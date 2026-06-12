@@ -1,0 +1,25 @@
+# Sail / C build artifacts
+build_run_block
+build_run_block.c
+build_run_block.h
+*.o
+*.out
+sail_smt_cache
+**/sail_smt_cache
+
+# zkVM RISC-V guest build artifacts
+zkvm/build/
+
+# EEST harness build artifacts
+examples/eest/.runner_bin*
+examples/eest/.rtcache/
+examples/eest/_eest*
+
+# stateless vector-gen venv
+zkvm/.vecgen/
+
+# python
+**/__pycache__/
+
+# Rust runner
+revm-eest/target/

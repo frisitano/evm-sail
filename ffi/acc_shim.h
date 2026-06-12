@@ -1,0 +1,23 @@
+/* Sail marshalling shim for the zkvm-standards crypto accelerators.
+ * Sail cannot form a (const uint8_t*, size_t) call, so the model streams input
+ * bytes into a buffer here (acc_begin/push/push8), the shim calls the one-shot
+ * standard zkvm_accelerators.h function for the selected id, and the model reads
+ * the output back (acc_exec/ok/out). Only mach_bits cross the FFI. This shim is
+ * guest glue; the swappable boundary is ffi/zkvm_accelerators.h. ids: 0=keccak256
+ * (the standard's non-precompile accelerator), 2=sha256, 3=ripemd160, 4=identity
+ * (done guest-side per the standard), 1/5..10 = EVM precompiles (typed standard
+ * calls wired as they are implemented). */
+#ifndef ACC_SHIM_H
+#define ACC_SHIM_H
+#include "sail.h"
+#include <stdint.h>
+#include "el_mem.h"   /* C-backed EVM memory externs (shared by every build path) */
+#include "el_map.h"   /* C-backed transient-storage / warm-slot maps */
+unit     acc_begin(uint64_t id);   /* bits(64): select accelerator id, clear buffers */
+unit     acc_push(uint64_t b);      /* bits(8):  append one input byte */
+unit     acc_push8(uint64_t w);     /* bits(64): append 8 input bytes (big-endian) */
+uint64_t acc_exec(unit u);          /* run the standard accelerator; returns output length */
+uint64_t acc_ok(unit u);            /* bits(8): 1 = ZKVM_EOK, 0 = ZKVM_EFAIL */
+uint64_t acc_out(uint64_t i);       /* bits(64) index -> bits(8): output byte i */
+uint64_t acc_word(uint64_t i);      /* bits(64) -> bits(64): big-endian output word i (hash fast path) */
+#endif

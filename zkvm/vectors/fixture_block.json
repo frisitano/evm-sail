@@ -1,0 +1,40 @@
+{
+  "schema_id": 1,
+  "total_bytes": 1856,
+  "pre_state_root": "15baf17aaa1e11319ff424197749bf6715919d0f9ec37430ea115360a55a2a1b",
+  "post_state_root": "d144e00cd635e4445504e05c3fcccc3862ffbe73c3d76d761f44f14d97e4d1b8",
+  "witness": {
+    "n_state_nodes": 4,
+    "n_codes": 1,
+    "n_headers": 1,
+    "code0_keccak": "ac200f16708c3b5c9c2ebffbb1bc40de8df337d6389e49f6425292e9ae777d7e"
+  },
+  "payload": {
+    "block_number": 21000000,
+    "gas_limit": 30000000,
+    "gas_used": 43106,
+    "timestamp": 1700000000,
+    "fee_recipient": "000000000000000000000000000000000000c01b",
+    "base_fee_per_gas": 0,
+    "n_transactions": 1,
+    "n_withdrawals": 1,
+    "withdrawal0": {
+      "address": "0000000000000000000000000000000000004895",
+      "amount": 500
+    }
+  },
+  "chain_config": {
+    "chain_id": 1,
+    "fork": 20
+  },
+  "htr": {
+    "withdrawal0": "1d086289701b84e6132900abe9130e6f284164639983055bdfecb5b17e2757d6",
+    "execution_payload": "45b7bb55647a6cbb8e2b0e3d3f8525c7380033f2fe8f33eabcdc3a1f84482d2f",
+    "new_payload_request": "b216ba8f287705be4b644df72a362fea3226925b250eba273c63d912e4758d32"
+  },
+  "result": {
+    "len": 105,
+    "ssz": "b216ba8f287705be4b644df72a362fea3226925b250eba273c63d912e4758d32012500000001000000000000000c00000014000000000000001000000020000000080000000800000000000000000000000600000000000000090000000000000064694c0000000000",
+    "sha256": "2c0ea45002c0a19ee9dbf10817e26e848ae4d11d5e576e35e7e97ed297d110e9"
+  }
+}

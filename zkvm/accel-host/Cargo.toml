@@ -1,0 +1,31 @@
+# Host-side implementation of the eth-act zkvm-standards crypto accelerators
+# (ffi/zkvm_accelerators.h), using the SAME industry crates execution clients
+# (revm/reth) use. Compiled to a staticlib and linked on the native/host path
+# (the EEST runner, and a real zkVM host); the freestanding spike guest keeps the
+# C reference impl. Standalone workspace so the parent evm-asm workspace is
+# untouched.
+[package]
+name = "zkvm-accel-host"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+sha3 = "0.10"                 # Keccak-256 (Ethereum)
+sha2 = "0.10"                 # SHA-256 (precompile 0x02)
+ripemd = "0.1"                # RIPEMD-160 (precompile 0x03)
+k256 = { version = "0.13", default-features = false, features = ["ecdsa", "arithmetic"] }   # ecrecover (0x01)
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "arithmetic"] }   # secp256r1 (0x100)
+aurora-engine-modexp = "1.2"  # modexp (0x05) -- the crate revm uses
+ark-bn254 = { version = "0.5", default-features = false, features = ["curve"] }   # bn254 (0x06-08), as revm
+ark-ec = { version = "0.5", default-features = false }
+ark-ff = { version = "0.5", default-features = false }
+c-kzg = "2.1"      # KZG point evaluation (0x0a, EIP-4844) -- embedded mainnet trusted setup, as revm
+blst = "0.3"       # BLS12-381 (EIP-2537) -- the implementation c-kzg + revm use
+
+[profile.release]
+opt-level = 3
+
+[workspace]

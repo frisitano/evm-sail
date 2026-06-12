@@ -1,0 +1,25 @@
+[package]
+name = "revm-eest"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Parallel EEST state-test runner for the evm-sail formal EVM specification.
+# Parses execution-spec-tests state fixtures (the revm/reth fixture schema,
+# self-contained here), encodes each case into the Sail model binary's stdin
+# int-stream (matching examples/eest/runner.sail), runs the model across all
+# cores, and compares the dumped post-state.
+
+[[bin]]
+name = "revm-eest"
+path = "src/main.rs"
+
+[dependencies]
+alloy-primitives = { version = "1.5", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rayon = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
