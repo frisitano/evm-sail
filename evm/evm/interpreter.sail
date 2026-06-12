@@ -20,45 +20,45 @@ function read_push(n : int) -> word = {
 }
 
 function decode_simple(b : int) -> ast =
-  if      b >= 128 & b <= 143 then OP_DUP(b - 127)
-  else if b >= 144 & b <= 159 then OP_SWAP(b - 143)
-  else if b >= 160 & b <= 164 then OP_LOG(b - 160)
+  if      b >= 128 & b <= 143 then DUP(b - 127)
+  else if b >= 144 & b <= 159 then SWAP(b - 143)
+  else if b >= 160 & b <= 164 then LOG(b - 160)
   else match b {
-    0   => OP_STOP(),   1  => OP_ADD(),    2  => OP_MUL(),    3  => OP_SUB(),
-    4   => OP_DIV(),    5  => OP_SDIV(),   6  => OP_MOD(),    7  => OP_SMOD(),
-    8   => OP_ADDMOD(), 9  => OP_MULMOD(), 10 => OP_EXP(),    11 => OP_SIGNEXTEND(),
-    16  => OP_LT(),     17 => OP_GT(),     18 => OP_SLT(),    19 => OP_SGT(),
-    20  => OP_EQ(),     21 => OP_ISZERO(), 22 => OP_AND(),    23 => OP_OR(),
-    24  => OP_XOR(),    25 => OP_NOT(),    26 => OP_BYTE(),   27 => OP_SHL(),
-    28  => OP_SHR(),    29 => OP_SAR(),    30 => OP_CLZ(),
-    32  => OP_KECCAK256(),
-    48  => OP_ADDRESS(),    49 => OP_BALANCE(),    50 => OP_ORIGIN(),
-    51  => OP_CALLER(),     52 => OP_CALLVALUE(),  53 => OP_CALLDATALOAD(),
-    54  => OP_CALLDATASIZE(),55 => OP_CALLDATACOPY(),56 => OP_CODESIZE(),
-    57  => OP_CODECOPY(),   58 => OP_GASPRICE(),   59 => OP_EXTCODESIZE(),
-    60  => OP_EXTCODECOPY(),61 => OP_RETURNDATASIZE(),62 => OP_RETURNDATACOPY(),
-    63  => OP_EXTCODEHASH(),
-    64  => OP_BLOCKHASH(),  65 => OP_COINBASE(),   66 => OP_TIMESTAMP(),
-    67  => OP_NUMBER(),     68 => OP_PREVRANDAO(), 69 => OP_GASLIMIT(),
-    70  => OP_CHAINID(),    71 => OP_SELFBALANCE(),72 => OP_BASEFEE(),
-    73  => OP_BLOBHASH(),   74 => OP_BLOBBASEFEE(),
-    80  => OP_POP(),        81 => OP_MLOAD(),      82 => OP_MSTORE(),
-    83  => OP_MSTORE8(),    84 => OP_SLOAD(),      85 => OP_SSTORE(),
-    86  => OP_JUMP(),       87 => OP_JUMPI(),      88 => OP_PC(),
-    89  => OP_MSIZE(),      90 => OP_GAS(),        91 => OP_JUMPDEST(),
-    92  => OP_TLOAD(),      93 => OP_TSTORE(),     94 => OP_MCOPY(),
-    240 => OP_CREATE(),     241 => OP_CALL(),      242 => OP_CALLCODE(),
-    243 => OP_RETURN(),     244 => OP_DELEGATECALL(),245 => OP_CREATE2(),
-    250 => OP_STATICCALL(), 253 => OP_REVERT(),    255 => OP_SELFDESTRUCT(),
-    _   => OP_INVALID()
+    0   => STOP(),   1  => ADD(),    2  => MUL(),    3  => SUB(),
+    4   => DIV(),    5  => SDIV(),   6  => MOD(),    7  => SMOD(),
+    8   => ADDMOD(), 9  => MULMOD(), 10 => EXP(),    11 => SIGNEXTEND(),
+    16  => LT(),     17 => GT(),     18 => SLT(),    19 => SGT(),
+    20  => EQ(),     21 => ISZERO(), 22 => AND(),    23 => OR(),
+    24  => XOR(),    25 => NOT(),    26 => BYTE(),   27 => SHL(),
+    28  => SHR(),    29 => SAR(),    30 => CLZ(),
+    32  => KECCAK256(),
+    48  => ADDRESS(),    49 => BALANCE(),    50 => ORIGIN(),
+    51  => CALLER(),     52 => CALLVALUE(),  53 => CALLDATALOAD(),
+    54  => CALLDATASIZE(),55 => CALLDATACOPY(),56 => CODESIZE(),
+    57  => CODECOPY(),   58 => GASPRICE(),   59 => EXTCODESIZE(),
+    60  => EXTCODECOPY(),61 => RETURNDATASIZE(),62 => RETURNDATACOPY(),
+    63  => EXTCODEHASH(),
+    64  => BLOCKHASH(),  65 => COINBASE(),   66 => TIMESTAMP(),
+    67  => NUMBER(),     68 => PREVRANDAO(), 69 => GASLIMIT(),
+    70  => CHAINID(),    71 => SELFBALANCE(),72 => BASEFEE(),
+    73  => BLOBHASH(),   74 => BLOBBASEFEE(),
+    80  => POP(),        81 => MLOAD(),      82 => MSTORE(),
+    83  => MSTORE8(),    84 => SLOAD(),      85 => SSTORE(),
+    86  => JUMP(),       87 => JUMPI(),      88 => PC(),
+    89  => MSIZE(),      90 => GAS(),        91 => JUMPDEST(),
+    92  => TLOAD(),      93 => TSTORE(),     94 => MCOPY(),
+    240 => CREATE(),     241 => CALL(),      242 => CALLCODE(),
+    243 => RETURN(),     244 => DELEGATECALL(),245 => CREATE2(),
+    250 => STATICCALL(), 253 => REVERT(),    255 => SELFDESTRUCT(),
+    _   => INVALID()
   }
 
 function fetch() -> ast = {
-  if pc >= code_len then { pc = pc + 1; OP_STOP() }
+  if pc >= code_len then { pc = pc + 1; STOP() }
   else {
     let b = unsigned(code_byte(pc));
     pc = pc + 1;
-    if b >= 95 & b <= 127 then { let n = b - 95; let v = read_push(n); pc = pc + n; OP_PUSH(n, v) }
+    if b >= 95 & b <= 127 then { let n = b - 95; let v = read_push(n); pc = pc + n; PUSH(n, v) }
     else decode_simple(b)
   }
 }

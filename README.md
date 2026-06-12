@@ -48,7 +48,7 @@ Prim:     k_keccak  k_create_addr  k_create2_addr  k_precompile
 World:    k_snapshot  k_commit  k_revert  k_refund_add  k_log
 ```
 
-- **The transaction kernel = the EVM** (`evm/kernel/`): the opcode
+- **The transaction kernel = the EVM** (`evm/evm/`): the opcode
   interpreter, the gas counter, and **all** policy — the full fork-gated gas
   schedule, the EIP-2929/2200/3529 rules, transaction validity
   (EIP-1559/2930/3860/4844/7623/7702/7825), and *the decision of whether an
@@ -90,7 +90,7 @@ evm/         the specification (evm.sail is the root include)
     kernel.sail       the kernel functions (k_*): the only state interface
     memory.sail       per-frame byte memory (C-backed, O(1))
     accelerators.sail crypto host functions (eth-act zkvm-standards)
-  kernel/             THE TRANSACTION KERNEL (= the EVM)
+  evm/                THE TRANSACTION KERNEL (= the EVM)
     machine.sail      frame registers, gas counter, stack, code cursor
     gas.sail          the complete gas schedule (fork-gated)
     instructions.sail the opcode AST

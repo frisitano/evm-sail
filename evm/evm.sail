@@ -37,13 +37,13 @@ $include "host/kernel.sail"
 $include "host/memory.sail"
 
 /* the transaction kernel (the EVM) */
-$include "kernel/machine.sail"
-$include "kernel/gas.sail"
-$include "kernel/instructions.sail"
-$include "kernel/execute.sail"
-$include "kernel/interpreter.sail"
-$include "kernel/transaction.sail"
-$include "kernel/block.sail"
+$include "evm/machine.sail"
+$include "evm/gas.sail"
+$include "evm/instructions.sail"
+$include "evm/execute.sail"
+$include "evm/interpreter.sail"
+$include "evm/transaction.sail"
+$include "evm/block.sail"
 
 /* post-state authentication */
 $include "lib/state_root.sail"
