@@ -170,7 +170,7 @@ function execute(op : ast) -> unit = match op {
   PUSH(n, v) => { if n == 0 then charge(G_base) else charge(G_verylow); push(v) },
   DUP(n)     => { charge(G_verylow); push(peek(n - 1)) },
   SWAP(n)    => { charge(G_verylow); let top = peek(0); let other = peek(n);
-                     stack = list_set(list_set(stack, 0, other), n, top) },
+                     stack_set(0, other); stack_set(n, top) },
 
   /* ---- log: EVM checks/prices, kernel records ---- */
   LOG(n) => { if guard_static() then () else {

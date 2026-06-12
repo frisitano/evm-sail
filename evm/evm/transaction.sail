@@ -180,7 +180,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
   k_snapshot();
 
   pc = 0; call_depth = 0; gas_remaining = to_gas(tx.t_gas_limit - intrinsic);
-  stack = [||]; mem_clear(); memory_size = 0;
+  stack_clear(); mem_clear(); memory_size = 0;
   returndata = [||]; frame_output = [||]; frame_status = Running();
 
   if tx.t_is_create then {

@@ -142,7 +142,7 @@ function run_call(mode : int) -> unit = {
     k_snapshot();
     if (mode == 0) & word_nonzero(value) then k_transfer(caller, target, value) else ();
 
-    let s_pc = pc; let s_gas = gas_remaining; let s_stack = stack; let s_code = code;
+    let s_pc = pc; let s_gas = gas_remaining; let s_code = code;
     let s_out = frame_output; let s_msg = message; let s_status = frame_status;
     let s_msize = memory_size; let s_depth = call_depth;
 
@@ -155,7 +155,7 @@ function run_call(mode : int) -> unit = {
       msg_caller = child_caller, msg_address = child_addr, msg_code_address = target,
       msg_value = child_value, msg_data = args, msg_is_static = child_static, msg_depth = s_depth + 1
     };
-    pc = 0; gas_remaining = to_gas(child_gas); stack = [||]; set_code(k_get_exec_code(target));  /* EIP-7702 delegation */
+    pc = 0; gas_remaining = to_gas(child_gas); stack_frame_enter(); set_code(k_get_exec_code(target));  /* EIP-7702 delegation */
     returndata = [||]; frame_output = [||]; frame_status = Running(); mem_frame_enter(); memory_size = 0;
     call_depth = s_depth + 1;
 
@@ -164,7 +164,7 @@ function run_call(mode : int) -> unit = {
     let succeeded = frame_succeeded();
     let child_out = frame_output; let child_left = gas_remaining;
 
-    pc = s_pc; stack = s_stack; set_code(s_code); frame_output = s_out; message = s_msg;
+    pc = s_pc; stack_frame_leave(); set_code(s_code); frame_output = s_out; message = s_msg;
     frame_status = s_status; mem_frame_leave(); memory_size = s_msize; call_depth = s_depth;
     returndata = child_out; gas_remaining = to_gas(s_gas + child_left);
 
@@ -223,7 +223,7 @@ function run_create(is2 : bool) -> unit = {
       k_bump_nonce(new_addr);          /* EIP-161: a created contract starts at nonce 1 */
       k_transfer(creator, new_addr, value);
 
-      let s_pc = pc; let s_gas = gas_remaining; let s_stack = stack; let s_code = code;
+      let s_pc = pc; let s_gas = gas_remaining; let s_code = code;
       let s_out = frame_output; let s_msg = message; let s_status = frame_status;
       let s_msize = memory_size; let s_depth = call_depth;
 
@@ -231,7 +231,7 @@ function run_create(is2 : bool) -> unit = {
         msg_caller = creator, msg_address = new_addr, msg_code_address = new_addr,
         msg_value = value, msg_data = [||], msg_is_static = s_msg.msg_is_static, msg_depth = s_depth + 1
       };
-      pc = 0; gas_remaining = to_gas(child_gas); stack = [||]; set_code(initcode);
+      pc = 0; gas_remaining = to_gas(child_gas); stack_frame_enter(); set_code(initcode);
       returndata = [||]; frame_output = [||]; frame_status = Running(); mem_frame_enter(); memory_size = 0;
       call_depth = s_depth + 1;
 
@@ -244,7 +244,7 @@ function run_create(is2 : bool) -> unit = {
       let code_ok = (list_len(deployed) <= MAX_CODE_SIZE)
                   & (match deployed { b :: _ => b != 0xef, [||] => true });
 
-      pc = s_pc; stack = s_stack; set_code(s_code); frame_output = s_out; message = s_msg;
+      pc = s_pc; stack_frame_leave(); set_code(s_code); frame_output = s_out; message = s_msg;
       frame_status = s_status; mem_frame_leave(); memory_size = s_msize; call_depth = s_depth;
       returndata = if succeeded then [||] else deployed;
       gas_remaining = to_gas(s_gas + child_left);
