@@ -11,8 +11,8 @@
 #define ACC_SHIM_H
 #include "sail.h"
 #include <stdint.h>
-#include "el_mem.h"   /* C-backed EVM memory externs (shared by every build path) */
-#include "el_map.h"   /* C-backed transient-storage / warm-slot maps */
+#include "host_mem.h"   /* C-backed EVM memory externs (shared by every build path) */
+#include "host_map.h"   /* C-backed transient-storage / warm-slot maps */
 unit     acc_begin(uint64_t id);   /* bits(64): select accelerator id, clear buffers */
 unit     acc_push(uint64_t b);      /* bits(8):  append one input byte */
 unit     acc_push8(uint64_t w);     /* bits(64): append 8 input bytes (big-endian) */

@@ -14,13 +14,13 @@
 /* only memset from libc.                                                       */
 /* ======================================================================== */
 
-$include "../evm/el_ir.sail"
+$include "../evm/evm.sail"
 $include "../examples/evm_primitives.sail"
-$include "../evm/ssz.sail"
-$include "../evm/rlp_decode.sail"
-$include "../evm/mpt_witness.sail"
-$include "../evm/sha256.sail"
-$include "../evm/ssz_htr.sail"
+$include "../evm/lib/ssz.sail"
+$include "../evm/lib/rlp_decode.sail"
+$include "../evm/lib/mpt_witness.sail"
+$include "../evm/lib/sha256.sail"
+$include "../evm/lib/ssz_htr.sail"
 
 /* canonical public output: write one byte to write_output (zkvm/el_input.c) */
 val emit_out = impure "el_emit_out" : bits(8) -> unit
@@ -258,7 +258,7 @@ function zkvm_run() -> unit = {
   zkvm_out_storage0 = unsigned(stored);
   zkvm_out_wbal     = unsigned(wbal);
   zkvm_out_cbbal    = unsigned(cbbal);
-  zkvm_out_tracelen = list_len(ir_trace);
+  zkvm_out_tracelen = 0  /* the ELOp trace machinery was removed */;
   zkvm_out_success  = if valid then 1 else 0;
 
   /* emit the canonical SSZ SszStatelessValidationResult as public output */

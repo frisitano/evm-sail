@@ -1,7 +1,7 @@
 /* ======================================================================== */
-/* EL-IR prelude: value model + the full 256-bit word ALU                    */
+/* evm-sail prelude: value model + the full 256-bit word ALU                    */
 /*                                                                           */
-/* This is the arithmetic foundation of the EL-IR ISA. Every EVM word        */
+/* This is the arithmetic foundation of the specification. Every EVM word        */
 /* operation is given REAL two's-complement / unsigned semantics over        */
 /* bits(256); only KECCAK-256 (and the precompile crypto, declared           */
 /* elsewhere) is an opaque primitive. The operators follow the Sail 0.20.1   */

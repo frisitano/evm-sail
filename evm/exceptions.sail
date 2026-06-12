@@ -1,5 +1,5 @@
 /* ======================================================================== */
-/* EL-IR halt outcomes and exceptional-halt kinds                            */
+/* Halt outcomes and exceptional-halt kinds                            */
 /* ======================================================================== */
 
 /* Ordinary frame stops. */

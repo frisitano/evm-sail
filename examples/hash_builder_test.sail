@@ -1,6 +1,6 @@
 /* Differential check: the alloy-trie stack HashBuilder (hb_root) must agree
  * with the recursive trie_root oracle on the same key-sorted leaf sets. */
-$include "../evm/el_ir.sail"
+$include "../evm/evm.sail"
 $include "evm_primitives.sail"
 $include <string.sail>
 

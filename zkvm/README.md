@@ -57,7 +57,7 @@ successful_validation=0          # a failed validation is a NORMAL result
 The full design + stage-by-stage validation is in `STATELESS.md`. Vectors are produced
 host-side by `gen_vector.py` (`--bad` for the fail path); the SSZ codec, RLP decode,
 witness-MPT walk, and SSZ `hash_tree_root` live in `../evm/{ssz,rlp_decode,mpt_witness,
-sha256,ssz_htr}.sail` (model-level, not pulled into `el_ir.sail`).
+sha256,ssz_htr}.sail` (model-level, not pulled into `evm.sail`).
 
 ## Conformance to the standard target
 

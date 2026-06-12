@@ -1,5 +1,5 @@
 /* Validate block hash against a real (Berlin) genesis header. */
-$include "../evm/el_ir.sail"
+$include "../evm/evm.sail"
 $include "evm_primitives.sail"
 $include <string.sail>
 

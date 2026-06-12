@@ -65,9 +65,6 @@ function fetch() -> ast = {
 
 function interpret() -> unit =
   while is_running() do {
-    let here = pc;
-    let opcode = if pc < code_len then unsigned(code_byte(pc)) else 0;
-    trace_evm(here, opcode);          /* record the user-space opcode step */
     let op = fetch();
     execute(op)
   }

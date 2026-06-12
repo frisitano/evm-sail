@@ -9,7 +9,7 @@
 /* source (ssz_src_byte/ssz_src_len) that a harness binds to its input; the      */
 /* zkVM guest binds it to the private-input region (zkvm/el_input.{h,c}). This   */
 /* file is a model-level codec (like rlp.sail) and is NOT included by           */
-/* el_ir.sail, so the core model stays free of the input FFI.                   */
+/* evm.sail, so the core model stays free of the input FFI.                   */
 /*                                                                           */
 /* Field positions below are computed from the container definitions in       */
 /* STATELESS.md; see SszExecutionPayload for the 540-byte fixed region map.    */

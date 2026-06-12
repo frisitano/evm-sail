@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run EEST state-test fixtures against the EL-IR Sail EVM.
+"""Run EEST state-test fixtures against the evm-sail Sail EVM.
 
 Compile-once architecture: the Sail `runner` (runner.sail) is built into a single
 binary ONCE, then every test is fed to it at runtime as a flat int-stream on
@@ -61,8 +61,8 @@ def build_runner(rebuild=False):
         subprocess.check_call(["cc","-O1",f"-I{sfdir}",f"-I{lib}",
                                BIN+"_gen.c", os.path.join(HERE,"runner_ffi.c"),
                                os.path.join(ELDIR,"ffi","acc_shim.c"),
-                               os.path.join(ELDIR,"ffi","el_mem.c"),
-                               os.path.join(ELDIR,"ffi","el_map.c"),
+                               os.path.join(ELDIR,"ffi","host_mem.c"),
+                               os.path.join(ELDIR,"ffi","host_map.c"),
                                *objs, *accel_flags, *stack_flags, "-o",BIN])
     else:
         objs = []
@@ -76,8 +76,8 @@ def build_runner(rebuild=False):
         subprocess.check_call(["cc","-O1",f"-I{lib}","-I/opt/homebrew/include","-L/opt/homebrew/lib",
                                BIN+"_gen.c", os.path.join(HERE,"runner_ffi.c"),
                                os.path.join(ELDIR,"ffi","acc_shim.c"),
-                               os.path.join(ELDIR,"ffi","el_mem.c"),
-                               os.path.join(ELDIR,"ffi","el_map.c"),
+                               os.path.join(ELDIR,"ffi","host_mem.c"),
+                               os.path.join(ELDIR,"ffi","host_map.c"),
                                *objs, *accel_flags, *stack_flags, "-lgmp","-o",BIN])
     for p in (BIN+"_gen.c", BIN+"_gen.h"):
         if os.path.exists(p): os.remove(p)

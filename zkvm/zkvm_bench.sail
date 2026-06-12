@@ -6,7 +6,7 @@
 /* committing to the per-tx BAL refactor.  GUEST=zkvm_bench.sail ./build.sh run  */
 /* ======================================================================== */
 
-$include "../evm/el_ir.sail"
+$include "../evm/evm.sail"
 $include "../examples/evm_primitives.sail"
 
 val ssz_src_le = impure "ssz_src_le" : (int, int) -> bits(64)
@@ -30,5 +30,5 @@ function zkvm_run() -> unit = {
   zkvm_out_wbal     = 0;
   zkvm_out_cbbal    = 0;
   zkvm_out_success  = 1;
-  zkvm_out_tracelen = list_len(ir_trace)
+  zkvm_out_tracelen = 0  /* the ELOp trace machinery was removed */
 }

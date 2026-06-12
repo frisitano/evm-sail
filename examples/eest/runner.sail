@@ -1,5 +1,5 @@
 /* ======================================================================== */
-/* EL-IR EEST runner: compile ONCE, feed fixtures at runtime via stdin.       */
+/* evm-sail EEST runner: compile ONCE, feed fixtures at runtime via stdin.       */
 /*                                                                           */
 /* Reads a flat stream of decimal integers from stdin (one C extern,         */
 /* `next_int`) describing a sequence of test cases, runs each through         */
@@ -18,7 +18,7 @@
 /*             dataLen <dataBytes>                                            */
 /* ======================================================================== */
 
-$include "../../evm/el_ir.sail"
+$include "../../evm/evm.sail"
 $include "../evm_primitives.sail"
 $include <string.sail>
 
@@ -92,7 +92,7 @@ function run_one() -> unit = {
       au_nonce = anon, au_chain_id = acid } |])
   };
   /* EIP-4844 blob section: is_blob flag (type-3 marker), then n 32-byte
-     versioned hashes (decimal words). Mirrors run_eest.py / el-ir-eest encode(). */
+     versioned hashes (decimal words). Mirrors run_eest.py / revm-eest encode(). */
   let is_blob = ni();
   let n_bh = ni();
   var bhs : list(word) = [||];
@@ -111,7 +111,6 @@ function run_one() -> unit = {
 }
 
 function main() -> unit = {
-  k_trace_on = false;                   /* bulk EEST run: skip EL-IR trace accumulation */
   k_fork = ni();                        /* active fork level (fork-gated gas rules) */
   let want_root : int = ni();           /* 0 = skip state root (fast), 1 = compute */
   var more : int = ni();

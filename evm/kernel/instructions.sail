@@ -1,5 +1,5 @@
 /* ======================================================================== */
-/* EL-IR instruction surface: the full EVM opcode set (Cancun/Prague)        */
+/* The instruction surface: the full EVM opcode set (Cancun/Prague)        */
 /*                                                                           */
 /* One `ast` constructor per opcode. Immediates are carried inline (PUSH      */
 /* holds its width + value; DUP/SWAP/LOG hold n). Decoding from code bytes    */

@@ -1,5 +1,5 @@
 /* Validate the C-host precompiles (run_precompile) against known vectors. */
-$include "../evm/el_ir.sail"
+$include "../evm/evm.sail"
 $include "evm_primitives.sail"
 $include <string.sail>
 

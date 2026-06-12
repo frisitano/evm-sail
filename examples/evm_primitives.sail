@@ -1,5 +1,5 @@
 /* ======================================================================== */
-/* EL-IR runnable primitive bodies (for EXECUTION, not the canonical spec)   */
+/* Runnable primitive bodies (for EXECUTION, not the canonical spec)   */
 /*                                                                           */
 /* The canonical model (evm/) leaves KECCAK-256, CREATE address derivation, */
 /* and the precompiles as declared `val` primitives. To *execute* the model  */

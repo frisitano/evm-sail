@@ -1,13 +1,13 @@
 /* ======================================================================== */
-/* EL-IR block fixtures: run a variety of Ethereum blocks and assert results  */
+/* evm-sail block fixtures: run a variety of Ethereum blocks and assert results  */
 /*                                                                           */
 /* Each fixture wipes the kernel world, seeds pre-state, executes a block via */
 /* process_block, prints a one-line summary, and asserts the expected state / */
 /* gas / receipt. A regression suite for the user-space/kernel EVM.           */
-/* Run:  make -C el-ir run EX=examples/fixtures.sail                          */
+/* Run:  make run EX=examples/fixtures.sail                          */
 /* ======================================================================== */
 
-$include "../evm/el_ir.sail"
+$include "../evm/evm.sail"
 $include "evm_primitives.sail"
 $include <string.sail>
 
@@ -160,7 +160,7 @@ function f8_oog() -> unit = {
 }
 
 function main() -> unit = {
-  print_endline("EL-IR block fixtures:");
+  print_endline("evm-sail block fixtures:");
   print_endline("");
   f1_transfer(); f2_storage(); f3_arith(); f4_call();
   f5_revert(); f6_create(); f7_multitx(); f8_oog();

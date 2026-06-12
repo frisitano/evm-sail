@@ -1,21 +1,21 @@
 /* ======================================================================== */
-/* EL-IR memory: byte-addressed, zero-initialized, lazily expanding          */
+/* Per-frame EVM memory: byte-addressed, zero-initialized, lazily expanding          */
 /*                                                                           */
 /* Real EVM memory semantics: a flat byte array addressed from 0, growing in */
 /* 32-byte words. Sail forbids recursive types (no in-model balanced tree)    */
 /* and a list-backed memory is O(n) per access -- O(n^2) over a fill/copy     */
-/* loop. So, like sail-riscv, memory lives in C (ffi/el_mem.c): a flat buffer  */
+/* loop. So, like sail-riscv, memory lives in C (ffi/host_mem.c): a flat buffer  */
 /* per call frame with O(1) read/write. Frames form a stack -- a sub-call gets */
 /* fresh memory (mem_frame_enter) and the parent's is restored on return      */
 /* (mem_frame_leave); mem_clear resets to a single empty frame per tx. The     */
 /* Sail side keeps only the high-water mark (memory_size) for expansion gas.  */
 /* ======================================================================== */
 
-val el_mem_read  = impure "el_mem_read"  : bits(64) -> bits(8)
-val el_mem_write = impure "el_mem_write" : (bits(64), bits(8)) -> unit
-val el_mem_reset = impure "el_mem_reset" : unit -> unit
-val el_mem_push  = impure "el_mem_push"  : unit -> unit
-val el_mem_pop   = impure "el_mem_pop"   : unit -> unit
+val host_mem_read  = impure "host_mem_read"  : bits(64) -> bits(8)
+val host_mem_write = impure "host_mem_write" : (bits(64), bits(8)) -> unit
+val host_mem_reset = impure "host_mem_reset" : unit -> unit
+val host_mem_push  = impure "host_mem_push"  : unit -> unit
+val host_mem_pop   = impure "host_mem_pop"   : unit -> unit
 
 /* kept only as the type of the (now unused) StackFrame snapshot field */
 struct MemByte = { mb_off : int, mb_val : byte }
@@ -23,16 +23,16 @@ struct MemByte = { mb_off : int, mb_val : byte }
 register memory_size : int = 0   /* high-water mark, in bytes */
 
 /* call-frame memory lifecycle (the C side owns the bytes) */
-function mem_clear()       -> unit = el_mem_reset()
-function mem_frame_enter() -> unit = el_mem_push()
-function mem_frame_leave() -> unit = el_mem_pop()
+function mem_clear()       -> unit = host_mem_reset()
+function mem_frame_enter() -> unit = host_mem_push()
+function mem_frame_leave() -> unit = host_mem_pop()
 
 /* --- raw byte access (O(1), C-backed) --- */
 
-function mem_get_byte(off : int) -> byte = el_mem_read(get_slice_int(64, off, 0))
+function mem_get_byte(off : int) -> byte = host_mem_read(get_slice_int(64, off, 0))
 
 function mem_set_byte(off : int, v : byte) -> unit = {
-  el_mem_write(get_slice_int(64, off, 0), v);
+  host_mem_write(get_slice_int(64, off, 0), v);
   if off + 1 > memory_size then memory_size = off + 1 else ()
 }
 

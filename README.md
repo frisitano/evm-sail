@@ -32,16 +32,12 @@ revm)?
   syscall interface — exactly where symbolic execution, differential fuzzing,
   and witness-based (stateless) execution attach.
 
-## Architecture: EVM user space / EL kernel
+## Architecture: a host, and the transaction kernel over user space
 
-- **EVM = user space** (`evm/execute.sail`, `interpreter.sail`, `gas.sail`,
-  `transaction.sail`): the opcode interpreter, the gas counter, and **all**
-  policy — the full gas schedule, the EIP-2929/2200/3529 rules, transaction
-  validity (EIP-1559/2930/3860/4844/7623/7702/7825), and *the decision of
-  whether an effect happens*. Pure compute.
-- **EL = kernel / host** (`evm/el_kernel.sail`): the privileged world state —
-  accounts, storage, transient storage, warm sets, logs, refunds, snapshots,
-  block/tx environment — reachable **only** through the EL syscall ISA:
+- **The host** (`evm/host/`): world state — user accounts, storage, transient
+  storage, warm sets, logs, refunds, snapshots, the block/tx environment —
+  plus per-frame memory and the crypto accelerators. Pure mechanism: no gas,
+  no policy. State is reachable **only** through the host's kernel functions:
 
 ```
 Storage:  k_access_slot  k_sload  k_sstore  k_tload  k_tstore  k_orig
@@ -52,14 +48,17 @@ Prim:     k_keccak  k_create_addr  k_create2_addr  k_precompile
 World:    k_snapshot  k_commit  k_revert  k_refund_add  k_log
 ```
 
-The EVM issues a syscall **only for a real effect** (a no-op SSTORE charges
-gas in user space but emits no kernel write — see
-`examples/syscall_demo.sail`). An execution is recorded as an interleaved
-stream of opcode steps and authenticated effects (`ir_trace`). That boundary
-is what makes the model a natural front end for proof systems (the effect
-stream is an AIR interface-channel stream), for stateless validation (the
-kernel fails closed on state absent from a witness), and for symbolic engines
-(the world is an explicit, finite interface).
+- **The transaction kernel = the EVM** (`evm/kernel/`): the opcode
+  interpreter, the gas counter, and **all** policy — the full fork-gated gas
+  schedule, the EIP-2929/2200/3529 rules, transaction validity
+  (EIP-1559/2930/3860/4844/7623/7702/7825), and *the decision of whether an
+  effect happens* (a no-op SSTORE charges gas in the transaction kernel but
+  performs no host write). It operates over user accounts — user space.
+
+The host-call boundary is what makes the model a natural front end for proof
+systems (each kernel function is an interface channel), for stateless
+validation (the host fails closed on state absent from a witness), and for
+symbolic engines (the world is an explicit, finite interface).
 
 Performance-critical state lives behind C FFI with O(1) operations — EVM
 memory (`ffi/el_mem.c`) and the overlay-layered storage / transient storage /
@@ -84,19 +83,26 @@ revm, which is a production interpreter, not a specification.
 ## Layout
 
 ```
-evm/         the specification (el_ir.sail is the root include)
-  el_kernel.sail      EL kernel: world state + the syscall ISA + ir_trace
-  machine.sail        frame registers, gas counter, stack, code cursor
-  memory.sail         per-frame byte memory (C-backed, O(1))
-  gas.sail            the complete gas schedule (fork-gated)
-  instructions.sail   the opcode AST
-  execute.sail        per-opcode semantics (policy here, effects via k_*)
-  interpreter.sail    fetch/decode, run loop, CALL*/CREATE*, precompiles
-  transaction.sail    tx validity + the state transition + refunds
-  block.sail          whole-block execution (txs + withdrawals)
-  keccak.sail  rlp.sail  mpt.sail  hash_builder.sail  state_root.sail
-  mpt_witness.sail    stateless witness: feed, re-root, fail-closed lookups
-ffi/         C backends: el_mem.c (memory), el_map.c (overlay maps),
+evm/         the specification (evm.sail is the root include)
+  host/
+    state.sail        world state: accounts, storage overlays, warm sets,
+                      logs, journal, block/tx environment
+    kernel.sail       the kernel functions (k_*): the only state interface
+    memory.sail       per-frame byte memory (C-backed, O(1))
+    accelerators.sail crypto host functions (eth-act zkvm-standards)
+  kernel/             THE TRANSACTION KERNEL (= the EVM)
+    machine.sail      frame registers, gas counter, stack, code cursor
+    gas.sail          the complete gas schedule (fork-gated)
+    instructions.sail the opcode AST
+    execute.sail      per-opcode semantics (policy here, effects via k_*)
+    interpreter.sail  fetch/decode, run loop, CALL*/CREATE*, precompiles
+    transaction.sail  tx validity + the state transition + refunds
+    block.sail        whole-block execution (txs + withdrawals)
+  lib/
+    keccak.sail  sha256.sail  rlp.sail  rlp_decode.sail  mpt.sail
+    hash_builder.sail  state_root.sail  block_hash.sail  ssz.sail  ssz_htr.sail
+    mpt_witness.sail  stateless witness: feed, re-root, fail-closed lookups
+ffi/         C backends: host_mem.c (memory), host_map.c (overlay maps),
              acc_shim.c + zkvm_accelerators.h (eth-act zkvm-standards crypto)
 examples/    runnable examples + the EEST harness (run_eest.py, runner.sail)
 revm-eest/   parallel EEST runner (Rust): drives the model on all cores
@@ -123,7 +129,6 @@ Type-check the specification and run the example block + fixture suite
 make check
 make run-example                            # execute a block + print the EL trace
 make run EX=examples/fixtures.sail          # 8 block fixtures
-make run EX=examples/syscall_demo.sail      # no-op SSTORE emits no kernel write
 ```
 
 Run the conformance suite against a local
@@ -151,6 +156,6 @@ in `zkvm/accel-host` (blst, k256, c-kzg, aurora-engine-modexp, p256).
 
 Extracted from the `evm-asm` research workspace, where this model is the
 semantic front end of a specification-driven EVM AIR compiler (Event IR →
-checked facts → Constraint IR/AIR → WHIR proof backend). The internal name of
-the syscall ISA — **EL-IR** — is retained: the `TSyscall` effect stream is
-that proof system's AIR interface-channel stream.
+checked facts → Constraint IR/AIR → WHIR proof backend). The host kernel
+functions correspond one-to-one with that proof system's AIR interface
+channels.

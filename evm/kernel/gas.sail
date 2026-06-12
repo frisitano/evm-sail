@@ -1,5 +1,5 @@
 /* ======================================================================== */
-/* EL-IR gas schedule (Cancun/Prague-era constants)                          */
+/* The gas schedule (Cancun/Prague-era constants)                          */
 /*                                                                           */
 /* Static per-opcode costs are attached in execute.sail; this module owns    */
 /* the charging hook, memory-expansion gas, the EIP-2929 access costs, the   */

@@ -11,7 +11,7 @@
 /* checked against a committed state root in one pass (stateless validation).  */
 /*                                                                           */
 /* Reuses mpt.sail: hp_compact, child_ref, rlp_bytes/rlp_list, keccak256.      */
-/* Self-contained (local byte/empty-root helpers) so it sits in el_ir core and */
+/* Self-contained (local byte/empty-root helpers) so it sits in the core model and */
 /* can be differentially tested against the recursive `trie_root` oracle.      */
 /* ======================================================================== */
 

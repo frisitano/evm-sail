@@ -1,7 +1,7 @@
 # ===========================================================================
-# EL-IR Sail ISA — validation + execution entry point
+# evm-sail — validation + execution entry point
 #
-#   make check          type-check the EL-IR machine model (evm/el_ir.sail)
+#   make check          type-check the specification (evm/evm.sail)
 #   make check-example  type-check the runnable block example
 #   make run-example    compile the example to C and EXECUTE a block
 #   make all            check + check-example
@@ -14,7 +14,7 @@
 
 SAIL ?= sail
 
-MODEL   := evm/el_ir.sail
+MODEL   := evm/evm.sail
 EXAMPLE := examples/run_block.sail
 
 # Sail runtime library (ships with the toolchain) and its C sources.
@@ -32,14 +32,14 @@ CFLAGS_GMP := -I$(GMP_PREFIX)/include -L$(GMP_PREFIX)/lib
 # into the Sail-generated C so the call sites compile.
 # zkvm-standards crypto accelerators: the standard reference impl + the Sail
 # marshalling shim. One boundary for keccak/sha256/ripemd/precompiles.
-ACC_FFI := ffi/zkvm_accelerators.c ffi/acc_shim.c ffi/el_mem.c ffi/el_map.c
+ACC_FFI := ffi/zkvm_accelerators.c ffi/acc_shim.c ffi/host_mem.c ffi/host_map.c
 SAIL_CFLAGS := --c-include acc_shim.h
 CFLAGS_FFI  := -Iffi
 
 .PHONY: all check check-example run-example clean help
 
 help:
-	@echo "EL-IR Sail ISA targets:"
+	@echo "evm-sail targets:"
 	@echo "  make check          - type-check the model ($(MODEL))"
 	@echo "  make check-example  - type-check the block example ($(EXAMPLE))"
 	@echo "  make run-example    - compile to C and execute a block"
