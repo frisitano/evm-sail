@@ -32,7 +32,7 @@ CFLAGS_GMP := -I$(GMP_PREFIX)/include -L$(GMP_PREFIX)/lib
 # into the Sail-generated C so the call sites compile.
 # zkvm-standards crypto accelerators: the standard reference impl + the Sail
 # marshalling shim. One boundary for keccak/sha256/ripemd/precompiles.
-ACC_FFI := ffi/zkvm_accelerators.c ffi/acc_shim.c ffi/host_mem.c ffi/host_map.c ffi/host_stack.c
+ACC_FFI := ffi/zkvm_accelerators.c ffi/acc_shim.c ffi/host_mem.c ffi/host_map.c ffi/host_stack.c ffi/host_word.c
 SAIL_CFLAGS := --c-include acc_shim.h
 CFLAGS_FFI  := -Iffi
 

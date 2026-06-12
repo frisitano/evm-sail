@@ -108,7 +108,7 @@ function push(w : word) -> unit =
   else hs_push_w(w)
 
 function pop() -> word =
-  if stack_height() == 0 then { exc_halt(StackUnderflow); word_of_int(0) }
+  if stack_height() == 0 then { exc_halt(StackUnderflow); WORD_ZERO }
   else { let w = peek(0); hs_pop(); w }
 
 /* overwrite the nth-from-top operand (SWAP) */

@@ -48,9 +48,17 @@ function word_of_int(n : int) -> word = get_slice_int(256, n, 0)
 function uint(w : word) -> int = unsigned(w)
 function sint(w : word) -> int = signed(w)
 
-function word_of_bool(b : bool) -> word = if b then word_of_int(1) else word_of_int(0)
-function word_is_zero(w : word) -> bool = unsigned(w) == 0
-function word_nonzero(w : word) -> bool = unsigned(w) != 0
+/* native lbits predicates (ffi/host_word.c): no word -> integer conversion */
+val hw_ult    = pure "hw_ult"    : (word, word) -> bool
+val hw_slt    = pure "hw_slt"    : (word, word) -> bool
+val hw_iszero = pure "hw_iszero" : word -> bool
+
+let WORD_ZERO : word = 0x0000000000000000000000000000000000000000000000000000000000000000
+let WORD_ONE  : word = 0x0000000000000000000000000000000000000000000000000000000000000001
+
+function word_of_bool(b : bool) -> word = if b then WORD_ONE else WORD_ZERO
+function word_is_zero(w : word) -> bool = hw_iszero(w)
+function word_nonzero(w : word) -> bool = not_bool(hw_iszero(w))
 
 /* pow2(n) = 2^n is a typed builtin from arith.sail (forall 'n. int(2^'n)). */
 
@@ -175,10 +183,10 @@ function alu_signextend(byte_index : word, value : word) -> word = {
 }
 
 /* --- comparison (push 1/0) --- */
-function alu_lt(a : word, b : word)  -> word = word_of_bool(unsigned(a) <  unsigned(b))
-function alu_gt(a : word, b : word)  -> word = word_of_bool(unsigned(a) >  unsigned(b))
-function alu_slt(a : word, b : word) -> word = word_of_bool(signed(a)   <  signed(b))
-function alu_sgt(a : word, b : word) -> word = word_of_bool(signed(a)   >  signed(b))
+function alu_lt(a : word, b : word)  -> word = word_of_bool(hw_ult(a, b))
+function alu_gt(a : word, b : word)  -> word = word_of_bool(hw_ult(b, a))
+function alu_slt(a : word, b : word) -> word = word_of_bool(hw_slt(a, b))
+function alu_sgt(a : word, b : word) -> word = word_of_bool(hw_slt(b, a))
 function alu_eq(a : word, b : word)  -> word = word_of_bool(a == b)
 function alu_iszero(a : word)        -> word = word_of_bool(word_is_zero(a))
 

@@ -12,7 +12,7 @@ let DEPTH_LIMIT : int = 1024
 /* ------------------------------ fetch ----------------------------------- */
 
 function read_push(n : int) -> word = {
-  var acc : word = word_of_int(0);
+  var acc : word = WORD_ZERO;
   foreach (k from 0 to (n - 1)) {
     acc = or_vec(sail_shiftleft(acc, 8), sail_zero_extend(code_byte(pc + k), 256))
   };
@@ -80,7 +80,7 @@ function run_call(mode : int) -> unit = {
   let caller = self_addr();
   let gas_req = pop_int();
   let target  = word_to_address(pop());
-  let value   = if mode == 0 | mode == 1 then pop() else word_of_int(0);
+  let value   = if mode == 0 | mode == 1 then pop() else WORD_ZERO;
   let args_off = pop_int(); let args_len = pop_int();
   let ret_off  = pop_int(); let ret_len  = pop_int();
 
@@ -116,7 +116,7 @@ function run_call(mode : int) -> unit = {
     then unsigned(k_get_balance(caller)) >= unsigned(value) else true;
 
   if not_bool(depth_ok) | not_bool(balance_ok) then {
-    returndata = [||]; gas_remaining = to_gas(gas_remaining + child_gas); push(word_of_int(0))
+    returndata = [||]; gas_remaining = to_gas(gas_remaining + child_gas); push(WORD_ZERO)
   } else if (an >= 1 & an <= 17) | (an == 256) then {   /* 256 = 0x100 P256VERIFY (EIP-7951) */
     let used = precompile_gas(an, args);
     /* gas check FIRST: an out-of-gas precompile call must not execute (e.g. a
@@ -130,13 +130,13 @@ function run_call(mode : int) -> unit = {
       let pout_n = if ret_len < list_len(out) then ret_len else list_len(out);
       mem_write_range(ret_off, bytes_slice(out, 0, pout_n));
       gas_remaining = to_gas(gas_remaining + (child_gas - used));
-      push(word_of_int(1))
+      push(WORD_ONE)
     } else {
       /* precompile failure (bad input) or OOG is a non-revert error: it consumes
          ALL the call's gas (no refund of child_gas), CALL returns 0, and the
          RETURNDATA buffer is EMPTY (no output escapes a failed precompile). */
       returndata = [||];
-      push(word_of_int(0))
+      push(WORD_ZERO)
     }
   } else {
     k_snapshot();
@@ -173,8 +173,8 @@ function run_call(mode : int) -> unit = {
        An exceptionally-halted child has empty output, so nothing is written. */
     let out_n = if ret_len < list_len(child_out) then ret_len else list_len(child_out);
     mem_write_range(ret_off, bytes_slice(child_out, 0, out_n));
-    if succeeded then { k_commit(); push(word_of_int(1)) }
-    else { k_revert(); push(word_of_int(0)) }
+    if succeeded then { k_commit(); push(WORD_ONE) }
+    else { k_revert(); push(WORD_ZERO) }
   }
 }
 
@@ -183,7 +183,7 @@ function run_call(mode : int) -> unit = {
 function run_create(is2 : bool) -> unit = {
   let creator = self_addr();
   let value = pop(); let off = pop_int(); let len = pop_int();
-  let salt  = if is2 then pop() else word_of_int(0);
+  let salt  = if is2 then pop() else WORD_ZERO;
 
   charge_expansion(off, len);
   charge(G_create); charge(initcode_gas(len));
@@ -203,7 +203,7 @@ function run_create(is2 : bool) -> unit = {
     let balance_ok : bool = unsigned(k_get_balance(creator)) >= unsigned(value);
 
     if not_bool(depth_ok) | not_bool(balance_ok) then {
-      returndata = [||]; gas_remaining = to_gas(gas_remaining + child_gas); push(word_of_int(0))
+      returndata = [||]; gas_remaining = to_gas(gas_remaining + child_gas); push(WORD_ZERO)
     } else {
       /* warm the target + bump the creator nonce BEFORE the child snapshot:
        * both persist even when the initcode reverts (EELS generic_create runs
@@ -216,7 +216,7 @@ function run_create(is2 : bool) -> unit = {
         /* CREATE address collision (code, nonzero nonce, or storage at the
          * target): no initcode runs, 0 is pushed, and the child gas is NOT
          * returned (EELS generic_create keeps it deducted). */
-        push(word_of_int(0))
+        push(WORD_ZERO)
       } else {
       k_snapshot();
       k_mark_created(new_addr);        /* EIP-6780: created this tx */
@@ -258,7 +258,7 @@ function run_create(is2 : bool) -> unit = {
          * process_create_message sets gas_left = 0). A reverting/failing
          * initcode keeps child_left as already folded in above. */
         if succeeded then gas_remaining = s_gas else ();
-        k_revert(); push(word_of_int(0))
+        k_revert(); push(WORD_ZERO)
       }
       }
     }
