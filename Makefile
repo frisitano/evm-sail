@@ -1,7 +1,7 @@
 # ===========================================================================
 # EL-IR Sail ISA — validation + execution entry point
 #
-#   make check          type-check the EL-IR machine model (sail/el_ir.sail)
+#   make check          type-check the EL-IR machine model (evm/el_ir.sail)
 #   make check-example  type-check the runnable block example
 #   make run-example    compile the example to C and EXECUTE a block
 #   make all            check + check-example
@@ -14,7 +14,7 @@
 
 SAIL ?= sail
 
-MODEL   := sail/el_ir.sail
+MODEL   := evm/el_ir.sail
 EXAMPLE := examples/run_block.sail
 
 # Sail runtime library (ships with the toolchain) and its C sources.
@@ -27,7 +27,7 @@ GMP_PREFIX ?= /opt/homebrew
 CFLAGS_GMP := -I$(GMP_PREFIX)/include -L$(GMP_PREFIX)/lib
 
 # Keccak-256 C accelerator (FFI). The model declares keccak_reset/absorb/word as
-# externs (sail/keccak.sail); native builds link this fast C implementation, the
+# externs (evm/keccak.sail); native builds link this fast C implementation, the
 # eth-act zkVM c-interface-accelerator boundary. --c-include injects the decls
 # into the Sail-generated C so the call sites compile.
 # zkvm-standards crypto accelerators: the standard reference impl + the Sail
@@ -75,4 +75,4 @@ fixtures:
 
 clean:
 	rm -f build_run_block build_run_block.c build_run_block.h build_ex build_ex.c build_ex.h
-	rm -rf sail_smt_cache sail/sail_smt_cache examples/sail_smt_cache
+	rm -rf sail_smt_cache evm/sail_smt_cache examples/sail_smt_cache

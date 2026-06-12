@@ -1,5 +1,5 @@
 /* Validate RLP encoding against the standard vectors. */
-$include "../sail/el_ir.sail"
+$include "../evm/el_ir.sail"
 $include "evm_primitives.sail"
 $include <string.sail>
 

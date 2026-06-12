@@ -13,7 +13,7 @@
 /* ======================================================================== */
 
 /* prelude_evm.sail sets `default Order dec` + pulls <prelude.sail>/<smt.sail>. */
-$include "../sail/prelude_evm.sail"
+$include "../evm/prelude_evm.sail"
 $include <string.sail>
 
 /* ----------------------- EL kernel ISA (the syscalls) ------------------- */

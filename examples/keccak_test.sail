@@ -1,5 +1,5 @@
 /* Validate the Sail Keccak-256 against known vectors. */
-$include "../sail/el_ir.sail"
+$include "../evm/el_ir.sail"
 $include "evm_primitives.sail"
 $include <string.sail>
 

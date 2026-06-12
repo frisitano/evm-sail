@@ -4,7 +4,7 @@ This directory cross-compiles the evm-sail Sail EVM into a **GMP-free, libc-IO-f
 statically-linked RISC-V guest** for the [eth-act zkVM standards](https://github.com/eth-act/zkvm-standards),
 and validates it by executing an Ethereum block end-to-end on `spike`.
 
-The proven program is the standalone Sail model in `../sail/` (a real, block-executable
+The proven program is the standalone Sail model in `../evm/` (a real, block-executable
 EVM). Here it is lowered Sail → C → `riscv64im_zicclsm-unknown-none-elf` and run on the
 bare ISA simulator, with the standard IO interface, guard regions, and termination
 semantics wired up.
@@ -56,7 +56,7 @@ successful_validation=0          # a failed validation is a NORMAL result
 
 The full design + stage-by-stage validation is in `STATELESS.md`. Vectors are produced
 host-side by `gen_vector.py` (`--bad` for the fail path); the SSZ codec, RLP decode,
-witness-MPT walk, and SSZ `hash_tree_root` live in `../sail/{ssz,rlp_decode,mpt_witness,
+witness-MPT walk, and SSZ `hash_tree_root` live in `../evm/{ssz,rlp_decode,mpt_witness,
 sha256,ssz_htr}.sail` (model-level, not pulled into `el_ir.sail`).
 
 ## Conformance to the standard target

@@ -34,12 +34,12 @@ revm)?
 
 ## Architecture: EVM user space / EL kernel
 
-- **EVM = user space** (`sail/execute.sail`, `interpreter.sail`, `gas.sail`,
+- **EVM = user space** (`evm/execute.sail`, `interpreter.sail`, `gas.sail`,
   `transaction.sail`): the opcode interpreter, the gas counter, and **all**
   policy — the full gas schedule, the EIP-2929/2200/3529 rules, transaction
   validity (EIP-1559/2930/3860/4844/7623/7702/7825), and *the decision of
   whether an effect happens*. Pure compute.
-- **EL = kernel / host** (`sail/el_kernel.sail`): the privileged world state —
+- **EL = kernel / host** (`evm/el_kernel.sail`): the privileged world state —
   accounts, storage, transient storage, warm sets, logs, refunds, snapshots,
   block/tx environment — reachable **only** through the EL syscall ISA:
 
@@ -84,7 +84,7 @@ revm, which is a production interpreter, not a specification.
 ## Layout
 
 ```
-sail/        the specification (el_ir.sail is the root include)
+evm/         the specification (el_ir.sail is the root include)
   el_kernel.sail      EL kernel: world state + the syscall ISA + ir_trace
   machine.sail        frame registers, gas counter, stack, code cursor
   memory.sail         per-frame byte memory (C-backed, O(1))
@@ -104,7 +104,6 @@ zkvm/        RISC-V zkVM guest target (riscv64im, stateless block validation)
   runtime/sailfix     GMP-free fixed-width Sail runtime (guest-shared)
   runtime/sail256     host-optimized variant (sized limbs, Knuth-D division)
   accel-host/         host crypto cdylib (blst, k256, c-kzg, aurora-modexp, p256)
-mapping/     the EL-syscall <-> AIR-channel and Sail <-> Rust mappings
 ```
 
 ## Build and run
@@ -154,5 +153,4 @@ Extracted from the `evm-asm` research workspace, where this model is the
 semantic front end of a specification-driven EVM AIR compiler (Event IR →
 checked facts → Constraint IR/AIR → WHIR proof backend). The internal name of
 the syscall ISA — **EL-IR** — is retained: the `TSyscall` effect stream is
-that proof system's AIR interface-channel stream, and the correspondence is
-documented in [`mapping/MAPPING.md`](mapping/MAPPING.md).
+that proof system's AIR interface-channel stream.

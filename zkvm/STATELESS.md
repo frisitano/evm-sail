@@ -71,14 +71,14 @@ elements). `uint256` is 32-byte little-endian; `uint64` 8-byte little-endian;
 
 - **keccak** — FFI accelerator (`ffi/keccak_ffi.c`); used by node_db, header
   hashes, secure-trie key hashing, post-state root.
-- **RLP** — `sail/rlp.sail` (encode). We need RLP **decode** for headers,
+- **RLP** — `evm/rlp.sail` (encode). We need RLP **decode** for headers,
   account leaves, storage leaves, transactions.
-- **MPT** — `sail/mpt.sail` builds a trie from pairs → root. We need MPT
+- **MPT** — `evm/mpt.sail` builds a trie from pairs → root. We need MPT
   **decode + walk** (`decode_witness_to_mpt` + `_trie_lookup`) over a
   `keccak(node) → node` db.
-- **state root** — `sail/state_root.sail` recomputes a full root; witness mode
+- **state root** — `evm/state_root.sail` recomputes a full root; witness mode
   recomputes from a partial incremental-MPT (post-change).
-- **block hash / header RLP** — `sail/block_hash.sail`.
+- **block hash / header RLP** — `evm/block_hash.sail`.
 - **execution** — `process_block` already runs txs/withdrawals; today it reads a
   flat seeded world. Stateless mode must serve `k_get_balance/nonce/code` + SLOAD
   from the witness MPT (lazy), keyed by `keccak(addr)`/`keccak(slot)`.
@@ -93,15 +93,15 @@ hash_tree_root** (needs **SHA-256**, a second C accelerator alongside keccak),
   emits a schema-prefixed `SszStatelessInput` for the fixture block with a real
   secure-trie witness, plus a sidecar of expected fields/roots/result bytes.
   `--bad` emits a tampered (corrupted `state_root`) vector for the fail path.
-- **S1 ✅ SSZ decode envelope** (`sail/ssz.sail`). Decodes `SszStatelessInput`
+- **S1 ✅ SSZ decode envelope** (`evm/ssz.sail`). Decodes `SszStatelessInput`
   from `read_input` via `ssz_src_byte`; offset navigation + the 540-byte payload
   fixed-region map.
-- **S2 ✅ Witness-backed reads** (`sail/rlp_decode.sail`, `sail/mpt_witness.sail`).
+- **S2 ✅ Witness-backed reads** (`evm/rlp_decode.sail`, `evm/mpt_witness.sail`).
   RLP decode, `build_node_db`, secure-trie walk (branch/extension/leaf, hex-prefix),
   account/storage leaf decode; the decoded block executes against witness state.
 - **S3 ✅ Post-state verification.** `compute_state_root()` over the executed
   world is checked against the decoded `payload.state_root`.
-- **S4 ✅ Public-output commitment** (`sail/sha256.sail`, `sail/ssz_htr.sail`).
+- **S4 ✅ Public-output commitment** (`evm/sha256.sail`, `evm/ssz_htr.sail`).
   SHA-256 accelerator + full SSZ `hash_tree_root` (zero-hash-pruned merkleization)
   → `new_payload_request_root`; emits SSZ `SszStatelessValidationResult` via
   `write_output` (105 bytes, byte-exact vs remerkleable).

@@ -6,7 +6,7 @@
 /* Compile + run:  make -C el-ir run-example                                  */
 /* ======================================================================== */
 
-$include "../sail/el_ir.sail"
+$include "../evm/el_ir.sail"
 $include "evm_primitives.sail"
 $include <string.sail>
 

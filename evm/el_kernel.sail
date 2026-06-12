@@ -88,8 +88,8 @@ union TraceEntry = {
   TSyscall : ELOp          /* a kernel syscall  -- an authenticated effect       */
 }
 
-/* create_address / create2_address are real (sail/keccak.sail). EVM precompiles
- * run through the C host accelerator in sail/precompile.sail (run_precompile). */
+/* create_address / create2_address are real (evm/keccak.sail). EVM precompiles
+ * run through the C host accelerator in evm/accelerators.sail (run_precompile). */
 
 /* ----------------------------- kernel state ----------------------------- */
 
@@ -408,7 +408,7 @@ function k_create_addr(a : address, nonce : int) -> address = create_address(a, 
 function k_create2_addr(a : address, salt : word, inithash : hash) -> address =
   create2_address(a, salt, inithash)
 /* precompile: returns (success, output) via the C host accelerator
- * (sail/precompile.sail). Gas is computed by the EVM (policy, sail/gas.sail). */
+ * (evm/accelerators.sail). Gas is computed by the EVM (policy, evm/gas.sail). */
 function k_precompile(num : int, input : list(byte)) -> (bool, list(byte)) = {
   record(EL_Precompile(num, list_len(input)));
   if (num >= 1 & num <= 17) | (num == 256) then run_precompile(num, input) else (false, [||])

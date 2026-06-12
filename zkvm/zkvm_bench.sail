@@ -6,7 +6,7 @@
 /* committing to the per-tx BAL refactor.  GUEST=zkvm_bench.sail ./build.sh run  */
 /* ======================================================================== */
 
-$include "../sail/el_ir.sail"
+$include "../evm/el_ir.sail"
 $include "../examples/evm_primitives.sail"
 
 val ssz_src_le = impure "ssz_src_le" : (int, int) -> bits(64)

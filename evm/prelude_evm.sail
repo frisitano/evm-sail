@@ -218,5 +218,5 @@ function alu_clz(x : word) -> word = {
   word_of_int(count)
 }
 
-/* KECCAK-256 is a real Sail implementation (sail/keccak.sail), included
+/* KECCAK-256 is a real Sail implementation (evm/keccak.sail), included
  * after this prelude. Self-contained so it compiles to the RISC-V target. */

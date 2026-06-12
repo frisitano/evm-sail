@@ -14,13 +14,13 @@
 /* only memset from libc.                                                       */
 /* ======================================================================== */
 
-$include "../sail/el_ir.sail"
+$include "../evm/el_ir.sail"
 $include "../examples/evm_primitives.sail"
-$include "../sail/ssz.sail"
-$include "../sail/rlp_decode.sail"
-$include "../sail/mpt_witness.sail"
-$include "../sail/sha256.sail"
-$include "../sail/ssz_htr.sail"
+$include "../evm/ssz.sail"
+$include "../evm/rlp_decode.sail"
+$include "../evm/mpt_witness.sail"
+$include "../evm/sha256.sail"
+$include "../evm/ssz_htr.sail"
 
 /* canonical public output: write one byte to write_output (zkvm/el_input.c) */
 val emit_out = impure "el_emit_out" : bits(8) -> unit
