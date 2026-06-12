@@ -40,7 +40,7 @@ let PER_EMPTY_ACCOUNT : gas = 25000 /* EIP-7702 PER_EMPTY_ACCOUNT_COST      */
 
 function calldata_cost(data : list(byte)) -> gas = {
   /* consume the list once (O(n)); list_nth-per-index would be O(n^2) on large initcode */
-  var g : gas = 0;
+  var g : int = 0;
   var rest : list(byte) = data;
   var more : bool = true;
   while more do {
@@ -49,7 +49,7 @@ function calldata_cost(data : list(byte)) -> gas = {
       [||]   => more = false
     }
   };
-  g
+  to_gas(g)
 }
 
 /* EIP-7623 calldata tokens: each zero byte = 1 token, each nonzero byte = 4. */
@@ -74,7 +74,7 @@ function intrinsic_gas(tx : Transaction) -> gas = {
   let al = G_al_address * list_len(tx.t_al_addrs) + G_al_key * list_len(tx.t_al_keys);
   let auth = PER_EMPTY_ACCOUNT * list_len(tx.t_auth_list);   /* EIP-7702 */
   let base = G_transaction + calldata_cost(tx.t_data) + al + auth;
-  if tx.t_is_create then base + G_txcreate + initcode_gas(list_len(tx.t_data)) else base
+  to_gas(if tx.t_is_create then base + G_txcreate + initcode_gas(list_len(tx.t_data)) else base)
 }
 
 /* EIP-7702: apply one authorization (validate against current state, set/clear the
@@ -179,7 +179,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
   process_auth_list(tx.t_auth_list);   /* EIP-7702: set delegations before execution (persist) */
   k_snapshot();
 
-  pc = 0; call_depth = 0; gas_remaining = tx.t_gas_limit - intrinsic;
+  pc = 0; call_depth = 0; gas_remaining = to_gas(tx.t_gas_limit - intrinsic);
   stack = [||]; mem_clear(); memory_size = 0;
   returndata = [||]; frame_output = [||]; frame_status = Running();
 
@@ -206,7 +206,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
       let code_ok = (list_len(deployed) <= MAX_CODE_SIZE)
                   & (match deployed { b :: _ => b != 0xef, [||] => true });  /* EIP-3541 */
       if code_ok & (gas_remaining >= deposit)
-      then { gas_remaining = gas_remaining - deposit; k_set_code(new_addr, deployed) }
+      then { gas_remaining = to_gas(gas_remaining - deposit); k_set_code(new_addr, deployed) }
       else exc_halt(OutOfGas)     /* failed deploy */
     } else ()
     }
@@ -221,7 +221,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
       let (ok, out) : (bool, list(byte)) =
         if used <= gas_remaining then k_precompile(an, tx.t_data) else (false, [||]);
       if ok & (used <= gas_remaining) then {
-        gas_remaining = gas_remaining - used;
+        gas_remaining = to_gas(gas_remaining - used);
         returndata = out; frame_output = out; frame_status = Halted(HaltReturn)
       } else exc_halt(OutOfGas)
     } else {
@@ -265,5 +265,5 @@ function process_transaction(tx : Transaction) -> Receipt = {
    * transfers; a failed tx has no surviving selfdestructs to apply). */
   if success then k_finalize_selfdestructs() else ();
 
-  struct { rc_success = success, rc_gas_used = gas_used, rc_logs = k_logs }
+  struct { rc_success = success, rc_gas_used = to_gas(gas_used), rc_logs = k_logs }
 }

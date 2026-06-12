@@ -99,7 +99,7 @@ function run_one() -> unit = {
   foreach (i from 0 to (n_bh - 1)) { let _ = i; bhs = list_append(bhs, [| nw() |]) };
   let txn : Transaction = struct {
     t_sender = sender, t_nonce = tnonce, t_gas_price = gp, t_priority_fee = pf,
-    t_gas_limit = gl, t_is_create = (isc != 0), t_to = dst, t_value = tval, t_data = dbytes,
+    t_gas_limit = to_gas(gl), t_is_create = (isc != 0), t_to = dst, t_value = tval, t_data = dbytes,
     t_al_addrs = al_addrs, t_al_keys = al_keys, t_blob_count = nblob,
     t_max_fee = maxfee, t_max_blob_fee = maxblobfee, t_max_priority = maxprio,
     t_is_setcode = (is4 != 0), t_auth_list = auths,

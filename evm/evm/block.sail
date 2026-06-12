@@ -26,4 +26,4 @@ function process_block(blk : Block) -> list(Receipt) = {
 }
 
 function total_gas_used(rs : list(Receipt)) -> gas =
-  match rs { [||] => 0, r :: rest => r.rc_gas_used + total_gas_used(rest) }
+  match rs { [||] => 0, r :: rest => to_gas(r.rc_gas_used + total_gas_used(rest)) }

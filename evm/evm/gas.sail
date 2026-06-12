@@ -45,18 +45,18 @@ let MAX_CODE_SIZE        : int = 24576
 function charge(amount : gas) -> unit =
   if amount <= 0 then ()
   else if gas_remaining < amount then exc_halt(OutOfGas)
-  else gas_remaining = gas_remaining - amount
+  else gas_remaining = to_gas(gas_remaining - amount)
 
 /* --------------------- memory-expansion gas ----------------------------- */
 
-function mem_cost(words : int) -> gas = G_memory * words + ediv_int(words * words, 512)
+function mem_cost(words : int) -> int = G_memory * words + ediv_int(words * words, 512)
 
 /* Gas to expand memory so that byte range [0 .. new_bytes) is addressable. */
 function expansion_gas(new_bytes : int) -> gas = {
   let new_words = ediv_int(new_bytes + 31, 32);
   let old_words = mem_size_words();
   if new_words <= old_words then 0
-  else mem_cost(new_words) - mem_cost(old_words)
+  else to_gas(mem_cost(new_words) - mem_cost(old_words))
 }
 
 /* Charge expansion to cover [off, off+len) when len > 0. EVM memory expands
@@ -124,7 +124,7 @@ function modexp_gas(args : list(byte)) -> gas = {
   let it = if iter < 1 then 1 else iter;
   /* EIP-7883: gas = max(500, mult*it) (no /3); EIP-2565: max(200, mult*it/3) */
   let g  = if osaka then mult * it else ediv_int(mult * it, 3);
-  if osaka then (if g < 500 then 500 else g) else (if g < 200 then 200 else g)
+  to_gas(if osaka then (if g < 500 then 500 else g) else (if g < 200 then 200 else g))
 }
 
 /* EIP-2537 BLS12-381 MSM discount tables (per-pair discount, /1000), index k=1..128. */
@@ -152,7 +152,7 @@ function bls_msm_gas(table : list(int), base : gas, maxd : int, k : int) -> gas 
   if k <= 0 then 0
   else {
     let d = if k >= 128 then maxd else list_nth(table, k - 1, maxd);
-    ediv_int(k * base * d, 1000)
+    to_gas(ediv_int(k * base * d, 1000))
   }
 }
 
@@ -161,7 +161,7 @@ function bls_msm_gas(table : list(int), base : gas, maxd : int, k : int) -> gas 
 function precompile_gas(num : int, args : list(byte)) -> gas = {
   let input_len = list_len(args);
   let words = ediv_int(input_len + 31, 32);
-  match num {
+  let g : int = match num {
     1 => 3000, 2 => 60 + 12 * words, 3 => 600 + 120 * words, 4 => 15 + 3 * words,
     5 => modexp_gas(args),
     6 => 150, 7 => 6000,
@@ -178,7 +178,8 @@ function precompile_gas(num : int, args : list(byte)) -> gas = {
     17 => 23800,                                                /* MAP_FP2_TO_G2    */
     256 => 6900,                                                /* P256VERIFY (EIP-7951, 0x100) */
     _ => 0
-  }
+  };
+  to_gas(g)
 }
 
 /* ----------------- EIP-2200/2929/3529 SSTORE cost+refund ---------------- */
@@ -212,19 +213,19 @@ function sstore_gas(original : word, current : word, new : word, cold : bool)
       } else ()
     }
   } else ();
-  (base + cold_cost, refund)
+  (to_gas(base + cold_cost), refund)
 }
 
 /* ------------------------- per-op dynamic gas --------------------------- */
 
 function keccak_gas(byte_len : int) -> gas =
-  G_keccak + G_keccak_word * ediv_int(byte_len + 31, 32)
+  to_gas(G_keccak + G_keccak_word * ediv_int(byte_len + 31, 32))
 
 function copy_gas(byte_len : int) -> gas =
-  G_copy_word * ediv_int(byte_len + 31, 32)
+  to_gas(G_copy_word * ediv_int(byte_len + 31, 32))
 
 function log_gas(num_topics : int, byte_len : int) -> gas =
-  G_log + G_logtopic * num_topics + G_logdata * byte_len
+  to_gas(G_log + G_logtopic * num_topics + G_logdata * byte_len)
 
 /* significant byte length of a non-negative integer (for EXP). */
 function byte_length(n : int) -> int =
@@ -232,16 +233,16 @@ function byte_length(n : int) -> int =
 termination_measure byte_length(n) = n
 
 function exp_gas(exponent : word) -> gas =
-  G_exp + G_expbyte * byte_length(unsigned(exponent))
+  to_gas(G_exp + G_expbyte * byte_length(unsigned(exponent)))
 
 function initcode_gas(byte_len : int) -> gas =
-  G_initcode_word * ediv_int(byte_len + 31, 32)
+  to_gas(G_initcode_word * ediv_int(byte_len + 31, 32))
 
 /* ----------------------- call gas (EIP-150 63/64) ----------------------- */
 /* The gas actually forwarded to a sub-call: min(requested, all-but-1/64). */
-function call_gas_cap(available : gas, requested : gas) -> gas = {
+function call_gas_cap(available : gas, requested : int) -> gas = {
   let all_but_64th = available - ediv_int(available, 64);
-  if requested < all_but_64th then requested else all_but_64th
+  if requested < all_but_64th then to_gas(requested) else to_gas(all_but_64th)
 }
 
 /* ======================================================================== */

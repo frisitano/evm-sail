@@ -105,7 +105,7 @@ function run_call(mode : int) -> unit = {
   let avail = gas_remaining;
   let base_child = call_gas_cap(avail, gas_req);
   let stipend = if word_nonzero(value) then G_callstipend else 0;
-  gas_remaining = avail - base_child;
+  gas_remaining = to_gas(avail - base_child);
   let child_gas = base_child + stipend;
 
   let args = if is_running() then mem_read_range(args_off, args_len) else [||];
@@ -116,7 +116,7 @@ function run_call(mode : int) -> unit = {
     then unsigned(k_get_balance(caller)) >= unsigned(value) else true;
 
   if not_bool(depth_ok) | not_bool(balance_ok) then {
-    returndata = [||]; gas_remaining = gas_remaining + child_gas; push(word_of_int(0))
+    returndata = [||]; gas_remaining = to_gas(gas_remaining + child_gas); push(word_of_int(0))
   } else if (an >= 1 & an <= 17) | (an == 256) then {   /* 256 = 0x100 P256VERIFY (EIP-7951) */
     let used = precompile_gas(an, args);
     /* gas check FIRST: an out-of-gas precompile call must not execute (e.g. a
@@ -129,7 +129,7 @@ function run_call(mode : int) -> unit = {
       if (mode == 0) & word_nonzero(value) then k_transfer(caller, target, value) else ();
       let pout_n = if ret_len < list_len(out) then ret_len else list_len(out);
       mem_write_range(ret_off, bytes_slice(out, 0, pout_n));
-      gas_remaining = gas_remaining + (child_gas - used);
+      gas_remaining = to_gas(gas_remaining + (child_gas - used));
       push(word_of_int(1))
     } else {
       /* precompile failure (bad input) or OOG is a non-revert error: it consumes
@@ -155,7 +155,7 @@ function run_call(mode : int) -> unit = {
       msg_caller = child_caller, msg_address = child_addr, msg_code_address = target,
       msg_value = child_value, msg_data = args, msg_is_static = child_static, msg_depth = s_depth + 1
     };
-    pc = 0; gas_remaining = child_gas; stack = [||]; set_code(k_get_exec_code(target));  /* EIP-7702 delegation */
+    pc = 0; gas_remaining = to_gas(child_gas); stack = [||]; set_code(k_get_exec_code(target));  /* EIP-7702 delegation */
     returndata = [||]; frame_output = [||]; frame_status = Running(); mem_frame_enter(); memory_size = 0;
     call_depth = s_depth + 1;
 
@@ -166,7 +166,7 @@ function run_call(mode : int) -> unit = {
 
     pc = s_pc; stack = s_stack; set_code(s_code); frame_output = s_out; message = s_msg;
     frame_status = s_status; mem_frame_leave(); memory_size = s_msize; call_depth = s_depth;
-    returndata = child_out; gas_remaining = s_gas + child_left;
+    returndata = child_out; gas_remaining = to_gas(s_gas + child_left);
 
     /* the output region is written on success AND revert (EELS generic_call) --
        and only min(ret_len, |output|) bytes: the rest of the region is untouched.
@@ -187,7 +187,7 @@ function run_create(is2 : bool) -> unit = {
 
   charge_expansion(off, len);
   charge(G_create); charge(initcode_gas(len));
-  if is2 then charge(G_keccak_word * ediv_int(len + 31, 32)) else ();
+  if is2 then charge(to_gas(G_keccak_word * ediv_int(len + 31, 32))) else ();
   let initcode = if is_running() then mem_read_range(off, len) else [||];
 
   if len > MAX_INITCODE_SIZE then exc_halt(InitCodeTooLarge)
@@ -198,12 +198,12 @@ function run_create(is2 : bool) -> unit = {
       else k_create_addr(creator, nonce);
 
     let avail = gas_remaining; let child_gas = avail - ediv_int(avail, 64);
-    gas_remaining = avail - child_gas;
+    gas_remaining = to_gas(avail - child_gas);
     let depth_ok : bool = call_depth + 1 <= DEPTH_LIMIT;
     let balance_ok : bool = unsigned(k_get_balance(creator)) >= unsigned(value);
 
     if not_bool(depth_ok) | not_bool(balance_ok) then {
-      returndata = [||]; gas_remaining = gas_remaining + child_gas; push(word_of_int(0))
+      returndata = [||]; gas_remaining = to_gas(gas_remaining + child_gas); push(word_of_int(0))
     } else {
       /* warm the target + bump the creator nonce BEFORE the child snapshot:
        * both persist even when the initcode reverts (EELS generic_create runs
@@ -231,7 +231,7 @@ function run_create(is2 : bool) -> unit = {
         msg_caller = creator, msg_address = new_addr, msg_code_address = new_addr,
         msg_value = value, msg_data = [||], msg_is_static = s_msg.msg_is_static, msg_depth = s_depth + 1
       };
-      pc = 0; gas_remaining = child_gas; stack = [||]; set_code(initcode);
+      pc = 0; gas_remaining = to_gas(child_gas); stack = [||]; set_code(initcode);
       returndata = [||]; frame_output = [||]; frame_status = Running(); mem_frame_enter(); memory_size = 0;
       call_depth = s_depth + 1;
 
@@ -247,10 +247,10 @@ function run_create(is2 : bool) -> unit = {
       pc = s_pc; stack = s_stack; set_code(s_code); frame_output = s_out; message = s_msg;
       frame_status = s_status; mem_frame_leave(); memory_size = s_msize; call_depth = s_depth;
       returndata = if succeeded then [||] else deployed;
-      gas_remaining = s_gas + child_left;
+      gas_remaining = to_gas(s_gas + child_left);
 
       if succeeded & code_ok & (child_left >= deposit) then {
-        gas_remaining = gas_remaining - deposit; k_set_code(new_addr, deployed); k_commit();
+        gas_remaining = to_gas(gas_remaining - deposit); k_set_code(new_addr, deployed); k_commit();
         push(address_to_word(new_addr))
       } else {
         /* a deposit-stage failure (0xEF prefix, oversize code, deposit OOG)

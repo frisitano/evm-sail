@@ -23,7 +23,16 @@ type hash    = bits(256)   /* keccak-256 / storage-key sized digest          */
 type byte    = bits(8)
 
 /* Gas is a non-negative integer counter (Rust u64 in the impl). */
-type gas = int
+/* Gas is a 64-bit-representable quantity (Sail compiles range types that fit
+ * int64 to machine integers -- the gas counter and schedule run native). The
+ * cap 2^62 exceeds any real gas limit, so SATURATING at it preserves the
+ * charge-then-out-of-gas semantics for attacker-controlled sizes (a clamped
+ * astronomic charge still exhausts any frame). */
+type gas = range(0, 4611686018427387904)
+function to_gas(x : int) -> gas =
+  if x < 0 then 0
+  else if x <= 4611686018427387904 then x
+  else 4611686018427387904
 
 let WORD_BYTES  : int = 32
 let WORD_BITS   : int = 256
