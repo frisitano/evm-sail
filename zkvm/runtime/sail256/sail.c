@@ -388,3 +388,7 @@ void sail_signed(sail_int *rop, const lbits op) {
 /* ===================== strings / assert ================================ */
 void create_sail_string(sail_string *str) { char *s = (char *)malloc(1); s[0] = 0; *str = s; }
 void kill_sail_string(sail_string *str) { free((void *)*str); }
+
+/* sail -c -O emits RECREATE calls (reuse-an-allocation hint; for inline
+ * fixed-width values it is just re-initialization) */
+void recreate_sail_int(sail_int *rop) { create_sail_int(rop); }
