@@ -84,7 +84,7 @@ function k_get_codehash(a : address) -> hash = {
     }
 }
 function k_account_is_empty(a : address) -> bool = {
-    /* unrecorded query */
+    /* EIP-161 "empty" account: nonce 0, balance 0, no code (unrecorded query) */
     let acc = kget(a);
     (acc.acc_codehash == KECCAK_EMPTY) & acc.acc_nonce == 0 & word_is_zero(acc.acc_balance)
 }

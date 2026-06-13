@@ -6,13 +6,28 @@
 /*   host/    the HOST: world state, per-frame memory, the kernel-function    */
 /*            surface (k_*), and the crypto accelerators. Pure mechanism --   */
 /*            no gas, no policy.                                              */
-/*   kernel/  the TRANSACTION KERNEL (= the EVM): the opcode interpreter,    */
+/*   evm/     the TRANSACTION KERNEL (= the EVM): the opcode interpreter,     */
 /*            the gas counter and full fork-gated schedule, transaction       */
 /*            validity, and the state transition. It operates over user       */
 /*            accounts (user space) and touches world state only through      */
 /*            the host kernel functions.                                      */
 /*   lib/     pure functions: keccak/sha256, RLP, the Merkle-Patricia trie,   */
 /*            state root, block hash, SSZ, and the stateless witness.         */
+/*                                                                           */
+/* Reading guide -- the state transition, outermost to innermost:            */
+/*                                                                           */
+/*   block.sail        process_block: run each tx, then apply withdrawals     */
+/*     transaction.sail  process_transaction: validity, intrinsic gas, fee    */
+/*                       deduction, nonce; then the top-level frame; refunds   */
+/*       interpreter.sail interpret: the fetch/execute loop; run_call /        */
+/*                       run_create build sub-frames; precompile dispatch      */
+/*         execute.sail   per-opcode semantics -- pure compute + gas here,     */
+/*                       every world effect issued as a k_* host call          */
+/*           kernel.sail  the k_* effect/query surface over host/state.sail    */
+/*                                                                           */
+/* gas.sail holds the schedule + charging; machine.sail the per-frame         */
+/* registers/stack; exceptions.sail the halt kinds. The post-state is         */
+/* authenticated by state_root.sail (and, statelessly, lib/mpt_witness.sail). */
 /* ======================================================================== */
 
 /* shared value model: 256-bit words, byte lists, addresses */
