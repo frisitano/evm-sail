@@ -81,3 +81,28 @@ function mem_write_range(off : int, src : list(byte)) -> unit = {
 
 /* Current memory size in 32-byte words (rounded up). */
 function mem_size_words() -> int = ediv_int(memory_size + 31, 32)
+
+/* ---- range-based operations (zero/one-copy: both sides live in C) ---- */
+val hm_move   = impure "hm_move"   : (bits(64), bits(64), bits(64)) -> unit
+val hc_to_mem = impure "hc_to_mem" : (bits(64), bits(64), bits(64)) -> unit
+val acc_begin_mem = impure "acc_begin_mem" : (bits(64), bits(64), bits(64)) -> unit
+
+/* MCOPY: overlapping-safe memory-to-memory copy (one C memmove) */
+function mem_mcopy(dst : int, src : int, len : int) -> unit =
+  hm_move(get_slice_int(64, dst, 0), get_slice_int(64, src, 0), get_slice_int(64, len, 0))
+
+/* CODECOPY: the current frame's code (already in the C buffer) into memory */
+function mem_codecopy(dst : int, off : int, len : int) -> unit =
+  hc_to_mem(get_slice_int(64, dst, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0))
+
+/* KECCAK-256 directly over the memory range [off, off+len): the bytes go from
+ * the C memory frame into the C accelerator without an intermediate list */
+function mem_keccak(off : int, len : int) -> word = {
+  acc_begin_mem(get_slice_int(64, 0, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0));
+  let _ = acc_exec();
+  let w0 : bits(64) = acc_word(get_slice_int(64, 0, 0));
+  let w1 : bits(64) = acc_word(get_slice_int(64, 1, 0));
+  let w2 : bits(64) = acc_word(get_slice_int(64, 2, 0));
+  let w3 : bits(64) = acc_word(get_slice_int(64, 3, 0));
+  append(w0, append(w1, append(w2, w3)))
+}

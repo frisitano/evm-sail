@@ -7,6 +7,7 @@
  * built during the same streaming pass (PUSH immediate data skipped). Frames
  * save/restore code by re-streaming on set_code, exactly as before. */
 #include "sail.h"
+#include "host_mem.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -69,3 +70,15 @@ void hc_word(lbits *rop, uint64_t i, uint64_t n) {
   }
 }
 #endif
+
+/* CODECOPY: code[off..off+len) -> memory[dst..), zero-padded past the end */
+unit hc_to_mem(uint64_t dst, uint64_t off, uint64_t len) {
+  if (!len) return UNIT;
+  uint8_t *d = hm_wr(dst, len);
+  if (!d) return UNIT;
+  for (uint64_t k = 0; k < len; k++) {
+    uint64_t i = off + k;
+    d[k] = (i < hj_len && i < HJ_MAXCODE) ? hc_code[i] : 0;
+  }
+  return UNIT;
+}

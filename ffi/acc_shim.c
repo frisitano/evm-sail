@@ -48,6 +48,18 @@ static void bls_out_g2(uint32_t off, const uint8_t *b192) {    /* blst 192B (c1,
 }
 
 unit acc_begin(uint64_t id) { ACC_id = (int)id; ACC_inlen = 0; ACC_outlen = 0; ACC_ok = 1; return UNIT; }
+/* begin + bulk-load the input from EVM memory [off, off+len) -- one memcpy,
+ * replacing a per-byte stream of an intermediate Sail list */
+unit acc_begin_mem(uint64_t id, uint64_t off, uint64_t len) {
+  acc_begin(id);
+  if (len > ACC_INMAX) len = ACC_INMAX;
+  if (len) {
+    const uint8_t *p = hm_rd(off, len);
+    memcpy(ACC_in, p, len);
+  }
+  ACC_inlen = (uint32_t)len;
+  return UNIT;
+}
 unit acc_push(uint64_t b)   { if (ACC_inlen < ACC_INMAX) ACC_in[ACC_inlen++] = (uint8_t)(b & 0xff); return UNIT; }
 unit acc_push8(uint64_t w)  {   /* 8 input bytes (big-endian) in one store when room */
   if (ACC_inlen + 8 <= ACC_INMAX) { for (int i = 0; i < 8; i++) ACC_in[ACC_inlen + i] = (uint8_t)(w >> (8 * (7 - i))); ACC_inlen += 8; }

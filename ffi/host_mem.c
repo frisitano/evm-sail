@@ -23,6 +23,7 @@ static int h_top = 0;   /* index of the current (innermost) frame */
 static void host_mem_ensure(size_t off) {
   h_memframe *f = &h_stack[h_top];
   if (off < f->cap) return;
+  if (off >= ((size_t)1 << 40)) return;            /* hard cap: gas can never pay for this */
   size_t ncap = f->cap ? f->cap : 4096;
   while (ncap <= off) ncap <<= 1;
   uint8_t *nb = (uint8_t *)realloc(f->buf, ncap);
@@ -69,6 +70,36 @@ unit host_mem_pop(const unit u) {
 uint64_t host_mem_read(uint64_t off) {
   h_memframe *f = &h_stack[h_top];
   return (off < f->cap) ? (uint64_t)f->buf[off] : 0;
+}
+
+/* ensure capacity (zero-filled) and return a READ pointer to [off, off+len) */
+const uint8_t *hm_rd(uint64_t off, uint64_t len) {
+  static const uint8_t zero = 0;
+  if (len == 0) return &zero;
+  host_mem_ensure((size_t)(off + len - 1));
+  h_memframe *f = &h_stack[h_top];
+  if (off + len > f->cap) return &zero;            /* OOM fallback */
+  return f->buf + off;
+}
+
+/* ensure capacity and return a WRITE pointer to [off, off+len) (the gas-side
+ * watermark is raised by charge_expansion before any copy opcode writes) */
+uint8_t *hm_wr(uint64_t off, uint64_t len) {
+  if (len == 0) return NULL;
+  host_mem_ensure((size_t)(off + len - 1));
+  h_memframe *f = &h_stack[h_top];
+  if (off + len > f->cap) return NULL;
+  return f->buf + off;
+}
+
+/* MCOPY: overlapping-safe copy within the current frame */
+unit hm_move(uint64_t dst, uint64_t src, uint64_t len) {
+  if (len) {
+    const uint8_t *s = hm_rd(src, len);
+    uint8_t *d = hm_wr(dst, len);
+    if (s && d) memmove(d, s, len);
+  }
+  return UNIT;
 }
 
 /* (bits(64) offset, bits(8) value) -> unit */

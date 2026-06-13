@@ -61,7 +61,7 @@ function execute(op : ast) -> unit = match op {
   /* ---- keccak: hash via kernel primitive ---- */
   KECCAK256() => { let off = pop_int(); let len = pop_int();
                       charge(keccak_gas(len)); charge_expansion(off, len);
-                      if is_running() then push(k_keccak(mem_read_range(off, len))) else () },
+                      if is_running() then push(mem_keccak(off, len)) else () },
 
   /* ---- environment / account (kernel reads, EVM prices them) ---- */
   ADDRESS()   => { charge(G_base); push(address_to_word(self_addr())) },
@@ -78,7 +78,7 @@ function execute(op : ast) -> unit = match op {
   CODESIZE()  => { charge(G_base); push(word_of_int(code_len)) },
   CODECOPY()  => { charge(G_verylow); let dest = pop_int(); let off = pop_int();
                       let len = pop_int(); charge(copy_gas(len)); charge_expansion(dest, len);
-                      if is_running() then mem_write_range(dest, bytes_slice(code, off, len)) else () },
+                      if is_running() then mem_codecopy(dest, off, len) else () },
   BALANCE()   => { let a = word_to_address(pop()); let warm = k_access_account(a);
                       charge(account_cost(warm)); push(k_get_balance(a)) },
   SELFBALANCE() => { charge(G_low); push(k_get_balance(self_addr())) },
@@ -120,7 +120,7 @@ function execute(op : ast) -> unit = match op {
   MCOPY()  => { charge(G_verylow); let dest = pop_int(); let src = pop_int(); let len = pop_int();
                    charge(copy_gas(len)); let hi = if dest > src then dest else src;
                    charge_expansion(hi, len);
-                   if is_running() then mem_write_range(dest, mem_read_range(src, len)) else () },
+                   if is_running() then mem_mcopy(dest, src, len) else () },
 
   /* ---- storage: gas/decision in EVM, effect in kernel ---- */
   SLOAD()  => { let s = pop(); let warm = k_access_slot(self_addr(), s);

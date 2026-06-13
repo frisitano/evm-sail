@@ -194,7 +194,7 @@ function run_create(is2 : bool) -> unit = {
   else {
     let nonce = k_get_nonce(creator);
     let new_addr : address =
-      if is2 then k_create2_addr(creator, salt, k_keccak(initcode))
+      if is2 & is_running() then k_create2_addr(creator, salt, mem_keccak(off, len))
       else k_create_addr(creator, nonce);
 
     let avail = gas_remaining; let child_gas = avail - ediv_int(avail, 64);

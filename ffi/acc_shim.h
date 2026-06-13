@@ -17,6 +17,7 @@
 #include "host_word.h"  /* native word predicates */
 #include "host_code.h"  /* JUMPDEST bitmap */
 unit     acc_begin(uint64_t id);   /* bits(64): select accelerator id, clear buffers */
+unit     acc_begin_mem(uint64_t id, uint64_t off, uint64_t len);  /* input := memory range */
 unit     acc_push(uint64_t b);      /* bits(8):  append one input byte */
 unit     acc_push8(uint64_t w);     /* bits(64): append 8 input bytes (big-endian) */
 uint64_t acc_exec(unit u);          /* run the standard accelerator; returns output length */
