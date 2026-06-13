@@ -1,4 +1,4 @@
-# EL-IR Sail EVM → eth-act zkVM RISC-V standard target
+# evm-sail → eth-act zkVM RISC-V standard target
 
 This directory cross-compiles the evm-sail Sail EVM into a **GMP-free, libc-IO-free,
 statically-linked RISC-V guest** for the [eth-act zkVM standards](https://github.com/eth-act/zkvm-standards),
@@ -13,7 +13,7 @@ semantics wired up.
 
 ```
 $ ./build.sh run
-[zkvm] EL-IR Sail EVM guest on riscv64im_zicclsm (GMP-free)
+[zkvm] evm-sail guest on riscv64im_zicclsm (GMP-free)
 input_size=0
 gas_used=43106
 storage0=42

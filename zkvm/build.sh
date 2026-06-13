@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ===========================================================================
-# Build the el-ir Sail EVM as a GMP-free guest for the eth-act zkVM RISC-V
+# Build evm-sail as a GMP-free guest for the eth-act zkVM RISC-V
 # standard target (riscv64im_zicclsm-unknown-none-elf) and (optionally) run it
 # on spike.
 #
 #   ./build.sh derisk   - build+run the HTIF de-risk program (harness check)
-#   ./build.sh guest    - build the full el-ir block guest ELF
+#   ./build.sh guest    - build the full evm-sail block guest ELF
 #   ./build.sh run       - build the guest and run it on spike
 #   ./build.sh clean     - remove build artifacts
 #
@@ -16,7 +16,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RT="$HERE/runtime"
 BUILD="$HERE/build"
-ELIR="$(cd "$HERE/.." && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
 
 SAIL="${SAIL:-sail}"
 GCC="${GCC:-riscv64-unknown-elf-gcc}"
@@ -33,7 +33,7 @@ ARCH=(-march=rv64im_zicclsm -mabi=lp64 -mcmodel=medany)
 CFLAGS=("${ARCH[@]}" -O2 -ffreestanding -nostdlib -fno-builtin
         -fno-stack-protector -fno-pic -mno-relax -DNDEBUG
         -ffunction-sections -fdata-sections
-        -I"$RT/sailfix" -I"$RT/freestanding" -I"$RT" -I"$ELIR/zkvm" -I"$ELIR/ffi")
+        -I"$RT/sailfix" -I"$RT/freestanding" -I"$RT" -I"$ROOT/zkvm" -I"$ROOT/ffi")
 # -lgcc supplies compiler runtime helpers; --gc-sections drops the unused Sail
 # diagnostic/format surface (and its gmp_printf/asprintf references).
 LDFLAGS=(-T "$RT/link.ld" -Wl,--no-relax -Wl,--gc-sections -nostdlib -static)
@@ -81,7 +81,7 @@ cmd_guest() {
   build_runtime
   # 0. Embed the schema-prefixed SSZ test vector as the preloaded private input
   #    (zkvm_input_bytes). A real zkVM host supplies these bytes instead.
-  local vec="${VEC:-$ELIR/zkvm/vectors/fixture_block.ssz}"
+  local vec="${VEC:-$ROOT/zkvm/vectors/fixture_block.ssz}"
   python3 - "$vec" "$BUILD/zkvm_input_data.c" <<'PY'
 import sys
 data = open(sys.argv[1], "rb").read()
@@ -99,7 +99,7 @@ PY
   #    el_input private-input reader) so the generated call sites compile.
   "$SAIL" -c --c-no-main --c-no-rts --c-preserve zkvm_run \
       --c-include el_input.h \
-      "${GUEST:-$ELIR/zkvm/zkvm_block.sail}" -o "$BUILD/zkvm_block"
+      "${GUEST:-$ROOT/zkvm/zkvm_block.sail}" -o "$BUILD/zkvm_block"
   # 2. Compile the generated model (stock Sail GMP-ABI, backed by mini-gmp).
   #    The model calls setup_rts/cleanup_rts (provided by runtime.c) without a
   #    prototype since --c-no-rts omits rts.h; downgrade that to a warning.
@@ -114,20 +114,20 @@ PY
   # 3b. Keccak-256 + SHA-256 C accelerators (c-interface-accelerators path).
   #     Pure C; need sail.h (-I$lib) for the unit/sail_int extern ABI types.
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
-      -Wno-unused -c "$ELIR/ffi/zkvm_accelerators.c" -o "$BUILD/zkvm_accelerators.o"
-  "$GCC" "${CFLAGS[@]}" -I"$lib" -I"$ELIR/ffi" -DACCEL_MMIO \
-      -Wno-unused -c "$ELIR/ffi/acc_shim.c" -o "$BUILD/acc_shim.o"
+      -Wno-unused -c "$ROOT/ffi/zkvm_accelerators.c" -o "$BUILD/zkvm_accelerators.o"
+  "$GCC" "${CFLAGS[@]}" -I"$lib" -I"$ROOT/ffi" -DACCEL_MMIO \
+      -Wno-unused -c "$ROOT/ffi/acc_shim.c" -o "$BUILD/acc_shim.o"
   # 3b'. Host accelerator device (spike --extlib): the crypto runs on the host,
   #      not as guest instructions. Reuses the SAME zkvm_accelerators behind the
   #      eth-act standard header, compiled for the HOST.
-  "$HOSTCC" -O2 -I"$ELIR/ffi" -c "$ELIR/ffi/zkvm_accelerators.c" -o "$BUILD/zkvm_accel_ref_host.o"
-  "$HOSTCXX" -std=c++17 -fPIC -shared -I"$SPIKE_INC" -I"$ELIR/ffi" -undefined dynamic_lookup \
-      -o "$ACCEL_SO" "$ELIR/zkvm/accel-device/accel_device.cc" "$BUILD/zkvm_accel_ref_host.o"
+  "$HOSTCC" -O2 -I"$ROOT/ffi" -c "$ROOT/ffi/zkvm_accelerators.c" -o "$BUILD/zkvm_accel_ref_host.o"
+  "$HOSTCXX" -std=c++17 -fPIC -shared -I"$SPIKE_INC" -I"$ROOT/ffi" -undefined dynamic_lookup \
+      -o "$ACCEL_SO" "$ROOT/zkvm/accel-device/accel_device.cc" "$BUILD/zkvm_accel_ref_host.o"
   # 3c. C host backends: memory/calldata, overlay maps, operand stack, word
   #     predicates, code store + frame descriptors.
   for hc in host_mem host_map host_stack host_word host_code host_nodedb; do
     "$GCC" "${CFLAGS[@]}" -I"$lib" \
-        -Wno-unused -c "$ELIR/ffi/$hc.c" -o "$BUILD/$hc.o"
+        -Wno-unused -c "$ROOT/ffi/$hc.c" -o "$BUILD/$hc.o"
   done
   # 4. Our freestanding runtime + IO + harness.
   "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra \

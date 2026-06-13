@@ -1,4 +1,4 @@
-/* C-backed (address, slot) -> 256-bit value maps for the EL-IR Sail model.
+/* C-backed (address, slot) -> 256-bit value maps for the evm-sail model.
  *
  * Maps (by id): 0 = EIP-1153 transient storage, 1 = the EIP-2929 warm-slot set
  * (low word 1 = warm), 2 = the persistent account STORAGE. The Sail assoc lists

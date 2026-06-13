@@ -1,5 +1,5 @@
 /* ===========================================================================
- * zkVM guest harness: drive the Sail EL-IR EVM block to completion and emit the
+ * zkVM guest harness: drive the Sail EVM block to completion and emit the
  * result through the standard write_output interface, then terminate with the
  * standardized success/abnormal semantics.
  *
@@ -82,7 +82,7 @@ int zkvm_start(void)
     size_t         in_size;
     read_input(&in_ptr, &in_size);
 
-    htif_puts("[zkvm] EL-IR Sail EVM guest on riscv64im_zicclsm (GMP-free)\n");
+    htif_puts("[zkvm] evm-sail guest on riscv64im_zicclsm (GMP-free)\n");
     emit_kv("input_size", (uint64_t)in_size);
 
     /* (2,3) Initialise the world and run the block, counting retired

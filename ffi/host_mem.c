@@ -1,4 +1,4 @@
-/* C-backed EVM memory for the EL-IR Sail model.
+/* C-backed EVM memory for the evm-sail model.
  *
  * Sail forbids recursive types, so an in-model balanced tree is impossible and a
  * list-backed memory is O(n) per access (O(n^2) over a fill/copy loop). Following

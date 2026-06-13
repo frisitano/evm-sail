@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Witness-reader coverage harness for the EL-IR Sail EVM.
+"""Witness-reader coverage harness for evm-sail.
 
 For each EEST fixture `pre` alloc, build a REAL secure-trie execution witness
 (py-trie, via zkvm/gen_vector.py), wrap it as a schema-prefixed SSZ

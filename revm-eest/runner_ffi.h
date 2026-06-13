@@ -1,7 +1,7 @@
 /* C-include for the EEST runner build (the ssz_src input source + crypto/
  * memory shims live in their own .c files; this just pulls the decls). */
-#ifndef EL_IR_RUNNER_FFI_H
-#define EL_IR_RUNNER_FFI_H
+#ifndef EVM_SAIL_RUNNER_FFI_H
+#define EVM_SAIL_RUNNER_FFI_H
 #include "sail.h"
 #include "../ffi/acc_shim.h"   /* zkvm-standards crypto accelerator shim (keccak/sha256/precompiles) */
 #include "../ffi/host_mem.h"     /* C-backed EVM memory (O(1) read/write, per-frame) */

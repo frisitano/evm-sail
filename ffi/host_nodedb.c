@@ -1,4 +1,4 @@
-/* C-backed witness node-db for the EL-IR Sail stateless reader.
+/* C-backed witness node-db for the evm-sail stateless reader.
  *
  * keccak(node) -> (offset, len) span into the SSZ witness buffer. See
  * host_nodedb.h for the rationale (kills the O(N^2) Sail assoc-list scan). The

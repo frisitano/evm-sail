@@ -1,4 +1,4 @@
-/* C-backed EVM memory for the EL-IR Sail model (see host_mem.c). Declared here so
+/* C-backed EVM memory for the evm-sail model (see host_mem.c). Declared here so
  * the Sail-generated C call sites are prototyped via `sail -c --c-include`.
  * Only mach_bits (uint64_t) cross the FFI, matching ffi/acc_shim.h. */
 #ifndef HOST_MEM_H

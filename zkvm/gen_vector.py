@@ -2,7 +2,7 @@
 """
 S0 — Canonical stateless test-vector generator (host side).
 
-Emits a schema-prefixed SSZ ``SszStatelessInput`` for the EL-IR fixture block
+Emits a schema-prefixed SSZ ``SszStatelessInput`` for the evm-sail fixture block
 (the same 1-tx block zkvm_block.sail runs: contract `PUSH1 0x2a; PUSH1 0x00;
 SSTORE; STOP`, plus a 500-wei withdrawal) together with a JSON sidecar of the
 decoded scalar fields, so the Sail SSZ decoder (S1) can diff against it.
@@ -13,7 +13,7 @@ The pre-state is a real Ethereum secure-trie (py-trie): keys keccak(address),
 values RLP([nonce,balance,storage_root,code_hash]); the trie's backing node db
 is the witness `state`, and the trie root is the parent header's state_root.
 
-Run:  ./.vecgen/bin/python gen_vector.py   (from el-ir/zkvm/)
+Run:  ./.vecgen/bin/python gen_vector.py   (from zkvm/)
 Out:  vectors/fixture_block.ssz  +  vectors/fixture_block.json
 
 NOTE: payload.state_root (POST-state) is a placeholder here (zeroed) — S1 only

@@ -37,7 +37,7 @@ register zkvm_out_gas : int = 0 /* total gas used                     */
 register zkvm_out_storage0 : int = 0 /* contract storage slot 0            */
 register zkvm_out_wbal : int = 0 /* withdrawer balance (wei)           */
 register zkvm_out_cbbal : int = 0 /* coinbase balance (wei)             */
-register zkvm_out_tracelen : int = 0 /* EL-IR stream length                */
+register zkvm_out_tracelen : int = 0 /* trace stream length                */
 register zkvm_out_success : int = 0 /* 1 if the tx receipt succeeded      */
 
 function eoa() -> address = 0x00000000000000000000000000000000000005e0

@@ -1,4 +1,4 @@
-/* C externs for the EL-IR EEST runner. The test input arrives on stdin as a
+/* C externs for the evm-sail EEST runner. The test input arrives on stdin as a
  * stream of varints ([len][big-endian bytes]) -- the same byte source the model
  * reads everywhere via ssz_src (io.sail); the run_eest.py / revm-eest encoders
  * produce it. We buffer all of stdin once and serve it by index. */
