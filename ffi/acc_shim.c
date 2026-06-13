@@ -13,6 +13,7 @@ static uint8_t  ACC_out[ACC_OUTMAX];
 static uint32_t ACC_outlen;
 static int      ACC_id;
 static int      ACC_ok;
+static const uint8_t *ACC_src = ACC_in;  /* the input bytes: ACC_in, or a source buffer read in place */
 
 /* EVM precompiles zero-pad their input to the field layout; read with padding. */
 #ifdef ACCEL_MMIO
@@ -62,7 +63,7 @@ static void bls_out_g2(uint32_t off, const uint8_t *b192) {    /* blst 192B (c1,
   bls_pad_fp(off + 128, b192 + 144); bls_pad_fp(off + 192, b192 + 96);
 }
 
-unit acc_begin(uint64_t id) { ACC_id = (int)id; ACC_inlen = 0; ACC_outlen = 0; ACC_ok = 1; return UNIT; }
+unit acc_begin(uint64_t id) { ACC_id = (int)id; ACC_inlen = 0; ACC_outlen = 0; ACC_ok = 1; ACC_src = ACC_in; return UNIT; }
 /* begin + bulk-load the input from EVM memory [off, off+len) -- one memcpy,
  * replacing a per-byte stream of an intermediate Sail list */
 extern const uint8_t *txd_ptr(uint64_t *len);
@@ -78,17 +79,21 @@ unit acc_begin_txd(uint64_t id) {
 unit acc_begin_mem(uint64_t id, uint64_t off, uint64_t len) {
   acc_begin(id);
   if (len > ACC_INMAX) len = ACC_INMAX;
-  if (len) {
-    const uint8_t *p = hm_rd(off, len);
-    memcpy(ACC_in, p, len);
+#ifdef ACCEL_MMIO
+  if (id == 0 || id == 2) {                 /* keccak/sha256 -> host device reads memory in place */
+    ACC_src = len ? hm_rd(off, len) : ACC_in;
+    ACC_inlen = (uint32_t)len;
+    return UNIT;
   }
+#endif
+  if (len) memcpy(ACC_in, hm_rd(off, len), len);  /* precompiles: in-guest dispatch + gas read ACC_in */
   ACC_inlen = (uint32_t)len;
   return UNIT;
 }
 unit acc_push(uint64_t b)   { if (ACC_inlen < ACC_INMAX) ACC_in[ACC_inlen++] = (uint8_t)(b & 0xff); return UNIT; }
 /* staged-input byte (zero past the end): precompile gas inspection (modexp
  * length header / exponent head, blake2f rounds) without a Sail byte list */
-uint64_t acc_in_byte(uint64_t i) { return (i < ACC_inlen) ? ACC_in[i] : 0; }
+uint64_t acc_in_byte(uint64_t i) { return (i < ACC_inlen) ? ACC_src[i] : 0; }
 unit acc_push8(uint64_t w)  {   /* 8 input bytes (big-endian) in one store when room */
   if (ACC_inlen + 8 <= ACC_INMAX) { for (int i = 0; i < 8; i++) ACC_in[ACC_inlen + i] = (uint8_t)(w >> (8 * (7 - i))); ACC_inlen += 8; }
   else { for (int i = 0; i < 8; i++) acc_push((w >> (8 * (7 - i))) & 0xff); }
@@ -99,7 +104,7 @@ uint64_t acc_exec(unit u) {
   (void)u;
 #ifdef ACCEL_MMIO
   if (ACC_id == 0 || ACC_id == 2)   /* keccak / sha256 -> host accelerator */
-    return accel_dev_call(ACC_id, ACC_in, ACC_inlen, ACC_out);
+    return accel_dev_call(ACC_id, ACC_src, ACC_inlen, ACC_out);
 #endif
   switch (ACC_id) {
     case 0: { zkvm_keccak256_hash h;
