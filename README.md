@@ -145,12 +145,11 @@ make run EX=examples/fixtures.sail          # 8 block fixtures
 make lint                                   # sail --all-warnings + source hygiene
 ```
 
-`make lint` (part of `make all`) enforces a warning-clean model and basic
-`*.sail` hygiene (no trailing whitespace, no tabs, final newline). The official
-Sail formatter is wired as `make fmt` / `make fmt-check`, but it is opt-in: it
-imposes a 4-space, line-reflowing style that would replace the repository's
-hand-aligned tables (the gas schedule, the opcode decode table), so it is not
-run by default.
+`make all` runs `check` + `check-example` + `lint` + `fmt-check`. `make lint`
+enforces a warning-clean model and basic `*.sail` hygiene (no trailing
+whitespace, no tabs, final newline); `make fmt-check` enforces that every
+`*.sail` is formatted with the official `sail --fmt` (canonical 4-space style).
+`make fmt` reformats in place.
 
 Run the conformance suite against a local
 [execution-spec-tests](https://github.com/ethereum/execution-spec-tests)

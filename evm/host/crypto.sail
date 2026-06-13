@@ -24,15 +24,19 @@ function stage_precompile_txd(num : int) -> unit = acc_begin_txd(get_slice_int(6
  * the accelerator buffer for returndata adoption (hr_capture_acc). On failure
  * the CALL returns 0 (handled by the interpreter). */
 function run_precompile_staged() -> bool = {
-  let _ = acc_exec();
-  unsigned(acc_ok()) == 1
+    let _ = acc_exec();
+    unsigned(acc_ok()) == 1
 }
 
 /* list-in/list-out wrapper (vector tests; the EVM uses the staged path) */
 function run_precompile(num : int, input : list(byte)) -> (bool, list(byte)) = {
-  acc_begin(get_slice_int(64, num, 0));
-  acc_push_all(input);
-  let n = unsigned(acc_exec());
-  let ok = unsigned(acc_ok()) == 1;
-  if not_bool(ok) then (false, [||]) else (true, acc_read(n))
+    acc_begin(get_slice_int(64, num, 0));
+    acc_push_all(input);
+    let n = unsigned(acc_exec());
+    let ok = unsigned(acc_ok()) == 1;
+    if not_bool(ok) then {
+        (false, [||])
+    } else {
+        (true, acc_read(n))
+    }
 }

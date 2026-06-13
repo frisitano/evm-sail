@@ -6,7 +6,7 @@
 #   make run-example    compile the example to C and EXECUTE a block
 #   make lint            sail --all-warnings + source hygiene (trailing ws/tabs/newline)
 #   make fmt             format *.sail with the official `sail --fmt` (opt-in)
-#   make all            check + check-example + lint
+#   make all            check + check-example + lint + fmt-check
 #   make clean          remove build artifacts
 #
 # Requires the rems-project Sail toolchain (`sail`) on PATH, installed via
@@ -48,7 +48,7 @@ help:
 	@echo "  make lint           - sail --all-warnings + source hygiene"
 	@echo "  make fmt            - format every *.sail with sail --fmt (opinionated; opt-in)"
 	@echo "  make fmt-check      - verify *.sail match sail --fmt"
-	@echo "  make all            - check + check-example + lint"
+	@echo "  make all            - check + check-example + lint + fmt-check"
 
 check:
 	$(SAIL) $(MODEL)
@@ -65,7 +65,7 @@ fmt:
 fmt-check:
 	@SAIL=$(SAIL) bash scripts/fmt-sail.sh --check
 
-all: check check-example lint
+all: check check-example lint fmt-check
 
 # Compile the example to C against the Sail runtime, then run it. Executes a
 # one-transaction block and prints the resulting state / gas / receipt.
