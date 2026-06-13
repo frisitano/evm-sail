@@ -1,5 +1,5 @@
 /* ======================================================================== */
-/* SSZ decoder for the canonical stateless input, read from PRIVATE INPUT.    */
+/* I/O: decode the canonical stateless INPUT (SSZ), read from PRIVATE INPUT.   */
 /*                                                                           */
 /* Mirrors execution-specs (projects/zkevm) forks/amsterdam stateless_ssz.py: */
 /* a 2-byte big-endian schema id (0x0001) precedes SSZ(SszStatelessInput).     */

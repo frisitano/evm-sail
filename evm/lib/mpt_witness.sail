@@ -5,7 +5,7 @@
 /* decode. Storage reads reuse the same walk against an account's storage root. */
 /*                                                                           */
 /* Depends on rlp_decode.sail (RlpField/rlp_node_items) + keccak (evm.sail) + */
-/* the SSZ witness-list readers (ssz.sail). Pure given the node db; the db is   */
+/* the SSZ witness-list readers (io.sail). Pure given the node db; the db is   */
 /* built once from witness.state.                                              */
 /* ======================================================================== */
 
