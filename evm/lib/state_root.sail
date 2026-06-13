@@ -8,7 +8,6 @@
 /* compute_state_root() == a block's post-state root authenticates execution. */
 /* ======================================================================== */
 
-function eth_code_hash(cb : list(byte)) -> bits(256) = keccak256(cb)
 
 /* Reused account-RLP payload accumulator. account_rlp is invoked once per account
  * when authenticating the post-state root (compute_state_root); a block-level
@@ -51,7 +50,7 @@ function storage_pairs(a : address) -> list(TriePair) = {
 function storage_root(a : address) -> bits(256) = trie_root(storage_pairs(a))
 
 function acc_is_empty(acc : Account) -> bool =
-  match acc.acc_code { [||] => acc.acc_nonce == 0 & word_is_zero(acc.acc_balance), _ => false }
+  (acc.acc_codehash == KECCAK_EMPTY) & acc.acc_nonce == 0 & word_is_zero(acc.acc_balance)
 
 /* secure-trie pairs for all non-empty accounts */
 function state_pairs(entries : list(AccountEntry)) -> list(TriePair) =
@@ -61,7 +60,7 @@ function state_pairs(entries : list(AccountEntry)) -> list(TriePair) =
               else (struct {
                 tp_key = to_nibbles(word_to_bytes32(keccak256(address_to_bytes(e.ae_addr)))),
                 tp_val = account_rlp(e.ae_acc.acc_nonce, e.ae_acc.acc_balance,
-                                     storage_root(e.ae_addr), eth_code_hash(e.ae_acc.acc_code))
+                                     storage_root(e.ae_addr), e.ae_acc.acc_codehash)
               }) :: state_pairs(r)
   }
 

@@ -103,7 +103,7 @@ function run_call(mode : int) -> unit = {
   let warm = k_access_account(target);
   charge(account_cost(warm));
   /* EIP-7702: resolving a delegation designation charges the delegate's access */
-  let (tg_deleg, tg_target) = deleg_target(k_get_code(target));
+  let (tg_deleg, tg_target) = k_deleg_target(target);
   if tg_deleg then { let dw = k_access_account(tg_target); charge(account_cost(dw)) } else ();
   if word_nonzero(value) then {
     charge(G_callvalue);

@@ -222,11 +222,35 @@ unit cs_to_mem(uint64_t a2, uint64_t a1, uint64_t a0,
   return UNIT;
 }
 
-/* code bytes for accelerator staging (EXTCODEHASH keccak input) */
-const uint8_t *cs_bytes(uint64_t a2, uint64_t a1, uint64_t a0, uint64_t *len) {
+/* EIP-7702 delegation probe: (is_designation << 160) | target, in one call
+ * (this runs on every CALL-family target; reading the code any other way
+ * would be O(|code|) or a code-db walk) */
+void cs_deleg(lbits *rop, uint64_t a2, uint64_t a1, uint64_t a0) {
   const cs_ent *e = cs_get(a2, a1, a0);
-  *len = e ? e->len : 0;
-  return e ? e->p : NULL;
+  int deleg = e && e->len == 23 && e->p[0] == 0xef && e->p[1] == 0x01 && e->p[2] == 0x00;
+#ifdef SAIL_INT_LIMBS
+  rop->len = 168;
+  rop->d[0] = rop->d[1] = rop->d[2] = rop->d[3] = 0;
+  if (deleg) {
+    const uint8_t *q = e->p + 3;                /* 20-byte target, big-endian */
+    uint64_t w0 = 0, w1 = 0, w2 = 0;
+    for (int i = 0;  i < 4;  i++) w2 = (w2 << 8) | q[i];       /* bits 159..128 */
+    for (int i = 4;  i < 12; i++) w1 = (w1 << 8) | q[i];       /* bits 127..64  */
+    for (int i = 12; i < 20; i++) w0 = (w0 << 8) | q[i];       /* bits  63..0   */
+    rop->d[0] = w0; rop->d[1] = w1; rop->d[2] = w2 | (1ull << 32);  /* flag: bit 160 */
+  }
+#else
+  rop->len = 168;
+  mpz_set_ui(*rop->bits, 0);
+  if (deleg) {
+    mpz_set_ui(*rop->bits, 1);
+    mpz_mul_2exp(*rop->bits, *rop->bits, 160);
+    mpz_t t; mpz_init(t);
+    mpz_import(t, 20, 1, 1, 0, 0, e->p + 3);
+    mpz_add(*rop->bits, *rop->bits, t);
+    mpz_clear(t);
+  }
+#endif
 }
 
 /* ------------------------------ accessors ------------------------------ */

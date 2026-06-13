@@ -70,7 +70,7 @@ function seed_account_from_witness(adb : list((bits(256), list(byte))),
   if list_len(leaf) > 0 then {
     let (nonce, bal, _, chash) = decode_account(leaf);
     let acode = if chash == EMPTY_CODE_HASH then [||] else node_db_lookup(cdb, chash);
-    k_seed_account(addr, struct { acc_nonce = nonce, acc_balance = bal, acc_code = acode })
+    k_seed_account(addr, nonce, bal, acode)
   } else ()
 }
 
@@ -83,7 +83,7 @@ function seed_account_from_store(cdb : list((bits(256), list(byte))), addr : add
   if list_len(leaf) > 0 then {
     let (nonce, bal, _, chash) = decode_account(leaf);
     let acode = if chash == EMPTY_CODE_HASH then [||] else node_db_lookup(cdb, chash);
-    k_seed_account(addr, struct { acc_nonce = nonce, acc_balance = bal, acc_code = acode })
+    k_seed_account(addr, nonce, bal, acode)
   } else ()
 }
 

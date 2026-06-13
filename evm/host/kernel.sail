@@ -56,23 +56,24 @@ function k_tstore(a : address, s : word, v : word) -> unit = {
 /* --- accounts --- */
 function k_get_balance(a : address) -> word = { kget(a).acc_balance }
 function k_get_nonce(a : address) -> int = { kget(a).acc_nonce }
-function k_get_code(a : address) -> list(byte) = { kget(a).acc_code }
+function k_get_code(a : address) -> list(byte) = codedb_lookup(kget(a).acc_codehash)
+/* EXTCODEHASH: a field read -- the hash IS the account's code binding.
+ * A truly empty (nonexistent) account reads as 0 (EIP-1052). */
 function k_get_codehash(a : address) -> hash = {
-    let acc = kget(a);
-  match acc.acc_code { [||] => if acc.acc_nonce == 0 & word_is_zero(acc.acc_balance)
-                               then word_of_int(0) else keccak256([||]),
-                       _ => acc_hash_code(a) }
+  let acc = kget(a);
+  if (acc.acc_codehash == KECCAK_EMPTY) & acc.acc_nonce == 0 & word_is_zero(acc.acc_balance)
+  then word_of_int(0) else acc.acc_codehash
 }
 function k_account_is_empty(a : address) -> bool = {   /* unrecorded query */
   let acc = kget(a);
-  match acc.acc_code { [||] => acc.acc_nonce == 0 & word_is_zero(acc.acc_balance), _ => false }
+  (acc.acc_codehash == KECCAK_EMPTY) & acc.acc_nonce == 0 & word_is_zero(acc.acc_balance)
 }
 /* CREATE/CREATE2/create-tx address-collision test (unrecorded query): the
  * target is occupied if it has code OR a nonzero nonce OR any storage
  * (EELS account_has_code_or_nonce || account_has_storage). */
 function k_account_occupied(a : address) -> bool = {
   let acc = kget(a);
-  let has_code : bool = match acc.acc_code { [||] => false, _ => true };
+  let has_code : bool = acc.acc_codehash != KECCAK_EMPTY;
   has_code | (acc.acc_nonce != 0) | map_has_addr(MAP_STORAGE, a)
 }
 function k_transfer(src : address, dst : address, v : word) -> unit = {
@@ -86,7 +87,9 @@ function k_bump_nonce(a : address) -> unit = {
 }
 function k_set_code(a : address, c : list(byte)) -> unit = {
   jpush(JAcct(a, kget(a)));
-  kset(a, { kget(a) with acc_code = c });
+  let h : hash = keccak256(c);
+  codedb_add(h, c);
+  kset(a, { kget(a) with acc_codehash = h });
   cs_store_code(a, c)
 }
 
@@ -121,8 +124,18 @@ function deleg_target(c : list(byte)) -> (bool, address) =
     _ => (false, ZERO_ADDR)
   }
 
-/* EXTCODESIZE / EXTCODECOPY via the execution mirror (the Sail acc_code list
- * defines the value; walking it is O(|code|) per opcode) */
+val cs_deleg = impure "cs_deleg" : (bits(64), bits(64), bits(64)) -> bits(168)
+/* EIP-7702 delegation of addr's STORED code, probed via the execution mirror
+ * in ONE host call (this runs on every CALL-family target): bit 160 = is a
+ * delegation designation, low 160 bits = the designated target. */
+function k_deleg_target(a : address) -> (bool, address) = {
+  let aw : word = sail_zero_extend(a, 256);
+  let r : bits(168) = cs_deleg(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0]);
+  (r[160] == bitone, r[159 .. 0])
+}
+
+/* EXTCODESIZE / EXTCODECOPY via the execution mirror (the semantic code db
+ * defines the value; walking a code list is O(|code|) per opcode) */
 function k_get_code_size(a : address) -> int = {
   let aw : word = sail_zero_extend(a, 256);
   unsigned(cs_len(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0]))
@@ -135,7 +148,12 @@ function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
             get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
 }
 /* used only by the tx driver to seed pre-state (no trace entry) */
-function k_seed_account(a : address, acc : Account) -> unit = { kset(a, acc); cs_store_code(a, acc.acc_code) }
+function k_seed_account(a : address, nonce : int, bal : word, c : list(byte)) -> unit = {
+  let h : hash = keccak256(c);
+  codedb_add(h, c);
+  kset(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = h });
+  cs_store_code(a, c)
+}
 function k_seed_storage(a : address, s : word, v : word) -> unit =
   map_store(MAP_STORAGE, a, s, v)   /* seeds the base layer (only layer live here) */
 

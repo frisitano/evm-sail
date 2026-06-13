@@ -22,5 +22,5 @@ uint64_t hc_len(const unit u);                     /* current frame code len  */
 uint64_t cs_len(uint64_t a2, uint64_t a1, uint64_t a0);       /* EXTCODESIZE  */
 unit cs_to_mem(uint64_t a2, uint64_t a1, uint64_t a0,
                uint64_t dst, uint64_t off, uint64_t len);     /* EXTCODECOPY  */
-const uint8_t *cs_bytes(uint64_t a2, uint64_t a1, uint64_t a0, uint64_t *len);
+void cs_deleg(lbits *rop, uint64_t a2, uint64_t a1, uint64_t a0);  /* 7702  */
 #endif

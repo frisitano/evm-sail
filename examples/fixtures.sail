@@ -20,9 +20,9 @@ function coinbase_a() -> address = 0x000000000000000000000000000000000000c01b
 
 /* ------------------------------ helpers --------------------------------- */
 function fund(a : address, wei : int) -> unit =
-  k_seed_account(a, struct { acc_nonce = 0, acc_balance = word_of_int(wei), acc_code = [||] })
+  k_seed_account(a, 0, word_of_int(wei), [||])
 function deploy(a : address, c : list(byte)) -> unit =
-  k_seed_account(a, struct { acc_nonce = 1, acc_balance = word_of_int(0), acc_code = c })
+  k_seed_account(a, 1, word_of_int(0), c)
 
 function std_env() -> BlockEnv = struct {
   be_number = word_of_int(21000000), be_timestamp = word_of_int(1700000000),
@@ -122,7 +122,7 @@ function f6_create() -> unit = {
   let rs = process_block(block1(create_tx(alice(), 200000,
              [| 0x60,0x00, 0x60,0x00, 0x53, 0x60,0x01, 0x60,0x00, 0xf3 |])));
   let new_addr = create_address(alice(), 0);
-  let deployed_len = list_len(kget(new_addr).acc_code);
+  let deployed_len = k_get_code_size(new_addr);
   line("  F6 CREATE      : ", concat_str(yn(rsucc(rs)),
     concat_str(concat_str("  gas=", dec_str(rgas(rs))),
                concat_str("  deployed_code_len=", dec_str(deployed_len)))));

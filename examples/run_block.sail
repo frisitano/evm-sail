@@ -19,10 +19,8 @@ function contract_code() -> list(byte) = [| 0x60, 0x2a, 0x60, 0x00, 0x55, 0x00 |
 
 function main() -> unit = {
   /* host seeds pre-state */
-  k_seed_account(eoa(), struct {
-    acc_nonce = 0, acc_balance = word_of_int(1000000000000000000), acc_code = [||] });
-  k_seed_account(contract(), struct {
-    acc_nonce = 1, acc_balance = word_of_int(0), acc_code = contract_code() });
+  k_seed_account(eoa(), 0, word_of_int(1000000000000000000), [||]);
+  k_seed_account(contract(), 1, word_of_int(0), contract_code());
 
   let env : BlockEnv = struct {
     be_number = word_of_int(21000000), be_timestamp = word_of_int(1700000000),

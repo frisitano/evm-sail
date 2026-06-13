@@ -59,7 +59,7 @@ function run_one() -> unit = {
     let _ = i;
     let a = na(); let nonce = ni(); let bal = nw();
     let clen = ni(); let cbytes = nbytes(clen);
-    k_seed_account(a, struct { acc_nonce = nonce, acc_balance = bal, acc_code = cbytes });
+    k_seed_account(a, nonce, bal, cbytes);
     let nsto = ni();
     foreach (j from 0 to nsto - 1) { let _ = j; let s = nw(); let v = nw(); k_seed_storage(a, s, v) }
   };

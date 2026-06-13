@@ -49,21 +49,6 @@ function acc_hash(id : int, msg : list(byte)) -> bits(256) = {
 }
 
 val acc_in_byte = impure "acc_in_byte" : bits(64) -> bits(8)
-val acc_begin_cs = impure "acc_begin_cs" : (bits(64), bits(64), bits(64), bits(64)) -> unit
-
-/* keccak over an account's STORED code (EXTCODEHASH) staged straight from the
- * code store -- no byte list, no per-byte stream */
-function acc_hash_code(a : bits(160)) -> bits(256) = {
-  let aw : bits(256) = sail_zero_extend(a, 256);
-  acc_begin_cs(get_slice_int(64, 0, 0), aw[191 .. 128], aw[127 .. 64], aw[63 .. 0]);
-  let _ = acc_exec();
-  let w0 : bits(64) = acc_word(get_slice_int(64, 0, 0));
-  let w1 : bits(64) = acc_word(get_slice_int(64, 1, 0));
-  let w2 : bits(64) = acc_word(get_slice_int(64, 2, 0));
-  let w3 : bits(64) = acc_word(get_slice_int(64, 3, 0));
-  append(w0, append(w1, append(w2, w3)))
-}
-
 /* staged-input byte (zero past the end). The EVM stages a precompile's input
  * once (a C-side snapshot of the caller's memory slice / the tx calldata) and
  * gas inspection reads the few bytes it needs O(1) -- no Sail byte list. */

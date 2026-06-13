@@ -235,7 +235,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
         msg_value = tx.t_value, msg_data_len = dlen, msg_is_static = false, msg_depth = 0
       };
       /* EIP-7702: at the tx level the delegate is warmed but not separately charged */
-      let (tx_deleg, tx_dtgt) = deleg_target(k_get_code(tx.t_to));
+      let (tx_deleg, tx_dtgt) = k_deleg_target(tx.t_to);
       if tx_deleg then { let _ = k_access_account(tx_dtgt); () } else ();
       frame_code_exec(tx.t_to, tx_deleg, tx_dtgt);   /* follow a delegation designation */
       interpret()
