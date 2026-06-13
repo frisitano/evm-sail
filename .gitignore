@@ -30,3 +30,9 @@ revm-eest/target/
 
 # generated spec HTML (regenerate with: make html)
 docs/evm-sail.html
+docs/evm-sail.pdf
+docs/evm-sail.sail
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc

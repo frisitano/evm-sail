@@ -25,7 +25,7 @@ SAIL_FILES := $(shell find . -name '*.sail' | sort)
 # since `sail --fmt` normalizes trailing whitespace, tabs, and final newlines).
 WARN_ROOTS := sail/evm.sail zkvm/zkvm_block.sail
 
-.PHONY: all check clean help lint fmt fmt-check html
+.PHONY: all check clean help lint fmt fmt-check html pdf
 
 help:
 	@echo "evm-sail targets:"
@@ -35,6 +35,7 @@ help:
 	@echo "  make fmt-check      - verify *.sail match sail --fmt"
 	@echo "  make all            - check + lint + fmt-check"
 	@echo "  make html           - render the spec to docs/evm-sail.html"
+	@echo "  make pdf            - typeset the spec to docs/evm-sail.pdf"
 
 check:
 	$(SAIL) $(MODEL)
@@ -65,6 +66,16 @@ html:
 	( cd $$tmp && $(SAIL) evm-sail.sail --html -o html ); \
 	mkdir -p docs && cp $$tmp/html/evm-sail.html docs/evm-sail.html && rm -rf $$tmp; \
 	echo "wrote docs/evm-sail.html ($$(wc -c < docs/evm-sail.html | tr -d ' ') bytes)"
+
+# Typeset the spec to a PDF via docs/spec.tex (listings). Same concatenation as
+# `html`; perl normalizes the stray em-dash so the source is plain ASCII for TeX.
+pdf:
+	@order=$$(grep -E '^\$$include "' $(MODEL) | sed -E 's/.*"([^"]+)".*/\1/'); \
+	: > docs/evm-sail.sail; \
+	for p in $$order; do printf '\n/* === sail/%s === */\n\n' "$$p" >> docs/evm-sail.sail; perl -CSD -pe 's/\x{2014}/--/g' "sail/$$p" >> docs/evm-sail.sail; done; \
+	( cd docs && pdflatex -interaction=nonstopmode -halt-on-error spec.tex >/dev/null && pdflatex -interaction=nonstopmode spec.tex >/dev/null ); \
+	mv docs/spec.pdf docs/evm-sail.pdf; rm -f docs/spec.aux docs/spec.log docs/spec.out docs/spec.toc docs/evm-sail.sail; \
+	echo "wrote docs/evm-sail.pdf ($$(wc -c < docs/evm-sail.pdf | tr -d ' ') bytes)"
 
 clean:
 	rm -rf sail_smt_cache sail/sail_smt_cache

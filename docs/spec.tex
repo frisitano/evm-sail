@@ -1,0 +1,26 @@
+% LaTeX wrapper for the evm-sail specification PDF.
+% `make pdf` generates docs/evm-sail.sail (the modules concatenated in
+% evm.sail's $include order) and compiles this file to docs/evm-sail.pdf.
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=0.7in]{geometry}
+\usepackage{listings,xcolor,fancyhdr,hyperref}
+\hypersetup{colorlinks,linkcolor=blue,pdftitle={evm-sail specification}}
+\lstdefinelanguage{Sail}{
+  morekeywords={function,val,let,var,register,struct,enum,union,type,bitfield,
+    mapping,scattered,end,if,then,else,match,foreach,while,do,return,forall,
+    default,overload,infix,infixl,infixr,as,by,in,and,clause,termination_measure,
+    impure,pure,Order,dec,inc,Type,Int,Bool,true,false,bits,int,bool,unit},
+  sensitive=true, morecomment=[s]{/*}{*/}, morestring=[b]"}
+\lstset{language=Sail, basicstyle=\ttfamily\scriptsize,
+  commentstyle=\color{green!45!black}, keywordstyle=\color{purple!80!black}\bfseries,
+  stringstyle=\color{red!70!black}, breaklines=true, breakatwhitespace=true,
+  columns=fullflexible, numbers=left, numberstyle=\tiny\color{gray}, showstringspaces=false}
+\title{\textbf{evm-sail}\\[2pt]\large A formal, executable specification of the Ethereum Virtual Machine}
+\date{}
+\pagestyle{fancy}\fancyhf{}\fancyfoot[C]{\thepage}\renewcommand{\headrulewidth}{0pt}
+\begin{document}
+\maketitle\thispagestyle{fancy}
+\tableofcontents
+\newpage
+\lstinputlisting{evm-sail.sail}
+\end{document}
