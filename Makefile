@@ -40,11 +40,16 @@ help:
 check:
 	$(SAIL) $(MODEL)
 
-# sail has no $include-following autodiscovery for these, so files come from the
-# `find` above; each recipe is a single-line shell command (Make 3.81 has no
-# .ONESHELL). --all-warnings on the roots type-checks every reachable definition.
+# Two checks (each recipe is a single-line shell command; Make 3.81 has no
+# .ONESHELL). (1) sail --all-warnings on the roots type-checks every reachable
+# definition (sail has no $include-following autodiscovery, so files come from
+# the `find` above). (2) banner-box alignment: inside a /* ===...=== */ box,
+# every comment line must be the same width as the divider, so the closing */
+# columns line up.
 lint:
-	@o=$$(for r in $(WARN_ROOTS); do $(SAIL) --all-warnings "$$r" 2>&1; done); if printf '%s\n' "$$o" | grep -qiE "warning|error"; then printf '%s\n' "$$o" | grep -iE "warning|error" | head -20; echo "lint: FAILED"; exit 1; else echo "lint: clean"; fi
+	@o=$$(for r in $(WARN_ROOTS); do $(SAIL) --all-warnings "$$r" 2>&1; done); if printf '%s\n' "$$o" | grep -qiE "warning|error"; then printf '%s\n' "$$o" | grep -iE "warning|error" | head -20; echo "lint: FAILED (sail warnings)"; exit 1; fi; \
+	awk 'function ck(){if(n&&d)for(i=1;i<=n;i++)if(length(b[i])!=w){print f[i]":"l[i]": comment box width "length(b[i])" != "w;bad=1}} FNR==1{ck();n=0;d=0} /^\/\*.*\*\/$$/{b[++n]=$$0;l[n]=FNR;f[n]=FILENAME;if($$0~/^\/\* =+ \*\/$$/){d=1;w=length($$0)};next} {ck();n=0;d=0} END{ck();exit bad}' $(SAIL_FILES) || { echo "lint: FAILED (misaligned comment boxes)"; exit 1; }; \
+	echo "lint: clean"
 
 # one sail call per file: the files $include each other, so a single multi-file
 # invocation double-loads them and errors.

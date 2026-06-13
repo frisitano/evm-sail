@@ -1,28 +1,28 @@
 /* ======================================================================== */
 /* THE GAS SCHEDULE                                                         */
 /*                                                                          */
-/* The complete fork-gated EVM gas schedule (Yellow Paper Appendix G plus    */
-/* the gas-repricing EIPs). Gas meters execution: every step debits the      */
-/* frame's gas counter, and a debit that would underflow raises an           */
-/* out-of-gas exceptional halt. This module owns the cost groups; the static */
-/* per-opcode cost is attached to each opcode in execute.sail.               */
+/* The complete fork-gated EVM gas schedule (Yellow Paper Appendix G plus   */
+/* the gas-repricing EIPs). Gas meters execution: every step debits the     */
+/* frame's gas counter, and a debit that would underflow raises an out-of-  */
+/* gas exceptional halt. This module owns the cost groups; the static per-  */
+/* opcode cost is attached to each opcode in execute.sail.                  */
 /*                                                                          */
 /* The cost groups, with their governing specifications:                    */
 /*                                                                          */
-/*   - Static G_* constants: the Yellow Paper Appendix G symbols, as         */
-/*     repriced by EIP-150 (SLOAD/CALL/SELFDESTRUCT), EIP-160 (G_expbyte),   */
+/*   - Static G_* constants: the Yellow Paper Appendix G symbols, as        */
+/*     repriced by EIP-150 (SLOAD/CALL/SELFDESTRUCT), EIP-160 (G_expbyte),  */
 /*     and EIP-2929 (cold/warm).                                            */
-/*   - Memory-expansion gas (YP C_mem): quadratic in the high-water word     */
+/*   - Memory-expansion gas (YP C_mem): quadratic in the high-water word    */
 /*     count, charged on any addressed touch.                               */
-/*   - EIP-2929 access costs: cold/warm surcharges for account and storage   */
-/*     access (the kernel owns the warm set; the EVM only prices it).        */
-/*   - EIP-2200 / EIP-3529 SSTORE cost and refund, under the EIP-3529        */
+/*   - EIP-2929 access costs: cold/warm surcharges for account and storage  */
+/*     access (the kernel owns the warm set; the EVM only prices it).       */
+/*   - EIP-2200 / EIP-3529 SSTORE cost and refund, under the EIP-3529       */
 /*     refund cap (applied at tx scope, not here).                          */
-/*   - Per-opcode dynamic gas: KECCAK256 / *COPY per-word, LOG per-byte/     */
-/*     topic, EXP per-byte, EIP-3860 per-initcode-word.                     */
-/*   - Call gas: the EIP-150 all-but-one-64th forwarding cap and the         */
-/*     value-transfer stipend.                                              */
-/*   - Per-precompile gas, including the EIP-2565 / EIP-7883 MODEXP curve    */
+/*   - Per-opcode dynamic gas: KECCAK256 / *COPY per-word, LOG per-         */
+/*     byte/topic, EXP per-byte, EIP-3860 per-initcode-word.                */
+/*   - Call gas: the EIP-150 all-but-one-64th forwarding cap and the value- */
+/*     transfer stipend.                                                    */
+/*   - Per-precompile gas, including the EIP-2565 / EIP-7883 MODEXP curve   */
 /*     and the EIP-2537 BLS12-381 MSM discount tables.                      */
 /* ======================================================================== */
 

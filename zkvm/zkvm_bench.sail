@@ -1,16 +1,16 @@
 /* ======================================================================== */
 /* WORLD-STATE THROUGHPUT BENCHMARK (zkVM)                                  */
 /*                                                                          */
-/* A throughput micro-benchmark for the zkVM guest, not a validator: it does */
-/* N storage writes followed by N reads to distinct slots of one account,   */
-/* measuring how the kernel's world-state storage scales. N is read from the */
-/* private input (first 4 bytes, little-endian).                            */
+/* A throughput micro-benchmark for the zkVM guest, not a validator: it     */
+/* does N storage writes followed by N reads to distinct slots of one       */
+/* account, measuring how the kernel's world-state storage scales. N is     */
+/* read from the private input (first 4 bytes, little-endian).              */
 /*                                                                          */
-/* The list-based storage (st_update / st_lookup are O(current size)) makes  */
-/* N accesses cost O(N^2); this run quantifies that before any per-tx        */
-/* block-access-list (BAL) refactor. Drive it with                          */
-/* GUEST=zkvm_bench.sail ./build.sh run. Shares the zkvm_out_* register      */
-/* output convention with zkvm_block.sail.                                  */
+/* The list-based storage (st_update / st_lookup are O(current size)) makes */
+/* N accesses cost O(N^2); this run quantifies that before any per-tx       */
+/* block-access-list (BAL) refactor. Drive it with GUEST=zkvm_bench.sail    */
+/* ./build.sh run. Shares the zkvm_out_* register output convention with    */
+/* zkvm_block.sail.                                                         */
 /* ======================================================================== */
 
 $include "../sail/evm.sail"

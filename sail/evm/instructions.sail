@@ -7,11 +7,11 @@
 /* EIP-1153, MCOPY EIP-5656, BLOBHASH/BLOBBASEFEE EIP-4844/7516).           */
 /*                                                                          */
 /* One `ast` constructor per opcode. Immediates are carried inline: PUSH    */
-/* holds its byte width (0..32) and value, DUP/SWAP hold the index n, LOG    */
-/* holds its topic count n. The constructor groups below are labelled with   */
-/* the opcode byte range they cover. Decoding code bytes into this AST lives */
-/* in interpreter.sail (`fetch`); undefined bytes decode to INVALID and halt */
-/* exceptionally when executed. */
+/* holds its byte width (0..32) and value, DUP/SWAP hold the index n, LOG   */
+/* holds its topic count n. The constructor groups below are labelled with  */
+/* the opcode byte range they cover. Decoding code bytes into this AST      */
+/* lives in interpreter.sail (`fetch`); undefined bytes decode to INVALID   */
+/* and halt exceptionally when executed.                                    */
 /* ======================================================================== */
 
 union ast = {

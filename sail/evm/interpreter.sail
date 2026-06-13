@@ -1,26 +1,27 @@
 /* ======================================================================== */
-/* THE INTERPRETER: FETCH/DECODE, RUN LOOP, AND THE MESSAGE-CALL MACHINERY   */
+/* THE INTERPRETER: FETCH/DECODE, RUN LOOP, AND THE MESSAGE-CALL MACHINERY  */
 /*                                                                          */
-/* The user-space EVM: it fetches and decodes bytecode (Yellow Paper section */
-/* 9), drives the step loop, and spawns sub-frames for the call and create   */
-/* opcodes. This module specifies that machinery in three layers.            */
+/* The user-space EVM: it fetches and decodes bytecode (Yellow Paper        */
+/* section 9), drives the step loop, and spawns sub-frames for the call and */
+/* create opcodes. This module specifies that machinery in three layers.    */
 /*                                                                          */
-/* (1) Fetch/decode: read the opcode at pc, decode PUSH immediates inline,   */
-/* and map every other byte to its AST node (an undefined byte decodes to    */
-/* INVALID). Reading past the end of code yields STOP (YP: implicit halt).   */
+/* (1) Fetch/decode: read the opcode at pc, decode PUSH immediates inline,  */
+/* and map every other byte to its AST node (an undefined byte decodes to   */
+/* INVALID). Reading past the end of code yields STOP (YP: implicit halt).  */
 /*                                                                          */
-/* (2) Run loop: interpret() steps fetch-then-execute until the frame stops  */
-/* running (normal halt, REVERT, or exceptional halt).                       */
+/* (2) Run loop: interpret() steps fetch-then-execute until the frame stops */
+/* running (normal halt, REVERT, or exceptional halt).                      */
 /*                                                                          */
-/* (3) Message calls: run_call handles CALL/CALLCODE/DELEGATECALL/STATICCALL */
-/* (multiplexed on `mode`) and run_create handles CREATE/CREATE2. A sub-call */
-/* saves the parent's user-space frame registers, runs the child to a halt,  */
-/* then restores them. All WORLD effects go through kernel syscalls:        */
-/* k_snapshot on entry, k_transfer for value, and k_commit / k_revert on     */
-/* exit -- the kernel rolls the world back atomically on a reverting child.  */
-/* The applicable rules are EIP-150 (63/64ths gas cap + stipend), EIP-214    */
-/* (static-context write protection), EIP-2929 (cold/warm access), and       */
-/* EIP-7702 (delegated-code execution).                                      */
+/* (3) Message calls: run_call handles                                      */
+/* CALL/CALLCODE/DELEGATECALL/STATICCALL (multiplexed on `mode`) and        */
+/* run_create handles CREATE/CREATE2. A sub-call saves the parent's user-   */
+/* space frame registers, runs the child to a halt, then restores them. All */
+/* WORLD effects go through kernel syscalls: k_snapshot on entry,           */
+/* k_transfer for value, and k_commit / k_revert on exit -- the kernel      */
+/* rolls the world back atomically on a reverting child. The applicable     */
+/* rules are EIP-150 (63/64ths gas cap + stipend), EIP-214 (static-context  */
+/* write protection), EIP-2929 (cold/warm access), and EIP-7702 (delegated- */
+/* code execution).                                                         */
 /* ======================================================================== */
 
 /* EIP-150 / YP: a message call may nest at most 1024 frames deep. */

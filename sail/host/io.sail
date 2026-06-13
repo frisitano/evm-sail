@@ -1,29 +1,29 @@
 /* ======================================================================== */
 /* HOST I/O: ACCELERATOR FFI, HOST CRYPTO, STATELESS SSZ INPUT              */
-/*                                                                           */
-/* Everything the model obtains from OUTSIDE itself -- the boundary between   */
-/* the EVM specification and its environment. Three layers:                  */
-/*                                                                           */
-/* (1) FFI BINDING -- the accelerator byte-stream protocol (mechanism only,  */
-/* no semantics). The model commits to WHAT is hashed/verified; the host     */
-/* computes the result. Inputs stream across the C boundary 8 bytes per      */
-/* crossing (begin / push / exec / read).                                    */
-/*                                                                           */
-/* (2) HOST CRYPTO -- keccak256 (the Ethereum hash: KECCAK256, trie/RLP      */
-/* node references, CREATE2 salt) and sha256 (precompile 0x02 + SSZ          */
-/* merkleization), the EVM precompiles over the same binding, and the        */
-/* CREATE (Yellow Paper) / CREATE2 (EIP-1014) address derivations.           */
-/*                                                                           */
-/* (3) STATELESS INPUT -- decode the canonical SSZ SszStatelessInput from    */
-/* the private-input region (ssz_src_*): the execution payload, the          */
-/* execution witness (state nodes, codes, headers), the block access list    */
-/* (EIP-7928), and the chain config. Mirrors execution-specs                 */
-/* (projects/zkevm) forks/amsterdam stateless_ssz.py.                        */
-/*                                                                           */
-/* Host mechanism, like memory and storage. Included early -- the crypto is  */
-/* used by block_hash, state, kernel, gas, and transaction; the SSZ decoders */
-/* are called only by the outer stateless layers (the lib/mpt.sail witness   */
-/* reader, zkvm/zkvm_block.sail, the EEST runner).                           */
+/*                                                                          */
+/* Everything the model obtains from OUTSIDE itself -- the boundary between */
+/* the EVM specification and its environment. Three layers:                 */
+/*                                                                          */
+/* (1) FFI BINDING -- the accelerator byte-stream protocol (mechanism only, */
+/* no semantics). The model commits to WHAT is hashed/verified; the host    */
+/* computes the result. Inputs stream across the C boundary 8 bytes per     */
+/* crossing (begin / push / exec / read).                                   */
+/*                                                                          */
+/* (2) HOST CRYPTO -- keccak256 (the Ethereum hash: KECCAK256, trie/RLP     */
+/* node references, CREATE2 salt) and sha256 (precompile 0x02 + SSZ         */
+/* merkleization), the EVM precompiles over the same binding, and the       */
+/* CREATE (Yellow Paper) / CREATE2 (EIP-1014) address derivations.          */
+/*                                                                          */
+/* (3) STATELESS INPUT -- decode the canonical SSZ SszStatelessInput from   */
+/* the private-input region (ssz_src_*): the execution payload, the         */
+/* execution witness (state nodes, codes, headers), the block access list   */
+/* (EIP-7928), and the chain config. Mirrors execution-specs                */
+/* (projects/zkevm) forks/amsterdam stateless_ssz.py.                       */
+/*                                                                          */
+/* Host mechanism, like memory and storage. Included early -- the crypto is */
+/* used by block_hash, state, kernel, gas, and transaction; the SSZ         */
+/* decoders are called only by the outer stateless layers (the lib/mpt.sail */
+/* witness reader, zkvm/zkvm_block.sail, the EEST runner).                  */
 /* ======================================================================== */
 
 /* The block-access-list key: an (address, slot) pair (EIP-7928). bal_load
@@ -122,11 +122,11 @@ function run_precompile(num : int, input : list(byte)) -> (bool, list(byte)) = {
 
 /* ======================================================================== */
 /* HASH PRIMITIVES + CREATE ADDRESS DERIVATION                              */
-/*                                                                           */
-/* keccak256 and sha256 route through the same accelerator boundary as the   */
-/* precompiles (acc_hash; id 0 = keccak256, id 2 = sha256). The model        */
-/* defines what is hashed; the host computes the digest behind the standard  */
-/* accelerator header.                                                       */
+/*                                                                          */
+/* keccak256 and sha256 route through the same accelerator boundary as the  */
+/* precompiles (acc_hash; id 0 = keccak256, id 2 = sha256). The model       */
+/* defines what is hashed; the host computes the digest behind the standard */
+/* accelerator header.                                                      */
 /* ======================================================================== */
 
 /* Keccak-256, the Ethereum hash function: the KECCAK256 opcode, trie/RLP
@@ -223,12 +223,12 @@ val ssz_src_be = impure { _: "ssz_src_be" } : (int, int) -> bits(64)
 
 function ib(i : int) -> int = unsigned(ssz_src_byte(i))
 
-/* little-endian uintN (n <= 8 bytes) at absolute input offset b — one FFI call */
+/* little-endian uintN (n <= 8 bytes) at absolute input offset b -- one FFI call */
 function ssz_uint(b : int, n : int) -> int = unsigned(ssz_src_le(b, n))
 function ssz_u32(b : int) -> int = unsigned(ssz_src_le(b, 4))
 function ssz_u64(b : int) -> int = unsigned(ssz_src_le(b, 8))
 
-/* big-endian 20-byte address at offset b — three FFI reads (8+8+4) */
+/* big-endian 20-byte address at offset b -- three FFI reads (8+8+4) */
 function ssz_addr(b : int) -> address = {
     let w0 = ssz_src_be(b + 0, 8);
     let w1 = ssz_src_be(b + 8, 8);
@@ -283,7 +283,7 @@ let PL_TXS_OFF : int = 504
 let PL_WDS_OFF : int = 508
 let PL_BAL_OFF : int = 528
 
-/* big-endian 32-byte field (Bytes32, e.g. prev_randao) — four FFI reads */
+/* big-endian 32-byte field (Bytes32, e.g. prev_randao) -- four FFI reads */
 function ssz_bytes32(b : int) -> bits(256) = {
     let w0 = ssz_src_be(b + 0, 8);
     let w1 = ssz_src_be(b + 8, 8);
@@ -292,7 +292,7 @@ function ssz_bytes32(b : int) -> bits(256) = {
     append(w0, append(w1, append(w2, w3)))
 }
 
-/* little-endian 32-byte uint256 (SSZ) — four FFI reads, low word first */
+/* little-endian 32-byte uint256 (SSZ) -- four FFI reads, low word first */
 function ssz_u256(b : int) -> word = {
     let c0 = ssz_src_le(b + 0, 8);
     let c1 = ssz_src_le(b + 8, 8);

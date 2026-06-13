@@ -7,21 +7,21 @@
 /* can be exercised directly.                                               */
 /*                                                                          */
 /* Input contract: a schema-prefixed SSZ SszStatelessInput read from stdin  */
-/* through ssz_src (host/io.sail), the private-input byte source the zkVM    */
-/* guest also uses. build_node_db loads the witness node store from it;      */
-/* parent_state_root returns the committed pre-state root carried in the     */
+/* through ssz_src (host/io.sail), the private-input byte source the zkVM   */
+/* guest also uses. build_node_db loads the witness node store from it;     */
+/* parent_state_root returns the committed pre-state root carried in the    */
 /* input header.                                                            */
 /*                                                                          */
-/* witness_reroot walks the ENTIRE witness trie from that root and rebuilds  */
-/* it through the hash builder, so REROOT == PARENT certifies that every     */
-/* node (branch / extension / leaf, hex-prefix paths, embedded children) was */
-/* parsed correctly. Output: a "PARENT <hex>" and a "REROOT <hex>" line for  */
-/* the harness to diff.                                                     */
+/* witness_reroot walks the ENTIRE witness trie from that root and rebuilds */
+/* it through the hash builder, so REROOT == PARENT certifies that every    */
+/* node (branch / extension / leaf, hex-prefix paths, embedded children)    */
+/* was parsed correctly. Output: a "PARENT <hex>" and a "REROOT <hex>" line */
+/* for the harness to diff.                                                 */
 /*                                                                          */
-/* The harness revm-eest/stateless/run_witness.py builds one input per EEST  */
-/* `pre` alloc with a real py-trie witness and diffs REROOT against the      */
-/* py-trie root, covering the full diversity of EEST pre-state trie shapes   */
-/* -- the role execution-specs' stateless mode gives witness_state.py.       */
+/* The harness revm-eest/stateless/run_witness.py builds one input per EEST */
+/* `pre` alloc with a real py-trie witness and diffs REROOT against the py- */
+/* trie root, covering the full diversity of EEST pre-state trie shapes --  */
+/* the role execution-specs' stateless mode gives witness_state.py.         */
 /* ======================================================================== */
 
 $include "../../sail/evm.sail"

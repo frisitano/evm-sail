@@ -1,11 +1,11 @@
 /* ======================================================================== */
-/* EVM USER-SPACE machine: per-frame registers, operand stack, gas counter,  */
-/* and the saved-frame stack for nested calls                                */
-/*                                                                           */
-/* This is the user-space half. It holds the gas counter and all per-frame   */
-/* compute state (pc, stack, memory, code, message, returndata). World state */
-/* lives in the host (host/kernel.sail) and is reached only via k_* calls.    */
-/* World rollback on revert is a kernel snapshot, NOT saved here.             */
+/* EVM USER-SPACE machine: per-frame registers, operand stack, gas counter, */
+/* and the saved-frame stack for nested calls                               */
+/*                                                                          */
+/* This is the user-space half. It holds the gas counter and all per-frame  */
+/* compute state (pc, stack, memory, code, message, returndata). World      */
+/* state lives in the host (host/kernel.sail) and is reached only via k_*   */
+/* calls. World rollback on revert is a kernel snapshot, NOT saved here.    */
 /* ======================================================================== */
 
 /* The per-frame call context (YP "message call" I = (I_a, I_o, I_s, ...)).

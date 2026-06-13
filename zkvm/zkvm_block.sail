@@ -2,28 +2,29 @@
 /* STATELESS BLOCK-VALIDATION GUEST (zkVM)                                  */
 /*                                                                          */
 /* The stateless block-validation guest for the eth-act zkVM RISC-V target  */
-/* (riscv64im_zicclsm). It decodes an SSZ SszStatelessInput from the private */
-/* input, validates the supplied witness against the committed pre-state    */
-/* root, executes the block over that witness-backed state, and commits to   */
-/* the post-state -- emitting an SSZ SszStatelessValidationResult as the     */
-/* canonical public output. A proof of this guest is a proof that the block  */
-/* is valid relative to the parent state root.                              */
+/* (riscv64im_zicclsm). It decodes an SSZ SszStatelessInput from the        */
+/* private input, validates the supplied witness against the committed pre- */
+/* state root, executes the block over that witness-backed state, and       */
+/* commits to the post-state -- emitting an SSZ                             */
+/* SszStatelessValidationResult as the canonical public output. A proof of  */
+/* this guest is a proof that the block is valid relative to the parent     */
+/* state root.                                                              */
 /*                                                                          */
-/* Validation pipeline (zkvm_run): re-root the witness to parent.state_root  */
-/* (the one-shot pre-state check), seed the touched pre-state from the       */
-/* authenticated leaves, run process_block, then check that the chain config */
-/* selects the expected fork, the witness headers chain, the tx receipt      */
-/* succeeded, and the recomputed post-state root equals payload.state_root.  */
-/* A failing block is a NORMAL outcome: the guest reports                    */
-/* successful_validation = false, it does not abort.                        */
+/* Validation pipeline (zkvm_run): re-root the witness to parent.state_root */
+/* (the one-shot pre-state check), seed the touched pre-state from the      */
+/* authenticated leaves, run process_block, then check that the chain       */
+/* config selects the expected fork, the witness headers chain, the tx      */
+/* receipt succeeded, and the recomputed post-state root equals             */
+/* payload.state_root. A failing block is a NORMAL outcome: the guest       */
+/* reports successful_validation = false, it does not abort.                */
 /*                                                                          */
-/* Target contract: NO printing, NO string building, NO libc IO, NO asserts  */
-/* on the happy path. read_input supplies the SSZ input via ssz_src;         */
-/* write_output (runtime/zkvm_input.c) receives the SSZ result. Built GMP-free */
-/* by backing the stock Sail GMP ABI with a vendored, freestanding mini-gmp  */
-/* (no libgmp linked) at EXACT 256-bit semantics; keccak-256 comes from a C  */
-/* accelerator (the eth-act c-interface-accelerators path), needing no GMP   */
-/* and only memset from libc.                                               */
+/* Target contract: NO printing, NO string building, NO libc IO, NO asserts */
+/* on the happy path. read_input supplies the SSZ input via ssz_src;        */
+/* write_output (runtime/zkvm_input.c) receives the SSZ result. Built GMP-  */
+/* free by backing the stock Sail GMP ABI with a vendored, freestanding     */
+/* mini-gmp (no libgmp linked) at EXACT 256-bit semantics; keccak-256 comes */
+/* from a C accelerator (the eth-act c-interface-accelerators path),        */
+/* needing no GMP and only memset from libc.                                */
 /* ======================================================================== */
 
 $include "../sail/evm.sail"

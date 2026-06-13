@@ -2,17 +2,17 @@
 /* TRANSACTION STATE TRANSITION                                             */
 /*                                                                          */
 /* The per-transaction step of the Ethereum state transition (Yellow Paper  */
-/* section 6): validate the transaction, charge upfront gas, run it as the   */
-/* top-level message call, then settle gas/refunds and the coinbase fee.     */
+/* section 6): validate the transaction, charge upfront gas, run it as the  */
+/* top-level message call, then settle gas/refunds and the coinbase fee.    */
 /*                                                                          */
-/* Validity and intrinsic gas are user-space policy; every world effect is a */
-/* kernel syscall, and a tx-level snapshot/commit/revert bounds the whole    */
-/* transaction's world state. The typed-envelope rules covered here:         */
-/* EIP-2718 (typed tx), EIP-1559 (fee market: base fee + priority tip caps), */
-/* EIP-2930 (access list), EIP-3860 (initcode size/gas), EIP-4844 (blob tx + */
-/* blob-gas burn), EIP-7702 (set-code authorizations), EIP-7623 (calldata    */
-/* floor), EIP-3607 (no tx from an account with code), EIP-7825 (gas cap).   */
-/* Gas refunds (SSTORE clears, etc.) are capped per EIP-3529. */
+/* Validity and intrinsic gas are user-space policy; every world effect is  */
+/* a kernel syscall, and a tx-level snapshot/commit/revert bounds the whole */
+/* transaction's world state. The typed-envelope rules covered here:        */
+/* EIP-2718 (typed tx), EIP-1559 (fee market: base fee + priority tip       */
+/* caps), EIP-2930 (access list), EIP-3860 (initcode size/gas), EIP-4844    */
+/* (blob tx + blob-gas burn), EIP-7702 (set-code authorizations), EIP-7623  */
+/* (calldata floor), EIP-3607 (no tx from an account with code), EIP-7825   */
+/* (gas cap). Gas refunds (SSTORE clears, etc.) are capped per EIP-3529.    */
 /* ======================================================================== */
 
 /* An EIP-7702 set-code authorization tuple. The runner pre-recovers the

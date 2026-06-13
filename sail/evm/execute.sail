@@ -2,18 +2,19 @@
 /* OPCODE SEMANTICS: execute(op)                                            */
 /*                                                                          */
 /* The single-step transition function of the EVM (Yellow Paper section 9): */
-/* given the decoded opcode, charge its gas, consume its stack operands, and */
-/* produce its result or effect. One match arm per opcode, grouped by family */
-/* (arithmetic / bitwise / keccak / environment / block / stack-memory /     */
-/* storage / flow / push-dup-swap / log / system).                          */
+/* given the decoded opcode, charge its gas, consume its stack operands,    */
+/* and produce its result or effect. One match arm per opcode, grouped by   */
+/* family (arithmetic / bitwise / keccak / environment / block / stack-     */
+/* memory / storage / flow / push-dup-swap / log / system).                 */
 /*                                                                          */
-/* Pure compute is done here; every world effect is a kernel syscall (k_*).  */
-/* All gas/policy stays in the EVM: the EVM marks-and-prices access via the  */
-/* kernel's returned warm bit (EIP-2929), decides whether an effect happens, */
-/* and issues the syscall only for real effects (e.g. a no-op SSTORE charges */
-/* gas but issues no host write). Memory-touching opcodes pay the quadratic  */
-/* expansion cost via charge_expansion before acting. Sub-calls and creates  */
-/* delegate to run_call / run_create (interpreter.sail). */
+/* Pure compute is done here; every world effect is a kernel syscall (k_*). */
+/* All gas/policy stays in the EVM: the EVM marks-and-prices access via the */
+/* kernel's returned warm bit (EIP-2929), decides whether an effect         */
+/* happens, and issues the syscall only for real effects (e.g. a no-op      */
+/* SSTORE charges gas but issues no host write). Memory-touching opcodes    */
+/* pay the quadratic expansion cost via charge_expansion before acting.     */
+/* Sub-calls and creates delegate to run_call / run_create                  */
+/* (interpreter.sail).                                                      */
 /* ======================================================================== */
 
 val run_call : int -> unit /* 0=CALL 1=CALLCODE 2=DELEGATECALL 3=STATICCALL */
