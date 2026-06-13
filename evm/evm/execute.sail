@@ -5,7 +5,7 @@
 /* All gas/policy stays in the EVM: the EVM marks-and-prices access via the    */
 /* kernel's returned warm bit, decides whether an effect happens, and issues  */
 /* the syscall only for real effects (e.g. a no-op SSTORE charges gas but     */
-/* issues no EL_SStore). Sub-calls/creates delegate to run_call/run_create.   */
+/* issues no host write). Sub-calls/creates delegate to run_call/run_create.  */
 /* ======================================================================== */
 
 val run_call   : int  -> unit   /* 0=CALL 1=CALLCODE 2=DELEGATECALL 3=STATICCALL */

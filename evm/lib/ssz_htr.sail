@@ -65,7 +65,7 @@ function htr_bytes32(b : bits(256)) -> bits(256) = b
 function htr_addr(a : address) -> bits(256) = sail_shiftleft(sail_zero_extend(a, 256), 96)
 
 /* mix_in_length(root, length) = sha256(root ++ length-as-uint256-chunk) */
-function mix_in_length(zh : list(bits(256)), root : bits(256), len : int) -> bits(256) =
+function mix_in_length(root : bits(256), len : int) -> bits(256) =
   sha256_pair(root, htr_u64(len))
 
 /* ceil(log2(n)), min 0 (tree depth for a chunk/element capacity of n) */
@@ -98,7 +98,7 @@ function htr_bytelist(zh : list(bits(256)), start : int, len : int, limit_bytes 
   let cap     = ediv_int(limit_bytes + 31, 32);
   var leaves : list(bits(256)) = [||];
   foreach (j from 0 to (nchunks - 1)) { leaves = list_append(leaves, [| chunk_be(start, len, j) |]) };
-  mix_in_length(zh, merkleize(zh, leaves, nchunks, clog2(cap)), len)
+  mix_in_length(merkleize(zh, leaves, nchunks, clog2(cap)), len)
 }
 
 /* ---- containers / lists we need --------------------------------------- */
@@ -123,14 +123,14 @@ function htr_transactions(zh : list(bits(256))) -> bits(256) = {
     let (s, l) = ssz_list_span(pl_txs_start(), n, pl_wds_start(), i);
     leaves = list_append(leaves, [| htr_bytelist(zh, s, l, 1073741824) |])
   };
-  mix_in_length(zh, merkleize(zh, leaves, n, 20), n)
+  mix_in_length(merkleize(zh, leaves, n, 20), n)
 }
 /* withdrawals: List[SszWithdrawal, 16] */
 function htr_withdrawals_list(zh : list(bits(256))) -> bits(256) = {
   let n = pl_n_withdrawals();
   var leaves : list(bits(256)) = [||];
   foreach (i from 0 to (n - 1)) { leaves = list_append(leaves, [| htr_withdrawal(zh, i) |]) };
-  mix_in_length(zh, merkleize(zh, leaves, n, 4), n)
+  mix_in_length(merkleize(zh, leaves, n, 4), n)
 }
 
 /* SszExecutionPayload: 19 fields -> depth 5 (next pow2 of 19 = 32) */
@@ -172,16 +172,16 @@ function htr_versioned_hashes(zh : list(bits(256))) -> bits(256) = {
   let cnt = ediv_int(vh_end - vh_start, 32);
   var leaves : list(bits(256)) = [||];
   foreach (i from 0 to (cnt - 1)) { leaves = list_append(leaves, [| ssz_bytes32(vh_start + i * 32) |]) };
-  mix_in_length(zh, merkleize(zh, leaves, cnt, 12), cnt)
+  mix_in_length(merkleize(zh, leaves, cnt, 12), cnt)
 }
 
 /* SszExecutionRequests: 3 empty lists in the fixture (deposits 2^13, withdrawals
  * 2^4, consolidations 2^1). Non-empty request lists are a documented follow-on. */
 function htr_execution_requests(zh : list(bits(256))) -> bits(256) = {
   let leaves : list(bits(256)) = [|
-    mix_in_length(zh, zh_at(zh, 13), 0),
-    mix_in_length(zh, zh_at(zh, 4), 0),
-    mix_in_length(zh, zh_at(zh, 1), 0)
+    mix_in_length(zh_at(zh, 13), 0),
+    mix_in_length(zh_at(zh, 4), 0),
+    mix_in_length(zh_at(zh, 1), 0)
   |];
   merkleize(zh, leaves, 3, 2)
 }
@@ -195,15 +195,4 @@ function htr_new_payload_request(zh : list(bits(256))) -> bits(256) = {
     htr_execution_requests(zh)
   |];
   merkleize(zh, leaves, 4, 2)
-}
-
-/* ---- S4b self-check: withdrawal, execution payload, and request roots --- */
-function htr_selfcheck() -> unit = {
-  let zh = build_zerohashes(40);
-  assert(htr_withdrawal(zh, 0) == 0x1d086289701b84e6132900abe9130e6f284164639983055bdfecb5b17e2757d6,
-         "htr(withdrawal[0])");
-  assert(htr_execution_payload(zh) == 0xbeb46b1a58634222a2dc7a7ae62b214274302167298eabed9dd27c86eb53d0e9,
-         "htr(execution_payload)");
-  assert(htr_new_payload_request(zh) == 0x8a4de46e1766e8e331f5f7db6a4f41a460251e0f92742752a6b54c9a85a5c1e0,
-         "htr(new_payload_request)")
 }

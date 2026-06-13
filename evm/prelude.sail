@@ -44,10 +44,6 @@ let TWO_256 : int = 115792089237316195423570985008687907853269984665640564039457
 /* Low 256 bits of a (possibly huge / negative) integer. */
 function word_of_int(n : int) -> word = get_slice_int(256, n, 0)
 
-/* Unsigned / signed interpretation of a word. */
-function uint(w : word) -> int = unsigned(w)
-function sint(w : word) -> int = signed(w)
-
 /* native lbits predicates (ffi/host_word.c): no word -> integer conversion */
 val hw_ult    = pure "hw_ult"    : (word, word) -> bool
 val hw_slt    = pure "hw_slt"    : (word, word) -> bool
@@ -87,15 +83,6 @@ function list_set forall ('a : Type). (xs : list('a), i : int, v : 'a) -> list('
 /* byte from a buffer at index i, zero outside [0, len). */
 function bytes_get(data : list(byte), i : int) -> byte =
   if i < 0 then 0x00 else list_nth(data, i, 0x00)
-
-/* read a big-endian 32-byte word from a buffer at byte offset `off`, zero-padded. */
-function bytes_load_word(data : list(byte), off : int) -> word = {
-  var acc : word = word_of_int(0);
-  foreach (k from 0 to 31) {
-    acc = or_vec(sail_shiftleft(acc, 8), sail_zero_extend(bytes_get(data, off + k), 256))
-  };
-  acc
-}
 
 /* zero-padded slice data[off .. off+len). */
 /* O(off + len): drop `off` then take `len` in a single left-to-right pass

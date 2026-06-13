@@ -4,7 +4,7 @@
 /*                                                                           */
 /* This is the user-space half. It holds the gas counter and all per-frame   */
 /* compute state (pc, stack, memory, code, message, returndata). World state */
-/* lives in the kernel (el_kernel.sail) and is reached only via k_* syscalls. */
+/* lives in the host (host/kernel.sail) and is reached only via k_* calls.    */
 /* World rollback on revert is a kernel snapshot, NOT saved here.             */
 /* ======================================================================== */
 

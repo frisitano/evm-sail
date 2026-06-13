@@ -176,13 +176,12 @@ function k_env(f : EnvField) -> word = {
   }
 }
 function k_coinbase() -> address = k_block.be_coinbase
-function k_blockhash(n : word) -> hash = { word_of_int(0) }
+function k_blockhash(n : word) -> hash = { let _ = n; word_of_int(0) }
 function k_blobhash(i : int) -> word = {
   list_nth(k_tx.txe_blob_hashes, i, word_of_int(0))
 }
 
 /* --- primitives --- */
-function k_keccak(bs : list(byte)) -> hash = { keccak256(bs) }
 function k_create_addr(a : address, nonce : int) -> address = create_address(a, nonce)
 function k_create2_addr(a : address, salt : word, inithash : hash) -> address =
   create2_address(a, salt, inithash)
@@ -191,7 +190,7 @@ function k_create2_addr(a : address, salt : word, inithash : hash) -> address =
  * input). Output stays in the accelerator buffer; the EVM adopts it as
  * returndata. Gas is computed by the EVM (policy, evm/gas.sail). */
 function k_precompile(num : int) -> bool =
-  if (num >= 1 & num <= 17) | (num == 256) then run_precompile_staged(num) else false
+  if (num >= 1 & num <= 17) | (num == 256) then run_precompile_staged() else false
 
 /* --- logs + refund --- */
 function k_log(a : address, topics : list(word), data : list(byte)) -> unit = {

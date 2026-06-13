@@ -252,30 +252,3 @@ function witness_get_storage(db : list((bits(256), list(byte))), sroot : bits(25
   }
 }
 
-/* ---- S2b self-check: resolve the two fixture accounts from the witness -- */
-function witness_selfcheck() -> unit = {
-  let db = build_node_db();
-  let sr = parent_state_root();
-
-  let cleaf = witness_get_account(db, sr, 0x000000000000000000000000000000000000c0de);
-  assert(list_len(cleaf) > 0, "contract account resolved from witness");
-  let (cn, cb, _, cch) = decode_account(cleaf);
-  assert(cn == 1, "contract nonce == 1");
-  assert(unsigned(cb) == 0, "contract balance == 0");
-  assert(cch == 0xac200f16708c3b5c9c2ebffbb1bc40de8df337d6389e49f6425292e9ae777d7e, "contract code hash");
-
-  let eleaf = witness_get_account(db, sr, 0x00000000000000000000000000000000000005e0);
-  assert(list_len(eleaf) > 0, "eoa account resolved from witness");
-  let (en, eb, _, ech) = decode_account(eleaf);
-  assert(en == 0, "eoa nonce == 0");
-  assert(unsigned(eb) == 1000000000000000000, "eoa balance == 1e18");
-  assert(ech == EMPTY_CODE_HASH, "eoa empty code hash")
-}
-
-/* self-check: the witness must re-root to the committed parent state root
- * (defined after build_node_db/parent_state_root, which it depends on). */
-function hb_witness_selfcheck() -> unit = {
-  let db = build_node_db();
-  let sr = parent_state_root();
-  assert(witness_reroot(db, sr) == sr, "witness re-roots to parent.state_root")
-}

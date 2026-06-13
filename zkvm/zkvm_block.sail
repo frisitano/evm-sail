@@ -220,8 +220,12 @@ function zkvm_run() -> unit = {
   };
   let txn : Transaction = struct {
     t_sender = sender, t_nonce = t_nonce, t_gas_price = t_gasprice, t_priority_fee = t_gasprice,
-    t_gas_limit = t_gas, t_is_create = false, t_to = t_to, t_value = t_value, t_data = t_data,
-    t_al_addrs = [||], t_al_keys = [||]
+    t_gas_limit = to_gas(t_gas), t_is_create = false, t_to = t_to, t_value = t_value, t_data = t_data,
+    t_al_addrs = [||], t_al_keys = [||],
+    /* legacy (type-0) tx: no 1559/4844/7702 envelope fields */
+    t_blob_count = 0, t_max_fee = t_gasprice, t_max_blob_fee = ZERO_WORD,
+    t_max_priority = t_gasprice, t_is_setcode = false, t_auth_list = [||],
+    t_is_blob = false, t_blob_hashes = [||]
   };
   let wd : Withdrawal = struct {
     w_address = withdrawal_addr(0), w_amount = word_of_int(withdrawal_amount(0)) };

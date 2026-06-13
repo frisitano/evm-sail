@@ -69,16 +69,6 @@ function mem_read_range(off : int, len : int) -> list(byte) = {
 
 /* --- byte-range write (for CALLDATACOPY / CODECOPY / RETURNDATACOPY) --- */
 
-function mem_write_range(off : int, src : list(byte)) -> unit = {
-  /* consume src once (O(n)); list_nth-per-index would be O(n^2) on large copies */
-  var rest : list(byte) = src;
-  var k : int = 0;
-  var more : bool = true;
-  while more do {
-    match rest { b :: t => { mem_set_byte(off + k, b); rest = t; k = k + 1 }, [||] => more = false }
-  }
-}
-
 /* Current memory size in 32-byte words (rounded up). */
 function mem_size_words() -> int = ediv_int(memory_size + 31, 32)
 
@@ -154,7 +144,6 @@ val cd_len       = impure "cd_len"       : unit -> bits(64)
 val cd_word      = impure "cd_word"      : bits(64) -> word
 val cd_to_mem    = impure "cd_to_mem"    : (bits(64), bits(64), bits(64)) -> unit
 
-function calldata_size() -> int = unsigned(cd_len())
 function calldata_word(off : int) -> word = cd_word(get_slice_int(64, off, 0))
 function calldata_copy_to_mem(dst : int, off : int, len : int) -> unit =
   cd_to_mem(get_slice_int(64, dst, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0))

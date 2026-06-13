@@ -42,9 +42,10 @@ revm)?
 ```
 Storage:  k_access_slot  k_sload  k_sstore  k_tload  k_tstore  k_orig
 Account:  k_access_account  k_get_balance/nonce/code/codehash  k_transfer
-          k_bump_nonce  k_set_code  k_add_balance  k_sub_balance
+          k_bump_nonce  k_set_code  k_get_code_size  k_code_copy
+          k_deleg_target  k_seed_account
 Env:      k_env(field)  k_blockhash  k_blobhash  k_coinbase
-Prim:     k_keccak  k_create_addr  k_create2_addr  k_precompile
+Prim:     k_create_addr  k_create2_addr  k_precompile
 World:    k_snapshot  k_commit  k_revert  k_refund_add  k_log
 ```
 
@@ -61,10 +62,16 @@ validation (the host fails closed on state absent from a witness), and for
 symbolic engines (the world is an explicit, finite interface).
 
 Performance-critical state lives behind C FFI with O(1) operations — EVM
-memory (`ffi/el_mem.c`) and the overlay-layered storage / transient storage /
-warm sets (`ffi/el_map.c`: frame revert = discard the top layer; the EIP-2200
-"original" value = the overlay's base layer). The Sail semantics is unchanged
-by these backends.
+memory, calldata and returndata (`ffi/host_mem.c`, `ffi/acc_shim.c`), the
+operand stack (`ffi/host_stack.c`), the account code store + per-frame code
+descriptors with prebuilt JUMPDEST bitmaps (`ffi/host_code.c`), and the
+overlay-layered storage / transient storage / warm sets (`ffi/host_map.c`:
+frame revert = discard the top layer; the EIP-2200 "original" value = the
+overlay's base layer). In-memory representations stay unhashed (plain
+address/slot keys, code linked directly); hashing happens only at the write
+boundary (the account's cached codeHash) and the commitment boundary (state
+root, witness authentication). The Sail semantics is unchanged by these
+backends.
 
 ## Performance
 
@@ -74,11 +81,14 @@ Three host runtimes compile the same generated C:
 |---|---|---|
 | GMP (stock Sail) | heap `mpz_t` | ~5.6 Mgas/s |
 | `sailfix` | inline 512-bit (guest-shared, zkVM) | below GMP |
-| `sail256` | inline 512-bit, host-optimized | **~22 Mgas/s** |
+| `sail256` | inline 512-bit, host-optimized | **~28–35 Mgas/s** |
 
-*Execution-bound benchmark (a TSTORE loop run until out-of-gas, 360M gas). A
-30–45M-gas mainnet block executes in ~1.5–2s under `sail256` — within ~17× of
-revm, which is a production interpreter, not a specification.
+*Workload mix (`examples/eest/bench.py`): ~28 Mgas/s on an execution-bound
+TSTORE loop, ~35 Mgas/s across the mix, with calls/creates/precompiles well
+above (deep reentrant CALLs ~940, 49KB-initcode CREATE ~170, blake2f ~100).
+A 30–45M-gas mainnet block executes in ~1–1.5s under `sail256` — within ~13×
+of revm, which is a production interpreter, not a specification. Calling a
+24KB-code contract costs the same as calling a 1-byte one (O(1) frame entry).
 
 ## Layout
 
@@ -91,7 +101,7 @@ evm/         the specification (evm.sail is the root include)
     memory.sail       per-frame byte memory (C-backed, O(1))
     accelerators.sail crypto host functions (eth-act zkvm-standards)
   evm/                THE TRANSACTION KERNEL (= the EVM)
-    machine.sail      frame registers, gas counter, stack, code cursor
+    machine.sail      frame registers, gas counter, stack, code descriptors
     gas.sail          the complete gas schedule (fork-gated)
     instructions.sail the opcode AST
     execute.sail      per-opcode semantics (policy here, effects via k_*)
@@ -102,7 +112,9 @@ evm/         the specification (evm.sail is the root include)
     keccak.sail  sha256.sail  rlp.sail  rlp_decode.sail  mpt.sail
     hash_builder.sail  state_root.sail  block_hash.sail  ssz.sail  ssz_htr.sail
     mpt_witness.sail  stateless witness: feed, re-root, fail-closed lookups
-ffi/         C backends: host_mem.c (memory), host_map.c (overlay maps),
+ffi/         C backends: host_mem.c (memory/calldata), host_map.c (overlay
+             maps), host_stack.c (operand stack), host_code.c (code store +
+             frame descriptors + JUMPDEST bitmaps), host_word.c (comparisons),
              acc_shim.c + zkvm_accelerators.h (eth-act zkvm-standards crypto)
 examples/    runnable examples + the EEST harness (run_eest.py, runner.sail)
 revm-eest/   parallel EEST runner (Rust): drives the model on all cores

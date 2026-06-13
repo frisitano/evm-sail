@@ -5,6 +5,8 @@ Usage: bench.py <model-bin> <fixtures-root> [fork-level]"""
 import sys, time, subprocess, json
 import run_eest
 
+if len(sys.argv) < 3:
+    sys.exit("usage: bench.py <model-bin> <eest-state_tests-root> [fork-level]")
 BIN = sys.argv[1]
 FX = sys.argv[2]
 

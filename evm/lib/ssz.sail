@@ -185,18 +185,3 @@ function ssz_witness_header(i : int) -> list(byte) =
 function ssz_tx(i : int) -> list(byte) =
   ssz_list_elem(pl_txs_start(), pl_n_txs(), pl_wds_start(), i)
 
-/* ---- S1 self-check: decode the fixture vector and assert the fields ---- */
-function ssz_selfcheck() -> unit = {
-  assert(ssz_schema_id() == 1, "stateless input schema id 0x0001");
-  assert(pl_block_number() == 21000000, "payload.block_number");
-  assert(pl_gas_limit() == 30000000, "payload.gas_limit");
-  assert(pl_gas_used() == 43106, "payload.gas_used");
-  assert(pl_timestamp() == 1700000000, "payload.timestamp");
-  assert(pl_fee_recipient() == 0x000000000000000000000000000000000000c01b, "payload.fee_recipient");
-  assert(cc_chain_id() == 1, "chain_config.chain_id");
-  assert(pl_n_txs() == 1, "payload.transactions count");
-  assert(pl_n_withdrawals() == 1, "payload.withdrawals count");
-  assert(withdrawal_amount(0) == 500, "withdrawal[0].amount");
-  assert(withdrawal_addr(0) == 0x0000000000000000000000000000000000004895, "withdrawal[0].address");
-  assert(wit_n_state() == 4, "witness.state node count")
-}

@@ -1,5 +1,6 @@
 /* Validate RLP encoding against the standard vectors. */
 $include "../evm/evm.sail"
+$include "../evm/lib/rlp_decode.sail"
 $include "evm_primitives.sail"
 $include <string.sail>
 
@@ -19,6 +20,8 @@ function check(name : string, got : list(byte), want : string) -> unit = {
 }
 
 function main() -> unit = {
+  rlp_decode_selfcheck();
+  print_endline("rlp_decode: nested list/field decode vectors  OK");
   check("rlp('')      = ", rlp_bytes([||]), "80");
   check("rlp(0x00)    = ", rlp_bytes([| 0x00 |]), "00");
   check("rlp(0x0f)    = ", rlp_bytes([| 0x0f |]), "0f");

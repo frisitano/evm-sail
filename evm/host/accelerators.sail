@@ -58,7 +58,7 @@ function acc_input_byte(i : int) -> byte = acc_in_byte(get_slice_int(64, i, 0))
  * for a memory slice, acc_begin+acc_push_all for a list). The output stays in
  * the accelerator buffer for returndata adoption (hr_capture_acc). On failure
  * the CALL returns 0 (handled by the interpreter). */
-function run_precompile_staged(num : int) -> bool = {
+function run_precompile_staged() -> bool = {
   let _ = acc_exec();
   unsigned(acc_ok()) == 1
 }

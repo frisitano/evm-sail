@@ -113,6 +113,12 @@ PY
       -Wno-unused -c "$ELIR/ffi/zkvm_accelerators.c" -o "$BUILD/zkvm_accelerators.o"
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
       -Wno-unused -c "$ELIR/ffi/acc_shim.c" -o "$BUILD/acc_shim.o"
+  # 3c. C host backends: memory/calldata, overlay maps, operand stack, word
+  #     predicates, code store + frame descriptors.
+  for hc in host_mem host_map host_stack host_word host_code; do
+    "$GCC" "${CFLAGS[@]}" -I"$lib" \
+        -Wno-unused -c "$ELIR/ffi/$hc.c" -o "$BUILD/$hc.o"
+  done
   # 4. Our freestanding runtime + IO + harness.
   "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra \
       -c "$RT/runtime.c" -o "$BUILD/runtime.o"
@@ -128,7 +134,9 @@ PY
       "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/zkvm_io.o" "$BUILD/el_input.o" \
       "$BUILD/zkvm_input_data.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
-      "$BUILD/zkvm_accelerators.o" "$BUILD/acc_shim.o" "$BUILD/zkvm_block.o" \
+      "$BUILD/zkvm_accelerators.o" "$BUILD/acc_shim.o" \
+      "$BUILD/host_mem.o" "$BUILD/host_map.o" "$BUILD/host_stack.o" \
+      "$BUILD/host_word.o" "$BUILD/host_code.o" "$BUILD/zkvm_block.o" \
       -o "$BUILD/zkvm_guest.elf"
   echo "built $BUILD/zkvm_guest.elf"
   riscv64-unknown-elf-size "$BUILD/zkvm_guest.elf" 2>/dev/null || true
