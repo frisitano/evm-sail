@@ -1,0 +1,12 @@
+# TEMPLATE — an ere guest crate wrapping the Sail EVM stateless validator.
+# Untested in this repo's environment: building/proving requires the ere host
+# toolchain and an RV64 zkVM SDK (OpenVM or ZisK). See README.md.
+[package]
+name = "evmsail-ere-guest"
+edition = "2021"
+
+[dependencies]
+# ere-platform-core = { git = "https://github.com/eth-act/ere" }   # Platform I/O trait
+# <openvm|zisk>-zkvm SDK crate for the #[entry] macro + allocator
+
+[workspace]
