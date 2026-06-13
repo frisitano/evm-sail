@@ -174,6 +174,45 @@ function arith_selfcheck() -> unit = {
   assert(alu_smod(neg7, two) == 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff, "alu_smod")
 }
 
+val txin_view_input = impure "txin_view_input" : (bits(64), bits(64), bits(64)) -> bits(64)
+
+/* ---- RLP parsing directly over the SSZ input (no list materialisation) ----
+ * The transactions live in the C-backed witness; we walk their RLP structure by
+ * offset (ib = ssz input byte) to find each field's (offset, length), read the
+ * small scalar fields in place, and point the tx's input slot straight at the
+ * data field's bytes -- the EVM then executes over the witness, zero copy. */
+function rlp_hdr_at(pos : int) -> (bool, int, int) = {
+  let h = ib(pos);
+  if h < 128 then (false, pos, 1)
+  else if h < 184 then (false, pos + 1, h - 128)
+  else if h < 192 then {
+    let lol = h - 183; var v : int = 0;
+    foreach (k from 0 to (lol - 1)) { v = v * 256 + ib(pos + 1 + k) };
+    (false, pos + 1 + lol, v)
+  } else if h < 248 then (true, pos + 1, h - 192)
+  else {
+    let lol = h - 247; var v : int = 0;
+    foreach (k from 0 to (lol - 1)) { v = v * 256 + ib(pos + 1 + k) };
+    (true, pos + 1 + lol, v)
+  }
+}
+/* (offset, length) of field `idx` within the RLP list at offset `off` */
+function rlp_field_span(off : int, idx : int) -> (int, int) = {
+  let (_, po, pl) = rlp_hdr_at(off);
+  let pe = po + pl;
+  var pos : int = po; var fi : int = 0;
+  var res : (int, int) = (po, 0); var more : bool = true;
+  while more & (pos < pe) do {
+    let (_, cs, cl) = rlp_hdr_at(pos);
+    if fi == idx then { res = (cs, cl); more = false }
+    else { pos = cs + cl; fi = fi + 1 }
+  };
+  res
+}
+function rlp_uint_span(off : int, len : int) -> int = {
+  var v : int = 0; foreach (k from 0 to (len - 1)) { v = v * 256 + ib(off + k) }; v
+}
+
 function zkvm_run() -> unit = {
   /* input-independent self-checks (valid for any vector): the C accelerators
      and the GMP-free fixed-width int/bits runtime. The per-stage fixture
@@ -199,14 +238,15 @@ function zkvm_run() -> unit = {
   let sender = word_to_address(keccak256(ssz_bytes(cc_end() + 1, 64)));
 
   /* decode the single legacy transaction from transactions[0] */
-  let ti = rlp_node_items(ssz_tx(0));
-  let t_nonce    = rlp_field_int(list_nth(ti, 0, RLP_NONE));
-  let t_gasprice = rlp_field_word(list_nth(ti, 1, RLP_NONE));
-  let t_gas      = rlp_field_int(list_nth(ti, 2, RLP_NONE));
-  let t_to       = word_to_address(rlp_field_word(list_nth(ti, 3, RLP_NONE)));
-  let t_value    = rlp_field_word(list_nth(ti, 4, RLP_NONE));
-  let t_data     = (list_nth(ti, 5, RLP_NONE)).rf_content;
-  txdata_set_input(0, t_data);   /* tx input lives in memory; the struct holds its index */
+  let (tx_off, _tx_len) = ssz_list_span(pl_txs_start(), pl_n_txs(), pl_wds_start(), 0);
+  let (no, nl) = rlp_field_span(tx_off, 0); let t_nonce    = rlp_uint_span(no, nl);
+  let (go, gl2) = rlp_field_span(tx_off, 1); let t_gasprice = word_of_int(rlp_uint_span(go, gl2));
+  let (xo, xl) = rlp_field_span(tx_off, 2); let t_gas      = rlp_uint_span(xo, xl);
+  let (ao, al2) = rlp_field_span(tx_off, 3); let t_to       = word_to_address(word_of_int(rlp_uint_span(ao, al2)));
+  let (vo, vl) = rlp_field_span(tx_off, 4); let t_value    = word_of_int(rlp_uint_span(vo, vl));
+  /* the tx input is the witness bytes themselves -- point the slot at them, no copy */
+  let (do_, dl) = rlp_field_span(tx_off, 5);
+  let _ = txin_view_input(get_slice_int(64, 0, 0), get_slice_int(64, do_, 0), get_slice_int(64, dl, 0));
 
   /* seed the touched accounts' pre-state from the harvested (authenticated) leaves */
   seed_account_from_store(cdb, sender);

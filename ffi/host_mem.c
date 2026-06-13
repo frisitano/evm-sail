@@ -35,7 +35,11 @@ static hm_cd cd_pending = { -2, 0, 0 };
  * tx is SELECTED by index (txin_activate). The Transaction struct carries only
  * the index -- the bytes live here in memory, never duplicated in a Sail list. */
 #define TXIN_MAX 256
-typedef struct { uint8_t *p; uint64_t len, cap; } txin_slot;
+/* A slot is either OWNED (buf is malloc'd, filled byte-by-byte: EEST / synthetic
+ * txs whose bytes originate in Sail) or a VIEW (p aliases an external buffer --
+ * the stateless SSZ input -- so the tx operates directly over it, zero copy).
+ * Readers only touch (p, len); p == buf for an owned slot. */
+typedef struct { uint8_t *buf; const uint8_t *p; uint64_t len, cap; } txin_slot;
 static txin_slot txin[TXIN_MAX];
 static int txin_fill = 0;   /* slot currently being populated  */
 static int txin_sel  = 0;   /* slot of the executing tx        */
@@ -97,20 +101,29 @@ unit cd_set_tx(const unit u) {
   cd[h_top].src = -1; cd[h_top].off = 0; cd[h_top].len = txin[txin_sel].len;
   return UNIT;
 }
-/* begin populating tx slot `idx` (resets its length; allocations are cached) */
+/* begin populating an OWNED tx slot `idx` (resets length; storage is cached) */
 unit txin_begin(uint64_t idx) {
   txin_fill = (idx < TXIN_MAX) ? (int)idx : 0;
   txin[txin_fill].len = 0;
+  txin[txin_fill].p = txin[txin_fill].buf;
   return UNIT;
 }
 unit txin_byte(uint64_t b) {
   txin_slot *s = &txin[txin_fill];
   if (s->len >= s->cap) {
     uint64_t n = s->cap ? s->cap * 2 : 1024;
-    s->p = (uint8_t *)realloc(s->p, n);
+    s->buf = (uint8_t *)realloc(s->buf, n);
     s->cap = n;
   }
-  s->p[s->len++] = (uint8_t)b;
+  s->buf[s->len++] = (uint8_t)b;
+  s->p = s->buf;
+  return UNIT;
+}
+/* point tx slot `idx` at an EXTERNAL buffer [ptr, ptr+len) (no copy). The tx
+ * then reads its input directly over that memory (the stateless SSZ input). */
+unit txin_view(uint64_t idx, const uint8_t *ptr, uint64_t len) {
+  txin_slot *s = &txin[(idx < TXIN_MAX) ? (int)idx : 0];
+  s->p = ptr; s->len = len;
   return UNIT;
 }
 /* select tx slot `idx` as the executing transaction; returns its input length */

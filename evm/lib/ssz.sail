@@ -182,6 +182,4 @@ function ssz_witness_header(i : int) -> list(byte) =
   ssz_list_elem(wit_headers_start(), wit_n_headers(), cc_start(),          i)
 
 /* transactions[i] raw bytes (legacy = RLP list; typed = type byte ++ payload) */
-function ssz_tx(i : int) -> list(byte) =
-  ssz_list_elem(pl_txs_start(), pl_n_txs(), pl_wds_start(), i)
 

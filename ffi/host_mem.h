@@ -20,6 +20,7 @@ unit cd_set_tx(const unit u);
 unit txin_begin(uint64_t idx);
 unit txin_byte(uint64_t b);
 uint64_t txin_activate(uint64_t idx);
+unit txin_view(uint64_t idx, const uint8_t *ptr, uint64_t len);
 uint64_t cd_len(const unit u);
 const uint8_t *txd_ptr(uint64_t *len);
 uint64_t txd_at(uint64_t i);

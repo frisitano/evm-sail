@@ -7,6 +7,16 @@
 extern const unsigned char zkvm_input_bytes[];
 extern const unsigned long  zkvm_input_bytes_len;
 
+/* point a tx-input slot at a span of the stateless SSZ input -- the tx executes
+ * directly over the witness bytes, no copy. (txin_view: host_mem.h via el_input.h) */
+uint64_t txin_view_input(uint64_t idx, uint64_t off, uint64_t len) {
+  const unsigned char *base = zkvm_input_bytes + (off < zkvm_input_bytes_len ? off : zkvm_input_bytes_len);
+  uint64_t avail = zkvm_input_bytes_len - (off < zkvm_input_bytes_len ? off : zkvm_input_bytes_len);
+  if (len > avail) len = avail;
+  txin_view(idx, base, len);
+  return len;
+}
+
 /* The guest emits the canonical SSZ result through the standard write_output. */
 unit el_emit_out(uint64_t b)
 {
