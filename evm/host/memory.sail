@@ -106,3 +106,34 @@ function mem_keccak(off : int, len : int) -> word = {
   let w3 : bits(64) = acc_word(get_slice_int(64, 3, 0));
   append(w0, append(w1, append(w2, w3)))
 }
+
+/* ---- C-backed RETURNDATA (per call frame; see ffi/acc_shim.c) ---- */
+val hr_reset        = impure "hr_reset"        : unit -> unit
+val hr_clear        = impure "hr_clear"        : unit -> unit
+val hr_discard      = impure "hr_discard"      : unit -> unit
+val hr_capture      = impure "hr_capture"      : (bits(64), bits(64)) -> unit
+val hr_capture_acc  = impure "hr_capture_acc"  : unit -> unit
+val hr_adopt        = impure "hr_adopt"        : unit -> unit
+val hr_len          = impure "hr_len"          : unit -> bits(64)
+val hr_pending_len  = impure "hr_pending_len"  : unit -> bits(64)
+val hr_pending_byte = impure "hr_pending_byte" : bits(64) -> bits(8)
+val hr_to_mem       = impure "hr_to_mem"       : (bits(64), bits(64), bits(64)) -> unit
+val hr_out_region   = impure "hr_out_region"   : (bits(64), bits(64)) -> unit
+
+function returndata_size() -> int = unsigned(hr_len())
+function returndata_capture(off : int, len : int) -> unit =
+  hr_capture(get_slice_int(64, off, 0), get_slice_int(64, len, 0))
+function returndata_copy_to_mem(dst : int, off : int, len : int) -> unit =
+  hr_to_mem(get_slice_int(64, dst, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0))
+function returndata_out_region(dst : int, want : int) -> unit =
+  hr_out_region(get_slice_int(64, dst, 0), get_slice_int(64, want, 0))
+
+/* materialize the pending child output (a CREATE's deployed code) as a list */
+function pending_output_list() -> list(byte) = {
+  let n = unsigned(hr_pending_len());
+  var out : list(byte) = [||];
+  foreach (i from 0 to (n - 1)) {
+    out = hr_pending_byte(get_slice_int(64, n - 1 - i, 0)) :: out
+  };
+  out
+}

@@ -121,7 +121,7 @@ function prewarm(tx : Transaction) -> unit = {
 function process_transaction(tx : Transaction) -> Receipt = {
   k_tx_reset();
   k_set_tx(struct { txe_origin = tx.t_sender, txe_gas_price = tx.t_gas_price, txe_blob_hashes = tx.t_blob_hashes });
-  returndata = [||];
+  hr_reset();
 
   let sender = tx.t_sender;
   let nonce_before = k_get_nonce(sender);
@@ -180,8 +180,8 @@ function process_transaction(tx : Transaction) -> Receipt = {
   k_snapshot();
 
   pc = 0; call_depth = 0; gas_remaining = to_gas(tx.t_gas_limit - intrinsic);
-  stack_clear(); mem_clear(); memory_size = 0;
-  returndata = [||]; frame_output = [||]; frame_status = Running();
+  stack_clear(); mem_clear(); hr_reset(); memory_size = 0;
+  frame_status = Running();
 
   if tx.t_is_create then {
     let new_addr = k_create_addr(sender, nonce_before);
@@ -201,13 +201,14 @@ function process_transaction(tx : Transaction) -> Receipt = {
     set_code(tx.t_data);
     interpret();
     if frame_succeeded() then {
-      let deployed = frame_output;
-      let deposit = G_codedeposit * list_len(deployed);
-      let code_ok = (list_len(deployed) <= MAX_CODE_SIZE)
-                  & (match deployed { b :: _ => b != 0xef, [||] => true });  /* EIP-3541 */
+      let dep_len = unsigned(hr_pending_len());
+      let deposit = G_codedeposit * dep_len;
+      let code_ok = (dep_len <= MAX_CODE_SIZE)
+                  & ((dep_len == 0) | (hr_pending_byte(get_slice_int(64, 0, 0)) != 0xef));  /* EIP-3541 */
       if code_ok & (gas_remaining >= deposit)
-      then { gas_remaining = to_gas(gas_remaining - deposit); k_set_code(new_addr, deployed) }
-      else exc_halt(OutOfGas)     /* failed deploy */
+      then { gas_remaining = to_gas(gas_remaining - deposit);
+             k_set_code(new_addr, pending_output_list()); hr_discard() }
+      else { hr_discard(); exc_halt(OutOfGas) }     /* failed deploy */
     } else ()
     }
   } else {
@@ -222,7 +223,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
         if used <= gas_remaining then k_precompile(an, tx.t_data) else (false, [||]);
       if ok & (used <= gas_remaining) then {
         gas_remaining = to_gas(gas_remaining - used);
-        returndata = out; frame_output = out; frame_status = Halted(HaltReturn)
+        hr_capture_acc(); hr_adopt(); frame_status = Halted(HaltReturn)
       } else exc_halt(OutOfGas)
     } else {
       message = struct {

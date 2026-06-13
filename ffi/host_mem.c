@@ -72,6 +72,9 @@ uint64_t host_mem_read(uint64_t off) {
   return (off < f->cap) ? (uint64_t)f->buf[off] : 0;
 }
 
+/* current call-frame depth (the returndata slots in acc_shim key off it) */
+uint64_t hm_depth(const unit u) { (void)u; return (uint64_t)h_top; }
+
 /* ensure capacity (zero-filled) and return a READ pointer to [off, off+len) */
 const uint8_t *hm_rd(uint64_t off, uint64_t len) {
   static const uint8_t zero = 0;

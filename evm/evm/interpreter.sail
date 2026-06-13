@@ -116,7 +116,7 @@ function run_call(mode : int) -> unit = {
     then unsigned(k_get_balance(caller)) >= unsigned(value) else true;
 
   if not_bool(depth_ok) | not_bool(balance_ok) then {
-    returndata = [||]; gas_remaining = to_gas(gas_remaining + child_gas); push(WORD_ZERO)
+    hr_clear(); gas_remaining = to_gas(gas_remaining + child_gas); push(WORD_ZERO)
   } else if (an >= 1 & an <= 17) | (an == 256) then {   /* 256 = 0x100 P256VERIFY (EIP-7951) */
     let used = precompile_gas(an, args);
     /* gas check FIRST: an out-of-gas precompile call must not execute (e.g. a
@@ -124,18 +124,17 @@ function run_call(mode : int) -> unit = {
     let (ok, out) : (bool, list(byte)) =
       if used <= child_gas then k_precompile(an, args) else (false, [||]);
     if ok & (used <= child_gas) then {
-      returndata = out;
+      hr_capture_acc(); hr_adopt();
       /* the value transfer is part of the (successful) call */
       if (mode == 0) & word_nonzero(value) then k_transfer(caller, target, value) else ();
-      let pout_n = if ret_len < list_len(out) then ret_len else list_len(out);
-      mem_write_range(ret_off, bytes_slice(out, 0, pout_n));
+      returndata_out_region(ret_off, ret_len);
       gas_remaining = to_gas(gas_remaining + (child_gas - used));
       push(WORD_ONE)
     } else {
       /* precompile failure (bad input) or OOG is a non-revert error: it consumes
          ALL the call's gas (no refund of child_gas), CALL returns 0, and the
          RETURNDATA buffer is EMPTY (no output escapes a failed precompile). */
-      returndata = [||];
+      hr_clear();
       push(WORD_ZERO)
     }
   } else {
@@ -143,7 +142,7 @@ function run_call(mode : int) -> unit = {
     if (mode == 0) & word_nonzero(value) then k_transfer(caller, target, value) else ();
 
     let s_pc = pc; let s_gas = gas_remaining; let s_code = code;
-    let s_out = frame_output; let s_msg = message; let s_status = frame_status;
+    let s_msg = message; let s_status = frame_status;
     let s_msize = memory_size; let s_depth = call_depth;
 
     let child_addr : address = if mode == 0 | mode == 3 then target else caller;
@@ -156,23 +155,22 @@ function run_call(mode : int) -> unit = {
       msg_value = child_value, msg_data = args, msg_is_static = child_static, msg_depth = s_depth + 1
     };
     pc = 0; gas_remaining = to_gas(child_gas); stack_frame_enter(); set_code(k_get_exec_code(target));  /* EIP-7702 delegation */
-    returndata = [||]; frame_output = [||]; frame_status = Running(); mem_frame_enter(); memory_size = 0;
+    frame_status = Running(); mem_frame_enter(); hr_clear(); memory_size = 0;
     call_depth = s_depth + 1;
 
     interpret();
 
     let succeeded = frame_succeeded();
-    let child_out = frame_output; let child_left = gas_remaining;
+    let child_left = gas_remaining;
 
-    pc = s_pc; stack_frame_leave(); set_code(s_code); frame_output = s_out; message = s_msg;
+    pc = s_pc; stack_frame_leave(); set_code(s_code); message = s_msg;
     frame_status = s_status; mem_frame_leave(); memory_size = s_msize; call_depth = s_depth;
-    returndata = child_out; gas_remaining = to_gas(s_gas + child_left);
+    hr_adopt(); gas_remaining = to_gas(s_gas + child_left);
 
     /* the output region is written on success AND revert (EELS generic_call) --
        and only min(ret_len, |output|) bytes: the rest of the region is untouched.
        An exceptionally-halted child has empty output, so nothing is written. */
-    let out_n = if ret_len < list_len(child_out) then ret_len else list_len(child_out);
-    mem_write_range(ret_off, bytes_slice(child_out, 0, out_n));
+    returndata_out_region(ret_off, ret_len);
     if succeeded then { k_commit(); push(WORD_ONE) }
     else { k_revert(); push(WORD_ZERO) }
   }
@@ -203,14 +201,14 @@ function run_create(is2 : bool) -> unit = {
     let balance_ok : bool = unsigned(k_get_balance(creator)) >= unsigned(value);
 
     if not_bool(depth_ok) | not_bool(balance_ok) then {
-      returndata = [||]; gas_remaining = to_gas(gas_remaining + child_gas); push(WORD_ZERO)
+      hr_clear(); gas_remaining = to_gas(gas_remaining + child_gas); push(WORD_ZERO)
     } else {
       /* warm the target + bump the creator nonce BEFORE the child snapshot:
        * both persist even when the initcode reverts (EELS generic_create runs
        * them in the parent frame, before process_create_message). */
       let _ = k_access_account(new_addr);
       let occupied : bool = k_account_occupied(new_addr);
-      returndata = [||];
+      hr_clear();
       k_bump_nonce(creator);
       if occupied then {
         /* CREATE address collision (code, nonzero nonce, or storage at the
@@ -224,7 +222,7 @@ function run_create(is2 : bool) -> unit = {
       k_transfer(creator, new_addr, value);
 
       let s_pc = pc; let s_gas = gas_remaining; let s_code = code;
-      let s_out = frame_output; let s_msg = message; let s_status = frame_status;
+      let s_msg = message; let s_status = frame_status;
       let s_msize = memory_size; let s_depth = call_depth;
 
       message = struct {
@@ -232,25 +230,28 @@ function run_create(is2 : bool) -> unit = {
         msg_value = value, msg_data = [||], msg_is_static = s_msg.msg_is_static, msg_depth = s_depth + 1
       };
       pc = 0; gas_remaining = to_gas(child_gas); stack_frame_enter(); set_code(initcode);
-      returndata = [||]; frame_output = [||]; frame_status = Running(); mem_frame_enter(); memory_size = 0;
+      frame_status = Running(); mem_frame_enter(); hr_clear(); memory_size = 0;
       call_depth = s_depth + 1;
 
       interpret();
 
       let succeeded = frame_succeeded();
-      let deployed = frame_output; let child_left = gas_remaining;
-      let deposit = G_codedeposit * list_len(deployed);
+      let child_left = gas_remaining;
+      let dep_len = unsigned(hr_pending_len());
+      let deposit = G_codedeposit * dep_len;
       /* EIP-170 size limit + EIP-3541 (reject code starting with 0xEF) */
-      let code_ok = (list_len(deployed) <= MAX_CODE_SIZE)
-                  & (match deployed { b :: _ => b != 0xef, [||] => true });
+      let code_ok = (dep_len <= MAX_CODE_SIZE)
+                  & ((dep_len == 0) | (hr_pending_byte(get_slice_int(64, 0, 0)) != 0xef));
 
-      pc = s_pc; stack_frame_leave(); set_code(s_code); frame_output = s_out; message = s_msg;
+      pc = s_pc; stack_frame_leave(); set_code(s_code); message = s_msg;
       frame_status = s_status; mem_frame_leave(); memory_size = s_msize; call_depth = s_depth;
-      returndata = if succeeded then [||] else deployed;
+      /* a successful create yields EMPTY returndata; a revert exposes its data */
+      if succeeded then hr_clear() else hr_adopt();
       gas_remaining = to_gas(s_gas + child_left);
 
       if succeeded & code_ok & (child_left >= deposit) then {
-        gas_remaining = to_gas(gas_remaining - deposit); k_set_code(new_addr, deployed); k_commit();
+        gas_remaining = to_gas(gas_remaining - deposit);
+        k_set_code(new_addr, pending_output_list()); hr_discard(); k_commit();
         push(address_to_word(new_addr))
       } else {
         /* a deposit-stage failure (0xEF prefix, oversize code, deposit OOG)
@@ -258,7 +259,7 @@ function run_create(is2 : bool) -> unit = {
          * process_create_message sets gas_left = 0). A reverting/failing
          * initcode keeps child_left as already folded in above. */
         if succeeded then gas_remaining = s_gas else ();
-        k_revert(); push(WORD_ZERO)
+        hr_discard(); k_revert(); push(WORD_ZERO)
       }
       }
     }

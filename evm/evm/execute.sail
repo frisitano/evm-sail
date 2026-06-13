@@ -91,11 +91,11 @@ function execute(op : ast) -> unit = match op {
                         if is_running() then mem_write_range(dest, bytes_slice(k_get_code(a), off, len)) else () },
   EXTCODEHASH() => { let a = word_to_address(pop()); let warm = k_access_account(a);
                         charge(account_cost(warm)); push(k_get_codehash(a)) },
-  RETURNDATASIZE() => { charge(G_base); push(word_of_int(list_len(returndata))) },
+  RETURNDATASIZE() => { charge(G_base); push(word_of_int(returndata_size())) },
   RETURNDATACOPY() => { charge(G_verylow); let dest = pop_int(); let off = pop_int();
                            let len = pop_int(); charge(copy_gas(len)); charge_expansion(dest, len);
-                           if off + len > list_len(returndata) then exc_halt(InvalidOpcode)
-                           else if is_running() then mem_write_range(dest, bytes_slice(returndata, off, len)) else () },
+                           if off + len > returndata_size() then exc_halt(InvalidOpcode)
+                           else if is_running() then returndata_copy_to_mem(dest, off, len) else () },
 
   /* ---- block (kernel reads) ---- */
   BLOCKHASH()  => { charge(20); let n = pop(); push(k_blockhash(n)) },
@@ -174,9 +174,9 @@ function execute(op : ast) -> unit = match op {
   STATICCALL()   => run_call(3),
 
   RETURN() => { let off = pop_int(); let len = pop_int(); charge_expansion(off, len);
-                   if is_running() then { frame_output = mem_read_range(off, len); frame_status = Halted(HaltReturn) } else () },
+                   if is_running() then { returndata_capture(off, len); frame_status = Halted(HaltReturn) } else () },
   REVERT() => { let off = pop_int(); let len = pop_int(); charge_expansion(off, len);
-                   if is_running() then { frame_output = mem_read_range(off, len); frame_status = Halted(HaltRevert) } else () },
+                   if is_running() then { returndata_capture(off, len); frame_status = Halted(HaltRevert) } else () },
   INVALID() => { gas_remaining = 0; exc_halt(InvalidOpcode) },
 
   SELFDESTRUCT() => { if guard_static() then () else {

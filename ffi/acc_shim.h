@@ -24,4 +24,15 @@ uint64_t acc_exec(unit u);          /* run the standard accelerator; returns out
 uint64_t acc_ok(unit u);            /* bits(8): 1 = ZKVM_EOK, 0 = ZKVM_EFAIL */
 uint64_t acc_out(uint64_t i);       /* bits(64) index -> bits(8): output byte i */
 uint64_t acc_word(uint64_t i);      /* bits(64) -> bits(64): big-endian output word i (hash fast path) */
+unit hr_reset(const unit u);
+unit hr_clear(const unit u);
+unit hr_discard(const unit u);
+unit hr_capture(uint64_t off, uint64_t len);
+unit hr_capture_acc(const unit u);
+unit hr_adopt(const unit u);
+uint64_t hr_len(const unit u);
+uint64_t hr_pending_len(const unit u);
+uint64_t hr_pending_byte(uint64_t i);
+unit hr_to_mem(uint64_t dst, uint64_t off, uint64_t len);
+unit hr_out_region(uint64_t dst, uint64_t want);
 #endif

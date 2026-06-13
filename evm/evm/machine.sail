@@ -30,8 +30,6 @@ register pc            : int        = 0
 register gas_remaining : gas        = 0      /* THE gas counter (user-space) */
 register frame_status  : FrameStatus = Running()
 register code          : list(byte) = [||]
-register returndata    : list(byte) = [||]
-register frame_output  : list(byte) = [||]
 register message       : Message    = DEFAULT_MESSAGE
 register call_depth    : int        = 0
 
