@@ -15,6 +15,21 @@ static int      ACC_id;
 static int      ACC_ok;
 
 /* EVM precompiles zero-pad their input to the field layout; read with padding. */
+#ifdef ACCEL_MMIO
+#include "accel_mmio.h"
+/* hand the request to the host accelerator device (no in-guest crypto) */
+static uint64_t accel_dev_call(uint64_t op, const uint8_t *in, uint32_t inlen, uint8_t *out) {
+  volatile uint64_t *d = (volatile uint64_t *)ACCEL_BASE;
+  d[ACC_R_OP] = op;
+  d[ACC_R_IN] = (uint64_t)(uintptr_t)in;
+  d[ACC_R_INLEN] = inlen;
+  d[ACC_R_OUT] = (uint64_t)(uintptr_t)out;
+  d[ACC_R_GO] = 1;                 /* synchronous: device computes in this store */
+  ACC_ok = (int)d[ACC_R_OK];
+  ACC_outlen = (uint32_t)d[ACC_R_OUTLEN];
+  return ACC_outlen;
+}
+#endif
 static uint8_t in_byte(uint32_t i) { return (i < ACC_inlen) ? ACC_in[i] : 0; }
 static void in_copy(uint8_t *dst, uint32_t off, uint32_t n) { for (uint32_t i = 0; i < n; i++) dst[i] = in_byte(off + i); }
 
@@ -82,6 +97,10 @@ unit acc_push8(uint64_t w)  {   /* 8 input bytes (big-endian) in one store when 
 
 uint64_t acc_exec(unit u) {
   (void)u;
+#ifdef ACCEL_MMIO
+  if (ACC_id == 0 || ACC_id == 2)   /* keccak / sha256 -> host accelerator */
+    return accel_dev_call(ACC_id, ACC_in, ACC_inlen, ACC_out);
+#endif
   switch (ACC_id) {
     case 0: { zkvm_keccak256_hash h;
       if (zkvm_keccak256(ACC_in, ACC_inlen, &h) == ZKVM_EOK) { memcpy(ACC_out, h.data, 32); ACC_outlen = 32; }

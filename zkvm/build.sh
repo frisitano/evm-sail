@@ -21,6 +21,10 @@ ELIR="$(cd "$HERE/.." && pwd)"
 SAIL="${SAIL:-sail}"
 GCC="${GCC:-riscv64-unknown-elf-gcc}"
 SPIKE="${SPIKE:-spike}"
+HOSTCC="${HOSTCC:-cc}"
+HOSTCXX="${HOSTCXX:-c++}"
+SPIKE_INC="${SPIKE_INC:-/opt/homebrew/Cellar/riscv-isa-sim/main/include}"
+ACCEL_SO="$BUILD/accel_device.so"
 
 # Standard target: RV64IM + Zicclsm, LP64 soft-float, machine mode, freestanding.
 ARCH=(-march=rv64im_zicclsm -mabi=lp64 -mcmodel=medany)
@@ -46,7 +50,7 @@ SPIKE_MEM="0x80000000:0x10000000,0x90010000:0x00100000"
 # transparent misaligned load/store support, which spike provides via
 # --misaligned. So rv64im + --misaligned is the Zicclsm-equivalent run config.
 SPIKE_ISA="rv64im_zicntr"   # zicntr enables instret for the harness cost readout
-SPIKE_FLAGS=(--isa="$SPIKE_ISA" --misaligned -m"$SPIKE_MEM")
+SPIKE_FLAGS=(--isa="$SPIKE_ISA" --misaligned -m"$SPIKE_MEM" --extlib="$ACCEL_SO" --device=accel)
 
 mkdir -p "$BUILD"
 
@@ -111,8 +115,14 @@ PY
   #     Pure C; need sail.h (-I$lib) for the unit/sail_int extern ABI types.
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
       -Wno-unused -c "$ELIR/ffi/zkvm_accelerators.c" -o "$BUILD/zkvm_accelerators.o"
-  "$GCC" "${CFLAGS[@]}" -I"$lib" \
+  "$GCC" "${CFLAGS[@]}" -I"$lib" -I"$ELIR/ffi" -DACCEL_MMIO \
       -Wno-unused -c "$ELIR/ffi/acc_shim.c" -o "$BUILD/acc_shim.o"
+  # 3b'. Host accelerator device (spike --extlib): the crypto runs on the host,
+  #      not as guest instructions. Reuses the SAME zkvm_accelerators behind the
+  #      eth-act standard header, compiled for the HOST.
+  "$HOSTCC" -O2 -I"$ELIR/ffi" -c "$ELIR/ffi/zkvm_accelerators.c" -o "$BUILD/zkvm_accel_ref_host.o"
+  "$HOSTCXX" -std=c++17 -fPIC -shared -I"$SPIKE_INC" -I"$ELIR/ffi" -undefined dynamic_lookup \
+      -o "$ACCEL_SO" "$ELIR/zkvm/accel-device/accel_device.cc" "$BUILD/zkvm_accel_ref_host.o"
   # 3c. C host backends: memory/calldata, overlay maps, operand stack, word
   #     predicates, code store + frame descriptors.
   for hc in host_mem host_map host_stack host_word host_code; do
