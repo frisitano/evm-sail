@@ -138,7 +138,9 @@ def encode(c):
         h2i(tx.get("maxFeePerGas","0x0")), base + h2i(tx.get("maxPriorityFeePerGas","0x0")))
     is_create = 0 if tx.get("to") else 1
     data = hexbytes(c["data"])
-    s += [ai(tx["sender"]), h2i(tx.get("nonce","0x0")), gp, gp-base, c["gas"], is_create,
+    # priority fee, saturating at 0 (matches revm-eest's gp.saturating_sub(base));
+    # gp < base means an invalid tx, judged from gp vs base, not a negative tip.
+    s += [ai(tx["sender"]), h2i(tx.get("nonce","0x0")), gp, max(0, gp-base), c["gas"], is_create,
           0 if is_create else ai(tx["to"]), c["val"], len(data), *data]
     # EIP-2930 access list: n_addrs addresses, then n_keys (addr, slot) pairs
     al = c.get("al") or []
@@ -274,9 +276,18 @@ def main():
     global FORK_LEVEL; FORK_LEVEL = fork_level(args.fork)
     build_runner(args.rebuild)
 
+    # expand directories to the .json files within (recursive), like run_witness.py
+    import glob as _glob
+    files = []
+    for p in args.files:
+        if os.path.isdir(p):
+            files += sorted(_glob.glob(os.path.join(p, "**", "*.json"), recursive=True))
+        else:
+            files.append(p)
+
     npass = ntotal = ntimeout = nroot = nroot_have = 0
     fail_reasons = {}   # coarse category -> count
-    for f in args.files:
+    for f in files:
         allcases = collect(f, args.fork, args.limit)
         if not allcases: continue
         # Run cases in small chunks so one slow file's timeout doesn't take down a
