@@ -39,52 +39,6 @@ function account_rlp(nonce : int, balance : word, sroot : bits(256), chash : bit
     rlp_list(list_reverse(rlp_scratch)) /* prepend builds newest-first; reverse -> field order */
 }
 
-/* secure-trie pairs for one account's non-zero storage, enumerated from the
- * flattened C overlay map (cold path: only --root runs / block authentication). */
-function storage_pairs(a : address) -> list(TriePair) = {
-    var out : list(TriePair) = [||];
-    let n = storage_count();
-    foreach (j from 0 to (n - 1)) {
-        let (ea, es, ev) = storage_entry(j);
-        if ea == a & not_bool(word_is_zero(ev)) then {
-            out =
-                struct {
-                    tp_key = to_nibbles(word_to_bytes32(keccak256(word_to_bytes32(es)))),
-                    tp_val = rlp_int(unsigned(ev)),
-                } ::
-                    out
-        }
-    };
-    out
-}
-function storage_root(a : address) -> bits(256) = trie_root(storage_pairs(a))
-
-function acc_is_empty(acc : Account) -> bool =
-    (acc.acc_codehash == KECCAK_EMPTY) & acc.acc_nonce == 0 & word_is_zero(acc.acc_balance)
-
-/* secure-trie pairs for all non-empty accounts */
-function state_pairs(entries : list(AccountEntry)) -> list(TriePair) =
-    match entries {
-        [||]   => [||],
-        e :: r => if acc_is_empty(e.ae_acc) then {
-            state_pairs(r)
-        } else {
-            struct {
-                tp_key = to_nibbles(word_to_bytes32(keccak256(address_to_bytes(e.ae_addr)))),
-                tp_val =
-                    account_rlp(
-                        e.ae_acc.acc_nonce,
-                        e.ae_acc.acc_balance,
-                        storage_root(e.ae_addr),
-                        e.ae_acc.acc_codehash,
-                    ),
-            } ::
-                state_pairs(r)
-        },
-    }
-
-function compute_state_root() -> bits(256) = trie_root(state_pairs(k_accounts))
-
 /* ---- post-state root via the stack HashBuilder ------------------------- */
 /* lexicographic nibble-key order (HashBuilder requires strictly ascending keys) */
 function nib_lt(a : list(int), b : list(int)) -> bool = {
@@ -125,6 +79,50 @@ function sort_pairs(ps : list(TriePair)) -> list(TriePair) =
         q :: r => insert_sorted(q, sort_pairs(r)),
     }
 
+/* secure-trie pairs for one account's non-zero storage, enumerated from the
+ * flattened C overlay map (cold path: only --root runs / block authentication). */
+function storage_pairs(a : address) -> list(TriePair) = {
+    var out : list(TriePair) = [||];
+    let n = storage_count();
+    foreach (j from 0 to (n - 1)) {
+        let (ea, es, ev) = storage_entry(j);
+        if ea == a & not_bool(word_is_zero(ev)) then {
+            out =
+                struct {
+                    tp_key = to_nibbles(word_to_bytes32(keccak256(word_to_bytes32(es)))),
+                    tp_val = rlp_int(unsigned(ev)),
+                } ::
+                    out
+        }
+    };
+    out
+}
+function storage_root(a : address) -> bits(256) = hb_root_of(sort_pairs(storage_pairs(a)))
+
+function acc_is_empty(acc : Account) -> bool =
+    (acc.acc_codehash == KECCAK_EMPTY) & acc.acc_nonce == 0 & word_is_zero(acc.acc_balance)
+
+/* secure-trie pairs for all non-empty accounts */
+function state_pairs(entries : list(AccountEntry)) -> list(TriePair) =
+    match entries {
+        [||]   => [||],
+        e :: r => if acc_is_empty(e.ae_acc) then {
+            state_pairs(r)
+        } else {
+            struct {
+                tp_key = to_nibbles(word_to_bytes32(keccak256(address_to_bytes(e.ae_addr)))),
+                tp_val =
+                    account_rlp(
+                        e.ae_acc.acc_nonce,
+                        e.ae_acc.acc_balance,
+                        storage_root(e.ae_addr),
+                        e.ae_acc.acc_codehash,
+                    ),
+            } ::
+                state_pairs(r)
+        },
+    }
+
 /* Post-state root via the alloy-trie stack builder: feed the post-execution
  * account leaves (key = keccak(addr), value = rlp(post-account); created accounts
  * included, EIP-161-empty dropped) in sorted key order. The untouched frontier --
@@ -132,12 +130,3 @@ function sort_pairs(ps : list(TriePair)) -> list(TriePair) =
  * hb_add_branch (validated in stage 2); it is empty for a fixture whose whole
  * state is materialised. Same stack machinery as the pre-state validation. */
 function compute_state_root_hb() -> bits(256) = hb_root_of(sort_pairs(state_pairs(k_accounts)))
-
-/* Authenticate the current world state against a claimed root. Used both for
- * pre-state authentication (the provided pre-state/witness must hash to the
- * parent block's stateRoot) and post-state authentication (the computed
- * post-state must hash to this block's stateRoot). A stateless prover supplies
- * the accessed pre-state as the world here; verifying individual MPT branch
- * proofs (without the full state) is a further refinement. */
-function authenticate_state(claimed_root : bits(256)) -> bool =
-    compute_state_root() == claimed_root

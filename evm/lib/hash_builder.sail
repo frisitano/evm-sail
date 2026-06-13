@@ -16,6 +16,74 @@
 /* ======================================================================== */
 
 /* ---- small generic list helpers (take/drop n from the front) ----------- */
+/* ---- shared trie primitives (formerly lib/mpt.sail) -------------------- */
+
+/* (key-nibbles, value) pair: the unit a trie root is built from. */
+struct TriePair = { tp_key : list(int), tp_val : list(byte) }
+
+/* 32-byte key -> 64 nibbles, high nibble first (single pass + reverse). */
+function to_nibbles(bs : list(byte)) -> list(int) = {
+    var out : list(int) = [||];
+    var rest : list(byte) = bs;
+    while match rest {
+        [||] => false,
+        _ => true,
+    } do {
+        match rest {
+            b :: r => {
+                let bb = unsigned(b);
+                out = ediv_int(bb, 16) :: out;
+                out = emod_int(bb, 16) :: out;
+                rest = r
+            },
+            [||] => (),
+        }
+    };
+    list_reverse(out)
+}
+
+/* hex-prefix (compact) encoding of a nibble path + leaf/extension flag (YP C.1). */
+function hp_compact(nibs : list(int), is_leaf : bool) -> list(byte) = {
+    let len = list_len(nibs);
+    let odd = emod_int(len, 2) == 1;
+    let flag : int = if is_leaf then { 2 } else { 0 };
+    var out : list(byte) = [||];
+    var rest : list(int) = nibs;
+    if odd then {
+        match rest {
+            n0 :: t => {
+                out = get_slice_int(8, (flag + 1) * 16 + n0, 0) :: out;
+                rest = t
+            },
+            [||] => (),
+        }
+    } else {
+        out = get_slice_int(8, flag * 16, 0) :: out
+    };
+    while match rest {
+        [||] => false,
+        _ => true,
+    } do {
+        match rest {
+            a :: (b :: t) => {
+                out = get_slice_int(8, a * 16 + b, 0) :: out;
+                rest = t
+            },
+            _ => rest = [||],
+        }
+    };
+    list_reverse(out)
+}
+
+/* reference to a child node: inline if its RLP < 32 bytes, else its keccak
+ * (alloy `from_rlp`; YP: nodes < 32 bytes are embedded, otherwise hashed). */
+function child_ref(enc : list(byte)) -> list(byte) =
+    if list_len(enc) < 32 then {
+        enc
+    } else {
+        rlp_bytes(word_to_bytes32(keccak256(enc)))
+    }
+
 function hb_ltake forall ('a : Type). (xs : list('a), n : int) -> list('a) = {
     var out : list('a) = [||];
     var rest : list('a) = xs;
@@ -276,8 +344,8 @@ function hb_root() -> bits(256) = {
     hb_current_root()
 }
 
-/* ---- differential self-check: stack builder == recursive trie_root ------ */
-/* add the (already key-sorted) pairs via hb_add_leaf, compare to trie_root.  */
+/* feed (already key-sorted) pairs through hb_add_leaf and return the root.
+ * The sole MPT-root driver: storage roots and the state root both use it. */
 function hb_root_of(pairs : list(TriePair)) -> bits(256) = {
     hb_reset();
     var ps : list(TriePair) = pairs;
@@ -294,107 +362,4 @@ function hb_root_of(pairs : list(TriePair)) -> bits(256) = {
         }
     };
     hb_root()
-}
-function hb_tp(key : list(int), value : list(byte)) -> TriePair = struct { tp_key = key, tp_val = value }
-function hb_repeat_byte(b : byte, n : int) -> list(byte) = {
-    var out : list(byte) = [||];
-    var i : int = 0;
-    while i < n do {
-        out = b :: out;
-        i = i + 1
-    };
-    out
-}
-function hb_check_set(pairs : list(TriePair)) -> unit =
-    assert(hb_root_of(pairs) == trie_root(pairs), "hash_builder root == recursive trie_root")
-
-/* child-ref (hash form) of the subtree that all `group` keys share below the
- * first nibble -- i.e. the value a parent branch holds for that nibble slot.
- * (Built via the recursive oracle at depth 1; used to blind a whole subtree.) */
-function hb_subtree_ref(group : list(TriePair)) -> list(byte) = child_ref(build_node(group, 1))
-
-/* Partial-witness check: present some leaves, blind a whole sibling subtree as a
- * single hash via hb_add_branch, and require the re-rooted partial trie to equal
- * the full trie root. `present`/`blinded` partition `full` by first nibble; the
- * blinded group hangs off `blind_nib`. Run in both interleave orders. */
-function hb_add_pairs(ps : list(TriePair)) -> unit = {
-    var r : list(TriePair) = ps;
-    while match r {
-        [||] => false,
-        _ => true,
-    } do {
-        match r {
-            p :: t => {
-                hb_add_leaf(p.tp_key, p.tp_val);
-                r = t
-            },
-            [||] => (),
-        }
-    }
-}
-function hb_blind_set(
-    present : list(TriePair),
-    blinded : list(TriePair),
-    blind_nib : int,
-    blind_first : bool,
-    full : list(TriePair),
-) -> (
-    unit
-) = {
-    let sref = hb_subtree_ref(blinded);
-    assert(list_len(sref) == 33, "blinded subtree is a hash (>=32B node)");
-    let h = hb_ldrop(sref, 1);
-    hb_reset();
-    if blind_first then {
-        hb_add_branch([|blind_nib|], h);
-        hb_add_pairs(present)
-    } else {
-        hb_add_pairs(present);
-        hb_add_branch([|blind_nib|], h)
-    };
-    assert(hb_root() == trie_root(full), "blinded partial root == full trie root")
-}
-
-function hb_blind_selfcheck() -> unit = {
-    let g1 : list(TriePair) = [|
-            hb_tp([|1, 0, 0, 0|], [|0x11|]),
-            hb_tp([|1, 0, 0, 1|], [|0x12|]),
-            hb_tp([|1, 5, 0, 0|], [|0x13|]),
-        |];
-    let g7 : list(TriePair) = [|
-            hb_tp([|7, 2, 0, 0|], [|0x71|]),
-            hb_tp([|7, 2, 0, 1|], [|0x72|]),
-            hb_tp([|7, 9, 0, 0|], [|0x79|]),
-        |];
-    let full : list(TriePair) = list_append(g1, g7);
-
-    /* present nibble-1 leaves, blind the nibble-7 subtree (branch comes last) */
-    hb_blind_set(g1, g7, 7, false, full);
-
-    /* present nibble-7 leaves, blind the nibble-1 subtree (branch comes first) */
-    hb_blind_set(g7, g1, 1, true, full)
-}
-
-function hb_selfcheck() -> unit = {
-    /* single leaf */
-    hb_check_set([|hb_tp([|1, 2, 3, 4|], [|0xaa|])|]);
-
-    /* two leaves sharing a prefix -> extension over a branch */
-    hb_check_set([|hb_tp([|1, 2, 3, 4|], [|0xaa|]), hb_tp([|1, 2, 5, 6|], [|0xbb|])|]);
-
-    /* immediate branch at root (distinct first nibble) */
-    hb_check_set([|hb_tp([|0, 1, 2, 3|], [|0x01|]), hb_tp([|7, 1, 2, 3|], [|0x07|]), hb_tp([|9, 9, 9, 9|], [|0x09|])|]);
-
-    /* longer secure-trie-like keys (8 nibbles), several branch levels */
-    hb_check_set(
-        [|
-            hb_tp([|10, 11, 0, 0, 0, 0, 0, 1|], [|0x31|]),
-            hb_tp([|10, 11, 0, 0, 0, 0, 0, 2|], [|0x32|]),
-            hb_tp([|10, 12, 0, 0, 0, 0, 0, 0|], [|0x33|]),
-            hb_tp([|15, 0, 1, 2, 3, 4, 5, 6|], [|0x34|]),
-        |],
-    );
-
-    /* value >= 32 bytes (child hashed, not inline) */
-    hb_check_set([|hb_tp([|2, 2, 2, 2|], hb_repeat_byte(0xcd, 34)), hb_tp([|2, 2, 9, 9|], [|0x77|])|])
 }

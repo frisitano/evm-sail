@@ -39,7 +39,6 @@ $include "host/crypto.sail"
 
 /* pure library functions */
 $include "lib/rlp.sail"
-$include "lib/mpt.sail"
 $include "lib/hash_builder.sail"
 $include "lib/block_hash.sail"
 

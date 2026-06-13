@@ -229,7 +229,7 @@ function main() -> unit = {
         print_endline("CASE");
         run_one();
         if want_root != 0 then {
-            print_endline(concat_str("ROOT ", hex_str(unsigned(compute_state_root()))))
+            print_endline(concat_str("ROOT ", hex_str(unsigned(compute_state_root_hb()))))
         };
         more = ni()
     }

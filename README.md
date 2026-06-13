@@ -111,7 +111,7 @@ evm/         the specification (evm.sail is the root include)
     transaction.sail  tx validity + the state transition + refunds
     block.sail        whole-block execution (txs + withdrawals)
   lib/
-    rlp.sail  rlp_decode.sail  mpt.sail
+    rlp.sail  rlp_decode.sail
     hash_builder.sail  state_root.sail  block_hash.sail  io.sail  ssz_htr.sail
     mpt_witness.sail  stateless witness: feed, re-root, fail-closed lookups
 ffi/         C backends: host_mem.c (memory/calldata), host_map.c (overlay
