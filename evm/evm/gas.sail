@@ -1,44 +1,47 @@
 /* ======================================================================== */
-/* The gas schedule (Cancun/Prague-era constants)                          */
+/* The gas schedule (Yellow Paper Appendix G + the gas EIPs)                 */
 /*                                                                           */
-/* Static per-opcode costs are attached in execute.sail; this module owns    */
-/* the charging hook, memory-expansion gas, the EIP-2929 access costs, the   */
-/* EIP-2200/3529 SSTORE cost+refund, and the keccak/copy/log/exp/call/create */
-/* dynamic-gas helpers.                                                      */
+/* The static cost symbols (G_*) are the Yellow Paper's, as repriced by      */
+/* EIP-150/160/2929. This module owns the charging hook, memory-expansion    */
+/* gas (YP C_mem), the EIP-2929 access costs, the EIP-2200/3529 SSTORE        */
+/* cost+refund, and the keccak/copy/log/exp/call/create dynamic-gas helpers.  */
+/* Static per-opcode costs are attached to each opcode in execute.sail.       */
 /* ======================================================================== */
 
-/* --- static cost constants --- */
-let G_zero : gas = 0
-let G_jumpdest : gas = 1
-let G_base : gas = 2
-let G_verylow : gas = 3
-let G_low : gas = 5
-let G_mid : gas = 8
-let G_high : gas = 10
-let G_warm_access : gas = 100
-let G_cold_sload : gas = 2100
-let G_cold_account : gas = 2600
-let G_keccak : gas = 30
-let G_keccak_word : gas = 6
-let G_copy_word : gas = 3
-let G_memory : gas = 3
-let G_log : gas = 375
-let G_logtopic : gas = 375
-let G_logdata : gas = 8
-let G_exp : gas = 10
-let G_expbyte : gas = 50
-let G_sset : gas = 20000
-let G_sreset : gas = 2900 /* 5000 - 2100 cold (charged separately) */
-let R_sclear : gas = 4800 /* EIP-3529 SSTORE clears refund         */
-let G_create : gas = 32000
-let G_codedeposit : gas = 200
-let G_callvalue : gas = 9000
-let G_callstipend : gas = 2300
-let G_newaccount : gas = 25000
-let G_selfdestruct : gas = 5000
-let G_initcode_word : gas = 2 /* EIP-3860 */
-let MAX_INITCODE_SIZE : int = 49152 /* EIP-3860: 2 * MAX_CODE_SIZE */
-let MAX_CODE_SIZE : int = 24576
+/* --- static cost constants (Yellow Paper Appendix G symbols G_*) --- */
+let G_zero : gas = 0 /* YP G_zero                                  */
+let G_jumpdest : gas = 1 /* YP G_jumpdest                              */
+let G_base : gas = 2 /* YP G_base                                  */
+let G_verylow : gas = 3 /* YP G_verylow                               */
+let G_low : gas = 5 /* YP G_low                                   */
+let G_mid : gas = 8 /* YP G_mid                                   */
+let G_high : gas = 10 /* YP G_high                                  */
+let G_warm_access : gas = 100 /* EIP-2929 G_warmaccess (warm SLOAD/access)  */
+let G_cold_sload : gas = 2100 /* EIP-2929 G_coldsload surcharge             */
+let G_cold_account : gas = 2600 /* EIP-2929 G_coldaccountaccess surcharge     */
+let G_keccak : gas = 30 /* YP G_keccak256 (KECCAK256 base)            */
+let G_keccak_word : gas = 6 /* YP G_keccak256word (per 32-byte word)      */
+let G_copy_word : gas = 3 /* YP G_copy (*COPY per word)                 */
+let G_memory : gas = 3 /* YP G_memory (per word of expansion)        */
+let G_log : gas = 375 /* YP G_log (LOG base)                        */
+let G_logtopic : gas = 375 /* YP G_logtopic (per topic)                  */
+let G_logdata : gas = 8 /* YP G_logdata (per byte)                    */
+let G_exp : gas = 10 /* YP G_exp (EXP base)                        */
+let G_expbyte : gas = 50 /* YP G_expbyte; raised 10->50 by EIP-160     */
+let G_sset : gas = 20000 /* EIP-2200 G_sset (zero -> nonzero SSTORE)   */
+let G_sreset : gas = 2900 /* EIP-2200/2929 G_sreset (5000 - 2100 cold)  */
+let R_sclear : gas = 4800 /* EIP-3529 SSTORE-clears refund              */
+let G_create : gas = 32000 /* YP G_create (CREATE/CREATE2 base)          */
+let G_codedeposit : gas = 200 /* YP G_codedeposit (per deployed code byte)  */
+let G_callvalue : gas = 9000 /* YP G_callvalue (CALL value-transfer)       */
+let G_callstipend : gas = 2300 /* YP G_callstipend (gas given to a callee)   */
+let G_newaccount : gas = 25000 /* YP G_newaccount (CALL/SELFDESTRUCT to new) */
+let G_selfdestruct : gas = 5000 /* EIP-150 R_selfdestruct base                */
+let G_initcode_word : gas = 2 /* EIP-3860 (per word of initcode)            */
+
+/* --- protocol code-size limits --- */
+let MAX_CODE_SIZE : int = 24576 /* EIP-170 deployed-code limit                */
+let MAX_INITCODE_SIZE : int = 49152 /* EIP-3860: 2 * MAX_CODE_SIZE                */
 
 /* --------------------------- charging hook ------------------------------ */
 

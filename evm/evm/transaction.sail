@@ -8,10 +8,16 @@
 
 /* EIP-7702 authorization tuple; the runner pre-recovers the authority + validates
  * the signature (s<=n/2, y_parity, r) into au_valid_sig. */
+/* An EIP-7702 set-code authorization tuple (the signature is pre-verified by
+ * the runner; au_valid_sig records the result). */
 struct Authorization = {
-  au_valid_sig : bool, au_authority : address, au_address : address,
-  au_nonce : int, au_chain_id : int
+    au_valid_sig : bool, au_authority : address, au_address : address,
+    au_nonce : int, au_chain_id : int,
 }
+
+/* A transaction. Covers the EIP-2718 typed envelopes 0..4: legacy, EIP-2930
+ * (access list), EIP-1559 (fee market), EIP-4844 (blob), EIP-7702 (set code);
+ * the type-specific fields below are validity-relevant per their EIP. */
 struct Transaction = {
   t_sender : address, t_nonce : int, t_gas_price : word, t_priority_fee : word,
   t_gas_limit : gas, t_is_create : bool, t_to : address, t_value : word,

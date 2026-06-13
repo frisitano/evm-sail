@@ -2,7 +2,11 @@
 /* Block processing: execute a full Ethereum block over the kernel state      */
 /* ======================================================================== */
 
+/* A consensus-layer withdrawal credited at block end (EIP-4895); w_amount is
+ * in Gwei and is scaled to wei when applied (apply_withdrawals). */
 struct Withdrawal = { w_address : address, w_amount : word }
+
+/* A block: its environment, ordered transactions, and withdrawals. */
 struct Block = { blk_env : BlockEnv, blk_txs : list(Transaction), blk_withdrawals : list(Withdrawal) }
 
 function process_transactions(txs : list(Transaction)) -> list(Receipt) =

@@ -10,22 +10,28 @@
 
 /* ------------------------------ structs --------------------------------- */
 
-/* The protocol's account: the Yellow Paper quadruple minus storageRoot
- * (storage lives in the overlay maps; its root is computed on demand).
- *
- * In-memory representations stay UNHASHED: the account links its code bytes
- * DIRECTLY (a refcounted list -- holding it is O(1)); nothing at runtime is
- * codeHash IS the account's code: a content address into the hash-keyed code
- * store (host_code.c). The bytes are not held here -- the hash is, computed at
- * because the hash itself is observable state (EXTCODEHASH, the trie leaf)
- * and is the symbolic binding a prover reasons over. */
-struct Account = { acc_nonce : int, acc_balance : word, acc_codehash : hash }
+/* Account state (Yellow Paper sec. 4.1, the tuple sigma[a]). storageRoot is
+ * omitted: storage lives in the overlay maps and its root is computed on demand
+ * (state_root.sail). Code BYTES are not held here -- the account carries only
+ * codeHash, a content address into the code store (host_code.c); codeHash is
+ * itself observable state (EXTCODEHASH, EIP-1052) and the binding a stateless
+ * witness checks code against. */
+struct Account = {
+    acc_nonce    : int,   /* sigma[a]_n: nonce (txs sent / contracts created)      */
+    acc_balance  : word,  /* sigma[a]_b: balance in wei                            */
+    acc_codehash : hash,  /* sigma[a]_c: keccak256(code); KECCAK_EMPTY if codeless */
+}
 
 /* keccak256 of the empty string: the codeHash of every codeless account */
 let KECCAK_EMPTY : hash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
+
+/* Host bookkeeping (not protocol state): the account table is a Sail assoc list
+ * (storage/transient/warm sets are C-backed maps; see below). */
 struct AccountEntry = { ae_addr : address, ae_acc : Account }
 struct StorageEntry = { se_addr : address, se_slot : word, se_val : word }
 struct SlotKey      = { sk_addr : address, sk_slot : word }
+
+/* A LOG record (YP sec. 4.4.1): emitting address, 0..4 topics, data bytes. */
 struct LogEntry     = { le_addr : address, le_topics : list(word), le_data : list(byte) }
 
 enum EnvField = {
@@ -41,11 +47,17 @@ enum EnvField = {
     F_GasPrice,
 }
 
+/* The block environment the EVM reads (BLOCKHASH..BLOBBASEFEE opcodes).
+ * be_base_fee: EIP-1559; be_prev_randao: EIP-4399 (PREVRANDAO replaced DIFFICULTY);
+ * be_blob_base_fee/be_excess_blob_gas: EIP-4844. */
 struct BlockEnv = {
-  be_number : word, be_timestamp : word, be_gas_limit : word, be_coinbase : address,
-  be_base_fee : word, be_prev_randao : word, be_chain_id : word,
-  be_blob_base_fee : word, be_excess_blob_gas : word
+    be_number : word, be_timestamp : word, be_gas_limit : word, be_coinbase : address,
+    be_base_fee : word, be_prev_randao : word, be_chain_id : word,
+    be_blob_base_fee : word, be_excess_blob_gas : word,
 }
+
+/* Per-transaction environment: ORIGIN/GASPRICE (YP I_o, I_p) + the EIP-4844
+ * blob versioned hashes the BLOBHASH opcode reads. */
 struct TxEnv = { txe_origin : address, txe_gas_price : word, txe_blob_hashes : list(word) }
 
 /* Everything a reverting frame must roll back atomically. */
@@ -105,10 +117,12 @@ val host_map_sel = impure { _: "host_map_sel" } : bits(64) -> unit
 val host_map_it_key = impure { _: "host_map_it_key" } : bits(64) -> bits(64)
 val host_map_it_val = impure { _: "host_map_it_val" } : bits(64) -> bits(64)
 
-/* ---- C code store (ffi/host_code.c): the execution mirror of the code db ----
- * Keyed by address; each entry holds the bytes AND the JUMPDEST bitmap, built
- * once per code WRITE (seeding, CREATE deploys, EIP-7702 delegations). The
- * Sail account store remains the authoritative spec value. */
+/* ---- C code store (ffi/host_code.c): contract code, content-addressed --------
+ * Keyed by codeHash (not address): each entry holds the code bytes AND the
+ * JUMPDEST bitmap (built once per code WRITE -- seeding, CREATE deploys, EIP-7702
+ * delegations). Content-addressing makes code de-duplicated and append-only, so
+ * REVERT needs no code rollback: restoring the account's codeHash restores its
+ * code. An account resolves its code by codeHash (k_code_key). */
 val cs_reset = impure { _: "cs_reset" } : unit -> unit
 val cs_begin = impure { _: "cs_begin" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
 val cs_len = impure { _: "cs_len" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
@@ -135,8 +149,8 @@ function cs_store_code(h : hash, c : list(byte)) -> unit = {
     }
 }
 
-let MAP_TRANSIENT : int = 0
-let MAP_WARM_SLOT : int = 1
+let MAP_TRANSIENT : int = 0 /* EIP-1153 transient storage (TLOAD/TSTORE)   */
+let MAP_WARM_SLOT : int = 1 /* EIP-2929 warm storage-slot set              */
 let MAP_STORAGE : int = 2 /* persistent storage: OVERLAY layers (push at snapshot,
                              pop_commit/pop_discard at commit/revert); the base
                              layer = tx-start state = EIP-2200 originals. */

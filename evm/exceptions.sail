@@ -1,5 +1,10 @@
 /* ======================================================================== */
-/* Halt outcomes and exceptional-halt kinds                            */
+/* Halt outcomes and exceptional-halt kinds (Yellow Paper sec. 9.4.2)        */
+/*                                                                           */
+/* A frame ends either by a normal halt (STOP/RETURN/REVERT/SELFDESTRUCT) or */
+/* an exceptional halt. An exceptional halt consumes all remaining gas and   */
+/* reverts the frame's state changes (YP: the "exceptional halting state").  */
+/* REVERT (EIP-140) is the one failure that REFUNDS remaining gas.           */
 /* ======================================================================== */
 
 /* Ordinary frame stops. */
@@ -17,13 +22,13 @@ enum ExceptionKind = {
     OutOfGas,
     InvalidOpcode,
     InvalidJump,
-    StaticViolation, /* state-changing op inside a STATICCALL frame */
+    StaticViolation, /* EIP-214: state-changing op inside a STATICCALL */
     CallDepthExceeded,
     InsufficientBalance,
-    WriteProtection,
+    WriteProtection, /* EIP-214 write protection                    */
     InitCodeTooLarge, /* EIP-3860 */
     NonceOverflow,
-    AddressCollision, /* CREATE into an existing non-empty account   */
+    AddressCollision, /* EIP-684: CREATE into an occupied account     */
 }
 
 /* Per-frame execution status. */

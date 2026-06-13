@@ -8,15 +8,17 @@
 /* World rollback on revert is a kernel snapshot, NOT saved here.             */
 /* ======================================================================== */
 
-/* Per-frame message / call context (user-space). */
+/* The per-frame call context (YP "message call" I = (I_a, I_o, I_s, ...)).
+ * One Message per active frame; sub-calls save/restore it (interpreter.sail). */
 struct Message = {
-  msg_caller       : address,
-  msg_address      : address,    /* ADDRESS / storage owner (self)          */
-  msg_code_address : address,    /* account whose code executes             */
-  msg_value        : word,       /* CALLVALUE                               */
-  msg_data_len     : int,        /* CALLDATA length (content is C-backed)   */
-  msg_is_static    : bool,
-  msg_depth        : int
+    msg_caller       : address,  /* CALLER (I_s)                                  */
+    msg_address      : address,  /* ADDRESS / storage owner = self (I_a)          */
+    msg_code_address : address,  /* account whose code runs (differs under        */
+                                 /* DELEGATECALL/CALLCODE and EIP-7702 delegation) */
+    msg_value        : word,     /* CALLVALUE (I_v)                               */
+    msg_data_len     : int,      /* CALLDATA length (bytes are C-backed, host_mem) */
+    msg_is_static    : bool,     /* inside a STATICCALL frame (EIP-214)           */
+    msg_depth        : int,      /* call depth (YP I_e), bounded by DEPTH_LIMIT   */
 }
 
 let DEFAULT_MESSAGE : Message = struct {
@@ -93,7 +95,7 @@ val hs_pop = impure { _: "hs_pop" } : unit -> unit
 val hs_peek_w = impure { _: "hs_peek_w" } : bits(64) -> word
 val hs_set_w = impure { _: "hs_set_w" } : (bits(64), word) -> unit
 
-let STACK_LIMIT : int = 1024
+let STACK_LIMIT : int = 1024 /* YP: 1024-element operand-stack limit */
 
 /* An exceptional halt (OOG, invalid opcode/jump, stack error, write protection,
  * initcode-too-large) consumes ALL remaining gas -- unlike REVERT, which returns
