@@ -9,6 +9,15 @@ extern const unsigned long  zkvm_input_bytes_len;
 
 /* point a tx-input slot at a span of the stateless SSZ input -- the tx executes
  * directly over the witness bytes, no copy. (txin_view: host_mem.h via el_input.h) */
+/* store the code for a codeHash as a view of the witness span [off, off+len). */
+unit cs_view_input(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
+                   uint64_t off, uint64_t len) {
+  uint64_t o = (off < zkvm_input_bytes_len) ? off : zkvm_input_bytes_len;
+  uint64_t avail = zkvm_input_bytes_len - o;
+  if (len > avail) len = avail;
+  cs_view_hash(h3, h2, h1, h0, zkvm_input_bytes + o, len);
+  return UNIT;
+}
 uint64_t txin_view_input(uint64_t idx, uint64_t off, uint64_t len) {
   const unsigned char *base = zkvm_input_bytes + (off < zkvm_input_bytes_len ? off : zkvm_input_bytes_len);
   uint64_t avail = zkvm_input_bytes_len - (off < zkvm_input_bytes_len ? off : zkvm_input_bytes_len);

@@ -26,10 +26,11 @@
 
 typedef struct {
   uint64_t a[4];                  /* codeHash key (BE 64-bit limbs)   */
-  uint8_t *p;                     /* code bytes                       */
-  uint8_t *bm;                    /* JUMPDEST bitmap                  */
+  uint8_t *p;                     /* code bytes (owned, or a VIEW)    */
+  uint8_t *bm;                    /* JUMPDEST bitmap (always owned)   */
   uint32_t len, cap;
   uint8_t  used;
+  uint8_t  owns_bytes;            /* 1: p is malloc'd; 0: p views the witness */
 } cs_ent;
 
 static cs_ent  *cs_tab;
@@ -64,7 +65,10 @@ static void cs_grow(void) {
 unit cs_reset(const unit u) {     /* per test case: drop every entry */
   (void)u;
   for (uint32_t i = 0; i < cs_cap; i++)
-    if (cs_tab && cs_tab[i].used) { free(cs_tab[i].p); free(cs_tab[i].bm); }
+    if (cs_tab && cs_tab[i].used) {
+      if (cs_tab[i].owns_bytes) free(cs_tab[i].p);
+      free(cs_tab[i].bm);
+    }
   free(cs_tab);
   cs_tab = NULL; cs_cap = 0; cs_n = 0; cs_cur = NULL;
   return UNIT;
@@ -85,6 +89,7 @@ uint64_t cs_begin(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
     if (cs_n * 10 >= cs_cap * 7) { cs_grow(); e = cs_find(key); }
   }
   e->len = 0;
+  e->owns_bytes = 1;
   cs_cur = e;
   cs_skip = 0;
   return 1;
@@ -139,6 +144,32 @@ static void fc_inl_fit(int d, uint32_t need) {
     fc_inl[d].bm = (uint8_t *)realloc(fc_inl[d].bm, n / 8 + 1);
     fc_inl[d].cap = n;
   }
+}
+
+/* store the code for codeHash (h3,h2,h1,h0) as a VIEW of [ptr, ptr+len) -- no
+ * byte copy (the stateless witness already holds them). The JUMPDEST bitmap is
+ * derived, so it is still built and owned. Content-addressed: a hash already
+ * present is left as-is (dedup). */
+unit cs_view_hash(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
+                  const uint8_t *ptr, uint64_t len) {
+  if (!cs_tab) cs_grow();
+  uint64_t key[4] = { h3, h2, h1, h0 };
+  cs_ent *e = cs_find(key);
+  if (e->used && e->len) return UNIT;               /* already present */
+  if (!e->used) {
+    e->used = 1;
+    e->a[0] = h3; e->a[1] = h2; e->a[2] = h1; e->a[3] = h0;
+    cs_n++;
+    if (cs_n * 10 >= cs_cap * 7) { cs_grow(); e = cs_find(key); }
+  }
+  free(e->bm);
+  e->bm = (uint8_t *)malloc(len / 8 + 1);
+  fc_build_bitmap(e->bm, ptr, (uint32_t)len);
+  e->p = (uint8_t *)ptr;       /* view: borrowed, not owned */
+  e->len = (uint32_t)len;
+  e->cap = 0;
+  e->owns_bytes = 0;
+  return UNIT;
 }
 
 /* current frame's code := the store entry for codeHash (h3,h2,h1,h0); len */

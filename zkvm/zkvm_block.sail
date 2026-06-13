@@ -54,36 +54,44 @@ function keccak_selfcheck() -> unit = {
 }
 
 /* code db from witness.codes (keccak(code) -> code) */
-function build_code_db() -> list((bits(256), list(byte))) = {
+val cs_view_input = impure "cs_view_input"
+  : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
+/* store the code for codeHash `h` as a VIEW of the witness span [off, off+len) */
+function cs_view_witness(h : hash, off : int, len : int) -> unit =
+  cs_view_input(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0],
+                get_slice_int(64, off, 0), get_slice_int(64, len, 0))
+
+/* code db keyed by hash -> the code blob's (offset, length) in the witness.
+ * Each blob is materialised once to compute its keccak (the content-address
+ * authentication); the bytes are NOT copied -- seeding views the witness. */
+function build_code_spans() -> list((bits(256), int, int)) = {
   let n = wit_n_codes();
-  var db : list((bits(256), list(byte))) = [||];
-  foreach (i from 0 to (n - 1)) { let cb = ssz_witness_code(i); db = (keccak256(cb), cb) :: db };
+  var db : list((bits(256), int, int)) = [||];
+  foreach (i from 0 to (n - 1)) {
+    let (off, len) = ssz_witness_code_span(i);
+    db = (keccak256(ssz_witness_code(i)), off, len) :: db
+  };
   db
 }
-
-/* resolve `addr` from the witness pre-state MPT and seed the kernel world with
- * it (account + code). No-op if the account is absent from the witness. */
-function seed_account_from_witness(adb : list((bits(256), list(byte))),
-                                   cdb : list((bits(256), list(byte))),
-                                   sr : bits(256), addr : address) -> unit = {
-  let leaf = witness_get_account(adb, sr, addr);
-  if list_len(leaf) > 0 then {
-    let (nonce, bal, _, chash) = decode_account(leaf);
-    let acode = if chash == EMPTY_CODE_HASH then [||] else node_db_lookup(cdb, chash);
-    k_seed_account(addr, nonce, bal, acode)
-  } else ()
-}
+function code_span_lookup(db : list((bits(256), int, int)), h : bits(256)) -> (bool, int, int) =
+  match db {
+    [||] => (false, 0, 0),
+    (hh, o, l) :: r => if hh == h then (true, o, l) else code_span_lookup(r, h)
+  }
 
 /* seed an account from the flat leaf store harvested during the validated
  * re-root pass (witness_leaves). A present leaf is bound to parent.state_root,
  * so it is authenticated; absent -> empty account. Replaces the per-address
  * trie_walk (witness_get_account): values come straight from the leaves. */
-function seed_account_from_store(cdb : list((bits(256), list(byte))), addr : address) -> unit = {
+function seed_account_from_store(sdb : list((bits(256), int, int)), addr : address) -> unit = {
   let leaf = witness_store_leaf(keccak256(address_to_bytes(addr)));
   if list_len(leaf) > 0 then {
     let (nonce, bal, _, chash) = decode_account(leaf);
-    let acode = if chash == EMPTY_CODE_HASH then [||] else node_db_lookup(cdb, chash);
-    k_seed_account(addr, nonce, bal, acode)
+    if chash != EMPTY_CODE_HASH then {
+      let (found, off, len) = code_span_lookup(sdb, chash);
+      if found then cs_view_witness(chash, off, len) else ()
+    } else ();
+    k_seed_account_hashed(addr, nonce, bal, chash)
   } else ()
 }
 
@@ -224,7 +232,7 @@ function zkvm_run() -> unit = {
 
   /* S2f: execute the block decoded from private input against witness state */
   let adb = build_node_db();
-  let cdb = build_code_db();
+  let sdb = build_code_spans();
   let sr  = parent_state_root();
   /* Stage 3+4: re-root the witness via the stack builder and validate it against
      the committed parent.state_root (the one-shot pre-state validation), and in
@@ -249,8 +257,8 @@ function zkvm_run() -> unit = {
   let _ = txin_view_input(get_slice_int(64, 0, 0), get_slice_int(64, do_, 0), get_slice_int(64, dl, 0));
 
   /* seed the touched accounts' pre-state from the harvested (authenticated) leaves */
-  seed_account_from_store(cdb, sender);
-  seed_account_from_store(cdb, t_to);
+  seed_account_from_store(sdb, sender);
+  seed_account_from_store(sdb, t_to);
 
   let env : BlockEnv = struct {
     be_number = word_of_int(pl_block_number()), be_timestamp = word_of_int(pl_timestamp()),

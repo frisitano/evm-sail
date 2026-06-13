@@ -178,6 +178,8 @@ function ssz_witness_node(i : int)   -> list(byte) =
   ssz_list_elem(wit_state_start(),   wit_n_state(),   wit_codes_start(),   i)
 function ssz_witness_code(i : int)   -> list(byte) =
   ssz_list_elem(wit_codes_start(),   wit_n_codes(),   wit_headers_start(), i)
+function ssz_witness_code_span(i : int) -> (int, int) =
+  ssz_list_span(wit_codes_start(),   wit_n_codes(),   wit_headers_start(), i)
 function ssz_witness_header(i : int) -> list(byte) =
   ssz_list_elem(wit_headers_start(), wit_n_headers(), cc_start(),          i)
 

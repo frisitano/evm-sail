@@ -10,4 +10,5 @@ uint64_t ssz_src_le(sail_int off, sail_int n);       /* (int,int) -> bits(64): n
 uint64_t ssz_src_be(sail_int off, sail_int n);       /* (int,int) -> bits(64): n<=8 BE */
 unit     el_emit_out(uint64_t b);                    /* bits(8) -> unit: write_output one byte */
 uint64_t txin_view_input(uint64_t idx, uint64_t off, uint64_t len);
+unit cs_view_input(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0, uint64_t off, uint64_t len);
 #endif

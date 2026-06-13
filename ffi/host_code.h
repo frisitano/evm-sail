@@ -8,6 +8,8 @@
 unit cs_reset(const unit u);                       /* drop the code store     */
 uint64_t cs_begin(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0); /* store code by hash; 1=new */
 unit cs_byte(uint64_t b);                          /* stream the next byte    */
+unit cs_view_hash(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
+                  const uint8_t *ptr, uint64_t len);  /* store code as a witness view */
 uint64_t fc_set_hash(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0); /* frame := store entry */
 uint64_t fc_pend_mem(uint64_t off, uint64_t len);  /* NEXT frame := mem alias */
 uint64_t fc_set_txd(const unit u);                 /* frame := tx input       */

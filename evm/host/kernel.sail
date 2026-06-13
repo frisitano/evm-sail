@@ -131,6 +131,10 @@ function k_seed_account(a : address, nonce : int, bal : word, c : list(byte)) ->
   cs_store_code(h, c);
   kset(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = h })
 }
+/* seed an account whose code is already in the store (a stateless witness view):
+ * the codeHash is given, no bytes are streamed. */
+function k_seed_account_hashed(a : address, nonce : int, bal : word, codehash : hash) -> unit =
+  kset(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = codehash })
 function k_seed_storage(a : address, s : word, v : word) -> unit =
   map_store(MAP_STORAGE, a, s, v)   /* seeds the base layer (only layer live here) */
 
