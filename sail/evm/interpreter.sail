@@ -15,7 +15,7 @@
 /* (3) Message calls: run_call handles CALL/CALLCODE/DELEGATECALL/STATICCALL */
 /* (multiplexed on `mode`) and run_create handles CREATE/CREATE2. A sub-call */
 /* saves the parent's user-space frame registers, runs the child to a halt,  */
-/* then restores them. All WORLD effects go through EL-kernel syscalls:      */
+/* then restores them. All WORLD effects go through kernel syscalls:        */
 /* k_snapshot on entry, k_transfer for value, and k_commit / k_revert on     */
 /* exit -- the kernel rolls the world back atomically on a reverting child.  */
 /* The applicable rules are EIP-150 (63/64ths gas cap + stipend), EIP-214    */
