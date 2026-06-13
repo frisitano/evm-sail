@@ -4,7 +4,9 @@
 #   make check          type-check the specification (evm/evm.sail)
 #   make check-example  type-check the runnable block example
 #   make run-example    compile the example to C and EXECUTE a block
-#   make all            check + check-example
+#   make lint            sail --all-warnings + source hygiene (trailing ws/tabs/newline)
+#   make fmt             format *.sail with the official `sail --fmt` (opt-in)
+#   make all            check + check-example + lint
 #   make clean          remove build artifacts
 #
 # Requires the rems-project Sail toolchain (`sail`) on PATH, installed via
@@ -36,14 +38,17 @@ ACC_FFI := ffi/zkvm_accelerators.c ffi/acc_shim.c ffi/host_mem.c ffi/host_map.c 
 SAIL_CFLAGS := --c-include acc_shim.h
 CFLAGS_FFI  := -Iffi
 
-.PHONY: all check check-example run-example clean help
+.PHONY: all check check-example run-example clean help lint fmt fmt-check
 
 help:
 	@echo "evm-sail targets:"
 	@echo "  make check          - type-check the model ($(MODEL))"
 	@echo "  make check-example  - type-check the block example ($(EXAMPLE))"
 	@echo "  make run-example    - compile to C and execute a block"
-	@echo "  make all            - check + check-example"
+	@echo "  make lint           - sail --all-warnings + source hygiene"
+	@echo "  make fmt            - format every *.sail with sail --fmt (opinionated; opt-in)"
+	@echo "  make fmt-check      - verify *.sail match sail --fmt"
+	@echo "  make all            - check + check-example + lint"
 
 check:
 	$(SAIL) $(MODEL)
@@ -51,7 +56,16 @@ check:
 check-example:
 	$(SAIL) $(EXAMPLE)
 
-all: check check-example
+lint:
+	@SAIL=$(SAIL) bash scripts/lint-sail.sh
+
+fmt:
+	@SAIL=$(SAIL) bash scripts/fmt-sail.sh
+
+fmt-check:
+	@SAIL=$(SAIL) bash scripts/fmt-sail.sh --check
+
+all: check check-example lint
 
 # Compile the example to C against the Sail runtime, then run it. Executes a
 # one-transaction block and prints the resulting state / gas / receipt.

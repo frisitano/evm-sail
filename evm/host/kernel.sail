@@ -35,7 +35,7 @@ function storage_present(a : address, s : word) -> unit =
   else ()
 
 function k_sload(a : address, s : word) -> word = {
-  storage_present(a, s); 
+  storage_present(a, s);
   map_load(MAP_STORAGE, a, s)
 }
 function k_sstore(a : address, s : word, v : word) -> unit = {
