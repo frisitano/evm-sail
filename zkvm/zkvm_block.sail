@@ -16,9 +16,6 @@
 
 $include "../evm/evm.sail"
 $include "../examples/evm_primitives.sail"
-$include "../evm/lib/io.sail"
-$include "../evm/lib/rlp_decode.sail"
-$include "../evm/lib/mpt_witness.sail"
 $include "../evm/lib/ssz_htr.sail"
 
 /* canonical public output: write one byte to write_output (zkvm/el_input.c) */

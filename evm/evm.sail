@@ -59,4 +59,8 @@ $include "evm/transaction.sail"
 $include "evm/block.sail"
 
 /* post-state authentication */
+$include "lib/io.sail"
+
+/* SSZ stateless input decoder (needs state.sail types) */
+$include "lib/rlp_decode.sail"
 $include "lib/mpt.sail"
