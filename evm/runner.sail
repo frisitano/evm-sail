@@ -4,7 +4,7 @@
 /* Reads a stream of values from the private input (ssz_src, the same byte     */
 /* source the zkVM guest uses) describing a sequence of test cases, runs each   */
 /* through process_block, and dumps the resulting accounts + storage. The       */
-/* Python driver (examples/eest/run_eest.py) encodes EEST fixtures into this    */
+/* Python driver (revm-eest/run_eest.py) encodes EEST fixtures into this        */
 /* stream and compares the dump against the fixture's expected post-state. No   */
 /* recompilation per test -- the data is INPUT, not generated code.            */
 /*                                                                           */
@@ -20,7 +20,6 @@
 /* ======================================================================== */
 
 $include "evm.sail"
-$include "../examples/evm_primitives.sail"
 $include <string.sail>
 
 /* The test input is a byte stream read via ssz_src (io.sail) -- the same

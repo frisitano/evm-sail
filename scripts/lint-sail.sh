@@ -20,11 +20,11 @@ for root in evm/evm.sail zkvm/zkvm_block.sail; do
 done
 
 echo "== source hygiene (*.sail) =="
-files=$(find evm examples zkvm -name '*.sail')
+files=$(find evm zkvm revm-eest -name '*.sail')
 TAB=$(printf '\t')
-ws=$(grep -rlE ' +$' --include='*.sail' evm examples zkvm || true)
+ws=$(grep -rlE ' +$' --include='*.sail' evm zkvm revm-eest || true)
 [ -n "$ws" ] && { echo "  FAIL trailing whitespace:"; printf '    %s\n' $ws; fail=1; }
-tabs=$(grep -rl "$TAB" --include='*.sail' evm examples zkvm || true)
+tabs=$(grep -rl "$TAB" --include='*.sail' evm zkvm revm-eest || true)
 [ -n "$tabs" ] && { echo "  FAIL tabs (use spaces):"; printf '    %s\n' $tabs; fail=1; }
 for f in $files; do
   [ -n "$(tail -c1 "$f")" ] && { echo "  FAIL no final newline: $f"; fail=1; }

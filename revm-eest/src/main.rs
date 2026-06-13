@@ -2,7 +2,7 @@
 //!
 //! Parses execution-spec-tests state fixtures (self-contained schema below),
 //! encodes each case into the model binary's stdin varint byte stream (matching
-//! examples/eest/runner.sail and run_eest.py), runs the model across all cores,
+//! evm/runner.sail and run_eest.py), runs the model across all cores,
 //! and compares the dumped post-state. The model binary is the Sail EVM
 //! compiled to native C; this runner only drives it in parallel.
 //!

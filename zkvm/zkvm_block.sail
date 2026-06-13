@@ -2,8 +2,8 @@
 /* EL-IR zkVM guest entry: run a one-transaction block and expose the result */
 /* facts to the freestanding C harness via output registers.                 */
 /*                                                                           */
-/* This is the run_block.sail example reshaped for the eth-act zkVM RISC-V    */
-/* standard target: NO printing, NO string building, NO libc IO, NO asserts   */
+/* This is a whole-block run reshaped for the eth-act zkVM RISC-V standard     */
+/* target: NO printing, NO string building, NO libc IO, NO asserts            */
 /* in the happy path.  The harness reads the `zkvm_out_*` registers after     */
 /* `zkvm_run` and emits them through the standard write_output interface.     */
 /*                                                                           */
@@ -15,7 +15,6 @@
 /* ======================================================================== */
 
 $include "../evm/evm.sail"
-$include "../examples/evm_primitives.sail"
 $include "../evm/lib/ssz_htr.sail"
 
 /* canonical public output: write one byte to write_output (zkvm/el_input.c) */

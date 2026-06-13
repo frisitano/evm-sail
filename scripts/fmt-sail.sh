@@ -10,7 +10,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SAIL="${SAIL:-sail}"
-files=$(find evm examples zkvm -name '*.sail' | sort)
+files=$(find evm zkvm revm-eest -name '*.sail' | sort)
 
 if [ "${1:-apply}" = "--check" ]; then
   rc=0; n=0; tmp=$(mktemp)

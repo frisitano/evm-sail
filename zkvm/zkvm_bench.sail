@@ -7,7 +7,6 @@
 /* ======================================================================== */
 
 $include "../evm/evm.sail"
-$include "../examples/evm_primitives.sail"
 
 val ssz_src_le = impure { _: "ssz_src_le" } : (int, int) -> bits(64)
 

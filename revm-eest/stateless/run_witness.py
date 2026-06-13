@@ -15,7 +15,7 @@ diversity that the single baked spike vector cannot — the coverage execution-
 specs gets by running EEST through stateless.py / witness_state.py.
 
 Usage:
-    python3 examples/stateless/run_witness.py <test.json|dir> [...] [--limit N]
+    python3 revm-eest/stateless/run_witness.py <test.json|dir> [...] [--limit N]
             [--rebuild] [--verbose]
 Requires `sail` on PATH, a C compiler, and the gen_vector venv deps.
 """
@@ -28,7 +28,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ELDIR = os.path.abspath(os.path.join(HERE, "..", ".."))
-EEST = os.path.join(ELDIR, "examples", "eest")
+EEST = os.path.join(ELDIR, "revm-eest")  # runner_ffi.{c,h}: the ssz_src C FFI
 BIN = os.path.join(HERE, ".witness_probe_bin")
 sys.path.insert(0, os.path.join(ELDIR, "zkvm"))
 import gen_vector as gv  # noqa: E402

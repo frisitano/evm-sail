@@ -8,14 +8,14 @@ resulting accounts + storage; this script compares them to the fixture's explici
 `post[fork][i].state`. No keccak-MPT state root needed.
 
 Usage:
-    python3 examples/eest/run_eest.py <test.json> [...] [--fork F] [--limit N]
+    python3 revm-eest/run_eest.py <test.json> [...] [--fork F] [--limit N]
             [--rebuild] [--verbose]
 Requires `sail` on PATH, a C compiler, and libgmp.
 """
 import json, os, subprocess, sys, argparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ELDIR = os.path.abspath(os.path.join(HERE, "..", ".."))
+ELDIR = os.path.abspath(os.path.join(HERE, ".."))
 BIN = os.path.join(HERE, ".runner_bin")
 
 def h2i(x):

@@ -11,13 +11,13 @@ sail_smt_cache
 zkvm/build/
 
 # EEST harness build artifacts
-examples/eest/.runner_bin*
-examples/eest/.rtcache/
-examples/eest/_eest*
+revm-eest/.runner_bin*
+revm-eest/.rtcache/
+revm-eest/_eest*
 
 # witness-reader coverage harness build artifacts
-examples/stateless/.witness_probe_bin*
-examples/stateless/.rtcache/
+revm-eest/stateless/.witness_probe_bin*
+revm-eest/stateless/.rtcache/
 
 # stateless vector-gen venv
 zkvm/.vecgen/

@@ -26,7 +26,7 @@ tx_success=1
 ```
 
 `gas_used=43106`, `storage0=42`, `withdrawal_balance=500`, `tx_success=1` match the
-native `make -C el-ir run-example` fixture exactly — the block (a 1-tx block: `PUSH1 0x2a;
+native Sail/C reference exactly — the block (a 1-tx block: `PUSH1 0x2a;
 PUSH1 0x00; SSTORE; STOP`, plus a 500-wei withdrawal) produces identical state and gas on
 the RISC-V guest as in the Sail/C reference. A mismatch is an abnormal termination, so a
 wrong execution cannot exit 0.

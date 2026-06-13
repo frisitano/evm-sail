@@ -83,7 +83,7 @@ Three host runtimes compile the same generated C:
 | `sailfix` | inline 512-bit (guest-shared, zkVM) | below GMP |
 | `sail256` | inline 512-bit, host-optimized | **~28–35 Mgas/s** |
 
-*Workload mix (`examples/eest/bench.py`): ~28 Mgas/s on an execution-bound
+*Workload mix (`revm-eest/bench.py`): ~28 Mgas/s on an execution-bound
 TSTORE loop, ~35 Mgas/s across the mix, with calls/creates/precompiles well
 above (deep reentrant CALLs ~940, 49KB-initcode CREATE ~170, blake2f ~100).
 A 30–45M-gas mainnet block executes in ~1–1.5s under `sail256` — within ~13×
@@ -94,14 +94,15 @@ of revm, which is a production interpreter, not a specification. Calling a
 
 ```
 evm/         the specification (evm.sail is the root include)
+  runner.sail         single-block / EEST runner entry point (reads input, runs)
   host/
     state.sail        world state: accounts, storage overlays, warm sets,
                       logs, journal, block/tx environment
     kernel.sail       the kernel functions (k_*): the only state interface
     memory.sail       per-frame byte memory (C-backed, O(1))
-    ffi.sail          the C binding layer (accelerator byte-stream protocol)
-    crypto.sail       keccak256/sha256 + the EVM precompiles + CREATE address
-                      derivation (eth-act zkvm-standards crypto boundary)
+    io.sail           host I/O: accelerator FFI binding + keccak256/sha256 +
+                      EVM precompiles + CREATE derivation + the stateless SSZ
+                      input decoder (eth-act zkvm-standards C boundary)
   evm/                THE TRANSACTION KERNEL (= the EVM)
     machine.sail      frame registers, gas counter, stack, code descriptors
     gas.sail          the complete gas schedule (fork-gated)
@@ -111,15 +112,16 @@ evm/         the specification (evm.sail is the root include)
     transaction.sail  tx validity + the state transition + refunds
     block.sail        whole-block execution (txs + withdrawals)
   lib/
-    rlp.sail  rlp_decode.sail
-    mpt.sail  block_hash.sail  io.sail  ssz_htr.sail
-    mpt_witness.sail  stateless witness reads (feed, re-root, fail-closed lookups)
+    rlp.sail  rlp_decode.sail  block_hash.sail  ssz_htr.sail
+    mpt.sail           MPT root builder + state trie + stateless witness reads
+                       (feed, re-root, fail-closed lookups; C-backed node-db)
 ffi/         C backends: host_mem.c (memory/calldata), host_map.c (overlay
              maps), host_stack.c (operand stack), host_code.c (code store +
              frame descriptors + JUMPDEST bitmaps), host_word.c (comparisons),
-             acc_shim.c + zkvm_accelerators.h (eth-act zkvm-standards crypto)
-examples/    runnable examples + the EEST harness (run_eest.py, runner.sail)
-revm-eest/   parallel EEST runner (Rust): drives the model on all cores
+             host_nodedb.c (witness node-db), acc_shim.c + zkvm_accelerators.h
+             (eth-act zkvm-standards crypto)
+revm-eest/   the EEST harness: run_eest.py (drives evm/runner.sail) + the
+             parallel Rust runner (all cores) + stateless/ (witness-reroot gate)
 zkvm/        RISC-V zkVM guest target (riscv64im, stateless block validation)
   runtime/sailfix     GMP-free fixed-width Sail runtime (guest-shared)
   runtime/sail256     host-optimized variant (sized limbs, Knuth-D division)
@@ -136,17 +138,16 @@ opam init --bare -y && opam switch create sail 5.2.0 && eval "$(opam env --switc
 opam install -y sail && sail --version
 ```
 
-Type-check the specification and run the example block + fixture suite
-(needs a C compiler; the GMP build additionally needs libgmp):
+Type-check the specification (block execution is validated by the EEST harness
+and the zkVM guest, below):
 
 ```sh
-make check
-make run-example                            # execute a block + print the EL trace
-make run EX=examples/fixtures.sail          # 8 block fixtures
+make check                                  # type-check evm/evm.sail
 make lint                                   # sail --all-warnings + source hygiene
+make fmt-check                              # verify sail --fmt formatting
 ```
 
-`make all` runs `check` + `check-example` + `lint` + `fmt-check`. `make lint`
+`make all` runs `check` + `lint` + `fmt-check`. `make lint`
 enforces a warning-clean model and basic `*.sail` hygiene (no trailing
 whitespace, no tabs, final newline); `make fmt-check` enforces that every
 `*.sail` is formatted with the official `sail --fmt` (canonical 4-space style).
@@ -157,7 +158,7 @@ Run the conformance suite against a local
 state-fixtures checkout:
 
 ```sh
-cd examples/eest
+cd revm-eest
 SAIL256=1 python3 run_eest.py --rebuild --fork Cancun <fixtures>/state_tests/cancun
 
 # or across all cores, with the Rust runner:

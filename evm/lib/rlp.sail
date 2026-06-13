@@ -2,9 +2,8 @@
 /* RLP encoding (Ethereum) in Sail                                           */
 /*                                                                           */
 /* Foundation for block authentication: account/header/tx/receipt encoding   */
-/* and Merkle-Patricia trie nodes. Self-contained (uses keccak.sail's byte    */
-/* helpers); compiles to the RISC-V target. Validate against the standard     */
-/* RLP test vectors (see examples/rlp_test.sail).                            */
+/* and Merkle-Patricia trie nodes. Self-contained (uses host/io.sail's byte   */
+/* helpers); compiles to the RISC-V target.                                   */
 /* ======================================================================== */
 
 function rlp_byte(n : int) -> byte = get_slice_int(8, n, 0)

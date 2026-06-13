@@ -3,8 +3,7 @@
 /*                                                                           */
 /* block_hash = keccak256(rlp(header)). Legacy/pre-1559 header is the 15-field */
 /* form; rlp_header_legacy covers it. Self-contained (rlp + keccak); the       */
-/* block hash authenticates a sealed block. Validate against a real genesis    */
-/* header (see examples/blockhash_test.sail).                                 */
+/* block hash authenticates a sealed block.                                   */
 /* ======================================================================== */
 
 function zero_bytes(n : int) -> list(byte) = {

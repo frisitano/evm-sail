@@ -7,14 +7,13 @@
  * `REROOT == PARENT` certifies that every node (branch / extension / leaf,
  * hex-prefix, embedded children) was parsed correctly.
  *
- * The harness (examples/stateless/run_witness.py) builds one such input per
+ * The harness (revm-eest/stateless/run_witness.py) builds one such input per
  * EEST `pre` alloc with a real py-trie witness, then diffs REROOT against the
  * py-trie root — giving the witness reader (lib/mpt.sail) coverage across the
  * full diversity of EEST pre-state trie shapes, the way execution-specs'
  * stateless mode exercises witness_state.py. */
 
 $include "../../evm/evm.sail"
-$include "../evm_primitives.sail"
 $include <string.sail>
 
 function main() -> unit = {
