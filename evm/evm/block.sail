@@ -1,12 +1,24 @@
 /* ======================================================================== */
-/* Block processing: execute a full Ethereum block over the kernel state      */
+/* BLOCK PROCESSING                                                         */
+/*                                                                          */
+/* The block-level state transition (Yellow Paper section 11): given a      */
+/* block environment, an ordered transaction list, and the consensus-layer  */
+/* withdrawals, evolve the world state and return one receipt per           */
+/* transaction.                                                             */
+/*                                                                          */
+/* Transactions are applied in order, each as its own state-transition step */
+/* (process_transaction, transaction.sail); withdrawals (EIP-4895) are then */
+/* credited at block end. The receipts carry the per-tx success flag, gas   */
+/* used, and the logs the header's receiptsRoot/logsBloom commit to.        */
 /* ======================================================================== */
 
-/* A consensus-layer withdrawal credited at block end (EIP-4895); w_amount is
- * in Gwei and is scaled to wei when applied (apply_withdrawals). */
+/* A consensus-layer withdrawal credited at block end (EIP-4895). w_amount is
+ * the value added directly to w_address's balance by apply_withdrawals; the
+ * Sail model credits this word as-is (no Gwei->wei scaling is applied here). */
 struct Withdrawal = { w_address : address, w_amount : word }
 
-/* A block: its environment, ordered transactions, and withdrawals. */
+/* A block: its execution environment, ordered transactions, and the
+ * post-execution withdrawals (EIP-4895). */
 struct Block = { blk_env : BlockEnv, blk_txs : list(Transaction), blk_withdrawals : list(Withdrawal) }
 
 function process_transactions(txs : list(Transaction)) -> list(Receipt) =
@@ -35,6 +47,7 @@ function process_block(blk : Block) -> list(Receipt) = {
     receipts
 }
 
+/* Cumulative gas used across the block's receipts (the header's gasUsed field). */
 function total_gas_used(rs : list(Receipt)) -> gas =
     match rs {
         [||] => 0,

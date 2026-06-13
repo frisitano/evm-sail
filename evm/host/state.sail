@@ -1,20 +1,27 @@
 /* ======================================================================== */
-/* HOST STATE                                                                */
-/*                                                                           */
-/* The host's privileged world state: accounts, the C-backed overlay maps    */
-/* (persistent storage, transient storage, the EIP-2929 warm-slot set), the  */
-/* warm-address set, logs, refunds, the journal (undo log), and the block/tx */
-/* environment. The transaction kernel (the EVM) reaches this state ONLY     */
-/* through the host kernel functions in host/kernel.sail.                    */
+/* HOST STATE                                                               */
+/*                                                                          */
+/* The world state the EVM acts on (Yellow Paper section 4.1, the state     */
+/* sigma): the account table, persistent storage (EIP-2200), transient      */
+/* storage (EIP-1153), the EIP-2929 warm address and slot sets, logs, the   */
+/* gas-refund counter, the per-tx created-account set (EIP-6780), the block */
+/* and transaction environment, and the journal (the undo log that makes a  */
+/* call frame's effects atomically revertible).                             */
+/*                                                                          */
+/* This is the privileged host's data; the transaction kernel (the EVM,     */
+/* user space) reaches it ONLY through the host kernel functions in         */
+/* host/kernel.sail. Large maps (storage, transient storage, warm slots)    */
+/* are held in C overlays for O(1) access (host/io.sail FFI); the account   */
+/* table and the small sets are Sail association lists.                     */
 /* ======================================================================== */
 
 /* ------------------------------ structs --------------------------------- */
 
-/* Account state (Yellow Paper sec. 4.1, the tuple sigma[a]). storageRoot is
- * omitted: storage lives in the overlay maps and its root is computed on demand
- * (state_root.sail). Code BYTES are not held here -- the account carries only
- * codeHash, a content address into the code store (host_code.c); codeHash is
- * itself observable state (EXTCODEHASH, EIP-1052) and the binding a stateless
+/* Account state (Yellow Paper section 4.1, the account tuple sigma[a]).
+ * storageRoot is omitted: storage lives in the overlay maps and its root is
+ * computed on demand (state_root.sail). Code BYTES are not held here -- the
+ * account carries only codeHash, a content address into the code store; codeHash
+ * is itself observable state (EXTCODEHASH, EIP-1052) and the binding a stateless
  * witness checks code against. */
 struct Account = {
     acc_nonce    : int,   /* sigma[a]_n: nonce (txs sent / contracts created)      */
@@ -25,15 +32,16 @@ struct Account = {
 /* keccak256 of the empty string: the codeHash of every codeless account */
 let KECCAK_EMPTY : hash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
 
-/* Host bookkeeping (not protocol state): the account table is a Sail assoc list
- * (storage/transient/warm sets are C-backed maps; see below). */
+/* Account-table entry: the (address -> Account) binding of sigma, stored as a
+ * Sail association list (storage/transient/warm sets are C-backed maps below). */
 struct AccountEntry = { ae_addr : address, ae_acc : Account }
 struct StorageEntry = { se_addr : address, se_slot : word, se_val : word }
 
 /* SlotKey (the BAL access-set key) is defined in host/io.sail (its bal_load
  * builder is the producer), included before this file. */
 
-/* A LOG record (YP sec. 4.4.1): emitting address, 0..4 topics, data bytes. */
+/* A LOG record (Yellow Paper section 4.4.1, the log series): emitting address,
+ * 0..4 topics (LOG0..LOG4), and the data bytes. */
 struct LogEntry     = { le_addr : address, le_topics : list(word), le_data : list(byte) }
 
 enum EnvField = {
@@ -62,11 +70,13 @@ struct BlockEnv = {
  * blob versioned hashes the BLOBHASH opcode reads. */
 struct TxEnv = { txe_origin : address, txe_gas_price : word, txe_blob_hashes : list(word) }
 
-/* Everything a reverting frame must roll back atomically. */
-/* Journal-based revert: instead of deep-copying the whole world per call frame
- * (O(state) per snapshot), each mutation records a small undo entry; k_snapshot
- * pushes a checkpoint marker, k_revert replays undos back to it, k_commit drops
- * the marker (the frame's entries fold into the parent). O(changes), not O(state). */
+/* Journal (undo-log) entry: one reversible state mutation. A call frame's
+ * effects must roll back atomically on REVERT or an exceptional halt; rather
+ * than snapshot the whole world per frame (O(state)), each mutation records a
+ * small undo entry. k_snapshot pushes a JCheck checkpoint marker, k_revert
+ * replays undos back to it, k_commit drops the marker so the frame's entries
+ * fold into the parent (a later parent revert still undoes them). This is the
+ * EELS journal model: O(changes), not O(state). */
 union JEntry = {
   JCheck  : unit,                     /* call-frame checkpoint marker            */
   JAcct   : (address, Account),       /* restore an account to its prior value   */
@@ -90,10 +100,10 @@ register k_warm_addr : list(address) = [||]
 register k_logs : list(LogEntry) = [||]
 
 /* ---- C-backed (address, slot) maps (ffi/host_map.c): O(1) per access ----
- * id 0 = EIP-1153 transient storage, id 1 = the EIP-2929 warm-slot set.
- * Sail assoc lists made these O(n) per access -- O(n^2) over a TSTORE loop or a
- * large access-list prewarm. "Absent" == "value 0" for both (TLOAD of an unset
- * slot is 0; un-warm = 0), so journal undo just stores the prior value. */
+ * id 0 = EIP-1153 transient storage, id 1 = the EIP-2929 warm-slot set, id 2 =
+ * persistent storage (see MAP_* below). For every map "absent" == "value 0"
+ * (TLOAD of an unset slot is 0; a cold slot's warm bit is 0), so a journal undo
+ * is just a store of the prior value. */
 val host_map_reset = impure { _: "host_map_reset" } : bits(64) -> unit
 val host_map_push = impure { _: "host_map_push" } : bits(64) -> unit
 val host_map_pop_commit = impure { _: "host_map_pop_commit" } : bits(64) -> unit
@@ -121,18 +131,20 @@ val host_map_it_val = impure { _: "host_map_it_val" } : bits(64) -> bits(64)
 
 /* ---- C code store (ffi/host_code.c): contract code, content-addressed --------
  * Keyed by codeHash (not address): each entry holds the code bytes AND the
- * JUMPDEST bitmap (built once per code WRITE -- seeding, CREATE deploys, EIP-7702
- * delegations). Content-addressing makes code de-duplicated and append-only, so
- * REVERT needs no code rollback: restoring the account's codeHash restores its
- * code. An account resolves its code by codeHash (k_code_key). */
+ * JUMPDEST validity bitmap (built once per code WRITE -- pre-state seeding,
+ * CREATE deploys, EIP-7702 delegations). Content-addressing makes the store
+ * de-duplicated and append-only, so REVERT needs no code rollback: restoring an
+ * account's codeHash restores its code. An account resolves its code by codeHash
+ * (k_code_key). */
 val cs_reset = impure { _: "cs_reset" } : unit -> unit
 val cs_begin = impure { _: "cs_begin" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
 val cs_len = impure { _: "cs_len" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
 val cs_to_mem = impure { _: "cs_to_mem" } : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
 val cs_byte = impure { _: "cs_byte" } : bits(8) -> unit
 
-/* store `c` in the content-addressed code store under its keccak `h`; if the
- * hash is already present (same bytes) the stream is skipped (cs_begin == 0). */
+/* Store code `c` in the content-addressed code store under its keccak hash `h`.
+ * If `h` is already present (identical bytes) the byte stream is skipped
+ * (cs_begin returns 0) -- the store is append-only and de-duplicated. */
 function cs_store_code(h : hash, c : list(byte)) -> unit = {
     if cs_begin(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]) == 0x0000000000000000 then {
         ()
@@ -153,9 +165,10 @@ function cs_store_code(h : hash, c : list(byte)) -> unit = {
 
 let MAP_TRANSIENT : int = 0 /* EIP-1153 transient storage (TLOAD/TSTORE)   */
 let MAP_WARM_SLOT : int = 1 /* EIP-2929 warm storage-slot set              */
-let MAP_STORAGE : int = 2 /* persistent storage: OVERLAY layers (push at snapshot,
-                             pop_commit/pop_discard at commit/revert); the base
-                             layer = tx-start state = EIP-2200 originals. */
+let MAP_STORAGE : int = 2 /* persistent storage, kept as a stack of OVERLAY layers
+                             (push at k_snapshot, pop_commit/pop_discard at frame
+                             commit/revert); the base layer is tx-start state, i.e.
+                             the EIP-2200 "original" value of every slot. */
 
 function map_select(id : int, a : address, s : word) -> unit = {
     let aw : word = sail_zero_extend(a, 256);
@@ -238,8 +251,8 @@ function storage_entry(j : int) -> (address, word, word) = {
     );
     (word_to_address(aw), s, v)
 }
-register k_refund : int = 0
-register k_selfdestr : list(address) = [||]
+register k_refund : int = 0 /* gas-refund counter (SSTORE clears; EIP-3529 cap applied at tx end) */
+register k_selfdestr : list(address) = [||] /* addresses SELFDESTRUCTed this tx */
 register k_created : list(address) =
     [||] /* accounts CREATEd this tx (EIP-6780).
             NOT journaled: like EELS created_accounts,
@@ -318,7 +331,7 @@ function slot_in(xs : list(SlotKey), a : address, s : word) -> bool =
         },
     }
 
-/* internal (unrecorded) account accessors used by syscall handlers */
+/* internal (un-journaled) account accessors used inside the kernel functions */
 function kget(a : address) -> Account = acc_lookup(k_accounts, a)
 function kset(a : address, v : Account) -> unit = k_accounts = acc_update(k_accounts, a, v)
 
@@ -354,10 +367,12 @@ function jdrop_last_addr(xs : list(address)) -> list(address) =
         _ :: [||] => [||],
         x :: r => x :: jdrop_last_addr(r),
     }
+
+/* Apply one undo entry (k_revert replays these back to the checkpoint). */
 function apply_undo(e : JEntry) -> unit = match e {
     JCheck()       => (),
     JAcct(a, old)  => kset(a, old),
-    JStor(_, _, _) => (), /* storage undo is the overlay's pop_discard now */
+    JStor(_, _, _) => (), /* persistent-storage undo is the overlay layer's pop_discard */
     JTran(a, s, v) => map_store(MAP_TRANSIENT, a, s, v),
     JWarmA(a)      => k_warm_addr = jremove_addr(k_warm_addr, a),
     JWarmS(a, s)   => map_store(MAP_WARM_SLOT, a, s, ZERO_WORD),

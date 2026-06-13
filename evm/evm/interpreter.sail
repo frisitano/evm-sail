@@ -1,16 +1,35 @@
 /* ======================================================================== */
-/* EVM USER-SPACE interpreter: fetch/decode, run loop, sub-call/create        */
-/*                                                                           */
-/* run_call/run_create save USER-SPACE frame registers and use kernel         */
-/* syscalls for all world effects: k_snapshot on entry, code via the store     */
-/* the callee code, k_transfer for value, and k_commit / k_revert on exit     */
-/* (the kernel rolls the world back atomically on a reverting child).         */
+/* THE INTERPRETER: FETCH/DECODE, RUN LOOP, AND THE MESSAGE-CALL MACHINERY   */
+/*                                                                          */
+/* The user-space EVM: it fetches and decodes bytecode (Yellow Paper section */
+/* 9), drives the step loop, and spawns sub-frames for the call and create   */
+/* opcodes. This module specifies that machinery in three layers.            */
+/*                                                                          */
+/* (1) Fetch/decode: read the opcode at pc, decode PUSH immediates inline,   */
+/* and map every other byte to its AST node (an undefined byte decodes to    */
+/* INVALID). Reading past the end of code yields STOP (YP: implicit halt).   */
+/*                                                                          */
+/* (2) Run loop: interpret() steps fetch-then-execute until the frame stops  */
+/* running (normal halt, REVERT, or exceptional halt).                       */
+/*                                                                          */
+/* (3) Message calls: run_call handles CALL/CALLCODE/DELEGATECALL/STATICCALL */
+/* (multiplexed on `mode`) and run_create handles CREATE/CREATE2. A sub-call */
+/* saves the parent's user-space frame registers, runs the child to a halt,  */
+/* then restores them. All WORLD effects go through EL-kernel syscalls:      */
+/* k_snapshot on entry, k_transfer for value, and k_commit / k_revert on     */
+/* exit -- the kernel rolls the world back atomically on a reverting child.  */
+/* The applicable rules are EIP-150 (63/64ths gas cap + stipend), EIP-214    */
+/* (static-context write protection), EIP-2929 (cold/warm access), and       */
+/* EIP-7702 (delegated-code execution).                                      */
 /* ======================================================================== */
 
+/* EIP-150 / YP: a message call may nest at most 1024 frames deep. */
 let DEPTH_LIMIT : int = 1024
 
-/* ------------------------------ fetch ----------------------------------- */
+/* ----------------------------- fetch/decode ----------------------------- */
 
+/* Assemble the n-byte big-endian immediate following a PUSHn opcode into a
+ * 256-bit word; bytes past the end of code read as zero (code_byte). */
 function read_push(n : int) -> word = {
     var acc : word = WORD_ZERO;
     foreach (k from 0 to (n - 1)) {
@@ -19,6 +38,10 @@ function read_push(n : int) -> word = {
     acc
 }
 
+/* Decode one non-PUSH opcode byte to its AST node. The three contiguous
+ * families fold to an arity argument -- DUP1..16 (0x80..0x8f), SWAP1..16
+ * (0x90..0x9f), LOG0..4 (0xa0..0xa4) -- and the remainder is a flat table.
+ * Any byte with no defined opcode decodes to INVALID. */
 function decode_simple(b : int) -> ast =
     if b >= 128 & b <= 143 then {
         DUP(b - 127)
@@ -115,6 +138,10 @@ function decode_simple(b : int) -> ast =
         }
     }
 
+/* Fetch and decode the opcode at pc, advancing pc past the opcode and any
+ * immediate. Past the end of code the frame implicitly executes STOP (YP).
+ * PUSH0..PUSH32 (0x5f..0x7f) carry an n-byte immediate consumed here; every
+ * other byte is decoded by decode_simple. */
 function fetch() -> ast = {
     if pc >= code_len then {
         pc = pc + 1;
@@ -133,12 +160,17 @@ function fetch() -> ast = {
     }
 }
 
+/* The step loop: fetch then execute until the frame stops running -- a normal
+ * halt (STOP/RETURN), a REVERT, or an exceptional halt all clear is_running. */
 function interpret() -> unit =
     while is_running() do {
         let op = fetch();
         execute(op)
     }
 
+/* Did the just-finished frame end successfully? A normal halt succeeds; a
+ * REVERT and any exceptional halt do not (their world effects are rolled
+ * back and CALL/CREATE reports failure). */
 function frame_succeeded() -> bool =
     match frame_status {
         Halted(HaltRevert) => false,
@@ -147,8 +179,10 @@ function frame_succeeded() -> bool =
         Exceptional(_) => false,
     }
 
-/* the code an account EXECUTES: one delegation hop; a delegation to a
- * precompile (or to nothing) executes as empty code (EIP-7702) */
+/* Select the code a frame actually executes (EIP-7702). A delegated account
+ * runs the code at its delegation target, following exactly ONE hop; a
+ * delegation whose target is a precompile (or has no code) executes as empty
+ * code. An undelegated account runs its own code. */
 function frame_code_exec(target : address, dele : bool, dtgt : address) -> unit =
     if dele then {
         let n = unsigned(address_to_word(dtgt));
@@ -162,7 +196,15 @@ function frame_code_exec(target : address, dele : bool, dtgt : address) -> unit 
     }
 
 /* ------------------------------ run_call -------------------------------- */
-
+/* The four call opcodes, multiplexed on `mode`:
+ *   0 = CALL          new frame at `target`, may transfer value
+ *   1 = CALLCODE      run target's code in the CALLER's account, may transfer
+ *   2 = DELEGATECALL  run target's code in the caller's account, inheriting
+ *                     the parent's caller/value/static context (EIP-7)
+ *   3 = STATICCALL    like CALL with value 0 and a forced static context
+ *                     (EIP-214)
+ * Operand layout (top of stack first): gas, target, [value for CALL/CALLCODE],
+ * argsOffset, argsLen, retOffset, retLen. Pushes 1 on success, 0 on failure. */
 function run_call(mode : int) -> unit = {
     let caller = self_addr();
     let gas_req = pop_int();
@@ -178,13 +220,15 @@ function run_call(mode : int) -> unit = {
     let ret_len = pop_int();
 
     /* A stack underflow during the operand pops exceptionally halts the frame
-       (exc_halt zeroed the gas). EELS unwinds the whole op via an exception;
-       Sail has no unwind, so bail out here before any gas is re-added below. */
+       (exc_halt zeroes the gas). The execution-specs unwind the whole op via
+       an exception; Sail has no unwind, so bail out here before any gas is
+       re-added below. */
     if not_bool(is_running()) then {
         return ()
     };
 
-    /* memory is expanded once to cover the larger of the args / return ranges */
+    /* memory is expanded once to cover the larger of the input-args range and
+       the return-data region (a zero-length range touches no memory) */
     let m_args = if args_len > 0 then {
             args_off + args_len
         } else {
@@ -197,9 +241,10 @@ function run_call(mode : int) -> unit = {
         };
     let m_max = if m_args > m_ret then { m_args } else { m_ret };
 
-    /* memory-expansion cost is part of the single message-call charge below
-       (EELS charges message_call_gas.cost + extend_memory.cost together, then
-       expands memory only if it did not run out of gas). */
+    /* memory-expansion cost is folded into the single message-call charge
+       below: the execution-specs charge message_call_gas.cost together with
+       extend_memory.cost, then grow memory only if the frame did not run out
+       of gas. */
     let mem_gas = if m_max > 0 then {
             expansion_gas(m_max)
         } else {
@@ -235,10 +280,12 @@ function run_call(mode : int) -> unit = {
     let extra_gas : int = access_cost + transfer_cost + create_cost;
     let stipend : int = if word_nonzero(value) then { G_callstipend } else { 0 };
 
-    /* EELS calculate_message_call_gas: if the frame cannot even afford
+    /* Forwarded child gas, mirroring the execution-specs
+       calculate_message_call_gas. If the frame cannot even afford
        extra_gas + mem_gas, the call is charged the FULL requested gas (not the
-       63/64-capped value) -- which forces an out-of-gas exceptional halt below.
-       Otherwise the 63/64ths cap applies to (gas_left - mem_gas - extra_gas). */
+       63/64-capped value), which forces the out-of-gas exceptional halt below.
+       Otherwise the EIP-150 63/64ths cap applies to the gas left after
+       subtracting mem_gas and extra_gas. */
     let avail = gas_remaining;
     let base_child : int = if avail < extra_gas + mem_gas then {
             gas_req
@@ -258,6 +305,9 @@ function run_call(mode : int) -> unit = {
     };
     let child_gas = base_child + stipend;
 
+    /* call-failure guards (checked AFTER gas is charged): the depth ceiling
+       (EIP-150, 1024 frames) and, for a value-bearing CALL/CALLCODE, the
+       caller's balance covering the transfer. */
     let an = unsigned(target);
     let depth_ok : bool = call_depth + 1 <= DEPTH_LIMIT;
     let balance_ok : bool = if (mode == 0 | mode == 1) & word_nonzero(value) then {
@@ -267,16 +317,19 @@ function run_call(mode : int) -> unit = {
         };
 
     if not_bool(depth_ok) | not_bool(balance_ok) then {
+        /* the call does not happen: the child gas (including stipend) is
+           refunded to the caller and CALL pushes 0. */
         hr_clear();
         gas_remaining = to_gas(gas_remaining + child_gas);
         push(WORD_ZERO)
     } else {
         if is_precompile(an) then {
-            /* 256 = 0x100 P256VERIFY (EIP-7951; Osaka). The precompile set is
-               fork-gated: an address outside the active set is an ordinary call. */
-            /* the precompile's input is the child message's calldata: a snapshot of
-               mem[args_off .. args_off+args_len), staged C-side in one copy; the gas
-               functions inspect the staged bytes (modexp header, blake2f rounds) O(1) */
+            /* PRECOMPILE call. The precompile set is fork-gated (the highest is
+               0x100 P256VERIFY, EIP-7951/Osaka); an address outside the active
+               set is an ordinary code call. The precompile's input is the
+               child message's calldata, a snapshot of
+               mem[args_off .. args_off+args_len) staged host-side in one copy;
+               precompile_gas inspects the staged bytes O(1). */
             let in_len = if is_running() then { args_len } else { 0 };
             stage_precompile_input(an, args_off, in_len);
             let used = precompile_gas(an, in_len);
@@ -307,11 +360,15 @@ function run_call(mode : int) -> unit = {
                 push(WORD_ZERO)
             }
         } else {
+            /* CODE call. Snapshot the world (so a reverting child can be rolled
+               back), then perform the CALL value transfer up front. */
             k_snapshot();
             if (mode == 0) & word_nonzero(value) then {
                 k_transfer(caller, target, value)
             };
 
+            /* save the parent's user-space frame registers to restore on
+               return (Sail has no native call stack for these). */
             let s_pc = pc;
             let s_gas = gas_remaining;
             let s_msg = message;
@@ -319,6 +376,13 @@ function run_call(mode : int) -> unit = {
             let s_msize = memory_size;
             let s_depth = call_depth;
 
+            /* the child message context, by call mode:
+               - address: target for CALL/STATICCALL; the CALLER's own address
+                 for CALLCODE/DELEGATECALL (they run target's code in place);
+               - caller/value: inherited from the parent for DELEGATECALL,
+                 else the immediate caller and the call's value;
+               - static: forced for STATICCALL, else inherited (a static frame
+                 stays static for all of its sub-calls). */
             let child_addr : address = if mode == 0 | mode == 3 then { target } else { caller };
             let child_caller : address = if mode == 2 then {
                     s_msg.msg_caller
@@ -351,6 +415,9 @@ function run_call(mode : int) -> unit = {
             } else {
                 cd_set_empty()
             };
+
+            /* enter the child frame: pc at 0, its own gas/stack/memory, code
+               selected by the EIP-7702 delegation rule, depth bumped. */
             pc = 0;
             gas_remaining = to_gas(child_gas);
             stack_frame_enter();
@@ -366,6 +433,8 @@ function run_call(mode : int) -> unit = {
             let succeeded = frame_succeeded();
             let child_left = gas_remaining;
 
+            /* leave the child: restore every saved parent register, then credit
+               the parent with the child's unspent gas. */
             pc = s_pc;
             stack_frame_leave();
             message = s_msg;
@@ -377,9 +446,12 @@ function run_call(mode : int) -> unit = {
             hr_adopt();
             gas_remaining = to_gas(s_gas + child_left);
 
-            /* the output region is written on success AND revert (EELS generic_call) --
-               and only min(ret_len, |output|) bytes: the rest of the region is untouched.
-               An exceptionally-halted child has empty output, so nothing is written. */
+            /* copy returndata into the caller's output region on both success
+               AND revert (execution-specs generic_call), writing only
+               min(ret_len, |output|) bytes and leaving the rest untouched. An
+               exceptionally-halted child has empty output, so nothing is
+               written. The kernel then commits the child's world effects on
+               success, or rolls them back on failure. */
             returndata_out_region(ret_off, ret_len);
             if succeeded then {
                 k_commit();
@@ -393,7 +465,11 @@ function run_call(mode : int) -> unit = {
 }
 
 /* ----------------------------- run_create ------------------------------- */
-
+/* CREATE (is2 = false) and CREATE2 (is2 = true, EIP-1014). Both deploy a new
+ * contract by running the initcode supplied in memory; the new address is
+ * derived from (creator, nonce) for CREATE or (creator, salt, initcode hash)
+ * for CREATE2. Operand layout: value, offset, length, [salt for CREATE2].
+ * Pushes the new address on success, 0 on failure. */
 function run_create(is2 : bool) -> unit = {
     let creator = self_addr();
     let value = pop();
@@ -406,11 +482,14 @@ function run_create(is2 : bool) -> unit = {
         };
 
     /* a stack underflow during the operand pops exceptionally halts the frame
-       (exc_halt zeroed the gas); bail out before any child gas is allocated. */
+       (exc_halt zeroes the gas); bail out before any child gas is allocated. */
     if not_bool(is_running()) then {
         return ()
     };
 
+    /* up-front charges: memory expansion over the initcode, the CREATE base
+       cost (G_create), the EIP-3860 per-initcode-word cost, and -- for CREATE2
+       only -- the keccak word cost of hashing the initcode for the address. */
     charge_expansion(off, len);
     charge(G_create);
     charge(initcode_gas(len));
@@ -418,15 +497,19 @@ function run_create(is2 : bool) -> unit = {
         charge(to_gas(G_keccak_word * ediv_int(len + 31, 32)))
     };
 
-    /* an OOG during the static/initcode/keccak charges is an exceptional halt
-       (all gas consumed); bail before any nonce bump or child allocation. */
+    /* an out-of-gas during those charges is an exceptional halt (all gas
+       consumed); bail before any nonce bump or child allocation. */
     if not_bool(is_running()) then {
         return ()
     };
 
+    /* EIP-3860: initcode longer than MAX_INITCODE_SIZE is rejected outright as
+       an exceptional halt. */
     if len > MAX_INITCODE_SIZE then {
         exc_halt(InitCodeTooLarge)
     } else {
+        /* derive the new contract address: keccak(0xff, creator, salt,
+           keccak(initcode)) for CREATE2 (EIP-1014), else rlp(creator, nonce). */
         let nonce = k_get_nonce(creator);
         let new_addr : address = if is2 & is_running() then {
                 k_create2_addr(creator, salt, mem_keccak(off, len))
@@ -434,25 +517,28 @@ function run_create(is2 : bool) -> unit = {
                 k_create_addr(creator, nonce)
             };
 
+        /* reserve all-but-one-64th of the remaining gas for the initcode frame
+           (EIP-150); the retained 1/64th stays with the creating frame. */
         let avail = gas_remaining;
         let child_gas = avail - ediv_int(avail, 64);
         gas_remaining = to_gas(avail - child_gas);
 
-        /* EELS generic_create: after reserving the 63/64ths child gas, a CREATE in
-         * a static context (e.g. inside a STATICCALL frame) raises
-         * WriteInStaticContext -- an exceptional halt that consumes all gas, bumps
-         * no nonce, and runs no initcode. */
+        /* EIP-214 (execution-specs generic_create): a CREATE in a static
+         * context (e.g. inside a STATICCALL frame) is a write and raises
+         * WriteInStaticContext after the child gas is reserved -- an
+         * exceptional halt that consumes all gas, bumps no nonce, runs no
+         * initcode. */
         if message.msg_is_static then {
             exc_halt(WriteProtection);
             return ()
         };
 
+        /* early-abort guards (child gas refunded, 0 pushed, NO nonce bump): the
+           depth ceiling, the creator's balance covering the endowment, and the
+           creator nonce not already at the 2^64-1 ceiling (it must be
+           incrementable). */
         let depth_ok : bool = call_depth + 1 <= DEPTH_LIMIT;
         let balance_ok : bool = unsigned(k_get_balance(creator)) >= unsigned(value);
-
-        /* EELS generic_create: a creator nonce at the 2^64-1 ceiling cannot be
-         * incremented, so the create aborts early (child gas refunded, 0 pushed,
-         * NO nonce bump) -- alongside the depth/balance guards. */
         let nonce_ok : bool = nonce < 18446744073709551615;
 
         if not_bool(depth_ok) | not_bool(balance_ok) | not_bool(nonce_ok) then {
@@ -460,24 +546,28 @@ function run_create(is2 : bool) -> unit = {
             gas_remaining = to_gas(gas_remaining + child_gas);
             push(WORD_ZERO)
         } else {
-            /* warm the target + bump the creator nonce BEFORE the child snapshot:
-             * both persist even when the initcode reverts (EELS generic_create runs
-             * them in the parent frame, before process_create_message). */
+            /* warm the new address and bump the creator nonce BEFORE the child
+             * snapshot: both persist even if the initcode reverts (the
+             * execution-specs run them in the parent, before
+             * process_create_message). */
             let _ = k_access_account(new_addr);
             let occupied : bool = k_account_occupied(new_addr);
             hr_clear();
             k_bump_nonce(creator);
             if occupied then {
-                /* CREATE address collision (code, nonzero nonce, or storage at the
-                 * target): no initcode runs, 0 is pushed, and the child gas is NOT
-                 * returned (EELS generic_create keeps it deducted). */
+                /* address collision (the target already has code, a nonzero
+                 * nonce, or storage): no initcode runs, 0 is pushed, and the
+                 * reserved child gas is NOT refunded (it stays deducted). */
                 push(WORD_ZERO)
             } else {
+                /* enter the new account: snapshot, mark it created this tx,
+                   set its initial nonce to 1, and endow it with `value`. */
                 k_snapshot();
                 k_mark_created(new_addr); /* EIP-6780: created this tx */
                 k_bump_nonce(new_addr); /* EIP-161: a created contract starts at nonce 1 */
                 k_transfer(creator, new_addr, value);
 
+                /* save the parent's frame registers (restored on return). */
                 let s_pc = pc;
                 let s_gas = gas_remaining;
                 let s_msg = message;
@@ -495,6 +585,9 @@ function run_create(is2 : bool) -> unit = {
                         msg_is_static = s_msg.msg_is_static,
                         msg_depth = s_depth + 1,
                     };
+
+                /* the initcode frame has no calldata; its executing code is the
+                   initcode copied from memory[off, off+len). */
                 cd_set_empty();
                 let ic_len = if is_running() then {
                         frame_code_pend_mem(off, len)
@@ -516,15 +609,19 @@ function run_create(is2 : bool) -> unit = {
 
                 interpret();
 
+                /* the initcode's RETURN value is the deployed code; its length
+                   sets the EIP-170 size check and the per-byte deposit cost. */
                 let succeeded = frame_succeeded();
                 let child_left = gas_remaining;
                 let dep_len = unsigned(hr_pending_len());
                 let deposit = G_codedeposit * dep_len;
 
-                /* EIP-170 size limit + EIP-3541 (reject code starting with 0xEF) */
+                /* deployed-code validity: within the EIP-170 size limit and not
+                   beginning with 0xEF (EIP-3541, the reserved EOF prefix). */
                 let code_ok = (dep_len <= MAX_CODE_SIZE) &
                         ((dep_len == 0) | (hr_pending_byte(get_slice_int(64, 0, 0)) != 0xef));
 
+                /* leave the initcode frame: restore the parent's registers. */
                 pc = s_pc;
                 stack_frame_leave();
                 message = s_msg;
@@ -542,6 +639,9 @@ function run_create(is2 : bool) -> unit = {
                 };
                 gas_remaining = to_gas(s_gas + child_left);
 
+                /* finalize: an initcode that succeeded AND whose code is valid
+                   AND can pay its G_codedeposit cost deploys the code and
+                   commits; the new address is pushed. */
                 if succeeded & code_ok & (child_left >= deposit) then {
                     gas_remaining = to_gas(gas_remaining - deposit);
                     k_set_code(new_addr, pending_output_list());
@@ -549,10 +649,13 @@ function run_create(is2 : bool) -> unit = {
                     k_commit();
                     push(address_to_word(new_addr))
                 } else {
-                    /* a deposit-stage failure (0xEF prefix, oversize code, deposit OOG)
-                     * is an exceptional halt: ALL child gas is consumed (EELS
-                     * process_create_message sets gas_left = 0). A reverting/failing
-                     * initcode keeps child_left as already folded in above. */
+                    /* otherwise the create fails and is rolled back, pushing 0.
+                     * A deposit-stage failure (0xEF prefix, oversize code, or
+                     * deposit OOG) is an exceptional halt that consumes ALL the
+                     * child gas (process_create_message sets gas_left = 0), so
+                     * the parent's gas is reset to its pre-reservation value; a
+                     * reverting/failing initcode instead keeps child_left as
+                     * already folded in above. */
                     if succeeded then {
                         gas_remaining = s_gas
                     };

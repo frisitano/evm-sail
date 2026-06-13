@@ -1,28 +1,36 @@
 /* ======================================================================== */
-/* HOST I/O: the accelerator FFI, host crypto, and the stateless SSZ input.    */
+/* HOST I/O: ACCELERATOR FFI, HOST CRYPTO, STATELESS SSZ INPUT              */
 /*                                                                           */
-/* Everything the model gets from OUTSIDE itself lives here, in three layers: */
-/*   (1) FFI BINDING -- the accelerator byte-stream protocol (mechanism only, */
-/*       no semantics). Sail lists cannot cross the C boundary, so bytes       */
-/*       stream through begin/push/exec/read, 8 bytes per crossing (C side:    */
-/*       ffi/acc_shim.c; wire: eth-act/zkvm-standards c-interface-accelerators).*/
-/*   (2) HOST CRYPTO -- keccak256/sha256 and the EVM precompiles over that      */
-/*       binding (the model defines WHAT is hashed/verified and all gas; the    */
-/*       host computes it), plus CREATE/CREATE2 address derivation.            */
-/*   (3) STATELESS INPUT -- decode the canonical SSZ SszStatelessInput from the */
-/*       private-input region (ssz_src_*), mirroring execution-specs           */
-/*       (projects/zkevm) forks/amsterdam stateless_ssz.py.                    */
+/* Everything the model obtains from OUTSIDE itself -- the boundary between   */
+/* the EVM specification and its environment. Three layers:                  */
 /*                                                                           */
-/* This is host mechanism, like memory and storage. It is included early (the */
-/* crypto is used by block_hash, state, kernel, gas, transaction); the SSZ     */
-/* decoders are only called by the outer stateless layers (lib/mpt.sail        */
-/* witness reader, zkvm/zkvm_block.sail, the EEST runner).                     */
+/* (1) FFI BINDING -- the accelerator byte-stream protocol (mechanism only,  */
+/* no semantics). The model commits to WHAT is hashed/verified; the host     */
+/* computes the result. Inputs stream across the C boundary 8 bytes per      */
+/* crossing (begin / push / exec / read).                                    */
+/*                                                                           */
+/* (2) HOST CRYPTO -- keccak256 (the Ethereum hash: KECCAK256, trie/RLP      */
+/* node references, CREATE2 salt) and sha256 (precompile 0x02 + SSZ          */
+/* merkleization), the EVM precompiles over the same binding, and the        */
+/* CREATE (Yellow Paper) / CREATE2 (EIP-1014) address derivations.           */
+/*                                                                           */
+/* (3) STATELESS INPUT -- decode the canonical SSZ SszStatelessInput from    */
+/* the private-input region (ssz_src_*): the execution payload, the          */
+/* execution witness (state nodes, codes, headers), the block access list    */
+/* (EIP-7928), and the chain config. Mirrors execution-specs                 */
+/* (projects/zkevm) forks/amsterdam stateless_ssz.py.                        */
+/*                                                                           */
+/* Host mechanism, like memory and storage. Included early -- the crypto is  */
+/* used by block_hash, state, kernel, gas, and transaction; the SSZ decoders */
+/* are called only by the outer stateless layers (the lib/mpt.sail witness   */
+/* reader, zkvm/zkvm_block.sail, the EEST runner).                           */
 /* ======================================================================== */
 
-/* the BAL access-set key (an (address, slot) pair): bal_load (below)
- * materializes the permitted set, the kernel's storage guards check against
- * it. Defined here because bal_load constructs it and host I/O is included
- * before host/state.sail (which also consumes it). */
+/* The block-access-list key: an (address, slot) pair (EIP-7928). bal_load
+ * (below) materializes the permitted access set from the SSZ input, and the
+ * kernel's storage guards reject any SLOAD/SSTORE outside it. Defined here
+ * because bal_load is its producer and host I/O is included before
+ * host/state.sail (which also consumes it). */
 struct SlotKey = { sk_addr : address, sk_slot : word }
 
 /* ===================== (1) FFI BINDING ================================= */
@@ -38,7 +46,8 @@ val acc_in_byte = impure { _: "acc_in_byte" } : bits(64) -> bits(8)
 val acc_begin_mem = impure { _: "acc_begin_mem" } : (bits(64), bits(64), bits(64)) -> unit
 val acc_begin_txd = impure { _: "acc_begin_txd" } : bits(64) -> unit
 
-/* feed the input to the host, 8 bytes per FFI crossing (remainder one-by-one) */
+/* Feed a message to the host accelerator, 8 bytes per FFI crossing (the
+ * sub-8 remainder one byte at a time). */
 function acc_push_all(msg : list(byte)) -> unit = match msg {
     b0 :: (b1 :: (b2 :: (b3 :: (b4 :: (b5 :: (b6 :: (b7 :: r))))))) => {
         acc_push8(append(b0, append(b1, append(b2, append(b3, append(b4, append(b5, append(b6, b7))))))));
@@ -51,7 +60,7 @@ function acc_push_all(msg : list(byte)) -> unit = match msg {
     [||] => (),
 }
 
-/* read `n` output bytes back from the host (O(n): prepend + reverse) */
+/* Read `n` output bytes back from the host accelerator into a list. */
 function acc_read(n : int) -> list(byte) = {
     var out : list(byte) = [||];
     foreach (i from 0 to (n - 1)) {
@@ -60,13 +69,13 @@ function acc_read(n : int) -> list(byte) = {
     list_reverse(out)
 }
 
-/* a 32-byte-digest accelerator (keccak256 id 0, sha256 id 2): hash `msg` -> word.
- * The 32 output bytes are folded big-endian into bits(256). */
+/* A 32-byte-digest hash over the accelerator (id 0 = keccak256, id 2 =
+ * sha256): hash `msg`, folding the 32 output bytes big-endian into a word. */
 function acc_hash(id : int, msg : list(byte)) -> bits(256) = {
     acc_begin(get_slice_int(64, id, 0));
     acc_push_all(msg);
     let _ = acc_exec();
-    let w0 : bits(64) = acc_word(get_slice_int(64, 0, 0)); /* 4 big-endian word reads */
+    let w0 : bits(64) = acc_word(get_slice_int(64, 0, 0)); /* digest as 4 big-endian 64-bit words */
     let w1 : bits(64) = acc_word(get_slice_int(64, 1, 0));
     let w2 : bits(64) = acc_word(get_slice_int(64, 2, 0));
     let w3 : bits(64) = acc_word(get_slice_int(64, 3, 0));
@@ -76,25 +85,29 @@ function acc_hash(id : int, msg : list(byte)) -> bits(256) = {
 /* ===================== (2) HOST CRYPTO ================================= */
 
 /* The i-th byte of the STAGED precompile input, zero past the end. A
- * precompile's input is staged once (a snapshot of the caller's memory slice,
- * or the tx data); gas inspection (modexp header, blake2f rounds) reads the
- * few bytes it needs O(1) -- no Sail byte list. */
+ * precompile's input is staged once (a snapshot of the caller's memory slice
+ * for a CALL, or the tx data for a tx-to-precompile); gas inspection (the
+ * MODEXP length header, the BLAKE2F rounds count) reads only the leading
+ * bytes it needs, directly from the staged buffer. */
 function precompile_input_byte(i : int) -> byte = acc_in_byte(get_slice_int(64, i, 0))
 
-/* stage a precompile's input from the streamed tx buffer (tx-to-precompile;
- * CALL-family staging is memory-sourced: stage_precompile_input, memory.sail) */
+/* Stage a precompile's input from the streamed tx buffer (a transaction
+ * sent directly to a precompile; CALL-family staging is memory-sourced --
+ * see stage_precompile_input in host/memory.sail). */
 function stage_precompile_txd(num : int) -> unit = acc_begin_txd(get_slice_int(64, num, 0))
 
-/* run the staged precompile (input already in the accelerator: acc_begin_mem
- * for a memory slice, acc_begin+acc_push_all for a list). The output stays in
- * the accelerator buffer for returndata adoption (hr_capture_acc). On failure
- * the CALL returns 0 (handled by the interpreter). */
+/* Run the staged precompile (input already in the accelerator: acc_begin_mem
+ * for a memory slice, acc_begin + acc_push_all for a list). Output stays in
+ * the accelerator buffer for returndata adoption (hr_capture_acc). Returns
+ * false on precompile failure, which the interpreter maps to a CALL result
+ * of 0 with empty returndata. */
 function run_precompile_staged() -> bool = {
     let _ = acc_exec();
     unsigned(acc_ok()) == 1
 }
 
-/* list-in/list-out wrapper (vector tests; the EVM uses the staged path) */
+/* List-in / list-out precompile wrapper (precompile vector tests; the EVM
+ * itself uses the staged path above). */
 function run_precompile(num : int, input : list(byte)) -> (bool, list(byte)) = {
     acc_begin(get_slice_int(64, num, 0));
     acc_push_all(input);
@@ -108,20 +121,19 @@ function run_precompile(num : int, input : list(byte)) -> (bool, list(byte)) = {
 }
 
 /* ======================================================================== */
-/* Hash primitives + CREATE address derivation                              */
+/* HASH PRIMITIVES + CREATE ADDRESS DERIVATION                              */
 /*                                                                           */
-/* keccak256/sha256 route through the same accelerator boundary as the       */
-/* precompiles (acc_hash; ids 0 = keccak256, 2 = sha256). Native links the    */
-/* reference impl; a real zkVM swaps in a native keccak/sha256 precompile     */
-/* behind the standard header. The pure-Sail reference permutations live in   */
-/* git history. (Consolidated here from the former lib/keccak.sail +          */
-/* lib/sha256.sail, which were thin wrappers once the permutations moved to C.) */
+/* keccak256 and sha256 route through the same accelerator boundary as the   */
+/* precompiles (acc_hash; id 0 = keccak256, id 2 = sha256). The model        */
+/* defines what is hashed; the host computes the digest behind the standard  */
+/* accelerator header.                                                       */
 /* ======================================================================== */
 
-/* Keccak-256, the Ethereum hash (KECCAK256 opcode, trie/RLP, CREATE2). id 0. */
+/* Keccak-256, the Ethereum hash function: the KECCAK256 opcode, trie/RLP
+ * node references, code hashes, and CREATE2 init-code commitments. id 0. */
 function keccak256(msg : list(byte)) -> bits(256) = acc_hash(0, msg)
 
-/* big-endian byte serializations used by RLP, the tries, and address derivation */
+/* Big-endian byte serializations used by RLP, the tries, and address derivation. */
 function word_to_bytes32(w : word) -> list(byte) = {
     var out : list(byte) = [||]; /* O(n): prepend big-endian */
     foreach (k from 0 to 31) {
@@ -151,7 +163,8 @@ function int_to_be_bytes(n : int) -> list(byte) = {
     out
 }
 
-/* RLP encoding of the nonce for CREATE address derivation. */
+/* RLP encoding of the account nonce, as used in CREATE address derivation
+ * (0 encodes as 0x80; a single byte < 128 is itself; otherwise length-prefixed). */
 function rlp_nonce(nonce : int) -> list(byte) =
     if nonce == 0 then {
         [|0x80|]
@@ -163,14 +176,17 @@ function rlp_nonce(nonce : int) -> list(byte) =
         }
     }
 
-/* CREATE (YP): address = keccak256(rlp([sender, nonce]))[12:] */
+/* CREATE address (Yellow Paper): keccak256(rlp([sender, nonce]))[12:] -- the
+ * low 20 bytes of the hash of the RLP-encoded (sender, nonce) pair. */
 function create_address(sender : address, nonce : int) -> address = {
     let items = list_append(list_append([|0x94|], address_to_bytes(sender)), rlp_nonce(nonce));
     let payload = list_append([|get_slice_int(8, 192 + list_len(items), 0)|], items);
     word_to_address(keccak256(payload))
 }
 
-/* CREATE2 (EIP-1014): address = keccak256(0xff ++ sender ++ salt ++ keccak(init))[12:] */
+/* CREATE2 address (EIP-1014): the low 20 bytes of
+ * keccak256(0xff ++ sender ++ salt ++ keccak256(init_code)) -- a salted,
+ * init-code-committed address independent of the sender's nonce. */
 function create2_address(sender : address, salt : word, init_hash : hash) -> address = {
     var buf : list(byte) = [|0xff|];
     buf = list_append(buf, address_to_bytes(sender));
@@ -179,15 +195,15 @@ function create2_address(sender : address, salt : word, init_hash : hash) -> add
     word_to_address(keccak256(buf))
 }
 
-/* SHA-256 (id 2): the precompile 0x02 hash and the SSZ merkleization hash
- * (distinct from the execution keccak). */
+/* SHA-256 (id 2): the precompile 0x02 hash and the SSZ merkleization hash --
+ * distinct from the keccak256 used throughout execution. */
 function sha256(msg : list(byte)) -> bits(256) = acc_hash(2, msg)
 
-/* SSZ merkle parent: SHA-256(left ++ right), both 32-byte chunks */
+/* SSZ merkle parent: SHA-256(left ++ right) over two 32-byte chunks. */
 function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) =
     acc_hash(2, list_append(word_to_bytes32(a), word_to_bytes32(b)))
 
-/* self-check: SHA-256 reference vectors (run on the guest) */
+/* SHA-256 self-check against the standard "" and "abc" reference vectors. */
 function sha256_selfcheck() -> unit = {
     assert(sha256([||]) == 0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855, "sha256('') on guest");
     assert(

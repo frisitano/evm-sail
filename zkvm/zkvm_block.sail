@@ -1,23 +1,35 @@
 /* ======================================================================== */
-/* EL-IR zkVM guest entry: run a one-transaction block and expose the result */
-/* facts to the freestanding C harness via output registers.                 */
-/*                                                                           */
-/* This is a whole-block run reshaped for the eth-act zkVM RISC-V standard     */
-/* target: NO printing, NO string building, NO libc IO, NO asserts            */
-/* in the happy path.  The harness reads the `zkvm_out_*` registers after     */
-/* `zkvm_run` and emits them through the standard write_output interface.     */
-/*                                                                           */
-/* Built GMP-free by backing the stock Sail GMP ABI with a vendored,           */
-/* freestanding mini-gmp (no libgmp linked), keeping EXACT 256-bit semantics.  */
-/* Keccak-256 is supplied by the C accelerator (ffi/keccak_ffi.c) linked into  */
-/* the guest — the eth-act c-interface-accelerators path; it needs no GMP and  */
-/* only memset from libc.                                                       */
+/* STATELESS BLOCK-VALIDATION GUEST (zkVM)                                  */
+/*                                                                          */
+/* The stateless block-validation guest for the eth-act zkVM RISC-V target  */
+/* (riscv64im_zicclsm). It decodes an SSZ SszStatelessInput from the private */
+/* input, validates the supplied witness against the committed pre-state    */
+/* root, executes the block over that witness-backed state, and commits to   */
+/* the post-state -- emitting an SSZ SszStatelessValidationResult as the     */
+/* canonical public output. A proof of this guest is a proof that the block  */
+/* is valid relative to the parent state root.                              */
+/*                                                                          */
+/* Validation pipeline (zkvm_run): re-root the witness to parent.state_root  */
+/* (the one-shot pre-state check), seed the touched pre-state from the       */
+/* authenticated leaves, run process_block, then check that the chain config */
+/* selects the expected fork, the witness headers chain, the tx receipt      */
+/* succeeded, and the recomputed post-state root equals payload.state_root.  */
+/* A failing block is a NORMAL outcome: the guest reports                    */
+/* successful_validation = false, it does not abort.                        */
+/*                                                                          */
+/* Target contract: NO printing, NO string building, NO libc IO, NO asserts  */
+/* on the happy path. read_input supplies the SSZ input via ssz_src;         */
+/* write_output (runtime/el_input.c) receives the SSZ result. Built GMP-free */
+/* by backing the stock Sail GMP ABI with a vendored, freestanding mini-gmp  */
+/* (no libgmp linked) at EXACT 256-bit semantics; keccak-256 comes from a C  */
+/* accelerator (the eth-act c-interface-accelerators path), needing no GMP   */
+/* and only memset from libc.                                               */
 /* ======================================================================== */
 
 $include "../evm/evm.sail"
 $include "../evm/lib/ssz_htr.sail"
 
-/* canonical public output: write one byte to write_output (zkvm/el_input.c) */
+/* one byte of the canonical SSZ public output, via write_output (runtime/el_input.c) */
 val emit_out = impure { _: "el_emit_out" } : bits(8) -> unit
 
 /* Output facts, read by the C harness after zkvm_run(). All fit in 64 bits. */
@@ -36,11 +48,11 @@ function withdrawer() -> address = 0x0000000000000000000000000000000000004895
 /* PUSH1 0x2a; PUSH1 0x00; SSTORE; STOP  (store 42 at slot 0) */
 function contract_code() -> list(byte) = [|0x60, 0x2a, 0x60, 0x00, 0x55, 0x00|]
 
-/* Exercise the keccak C accelerator (ffi/keccak_ffi.c) ON the RISC-V guest:
- * compute the two reference digests through the freestanding mini-gmp + FFI
- * path and assert them. A broken on-guest accelerator (ABI/endianness/mini-gmp)
- * fails the assert -> abnormal termination (non-zero exit), so exit 0 proves
- * keccak runs correctly on the guest, not just that it links. */
+/* Exercise the keccak-256 C accelerator ON the RISC-V guest: compute the two
+ * reference digests through the freestanding mini-gmp + FFI path and assert
+ * them. A broken on-guest accelerator (ABI/endianness/mini-gmp) fails the
+ * assert -> abnormal termination (non-zero exit), so exit 0 proves keccak runs
+ * correctly on the guest, not just that it links. */
 function keccak_selfcheck() -> unit = {
     assert(keccak256([||]) == 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470, "keccak('') on guest");
     assert(
@@ -49,7 +61,8 @@ function keccak_selfcheck() -> unit = {
     )
 }
 
-/* code db from witness.codes (keccak(code) -> code) */
+/* register a code blob in the code db keyed by codeHash, as a (off,len) view
+ * into the witness bytes -- (hash hi..lo, off, len) split across six u64s. */
 val cs_view_input = impure { _: "cs_view_input" } : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
 
 /* store the code for codeHash `h` as a VIEW of the witness span [off, off+len) */

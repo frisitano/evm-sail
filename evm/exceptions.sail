@@ -1,10 +1,15 @@
 /* ======================================================================== */
-/* Halt outcomes and exceptional-halt kinds (Yellow Paper sec. 9.4.2)        */
-/*                                                                           */
-/* A frame ends either by a normal halt (STOP/RETURN/REVERT/SELFDESTRUCT) or */
-/* an exceptional halt. An exceptional halt consumes all remaining gas and   */
-/* reverts the frame's state changes (YP: the "exceptional halting state").  */
-/* REVERT (EIP-140) is the one failure that REFUNDS remaining gas.           */
+/* HALT KINDS AND THE EXCEPTIONAL HALTING STATE (Yellow Paper sec. 9.4.2)   */
+/*                                                                          */
+/* How an execution frame can end. A frame either halts normally (one of    */
+/* HaltKind: STOP / RETURN / REVERT / SELFDESTRUCT) or hits an exceptional  */
+/* halt (one of ExceptionKind). An exceptional halt is the YP "exceptional  */
+/* halting state": it consumes ALL remaining gas and reverts the frame's    */
+/* state changes. REVERT (EIP-140) is the sole failure that instead REFUNDS */
+/* the remaining gas while still rolling state back.                        */
+/*                                                                          */
+/* FrameStatus is the running/halted/exceptional tag; CallOutcome is what a */
+/* finished sub-frame hands back to its caller.                             */
 /* ======================================================================== */
 
 /* Ordinary frame stops. */

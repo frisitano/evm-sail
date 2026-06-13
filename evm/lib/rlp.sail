@@ -1,9 +1,17 @@
 /* ======================================================================== */
-/* RLP encoding (Ethereum) in Sail                                           */
-/*                                                                           */
-/* Foundation for block authentication: account/header/tx/receipt encoding   */
-/* and Merkle-Patricia trie nodes. Self-contained (uses host/io.sail's byte   */
-/* helpers); compiles to the RISC-V target.                                   */
+/* RLP ENCODING (YELLOW PAPER APPENDIX B)                                   */
+/*                                                                          */
+/* Recursive Length Prefix, the canonical serialization Ethereum uses for   */
+/* accounts, block headers, transactions, receipts, and Merkle-Patricia     */
+/* trie nodes. RLP encodes a recursive structure of byte strings and lists; */
+/* it imposes no type semantics, only a minimal length-prefixed framing.    */
+/*                                                                          */
+/* The encoders here cover the cases the model emits. A single byte < 0x80  */
+/* is its own encoding; a string of length n <= 55 takes a 0x80+n prefix; a */
+/* longer string takes a 0xb7+|len| prefix followed by the big-endian       */
+/* length. Lists mirror this with the 0xc0 / 0xf7 prefix bands over an      */
+/* already-encoded payload. Integers encode as their minimal big-endian     */
+/* byte string (no leading zeros).                                          */
 /* ======================================================================== */
 
 function rlp_byte(n : int) -> byte = get_slice_int(8, n, 0)

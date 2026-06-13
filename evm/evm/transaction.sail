@@ -1,15 +1,23 @@
 /* ======================================================================== */
-/* EVM USER-SPACE transaction processing                                     */
-/*                                                                           */
-/* Intrinsic gas + the upfront-gas/nonce state transition + EIP-3529 refunds  */
-/* are user-space policy; all state changes are kernel syscalls. The tx-level */
-/* snapshot/commit/revert bound the whole transaction's world effects.       */
+/* TRANSACTION STATE TRANSITION                                             */
+/*                                                                          */
+/* The per-transaction step of the Ethereum state transition (Yellow Paper  */
+/* section 6): validate the transaction, charge upfront gas, run it as the   */
+/* top-level message call, then settle gas/refunds and the coinbase fee.     */
+/*                                                                          */
+/* Validity and intrinsic gas are user-space policy; every world effect is a */
+/* kernel syscall, and a tx-level snapshot/commit/revert bounds the whole    */
+/* transaction's world state. The typed-envelope rules covered here:         */
+/* EIP-2718 (typed tx), EIP-1559 (fee market: base fee + priority tip caps), */
+/* EIP-2930 (access list), EIP-3860 (initcode size/gas), EIP-4844 (blob tx + */
+/* blob-gas burn), EIP-7702 (set-code authorizations), EIP-7623 (calldata    */
+/* floor), EIP-3607 (no tx from an account with code), EIP-7825 (gas cap).   */
+/* Gas refunds (SSTORE clears, etc.) are capped per EIP-3529. */
 /* ======================================================================== */
 
-/* EIP-7702 authorization tuple; the runner pre-recovers the authority + validates
- * the signature (s<=n/2, y_parity, r) into au_valid_sig. */
-/* An EIP-7702 set-code authorization tuple (the signature is pre-verified by
- * the runner; au_valid_sig records the result). */
+/* An EIP-7702 set-code authorization tuple. The runner pre-recovers the
+ * authority and validates the signature (s <= n/2, y_parity, r); au_valid_sig
+ * records that result, and process_auth applies the chain-id/nonce/code checks. */
 struct Authorization = {
     au_valid_sig : bool, au_authority : address, au_address : address,
     au_nonce : int, au_chain_id : int,

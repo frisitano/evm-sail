@@ -1,10 +1,18 @@
 /* ======================================================================== */
-/* SSZ hash_tree_root (merkleization, SHA-256) — produces the public           */
-/* new_payload_request_root. Mirrors the SSZ spec: basic types pack into a      */
-/* 32-byte little-endian chunk; vectors/lists/containers merkleize their chunk  */
-/* / element / field roots; lists additionally mix_in_length. Huge list limits  */
-/* (2^20 txs, ...) are handled by a PRUNED subtree walk + a zero-hash table, so */
-/* an N-element list costs O(N*depth) hashes, not O(2^depth).                   */
+/* SSZ hash_tree_root: consensus-layer merkleization (SHA-256)              */
+/*                                                                          */
+/* The consensus layer commits to the execution payload by SSZ hash_tree_root  */
+/* (the SimpleSerialize merkleization), distinct from the execution layer's    */
+/* keccak/RLP/Merkle-Patricia commitments. This module computes one such root, */
+/* new_payload_request_root, over the SszNewPayloadRequest. It is part of the  */
+/* zkVM block harness (zkvm/), not the core EVM state transition.              */
+/*                                                                          */
+/* Per the SSZ spec: a basic type packs into a 32-byte little-endian chunk;    */
+/* a vector/list/container merkleizes its chunk / element / field roots into a */
+/* binary tree padded to a power-of-two leaf count; a list additionally mixes  */
+/* in its length (mix_in_length). The huge declared limits (2^20 transactions, */
+/* ...) never materialize: a PRUNED subtree walk over a precomputed zero-hash  */
+/* table makes an N-element list cost O(N*depth) hashes, not O(2^depth).       */
 /* ======================================================================== */
 
 /* zero-hash table: zh[0] = 0 chunk, zh[d] = sha256(zh[d-1] ++ zh[d-1]) */

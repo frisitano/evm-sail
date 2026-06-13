@@ -1,13 +1,19 @@
 /* ======================================================================== */
-/* evm-sail prelude: value model + the full 256-bit word ALU                    */
-/*                                                                           */
-/* This is the arithmetic foundation of the specification. Every EVM word        */
-/* operation is given REAL two's-complement / unsigned semantics over        */
-/* bits(256); only KECCAK-256 (and the precompile crypto, declared           */
-/* elsewhere) is an opaque primitive. The operators follow the Sail 0.20.1   */
-/* base prelude: int->bits is get_slice_int; integer div/mod come from       */
-/* <smt.sail> (ediv/emod) and arith.sail (tdiv/tmod/fdiv); subtraction on    */
-/* bits is sub_bits; xor/and/or/not are the *_vec builtins.                  */
+/* PRELUDE: the value model and the full 256-bit word ALU                   */
+/*                                                                          */
+/* The arithmetic foundation of the specification. The EVM operates on      */
+/* 256-bit words (YP section 9.1); this file defines that word type and     */
+/* gives every word operation its REAL two's-complement / unsigned          */
+/* semantics over bits(256). Only KECCAK-256 and the precompile crypto      */
+/* (host/io.sail) are opaque primitives; everything arithmetic or bitwise   */
+/* is fully defined here.                                                   */
+/*                                                                          */
+/* Operator grounding: int->bits is get_slice_int; integer div/mod are the  */
+/* Euclidean ediv/emod from <smt.sail> with the truncating/flooring         */
+/* tdiv/tmod /fdiv from arith.sail; subtraction on bits is sub_bits;        */
+/* xor/and/or/not are the *_vec builtins. The signed comparisons and zero   */
+/* test go through the host word predicates (hw_*) to avoid materializing   */
+/* word-to-integer casts.                                                   */
 /* ======================================================================== */
 
 default Order dec
@@ -28,12 +34,10 @@ type hash    = bits(256)
 /* keccak-256 / storage-key sized digest          */
 type byte    = bits(8)
 
-/* Gas is a non-negative integer counter (Rust u64 in the impl). */
-/* Gas is a 64-bit-representable quantity (Sail compiles range types that fit
- * int64 to machine integers -- the gas counter and schedule run native). The
- * cap 2^62 exceeds any real gas limit, so SATURATING at it preserves the
- * charge-then-out-of-gas semantics for attacker-controlled sizes (a clamped
- * astronomic charge still exhausts any frame). */
+/* Gas is a non-negative counter, bounded to range(0, 2^62). The cap exceeds
+ * any real block gas limit, so SATURATING to it (to_gas) preserves the
+ * charge-then-out-of-gas semantics for attacker-controlled sizes: a clamped
+ * astronomic charge still exhausts any frame, just as the true charge would. */
 type gas = range(0, 4611686018427387904)
 function to_gas(x : int) -> gas =
     if x < 0 then { 0 } else { if x <= 4611686018427387904 then { x } else { 4611686018427387904 } }
@@ -310,5 +314,6 @@ function alu_clz(x : word) -> word = {
     word_of_int(count)
 }
 
-/* KECCAK-256 is a real Sail implementation (evm/keccak.sail), included
- * after this prelude. Self-contained so it compiles to the RISC-V target. */
+/* KECCAK-256 is a fully-defined Sail implementation, not an axiom; it lives
+ * with the rest of the host crypto in host/io.sail, included after this
+ * prelude. */

@@ -1,12 +1,16 @@
 /* ======================================================================== */
-/* RLP decode (the inverse of rlp.sail's encoders) — needed to read witness    */
-/* trie nodes and account/storage leaves during stateless validation.         */
-/*                                                                           */
-/* One level is parsed at a time (rlp_split / rlp_node_items): each item is a   */
-/* RlpField carrying whether it is a list, its content bytes (the string value */
-/* or the list payload), and its full bytes (header+body, for descending into  */
-/* an embedded child node). The MPT walk recurses one node at a time, so no    */
-/* mutually-recursive RLP traversal / termination measure is needed here.      */
+/* RLP DECODE (the inverse of lib/rlp.sail; Yellow Paper Appendix B)        */
+/*                                                                          */
+/* Parses the canonical Recursive Length Prefix framing back into items:    */
+/* the witness reader uses it to read Merkle-Patricia trie nodes and the    */
+/* account / storage leaves they hold during stateless validation.          */
+/*                                                                          */
+/* Decoding proceeds one level at a time (rlp_split / rlp_node_items). Each */
+/* item is returned as an RlpField recording whether it is a list, its      */
+/* content bytes (the string value, or a list's payload), and its full      */
+/* bytes (header + body -- the handle used to descend into an embedded      */
+/* child node). The trie walk recurses one node at a time, so no mutually-  */
+/* recursive RLP traversal (and no termination measure) is needed here.     */
 /* ======================================================================== */
 
 struct RlpField = {
@@ -95,7 +99,7 @@ function rlp_field_word(f : RlpField) -> word = {
     acc
 }
 
-/* ---- S2a self-check: decode rlp([1, 2, 1024]) = c5 01 02 82 04 00 ------ */
+/* ---- self-check: decode rlp([1, 2, 1024]) = c5 01 02 82 04 00 --------- */
 function rlp_decode_selfcheck() -> unit = {
     let enc : list(byte) = [|0xc5, 0x01, 0x02, 0x82, 0x04, 0x00|];
     let items = rlp_node_items(enc);

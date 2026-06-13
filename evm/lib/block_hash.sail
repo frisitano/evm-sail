@@ -1,9 +1,15 @@
 /* ======================================================================== */
-/* Block header RLP + block hash (Ethereum) in Sail                          */
-/*                                                                           */
-/* block_hash = keccak256(rlp(header)). Legacy/pre-1559 header is the 15-field */
-/* form; rlp_header_legacy covers it. Self-contained (rlp + keccak); the       */
-/* block hash authenticates a sealed block.                                   */
+/* BLOCK HEADER RLP + BLOCK HASH (Yellow Paper section 4.3)                  */
+/*                                                                          */
+/* The block hash is keccak256(rlp(H)) over the header H -- the commitment    */
+/* that seals a block and chains it to its parent (each header carries its    */
+/* parent's hash). The header is RLP-encoded field-by-field in YP order, then */
+/* hashed.                                                                    */
+/*                                                                          */
+/* rlp_header_legacy covers the original 15-field header (frontier through    */
+/* the fork before EIP-1559 introduced the baseFeePerGas field). Later forks  */
+/* append further fields (baseFeePerGas, withdrawalsRoot, blob gas, ...) to    */
+/* the same RLP-list framing.                                                 */
 /* ======================================================================== */
 
 function zero_bytes(n : int) -> list(byte) = {

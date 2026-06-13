@@ -1,9 +1,16 @@
 /* ======================================================================== */
-/* World-state scaling micro-benchmark: N storage writes + N reads to distinct */
-/* slots, exercising the kernel's list-based storage (st_update/st_lookup are   */
-/* O(current size), so N accesses cost O(N^2)). N is read from the private      */
-/* input (first 4 bytes LE). Measures whether the world state is O(N^2) before  */
-/* committing to the per-tx BAL refactor.  GUEST=zkvm_bench.sail ./build.sh run  */
+/* WORLD-STATE THROUGHPUT BENCHMARK (zkVM)                                  */
+/*                                                                          */
+/* A throughput micro-benchmark for the zkVM guest, not a validator: it does */
+/* N storage writes followed by N reads to distinct slots of one account,   */
+/* measuring how the kernel's world-state storage scales. N is read from the */
+/* private input (first 4 bytes, little-endian).                            */
+/*                                                                          */
+/* The list-based storage (st_update / st_lookup are O(current size)) makes  */
+/* N accesses cost O(N^2); this run quantifies that before any per-tx        */
+/* block-access-list (BAL) refactor. Drive it with                          */
+/* GUEST=zkvm_bench.sail ./build.sh run. Shares the zkvm_out_* register      */
+/* output convention with zkvm_block.sail.                                  */
 /* ======================================================================== */
 
 $include "../evm/evm.sail"
@@ -18,7 +25,7 @@ register zkvm_out_tracelen : int = 0
 register zkvm_out_success : int = 0
 
 function zkvm_run() -> unit = {
-    let n : int = unsigned(ssz_src_le(0, 4)); /* N from the input */
+    let n : int = unsigned(ssz_src_le(0, 4)); /* N: first 4 input bytes, LE */
     k_world_reset();
     let a : address = 0x000000000000000000000000000000000000c0de;
     foreach (k from 0 to (n - 1)) {

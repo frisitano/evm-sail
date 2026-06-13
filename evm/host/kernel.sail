@@ -1,15 +1,24 @@
 /* ======================================================================== */
-/* HOST KERNEL FUNCTIONS                                                     */
-/*                                                                           */
-/* The host's kernel-function surface (`k_*`): the ONLY way the transaction  */
-/* kernel (the EVM) touches world state. Each function performs one effect   */
-/* or answers one query against host/state.sail. The host is pure mechanism: */
-/* it holds no gas counter and makes no policy decisions -- the EVM decides  */
-/* whether an effect happens (e.g. a no-op SSTORE charges gas in the         */
-/* transaction kernel but performs no host write).                           */
+/* HOST KERNEL FUNCTIONS                                                    */
+/*                                                                          */
+/* The host's syscall surface (k_*): the ONLY interface through which the   */
+/* transaction kernel (the EVM, user space) reads or mutates world state    */
+/* (host/state.sail). Each function performs one effect (a balance          */
+/* transfer, an SSTORE, a log emission, a snapshot/commit/revert) or        */
+/* answers one query (a balance, a code hash, an EIP-2929 warm bit).        */
+/*                                                                          */
+/* The host is pure mechanism: it holds no gas counter and makes no policy  */
+/* decision. The EVM decides WHETHER an effect happens and charges all gas  */
+/* (evm/gas.sail); for example a no-op SSTORE is still gas-charged in the   */
+/* kernel but performs no host write. State mutations are made revertible   */
+/* at their enclosing call-frame boundary either by a journal undo entry    */
+/* or, for persistent storage, by the overlay-layer stack (k_snapshot /     */
+/* k_commit / k_revert).                                                    */
 /* ======================================================================== */
 
-/* --- EIP-2929 access (mark warm, return PRIOR warm bit) --- */
+/* --- EIP-2929 access lists: mark an address/slot warm, return its PRIOR warm
+ * bit (the EVM charges COLD_*_COST on a false result, WARM_STORAGE_READ_COST on
+ * true). The warming is journaled so a frame revert un-warms it. --- */
 function k_access_account(a : address) -> bool = {
     let prior = addr_in(k_warm_addr, a);
     if not_bool(prior) then {
@@ -27,12 +36,14 @@ function k_access_slot(a : address, s : word) -> bool = {
     prior
 }
 
-/* --- storage (C overlay map; layers paired with snapshot/commit/revert) --- */
+/* --- persistent storage (SLOAD/SSTORE): the C overlay map, whose layers are
+ * pushed/popped by k_snapshot / k_commit / k_revert --- */
 
-/* stateless guard: a slot the EVM touches must be in the witness working set
- * (seeded from the BAL slice + witness pre-values). Absent => the prover did not
- * provision it => fail closed -- host_map_present distinguishes a witness-proven 0
- * from never-provisioned. Off by default, so the native path is unchanged. */
+/* Stateless guard: in stateless mode a slot the EVM touches MUST already be in
+ * the witness working set (seeded from the EIP-7928 BAL slice plus the witness
+ * pre-values). Absent => the prover never provisioned it => fail closed.
+ * host_map_present distinguishes a witness-proven 0 from a never-provisioned
+ * slot. Off by default, so the native execution path is unaffected. */
 function k_stateless_on() -> unit = k_stateless = true
 function storage_present(a : address, s : word) -> unit =
     if k_stateless then {
@@ -45,15 +56,19 @@ function k_sload(a : address, s : word) -> word = {
 }
 function k_sstore(a : address, s : word, v : word) -> unit = {
     storage_present(a, s);
-    map_store(MAP_STORAGE, a, s, v) /* overlay write; revert = layer discard */
+    map_store(MAP_STORAGE, a, s, v) /* writes the top overlay layer; revert discards it */
 }
 
-/* EIP-2200 original value = the BASE layer (the state at tx start; every prior
- * tx was pop_commit-merged into it). No per-tx snapshot copy needed. */
+/* EIP-2200 "original" value: the slot's value at tx start, which is the BASE
+ * overlay layer (every committed prior tx was pop_commit-merged into it). Used
+ * by the SSTORE gas/refund schedule; no per-tx snapshot copy is needed. */
 function k_orig(a : address, s : word) -> word = map_base_load(MAP_STORAGE, a, s)
 
-/* unrecorded storage read (drivers/examples; same layered view as SLOAD) */
+/* un-journaled storage read (drivers/examples; same layered view as SLOAD) */
 function k_storage_get(a : address, s : word) -> word = map_load(MAP_STORAGE, a, s)
+
+/* EIP-1153 transient storage (TLOAD/TSTORE): per-tx scratch, discarded at tx end,
+ * not part of the state trie. TSTORE journals the prior value for frame revert. */
 function k_tload(a : address, s : word) -> word = {
     map_load(MAP_TRANSIENT, a, s)
 }
@@ -62,7 +77,7 @@ function k_tstore(a : address, s : word, v : word) -> unit = {
     map_store(MAP_TRANSIENT, a, s, v)
 }
 
-/* --- accounts --- */
+/* --- accounts (BALANCE / EXTCODEHASH / EXTCODESIZE / nonce, transfers) --- */
 function k_get_balance(a : address) -> word = {
     kget(a).acc_balance
 }
@@ -70,11 +85,11 @@ function k_get_nonce(a : address) -> int = {
     kget(a).acc_nonce
 }
 
-/* the raw code key for store lookups (KECCAK_EMPTY for codeless accounts) */
+/* the raw codeHash used to key the code store (KECCAK_EMPTY for codeless accounts) */
 function k_code_key(a : address) -> hash = kget(a).acc_codehash
 
-/* EXTCODEHASH: a field read -- the hash IS the account's code binding.
- * A truly empty (nonexistent) account reads as 0 (EIP-1052). */
+/* EXTCODEHASH (EIP-1052): the account's code binding. A truly empty
+ * (nonexistent per EIP-161) account reads as 0, not KECCAK_EMPTY. */
 function k_get_codehash(a : address) -> hash = {
     let acc = kget(a);
     if (acc.acc_codehash == KECCAK_EMPTY) & acc.acc_nonce == 0 & word_is_zero(acc.acc_balance) then {
@@ -97,16 +112,24 @@ function k_account_occupied(a : address) -> bool = {
     let has_code : bool = acc.acc_codehash != KECCAK_EMPTY;
     has_code | (acc.acc_nonce != 0) | map_has_addr(MAP_STORAGE, a)
 }
+
+/* Move `v` wei from src to dst (the value field of a CALL or a tx). Both
+ * balances are journaled; the EVM checks sufficiency before calling. */
 function k_transfer(src : address, dst : address, v : word) -> unit = {
     jpush(JAcct(src, kget(src)));
     jpush(JAcct(dst, kget(dst)));
     kset(src, { kget(src) with acc_balance = alu_sub(kget(src).acc_balance, v) });
     kset(dst, { kget(dst) with acc_balance = alu_add(kget(dst).acc_balance, v) })
 }
+
+/* Increment an account's nonce (sender per tx, creator at CREATE/CREATE2). */
 function k_bump_nonce(a : address) -> unit = {
     jpush(JAcct(a, kget(a)));
     kset(a, { kget(a) with acc_nonce = kget(a).acc_nonce + 1 })
 }
+
+/* Set an account's code: hash it, intern the bytes in the code store, and bind
+ * the account's codeHash. Used by CREATE/CREATE2 deploys and EIP-7702. */
 function k_set_code(a : address, c : list(byte)) -> unit = {
     jpush(JAcct(a, kget(a)));
     let h : hash = keccak256(c);
@@ -114,7 +137,8 @@ function k_set_code(a : address, c : list(byte)) -> unit = {
     kset(a, { kget(a) with acc_codehash = h })
 }
 
-/* ---- EIP-7702 delegation designation (0xef0100 || address) ---- */
+/* ---- EIP-7702 delegation designation: the 23-byte code 0xef0100 ++ address
+ * that an EOA's code is set to so its calls execute the designated contract ---- */
 function addr_bytes(a : address) -> list(byte) = {
     let w = address_to_word(a);
     var out : list(byte) = [||];
@@ -127,17 +151,18 @@ function delegation_code(a : address) -> list(byte) = 0xef :: 0x01 :: 0x00 :: ad
 
 val cs_deleg = impure { _: "cs_deleg" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(168)
 
-/* EIP-7702 delegation of addr's stored code, probed by codeHash in ONE host
- * call (runs on every CALL-family target): bit 160 = is a delegation
- * designation, low 160 bits = the designated target. */
+/* EIP-7702: resolve whether addr's stored code is a delegation designation,
+ * probed by codeHash in ONE host call (run on every CALL-family target). Returns
+ * (is_delegation, designated_target): bit 160 of the result is the flag, the low
+ * 160 bits the target the call should execute against. */
 function k_deleg_target(a : address) -> (bool, address) = {
     let h : hash = k_code_key(a);
     let r : bits(168) = cs_deleg(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]);
     (r[160] == bitone, r[159 .. 0])
 }
 
-/* EXTCODESIZE / EXTCODECOPY via the execution mirror (the semantic code db
- * defines the value; walking a code list is O(|code|) per opcode) */
+/* EXTCODESIZE / EXTCODECOPY: the length of, and a copy from, the code of the
+ * account at `a`, resolved by codeHash through the C code store. */
 function k_get_code_size(a : address) -> int = {
     let h : hash = k_code_key(a);
     unsigned(cs_len(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]))
@@ -145,7 +170,8 @@ function k_get_code_size(a : address) -> int = {
 function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
     let h : hash = k_code_key(a);
 
-    /* clamp a beyond-2^64 offset to a beyond-any-code sentinel (reads zeros) */
+    /* clamp a beyond-2^64 source offset to a beyond-any-code sentinel: a past-end
+     * read zero-fills the destination (EELS buffer_read semantics) */
     let o = if off > 16777216 then { 16777216 } else { off };
     cs_to_mem(
         h[255 .. 192],
@@ -158,7 +184,9 @@ function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
     )
 }
 
-/* used only by the tx driver to seed pre-state (no trace entry) */
+/* --- pre-state seeding (driver / runner; not part of execution) --- */
+
+/* Seed an account from full code bytes (intern them in the code store). */
 function k_seed_account(a : address, nonce : int, bal : word, c : list(byte)) -> unit = {
     let h : hash = keccak256(c);
     cs_store_code(h, c);
@@ -172,8 +200,8 @@ function k_seed_account_hashed(a : address, nonce : int, bal : word, codehash : 
 function k_seed_storage(a : address, s : word, v : word) -> unit =
     map_store(MAP_STORAGE, a, s, v) /* seeds the base layer (only layer live here) */
 
-/* single-account balance deltas (gas fees / withdrawals); recorded as a
- * transfer to/from the zero-address fee sink so the flow is in the trace. */
+/* single-account balance credit/debit (gas fees, the coinbase priority-fee
+ * payment, withdrawals); both journal the prior account for frame revert. */
 function k_add_balance(a : address, v : word) -> unit = {
     jpush(JAcct(a, kget(a)));
     kset(a, { kget(a) with acc_balance = alu_add(kget(a).acc_balance, v) })
@@ -183,7 +211,8 @@ function k_sub_balance(a : address, v : word) -> unit = {
     kset(a, { kget(a) with acc_balance = alu_sub(kget(a).acc_balance, v) })
 }
 
-/* --- environment --- */
+/* --- block / tx environment reads (NUMBER, TIMESTAMP, COINBASE, BASEFEE,
+ * CHAINID, GASLIMIT, PREVRANDAO, BLOBBASEFEE, ORIGIN, GASPRICE) --- */
 function k_env(f : EnvField) -> word = {
     match f {
         F_Number => k_block.be_number,
@@ -199,15 +228,20 @@ function k_env(f : EnvField) -> word = {
     }
 }
 function k_coinbase() -> address = k_block.be_coinbase
+
+/* BLOCKHASH: hash of one of the 256 most recent ancestor blocks. Modeled as 0
+ * (the recent-block-hash history ring is not carried in this state). */
 function k_blockhash(n : word) -> hash = {
     let _ = n;
     word_of_int(0)
 }
+
+/* BLOBHASH (EIP-4844): the i-th versioned hash of the current tx, 0 past the end. */
 function k_blobhash(i : int) -> word = {
     list_nth(k_tx.txe_blob_hashes, i, word_of_int(0))
 }
 
-/* --- primitives --- */
+/* --- address derivation primitives (CREATE / CREATE2) --- */
 function k_create_addr(a : address, nonce : int) -> address = create_address(a, nonce)
 function k_create2_addr(a : address, salt : word, inithash : hash) -> address =
     create2_address(a, salt, inithash)
@@ -223,7 +257,7 @@ function k_precompile(num : int) -> bool =
         false
     }
 
-/* --- logs + refund --- */
+/* --- logs (LOG0..LOG4) + the gas-refund counter --- */
 function k_log(a : address, topics : list(word), data : list(byte)) -> unit = {
     jpush(JLog());
     k_logs = list_append(k_logs, [|struct { le_addr = a, le_topics = topics, le_data = data }|])
@@ -232,6 +266,10 @@ function k_refund_add(delta : int) -> unit = {
     jpush(JRefund(k_refund));
     k_refund = k_refund + delta
 }
+
+/* Record that `a` issued SELFDESTRUCT this tx (the balance transfer to the
+ * beneficiary is a separate k_transfer). The account is only actually deleted
+ * at tx end, and only under the EIP-6780 condition (k_finalize_selfdestructs). */
 function k_selfdestruct(a : address) -> unit = {
     jpush(JSelfD());
     k_selfdestr = list_append(k_selfdestr, [|a|])
@@ -296,7 +334,11 @@ function k_finalize_selfdestructs() -> unit = {
     }
 }
 
-/* --- world snapshots (atomic revert across a frame) --- */
+/* --- call-frame snapshot / commit / revert: the EVM brackets every CALL- and
+ * CREATE-family sub-call with a snapshot, then commits on success or reverts on
+ * REVERT / exceptional halt, giving each frame's effects all-or-nothing atomicity --- */
+
+/* Open a checkpoint: push a journal marker AND a fresh storage overlay layer. */
 function k_snapshot() -> unit = {
     jpush(JCheck());
     host_map_push(get_slice_int(64, MAP_STORAGE, 0)) /* open the frame's storage overlay */

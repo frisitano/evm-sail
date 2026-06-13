@@ -1,11 +1,19 @@
 /* ======================================================================== */
-/* EVM USER-SPACE instruction semantics: execute(op)                         */
-/*                                                                           */
-/* Pure compute is done here; every world effect is a kernel syscall (k_*).   */
-/* All gas/policy stays in the EVM: the EVM marks-and-prices access via the    */
-/* kernel's returned warm bit, decides whether an effect happens, and issues  */
-/* the syscall only for real effects (e.g. a no-op SSTORE charges gas but     */
-/* issues no host write). Sub-calls/creates delegate to run_call/run_create.  */
+/* OPCODE SEMANTICS: execute(op)                                            */
+/*                                                                          */
+/* The single-step transition function of the EVM (Yellow Paper section 9): */
+/* given the decoded opcode, charge its gas, consume its stack operands, and */
+/* produce its result or effect. One match arm per opcode, grouped by family */
+/* (arithmetic / bitwise / keccak / environment / block / stack-memory /     */
+/* storage / flow / push-dup-swap / log / system).                          */
+/*                                                                          */
+/* Pure compute is done here; every world effect is a kernel syscall (k_*).  */
+/* All gas/policy stays in the EVM: the EVM marks-and-prices access via the  */
+/* kernel's returned warm bit (EIP-2929), decides whether an effect happens, */
+/* and issues the syscall only for real effects (e.g. a no-op SSTORE charges */
+/* gas but issues no host write). Memory-touching opcodes pay the quadratic  */
+/* expansion cost via charge_expansion before acting. Sub-calls and creates  */
+/* delegate to run_call / run_create (interpreter.sail). */
 /* ======================================================================== */
 
 val run_call : int -> unit /* 0=CALL 1=CALLCODE 2=DELEGATECALL 3=STATICCALL */
@@ -13,8 +21,11 @@ val run_create : bool -> unit /* true = CREATE2 */
 
 /* ----------------------------- helpers ---------------------------------- */
 
+/* the storage owner / I_a: SLOAD, SSTORE, LOG, SELFDESTRUCT act on this account */
 function self_addr() -> address = message.msg_address
 
+/* EIP-214 write protection: any state-modifying opcode in a STATICCALL frame
+ * halts exceptionally. State-changing opcodes call this first; true => halted. */
 function guard_static() -> bool =
     if message.msg_is_static then {
         exc_halt(WriteProtection);
@@ -23,6 +34,9 @@ function guard_static() -> bool =
         false
     }
 
+/* JUMP/JUMPI target validity: dest must be in code range AND land on a JUMPDEST
+ * (the precomputed valid-destination set, YP 9.4.3); otherwise an invalid-jump
+ * exceptional halt. PUSH-data bytes that happen to equal 0x5b are not valid. */
 function do_jump(dest : int) -> unit =
     if dest >= 0 & dest < code_len & hj_valid(get_slice_int(64, dest, 0)) then {
         pc = dest
@@ -311,6 +325,9 @@ function execute(op : ast) -> unit = match op {
         let len = pop_int();
         charge(copy_gas(len));
         charge_expansion(dest, len);
+
+        /* EIP-211: a read past the end of the return-data buffer is an
+           exceptional halt (cannot read beyond the last sub-call's output). */
         if off + len > returndata_size() then {
             exc_halt(InvalidOpcode)
         } else {
@@ -410,18 +427,21 @@ function execute(op : ast) -> unit = match op {
     },
     /* ---- storage: gas/decision in EVM, effect in kernel ---- */
     SLOAD() => {
+        /* EIP-2929: cold (2100) vs warm (100) by the slot's accessed-set bit */
         let s = pop();
         let warm = k_access_slot(self_addr(), s);
         charge(sload_cost(warm));
         push(k_sload(self_addr(), s))
     },
     SSTORE() => {
+        /* EIP-2200 net-metered store + EIP-2929 cold surcharge + EIP-1706 stipend
+           guard; the effect is issued only when the value actually changes. */
         if guard_static() then {
             ()
         } else {
             if gas_remaining <= G_callstipend then {
                 exc_halt(OutOfGas)
-                /* EIP-1706 */
+                /* EIP-1706: forbid SSTORE with <= 2300 gas left */
             } else {
                 let s = pop();
                 let v = pop();

@@ -1,35 +1,41 @@
 /* ======================================================================== */
-/* Merkle-Patricia Trie: root builder + the Ethereum state trie              */
-/*                                                                           */
-/* Two layers, one trie. (1) A stack-based MPT root builder (the alloy-trie  */
-/* HashBuilder port): feed key-sorted (nibble-key, value) leaves and read the */
-/* root; nodes < 32 bytes embed, else they hash (child_ref); hex-prefix path  */
-/* encoding per YP Appendix C. (2) The Ethereum state trie over the kernel's  */
-/* accounts: key = keccak(address), value = rlp[nonce, balance, storageRoot,  */
-/* codeHash], with per-account storage roots over keccak(slot) -> rlp(value)  */
-/* and EIP-161-empty accounts excluded. compute_state_root_hb authenticates a */
-/* block's post-state. Self-contained -> compiles to the RISC-V target.       */
-/*                                                                           */
-/* (Stateless witness-backed READS of this trie live in lib/mpt_witness.sail, */
-/* which additionally depends on the zkVM-only SSZ input layer.)             */
+/* MERKLE-PATRICIA TRIE                                                     */
+/*                                                                          */
+/* The authenticated key/value structure underlying Ethereum world state    */
+/* (Yellow Paper Appendix D), with hex-prefix path encoding (Appendix C).   */
+/* This module specifies one trie in three layers.                          */
+/*                                                                          */
+/* (1) Root builder: the map TRIE(.) from a set of key/value pairs to a     */
+/* 32-byte root. Sorted (nibble-key, value) leaves fold bottom-up into leaf */
+/* / extension / branch nodes; a node is embedded in its parent when its    */
+/* RLP encoding is under 32 bytes, otherwise referenced by keccak-256.      */
+/*                                                                          */
+/* (2) World-state trie: the state root over accounts, keyed by             */
+/* keccak256(address) with value RLP([nonce, balance, storageRoot,          */
+/* codeHash]) over per-account storage tries. This is the commitment a      */
+/* block's stateRoot must equal.                                            */
+/*                                                                          */
+/* (3) Witness reads: stateless verification -- re-root a partial trie from */
+/* a node witness to authenticate it against a committed root, and resolve  */
+/* account/storage values by Merkle proof.                                  */
 /* ======================================================================== */
 
-/* ===================== (1) the stack root builder ====================== */
-
-/* Stack-based MPT root builder (alloy-trie HashBuilder port)                 */
-/*                                                                           */
-/* Mirrors alloy-trie 0.9.5 `HashBuilder`: builds a trie root bottom-up from  */
-/* sorted (key-nibbles, value) leaves using an explicit stack of child-refs   */
-/* plus per-depth state masks. `update` collapses the stack when the next key */
-/* diverges, emitting leaf / extension / branch RLP nodes (hashed via         */
-/* child_ref == alloy `from_rlp`: inline if <32 bytes, else 0xa0++keccak).     */
-/* Blinded frontier subtrees enter via hb_add_branch (push 0xa0++hash without  */
-/* descending) -- this is what lets a *partial* witness trie be re-rooted and  */
-/* checked against a committed state root in one pass (stateless validation).  */
-/*                                                                           */
-/* Reuses mpt.sail: hp_compact, child_ref, rlp_bytes/rlp_list, keccak256.      */
-/* Self-contained (local byte/empty-root helpers) so it sits in the core model and */
-/* can be differentially tested against the recursive `trie_root` oracle.      */
+/* ======================================================================== */
+/* (1) trie root builder                                                    */
+/*                                                                          */
+/* Computes the trie root of a set of key/value pairs (Yellow Paper         */
+/* Appendix D, the structural composition c). Leaves are supplied in        */
+/* ascending nibble-key order and folded bottom-up through an explicit node */
+/* stack with per-depth branch masks: a diverging key collapses the stack,  */
+/* emitting the leaf, extension, and branch nodes along the closed path.    */
+/* Each node is RLP-encoded (with hex-prefix paths, Appendix C) and         */
+/* referenced by its parent inline when under 32 bytes, else by 0xa0 ++     */
+/* keccak256(node).                                                         */
+/*                                                                          */
+/* A node known only by hash -- a blinded subtree on a witness frontier --  */
+/* is admitted directly (hb_add_branch), so a PARTIAL trie can be re-rooted */
+/* and checked against a committed root in one pass. This is the basis of   */
+/* the stateless pre-state verification in layer (3).                       */
 /* ======================================================================== */
 
 /* ---- small generic list helpers (take/drop n from the front) ----------- */
@@ -92,8 +98,8 @@ function hp_compact(nibs : list(int), is_leaf : bool) -> list(byte) = {
     list_reverse(out)
 }
 
-/* reference to a child node: inline if its RLP < 32 bytes, else its keccak
- * (alloy `from_rlp`; YP: nodes < 32 bytes are embedded, otherwise hashed). */
+/* reference to a child node (Yellow Paper Appendix D, the node cap function n):
+ * the node's RLP inline when under 32 bytes, otherwise 0xa0 ++ keccak256(node). */
 function child_ref(enc : list(byte)) -> list(byte) =
     if list_len(enc) < 32 then {
         enc
@@ -381,15 +387,20 @@ function hb_root_of(pairs : list(TriePair)) -> bits(256) = {
     hb_root()
 }
 
-/* ================== (2) the Ethereum state trie ======================= */
-
-/* Ethereum state root (post-state authentication) in Sail                   */
-/*                                                                           */
-/* Builds the secure state trie over the kernel's accounts and computes its   */
-/* root: key = keccak(address), value = rlp([nonce, balance, storageRoot,     */
-/* codeHash]). Per-account storage root = secure trie over keccak(slot) ->    */
-/* rlp(value) (zero slots omitted). EIP-161 empty accounts are excluded.      */
-/* compute_state_root() == a block's post-state root authenticates execution. */
+/* ======================================================================== */
+/* (2) Ethereum world-state trie                                            */
+/*                                                                          */
+/* The state root (Yellow Paper section 4.1): the secure-trie root over all */
+/* accounts. The trie is 'secure' -- keys are hashed: key =                 */
+/* keccak256(address), value = RLP([nonce, balance, storageRoot,            */
+/* codeHash]). storageRoot is the root of the account's storage trie, the   */
+/* secure trie over keccak256(slot) -> RLP(value) with zero-valued slots    */
+/* absent. Accounts that are empty per EIP-161 (zero nonce, zero balance,   */
+/* no code) are excluded.                                                   */
+/*                                                                          */
+/* compute_state_root_hb over the post-execution world equals the block's   */
+/* stateRoot exactly when execution is correct -- it authenticates the      */
+/* result.                                                                  */
 /* ======================================================================== */
 
 /* Reused account-RLP payload accumulator. account_rlp is invoked once per account
@@ -507,7 +518,7 @@ function state_pairs(entries : list(AccountEntry)) -> list(TriePair) =
         },
     }
 
-/* Post-state root via the alloy-trie stack builder: feed the post-execution
+/* Post-state root via the layer-(1) stack builder: feed the post-execution
  * account leaves (key = keccak(addr), value = rlp(post-account); created accounts
  * included, EIP-161-empty dropped) in sorted key order. The untouched frontier --
  * blinded sibling subtrees for accounts the block never touches -- folds in via
@@ -515,18 +526,24 @@ function state_pairs(entries : list(AccountEntry)) -> list(TriePair) =
  * state is materialised. Same stack machinery as the pre-state validation. */
 function compute_state_root_hb() -> bits(256) = hb_root_of(sort_pairs(state_pairs(k_accounts)))
 
-/* ============ (3) stateless witness-backed reads of the trie =========== */
-/* feed witness nodes, re-root (via the builder above) to authenticate the   */
-/* pre-state, and resolve account/storage values by walking the witness.     */
-
-/* Witness-backed secure-trie reads (mirrors execution-specs forks/amsterdam    */
-/* witness_state.py): a node db keyed by keccak(node), a secure-trie walk by    */
-/* keccak(key) nibbles over branch/extension/leaf nodes, and account-leaf RLP   */
-/* decode. Storage reads reuse the same walk against an account's storage root. */
-/*                                                                           */
-/* Depends on rlp_decode.sail (RlpField/rlp_node_items) + keccak (evm.sail) + */
-/* the SSZ witness-list readers (io.sail). Pure given the node db; the db is   */
-/* built once from witness.state.                                              */
+/* ======================================================================== */
+/* (3) stateless witness-backed reads                                       */
+/*                                                                          */
+/* Stateless verification of the world-state trie from a Merkle witness     */
+/* (the node set covering the proof paths), mirroring execution-specs       */
+/* witness_state.py. A node database keyed by keccak256(node) (C-backed,    */
+/* ffi/host_nodedb.c) backs two operations.                                 */
+/*                                                                          */
+/* Re-rooting feeds the witness through the layer-(1) builder and checks    */
+/* the result against the committed pre-state root, authenticating every    */
+/* supplied node at once. Point reads walk the secure trie by               */
+/* keccak256(key) nibbles (branch / extension / leaf, hex-prefix paths) to  */
+/* the account leaf and decode RLP([nonce, balance, storageRoot,            */
+/* codeHash]); storage reads walk the account's storage root the same way.  */
+/*                                                                          */
+/* A node absent from the witness on a walked path is a missing proof and   */
+/* fails closed. Depends on the RLP decoder (rlp_decode.sail) and the SSZ   */
+/* witness-list readers (host/io.sail).                                     */
 /* ======================================================================== */
 
 let EMPTY_TRIE_ROOT : bits(256) = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421

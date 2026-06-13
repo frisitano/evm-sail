@@ -54,7 +54,7 @@ successful_validation=0          # a failed validation is a NORMAL result
 --- spike exit code: 0 ---
 ```
 
-The full design + stage-by-stage validation is in `STATELESS.md`. Vectors are produced
+Vectors are produced
 host-side by `gen_vector.py` (`--bad` for the fail path); the SSZ codec, RLP decode,
 witness-MPT walk, and SSZ `hash_tree_root` live in `../evm/{ssz,rlp_decode,mpt_witness,
 sha256,ssz_htr}.sail` (model-level, not pulled into `evm.sail`).
@@ -197,9 +197,9 @@ Requires `sail` (opam), `riscv64-unknown-elf-gcc`, and `spike` on `PATH`
 
 * **Block-from-input**: DONE — the block + execution witness are deserialized from the
   canonical schema-prefixed SSZ `SszStatelessInput` in the private input, and the guest
-  validates an arbitrary input block statelessly. See `STATELESS.md` for the design and
-  the remaining refinements (block_hash recompute, sender-from-`public_keys`, non-empty
-  execution requests, lazy arbitrary-access witness reads).
+  validates an arbitrary input block statelessly. Remaining refinements: block_hash
+  recompute, sender-from-`public_keys`, non-empty execution requests, lazy
+  arbitrary-access witness reads.
 * **All crypto goes through the `c-interface-accelerators` standard.** keccak256, sha256,
   ripemd160, and the EVM precompiles share one boundary: the vendored standard header
   `../ffi/zkvm_accelerators.h` (verbatim from eth-act/zkvm-standards), implemented by the

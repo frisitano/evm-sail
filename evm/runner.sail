@@ -1,30 +1,44 @@
 /* ======================================================================== */
-/* evm-sail EEST runner: compile ONCE, feed fixtures at runtime via stdin.       */
-/*                                                                           */
-/* Reads a stream of values from the private input (ssz_src, the same byte     */
-/* source the zkVM guest uses) describing a sequence of test cases, runs each   */
-/* through process_block, and dumps the resulting accounts + storage. The       */
-/* Python driver (revm-eest/run_eest.py) encodes EEST fixtures into this        */
-/* stream and compares the dump against the fixture's expected post-state. No   */
-/* recompilation per test -- the data is INPUT, not generated code.            */
-/*                                                                           */
-/* Wire format: each value is a varint [len : 1 byte][big-endian magnitude];    */
-/* ni() reads one. Stream schema (sequence of values):                          */
-/*   repeat: 1  <case>            ... then 0 to stop                          */
-/*   <case> = nAcc                                                            */
-/*             { addr nonce balance codeLen <codeBytes> nSto {slot val}* }*   */
-/*           number timestamp gasLimit coinbase baseFee prevRandao chainId    */
-/*             blobBaseFee                                                    */
-/*           sender txNonce gasPrice prioFee gasLimit isCreate to value       */
-/*             dataLen <dataBytes>                                            */
+/* SINGLE-BLOCK / EEST RUNNER                                               */
+/*                                                                          */
+/* The native entry point that runs an Ethereum block end to end. A test    */
+/* harness compiles this model ONCE, then feeds it a stream of fixtures at  */
+/* runtime: each case seeds a pre-state, sets the block environment, builds */
+/* one transaction, runs it through process_block (block.sail), and dumps   */
+/* the resulting accounts + storage for an external comparator. The data is */
+/* INPUT, not generated code -- there is no per-fixture recompilation.      */
+/*                                                                          */
+/* The Ethereum Execution Spec Tests (EEST) driver revm-eest/run_eest.py    */
+/* encodes each fixture into the wire stream, then diffs the ACC/STO/GAS/   */
+/* ROOT lines below against the fixture's expected post-state.              */
+/*                                                                          */
+/* Input contract: the stream is read through ssz_src (host/io.sail), the   */
+/* same input byte source the zkVM guest uses; revm-eest/runner_ffi.c       */
+/* buffers stdin once and serves it by index. Each value is a varint        */
+/* [len : 1 byte][big-endian magnitude : len bytes]; ni() reads one. Stream */
+/* schema (a flat sequence of varints):                                     */
+/*   fork  wantRoot                                                         */
+/*   repeat: 1  <case>            ... then 0 to stop                        */
+/*   <case> = nAcc                                                          */
+/*             { addr nonce balance codeLen <codeBytes> nSto {slot val}* }* */
+/*           number timestamp gasLimit coinbase baseFee prevRandao chainId  */
+/*             blobBaseFee                                                  */
+/*           sender txNonce gasPrice prioFee gasLimit isCreate to value     */
+/*             dataLen <dataBytes>                                          */
+/*           <EIP-2930 access list> <EIP-7702 auth list> <EIP-4844 blobs>   */
+/*                                                                          */
+/* Output contract (one line per record, decimal unless noted): "CASE" per  */
+/* case; "ACC addr nonce balance" per account; "STO addr slot value" per    */
+/* live storage slot; "GAS gasUsed" for the tx; and, when wantRoot is set,  */
+/* "ROOT <hex>" carrying the recomputed post-state root.                    */
 /* ======================================================================== */
 
 $include "evm.sail"
 $include <string.sail>
 
-/* The test input is a byte stream read via ssz_src (io.sail) -- the same
- * byte source the model uses everywhere -- served from stdin by runner_ffi.c.
- * A scalar is a varint: [len : 1 byte][big-endian magnitude : len bytes]. */
+/* Cursor over the private-input byte stream (ssz_src, host/io.sail), the byte
+ * source the model reads everywhere; revm-eest/runner_ffi.c serves it from
+ * stdin. ni() reads one varint scalar: [len : 1 byte][big-endian magnitude]. */
 register in_pos : int = 0
 function ni() -> int = {
     let l = unsigned(ssz_src_byte(in_pos));
@@ -35,8 +49,14 @@ function ni() -> int = {
     in_pos = in_pos + 1 + l;
     v
 }
+
+/* one scalar as a 256-bit word */
 function nw() -> word = word_of_int(ni())
+
+/* one scalar as the low-20-byte address */
 function na() -> address = word_to_address(word_of_int(ni()))
+
+/* the next n scalars as raw bytes (code / calldata) */
 function nbytes(n : int) -> list(byte) = {
     /* prepend then reverse (O(n)); list_append-per-byte was O(n^2) on large code/data */
     var out : list(byte) = [||];
@@ -47,7 +67,8 @@ function nbytes(n : int) -> list(byte) = {
     list_reverse(out)
 }
 
-/* dump final state for the Python comparator (storage = flattened C overlay) */
+/* emit the post-state for the external comparator: one "STO addr slot value"
+ * line per live storage slot (the kernel's flat C overlay), all decimal. */
 function dump_storage() -> unit = {
     let n = storage_count();
     foreach (j from 0 to (n - 1)) {
@@ -63,6 +84,8 @@ function dump_storage() -> unit = {
         )
     }
 }
+
+/* one "ACC addr nonce balance" line per account in the working set */
 function dump_accounts(es : list(AccountEntry)) -> unit = match es {
     [||]   => (),
     e :: r => {
@@ -89,6 +112,8 @@ function dump_state() -> unit = {
     dump_storage()
 }
 
+/* decode and run one fixture: seed pre-state, set the block env, build the
+ * single transaction, run process_block, and dump the post-state. */
 function run_one() -> unit = {
     k_world_reset();
     let nacc = ni();
@@ -139,7 +164,7 @@ function run_one() -> unit = {
     let tval = nw();
     let dlen = ni();
 
-    /* stream the tx input straight into its memory slot (no Sail list) */
+    /* stream calldata straight into the tx-input memory slot (no Sail list) */
     txin_begin(get_slice_int(64, 0, 0));
     foreach (i from 0 to (dlen - 1)) {
         let _ = i;
@@ -230,14 +255,16 @@ function run_one() -> unit = {
     print_endline(concat_str("GAS ", dec_str(gu)))
 }
 
+/* read the stream header (fork, wantRoot), then run cases until the 0 sentinel */
 function main() -> unit = {
-    k_fork = ni(); /* active fork level (fork-gated gas rules) */
-    let want_root : int = ni(); /* 0 = skip state root (fast), 1 = compute */
+    k_fork = ni(); /* active fork level: selects the fork-gated gas/opcode rules */
+    let want_root : int = ni(); /* 0 = skip state root (fast), 1 = compute it */
     var more : int = ni();
     while more != 0 do {
         print_endline("CASE");
         run_one();
         if want_root != 0 then {
+            /* recomputed world-state root (YP stateRoot), via the hash builder */
             print_endline(concat_str("ROOT ", hex_str(unsigned(compute_state_root_hb()))))
         };
         more = ni()

@@ -1,14 +1,18 @@
 /* ======================================================================== */
-/* Per-frame EVM memory: byte-addressed, zero-initialized, lazily expanding          */
-/*                                                                           */
-/* Real EVM memory semantics: a flat byte array addressed from 0, growing in */
-/* 32-byte words. Sail forbids recursive types (no in-model balanced tree)    */
-/* and a list-backed memory is O(n) per access -- O(n^2) over a fill/copy     */
-/* loop. So, like sail-riscv, memory lives in C (ffi/host_mem.c): a flat buffer  */
-/* per call frame with O(1) read/write. Frames form a stack -- a sub-call gets */
-/* fresh memory (mem_frame_enter) and the parent's is restored on return      */
-/* (mem_frame_leave); mem_clear resets to a single empty frame per tx. The     */
-/* Sail side keeps only the high-water mark (memory_size) for expansion gas.  */
+/* PER-FRAME EVM MEMORY                                                     */
+/*                                                                          */
+/* The volatile byte array each call frame addresses from zero (Yellow      */
+/* Paper section 9.4.1): flat, byte-addressed, zero-initialized, and lazily */
+/* expanding in 32-byte words. MLOAD/MSTORE/MSTORE8/MSIZE and the *COPY     */
+/* opcodes read and write it; expansion past the high-water mark is charged */
+/* as memory-expansion gas.                                                 */
+/*                                                                          */
+/* Frames form a stack: a sub-call (CALL/CREATE) receives fresh memory      */
+/* (mem_frame_enter) and the caller's is restored on return                 */
+/* (mem_frame_leave); mem_clear resets to a single empty frame per          */
+/* transaction. The Sail side tracks only the high-water mark (memory_size) */
+/* for expansion gas; the bytes themselves live in C (ffi/host_mem.c) for   */
+/* O(1) access, since Sail has no in-model mutable byte array.              */
 /* ======================================================================== */
 
 val host_mem_read = impure { _: "host_mem_read" } : bits(64) -> bits(8)
@@ -20,7 +24,10 @@ val host_mem_pop = impure { _: "host_mem_pop" } : unit -> unit
 /* kept only as the type of the (now unused) StackFrame snapshot field */
 struct MemByte = { mb_off : int, mb_val : byte }
 
-register memory_size : int = 0 /* high-water mark, in bytes */
+/* The high-water mark, in bytes: the largest offset ever touched in this
+ * frame. MSIZE rounds it up to a word; memory-expansion gas is charged on
+ * each growth of mem_size_words (Yellow Paper section 9.4.1, the C_mem term). */
+register memory_size : int = 0
 
 /* call-frame memory lifecycle (the C side owns the bytes) */
 function mem_clear() -> unit = host_mem_reset()
@@ -38,7 +45,7 @@ function mem_set_byte(off : int, v : byte) -> unit = {
     }
 }
 
-/* --- word access (big-endian, 32 bytes) --- */
+/* --- word access (big-endian, 32 bytes): MLOAD / MSTORE / MSTORE8 --- */
 
 function mem_load(off : int) -> word = {
     var acc : word = word_of_int(0);
@@ -61,30 +68,31 @@ function mem_store_byte(off : int, w : word) -> unit =
 
 /* --- byte-range read (for KECCAK / RETURN / LOG / CALL args), as a list --- */
 
+/* Read mem[off .. off+len) into a list, in address order. */
 function mem_read_range(off : int, len : int) -> list(byte) = {
-    var out : list(byte) = [||]; /* O(n): prepend then reverse */
+    var out : list(byte) = [||]; /* prepend from the high end so the list ends in address order */
     foreach (k from 0 to (len - 1)) {
         out = mem_get_byte(off + (len - 1 - k)) :: out
     };
     out
 }
 
-/* --- byte-range write (for CALLDATACOPY / CODECOPY / RETURNDATACOPY) --- */
-
-/* Current memory size in 32-byte words (rounded up). */
+/* Current memory size in 32-byte words, rounded up (the MSIZE value, and the
+ * unit of memory-expansion gas). */
 function mem_size_words() -> int = ediv_int(memory_size + 31, 32)
 
-/* ---- range-based operations (zero/one-copy: both sides live in C) ---- */
+/* ---- range copies (CALLDATACOPY / CODECOPY / RETURNDATACOPY / MCOPY):
+ * zero/one-copy, since both endpoints already live in the C buffers ---- */
 val hm_move = impure { _: "hm_move" } : (bits(64), bits(64), bits(64)) -> unit
 val hc_to_mem = impure { _: "hc_to_mem" } : (bits(64), bits(64), bits(64)) -> unit
 
-/* stage a precompile's input: ONE C-side snapshot of mem[off .. off+len) (the
- * child message's calldata). A snapshot, not an alias: the identity precompile's
- * output may be written back over a region overlapping its input. */
+/* Stage a precompile's input: ONE C-side snapshot of mem[off .. off+len) -- the
+ * child message's calldata. A snapshot, not an alias: precompile 0x04 (identity)
+ * may have its output written back over a region overlapping its input. */
 function stage_precompile_input(id : int, off : int, len : int) -> unit =
     acc_begin_mem(get_slice_int(64, id, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0))
 
-/* MCOPY: overlapping-safe memory-to-memory copy (one C memmove) */
+/* MCOPY (EIP-5656): overlapping-safe memory-to-memory copy (one C memmove). */
 function mem_mcopy(dst : int, src : int, len : int) -> unit =
     hm_move(get_slice_int(64, dst, 0), get_slice_int(64, src, 0), get_slice_int(64, len, 0))
 
@@ -96,8 +104,9 @@ function mem_codecopy(dst : int, off : int, len : int) -> unit = {
     hc_to_mem(get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
 }
 
-/* KECCAK-256 directly over the memory range [off, off+len): the bytes go from
- * the C memory frame into the C accelerator without an intermediate list */
+/* KECCAK256 directly over the memory range [off, off+len): the bytes go from
+ * the C memory frame into the C accelerator without an intermediate Sail list,
+ * folding the digest big-endian into a word. */
 function mem_keccak(off : int, len : int) -> word = {
     acc_begin_mem(get_slice_int(64, 0, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0));
     let _ = acc_exec();
@@ -108,7 +117,10 @@ function mem_keccak(off : int, len : int) -> word = {
     append(w0, append(w1, append(w2, w3)))
 }
 
-/* ---- C-backed RETURNDATA (per call frame; see ffi/acc_shim.c) ---- */
+/* ---- C-backed RETURNDATA buffer (per call frame; see ffi/acc_shim.c) ----
+ * The bytes a child frame returned (RETURN/REVERT) or a precompile produced,
+ * read by RETURNDATASIZE/RETURNDATACOPY (EIP-211). Cleared at the start of
+ * every sub-call and replaced by the child's output on return. ---- */
 val hr_reset = impure { _: "hr_reset" } : unit -> unit
 val hr_clear = impure { _: "hr_clear" } : unit -> unit
 val hr_discard = impure { _: "hr_discard" } : unit -> unit
@@ -129,7 +141,8 @@ function returndata_copy_to_mem(dst : int, off : int, len : int) -> unit =
 function returndata_out_region(dst : int, want : int) -> unit =
     hr_out_region(get_slice_int(64, dst, 0), get_slice_int(64, want, 0))
 
-/* materialize the pending child output (a CREATE's deployed code) as a list */
+/* Materialize the pending child output (the init-code return value a CREATE
+ * deploys as the new account's code) as a Sail list. */
 function pending_output_list() -> list(byte) = {
     let n = unsigned(hr_pending_len());
     var out : list(byte) = [||];
@@ -139,7 +152,10 @@ function pending_output_list() -> list(byte) = {
     out
 }
 
-/* ---- C-backed CALLDATA (per call frame; alias into the parent's memory) ---- */
+/* ---- C-backed CALLDATA (per call frame) ----
+ * The current frame's input data, read by CALLDATALOAD/CALLDATASIZE/CALLDATACOPY.
+ * For a CALL-family child it aliases the slice of the caller's memory passed as
+ * args; for the top-level frame it is the transaction input. ---- */
 val cd_set = impure { _: "cd_set" } : (bits(64), bits(64)) -> unit
 val cd_set_empty = impure { _: "cd_set_empty" } : unit -> unit
 val cd_set_tx = impure { _: "cd_set_tx" } : unit -> unit
@@ -152,9 +168,9 @@ val cd_to_mem = impure { _: "cd_to_mem" } : (bits(64), bits(64), bits(64)) -> un
 val txd_at = impure { _: "txd_at" } : bits(64) -> bits(8)
 val txd_length = impure { _: "txd_length" } : unit -> bits(64)
 
-/* The transaction input, after txdata_load streamed it into the C buffer ONCE.
- * Gas inspection (EIP-2028/7623 zero/nonzero counting) and length checks read
- * it here -- the EVM operates over memory, never re-walking the spec list. */
+/* The transaction input, streamed into the C buffer ONCE per tx. Intrinsic-gas
+ * inspection (EIP-2028 / EIP-7623 zero vs nonzero byte counting) and length
+ * checks read it here, byte-addressed, rather than re-walking a Sail list. */
 function txdata_byte(i : int) -> byte = txd_at(get_slice_int(64, i, 0))
 function txdata_size() -> int = unsigned(txd_length())
 
