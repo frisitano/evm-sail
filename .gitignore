@@ -27,3 +27,6 @@ zkvm/.vecgen/
 
 # Rust runner
 revm-eest/target/
+
+# generated spec HTML (regenerate with: make html)
+docs/evm-sail.html

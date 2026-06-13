@@ -25,7 +25,7 @@ SAIL_FILES := $(shell find . -name '*.sail' | sort)
 # since `sail --fmt` normalizes trailing whitespace, tabs, and final newlines).
 WARN_ROOTS := sail/evm.sail zkvm/zkvm_block.sail
 
-.PHONY: all check clean help lint fmt fmt-check
+.PHONY: all check clean help lint fmt fmt-check html
 
 help:
 	@echo "evm-sail targets:"
@@ -34,6 +34,7 @@ help:
 	@echo "  make fmt            - format every *.sail with sail --fmt"
 	@echo "  make fmt-check      - verify *.sail match sail --fmt"
 	@echo "  make all            - check + lint + fmt-check"
+	@echo "  make html           - render the spec to docs/evm-sail.html"
 
 check:
 	$(SAIL) $(MODEL)
@@ -53,6 +54,17 @@ fmt-check:
 	@rc=0; for f in $(SAIL_FILES); do $(SAIL) --fmt --fmt-emit stdout "$$f" 2>/dev/null | diff -q "$$f" - >/dev/null 2>&1 || { echo "  needs formatting: $$f"; rc=1; }; done; [ "$$rc" -eq 0 ] && echo "fmt-check: clean" || exit 1
 
 all: check lint fmt-check
+
+# Render the whole spec to a single syntax-highlighted HTML page (sail --html).
+# sail --html can't take the cross-including fileset at once, so concatenate the
+# modules in evm.sail's $include order into one source and render that.
+html:
+	@order=$$(grep -E '^\$$include "' $(MODEL) | sed -E 's/.*"([^"]+)".*/\1/'); \
+	tmp=$$(mktemp -d); : > $$tmp/evm-sail.sail; \
+	for p in $$order; do printf '\n/* === sail/%s === */\n\n' "$$p" >> $$tmp/evm-sail.sail; cat "sail/$$p" >> $$tmp/evm-sail.sail; done; \
+	( cd $$tmp && $(SAIL) evm-sail.sail --html -o html ); \
+	mkdir -p docs && cp $$tmp/html/evm-sail.html docs/evm-sail.html && rm -rf $$tmp; \
+	echo "wrote docs/evm-sail.html ($$(wc -c < docs/evm-sail.html | tr -d ' ') bytes)"
 
 clean:
 	rm -rf sail_smt_cache sail/sail_smt_cache
