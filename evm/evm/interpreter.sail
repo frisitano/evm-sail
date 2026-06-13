@@ -74,6 +74,14 @@ function frame_succeeded() -> bool =
     Halted(HaltRevert) => false, Halted(_) => true, Running() => true, Exceptional(_) => false
   }
 
+/* the code an account EXECUTES: one delegation hop; a delegation to a
+ * precompile (or to nothing) executes as empty code (EIP-7702) */
+function frame_code_exec(target : address, dele : bool, dtgt : address) -> unit =
+  if dele then {
+    let n = unsigned(address_to_word(dtgt));
+    if (n >= 1 & n <= 17) | (n == 256) then frame_code_empty() else frame_code_addr(dtgt)
+  } else frame_code_addr(target)
+
 /* ------------------------------ run_call -------------------------------- */
 
 function run_call(mode : int) -> unit = {
@@ -142,7 +150,7 @@ function run_call(mode : int) -> unit = {
     k_snapshot();
     if (mode == 0) & word_nonzero(value) then k_transfer(caller, target, value) else ();
 
-    let s_pc = pc; let s_gas = gas_remaining; let s_code = code;
+    let s_pc = pc; let s_gas = gas_remaining;
     let s_msg = message; let s_status = frame_status;
     let s_msize = memory_size; let s_depth = call_depth;
 
@@ -157,8 +165,9 @@ function run_call(mode : int) -> unit = {
       msg_value = child_value, msg_is_static = child_static, msg_depth = s_depth + 1
     };
     if is_running() then calldata_set_next(args_off, args_len) else cd_set_empty();
-    pc = 0; gas_remaining = to_gas(child_gas); stack_frame_enter(); set_code(k_get_exec_code(target));  /* EIP-7702 delegation */
+    pc = 0; gas_remaining = to_gas(child_gas); stack_frame_enter();
     frame_status = Running(); mem_frame_enter(); hr_clear(); memory_size = 0;
+    frame_code_exec(target, tg_deleg, tg_target);   /* EIP-7702 delegation */
     call_depth = s_depth + 1;
 
     interpret();
@@ -166,8 +175,9 @@ function run_call(mode : int) -> unit = {
     let succeeded = frame_succeeded();
     let child_left = gas_remaining;
 
-    pc = s_pc; stack_frame_leave(); set_code(s_code); message = s_msg;
-    frame_status = s_status; mem_frame_leave(); memory_size = s_msize; call_depth = s_depth;
+    pc = s_pc; stack_frame_leave(); message = s_msg;
+    frame_status = s_status; mem_frame_leave(); frame_code_resync();
+    memory_size = s_msize; call_depth = s_depth;
     hr_adopt(); gas_remaining = to_gas(s_gas + child_left);
 
     /* the output region is written on success AND revert (EELS generic_call) --
@@ -189,7 +199,6 @@ function run_create(is2 : bool) -> unit = {
   charge_expansion(off, len);
   charge(G_create); charge(initcode_gas(len));
   if is2 then charge(to_gas(G_keccak_word * ediv_int(len + 31, 32))) else ();
-  let initcode = if is_running() then mem_read_range(off, len) else [||];
 
   if len > MAX_INITCODE_SIZE then exc_halt(InitCodeTooLarge)
   else {
@@ -224,7 +233,7 @@ function run_create(is2 : bool) -> unit = {
       k_bump_nonce(new_addr);          /* EIP-161: a created contract starts at nonce 1 */
       k_transfer(creator, new_addr, value);
 
-      let s_pc = pc; let s_gas = gas_remaining; let s_code = code;
+      let s_pc = pc; let s_gas = gas_remaining;
       let s_msg = message; let s_status = frame_status;
       let s_msize = memory_size; let s_depth = call_depth;
 
@@ -233,8 +242,10 @@ function run_create(is2 : bool) -> unit = {
         msg_value = value, msg_data_len = 0, msg_is_static = s_msg.msg_is_static, msg_depth = s_depth + 1
       };
       cd_set_empty();
-      pc = 0; gas_remaining = to_gas(child_gas); stack_frame_enter(); set_code(initcode);
+      let ic_len = if is_running() then frame_code_pend_mem(off, len) else 0;
+      pc = 0; gas_remaining = to_gas(child_gas); stack_frame_enter();
       frame_status = Running(); mem_frame_enter(); hr_clear(); memory_size = 0;
+      code_len = ic_len; if is_running() & (len == 0) then frame_code_empty() else ();
       call_depth = s_depth + 1;
 
       interpret();
@@ -247,8 +258,9 @@ function run_create(is2 : bool) -> unit = {
       let code_ok = (dep_len <= MAX_CODE_SIZE)
                   & ((dep_len == 0) | (hr_pending_byte(get_slice_int(64, 0, 0)) != 0xef));
 
-      pc = s_pc; stack_frame_leave(); set_code(s_code); message = s_msg;
-      frame_status = s_status; mem_frame_leave(); memory_size = s_msize; call_depth = s_depth;
+      pc = s_pc; stack_frame_leave(); message = s_msg;
+      frame_status = s_status; mem_frame_leave(); frame_code_resync();
+      memory_size = s_msize; call_depth = s_depth;
       /* a successful create yields EMPTY returndata; a revert exposes its data */
       if succeeded then hr_clear() else hr_adopt();
       gas_remaining = to_gas(s_gas + child_left);

@@ -198,7 +198,8 @@ function process_transaction(tx : Transaction) -> Receipt = {
       msg_caller = sender, msg_address = new_addr, msg_code_address = new_addr,
       msg_value = tx.t_value, msg_data_len = 0, msg_is_static = false, msg_depth = 0
     };
-    set_code(tx.t_data);
+    let _ = txdata_load(tx.t_data);
+    frame_code_txd();
     interpret();
     if frame_succeeded() then {
       let dep_len = unsigned(hr_pending_len());
@@ -235,7 +236,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
       /* EIP-7702: at the tx level the delegate is warmed but not separately charged */
       let (tx_deleg, tx_dtgt) = deleg_target(k_get_code(tx.t_to));
       if tx_deleg then { let _ = k_access_account(tx_dtgt); () } else ();
-      set_code(k_get_exec_code(tx.t_to));   /* follow a delegation designation */
+      frame_code_exec(tx.t_to, tx_deleg, tx_dtgt);   /* follow a delegation designation */
       interpret()
     }
   };

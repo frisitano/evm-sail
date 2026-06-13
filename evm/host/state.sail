@@ -76,6 +76,29 @@ val host_map_sel    = impure "host_map_sel"    : bits(64) -> unit
 val host_map_it_key = impure "host_map_it_key" : bits(64) -> bits(64)
 val host_map_it_val = impure "host_map_it_val" : bits(64) -> bits(64)
 
+/* ---- C code store (ffi/host_code.c): the execution mirror of acc_code ----
+ * Keyed by address; each entry holds the bytes AND the JUMPDEST bitmap, built
+ * once per code WRITE (seeding, CREATE deploys, EIP-7702 delegations). The
+ * Sail account store remains the authoritative spec value. */
+val cs_reset = impure "cs_reset" : unit -> unit
+val cs_begin = impure "cs_begin" : (bits(64), bits(64), bits(64)) -> unit
+val cs_byte  = impure "cs_byte"  : bits(8) -> unit
+val cs_del   = impure "cs_del"   : (bits(64), bits(64), bits(64)) -> unit
+
+function cs_store_code(a : address, c : list(byte)) -> unit = {
+  let aw : word = sail_zero_extend(a, 256);
+  cs_begin(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0]);
+  var rest : list(byte) = c;
+  var more : bool = true;
+  while more do {
+    match rest { b :: t => { cs_byte(b); rest = t }, [||] => more = false }
+  }
+}
+function cs_del_addr(a : address) -> unit = {
+  let aw : word = sail_zero_extend(a, 256);
+  cs_del(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0])
+}
+
 let MAP_TRANSIENT : int = 0
 let MAP_WARM_SLOT : int = 1
 let MAP_STORAGE   : int = 2   /* persistent storage: OVERLAY layers (push at snapshot,
@@ -187,7 +210,7 @@ function jdrop_last_addr(xs : list(address)) -> list(address) =
   match xs { [||] => [||], _ :: [||] => [||], x :: r => x :: jdrop_last_addr(r) }
 function apply_undo(e : JEntry) -> unit = match e {
   JCheck()       => (),
-  JAcct(a, old)  => kset(a, old),
+  JAcct(a, old)  => { kset(a, old); cs_store_code(a, old.acc_code) },
   JStor(_, _, _) => (),   /* storage undo is the overlay's pop_discard now */
   JTran(a, s, v) => map_store(MAP_TRANSIENT, a, s, v),
   JWarmA(a)      => k_warm_addr = jremove_addr(k_warm_addr, a),

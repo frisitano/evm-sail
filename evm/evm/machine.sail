@@ -29,7 +29,6 @@ let DEFAULT_MESSAGE : Message = struct {
 register pc            : int        = 0
 register gas_remaining : gas        = 0      /* THE gas counter (user-space) */
 register frame_status  : FrameStatus = Running()
-register code          : list(byte) = [||]
 register message       : Message    = DEFAULT_MESSAGE
 register call_depth    : int        = 0
 
@@ -39,26 +38,33 @@ register call_depth    : int        = 0
  * one hc_word call. Only the length is kept on the Sail side. */
 register code_len      : int        = 0
 
-val hj_begin = impure "hj_begin" : unit -> unit
-val hj_byte  = impure "hj_byte"  : bits(8) -> unit
-val hj_valid = impure "hj_valid" : bits(64) -> bool
-val hc_byte  = impure "hc_byte"  : bits(64) -> bits(8)
-val hc_word  = impure "hc_word"  : (bits(64), bits(64)) -> word
+val hj_valid    = impure "hj_valid"    : bits(64) -> bool
+val hc_byte     = impure "hc_byte"     : bits(64) -> bits(8)
+val hc_word     = impure "hc_word"     : (bits(64), bits(64)) -> word
+val fc_set_addr = impure "fc_set_addr" : (bits(64), bits(64), bits(64)) -> bits(64)
+val fc_pend_mem = impure "fc_pend_mem" : (bits(64), bits(64)) -> bits(64)
+val fc_set_txd  = impure "fc_set_txd"  : unit -> bits(64)
+val fc_set_empty = impure "fc_set_empty" : unit -> unit
+val hc_len      = impure "hc_len"      : unit -> bits(64)
 
-/* The single setter for the `code` register: one walk measures the length AND
- * streams the bytes into the C JUMPDEST bitmap (PUSH immediates skipped), so
- * jump validity is an O(1) bit test instead of a per-jump O(n^2) code scan. */
-function set_code(c : list(byte)) -> unit = {
-  code = c;
-  hj_begin();
-  var n : int = 0;
-  var rest : list(byte) = c;
-  var more : bool = true;
-  while more do {
-    match rest { b :: t => { hj_byte(b); n = n + 1; rest = t }, [||] => more = false }
-  };
-  code_len = n
+/* Bind the current frame's code to an account's store entry (O(1): the bytes
+ * and JUMPDEST bitmap were prepared when the code was written), to the
+ * streamed tx input, or to nothing. CREATE initcode uses frame_code_pend_mem
+ * BEFORE the frame switch: the child's code is an alias of this frame's
+ * memory range (the parent is frozen while the child runs). */
+function frame_code_addr(a : address) -> unit = {
+  let aw : word = sail_zero_extend(a, 256);
+  code_len = unsigned(fc_set_addr(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0]))
 }
+/* re-read the (C-side) frame descriptor's length after a child frame pops.
+ * NOT a saved Sail local: sail -O's register-effect analysis is per-function
+ * body, so a `let saved = code_len ... code_len = saved` round-trip with no
+ * direct write in between gets eliminated as a self-assignment. */
+function frame_code_resync() -> unit = code_len = unsigned(hc_len())
+function frame_code_txd() -> unit = code_len = unsigned(fc_set_txd())
+function frame_code_empty() -> unit = { fc_set_empty(); code_len = 0 }
+function frame_code_pend_mem(off : int, len : int) -> int =
+  unsigned(fc_pend_mem(get_slice_int(64, off, 0), get_slice_int(64, len, 0)))
 
 /* code[i], zero past the end (the EVM's implicit STOP padding) */
 function code_byte(i : int) -> byte = hc_byte(get_slice_int(64, i, 0))

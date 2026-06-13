@@ -86,7 +86,8 @@ function k_bump_nonce(a : address) -> unit = {
 }
 function k_set_code(a : address, c : list(byte)) -> unit = {
   jpush(JAcct(a, kget(a)));
-  kset(a, { kget(a) with acc_code = c })
+  kset(a, { kget(a) with acc_code = c });
+  cs_store_code(a, c)
 }
 
 /* ---- EIP-7702 delegation designation (0xef0100 || address) ---- */
@@ -119,7 +120,7 @@ function k_get_exec_code(addr : address) -> list(byte) = {
   else { let n = unsigned(address_to_word(t)); if (n >= 1 & n <= 17) | (n == 256) then [||] else k_get_code(t) }
 }
 /* used only by the tx driver to seed pre-state (no trace entry) */
-function k_seed_account(a : address, acc : Account) -> unit = kset(a, acc)
+function k_seed_account(a : address, acc : Account) -> unit = { kset(a, acc); cs_store_code(a, acc.acc_code) }
 function k_seed_storage(a : address, s : word, v : word) -> unit =
   map_store(MAP_STORAGE, a, s, v)   /* seeds the base layer (only layer live here) */
 
@@ -194,6 +195,7 @@ function acc_remove(es : list(AccountEntry), a : address) -> list(AccountEntry) 
   match es { [||] => [||], e :: r => if e.ae_addr == a then acc_remove(r, a) else e :: acc_remove(r, a) }
 function k_account_delete(a : address) -> unit = {
   k_accounts = acc_remove(k_accounts, a);
+  cs_del_addr(a);
   map_wipe_addr(MAP_STORAGE, a)
 }
 

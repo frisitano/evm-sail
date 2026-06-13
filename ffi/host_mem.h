@@ -20,6 +20,7 @@ unit cd_set_tx(const unit u);
 unit txd_begin(const unit u);
 unit txd_byte(uint64_t b);
 uint64_t cd_len(const unit u);
+const uint8_t *txd_ptr(uint64_t *len);
 uint64_t cd_byte(uint64_t i);
 unit cd_to_mem(uint64_t dst, uint64_t off, uint64_t len);
 #endif
