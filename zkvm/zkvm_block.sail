@@ -121,7 +121,7 @@ function acct_storage_root(addr : address) -> bits(256) = {
  * missing node, so the seeded value is witness-proven (a proven 0 included).
  * After this, every EVM SLOAD/SSTORE outside the seeded set fails the presence
  * check -- the soundness bound, folded into the read (replaces the BAL guard). */
-function seed_storage_working_set(adb : list((bits(256), list(byte)))) -> unit = {
+function seed_storage_working_set() -> unit = {
     let bal = bal_load();
     let n = list_len(bal);
     foreach (i from 0 to (n - 1)) {
@@ -130,7 +130,7 @@ function seed_storage_working_set(adb : list((bits(256), list(byte)))) -> unit =
             i,
             struct { sk_addr = 0x0000000000000000000000000000000000000000, sk_slot = word_of_int(0) },
         );
-        let v = witness_get_storage(adb, acct_storage_root(sk.sk_addr), sk.sk_slot);
+        let v = witness_get_storage(acct_storage_root(sk.sk_addr), sk.sk_slot);
         k_seed_storage(sk.sk_addr, sk.sk_slot, v)
     }
 }
@@ -291,14 +291,14 @@ function zkvm_run() -> unit = {
     arith_selfcheck();
 
     /* S2f: execute the block decoded from private input against witness state */
-    let adb = build_node_db();
+    build_node_db();
     let sdb = build_code_spans();
     let sr = parent_state_root();
 
     /* Stage 3+4: re-root the witness via the stack builder and validate it against
        the committed parent.state_root (the one-shot pre-state validation), and in
        the same pass harvest the authenticated account leaves into witness_leaves. */
-    assert(witness_reroot(adb, sr) == sr, "witness re-roots to parent.state_root");
+    assert(witness_reroot(sr) == sr, "witness re-roots to parent.state_root");
     k_world_reset();
 
     /* The tx sender is derived from public_keys[0] (no ecrecover needed): the
@@ -368,7 +368,7 @@ function zkvm_run() -> unit = {
        outside the seeded set fails the kernel presence check. The BAL selects which
        slots to provision; the witness supplies their values; presence is the bound
        (no separate access-list guard). */
-    seed_storage_working_set(adb);
+    seed_storage_working_set();
     k_stateless_on();
 
     let receipts = process_block(blk);

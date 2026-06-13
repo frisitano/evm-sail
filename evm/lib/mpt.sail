@@ -589,28 +589,38 @@ function nibs_match(key : list(int), pos : int, seg : list(int)) -> bool = {
 }
 
 /* node db: keccak(node) -> node bytes (linear scan; witnesses are small) */
-function node_db_lookup(db : list((bits(256), list(byte))), h : bits(256)) -> list(byte) = {
-    let n = list_len(db);
-    var res : list(byte) = [||];
-    foreach (i from 0 to (n - 1)) {
-        let (k, v) = list_nth(db, i, (sail_zeros(256), [||] : list(byte)));
-        if k == h then {
-            res = v
-        }
-    };
-    res
+/* C-backed node-db (ffi/host_nodedb.c): keccak(node) -> (offset, len) span into
+ * the SSZ witness buffer. Replaces a Sail assoc list whose linear node_db_lookup
+ * (plus the whole list deep-copied through every recursive walk) made re-rooting
+ * O(N^2); this is an O(1)-amortized hash map, so the walk is O(N). The 256-bit
+ * key crosses as four big-endian words (k3 most significant); nodedb_sel caches
+ * the matched span for the off/len accessors. */
+val nodedb_reset = impure { _: "nodedb_reset" } : unit -> unit
+val nodedb_insert = impure { _: "nodedb_insert" } : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
+val nodedb_sel = impure { _: "nodedb_sel" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val nodedb_sel_off = impure { _: "nodedb_sel_off" } : unit -> bits(64)
+val nodedb_sel_len = impure { _: "nodedb_sel_len" } : unit -> bits(64)
+
+/* node bytes for keccak `h` from the C node-db, or [] if absent (read straight
+ * from the witness buffer by the recorded span -- no per-node Sail copy held). */
+function node_db_lookup(h : bits(256)) -> list(byte) = {
+    if nodedb_sel(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]) == 0x0000000000000000 then {
+        [||]
+    } else {
+        ssz_bytes(unsigned(nodedb_sel_off()), unsigned(nodedb_sel_len()))
+    }
 }
 
 /* resolve a child reference: embedded node (full bytes), 32-byte hash, or empty.
  * A 32-byte hash that is absent from the witness is a MISSING node (the prover
  * omitted a node on a walked path) -- fail closed, so a resolved-empty result
  * always means a legitimate exclusion, never a withheld subtree. */
-function resolve_child(db : list((bits(256), list(byte))), f : RlpField) -> list(byte) =
+function resolve_child(f : RlpField) -> list(byte) =
     if f.rf_is_list then {
         f.rf_full
     } else {
         if list_len(f.rf_content) == 32 then {
-            let node = node_db_lookup(db, bytes_be256(f.rf_content));
+            let node = node_db_lookup(bytes_be256(f.rf_content));
             assert(list_len(node) > 0, "witness missing trie node");
             node
         } else {
@@ -619,15 +629,7 @@ function resolve_child(db : list((bits(256), list(byte))), f : RlpField) -> list
     }
 
 /* walk the secure trie from `node` following key nibbles; return the leaf value */
-function trie_walk(
-    db : list((bits(256), list(byte))),
-    node : list(byte),
-    key : list(int),
-    pos : int,
-    fuel : int,
-) -> (
-    list(byte)
-) = {
+function trie_walk(node : list(byte), key : list(int), pos : int, fuel : int) -> list(byte) = {
     if fuel <= 0 | list_len(node) == 0 then {
         [||]
     } else {
@@ -645,8 +647,8 @@ function trie_walk(
                         [||]
                     }
                 } else {
-                    let child = resolve_child(db, list_nth(items, 1, RLP_NONE));
-                    trie_walk(db, child, key, pos + list_len(seg), fuel - 1)
+                    let child = resolve_child(list_nth(items, 1, RLP_NONE));
+                    trie_walk(child, key, pos + list_len(seg), fuel - 1)
                 }
             }
         } else {
@@ -654,8 +656,8 @@ function trie_walk(
                 if pos == list_len(key) then {
                     list_nth(items, 16, RLP_NONE).rf_content
                 } else {
-                    let child = resolve_child(db, list_nth(items, list_nth(key, pos, 0), RLP_NONE));
-                    trie_walk(db, child, key, pos + 1, fuel - 1)
+                    let child = resolve_child(list_nth(items, list_nth(key, pos, 0), RLP_NONE));
+                    trie_walk(child, key, pos + 1, fuel - 1)
                 }
             } else {
                 [||]
@@ -663,7 +665,7 @@ function trie_walk(
         }
     }
 }
-termination_measure trie_walk(db, node, key, pos, fuel) = fuel
+termination_measure trie_walk(node, key, pos, fuel) = fuel
 
 /* ---- witness -> HashBuilder: re-root a partial trie in one pass --------- */
 /* Left-to-right DFS over the provided witness trie. Each present leaf is fed
@@ -701,12 +703,12 @@ function witness_store_leaf(h : bits(256)) -> list(byte) = {
     res
 }
 
-val witness_feed : (list((bits(256), list(byte))), list(byte), list(int), int) -> unit
+val witness_feed : (list(byte), list(int), int) -> unit
 
 /* feed one child field at nibble-path `key`: descend if present, blind if not */
-function witness_feed_child(db : list((bits(256), list(byte))), f : RlpField, key : list(int), fuel : int) -> unit = {
+function witness_feed_child(f : RlpField, key : list(int), fuel : int) -> unit = {
     if f.rf_is_list then {
-        witness_feed(db, f.rf_full, key, fuel)
+        witness_feed(f.rf_full, key, fuel)
         /* embedded node */
     } else {
         let c = f.rf_content;
@@ -715,19 +717,19 @@ function witness_feed_child(db : list((bits(256), list(byte))), f : RlpField, ke
             /* empty slot */
         } else {
             if list_len(c) == 32 then {
-                let node = node_db_lookup(db, bytes_be256(c));
+                let node = node_db_lookup(bytes_be256(c));
                 if list_len(node) == 0 then {
                     hb_add_branch(key, c)
                     /* blinded frontier */
                 } else {
-                    witness_feed(db, node, key, fuel)
+                    witness_feed(node, key, fuel)
                 } /* descend */
             }
         }
     }
 }
 
-function witness_feed(db : list((bits(256), list(byte))), node : list(byte), prefix : list(int), fuel : int) -> unit = {
+function witness_feed(node : list(byte), prefix : list(int), fuel : int) -> unit = {
     if fuel <= 0 | list_len(node) == 0 then {
         ()
     } else {
@@ -743,7 +745,7 @@ function witness_feed(db : list((bits(256), list(byte))), node : list(byte), pre
                     witness_leaves = (nibbles_to_h256(key), value) :: witness_leaves
                 }
             } else {
-                witness_feed_child(db, list_nth(items, 1, RLP_NONE), key, fuel - 1)
+                witness_feed_child(list_nth(items, 1, RLP_NONE), key, fuel - 1)
             } /* extension */
         } else {
             if n == 17 then {
@@ -752,24 +754,24 @@ function witness_feed(db : list((bits(256), list(byte))), node : list(byte), pre
                     hb_add_leaf(prefix, v)
                 }; /* (empty for secure tries) */
                 foreach (i from 0 to 15) {
-                    witness_feed_child(db, list_nth(items, i, RLP_NONE), list_append(prefix, [|i|]), fuel - 1)
+                    witness_feed_child(list_nth(items, i, RLP_NONE), list_append(prefix, [|i|]), fuel - 1)
                 }
             }
         }
     }
 }
-termination_measure witness_feed(db, node, prefix, fuel) = fuel
-termination_measure witness_feed_child(db, f, key, fuel) = fuel
+termination_measure witness_feed(node, prefix, fuel) = fuel
+termination_measure witness_feed_child(f, key, fuel) = fuel
 
 /* re-root the trie at `root` from the witness via the stack builder */
-function witness_reroot(db : list((bits(256), list(byte))), root : bits(256)) -> bits(256) = {
+function witness_reroot(root : bits(256)) -> bits(256) = {
     hb_reset();
     witness_leaves = [||];
-    let rootnode = node_db_lookup(db, root);
+    let rootnode = node_db_lookup(root);
     if list_len(rootnode) == 0 then {
         keccak256([|0x80|])
     } else {
-        witness_feed(db, rootnode, [||], 256);
+        witness_feed(rootnode, [||], 256);
         hb_root()
     }
 }
@@ -796,15 +798,24 @@ function decode_account(leaf : list(byte)) -> (int, word, bits(256), bits(256)) 
     (nonce, balance, sroot, chash)
 }
 
-/* build the node db from witness.state (keccak(node) -> node) */
-function build_node_db() -> list((bits(256), list(byte))) = {
+/* populate the C node-db from witness.state: keccak(node) -> span. The node is
+ * materialized once here to hash it; the recorded span (not the bytes) is what
+ * the walk reads back, so no per-node Sail copy is retained. */
+function build_node_db() -> unit = {
+    nodedb_reset();
     let n = wit_n_state();
-    var db : list((bits(256), list(byte))) = [||];
     foreach (i from 0 to (n - 1)) {
-        let nb = ssz_witness_node(i);
-        db = (keccak256(nb), nb) :: db
-    };
-    db
+        let (off, len) = ssz_witness_node_span(i);
+        let h = keccak256(ssz_bytes(off, len));
+        nodedb_insert(
+            h[255 .. 192],
+            h[191 .. 128],
+            h[127 .. 64],
+            h[63 .. 0],
+            get_slice_int(64, off, 0),
+            get_slice_int(64, len, 0),
+        )
+    }
 }
 
 /* the parent header's state_root (witness.headers[0] field 3) = pre-state root */
@@ -814,18 +825,18 @@ function parent_state_root() -> bits(256) = {
 }
 
 /* resolve an account leaf (RLP) for `addr`, or [] if absent */
-function witness_get_account(db : list((bits(256), list(byte))), state_root : bits(256), addr : address) -> list(byte) = {
+function witness_get_account(state_root : bits(256), addr : address) -> list(byte) = {
     let key = hash_nibbles(keccak256(address_to_bytes(addr)));
-    trie_walk(db, node_db_lookup(db, state_root), key, 0, 80)
+    trie_walk(node_db_lookup(state_root), key, 0, 80)
 }
 
 /* resolve a storage slot value for `slot` under `storage_root` (U256, or 0) */
-function witness_get_storage(db : list((bits(256), list(byte))), sroot : bits(256), slot : word) -> word = {
+function witness_get_storage(sroot : bits(256), slot : word) -> word = {
     if sroot == EMPTY_TRIE_ROOT then {
         sail_zeros(256)
     } else {
         let key = hash_nibbles(keccak256(word_to_bytes32(slot)));
-        let leaf = trie_walk(db, node_db_lookup(db, sroot), key, 0, 80);
+        let leaf = trie_walk(node_db_lookup(sroot), key, 0, 80);
         if list_len(leaf) == 0 then {
             sail_zeros(256)
         } else {

@@ -18,9 +18,9 @@ $include "../evm_primitives.sail"
 $include <string.sail>
 
 function main() -> unit = {
-    let db = build_node_db();
+    build_node_db();
     let parent = parent_state_root();
-    let rerooted = witness_reroot(db, parent);
+    let rerooted = witness_reroot(parent);
     print_endline(concat_str("PARENT ", hex_str(unsigned(parent))));
     print_endline(concat_str("REROOT ", hex_str(unsigned(rerooted))))
 }

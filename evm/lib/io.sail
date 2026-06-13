@@ -230,6 +230,8 @@ function ssz_list_span(start : int, n : int, stop : int, i : int) -> (int, int) 
 }
 function ssz_witness_node(i : int) -> list(byte) =
     ssz_list_elem(wit_state_start(), wit_n_state(), wit_codes_start(), i)
+function ssz_witness_node_span(i : int) -> (int, int) =
+    ssz_list_span(wit_state_start(), wit_n_state(), wit_codes_start(), i)
 function ssz_witness_code(i : int) -> list(byte) =
     ssz_list_elem(wit_codes_start(), wit_n_codes(), wit_headers_start(), i)
 function ssz_witness_code_span(i : int) -> (int, int) =

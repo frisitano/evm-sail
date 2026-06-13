@@ -61,7 +61,7 @@ def build_probe(rebuild=False):
                    else ["-Wl,-z,stacksize=0x20000000"])
     host_c = [os.path.join(ELDIR, "ffi", f"{m}.c") for m in
               ("acc_shim", "host_mem", "host_map", "host_stack",
-               "host_word", "host_code")]
+               "host_word", "host_code", "host_nodedb")]
     ffi_c = os.path.join(EEST, "runner_ffi.c")  # ssz_src over buffered stdin
     src = os.path.join(HERE, "witness_probe.sail")
     subprocess.check_call(
