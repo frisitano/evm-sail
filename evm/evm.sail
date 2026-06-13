@@ -19,7 +19,8 @@
 $include "prelude.sail"
 
 /* host crypto accelerators (eth-act zkvm-standards C boundary) */
-$include "host/accelerators.sail"
+$include "host/ffi.sail"
+$include "host/crypto.sail"
 
 /* pure library functions */
 $include "lib/keccak.sail"

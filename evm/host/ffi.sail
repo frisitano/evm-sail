@@ -1,13 +1,16 @@
 /* ======================================================================== */
-/* zkVM crypto accelerators (eth-act zkvm-standards c-interface-accelerators)  */
+/* FFI BINDING: the accelerator byte-stream protocol                         */
 /*                                                                           */
-/* ONE host boundary for all crypto -- keccak256, sha256, ripemd160, and the   */
-/* EVM precompiles -- aligning with eth-act/zkvm-standards. The model streams   */
-/* input bytes through a thin C shim (ffi/acc_shim.c) that calls the one-shot   */
-/* standard functions in ffi/zkvm_accelerators.h; a real zkVM swaps the         */
-/* reference impl (ffi/zkvm_accelerators.c) for native precompiles behind that  */
-/* same header. Only mach_bits cross the FFI. ids: 0=keccak256, 2=sha256,       */
-/* 3=ripemd160, 4=identity, 1/5..10 = EVM precompiles. Gas stays in Sail.       */
+/* This file is mechanism only -- NO semantics. Sail lists cannot cross the  */
+/* C boundary, so byte inputs stream through a small stateful protocol       */
+/* (begin / push / exec / read), 8 bytes per crossing. The C side is         */
+/* ffi/acc_shim.c; the wire interface follows eth-act/zkvm-standards         */
+/* c-interface-accelerators (one header, ffi/zkvm_accelerators.h, backed by  */
+/* industry libraries on the host and by native precompiles in a zkVM        */
+/* guest). Semantic crypto functions over this binding live in               */
+/* host/crypto.sail; memory-sourced staging (no list, one C-side copy) in    */
+/* host/memory.sail. ids: 0=keccak256, 2=sha256, 3=ripemd160, 4=identity,    */
+/* 1/5..17/256 = EVM precompiles.                                            */
 /* ======================================================================== */
 
 val acc_begin = impure "acc_begin" : bits(64) -> unit
@@ -17,6 +20,8 @@ val acc_exec  = impure "acc_exec"  : unit -> bits(64)
 val acc_ok    = impure "acc_ok"    : unit -> bits(8)
 val acc_out   = impure "acc_out"   : bits(64) -> bits(8)
 val acc_word  = impure "acc_word"  : bits(64) -> bits(64)
+val acc_in_byte   = impure "acc_in_byte"   : bits(64) -> bits(8)
+val acc_begin_mem = impure "acc_begin_mem" : (bits(64), bits(64), bits(64)) -> unit
 
 /* feed the input to the host, 8 bytes per FFI crossing (remainder one-by-one) */
 function acc_push_all(msg : list(byte)) -> unit = match msg {
@@ -46,28 +51,4 @@ function acc_hash(id : int, msg : list(byte)) -> bits(256) = {
   let w2 : bits(64) = acc_word(get_slice_int(64, 2, 0));
   let w3 : bits(64) = acc_word(get_slice_int(64, 3, 0));
   append(w0, append(w1, append(w2, w3)))
-}
-
-val acc_in_byte = impure "acc_in_byte" : bits(64) -> bits(8)
-/* staged-input byte (zero past the end). The EVM stages a precompile's input
- * once (a C-side snapshot of the caller's memory slice / the tx calldata) and
- * gas inspection reads the few bytes it needs O(1) -- no Sail byte list. */
-function acc_input_byte(i : int) -> byte = acc_in_byte(get_slice_int(64, i, 0))
-
-/* run the staged precompile (input already in the accelerator: acc_begin_mem
- * for a memory slice, acc_begin+acc_push_all for a list). The output stays in
- * the accelerator buffer for returndata adoption (hr_capture_acc). On failure
- * the CALL returns 0 (handled by the interpreter). */
-function run_precompile_staged() -> bool = {
-  let _ = acc_exec();
-  unsigned(acc_ok()) == 1
-}
-
-/* list-in/list-out wrapper (vector tests; the EVM uses the staged path) */
-function run_precompile(num : int, input : list(byte)) -> (bool, list(byte)) = {
-  acc_begin(get_slice_int(64, num, 0));
-  acc_push_all(input);
-  let n = unsigned(acc_exec());
-  let ok = unsigned(acc_ok()) == 1;
-  if not_bool(ok) then (false, [||]) else (true, acc_read(n))
 }

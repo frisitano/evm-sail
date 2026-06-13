@@ -219,7 +219,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
       /* tx directly to a precompile: run it as the top-level frame, gas-checked
          FIRST (an OOG precompile must not execute). Failure or OOG is an
          exceptional halt (all gas consumed, value transfer reverted). */
-      acc_begin(get_slice_int(64, an, 0)); acc_push_all(tx.t_data);
+      stage_precompile_list(an, tx.t_data);
       let used = precompile_gas(an, list_len(tx.t_data));
       let ok : bool =
         if used <= gas_remaining then k_precompile(an) else false;

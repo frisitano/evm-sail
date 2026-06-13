@@ -86,7 +86,7 @@ function sload_cost(warm : bool) -> gas =
  * matching EELS buffer_read semantics for header parsing) */
 function pc_be(off : int, n : int) -> int = {
   var v : int = 0;
-  foreach (i from 0 to (n - 1)) { v = v * 256 + unsigned(acc_input_byte(off + i)) };
+  foreach (i from 0 to (n - 1)) { v = v * 256 + unsigned(precompile_input_byte(off + i)) };
   v
 }
 /* number of bits in v (bit_length): bit_length(0)=0, bit_length(1)=1, ... */

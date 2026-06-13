@@ -1,5 +1,5 @@
 /* ======================================================================== */
-/* SHA-256 via the zkvm-standards accelerator boundary (accelerators.sail ->    */
+/* SHA-256 via the zkvm-standards accelerator boundary (host/crypto.sail ->    */
 /* ffi/zkvm_accelerators.h zkvm_sha256, id 2) -- used by SSZ hash_tree_root      */
 /* merkleization (distinct from execution keccak). Same C host as keccak and     */
 /* the precompiles; a real zkVM swaps the reference impl for a native sha256.    */

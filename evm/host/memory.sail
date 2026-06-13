@@ -75,8 +75,6 @@ function mem_size_words() -> int = ediv_int(memory_size + 31, 32)
 /* ---- range-based operations (zero/one-copy: both sides live in C) ---- */
 val hm_move   = impure "hm_move"   : (bits(64), bits(64), bits(64)) -> unit
 val hc_to_mem = impure "hc_to_mem" : (bits(64), bits(64), bits(64)) -> unit
-val acc_begin_mem = impure "acc_begin_mem" : (bits(64), bits(64), bits(64)) -> unit
-
 /* stage a precompile's input: ONE C-side snapshot of mem[off .. off+len) (the
  * child message's calldata). A snapshot, not an alias: the identity precompile's
  * output may be written back over a region overlapping its input. */

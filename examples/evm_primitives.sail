@@ -12,6 +12,6 @@
 
 /* keccak256 and create_address/create2_address are now real (evm/keccak.sail),
  * and the EVM precompiles now run through the C host accelerator
- * (evm/accelerators.sail -> ffi/acc_shim.c), structured like keccak. So this
+ * (evm/host/crypto.sail -> ffi/acc_shim.c), structured like keccak. So this
  * file no longer supplies any placeholder bodies; it remains as a stable include
  * point for examples. */

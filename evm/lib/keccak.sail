@@ -1,7 +1,7 @@
 /* ======================================================================== */
 /* Keccak-256 (Ethereum variant) via the zkvm-standards accelerator boundary  */
 /*                                                                           */
-/* keccak256 routes through the unified crypto accelerator (accelerators.sail  */
+/* keccak256 routes through the host crypto boundary (host/crypto.sail  */
 /* -> ffi/zkvm_accelerators.h zkvm_keccak256, id 0). This IS the eth-act       */
 /* c-interface-accelerators boundary: native links the reference impl, a real  */
 /* zkVM swaps it for a native keccak precompile behind the same standard       */
@@ -9,7 +9,7 @@
 /* Validate against keccak256("") = c5d2460186f7233c927e7db2dcc703c0e500...   */
 /* ======================================================================== */
 
-/* Keccak-256 via the zkvm-standards accelerator boundary (accelerators.sail ->
+/* Keccak-256 via the zkvm-standards accelerator boundary (host/crypto.sail ->
  * ffi/zkvm_accelerators.h zkvm_keccak256). id 0 is the standard's non-precompile
  * keccak accelerator. */
 function keccak256(msg : list(byte)) -> bits(256) = acc_hash(0, msg)

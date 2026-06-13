@@ -99,7 +99,8 @@ evm/         the specification (evm.sail is the root include)
                       logs, journal, block/tx environment
     kernel.sail       the kernel functions (k_*): the only state interface
     memory.sail       per-frame byte memory (C-backed, O(1))
-    accelerators.sail crypto host functions (eth-act zkvm-standards)
+    ffi.sail          the C binding layer (accelerator byte-stream protocol)
+    crypto.sail       host precompile functions (eth-act zkvm-standards)
   evm/                THE TRANSACTION KERNEL (= the EVM)
     machine.sail      frame registers, gas counter, stack, code descriptors
     gas.sail          the complete gas schedule (fork-gated)
