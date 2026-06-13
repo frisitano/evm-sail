@@ -136,8 +136,9 @@ function pending_output_list() -> list(byte) = {
 val cd_set       = impure "cd_set"       : (bits(64), bits(64)) -> unit
 val cd_set_empty = impure "cd_set_empty" : unit -> unit
 val cd_set_tx    = impure "cd_set_tx"    : unit -> unit
-val txd_begin    = impure "txd_begin"    : unit -> unit
-val txd_byte     = impure "txd_byte"     : bits(8) -> unit
+val txin_begin    = impure "txin_begin"    : bits(64) -> unit
+val txin_byte     = impure "txin_byte"     : bits(8) -> unit
+val txin_activate = impure "txin_activate" : bits(64) -> bits(64)
 val cd_len       = impure "cd_len"       : unit -> bits(64)
 val cd_word      = impure "cd_word"      : bits(64) -> word
 val cd_to_mem    = impure "cd_to_mem"    : (bits(64), bits(64), bits(64)) -> unit
@@ -155,14 +156,18 @@ function calldata_copy_to_mem(dst : int, off : int, len : int) -> unit =
   cd_to_mem(get_slice_int(64, dst, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0))
 function calldata_set_next(off : int, len : int) -> unit =
   cd_set(get_slice_int(64, off, 0), get_slice_int(64, len, 0))
-/* stream the transaction input once; returns its length */
-function txdata_load(data : list(byte)) -> int = {
-  txd_begin();
-  var n : int = 0;
+/* load transaction `idx`'s input bytes into its memory slot (block setup: the
+ * runner / stateless decoder / test fixtures call this once per tx). */
+function txdata_set_input(idx : int, data : list(byte)) -> unit = {
+  txin_begin(get_slice_int(64, idx, 0));
   var rest : list(byte) = data;
   var more : bool = true;
   while more do {
-    match rest { b :: t => { txd_byte(b); n = n + 1; rest = t }, [||] => more = false }
-  };
-  n
+    match rest { b :: t => { txin_byte(b); rest = t }, [||] => more = false }
+  }
 }
+
+/* select transaction `idx` as the executing tx; returns its input length. The
+ * EVM reads the input from memory (txdata_byte / txdata_size / calldata) -- it
+ * holds only the index, never the bytes. */
+function txdata_activate(idx : int) -> int = unsigned(txin_activate(get_slice_int(64, idx, 0)))

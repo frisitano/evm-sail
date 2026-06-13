@@ -14,7 +14,8 @@ struct Authorization = {
 }
 struct Transaction = {
   t_sender : address, t_nonce : int, t_gas_price : word, t_priority_fee : word,
-  t_gas_limit : gas, t_is_create : bool, t_to : address, t_value : word, t_data : list(byte),
+  t_gas_limit : gas, t_is_create : bool, t_to : address, t_value : word,
+  t_index : int,                /* transaction index: its input bytes live in memory (txin) */
   t_al_addrs : list(address),   /* EIP-2930 access-list addresses (one per entry) */
   t_al_keys  : list(SlotKey),   /* EIP-2930 access-list (address, slot) pairs      */
   t_blob_count : int,           /* EIP-4844 number of blob versioned hashes         */
@@ -117,9 +118,9 @@ function process_transaction(tx : Transaction) -> Receipt = {
   k_tx_reset();
   k_set_tx(struct { txe_origin = tx.t_sender, txe_gas_price = tx.t_gas_price, txe_blob_hashes = tx.t_blob_hashes });
   hr_reset();
-  /* stream the tx input into the C buffer ONCE; gas, validity, calldata and
-     initcode all read it from there (the spec list is never re-walked). */
-  let dlen = txdata_load(tx.t_data);
+  /* select this tx's input (already loaded into memory at block setup); gas,
+     validity, calldata and initcode all read it from there by index. */
+  let dlen = txdata_activate(tx.t_index);
 
   let sender = tx.t_sender;
   let nonce_before = k_get_nonce(sender);

@@ -30,7 +30,15 @@ uint8_t *hm_wr(uint64_t off, uint64_t len);   /* fwd decl (defined below) */
 typedef struct { int src; uint64_t off, len; } hm_cd;
 static hm_cd cd[HOST_MEM_MAXDEPTH];
 static hm_cd cd_pending = { -2, 0, 0 };
-static uint8_t *txd; static uint64_t txd_cap, txd_len;   /* index of the current (innermost) frame */
+/* The block's transaction inputs, indexed by tx position. Each tx's data is
+ * loaded into its slot once (by the runner / stateless decoder); the executing
+ * tx is SELECTED by index (txin_activate). The Transaction struct carries only
+ * the index -- the bytes live here in memory, never duplicated in a Sail list. */
+#define TXIN_MAX 256
+typedef struct { uint8_t *p; uint64_t len, cap; } txin_slot;
+static txin_slot txin[TXIN_MAX];
+static int txin_fill = 0;   /* slot currently being populated  */
+static int txin_sel  = 0;   /* slot of the executing tx        */
 
 static void host_mem_ensure(size_t off) {
   h_memframe *f = &h_stack[h_top];
@@ -86,32 +94,43 @@ unit cd_set_empty(const unit u) {
 /* the CURRENT (tx-level) frame's calldata := the streamed tx input */
 unit cd_set_tx(const unit u) {
   (void)u;
-  cd[h_top].src = -1; cd[h_top].off = 0; cd[h_top].len = txd_len;
+  cd[h_top].src = -1; cd[h_top].off = 0; cd[h_top].len = txin[txin_sel].len;
   return UNIT;
 }
-unit txd_begin(const unit u) { (void)u; txd_len = 0; return UNIT; }
-unit txd_byte(uint64_t b) {
-  if (txd_len >= txd_cap) {
-    uint64_t n = txd_cap ? txd_cap * 2 : 1024;
-    txd = (uint8_t *)realloc(txd, n);
-    txd_cap = n;
-  }
-  txd[txd_len++] = (uint8_t)b;
+/* begin populating tx slot `idx` (resets its length; allocations are cached) */
+unit txin_begin(uint64_t idx) {
+  txin_fill = (idx < TXIN_MAX) ? (int)idx : 0;
+  txin[txin_fill].len = 0;
   return UNIT;
+}
+unit txin_byte(uint64_t b) {
+  txin_slot *s = &txin[txin_fill];
+  if (s->len >= s->cap) {
+    uint64_t n = s->cap ? s->cap * 2 : 1024;
+    s->p = (uint8_t *)realloc(s->p, n);
+    s->cap = n;
+  }
+  s->p[s->len++] = (uint8_t)b;
+  return UNIT;
+}
+/* select tx slot `idx` as the executing transaction; returns its input length */
+uint64_t txin_activate(uint64_t idx) {
+  txin_sel = (idx < TXIN_MAX) ? (int)idx : 0;
+  return txin[txin_sel].len;
 }
 
 uint64_t cd_len(const unit u) { (void)u; return cd[h_top].len; }
 
-/* the streamed tx input (a create-tx's initcode source) */
-const uint8_t *txd_ptr(uint64_t *len) { *len = txd_len; return txd; }
-uint64_t txd_at(uint64_t i)  { return i < txd_len ? txd[i] : 0; }   /* byte, 0 past end */
-uint64_t txd_length(const unit u) { (void)u; return txd_len; }
+/* the executing tx's input (a create-tx's initcode source; gas byte reads) */
+const uint8_t *txd_ptr(uint64_t *len) { *len = txin[txin_sel].len; return txin[txin_sel].p; }
+uint64_t txd_at(uint64_t i)  { return i < txin[txin_sel].len ? txin[txin_sel].p[i] : 0; }
+uint64_t txd_length(const unit u) { (void)u; return txin[txin_sel].len; }
 
 /* calldata byte i (0 past the end -- and 0 past the source's ALLOCATED cap:
  * an expansion-charged but never-written parent range reads as zeros) */
 static uint8_t cd_at(const hm_cd *c, uint64_t i) {
   if (i >= c->len) return 0;
-  if (c->src == -1) return i < txd_len ? txd[i] : 0;
+  if (c->src == -1) return i < txin[txin_sel].len ? txin[txin_sel].p[i] : 0;
   if (c->src >= 0) {
     const h_memframe *f = &h_stack[c->src];
     uint64_t p = c->off + i;

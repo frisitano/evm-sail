@@ -29,9 +29,10 @@ function main() -> unit = {
     be_chain_id = word_of_int(1), be_blob_base_fee = word_of_int(1),
     be_excess_blob_gas = word_of_int(0)
   };
+  txdata_set_input(0, [||]);
   let tx : Transaction = struct {
     t_sender = eoa(), t_nonce = 0, t_gas_price = word_of_int(2), t_priority_fee = word_of_int(1),
-    t_gas_limit = 100000, t_is_create = false, t_to = contract(), t_value = word_of_int(0), t_data = [||],
+    t_gas_limit = 100000, t_is_create = false, t_to = contract(), t_value = word_of_int(0), t_index = 0,
     t_al_addrs = [||], t_al_keys = [||], t_blob_count = 0, t_max_fee = word_of_int(2), t_max_blob_fee = word_of_int(0), t_max_priority = word_of_int(1), t_is_setcode = false, t_auth_list = [||], t_is_blob = false, t_blob_hashes = [||]
   };
   let wd : Withdrawal = struct { w_address = withdrawer(), w_amount = word_of_int(500) };

@@ -206,6 +206,7 @@ function zkvm_run() -> unit = {
   let t_to       = word_to_address(rlp_field_word(list_nth(ti, 3, RLP_NONE)));
   let t_value    = rlp_field_word(list_nth(ti, 4, RLP_NONE));
   let t_data     = (list_nth(ti, 5, RLP_NONE)).rf_content;
+  txdata_set_input(0, t_data);   /* tx input lives in memory; the struct holds its index */
 
   /* seed the touched accounts' pre-state from the harvested (authenticated) leaves */
   seed_account_from_store(cdb, sender);
@@ -220,7 +221,7 @@ function zkvm_run() -> unit = {
   };
   let txn : Transaction = struct {
     t_sender = sender, t_nonce = t_nonce, t_gas_price = t_gasprice, t_priority_fee = t_gasprice,
-    t_gas_limit = to_gas(t_gas), t_is_create = false, t_to = t_to, t_value = t_value, t_data = t_data,
+    t_gas_limit = to_gas(t_gas), t_is_create = false, t_to = t_to, t_value = t_value, t_index = 0,
     t_al_addrs = [||], t_al_keys = [||],
     /* legacy (type-0) tx: no 1559/4844/7702 envelope fields */
     t_blob_count = 0, t_max_fee = t_gasprice, t_max_blob_fee = ZERO_WORD,

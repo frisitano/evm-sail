@@ -17,8 +17,9 @@ unit hm_move(uint64_t dst, uint64_t src, uint64_t len);  /* MCOPY memmove */
 unit cd_set(uint64_t off, uint64_t len);   /* next child's calldata = mem range */
 unit cd_set_empty(const unit u);
 unit cd_set_tx(const unit u);
-unit txd_begin(const unit u);
-unit txd_byte(uint64_t b);
+unit txin_begin(uint64_t idx);
+unit txin_byte(uint64_t b);
+uint64_t txin_activate(uint64_t idx);
 uint64_t cd_len(const unit u);
 const uint8_t *txd_ptr(uint64_t *len);
 uint64_t txd_at(uint64_t i);

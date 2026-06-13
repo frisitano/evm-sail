@@ -31,14 +31,18 @@ function std_env() -> BlockEnv = struct {
   be_chain_id = word_of_int(1), be_blob_base_fee = word_of_int(1),
   be_excess_blob_gas = word_of_int(0)
 }
-function call_tx(sender : address, dst : address, value : int, gl : gas, data : list(byte)) -> Transaction =
+function call_tx(idx : int, sender : address, dst : address, value : int, gl : gas, data : list(byte)) -> Transaction = {
+  txdata_set_input(idx, data);
   struct { t_sender = sender, t_nonce = 0, t_gas_price = word_of_int(1), t_priority_fee = word_of_int(1),
-           t_gas_limit = gl, t_is_create = false, t_to = dst, t_value = word_of_int(value), t_data = data,
+           t_gas_limit = gl, t_is_create = false, t_to = dst, t_value = word_of_int(value), t_index = idx,
            t_al_addrs = [||], t_al_keys = [||], t_blob_count = 0, t_max_fee = word_of_int(1), t_max_blob_fee = word_of_int(1), t_max_priority = word_of_int(1), t_is_setcode = false, t_auth_list = [||], t_is_blob = false, t_blob_hashes = [||] }
-function create_tx(sender : address, gl : gas, initcode : list(byte)) -> Transaction =
+}
+function create_tx(idx : int, sender : address, gl : gas, initcode : list(byte)) -> Transaction = {
+  txdata_set_input(idx, initcode);
   struct { t_sender = sender, t_nonce = 0, t_gas_price = word_of_int(1), t_priority_fee = word_of_int(1),
-           t_gas_limit = gl, t_is_create = true, t_to = ZERO_ADDR, t_value = word_of_int(0), t_data = initcode,
+           t_gas_limit = gl, t_is_create = true, t_to = ZERO_ADDR, t_value = word_of_int(0), t_index = idx,
            t_al_addrs = [||], t_al_keys = [||], t_blob_count = 0, t_max_fee = word_of_int(1), t_max_blob_fee = word_of_int(1), t_max_priority = word_of_int(1), t_is_setcode = false, t_auth_list = [||], t_is_blob = false, t_blob_hashes = [||] }
+}
 function block1(tx : Transaction) -> Block =
   struct { blk_env = std_env(), blk_txs = [| tx |], blk_withdrawals = [||] }
 
@@ -54,7 +58,7 @@ function line(name : string, rest : string) -> unit = print_endline(concat_str(n
 /* F1: plain EOA -> EOA value transfer (no code). */
 function f1_transfer() -> unit = {
   k_world_reset(); fund(alice(), 1000000);
-  let rs = process_block(block1(call_tx(alice(), bob(), 500, 21000, [||])));
+  let rs = process_block(block1(call_tx(0, alice(), bob(), 500, 21000, [||])));
   line("  F1 transfer    : ", concat_str(yn(rsucc(rs)),
     concat_str(concat_str("  gas=", dec_str(rgas(rs))),
       concat_str(concat_str("  bob=", dec_str(bal(bob()))),
@@ -68,7 +72,7 @@ function f1_transfer() -> unit = {
 function f2_storage() -> unit = {
   k_world_reset(); fund(alice(), 1000000);
   deploy(cont(), [| 0x60, 0x2a, 0x60, 0x00, 0x55, 0x00 |]);
-  let rs = process_block(block1(call_tx(alice(), cont(), 0, 100000, [||])));
+  let rs = process_block(block1(call_tx(0, alice(), cont(), 0, 100000, [||])));
   line("  F2 storage     : ", concat_str(yn(rsucc(rs)),
     concat_str(concat_str("  gas=", dec_str(rgas(rs))),
                concat_str("  slot0=", dec_str(slot0(cont()))))));
@@ -80,7 +84,7 @@ function f2_storage() -> unit = {
 function f3_arith() -> unit = {
   k_world_reset(); fund(alice(), 1000000);
   deploy(cont(), [| 0x60, 0x02, 0x60, 0x03, 0x01, 0x60, 0x04, 0x02, 0x60, 0x00, 0x55, 0x00 |]);
-  let rs = process_block(block1(call_tx(alice(), cont(), 0, 100000, [||])));
+  let rs = process_block(block1(call_tx(0, alice(), cont(), 0, 100000, [||])));
   line("  F3 arithmetic  : ", concat_str(yn(rsucc(rs)),
     concat_str(concat_str("  gas=", dec_str(rgas(rs))),
                concat_str("  slot0=", dec_str(slot0(cont()))))));
@@ -94,7 +98,7 @@ function f4_call() -> unit = {
   deploy(cont(), [| 0x60,0x00, 0x60,0x00, 0x60,0x00, 0x60,0x00, 0x60,0x00,
                     0x61,0xbb,0xbb, 0x61,0xff,0xff, 0xf1, 0x00 |]);
   deploy(callee(), [| 0x60, 0x63, 0x60, 0x00, 0x55, 0x00 |]);   /* SSTORE 99 @ slot0 */
-  let rs = process_block(block1(call_tx(alice(), cont(), 0, 200000, [||])));
+  let rs = process_block(block1(call_tx(0, alice(), cont(), 0, 200000, [||])));
   line("  F4 nested CALL : ", concat_str(yn(rsucc(rs)),
     concat_str(concat_str("  gas=", dec_str(rgas(rs))),
                concat_str("  callee.slot0=", dec_str(slot0(callee()))))));
@@ -107,7 +111,7 @@ function f5_revert() -> unit = {
   k_world_reset(); fund(alice(), 1000000);
   /* PUSH1 42 PUSH1 0 SSTORE  PUSH1 0 PUSH1 0 REVERT */
   deploy(cont(), [| 0x60,0x2a, 0x60,0x00, 0x55, 0x60,0x00, 0x60,0x00, 0xfd |]);
-  let rs = process_block(block1(call_tx(alice(), cont(), 0, 100000, [||])));
+  let rs = process_block(block1(call_tx(0, alice(), cont(), 0, 100000, [||])));
   line("  F5 REVERT      : ", concat_str(yn(not_bool(rsucc(rs))),
     concat_str(concat_str("  reverted, gas=", dec_str(rgas(rs))),
                concat_str("  slot0=", dec_str(slot0(cont()))))));
@@ -119,7 +123,7 @@ function f5_revert() -> unit = {
 function f6_create() -> unit = {
   k_world_reset(); fund(alice(), 1000000);
   /* init: PUSH1 0 PUSH1 0 MSTORE8 ; PUSH1 1 PUSH1 0 RETURN  -> returns [0x00] */
-  let rs = process_block(block1(create_tx(alice(), 200000,
+  let rs = process_block(block1(create_tx(0, alice(), 200000,
              [| 0x60,0x00, 0x60,0x00, 0x53, 0x60,0x01, 0x60,0x00, 0xf3 |])));
   let new_addr = create_address(alice(), 0);
   let deployed_len = k_get_code_size(new_addr);
@@ -135,8 +139,8 @@ function f7_multitx() -> unit = {
   deploy(cont(), [| 0x60, 0x2a, 0x60, 0x00, 0x55, 0x00 |]);   /* store 42 */
   deploy(callee(), [| 0x60, 0x64, 0x60, 0x00, 0x55, 0x00 |]); /* store 100 */
   let blk : Block = struct { blk_env = std_env(),
-    blk_txs = [| call_tx(alice(), cont(), 0, 100000, [||]),
-                 call_tx(alice(), cont(), 0, 100000, [||]) |],
+    blk_txs = [| call_tx(0, alice(), cont(), 0, 100000, [||]),
+                 call_tx(1, alice(), cont(), 0, 100000, [||]) |],
     blk_withdrawals = [||] };
   let rs = process_block(blk);
   let n = list_len(rs);
@@ -151,7 +155,7 @@ function f7_multitx() -> unit = {
 function f8_oog() -> unit = {
   k_world_reset(); fund(alice(), 1000000);
   deploy(cont(), [| 0x60, 0x2a, 0x60, 0x00, 0x55, 0x00 |]);
-  let rs = process_block(block1(call_tx(alice(), cont(), 0, 21000, [||])));
+  let rs = process_block(block1(call_tx(0, alice(), cont(), 0, 21000, [||])));
   line("  F8 out-of-gas  : ", concat_str(yn(not_bool(rsucc(rs))),
     concat_str(concat_str("  gas=", dec_str(rgas(rs))),
                concat_str("  slot0=", dec_str(slot0(cont()))))));
