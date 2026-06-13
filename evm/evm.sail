@@ -27,7 +27,7 @@
 /*                                                                           */
 /* gas.sail holds the schedule + charging; machine.sail the per-frame         */
 /* registers/stack; exceptions.sail the halt kinds. The post-state is         */
-/* authenticated by state_root.sail (and, statelessly, lib/mpt_witness.sail). */
+/* authenticated by lib/mpt.sail (and, statelessly, lib/mpt_witness.sail). */
 /* ======================================================================== */
 
 /* shared value model: 256-bit words, byte lists, addresses */
@@ -39,7 +39,6 @@ $include "host/crypto.sail"
 
 /* pure library functions */
 $include "lib/rlp.sail"
-$include "lib/hash_builder.sail"
 $include "lib/block_hash.sail"
 
 /* halt / exceptional-halt kinds */
@@ -60,4 +59,4 @@ $include "evm/transaction.sail"
 $include "evm/block.sail"
 
 /* post-state authentication */
-$include "lib/state_root.sail"
+$include "lib/mpt.sail"
