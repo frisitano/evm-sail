@@ -41,7 +41,7 @@ register code_len      : int        = 0
 val hj_valid    = impure "hj_valid"    : bits(64) -> bool
 val hc_byte     = impure "hc_byte"     : bits(64) -> bits(8)
 val hc_word     = impure "hc_word"     : (bits(64), bits(64)) -> word
-val fc_set_addr = impure "fc_set_addr" : (bits(64), bits(64), bits(64)) -> bits(64)
+val fc_set_hash = impure "fc_set_hash" : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
 val fc_pend_mem = impure "fc_pend_mem" : (bits(64), bits(64)) -> bits(64)
 val fc_set_txd  = impure "fc_set_txd"  : unit -> bits(64)
 val fc_set_empty = impure "fc_set_empty" : unit -> unit
@@ -53,8 +53,8 @@ val hc_len      = impure "hc_len"      : unit -> bits(64)
  * BEFORE the frame switch: the child's code is an alias of this frame's
  * memory range (the parent is frozen while the child runs). */
 function frame_code_addr(a : address) -> unit = {
-  let aw : word = sail_zero_extend(a, 256);
-  code_len = unsigned(fc_set_addr(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0]))
+  let h : hash = k_code_key(a);
+  code_len = unsigned(fc_set_hash(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]))
 }
 /* re-read the (C-side) frame descriptor's length after a child frame pops.
  * NOT a saved Sail local: sail -O's register-effect analysis is per-function

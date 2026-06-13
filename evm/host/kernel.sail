@@ -56,7 +56,8 @@ function k_tstore(a : address, s : word, v : word) -> unit = {
 /* --- accounts --- */
 function k_get_balance(a : address) -> word = { kget(a).acc_balance }
 function k_get_nonce(a : address) -> int = { kget(a).acc_nonce }
-function k_get_code(a : address) -> list(byte) = kget(a).acc_code
+/* the raw code key for store lookups (KECCAK_EMPTY for codeless accounts) */
+function k_code_key(a : address) -> hash = kget(a).acc_codehash
 /* EXTCODEHASH: a field read -- the hash IS the account's code binding.
  * A truly empty (nonexistent) account reads as 0 (EIP-1052). */
 function k_get_codehash(a : address) -> hash = {
@@ -87,8 +88,9 @@ function k_bump_nonce(a : address) -> unit = {
 }
 function k_set_code(a : address, c : list(byte)) -> unit = {
   jpush(JAcct(a, kget(a)));
-  kset(a, { kget(a) with acc_code = c, acc_codehash = keccak256(c) });
-  cs_store_code(a, c)
+  let h : hash = keccak256(c);
+  cs_store_code(h, c);
+  kset(a, { kget(a) with acc_codehash = h })
 }
 
 /* ---- EIP-7702 delegation designation (0xef0100 || address) ---- */
@@ -98,58 +100,36 @@ function addr_bytes(a : address) -> list(byte) = {
   foreach (k from 0 to 19) { out = list_append(out, [| (sail_shiftright(w, 8 * (19 - k)))[7 .. 0] |]) };
   out
 }
-function addr_from_bytes(bs : list(byte)) -> address = {
-  var w : word = word_of_int(0);
-  foreach (k from 0 to 19) { w = or_vec(sail_shiftleft(w, 8), sail_zero_extend(list_nth(bs, k, 0x00), 256)) };
-  word_to_address(w)
-}
 function delegation_code(a : address) -> list(byte) = 0xef :: 0x01 :: 0x00 :: addr_bytes(a)
 
-/* |c| == n, walking at most n+1 cells (NOT list_len: the delegation check
- * below runs on every CALL-family target, and list_len of a 24KB contract
- * would make CALL O(|code|)) */
-function len_is(c : list(byte), n : int) -> bool =
-  match c { [||] => n == 0, _ :: r => if n == 0 then false else len_is(r, n - 1) }
-
-function code_is_nil(c : list(byte)) -> bool = match c { [||] => true, _ => false }
-
-/* (is_delegation, target) for a 23-byte 0xef0100 designation; else (false, _).
- * O(prefix): matches 3 head bytes, then verifies the tail is exactly 20. */
-function deleg_target(c : list(byte)) -> (bool, address) =
-  match c {
-    0xef :: 0x01 :: 0x00 :: rest =>
-      if len_is(rest, 20) then (true, addr_from_bytes(rest)) else (false, ZERO_ADDR),
-    _ => (false, ZERO_ADDR)
-  }
-
-val cs_deleg = impure "cs_deleg" : (bits(64), bits(64), bits(64)) -> bits(168)
-/* EIP-7702 delegation of addr's STORED code, probed via the execution mirror
- * in ONE host call (this runs on every CALL-family target): bit 160 = is a
- * delegation designation, low 160 bits = the designated target. */
+val cs_deleg = impure "cs_deleg" : (bits(64), bits(64), bits(64), bits(64)) -> bits(168)
+/* EIP-7702 delegation of addr's stored code, probed by codeHash in ONE host
+ * call (runs on every CALL-family target): bit 160 = is a delegation
+ * designation, low 160 bits = the designated target. */
 function k_deleg_target(a : address) -> (bool, address) = {
-  let aw : word = sail_zero_extend(a, 256);
-  let r : bits(168) = cs_deleg(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0]);
+  let h : hash = k_code_key(a);
+  let r : bits(168) = cs_deleg(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]);
   (r[160] == bitone, r[159 .. 0])
 }
 
 /* EXTCODESIZE / EXTCODECOPY via the execution mirror (the semantic code db
  * defines the value; walking a code list is O(|code|) per opcode) */
 function k_get_code_size(a : address) -> int = {
-  let aw : word = sail_zero_extend(a, 256);
-  unsigned(cs_len(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0]))
+  let h : hash = k_code_key(a);
+  unsigned(cs_len(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]))
 }
 function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
-  let aw : word = sail_zero_extend(a, 256);
+  let h : hash = k_code_key(a);
   /* clamp a beyond-2^64 offset to a beyond-any-code sentinel (reads zeros) */
   let o = if off > 16777216 then 16777216 else off;
-  cs_to_mem(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0],
+  cs_to_mem(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0],
             get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
 }
 /* used only by the tx driver to seed pre-state (no trace entry) */
 function k_seed_account(a : address, nonce : int, bal : word, c : list(byte)) -> unit = {
-  kset(a, struct { acc_nonce = nonce, acc_balance = bal,
-                   acc_code = c, acc_codehash = keccak256(c) });
-  cs_store_code(a, c)
+  let h : hash = keccak256(c);
+  cs_store_code(h, c);
+  kset(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = h })
 }
 function k_seed_storage(a : address, s : word, v : word) -> unit =
   map_store(MAP_STORAGE, a, s, v)   /* seeds the base layer (only layer live here) */
@@ -225,7 +205,6 @@ function acc_remove(es : list(AccountEntry), a : address) -> list(AccountEntry) 
   match es { [||] => [||], e :: r => if e.ae_addr == a then acc_remove(r, a) else e :: acc_remove(r, a) }
 function k_account_delete(a : address) -> unit = {
   k_accounts = acc_remove(k_accounts, a);
-  cs_del_addr(a);
   map_wipe_addr(MAP_STORAGE, a)
 }
 

@@ -2,7 +2,7 @@
 /* EVM USER-SPACE interpreter: fetch/decode, run loop, sub-call/create        */
 /*                                                                           */
 /* run_call/run_create save USER-SPACE frame registers and use kernel         */
-/* syscalls for all world effects: k_snapshot on entry, k_get_code to fetch   */
+/* syscalls for all world effects: k_snapshot on entry, code via the store     */
 /* the callee code, k_transfer for value, and k_commit / k_revert on exit     */
 /* (the kernel rolls the world back atomically on a reverting child).         */
 /* ======================================================================== */

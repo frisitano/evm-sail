@@ -78,9 +78,8 @@ function intrinsic_gas(tx : Transaction) -> gas = {
 function process_auth(au : Authorization) -> unit = {
   let authority = au.au_authority;
   let chain_ok = (au.au_chain_id == 0) | (au.au_chain_id == unsigned(k_block.be_chain_id));
-  let acode = k_get_code(authority);
-  let (is_deleg, _) = deleg_target(acode);
-  let code_ok = code_is_nil(acode) | is_deleg;
+  let (is_deleg, _) = k_deleg_target(authority);
+  let code_ok = (k_code_key(authority) == KECCAK_EMPTY) | is_deleg;
   let nonce_ok = k_get_nonce(authority) == au.au_nonce;
   /* step 5: warm the authority once sig + chain id pass, BEFORE the code/nonce
    * checks -- so a tuple later skipped for code/nonce still warms its authority. */
@@ -134,8 +133,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
   let upfront = tx.t_gas_limit * unsigned(tx.t_max_fee)
               + unsigned(tx.t_value)
               + blob_gas * unsigned(tx.t_max_blob_fee);
-  let scode = k_get_code(sender);
-  let (sender_deleg, _) = deleg_target(scode);
+  let (sender_deleg, _) = k_deleg_target(sender);
   /* EIP-4844 / EIP-7691 / EIP-7594 blob-count bounds: Cancun max 6 per block,
      Prague max 9 per block, Osaka adds MAX_BLOBS_PER_TX = 6. A type-3 tx must
      carry >= 1 blob, must not create, and every versioned hash must be 0x01-tagged. */
@@ -154,7 +152,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
     | (tx.t_gas_limit >= G_transaction + 10 * calldata_tokens());
   let valid =
         (unsigned(k_get_balance(sender)) >= upfront)        /* covers upfront cost      */
-      & (code_is_nil(scode) | sender_deleg)                 /* EIP-3607 (7702 exempts delegations) */
+      & ((k_code_key(sender) == KECCAK_EMPTY) | sender_deleg) /* EIP-3607 (7702 exempts delegations) */
       & (tx.t_gas_limit >= intrinsic)                       /* gas covers intrinsic     */
       & floor_ok                                            /* EIP-7623 floor coverage  */
       & (unsigned(tx.t_max_fee) >= unsigned(k_block.be_base_fee))          /* >= base fee */

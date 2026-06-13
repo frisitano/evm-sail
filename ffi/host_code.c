@@ -25,9 +25,9 @@
 /* ----------------------------- code store ------------------------------ */
 
 typedef struct {
-  uint64_t a[3];                  /* address key (BE words)        */
-  uint8_t *p;                     /* code bytes                    */
-  uint8_t *bm;                    /* JUMPDEST bitmap               */
+  uint64_t a[4];                  /* codeHash key (BE 64-bit limbs)   */
+  uint8_t *p;                     /* code bytes                       */
+  uint8_t *bm;                    /* JUMPDEST bitmap                  */
   uint32_t len, cap;
   uint8_t  used;
 } cs_ent;
@@ -39,14 +39,15 @@ static uint32_t cs_skip;          /* PUSH-immediate skip while streaming   */
 
 static uint64_t cs_hash(const uint64_t *a) {
   uint64_t h = 0xcbf29ce484222325ull;
-  for (int i = 0; i < 3; i++) { h ^= a[i]; h *= 0x100000001b3ull; }
+  for (int i = 0; i < 4; i++) { h ^= a[i]; h *= 0x100000001b3ull; }
   return h;
 }
 static cs_ent *cs_find(const uint64_t *a) {
   uint32_t i = (uint32_t)(cs_hash(a) & (cs_cap - 1));
   for (;;) {
     cs_ent *e = &cs_tab[i];
-    if (!e->used || (e->a[0] == a[0] && e->a[1] == a[1] && e->a[2] == a[2])) return e;
+    if (!e->used || (e->a[0] == a[0] && e->a[1] == a[1] && e->a[2] == a[2] && e->a[3] == a[3]))
+      return e;
     i = (i + 1) & (cs_cap - 1);
   }
 }
@@ -69,21 +70,24 @@ unit cs_reset(const unit u) {     /* per test case: drop every entry */
   return UNIT;
 }
 
-/* begin (re)writing the code of address (a2,a1,a0); stream bytes via cs_byte */
-unit cs_begin(uint64_t a2, uint64_t a1, uint64_t a0) {
+/* begin storing the code whose keccak is (h3,h2,h1,h0); content-addressed --
+ * returns 1 if this hash is new (caller streams the bytes via cs_byte), 0 if it
+ * is already stored (same hash == same bytes, so streaming is skipped). */
+uint64_t cs_begin(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
   if (!cs_tab) cs_grow();
-  uint64_t key[3] = { a2, a1, a0 };
+  uint64_t key[4] = { h3, h2, h1, h0 };
   cs_ent *e = cs_find(key);
+  if (e->used && e->len) { cs_cur = e; return 0; }   /* already present */
   if (!e->used) {
     e->used = 1;
-    e->a[0] = a2; e->a[1] = a1; e->a[2] = a0;
+    e->a[0] = h3; e->a[1] = h2; e->a[2] = h1; e->a[3] = h0;
     cs_n++;
     if (cs_n * 10 >= cs_cap * 7) { cs_grow(); e = cs_find(key); }
   }
   e->len = 0;
   cs_cur = e;
   cs_skip = 0;
-  return UNIT;
+  return 1;
 }
 unit cs_byte(uint64_t b) {
   cs_ent *e = cs_cur;
@@ -103,14 +107,6 @@ unit cs_byte(uint64_t b) {
   e->len++;
   return UNIT;
 }
-unit cs_del(uint64_t a2, uint64_t a1, uint64_t a0) {   /* account deletion */
-  if (!cs_tab) return UNIT;
-  uint64_t key[3] = { a2, a1, a0 };
-  cs_ent *e = cs_find(key);
-  if (e->used) e->len = 0;          /* keep the slot; empty code */
-  return UNIT;
-}
-
 /* ------------------------- per-frame descriptors ------------------------ */
 
 typedef struct {
@@ -145,11 +141,11 @@ static void fc_inl_fit(int d, uint32_t need) {
   }
 }
 
-/* current frame's code := the store entry of (a2,a1,a0); returns its length */
-uint64_t fc_set_addr(uint64_t a2, uint64_t a1, uint64_t a0) {
+/* current frame's code := the store entry for codeHash (h3,h2,h1,h0); len */
+uint64_t fc_set_hash(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
   fc_desc *f = fc_cur();
   if (cs_tab) {
-    uint64_t key[3] = { a2, a1, a0 };
+    uint64_t key[4] = { h3, h2, h1, h0 };
     cs_ent *e = cs_find(key);
     if (e->used && e->len) { f->p = e->p; f->bm = e->bm; f->len = e->len; return f->len; }
   }
@@ -196,25 +192,25 @@ unit fc_set_empty(const unit u) {
 /* EXTCODESIZE / EXTCODECOPY / EXTCODEHASH read the store directly: the Sail
  * acc_code list defines the value, but walking it is O(|code|) per opcode. */
 
-static const cs_ent *cs_get(uint64_t a2, uint64_t a1, uint64_t a0) {
+static const cs_ent *cs_get(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
   if (!cs_tab) return NULL;
-  uint64_t key[3] = { a2, a1, a0 };
+  uint64_t key[4] = { h3, h2, h1, h0 };
   const cs_ent *e = cs_find(key);
   return (e->used && e->len) ? e : NULL;
 }
 
-uint64_t cs_len(uint64_t a2, uint64_t a1, uint64_t a0) {
-  const cs_ent *e = cs_get(a2, a1, a0);
+uint64_t cs_len(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
+  const cs_ent *e = cs_get(h3, h2, h1, h0);
   return e ? e->len : 0;
 }
 
-/* EXTCODECOPY: code(addr)[off..off+len) -> memory[dst..), zero-padded */
-unit cs_to_mem(uint64_t a2, uint64_t a1, uint64_t a0,
+/* EXTCODECOPY: code(hash)[off..off+len) -> memory[dst..), zero-padded */
+unit cs_to_mem(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
                uint64_t dst, uint64_t off, uint64_t len) {
   if (!len) return UNIT;
   uint8_t *d = hm_wr(dst, len);
   if (!d) return UNIT;
-  const cs_ent *e = cs_get(a2, a1, a0);
+  const cs_ent *e = cs_get(h3, h2, h1, h0);
   for (uint64_t k = 0; k < len; k++) {
     uint64_t i = off + k;
     d[k] = (e && i < e->len) ? e->p[i] : 0;
@@ -225,8 +221,8 @@ unit cs_to_mem(uint64_t a2, uint64_t a1, uint64_t a0,
 /* EIP-7702 delegation probe: (is_designation << 160) | target, in one call
  * (this runs on every CALL-family target; reading the code any other way
  * would be O(|code|) or a code-db walk) */
-void cs_deleg(lbits *rop, uint64_t a2, uint64_t a1, uint64_t a0) {
-  const cs_ent *e = cs_get(a2, a1, a0);
+void cs_deleg(lbits *rop, uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
+  const cs_ent *e = cs_get(h3, h2, h1, h0);
   int deleg = e && e->len == 23 && e->p[0] == 0xef && e->p[1] == 0x01 && e->p[2] == 0x00;
 #ifdef SAIL_INT_LIMBS
   rop->len = 168;

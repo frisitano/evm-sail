@@ -15,12 +15,11 @@
  *
  * In-memory representations stay UNHASHED: the account links its code bytes
  * DIRECTLY (a refcounted list -- holding it is O(1)); nothing at runtime is
- * keyed or resolved by hash. acc_codehash is not linkage -- it is the cached
- * protocol VALUE keccak256(acc_code), computed once at the write boundary,
+ * codeHash IS the account's code: a content address into the hash-keyed code
+ * store (host_code.c). The bytes are not held here -- the hash is, computed at
  * because the hash itself is observable state (EXTCODEHASH, the trie leaf)
  * and is the symbolic binding a prover reasons over. */
-struct Account = { acc_nonce : int, acc_balance : word,
-                   acc_code : list(byte), acc_codehash : hash }
+struct Account = { acc_nonce : int, acc_balance : word, acc_codehash : hash }
 
 /* keccak256 of the empty string: the codeHash of every codeless account */
 let KECCAK_EMPTY : hash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
@@ -63,7 +62,7 @@ union JEntry = {
 let ZERO_WORD : word = 0x0000000000000000000000000000000000000000000000000000000000000000
 let ZERO_ADDR : address = 0x0000000000000000000000000000000000000000
 let EMPTY_ACCOUNT : Account = struct { acc_nonce = 0, acc_balance = ZERO_WORD,
-                                       acc_code = [||], acc_codehash = KECCAK_EMPTY }
+                                       acc_codehash = KECCAK_EMPTY }
 
 register k_accounts    : list(AccountEntry) = [||]
 register k_warm_addr   : list(address)      = [||]
@@ -95,24 +94,22 @@ val host_map_it_val = impure "host_map_it_val" : bits(64) -> bits(64)
  * once per code WRITE (seeding, CREATE deploys, EIP-7702 delegations). The
  * Sail account store remains the authoritative spec value. */
 val cs_reset = impure "cs_reset" : unit -> unit
-val cs_begin = impure "cs_begin" : (bits(64), bits(64), bits(64)) -> unit
-val cs_len    = impure "cs_len"    : (bits(64), bits(64), bits(64)) -> bits(64)
-val cs_to_mem = impure "cs_to_mem" : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
+val cs_begin = impure "cs_begin" : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val cs_len    = impure "cs_len"    : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val cs_to_mem = impure "cs_to_mem" : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
 val cs_byte  = impure "cs_byte"  : bits(8) -> unit
-val cs_del   = impure "cs_del"   : (bits(64), bits(64), bits(64)) -> unit
 
-function cs_store_code(a : address, c : list(byte)) -> unit = {
-  let aw : word = sail_zero_extend(a, 256);
-  cs_begin(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0]);
-  var rest : list(byte) = c;
-  var more : bool = true;
-  while more do {
-    match rest { b :: t => { cs_byte(b); rest = t }, [||] => more = false }
+/* store `c` in the content-addressed code store under its keccak `h`; if the
+ * hash is already present (same bytes) the stream is skipped (cs_begin == 0). */
+function cs_store_code(h : hash, c : list(byte)) -> unit = {
+  if cs_begin(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]) == 0x0000000000000000 then ()
+  else {
+    var rest : list(byte) = c;
+    var more : bool = true;
+    while more do {
+      match rest { b :: t => { cs_byte(b); rest = t }, [||] => more = false }
+    }
   }
-}
-function cs_del_addr(a : address) -> unit = {
-  let aw : word = sail_zero_extend(a, 256);
-  cs_del(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0])
 }
 
 let MAP_TRANSIENT : int = 0
@@ -226,7 +223,7 @@ function jdrop_last_addr(xs : list(address)) -> list(address) =
   match xs { [||] => [||], _ :: [||] => [||], x :: r => x :: jdrop_last_addr(r) }
 function apply_undo(e : JEntry) -> unit = match e {
   JCheck()       => (),
-  JAcct(a, old)  => { kset(a, old); cs_store_code(a, old.acc_code) },
+  JAcct(a, old)  => kset(a, old),
   JStor(_, _, _) => (),   /* storage undo is the overlay's pop_discard now */
   JTran(a, s, v) => map_store(MAP_TRANSIENT, a, s, v),
   JWarmA(a)      => k_warm_addr = jremove_addr(k_warm_addr, a),
