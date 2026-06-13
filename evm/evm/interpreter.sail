@@ -196,12 +196,15 @@ function run_call(mode : int) -> unit = {
             0
         };
     let m_max = if m_args > m_ret then { m_args } else { m_ret };
-    if m_max > 0 then {
-        charge(expansion_gas(m_max));
-        if m_max > memory_size then {
-            memory_size = m_max
-        }
-    };
+
+    /* memory-expansion cost is part of the single message-call charge below
+       (EELS charges message_call_gas.cost + extend_memory.cost together, then
+       expands memory only if it did not run out of gas). */
+    let mem_gas = if m_max > 0 then {
+            expansion_gas(m_max)
+        } else {
+            0
+        };
 
     /* EIP-214: a value-bearing CALL (mode 0) inside a static context is a write and
        raises WriteInStaticContext -- an exceptional halt that consumes all the
@@ -212,26 +215,47 @@ function run_call(mode : int) -> unit = {
         return ()
     };
 
+    /* EIP-2929 access (marks the target warm as a side effect) + EIP-7702
+       delegation access form the access component of extra_gas. */
     let warm = k_access_account(target);
-    charge(account_cost(warm));
-
-    /* EIP-7702: resolving a delegation designation charges the delegate's access */
+    var access_cost : int = account_cost(warm);
     let (tg_deleg, tg_target) = k_deleg_target(target);
     if tg_deleg then {
         let dw = k_access_account(tg_target);
-        charge(account_cost(dw))
-    };
-    if word_nonzero(value) then {
-        charge(G_callvalue);
-        if (mode == 0) & k_account_is_empty(target) then {
-            charge(G_newaccount)
-        }
+        access_cost = access_cost + account_cost(dw)
     };
 
+    /* value-transfer + new-account components of extra_gas */
+    let transfer_cost : int = if word_nonzero(value) then { G_callvalue } else { 0 };
+    let create_cost : int = if word_nonzero(value) & (mode == 0) & k_account_is_empty(target) then {
+            G_newaccount
+        } else {
+            0
+        };
+    let extra_gas : int = access_cost + transfer_cost + create_cost;
+    let stipend : int = if word_nonzero(value) then { G_callstipend } else { 0 };
+
+    /* EELS calculate_message_call_gas: if the frame cannot even afford
+       extra_gas + mem_gas, the call is charged the FULL requested gas (not the
+       63/64-capped value) -- which forces an out-of-gas exceptional halt below.
+       Otherwise the 63/64ths cap applies to (gas_left - mem_gas - extra_gas). */
     let avail = gas_remaining;
-    let base_child = call_gas_cap(avail, gas_req);
-    let stipend = if word_nonzero(value) then { G_callstipend } else { 0 };
-    gas_remaining = to_gas(avail - base_child);
+    let base_child : int = if avail < extra_gas + mem_gas then {
+            gas_req
+        } else {
+            call_gas_cap(to_gas(avail - mem_gas - extra_gas), gas_req)
+        };
+
+    /* one combined charge: cost (= base_child + extra_gas) + mem_gas. A frame
+       that cannot cover this exceptionally halts (all gas consumed) BEFORE the
+       child runs and BEFORE the stipend is granted. */
+    charge(to_gas(base_child + extra_gas + mem_gas));
+    if not_bool(is_running()) then {
+        return ()
+    };
+    if m_max > memory_size then {
+        memory_size = m_max
+    };
     let child_gas = base_child + stipend;
 
     let an = unsigned(target);
@@ -335,7 +359,7 @@ function run_call(mode : int) -> unit = {
             hr_clear();
             memory_size = 0;
             frame_code_exec(target, tg_deleg, tg_target); /* EIP-7702 delegation */
-            call_depth = s_depth + 1;
+            call_depth = call_depth + 1;
 
             interpret();
 
@@ -349,7 +373,7 @@ function run_call(mode : int) -> unit = {
             mem_frame_leave();
             frame_code_resync();
             memory_size = s_msize;
-            call_depth = s_depth;
+            call_depth = call_depth - 1;
             hr_adopt();
             gas_remaining = to_gas(s_gas + child_left);
 
@@ -394,6 +418,12 @@ function run_create(is2 : bool) -> unit = {
         charge(to_gas(G_keccak_word * ediv_int(len + 31, 32)))
     };
 
+    /* an OOG during the static/initcode/keccak charges is an exceptional halt
+       (all gas consumed); bail before any nonce bump or child allocation. */
+    if not_bool(is_running()) then {
+        return ()
+    };
+
     if len > MAX_INITCODE_SIZE then {
         exc_halt(InitCodeTooLarge)
     } else {
@@ -407,6 +437,16 @@ function run_create(is2 : bool) -> unit = {
         let avail = gas_remaining;
         let child_gas = avail - ediv_int(avail, 64);
         gas_remaining = to_gas(avail - child_gas);
+
+        /* EELS generic_create: after reserving the 63/64ths child gas, a CREATE in
+         * a static context (e.g. inside a STATICCALL frame) raises
+         * WriteInStaticContext -- an exceptional halt that consumes all gas, bumps
+         * no nonce, and runs no initcode. */
+        if message.msg_is_static then {
+            exc_halt(WriteProtection);
+            return ()
+        };
+
         let depth_ok : bool = call_depth + 1 <= DEPTH_LIMIT;
         let balance_ok : bool = unsigned(k_get_balance(creator)) >= unsigned(value);
 
@@ -472,7 +512,7 @@ function run_create(is2 : bool) -> unit = {
                 if is_running() & (len == 0) then {
                     frame_code_empty()
                 };
-                call_depth = s_depth + 1;
+                call_depth = call_depth + 1;
 
                 interpret();
 
@@ -492,7 +532,7 @@ function run_create(is2 : bool) -> unit = {
                 mem_frame_leave();
                 frame_code_resync();
                 memory_size = s_msize;
-                call_depth = s_depth;
+                call_depth = call_depth - 1;
 
                 /* a successful create yields EMPTY returndata; a revert exposes its data */
                 if succeeded then {
