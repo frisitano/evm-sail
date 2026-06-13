@@ -11,10 +11,15 @@ behind the official RISC-V model and the Arm/CHERI/x86 academic models. It is
 for theorem provers and symbolic engines — and it is **executable**: the same
 specification compiles to native code, riscv, runs real Ethereum blocks, and passes
 **~100% of the execution-spec-tests state suites for the modern forks** (Berlin onwards).
+This formal specification is inspired by and intended as a complement to [`evm-asm`](https://github.com/Verified-zkEVM/evm-asm).
 
-Why Sail, rather than prose (the Yellow Paper) or a reference client (EELS,
-revm)?
+Objectives:
 
+- **Complete & objective.** The specification is complete — it defines the EVM,
+  the host kernel it runs over, and the interface between them. And it is
+  objective: the semantics are fixed by executable code, not by a
+  natural-language description, and the conformance suite runs against the same
+  model you reason about.
 - **One artifact, many backends.** Sail definitions export to Coq,
   Isabelle/HOL, HOL4 and Lean, generate SMT obligations, and compile to C — so
   the *same* model that passes the conformance suite is the one you reason
@@ -58,6 +63,11 @@ systems (each kernel function is an interface channel), for stateless
 validation (the host fails closed on state absent from a witness), and for
 symbolic engines (the world is an explicit, finite interface).
 
+### Native execution: C FFI backends
+
+To *run* the model — the generated C compiled natively (`sail256`/`sailfix`) —
+the host's mechanism is backed by C FFI; the Sail definitions stay the
+specification while these provide the data structures underneath it.
 Performance-critical state lives behind C FFI with O(1) operations — EVM
 memory, calldata and returndata (`ffi/host_mem.c`, `ffi/acc_shim.c`), the
 operand stack (`ffi/host_stack.c`), the account code store + per-frame code
