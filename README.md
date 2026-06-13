@@ -100,7 +100,8 @@ evm/         the specification (evm.sail is the root include)
     kernel.sail       the kernel functions (k_*): the only state interface
     memory.sail       per-frame byte memory (C-backed, O(1))
     ffi.sail          the C binding layer (accelerator byte-stream protocol)
-    crypto.sail       host precompile functions (eth-act zkvm-standards)
+    crypto.sail       keccak256/sha256 + the EVM precompiles + CREATE address
+                      derivation (eth-act zkvm-standards crypto boundary)
   evm/                THE TRANSACTION KERNEL (= the EVM)
     machine.sail      frame registers, gas counter, stack, code descriptors
     gas.sail          the complete gas schedule (fork-gated)
@@ -110,7 +111,7 @@ evm/         the specification (evm.sail is the root include)
     transaction.sail  tx validity + the state transition + refunds
     block.sail        whole-block execution (txs + withdrawals)
   lib/
-    keccak.sail  sha256.sail  rlp.sail  rlp_decode.sail  mpt.sail
+    rlp.sail  rlp_decode.sail  mpt.sail
     hash_builder.sail  state_root.sail  block_hash.sail  ssz.sail  ssz_htr.sail
     mpt_witness.sail  stateless witness: feed, re-root, fail-closed lookups
 ffi/         C backends: host_mem.c (memory/calldata), host_map.c (overlay
