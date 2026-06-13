@@ -250,8 +250,20 @@ register k_stateless : bool = false /* stateless mode: storage reads must hit th
 register k_fork : int = 99 /* active fork level (higher = newer); set by the runner */
 
 /* fork levels for fork-gated rules (chronological; only thresholds matter) */
-let FORK_PRAGUE : int = 2 /* EIP-7623 calldata floor              */
-let FORK_OSAKA : int = 3 /* EIP-7883 modexp gas, EIP-7825 cap    */
+let FORK_CANCUN : int = 1 /* EIP-1153/4844; precompiles 0x01-0x0a */
+let FORK_PRAGUE : int = 2 /* EIP-7623 calldata floor; +BLS 0x0b-0x11 */
+let FORK_OSAKA : int = 3 /* EIP-7883 modexp gas, EIP-7825 cap; +0x100 */
+
+/* Is `n` (the low bytes of an address, as an int) a precompile at the active
+ * fork? The precompile set GROWS by fork: Cancun has 0x01-0x0a (1-10);
+ * Prague adds the EIP-2537 BLS12-381 set 0x0b-0x11 (11-17); Osaka adds
+ * 0x100 P256VERIFY (EIP-7951). A CALL to an address OUTSIDE the active set is
+ * an ordinary call to a (typically empty) account, not a precompile. */
+function is_precompile(n : int) -> bool = {
+    let bls = (n >= 11) & (n <= 17) & (k_fork >= FORK_PRAGUE);
+    let p256 = (n == 256) & (k_fork >= FORK_OSAKA);
+    ((n >= 1) & (n <= 10)) | bls | p256
+}
 
 register k_block : BlockEnv =
     struct {

@@ -150,10 +150,18 @@ function prewarm(tx : Transaction) -> unit = {
             k_access_account(tx.t_to)
         };
     let _ = k_access_account(k_coinbase());
+
+    /* pre-warm the active fork's precompile set only (EIP-2929 seeds
+       accessed_addresses with PRE_COMPILED_CONTRACTS, which GROWS by fork:
+       Cancun 0x01-0x0a, Prague +BLS 0x0b-0x11, Osaka +0x100 P256VERIFY). */
     foreach (p from 1 to 17) {
-        let _ = k_access_account(word_to_address(word_of_int(p)))
-    }; /* precompiles pre-warmed (EIP-2929; 0x0b-0x11 are EIP-2537 BLS) */
-    let _ = k_access_account(word_to_address(word_of_int(256))); /* 0x100 P256VERIFY (EIP-7951) */
+        if is_precompile(p) then {
+            let _ = k_access_account(word_to_address(word_of_int(p)))
+        }
+    };
+    if is_precompile(256) then {
+        let _ = k_access_account(word_to_address(word_of_int(256))) /* 0x100 P256VERIFY */
+    };
     warm_al_addrs(tx.t_al_addrs);
     warm_al_keys(tx.t_al_keys)
 }
@@ -294,7 +302,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
             k_transfer(sender, tx.t_to, tx.t_value)
         };
         let an = unsigned(tx.t_to);
-        if (an >= 1 & an <= 17) | (an == 256) then {
+        if is_precompile(an) then {
             /* tx directly to a precompile: run it as the top-level frame, gas-checked
                FIRST (an OOG precompile must not execute). Failure or OOG is an
                exceptional halt (all gas consumed, value transfer reverted). */

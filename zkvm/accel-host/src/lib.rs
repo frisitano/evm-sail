@@ -58,6 +58,21 @@ pub unsafe extern "C" fn zkvm_secp256k1_ecrecover(
         Ok(s) => s,
         Err(_) => return ZKVM_EFAIL,
     };
+    if recid > 1 {
+        return ZKVM_EFAIL;
+    }
+    // The EVM ECRECOVER precompile (0x01) does NOT enforce low-s malleability
+    // (unlike EIP-2 transaction signatures): it must recover from (r, s, v) with
+    // s anywhere in [1, n-1]. k256's recover_from_prehash, however, rejects a
+    // high-s signature in its final verify step. Negating s (s' = n - s) reflects
+    // the recovered point R across the x-axis, flipping its y-parity, so recovery
+    // from the low-s-normalized signature with the recovery id's y-parity bit
+    // flipped yields the SAME public key -- and passes the low-s verify. Apply
+    // this equivalence when s is high; the result is identical for low-s inputs.
+    let (signature, recid) = match signature.normalize_s() {
+        Some(low_s) => (low_s, recid ^ 1), // s was high: use n-s and flip y-parity
+        None => (signature, recid),        // s already low: unchanged
+    };
     let rid = match RecoveryId::from_byte(recid) {
         Some(r) => r,
         None => return ZKVM_EFAIL,
@@ -670,5 +685,25 @@ mod tests {
         let mut a = [0u8; 32];
         unsafe { zkvm_keccak256(pubkey.as_ptr(), 64, a.as_mut_ptr()); }
         assert_eq!(a[12..], hex("7156526fbd7a3c72969b54f64e42c10fbb768c8a")[..]);
+    }
+
+    #[test]
+    fn ecrecover_high_s_is_accepted() {
+        // EVM ECRECOVER (0x01) must accept a high-s signature (no EIP-2 low-s
+        // malleability check). This vector (from stStaticFlagEnabled precompile
+        // tests) has s > n/2 and v = 28; the recovered address is the test sender.
+        let msg = hex("18c547e4f7b0f325ad1e56f57e26c745b09a3e503d86e00e5255ff7f715d3d1c");
+        let r = hex("73b1693892219d736caba55bdb67216e485557ea6b6af75f37096c9aa6a5a75f");
+        let s = hex("eeb940b1d03b21e36b0e47e79769f095fe2ab855bd91e3a38756b7d75a9c4549");
+        let mut sig = [0u8; 64];
+        sig[..32].copy_from_slice(&r);
+        sig[32..].copy_from_slice(&s);
+        let mut pubkey = [0u8; 64];
+        // v = 28 -> recid 1
+        let rc = unsafe { zkvm_secp256k1_ecrecover(msg.as_ptr(), sig.as_ptr(), 1, pubkey.as_mut_ptr()) };
+        assert_eq!(rc, ZKVM_EOK);
+        let mut a = [0u8; 32];
+        unsafe { zkvm_keccak256(pubkey.as_ptr(), 64, a.as_mut_ptr()); }
+        assert_eq!(a[12..], hex("a94f5374fce5edbc8e2a8697c15331677e6ebf0b")[..]);
     }
 }

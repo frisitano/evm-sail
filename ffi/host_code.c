@@ -301,7 +301,8 @@ unit hc_to_mem(uint64_t dst, uint64_t off, uint64_t len) {
   const fc_desc *f = fc_cur();
   for (uint64_t k = 0; k < len; k++) {
     uint64_t i = off + k;
-    d[k] = i < f->len ? f->p[i] : 0;
+    /* i < off => uint64 overflow of a past-end (truncated 256-bit) offset */
+    d[k] = (i >= off && i < f->len) ? f->p[i] : 0;
   }
   return UNIT;
 }

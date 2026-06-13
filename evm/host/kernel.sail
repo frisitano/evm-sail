@@ -217,7 +217,7 @@ function k_create2_addr(a : address, salt : word, inithash : hash) -> address =
  * input). Output stays in the accelerator buffer; the EVM adopts it as
  * returndata. Gas is computed by the EVM (policy, evm/gas.sail). */
 function k_precompile(num : int) -> bool =
-    if (num >= 1 & num <= 17) | (num == 256) then {
+    if is_precompile(num) then {
         run_precompile_staged()
     } else {
         false

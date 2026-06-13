@@ -152,7 +152,7 @@ function frame_succeeded() -> bool =
 function frame_code_exec(target : address, dele : bool, dtgt : address) -> unit =
     if dele then {
         let n = unsigned(address_to_word(dtgt));
-        if (n >= 1 & n <= 17) | (n == 256) then {
+        if is_precompile(n) then {
             frame_code_empty()
         } else {
             frame_code_addr(dtgt)
@@ -177,6 +177,13 @@ function run_call(mode : int) -> unit = {
     let ret_off = pop_int();
     let ret_len = pop_int();
 
+    /* A stack underflow during the operand pops exceptionally halts the frame
+       (exc_halt zeroed the gas). EELS unwinds the whole op via an exception;
+       Sail has no unwind, so bail out here before any gas is re-added below. */
+    if not_bool(is_running()) then {
+        return ()
+    };
+
     /* memory is expanded once to cover the larger of the args / return ranges */
     let m_args = if args_len > 0 then {
             args_off + args_len
@@ -195,6 +202,16 @@ function run_call(mode : int) -> unit = {
             memory_size = m_max
         }
     };
+
+    /* EIP-214: a value-bearing CALL (mode 0) inside a static context is a write and
+       raises WriteInStaticContext -- an exceptional halt that consumes all the
+       caller frame's gas. CALLCODE/DELEGATECALL/STATICCALL never trigger it
+       (CALLCODE has no static guard in the spec; the others force value = 0). */
+    if (mode == 0) & word_nonzero(value) & message.msg_is_static then {
+        exc_halt(WriteProtection);
+        return ()
+    };
+
     let warm = k_access_account(target);
     charge(account_cost(warm));
 
@@ -230,8 +247,9 @@ function run_call(mode : int) -> unit = {
         gas_remaining = to_gas(gas_remaining + child_gas);
         push(WORD_ZERO)
     } else {
-        if (an >= 1 & an <= 17) | (an == 256) then {
-            /* 256 = 0x100 P256VERIFY (EIP-7951) */
+        if is_precompile(an) then {
+            /* 256 = 0x100 P256VERIFY (EIP-7951; Osaka). The precompile set is
+               fork-gated: an address outside the active set is an ordinary call. */
             /* the precompile's input is the child message's calldata: a snapshot of
                mem[args_off .. args_off+args_len), staged C-side in one copy; the gas
                functions inspect the staged bytes (modexp header, blake2f rounds) O(1) */
@@ -363,6 +381,12 @@ function run_create(is2 : bool) -> unit = {
             WORD_ZERO
         };
 
+    /* a stack underflow during the operand pops exceptionally halts the frame
+       (exc_halt zeroed the gas); bail out before any child gas is allocated. */
+    if not_bool(is_running()) then {
+        return ()
+    };
+
     charge_expansion(off, len);
     charge(G_create);
     charge(initcode_gas(len));
@@ -386,7 +410,12 @@ function run_create(is2 : bool) -> unit = {
         let depth_ok : bool = call_depth + 1 <= DEPTH_LIMIT;
         let balance_ok : bool = unsigned(k_get_balance(creator)) >= unsigned(value);
 
-        if not_bool(depth_ok) | not_bool(balance_ok) then {
+        /* EELS generic_create: a creator nonce at the 2^64-1 ceiling cannot be
+         * incremented, so the create aborts early (child gas refunded, 0 pushed,
+         * NO nonce bump) -- alongside the depth/balance guards. */
+        let nonce_ok : bool = nonce < 18446744073709551615;
+
+        if not_bool(depth_ok) | not_bool(balance_ok) | not_bool(nonce_ok) then {
             hr_clear();
             gas_remaining = to_gas(gas_remaining + child_gas);
             push(WORD_ZERO)

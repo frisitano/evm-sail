@@ -493,14 +493,28 @@ function execute(op : ast) -> unit = match op {
     },
     DUP(n) => {
         charge(G_verylow);
-        push(peek(n - 1))
+
+        /* DUP_n duplicates the n-th item (1-indexed): needs height >= n.
+           EELS dup_n raises StackUnderflowError when (n-1) >= len(stack). */
+        if stack_height() < n then {
+            exc_halt(StackUnderflow)
+        } else {
+            push(peek(n - 1))
+        }
     },
     SWAP(n) => {
         charge(G_verylow);
-        let top = peek(0);
-        let other = peek(n);
-        stack_set(0, other);
-        stack_set(n, top)
+
+        /* SWAP_n swaps the top with the n-th-below item: needs height >= n+1.
+           EELS swap_n raises StackUnderflowError when n >= len(stack). */
+        if stack_height() < n + 1 then {
+            exc_halt(StackUnderflow)
+        } else {
+            let top = peek(0);
+            let other = peek(n);
+            stack_set(0, other);
+            stack_set(n, top)
+        }
     },
     /* ---- log: EVM checks/prices, kernel records ---- */
     LOG(n) => {

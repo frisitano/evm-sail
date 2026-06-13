@@ -153,13 +153,19 @@ static uint8_t cd_at(const hm_cd *c, uint64_t i) {
 }
 uint64_t cd_byte(uint64_t i) { return cd_at(&cd[h_top], i); }
 
-/* CALLDATACOPY: calldata[off..off+len) -> memory[dst..), zero-padded */
+/* CALLDATACOPY: calldata[off..off+len) -> memory[dst..), zero-padded.
+ * `off` arrives truncated to 64 bits from a 256-bit EVM offset; a past-end
+ * source offset must zero-fill the WHOLE dest, so guard against the uint64
+ * wraparound of `off + k` re-aliasing back into the real calldata. */
 unit cd_to_mem(uint64_t dst, uint64_t off, uint64_t len) {
   if (!len) return UNIT;
   uint8_t *d = hm_wr(dst, len);
   if (!d) return UNIT;
   const hm_cd *c = &cd[h_top];
-  for (uint64_t k = 0; k < len; k++) d[k] = cd_at(c, off + k);
+  for (uint64_t k = 0; k < len; k++) {
+    uint64_t i = off + k;
+    d[k] = (i < off) ? 0 : cd_at(c, i); /* i < off => uint64 overflow => past-end */
+  }
   return UNIT;
 }
 

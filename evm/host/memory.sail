@@ -88,9 +88,13 @@ function stage_precompile_input(id : int, off : int, len : int) -> unit =
 function mem_mcopy(dst : int, src : int, len : int) -> unit =
     hm_move(get_slice_int(64, dst, 0), get_slice_int(64, src, 0), get_slice_int(64, len, 0))
 
-/* CODECOPY: the current frame's code (already in the C buffer) into memory */
-function mem_codecopy(dst : int, off : int, len : int) -> unit =
-    hc_to_mem(get_slice_int(64, dst, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0))
+/* CODECOPY: the current frame's code (already in the C buffer) into memory.
+ * Clamp a beyond-2^64 source offset to a beyond-any-code sentinel (see
+ * calldata_copy_to_mem): a past-end source must zero-fill the destination. */
+function mem_codecopy(dst : int, off : int, len : int) -> unit = {
+    let o = if off > 16777216 then { 16777216 } else { off };
+    hc_to_mem(get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
+}
 
 /* KECCAK-256 directly over the memory range [off, off+len): the bytes go from
  * the C memory frame into the C accelerator without an intermediate list */
@@ -155,8 +159,14 @@ function txdata_byte(i : int) -> byte = txd_at(get_slice_int(64, i, 0))
 function txdata_size() -> int = unsigned(txd_length())
 
 function calldata_word(off : int) -> word = cd_word(get_slice_int(64, off, 0))
-function calldata_copy_to_mem(dst : int, off : int, len : int) -> unit =
-    cd_to_mem(get_slice_int(64, dst, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0))
+
+/* clamp a beyond-2^64 source offset to a beyond-any-calldata sentinel so the
+ * 64-bit truncation cannot wrap back into real calldata: a past-end source
+ * offset must zero-fill the whole destination (EELS buffer_read). */
+function calldata_copy_to_mem(dst : int, off : int, len : int) -> unit = {
+    let o = if off > 16777216 then { 16777216 } else { off };
+    cd_to_mem(get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
+}
 function calldata_set_next(off : int, len : int) -> unit =
     cd_set(get_slice_int(64, off, 0), get_slice_int(64, len, 0))
 
