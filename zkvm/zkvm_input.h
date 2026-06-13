@@ -1,6 +1,6 @@
 /* zkVM binding of the SSZ byte-source (sail/host/io.sail's ssz_src_byte/ssz_src_len)
  * to the private input (read_input's buffer). Pulls in keccak too so a single
- * `sail -c --c-include el_input.h` covers all guest externs. */
+ * `sail -c --c-include zkvm_input.h` covers all guest externs. */
 #ifndef EL_INPUT_H
 #define EL_INPUT_H
 #include "acc_shim.h"                 /* -> sail.h + zkvm-standards accelerator shim (keccak/sha256/precompiles) */

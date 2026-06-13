@@ -96,9 +96,9 @@ PY
   "$GCC" "${CFLAGS[@]}" -Wno-unused -c "$BUILD/zkvm_input_data.c" -o "$BUILD/zkvm_input_data.o"
   # 1. Sail -> C: no main, no Sail runtime harness (we supply our own).
   #    --c-include injects the guest extern decls (keccak accelerator +
-  #    el_input private-input reader) so the generated call sites compile.
+  #    zkvm_input private-input reader) so the generated call sites compile.
   "$SAIL" -c --c-no-main --c-no-rts --c-preserve zkvm_run \
-      --c-include el_input.h \
+      --c-include zkvm_input.h \
       "${GUEST:-$ROOT/zkvm/zkvm_block.sail}" -o "$BUILD/zkvm_block"
   # 2. Compile the generated model (stock Sail GMP-ABI, backed by mini-gmp).
   #    The model calls setup_rts/cleanup_rts (provided by runtime.c) without a
@@ -134,14 +134,14 @@ PY
       -c "$RT/runtime.c" -o "$BUILD/runtime.o"
   "$GCC" "${CFLAGS[@]}" -Wall -Wextra -c "$RT/zkvm_io.c"  -o "$BUILD/zkvm_io.o"
   # private-input reader FFI for the Sail SSZ decoder (needs sail.h types).
-  "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra -c "$RT/el_input.c" -o "$BUILD/el_input.o"
+  "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra -c "$RT/zkvm_input.c" -o "$BUILD/zkvm_input.o"
   # harness reads minstret (rdinstret) to report block execution cost -> Zicsr
   # (platform glue, like start.S; the proven model stays rv64im_zicclsm).
   "$GCC" "${CFLAGS[@]}" -march=rv64im_zicsr_zicclsm -I"$lib" -Wall -Wextra \
       -c "$RT/harness.c" -o "$BUILD/harness.o"
   # 5. Link the static guest ELF with the vendor linker script.
   "$GCC" "${CFLAGS[@]}" "${LDFLAGS[@]}" \
-      "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/zkvm_io.o" "$BUILD/el_input.o" \
+      "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/zkvm_io.o" "$BUILD/zkvm_input.o" \
       "$BUILD/zkvm_input_data.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
       "$BUILD/zkvm_accelerators.o" "$BUILD/acc_shim.o" \

@@ -1,7 +1,7 @@
 /* Private-input accessor FFI for the Sail SSZ decoder. Reads the same preloaded
  * buffer read_input() returns (zkvm_input_bytes, generated from the SSZ test
  * vector at build time). A real zkVM host supplies these bytes as the witness. */
-#include "el_input.h"
+#include "zkvm_input.h"
 #include "zkvm_io.h"
 
 /* Input source. On spike the SSZ witness is a vector baked in at build time
@@ -22,7 +22,7 @@ extern const unsigned long  zkvm_input_bytes_len;
 #endif
 
 /* point a tx-input slot at a span of the stateless SSZ input -- the tx executes
- * directly over the witness bytes, no copy. (txin_view: host_mem.h via el_input.h) */
+ * directly over the witness bytes, no copy. (txin_view: host_mem.h via zkvm_input.h) */
 /* store the code for a codeHash as a view of the witness span [off, off+len). */
 unit cs_view_input(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
                    uint64_t off, uint64_t len) {

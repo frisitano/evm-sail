@@ -187,7 +187,7 @@ bool EQUAL(mach_int)(const mach_int, const mach_int);
 uint64_t sail_int_get_ui(const sail_int);
 
 /* GMP-API compatibility shims: FFI/harness code (keccak_ffi.c, sha256_ffi.c,
- * el_input.c, harness.c) calls mpz_* on sail_int values; these let that shared C
+ * zkvm_input.c, harness.c) calls mpz_* on sail_int values; these let that shared C
  * compile unchanged against sailfix (it resolves to real GMP in native builds). */
 static inline uint64_t mpz_get_ui(const sail_int op) { return op->d[0]; }
 static inline long     mpz_get_si(const sail_int op) { return op->neg ? -(long)op->d[0] : (long)op->d[0]; }

@@ -4,7 +4,7 @@
  * result over HTIF; here the ere/zkVM SDK supplies read_input/write_output).
  *
  * Build the model core (Sail-generated C + sailfix runtime + acc_shim + the
- * host_*.c backends + this file + el_input.c) with -DERE_GUEST and link against
+ * host_*.c backends + this file + zkvm_input.c) with -DERE_GUEST and link against
  * the SDK runtime that exports read_input/write_output. Call evmsail_validate()
  * once from the guest main (src/main.rs). */
 #include <stdint.h>
@@ -18,7 +18,7 @@ extern void model_init(void);
 extern void model_fini(void);
 extern void zzzkvm_run(int);                 /* Sail zkvm_run (mangled), arg = UNIT */
 
-/* el_input.c (compiled -DERE_GUEST) */
+/* zkvm_input.c (compiled -DERE_GUEST) */
 extern void evmsail_set_input(const unsigned char *p, unsigned long n);
 extern void evmsail_flush_output(void);
 

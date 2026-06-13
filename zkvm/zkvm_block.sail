@@ -19,7 +19,7 @@
 /*                                                                          */
 /* Target contract: NO printing, NO string building, NO libc IO, NO asserts  */
 /* on the happy path. read_input supplies the SSZ input via ssz_src;         */
-/* write_output (runtime/el_input.c) receives the SSZ result. Built GMP-free */
+/* write_output (runtime/zkvm_input.c) receives the SSZ result. Built GMP-free */
 /* by backing the stock Sail GMP ABI with a vendored, freestanding mini-gmp  */
 /* (no libgmp linked) at EXACT 256-bit semantics; keccak-256 comes from a C  */
 /* accelerator (the eth-act c-interface-accelerators path), needing no GMP   */
@@ -29,7 +29,7 @@
 $include "../sail/evm.sail"
 $include "../sail/lib/ssz_htr.sail"
 
-/* one byte of the canonical SSZ public output, via write_output (runtime/el_input.c) */
+/* one byte of the canonical SSZ public output, via write_output (runtime/zkvm_input.c) */
 val emit_out = impure { _: "el_emit_out" } : bits(8) -> unit
 
 /* Output facts, read by the C harness after zkvm_run(). All fit in 64 bits. */

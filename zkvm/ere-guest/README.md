@@ -11,7 +11,7 @@ Verified in this repo:
 - **The I/O ABI already matches ere.** ere's `Platform::read_input`/`write_output`
   default impls call the eth-act `zkvm-standards` C symbols `read_input`/
   `write_output` — exactly the interface this model already uses. No rewrite.
-- **`-DERE_GUEST` hook is in place and spike-verified.** `runtime/el_input.c`
+- **`-DERE_GUEST` hook is in place and spike-verified.** `runtime/zkvm_input.c`
   takes its witness from `evmsail_set_input()` (the host `read_input()` buffer)
   instead of the baked vector, and buffers the SSZ result for a single
   `write_output()` (ere's commit-once contract). The spike build (no `ERE_GUEST`)

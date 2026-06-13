@@ -18,7 +18,7 @@ fn main() {
      .file(format!("{ffi}/host_stack.c")).file(format!("{ffi}/host_word.c"))
      .file(format!("{ffi}/host_code.c"))
      .file(format!("{ffi}/zkvm_accelerators.c"))   // reference crypto (or SDK precompile syscalls)
-     .file(format!("{rt}/el_input.c"))             // -DERE_GUEST: read_input source + buffered output
+     .file(format!("{rt}/zkvm_input.c"))             // -DERE_GUEST: read_input source + buffered output
      .file("ere_bridge.c");
     b.compile("evmsail_core");
 }
