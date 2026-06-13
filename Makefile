@@ -2,9 +2,9 @@
 # evm-sail — specification validation entry point
 #
 #   make check          type-check the specification (evm/evm.sail)
-#   make lint           sail --all-warnings + source hygiene (trailing ws/tabs/newline)
-#   make fmt            format *.sail with the official `sail --fmt` (opt-in)
-#   make fmt-check      verify *.sail match sail --fmt
+#   make lint           sail --all-warnings on the program roots
+#   make fmt            format every *.sail in place with `sail --fmt`
+#   make fmt-check      verify every *.sail matches `sail --fmt`
 #   make all            check + lint + fmt-check
 #   make clean          remove build artifacts
 #
@@ -17,29 +17,40 @@
 
 SAIL ?= sail
 
-MODEL := evm/evm.sail
+MODEL      := evm/evm.sail
+# every Sail source, discovered (not a hand-maintained list)
+SAIL_FILES := $(shell find . -name '*.sail' | sort)
+# program roots whose $include graph reaches every definition; --all-warnings
+# here type-checks the whole tree (formatting/hygiene is covered by fmt-check,
+# since `sail --fmt` normalizes trailing whitespace, tabs, and final newlines).
+WARN_ROOTS := evm/evm.sail zkvm/zkvm_block.sail
 
 .PHONY: all check clean help lint fmt fmt-check
 
 help:
 	@echo "evm-sail targets:"
 	@echo "  make check          - type-check the model ($(MODEL))"
-	@echo "  make lint           - sail --all-warnings + source hygiene"
-	@echo "  make fmt            - format every *.sail with sail --fmt (opinionated; opt-in)"
+	@echo "  make lint           - sail --all-warnings on the program roots"
+	@echo "  make fmt            - format every *.sail with sail --fmt"
 	@echo "  make fmt-check      - verify *.sail match sail --fmt"
 	@echo "  make all            - check + lint + fmt-check"
 
 check:
 	$(SAIL) $(MODEL)
 
+# sail has no $include-following autodiscovery for these, so files come from the
+# `find` above; each recipe is a single-line shell command (Make 3.81 has no
+# .ONESHELL). --all-warnings on the roots type-checks every reachable definition.
 lint:
-	@SAIL=$(SAIL) bash scripts/lint-sail.sh
+	@o=$$(for r in $(WARN_ROOTS); do $(SAIL) --all-warnings "$$r" 2>&1; done); if printf '%s\n' "$$o" | grep -qiE "warning|error"; then printf '%s\n' "$$o" | grep -iE "warning|error" | head -20; echo "lint: FAILED"; exit 1; else echo "lint: clean"; fi
 
+# one sail call per file: the files $include each other, so a single multi-file
+# invocation double-loads them and errors.
 fmt:
-	@SAIL=$(SAIL) bash scripts/fmt-sail.sh
+	@for f in $(SAIL_FILES); do $(SAIL) --fmt --fmt-emit file "$$f"; done; echo "formatted $$(echo $(SAIL_FILES) | wc -w | tr -d ' ') file(s) with sail --fmt"
 
 fmt-check:
-	@SAIL=$(SAIL) bash scripts/fmt-sail.sh --check
+	@rc=0; for f in $(SAIL_FILES); do $(SAIL) --fmt --fmt-emit stdout "$$f" 2>/dev/null | diff -q "$$f" - >/dev/null 2>&1 || { echo "  needs formatting: $$f"; rc=1; }; done; [ "$$rc" -eq 0 ] && echo "fmt-check: clean" || exit 1
 
 all: check lint fmt-check
 
