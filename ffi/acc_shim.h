@@ -15,6 +15,7 @@
 #include "host_map.h"   /* C-backed layered state maps */
 #include "host_stack.h" /* C-backed operand stack */
 #include "host_word.h"  /* native word predicates */
+#include "host_code.h"  /* JUMPDEST bitmap */
 unit     acc_begin(uint64_t id);   /* bits(64): select accelerator id, clear buffers */
 unit     acc_push(uint64_t b);      /* bits(8):  append one input byte */
 unit     acc_push8(uint64_t w);     /* bits(64): append 8 input bytes (big-endian) */

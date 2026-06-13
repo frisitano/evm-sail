@@ -35,42 +35,35 @@ register frame_output  : list(byte) = [||]
 register message       : Message    = DEFAULT_MESSAGE
 register call_depth    : int        = 0
 
-/* ----------------------- code length + sequential cursor ----------------- */
-/* `code` is a list(byte), so list_len(code) is O(n) and list_nth(code, pc) is   */
-/* O(pc). A long loop (run-until-OOG, deep reentrancy) therefore fetches in      */
-/* O(n^2). We cache the code length, and keep a sequential cursor: a register    */
-/* holding the suffix of `code` starting at index `code_cur_pc`. Reading byte i  */
-/* advances the cursor forward (O(1) amortized for the sequential PC walk and    */
-/* PUSH-operand reads, which only ever move forward); a backward read (a JUMP to  */
-/* an earlier dest, or a re-entry at pc=0) re-seeks from `code` once. ALL `code`  */
-/* assignments must go through set_code so the length + cursor stay coherent.    */
+/* --------------------------- code length -------------------------------- */
+/* The frame's code bytes live in the C buffer (host_code.c), streamed once by
+ * set_code; fetch is an O(1) array read and PUSH immediates are assembled by
+ * one hc_word call. Only the length is kept on the Sail side. */
 register code_len      : int        = 0
-register code_cur      : list(byte) = [||]   /* suffix of code at index code_cur_pc */
-register code_cur_pc   : int        = 0
 
-/* Re-seek the cursor to the head of `code` (used on a fresh frame / backward
- * read). O(n) once, amortized away by the sequential reads that follow. */
-function code_reseek() -> unit = { code_cur = code; code_cur_pc = 0 }
+val hj_begin = impure "hj_begin" : unit -> unit
+val hj_byte  = impure "hj_byte"  : bits(8) -> unit
+val hj_valid = impure "hj_valid" : bits(64) -> bool
+val hc_byte  = impure "hc_byte"  : bits(64) -> bits(8)
+val hc_word  = impure "hc_word"  : (bits(64), bits(64)) -> word
 
-/* The single setter for the `code` register: keep code_len + cursor coherent. */
+/* The single setter for the `code` register: one walk measures the length AND
+ * streams the bytes into the C JUMPDEST bitmap (PUSH immediates skipped), so
+ * jump validity is an O(1) bit test instead of a per-jump O(n^2) code scan. */
 function set_code(c : list(byte)) -> unit = {
   code = c;
-  code_len = list_len(c);
-  code_cur = c;
-  code_cur_pc = 0
+  hj_begin();
+  var n : int = 0;
+  var rest : list(byte) = c;
+  var more : bool = true;
+  while more do {
+    match rest { b :: t => { hj_byte(b); n = n + 1; rest = t }, [||] => more = false }
+  };
+  code_len = n
 }
 
-/* code[i], zero past the end. O(1) amortized for a forward (sequential) walk;
- * O(i) on a backward seek. Drives the cursor to index i, then reads its head. */
-function code_byte(i : int) -> byte = {
-  if i < code_cur_pc then code_reseek() else ();
-  /* advance the cursor head forward to index i */
-  while code_cur_pc < i do {
-    match code_cur { _ :: t => code_cur = t, [||] => () };
-    code_cur_pc = code_cur_pc + 1
-  };
-  match code_cur { h :: _ => h, [||] => 0x00 }
-}
+/* code[i], zero past the end (the EVM's implicit STOP padding) */
+function code_byte(i : int) -> byte = hc_byte(get_slice_int(64, i, 0))
 
 /* ------------------------------ the stack ------------------------------- */
 /* C-backed (ffi/host_stack.c): per-call-frame flat word arrays, O(1)

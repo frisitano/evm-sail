@@ -15,27 +15,12 @@ val run_create : bool -> unit   /* true = CREATE2 */
 
 function self_addr() -> address = message.msg_address
 
-function is_valid_jumpdest(c : list(byte), dest : int) -> bool = {
-  let n = list_len(c);
-  var i : int = 0;
-  var result : bool = false;
-  var done : bool = false;
-  while (i < n) & not_bool(done) do {
-    if i == dest then { result = (list_nth(c, i, 0x00) == 0x5b); done = true }
-    else {
-      let op = list_nth(c, i, 0x00);
-      if (unsigned(op) >= 96) & (unsigned(op) <= 127) then i = i + 1 + (unsigned(op) - 95)
-      else i = i + 1
-    }
-  };
-  result
-}
-
 function guard_static() -> bool =
   if message.msg_is_static then { exc_halt(WriteProtection); true } else false
 
 function do_jump(dest : int) -> unit =
-  if is_valid_jumpdest(code, dest) then pc = dest else exc_halt(InvalidJump)
+  if dest >= 0 & dest < code_len & hj_valid(get_slice_int(64, dest, 0))
+  then pc = dest else exc_halt(InvalidJump)
 
 /* ------------------------------- execute -------------------------------- */
 

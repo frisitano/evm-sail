@@ -65,6 +65,7 @@ def build_runner(rebuild=False):
                                os.path.join(ELDIR,"ffi","host_map.c"),
                                os.path.join(ELDIR,"ffi","host_stack.c"),
                                os.path.join(ELDIR,"ffi","host_word.c"),
+                               os.path.join(ELDIR,"ffi","host_code.c"),
                                *objs, *accel_flags, *stack_flags, "-o",BIN])
     else:
         objs = []
@@ -82,6 +83,7 @@ def build_runner(rebuild=False):
                                os.path.join(ELDIR,"ffi","host_map.c"),
                                os.path.join(ELDIR,"ffi","host_stack.c"),
                                os.path.join(ELDIR,"ffi","host_word.c"),
+                               os.path.join(ELDIR,"ffi","host_code.c"),
                                *objs, *accel_flags, *stack_flags, "-lgmp","-o",BIN])
     for p in (BIN+"_gen.c", BIN+"_gen.h"):
         if os.path.exists(p): os.remove(p)
