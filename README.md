@@ -1,6 +1,6 @@
 # evm-sail
 
-**A formal, executable specification of the Ethereum EVM (WIP)**
+**A formal, executable specification of the Ethereum Virtual Machine (WIP)**
 
 ![EVM Sail hero image](assets/evm-sail-hero-1280x720.jpg)
 
