@@ -61,7 +61,7 @@ function k_get_codehash(a : address) -> hash = {
     let acc = kget(a);
   match acc.acc_code { [||] => if acc.acc_nonce == 0 & word_is_zero(acc.acc_balance)
                                then word_of_int(0) else keccak256([||]),
-                       _ => keccak256(acc.acc_code) }
+                       _ => acc_hash_code(a) }
 }
 function k_account_is_empty(a : address) -> bool = {   /* unrecorded query */
   let acc = kget(a);
@@ -104,20 +104,35 @@ function addr_from_bytes(bs : list(byte)) -> address = {
 }
 function delegation_code(a : address) -> list(byte) = 0xef :: 0x01 :: 0x00 :: addr_bytes(a)
 
-/* (is_delegation, target) for a 23-byte 0xef0100 designation; else (false, _) */
-function deleg_target(c : list(byte)) -> (bool, address) =
-  if list_len(c) == 23 then
-    match c { 0xef :: 0x01 :: 0x00 :: rest => (true, addr_from_bytes(rest)), _ => (false, ZERO_ADDR) }
-  else (false, ZERO_ADDR)
+/* |c| == n, walking at most n+1 cells (NOT list_len: the delegation check
+ * below runs on every CALL-family target, and list_len of a 24KB contract
+ * would make CALL O(|code|)) */
+function len_is(c : list(byte), n : int) -> bool =
+  match c { [||] => n == 0, _ :: r => if n == 0 then false else len_is(r, n - 1) }
 
-/* code to EXECUTE when calling addr: follow one delegation hop; a delegation to
- * a precompile (or empty) executes as empty code (EIP-7702). EXTCODE / CODE ops
- * keep the raw designation via k_get_code. */
-function k_get_exec_code(addr : address) -> list(byte) = {
-  let c = k_get_code(addr);
-  let (deleg, t) = deleg_target(c);
-  if not_bool(deleg) then c
-  else { let n = unsigned(address_to_word(t)); if (n >= 1 & n <= 17) | (n == 256) then [||] else k_get_code(t) }
+function code_is_nil(c : list(byte)) -> bool = match c { [||] => true, _ => false }
+
+/* (is_delegation, target) for a 23-byte 0xef0100 designation; else (false, _).
+ * O(prefix): matches 3 head bytes, then verifies the tail is exactly 20. */
+function deleg_target(c : list(byte)) -> (bool, address) =
+  match c {
+    0xef :: 0x01 :: 0x00 :: rest =>
+      if len_is(rest, 20) then (true, addr_from_bytes(rest)) else (false, ZERO_ADDR),
+    _ => (false, ZERO_ADDR)
+  }
+
+/* EXTCODESIZE / EXTCODECOPY via the execution mirror (the Sail acc_code list
+ * defines the value; walking it is O(|code|) per opcode) */
+function k_get_code_size(a : address) -> int = {
+  let aw : word = sail_zero_extend(a, 256);
+  unsigned(cs_len(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0]))
+}
+function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
+  let aw : word = sail_zero_extend(a, 256);
+  /* clamp a beyond-2^64 offset to a beyond-any-code sentinel (reads zeros) */
+  let o = if off > 16777216 then 16777216 else off;
+  cs_to_mem(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0],
+            get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
 }
 /* used only by the tx driver to seed pre-state (no trace entry) */
 function k_seed_account(a : address, acc : Account) -> unit = { kset(a, acc); cs_store_code(a, acc.acc_code) }

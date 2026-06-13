@@ -83,12 +83,12 @@ function execute(op : ast) -> unit = match op {
                       charge(account_cost(warm)); push(k_get_balance(a)) },
   SELFBALANCE() => { charge(G_low); push(k_get_balance(self_addr())) },
   EXTCODESIZE() => { let a = word_to_address(pop()); let warm = k_access_account(a);
-                        charge(account_cost(warm)); push(word_of_int(list_len(k_get_code(a)))) },
+                        charge(account_cost(warm)); push(word_of_int(k_get_code_size(a))) },
   EXTCODECOPY() => { let a = word_to_address(pop()); let dest = pop_int();
                         let off = pop_int(); let len = pop_int();
                         let warm = k_access_account(a); charge(account_cost(warm));
                         charge(copy_gas(len)); charge_expansion(dest, len);
-                        if is_running() then mem_write_range(dest, bytes_slice(k_get_code(a), off, len)) else () },
+                        if is_running() then k_code_copy(a, dest, off, len) else () },
   EXTCODEHASH() => { let a = word_to_address(pop()); let warm = k_access_account(a);
                         charge(account_cost(warm)); push(k_get_codehash(a)) },
   RETURNDATASIZE() => { charge(G_base); push(word_of_int(returndata_size())) },

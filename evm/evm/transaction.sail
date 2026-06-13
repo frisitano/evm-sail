@@ -84,7 +84,7 @@ function process_auth(au : Authorization) -> unit = {
   let chain_ok = (au.au_chain_id == 0) | (au.au_chain_id == unsigned(k_block.be_chain_id));
   let acode = k_get_code(authority);
   let (is_deleg, _) = deleg_target(acode);
-  let code_ok = (list_len(acode) == 0) | is_deleg;
+  let code_ok = code_is_nil(acode) | is_deleg;
   let nonce_ok = k_get_nonce(authority) == au.au_nonce;
   /* step 5: warm the authority once sig + chain id pass, BEFORE the code/nonce
    * checks -- so a tuple later skipped for code/nonce still warms its authority. */
@@ -155,7 +155,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
     | (tx.t_gas_limit >= G_transaction + 10 * calldata_tokens(tx.t_data));
   let valid =
         (unsigned(k_get_balance(sender)) >= upfront)        /* covers upfront cost      */
-      & ((list_len(scode) == 0) | sender_deleg)             /* EIP-3607 (7702 exempts delegations) */
+      & (code_is_nil(scode) | sender_deleg)                 /* EIP-3607 (7702 exempts delegations) */
       & (tx.t_gas_limit >= intrinsic)                       /* gas covers intrinsic     */
       & floor_ok                                            /* EIP-7623 floor coverage  */
       & (unsigned(tx.t_max_fee) >= unsigned(k_block.be_base_fee))          /* >= base fee */

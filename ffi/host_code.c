@@ -192,6 +192,43 @@ unit fc_set_empty(const unit u) {
   return UNIT;
 }
 
+/* --------------------- address-keyed read accessors --------------------- */
+/* EXTCODESIZE / EXTCODECOPY / EXTCODEHASH read the store directly: the Sail
+ * acc_code list defines the value, but walking it is O(|code|) per opcode. */
+
+static const cs_ent *cs_get(uint64_t a2, uint64_t a1, uint64_t a0) {
+  if (!cs_tab) return NULL;
+  uint64_t key[3] = { a2, a1, a0 };
+  const cs_ent *e = cs_find(key);
+  return (e->used && e->len) ? e : NULL;
+}
+
+uint64_t cs_len(uint64_t a2, uint64_t a1, uint64_t a0) {
+  const cs_ent *e = cs_get(a2, a1, a0);
+  return e ? e->len : 0;
+}
+
+/* EXTCODECOPY: code(addr)[off..off+len) -> memory[dst..), zero-padded */
+unit cs_to_mem(uint64_t a2, uint64_t a1, uint64_t a0,
+               uint64_t dst, uint64_t off, uint64_t len) {
+  if (!len) return UNIT;
+  uint8_t *d = hm_wr(dst, len);
+  if (!d) return UNIT;
+  const cs_ent *e = cs_get(a2, a1, a0);
+  for (uint64_t k = 0; k < len; k++) {
+    uint64_t i = off + k;
+    d[k] = (e && i < e->len) ? e->p[i] : 0;
+  }
+  return UNIT;
+}
+
+/* code bytes for accelerator staging (EXTCODEHASH keccak input) */
+const uint8_t *cs_bytes(uint64_t a2, uint64_t a1, uint64_t a0, uint64_t *len) {
+  const cs_ent *e = cs_get(a2, a1, a0);
+  *len = e ? e->len : 0;
+  return e ? e->p : NULL;
+}
+
 /* ------------------------------ accessors ------------------------------ */
 
 uint64_t hc_byte(uint64_t i) {

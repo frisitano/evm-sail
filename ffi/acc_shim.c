@@ -60,6 +60,16 @@ unit acc_begin_mem(uint64_t id, uint64_t off, uint64_t len) {
   ACC_inlen = (uint32_t)len;
   return UNIT;
 }
+/* begin + load the input from the code store (EXTCODEHASH keccak input) */
+extern const uint8_t *cs_bytes(uint64_t a2, uint64_t a1, uint64_t a0, uint64_t *len);
+unit acc_begin_cs(uint64_t id, uint64_t a2, uint64_t a1, uint64_t a0) {
+  acc_begin(id);
+  uint64_t len; const uint8_t *p = cs_bytes(a2, a1, a0, &len);
+  if (len > ACC_INMAX) len = ACC_INMAX;
+  if (len) memcpy(ACC_in, p, len);
+  ACC_inlen = (uint32_t)len;
+  return UNIT;
+}
 unit acc_push(uint64_t b)   { if (ACC_inlen < ACC_INMAX) ACC_in[ACC_inlen++] = (uint8_t)(b & 0xff); return UNIT; }
 /* staged-input byte (zero past the end): precompile gas inspection (modexp
  * length header / exponent head, blake2f rounds) without a Sail byte list */

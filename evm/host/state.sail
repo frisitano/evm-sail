@@ -82,6 +82,8 @@ val host_map_it_val = impure "host_map_it_val" : bits(64) -> bits(64)
  * Sail account store remains the authoritative spec value. */
 val cs_reset = impure "cs_reset" : unit -> unit
 val cs_begin = impure "cs_begin" : (bits(64), bits(64), bits(64)) -> unit
+val cs_len    = impure "cs_len"    : (bits(64), bits(64), bits(64)) -> bits(64)
+val cs_to_mem = impure "cs_to_mem" : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
 val cs_byte  = impure "cs_byte"  : bits(8) -> unit
 val cs_del   = impure "cs_del"   : (bits(64), bits(64), bits(64)) -> unit
 
