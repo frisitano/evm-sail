@@ -29,7 +29,9 @@ let KECCAK_EMPTY : hash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfa
  * (storage/transient/warm sets are C-backed maps; see below). */
 struct AccountEntry = { ae_addr : address, ae_acc : Account }
 struct StorageEntry = { se_addr : address, se_slot : word, se_val : word }
-struct SlotKey      = { sk_addr : address, sk_slot : word }
+
+/* SlotKey (the BAL access-set key) is defined in host/io.sail (its bal_load
+ * builder is the producer), included before this file. */
 
 /* A LOG record (YP sec. 4.4.1): emitting address, 0..4 topics, data bytes. */
 struct LogEntry     = { le_addr : address, le_topics : list(word), le_data : list(byte) }

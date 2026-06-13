@@ -33,9 +33,9 @@
 /* shared value model: 256-bit words, byte lists, addresses */
 $include "prelude.sail"
 
-/* host crypto accelerators (eth-act zkvm-standards C boundary) */
-$include "host/ffi.sail"
-$include "host/crypto.sail"
+/* host I/O: accelerator FFI + crypto + stateless SSZ input (eth-act zkvm-standards
+ * C boundary). Early: the crypto is used by block_hash/state/kernel/gas/transaction. */
+$include "host/io.sail"
 
 /* pure library functions */
 $include "lib/rlp.sail"
@@ -58,9 +58,7 @@ $include "evm/interpreter.sail"
 $include "evm/transaction.sail"
 $include "evm/block.sail"
 
-/* post-state authentication */
-$include "lib/io.sail"
-
-/* SSZ stateless input decoder (needs state.sail types) */
+/* RLP decode + the MPT root builder / Ethereum state trie / stateless witness
+ * reader (post-state authentication + witness-backed reads). */
 $include "lib/rlp_decode.sail"
 $include "lib/mpt.sail"

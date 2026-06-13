@@ -1,14 +1,15 @@
 /* ======================================================================== */
 /* evm-sail EEST runner: compile ONCE, feed fixtures at runtime via stdin.       */
 /*                                                                           */
-/* Reads a flat stream of decimal integers from stdin (one C extern,         */
-/* `next_int`) describing a sequence of test cases, runs each through         */
-/* process_block, and dumps the resulting accounts + storage. The Python      */
-/* driver (run_eest.py) encodes EEST fixtures into this stream and compares    */
-/* the dump against the fixture's expected post-state. No recompilation per    */
-/* test -- the data is INPUT, not generated code.                            */
+/* Reads a stream of values from the private input (ssz_src, the same byte     */
+/* source the zkVM guest uses) describing a sequence of test cases, runs each   */
+/* through process_block, and dumps the resulting accounts + storage. The       */
+/* Python driver (examples/eest/run_eest.py) encodes EEST fixtures into this    */
+/* stream and compares the dump against the fixture's expected post-state. No   */
+/* recompilation per test -- the data is INPUT, not generated code.            */
 /*                                                                           */
-/* Stream schema (all decimal ints, whitespace separated):                    */
+/* Wire format: each value is a varint [len : 1 byte][big-endian magnitude];    */
+/* ni() reads one. Stream schema (sequence of values):                          */
 /*   repeat: 1  <case>            ... then 0 to stop                          */
 /*   <case> = nAcc                                                            */
 /*             { addr nonce balance codeLen <codeBytes> nSto {slot val}* }*   */
@@ -18,8 +19,8 @@
 /*             dataLen <dataBytes>                                            */
 /* ======================================================================== */
 
-$include "../../evm/evm.sail"
-$include "../evm_primitives.sail"
+$include "evm.sail"
+$include "../examples/evm_primitives.sail"
 $include <string.sail>
 
 /* The test input is a byte stream read via ssz_src (io.sail) -- the same

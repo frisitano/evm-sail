@@ -57,7 +57,7 @@ def build_runner(rebuild=False):
             subprocess.check_call(["cc","-O2","-c",f"-I{sfdir}",f"-I{lib}",src,"-o",o])
             objs.append(o)
         subprocess.check_call(["sail","-c","-O","--c-include","runner_ffi.h",
-                               "examples/eest/runner.sail","-o",BIN+"_gen"], cwd=ELDIR)
+                               "evm/runner.sail","-o",BIN+"_gen"], cwd=ELDIR)
         subprocess.check_call(["cc","-O2",f"-I{sfdir}",f"-I{lib}",
                                BIN+"_gen.c", os.path.join(HERE,"runner_ffi.c"),
                                os.path.join(ELDIR,"ffi","acc_shim.c"),
@@ -76,7 +76,7 @@ def build_runner(rebuild=False):
                 subprocess.check_call(["cc","-O2","-c",f"-I{lib}","-I/opt/homebrew/include",f"{lib}/{c}","-o",o])
             objs.append(o)
         subprocess.check_call(["sail","-c","-O","--c-include","runner_ffi.h",
-                               "examples/eest/runner.sail","-o",BIN+"_gen"], cwd=ELDIR)
+                               "evm/runner.sail","-o",BIN+"_gen"], cwd=ELDIR)
         subprocess.check_call(["cc","-O2",f"-I{lib}","-I/opt/homebrew/include","-L/opt/homebrew/lib",
                                BIN+"_gen.c", os.path.join(HERE,"runner_ffi.c"),
                                os.path.join(ELDIR,"ffi","acc_shim.c"),
