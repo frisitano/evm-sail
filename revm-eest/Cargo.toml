@@ -2,6 +2,7 @@
 name = "revm-eest"
 version = "0.1.0"
 edition = "2021"
+license = "CC0-1.0"
 publish = false
 
 # Parallel EEST state-test runner for the evm-sail formal EVM specification.
