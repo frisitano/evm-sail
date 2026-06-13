@@ -15,6 +15,10 @@ examples/eest/.runner_bin*
 examples/eest/.rtcache/
 examples/eest/_eest*
 
+# witness-reader coverage harness build artifacts
+examples/stateless/.witness_probe_bin*
+examples/stateless/.rtcache/
+
 # stateless vector-gen venv
 zkvm/.vecgen/
 

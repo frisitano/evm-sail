@@ -281,6 +281,124 @@ def parent_header_bytes(state_root):
     ])
 
 
+# --- Generalized witness builder (reused by the EEST witness-reroot harness) ---
+# Same secure-trie construction as build_prestate(), but for an arbitrary EEST
+# `pre` alloc: a real py-trie state trie (keys keccak(addr), values
+# RLP([nonce,balance,storage_root,code_hash])) over per-account storage tries.
+# Returns (state_root, witness_nodes, codes) — witness_nodes is the merged trie
+# node-db (keccak(node)->node for nodes >= 32 bytes; embedded nodes live inside
+# their parents, exactly what an execution witness carries).
+
+def _hexint(x):
+    if isinstance(x, int):
+        return x
+    x = str(x)
+    return int(x, 16) if x.lower().startswith("0x") else int(x)
+
+
+def _addr20(a):
+    h = str(a).lower().replace("0x", "")
+    return bytes.fromhex(h).rjust(20, b"\x00")
+
+
+def build_witness_from_alloc(alloc):
+    node_db = {}
+    codes = []
+    main_trie = HexaryTrie(db={})
+    for addr_hex, acc in alloc.items():
+        nonce = _hexint(acc.get("nonce", 0))
+        bal = _hexint(acc.get("balance", 0))
+        code_hex = (acc.get("code") or "").lower().replace("0x", "")
+        code = bytes.fromhex(code_hex) if code_hex else b""
+        chash = keccak(code) if code else EMPTY_CODE_HASH
+        if code:
+            codes.append(code)
+        # zero storage values are absent from the trie (EEST sometimes lists them)
+        storage = {k: v for k, v in (acc.get("storage") or {}).items()
+                   if _hexint(v) != 0}
+        if storage:
+            strie = HexaryTrie(db={})
+            for slot_hex, val_hex in storage.items():
+                key = keccak(_hexint(slot_hex).to_bytes(32, "big"))
+                strie[key] = rlp.encode(_hexint(val_hex))
+            sroot = strie.root_hash
+            node_db.update(strie.db)
+        else:
+            sroot = EMPTY_TRIE_ROOT
+        main_trie[keccak(_addr20(addr_hex))] = account_rlp(nonce, bal, sroot, chash)
+    node_db.update(main_trie.db)
+    # The root node is always referenced by hash; guarantee it is in the witness.
+    if main_trie.root_hash != EMPTY_TRIE_ROOT and main_trie.root_hash not in node_db:
+        node_db[main_trie.root_hash] = main_trie.db[main_trie.root_hash]
+    return main_trie.root_hash, list(node_db.values()), codes
+
+
+def make_stateless_blob(state_root, witness_nodes, codes):
+    """Wrap a witness in a structurally-valid SszStatelessInput. Payload values
+    are placeholders; only `witness.state`/`witness.headers` matter for a
+    witness-reroot probe (parent header carries `state_root`)."""
+    payload = SszExecutionPayload(
+        parent_hash=Bytes32(b"\x00" * 32),
+        fee_recipient=ByteVector[20](b"\x00" * 20),
+        state_root=Bytes32(state_root),
+        receipts_root=Bytes32(EMPTY_TRIE_ROOT),
+        logs_bloom=ByteVector[256](b"\x00" * 256),
+        prev_randao=Bytes32(b"\x00" * 32),
+        block_number=uint64(BLOCK_NUMBER),
+        gas_limit=uint64(GAS_LIMIT),
+        gas_used=uint64(0),
+        timestamp=uint64(TIMESTAMP),
+        extra_data=ByteList[MAX_EXTRA_DATA_BYTES](b""),
+        base_fee_per_gas=uint256(0),
+        block_hash=Bytes32(b"\x00" * 32),
+        transactions=SszList[
+            ByteList[MAX_BYTES_PER_TRANSACTION], MAX_TRANSACTIONS_PER_PAYLOAD](),
+        withdrawals=SszList[SszWithdrawal, MAX_WITHDRAWALS_PER_PAYLOAD](),
+        blob_gas_used=uint64(0),
+        excess_blob_gas=uint64(0),
+        block_access_list=ByteList[MAX_BYTES_PER_TRANSACTION](b""),
+        slot_number=uint64(0),
+    )
+    npr = SszNewPayloadRequest(
+        execution_payload=payload,
+        versioned_hashes=SszList[Bytes32, MAX_BLOB_COMMITMENTS_PER_BLOCK](),
+        parent_beacon_block_root=Bytes32(b"\x00" * 32),
+        execution_requests=SszExecutionRequests(),
+    )
+    witness = SszExecutionWitness(
+        state=SszList[ByteList[MAX_BYTES_PER_WITNESS_NODE], MAX_WITNESS_NODES](
+            *[ByteList[MAX_BYTES_PER_WITNESS_NODE](n) for n in witness_nodes]),
+        codes=SszList[ByteList[MAX_BYTES_PER_CODE], MAX_WITNESS_CODES](
+            *[ByteList[MAX_BYTES_PER_CODE](c) for c in codes]),
+        headers=SszList[ByteList[MAX_BYTES_PER_HEADER], MAX_WITNESS_HEADERS](
+            ByteList[MAX_BYTES_PER_HEADER](parent_header_bytes(state_root))),
+    )
+    chain_config = SszChainConfig(
+        chain_id=uint64(CHAIN_ID),
+        active_fork=SszForkConfig(
+            fork=uint64(20),
+            activation=SszForkActivation(
+                block_number=SszList[uint64, 1](),
+                timestamp=SszList[uint64, 1](uint64(0)),
+            ),
+            blob_schedule=SszList[SszBlobSchedule, 1](
+                SszBlobSchedule(
+                    target=uint64(BLOB_SCHEDULE_TARGET),
+                    max=uint64(BLOB_SCHEDULE_MAX),
+                    base_fee_update_fraction=uint64(BLOB_BASE_FEE_UPDATE_FRACTION),
+                )
+            ),
+        ),
+    )
+    inp = SszStatelessInput(
+        new_payload_request=npr,
+        witness=witness,
+        chain_config=chain_config,
+        public_keys=SszList[ByteVector[PUBLIC_KEY_BYTES], MAX_PUBLIC_KEYS](),
+    )
+    return SCHEMA_ID + bytes(inp.encode_bytes())
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     bad = "--bad" in sys.argv            # tamper the post-state root (fail path)
