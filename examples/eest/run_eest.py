@@ -66,7 +66,6 @@ def build_runner(rebuild=False):
                                os.path.join(ELDIR,"ffi","host_stack.c"),
                                os.path.join(ELDIR,"ffi","host_word.c"),
                                os.path.join(ELDIR,"ffi","host_code.c"),
-                               os.path.join(ELDIR,"ffi","io_native_stub.c"),
                                *objs, *accel_flags, *stack_flags, "-o",BIN])
     else:
         objs = []
@@ -85,7 +84,6 @@ def build_runner(rebuild=False):
                                os.path.join(ELDIR,"ffi","host_stack.c"),
                                os.path.join(ELDIR,"ffi","host_word.c"),
                                os.path.join(ELDIR,"ffi","host_code.c"),
-                               os.path.join(ELDIR,"ffi","io_native_stub.c"),
                                *objs, *accel_flags, *stack_flags, "-lgmp","-o",BIN])
     for p in (BIN+"_gen.c", BIN+"_gen.h"):
         if os.path.exists(p): os.remove(p)
@@ -107,6 +105,16 @@ def collect(path, want_fork, limit):
                            and idx["data"] < len(tx["accessLists"]) else [])})
                 if limit and len(out) >= limit: return out
     return out
+
+def vbytes(ints):
+    """Serialize a flat list of non-negative ints as varints: [len][big-endian]."""
+    out = bytearray()
+    for v in ints:
+        v = int(v)
+        L = (v.bit_length() + 7) // 8
+        out.append(L)
+        out += v.to_bytes(L, "big")
+    return bytes(out)
 
 def encode(c):
     """Encode one case into the runner's int-stream (must match runner.sail's read order)."""
@@ -199,9 +207,9 @@ def run_cases(cases, timeout, want_root=False):
     stream = [FORK_LEVEL, 1 if want_root else 0]   # fork level; then state-root flag
     for c in cases: stream += [1, *encode(c)]
     stream += [0]
-    inp = " ".join(str(x) for x in stream)
+    inp = vbytes(stream)
     try:
-        out = subprocess.run([BIN], input=inp, capture_output=True, text=True, timeout=timeout).stdout
+        out = subprocess.run([BIN], input=inp, capture_output=True, timeout=timeout).stdout.decode()
     except subprocess.TimeoutExpired:
         return None
     cur, results = -1, {}

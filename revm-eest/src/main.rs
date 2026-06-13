@@ -1,7 +1,7 @@
 //! Parallel EEST state-test runner for the evm-sail Sail EVM model.
 //!
 //! Parses execution-spec-tests state fixtures (self-contained schema below),
-//! encodes each case into the model binary's stdin int-stream (matching
+//! encodes each case into the model binary's stdin varint byte stream (matching
 //! examples/eest/runner.sail and run_eest.py), runs the model across all cores,
 //! and compares the dumped post-state. The model binary is the Sail EVM
 //! compiled to native C; this runner only drives it in parallel.
@@ -360,7 +360,17 @@ fn run_chunk(bin: &str, chunk: &[&Case], timeout: f64) -> Option<Vec<CaseOut>> {
         stream.extend(c.encoded.iter().cloned());
     }
     stream.push("0".into());
-    let input = stream.join(" ");
+    // varint byte stream: each decimal token -> [len][big-endian bytes] (matches
+    // run_eest.py vbytes() + runner.sail ni()). The model reads it via ssz_src.
+    let mut input: Vec<u8> = Vec::new();
+    for tok in &stream {
+        let v = U256::from_str_radix(tok, 10).unwrap_or(U256::ZERO);
+        let be = v.to_be_bytes::<32>();
+        let first = be.iter().position(|&b| b != 0).unwrap_or(32);
+        let body = &be[first..];
+        input.push(body.len() as u8);
+        input.extend_from_slice(body);
+    }
 
     let mut child = Command::new(bin)
         .stdin(Stdio::piped())
@@ -370,7 +380,7 @@ fn run_chunk(bin: &str, chunk: &[&Case], timeout: f64) -> Option<Vec<CaseOut>> {
         .ok()?;
     let mut stdin = child.stdin.take().unwrap();
     std::thread::spawn(move || {
-        let _ = stdin.write_all(input.as_bytes());
+        let _ = stdin.write_all(&input);
     });
     let mut stdout = child.stdout.take().unwrap();
     let (tx, rx) = mpsc::channel();

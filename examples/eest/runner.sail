@@ -22,10 +22,19 @@ $include "../../evm/evm.sail"
 $include "../evm_primitives.sail"
 $include <string.sail>
 
-val next_int = impure { _: "next_int" } : unit -> int
-
-/* typed readers off the int stream */
-function ni() -> int = next_int()
+/* The test input is a byte stream read via ssz_src (io.sail) -- the same
+ * byte source the model uses everywhere -- served from stdin by runner_ffi.c.
+ * A scalar is a varint: [len : 1 byte][big-endian magnitude : len bytes]. */
+register in_pos : int = 0
+function ni() -> int = {
+    let l = unsigned(ssz_src_byte(in_pos));
+    var v : int = 0;
+    foreach (k from 0 to (l - 1)) {
+        v = v * 256 + unsigned(ssz_src_byte(in_pos + 1 + k))
+    };
+    in_pos = in_pos + 1 + l;
+    v
+}
 function nw() -> word = word_of_int(ni())
 function na() -> address = word_to_address(word_of_int(ni()))
 function nbytes(n : int) -> list(byte) = {
