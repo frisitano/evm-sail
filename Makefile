@@ -1,7 +1,7 @@
 # ===========================================================================
 # evm-sail — specification validation entry point
 #
-#   make check          type-check the specification (evm/evm.sail)
+#   make check          type-check the specification (sail/evm.sail)
 #   make lint           sail --all-warnings on the program roots
 #   make fmt            format every *.sail in place with `sail --fmt`
 #   make fmt-check      verify every *.sail matches `sail --fmt`
@@ -12,18 +12,18 @@
 # opam (NOT `brew install sail`, which is an unrelated tool). See README.md.
 #
 # Block EXECUTION (compile to C and run) is validated by the EEST harness
-# (revm-eest/: run_eest.py over evm/runner.sail) and the zkVM guest (zkvm/).
+# (revm-eest/: run_eest.py over sail/runner.sail) and the zkVM guest (zkvm/).
 # ===========================================================================
 
 SAIL ?= sail
 
-MODEL      := evm/evm.sail
+MODEL      := sail/evm.sail
 # every Sail source, discovered (not a hand-maintained list)
 SAIL_FILES := $(shell find . -name '*.sail' | sort)
 # program roots whose $include graph reaches every definition; --all-warnings
 # here type-checks the whole tree (formatting/hygiene is covered by fmt-check,
 # since `sail --fmt` normalizes trailing whitespace, tabs, and final newlines).
-WARN_ROOTS := evm/evm.sail zkvm/zkvm_block.sail
+WARN_ROOTS := sail/evm.sail zkvm/zkvm_block.sail
 
 .PHONY: all check clean help lint fmt fmt-check
 
@@ -55,4 +55,4 @@ fmt-check:
 all: check lint fmt-check
 
 clean:
-	rm -rf sail_smt_cache evm/sail_smt_cache
+	rm -rf sail_smt_cache sail/sail_smt_cache

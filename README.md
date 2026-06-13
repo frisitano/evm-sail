@@ -36,7 +36,7 @@ Objectives:
 
 ## Architecture: a host, and the transaction kernel over user space
 
-- **The host** (`evm/host/`): Ethereum world state — user accounts, storage, transient
+- **The host** (`sail/host/`): Ethereum world state — user accounts, storage, transient
   storage, warm sets, logs, refunds, snapshots, the block/tx environment —
   plus per-frame memory and the crypto accelerators. Pure mechanism: no gas,
   no policy. State is reachable **only** through the host's kernel functions:
@@ -51,7 +51,7 @@ Prim:     k_create_addr  k_create2_addr  k_precompile
 Utils:    k_snapshot  k_commit  k_revert  k_refund_add  k_log
 ```
 
-- **The transaction kernel = the EVM** (`evm/evm/`): the opcode
+- **The transaction kernel = the EVM** (`sail/evm/`): the opcode
   interpreter, the gas counter, and **all** policy — the full fork-gated gas
   schedule, the EIP-2929/2200/3529 rules, transaction validity
   (EIP-1559/2930/3860/4844/7623/7702/7825), and *the decision of whether an
@@ -100,7 +100,7 @@ of revm, which is a production interpreter, not a specification. Calling a
 ## Layout
 
 ```
-evm/         the specification (evm.sail is the root include)
+sail/        the specification (evm.sail is the root include)
   runner.sail         single-block / EEST runner entry point (reads input, runs)
   host/
     state.sail        world state: accounts, storage overlays, warm sets,
@@ -127,7 +127,7 @@ ffi/         C backends: host_mem.c (memory/calldata), host_map.c (overlay
              frame descriptors + JUMPDEST bitmaps), host_word.c (comparisons),
              host_nodedb.c (witness node-db), acc_shim.c + zkvm_accelerators.h
              (eth-act zkvm-standards crypto)
-revm-eest/   the EEST harness: run_eest.py (drives evm/runner.sail) + the
+revm-eest/   the EEST harness: run_eest.py (drives sail/runner.sail) + the
              parallel Rust runner (all cores) + stateless/ (witness-reroot gate)
 zkvm/        RISC-V zkVM guest target (riscv64im, stateless block validation)
   runtime/sailfix     GMP-free fixed-width Sail runtime (guest-shared)
@@ -149,7 +149,7 @@ Type-check the specification (block execution is validated by the EEST harness
 and the zkVM guest, below):
 
 ```sh
-make check                                  # type-check evm/evm.sail
+make check                                  # type-check sail/evm.sail
 make lint                                   # sail --all-warnings + source hygiene
 make fmt-check                              # verify sail --fmt formatting
 ```

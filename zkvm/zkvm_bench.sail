@@ -13,7 +13,7 @@
 /* output convention with zkvm_block.sail.                                  */
 /* ======================================================================== */
 
-$include "../evm/evm.sail"
+$include "../sail/evm.sail"
 
 val ssz_src_le = impure { _: "ssz_src_le" } : (int, int) -> bits(64)
 

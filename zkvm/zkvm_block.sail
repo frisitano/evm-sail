@@ -26,8 +26,8 @@
 /* and only memset from libc.                                               */
 /* ======================================================================== */
 
-$include "../evm/evm.sail"
-$include "../evm/lib/ssz_htr.sail"
+$include "../sail/evm.sail"
+$include "../sail/lib/ssz_htr.sail"
 
 /* one byte of the canonical SSZ public output, via write_output (runtime/el_input.c) */
 val emit_out = impure { _: "el_emit_out" } : bits(8) -> unit
