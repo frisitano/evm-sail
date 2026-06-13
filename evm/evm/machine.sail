@@ -14,14 +14,14 @@ struct Message = {
   msg_address      : address,    /* ADDRESS / storage owner (self)          */
   msg_code_address : address,    /* account whose code executes             */
   msg_value        : word,       /* CALLVALUE                               */
-  msg_data         : list(byte), /* CALLDATA                                */
+  msg_data_len     : int,        /* CALLDATA length (content is C-backed)   */
   msg_is_static    : bool,
   msg_depth        : int
 }
 
 let DEFAULT_MESSAGE : Message = struct {
   msg_caller = ZERO_ADDR, msg_address = ZERO_ADDR, msg_code_address = ZERO_ADDR,
-  msg_value = ZERO_WORD, msg_data = [||], msg_is_static = false, msg_depth = 0
+  msg_value = ZERO_WORD, msg_data_len = 0, msg_is_static = false, msg_depth = 0
 }
 
 /* ----------------------- active-frame registers ------------------------- */

@@ -108,7 +108,6 @@ function run_call(mode : int) -> unit = {
   gas_remaining = to_gas(avail - base_child);
   let child_gas = base_child + stipend;
 
-  let args = if is_running() then mem_read_range(args_off, args_len) else [||];
   let an = unsigned(target);
   let depth_ok : bool = call_depth + 1 <= DEPTH_LIMIT;
   let balance_ok : bool =
@@ -118,6 +117,8 @@ function run_call(mode : int) -> unit = {
   if not_bool(depth_ok) | not_bool(balance_ok) then {
     hr_clear(); gas_remaining = to_gas(gas_remaining + child_gas); push(WORD_ZERO)
   } else if (an >= 1 & an <= 17) | (an == 256) then {   /* 256 = 0x100 P256VERIFY (EIP-7951) */
+    /* precompile input is byte-inspected for gas, so it stays a materialized list */
+    let args = if is_running() then mem_read_range(args_off, args_len) else [||];
     let used = precompile_gas(an, args);
     /* gas check FIRST: an out-of-gas precompile call must not execute (e.g. a
        blake2f with a huge round count would otherwise run before failing). */
@@ -152,8 +153,10 @@ function run_call(mode : int) -> unit = {
 
     message = struct {
       msg_caller = child_caller, msg_address = child_addr, msg_code_address = target,
-      msg_value = child_value, msg_data = args, msg_is_static = child_static, msg_depth = s_depth + 1
+      msg_data_len = (if is_running() then args_len else 0),
+      msg_value = child_value, msg_is_static = child_static, msg_depth = s_depth + 1
     };
+    if is_running() then calldata_set_next(args_off, args_len) else cd_set_empty();
     pc = 0; gas_remaining = to_gas(child_gas); stack_frame_enter(); set_code(k_get_exec_code(target));  /* EIP-7702 delegation */
     frame_status = Running(); mem_frame_enter(); hr_clear(); memory_size = 0;
     call_depth = s_depth + 1;
@@ -227,8 +230,9 @@ function run_create(is2 : bool) -> unit = {
 
       message = struct {
         msg_caller = creator, msg_address = new_addr, msg_code_address = new_addr,
-        msg_value = value, msg_data = [||], msg_is_static = s_msg.msg_is_static, msg_depth = s_depth + 1
+        msg_value = value, msg_data_len = 0, msg_is_static = s_msg.msg_is_static, msg_depth = s_depth + 1
       };
+      cd_set_empty();
       pc = 0; gas_remaining = to_gas(child_gas); stack_frame_enter(); set_code(initcode);
       frame_status = Running(); mem_frame_enter(); hr_clear(); memory_size = 0;
       call_depth = s_depth + 1;

@@ -18,7 +18,19 @@
 typedef struct { uint8_t *buf; size_t cap; } h_memframe;
 
 static h_memframe h_stack[HOST_MEM_MAXDEPTH];
-static int h_top = 0;   /* index of the current (innermost) frame */
+static int h_top = 0;
+
+/* ---- CALLDATA: a per-frame descriptor aliasing the parent's memory ----
+ * src: -2 = empty, -1 = the transaction input buffer, >= 0 = a (suspended)
+ * ancestor memory frame. Resolved through h_stack at READ time, so a parent
+ * realloc never leaves a stale pointer. The aliased frame cannot change while
+ * its child executes (frames above it are suspended). */
+uint8_t *hm_wr(uint64_t off, uint64_t len);   /* fwd decl (defined below) */
+
+typedef struct { int src; uint64_t off, len; } hm_cd;
+static hm_cd cd[HOST_MEM_MAXDEPTH];
+static hm_cd cd_pending = { -2, 0, 0 };
+static uint8_t *txd; static uint64_t txd_cap, txd_len;   /* index of the current (innermost) frame */
 
 static void host_mem_ensure(size_t off) {
   h_memframe *f = &h_stack[h_top];
@@ -42,17 +54,75 @@ unit host_mem_reset(const unit u) {
     h_stack[i].cap = 0;
   }
   h_top = 0;
+  cd[0].src = -2; cd[0].off = 0; cd[0].len = 0;
+  cd_pending = cd[0];
   return UNIT;
 }
 
-/* enter a sub-call: push the current frame, start a fresh empty one */
+/* enter a sub-call: push the current frame, start a fresh empty one; the
+ * pending calldata descriptor (set by the caller just before) is adopted */
 unit host_mem_push(const unit u) {
   (void)u;
   if (h_top + 1 < HOST_MEM_MAXDEPTH) {
     h_top++;
     h_stack[h_top].buf = NULL;
     h_stack[h_top].cap = 0;
+    cd[h_top] = cd_pending;
   }
+  cd_pending.src = -2; cd_pending.off = 0; cd_pending.len = 0;
+  return UNIT;
+}
+
+/* the NEXT child's calldata := this frame's memory [off, off+len) */
+unit cd_set(uint64_t off, uint64_t len) {
+  cd_pending.src = h_top; cd_pending.off = off; cd_pending.len = len;
+  return UNIT;
+}
+unit cd_set_empty(const unit u) {
+  (void)u;
+  cd_pending.src = -2; cd_pending.off = 0; cd_pending.len = 0;
+  return UNIT;
+}
+/* the CURRENT (tx-level) frame's calldata := the streamed tx input */
+unit cd_set_tx(const unit u) {
+  (void)u;
+  cd[h_top].src = -1; cd[h_top].off = 0; cd[h_top].len = txd_len;
+  return UNIT;
+}
+unit txd_begin(const unit u) { (void)u; txd_len = 0; return UNIT; }
+unit txd_byte(uint64_t b) {
+  if (txd_len >= txd_cap) {
+    uint64_t n = txd_cap ? txd_cap * 2 : 1024;
+    txd = (uint8_t *)realloc(txd, n);
+    txd_cap = n;
+  }
+  txd[txd_len++] = (uint8_t)b;
+  return UNIT;
+}
+
+uint64_t cd_len(const unit u) { (void)u; return cd[h_top].len; }
+
+/* calldata byte i (0 past the end -- and 0 past the source's ALLOCATED cap:
+ * an expansion-charged but never-written parent range reads as zeros) */
+static uint8_t cd_at(const hm_cd *c, uint64_t i) {
+  if (i >= c->len) return 0;
+  if (c->src == -1) return i < txd_len ? txd[i] : 0;
+  if (c->src >= 0) {
+    const h_memframe *f = &h_stack[c->src];
+    uint64_t p = c->off + i;
+    return (f->buf && p < f->cap) ? f->buf[p] : 0;
+  }
+  return 0;
+}
+uint64_t cd_byte(uint64_t i) { return cd_at(&cd[h_top], i); }
+
+/* CALLDATACOPY: calldata[off..off+len) -> memory[dst..), zero-padded */
+unit cd_to_mem(uint64_t dst, uint64_t off, uint64_t len) {
+  if (!len) return UNIT;
+  uint8_t *d = hm_wr(dst, len);
+  if (!d) return UNIT;
+  const hm_cd *c = &cd[h_top];
+  for (uint64_t k = 0; k < len; k++) d[k] = cd_at(c, off + k);
   return UNIT;
 }
 

@@ -14,4 +14,12 @@ uint64_t hm_depth(const unit u);                    /* call-frame depth   */
 const uint8_t *hm_rd(uint64_t off, uint64_t len);  /* ensure + read ptr   */
 uint8_t *hm_wr(uint64_t off, uint64_t len);        /* ensure + write ptr  */
 unit hm_move(uint64_t dst, uint64_t src, uint64_t len);  /* MCOPY memmove */
+unit cd_set(uint64_t off, uint64_t len);   /* next child's calldata = mem range */
+unit cd_set_empty(const unit u);
+unit cd_set_tx(const unit u);
+unit txd_begin(const unit u);
+unit txd_byte(uint64_t b);
+uint64_t cd_len(const unit u);
+uint64_t cd_byte(uint64_t i);
+unit cd_to_mem(uint64_t dst, uint64_t off, uint64_t len);
 #endif

@@ -196,7 +196,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
     if word_nonzero(tx.t_value) then k_transfer(sender, new_addr, tx.t_value) else ();
     message = struct {
       msg_caller = sender, msg_address = new_addr, msg_code_address = new_addr,
-      msg_value = tx.t_value, msg_data = [||], msg_is_static = false, msg_depth = 0
+      msg_value = tx.t_value, msg_data_len = 0, msg_is_static = false, msg_depth = 0
     };
     set_code(tx.t_data);
     interpret();
@@ -226,9 +226,11 @@ function process_transaction(tx : Transaction) -> Receipt = {
         hr_capture_acc(); hr_adopt(); frame_status = Halted(HaltReturn)
       } else exc_halt(OutOfGas)
     } else {
+      let dlen = txdata_load(tx.t_data);
+      cd_set_tx();
       message = struct {
         msg_caller = sender, msg_address = tx.t_to, msg_code_address = tx.t_to,
-        msg_value = tx.t_value, msg_data = tx.t_data, msg_is_static = false, msg_depth = 0
+        msg_value = tx.t_value, msg_data_len = dlen, msg_is_static = false, msg_depth = 0
       };
       /* EIP-7702: at the tx level the delegate is warmed but not separately charged */
       let (tx_deleg, tx_dtgt) = deleg_target(k_get_code(tx.t_to));

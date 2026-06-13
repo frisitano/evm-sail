@@ -137,3 +137,31 @@ function pending_output_list() -> list(byte) = {
   };
   out
 }
+
+/* ---- C-backed CALLDATA (per call frame; alias into the parent's memory) ---- */
+val cd_set       = impure "cd_set"       : (bits(64), bits(64)) -> unit
+val cd_set_empty = impure "cd_set_empty" : unit -> unit
+val cd_set_tx    = impure "cd_set_tx"    : unit -> unit
+val txd_begin    = impure "txd_begin"    : unit -> unit
+val txd_byte     = impure "txd_byte"     : bits(8) -> unit
+val cd_len       = impure "cd_len"       : unit -> bits(64)
+val cd_word      = impure "cd_word"      : bits(64) -> word
+val cd_to_mem    = impure "cd_to_mem"    : (bits(64), bits(64), bits(64)) -> unit
+
+function calldata_size() -> int = unsigned(cd_len())
+function calldata_word(off : int) -> word = cd_word(get_slice_int(64, off, 0))
+function calldata_copy_to_mem(dst : int, off : int, len : int) -> unit =
+  cd_to_mem(get_slice_int(64, dst, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0))
+function calldata_set_next(off : int, len : int) -> unit =
+  cd_set(get_slice_int(64, off, 0), get_slice_int(64, len, 0))
+/* stream the transaction input once; returns its length */
+function txdata_load(data : list(byte)) -> int = {
+  txd_begin();
+  var n : int = 0;
+  var rest : list(byte) = data;
+  var more : bool = true;
+  while more do {
+    match rest { b :: t => { txd_byte(b); n = n + 1; rest = t }, [||] => more = false }
+  };
+  n
+}

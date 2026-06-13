@@ -82,3 +82,25 @@ unit hc_to_mem(uint64_t dst, uint64_t off, uint64_t len) {
   }
   return UNIT;
 }
+
+/* CALLDATALOAD: the 32-byte word at calldata offset i (zero-padded) */
+#ifdef SAIL_INT_LIMBS
+void cd_word(lbits *rop, uint64_t i) {
+  rop->len = 256;
+  rop->d[0] = rop->d[1] = rop->d[2] = rop->d[3] = 0;
+  for (int k = 0; k < 32; k++) {
+    uint64_t byte = cd_byte(i + (uint64_t)k);
+    int bit = (31 - k) * 8;
+    rop->d[bit >> 6] |= byte << (bit & 63);
+  }
+}
+#else
+void cd_word(lbits *rop, uint64_t i) {
+  rop->len = 256;
+  mpz_set_ui(*rop->bits, 0);
+  for (int k = 0; k < 32; k++) {
+    mpz_mul_2exp(*rop->bits, *rop->bits, 8);
+    mpz_add_ui(*rop->bits, *rop->bits, cd_byte(i + (uint64_t)k));
+  }
+}
+#endif

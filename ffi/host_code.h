@@ -10,4 +10,5 @@ bool hj_valid(uint64_t i);              /* is offset i a reachable JUMPDEST?  */
 uint64_t hc_byte(uint64_t i);           /* code[i], 0 past the end            */
 void hc_word(lbits *rop, uint64_t i, uint64_t n);  /* n-byte immediate at i   */
 unit hc_to_mem(uint64_t dst, uint64_t off, uint64_t len);  /* CODECOPY */
+void cd_word(lbits *rop, uint64_t i);   /* CALLDATALOAD */
 #endif

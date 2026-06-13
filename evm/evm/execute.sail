@@ -69,12 +69,12 @@ function execute(op : ast) -> unit = match op {
   CALLER()    => { charge(G_base); push(address_to_word(message.msg_caller)) },
   CALLVALUE() => { charge(G_base); push(message.msg_value) },
   GASPRICE()  => { charge(G_base); push(k_env(F_GasPrice)) },
-  CALLDATASIZE() => { charge(G_base); push(word_of_int(list_len(message.msg_data))) },
+  CALLDATASIZE() => { charge(G_base); push(word_of_int(message.msg_data_len)) },
   CALLDATALOAD() => { charge(G_verylow); let off = pop_int();
-                         push(bytes_load_word(message.msg_data, off)) },
+                         push(calldata_word(off)) },
   CALLDATACOPY() => { charge(G_verylow); let dest = pop_int(); let off = pop_int();
                          let len = pop_int(); charge(copy_gas(len)); charge_expansion(dest, len);
-                         if is_running() then mem_write_range(dest, bytes_slice(message.msg_data, off, len)) else () },
+                         if is_running() then calldata_copy_to_mem(dest, off, len) else () },
   CODESIZE()  => { charge(G_base); push(word_of_int(code_len)) },
   CODECOPY()  => { charge(G_verylow); let dest = pop_int(); let off = pop_int();
                       let len = pop_int(); charge(copy_gas(len)); charge_expansion(dest, len);
