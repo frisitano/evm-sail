@@ -169,24 +169,28 @@ function execute(op : ast) -> unit = match op {
         push(alu_byte(i, x))
     },
     SHL() => {
+        /* EIP-145 */
         charge(G_verylow);
         let s = pop();
         let v = pop();
         push(alu_shl(s, v))
     },
     SHR() => {
+        /* EIP-145 */
         charge(G_verylow);
         let s = pop();
         let v = pop();
         push(alu_shr(s, v))
     },
     SAR() => {
+        /* EIP-145 */
         charge(G_verylow);
         let s = pop();
         let v = pop();
         push(alu_sar(s, v))
     },
     CLZ() => {
+        /* EIP-7939 */
         charge(G_low);
         let x = pop();
         push(alu_clz(x))
@@ -264,6 +268,7 @@ function execute(op : ast) -> unit = match op {
         push(k_get_balance(a))
     },
     SELFBALANCE() => {
+        /* EIP-1884 */
         charge(G_low);
         push(k_get_balance(self_addr()))
     },
@@ -287,16 +292,19 @@ function execute(op : ast) -> unit = match op {
         }
     },
     EXTCODEHASH() => {
+        /* EIP-1052 */
         let a = word_to_address(pop());
         let warm = k_access_account(a);
         charge(account_cost(warm));
         push(k_get_codehash(a))
     },
     RETURNDATASIZE() => {
+        /* EIP-211 */
         charge(G_base);
         push(word_of_int(returndata_size()))
     },
     RETURNDATACOPY() => {
+        /* EIP-211 */
         charge(G_verylow);
         let dest = pop_int();
         let off = pop_int();
@@ -338,18 +346,22 @@ function execute(op : ast) -> unit = match op {
         push(k_env(F_GasLimit))
     },
     CHAINID() => {
+        /* EIP-1344 */
         charge(G_base);
         push(k_env(F_ChainId))
     },
     BASEFEE() => {
+        /* EIP-3198 */
         charge(G_base);
         push(k_env(F_BaseFee))
     },
     BLOBBASEFEE() => {
+        /* EIP-7516 */
         charge(G_base);
         push(k_env(F_BlobBaseFee))
     },
     BLOBHASH() => {
+        /* EIP-4844 */
         charge(G_verylow);
         let i = pop_int();
         push(k_blobhash(i))
@@ -384,6 +396,7 @@ function execute(op : ast) -> unit = match op {
         push(word_of_int(mem_size_words() * 32))
     },
     MCOPY() => {
+        /* EIP-5656 */
         charge(G_verylow);
         let dest = pop_int();
         let src = pop_int();
@@ -427,11 +440,13 @@ function execute(op : ast) -> unit = match op {
         }
     },
     TLOAD() => {
+        /* EIP-1153 */
         charge(G_warm_access);
         let s = pop();
         push(k_tload(self_addr(), s))
     },
     TSTORE() => {
+        /* EIP-1153 */
         if guard_static() then {
             ()
         } else {
@@ -468,6 +483,7 @@ function execute(op : ast) -> unit = match op {
     JUMPDEST() => charge(G_jumpdest),
     /* ---- push / dup / swap (pure) ---- */
     PUSH(n, v) => {
+        /* PUSH0 (n=0): EIP-3855 */
         if n == 0 then {
             charge(G_base)
         } else {
@@ -506,11 +522,11 @@ function execute(op : ast) -> unit = match op {
     },
     /* ---- system ---- */
     CREATE() => run_create(false),
-    CREATE2() => run_create(true),
+    CREATE2() => /* EIP-1014 */ run_create(true),
     CALL() => run_call(0),
     CALLCODE() => run_call(1),
-    DELEGATECALL() => run_call(2),
-    STATICCALL() => run_call(3),
+    DELEGATECALL() => /* EIP-7 */ run_call(2),
+    STATICCALL() => /* EIP-214 */ run_call(3),
     RETURN() => {
         let off = pop_int();
         let len = pop_int();
@@ -521,6 +537,7 @@ function execute(op : ast) -> unit = match op {
         }
     },
     REVERT() => {
+        /* EIP-140 */
         let off = pop_int();
         let len = pop_int();
         charge_expansion(off, len);
