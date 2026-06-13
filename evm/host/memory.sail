@@ -87,6 +87,12 @@ val hm_move   = impure "hm_move"   : (bits(64), bits(64), bits(64)) -> unit
 val hc_to_mem = impure "hc_to_mem" : (bits(64), bits(64), bits(64)) -> unit
 val acc_begin_mem = impure "acc_begin_mem" : (bits(64), bits(64), bits(64)) -> unit
 
+/* stage a precompile's input: ONE C-side snapshot of mem[off .. off+len) (the
+ * child message's calldata). A snapshot, not an alias: the identity precompile's
+ * output may be written back over a region overlapping its input. */
+function stage_precompile_input(id : int, off : int, len : int) -> unit =
+  acc_begin_mem(get_slice_int(64, id, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0))
+
 /* MCOPY: overlapping-safe memory-to-memory copy (one C memmove) */
 function mem_mcopy(dst : int, src : int, len : int) -> unit =
   hm_move(get_slice_int(64, dst, 0), get_slice_int(64, src, 0), get_slice_int(64, len, 0))

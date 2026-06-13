@@ -156,11 +156,12 @@ function k_keccak(bs : list(byte)) -> hash = { keccak256(bs) }
 function k_create_addr(a : address, nonce : int) -> address = create_address(a, nonce)
 function k_create2_addr(a : address, salt : word, inithash : hash) -> address =
   create2_address(a, salt, inithash)
-/* precompile: returns (success, output) via the C host accelerator
- * (evm/accelerators.sail). Gas is computed by the EVM (policy, evm/gas.sail). */
-function k_precompile(num : int, input : list(byte)) -> (bool, list(byte)) = {
-    if (num >= 1 & num <= 17) | (num == 256) then run_precompile(num, input) else (false, [||])
-}
+/* precompile syscall: the input was STAGED by the EVM (a snapshot of the
+ * caller's mem[args .. args+len) -- the child message's calldata -- or the tx
+ * input). Output stays in the accelerator buffer; the EVM adopts it as
+ * returndata. Gas is computed by the EVM (policy, evm/gas.sail). */
+function k_precompile(num : int) -> bool =
+  if (num >= 1 & num <= 17) | (num == 256) then run_precompile_staged(num) else false
 
 /* --- logs + refund --- */
 function k_log(a : address, topics : list(word), data : list(byte)) -> unit = {

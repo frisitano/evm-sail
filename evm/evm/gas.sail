@@ -82,9 +82,11 @@ function sload_cost(warm : bool) -> gas =
   if warm then G_warm_access else G_cold_sload   /* EIP-2929: COLD_SLOAD_COST = 2100 total */
 
 /* big-endian int over n bytes of `args` starting at off (0 beyond end) */
-function pc_be(args : list(byte), off : int, n : int) -> int = {
+/* big-endian integer from the STAGED precompile input (zero past the end,
+ * matching EELS buffer_read semantics for header parsing) */
+function pc_be(off : int, n : int) -> int = {
   var v : int = 0;
-  foreach (i from 0 to (n - 1)) { v = v * 256 + unsigned(list_nth(args, off + i, 0x00)) };
+  foreach (i from 0 to (n - 1)) { v = v * 256 + unsigned(acc_input_byte(off + i)) };
   v
 }
 /* number of bits in v (bit_length): bit_length(0)=0, bit_length(1)=1, ... */
@@ -95,10 +97,10 @@ function bit_length(v : int) -> int = {
 }
 
 /* EIP-2565 modexp gas: input = bsize[32] esize[32] msize[32] base exp mod. */
-function modexp_gas(args : list(byte)) -> gas = {
-  let bl = pc_be(args, 0, 32);   /* FULL 32-byte length fields: oversized      */
-  let el = pc_be(args, 32, 32);  /* lengths (e.g. 2^64) must price the call    */
-  let ml = pc_be(args, 64, 32);  /* out of gas, not alias into the low 4 bytes */
+function modexp_gas() -> gas = {
+  let bl = pc_be(0, 32);         /* FULL 32-byte length fields: oversized      */
+  let el = pc_be(32, 32);        /* lengths (e.g. 2^64) must price the call    */
+  let ml = pc_be(64, 32);        /* out of gas, not alias into the low 4 bytes */
   /* EIP-7823 (Osaka): base/exp/mod each <= 1024 bytes, else the call fails (priced
    * beyond any forwardable gas so run_call's used<=child_gas test rejects it). */
   if (k_fork >= FORK_OSAKA) & ((bl > 1024) | (el > 1024) | (ml > 1024))
@@ -114,10 +116,10 @@ function modexp_gas(args : list(byte)) -> gas = {
   let exp_off = 96 + bl;
   let iter : int =
     if el <= 32 then {
-      let ev = pc_be(args, exp_off, el);
+      let ev = pc_be(exp_off, el);
       if ev == 0 then 0 else bit_length(ev) - 1
     } else {
-      let head = pc_be(args, exp_off, 32);           /* first 32 bytes of exponent */
+      let head = pc_be(exp_off, 32);                 /* first 32 bytes of exponent */
       let hb = if bit_length(head) > 0 then bit_length(head) - 1 else 0;
       big_mul * (el - 32) + hb
     };
@@ -157,16 +159,16 @@ function bls_msm_gas(table : list(int), base : gas, maxd : int, k : int) -> gas 
 }
 
 /* Precompile gas (user-space policy; the C host returns only output). Dynamic
- * costs (modexp EIP-2565, bn254 pairing, blake2f rounds, EIP-2537 BLS) read input. */
-function precompile_gas(num : int, args : list(byte)) -> gas = {
-  let input_len = list_len(args);
+ * costs (modexp EIP-2565, blake2f rounds) inspect the STAGED input bytes O(1);
+ * everything else needs only the input length. */
+function precompile_gas(num : int, input_len : int) -> gas = {
   let words = ediv_int(input_len + 31, 32);
   let g : int = match num {
     1 => 3000, 2 => 60 + 12 * words, 3 => 600 + 120 * words, 4 => 15 + 3 * words,
-    5 => modexp_gas(args),
+    5 => modexp_gas(),
     6 => 150, 7 => 6000,
     8 => 45000 + 34000 * ediv_int(input_len, 192),   /* EIP-1108 */
-    9 => pc_be(args, 0, 4),                           /* blake2f: gas = rounds */
+    9 => pc_be(0, 4),                                 /* blake2f: gas = rounds */
     10 => 50000,
     /* EIP-2537 BLS12-381 */
     11 => 375,                                                  /* G1ADD            */

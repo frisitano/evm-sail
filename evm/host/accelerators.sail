@@ -48,8 +48,23 @@ function acc_hash(id : int, msg : list(byte)) -> bits(256) = {
   append(w0, append(w1, append(w2, w3)))
 }
 
-/* run EVM precompile `num` over `input`; (success, output). On failure the CALL
- * returns 0 (handled by the interpreter). */
+val acc_in_byte = impure "acc_in_byte" : bits(64) -> bits(8)
+
+/* staged-input byte (zero past the end). The EVM stages a precompile's input
+ * once (a C-side snapshot of the caller's memory slice / the tx calldata) and
+ * gas inspection reads the few bytes it needs O(1) -- no Sail byte list. */
+function acc_input_byte(i : int) -> byte = acc_in_byte(get_slice_int(64, i, 0))
+
+/* run the staged precompile (input already in the accelerator: acc_begin_mem
+ * for a memory slice, acc_begin+acc_push_all for a list). The output stays in
+ * the accelerator buffer for returndata adoption (hr_capture_acc). On failure
+ * the CALL returns 0 (handled by the interpreter). */
+function run_precompile_staged(num : int) -> bool = {
+  let _ = acc_exec();
+  unsigned(acc_ok()) == 1
+}
+
+/* list-in/list-out wrapper (vector tests; the EVM uses the staged path) */
 function run_precompile(num : int, input : list(byte)) -> (bool, list(byte)) = {
   acc_begin(get_slice_int(64, num, 0));
   acc_push_all(input);

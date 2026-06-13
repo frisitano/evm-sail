@@ -61,6 +61,9 @@ unit acc_begin_mem(uint64_t id, uint64_t off, uint64_t len) {
   return UNIT;
 }
 unit acc_push(uint64_t b)   { if (ACC_inlen < ACC_INMAX) ACC_in[ACC_inlen++] = (uint8_t)(b & 0xff); return UNIT; }
+/* staged-input byte (zero past the end): precompile gas inspection (modexp
+ * length header / exponent head, blake2f rounds) without a Sail byte list */
+uint64_t acc_in_byte(uint64_t i) { return (i < ACC_inlen) ? ACC_in[i] : 0; }
 unit acc_push8(uint64_t w)  {   /* 8 input bytes (big-endian) in one store when room */
   if (ACC_inlen + 8 <= ACC_INMAX) { for (int i = 0; i < 8; i++) ACC_in[ACC_inlen + i] = (uint8_t)(w >> (8 * (7 - i))); ACC_inlen += 8; }
   else { for (int i = 0; i < 8; i++) acc_push((w >> (8 * (7 - i))) & 0xff); }

@@ -16,7 +16,7 @@ CASES = [
     ("SSTORE refund churn",           3, "Osaka",   "osaka/eip7825_transaction_gas_limit_cap/test_maximum_gas_refund.json"),
     ("MCOPY memory ops",              1, "Cancun",  "cancun/eip5656_mcopy/test_mcopy_memory_expansion.json"),
     ("CREATE w/ 49KB initcode",       0, "Shanghai","shanghai/eip3860_initcode/test_create_opcode_initcode.json"),
-    ("blake2f precompile rounds",     1, "Cancun",  "istanbul/eip152_blake2/test_blake2.json"),
+    ("blake2f precompile rounds",     1, "Cancun",  "istanbul/eip152_blake2/test_blake2b.json"),
 ]
 
 total_g, total_t = 0, 0.0

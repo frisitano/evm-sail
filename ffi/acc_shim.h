@@ -20,6 +20,7 @@ unit     acc_begin(uint64_t id);   /* bits(64): select accelerator id, clear buf
 unit     acc_begin_mem(uint64_t id, uint64_t off, uint64_t len);  /* input := memory range */
 unit     acc_push(uint64_t b);      /* bits(8):  append one input byte */
 unit     acc_push8(uint64_t w);     /* bits(64): append 8 input bytes (big-endian) */
+uint64_t acc_in_byte(uint64_t i);   /* staged-input byte, zero past the end */
 uint64_t acc_exec(unit u);          /* run the standard accelerator; returns output length */
 uint64_t acc_ok(unit u);            /* bits(8): 1 = ZKVM_EOK, 0 = ZKVM_EFAIL */
 uint64_t acc_out(uint64_t i);       /* bits(64) index -> bits(8): output byte i */

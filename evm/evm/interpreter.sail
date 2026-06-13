@@ -125,13 +125,15 @@ function run_call(mode : int) -> unit = {
   if not_bool(depth_ok) | not_bool(balance_ok) then {
     hr_clear(); gas_remaining = to_gas(gas_remaining + child_gas); push(WORD_ZERO)
   } else if (an >= 1 & an <= 17) | (an == 256) then {   /* 256 = 0x100 P256VERIFY (EIP-7951) */
-    /* precompile input is byte-inspected for gas, so it stays a materialized list */
-    let args = if is_running() then mem_read_range(args_off, args_len) else [||];
-    let used = precompile_gas(an, args);
+    /* the precompile's input is the child message's calldata: a snapshot of
+       mem[args_off .. args_off+args_len), staged C-side in one copy; the gas
+       functions inspect the staged bytes (modexp header, blake2f rounds) O(1) */
+    let in_len = if is_running() then args_len else 0;
+    stage_precompile_input(an, args_off, in_len);
+    let used = precompile_gas(an, in_len);
     /* gas check FIRST: an out-of-gas precompile call must not execute (e.g. a
        blake2f with a huge round count would otherwise run before failing). */
-    let (ok, out) : (bool, list(byte)) =
-      if used <= child_gas then k_precompile(an, args) else (false, [||]);
+    let ok : bool = if used <= child_gas then k_precompile(an) else false;
     if ok & (used <= child_gas) then {
       hr_capture_acc(); hr_adopt();
       /* the value transfer is part of the (successful) call */
