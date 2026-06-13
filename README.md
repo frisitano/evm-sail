@@ -1,19 +1,16 @@
-# evm-sail — a formal, executable specification of the Ethereum EVM
+# evm-sail
+
+**A formal, executable specification of the Ethereum EVM (WIP)**
+
+![EVM Sail hero image](assets/evm-sail-hero-1280x720.jpg)
 
 `evm-sail` is a specification of the Ethereum Virtual Machine written in
 [Sail](https://github.com/rems-project/sail), the ISA-specification language
 behind the official RISC-V model and the Arm/CHERI/x86 academic models. It is
 **formal** — one small, typed, total source of truth with semantics suitable
 for theorem provers and symbolic engines — and it is **executable**: the same
-specification compiles to native code, runs real Ethereum blocks, and passes
-**100% of the execution-spec-tests state suites for the modern forks**:
-
-| Suite (execution-spec-tests state fixtures) | Result |
-|---|---|
-| Cancun | 1427/1427 |
-| Shanghai | 88/88 |
-| Prague | 2010/2010 |
-| Osaka | 1223/1223 |
+specification compiles to native code, riscv, runs real Ethereum blocks, and passes
+**~100% of the execution-spec-tests state suites for the modern forks** (Berlin onwards).
 
 Why Sail, rather than prose (the Yellow Paper) or a reference client (EELS,
 revm)?
@@ -34,7 +31,7 @@ revm)?
 
 ## Architecture: a host, and the transaction kernel over user space
 
-- **The host** (`evm/host/`): world state — user accounts, storage, transient
+- **The host** (`evm/host/`): Ethereum world state — user accounts, storage, transient
   storage, warm sets, logs, refunds, snapshots, the block/tx environment —
   plus per-frame memory and the crypto accelerators. Pure mechanism: no gas,
   no policy. State is reachable **only** through the host's kernel functions:
@@ -46,7 +43,7 @@ Account:  k_access_account  k_get_balance/nonce/code/codehash  k_transfer
           k_deleg_target  k_seed_account
 Env:      k_env(field)  k_blockhash  k_blobhash  k_coinbase
 Prim:     k_create_addr  k_create2_addr  k_precompile
-World:    k_snapshot  k_commit  k_revert  k_refund_add  k_log
+Utils:    k_snapshot  k_commit  k_revert  k_refund_add  k_log
 ```
 
 - **The transaction kernel = the EVM** (`evm/evm/`): the opcode
@@ -174,10 +171,9 @@ additionally computes and checks the post-state MPT root. The crypto
 eth-act zkvm-standards accelerator boundary, backed by the industry libraries
 in `zkvm/accel-host` (blst, k256, c-kzg, aurora-engine-modexp, p256).
 
-## Provenance
+## License
 
-Extracted from the `evm-asm` research workspace, where this model is the
-semantic front end of a specification-driven EVM AIR compiler (Event IR →
-checked facts → Constraint IR/AIR → WHIR proof backend). The host kernel
-functions correspond one-to-one with that proof system's AIR interface
-channels.
+Dedicated to the public domain under [CC0-1.0](LICENSE), mirroring
+[`ethereum/execution-specs`](https://github.com/ethereum/execution-specs) and
+the EIPs — so this specification of the Ethereum protocol can be reused,
+modified, and built upon without restriction.
