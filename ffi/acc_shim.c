@@ -50,6 +50,16 @@ static void bls_out_g2(uint32_t off, const uint8_t *b192) {    /* blst 192B (c1,
 unit acc_begin(uint64_t id) { ACC_id = (int)id; ACC_inlen = 0; ACC_outlen = 0; ACC_ok = 1; return UNIT; }
 /* begin + bulk-load the input from EVM memory [off, off+len) -- one memcpy,
  * replacing a per-byte stream of an intermediate Sail list */
+extern const uint8_t *txd_ptr(uint64_t *len);
+/* begin + load the input from the streamed tx-input buffer (tx-to-precompile) */
+unit acc_begin_txd(uint64_t id) {
+  acc_begin(id);
+  uint64_t len; const uint8_t *p = txd_ptr(&len);
+  if (len > ACC_INMAX) len = ACC_INMAX;
+  if (len) memcpy(ACC_in, p, (size_t)len);
+  ACC_inlen = (uint32_t)len;
+  return UNIT;
+}
 unit acc_begin_mem(uint64_t id, uint64_t off, uint64_t len) {
   acc_begin(id);
   if (len > ACC_INMAX) len = ACC_INMAX;

@@ -15,12 +15,9 @@
  * few bytes it needs O(1) -- no Sail byte list. */
 function precompile_input_byte(i : int) -> byte = acc_in_byte(get_slice_int(64, i, 0))
 
-/* stage a precompile's input from a byte list (the tx-to-precompile path;
+/* stage a precompile's input from the streamed tx buffer (tx-to-precompile;
  * CALL-family staging is memory-sourced: stage_precompile_input, memory.sail) */
-function stage_precompile_list(num : int, input : list(byte)) -> unit = {
-  acc_begin(get_slice_int(64, num, 0));
-  acc_push_all(input)
-}
+function stage_precompile_txd(num : int) -> unit = acc_begin_txd(get_slice_int(64, num, 0))
 
 /* run the staged precompile (input already in the accelerator: acc_begin_mem
  * for a memory slice, acc_begin+acc_push_all for a list). The output stays in

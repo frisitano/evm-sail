@@ -38,28 +38,21 @@ let GAS_PER_BLOB  : int = 131072 /* EIP-4844 GAS_PER_BLOB                  */
 let PER_AUTH_BASE    : gas = 12500  /* EIP-7702 PER_AUTH_BASE_COST          */
 let PER_EMPTY_ACCOUNT : gas = 25000 /* EIP-7702 PER_EMPTY_ACCOUNT_COST      */
 
-function calldata_cost(data : list(byte)) -> gas = {
-  /* consume the list once (O(n)); list_nth-per-index would be O(n^2) on large initcode */
+function calldata_cost() -> gas = {
+  /* EIP-2028: 4 gas per zero byte, 16 per non-zero, over the loaded tx input */
+  let n = txdata_size();
   var g : int = 0;
-  var rest : list(byte) = data;
-  var more : bool = true;
-  while more do {
-    match rest {
-      b :: t => { g = g + (if b == 0x00 then G_txdatazero else G_txdatanonzero); rest = t },
-      [||]   => more = false
-    }
+  foreach (i from 0 to (n - 1)) {
+    g = g + (if txdata_byte(i) == 0x00 then G_txdatazero else G_txdatanonzero)
   };
   to_gas(g)
 }
 
 /* EIP-7623 calldata tokens: each zero byte = 1 token, each nonzero byte = 4. */
-function calldata_tokens(data : list(byte)) -> int = {
+function calldata_tokens() -> int = {
+  let n = txdata_size();
   var t : int = 0;
-  var rest : list(byte) = data;
-  var more : bool = true;
-  while more do {
-    match rest { b :: r => { t = t + (if b == 0x00 then 1 else 4); rest = r }, [||] => more = false }
-  };
+  foreach (i from 0 to (n - 1)) { t = t + (if txdata_byte(i) == 0x00 then 1 else 4) };
   t
 }
 
@@ -70,11 +63,13 @@ function blob_hashes_versioned(xs : list(word)) -> bool =
     h :: r => if h[255 .. 248] == 0x01 then blob_hashes_versioned(r) else false
   }
 
+/* intrinsic gas: tx input already loaded into the C buffer (txdata_load), so
+ * calldata cost and the EIP-3860 initcode words read it via txdata_size. */
 function intrinsic_gas(tx : Transaction) -> gas = {
   let al = G_al_address * list_len(tx.t_al_addrs) + G_al_key * list_len(tx.t_al_keys);
   let auth = PER_EMPTY_ACCOUNT * list_len(tx.t_auth_list);   /* EIP-7702 */
-  let base = G_transaction + calldata_cost(tx.t_data) + al + auth;
-  to_gas(if tx.t_is_create then base + G_txcreate + initcode_gas(list_len(tx.t_data)) else base)
+  let base = G_transaction + calldata_cost() + al + auth;
+  to_gas(if tx.t_is_create then base + G_txcreate + initcode_gas(txdata_size()) else base)
 }
 
 /* EIP-7702: apply one authorization (validate against current state, set/clear the
@@ -122,6 +117,9 @@ function process_transaction(tx : Transaction) -> Receipt = {
   k_tx_reset();
   k_set_tx(struct { txe_origin = tx.t_sender, txe_gas_price = tx.t_gas_price, txe_blob_hashes = tx.t_blob_hashes });
   hr_reset();
+  /* stream the tx input into the C buffer ONCE; gas, validity, calldata and
+     initcode all read it from there (the spec list is never re-walked). */
+  let dlen = txdata_load(tx.t_data);
 
   let sender = tx.t_sender;
   let nonce_before = k_get_nonce(sender);
@@ -152,7 +150,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
      gas limit cannot cover 21000 + 10*tokens is rejected outright. */
   let floor_ok : bool =
     (k_fork < FORK_PRAGUE)
-    | (tx.t_gas_limit >= G_transaction + 10 * calldata_tokens(tx.t_data));
+    | (tx.t_gas_limit >= G_transaction + 10 * calldata_tokens());
   let valid =
         (unsigned(k_get_balance(sender)) >= upfront)        /* covers upfront cost      */
       & (code_is_nil(scode) | sender_deleg)                 /* EIP-3607 (7702 exempts delegations) */
@@ -162,7 +160,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
       & ((tx.t_blob_count == 0)                             /* blob fee cap >= price    */
          | (unsigned(tx.t_max_blob_fee) >= unsigned(k_block.be_blob_base_fee)))
       & blob_ok
-      & (not_bool(tx.t_is_create) | (list_len(tx.t_data) <= MAX_INITCODE_SIZE))  /* EIP-3860 */
+      & (not_bool(tx.t_is_create) | (dlen <= MAX_INITCODE_SIZE))  /* EIP-3860 */
       & ((k_fork < FORK_OSAKA) | (tx.t_gas_limit <= 16777216))   /* EIP-7825: gas cap 2^24 */
       & (unsigned(tx.t_max_priority) <= unsigned(tx.t_max_fee))   /* EIP-1559: prio cap <= fee cap */
       & (not_bool(tx.t_is_setcode) | not_bool(tx.t_is_create))    /* EIP-7702: type-4 has to != nil */
@@ -198,7 +196,6 @@ function process_transaction(tx : Transaction) -> Receipt = {
       msg_caller = sender, msg_address = new_addr, msg_code_address = new_addr,
       msg_value = tx.t_value, msg_data_len = 0, msg_is_static = false, msg_depth = 0
     };
-    let _ = txdata_load(tx.t_data);
     frame_code_txd();
     interpret();
     if frame_succeeded() then {
@@ -219,8 +216,8 @@ function process_transaction(tx : Transaction) -> Receipt = {
       /* tx directly to a precompile: run it as the top-level frame, gas-checked
          FIRST (an OOG precompile must not execute). Failure or OOG is an
          exceptional halt (all gas consumed, value transfer reverted). */
-      stage_precompile_list(an, tx.t_data);
-      let used = precompile_gas(an, list_len(tx.t_data));
+      stage_precompile_txd(an);
+      let used = precompile_gas(an, dlen);
       let ok : bool =
         if used <= gas_remaining then k_precompile(an) else false;
       if ok & (used <= gas_remaining) then {
@@ -228,7 +225,6 @@ function process_transaction(tx : Transaction) -> Receipt = {
         hr_capture_acc(); hr_adopt(); frame_status = Halted(HaltReturn)
       } else exc_halt(OutOfGas)
     } else {
-      let dlen = txdata_load(tx.t_data);
       cd_set_tx();
       message = struct {
         msg_caller = sender, msg_address = tx.t_to, msg_code_address = tx.t_to,
@@ -256,7 +252,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
   /* EIP-7623 (Prague+): a tx pays at least the calldata floor 21000 + 10*tokens */
   let gas_used =
     if k_fork >= FORK_PRAGUE then {
-      let floor = G_transaction + 10 * calldata_tokens(tx.t_data);
+      let floor = G_transaction + 10 * calldata_tokens();
       if gas_used1 < floor then floor else gas_used1
     } else gas_used1;
   let gas_left = tx.t_gas_limit - gas_used;

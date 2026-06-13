@@ -104,6 +104,8 @@ uint64_t cd_len(const unit u) { (void)u; return cd[h_top].len; }
 
 /* the streamed tx input (a create-tx's initcode source) */
 const uint8_t *txd_ptr(uint64_t *len) { *len = txd_len; return txd; }
+uint64_t txd_at(uint64_t i)  { return i < txd_len ? txd[i] : 0; }   /* byte, 0 past end */
+uint64_t txd_length(const unit u) { (void)u; return txd_len; }
 
 /* calldata byte i (0 past the end -- and 0 past the source's ALLOCATED cap:
  * an expansion-charged but never-written parent range reads as zeros) */

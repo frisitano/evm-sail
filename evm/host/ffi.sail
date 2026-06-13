@@ -22,6 +22,7 @@ val acc_out   = impure "acc_out"   : bits(64) -> bits(8)
 val acc_word  = impure "acc_word"  : bits(64) -> bits(64)
 val acc_in_byte   = impure "acc_in_byte"   : bits(64) -> bits(8)
 val acc_begin_mem = impure "acc_begin_mem" : (bits(64), bits(64), bits(64)) -> unit
+val acc_begin_txd = impure "acc_begin_txd" : bits(64) -> unit
 
 /* feed the input to the host, 8 bytes per FFI crossing (remainder one-by-one) */
 function acc_push_all(msg : list(byte)) -> unit = match msg {

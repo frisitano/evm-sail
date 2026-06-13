@@ -141,6 +141,14 @@ val txd_byte     = impure "txd_byte"     : bits(8) -> unit
 val cd_len       = impure "cd_len"       : unit -> bits(64)
 val cd_word      = impure "cd_word"      : bits(64) -> word
 val cd_to_mem    = impure "cd_to_mem"    : (bits(64), bits(64), bits(64)) -> unit
+val txd_at       = impure "txd_at"       : bits(64) -> bits(8)
+val txd_length   = impure "txd_length"   : unit -> bits(64)
+
+/* The transaction input, after txdata_load streamed it into the C buffer ONCE.
+ * Gas inspection (EIP-2028/7623 zero/nonzero counting) and length checks read
+ * it here -- the EVM operates over memory, never re-walking the spec list. */
+function txdata_byte(i : int) -> byte = txd_at(get_slice_int(64, i, 0))
+function txdata_size() -> int = unsigned(txd_length())
 
 function calldata_word(off : int) -> word = cd_word(get_slice_int(64, off, 0))
 function calldata_copy_to_mem(dst : int, off : int, len : int) -> unit =
