@@ -56,7 +56,7 @@ function k_tstore(a : address, s : word, v : word) -> unit = {
 /* --- accounts --- */
 function k_get_balance(a : address) -> word = { kget(a).acc_balance }
 function k_get_nonce(a : address) -> int = { kget(a).acc_nonce }
-function k_get_code(a : address) -> list(byte) = codedb_lookup(kget(a).acc_codehash)
+function k_get_code(a : address) -> list(byte) = kget(a).acc_code
 /* EXTCODEHASH: a field read -- the hash IS the account's code binding.
  * A truly empty (nonexistent) account reads as 0 (EIP-1052). */
 function k_get_codehash(a : address) -> hash = {
@@ -87,9 +87,7 @@ function k_bump_nonce(a : address) -> unit = {
 }
 function k_set_code(a : address, c : list(byte)) -> unit = {
   jpush(JAcct(a, kget(a)));
-  let h : hash = keccak256(c);
-  codedb_add(h, c);
-  kset(a, { kget(a) with acc_codehash = h });
+  kset(a, { kget(a) with acc_code = c, acc_codehash = keccak256(c) });
   cs_store_code(a, c)
 }
 
@@ -149,9 +147,8 @@ function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
 }
 /* used only by the tx driver to seed pre-state (no trace entry) */
 function k_seed_account(a : address, nonce : int, bal : word, c : list(byte)) -> unit = {
-  let h : hash = keccak256(c);
-  codedb_add(h, c);
-  kset(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = h });
+  kset(a, struct { acc_nonce = nonce, acc_balance = bal,
+                   acc_code = c, acc_codehash = keccak256(c) });
   cs_store_code(a, c)
 }
 function k_seed_storage(a : address, s : word, v : word) -> unit =

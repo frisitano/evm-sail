@@ -10,12 +10,17 @@
 
 /* ------------------------------ structs --------------------------------- */
 
-/* The protocol's account: (nonce, balance, codeHash) -- the Yellow Paper
- * quadruple minus storageRoot (storage lives in the overlay maps and its root
- * is computed on demand). Code BYTES are not part of the account: they live in
- * the code db below, keyed by hash. The hash is the account's binding -- the
- * symbolic representation a prover reasons over (keccak as collision-free). */
-struct Account = { acc_nonce : int, acc_balance : word, acc_codehash : hash }
+/* The protocol's account: the Yellow Paper quadruple minus storageRoot
+ * (storage lives in the overlay maps; its root is computed on demand).
+ *
+ * In-memory representations stay UNHASHED: the account links its code bytes
+ * DIRECTLY (a refcounted list -- holding it is O(1)); nothing at runtime is
+ * keyed or resolved by hash. acc_codehash is not linkage -- it is the cached
+ * protocol VALUE keccak256(acc_code), computed once at the write boundary,
+ * because the hash itself is observable state (EXTCODEHASH, the trie leaf)
+ * and is the symbolic binding a prover reasons over. */
+struct Account = { acc_nonce : int, acc_balance : word,
+                   acc_code : list(byte), acc_codehash : hash }
 
 /* keccak256 of the empty string: the codeHash of every codeless account */
 let KECCAK_EMPTY : hash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
@@ -57,22 +62,8 @@ union JEntry = {
 
 let ZERO_WORD : word = 0x0000000000000000000000000000000000000000000000000000000000000000
 let ZERO_ADDR : address = 0x0000000000000000000000000000000000000000
-let EMPTY_ACCOUNT : Account = struct { acc_nonce = 0, acc_balance = ZERO_WORD, acc_codehash = KECCAK_EMPTY }
-
-/* ---- the code db: hash -> bytes (the world's code store, dedup'd) ------ */
-struct CodeEntry = { ce_hash : hash, ce_code : list(byte) }
-register k_codedb : list(CodeEntry) = [||]
-
-function codedb_get(es : list(CodeEntry), h : hash) -> list(byte) =
-  match es { [||] => [||], e :: r => if e.ce_hash == h then e.ce_code else codedb_get(r, h) }
-function codedb_lookup(h : hash) -> list(byte) =
-  if h == KECCAK_EMPTY then [||] else codedb_get(k_codedb, h)
-function codedb_add(h : hash, c : list(byte)) -> unit =
-  if h == KECCAK_EMPTY then ()
-  else match codedb_get(k_codedb, h) {
-    [||] => k_codedb = struct { ce_hash = h, ce_code = c } :: k_codedb,
-    _ => ()
-  }
+let EMPTY_ACCOUNT : Account = struct { acc_nonce = 0, acc_balance = ZERO_WORD,
+                                       acc_code = [||], acc_codehash = KECCAK_EMPTY }
 
 register k_accounts    : list(AccountEntry) = [||]
 register k_warm_addr   : list(address)      = [||]
@@ -235,7 +226,7 @@ function jdrop_last_addr(xs : list(address)) -> list(address) =
   match xs { [||] => [||], _ :: [||] => [||], x :: r => x :: jdrop_last_addr(r) }
 function apply_undo(e : JEntry) -> unit = match e {
   JCheck()       => (),
-  JAcct(a, old)  => { kset(a, old); cs_store_code(a, codedb_lookup(old.acc_codehash)) },
+  JAcct(a, old)  => { kset(a, old); cs_store_code(a, old.acc_code) },
   JStor(_, _, _) => (),   /* storage undo is the overlay's pop_discard now */
   JTran(a, s, v) => map_store(MAP_TRANSIENT, a, s, v),
   JWarmA(a)      => k_warm_addr = jremove_addr(k_warm_addr, a),
