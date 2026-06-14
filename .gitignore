@@ -36,3 +36,6 @@ docs/*.aux
 docs/*.log
 docs/*.out
 docs/*.toc
+
+# canonical zkevm conformance fixtures (tests-zkevm@v0.4.1, ~360MB)
+zkvm/.fixtures/
