@@ -294,6 +294,52 @@ function rlp_uint_span(off : int, len : int) -> int = {
     v
 }
 
+/* Decode transaction `i` straight from the SSZ payload's transactions list, by
+ * offset -- no copy. The calldata is the witness bytes themselves: txin_view_input
+ * points the (single, reused) input slot at them, so the decoded Transaction
+ * carries only scalars (t_index = 0 names that slot). The sender is derived from
+ * public_keys[i] (PUBLIC_KEY_BYTES = 65: a 0x04 prefix + the 64-byte X||Y), the
+ * host-attested key for tx i; the SSZ-convergence plan replaces this with a
+ * carried sender-address list. Legacy (type-0) layout only for now; the typed
+ * 2930/1559/4844/7702 envelopes are the next decode step. */
+function decode_tx_ssz(i : int) -> Transaction = {
+    let sender = word_to_address(keccak256(ssz_bytes(cc_end() + i * 65 + 1, 64)));
+    let (tx_off, _tx_len) = ssz_list_span(pl_txs_start(), pl_n_txs(), pl_wds_start(), i);
+    let (no, nl) = rlp_field_span(tx_off, 0);
+    let t_nonce = rlp_uint_span(no, nl);
+    let (go, gl2) = rlp_field_span(tx_off, 1);
+    let t_gasprice = word_of_int(rlp_uint_span(go, gl2));
+    let (xo, xl) = rlp_field_span(tx_off, 2);
+    let t_gas = rlp_uint_span(xo, xl);
+    let (ao, al2) = rlp_field_span(tx_off, 3);
+    let t_to = word_to_address(word_of_int(rlp_uint_span(ao, al2)));
+    let (vo, vl) = rlp_field_span(tx_off, 4);
+    let t_value = word_of_int(rlp_uint_span(vo, vl));
+    let (do_, dl) = rlp_field_span(tx_off, 5);
+    let _ = txin_view_input(get_slice_int(64, 0, 0), get_slice_int(64, do_, 0), get_slice_int(64, dl, 0));
+    struct {
+        t_sender = sender,
+        t_nonce = t_nonce,
+        t_gas_price = t_gasprice,
+        t_priority_fee = t_gasprice,
+        t_gas_limit = to_gas(t_gas),
+        t_is_create = false,
+        t_to = t_to,
+        t_value = t_value,
+        t_index = 0,
+        t_al_addrs = [||],
+        t_al_keys = [||],
+        t_blob_count = 0,
+        t_max_fee = t_gasprice,
+        t_max_blob_fee = ZERO_WORD,
+        t_max_priority = t_gasprice,
+        t_is_setcode = false,
+        t_auth_list = [||],
+        t_is_blob = false,
+        t_blob_hashes = [||],
+    }
+}
+
 function zkvm_run() -> unit = {
     /* input-independent self-checks (valid for any vector): the C accelerators
        and the GMP-free fixed-width int/bits runtime. The per-stage fixture
@@ -314,31 +360,12 @@ function zkvm_run() -> unit = {
     assert(witness_reroot(sr) == sr, "witness re-roots to parent.state_root");
     k_world_reset();
 
-    /* The tx sender is derived from public_keys[0] (no ecrecover needed): the
-       guest trusts the host-attested pubkey and computes address = keccak(X||Y)[12:]
-       over the 64 bytes after the 0x04 uncompressed prefix. */
-    let sender = word_to_address(keccak256(ssz_bytes(cc_end() + 1, 64)));
-
-    /* decode the single legacy transaction from transactions[0] */
-    let (tx_off, _tx_len) = ssz_list_span(pl_txs_start(), pl_n_txs(), pl_wds_start(), 0);
-    let (no, nl) = rlp_field_span(tx_off, 0);
-    let t_nonce = rlp_uint_span(no, nl);
-    let (go, gl2) = rlp_field_span(tx_off, 1);
-    let t_gasprice = word_of_int(rlp_uint_span(go, gl2));
-    let (xo, xl) = rlp_field_span(tx_off, 2);
-    let t_gas = rlp_uint_span(xo, xl);
-    let (ao, al2) = rlp_field_span(tx_off, 3);
-    let t_to = word_to_address(word_of_int(rlp_uint_span(ao, al2)));
-    let (vo, vl) = rlp_field_span(tx_off, 4);
-    let t_value = word_of_int(rlp_uint_span(vo, vl));
-
-    /* the tx input is the witness bytes themselves -- point the slot at them, no copy */
-    let (do_, dl) = rlp_field_span(tx_off, 5);
-    let _ = txin_view_input(get_slice_int(64, 0, 0), get_slice_int(64, do_, 0), get_slice_int(64, dl, 0));
-
-    /* seed the touched accounts' pre-state from the harvested (authenticated) leaves */
-    seed_account_from_store(sdb, sender);
-    seed_account_from_store(sdb, t_to);
+    /* Decode tx 0 up front (decode_tx_ssz points txin at its calldata, no copy):
+       its sender and recipient seed the authenticated pre-state from the harvested
+       witness leaves before stateless mode arms. */
+    let tx0 = decode_tx_ssz(0);
+    seed_account_from_store(sdb, tx0.t_sender);
+    seed_account_from_store(sdb, tx0.t_to);
 
     let env : BlockEnv = struct {
             be_number = word_of_int(pl_block_number()),
@@ -351,30 +378,6 @@ function zkvm_run() -> unit = {
             be_blob_base_fee = word_of_int(1),
             be_excess_blob_gas = word_of_int(0),
         };
-    let txn : Transaction = struct {
-            t_sender = sender,
-            t_nonce = t_nonce,
-            t_gas_price = t_gasprice,
-            t_priority_fee = t_gasprice,
-            t_gas_limit = to_gas(t_gas),
-            t_is_create = false,
-            t_to = t_to,
-            t_value = t_value,
-            t_index = 0,
-            t_al_addrs = [||],
-            t_al_keys = [||],
-            /* legacy (type-0) tx: no 1559/4844/7702 envelope fields */
-            t_blob_count = 0,
-            t_max_fee = t_gasprice,
-            t_max_blob_fee = ZERO_WORD,
-            t_max_priority = t_gasprice,
-            t_is_setcode = false,
-            t_auth_list = [||],
-            t_is_blob = false,
-            t_blob_hashes = [||],
-        };
-    let wd : Withdrawal = struct { w_address = withdrawal_addr(0), w_amount = word_of_int(withdrawal_amount(0)) };
-    let blk : Block = struct { blk_env = env, blk_txs = [|txn|], blk_withdrawals = [|wd|] };
 
     /* Seed the storage working set with authenticated witness pre-values for every
        BAL-listed slot, then arm stateless mode: from here every EVM SLOAD/SSTORE
@@ -384,7 +387,21 @@ function zkvm_run() -> unit = {
     seed_storage_working_set();
     k_stateless_on();
 
-    let receipts = process_block(blk);
+    /* Block execution, read straight from the SSZ payload by index -- no
+       materialized Block / list(Transaction). The block env is seeded, then each
+       transaction is decoded and applied in order (txin is repointed per tx, so a
+       single input slot serves all), and finally the withdrawal list is credited.
+       This is the zero-copy, multi-tx process_block; the varint EEST runner still
+       uses the Block-taking process_block in block.sail until the paths converge. */
+    k_set_block(env);
+    let r0 = process_transaction(tx0);
+    var receipts : list(Receipt) = [|r0|];
+    foreach (i from 1 to (pl_n_txs() - 1)) {
+        receipts = process_transaction(decode_tx_ssz(i)) :: receipts
+    };
+    foreach (i from 0 to (pl_n_withdrawals() - 1)) {
+        k_add_balance(withdrawal_addr(i), word_of_int(withdrawal_amount(i)))
+    };
 
     /* S5: stateless validation outcome (a failure is a NORMAL result -- the guest
        reports successful_validation=false, it does not abort):
@@ -394,14 +411,14 @@ function zkvm_run() -> unit = {
          - the recomputed post-state root commits to payload.state_root */
     let cfg_ok = cc_fork() == 20;
     let hdr_ok = headers_ok();
-    let exec_ok : bool = match receipts {
-        r :: _ => r.rc_success,
-        [||] => false,
-    };
+
+    /* receipts is in reverse application order (the loop prepends), so read tx 0's
+       receipt directly; a multi-tx block would fold rc_success over the whole list. */
+    let exec_ok : bool = r0.rc_success;
     let poststate_ok = compute_state_root_hb() == pl_state_root();
     let valid : bool = cfg_ok & hdr_ok & exec_ok & poststate_ok;
 
-    let stored = k_storage_get(t_to, word_of_int(0));
+    let stored = k_storage_get(tx0.t_to, word_of_int(0));
     let gas_used = total_gas_used(receipts);
     let wbal = kget(withdrawal_addr(0)).acc_balance;
     let cbbal = kget(pl_fee_recipient()).acc_balance;
