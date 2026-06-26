@@ -273,7 +273,7 @@ function sha256_selfcheck() -> unit = {
 
 /* ===================== (3) STATELESS SSZ INPUT ========================= */
 
-val ssz_src_len = impure { _: "ssz_src_len" } : unit -> int
+val ssz_src_len = impure { _: "ssz_src_len" } : unit -> bits(64)
 val ssz_src_byte = impure { _: "ssz_src_byte" } : int -> bits(8)
 
 /* bulk readers: n (<=8) bytes from the input in one FFI call (LE / BE) */

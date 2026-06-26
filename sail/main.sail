@@ -690,7 +690,7 @@ function system_call_checked(tgt : address) -> bool = {
  * rejects such input with successful_validation=false; the guest must too rather
  * than echo garbage. */
 function input_well_formed() -> bool = {
-    let len = ssz_src_len();
+    let len = unsigned(ssz_src_len());
     if len < 18 then {
         false
     } else {
