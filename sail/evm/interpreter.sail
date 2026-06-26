@@ -80,7 +80,11 @@ function decode_simple(b : int) -> ast =
                     27 => SHL(),
                     28 => SHR(),
                     29 => SAR(),
-                    30 => CLZ(),
+                    30 => if k_fork >= FORK_OSAKA then {
+                        CLZ()
+                    } else {
+                        INVALID()
+                    }, /* EIP-7939: Osaka+ */
                     32 => KECCAK256(),
                     48 => ADDRESS(),
                     49 => BALANCE(),
@@ -109,6 +113,11 @@ function decode_simple(b : int) -> ast =
                     72 => BASEFEE(),
                     73 => BLOBHASH(),
                     74 => BLOBBASEFEE(),
+                    75 => if k_fork >= FORK_AMSTERDAM then {
+                        SLOTNUM()
+                    } else {
+                        INVALID()
+                    }, /* EIP-7843: Amsterdam+ (0x4b is undefined earlier) */
                     80 => POP(),
                     81 => MLOAD(),
                     82 => MSTORE(),
@@ -261,18 +270,31 @@ function run_call(mode : int) -> unit = {
         return ()
     };
 
-    /* EIP-2929 access (marks the target warm as a side effect) + EIP-7702
-       delegation access form the access component of extra_gas. */
+    /* EIP-2929 access: warm the target (a set update, NOT a state read) and take
+       its cold/warm cost. */
     let warm = k_access_account(target);
-    var access_cost : int = account_cost(warm);
+    let target_cost : int = account_cost(warm);
+    let transfer_cost : int = if word_nonzero(value) then { G_callvalue } else { 0 };
+
+    /* "check static gas before state access" (execution-specs generic_call): the
+       target's access + value-transfer + memory cost is checked BEFORE reading
+       any of the target's state. A frame that cannot afford it halts here, having
+       touched no account -- so the stateless witness need not prove the target.
+       (Resolving the EIP-7702 delegation or the empty-account check below reads
+       the target's account, which an OOG-before-access tx must never do.) */
+    if gas_remaining < target_cost + transfer_cost + mem_gas then {
+        exc_halt(OutOfGas);
+        return ()
+    };
+
+    /* STATE ACCESS (only now that the static gas is covered): the EIP-7702
+       delegation designation (reads the target's code) + new-account component. */
+    var access_cost : int = target_cost;
     let (tg_deleg, tg_target) = k_deleg_target(target);
     if tg_deleg then {
         let dw = k_access_account(tg_target);
         access_cost = access_cost + account_cost(dw)
     };
-
-    /* value-transfer + new-account components of extra_gas */
-    let transfer_cost : int = if word_nonzero(value) then { G_callvalue } else { 0 };
     let create_cost : int = if word_nonzero(value) & (mode == 0) & k_account_is_empty(target) then {
             G_newaccount
         } else {
@@ -300,6 +322,15 @@ function run_call(mode : int) -> unit = {
     charge(to_gas(base_child + extra_gas + mem_gas));
     if not_bool(is_running()) then {
         return ()
+    };
+
+    /* gas is now covered, so EELS proceeds to prepare_message, which loads the
+       delegate's CODE -- BEFORE the depth/balance guards below. Resolve it now
+       (flagging a missing-code witness deficiency) so an insufficient-balance
+       call to a 7702-delegated target still detects an omitted delegate-code
+       proof, matching EELS; an OOG call returned above and never reaches here. */
+    if tg_deleg then {
+        note_code_resolved(k_code_key(tg_target))
     };
     if m_max > memory_size then {
         memory_size = m_max
@@ -488,6 +519,13 @@ function run_create(is2 : bool) -> unit = {
         return ()
     };
 
+    /* EIP-214: CREATE/CREATE2 modifies state and is forbidden in a static
+       context -- it raises WriteProtection (an exceptional halt consuming all
+       remaining gas), checked before any charge or child frame. */
+    if guard_static() then {
+        return ()
+    };
+
     /* up-front charges: memory expansion over the initcode, the CREATE base
        cost (G_create), the EIP-3860 per-initcode-word cost, and -- for CREATE2
        only -- the keccak word cost of hashing the initcode for the address. */
@@ -506,7 +544,7 @@ function run_create(is2 : bool) -> unit = {
 
     /* EIP-3860: initcode longer than MAX_INITCODE_SIZE is rejected outright as
        an exceptional halt. */
-    if len > MAX_INITCODE_SIZE then {
+    if len > max_initcode_size() then {
         exc_halt(InitCodeTooLarge)
     } else {
         /* derive the new contract address: keccak(0xff, creator, salt,
@@ -619,7 +657,7 @@ function run_create(is2 : bool) -> unit = {
 
                 /* deployed-code validity: within the EIP-170 size limit and not
                    beginning with 0xEF (EIP-3541, the reserved EOF prefix). */
-                let code_ok = (dep_len <= MAX_CODE_SIZE) &
+                let code_ok = (dep_len <= max_code_size()) &
                         ((dep_len == 0) | (hr_pending_byte(get_slice_int(64, 0, 0)) != 0xef));
 
                 /* leave the initcode frame: restore the parent's registers. */

@@ -23,7 +23,7 @@ SAIL_FILES := $(shell find . -name '*.sail' | sort)
 # program roots whose $include graph reaches every definition; --all-warnings
 # here type-checks the whole tree (formatting/hygiene is covered by fmt-check,
 # since `sail --fmt` normalizes trailing whitespace, tabs, and final newlines).
-WARN_ROOTS := sail/evm.sail zkvm/zkvm_block.sail
+WARN_ROOTS := sail/evm.sail sail/main.sail
 
 .PHONY: all check clean help lint fmt fmt-check html pdf
 

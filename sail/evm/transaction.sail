@@ -41,7 +41,20 @@ struct Transaction = {
   t_is_blob : bool,             /* EIP-4844 type-3 marker (blob validity rules)     */
   t_blob_hashes : list(word)    /* EIP-4844 versioned hashes (BLOBHASH operands)    */
 }
-struct Receipt = { rc_success : bool, rc_gas_used : gas, rc_logs : list(LogEntry) }
+
+/* rc_success: the top-level frame returned/stopped without reverting or
+ * exceptionally halting (used for create-tx code deposit, log inclusion).
+ * rc_valid: the tx passed transaction VALIDITY (nonce/balance/intrinsic/floor/
+ * fee/blob/7702 rules) and was applied to the block. A valid tx that REVERTS
+ * or runs out of gas during execution still has rc_valid = true -- it is a
+ * legitimate block member (gas charged, nonce bumped). Block validity (the
+ * stateless guest's successful_validation) folds rc_valid, NOT rc_success:
+ * only an INVALID/inapplicable tx makes the containing block invalid. */
+/* rc_block_gas: EIP-7778 block-gas accounting WITHOUT the EIP-3529 refund
+ * (= max(gas_used_before_refund, calldata_floor)). The block driver sums this
+ * for the block gas-availability check and the header gas_used; it differs from
+ * rc_gas_used (the receipt's refunded gas) precisely by the refund. */
+struct Receipt = { rc_success : bool, rc_valid : bool, rc_gas_used : gas, rc_block_gas : gas, rc_logs : list(LogEntry) }
 
 let G_transaction : gas = 21000
 let G_txcreate : gas = 32000
@@ -98,27 +111,30 @@ function intrinsic_gas(tx : Transaction) -> gas = {
 function process_auth(au : Authorization) -> unit = {
     let authority = au.au_authority;
     let chain_ok = (au.au_chain_id == 0) | (au.au_chain_id == unsigned(k_block.be_chain_id));
-    let (is_deleg, _) = k_deleg_target(authority);
-    let code_ok = (k_code_key(authority) == KECCAK_EMPTY) | is_deleg;
-    let nonce_ok = k_get_nonce(authority) == au.au_nonce;
 
-    /* step 5: warm the authority once sig + chain id pass, BEFORE the code/nonce
-     * checks -- so a tuple later skipped for code/nonce still warms its authority. */
+    /* EELS validates sig + chain id from the tuple ALONE before reading the
+     * authority's account; a tuple rejected there (e.g. wrong chain id) touches
+     * NO state, so its authority need not be witnessed -- reading it eagerly would
+     * over-access the witness. Gate every authority-state read on sig & chain_ok. */
     if au.au_valid_sig & chain_ok then {
+        /* step 5: warm the authority BEFORE the code/nonce checks -- a tuple later
+         * skipped for code/nonce still warms its authority. */
         let _ = k_access_account(authority);
-        ()
-    };
-    if au.au_valid_sig & chain_ok & code_ok & nonce_ok then {
-        let existed = not_bool(k_account_is_empty(authority));
-        if unsigned(address_to_word(au.au_address)) == 0 then {
-            k_set_code(authority, [||])
-            /* clear delegation */
-        } else {
-            k_set_code(authority, delegation_code(au.au_address))
-        };
-        k_bump_nonce(authority);
-        if existed then {
-            k_refund_add(PER_EMPTY_ACCOUNT - PER_AUTH_BASE)
+        let (is_deleg, _) = k_deleg_target(authority);
+        let code_ok = (k_code_key(authority) == KECCAK_EMPTY) | is_deleg;
+        let nonce_ok = k_get_nonce(authority) == au.au_nonce;
+        if code_ok & nonce_ok then {
+            let existed = not_bool(k_account_is_empty(authority));
+            if unsigned(address_to_word(au.au_address)) == 0 then {
+                k_set_code(authority, [||])
+                /* clear delegation */
+            } else {
+                k_set_code(authority, delegation_code(au.au_address))
+            };
+            k_bump_nonce(authority);
+            if existed then {
+                k_refund_add(PER_EMPTY_ACCOUNT - PER_AUTH_BASE)
+            }
         }
     }
 }
@@ -229,7 +245,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
                       /* blob fee cap >= price    */
                       (unsigned(tx.t_max_blob_fee) >= unsigned(k_block.be_blob_base_fee)))
                 & blob_ok
-                & (not_bool(tx.t_is_create) | (dlen <= MAX_INITCODE_SIZE))
+                & (not_bool(tx.t_is_create) | (dlen <= max_initcode_size()))
                 & /* EIP-3860 */
                   ((k_fork < FORK_OSAKA) | (tx.t_gas_limit <= 16777216))
                 & /* EIP-7825: gas cap 2^24 */
@@ -237,9 +253,15 @@ function process_transaction(tx : Transaction) -> Receipt = {
                 & /* EIP-1559: prio cap <= fee cap */
                   (not_bool(tx.t_is_setcode) | not_bool(tx.t_is_create))
                 & /* EIP-7702: type-4 has to != nil */
-                  (not_bool(tx.t_is_setcode) | (list_len(tx.t_auth_list) > 0)); /* EIP-7702: non-empty auth list */
+                  (not_bool(tx.t_is_setcode) | (list_len(tx.t_auth_list) > 0))
+                & /* EIP-7702: non-empty auth list */
+                  (not_bool(tx.t_is_setcode) | (k_fork >= FORK_PRAGUE))
+                & /* EIP-7702 is Prague+: a type-4 tx is invalid on an earlier fork */
+                  (nonce_before < 18446744073709551615)
+                & /* EIP-2681: nonce < 2^64-1 (incrementable) */
+                  (tx.t_gas_limit <= unsigned(k_block.be_gas_limit)); /* tx gas <= block gas limit */
     if not_bool(valid) then {
-        return struct { rc_success = false, rc_gas_used = 0, rc_logs = [||] }
+        return struct { rc_success = false, rc_valid = false, rc_gas_used = 0, rc_block_gas = 0, rc_logs = [||] }
     };
 
     /* upfront gas + nonce bump (persist across revert; taken before the snapshot) */
@@ -293,7 +315,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
             if frame_succeeded() then {
                 let dep_len = unsigned(hr_pending_len());
                 let deposit = G_codedeposit * dep_len;
-                let code_ok = (dep_len <= MAX_CODE_SIZE) &
+                let code_ok = (dep_len <= max_code_size()) &
                         ((dep_len == 0) | (hr_pending_byte(get_slice_int(64, 0, 0)) != 0xef)); /* EIP-3541 */
                 if code_ok & (gas_remaining >= deposit) then {
                     gas_remaining = to_gas(gas_remaining - deposit);
@@ -370,13 +392,17 @@ function process_transaction(tx : Transaction) -> Receipt = {
     let gas_used1 = tx.t_gas_limit - gas_left1;
 
     /* EIP-7623 (Prague+): a tx pays at least the calldata floor 21000 + 10*tokens */
-    let gas_used = if k_fork >= FORK_PRAGUE then {
-            let floor = G_transaction + 10 * calldata_tokens();
-            if gas_used1 < floor then { floor } else { gas_used1 }
+    let floor : int = if k_fork >= FORK_PRAGUE then {
+            G_transaction + 10 * calldata_tokens()
         } else {
-            gas_used1
+            0
         };
+    let gas_used = if gas_used1 < floor then { floor } else { gas_used1 };
     let gas_left = tx.t_gas_limit - gas_used;
+
+    /* EIP-7778: the block charges the UNREFUNDED gas (floored), not the receipt's
+       refunded gas -- this is what bounds the block gas limit and the header. */
+    let block_gas = if gas_used0 < floor then { floor } else { gas_used0 };
 
     /* return unused gas to sender; pay coinbase the priority fee */
     k_add_balance(sender, word_of_int(gas_left * unsigned(tx.t_gas_price)));
@@ -389,5 +415,11 @@ function process_transaction(tx : Transaction) -> Receipt = {
         k_finalize_selfdestructs()
     };
 
-    struct { rc_success = success, rc_gas_used = to_gas(gas_used), rc_logs = k_logs }
+    struct {
+        rc_success = success,
+        rc_valid = true,
+        rc_gas_used = to_gas(gas_used),
+        rc_block_gas = to_gas(block_gas),
+        rc_logs = k_logs,
+    }
 }

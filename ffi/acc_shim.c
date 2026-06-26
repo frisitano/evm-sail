@@ -103,9 +103,11 @@ unit acc_push8(uint64_t w)  {   /* 8 input bytes (big-endian) in one store when 
 uint64_t acc_exec(unit u) {
   (void)u;
 #ifdef ACCEL_MMIO
-  if (ACC_id == 0 || ACC_id == 2)   /* keccak / sha256 -> host accelerator */
-    return accel_dev_call(ACC_id, ACC_src, ACC_inlen, ACC_out);
-#endif
+  /* Guest: every accelerator op is a proven precompile served by the host
+   * device (zkvm/accel-device, backed by the audited Rust accel-host). No
+   * crypto runs as guest instructions and the guest links no crypto code. */
+  return accel_dev_call(ACC_id, ACC_src, ACC_inlen, ACC_out);
+#else
   switch (ACC_id) {
     case 0: { zkvm_keccak256_hash h;
       if (zkvm_keccak256(ACC_in, ACC_inlen, &h) == ZKVM_EOK) { memcpy(ACC_out, h.data, 32); ACC_outlen = 32; }
@@ -279,9 +281,25 @@ uint64_t acc_exec(unit u) {
       }
       break;
     }
+    case 257: {  /* secp256k1 ECDSA verify (tx-sender auth, not an EVM precompile):
+                  * input hash[32] r[32] s[32] x[32] y[32] (160B) -> 32B 0..01 if the
+                  * signature verifies for the given pubkey, else EMPTY. The pubkey is
+                  * the witness; sender = keccak(pubkey)[12:] is bound by this check. */
+      ACC_ok = 1; ACC_outlen = 0;
+      if (ACC_inlen == 160) {
+        uint8_t h[32], sig[64], pk[64]; bool verified = false;
+        in_copy(h, 0, 32); in_copy(sig, 32, 64); in_copy(pk, 96, 64);
+        if (zkvm_secp256k1_verify((const zkvm_secp256k1_hash*)h, (const zkvm_secp256k1_signature*)sig,
+                (const zkvm_secp256k1_pubkey*)pk, &verified) == ZKVM_EOK && verified) {
+          memset(ACC_out, 0, 32); ACC_out[31] = 1; ACC_outlen = 32;
+        }
+      }
+      break;
+    }
     default: ACC_ok = 0; ACC_outlen = 0; break;
   }
   return ACC_outlen;
+#endif
 }
 uint64_t acc_ok(unit u)  { (void)u; return (uint64_t)ACC_ok; }
 uint64_t acc_out(uint64_t i) { return (i < ACC_outlen) ? ACC_out[i] : 0; }

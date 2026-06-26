@@ -17,7 +17,11 @@ fn main() {
      .file(format!("{ffi}/host_mem.c")).file(format!("{ffi}/host_map.c"))
      .file(format!("{ffi}/host_stack.c")).file(format!("{ffi}/host_word.c"))
      .file(format!("{ffi}/host_code.c"))
-     .file(format!("{ffi}/zkvm_accelerators.c"))   // reference crypto (or SDK precompile syscalls)
+     // Crypto: NO in-guest implementation. acc_shim must be built to offload every
+     // accelerator op to the zkVM's native crypto precompiles (the ere SDK's proven
+     // precompile syscalls) -- the analogue of the spike host-accelerator device.
+     // (The portable-C reference ffi/zkvm_accelerators.c has been removed; the single
+     // crypto source is the Rust accel-host, served as proven precompiles.)
      .file(format!("{rt}/zkvm_input.c"))             // -DERE_GUEST: read_input source + buffered output
      .file("ere_bridge.c");
     b.compile("evmsail_core");

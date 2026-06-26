@@ -4,7 +4,7 @@
 /* The native entry point that runs an Ethereum block end to end. A test    */
 /* harness compiles this model ONCE, then feeds it a stream of fixtures at  */
 /* runtime: each case seeds a pre-state, sets the block environment, builds */
-/* one transaction, runs it through process_block (block.sail), and dumps   */
+/* one transaction, runs it through process_transaction, and dumps          */
 /* the resulting accounts + storage for an external comparator. The data is */
 /* INPUT, not generated code -- there is no per-fixture recompilation.      */
 /*                                                                          */
@@ -85,35 +85,35 @@ function dump_storage() -> unit = {
     }
 }
 
-/* one "ACC addr nonce balance" line per account in the working set */
-function dump_accounts(es : list(AccountEntry)) -> unit = match es {
-    [||]   => (),
-    e :: r => {
+/* one "ACC addr nonce balance" line per account in the working set (acctmap) */
+function dump_accounts() -> unit = {
+    let n = unsigned(acctmap_count());
+    foreach (j from 0 to (n - 1)) {
+        acctmap_at(get_slice_int(64, j, 0));
         print_endline(
             concat_str(
                 "ACC ",
                 concat_str(
-                    dec_str(unsigned(sail_zero_extend(e.ae_addr, 256))),
+                    dec_str(unsigned(sail_zero_extend(am_at_addr(), 256))),
                     concat_str(
                         " ",
                         concat_str(
-                            dec_str(e.ae_acc.acc_nonce),
-                            concat_str(" ", dec_str(unsigned(e.ae_acc.acc_balance))),
+                            dec_str(unsigned(acctmap_at_nonce())),
+                            concat_str(" ", dec_str(unsigned(am_at_bal()))),
                         ),
                     ),
                 ),
             ),
-        );
-        dump_accounts(r)
-    },
+        )
+    }
 }
 function dump_state() -> unit = {
-    dump_accounts(k_accounts);
+    dump_accounts();
     dump_storage()
 }
 
 /* decode and run one fixture: seed pre-state, set the block env, build the
- * single transaction, run process_block, and dump the post-state. */
+ * single transaction, run process_transaction, and dump the post-state. */
 function run_one() -> unit = {
     k_world_reset();
     let nacc = ni();
@@ -141,6 +141,7 @@ function run_one() -> unit = {
     let bpr = nw();
     let bci = nw();
     let bbbf = nw();
+    let bslot = nw(); /* EIP-7843 SLOTNUM: env slotNumber */
     k_set_block(
         struct {
             be_number = bnum,
@@ -152,6 +153,7 @@ function run_one() -> unit = {
             be_chain_id = bci,
             be_blob_base_fee = bbbf,
             be_excess_blob_gas = word_of_int(0),
+            be_slot = bslot,
         },
     );
     let sender = na();
@@ -246,13 +248,13 @@ function run_one() -> unit = {
             t_is_blob = is_blob != 0,
             t_blob_hashes = bhs,
         };
-    let rs = process_block(struct { blk_env = k_block, blk_txs = [|txn|], blk_withdrawals = [||] });
+
+    /* the block env is already seeded (k_set_block above); a state-test case is a
+       single transaction with no withdrawals, so the shared per-tx STF unit
+       (process_transaction) IS the block -- no list-based block wrapper needed. */
+    let r = process_transaction(txn);
     dump_state();
-    let gu : gas = match rs {
-        r :: _ => r.rc_gas_used,
-        [||] => 0,
-    };
-    print_endline(concat_str("GAS ", dec_str(gu)))
+    print_endline(concat_str("GAS ", dec_str(r.rc_gas_used)))
 }
 
 /* read the stream header (fork, wantRoot), then run cases until the 0 sentinel */

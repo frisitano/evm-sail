@@ -39,6 +39,7 @@ union ast = {
   BLOCKHASH : unit, COINBASE : unit, TIMESTAMP : unit, NUMBER : unit,
   PREVRANDAO : unit, GASLIMIT : unit, CHAINID : unit,
   SELFBALANCE : unit, BASEFEE : unit, BLOBHASH : unit, BLOBBASEFEE : unit,
+  SLOTNUM : unit, /* EIP-7843 (0x4b) */
 
   /* 0x50, 0x5e: stack / memory / storage / flow */
   POP : unit, MLOAD : unit, MSTORE : unit, MSTORE8 : unit,

@@ -214,6 +214,18 @@ uint64_t host_map_present(const unit u) {
   return h_walk() ? 1 : 0;
 }
 
+/* 1 if the selected key is present in the BASE (bottom) layer only -- the
+ * EIP-2200 "original" presence test: distinguishes a committed base 0 from a
+ * base-absent slot (which a stateless reader resolves from the witness). */
+uint64_t host_map_base_present(const unit u) {
+  (void)u;
+  if (h_cur_id < 0 || !h_maps[h_cur_id]) return 0;
+  h_layer *l = h_maps[h_cur_id];
+  while (l->below) l = l->below;
+  uint32_t j = h_find(l, h_cur_key, h_cur_hash);
+  return l->tab[j].used ? 1 : 0;
+}
+
 /* ----------------------------- address sweeps --------------------------- */
 
 /* 1 if any key with address (a2,a1,a0) exists in any layer of map id */

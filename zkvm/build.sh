@@ -97,9 +97,9 @@ PY
   # 1. Sail -> C: no main, no Sail runtime harness (we supply our own).
   #    --c-include injects the guest extern decls (keccak accelerator +
   #    zkvm_input private-input reader) so the generated call sites compile.
-  "$SAIL" -c --c-no-main --c-no-rts --c-preserve zkvm_run \
+  "$SAIL" -c --c-no-main --c-no-rts --c-preserve main \
       --c-include zkvm_input.h \
-      "${GUEST:-$ROOT/zkvm/zkvm_block.sail}" -o "$BUILD/zkvm_block"
+      "${GUEST:-$ROOT/sail/main.sail}" -o "$BUILD/zkvm_block"
   # 2. Compile the generated model (stock Sail GMP-ABI, backed by mini-gmp).
   #    The model calls setup_rts/cleanup_rts (provided by runtime.c) without a
   #    prototype since --c-no-rts omits rts.h; downgrade that to a warning.
@@ -111,21 +111,25 @@ PY
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
       -Wno-unused -Wno-error=implicit-function-declaration \
       -c "$RT/sailfix/sail.c" -o "$BUILD/sail.o"
-  # 3b. Keccak-256 + SHA-256 C accelerators (c-interface-accelerators path).
-  #     Pure C; need sail.h (-I$lib) for the unit/sail_int extern ABI types.
-  "$GCC" "${CFLAGS[@]}" -I"$lib" \
-      -Wno-unused -c "$ROOT/ffi/zkvm_accelerators.c" -o "$BUILD/zkvm_accelerators.o"
+  # 3b. Accelerator shim: on the guest EVERY op is offloaded to the host device
+  #     (-DACCEL_MMIO), so the guest links NO crypto code. The crypto is a proven
+  #     precompile served by the device, backed by the audited Rust accel-host --
+  #     a single crypto implementation shared with the native build.
   "$GCC" "${CFLAGS[@]}" -I"$lib" -I"$ROOT/ffi" -DACCEL_MMIO \
       -Wno-unused -c "$ROOT/ffi/acc_shim.c" -o "$BUILD/acc_shim.o"
-  # 3b'. Host accelerator device (spike --extlib): the crypto runs on the host,
-  #      not as guest instructions. Reuses the SAME zkvm_accelerators behind the
-  #      eth-act standard header, compiled for the HOST.
-  "$HOSTCC" -O2 -I"$ROOT/ffi" -c "$ROOT/ffi/zkvm_accelerators.c" -o "$BUILD/zkvm_accel_ref_host.o"
+  # 3b'. Host accelerator device (spike --extlib): models a zkVM crypto precompile,
+  #      backed by the SAME Rust accel-host crypto the native build links
+  #      (keccak/sha256/secp256k1 verify). The crypto never enters guest instret.
+  ACCEL="$ROOT/zkvm/accel-host"; ACCEL_LIB="$ACCEL/target/release"
+  if [ ! -f "$ACCEL_LIB/libzkvm_accel_host.dylib" ] && [ ! -f "$ACCEL_LIB/libzkvm_accel_host.so" ]; then
+    ( cd "$ACCEL" && cargo build --release --target-dir target )  # local target (matches link path)
+  fi
   "$HOSTCXX" -std=c++17 -fPIC -shared -I"$SPIKE_INC" -I"$ROOT/ffi" -undefined dynamic_lookup \
-      -o "$ACCEL_SO" "$ROOT/zkvm/accel-device/accel_device.cc" "$BUILD/zkvm_accel_ref_host.o"
+      -o "$ACCEL_SO" "$ROOT/zkvm/accel-device/accel_device.cc" \
+      -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB"
   # 3c. C host backends: memory/calldata, overlay maps, operand stack, word
   #     predicates, code store + frame descriptors.
-  for hc in host_mem host_map host_stack host_word host_code host_nodedb; do
+  for hc in host_mem host_map host_stack host_word host_code host_nodedb host_acctmap host_preimage; do
     "$GCC" "${CFLAGS[@]}" -I"$lib" \
         -Wno-unused -c "$ROOT/ffi/$hc.c" -o "$BUILD/$hc.o"
   done
@@ -144,9 +148,11 @@ PY
       "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/zkvm_io.o" "$BUILD/zkvm_input.o" \
       "$BUILD/zkvm_input_data.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
-      "$BUILD/zkvm_accelerators.o" "$BUILD/acc_shim.o" \
+      "$BUILD/acc_shim.o" \
       "$BUILD/host_mem.o" "$BUILD/host_map.o" "$BUILD/host_stack.o" \
       "$BUILD/host_word.o" "$BUILD/host_code.o" "$BUILD/host_nodedb.o" \
+      "$BUILD/host_acctmap.o" \
+      "$BUILD/host_preimage.o" \
       "$BUILD/zkvm_block.o" \
       -o "$BUILD/zkvm_guest.elf"
   echo "built $BUILD/zkvm_guest.elf"

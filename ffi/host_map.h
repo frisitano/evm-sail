@@ -18,6 +18,7 @@ unit host_map_store(uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0); /* writ
 uint64_t host_map_word(uint64_t i);                     /* value word (3=msw..0), layered */
 uint64_t host_map_base_word(uint64_t i);                /* value word, BASE layer only    */
 uint64_t host_map_present(const unit u);                /* 1 if key present in any layer  */
+uint64_t host_map_base_present(const unit u);           /* 1 if key present in BASE layer */
 uint64_t host_map_has_addr(uint64_t id, uint64_t a2, uint64_t a1, uint64_t a0);
 unit host_map_wipe_addr(uint64_t id, uint64_t a2, uint64_t a1, uint64_t a0);
 uint64_t host_map_count(uint64_t id);                   /* flatten; returns entry count   */
