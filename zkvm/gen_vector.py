@@ -120,7 +120,7 @@ def deleg_code_hash(target):
 MAX_EXTRA_DATA_BYTES = 32
 MAX_BYTES_PER_TRANSACTION = 2**30
 MAX_TRANSACTIONS_PER_PAYLOAD = 2**20
-MAX_BLOCK_ACCESS_LIST_BYTES = 2**24  # EIP-7928 block_access_list cap (canonical)
+MAX_BLOCK_ACCESS_LIST_BYTES = 2**30  # EIP-7928 cap = MAX_BYTES_PER_TRANSACTION @ 02c6c2510 (was 2**24 in v0.4.1)
 MAX_WITHDRAWALS_PER_PAYLOAD = 2**4
 MAX_BLOB_COMMITMENTS_PER_BLOCK = 4096
 MAX_DEPOSIT_REQUESTS_PER_PAYLOAD = 2**13
@@ -263,6 +263,15 @@ AUTHORITY = keccak(_AUTHPUB[0].to_bytes(32, "big") + _AUTHPUB[1].to_bytes(32, "b
 CONTRACT = bytes.fromhex("000000000000000000000000000000000000c0de")
 COINBASE = bytes.fromhex("000000000000000000000000000000000000c01b")
 WITHDRAWER = bytes.fromhex("0000000000000000000000000000000000004895")
+# EIP-7002 withdrawal-request + EIP-7251 consolidation-request system predeploys.
+# A valid Amsterdam block REQUIRES them: the protocol issues a CHECKED system call
+# to each at block end, so a block without them is invalid. On an empty request
+# queue the dequeue is a no-op (storage stays empty), so they appear UNCHANGED in
+# both pre- and post-state. Real predeploy bytecode (from the EEST Amsterdam set).
+WR_ADDR = bytes.fromhex("00000961ef480eb55e80d19ad83579a64c007002")
+CR_ADDR = bytes.fromhex("0000bbddc7ce488642fb579f8b00f3a590007251")
+WR_CODE = bytes.fromhex("3373fffffffffffffffffffffffffffffffffffffffe1460cb5760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff146101f457600182026001905f5b5f82111560685781019083028483029004916001019190604d565b909390049250505036603814608857366101f457346101f4575f5260205ff35b34106101f457600154600101600155600354806003026004013381556001015f35815560010160203590553360601b5f5260385f601437604c5fa0600101600355005b6003546002548082038060101160df575060105b5f5b8181146101835782810160030260040181604c02815460601b8152601401816001015481526020019060020154807fffffffffffffffffffffffffffffffff00000000000000000000000000000000168252906010019060401c908160381c81600701538160301c81600601538160281c81600501538160201c81600401538160181c81600301538160101c81600201538160081c81600101535360010160e1565b910180921461019557906002556101a0565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff14156101cd57505f5b6001546002828201116101e25750505f6101e8565b01600290035b5f555f600155604c025ff35b5f5ffd")
+CR_CODE = bytes.fromhex("3373fffffffffffffffffffffffffffffffffffffffe1460d35760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1461019a57600182026001905f5b5f82111560685781019083028483029004916001019190604d565b9093900492505050366060146088573661019a573461019a575f5260205ff35b341061019a57600154600101600155600354806004026004013381556001015f358155600101602035815560010160403590553360601b5f5260605f60143760745fa0600101600355005b6003546002548082038060021160e7575060025b5f5b8181146101295782810160040260040181607402815460601b815260140181600101548152602001816002015481526020019060030154905260010160e9565b910180921461013b5790600255610146565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff141561017357505f5b6001546001828201116101885750505f61018e565b01600190035b5f555f6001556074025ff35b5f5ffd")
 EOA2 = bytes.fromhex("00000000000000000000000000000000000022e0")  # typed-tx recipient
 CODE = bytes([0x60, 0x2A, 0x60, 0x00, 0x55, 0x00])
 CHAIN_ID = 1
@@ -301,6 +310,8 @@ def build_prestate():
     accounts = {
         EOA: (0, 10**18, EMPTY_TRIE_ROOT, EMPTY_CODE_HASH),
         CONTRACT: (1, 0, EMPTY_TRIE_ROOT, keccak(CODE)),
+        WR_ADDR: (1, 0, EMPTY_TRIE_ROOT, keccak(WR_CODE)),   # EIP-7002 predeploy
+        CR_ADDR: (1, 0, EMPTY_TRIE_ROOT, keccak(CR_CODE)),   # EIP-7251 predeploy
     }
     for addr, (nonce, bal, sroot, chash) in accounts.items():
         trie[keccak(addr)] = account_rlp(nonce, bal, sroot, chash)
@@ -325,7 +336,9 @@ def build_poststate_root():
         EOA: (1, 10**18 - FEE, EMPTY_TRIE_ROOT, EMPTY_CODE_HASH),
         CONTRACT: (1, 0, storage_root, keccak(CODE)),
         COINBASE: (0, FEE, EMPTY_TRIE_ROOT, EMPTY_CODE_HASH),
-        WITHDRAWER: (0, 500, EMPTY_TRIE_ROOT, EMPTY_CODE_HASH),
+        WITHDRAWER: (0, 500 * 10**9, EMPTY_TRIE_ROOT, EMPTY_CODE_HASH),  # EIP-4895: amount 500 is Gwei -> wei
+        WR_ADDR: (1, 0, EMPTY_TRIE_ROOT, keccak(WR_CODE)),   # EIP-7002: unchanged
+        CR_ADDR: (1, 0, EMPTY_TRIE_ROOT, keccak(CR_CODE)),   # EIP-7251: unchanged
     }
     for addr, (nonce, bal, sroot, chash) in accounts.items():
         trie[keccak(addr)] = account_rlp(nonce, bal, sroot, chash)
@@ -517,7 +530,7 @@ def main():
         ),
         blob_gas_used=uint64(0),
         excess_blob_gas=uint64(0),
-        block_access_list=ByteList[MAX_BLOCK_ACCESS_LIST_BYTES](BAL_BYTES),
+        block_access_list=ByteList[MAX_BLOCK_ACCESS_LIST_BYTES](b""),
         slot_number=uint64(0),
     )
 
@@ -533,7 +546,9 @@ def main():
             ByteList[MAX_BYTES_PER_WITNESS_NODE], MAX_WITNESS_NODES
         ](*[ByteList[MAX_BYTES_PER_WITNESS_NODE](n) for n in witness_nodes]),
         codes=SszList[ByteList[MAX_BYTES_PER_CODE], MAX_WITNESS_CODES](
-            ByteList[MAX_BYTES_PER_CODE](CODE)
+            ByteList[MAX_BYTES_PER_CODE](CODE),
+            ByteList[MAX_BYTES_PER_CODE](WR_CODE),
+            ByteList[MAX_BYTES_PER_CODE](CR_CODE),
         ),
         headers=SszList[ByteList[MAX_BYTES_PER_HEADER], MAX_WITNESS_HEADERS](
             ByteList[MAX_BYTES_PER_HEADER](parent_header_bytes(pre_root))
@@ -543,7 +558,7 @@ def main():
     chain_config = SszChainConfig(
         chain_id=uint64(CHAIN_ID),
         active_fork=SszForkConfig(
-            fork=uint64(24),  # ProtocolFork index: Amsterdam (0-based, 21 forks)
+            fork=uint64(20),  # ProtocolFork index: Amsterdam @ execution-specs 02c6c2510
             activation=SszForkActivation(
                 block_number=SszList[uint64, 1](),
                 timestamp=SszList[uint64, 1](uint64(0)),
@@ -588,7 +603,7 @@ def main():
         "post_state_root": post_root.hex(),
         "witness": {
             "n_state_nodes": len(witness_nodes),
-            "n_codes": 1,
+            "n_codes": 3,
             "n_headers": 1,
             "code0_keccak": keccak(CODE).hex(),
         },
