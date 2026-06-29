@@ -102,7 +102,10 @@ function charge(amount : gas) -> unit =
         if gas_remaining < amount then {
             exc_halt(OutOfGas)
         } else {
-            gas_remaining = to_gas(gas_remaining - amount)
+            /* a >= b >= 0 proven above, so gas_remaining - amount is a valid
+               `gas`: use native int64 subtraction instead of to_gas(a - b),
+               which would round-trip through sail_int (see gas_sub). */
+            gas_remaining = gas_sub(gas_remaining, amount)
         }
     }
 

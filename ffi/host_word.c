@@ -46,3 +46,10 @@ bool hw_slt(const lbits a, const lbits b) {
 bool hw_iszero(const lbits a) { return mpz_sgn(*a.bits) == 0; }
 
 #endif
+
+/* int64 gas subtraction (both runtimes: gas -> int64_t in the generated ABI).
+ * charge() only calls this on the path where it has already checked
+ * amount > 0 and gas_remaining >= amount, so the result is in [0, gas_remaining]
+ * <= 2^63-1: the old to_gas() clamp was a no-op here. Replaces six sail_int
+ * CREATE/KILLs + sub_int + to_gas per opcode with a single native subtract. */
+int64_t gas_sub(int64_t a, int64_t b) { return a - b; }

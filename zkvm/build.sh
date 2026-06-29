@@ -45,7 +45,7 @@ sail_lib() {
 }
 
 # spike memory ranges MUST match link.ld: MAIN, then (omitted guard gap), STACK.
-SPIKE_MEM="0x80000000:0x10000000,0x90010000:0x00100000"
+SPIKE_MEM="0x80000000:0x10000000,0x90010000:0x04000000"
 # spike's --isa string does not name Zicclsm; that extension only mandates
 # transparent misaligned load/store support, which spike provides via
 # --misaligned. So rv64im + --misaligned is the Zicclsm-equivalent run config.

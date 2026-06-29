@@ -27,7 +27,7 @@
  * Layout (addresses):
  *   MAIN  region : 0x80000000 .. 0x90000000   (256 MiB)  text/rodata/data/bss/heap
  *   GUARD gap    : 0x90000000 .. 0x90010000   ( 64 KiB)  UNMAPPED stack guard
- *   STACK region : 0x90010000 .. 0x90110000   (  1 MiB)  stack (grows down)
+ *   STACK region : 0x90010000 .. 0x94010000   ( 64 MiB)  stack (grows down)
  * =========================================================================== */
 
 OUTPUT_ARCH(riscv)
@@ -36,7 +36,7 @@ ENTRY(_start)
 MEMORY
 {
   MAIN  (rwxa) : ORIGIN = 0x80000000, LENGTH = 0x10000000  /* 256 MiB */
-  STACK (rw)   : ORIGIN = 0x90010000, LENGTH = 0x00100000  /*   1 MiB */
+  STACK (rw)   : ORIGIN = 0x90010000, LENGTH = 0x04000000  /*  64 MiB */
 }
 
 /* Size of the unmapped guard gap immediately below the stack bottom (>= 4 KiB).

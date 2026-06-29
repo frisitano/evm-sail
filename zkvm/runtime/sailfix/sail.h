@@ -57,7 +57,11 @@
  * carries the same (pass-as-pointer) ABI as GMP's mpz_t, letting the unchanged
  * Sail-generated C recompile against it. d[0] is the least significant limb. */
 #define SAIL_INT_LIMBS 8
-typedef struct { int neg; uint64_t d[SAIL_INT_LIMBS]; } sail_int_struct;
+/* Sign-magnitude with an EXACT significant-limb count `len` (d[len-1] != 0, or
+ * len == 0 for the value 0). Limbs d[len..SAIL_INT_LIMBS-1] are UNDEFINED and
+ * must never be read -- every accessor below respects `len`. Small values
+ * (gas, pc, opcode bytes, indices) thus touch one limb instead of eight. */
+typedef struct { int neg; int len; uint64_t d[SAIL_INT_LIMBS]; } sail_int_struct;
 typedef sail_int_struct sail_int[1];
 /* Alias so stock rts.h (included by hosted/runner builds) compiles; its mpz_t-
  * using functions are declared but never called by the runner. */
@@ -189,14 +193,16 @@ uint64_t sail_int_get_ui(const sail_int);
 /* GMP-API compatibility shims: FFI/harness code (keccak_ffi.c, sha256_ffi.c,
  * zkvm_input.c, harness.c) calls mpz_* on sail_int values; these let that shared C
  * compile unchanged against sailfix (it resolves to real GMP in native builds). */
-static inline uint64_t mpz_get_ui(const sail_int op) { return op->d[0]; }
-static inline long     mpz_get_si(const sail_int op) { return op->neg ? -(long)op->d[0] : (long)op->d[0]; }
+static inline uint64_t mpz_get_ui(const sail_int op) { return op->len ? op->d[0] : 0; }
+static inline long     mpz_get_si(const sail_int op) {
+  unsigned long m = op->len ? op->d[0] : 0; return op->neg ? -(long)m : (long)m;
+}
 static inline void     mpz_set_ui(sail_int rop, unsigned long v) {
-  rop->neg = 0; rop->d[0] = v; for (int i = 1; i < SAIL_INT_LIMBS; i++) rop->d[i] = 0;
+  rop->neg = 0; rop->d[0] = v; rop->len = v ? 1 : 0;
 }
 static inline void     mpz_set_si(sail_int rop, long v) {
-  rop->neg = v < 0; rop->d[0] = v < 0 ? (unsigned long)(-(v + 1)) + 1 : (unsigned long)v;
-  for (int i = 1; i < SAIL_INT_LIMBS; i++) rop->d[i] = 0;
+  unsigned long m = v < 0 ? (unsigned long)(-(v + 1)) + 1 : (unsigned long)v;
+  rop->neg = v < 0; rop->d[0] = m; rop->len = m ? 1 : 0;
 }
 int mpz_set_str(sail_int rop, const char *str, int base);   /* decimal parse (sail.c) */
 

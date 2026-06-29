@@ -47,6 +47,12 @@ type gas = range(0, 9223372036854775807)
 function to_gas(x : int) -> gas =
     if x < 0 then { 0 } else { if x <= 9223372036854775807 then { x } else { 9223372036854775807 } }
 
+/* Native int64 gas subtraction (ffi/host_word.c): gas -> int64_t in the C ABI.
+ * Used by charge() where a >= b >= 0 is already proven, so the result is a
+ * valid `gas` -- this skips the sail_int round-trip that `to_gas(a - b)` emits
+ * (CONVERT_OF + sub_int + to_gas clamp) on every opcode's gas charge. */
+val gas_sub = pure { _: "gas_sub" } : (gas, gas) -> gas
+
 let WORD_BYTES : int = 32
 let WORD_BITS : int = 256
 
