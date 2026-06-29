@@ -4,7 +4,7 @@
 #ifndef EL_INPUT_H
 #define EL_INPUT_H
 #include "acc_shim.h"                 /* -> sail.h + zkvm-standards accelerator shim (keccak/sha256/precompiles) */
-void     ssz_src_len(sail_int rop, const unit u);    /* unit -> int  (byte count) */
+uint64_t ssz_src_len(const unit u);                  /* unit -> bits(64) (byte count) */
 uint64_t ssz_src_byte(sail_int idx);                 /* int  -> bits(8) */
 uint64_t ssz_src_le(sail_int off, sail_int n);       /* (int,int) -> bits(64): n<=8 LE */
 uint64_t ssz_src_be(sail_int off, sail_int n);       /* (int,int) -> bits(64): n<=8 BE */

@@ -39,30 +39,43 @@ function k_access_slot(a : address, s : word) -> bool = {
 /* --- persistent storage (SLOAD/SSTORE): the C overlay map, whose layers are
  * pushed/popped by k_snapshot / k_commit / k_revert --- */
 
-/* Stateless guard: in stateless mode a slot the EVM touches MUST already be in
- * the witness working set (seeded from the EIP-7928 BAL slice plus the witness
- * pre-values). Absent => the prover never provisioned it => fail closed.
- * host_map_present distinguishes a witness-proven 0 from a never-provisioned
- * slot. Off by default, so the native execution path is unaffected. */
+/* Stateless mode: the SSZ witness IS the storage base layer. A read the working
+ * set doesn't hold is resolved from the witness on demand (k_sload/k_orig ->
+ * stateless_storage), so nothing is pre-seeded; committed writes accumulate in
+ * the overlay base above the witness. Off by default, so the native execution
+ * path (absent == 0) is unaffected. */
 function k_stateless_on() -> unit = k_stateless = true
-function storage_present(a : address, s : word) -> unit =
-    if k_stateless then {
-        assert(map_present(MAP_STORAGE, a, s), "storage slot not in witness working set")
+
+/* SLOAD: the slot's value in the layered working set; on a stateless miss the
+ * witness IS the base layer, so resolve the authenticated pre-value on demand
+ * (witness-backed base -- no eager seeding). Native (k_stateless=false) reads
+ * the maps directly (absent == 0), unchanged. */
+function k_sload(a : address, s : word) -> word =
+    if map_present(MAP_STORAGE, a, s) then {
+        map_load(MAP_STORAGE, a, s)
+    } else {
+        if k_stateless then {
+            stateless_storage(a, s)
+        } else {
+            map_load(MAP_STORAGE, a, s)
+        }
     }
-
-function k_sload(a : address, s : word) -> word = {
-    storage_present(a, s);
-    map_load(MAP_STORAGE, a, s)
-}
-function k_sstore(a : address, s : word, v : word) -> unit = {
-    storage_present(a, s);
+function k_sstore(a : address, s : word, v : word) -> unit =
     map_store(MAP_STORAGE, a, s, v) /* writes the top overlay layer; revert discards it */
-}
 
-/* EIP-2200 "original" value: the slot's value at tx start, which is the BASE
- * overlay layer (every committed prior tx was pop_commit-merged into it). Used
- * by the SSTORE gas/refund schedule; no per-tx snapshot copy is needed. */
-function k_orig(a : address, s : word) -> word = map_base_load(MAP_STORAGE, a, s)
+/* EIP-2200 "original" value: the slot at tx start = the BASE layer (committed
+ * prior txs were pop_commit-merged in). A slot never committed to the base is,
+ * statelessly, still at its witness pre-value, so resolve it from the witness. */
+function k_orig(a : address, s : word) -> word =
+    if map_base_present(MAP_STORAGE, a, s) then {
+        map_base_load(MAP_STORAGE, a, s)
+    } else {
+        if k_stateless then {
+            stateless_storage(a, s)
+        } else {
+            map_base_load(MAP_STORAGE, a, s)
+        }
+    }
 
 /* un-journaled storage read (drivers/examples; same layered view as SLOAD) */
 function k_storage_get(a : address, s : word) -> word = map_load(MAP_STORAGE, a, s)
@@ -155,8 +168,23 @@ val cs_deleg = impure { _: "cs_deleg" } : (bits(64), bits(64), bits(64), bits(64
  * probed by codeHash in ONE host call (run on every CALL-family target). Returns
  * (is_delegation, designated_target): bit 160 of the result is the flag, the low
  * 160 bits the target the call should execute against. */
+/* A non-empty codeHash whose bytes are ABSENT from the witness code store is a
+ * deficient proof (the prover omitted code execution needs): flag the block
+ * invalid (EIP-8025 witness_validation_codes), rather than silently treating the
+ * account as codeless. KECCAK_EMPTY accounts are legitimately codeless. */
+function note_code_resolved(h : hash) -> unit =
+    if (h != KECCAK_EMPTY) & (unsigned(cs_len(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0])) == 0) then {
+        k_witness_bad = true
+    }
+
 function k_deleg_target(a : address) -> (bool, address) = {
     let h : hash = k_code_key(a);
+
+    /* NB: do NOT flag a missing code here -- delegation is probed on the warming
+       path (e.g. EIP-7702 auth validation) for accounts EELS may legitimately not
+       witness (an auth skipped for an invalid chain id), which must not invalidate
+       the block. Missing EXECUTED/queried code is flagged in k_get_code_size /
+       k_code_copy instead. */
     let r : bits(168) = cs_deleg(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]);
     (r[160] == bitone, r[159 .. 0])
 }
@@ -165,10 +193,12 @@ function k_deleg_target(a : address) -> (bool, address) = {
  * account at `a`, resolved by codeHash through the C code store. */
 function k_get_code_size(a : address) -> int = {
     let h : hash = k_code_key(a);
+    note_code_resolved(h);
     unsigned(cs_len(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]))
 }
 function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
     let h : hash = k_code_key(a);
+    note_code_resolved(h);
 
     /* clamp a beyond-2^64 source offset to a beyond-any-code sentinel: a past-end
      * read zero-fills the destination (EELS buffer_read semantics) */
@@ -190,13 +220,13 @@ function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
 function k_seed_account(a : address, nonce : int, bal : word, c : list(byte)) -> unit = {
     let h : hash = keccak256(c);
     cs_store_code(h, c);
-    kset(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = h })
+    kset(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = h, acc_storage_root = EMPTY_TRIE_ROOT })
 }
 
 /* seed an account whose code is already in the store (a stateless witness view):
- * the codeHash is given, no bytes are streamed. */
-function k_seed_account_hashed(a : address, nonce : int, bal : word, codehash : hash) -> unit =
-    kset(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = codehash })
+ * the codeHash and pre-state storage root are given, no bytes are streamed. */
+function k_seed_account_hashed(a : address, nonce : int, bal : word, sroot : hash, codehash : hash) -> unit =
+    kset(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = codehash, acc_storage_root = sroot })
 function k_seed_storage(a : address, s : word, v : word) -> unit =
     map_store(MAP_STORAGE, a, s, v) /* seeds the base layer (only layer live here) */
 
@@ -225,6 +255,7 @@ function k_env(f : EnvField) -> word = {
         F_BlobBaseFee => k_block.be_blob_base_fee,
         F_Origin => address_to_word(k_tx.txe_origin),
         F_GasPrice => k_tx.txe_gas_price,
+        F_SlotNumber => k_block.be_slot,
     }
 }
 function k_coinbase() -> address = k_block.be_coinbase
@@ -232,8 +263,28 @@ function k_coinbase() -> address = k_block.be_coinbase
 /* BLOCKHASH: hash of one of the 256 most recent ancestor blocks. Modeled as 0
  * (the recent-block-hash history ring is not carried in this state). */
 function k_blockhash(n : word) -> hash = {
-    let _ = n;
-    word_of_int(0)
+    if not_bool(k_stateless) then {
+        word_of_int(0) /* native / state-test: BLOCKHASH unmodeled (returns 0) */
+    } else {
+        /* EIP-2935/BLOCKHASH (stateless): the hash of the ancestor `offset` blocks
+           back (1..256) is keccak of the witness header at that depth. The witness
+           headers run oldest..newest with the parent (offset 1) LAST, so the
+           ancestor at `offset` is header[n_headers - offset]; if that index is
+           absent the witness is deficient for this access -> invalid block. */
+        let req = unsigned(n);
+        let offset = pl_block_number() - req;
+        if offset < 1 | offset > 256 then {
+            word_of_int(0)
+        } else {
+            let idx = wit_n_headers() - offset;
+            if idx < 0 then {
+                k_witness_bad = true;
+                word_of_int(0)
+            } else {
+                keccak256(ssz_witness_header(idx))
+            }
+        }
+    }
 }
 
 /* BLOBHASH (EIP-4844): the i-th versioned hash of the current tx, 0 past the end. */
@@ -295,20 +346,18 @@ function k_zero_balance(a : address) -> unit = {
     kset(a, { kget(a) with acc_balance = ZERO_WORD })
 }
 
-/* delete an account outright: drop it from the account table and wipe its
- * storage. Used by the EIP-6780 tx-end finalization (created AND selfdestructed
- * in the same tx). Unrecorded: the tx-end reduction is host bookkeeping. */
-function acc_remove(es : list(AccountEntry), a : address) -> list(AccountEntry) =
-    match es {
-        [||] => [||],
-        e :: r => if e.ae_addr == a then {
-            acc_remove(r, a)
-        } else {
-            e :: acc_remove(r, a)
-        },
-    }
+/* delete an account outright: drop it from the acctmap and wipe its storage.
+ * Used by the EIP-6780 tx-end finalization (created AND selfdestructed in the
+ * same tx). Unrecorded: the tx-end reduction is host bookkeeping. */
 function k_account_delete(a : address) -> unit = {
-    k_accounts = acc_remove(k_accounts, a);
+    /* Set the account EMPTY in place (do NOT acctmap_remove it). Removing it would
+       let a later kget(a) RE-MATERIALIZE the account from the pre-state witness
+       leaf -- wrong for an account CREATEd+SELFDESTRUCTed and then re-CREATEd later
+       in the same block (the stale pre-state balance would resurface). Kept empty
+       in the acctmap, a later read sees the deletion, the post-state walk drops it
+       (acc_is_empty) AND marks it touched (sb_touched) so its pre-state leaf is not
+       reused -- subsuming the old k_deleted mechanism. */
+    kset(a, EMPTY_ACCOUNT);
     map_wipe_addr(MAP_STORAGE, a)
 }
 
@@ -346,7 +395,7 @@ function k_snapshot() -> unit = {
 
 /* full world wipe between independent blocks/fixtures (driver/test only) */
 function k_world_reset() -> unit = {
-    k_accounts = [||];
+    acctmap_reset();
     host_map_reset(get_slice_int(64, MAP_STORAGE, 0));
     host_map_reset(get_slice_int(64, MAP_TRANSIENT, 0));
     k_warm_addr = [||];

@@ -17,7 +17,9 @@
 /*                                                                          */
 /* Reading guide -- the state transition, outermost to innermost:           */
 /*                                                                          */
-/*   block.sail        process_block: run each tx, then apply withdrawals   */
+/*   (block level)     run each tx then credit withdrawals -- SSZ guest     */
+/*                     (main.sail) drives it zero-copy, the EEST runner one */
+/*                     tx; both share:                                      */
 /*     transaction.sail  process_transaction: validity, intrinsic gas, fee  */
 /*                       deduction, nonce; then the top frame; refunds      */
 /*       interpreter.sail interpret: the fetch/execute loop; run_call /     */
@@ -61,7 +63,6 @@ $include "evm/instructions.sail"
 $include "evm/execute.sail"
 $include "evm/interpreter.sail"
 $include "evm/transaction.sail"
-$include "evm/block.sail"
 
 /* RLP decode (inverse of lib/rlp.sail), then the Merkle-Patricia trie: the root
  * builder, the Ethereum state trie, and the stateless witness reader (post-state

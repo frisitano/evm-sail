@@ -34,13 +34,24 @@ type hash    = bits(256)
 /* keccak-256 / storage-key sized digest          */
 type byte    = bits(8)
 
-/* Gas is a non-negative counter, bounded to range(0, 2^62). The cap exceeds
- * any real block gas limit, so SATURATING to it (to_gas) preserves the
- * charge-then-out-of-gas semantics for attacker-controlled sizes: a clamped
- * astronomic charge still exhausts any frame, just as the true charge would. */
-type gas = range(0, 4611686018427387904)
+/* Gas is a non-negative counter, bounded to range(0, 2^63 - 1) = INT64_MAX.
+ * The bound must EXCEED the largest tx/block gas limit a fixture can set: the
+ * EEST state-test suite uses gas limits up to 0x7fe0000000000001 (~9.21e18,
+ * just under 2^63) and a block gas limit up to INT64_MAX itself, so a smaller
+ * cap (e.g. 2^62) would SATURATE the initial frame gas to half its true value
+ * and corrupt the whole 63/64 call-gas cascade. SATURATING to this bound
+ * (to_gas) still preserves charge-then-out-of-gas semantics for attacker-
+ * controlled sizes: a clamped astronomic charge exhausts any frame, just as
+ * the true charge would. INT64_MAX keeps the counter in a machine int. */
+type gas = range(0, 9223372036854775807)
 function to_gas(x : int) -> gas =
-    if x < 0 then { 0 } else { if x <= 4611686018427387904 then { x } else { 4611686018427387904 } }
+    if x < 0 then { 0 } else { if x <= 9223372036854775807 then { x } else { 9223372036854775807 } }
+
+/* Native int64 gas subtraction (ffi/host_word.c): gas -> int64_t in the C ABI.
+ * Used by charge() where a >= b >= 0 is already proven, so the result is a
+ * valid `gas` -- this skips the sail_int round-trip that `to_gas(a - b)` emits
+ * (CONVERT_OF + sub_int + to_gas clamp) on every opcode's gas charge. */
+val gas_sub = pure { _: "gas_sub" } : (gas, gas) -> gas
 
 let WORD_BYTES : int = 32
 let WORD_BITS : int = 256

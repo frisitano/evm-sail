@@ -67,6 +67,8 @@ def build_runner(rebuild=False):
                                os.path.join(ELDIR,"ffi","host_word.c"),
                                os.path.join(ELDIR,"ffi","host_code.c"),
                                os.path.join(ELDIR,"ffi","host_nodedb.c"),
+                               os.path.join(ELDIR,"ffi","host_acctmap.c"),
+                               os.path.join(ELDIR,"ffi","host_preimage.c"),
                                *objs, *accel_flags, *stack_flags, "-o",BIN])
     else:
         objs = []
@@ -86,6 +88,8 @@ def build_runner(rebuild=False):
                                os.path.join(ELDIR,"ffi","host_word.c"),
                                os.path.join(ELDIR,"ffi","host_code.c"),
                                os.path.join(ELDIR,"ffi","host_nodedb.c"),
+                               os.path.join(ELDIR,"ffi","host_acctmap.c"),
+                               os.path.join(ELDIR,"ffi","host_preimage.c"),
                                *objs, *accel_flags, *stack_flags, "-lgmp","-o",BIN])
     for p in (BIN+"_gen.c", BIN+"_gen.h"):
         if os.path.exists(p): os.remove(p)
@@ -133,7 +137,7 @@ def encode(c):
     s += [h2i(env.get("currentNumber","0x0")), h2i(env.get("currentTimestamp","0x0")),
           h2i(env.get("currentGasLimit","0x0")), ai(env["currentCoinbase"]), base,
           h2i(env.get("currentRandom", env.get("currentDifficulty","0x0"))), 1,
-          blob_gas_price(excess)]
+          blob_gas_price(excess), h2i(env.get("slotNumber","0x0"))]  # EIP-7843 SLOTNUM
     gp = h2i(tx["gasPrice"]) if "gasPrice" in tx else min(
         h2i(tx.get("maxFeePerGas","0x0")), base + h2i(tx.get("maxPriorityFeePerGas","0x0")))
     is_create = 0 if tx.get("to") else 1
@@ -198,7 +202,7 @@ def compare(expected, accounts, storage):
 def fork_level(name):
     """Map an EEST fork name to a chronological level for fork-gated gas rules."""
     name = (name or "").lower()
-    for k, v in (("osaka", 3), ("prague", 2), ("cancun", 1), ("shanghai", 0)):
+    for k, v in (("amsterdam", 4), ("osaka", 3), ("prague", 2), ("cancun", 1), ("shanghai", 0)):
         if k in name:
             return v
     return 1   # default: pre-Prague (no calldata floor / EIP-7883)

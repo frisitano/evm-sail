@@ -16,7 +16,7 @@ extern void read_input(const uint8_t **buf_ptr, size_t *buf_size);
 /* model entry points (Sail-generated + runtime) */
 extern void model_init(void);
 extern void model_fini(void);
-extern void zzzkvm_run(int);                 /* Sail zkvm_run (mangled), arg = UNIT */
+extern void zmain(int);                 /* Sail main (mangled), arg = UNIT */
 
 /* zkvm_input.c (compiled -DERE_GUEST) */
 extern void evmsail_set_input(const unsigned char *p, unsigned long n);
@@ -31,7 +31,7 @@ void evmsail_validate(void)
     read_input(&in, &len);
     evmsail_set_input((const unsigned char *)in, (unsigned long)len);
     model_init();
-    zzzkvm_run(0 /* UNIT */);
+    zmain(0 /* UNIT */);
     evmsail_flush_output();
     model_fini();
 }

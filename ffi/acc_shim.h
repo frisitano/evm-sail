@@ -17,6 +17,8 @@
 #include "host_word.h"  /* native word predicates */
 #include "host_code.h"  /* JUMPDEST bitmap */
 #include "host_nodedb.h" /* C-backed witness node-db (keccak(node) -> span) */
+#include "host_acctmap.h" /* C-backed raw-address -> account overlay map */
+#include "host_preimage.h" /* C-backed raw key -> keccak(key) pre-image cache */
 unit     acc_begin(uint64_t id);   /* bits(64): select accelerator id, clear buffers */
 unit     acc_begin_mem(uint64_t id, uint64_t off, uint64_t len);  /* input := memory range */
 unit     acc_push(uint64_t b);      /* bits(8):  append one input byte */

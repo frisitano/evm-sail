@@ -18,24 +18,31 @@
 /* ------------------------------ structs --------------------------------- */
 
 /* Account state (Yellow Paper section 4.1, the account tuple sigma[a]).
- * storageRoot is omitted: storage lives in the overlay maps and its root is
- * computed on demand (state_root.sail). Code BYTES are not held here -- the
- * account carries only codeHash, a content address into the code store; codeHash
- * is itself observable state (EXTCODEHASH, EIP-1052) and the binding a stateless
- * witness checks code against. */
+ * acc_storage_root is the account's PRE-STATE storage root -- the witness anchor
+ * that stateless storage reads walk on a working-set miss. It is set when the
+ * account is materialized from the witness and is NOT kept live during execution
+ * (storage mutates in the overlay maps; the post-state root is computed on demand
+ * in state_root.sail). Code BYTES are not held here -- the account carries only
+ * codeHash, a content address into the code store; codeHash is itself observable
+ * state (EXTCODEHASH, EIP-1052) and the binding a stateless witness checks code
+ * against. */
 struct Account = {
-    acc_nonce    : int,   /* sigma[a]_n: nonce (txs sent / contracts created)      */
-    acc_balance  : word,  /* sigma[a]_b: balance in wei                            */
-    acc_codehash : hash,  /* sigma[a]_c: keccak256(code); KECCAK_EMPTY if codeless */
+    acc_nonce        : int,   /* sigma[a]_n: nonce (txs sent / contracts created)      */
+    acc_balance      : word,  /* sigma[a]_b: balance in wei                            */
+    acc_codehash     : hash,  /* sigma[a]_c: keccak256(code); KECCAK_EMPTY if codeless */
+    acc_storage_root : hash,  /* sigma[a]_s: PRE-STATE storage root, the witness anchor */
 }
 
 /* keccak256 of the empty string: the codeHash of every codeless account */
 let KECCAK_EMPTY : hash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
 
-/* Account-table entry: the (address -> Account) binding of sigma, stored as a
- * Sail association list (storage/transient/warm sets are C-backed maps below). */
-struct AccountEntry = { ae_addr : address, ae_acc : Account }
-struct StorageEntry = { se_addr : address, se_slot : word, se_val : word }
+/* keccak256(rlp("")) -- the root of an empty Merkle-Patricia trie: the storage
+ * root of every account with no storage (EMPTY_ACCOUNT, freshly created). */
+let EMPTY_TRIE_ROOT : hash = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
+
+/* The account table is the C-backed acctmap (raw address -> Account; see the
+ * ffi/host_acctmap.c declarations below); storage/transient/warm sets are the
+ * C-backed (address, slot) maps. No Sail association lists for sigma. */
 
 /* SlotKey (the BAL access-set key) is defined in host/io.sail (its bal_load
  * builder is the producer), included before this file. */
@@ -55,6 +62,7 @@ enum EnvField = {
     F_BlobBaseFee,
     F_Origin,
     F_GasPrice,
+    F_SlotNumber, /* EIP-7843 SLOTNUM */
 }
 
 /* The block environment the EVM reads (BLOCKHASH..BLOBBASEFEE opcodes).
@@ -63,7 +71,7 @@ enum EnvField = {
 struct BlockEnv = {
     be_number : word, be_timestamp : word, be_gas_limit : word, be_coinbase : address,
     be_base_fee : word, be_prev_randao : word, be_chain_id : word,
-    be_blob_base_fee : word, be_excess_blob_gas : word,
+    be_blob_base_fee : word, be_excess_blob_gas : word, be_slot : word,
 }
 
 /* Per-transaction environment: ORIGIN/GASPRICE (YP I_o, I_p) + the EIP-4844
@@ -93,9 +101,15 @@ union JEntry = {
 
 let ZERO_WORD : word = 0x0000000000000000000000000000000000000000000000000000000000000000
 let ZERO_ADDR : address = 0x0000000000000000000000000000000000000000
-let EMPTY_ACCOUNT : Account = struct { acc_nonce = 0, acc_balance = ZERO_WORD, acc_codehash = KECCAK_EMPTY }
+let EMPTY_ACCOUNT : Account = struct {
+        acc_nonce = 0,
+        acc_balance = ZERO_WORD,
+        acc_codehash = KECCAK_EMPTY,
+        acc_storage_root = EMPTY_TRIE_ROOT,
+    }
 
-register k_accounts : list(AccountEntry) = [||]
+/* the account working set is the C-backed acctmap (ffi/host_acctmap.c), keyed by
+ * raw address -- no Sail assoc list. */
 register k_warm_addr : list(address) = [||]
 register k_logs : list(LogEntry) = [||]
 
@@ -122,12 +136,51 @@ val host_map_store = impure { _: "host_map_store" } : (bits(64), bits(64), bits(
 val host_map_word = impure { _: "host_map_word" } : bits(64) -> bits(64)
 val host_map_base_word = impure { _: "host_map_base_word" } : bits(64) -> bits(64)
 val host_map_present = impure { _: "host_map_present" } : unit -> bits(64)
+val host_map_base_present = impure { _: "host_map_base_present" } : unit -> bits(64)
 val host_map_has_addr = impure { _: "host_map_has_addr" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
 val host_map_wipe_addr = impure { _: "host_map_wipe_addr" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
 val host_map_count = impure { _: "host_map_count" } : bits(64) -> bits(64)
 val host_map_sel = impure { _: "host_map_sel" } : bits(64) -> unit
 val host_map_it_key = impure { _: "host_map_it_key" } : bits(64) -> bits(64)
 val host_map_it_val = impure { _: "host_map_it_val" } : bits(64) -> bits(64)
+
+/* ---- C-backed raw-address -> account map (ffi/host_acctmap.c): the kernel
+ * account working set (k_accounts), keyed by the RAW address so reads/writes
+ * never hash. O(1)-amortized open addressing; the witness pre-state is the base
+ * it sits over (materialized once per account, then cached here). An account is
+ * (nonce, balance, storage_root, code_hash): nonce one word, the 256-bit fields
+ * four big-endian words each (w3 most significant). Point access selects the key
+ * once (acctmap_key) then the accessors resolve it; iteration feeds the post-state
+ * root. ---- */
+val acctmap_reset = impure { _: "acctmap_reset" } : unit -> unit
+val acctmap_key = impure { _: "acctmap_key" } : (bits(64), bits(64), bits(64)) -> unit
+val acctmap_present = impure { _: "acctmap_present" } : unit -> bits(64)
+val acctmap_store = impure { _: "acctmap_store" } : (
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+    ) -> unit
+val acctmap_nonce = impure { _: "acctmap_nonce" } : unit -> bits(64)
+val acctmap_bal = impure { _: "acctmap_bal" } : bits(64) -> bits(64)
+val acctmap_sroot = impure { _: "acctmap_sroot" } : bits(64) -> bits(64)
+val acctmap_chash = impure { _: "acctmap_chash" } : bits(64) -> bits(64)
+val acctmap_remove = impure { _: "acctmap_remove" } : (bits(64), bits(64), bits(64)) -> unit
+val acctmap_count = impure { _: "acctmap_count" } : unit -> bits(64)
+val acctmap_at = impure { _: "acctmap_at" } : bits(64) -> unit
+val acctmap_at_key = impure { _: "acctmap_at_key" } : bits(64) -> bits(64)
+val acctmap_at_nonce = impure { _: "acctmap_at_nonce" } : unit -> bits(64)
+val acctmap_at_bal = impure { _: "acctmap_at_bal" } : bits(64) -> bits(64)
+val acctmap_at_chash = impure { _: "acctmap_at_chash" } : bits(64) -> bits(64)
 
 /* ---- C code store (ffi/host_code.c): contract code, content-addressed --------
  * Keyed by codeHash (not address): each entry holds the code bytes AND the
@@ -215,6 +268,19 @@ function map_present(id : int, a : address, s : word) -> bool = {
     map_select(id, a, s);
     unsigned(host_map_present()) == 1
 }
+
+/* present in the BASE layer only (EIP-2200 "original" presence; a committed base
+ * 0 is present, a never-committed slot is absent and resolved from the witness) */
+function map_base_present(id : int, a : address, s : word) -> bool = {
+    map_select(id, a, s);
+    unsigned(host_map_base_present()) == 1
+}
+
+/* Stateless storage resolver: the value of (a, s) in the witness pre-state,
+ * walked from the account's authenticated storage root. Defined in lib/mpt.sail
+ * (the witness reader, included later); declared here so the kernel's storage
+ * reads can fall through to it on a working-set miss. */
+val stateless_storage : (address, word) -> word
 function map_has_addr(id : int, a : address) -> bool = {
     let aw : word = sail_zero_extend(a, 256);
     unsigned(host_map_has_addr(get_slice_int(64, id, 0), aw[191 .. 128], aw[127 .. 64], aw[63 .. 0])) == 1
@@ -253,6 +319,7 @@ function storage_entry(j : int) -> (address, word, word) = {
 }
 register k_refund : int = 0 /* gas-refund counter (SSTORE clears; EIP-3529 cap applied at tx end) */
 register k_selfdestr : list(address) = [||] /* addresses SELFDESTRUCTed this tx */
+
 register k_created : list(address) =
     [||] /* accounts CREATEd this tx (EIP-6780).
             NOT journaled: like EELS created_accounts,
@@ -260,12 +327,17 @@ register k_created : list(address) =
 
 register k_journal : list(JEntry) = [||] /* undo log (call-frame revert) */
 register k_stateless : bool = false /* stateless mode: storage reads must hit the witness working set */
+register k_witness_bad : bool =
+    false /* witness proof deficient/inconsistent: validation FAILS (valid=false)
+           gracefully instead of aborting (EIP-8025 optional-proofs tests) */
+
 register k_fork : int = 99 /* active fork level (higher = newer); set by the runner */
 
 /* fork levels for fork-gated rules (chronological; only thresholds matter) */
 let FORK_CANCUN : int = 1 /* EIP-1153/4844; precompiles 0x01-0x0a */
 let FORK_PRAGUE : int = 2 /* EIP-7623 calldata floor; +BLS 0x0b-0x11 */
 let FORK_OSAKA : int = 3 /* EIP-7883 modexp gas, EIP-7825 cap; +0x100 */
+let FORK_AMSTERDAM : int = 4 /* EIP-7954 code/initcode size bump (32768/65536) */
 
 /* Is `n` (the low bytes of an address, as an int) a precompile at the active
  * fork? The precompile set GROWS by fork: Cancun has 0x01-0x0a (1-10);
@@ -289,29 +361,79 @@ register k_block : BlockEnv =
         be_chain_id = ZERO_WORD,
         be_blob_base_fee = ZERO_WORD,
         be_excess_blob_gas = ZERO_WORD,
+        be_slot = ZERO_WORD,
     }
 register k_tx : TxEnv = struct { txe_origin = ZERO_ADDR, txe_gas_price = ZERO_WORD, txe_blob_hashes = [||] }
 
 /* ----------------------------- assoc helpers ---------------------------- */
 
-function acc_lookup(es : list(AccountEntry), a : address) -> Account =
-    match es {
-        [||] => EMPTY_ACCOUNT,
-        e :: r => if e.ae_addr == a then {
-            e.ae_acc
-        } else {
-            acc_lookup(r, a)
-        },
+/* select the acctmap key for address `a` (caches it for the accessors below) */
+function acctmap_select(a : address) -> unit = {
+    let aw : word = sail_zero_extend(a, 256);
+    acctmap_key(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0])
+}
+
+/* the three 256-bit account fields at the currently selected acctmap key
+ * (word 3 most significant), reassembled from the per-word C accessors. */
+function acctmap_read_bal() -> word =
+    append(
+        acctmap_bal(get_slice_int(64, 3, 0)),
+        append(
+            acctmap_bal(get_slice_int(64, 2, 0)),
+            append(acctmap_bal(get_slice_int(64, 1, 0)), acctmap_bal(get_slice_int(64, 0, 0))),
+        ),
+    )
+function acctmap_read_sroot() -> word =
+    append(
+        acctmap_sroot(get_slice_int(64, 3, 0)),
+        append(
+            acctmap_sroot(get_slice_int(64, 2, 0)),
+            append(acctmap_sroot(get_slice_int(64, 1, 0)), acctmap_sroot(get_slice_int(64, 0, 0))),
+        ),
+    )
+function acctmap_read_chash() -> word =
+    append(
+        acctmap_chash(get_slice_int(64, 3, 0)),
+        append(
+            acctmap_chash(get_slice_int(64, 2, 0)),
+            append(acctmap_chash(get_slice_int(64, 1, 0)), acctmap_chash(get_slice_int(64, 0, 0))),
+        ),
+    )
+
+/* the account bound to `a` (EMPTY_ACCOUNT if absent), read from the acctmap */
+function acc_lookup(a : address) -> Account = {
+    acctmap_select(a);
+    if unsigned(acctmap_present()) == 1 then {
+        struct {
+            acc_nonce = unsigned(acctmap_nonce()),
+            acc_balance = acctmap_read_bal(),
+            acc_codehash = acctmap_read_chash(),
+            acc_storage_root = acctmap_read_sroot(),
+        }
+    } else {
+        EMPTY_ACCOUNT
     }
-function acc_update(es : list(AccountEntry), a : address, v : Account) -> list(AccountEntry) =
-    match es {
-        [||] => [|struct { ae_addr = a, ae_acc = v }|],
-        e :: r => if e.ae_addr == a then {
-            struct { ae_addr = a, ae_acc = v } :: r
-        } else {
-            e :: acc_update(r, a, v)
-        },
-    }
+}
+
+/* bind `a` -> v in the acctmap (overwrites any prior value) */
+function acc_update(a : address, v : Account) -> unit = {
+    acctmap_select(a);
+    acctmap_store(
+        get_slice_int(64, v.acc_nonce, 0),
+        v.acc_balance[255 .. 192],
+        v.acc_balance[191 .. 128],
+        v.acc_balance[127 .. 64],
+        v.acc_balance[63 .. 0],
+        v.acc_storage_root[255 .. 192],
+        v.acc_storage_root[191 .. 128],
+        v.acc_storage_root[127 .. 64],
+        v.acc_storage_root[63 .. 0],
+        v.acc_codehash[255 .. 192],
+        v.acc_codehash[191 .. 128],
+        v.acc_codehash[127 .. 64],
+        v.acc_codehash[63 .. 0],
+    )
+}
 function addr_in(xs : list(address), a : address) -> bool =
     match xs {
         [||] => false,
@@ -331,9 +453,30 @@ function slot_in(xs : list(SlotKey), a : address, s : word) -> bool =
         },
     }
 
-/* internal (un-journaled) account accessors used inside the kernel functions */
-function kget(a : address) -> Account = acc_lookup(k_accounts, a)
-function kset(a : address, v : Account) -> unit = k_accounts = acc_update(k_accounts, a, v)
+/* whether `a` has been materialized into the acctmap (distinct from acc_lookup,
+ * which returns EMPTY_ACCOUNT for both absent and not-yet-loaded). */
+function acc_has(a : address) -> bool = {
+    acctmap_select(a);
+    unsigned(acctmap_present()) == 1
+}
+
+/* Stateless account materialization (defined in lib/mpt.sail, the witness reader,
+ * included later): resolve `a` from the authenticated witness leaf store and bind
+ * it (nonce/balance/storageRoot/codeHash); absent in the witness -> empty. The
+ * witness IS the base, so kget loads on first touch -- no eager seeding. */
+val stateless_account_load : address -> unit
+
+/* internal (un-journaled) account accessors used inside the kernel functions.
+ * In stateless mode the witness backs the base layer: a not-yet-loaded account
+ * is materialized from the witness on first access (un-journaled, so a frame
+ * revert keeps the revealed pre-state and only undoes recorded mutations). */
+function kget(a : address) -> Account = {
+    if k_stateless & not_bool(acc_has(a)) then {
+        stateless_account_load(a)
+    };
+    acc_lookup(a)
+}
+function kset(a : address, v : Account) -> unit = acc_update(a, v)
 
 /* --- journal (undo log) helpers --- */
 function jpush(e : JEntry) -> unit = k_journal = e :: k_journal

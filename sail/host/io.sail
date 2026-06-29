@@ -23,7 +23,7 @@
 /* Host mechanism, like memory and storage. Included early -- the crypto is */
 /* used by block_hash, state, kernel, gas, and transaction; the SSZ         */
 /* decoders are called only by the outer stateless layers (the lib/mpt.sail */
-/* witness reader, zkvm/zkvm_block.sail, the EEST runner).                  */
+/* witness reader, sail/main.sail, the EEST runner).                        */
 /* ======================================================================== */
 
 /* The block-access-list key: an (address, slot) pair (EIP-7928). bal_load
@@ -148,6 +148,65 @@ function address_to_bytes(a : address) -> list(byte) = {
     };
     out
 }
+
+/* C-backed pre-image cache (ffi/host_preimage.c): the secure-trie key derivation
+ * keccak(addr)/keccak(slot) memoized so each touched key is hashed exactly once
+ * and reused for reads, non-membership walks, and the post-state root. Separate
+ * address (3-word key) and slot (4-word key) namespaces. keccak is computed here
+ * on a miss and cached; a hit returns the stored hash. */
+val pa_reset = impure { _: "pa_reset" } : unit -> unit
+val pa_key = impure { _: "pa_key" } : (bits(64), bits(64), bits(64)) -> unit
+val pa_present = impure { _: "pa_present" } : unit -> bits(64)
+val pa_store = impure { _: "pa_store" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val pa_word = impure { _: "pa_word" } : bits(64) -> bits(64)
+val ps_reset = impure { _: "ps_reset" } : unit -> unit
+val ps_key = impure { _: "ps_key" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val ps_present = impure { _: "ps_present" } : unit -> bits(64)
+val ps_store = impure { _: "ps_store" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val ps_word = impure { _: "ps_word" } : bits(64) -> bits(64)
+
+/* reassemble the cached 256-bit hash at the selected key (word 3 most sig) */
+function pa_hash() -> bits(256) =
+    append(
+        pa_word(get_slice_int(64, 3, 0)),
+        append(
+            pa_word(get_slice_int(64, 2, 0)),
+            append(pa_word(get_slice_int(64, 1, 0)), pa_word(get_slice_int(64, 0, 0))),
+        ),
+    )
+function ps_hash() -> bits(256) =
+    append(
+        ps_word(get_slice_int(64, 3, 0)),
+        append(
+            ps_word(get_slice_int(64, 2, 0)),
+            append(ps_word(get_slice_int(64, 1, 0)), ps_word(get_slice_int(64, 0, 0))),
+        ),
+    )
+
+/* keccak(address), memoized: the trie key for an account. */
+function pre_keccak_addr(a : address) -> bits(256) = {
+    let aw : word = sail_zero_extend(a, 256);
+    pa_key(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0]);
+    if unsigned(pa_present()) == 1 then {
+        pa_hash()
+    } else {
+        let h = keccak256(address_to_bytes(a));
+        pa_store(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]);
+        h
+    }
+}
+
+/* keccak(slot), memoized: the trie key for a storage slot. */
+function pre_keccak_slot(s : word) -> bits(256) = {
+    ps_key(s[255 .. 192], s[191 .. 128], s[127 .. 64], s[63 .. 0]);
+    if unsigned(ps_present()) == 1 then {
+        ps_hash()
+    } else {
+        let h = keccak256(word_to_bytes32(s));
+        ps_store(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]);
+        h
+    }
+}
 function int_be_len(n : int) -> int = if n <= 0 then {
     0
 } else {
@@ -214,7 +273,7 @@ function sha256_selfcheck() -> unit = {
 
 /* ===================== (3) STATELESS SSZ INPUT ========================= */
 
-val ssz_src_len = impure { _: "ssz_src_len" } : unit -> int
+val ssz_src_len = impure { _: "ssz_src_len" } : unit -> bits(64)
 val ssz_src_byte = impure { _: "ssz_src_byte" } : int -> bits(8)
 
 /* bulk readers: n (<=8) bytes from the input in one FFI call (LE / BE) */
@@ -281,6 +340,7 @@ let PL_BASE_FEE : int = 440
 let PL_BLOCK_HASH : int = 472
 let PL_TXS_OFF : int = 504
 let PL_WDS_OFF : int = 508
+let PL_EXCESS_BLOB_GAS : int = 520
 let PL_BAL_OFF : int = 528
 
 /* big-endian 32-byte field (Bytes32, e.g. prev_randao) -- four FFI reads */
@@ -303,12 +363,14 @@ function ssz_u256(b : int) -> word = {
 
 let PL_PREV_RANDAO : int = 372
 function pl_block_number() -> int = ssz_u64(payload_start() + PL_BLOCK_NUMBER)
+function pl_slot_number() -> int = ssz_u64(payload_start() + 532) /* EIP-7843 */
 function pl_gas_limit() -> int = ssz_u64(payload_start() + PL_GAS_LIMIT)
 function pl_gas_used() -> int = ssz_u64(payload_start() + PL_GAS_USED)
 function pl_timestamp() -> int = ssz_u64(payload_start() + PL_TIMESTAMP)
 function pl_fee_recipient() -> address = ssz_addr(payload_start() + PL_FEE_RECIPIENT)
 function pl_prev_randao() -> bits(256) = ssz_bytes32(payload_start() + PL_PREV_RANDAO)
 function pl_base_fee() -> word = ssz_u256(payload_start() + PL_BASE_FEE)
+function pl_excess_blob_gas() -> int = ssz_u64(payload_start() + PL_EXCESS_BLOB_GAS)
 function pl_state_root() -> bits(256) = ssz_bytes32(payload_start() + PL_STATE_ROOT)
 function pl_block_hash() -> bits(256) = ssz_bytes32(payload_start() + PL_BLOCK_HASH)
 
@@ -364,6 +426,33 @@ function cc_active_fork_start() -> int = {
     c + ssz_u32(c + 8)
 }
 function cc_fork() -> int = ssz_u64(cc_active_fork_start() + 0)
+
+/* SszForkConfig { fork:u64 @0, activation:SszForkActivation (offset @8),
+ * blob_schedule (offset @12) }; SszForkActivation { block_number, timestamp :
+ * SszOptionalForkActivationValue (List[u64,1], offsets @ activation+{0,4}) }.
+ * The active_fork's activation must be ACTIVE for the block (EELS
+ * validate_chain_config -> _is_activation_active): at least one of block_number
+ * / timestamp set, and any set value must not exceed the payload's -- a FUTURE
+ * activation point makes the block invalid. */
+function cc_activation_start() -> int = {
+    let f = cc_active_fork_start();
+    f + ssz_u32(f + 8)
+}
+function cc_blobsched_start() -> int = {
+    let f = cc_active_fork_start();
+    f + ssz_u32(f + 12)
+}
+function cc_activation_active() -> bool = {
+    let a = cc_activation_start();
+    let bn_start = a + ssz_u32(a + 0);
+    let ts_start = a + ssz_u32(a + 4);
+    let bs_start = cc_blobsched_start();
+    let bn_present = (ts_start - bn_start) >= 8; /* the optional list is non-empty */
+    let ts_present = (bs_start - ts_start) >= 8;
+    let bn_ok = not_bool(bn_present) | (pl_block_number() >= ssz_u64(bn_start));
+    let ts_ok = not_bool(ts_present) | (pl_timestamp() >= ssz_u64(ts_start));
+    (bn_present | ts_present) & bn_ok & ts_ok
+}
 
 /* SszExecutionWitness: 3 variable List fields, offsets at witness+{0,4,8} */
 function wit_state_start() -> int = {

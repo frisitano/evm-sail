@@ -53,9 +53,32 @@ class accel_t : public abstract_device_t {
     if (op == 0) {        /* keccak256 */
       zkvm_keccak256_hash h;
       if (zkvm_keccak256(ibuf, inlen, &h) == ZKVM_EOK) { std::memcpy(obuf, h.data, 32); outlen = 32; ok = 1; }
+    } else if (op == 1) { /* ecrecover: hash[32] v[32] r[32] s[32] -> keccak(pubkey)[12:] */
+      ok = 1;             /* "call" always succeeds; empty output on bad recovery */
+      if (inlen == 128) {
+        uint8_t v = ibuf[63]; int v_ok = (v == 27 || v == 28);
+        for (int i = 32; i < 63; i++) if (ibuf[i] != 0) v_ok = 0;
+        uint8_t pub[64];
+        if (v_ok && zkvm_secp256k1_ecrecover((const zkvm_secp256k1_hash*)ibuf,
+                (const zkvm_secp256k1_signature*)(ibuf + 64), (uint8_t)(v - 27),
+                (zkvm_secp256k1_pubkey*)pub) == ZKVM_EOK) {
+          zkvm_keccak256_hash a; zkvm_keccak256(pub, 64, &a);
+          std::memset(obuf, 0, 12); std::memcpy(obuf + 12, a.data + 12, 20); outlen = 32;
+        }
+      }
     } else if (op == 2) { /* sha256 */
       zkvm_sha256_hash h;
       if (zkvm_sha256(ibuf, inlen, &h) == ZKVM_EOK) { std::memcpy(obuf, h.data, 32); outlen = 32; ok = 1; }
+    } else if (op == 257) { /* secp256k1 verify (tx-sender auth): input hash[32] r[32] s[32]
+                             * x[32] y[32] (160B) -> 32B 0..01 if it verifies, else empty */
+      ok = 1;
+      bool verified = false;
+      if (inlen == 160 &&
+          zkvm_secp256k1_verify((const zkvm_secp256k1_hash*)ibuf,
+              (const zkvm_secp256k1_signature*)(ibuf + 32),
+              (const zkvm_secp256k1_pubkey*)(ibuf + 96), &verified) == ZKVM_EOK && verified) {
+        std::memset(obuf, 0, 32); obuf[31] = 1; outlen = 32;
+      }
     }
     reg[R_OUTLEN/8] = outlen;
     reg[R_OK/8] = ok;

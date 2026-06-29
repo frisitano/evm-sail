@@ -26,6 +26,30 @@
 /*     and the EIP-2537 BLS12-381 MSM discount tables.                      */
 /* ======================================================================== */
 
+/* --- EIP-4844 blob base fee (from excess_blob_gas) ---
+ * blob_base_fee = fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas,
+ * BLOB_BASE_FEE_UPDATE_FRACTION). fake_exponential approximates
+ * factor * e^(numerator/denominator) by summing the Taylor terms until the
+ * (integer-divided) term reaches 0. The Amsterdam update fraction is EIP-7691's
+ * (5007716). Mirrors forks/amsterdam/vm/gas.py. */
+let MIN_BLOB_BASE_FEE : int = 1
+let BLOB_BASE_FEE_UPDATE_FRACTION : int = 5007716
+
+function fake_exponential(factor : int, numerator : int, denominator : int) -> int = {
+    var i : int = 1;
+    var output : int = 0;
+    var numerator_accum : int = factor * denominator;
+    while numerator_accum > 0 do {
+        output = output + numerator_accum;
+        numerator_accum = ediv_int(numerator_accum * numerator, denominator * i);
+        i = i + 1
+    };
+    ediv_int(output, denominator)
+}
+
+function blob_base_fee(excess_blob_gas : int) -> int =
+    fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas, BLOB_BASE_FEE_UPDATE_FRACTION)
+
 /* --- static cost constants (Yellow Paper Appendix G symbols G_*, as
  *     repriced by EIP-150/160/2929) --- */
 let G_zero : gas = 0 /* YP G_zero                                  */
@@ -59,8 +83,12 @@ let G_selfdestruct : gas = 5000 /* EIP-150 R_selfdestruct base                */
 let G_initcode_word : gas = 2 /* EIP-3860 (per word of initcode)            */
 
 /* --- protocol code-size limits --- */
-let MAX_CODE_SIZE : int = 24576 /* EIP-170 deployed-code limit                */
-let MAX_INITCODE_SIZE : int = 49152 /* EIP-3860: 2 * MAX_CODE_SIZE                */
+/* EIP-170 deployed-code limit 24576, raised to 0x8000 = 32768 by EIP-7954 at
+ * Amsterdam; the EIP-3860 initcode cap is always 2 * MAX_CODE_SIZE. Fork-
+ * dependent so the shared interpreter serves both the pre-Amsterdam state-tests
+ * (k_fork < FORK_AMSTERDAM) and the guest (k_fork defaults to 99). */
+function max_code_size() -> int = if k_fork >= FORK_AMSTERDAM then { 32768 } else { 24576 }
+function max_initcode_size() -> int = 2 * max_code_size()
 
 /* --------------------------- charging hook ------------------------------ */
 /* Debit `amount` from the frame's gas counter. A debit that cannot be       */
@@ -74,7 +102,10 @@ function charge(amount : gas) -> unit =
         if gas_remaining < amount then {
             exc_halt(OutOfGas)
         } else {
-            gas_remaining = to_gas(gas_remaining - amount)
+            /* a >= b >= 0 proven above, so gas_remaining - amount is a valid
+               `gas`: use native int64 subtraction instead of to_gas(a - b),
+               which would round-trip through sail_int (see gas_sub). */
+            gas_remaining = gas_sub(gas_remaining, amount)
         }
     }
 

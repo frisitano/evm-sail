@@ -36,14 +36,28 @@ function mem_frame_leave() -> unit = host_mem_pop()
 
 /* --- raw byte access (O(1), C-backed) --- */
 
-function mem_get_byte(off : int) -> byte = host_mem_read(get_slice_int(64, off, 0))
+/* frame liveness (defined in evm/machine.sail); forward-declared so the byte
+ * primitives below can no-op when the frame has exceptionally halted. */
+val is_running : unit -> bool
 
-function mem_set_byte(off : int, v : byte) -> unit = {
-    host_mem_write(get_slice_int(64, off, 0), v);
-    if off + 1 > memory_size then {
-        memory_size = off + 1
+/* A memory access only follows a successful charge_expansion; if that charge ran
+ * the frame out of gas (exc_halt sets the status but does not abort the opcode
+ * handler), the access must NOT touch memory -- otherwise an out-of-gas write to
+ * a huge offset (e.g. MSTORE at 2^32) would grow the C buffer to gigabytes. */
+function mem_get_byte(off : int) -> byte =
+    if is_running() then {
+        host_mem_read(get_slice_int(64, off, 0))
+    } else {
+        0x00
     }
-}
+
+function mem_set_byte(off : int, v : byte) -> unit =
+    if is_running() then {
+        host_mem_write(get_slice_int(64, off, 0), v);
+        if off + 1 > memory_size then {
+            memory_size = off + 1
+        }
+    }
 
 /* --- word access (big-endian, 32 bytes): MLOAD / MSTORE / MSTORE8 --- */
 

@@ -6,7 +6,15 @@
 //! and compares the dumped post-state. The model binary is the Sail EVM
 //! compiled to native C; this runner only drives it in parallel.
 //!
-//! Usage: revm-eest --bin <model-bin> [--fork Cancun] [--timeout 20] <files-or-dirs...>
+//! Usage: revm-eest --bin <model-bin> [--fork Cancun] [--timeout 20]
+//!                  [--jobs N] <files-or-dirs...>
+//!
+//! Each case runs in a freshly spawned child process, and every child reserves a
+//! large (512 MB) main-thread stack for the model's deep recursive list/RLP/MPT
+//! walks. Concurrency therefore multiplies that footprint: the default fans out
+//! to one worker per core, so on a many-core box an unbounded sweep can exhaust
+//! RAM. `--jobs N` caps the worker pool to N concurrent children (and overrides
+//! RAYON_NUM_THREADS); use it to bound peak memory on large sweeps.
 
 use alloy_primitives::{Address, Bytes, B256, U256};
 use rayon::prelude::*;
@@ -487,6 +495,7 @@ fn main() {
     let mut bin = String::new();
     let mut fork: Option<String> = None;
     let mut timeout = 20.0f64;
+    let mut jobs: usize = 0;
     let mut files: Vec<String> = Vec::new();
     let mut it = argv.iter();
     while let Some(a) = it.next() {
@@ -494,12 +503,23 @@ fn main() {
             "--bin" => bin = it.next().cloned().unwrap_or_default(),
             "--fork" => fork = it.next().cloned(),
             "--timeout" => timeout = it.next().and_then(|x| x.parse().ok()).unwrap_or(20.0),
+            "--jobs" => jobs = it.next().and_then(|x| x.parse().ok()).unwrap_or(0),
             _ => files.push(a.clone()),
         }
     }
     if bin.is_empty() {
-        eprintln!("usage: revm-eest --bin <model> [--fork F] [--timeout N] <files/dirs>");
+        eprintln!("usage: revm-eest --bin <model> [--fork F] [--timeout N] [--jobs N] <files/dirs>");
         std::process::exit(2);
+    }
+    // Each child reserves a 512 MB stack; cap concurrent children so a large
+    // sweep can't exhaust RAM. --jobs sizes the global rayon pool that both
+    // par_iter sections below draw from; 0 leaves rayon's default (one per core,
+    // still honoring RAYON_NUM_THREADS).
+    if jobs > 0 {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(jobs)
+            .build_global()
+            .expect("failed to configure rayon thread pool");
     }
     FORK_LEVEL.store(fork_level(fork.as_deref().unwrap_or("")), Ordering::Relaxed);
     let files = collect_files(&files);

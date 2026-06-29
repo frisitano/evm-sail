@@ -280,7 +280,14 @@ function execute(op : ast) -> unit = match op {
         let a = word_to_address(pop());
         let warm = k_access_account(a);
         charge(account_cost(warm));
-        push(k_get_balance(a))
+
+        /* read the account ONLY if the access charge was covered: an OOG'd
+           BALANCE must touch no state (charge sets status but does not abort
+           the handler), else the stateless witness would need to prove an
+           account EELS never read. */
+        if is_running() then {
+            push(k_get_balance(a))
+        }
     },
     SELFBALANCE() => {
         /* EIP-1884 */
@@ -291,7 +298,9 @@ function execute(op : ast) -> unit = match op {
         let a = word_to_address(pop());
         let warm = k_access_account(a);
         charge(account_cost(warm));
-        push(word_of_int(k_get_code_size(a)))
+        if is_running() then {
+            push(word_of_int(k_get_code_size(a)))
+        }
     },
     EXTCODECOPY() => {
         let a = word_to_address(pop());
@@ -311,7 +320,9 @@ function execute(op : ast) -> unit = match op {
         let a = word_to_address(pop());
         let warm = k_access_account(a);
         charge(account_cost(warm));
-        push(k_get_codehash(a))
+        if is_running() then {
+            push(k_get_codehash(a))
+        }
     },
     RETURNDATASIZE() => {
         /* EIP-211 */
@@ -354,6 +365,11 @@ function execute(op : ast) -> unit = match op {
     NUMBER() => {
         charge(G_base);
         push(k_env(F_Number))
+    },
+    SLOTNUM() => {
+        /* EIP-7843: push the block's slot number (BASE gas) */
+        charge(G_base);
+        push(k_env(F_SlotNumber))
     },
     PREVRANDAO() => {
         charge(G_base);
@@ -432,7 +448,12 @@ function execute(op : ast) -> unit = match op {
         let s = pop();
         let warm = k_access_slot(self_addr(), s);
         charge(sload_cost(warm));
-        push(k_sload(self_addr(), s))
+
+        /* read the slot ONLY if the access charge was covered (OOG must touch no
+           state, so the stateless witness need not prove an unread slot). */
+        if is_running() then {
+            push(k_sload(self_addr(), s))
+        }
     },
     SSTORE() => {
         /* EIP-2200 net-metered store + EIP-2929 cold surcharge + EIP-1706 stipend
@@ -600,17 +621,24 @@ function execute(op : ast) -> unit = match op {
                 /* new account */
                 charge(G_newaccount)
             };
-            k_transfer(self_addr(), beneficiary, bal);
 
-            /* EIP-6780: only a created-this-tx originator is registered for
-             * deletion, and its balance is forced to 0 after the transfer
-             * (burning a self-beneficiary transfer). A pre-existing account
-             * just moves its balance and persists. */
-            if k_was_created(self_addr()) then {
-                k_zero_balance(self_addr());
-                k_selfdestruct(self_addr())
-            };
-            frame_status = Halted(HaltSelfDestruct)
+            /* a charge above may have run the frame out of gas (exc_halt sets the
+             * status but does not abort this handler): only move the balance and
+             * register the deletion when the frame is still running, else the
+             * out-of-gas SELFDESTRUCT must have no effect. */
+            if is_running() then {
+                k_transfer(self_addr(), beneficiary, bal);
+
+                /* EIP-6780: only a created-this-tx originator is registered for
+                 * deletion, and its balance is forced to 0 after the transfer
+                 * (burning a self-beneficiary transfer). A pre-existing account
+                 * just moves its balance and persists. */
+                if k_was_created(self_addr()) then {
+                    k_zero_balance(self_addr());
+                    k_selfdestruct(self_addr())
+                };
+                frame_status = Halted(HaltSelfDestruct)
+            }
         }
     },
 }

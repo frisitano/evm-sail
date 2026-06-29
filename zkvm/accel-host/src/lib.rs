@@ -555,8 +555,38 @@ bls_pt!(zkvm_bls12_g2_add, bls::g2_add, 192, 192);
     if bls::map_fp2_to_g2(slice(fp2, 96), &mut out) { core::ptr::copy_nonoverlapping(out.as_ptr(), result, 192); ZKVM_EOK } else { ZKVM_EFAIL }
 }
 
-/* ===================== not yet wired (EFAIL) ========================= */
-#[no_mangle] pub extern "C" fn zkvm_secp256k1_verify(_:*const u8,_:*const u8,_:*const u8,_:*mut bool)->i32{ZKVM_EFAIL}
+/* secp256k1 ECDSA verify with a provided public key (the witness): cheaper than
+ * recovery, and the native parity of the in-guest portable-C verify. msg = 32B
+ * prehash, sig = 64B r||s, pubkey = 64B X||Y. k256's verify enforces low-s. */
+#[no_mangle]
+pub unsafe extern "C" fn zkvm_secp256k1_verify(
+    msg: *const u8,
+    sig: *const u8,
+    pubkey: *const u8,
+    verified: *mut bool,
+) -> i32 {
+    use k256::ecdsa::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
+    use k256::EncodedPoint;
+    let msg = slice(msg, 32);
+    let signature = match Signature::from_slice(slice(sig, 64)) {
+        Ok(s) => s,
+        Err(_) => return ZKVM_EFAIL,
+    };
+    let pk = slice(pubkey, 64);
+    let mut enc = [0u8; 65];
+    enc[0] = 0x04;
+    enc[1..].copy_from_slice(pk);
+    let point = match EncodedPoint::from_bytes(enc) {
+        Ok(p) => p,
+        Err(_) => return ZKVM_EFAIL,
+    };
+    let vk = match VerifyingKey::from_encoded_point(&point) {
+        Ok(v) => v,
+        Err(_) => return ZKVM_EFAIL,
+    };
+    *verified = vk.verify_prehash(msg, &signature).is_ok();
+    ZKVM_EOK
+}
 
 /* ============================== tests ================================= */
 #[cfg(test)]

@@ -201,16 +201,16 @@ Requires `sail` (opam), `riscv64-unknown-elf-gcc`, and `spike` on `PATH`
   recompute, sender-from-`public_keys`, non-empty execution requests, lazy
   arbitrary-access witness reads.
 * **All crypto goes through the `c-interface-accelerators` standard.** keccak256, sha256,
-  ripemd160, and the EVM precompiles share one boundary: the vendored standard header
-  `../ffi/zkvm_accelerators.h` (verbatim from eth-act/zkvm-standards), implemented by the
-  GMP-free, freestanding reference `../ffi/zkvm_accelerators.c` (`zkvm_keccak256`/`zkvm_sha256`/
-  `zkvm_ripemd160` real; ecrecover/modexp/bn254/blake2f/KZG return `ZKVM_EFAIL` pending impl).
-  The Sail model calls these via a thin marshalling shim (`../ffi/acc_shim.c`, externs
-  injected with `sail -c --c-include acc_shim.h`), since Sail cannot form a `(ptr,len)` call.
-  keccak/sha256 are exercised + asserted on-guest by `keccak_selfcheck`/`sha256_selfcheck`.
-  A real zkVM host swaps `zkvm_accelerators.c` for its native precompiles behind the
-  unchanged standard header. (The Sail-shim staging adds a buffer pass vs. a direct C
-  `(ptr,len)` call — a marshalling artifact that a C guest or precompile-circuit host avoids.)
+  ripemd160, secp256k1, and the EVM precompiles share one boundary: the vendored standard
+  header `../ffi/zkvm_accelerators.h` (verbatim from eth-act/zkvm-standards). There is a
+  SINGLE implementation — the Rust `accel-host` (`k256`/`sha3`/`p256`/…) — served as proven
+  precompiles. Native links it directly; the spike guest offloads every op to the host
+  accelerator device (`accel-device/accel_device.cc`, linked against the Rust lib), so no
+  crypto runs as guest instructions. (The portable-C reference `zkvm_accelerators.c` has
+  been removed.) The Sail model calls these via a thin marshalling shim (`../ffi/acc_shim.c`,
+  externs injected with `sail -c --c-include acc_shim.h`), since Sail cannot form a
+  `(ptr,len)` call. keccak/sha256 are exercised + asserted on-guest by
+  `keccak_selfcheck`/`sha256_selfcheck`.
 * `start.S`/trap-vector use Zicsr (machine-mode CSRs) — these are **platform/crt0 glue**
   (a vendor responsibility under the memory-layout standard), not the proven STF, which
   stays pure `rv64im_zicclsm`.

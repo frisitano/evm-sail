@@ -36,10 +36,10 @@ bigint runtime. Target the RV64 backends: **OpenVM** or **ZisK**
 - The guest is still the **single-fixture demonstration** (`zkvm_block.sail`
   decodes exactly one legacy tx and seeds two accounts). Benchmarking real
   blocks needs the guest generalized to arbitrary tx/account counts first.
-- Crypto: link `zkvm_accelerators.c` (reference) or wire the zkVM's native
-  keccak/sha256 **precompiles** behind the same `zkvm-standards` header — the
-  latter is the real proving-cost win (see the spike `--extlib` accel device for
-  the host-side model).
+- Crypto: wire the zkVM's native keccak/sha256/secp256k1 **precompiles** behind
+  the `zkvm-standards` header. The portable-C reference `zkvm_accelerators.c` has
+  been removed; the single crypto source is the Rust `accel-host`, served as proven
+  precompiles (see the spike `--extlib` accel device for the host-side model).
 
 ## Build sketch (once the toolchain is present)
 

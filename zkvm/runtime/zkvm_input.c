@@ -61,10 +61,10 @@ unit el_emit_out(uint64_t b)
 }
 #endif
 
-void ssz_src_len(sail_int rop, const unit u)
+uint64_t ssz_src_len(const unit u)
 {
     (void)u;
-    mpz_set_ui(rop, IN_LEN);
+    return (uint64_t)IN_LEN;
 }
 
 uint64_t ssz_src_byte(sail_int idx)

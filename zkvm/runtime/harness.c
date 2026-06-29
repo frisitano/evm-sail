@@ -8,7 +8,7 @@
  *
  *   1. read_input()  exercises the private-input side of the IO interface.
  *   2. model_init()  initialises the Sail world (kernel registers, letbinds).
- *   3. zzzkvm_run()  executes the one-tx block (see zkvm_block.sail).
+ *   3. zmain()  executes the block (see sail/main.sail).
  *   4. the result facts are read from the model's output registers and emitted
  *      via write_output().
  *   5. the facts are checked against the known-correct fixture values; any
@@ -23,9 +23,9 @@
 /* Sail-generated entry points (see build/zkvm_block.c). */
 extern void model_init(void);
 extern void model_fini(void);
-extern unit zzzkvm_run(unit);
+extern unit zmain(unit);
 
-/* Output registers set by zzzkvm_run (all hold values that fit in 64 bits). */
+/* Output registers set by zmain (all hold values that fit in 64 bits). */
 extern sail_int zzzkvm_out_gas;
 extern sail_int zzzkvm_out_storage0;
 extern sail_int zzzkvm_out_wbal;
@@ -90,7 +90,7 @@ int zkvm_start(void)
     model_init();
     uint64_t i0, i1;
     __asm__ volatile("rdinstret %0" : "=r"(i0));
-    zzzkvm_run(UNIT);
+    zmain(UNIT);
     __asm__ volatile("rdinstret %0" : "=r"(i1));
     emit_kv("instret_block", i1 - i0);
 
