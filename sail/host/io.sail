@@ -340,6 +340,7 @@ let PL_BASE_FEE : int = 440
 let PL_BLOCK_HASH : int = 472
 let PL_TXS_OFF : int = 504
 let PL_WDS_OFF : int = 508
+let PL_BLOB_GAS_USED : int = 512
 let PL_EXCESS_BLOB_GAS : int = 520
 let PL_BAL_OFF : int = 528
 
@@ -370,6 +371,7 @@ function pl_timestamp() -> int = ssz_u64(payload_start() + PL_TIMESTAMP)
 function pl_fee_recipient() -> address = ssz_addr(payload_start() + PL_FEE_RECIPIENT)
 function pl_prev_randao() -> bits(256) = ssz_bytes32(payload_start() + PL_PREV_RANDAO)
 function pl_base_fee() -> word = ssz_u256(payload_start() + PL_BASE_FEE)
+function pl_blob_gas_used() -> int = ssz_u64(payload_start() + PL_BLOB_GAS_USED)
 function pl_excess_blob_gas() -> int = ssz_u64(payload_start() + PL_EXCESS_BLOB_GAS)
 function pl_state_root() -> bits(256) = ssz_bytes32(payload_start() + PL_STATE_ROOT)
 function pl_block_hash() -> bits(256) = ssz_bytes32(payload_start() + PL_BLOCK_HASH)

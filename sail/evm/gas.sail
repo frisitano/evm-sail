@@ -26,14 +26,23 @@
 /*     and the EIP-2537 BLS12-381 MSM discount tables.                      */
 /* ======================================================================== */
 
-/* --- EIP-4844 blob base fee (from excess_blob_gas) ---
+/* --- EIP-4844/EIP-7918 blob accounting (from excess_blob_gas) ---
  * blob_base_fee = fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas,
- * BLOB_BASE_FEE_UPDATE_FRACTION). fake_exponential approximates
- * factor * e^(numerator/denominator) by summing the Taylor terms until the
- * (integer-divided) term reaches 0. The Amsterdam update fraction is EIP-7691's
- * (5007716). Mirrors forks/amsterdam/vm/gas.py. */
+ * BLOB_BASE_FEE_UPDATE_FRACTION). fake_exponential approximates factor *
+ * e^(numerator/denominator) by summing the Taylor terms until the
+ * (integer-divided) term reaches 0. Amsterdam retunes the update fraction and
+ * adds the EIP-7918 reserve-price branch to the excess-blob-gas transition. */
 let MIN_BLOB_BASE_FEE : int = 1
-let BLOB_BASE_FEE_UPDATE_FRACTION : int = 5007716
+let BLOB_BASE_COST : int = 8192
+let GAS_PER_BLOB : int = 131072
+let BLOB_SCHEDULE_TARGET_CANCUN : int = 3
+let BLOB_SCHEDULE_MAX_CANCUN : int = 6
+let BLOB_SCHEDULE_TARGET_PRAGUE : int = 6
+let BLOB_SCHEDULE_MAX_PRAGUE : int = 9
+let BLOB_SCHEDULE_TARGET_AMSTERDAM : int = 14
+let BLOB_SCHEDULE_MAX_AMSTERDAM : int = 21
+let BLOB_BASE_FEE_UPDATE_FRACTION_OSAKA : int = 5007716
+let BLOB_BASE_FEE_UPDATE_FRACTION_AMSTERDAM : int = 11684671
 
 function fake_exponential(factor : int, numerator : int, denominator : int) -> int = {
     var i : int = 1;
@@ -47,8 +56,55 @@ function fake_exponential(factor : int, numerator : int, denominator : int) -> i
     ediv_int(output, denominator)
 }
 
+function blob_base_fee_update_fraction() -> int =
+    if k_fork >= FORK_AMSTERDAM then {
+        BLOB_BASE_FEE_UPDATE_FRACTION_AMSTERDAM
+    } else {
+        BLOB_BASE_FEE_UPDATE_FRACTION_OSAKA
+    }
+
 function blob_base_fee(excess_blob_gas : int) -> int =
-    fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas, BLOB_BASE_FEE_UPDATE_FRACTION)
+    fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas, blob_base_fee_update_fraction())
+
+function blob_schedule_target() -> int =
+    if k_fork >= FORK_AMSTERDAM then {
+        BLOB_SCHEDULE_TARGET_AMSTERDAM
+    } else if k_fork >= FORK_PRAGUE then {
+        BLOB_SCHEDULE_TARGET_PRAGUE
+    } else {
+        BLOB_SCHEDULE_TARGET_CANCUN
+    }
+
+function blob_schedule_max() -> int =
+    if k_fork >= FORK_AMSTERDAM then {
+        BLOB_SCHEDULE_MAX_AMSTERDAM
+    } else if k_fork >= FORK_PRAGUE then {
+        BLOB_SCHEDULE_MAX_PRAGUE
+    } else {
+        BLOB_SCHEDULE_MAX_CANCUN
+    }
+
+function blob_target_gas_per_block() -> int =
+    GAS_PER_BLOB * blob_schedule_target()
+
+function blob_max_gas_per_block() -> int =
+    GAS_PER_BLOB * blob_schedule_max()
+
+function next_excess_blob_gas(parent_excess_blob_gas : int, parent_blob_gas_used : int, parent_base_fee_per_gas : int) -> int = {
+    let parent_blob_gas = parent_excess_blob_gas + parent_blob_gas_used;
+    let target_blob_gas = blob_target_gas_per_block();
+    if parent_blob_gas < target_blob_gas then {
+        0
+    } else {
+        let target_blob_gas_price = GAS_PER_BLOB * blob_base_fee(parent_excess_blob_gas);
+        let base_blob_tx_price = BLOB_BASE_COST * parent_base_fee_per_gas;
+        if (k_fork >= FORK_AMSTERDAM) & (base_blob_tx_price > target_blob_gas_price) then {
+            parent_excess_blob_gas + ediv_int(parent_blob_gas_used * (blob_schedule_max() - blob_schedule_target()), blob_schedule_max())
+        } else {
+            parent_blob_gas - target_blob_gas
+        }
+    }
+}
 
 /* --- static cost constants (Yellow Paper Appendix G symbols G_*, as
  *     repriced by EIP-150/160/2929) --- */
@@ -73,7 +129,9 @@ let G_exp : gas = 10 /* YP G_exp (EXP base)                        */
 let G_expbyte : gas = 50 /* YP G_expbyte; raised 10->50 by EIP-160     */
 let G_sset : gas = 20000 /* EIP-2200 G_sset (zero -> nonzero SSTORE)   */
 let G_sreset : gas = 2900 /* EIP-2200/2929 G_sreset (5000 - 2100 cold)  */
-let R_sclear : gas = 4800 /* EIP-3529 SSTORE-clears refund              */
+let R_sclear_pre_london : gas = 15000 /* EIP-2200 SSTORE-clears refund before EIP-3529 */
+let R_sclear_london : gas = 4800 /* EIP-3529 SSTORE-clears refund                  */
+let R_selfdestruct_pre_london : gas = 24000 /* SELFDESTRUCT refund removed by EIP-3529 */
 let G_create : gas = 32000 /* YP G_create (CREATE/CREATE2 base)          */
 let G_codedeposit : gas = 200 /* YP G_codedeposit (per deployed code byte)  */
 let G_callvalue : gas = 9000 /* YP G_callvalue (CALL value-transfer)       */
@@ -88,7 +146,10 @@ let G_initcode_word : gas = 2 /* EIP-3860 (per word of initcode)            */
  * dependent so the shared interpreter serves both the pre-Amsterdam state-tests
  * (k_fork < FORK_AMSTERDAM) and the guest (k_fork defaults to 99). */
 function max_code_size() -> int = if k_fork >= FORK_AMSTERDAM then { 32768 } else { 24576 }
-function max_initcode_size() -> int = 2 * max_code_size()
+function max_initcode_size() -> int =
+    if k_fork >= FORK_SHANGHAI then { 2 * max_code_size() } else { 9223372036854775807 }
+function sstore_clear_refund() -> gas =
+    if k_fork >= FORK_LONDON then { R_sclear_london } else { R_sclear_pre_london }
 
 /* --------------------------- charging hook ------------------------------ */
 /* Debit `amount` from the frame's gas counter. A debit that cannot be       */
@@ -569,6 +630,7 @@ function precompile_gas(num : int, input_len : int) -> gas = {
 /* capped at tx scope (EIP-3529 gas_used/5), not here. */
 function sstore_gas(original : word, current : word, new : word, cold : bool) -> (gas, int) = {
     let cold_cost : gas = if cold then { G_cold_sload } else { 0 };
+    let clear_refund = sstore_clear_refund();
     let base : gas = if current == new then {
             G_warm_access
         } else {
@@ -583,16 +645,16 @@ function sstore_gas(original : word, current : word, new : word, cold : bool) ->
         if original == current then {
             /* clean slot being changed: refund only when clearing a non-zero slot */
             if not_bool(word_is_zero(original)) & word_is_zero(new) then {
-                refund = refund + R_sclear
+                refund = refund + clear_refund
             }
         } else {
             /* dirty slot */
             if not_bool(word_is_zero(original)) then {
                 if word_is_zero(current) then {
-                    refund = refund - R_sclear
+                    refund = refund - clear_refund
                 }; /* un-clear */
                 if word_is_zero(new) then {
-                    refund = refund + R_sclear
+                    refund = refund + clear_refund
                 } /* re-clear */
             };
             if original == new then {
@@ -641,7 +703,11 @@ function exp_gas(exponent : word) -> gas =
 
 /* EIP-3860 initcode word cost, charged by CREATE/CREATE2 and tx-deploy. */
 function initcode_gas(byte_len : int) -> gas =
-    to_gas(G_initcode_word * ediv_int(byte_len + 31, 32))
+    if k_fork >= FORK_SHANGHAI then {
+        to_gas(G_initcode_word * ediv_int(byte_len + 31, 32))
+    } else {
+        0
+    }
 
 /* ----------------------- call gas (EIP-150 63/64) ----------------------- */
 /* EIP-150 forwards at most all-but-one-64th of the available gas to a        */

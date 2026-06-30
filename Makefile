@@ -5,6 +5,9 @@
 #   make lint           sail --all-warnings on the program roots
 #   make fmt            format every *.sail in place with `sail --fmt`
 #   make fmt-check      verify every *.sail matches `sail --fmt`
+#   make eest-smoke     run a tiny EEST state fixture
+#   make eest-smoke-root
+#                       run the tiny EEST fixture with post-state root checking
 #   make all            check + lint + fmt-check
 #   make clean          remove build artifacts
 #
@@ -16,8 +19,10 @@
 # ===========================================================================
 
 SAIL ?= sail
+PYTHON ?= python3
 
 MODEL      := sail/evm.sail
+EEST_SMOKE := revm-eest/fixtures/smoke/state_root_transfer.json
 # every Sail source, discovered (not a hand-maintained list)
 SAIL_FILES := $(shell find . -name '*.sail' | sort)
 # program roots whose $include graph reaches every definition; --all-warnings
@@ -25,7 +30,7 @@ SAIL_FILES := $(shell find . -name '*.sail' | sort)
 # since `sail --fmt` normalizes trailing whitespace, tabs, and final newlines).
 WARN_ROOTS := sail/evm.sail sail/main.sail
 
-.PHONY: all check clean help lint fmt fmt-check html pdf
+.PHONY: all check clean help lint fmt fmt-check eest-smoke eest-smoke-root html pdf
 
 help:
 	@echo "evm-sail targets:"
@@ -33,6 +38,8 @@ help:
 	@echo "  make lint           - sail --all-warnings on the program roots"
 	@echo "  make fmt            - format every *.sail with sail --fmt"
 	@echo "  make fmt-check      - verify *.sail match sail --fmt"
+	@echo "  make eest-smoke     - run a tiny EEST fixture"
+	@echo "  make eest-smoke-root - run the tiny EEST fixture with root checking"
 	@echo "  make all            - check + lint + fmt-check"
 	@echo "  make html           - render the spec to docs/evm-sail.html"
 	@echo "  make pdf            - typeset the spec to docs/evm-sail.pdf"
@@ -58,6 +65,12 @@ fmt:
 
 fmt-check:
 	@rc=0; for f in $(SAIL_FILES); do $(SAIL) --fmt --fmt-emit stdout "$$f" 2>/dev/null | diff -q "$$f" - >/dev/null 2>&1 || { echo "  needs formatting: $$f"; rc=1; }; done; [ "$$rc" -eq 0 ] && echo "fmt-check: clean" || exit 1
+
+eest-smoke:
+	@cd revm-eest && SAIL256=1 $(PYTHON) run_eest.py fixtures/smoke/state_root_transfer.json --fork Cancun --limit 1 --quiet --timeout 30
+
+eest-smoke-root:
+	@cd revm-eest && SAIL256=1 $(PYTHON) run_eest.py fixtures/smoke/state_root_transfer.json --fork Cancun --limit 1 --quiet --timeout 30 --root
 
 all: check lint fmt-check
 

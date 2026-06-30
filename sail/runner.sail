@@ -188,6 +188,8 @@ function run_one() -> unit = {
         let ks = nw();
         al_keys = list_append(al_keys, [|struct { sk_addr = ka, sk_slot = ks }|])
     };
+    let is_al_tx = ni(); /* type-1 (EIP-2930) envelope flag */
+    let is_dyn_tx = ni(); /* EIP-1559-style fee-market envelope flag */
     let nblob = ni();
     let maxfee = nw();
     let maxblobfee = nw();
@@ -239,6 +241,8 @@ function run_one() -> unit = {
             t_index = 0,
             t_al_addrs = al_addrs,
             t_al_keys = al_keys,
+            t_is_access_list = is_al_tx != 0,
+            t_is_dynamic_fee = is_dyn_tx != 0,
             t_blob_count = nblob,
             t_max_fee = maxfee,
             t_max_blob_fee = maxblobfee,
@@ -266,8 +270,8 @@ function main() -> unit = {
         print_endline("CASE");
         run_one();
         if want_root != 0 then {
-            /* recomputed world-state root (YP stateRoot), via the hash builder */
-            print_endline(concat_str("ROOT ", hex_str(unsigned(compute_state_root_hb()))))
+            /* recomputed world-state root (YP stateRoot) from the seeded case state */
+            print_endline(concat_str("ROOT ", hex_str(unsigned(compute_state_root_updates_only()))))
         };
         more = ni()
     }

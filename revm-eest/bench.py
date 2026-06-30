@@ -12,13 +12,13 @@ FX = sys.argv[2]
 
 # (label, fork-level, fork-name, path) — chosen for high gas + PASSING status
 CASES = [
-    ("TSTORE loop (jump/push/store)", 1, "Cancun",  "cancun/eip1153_tstore/test_run_until_out_of_gas.json"),
-    ("deep reentrant CALLs",          1, "Cancun",  "cancun/eip1153_tstore/test_tstore_reentrancy.json"),
-    ("subcall contexts (16.7M gas)",  3, "Osaka",   "osaka/eip7825_transaction_gas_limit_cap/test_tx_gas_limit_cap_subcall_context.json"),
-    ("SSTORE refund churn",           3, "Osaka",   "osaka/eip7825_transaction_gas_limit_cap/test_maximum_gas_refund.json"),
-    ("MCOPY memory ops",              1, "Cancun",  "cancun/eip5656_mcopy/test_mcopy_memory_expansion.json"),
-    ("CREATE w/ 49KB initcode",       0, "Shanghai","shanghai/eip3860_initcode/test_create_opcode_initcode.json"),
-    ("blake2f precompile rounds",     1, "Cancun",  "istanbul/eip152_blake2/test_blake2b.json"),
+    ("TSTORE loop (jump/push/store)", 9,  "Cancun",  "cancun/eip1153_tstore/test_run_until_out_of_gas.json"),
+    ("deep reentrant CALLs",          9,  "Cancun",  "cancun/eip1153_tstore/test_tstore_reentrancy.json"),
+    ("subcall contexts (16.7M gas)",  11, "Osaka",   "osaka/eip7825_transaction_gas_limit_cap/test_tx_gas_limit_cap_subcall_context.json"),
+    ("SSTORE refund churn",           11, "Osaka",   "osaka/eip7825_transaction_gas_limit_cap/test_maximum_gas_refund.json"),
+    ("MCOPY memory ops",              9,  "Cancun",  "cancun/eip5656_mcopy/test_mcopy_memory_expansion.json"),
+    ("CREATE w/ 49KB initcode",       8,  "Shanghai", "shanghai/eip3860_initcode/test_create_opcode_initcode.json"),
+    ("blake2f precompile rounds",     9,  "Cancun",  "istanbul/eip152_blake2/test_blake2b.json"),
 ]
 
 total_g, total_t = 0, 0.0

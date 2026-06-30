@@ -266,6 +266,7 @@ uint64_t acctdb_at_len(const unit u) {
 typedef struct {
   uint64_t key[8]; /* keccak(addr) k3..k0 (0..3), keccak(slot) k3..k0 (4..7) */
   uint64_t val[4]; /* slot value v3..v0 (v3 most significant) */
+  uint8_t existed; /* authenticated pre-state slot existed */
   uint8_t used;
 } sd_entry;
 
@@ -273,7 +274,24 @@ static sd_entry *sd_tab = NULL;
 static uint32_t sd_cap = 0;
 static uint32_t sd_n = 0;
 static uint64_t sd_sel_val[4];                              /* last sd_sel hit */
+static uint64_t sd_sel_existed;                             /* last sd_sel provenance */
 static uint64_t sd_it_acct[4], sd_it_slot[4], sd_it_val[4]; /* last sd_at row */
+static uint64_t sd_it_existed;                              /* last sd_at provenance */
+
+/* Accounts whose storage harvest preserved at least one blinded child. Their
+ * slotdb rows are only a working-set slice, not a complete live storage map, so
+ * post-state delete handling must use the preserving overlay instead of a full
+ * rebuild from harvested leaves. */
+#define IC_INIT_CAP 64u /* power of two */
+
+typedef struct {
+  uint64_t key[4]; /* keccak(addr): k0 (low) .. k3 (high) */
+  uint8_t used;
+} ic_entry;
+
+static ic_entry *ic_tab = NULL;
+static uint32_t ic_cap = 0;
+static uint32_t ic_n = 0;
 
 static uint64_t sd_hash(const uint64_t *k) {
   uint64_t h = 0xcbf29ce484222325ull;
@@ -288,6 +306,69 @@ static uint64_t sd_hash(const uint64_t *k) {
 }
 
 static void sd_grow(void);
+static void ic_grow(void);
+
+static uint8_t sd_val_nonzero(const uint64_t *v) {
+  return (v[0] | v[1] | v[2] | v[3]) != 0 ? 1 : 0;
+}
+
+static void ic_reset(void) {
+  free(ic_tab);
+  ic_tab = (ic_entry *)calloc(IC_INIT_CAP, sizeof(ic_entry));
+  ic_cap = IC_INIT_CAP;
+  ic_n = 0;
+}
+
+static void ic_put(const uint64_t *k) {
+  if ((ic_n + 1) * 4 >= ic_cap * 3)
+    ic_grow();
+  uint32_t m = ic_cap - 1;
+  uint32_t i = (uint32_t)nd_hash(k) & m;
+  while (ic_tab[i].used) {
+    if (memcmp(ic_tab[i].key, k, 32) == 0)
+      return;
+    i = (i + 1) & m;
+  }
+  memcpy(ic_tab[i].key, k, 32);
+  ic_tab[i].used = 1;
+  ic_n++;
+}
+
+static void ic_grow(void) {
+  uint32_t oc = ic_cap;
+  ic_entry *ot = ic_tab;
+  ic_cap = oc ? oc * 2 : IC_INIT_CAP;
+  ic_tab = (ic_entry *)calloc(ic_cap, sizeof(ic_entry));
+  ic_n = 0;
+  for (uint32_t i = 0; i < oc; i++)
+    if (ot[i].used)
+      ic_put(ot[i].key);
+  free(ot);
+}
+
+unit storage_mark_incomplete(uint64_t a3, uint64_t a2, uint64_t a1,
+                             uint64_t a0) {
+  uint64_t k[4] = {a0, a1, a2, a3};
+  if (!ic_tab)
+    ic_reset();
+  ic_put(k);
+  return UNIT;
+}
+
+uint64_t storage_harvest_complete(uint64_t a3, uint64_t a2, uint64_t a1,
+                                  uint64_t a0) {
+  uint64_t k[4] = {a0, a1, a2, a3};
+  if (!ic_tab)
+    return 1;
+  uint32_t m = ic_cap - 1;
+  uint32_t i = (uint32_t)nd_hash(k) & m;
+  while (ic_tab[i].used) {
+    if (memcmp(ic_tab[i].key, k, 32) == 0)
+      return 0;
+    i = (i + 1) & m;
+  }
+  return 1;
+}
 
 static void sd_put(const uint64_t *k, const uint64_t *v) {
   if ((sd_n + 1) * 4 >= sd_cap * 3)
@@ -297,12 +378,14 @@ static void sd_put(const uint64_t *k, const uint64_t *v) {
   while (sd_tab[i].used) {
     if (memcmp(sd_tab[i].key, k, 64) == 0) { /* same (addr,slot): overwrite */
       memcpy(sd_tab[i].val, v, 32);
+      sd_tab[i].existed = sd_val_nonzero(v);
       return;
     }
     i = (i + 1) & m;
   }
   memcpy(sd_tab[i].key, k, 64);
   memcpy(sd_tab[i].val, v, 32);
+  sd_tab[i].existed = sd_val_nonzero(v);
   sd_tab[i].used = 1;
   sd_n++;
 }
@@ -325,6 +408,9 @@ unit slotdb_reset(const unit u) {
   sd_tab = (sd_entry *)calloc(SD_INIT_CAP, sizeof(sd_entry));
   sd_cap = SD_INIT_CAP;
   sd_n = 0;
+  sd_sel_existed = 0;
+  sd_it_existed = 0;
+  ic_reset();
   return UNIT;
 }
 
@@ -343,6 +429,7 @@ unit slotdb_insert(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
 uint64_t slotdb_sel(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
                     uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0) {
   uint64_t k[8] = {a0, a1, a2, a3, s0, s1, s2, s3};
+  sd_sel_existed = 0;
   if (!sd_tab)
     return 0;
   uint32_t m = sd_cap - 1;
@@ -350,6 +437,7 @@ uint64_t slotdb_sel(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
   while (sd_tab[i].used) {
     if (memcmp(sd_tab[i].key, k, 64) == 0) {
       memcpy(sd_sel_val, sd_tab[i].val, 32);
+      sd_sel_existed = sd_tab[i].existed;
       return 1;
     }
     i = (i + 1) & m;
@@ -357,6 +445,10 @@ uint64_t slotdb_sel(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
   return 0;
 }
 uint64_t slotdb_selval(uint64_t i) { return i > 3 ? 0 : sd_sel_val[i]; }
+uint64_t slotdb_sel_existed(const unit u) {
+  (void)u;
+  return sd_sel_existed;
+}
 
 /* iteration over all entries (post-state-root pass): slotdb_at(i) caches row i */
 uint64_t slotdb_count(const unit u) {
@@ -365,6 +457,7 @@ uint64_t slotdb_count(const unit u) {
 }
 unit slotdb_at(uint64_t idx) {
   uint32_t seen = 0;
+  sd_it_existed = 0;
   if (!sd_tab)
     return UNIT;
   for (uint32_t i = 0; i < sd_cap; i++) {
@@ -375,6 +468,7 @@ unit slotdb_at(uint64_t idx) {
           sd_it_slot[w] = sd_tab[i].key[4 + w];
           sd_it_val[w] = sd_tab[i].val[w];
         }
+        sd_it_existed = sd_tab[i].existed;
         return UNIT;
       }
       seen++;
@@ -387,3 +481,7 @@ unit slotdb_at(uint64_t idx) {
 uint64_t slotdb_at_acct(uint64_t w) { return w > 3 ? 0 : sd_it_acct[w]; }
 uint64_t slotdb_at_slot(uint64_t w) { return w > 3 ? 0 : sd_it_slot[w]; }
 uint64_t slotdb_at_val(uint64_t w) { return w > 3 ? 0 : sd_it_val[w]; }
+uint64_t slotdb_at_existed(const unit u) {
+  (void)u;
+  return sd_it_existed;
+}

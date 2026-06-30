@@ -617,7 +617,7 @@ function execute(op : ast) -> unit = match op {
             if not_bool(warm) then {
                 charge(G_cold_account)
             }; /* EIP-2929 */
-            if word_nonzero(bal) & k_account_is_empty(beneficiary) then {
+            if is_running() & word_nonzero(bal) & k_account_is_empty(beneficiary) then {
                 /* new account */
                 charge(G_newaccount)
             };
@@ -627,15 +627,28 @@ function execute(op : ast) -> unit = match op {
              * register the deletion when the frame is still running, else the
              * out-of-gas SELFDESTRUCT must have no effect. */
             if is_running() then {
+                let first_selfdestruct = not_bool(addr_in(k_selfdestr, self_addr()));
+                if (k_fork < FORK_LONDON) & first_selfdestruct then {
+                    k_refund_add(R_selfdestruct_pre_london)
+                };
                 k_transfer(self_addr(), beneficiary, bal);
 
-                /* EIP-6780: only a created-this-tx originator is registered for
-                 * deletion, and its balance is forced to 0 after the transfer
-                 * (burning a self-beneficiary transfer). A pre-existing account
-                 * just moves its balance and persists. */
-                if k_was_created(self_addr()) then {
+                if k_fork < FORK_CANCUN then {
+                    /* Before EIP-6780, every successful SELFDESTRUCT deletes the
+                     * originator at tx end. Its balance is also zeroed
+                     * immediately after the transfer, including the
+                     * self-beneficiary case. */
                     k_zero_balance(self_addr());
                     k_selfdestruct(self_addr())
+                } else {
+                    /* EIP-6780: only a created-this-tx originator is registered
+                     * for deletion, and its balance is forced to 0 after the
+                     * transfer (burning a self-beneficiary transfer). A
+                     * pre-existing account just moves its balance and persists. */
+                    if k_was_created(self_addr()) then {
+                        k_zero_balance(self_addr());
+                        k_selfdestruct(self_addr())
+                    }
                 };
                 frame_status = Halted(HaltSelfDestruct)
             }

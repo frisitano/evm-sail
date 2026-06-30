@@ -145,17 +145,40 @@ val host_map_it_key = impure { _: "host_map_it_key" } : bits(64) -> bits(64)
 val host_map_it_val = impure { _: "host_map_it_val" } : bits(64) -> bits(64)
 
 /* ---- C-backed raw-address -> account map (ffi/host_acctmap.c): the kernel
- * account working set (k_accounts), keyed by the RAW address so reads/writes
- * never hash. O(1)-amortized open addressing; the witness pre-state is the base
- * it sits over (materialized once per account, then cached here). An account is
- * (nonce, balance, storage_root, code_hash): nonce one word, the 256-bit fields
- * four big-endian words each (w3 most significant). Point access selects the key
- * once (acctmap_key) then the accessors resolve it; iteration feeds the post-state
- * root. ---- */
+ * account working set (k_accounts), keyed by the RAW address so execution
+ * lookup does not hash. State-root iteration is a separate sorted view ordered
+ * by keccak256(address), the secure trie key passed on each store. An account
+ * is (nonce, balance, storage_root, code_hash): nonce one word, the 256-bit
+ * fields four big-endian words each (w3 most significant). Point access selects
+ * the key once (acctmap_key) then the accessors resolve it. ---- */
 val acctmap_reset = impure { _: "acctmap_reset" } : unit -> unit
 val acctmap_key = impure { _: "acctmap_key" } : (bits(64), bits(64), bits(64)) -> unit
 val acctmap_present = impure { _: "acctmap_present" } : unit -> bits(64)
 val acctmap_store = impure { _: "acctmap_store" } : (
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+    ) -> unit
+val acctmap_mark_existing = impure { _: "acctmap_mark_existing" } : unit -> unit
+val acctmap_seed = impure { _: "acctmap_seed" } : (
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
         bits(64),
         bits(64),
         bits(64),
@@ -176,11 +199,15 @@ val acctmap_sroot = impure { _: "acctmap_sroot" } : bits(64) -> bits(64)
 val acctmap_chash = impure { _: "acctmap_chash" } : bits(64) -> bits(64)
 val acctmap_remove = impure { _: "acctmap_remove" } : (bits(64), bits(64), bits(64)) -> unit
 val acctmap_count = impure { _: "acctmap_count" } : unit -> bits(64)
+val acctmap_dirty_count = impure { _: "acctmap_dirty_count" } : unit -> bits(64)
 val acctmap_at = impure { _: "acctmap_at" } : bits(64) -> unit
+val acctmap_dirty_at = impure { _: "acctmap_dirty_at" } : bits(64) -> unit
 val acctmap_at_key = impure { _: "acctmap_at_key" } : bits(64) -> bits(64)
 val acctmap_at_nonce = impure { _: "acctmap_at_nonce" } : unit -> bits(64)
 val acctmap_at_bal = impure { _: "acctmap_at_bal" } : bits(64) -> bits(64)
+val acctmap_at_sroot = impure { _: "acctmap_at_sroot" } : bits(64) -> bits(64)
 val acctmap_at_chash = impure { _: "acctmap_at_chash" } : bits(64) -> bits(64)
+val acctmap_at_existed = impure { _: "acctmap_at_existed" } : unit -> bits(64)
 
 /* ---- C code store (ffi/host_code.c): contract code, content-addressed --------
  * Keyed by codeHash (not address): each entry holds the code bytes AND the
@@ -317,6 +344,22 @@ function storage_entry(j : int) -> (address, word, word) = {
     );
     (word_to_address(aw), s, v)
 }
+
+function storage_has_live_addr(a : address) -> bool = {
+    let n = storage_count();
+    var j : int = 0;
+    var found : bool = false;
+    while (j < n) & not_bool(found) do {
+        let (ea, _, ev) = storage_entry(j);
+        if (ea == a) & word_nonzero(ev) then {
+            found = true
+        } else {
+            ()
+        };
+        j = j + 1
+    };
+    found
+}
 register k_refund : int = 0 /* gas-refund counter (SSTORE clears; EIP-3529 cap applied at tx end) */
 register k_selfdestr : list(address) = [||] /* addresses SELFDESTRUCTed this tx */
 
@@ -334,20 +377,35 @@ register k_witness_bad : bool =
 register k_fork : int = 99 /* active fork level (higher = newer); set by the runner */
 
 /* fork levels for fork-gated rules (chronological; only thresholds matter) */
-let FORK_CANCUN : int = 1 /* EIP-1153/4844; precompiles 0x01-0x0a */
-let FORK_PRAGUE : int = 2 /* EIP-7623 calldata floor; +BLS 0x0b-0x11 */
-let FORK_OSAKA : int = 3 /* EIP-7883 modexp gas, EIP-7825 cap; +0x100 */
-let FORK_AMSTERDAM : int = 4 /* EIP-7954 code/initcode size bump (32768/65536) */
+let FORK_FRONTIER : int = 0
+let FORK_HOMESTEAD : int = 1
+let FORK_BYZANTIUM : int = 2
+let FORK_CONSTANTINOPLE : int = 3
+let FORK_ISTANBUL : int = 4
+let FORK_BERLIN : int = 5 /* EIP-2929/2930 access lists + warm/cold access costs */
+let FORK_LONDON : int = 6 /* EIP-1559 fee market + EIP-3529 refund reduction */
+let FORK_PARIS : int = 7
+let FORK_SHANGHAI : int = 8 /* EIP-3651 warm coinbase, EIP-3855 PUSH0, EIP-3860 initcode */
+let FORK_CANCUN : int = 9 /* EIP-1153/4844; precompiles 0x01-0x0a */
+let FORK_PRAGUE : int = 10 /* EIP-7623 calldata floor; +BLS 0x0b-0x11 */
+let FORK_OSAKA : int = 11 /* EIP-7883 modexp gas, EIP-7825 cap; +0x100 */
+let FORK_AMSTERDAM : int = 12 /* EIP-7954 code/initcode size bump (32768/65536) */
 
 /* Is `n` (the low bytes of an address, as an int) a precompile at the active
- * fork? The precompile set GROWS by fork: Cancun has 0x01-0x0a (1-10);
- * Prague adds the EIP-2537 BLS12-381 set 0x0b-0x11 (11-17); Osaka adds
- * 0x100 P256VERIFY (EIP-7951). A CALL to an address OUTSIDE the active set is
- * an ordinary call to a (typically empty) account, not a precompile. */
+ * fork? The precompile set GROWS by fork: Frontier has 0x01-0x04, Byzantium
+ * adds 0x05-0x08, Istanbul adds 0x09, Cancun adds 0x0a POINT_EVALUATION,
+ * Prague adds the EIP-2537 BLS12-381 set 0x0b-0x11
+ * (11-17), and Osaka adds 0x100 P256VERIFY (EIP-7951). A CALL to an address
+ * OUTSIDE the active set is an ordinary call to a (typically empty) account,
+ * not a precompile. */
 function is_precompile(n : int) -> bool = {
+    let base = (n >= 1) & (n <= 4);
+    let byzantium = (n >= 5) & (n <= 8) & (k_fork >= FORK_BYZANTIUM);
+    let istanbul = (n == 9) & (k_fork >= FORK_ISTANBUL);
+    let kzg = (n == 10) & (k_fork >= FORK_CANCUN);
     let bls = (n >= 11) & (n <= 17) & (k_fork >= FORK_PRAGUE);
     let p256 = (n == 256) & (k_fork >= FORK_OSAKA);
-    ((n >= 1) & (n <= 10)) | bls | p256
+    base | byzantium | istanbul | kzg | bls | p256
 }
 
 register k_block : BlockEnv =
@@ -415,10 +473,35 @@ function acc_lookup(a : address) -> Account = {
     }
 }
 
-/* bind `a` -> v in the acctmap (overwrites any prior value) */
-function acc_update(a : address, v : Account) -> unit = {
+function acctmap_write_account(a : address, v : Account, dirty : bool) -> unit = {
     acctmap_select(a);
-    acctmap_store(
+    let h = pre_keccak_addr(a);
+    if dirty then {
+        acctmap_store(
+            h[255 .. 192],
+            h[191 .. 128],
+            h[127 .. 64],
+            h[63 .. 0],
+            get_slice_int(64, v.acc_nonce, 0),
+            v.acc_balance[255 .. 192],
+            v.acc_balance[191 .. 128],
+            v.acc_balance[127 .. 64],
+            v.acc_balance[63 .. 0],
+            v.acc_storage_root[255 .. 192],
+            v.acc_storage_root[191 .. 128],
+            v.acc_storage_root[127 .. 64],
+            v.acc_storage_root[63 .. 0],
+            v.acc_codehash[255 .. 192],
+            v.acc_codehash[191 .. 128],
+            v.acc_codehash[127 .. 64],
+            v.acc_codehash[63 .. 0],
+        )
+    } else {
+        acctmap_seed(
+        h[255 .. 192],
+        h[191 .. 128],
+        h[127 .. 64],
+        h[63 .. 0],
         get_slice_int(64, v.acc_nonce, 0),
         v.acc_balance[255 .. 192],
         v.acc_balance[191 .. 128],
@@ -432,8 +515,15 @@ function acc_update(a : address, v : Account) -> unit = {
         v.acc_codehash[191 .. 128],
         v.acc_codehash[127 .. 64],
         v.acc_codehash[63 .. 0],
-    )
+        )
+    }
 }
+
+/* bind `a` -> v in the acctmap as authenticated pre-state/cache material. */
+function acc_seed(a : address, v : Account) -> unit = acctmap_write_account(a, v, false)
+
+/* bind `a` -> v in the acctmap as an execution mutation. */
+function acc_update(a : address, v : Account) -> unit = acctmap_write_account(a, v, true)
 function addr_in(xs : list(address), a : address) -> bool =
     match xs {
         [||] => false,

@@ -83,6 +83,8 @@ struct Env {
     current_random: Option<B256>,
     #[serde(default)]
     current_excess_blob_gas: Option<U256>,
+    #[serde(default)]
+    slot_number: U256,
 }
 
 #[derive(Deserialize)]
@@ -206,9 +208,10 @@ fn encode(unit: &Unit, entry: &PostEntry) -> Option<Vec<String>> {
         .unwrap_or(env.current_difficulty);
     push_u256(&mut s, prevrandao);
     s.push("1".into()); // chain id
-    // EIP-4844 blob gas price = fake_exponential(1, excess_blob_gas, 3338477)
+                        // EIP-4844 blob gas price = fake_exponential(1, excess_blob_gas, 3338477)
     let excess = env.current_excess_blob_gas.unwrap_or(U256::ZERO);
     push_u256(&mut s, blob_gas_price(excess));
+    push_u256(&mut s, env.slot_number);
 
     let tx = &unit.transaction;
     let idx = &entry.indexes;
@@ -260,9 +263,27 @@ fn encode(unit: &Unit, entry: &PostEntry) -> Option<Vec<String>> {
         push_u256(&mut s, *a);
         push_u256(&mut s, *k);
     }
+    s.push(
+        if !tx.access_lists.is_empty() {
+            "1"
+        } else {
+            "0"
+        }
+        .into(),
+    );
+    s.push(
+        if tx.max_fee_per_gas.is_some() {
+            "1"
+        } else {
+            "0"
+        }
+        .into(),
+    );
     // EIP-4844 num blobs; then fee caps (max_fee_per_gas, max_fee_per_blob_gas) for validity
     s.push(tx.blob_versioned_hashes.len().to_string());
-    let max_fee = tx.gas_price.unwrap_or(tx.max_fee_per_gas.unwrap_or(U256::ZERO));
+    let max_fee = tx
+        .gas_price
+        .unwrap_or(tx.max_fee_per_gas.unwrap_or(U256::ZERO));
     push_u256(&mut s, max_fee);
     push_u256(&mut s, tx.max_fee_per_blob_gas.unwrap_or(U256::ZERO));
     // EIP-1559 priority-fee cap (gasPrice for legacy txs), for validity
@@ -272,7 +293,14 @@ fn encode(unit: &Unit, entry: &PostEntry) -> Option<Vec<String>> {
             .unwrap_or(tx.gas_price.unwrap_or(U256::ZERO)),
     );
     // EIP-7702 type-4 envelope flag (an EMPTY auth list is still a type-4 tx -> invalid)
-    s.push(if tx.authorization_list.is_some() { "1" } else { "0" }.into());
+    s.push(
+        if tx.authorization_list.is_some() {
+            "1"
+        } else {
+            "0"
+        }
+        .into(),
+    );
     // EIP-7702 authorization list: each (valid_sig, authority, delegate, nonce, chainId).
     // The fixture pre-recovers the authority into `signer`; validity mirrors
     // run_eest.py: signer present, EIP-2 1<=s<=n/2, 1<=r<n, yParity in {0,1},
@@ -332,7 +360,9 @@ fn blob_gas_price(excess: U256) -> U256 {
     output / denom
 }
 
-fn expected_post(ps: &AddressMap<AccountInfo>) -> Vec<(U256, Option<u64>, Option<U256>, Vec<(U256, U256)>)> {
+fn expected_post(
+    ps: &AddressMap<AccountInfo>,
+) -> Vec<(U256, Option<u64>, Option<U256>, Vec<(U256, U256)>)> {
     ps.iter()
         .map(|(addr, acc)| {
             let storage: Vec<(U256, U256)> = acc.storage.iter().map(|(k, v)| (*k, *v)).collect();
@@ -345,15 +375,29 @@ fn expected_post(ps: &AddressMap<AccountInfo>) -> Vec<(U256, Option<u64>, Option
 /* ------------------------------- execution ------------------------------- */
 
 /// Chronological fork level for fork-gated gas rules (EIP-7623 / EIP-7883), set from --fork.
-static FORK_LEVEL: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(1);
+static FORK_LEVEL: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(9);
 fn fork_level(name: &str) -> i64 {
     let n = name.to_lowercase();
-    for (k, v) in [("osaka", 3), ("prague", 2), ("cancun", 1), ("shanghai", 0)] {
+    for (k, v) in [
+        ("amsterdam", 12),
+        ("osaka", 11),
+        ("prague", 10),
+        ("cancun", 9),
+        ("shanghai", 8),
+        ("paris", 7),
+        ("london", 6),
+        ("berlin", 5),
+        ("istanbul", 4),
+        ("constantinople", 3),
+        ("byzantium", 2),
+        ("homestead", 1),
+        ("frontier", 0),
+    ] {
         if n.contains(k) {
             return v;
         }
     }
-    1
+    9
 }
 
 /// Run a chunk of cases through one model invocation; parse the per-case dump.
@@ -415,12 +459,18 @@ fn run_chunk(bin: &str, chunk: &[&Case], timeout: f64) -> Option<Vec<CaseOut>> {
         match p.first().copied() {
             Some("CASE") => results.push(CaseOut::default()),
             Some("ACC") if !results.is_empty() => {
-                if let (Ok(a), Ok(n), Ok(b)) = (p[1].parse(), p[2].parse::<u64>(), p[3].parse::<U256>()) {
+                if let (Ok(a), Ok(n), Ok(b)) =
+                    (p[1].parse(), p[2].parse::<u64>(), p[3].parse::<U256>())
+                {
                     results.last_mut().unwrap().acc.insert(a, (n, b));
                 }
             }
             Some("STO") if !results.is_empty() => {
-                if let (Ok(a), Ok(k), Ok(v)) = (p[1].parse::<U256>(), p[2].parse::<U256>(), p[3].parse::<U256>()) {
+                if let (Ok(a), Ok(k), Ok(v)) = (
+                    p[1].parse::<U256>(),
+                    p[2].parse::<U256>(),
+                    p[3].parse::<U256>(),
+                ) {
                     results.last_mut().unwrap().sto.insert((a, k), v);
                 }
             }
@@ -508,7 +558,9 @@ fn main() {
         }
     }
     if bin.is_empty() {
-        eprintln!("usage: revm-eest --bin <model> [--fork F] [--timeout N] [--jobs N] <files/dirs>");
+        eprintln!(
+            "usage: revm-eest --bin <model> [--fork F] [--timeout N] [--jobs N] <files/dirs>"
+        );
         std::process::exit(2);
     }
     // Each child reserves a 512 MB stack; cap concurrent children so a large
@@ -588,27 +640,29 @@ fn main() {
         }
     };
 
-    chunks.par_iter().for_each(|chunk| match run_chunk(&bin, chunk, timeout) {
-        None => {
-            // chunk-level timeout: re-run one case at a time and SCORE each
-            // individually -- a chunk of heavy-but-passing cases can exceed the
-            // budget collectively while every case finishes alone.
-            for c in chunk.iter() {
-                match run_chunk(&bin, &[c], timeout) {
-                    None => {
-                        eprintln!("TIMEOUT {}", c.cid);
-                        ntimeout.fetch_add(1, Ordering::Relaxed);
+    chunks
+        .par_iter()
+        .for_each(|chunk| match run_chunk(&bin, chunk, timeout) {
+            None => {
+                // chunk-level timeout: re-run one case at a time and SCORE each
+                // individually -- a chunk of heavy-but-passing cases can exceed the
+                // budget collectively while every case finishes alone.
+                for c in chunk.iter() {
+                    match run_chunk(&bin, &[c], timeout) {
+                        None => {
+                            eprintln!("TIMEOUT {}", c.cid);
+                            ntimeout.fetch_add(1, Ordering::Relaxed);
+                        }
+                        Some(outs) => score(c, outs.first()),
                     }
-                    Some(outs) => score(c, outs.first()),
                 }
             }
-        }
-        Some(outs) => {
-            for (i, c) in chunk.iter().enumerate() {
-                score(c, outs.get(i));
+            Some(outs) => {
+                for (i, c) in chunk.iter().enumerate() {
+                    score(c, outs.get(i));
+                }
             }
-        }
-    });
+        });
 
     let p = npass.load(Ordering::Relaxed);
     let to = ntimeout.load(Ordering::Relaxed);

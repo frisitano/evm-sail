@@ -12,7 +12,7 @@ Usage:
             [--rebuild] [--verbose]
 Requires `sail` on PATH, a C compiler, and libgmp.
 """
-import json, os, subprocess, sys, argparse
+import argparse, json, os, shutil, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ELDIR = os.path.abspath(os.path.join(HERE, ".."))
@@ -31,7 +31,11 @@ def build_runner(rebuild=False):
     if os.path.exists(BIN) and not rebuild:
         return
     if os.path.exists(BIN): os.remove(BIN)   # never leave a stale binary if the build fails
-    lib = subprocess.check_output(["sh","-c","dirname $(command -v sail)"]).decode().strip() + "/../share/sail/lib"
+    sail = os.environ.get("SAIL", "sail")
+    sail_path = sail if os.path.sep in sail else shutil.which(sail)
+    if not sail_path:
+        raise RuntimeError(f"could not find Sail executable {sail!r}; set SAIL=/path/to/sail")
+    lib = os.path.join(os.path.dirname(os.path.abspath(sail_path)), "..", "share", "sail", "lib")
     cache = os.path.join(HERE, ".rtcache"); os.makedirs(cache, exist_ok=True)
     # GMP-free fixed-width runtimes: SAILFIX = the guest-shared baseline,
     # SAIL256 = the host-optimized variant (sized limb ops, Knuth-D division).
@@ -56,7 +60,7 @@ def build_runner(rebuild=False):
             o = os.path.join(cache, "sf_" + os.path.basename(src)[:-2] + ".o")
             subprocess.check_call(["cc","-O2","-c",f"-I{sfdir}",f"-I{lib}",src,"-o",o])
             objs.append(o)
-        subprocess.check_call(["sail","-c","-O","--c-include","runner_ffi.h",
+        subprocess.check_call([sail_path,"-c","-O","--c-include","runner_ffi.h",
                                "sail/runner.sail","-o",BIN+"_gen"], cwd=ELDIR)
         subprocess.check_call(["cc","-O2",f"-I{sfdir}",f"-I{lib}",
                                BIN+"_gen.c", os.path.join(HERE,"runner_ffi.c"),
@@ -77,7 +81,7 @@ def build_runner(rebuild=False):
             if not os.path.exists(o):
                 subprocess.check_call(["cc","-O2","-c",f"-I{lib}","-I/opt/homebrew/include",f"{lib}/{c}","-o",o])
             objs.append(o)
-        subprocess.check_call(["sail","-c","-O","--c-include","runner_ffi.h",
+        subprocess.check_call([sail_path,"-c","-O","--c-include","runner_ffi.h",
                                "sail/runner.sail","-o",BIN+"_gen"], cwd=ELDIR)
         subprocess.check_call(["cc","-O2",f"-I{lib}","-I/opt/homebrew/include","-L/opt/homebrew/lib",
                                BIN+"_gen.c", os.path.join(HERE,"runner_ffi.c"),
@@ -152,6 +156,9 @@ def encode(c):
     keys = [(ai(e["address"]), h2i(k)) for e in al for k in e.get("storageKeys", [])]
     s += [len(addrs), *addrs, len(keys)]
     for a, k in keys: s += [a, k]
+    is_access_list = 1 if "accessLists" in tx else 0
+    is_dynamic_fee = 1 if "maxFeePerGas" in tx else 0
+    s += [is_access_list, is_dynamic_fee]
     # EIP-4844 num blobs; then fee caps (max_fee_per_gas, max_fee_per_blob_gas) for validity
     max_fee = h2i(tx["gasPrice"]) if "gasPrice" in tx else h2i(tx.get("maxFeePerGas","0x0"))
     s += [len(tx.get("blobVersionedHashes", [])), max_fee, h2i(tx.get("maxFeePerBlobGas","0x0")),
@@ -202,12 +209,17 @@ def compare(expected, accounts, storage):
 def fork_level(name):
     """Map an EEST fork name to a chronological level for fork-gated gas rules."""
     name = (name or "").lower()
-    for k, v in (("amsterdam", 4), ("osaka", 3), ("prague", 2), ("cancun", 1), ("shanghai", 0)):
+    for k, v in (
+        ("amsterdam", 12), ("osaka", 11), ("prague", 10), ("cancun", 9),
+        ("shanghai", 8), ("paris", 7), ("london", 6), ("berlin", 5),
+        ("istanbul", 4), ("constantinople", 3), ("byzantium", 2),
+        ("homestead", 1), ("frontier", 0),
+    ):
         if k in name:
             return v
-    return 1   # default: pre-Prague (no calldata floor / EIP-7883)
+    return 9   # default: Cancun-era unless the fixture path says otherwise
 
-FORK_LEVEL = 1   # set from --fork in main()
+FORK_LEVEL = 9   # set from --fork in main()
 
 def run_cases(cases, timeout, want_root=False):
     """Stream a batch of cases through the runner; return parsed per-case state.
@@ -274,6 +286,8 @@ def main():
     ap.add_argument("--limit", type=int, default=0); ap.add_argument("--rebuild", action="store_true")
     ap.add_argument("--verbose", action="store_true"); ap.add_argument("--timeout", type=float, default=30.0)
     ap.add_argument("--quiet", action="store_true", help="only print failures + summary")
+    ap.add_argument("--fail-limit", type=int, default=0,
+                    help="print at most this many individual FAIL lines (0 = unlimited)")
     ap.add_argument("--root", action="store_true", help="also compute+check the state root (slow)")
     ap.add_argument("--gasdbg", action="store_true", help="for balance fails: show gas delta + disasm")
     args = ap.parse_args()
@@ -291,6 +305,8 @@ def main():
 
     npass = ntotal = ntimeout = nroot = nroot_have = 0
     fail_reasons = {}   # coarse category -> count
+    printed_fails = 0
+    suppressed_fails = 0
     for f in files:
         allcases = collect(f, args.fork, args.limit)
         if not allcases: continue
@@ -316,17 +332,22 @@ def main():
             if args.root and c.get("hash") and r["root"] is not None:
                 nroot_have += 1
                 if r["root"] == h2i(c["hash"]): nroot += 1
-                elif args.verbose: print(f"      ROOT {hex(r['root'])[:14]}.. != {c['hash'][:14]}..")
+                elif args.verbose: print(f"      ROOT {hex(r['root'])} != {c['hash']}")
             if not fails:
                 npass += 1
                 if not args.quiet: print(f"PASS {c['cid']}")
             else:
                 cat = "storage" if any("[" in x for x in fails) else ("balance" if any("bal" in x for x in fails) else "nonce")
                 fail_reasons[cat] = fail_reasons.get(cat, 0) + 1
-                print(f"FAIL {c['cid']}")
-                if args.verbose:
-                    for fdesc in fails[:6]: print("      " + fdesc)
-                if args.gasdbg and cat == "balance":
+                should_print = args.fail_limit <= 0 or printed_fails < args.fail_limit
+                if should_print:
+                    printed_fails += 1
+                    print(f"FAIL {c['cid']}")
+                    if args.verbose:
+                        for fdesc in fails[:6]: print("      " + fdesc)
+                else:
+                    suppressed_fails += 1
+                if should_print and args.gasdbg and cat == "balance":
                     tx = c["tx"]; sender = ai(tx["sender"])
                     base = h2i(c["env"].get("currentBaseFee", "0x0"))
                     gp = h2i(tx["gasPrice"]) if "gasPrice" in tx else min(
@@ -342,7 +363,13 @@ def main():
                     if code != "0x": print("      code: " + " ".join(disasm(code)[:20]))
     print(f"\n=== {npass}/{ntotal} passed ({ntimeout} timeouts) ===")
     print(f"=== state-root matches: {nroot}/{nroot_have} ===")
+    if suppressed_fails:
+        print(f"=== suppressed FAIL lines: {suppressed_fails} ===")
     if fail_reasons: print("fail categories:", dict(sorted(fail_reasons.items(), key=lambda x:-x[1])))
+    if ntotal == 0 or npass != ntotal or ntimeout != 0:
+        sys.exit(1)
+    if args.root and (nroot_have == 0 or nroot != nroot_have):
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

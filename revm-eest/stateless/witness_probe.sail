@@ -12,11 +12,10 @@
 /* parent_state_root returns the committed pre-state root carried in the    */
 /* input header.                                                            */
 /*                                                                          */
-/* witness_reroot walks the ENTIRE witness trie from that root and rebuilds */
-/* it through the hash builder, so REROOT == PARENT certifies that every    */
-/* node (branch / extension / leaf, hex-prefix paths, embedded children)    */
-/* was parsed correctly. Output: a "PARENT <hex>" and a "REROOT <hex>" line */
-/* for the harness to diff.                                                 */
+/* witness_reroot walks the ENTIRE witness trie from that root recursively, */
+/* so REROOT == PARENT certifies that every node (branch / extension / leaf,*/
+/* hex-prefix paths, embedded children) was parsed correctly. Output: a     */
+/* "PARENT <hex>" and a "REROOT <hex>" line for the harness to diff.        */
 /*                                                                          */
 /* The harness revm-eest/stateless/run_witness.py builds one input per EEST */
 /* `pre` alloc with a real py-trie witness and diffs REROOT against the py- */

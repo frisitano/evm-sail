@@ -53,10 +53,20 @@ unit slotdb_insert(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
 uint64_t slotdb_sel(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
                     uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0);
 uint64_t slotdb_selval(uint64_t i);
+uint64_t slotdb_sel_existed(const unit u);
 uint64_t slotdb_count(const unit u);
 unit slotdb_at(uint64_t idx);
 uint64_t slotdb_at_acct(uint64_t w);
 uint64_t slotdb_at_slot(uint64_t w);
 uint64_t slotdb_at_val(uint64_t w);
+uint64_t slotdb_at_existed(const unit u);
+
+/* Storage-harvest completeness for optional proofs. Marked incomplete when a
+ * storage re-root preserves a blinded child hash, so the post-state root code
+ * knows slotdb is not a complete live map for that account. */
+unit storage_mark_incomplete(uint64_t a3, uint64_t a2, uint64_t a1,
+                             uint64_t a0);
+uint64_t storage_harvest_complete(uint64_t a3, uint64_t a2, uint64_t a1,
+                                  uint64_t a0);
 
 #endif

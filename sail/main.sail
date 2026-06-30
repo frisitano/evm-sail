@@ -304,6 +304,7 @@ function decode_word_list(cs : int, cl : int) -> list(word) = {
 
 /* n/2 of the secp256k1 group order (EIP-2 low-s malleability bound) */
 let SECP_N_HALF : bits(256) = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0
+let SECP_N_FULL : bits(256) = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
 
 /* secp256k1 ECDSA verify (accelerator id 257): input hash ++ r ++ s ++ x ++ y,
  * each a 32-byte big-endian word -> true iff (r,s) verifies for pubkey (x,y). */
@@ -335,17 +336,28 @@ function tx_sig_field(ttype : int) -> int = match ttype {
     _ => 10,
 }
 
+function legacy_sig_chain_id(v : int) -> int =
+    ediv_int(v - 35, 2)
+
+function tx_sig_v_ok(ttype : int, v : int) -> bool =
+    if ttype == 0 then {
+        (v == 27) | (v == 28) | ((v >= 35) & (legacy_sig_chain_id(v) == cc_chain_id()))
+    } else {
+        (v == 0) | (v == 1)
+    }
+
 /* keccak of the signing preimage: the unsigned RLP fields (contiguous and already
- * encoded in the stored tx, fields 0..i_v-1) re-wrapped in a fresh list header --
- * the type byte prepended for typed envelopes, and chain_id,0,0 appended for legacy
- * (EIP-155 replay protection). */
-function tx_signing_hash(ttype : int, loff : int, i_v : int) -> bits(256) = {
+ * encoded in the stored tx, fields 0..i_v-1) re-wrapped in a fresh list header.
+ * Typed envelopes prepend the transaction type byte. Legacy transactions have
+ * two historical forms: unprotected v=27/28 signs only the first six fields;
+ * EIP-155 protected v>=35 appends chain_id,0,0 before hashing. */
+function tx_signing_hash(ttype : int, loff : int, i_v : int, v : int) -> bits(256) = {
     let (_, po, _) = rlp_hdr_at(loff);
     let (lcs, lcl) = rlp_field_span(loff, i_v - 1);
     let sig_start = lcs + lcl;
     var content : list(byte) = ssz_bytes(po, sig_start - po);
-    if ttype == 0 then {
-        content = list_append(content, rlp_int(cc_chain_id()));
+    if (ttype == 0) & (v >= 35) then {
+        content = list_append(content, rlp_int(legacy_sig_chain_id(v)));
         content = list_append(content, [|0x80, 0x80|])
     };
     var pre : list(byte) = if ttype != 0 then {
@@ -402,8 +414,9 @@ function auth_signing_hash(toff : int) -> bits(256) = {
 }
 
 /* decode an EIP-7702 authorization list (content span cs,cl) into Authorizations,
- * recovering each authority. au_valid_sig records EIP-2 low-s + a successful
- * recovery; process_auth then applies the chain-id / nonce / code checks. */
+ * recovering each authority. au_valid_sig records tuple-local signature validity
+ * (recoverable, low-s, r/y parity ranges, incrementable nonce); process_auth then
+ * applies the chain-id / account nonce / code checks. */
 function decode_auth_list(cs : int, cl : int) -> list(Authorization) = {
     var out : list(Authorization) = [||];
     var pos : int = cs;
@@ -416,21 +429,31 @@ function decode_auth_list(cs : int, cl : int) -> list(Authorization) = {
         let (y3o, y3l) = rlp_field_span(pos, 3);
         let (r4o, r4l) = rlp_field_span(pos, 4);
         let (s5o, s5l) = rlp_field_span(pos, 5);
+        let y = rlp_uint_span(y3o, y3l);
+        let r = word_of_int(rlp_uint_span(r4o, r4l));
         let s = word_of_int(rlp_uint_span(s5o, s5l));
+        let auth_nonce = rlp_uint_span(n2o, n2l);
         let (ok, authority) = ecrecover_addr(
             auth_signing_hash(pos),
-            rlp_uint_span(y3o, y3l),
-            word_of_int(rlp_uint_span(r4o, r4l)),
+            y,
+            r,
             s,
         );
         out = list_append(
             out,
             [|
                 struct {
-                    au_valid_sig = ok & (unsigned(s) <= unsigned(SECP_N_HALF)),
+                    au_valid_sig =
+                        ok &
+                        (y == 0 | y == 1) &
+                        (unsigned(r) >= 1) &
+                        (unsigned(r) < unsigned(SECP_N_FULL)) &
+                        (unsigned(s) >= 1) &
+                        (unsigned(s) <= unsigned(SECP_N_HALF)) &
+                        (auth_nonce < 18446744073709551615),
                     au_authority = authority,
                     au_address = word_to_address(word_of_int(rlp_uint_span(a1o, a1l))),
-                    au_nonce = rlp_uint_span(n2o, n2l),
+                    au_nonce = auth_nonce,
                     au_chain_id = rlp_uint_span(c0o, c0l),
                 },
             |],
@@ -554,13 +577,16 @@ function decode_tx_ssz(i : int) -> Transaction = {
        signature (r,s) over the signing hash; `sender` above is keccak(pubkey)[12:],
        so a forged key would not verify here. */
     let i_v = tx_sig_field(ttype);
+    let (vso, vsl) = rlp_field_span(loff, i_v);
+    let sig_v = rlp_uint_span(vso, vsl);
     let (ro, rl) = rlp_field_span(loff, i_v + 1);
     let (sso, ssl) = rlp_field_span(loff, i_v + 2);
     auth_ok =
         auth_ok &
+            tx_sig_v_ok(ttype, sig_v) &
             tx_auth_ok(
                 i,
-                tx_signing_hash(ttype, loff, i_v),
+                tx_signing_hash(ttype, loff, i_v, sig_v),
                 word_of_int(rlp_uint_span(ro, rl)),
                 word_of_int(rlp_uint_span(sso, ssl)),
             );
@@ -577,6 +603,8 @@ function decode_tx_ssz(i : int) -> Transaction = {
         t_index = 0,
         t_al_addrs = al_addrs,
         t_al_keys = al_keys,
+        t_is_access_list = ttype == 1,
+        t_is_dynamic_fee = (ttype == 2) | (ttype == 3) | (ttype == 4),
         t_blob_count = list_len(blob_hashes),
         t_max_fee = max_fee,
         t_max_blob_fee = max_blob_fee,
@@ -599,33 +627,44 @@ function SYSTEM_ADDRESS() -> address = 0xfffffffffffffffffffffffffffffffffffffff
 function BEACON_ROOTS_ADDR() -> address = 0x000f3df6d732807ef1319fb7b8bb8522d0beac02
 function HISTORY_STORAGE_ADDR() -> address = 0x0000f90827f1c53a10cb7a02335b175320002935
 
+/* Enter a top-level protocol system-call frame.
+ *
+ * The caller stages and activates txdata slot 0 before entering this helper.
+ * Keeping frame initialization in one place gives the block driver a named
+ * boundary: pre-transaction and post-transaction system calls differ in
+ * validation policy, not in execution-frame construction.
+ */
+function enter_system_call_frame(tgt : address, input_len : int) -> unit = {
+    k_snapshot();
+    pc = 0;
+    call_depth = 0;
+    gas_remaining = to_gas(30000000);
+    stack_clear();
+    mem_clear();
+    hr_reset();
+    memory_size = 0;
+    frame_status = Running();
+    cd_set_tx(); /* AFTER mem_clear: it points the base frame's calldata at the slot */
+    message =
+        struct {
+            msg_caller = SYSTEM_ADDRESS(),
+            msg_address = tgt,
+            msg_code_address = tgt,
+            msg_value = ZERO_WORD,
+            msg_data_len = input_len,
+            msg_is_static = false,
+            msg_depth = 0,
+        };
+    frame_code_addr(tgt)
+}
+
 function system_call(tgt : address, input : bits(256)) -> unit = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         () /* system contract absent -> skip (EIP-4788 / EIP-2935) */
     } else {
         txdata_set_input(0, word_to_bytes32(input)); /* the call's 32-byte calldata */
         let _ = txdata_activate(0);
-        k_snapshot();
-        pc = 0;
-        call_depth = 0;
-        gas_remaining = to_gas(30000000);
-        stack_clear();
-        mem_clear();
-        hr_reset();
-        memory_size = 0;
-        frame_status = Running();
-        cd_set_tx(); /* AFTER mem_clear: it points the base frame's calldata at the slot */
-        message =
-            struct {
-                msg_caller = SYSTEM_ADDRESS(),
-                msg_address = tgt,
-                msg_code_address = tgt,
-                msg_value = ZERO_WORD,
-                msg_data_len = 32,
-                msg_is_static = false,
-                msg_depth = 0,
-            };
-        frame_code_addr(tgt);
+        enter_system_call_frame(tgt, 32);
         interpret();
         if frame_succeeded() then {
             k_commit()
@@ -651,27 +690,7 @@ function system_call_checked(tgt : address) -> bool = {
     } else {
         txdata_set_input(0, [||]); /* empty calldata: the SYSTEM caller dequeues */
         let _ = txdata_activate(0);
-        k_snapshot();
-        pc = 0;
-        call_depth = 0;
-        gas_remaining = to_gas(30000000);
-        stack_clear();
-        mem_clear();
-        hr_reset();
-        memory_size = 0;
-        frame_status = Running();
-        cd_set_tx();
-        message =
-            struct {
-                msg_caller = SYSTEM_ADDRESS(),
-                msg_address = tgt,
-                msg_code_address = tgt,
-                msg_value = ZERO_WORD,
-                msg_data_len = 0,
-                msg_is_static = false,
-                msg_depth = 0,
-            };
-        frame_code_addr(tgt);
+        enter_system_call_frame(tgt, 0);
         interpret();
         if frame_succeeded() then {
             k_commit();
@@ -704,6 +723,161 @@ function input_well_formed() -> bool = {
             (o0 == 16) & (o0 <= o1) & (o1 <= o2) & (o2 <= o3) & (2 + o3 <= len) & (emod_int(len - (2 + o3), 65) == 0)
         }
     }
+}
+
+struct BlockExecutionResult = {
+    ber_all_ok : bool,
+    ber_gas_acc : int,
+    ber_blob_gas_acc : int,
+    ber_tx0_to : address,
+    ber_block_gas_overflow : bool,
+    ber_blob_gas_overflow : bool,
+}
+
+/* Authenticate the pre-state witness, harvest storage witnesses, then reset the
+ * execution overlay. This is the block-level pre-state obligation consumed by
+ * later stateless reads and the post-state root pass.
+ */
+function authenticate_parent_state() -> unit = {
+    build_node_db();
+    slotdb_reset();
+    pa_reset();
+    ps_reset();
+    register_witness_codes();
+    let sr = parent_state_root();
+    if witness_reroot(sr) != sr then {
+        k_witness_bad = true
+    };
+    harvest_all_storage();
+    k_world_reset()
+}
+
+function current_block_env() -> BlockEnv =
+    struct {
+        be_number = word_of_int(pl_block_number()),
+        be_timestamp = word_of_int(pl_timestamp()),
+        be_gas_limit = word_of_int(pl_gas_limit()),
+        be_coinbase = pl_fee_recipient(),
+        be_base_fee = pl_base_fee(),
+        be_prev_randao = pl_prev_randao(),
+        be_chain_id = word_of_int(cc_chain_id()),
+        be_blob_base_fee = word_of_int(blob_base_fee(pl_excess_blob_gas())),
+        be_excess_blob_gas = word_of_int(pl_excess_blob_gas()),
+        be_slot = word_of_int(pl_slot_number()),
+    }
+
+function parent_header_int_field(idx : int) -> int = {
+    let items = rlp_node_items(ssz_witness_header(wit_n_headers() - 1));
+    rlp_field_int(list_nth(items, idx, RLP_NONE))
+}
+
+function expected_payload_excess_blob_gas() -> int =
+    next_excess_blob_gas(parent_header_int_field(18), parent_header_int_field(17), parent_header_int_field(15))
+
+function run_block_start_system_calls() -> unit = {
+    /* EIP-4788 / EIP-2935: write the parent beacon-block root and parent block
+       hash into their system contracts before the transactions run. */
+    system_call(BEACON_ROOTS_ADDR(), ssz_bytes32(npr_start() + 8)); /* parent_beacon_block_root */
+    system_call(HISTORY_STORAGE_ADDR(), ssz_bytes32(payload_start() + 0)) /* parent_hash */
+}
+
+function execute_block_transactions(n_txs : int, block_gas_limit : int) -> BlockExecutionResult = {
+    auth_ok = true; /* reset; decode_tx_ssz folds each tx's pubkey authentication in */
+    var all_ok : bool = true;
+    var gas_acc : int = 0;
+    var blob_gas_acc : int = 0;
+    var tx0_to : address = ZERO_ADDR; /* tx 0 recipient, for the storage0 fact */
+    var block_gas_overflow : bool = false;
+    var blob_gas_overflow : bool = false;
+
+    /* EIP-7778 block gas accounting: a tx whose gas limit exceeds the block's
+       remaining gas raises GasUsedExceedsLimitError -> the whole block is
+       invalid. EELS performs this check BEFORE touching the tx's state, so the
+       witness omits the offending tx's proofs; the guest must likewise refrain
+       from executing it (and every later tx), else it over-reads the witness
+       and aborts on a node EELS never proved. */
+    foreach (i from 0 to (n_txs - 1)) {
+        if not_bool(block_gas_overflow | blob_gas_overflow) then {
+            let tx = decode_tx_ssz(i);
+            let tx_blob_gas = tx.t_blob_count * GAS_PER_BLOB;
+            if i == 0 then {
+                tx0_to = tx.t_to
+            };
+            if tx.t_gas_limit > block_gas_limit - gas_acc then {
+                block_gas_overflow = true
+            } else if tx_blob_gas > blob_max_gas_per_block() - blob_gas_acc then {
+                blob_gas_overflow = true
+            } else {
+                let r = process_transaction(tx);
+                all_ok = all_ok & r.rc_valid;
+                gas_acc = gas_acc + r.rc_block_gas;
+                if r.rc_valid then {
+                    blob_gas_acc = blob_gas_acc + tx_blob_gas
+                }
+            }
+        }
+    };
+    struct {
+        ber_all_ok = all_ok & not_bool(block_gas_overflow) & not_bool(blob_gas_overflow),
+        ber_gas_acc = gas_acc,
+        ber_blob_gas_acc = blob_gas_acc,
+        ber_tx0_to = tx0_to,
+        ber_block_gas_overflow = block_gas_overflow,
+        ber_blob_gas_overflow = blob_gas_overflow,
+    }
+}
+
+function apply_withdrawals() -> unit = {
+    foreach (i from 0 to (pl_n_withdrawals() - 1)) {
+        /* EIP-4895: the withdrawal `amount` field is denominated in Gwei; the
+           credited balance is amount * 10^9 wei. */
+        k_add_balance(withdrawal_addr(i), word_of_int(withdrawal_amount(i) * 1000000000))
+    }
+}
+
+function run_checked_block_end_system_calls(all_ok : bool) -> bool = {
+    /* EIP-7002 / EIP-7251: dequeue the withdrawal + consolidation requests via a
+       CHECKED system call to each predeploy (clearing their queue storage). EELS
+       reaches this only if no earlier step raised, so run it only while the block
+       is still valid; a missing predeploy or a failed call invalidates the block. */
+    if all_ok then {
+        let rw = system_call_checked(WITHDRAWAL_REQUEST_ADDR());
+        let rc = system_call_checked(CONSOLIDATION_REQUEST_ADDR());
+        all_ok & rw & rc
+    } else {
+        false
+    }
+}
+
+function validate_block_outputs(exec_ok : bool, block_result : BlockExecutionResult) -> bool = {
+    /* S5: stateless validation outcome (a failure is a NORMAL result -- the guest
+       reports successful_validation=false, it does not abort):
+         - chain config selects the Amsterdam fork
+         - the witness headers are contiguous
+         - every tx's witness public key is authenticated against its signature
+         - every tx is VALID/applicable (a reverting valid tx keeps the block valid)
+         - the recomputed post-state root commits to payload.state_root */
+    let fork_ok = cc_fork() == 20; /* canonical ProtocolFork index for Amsterdam
+                                   (execution-specs@02c6c2510: enum pruned, Osaka=17 BPO1=18 BPO2=19
+                                   Amsterdam=20; was 24 in tests-zkevm@v0.4.1). */
+    let active_ok = cc_activation_active();
+    let cfg_ok = fork_ok & active_ok;
+
+    let hdr_ok = headers_ok();
+    let gas_used_ok = block_result.ber_gas_acc == pl_gas_used();
+    let blob_gas_used_ok = block_result.ber_blob_gas_acc == pl_blob_gas_used();
+    let excess_blob_gas_ok = pl_excess_blob_gas() == expected_payload_excess_blob_gas();
+    let computed_root = compute_state_root_overlay();
+    let expected_root = pl_state_root();
+    let poststate_ok = computed_root == expected_root;
+
+    /* k_witness_bad: a deficient/inconsistent witness proof (missing trie node,
+       a pre/post storage trie that does not re-root) -- the block cannot be
+       validated, so it is invalid (EIP-8025 optional-proofs negative tests). */
+    /* EIP-7928: the block access list must not exceed block_gas_limit / 2000 items. */
+    let bal_limit = ediv_int(pl_gas_limit(), 2000);
+    let bal_ok : bool = bal_item_count() <= bal_limit;
+    cfg_ok & hdr_ok & auth_ok & exec_ok & gas_used_ok & blob_gas_used_ok & excess_blob_gas_ok & poststate_ok & bal_ok & not_bool(k_witness_bad)
 }
 
 /* canonical "invalid input" output: a 32-byte ZERO new_payload_request_root,
@@ -780,40 +954,8 @@ function main() -> unit = {
     };
 
     /* S2f: execute the block decoded from private input against witness state */
-    build_node_db();
-    slotdb_reset();
-    pa_reset();
-    ps_reset();
-    register_witness_codes();
-    let sr = parent_state_root();
-
-    /* Stage 3+4: re-root the witness via the stack builder and validate it against
-       the committed parent.state_root (the one-shot pre-state validation); the walk
-       records each account leaf's span into the acctdb (for lazy O(1) account
-       reads). Then authenticate + harvest every account's storage trie into the
-       slot store (driven by the acctdb): the witness-proven pre-state storage that
-       backs stateless reads and the post-state root. */
-    /* the witness must re-root to the committed parent.state_root; if it does
-       not (a deficient/inconsistent proof), the block is invalid (valid=false)
-       -- a NORMAL failure outcome, reported rather than aborted on. */
-    if witness_reroot(sr) != sr then {
-        k_witness_bad = true
-    };
-    harvest_all_storage();
-    k_world_reset();
-
-    let env : BlockEnv = struct {
-            be_number = word_of_int(pl_block_number()),
-            be_timestamp = word_of_int(pl_timestamp()),
-            be_gas_limit = word_of_int(pl_gas_limit()),
-            be_coinbase = pl_fee_recipient(),
-            be_base_fee = pl_base_fee(),
-            be_prev_randao = pl_prev_randao(),
-            be_chain_id = word_of_int(cc_chain_id()),
-            be_blob_base_fee = word_of_int(blob_base_fee(pl_excess_blob_gas())),
-            be_excess_blob_gas = word_of_int(pl_excess_blob_gas()),
-            be_slot = word_of_int(pl_slot_number()),
-        };
+    authenticate_parent_state();
+    let env : BlockEnv = current_block_env();
 
     /* Arm stateless mode: the witness now backs the base layer for BOTH accounts
        and storage. A touched account is materialized from its acctdb span on first
@@ -829,87 +971,15 @@ function main() -> unit = {
        This is the single block driver -- the EEST runner shares process_transaction
        for its single-tx state-test cases. */
     k_set_block(env);
+    run_block_start_system_calls();
 
-    /* EIP-4788 / EIP-2935: write the parent beacon-block root and parent block
-       hash into their system contracts before the transactions run. */
-    system_call(BEACON_ROOTS_ADDR(), ssz_bytes32(npr_start() + 8)); /* parent_beacon_block_root */
-    system_call(HISTORY_STORAGE_ADDR(), ssz_bytes32(payload_start() + 0)); /* parent_hash */
+    let block_result = execute_block_transactions(pl_n_txs(), pl_gas_limit());
+    apply_withdrawals();
+    let exec_ok : bool = run_checked_block_end_system_calls(block_result.ber_all_ok);
+    let valid : bool = validate_block_outputs(exec_ok, block_result);
 
-    let n_txs = pl_n_txs();
-    auth_ok = true; /* reset; decode_tx_ssz folds each tx's pubkey authentication in */
-    var all_ok : bool = true;
-    var gas_acc : int = 0;
-    var tx0_to : address = ZERO_ADDR; /* tx 0 recipient, for the storage0 fact */
-    let block_gas_limit = pl_gas_limit();
-
-    /* EIP-7778 block gas accounting: a tx whose gas limit exceeds the block's
-       remaining gas raises GasUsedExceedsLimitError -> the whole block is
-       invalid. EELS performs this check BEFORE touching the tx's state, so the
-       witness omits the offending tx's proofs; the guest must likewise refrain
-       from executing it (and every later tx), else it over-reads the witness
-       and aborts on a node EELS never proved. */
-    var block_gas_overflow : bool = false;
-    foreach (i from 0 to (n_txs - 1)) {
-        if not_bool(block_gas_overflow) then {
-            let tx = decode_tx_ssz(i);
-            if i == 0 then {
-                tx0_to = tx.t_to
-            };
-            if tx.t_gas_limit > block_gas_limit - gas_acc then {
-                block_gas_overflow = true
-            } else {
-                let r = process_transaction(tx);
-                all_ok = all_ok & r.rc_valid;
-                gas_acc = gas_acc + r.rc_block_gas
-            }
-        }
-    };
-    all_ok = all_ok & not_bool(block_gas_overflow);
-    foreach (i from 0 to (pl_n_withdrawals() - 1)) {
-        /* EIP-4895: the withdrawal `amount` field is denominated in Gwei; the
-           credited balance is amount * 10^9 wei. */
-        k_add_balance(withdrawal_addr(i), word_of_int(withdrawal_amount(i) * 1000000000))
-    };
-
-    /* EIP-7002 / EIP-7251: dequeue the withdrawal + consolidation requests via a
-       CHECKED system call to each predeploy (clearing their queue storage). EELS
-       reaches this only if no earlier step raised, so run it only while the block
-       is still valid; a missing predeploy or a failed call invalidates the block. */
-    if all_ok then {
-        let rw = system_call_checked(WITHDRAWAL_REQUEST_ADDR());
-        let rc = system_call_checked(CONSOLIDATION_REQUEST_ADDR());
-        all_ok = all_ok & rw & rc
-    };
-
-    /* S5: stateless validation outcome (a failure is a NORMAL result -- the guest
-       reports successful_validation=false, it does not abort):
-         - chain config selects the Amsterdam fork
-         - the witness headers are contiguous
-         - every tx's witness public key is authenticated against its signature
-         - every tx is VALID/applicable (a reverting valid tx keeps the block valid)
-         - the recomputed post-state root commits to payload.state_root */
-    let cfg_ok = (cc_fork() == 20) & cc_activation_active(); /* canonical ProtocolFork index for Amsterdam
-                                                            (execution-specs@02c6c2510: enum pruned, Osaka=17 BPO1=18 BPO2=19
-                                                            Amsterdam=20; was 24 in tests-zkevm@v0.4.1). */
-
-    let hdr_ok = headers_ok();
-
-    /* every transaction must be VALID (applicable), folded over the block: an
-       INVALID tx (bad nonce/balance/intrinsic/floor/fee) makes the block
-       invalid, but a valid tx that reverts or OOGs does NOT (rc_valid, not
-       rc_success). */
-    let exec_ok : bool = all_ok;
-    let poststate_ok = compute_state_root_hb() == pl_state_root();
-
-    /* k_witness_bad: a deficient/inconsistent witness proof (missing trie node,
-       a pre/post storage trie that does not re-root) -- the block cannot be
-       validated, so it is invalid (EIP-8025 optional-proofs negative tests). */
-    /* EIP-7928: the block access list must not exceed block_gas_limit / 2000 items. */
-    let bal_ok : bool = bal_item_count() <= ediv_int(pl_gas_limit(), 2000);
-    let valid : bool = cfg_ok & hdr_ok & auth_ok & exec_ok & poststate_ok & bal_ok & not_bool(k_witness_bad);
-
-    let stored = k_storage_get(tx0_to, word_of_int(0));
-    let gas_used = to_gas(gas_acc);
+    let stored = k_storage_get(block_result.ber_tx0_to, word_of_int(0));
+    let gas_used = to_gas(block_result.ber_gas_acc);
     let wbal = kget(withdrawal_addr(0)).acc_balance;
     let cbbal = kget(pl_fee_recipient()).acc_balance;
 

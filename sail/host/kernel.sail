@@ -60,8 +60,10 @@ function k_sload(a : address, s : word) -> word =
             map_load(MAP_STORAGE, a, s)
         }
     }
-function k_sstore(a : address, s : word, v : word) -> unit =
-    map_store(MAP_STORAGE, a, s, v) /* writes the top overlay layer; revert discards it */
+function k_sstore(a : address, s : word, v : word) -> unit = {
+    map_store(MAP_STORAGE, a, s, v); /* writes the top overlay layer; revert discards it */
+    kset(a, kget(a)) /* storage-root changes require a fresh account trie leaf */
+}
 
 /* EIP-2200 "original" value: the slot at tx start = the BASE layer (committed
  * prior txs were pop_commit-merged in). A slot never committed to the base is,
@@ -123,16 +125,21 @@ function k_account_is_empty(a : address) -> bool = {
 function k_account_occupied(a : address) -> bool = {
     let acc = kget(a);
     let has_code : bool = acc.acc_codehash != KECCAK_EMPTY;
-    has_code | (acc.acc_nonce != 0) | map_has_addr(MAP_STORAGE, a)
+    let has_storage : bool = (acc.acc_storage_root != EMPTY_TRIE_ROOT) | storage_has_live_addr(a);
+    has_code | (acc.acc_nonce != 0) | has_storage
 }
 
 /* Move `v` wei from src to dst (the value field of a CALL or a tx). Both
  * balances are journaled; the EVM checks sufficiency before calling. */
 function k_transfer(src : address, dst : address, v : word) -> unit = {
-    jpush(JAcct(src, kget(src)));
-    jpush(JAcct(dst, kget(dst)));
-    kset(src, { kget(src) with acc_balance = alu_sub(kget(src).acc_balance, v) });
-    kset(dst, { kget(dst) with acc_balance = alu_add(kget(dst).acc_balance, v) })
+    if word_is_zero(v) | (src == dst) then {
+        ()
+    } else {
+        jpush(JAcct(src, kget(src)));
+        jpush(JAcct(dst, kget(dst)));
+        kset(src, { kget(src) with acc_balance = alu_sub(kget(src).acc_balance, v) });
+        kset(dst, { kget(dst) with acc_balance = alu_add(kget(dst).acc_balance, v) })
+    }
 }
 
 /* Increment an account's nonce (sender per tx, creator at CREATE/CREATE2). */
@@ -220,25 +227,33 @@ function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
 function k_seed_account(a : address, nonce : int, bal : word, c : list(byte)) -> unit = {
     let h : hash = keccak256(c);
     cs_store_code(h, c);
-    kset(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = h, acc_storage_root = EMPTY_TRIE_ROOT })
+    acc_seed(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = h, acc_storage_root = EMPTY_TRIE_ROOT })
 }
 
 /* seed an account whose code is already in the store (a stateless witness view):
  * the codeHash and pre-state storage root are given, no bytes are streamed. */
 function k_seed_account_hashed(a : address, nonce : int, bal : word, sroot : hash, codehash : hash) -> unit =
-    kset(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = codehash, acc_storage_root = sroot })
+    acc_seed(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = codehash, acc_storage_root = sroot })
 function k_seed_storage(a : address, s : word, v : word) -> unit =
     map_store(MAP_STORAGE, a, s, v) /* seeds the base layer (only layer live here) */
 
 /* single-account balance credit/debit (gas fees, the coinbase priority-fee
  * payment, withdrawals); both journal the prior account for frame revert. */
 function k_add_balance(a : address, v : word) -> unit = {
-    jpush(JAcct(a, kget(a)));
-    kset(a, { kget(a) with acc_balance = alu_add(kget(a).acc_balance, v) })
+    if word_is_zero(v) then {
+        ()
+    } else {
+        jpush(JAcct(a, kget(a)));
+        kset(a, { kget(a) with acc_balance = alu_add(kget(a).acc_balance, v) })
+    }
 }
 function k_sub_balance(a : address, v : word) -> unit = {
-    jpush(JAcct(a, kget(a)));
-    kset(a, { kget(a) with acc_balance = alu_sub(kget(a).acc_balance, v) })
+    if word_is_zero(v) then {
+        ()
+    } else {
+        jpush(JAcct(a, kget(a)));
+        kset(a, { kget(a) with acc_balance = alu_sub(kget(a).acc_balance, v) })
+    }
 }
 
 /* --- block / tx environment reads (NUMBER, TIMESTAMP, COINBASE, BASEFEE,
@@ -342,8 +357,12 @@ function k_was_created(a : address) -> bool = addr_in(k_created, a)
  * balance is forced to 0 after the transfer, so a self-beneficiary transfer
  * burns the ether (journaled; a frame revert restores it). */
 function k_zero_balance(a : address) -> unit = {
-    jpush(JAcct(a, kget(a)));
-    kset(a, { kget(a) with acc_balance = ZERO_WORD })
+    if word_is_zero(kget(a).acc_balance) then {
+        ()
+    } else {
+        jpush(JAcct(a, kget(a)));
+        kset(a, { kget(a) with acc_balance = ZERO_WORD })
+    }
 }
 
 /* delete an account outright: drop it from the acctmap and wipe its storage.
@@ -361,19 +380,19 @@ function k_account_delete(a : address) -> unit = {
     map_wipe_addr(MAP_STORAGE, a)
 }
 
-/* EIP-6780 tx-end finalization: an account is actually DELETED only if it was
- * both CREATEd and SELFDESTRUCTed in this same tx (EELS: destroy_account per
- * tx_output.accounts_to_delete). The balance already moved at SELFDESTRUCT
- * time. Call AFTER the tx-level commit, so only surviving (committed)
- * selfdestructs are in k_selfdestr; a pre-existing selfdestructed account is
- * left in place (code/nonce/storage kept). */
+/* SELFDESTRUCT tx-end finalization. Before Cancun, every surviving
+ * SELFDESTRUCT deletes the originator. Cancun+ applies EIP-6780: an account is
+ * actually DELETED only if it was both CREATEd and SELFDESTRUCTed in this same
+ * tx (EELS: destroy_account per tx_output.accounts_to_delete). The balance
+ * already moved at SELFDESTRUCT time. Call AFTER the tx-level commit, so only
+ * surviving (committed) selfdestructs are in k_selfdestr. */
 function k_finalize_selfdestructs() -> unit = {
     var xs : list(address) = k_selfdestr;
     var more : bool = true;
     while more do {
         match xs {
             a :: r => {
-                if k_was_created(a) then {
+                if (k_fork < FORK_CANCUN) | k_was_created(a) then {
                     k_account_delete(a)
                 };
                 xs = r

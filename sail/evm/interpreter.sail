@@ -110,9 +110,21 @@ function decode_simple(b : int) -> ast =
                     69 => GASLIMIT(),
                     70 => CHAINID(),
                     71 => SELFBALANCE(),
-                    72 => BASEFEE(),
-                    73 => BLOBHASH(),
-                    74 => BLOBBASEFEE(),
+                    72 => if k_fork >= FORK_LONDON then {
+                        BASEFEE()
+                    } else {
+                        INVALID()
+                    },
+                    73 => if k_fork >= FORK_CANCUN then {
+                        BLOBHASH()
+                    } else {
+                        INVALID()
+                    },
+                    74 => if k_fork >= FORK_CANCUN then {
+                        BLOBBASEFEE()
+                    } else {
+                        INVALID()
+                    },
                     75 => if k_fork >= FORK_AMSTERDAM then {
                         SLOTNUM()
                     } else {
@@ -130,9 +142,21 @@ function decode_simple(b : int) -> ast =
                     89 => MSIZE(),
                     90 => GAS(),
                     91 => JUMPDEST(),
-                    92 => TLOAD(),
-                    93 => TSTORE(),
-                    94 => MCOPY(),
+                    92 => if k_fork >= FORK_CANCUN then {
+                        TLOAD()
+                    } else {
+                        INVALID()
+                    },
+                    93 => if k_fork >= FORK_CANCUN then {
+                        TSTORE()
+                    } else {
+                        INVALID()
+                    },
+                    94 => if k_fork >= FORK_CANCUN then {
+                        MCOPY()
+                    } else {
+                        INVALID()
+                    },
                     240 => CREATE(),
                     241 => CALL(),
                     242 => CALLCODE(),
@@ -159,7 +183,9 @@ function fetch() -> ast = {
     } else {
         let b = unsigned(code_byte(pc));
         pc = pc + 1;
-        if b >= 95 & b <= 127 then {
+        if (b == 95) & (k_fork < FORK_SHANGHAI) then {
+            INVALID()
+        } else if b >= 95 & b <= 127 then {
             let n = b - 95;
             let v = read_push(n);
             pc = pc + n;
@@ -655,10 +681,12 @@ function run_create(is2 : bool) -> unit = {
                 let dep_len = unsigned(hr_pending_len());
                 let deposit = G_codedeposit * dep_len;
 
-                /* deployed-code validity: within the EIP-170 size limit and not
-                   beginning with 0xEF (EIP-3541, the reserved EOF prefix). */
+                /* deployed-code validity: within the EIP-170 size limit and,
+                   from London onward, not beginning with 0xEF (EIP-3541, the
+                   reserved EOF prefix). */
                 let code_ok = (dep_len <= max_code_size()) &
-                        ((dep_len == 0) | (hr_pending_byte(get_slice_int(64, 0, 0)) != 0xef));
+                        ((k_fork < FORK_LONDON) | (dep_len == 0) |
+                         (hr_pending_byte(get_slice_int(64, 0, 0)) != 0xef));
 
                 /* leave the initcode frame: restore the parent's registers. */
                 pc = s_pc;
