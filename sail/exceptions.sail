@@ -46,8 +46,8 @@ union FrameStatus = {
 /* The result handed back to a caller when a sub-frame finishes:
  * success flag + returndata + gas left + whether state must roll back. */
 struct CallOutcome = {
-  co_success    : bool,
-  co_returndata : list(byte),
-  co_gas_left   : gas,
-  co_reverted   : bool
+  success    : bool,
+  returndata : list(byte),
+  gas_left   : gas,
+  reverted   : bool
 }

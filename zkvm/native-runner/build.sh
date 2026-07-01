@@ -96,7 +96,7 @@ done
 
 # --- 6. C host backends + acc_shim (acc_shim WITHOUT -DACCEL_MMIO) ----------
 HOST_OBJS=()
-for hc in host_mem host_map host_stack host_word host_code host_nodedb host_acctmap host_preimage acc_shim; do
+for hc in memory transient_storage state_db stack code_db trie_node_db acc_shim; do
   o="$BUILD/$hc.o"
   "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$FFI" -c "$FFI/$hc.c" -o "$o"
   HOST_OBJS+=("$o")

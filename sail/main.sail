@@ -62,11 +62,11 @@ function keccak_selfcheck() -> unit = {
     )
 }
 
-/* register a code blob in the code db keyed by codeHash, as a (off,len) view
- * into the witness bytes -- (hash hi..lo, off, len) split across six u64s. */
+/* register a code blob in the code db keyed by codeHash, as an immutable
+ * witness input span -- (hash hi..lo, off, len) split across six u64s. */
 val cs_view_input = impure { _: "cs_view_input" } : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
 
-/* store the code for codeHash `h` as a VIEW of the witness span [off, off+len) */
+/* store the code for codeHash `h` as an immutable witness span [off, off+len) */
 function cs_view_witness(h : hash, off : int, len : int) -> unit =
     cs_view_input(
         h[255 .. 192],
@@ -77,10 +77,11 @@ function cs_view_witness(h : hash, off : int, len : int) -> unit =
         get_slice_int(64, len, 0),
     )
 
-/* Register every witness code blob into the (hash-keyed) C code store as a view
- * into the witness bytes -- no copy, no Sail list. Each blob is hashed once (the
- * content-address authentication); execution then resolves an account's code by
- * its code_hash from the store, so seeding needs no per-account span lookup. */
+/* Register every witness code blob into the (hash-keyed) C code store as an
+ * immutable input span -- no byte copy, no Sail list. Each blob is hashed once
+ * (the content-address authentication); execution then resolves an account's
+ * code by its code_hash from the store, so seeding needs no per-account span
+ * lookup. */
 function register_witness_codes() -> unit = {
     let n = wit_n_codes();
     foreach (i from 0 to (n - 1)) {
@@ -98,7 +99,7 @@ function headers_ok() -> bool = {
     } else {
         var ok : bool = true;
         foreach (i from 1 to (n - 1)) {
-            let parent_hash = bytes_be256(list_nth(rlp_node_items(ssz_witness_header(i)), 0, RLP_NONE).rf_content);
+            let parent_hash = bytes_be256(list_nth(rlp_node_items(ssz_witness_header(i)), 0, RLP_NONE).content);
             let prev_hash = keccak256(ssz_witness_header(i - 1));
             if parent_hash != prev_hash then {
                 ok = false
@@ -237,10 +238,10 @@ function rlp_uint_span(off : int, len : int) -> int = {
  * gas_price, passed here as max_fee = max_priority = gas_price so this recovers
  * (gas_price, gas_price - base_fee). The priority is clamped at 0 so an invalid
  * sub-base-fee price (rejected later by the validity check) never underflows. */
-function eff_gas_price(max_fee : word, max_prio : word) -> (word, word) = {
-    let bf = unsigned(k_block.be_base_fee);
+function eff_gas_price(max_fee : word, max_priority_fee : word) -> (word, word) = {
+    let bf = unsigned(k_block.base_fee);
     let cap = unsigned(max_fee);
-    let tip = unsigned(max_prio);
+    let tip = unsigned(max_priority_fee);
     let price = if cap < bf + tip then {
             cap
         } else {
@@ -259,26 +260,29 @@ function eff_gas_price(max_fee : word, max_prio : word) -> (word, word) = {
  * Transaction and intrinsic-gas accounting use: the addresses (one per entry) and
  * the (address, slot) pairs. Walked by offset over the witness bytes, no copy. */
 function decode_access_list(cs : int, cl : int) -> (list(address), list(SlotKey)) = {
-    var addrs : list(address) = [||];
-    var keys : list(SlotKey) = [||];
+    var addresses : list(address) = [||];
+    var storage_slots : list(SlotKey) = [||];
     var pos : int = cs;
     let stop = cs + cl;
     while pos < stop do {
         let (_, ecs, ecl) = rlp_hdr_at(pos); /* one entry = [addr, [keys]] */
         let (_, ado, adl) = rlp_hdr_at(ecs); /* the 20-byte address         */
         let addr = word_to_address(word_of_int(rlp_uint_span(ado, adl)));
-        addrs = list_append(addrs, [|addr|]);
+        addresses = list_append(addresses, [|addr|]);
         let (_, kcs, kcl) = rlp_hdr_at(ado + adl); /* the entry's storage-key list */
         var kpos : int = kcs;
         let kstop = kcs + kcl;
         while kpos < kstop do {
             let (_, ko, kl) = rlp_hdr_at(kpos); /* one 32-byte key */
-            keys = list_append(keys, [|struct { sk_addr = addr, sk_slot = word_of_int(rlp_uint_span(ko, kl)) }|]);
+            storage_slots = list_append(
+                storage_slots,
+                [|struct { address = addr, slot = word_of_int(rlp_uint_span(ko, kl)) }|],
+            );
             kpos = ko + kl
         };
         pos = ecs + ecl
     };
-    (addrs, keys)
+    (addresses, storage_slots)
 }
 
 /* Decode an RLP list of 32-byte words (content span cs, cl) -- the EIP-4844
@@ -414,7 +418,7 @@ function auth_signing_hash(toff : int) -> bits(256) = {
 }
 
 /* decode an EIP-7702 authorization list (content span cs,cl) into Authorizations,
- * recovering each authority. au_valid_sig records tuple-local signature validity
+ * recovering each authority. valid_sig records tuple-local signature validity
  * (recoverable, low-s, r/y parity ranges, incrementable nonce); process_auth then
  * applies the chain-id / account nonce / code checks. */
 function decode_auth_list(cs : int, cl : int) -> list(Authorization) = {
@@ -443,7 +447,7 @@ function decode_auth_list(cs : int, cl : int) -> list(Authorization) = {
             out,
             [|
                 struct {
-                    au_valid_sig =
+                    valid_sig =
                         ok &
                         (y == 0 | y == 1) &
                         (unsigned(r) >= 1) &
@@ -451,10 +455,10 @@ function decode_auth_list(cs : int, cl : int) -> list(Authorization) = {
                         (unsigned(s) >= 1) &
                         (unsigned(s) <= unsigned(SECP_N_HALF)) &
                         (auth_nonce < 18446744073709551615),
-                    au_authority = authority,
-                    au_address = word_to_address(word_of_int(rlp_uint_span(a1o, a1l))),
-                    au_nonce = auth_nonce,
-                    au_chain_id = rlp_uint_span(c0o, c0l),
+                    authority = authority,
+                    address = word_to_address(word_of_int(rlp_uint_span(a1o, a1l))),
+                    nonce = auth_nonce,
+                    chain_id = rlp_uint_span(c0o, c0l),
                 },
             |],
         );
@@ -466,7 +470,7 @@ function decode_auth_list(cs : int, cl : int) -> list(Authorization) = {
 /* Decode transaction `i` straight from the SSZ payload's transactions list, by
  * offset -- no copy. The calldata is the witness bytes themselves: txin_view_input
  * points the (single, reused) input slot at them, so the decoded Transaction
- * carries only scalars (t_index = 0 names that slot). The sender is derived from
+ * carries only scalars (input_index = 0 names that slot). The sender is derived from
  * public_keys[i] (PUBLIC_KEY_BYTES = 65: a 0x04 prefix + the 64-byte X||Y) as
  * keccak(X||Y)[12:]. public_keys is a WITNESS, not trusted: tx_auth_ok (folded into
  * the auth_ok register below) verifies tx i's signature against this key, so a
@@ -517,19 +521,19 @@ function decode_tx_ssz(i : int) -> Transaction = {
     let i_al : int = if ttype == 1 then { 7 } else { 8 }; /* typed only */
 
     let (no, nl) = rlp_field_span(loff, i_nonce);
-    let t_nonce = rlp_uint_span(no, nl);
+    let nonce = rlp_uint_span(no, nl);
     let (xo, xl) = rlp_field_span(loff, i_gas);
-    let t_gas = rlp_uint_span(xo, xl);
+    let transaction_gas_limit = rlp_uint_span(xo, xl);
     let (ao, al2) = rlp_field_span(loff, i_to);
     let is_create = al2 == 0; /* empty `to` field = contract creation */
-    let t_to = word_to_address(word_of_int(rlp_uint_span(ao, al2)));
+    let recipient = word_to_address(word_of_int(rlp_uint_span(ao, al2)));
     let (vo, vl) = rlp_field_span(loff, i_val);
-    let t_value = word_of_int(rlp_uint_span(vo, vl));
+    let value = word_of_int(rlp_uint_span(vo, vl));
     let (do_, dl) = rlp_field_span(loff, i_data);
     let _ = txin_view_input(get_slice_int(64, 0, 0), get_slice_int(64, do_, 0), get_slice_int(64, dl, 0));
 
     /* fees: legacy / 2930 carry one gas_price; 1559+ carry (max_priority, max_fee) */
-    let (gas_price, priority, max_fee, max_prio) : (word, word, word, word) = if ttype <= 1 then {
+    let (gas_price, priority, max_fee, max_priority_fee_cap) : (word, word, word, word) = if ttype <= 1 then {
             let (go, gl2) = rlp_field_span(loff, if ttype == 0 then { 1 } else { 2 });
             let gp = word_of_int(rlp_uint_span(go, gl2));
 
@@ -549,7 +553,7 @@ function decode_tx_ssz(i : int) -> Transaction = {
         };
 
     /* EIP-2930 access list (present on every typed envelope) */
-    let (al_addrs, al_keys) : (list(address), list(SlotKey)) = if typed then {
+    let (decoded_access_list_addresses, decoded_access_list_slots) : (list(address), list(SlotKey)) = if typed then {
             let (acs, acl) = rlp_field_span(loff, i_al);
             decode_access_list(acs, acl)
         } else {
@@ -566,7 +570,7 @@ function decode_tx_ssz(i : int) -> Transaction = {
         };
 
     /* EIP-7702 authorization list (field 9 for type-4): recover each authority */
-    let auth_list : list(Authorization) = if ttype == 4 then {
+    let decoded_authorizations : list(Authorization) = if ttype == 4 then {
             let (aucs, aucl) = rlp_field_span(loff, 9);
             decode_auth_list(aucs, aucl)
         } else {
@@ -592,27 +596,27 @@ function decode_tx_ssz(i : int) -> Transaction = {
             );
 
     struct {
-        t_sender = sender,
-        t_nonce = t_nonce,
-        t_gas_price = gas_price,
-        t_priority_fee = priority,
-        t_gas_limit = to_gas(t_gas),
-        t_is_create = is_create,
-        t_to = t_to,
-        t_value = t_value,
-        t_index = 0,
-        t_al_addrs = al_addrs,
-        t_al_keys = al_keys,
-        t_is_access_list = ttype == 1,
-        t_is_dynamic_fee = (ttype == 2) | (ttype == 3) | (ttype == 4),
-        t_blob_count = list_len(blob_hashes),
-        t_max_fee = max_fee,
-        t_max_blob_fee = max_blob_fee,
-        t_max_priority = max_prio,
-        t_is_setcode = ttype == 4,
-        t_auth_list = auth_list,
-        t_is_blob = ttype == 3,
-        t_blob_hashes = blob_hashes,
+        sender = sender,
+        nonce = nonce,
+        gas_price = gas_price,
+        priority_fee = priority,
+        gas_limit = to_gas(transaction_gas_limit),
+        is_create = is_create,
+        recipient = recipient,
+        value = value,
+        input_index = 0,
+        access_list_addresses = decoded_access_list_addresses,
+        access_list_slots = decoded_access_list_slots,
+        is_access_list = ttype == 1,
+        is_dynamic_fee = (ttype == 2) | (ttype == 3) | (ttype == 4),
+        blob_count = list_len(blob_hashes),
+        max_fee = max_fee,
+        max_blob_fee = max_blob_fee,
+        max_priority_fee = max_priority_fee_cap,
+        is_set_code = ttype == 4,
+        authorizations = decoded_authorizations,
+        is_blob = ttype == 3,
+        blob_hashes = blob_hashes,
     }
 }
 
@@ -647,13 +651,13 @@ function enter_system_call_frame(tgt : address, input_len : int) -> unit = {
     cd_set_tx(); /* AFTER mem_clear: it points the base frame's calldata at the slot */
     message =
         struct {
-            msg_caller = SYSTEM_ADDRESS(),
-            msg_address = tgt,
-            msg_code_address = tgt,
-            msg_value = ZERO_WORD,
-            msg_data_len = input_len,
-            msg_is_static = false,
-            msg_depth = 0,
+            caller = SYSTEM_ADDRESS(),
+            address = tgt,
+            code_address = tgt,
+            value = ZERO_WORD,
+            data_len = input_len,
+            is_static = false,
+            depth = 0,
         };
     frame_code_addr(tgt)
 }
@@ -726,12 +730,12 @@ function input_well_formed() -> bool = {
 }
 
 struct BlockExecutionResult = {
-    ber_all_ok : bool,
-    ber_gas_acc : int,
-    ber_blob_gas_acc : int,
-    ber_tx0_to : address,
-    ber_block_gas_overflow : bool,
-    ber_blob_gas_overflow : bool,
+    all_ok : bool,
+    gas_acc : int,
+    blob_gas_acc : int,
+    first_tx_recipient : address,
+    block_gas_overflow : bool,
+    blob_gas_overflow : bool,
 }
 
 /* Authenticate the pre-state witness, harvest storage witnesses, then reset the
@@ -741,8 +745,6 @@ struct BlockExecutionResult = {
 function authenticate_parent_state() -> unit = {
     build_node_db();
     slotdb_reset();
-    pa_reset();
-    ps_reset();
     register_witness_codes();
     let sr = parent_state_root();
     if witness_reroot(sr) != sr then {
@@ -754,16 +756,16 @@ function authenticate_parent_state() -> unit = {
 
 function current_block_env() -> BlockEnv =
     struct {
-        be_number = word_of_int(pl_block_number()),
-        be_timestamp = word_of_int(pl_timestamp()),
-        be_gas_limit = word_of_int(pl_gas_limit()),
-        be_coinbase = pl_fee_recipient(),
-        be_base_fee = pl_base_fee(),
-        be_prev_randao = pl_prev_randao(),
-        be_chain_id = word_of_int(cc_chain_id()),
-        be_blob_base_fee = word_of_int(blob_base_fee(pl_excess_blob_gas())),
-        be_excess_blob_gas = word_of_int(pl_excess_blob_gas()),
-        be_slot = word_of_int(pl_slot_number()),
+        number = word_of_int(pl_block_number()),
+        timestamp = word_of_int(pl_timestamp()),
+        gas_limit = word_of_int(pl_gas_limit()),
+        coinbase = pl_fee_recipient(),
+        base_fee = pl_base_fee(),
+        prev_randao = pl_prev_randao(),
+        chain_id = word_of_int(cc_chain_id()),
+        blob_base_fee = word_of_int(blob_base_fee(pl_excess_blob_gas())),
+        excess_blob_gas = word_of_int(pl_excess_blob_gas()),
+        slot = word_of_int(pl_slot_number()),
     }
 
 function parent_header_int_field(idx : int) -> int = {
@@ -799,31 +801,31 @@ function execute_block_transactions(n_txs : int, block_gas_limit : int) -> Block
     foreach (i from 0 to (n_txs - 1)) {
         if not_bool(block_gas_overflow | blob_gas_overflow) then {
             let tx = decode_tx_ssz(i);
-            let tx_blob_gas = tx.t_blob_count * GAS_PER_BLOB;
+            let tx_blob_gas = tx.blob_count * GAS_PER_BLOB;
             if i == 0 then {
-                tx0_to = tx.t_to
+                tx0_to = tx.recipient
             };
-            if tx.t_gas_limit > block_gas_limit - gas_acc then {
+            if tx.gas_limit > block_gas_limit - gas_acc then {
                 block_gas_overflow = true
             } else if tx_blob_gas > blob_max_gas_per_block() - blob_gas_acc then {
                 blob_gas_overflow = true
             } else {
                 let r = process_transaction(tx);
-                all_ok = all_ok & r.rc_valid;
-                gas_acc = gas_acc + r.rc_block_gas;
-                if r.rc_valid then {
+                all_ok = all_ok & r.valid;
+                gas_acc = gas_acc + r.block_gas;
+                if r.valid then {
                     blob_gas_acc = blob_gas_acc + tx_blob_gas
                 }
             }
         }
     };
     struct {
-        ber_all_ok = all_ok & not_bool(block_gas_overflow) & not_bool(blob_gas_overflow),
-        ber_gas_acc = gas_acc,
-        ber_blob_gas_acc = blob_gas_acc,
-        ber_tx0_to = tx0_to,
-        ber_block_gas_overflow = block_gas_overflow,
-        ber_blob_gas_overflow = blob_gas_overflow,
+        all_ok = all_ok & not_bool(block_gas_overflow) & not_bool(blob_gas_overflow),
+        gas_acc = gas_acc,
+        blob_gas_acc = blob_gas_acc,
+        first_tx_recipient = tx0_to,
+        block_gas_overflow = block_gas_overflow,
+        blob_gas_overflow = blob_gas_overflow,
     }
 }
 
@@ -864,8 +866,8 @@ function validate_block_outputs(exec_ok : bool, block_result : BlockExecutionRes
     let cfg_ok = fork_ok & active_ok;
 
     let hdr_ok = headers_ok();
-    let gas_used_ok = block_result.ber_gas_acc == pl_gas_used();
-    let blob_gas_used_ok = block_result.ber_blob_gas_acc == pl_blob_gas_used();
+    let gas_used_ok = block_result.gas_acc == pl_gas_used();
+    let blob_gas_used_ok = block_result.blob_gas_acc == pl_blob_gas_used();
     let excess_blob_gas_ok = pl_excess_blob_gas() == expected_payload_excess_blob_gas();
     let computed_root = compute_state_root_overlay();
     let expected_root = pl_state_root();
@@ -959,7 +961,7 @@ function main() -> unit = {
 
     /* Arm stateless mode: the witness now backs the base layer for BOTH accounts
        and storage. A touched account is materialized from its acctdb span on first
-       kget (one keccak, then cached raw in the acctmap); a touched slot resolves
+       load_account (one keccak, then cached raw in the acctmap); a touched slot resolves
        from the harvested slot store on first read (k_sload/k_orig) and is cached
        read-through. Nothing is pre-seeded -- no eager account/slot pass. */
     k_stateless_on();
@@ -975,13 +977,13 @@ function main() -> unit = {
 
     let block_result = execute_block_transactions(pl_n_txs(), pl_gas_limit());
     apply_withdrawals();
-    let exec_ok : bool = run_checked_block_end_system_calls(block_result.ber_all_ok);
+    let exec_ok : bool = run_checked_block_end_system_calls(block_result.all_ok);
     let valid : bool = validate_block_outputs(exec_ok, block_result);
 
-    let stored = k_storage_get(block_result.ber_tx0_to, word_of_int(0));
-    let gas_used = to_gas(block_result.ber_gas_acc);
-    let wbal = kget(withdrawal_addr(0)).acc_balance;
-    let cbbal = kget(pl_fee_recipient()).acc_balance;
+    let stored = k_storage_get(block_result.first_tx_recipient, word_of_int(0));
+    let gas_used = to_gas(block_result.gas_acc);
+    let wbal = load_account(withdrawal_addr(0)).balance;
+    let cbbal = load_account(pl_fee_recipient()).balance;
 
     zkvm_out_gas = gas_used;
     zkvm_out_storage0 = unsigned(stored);

@@ -17,10 +17,20 @@ static const uint8_t *ACC_src = ACC_in;  /* the input bytes: ACC_in, or a source
 
 /* EVM precompiles zero-pad their input to the field layout; read with padding. */
 #ifdef ACCEL_MMIO
-#include "accel_mmio.h"
+static const uintptr_t ACCEL_MMIO_BASE = 0x40000000UL;
+enum {
+  ACC_R_OP = 0,
+  ACC_R_IN = 1,
+  ACC_R_INLEN = 2,
+  ACC_R_OUT = 3,
+  ACC_R_GO = 4,
+  ACC_R_OUTLEN = 5,
+  ACC_R_OK = 6,
+};
+
 /* hand the request to the host accelerator device (no in-guest crypto) */
 static uint64_t accel_dev_call(uint64_t op, const uint8_t *in, uint32_t inlen, uint8_t *out) {
-  volatile uint64_t *d = (volatile uint64_t *)ACCEL_BASE;
+  volatile uint64_t *d = (volatile uint64_t *)ACCEL_MMIO_BASE;
   d[ACC_R_OP] = op;
   d[ACC_R_IN] = (uint64_t)(uintptr_t)in;
   d[ACC_R_INLEN] = inlen;
@@ -66,13 +76,14 @@ static void bls_out_g2(uint32_t off, const uint8_t *b192) {    /* blst 192B (c1,
 unit acc_begin(uint64_t id) { ACC_id = (int)id; ACC_inlen = 0; ACC_outlen = 0; ACC_ok = 1; ACC_src = ACC_in; return UNIT; }
 /* begin + bulk-load the input from EVM memory [off, off+len) -- one memcpy,
  * replacing a per-byte stream of an intermediate Sail list */
-extern const uint8_t *txd_ptr(uint64_t *len);
+extern uint64_t txd_copy(uint8_t *dst, uint64_t cap);
+extern uint64_t txd_length(const unit u);
 /* begin + load the input from the streamed tx-input buffer (tx-to-precompile) */
 unit acc_begin_txd(uint64_t id) {
   acc_begin(id);
-  uint64_t len; const uint8_t *p = txd_ptr(&len);
+  uint64_t len = txd_length(UNIT);
   if (len > ACC_INMAX) len = ACC_INMAX;
-  if (len) memcpy(ACC_in, p, (size_t)len);
+  if (len) txd_copy(ACC_in, len);
   ACC_inlen = (uint32_t)len;
   return UNIT;
 }

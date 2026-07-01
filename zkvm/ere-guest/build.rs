@@ -14,9 +14,11 @@ fn main() {
      .file("generated/zkvm_block.c")        // sail -c zkvm_block.sail (committed by build)
      .file("../runtime/sailfix/sail.c")
      .file(format!("{ffi}/acc_shim.c"))
-     .file(format!("{ffi}/host_mem.c")).file(format!("{ffi}/host_map.c"))
-     .file(format!("{ffi}/host_stack.c")).file(format!("{ffi}/host_word.c"))
-     .file(format!("{ffi}/host_code.c"))
+     .file(format!("{ffi}/memory.c")).file(format!("{ffi}/transient_storage.c"))
+     .file(format!("{ffi}/state_db.c"))
+     .file(format!("{ffi}/stack.c"))
+     .file(format!("{ffi}/code_db.c"))
+     .file(format!("{ffi}/trie_node_db.c"))
      // Crypto: NO in-guest implementation. acc_shim must be built to offload every
      // accelerator op to the zkVM's native crypto precompiles (the ere SDK's proven
      // precompile syscalls) -- the analogue of the spike host-accelerator device.

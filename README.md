@@ -69,14 +69,14 @@ To *run* the model — the generated C compiled natively (`sail256`/`sailfix`) �
 the host's mechanism is backed by C FFI; the Sail definitions stay the
 specification while these provide the data structures underneath it.
 Performance-critical state lives behind C FFI with O(1) operations — EVM
-memory, calldata and returndata (`ffi/host_mem.c`, `ffi/acc_shim.c`), the
-operand stack (`ffi/host_stack.c`), the account code store + per-frame code
-descriptors with prebuilt JUMPDEST bitmaps (`ffi/host_code.c`), and the
-overlay-layered storage / transient storage / warm sets (`ffi/host_map.c`:
-frame revert = discard the top layer; the EIP-2200 "original" value = the
-overlay's base layer). In-memory representations stay unhashed (plain
-address/slot keys, code linked directly); hashing happens only at the write
-boundary (the account's cached codeHash) and the commitment boundary (state
+memory, calldata and returndata (`ffi/memory.c`, `ffi/acc_shim.c`), the
+operand stack (`ffi/stack.c`), the account code store + per-frame code
+descriptors with prebuilt JUMPDEST bitmaps (`ffi/code_db.c`), transient
+storage (`ffi/transient_storage.c`, with frame rollback driven by the Sail
+journal), and account plus persistent storage state (`ffi/state_db.c`, sorted
+cache/update backends keyed by keccak(address) and keccak(slot)). In-memory representations keep raw keys
+alongside secure trie keys; hashing happens at state access setup, the write
+boundary (the account's cached codeHash), and the commitment boundary (state
 root, witness authentication). The Sail semantics is unchanged by these
 backends.
 
@@ -122,10 +122,11 @@ sail/        the specification (evm.sail is the root include)
     rlp.sail  rlp_decode.sail  block_hash.sail  ssz_htr.sail
     mpt.sail           MPT root builder + state trie + stateless witness reads
                        (feed, re-root, fail-closed lookups; C-backed node-db)
-ffi/         C backends: host_mem.c (memory/calldata), host_map.c (overlay
-             maps), host_stack.c (operand stack), host_code.c (code store +
-             frame descriptors + JUMPDEST bitmaps), host_word.c (comparisons),
-             host_nodedb.c (witness node-db), acc_shim.c + zkvm_accelerators.h
+ffi/         C backends: memory.c (memory/calldata), transient_storage.c
+             (transient storage), state_db.c (account and persistent storage
+             cache/update maps), stack.c (operand stack), code_db.c
+             (code store + frame descriptors + JUMPDEST bitmaps), trie_node_db.c
+             (witness node-db), acc_shim.c + zkvm_accelerators.h
              (eth-act zkvm-standards crypto)
 revm-eest/   the EEST harness: run_eest.py (drives sail/runner.sail) + the
              parallel Rust runner (all cores) + stateless/ (witness-reroot gate)

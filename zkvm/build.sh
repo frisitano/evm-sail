@@ -127,9 +127,9 @@ PY
   "$HOSTCXX" -std=c++17 -fPIC -shared -I"$SPIKE_INC" -I"$ROOT/ffi" -undefined dynamic_lookup \
       -o "$ACCEL_SO" "$ROOT/zkvm/accel-device/accel_device.cc" \
       -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB"
-  # 3c. C host backends: memory/calldata, overlay maps, operand stack, word
-  #     predicates, code store + frame descriptors.
-  for hc in host_mem host_map host_stack host_word host_code host_nodedb host_acctmap host_preimage; do
+  # 3c. C host backends: memory/calldata, transient storage, operand stack, code store,
+  #     witness/account databases, and frame descriptors.
+  for hc in memory transient_storage state_db stack code_db trie_node_db; do
     "$GCC" "${CFLAGS[@]}" -I"$lib" \
         -Wno-unused -c "$ROOT/ffi/$hc.c" -o "$BUILD/$hc.o"
   done
@@ -149,10 +149,8 @@ PY
       "$BUILD/zkvm_input_data.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
       "$BUILD/acc_shim.o" \
-      "$BUILD/host_mem.o" "$BUILD/host_map.o" "$BUILD/host_stack.o" \
-      "$BUILD/host_word.o" "$BUILD/host_code.o" "$BUILD/host_nodedb.o" \
-      "$BUILD/host_acctmap.o" \
-      "$BUILD/host_preimage.o" \
+      "$BUILD/memory.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
+      "$BUILD/code_db.o" "$BUILD/trie_node_db.o" \
       "$BUILD/zkvm_block.o" \
       -o "$BUILD/zkvm_guest.elf"
   echo "built $BUILD/zkvm_guest.elf"

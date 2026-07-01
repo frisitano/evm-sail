@@ -11,9 +11,8 @@
 /* Operator grounding: int->bits is get_slice_int; integer div/mod are the  */
 /* Euclidean ediv/emod from <smt.sail> with the truncating/flooring         */
 /* tdiv/tmod /fdiv from arith.sail; subtraction on bits is sub_bits;        */
-/* xor/and/or/not are the *_vec builtins. The signed comparisons and zero   */
-/* test go through the host word predicates (hw_*) to avoid materializing   */
-/* word-to-integer casts.                                                   */
+/* xor/and/or/not are the *_vec builtins. The word comparisons are direct   */
+/* bit-slice definitions rather than opaque host predicates.                */
 /* ======================================================================== */
 
 default Order dec
@@ -47,11 +46,9 @@ type gas = range(0, 9223372036854775807)
 function to_gas(x : int) -> gas =
     if x < 0 then { 0 } else { if x <= 9223372036854775807 then { x } else { 9223372036854775807 } }
 
-/* Native int64 gas subtraction (ffi/host_word.c): gas -> int64_t in the C ABI.
- * Used by charge() where a >= b >= 0 is already proven, so the result is a
- * valid `gas` -- this skips the sail_int round-trip that `to_gas(a - b)` emits
- * (CONVERT_OF + sub_int + to_gas clamp) on every opcode's gas charge. */
-val gas_sub = pure { _: "gas_sub" } : (gas, gas) -> gas
+/* Gas subtraction used by charge(). The caller proves a >= b >= 0; to_gas is
+ * therefore only a typed range guard for the generated code. */
+function gas_sub(a : gas, b : gas) -> gas = to_gas(a - b)
 
 let WORD_BYTES : int = 32
 let WORD_BITS : int = 256
@@ -64,17 +61,35 @@ let TWO_256 : int = 115792089237316195423570985008687907853269984665640564039457
 /* Low 256 bits of a (possibly huge / negative) integer. */
 function word_of_int(n : int) -> word = get_slice_int(256, n, 0)
 
-/* native lbits predicates (ffi/host_word.c): no word -> integer conversion */
-val hw_ult = pure { _: "hw_ult" } : (word, word) -> bool
-val hw_slt = pure { _: "hw_slt" } : (word, word) -> bool
-val hw_iszero = pure { _: "hw_iszero" } : word -> bool
-
 let WORD_ZERO : word = 0x0000000000000000000000000000000000000000000000000000000000000000
 let WORD_ONE : word = 0x0000000000000000000000000000000000000000000000000000000000000001
 
 function word_of_bool(b : bool) -> word = if b then { WORD_ONE } else { WORD_ZERO }
-function word_is_zero(w : word) -> bool = hw_iszero(w)
-function word_nonzero(w : word) -> bool = not_bool(hw_iszero(w))
+function word_is_zero(w : word) -> bool = w == WORD_ZERO
+function word_nonzero(w : word) -> bool = not_bool(word_is_zero(w))
+
+function word64_ult(a : bits(64), b : bits(64)) -> bool = unsigned(a) < unsigned(b)
+
+function word_ult(a : word, b : word) -> bool =
+    if a[255 .. 192] != b[255 .. 192] then {
+        word64_ult(a[255 .. 192], b[255 .. 192])
+    } else if a[191 .. 128] != b[191 .. 128] then {
+        word64_ult(a[191 .. 128], b[191 .. 128])
+    } else if a[127 .. 64] != b[127 .. 64] then {
+        word64_ult(a[127 .. 64], b[127 .. 64])
+    } else {
+        word64_ult(a[63 .. 0], b[63 .. 0])
+    }
+
+function word_slt(a : word, b : word) -> bool = {
+    let a_neg = a[255] == bitone;
+    let b_neg = b[255] == bitone;
+    if a_neg then {
+        if b_neg then { word_ult(a, b) } else { true }
+    } else {
+        if b_neg then { false } else { word_ult(a, b) }
+    }
+}
 
 /* pow2(n) = 2^n is a typed builtin from arith.sail (forall 'n. int(2^'n)). */
 
@@ -259,10 +274,10 @@ function alu_signextend(byte_index : word, value : word) -> word = {
 }
 
 /* --- comparison (push 1/0) --- */
-function alu_lt(a : word, b : word) -> word = word_of_bool(hw_ult(a, b))
-function alu_gt(a : word, b : word) -> word = word_of_bool(hw_ult(b, a))
-function alu_slt(a : word, b : word) -> word = word_of_bool(hw_slt(a, b))
-function alu_sgt(a : word, b : word) -> word = word_of_bool(hw_slt(b, a))
+function alu_lt(a : word, b : word) -> word = word_of_bool(word_ult(a, b))
+function alu_gt(a : word, b : word) -> word = word_of_bool(word_ult(b, a))
+function alu_slt(a : word, b : word) -> word = word_of_bool(word_slt(a, b))
+function alu_sgt(a : word, b : word) -> word = word_of_bool(word_slt(b, a))
 function alu_eq(a : word, b : word) -> word = word_of_bool(a == b)
 function alu_iszero(a : word) -> word = word_of_bool(word_is_zero(a))
 
@@ -313,9 +328,9 @@ function alu_clz(x : word) -> word = {
     var count : int = 0;
     var found : bool = false;
     foreach (i from 0 to 255) {
-        let bit_index = 255 - i; /* scan from MSB down */
+        let biinput_index = 255 - i; /* scan from MSB down */
         if not_bool(found) then {
-            if x[bit_index] == bitzero then {
+            if x[biinput_index] == bitzero then {
                 count = count + 1
             } else {
                 found = true

@@ -31,7 +31,7 @@
  * kernel's storage guards reject any SLOAD/SSTORE outside it. Defined here
  * because bal_load is its producer and host I/O is included before
  * host/state.sail (which also consumes it). */
-struct SlotKey = { sk_addr : address, sk_slot : word }
+struct SlotKey = { address : address, slot : word }
 
 /* ===================== (1) FFI BINDING ================================= */
 
@@ -149,64 +149,6 @@ function address_to_bytes(a : address) -> list(byte) = {
     out
 }
 
-/* C-backed pre-image cache (ffi/host_preimage.c): the secure-trie key derivation
- * keccak(addr)/keccak(slot) memoized so each touched key is hashed exactly once
- * and reused for reads, non-membership walks, and the post-state root. Separate
- * address (3-word key) and slot (4-word key) namespaces. keccak is computed here
- * on a miss and cached; a hit returns the stored hash. */
-val pa_reset = impure { _: "pa_reset" } : unit -> unit
-val pa_key = impure { _: "pa_key" } : (bits(64), bits(64), bits(64)) -> unit
-val pa_present = impure { _: "pa_present" } : unit -> bits(64)
-val pa_store = impure { _: "pa_store" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val pa_word = impure { _: "pa_word" } : bits(64) -> bits(64)
-val ps_reset = impure { _: "ps_reset" } : unit -> unit
-val ps_key = impure { _: "ps_key" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val ps_present = impure { _: "ps_present" } : unit -> bits(64)
-val ps_store = impure { _: "ps_store" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val ps_word = impure { _: "ps_word" } : bits(64) -> bits(64)
-
-/* reassemble the cached 256-bit hash at the selected key (word 3 most sig) */
-function pa_hash() -> bits(256) =
-    append(
-        pa_word(get_slice_int(64, 3, 0)),
-        append(
-            pa_word(get_slice_int(64, 2, 0)),
-            append(pa_word(get_slice_int(64, 1, 0)), pa_word(get_slice_int(64, 0, 0))),
-        ),
-    )
-function ps_hash() -> bits(256) =
-    append(
-        ps_word(get_slice_int(64, 3, 0)),
-        append(
-            ps_word(get_slice_int(64, 2, 0)),
-            append(ps_word(get_slice_int(64, 1, 0)), ps_word(get_slice_int(64, 0, 0))),
-        ),
-    )
-
-/* keccak(address), memoized: the trie key for an account. */
-function pre_keccak_addr(a : address) -> bits(256) = {
-    let aw : word = sail_zero_extend(a, 256);
-    pa_key(aw[191 .. 128], aw[127 .. 64], aw[63 .. 0]);
-    if unsigned(pa_present()) == 1 then {
-        pa_hash()
-    } else {
-        let h = keccak256(address_to_bytes(a));
-        pa_store(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]);
-        h
-    }
-}
-
-/* keccak(slot), memoized: the trie key for a storage slot. */
-function pre_keccak_slot(s : word) -> bits(256) = {
-    ps_key(s[255 .. 192], s[191 .. 128], s[127 .. 64], s[63 .. 0]);
-    if unsigned(ps_present()) == 1 then {
-        ps_hash()
-    } else {
-        let h = keccak256(word_to_bytes32(s));
-        ps_store(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]);
-        h
-    }
-}
 function int_be_len(n : int) -> int = if n <= 0 then {
     0
 } else {
@@ -399,7 +341,7 @@ function bal_load() -> list(SlotKey) = {
     let n = bal_count();
     var xs : list(SlotKey) = [||];
     foreach (i from 0 to (n - 1)) {
-        xs = struct { sk_addr = ssz_addr(base + i * 52), sk_slot = ssz_bytes32(base + i * 52 + 20) } :: xs
+        xs = struct { address = ssz_addr(base + i * 52), slot = ssz_bytes32(base + i * 52 + 20) } :: xs
     };
     xs
 }

@@ -11,24 +11,24 @@
 /* The per-frame call context (YP "message call" I = (I_a, I_o, I_s, ...)).
  * One Message per active frame; sub-calls save/restore it (interpreter.sail). */
 struct Message = {
-    msg_caller       : address,  /* CALLER (I_s)                                  */
-    msg_address      : address,  /* ADDRESS / storage owner = self (I_a)          */
-    msg_code_address : address,  /* account whose code runs (differs under        */
+    caller       : address,  /* CALLER (I_s)                                  */
+    address      : address,  /* ADDRESS / storage owner = self (I_a)          */
+    code_address : address,  /* account whose code runs (differs under        */
                                  /* DELEGATECALL/CALLCODE and EIP-7702 delegation) */
-    msg_value        : word,     /* CALLVALUE (I_v)                               */
-    msg_data_len     : int,      /* CALLDATA length (bytes are C-backed, host_mem) */
-    msg_is_static    : bool,     /* inside a STATICCALL frame (EIP-214)           */
-    msg_depth        : int,      /* call depth (YP I_e), bounded by DEPTH_LIMIT   */
+    value        : word,     /* CALLVALUE (I_v)                               */
+    data_len     : int,      /* CALLDATA length (bytes are C-backed, host_mem) */
+    is_static    : bool,     /* inside a STATICCALL frame (EIP-214)           */
+    depth        : int,      /* call depth (YP I_e), bounded by DEPTH_LIMIT   */
 }
 
 let DEFAULT_MESSAGE : Message = struct {
-        msg_caller = ZERO_ADDR,
-        msg_address = ZERO_ADDR,
-        msg_code_address = ZERO_ADDR,
-        msg_value = ZERO_WORD,
-        msg_data_len = 0,
-        msg_is_static = false,
-        msg_depth = 0,
+        caller = ZERO_ADDR,
+        address = ZERO_ADDR,
+        code_address = ZERO_ADDR,
+        value = ZERO_WORD,
+        data_len = 0,
+        is_static = false,
+        depth = 0,
     }
 
 /* ----------------------- active-frame registers ------------------------- */
@@ -40,7 +40,7 @@ register message : Message = DEFAULT_MESSAGE
 register call_depth : int = 0
 
 /* --------------------------- code length -------------------------------- */
-/* The frame's code bytes live in the C buffer (host_code.c), streamed once by
+/* The frame's code bytes live in the C buffer (code_db.c), streamed once by
  * set_code; fetch is an O(1) array read and PUSH immediates are assembled by
  * one hc_word call. Only the length is kept on the Sail side. */
 register code_len : int = 0
@@ -57,8 +57,8 @@ val hc_len = impure { _: "hc_len" } : unit -> bits(64)
 /* Bind the current frame's code to an account's store entry (O(1): the bytes
  * and JUMPDEST bitmap were prepared when the code was written), to the
  * streamed tx input, or to nothing. CREATE initcode uses frame_code_pend_mem
- * BEFORE the frame switch: the child's code is an alias of this frame's
- * memory range (the parent is frozen while the child runs). */
+ * BEFORE the frame switch: the child's code is copied from this frame's memory
+ * range, so execution code never aliases mutable memory. */
 function frame_code_addr(a : address) -> unit = {
     let h : hash = k_code_key(a);
     code_len = unsigned(fc_set_hash(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]))
@@ -81,7 +81,7 @@ function frame_code_pend_mem(off : int, len : int) -> int =
 function code_byte(i : int) -> byte = hc_byte(get_slice_int(64, i, 0))
 
 /* ------------------------------ the stack ------------------------------- */
-/* C-backed (ffi/host_stack.c): per-call-frame flat word arrays, O(1)
+/* C-backed (ffi/stack.c): per-call-frame flat word arrays, O(1)
  * push/pop/peek/set, zero steady-state allocation (a Sail list(word) paid a
  * heap cons per PUSH). The frame lifecycle pairs with calls: stack_frame_enter
  * on a sub-call, stack_frame_leave on return, stack_clear per transaction. */

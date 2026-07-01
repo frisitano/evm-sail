@@ -1,0 +1,55 @@
+{
+  "stateRootPrecompile::singleLegacyPrecompile": {
+    "env": {
+      "currentCoinbase": "0x0000000000000000000000000000000000001003",
+      "currentNumber": "0x01",
+      "currentTimestamp": "0x01",
+      "currentGasLimit": "0x100000",
+      "currentBaseFee": "0x00",
+      "currentRandom": "0x00",
+      "currentExcessBlobGas": "0x00",
+      "slotNumber": "0x00"
+    },
+    "pre": {
+      "0x0000000000000000000000000000000000001001": {
+        "balance": "0x64",
+        "nonce": "0x00",
+        "code": "0x",
+        "storage": {}
+      }
+    },
+    "transaction": {
+      "sender": "0x0000000000000000000000000000000000001001",
+      "nonce": "0x00",
+      "gasPrice": "0x00",
+      "gasLimit": [
+        "0x5208"
+      ],
+      "to": "0x0000000000000000000000000000000000000002",
+      "value": [
+        "0x00"
+      ],
+      "data": [
+        "0x"
+      ]
+    },
+    "post": {
+      "Cancun": [
+        {
+          "indexes": {
+            "data": 0,
+            "gas": 0,
+            "value": 0
+          },
+          "hash": "0xeae85bd8819ecdb0110263cda751b8be0c5f8d2ea845e14465d621b3cf763175",
+          "state": {
+            "0x0000000000000000000000000000000000001001": {
+              "balance": "0x64",
+              "nonce": "0x01"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

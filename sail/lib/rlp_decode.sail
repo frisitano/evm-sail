@@ -14,9 +14,9 @@
 /* ======================================================================== */
 
 struct RlpField = {
-  rf_is_list : bool,
-  rf_content : list(byte),   /* string value, or a list's payload bytes */
-  rf_full    : list(byte)    /* full item bytes incl header (an embedded node) */
+  is_list : bool,
+  content : list(byte),   /* string value, or a list's payload bytes */
+  full    : list(byte)    /* full item bytes incl header (an embedded node) */
 }
 
 /* big-endian integer from n content bytes at offset pos */
@@ -65,7 +65,7 @@ function rlp_split(b : list(byte), start : int, stop : int) -> list(RlpField) = 
         let (isl, cs, cl) = rlp_hdr(b, pos);
         let nxt = cs + cl;
         out =
-            struct { rf_is_list = isl, rf_content = bytes_slice(b, cs, cl), rf_full = bytes_slice(b, pos, nxt - pos) } ::
+            struct { is_list = isl, content = bytes_slice(b, cs, cl), full = bytes_slice(b, pos, nxt - pos) } ::
                 out;
         pos = nxt
     };
@@ -88,10 +88,10 @@ function rlp_node_items(node : list(byte)) -> list(RlpField) = {
 
 /* content of an RlpField as a big-endian integer / 256-bit word */
 function rlp_field_int(f : RlpField) -> int =
-    rlp_be_int(f.rf_content, 0, list_len(f.rf_content))
+    rlp_be_int(f.content, 0, list_len(f.content))
 function rlp_field_word(f : RlpField) -> word = {
     var acc : word = sail_zeros(256);
-    let c = f.rf_content;
+    let c = f.content;
     let n = list_len(c);
     foreach (k from 0 to (n - 1)) {
         acc = or_vec(sail_shiftleft(acc, 8), sail_zero_extend(bytes_get(c, k), 256))
@@ -105,15 +105,15 @@ function rlp_decode_selfcheck() -> unit = {
     let items = rlp_node_items(enc);
     assert(list_len(items) == 3, "rlp list has 3 items");
     assert(
-        rlp_field_int(list_nth(items, 0, struct { rf_is_list = false, rf_content = [||], rf_full = [||] })) == 1,
+        rlp_field_int(list_nth(items, 0, struct { is_list = false, content = [||], full = [||] })) == 1,
         "item0 == 1"
     );
     assert(
-        rlp_field_int(list_nth(items, 1, struct { rf_is_list = false, rf_content = [||], rf_full = [||] })) == 2,
+        rlp_field_int(list_nth(items, 1, struct { is_list = false, content = [||], full = [||] })) == 2,
         "item1 == 2"
     );
     assert(
-        rlp_field_int(list_nth(items, 2, struct { rf_is_list = false, rf_content = [||], rf_full = [||] })) == 1024,
+        rlp_field_int(list_nth(items, 2, struct { is_list = false, content = [||], full = [||] })) == 1024,
         "item2 == 1024"
     )
 }

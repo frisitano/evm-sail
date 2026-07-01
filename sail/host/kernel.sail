@@ -20,113 +20,117 @@
  * bit (the EVM charges COLD_*_COST on a false result, WARM_STORAGE_READ_COST on
  * true). The warming is journaled so a frame revert un-warms it. --- */
 function k_access_account(a : address) -> bool = {
-    let prior = addr_in(k_warm_addr, a);
+    let prior = address_list_contains(k_warm_addr, a);
     if not_bool(prior) then {
         k_warm_addr = a :: k_warm_addr;
-        jpush(JWarmA(a))
+        journal_push(JWarmA(a))
     };
     prior
 }
 function k_access_slot(a : address, s : word) -> bool = {
-    let prior = word_nonzero(map_load(MAP_WARM_SLOT, a, s));
+    let prior = slot_list_contains(k_warm_slots, a, s);
     if not_bool(prior) then {
-        map_store(MAP_WARM_SLOT, a, s, word_of_int(1));
-        jpush(JWarmS(a, s))
+        k_warm_slots = struct { address = a, slot = s } :: k_warm_slots;
+        journal_push(JWarmS(a, s))
     };
     prior
 }
 
-/* --- persistent storage (SLOAD/SSTORE): the C overlay map, whose layers are
- * pushed/popped by k_snapshot / k_commit / k_revert --- */
+/* --- persistent storage (SLOAD/SSTORE): the C cache/update store, whose update
+ * layers are pushed/popped by k_snapshot / k_commit / k_revert --- */
 
 /* Stateless mode: the SSZ witness IS the storage base layer. A read the working
  * set doesn't hold is resolved from the witness on demand (k_sload/k_orig ->
- * stateless_storage), so nothing is pre-seeded; committed writes accumulate in
- * the overlay base above the witness. Off by default, so the native execution
- * path (absent == 0) is unaffected. */
+ * stateless_storage) and then cached. Committed writes accumulate as updates
+ * above the witness/cache. Off by default, so the native execution path
+ * (absent == 0) is unaffected. */
 function k_stateless_on() -> unit = k_stateless = true
 
 /* SLOAD: the slot's value in the layered working set; on a stateless miss the
  * witness IS the base layer, so resolve the authenticated pre-value on demand
- * (witness-backed base -- no eager seeding). Native (k_stateless=false) reads
- * the maps directly (absent == 0), unchanged. */
+ * and cache it. Native (k_stateless=false) reads the maps directly
+ * (absent == 0), unchanged. */
 function k_sload(a : address, s : word) -> word =
-    if map_present(MAP_STORAGE, a, s) then {
-        map_load(MAP_STORAGE, a, s)
+    if storage_present(a, s) then {
+        storage_load(a, s)
     } else {
         if k_stateless then {
-            stateless_storage(a, s)
+            let v = stateless_storage(a, s);
+            storage_seed(a, s, v);
+            v
         } else {
-            map_load(MAP_STORAGE, a, s)
+            storage_load(a, s)
         }
     }
 function k_sstore(a : address, s : word, v : word) -> unit = {
-    map_store(MAP_STORAGE, a, s, v); /* writes the top overlay layer; revert discards it */
-    kset(a, kget(a)) /* storage-root changes require a fresh account trie leaf */
+    storage_store(a, s, v); /* writes the top storage update layer; revert discards it */
+    store_account(a, load_account(a)) /* storage-root changes require a fresh account trie leaf */
 }
 
 /* EIP-2200 "original" value: the slot at tx start = the BASE layer (committed
  * prior txs were pop_commit-merged in). A slot never committed to the base is,
  * statelessly, still at its witness pre-value, so resolve it from the witness. */
 function k_orig(a : address, s : word) -> word =
-    if map_base_present(MAP_STORAGE, a, s) then {
-        map_base_load(MAP_STORAGE, a, s)
+    if storage_base_present(a, s) then {
+        storage_base_load(a, s)
     } else {
         if k_stateless then {
-            stateless_storage(a, s)
+            let v = stateless_storage(a, s);
+            storage_seed(a, s, v);
+            v
         } else {
-            map_base_load(MAP_STORAGE, a, s)
+            storage_base_load(a, s)
         }
     }
 
 /* un-journaled storage read (drivers/examples; same layered view as SLOAD) */
-function k_storage_get(a : address, s : word) -> word = map_load(MAP_STORAGE, a, s)
+function k_storage_get(a : address, s : word) -> word = storage_load(a, s)
 
 /* EIP-1153 transient storage (TLOAD/TSTORE): per-tx scratch, discarded at tx end,
  * not part of the state trie. TSTORE journals the prior value for frame revert. */
 function k_tload(a : address, s : word) -> word = {
-    map_load(MAP_TRANSIENT, a, s)
+    transient_load(a, s)
 }
 function k_tstore(a : address, s : word, v : word) -> unit = {
-    jpush(JTran(a, s, map_load(MAP_TRANSIENT, a, s)));
-    map_store(MAP_TRANSIENT, a, s, v)
+    journal_push(JTran(a, s, transient_load(a, s)));
+    transient_store(a, s, v)
 }
 
 /* --- accounts (BALANCE / EXTCODEHASH / EXTCODESIZE / nonce, transfers) --- */
 function k_get_balance(a : address) -> word = {
-    kget(a).acc_balance
+    load_account(a).balance
 }
 function k_get_nonce(a : address) -> int = {
-    kget(a).acc_nonce
+    load_account(a).nonce
 }
 
 /* the raw codeHash used to key the code store (KECCAK_EMPTY for codeless accounts) */
-function k_code_key(a : address) -> hash = kget(a).acc_codehash
+function k_code_key(a : address) -> hash = load_account(a).code_hash
 
 /* EXTCODEHASH (EIP-1052): the account's code binding. A truly empty
  * (nonexistent per EIP-161) account reads as 0, not KECCAK_EMPTY. */
 function k_get_codehash(a : address) -> hash = {
-    let acc = kget(a);
-    if (acc.acc_codehash == KECCAK_EMPTY) & acc.acc_nonce == 0 & word_is_zero(acc.acc_balance) then {
+    let acc = load_account(a);
+    if (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance) then {
         word_of_int(0)
     } else {
-        acc.acc_codehash
+        acc.code_hash
     }
 }
 function k_account_is_empty(a : address) -> bool = {
     /* EIP-161 "empty" account: nonce 0, balance 0, no code (unrecorded query) */
-    let acc = kget(a);
-    (acc.acc_codehash == KECCAK_EMPTY) & acc.acc_nonce == 0 & word_is_zero(acc.acc_balance)
+    let acc = load_account(a);
+    (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance)
 }
 
 /* CREATE/CREATE2/create-tx address-collision test (unrecorded query): the
  * target is occupied if it has code OR a nonzero nonce OR any storage
  * (EELS account_has_code_or_nonce || account_has_storage). */
 function k_account_occupied(a : address) -> bool = {
-    let acc = kget(a);
-    let has_code : bool = acc.acc_codehash != KECCAK_EMPTY;
-    let has_storage : bool = (acc.acc_storage_root != EMPTY_TRIE_ROOT) | storage_has_live_addr(a);
-    has_code | (acc.acc_nonce != 0) | has_storage
+    let acc = load_account(a);
+    let has_code : bool = acc.code_hash != KECCAK_EMPTY;
+    let has_storage : bool = (acc.storage_root != EMPTY_TRIE_ROOT) | storage_has_live_addr(a);
+    has_code | (acc.nonce != 0) | has_storage
 }
 
 /* Move `v` wei from src to dst (the value field of a CALL or a tx). Both
@@ -135,26 +139,26 @@ function k_transfer(src : address, dst : address, v : word) -> unit = {
     if word_is_zero(v) | (src == dst) then {
         ()
     } else {
-        jpush(JAcct(src, kget(src)));
-        jpush(JAcct(dst, kget(dst)));
-        kset(src, { kget(src) with acc_balance = alu_sub(kget(src).acc_balance, v) });
-        kset(dst, { kget(dst) with acc_balance = alu_add(kget(dst).acc_balance, v) })
+        journal_push(JAcct(src, load_account(src)));
+        journal_push(JAcct(dst, load_account(dst)));
+        store_account(src, { load_account(src) with balance = alu_sub(load_account(src).balance, v) });
+        store_account(dst, { load_account(dst) with balance = alu_add(load_account(dst).balance, v) })
     }
 }
 
 /* Increment an account's nonce (sender per tx, creator at CREATE/CREATE2). */
 function k_bump_nonce(a : address) -> unit = {
-    jpush(JAcct(a, kget(a)));
-    kset(a, { kget(a) with acc_nonce = kget(a).acc_nonce + 1 })
+    journal_push(JAcct(a, load_account(a)));
+    store_account(a, { load_account(a) with nonce = load_account(a).nonce + 1 })
 }
 
 /* Set an account's code: hash it, intern the bytes in the code store, and bind
  * the account's codeHash. Used by CREATE/CREATE2 deploys and EIP-7702. */
 function k_set_code(a : address, c : list(byte)) -> unit = {
-    jpush(JAcct(a, kget(a)));
+    journal_push(JAcct(a, load_account(a)));
     let h : hash = keccak256(c);
     cs_store_code(h, c);
-    kset(a, { kget(a) with acc_codehash = h })
+    store_account(a, { load_account(a) with code_hash = h })
 }
 
 /* ---- EIP-7702 delegation designation: the 23-byte code 0xef0100 ++ address
@@ -227,15 +231,15 @@ function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
 function k_seed_account(a : address, nonce : int, bal : word, c : list(byte)) -> unit = {
     let h : hash = keccak256(c);
     cs_store_code(h, c);
-    acc_seed(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = h, acc_storage_root = EMPTY_TRIE_ROOT })
+    account_seed(a, struct { nonce = nonce, balance = bal, code_hash = h, storage_root = EMPTY_TRIE_ROOT })
 }
 
-/* seed an account whose code is already in the store (a stateless witness view):
- * the codeHash and pre-state storage root are given, no bytes are streamed. */
+/* seed an account whose code is already in the store (a stateless witness input
+ * span): the codeHash and pre-state storage root are given, no bytes are streamed. */
 function k_seed_account_hashed(a : address, nonce : int, bal : word, sroot : hash, codehash : hash) -> unit =
-    acc_seed(a, struct { acc_nonce = nonce, acc_balance = bal, acc_codehash = codehash, acc_storage_root = sroot })
+    account_seed(a, struct { nonce = nonce, balance = bal, code_hash = codehash, storage_root = sroot })
 function k_seed_storage(a : address, s : word, v : word) -> unit =
-    map_store(MAP_STORAGE, a, s, v) /* seeds the base layer (only layer live here) */
+    storage_seed(a, s, v) /* authenticated pre-state/cache material */
 
 /* single-account balance credit/debit (gas fees, the coinbase priority-fee
  * payment, withdrawals); both journal the prior account for frame revert. */
@@ -243,16 +247,16 @@ function k_add_balance(a : address, v : word) -> unit = {
     if word_is_zero(v) then {
         ()
     } else {
-        jpush(JAcct(a, kget(a)));
-        kset(a, { kget(a) with acc_balance = alu_add(kget(a).acc_balance, v) })
+        journal_push(JAcct(a, load_account(a)));
+        store_account(a, { load_account(a) with balance = alu_add(load_account(a).balance, v) })
     }
 }
 function k_sub_balance(a : address, v : word) -> unit = {
     if word_is_zero(v) then {
         ()
     } else {
-        jpush(JAcct(a, kget(a)));
-        kset(a, { kget(a) with acc_balance = alu_sub(kget(a).acc_balance, v) })
+        journal_push(JAcct(a, load_account(a)));
+        store_account(a, { load_account(a) with balance = alu_sub(load_account(a).balance, v) })
     }
 }
 
@@ -260,20 +264,20 @@ function k_sub_balance(a : address, v : word) -> unit = {
  * CHAINID, GASLIMIT, PREVRANDAO, BLOBBASEFEE, ORIGIN, GASPRICE) --- */
 function k_env(f : EnvField) -> word = {
     match f {
-        F_Number => k_block.be_number,
-        F_Timestamp => k_block.be_timestamp,
-        F_Coinbase => address_to_word(k_block.be_coinbase),
-        F_BaseFee => k_block.be_base_fee,
-        F_ChainId => k_block.be_chain_id,
-        F_GasLimit => k_block.be_gas_limit,
-        F_PrevRandao => k_block.be_prev_randao,
-        F_BlobBaseFee => k_block.be_blob_base_fee,
-        F_Origin => address_to_word(k_tx.txe_origin),
-        F_GasPrice => k_tx.txe_gas_price,
-        F_SlotNumber => k_block.be_slot,
+        F_Number => k_block.number,
+        F_Timestamp => k_block.timestamp,
+        F_Coinbase => address_to_word(k_block.coinbase),
+        F_BaseFee => k_block.base_fee,
+        F_ChainId => k_block.chain_id,
+        F_GasLimit => k_block.gas_limit,
+        F_PrevRandao => k_block.prev_randao,
+        F_BlobBaseFee => k_block.blob_base_fee,
+        F_Origin => address_to_word(k_tx.origin),
+        F_GasPrice => k_tx.gas_price,
+        F_SlotNumber => k_block.slot,
     }
 }
-function k_coinbase() -> address = k_block.be_coinbase
+function k_coinbase() -> address = k_block.coinbase
 
 /* BLOCKHASH: hash of one of the 256 most recent ancestor blocks. Modeled as 0
  * (the recent-block-hash history ring is not carried in this state). */
@@ -304,7 +308,7 @@ function k_blockhash(n : word) -> hash = {
 
 /* BLOBHASH (EIP-4844): the i-th versioned hash of the current tx, 0 past the end. */
 function k_blobhash(i : int) -> word = {
-    list_nth(k_tx.txe_blob_hashes, i, word_of_int(0))
+    list_nth(k_tx.blob_hashes, i, word_of_int(0))
 }
 
 /* --- address derivation primitives (CREATE / CREATE2) --- */
@@ -325,11 +329,11 @@ function k_precompile(num : int) -> bool =
 
 /* --- logs (LOG0..LOG4) + the gas-refund counter --- */
 function k_log(a : address, topics : list(word), data : list(byte)) -> unit = {
-    jpush(JLog());
-    k_logs = list_append(k_logs, [|struct { le_addr = a, le_topics = topics, le_data = data }|])
+    journal_push(JLog());
+    k_logs = list_append(k_logs, [|struct { address = a, topics = topics, data = data }|])
 }
 function k_refund_add(delta : int) -> unit = {
-    jpush(JRefund(k_refund));
+    journal_push(JRefund(k_refund));
     k_refund = k_refund + delta
 }
 
@@ -337,7 +341,7 @@ function k_refund_add(delta : int) -> unit = {
  * beneficiary is a separate k_transfer). The account is only actually deleted
  * at tx end, and only under the EIP-6780 condition (k_finalize_selfdestructs). */
 function k_selfdestruct(a : address) -> unit = {
-    jpush(JSelfD());
+    journal_push(JSelfD());
     k_selfdestr = list_append(k_selfdestr, [|a|])
 }
 
@@ -346,22 +350,22 @@ function k_selfdestruct(a : address) -> unit = {
  * marker is NOT removed when the creating frame reverts (harmless: the account
  * cannot selfdestruct later without being re-created, which re-marks it). */
 function k_mark_created(a : address) -> unit =
-    if addr_in(k_created, a) then {
+    if address_list_contains(k_created, a) then {
         ()
     } else {
         k_created = a :: k_created
     }
-function k_was_created(a : address) -> bool = addr_in(k_created, a)
+function k_was_created(a : address) -> bool = address_list_contains(k_created, a)
 
 /* EIP-6780 (selfdestruct of a created-this-tx account): the originator's
  * balance is forced to 0 after the transfer, so a self-beneficiary transfer
  * burns the ether (journaled; a frame revert restores it). */
 function k_zero_balance(a : address) -> unit = {
-    if word_is_zero(kget(a).acc_balance) then {
+    if word_is_zero(load_account(a).balance) then {
         ()
     } else {
-        jpush(JAcct(a, kget(a)));
-        kset(a, { kget(a) with acc_balance = ZERO_WORD })
+        journal_push(JAcct(a, load_account(a)));
+        store_account(a, { load_account(a) with balance = ZERO_WORD })
     }
 }
 
@@ -370,14 +374,14 @@ function k_zero_balance(a : address) -> unit = {
  * same tx). Unrecorded: the tx-end reduction is host bookkeeping. */
 function k_account_delete(a : address) -> unit = {
     /* Set the account EMPTY in place (do NOT acctmap_remove it). Removing it would
-       let a later kget(a) RE-MATERIALIZE the account from the pre-state witness
+       let a later load_account(a) RE-MATERIALIZE the account from the pre-state witness
        leaf -- wrong for an account CREATEd+SELFDESTRUCTed and then re-CREATEd later
        in the same block (the stale pre-state balance would resurface). Kept empty
        in the acctmap, a later read sees the deletion, the post-state walk drops it
-       (acc_is_empty) AND marks it touched (sb_touched) so its pre-state leaf is not
+       (account_empty) AND marks it touched (sb_touched) so its pre-state leaf is not
        reused -- subsuming the old k_deleted mechanism. */
-    kset(a, EMPTY_ACCOUNT);
-    map_wipe_addr(MAP_STORAGE, a)
+    store_account(a, EMPTY_ACCOUNT);
+    storage_wipe_addr(a)
 }
 
 /* SELFDESTRUCT tx-end finalization. Before Cancun, every surviving
@@ -408,17 +412,17 @@ function k_finalize_selfdestructs() -> unit = {
 
 /* Open a checkpoint: push a journal marker AND a fresh storage overlay layer. */
 function k_snapshot() -> unit = {
-    jpush(JCheck());
-    host_map_push(get_slice_int(64, MAP_STORAGE, 0)) /* open the frame's storage overlay */
+    journal_push(JCheck());
+    storage_map_push() /* open the frame's storage update overlay */
 }
 
 /* full world wipe between independent blocks/fixtures (driver/test only) */
 function k_world_reset() -> unit = {
     acctmap_reset();
-    host_map_reset(get_slice_int(64, MAP_STORAGE, 0));
-    host_map_reset(get_slice_int(64, MAP_TRANSIENT, 0));
+    storage_map_reset();
+    transient_reset();
     k_warm_addr = [||];
-    host_map_reset(get_slice_int(64, MAP_WARM_SLOT, 0));
+    k_warm_slots = [||];
     k_logs = [||];
     k_refund = 0;
     k_selfdestr = [||];
@@ -433,8 +437,8 @@ function k_set_tx(env : TxEnv) -> unit = k_tx = env
 function k_tx_reset() -> unit = {
     /* per-tx: clear ephemeral state, snapshot tx-original storage */
     k_warm_addr = [||];
-    host_map_reset(get_slice_int(64, MAP_WARM_SLOT, 0));
-    host_map_reset(get_slice_int(64, MAP_TRANSIENT, 0));
+    k_warm_slots = [||];
+    transient_reset();
     k_logs = [||];
     k_refund = 0;
     k_selfdestr = [||];
@@ -446,7 +450,7 @@ function k_tx_reset() -> unit = {
 /* commit: drop the most recent checkpoint; the frame's undo entries fold into
  * the parent frame (so a later parent revert also undoes them). */
 function k_commit() -> unit = {
-    host_map_pop_commit(get_slice_int(64, MAP_STORAGE, 0)); /* merge the frame's storage overlay */
+    storage_map_pop_commit(); /* merge the frame's storage update overlay */
     var pre : list(JEntry) = [||]; /* frame's entries before the checkpoint (reversed) */
     var j : list(JEntry) = k_journal;
     var done : bool = false;
@@ -468,7 +472,7 @@ function k_commit() -> unit = {
 
 /* revert: replay undo entries back to (and dropping) the most recent checkpoint. */
 function k_revert() -> unit = {
-    host_map_pop_discard(get_slice_int(64, MAP_STORAGE, 0)); /* drop the frame's storage overlay */
+    storage_map_pop_discard(); /* drop the frame's storage update overlay */
     var j : list(JEntry) = k_journal;
     var done : bool = false;
     while not_bool(done) do {

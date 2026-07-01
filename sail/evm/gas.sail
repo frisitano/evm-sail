@@ -164,8 +164,7 @@ function charge(amount : gas) -> unit =
             exc_halt(OutOfGas)
         } else {
             /* a >= b >= 0 proven above, so gas_remaining - amount is a valid
-               `gas`: use native int64 subtraction instead of to_gas(a - b),
-               which would round-trip through sail_int (see gas_sub). */
+               `gas`; gas_sub keeps the range guard in one spec-level helper. */
             gas_remaining = gas_sub(gas_remaining, amount)
         }
     }

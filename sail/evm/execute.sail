@@ -23,12 +23,12 @@ val run_create : bool -> unit /* true = CREATE2 */
 /* ----------------------------- helpers ---------------------------------- */
 
 /* the storage owner / I_a: SLOAD, SSTORE, LOG, SELFDESTRUCT act on this account */
-function self_addr() -> address = message.msg_address
+function self_addr() -> address = message.address
 
 /* EIP-214 write protection: any state-modifying opcode in a STATICCALL frame
  * halts exceptionally. State-changing opcodes call this first; true => halted. */
 function guard_static() -> bool =
-    if message.msg_is_static then {
+    if message.is_static then {
         exc_halt(WriteProtection);
         true
     } else {
@@ -231,11 +231,11 @@ function execute(op : ast) -> unit = match op {
     },
     CALLER() => {
         charge(G_base);
-        push(address_to_word(message.msg_caller))
+        push(address_to_word(message.caller))
     },
     CALLVALUE() => {
         charge(G_base);
-        push(message.msg_value)
+        push(message.value)
     },
     GASPRICE() => {
         charge(G_base);
@@ -243,7 +243,7 @@ function execute(op : ast) -> unit = match op {
     },
     CALLDATASIZE() => {
         charge(G_base);
-        push(word_of_int(message.msg_data_len))
+        push(word_of_int(message.data_len))
     },
     CALLDATALOAD() => {
         charge(G_verylow);
@@ -627,7 +627,7 @@ function execute(op : ast) -> unit = match op {
              * register the deletion when the frame is still running, else the
              * out-of-gas SELFDESTRUCT must have no effect. */
             if is_running() then {
-                let first_selfdestruct = not_bool(addr_in(k_selfdestr, self_addr()));
+                let first_selfdestruct = not_bool(address_list_contains(k_selfdestr, self_addr()));
                 if (k_fork < FORK_LONDON) & first_selfdestruct then {
                     k_refund_add(R_selfdestruct_pre_london)
                 };

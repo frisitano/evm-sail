@@ -20,13 +20,13 @@
 /* ======================================================================== */
 
 /* ======================================================================== */
-/* (1) trie node references and recursive composition                        */
+/* (1) trie node references and recursive composition                       */
 /*                                                                          */
-/* Trie nodes are composed directly in the Yellow Paper Appendix D shape:    */
-/* leaf, extension, and branch. A child is either embedded RLP, or an        */
-/* external 0xa0 ++ keccak256(node) reference. Post-state roots are computed */
-/* by recursively traversing the witnessed node database and applying an     */
-/* ordered update list only along touched paths; untouched children are      */
+/* Trie nodes are composed directly in the Yellow Paper Appendix D shape:   */
+/* leaf, extension, and branch. A child is either embedded RLP, or an       */
+/* external 0xa0 ++ keccak256(node) reference. Post-state roots are computed*/
+/* by recursively traversing the witnessed node database and applying an    */
+/* ordered update list only along touched paths; untouched children are     */
 /* preserved by reference.                                                  */
 /* ======================================================================== */
 
@@ -98,7 +98,7 @@ function child_ref(enc : list(byte)) -> list(byte) =
 
 /* A trie leaf VALUE is the RLP encoding of the slot value (a string), e.g.
  * RLP(132) = 0x81 0x84, RLP(32-byte) = 0xa0 ++ 32 bytes. rlp_field_word reads
- * rf_content as a raw big-endian word, which is only correct AFTER the RLP
+ * content as a raw big-endian word, which is only correct AFTER the RLP
  * string header is stripped: decode the short-string header (0x80..0xb7 -> drop
  * the length byte; a single byte < 0x80 is the value itself). Without this, a
  * small value keeps its 0x81 prefix (e.g. -> 0x8184) and is double-encoded on
@@ -108,13 +108,13 @@ function rlp_str_word(bs : list(byte)) -> word =
     match bs {
         [||] => sail_zeros(256),
         b0 :: rest => if unsigned(b0) < 128 then {
-            rlp_field_word(struct { rf_is_list = false, rf_content = bs, rf_full = bs })
+            rlp_field_word(struct { is_list = false, content = bs, full = bs })
         } else {
-            rlp_field_word(struct { rf_is_list = false, rf_content = rest, rf_full = rest })
+            rlp_field_word(struct { is_list = false, content = rest, full = rest })
         },
     }
 
-function hb_ltake forall ('a : Type). (xs : list('a), n : int) -> list('a) = {
+function list_take_prefix forall ('a : Type). (xs : list('a), n : int) -> list('a) = {
     var out : list('a) = [||];
     var rest : list('a) = xs;
     var i : int = 0;
@@ -130,7 +130,7 @@ function hb_ltake forall ('a : Type). (xs : list('a), n : int) -> list('a) = {
     };
     list_reverse(out)
 }
-function hb_ldrop forall ('a : Type). (xs : list('a), n : int) -> list('a) = {
+function list_drop_prefix forall ('a : Type). (xs : list('a), n : int) -> list('a) = {
     var rest : list('a) = xs;
     var i : int = 0;
     while i < n do {
@@ -144,7 +144,7 @@ function hb_ldrop forall ('a : Type). (xs : list('a), n : int) -> list('a) = {
 }
 
 /* ---- bit / mask helpers (16-bit branch masks held as int) --------------- */
-function hb_pow2(n : int) -> int = {
+function branch_mask_pow2(n : int) -> int = {
     var r : int = 1;
     var i : int = 0;
     while i < n do {
@@ -153,16 +153,16 @@ function hb_pow2(n : int) -> int = {
     };
     r
 }
-function hb_bit_set(mask : int, i : int) -> bool = emod_int(ediv_int(mask, hb_pow2(i)), 2) == 1
-function hb_with_bit(mask : int, i : int) -> int = if hb_bit_set(mask, i) then {
+function branch_mask_has_bit(mask : int, i : int) -> bool = emod_int(ediv_int(mask, branch_mask_pow2(i)), 2) == 1
+function branch_mask_set_bit(mask : int, i : int) -> int = if branch_mask_has_bit(mask, i) then {
     mask
 } else {
-    mask + hb_pow2(i)
+    mask + branch_mask_pow2(i)
 }
-function hb_popcount16(mask : int) -> int = {
+function branch_mask_popcount(mask : int) -> int = {
     var c : int = 0;
     foreach (i from 0 to 15) {
-        if hb_bit_set(mask, i) then {
+        if branch_mask_has_bit(mask, i) then {
             c = c + 1
         }
     };
@@ -170,7 +170,7 @@ function hb_popcount16(mask : int) -> int = {
 }
 
 /* longest common prefix length of two nibble lists */
-function hb_cpl(a : list(int), b : list(int)) -> int = {
+function common_prefix_len(a : list(int), b : list(int)) -> int = {
     var i : int = 0;
     var ra : list(int) = a;
     var rb : list(int) = b;
@@ -191,7 +191,7 @@ function hb_cpl(a : list(int), b : list(int)) -> int = {
 }
 
 /* 32 big-endian bytes -> bits(256) (local; avoids clash with mpt_witness) */
-function hb_bytes_be256(c : list(byte)) -> bits(256) = {
+function bytes_to_word_be256(c : list(byte)) -> bits(256) = {
     var acc : bits(256) = sail_zeros(256);
     let n = list_len(c);
     foreach (k from 0 to (n - 1)) {
@@ -205,21 +205,21 @@ function hb_bytes_be256(c : list(byte)) -> bits(256) = {
 /* extension: child_ref( rlp[ hp_compact(key,ext)  , child-ref ] )            */
 /* branch:    child_ref( rlp[ 16 child-refs-or-0x80 , 0x80 ] )                 */
 /* word:      0xa0 ++ hash   (a blinded subtree / >=32B child, already a ref)  */
-function hb_leaf_node(key : list(int), value : list(byte)) -> list(byte) =
+function leaf_node_rlp(key : list(int), value : list(byte)) -> list(byte) =
     rlp_list(list_append(rlp_bytes(hp_compact(key, true)), rlp_bytes(value)))
-function hb_ext_node(key : list(int), childref : list(byte)) -> list(byte) =
+function extension_node_rlp(key : list(int), childref : list(byte)) -> list(byte) =
     rlp_list(list_append(rlp_bytes(hp_compact(key, false)), childref))
-function hb_leaf_ref(key : list(int), value : list(byte)) -> list(byte) =
-    child_ref(hb_leaf_node(key, value))
-function hb_ext_ref(key : list(int), childref : list(byte)) -> list(byte) =
-    child_ref(hb_ext_node(key, childref))
-function hb_word_ref(hash : list(byte)) -> list(byte) = list_append([|0xa0|], hash)
+function leaf_child_ref(key : list(int), value : list(byte)) -> list(byte) =
+    child_ref(leaf_node_rlp(key, value))
+function extension_child_ref(key : list(int), childref : list(byte)) -> list(byte) =
+    child_ref(extension_node_rlp(key, childref))
+function hash_child_ref(hash : list(byte)) -> list(byte) = list_append([|0xa0|], hash)
 
-function hb_branch_payload(mask : int, children : list(list(byte))) -> list(byte) = {
+function branch_payload_rlp(mask : int, children : list(list(byte))) -> list(byte) = {
     var payload : list(byte) = [||];
     var ch : list(list(byte)) = children; /* ascending nibble order */
     foreach (i from 0 to 15) {
-        if hb_bit_set(mask, i) then {
+        if branch_mask_has_bit(mask, i) then {
             match ch {
                 c :: t => {
                     payload = list_append(payload, c);
@@ -233,10 +233,10 @@ function hb_branch_payload(mask : int, children : list(list(byte))) -> list(byte
     };
     list_append(payload, [|0x80|]) /* branch value slot: empty */
 }
-function hb_branch_node(mask : int, children : list(list(byte))) -> list(byte) =
-    rlp_list(hb_branch_payload(mask, children))
-function hb_branch_ref(mask : int, children : list(list(byte))) -> list(byte) =
-    child_ref(hb_branch_node(mask, children))
+function branch_node_rlp(mask : int, children : list(list(byte))) -> list(byte) =
+    rlp_list(branch_payload_rlp(mask, children))
+function branch_child_ref(mask : int, children : list(list(byte))) -> list(byte) =
+    child_ref(branch_node_rlp(mask, children))
 
 /* ======================================================================== */
 /* (2) Ethereum world-state trie                                            */
@@ -287,7 +287,7 @@ function account_rlp(nonce : int, balance : word, sroot : bits(256), chash : bit
 
 /* ---- ordered post-state updates ---------------------------------------- */
 /* lexicographic nibble-key order for recursive trie composition */
-struct TrieUpdate = { tu_key : list(int), tu_delete : bool, tu_val : list(byte) }
+struct TrieUpdate = { key : list(int), is_delete : bool, value : list(byte) }
 
 function nib_lt(a : list(int), b : list(int)) -> bool = {
     var ra : list(int) = a;
@@ -326,10 +326,10 @@ function nib_prefix_of(prefix : list(int), key : list(int)) -> bool =
 function update_insert_sorted(u : TrieUpdate, us : list(TrieUpdate)) -> list(TrieUpdate) =
     match us {
         [||] => [|u|],
-        v :: r => if nib_eq(u.tu_key, v.tu_key) then {
+        v :: r => if nib_eq(u.key, v.key) then {
             u :: r
         } else {
-            if nib_lt(u.tu_key, v.tu_key) then {
+            if nib_lt(u.key, v.key) then {
                 u :: us
             } else {
                 v :: update_insert_sorted(u, r)
@@ -348,7 +348,7 @@ function updates_strictly_sorted(us : list(TrieUpdate)) -> bool =
         [||] => true,
         u :: r => match r {
             [||]   => true,
-            v :: _ => nib_lt(u.tu_key, v.tu_key) & updates_strictly_sorted(r),
+            v :: _ => nib_lt(u.key, v.key) & updates_strictly_sorted(r),
         },
     }
 
@@ -361,7 +361,7 @@ function updates_empty(us : list(TrieUpdate)) -> bool =
 function updates_has_live(us : list(TrieUpdate)) -> bool =
     match us {
         [||] => false,
-        u :: r => if u.tu_delete then {
+        u :: r => if u.is_delete then {
             updates_has_live(r)
         } else {
             true
@@ -371,13 +371,13 @@ function updates_has_live(us : list(TrieUpdate)) -> bool =
 function updates_has_delete(us : list(TrieUpdate)) -> bool =
     match us {
         [||] => false,
-        u :: r => u.tu_delete | updates_has_delete(r),
+        u :: r => u.is_delete | updates_has_delete(r),
     }
 
 function updates_at_nibble(us : list(TrieUpdate), depth : int, nib : int) -> list(TrieUpdate) =
     match us {
         [||] => [||],
-        u :: r => if list_len(u.tu_key) > depth & list_nth(u.tu_key, depth, -1) == nib then {
+        u :: r => if list_len(u.key) > depth & list_nth(u.key, depth, -1) == nib then {
             u :: updates_at_nibble(r, depth, nib)
         } else {
             updates_at_nibble(r, depth, nib)
@@ -387,13 +387,13 @@ function updates_at_nibble(us : list(TrieUpdate), depth : int, nib : int) -> lis
 function updates_all_under_prefix(us : list(TrieUpdate), prefix : list(int)) -> bool =
     match us {
         [||]   => true,
-        u :: r => nib_prefix_of(prefix, u.tu_key) & updates_all_under_prefix(r, prefix),
+        u :: r => nib_prefix_of(prefix, u.key) & updates_all_under_prefix(r, prefix),
     }
 
 function updates_under_prefix(us : list(TrieUpdate), prefix : list(int)) -> list(TrieUpdate) =
     match us {
         [||] => [||],
-        u :: r => if nib_prefix_of(prefix, u.tu_key) then {
+        u :: r => if nib_prefix_of(prefix, u.key) then {
             u :: updates_under_prefix(r, prefix)
         } else {
             updates_under_prefix(r, prefix)
@@ -403,7 +403,7 @@ function updates_under_prefix(us : list(TrieUpdate), prefix : list(int)) -> list
 function updates_outside_prefix(us : list(TrieUpdate), prefix : list(int)) -> list(TrieUpdate) =
     match us {
         [||] => [||],
-        u :: r => if nib_prefix_of(prefix, u.tu_key) then {
+        u :: r => if nib_prefix_of(prefix, u.key) then {
             updates_outside_prefix(r, prefix)
         } else {
             u :: updates_outside_prefix(r, prefix)
@@ -413,14 +413,14 @@ function updates_outside_prefix(us : list(TrieUpdate), prefix : list(int)) -> li
 function updates_has_key(us : list(TrieUpdate), key : list(int)) -> bool =
     match us {
         [||] => false,
-        u :: r => if nib_eq(u.tu_key, key) then {
+        u :: r => if nib_eq(u.key, key) then {
             true
         } else {
             updates_has_key(r, key)
         },
     }
 
-/* C-backed witness storage-slot store (ffi/host_nodedb.c):
+/* C-backed witness storage-slot store (ffi/trie_node_db.c):
  * (keccak(addr), keccak(slot)) -> 256-bit value. The harvested, authenticated
  * pre-state storage. Point lookup (slotdb_sel + slotdb_selval) serves stateless
  * reads; iteration (slotdb_count + slotdb_at + slotdb_at_*) feeds the post-state
@@ -459,12 +459,9 @@ val slotdb_at_slot = impure { _: "slotdb_at_slot" } : bits(64) -> bits(64)
 val slotdb_at_val = impure { _: "slotdb_at_val" } : bits(64) -> bits(64)
 val slotdb_at_existed = impure { _: "slotdb_at_existed" } : unit -> bits(64)
 val storage_mark_incomplete = impure { _: "storage_mark_incomplete" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val storage_harvest_complete_raw = impure { _: "storage_harvest_complete" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> bits(64)
+val storage_harvest_complete_raw = impure { _: "storage_harvest_complete" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(
+        64,
+    )
 
 /* harvest context: while re-rooting an account's storage trie, the recursive
  * witness leaf sink switches from the account leaf store to slotdb, keyed by
@@ -507,7 +504,8 @@ function slot_existed(acct : bits(256), slot : bits(256)) -> bool =
         slot[127 .. 64],
         slot[63 .. 0],
     ) !=
-        0x0000000000000000) & (slotdb_sel_existed() != 0x0000000000000000)
+        0x0000000000000000) &
+        (slotdb_sel_existed() != 0x0000000000000000)
 
 /* the cached slotdb_sel value as a 256-bit word */
 function slot_selword() -> word =
@@ -545,26 +543,35 @@ function slot_at_acct() -> bits(256) =
         ),
     )
 
-/* secure-trie updates for one account's post-state storage. The update list is
- * only the write set: nonzero writes set RLP(value), zero writes delete the slot.
- * Untouched storage slots remain inside the recursive overlay rooted at the
- * account's pre-state storage root. */
-function storage_updates(a : address) -> list(TrieUpdate) = {
+/* secure-trie updates for one account's post-state storage, selected by
+ * keccak(address). In stateless mode the update list is only the write set:
+ * nonzero writes set RLP(value), zero writes delete the slot. Untouched storage
+ * slots remain inside the recursive overlay rooted at the account's pre-state
+ * storage root. Native fixture mode has no authenticated witness root, so it
+ * enumerates the full live cache/update union. */
+function storage_updates(ak : bits(256)) -> list(TrieUpdate) = {
     var out : list(TrieUpdate) = [||];
-    let n = storage_count();
+    let n = if k_stateless then {
+            storage_update_count()
+        } else {
+            storage_count()
+        };
     foreach (j from 0 to (n - 1)) {
-        let (ea, es, ev) = storage_entry(j);
-        if ea == a then {
-            let ak = pre_keccak_addr(a);
-            let sk = pre_keccak_slot(es);
+        let (eak, es, ev) = if k_stateless then {
+                storage_hashed_update_entry(j)
+            } else {
+                storage_hashed_entry(j)
+            };
+        if eak == ak then {
+            let sk = keccak256(word_to_bytes32(es));
             if k_stateless & word_is_zero(ev) & not_bool(slot_existed(ak, sk)) then {
                 ()
             } else {
                 out = update_insert_sorted(
                     struct {
-                        tu_key = to_nibbles(word_to_bytes32(sk)),
-                        tu_delete = word_is_zero(ev),
-                        tu_val = rlp_int(unsigned(ev)),
+                        key = to_nibbles(word_to_bytes32(sk)),
+                        is_delete = word_is_zero(ev),
+                        value = rlp_int(unsigned(ev)),
                     },
                     out,
                 )
@@ -583,8 +590,7 @@ function storage_updates(a : address) -> list(TrieUpdate) = {
  * trie build as execution-specs. Partial optional-proof witnesses must use the
  * preserving overlay instead, because omitted blinded children may contain
  * untouched live slots. */
-function storage_live_updates_from_harvest(a : address, writes : list(TrieUpdate)) -> list(TrieUpdate) = {
-    let ak = pre_keccak_addr(a);
+function storage_live_updates_from_harvest(ak : bits(256), writes : list(TrieUpdate)) -> list(TrieUpdate) = {
     var out : list(TrieUpdate) = [||];
     let n = unsigned(slotdb_count());
     foreach (j from 0 to (n - 1)) {
@@ -593,11 +599,11 @@ function storage_live_updates_from_harvest(a : address, writes : list(TrieUpdate
             let sk = slot_at_slot();
             let key = to_nibbles(word_to_bytes32(sk));
             let slot_val = slot_at_val();
-            if (slotdb_at_existed() != 0x0000000000000000) &
-                    word_nonzero(slot_val) &
-                    not_bool(updates_has_key(writes, key)) then {
+            if   (slotdb_at_existed() != 0x0000000000000000)
+               & word_nonzero(slot_val)
+               & not_bool(updates_has_key(writes, key)) then {
                 out = update_insert_sorted(
-                    struct { tu_key = key, tu_delete = false, tu_val = rlp_int(unsigned(slot_val)) },
+                    struct { key = key, is_delete = false, value = rlp_int(unsigned(slot_val)) },
                     out,
                 )
             }
@@ -606,15 +612,16 @@ function storage_live_updates_from_harvest(a : address, writes : list(TrieUpdate
     updates_insert_all(writes, out)
 }
 
-/* post-state storage root of `a`. Defined after the recursive overlay walker. */
+/* post-state storage root for keccak(address). Defined after the recursive
+ * overlay walker. */
 val storage_root : address -> bits(256)
-val storage_root_from : (address, bits(256)) -> bits(256)
+val storage_root_from : (bits(256), bits(256)) -> bits(256)
 
-function acc_is_empty(acc : Account) -> bool =
-    (acc.acc_codehash == KECCAK_EMPTY) & acc.acc_nonce == 0 & word_is_zero(acc.acc_balance)
+function account_empty(acc : Account) -> bool =
+    (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance)
 
 /* 256-bit account field (balance / code_hash) of the current acctmap_at row */
-function am_at_bal() -> word =
+function selected_account_balance() -> word =
     append(
         acctmap_at_bal(get_slice_int(64, 3, 0)),
         append(
@@ -622,7 +629,7 @@ function am_at_bal() -> word =
             append(acctmap_at_bal(get_slice_int(64, 1, 0)), acctmap_at_bal(get_slice_int(64, 0, 0))),
         ),
     )
-function am_at_chash() -> word =
+function selected_account_code_hash() -> word =
     append(
         acctmap_at_chash(get_slice_int(64, 3, 0)),
         append(
@@ -630,7 +637,7 @@ function am_at_chash() -> word =
             append(acctmap_at_chash(get_slice_int(64, 1, 0)), acctmap_at_chash(get_slice_int(64, 0, 0))),
         ),
     )
-function am_at_sroot() -> word =
+function selected_account_storage_root() -> word =
     append(
         acctmap_at_sroot(get_slice_int(64, 3, 0)),
         append(
@@ -639,50 +646,61 @@ function am_at_sroot() -> word =
         ),
     )
 
-/* address of the current acctmap_at row (key words a2,a1,a0) */
-function am_at_addr() -> address =
-    word_to_address(
-        sail_zero_extend(
-            append(
-                acctmap_at_key(get_slice_int(64, 0, 0)),
-                append(acctmap_at_key(get_slice_int(64, 1, 0)), acctmap_at_key(get_slice_int(64, 2, 0))),
-            ),
-            256,
+/* secure trie key of the current acctmap_at row (keccak(address), h3..h0) */
+function selected_account_key_hash() -> bits(256) =
+    append(
+        acctmap_at_hkey(get_slice_int(64, 0, 0)),
+        append(
+            acctmap_at_hkey(get_slice_int(64, 1, 0)),
+            append(acctmap_at_hkey(get_slice_int(64, 2, 0)), acctmap_at_hkey(get_slice_int(64, 3, 0))),
         ),
     )
 
 /* secure-trie updates for the account map. Stateless block validation consumes
- * only dirty rows: witness-materialized read-only accounts are base-state cache,
- * not post-state updates. The native EEST runner has no parent root anchor, so
- * it uses the complete seeded map to build a full updates-only root. */
+ * only execution updates: witness-materialized read-only accounts are base-state
+ * cache, not post-state updates. The native EEST runner has no parent root
+ * anchor, so it uses the complete cache/update union to build a full
+ * updates-only root. */
 function state_updates_map() -> list(TrieUpdate) = {
     var out : list(TrieUpdate) = [||];
-    let n = unsigned(if k_stateless then { acctmap_dirty_count() } else { acctmap_count() });
+    let n = unsigned(
+        if k_stateless then {
+            acctmap_update_count()
+        } else {
+            acctmap_count()
+        },
+    );
     foreach (j from 0 to (n - 1)) {
         if k_stateless then {
-            acctmap_dirty_at(get_slice_int(64, j, 0))
+            acctmap_update_at(get_slice_int(64, j, 0))
         } else {
             acctmap_at(get_slice_int(64, j, 0))
         };
-        let addr = am_at_addr();
+        let ak_hash = selected_account_key_hash();
         let acc : Account = struct {
-                acc_nonce = unsigned(acctmap_at_nonce()),
-                acc_balance = am_at_bal(),
-                acc_codehash = am_at_chash(),
-                acc_storage_root = am_at_sroot(),
+                nonce = unsigned(acctmap_at_nonce()),
+                balance = selected_account_balance(),
+                code_hash = selected_account_code_hash(),
+                storage_root = selected_account_storage_root(),
             };
-        let ak = to_nibbles(word_to_bytes32(pre_keccak_addr(addr)));
-        let existed = unsigned(acctmap_at_existed()) == 1;
-        if k_stateless & acc_is_empty(acc) & not_bool(existed) then {
+        let ak = to_nibbles(word_to_bytes32(ak_hash));
+        let base_exists = unsigned(acctmap_at_base_exists()) == 1;
+        if k_stateless & account_empty(acc) & not_bool(base_exists) then {
             ()
         } else {
-            let upd : TrieUpdate = if acc_is_empty(acc) then {
-                    struct { tu_key = ak, tu_delete = true, tu_val = [||] }
+            let upd : TrieUpdate = if account_empty(acc) then {
+                    struct { key = ak, is_delete = true, value = [||] }
                 } else {
                     struct {
-                        tu_key = ak,
-                        tu_delete = false,
-                        tu_val = account_rlp(acc.acc_nonce, acc.acc_balance, storage_root_from(addr, acc.acc_storage_root), acc.acc_codehash),
+                        key = ak,
+                        is_delete = false,
+                        value =
+                            account_rlp(
+                                acc.nonce,
+                                acc.balance,
+                                storage_root_from(ak_hash, acc.storage_root),
+                                acc.code_hash,
+                            ),
                     }
                 };
             out = update_insert_sorted(upd, out)
@@ -701,7 +719,7 @@ val compute_state_root_overlay : unit -> bits(256)
 /* Stateless verification of the world-state trie from a Merkle witness     */
 /* (the node set covering the proof paths), mirroring execution-specs       */
 /* witness_state.py. A node database keyed by keccak256(node) (C-backed,    */
-/* ffi/host_nodedb.c) backs two operations.                                 */
+/* ffi/trie_node_db.c) backs two operations.                                 */
 /*                                                                          */
 /* Re-rooting recursively traverses the witnessed nodes and checks the      */
 /* result against the committed pre-state root, authenticating every        */
@@ -716,10 +734,10 @@ val compute_state_root_overlay : unit -> bits(256)
 /* ======================================================================== */
 
 /* EMPTY_TRIE_ROOT is defined in host/state.sail (next to KECCAK_EMPTY) so the
- * Account struct's acc_storage_root default can reference it. */
+ * Account struct's storage_root default can reference it. */
 let EMPTY_CODE_HASH : bits(256) = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
 
-let RLP_NONE : RlpField = struct { rf_is_list = false, rf_content = [||], rf_full = [||] }
+let RLP_NONE : RlpField = struct { is_list = false, content = [||], full = [||] }
 
 /* big-endian bytes -> 256-bit word */
 function bytes_be256(c : list(byte)) -> bits(256) = {
@@ -740,15 +758,15 @@ function decode_account(leaf : list(byte)) -> (int, word, bits(256), bits(256)) 
     let balance = rlp_field_word(list_nth(items, 1, RLP_NONE));
     let sr_f = list_nth(items, 2, RLP_NONE);
     let ch_f = list_nth(items, 3, RLP_NONE);
-    let sroot = if list_len(sr_f.rf_content) == 0 then {
+    let sroot = if list_len(sr_f.content) == 0 then {
             EMPTY_TRIE_ROOT
         } else {
-            bytes_be256(sr_f.rf_content)
+            bytes_be256(sr_f.content)
         };
-    let chash = if list_len(ch_f.rf_content) == 0 then {
+    let chash = if list_len(ch_f.content) == 0 then {
             EMPTY_CODE_HASH
         } else {
-            bytes_be256(ch_f.rf_content)
+            bytes_be256(ch_f.content)
         };
     (nonce, balance, sroot, chash)
 }
@@ -798,7 +816,7 @@ function nibs_match(key : list(int), pos : int, seg : list(int)) -> bool = {
 }
 
 /* node db: keccak(node) -> node bytes (linear scan; witnesses are small) */
-/* C-backed node-db (ffi/host_nodedb.c): keccak(node) -> (offset, len) span into
+/* C-backed node-db (ffi/trie_node_db.c): keccak(node) -> (offset, len) span into
  * the SSZ witness buffer. Replaces a Sail assoc list whose linear node_db_lookup
  * (plus the whole list deep-copied through every recursive walk) made re-rooting
  * O(N^2); this is an O(1)-amortized hash map, so the walk is O(N). The 256-bit
@@ -810,7 +828,7 @@ val nodedb_sel = impure { _: "nodedb_sel" } : (bits(64), bits(64), bits(64), bit
 val nodedb_sel_off = impure { _: "nodedb_sel_off" } : unit -> bits(64)
 val nodedb_sel_len = impure { _: "nodedb_sel_len" } : unit -> bits(64)
 
-/* C-backed witness account-leaf store (ffi/host_nodedb.c): keccak(addr) ->
+/* C-backed witness account-leaf store (ffi/trie_node_db.c): keccak(addr) ->
  * (offset, len) span of the account's leaf node in the SSZ witness buffer.
  * Recorded during the state re-root walk; a stateless account read looks the span
  * up here (O(1)) and decodes the leaf lazily. Same span model as the node-db. */
@@ -840,11 +858,11 @@ function node_db_lookup(h : bits(256)) -> list(byte) = {
  * omitted a node on a walked path) -- fail closed, so a resolved-empty result
  * always means a legitimate exclusion, never a withheld subtree. */
 function resolve_child(f : RlpField) -> list(byte) =
-    if f.rf_is_list then {
-        f.rf_full
+    if f.is_list then {
+        f.full
     } else {
-        if list_len(f.rf_content) == 32 then {
-            let node = node_db_lookup(bytes_be256(f.rf_content));
+        if list_len(f.content) == 32 then {
+            let node = node_db_lookup(bytes_be256(f.content));
 
             /* a 32-byte ref absent from the witness means the proof is deficient:
                flag the block invalid (valid=false) and end the walk here, rather
@@ -861,7 +879,7 @@ function resolve_child(f : RlpField) -> list(byte) =
 
 /* ---- recursive trie overlay -------------------------------------------- */
 
-struct TriePatch = { pa_key : list(int), pa_delete : bool, pa_is_ref : bool, pa_bytes : list(byte) }
+struct TriePatch = { key : list(int), is_delete : bool, is_ref : bool, bytes : list(byte) }
 
 function trie_empty_ref() -> list(byte) = [|0x80|]
 
@@ -871,7 +889,7 @@ function trie_ref_is_empty(r : list(byte)) -> bool =
 function trie_ref_to_root(r : list(byte)) -> bits(256) =
     match r {
         0xa0 :: h => if list_len(h) == 32 then {
-            hb_bytes_be256(h)
+            bytes_to_word_be256(h)
         } else {
             keccak256(r)
         },
@@ -879,11 +897,11 @@ function trie_ref_to_root(r : list(byte)) -> bits(256) =
     }
 
 function field_to_ref(f : RlpField) -> list(byte) =
-    if f.rf_is_list then {
-        f.rf_full
+    if f.is_list then {
+        f.full
     } else {
-        if list_len(f.rf_content) == 32 then {
-            hb_word_ref(f.rf_content)
+        if list_len(f.content) == 32 then {
+            hash_child_ref(f.content)
         } else {
             trie_empty_ref()
         }
@@ -906,15 +924,15 @@ function merge_ext_node(prefix : list(int), childnode : list(byte)) -> list(byte
             let items = rlp_node_items(childnode);
             let n = list_len(items);
             if n == 2 then {
-                let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).rf_content);
+                let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).content);
                 let key = list_append(prefix, seg);
                 if is_leaf then {
-                    hb_leaf_node(key, list_nth(items, 1, RLP_NONE).rf_content)
+                    leaf_node_rlp(key, list_nth(items, 1, RLP_NONE).content)
                 } else {
-                    hb_ext_node(key, field_to_ref(list_nth(items, 1, RLP_NONE)))
+                    extension_node_rlp(key, field_to_ref(list_nth(items, 1, RLP_NONE)))
                 }
             } else {
-                hb_ext_node(prefix, node_to_ref(childnode))
+                extension_node_rlp(prefix, node_to_ref(childnode))
             }
         }
     }
@@ -929,23 +947,23 @@ function merge_ext_ref(prefix : list(int), childref : list(byte)) -> list(byte) 
         } else {
             match childref {
                 0xa0 :: h => if list_len(h) == 32 then {
-                    hb_ext_ref(prefix, childref)
+                    extension_child_ref(prefix, childref)
                 } else {
-                    hb_ext_ref(prefix, childref)
+                    extension_child_ref(prefix, childref)
                 },
                 _ => {
                     let items = rlp_node_items(childref);
                     let n = list_len(items);
                     if n == 2 then {
-                        let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).rf_content);
+                        let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).content);
                         let key = list_append(prefix, seg);
                         if is_leaf then {
-                            hb_leaf_ref(key, list_nth(items, 1, RLP_NONE).rf_content)
+                            leaf_child_ref(key, list_nth(items, 1, RLP_NONE).content)
                         } else {
-                            hb_ext_ref(key, field_to_ref(list_nth(items, 1, RLP_NONE)))
+                            extension_child_ref(key, field_to_ref(list_nth(items, 1, RLP_NONE)))
                         }
                     } else {
-                        hb_ext_ref(prefix, childref)
+                        extension_child_ref(prefix, childref)
                     }
                 },
             }
@@ -956,7 +974,7 @@ function merge_ext_ref(prefix : list(int), childref : list(byte)) -> list(byte) 
 function mask_single_index(mask : int) -> int = {
     var ix : int = 0;
     foreach (i from 0 to 15) {
-        if hb_bit_set(mask, i) then {
+        if branch_mask_has_bit(mask, i) then {
             ix = i
         }
     };
@@ -973,22 +991,22 @@ function canonical_branch_ref(mask : int, children : list(list(byte))) -> list(b
     if mask == 0 then {
         trie_empty_ref()
     } else {
-        if hb_popcount16(mask) == 1 then {
+        if branch_mask_popcount(mask) == 1 then {
             merge_ext_ref([|mask_single_index(mask)|], first_child_ref(children))
         } else {
-            hb_branch_ref(mask, children)
+            branch_child_ref(mask, children)
         }
     }
 
-function patch_live(p : TriePatch) -> bool = p.pa_is_ref | not_bool(p.pa_delete)
+function patch_live(p : TriePatch) -> bool = p.is_ref | not_bool(p.is_delete)
 
 function patch_insert_sorted(p : TriePatch, ps : list(TriePatch)) -> list(TriePatch) =
     match ps {
         [||] => [|p|],
-        q :: r => if nib_eq(p.pa_key, q.pa_key) then {
+        q :: r => if nib_eq(p.key, q.key) then {
             p :: r
         } else {
-            if nib_lt(p.pa_key, q.pa_key) then {
+            if nib_lt(p.key, q.key) then {
                 p :: ps
             } else {
                 q :: patch_insert_sorted(p, r)
@@ -997,7 +1015,7 @@ function patch_insert_sorted(p : TriePatch, ps : list(TriePatch)) -> list(TriePa
     }
 
 function patch_from_update(u : TrieUpdate) -> TriePatch =
-    struct { pa_key = u.tu_key, pa_delete = u.tu_delete, pa_is_ref = false, pa_bytes = u.tu_val }
+    struct { key = u.key, is_delete = u.is_delete, is_ref = false, bytes = u.value }
 
 function patches_from_updates(us : list(TrieUpdate)) -> list(TriePatch) =
     match us {
@@ -1016,7 +1034,7 @@ function patches_filter_live(ps : list(TriePatch)) -> list(TriePatch) =
     }
 
 function patch_ref(key : list(int), child : list(byte)) -> TriePatch =
-    struct { pa_key = key, pa_delete = false, pa_is_ref = true, pa_bytes = child }
+    struct { key = key, is_delete = false, is_ref = true, bytes = child }
 
 function patch_insert_ref_if_live(key : list(int), child : list(byte), ps : list(TriePatch)) -> list(TriePatch) =
     if trie_ref_is_empty(child) then {
@@ -1026,19 +1044,19 @@ function patch_insert_ref_if_live(key : list(int), child : list(byte), ps : list
     }
 
 function patch_leaf(key : list(int), value : list(byte)) -> TriePatch =
-    struct { pa_key = key, pa_delete = false, pa_is_ref = false, pa_bytes = value }
+    struct { key = key, is_delete = false, is_ref = false, bytes = value }
 
 function patches_first_key(ps : list(TriePatch)) -> list(int) =
     match ps {
         [||]   => [||],
-        p :: _ => p.pa_key,
+        p :: _ => p.key,
     }
 
 function patches_last_key(ps : list(TriePatch)) -> list(int) =
     match ps {
         [||] => [||],
         p :: r => match r {
-            [||] => p.pa_key,
+            [||] => p.key,
             _    => patches_last_key(r),
         },
     }
@@ -1046,7 +1064,7 @@ function patches_last_key(ps : list(TriePatch)) -> list(int) =
 function patches_at_nibble(ps : list(TriePatch), depth : int, nib : int) -> list(TriePatch) =
     match ps {
         [||] => [||],
-        p :: r => if list_len(p.pa_key) > depth & list_nth(p.pa_key, depth, -1) == nib then {
+        p :: r => if list_len(p.key) > depth & list_nth(p.key, depth, -1) == nib then {
             p :: patches_at_nibble(r, depth, nib)
         } else {
             patches_at_nibble(r, depth, nib)
@@ -1054,11 +1072,11 @@ function patches_at_nibble(ps : list(TriePatch), depth : int, nib : int) -> list
     }
 
 function patch_entry_ref(p : TriePatch, depth : int) -> list(byte) = {
-    let suffix = hb_ldrop(p.pa_key, depth);
-    if p.pa_is_ref then {
-        merge_ext_ref(suffix, p.pa_bytes)
+    let suffix = list_drop_prefix(p.key, depth);
+    if p.is_ref then {
+        merge_ext_ref(suffix, p.bytes)
     } else {
-        hb_leaf_ref(suffix, p.pa_bytes)
+        leaf_child_ref(suffix, p.bytes)
     }
 }
 
@@ -1081,15 +1099,15 @@ function ref_node_for_collapse(r : list(byte)) -> list(byte) =
     }
 
 function patch_entry_node(p : TriePatch, depth : int) -> list(byte) = {
-    let suffix = hb_ldrop(p.pa_key, depth);
-    if p.pa_is_ref then {
+    let suffix = list_drop_prefix(p.key, depth);
+    if p.is_ref then {
         if list_len(suffix) == 0 then {
-            ref_node_for_collapse(p.pa_bytes)
+            ref_node_for_collapse(p.bytes)
         } else {
-            hb_ext_node(suffix, p.pa_bytes)
+            extension_node_rlp(suffix, p.bytes)
         }
     } else {
-        hb_leaf_node(suffix, p.pa_bytes)
+        leaf_node_rlp(suffix, p.bytes)
     }
 }
 
@@ -1105,9 +1123,9 @@ function patches_ref(ps0 : list(TriePatch), depth : int, fuel : int) -> list(byt
             _ => {
                 let first = patches_first_key(ps);
                 let last = patches_last_key(ps);
-                let common = hb_cpl(hb_ldrop(first, depth), hb_ldrop(last, depth));
+                let common = common_prefix_len(list_drop_prefix(first, depth), list_drop_prefix(last, depth));
                 if common > 0 then {
-                    let prefix = hb_ltake(hb_ldrop(first, depth), common);
+                    let prefix = list_take_prefix(list_drop_prefix(first, depth), common);
                     merge_ext_ref(prefix, patches_ref(ps, depth + common, fuel - common))
                 } else {
                     var mask : int = 0;
@@ -1115,7 +1133,7 @@ function patches_ref(ps0 : list(TriePatch), depth : int, fuel : int) -> list(byt
                     foreach (i from 0 to 15) {
                         let group = patches_at_nibble(ps, depth, i);
                         if list_len(group) > 0 then {
-                            mask = hb_with_bit(mask, i);
+                            mask = branch_mask_set_bit(mask, i);
                             children = list_append(children, [|patches_ref(group, depth + 1, fuel - 1)|])
                         }
                     };
@@ -1139,9 +1157,9 @@ function patches_node(ps0 : list(TriePatch), depth : int, fuel : int) -> list(by
             _ => {
                 let first = patches_first_key(ps);
                 let last = patches_last_key(ps);
-                let common = hb_cpl(hb_ldrop(first, depth), hb_ldrop(last, depth));
+                let common = common_prefix_len(list_drop_prefix(first, depth), list_drop_prefix(last, depth));
                 if common > 0 then {
-                    let prefix = hb_ltake(hb_ldrop(first, depth), common);
+                    let prefix = list_take_prefix(list_drop_prefix(first, depth), common);
                     merge_ext_node(prefix, patches_node(ps, depth + common, fuel - common))
                 } else {
                     var mask : int = 0;
@@ -1153,7 +1171,7 @@ function patches_node(ps0 : list(TriePatch), depth : int, fuel : int) -> list(by
                         if list_len(group) > 0 then {
                             let cnode = patches_node(group, depth + 1, fuel - 1);
                             if list_len(cnode) > 0 then {
-                                mask = hb_with_bit(mask, i);
+                                mask = branch_mask_set_bit(mask, i);
                                 children = list_append(children, [|node_to_ref(cnode)|]);
                                 lone_index = i;
                                 lone_child = cnode
@@ -1163,10 +1181,10 @@ function patches_node(ps0 : list(TriePatch), depth : int, fuel : int) -> list(by
                     if mask == 0 then {
                         [||]
                     } else {
-                        if hb_popcount16(mask) == 1 then {
+                        if branch_mask_popcount(mask) == 1 then {
                             merge_ext_node([|lone_index|], lone_child)
                         } else {
-                            hb_branch_node(mask, children)
+                            branch_node_rlp(mask, children)
                         }
                     }
                 }
@@ -1203,14 +1221,16 @@ function trie_overlay_child_ref_preserve(
     prefix : list(int),
     updates : list(TrieUpdate),
     fuel : int,
-) -> list(byte) = {
+) -> (
+    list(byte)
+) = {
     if updates_empty(updates) then {
         field_to_ref(f)
     } else {
-        if f.rf_is_list then {
-            trie_overlay_node_ref_preserve(f.rf_full, prefix, updates, fuel)
+        if f.is_list then {
+            trie_overlay_node_ref_preserve(f.full, prefix, updates, fuel)
         } else {
-            let c = f.rf_content;
+            let c = f.content;
             if list_len(c) == 0 then {
                 updates_ref(updates, list_len(prefix), fuel)
             } else {
@@ -1235,7 +1255,9 @@ function trie_overlay_node_ref_preserve(
     prefix : list(int),
     updates : list(TrieUpdate),
     fuel : int,
-) -> list(byte) = {
+) -> (
+    list(byte)
+) = {
     if fuel <= 0 then {
         k_witness_bad = true;
         trie_empty_ref()
@@ -1246,11 +1268,11 @@ function trie_overlay_node_ref_preserve(
             let items = rlp_node_items(node);
             let n = list_len(items);
             if n == 2 then {
-                let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).rf_content);
+                let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).content);
                 let key = list_append(prefix, seg);
                 if is_leaf then {
                     patches_ref(
-                        leaf_overlay_patches(key, list_nth(items, 1, RLP_NONE).rf_content, updates),
+                        leaf_overlay_patches(key, list_nth(items, 1, RLP_NONE).content, updates),
                         list_len(prefix),
                         fuel,
                     )
@@ -1263,8 +1285,7 @@ function trie_overlay_node_ref_preserve(
                     } else {
                         let under = updates_under_prefix(updates, key);
                         let outside = updates_outside_prefix(updates, key);
-                        let old =
-                            trie_overlay_child_ref_preserve(list_nth(items, 1, RLP_NONE), key, under, fuel - 1);
+                        let old = trie_overlay_child_ref_preserve(list_nth(items, 1, RLP_NONE), key, under, fuel - 1);
                         patches_ref(
                             patch_insert_ref_if_live(key, old, patches_from_updates(outside)),
                             list_len(prefix),
@@ -1274,7 +1295,7 @@ function trie_overlay_node_ref_preserve(
                 }
             } else {
                 if n == 17 then {
-                    let branch_value = list_nth(items, 16, RLP_NONE).rf_content;
+                    let branch_value = list_nth(items, 16, RLP_NONE).content;
                     if list_len(branch_value) > 0 then {
                         k_witness_bad = true
                     };
@@ -1286,7 +1307,7 @@ function trie_overlay_node_ref_preserve(
                         let group = updates_at_nibble(updates, list_len(prefix), i);
                         let cref = trie_overlay_child_ref_preserve(field, child_prefix, group, fuel - 1);
                         if not_bool(trie_ref_is_empty(cref)) then {
-                            mask = hb_with_bit(mask, i);
+                            mask = branch_mask_set_bit(mask, i);
                             children = list_append(children, [|cref|])
                         }
                     };
@@ -1303,10 +1324,10 @@ function trie_overlay_child_ref(f : RlpField, prefix : list(int), updates : list
     if updates_empty(updates) then {
         field_to_ref(f)
     } else {
-        if f.rf_is_list then {
-            trie_overlay_node_ref(f.rf_full, prefix, updates, fuel)
+        if f.is_list then {
+            trie_overlay_node_ref(f.full, prefix, updates, fuel)
         } else {
-            let c = f.rf_content;
+            let c = f.content;
             if list_len(c) == 0 then {
                 updates_ref(updates, list_len(prefix), fuel)
             } else {
@@ -1335,10 +1356,10 @@ function trie_overlay_child_node_for_collapse(
     list(byte)
 ) = {
     if updates_empty(updates) then {
-        if f.rf_is_list then {
-            trie_overlay_node_for_collapse(f.rf_full, prefix, updates, fuel)
+        if f.is_list then {
+            trie_overlay_node_for_collapse(f.full, prefix, updates, fuel)
         } else {
-            let c = f.rf_content;
+            let c = f.content;
             if list_len(c) == 0 then {
                 [||]
             } else {
@@ -1356,10 +1377,10 @@ function trie_overlay_child_node_for_collapse(
             }
         }
     } else {
-        if f.rf_is_list then {
-            trie_overlay_node_for_collapse(f.rf_full, prefix, updates, fuel)
+        if f.is_list then {
+            trie_overlay_node_for_collapse(f.full, prefix, updates, fuel)
         } else {
-            let c = f.rf_content;
+            let c = f.content;
             if list_len(c) == 0 then {
                 updates_node(updates, list_len(prefix), fuel)
             } else {
@@ -1397,11 +1418,11 @@ function trie_overlay_node_for_collapse(
             let items = rlp_node_items(node);
             let n = list_len(items);
             if n == 2 then {
-                let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).rf_content);
+                let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).content);
                 let key = list_append(prefix, seg);
                 if is_leaf then {
                     patches_node(
-                        leaf_overlay_patches(key, list_nth(items, 1, RLP_NONE).rf_content, updates),
+                        leaf_overlay_patches(key, list_nth(items, 1, RLP_NONE).content, updates),
                         list_len(prefix),
                         fuel,
                     )
@@ -1417,12 +1438,7 @@ function trie_overlay_node_for_collapse(
                         if not_bool(updates_empty(under)) & not_bool(updates_has_live(outside)) then {
                             merge_ext_node(
                                 seg,
-                                trie_overlay_child_node_for_collapse(
-                                    list_nth(items, 1, RLP_NONE),
-                                    key,
-                                    under,
-                                    fuel - 1,
-                                ),
+                                trie_overlay_child_node_for_collapse(list_nth(items, 1, RLP_NONE), key, under, fuel - 1),
                             )
                         } else {
                             let old = trie_overlay_child_ref(list_nth(items, 1, RLP_NONE), key, under, fuel - 1);
@@ -1436,7 +1452,7 @@ function trie_overlay_node_for_collapse(
                 }
             } else {
                 if n == 17 then {
-                    let branch_value = list_nth(items, 16, RLP_NONE).rf_content;
+                    let branch_value = list_nth(items, 16, RLP_NONE).content;
                     if list_len(branch_value) > 0 then {
                         k_witness_bad = true
                     };
@@ -1452,7 +1468,7 @@ function trie_overlay_node_for_collapse(
                         let group = updates_at_nibble(updates, list_len(prefix), i);
                         let cref = trie_overlay_child_ref(field, child_prefix, group, fuel - 1);
                         if not_bool(trie_ref_is_empty(cref)) then {
-                            mask = hb_with_bit(mask, i);
+                            mask = branch_mask_set_bit(mask, i);
                             children = list_append(children, [|cref|]);
                             lone_index = i;
                             lone_field = field;
@@ -1463,12 +1479,16 @@ function trie_overlay_node_for_collapse(
                     if mask == 0 then {
                         [||]
                     } else {
-                        if hb_popcount16(mask) == 1 then {
-                            let cnode =
-                                trie_overlay_child_node_for_collapse(lone_field, lone_prefix, lone_updates, fuel - 1);
+                        if branch_mask_popcount(mask) == 1 then {
+                            let cnode = trie_overlay_child_node_for_collapse(
+                                lone_field,
+                                lone_prefix,
+                                lone_updates,
+                                fuel - 1,
+                            );
                             merge_ext_node([|lone_index|], cnode)
                         } else {
-                            hb_branch_node(mask, children)
+                            branch_node_rlp(mask, children)
                         }
                     }
                 } else {
@@ -1543,13 +1563,13 @@ function trie_walk(node : list(byte), key : list(int), pos : int, fuel : int) ->
         let items = rlp_node_items(node);
         let n = list_len(items);
         if n == 2 then {
-            let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).rf_content);
+            let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).content);
             if not_bool(nibs_match(key, pos, seg)) then {
                 [||]
             } else {
                 if is_leaf then {
                     if pos + list_len(seg) == list_len(key) then {
-                        list_nth(items, 1, RLP_NONE).rf_content
+                        list_nth(items, 1, RLP_NONE).content
                     } else {
                         [||]
                     }
@@ -1561,7 +1581,7 @@ function trie_walk(node : list(byte), key : list(int), pos : int, fuel : int) ->
         } else {
             if n == 17 then {
                 if pos == list_len(key) then {
-                    list_nth(items, 16, RLP_NONE).rf_content
+                    list_nth(items, 16, RLP_NONE).content
                 } else {
                     let child = resolve_child(list_nth(items, list_nth(key, pos, 0), RLP_NONE));
                     trie_walk(child, key, pos + 1, fuel - 1)
@@ -1616,10 +1636,10 @@ function record_witness_leaf(node : list(byte), key : list(int), value : list(by
 
 /* child field at nibble-path `key`: descend if present, preserve if blinded */
 function witness_child_ref(f : RlpField, key : list(int), fuel : int) -> list(byte) = {
-    if f.rf_is_list then {
-        witness_node_ref(f.rf_full, key, fuel)
+    if f.is_list then {
+        witness_node_ref(f.full, key, fuel)
     } else {
-        let c = f.rf_content;
+        let c = f.content;
         if list_len(c) == 0 then {
             trie_empty_ref()
         } else {
@@ -1629,7 +1649,7 @@ function witness_child_ref(f : RlpField, key : list(int), fuel : int) -> list(by
                     if hv_storage then {
                         storage_mark_partial(hv_acct)
                     };
-                    hb_word_ref(c)
+                    hash_child_ref(c)
                 } else {
                     witness_node_ref(node, key, fuel)
                 }
@@ -1650,18 +1670,18 @@ function witness_node_ref(node : list(byte), prefix : list(int), fuel : int) -> 
         let items = rlp_node_items(node);
         let n = list_len(items);
         if n == 2 then {
-            let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).rf_content);
+            let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).content);
             let key = list_append(prefix, seg);
             if is_leaf then {
-                let value = list_nth(items, 1, RLP_NONE).rf_content;
+                let value = list_nth(items, 1, RLP_NONE).content;
                 record_witness_leaf(node, key, value);
-                hb_leaf_ref(seg, value)
+                leaf_child_ref(seg, value)
             } else {
                 merge_ext_ref(seg, witness_child_ref(list_nth(items, 1, RLP_NONE), key, fuel - 1))
             } /* extension */
         } else {
             if n == 17 then {
-                let v = list_nth(items, 16, RLP_NONE).rf_content;
+                let v = list_nth(items, 16, RLP_NONE).content;
                 if list_len(v) > 0 then {
                     k_witness_bad = true
                 };
@@ -1670,7 +1690,7 @@ function witness_node_ref(node : list(byte), prefix : list(int), fuel : int) -> 
                 foreach (i from 0 to 15) {
                     let cref = witness_child_ref(list_nth(items, i, RLP_NONE), list_append(prefix, [|i|]), fuel - 1);
                     if not_bool(trie_ref_is_empty(cref)) then {
-                        mask = hb_with_bit(mask, i);
+                        mask = branch_mask_set_bit(mask, i);
                         children = list_append(children, [|cref|])
                     }
                 };
@@ -1731,7 +1751,7 @@ function build_node_db() -> unit = {
  * (EIP-8025 witness header collection) the parent is the last one. */
 function parent_state_root() -> bits(256) = {
     let items = rlp_node_items(ssz_witness_header(wit_n_headers() - 1));
-    bytes_be256(list_nth(items, 3, RLP_NONE).rf_content)
+    bytes_be256(list_nth(items, 3, RLP_NONE).content)
 }
 
 /* Stateless storage resolver (declared in host/state.sail): the (a, s) pre-state
@@ -1746,10 +1766,10 @@ function parent_state_root() -> bits(256) = {
  *     absent) node on the path              => trie_walk asserts "witness missing
  *                                              trie node" => fail closed.
  * The resolved value (or proven-absent 0) is cached in the slot store, so repeat
- * reads are O(1) -- one keccak (memoized) and one walk per slot, never per read. */
+ * reads are O(1) without repeating the walk. */
 function stateless_storage(a : address, s : word) -> word = {
-    let ak = pre_keccak_addr(a);
-    let sk = pre_keccak_slot(s);
+    let ak = keccak256(address_to_bytes(a));
+    let sk = keccak256(word_to_bytes32(s));
     if slotdb_sel(
         ak[255 .. 192],
         ak[191 .. 128],
@@ -1763,7 +1783,7 @@ function stateless_storage(a : address, s : word) -> word = {
         0x0000000000000000 then {
         slot_selword()
     } else {
-        let sroot = kget(a).acc_storage_root;
+        let sroot = load_account(a).storage_root;
         let leaf = trie_walk(node_db_lookup(sroot), hash_nibbles(sk), 0, 256);
         let v : word = if list_len(leaf) > 0 then {
                 rlp_str_word(leaf)
@@ -1829,7 +1849,7 @@ function harvest_all_storage() -> unit = {
         acctdb_at(get_slice_int(64, i, 0));
         let ak = acctdb_at_acct();
         let node = ssz_bytes(unsigned(acctdb_at_off()), unsigned(acctdb_at_len()));
-        let value = list_nth(rlp_node_items(node), 1, RLP_NONE).rf_content;
+        let value = list_nth(rlp_node_items(node), 1, RLP_NONE).content;
         let (_, _, sroot, _) = decode_account(value);
         if sroot != EMPTY_TRIE_ROOT then {
             harvest_storage(ak, sroot)
@@ -1847,19 +1867,19 @@ function harvest_all_storage() -> unit = {
  *   - hits a blinded (witness-absent) node   => trie_walk asserts => fail closed.
  * So a not-materialized account is never silently treated as empty -- its
  * absence is a witness-proven exclusion. The result is cached raw in the acctmap
- * (k_seed_account_hashed), so subsequent kget(a) is an O(1) raw read. */
+ * (k_seed_account_hashed), so subsequent load_account(a) is an O(1) raw read. */
 function stateless_account_load(a : address) -> unit = {
-    let ak = pre_keccak_addr(a);
+    let ak = keccak256(address_to_bytes(a));
     let value : list(byte) = if acctdb_sel(ak[255 .. 192], ak[191 .. 128], ak[127 .. 64], ak[63 .. 0]) !=
             0x0000000000000000 then {
-            list_nth(rlp_node_items(ssz_bytes(unsigned(acctdb_sel_off()), unsigned(acctdb_sel_len()))), 1, RLP_NONE).rf_content
+            list_nth(rlp_node_items(ssz_bytes(unsigned(acctdb_sel_off()), unsigned(acctdb_sel_len()))), 1, RLP_NONE).content
         } else {
             trie_walk(node_db_lookup(parent_state_root()), hash_nibbles(ak), 0, 256)
         };
     if list_len(value) > 0 then {
         let (nonce, bal, sroot, chash) = decode_account(value);
         k_seed_account_hashed(a, nonce, bal, sroot, chash);
-        acctmap_mark_existing()
+        acctmap_mark_base_exists()
     } else {
         k_seed_account_hashed(a, 0, sail_zeros(256), EMPTY_TRIE_ROOT, KECCAK_EMPTY)
     }
@@ -1871,8 +1891,8 @@ function stateless_account_load(a : address) -> unit = {
  * node-db and preserving untouched children by reference. The standalone EEST
  * runner seeds the complete post-state and uses the updates-only entry point
  * because it has no parent root anchor. */
-function storage_root_from(a : address, sroot : bits(256)) -> bits(256) = {
-    let updates = storage_updates(a);
+function storage_root_from(ak : bits(256), sroot : bits(256)) -> bits(256) = {
+    let updates = storage_updates(ak);
     if updates_empty(updates) then {
         sroot
     } else {
@@ -1882,9 +1902,8 @@ function storage_root_from(a : address, sroot : bits(256)) -> bits(256) = {
         } else {
             let r = if updates_has_delete(updates) then {
                     if k_stateless then {
-                        let ak = pre_keccak_addr(a);
                         if storage_harvest_complete(ak) then {
-                            updates_root(storage_live_updates_from_harvest(a, updates))
+                            updates_root(storage_live_updates_from_harvest(ak, updates))
                         } else {
                             trie_overlay_root(sroot, updates)
                         }
@@ -1900,7 +1919,7 @@ function storage_root_from(a : address, sroot : bits(256)) -> bits(256) = {
 }
 
 function storage_root(a : address) -> bits(256) =
-    storage_root_from(a, kget(a).acc_storage_root)
+    storage_root_from(keccak256(address_to_bytes(a)), load_account(a).storage_root)
 
 function compute_state_root_updates_only() -> bits(256) =
     updates_root(state_updates_map())
@@ -1927,7 +1946,7 @@ function bal_account_items(acc : list(byte)) -> int = {
     let items = rlp_node_items(acc);
     let sc = list_nth(items, 1, RLP_NONE);
     let sr = list_nth(items, 2, RLP_NONE);
-    1 + list_len(rlp_node_items(sc.rf_full)) + list_len(rlp_node_items(sr.rf_full))
+    1 + list_len(rlp_node_items(sc.full)) + list_len(rlp_node_items(sr.full))
 }
 
 function bal_item_count() -> int = {
@@ -1942,7 +1961,7 @@ function bal_item_count() -> int = {
         while more do {
             match rest {
                 a :: r => {
-                    total = total + bal_account_items(a.rf_full);
+                    total = total + bal_account_items(a.full);
                     rest = r
                 },
                 [||] => more = false,

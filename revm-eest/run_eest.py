@@ -27,6 +27,84 @@ def hexbytes(s):
     s = (s or "").lower().replace("0x", "")
     return bytes.fromhex(s) if s else b""
 
+try:
+    from Crypto.Hash import keccak as _crypto_keccak
+    def keccak256(data):
+        h = _crypto_keccak.new(digest_bits=256)
+        h.update(data)
+        return h.digest()
+except ModuleNotFoundError:
+    try:
+        from eth_hash.auto import keccak as keccak256
+    except ModuleNotFoundError:
+        _MASK64 = (1 << 64) - 1
+        _KECCAK_RC = [
+            0x0000000000000001, 0x0000000000008082, 0x800000000000808a,
+            0x8000000080008000, 0x000000000000808b, 0x0000000080000001,
+            0x8000000080008081, 0x8000000000008009, 0x000000000000008a,
+            0x0000000000000088, 0x0000000080008009, 0x000000008000000a,
+            0x000000008000808b, 0x800000000000008b, 0x8000000000008089,
+            0x8000000000008003, 0x8000000000008002, 0x8000000000000080,
+            0x000000000000800a, 0x800000008000000a, 0x8000000080008081,
+            0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+        ]
+        _KECCAK_R = [
+            [0, 36, 3, 41, 18],
+            [1, 44, 10, 45, 2],
+            [62, 6, 43, 15, 61],
+            [28, 55, 25, 21, 56],
+            [27, 20, 39, 8, 14],
+        ]
+
+        def _rol64(x, n):
+            return ((x << n) | (x >> (64 - n))) & _MASK64 if n else x
+
+        def _keccak_f(st):
+            for rc in _KECCAK_RC:
+                c = [st[x] ^ st[x + 5] ^ st[x + 10] ^ st[x + 15] ^ st[x + 20] for x in range(5)]
+                d = [c[(x - 1) % 5] ^ _rol64(c[(x + 1) % 5], 1) for x in range(5)]
+                for x in range(5):
+                    for y in range(5):
+                        st[x + 5 * y] ^= d[x]
+                b = [0] * 25
+                for x in range(5):
+                    for y in range(5):
+                        b[y + 5 * ((2 * x + 3 * y) % 5)] = _rol64(st[x + 5 * y], _KECCAK_R[x][y])
+                for x in range(5):
+                    for y in range(5):
+                        st[x + 5 * y] = b[x + 5 * y] ^ ((~b[((x + 1) % 5) + 5 * y] & _MASK64) & b[((x + 2) % 5) + 5 * y])
+                st[0] ^= rc
+
+        def keccak256(data):
+            rate = 136
+            st = [0] * 25
+            off = 0
+            while off + rate <= len(data):
+                block = data[off:off + rate]
+                for i in range(rate // 8):
+                    st[i] ^= int.from_bytes(block[8 * i:8 * i + 8], "little")
+                _keccak_f(st)
+                off += rate
+            block = bytearray(rate)
+            block[:len(data) - off] = data[off:]
+            block[len(data) - off] ^= 0x01
+            block[-1] ^= 0x80
+            for i in range(rate // 8):
+                st[i] ^= int.from_bytes(block[8 * i:8 * i + 8], "little")
+            _keccak_f(st)
+            out = bytearray()
+            while len(out) < 32:
+                for i in range(rate // 8):
+                    out += st[i].to_bytes(8, "little")
+                    if len(out) >= 32:
+                        break
+                if len(out) < 32:
+                    _keccak_f(st)
+            return bytes(out[:32])
+
+def acct_hash_int(addr):
+    return int.from_bytes(keccak256(int(addr).to_bytes(20, "big")), "big")
+
 def build_runner(rebuild=False):
     if os.path.exists(BIN) and not rebuild:
         return
@@ -65,14 +143,12 @@ def build_runner(rebuild=False):
         subprocess.check_call(["cc","-O2",f"-I{sfdir}",f"-I{lib}",
                                BIN+"_gen.c", os.path.join(HERE,"runner_ffi.c"),
                                os.path.join(ELDIR,"ffi","acc_shim.c"),
-                               os.path.join(ELDIR,"ffi","host_mem.c"),
-                               os.path.join(ELDIR,"ffi","host_map.c"),
-                               os.path.join(ELDIR,"ffi","host_stack.c"),
-                               os.path.join(ELDIR,"ffi","host_word.c"),
-                               os.path.join(ELDIR,"ffi","host_code.c"),
-                               os.path.join(ELDIR,"ffi","host_nodedb.c"),
-                               os.path.join(ELDIR,"ffi","host_acctmap.c"),
-                               os.path.join(ELDIR,"ffi","host_preimage.c"),
+                               os.path.join(ELDIR,"ffi","memory.c"),
+                               os.path.join(ELDIR,"ffi","transient_storage.c"),
+                               os.path.join(ELDIR,"ffi","state_db.c"),
+                               os.path.join(ELDIR,"ffi","stack.c"),
+                               os.path.join(ELDIR,"ffi","code_db.c"),
+                               os.path.join(ELDIR,"ffi","trie_node_db.c"),
                                *objs, *accel_flags, *stack_flags, "-o",BIN])
     else:
         objs = []
@@ -86,14 +162,12 @@ def build_runner(rebuild=False):
         subprocess.check_call(["cc","-O2",f"-I{lib}","-I/opt/homebrew/include","-L/opt/homebrew/lib",
                                BIN+"_gen.c", os.path.join(HERE,"runner_ffi.c"),
                                os.path.join(ELDIR,"ffi","acc_shim.c"),
-                               os.path.join(ELDIR,"ffi","host_mem.c"),
-                               os.path.join(ELDIR,"ffi","host_map.c"),
-                               os.path.join(ELDIR,"ffi","host_stack.c"),
-                               os.path.join(ELDIR,"ffi","host_word.c"),
-                               os.path.join(ELDIR,"ffi","host_code.c"),
-                               os.path.join(ELDIR,"ffi","host_nodedb.c"),
-                               os.path.join(ELDIR,"ffi","host_acctmap.c"),
-                               os.path.join(ELDIR,"ffi","host_preimage.c"),
+                               os.path.join(ELDIR,"ffi","memory.c"),
+                               os.path.join(ELDIR,"ffi","transient_storage.c"),
+                               os.path.join(ELDIR,"ffi","state_db.c"),
+                               os.path.join(ELDIR,"ffi","stack.c"),
+                               os.path.join(ELDIR,"ffi","code_db.c"),
+                               os.path.join(ELDIR,"ffi","trie_node_db.c"),
                                *objs, *accel_flags, *stack_flags, "-lgmp","-o",BIN])
     for p in (BIN+"_gen.c", BIN+"_gen.h"):
         if os.path.exists(p): os.remove(p)
@@ -198,11 +272,11 @@ def blob_gas_price(excess):
 def compare(expected, accounts, storage):
     fails = []
     for a, acc in expected.items():
-        ad = ai(a); n, b = accounts.get(ad, (0, 0))
+        ad = ai(a); ah = acct_hash_int(ad); n, b = accounts.get(ah, (0, 0))
         if "nonce" in acc and n != h2i(acc["nonce"]):     fails.append(f"{a[:10]} nonce {n}!={h2i(acc['nonce'])}")
         if "balance" in acc and b != h2i(acc["balance"]): fails.append(f"{a[:10]} bal {b}!={h2i(acc['balance'])}")
         for k, v in acc.get("storage", {}).items():
-            got = storage.get((ad, h2i(k)), 0)
+            got = storage.get((ah, h2i(k)), 0)
             if got != h2i(v): fails.append(f"{a[:8]}[{k}] {got}!={h2i(v)}")
     return fails
 
@@ -354,7 +428,7 @@ def main():
                         h2i(tx.get("maxFeePerGas","0x0")), base + h2i(tx.get("maxPriorityFeePerGas","0x0")))
                     want_bal = next((h2i(acc["balance"]) for a, acc in c["post"].items()
                                      if ai(a) == sender and "balance" in acc), None)
-                    got_bal = r["acc"].get(sender, (0, 0))[1]
+                    got_bal = r["acc"].get(acct_hash_int(sender), (0, 0))[1]
                     if want_bal is not None and gp > 0:
                         # +ve delta = we over-charged gas (sender kept less than expected)
                         print(f"      gasdelta={(want_bal - got_bal)//gp} got_gas={r.get('gas')}")

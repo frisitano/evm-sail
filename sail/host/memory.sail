@@ -11,7 +11,7 @@
 /* (mem_frame_enter) and the caller's is restored on return                 */
 /* (mem_frame_leave); mem_clear resets to a single empty frame per          */
 /* transaction. The Sail side tracks only the high-water mark (memory_size) */
-/* for expansion gas; the bytes themselves live in C (ffi/host_mem.c) for   */
+/* for expansion gas; the bytes themselves live in C (ffi/memory.c) for   */
 /* O(1) access, since Sail has no in-model mutable byte array.              */
 /* ======================================================================== */
 
@@ -22,7 +22,7 @@ val host_mem_push = impure { _: "host_mem_push" } : unit -> unit
 val host_mem_pop = impure { _: "host_mem_pop" } : unit -> unit
 
 /* kept only as the type of the (now unused) StackFrame snapshot field */
-struct MemByte = { mb_off : int, mb_val : byte }
+struct MemByte = { offset : int, value : byte }
 
 /* The high-water mark, in bytes: the largest offset ever touched in this
  * frame. MSIZE rounds it up to a word; memory-expansion gas is charged on

@@ -291,7 +291,7 @@ function run_call(mode : int) -> unit = {
        raises WriteInStaticContext -- an exceptional halt that consumes all the
        caller frame's gas. CALLCODE/DELEGATECALL/STATICCALL never trigger it
        (CALLCODE has no static guard in the spec; the others force value = 0). */
-    if (mode == 0) & word_nonzero(value) & message.msg_is_static then {
+    if (mode == 0) & word_nonzero(value) & message.is_static then {
         exc_halt(WriteProtection);
         return ()
     };
@@ -427,12 +427,12 @@ function run_call(mode : int) -> unit = {
 
             /* save the parent's user-space frame registers to restore on
                return (Sail has no native call stack for these). */
-            let s_pc = pc;
-            let s_gas = gas_remaining;
-            let s_msg = message;
-            let s_status = frame_status;
-            let s_msize = memory_size;
-            let s_depth = call_depth;
+            let saved_pc = pc;
+            let saved_gas_remaining = gas_remaining;
+            let saved_message = message;
+            let saved_frame_status = frame_status;
+            let saved_memory_size = memory_size;
+            let saved_call_depth = call_depth;
 
             /* the child message context, by call mode:
                - address: target for CALL/STATICCALL; the CALLER's own address
@@ -443,30 +443,30 @@ function run_call(mode : int) -> unit = {
                  stays static for all of its sub-calls). */
             let child_addr : address = if mode == 0 | mode == 3 then { target } else { caller };
             let child_caller : address = if mode == 2 then {
-                    s_msg.msg_caller
+                    saved_message.caller
                 } else {
                     caller
                 };
             let child_value : word = if mode == 2 then {
-                    s_msg.msg_value
+                    saved_message.value
                 } else {
                     value
                 };
             let child_static : bool = if mode == 3 then {
                     true
                 } else {
-                    s_msg.msg_is_static
+                    saved_message.is_static
                 };
 
             message =
                 struct {
-                    msg_caller = child_caller,
-                    msg_address = child_addr,
-                    msg_code_address = target,
-                    msg_data_len = if is_running() then args_len else 0,
-                    msg_value = child_value,
-                    msg_is_static = child_static,
-                    msg_depth = s_depth + 1,
+                    caller = child_caller,
+                    address = child_addr,
+                    code_address = target,
+                    data_len = if is_running() then args_len else 0,
+                    value = child_value,
+                    is_static = child_static,
+                    depth = saved_call_depth + 1,
                 };
             if is_running() then {
                 calldata_set_next(args_off, args_len)
@@ -493,16 +493,16 @@ function run_call(mode : int) -> unit = {
 
             /* leave the child: restore every saved parent register, then credit
                the parent with the child's unspent gas. */
-            pc = s_pc;
+            pc = saved_pc;
             stack_frame_leave();
-            message = s_msg;
-            frame_status = s_status;
+            message = saved_message;
+            frame_status = saved_frame_status;
             mem_frame_leave();
             frame_code_resync();
-            memory_size = s_msize;
+            memory_size = saved_memory_size;
             call_depth = call_depth - 1;
             hr_adopt();
-            gas_remaining = to_gas(s_gas + child_left);
+            gas_remaining = to_gas(saved_gas_remaining + child_left);
 
             /* copy returndata into the caller's output region on both success
                AND revert (execution-specs generic_call), writing only
@@ -593,7 +593,7 @@ function run_create(is2 : bool) -> unit = {
          * WriteInStaticContext after the child gas is reserved -- an
          * exceptional halt that consumes all gas, bumps no nonce, runs no
          * initcode. */
-        if message.msg_is_static then {
+        if message.is_static then {
             exc_halt(WriteProtection);
             return ()
         };
@@ -633,22 +633,22 @@ function run_create(is2 : bool) -> unit = {
                 k_transfer(creator, new_addr, value);
 
                 /* save the parent's frame registers (restored on return). */
-                let s_pc = pc;
-                let s_gas = gas_remaining;
-                let s_msg = message;
-                let s_status = frame_status;
-                let s_msize = memory_size;
-                let s_depth = call_depth;
+                let saved_pc = pc;
+                let saved_gas_remaining = gas_remaining;
+                let saved_message = message;
+                let saved_frame_status = frame_status;
+                let saved_memory_size = memory_size;
+                let saved_call_depth = call_depth;
 
                 message =
                     struct {
-                        msg_caller = creator,
-                        msg_address = new_addr,
-                        msg_code_address = new_addr,
-                        msg_value = value,
-                        msg_data_len = 0,
-                        msg_is_static = s_msg.msg_is_static,
-                        msg_depth = s_depth + 1,
+                        caller = creator,
+                        address = new_addr,
+                        code_address = new_addr,
+                        value = value,
+                        data_len = 0,
+                        is_static = saved_message.is_static,
+                        depth = saved_call_depth + 1,
                     };
 
                 /* the initcode frame has no calldata; its executing code is the
@@ -689,13 +689,13 @@ function run_create(is2 : bool) -> unit = {
                          (hr_pending_byte(get_slice_int(64, 0, 0)) != 0xef));
 
                 /* leave the initcode frame: restore the parent's registers. */
-                pc = s_pc;
+                pc = saved_pc;
                 stack_frame_leave();
-                message = s_msg;
-                frame_status = s_status;
+                message = saved_message;
+                frame_status = saved_frame_status;
                 mem_frame_leave();
                 frame_code_resync();
-                memory_size = s_msize;
+                memory_size = saved_memory_size;
                 call_depth = call_depth - 1;
 
                 /* a successful create yields EMPTY returndata; a revert exposes its data */
@@ -704,7 +704,7 @@ function run_create(is2 : bool) -> unit = {
                 } else {
                     hr_adopt()
                 };
-                gas_remaining = to_gas(s_gas + child_left);
+                gas_remaining = to_gas(saved_gas_remaining + child_left);
 
                 /* finalize: an initcode that succeeded AND whose code is valid
                    AND can pay its G_codedeposit cost deploys the code and
@@ -724,7 +724,7 @@ function run_create(is2 : bool) -> unit = {
                      * reverting/failing initcode instead keeps child_left as
                      * already folded in above. */
                     if succeeded then {
-                        gas_remaining = s_gas
+                        gas_remaining = saved_gas_remaining
                     };
                     hr_discard();
                     k_revert();

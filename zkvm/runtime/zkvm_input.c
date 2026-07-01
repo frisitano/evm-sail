@@ -22,21 +22,25 @@ extern const unsigned long  zkvm_input_bytes_len;
 #endif
 
 /* point a tx-input slot at a span of the stateless SSZ input -- the tx executes
- * directly over the witness bytes, no copy. (txin_view: host_mem.h via zkvm_input.h) */
-/* store the code for a codeHash as a view of the witness span [off, off+len). */
+ * directly over the witness bytes, no copy. (txin_view_input_span: memory.h via zkvm_input.h) */
+/* store the code for a codeHash as an immutable witness input span. */
+uint64_t ssz_src_byte_u64(uint64_t idx) {
+  return (idx < IN_LEN) ? (uint64_t)IN_PTR[idx] : 0;
+}
+
 unit cs_view_input(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
                    uint64_t off, uint64_t len) {
   uint64_t o = (off < IN_LEN) ? off : IN_LEN;
   uint64_t avail = IN_LEN - o;
   if (len > avail) len = avail;
-  cs_view_hash(h3, h2, h1, h0, IN_PTR + o, len);
+  cs_view_hash_input(h3, h2, h1, h0, o, len);
   return UNIT;
 }
 uint64_t txin_view_input(uint64_t idx, uint64_t off, uint64_t len) {
-  const unsigned char *base = IN_PTR + (off < IN_LEN ? off : IN_LEN);
-  uint64_t avail = IN_LEN - (off < IN_LEN ? off : IN_LEN);
+  uint64_t o = (off < IN_LEN) ? off : IN_LEN;
+  uint64_t avail = IN_LEN - o;
   if (len > avail) len = avail;
-  txin_view(idx, base, len);
+  txin_view_input_span(idx, o, len);
   return len;
 }
 
@@ -70,10 +74,7 @@ uint64_t ssz_src_len(const unit u)
 uint64_t ssz_src_byte(sail_int idx)
 {
     unsigned long i = mpz_get_ui(idx);
-    if (i >= IN_LEN) {
-        return 0;   /* out-of-range reads return 0 (decoder guards lengths) */
-    }
-    return (uint64_t)IN_PTR[i];
+    return ssz_src_byte_u64((uint64_t)i);
 }
 
 /* Bulk slice readers: read n (<=8) bytes from the input in ONE FFI call instead

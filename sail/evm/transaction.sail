@@ -16,54 +16,54 @@
 /* ======================================================================== */
 
 /* An EIP-7702 set-code authorization tuple. The runner pre-recovers the
- * authority and validates the signature (s <= n/2, y_parity, r); au_valid_sig
+ * authority and validates the signature (s <= n/2, y_parity, r); valid_sig
  * records that result, and process_auth applies the chain-id/nonce/code checks. */
 struct Authorization = {
-    au_valid_sig : bool, au_authority : address, au_address : address,
-    au_nonce : int, au_chain_id : int,
+    valid_sig : bool, authority : address, address : address,
+    nonce : int, chain_id : int,
 }
 
 /* A transaction. Covers the EIP-2718 typed envelopes 0..4: legacy, EIP-2930
  * (access list), EIP-1559 (fee market), EIP-4844 (blob), EIP-7702 (set code);
  * the type-specific fields below are validity-relevant per their EIP. */
 struct Transaction = {
-  t_sender : address, t_nonce : int, t_gas_price : word, t_priority_fee : word,
-  t_gas_limit : gas, t_is_create : bool, t_to : address, t_value : word,
-  t_index : int,                /* transaction index: its input bytes live in memory (txin) */
-  t_al_addrs : list(address),   /* EIP-2930 access-list addresses (one per entry) */
-  t_al_keys  : list(SlotKey),   /* EIP-2930 access-list (address, slot) pairs      */
-  t_is_access_list : bool,      /* type-1 (EIP-2930) envelope, even if the list is empty */
-  t_is_dynamic_fee : bool,      /* EIP-1559-style fee-market envelope (types 2/3/4) */
-  t_blob_count : int,           /* EIP-4844 number of blob versioned hashes         */
-  t_max_fee : word,             /* EIP-1559 max_fee_per_gas (cap, for validity)     */
-  t_max_blob_fee : word,        /* EIP-4844 max_fee_per_blob_gas (cap, for validity)*/
-  t_max_priority : word,        /* EIP-1559 max_priority_fee_per_gas (cap, for validity) */
-  t_is_setcode : bool,          /* type-4 (EIP-7702) envelope (even with 0 tuples)  */
-  t_auth_list : list(Authorization), /* EIP-7702 set-code authorization tuples      */
-  t_is_blob : bool,             /* EIP-4844 type-3 marker (blob validity rules)     */
-  t_blob_hashes : list(word)    /* EIP-4844 versioned hashes (BLOBHASH operands)    */
+  sender : address, nonce : int, gas_price : word, priority_fee : word,
+  gas_limit : gas, is_create : bool, recipient : address, value : word,
+  input_index : int,                /* transaction index: its input bytes live in memory (txin) */
+  access_list_addresses : list(address),   /* EIP-2930 access-list addresses (one per entry) */
+  access_list_slots  : list(SlotKey),   /* EIP-2930 access-list (address, slot) pairs      */
+  is_access_list : bool,      /* type-1 (EIP-2930) envelope, even if the list is empty */
+  is_dynamic_fee : bool,      /* EIP-1559-style fee-market envelope (types 2/3/4) */
+  blob_count : int,           /* EIP-4844 number of blob versioned hashes         */
+  max_fee : word,             /* EIP-1559 max_fee_per_gas (cap, for validity)     */
+  max_blob_fee : word,        /* EIP-4844 max_fee_per_blob_gas (cap, for validity)*/
+  max_priority_fee : word,        /* EIP-1559 max_priority_fee_per_gas (cap, for validity) */
+  is_set_code : bool,          /* type-4 (EIP-7702) envelope (even with 0 tuples)  */
+  authorizations : list(Authorization), /* EIP-7702 set-code authorization tuples      */
+  is_blob : bool,             /* EIP-4844 type-3 marker (blob validity rules)     */
+  blob_hashes : list(word)    /* EIP-4844 versioned hashes (BLOBHASH operands)    */
 }
 
-/* rc_success: the top-level frame returned/stopped without reverting or
+/* success: the top-level frame returned/stopped without reverting or
  * exceptionally halting (used for create-tx code deposit, log inclusion).
- * rc_valid: the tx passed transaction VALIDITY (nonce/balance/intrinsic/floor/
+ * valid: the tx passed transaction VALIDITY (nonce/balance/intrinsic/floor/
  * fee/blob/7702 rules) and was applied to the block. A valid tx that REVERTS
- * or runs out of gas during execution still has rc_valid = true -- it is a
+ * or runs out of gas during execution still has valid = true -- it is a
  * legitimate block member (gas charged, nonce bumped). Block validity (the
- * stateless guest's successful_validation) folds rc_valid, NOT rc_success:
+ * stateless guest's successful_validation) folds valid, NOT success:
  * only an INVALID/inapplicable tx makes the containing block invalid. */
-/* rc_block_gas: EIP-7778 block-gas accounting WITHOUT the EIP-3529 refund
+/* block_gas: EIP-7778 block-gas accounting WITHOUT the EIP-3529 refund
  * (= max(gas_used_before_refund, calldata_floor)). The block driver sums this
  * for the block gas-availability check and the header gas_used; it differs from
- * rc_gas_used (the receipt's refunded gas) precisely by the refund. */
-struct Receipt = { rc_success : bool, rc_valid : bool, rc_gas_used : gas, rc_block_gas : gas, rc_logs : list(LogEntry) }
+ * gas_used (the receipt's refunded gas) precisely by the refund. */
+struct Receipt = { success : bool, valid : bool, gas_used : gas, block_gas : gas, logs : list(LogEntry) }
 
 let G_transaction : gas = 21000
 let G_txcreate : gas = 32000
 let G_txdatazero : gas = 4
 let G_txdatanonzero : gas = 16
-let G_al_address : gas = 2400 /* EIP-2930 ACCESS_LIST_ADDRESS_COST     */
-let G_al_key : gas = 1900 /* EIP-2930 ACCESS_LIST_STORAGE_KEY_COST */
+let G_access_list_address : gas = 2400 /* EIP-2930 ACCESS_LIST_ADDRESS_COST     */
+let G_access_list_storage_key : gas = 1900 /* EIP-2930 ACCESS_LIST_STORAGE_KEY_COST */
 let PER_AUTH_BASE : gas = 12500 /* EIP-7702 PER_AUTH_BASE_COST          */
 let PER_EMPTY_ACCOUNT : gas = 25000 /* EIP-7702 PER_EMPTY_ACCOUNT_COST      */
 
@@ -101,36 +101,38 @@ function blob_hashes_versioned(xs : list(word)) -> bool =
 /* intrinsic gas: tx input already loaded into the C buffer (txdata_load), so
  * calldata cost and the EIP-3860 initcode words read it via txdata_size. */
 function intrinsic_gas(tx : Transaction) -> gas = {
-    let al = G_al_address * list_len(tx.t_al_addrs) + G_al_key * list_len(tx.t_al_keys);
-    let auth = PER_EMPTY_ACCOUNT * list_len(tx.t_auth_list); /* EIP-7702 */
-    let base = G_transaction + calldata_cost() + al + auth;
-    to_gas(if tx.t_is_create then base + G_txcreate + initcode_gas(txdata_size()) else base)
+    let access_list_gas =
+        G_access_list_address * list_len(tx.access_list_addresses) +
+        G_access_list_storage_key * list_len(tx.access_list_slots);
+    let auth = PER_EMPTY_ACCOUNT * list_len(tx.authorizations); /* EIP-7702 */
+    let base = G_transaction + calldata_cost() + access_list_gas + auth;
+    to_gas(if tx.is_create then base + G_txcreate + initcode_gas(txdata_size()) else base)
 }
 
 /* EIP-7702: apply one authorization (validate against current state, set/clear the
  * delegation, bump the authority nonce; refund if the authority already existed). */
 function process_auth(au : Authorization) -> unit = {
-    let authority = au.au_authority;
-    let chain_ok = (au.au_chain_id == 0) | (au.au_chain_id == unsigned(k_block.be_chain_id));
+    let authority = au.authority;
+    let chain_ok = (au.chain_id == 0) | (au.chain_id == unsigned(k_block.chain_id));
 
     /* EELS validates sig + chain id from the tuple ALONE before reading the
      * authority's account; a tuple rejected there (e.g. wrong chain id) touches
      * NO state, so its authority need not be witnessed -- reading it eagerly would
      * over-access the witness. Gate every authority-state read on sig & chain_ok. */
-    if au.au_valid_sig & chain_ok then {
+    if au.valid_sig & chain_ok then {
         /* step 5: warm the authority BEFORE the code/nonce checks -- a tuple later
          * skipped for code/nonce still warms its authority. */
         let _ = k_access_account(authority);
         let (is_deleg, _) = k_deleg_target(authority);
         let code_ok = (k_code_key(authority) == KECCAK_EMPTY) | is_deleg;
-        let nonce_ok = k_get_nonce(authority) == au.au_nonce;
+        let nonce_ok = k_get_nonce(authority) == au.nonce;
         if code_ok & nonce_ok then {
             let existed = not_bool(k_account_is_empty(authority));
-            if unsigned(address_to_word(au.au_address)) == 0 then {
+            if unsigned(address_to_word(au.address)) == 0 then {
                 k_set_code(authority, [||])
                 /* clear delegation */
             } else {
-                k_set_code(authority, delegation_code(au.au_address))
+                k_set_code(authority, delegation_code(au.address))
             };
             k_bump_nonce(authority);
             if existed then {
@@ -148,31 +150,31 @@ function process_auth_list(xs : list(Authorization)) -> unit =
         },
     }
 
-function warm_al_addrs(xs : list(address)) -> unit =
+function warm_access_list_addresses(xs : list(address)) -> unit =
     match xs {
         [||] => (),
         a :: r => {
             let _ = k_access_account(a);
-            warm_al_addrs(r)
+            warm_access_list_addresses(r)
         },
     }
-function warm_al_keys(xs : list(SlotKey)) -> unit =
+function warm_access_list_slots(xs : list(SlotKey)) -> unit =
     match xs {
         [||] => (),
         k :: r => {
-            let _ = k_access_slot(k.sk_addr, k.sk_slot);
-            warm_al_keys(r)
+            let _ = k_access_slot(k.address, k.slot);
+            warm_access_list_slots(r)
         },
     }
 
 /* EIP-2929 + EIP-2930 pre-warm sender, target, precompiles, and the access
  * list. EIP-3651 additionally warms coinbase from Shanghai onward. */
 function prewarm(tx : Transaction) -> unit = {
-    let _ = k_access_account(tx.t_sender);
-    let _ = if tx.t_is_create then {
+    let _ = k_access_account(tx.sender);
+    let _ = if tx.is_create then {
             false
         } else {
-            k_access_account(tx.t_to)
+            k_access_account(tx.recipient)
         };
     if k_fork >= FORK_SHANGHAI then {
         let _ = k_access_account(k_coinbase())
@@ -189,123 +191,123 @@ function prewarm(tx : Transaction) -> unit = {
     if is_precompile(256) then {
         let _ = k_access_account(word_to_address(word_of_int(256))) /* 0x100 P256VERIFY */
     };
-    warm_al_addrs(tx.t_al_addrs);
-    warm_al_keys(tx.t_al_keys)
+    warm_access_list_addresses(tx.access_list_addresses);
+    warm_access_list_slots(tx.access_list_slots)
 }
 
 struct TxValidity = {
-    tv_valid : bool,
-    tv_sender : address,
-    tv_nonce_before : int,
-    tv_intrinsic : gas,
-    tv_blob_fee : int,
-    tv_input_len : int,
+    valid : bool,
+    sender : address,
+    nonce_before : int,
+    intrinsic_gas : gas,
+    blob_fee : int,
+    input_len : int,
 }
 
 struct TxFrameResult = {
-    tfr_success : bool,
-    tfr_gas_remaining : gas,
+    success : bool,
+    gas_remaining : gas,
 }
 
 function invalid_receipt() -> Receipt =
-    struct { rc_success = false, rc_valid = false, rc_gas_used = 0, rc_block_gas = 0, rc_logs = [||] }
+    struct { success = false, valid = false, gas_used = 0, block_gas = 0, logs = [||] }
 
 function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity = {
-    let sender = tx.t_sender;
+    let sender = tx.sender;
     let nonce_before = k_get_nonce(sender);
     let intrinsic = intrinsic_gas(tx);
-    let blob_fee = tx.t_blob_count * GAS_PER_BLOB * unsigned(k_block.be_blob_base_fee);
+    let blob_fee = tx.blob_count * GAS_PER_BLOB * unsigned(k_block.blob_base_fee);
 
     /* Transaction validity: an invalid tx is REJECTED with no state change at all
        (no nonce bump, no gas charge). The upfront-balance test uses the fee CAPS
        (max_fee_per_gas, max_fee_per_blob_gas), not the effective prices. */
-    let blob_gas = tx.t_blob_count * GAS_PER_BLOB;
-    let upfront =   tx.t_gas_limit
-                  * unsigned(tx.t_max_fee)
-                  + unsigned(tx.t_value)
+    let blob_gas = tx.blob_count * GAS_PER_BLOB;
+    let upfront =   tx.gas_limit
+                  * unsigned(tx.max_fee)
+                  + unsigned(tx.value)
                   + blob_gas
-                  * unsigned(tx.t_max_blob_fee);
+                  * unsigned(tx.max_blob_fee);
     let (sender_deleg, _) = k_deleg_target(sender);
 
     /* EIP-4844 / EIP-7691 / EIP-7594 blob-count bounds: Cancun max 6 per block,
        Prague max 9 per block, Osaka adds MAX_BLOBS_PER_TX = 6. A type-3 tx must
        carry >= 1 blob, must not create, and every versioned hash must be 0x01-tagged. */
     let max_blobs : int = if k_fork >= FORK_OSAKA then { 6 } else { if k_fork >= FORK_PRAGUE then { 9 } else { 6 } };
-    let blob_ok : bool = if tx.t_is_blob then {
+    let blob_ok : bool = if tx.is_blob then {
               (k_fork >= FORK_CANCUN)
-            & (tx.t_blob_count >= 1)
-            & (tx.t_blob_count <= max_blobs)
-            & not_bool(tx.t_is_create)
-            & blob_hashes_versioned(tx.t_blob_hashes)
+            & (tx.blob_count >= 1)
+            & (tx.blob_count <= max_blobs)
+            & not_bool(tx.is_create)
+            & blob_hashes_versioned(tx.blob_hashes)
         } else {
             true
         };
 
     /* EIP-7623 (Prague+): the calldata floor is ALSO a validity bound -- a tx whose
        gas limit cannot cover 21000 + 10*tokens is rejected outright. */
-    let floor_ok : bool = (k_fork < FORK_PRAGUE) | (tx.t_gas_limit >= G_transaction + 10 * calldata_tokens());
+    let floor_ok : bool = (k_fork < FORK_PRAGUE) | (tx.gas_limit >= G_transaction + 10 * calldata_tokens());
     let valid =   (unsigned(k_get_balance(sender)) >= upfront)
                 & /* covers upfront cost      */
                   ((k_code_key(sender) == KECCAK_EMPTY) | sender_deleg)
                 & /* EIP-3607 (7702 exempts delegations) */
-                  (tx.t_gas_limit >= intrinsic)
+                  (tx.gas_limit >= intrinsic)
                 & /* gas covers intrinsic     */
                   floor_ok
                 & /* EIP-7623 floor coverage  */
-                  (unsigned(tx.t_max_fee) >= unsigned(k_block.be_base_fee))
+                  (unsigned(tx.max_fee) >= unsigned(k_block.base_fee))
                 & /* >= base fee */
-                  ((tx.t_blob_count == 0) |
+                  ((tx.blob_count == 0) |
                       /* blob fee cap >= price    */
-                      (unsigned(tx.t_max_blob_fee) >= unsigned(k_block.be_blob_base_fee)))
+                      (unsigned(tx.max_blob_fee) >= unsigned(k_block.blob_base_fee)))
                 & blob_ok
-                & (not_bool(tx.t_is_create) | (dlen <= max_initcode_size()))
+                & (not_bool(tx.is_create) | (dlen <= max_initcode_size()))
                 & /* EIP-3860 */
-                  ((k_fork < FORK_OSAKA) | (tx.t_gas_limit <= 16777216))
+                  ((k_fork < FORK_OSAKA) | (tx.gas_limit <= 16777216))
                 & /* EIP-7825: gas cap 2^24 */
-                  (unsigned(tx.t_max_priority) <= unsigned(tx.t_max_fee))
+                  (unsigned(tx.max_priority_fee) <= unsigned(tx.max_fee))
                 & /* EIP-1559: prio cap <= fee cap */
-                  (not_bool(tx.t_is_access_list) | (k_fork >= FORK_BERLIN))
+                  (not_bool(tx.is_access_list) | (k_fork >= FORK_BERLIN))
                 & /* EIP-2930 type-1 tx is Berlin+ */
-                  (not_bool(tx.t_is_dynamic_fee) | (k_fork >= FORK_LONDON))
+                  (not_bool(tx.is_dynamic_fee) | (k_fork >= FORK_LONDON))
                 & /* EIP-1559 fee-market txs are London+ */
-                  (not_bool(tx.t_is_setcode) | not_bool(tx.t_is_create))
+                  (not_bool(tx.is_set_code) | not_bool(tx.is_create))
                 & /* EIP-7702: type-4 has to != nil */
-                  (not_bool(tx.t_is_setcode) | (list_len(tx.t_auth_list) > 0))
+                  (not_bool(tx.is_set_code) | (list_len(tx.authorizations) > 0))
                 & /* EIP-7702: non-empty auth list */
-                  (not_bool(tx.t_is_setcode) | (k_fork >= FORK_PRAGUE))
+                  (not_bool(tx.is_set_code) | (k_fork >= FORK_PRAGUE))
                 & /* EIP-7702 is Prague+: a type-4 tx is invalid on an earlier fork */
                   (nonce_before < 18446744073709551615)
                 & /* EIP-2681: nonce < 2^64-1 (incrementable) */
-                  (tx.t_gas_limit <= unsigned(k_block.be_gas_limit)); /* tx gas <= block gas limit */
+                  (tx.gas_limit <= unsigned(k_block.gas_limit)); /* tx gas <= block gas limit */
 
     struct {
-        tv_valid = valid,
-        tv_sender = sender,
-        tv_nonce_before = nonce_before,
-        tv_intrinsic = intrinsic,
-        tv_blob_fee = blob_fee,
-        tv_input_len = dlen,
+        valid = valid,
+        sender = sender,
+        nonce_before = nonce_before,
+        intrinsic_gas = intrinsic,
+        blob_fee = blob_fee,
+        input_len = dlen,
     }
 }
 
 function apply_transaction_upfront_effects(tx : Transaction, v : TxValidity) -> unit = {
     /* upfront gas + nonce bump (persist across revert; taken before the snapshot) */
-    k_sub_balance(v.tv_sender, word_of_int(tx.t_gas_limit * unsigned(tx.t_gas_price)));
+    k_sub_balance(v.sender, word_of_int(tx.gas_limit * unsigned(tx.gas_price)));
 
     /* EIP-4844: burn the blob fee upfront (blob_gas_used * blob_gas_price), no refund */
-    if v.tv_blob_fee > 0 then {
-        k_sub_balance(v.tv_sender, word_of_int(v.tv_blob_fee))
+    if v.blob_fee > 0 then {
+        k_sub_balance(v.sender, word_of_int(v.blob_fee))
     };
-    k_bump_nonce(v.tv_sender);
+    k_bump_nonce(v.sender);
     prewarm(tx);
-    process_auth_list(tx.t_auth_list); /* EIP-7702: set delegations before execution (persist) */
+    process_auth_list(tx.authorizations); /* EIP-7702: set delegations before execution (persist) */
     k_snapshot()
 }
 
 function enter_transaction_frame(tx : Transaction, intrinsic : gas) -> unit = {
     pc = 0;
     call_depth = 0;
-    gas_remaining = to_gas(tx.t_gas_limit - intrinsic);
+    gas_remaining = to_gas(tx.gas_limit - intrinsic);
     stack_clear();
     mem_clear();
     hr_reset();
@@ -325,18 +327,18 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
     } else {
         k_mark_created(new_addr); /* EIP-6780: created this tx */
         k_bump_nonce(new_addr);
-        if word_nonzero(tx.t_value) then {
-            k_transfer(sender, new_addr, tx.t_value)
+        if word_nonzero(tx.value) then {
+            k_transfer(sender, new_addr, tx.value)
         };
         message =
             struct {
-                msg_caller = sender,
-                msg_address = new_addr,
-                msg_code_address = new_addr,
-                msg_value = tx.t_value,
-                msg_data_len = 0,
-                msg_is_static = false,
-                msg_depth = 0,
+                caller = sender,
+                address = new_addr,
+                code_address = new_addr,
+                value = tx.value,
+                data_len = 0,
+                is_static = false,
+                depth = 0,
             };
         frame_code_txd();
         interpret();
@@ -358,10 +360,10 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
 }
 
 function run_call_transaction_frame(tx : Transaction, sender : address, dlen : int) -> unit = {
-    if word_nonzero(tx.t_value) then {
-        k_transfer(sender, tx.t_to, tx.t_value)
+    if word_nonzero(tx.value) then {
+        k_transfer(sender, tx.recipient, tx.value)
     };
-    let an = unsigned(tx.t_to);
+    let an = unsigned(tx.recipient);
     if is_precompile(an) then {
         /* tx directly to a precompile: run it as the top-level frame, gas-checked
            FIRST (an OOG precompile must not execute). Failure or OOG is an
@@ -385,32 +387,32 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
         cd_set_tx();
         message =
             struct {
-                msg_caller = sender,
-                msg_address = tx.t_to,
-                msg_code_address = tx.t_to,
-                msg_value = tx.t_value,
-                msg_data_len = dlen,
-                msg_is_static = false,
-                msg_depth = 0,
+                caller = sender,
+                address = tx.recipient,
+                code_address = tx.recipient,
+                value = tx.value,
+                data_len = dlen,
+                is_static = false,
+                depth = 0,
             };
 
         /* EIP-7702: at the tx level the delegate is warmed but not separately charged */
-        let (tx_deleg, tx_dtgt) = k_deleg_target(tx.t_to);
+        let (tx_deleg, tx_dtgt) = k_deleg_target(tx.recipient);
         if tx_deleg then {
             let _ = k_access_account(tx_dtgt);
             ()
         };
-        frame_code_exec(tx.t_to, tx_deleg, tx_dtgt); /* follow a delegation designation */
+        frame_code_exec(tx.recipient, tx_deleg, tx_dtgt); /* follow a delegation designation */
         interpret()
     }
 }
 
 function run_transaction_frame(tx : Transaction, v : TxValidity) -> TxFrameResult = {
-    enter_transaction_frame(tx, v.tv_intrinsic);
-    if tx.t_is_create then {
-        run_create_transaction_frame(tx, v.tv_sender, v.tv_nonce_before)
+    enter_transaction_frame(tx, v.intrinsic_gas);
+    if tx.is_create then {
+        run_create_transaction_frame(tx, v.sender, v.nonce_before)
     } else {
-        run_call_transaction_frame(tx, v.tv_sender, v.tv_input_len)
+        run_call_transaction_frame(tx, v.sender, v.input_len)
     };
 
     let success = frame_succeeded();
@@ -419,19 +421,19 @@ function run_transaction_frame(tx : Transaction, v : TxValidity) -> TxFrameResul
     } else {
         k_revert()
     };
-    struct { tfr_success = success, tfr_gas_remaining = gas_remaining }
+    struct { success = success, gas_remaining = gas_remaining }
 }
 
 function settle_transaction(tx : Transaction, sender : address, fr : TxFrameResult) -> Receipt = {
     /* Refund cap: gas_used / 2 before London, gas_used / 5 after EIP-3529. */
-    let gas_left0 = fr.tfr_gas_remaining;
-    let gas_used0 = tx.t_gas_limit - gas_left0;
+    let gas_left0 = fr.gas_remaining;
+    let gas_used0 = tx.gas_limit - gas_left0;
     let refund_quotient = if k_fork >= FORK_LONDON then { 5 } else { 2 };
     let refund_cap = ediv_int(gas_used0, refund_quotient);
     let refund = if k_refund < refund_cap then { k_refund } else { refund_cap };
     let refund_pos = if refund < 0 then { 0 } else { refund };
     let gas_left1 = gas_left0 + refund_pos;
-    let gas_used1 = tx.t_gas_limit - gas_left1;
+    let gas_used1 = tx.gas_limit - gas_left1;
 
     /* EIP-7623 (Prague+): a tx pays at least the calldata floor 21000 + 10*tokens */
     let floor : int = if k_fork >= FORK_PRAGUE then {
@@ -440,45 +442,45 @@ function settle_transaction(tx : Transaction, sender : address, fr : TxFrameResu
             0
         };
     let gas_used = if gas_used1 < floor then { floor } else { gas_used1 };
-    let gas_left = tx.t_gas_limit - gas_used;
+    let gas_left = tx.gas_limit - gas_used;
 
     /* EIP-7778: the block charges the UNREFUNDED gas (floored), not the receipt's
        refunded gas -- this is what bounds the block gas limit and the header. */
     let block_gas = if gas_used0 < floor then { floor } else { gas_used0 };
 
     /* return unused gas to sender; pay coinbase the priority fee */
-    k_add_balance(sender, word_of_int(gas_left * unsigned(tx.t_gas_price)));
-    k_add_balance(k_coinbase(), word_of_int(gas_used * unsigned(tx.t_priority_fee)));
+    k_add_balance(sender, word_of_int(gas_left * unsigned(tx.gas_price)));
+    k_add_balance(k_coinbase(), word_of_int(gas_used * unsigned(tx.priority_fee)));
 
     /* EIP-6780 tx-end reduction: delete accounts created AND selfdestructed in
      * this tx (EELS destroys tx_output.accounts_to_delete after the fee
      * transfers; a failed tx has no surviving selfdestructs to apply). */
-    if fr.tfr_success then {
+    if fr.success then {
         k_finalize_selfdestructs()
     };
 
     struct {
-        rc_success = fr.tfr_success,
-        rc_valid = true,
-        rc_gas_used = to_gas(gas_used),
-        rc_block_gas = to_gas(block_gas),
-        rc_logs = k_logs,
+        success = fr.success,
+        valid = true,
+        gas_used = to_gas(gas_used),
+        block_gas = to_gas(block_gas),
+        logs = k_logs,
     }
 }
 
 function process_transaction(tx : Transaction) -> Receipt = {
     k_tx_reset();
-    k_set_tx(struct { txe_origin = tx.t_sender, txe_gas_price = tx.t_gas_price, txe_blob_hashes = tx.t_blob_hashes });
+    k_set_tx(struct { origin = tx.sender, gas_price = tx.gas_price, blob_hashes = tx.blob_hashes });
     hr_reset();
 
     /* select this tx's input (already loaded into memory at block setup); gas,
        validity, calldata and initcode all read it from there by index. */
-    let dlen = txdata_activate(tx.t_index);
+    let dlen = txdata_activate(tx.input_index);
     let validity = check_transaction_validity(tx, dlen);
-    if not_bool(validity.tv_valid) then {
+    if not_bool(validity.valid) then {
         return invalid_receipt()
     };
     apply_transaction_upfront_effects(tx, validity);
     let frame_result = run_transaction_frame(tx, validity);
-    settle_transaction(tx, validity.tv_sender, frame_result)
+    settle_transaction(tx, validity.sender, frame_result)
 }

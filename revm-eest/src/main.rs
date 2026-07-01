@@ -16,7 +16,7 @@
 //! RAM. `--jobs N` caps the worker pool to N concurrent children (and overrides
 //! RAYON_NUM_THREADS); use it to bound peak memory on large sweeps.
 
-use alloy_primitives::{Address, Bytes, B256, U256};
+use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
 use rayon::prelude::*;
 use serde::{Deserialize, Deserializer};
 use std::collections::{BTreeMap, HashMap};
@@ -161,6 +161,9 @@ fn maybe_empty_addr<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Address>, 
 fn addr_int(a: &Address) -> U256 {
     U256::from_be_slice(a.as_slice())
 }
+fn acct_hash_int(a: &Address) -> U256 {
+    U256::from_be_slice(keccak256(a.as_slice()).as_slice())
+}
 fn b256_int(b: &B256) -> U256 {
     U256::from_be_slice(b.as_slice())
 }
@@ -169,7 +172,7 @@ fn b256_int(b: &B256) -> U256 {
 struct Case {
     cid: String,
     encoded: Vec<String>,
-    post: Vec<(U256, Option<u64>, Option<U256>, Vec<(U256, U256)>)>, // (addr, nonce?, balance?, storage)
+    post: Vec<(U256, Option<u64>, Option<U256>, Vec<(U256, U256)>)>, // (account hash, nonce?, balance?, storage)
 }
 
 fn push_u256(s: &mut Vec<String>, v: U256) {
@@ -367,7 +370,7 @@ fn expected_post(
         .map(|(addr, acc)| {
             let storage: Vec<(U256, U256)> = acc.storage.iter().map(|(k, v)| (*k, *v)).collect();
             let nonce: u64 = acc.nonce.try_into().unwrap_or(u64::MAX);
-            (addr_int(addr), Some(nonce), Some(acc.balance), storage)
+            (acct_hash_int(addr), Some(nonce), Some(acc.balance), storage)
         })
         .collect()
 }
@@ -401,7 +404,8 @@ fn fork_level(name: &str) -> i64 {
 }
 
 /// Run a chunk of cases through one model invocation; parse the per-case dump.
-/// Returns None on timeout. Output: CASE / ACC <addr> <nonce> <bal> / STO <addr> <slot> <val>.
+/// Returns None on timeout.
+/// Output: CASE / ACC <accountHash> <nonce> <bal> / STO <accountHash> <slot> <val>.
 fn run_chunk(bin: &str, chunk: &[&Case], timeout: f64) -> Option<Vec<CaseOut>> {
     let mut stream = vec![
         FORK_LEVEL.load(Ordering::Relaxed).to_string(), // fork level
@@ -487,11 +491,14 @@ struct CaseOut {
 }
 
 fn compare(case: &Case, out: &CaseOut) -> Option<String> {
-    for (addr, nonce, bal, storage) in &case.post {
-        let got = out.acc.get(addr).cloned().unwrap_or((0, U256::ZERO));
+    for (acct_hash, nonce, bal, storage) in &case.post {
+        let got = out.acc.get(acct_hash).cloned().unwrap_or((0, U256::ZERO));
         if let Some(n) = nonce {
             if got.0 != *n {
-                return Some(format!("nonce {:#x} {}!={}", addr, got.0, n));
+                return Some(format!(
+                    "nonce accountHash={:#x} {}!={}",
+                    acct_hash, got.0, n
+                ));
             }
         }
         if let Some(b) = bal {
@@ -500,7 +507,11 @@ fn compare(case: &Case, out: &CaseOut) -> Option<String> {
             }
         }
         for (k, v) in storage {
-            let g = out.sto.get(&(*addr, *k)).copied().unwrap_or(U256::ZERO);
+            let g = out
+                .sto
+                .get(&(*acct_hash, *k))
+                .copied()
+                .unwrap_or(U256::ZERO);
             if g != *v {
                 return Some("storage".into());
             }
