@@ -134,7 +134,8 @@ function mem_keccak(off : int, len : int) -> word = {
 /* ---- C-backed RETURNDATA buffer (per call frame; see ffi/acc_shim.c) ----
  * The bytes a child frame returned (RETURN/REVERT) or a precompile produced,
  * read by RETURNDATASIZE/RETURNDATACOPY (EIP-211). Cleared at the start of
- * every sub-call and replaced by the child's output on return. ---- */
+ * every sub-call and replaced by the child's output on return. Staged
+ * precompile execution writes directly into the pending buffer. ---- */
 val hr_reset = impure { _: "hr_reset" } : unit -> unit
 val hr_clear = impure { _: "hr_clear" } : unit -> unit
 val hr_discard = impure { _: "hr_discard" } : unit -> unit

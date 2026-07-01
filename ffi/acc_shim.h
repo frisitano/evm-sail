@@ -23,7 +23,8 @@ unit     acc_push(uint64_t b);      /* bits(8):  append one input byte */
 unit     acc_push8(uint64_t w);     /* bits(64): append 8 input bytes (big-endian) */
 uint64_t acc_in_byte(uint64_t i);  /* staged-input byte, zero past the end */
 unit acc_begin_txd(uint64_t id);   /* stage a precompile input from the tx buffer */
-uint64_t acc_exec(unit u);          /* run the standard accelerator; returns output length */
+uint64_t acc_exec(unit u);          /* run the standard accelerator into scratch output */
+uint64_t acc_exec_to_returndata(unit u); /* run a staged precompile into pending returndata */
 uint64_t acc_ok(unit u);            /* bits(8): 1 = ZKVM_EOK, 0 = ZKVM_EFAIL */
 uint64_t acc_out(uint64_t i);       /* bits(64) index -> bits(8): output byte i */
 uint64_t acc_word(uint64_t i);      /* bits(64) -> bits(64): big-endian output word i (hash fast path) */
@@ -31,7 +32,7 @@ unit hr_reset(const unit u);
 unit hr_clear(const unit u);
 unit hr_discard(const unit u);
 unit hr_capture(uint64_t off, uint64_t len);
-unit hr_capture_acc(const unit u);
+unit hr_capture_acc(const unit u);  /* legacy finalizer; staged precompile output is already pending */
 unit hr_adopt(const unit u);
 uint64_t hr_len(const unit u);
 uint64_t hr_pending_len(const unit u);

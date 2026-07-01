@@ -4,18 +4,73 @@
 #include "acc_shim.h"
 #include "zkvm_accelerators.h"
 #include <string.h>
+#include <stdlib.h>
 
 #define ACC_INMAX  (1u << 21)   /* EEST drives >1.2MB pairing inputs (multi-inf) */
 #define ACC_OUTMAX (1u << 17)
+
+/* ==================== RETURNDATA (C-backed, per frame) ==================== */
+/* Each call frame has a returndata slot (what its LAST sub-call returned);
+ * a child's RETURN/REVERT captures its payload into one PENDING buffer that
+ * the parent ADOPTS (a pointer swap) after the child frame is torn down.
+ * Adoption consumes the pending buffer, so an exceptionally-halted child
+ * (which never captures) correctly yields empty returndata. */
+#define HR_MAXDEPTH 1100
+typedef struct { uint8_t *p; uint64_t cap, len; } hr_buf;
+static hr_buf hr_rd[HR_MAXDEPTH];
+static hr_buf hr_pend;
+
+static void hr_fit(hr_buf *b, uint64_t need) {
+  if (b->cap < need) {
+    uint64_t n = b->cap ? b->cap : 256;
+    while (n < need) n <<= 1;
+    b->p = (uint8_t *)realloc(b->p, n);
+    b->cap = n;
+  }
+}
+
 static uint8_t  ACC_in[ACC_INMAX];
 static uint32_t ACC_inlen;
-static uint8_t  ACC_out[ACC_OUTMAX];
+static uint8_t  ACC_scratch[ACC_OUTMAX];
+static uint8_t *ACC_out = ACC_scratch;
+static uint32_t ACC_outcap = ACC_OUTMAX;
 static uint32_t ACC_outlen;
 static int      ACC_id;
 static int      ACC_ok;
 static const uint8_t *ACC_src = ACC_in;  /* the input bytes: ACC_in, or a source buffer read in place */
 
-/* EVM precompiles zero-pad their input to the field layout; read with padding. */
+static void acc_output_scratch(void) {
+  ACC_out = ACC_scratch;
+  ACC_outcap = ACC_OUTMAX;
+}
+
+static uint32_t acc_input_u32_be(uint32_t off) {
+  uint32_t out = 0;
+  for (uint32_t i = 0; i < 4; i++) out = (out << 8) | ((off + i < ACC_inlen) ? ACC_src[off + i] : 0);
+  return out;
+}
+
+static uint32_t acc_pending_output_cap(void) {
+  switch (ACC_id) {
+    case 4: return ACC_inlen;                 /* identity */
+    case 5: return acc_input_u32_be(92);      /* MODEXP modulus length */
+    case 6: case 7: case 9: case 10: return 64;
+    case 11: case 12: case 16: return 128;
+    case 13: case 14: case 17: return 256;
+    case 1: case 2: case 3: case 8: case 15: case 256: case 257: return 32;
+    default: return 0;
+  }
+}
+
+static void acc_output_pending(void) {
+  uint32_t cap = acc_pending_output_cap();
+  if (cap > ACC_INMAX) cap = ACC_INMAX;
+  hr_fit(&hr_pend, cap ? cap : 1);
+  hr_pend.len = 0;
+  ACC_out = hr_pend.p;
+  ACC_outcap = cap;
+}
+
 #ifdef ACCEL_MMIO
 static const uintptr_t ACCEL_MMIO_BASE = 0x40000000UL;
 enum {
@@ -41,7 +96,8 @@ static uint64_t accel_dev_call(uint64_t op, const uint8_t *in, uint32_t inlen, u
   return ACC_outlen;
 }
 #endif
-static uint8_t in_byte(uint32_t i) { return (i < ACC_inlen) ? ACC_in[i] : 0; }
+/* EVM precompiles zero-pad their input to the field layout; read with padding. */
+static uint8_t in_byte(uint32_t i) { return (i < ACC_inlen) ? ACC_src[i] : 0; }
 static void in_copy(uint8_t *dst, uint32_t off, uint32_t n) { for (uint32_t i = 0; i < n; i++) dst[i] = in_byte(off + i); }
 
 /* ---- EIP-2537 BLS12-381 marshalling: EVM 64-byte-padded field elems <-> blst
@@ -73,7 +129,7 @@ static void bls_out_g2(uint32_t off, const uint8_t *b192) {    /* blst 192B (c1,
   bls_pad_fp(off + 128, b192 + 144); bls_pad_fp(off + 192, b192 + 96);
 }
 
-unit acc_begin(uint64_t id) { ACC_id = (int)id; ACC_inlen = 0; ACC_outlen = 0; ACC_ok = 1; ACC_src = ACC_in; return UNIT; }
+unit acc_begin(uint64_t id) { ACC_id = (int)id; ACC_inlen = 0; ACC_outlen = 0; ACC_ok = 1; ACC_src = ACC_in; acc_output_scratch(); return UNIT; }
 /* begin + bulk-load the input from EVM memory [off, off+len) -- one memcpy,
  * replacing a per-byte stream of an intermediate Sail list */
 extern uint64_t txd_copy(uint8_t *dst, uint64_t cap);
@@ -111,8 +167,7 @@ unit acc_push8(uint64_t w)  {   /* 8 input bytes (big-endian) in one store when 
   return UNIT;
 }
 
-uint64_t acc_exec(unit u) {
-  (void)u;
+static uint64_t acc_exec_current(void) {
 #ifdef ACCEL_MMIO
   /* Guest: every accelerator op is a proven precompile served by the host
    * device (zkvm/accel-device, backed by the audited Rust accel-host). No
@@ -121,15 +176,17 @@ uint64_t acc_exec(unit u) {
 #else
   switch (ACC_id) {
     case 0: { zkvm_keccak256_hash h;
-      if (zkvm_keccak256(ACC_in, ACC_inlen, &h) == ZKVM_EOK) { memcpy(ACC_out, h.data, 32); ACC_outlen = 32; }
+      if (zkvm_keccak256(ACC_src, ACC_inlen, &h) == ZKVM_EOK) { memcpy(ACC_out, h.data, 32); ACC_outlen = 32; }
       else ACC_ok = 0; break; }
     case 2: { zkvm_sha256_hash h;
-      if (zkvm_sha256(ACC_in, ACC_inlen, &h) == ZKVM_EOK) { memcpy(ACC_out, h.data, 32); ACC_outlen = 32; }
+      if (zkvm_sha256(ACC_src, ACC_inlen, &h) == ZKVM_EOK) { memcpy(ACC_out, h.data, 32); ACC_outlen = 32; }
       else ACC_ok = 0; break; }
     case 3: { zkvm_ripemd160_hash h;
-      if (zkvm_ripemd160(ACC_in, ACC_inlen, &h) == ZKVM_EOK) { memcpy(ACC_out, h.data, 32); ACC_outlen = 32; }
+      if (zkvm_ripemd160(ACC_src, ACC_inlen, &h) == ZKVM_EOK) { memcpy(ACC_out, h.data, 32); ACC_outlen = 32; }
       else ACC_ok = 0; break; }
-    case 4: memcpy(ACC_out, ACC_in, ACC_inlen); ACC_outlen = ACC_inlen; break;  /* identity (guest-side) */
+    case 4:
+      if (ACC_inlen > ACC_outcap) { ACC_ok = 0; ACC_outlen = 0; break; }
+      memcpy(ACC_out, ACC_src, ACC_inlen); ACC_outlen = ACC_inlen; break;  /* identity (guest-side) */
     case 1: {  /* ecrecover (0x01): input hash[32] v[32] r[32] s[32]; output = keccak(pubkey)[12:] */
       uint8_t hash[32], sig[64], pub[64];
       in_copy(hash, 0, 32); in_copy(sig, 64, 64);
@@ -162,7 +219,7 @@ uint64_t acc_exec(unit u) {
       for (int i = 0; i < 4; i++) { bl = (bl << 8) | in_byte(28 + i); el = (el << 8) | in_byte(60 + i); ml = (ml << 8) | in_byte(92 + i); }
       if (ml == 0) { ACC_ok = 1; ACC_outlen = 0; break; }
       uint64_t need = (uint64_t)96 + bl + el + ml;
-      if (need > ACC_INMAX || ml > ACC_OUTMAX) { ACC_ok = 0; ACC_outlen = 0; break; }
+      if (need > ACC_INMAX || ml > ACC_outcap) { ACC_ok = 0; ACC_outlen = 0; break; }
       for (uint32_t i = ACC_inlen; i < need; i++) ACC_in[i] = 0;   /* zero-pad to layout length */
       if (zkvm_modexp(ACC_in + 96, bl, ACC_in + 96 + bl, el, ACC_in + 96 + bl + el, ml, ACC_out) == ZKVM_EOK)
         ACC_outlen = ml;
@@ -312,32 +369,27 @@ uint64_t acc_exec(unit u) {
   return ACC_outlen;
 #endif
 }
+
+uint64_t acc_exec(unit u) {
+  (void)u;
+  acc_output_scratch();
+  return acc_exec_current();
+}
+
+uint64_t acc_exec_to_returndata(unit u) {
+  (void)u;
+  acc_output_pending();
+  uint64_t n = acc_exec_current();
+  hr_pend.len = ACC_ok ? ACC_outlen : 0;
+  acc_output_scratch();
+  return n;
+}
 uint64_t acc_ok(unit u)  { (void)u; return (uint64_t)ACC_ok; }
 uint64_t acc_out(uint64_t i) { return (i < ACC_outlen) ? ACC_out[i] : 0; }
 uint64_t acc_word(uint64_t i) {   /* big-endian 64-bit word i of the output (4 reads per 32-byte digest) */
   uint64_t w = 0;
   for (int k = 0; k < 8; k++) { uint64_t j = i * 8 + k; w = (w << 8) | ((j < ACC_outlen) ? ACC_out[j] : 0); }
   return w;
-}
-
-/* ==================== RETURNDATA (C-backed, per frame) ==================== */
-/* Each call frame has a returndata slot (what its LAST sub-call returned);
- * a child's RETURN/REVERT captures its payload into one PENDING buffer that
- * the parent ADOPTS (a pointer swap) after the child frame is torn down.
- * Adoption consumes the pending buffer, so an exceptionally-halted child
- * (which never captures) correctly yields empty returndata. */
-#define HR_MAXDEPTH 1100
-typedef struct { uint8_t *p; uint64_t cap, len; } hr_buf;
-static hr_buf hr_rd[HR_MAXDEPTH];
-static hr_buf hr_pend;
-
-static void hr_fit(hr_buf *b, uint64_t need) {
-  if (b->cap < need) {
-    uint64_t n = b->cap ? b->cap : 256;
-    while (n < need) n <<= 1;
-    b->p = (uint8_t *)realloc(b->p, n);
-    b->cap = n;
-  }
 }
 
 unit hr_reset(const unit u) {           /* per tx: all slots + pending empty */
@@ -359,12 +411,9 @@ unit hr_capture(uint64_t off, uint64_t len) {
   hr_pend.len = len;
   return UNIT;
 }
-/* precompile output: pending := ACC_out */
+/* staged precompile output is written directly into hr_pend by acc_exec_to_returndata */
 unit hr_capture_acc(const unit u) {
   (void)u;
-  hr_fit(&hr_pend, ACC_outlen ? ACC_outlen : 1);
-  memcpy(hr_pend.p, ACC_out, ACC_outlen);
-  hr_pend.len = ACC_outlen;
   return UNIT;
 }
 /* parent adopts the pending output as its returndata (pointer swap; consumes) */

@@ -40,7 +40,6 @@ register zkvm_out_wbal : int = 0 /* withdrawer balance (wei)           */
 register zkvm_out_cbbal : int = 0 /* coinbase balance (wei)             */
 register zkvm_out_tracelen : int = 0 /* trace stream length                */
 register zkvm_out_success : int = 0 /* 1 if the tx receipt succeeded      */
-
 function eoa() -> address = 0x00000000000000000000000000000000000005e0
 function contract() -> address = 0x000000000000000000000000000000000000c0de
 function coinbase_a() -> address = 0x000000000000000000000000000000000000c01b
@@ -861,7 +860,7 @@ function validate_block_outputs(exec_ok : bool, block_result : BlockExecutionRes
          - the recomputed post-state root commits to payload.state_root */
     let fork_ok = cc_fork() == 20; /* canonical ProtocolFork index for Amsterdam
                                    (execution-specs@02c6c2510: enum pruned, Osaka=17 BPO1=18 BPO2=19
-                                   Amsterdam=20; was 24 in tests-zkevm@v0.4.1). */
+                                   Amsterdam=20). */
     let active_ok = cc_activation_active();
     let cfg_ok = fork_ok & active_ok;
 
@@ -879,6 +878,7 @@ function validate_block_outputs(exec_ok : bool, block_result : BlockExecutionRes
     /* EIP-7928: the block access list must not exceed block_gas_limit / 2000 items. */
     let bal_limit = ediv_int(pl_gas_limit(), 2000);
     let bal_ok : bool = bal_item_count() <= bal_limit;
+
     cfg_ok & hdr_ok & auth_ok & exec_ok & gas_used_ok & blob_gas_used_ok & excess_blob_gas_ok & poststate_ok & bal_ok & not_bool(k_witness_bad)
 }
 

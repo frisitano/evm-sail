@@ -103,6 +103,32 @@ Full post-Berlin EEST state and EELS/stateless blockchain sweeps require an
 external generated fixture corpus; do not claim the full suite has been rerun
 unless the external state/blockchain fixture directories were actually run.
 
+## Aligned Full Fixture Corpora
+
+Large unpacked fixture corpora may live under `zkvm/.fixtures/`. This directory
+is ignored by git and is workspace-local; do not assume its contents are present
+in a fresh checkout.
+
+Current aligned corpora in this worktree were generated from
+`/Users/f/dev/ethereum/execution-specs` on branch `projects/zkevm` at commit
+`02c6c2510916e470f2c1e5191589212ca75d4948` with `t8n = 2.19.0`:
+
+- `zkvm/.fixtures/current-02c6-full/`
+  - Amsterdam blockchain/stateless corpus.
+  - Generated 2026-07-01 with `fill -m "blockchain_test or blockchain_test_engine" --fork Amsterdam ./tests/`.
+  - Fixture generation result: `43111 passed, 14 skipped`.
+  - `evm_sail_consumer` validation result: `20442 passed, 1104 skipped`.
+- `zkvm/.fixtures/current-state-02c6-full/`
+  - Amsterdam state-test corpus.
+  - Generated 2026-07-02 with `fill -m state_test --fork Amsterdam ./tests/`.
+  - Fixture generation result: `13917 passed, 6 skipped`.
+  - Rust state runner result: `13917/13917 passed`, `0 timeouts`.
+
+Do not use `zkvm/.fixtures/fixtures/` as aligned proof unless explicitly
+requested. That unpack is older metadata:
+`refs/tags/tests-zkevm@v0.4.1`, commit
+`b6b764ff21bb754b79e11ef5dc7ad1f79996e923`, generated 2026-05-18.
+
 ## Regenerating The Checked-In EELS Subsets
 
 The local EELS checkout used in this environment is

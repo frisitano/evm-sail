@@ -39,6 +39,7 @@ val acc_begin = impure { _: "acc_begin" } : bits(64) -> unit
 val acc_push = impure { _: "acc_push" } : bits(8) -> unit
 val acc_push8 = impure { _: "acc_push8" } : bits(64) -> unit
 val acc_exec = impure { _: "acc_exec" } : unit -> bits(64)
+val acc_exec_to_returndata = impure { _: "acc_exec_to_returndata" } : unit -> bits(64)
 val acc_ok = impure { _: "acc_ok" } : unit -> bits(8)
 val acc_out = impure { _: "acc_out" } : bits(64) -> bits(8)
 val acc_word = impure { _: "acc_word" } : bits(64) -> bits(64)
@@ -96,13 +97,13 @@ function precompile_input_byte(i : int) -> byte = acc_in_byte(get_slice_int(64, 
  * see stage_precompile_input in host/memory.sail). */
 function stage_precompile_txd(num : int) -> unit = acc_begin_txd(get_slice_int(64, num, 0))
 
-/* Run the staged precompile (input already in the accelerator: acc_begin_mem
- * for a memory slice, acc_begin + acc_push_all for a list). Output stays in
- * the accelerator buffer for returndata adoption (hr_capture_acc). Returns
- * false on precompile failure, which the interpreter maps to a CALL result
- * of 0 with empty returndata. */
+/* Run the staged precompile (input already snapshotted in the accelerator from
+ * memory or tx data). Output is written directly into pending returndata;
+ * hr_capture_acc is only a compatibility finalizer at the adoption point.
+ * Returns false on precompile failure, which the interpreter maps to a CALL
+ * result of 0 with empty returndata. */
 function run_precompile_staged() -> bool = {
-    let _ = acc_exec();
+    let _ = acc_exec_to_returndata();
     unsigned(acc_ok()) == 1
 }
 
@@ -363,7 +364,8 @@ function pl_n_txs() -> int = {
 }
 
 /* SszChainConfig: chain_id u64 @ cc+0, active_fork (SszForkConfig) offset @ cc+8;
- * SszForkConfig: fork u64 @ 0 (ProtocolFork index; Amsterdam = 20). */
+ * SszForkConfig: fork u64 @ 0 (ProtocolFork index; Amsterdam = 20 in current
+ * projects/zkevm fixtures). */
 function cc_chain_id() -> int = ssz_u64(cc_start() + 0)
 function cc_active_fork_start() -> int = {
     let c = cc_start();

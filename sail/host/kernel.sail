@@ -318,8 +318,8 @@ function k_create2_addr(a : address, salt : word, inithash : hash) -> address =
 
 /* precompile syscall: the input was STAGED by the EVM (a snapshot of the
  * caller's mem[args .. args+len) -- the child message's calldata -- or the tx
- * input). Output stays in the accelerator buffer; the EVM adopts it as
- * returndata. Gas is computed by the EVM (policy, evm/gas.sail). */
+ * input). Output is staged directly as pending returndata. Gas is computed by
+ * the EVM (policy, evm/gas.sail). */
 function k_precompile(num : int) -> bool =
     if is_precompile(num) then {
         run_precompile_staged()
