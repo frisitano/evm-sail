@@ -185,13 +185,15 @@ function fetch() -> ast = {
         pc = pc + 1;
         if (b == 95) & (k_fork < FORK_SHANGHAI) then {
             INVALID()
-        } else if b >= 95 & b <= 127 then {
-            let n = b - 95;
-            let v = read_push(n);
-            pc = pc + n;
-            PUSH(n, v)
         } else {
-            decode_simple(b)
+            if b >= 95 & b <= 127 then {
+                let n = b - 95;
+                let v = read_push(n);
+                pc = pc + n;
+                PUSH(n, v)
+            } else {
+                decode_simple(b)
+            }
         }
     }
 }
@@ -685,8 +687,7 @@ function run_create(is2 : bool) -> unit = {
                    from London onward, not beginning with 0xEF (EIP-3541, the
                    reserved EOF prefix). */
                 let code_ok = (dep_len <= max_code_size()) &
-                        ((k_fork < FORK_LONDON) | (dep_len == 0) |
-                         (hr_pending_byte(get_slice_int(64, 0, 0)) != 0xef));
+                        ((k_fork < FORK_LONDON) | (dep_len == 0) | (hr_pending_byte(get_slice_int(64, 0, 0)) != 0xef));
 
                 /* leave the initcode frame: restore the parent's registers. */
                 pc = saved_pc;

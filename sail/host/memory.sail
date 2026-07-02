@@ -11,7 +11,7 @@
 /* (mem_frame_enter) and the caller's is restored on return                 */
 /* (mem_frame_leave); mem_clear resets to a single empty frame per          */
 /* transaction. The Sail side tracks only the high-water mark (memory_size) */
-/* for expansion gas; the bytes themselves live in C (ffi/memory.c) for   */
+/* for expansion gas; the bytes themselves live in C (ffi/memory.c) for     */
 /* O(1) access, since Sail has no in-model mutable byte array.              */
 /* ======================================================================== */
 

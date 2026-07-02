@@ -161,7 +161,9 @@ val storage_map_word = impure { _: "storage_map_word" } : bits(64) -> bits(64)
 val storage_map_base_word = impure { _: "storage_map_base_word" } : bits(64) -> bits(64)
 val storage_map_present = impure { _: "storage_map_present" } : unit -> bits(64)
 val storage_map_base_present = impure { _: "storage_map_base_present" } : unit -> bits(64)
-val storage_map_has_acct_hash = impure { _: "storage_map_has_acct_hash" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val storage_map_has_acct_hash = impure { _: "storage_map_has_acct_hash" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(
+        64,
+    )
 val storage_map_wipe_acct_hash = impure { _: "storage_map_wipe_acct_hash" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
 val storage_map_count = impure { _: "storage_map_count" } : unit -> bits(64)
 val storage_map_update_count = impure { _: "storage_map_update_count" } : unit -> bits(64)
@@ -222,12 +224,7 @@ val acctmap_nonce = impure { _: "acctmap_nonce" } : unit -> bits(64)
 val acctmap_bal = impure { _: "acctmap_bal" } : bits(64) -> bits(64)
 val acctmap_sroot = impure { _: "acctmap_sroot" } : bits(64) -> bits(64)
 val acctmap_chash = impure { _: "acctmap_chash" } : bits(64) -> bits(64)
-val acctmap_remove = impure { _: "acctmap_remove" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> unit
+val acctmap_remove = impure { _: "acctmap_remove" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
 val acctmap_count = impure { _: "acctmap_count" } : unit -> bits(64)
 val acctmap_update_count = impure { _: "acctmap_update_count" } : unit -> bits(64)
 val acctmap_at = impure { _: "acctmap_at" } : bits(64) -> unit
@@ -406,10 +403,7 @@ function storage_selected_hashed_entry() -> (bits(256), word, word) = {
         storage_map_it_acct_hash(get_slice_int(64, 3, 0)),
         append(
             storage_map_it_acct_hash(get_slice_int(64, 2, 0)),
-            append(
-                storage_map_it_acct_hash(get_slice_int(64, 1, 0)),
-                storage_map_it_acct_hash(get_slice_int(64, 0, 0)),
-            ),
+            append(storage_map_it_acct_hash(get_slice_int(64, 1, 0)), storage_map_it_acct_hash(get_slice_int(64, 0, 0))),
         ),
     );
     (ak, storage_selected_slot(), storage_selected_val())

@@ -1,0 +1,14 @@
+// Minimal ZisK RV64IMA stack-store smoke test for the Islaris frontend.
+//@isla-config: riscv64_zisk_isla_coq.toml
+//@base_address: 0x0000000080000000
+//@constraint: = cur_privilege Machine
+//@constraint: = ((_ extract 0 0) misa.bits) 0b1
+//@constraint: = ((_ extract 8 8) misa.bits) 0b1
+//@constraint: = ((_ extract 12 12) misa.bits) 0b1
+//@constraint: = ((_ extract 2 2) misa.bits) 0b0
+//@constraint: = (bvand mstatus.bits 0x0000000000020000) 0x0000000000000000
+//@constraint: = (bvand PC 0x0000000000000003) 0x0000000000000000
+//@constraint: = ((_ extract 2 0) x2) 0b000
+//@constraint: bvuge (bvadd x2 0x0000000000000008) rv_ram_base
+//@constraint: bvult (bvadd (bvadd x2 0x0000000000000008) 0x0000000000000007) (bvadd rv_ram_base rv_ram_size)
+    0000000080000004:	00113423	rv64_00113423

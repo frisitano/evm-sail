@@ -436,24 +436,19 @@ function decode_auth_list(cs : int, cl : int) -> list(Authorization) = {
         let r = word_of_int(rlp_uint_span(r4o, r4l));
         let s = word_of_int(rlp_uint_span(s5o, s5l));
         let auth_nonce = rlp_uint_span(n2o, n2l);
-        let (ok, authority) = ecrecover_addr(
-            auth_signing_hash(pos),
-            y,
-            r,
-            s,
-        );
+        let (ok, authority) = ecrecover_addr(auth_signing_hash(pos), y, r, s);
         out = list_append(
             out,
             [|
                 struct {
                     valid_sig =
-                        ok &
-                        (y == 0 | y == 1) &
-                        (unsigned(r) >= 1) &
-                        (unsigned(r) < unsigned(SECP_N_FULL)) &
-                        (unsigned(s) >= 1) &
-                        (unsigned(s) <= unsigned(SECP_N_HALF)) &
-                        (auth_nonce < 18446744073709551615),
+                          ok
+                        & (y == 0 | y == 1)
+                        & (unsigned(r) >= 1)
+                        & (unsigned(r) < unsigned(SECP_N_FULL))
+                        & (unsigned(s) >= 1)
+                        & (unsigned(s) <= unsigned(SECP_N_HALF))
+                        & (auth_nonce < 18446744073709551615),
                     authority = authority,
                     address = word_to_address(word_of_int(rlp_uint_span(a1o, a1l))),
                     nonce = auth_nonce,
@@ -585,14 +580,14 @@ function decode_tx_ssz(i : int) -> Transaction = {
     let (ro, rl) = rlp_field_span(loff, i_v + 1);
     let (sso, ssl) = rlp_field_span(loff, i_v + 2);
     auth_ok =
-        auth_ok &
-            tx_sig_v_ok(ttype, sig_v) &
-            tx_auth_ok(
-                i,
-                tx_signing_hash(ttype, loff, i_v, sig_v),
-                word_of_int(rlp_uint_span(ro, rl)),
-                word_of_int(rlp_uint_span(sso, ssl)),
-            );
+          auth_ok
+        & tx_sig_v_ok(ttype, sig_v)
+        & tx_auth_ok(
+              i,
+              tx_signing_hash(ttype, loff, i_v, sig_v),
+              word_of_int(rlp_uint_span(ro, rl)),
+              word_of_int(rlp_uint_span(sso, ssl)),
+          );
 
     struct {
         sender = sender,
@@ -806,14 +801,16 @@ function execute_block_transactions(n_txs : int, block_gas_limit : int) -> Block
             };
             if tx.gas_limit > block_gas_limit - gas_acc then {
                 block_gas_overflow = true
-            } else if tx_blob_gas > blob_max_gas_per_block() - blob_gas_acc then {
-                blob_gas_overflow = true
             } else {
-                let r = process_transaction(tx);
-                all_ok = all_ok & r.valid;
-                gas_acc = gas_acc + r.block_gas;
-                if r.valid then {
-                    blob_gas_acc = blob_gas_acc + tx_blob_gas
+                if tx_blob_gas > blob_max_gas_per_block() - blob_gas_acc then {
+                    blob_gas_overflow = true
+                } else {
+                    let r = process_transaction(tx);
+                    all_ok = all_ok & r.valid;
+                    gas_acc = gas_acc + r.block_gas;
+                    if r.valid then {
+                        blob_gas_acc = blob_gas_acc + tx_blob_gas
+                    }
                 }
             }
         }
@@ -859,8 +856,9 @@ function validate_block_outputs(exec_ok : bool, block_result : BlockExecutionRes
          - every tx is VALID/applicable (a reverting valid tx keeps the block valid)
          - the recomputed post-state root commits to payload.state_root */
     let fork_ok = cc_fork() == 20; /* canonical ProtocolFork index for Amsterdam
-                                   (execution-specs@02c6c2510: enum pruned, Osaka=17 BPO1=18 BPO2=19
-                                   Amsterdam=20). */
+                                  (execution-specs@02c6c2510: enum pruned, Osaka=17 BPO1=18 BPO2=19
+                                  Amsterdam=20). */
+
     let active_ok = cc_activation_active();
     let cfg_ok = fork_ok & active_ok;
 
@@ -879,7 +877,16 @@ function validate_block_outputs(exec_ok : bool, block_result : BlockExecutionRes
     let bal_limit = ediv_int(pl_gas_limit(), 2000);
     let bal_ok : bool = bal_item_count() <= bal_limit;
 
-    cfg_ok & hdr_ok & auth_ok & exec_ok & gas_used_ok & blob_gas_used_ok & excess_blob_gas_ok & poststate_ok & bal_ok & not_bool(k_witness_bad)
+      cfg_ok
+    & hdr_ok
+    & auth_ok
+    & exec_ok
+    & gas_used_ok
+    & blob_gas_used_ok
+    & excess_blob_gas_ok
+    & poststate_ok
+    & bal_ok
+    & not_bool(k_witness_bad)
 }
 
 /* canonical "invalid input" output: a 32-byte ZERO new_payload_request_root,

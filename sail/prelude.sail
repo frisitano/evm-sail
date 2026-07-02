@@ -73,21 +73,33 @@ function word64_ult(a : bits(64), b : bits(64)) -> bool = unsigned(a) < unsigned
 function word_ult(a : word, b : word) -> bool =
     if a[255 .. 192] != b[255 .. 192] then {
         word64_ult(a[255 .. 192], b[255 .. 192])
-    } else if a[191 .. 128] != b[191 .. 128] then {
-        word64_ult(a[191 .. 128], b[191 .. 128])
-    } else if a[127 .. 64] != b[127 .. 64] then {
-        word64_ult(a[127 .. 64], b[127 .. 64])
     } else {
-        word64_ult(a[63 .. 0], b[63 .. 0])
+        if a[191 .. 128] != b[191 .. 128] then {
+            word64_ult(a[191 .. 128], b[191 .. 128])
+        } else {
+            if a[127 .. 64] != b[127 .. 64] then {
+                word64_ult(a[127 .. 64], b[127 .. 64])
+            } else {
+                word64_ult(a[63 .. 0], b[63 .. 0])
+            }
+        }
     }
 
 function word_slt(a : word, b : word) -> bool = {
     let a_neg = a[255] == bitone;
     let b_neg = b[255] == bitone;
     if a_neg then {
-        if b_neg then { word_ult(a, b) } else { true }
+        if b_neg then {
+            word_ult(a, b)
+        } else {
+            true
+        }
     } else {
-        if b_neg then { false } else { word_ult(a, b) }
+        if b_neg then {
+            false
+        } else {
+            word_ult(a, b)
+        }
     }
 }
 

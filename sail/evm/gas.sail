@@ -69,19 +69,15 @@ function blob_base_fee(excess_blob_gas : int) -> int =
 function blob_schedule_target() -> int =
     if k_fork >= FORK_AMSTERDAM then {
         BLOB_SCHEDULE_TARGET_AMSTERDAM
-    } else if k_fork >= FORK_PRAGUE then {
-        BLOB_SCHEDULE_TARGET_PRAGUE
     } else {
-        BLOB_SCHEDULE_TARGET_CANCUN
+        if k_fork >= FORK_PRAGUE then { BLOB_SCHEDULE_TARGET_PRAGUE } else { BLOB_SCHEDULE_TARGET_CANCUN }
     }
 
 function blob_schedule_max() -> int =
     if k_fork >= FORK_AMSTERDAM then {
         BLOB_SCHEDULE_MAX_AMSTERDAM
-    } else if k_fork >= FORK_PRAGUE then {
-        BLOB_SCHEDULE_MAX_PRAGUE
     } else {
-        BLOB_SCHEDULE_MAX_CANCUN
+        if k_fork >= FORK_PRAGUE then { BLOB_SCHEDULE_MAX_PRAGUE } else { BLOB_SCHEDULE_MAX_CANCUN }
     }
 
 function blob_target_gas_per_block() -> int =
@@ -90,7 +86,13 @@ function blob_target_gas_per_block() -> int =
 function blob_max_gas_per_block() -> int =
     GAS_PER_BLOB * blob_schedule_max()
 
-function next_excess_blob_gas(parent_excess_blob_gas : int, parent_blob_gas_used : int, parent_base_fee_per_gas : int) -> int = {
+function next_excess_blob_gas(
+    parent_excess_blob_gas : int,
+    parent_blob_gas_used : int,
+    parent_base_fee_per_gas : int,
+) -> (
+    int
+) = {
     let parent_blob_gas = parent_excess_blob_gas + parent_blob_gas_used;
     let target_blob_gas = blob_target_gas_per_block();
     if parent_blob_gas < target_blob_gas then {
@@ -99,7 +101,8 @@ function next_excess_blob_gas(parent_excess_blob_gas : int, parent_blob_gas_used
         let target_blob_gas_price = GAS_PER_BLOB * blob_base_fee(parent_excess_blob_gas);
         let base_blob_tx_price = BLOB_BASE_COST * parent_base_fee_per_gas;
         if (k_fork >= FORK_AMSTERDAM) & (base_blob_tx_price > target_blob_gas_price) then {
-            parent_excess_blob_gas + ediv_int(parent_blob_gas_used * (blob_schedule_max() - blob_schedule_target()), blob_schedule_max())
+            parent_excess_blob_gas +
+                ediv_int(parent_blob_gas_used * (blob_schedule_max() - blob_schedule_target()), blob_schedule_max())
         } else {
             parent_blob_gas - target_blob_gas
         }
@@ -147,7 +150,11 @@ let G_initcode_word : gas = 2 /* EIP-3860 (per word of initcode)            */
  * (k_fork < FORK_AMSTERDAM) and the guest (k_fork defaults to 99). */
 function max_code_size() -> int = if k_fork >= FORK_AMSTERDAM then { 32768 } else { 24576 }
 function max_initcode_size() -> int =
-    if k_fork >= FORK_SHANGHAI then { 2 * max_code_size() } else { 9223372036854775807 }
+    if k_fork >= FORK_SHANGHAI then {
+        2 * max_code_size()
+    } else {
+        9223372036854775807
+    }
 function sstore_clear_refund() -> gas =
     if k_fork >= FORK_LONDON then { R_sclear_london } else { R_sclear_pre_london }
 

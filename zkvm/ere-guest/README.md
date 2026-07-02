@@ -24,12 +24,57 @@ NOT done here (requires external toolchains not installed in this environment):
 - `Cargo.toml` / `build.rs` / `src/main.rs` are TEMPLATES (SDK-specific entry
   macro, target sysroot, allocator) — they will not compile as-is.
 
-## Hard constraint: RV64 only → OpenVM or ZisK
+## Hard constraint: RV64 only
 
 The model is RV64 (256-bit words over 64-bit limbs; sailfix/mini-gmp). ere's
 RV32 backends (SP1, RISC0, Airbender) cannot run it without a 32-bit port of the
-bigint runtime. Target the RV64 backends: **OpenVM** or **ZisK**
-(`riscv64ima-unknown-none-elf`).
+bigint runtime.
+
+For the current RISC-V proof effort, do not use this evm-sail guest as the
+implementation target. Treat evm-sail as the source-of-truth spec and compare it
+against the Reth ZisK guest from `ere-guests`, built for
+`riscv64ima-zisk-zkvm-elf` with its proof profile. This template can still be
+revived later if we want evm-sail itself to run inside an ere-backed RV64 zkVM.
+
+## Islaris bridge
+
+The current binary-proof bridge starts in the sibling `ere-guests` and
+`islaris` checkouts:
+
+```sh
+cd /Users/f/dev/ethereum/ere-guests
+scripts/build-reth-zisk-proof-candidate.sh
+scripts/extract-zisk-elf-for-islaris.sh
+
+cd /Users/f/dev/ethereum/islaris
+make update_etc
+PATH=$PWD/bin:$PATH dune exec -- islaris \
+  /Users/f/dev/ethereum/ere-guests/proof-artifacts/reth-zisk/islaris/elf.dump \
+  -j 4 \
+  -o instructions/reth_zisk_full \
+  --coqdir=isla.instructions.reth_zisk_full \
+  --arch=riscv64
+```
+
+The extractor writes a full annotated executable-ELF dump under
+`proof-artifacts/reth-zisk/islaris/` by calling Isla's `isla-riscv-dump`
+binary. The dump bytes therefore come from the linked ELF and its symbol table,
+not from shell parsing of disassembler text. With no `--symbol` and no
+`--max-instructions`, the default path covers the whole guest. The bounded
+`--symbol` / `--max-instructions` options remain useful for diagnostics and
+small proof spikes, but they are not the production equivalence target.
+
+Each dump selects Islaris' `riscv64_zisk_isla_coq.toml` config, which matches
+the ZisK Rust target `riscv64ima-zisk-zkvm-elf` by disabling compressed RISC-V
+instructions. The current full-guest path preserves the native `ere-guests`
+memory-alignment mode and records those settings in
+`proof-artifacts/reth-zisk/islaris/provenance.txt`.
+
+From the `evm-sail` worktree, the repeatable check is:
+
+```sh
+rtk make -C proof check-ere-full-dump
+```
 
 ## Also note
 

@@ -33,14 +33,23 @@
 /* ---- small generic list helpers (take/drop n from the front) ----------- */
 /* ---- shared trie primitives (formerly lib/mpt.sail) -------------------- */
 
+function byte_list_nonempty(xs : list(byte)) -> bool =
+    match xs {
+        [||] => false,
+        _ => true,
+    }
+
+function int_list_nonempty(xs : list(int)) -> bool =
+    match xs {
+        [||] => false,
+        _ => true,
+    }
+
 /* 32-byte key -> 64 nibbles, high nibble first (single pass + reverse). */
 function to_nibbles(bs : list(byte)) -> list(int) = {
     var out : list(int) = [||];
     var rest : list(byte) = bs;
-    while match rest {
-        [||] => false,
-        _ => true,
-    } do {
+    while byte_list_nonempty(rest) do {
         match rest {
             b :: r => {
                 let bb = unsigned(b);
@@ -72,10 +81,7 @@ function hp_compact(nibs : list(int), is_leaf : bool) -> list(byte) = {
     } else {
         out = get_slice_int(8, flag * 16, 0) :: out
     };
-    while match rest {
-        [||] => false,
-        _ => true,
-    } do {
+    while int_list_nonempty(rest) do {
         match rest {
             a :: (b :: t) => {
                 out = get_slice_int(8, a * 16 + b, 0) :: out;
@@ -719,7 +725,7 @@ val compute_state_root_overlay : unit -> bits(256)
 /* Stateless verification of the world-state trie from a Merkle witness     */
 /* (the node set covering the proof paths), mirroring execution-specs       */
 /* witness_state.py. A node database keyed by keccak256(node) (C-backed,    */
-/* ffi/trie_node_db.c) backs two operations.                                 */
+/* ffi/trie_node_db.c) backs two operations.                                */
 /*                                                                          */
 /* Re-rooting recursively traverses the witnessed nodes and checks the      */
 /* result against the committed pre-state root, authenticating every        */

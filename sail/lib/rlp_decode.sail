@@ -64,9 +64,7 @@ function rlp_split(b : list(byte), start : int, stop : int) -> list(RlpField) = 
     while pos < stop do {
         let (isl, cs, cl) = rlp_hdr(b, pos);
         let nxt = cs + cl;
-        out =
-            struct { is_list = isl, content = bytes_slice(b, cs, cl), full = bytes_slice(b, pos, nxt - pos) } ::
-                out;
+        out = struct { is_list = isl, content = bytes_slice(b, cs, cl), full = bytes_slice(b, pos, nxt - pos) } :: out;
         pos = nxt
     };
     list_reverse(out)

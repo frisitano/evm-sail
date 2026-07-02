@@ -41,18 +41,18 @@ actually inspecting those bytes as model data.
 - Do not use one global accelerator output buffer as permanent EVM returndata.
   Later accelerators could overwrite it before `RETURNDATACOPY`.
 
-## Planned Refactor
+## Refactor Plan
 
-1. Split accelerator output roles:
+1. Split accelerator output roles. Implemented in `ffi/acc_shim.c`:
    - Hash/list APIs keep a small scratch output readable through `acc_word` and
      `acc_out`.
    - Staged precompile execution writes directly into pending returndata.
-2. Add an accelerator execution path for staged precompiles that receives the
-   pending returndata buffer as its output destination. `hr_capture_acc` then
-   becomes a finalizer for the pending length instead of copying bytes.
-3. Preserve the current snapshot semantics for precompile input. A precompile
+2. Add an accelerator execution path for staged precompiles. Implemented as
+   `acc_exec_to_returndata`; `hr_capture_acc` is now only a compatibility
+   finalizer at the existing adoption point.
+3. Preserve the current snapshot semantics for precompile input. Done. A precompile
    input slice must not alias memory that later receives the precompile output.
-4. Expand direct memory-span reads where safe:
+4. Expand direct memory-span reads where safe. Partially done:
    - Hashes can read memory in place.
    - Precompile inputs should continue to snapshot unless a specific operation
      is proven non-overlapping and non-mutating.
@@ -69,7 +69,7 @@ After C/FFI changes, run:
 rtk make check
 rtk git diff --check
 cd revm-eest
-rtk python3 run_eest.py fixtures/smoke/state_root_transfer.json fixtures/smoke/state_root_precompile.json --fork Cancun --quiet --timeout 30 --root --rebuild
-rtk python3 run_eest.py fixtures/eels/shanghai_push0/state_tests/for_shanghai --fork Shanghai --quiet --timeout 30 --root --rebuild
-rtk python3 run_eest.py fixtures/eels/cancun_selfdestruct/state_tests/for_cancun --fork Cancun --quiet --timeout 30 --root --rebuild
+rtk env -u RUSTC_WRAPPER python3 run_eest.py fixtures/smoke/state_root_transfer.json fixtures/smoke/state_root_precompile.json --fork Cancun --quiet --timeout 30 --root --rebuild
+rtk env -u RUSTC_WRAPPER python3 run_eest.py fixtures/eels/shanghai_push0/state_tests/for_shanghai --fork Shanghai --quiet --timeout 30 --root --rebuild
+rtk env -u RUSTC_WRAPPER python3 run_eest.py fixtures/eels/cancun_selfdestruct/state_tests/for_cancun --fork Cancun --quiet --timeout 30 --root --rebuild
 ```

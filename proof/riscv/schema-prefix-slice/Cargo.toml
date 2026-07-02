@@ -1,0 +1,19 @@
+[package]
+name = "proof-schema-prefix-slice"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[profile.dev]
+panic = "abort"
+debug = 2
+opt-level = 1
+lto = false
+codegen-units = 1
+
+[profile.release]
+panic = "abort"
+debug = 2
+opt-level = 2
+lto = false
+codegen-units = 1

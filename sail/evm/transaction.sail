@@ -101,9 +101,10 @@ function blob_hashes_versioned(xs : list(word)) -> bool =
 /* intrinsic gas: tx input already loaded into the C buffer (txdata_load), so
  * calldata cost and the EIP-3860 initcode words read it via txdata_size. */
 function intrinsic_gas(tx : Transaction) -> gas = {
-    let access_list_gas =
-        G_access_list_address * list_len(tx.access_list_addresses) +
-        G_access_list_storage_key * list_len(tx.access_list_slots);
+    let access_list_gas =   G_access_list_address
+                          * list_len(tx.access_list_addresses)
+                          + G_access_list_storage_key
+                          * list_len(tx.access_list_slots);
     let auth = PER_EMPTY_ACCOUNT * list_len(tx.authorizations); /* EIP-7702 */
     let base = G_transaction + calldata_cost() + access_list_gas + auth;
     to_gas(if tx.is_create then base + G_txcreate + initcode_gas(txdata_size()) else base)
@@ -222,11 +223,7 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
        (no nonce bump, no gas charge). The upfront-balance test uses the fee CAPS
        (max_fee_per_gas, max_fee_per_blob_gas), not the effective prices. */
     let blob_gas = tx.blob_count * GAS_PER_BLOB;
-    let upfront =   tx.gas_limit
-                  * unsigned(tx.max_fee)
-                  + unsigned(tx.value)
-                  + blob_gas
-                  * unsigned(tx.max_blob_fee);
+    let upfront = tx.gas_limit * unsigned(tx.max_fee) + unsigned(tx.value) + blob_gas * unsigned(tx.max_blob_fee);
     let (sender_deleg, _) = k_deleg_target(sender);
 
     /* EIP-4844 / EIP-7691 / EIP-7594 blob-count bounds: Cancun max 6 per block,
