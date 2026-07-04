@@ -569,7 +569,7 @@ function storage_updates(ak : bits(256)) -> list(TrieUpdate) = {
                 storage_hashed_entry(j)
             };
         if eak == ak then {
-            let sk = keccak256(word_to_bytes32(es));
+            let sk = keccak256_source(WordSource(es));
             if k_stateless & word_is_zero(ev) & not_bool(slot_existed(ak, sk)) then {
                 ()
             } else {
@@ -735,15 +735,13 @@ val compute_state_root_overlay : unit -> bits(256)
 /* codeHash]); storage reads walk the account's storage root the same way.  */
 /*                                                                          */
 /* A node absent from the witness on a walked path is a missing proof and   */
-/* fails closed. Depends on the RLP decoder (rlp_decode.sail) and the SSZ   */
+/* fails closed. Depends on the RLP library and the SSZ                     */
 /* witness-list readers (host/io.sail).                                     */
 /* ======================================================================== */
 
 /* EMPTY_TRIE_ROOT is defined in host/state.sail (next to KECCAK_EMPTY) so the
  * Account struct's storage_root default can reference it. */
 let EMPTY_CODE_HASH : bits(256) = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
-
-let RLP_NONE : RlpField = struct { is_list = false, content = [||], full = [||] }
 
 /* big-endian bytes -> 256-bit word */
 function bytes_be256(c : list(byte)) -> bits(256) = {
@@ -760,10 +758,10 @@ function bytes_be256(c : list(byte)) -> bits(256) = {
  * and the lazy account read can use it. */
 function decode_account(leaf : list(byte)) -> (int, word, bits(256), bits(256)) = {
     let items = rlp_node_items(leaf);
-    let nonce = rlp_field_int(list_nth(items, 0, RLP_NONE));
-    let balance = rlp_field_word(list_nth(items, 1, RLP_NONE));
-    let sr_f = list_nth(items, 2, RLP_NONE);
-    let ch_f = list_nth(items, 3, RLP_NONE);
+    let nonce = rlp_field_int(rlp_item(items, 0));
+    let balance = rlp_field_uint_word(rlp_item(items, 1));
+    let sr_f = rlp_item(items, 2);
+    let ch_f = rlp_item(items, 3);
     let sroot = if list_len(sr_f.content) == 0 then {
             EMPTY_TRIE_ROOT
         } else {
@@ -1737,7 +1735,7 @@ function build_node_db() -> unit = {
     let n = wit_n_state();
     foreach (i from 0 to (n - 1)) {
         let (off, len) = ssz_witness_node_span(i);
-        let h = keccak256(ssz_bytes(off, len));
+        let h = keccak256_source(WitnessSource(ssz_witness_node_slice(i)));
         nodedb_insert(
             h[255 .. 192],
             h[191 .. 128],
@@ -1774,8 +1772,8 @@ function parent_state_root() -> bits(256) = {
  * The resolved value (or proven-absent 0) is cached in the slot store, so repeat
  * reads are O(1) without repeating the walk. */
 function stateless_storage(a : address, s : word) -> word = {
-    let ak = keccak256(address_to_bytes(a));
-    let sk = keccak256(word_to_bytes32(s));
+    let ak = keccak256_source(AddressSource(a));
+    let sk = keccak256_source(WordSource(s));
     if slotdb_sel(
         ak[255 .. 192],
         ak[191 .. 128],
@@ -1875,7 +1873,7 @@ function harvest_all_storage() -> unit = {
  * absence is a witness-proven exclusion. The result is cached raw in the acctmap
  * (k_seed_account_hashed), so subsequent load_account(a) is an O(1) raw read. */
 function stateless_account_load(a : address) -> unit = {
-    let ak = keccak256(address_to_bytes(a));
+    let ak = keccak256_source(AddressSource(a));
     let value : list(byte) = if acctdb_sel(ak[255 .. 192], ak[191 .. 128], ak[127 .. 64], ak[63 .. 0]) !=
             0x0000000000000000 then {
             list_nth(rlp_node_items(ssz_bytes(unsigned(acctdb_sel_off()), unsigned(acctdb_sel_len()))), 1, RLP_NONE).content
@@ -1925,7 +1923,7 @@ function storage_root_from(ak : bits(256), sroot : bits(256)) -> bits(256) = {
 }
 
 function storage_root(a : address) -> bits(256) =
-    storage_root_from(keccak256(address_to_bytes(a)), load_account(a).storage_root)
+    storage_root_from(keccak256_source(AddressSource(a)), load_account(a).storage_root)
 
 function compute_state_root_updates_only() -> bits(256) =
     updates_root(state_updates_map())

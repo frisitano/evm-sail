@@ -1,6 +1,6 @@
 /* C-backed EVM memory for the evm-sail model (see memory.c). Declared here so
  * the Sail-generated C call sites are prototyped via `sail -c --c-include`.
- * Only mach_bits (uint64_t) cross the FFI, matching ffi/acc_shim.h. */
+ * Only mach_bits (uint64_t) cross the FFI, matching the other host FFI modules. */
 #ifndef MEMORY_H
 #define MEMORY_H
 #include "sail.h"
@@ -17,10 +17,8 @@ unit hm_move(uint64_t dst, uint64_t src, uint64_t len);  /* MCOPY memmove */
 unit cd_set(uint64_t off, uint64_t len);   /* next child's calldata = mem range */
 unit cd_set_empty(const unit u);
 unit cd_set_tx(const unit u);
-unit txin_begin(uint64_t idx);
+unit txin_begin(const unit u);
 unit txin_byte(uint64_t b);
-uint64_t txin_activate(uint64_t idx);
-unit txin_view_input_span(uint64_t idx, uint64_t off, uint64_t len);
 uint64_t cd_len(const unit u);
 uint64_t txd_copy(uint8_t *dst, uint64_t cap);
 uint64_t txd_at(uint64_t i);

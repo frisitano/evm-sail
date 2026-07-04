@@ -3,10 +3,11 @@
  * from the spike build (there the runtime bakes the witness in and writes the
  * result over HTIF; here the ere/zkVM SDK supplies read_input/write_output).
  *
- * Build the model core (Sail-generated C + sailfix runtime + acc_shim + the
- * host_*.c backends + this file + zkvm_input.c) with -DERE_GUEST and link against
- * the SDK runtime that exports read_input/write_output. Call evmsail_validate()
- * once from the guest main (src/main.rs). */
+ * Build the model core (Sail-generated C + sailfix runtime + explicit host
+ * crypto/precompile/returndata backends + the other host_*.c backends + this
+ * file + zkvm_input.c) with -DERE_GUEST and link against the SDK runtime that
+ * exports read_input/write_output. Call evmsail_validate() once from the guest
+ * main (src/main.rs). */
 #include <stdint.h>
 #include <stddef.h>
 

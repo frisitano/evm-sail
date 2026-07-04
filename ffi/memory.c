@@ -7,7 +7,7 @@
  * memory (host_mem_push) and the parent's is restored on return (host_mem_pop); the
  * Sail side keeps the high-water mark (memory_size) for expansion gas.
  *
- * Only mach_bits cross the FFI (uint64_t), matching ffi/acc_shim.c. */
+ * Only mach_bits cross the FFI (uint64_t), matching the other host FFI modules. */
 #include "sail.h"
 #include <stdint.h>
 #include <stdlib.h>
@@ -30,32 +30,15 @@ uint8_t *hm_wr(uint64_t off, uint64_t len);   /* fwd decl (defined below) */
 typedef struct { int src; uint64_t off, len; } hm_cd;
 static hm_cd cd[MEMORY_MAXDEPTH];
 static hm_cd cd_pending = { -2, 0, 0 };
-/* Byte accessor for immutable SSZ/private input spans. The concrete input owner
- * (zkvm/runtime/zkvm_input.c or revm-eest/runner_ffi.c) defines this helper. */
-extern uint64_t ssz_src_byte_u64(uint64_t off);
 
-/* The block's transaction inputs, indexed by tx position. Each tx's data is
- * loaded into its slot once (by the runner / stateless decoder); the executing
- * tx is SELECTED by index (txin_activate). The Transaction struct carries only
- * the index -- the bytes live here in memory, never duplicated in a Sail list. */
-#define TXIN_MAX 256
-/* A slot is either OWNED (buf is malloc'd and filled byte-by-byte: EEST /
- * synthetic txs whose bytes originate in Sail) or INPUT_SPAN (an offset/length
- * into the immutable stateless SSZ input). The slot never stores an external
- * byte pointer; large immutable payloads stay zero-copy, while mutable/generated
- * payloads are owned copies. */
-typedef enum { TXIN_OWNED = 0, TXIN_INPUT_SPAN = 1 } txin_kind;
-typedef struct { uint8_t *buf; uint64_t input_off, len, cap; txin_kind kind; } txin_slot;
-static txin_slot txin[TXIN_MAX];
-static int txin_fill = 0;   /* slot currently being populated  */
-static int txin_sel  = 0;   /* slot of the executing tx        */
+/* The current transaction's input bytes. The runner / stateless decoder
+ * materializes calldata or create initcode into this owned buffer before
+ * execution; opcodes then read it byte-addressed through txd_* / cd_*. */
+typedef struct { uint8_t *buf; uint64_t len, cap; } txin_buf;
+static txin_buf txin = { NULL, 0, 0 };
 
-static uint8_t txin_slot_byte(const txin_slot *s, uint64_t i) {
+static uint8_t txin_byte_at(const txin_buf *s, uint64_t i) {
   if (i >= s->len) return 0;
-  if (s->kind == TXIN_INPUT_SPAN) {
-    uint64_t p = s->input_off + i;
-    return (p < s->input_off) ? 0 : (uint8_t)ssz_src_byte_u64(p);
-  }
   return s->buf ? s->buf[i] : 0;
 }
 
@@ -113,59 +96,40 @@ unit cd_set_empty(const unit u) {
 /* the CURRENT (tx-level) frame's calldata := the streamed tx input */
 unit cd_set_tx(const unit u) {
   (void)u;
-  cd[h_top].src = -1; cd[h_top].off = 0; cd[h_top].len = txin[txin_sel].len;
+  cd[h_top].src = -1; cd[h_top].off = 0; cd[h_top].len = txin.len;
   return UNIT;
 }
-/* begin populating an OWNED tx slot `idx` (resets length; storage is cached) */
-unit txin_begin(uint64_t idx) {
-  txin_fill = (idx < TXIN_MAX) ? (int)idx : 0;
-  txin[txin_fill].len = 0;
-  txin[txin_fill].input_off = 0;
-  txin[txin_fill].kind = TXIN_OWNED;
+/* begin populating the owned tx input buffer (resets length; storage is cached) */
+unit txin_begin(const unit u) {
+  (void)u;
+  txin.len = 0;
   return UNIT;
 }
 unit txin_byte(uint64_t b) {
-  txin_slot *s = &txin[txin_fill];
-  s->kind = TXIN_OWNED;
-  if (s->len >= s->cap) {
-    uint64_t n = s->cap ? s->cap * 2 : 1024;
-    s->buf = (uint8_t *)realloc(s->buf, n);
-    s->cap = n;
+  if (txin.len >= txin.cap) {
+    uint64_t n = txin.cap ? txin.cap * 2 : 1024;
+    txin.buf = (uint8_t *)realloc(txin.buf, n);
+    txin.cap = n;
   }
-  s->buf[s->len++] = (uint8_t)b;
+  txin.buf[txin.len++] = (uint8_t)b;
   return UNIT;
 }
-/* point tx slot `idx` at an immutable SSZ input span [off, off+len) (no copy). */
-unit txin_view_input_span(uint64_t idx, uint64_t off, uint64_t len) {
-  txin_slot *s = &txin[(idx < TXIN_MAX) ? (int)idx : 0];
-  s->input_off = off;
-  s->len = len;
-  s->kind = TXIN_INPUT_SPAN;
-  return UNIT;
-}
-/* select tx slot `idx` as the executing transaction; returns its input length */
-uint64_t txin_activate(uint64_t idx) {
-  txin_sel = (idx < TXIN_MAX) ? (int)idx : 0;
-  return txin[txin_sel].len;
-}
-
 uint64_t cd_len(const unit u) { (void)u; return cd[h_top].len; }
 
 /* the executing tx's input (a create-tx's initcode source; gas byte reads) */
 uint64_t txd_copy(uint8_t *dst, uint64_t cap) {
-  const txin_slot *s = &txin[txin_sel];
-  uint64_t n = s->len < cap ? s->len : cap;
-  for (uint64_t i = 0; i < n; i++) dst[i] = txin_slot_byte(s, i);
+  uint64_t n = txin.len < cap ? txin.len : cap;
+  for (uint64_t i = 0; i < n; i++) dst[i] = txin_byte_at(&txin, i);
   return n;
 }
-uint64_t txd_at(uint64_t i)  { return txin_slot_byte(&txin[txin_sel], i); }
-uint64_t txd_length(const unit u) { (void)u; return txin[txin_sel].len; }
+uint64_t txd_at(uint64_t i)  { return txin_byte_at(&txin, i); }
+uint64_t txd_length(const unit u) { (void)u; return txin.len; }
 
 /* calldata byte i (0 past the end -- and 0 past the source's ALLOCATED cap:
  * an expansion-charged but never-written parent range reads as zeros) */
 static uint8_t cd_at(const hm_cd *c, uint64_t i) {
   if (i >= c->len) return 0;
-  if (c->src == -1) return txin_slot_byte(&txin[txin_sel], i);
+  if (c->src == -1) return txin_byte_at(&txin, i);
   if (c->src >= 0) {
     const h_memframe *f = &h_stack[c->src];
     uint64_t p = c->off + i;
@@ -207,7 +171,7 @@ uint64_t host_mem_read(uint64_t off) {
   return (off < f->cap) ? (uint64_t)f->buf[off] : 0;
 }
 
-/* current call-frame depth (the returndata slots in acc_shim key off it) */
+/* current call-frame depth (the returndata slots in returndata.c key off it) */
 uint64_t hm_depth(const unit u) { (void)u; return (uint64_t)h_top; }
 
 /* ensure capacity (zero-filled) and return a READ pointer to [off, off+len) */

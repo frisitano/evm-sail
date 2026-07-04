@@ -21,29 +21,6 @@ extern const unsigned long  zkvm_input_bytes_len;
 #define IN_LEN zkvm_input_bytes_len
 #endif
 
-/* point a tx-input slot at a span of the stateless SSZ input -- the tx executes
- * directly over the witness bytes, no copy. (txin_view_input_span: memory.h via zkvm_input.h) */
-/* store the code for a codeHash as an immutable witness input span. */
-uint64_t ssz_src_byte_u64(uint64_t idx) {
-  return (idx < IN_LEN) ? (uint64_t)IN_PTR[idx] : 0;
-}
-
-unit cs_view_input(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
-                   uint64_t off, uint64_t len) {
-  uint64_t o = (off < IN_LEN) ? off : IN_LEN;
-  uint64_t avail = IN_LEN - o;
-  if (len > avail) len = avail;
-  cs_view_hash_input(h3, h2, h1, h0, o, len);
-  return UNIT;
-}
-uint64_t txin_view_input(uint64_t idx, uint64_t off, uint64_t len) {
-  uint64_t o = (off < IN_LEN) ? off : IN_LEN;
-  uint64_t avail = IN_LEN - o;
-  if (len > avail) len = avail;
-  txin_view_input_span(idx, o, len);
-  return len;
-}
-
 /* The guest emits the canonical SSZ result through the standard write_output. */
 #ifdef ERE_GUEST
 /* ere/zkvm-standards write_output is commit-once: buffer the SSZ result and
@@ -74,7 +51,14 @@ uint64_t ssz_src_len(const unit u)
 uint64_t ssz_src_byte(sail_int idx)
 {
     unsigned long i = mpz_get_ui(idx);
-    return ssz_src_byte_u64((uint64_t)i);
+    return (i < IN_LEN) ? (uint64_t)IN_PTR[i] : 0;
+}
+
+const uint8_t *evmsail_ssz_ptr(uint64_t off, uint64_t len)
+{
+    uint64_t total = (uint64_t)IN_LEN;
+    if (off > total || len > total - off) return NULL;
+    return IN_PTR + off;
 }
 
 /* Bulk slice readers: read n (<=8) bytes from the input in ONE FFI call instead

@@ -107,15 +107,15 @@ Record OutputTraceContract := {
       bytes_wf (output_bytes (emit_out_step trace b));
 }.
 
-(* sail/host/io.sail: acc_* plus keccak256/sha256 wrappers. *)
-Record AcceleratorContract := {
-  acc_hash_ref : Z -> byte_seq -> word256;
+(* sail/host/io.sail: host crypto plus staged precompile wrappers. *)
+Record HostCryptoContract := {
+  host_hash_ref : Z -> byte_seq -> word256;
   keccak256_ref : byte_seq -> word256;
   sha256_ref : byte_seq -> word256;
   precompile_ref : Z -> byte_seq -> option byte_seq;
 
-  acc_hash_ref_wf :
-    forall id msg, bytes_wf msg -> uint256_wf (acc_hash_ref id msg);
+  host_hash_ref_wf :
+    forall id msg, bytes_wf msg -> uint256_wf (host_hash_ref id msg);
   keccak256_ref_wf :
     forall msg, bytes_wf msg -> uint256_wf (keccak256_ref msg);
   sha256_ref_wf :
@@ -126,15 +126,15 @@ Record AcceleratorContract := {
       precompile_ref id input = Some output ->
       bytes_wf output;
 
-  acc_hash_id_0_is_keccak256 :
-    forall msg, bytes_wf msg -> acc_hash_ref 0 msg = keccak256_ref msg;
-  acc_hash_id_2_is_sha256 :
-    forall msg, bytes_wf msg -> acc_hash_ref 2 msg = sha256_ref msg;
-  acc_stateful_protocol_refines_refs : Prop;
+  host_hash_id_0_is_keccak256 :
+    forall msg, bytes_wf msg -> host_hash_ref 0 msg = keccak256_ref msg;
+  host_hash_id_2_is_sha256 :
+    forall msg, bytes_wf msg -> host_hash_ref 2 msg = sha256_ref msg;
+  host_precompile_protocol_refines_refs : Prop;
 }.
 
-(* sail/host/memory.sail and sail/evm/machine.sail host_mem_*, hm_*, hc_*,
-   hr_*, cd_*, txin_*, txd_*, hj_*, fc_*, hs_*. *)
+(* sail/host/memory.sail and sail/evm/machine.sail host_mem_*, hm_*, hr_*,
+   txin_*, txd_*, code_db_*, hs_*. *)
 Record MemoryStackContract := {
   memory_state : Type;
   stack_state : Type;
@@ -165,7 +165,7 @@ Record MemoryStackContract := {
 }.
 
 (* sail/host/state.sail and sail/host/kernel.sail state-facing externs:
-   transient_storage_*, storage_map_*, acctmap_*, cs_*, cs_deleg. *)
+   transient_storage_*, storage_map_*, acctmap_*, code_db_*. *)
 Record WorldStateContract := {
   world_state : Type;
 
@@ -233,7 +233,7 @@ Record WitnessDbContract := {
 Record GuestExternContract := {
   guest_input : InputOracle;
   guest_output : OutputTraceContract;
-  guest_accelerator : AcceleratorContract;
+  guest_host_crypto : HostCryptoContract;
   guest_memory_stack : MemoryStackContract;
   guest_world_state : WorldStateContract;
   guest_witness_db : WitnessDbContract;
@@ -245,7 +245,7 @@ Definition input_well_formed_boundary (contract : GuestExternContract) : Prop :=
     Z.of_nat (length (input_bytes (guest_input contract))).
 
 Definition main_boundary (contract : GuestExternContract) : Prop :=
-  acc_stateful_protocol_refines_refs contract.(guest_accelerator) /\
+  host_precompile_protocol_refines_refs contract.(guest_host_crypto) /\
   memory_frame_lifo_contract contract.(guest_memory_stack) /\
   calldata_view_contract contract.(guest_memory_stack) /\
   returndata_frame_contract contract.(guest_memory_stack) /\

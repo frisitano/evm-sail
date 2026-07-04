@@ -27,9 +27,10 @@ struct Authorization = {
  * (access list), EIP-1559 (fee market), EIP-4844 (blob), EIP-7702 (set code);
  * the type-specific fields below are validity-relevant per their EIP. */
 struct Transaction = {
+  tx_type : int,             /* EIP-2718 envelope type: 0 legacy, 1..4 typed */
   sender : address, nonce : int, gas_price : word, priority_fee : word,
   gas_limit : gas, is_create : bool, recipient : address, value : word,
-  input_index : int,                /* transaction index: its input bytes live in memory (txin) */
+  input : list(byte),          /* calldata, or initcode for contract creation */
   access_list_addresses : list(address),   /* EIP-2930 access-list addresses (one per entry) */
   access_list_slots  : list(SlotKey),   /* EIP-2930 access-list (address, slot) pairs      */
   is_access_list : bool,      /* type-1 (EIP-2930) envelope, even if the list is empty */
@@ -56,7 +57,7 @@ struct Transaction = {
  * (= max(gas_used_before_refund, calldata_floor)). The block driver sums this
  * for the block gas-availability check and the header gas_used; it differs from
  * gas_used (the receipt's refunded gas) precisely by the refund. */
-struct Receipt = { success : bool, valid : bool, gas_used : gas, block_gas : gas, logs : list(LogEntry) }
+struct Receipt = { tx_type : int, success : bool, valid : bool, gas_used : gas, block_gas : gas, logs : list(LogEntry) }
 
 let G_transaction : gas = 21000
 let G_txcreate : gas = 32000
@@ -98,7 +99,7 @@ function blob_hashes_versioned(xs : list(word)) -> bool =
         },
     }
 
-/* intrinsic gas: tx input already loaded into the C buffer (txdata_load), so
+/* intrinsic gas: tx input already loaded into the C buffer, so
  * calldata cost and the EIP-3860 initcode words read it via txdata_size. */
 function intrinsic_gas(tx : Transaction) -> gas = {
     let access_list_gas =   G_access_list_address
@@ -142,6 +143,7 @@ function process_auth(au : Authorization) -> unit = {
         }
     }
 }
+
 function process_auth_list(xs : list(Authorization)) -> unit =
     match xs {
         [||] => (),
@@ -211,7 +213,7 @@ struct TxFrameResult = {
 }
 
 function invalid_receipt() -> Receipt =
-    struct { success = false, valid = false, gas_used = 0, block_gas = 0, logs = [||] }
+    struct { tx_type = 0, success = false, valid = false, gas_used = 0, block_gas = 0, logs = [||] }
 
 function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity = {
     let sender = tx.sender;
@@ -374,7 +376,6 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
             };
         if ok & (used <= gas_remaining) then {
             gas_remaining = to_gas(gas_remaining - used);
-            hr_capture_acc();
             hr_adopt();
             frame_status = Halted(HaltReturn)
         } else {
@@ -457,6 +458,7 @@ function settle_transaction(tx : Transaction, sender : address, fr : TxFrameResu
     };
 
     struct {
+        tx_type = tx.tx_type,
         success = fr.success,
         valid = true,
         gas_used = to_gas(gas_used),
@@ -470,9 +472,9 @@ function process_transaction(tx : Transaction) -> Receipt = {
     k_set_tx(struct { origin = tx.sender, gas_price = tx.gas_price, blob_hashes = tx.blob_hashes });
     hr_reset();
 
-    /* select this tx's input (already loaded into memory at block setup); gas,
-       validity, calldata and initcode all read it from there by index. */
-    let dlen = txdata_activate(tx.input_index);
+    /* Stage this tx's input into the owned C buffer; gas, validity, calldata and
+       initcode all read it from there during execution. */
+    let dlen = txdata_set_input(tx.input);
     let validity = check_transaction_validity(tx, dlen);
     if not_bool(validity.valid) then {
         return invalid_receipt()

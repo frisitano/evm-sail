@@ -88,7 +88,7 @@ check-extern-boundary:
 	test -s $(EXTERN_BOUNDARY_DOC)
 	grep -q "Record InputOracle" $(EXTERN_BOUNDARY_COQ)
 	grep -q "Record OutputTraceContract" $(EXTERN_BOUNDARY_COQ)
-	grep -q "Record AcceleratorContract" $(EXTERN_BOUNDARY_COQ)
+	grep -q "Record HostCryptoContract" $(EXTERN_BOUNDARY_COQ)
 	grep -q "Record MemoryStackContract" $(EXTERN_BOUNDARY_COQ)
 	grep -q "Record WorldStateContract" $(EXTERN_BOUNDARY_COQ)
 	grep -q "Record WitnessDbContract" $(EXTERN_BOUNDARY_COQ)

@@ -1,17 +1,16 @@
 /* ======================================================================== */
-/* HOST I/O: ACCELERATOR FFI, HOST CRYPTO, STATELESS SSZ INPUT              */
+/* HOST I/O: HOST CRYPTO, PRECOMPILES, STATELESS SSZ INPUT                  */
 /*                                                                          */
 /* Everything the model obtains from OUTSIDE itself -- the boundary between */
 /* the EVM specification and its environment. Three layers:                 */
 /*                                                                          */
-/* (1) FFI BINDING -- the accelerator byte-stream protocol (mechanism only, */
-/* no semantics). The model commits to WHAT is hashed/verified; the host    */
-/* computes the result. Inputs stream across the C boundary 8 bytes per     */
-/* crossing (begin / push / exec / read).                                   */
+/* (1) FFI BINDING -- direct host hash helpers and staged precompile input. */
+/* The model commits to WHAT is serialized or executed; C supplies          */
+/* pointer/length calls to host crypto and precompile implementations.      */
 /*                                                                          */
 /* (2) HOST CRYPTO -- keccak256 (the Ethereum hash: KECCAK256, trie/RLP     */
 /* node references, CREATE2 salt) and sha256 (precompile 0x02 + SSZ         */
-/* merkleization), the EVM precompiles over the same binding, and the       */
+/* merkleization), the EVM precompiles over staged byte ranges, and the     */
 /* CREATE (Yellow Paper) / CREATE2 (EIP-1014) address derivations.          */
 /*                                                                          */
 /* (3) STATELESS INPUT -- decode the canonical SSZ SszStatelessInput from   */
@@ -21,7 +20,7 @@
 /* (projects/zkevm) forks/amsterdam stateless_ssz.py.                       */
 /*                                                                          */
 /* Host mechanism, like memory and storage. Included early -- the crypto is */
-/* used by block_hash, state, kernel, gas, and transaction; the SSZ         */
+/* used by state, kernel, gas, and transaction; the SSZ                     */
 /* decoders are called only by the outer stateless layers (the lib/mpt.sail */
 /* witness reader, sail/main.sail, the EEST runner).                        */
 /* ======================================================================== */
@@ -35,52 +34,84 @@ struct SlotKey = { address : address, slot : word }
 
 /* ===================== (1) FFI BINDING ================================= */
 
-val acc_begin = impure { _: "acc_begin" } : bits(64) -> unit
-val acc_push = impure { _: "acc_push" } : bits(8) -> unit
-val acc_push8 = impure { _: "acc_push8" } : bits(64) -> unit
-val acc_exec = impure { _: "acc_exec" } : unit -> bits(64)
-val acc_exec_to_returndata = impure { _: "acc_exec_to_returndata" } : unit -> bits(64)
-val acc_ok = impure { _: "acc_ok" } : unit -> bits(8)
-val acc_out = impure { _: "acc_out" } : bits(64) -> bits(8)
-val acc_word = impure { _: "acc_word" } : bits(64) -> bits(64)
-val acc_in_byte = impure { _: "acc_in_byte" } : bits(64) -> bits(8)
-val acc_begin_mem = impure { _: "acc_begin_mem" } : (bits(64), bits(64), bits(64)) -> unit
-val acc_begin_txd = impure { _: "acc_begin_txd" } : bits(64) -> unit
+val precompile_input_byte_ffi = impure { _: "precompile_input_byte" } : bits(64) -> bits(8)
+val precompile_stage_tx = impure { _: "precompile_stage_tx" } : bits(64) -> unit
+val precompile_run_staged_to_returndata = impure { _: "precompile_run_staged_to_returndata" } : unit -> bits(64)
+val precompile_run_host_input = impure { _: "precompile_run_host_input" } : bits(64) -> bits(64)
+val precompile_ok = impure { _: "precompile_ok" } : unit -> bits(8)
+val precompile_out = impure { _: "precompile_out" } : bits(64) -> bits(8)
+val host_bytes_reset = impure { _: "host_bytes_reset" } : unit -> unit
+val host_bytes_append_byte = impure { _: "host_bytes_append_byte" } : bits(8) -> unit
+val host_bytes_append8 = impure { _: "host_bytes_append8" } : bits(64) -> unit
+val host_keccak_input = impure { _: "host_keccak_input" } : unit -> unit
+val host_sha256_input = impure { _: "host_sha256_input" } : unit -> unit
+val host_keccak_witness = impure { _: "host_keccak_witness" } : (witness_offset, witness_len) -> unit
+val host_keccak_memory = impure { _: "host_keccak_memory" } : (memory_offset, memory_len) -> unit
+val host_sha256_request_digest = impure { _: "host_sha256_request_digest" } : (bits(64), witness_offset, witness_len) -> unit
+val host_keccak_word = impure { _: "host_keccak_word" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val host_keccak_address = impure { _: "host_keccak_address" } : (bits(64), bits(64), bits(64)) -> unit
+val host_sha256_pair_words = impure { _: "host_sha256_pair_words" } : (
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+    ) -> unit
+val host_hash_word = impure { _: "host_hash_word" } : bits(64) -> bits(64)
 
-/* Feed a message to the host accelerator, 8 bytes per FFI crossing (the
- * sub-8 remainder one byte at a time). */
-function acc_push_all(msg : list(byte)) -> unit = match msg {
+function host_bytes_append_list(msg : list(byte)) -> unit = match msg {
     b0 :: (b1 :: (b2 :: (b3 :: (b4 :: (b5 :: (b6 :: (b7 :: r))))))) => {
-        acc_push8(append(b0, append(b1, append(b2, append(b3, append(b4, append(b5, append(b6, b7))))))));
-        acc_push_all(r)
+        host_bytes_append8(append(b0, append(b1, append(b2, append(b3, append(b4, append(b5, append(b6, b7))))))));
+        host_bytes_append_list(r)
     },
     b :: r => {
-        acc_push(b);
-        acc_push_all(r)
+        host_bytes_append_byte(b);
+        host_bytes_append_list(r)
     },
     [||] => (),
 }
 
-/* Read `n` output bytes back from the host accelerator into a list. */
-function acc_read(n : int) -> list(byte) = {
-    var out : list(byte) = [||];
-    foreach (i from 0 to (n - 1)) {
-        out = acc_out(get_slice_int(64, i, 0)) :: out
-    };
-    list_reverse(out)
+function host_digest() -> bits(256) = {
+    let w0 : bits(64) = host_hash_word(get_slice_int(64, 0, 0));
+    let w1 : bits(64) = host_hash_word(get_slice_int(64, 1, 0));
+    let w2 : bits(64) = host_hash_word(get_slice_int(64, 2, 0));
+    let w3 : bits(64) = host_hash_word(get_slice_int(64, 3, 0));
+    append(w0, append(w1, append(w2, w3)))
 }
 
-/* A 32-byte-digest hash over the accelerator (id 0 = keccak256, id 2 =
- * sha256): hash `msg`, folding the 32 output bytes big-endian into a word. */
-function acc_hash(id : int, msg : list(byte)) -> bits(256) = {
-    acc_begin(get_slice_int(64, id, 0));
-    acc_push_all(msg);
-    let _ = acc_exec();
-    let w0 : bits(64) = acc_word(get_slice_int(64, 0, 0)); /* digest as 4 big-endian 64-bit words */
-    let w1 : bits(64) = acc_word(get_slice_int(64, 1, 0));
-    let w2 : bits(64) = acc_word(get_slice_int(64, 2, 0));
-    let w3 : bits(64) = acc_word(get_slice_int(64, 3, 0));
-    append(w0, append(w1, append(w2, w3)))
+function keccak256_source(src : byte_source) -> bits(256) = match src {
+    ByteListSource(msg) => {
+        host_bytes_reset();
+        host_bytes_append_list(msg);
+        host_keccak_input();
+        let h = host_digest();
+        host_bytes_reset();
+        h
+    },
+    WitnessSource(s) => {
+        host_keccak_witness(s.off, s.len);
+        host_digest()
+    },
+    MemorySource(s) => {
+        host_keccak_memory(s.off, s.len);
+        host_digest()
+    },
+    WordSource(w) => {
+        host_keccak_word(w[255 .. 192], w[191 .. 128], w[127 .. 64], w[63 .. 0]);
+        host_digest()
+    },
+    AddressSource(a) => {
+        host_keccak_address(a[159 .. 96], a[95 .. 32], sail_zero_extend(a[31 .. 0], 64));
+        host_digest()
+    },
+}
+
+function sha256_request_digest(request_type : int, s : witness_slice) -> bits(256) = {
+    host_sha256_request_digest(get_slice_int(64, request_type, 0), s.off, s.len);
+    host_digest()
 }
 
 /* ===================== (2) HOST CRYPTO ================================= */
@@ -90,49 +121,59 @@ function acc_hash(id : int, msg : list(byte)) -> bits(256) = {
  * for a CALL, or the tx data for a tx-to-precompile); gas inspection (the
  * MODEXP length header, the BLAKE2F rounds count) reads only the leading
  * bytes it needs, directly from the staged buffer. */
-function precompile_input_byte(i : int) -> byte = acc_in_byte(get_slice_int(64, i, 0))
+function precompile_input_byte(i : int) -> byte = precompile_input_byte_ffi(get_slice_int(64, i, 0))
 
 /* Stage a precompile's input from the streamed tx buffer (a transaction
  * sent directly to a precompile; CALL-family staging is memory-sourced --
  * see stage_precompile_input in host/memory.sail). */
-function stage_precompile_txd(num : int) -> unit = acc_begin_txd(get_slice_int(64, num, 0))
+function stage_precompile_txd(num : int) -> unit = precompile_stage_tx(get_slice_int(64, num, 0))
 
-/* Run the staged precompile (input already snapshotted in the accelerator from
- * memory or tx data). Output is written directly into pending returndata;
- * hr_capture_acc is only a compatibility finalizer at the adoption point.
+/* Run the staged precompile (input already snapshotted from memory or tx data).
+ * Output is written directly into pending returndata.
  * Returns false on precompile failure, which the interpreter maps to a CALL
  * result of 0 with empty returndata. */
 function run_precompile_staged() -> bool = {
-    let _ = acc_exec_to_returndata();
-    unsigned(acc_ok()) == 1
+    let _ = precompile_run_staged_to_returndata();
+    unsigned(precompile_ok()) == 1
 }
 
-/* List-in / list-out precompile wrapper (precompile vector tests; the EVM
- * itself uses the staged path above). */
+/* Read `n` bytes from the most recent precompile scratch output into a list. */
+function precompile_read(n : int) -> list(byte) = {
+    var out : list(byte) = [||];
+    foreach (i from 0 to (n - 1)) {
+        out = precompile_out(get_slice_int(64, i, 0)) :: out
+    };
+    list_reverse(out)
+}
+
+/* List-in / list-out precompile wrapper for tx-auth helpers and vector tests.
+ * The list is first materialized in the host byte scratch; C then invokes the
+ * same pointer/length precompile path used by staged execution. */
 function run_precompile(num : int, input : list(byte)) -> (bool, list(byte)) = {
-    acc_begin(get_slice_int(64, num, 0));
-    acc_push_all(input);
-    let n = unsigned(acc_exec());
-    let ok = unsigned(acc_ok()) == 1;
-    if not_bool(ok) then {
-        (false, [||])
-    } else {
-        (true, acc_read(n))
-    }
+    host_bytes_reset();
+    host_bytes_append_list(input);
+    let n = unsigned(precompile_run_host_input(get_slice_int(64, num, 0)));
+    let ok = unsigned(precompile_ok()) == 1;
+    let out = if not_bool(ok) then {
+            [||]
+        } else {
+            precompile_read(n)
+        };
+    host_bytes_reset();
+    (ok, out)
 }
 
 /* ======================================================================== */
 /* HASH PRIMITIVES + CREATE ADDRESS DERIVATION                              */
 /*                                                                          */
-/* keccak256 and sha256 route through the same accelerator boundary as the  */
-/* precompiles (acc_hash; id 0 = keccak256, id 2 = sha256). The model       */
-/* defines what is hashed; the host computes the digest behind the standard */
-/* accelerator header.                                                      */
+/* keccak256 and sha256 route through the host byte scratch and host-crypto */
+/* pointer/length boundary. The model defines what is hashed; the host      */
+/* computes the digest behind the standard accelerator header.              */
 /* ======================================================================== */
 
 /* Keccak-256, the Ethereum hash function: the KECCAK256 opcode, trie/RLP
  * node references, code hashes, and CREATE2 init-code commitments. id 0. */
-function keccak256(msg : list(byte)) -> bits(256) = acc_hash(0, msg)
+function keccak256(msg : list(byte)) -> bits(256) = keccak256_source(ByteListSource(msg))
 
 /* Big-endian byte serializations used by RLP, the tries, and address derivation. */
 function word_to_bytes32(w : word) -> list(byte) = {
@@ -148,6 +189,18 @@ function address_to_bytes(a : address) -> list(byte) = {
         out = sail_shiftright(a, 8 * k)[7 .. 0] :: out
     };
     out
+}
+
+function word_be_len(w : word) -> int = {
+    var n : int = 0;
+    foreach (k from 0 to 31) {
+        if unsigned(sail_shiftright(w, 8 * k)[7 .. 0]) != 0 then {
+            n = k + 1
+        } else {
+            ()
+        }
+    };
+    n
 }
 
 function int_be_len(n : int) -> int = if n <= 0 then {
@@ -178,32 +231,31 @@ function rlp_nonce(nonce : int) -> list(byte) =
         }
     }
 
-/* CREATE address (Yellow Paper): keccak256(rlp([sender, nonce]))[12:] -- the
- * low 20 bytes of the hash of the RLP-encoded (sender, nonce) pair. */
-function create_address(sender : address, nonce : int) -> address = {
-    let items = list_append(list_append([|0x94|], address_to_bytes(sender)), rlp_nonce(nonce));
-    let payload = list_append([|get_slice_int(8, 192 + list_len(items), 0)|], items);
-    word_to_address(keccak256(payload))
-}
-
-/* CREATE2 address (EIP-1014): the low 20 bytes of
- * keccak256(0xff ++ sender ++ salt ++ keccak256(init_code)) -- a salted,
- * init-code-committed address independent of the sender's nonce. */
-function create2_address(sender : address, salt : word, init_hash : hash) -> address = {
-    var buf : list(byte) = [|0xff|];
-    buf = list_append(buf, address_to_bytes(sender));
-    buf = list_append(buf, word_to_bytes32(salt));
-    buf = list_append(buf, word_to_bytes32(init_hash));
-    word_to_address(keccak256(buf))
-}
-
 /* SHA-256 (id 2): the precompile 0x02 hash and the SSZ merkleization hash --
  * distinct from the keccak256 used throughout execution. */
-function sha256(msg : list(byte)) -> bits(256) = acc_hash(2, msg)
+function sha256(msg : list(byte)) -> bits(256) = {
+    host_bytes_reset();
+    host_bytes_append_list(msg);
+    host_sha256_input();
+    let h = host_digest();
+    host_bytes_reset();
+    h
+}
 
 /* SSZ merkle parent: SHA-256(left ++ right) over two 32-byte chunks. */
-function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) =
-    acc_hash(2, list_append(word_to_bytes32(a), word_to_bytes32(b)))
+function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) = {
+    host_sha256_pair_words(
+        a[255 .. 192],
+        a[191 .. 128],
+        a[127 .. 64],
+        a[63 .. 0],
+        b[255 .. 192],
+        b[191 .. 128],
+        b[127 .. 64],
+        b[63 .. 0],
+    );
+    host_digest()
+}
 
 /* SHA-256 self-check against the standard "" and "abc" reference vectors. */
 function sha256_selfcheck() -> unit = {
@@ -274,6 +326,8 @@ function npr_end() -> int = witness_start() /* npr is the first top field */
 /* SszExecutionPayload fixed-region field offsets (bytes from payload start) */
 let PL_FEE_RECIPIENT : int = 32
 let PL_STATE_ROOT : int = 52
+let PL_RECEIPTS_ROOT : int = 84
+let PL_LOGS_BLOOM : int = 116
 let PL_BLOCK_NUMBER : int = 404
 let PL_GAS_LIMIT : int = 412
 let PL_GAS_USED : int = 420
@@ -317,6 +371,8 @@ function pl_base_fee() -> word = ssz_u256(payload_start() + PL_BASE_FEE)
 function pl_blob_gas_used() -> int = ssz_u64(payload_start() + PL_BLOB_GAS_USED)
 function pl_excess_blob_gas() -> int = ssz_u64(payload_start() + PL_EXCESS_BLOB_GAS)
 function pl_state_root() -> bits(256) = ssz_bytes32(payload_start() + PL_STATE_ROOT)
+function pl_receipts_root() -> bits(256) = ssz_bytes32(payload_start() + PL_RECEIPTS_ROOT)
+function pl_logs_bloom() -> list(byte) = ssz_bytes(payload_start() + PL_LOGS_BLOOM, 256)
 function pl_block_hash() -> bits(256) = ssz_bytes32(payload_start() + PL_BLOCK_HASH)
 
 /* variable sub-regions of the payload (offsets relative to payload start) */
@@ -332,6 +388,14 @@ function pl_bal_start() -> int = {
     let p = payload_start();
     p + ssz_u32(p + PL_BAL_OFF)
 }
+function pl_extra_start() -> int = {
+    let p = payload_start();
+    p + ssz_u32(p + PL_EXTRA_OFF)
+}
+function pl_extra_data() -> list(byte) =
+    ssz_bytes(pl_extra_start(), pl_txs_start() - pl_extra_start())
+function pl_block_access_list() -> list(byte) =
+    ssz_bytes(pl_bal_start(), payload_end() - pl_bal_start())
 
 /* block_access_list (simplified): u32-LE count, then count*(addr[20] ++ slot[32 BE]).
  * bal_load materializes the permitted (addr,slot) set; the kernel's k_sload/k_sstore
@@ -349,6 +413,8 @@ function bal_load() -> list(SlotKey) = {
 
 /* withdrawals: FIXED 44-byte SszWithdrawal elements, span [wds, bal) */
 function pl_n_withdrawals() -> int = ediv_int(pl_bal_start() - pl_wds_start(), 44)
+function withdrawal_index(i : int) -> int = ssz_u64(pl_wds_start() + i * 44 + 0)
+function withdrawal_validator_index(i : int) -> int = ssz_u64(pl_wds_start() + i * 44 + 8)
 function withdrawal_amount(i : int) -> int = ssz_u64(pl_wds_start() + i * 44 + 36)
 function withdrawal_addr(i : int) -> address = ssz_addr(pl_wds_start() + i * 44 + 16)
 
@@ -462,15 +528,27 @@ function ssz_list_span(start : int, n : int, stop : int, i : int) -> (int, int) 
         };
     (start + off_i, off_next - off_i)
 }
-function ssz_witness_node(i : int) -> list(byte) =
-    ssz_list_elem(wit_state_start(), wit_n_state(), wit_codes_start(), i)
+function ssz_list_slice(start : int, n : int, stop : int, i : int) -> witness_slice = {
+    let (off, len) = ssz_list_span(start, n, stop, i);
+    witness_slice(off, len)
+}
+function read_witness_slice(s : witness_slice) -> list(byte) =
+    ssz_bytes(unsigned(s.off), unsigned(s.len))
 function ssz_witness_node_span(i : int) -> (int, int) =
     ssz_list_span(wit_state_start(), wit_n_state(), wit_codes_start(), i)
-function ssz_witness_code(i : int) -> list(byte) =
-    ssz_list_elem(wit_codes_start(), wit_n_codes(), wit_headers_start(), i)
+function ssz_witness_node_slice(i : int) -> witness_slice =
+    ssz_list_slice(wit_state_start(), wit_n_state(), wit_codes_start(), i)
+function ssz_witness_node(i : int) -> list(byte) =
+    read_witness_slice(ssz_witness_node_slice(i))
 function ssz_witness_code_span(i : int) -> (int, int) =
     ssz_list_span(wit_codes_start(), wit_n_codes(), wit_headers_start(), i)
+function ssz_witness_code_slice(i : int) -> witness_slice =
+    ssz_list_slice(wit_codes_start(), wit_n_codes(), wit_headers_start(), i)
+function ssz_witness_header_span(i : int) -> (int, int) =
+    ssz_list_span(wit_headers_start(), wit_n_headers(), cc_start(), i)
+function ssz_witness_header_slice(i : int) -> witness_slice =
+    ssz_list_slice(wit_headers_start(), wit_n_headers(), cc_start(), i)
 function ssz_witness_header(i : int) -> list(byte) =
-    ssz_list_elem(wit_headers_start(), wit_n_headers(), cc_start(), i)
+    read_witness_slice(ssz_witness_header_slice(i))
 
 /* transactions[i] raw bytes (legacy = RLP list; typed = type byte ++ payload) */

@@ -5,8 +5,8 @@
 #
 # This mirrors:
 #   - the EEST sail256 native build in revm-eest/run_eest.py (accel-host cdylib,
-#     GMP-free sail256 runtime, host_*.c backends, acc_shim marshalling, big
-#     main-thread stack), and
+#     GMP-free sail256 runtime, explicit host crypto/precompile/backends, and
+#     big main-thread stack), and
 #   - the guest sail-compile flags in zkvm/build.sh (--c-no-main, --c-preserve
 #     zkvm_run, --c-include zkvm_input.h).
 #
@@ -94,9 +94,9 @@ done
 "$CC" "${CFLAGS[@]}" -c "$HERE/native_io.c" -o "$BUILD/native_io.o"
 "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -c "$HERE/main.c" -o "$BUILD/main.o"
 
-# --- 6. C host backends + acc_shim (acc_shim WITHOUT -DACCEL_MMIO) ----------
+# --- 6. C host backends + direct host crypto/precompile adapters ------------
 HOST_OBJS=()
-for hc in memory transient_storage state_db stack code_db trie_node_db acc_shim; do
+for hc in memory transient_storage state_db stack code_db trie_node_db host_crypto precompiles returndata; do
   o="$BUILD/$hc.o"
   "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$FFI" -c "$FFI/$hc.c" -o "$o"
   HOST_OBJS+=("$o")

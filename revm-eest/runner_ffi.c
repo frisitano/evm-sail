@@ -25,9 +25,11 @@ uint64_t ssz_src_byte(sail_int idx) {
     long i = (long)mpz_get_ui(idx);
     return (i >= 0 && i < g_len) ? (uint64_t)g_in[i] : 0;
 }
-uint64_t ssz_src_byte_u64(uint64_t idx) {
+const uint8_t *evmsail_ssz_ptr(uint64_t off, uint64_t len) {
     ensure();
-    return (g_len >= 0 && idx < (uint64_t)g_len) ? (uint64_t)g_in[idx] : 0;
+    uint64_t total = g_len < 0 ? 0 : (uint64_t)g_len;
+    if (off > total || len > total - off) return NULL;
+    return g_in + off;
 }
 void ssz_src_len(sail_int rop, const unit u) {
     (void)u; ensure(); mpz_set_ui(rop, (unsigned long)(g_len < 0 ? 0 : g_len));

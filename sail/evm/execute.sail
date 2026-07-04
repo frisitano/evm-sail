@@ -39,7 +39,7 @@ function guard_static() -> bool =
  * (the precomputed valid-destination set, YP 9.4.3); otherwise an invalid-jump
  * exceptional halt. PUSH-data bytes that happen to equal 0x5b are not valid. */
 function do_jump(dest : int) -> unit =
-    if dest >= 0 & dest < code_len & hj_valid(get_slice_int(64, dest, 0)) then {
+    if dest >= 0 & dest < code_len & code_db_frame_jumpdest_valid(get_slice_int(64, dest, 0)) then {
         pc = dest
     } else {
         exc_halt(InvalidJump)
@@ -646,6 +646,9 @@ function execute(op : ast) -> unit = match op {
                      * transfer (burning a self-beneficiary transfer). A
                      * pre-existing account just moves its balance and persists. */
                     if k_was_created(self_addr()) then {
+                        if beneficiary == self_addr() then {
+                            k_emit_burn_log(self_addr(), bal)
+                        };
                         k_zero_balance(self_addr());
                         k_selfdestruct(self_addr())
                     }

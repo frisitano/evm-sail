@@ -133,6 +133,48 @@ function k_account_occupied(a : address) -> bool = {
     has_code | (acc.nonce != 0) | has_storage
 }
 
+function eip7708_system_address() -> address = 0xfffffffffffffffffffffffffffffffffffffffe
+function eip7708_transfer_topic() -> word =
+    0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
+function eip7708_burn_topic() -> word =
+    0xcc16f5dbb4873280815c1ee09dbd06736cffcc184412cf7a71a0fdb75d397ca5
+
+function k_emit_transfer_log(src : address, dst : address, v : word) -> unit = {
+    if (k_fork < FORK_AMSTERDAM) | word_is_zero(v) | (src == dst) then {
+        ()
+    } else {
+        journal_push(JLog());
+        k_logs = list_append(
+            k_logs,
+            [|
+                struct {
+                    address = eip7708_system_address(),
+                    topics = [|eip7708_transfer_topic(), address_to_word(src), address_to_word(dst)|],
+                    data = word_to_bytes32(v),
+                },
+            |],
+        )
+    }
+}
+
+function k_emit_burn_log(a : address, v : word) -> unit = {
+    if (k_fork < FORK_AMSTERDAM) | word_is_zero(v) then {
+        ()
+    } else {
+        journal_push(JLog());
+        k_logs = list_append(
+            k_logs,
+            [|
+                struct {
+                    address = eip7708_system_address(),
+                    topics = [|eip7708_burn_topic(), address_to_word(a)|],
+                    data = word_to_bytes32(v),
+                },
+            |],
+        )
+    }
+}
+
 /* Move `v` wei from src to dst (the value field of a CALL or a tx). Both
  * balances are journaled; the EVM checks sufficiency before calling. */
 function k_transfer(src : address, dst : address, v : word) -> unit = {
@@ -142,7 +184,8 @@ function k_transfer(src : address, dst : address, v : word) -> unit = {
         journal_push(JAcct(src, load_account(src)));
         journal_push(JAcct(dst, load_account(dst)));
         store_account(src, { load_account(src) with balance = alu_sub(load_account(src).balance, v) });
-        store_account(dst, { load_account(dst) with balance = alu_add(load_account(dst).balance, v) })
+        store_account(dst, { load_account(dst) with balance = alu_add(load_account(dst).balance, v) });
+        k_emit_transfer_log(src, dst, v)
     }
 }
 
@@ -157,7 +200,7 @@ function k_bump_nonce(a : address) -> unit = {
 function k_set_code(a : address, c : list(byte)) -> unit = {
     journal_push(JAcct(a, load_account(a)));
     let h : hash = keccak256(c);
-    cs_store_code(h, c);
+    code_db_store_code(h, c);
     store_account(a, { load_account(a) with code_hash = h })
 }
 
@@ -173,7 +216,9 @@ function addr_bytes(a : address) -> list(byte) = {
 }
 function delegation_code(a : address) -> list(byte) = 0xef :: 0x01 :: 0x00 :: addr_bytes(a)
 
-val cs_deleg = impure { _: "cs_deleg" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(168)
+val code_db_read_delegation = impure { _: "code_db_read_delegation" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(
+        168,
+    )
 
 /* EIP-7702: resolve whether addr's stored code is a delegation designation,
  * probed by codeHash in ONE host call (run on every CALL-family target). Returns
@@ -184,7 +229,8 @@ val cs_deleg = impure { _: "cs_deleg" } : (bits(64), bits(64), bits(64), bits(64
  * invalid (EIP-8025 witness_validation_codes), rather than silently treating the
  * account as codeless. KECCAK_EMPTY accounts are legitimately codeless. */
 function note_code_resolved(h : hash) -> unit =
-    if (h != KECCAK_EMPTY) & (unsigned(cs_len(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0])) == 0) then {
+    if (h != KECCAK_EMPTY) &
+        (unsigned(code_db_stored_code_length(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0])) == 0) then {
         k_witness_bad = true
     }
 
@@ -196,7 +242,7 @@ function k_deleg_target(a : address) -> (bool, address) = {
        witness (an auth skipped for an invalid chain id), which must not invalidate
        the block. Missing EXECUTED/queried code is flagged in k_get_code_size /
        k_code_copy instead. */
-    let r : bits(168) = cs_deleg(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]);
+    let r : bits(168) = code_db_read_delegation(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]);
     (r[160] == bitone, r[159 .. 0])
 }
 
@@ -205,7 +251,7 @@ function k_deleg_target(a : address) -> (bool, address) = {
 function k_get_code_size(a : address) -> int = {
     let h : hash = k_code_key(a);
     note_code_resolved(h);
-    unsigned(cs_len(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]))
+    unsigned(code_db_stored_code_length(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]))
 }
 function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
     let h : hash = k_code_key(a);
@@ -214,7 +260,7 @@ function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
     /* clamp a beyond-2^64 source offset to a beyond-any-code sentinel: a past-end
      * read zero-fills the destination (EELS buffer_read semantics) */
     let o = if off > 16777216 then { 16777216 } else { off };
-    cs_to_mem(
+    code_db_copy_stored_code_to_memory(
         h[255 .. 192],
         h[191 .. 128],
         h[127 .. 64],
@@ -230,7 +276,7 @@ function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
 /* Seed an account from full code bytes (intern them in the code store). */
 function k_seed_account(a : address, nonce : int, bal : word, c : list(byte)) -> unit = {
     let h : hash = keccak256(c);
-    cs_store_code(h, c);
+    code_db_store_code(h, c);
     account_seed(a, struct { nonce = nonce, balance = bal, code_hash = h, storage_root = EMPTY_TRIE_ROOT })
 }
 
@@ -300,7 +346,7 @@ function k_blockhash(n : word) -> hash = {
                 k_witness_bad = true;
                 word_of_int(0)
             } else {
-                keccak256(ssz_witness_header(idx))
+                keccak256_source(WitnessSource(ssz_witness_header_slice(idx)))
             }
         }
     }
@@ -384,6 +430,26 @@ function k_account_delete(a : address) -> unit = {
     storage_wipe_addr(a)
 }
 
+function address_insert_sorted_unique(xs : list(address), a : address) -> list(address) =
+    match xs {
+        [||] => [|a|],
+        x :: r => if x == a then {
+            xs
+        } else {
+            if unsigned(address_to_word(a)) < unsigned(address_to_word(x)) then {
+                a :: xs
+            } else {
+                x :: address_insert_sorted_unique(r, a)
+            }
+        },
+    }
+
+function address_sort_unique(xs : list(address)) -> list(address) =
+    match xs {
+        [||] => [||],
+        x :: r => address_insert_sorted_unique(address_sort_unique(r), x),
+    }
+
 /* SELFDESTRUCT tx-end finalization. Before Cancun, every surviving
  * SELFDESTRUCT deletes the originator. Cancun+ applies EIP-6780: an account is
  * actually DELETED only if it was both CREATEd and SELFDESTRUCTed in this same
@@ -391,12 +457,13 @@ function k_account_delete(a : address) -> unit = {
  * already moved at SELFDESTRUCT time. Call AFTER the tx-level commit, so only
  * surviving (committed) selfdestructs are in k_selfdestr. */
 function k_finalize_selfdestructs() -> unit = {
-    var xs : list(address) = k_selfdestr;
+    var xs : list(address) = address_sort_unique(k_selfdestr);
     var more : bool = true;
     while more do {
         match xs {
             a :: r => {
                 if (k_fork < FORK_CANCUN) | k_was_created(a) then {
+                    k_emit_burn_log(a, load_account(a).balance);
                     k_account_delete(a)
                 };
                 xs = r
@@ -418,6 +485,7 @@ function k_snapshot() -> unit = {
 
 /* full world wipe between independent blocks/fixtures (driver/test only) */
 function k_world_reset() -> unit = {
+    host_bytes_reset();
     acctmap_reset();
     storage_map_reset();
     transient_reset();

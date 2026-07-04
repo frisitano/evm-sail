@@ -1,10 +1,3 @@
-/* VENDORED VERBATIM from eth-act/zkvm-standards:
- * standards/c-interface-accelerators/zkvm_accelerators.h
- * The standard C interface for zkVM crypto accelerators. The model calls these
- * through a thin Sail marshalling shim (ffi/acc_shim.c); a real zkVM host swaps
- * the reference impl (ffi/zkvm_accelerators.c) for native precompiles behind this
- * same header. Do not edit (re-vendor on standard updates). */
-
 /**
  * zkVM Cryptographic Accelerators C Interface
  *

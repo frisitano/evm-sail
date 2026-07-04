@@ -5,23 +5,27 @@
 #define CODE_DB_H
 #include "sail.h"
 #include <stdbool.h>
-unit cs_reset(const unit u);                       /* drop the code_db        */
-uint64_t cs_begin(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0); /* code_db insert by hash; 1=new */
-unit cs_byte(uint64_t b);                          /* stream the next byte    */
-unit cs_view_hash_input(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
-                        uint64_t off, uint64_t len);  /* copy witness code into code_db */
-uint64_t fc_set_hash(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0); /* frame := store entry */
-uint64_t fc_pend_mem(uint64_t off, uint64_t len);  /* NEXT frame := mem copy */
-uint64_t fc_set_txd(const unit u);                 /* frame := tx input       */
-unit fc_set_empty(const unit u);
-uint64_t hc_byte(uint64_t i);                      /* code[i], 0 past the end */
-bool hj_valid(uint64_t i);                         /* JUMPDEST bitmap test    */
-unit hc_to_mem(uint64_t dst, uint64_t off, uint64_t len);     /* CODECOPY     */
-void hc_word(lbits *rop, uint64_t i, uint64_t n);  /* n-byte PUSH immediate   */
-void cd_word(lbits *rop, uint64_t i);              /* CALLDATALOAD            */
-uint64_t hc_len(const unit u);                     /* current frame code len  */
-uint64_t cs_len(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);   /* EXTCODESIZE */
-unit cs_to_mem(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
-               uint64_t dst, uint64_t off, uint64_t len);     /* EXTCODECOPY */
-void cs_deleg(lbits *rop, uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0); /* 7702 */
+unit code_db_reset(const unit u);
+
+/* Streaming FFI bridge for Sail's code_db_store_code(hash, list(byte)) helper. */
+uint64_t code_db_stream_code_begin(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);
+unit code_db_stream_code_byte(uint64_t b);
+unit code_db_store_ssz_code(uint64_t off, uint64_t len);
+uint64_t code_db_stored_code_length(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);
+unit code_db_copy_stored_code_to_memory(
+    uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
+    uint64_t dst, uint64_t off, uint64_t len);
+void code_db_read_delegation(lbits *rop, uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);
+
+/* Per-frame executable code views. */
+uint64_t code_db_frame_set_stored_code(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);
+uint64_t code_db_prepare_child_frame_memory_code(uint64_t off, uint64_t len);
+uint64_t code_db_frame_set_tx_input_code(const unit u);
+unit code_db_frame_clear_code(const unit u);
+uint64_t code_db_frame_code_byte(uint64_t i);
+uint64_t code_db_frame_code_length(const unit u);
+bool code_db_frame_jumpdest_valid(uint64_t i);
+unit code_db_copy_frame_code_to_memory(uint64_t dst, uint64_t off, uint64_t len);
+void code_db_frame_push_immediate_word(lbits *rop, uint64_t i, uint64_t n);
+void code_db_calldata_load_word(lbits *rop, uint64_t i);
 #endif

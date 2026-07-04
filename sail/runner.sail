@@ -168,12 +168,12 @@ function run_one() -> unit = {
     let decoded_value = nw();
     let decoded_input_len = ni();
 
-    /* stream calldata straight into the tx-input memory slot (no Sail list) */
-    txin_begin(get_slice_int(64, 0, 0));
+    var decoded_input : list(byte) = [||];
     foreach (i from 0 to (decoded_input_len - 1)) {
         let _ = i;
-        txin_byte(get_slice_int(8, ni(), 0))
+        decoded_input = get_slice_int(8, ni(), 0) :: decoded_input
     };
+    decoded_input = list_reverse(decoded_input);
 
     /* EIP-2930 access list: n_addrs addresses, then n_keys (addr, slot) pairs */
     let access_list_address_count = ni();
@@ -232,6 +232,16 @@ function run_one() -> unit = {
         decoded_blob_hashes = list_append(decoded_blob_hashes, [|nw()|])
     };
     let txn : Transaction = struct {
+            tx_type =
+                if decoded_is_set_code != 0 then {
+                    4
+                } else {
+                    if is_blob != 0 then {
+                        3
+                    } else {
+                        if is_dynamic_fee_tx != 0 then { 2 } else { if is_access_list_tx != 0 then { 1 } else { 0 } }
+                    }
+                },
             sender = sender,
             nonce = decoded_nonce,
             gas_price = decoded_gas_price,
@@ -240,7 +250,7 @@ function run_one() -> unit = {
             is_create = decoded_is_create != 0,
             recipient = decoded_recipient,
             value = decoded_value,
-            input_index = 0,
+            input = decoded_input,
             access_list_addresses = decoded_access_list_addresses,
             access_list_slots = decoded_access_list_slots,
             is_access_list = is_access_list_tx != 0,

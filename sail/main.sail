@@ -61,31 +61,12 @@ function keccak_selfcheck() -> unit = {
     )
 }
 
-/* register a code blob in the code db keyed by codeHash, as an immutable
- * witness input span -- (hash hi..lo, off, len) split across six u64s. */
-val cs_view_input = impure { _: "cs_view_input" } : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
-
-/* store the code for codeHash `h` as an immutable witness span [off, off+len) */
-function cs_view_witness(h : hash, off : int, len : int) -> unit =
-    cs_view_input(
-        h[255 .. 192],
-        h[191 .. 128],
-        h[127 .. 64],
-        h[63 .. 0],
-        get_slice_int(64, off, 0),
-        get_slice_int(64, len, 0),
-    )
-
-/* Register every witness code blob into the (hash-keyed) C code store as an
- * immutable input span -- no byte copy, no Sail list. Each blob is hashed once
- * (the content-address authentication); execution then resolves an account's
- * code by its code_hash from the store, so seeding needs no per-account span
- * lookup. */
+/* Register every witness code blob into the hash-keyed C code store. The C side
+ * hashes the SSZ input span and copies the bytes into the owned code_db entry. */
 function register_witness_codes() -> unit = {
     let n = wit_n_codes();
     foreach (i from 0 to (n - 1)) {
-        let (off, len) = ssz_witness_code_span(i);
-        cs_view_witness(keccak256(ssz_witness_code(i)), off, len)
+        code_db_store_witness_code(ssz_witness_code_slice(i))
     }
 }
 
@@ -99,7 +80,7 @@ function headers_ok() -> bool = {
         var ok : bool = true;
         foreach (i from 1 to (n - 1)) {
             let parent_hash = bytes_be256(list_nth(rlp_node_items(ssz_witness_header(i)), 0, RLP_NONE).content);
-            let prev_hash = keccak256(ssz_witness_header(i - 1));
+            let prev_hash = keccak256_source(WitnessSource(ssz_witness_header_slice(i - 1)));
             if parent_hash != prev_hash then {
                 ok = false
             }
@@ -165,80 +146,14 @@ function arith_selfcheck() -> unit = {
     assert(alu_smod(neg7, two) == 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff, "alu_smod")
 }
 
-val txin_view_input = impure { _: "txin_view_input" } : (bits(64), bits(64), bits(64)) -> bits(64)
-
-/* ---- RLP parsing directly over the SSZ input (no list materialisation) ----
- * The transactions live in the C-backed witness; we walk their RLP structure by
- * offset (ib = ssz input byte) to find each field's (offset, length), read the
- * small scalar fields in place, and point the tx's input slot straight at the
- * data field's bytes -- the EVM then executes over the witness, zero copy. */
-function rlp_hdr_at(pos : int) -> (bool, int, int) = {
-    let h = ib(pos);
-    if h < 128 then {
-        (false, pos, 1)
-    } else {
-        if h < 184 then {
-            (false, pos + 1, h - 128)
-        } else {
-            if h < 192 then {
-                let lol = h - 183;
-                var v : int = 0;
-                foreach (k from 0 to (lol - 1)) {
-                    v = v * 256 + ib(pos + 1 + k)
-                };
-                (false, pos + 1 + lol, v)
-            } else {
-                if h < 248 then {
-                    (true, pos + 1, h - 192)
-                } else {
-                    let lol = h - 247;
-                    var v : int = 0;
-                    foreach (k from 0 to (lol - 1)) {
-                        v = v * 256 + ib(pos + 1 + k)
-                    };
-                    (true, pos + 1 + lol, v)
-                }
-            }
-        }
-    }
-}
-
-/* (offset, length) of field `idx` within the RLP list at offset `off` */
-function rlp_field_span(off : int, idx : int) -> (int, int) = {
-    let (_, po, pl) = rlp_hdr_at(off);
-    let pe = po + pl;
-    var pos : int = po;
-    var fi : int = 0;
-    var res : (int, int) = (po, 0);
-    var more : bool = true;
-    while more & (pos < pe) do {
-        let (_, cs, cl) = rlp_hdr_at(pos);
-        if fi == idx then {
-            res = (cs, cl);
-            more = false
-        } else {
-            pos = cs + cl;
-            fi = fi + 1
-        }
-    };
-    res
-}
-function rlp_uint_span(off : int, len : int) -> int = {
-    var v : int = 0;
-    foreach (k from 0 to (len - 1)) {
-        v = v * 256 + ib(off + k)
-    };
-    v
-}
-
 /* Effective fee for a typed (EIP-1559) tx: the gas price actually paid is
  * min(max_fee_per_gas, base_fee + max_priority_fee), and the priority tip paid to
  * the coinbase is that price minus the base fee. Legacy / 2930 txs carry a single
  * gas_price, passed here as max_fee = max_priority = gas_price so this recovers
  * (gas_price, gas_price - base_fee). The priority is clamped at 0 so an invalid
  * sub-base-fee price (rejected later by the validity check) never underflows. */
-function eff_gas_price(max_fee : word, max_priority_fee : word) -> (word, word) = {
-    let bf = unsigned(k_block.base_fee);
+function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : word) -> (word, word) = {
+    let bf = unsigned(base_fee);
     let cap = unsigned(max_fee);
     let tip = unsigned(max_priority_fee);
     let price = if cap < bf + tip then {
@@ -255,45 +170,55 @@ function eff_gas_price(max_fee : word, max_priority_fee : word) -> (word, word) 
 }
 
 /* Decode an EIP-2930 access list (RLP [[address, [slot, ...]], ...]) from the
- * content span (cs, cl) of the access-list field into the flat representation the
- * Transaction and intrinsic-gas accounting use: the addresses (one per entry) and
- * the (address, slot) pairs. Walked by offset over the witness bytes, no copy. */
-function decode_access_list(cs : int, cl : int) -> (list(address), list(SlotKey)) = {
+ * access-list field into the flat representation the Transaction and intrinsic-
+ * gas accounting use: the addresses (one per entry) and the (address, slot) pairs. */
+function decode_access_list(f : RlpField) -> (list(address), list(SlotKey)) = {
     var addresses : list(address) = [||];
     var storage_slots : list(SlotKey) = [||];
-    var pos : int = cs;
-    let stop = cs + cl;
-    while pos < stop do {
-        let (_, ecs, ecl) = rlp_hdr_at(pos); /* one entry = [addr, [keys]] */
-        let (_, ado, adl) = rlp_hdr_at(ecs); /* the 20-byte address         */
-        let addr = word_to_address(word_of_int(rlp_uint_span(ado, adl)));
-        addresses = list_append(addresses, [|addr|]);
-        let (_, kcs, kcl) = rlp_hdr_at(ado + adl); /* the entry's storage-key list */
-        var kpos : int = kcs;
-        let kstop = kcs + kcl;
-        while kpos < kstop do {
-            let (_, ko, kl) = rlp_hdr_at(kpos); /* one 32-byte key */
-            storage_slots = list_append(
-                storage_slots,
-                [|struct { address = addr, slot = word_of_int(rlp_uint_span(ko, kl)) }|],
-            );
-            kpos = ko + kl
-        };
-        pos = ecs + ecl
+    var entries : list(RlpField) = rlp_list_items(f);
+    var more_entries : bool = true;
+    while more_entries do {
+        match entries {
+            entry :: rest_entries => {
+                let parts = rlp_list_items(entry); /* one entry = [addr, [keys]] */
+                let addr = word_to_address(rlp_field_word(rlp_item(parts, 0)));
+                addresses = list_append(addresses, [|addr|]);
+                var keys : list(RlpField) = rlp_list_items(rlp_item(parts, 1));
+                var more_keys : bool = true;
+                while more_keys do {
+                    match keys {
+                        key :: rest_keys => {
+                            storage_slots = list_append(
+                                storage_slots,
+                                [|struct { address = addr, slot = rlp_field_word(key) }|],
+                            );
+                            keys = rest_keys
+                        },
+                        [||] => more_keys = false,
+                    }
+                };
+                entries = rest_entries
+            },
+            [||] => more_entries = false,
+        }
     };
     (addresses, storage_slots)
 }
 
-/* Decode an RLP list of 32-byte words (content span cs, cl) -- the EIP-4844
+/* Decode an RLP list of 32-byte words -- the EIP-4844
  * blobVersionedHashes (BLOBHASH operands; the blob count is the list length). */
-function decode_word_list(cs : int, cl : int) -> list(word) = {
+function decode_word_list(f : RlpField) -> list(word) = {
     var out : list(word) = [||];
-    var pos : int = cs;
-    let stop = cs + cl;
-    while pos < stop do {
-        let (_, ho, hl) = rlp_hdr_at(pos);
-        out = list_append(out, [|word_of_int(rlp_uint_span(ho, hl))|]);
-        pos = ho + hl
+    var items : list(RlpField) = rlp_list_items(f);
+    var more : bool = true;
+    while more do {
+        match items {
+            item :: rest => {
+                out = list_append(out, [|rlp_field_word(item)|]);
+                items = rest
+            },
+            [||] => more = false,
+        }
     };
     out
 }
@@ -321,15 +246,6 @@ function secp256k1_verify(h : bits(256), r : word, s : word, x : bits(256), y : 
     list_len(out) == 32
 }
 
-/* RLP list header for a payload of `len` content bytes (YP App. B) */
-function rlp_list_prefix(len : int) -> list(byte) =
-    if len <= 55 then {
-        [|get_slice_int(8, 192 + len, 0)|]
-    } else {
-        let lb = int_to_be_bytes(len);
-        get_slice_int(8, 247 + list_len(lb), 0) :: lb
-    }
-
 /* index of the first signature field (v / yParity) by tx type */
 function tx_sig_field(ttype : int) -> int = match ttype {
     0 => 6,
@@ -354,11 +270,8 @@ function tx_sig_v_ok(ttype : int, v : int) -> bool =
  * Typed envelopes prepend the transaction type byte. Legacy transactions have
  * two historical forms: unprotected v=27/28 signs only the first six fields;
  * EIP-155 protected v>=35 appends chain_id,0,0 before hashing. */
-function tx_signing_hash(ttype : int, loff : int, i_v : int, v : int) -> bits(256) = {
-    let (_, po, _) = rlp_hdr_at(loff);
-    let (lcs, lcl) = rlp_field_span(loff, i_v - 1);
-    let sig_start = lcs + lcl;
-    var content : list(byte) = ssz_bytes(po, sig_start - po);
+function tx_signing_hash(ttype : int, fields : list(RlpField), i_v : int, v : int) -> bits(256) = {
+    var content : list(byte) = rlp_fields_encoded_prefix(fields, i_v);
     if (ttype == 0) & (v >= 35) then {
         content = list_append(content, rlp_int(legacy_sig_chain_id(v)));
         content = list_append(content, [|0x80, 0x80|])
@@ -406,69 +319,66 @@ function ecrecover_addr(h : bits(256), yparity : int, r : word, s : word) -> (bo
 
 /* keccak of the authorization signing preimage: 0x05 ++ rlp([chainId, address,
  * nonce]) -- the first three tuple fields (contiguous in the stored tuple) re-wrapped. */
-function auth_signing_hash(toff : int) -> bits(256) = {
-    let (_, tcs, _) = rlp_hdr_at(toff);
-    let (ncs, ncl) = rlp_field_span(toff, 2); /* nonce = last signed field */
-    let content : list(byte) = ssz_bytes(tcs, ncs + ncl - tcs);
+function auth_signing_hash(fields : list(RlpField)) -> bits(256) = {
+    let content : list(byte) = rlp_fields_encoded_prefix(fields, 3);
     var pre : list(byte) = [|0x05|];
     pre = list_append(pre, rlp_list_prefix(list_len(content)));
     pre = list_append(pre, content);
     keccak256(pre)
 }
 
-/* decode an EIP-7702 authorization list (content span cs,cl) into Authorizations,
+/* decode an EIP-7702 authorization list into Authorizations,
  * recovering each authority. valid_sig records tuple-local signature validity
  * (recoverable, low-s, r/y parity ranges, incrementable nonce); process_auth then
  * applies the chain-id / account nonce / code checks. */
-function decode_auth_list(cs : int, cl : int) -> list(Authorization) = {
+function decode_auth_list(f : RlpField) -> list(Authorization) = {
     var out : list(Authorization) = [||];
-    var pos : int = cs;
-    let stop = cs + cl;
-    while pos < stop do {
-        let (_, tcs, tcl) = rlp_hdr_at(pos); /* one [chainId,address,nonce,yParity,r,s] */
-        let (c0o, c0l) = rlp_field_span(pos, 0);
-        let (a1o, a1l) = rlp_field_span(pos, 1);
-        let (n2o, n2l) = rlp_field_span(pos, 2);
-        let (y3o, y3l) = rlp_field_span(pos, 3);
-        let (r4o, r4l) = rlp_field_span(pos, 4);
-        let (s5o, s5l) = rlp_field_span(pos, 5);
-        let y = rlp_uint_span(y3o, y3l);
-        let r = word_of_int(rlp_uint_span(r4o, r4l));
-        let s = word_of_int(rlp_uint_span(s5o, s5l));
-        let auth_nonce = rlp_uint_span(n2o, n2l);
-        let (ok, authority) = ecrecover_addr(auth_signing_hash(pos), y, r, s);
-        out = list_append(
-            out,
-            [|
-                struct {
-                    valid_sig =
-                          ok
-                        & (y == 0 | y == 1)
-                        & (unsigned(r) >= 1)
-                        & (unsigned(r) < unsigned(SECP_N_FULL))
-                        & (unsigned(s) >= 1)
-                        & (unsigned(s) <= unsigned(SECP_N_HALF))
-                        & (auth_nonce < 18446744073709551615),
-                    authority = authority,
-                    address = word_to_address(word_of_int(rlp_uint_span(a1o, a1l))),
-                    nonce = auth_nonce,
-                    chain_id = rlp_uint_span(c0o, c0l),
-                },
-            |],
-        );
-        pos = tcs + tcl
+    var tuples : list(RlpField) = rlp_list_items(f);
+    var more : bool = true;
+    while more do {
+        match tuples {
+            tuple :: rest => {
+                let fields = rlp_list_items(tuple); /* one [chainId,address,nonce,yParity,r,s] */
+                let chain_id = rlp_field_int(rlp_item(fields, 0));
+                let auth_nonce = rlp_field_int(rlp_item(fields, 2));
+                let y = rlp_field_int(rlp_item(fields, 3));
+                let r = rlp_field_uint_word(rlp_item(fields, 4));
+                let s = rlp_field_uint_word(rlp_item(fields, 5));
+                let (ok, authority) = ecrecover_addr(auth_signing_hash(fields), y, r, s);
+                out = list_append(
+                    out,
+                    [|
+                        struct {
+                            valid_sig =
+                                  ok
+                                & (y == 0 | y == 1)
+                                & (unsigned(r) >= 1)
+                                & (unsigned(r) < unsigned(SECP_N_FULL))
+                                & (unsigned(s) >= 1)
+                                & (unsigned(s) <= unsigned(SECP_N_HALF))
+                                & (auth_nonce < 18446744073709551615),
+                            authority = authority,
+                            address = word_to_address(rlp_field_word(rlp_item(fields, 1))),
+                            nonce = auth_nonce,
+                            chain_id = chain_id,
+                        },
+                    |],
+                );
+                tuples = rest
+            },
+            [||] => more = false,
+        }
     };
     out
 }
 
-/* Decode transaction `i` straight from the SSZ payload's transactions list, by
- * offset -- no copy. The calldata is the witness bytes themselves: txin_view_input
- * points the (single, reused) input slot at them, so the decoded Transaction
- * carries only scalars (input_index = 0 names that slot). The sender is derived from
- * public_keys[i] (PUBLIC_KEY_BYTES = 65: a 0x04 prefix + the 64-byte X||Y) as
- * keccak(X||Y)[12:]. public_keys is a WITNESS, not trusted: tx_auth_ok (folded into
- * the auth_ok register below) verifies tx i's signature against this key, so a
- * forged key fails verification and the block is rejected.
+/* Decode transaction `i` from the SSZ payload's transactions list by
+ * materializing its RLP bytes, then using the shared RLP decoder. The calldata
+ * field is copied into the owned txdata buffer before execution.
+ * The sender is derived from public_keys[i] (PUBLIC_KEY_BYTES = 65: a 0x04 prefix
+ * + the 64-byte X||Y) as keccak(X||Y)[12:]. public_keys is a WITNESS, not trusted:
+ * tx_auth_ok (folded into the auth_ok register below) verifies tx i's signature
+ * against this key, so a forged key fails verification and the block is rejected.
  *
  * EIP-2718 envelope: a leading byte >= 0xc0 is a legacy (type-0) RLP list;
  * otherwise it is the type byte (0x01 EIP-2930, 0x02 EIP-1559, 0x03 EIP-4844,
@@ -477,18 +387,25 @@ function decode_auth_list(cs : int, cl : int) -> list(Authorization) = {
  * (max_priority_fee, max_fee) -- so the logical field indices are selected by
  * type. Type-4 (EIP-7702) authorization tuples are decoded and their authorities
  * recovered (decode_auth_list); process_auth_list then applies the delegations. */
-function decode_tx_ssz(i : int) -> Transaction = {
-    let sender = word_to_address(keccak256(ssz_bytes(cc_end() + i * 65 + 1, 64)));
-    let (tx_off, _tx_len) = ssz_list_span(pl_txs_start(), pl_n_txs(), pl_wds_start(), i);
+function decode_tx_ssz(i : int, base_fee : word) -> Transaction = {
+    let sender = word_to_address(keccak256_source(WitnessSource(witness_slice(cc_end() + i * 65 + 1, 64))));
+    let (tx_off, tx_len) = ssz_list_span(pl_txs_start(), pl_n_txs(), pl_wds_start(), i);
+    let tx_bytes = ssz_bytes(tx_off, tx_len);
 
-    let b0 = ib(tx_off);
+    let b0 = if tx_len == 0 then {
+            rlp_decode_ok = false;
+            0
+        } else {
+            unsigned(bytes_get(tx_bytes, 0))
+        };
     let ttype : int = if b0 >= 192 then { 0 } else { b0 }; /* 0xc0 = RLP list tag */
     let typed = ttype != 0;
-    let loff : int = if typed then {
-            tx_off + 1
+    let payload : list(byte) = if typed then {
+            bytes_slice(tx_bytes, 1, tx_len - 1)
         } else {
-            tx_off
+            tx_bytes
         };
+    let fields = rlp_node_items(payload);
 
     /* logical field index per type (see each EIP's layout) */
     let i_nonce : int = if typed then { 1 } else { 0 };
@@ -514,59 +431,48 @@ function decode_tx_ssz(i : int) -> Transaction = {
     };
     let i_al : int = if ttype == 1 then { 7 } else { 8 }; /* typed only */
 
-    let (no, nl) = rlp_field_span(loff, i_nonce);
-    let nonce = rlp_uint_span(no, nl);
-    let (xo, xl) = rlp_field_span(loff, i_gas);
-    let transaction_gas_limit = rlp_uint_span(xo, xl);
-    let (ao, al2) = rlp_field_span(loff, i_to);
-    let is_create = al2 == 0; /* empty `to` field = contract creation */
-    let recipient = word_to_address(word_of_int(rlp_uint_span(ao, al2)));
-    let (vo, vl) = rlp_field_span(loff, i_val);
-    let value = word_of_int(rlp_uint_span(vo, vl));
-    let (do_, dl) = rlp_field_span(loff, i_data);
-    let _ = txin_view_input(get_slice_int(64, 0, 0), get_slice_int(64, do_, 0), get_slice_int(64, dl, 0));
+    let to_f = rlp_item(fields, i_to);
+    let data_f = rlp_item(fields, i_data);
+    let nonce = rlp_field_int(rlp_item(fields, i_nonce));
+    let transaction_gas_limit = rlp_field_int(rlp_item(fields, i_gas));
+    let is_create = list_len(to_f.content) == 0; /* empty `to` field = contract creation */
+    let recipient = word_to_address(rlp_field_word(to_f));
+    let value = rlp_field_uint_word(rlp_item(fields, i_val));
 
     /* fees: legacy / 2930 carry one gas_price; 1559+ carry (max_priority, max_fee) */
     let (gas_price, priority, max_fee, max_priority_fee_cap) : (word, word, word, word) = if ttype <= 1 then {
-            let (go, gl2) = rlp_field_span(loff, if ttype == 0 then { 1 } else { 2 });
-            let gp = word_of_int(rlp_uint_span(go, gl2));
+            let gp = rlp_field_uint_word(rlp_item(fields, if ttype == 0 then { 1 } else { 2 }));
 
             /* legacy/2930 carry a single gas_price; the coinbase tip is still
                gas_price - base_fee (the base fee is burned), so route through
-               eff_gas_price(gp, gp) = (gp, gp - base_fee) rather than paying the
+               eff_gas_price_for(base_fee, gp, gp) = (gp, gp - base_fee) rather than paying the
                full gas_price as priority. */
-            let (_, pr) = eff_gas_price(gp, gp);
+            let (_, pr) = eff_gas_price_for(base_fee, gp, gp);
             (gp, pr, gp, gp)
         } else {
-            let (mpo, mpl) = rlp_field_span(loff, 2);
-            let (mfo, mfl) = rlp_field_span(loff, 3);
-            let mp = word_of_int(rlp_uint_span(mpo, mpl));
-            let mf = word_of_int(rlp_uint_span(mfo, mfl));
-            let (gp, pr) = eff_gas_price(mf, mp);
+            let mp = rlp_field_uint_word(rlp_item(fields, 2));
+            let mf = rlp_field_uint_word(rlp_item(fields, 3));
+            let (gp, pr) = eff_gas_price_for(base_fee, mf, mp);
             (gp, pr, mf, mp)
         };
 
     /* EIP-2930 access list (present on every typed envelope) */
     let (decoded_access_list_addresses, decoded_access_list_slots) : (list(address), list(SlotKey)) = if typed then {
-            let (acs, acl) = rlp_field_span(loff, i_al);
-            decode_access_list(acs, acl)
+            decode_access_list(rlp_item(fields, i_al))
         } else {
             ([||], [||])
         };
 
     /* EIP-4844 blob fields: max_fee_per_blob_gas (field 9) + versioned hashes (10) */
     let (max_blob_fee, blob_hashes) : (word, list(word)) = if ttype == 3 then {
-            let (bfo, bfl) = rlp_field_span(loff, 9);
-            let (bhcs, bhcl) = rlp_field_span(loff, 10);
-            (word_of_int(rlp_uint_span(bfo, bfl)), decode_word_list(bhcs, bhcl))
+            (rlp_field_uint_word(rlp_item(fields, 9)), decode_word_list(rlp_item(fields, 10)))
         } else {
             (ZERO_WORD, [||])
         };
 
     /* EIP-7702 authorization list (field 9 for type-4): recover each authority */
     let decoded_authorizations : list(Authorization) = if ttype == 4 then {
-            let (aucs, aucl) = rlp_field_span(loff, 9);
-            decode_auth_list(aucs, aucl)
+            decode_auth_list(rlp_item(fields, 9))
         } else {
             [||]
         };
@@ -575,21 +481,14 @@ function decode_tx_ssz(i : int) -> Transaction = {
        signature (r,s) over the signing hash; `sender` above is keccak(pubkey)[12:],
        so a forged key would not verify here. */
     let i_v = tx_sig_field(ttype);
-    let (vso, vsl) = rlp_field_span(loff, i_v);
-    let sig_v = rlp_uint_span(vso, vsl);
-    let (ro, rl) = rlp_field_span(loff, i_v + 1);
-    let (sso, ssl) = rlp_field_span(loff, i_v + 2);
+    let sig_v = rlp_field_int(rlp_item(fields, i_v));
+    let sig_r = rlp_field_uint_word(rlp_item(fields, i_v + 1));
+    let sig_s = rlp_field_uint_word(rlp_item(fields, i_v + 2));
     auth_ok =
-          auth_ok
-        & tx_sig_v_ok(ttype, sig_v)
-        & tx_auth_ok(
-              i,
-              tx_signing_hash(ttype, loff, i_v, sig_v),
-              word_of_int(rlp_uint_span(ro, rl)),
-              word_of_int(rlp_uint_span(sso, ssl)),
-          );
+        auth_ok & tx_sig_v_ok(ttype, sig_v) & tx_auth_ok(i, tx_signing_hash(ttype, fields, i_v, sig_v), sig_r, sig_s);
 
     struct {
+        tx_type = ttype,
         sender = sender,
         nonce = nonce,
         gas_price = gas_price,
@@ -598,7 +497,7 @@ function decode_tx_ssz(i : int) -> Transaction = {
         is_create = is_create,
         recipient = recipient,
         value = value,
-        input_index = 0,
+        input = data_f.content,
         access_list_addresses = decoded_access_list_addresses,
         access_list_slots = decoded_access_list_slots,
         is_access_list = ttype == 1,
@@ -627,7 +526,7 @@ function HISTORY_STORAGE_ADDR() -> address = 0x0000f90827f1c53a10cb7a02335b17532
 
 /* Enter a top-level protocol system-call frame.
  *
- * The caller stages and activates txdata slot 0 before entering this helper.
+ * The caller stages txdata before entering this helper.
  * Keeping frame initialization in one place gives the block driver a named
  * boundary: pre-transaction and post-transaction system calls differ in
  * validation policy, not in execution-frame construction.
@@ -660,8 +559,7 @@ function system_call(tgt : address, input : bits(256)) -> unit = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         () /* system contract absent -> skip (EIP-4788 / EIP-2935) */
     } else {
-        txdata_set_input(0, word_to_bytes32(input)); /* the call's 32-byte calldata */
-        let _ = txdata_activate(0);
+        let _ = txdata_set_input(word_to_bytes32(input)); /* the call's 32-byte calldata */
         enter_system_call_frame(tgt, 32);
         interpret();
         if frame_succeeded() then {
@@ -686,8 +584,7 @@ function system_call_checked(tgt : address) -> bool = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         false /* checked: a missing system predeploy invalidates the block */
     } else {
-        txdata_set_input(0, [||]); /* empty calldata: the SYSTEM caller dequeues */
-        let _ = txdata_activate(0);
+        let _ = txdata_set_input([||]); /* empty calldata: the SYSTEM caller dequeues */
         enter_system_call_frame(tgt, 0);
         interpret();
         if frame_succeeded() then {
@@ -730,6 +627,43 @@ struct BlockExecutionResult = {
     first_tx_recipient : address,
     block_gas_overflow : bool,
     blob_gas_overflow : bool,
+    receipts : list(Receipt),
+}
+
+struct BlockHeader = {
+    number : int,
+    timestamp : int,
+    gas_limit : int,
+    gas_used : int,
+    prev_randao : word,
+    base_fee : word,
+    blob_gas_used : int,
+    excess_blob_gas : int,
+    state_root : bits(256),
+    receipts_root : bits(256),
+    logs_bloom : list(byte),
+    block_hash : bits(256),
+    fee_recipient : address,
+    parent_hash : bits(256),
+    parent_beacon_block_root : bits(256),
+    slot_number : int,
+}
+
+struct Withdrawal = {
+    index : int,
+    validator_index : int,
+    address : address,
+    amount : int,
+}
+
+struct BlockBody = {
+    transactions : list(Transaction),
+    withdrawals : list(Withdrawal),
+}
+
+struct Block = {
+    header : BlockHeader,
+    body : BlockBody,
 }
 
 /* Authenticate the pre-state witness, harvest storage witnesses, then reset the
@@ -748,43 +682,98 @@ function authenticate_parent_state() -> unit = {
     k_world_reset()
 }
 
-function current_block_env() -> BlockEnv =
+function block_env_from_header(header : BlockHeader) -> BlockEnv =
     struct {
-        number = word_of_int(pl_block_number()),
-        timestamp = word_of_int(pl_timestamp()),
-        gas_limit = word_of_int(pl_gas_limit()),
-        coinbase = pl_fee_recipient(),
-        base_fee = pl_base_fee(),
-        prev_randao = pl_prev_randao(),
+        number = word_of_int(header.number),
+        timestamp = word_of_int(header.timestamp),
+        gas_limit = word_of_int(header.gas_limit),
+        coinbase = header.fee_recipient,
+        base_fee = header.base_fee,
+        prev_randao = header.prev_randao,
         chain_id = word_of_int(cc_chain_id()),
-        blob_base_fee = word_of_int(blob_base_fee(pl_excess_blob_gas())),
-        excess_blob_gas = word_of_int(pl_excess_blob_gas()),
-        slot = word_of_int(pl_slot_number()),
+        blob_base_fee = word_of_int(blob_base_fee(header.excess_blob_gas)),
+        excess_blob_gas = word_of_int(header.excess_blob_gas),
+        slot = word_of_int(header.slot_number),
     }
+
+function decode_block_header_ssz() -> BlockHeader =
+    struct {
+        number = pl_block_number(),
+        timestamp = pl_timestamp(),
+        gas_limit = pl_gas_limit(),
+        gas_used = pl_gas_used(),
+        prev_randao = pl_prev_randao(),
+        base_fee = pl_base_fee(),
+        blob_gas_used = pl_blob_gas_used(),
+        excess_blob_gas = pl_excess_blob_gas(),
+        state_root = pl_state_root(),
+        receipts_root = pl_receipts_root(),
+        logs_bloom = pl_logs_bloom(),
+        block_hash = pl_block_hash(),
+        fee_recipient = pl_fee_recipient(),
+        parent_hash = ssz_bytes32(payload_start() + 0),
+        parent_beacon_block_root = ssz_bytes32(npr_start() + 8),
+        slot_number = pl_slot_number(),
+    }
+
+function decode_transactions_ssz(base_fee : word) -> list(Transaction) = {
+    auth_ok = true;
+    var out : list(Transaction) = [||];
+    foreach (i from 0 to (pl_n_txs() - 1)) {
+        if rlp_decode_ok then {
+            out = decode_tx_ssz(i, base_fee) :: out
+        }
+    };
+    list_reverse(out)
+}
+
+function decode_withdrawals_ssz() -> list(Withdrawal) = {
+    var out : list(Withdrawal) = [||];
+    foreach (i from 0 to (pl_n_withdrawals() - 1)) {
+        out =
+            struct {
+                index = withdrawal_index(i),
+                validator_index = withdrawal_validator_index(i),
+                address = withdrawal_addr(i),
+                amount = withdrawal_amount(i),
+            } ::
+                out
+    };
+    list_reverse(out)
+}
+
+function decode_block_ssz() -> Block = {
+    let header = decode_block_header_ssz();
+    struct {
+        header = header,
+        body =
+            struct { transactions = decode_transactions_ssz(header.base_fee), withdrawals = decode_withdrawals_ssz() },
+    }
+}
 
 function parent_header_int_field(idx : int) -> int = {
     let items = rlp_node_items(ssz_witness_header(wit_n_headers() - 1));
-    rlp_field_int(list_nth(items, idx, RLP_NONE))
+    rlp_field_int(rlp_item(items, idx))
 }
 
 function expected_payload_excess_blob_gas() -> int =
     next_excess_blob_gas(parent_header_int_field(18), parent_header_int_field(17), parent_header_int_field(15))
 
-function run_block_start_system_calls() -> unit = {
+function run_block_start_system_calls(header : BlockHeader) -> unit = {
     /* EIP-4788 / EIP-2935: write the parent beacon-block root and parent block
        hash into their system contracts before the transactions run. */
-    system_call(BEACON_ROOTS_ADDR(), ssz_bytes32(npr_start() + 8)); /* parent_beacon_block_root */
-    system_call(HISTORY_STORAGE_ADDR(), ssz_bytes32(payload_start() + 0)) /* parent_hash */
+    system_call(BEACON_ROOTS_ADDR(), header.parent_beacon_block_root);
+    system_call(HISTORY_STORAGE_ADDR(), header.parent_hash)
 }
 
-function execute_block_transactions(n_txs : int, block_gas_limit : int) -> BlockExecutionResult = {
-    auth_ok = true; /* reset; decode_tx_ssz folds each tx's pubkey authentication in */
+function execute_block_transactions(transactions : list(Transaction), block_gas_limit : int) -> BlockExecutionResult = {
     var all_ok : bool = true;
     var gas_acc : int = 0;
     var blob_gas_acc : int = 0;
     var tx0_to : address = ZERO_ADDR; /* tx 0 recipient, for the storage0 fact */
     var block_gas_overflow : bool = false;
     var blob_gas_overflow : bool = false;
+    var receipts_rev : list(Receipt) = [||];
 
     /* EIP-7778 block gas accounting: a tx whose gas limit exceeds the block's
        remaining gas raises GasUsedExceedsLimitError -> the whole block is
@@ -792,44 +781,67 @@ function execute_block_transactions(n_txs : int, block_gas_limit : int) -> Block
        witness omits the offending tx's proofs; the guest must likewise refrain
        from executing it (and every later tx), else it over-reads the witness
        and aborts on a node EELS never proved. */
-    foreach (i from 0 to (n_txs - 1)) {
-        if not_bool(block_gas_overflow | blob_gas_overflow) then {
-            let tx = decode_tx_ssz(i);
-            let tx_blob_gas = tx.blob_count * GAS_PER_BLOB;
-            if i == 0 then {
-                tx0_to = tx.recipient
-            };
-            if tx.gas_limit > block_gas_limit - gas_acc then {
-                block_gas_overflow = true
-            } else {
-                if tx_blob_gas > blob_max_gas_per_block() - blob_gas_acc then {
-                    blob_gas_overflow = true
-                } else {
-                    let r = process_transaction(tx);
-                    all_ok = all_ok & r.valid;
-                    gas_acc = gas_acc + r.block_gas;
-                    if r.valid then {
-                        blob_gas_acc = blob_gas_acc + tx_blob_gas
+    var txs : list(Transaction) = transactions;
+    var i : int = 0;
+    var more : bool = true;
+    while more do {
+        match txs {
+            tx :: rest => {
+                if not_bool(block_gas_overflow | blob_gas_overflow | not_bool(rlp_decode_ok)) then {
+                    let tx_blob_gas = tx.blob_count * GAS_PER_BLOB;
+                    if i == 0 then {
+                        tx0_to = tx.recipient
+                    };
+                    if not_bool(rlp_decode_ok) then {
+                        all_ok = false
+                    } else {
+                        if tx.gas_limit > block_gas_limit - gas_acc then {
+                            block_gas_overflow = true
+                        } else {
+                            if tx_blob_gas > blob_max_gas_per_block() - blob_gas_acc then {
+                                blob_gas_overflow = true
+                            } else {
+                                let r = process_transaction(tx);
+                                all_ok = all_ok & r.valid;
+                                gas_acc = gas_acc + r.block_gas;
+                                if r.valid then {
+                                    receipts_rev = r :: receipts_rev;
+                                    blob_gas_acc = blob_gas_acc + tx_blob_gas
+                                }
+                            }
+                        }
                     }
-                }
-            }
+                };
+                txs = rest;
+                i = i + 1
+            },
+            [||] => more = false,
         }
     };
     struct {
-        all_ok = all_ok & not_bool(block_gas_overflow) & not_bool(blob_gas_overflow),
+        all_ok = all_ok & rlp_decode_ok & not_bool(block_gas_overflow) & not_bool(blob_gas_overflow),
         gas_acc = gas_acc,
         blob_gas_acc = blob_gas_acc,
         first_tx_recipient = tx0_to,
         block_gas_overflow = block_gas_overflow,
         blob_gas_overflow = blob_gas_overflow,
+        receipts = list_reverse(receipts_rev),
     }
 }
 
-function apply_withdrawals() -> unit = {
-    foreach (i from 0 to (pl_n_withdrawals() - 1)) {
-        /* EIP-4895: the withdrawal `amount` field is denominated in Gwei; the
-           credited balance is amount * 10^9 wei. */
-        k_add_balance(withdrawal_addr(i), word_of_int(withdrawal_amount(i) * 1000000000))
+function apply_withdrawals(withdrawals : list(Withdrawal)) -> unit = {
+    var rest : list(Withdrawal) = withdrawals;
+    var more : bool = true;
+    while more do {
+        match rest {
+            w :: tail => {
+                /* EIP-4895: the withdrawal `amount` field is denominated in Gwei; the
+                   credited balance is amount * 10^9 wei. */
+                k_add_balance(w.address, word_of_int(w.amount * 1000000000));
+                rest = tail
+            },
+            [||] => more = false,
+        }
     }
 }
 
@@ -847,14 +859,298 @@ function run_checked_block_end_system_calls(all_ok : bool) -> bool = {
     }
 }
 
-function validate_block_outputs(exec_ok : bool, block_result : BlockExecutionResult) -> bool = {
+function trie_index_key(i : int) -> list(int) =
+    to_nibbles(rlp_int(i))
+
+function transaction_trie_root() -> hash = {
+    var updates : list(TrieUpdate) = [||];
+    let n = pl_n_txs();
+    foreach (i from 0 to (n - 1)) {
+        let (off, len) = ssz_list_span(pl_txs_start(), n, pl_wds_start(), i);
+        updates = update_insert_sorted(
+            struct { key = trie_index_key(i), is_delete = false, value = ssz_bytes(off, len) },
+            updates,
+        )
+    };
+    updates_root(updates)
+}
+
+function withdrawal_rlp(w : Withdrawal) -> list(byte) = {
+    var payload : list(byte) = [||];
+    payload = list_append(payload, rlp_int(w.index));
+    payload = list_append(payload, rlp_int(w.validator_index));
+    payload = list_append(payload, rlp_addr(w.address));
+    payload = list_append(payload, rlp_int(w.amount));
+    rlp_list(payload)
+}
+
+function withdrawals_trie_root(withdrawals : list(Withdrawal)) -> hash = {
+    var updates : list(TrieUpdate) = [||];
+    var rest : list(Withdrawal) = withdrawals;
+    var i : int = 0;
+    var more : bool = true;
+    while more do {
+        match rest {
+            w :: tail => {
+                updates = update_insert_sorted(
+                    struct { key = trie_index_key(i), is_delete = false, value = withdrawal_rlp(w) },
+                    updates,
+                );
+                rest = tail;
+                i = i + 1
+            },
+            [||] => more = false,
+        }
+    };
+    updates_root(updates)
+}
+
+function bloom_set_bit(bloom : list(byte), bit_to_set : int) -> list(byte) = {
+    let bit_index = 2047 - bit_to_set;
+    let byte_index = ediv_int(bit_index, 8);
+    let bit_value = pow2(7 - emod_int(bit_index, 8));
+    let old = bytes_get(bloom, byte_index);
+    list_set(bloom, byte_index, or_vec(old, get_slice_int(8, bit_value, 0)))
+}
+
+function bloom_add_entry(bloom : list(byte), entry : list(byte)) -> list(byte) = {
+    let h = word_to_bytes32(keccak256(entry));
+    var out : list(byte) = bloom;
+    foreach (i from 0 to 2) {
+        let j = i * 2;
+        let bit_to_set = emod_int(unsigned(bytes_get(h, j)) * 256 + unsigned(bytes_get(h, j + 1)), 2048);
+        out = bloom_set_bit(out, bit_to_set)
+    };
+    out
+}
+
+function bloom_add_topics(bloom : list(byte), topics : list(word)) -> list(byte) = {
+    var out : list(byte) = bloom;
+    var rest : list(word) = topics;
+    var more : bool = true;
+    while more do {
+        match rest {
+            topic :: tail => {
+                out = bloom_add_entry(out, word_to_bytes32(topic));
+                rest = tail
+            },
+            [||] => more = false,
+        }
+    };
+    out
+}
+
+function bloom_add_log(bloom : list(byte), log : LogEntry) -> list(byte) = {
+    let with_address = bloom_add_entry(bloom, address_to_bytes(log.address));
+    bloom_add_topics(with_address, log.topics)
+}
+
+function logs_bloom_for_logs(logs : list(LogEntry)) -> list(byte) = {
+    var out : list(byte) = zero_bytes(256);
+    var rest : list(LogEntry) = logs;
+    var more : bool = true;
+    while more do {
+        match rest {
+            log :: tail => {
+                out = bloom_add_log(out, log);
+                rest = tail
+            },
+            [||] => more = false,
+        }
+    };
+    out
+}
+
+function receipts_bloom(receipts : list(Receipt)) -> list(byte) = {
+    var out : list(byte) = zero_bytes(256);
+    var rest : list(Receipt) = receipts;
+    var more : bool = true;
+    while more do {
+        match rest {
+            receipt :: tail => {
+                var logs : list(LogEntry) = receipt.logs;
+                var more_logs : bool = true;
+                while more_logs do {
+                    match logs {
+                        log :: log_tail => {
+                            out = bloom_add_log(out, log);
+                            logs = log_tail
+                        },
+                        [||] => more_logs = false,
+                    }
+                };
+                rest = tail
+            },
+            [||] => more = false,
+        }
+    };
+    out
+}
+
+function bytes_equal(a : list(byte), b : list(byte)) -> bool = {
+    if list_len(a) == list_len(b) then {
+        var ok : bool = true;
+        foreach (i from 0 to (list_len(a) - 1)) {
+            ok = ok & (bytes_get(a, i) == bytes_get(b, i))
+        };
+        ok
+    } else {
+        false
+    }
+}
+
+function topics_rlp(topics : list(word)) -> list(byte) = {
+    var payload : list(byte) = [||];
+    var rest : list(word) = topics;
+    var more : bool = true;
+    while more do {
+        match rest {
+            topic :: tail => {
+                payload = list_append(payload, rlp_word(topic));
+                rest = tail
+            },
+            [||] => more = false,
+        }
+    };
+    rlp_list(payload)
+}
+
+function log_entry_rlp(log : LogEntry) -> list(byte) = {
+    var payload : list(byte) = [||];
+    payload = list_append(payload, rlp_addr(log.address));
+    payload = list_append(payload, topics_rlp(log.topics));
+    payload = list_append(payload, rlp_bytes(log.data));
+    rlp_list(payload)
+}
+
+function logs_rlp(logs : list(LogEntry)) -> list(byte) = {
+    var payload : list(byte) = [||];
+    var rest : list(LogEntry) = logs;
+    var more : bool = true;
+    while more do {
+        match rest {
+            log :: tail => {
+                payload = list_append(payload, log_entry_rlp(log));
+                rest = tail
+            },
+            [||] => more = false,
+        }
+    };
+    rlp_list(payload)
+}
+
+function receipt_payload_rlp(r : Receipt, cumulative_gas_used : int) -> list(byte) = {
+    var payload : list(byte) = [||];
+    payload = list_append(payload, rlp_int(if r.success then { 1 } else { 0 }));
+    payload = list_append(payload, rlp_int(cumulative_gas_used));
+    payload = list_append(payload, rlp_bytes(logs_bloom_for_logs(r.logs)));
+    payload = list_append(payload, logs_rlp(r.logs));
+    rlp_list(payload)
+}
+
+function receipt_encoded(r : Receipt, cumulative_gas_used : int) -> list(byte) = {
+    let payload = receipt_payload_rlp(r, cumulative_gas_used);
+    if r.tx_type == 0 then {
+        payload
+    } else {
+        let type_byte : byte = get_slice_int(8, r.tx_type, 0);
+        type_byte :: payload
+    }
+}
+
+function receipts_trie_root(receipts : list(Receipt)) -> hash = {
+    var updates : list(TrieUpdate) = [||];
+    var rest : list(Receipt) = receipts;
+    var i : int = 0;
+    var cumulative : int = 0;
+    var more : bool = true;
+    while more do {
+        match rest {
+            r :: tail => {
+                cumulative = cumulative + r.gas_used;
+                updates = update_insert_sorted(
+                    struct { key = trie_index_key(i), is_delete = false, value = receipt_encoded(r, cumulative) },
+                    updates,
+                );
+                rest = tail;
+                i = i + 1
+            },
+            [||] => more = false,
+        }
+    };
+    updates_root(updates)
+}
+
+function request_digest_bytes(request_type : int, body_start : int, body_len : int) -> list(byte) = {
+    if body_len == 0 then {
+        [||]
+    } else {
+        word_to_bytes32(sha256_request_digest(request_type, witness_slice(body_start, body_len)))
+    }
+}
+
+function execution_requests_hash() -> hash = {
+    var payload : list(byte) = [||];
+    payload = list_append(payload, request_digest_bytes(0, dep_start(), wreq_start() - dep_start()));
+    payload = list_append(payload, request_digest_bytes(1, wreq_start(), creq_start() - wreq_start()));
+    payload = list_append(payload, request_digest_bytes(2, creq_start(), req_end() - creq_start()));
+    sha256(payload)
+}
+
+let EMPTY_OMMER_HASH : hash = 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347
+
+function block_header_hash(
+    header : BlockHeader,
+    transactions_root : hash,
+    withdrawals_root : hash,
+    requests_hash : hash,
+    block_access_list_hash : hash,
+) -> (
+    hash
+) = {
+    var payload : list(byte) = rlp_word(header.parent_hash);
+    payload = list_append(payload, rlp_word(EMPTY_OMMER_HASH));
+    payload = list_append(payload, rlp_addr(header.fee_recipient));
+    payload = list_append(payload, rlp_word(header.state_root));
+    payload = list_append(payload, rlp_word(transactions_root));
+    payload = list_append(payload, rlp_word(header.receipts_root));
+    payload = list_append(payload, rlp_bytes(header.logs_bloom));
+    payload = list_append(payload, rlp_int(0));
+    payload = list_append(payload, rlp_int(header.number));
+    payload = list_append(payload, rlp_int(header.gas_limit));
+    payload = list_append(payload, rlp_int(header.gas_used));
+    payload = list_append(payload, rlp_int(header.timestamp));
+    payload = list_append(payload, rlp_bytes(ssz_bytes(pl_extra_start(), pl_txs_start() - pl_extra_start())));
+    payload = list_append(payload, rlp_word(header.prev_randao));
+    payload = list_append(payload, rlp_bytes(zero_bytes(8)));
+    payload = list_append(payload, rlp_int_word(header.base_fee));
+    payload = list_append(payload, rlp_word(withdrawals_root));
+    payload = list_append(payload, rlp_int(header.blob_gas_used));
+    payload = list_append(payload, rlp_int(header.excess_blob_gas));
+    payload = list_append(payload, rlp_word(header.parent_beacon_block_root));
+    payload = list_append(payload, rlp_word(requests_hash));
+    payload = list_append(payload, rlp_word(block_access_list_hash));
+    payload = list_append(payload, rlp_int(header.slot_number));
+    keccak256(rlp_list(payload))
+}
+
+function parent_hash_ok(header : BlockHeader) -> bool =
+    if wit_n_headers() < 1 then {
+        false
+    } else {
+        header.parent_hash == keccak256_source(WitnessSource(ssz_witness_header_slice(wit_n_headers() - 1)))
+    }
+
+function validate_block_outputs(block : Block, exec_ok : bool, block_result : BlockExecutionResult) -> bool = {
     /* S5: stateless validation outcome (a failure is a NORMAL result -- the guest
        reports successful_validation=false, it does not abort):
          - chain config selects the Amsterdam fork
          - the witness headers are contiguous
+         - RLP scalar fields are canonical integers
          - every tx's witness public key is authenticated against its signature
          - every tx is VALID/applicable (a reverting valid tx keeps the block valid)
          - the recomputed post-state root commits to payload.state_root */
+    let header = block.header;
     let fork_ok = cc_fork() == 20; /* canonical ProtocolFork index for Amsterdam
                                   (execution-specs@02c6c2510: enum pruned, Osaka=17 BPO1=18 BPO2=19
                                   Amsterdam=20). */
@@ -863,31 +1159,60 @@ function validate_block_outputs(exec_ok : bool, block_result : BlockExecutionRes
     let cfg_ok = fork_ok & active_ok;
 
     let hdr_ok = headers_ok();
-    let gas_used_ok = block_result.gas_acc == pl_gas_used();
-    let blob_gas_used_ok = block_result.blob_gas_acc == pl_blob_gas_used();
-    let excess_blob_gas_ok = pl_excess_blob_gas() == expected_payload_excess_blob_gas();
+    let gas_used_ok = block_result.gas_acc == header.gas_used;
+    let blob_gas_used_ok = block_result.blob_gas_acc == header.blob_gas_used;
+    let excess_blob_gas_ok = header.excess_blob_gas == expected_payload_excess_blob_gas();
     let computed_root = compute_state_root_overlay();
-    let expected_root = pl_state_root();
+    let expected_root = header.state_root;
     let poststate_ok = computed_root == expected_root;
+    let receipts_root = receipts_trie_root(block_result.receipts);
+    let receipts_root_ok = receipts_root == header.receipts_root;
+    let logs_bloom_ok = bytes_equal(receipts_bloom(block_result.receipts), header.logs_bloom);
+    let transactions_root = transaction_trie_root();
+    let withdrawals_root = withdrawals_trie_root(block.body.withdrawals);
+    let requests_hash = execution_requests_hash();
+    let block_access_list_hash = keccak256_source(
+        WitnessSource(witness_slice(pl_bal_start(), payload_end() - pl_bal_start())),
+    );
+    let block_hash = block_header_hash(
+        header,
+        transactions_root,
+        withdrawals_root,
+        requests_hash,
+        block_access_list_hash,
+    );
+    let block_hash_ok = block_hash == header.block_hash;
+    let parent_ok = parent_hash_ok(header);
 
     /* k_witness_bad: a deficient/inconsistent witness proof (missing trie node,
        a pre/post storage trie that does not re-root) -- the block cannot be
        validated, so it is invalid (EIP-8025 optional-proofs negative tests). */
     /* EIP-7928: the block access list must not exceed block_gas_limit / 2000 items. */
-    let bal_limit = ediv_int(pl_gas_limit(), 2000);
+    let bal_limit = ediv_int(header.gas_limit, 2000);
     let bal_ok : bool = bal_item_count() <= bal_limit;
 
       cfg_ok
     & hdr_ok
+    & rlp_decode_ok
     & auth_ok
     & exec_ok
     & gas_used_ok
     & blob_gas_used_ok
     & excess_blob_gas_ok
     & poststate_ok
+    & receipts_root_ok
+    & logs_bloom_ok
+    & block_hash_ok
+    & parent_ok
     & bal_ok
     & not_bool(k_witness_bad)
 }
+
+function first_withdrawal_address(withdrawals : list(Withdrawal)) -> address =
+    match withdrawals {
+        w :: _ => w.address,
+        [||] => ZERO_ADDR,
+    }
 
 /* canonical "invalid input" output: a 32-byte ZERO new_payload_request_root,
  * successful_validation=false, and a FIXED default ChainConfig (the input's is
@@ -953,6 +1278,7 @@ function main() -> unit = {
     keccak_selfcheck();
     sha256_selfcheck();
     arith_selfcheck();
+    rlp_decode_ok = true;
 
     /* reject a malformed SSZ input outright with the canonical invalid output
        (zero root + valid=false + default chain_config) -- nothing below can
@@ -962,35 +1288,36 @@ function main() -> unit = {
         return ()
     };
 
-    /* S2f: execute the block decoded from private input against witness state */
+    /* S2f: decode the block from private input, then execute it against witness
+       state. Transactions and withdrawals are materialized here; execution only
+       stages a transaction's input into the byte-addressed backend when that
+       transaction is actually run. */
+    let block : Block = decode_block_ssz();
     authenticate_parent_state();
-    let env : BlockEnv = current_block_env();
 
     /* Arm stateless mode: the witness now backs the base layer for BOTH accounts
-       and storage. A touched account is materialized from its acctdb span on first
-       load_account (one keccak, then cached raw in the acctmap); a touched slot resolves
+       and storage. A touched account is materialized from its authenticated witness
+       record on first load_account (one keccak, then cached raw in the acctmap);
+       a touched slot resolves
        from the harvested slot store on first read (k_sload/k_orig) and is cached
        read-through. Nothing is pre-seeded -- no eager account/slot pass. */
     k_stateless_on();
 
-    /* Zero-copy block STF over the SSZ payload by index -- no materialized Block /
-       list(Transaction). Each tx is decoded once (repointing the single txin slot)
-       and applied in order via the shared per-tx STF unit (process_transaction),
-       folding receipt success and accumulating gas; withdrawals are then credited.
-       This is the single block driver -- the EEST runner shares process_transaction
-       for its single-tx state-test cases. */
-    k_set_block(env);
-    run_block_start_system_calls();
+    /* Block STF over the materialized block: system calls, each decoded tx in
+       order via the shared per-tx STF unit, then withdrawals and block-end
+       system calls. */
+    k_set_block(block_env_from_header(block.header));
+    run_block_start_system_calls(block.header);
 
-    let block_result = execute_block_transactions(pl_n_txs(), pl_gas_limit());
-    apply_withdrawals();
+    let block_result = execute_block_transactions(block.body.transactions, block.header.gas_limit);
+    apply_withdrawals(block.body.withdrawals);
     let exec_ok : bool = run_checked_block_end_system_calls(block_result.all_ok);
-    let valid : bool = validate_block_outputs(exec_ok, block_result);
+    let valid : bool = validate_block_outputs(block, exec_ok, block_result);
 
     let stored = k_storage_get(block_result.first_tx_recipient, word_of_int(0));
     let gas_used = to_gas(block_result.gas_acc);
-    let wbal = load_account(withdrawal_addr(0)).balance;
-    let cbbal = load_account(pl_fee_recipient()).balance;
+    let wbal = load_account(first_withdrawal_address(block.body.withdrawals)).balance;
+    let cbbal = load_account(block.header.fee_recipient).balance;
 
     zkvm_out_gas = gas_used;
     zkvm_out_storage0 = unsigned(stored);

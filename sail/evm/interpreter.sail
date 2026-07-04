@@ -30,14 +30,9 @@ let DEPTH_LIMIT : int = 1024
 /* ----------------------------- fetch/decode ----------------------------- */
 
 /* Assemble the n-byte big-endian immediate following a PUSHn opcode into a
- * 256-bit word; bytes past the end of code read as zero (code_byte). */
-function read_push(n : int) -> word = {
-    var acc : word = WORD_ZERO;
-    foreach (k from 0 to (n - 1)) {
-        acc = or_vec(sail_shiftleft(acc, 8), sail_zero_extend(code_byte(pc + k), 256))
-    };
-    acc
-}
+ * 256-bit word; bytes past the end of code read as zero. */
+function read_push(n : int) -> word =
+    code_db_frame_push_immediate_word(get_slice_int(64, pc, 0), get_slice_int(64, n, 0))
 
 /* Decode one non-PUSH opcode byte to its AST node. The three contiguous
  * families fold to an arity argument -- DUP1..16 (0x80..0x8f), SWAP1..16
@@ -402,7 +397,6 @@ function run_call(mode : int) -> unit = {
                     false
                 };
             if ok & (used <= child_gas) then {
-                hr_capture_acc();
                 hr_adopt();
 
                 /* the value transfer is part of the (successful) call */

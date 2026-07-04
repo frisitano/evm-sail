@@ -55,9 +55,9 @@ successful_validation=0          # a failed validation is a NORMAL result
 ```
 
 Vectors are produced
-host-side by `gen_vector.py` (`--bad` for the fail path); the SSZ codec, RLP decode,
-witness-MPT walk, and SSZ `hash_tree_root` live in `../sail/{ssz,rlp_decode,mpt_witness,
-sha256,ssz_htr}.sail` (model-level, not pulled into `evm.sail`).
+host-side by `gen_vector.py` (`--bad` for the fail path); the SSZ codec,
+witness-MPT walk, and SSZ `hash_tree_root` live in `../sail/{ssz,mpt_witness,
+sha256,ssz_htr}.sail`, while the shared RLP helpers live in `../sail/lib/rlp.sail`.
 
 ## Conformance to the standard target
 
@@ -207,9 +207,10 @@ Requires `sail` (opam), `riscv64-unknown-elf-gcc`, and `spike` on `PATH`
   precompiles. Native links it directly; the spike guest offloads every op to the host
   accelerator device (`accel-device/accel_device.cc`, linked against the Rust lib), so no
   crypto runs as guest instructions. (The portable-C reference `zkvm_accelerators.c` has
-  been removed.) The Sail model calls these via a thin marshalling shim (`../ffi/acc_shim.c`,
-  externs injected with `sail -c --c-include acc_shim.h`), since Sail cannot form a
-  `(ptr,len)` call. keccak/sha256 are exercised + asserted on-guest by
+  been removed.) Sail calls explicit C adapters instead of a catch-all shim:
+  `../ffi/host_crypto.c` for direct hash pointer/length calls,
+  `../ffi/precompiles.c` for staged EVM precompile execution,
+  and `../ffi/returndata.c` for output ownership. keccak/sha256 are exercised + asserted on-guest by
   `keccak_selfcheck`/`sha256_selfcheck`.
 * `start.S`/trap-vector use Zicsr (machine-mode CSRs) — these are **platform/crt0 glue**
   (a vendor responsibility under the memory-layout standard), not the proven STF, which

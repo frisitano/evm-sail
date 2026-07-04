@@ -96,15 +96,20 @@ function mem_read_range(off : int, len : int) -> list(byte) = {
 function mem_size_words() -> int = ediv_int(memory_size + 31, 32)
 
 /* ---- range copies (CALLDATACOPY / CODECOPY / RETURNDATACOPY / MCOPY):
- * zero/one-copy, since both endpoints already live in the C buffers ---- */
+ * endpoints already live in C buffers, so copies stay on the C side. ---- */
 val hm_move = impure { _: "hm_move" } : (bits(64), bits(64), bits(64)) -> unit
-val hc_to_mem = impure { _: "hc_to_mem" } : (bits(64), bits(64), bits(64)) -> unit
+val code_db_copy_frame_code_to_memory = impure { _: "code_db_copy_frame_code_to_memory" } : (
+        bits(64),
+        bits(64),
+        bits(64),
+    ) -> unit
+val precompile_stage_memory = impure { _: "precompile_stage_memory" } : (bits(64), bits(64), bits(64)) -> unit
 
 /* Stage a precompile's input: ONE C-side snapshot of mem[off .. off+len) -- the
  * child message's calldata. A snapshot, not an alias: precompile 0x04 (identity)
  * may have its output written back over a region overlapping its input. */
 function stage_precompile_input(id : int, off : int, len : int) -> unit =
-    acc_begin_mem(get_slice_int(64, id, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0))
+    precompile_stage_memory(get_slice_int(64, id, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0))
 
 /* MCOPY (EIP-5656): overlapping-safe memory-to-memory copy (one C memmove). */
 function mem_mcopy(dst : int, src : int, len : int) -> unit =
@@ -115,23 +120,16 @@ function mem_mcopy(dst : int, src : int, len : int) -> unit =
  * calldata_copy_to_mem): a past-end source must zero-fill the destination. */
 function mem_codecopy(dst : int, off : int, len : int) -> unit = {
     let o = if off > 16777216 then { 16777216 } else { off };
-    hc_to_mem(get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
+    code_db_copy_frame_code_to_memory(get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
 }
 
 /* KECCAK256 directly over the memory range [off, off+len): the bytes go from
  * the C memory frame into the C accelerator without an intermediate Sail list,
  * folding the digest big-endian into a word. */
-function mem_keccak(off : int, len : int) -> word = {
-    acc_begin_mem(get_slice_int(64, 0, 0), get_slice_int(64, off, 0), get_slice_int(64, len, 0));
-    let _ = acc_exec();
-    let w0 : bits(64) = acc_word(get_slice_int(64, 0, 0));
-    let w1 : bits(64) = acc_word(get_slice_int(64, 1, 0));
-    let w2 : bits(64) = acc_word(get_slice_int(64, 2, 0));
-    let w3 : bits(64) = acc_word(get_slice_int(64, 3, 0));
-    append(w0, append(w1, append(w2, w3)))
-}
+function mem_keccak(off : int, len : int) -> word =
+    keccak256_source(MemorySource(memory_slice(off, len)))
 
-/* ---- C-backed RETURNDATA buffer (per call frame; see ffi/acc_shim.c) ----
+/* ---- C-backed RETURNDATA buffer (per call frame; see ffi/returndata.c) ----
  * The bytes a child frame returned (RETURN/REVERT) or a precompile produced,
  * read by RETURNDATASIZE/RETURNDATACOPY (EIP-211). Cleared at the start of
  * every sub-call and replaced by the child's output on return. Staged
@@ -140,7 +138,6 @@ val hr_reset = impure { _: "hr_reset" } : unit -> unit
 val hr_clear = impure { _: "hr_clear" } : unit -> unit
 val hr_discard = impure { _: "hr_discard" } : unit -> unit
 val hr_capture = impure { _: "hr_capture" } : (bits(64), bits(64)) -> unit
-val hr_capture_acc = impure { _: "hr_capture_acc" } : unit -> unit
 val hr_adopt = impure { _: "hr_adopt" } : unit -> unit
 val hr_len = impure { _: "hr_len" } : unit -> bits(64)
 val hr_pending_len = impure { _: "hr_pending_len" } : unit -> bits(64)
@@ -174,11 +171,10 @@ function pending_output_list() -> list(byte) = {
 val cd_set = impure { _: "cd_set" } : (bits(64), bits(64)) -> unit
 val cd_set_empty = impure { _: "cd_set_empty" } : unit -> unit
 val cd_set_tx = impure { _: "cd_set_tx" } : unit -> unit
-val txin_begin = impure { _: "txin_begin" } : bits(64) -> unit
+val txin_begin = impure { _: "txin_begin" } : unit -> unit
 val txin_byte = impure { _: "txin_byte" } : bits(8) -> unit
-val txin_activate = impure { _: "txin_activate" } : bits(64) -> bits(64)
 val cd_len = impure { _: "cd_len" } : unit -> bits(64)
-val cd_word = impure { _: "cd_word" } : bits(64) -> word
+val code_db_calldata_load_word = impure { _: "code_db_calldata_load_word" } : bits(64) -> word
 val cd_to_mem = impure { _: "cd_to_mem" } : (bits(64), bits(64), bits(64)) -> unit
 val txd_at = impure { _: "txd_at" } : bits(64) -> bits(8)
 val txd_length = impure { _: "txd_length" } : unit -> bits(64)
@@ -189,7 +185,7 @@ val txd_length = impure { _: "txd_length" } : unit -> bits(64)
 function txdata_byte(i : int) -> byte = txd_at(get_slice_int(64, i, 0))
 function txdata_size() -> int = unsigned(txd_length())
 
-function calldata_word(off : int) -> word = cd_word(get_slice_int(64, off, 0))
+function calldata_word(off : int) -> word = code_db_calldata_load_word(get_slice_int(64, off, 0))
 
 /* clamp a beyond-2^64 source offset to a beyond-any-calldata sentinel so the
  * 64-bit truncation cannot wrap back into real calldata: a past-end source
@@ -201,24 +197,22 @@ function calldata_copy_to_mem(dst : int, off : int, len : int) -> unit = {
 function calldata_set_next(off : int, len : int) -> unit =
     cd_set(get_slice_int(64, off, 0), get_slice_int(64, len, 0))
 
-/* load transaction `idx`'s input bytes into its memory slot (block setup: the
- * runner / stateless decoder / test fixtures call this once per tx). */
-function txdata_set_input(idx : int, data : list(byte)) -> unit = {
-    txin_begin(get_slice_int(64, idx, 0));
+/* Load the current transaction's input bytes into the owned C buffer and return
+ * the staged length. */
+function txdata_set_input(data : list(byte)) -> int = {
+    txin_begin();
     var rest : list(byte) = data;
+    var n : int = 0;
     var more : bool = true;
     while more do {
         match rest {
             b :: t => {
                 txin_byte(b);
+                n = n + 1;
                 rest = t
             },
             [||] => more = false,
         }
-    }
+    };
+    n
 }
-
-/* select transaction `idx` as the executing tx; returns its input length. The
- * EVM reads the input from memory (txdata_byte / txdata_size / calldata) -- it
- * holds only the index, never the bytes. */
-function txdata_activate(idx : int) -> int = unsigned(txin_activate(get_slice_int(64, idx, 0)))

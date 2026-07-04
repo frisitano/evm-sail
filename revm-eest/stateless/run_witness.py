@@ -60,8 +60,9 @@ def build_probe(rebuild=False):
     stack_flags = (["-Wl,-stack_size,0x20000000"] if sys.platform == "darwin"
                    else ["-Wl,-z,stacksize=0x20000000"])
     host_c = [os.path.join(ELDIR, "ffi", f"{m}.c") for m in
-              ("acc_shim", "memory", "transient_storage", "state_db",
-               "stack", "code_db", "trie_node_db")]
+              ("host_crypto", "precompiles", "returndata", "memory",
+               "transient_storage", "state_db", "stack", "code_db",
+               "trie_node_db")]
     ffi_c = os.path.join(EEST, "runner_ffi.c")  # ssz_src over buffered stdin
     src = os.path.join(HERE, "witness_probe.sail")
     subprocess.check_call(

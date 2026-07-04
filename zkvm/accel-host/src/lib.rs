@@ -335,8 +335,9 @@ pub unsafe extern "C" fn zkvm_kzg_point_eval(
 
 /* ========================= BLS12-381 (EIP-2537) ====================== */
 /* via blst. Standard encoding here = blst native serialization: G1 = 96 bytes
- * (x||y, 48 each BE), G2 = 192 bytes, Fp = 48, Fp2 = 96, scalar = 32. acc_shim
- * maps the EIP-2537 padded layout (64-byte field elems) to/from this. */
+ * (x||y, 48 each BE), G2 = 192 bytes, Fp = 48, Fp2 = 96, scalar = 32. The
+ * precompile adapter maps the EIP-2537 padded layout (64-byte field elems)
+ * to/from this. */
 mod bls {
     use blst::*;
     /* EIP-2537 encodes the point at infinity as all-zero bytes, but blst's native

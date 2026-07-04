@@ -42,17 +42,25 @@ register call_depth : int = 0
 /* --------------------------- code length -------------------------------- */
 /* The frame's code bytes live in the C buffer (code_db.c), streamed once by
  * set_code; fetch is an O(1) array read and PUSH immediates are assembled by
- * one hc_word call. Only the length is kept on the Sail side. */
+ * one code_db_frame_push_immediate_word call. Only the length is kept on the Sail side. */
 register code_len : int = 0
 
-val hj_valid = impure { _: "hj_valid" } : bits(64) -> bool
-val hc_byte = impure { _: "hc_byte" } : bits(64) -> bits(8)
-val hc_word = impure { _: "hc_word" } : (bits(64), bits(64)) -> word
-val fc_set_hash = impure { _: "fc_set_hash" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
-val fc_pend_mem = impure { _: "fc_pend_mem" } : (bits(64), bits(64)) -> bits(64)
-val fc_set_txd = impure { _: "fc_set_txd" } : unit -> bits(64)
-val fc_set_empty = impure { _: "fc_set_empty" } : unit -> unit
-val hc_len = impure { _: "hc_len" } : unit -> bits(64)
+val code_db_frame_jumpdest_valid = impure { _: "code_db_frame_jumpdest_valid" } : bits(64) -> bool
+val code_db_frame_code_byte = impure { _: "code_db_frame_code_byte" } : bits(64) -> bits(8)
+val code_db_frame_push_immediate_word = impure { _: "code_db_frame_push_immediate_word" } : (bits(64), bits(64)) -> word
+val code_db_frame_set_stored_code = impure { _: "code_db_frame_set_stored_code" } : (
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+    ) -> bits(64)
+val code_db_prepare_child_frame_memory_code = impure { _: "code_db_prepare_child_frame_memory_code" } : (
+        bits(64),
+        bits(64),
+    ) -> bits(64)
+val code_db_frame_set_tx_input_code = impure { _: "code_db_frame_set_tx_input_code" } : unit -> bits(64)
+val code_db_frame_clear_code = impure { _: "code_db_frame_clear_code" } : unit -> unit
+val code_db_frame_code_length = impure { _: "code_db_frame_code_length" } : unit -> bits(64)
 
 /* Bind the current frame's code to an account's store entry (O(1): the bytes
  * and JUMPDEST bitmap were prepared when the code was written), to the
@@ -61,24 +69,24 @@ val hc_len = impure { _: "hc_len" } : unit -> bits(64)
  * range, so execution code never aliases mutable memory. */
 function frame_code_addr(a : address) -> unit = {
     let h : hash = k_code_key(a);
-    code_len = unsigned(fc_set_hash(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]))
+    code_len = unsigned(code_db_frame_set_stored_code(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]))
 }
 
 /* re-read the (C-side) frame descriptor's length after a child frame pops.
  * NOT a saved Sail local: sail -O's register-effect analysis is per-function
  * body, so a `let saved = code_len ... code_len = saved` round-trip with no
  * direct write in between gets eliminated as a self-assignment. */
-function frame_code_resync() -> unit = code_len = unsigned(hc_len())
-function frame_code_txd() -> unit = code_len = unsigned(fc_set_txd())
+function frame_code_resync() -> unit = code_len = unsigned(code_db_frame_code_length())
+function frame_code_txd() -> unit = code_len = unsigned(code_db_frame_set_tx_input_code())
 function frame_code_empty() -> unit = {
-    fc_set_empty();
+    code_db_frame_clear_code();
     code_len = 0
 }
 function frame_code_pend_mem(off : int, len : int) -> int =
-    unsigned(fc_pend_mem(get_slice_int(64, off, 0), get_slice_int(64, len, 0)))
+    unsigned(code_db_prepare_child_frame_memory_code(get_slice_int(64, off, 0), get_slice_int(64, len, 0)))
 
 /* code[i], zero past the end (the EVM's implicit STOP padding) */
-function code_byte(i : int) -> byte = hc_byte(get_slice_int(64, i, 0))
+function code_byte(i : int) -> byte = code_db_frame_code_byte(get_slice_int(64, i, 0))
 
 /* ------------------------------ the stack ------------------------------- */
 /* C-backed (ffi/stack.c): per-call-frame flat word arrays, O(1)

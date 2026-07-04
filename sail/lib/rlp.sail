@@ -1,17 +1,18 @@
 /* ======================================================================== */
-/* RLP ENCODING (YELLOW PAPER APPENDIX B)                                   */
+/* RLP ENCODE / DECODE (YELLOW PAPER APPENDIX B)                            */
 /*                                                                          */
 /* Recursive Length Prefix, the canonical serialization Ethereum uses for   */
 /* accounts, block headers, transactions, receipts, and Merkle-Patricia     */
 /* trie nodes. RLP encodes a recursive structure of byte strings and lists; */
 /* it imposes no type semantics, only a minimal length-prefixed framing.    */
 /*                                                                          */
-/* The encoders here cover the cases the model emits. A single byte < 0x80  */
-/* is its own encoding; a string of length n <= 55 takes a 0x80+n prefix; a */
-/* longer string takes a 0xb7+|len| prefix followed by the big-endian       */
-/* length. Lists mirror this with the 0xc0 / 0xf7 prefix bands over an      */
-/* already-encoded payload. Integers encode as their minimal big-endian     */
-/* byte string (no leading zeros).                                          */
+/* A byte < 0x80 is its own encoding; strings of length n <= 55 use         */
+/* 0x80+n; longer strings use 0xb7+|len| followed by the big-endian length. */
+/* Lists mirror this with the 0xc0 / 0xf7 prefix bands over an already      */
+/* encoded payload. Integers encode as their minimal big-endian byte string */
+/* with no leading zeros. Decoding proceeds one level at a time:            */
+/* RlpField.content is the string value or list payload, and RlpField.full  */
+/* is the complete item bytes used for embedded trie nodes and signing.     */
 /* ======================================================================== */
 
 function rlp_byte(n : int) -> byte = get_slice_int(8, n, 0)
@@ -35,15 +36,18 @@ function rlp_bytes(data : list(byte)) -> list(byte) = {
     }
 }
 
+/* RLP list header for a payload of `len` content bytes. */
+function rlp_list_prefix(len : int) -> list(byte) =
+    if len <= 55 then {
+        [|rlp_byte(192 + len)|]
+    } else {
+        let lb = int_to_be_bytes(len);
+        rlp_byte(247 + list_len(lb)) :: lb
+    }
+
 /* Wrap an already-encoded item payload as an RLP list. */
 function rlp_list(payload : list(byte)) -> list(byte) = {
-    let n = list_len(payload);
-    if n <= 55 then {
-        list_append([|rlp_byte(192 + n)|], payload)
-    } else {
-        let lb = int_to_be_bytes(n);
-        list_append(list_append([|rlp_byte(247 + list_len(lb))|], lb), payload)
-    }
+    list_append(rlp_list_prefix(list_len(payload)), payload)
 }
 
 /* RLP-encode a non-negative integer as a minimal big-endian string. */
@@ -52,3 +56,248 @@ function rlp_int(n : int) -> list(byte) = rlp_bytes(int_to_be_bytes(n))
 /* RLP-encode a fixed 32-byte word and a 20-byte address as byte strings. */
 function rlp_word(w : word) -> list(byte) = rlp_bytes(word_to_bytes32(w))
 function rlp_addr(a : address) -> list(byte) = rlp_bytes(address_to_bytes(a))
+
+function word_to_min_bytes(w : word) -> list(byte) = {
+    let n = word_be_len(w);
+    var out : list(byte) = [||];
+    foreach (k from 0 to (n - 1)) {
+        out = list_append(out, [|sail_shiftright(w, 8 * (n - 1 - k))[7 .. 0]|])
+    };
+    out
+}
+
+function rlp_int_word(w : word) -> list(byte) = rlp_bytes(word_to_min_bytes(w))
+
+function zero_bytes(n : int) -> list(byte) = {
+    var out : list(byte) = [||];
+    foreach (i from 0 to (n - 1)) {
+        out = 0x00 :: out
+    };
+    out
+}
+
+/* CREATE address (Yellow Paper): keccak256(rlp([sender, nonce]))[12:] -- the
+ * low 20 bytes of the hash of the RLP-encoded (sender, nonce) pair. */
+function create_address(sender : address, nonce : int) -> address = {
+    var payload : list(byte) = rlp_addr(sender);
+    payload = list_append(payload, rlp_int(nonce));
+    word_to_address(keccak256(rlp_list(payload)))
+}
+
+/* CREATE2 address (EIP-1014): the low 20 bytes of
+ * keccak256(0xff ++ sender ++ salt ++ keccak256(init_code)) -- a salted,
+ * init-code-committed address independent of the sender's nonce. */
+function create2_address(sender : address, salt : word, init_hash : hash) -> address = {
+    var preimage : list(byte) = [|0xff|];
+    preimage = list_append(preimage, address_to_bytes(sender));
+    preimage = list_append(preimage, word_to_bytes32(salt));
+    preimage = list_append(preimage, word_to_bytes32(init_hash));
+    word_to_address(keccak256(preimage))
+}
+
+struct RlpField = {
+  is_list : bool,
+  content : list(byte),   /* string value, or a list's payload bytes */
+  full    : list(byte)    /* full item bytes incl header (an embedded node) */
+}
+
+let RLP_NONE : RlpField = struct { is_list = false, content = [||], full = [||] }
+
+/* Soft RLP decode validity flag for stateless validation. Malformed scalars are
+ * a normal invalid-block outcome, not a guest abort. */
+register rlp_decode_ok : bool = true
+
+/* big-endian integer from n content bytes at offset pos */
+function rlp_be_int(b : list(byte), pos : int, n : int) -> int = {
+    var acc : int = 0;
+    foreach (k from 0 to (n - 1)) {
+        acc = acc * 256 + unsigned(bytes_get(b, pos + k))
+    };
+    acc
+}
+
+/* header of the item at pos: (is_list, content_start, content_len) */
+function rlp_hdr(b : list(byte), pos : int) -> (bool, int, int) = {
+    let h = unsigned(bytes_get(b, pos));
+    if h < 128 then {
+        (false, pos, 1)
+        /* single byte */
+    } else {
+        if h < 184 then {
+            (false, pos + 1, h - 128)
+            /* short string (0x80..0xb7) */
+        } else {
+            if h < 192 then {
+                /* long string (0xb8..0xbf) */
+                let lol = h - 183;
+                (false, pos + 1 + lol, rlp_be_int(b, pos + 1, lol))
+            } else {
+                if h < 248 then {
+                    (true, pos + 1, h - 192)
+                    /* short list (0xc0..0xf7) */
+                } else {
+                    /* long list (0xf8..0xff) */
+                    let lol = h - 247;
+                    (true, pos + 1 + lol, rlp_be_int(b, pos + 1, lol))
+                }
+            }
+        }
+    }
+}
+
+/* RLP's scalar integer convention: zero is the empty string (0x80), positive
+ * integers are shortest big-endian byte strings, and the surrounding RLP string
+ * header must itself be canonical. Raw byte strings use rlp_field_word instead. */
+function rlp_uint_item_canonical(full : list(byte), content : list(byte)) -> bool = {
+    let n = list_len(content);
+    let fl = list_len(full);
+    if fl == 0 then {
+        false
+    } else {
+        if n == 0 then {
+            if fl == 1 then {
+                unsigned(bytes_get(full, 0)) == 128
+            } else {
+                false
+            }
+        } else {
+            let first = unsigned(bytes_get(content, 0));
+            if first == 0 then {
+                false
+            } else {
+                if (n == 1) & (first < 128) then {
+                    if fl == 1 then {
+                        unsigned(bytes_get(full, 0)) == first
+                    } else {
+                        false
+                    }
+                } else {
+                    if n <= 55 then {
+                        if fl == n + 1 then {
+                            unsigned(bytes_get(full, 0)) == 128 + n
+                        } else {
+                            false
+                        }
+                    } else {
+                        let len_bytes = int_to_be_bytes(n);
+                        let lol = list_len(len_bytes);
+                        if fl == 1 + lol + n then {
+                            var ok : bool = unsigned(bytes_get(full, 0)) == 183 + lol;
+                            foreach (k from 0 to (lol - 1)) {
+                                ok = ok & (bytes_get(full, 1 + k) == bytes_get(len_bytes, k))
+                            };
+                            ok
+                        } else {
+                            false
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* split the items in [start, stop) into a list of RlpField (single level) */
+function rlp_split(b : list(byte), start : int, stop : int) -> list(RlpField) = {
+    var out : list(RlpField) = [||];
+    var pos : int = start;
+    while pos < stop do {
+        let (isl, cs, cl) = rlp_hdr(b, pos);
+        let nxt = cs + cl;
+        out = struct { is_list = isl, content = bytes_slice(b, cs, cl), full = bytes_slice(b, pos, nxt - pos) } :: out;
+        pos = nxt
+    };
+    list_reverse(out)
+}
+
+/* decode a full RLP node (always a list) into its top-level items */
+function rlp_node_items(node : list(byte)) -> list(RlpField) = {
+    if list_len(node) == 0 then {
+        [||]
+    } else {
+        let (isl, cs, cl) = rlp_hdr(node, 0);
+        if isl then {
+            rlp_split(node, cs, cs + cl)
+        } else {
+            [||]
+        }
+    }
+}
+
+function rlp_item(items : list(RlpField), idx : int) -> RlpField = {
+    if (idx >= 0) & (idx < list_len(items)) then {
+        list_nth(items, idx, RLP_NONE)
+    } else {
+        rlp_decode_ok = false;
+        RLP_NONE
+    }
+}
+
+function rlp_list_items(f : RlpField) -> list(RlpField) =
+    if f.is_list then {
+        rlp_node_items(f.full)
+    } else {
+        rlp_decode_ok = false;
+        [||]
+    }
+
+function rlp_fields_encoded_prefix(items : list(RlpField), count : int) -> list(byte) = {
+    var out : list(byte) = [||];
+    var rest : list(RlpField) = items;
+    var i : int = 0;
+    var more : bool = true;
+    while more & (i < count) do {
+        match rest {
+            f :: t => {
+                out = list_append(out, f.full);
+                rest = t;
+                i = i + 1
+            },
+            [||] => {
+                rlp_decode_ok = false;
+                more = false
+            },
+        }
+    };
+    out
+}
+
+/* content of an RlpField as a big-endian integer / 256-bit word */
+function rlp_field_int(f : RlpField) -> int = {
+    if not_bool(f.is_list) & rlp_uint_item_canonical(f.full, f.content) then {
+        rlp_be_int(f.content, 0, list_len(f.content))
+    } else {
+        rlp_decode_ok = false;
+        0
+    }
+}
+function rlp_field_word(f : RlpField) -> word = {
+    var acc : word = sail_zeros(256);
+    let c = f.content;
+    let n = list_len(c);
+    foreach (k from 0 to (n - 1)) {
+        acc = or_vec(sail_shiftleft(acc, 8), sail_zero_extend(bytes_get(c, k), 256))
+    };
+    acc
+}
+
+function rlp_field_uint_word(f : RlpField) -> word = {
+    if not_bool(f.is_list) & rlp_uint_item_canonical(f.full, f.content) then {
+        rlp_field_word(f)
+    } else {
+        rlp_decode_ok = false;
+        sail_zeros(256)
+    }
+}
+
+/* ---- self-check: decode rlp([1, 2, 1024]) = c5 01 02 82 04 00 --------- */
+function rlp_decode_selfcheck() -> unit = {
+    let enc : list(byte) = [|0xc5, 0x01, 0x02, 0x82, 0x04, 0x00|];
+    let items = rlp_node_items(enc);
+    assert(list_len(items) == 3, "rlp list has 3 items");
+    assert(rlp_field_int(list_nth(items, 0, RLP_NONE)) == 1, "item0 == 1");
+    assert(rlp_field_int(list_nth(items, 1, RLP_NONE)) == 2, "item1 == 2");
+    assert(rlp_field_int(list_nth(items, 2, RLP_NONE)) == 1024, "item2 == 1024");
+    assert(not_bool(rlp_uint_item_canonical([|0x00|], [|0x00|])), "integer zero is not byte 0x00");
+    assert(not_bool(rlp_uint_item_canonical([|0x81, 0x01|], [|0x01|])), "integer 1 is not length-prefixed")
+}

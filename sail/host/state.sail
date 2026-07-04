@@ -243,17 +243,33 @@ val acctmap_at_base_exists = impure { _: "acctmap_at_base_exists" } : unit -> bi
  * de-duplicated and append-only, so REVERT needs no code rollback: restoring an
  * account's codeHash restores its code. An account resolves its code by codeHash
  * (k_code_key). */
-val cs_reset = impure { _: "cs_reset" } : unit -> unit
-val cs_begin = impure { _: "cs_begin" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
-val cs_len = impure { _: "cs_len" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
-val cs_to_mem = impure { _: "cs_to_mem" } : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
-val cs_byte = impure { _: "cs_byte" } : bits(8) -> unit
+val code_db_reset = impure { _: "code_db_reset" } : unit -> unit
+val code_db_stream_code_begin = impure { _: "code_db_stream_code_begin" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(
+        64,
+    )
+val code_db_stored_code_length = impure { _: "code_db_stored_code_length" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(
+        64,
+    )
+val code_db_copy_stored_code_to_memory = impure { _: "code_db_copy_stored_code_to_memory" } : (
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+    ) -> unit
+val code_db_stream_code_byte = impure { _: "code_db_stream_code_byte" } : bits(8) -> unit
+val code_db_store_ssz_code = impure { _: "code_db_store_ssz_code" } : (witness_offset, witness_len) -> unit
+
+function code_db_store_witness_code(s : witness_slice) -> unit =
+    code_db_store_ssz_code(s.off, s.len)
 
 /* Store code `c` in the content-addressed code store under its keccak hash `h`.
  * If `h` is already present (identical bytes) the byte stream is skipped
- * (cs_begin returns 0) -- the store is append-only and de-duplicated. */
-function cs_store_code(h : hash, c : list(byte)) -> unit = {
-    if cs_begin(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]) == 0x0000000000000000 then {
+ * (code_db_stream_code_begin returns 0) -- the store is append-only and de-duplicated. */
+function code_db_store_code(h : hash, c : list(byte)) -> unit = {
+    if code_db_stream_code_begin(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]) == 0x0000000000000000 then {
         ()
     } else {
         var rest : list(byte) = c;
@@ -261,7 +277,7 @@ function cs_store_code(h : hash, c : list(byte)) -> unit = {
         while more do {
             match rest {
                 b :: t => {
-                    cs_byte(b);
+                    code_db_stream_code_byte(b);
                     rest = t
                 },
                 [||] => more = false,
@@ -271,8 +287,8 @@ function cs_store_code(h : hash, c : list(byte)) -> unit = {
 }
 
 function storage_select(a : address, s : word) -> unit = {
-    let ah : hash = keccak256(address_to_bytes(a));
-    let sh : hash = keccak256(word_to_bytes32(s));
+    let ah : hash = keccak256_source(AddressSource(a));
+    let sh : hash = keccak256_source(WordSource(s));
     storage_map_key(
         s[255 .. 192],
         s[191 .. 128],
@@ -336,7 +352,7 @@ function storage_base_present(a : address, s : word) -> bool = {
 }
 
 function storage_wipe_addr(a : address) -> unit = {
-    let ah : hash = keccak256(address_to_bytes(a));
+    let ah : hash = keccak256_source(AddressSource(a));
     storage_map_wipe_acct_hash(ah[255 .. 192], ah[191 .. 128], ah[127 .. 64], ah[63 .. 0])
 }
 
@@ -433,7 +449,7 @@ function storage_has_live_acct_hash(ak : bits(256)) -> bool = {
     found
 }
 function storage_has_live_addr(a : address) -> bool =
-    storage_has_live_acct_hash(keccak256(address_to_bytes(a)))
+    storage_has_live_acct_hash(keccak256_source(AddressSource(a)))
 register k_refund : int = 0 /* gas-refund counter (SSTORE clears; EIP-3529 cap applied at tx end) */
 register k_selfdestr : list(address) = [||] /* addresses SELFDESTRUCTed this tx */
 
@@ -502,7 +518,7 @@ register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob
 /* select the acctmap key for address `a` (caches it for the accessors below) */
 function acctmap_select_hashed(h : bits(256)) -> unit =
     acctmap_key(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0])
-function acctmap_select(a : address) -> unit = acctmap_select_hashed(keccak256(address_to_bytes(a)))
+function acctmap_select(a : address) -> unit = acctmap_select_hashed(keccak256_source(AddressSource(a)))
 
 /* the three 256-bit account fields at the currently selected acctmap key
  * (word 3 most significant), reassembled from the per-word C accessors. */
@@ -547,7 +563,7 @@ function account_lookup(a : address) -> Account = {
 }
 
 function acctmap_write_account(a : address, v : Account, update : bool) -> unit = {
-    let h = keccak256(address_to_bytes(a));
+    let h = keccak256_source(AddressSource(a));
     acctmap_select_hashed(h);
     if update then {
         acctmap_store(

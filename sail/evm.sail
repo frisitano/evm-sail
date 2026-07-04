@@ -11,14 +11,14 @@
 /*            validity, and the state transition. It operates over user     */
 /*            accounts (user space) and touches world state only through    */
 /*            the host kernel functions.                                    */
-/*   lib/     pure functions: RLP (encode + decode), the block-header hash, */
-/*            and the Merkle-Patricia trie (state root + witness).          */
+/*   lib/     pure functions: RLP (encode + decode) and the                 */
+/*            Merkle-Patricia trie (state root + witness).                  */
 /*            keccak/sha256 themselves live in host/io.sail.                */
 /*                                                                          */
 /* Reading guide -- the state transition, outermost to innermost:           */
 /*                                                                          */
 /*   (block level)     run each tx then credit withdrawals -- SSZ guest     */
-/*                     (main.sail) drives it zero-copy, the EEST runner one */
+/*                     (main.sail) drives block input, the EEST runner one  */
 /*                     tx; both share:                                      */
 /*     transaction.sail  process_transaction: validity, intrinsic gas, fee  */
 /*                       deduction, nonce; then the top frame; refunds      */
@@ -40,13 +40,11 @@ $include "prelude.sail"
 
 /* host I/O: the accelerator FFI binding, host crypto (keccak/sha256 +
  * precompiles), and the stateless SSZ input decoders. Included early because the
- * crypto is used by block_hash/state/kernel/gas/transaction. */
+ * crypto is used by state/kernel/gas/transaction. */
 $include "host/io.sail"
 
-/* pure library functions: RLP encode (YP Appendix B), then the block-header
- * hash (keccak256(rlp(header)), YP section 4.3) that seals a block. */
+/* pure library functions: RLP encode/decode (YP Appendix B). */
 $include "lib/rlp.sail"
-$include "lib/block_hash.sail"
 
 /* halt / exceptional-halt kinds */
 $include "exceptions.sail"
@@ -64,10 +62,9 @@ $include "evm/execute.sail"
 $include "evm/interpreter.sail"
 $include "evm/transaction.sail"
 
-/* RLP decode (inverse of lib/rlp.sail), then the Merkle-Patricia trie: the root
- * builder, the Ethereum state trie, and the stateless witness reader (post-state
- * authentication against stateRoot + witness-backed reads). SSZ hash_tree_root
- * (lib/ssz_htr.sail) is a consensus-layer merkleization included only by the
- * zkVM block harness (zkvm/), not by this core EVM model. */
-$include "lib/rlp_decode.sail"
+/* The Merkle-Patricia trie: the root builder, the Ethereum state trie, and the
+ * stateless witness reader (post-state authentication against stateRoot +
+ * witness-backed reads). SSZ hash_tree_root (lib/ssz_htr.sail) is a
+ * consensus-layer merkleization included only by the zkVM block harness (zkvm/),
+ * not by this core EVM model. */
 $include "lib/mpt.sail"

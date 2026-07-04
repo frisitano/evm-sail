@@ -33,6 +33,46 @@ type hash    = bits(256)
 /* keccak-256 / storage-key sized digest          */
 type byte    = bits(8)
 
+/* Byte-indexed offsets/counts at C-backed host boundaries. Keep decoder and
+ * EVM arithmetic in int; narrow only when crossing the FFI. */
+type witness_offset = bits(64)
+type witness_len    = bits(64)
+function to_witness_offset(i : int) -> witness_offset = get_slice_int(64, i, 0)
+function to_witness_len(i : int) -> witness_len = get_slice_int(64, i, 0)
+
+type memory_offset = bits(64)
+type memory_len    = bits(64)
+function to_memory_offset(i : int) -> memory_offset = get_slice_int(64, i, 0)
+function to_memory_len(i : int) -> memory_len = get_slice_int(64, i, 0)
+
+struct witness_slice = {
+    off : witness_offset,
+    len : witness_len,
+}
+
+function witness_slice(off : int, len : int) -> witness_slice =
+    struct { off = to_witness_offset(off), len = to_witness_len(len) }
+
+struct memory_slice = {
+    off : memory_offset,
+    len : memory_len,
+}
+
+function memory_slice(off : int, len : int) -> memory_slice =
+    struct { off = to_memory_offset(off), len = to_memory_len(len) }
+
+/* A byte source records where a contiguous byte sequence lives. The semantic
+ * operation is always "hash/read these bytes"; the constructor chooses the
+ * host access path, mirroring Sail RISC-V's use of typed source/target values
+ * at impure boundaries. */
+union byte_source = {
+  ByteListSource : list(byte),
+  WitnessSource  : witness_slice,
+  MemorySource   : memory_slice,
+  WordSource     : word,
+  AddressSource  : address,
+}
+
 /* Gas is a non-negative counter, bounded to range(0, 2^63 - 1) = INT64_MAX.
  * The bound must EXCEED the largest tx/block gas limit a fixture can set: the
  * EEST state-test suite uses gas limits up to 0x7fe0000000000001 (~9.21e18,
@@ -351,7 +391,3 @@ function alu_clz(x : word) -> word = {
     };
     word_of_int(count)
 }
-
-/* KECCAK-256 is a fully-defined Sail implementation, not an axiom; it lives
- * with the rest of the host crypto in host/io.sail, included after this
- * prelude. */

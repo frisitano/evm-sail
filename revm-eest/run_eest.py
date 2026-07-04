@@ -122,7 +122,7 @@ def build_runner(rebuild=False):
     sfdir = os.path.join(ELDIR, "zkvm", "runtime", "sail256" if sail256 else "sailfix")
     print("# building runner (one-time%s)..." % (" [sailfix]" if sailfix else ""), file=sys.stderr)
     # Build the host accelerator crate (industry crypto: ecrecover/bn254/modexp/...)
-    # and link its cdylib in place of the C reference impl. acc_shim.c still marshals.
+    # and link its cdylib behind the direct host hash/precompile adapters.
     accel = os.path.join(ELDIR, "zkvm", "accel-host")
     subprocess.check_call(["cargo", "build", "--release", "--offline", "--target-dir", "target"], cwd=accel)
     accel_lib = os.path.join(accel, "target", "release")
@@ -142,7 +142,9 @@ def build_runner(rebuild=False):
                                "sail/runner.sail","-o",BIN+"_gen"], cwd=ELDIR)
         subprocess.check_call(["cc","-O2",f"-I{sfdir}",f"-I{lib}",
                                BIN+"_gen.c", os.path.join(HERE,"runner_ffi.c"),
-                               os.path.join(ELDIR,"ffi","acc_shim.c"),
+                               os.path.join(ELDIR,"ffi","host_crypto.c"),
+                               os.path.join(ELDIR,"ffi","precompiles.c"),
+                               os.path.join(ELDIR,"ffi","returndata.c"),
                                os.path.join(ELDIR,"ffi","memory.c"),
                                os.path.join(ELDIR,"ffi","transient_storage.c"),
                                os.path.join(ELDIR,"ffi","state_db.c"),
@@ -161,7 +163,9 @@ def build_runner(rebuild=False):
                                "sail/runner.sail","-o",BIN+"_gen"], cwd=ELDIR)
         subprocess.check_call(["cc","-O2",f"-I{lib}","-I/opt/homebrew/include","-L/opt/homebrew/lib",
                                BIN+"_gen.c", os.path.join(HERE,"runner_ffi.c"),
-                               os.path.join(ELDIR,"ffi","acc_shim.c"),
+                               os.path.join(ELDIR,"ffi","host_crypto.c"),
+                               os.path.join(ELDIR,"ffi","precompiles.c"),
+                               os.path.join(ELDIR,"ffi","returndata.c"),
                                os.path.join(ELDIR,"ffi","memory.c"),
                                os.path.join(ELDIR,"ffi","transient_storage.c"),
                                os.path.join(ELDIR,"ffi","state_db.c"),
