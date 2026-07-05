@@ -48,19 +48,20 @@ function k_stateless_on() -> unit = k_stateless = true
 
 /* SLOAD: the slot's value in the layered working set; on a stateless miss the
  * witness IS the base layer, so resolve the authenticated pre-value on demand
- * and cache it. Native (k_stateless=false) reads the maps directly
- * (absent == 0), unchanged. */
+ * and cache it. Native (k_stateless=false) reads the map directly (absent == 0)
+ * without a separate presence probe: the probe only decides the stateless
+ * witness fallback. */
 function k_sload(a : address, s : word) -> word =
-    if storage_present(a, s) then {
-        storage_load(a, s)
-    } else {
-        if k_stateless then {
+    if k_stateless then {
+        if storage_present(a, s) then {
+            storage_load(a, s)
+        } else {
             let v = stateless_storage(a, s);
             storage_seed(a, s, v);
             v
-        } else {
-            storage_load(a, s)
         }
+    } else {
+        storage_load(a, s)
     }
 function k_sstore(a : address, s : word, v : word) -> unit = {
     storage_store(a, s, v); /* writes the top storage update layer; revert discards it */
@@ -69,18 +70,19 @@ function k_sstore(a : address, s : word, v : word) -> unit = {
 
 /* EIP-2200 "original" value: the slot at tx start = the BASE layer (committed
  * prior txs were pop_commit-merged in). A slot never committed to the base is,
- * statelessly, still at its witness pre-value, so resolve it from the witness. */
+ * statelessly, still at its witness pre-value, so resolve it from the witness.
+ * Native reads the base layer directly (absent == 0), no presence probe. */
 function k_orig(a : address, s : word) -> word =
-    if storage_base_present(a, s) then {
-        storage_base_load(a, s)
-    } else {
-        if k_stateless then {
+    if k_stateless then {
+        if storage_base_present(a, s) then {
+            storage_base_load(a, s)
+        } else {
             let v = stateless_storage(a, s);
             storage_seed(a, s, v);
             v
-        } else {
-            storage_base_load(a, s)
         }
+    } else {
+        storage_base_load(a, s)
     }
 
 /* un-journaled storage read (drivers/examples; same layered view as SLOAD) */
