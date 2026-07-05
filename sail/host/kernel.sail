@@ -39,51 +39,23 @@ function k_access_slot(a : address, s : word) -> bool = {
 /* --- persistent storage (SLOAD/SSTORE): the C cache/update store, whose update
  * layers are pushed/popped by k_snapshot / k_commit / k_revert --- */
 
-/* Stateless mode: the SSZ witness IS the storage base layer. A read the working
- * set doesn't hold is resolved from the witness on demand (k_sload/k_orig ->
- * stateless_storage) and then cached. Committed writes accumulate as updates
- * above the witness/cache. Off by default, so the native execution path
- * (absent == 0) is unaffected. */
-function k_stateless_on() -> unit = k_stateless = true
+/* Base-layer contracts (defined per entry: host/base_native.sail for the
+ * fixture-seeded runner/bench, host/base_witness.sail for the stateless
+ * guest/probe -- see the entry selection in evm.sail_project).
+ *
+ * k_sload: the slot's current value in the layered working set over the
+ * pre-state base. k_orig: the EIP-2200 "original" value = the slot at tx
+ * start (the BASE layer; committed prior txs were pop_commit-merged in).
+ * The two backends refine the same semantics: the native base is the
+ * fully-seeded map (absent == 0); the witness base resolves a working-set
+ * miss from the authenticated witness (absence is a proven exclusion). */
+val k_sload : (address, word) -> word
+val k_orig : (address, word) -> word
 
-/* SLOAD: the slot's value in the layered working set; on a stateless miss the
- * witness IS the base layer, so resolve the authenticated pre-value on demand
- * and cache it. Native (k_stateless=false) reads the map directly (absent == 0)
- * without a separate presence probe: the probe only decides the stateless
- * witness fallback. */
-function k_sload(a : address, s : word) -> word =
-    if k_stateless then {
-        if storage_present(a, s) then {
-            storage_load(a, s)
-        } else {
-            let v = stateless_storage(a, s);
-            storage_seed(a, s, v);
-            v
-        }
-    } else {
-        storage_load(a, s)
-    }
 function k_sstore(a : address, s : word, v : word) -> unit = {
     storage_store(a, s, v); /* writes the top storage update layer; revert discards it */
     store_account(a, load_account(a)) /* storage-root changes require a fresh account trie leaf */
 }
-
-/* EIP-2200 "original" value: the slot at tx start = the BASE layer (committed
- * prior txs were pop_commit-merged in). A slot never committed to the base is,
- * statelessly, still at its witness pre-value, so resolve it from the witness.
- * Native reads the base layer directly (absent == 0), no presence probe. */
-function k_orig(a : address, s : word) -> word =
-    if k_stateless then {
-        if storage_base_present(a, s) then {
-            storage_base_load(a, s)
-        } else {
-            let v = stateless_storage(a, s);
-            storage_seed(a, s, v);
-            v
-        }
-    } else {
-        storage_base_load(a, s)
-    }
 
 /* un-journaled storage read (drivers/examples; same layered view as SLOAD) */
 function k_storage_get(a : address, s : word) -> word = storage_load(a, s)
@@ -312,32 +284,11 @@ function k_env(f : EnvField) -> word = {
 }
 function k_coinbase() -> address = k_block.coinbase
 
-/* BLOCKHASH: hash of one of the 256 most recent ancestor blocks. Modeled as 0
- * (the recent-block-hash history ring is not carried in this state). */
-function k_blockhash(n : word) -> hash = {
-    if not_bool(k_stateless) then {
-        word_of_int(0) /* native / state-test: BLOCKHASH unmodeled (returns 0) */
-    } else {
-        /* EIP-2935/BLOCKHASH (stateless): the hash of the ancestor `offset` blocks
-           back (1..256) is keccak of the witness header at that depth. The witness
-           headers run oldest..newest with the parent (offset 1) LAST, so the
-           ancestor at `offset` is header[n_headers - offset]; if that index is
-           absent the witness is deficient for this access -> invalid block. */
-        let req = unsigned(n);
-        let offset = pl_block_number() - req;
-        if offset < 1 | offset > 256 then {
-            word_of_int(0)
-        } else {
-            let idx = wit_n_headers() - offset;
-            if idx < 0 then {
-                k_witness_bad = true;
-                word_of_int(0)
-            } else {
-                witness_keccak(ssz_witness_header_slice(idx))
-            }
-        }
-    }
-}
+/* BLOCKHASH: hash of one of the 256 most recent ancestor blocks. Base-layer
+ * contract (per-entry): the witness backend hashes the authenticated witness
+ * header at that depth (EIP-2935); the native backend has no ancestors in a
+ * state-test fixture and models it as 0. */
+val k_blockhash : word -> hash
 
 /* BLOBHASH (EIP-4844): the i-th versioned hash of the current tx, 0 past the end. */
 function k_blobhash(i : int) -> word = {
@@ -470,8 +421,7 @@ function k_world_reset() -> unit = {
     k_refund = 0;
     k_selfdestr = [||];
     k_created = [||];
-    k_journal = [||];
-    k_stateless = false
+    k_journal = [||]
 }
 
 /* --- tx-lifecycle / driver helpers (system layer, not EVM user space) --- */

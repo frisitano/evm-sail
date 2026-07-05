@@ -445,27 +445,24 @@ function slot_at_val() -> word = slotdb_at_val()
 function slot_at_acct() -> bits(256) = slotdb_at_acct()
 
 /* secure-trie updates for one account's post-state storage, selected by
- * keccak(address). In stateless mode the update list is only the write set:
- * nonzero writes set RLP(value), zero writes delete the slot. Untouched storage
- * slots remain inside the recursive overlay rooted at the account's pre-state
- * storage root. Native fixture mode has no authenticated witness root, so it
- * enumerates the full live cache/update union. */
-function storage_updates(ak : bits(256)) -> list(TrieUpdate) = {
+ * keccak(address). Base-layer contract (defined per entry): the witness
+ * backend consumes only the write set (untouched slots remain inside the
+ * recursive overlay rooted at the account's pre-state storage root); the
+ * native backend enumerates the full live cache/update union because it has
+ * no authenticated witness root. */
+val storage_updates : bits(256) -> list(TrieUpdate)
+
+/* write-set-only updates (witness base): nonzero writes set RLP(value), zero
+ * writes delete the slot; a zero write to a slot with no authenticated
+ * pre-state leaf is dropped (nothing to delete). */
+function storage_updates_writes_only(ak : bits(256)) -> list(TrieUpdate) = {
     var out : list(TrieUpdate) = [||];
-    let n = if k_stateless then {
-            storage_update_count()
-        } else {
-            storage_count()
-        };
+    let n = storage_update_count();
     foreach (j from 0 to (n - 1)) {
-        let (eak, es, ev) = if k_stateless then {
-                storage_hashed_update_entry(j)
-            } else {
-                storage_hashed_entry(j)
-            };
+        let (eak, es, ev) = storage_hashed_update_entry(j);
         if eak == ak then {
             let sk = keccak256_word(es);
-            if k_stateless & word_is_zero(ev) & not_bool(slot_existed(ak, sk)) then {
+            if word_is_zero(ev) & not_bool(slot_existed(ak, sk)) then {
                 ()
             } else {
                 out = update_insert_sorted(
@@ -477,6 +474,27 @@ function storage_updates(ak : bits(256)) -> list(TrieUpdate) = {
                     out,
                 )
             }
+        }
+    };
+    out
+}
+
+/* full live cache/update union (native fixture base) */
+function storage_updates_union(ak : bits(256)) -> list(TrieUpdate) = {
+    var out : list(TrieUpdate) = [||];
+    let n = storage_count();
+    foreach (j from 0 to (n - 1)) {
+        let (eak, es, ev) = storage_hashed_entry(j);
+        if eak == ak then {
+            let sk = keccak256_word(es);
+            out = update_insert_sorted(
+                struct {
+                    key = to_nibbles(word_to_bytes32(sk)),
+                    is_delete = word_is_zero(ev),
+                    value = rlp_int(unsigned(ev)),
+                },
+                out,
+            )
         }
     };
     out
@@ -529,55 +547,66 @@ function selected_account_storage_root() -> word = acctmap_at_sroot()
 /* secure trie key of the current acctmap_at row (keccak(address)) */
 function selected_account_key_hash() -> bits(256) = acctmap_at_hkey()
 
-/* secure-trie updates for the account map. Stateless block validation consumes
- * only execution updates: witness-materialized read-only accounts are base-state
- * cache, not post-state updates. The native EEST runner has no parent root
- * anchor, so it uses the complete cache/update union to build a full
- * updates-only root. */
-function state_updates_map() -> list(TrieUpdate) = {
-    var out : list(TrieUpdate) = [||];
-    let n = unsigned(
-        if k_stateless then {
-            acctmap_update_count()
-        } else {
-            acctmap_count()
-        },
-    );
-    foreach (j from 0 to (n - 1)) {
-        if k_stateless then {
-            acctmap_update_at(get_slice_int(64, j, 0))
-        } else {
-            acctmap_at(get_slice_int(64, j, 0))
+/* secure-trie updates for the account map. Base-layer contract (defined per
+ * entry): stateless block validation consumes only execution updates
+ * (witness-materialized read-only accounts are base-state cache, not
+ * post-state updates); the native EEST runner has no parent root anchor, so
+ * it uses the complete cache/update union to build a full updates-only root. */
+val state_updates_map : unit -> list(TrieUpdate)
+
+/* trie update for the currently-selected acctmap row. skip_empty_unbased
+ * drops empty accounts with no authenticated base leaf (witness base: there
+ * is nothing to delete); otherwise empty accounts become deletes. */
+function state_updates_selected_row(prev : list(TrieUpdate), skip_empty_unbased : bool) -> list(TrieUpdate) = {
+    let ak_hash = selected_account_key_hash();
+    let acc : Account = struct {
+            nonce = unsigned(acctmap_at_nonce()),
+            balance = selected_account_balance(),
+            code_hash = selected_account_code_hash(),
+            storage_root = selected_account_storage_root(),
         };
-        let ak_hash = selected_account_key_hash();
-        let acc : Account = struct {
-                nonce = unsigned(acctmap_at_nonce()),
-                balance = selected_account_balance(),
-                code_hash = selected_account_code_hash(),
-                storage_root = selected_account_storage_root(),
+    let ak = to_nibbles(word_to_bytes32(ak_hash));
+    let base_exists = acctmap_at_base_exists();
+    if skip_empty_unbased & account_empty(acc) & not_bool(base_exists) then {
+        prev
+    } else {
+        let upd : TrieUpdate = if account_empty(acc) then {
+                struct { key = ak, is_delete = true, value = [||] }
+            } else {
+                struct {
+                    key = ak,
+                    is_delete = false,
+                    value =
+                        account_rlp(
+                            acc.nonce,
+                            acc.balance,
+                            storage_root_from(ak_hash, acc.storage_root),
+                            acc.code_hash,
+                        ),
+                }
             };
-        let ak = to_nibbles(word_to_bytes32(ak_hash));
-        let base_exists = acctmap_at_base_exists();
-        if k_stateless & account_empty(acc) & not_bool(base_exists) then {
-            ()
-        } else {
-            let upd : TrieUpdate = if account_empty(acc) then {
-                    struct { key = ak, is_delete = true, value = [||] }
-                } else {
-                    struct {
-                        key = ak,
-                        is_delete = false,
-                        value =
-                            account_rlp(
-                                acc.nonce,
-                                acc.balance,
-                                storage_root_from(ak_hash, acc.storage_root),
-                                acc.code_hash,
-                            ),
-                    }
-                };
-            out = update_insert_sorted(upd, out)
-        }
+        update_insert_sorted(upd, prev)
+    }
+}
+
+/* execution updates only (witness base) */
+function state_updates_map_updates_only() -> list(TrieUpdate) = {
+    var out : list(TrieUpdate) = [||];
+    let n = unsigned(acctmap_update_count());
+    foreach (j from 0 to (n - 1)) {
+        acctmap_update_at(get_slice_int(64, j, 0));
+        out = state_updates_selected_row(out, true)
+    };
+    out
+}
+
+/* complete cache/update union (native fixture base) */
+function state_updates_map_union() -> list(TrieUpdate) = {
+    var out : list(TrieUpdate) = [||];
+    let n = unsigned(acctmap_count());
+    foreach (j from 0 to (n - 1)) {
+        acctmap_at(get_slice_int(64, j, 0));
+        out = state_updates_selected_row(out, false)
     };
     out
 }
@@ -1695,6 +1724,12 @@ function stateless_account_load(a : address) -> unit = {
  * node-db and preserving untouched children by reference. The standalone EEST
  * runner seeds the complete post-state and uses the updates-only entry point
  * because it has no parent root anchor. */
+/* delete-bearing storage overlay: base-layer contract (defined per entry).
+ * Deletion can collapse branch/extension structure: the witness backend may
+ * rebuild from the complete authenticated harvest; the native backend uses
+ * the collapsing overlay directly. */
+val storage_root_deletes : (bits(256), bits(256), list(TrieUpdate)) -> bits(256)
+
 function storage_root_from(ak : bits(256), sroot : bits(256)) -> bits(256) = {
     let updates = storage_updates(ak);
     if updates_empty(updates) then {
@@ -1704,20 +1739,11 @@ function storage_root_from(ak : bits(256), sroot : bits(256)) -> bits(256) = {
             k_witness_bad = true;
             sroot
         } else {
-            let r = if updates_has_delete(updates) then {
-                    if k_stateless then {
-                        if storage_harvest_complete(ak) then {
-                            updates_root(storage_live_updates_from_harvest(ak, updates))
-                        } else {
-                            trie_overlay_root(sroot, updates)
-                        }
-                    } else {
-                        trie_overlay_root(sroot, updates)
-                    }
-                } else {
-                    trie_overlay_root_preserve(sroot, updates)
-                };
-            r
+            if updates_has_delete(updates) then {
+                storage_root_deletes(ak, sroot, updates)
+            } else {
+                trie_overlay_root_preserve(sroot, updates)
+            }
         }
     }
 }

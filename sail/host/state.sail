@@ -217,7 +217,6 @@ register k_created : list(address) =
             the marker survives a frame revert. */
 
 register k_journal : list(JEntry) = [||] /* undo log (call-frame revert) */
-register k_stateless : bool = false /* stateless mode: storage reads must hit the witness working set */
 register k_witness_bad : bool =
     false /* witness proof deficient/inconsistent: validation FAILS (valid=false)
            gracefully instead of aborting (EIP-8025 optional-proofs tests) */
@@ -329,16 +328,14 @@ function account_loaded(a : address) -> bool = acctmap_present(a)
  * witness IS the base, so load_account loads on first touch -- no eager seeding. */
 val stateless_account_load : address -> unit
 
-/* internal (un-journaled) account accessors used inside the kernel functions.
- * In stateless mode the witness backs the base layer: a not-yet-loaded account
- * is materialized from the witness on first access (un-journaled, so a frame
- * revert keeps the revealed pre-state and only undoes recorded mutations). */
-function load_account(a : address) -> Account = {
-    if k_stateless & not_bool(account_loaded(a)) then {
-        stateless_account_load(a)
-    };
-    account_lookup(a)
-}
+/* internal (un-journaled) account accessor used inside the kernel functions.
+ * Base-layer contract (defined per entry): the native backend reads the seeded
+ * map directly (absent == EMPTY_ACCOUNT); the witness backend materializes a
+ * not-yet-loaded account from the witness on first access (un-journaled, so a
+ * frame revert keeps the revealed pre-state and only undoes recorded
+ * mutations). */
+val load_account : address -> Account
+
 function store_account(a : address, v : Account) -> unit = account_update(a, v)
 
 /* --- journal (undo log) helpers --- */

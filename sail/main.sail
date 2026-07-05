@@ -1144,13 +1144,13 @@ function main() -> unit = {
     let block : Block = decode_block_ssz();
     authenticate_parent_state();
 
-    /* Arm stateless mode: the witness now backs the base layer for BOTH accounts
-       and storage. A touched account is materialized from its authenticated witness
+    /* The witness backs the base layer for BOTH accounts and storage (the
+       witness base backend, host/base_witness.sail, statically linked into this
+       entry). A touched account is materialized from its authenticated witness
        record on first load_account (one keccak, then cached raw in the acctmap);
-       a touched slot resolves
-       from the harvested slot store on first read (k_sload/k_orig) and is cached
-       read-through. Nothing is pre-seeded -- no eager account/slot pass. */
-    k_stateless_on();
+       a touched slot resolves from the harvested slot store on first read
+       (k_sload/k_orig) and is cached read-through. Nothing is pre-seeded -- no
+       eager account/slot pass. */
 
     /* Block STF over the materialized block: system calls, each decoded tx in
        order via the shared per-tx STF unit, then withdrawals and block-end

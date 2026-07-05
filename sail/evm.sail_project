@@ -25,7 +25,7 @@ evm {
     evm/transaction.sail,
     lib/mpt.sail,
     lib/consensus_hash.sail,
-    if $EVM_BACKEND == spec then [spec/oracle.sail, spec/crypto.sail, spec/model_state.sail]
+    if $EVM_BACKEND == spec then [spec/oracle.sail, spec/crypto.sail, spec/model_state.sail, spec/model_buffers.sail]
     else if $EVM_BACKEND == build then [
       build/oracle.sail,
       build/crypto.sail,
@@ -37,9 +37,9 @@ evm {
     ]
     else error("EVM_BACKEND must be spec or build"),
     if $EVM_ENTRY == core then []
-    else if $EVM_ENTRY == guest then [lib/ssz_htr.sail, main.sail]
-    else if $EVM_ENTRY == runner then runner.sail
-    else if $EVM_ENTRY == witness_probe then "../revm-eest/stateless/witness_probe.sail"
-    else if $EVM_ENTRY == bench then "../zkvm/zkvm_bench.sail"
+    else if $EVM_ENTRY == guest then [host/base_witness.sail, lib/ssz_htr.sail, main.sail]
+    else if $EVM_ENTRY == runner then [host/base_native.sail, runner.sail]
+    else if $EVM_ENTRY == witness_probe then [host/base_witness.sail, "../revm-eest/stateless/witness_probe.sail"]
+    else if $EVM_ENTRY == bench then [host/base_native.sail, "../zkvm/zkvm_bench.sail"]
     else error("EVM_ENTRY must be core, guest, runner, witness_probe, or bench")
 }
