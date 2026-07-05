@@ -41,7 +41,7 @@ if [ ! -f "$SAIL_LIB/sail.h" ]; then
 fi
 
 # sail256: GMP-free fixed-width Sail runtime (matches run_eest.py SAIL256 path).
-SF="$ROOT/zkvm/runtime/sail256"
+SF="${SF_RUNTIME:-$ROOT/zkvm/runtime/sail256}"
 RT="$ROOT/zkvm/runtime"
 ZKVM="$ROOT/zkvm"          # zkvm_input.h / zkvm_io.h live here
 FFI="$ROOT/ffi"
@@ -63,6 +63,7 @@ case "$(uname -s)" in
 esac
 
 CFLAGS=(-O2 -Wno-error=implicit-function-declaration)
+if [ -n "${SANITIZE:-}" ]; then CFLAGS+=(-g -fsanitize=address,undefined -fno-omit-frame-pointer); fi
 
 # --- 2. sail256 GMP-free runtime objects -----------------------------------
 SF_OBJS=()

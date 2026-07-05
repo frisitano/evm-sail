@@ -105,6 +105,23 @@ rtk python3 run_eest.py fixtures/eels/cancun_selfdestruct/state_tests/for_cancun
 
 Use `--rebuild` when generated C or FFI changes need a fresh runner binary.
 
+## zkVM Guest Smoke Gate
+
+EEST-generated stateless fixtures (Amsterdam blockchain_tests carrying
+`statelessInputBytes`/`statelessOutputBytes`, filled from execution-specs
+`projects/zkevm` @ `02c6c2510916`) live under `zkvm/fixtures/smoke/`. Both
+gates diff the guest output byte-exactly against the reference:
+
+```sh
+rtk python3 zkvm/native-runner/run_fixtures.py --bin zkvm/native-runner/.build/zkvm_native --quiet zkvm/fixtures/smoke
+rtk python3 zkvm/run_guest_smoke.py            # spike guest; full build once, then REBAKE_ONLY per vector
+```
+
+Expected: 10 pass each. The hand-rolled `zkvm/vectors/fixture_*.ssz`
+(gen_vector.py) are development probes only; their placeholder
+parent_hash/receipts_root/block_hash fields do not validate and they are NOT
+the smoke gate.
+
 Full post-Berlin EEST state and EELS/stateless blockchain sweeps require an
 external generated fixture corpus; do not claim the full suite has been rerun
 unless the external state/blockchain fixture directories were actually run.

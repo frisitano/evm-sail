@@ -94,6 +94,12 @@ with open(sys.argv[2], "w") as f:
     f.write("const unsigned long zkvm_input_bytes_len = %d;\n" % len(data))
 PY
   "$GCC" "${CFLAGS[@]}" -Wno-unused -c "$BUILD/zkvm_input_data.c" -o "$BUILD/zkvm_input_data.o"
+  # REBAKE_ONLY=1: reuse every compiled object and only rebake the input vector
+  # and relink -- the per-vector fast path for the EEST guest smoke gate.
+  if [ -n "${REBAKE_ONLY:-}" ] && [ -f "$BUILD/zkvm_block.o" ]; then
+    link_guest
+    return
+  fi
   # 1. Sail -> C: no main, no Sail runtime harness (we supply our own).
   #    --c-include injects the guest extern decls (host crypto/precompile
   #    adapters + zkvm_input private-input reader) so the generated call sites
@@ -125,14 +131,14 @@ PY
   # 3b. Host crypto/precompile adapters: identical code to the native build,
   #     written against the zkvm_accelerators.h API. On the guest that API is
   #     implemented by accel_guest.c, which marshals each call to the host
-  #     accel device over MMIO (ffi/zkvm_accel_mmio.h) -- so the crypto itself
+  #     accel device over MMIO (zkvm/zkvm_accel_mmio.h) -- so the crypto itself
   #     never executes as guest instructions and the guest links NO crypto
   #     code, while ffi/ stays free of any MMIO special-casing.
   for hc in host_crypto precompiles; do
     "$GCC" "${CFLAGS[@]}" -I"$lib" -I"$ROOT/ffi" \
         -Wno-unused -c "$ROOT/ffi/$hc.c" -o "$BUILD/$hc.o"
   done
-  "$GCC" "${CFLAGS[@]}" -I"$ROOT/ffi" -Wall -Wextra \
+  "$GCC" "${CFLAGS[@]}" -I"$ROOT/ffi" -I"$ROOT/zkvm" -Wall -Wextra \
       -c "$RT/accel_guest.c" -o "$BUILD/accel_guest.o"
   # 3b'. Host accelerator device (spike --extlib): models a zkVM crypto precompile,
   #      backed by the SAME Rust accel-host crypto the native build links
@@ -141,7 +147,7 @@ PY
   if [ ! -f "$ACCEL_LIB/libzkvm_accel_host.dylib" ] && [ ! -f "$ACCEL_LIB/libzkvm_accel_host.so" ]; then
     ( cd "$ACCEL" && cargo build --release --target-dir target )  # local target (matches link path)
   fi
-  "$HOSTCXX" -std=c++17 -fPIC -shared -I"$SPIKE_INC" -I"$ROOT/ffi" -undefined dynamic_lookup \
+  "$HOSTCXX" -std=c++17 -fPIC -shared -I"$SPIKE_INC" -I"$ROOT/ffi" -I"$ROOT/zkvm" -undefined dynamic_lookup \
       -o "$ACCEL_SO" "$ROOT/zkvm/accel-device/accel_device.cc" \
       -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB"
   # 3c. C host backends: memory/calldata, transient storage, returndata,
@@ -162,6 +168,10 @@ PY
   "$GCC" "${CFLAGS[@]}" -march=rv64im_zicsr_zicclsm -I"$lib" -Wall -Wextra \
       -c "$RT/harness.c" -o "$BUILD/harness.o"
   # 5. Link the static guest ELF with the vendor linker script.
+  link_guest
+}
+
+link_guest() {
   "$GCC" "${CFLAGS[@]}" "${LDFLAGS[@]}" \
       "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/zkvm_io.o" "$BUILD/zkvm_input.o" \
       "$BUILD/zkvm_input_data.o" \

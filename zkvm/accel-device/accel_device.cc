@@ -1,7 +1,7 @@
 /* Spike --extlib MMIO accelerator serving the zkvm_accelerators.h API.
  *
  * The guest's zkvm_* functions (zkvm/runtime/accel_guest.c) marshal their
- * arguments per ffi/zkvm_accel_mmio.h and trigger GO; this device -- running
+ * arguments per zkvm/zkvm_accel_mmio.h and trigger GO; this device -- running
  * on the HOST, not as guest instructions -- reads the guest's input straight
  * from simulator memory (addr_to_mem), dispatches 1:1 into the SAME native
  * zkvm_* implementations (the Rust accel-host) that native builds link
@@ -22,7 +22,7 @@ extern "C" {
 #include <sstream>
 
 /* register file (byte offsets within the device's MMIO window; the index
- * layout is fixed by ffi/zkvm_accel_mmio.h) */
+ * layout is fixed by zkvm/zkvm_accel_mmio.h) */
 enum { R_OP = ZKVM_ACC_R_OP * 8, R_IN = ZKVM_ACC_R_IN * 8,
        R_INLEN = ZKVM_ACC_R_INLEN * 8, R_OUT = ZKVM_ACC_R_OUT * 8,
        R_GO = ZKVM_ACC_R_GO * 8, R_OUTLEN = ZKVM_ACC_R_OUTLEN * 8,
@@ -57,7 +57,7 @@ class accel_t : public abstract_device_t {
     char* op_ = sim->addr_to_mem(out);
     if (!ip || !op_) { reg[R_OK/8] = 0; reg[R_OUTLEN/8] = 0; return; }
     /* The crypto runs HERE, on the host -- never as guest instructions.
-     * Wire layouts per ffi/zkvm_accel_mmio.h; every op is a 1:1 dispatch
+     * Wire layouts per zkvm/zkvm_accel_mmio.h; every op is a 1:1 dispatch
      * into the native zkvm_accelerators.h implementation. */
     zkvm_status st = ZKVM_EFAIL;
     uint64_t outlen = 0;

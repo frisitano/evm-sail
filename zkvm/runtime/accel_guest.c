@@ -1,7 +1,7 @@
 /* Guest-side implementation of the zkvm_accelerators.h API.
  *
  * Every function marshals its arguments per the wire layout in
- * ffi/zkvm_accel_mmio.h and issues one MMIO call to the accel device, which
+ * zkvm/zkvm_accel_mmio.h and issues one MMIO call to the accel device, which
  * dispatches into the native Rust accel-host implementation. The crypto
  * itself never executes as guest instructions -- this file is pure argument
  * marshalling, so ffi/ code can call the accelerator API unconditionally on
@@ -13,16 +13,44 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* All device I/O is bounced through MAIN-region heap buffers: the guest
+ * stack lives in the second spike memory region (see runtime/link.ld), and
+ * device access to that region through addr_to_mem returns wrong data on
+ * the validation simulator -- hash inputs built in stack frames read back
+ * corrupt, and result writes to stack addresses go astray. Keeping every
+ * pointer the device sees inside the MAIN region makes the transport exact.
+ * The copies are small (hash inputs / fixed-size structs) and never enter
+ * the crypto itself. */
+static uint8_t *acc_in_bounce;  static uint64_t acc_in_cap;
+static uint8_t *acc_out_bounce; static uint64_t acc_out_cap;
+
+static uint8_t *acc_bounce(uint8_t **buf, uint64_t *cap, uint64_t need) {
+  if (need <= *cap && *buf) return *buf;
+  uint64_t c = *cap ? *cap : 4096;
+  while (c < need) c *= 2;
+  uint8_t *q = (uint8_t *)realloc(*buf, (size_t)c);
+  if (!q) return NULL;
+  *buf = q; *cap = c;
+  return q;
+}
+
 static uint64_t acc_call(uint64_t op, const uint8_t *in, uint64_t inlen,
-                         uint8_t *out, int *ok) {
+                         uint8_t *out, uint64_t outcap, int *ok) {
   volatile uint64_t *d = (volatile uint64_t *)ZKVM_ACC_MMIO_BASE;
+  uint8_t *bin = acc_bounce(&acc_in_bounce, &acc_in_cap, inlen ? inlen : 1);
+  uint8_t *bout = acc_bounce(&acc_out_bounce, &acc_out_cap, outcap ? outcap : 1);
+  if (!bin || !bout) { *ok = 0; return 0; }
+  memcpy(bin, in, inlen);
   d[ZKVM_ACC_R_OP] = op;
-  d[ZKVM_ACC_R_IN] = (uint64_t)(uintptr_t)in;
+  d[ZKVM_ACC_R_IN] = (uint64_t)(uintptr_t)bin;
   d[ZKVM_ACC_R_INLEN] = inlen;
-  d[ZKVM_ACC_R_OUT] = (uint64_t)(uintptr_t)out;
+  d[ZKVM_ACC_R_OUT] = (uint64_t)(uintptr_t)bout;
   d[ZKVM_ACC_R_GO] = 1;
   *ok = (int)d[ZKVM_ACC_R_OK];
-  return d[ZKVM_ACC_R_OUTLEN];
+  uint64_t outlen = d[ZKVM_ACC_R_OUTLEN];
+  if (outlen > outcap) { *ok = 0; return 0; }
+  memcpy(out, bout, outlen);
+  return outlen;
 }
 
 /* 8-aligned staging buffer for multi-argument marshalling (single-threaded). */
@@ -56,7 +84,7 @@ static zkvm_status acc_fixed(uint64_t op, const void *const *args,
     off += lens[i];
   }
   int ok = 0;
-  uint64_t outlen = acc_call(op, buf, total, (uint8_t *)out, &ok);
+  uint64_t outlen = acc_call(op, buf, total, (uint8_t *)out, want_outlen, &ok);
   return (ok && outlen == want_outlen) ? ZKVM_EOK : ZKVM_EFAIL;
 }
 
@@ -72,7 +100,7 @@ static zkvm_status acc_hash(uint64_t op, const uint8_t *data, size_t len,
                             void *out) {
   static const uint8_t empty = 0;
   int ok = 0;
-  uint64_t outlen = acc_call(op, len ? data : &empty, len, (uint8_t *)out, &ok);
+  uint64_t outlen = acc_call(op, len ? data : &empty, len, (uint8_t *)out, 32, &ok);
   return (ok && outlen == 32) ? ZKVM_EOK : ZKVM_EFAIL;
 }
 
@@ -133,7 +161,7 @@ zkvm_status zkvm_modexp(const uint8_t *base, size_t base_len,
   memcpy(buf + 24 + base_len, exp, exp_len);
   memcpy(buf + 24 + base_len + exp_len, modulus, mod_len);
   int ok = 0;
-  uint64_t outlen = acc_call(ZKVM_ACC_OP_MODEXP, buf, total, output, &ok);
+  uint64_t outlen = acc_call(ZKVM_ACC_OP_MODEXP, buf, total, output, mod_len, &ok);
   return (ok && outlen == mod_len) ? ZKVM_EOK : ZKVM_EFAIL;
 }
 
@@ -163,7 +191,7 @@ static zkvm_status acc_pairs(uint64_t op, const void *pairs, uint64_t num,
   acc_put_u64(buf, num);
   memcpy(buf + 8, pairs, num * pair_size);
   int ok = 0;
-  uint64_t outlen = acc_call(op, buf, total, (uint8_t *)out, &ok);
+  uint64_t outlen = acc_call(op, buf, total, (uint8_t *)out, want_outlen, &ok);
   return (ok && outlen == want_outlen) ? ZKVM_EOK : ZKVM_EFAIL;
 }
 

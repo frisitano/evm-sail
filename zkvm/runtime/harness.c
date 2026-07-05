@@ -114,6 +114,17 @@ int zkvm_start(void)
     if (zkvm_output_size() >= 33)
         emit_kv("successful_validation", (uint64_t)zkvm_output_buffer()[32]);
 
+    /* The full canonical SSZ result as hex, so a smoke harness can diff the
+     * guest byte-exactly against the fixture's statelessOutputBytes. */
+    htif_puts("output_hex=");
+    for (size_t i = 0; i < zkvm_output_size(); i++) {
+        static const char hexd[] = "0123456789abcdef";
+        unsigned char b = zkvm_output_buffer()[i];
+        htif_putchar(hexd[b >> 4]);
+        htif_putchar(hexd[b & 0xf]);
+    }
+    htif_putchar('\n');
+
     /* (5) model_fini surfaces any uncaught Sail exception as exit(EXIT_FAILURE),
      * which our runtime maps to abnormal termination. */
     model_fini();
