@@ -351,28 +351,37 @@ def legacy_tx_bytes():
 
 
 def parent_header_bytes(state_root):
-    """A structurally-real RLP header whose state_root is the pre-state root and
-    number = BLOCK_NUMBER-1. Field set kept simple for S0/S1; exact equivalence
-    to the Amsterdam Header is refined when header decode lands (S2/S3)."""
+    """A full Amsterdam-shaped RLP header (23 fields, matching the model's
+    block_header_hash layout) whose state_root is the pre-state root and
+    number = BLOCK_NUMBER-1. The guest's parent_header_int_field reads
+    base_fee (15), blob_gas_used (17), and excess_blob_gas (18) strictly, so
+    every field through slot_number must be present and canonical."""
     zero32 = b"\x00" * 32
     bloom = b"\x00" * 256
     return rlp.encode([
-        zero32,            # parent_hash
-        keccak(rlp.encode([])),  # ommers_hash (placeholder)
-        COINBASE,          # coinbase
-        state_root,        # state_root  <-- the pre-state root
-        EMPTY_TRIE_ROOT,   # transactions_root
-        EMPTY_TRIE_ROOT,   # receipt_root
-        bloom,             # bloom
-        0,                 # difficulty
-        BLOCK_NUMBER - 1,  # number
-        GAS_LIMIT,         # gas_limit
-        0,                 # gas_used
-        TIMESTAMP - 12,    # timestamp
-        b"",               # extra_data
-        zero32,            # prev_randao
-        b"\x00" * 8,       # nonce
-        0,                 # base_fee_per_gas
+        zero32,            # 0  parent_hash
+        keccak(rlp.encode([])),  # 1  ommers_hash (placeholder)
+        COINBASE,          # 2  coinbase
+        state_root,        # 3  state_root  <-- the pre-state root
+        EMPTY_TRIE_ROOT,   # 4  transactions_root
+        EMPTY_TRIE_ROOT,   # 5  receipt_root
+        bloom,             # 6  bloom
+        0,                 # 7  difficulty
+        BLOCK_NUMBER - 1,  # 8  number
+        GAS_LIMIT,         # 9  gas_limit
+        0,                 # 10 gas_used
+        TIMESTAMP - 12,    # 11 timestamp
+        b"",               # 12 extra_data
+        zero32,            # 13 prev_randao
+        b"\x00" * 8,       # 14 nonce
+        0,                 # 15 base_fee_per_gas
+        EMPTY_TRIE_ROOT,   # 16 withdrawals_root
+        0,                 # 17 blob_gas_used
+        0,                 # 18 excess_blob_gas
+        zero32,            # 19 parent_beacon_block_root
+        zero32,            # 20 requests_hash
+        zero32,            # 21 block_access_list_hash
+        0,                 # 22 slot_number (EIP-7843)
     ])
 
 

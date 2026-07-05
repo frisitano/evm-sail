@@ -122,15 +122,18 @@ PY
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
       -Wno-unused -Wno-error=implicit-function-declaration \
       -c "$RT/sailfix/sail.c" -o "$BUILD/sail.o"
-  # 3b. Host crypto/precompile adapters: on the guest EVERY crypto/precompile
-  #     op is offloaded to the host device (-DACCEL_MMIO), so the guest links NO
-  #     crypto code. The crypto is a proven precompile served by the device,
-  #     backed by the audited Rust accel-host -- a single crypto implementation
-  #     shared with the native build.
+  # 3b. Host crypto/precompile adapters: identical code to the native build,
+  #     written against the zkvm_accelerators.h API. On the guest that API is
+  #     implemented by accel_guest.c, which marshals each call to the host
+  #     accel device over MMIO (ffi/zkvm_accel_mmio.h) -- so the crypto itself
+  #     never executes as guest instructions and the guest links NO crypto
+  #     code, while ffi/ stays free of any MMIO special-casing.
   for hc in host_crypto precompiles; do
-    "$GCC" "${CFLAGS[@]}" -I"$lib" -I"$ROOT/ffi" -DACCEL_MMIO \
+    "$GCC" "${CFLAGS[@]}" -I"$lib" -I"$ROOT/ffi" \
         -Wno-unused -c "$ROOT/ffi/$hc.c" -o "$BUILD/$hc.o"
   done
+  "$GCC" "${CFLAGS[@]}" -I"$ROOT/ffi" -Wall -Wextra \
+      -c "$RT/accel_guest.c" -o "$BUILD/accel_guest.o"
   # 3b'. Host accelerator device (spike --extlib): models a zkVM crypto precompile,
   #      backed by the SAME Rust accel-host crypto the native build links
   #      (keccak/sha256/secp256k1 verify). The crypto never enters guest instret.
@@ -163,7 +166,7 @@ PY
       "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/zkvm_io.o" "$BUILD/zkvm_input.o" \
       "$BUILD/zkvm_input_data.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
-      "$BUILD/host_crypto.o" "$BUILD/precompiles.o" \
+      "$BUILD/host_crypto.o" "$BUILD/precompiles.o" "$BUILD/accel_guest.o" \
       "$BUILD/memory.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
       "$BUILD/code_db.o" "$BUILD/trie_node_db.o" "$BUILD/returndata.o" \
       "$BUILD/zkvm_block.o" \

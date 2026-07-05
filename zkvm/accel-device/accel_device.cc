@@ -1,13 +1,13 @@
-/* Spike --extlib MMIO crypto accelerator.
+/* Spike --extlib MMIO accelerator serving the zkvm_accelerators.h API.
  *
- * Models a zkVM crypto precompile: the guest writes a request (op, input addr,
- * input len, output addr) to MMIO registers and triggers GO; this device --
- * running on the HOST, not as guest instructions -- reads the guest's input
- * straight from simulator memory (addr_to_mem), computes the hash/precompile,
- * and writes the result back to guest memory. So the crypto never enters the
- * guest's retired-instruction (instret) count, exactly as a native zkVM
- * accelerator would behave. (Smoke-test build: the compute is an echo; the
- * crypto dispatch is wired in the next step.) */
+ * The guest's zkvm_* functions (zkvm/runtime/accel_guest.c) marshal their
+ * arguments per ffi/zkvm_accel_mmio.h and trigger GO; this device -- running
+ * on the HOST, not as guest instructions -- reads the guest's input straight
+ * from simulator memory (addr_to_mem), dispatches 1:1 into the SAME native
+ * zkvm_* implementations (the Rust accel-host) that native builds link
+ * directly, and writes the result back to guest memory. So the crypto never
+ * enters the guest's retired-instruction (instret) count, exactly as a native
+ * zkVM accelerator would behave. */
 #include "riscv/abstract_device.h"
 #include "riscv/simif.h"
 #include "riscv/sim.h"
@@ -16,13 +16,17 @@
 extern "C" {
 #include "zkvm_accelerators.h"
 }
+#include "zkvm_accel_mmio.h"
 #include <cstring>
 #include <cstdint>
 #include <sstream>
 
-/* register file (byte offsets within the device's MMIO window) */
-enum { R_OP = 0x00, R_IN = 0x08, R_INLEN = 0x10, R_OUT = 0x18,
-       R_GO = 0x20, R_OUTLEN = 0x28, R_OK = 0x30, R_NREG = 8 };
+/* register file (byte offsets within the device's MMIO window; the index
+ * layout is fixed by ffi/zkvm_accel_mmio.h) */
+enum { R_OP = ZKVM_ACC_R_OP * 8, R_IN = ZKVM_ACC_R_IN * 8,
+       R_INLEN = ZKVM_ACC_R_INLEN * 8, R_OUT = ZKVM_ACC_R_OUT * 8,
+       R_GO = ZKVM_ACC_R_GO * 8, R_OUTLEN = ZKVM_ACC_R_OUTLEN * 8,
+       R_OK = ZKVM_ACC_R_OK * 8, R_NREG = 8 };
 
 class accel_t : public abstract_device_t {
  public:
@@ -41,47 +45,190 @@ class accel_t : public abstract_device_t {
   }
 
  private:
+  static uint64_t get_u64(const uint8_t* p) {
+    uint64_t w;
+    std::memcpy(&w, p, 8);
+    return w;
+  }
+
   void compute() {
     uint64_t op = reg[R_OP/8], in = reg[R_IN/8], inlen = reg[R_INLEN/8], out = reg[R_OUT/8];
     char* ip = sim->addr_to_mem(in);
     char* op_ = sim->addr_to_mem(out);
     if (!ip || !op_) { reg[R_OK/8] = 0; reg[R_OUTLEN/8] = 0; return; }
-    /* The crypto runs HERE, on the host -- never as guest instructions. */
-    int ok = 0; uint32_t outlen = 0;
+    /* The crypto runs HERE, on the host -- never as guest instructions.
+     * Wire layouts per ffi/zkvm_accel_mmio.h; every op is a 1:1 dispatch
+     * into the native zkvm_accelerators.h implementation. */
+    zkvm_status st = ZKVM_EFAIL;
+    uint64_t outlen = 0;
     const uint8_t* ibuf = (const uint8_t*)ip;
     uint8_t* obuf = (uint8_t*)op_;
-    if (op == 0) {        /* keccak256 */
-      zkvm_keccak256_hash h;
-      if (zkvm_keccak256(ibuf, inlen, &h) == ZKVM_EOK) { std::memcpy(obuf, h.data, 32); outlen = 32; ok = 1; }
-    } else if (op == 1) { /* ecrecover: hash[32] v[32] r[32] s[32] -> keccak(pubkey)[12:] */
-      ok = 1;             /* "call" always succeeds; empty output on bad recovery */
-      if (inlen == 128) {
-        uint8_t v = ibuf[63]; int v_ok = (v == 27 || v == 28);
-        for (int i = 32; i < 63; i++) if (ibuf[i] != 0) v_ok = 0;
-        uint8_t pub[64];
-        if (v_ok && zkvm_secp256k1_ecrecover((const zkvm_secp256k1_hash*)ibuf,
-                (const zkvm_secp256k1_signature*)(ibuf + 64), (uint8_t)(v - 27),
-                (zkvm_secp256k1_pubkey*)pub) == ZKVM_EOK) {
-          zkvm_keccak256_hash a; zkvm_keccak256(pub, 64, &a);
-          std::memset(obuf, 0, 12); std::memcpy(obuf + 12, a.data + 12, 20); outlen = 32;
+    bool verified = false;
+    switch (op) {
+      case ZKVM_ACC_OP_KECCAK256:
+        st = zkvm_keccak256(ibuf, inlen, (zkvm_keccak256_hash*)obuf);
+        outlen = 32;
+        break;
+      case ZKVM_ACC_OP_SHA256:
+        st = zkvm_sha256(ibuf, inlen, (zkvm_sha256_hash*)obuf);
+        outlen = 32;
+        break;
+      case ZKVM_ACC_OP_RIPEMD160:
+        st = zkvm_ripemd160(ibuf, inlen, (zkvm_ripemd160_hash*)obuf);
+        outlen = 32;
+        break;
+      case ZKVM_ACC_OP_SECP256K1_VERIFY:
+        if (inlen == 160) {
+          st = zkvm_secp256k1_verify((const zkvm_secp256k1_hash*)ibuf,
+                                     (const zkvm_secp256k1_signature*)(ibuf + 32),
+                                     (const zkvm_secp256k1_pubkey*)(ibuf + 96),
+                                     &verified);
+          obuf[0] = verified ? 1 : 0;
+          outlen = 1;
         }
-      }
-    } else if (op == 2) { /* sha256 */
-      zkvm_sha256_hash h;
-      if (zkvm_sha256(ibuf, inlen, &h) == ZKVM_EOK) { std::memcpy(obuf, h.data, 32); outlen = 32; ok = 1; }
-    } else if (op == 257) { /* secp256k1 verify (tx-sender auth): input hash[32] r[32] s[32]
-                             * x[32] y[32] (160B) -> 32B 0..01 if it verifies, else empty */
-      ok = 1;
-      bool verified = false;
-      if (inlen == 160 &&
-          zkvm_secp256k1_verify((const zkvm_secp256k1_hash*)ibuf,
-              (const zkvm_secp256k1_signature*)(ibuf + 32),
-              (const zkvm_secp256k1_pubkey*)(ibuf + 96), &verified) == ZKVM_EOK && verified) {
-        std::memset(obuf, 0, 32); obuf[31] = 1; outlen = 32;
-      }
+        break;
+      case ZKVM_ACC_OP_SECP256K1_ECRECOVER:
+        if (inlen == 97) {
+          st = zkvm_secp256k1_ecrecover((const zkvm_secp256k1_hash*)ibuf,
+                                        (const zkvm_secp256k1_signature*)(ibuf + 32),
+                                        ibuf[96], (zkvm_secp256k1_pubkey*)obuf);
+          outlen = 64;
+        }
+        break;
+      case ZKVM_ACC_OP_SECP256R1_VERIFY:
+        if (inlen == 160) {
+          st = zkvm_secp256r1_verify((const zkvm_secp256r1_hash*)ibuf,
+                                     (const zkvm_secp256r1_signature*)(ibuf + 32),
+                                     (const zkvm_secp256r1_pubkey*)(ibuf + 96),
+                                     &verified);
+          obuf[0] = verified ? 1 : 0;
+          outlen = 1;
+        }
+        break;
+      case ZKVM_ACC_OP_MODEXP:
+        if (inlen >= 24) {
+          uint64_t bl = get_u64(ibuf), el = get_u64(ibuf + 8), ml = get_u64(ibuf + 16);
+          if (24 + bl + el + ml == inlen) {
+            st = zkvm_modexp(ibuf + 24, bl, ibuf + 24 + bl, el,
+                             ibuf + 24 + bl + el, ml, obuf);
+            outlen = ml;
+          }
+        }
+        break;
+      case ZKVM_ACC_OP_BN254_G1_ADD:
+        if (inlen == 128) {
+          st = zkvm_bn254_g1_add((const zkvm_bn254_g1_point*)ibuf,
+                                 (const zkvm_bn254_g1_point*)(ibuf + 64),
+                                 (zkvm_bn254_g1_point*)obuf);
+          outlen = 64;
+        }
+        break;
+      case ZKVM_ACC_OP_BN254_G1_MUL:
+        if (inlen == 96) {
+          st = zkvm_bn254_g1_mul((const zkvm_bn254_g1_point*)ibuf,
+                                 (const zkvm_bn254_scalar*)(ibuf + 64),
+                                 (zkvm_bn254_g1_point*)obuf);
+          outlen = 64;
+        }
+        break;
+      case ZKVM_ACC_OP_BN254_PAIRING:
+        if (inlen >= 8) {
+          uint64_t n = get_u64(ibuf);
+          if (8 + n * sizeof(zkvm_bn254_pairing_pair) == inlen) {
+            st = zkvm_bn254_pairing((const zkvm_bn254_pairing_pair*)(ibuf + 8), n,
+                                    &verified);
+            obuf[0] = verified ? 1 : 0;
+            outlen = 1;
+          }
+        }
+        break;
+      case ZKVM_ACC_OP_BLAKE2F:
+        if (inlen == 217) {
+          zkvm_blake2f_state h;
+          std::memcpy(h.data, ibuf + 8, 64);
+          st = zkvm_blake2f((uint32_t)get_u64(ibuf), &h,
+                            (const zkvm_blake2f_message*)(ibuf + 72),
+                            (const zkvm_blake2f_offset*)(ibuf + 200), ibuf[216]);
+          std::memcpy(obuf, h.data, 64);
+          outlen = 64;
+        }
+        break;
+      case ZKVM_ACC_OP_KZG_POINT_EVAL:
+        if (inlen == 160) {
+          st = zkvm_kzg_point_eval((const zkvm_kzg_commitment*)ibuf,
+                                   (const zkvm_kzg_field_element*)(ibuf + 48),
+                                   (const zkvm_kzg_field_element*)(ibuf + 80),
+                                   (const zkvm_kzg_proof*)(ibuf + 112), &verified);
+          obuf[0] = verified ? 1 : 0;
+          outlen = 1;
+        }
+        break;
+      case ZKVM_ACC_OP_BLS12_G1_ADD:
+        if (inlen == 192) {
+          st = zkvm_bls12_g1_add((const zkvm_bls12_381_g1_point*)ibuf,
+                                 (const zkvm_bls12_381_g1_point*)(ibuf + 96),
+                                 (zkvm_bls12_381_g1_point*)obuf);
+          outlen = 96;
+        }
+        break;
+      case ZKVM_ACC_OP_BLS12_G1_MSM:
+        if (inlen >= 8) {
+          uint64_t n = get_u64(ibuf);
+          if (8 + n * sizeof(zkvm_bls12_381_g1_msm_pair) == inlen) {
+            st = zkvm_bls12_g1_msm((const zkvm_bls12_381_g1_msm_pair*)(ibuf + 8), n,
+                                   (zkvm_bls12_381_g1_point*)obuf);
+            outlen = 96;
+          }
+        }
+        break;
+      case ZKVM_ACC_OP_BLS12_G2_ADD:
+        if (inlen == 384) {
+          st = zkvm_bls12_g2_add((const zkvm_bls12_381_g2_point*)ibuf,
+                                 (const zkvm_bls12_381_g2_point*)(ibuf + 192),
+                                 (zkvm_bls12_381_g2_point*)obuf);
+          outlen = 192;
+        }
+        break;
+      case ZKVM_ACC_OP_BLS12_G2_MSM:
+        if (inlen >= 8) {
+          uint64_t n = get_u64(ibuf);
+          if (8 + n * sizeof(zkvm_bls12_381_g2_msm_pair) == inlen) {
+            st = zkvm_bls12_g2_msm((const zkvm_bls12_381_g2_msm_pair*)(ibuf + 8), n,
+                                   (zkvm_bls12_381_g2_point*)obuf);
+            outlen = 192;
+          }
+        }
+        break;
+      case ZKVM_ACC_OP_BLS12_PAIRING:
+        if (inlen >= 8) {
+          uint64_t n = get_u64(ibuf);
+          if (8 + n * sizeof(zkvm_bls12_381_pairing_pair) == inlen) {
+            st = zkvm_bls12_pairing((const zkvm_bls12_381_pairing_pair*)(ibuf + 8), n,
+                                    &verified);
+            obuf[0] = verified ? 1 : 0;
+            outlen = 1;
+          }
+        }
+        break;
+      case ZKVM_ACC_OP_BLS12_MAP_FP_TO_G1:
+        if (inlen == 48) {
+          st = zkvm_bls12_map_fp_to_g1((const zkvm_bls12_381_fp*)ibuf,
+                                       (zkvm_bls12_381_g1_point*)obuf);
+          outlen = 96;
+        }
+        break;
+      case ZKVM_ACC_OP_BLS12_MAP_FP2_TO_G2:
+        if (inlen == 96) {
+          st = zkvm_bls12_map_fp2_to_g2((const zkvm_bls12_381_fp2*)ibuf,
+                                        (zkvm_bls12_381_g2_point*)obuf);
+          outlen = 192;
+        }
+        break;
+      default:
+        break;
     }
-    reg[R_OUTLEN/8] = outlen;
-    reg[R_OK/8] = ok;
+    reg[R_OUTLEN/8] = (st == ZKVM_EOK) ? outlen : 0;
+    reg[R_OK/8] = (st == ZKVM_EOK) ? 1 : 0;
   }
   simif_t* sim;
   uint64_t reg[R_NREG];

@@ -91,31 +91,6 @@ static int precompile_materialize_input(uint64_t padded_len) {
   return 1;
 }
 
-#ifdef ACCEL_MMIO
-static const uintptr_t PRECOMPILE_MMIO_BASE = 0x40000000UL;
-enum {
-  PRE_R_OP = 0,
-  PRE_R_IN = 1,
-  PRE_R_INLEN = 2,
-  PRE_R_OUT = 3,
-  PRE_R_GO = 4,
-  PRE_R_OUTLEN = 5,
-  PRE_R_OK = 6,
-};
-
-static uint64_t precompile_device_call(uint64_t op, const uint8_t *in, uint32_t inlen, uint8_t *out) {
-  volatile uint64_t *d = (volatile uint64_t *)PRECOMPILE_MMIO_BASE;
-  d[PRE_R_OP] = op;
-  d[PRE_R_IN] = (uint64_t)(uintptr_t)in;
-  d[PRE_R_INLEN] = inlen;
-  d[PRE_R_OUT] = (uint64_t)(uintptr_t)out;
-  d[PRE_R_GO] = 1;
-  PRE_ok = (int)d[PRE_R_OK];
-  PRE_outlen = (uint32_t)d[PRE_R_OUTLEN];
-  return PRE_outlen;
-}
-#endif
-
 /* ---- EIP-2537 BLS12-381 marshalling: EVM 64-byte-padded field elems <-> blst
  * native compact (Fp 48B). G1 point = x||y (96B). For a G2 point blst serializes
  * each Fp2 coordinate imaginary-part-first (c1||c0), while the EVM layout is
@@ -157,9 +132,6 @@ static void bls_out_g2(uint32_t off, const uint8_t *b192) {
 }
 
 static uint64_t precompile_run_current(void) {
-#ifdef ACCEL_MMIO
-  return precompile_device_call(PRE_id, PRE_src, PRE_inlen, PRE_out);
-#else
   switch (PRE_id) {
     case 0: {
       zkvm_keccak256_hash h;
@@ -418,7 +390,6 @@ static uint64_t precompile_run_current(void) {
       break;
   }
   return PRE_outlen;
-#endif
 }
 
 bool precompile_run_source_to_returndata(uint64_t id, uint64_t source_kind,

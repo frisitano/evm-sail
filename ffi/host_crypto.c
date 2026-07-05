@@ -15,31 +15,6 @@ static uint64_t HOST_bytes_len;
 static uint64_t HOST_bytes_cap;
 static int HOST_bytes_ok = 1;
 
-#ifdef ACCEL_MMIO
-static const uintptr_t CRYPTO_MMIO_BASE = 0x40000000UL;
-enum {
-  CRYPTO_R_OP = 0,
-  CRYPTO_R_IN = 1,
-  CRYPTO_R_INLEN = 2,
-  CRYPTO_R_OUT = 3,
-  CRYPTO_R_GO = 4,
-  CRYPTO_R_OUTLEN = 5,
-  CRYPTO_R_OK = 6,
-};
-
-static void crypto_device_call(uint64_t op, const uint8_t *in, uint32_t inlen,
-                               uint8_t *out, uint32_t *outlen, int *ok) {
-  volatile uint64_t *d = (volatile uint64_t *)CRYPTO_MMIO_BASE;
-  d[CRYPTO_R_OP] = op;
-  d[CRYPTO_R_IN] = (uint64_t)(uintptr_t)in;
-  d[CRYPTO_R_INLEN] = inlen;
-  d[CRYPTO_R_OUT] = (uint64_t)(uintptr_t)out;
-  d[CRYPTO_R_GO] = 1;
-  *ok = (int)d[CRYPTO_R_OK];
-  *outlen = (uint32_t)d[CRYPTO_R_OUTLEN];
-}
-#endif
-
 static uint64_t host_be64(const uint8_t *p) {
   uint64_t w = 0;
   for (int i = 0; i < 8; i++) w = (w << 8) | p[i];
@@ -94,12 +69,6 @@ static void host_hash_bytes(uint64_t id, uint64_t out[4], const uint8_t *p, uint
   int ok = (src != NULL && len <= UINT32_MAX);
 
   if (ok) {
-#ifdef ACCEL_MMIO
-    uint32_t outlen = 0;
-    int dev_ok = 0;
-    crypto_device_call(id, src, (uint32_t)len, digest, &outlen, &dev_ok);
-    ok = dev_ok && outlen >= 32;
-#else
     if (id == 0) {
       zkvm_keccak256_hash h;
       ok = (zkvm_keccak256(src, (size_t)len, &h) == ZKVM_EOK);
@@ -111,7 +80,6 @@ static void host_hash_bytes(uint64_t id, uint64_t out[4], const uint8_t *p, uint
     } else {
       ok = 0;
     }
-#endif
   }
 
   if (!ok) memset(digest, 0, sizeof digest);
