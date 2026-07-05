@@ -1,4 +1,5 @@
 #include "host_crypto.h"
+#include "lbits_convert.h"
 #include "code_db.h"
 #include "memory.h"
 #include "zkvm_accelerators.h"
@@ -47,19 +48,7 @@ static void host_put_address(uint8_t *p, uint64_t a2, uint64_t a1, uint64_t a0) 
 }
 
 static void host_words_to_lbits(lbits *rop, const uint64_t words[4]) {
-  rop->len = 256;
-#ifdef SAIL_INT_LIMBS
-  rop->d[0] = words[3];
-  rop->d[1] = words[2];
-  rop->d[2] = words[1];
-  rop->d[3] = words[0];
-#else
-  mpz_set_ui(*rop->bits, 0);
-  for (int i = 0; i < 4; i++) {
-    mpz_mul_2exp(*rop->bits, *rop->bits, 64);
-    mpz_add_ui(*rop->bits, *rop->bits, words[i]);
-  }
-#endif
+  be_words4_to_lbits(rop, words);
 }
 
 static void host_hash_bytes(uint64_t id, uint64_t out[4], const uint8_t *p, uint64_t len) {

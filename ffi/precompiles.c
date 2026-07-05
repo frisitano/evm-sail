@@ -1,5 +1,6 @@
 #include "precompiles.h"
 #include "host_crypto.h"
+#include "lbits_convert.h"
 #include "returndata.h"
 #include "zkvm_accelerators.h"
 
@@ -483,31 +484,12 @@ uint64_t precompile_secp256k1_verify_hash_sig_pub(
 }
 
 static void precompile_recovered_address_lbits(lbits *rop, int ok, const uint8_t addr[20]) {
-  rop->len = 168;
-#ifdef SAIL_INT_LIMBS
-  rop->d[0] = rop->d[1] = rop->d[2] = rop->d[3] = 0;
+  uint8_t b[21] = {0};
   if (ok) {
-    uint64_t hi = ((uint64_t)addr[0] << 24) | ((uint64_t)addr[1] << 16)
-        | ((uint64_t)addr[2] << 8) | addr[3];
-    rop->d[0] = precompile_be64(addr + 12);
-    rop->d[1] = precompile_be64(addr + 4);
-    rop->d[2] = hi | (1ull << 32);
+    b[0] = 0x01;                 /* success flag: bit 160 */
+    memcpy(b + 1, addr, 20);
   }
-#else
-  mpz_set_ui(*rop->bits, 0);
-  if (ok) {
-    mpz_set_ui(*rop->bits, 1);
-    mpz_mul_2exp(*rop->bits, *rop->bits, 160);
-    mpz_t t; mpz_init(t);
-    mpz_set_ui(t, 0);
-    for (int i = 0; i < 20; i++) {
-      mpz_mul_2exp(t, t, 8);
-      mpz_add_ui(t, t, addr[i]);
-    }
-    mpz_add(*rop->bits, *rop->bits, t);
-    mpz_clear(t);
-  }
-#endif
+  be_bytes_to_lbits(rop, 168, b, sizeof b);
 }
 
 void precompile_ecrecover_hash_sig(

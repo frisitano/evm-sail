@@ -14,6 +14,7 @@
  * The Sail account store remains the authoritative account-code value;
  * this is the execution mirror. */
 #include "sail.h"
+#include "lbits_convert.h"
 #include "host_crypto.h"
 #include "memory.h"
 #include <stdint.h>
@@ -287,32 +288,12 @@ unit code_db_copy_stored_code_to_memory(uint64_t h3, uint64_t h2, uint64_t h1, u
 void code_db_read_delegation(lbits *rop, uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
   const code_db_ent *e = code_db_get(h3, h2, h1, h0);
   int deleg = e && e->len == 23 && e->p[0] == 0xef && e->p[1] == 0x01 && e->p[2] == 0x00;
-#ifdef SAIL_INT_LIMBS
-  rop->len = 168;
-  rop->d[0] = rop->d[1] = rop->d[2] = rop->d[3] = 0;
+  uint8_t b[21] = {0};
   if (deleg) {
-    uint64_t w0 = 0, w1 = 0, w2 = 0;
-    for (int i = 0;  i < 4;  i++) w2 = (w2 << 8) | e->p[3 + (uint64_t)i];       /* bits 159..128 */
-    for (int i = 4;  i < 12; i++) w1 = (w1 << 8) | e->p[3 + (uint64_t)i];       /* bits 127..64  */
-    for (int i = 12; i < 20; i++) w0 = (w0 << 8) | e->p[3 + (uint64_t)i];       /* bits  63..0   */
-    rop->d[0] = w0; rop->d[1] = w1; rop->d[2] = w2 | (1ull << 32);  /* flag: bit 160 */
+    b[0] = 0x01;                    /* is_designation flag: bit 160 */
+    memcpy(b + 1, e->p + 3, 20);    /* target address              */
   }
-#else
-  rop->len = 168;
-  mpz_set_ui(*rop->bits, 0);
-  if (deleg) {
-    mpz_set_ui(*rop->bits, 1);
-    mpz_mul_2exp(*rop->bits, *rop->bits, 160);
-    mpz_t t; mpz_init(t);
-    mpz_set_ui(t, 0);
-    for (int i = 0; i < 20; i++) {
-      mpz_mul_2exp(t, t, 8);
-      mpz_add_ui(t, t, e->p[3 + (uint64_t)i]);
-    }
-    mpz_add(*rop->bits, *rop->bits, t);
-    mpz_clear(t);
-  }
-#endif
+  be_bytes_to_lbits(rop, 168, b, sizeof b);
 }
 
 /* ------------------------------ accessors ------------------------------ */
@@ -342,45 +323,17 @@ unit code_db_copy_frame_code_to_memory(uint64_t dst, uint64_t off, uint64_t len)
   return UNIT;
 }
 
-#ifdef SAIL_INT_LIMBS
 /* the n-byte PUSH immediate starting at offset i, as a right-aligned word */
 void code_db_frame_push_immediate_word(lbits *rop, uint64_t i, uint64_t n) {
   const fc_desc *f = fc_cur();
-  rop->len = 256;
-  rop->d[0] = rop->d[1] = rop->d[2] = rop->d[3] = 0;
-  for (uint64_t k = 0; k < n && k < 32; k++) {
-    uint64_t byte = fc_byte_at(f, i + k);
-    uint64_t bit = (n - 1 - k) * 8;
-    rop->d[bit >> 6] |= byte << (bit & 63);
-  }
+  uint8_t b[32];
+  uint64_t cnt = n < 32 ? n : 32;
+  for (uint64_t k = 0; k < cnt; k++) b[k] = (uint8_t)fc_byte_at(f, i + k);
+  be_bytes_to_lbits(rop, 256, b, (size_t)cnt);
 }
 /* CALLDATALOAD: the 32-byte word at calldata offset i (zero-padded) */
 void code_db_calldata_load_word(lbits *rop, uint64_t i) {
-  rop->len = 256;
-  rop->d[0] = rop->d[1] = rop->d[2] = rop->d[3] = 0;
-  for (int k = 0; k < 32; k++) {
-    uint64_t byte = cd_byte(i + (uint64_t)k);
-    int bit = (31 - k) * 8;
-    rop->d[bit >> 6] |= byte << (bit & 63);
-  }
+  uint8_t b[32];
+  for (int k = 0; k < 32; k++) b[k] = (uint8_t)cd_byte(i + (uint64_t)k);
+  be_bytes_to_lbits(rop, 256, b, 32);
 }
-#else
-void code_db_frame_push_immediate_word(lbits *rop, uint64_t i, uint64_t n) {
-  const fc_desc *f = fc_cur();
-  rop->len = 256;
-  mpz_set_ui(*rop->bits, 0);
-  for (uint64_t k = 0; k < n && k < 32; k++) {
-    uint64_t byte = fc_byte_at(f, i + k);
-    mpz_mul_2exp(*rop->bits, *rop->bits, 8);
-    mpz_add_ui(*rop->bits, *rop->bits, byte);
-  }
-}
-void code_db_calldata_load_word(lbits *rop, uint64_t i) {
-  rop->len = 256;
-  mpz_set_ui(*rop->bits, 0);
-  for (int k = 0; k < 32; k++) {
-    mpz_mul_2exp(*rop->bits, *rop->bits, 8);
-    mpz_add_ui(*rop->bits, *rop->bits, cd_byte(i + (uint64_t)k));
-  }
-}
-#endif
