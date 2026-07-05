@@ -444,39 +444,22 @@ bool precompile_run_source_to_returndata(uint64_t id, uint64_t source_kind,
   return (uint64_t)PRE_ok;
 }
 
-static uint64_t precompile_be64(const uint8_t *p) {
-  uint64_t w = 0;
-  for (int i = 0; i < 8; i++) w = (w << 8) | p[i];
-  return w;
-}
-
 static void precompile_put_be64(uint8_t *p, uint64_t w) {
   for (int i = 7; i >= 0; i--) {
     p[7 - i] = (uint8_t)(w >> (8 * i));
   }
 }
 
-static void precompile_put_word(uint8_t *p, uint64_t w3, uint64_t w2,
-                                uint64_t w1, uint64_t w0) {
-  precompile_put_be64(p + 0, w3);
-  precompile_put_be64(p + 8, w2);
-  precompile_put_be64(p + 16, w1);
-  precompile_put_be64(p + 24, w0);
-}
-
-uint64_t precompile_secp256k1_verify_hash_sig_pub(
-    uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
-    uint64_t r3, uint64_t r2, uint64_t r1, uint64_t r0,
-    uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0,
-    uint64_t x3, uint64_t x2, uint64_t x1, uint64_t x0,
-    uint64_t y3, uint64_t y2, uint64_t y1, uint64_t y0) {
+bool precompile_secp256k1_verify_hash_sig_pub(const lbits hw, const lbits r,
+                                              const lbits s, const lbits x,
+                                              const lbits y) {
   uint8_t h[32], sig[64], pk[64];
   bool verified = false;
-  precompile_put_word(h, h3, h2, h1, h0);
-  precompile_put_word(sig, r3, r2, r1, r0);
-  precompile_put_word(sig + 32, s3, s2, s1, s0);
-  precompile_put_word(pk, x3, x2, x1, x0);
-  precompile_put_word(pk + 32, y3, y2, y1, y0);
+  lbits_to_be_bytes(h, 32, hw);
+  lbits_to_be_bytes(sig, 32, r);
+  lbits_to_be_bytes(sig + 32, 32, s);
+  lbits_to_be_bytes(pk, 32, x);
+  lbits_to_be_bytes(pk + 32, 32, y);
   return zkvm_secp256k1_verify((const zkvm_secp256k1_hash*)h,
                                (const zkvm_secp256k1_signature*)sig,
                                (const zkvm_secp256k1_pubkey*)pk,
@@ -492,18 +475,14 @@ static void precompile_recovered_address_lbits(lbits *rop, int ok, const uint8_t
   be_bytes_to_lbits(rop, 168, b, sizeof b);
 }
 
-void precompile_ecrecover_hash_sig(
-    lbits *rop,
-    uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
-    uint64_t yparity,
-    uint64_t r3, uint64_t r2, uint64_t r1, uint64_t r0,
-    uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0) {
+void precompile_ecrecover_hash_sig(lbits *rop, const lbits hw, uint64_t yparity,
+                                   const lbits r, const lbits s) {
   uint8_t h[32], sig[64], pub[64], addr_hash[32], addr[20] = {0};
   uint64_t out[4] = {0, 0, 0, 0};
   int ok = (yparity <= 1);
-  precompile_put_word(h, h3, h2, h1, h0);
-  precompile_put_word(sig, r3, r2, r1, r0);
-  precompile_put_word(sig + 32, s3, s2, s1, s0);
+  lbits_to_be_bytes(h, 32, hw);
+  lbits_to_be_bytes(sig, 32, r);
+  lbits_to_be_bytes(sig + 32, 32, s);
   if (ok) {
     ok = zkvm_secp256k1_ecrecover((const zkvm_secp256k1_hash*)h,
                                   (const zkvm_secp256k1_signature*)sig,
