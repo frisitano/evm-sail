@@ -71,3 +71,56 @@ function hs_set_w(n : bits(64), w : word) -> unit =
         f :: rest => spec_hs_frames = spec_list_set_word(f, unsigned(n), w) :: rest,
         [||] => (),
     }
+
+/* ---- transient storage (iface/state.sail; refines ffi/transient_storage.c)
+ * A flat map from (address, slot) to word for id 0 (EIP-1153); absent slots
+ * read zero, stores overwrite, reset clears. Ids other than 0 are inert
+ * (writes dropped, reads zero). Frame revert is the Sail journal (JTran)
+ * replaying inverse writes, so the map itself has no layering. */
+
+struct SpecTransientEntry = { taddr : address, tslot : word, tval : word }
+
+register spec_tstore : list(SpecTransientEntry) = [||]
+
+val spec_tstore_get : (list(SpecTransientEntry), address, word) -> word
+function spec_tstore_get(m, a, s) =
+    match m {
+        [||] => sail_zeros(256),
+        e :: t => if (e.taddr == a) & (e.tslot == s) then {
+            e.tval
+        } else {
+            spec_tstore_get(t, a, s)
+        },
+    }
+
+val spec_tstore_put : (list(SpecTransientEntry), address, word, word) -> list(SpecTransientEntry)
+function spec_tstore_put(m, a, s, v) =
+    match m {
+        [||] => [|struct { taddr = a, tslot = s, tval = v }|],
+        e :: t => if (e.taddr == a) & (e.tslot == s) then {
+            struct { taddr = a, tslot = s, tval = v } :: t
+        } else {
+            e :: spec_tstore_put(t, a, s, v)
+        },
+    }
+
+function transient_storage_reset(id : bits(64)) -> unit =
+    if unsigned(id) == 0 then {
+        spec_tstore = [||]
+    } else {
+        ()
+    }
+
+function transient_storage_write(id : bits(64), a : address, s : word, v : word) -> unit =
+    if unsigned(id) == 0 then {
+        spec_tstore = spec_tstore_put(spec_tstore, a, s, v)
+    } else {
+        ()
+    }
+
+function transient_storage_read(id : bits(64), a : address, s : word) -> word =
+    if unsigned(id) == 0 then {
+        spec_tstore_get(spec_tstore, a, s)
+    } else {
+        sail_zeros(256)
+    }
