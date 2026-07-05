@@ -12,6 +12,14 @@
 /* post-execution world equals the block's stateRoot exactly when execution */
 /* is correct -- it authenticates the result.                               */
 /*                                                                          */
+/* Design decision (final): post-state roots are computed by BATCH overlay  */
+/* -- one recursive pass applying the whole ordered update list -- NOT by   */
+/* per-op insert/delete maintenance. The Yellow Paper defines the trie      */
+/* declaratively over the final map (Appendix D; S D.1 leaves maintenance   */
+/* strategy to implementations); the batch pass touches and hashes each     */
+/* node once, and a per-op delete would face the same blinded-sibling       */
+/* collapse problem while multiplying hashing. Do not migrate this to       */
+/* incremental per-operation insert/delete.                                 */
 /* (2) Witness reads and the pre-state overlay: stateless verification --   */
 /* re-root a partial trie from a node witness to authenticate it against a  */
 /* committed root, resolve account/storage values by Merkle proof, and      */
@@ -287,16 +295,6 @@ val compute_state_root_overlay : unit -> bits(256)
  * Account struct's storage_root default can reference it. */
 let EMPTY_CODE_HASH : bits(256) = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
 
-/* big-endian bytes -> 256-bit word */
-function bytes_be256(c : list(byte)) -> bits(256) = {
-    var acc : bits(256) = sail_zeros(256);
-    let n = list_len(c);
-    foreach (k from 0 to (n - 1)) {
-        acc = or_vec(sail_shiftleft(acc, 8), sail_zero_extend(bytes_get(c, k), 256))
-    };
-    acc
-}
-
 /* decode an account leaf value: (nonce, balance, storage_root, code_hash).
  * Defined here (ahead of the witness reader) so both the inline storage harvest
  * and the lazy account read can use it. */
@@ -449,11 +447,7 @@ function merge_ext_ref(prefix : list(nibble), childref : list(byte)) -> list(byt
             trie_empty_ref()
         } else {
             match childref {
-                0xa0 :: h => if list_len(h) == 32 then {
-                    extension_child_ref(prefix, childref)
-                } else {
-                    extension_child_ref(prefix, childref)
-                },
+                0xa0 :: _ => extension_child_ref(prefix, childref),
                 _ => {
                     let items = rlp_node_items(childref);
                     let n = list_len(items);
@@ -474,7 +468,7 @@ function merge_ext_ref(prefix : list(nibble), childref : list(byte)) -> list(byt
     }
 }
 
-function mask_single_index(mask : int) -> int = {
+function mask_single_index(mask : bits(16)) -> int = {
     var ix : int = 0;
     foreach (i from 0 to 15) {
         if branch_mask_has_bit(mask, i) then {
@@ -495,8 +489,8 @@ function first_child_ref(children : list(list(byte))) -> list(byte) =
  * contain only a single non-zero entry" -- a lone surviving child collapses
  * into its parent as an extension. Only overlay deletes can create this
  * shape; the from-scratch build (updates_node) is canonical by construction. */
-function canonical_branch_ref(mask : int, children : list(list(byte))) -> list(byte) =
-    if mask == 0 then {
+function canonical_branch_ref(mask : bits(16), children : list(list(byte))) -> list(byte) =
+    if mask == 0x0000 then {
         trie_empty_ref()
     } else {
         if branch_mask_popcount(mask) == 1 then {
@@ -636,7 +630,7 @@ function patches_ref(ps0 : list(TriePatch), depth : int, fuel : int) -> list(byt
                     let prefix = list_take_prefix(list_drop_prefix(first, depth), common);
                     merge_ext_ref(prefix, patches_ref(ps, depth + common, fuel - common))
                 } else {
-                    var mask : int = 0;
+                    var mask : bits(16) = 0x0000;
                     var children : list(list(byte)) = [||];
                     foreach (i from 0 to 15) {
                         let group = patches_at_nibble(ps, depth, get_slice_int(4, i, 0));
@@ -670,7 +664,7 @@ function patches_node(ps0 : list(TriePatch), depth : int, fuel : int) -> list(by
                     let prefix = list_take_prefix(list_drop_prefix(first, depth), common);
                     merge_ext_node(prefix, patches_node(ps, depth + common, fuel - common))
                 } else {
-                    var mask : int = 0;
+                    var mask : bits(16) = 0x0000;
                     var children : list(list(byte)) = [||];
                     var lone_nib : nibble = 0x0;
                     var lone_child : list(byte) = [||];
@@ -686,7 +680,7 @@ function patches_node(ps0 : list(TriePatch), depth : int, fuel : int) -> list(by
                             }
                         }
                     };
-                    if mask == 0 then {
+                    if mask == 0x0000 then {
                         [||]
                     } else {
                         if branch_mask_popcount(mask) == 1 then {
@@ -801,7 +795,7 @@ function trie_overlay_node_ref_preserve(
                     if list_len(branch_value) > 0 then {
                         k_witness_bad = true
                     };
-                    var mask : int = 0;
+                    var mask : bits(16) = 0x0000;
                     var children : list(list(byte)) = [||];
                     foreach (i from 0 to 15) {
                         let field = list_nth(items, i, RLP_NONE);
@@ -958,7 +952,7 @@ function trie_overlay_node_for_collapse(
                     if list_len(branch_value) > 0 then {
                         k_witness_bad = true
                     };
-                    var mask : int = 0;
+                    var mask : bits(16) = 0x0000;
                     var children : list(list(byte)) = [||];
                     var lone_nib : nibble = 0x0;
                     var lone_field : RlpField = RLP_NONE;
@@ -978,7 +972,7 @@ function trie_overlay_node_for_collapse(
                             lone_updates = group
                         }
                     };
-                    if mask == 0 then {
+                    if mask == 0x0000 then {
                         [||]
                     } else {
                         if branch_mask_popcount(mask) == 1 then {
@@ -1178,7 +1172,7 @@ function witness_node_ref(node : list(byte), prefix : list(nibble), fuel : int) 
                 if list_len(v) > 0 then {
                     k_witness_bad = true
                 };
-                var mask : int = 0;
+                var mask : bits(16) = 0x0000;
                 var children : list(list(byte)) = [||];
                 foreach (i from 0 to 15) {
                     let cref = witness_child_ref(list_nth(items, i, RLP_NONE), list_append(prefix, [|get_slice_int(4, i, 0)|]), fuel - 1);

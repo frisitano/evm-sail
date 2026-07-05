@@ -49,7 +49,7 @@ function child_ref(enc : list(byte)) -> list(byte) =
 function trie_ref_to_root(r : list(byte)) -> bits(256) =
     match r {
         0xa0 :: h => if list_len(h) == 32 then {
-            bytes_to_word_be256(h)
+            bytes_be256(h)
         } else {
             keccak256(r)
         },

@@ -17,7 +17,7 @@
 /* ---- small generic list helpers (take/drop n from the front) ----------- */
 /* ---- shared trie primitives (formerly lib/mpt.sail) -------------------- */
 
-function byte_list_nonempty(xs : list(byte)) -> bool =
+function list_nonempty forall ('a : Type). (xs : list('a)) -> bool =
     match xs {
         [||] => false,
         _ => true,
@@ -27,17 +27,11 @@ function byte_list_nonempty(xs : list(byte)) -> bool =
  * "Any series of bytes may also trivially be viewed as a series of nibbles"). */
 type nibble = bits(4)
 
-function int_list_nonempty(xs : list(nibble)) -> bool =
-    match xs {
-        [||] => false,
-        _ => true,
-    }
-
 /* 32-byte key -> 64 nibbles, high nibble first (single pass + reverse). */
 function to_nibbles(bs : list(byte)) -> list(nibble) = {
     var out : list(nibble) = [||];
     var rest : list(byte) = bs;
-    while byte_list_nonempty(rest) do {
+    while list_nonempty(rest) do {
         match rest {
             b :: r => {
                 out = b[7 .. 4] :: out;
@@ -68,7 +62,7 @@ function hp_compact(nibs : list(nibble), is_leaf : bool) -> list(byte) = {
     } else {
         out = append(flag, 0x0) :: out
     };
-    while int_list_nonempty(rest) do {
+    while list_nonempty(rest) do {
         match rest {
             a :: (b :: t) => {
                 out = append(a, b) :: out;
@@ -131,23 +125,12 @@ function list_drop_prefix forall ('a : Type). (xs : list('a), n : int) -> list('
     rest
 }
 
-/* ---- bit / mask helpers (16-bit branch masks held as int) --------------- */
-function branch_mask_pow2(n : int) -> int = {
-    var r : int = 1;
-    var i : int = 0;
-    while i < n do {
-        r = r * 2;
-        i = i + 1
-    };
-    r
-}
-function branch_mask_has_bit(mask : int, i : int) -> bool = emod_int(ediv_int(mask, branch_mask_pow2(i)), 2) == 1
-function branch_mask_set_bit(mask : int, i : int) -> int = if branch_mask_has_bit(mask, i) then {
-    mask
-} else {
-    mask + branch_mask_pow2(i)
-}
-function branch_mask_popcount(mask : int) -> int = {
+/* ---- branch masks: bit i set = child at nibble i present ---------------- */
+function branch_mask_has_bit(mask : bits(16), i : int) -> bool =
+    (sail_shiftright(mask, i) & 0x0001) == 0x0001
+function branch_mask_set_bit(mask : bits(16), i : int) -> bits(16) =
+    mask | sail_shiftleft(0x0001, i)
+function branch_mask_popcount(mask : bits(16)) -> int = {
     var c : int = 0;
     foreach (i from 0 to 15) {
         if branch_mask_has_bit(mask, i) then {
@@ -178,8 +161,8 @@ function common_prefix_len(a : list(nibble), b : list(nibble)) -> int = {
     i
 }
 
-/* 32 big-endian bytes -> bits(256) (local; avoids clash with mpt_witness) */
-function bytes_to_word_be256(c : list(byte)) -> bits(256) = {
+/* big-endian bytes -> 256-bit word */
+function bytes_be256(c : list(byte)) -> bits(256) = {
     var acc : bits(256) = sail_zeros(256);
     let n = list_len(c);
     foreach (k from 0 to (n - 1)) {
@@ -203,7 +186,7 @@ function extension_child_ref(key : list(nibble), childref : list(byte)) -> list(
     child_ref(extension_node_rlp(key, childref))
 function hash_child_ref(hash : list(byte)) -> list(byte) = list_append([|0xa0|], hash)
 
-function branch_payload_rlp(mask : int, children : list(list(byte))) -> list(byte) = {
+function branch_payload_rlp(mask : bits(16), children : list(list(byte))) -> list(byte) = {
     var payload : list(byte) = [||];
     var ch : list(list(byte)) = children; /* ascending nibble order */
     foreach (i from 0 to 15) {
@@ -221,9 +204,9 @@ function branch_payload_rlp(mask : int, children : list(list(byte))) -> list(byt
     };
     list_append(payload, [|0x80|]) /* branch value slot: empty */
 }
-function branch_node_rlp(mask : int, children : list(list(byte))) -> list(byte) =
+function branch_node_rlp(mask : bits(16), children : list(list(byte))) -> list(byte) =
     rlp_list(branch_payload_rlp(mask, children))
-function branch_child_ref(mask : int, children : list(list(byte))) -> list(byte) =
+function branch_child_ref(mask : bits(16), children : list(list(byte))) -> list(byte) =
     child_ref(branch_node_rlp(mask, children))
 
 function trie_empty_ref() -> list(byte) = [|0x80|]
@@ -269,7 +252,11 @@ function nib_lt(a : list(nibble), b : list(nibble)) -> bool = {
     res == 1
 }
 function nib_eq(a : list(nibble), b : list(nibble)) -> bool =
-    not_bool(nib_lt(a, b)) & not_bool(nib_lt(b, a))
+    match (a, b) {
+        ([||], [||]) => true,
+        (x :: ta, y :: tb) => (x == y) & nib_eq(ta, tb),
+        (_, _) => false,
+    }
 function nib_prefix_of(prefix : list(nibble), key : list(nibble)) -> bool =
     match prefix {
         [||] => true,
@@ -431,7 +418,7 @@ function updates_node(us0 : list(TrieUpdate), depth : int, fuel : int) -> list(b
             u :: [||] => leaf_node_rlp(list_drop_prefix(u.key, depth), u.value),
             _ => {
                 let shared = updates_shared_prefix(us, depth);
-                if int_list_nonempty(shared) then {
+                if list_nonempty(shared) then {
                     /* extension: >= 2 distinct keys share `shared`, so the
                        child one level down is necessarily a branch */
                     let sn = list_len(shared);
@@ -439,7 +426,7 @@ function updates_node(us0 : list(TrieUpdate), depth : int, fuel : int) -> list(b
                 } else {
                     /* branch: u(j) = n({I : key[depth] = j}, depth+1); the
                        shared-prefix maximality above guarantees >= 2 children */
-                    var mask : int = 0;
+                    var mask : bits(16) = 0x0000;
                     var children : list(list(byte)) = [||];
                     foreach (i from 0 to 15) {
                         let group = updates_at_nibble(us, depth, get_slice_int(4, i, 0));
