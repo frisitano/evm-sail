@@ -25,7 +25,7 @@ evm {
     evm/transaction.sail,
     lib/mpt.sail,
     lib/consensus_hash.sail,
-    if $EVM_BACKEND == spec then [spec/oracle.sail, spec/crypto.sail]
+    if $EVM_BACKEND == spec then [spec/oracle.sail, spec/crypto.sail, spec/model_state.sail]
     else if $EVM_BACKEND == build then [
       build/oracle.sail,
       build/crypto.sail,
