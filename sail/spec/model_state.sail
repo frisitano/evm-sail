@@ -418,3 +418,306 @@ function storage_map_it_acct_hash() -> hash = spec_sm_iter_row().sit_ah
 function storage_map_it_slot() -> word = spec_sm_iter_row().sit_slot
 
 function storage_map_it_val() -> word = spec_sm_iter_row().sit_val
+
+/* ---- account map (iface/state.sail; refines ffi/state_db.c) -------------
+ * The kernel account working set: TWO tables of account rows -- CACHE
+ * (authenticated pre-state / fixture seeds, written by acctmap_seed) and
+ * UPDATES (execution writes, written by acctmap_store). The C backend keys
+ * both by hkey = keccak(address), derived and memoized internally; the
+ * model keys them by the raw address (equal up to keccak collisions) and
+ * computes hkey only where observable (iteration order, at_hkey).
+ *
+ * Laws (matching the C): point reads resolve updates first, cache second,
+ * and yield zeros when absent. seed overwrites the cache row and CLEARS its
+ * base_exists flag; store overwrites the update row, whose base_exists is
+ * the existing update row's flag if set, else inherited from the cache row.
+ * mark_base_exists sets the flag on the cache row -- mirrored onto an
+ * existing update row -- ONLY when a cache row exists. remove deletes the
+ * address from both tables. Iteration: count/at enumerate the cache/update
+ * union ascending by hkey with update rows overriding; update_count/
+ * update_at enumerate the update table alone in the same order. at/
+ * update_at cache a cursor row read by the at_* accessors; an out-of-range
+ * index and every mutation (except count, which merely snapshots)
+ * invalidate the cursor, making at_* read zeros/false. */
+
+struct SpecAccountRow = {
+    arow_addr : address,
+    arow_nonce : bits(64),
+    arow_bal : word,
+    arow_sroot : hash,
+    arow_chash : hash,
+    arow_base : bool,
+}
+
+/* the iteration cursor row: the secure-keyed view of a merged account row */
+struct SpecAccountIterRow = {
+    ait_hkey : hash,
+    ait_nonce : bits(64),
+    ait_bal : word,
+    ait_sroot : hash,
+    ait_chash : hash,
+    ait_base : bool,
+}
+
+register spec_am_cache : list(SpecAccountRow) = [||]
+register spec_am_updates : list(SpecAccountRow) = [||]
+
+/* the cached iteration row: empty = invalid cursor (at_* read zeros) */
+register spec_am_iter : list(SpecAccountIterRow) = [||]
+
+val spec_arow_find : (list(SpecAccountRow), address) -> (bool, SpecAccountRow)
+function spec_arow_find(rows, a) =
+    match rows {
+        [||] => (
+            false,
+            struct {
+                arow_addr = a,
+                arow_nonce = 0x0000000000000000,
+                arow_bal = sail_zeros(256),
+                arow_sroot = sail_zeros(256),
+                arow_chash = sail_zeros(256),
+                arow_base = false,
+            },
+        ),
+        e :: t => if e.arow_addr == a then {
+            (true, e)
+        } else {
+            spec_arow_find(t, a)
+        },
+    }
+
+val spec_arow_put : (list(SpecAccountRow), SpecAccountRow) -> list(SpecAccountRow)
+function spec_arow_put(rows, r) =
+    match rows {
+        [||] => [|r|],
+        e :: t => if e.arow_addr == r.arow_addr then {
+            r :: t
+        } else {
+            e :: spec_arow_put(t, r)
+        },
+    }
+
+val spec_arow_remove : (list(SpecAccountRow), address) -> list(SpecAccountRow)
+function spec_arow_remove(rows, a) =
+    match rows {
+        [||] => [||],
+        e :: t => if e.arow_addr == a then {
+            t
+        } else {
+            e :: spec_arow_remove(t, a)
+        },
+    }
+
+function acctmap_reset() -> unit = {
+    spec_am_cache = [||];
+    spec_am_updates = [||];
+    spec_am_iter = [||]
+}
+
+/* the row bound to `a` (updates override cache rows) */
+val spec_am_row_of : address -> (bool, SpecAccountRow)
+function spec_am_row_of(a) = {
+    let (ufound, u) = spec_arow_find(spec_am_updates, a);
+    if ufound then {
+        (true, u)
+    } else {
+        spec_arow_find(spec_am_cache, a)
+    }
+}
+
+function acctmap_present(a : address) -> bool = {
+    let (found, _) = spec_am_row_of(a);
+    found
+}
+
+function acctmap_seed(a : address, nonce : bits(64), bal : word, sroot : hash, chash : hash) -> unit = {
+    spec_am_cache = spec_arow_put(
+        spec_am_cache,
+        struct {
+            arow_addr = a,
+            arow_nonce = nonce,
+            arow_bal = bal,
+            arow_sroot = sroot,
+            arow_chash = chash,
+            arow_base = false,
+        },
+    );
+    spec_am_iter = [||]
+}
+
+function acctmap_store(a : address, nonce : bits(64), bal : word, sroot : hash, chash : hash) -> unit = {
+    let (ufound, u) = spec_arow_find(spec_am_updates, a);
+    let (cfound, c) = spec_arow_find(spec_am_cache, a);
+    let base : bool = if ufound & u.arow_base then {
+            true
+        } else {
+            if cfound then {
+                c.arow_base
+            } else {
+                false
+            }
+        };
+    spec_am_updates = spec_arow_put(
+        spec_am_updates,
+        struct {
+            arow_addr = a,
+            arow_nonce = nonce,
+            arow_bal = bal,
+            arow_sroot = sroot,
+            arow_chash = chash,
+            arow_base = base,
+        },
+    );
+    spec_am_iter = [||]
+}
+
+function acctmap_mark_base_exists(a : address) -> unit = {
+    let (cfound, c) = spec_arow_find(spec_am_cache, a);
+    if cfound then {
+        spec_am_cache = spec_arow_put(spec_am_cache, { c with arow_base = true });
+        let (ufound, u) = spec_arow_find(spec_am_updates, a);
+        if ufound then {
+            spec_am_updates = spec_arow_put(spec_am_updates, { u with arow_base = true })
+        };
+        spec_am_iter = [||]
+    }
+}
+
+function acctmap_nonce(a : address) -> bits(64) = {
+    let (_, r) = spec_am_row_of(a);
+    r.arow_nonce
+}
+
+function acctmap_bal(a : address) -> word = {
+    let (found, r) = spec_am_row_of(a);
+    if found then {
+        r.arow_bal
+    } else {
+        sail_zeros(256)
+    }
+}
+
+function acctmap_sroot(a : address) -> hash = {
+    let (found, r) = spec_am_row_of(a);
+    if found then {
+        r.arow_sroot
+    } else {
+        sail_zeros(256)
+    }
+}
+
+function acctmap_chash(a : address) -> hash = {
+    let (found, r) = spec_am_row_of(a);
+    if found then {
+        r.arow_chash
+    } else {
+        sail_zeros(256)
+    }
+}
+
+function acctmap_remove(a : address) -> unit = {
+    spec_am_cache = spec_arow_remove(spec_am_cache, a);
+    spec_am_updates = spec_arow_remove(spec_am_updates, a);
+    spec_am_iter = [||]
+}
+
+/* insert into a list sorted ascending by hkey, replacing on an equal key */
+val spec_am_sorted_put : (list(SpecAccountIterRow), SpecAccountIterRow) -> list(SpecAccountIterRow)
+function spec_am_sorted_put(rows, r) =
+    match rows {
+        [||] => [|r|],
+        e :: t => if e.ait_hkey == r.ait_hkey then {
+            r :: t
+        } else {
+            if unsigned(r.ait_hkey) < unsigned(e.ait_hkey) then {
+                r :: (e :: t)
+            } else {
+                e :: spec_am_sorted_put(t, r)
+            }
+        },
+    }
+
+val spec_am_hashed_row : SpecAccountRow -> SpecAccountIterRow
+function spec_am_hashed_row(r) =
+    struct {
+        ait_hkey = keccak256_address(r.arow_addr),
+        ait_nonce = r.arow_nonce,
+        ait_bal = r.arow_bal,
+        ait_sroot = r.arow_sroot,
+        ait_chash = r.arow_chash,
+        ait_base = r.arow_base,
+    }
+
+val spec_am_overlay_rows : (list(SpecAccountIterRow), list(SpecAccountRow)) -> list(SpecAccountIterRow)
+function spec_am_overlay_rows(acc, rows) =
+    match rows {
+        [||] => acc,
+        e :: t => spec_am_overlay_rows(spec_am_sorted_put(acc, spec_am_hashed_row(e)), t),
+    }
+
+/* the cache/update union sorted by hkey, update rows overriding */
+val spec_am_order : unit -> list(SpecAccountIterRow)
+function spec_am_order() = spec_am_overlay_rows(spec_am_overlay_rows([||], spec_am_cache), spec_am_updates)
+
+/* the update table alone, sorted by hkey */
+val spec_am_updates_order : unit -> list(SpecAccountIterRow)
+function spec_am_updates_order() = spec_am_overlay_rows([||], spec_am_updates)
+
+function acctmap_count() -> bits(64) = get_slice_int(64, list_len(spec_am_order()), 0)
+
+function acctmap_update_count() -> bits(64) = get_slice_int(64, list_len(spec_am_updates), 0)
+
+val spec_am_select : (list(SpecAccountIterRow), bits(64)) -> unit
+function spec_am_select(rows, idx) = {
+    let i = unsigned(idx);
+    if i < list_len(rows) then {
+        spec_am_iter =
+            [|
+                list_nth(
+                    rows,
+                    i,
+                    struct {
+                        ait_hkey = sail_zeros(256),
+                        ait_nonce = 0x0000000000000000,
+                        ait_bal = sail_zeros(256),
+                        ait_sroot = sail_zeros(256),
+                        ait_chash = sail_zeros(256),
+                        ait_base = false,
+                    },
+                ),
+            |]
+    } else {
+        spec_am_iter = [||]
+    }
+}
+
+function acctmap_at(idx : bits(64)) -> unit = spec_am_select(spec_am_order(), idx)
+
+function acctmap_update_at(idx : bits(64)) -> unit = spec_am_select(spec_am_updates_order(), idx)
+
+/* the cursor row; all-zero fields when the cursor is invalid */
+val spec_am_iter_row : unit -> SpecAccountIterRow
+function spec_am_iter_row() =
+    match spec_am_iter {
+        r :: _ => r,
+        [||] => struct {
+            ait_hkey = sail_zeros(256),
+            ait_nonce = 0x0000000000000000,
+            ait_bal = sail_zeros(256),
+            ait_sroot = sail_zeros(256),
+            ait_chash = sail_zeros(256),
+            ait_base = false,
+        },
+    }
+
+function acctmap_at_hkey() -> hash = spec_am_iter_row().ait_hkey
+
+function acctmap_at_nonce() -> bits(64) = spec_am_iter_row().ait_nonce
+
+function acctmap_at_bal() -> word = spec_am_iter_row().ait_bal
+
+function acctmap_at_sroot() -> hash = spec_am_iter_row().ait_sroot
+
+function acctmap_at_chash() -> hash = spec_am_iter_row().ait_chash
+
+function acctmap_at_base_exists() -> bool = spec_am_iter_row().ait_base
