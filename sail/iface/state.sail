@@ -47,59 +47,23 @@ val storage_map_it_val : unit -> word
  * selects the secure trie key once, then accessors resolve update first, cache
  * second. ---- */
 val acctmap_reset : unit -> unit
-val acctmap_key : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val acctmap_key : hash -> unit
 val acctmap_present : unit -> bool
-val acctmap_store : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> unit
+val acctmap_store : (hash, bits(64), word, hash, hash) -> unit
 val acctmap_mark_base_exists : unit -> unit
-val acctmap_seed : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> unit
+val acctmap_seed : (hash, bits(64), word, hash, hash) -> unit
 val acctmap_nonce : unit -> bits(64)
-val acctmap_bal : bits(64) -> bits(64)
-val acctmap_sroot : bits(64) -> bits(64)
-val acctmap_chash : bits(64) -> bits(64)
-val acctmap_remove : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val acctmap_bal : unit -> word
+val acctmap_sroot : unit -> hash
+val acctmap_chash : unit -> hash
+val acctmap_remove : hash -> unit
 val acctmap_count : unit -> bits(64)
 val acctmap_update_count : unit -> bits(64)
 val acctmap_at : bits(64) -> unit
 val acctmap_update_at : bits(64) -> unit
-val acctmap_at_hkey : bits(64) -> bits(64)
+val acctmap_at_hkey : unit -> hash
 val acctmap_at_nonce : unit -> bits(64)
-val acctmap_at_bal : bits(64) -> bits(64)
-val acctmap_at_sroot : bits(64) -> bits(64)
-val acctmap_at_chash : bits(64) -> bits(64)
+val acctmap_at_bal : unit -> word
+val acctmap_at_sroot : unit -> hash
+val acctmap_at_chash : unit -> hash
 val acctmap_at_base_exists : unit -> bool

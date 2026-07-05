@@ -151,15 +151,16 @@ static void account_table_remove(account_table *t, const uint64_t *h) {
   t->n--;
 }
 
+/* bal/sroot/chash are 4 little-endian-ordered words each (index 3 = MS) */
 static void account_row_set(account_row *e,
                            uint64_t nonce,
-                           uint64_t b3, uint64_t b2, uint64_t b1, uint64_t b0,
-                           uint64_t sr3, uint64_t sr2, uint64_t sr1, uint64_t sr0,
-                           uint64_t ch3, uint64_t ch2, uint64_t ch1, uint64_t ch0) {
+                           const uint64_t bal[4],
+                           const uint64_t sroot[4],
+                           const uint64_t chash[4]) {
   e->nonce = nonce;
-  e->bal[3] = b3; e->bal[2] = b2; e->bal[1] = b1; e->bal[0] = b0;
-  e->sroot[3] = sr3; e->sroot[2] = sr2; e->sroot[1] = sr1; e->sroot[0] = sr0;
-  e->chash[3] = ch3; e->chash[2] = ch2; e->chash[1] = ch1; e->chash[0] = ch0;
+  memcpy(e->bal, bal, sizeof(e->bal));
+  memcpy(e->sroot, sroot, sizeof(e->sroot));
+  memcpy(e->chash, chash, sizeof(e->chash));
 }
 
 static void account_build_order(void) {
@@ -205,11 +206,8 @@ unit acctmap_reset(const unit u) {
   return UNIT;
 }
 
-unit acctmap_key(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
-  selected_account_hash[0] = h3;
-  selected_account_hash[1] = h2;
-  selected_account_hash[2] = h1;
-  selected_account_hash[3] = h0;
+unit acctmap_key(const lbits h) {
+  lbits_to_be_words4(selected_account_hash, h);
   selected_account_valid = 1;
   return UNIT;
 }
@@ -227,16 +225,13 @@ bool acctmap_present(const unit u) {
   return selected_account_row() ? 1 : 0;
 }
 
-static unit acctmap_write(uint8_t update,
-                          uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
-                          uint64_t nonce,
-                          uint64_t b3, uint64_t b2, uint64_t b1, uint64_t b0,
-                          uint64_t sr3, uint64_t sr2, uint64_t sr1, uint64_t sr0,
-                          uint64_t ch3, uint64_t ch2, uint64_t ch1, uint64_t ch0) {
+static unit acctmap_write(uint8_t update, const lbits hkey, uint64_t nonce,
+                          const lbits bal, const lbits sroot, const lbits chash) {
   if (!selected_account_valid)
     return UNIT;
 
-  uint64_t h[4] = {h3, h2, h1, h0};
+  uint64_t h[4];
+  lbits_to_be_words4(h, hkey);
   account_table *target = update ? &account_updates : &account_cache;
   account_row *e = account_table_put(target, h);
   if (!e)
@@ -250,27 +245,23 @@ static unit acctmap_write(uint8_t update,
     e->base_exists = 0;
   }
 
-  account_row_set(e, nonce, b3, b2, b1, b0, sr3, sr2, sr1, sr0, ch3, ch2, ch1, ch0);
+  uint64_t b[4], sr[4], ch[4];
+  lbits_to_le_words4(b, bal);
+  lbits_to_le_words4(sr, sroot);
+  lbits_to_le_words4(ch, chash);
+  account_row_set(e, nonce, b, sr, ch);
   account_invalidate_order();
   return UNIT;
 }
 
-unit acctmap_seed(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
-                  uint64_t nonce,
-                  uint64_t b3, uint64_t b2, uint64_t b1, uint64_t b0,
-                  uint64_t sr3, uint64_t sr2, uint64_t sr1, uint64_t sr0,
-                  uint64_t ch3, uint64_t ch2, uint64_t ch1, uint64_t ch0) {
-  return acctmap_write(0, h3, h2, h1, h0, nonce, b3, b2, b1, b0,
-                       sr3, sr2, sr1, sr0, ch3, ch2, ch1, ch0);
+unit acctmap_seed(const lbits h, uint64_t nonce,
+                  const lbits bal, const lbits sroot, const lbits chash) {
+  return acctmap_write(0, h, nonce, bal, sroot, chash);
 }
 
-unit acctmap_store(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
-                   uint64_t nonce,
-                   uint64_t b3, uint64_t b2, uint64_t b1, uint64_t b0,
-                   uint64_t sr3, uint64_t sr2, uint64_t sr1, uint64_t sr0,
-                   uint64_t ch3, uint64_t ch2, uint64_t ch1, uint64_t ch0) {
-  return acctmap_write(1, h3, h2, h1, h0, nonce, b3, b2, b1, b0,
-                       sr3, sr2, sr1, sr0, ch3, ch2, ch1, ch0);
+unit acctmap_store(const lbits h, uint64_t nonce,
+                   const lbits bal, const lbits sroot, const lbits chash) {
+  return acctmap_write(1, h, nonce, bal, sroot, chash);
 }
 
 unit acctmap_mark_base_exists(const unit u) {
@@ -293,21 +284,27 @@ uint64_t acctmap_nonce(const unit u) {
   account_row *e = selected_account_row();
   return e ? e->nonce : 0;
 }
-uint64_t acctmap_bal(uint64_t w) {
+static const uint64_t account_zero_val[4] = {0, 0, 0, 0};
+
+void acctmap_bal(lbits *rop, const unit u) {
+  (void)u;
   account_row *e = selected_account_row();
-  return (e && w <= 3) ? e->bal[w] : 0;
+  le_words4_to_lbits(rop, e ? e->bal : account_zero_val);
 }
-uint64_t acctmap_sroot(uint64_t w) {
+void acctmap_sroot(lbits *rop, const unit u) {
+  (void)u;
   account_row *e = selected_account_row();
-  return (e && w <= 3) ? e->sroot[w] : 0;
+  le_words4_to_lbits(rop, e ? e->sroot : account_zero_val);
 }
-uint64_t acctmap_chash(uint64_t w) {
+void acctmap_chash(lbits *rop, const unit u) {
+  (void)u;
   account_row *e = selected_account_row();
-  return (e && w <= 3) ? e->chash[w] : 0;
+  le_words4_to_lbits(rop, e ? e->chash : account_zero_val);
 }
 
-unit acctmap_remove(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
-  uint64_t h[4] = {h3, h2, h1, h0};
+unit acctmap_remove(const lbits hk) {
+  uint64_t h[4];
+  lbits_to_be_words4(h, hk);
   account_table_remove(&account_cache, h);
   account_table_remove(&account_updates, h);
   selected_account_valid = 0;
@@ -346,14 +343,26 @@ unit acctmap_update_at(uint64_t idx) {
   return UNIT;
 }
 
-uint64_t acctmap_at_hkey(uint64_t w) { return (account_iter_valid && w <= 3) ? account_iter.hkey[w] : 0; }
+void acctmap_at_hkey(lbits *rop, const unit u) {
+  (void)u;
+  be_words4_to_lbits(rop, account_iter_valid ? account_iter.hkey : account_zero_val);
+}
 uint64_t acctmap_at_nonce(const unit u) {
   (void)u;
   return account_iter_valid ? account_iter.nonce : 0;
 }
-uint64_t acctmap_at_bal(uint64_t w) { return (account_iter_valid && w <= 3) ? account_iter.bal[w] : 0; }
-uint64_t acctmap_at_sroot(uint64_t w) { return (account_iter_valid && w <= 3) ? account_iter.sroot[w] : 0; }
-uint64_t acctmap_at_chash(uint64_t w) { return (account_iter_valid && w <= 3) ? account_iter.chash[w] : 0; }
+void acctmap_at_bal(lbits *rop, const unit u) {
+  (void)u;
+  le_words4_to_lbits(rop, account_iter_valid ? account_iter.bal : account_zero_val);
+}
+void acctmap_at_sroot(lbits *rop, const unit u) {
+  (void)u;
+  le_words4_to_lbits(rop, account_iter_valid ? account_iter.sroot : account_zero_val);
+}
+void acctmap_at_chash(lbits *rop, const unit u) {
+  (void)u;
+  le_words4_to_lbits(rop, account_iter_valid ? account_iter.chash : account_zero_val);
+}
 bool acctmap_at_base_exists(const unit u) {
   (void)u;
   return account_iter_valid ? account_iter.base_exists : 0;

@@ -12,34 +12,28 @@
 
 /* Account map: materialized base/cache rows plus execution update rows. */
 unit acctmap_reset(const unit u);
-unit acctmap_key(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);
+unit acctmap_key(const lbits h);
 bool acctmap_present(const unit u);
-unit acctmap_store(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
-                   uint64_t nonce,
-                   uint64_t b3, uint64_t b2, uint64_t b1, uint64_t b0,
-                   uint64_t sr3, uint64_t sr2, uint64_t sr1, uint64_t sr0,
-                   uint64_t ch3, uint64_t ch2, uint64_t ch1, uint64_t ch0);
+unit acctmap_store(const lbits h, uint64_t nonce,
+                   const lbits bal, const lbits sroot, const lbits chash);
 unit acctmap_mark_base_exists(const unit u);
-unit acctmap_seed(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
-                  uint64_t nonce,
-                  uint64_t b3, uint64_t b2, uint64_t b1, uint64_t b0,
-                  uint64_t sr3, uint64_t sr2, uint64_t sr1, uint64_t sr0,
-                  uint64_t ch3, uint64_t ch2, uint64_t ch1, uint64_t ch0);
+unit acctmap_seed(const lbits h, uint64_t nonce,
+                  const lbits bal, const lbits sroot, const lbits chash);
 uint64_t acctmap_nonce(const unit u);
-uint64_t acctmap_bal(uint64_t w);
-uint64_t acctmap_sroot(uint64_t w);
-uint64_t acctmap_chash(uint64_t w);
-unit acctmap_remove(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);
+void acctmap_bal(lbits *rop, const unit u);
+void acctmap_sroot(lbits *rop, const unit u);
+void acctmap_chash(lbits *rop, const unit u);
+unit acctmap_remove(const lbits h);
 
 uint64_t acctmap_count(const unit u);
 uint64_t acctmap_update_count(const unit u);
 unit acctmap_at(uint64_t idx);
 unit acctmap_update_at(uint64_t idx);
-uint64_t acctmap_at_hkey(uint64_t w);
+void acctmap_at_hkey(lbits *rop, const unit u);
 uint64_t acctmap_at_nonce(const unit u);
-uint64_t acctmap_at_bal(uint64_t w);
-uint64_t acctmap_at_sroot(uint64_t w);
-uint64_t acctmap_at_chash(uint64_t w);
+void acctmap_at_bal(lbits *rop, const unit u);
+void acctmap_at_sroot(lbits *rop, const unit u);
+void acctmap_at_chash(lbits *rop, const unit u);
 bool acctmap_at_base_exists(const unit u);
 
 /* Persistent storage map: materialized base/cache rows plus frame overlays. */

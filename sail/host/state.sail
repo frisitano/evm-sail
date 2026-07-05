@@ -304,36 +304,8 @@ register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob
 /* ----------------------------- assoc helpers ---------------------------- */
 
 /* select the acctmap key for address `a` (caches it for the accessors below) */
-function acctmap_select_hashed(h : bits(256)) -> unit =
-    acctmap_key(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0])
+function acctmap_select_hashed(h : bits(256)) -> unit = acctmap_key(h)
 function acctmap_select(a : address) -> unit = acctmap_select_hashed(keccak256_address(a))
-
-/* the three 256-bit account fields at the currently selected acctmap key
- * (word 3 most significant), reassembled from the per-word C accessors. */
-function acctmap_read_bal() -> word =
-    append(
-        acctmap_bal(get_slice_int(64, 3, 0)),
-        append(
-            acctmap_bal(get_slice_int(64, 2, 0)),
-            append(acctmap_bal(get_slice_int(64, 1, 0)), acctmap_bal(get_slice_int(64, 0, 0))),
-        ),
-    )
-function acctmap_read_sroot() -> word =
-    append(
-        acctmap_sroot(get_slice_int(64, 3, 0)),
-        append(
-            acctmap_sroot(get_slice_int(64, 2, 0)),
-            append(acctmap_sroot(get_slice_int(64, 1, 0)), acctmap_sroot(get_slice_int(64, 0, 0))),
-        ),
-    )
-function acctmap_read_chash() -> word =
-    append(
-        acctmap_chash(get_slice_int(64, 3, 0)),
-        append(
-            acctmap_chash(get_slice_int(64, 2, 0)),
-            append(acctmap_chash(get_slice_int(64, 1, 0)), acctmap_chash(get_slice_int(64, 0, 0))),
-        ),
-    )
 
 /* the account bound to `a` (EMPTY_ACCOUNT if absent), read from the acctmap */
 function account_lookup(a : address) -> Account = {
@@ -341,9 +313,9 @@ function account_lookup(a : address) -> Account = {
     if acctmap_present() then {
         struct {
             nonce = unsigned(acctmap_nonce()),
-            balance = acctmap_read_bal(),
-            code_hash = acctmap_read_chash(),
-            storage_root = acctmap_read_sroot(),
+            balance = acctmap_bal(),
+            code_hash = acctmap_chash(),
+            storage_root = acctmap_sroot(),
         }
     } else {
         EMPTY_ACCOUNT
@@ -354,45 +326,9 @@ function acctmap_write_account(a : address, v : Account, update : bool) -> unit 
     let h = keccak256_address(a);
     acctmap_select_hashed(h);
     if update then {
-        acctmap_store(
-            h[255 .. 192],
-            h[191 .. 128],
-            h[127 .. 64],
-            h[63 .. 0],
-            get_slice_int(64, v.nonce, 0),
-            v.balance[255 .. 192],
-            v.balance[191 .. 128],
-            v.balance[127 .. 64],
-            v.balance[63 .. 0],
-            v.storage_root[255 .. 192],
-            v.storage_root[191 .. 128],
-            v.storage_root[127 .. 64],
-            v.storage_root[63 .. 0],
-            v.code_hash[255 .. 192],
-            v.code_hash[191 .. 128],
-            v.code_hash[127 .. 64],
-            v.code_hash[63 .. 0],
-        )
+        acctmap_store(h, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
     } else {
-        acctmap_seed(
-            h[255 .. 192],
-            h[191 .. 128],
-            h[127 .. 64],
-            h[63 .. 0],
-            get_slice_int(64, v.nonce, 0),
-            v.balance[255 .. 192],
-            v.balance[191 .. 128],
-            v.balance[127 .. 64],
-            v.balance[63 .. 0],
-            v.storage_root[255 .. 192],
-            v.storage_root[191 .. 128],
-            v.storage_root[127 .. 64],
-            v.storage_root[63 .. 0],
-            v.code_hash[255 .. 192],
-            v.code_hash[191 .. 128],
-            v.code_hash[127 .. 64],
-            v.code_hash[63 .. 0],
-        )
+        acctmap_seed(h, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
     }
 }
 

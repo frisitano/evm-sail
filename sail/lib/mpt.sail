@@ -577,40 +577,12 @@ function account_empty(acc : Account) -> bool =
     (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance)
 
 /* 256-bit account field (balance / code_hash) of the current acctmap_at row */
-function selected_account_balance() -> word =
-    append(
-        acctmap_at_bal(get_slice_int(64, 3, 0)),
-        append(
-            acctmap_at_bal(get_slice_int(64, 2, 0)),
-            append(acctmap_at_bal(get_slice_int(64, 1, 0)), acctmap_at_bal(get_slice_int(64, 0, 0))),
-        ),
-    )
-function selected_account_code_hash() -> word =
-    append(
-        acctmap_at_chash(get_slice_int(64, 3, 0)),
-        append(
-            acctmap_at_chash(get_slice_int(64, 2, 0)),
-            append(acctmap_at_chash(get_slice_int(64, 1, 0)), acctmap_at_chash(get_slice_int(64, 0, 0))),
-        ),
-    )
-function selected_account_storage_root() -> word =
-    append(
-        acctmap_at_sroot(get_slice_int(64, 3, 0)),
-        append(
-            acctmap_at_sroot(get_slice_int(64, 2, 0)),
-            append(acctmap_at_sroot(get_slice_int(64, 1, 0)), acctmap_at_sroot(get_slice_int(64, 0, 0))),
-        ),
-    )
+function selected_account_balance() -> word = acctmap_at_bal()
+function selected_account_code_hash() -> word = acctmap_at_chash()
+function selected_account_storage_root() -> word = acctmap_at_sroot()
 
-/* secure trie key of the current acctmap_at row (keccak(address), h3..h0) */
-function selected_account_key_hash() -> bits(256) =
-    append(
-        acctmap_at_hkey(get_slice_int(64, 0, 0)),
-        append(
-            acctmap_at_hkey(get_slice_int(64, 1, 0)),
-            append(acctmap_at_hkey(get_slice_int(64, 2, 0)), acctmap_at_hkey(get_slice_int(64, 3, 0))),
-        ),
-    )
+/* secure trie key of the current acctmap_at row (keccak(address)) */
+function selected_account_key_hash() -> bits(256) = acctmap_at_hkey()
 
 /* secure-trie updates for the account map. Stateless block validation consumes
  * only execution updates: witness-materialized read-only accounts are base-state
