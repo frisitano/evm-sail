@@ -4,9 +4,11 @@
  * trie_node_db.h for the rationale (kills the O(N^2) Sail assoc-list scan). The
  * keccak is computed Sail-side (over the materialized node) and the resulting
  * span is recorded here; lookups are O(1)-amortized open addressing. Mirrors the
- * conventions of the other C hash tables: only uint64 crosses the FFI, FNV-1a
- * over the key words, power-of-two capacity. */
+ * conventions of the other C hash tables: keys/values cross the FFI as whole
+ * lbits values, FNV-1a over the key words, power-of-two capacity. Internal key
+ * arrays are little-endian word order (index 0 = least significant). */
 #include "trie_node_db.h"
+#include "lbits_convert.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -82,9 +84,9 @@ unit nodedb_reset(const unit u) {
   return UNIT;
 }
 
-unit nodedb_insert(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0,
-                   uint64_t off, uint64_t len) {
-  uint64_t k[4] = {k0, k1, k2, k3};
+unit nodedb_insert(const lbits kh, uint64_t off, uint64_t len) {
+  uint64_t k[4];
+  lbits_to_le_words4(k, kh);
   if (!nd_tab)
     nodedb_reset(UNIT);
   nd_put(k, off, len);
@@ -92,8 +94,9 @@ unit nodedb_insert(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0,
 }
 
 /* 1 if keccak key is present (and caches its span), 0 otherwise */
-bool nodedb_sel(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0) {
-  uint64_t k[4] = {k0, k1, k2, k3};
+bool nodedb_sel(const lbits kh) {
+  uint64_t k[4];
+  lbits_to_le_words4(k, kh);
   if (!nd_tab)
     return 0;
   uint32_t m = nd_cap - 1;
@@ -183,17 +186,18 @@ unit acctdb_reset(const unit u) {
   return UNIT;
 }
 
-unit acctdb_insert(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0,
-                   uint64_t off, uint64_t len) {
-  uint64_t k[4] = {k0, k1, k2, k3};
+unit acctdb_insert(const lbits kh, uint64_t off, uint64_t len) {
+  uint64_t k[4];
+  lbits_to_le_words4(k, kh);
   if (!ad_tab)
     acctdb_reset(UNIT);
   ad_put(k, off, len);
   return UNIT;
 }
 
-bool acctdb_sel(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0) {
-  uint64_t k[4] = {k0, k1, k2, k3};
+bool acctdb_sel(const lbits kh) {
+  uint64_t k[4];
+  lbits_to_le_words4(k, kh);
   if (!ad_tab)
     return 0;
   uint32_t m = ad_cap - 1;
@@ -242,7 +246,10 @@ unit acctdb_at(uint64_t idx) {
     }
   return UNIT;
 }
-uint64_t acctdb_at_key(uint64_t w) { return w > 3 ? 0 : ad_it_key[w]; }
+void acctdb_at_key(lbits *rop, const unit u) {
+  (void)u;
+  le_words4_to_lbits(rop, ad_it_key);
+}
 uint64_t acctdb_at_off(const unit u) {
   (void)u;
   return ad_it_off;
@@ -346,18 +353,18 @@ static void ic_grow(void) {
   free(ot);
 }
 
-unit storage_mark_incomplete(uint64_t a3, uint64_t a2, uint64_t a1,
-                             uint64_t a0) {
-  uint64_t k[4] = {a0, a1, a2, a3};
+unit storage_mark_incomplete(const lbits a) {
+  uint64_t k[4];
+  lbits_to_le_words4(k, a);
   if (!ic_tab)
     ic_reset();
   ic_put(k);
   return UNIT;
 }
 
-bool storage_harvest_complete(uint64_t a3, uint64_t a2, uint64_t a1,
-                                  uint64_t a0) {
-  uint64_t k[4] = {a0, a1, a2, a3};
+bool storage_harvest_complete(const lbits a) {
+  uint64_t k[4];
+  lbits_to_le_words4(k, a);
   if (!ic_tab)
     return 1;
   uint32_t m = ic_cap - 1;
@@ -414,11 +421,11 @@ unit slotdb_reset(const unit u) {
   return UNIT;
 }
 
-unit slotdb_insert(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
-                   uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0,
-                   uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0) {
-  uint64_t k[8] = {a0, a1, a2, a3, s0, s1, s2, s3};
-  uint64_t v[4] = {v0, v1, v2, v3};
+unit slotdb_insert(const lbits acct, const lbits slot, const lbits val) {
+  uint64_t k[8], v[4];
+  lbits_to_le_words4(k, acct);
+  lbits_to_le_words4(k + 4, slot);
+  lbits_to_le_words4(v, val);
   if (!sd_tab)
     slotdb_reset(UNIT);
   sd_put(k, v);
@@ -426,9 +433,10 @@ unit slotdb_insert(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
 }
 
 /* 1 if (addr,slot) is present (caching its value for slotdb_selval), else 0 */
-bool slotdb_sel(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
-                    uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0) {
-  uint64_t k[8] = {a0, a1, a2, a3, s0, s1, s2, s3};
+bool slotdb_sel(const lbits acct, const lbits slot) {
+  uint64_t k[8];
+  lbits_to_le_words4(k, acct);
+  lbits_to_le_words4(k + 4, slot);
   sd_sel_existed = 0;
   if (!sd_tab)
     return 0;
@@ -444,7 +452,10 @@ bool slotdb_sel(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
   }
   return 0;
 }
-uint64_t slotdb_selval(uint64_t i) { return i > 3 ? 0 : sd_sel_val[i]; }
+void slotdb_selval(lbits *rop, const unit u) {
+  (void)u;
+  le_words4_to_lbits(rop, sd_sel_val);
+}
 bool slotdb_sel_existed(const unit u) {
   (void)u;
   return sd_sel_existed;
@@ -476,11 +487,20 @@ unit slotdb_at(uint64_t idx) {
   }
   return UNIT;
 }
-/* word w (3=most significant) of the cached row; key[w]/val[w] already store w3
- * (high) at index 3 .. w0 (low) at index 0, matching slotdb_selval (no flip). */
-uint64_t slotdb_at_acct(uint64_t w) { return w > 3 ? 0 : sd_it_acct[w]; }
-uint64_t slotdb_at_slot(uint64_t w) { return w > 3 ? 0 : sd_it_slot[w]; }
-uint64_t slotdb_at_val(uint64_t w) { return w > 3 ? 0 : sd_it_val[w]; }
+/* whole 256-bit acct key / slot key / value of the cached row; the internal
+ * arrays store w0 (low) at index 0 .. w3 (high) at index 3 (no flip). */
+void slotdb_at_acct(lbits *rop, const unit u) {
+  (void)u;
+  le_words4_to_lbits(rop, sd_it_acct);
+}
+void slotdb_at_slot(lbits *rop, const unit u) {
+  (void)u;
+  le_words4_to_lbits(rop, sd_it_slot);
+}
+void slotdb_at_val(lbits *rop, const unit u) {
+  (void)u;
+  le_words4_to_lbits(rop, sd_it_val);
+}
 bool slotdb_at_existed(const unit u) {
   (void)u;
   return sd_it_existed;

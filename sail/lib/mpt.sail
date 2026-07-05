@@ -428,76 +428,21 @@ register hv_storage : bool = false
 register hv_acct : bits(256) = sail_zeros(256)
 
 /* insert a harvested (acct, slot) -> value into the slot store */
-function slot_insert(acct : bits(256), slot : bits(256), v : word) -> unit =
-    slotdb_insert(
-        acct[255 .. 192],
-        acct[191 .. 128],
-        acct[127 .. 64],
-        acct[63 .. 0],
-        slot[255 .. 192],
-        slot[191 .. 128],
-        slot[127 .. 64],
-        slot[63 .. 0],
-        v[255 .. 192],
-        v[191 .. 128],
-        v[127 .. 64],
-        v[63 .. 0],
-    )
+function slot_insert(acct : bits(256), slot : bits(256), v : word) -> unit = slotdb_insert(acct, slot, v)
 
-function storage_mark_partial(acct : bits(256)) -> unit =
-    storage_mark_incomplete(acct[255 .. 192], acct[191 .. 128], acct[127 .. 64], acct[63 .. 0])
+function storage_mark_partial(acct : bits(256)) -> unit = storage_mark_incomplete(acct)
 
-function storage_harvest_complete(acct : bits(256)) -> bool =
-    storage_harvest_complete_raw(acct[255 .. 192], acct[191 .. 128], acct[127 .. 64], acct[63 .. 0])
+function storage_harvest_complete(acct : bits(256)) -> bool = storage_harvest_complete_raw(acct)
 
-function slot_existed(acct : bits(256), slot : bits(256)) -> bool =
-    slotdb_sel(
-        acct[255 .. 192],
-        acct[191 .. 128],
-        acct[127 .. 64],
-        acct[63 .. 0],
-        slot[255 .. 192],
-        slot[191 .. 128],
-        slot[127 .. 64],
-        slot[63 .. 0],
-    ) &
-        slotdb_sel_existed()
+function slot_existed(acct : bits(256), slot : bits(256)) -> bool = slotdb_sel(acct, slot) & slotdb_sel_existed()
 
 /* the cached slotdb_sel value as a 256-bit word */
-function slot_selword() -> word =
-    append(
-        slotdb_selval(get_slice_int(64, 3, 0)),
-        append(
-            slotdb_selval(get_slice_int(64, 2, 0)),
-            append(slotdb_selval(get_slice_int(64, 1, 0)), slotdb_selval(get_slice_int(64, 0, 0))),
-        ),
-    )
+function slot_selword() -> word = slotdb_selval()
 
 /* 256-bit acct key / slot key / value of the currently-selected slotdb row */
-function slot_at_slot() -> bits(256) =
-    append(
-        slotdb_at_slot(get_slice_int(64, 3, 0)),
-        append(
-            slotdb_at_slot(get_slice_int(64, 2, 0)),
-            append(slotdb_at_slot(get_slice_int(64, 1, 0)), slotdb_at_slot(get_slice_int(64, 0, 0))),
-        ),
-    )
-function slot_at_val() -> word =
-    append(
-        slotdb_at_val(get_slice_int(64, 3, 0)),
-        append(
-            slotdb_at_val(get_slice_int(64, 2, 0)),
-            append(slotdb_at_val(get_slice_int(64, 1, 0)), slotdb_at_val(get_slice_int(64, 0, 0))),
-        ),
-    )
-function slot_at_acct() -> bits(256) =
-    append(
-        slotdb_at_acct(get_slice_int(64, 3, 0)),
-        append(
-            slotdb_at_acct(get_slice_int(64, 2, 0)),
-            append(slotdb_at_acct(get_slice_int(64, 1, 0)), slotdb_at_acct(get_slice_int(64, 0, 0))),
-        ),
-    )
+function slot_at_slot() -> bits(256) = slotdb_at_slot()
+function slot_at_val() -> word = slotdb_at_val()
+function slot_at_acct() -> bits(256) = slotdb_at_acct()
 
 /* secure-trie updates for one account's post-state storage, selected by
  * keccak(address). In stateless mode the update list is only the write set:
@@ -744,7 +689,7 @@ function nibs_match(key : list(int), pos : int, seg : list(int)) -> bool = {
 /* node bytes for keccak `h` from the C node-db, or [] if absent (read straight
  * from the witness buffer by the recorded span -- no per-node Sail copy held). */
 function node_db_lookup(h : bits(256)) -> list(byte) = {
-    if not_bool(nodedb_sel(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0])) then {
+    if not_bool(nodedb_sel(h)) then {
         [||]
     } else {
         ssz_bytes(unsigned(nodedb_sel_off()), unsigned(nodedb_sel_len()))
@@ -1512,15 +1457,8 @@ function record_witness_leaf(node : list(byte), key : list(int), value : list(by
         } else {
             let ak = nibbles_to_h256(key);
             let hn = mpt_node_hash(node);
-            let _ = nodedb_sel(hn[255 .. 192], hn[191 .. 128], hn[127 .. 64], hn[63 .. 0]);
-            acctdb_insert(
-                ak[255 .. 192],
-                ak[191 .. 128],
-                ak[127 .. 64],
-                ak[63 .. 0],
-                nodedb_sel_off(),
-                nodedb_sel_len(),
-            )
+            let _ = nodedb_sel(hn);
+            acctdb_insert(ak, nodedb_sel_off(), nodedb_sel_len())
         }
     }
 }
@@ -1623,14 +1561,7 @@ function build_node_db() -> unit = {
     foreach (i from 0 to (n - 1)) {
         let (off, len) = ssz_witness_node_span(i);
         let h = witness_keccak(ssz_witness_node_slice(i));
-        nodedb_insert(
-            h[255 .. 192],
-            h[191 .. 128],
-            h[127 .. 64],
-            h[63 .. 0],
-            get_slice_int(64, off, 0),
-            get_slice_int(64, len, 0),
-        )
+        nodedb_insert(h, get_slice_int(64, off, 0), get_slice_int(64, len, 0))
     }
 }
 
@@ -1661,16 +1592,7 @@ function parent_state_root() -> bits(256) = {
 function stateless_storage(a : address, s : word) -> word = {
     let ak = keccak256_address(a);
     let sk = keccak256_word(s);
-    if slotdb_sel(
-        ak[255 .. 192],
-        ak[191 .. 128],
-        ak[127 .. 64],
-        ak[63 .. 0],
-        sk[255 .. 192],
-        sk[191 .. 128],
-        sk[127 .. 64],
-        sk[63 .. 0],
-    ) then {
+    if slotdb_sel(ak, sk) then {
         slot_selword()
     } else {
         let sroot = load_account(a).storage_root;
@@ -1718,14 +1640,7 @@ function harvest_storage(ak : bits(256), sroot : bits(256)) -> unit = {
 }
 
 /* 256-bit keccak(addr) of the current acctdb_at row */
-function acctdb_at_acct() -> bits(256) =
-    append(
-        acctdb_at_key(get_slice_int(64, 3, 0)),
-        append(
-            acctdb_at_key(get_slice_int(64, 2, 0)),
-            append(acctdb_at_key(get_slice_int(64, 1, 0)), acctdb_at_key(get_slice_int(64, 0, 0))),
-        ),
-    )
+function acctdb_at_acct() -> bits(256) = acctdb_at_key()
 
 /* Storage-harvest pass: for every account leaf recorded in the acctdb during the
  * state re-root, authenticate + harvest its storage trie into the slot store.
@@ -1760,7 +1675,7 @@ function harvest_all_storage() -> unit = {
  * (k_seed_account_hashed), so subsequent load_account(a) is an O(1) raw read. */
 function stateless_account_load(a : address) -> unit = {
     let ak = keccak256_address(a);
-    let value : list(byte) = if acctdb_sel(ak[255 .. 192], ak[191 .. 128], ak[127 .. 64], ak[63 .. 0]) then {
+    let value : list(byte) = if acctdb_sel(ak) then {
             list_nth(rlp_node_items(ssz_bytes(unsigned(acctdb_sel_off()), unsigned(acctdb_sel_len()))), 1, RLP_NONE).content
         } else {
             trie_walk(node_db_lookup(parent_state_root()), hash_nibbles(ak), 0, 256)
