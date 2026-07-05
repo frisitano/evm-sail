@@ -4,6 +4,7 @@
  * live in Sail registers, and persistent storage lives in state_db.c keyed by
  * secure trie keys. Only mach_bits (uint64_t) cross the FFI. */
 #include "transient_storage.h"
+#include "lbits_convert.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -118,38 +119,42 @@ unit transient_storage_reset(uint64_t id) {
   return UNIT;
 }
 
-/* select a transient-storage key for the word accessors below */
-unit transient_storage_key(uint64_t id, uint64_t a2, uint64_t a1, uint64_t a0,
-                           uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0) {
+/* select a transient-storage (address, slot) key for the accessors below */
+unit transient_storage_key(uint64_t id, const lbits addr, const lbits slot) {
   if (id != 0 || !h_ensure(&h_transient)) {
     h_cur_ok = 0;
     return UNIT;
   }
 
-  h_cur_key[0] = a2;
-  h_cur_key[1] = a1;
-  h_cur_key[2] = a0;
-  h_cur_key[3] = s3;
-  h_cur_key[4] = s2;
-  h_cur_key[5] = s1;
-  h_cur_key[6] = s0;
+  uint64_t a[4], sw[4];
+  lbits_to_be_words4(a, addr);   /* a[0] = 0 (160-bit value), a[1..3] = address */
+  lbits_to_be_words4(sw, slot);
+  h_cur_key[0] = a[1];
+  h_cur_key[1] = a[2];
+  h_cur_key[2] = a[3];
+  h_cur_key[3] = sw[0];
+  h_cur_key[4] = sw[1];
+  h_cur_key[5] = sw[2];
+  h_cur_key[6] = sw[3];
   h_cur_hash = h_hash(h_cur_key);
   h_cur_ok = 1;
   return UNIT;
 }
 
-/* store the 256-bit value (v3 = most significant) at the selected key */
-unit transient_storage_write(uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0) {
+/* store the 256-bit value at the selected key */
+unit transient_storage_write(const lbits v) {
   if (h_cur_ok) {
-    uint64_t v[4] = { v3, v2, v1, v0 };
-    (void)h_put(&h_transient, h_cur_key, h_cur_hash, v);
+    uint64_t w[4];
+    lbits_to_be_words4(w, v);
+    (void)h_put(&h_transient, h_cur_key, h_cur_hash, w);
   }
   return UNIT;
 }
 
-/* value word i (3 = most significant .. 0) at the selected key; 0 if absent */
-uint64_t transient_storage_word(uint64_t i) {
-  if (i > 3 || !h_cur_ok) return 0;
-  h_entry *e = h_get(&h_transient, h_cur_key, h_cur_hash);
-  return e ? e->val[3 - i] : 0;
+/* the 256-bit value at the selected key; 0 if absent */
+void transient_storage_read(lbits *rop, const unit u) {
+  (void)u;
+  static const uint64_t zero[4] = {0, 0, 0, 0};
+  h_entry *e = h_cur_ok ? h_get(&h_transient, h_cur_key, h_cur_hash) : NULL;
+  be_words4_to_lbits(rop, e ? e->val : zero);
 }

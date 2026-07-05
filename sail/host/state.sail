@@ -214,35 +214,17 @@ function storage_wipe_addr(a : address) -> unit = {
 
 function transient_reset() -> unit = transient_storage_reset(get_slice_int(64, 0, 0))
 
-function transient_select(a : address, s : word) -> unit = {
-    let aw : word = sail_zero_extend(a, 256);
-    transient_storage_key(
-        get_slice_int(64, 0, 0),
-        aw[191 .. 128],
-        aw[127 .. 64],
-        aw[63 .. 0],
-        s[255 .. 192],
-        s[191 .. 128],
-        s[127 .. 64],
-        s[63 .. 0],
-    )
-}
+function transient_select(a : address, s : word) -> unit =
+    transient_storage_key(get_slice_int(64, 0, 0), a, s)
+
 function transient_load(a : address, s : word) -> word = {
     transient_select(a, s);
-    append(
-        transient_storage_read_word(get_slice_int(64, 3, 0)),
-        append(
-            transient_storage_read_word(get_slice_int(64, 2, 0)),
-            append(
-                transient_storage_read_word(get_slice_int(64, 1, 0)),
-                transient_storage_read_word(get_slice_int(64, 0, 0)),
-            ),
-        ),
-    )
+    transient_storage_read()
 }
+
 function transient_store(a : address, s : word, v : word) -> unit = {
     transient_select(a, s);
-    transient_storage_write(v[255 .. 192], v[191 .. 128], v[127 .. 64], v[63 .. 0])
+    transient_storage_write(v)
 }
 
 /* Stateless storage resolver: the value of (a, s) in the witness pre-state,

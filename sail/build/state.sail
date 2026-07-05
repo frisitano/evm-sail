@@ -4,40 +4,14 @@
 val transient_storage_reset_ffi = impure { _: "transient_storage_reset" } : bits(64) -> unit
 function transient_storage_reset(x0 : bits(64)) -> unit = transient_storage_reset_ffi(x0)
 
-val transient_storage_key_ffi = impure { _: "transient_storage_key" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> unit
-function transient_storage_key(
-    x0 : bits(64),
-    x1 : bits(64),
-    x2 : bits(64),
-    x3 : bits(64),
-    x4 : bits(64),
-    x5 : bits(64),
-    x6 : bits(64),
-    x7 : bits(64),
-) -> (
-    unit
-) =
-    transient_storage_key_ffi(x0, x1, x2, x3, x4, x5, x6, x7)
+val transient_storage_key_ffi = impure { _: "transient_storage_key" } : (bits(64), address, word) -> unit
+function transient_storage_key(x0 : bits(64), a : address, s : word) -> unit = transient_storage_key_ffi(x0, a, s)
 
-val transient_storage_write_ffi = impure { _: "transient_storage_write" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-function transient_storage_write(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64)) -> unit = transient_storage_write_ffi(
-    x0,
-    x1,
-    x2,
-    x3,
-)
+val transient_storage_write_ffi = impure { _: "transient_storage_write" } : word -> unit
+function transient_storage_write(v : word) -> unit = transient_storage_write_ffi(v)
 
-val transient_storage_read_word_ffi = impure { _: "transient_storage_word" } : bits(64) -> bits(64)
-function transient_storage_read_word(x0 : bits(64)) -> bits(64) = transient_storage_read_word_ffi(x0)
+val transient_storage_read_ffi = impure { _: "transient_storage_read" } : unit -> word
+function transient_storage_read() -> word = transient_storage_read_ffi()
 
 val storage_map_reset_ffi = impure { _: "storage_map_reset" } : unit -> unit
 function storage_map_reset() -> unit = storage_map_reset_ffi()

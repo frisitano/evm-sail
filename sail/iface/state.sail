@@ -13,9 +13,9 @@
  * id 0 = EIP-1153 transient storage. Warm access sets are Sail values.
  * Persistent storage is split below into a separate secure-keyed backend. */
 val transient_storage_reset : bits(64) -> unit
-val transient_storage_key : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
-val transient_storage_write : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val transient_storage_read_word : bits(64) -> bits(64)
+val transient_storage_key : (bits(64), address, word) -> unit
+val transient_storage_write : word -> unit
+val transient_storage_read : unit -> word
 
 /* ---- C-backed persistent storage (ffi/state_db.c): cache/update split ----
  * Cache rows are authenticated pre-state/fixture material; update rows are
