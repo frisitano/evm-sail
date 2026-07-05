@@ -760,6 +760,18 @@ bool storage_map_present(const lbits a, const lbits s) {
   return storage_walk(ah, sh) ? 1 : 0;
 }
 
+/* nonzero authenticated pre-state (cache-layer) value at (acct_hash,
+ * slot_hash). Canonical storage tries have no zero leaves, so this is
+ * exactly "the slot existed in the block pre-state". Every update row has a
+ * cache row beneath it (SSTORE always reads first, which seeds the cache). */
+bool storage_map_cache_nonzero(const lbits ah, const lbits sh) {
+  uint64_t a[4], s[4];
+  lbits_to_be_words4(a, ah);
+  lbits_to_be_words4(s, sh);
+  storage_row *e = storage_table_get(&storage_cache, a, s);
+  return e != NULL && (e->val[0] | e->val[1] | e->val[2] | e->val[3]) != 0;
+}
+
 bool storage_map_base_present(const lbits a, const lbits s) {
   uint64_t slot[4], ah[4], sh[4];
   storage_secure_key(a, s, slot, ah, sh);

@@ -46,6 +46,7 @@ void storage_map_load(lbits *rop, const lbits a, const lbits s);
 void storage_map_base_load(lbits *rop, const lbits a, const lbits s);
 bool storage_map_present(const lbits a, const lbits s);
 bool storage_map_base_present(const lbits a, const lbits s);
+bool storage_map_cache_nonzero(const lbits ah, const lbits sh);
 unit storage_map_wipe_addr(const lbits a);
 uint64_t storage_map_count(const unit u);
 uint64_t storage_map_update_count(const unit u);

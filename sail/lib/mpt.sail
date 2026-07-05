@@ -118,7 +118,7 @@ function storage_updates_writes_only(ak : bits(256)) -> list(TrieUpdate) = {
         let (eak, es, ev) = storage_hashed_update_entry(j);
         if eak == ak then {
             let sk = keccak256_word(es);
-            if word_is_zero(ev) & not_bool(slot_existed(ak, sk)) then {
+            if word_is_zero(ev) & not_bool(storage_map_cache_nonzero(ak, sk)) then {
                 ()
             } else {
                 out = update_insert_sorted(
@@ -1314,12 +1314,6 @@ function stateless_account_load(a : address) -> unit = {
  * node-db and preserving untouched children by reference. The standalone EEST
  * runner seeds the complete post-state and uses the updates-only entry point
  * because it has no parent root anchor. */
-/* delete-bearing storage overlay: base-layer contract (defined per entry).
- * Deletion can collapse branch/extension structure: the witness backend may
- * rebuild from the complete authenticated harvest; the native backend uses
- * the collapsing overlay directly. */
-val storage_root_deletes : (bits(256), bits(256), list(TrieUpdate)) -> bits(256)
-
 function storage_root_from(ak : bits(256), sroot : bits(256)) -> bits(256) = {
     let updates = storage_updates(ak);
     if updates_empty(updates) then {
@@ -1330,7 +1324,10 @@ function storage_root_from(ak : bits(256), sroot : bits(256)) -> bits(256) = {
             sroot
         } else {
             if updates_has_delete(updates) then {
-                storage_root_deletes(ak, sroot, updates)
+                /* deletes can collapse trie shape; the witness always carries
+                 * the collapse material (EIP-8025), so the collapsing overlay
+                 * is the single delete path for every backend */
+                trie_overlay_root(sroot, updates)
             } else {
                 trie_overlay_root_preserve(sroot, updates)
             }

@@ -68,13 +68,3 @@ function load_account(a : address) -> Account = {
 function storage_updates(ak : bits(256)) -> list(TrieUpdate) = storage_updates_writes_only(ak)
 
 function state_updates_map() -> list(TrieUpdate) = state_updates_map_updates_only()
-
-/* Deletes can collapse branch/extension structure: rebuild from the complete
- * authenticated harvest when available; partial optional-proof witnesses must
- * use the preserving overlay (omitted blinded children may hold live slots). */
-function storage_root_deletes(ak : bits(256), sroot : bits(256), updates : list(TrieUpdate)) -> bits(256) =
-    if storage_harvest_complete(ak) then {
-        updates_root(storage_live_updates_from_harvest(ak, updates))
-    } else {
-        trie_overlay_root(sroot, updates)
-    }

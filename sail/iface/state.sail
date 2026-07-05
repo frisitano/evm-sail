@@ -31,6 +31,7 @@ val storage_map_seed : (address, word, word) -> unit
 val storage_map_base_load : (address, word) -> word
 val storage_map_present : (address, word) -> bool
 val storage_map_base_present : (address, word) -> bool
+val storage_map_cache_nonzero : (hash, hash) -> bool
 val storage_map_wipe_addr : address -> unit
 val storage_map_count : unit -> bits(64)
 val storage_map_update_count : unit -> bits(64)

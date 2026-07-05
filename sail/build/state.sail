@@ -41,6 +41,9 @@ function storage_map_present(a : address, s : word) -> bool = storage_map_presen
 val storage_map_base_present_ffi = impure { _: "storage_map_base_present" } : (address, word) -> bool
 function storage_map_base_present(a : address, s : word) -> bool = storage_map_base_present_ffi(a, s)
 
+val storage_map_cache_nonzero_ffi = impure { _: "storage_map_cache_nonzero" } : (hash, hash) -> bool
+function storage_map_cache_nonzero(ah : hash, sh : hash) -> bool = storage_map_cache_nonzero_ffi(ah, sh)
+
 val storage_map_wipe_addr_ffi = impure { _: "storage_map_wipe_addr" } : address -> unit
 function storage_map_wipe_addr(a : address) -> unit = storage_map_wipe_addr_ffi(a)
 
