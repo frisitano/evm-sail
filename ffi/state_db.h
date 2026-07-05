@@ -1,9 +1,9 @@
 /* C-backed account and persistent-storage state database for evm-sail.
  *
- * Accounts are keyed by keccak256(address). Persistent storage rows are keyed
- * by (keccak256(address), keccak256(slot)) and retain raw slots only for dumps.
- * Both stores are sorted, cache/update backed, and expose only uint64_t values
- * across the Sail FFI boundary. */
+ * Rows are stored sorted by keccak256(address) (accounts) and
+ * (keccak256(address), keccak256(slot)) (storage), but the point-access hooks
+ * are keyed by raw address/slot: the secure trie hashes are computed and
+ * memoized C-side. Both stores are cache/update backed. */
 #ifndef STATE_DB_H
 #define STATE_DB_H
 #include "sail.h"
@@ -12,18 +12,17 @@
 
 /* Account map: materialized base/cache rows plus execution update rows. */
 unit acctmap_reset(const unit u);
-unit acctmap_key(const lbits h);
-bool acctmap_present(const unit u);
-unit acctmap_store(const lbits h, uint64_t nonce,
+bool acctmap_present(const lbits a);
+unit acctmap_store(const lbits a, uint64_t nonce,
                    const lbits bal, const lbits sroot, const lbits chash);
-unit acctmap_mark_base_exists(const unit u);
-unit acctmap_seed(const lbits h, uint64_t nonce,
+unit acctmap_mark_base_exists(const lbits a);
+unit acctmap_seed(const lbits a, uint64_t nonce,
                   const lbits bal, const lbits sroot, const lbits chash);
-uint64_t acctmap_nonce(const unit u);
-void acctmap_bal(lbits *rop, const unit u);
-void acctmap_sroot(lbits *rop, const unit u);
-void acctmap_chash(lbits *rop, const unit u);
-unit acctmap_remove(const lbits h);
+uint64_t acctmap_nonce(const lbits a);
+void acctmap_bal(lbits *rop, const lbits a);
+void acctmap_sroot(lbits *rop, const lbits a);
+void acctmap_chash(lbits *rop, const lbits a);
+unit acctmap_remove(const lbits a);
 
 uint64_t acctmap_count(const unit u);
 uint64_t acctmap_update_count(const unit u);

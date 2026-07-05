@@ -1683,7 +1683,7 @@ function stateless_account_load(a : address) -> unit = {
     if list_len(value) > 0 then {
         let (nonce, bal, sroot, chash) = decode_account(value);
         k_seed_account_hashed(a, nonce, bal, sroot, chash);
-        acctmap_mark_base_exists()
+        acctmap_mark_base_exists(a)
     } else {
         k_seed_account_hashed(a, 0, sail_zeros(256), EMPTY_TRIE_ROOT, KECCAK_EMPTY)
     }

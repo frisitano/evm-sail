@@ -68,37 +68,34 @@ function storage_map_it_val() -> word = storage_map_it_val_ffi()
 val acctmap_reset_ffi = impure { _: "acctmap_reset" } : unit -> unit
 function acctmap_reset() -> unit = acctmap_reset_ffi()
 
-val acctmap_key_ffi = impure { _: "acctmap_key" } : hash -> unit
-function acctmap_key(h : hash) -> unit = acctmap_key_ffi(h)
+val acctmap_present_ffi = impure { _: "acctmap_present" } : address -> bool
+function acctmap_present(a : address) -> bool = acctmap_present_ffi(a)
 
-val acctmap_present_ffi = impure { _: "acctmap_present" } : unit -> bool
-function acctmap_present() -> bool = acctmap_present_ffi()
+val acctmap_store_ffi = impure { _: "acctmap_store" } : (address, bits(64), word, hash, hash) -> unit
+function acctmap_store(a : address, nonce : bits(64), bal : word, sroot : hash, chash : hash) -> unit =
+    acctmap_store_ffi(a, nonce, bal, sroot, chash)
 
-val acctmap_store_ffi = impure { _: "acctmap_store" } : (hash, bits(64), word, hash, hash) -> unit
-function acctmap_store(h : hash, nonce : bits(64), bal : word, sroot : hash, chash : hash) -> unit =
-    acctmap_store_ffi(h, nonce, bal, sroot, chash)
+val acctmap_mark_base_exists_ffi = impure { _: "acctmap_mark_base_exists" } : address -> unit
+function acctmap_mark_base_exists(a : address) -> unit = acctmap_mark_base_exists_ffi(a)
 
-val acctmap_mark_base_exists_ffi = impure { _: "acctmap_mark_base_exists" } : unit -> unit
-function acctmap_mark_base_exists() -> unit = acctmap_mark_base_exists_ffi()
+val acctmap_seed_ffi = impure { _: "acctmap_seed" } : (address, bits(64), word, hash, hash) -> unit
+function acctmap_seed(a : address, nonce : bits(64), bal : word, sroot : hash, chash : hash) -> unit =
+    acctmap_seed_ffi(a, nonce, bal, sroot, chash)
 
-val acctmap_seed_ffi = impure { _: "acctmap_seed" } : (hash, bits(64), word, hash, hash) -> unit
-function acctmap_seed(h : hash, nonce : bits(64), bal : word, sroot : hash, chash : hash) -> unit =
-    acctmap_seed_ffi(h, nonce, bal, sroot, chash)
+val acctmap_nonce_ffi = impure { _: "acctmap_nonce" } : address -> bits(64)
+function acctmap_nonce(a : address) -> bits(64) = acctmap_nonce_ffi(a)
 
-val acctmap_nonce_ffi = impure { _: "acctmap_nonce" } : unit -> bits(64)
-function acctmap_nonce() -> bits(64) = acctmap_nonce_ffi()
+val acctmap_bal_ffi = impure { _: "acctmap_bal" } : address -> word
+function acctmap_bal(a : address) -> word = acctmap_bal_ffi(a)
 
-val acctmap_bal_ffi = impure { _: "acctmap_bal" } : unit -> word
-function acctmap_bal() -> word = acctmap_bal_ffi()
+val acctmap_sroot_ffi = impure { _: "acctmap_sroot" } : address -> hash
+function acctmap_sroot(a : address) -> hash = acctmap_sroot_ffi(a)
 
-val acctmap_sroot_ffi = impure { _: "acctmap_sroot" } : unit -> hash
-function acctmap_sroot() -> hash = acctmap_sroot_ffi()
+val acctmap_chash_ffi = impure { _: "acctmap_chash" } : address -> hash
+function acctmap_chash(a : address) -> hash = acctmap_chash_ffi(a)
 
-val acctmap_chash_ffi = impure { _: "acctmap_chash" } : unit -> hash
-function acctmap_chash() -> hash = acctmap_chash_ffi()
-
-val acctmap_remove_ffi = impure { _: "acctmap_remove" } : hash -> unit
-function acctmap_remove(h : hash) -> unit = acctmap_remove_ffi(h)
+val acctmap_remove_ffi = impure { _: "acctmap_remove" } : address -> unit
+function acctmap_remove(a : address) -> unit = acctmap_remove_ffi(a)
 
 val acctmap_count_ffi = impure { _: "acctmap_count" } : unit -> bits(64)
 function acctmap_count() -> bits(64) = acctmap_count_ffi()

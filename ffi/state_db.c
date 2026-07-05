@@ -18,6 +18,98 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* ---- keccak memo: address -> keccak(address), slot -> keccak(slot) ----
+ * The account and storage hooks are keyed by raw (address[, slot]); the secure
+ * trie keys are computed here and memoized (keccak is a pure function), so
+ * repeated touches of the same address or slot never re-hash. Open addressing,
+ * FNV-1a over the preimage words, power-of-two capacity. */
+#define KMEMO_INIT_CAP 256u
+
+typedef struct {
+  uint64_t key[4]; /* preimage as BE words (address zero-extended to 256 bits) */
+  uint64_t h[4];   /* keccak(preimage), BE words */
+  uint8_t used;
+} kmemo_ent;
+
+typedef struct {
+  kmemo_ent *tab;
+  uint32_t cap;
+  uint32_t n;
+} kmemo;
+
+static kmemo addr_keccak_memo = {NULL, 0, 0};
+static kmemo slot_keccak_memo = {NULL, 0, 0};
+
+static uint64_t kmemo_hash(const uint64_t k[4]) {
+  uint64_t h = 0xcbf29ce484222325ull; /* FNV-1a over the 4 key words */
+  for (int i = 0; i < 4; i++) {
+    h ^= k[i];
+    h *= 0x100000001b3ull;
+  }
+  return h;
+}
+
+static uint32_t kmemo_find(const kmemo *m, const uint64_t k[4]) {
+  uint32_t i = (uint32_t)kmemo_hash(k) & (m->cap - 1);
+  while (m->tab[i].used && memcmp(m->tab[i].key, k, 32) != 0)
+    i = (i + 1) & (m->cap - 1);
+  return i;
+}
+
+/* make room for one more entry; 0 if the memo is unusable (alloc failure) */
+static int kmemo_room(kmemo *m) {
+  if (!m->tab) {
+    m->tab = (kmemo_ent *)calloc(KMEMO_INIT_CAP, sizeof(kmemo_ent));
+    if (!m->tab)
+      return 0;
+    m->cap = KMEMO_INIT_CAP;
+    m->n = 0;
+  }
+  if ((m->n + 1) * 4 >= m->cap * 3) {
+    kmemo_ent *ntab = (kmemo_ent *)calloc(m->cap * 2, sizeof(kmemo_ent));
+    if (!ntab)
+      return (m->n + 1) < m->cap; /* old table still usable while not full */
+    kmemo old = *m;
+    m->tab = ntab;
+    m->cap = old.cap * 2;
+    m->n = 0;
+    for (uint32_t i = 0; i < old.cap; i++)
+      if (old.tab[i].used) {
+        uint32_t j = kmemo_find(m, old.tab[i].key);
+        m->tab[j] = old.tab[i];
+        m->n++;
+      }
+    free(old.tab);
+  }
+  return 1;
+}
+
+/* out = keccak(low pre_len bytes of v), memoized in m */
+static void kmemo_keccak(kmemo *m, size_t pre_len, const lbits v, uint64_t out[4]) {
+  uint64_t k[4];
+  uint8_t buf[32];
+  lbits_to_be_words4(k, v);
+  if (!kmemo_room(m)) { /* allocation failed: hash without caching */
+    lbits_to_be_bytes(buf, pre_len, v);
+    host_keccak256_bytes(out, buf, pre_len);
+    return;
+  }
+  uint32_t i = kmemo_find(m, k);
+  if (!m->tab[i].used) {
+    lbits_to_be_bytes(buf, pre_len, v);
+    memcpy(m->tab[i].key, k, 32);
+    host_keccak256_bytes(m->tab[i].h, buf, pre_len);
+    m->tab[i].used = 1;
+    m->n++;
+  }
+  memcpy(out, m->tab[i].h, 32);
+}
+
+/* h = memoized keccak(address) -- the account secure trie key, BE words */
+static void acct_secure_key(const lbits a, uint64_t h[4]) {
+  kmemo_keccak(&addr_keccak_memo, 20, a, h);
+}
+
 #define ACCOUNT_INIT_CAP 64u
 
 typedef struct {
@@ -42,10 +134,6 @@ static account_table account_updates = {NULL, 0, 0};
 static account_row *account_order = NULL;
 static uint32_t account_order_count = 0;
 static int account_order_valid = 0;
-
-/* cached key selection (acctmap_key) */
-static uint64_t selected_account_hash[4];
-static int selected_account_valid = 0;
 
 /* cached iteration row (acctmap_at / acctmap_update_at) */
 static account_row account_iter;
@@ -202,37 +290,26 @@ unit acctmap_reset(const unit u) {
   (void)u;
   account_table_reset(&account_cache);
   account_table_reset(&account_updates);
-  selected_account_valid = 0;
   account_invalidate_order();
   return UNIT;
 }
 
-unit acctmap_key(const lbits h) {
-  lbits_to_be_words4(selected_account_hash, h);
-  selected_account_valid = 1;
-  return UNIT;
-}
-
-/* current account row: execution-visible updates override cache rows */
-static account_row *selected_account_row(void) {
-  if (!selected_account_valid)
-    return NULL;
-  account_row *u = account_table_get(&account_updates, selected_account_hash);
-  return u ? u : account_table_get(&account_cache, selected_account_hash);
-}
-
-bool acctmap_present(const unit u) {
-  (void)u;
-  return selected_account_row() ? 1 : 0;
-}
-
-static unit acctmap_write(uint8_t update, const lbits hkey, uint64_t nonce,
-                          const lbits bal, const lbits sroot, const lbits chash) {
-  if (!selected_account_valid)
-    return UNIT;
-
+/* the account row bound to address `a` (updates override cache rows) */
+static account_row *acct_row_of(const lbits a) {
   uint64_t h[4];
-  lbits_to_be_words4(h, hkey);
+  acct_secure_key(a, h);
+  account_row *u = account_table_get(&account_updates, h);
+  return u ? u : account_table_get(&account_cache, h);
+}
+
+bool acctmap_present(const lbits a) {
+  return acct_row_of(a) ? 1 : 0;
+}
+
+static unit acctmap_write(uint8_t update, const lbits a, uint64_t nonce,
+                          const lbits bal, const lbits sroot, const lbits chash) {
+  uint64_t h[4];
+  acct_secure_key(a, h);
   account_table *target = update ? &account_updates : &account_cache;
   account_row *e = account_table_put(target, h);
   if (!e)
@@ -255,24 +332,23 @@ static unit acctmap_write(uint8_t update, const lbits hkey, uint64_t nonce,
   return UNIT;
 }
 
-unit acctmap_seed(const lbits h, uint64_t nonce,
+unit acctmap_seed(const lbits a, uint64_t nonce,
                   const lbits bal, const lbits sroot, const lbits chash) {
-  return acctmap_write(0, h, nonce, bal, sroot, chash);
+  return acctmap_write(0, a, nonce, bal, sroot, chash);
 }
 
-unit acctmap_store(const lbits h, uint64_t nonce,
+unit acctmap_store(const lbits a, uint64_t nonce,
                    const lbits bal, const lbits sroot, const lbits chash) {
-  return acctmap_write(1, h, nonce, bal, sroot, chash);
+  return acctmap_write(1, a, nonce, bal, sroot, chash);
 }
 
-unit acctmap_mark_base_exists(const unit u) {
-  (void)u;
-  if (!selected_account_valid)
-    return UNIT;
-  account_row *e = account_table_get(&account_cache, selected_account_hash);
+unit acctmap_mark_base_exists(const lbits a) {
+  uint64_t h[4];
+  acct_secure_key(a, h);
+  account_row *e = account_table_get(&account_cache, h);
   if (e) {
     e->base_exists = 1;
-    account_row *urow = account_table_get(&account_updates, selected_account_hash);
+    account_row *urow = account_table_get(&account_updates, h);
     if (urow)
       urow->base_exists = 1;
     account_invalidate_order();
@@ -280,35 +356,30 @@ unit acctmap_mark_base_exists(const unit u) {
   return UNIT;
 }
 
-uint64_t acctmap_nonce(const unit u) {
-  (void)u;
-  account_row *e = selected_account_row();
+uint64_t acctmap_nonce(const lbits a) {
+  account_row *e = acct_row_of(a);
   return e ? e->nonce : 0;
 }
 static const uint64_t account_zero_val[4] = {0, 0, 0, 0};
 
-void acctmap_bal(lbits *rop, const unit u) {
-  (void)u;
-  account_row *e = selected_account_row();
+void acctmap_bal(lbits *rop, const lbits a) {
+  account_row *e = acct_row_of(a);
   le_words4_to_lbits(rop, e ? e->bal : account_zero_val);
 }
-void acctmap_sroot(lbits *rop, const unit u) {
-  (void)u;
-  account_row *e = selected_account_row();
+void acctmap_sroot(lbits *rop, const lbits a) {
+  account_row *e = acct_row_of(a);
   le_words4_to_lbits(rop, e ? e->sroot : account_zero_val);
 }
-void acctmap_chash(lbits *rop, const unit u) {
-  (void)u;
-  account_row *e = selected_account_row();
+void acctmap_chash(lbits *rop, const lbits a) {
+  account_row *e = acct_row_of(a);
   le_words4_to_lbits(rop, e ? e->chash : account_zero_val);
 }
 
-unit acctmap_remove(const lbits hk) {
+unit acctmap_remove(const lbits a) {
   uint64_t h[4];
-  lbits_to_be_words4(h, hk);
+  acct_secure_key(a, h);
   account_table_remove(&account_cache, h);
   account_table_remove(&account_updates, h);
-  selected_account_valid = 0;
   account_invalidate_order();
   return UNIT;
 }
@@ -528,96 +599,6 @@ static void storage_free_layers(storage_layer *l) {
     free(l);
     l = b;
   }
-}
-
-/* ---- keccak memo: address -> keccak(address), slot -> keccak(slot) ----
- * The storage hooks are keyed by raw (address, slot); the secure trie keys are
- * computed here and memoized (keccak is a pure function), so repeated touches
- * of the same address or slot never re-hash. Open addressing, FNV-1a over the
- * preimage words, power-of-two capacity. */
-#define KMEMO_INIT_CAP 256u
-
-typedef struct {
-  uint64_t key[4]; /* preimage as BE words (address zero-extended to 256 bits) */
-  uint64_t h[4];   /* keccak(preimage), BE words */
-  uint8_t used;
-} kmemo_ent;
-
-typedef struct {
-  kmemo_ent *tab;
-  uint32_t cap;
-  uint32_t n;
-} kmemo;
-
-static kmemo addr_keccak_memo = {NULL, 0, 0};
-static kmemo slot_keccak_memo = {NULL, 0, 0};
-
-static uint64_t kmemo_hash(const uint64_t k[4]) {
-  uint64_t h = 0xcbf29ce484222325ull;
-  for (int i = 0; i < 4; i++) {
-    uint64_t w = k[i];
-    for (int b = 0; b < 8; b++) {
-      h ^= (w >> (8 * b)) & 0xff;
-      h *= 0x100000001b3ull;
-    }
-  }
-  return h;
-}
-
-static uint32_t kmemo_find(const kmemo *m, const uint64_t k[4]) {
-  uint32_t i = (uint32_t)kmemo_hash(k) & (m->cap - 1);
-  while (m->tab[i].used && memcmp(m->tab[i].key, k, 32) != 0)
-    i = (i + 1) & (m->cap - 1);
-  return i;
-}
-
-/* make room for one more entry; 0 if the memo is unusable (alloc failure) */
-static int kmemo_room(kmemo *m) {
-  if (!m->tab) {
-    m->tab = (kmemo_ent *)calloc(KMEMO_INIT_CAP, sizeof(kmemo_ent));
-    if (!m->tab)
-      return 0;
-    m->cap = KMEMO_INIT_CAP;
-    m->n = 0;
-  }
-  if ((m->n + 1) * 4 >= m->cap * 3) {
-    kmemo_ent *ntab = (kmemo_ent *)calloc(m->cap * 2, sizeof(kmemo_ent));
-    if (!ntab)
-      return (m->n + 1) < m->cap; /* old table still usable while not full */
-    kmemo old = *m;
-    m->tab = ntab;
-    m->cap = old.cap * 2;
-    m->n = 0;
-    for (uint32_t i = 0; i < old.cap; i++)
-      if (old.tab[i].used) {
-        uint32_t j = kmemo_find(m, old.tab[i].key);
-        m->tab[j] = old.tab[i];
-        m->n++;
-      }
-    free(old.tab);
-  }
-  return 1;
-}
-
-/* out = keccak(low pre_len bytes of v), memoized in m */
-static void kmemo_keccak(kmemo *m, size_t pre_len, const lbits v, uint64_t out[4]) {
-  uint64_t k[4];
-  uint8_t buf[32];
-  lbits_to_be_words4(k, v);
-  if (!kmemo_room(m)) { /* allocation failed: hash without caching */
-    lbits_to_be_bytes(buf, pre_len, v);
-    host_keccak256_bytes(out, buf, pre_len);
-    return;
-  }
-  uint32_t i = kmemo_find(m, k);
-  if (!m->tab[i].used) {
-    lbits_to_be_bytes(buf, pre_len, v);
-    memcpy(m->tab[i].key, k, 32);
-    host_keccak256_bytes(m->tab[i].h, buf, pre_len);
-    m->tab[i].used = 1;
-    m->n++;
-  }
-  memcpy(out, m->tab[i].h, 32);
 }
 
 /* the secure storage key of raw (address, slot): (keccak(a), keccak(s)) */

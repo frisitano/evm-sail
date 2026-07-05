@@ -273,34 +273,27 @@ register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob
 
 /* ----------------------------- assoc helpers ---------------------------- */
 
-/* select the acctmap key for address `a` (caches it for the accessors below) */
-function acctmap_select_hashed(h : bits(256)) -> unit = acctmap_key(h)
-function acctmap_select(a : address) -> unit = acctmap_select_hashed(keccak256_address(a))
-
-/* the account bound to `a` (EMPTY_ACCOUNT if absent), read from the acctmap */
+/* the account bound to `a` (EMPTY_ACCOUNT if absent), read from the acctmap.
+ * The hooks are keyed by raw address; the C backend memoizes keccak(address). */
 function account_lookup(a : address) -> Account = {
-    acctmap_select(a);
-    if acctmap_present() then {
+    if acctmap_present(a) then {
         struct {
-            nonce = unsigned(acctmap_nonce()),
-            balance = acctmap_bal(),
-            code_hash = acctmap_chash(),
-            storage_root = acctmap_sroot(),
+            nonce = unsigned(acctmap_nonce(a)),
+            balance = acctmap_bal(a),
+            code_hash = acctmap_chash(a),
+            storage_root = acctmap_sroot(a),
         }
     } else {
         EMPTY_ACCOUNT
     }
 }
 
-function acctmap_write_account(a : address, v : Account, update : bool) -> unit = {
-    let h = keccak256_address(a);
-    acctmap_select_hashed(h);
+function acctmap_write_account(a : address, v : Account, update : bool) -> unit =
     if update then {
-        acctmap_store(h, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
+        acctmap_store(a, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
     } else {
-        acctmap_seed(h, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
+        acctmap_seed(a, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
     }
-}
 
 /* bind `a` -> v in the acctmap as authenticated pre-state/cache material. */
 function account_seed(a : address, v : Account) -> unit = acctmap_write_account(a, v, false)
@@ -328,10 +321,7 @@ function slot_list_contains(xs : list(SlotKey), a : address, s : word) -> bool =
 
 /* whether `a` has been materialized into the acctmap (distinct from account_lookup,
  * which returns EMPTY_ACCOUNT for both absent and not-yet-loaded). */
-function account_loaded(a : address) -> bool = {
-    acctmap_select(a);
-    acctmap_present()
-}
+function account_loaded(a : address) -> bool = acctmap_present(a)
 
 /* Stateless account materialization (defined in lib/mpt.sail, the witness reader,
  * included later): resolve `a` from the authenticated witness leaf store and bind

@@ -42,20 +42,19 @@ val storage_map_it_val : unit -> word
 
 /* ---- C-backed account map (ffi/state_db.c): the kernel account working
  * set (k_accounts), split into materialized base/cache rows and execution
- * update rows. Both tables are ordered by keccak256(address). Point access
- * selects the secure trie key once, then accessors resolve update first, cache
- * second. ---- */
+ * update rows. Both tables are ordered by keccak256(address). The point-access
+ * hooks are keyed by raw address; the backend computes and memoizes the secure
+ * trie key, and accessors resolve update first, cache second. ---- */
 val acctmap_reset : unit -> unit
-val acctmap_key : hash -> unit
-val acctmap_present : unit -> bool
-val acctmap_store : (hash, bits(64), word, hash, hash) -> unit
-val acctmap_mark_base_exists : unit -> unit
-val acctmap_seed : (hash, bits(64), word, hash, hash) -> unit
-val acctmap_nonce : unit -> bits(64)
-val acctmap_bal : unit -> word
-val acctmap_sroot : unit -> hash
-val acctmap_chash : unit -> hash
-val acctmap_remove : hash -> unit
+val acctmap_present : address -> bool
+val acctmap_store : (address, bits(64), word, hash, hash) -> unit
+val acctmap_mark_base_exists : address -> unit
+val acctmap_seed : (address, bits(64), word, hash, hash) -> unit
+val acctmap_nonce : address -> bits(64)
+val acctmap_bal : address -> word
+val acctmap_sroot : address -> hash
+val acctmap_chash : address -> hash
+val acctmap_remove : address -> unit
 val acctmap_count : unit -> bits(64)
 val acctmap_update_count : unit -> bits(64)
 val acctmap_at : bits(64) -> unit
