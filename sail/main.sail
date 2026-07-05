@@ -766,7 +766,7 @@ function run_checked_block_end_system_calls(all_ok : bool) -> bool = {
     }
 }
 
-function trie_index_key(i : int) -> list(int) =
+function trie_index_key(i : int) -> list(nibble) =
     to_nibbles(rlp_int(i))
 
 function transaction_trie_root() -> hash = {

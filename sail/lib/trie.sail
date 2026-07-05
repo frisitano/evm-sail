@@ -23,22 +23,25 @@ function byte_list_nonempty(xs : list(byte)) -> bool =
         _ => true,
     }
 
-function int_list_nonempty(xs : list(int)) -> bool =
+/* A nibble is half a byte: the unit of trie path traversal (YP Appendix D:
+ * "Any series of bytes may also trivially be viewed as a series of nibbles"). */
+type nibble = bits(4)
+
+function int_list_nonempty(xs : list(nibble)) -> bool =
     match xs {
         [||] => false,
         _ => true,
     }
 
 /* 32-byte key -> 64 nibbles, high nibble first (single pass + reverse). */
-function to_nibbles(bs : list(byte)) -> list(int) = {
-    var out : list(int) = [||];
+function to_nibbles(bs : list(byte)) -> list(nibble) = {
+    var out : list(nibble) = [||];
     var rest : list(byte) = bs;
     while byte_list_nonempty(rest) do {
         match rest {
             b :: r => {
-                let bb = unsigned(b);
-                out = ediv_int(bb, 16) :: out;
-                out = emod_int(bb, 16) :: out;
+                out = b[7 .. 4] :: out;
+                out = b[3 .. 0] :: out;
                 rest = r
             },
             [||] => (),
@@ -48,27 +51,27 @@ function to_nibbles(bs : list(byte)) -> list(int) = {
 }
 
 /* hex-prefix (compact) encoding of a nibble path + leaf/extension flag (YP C.1). */
-function hp_compact(nibs : list(int), is_leaf : bool) -> list(byte) = {
+function hp_compact(nibs : list(nibble), is_leaf : bool) -> list(byte) = {
     let len = list_len(nibs);
     let odd = emod_int(len, 2) == 1;
-    let flag : int = if is_leaf then { 2 } else { 0 };
+    let flag : nibble = if is_leaf then { 0x2 } else { 0x0 };
     var out : list(byte) = [||];
-    var rest : list(int) = nibs;
+    var rest : list(nibble) = nibs;
     if odd then {
         match rest {
             n0 :: t => {
-                out = get_slice_int(8, (flag + 1) * 16 + n0, 0) :: out;
+                out = append(flag | 0x1, n0) :: out;
                 rest = t
             },
             [||] => (),
         }
     } else {
-        out = get_slice_int(8, flag * 16, 0) :: out
+        out = append(flag, 0x0) :: out
     };
     while int_list_nonempty(rest) do {
         match rest {
             a :: (b :: t) => {
-                out = get_slice_int(8, a * 16 + b, 0) :: out;
+                out = append(a, b) :: out;
                 rest = t
             },
             _ => rest = [||],
@@ -155,10 +158,10 @@ function branch_mask_popcount(mask : int) -> int = {
 }
 
 /* longest common prefix length of two nibble lists */
-function common_prefix_len(a : list(int), b : list(int)) -> int = {
+function common_prefix_len(a : list(nibble), b : list(nibble)) -> int = {
     var i : int = 0;
-    var ra : list(int) = a;
-    var rb : list(int) = b;
+    var ra : list(nibble) = a;
+    var rb : list(nibble) = b;
     var stop : bool = false;
     while not_bool(stop) do {
         match (ra, rb) {
@@ -190,13 +193,13 @@ function bytes_to_word_be256(c : list(byte)) -> bits(256) = {
 /* extension: child_ref( rlp[ hp_compact(key,ext)  , child-ref ] )            */
 /* branch:    child_ref( rlp[ 16 child-refs-or-0x80 , 0x80 ] )                 */
 /* word:      0xa0 ++ hash   (a blinded subtree / >=32B child, already a ref)  */
-function leaf_node_rlp(key : list(int), value : list(byte)) -> list(byte) =
+function leaf_node_rlp(key : list(nibble), value : list(byte)) -> list(byte) =
     rlp_list(list_append(rlp_bytes(hp_compact(key, true)), rlp_bytes(value)))
-function extension_node_rlp(key : list(int), childref : list(byte)) -> list(byte) =
+function extension_node_rlp(key : list(nibble), childref : list(byte)) -> list(byte) =
     rlp_list(list_append(rlp_bytes(hp_compact(key, false)), childref))
-function leaf_child_ref(key : list(int), value : list(byte)) -> list(byte) =
+function leaf_child_ref(key : list(nibble), value : list(byte)) -> list(byte) =
     child_ref(leaf_node_rlp(key, value))
-function extension_child_ref(key : list(int), childref : list(byte)) -> list(byte) =
+function extension_child_ref(key : list(nibble), childref : list(byte)) -> list(byte) =
     child_ref(extension_node_rlp(key, childref))
 function hash_child_ref(hash : list(byte)) -> list(byte) = list_append([|0xa0|], hash)
 
@@ -240,21 +243,21 @@ function node_to_ref(node : list(byte)) -> list(byte) =
 
 /* ---- ordered post-state updates ---------------------------------------- */
 /* lexicographic nibble-key order for recursive trie composition */
-struct TrieUpdate = { key : list(int), is_delete : bool, value : list(byte) }
+struct TrieUpdate = { key : list(nibble), is_delete : bool, value : list(byte) }
 
-function nib_lt(a : list(int), b : list(int)) -> bool = {
-    var ra : list(int) = a;
-    var rb : list(int) = b;
+function nib_lt(a : list(nibble), b : list(nibble)) -> bool = {
+    var ra : list(nibble) = a;
+    var rb : list(nibble) = b;
     var res : int = 0; /* 0 undecided, 1 a<b, 2 a>=b */
     while res == 0 do {
         match (ra, rb) {
             ([||], [||]) => res = 2,
             ([||], _) => res = 1,
             (_, [||]) => res = 2,
-            (x :: ta, y :: tb) => if x < y then {
+            (x :: ta, y :: tb) => if unsigned(x) < unsigned(y) then {
                 res = 1
             } else {
-                if x > y then {
+                if unsigned(x) > unsigned(y) then {
                     res = 2
                 } else {
                     ra = ta;
@@ -265,9 +268,9 @@ function nib_lt(a : list(int), b : list(int)) -> bool = {
     };
     res == 1
 }
-function nib_eq(a : list(int), b : list(int)) -> bool =
+function nib_eq(a : list(nibble), b : list(nibble)) -> bool =
     not_bool(nib_lt(a, b)) & not_bool(nib_lt(b, a))
-function nib_prefix_of(prefix : list(int), key : list(int)) -> bool =
+function nib_prefix_of(prefix : list(nibble), key : list(nibble)) -> bool =
     match prefix {
         [||] => true,
         x :: xs => match key {
@@ -327,23 +330,23 @@ function updates_has_delete(us : list(TrieUpdate)) -> bool =
         u :: r => u.is_delete | updates_has_delete(r),
     }
 
-function updates_at_nibble(us : list(TrieUpdate), depth : int, nib : int) -> list(TrieUpdate) =
+function updates_at_nibble(us : list(TrieUpdate), depth : int, nib : nibble) -> list(TrieUpdate) =
     match us {
         [||] => [||],
-        u :: r => if list_len(u.key) > depth & list_nth(u.key, depth, -1) == nib then {
+        u :: r => if list_len(u.key) > depth & list_nth(u.key, depth, 0x0) == nib then {
             u :: updates_at_nibble(r, depth, nib)
         } else {
             updates_at_nibble(r, depth, nib)
         },
     }
 
-function updates_all_under_prefix(us : list(TrieUpdate), prefix : list(int)) -> bool =
+function updates_all_under_prefix(us : list(TrieUpdate), prefix : list(nibble)) -> bool =
     match us {
         [||]   => true,
         u :: r => nib_prefix_of(prefix, u.key) & updates_all_under_prefix(r, prefix),
     }
 
-function updates_under_prefix(us : list(TrieUpdate), prefix : list(int)) -> list(TrieUpdate) =
+function updates_under_prefix(us : list(TrieUpdate), prefix : list(nibble)) -> list(TrieUpdate) =
     match us {
         [||] => [||],
         u :: r => if nib_prefix_of(prefix, u.key) then {
@@ -353,7 +356,7 @@ function updates_under_prefix(us : list(TrieUpdate), prefix : list(int)) -> list
         },
     }
 
-function updates_outside_prefix(us : list(TrieUpdate), prefix : list(int)) -> list(TrieUpdate) =
+function updates_outside_prefix(us : list(TrieUpdate), prefix : list(nibble)) -> list(TrieUpdate) =
     match us {
         [||] => [||],
         u :: r => if nib_prefix_of(prefix, u.key) then {
@@ -363,7 +366,7 @@ function updates_outside_prefix(us : list(TrieUpdate), prefix : list(int)) -> li
         },
     }
 
-function updates_has_key(us : list(TrieUpdate), key : list(int)) -> bool =
+function updates_has_key(us : list(TrieUpdate), key : list(nibble)) -> bool =
     match us {
         [||] => false,
         u :: r => if nib_eq(u.key, key) then {
@@ -403,7 +406,7 @@ function updates_filter_live(us : list(TrieUpdate)) -> list(TrieUpdate) =
 
 /* the maximal key prefix shared by every entry past `depth` (Eq. 208's
  * j = max{x : all keys agree on nibbles i..x}, returned as the prefix) */
-function updates_shared_prefix(us : list(TrieUpdate), depth : int) -> list(int) =
+function updates_shared_prefix(us : list(TrieUpdate), depth : int) -> list(nibble) =
     match us {
         [||] => [||],
         u :: [||] => list_drop_prefix(u.key, depth),
@@ -439,7 +442,7 @@ function updates_node(us0 : list(TrieUpdate), depth : int, fuel : int) -> list(b
                     var mask : int = 0;
                     var children : list(list(byte)) = [||];
                     foreach (i from 0 to 15) {
-                        let group = updates_at_nibble(us, depth, i);
+                        let group = updates_at_nibble(us, depth, get_slice_int(4, i, 0));
                         if list_len(group) > 0 then {
                             mask = branch_mask_set_bit(mask, i);
                             children = list_append(children, [|node_to_ref(updates_node(group, depth + 1, fuel - 1))|])

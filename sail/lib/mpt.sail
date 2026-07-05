@@ -320,47 +320,51 @@ function decode_account(leaf : list(byte)) -> (int, word, bits(256), bits(256)) 
 }
 
 /* 64 nibbles (MSB-first) of a 256-bit key hash */
-function hash_nibbles(h : bits(256)) -> list(int) = {
-    var rev : list(int) = [||];
+function hash_nibbles(h : bits(256)) -> list(nibble) = {
+    var rev : list(nibble) = [||];
     foreach (i from 0 to 63) {
-        rev = unsigned(sail_shiftright(h, 4 * (63 - i))[3 .. 0]) :: rev
+        rev = sail_shiftright(h, 4 * (63 - i))[3 .. 0] :: rev
     };
     list_reverse(rev)
 }
 
 /* hex-prefix decode: (is_leaf, path nibbles) */
-function hp_decode(p : list(byte)) -> (bool, list(int)) = {
+function hp_decode(p : list(byte)) -> (bool, list(nibble)) = {
     let n = list_len(p);
     if n == 0 then {
         (false, [||])
     } else {
-        let fb = unsigned(bytes_get(p, 0));
-        let flag = ediv_int(fb, 16);
-        let is_leaf : bool = emod_int(flag, 4) >= 2;
-        let odd : bool = emod_int(flag, 2) == 1;
-        var rev : list(int) = [||];
+        let fb = bytes_get(p, 0);
+        let flag : nibble = fb[7 .. 4];
+        let is_leaf : bool = flag[1] == bitone;
+        let odd : bool = flag[0] == bitone;
+        var rev : list(nibble) = [||];
         if odd then {
-            rev = emod_int(fb, 16) :: rev
+            rev = fb[3 .. 0] :: rev
         };
         foreach (i from 1 to (n - 1)) {
-            let byte = unsigned(bytes_get(p, i));
-            rev = ediv_int(byte, 16) :: rev;
-            rev = emod_int(byte, 16) :: rev
+            let b = bytes_get(p, i);
+            rev = b[7 .. 4] :: rev;
+            rev = b[3 .. 0] :: rev
         };
         (is_leaf, list_reverse(rev))
     }
 }
 
 /* do seg nibbles match key[pos ..] ? */
-function nibs_match(key : list(int), pos : int, seg : list(int)) -> bool = {
+function nibs_match(key : list(nibble), pos : int, seg : list(nibble)) -> bool = {
     let m = list_len(seg);
-    var ok : bool = true;
-    foreach (k from 0 to (m - 1)) {
-        if list_nth(key, pos + k, -1) != list_nth(seg, k, -2) then {
-            ok = false
-        }
-    };
-    ok
+    if pos + m > list_len(key) then {
+        false
+    } else {
+        var ok : bool = true;
+        foreach (k from 0 to (m - 1)) {
+            if list_nth(key, pos + k, 0x0) != list_nth(seg, k, 0x0) then {
+                ok = false
+            }
+        };
+        ok
+    }
 }
 
 /* node bytes for keccak `h` from the C node-db, or [] if absent (read straight
@@ -399,7 +403,7 @@ function resolve_child(f : RlpField) -> list(byte) =
 
 /* ---- recursive trie overlay -------------------------------------------- */
 
-struct TriePatch = { key : list(int), is_delete : bool, is_ref : bool, bytes : list(byte) }
+struct TriePatch = { key : list(nibble), is_delete : bool, is_ref : bool, bytes : list(byte) }
 
 
 function field_to_ref(f : RlpField) -> list(byte) =
@@ -413,7 +417,7 @@ function field_to_ref(f : RlpField) -> list(byte) =
         }
     }
 
-function merge_ext_node(prefix : list(int), childnode : list(byte)) -> list(byte) = {
+function merge_ext_node(prefix : list(nibble), childnode : list(byte)) -> list(byte) = {
     if list_len(prefix) == 0 then {
         childnode
     } else {
@@ -437,7 +441,7 @@ function merge_ext_node(prefix : list(int), childnode : list(byte)) -> list(byte
     }
 }
 
-function merge_ext_ref(prefix : list(int), childref : list(byte)) -> list(byte) = {
+function merge_ext_ref(prefix : list(nibble), childref : list(byte)) -> list(byte) = {
     if list_len(prefix) == 0 then {
         childref
     } else {
@@ -496,7 +500,7 @@ function canonical_branch_ref(mask : int, children : list(list(byte))) -> list(b
         trie_empty_ref()
     } else {
         if branch_mask_popcount(mask) == 1 then {
-            merge_ext_ref([|mask_single_index(mask)|], first_child_ref(children))
+            merge_ext_ref([|get_slice_int(4, mask_single_index(mask), 0)|], first_child_ref(children))
         } else {
             branch_child_ref(mask, children)
         }
@@ -537,26 +541,26 @@ function patches_filter_live(ps : list(TriePatch)) -> list(TriePatch) =
         },
     }
 
-function patch_ref(key : list(int), child : list(byte)) -> TriePatch =
+function patch_ref(key : list(nibble), child : list(byte)) -> TriePatch =
     struct { key = key, is_delete = false, is_ref = true, bytes = child }
 
-function patch_insert_ref_if_live(key : list(int), child : list(byte), ps : list(TriePatch)) -> list(TriePatch) =
+function patch_insert_ref_if_live(key : list(nibble), child : list(byte), ps : list(TriePatch)) -> list(TriePatch) =
     if trie_ref_is_empty(child) then {
         ps
     } else {
         patch_insert_sorted(patch_ref(key, child), ps)
     }
 
-function patch_leaf(key : list(int), value : list(byte)) -> TriePatch =
+function patch_leaf(key : list(nibble), value : list(byte)) -> TriePatch =
     struct { key = key, is_delete = false, is_ref = false, bytes = value }
 
-function patches_first_key(ps : list(TriePatch)) -> list(int) =
+function patches_first_key(ps : list(TriePatch)) -> list(nibble) =
     match ps {
         [||]   => [||],
         p :: _ => p.key,
     }
 
-function patches_last_key(ps : list(TriePatch)) -> list(int) =
+function patches_last_key(ps : list(TriePatch)) -> list(nibble) =
     match ps {
         [||] => [||],
         p :: r => match r {
@@ -565,10 +569,10 @@ function patches_last_key(ps : list(TriePatch)) -> list(int) =
         },
     }
 
-function patches_at_nibble(ps : list(TriePatch), depth : int, nib : int) -> list(TriePatch) =
+function patches_at_nibble(ps : list(TriePatch), depth : int, nib : nibble) -> list(TriePatch) =
     match ps {
         [||] => [||],
-        p :: r => if list_len(p.key) > depth & list_nth(p.key, depth, -1) == nib then {
+        p :: r => if list_len(p.key) > depth & list_nth(p.key, depth, 0x0) == nib then {
             p :: patches_at_nibble(r, depth, nib)
         } else {
             patches_at_nibble(r, depth, nib)
@@ -635,7 +639,7 @@ function patches_ref(ps0 : list(TriePatch), depth : int, fuel : int) -> list(byt
                     var mask : int = 0;
                     var children : list(list(byte)) = [||];
                     foreach (i from 0 to 15) {
-                        let group = patches_at_nibble(ps, depth, i);
+                        let group = patches_at_nibble(ps, depth, get_slice_int(4, i, 0));
                         if list_len(group) > 0 then {
                             mask = branch_mask_set_bit(mask, i);
                             children = list_append(children, [|patches_ref(group, depth + 1, fuel - 1)|])
@@ -668,16 +672,16 @@ function patches_node(ps0 : list(TriePatch), depth : int, fuel : int) -> list(by
                 } else {
                     var mask : int = 0;
                     var children : list(list(byte)) = [||];
-                    var lone_index : int = 0;
+                    var lone_nib : nibble = 0x0;
                     var lone_child : list(byte) = [||];
                     foreach (i from 0 to 15) {
-                        let group = patches_at_nibble(ps, depth, i);
+                        let group = patches_at_nibble(ps, depth, get_slice_int(4, i, 0));
                         if list_len(group) > 0 then {
                             let cnode = patches_node(group, depth + 1, fuel - 1);
                             if list_len(cnode) > 0 then {
                                 mask = branch_mask_set_bit(mask, i);
                                 children = list_append(children, [|node_to_ref(cnode)|]);
-                                lone_index = i;
+                                lone_nib = get_slice_int(4, i, 0);
                                 lone_child = cnode
                             }
                         }
@@ -686,7 +690,7 @@ function patches_node(ps0 : list(TriePatch), depth : int, fuel : int) -> list(by
                         [||]
                     } else {
                         if branch_mask_popcount(mask) == 1 then {
-                            merge_ext_node([|lone_index|], lone_child)
+                            merge_ext_node([|lone_nib|], lone_child)
                         } else {
                             branch_node_rlp(mask, children)
                         }
@@ -698,7 +702,7 @@ function patches_node(ps0 : list(TriePatch), depth : int, fuel : int) -> list(by
 }
 termination_measure patches_node(ps0, depth, fuel) = fuel
 
-function leaf_overlay_patches(key : list(int), value : list(byte), us : list(TrieUpdate)) -> list(TriePatch) = {
+function leaf_overlay_patches(key : list(nibble), value : list(byte), us : list(TrieUpdate)) -> list(TriePatch) = {
     let ups = patches_from_updates(us);
     if updates_has_key(us, key) then {
         ups
@@ -707,16 +711,16 @@ function leaf_overlay_patches(key : list(int), value : list(byte), us : list(Tri
     }
 }
 
-val trie_overlay_node_ref : (list(byte), list(int), list(TrieUpdate), int) -> list(byte)
-val trie_overlay_child_ref : (RlpField, list(int), list(TrieUpdate), int) -> list(byte)
-val trie_overlay_node_for_collapse : (list(byte), list(int), list(TrieUpdate), int) -> list(byte)
-val trie_overlay_child_node_for_collapse : (RlpField, list(int), list(TrieUpdate), int) -> list(byte)
-val trie_overlay_node_ref_preserve : (list(byte), list(int), list(TrieUpdate), int) -> list(byte)
-val trie_overlay_child_ref_preserve : (RlpField, list(int), list(TrieUpdate), int) -> list(byte)
+val trie_overlay_node_ref : (list(byte), list(nibble), list(TrieUpdate), int) -> list(byte)
+val trie_overlay_child_ref : (RlpField, list(nibble), list(TrieUpdate), int) -> list(byte)
+val trie_overlay_node_for_collapse : (list(byte), list(nibble), list(TrieUpdate), int) -> list(byte)
+val trie_overlay_child_node_for_collapse : (RlpField, list(nibble), list(TrieUpdate), int) -> list(byte)
+val trie_overlay_node_ref_preserve : (list(byte), list(nibble), list(TrieUpdate), int) -> list(byte)
+val trie_overlay_child_ref_preserve : (RlpField, list(nibble), list(TrieUpdate), int) -> list(byte)
 
 function trie_overlay_child_ref_preserve(
     f : RlpField,
-    prefix : list(int),
+    prefix : list(nibble),
     updates : list(TrieUpdate),
     fuel : int,
 ) -> (
@@ -750,7 +754,7 @@ function trie_overlay_child_ref_preserve(
 
 function trie_overlay_node_ref_preserve(
     node : list(byte),
-    prefix : list(int),
+    prefix : list(nibble),
     updates : list(TrieUpdate),
     fuel : int,
 ) -> (
@@ -801,8 +805,8 @@ function trie_overlay_node_ref_preserve(
                     var children : list(list(byte)) = [||];
                     foreach (i from 0 to 15) {
                         let field = list_nth(items, i, RLP_NONE);
-                        let child_prefix = list_append(prefix, [|i|]);
-                        let group = updates_at_nibble(updates, list_len(prefix), i);
+                        let child_prefix = list_append(prefix, [|get_slice_int(4, i, 0)|]);
+                        let group = updates_at_nibble(updates, list_len(prefix), get_slice_int(4, i, 0));
                         let cref = trie_overlay_child_ref_preserve(field, child_prefix, group, fuel - 1);
                         if not_bool(trie_ref_is_empty(cref)) then {
                             mask = branch_mask_set_bit(mask, i);
@@ -818,7 +822,7 @@ function trie_overlay_node_ref_preserve(
     }
 }
 
-function trie_overlay_child_ref(f : RlpField, prefix : list(int), updates : list(TrieUpdate), fuel : int) -> list(byte) = {
+function trie_overlay_child_ref(f : RlpField, prefix : list(nibble), updates : list(TrieUpdate), fuel : int) -> list(byte) = {
     if updates_empty(updates) then {
         field_to_ref(f)
     } else {
@@ -847,7 +851,7 @@ function trie_overlay_child_ref(f : RlpField, prefix : list(int), updates : list
 
 function trie_overlay_child_node_for_collapse(
     f : RlpField,
-    prefix : list(int),
+    prefix : list(nibble),
     updates : list(TrieUpdate),
     fuel : int,
 ) -> (
@@ -900,7 +904,7 @@ function trie_overlay_child_node_for_collapse(
 
 function trie_overlay_node_for_collapse(
     node : list(byte),
-    prefix : list(int),
+    prefix : list(nibble),
     updates : list(TrieUpdate),
     fuel : int,
 ) -> (
@@ -956,19 +960,19 @@ function trie_overlay_node_for_collapse(
                     };
                     var mask : int = 0;
                     var children : list(list(byte)) = [||];
-                    var lone_index : int = 0;
+                    var lone_nib : nibble = 0x0;
                     var lone_field : RlpField = RLP_NONE;
-                    var lone_prefix : list(int) = [||];
+                    var lone_prefix : list(nibble) = [||];
                     var lone_updates : list(TrieUpdate) = [||];
                     foreach (i from 0 to 15) {
                         let field = list_nth(items, i, RLP_NONE);
-                        let child_prefix = list_append(prefix, [|i|]);
-                        let group = updates_at_nibble(updates, list_len(prefix), i);
+                        let child_prefix = list_append(prefix, [|get_slice_int(4, i, 0)|]);
+                        let group = updates_at_nibble(updates, list_len(prefix), get_slice_int(4, i, 0));
                         let cref = trie_overlay_child_ref(field, child_prefix, group, fuel - 1);
                         if not_bool(trie_ref_is_empty(cref)) then {
                             mask = branch_mask_set_bit(mask, i);
                             children = list_append(children, [|cref|]);
-                            lone_index = i;
+                            lone_nib = get_slice_int(4, i, 0);
                             lone_field = field;
                             lone_prefix = child_prefix;
                             lone_updates = group
@@ -984,7 +988,7 @@ function trie_overlay_node_for_collapse(
                                 lone_updates,
                                 fuel - 1,
                             );
-                            merge_ext_node([|lone_index|], cnode)
+                            merge_ext_node([|lone_nib|], cnode)
                         } else {
                             branch_node_rlp(mask, children)
                         }
@@ -999,7 +1003,7 @@ function trie_overlay_node_for_collapse(
 
 function trie_overlay_node_ref(
     node : list(byte),
-    prefix : list(int),
+    prefix : list(nibble),
     updates : list(TrieUpdate),
     fuel : int,
 ) -> (
@@ -1052,7 +1056,7 @@ function trie_overlay_root_preserve(root : bits(256), updates : list(TrieUpdate)
 }
 
 /* walk the secure trie from `node` following key nibbles; return the leaf value */
-function trie_walk(node : list(byte), key : list(int), pos : int, fuel : int) -> list(byte) = {
+function trie_walk(node : list(byte), key : list(nibble), pos : int, fuel : int) -> list(byte) = {
     if fuel <= 0 | list_len(node) == 0 then {
         [||]
     } else {
@@ -1079,7 +1083,7 @@ function trie_walk(node : list(byte), key : list(int), pos : int, fuel : int) ->
                 if pos == list_len(key) then {
                     list_nth(items, 16, RLP_NONE).content
                 } else {
-                    let child = resolve_child(list_nth(items, list_nth(key, pos, 0), RLP_NONE));
+                    let child = resolve_child(list_nth(items, unsigned(list_nth(key, pos, 0x0)), RLP_NONE));
                     trie_walk(child, key, pos + 1, fuel - 1)
                 }
             } else {
@@ -1097,19 +1101,19 @@ termination_measure trie_walk(node, key, pos, fuel) = fuel
  * reads, and storage leaves are harvested into slotdb during storage traversal. */
 
 /* 64 nibbles (MSB-first) -> bits(256) */
-function nibbles_to_h256(nibs : list(int)) -> bits(256) = {
+function nibbles_to_h256(nibs : list(nibble)) -> bits(256) = {
     var acc : bits(256) = sail_zeros(256);
     let n = list_len(nibs);
     foreach (k from 0 to (n - 1)) {
-        acc = or_vec(sail_shiftleft(acc, 4), sail_zero_extend(get_slice_int(4, list_nth(nibs, k, 0), 0), 256))
+        acc = or_vec(sail_shiftleft(acc, 4), sail_zero_extend(list_nth(nibs, k, 0x0), 256))
     };
     acc
 }
 
-val witness_node_ref : (list(byte), list(int), int) -> list(byte)
-val witness_child_ref : (RlpField, list(int), int) -> list(byte)
+val witness_node_ref : (list(byte), list(nibble), int) -> list(byte)
+val witness_child_ref : (RlpField, list(nibble), int) -> list(byte)
 
-function record_witness_leaf(node : list(byte), key : list(int), value : list(byte)) -> unit = {
+function record_witness_leaf(node : list(byte), key : list(nibble), value : list(byte)) -> unit = {
     if list_len(key) == 64 then {
         if hv_storage then {
             let sv = rlp_str_word(value);
@@ -1124,7 +1128,7 @@ function record_witness_leaf(node : list(byte), key : list(int), value : list(by
 }
 
 /* child field at nibble-path `key`: descend if present, preserve if blinded */
-function witness_child_ref(f : RlpField, key : list(int), fuel : int) -> list(byte) = {
+function witness_child_ref(f : RlpField, key : list(nibble), fuel : int) -> list(byte) = {
     if f.is_list then {
         witness_node_ref(f.full, key, fuel)
     } else {
@@ -1149,7 +1153,7 @@ function witness_child_ref(f : RlpField, key : list(int), fuel : int) -> list(by
     }
 }
 
-function witness_node_ref(node : list(byte), prefix : list(int), fuel : int) -> list(byte) = {
+function witness_node_ref(node : list(byte), prefix : list(nibble), fuel : int) -> list(byte) = {
     if fuel <= 0 | list_len(node) == 0 then {
         if fuel <= 0 then {
             k_witness_bad = true
@@ -1177,7 +1181,7 @@ function witness_node_ref(node : list(byte), prefix : list(int), fuel : int) -> 
                 var mask : int = 0;
                 var children : list(list(byte)) = [||];
                 foreach (i from 0 to 15) {
-                    let cref = witness_child_ref(list_nth(items, i, RLP_NONE), list_append(prefix, [|i|]), fuel - 1);
+                    let cref = witness_child_ref(list_nth(items, i, RLP_NONE), list_append(prefix, [|get_slice_int(4, i, 0)|]), fuel - 1);
                     if not_bool(trie_ref_is_empty(cref)) then {
                         mask = branch_mask_set_bit(mask, i);
                         children = list_append(children, [|cref|])
@@ -1287,7 +1291,7 @@ function harvest_storage(ak : bits(256), sroot : bits(256)) -> unit = {
         let got = if sroot == EMPTY_TRIE_ROOT then {
                 EMPTY_TRIE_ROOT
             } else {
-                trie_ref_to_root(witness_node_ref(node_db_lookup(sroot), [||] : list(int), 256))
+                trie_ref_to_root(witness_node_ref(node_db_lookup(sroot), [||] : list(nibble), 256))
             };
         hv_storage = false;
 
