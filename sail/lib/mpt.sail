@@ -852,6 +852,11 @@ function first_child_ref(children : list(list(byte))) -> list(byte) =
         [||]   => trie_empty_ref(),
     }
 
+/* the Yellow Paper's branch canonicalization invariant (Appendix D): "a
+ * branch is then only used when necessary; no branch nodes may exist that
+ * contain only a single non-zero entry" -- a lone surviving child collapses
+ * into its parent as an extension. Only overlay deletes can create this
+ * shape; the from-scratch build (updates_node) is canonical by construction. */
 function canonical_branch_ref(mask : int, children : list(list(byte))) -> list(byte) =
     if mask == 0 then {
         trie_empty_ref()
@@ -1059,9 +1064,88 @@ function patches_node(ps0 : list(TriePatch), depth : int, fuel : int) -> list(by
 }
 termination_measure patches_node(ps0, depth, fuel) = fuel
 
-function updates_node(us : list(TrieUpdate), depth : int, fuel : int) -> list(byte) =
-    patches_node(patches_from_updates(us), depth, fuel)
+/* ---- the Yellow Paper trie functions (Appendix D) -----------------------
+ *
+ * updates_root / updates_ref / updates_node ARE the protocol definition of
+ * the trie, transcribed from the Yellow Paper (Shanghai version) and
+ * specialized to the secure trie's fixed-length 64-nibble keys (so a branch
+ * node's value slot -- the 17th item -- is always empty):
+ *
+ *   TRIE(I) = KEC(RLP(c(I,0)))                     (Eq. 206)  updates_root
+ *   n(I,i): () if I = {}; c(I,i) if ||RLP|| < 32;
+ *           KEC(RLP(c(I,i))) otherwise             (Eq. 207)  updates_ref
+ *   c(I,i): leaf | extension | 17-item branch      (Eq. 208)  updates_node
+ *
+ * I is the LIVE key/value set: delete rows are identities of the whole-map
+ * function (they exist for the pre-state overlay, which erases leaves), so c
+ * consumes only the surviving pairs. The overlay machinery below refines
+ * this definition over (pre-state map) + updates; this build is the anchor
+ * it must agree with. */
 
+function updates_filter_live(us : list(TrieUpdate)) -> list(TrieUpdate) =
+    match us {
+        [||] => [||],
+        u :: r => if u.is_delete then {
+            updates_filter_live(r)
+        } else {
+            u :: updates_filter_live(r)
+        },
+    }
+
+/* the maximal key prefix shared by every entry past `depth` (Eq. 208's
+ * j = max{x : all keys agree on nibbles i..x}, returned as the prefix) */
+function updates_shared_prefix(us : list(TrieUpdate), depth : int) -> list(int) =
+    match us {
+        [||] => [||],
+        u :: [||] => list_drop_prefix(u.key, depth),
+        u :: r => {
+            let mine = list_drop_prefix(u.key, depth);
+            let rest = updates_shared_prefix(r, depth);
+            list_take_prefix(mine, common_prefix_len(mine, rest))
+        },
+    }
+
+/* c(I, i) -- Eq. 208: the structural composition of the live set at nibble
+ * depth `depth`; [||] denotes the empty node. `fuel` only bounds recursion
+ * for the termination checker: keys are 64 nibbles, callers pass >= 256. */
+function updates_node(us0 : list(TrieUpdate), depth : int, fuel : int) -> list(byte) = {
+    if fuel <= 0 then {
+        k_witness_bad = true;
+        [||]
+    } else {
+        let us = updates_filter_live(us0);
+        match us {
+            [||] => [||],
+            u :: [||] => leaf_node_rlp(list_drop_prefix(u.key, depth), u.value),
+            _ => {
+                let shared = updates_shared_prefix(us, depth);
+                if int_list_nonempty(shared) then {
+                    /* extension: >= 2 distinct keys share `shared`, so the
+                       child one level down is necessarily a branch */
+                    let sn = list_len(shared);
+                    extension_node_rlp(shared, node_to_ref(updates_node(us, depth + sn, fuel - sn)))
+                } else {
+                    /* branch: u(j) = n({I : key[depth] = j}, depth+1); the
+                       shared-prefix maximality above guarantees >= 2 children */
+                    var mask : int = 0;
+                    var children : list(list(byte)) = [||];
+                    foreach (i from 0 to 15) {
+                        let group = updates_at_nibble(us, depth, i);
+                        if list_len(group) > 0 then {
+                            mask = branch_mask_set_bit(mask, i);
+                            children = list_append(children, [|node_to_ref(updates_node(group, depth + 1, fuel - 1))|])
+                        }
+                    };
+                    branch_node_rlp(mask, children)
+                }
+            },
+        }
+    }
+}
+termination_measure updates_node(us0, depth, fuel) = fuel
+
+/* n(I, i) -- Eq. 207: the node cap (inline when RLP < 32 bytes, else the
+ * keccak reference) */
 function updates_ref(us : list(TrieUpdate), depth : int, fuel : int) -> list(byte) =
     node_to_ref(updates_node(us, depth, fuel))
 
@@ -1381,6 +1465,7 @@ termination_measure trie_overlay_child_node_for_collapse(f, prefix, updates, fue
 termination_measure trie_overlay_node_ref_preserve(node, prefix, updates, fuel) = fuel
 termination_measure trie_overlay_child_ref_preserve(f, prefix, updates, fuel) = fuel
 
+/* TRIE(I) -- Eq. 206: the root of the trie representing the live update set */
 function updates_root(us : list(TrieUpdate)) -> bits(256) =
     trie_ref_to_root(updates_ref(us, 0, 256))
 
