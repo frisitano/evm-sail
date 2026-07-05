@@ -12,6 +12,7 @@
  * Persistent storage uses the same cache/update shape, keyed by
  * (keccak256(address), keccak256(slot)), with frame overlays for revert. */
 #include "state_db.h"
+#include "lbits_convert.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -524,16 +525,14 @@ static void storage_free_layers(storage_layer *l) {
   }
 }
 
-static storage_row selected_storage_row(uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0) {
+/* v is 4 big-endian-ordered words (v[0] = most significant) */
+static storage_row selected_storage_row(const uint64_t v[4]) {
   storage_row e;
   memset(&e, 0, sizeof(e));
   memcpy(e.acct_hash, selected_storage_account_hash, sizeof(e.acct_hash));
   memcpy(e.slot_hash, selected_storage_slot_hash, sizeof(e.slot_hash));
   memcpy(e.slot, selected_storage_slot, sizeof(e.slot));
-  e.val[0] = v3;
-  e.val[1] = v2;
-  e.val[2] = v1;
-  e.val[3] = v0;
+  memcpy(e.val, v, sizeof(e.val));
   return e;
 }
 
@@ -628,50 +627,55 @@ unit storage_map_pop_discard(const unit u) {
   return UNIT;
 }
 
-unit storage_map_key(uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0,
-                     uint64_t ah3, uint64_t ah2, uint64_t ah1, uint64_t ah0,
-                     uint64_t sh3, uint64_t sh2, uint64_t sh1, uint64_t sh0) {
-  selected_storage_slot[0] = s3; selected_storage_slot[1] = s2; selected_storage_slot[2] = s1; selected_storage_slot[3] = s0;
-  selected_storage_account_hash[0] = ah3; selected_storage_account_hash[1] = ah2; selected_storage_account_hash[2] = ah1; selected_storage_account_hash[3] = ah0;
-  selected_storage_slot_hash[0] = sh3; selected_storage_slot_hash[1] = sh2; selected_storage_slot_hash[2] = sh1; selected_storage_slot_hash[3] = sh0;
+/* select a (raw slot, account hash, slot hash) storage key for the accessors */
+unit storage_map_key(const lbits slot, const lbits acct_hash, const lbits slot_hash) {
+  lbits_to_be_words4(selected_storage_slot, slot);
+  lbits_to_be_words4(selected_storage_account_hash, acct_hash);
+  lbits_to_be_words4(selected_storage_slot_hash, slot_hash);
   selected_storage_valid = 1;
   return UNIT;
 }
 
-unit storage_map_seed(uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0) {
+unit storage_map_seed(const lbits v) {
   if (selected_storage_valid) {
-    storage_row e = selected_storage_row(v3, v2, v1, v0);
+    uint64_t w[4];
+    lbits_to_be_words4(w, v);
+    storage_row e = selected_storage_row(w);
     (void)storage_table_put(&storage_cache, &e);
     storage_iter_clear();
   }
   return UNIT;
 }
 
-unit storage_map_store(uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0) {
+unit storage_map_store(const lbits v) {
   storage_layer *top = storage_update_top();
   if (selected_storage_valid && top) {
-    storage_row e = selected_storage_row(v3, v2, v1, v0);
+    uint64_t w[4];
+    lbits_to_be_words4(w, v);
+    storage_row e = selected_storage_row(w);
     (void)storage_table_put(&top->table, &e);
     storage_iter_clear();
   }
   return UNIT;
 }
 
-uint64_t storage_map_word(uint64_t i) {
-  if (i > 3)
-    return 0;
+static const uint64_t storage_zero_val[4] = {0, 0, 0, 0};
+
+/* the 256-bit value at the selected key across all layers; 0 if absent */
+void storage_map_value(lbits *rop, const unit u) {
+  (void)u;
   storage_row *e = storage_walk();
-  return e ? e->val[3 - i] : 0;
+  be_words4_to_lbits(rop, e ? e->val : storage_zero_val);
 }
 
-uint64_t storage_map_base_word(uint64_t i) {
-  if (i > 3)
-    return 0;
+/* the value in the BASE layer only; 0 if absent */
+void storage_map_base_value(lbits *rop, const unit u) {
+  (void)u;
   storage_layer *base = storage_update_base();
   storage_row *e = base ? storage_table_get(&base->table, selected_storage_account_hash, selected_storage_slot_hash) : NULL;
   if (!e)
     e = storage_table_get(&storage_cache, selected_storage_account_hash, selected_storage_slot_hash);
-  return e ? e->val[3 - i] : 0;
+  be_words4_to_lbits(rop, e ? e->val : storage_zero_val);
 }
 
 bool storage_map_present(const unit u) {
@@ -687,8 +691,9 @@ bool storage_map_base_present(const unit u) {
   return storage_table_get(&storage_cache, selected_storage_account_hash, selected_storage_slot_hash) ? 1 : 0;
 }
 
-unit storage_map_wipe_acct_hash(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
-  uint64_t h[4] = {h3, h2, h1, h0};
+unit storage_map_wipe_acct_hash(const lbits ah) {
+  uint64_t h[4];
+  lbits_to_be_words4(h, ah);
   storage_table_remove_account_hash(&storage_cache, h);
   for (storage_layer *l = storage_updates; l; l = l->below)
     storage_table_remove_account_hash(&l->table, h);
@@ -720,20 +725,23 @@ unit storage_map_update_at(uint64_t j) {
   return UNIT;
 }
 
-uint64_t storage_map_it_acct_hash(uint64_t i) {
-  if (storage_iter_selected >= storage_iter_count || i > 3)
-    return 0;
-  return storage_iter_rows[storage_iter_selected].acct_hash[3 - i];
+void storage_map_it_acct_hash(lbits *rop, const unit u) {
+  (void)u;
+  be_words4_to_lbits(rop, storage_iter_selected < storage_iter_count
+                              ? storage_iter_rows[storage_iter_selected].acct_hash
+                              : storage_zero_val);
 }
 
-uint64_t storage_map_it_slot(uint64_t i) {
-  if (storage_iter_selected >= storage_iter_count || i > 3)
-    return 0;
-  return storage_iter_rows[storage_iter_selected].slot[3 - i];
+void storage_map_it_slot(lbits *rop, const unit u) {
+  (void)u;
+  be_words4_to_lbits(rop, storage_iter_selected < storage_iter_count
+                              ? storage_iter_rows[storage_iter_selected].slot
+                              : storage_zero_val);
 }
 
-uint64_t storage_map_it_val(uint64_t i) {
-  if (storage_iter_selected >= storage_iter_count || i > 3)
-    return 0;
-  return storage_iter_rows[storage_iter_selected].val[3 - i];
+void storage_map_it_val(lbits *rop, const unit u) {
+  (void)u;
+  be_words4_to_lbits(rop, storage_iter_selected < storage_iter_count
+                              ? storage_iter_rows[storage_iter_selected].val
+                              : storage_zero_val);
 }

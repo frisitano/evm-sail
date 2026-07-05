@@ -145,53 +145,28 @@ val code_db_store_witness_code : witness_slice -> unit
 function storage_select(a : address, s : word) -> unit = {
     let ah : hash = keccak256_address(a);
     let sh : hash = keccak256_word(s);
-    storage_map_key(
-        s[255 .. 192],
-        s[191 .. 128],
-        s[127 .. 64],
-        s[63 .. 0],
-        ah[255 .. 192],
-        ah[191 .. 128],
-        ah[127 .. 64],
-        ah[63 .. 0],
-        sh[255 .. 192],
-        sh[191 .. 128],
-        sh[127 .. 64],
-        sh[63 .. 0],
-    )
+    storage_map_key(s, ah, sh)
 }
 
 function storage_load(a : address, s : word) -> word = {
     storage_select(a, s);
-    append(
-        storage_map_word(get_slice_int(64, 3, 0)),
-        append(
-            storage_map_word(get_slice_int(64, 2, 0)),
-            append(storage_map_word(get_slice_int(64, 1, 0)), storage_map_word(get_slice_int(64, 0, 0))),
-        ),
-    )
+    storage_map_value()
 }
 
 function storage_store(a : address, s : word, v : word) -> unit = {
     storage_select(a, s);
-    storage_map_store(v[255 .. 192], v[191 .. 128], v[127 .. 64], v[63 .. 0])
+    storage_map_store(v)
 }
 
 function storage_seed(a : address, s : word, v : word) -> unit = {
     storage_select(a, s);
-    storage_map_seed(v[255 .. 192], v[191 .. 128], v[127 .. 64], v[63 .. 0])
+    storage_map_seed(v)
 }
 
 /* value in the BASE layer only (the state at tx start -- EIP-2200 original) */
 function storage_base_load(a : address, s : word) -> word = {
     storage_select(a, s);
-    append(
-        storage_map_base_word(get_slice_int(64, 3, 0)),
-        append(
-            storage_map_base_word(get_slice_int(64, 2, 0)),
-            append(storage_map_base_word(get_slice_int(64, 1, 0)), storage_map_base_word(get_slice_int(64, 0, 0))),
-        ),
-    )
+    storage_map_base_value()
 }
 
 /* present in ANY layer (an explicit 0 is present; fail-closed stateless test) */
@@ -207,10 +182,7 @@ function storage_base_present(a : address, s : word) -> bool = {
     storage_map_base_present()
 }
 
-function storage_wipe_addr(a : address) -> unit = {
-    let ah : hash = keccak256_address(a);
-    storage_map_wipe_acct_hash(ah[255 .. 192], ah[191 .. 128], ah[127 .. 64], ah[63 .. 0])
-}
+function storage_wipe_addr(a : address) -> unit = storage_map_wipe_acct_hash(keccak256_address(a))
 
 function transient_reset() -> unit = transient_storage_reset(get_slice_int(64, 0, 0))
 
@@ -236,32 +208,10 @@ val stateless_storage : (address, word) -> word
 /* flattened storage enumeration (dump_state / state root; cold path) */
 function storage_count() -> int = unsigned(storage_map_count())
 function storage_update_count() -> int = unsigned(storage_map_update_count())
-function storage_selected_slot() -> word =
-    append(
-        storage_map_it_slot(get_slice_int(64, 3, 0)),
-        append(
-            storage_map_it_slot(get_slice_int(64, 2, 0)),
-            append(storage_map_it_slot(get_slice_int(64, 1, 0)), storage_map_it_slot(get_slice_int(64, 0, 0))),
-        ),
-    )
-function storage_selected_val() -> word =
-    append(
-        storage_map_it_val(get_slice_int(64, 3, 0)),
-        append(
-            storage_map_it_val(get_slice_int(64, 2, 0)),
-            append(storage_map_it_val(get_slice_int(64, 1, 0)), storage_map_it_val(get_slice_int(64, 0, 0))),
-        ),
-    )
-function storage_selected_hashed_entry() -> (bits(256), word, word) = {
-    let ak : bits(256) = append(
-        storage_map_it_acct_hash(get_slice_int(64, 3, 0)),
-        append(
-            storage_map_it_acct_hash(get_slice_int(64, 2, 0)),
-            append(storage_map_it_acct_hash(get_slice_int(64, 1, 0)), storage_map_it_acct_hash(get_slice_int(64, 0, 0))),
-        ),
-    );
-    (ak, storage_selected_slot(), storage_selected_val())
-}
+function storage_selected_slot() -> word = storage_map_it_slot()
+function storage_selected_val() -> word = storage_map_it_val()
+function storage_selected_hashed_entry() -> (bits(256), word, word) =
+    (storage_map_it_acct_hash(), storage_selected_slot(), storage_selected_val())
 function storage_hashed_entry(j : int) -> (bits(256), word, word) = {
     storage_map_at(get_slice_int(64, j, 0));
     storage_selected_hashed_entry()

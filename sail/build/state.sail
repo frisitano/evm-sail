@@ -25,59 +25,20 @@ function storage_map_pop_commit() -> unit = storage_map_pop_commit_ffi()
 val storage_map_pop_discard_ffi = impure { _: "storage_map_pop_discard" } : unit -> unit
 function storage_map_pop_discard() -> unit = storage_map_pop_discard_ffi()
 
-val storage_map_key_ffi = impure { _: "storage_map_key" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> unit
-function storage_map_key(
-    x0 : bits(64),
-    x1 : bits(64),
-    x2 : bits(64),
-    x3 : bits(64),
-    x4 : bits(64),
-    x5 : bits(64),
-    x6 : bits(64),
-    x7 : bits(64),
-    x8 : bits(64),
-    x9 : bits(64),
-    x10 : bits(64),
-    x11 : bits(64),
-) -> (
-    unit
-) =
-    storage_map_key_ffi(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11)
+val storage_map_key_ffi = impure { _: "storage_map_key" } : (word, hash, hash) -> unit
+function storage_map_key(s : word, ah : hash, sh : hash) -> unit = storage_map_key_ffi(s, ah, sh)
 
-val storage_map_seed_ffi = impure { _: "storage_map_seed" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-function storage_map_seed(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64)) -> unit = storage_map_seed_ffi(
-    x0,
-    x1,
-    x2,
-    x3,
-)
+val storage_map_seed_ffi = impure { _: "storage_map_seed" } : word -> unit
+function storage_map_seed(v : word) -> unit = storage_map_seed_ffi(v)
 
-val storage_map_store_ffi = impure { _: "storage_map_store" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-function storage_map_store(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64)) -> unit = storage_map_store_ffi(
-    x0,
-    x1,
-    x2,
-    x3,
-)
+val storage_map_store_ffi = impure { _: "storage_map_store" } : word -> unit
+function storage_map_store(v : word) -> unit = storage_map_store_ffi(v)
 
-val storage_map_word_ffi = impure { _: "storage_map_word" } : bits(64) -> bits(64)
-function storage_map_word(x0 : bits(64)) -> bits(64) = storage_map_word_ffi(x0)
+val storage_map_value_ffi = impure { _: "storage_map_value" } : unit -> word
+function storage_map_value() -> word = storage_map_value_ffi()
 
-val storage_map_base_word_ffi = impure { _: "storage_map_base_word" } : bits(64) -> bits(64)
-function storage_map_base_word(x0 : bits(64)) -> bits(64) = storage_map_base_word_ffi(x0)
+val storage_map_base_value_ffi = impure { _: "storage_map_base_value" } : unit -> word
+function storage_map_base_value() -> word = storage_map_base_value_ffi()
 
 val storage_map_present_ffi = impure { _: "storage_map_present" } : unit -> bool
 function storage_map_present() -> bool = storage_map_present_ffi()
@@ -85,18 +46,8 @@ function storage_map_present() -> bool = storage_map_present_ffi()
 val storage_map_base_present_ffi = impure { _: "storage_map_base_present" } : unit -> bool
 function storage_map_base_present() -> bool = storage_map_base_present_ffi()
 
-val storage_map_wipe_acct_hash_ffi = impure { _: "storage_map_wipe_acct_hash" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> unit
-function storage_map_wipe_acct_hash(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64)) -> unit = storage_map_wipe_acct_hash_ffi(
-    x0,
-    x1,
-    x2,
-    x3,
-)
+val storage_map_wipe_acct_hash_ffi = impure { _: "storage_map_wipe_acct_hash" } : hash -> unit
+function storage_map_wipe_acct_hash(ah : hash) -> unit = storage_map_wipe_acct_hash_ffi(ah)
 
 val storage_map_count_ffi = impure { _: "storage_map_count" } : unit -> bits(64)
 function storage_map_count() -> bits(64) = storage_map_count_ffi()
@@ -110,14 +61,14 @@ function storage_map_at(x0 : bits(64)) -> unit = storage_map_at_ffi(x0)
 val storage_map_update_at_ffi = impure { _: "storage_map_update_at" } : bits(64) -> unit
 function storage_map_update_at(x0 : bits(64)) -> unit = storage_map_update_at_ffi(x0)
 
-val storage_map_it_acct_hash_ffi = impure { _: "storage_map_it_acct_hash" } : bits(64) -> bits(64)
-function storage_map_it_acct_hash(x0 : bits(64)) -> bits(64) = storage_map_it_acct_hash_ffi(x0)
+val storage_map_it_acct_hash_ffi = impure { _: "storage_map_it_acct_hash" } : unit -> hash
+function storage_map_it_acct_hash() -> hash = storage_map_it_acct_hash_ffi()
 
-val storage_map_it_slot_ffi = impure { _: "storage_map_it_slot" } : bits(64) -> bits(64)
-function storage_map_it_slot(x0 : bits(64)) -> bits(64) = storage_map_it_slot_ffi(x0)
+val storage_map_it_slot_ffi = impure { _: "storage_map_it_slot" } : unit -> word
+function storage_map_it_slot() -> word = storage_map_it_slot_ffi()
 
-val storage_map_it_val_ffi = impure { _: "storage_map_it_val" } : bits(64) -> bits(64)
-function storage_map_it_val(x0 : bits(64)) -> bits(64) = storage_map_it_val_ffi(x0)
+val storage_map_it_val_ffi = impure { _: "storage_map_it_val" } : unit -> word
+function storage_map_it_val() -> word = storage_map_it_val_ffi()
 
 val acctmap_reset_ffi = impure { _: "acctmap_reset" } : unit -> unit
 function acctmap_reset() -> unit = acctmap_reset_ffi()

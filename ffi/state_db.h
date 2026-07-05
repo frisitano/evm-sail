@@ -47,22 +47,20 @@ unit storage_map_reset(const unit u);
 unit storage_map_push(const unit u);
 unit storage_map_pop_commit(const unit u);
 unit storage_map_pop_discard(const unit u);
-unit storage_map_key(uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0,
-                     uint64_t ah3, uint64_t ah2, uint64_t ah1, uint64_t ah0,
-                     uint64_t sh3, uint64_t sh2, uint64_t sh1, uint64_t sh0);
-unit storage_map_seed(uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0);
-unit storage_map_store(uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0);
-uint64_t storage_map_word(uint64_t i);
-uint64_t storage_map_base_word(uint64_t i);
+unit storage_map_key(const lbits slot, const lbits acct_hash, const lbits slot_hash);
+unit storage_map_seed(const lbits v);
+unit storage_map_store(const lbits v);
+void storage_map_value(lbits *rop, const unit u);
+void storage_map_base_value(lbits *rop, const unit u);
 bool storage_map_present(const unit u);
 bool storage_map_base_present(const unit u);
-unit storage_map_wipe_acct_hash(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);
+unit storage_map_wipe_acct_hash(const lbits ah);
 uint64_t storage_map_count(const unit u);
 uint64_t storage_map_update_count(const unit u);
 unit storage_map_at(uint64_t j);
 unit storage_map_update_at(uint64_t j);
-uint64_t storage_map_it_acct_hash(uint64_t i);
-uint64_t storage_map_it_slot(uint64_t i);
-uint64_t storage_map_it_val(uint64_t i);
+void storage_map_it_acct_hash(lbits *rop, const unit u);
+void storage_map_it_slot(lbits *rop, const unit u);
+void storage_map_it_val(lbits *rop, const unit u);
 
 #endif
