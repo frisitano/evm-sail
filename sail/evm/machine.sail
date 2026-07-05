@@ -52,7 +52,7 @@ register code_len : int = 0
  * range, so execution code never aliases mutable memory. */
 function frame_code_addr(a : address) -> unit = {
     let h : hash = k_code_key(a);
-    code_len = unsigned(code_db_frame_set_stored_code(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]))
+    code_len = unsigned(code_db_frame_set_stored_code(h))
 }
 
 /* re-read the (C-side) frame descriptor's length after a child frame pops.

@@ -224,8 +224,7 @@ function delegation_code(a : address) -> list(byte) = 0xef :: 0x01 :: 0x00 :: ad
  * invalid (EIP-8025 witness_validation_codes), rather than silently treating the
  * account as codeless. KECCAK_EMPTY accounts are legitimately codeless. */
 function note_code_resolved(h : hash) -> unit =
-    if (h != KECCAK_EMPTY) &
-        (unsigned(code_db_stored_code_length(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0])) == 0) then {
+    if (h != KECCAK_EMPTY) & (unsigned(code_db_stored_code_length(h)) == 0) then {
         k_witness_bad = true
     }
 
@@ -237,7 +236,7 @@ function k_deleg_target(a : address) -> (bool, address) = {
        witness (an auth skipped for an invalid chain id), which must not invalidate
        the block. Missing EXECUTED/queried code is flagged in k_get_code_size /
        k_code_copy instead. */
-    let r : bits(168) = code_db_read_delegation(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]);
+    let r : bits(168) = code_db_read_delegation(h);
     (r[160] == bitone, r[159 .. 0])
 }
 
@@ -246,7 +245,7 @@ function k_deleg_target(a : address) -> (bool, address) = {
 function k_get_code_size(a : address) -> int = {
     let h : hash = k_code_key(a);
     note_code_resolved(h);
-    unsigned(code_db_stored_code_length(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]))
+    unsigned(code_db_stored_code_length(h))
 }
 function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
     let h : hash = k_code_key(a);
@@ -255,15 +254,7 @@ function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
     /* clamp a beyond-2^64 source offset to a beyond-any-code sentinel: a past-end
      * read zero-fills the destination (EELS buffer_read semantics) */
     let o = if off > 16777216 then { 16777216 } else { off };
-    code_db_copy_stored_code_to_memory(
-        h[255 .. 192],
-        h[191 .. 128],
-        h[127 .. 64],
-        h[63 .. 0],
-        get_slice_int(64, dst, 0),
-        get_slice_int(64, o, 0),
-        get_slice_int(64, len, 0),
-    )
+    code_db_copy_stored_code_to_memory(h, get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
 }
 
 /* --- pre-state seeding (driver / runner; not part of execution) --- */

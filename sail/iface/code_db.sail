@@ -14,7 +14,7 @@
 val code_db_frame_jumpdest_valid : bits(64) -> bool
 val code_db_frame_code_byte : bits(64) -> bits(8)
 val code_db_frame_push_immediate_word : (bits(64), bits(64)) -> word
-val code_db_frame_set_stored_code : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val code_db_frame_set_stored_code : hash -> bits(64)
 val code_db_prepare_child_frame_memory_code : (bits(64), bits(64)) -> bits(64)
 val code_db_frame_set_tx_input_code : unit -> bits(64)
 val code_db_frame_clear_code : unit -> unit
@@ -23,7 +23,7 @@ val code_db_frame_code_length : unit -> bits(64)
 val code_db_copy_frame_code_to_memory : (bits(64), bits(64), bits(64)) -> unit
 val code_db_calldata_load_word : bits(64) -> word
 
-val code_db_read_delegation : (bits(64), bits(64), bits(64), bits(64)) -> bits(168)
+val code_db_read_delegation : hash -> bits(168)
 
 /* ---- C code store (ffi/code_db.c): contract code, content-addressed --------
  * Keyed by codeHash (not address): each entry holds the code bytes AND the
@@ -32,7 +32,7 @@ val code_db_read_delegation : (bits(64), bits(64), bits(64), bits(64)) -> bits(1
  * de-duplicated and append-only, so REVERT needs no code rollback: restoring an
  * account's codeHash restores its code. An account resolves its code by codeHash
  * (k_code_key). */
-val code_db_stream_code_begin : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
-val code_db_stored_code_length : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
-val code_db_copy_stored_code_to_memory : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
+val code_db_stream_code_begin : hash -> bits(64)
+val code_db_stored_code_length : hash -> bits(64)
+val code_db_copy_stored_code_to_memory : (hash, bits(64), bits(64), bits(64)) -> unit
 val code_db_stream_code_byte : bits(8) -> unit

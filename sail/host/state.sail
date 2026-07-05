@@ -120,7 +120,7 @@ register k_logs : list(LogEntry) = [||]
  * If `h` is already present (identical bytes) the byte stream is skipped
  * (code_db_stream_code_begin returns 0) -- the store is append-only and de-duplicated. */
 function code_db_store_code(h : hash, c : list(byte)) -> unit = {
-    if code_db_stream_code_begin(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]) == 0x0000000000000000 then {
+    if code_db_stream_code_begin(h) == 0x0000000000000000 then {
         ()
     } else {
         var rest : list(byte) = c;

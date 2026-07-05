@@ -91,18 +91,19 @@ static void code_db_build_jumpdest_bitmap(uint8_t *bm, const uint8_t *p, uint32_
   }
 }
 
-/* begin storing the code whose keccak is (h3,h2,h1,h0); content-addressed --
+/* begin storing the code whose keccak is `h`; content-addressed --
  * returns 1 if this hash is new (caller streams the bytes via
  * code_db_stream_code_byte), 0 if it
  * is already stored (same hash == same bytes, so streaming is skipped). */
-uint64_t code_db_stream_code_begin(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
+uint64_t code_db_stream_code_begin(const lbits h) {
   if (!code_db) code_db_grow();
-  uint64_t key[4] = { h3, h2, h1, h0 };
+  uint64_t key[4];
+  lbits_to_be_words4(key, h);
   code_db_ent *e = code_db_find(key);
   if (e->used && e->len) { code_db_cur = e; return 0; }   /* already present */
   if (!e->used) {
     e->used = 1;
-    e->a[0] = h3; e->a[1] = h2; e->a[2] = h1; e->a[3] = h0;
+    memcpy(e->a, key, sizeof(e->a));
     code_db_n++;
     if (code_db_n * 10 >= code_db_cap * 7) { code_db_grow(); e = code_db_find(key); }
   }
@@ -199,11 +200,12 @@ static void fc_inl_fit(int d, uint32_t need) {
   }
 }
 
-/* current frame's code := the store entry for codeHash (h3,h2,h1,h0); len */
-uint64_t code_db_frame_set_stored_code(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
+/* current frame's code := the store entry for codeHash `h`; len */
+uint64_t code_db_frame_set_stored_code(const lbits h) {
   fc_desc *f = fc_cur();
   if (code_db) {
-    uint64_t key[4] = { h3, h2, h1, h0 };
+    uint64_t key[4];
+    lbits_to_be_words4(key, h);
     code_db_ent *e = code_db_find(key);
     if (e->used && e->len) {
       f->p = e->p;
@@ -256,25 +258,25 @@ unit code_db_frame_clear_code(const unit u) {
 /* EXTCODESIZE / EXTCODECOPY / EXTCODEHASH read the store directly: the Sail
  * account code value defines the value, but walking it is O(|code|) per opcode. */
 
-static const code_db_ent *code_db_get(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
+static const code_db_ent *code_db_get(const lbits h) {
   if (!code_db) return NULL;
-  uint64_t key[4] = { h3, h2, h1, h0 };
+  uint64_t key[4];
+  lbits_to_be_words4(key, h);
   const code_db_ent *e = code_db_find(key);
   return (e->used && e->len) ? e : NULL;
 }
 
-uint64_t code_db_stored_code_length(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
-  const code_db_ent *e = code_db_get(h3, h2, h1, h0);
+uint64_t code_db_stored_code_length(const lbits h) {
+  const code_db_ent *e = code_db_get(h);
   return e ? e->len : 0;
 }
 
 /* EXTCODECOPY: code(hash)[off..off+len) -> memory[dst..), zero-padded */
-unit code_db_copy_stored_code_to_memory(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
-                                        uint64_t dst, uint64_t off, uint64_t len) {
+unit code_db_copy_stored_code_to_memory(const lbits h, uint64_t dst, uint64_t off, uint64_t len) {
   if (!len) return UNIT;
   uint8_t *d = hm_wr(dst, len);
   if (!d) return UNIT;
-  const code_db_ent *e = code_db_get(h3, h2, h1, h0);
+  const code_db_ent *e = code_db_get(h);
   for (uint64_t k = 0; k < len; k++) {
     uint64_t i = off + k;
     d[k] = (i >= off) ? code_db_byte(e, i) : 0;
@@ -285,8 +287,8 @@ unit code_db_copy_stored_code_to_memory(uint64_t h3, uint64_t h2, uint64_t h1, u
 /* EIP-7702 delegation probe: (is_designation << 160) | target, in one call
  * (this runs on every CALL-family target; reading the code any other way
  * would be O(|code|) or a code-db walk) */
-void code_db_read_delegation(lbits *rop, uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
-  const code_db_ent *e = code_db_get(h3, h2, h1, h0);
+void code_db_read_delegation(lbits *rop, const lbits h) {
+  const code_db_ent *e = code_db_get(h);
   int deleg = e && e->len == 23 && e->p[0] == 0xef && e->p[1] == 0x01 && e->p[2] == 0x00;
   uint8_t b[21] = {0};
   if (deleg) {
