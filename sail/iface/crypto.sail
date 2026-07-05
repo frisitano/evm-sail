@@ -28,10 +28,22 @@ val run_precompile_tx_input : int -> bool
 /*                                                                         */
 /* Common execution code names the operation it needs: secure trie keys,   */
 /* SSZ Merkle parents, code storage, tx/auth preimage hashing, and signing */
-/* precompile checks. spec.sail defines these in terms of canonical byte   */
-/* lists. build.sail may refine these with pointer/length FFI hooks or     */
+/* precompile checks. sail/spec/ defines these in terms of canonical byte  */
+/* lists. sail/build/ may refine these with pointer/length FFI hooks or    */
 /* staged byte sinks.                                                      */
 /* ======================================================================= */
+
+/* The hash primitives over materialized byte lists. keccak256 and sha256
+ * are the axiomatic crypto core: abstract in the spec backend, implemented
+ * in the build backend by streaming the list through the C host-bytes
+ * channel. keccak_rlp_payload is a refinement pair whose canonical meaning
+ * is keccak256(domain ++ rlp_list_prefix(len(payload)) ++ payload); the
+ * build backend streams the three parts without concatenating them. All
+ * shared consensus hashing (lib/consensus_hash.sail) is written against
+ * these three, so RLP/signing/header layouts exist exactly once. */
+val keccak256 : list(byte) -> bits(256)
+val sha256 : list(byte) -> bits(256)
+val keccak_rlp_payload : (list(byte), list(byte)) -> bits(256)
 
 val bytes_keccak : ByteSlice -> bits(256)
 val bytes_sha256_prefixed : (byte, ByteSlice) -> bits(256)

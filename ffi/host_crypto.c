@@ -169,30 +169,6 @@ void host_sha256_pair(lbits *rop, uint64_t a3, uint64_t a2, uint64_t a1, uint64_
   host_sha256_lbits(rop, buf, sizeof buf);
 }
 
-void host_sha256_execution_requests(lbits *rop,
-                                    uint64_t has0, uint64_t d03, uint64_t d02,
-                                    uint64_t d01, uint64_t d00,
-                                    uint64_t has1, uint64_t d13, uint64_t d12,
-                                    uint64_t d11, uint64_t d10,
-                                    uint64_t has2, uint64_t d23, uint64_t d22,
-                                    uint64_t d21, uint64_t d20) {
-  uint8_t buf[96];
-  uint64_t len = 0;
-  if (has0) {
-    host_put_word(buf + len, d03, d02, d01, d00);
-    len += 32;
-  }
-  if (has1) {
-    host_put_word(buf + len, d13, d12, d11, d10);
-    len += 32;
-  }
-  if (has2) {
-    host_put_word(buf + len, d23, d22, d21, d20);
-    len += 32;
-  }
-  host_sha256_lbits(rop, buf, len);
-}
-
 static int host_bytes_reserve(uint64_t need) {
   if (need <= HOST_bytes_cap) return 1;
   uint64_t cap = HOST_bytes_cap ? HOST_bytes_cap : 256;
