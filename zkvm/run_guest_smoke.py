@@ -38,8 +38,15 @@ def expand(paths):
             yield p
 
 
+# Per-invocation build directory: concurrent gate runs sharing zkvm/build/
+# race on the baked input vector and relinked ELF (observed as byte-exact
+# outputs of the WRONG fixture). The first fixture pays the full model build
+# in any case, so isolation costs nothing extra.
+BUILD_DIR = tempfile.mkdtemp(prefix="zkvm-smoke-")
+
+
 def run_guest(vec_path, rebake, timeout):
-    env = dict(os.environ, VEC=vec_path)
+    env = dict(os.environ, VEC=vec_path, ZKVM_BUILD=BUILD_DIR)
     if rebake:
         env["REBAKE_ONLY"] = "1"
     r = subprocess.run([BUILD_SH, "run"], capture_output=True, env=env,

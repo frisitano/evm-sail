@@ -15,7 +15,9 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RT="$HERE/runtime"
-BUILD="$HERE/build"
+# Override for concurrency: two gate runs sharing one build dir race on the
+# baked input vector + relinked ELF (run_guest_smoke.py isolates itself).
+BUILD="${ZKVM_BUILD:-$HERE/build}"
 ROOT="$(cd "$HERE/.." && pwd)"
 
 SAIL="${SAIL:-sail}"
