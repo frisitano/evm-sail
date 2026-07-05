@@ -28,8 +28,10 @@ duplicating instructions elsewhere.
   `EVM_ENTRY=runner`.
 - `sail/host/state.sail` and `sail/host/kernel.sail` define the host world-state
   interface used by EVM execution.
-- `sail/lib/mpt.sail` owns account/storage MPT root computation and stateless
-  witness traversal.
+- `sail/lib/trie.sail` is the canonical Yellow Paper trie (Appendix C/D:
+  hex-prefix encoding, node composition, and TRIE over the live update set);
+  `sail/lib/mpt.sail` owns account/storage MPT root computation and stateless
+  witness traversal (the pre-state overlay refining `lib/trie.sail`).
 - `sail/iface/*.sail` holds the abstract `val` contract layer for the impure
   host interface (see `proof/extern-boundary.md`); `sail/spec/*.sail` and
   `sail/build/*.sail` are the backend definitions selected by `EVM_BACKEND`.
