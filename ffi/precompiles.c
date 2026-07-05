@@ -5,24 +5,46 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define PRE_INMAX  (1u << 21)   /* EEST drives >1.2MB pairing inputs (multi-inf) */
 #define PRE_OUTMAX (1u << 17)
 
-static uint8_t  PRE_in[PRE_INMAX];
+/* Staging buffers are lazily-grown heap allocations, NOT statics: the
+ * zkvm-standards memory contract requires the whole ELF .bss zeroed, so a
+ * multi-MB static array is memory-image the VM must commit to even when no
+ * precompile ever runs. Untouched heap pages are free. PRE_INMAX/PRE_OUTMAX
+ * remain the hard caps. */
+static uint8_t *PRE_in;
+static uint32_t PRE_in_cap;
 static uint32_t PRE_inlen;
-static uint8_t  PRE_scratch[PRE_OUTMAX];
-static uint8_t *PRE_out = PRE_scratch;
-static uint32_t PRE_outcap = PRE_OUTMAX;
+static uint8_t *PRE_scratch;
+static uint8_t *PRE_out;
+static uint32_t PRE_outcap;
 static uint32_t PRE_outlen;
 static int      PRE_id;
 static int      PRE_ok;
-static const uint8_t *PRE_src = PRE_in;
+static const uint8_t PRE_empty[1] = {0};
+static const uint8_t *PRE_src = PRE_empty;
+
+/* grow *buf to at least need bytes (cap `max`); returns NULL past the cap */
+static uint8_t *pre_grow(uint8_t **buf, uint32_t *cap, uint64_t need, uint32_t max) {
+  if (need > max) return NULL;
+  if (*cap >= need && *buf) return *buf;
+  uint32_t nc = *cap ? *cap : 1024;
+  while (nc < need) nc *= 2;
+  uint8_t *p = (uint8_t *)realloc(*buf, nc);
+  if (!p) return NULL;
+  *buf = p;
+  *cap = nc;
+  return p;
+}
 
 static void precompile_output_scratch(void) {
+  if (!PRE_scratch) PRE_scratch = (uint8_t *)malloc(PRE_OUTMAX);
   PRE_out = PRE_scratch;
-  PRE_outcap = PRE_OUTMAX;
+  PRE_outcap = PRE_scratch ? PRE_OUTMAX : 0;
 }
 
 static uint8_t precompile_byte(uint32_t i) {
@@ -63,7 +85,7 @@ static void precompile_begin(uint64_t id) {
   PRE_inlen = 0;
   PRE_outlen = 0;
   PRE_ok = 1;
-  PRE_src = PRE_in;
+  PRE_src = PRE_empty;
   precompile_output_scratch();
 }
 
@@ -73,12 +95,13 @@ static void precompile_set_input(uint64_t id, const uint8_t *src, uint64_t len) 
     PRE_ok = 0;
     return;
   }
-  PRE_src = len ? src : PRE_in;
+  PRE_src = len ? src : PRE_empty;
   PRE_inlen = (uint32_t)len;
 }
 
 static int precompile_materialize_input(uint64_t padded_len) {
-  if (padded_len > PRE_INMAX || PRE_inlen > PRE_INMAX) {
+  uint64_t need = padded_len > PRE_inlen ? padded_len : PRE_inlen;
+  if (!pre_grow(&PRE_in, &PRE_in_cap, need ? need : 1, PRE_INMAX)) {
     PRE_ok = 0;
     PRE_outlen = 0;
     return 0;
@@ -95,7 +118,13 @@ static int precompile_materialize_input(uint64_t padded_len) {
  * native compact (Fp 48B). G1 point = x||y (96B). For a G2 point blst serializes
  * each Fp2 coordinate imaginary-part-first (c1||c0), while the EVM layout is
  * c0||c1; the helpers swap accordingly. A raw Fp2 (MAP_FP2 input) stays c0||c1. */
-static uint8_t BLS_scratch[PRE_INMAX];
+static uint8_t *BLS_scratch;
+static uint32_t BLS_scratch_cap;
+
+/* reserve k * pair_size bytes of BLS marshalling space (NULL past the cap) */
+static uint8_t *bls_reserve(uint64_t k, uint64_t pair_size) {
+  return pre_grow(&BLS_scratch, &BLS_scratch_cap, k * pair_size, PRE_INMAX);
+}
 
 static int bls_strip_fp(uint8_t *dst48, uint32_t off) {
   for (uint32_t i = 0; i < 16; i++) if (precompile_byte(off + i) != 0) return 0;
@@ -278,13 +307,14 @@ static uint64_t precompile_run_current(void) {
     case 12: {
       if (PRE_inlen == 0 || PRE_inlen % 160 != 0) { PRE_ok = 0; PRE_outlen = 0; break; }
       uint32_t k = PRE_inlen / 160;
-      int ok = 1;
-      for (uint32_t i = 0; i < k; i++) {
-        if (!bls_in_g1(BLS_scratch + i * 128, i * 160)) { ok = 0; break; }
-        precompile_copy(BLS_scratch + i * 128 + 96, i * 160 + 128, 32);
+      uint8_t *pairs = bls_reserve(k, 128);
+      int ok = pairs != NULL;
+      for (uint32_t i = 0; ok && i < k; i++) {
+        if (!bls_in_g1(pairs + i * 128, i * 160)) { ok = 0; break; }
+        precompile_copy(pairs + i * 128 + 96, i * 160 + 128, 32);
       }
       uint8_t out[96];
-      if (ok && zkvm_bls12_g1_msm((const zkvm_bls12_381_g1_msm_pair*)BLS_scratch, k,
+      if (ok && zkvm_bls12_g1_msm((const zkvm_bls12_381_g1_msm_pair*)pairs, k,
               (zkvm_bls12_381_g1_point*)out) == ZKVM_EOK) { bls_out_g1(0, out); PRE_outlen = 128; }
       else { PRE_ok = 0; PRE_outlen = 0; }
       break;
@@ -301,13 +331,14 @@ static uint64_t precompile_run_current(void) {
     case 14: {
       if (PRE_inlen == 0 || PRE_inlen % 288 != 0) { PRE_ok = 0; PRE_outlen = 0; break; }
       uint32_t k = PRE_inlen / 288;
-      int ok = 1;
-      for (uint32_t i = 0; i < k; i++) {
-        if (!bls_in_g2(BLS_scratch + i * 224, i * 288)) { ok = 0; break; }
-        precompile_copy(BLS_scratch + i * 224 + 192, i * 288 + 256, 32);
+      uint8_t *pairs = bls_reserve(k, 224);
+      int ok = pairs != NULL;
+      for (uint32_t i = 0; ok && i < k; i++) {
+        if (!bls_in_g2(pairs + i * 224, i * 288)) { ok = 0; break; }
+        precompile_copy(pairs + i * 224 + 192, i * 288 + 256, 32);
       }
       uint8_t out[192];
-      if (ok && zkvm_bls12_g2_msm((const zkvm_bls12_381_g2_msm_pair*)BLS_scratch, k,
+      if (ok && zkvm_bls12_g2_msm((const zkvm_bls12_381_g2_msm_pair*)pairs, k,
               (zkvm_bls12_381_g2_point*)out) == ZKVM_EOK) { bls_out_g2(0, out); PRE_outlen = 256; }
       else { PRE_ok = 0; PRE_outlen = 0; }
       break;
@@ -315,13 +346,14 @@ static uint64_t precompile_run_current(void) {
     case 15: {
       if (PRE_inlen == 0 || PRE_inlen % 384 != 0) { PRE_ok = 0; PRE_outlen = 0; break; }
       uint32_t k = PRE_inlen / 384;
-      int ok = 1;
-      for (uint32_t i = 0; i < k; i++) {
-        if (!bls_in_g1(BLS_scratch + i * 288, i * 384) ||
-            !bls_in_g2(BLS_scratch + i * 288 + 96, i * 384 + 128)) { ok = 0; break; }
+      uint8_t *pairs = bls_reserve(k, 288);
+      int ok = pairs != NULL;
+      for (uint32_t i = 0; ok && i < k; i++) {
+        if (!bls_in_g1(pairs + i * 288, i * 384) ||
+            !bls_in_g2(pairs + i * 288 + 96, i * 384 + 128)) { ok = 0; break; }
       }
       bool verified = false;
-      if (ok && zkvm_bls12_pairing((const zkvm_bls12_381_pairing_pair*)BLS_scratch, k, &verified) == ZKVM_EOK) {
+      if (ok && zkvm_bls12_pairing((const zkvm_bls12_381_pairing_pair*)pairs, k, &verified) == ZKVM_EOK) {
         memset(PRE_out, 0, 32);
         PRE_out[31] = verified ? 1 : 0;
         PRE_outlen = 32;
