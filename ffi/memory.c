@@ -114,7 +114,6 @@ unit txin_byte(uint64_t b) {
   txin.buf[txin.len++] = (uint8_t)b;
   return UNIT;
 }
-uint64_t cd_len(const unit u) { (void)u; return cd[h_top].len; }
 
 /* the executing tx's input (a create-tx's initcode source; gas byte reads) */
 uint64_t txd_copy(uint8_t *dst, uint64_t cap) {

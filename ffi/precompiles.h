@@ -9,9 +9,10 @@
 #define PRECOMPILES_H
 
 #include "sail.h"
+#include <stdbool.h>
 #include <stdint.h>
 
-uint64_t precompile_run_source_to_returndata(uint64_t id, uint64_t source_kind,
+bool precompile_run_source_to_returndata(uint64_t id, uint64_t source_kind,
                                             uint64_t off, uint64_t len);
 
 uint64_t precompile_secp256k1_verify_hash_sig_pub(

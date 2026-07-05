@@ -24,13 +24,10 @@ val precompile_run_source_to_returndata_ffi = impure { _: "precompile_run_source
         bits(64),
         bits(64),
         bits(64),
-    ) -> bits(8)
+    ) -> bool
 
 function run_precompile_slice(num : int, s : ByteSlice) -> bool =
-    unsigned(
-        precompile_run_source_to_returndata_ffi(get_slice_int(64, num, 0), byte_source_kind(s.source), s.off, s.len),
-    ) ==
-        1
+    precompile_run_source_to_returndata_ffi(get_slice_int(64, num, 0), byte_source_kind(s.source), s.off, s.len)
 
 function run_precompile_memory_input(num : int, off : int, len : int) -> bool =
     run_precompile_slice(num, memory_byte_slice(off, len))
@@ -431,11 +428,11 @@ function returndata_capture_memory(x0 : bits(64), x1 : bits(64)) -> unit = retur
 val returndata_adopt_pending_ffi = impure { _: "returndata_adopt_pending" } : unit -> unit
 function returndata_adopt_pending() -> unit = returndata_adopt_pending_ffi()
 
-val returndata_current_len64_ffi = impure { _: "returndata_current_len" } : unit -> bits(64)
-function returndata_current_len64() -> bits(64) = returndata_current_len64_ffi()
+val returndata_current_len_ffi = impure { _: "returndata_current_len" } : unit -> bits(64)
+function returndata_current_len() -> bits(64) = returndata_current_len_ffi()
 
-val returndata_pending_len64_ffi = impure { _: "returndata_pending_len" } : unit -> bits(64)
-function returndata_pending_len64() -> bits(64) = returndata_pending_len64_ffi()
+val returndata_pending_len_ffi = impure { _: "returndata_pending_len" } : unit -> bits(64)
+function returndata_pending_len() -> bits(64) = returndata_pending_len_ffi()
 
 val returndata_pending_byte_at_ffi = impure { _: "returndata_pending_byte" } : bits(64) -> bits(8)
 function returndata_pending_byte_at(x0 : bits(64)) -> bits(8) = returndata_pending_byte_at_ffi(x0)
@@ -474,9 +471,6 @@ function txin_begin() -> unit = txin_begin_ffi()
 
 val txin_byte_ffi = impure { _: "txin_byte" } : bits(8) -> unit
 function txin_byte(x0 : bits(8)) -> unit = txin_byte_ffi(x0)
-
-val cd_len_ffi = impure { _: "cd_len" } : unit -> bits(64)
-function cd_len() -> bits(64) = cd_len_ffi()
 
 val code_db_calldata_load_word_ffi = impure { _: "code_db_calldata_load_word" } : bits(64) -> word
 function code_db_calldata_load_word(x0 : bits(64)) -> word = code_db_calldata_load_word_ffi(x0)
@@ -517,7 +511,7 @@ function transient_storage_key(
 ) =
     transient_storage_key_ffi(x0, x1, x2, x3, x4, x5, x6, x7)
 
-val transient_storage_write_ffi = impure { _: "transient_storage_store" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val transient_storage_write_ffi = impure { _: "transient_storage_write" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
 function transient_storage_write(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64)) -> unit = transient_storage_write_ffi(
     x0,
     x1,
@@ -594,21 +588,11 @@ function storage_map_word(x0 : bits(64)) -> bits(64) = storage_map_word_ffi(x0)
 val storage_map_base_word_ffi = impure { _: "storage_map_base_word" } : bits(64) -> bits(64)
 function storage_map_base_word(x0 : bits(64)) -> bits(64) = storage_map_base_word_ffi(x0)
 
-val storage_map_present_ffi = impure { _: "storage_map_present" } : unit -> bits(64)
-function storage_map_present() -> bits(64) = storage_map_present_ffi()
+val storage_map_present_ffi = impure { _: "storage_map_present" } : unit -> bool
+function storage_map_present() -> bool = storage_map_present_ffi()
 
-val storage_map_base_present_ffi = impure { _: "storage_map_base_present" } : unit -> bits(64)
-function storage_map_base_present() -> bits(64) = storage_map_base_present_ffi()
-
-val storage_map_has_acct_hash_ffi = impure { _: "storage_map_has_acct_hash" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(
-        64,
-    )
-function storage_map_has_acct_hash(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64)) -> bits(64) = storage_map_has_acct_hash_ffi(
-    x0,
-    x1,
-    x2,
-    x3,
-)
+val storage_map_base_present_ffi = impure { _: "storage_map_base_present" } : unit -> bool
+function storage_map_base_present() -> bool = storage_map_base_present_ffi()
 
 val storage_map_wipe_acct_hash_ffi = impure { _: "storage_map_wipe_acct_hash" } : (
         bits(64),
@@ -655,8 +639,8 @@ function acctmap_key(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64))
     x3,
 )
 
-val acctmap_present_ffi = impure { _: "acctmap_present" } : unit -> bits(64)
-function acctmap_present() -> bits(64) = acctmap_present_ffi()
+val acctmap_present_ffi = impure { _: "acctmap_present" } : unit -> bool
+function acctmap_present() -> bool = acctmap_present_ffi()
 
 val acctmap_store_ffi = impure { _: "acctmap_store" } : (
         bits(64),
@@ -792,11 +776,8 @@ function acctmap_at_sroot(x0 : bits(64)) -> bits(64) = acctmap_at_sroot_ffi(x0)
 val acctmap_at_chash_ffi = impure { _: "acctmap_at_chash" } : bits(64) -> bits(64)
 function acctmap_at_chash(x0 : bits(64)) -> bits(64) = acctmap_at_chash_ffi(x0)
 
-val acctmap_at_base_exists_ffi = impure { _: "acctmap_at_base_exists" } : unit -> bits(64)
-function acctmap_at_base_exists() -> bits(64) = acctmap_at_base_exists_ffi()
-
-val code_db_reset_ffi = impure { _: "code_db_reset" } : unit -> unit
-function code_db_reset() -> unit = code_db_reset_ffi()
+val acctmap_at_base_exists_ffi = impure { _: "acctmap_at_base_exists" } : unit -> bool
+function acctmap_at_base_exists() -> bool = acctmap_at_base_exists_ffi()
 
 val code_db_stream_code_begin_ffi = impure { _: "code_db_stream_code_begin" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(
         64,
@@ -890,7 +871,7 @@ val slotdb_sel_ffi = impure { _: "slotdb_sel" } : (
         bits(64),
         bits(64),
         bits(64),
-    ) -> bits(64)
+    ) -> bool
 function slotdb_sel(
     x0 : bits(64),
     x1 : bits(64),
@@ -901,15 +882,15 @@ function slotdb_sel(
     x6 : bits(64),
     x7 : bits(64),
 ) -> (
-    bits(64)
+    bool
 ) =
     slotdb_sel_ffi(x0, x1, x2, x3, x4, x5, x6, x7)
 
 val slotdb_selval_ffi = impure { _: "slotdb_selval" } : bits(64) -> bits(64)
 function slotdb_selval(x0 : bits(64)) -> bits(64) = slotdb_selval_ffi(x0)
 
-val slotdb_sel_existed_ffi = impure { _: "slotdb_sel_existed" } : unit -> bits(64)
-function slotdb_sel_existed() -> bits(64) = slotdb_sel_existed_ffi()
+val slotdb_sel_existed_ffi = impure { _: "slotdb_sel_existed" } : unit -> bool
+function slotdb_sel_existed() -> bool = slotdb_sel_existed_ffi()
 
 val slotdb_count_ffi = impure { _: "slotdb_count" } : unit -> bits(64)
 function slotdb_count() -> bits(64) = slotdb_count_ffi()
@@ -926,8 +907,8 @@ function slotdb_at_slot(x0 : bits(64)) -> bits(64) = slotdb_at_slot_ffi(x0)
 val slotdb_at_val_ffi = impure { _: "slotdb_at_val" } : bits(64) -> bits(64)
 function slotdb_at_val(x0 : bits(64)) -> bits(64) = slotdb_at_val_ffi(x0)
 
-val slotdb_at_existed_ffi = impure { _: "slotdb_at_existed" } : unit -> bits(64)
-function slotdb_at_existed() -> bits(64) = slotdb_at_existed_ffi()
+val slotdb_at_existed_ffi = impure { _: "slotdb_at_existed" } : unit -> bool
+function slotdb_at_existed() -> bool = slotdb_at_existed_ffi()
 
 val storage_mark_incomplete_ffi = impure { _: "storage_mark_incomplete" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
 function storage_mark_incomplete(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64)) -> unit = storage_mark_incomplete_ffi(
@@ -942,8 +923,8 @@ val storage_harvest_complete_raw_ffi = impure { _: "storage_harvest_complete" } 
         bits(64),
         bits(64),
         bits(64),
-    ) -> bits(64)
-function storage_harvest_complete_raw(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64)) -> bits(64) = storage_harvest_complete_raw_ffi(
+    ) -> bool
+function storage_harvest_complete_raw(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64)) -> bool = storage_harvest_complete_raw_ffi(
     x0,
     x1,
     x2,
@@ -966,13 +947,8 @@ function nodedb_insert(
 ) =
     nodedb_insert_ffi(x0, x1, x2, x3, x4, x5)
 
-val nodedb_sel_ffi = impure { _: "nodedb_sel" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
-function nodedb_sel(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64)) -> bits(64) = nodedb_sel_ffi(
-    x0,
-    x1,
-    x2,
-    x3,
-)
+val nodedb_sel_ffi = impure { _: "nodedb_sel" } : (bits(64), bits(64), bits(64), bits(64)) -> bool
+function nodedb_sel(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64)) -> bool = nodedb_sel_ffi(x0, x1, x2, x3)
 
 val nodedb_sel_off_ffi = impure { _: "nodedb_sel_off" } : unit -> bits(64)
 function nodedb_sel_off() -> bits(64) = nodedb_sel_off_ffi()
@@ -996,13 +972,8 @@ function acctdb_insert(
 ) =
     acctdb_insert_ffi(x0, x1, x2, x3, x4, x5)
 
-val acctdb_sel_ffi = impure { _: "acctdb_sel" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
-function acctdb_sel(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64)) -> bits(64) = acctdb_sel_ffi(
-    x0,
-    x1,
-    x2,
-    x3,
-)
+val acctdb_sel_ffi = impure { _: "acctdb_sel" } : (bits(64), bits(64), bits(64), bits(64)) -> bool
+function acctdb_sel(x0 : bits(64), x1 : bits(64), x2 : bits(64), x3 : bits(64)) -> bool = acctdb_sel_ffi(x0, x1, x2, x3)
 
 val acctdb_sel_off_ffi = impure { _: "acctdb_sel_off" } : unit -> bits(64)
 function acctdb_sel_off() -> bits(64) = acctdb_sel_off_ffi()

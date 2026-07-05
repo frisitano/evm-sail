@@ -137,9 +137,8 @@ val storage_map_seed : (bits(64), bits(64), bits(64), bits(64)) -> unit
 val storage_map_store : (bits(64), bits(64), bits(64), bits(64)) -> unit
 val storage_map_word : bits(64) -> bits(64)
 val storage_map_base_word : bits(64) -> bits(64)
-val storage_map_present : unit -> bits(64)
-val storage_map_base_present : unit -> bits(64)
-val storage_map_has_acct_hash : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val storage_map_present : unit -> bool
+val storage_map_base_present : unit -> bool
 val storage_map_wipe_acct_hash : (bits(64), bits(64), bits(64), bits(64)) -> unit
 val storage_map_count : unit -> bits(64)
 val storage_map_update_count : unit -> bits(64)
@@ -156,7 +155,7 @@ val storage_map_it_val : bits(64) -> bits(64)
  * second. ---- */
 val acctmap_reset : unit -> unit
 val acctmap_key : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val acctmap_present : unit -> bits(64)
+val acctmap_present : unit -> bool
 val acctmap_store : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
 val acctmap_mark_base_exists : unit -> unit
 val acctmap_seed : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
@@ -174,7 +173,7 @@ val acctmap_at_nonce : unit -> bits(64)
 val acctmap_at_bal : bits(64) -> bits(64)
 val acctmap_at_sroot : bits(64) -> bits(64)
 val acctmap_at_chash : bits(64) -> bits(64)
-val acctmap_at_base_exists : unit -> bits(64)
+val acctmap_at_base_exists : unit -> bool
 
 /* ---- C code store (ffi/code_db.c): contract code, content-addressed --------
  * Keyed by codeHash (not address): each entry holds the code bytes AND the
@@ -183,7 +182,6 @@ val acctmap_at_base_exists : unit -> bits(64)
  * de-duplicated and append-only, so REVERT needs no code rollback: restoring an
  * account's codeHash restores its code. An account resolves its code by codeHash
  * (k_code_key). */
-val code_db_reset : unit -> unit
 val code_db_stream_code_begin : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
 val code_db_stored_code_length : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
 val code_db_copy_stored_code_to_memory : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
@@ -270,14 +268,14 @@ function storage_base_load(a : address, s : word) -> word = {
 /* present in ANY layer (an explicit 0 is present; fail-closed stateless test) */
 function storage_present(a : address, s : word) -> bool = {
     storage_select(a, s);
-    unsigned(storage_map_present()) == 1
+    storage_map_present()
 }
 
 /* present in the BASE layer only (EIP-2200 "original" presence; a committed base
  * 0 is present, a never-committed slot is absent and resolved from the witness) */
 function storage_base_present(a : address, s : word) -> bool = {
     storage_select(a, s);
-    unsigned(storage_map_base_present()) == 1
+    storage_map_base_present()
 }
 
 function storage_wipe_addr(a : address) -> unit = {
@@ -479,7 +477,7 @@ function acctmap_read_chash() -> word =
 /* the account bound to `a` (EMPTY_ACCOUNT if absent), read from the acctmap */
 function account_lookup(a : address) -> Account = {
     acctmap_select(a);
-    if unsigned(acctmap_present()) == 1 then {
+    if acctmap_present() then {
         struct {
             nonce = unsigned(acctmap_nonce()),
             balance = acctmap_read_bal(),
@@ -565,7 +563,7 @@ function slot_list_contains(xs : list(SlotKey), a : address, s : word) -> bool =
  * which returns EMPTY_ACCOUNT for both absent and not-yet-loaded). */
 function account_loaded(a : address) -> bool = {
     acctmap_select(a);
-    unsigned(acctmap_present()) == 1
+    acctmap_present()
 }
 
 /* Stateless account materialization (defined in lib/mpt.sail, the witness reader,

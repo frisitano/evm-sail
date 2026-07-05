@@ -428,17 +428,17 @@ function updates_has_key(us : list(TrieUpdate), key : list(int)) -> bool =
  * root. Each 256-bit key half crosses as four big-endian words (w3 most sig). */
 val slotdb_reset : unit -> unit
 val slotdb_insert : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
-val slotdb_sel : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val slotdb_sel : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> bool
 val slotdb_selval : bits(64) -> bits(64)
-val slotdb_sel_existed : unit -> bits(64)
+val slotdb_sel_existed : unit -> bool
 val slotdb_count : unit -> bits(64)
 val slotdb_at : bits(64) -> unit
 val slotdb_at_acct : bits(64) -> bits(64)
 val slotdb_at_slot : bits(64) -> bits(64)
 val slotdb_at_val : bits(64) -> bits(64)
-val slotdb_at_existed : unit -> bits(64)
+val slotdb_at_existed : unit -> bool
 val storage_mark_incomplete : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val storage_harvest_complete_raw : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val storage_harvest_complete_raw : (bits(64), bits(64), bits(64), bits(64)) -> bool
 
 /* harvest context: while re-rooting an account's storage trie, the recursive
  * witness leaf sink switches from the account leaf store to slotdb, keyed by
@@ -467,11 +467,10 @@ function storage_mark_partial(acct : bits(256)) -> unit =
     storage_mark_incomplete(acct[255 .. 192], acct[191 .. 128], acct[127 .. 64], acct[63 .. 0])
 
 function storage_harvest_complete(acct : bits(256)) -> bool =
-    storage_harvest_complete_raw(acct[255 .. 192], acct[191 .. 128], acct[127 .. 64], acct[63 .. 0]) !=
-        0x0000000000000000
+    storage_harvest_complete_raw(acct[255 .. 192], acct[191 .. 128], acct[127 .. 64], acct[63 .. 0])
 
 function slot_existed(acct : bits(256), slot : bits(256)) -> bool =
-    (slotdb_sel(
+    slotdb_sel(
         acct[255 .. 192],
         acct[191 .. 128],
         acct[127 .. 64],
@@ -480,9 +479,8 @@ function slot_existed(acct : bits(256), slot : bits(256)) -> bool =
         slot[191 .. 128],
         slot[127 .. 64],
         slot[63 .. 0],
-    ) !=
-        0x0000000000000000) &
-        (slotdb_sel_existed() != 0x0000000000000000)
+    ) &
+        slotdb_sel_existed()
 
 /* the cached slotdb_sel value as a 256-bit word */
 function slot_selword() -> word =
@@ -576,7 +574,7 @@ function storage_live_updates_from_harvest(ak : bits(256), writes : list(TrieUpd
             let sk = slot_at_slot();
             let key = to_nibbles(word_to_bytes32(sk));
             let slot_val = slot_at_val();
-            if   (slotdb_at_existed() != 0x0000000000000000)
+            if   (slotdb_at_existed())
                & word_nonzero(slot_val)
                & not_bool(updates_has_key(writes, key)) then {
                 out = update_insert_sorted(
@@ -661,7 +659,7 @@ function state_updates_map() -> list(TrieUpdate) = {
                 storage_root = selected_account_storage_root(),
             };
         let ak = to_nibbles(word_to_bytes32(ak_hash));
-        let base_exists = unsigned(acctmap_at_base_exists()) == 1;
+        let base_exists = acctmap_at_base_exists();
         if k_stateless & account_empty(acc) & not_bool(base_exists) then {
             ()
         } else {
@@ -799,7 +797,7 @@ function nibs_match(key : list(int), pos : int, seg : list(int)) -> bool = {
  * the matched span for the off/len accessors. */
 val nodedb_reset : unit -> unit
 val nodedb_insert : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
-val nodedb_sel : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val nodedb_sel : (bits(64), bits(64), bits(64), bits(64)) -> bool
 val nodedb_sel_off : unit -> bits(64)
 val nodedb_sel_len : unit -> bits(64)
 
@@ -809,7 +807,7 @@ val nodedb_sel_len : unit -> bits(64)
  * up here (O(1)) and decodes the leaf lazily. Same span model as the node-db. */
 val acctdb_reset : unit -> unit
 val acctdb_insert : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
-val acctdb_sel : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val acctdb_sel : (bits(64), bits(64), bits(64), bits(64)) -> bool
 val acctdb_sel_off : unit -> bits(64)
 val acctdb_sel_len : unit -> bits(64)
 val acctdb_count : unit -> bits(64)
@@ -821,7 +819,7 @@ val acctdb_at_len : unit -> bits(64)
 /* node bytes for keccak `h` from the C node-db, or [] if absent (read straight
  * from the witness buffer by the recorded span -- no per-node Sail copy held). */
 function node_db_lookup(h : bits(256)) -> list(byte) = {
-    if nodedb_sel(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0]) == 0x0000000000000000 then {
+    if not_bool(nodedb_sel(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0])) then {
         [||]
     } else {
         ssz_bytes(unsigned(nodedb_sel_off()), unsigned(nodedb_sel_len()))
@@ -1747,8 +1745,7 @@ function stateless_storage(a : address, s : word) -> word = {
         sk[191 .. 128],
         sk[127 .. 64],
         sk[63 .. 0],
-    ) !=
-        0x0000000000000000 then {
+    ) then {
         slot_selword()
     } else {
         let sroot = load_account(a).storage_root;
@@ -1838,8 +1835,7 @@ function harvest_all_storage() -> unit = {
  * (k_seed_account_hashed), so subsequent load_account(a) is an O(1) raw read. */
 function stateless_account_load(a : address) -> unit = {
     let ak = keccak256_address(a);
-    let value : list(byte) = if acctdb_sel(ak[255 .. 192], ak[191 .. 128], ak[127 .. 64], ak[63 .. 0]) !=
-            0x0000000000000000 then {
+    let value : list(byte) = if acctdb_sel(ak[255 .. 192], ak[191 .. 128], ak[127 .. 64], ak[63 .. 0]) then {
             list_nth(rlp_node_items(ssz_bytes(unsigned(acctdb_sel_off()), unsigned(acctdb_sel_len()))), 1, RLP_NONE).content
         } else {
             trie_walk(node_db_lookup(parent_state_root()), hash_nibbles(ak), 0, 256)

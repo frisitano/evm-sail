@@ -7,12 +7,13 @@
 #ifndef STATE_DB_H
 #define STATE_DB_H
 #include "sail.h"
+#include <stdbool.h>
 #include <stdint.h>
 
 /* Account map: materialized base/cache rows plus execution update rows. */
 unit acctmap_reset(const unit u);
 unit acctmap_key(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);
-uint64_t acctmap_present(const unit u);
+bool acctmap_present(const unit u);
 unit acctmap_store(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
                    uint64_t nonce,
                    uint64_t b3, uint64_t b2, uint64_t b1, uint64_t b0,
@@ -39,7 +40,7 @@ uint64_t acctmap_at_nonce(const unit u);
 uint64_t acctmap_at_bal(uint64_t w);
 uint64_t acctmap_at_sroot(uint64_t w);
 uint64_t acctmap_at_chash(uint64_t w);
-uint64_t acctmap_at_base_exists(const unit u);
+bool acctmap_at_base_exists(const unit u);
 
 /* Persistent storage map: materialized base/cache rows plus frame overlays. */
 unit storage_map_reset(const unit u);
@@ -53,9 +54,8 @@ unit storage_map_seed(uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0);
 unit storage_map_store(uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0);
 uint64_t storage_map_word(uint64_t i);
 uint64_t storage_map_base_word(uint64_t i);
-uint64_t storage_map_present(const unit u);
-uint64_t storage_map_base_present(const unit u);
-uint64_t storage_map_has_acct_hash(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);
+bool storage_map_present(const unit u);
+bool storage_map_base_present(const unit u);
 unit storage_map_wipe_acct_hash(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);
 uint64_t storage_map_count(const unit u);
 uint64_t storage_map_update_count(const unit u);

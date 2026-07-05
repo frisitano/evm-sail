@@ -1,6 +1,7 @@
 #ifndef TRIE_NODE_DB_H
 #define TRIE_NODE_DB_H
 #include "sail.h"
+#include <stdbool.h>
 #include <stdint.h>
 
 /* C-backed witness node-db (ffi/trie_node_db.c): keccak(node) -> (offset, len)
@@ -18,7 +19,7 @@
 unit nodedb_reset(const unit u);
 unit nodedb_insert(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0,
                    uint64_t off, uint64_t len);
-uint64_t nodedb_sel(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0);
+bool nodedb_sel(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0);
 uint64_t nodedb_sel_off(const unit u);
 uint64_t nodedb_sel_len(const unit u);
 
@@ -32,7 +33,7 @@ uint64_t nodedb_sel_len(const unit u);
 unit acctdb_reset(const unit u);
 unit acctdb_insert(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0,
                    uint64_t off, uint64_t len);
-uint64_t acctdb_sel(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0);
+bool acctdb_sel(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0);
 uint64_t acctdb_sel_off(const unit u);
 uint64_t acctdb_sel_len(const unit u);
 /* iteration over the harvested account leaves (the storage-harvest pass, which
@@ -50,23 +51,23 @@ unit slotdb_reset(const unit u);
 unit slotdb_insert(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
                    uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0,
                    uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0);
-uint64_t slotdb_sel(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
+bool slotdb_sel(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
                     uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0);
 uint64_t slotdb_selval(uint64_t i);
-uint64_t slotdb_sel_existed(const unit u);
+bool slotdb_sel_existed(const unit u);
 uint64_t slotdb_count(const unit u);
 unit slotdb_at(uint64_t idx);
 uint64_t slotdb_at_acct(uint64_t w);
 uint64_t slotdb_at_slot(uint64_t w);
 uint64_t slotdb_at_val(uint64_t w);
-uint64_t slotdb_at_existed(const unit u);
+bool slotdb_at_existed(const unit u);
 
 /* Storage-harvest completeness for optional proofs. Marked incomplete when a
  * storage re-root preserves a blinded child hash, so the post-state root code
  * knows slotdb is not a complete live map for that account. */
 unit storage_mark_incomplete(uint64_t a3, uint64_t a2, uint64_t a1,
                              uint64_t a0);
-uint64_t storage_harvest_complete(uint64_t a3, uint64_t a2, uint64_t a1,
+bool storage_harvest_complete(uint64_t a3, uint64_t a2, uint64_t a1,
                                   uint64_t a0);
 
 #endif

@@ -13,7 +13,7 @@
 unit transient_storage_reset(uint64_t id);
 unit transient_storage_key(uint64_t id, uint64_t a2, uint64_t a1, uint64_t a0,
                            uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0);
-unit transient_storage_store(uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0);
+unit transient_storage_write(uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0);
 uint64_t transient_storage_word(uint64_t i);
 
 #endif

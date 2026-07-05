@@ -92,7 +92,7 @@ unit nodedb_insert(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0,
 }
 
 /* 1 if keccak key is present (and caches its span), 0 otherwise */
-uint64_t nodedb_sel(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0) {
+bool nodedb_sel(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0) {
   uint64_t k[4] = {k0, k1, k2, k3};
   if (!nd_tab)
     return 0;
@@ -192,7 +192,7 @@ unit acctdb_insert(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0,
   return UNIT;
 }
 
-uint64_t acctdb_sel(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0) {
+bool acctdb_sel(uint64_t k3, uint64_t k2, uint64_t k1, uint64_t k0) {
   uint64_t k[4] = {k0, k1, k2, k3};
   if (!ad_tab)
     return 0;
@@ -355,7 +355,7 @@ unit storage_mark_incomplete(uint64_t a3, uint64_t a2, uint64_t a1,
   return UNIT;
 }
 
-uint64_t storage_harvest_complete(uint64_t a3, uint64_t a2, uint64_t a1,
+bool storage_harvest_complete(uint64_t a3, uint64_t a2, uint64_t a1,
                                   uint64_t a0) {
   uint64_t k[4] = {a0, a1, a2, a3};
   if (!ic_tab)
@@ -426,7 +426,7 @@ unit slotdb_insert(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
 }
 
 /* 1 if (addr,slot) is present (caching its value for slotdb_selval), else 0 */
-uint64_t slotdb_sel(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
+bool slotdb_sel(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
                     uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0) {
   uint64_t k[8] = {a0, a1, a2, a3, s0, s1, s2, s3};
   sd_sel_existed = 0;
@@ -445,7 +445,7 @@ uint64_t slotdb_sel(uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
   return 0;
 }
 uint64_t slotdb_selval(uint64_t i) { return i > 3 ? 0 : sd_sel_val[i]; }
-uint64_t slotdb_sel_existed(const unit u) {
+bool slotdb_sel_existed(const unit u) {
   (void)u;
   return sd_sel_existed;
 }
@@ -481,7 +481,7 @@ unit slotdb_at(uint64_t idx) {
 uint64_t slotdb_at_acct(uint64_t w) { return w > 3 ? 0 : sd_it_acct[w]; }
 uint64_t slotdb_at_slot(uint64_t w) { return w > 3 ? 0 : sd_it_slot[w]; }
 uint64_t slotdb_at_val(uint64_t w) { return w > 3 ? 0 : sd_it_val[w]; }
-uint64_t slotdb_at_existed(const unit u) {
+bool slotdb_at_existed(const unit u) {
   (void)u;
   return sd_it_existed;
 }

@@ -139,7 +139,7 @@ unit transient_storage_key(uint64_t id, uint64_t a2, uint64_t a1, uint64_t a0,
 }
 
 /* store the 256-bit value (v3 = most significant) at the selected key */
-unit transient_storage_store(uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0) {
+unit transient_storage_write(uint64_t v3, uint64_t v2, uint64_t v1, uint64_t v0) {
   if (h_cur_ok) {
     uint64_t v[4] = { v3, v2, v1, v0 };
     (void)h_put(&h_transient, h_cur_key, h_cur_hash, v);

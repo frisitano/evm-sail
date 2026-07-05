@@ -421,7 +421,7 @@ static uint64_t precompile_run_current(void) {
 #endif
 }
 
-uint64_t precompile_run_source_to_returndata(uint64_t id, uint64_t source_kind,
+bool precompile_run_source_to_returndata(uint64_t id, uint64_t source_kind,
                                             uint64_t off, uint64_t len) {
   const uint8_t *src = NULL;
   uint64_t resolved_len = 0;

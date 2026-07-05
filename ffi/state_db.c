@@ -221,7 +221,7 @@ static account_row *selected_account_row(void) {
   return u ? u : account_table_get(&account_cache, selected_account_hash);
 }
 
-uint64_t acctmap_present(const unit u) {
+bool acctmap_present(const unit u) {
   (void)u;
   return selected_account_row() ? 1 : 0;
 }
@@ -353,7 +353,7 @@ uint64_t acctmap_at_nonce(const unit u) {
 uint64_t acctmap_at_bal(uint64_t w) { return (account_iter_valid && w <= 3) ? account_iter.bal[w] : 0; }
 uint64_t acctmap_at_sroot(uint64_t w) { return (account_iter_valid && w <= 3) ? account_iter.sroot[w] : 0; }
 uint64_t acctmap_at_chash(uint64_t w) { return (account_iter_valid && w <= 3) ? account_iter.chash[w] : 0; }
-uint64_t acctmap_at_base_exists(const unit u) {
+bool acctmap_at_base_exists(const unit u) {
   (void)u;
   return account_iter_valid ? account_iter.base_exists : 0;
 }
@@ -674,29 +674,17 @@ uint64_t storage_map_base_word(uint64_t i) {
   return e ? e->val[3 - i] : 0;
 }
 
-uint64_t storage_map_present(const unit u) {
+bool storage_map_present(const unit u) {
   (void)u;
   return storage_walk() ? 1 : 0;
 }
 
-uint64_t storage_map_base_present(const unit u) {
+bool storage_map_base_present(const unit u) {
   (void)u;
   storage_layer *base = storage_update_base();
   if (base && storage_table_get(&base->table, selected_storage_account_hash, selected_storage_slot_hash))
     return 1;
   return storage_table_get(&storage_cache, selected_storage_account_hash, selected_storage_slot_hash) ? 1 : 0;
-}
-
-uint64_t storage_map_has_acct_hash(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {
-  uint64_t h[4] = {h3, h2, h1, h0};
-  for (uint32_t i = 0; i < storage_cache.n; i++)
-    if (compare_words(storage_cache.rows[i].acct_hash, h, 4) == 0)
-      return 1;
-  for (storage_layer *l = storage_updates; l; l = l->below)
-    for (uint32_t i = 0; i < l->table.n; i++)
-      if (compare_words(l->table.rows[i].acct_hash, h, 4) == 0)
-        return 1;
-  return 0;
 }
 
 unit storage_map_wipe_acct_hash(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0) {

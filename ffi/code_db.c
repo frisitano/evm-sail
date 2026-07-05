@@ -90,18 +90,6 @@ static void code_db_build_jumpdest_bitmap(uint8_t *bm, const uint8_t *p, uint32_
   }
 }
 
-unit code_db_reset(const unit u) {     /* per test case: drop every entry */
-  (void)u;
-  for (uint32_t i = 0; i < code_db_cap; i++)
-    if (code_db && code_db[i].used) {
-      free(code_db[i].p);
-      free(code_db[i].bm);
-    }
-  free(code_db);
-  code_db = NULL; code_db_cap = 0; code_db_n = 0; code_db_cur = NULL;
-  return UNIT;
-}
-
 /* begin storing the code whose keccak is (h3,h2,h1,h0); content-addressed --
  * returns 1 if this hash is new (caller streams the bytes via
  * code_db_stream_code_byte), 0 if it

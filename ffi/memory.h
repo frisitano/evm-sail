@@ -19,7 +19,6 @@ unit cd_set_empty(const unit u);
 unit cd_set_tx(const unit u);
 unit txin_begin(const unit u);
 unit txin_byte(uint64_t b);
-uint64_t cd_len(const unit u);
 uint64_t txd_copy(uint8_t *dst, uint64_t cap);
 uint64_t txd_at(uint64_t i);
 uint64_t txd_length(const unit u);

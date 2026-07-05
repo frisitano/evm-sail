@@ -5,7 +5,6 @@
 #define CODE_DB_H
 #include "sail.h"
 #include <stdbool.h>
-unit code_db_reset(const unit u);
 
 /* Streaming FFI bridge for Sail's code_db_store_code(hash, list(byte)) helper. */
 uint64_t code_db_stream_code_begin(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);

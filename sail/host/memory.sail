@@ -128,13 +128,13 @@ val returndata_clear_current : unit -> unit
 val returndata_discard_pending : unit -> unit
 val returndata_capture_memory : (bits(64), bits(64)) -> unit
 val returndata_adopt_pending : unit -> unit
-val returndata_current_len64 : unit -> bits(64)
-val returndata_pending_len64 : unit -> bits(64)
+val returndata_current_len : unit -> bits(64)
+val returndata_pending_len : unit -> bits(64)
 val returndata_pending_byte_at : bits(64) -> bits(8)
 val returndata_copy_current_to_memory : (bits(64), bits(64), bits(64)) -> unit
 val returndata_copy_current_prefix_to_memory : (bits(64), bits(64)) -> unit
 
-function returndata_size() -> int = unsigned(returndata_current_len64())
+function returndata_size() -> int = unsigned(returndata_current_len())
 function returndata_capture(off : int, len : int) -> unit =
     returndata_capture_memory(get_slice_int(64, off, 0), get_slice_int(64, len, 0))
 function returndata_copy_to_mem(dst : int, off : int, len : int) -> unit =
@@ -142,7 +142,7 @@ function returndata_copy_to_mem(dst : int, off : int, len : int) -> unit =
 function returndata_out_region(dst : int, want : int) -> unit =
     returndata_copy_current_prefix_to_memory(get_slice_int(64, dst, 0), get_slice_int(64, want, 0))
 
-function returndata_pending_size() -> int = unsigned(returndata_pending_len64())
+function returndata_pending_size() -> int = unsigned(returndata_pending_len())
 function returndata_pending_byte(i : int) -> byte =
     returndata_pending_byte_at(get_slice_int(64, i, 0))
 
@@ -166,7 +166,6 @@ val cd_set_empty : unit -> unit
 val cd_set_tx : unit -> unit
 val txin_begin : unit -> unit
 val txin_byte : bits(8) -> unit
-val cd_len : unit -> bits(64)
 val code_db_calldata_load_word : bits(64) -> word
 val cd_to_mem : (bits(64), bits(64), bits(64)) -> unit
 val txd_at : bits(64) -> bits(8)
