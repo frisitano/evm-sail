@@ -215,8 +215,6 @@ function addr_bytes(a : address) -> list(byte) = {
 }
 function delegation_code(a : address) -> list(byte) = 0xef :: 0x01 :: 0x00 :: addr_bytes(a)
 
-val code_db_read_delegation : (bits(64), bits(64), bits(64), bits(64)) -> bits(168)
-
 /* EIP-7702: resolve whether addr's stored code is a delegation designation,
  * probed by codeHash in ONE host call (run on every CALL-family target). Returns
  * (is_delegation, designated_target): bit 160 of the result is the flag, the low

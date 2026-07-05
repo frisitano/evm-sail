@@ -15,12 +15,6 @@
 /* O(1) access, since Sail has no in-model mutable byte array.              */
 /* ======================================================================== */
 
-val host_mem_read : bits(64) -> bits(8)
-val host_mem_write : (bits(64), bits(8)) -> unit
-val host_mem_reset : unit -> unit
-val host_mem_push : unit -> unit
-val host_mem_pop : unit -> unit
-
 /* kept only as the type of the (now unused) StackFrame snapshot field */
 struct MemByte = { offset : int, value : byte }
 
@@ -95,11 +89,6 @@ function mem_read_range(off : int, len : int) -> list(byte) = {
  * unit of memory-expansion gas). */
 function mem_size_words() -> int = ediv_int(memory_size + 31, 32)
 
-/* ---- range copies (CALLDATACOPY / CODECOPY / RETURNDATACOPY / MCOPY):
- * endpoints already live in C buffers, so copies stay on the C side. ---- */
-val hm_move : (bits(64), bits(64), bits(64)) -> unit
-val code_db_copy_frame_code_to_memory : (bits(64), bits(64), bits(64)) -> unit
-
 /* MCOPY (EIP-5656): overlapping-safe memory-to-memory copy (one C memmove). */
 function mem_mcopy(dst : int, src : int, len : int) -> unit =
     hm_move(get_slice_int(64, dst, 0), get_slice_int(64, src, 0), get_slice_int(64, len, 0))
@@ -116,23 +105,6 @@ function mem_codecopy(dst : int, off : int, len : int) -> unit = {
  * reads the addressed bytes and hashes that byte list. */
 function mem_keccak(off : int, len : int) -> word =
     bytes_keccak(memory_byte_slice(off, len))
-
-/* ---- RETURNDATA buffer (per call frame; see ffi/returndata.c) ----
- * The bytes a child frame returned (RETURN/REVERT) or a precompile produced,
- * read by RETURNDATASIZE/RETURNDATACOPY (EIP-211). Cleared at the start of
- * every sub-call and replaced by the child's output on return. The build
- * backend keeps the bytes in C; the common model uses domain-level operations
- * instead of exposing that implementation detail. ---- */
-val returndata_reset_all : unit -> unit
-val returndata_clear_current : unit -> unit
-val returndata_discard_pending : unit -> unit
-val returndata_capture_memory : (bits(64), bits(64)) -> unit
-val returndata_adopt_pending : unit -> unit
-val returndata_current_len : unit -> bits(64)
-val returndata_pending_len : unit -> bits(64)
-val returndata_pending_byte_at : bits(64) -> bits(8)
-val returndata_copy_current_to_memory : (bits(64), bits(64), bits(64)) -> unit
-val returndata_copy_current_prefix_to_memory : (bits(64), bits(64)) -> unit
 
 function returndata_size() -> int = unsigned(returndata_current_len())
 function returndata_capture(off : int, len : int) -> unit =
@@ -156,20 +128,6 @@ function returndata_pending_bytes() -> list(byte) = {
     };
     out
 }
-
-/* ---- C-backed CALLDATA (per call frame) ----
- * The current frame's input data, read by CALLDATALOAD/CALLDATASIZE/CALLDATACOPY.
- * For a CALL-family child it aliases the slice of the caller's memory passed as
- * args; for the top-level frame it is the transaction input. ---- */
-val cd_set : (bits(64), bits(64)) -> unit
-val cd_set_empty : unit -> unit
-val cd_set_tx : unit -> unit
-val txin_begin : unit -> unit
-val txin_byte : bits(8) -> unit
-val code_db_calldata_load_word : bits(64) -> word
-val cd_to_mem : (bits(64), bits(64), bits(64)) -> unit
-val txd_at : bits(64) -> bits(8)
-val txd_length : unit -> bits(64)
 
 /* The transaction input, streamed into the C buffer ONCE per tx. Intrinsic-gas
  * inspection (EIP-2028 / EIP-7623 zero vs nonzero byte counting) and length

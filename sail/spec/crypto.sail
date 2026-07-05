@@ -1,31 +1,15 @@
 /* ======================================================================== */
-/* SPEC BOUNDARY DEFINITIONS                                                */
+/* SPEC BACKEND: BYTE SOURCES, CRYPTO, AND PRECOMPILES                      */
 /*                                                                          */
 /* Canonical definitions for abstract host byte operations. These           */
 /* definitions materialize mathematical byte lists before hashing or        */
-/* storing bytes. Build roots may replace the same abstract functions with  */
-/* pointer-backed implementations in build.sail.                            */
+/* storing bytes. Build roots replace the same abstract functions with      */
+/* pointer-backed implementations in sail/build/.                           */
 /* ======================================================================== */
 
 val keccak256 : list(byte) -> bits(256)
 val sha256 : list(byte) -> bits(256)
 val run_precompile : (int, list(byte)) -> (bool, list(byte))
-
-function ssz_src_le(b : int, n : int) -> bits(64) = {
-    var acc : bits(64) = 0x0000000000000000;
-    foreach (k from 0 to (n - 1)) {
-        acc = or_vec(acc, sail_shiftleft(sail_zero_extend(ssz_src_byte(b + k), 64), 8 * k))
-    };
-    acc
-}
-
-function ssz_src_be(b : int, n : int) -> bits(64) = {
-    var acc : bits(64) = 0x0000000000000000;
-    foreach (k from 0 to (n - 1)) {
-        acc = or_vec(sail_shiftleft(acc, 8), sail_zero_extend(ssz_src_byte(b + k), 64))
-    };
-    acc
-}
 
 function read_active_code_slice(off : int, len : int) -> list(byte) = {
     var out : list(byte) = [||];

@@ -29,6 +29,22 @@ proof/coq/ExternBoundary.v
 | World state and code DB | `transient_storage_*`, `storage_map_*`, `acctmap_*`, `code_db_*` | Account, storage, transient storage, and code lookup/update operations refine an abstract world-state map with explicit cache/update and commit/revert laws. |
 | Witness and MPT DB | `nodedb_*`, `acctdb_*`, `slotdb_*`, `storage_mark_incomplete`, `storage_harvest_complete_raw` | Witness node/account/storage tables refine authenticated MPT witness spans over SSZ input bytes. Insert/select and iteration operations preserve the same abstract rows. |
 
+## Sail Interface Files
+
+The abstract `val` declarations for each contract group live in
+`sail/iface/*.sail` (included immediately after `sail/prelude.sail`); the
+backend definitions live in `sail/spec/*.sail` and `sail/build/*.sail`.
+
+| Contract group | Interface file |
+| --- | --- |
+| Private input oracle | `sail/iface/oracle.sail` |
+| Output trace | `sail/iface/oracle.sail` |
+| Byte sources | `sail/iface/crypto.sail` |
+| Crypto and precompiles | `sail/iface/crypto.sail` |
+| Memory, calldata, returndata, code, stack | `sail/iface/stack.sail`, `sail/iface/memory.sail`, `sail/iface/code_db.sail` |
+| World state and code DB | `sail/iface/state.sail`, `sail/iface/code_db.sail` |
+| Witness and MPT DB | `sail/iface/witness_db.sail` |
+
 ## Proof Order
 
 1. Instantiate only the private input oracle contract and prove small facts

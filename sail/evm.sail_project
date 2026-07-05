@@ -4,6 +4,13 @@ variable EVM_ENTRY = core
 evm {
   files
     prelude.sail,
+    iface/oracle.sail,
+    iface/crypto.sail,
+    iface/stack.sail,
+    iface/memory.sail,
+    iface/code_db.sail,
+    iface/state.sail,
+    iface/witness_db.sail,
     host/io.sail,
     lib/rlp.sail,
     exceptions.sail,
@@ -17,8 +24,16 @@ evm {
     evm/interpreter.sail,
     evm/transaction.sail,
     lib/mpt.sail,
-    if $EVM_BACKEND == spec then spec.sail
-    else if $EVM_BACKEND == build then build.sail
+    if $EVM_BACKEND == spec then [spec/oracle.sail, spec/crypto.sail]
+    else if $EVM_BACKEND == build then [
+      build/oracle.sail,
+      build/crypto.sail,
+      build/stack.sail,
+      build/memory.sail,
+      build/code_db.sail,
+      build/state.sail,
+      build/witness_db.sail
+    ]
     else error("EVM_BACKEND must be spec or build"),
     if $EVM_ENTRY == core then []
     else if $EVM_ENTRY == guest then [lib/ssz_htr.sail, main.sail]

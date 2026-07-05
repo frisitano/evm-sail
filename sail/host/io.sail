@@ -32,30 +32,7 @@
  * host/state.sail (which also consumes it). */
 struct SlotKey = { address : address, slot : word }
 
-/* ===================== (1) ABSTRACT HOST I/O =========================== */
-
-/* Run a precompile over a concrete input source. The gas rules inspect the
- * same source bytes directly (memory or top-level tx data) before this is
- * called. Build backends may stage/snapshot the input internally and write
- * successful output directly into pending returndata. */
-val run_precompile_memory_input : (int, int, int) -> bool
-val run_precompile_tx_input : int -> bool
-
-/* One byte of the canonical SSZ public output, via write_output in the guest
- * runtime. Only guest entries call this; core specs leave it abstract. */
-val emit_out : bits(8) -> unit
-
 /* ===================== (2) CRYPTO ======================================= */
-
-/* ======================================================================= */
-/* HASHED SEMANTIC OPERATIONS                                              */
-/*                                                                         */
-/* Common execution code names the operation it needs: secure trie keys,   */
-/* SSZ Merkle parents, code storage, tx/auth preimage hashing, and signing */
-/* precompile checks. spec.sail defines these in terms of canonical byte   */
-/* lists. build.sail may refine these with pointer/length FFI hooks or     */
-/* staged byte sinks.                                                      */
-/* ======================================================================= */
 
 /* Big-endian byte serializations used by RLP, the tries, and address derivation. */
 function word_to_bytes32(w : word) -> list(byte) = {
@@ -72,13 +49,6 @@ function address_to_bytes(a : address) -> list(byte) = {
     };
     out
 }
-
-val bytes_keccak : ByteSlice -> bits(256)
-val bytes_sha256_prefixed : (byte, ByteSlice) -> bits(256)
-val code_db_store_slice : ByteSlice -> unit
-
-val keccak256_word : word -> bits(256)
-val keccak256_address : address -> bits(256)
 
 function word_be_len(w : word) -> int = {
     var n : int = 0;
@@ -120,9 +90,6 @@ function rlp_nonce(nonce : int) -> list(byte) =
         }
     }
 
-/* SSZ merkle parent: SHA-256(left ++ right) over two 32-byte chunks. */
-val sha256_pair : (bits(256), bits(256)) -> bits(256)
-
 /* SHA-256 self-check against the standard "" and "abc" reference vectors. */
 val sha256_selfcheck : unit -> unit
 
@@ -153,11 +120,6 @@ let EMPTY_OMMER_HASH : hash = 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413
 /* Hash full code bytes, store them in the code database, and return codeHash. */
 val code_hash_and_store : list(byte) -> hash
 
-/* Signature/authentication helpers. Spec uses the mathematical precompile
- * input byte strings; build may use direct staged or native accelerator calls. */
-val secp256k1_verify_precompile : (bits(256), word, word, bits(256), bits(256)) -> bool
-val ecrecover_precompile : (bits(256), int, word, word) -> (bool, address)
-
 /* Domain operations whose spec definitions may materialize canonical bytes,
  * while build definitions may stream or hash from host byte sources. */
 val bloom_entry_bit : (list(byte), int) -> int
@@ -165,13 +127,6 @@ val execution_requests_hash : unit -> hash
 val block_header_hash : (BlockHeader, hash, hash, hash, hash) -> hash
 
 /* ===================== (3) STATELESS SSZ INPUT ========================= */
-
-val ssz_src_len : unit -> bits(64)
-val ssz_src_byte : int -> bits(8)
-
-/* bulk readers: n (<=8) bytes from the input in LE / BE order. */
-val ssz_src_le : (int, int) -> bits(64)
-val ssz_src_be : (int, int) -> bits(64)
 
 function ib(i : int) -> int = unsigned(ssz_src_byte(i))
 

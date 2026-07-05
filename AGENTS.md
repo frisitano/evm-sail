@@ -30,6 +30,9 @@ duplicating instructions elsewhere.
   interface used by EVM execution.
 - `sail/lib/mpt.sail` owns account/storage MPT root computation and stateless
   witness traversal.
+- `sail/iface/*.sail` holds the abstract `val` contract layer for the impure
+  host interface (see `proof/extern-boundary.md`); `sail/spec/*.sail` and
+  `sail/build/*.sail` are the backend definitions selected by `EVM_BACKEND`.
 - `ffi/` contains native C backends for performance-sensitive host structures:
   memory/calldata/returndata, `state_db.c` for accounts and persistent
   storage cache/update rows, `transient_storage.c`
