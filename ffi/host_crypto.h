@@ -21,13 +21,11 @@ void host_keccak256_bytes(uint64_t out[4], const uint8_t *p, uint64_t len);
 void host_sha256_bytes(uint64_t out[4], const uint8_t *p, uint64_t len);
 void host_keccak256_lbits(lbits *rop, const uint8_t *p, uint64_t len);
 void host_sha256_lbits(lbits *rop, const uint8_t *p, uint64_t len);
-void host_keccak_word(lbits *rop, uint64_t w3, uint64_t w2, uint64_t w1, uint64_t w0);
-void host_keccak_address(lbits *rop, uint64_t a2, uint64_t a1, uint64_t a0);
-void host_keccak_create2(lbits *rop, uint64_t a2, uint64_t a1, uint64_t a0,
-                         uint64_t salt3, uint64_t salt2, uint64_t salt1, uint64_t salt0,
-                         uint64_t init3, uint64_t init2, uint64_t init1, uint64_t init0);
-void host_sha256_pair(lbits *rop, uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
-                      uint64_t b3, uint64_t b2, uint64_t b1, uint64_t b0);
+void host_keccak_word(lbits *rop, const lbits w);
+void host_keccak_address(lbits *rop, const lbits a);
+void host_keccak_create2(lbits *rop, const lbits sender, const lbits salt,
+                         const lbits init_hash);
+void host_sha256_pair(lbits *rop, const lbits a, const lbits b);
 int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
                                 const uint8_t **p, uint64_t *resolved_len);
 void host_source_keccak(lbits *rop, uint64_t source_kind, uint64_t off, uint64_t len);

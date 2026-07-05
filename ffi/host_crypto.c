@@ -22,31 +22,6 @@ static uint64_t host_be64(const uint8_t *p) {
   return w;
 }
 
-static void host_put_be64(uint8_t *p, uint64_t w) {
-  for (int i = 7; i >= 0; i--) {
-    p[7 - i] = (uint8_t)(w >> (8 * i));
-  }
-}
-
-static void host_put_be32(uint8_t *p, uint64_t w) {
-  for (int i = 3; i >= 0; i--) {
-    p[3 - i] = (uint8_t)(w >> (8 * i));
-  }
-}
-
-static void host_put_word(uint8_t *p, uint64_t w3, uint64_t w2, uint64_t w1, uint64_t w0) {
-  host_put_be64(p + 0, w3);
-  host_put_be64(p + 8, w2);
-  host_put_be64(p + 16, w1);
-  host_put_be64(p + 24, w0);
-}
-
-static void host_put_address(uint8_t *p, uint64_t a2, uint64_t a1, uint64_t a0) {
-  host_put_be64(p + 0, a2);
-  host_put_be64(p + 8, a1);
-  host_put_be32(p + 16, a0);
-}
-
 static void host_words_to_lbits(lbits *rop, const uint64_t words[4]) {
   be_words4_to_lbits(rop, words);
 }
@@ -95,34 +70,32 @@ void host_sha256_lbits(lbits *rop, const uint8_t *p, uint64_t len) {
   host_words_to_lbits(rop, out);
 }
 
-void host_keccak_word(lbits *rop, uint64_t w3, uint64_t w2, uint64_t w1, uint64_t w0) {
+void host_keccak_word(lbits *rop, const lbits w) {
   uint8_t buf[32];
-  host_put_word(buf, w3, w2, w1, w0);
+  lbits_to_be_bytes(buf, sizeof buf, w);
   host_keccak256_lbits(rop, buf, sizeof buf);
 }
 
-void host_keccak_address(lbits *rop, uint64_t a2, uint64_t a1, uint64_t a0) {
+void host_keccak_address(lbits *rop, const lbits a) {
   uint8_t buf[20];
-  host_put_address(buf, a2, a1, a0);
+  lbits_to_be_bytes(buf, sizeof buf, a);
   host_keccak256_lbits(rop, buf, sizeof buf);
 }
 
-void host_keccak_create2(lbits *rop, uint64_t a2, uint64_t a1, uint64_t a0,
-                         uint64_t salt3, uint64_t salt2, uint64_t salt1, uint64_t salt0,
-                         uint64_t init3, uint64_t init2, uint64_t init1, uint64_t init0) {
+void host_keccak_create2(lbits *rop, const lbits sender, const lbits salt,
+                         const lbits init_hash) {
   uint8_t buf[85];
   buf[0] = 0xff;
-  host_put_address(buf + 1, a2, a1, a0);
-  host_put_word(buf + 21, salt3, salt2, salt1, salt0);
-  host_put_word(buf + 53, init3, init2, init1, init0);
+  lbits_to_be_bytes(buf + 1, 20, sender);
+  lbits_to_be_bytes(buf + 21, 32, salt);
+  lbits_to_be_bytes(buf + 53, 32, init_hash);
   host_keccak256_lbits(rop, buf, sizeof buf);
 }
 
-void host_sha256_pair(lbits *rop, uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
-                      uint64_t b3, uint64_t b2, uint64_t b1, uint64_t b0) {
+void host_sha256_pair(lbits *rop, const lbits a, const lbits b) {
   uint8_t buf[64];
-  host_put_word(buf, a3, a2, a1, a0);
-  host_put_word(buf + 32, b3, b2, b1, b0);
+  lbits_to_be_bytes(buf, 32, a);
+  lbits_to_be_bytes(buf + 32, 32, b);
   host_sha256_lbits(rop, buf, sizeof buf);
 }
 

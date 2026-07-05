@@ -32,31 +32,10 @@ val host_source_sha256_prefixed = impure { _: "host_source_sha256_prefixed" } : 
         256,
     )
 
-val host_keccak_word_ffi = impure { _: "host_keccak_word" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(256)
-val host_keccak_address_ffi = impure { _: "host_keccak_address" } : (bits(64), bits(64), bits(64)) -> bits(256)
-val host_keccak_create2_ffi = impure { _: "host_keccak_create2" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> bits(256)
-val host_sha256_pair_ffi = impure { _: "host_sha256_pair" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> bits(256)
+val host_keccak_word_ffi = impure { _: "host_keccak_word" } : word -> hash
+val host_keccak_address_ffi = impure { _: "host_keccak_address" } : address -> hash
+val host_keccak_create2_ffi = impure { _: "host_keccak_create2" } : (address, word, hash) -> hash
+val host_sha256_pair_ffi = impure { _: "host_sha256_pair" } : (hash, hash) -> hash
 
 val code_db_store_source_ffi = impure { _: "code_db_store_source" } : (bits(64), bits(64), bits(64)) -> unit
 
@@ -177,41 +156,14 @@ function bytes_sha256_prefixed(prefix : byte, s : ByteSlice) -> bits(256) =
 function code_db_store_slice(s : ByteSlice) -> unit =
     code_db_store_source_ffi(byte_source_kind(s.source), s.off, s.len)
 
-function keccak256_word(w : word) -> bits(256) =
-    host_keccak_word_ffi(word_limb3(w), word_limb2(w), word_limb1(w), word_limb0(w))
+function keccak256_word(w : word) -> bits(256) = host_keccak_word_ffi(w)
 
-function keccak256_address(a : address) -> bits(256) =
-    host_keccak_address_ffi(address_limb2(a), address_limb1(a), address_limb0(a))
+function keccak256_address(a : address) -> bits(256) = host_keccak_address_ffi(a)
 
-function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) =
-    host_sha256_pair_ffi(
-        word_limb3(a),
-        word_limb2(a),
-        word_limb1(a),
-        word_limb0(a),
-        word_limb3(b),
-        word_limb2(b),
-        word_limb1(b),
-        word_limb0(b),
-    )
+function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) = host_sha256_pair_ffi(a, b)
 
-function create2_address(sender : address, salt : word, init_hash : hash) -> address = {
-    word_to_address(
-        host_keccak_create2_ffi(
-            address_limb2(sender),
-            address_limb1(sender),
-            address_limb0(sender),
-            word_limb3(salt),
-            word_limb2(salt),
-            word_limb1(salt),
-            word_limb0(salt),
-            word_limb3(init_hash),
-            word_limb2(init_hash),
-            word_limb1(init_hash),
-            word_limb0(init_hash),
-        ),
-    )
-}
+function create2_address(sender : address, salt : word, init_hash : hash) -> address =
+    word_to_address(host_keccak_create2_ffi(sender, salt, init_hash))
 
 function secp256k1_verify_precompile(h : bits(256), r : word, s : word, x : bits(256), y : bits(256)) -> bool = {
     precompile_secp256k1_verify_hash_sig_pub_ffi(
