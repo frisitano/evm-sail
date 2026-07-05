@@ -308,8 +308,21 @@ function resolve_child(f : RlpField) -> list(byte) =
 
 /* ---- recursive trie overlay -------------------------------------------- */
 
-struct TriePatch = { key : list(nibble), is_delete : bool, is_ref : bool, bytes : list(byte) }
-
+/* A patch is either a leaf write (is_ref = false, bytes = RLP value), or a
+ * subtree reference (is_ref = true, bytes = child ref). For subtree refs,
+ * `node` optionally carries the referenced node's full RLP: an overlaid
+ * subtree exists only in memory (its post-state hash is NOT a witness node-db
+ * key), so a later collapse into the ref must use these carried bytes -- a
+ * node-db lookup of the fresh hash can never succeed. `node` is empty for
+ * untouched witness subtrees, where the node-db lookup is the (EIP-8025
+ * guaranteed) collapse-material path. */
+struct TriePatch = {
+    key : list(nibble),
+    is_delete : bool,
+    is_ref : bool,
+    bytes : list(byte),
+    node : list(byte),
+}
 
 function field_to_ref(f : RlpField) -> list(byte) =
     if f.is_list then {
@@ -424,7 +437,7 @@ function patch_insert_sorted(p : TriePatch, ps : list(TriePatch)) -> list(TriePa
     }
 
 function patch_from_update(u : TrieUpdate) -> TriePatch =
-    struct { key = u.key, is_delete = u.is_delete, is_ref = false, bytes = u.value }
+    struct { key = u.key, is_delete = u.is_delete, is_ref = false, bytes = u.value, node = [||] }
 
 function patches_from_updates(us : list(TrieUpdate)) -> list(TriePatch) =
     match us {
@@ -443,7 +456,7 @@ function patches_filter_live(ps : list(TriePatch)) -> list(TriePatch) =
     }
 
 function patch_ref(key : list(nibble), child : list(byte)) -> TriePatch =
-    struct { key = key, is_delete = false, is_ref = true, bytes = child }
+    struct { key = key, is_delete = false, is_ref = true, bytes = child, node = [||] }
 
 function patch_insert_ref_if_live(key : list(nibble), child : list(byte), ps : list(TriePatch)) -> list(TriePatch) =
     if trie_ref_is_empty(child) then {
@@ -452,8 +465,29 @@ function patch_insert_ref_if_live(key : list(nibble), child : list(byte), ps : l
         patch_insert_sorted(patch_ref(key, child), ps)
     }
 
+/* subtree-ref patch for a freshly OVERLAID (in-memory) child node: the ref is
+ * derived from the node, and the node bytes ride along for collapse (see
+ * TriePatch). An empty node (subtree fully deleted) inserts nothing. */
+function patch_insert_subtree_if_live(
+    key : list(nibble),
+    childnode : list(byte),
+    ps : list(TriePatch),
+) -> (
+    list(TriePatch)
+) = {
+    let childref = node_to_ref(childnode);
+    if trie_ref_is_empty(childref) then {
+        ps
+    } else {
+        patch_insert_sorted(
+            struct { key = key, is_delete = false, is_ref = true, bytes = childref, node = childnode },
+            ps,
+        )
+    }
+}
+
 function patch_leaf(key : list(nibble), value : list(byte)) -> TriePatch =
-    struct { key = key, is_delete = false, is_ref = false, bytes = value }
+    struct { key = key, is_delete = false, is_ref = false, bytes = value, node = [||] }
 
 function patches_first_key(ps : list(TriePatch)) -> list(nibble) =
     match ps {
@@ -483,7 +517,13 @@ function patches_at_nibble(ps : list(TriePatch), depth : int, nib : nibble) -> l
 function patch_entry_ref(p : TriePatch, depth : int) -> list(byte) = {
     let suffix = list_drop_prefix(p.key, depth);
     if p.is_ref then {
-        merge_ext_ref(suffix, p.bytes)
+        if list_len(p.node) > 0 then {
+            /* overlaid subtree: merge on the carried node bytes so a non-branch
+             * top node (post-delete collapse) merges keys canonically */
+            node_to_ref(merge_ext_node(suffix, p.node))
+        } else {
+            merge_ext_ref(suffix, p.bytes)
+        }
     } else {
         leaf_child_ref(suffix, p.bytes)
     }
@@ -510,10 +550,16 @@ function ref_node_for_collapse(r : list(byte)) -> list(byte) =
 function patch_entry_node(p : TriePatch, depth : int) -> list(byte) = {
     let suffix = list_drop_prefix(p.key, depth);
     if p.is_ref then {
-        if list_len(suffix) == 0 then {
-            ref_node_for_collapse(p.bytes)
+        if list_len(p.node) > 0 then {
+            /* overlaid subtree: its hash is not a node-db key, so the collapse
+             * (and canonical key-merge) must use the carried node bytes */
+            merge_ext_node(suffix, p.node)
         } else {
-            extension_node_rlp(suffix, p.bytes)
+            if list_len(suffix) == 0 then {
+                ref_node_for_collapse(p.bytes)
+            } else {
+                extension_node_rlp(suffix, p.bytes)
+            }
         }
     } else {
         leaf_node_rlp(suffix, p.bytes)
@@ -844,12 +890,32 @@ function trie_overlay_node_for_collapse(
                                 trie_overlay_child_node_for_collapse(list_nth(items, 1, RLP_NONE), key, under, fuel - 1),
                             )
                         } else {
-                            let old = trie_overlay_child_ref(list_nth(items, 1, RLP_NONE), key, under, fuel - 1);
-                            patches_node(
-                                patch_insert_ref_if_live(key, old, patches_from_updates(outside)),
-                                list_len(prefix),
-                                fuel,
-                            )
+                            if updates_empty(under) then {
+                                /* untouched witness subtree: a plain hash ref;
+                                 * collapse material resolves via the node-db */
+                                let old = trie_overlay_child_ref(list_nth(items, 1, RLP_NONE), key, under, fuel - 1);
+                                patches_node(
+                                    patch_insert_ref_if_live(key, old, patches_from_updates(outside)),
+                                    list_len(prefix),
+                                    fuel,
+                                )
+                            } else {
+                                /* overlaid subtree: its post-state node exists only
+                                 * in memory, so carry the node bytes in the patch --
+                                 * sibling deletes may collapse into it, and its fresh
+                                 * hash can never be found in the witness node-db */
+                                let old_node = trie_overlay_child_node_for_collapse(
+                                    list_nth(items, 1, RLP_NONE),
+                                    key,
+                                    under,
+                                    fuel - 1,
+                                );
+                                patches_node(
+                                    patch_insert_subtree_if_live(key, old_node, patches_from_updates(outside)),
+                                    list_len(prefix),
+                                    fuel,
+                                )
+                            }
                         }
                     }
                 }
