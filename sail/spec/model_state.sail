@@ -721,3 +721,85 @@ function acctmap_at_sroot() -> hash = spec_am_iter_row().ait_sroot
 function acctmap_at_chash() -> hash = spec_am_iter_row().ait_chash
 
 function acctmap_at_base_exists() -> bool = spec_am_iter_row().ait_base
+
+/* ---- code content store (iface/code_db.sail; refines ffi/code_db.c) -----
+ * The content-addressed contract-code store: codeHash -> code bytes.
+ * Streaming writes go through a cursor: code_db_stream_code_begin(h)
+ * selects the entry for h and returns 0 iff h is already stored with a
+ * non-empty byte string (same hash = same bytes, so re-streaming is
+ * skipped); otherwise it (re)initializes the entry to empty and returns 1,
+ * and each code_db_stream_code_byte appends one byte to the selected
+ * entry. Matching the C, the streamed bytes are visible immediately (the
+ * entry lives in the table while it grows), the cursor stays on the entry
+ * selected by the last begin, and a stream byte before any begin is a
+ * no-op. stored_code_length reads 0 for absent hashes. read_delegation
+ * probes EIP-7702 designations: 0x01 @ target when the stored code is
+ * exactly ef 01 00 ++ target (23 bytes), else zero. The JUMPDEST bitmap
+ * the C precomputes per entry is derived state; the model recomputes
+ * validity from the bytes where it is observed (the frame-code hooks in
+ * sail/spec/model_buffers.sail). */
+
+struct SpecCodeEntry = { ce_hash : hash, ce_code : list(byte) }
+
+register spec_code_db : list(SpecCodeEntry) = [||]
+
+/* the streaming cursor: hash selected by the last stream_code_begin */
+register spec_code_cur : list(hash) = [||]
+
+val spec_code_find : (list(SpecCodeEntry), hash) -> (bool, list(byte))
+function spec_code_find(es, h) =
+    match es {
+        [||] => (false, [||]),
+        e :: t => if e.ce_hash == h then {
+            (true, e.ce_code)
+        } else {
+            spec_code_find(t, h)
+        },
+    }
+
+val spec_code_put : (list(SpecCodeEntry), hash, list(byte)) -> list(SpecCodeEntry)
+function spec_code_put(es, h, c) =
+    match es {
+        [||] => [|struct { ce_hash = h, ce_code = c }|],
+        e :: t => if e.ce_hash == h then {
+            struct { ce_hash = h, ce_code = c } :: t
+        } else {
+            e :: spec_code_put(t, h, c)
+        },
+    }
+
+function code_db_stream_code_begin(h : hash) -> bits(64) = {
+    spec_code_cur = [|h|];
+    let (found, c) = spec_code_find(spec_code_db, h);
+    if found & (list_len(c) > 0) then {
+        0x0000000000000000
+    } else {
+        spec_code_db = spec_code_put(spec_code_db, h, [||]);
+        0x0000000000000001
+    }
+}
+
+function code_db_stream_code_byte(b : byte) -> unit =
+    match spec_code_cur {
+        h :: _ => {
+            let (found, c) = spec_code_find(spec_code_db, h);
+            if found then {
+                spec_code_db = spec_code_put(spec_code_db, h, list_append(c, [|b|]))
+            }
+        },
+        [||] => (),
+    }
+
+function code_db_stored_code_length(h : hash) -> bits(64) = {
+    let (_, c) = spec_code_find(spec_code_db, h);
+    get_slice_int(64, list_len(c), 0)
+}
+
+function code_db_read_delegation(h : hash) -> bits(168) = {
+    let (found, c) = spec_code_find(spec_code_db, h);
+    if found & (list_len(c) == 23) & (bytes_get(c, 0) == 0xef) & (bytes_get(c, 1) == 0x01) & (bytes_get(c, 2) == 0x00) then {
+        append(0x01, word_to_address(bytes_be256(bytes_slice(c, 3, 20))))
+    } else {
+        sail_zeros(168)
+    }
+}
