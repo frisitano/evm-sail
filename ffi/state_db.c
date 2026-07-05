@@ -12,6 +12,7 @@
  * Persistent storage uses the same cache/update shape, keyed by
  * (keccak256(address), keccak256(slot)), with frame overlays for revert. */
 #include "state_db.h"
+#include "host_crypto.h"
 #include "lbits_convert.h"
 #include <stdint.h>
 #include <stdlib.h>
@@ -391,11 +392,6 @@ typedef struct storage_layer {
 static storage_table storage_cache = {NULL, 0, 0};
 static storage_layer *storage_updates = NULL;
 
-static uint64_t selected_storage_slot[4];
-static uint64_t selected_storage_account_hash[4];
-static uint64_t selected_storage_slot_hash[4];
-static int selected_storage_valid = 0;
-
 static storage_row *storage_iter_rows = NULL;
 static uint32_t storage_iter_count = 0;
 static uint32_t storage_iter_selected = 0;
@@ -534,31 +530,127 @@ static void storage_free_layers(storage_layer *l) {
   }
 }
 
-/* v is 4 big-endian-ordered words (v[0] = most significant) */
-static storage_row selected_storage_row(const uint64_t v[4]) {
+/* ---- keccak memo: address -> keccak(address), slot -> keccak(slot) ----
+ * The storage hooks are keyed by raw (address, slot); the secure trie keys are
+ * computed here and memoized (keccak is a pure function), so repeated touches
+ * of the same address or slot never re-hash. Open addressing, FNV-1a over the
+ * preimage words, power-of-two capacity. */
+#define KMEMO_INIT_CAP 256u
+
+typedef struct {
+  uint64_t key[4]; /* preimage as BE words (address zero-extended to 256 bits) */
+  uint64_t h[4];   /* keccak(preimage), BE words */
+  uint8_t used;
+} kmemo_ent;
+
+typedef struct {
+  kmemo_ent *tab;
+  uint32_t cap;
+  uint32_t n;
+} kmemo;
+
+static kmemo addr_keccak_memo = {NULL, 0, 0};
+static kmemo slot_keccak_memo = {NULL, 0, 0};
+
+static uint64_t kmemo_hash(const uint64_t k[4]) {
+  uint64_t h = 0xcbf29ce484222325ull;
+  for (int i = 0; i < 4; i++) {
+    uint64_t w = k[i];
+    for (int b = 0; b < 8; b++) {
+      h ^= (w >> (8 * b)) & 0xff;
+      h *= 0x100000001b3ull;
+    }
+  }
+  return h;
+}
+
+static uint32_t kmemo_find(const kmemo *m, const uint64_t k[4]) {
+  uint32_t i = (uint32_t)kmemo_hash(k) & (m->cap - 1);
+  while (m->tab[i].used && memcmp(m->tab[i].key, k, 32) != 0)
+    i = (i + 1) & (m->cap - 1);
+  return i;
+}
+
+/* make room for one more entry; 0 if the memo is unusable (alloc failure) */
+static int kmemo_room(kmemo *m) {
+  if (!m->tab) {
+    m->tab = (kmemo_ent *)calloc(KMEMO_INIT_CAP, sizeof(kmemo_ent));
+    if (!m->tab)
+      return 0;
+    m->cap = KMEMO_INIT_CAP;
+    m->n = 0;
+  }
+  if ((m->n + 1) * 4 >= m->cap * 3) {
+    kmemo_ent *ntab = (kmemo_ent *)calloc(m->cap * 2, sizeof(kmemo_ent));
+    if (!ntab)
+      return (m->n + 1) < m->cap; /* old table still usable while not full */
+    kmemo old = *m;
+    m->tab = ntab;
+    m->cap = old.cap * 2;
+    m->n = 0;
+    for (uint32_t i = 0; i < old.cap; i++)
+      if (old.tab[i].used) {
+        uint32_t j = kmemo_find(m, old.tab[i].key);
+        m->tab[j] = old.tab[i];
+        m->n++;
+      }
+    free(old.tab);
+  }
+  return 1;
+}
+
+/* out = keccak(low pre_len bytes of v), memoized in m */
+static void kmemo_keccak(kmemo *m, size_t pre_len, const lbits v, uint64_t out[4]) {
+  uint64_t k[4];
+  uint8_t buf[32];
+  lbits_to_be_words4(k, v);
+  if (!kmemo_room(m)) { /* allocation failed: hash without caching */
+    lbits_to_be_bytes(buf, pre_len, v);
+    host_keccak256_bytes(out, buf, pre_len);
+    return;
+  }
+  uint32_t i = kmemo_find(m, k);
+  if (!m->tab[i].used) {
+    lbits_to_be_bytes(buf, pre_len, v);
+    memcpy(m->tab[i].key, k, 32);
+    host_keccak256_bytes(m->tab[i].h, buf, pre_len);
+    m->tab[i].used = 1;
+    m->n++;
+  }
+  memcpy(out, m->tab[i].h, 32);
+}
+
+/* the secure storage key of raw (address, slot): (keccak(a), keccak(s)) */
+static void storage_secure_key(const lbits a, const lbits s,
+                               uint64_t slot[4], uint64_t ah[4], uint64_t sh[4]) {
+  lbits_to_be_words4(slot, s);
+  kmemo_keccak(&addr_keccak_memo, 20, a, ah);
+  kmemo_keccak(&slot_keccak_memo, 32, s, sh);
+}
+
+static storage_row storage_make_row(const uint64_t ah[4], const uint64_t sh[4],
+                                    const uint64_t slot[4], const uint64_t v[4]) {
   storage_row e;
   memset(&e, 0, sizeof(e));
-  memcpy(e.acct_hash, selected_storage_account_hash, sizeof(e.acct_hash));
-  memcpy(e.slot_hash, selected_storage_slot_hash, sizeof(e.slot_hash));
-  memcpy(e.slot, selected_storage_slot, sizeof(e.slot));
+  memcpy(e.acct_hash, ah, sizeof(e.acct_hash));
+  memcpy(e.slot_hash, sh, sizeof(e.slot_hash));
+  memcpy(e.slot, slot, sizeof(e.slot));
   memcpy(e.val, v, sizeof(e.val));
   return e;
 }
 
-static storage_row *storage_walk_updates(void) {
-  if (!selected_storage_valid)
-    return NULL;
+static storage_row *storage_walk_updates(const uint64_t ah[4], const uint64_t sh[4]) {
   for (storage_layer *l = storage_updates; l; l = l->below) {
-    storage_row *e = storage_table_get(&l->table, selected_storage_account_hash, selected_storage_slot_hash);
+    storage_row *e = storage_table_get(&l->table, ah, sh);
     if (e)
       return e;
   }
   return NULL;
 }
 
-static storage_row *storage_walk(void) {
-  storage_row *e = storage_walk_updates();
-  return e ? e : storage_table_get(&storage_cache, selected_storage_account_hash, selected_storage_slot_hash);
+static storage_row *storage_walk(const uint64_t ah[4], const uint64_t sh[4]) {
+  storage_row *e = storage_walk_updates(ah, sh);
+  return e ? e : storage_table_get(&storage_cache, ah, sh);
 }
 
 static void storage_overlay_table(storage_table *dst, const storage_table *src) {
@@ -596,8 +688,9 @@ unit storage_map_reset(const unit u) {
   storage_table_reset(&storage_cache);
   storage_free_layers(storage_updates);
   storage_updates = NULL;
-  selected_storage_valid = 0;
   storage_iter_clear();
+  /* the keccak memos survive resets: keccak is pure, so cached hashes stay
+   * valid across transactions/blocks */
   return UNIT;
 }
 
@@ -636,32 +729,23 @@ unit storage_map_pop_discard(const unit u) {
   return UNIT;
 }
 
-/* select a (raw slot, account hash, slot hash) storage key for the accessors */
-unit storage_map_key(const lbits slot, const lbits acct_hash, const lbits slot_hash) {
-  lbits_to_be_words4(selected_storage_slot, slot);
-  lbits_to_be_words4(selected_storage_account_hash, acct_hash);
-  lbits_to_be_words4(selected_storage_slot_hash, slot_hash);
-  selected_storage_valid = 1;
+unit storage_map_seed(const lbits a, const lbits s, const lbits v) {
+  uint64_t slot[4], ah[4], sh[4], w[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  lbits_to_be_words4(w, v);
+  storage_row e = storage_make_row(ah, sh, slot, w);
+  (void)storage_table_put(&storage_cache, &e);
+  storage_iter_clear();
   return UNIT;
 }
 
-unit storage_map_seed(const lbits v) {
-  if (selected_storage_valid) {
-    uint64_t w[4];
-    lbits_to_be_words4(w, v);
-    storage_row e = selected_storage_row(w);
-    (void)storage_table_put(&storage_cache, &e);
-    storage_iter_clear();
-  }
-  return UNIT;
-}
-
-unit storage_map_store(const lbits v) {
+unit storage_map_store(const lbits a, const lbits s, const lbits v) {
   storage_layer *top = storage_update_top();
-  if (selected_storage_valid && top) {
-    uint64_t w[4];
+  if (top) {
+    uint64_t slot[4], ah[4], sh[4], w[4];
+    storage_secure_key(a, s, slot, ah, sh);
     lbits_to_be_words4(w, v);
-    storage_row e = selected_storage_row(w);
+    storage_row e = storage_make_row(ah, sh, slot, w);
     (void)storage_table_put(&top->table, &e);
     storage_iter_clear();
   }
@@ -670,39 +754,43 @@ unit storage_map_store(const lbits v) {
 
 static const uint64_t storage_zero_val[4] = {0, 0, 0, 0};
 
-/* the 256-bit value at the selected key across all layers; 0 if absent */
-void storage_map_value(lbits *rop, const unit u) {
-  (void)u;
-  storage_row *e = storage_walk();
+/* the 256-bit value at (address, slot) across all layers; 0 if absent */
+void storage_map_load(lbits *rop, const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  storage_row *e = storage_walk(ah, sh);
   be_words4_to_lbits(rop, e ? e->val : storage_zero_val);
 }
 
 /* the value in the BASE layer only; 0 if absent */
-void storage_map_base_value(lbits *rop, const unit u) {
-  (void)u;
+void storage_map_base_load(lbits *rop, const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
   storage_layer *base = storage_update_base();
-  storage_row *e = base ? storage_table_get(&base->table, selected_storage_account_hash, selected_storage_slot_hash) : NULL;
+  storage_row *e = base ? storage_table_get(&base->table, ah, sh) : NULL;
   if (!e)
-    e = storage_table_get(&storage_cache, selected_storage_account_hash, selected_storage_slot_hash);
+    e = storage_table_get(&storage_cache, ah, sh);
   be_words4_to_lbits(rop, e ? e->val : storage_zero_val);
 }
 
-bool storage_map_present(const unit u) {
-  (void)u;
-  return storage_walk() ? 1 : 0;
+bool storage_map_present(const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  return storage_walk(ah, sh) ? 1 : 0;
 }
 
-bool storage_map_base_present(const unit u) {
-  (void)u;
+bool storage_map_base_present(const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
   storage_layer *base = storage_update_base();
-  if (base && storage_table_get(&base->table, selected_storage_account_hash, selected_storage_slot_hash))
+  if (base && storage_table_get(&base->table, ah, sh))
     return 1;
-  return storage_table_get(&storage_cache, selected_storage_account_hash, selected_storage_slot_hash) ? 1 : 0;
+  return storage_table_get(&storage_cache, ah, sh) ? 1 : 0;
 }
 
-unit storage_map_wipe_acct_hash(const lbits ah) {
+unit storage_map_wipe_addr(const lbits a) {
   uint64_t h[4];
-  lbits_to_be_words4(h, ah);
+  kmemo_keccak(&addr_keccak_memo, 20, a, h);
   storage_table_remove_account_hash(&storage_cache, h);
   for (storage_layer *l = storage_updates; l; l = l->below)
     storage_table_remove_account_hash(&l->table, h);

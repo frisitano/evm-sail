@@ -25,11 +25,6 @@ typedef struct {
 
 static h_table h_transient;
 
-/* cached key selection (transient_storage_key) */
-static int h_cur_ok;
-static uint64_t h_cur_key[7];
-static uint64_t h_cur_hash;
-
 static uint64_t h_hash(const uint64_t *k) {
   uint64_t h = 0xcbf29ce484222325ull; /* FNV-1a over the 7 key words */
   for (int i = 0; i < 7; i++) {
@@ -114,47 +109,46 @@ static h_entry *h_get(h_table *m, const uint64_t *k, uint64_t h) {
 unit transient_storage_reset(uint64_t id) {
   if (id == 0) {
     h_table_clear(&h_transient);
-    h_cur_ok = 0;
   }
   return UNIT;
 }
 
-/* select a transient-storage (address, slot) key for the accessors below */
-unit transient_storage_key(uint64_t id, const lbits addr, const lbits slot) {
-  if (id != 0 || !h_ensure(&h_transient)) {
-    h_cur_ok = 0;
-    return UNIT;
-  }
-
+/* build the 7-word (address, slot) key; returns 0 for an unknown id */
+static int transient_key(uint64_t id, const lbits addr, const lbits slot,
+                         uint64_t key[7], uint64_t *hash) {
+  if (id != 0) return 0;
   uint64_t a[4], sw[4];
   lbits_to_be_words4(a, addr);   /* a[0] = 0 (160-bit value), a[1..3] = address */
   lbits_to_be_words4(sw, slot);
-  h_cur_key[0] = a[1];
-  h_cur_key[1] = a[2];
-  h_cur_key[2] = a[3];
-  h_cur_key[3] = sw[0];
-  h_cur_key[4] = sw[1];
-  h_cur_key[5] = sw[2];
-  h_cur_key[6] = sw[3];
-  h_cur_hash = h_hash(h_cur_key);
-  h_cur_ok = 1;
-  return UNIT;
+  key[0] = a[1];
+  key[1] = a[2];
+  key[2] = a[3];
+  key[3] = sw[0];
+  key[4] = sw[1];
+  key[5] = sw[2];
+  key[6] = sw[3];
+  *hash = h_hash(key);
+  return 1;
 }
 
-/* store the 256-bit value at the selected key */
-unit transient_storage_write(const lbits v) {
-  if (h_cur_ok) {
+/* store the 256-bit value at (address, slot) */
+unit transient_storage_write(uint64_t id, const lbits addr, const lbits slot, const lbits v) {
+  uint64_t key[7], h;
+  if (transient_key(id, addr, slot, key, &h) && h_ensure(&h_transient)) {
     uint64_t w[4];
     lbits_to_be_words4(w, v);
-    (void)h_put(&h_transient, h_cur_key, h_cur_hash, w);
+    (void)h_put(&h_transient, key, h, w);
   }
   return UNIT;
 }
 
-/* the 256-bit value at the selected key; 0 if absent */
-void transient_storage_read(lbits *rop, const unit u) {
-  (void)u;
+/* the 256-bit value at (address, slot); 0 if absent */
+void transient_storage_read(lbits *rop, uint64_t id, const lbits addr, const lbits slot) {
   static const uint64_t zero[4] = {0, 0, 0, 0};
-  h_entry *e = h_cur_ok ? h_get(&h_transient, h_cur_key, h_cur_hash) : NULL;
+  uint64_t key[7], h;
+  h_entry *e = NULL;
+  if (transient_key(id, addr, slot, key, &h)) {
+    e = h_get(&h_transient, key, h);
+  }
   be_words4_to_lbits(rop, e ? e->val : zero);
 }

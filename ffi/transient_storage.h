@@ -11,8 +11,7 @@
 #include <stdint.h>
 
 unit transient_storage_reset(uint64_t id);
-unit transient_storage_key(uint64_t id, const lbits addr, const lbits slot);
-unit transient_storage_write(const lbits v);
-void transient_storage_read(lbits *rop, const unit u);
+unit transient_storage_write(uint64_t id, const lbits addr, const lbits slot, const lbits v);
+void transient_storage_read(lbits *rop, uint64_t id, const lbits addr, const lbits slot);
 
 #endif

@@ -142,62 +142,32 @@ function code_db_store_code(h : hash, c : list(byte)) -> unit = {
  * witness slice directly. */
 val code_db_store_witness_code : witness_slice -> unit
 
-function storage_select(a : address, s : word) -> unit = {
-    let ah : hash = keccak256_address(a);
-    let sh : hash = keccak256_word(s);
-    storage_map_key(s, ah, sh)
-}
+/* Persistent storage, keyed by raw (address, slot). The C backend derives and
+ * memoizes the secure trie hashes, so Sail never re-hashes storage keys. */
+function storage_load(a : address, s : word) -> word = storage_map_load(a, s)
 
-function storage_load(a : address, s : word) -> word = {
-    storage_select(a, s);
-    storage_map_value()
-}
+function storage_store(a : address, s : word, v : word) -> unit = storage_map_store(a, s, v)
 
-function storage_store(a : address, s : word, v : word) -> unit = {
-    storage_select(a, s);
-    storage_map_store(v)
-}
-
-function storage_seed(a : address, s : word, v : word) -> unit = {
-    storage_select(a, s);
-    storage_map_seed(v)
-}
+function storage_seed(a : address, s : word, v : word) -> unit = storage_map_seed(a, s, v)
 
 /* value in the BASE layer only (the state at tx start -- EIP-2200 original) */
-function storage_base_load(a : address, s : word) -> word = {
-    storage_select(a, s);
-    storage_map_base_value()
-}
+function storage_base_load(a : address, s : word) -> word = storage_map_base_load(a, s)
 
 /* present in ANY layer (an explicit 0 is present; fail-closed stateless test) */
-function storage_present(a : address, s : word) -> bool = {
-    storage_select(a, s);
-    storage_map_present()
-}
+function storage_present(a : address, s : word) -> bool = storage_map_present(a, s)
 
 /* present in the BASE layer only (EIP-2200 "original" presence; a committed base
  * 0 is present, a never-committed slot is absent and resolved from the witness) */
-function storage_base_present(a : address, s : word) -> bool = {
-    storage_select(a, s);
-    storage_map_base_present()
-}
+function storage_base_present(a : address, s : word) -> bool = storage_map_base_present(a, s)
 
-function storage_wipe_addr(a : address) -> unit = storage_map_wipe_acct_hash(keccak256_address(a))
+function storage_wipe_addr(a : address) -> unit = storage_map_wipe_addr(a)
 
 function transient_reset() -> unit = transient_storage_reset(get_slice_int(64, 0, 0))
 
-function transient_select(a : address, s : word) -> unit =
-    transient_storage_key(get_slice_int(64, 0, 0), a, s)
+function transient_load(a : address, s : word) -> word = transient_storage_read(get_slice_int(64, 0, 0), a, s)
 
-function transient_load(a : address, s : word) -> word = {
-    transient_select(a, s);
-    transient_storage_read()
-}
-
-function transient_store(a : address, s : word, v : word) -> unit = {
-    transient_select(a, s);
-    transient_storage_write(v)
-}
+function transient_store(a : address, s : word, v : word) -> unit =
+    transient_storage_write(get_slice_int(64, 0, 0), a, s, v)
 
 /* Stateless storage resolver: the value of (a, s) in the witness pre-state,
  * walked from the account's authenticated storage root. Defined in lib/mpt.sail

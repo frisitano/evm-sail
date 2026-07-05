@@ -13,26 +13,25 @@
  * id 0 = EIP-1153 transient storage. Warm access sets are Sail values.
  * Persistent storage is split below into a separate secure-keyed backend. */
 val transient_storage_reset : bits(64) -> unit
-val transient_storage_key : (bits(64), address, word) -> unit
-val transient_storage_write : word -> unit
-val transient_storage_read : unit -> word
+val transient_storage_write : (bits(64), address, word, word) -> unit
+val transient_storage_read : (bits(64), address, word) -> word
 
 /* ---- C-backed persistent storage (ffi/state_db.c): cache/update split ----
  * Cache rows are authenticated pre-state/fixture material; update rows are
  * execution writes. Both are sorted by (keccak(address), keccak(slot)), while
- * update rows remain layered for frame rollback. */
+ * update rows remain layered for frame rollback. The hooks are keyed by raw
+ * (address, slot); the backend computes and memoizes the secure trie hashes. */
 val storage_map_reset : unit -> unit
 val storage_map_push : unit -> unit
 val storage_map_pop_commit : unit -> unit
 val storage_map_pop_discard : unit -> unit
-val storage_map_key : (word, hash, hash) -> unit
-val storage_map_seed : word -> unit
-val storage_map_store : word -> unit
-val storage_map_value : unit -> word
-val storage_map_base_value : unit -> word
-val storage_map_present : unit -> bool
-val storage_map_base_present : unit -> bool
-val storage_map_wipe_acct_hash : hash -> unit
+val storage_map_load : (address, word) -> word
+val storage_map_store : (address, word, word) -> unit
+val storage_map_seed : (address, word, word) -> unit
+val storage_map_base_load : (address, word) -> word
+val storage_map_present : (address, word) -> bool
+val storage_map_base_present : (address, word) -> bool
+val storage_map_wipe_addr : address -> unit
 val storage_map_count : unit -> bits(64)
 val storage_map_update_count : unit -> bits(64)
 val storage_map_at : bits(64) -> unit
