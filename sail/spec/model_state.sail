@@ -804,44 +804,22 @@ function code_db_read_delegation(h : hash) -> bits(168) = {
     }
 }
 
-/* ---- witness databases (iface/witness_db.sail; refines ffi/trie_node_db.c)
- * Three stores harvested from the SSZ stateless witness, plus the
- * incomplete-storage set:
+/* ---- witness node database (iface/witness_db.sail; refines ffi/trie_node_db.c)
+ * One store materialized from the SSZ stateless witness:
  *
  *   nodedb : keccak(node) -> (off, len) span into the witness buffer
- *   acctdb : keccak(addr) -> (off, len) span of the account's leaf node
- *   slotdb : (keccak(addr), keccak(slot)) -> (value, existed)
  *
- * The span stores are FIRST-insert-wins; slotdb inserts overwrite and
- * recompute existed = (value != 0). Each sel is a point lookup that caches
- * the matched row for its accessors; on a miss the model clears the cursor
- * so the accessors read zeros, where the C leaves the previous hit's
- * values -- every Sail caller either guards on the sel result
- * (lib/mpt.sail) or selects a key it just inserted (the acctdb_insert site
- * at lib/mpt.sail:1460), so the two are observationally equal; new callers
- * must preserve that precondition. Iteration (acctdb/slotdb count + at +
- * at_*) presents each row exactly once; the model uses insertion order
- * while the C uses its hash-table order, so callers must not depend on the
- * order, only on the row multiset. An out-of-range at clears the cursor
- * (in the C it keeps stale row data; callers stay in range).
- * slotdb_reset also clears the incomplete-storage set; the nodedb/acctdb
- * resets do not touch it. */
+ * FIRST-insert-wins. nodedb_sel is a point lookup that caches the matched
+ * row for its accessors; on a miss the model clears the cursor so the
+ * accessors read zeros, where the C leaves the previous hit's values --
+ * every Sail caller guards on the sel result (lib/mpt.sail's
+ * node_db_lookup), so the two are observationally equal; new callers must
+ * preserve that precondition. */
 
 struct SpecSpanEntry = { se_key : hash, se_off : bits(64), se_len : bits(64) }
 
-struct SpecSlotEntry = { sle_acct : hash, sle_slot : hash, sle_val : word, sle_existed : bool }
-
 register spec_ndb : list(SpecSpanEntry) = [||]
 register spec_ndb_sel : list(SpecSpanEntry) = [||]
-
-register spec_adb : list(SpecSpanEntry) = [||]
-register spec_adb_sel : list(SpecSpanEntry) = [||]
-register spec_adb_iter : list(SpecSpanEntry) = [||]
-
-register spec_sdb : list(SpecSlotEntry) = [||]
-register spec_sdb_sel : list(SpecSlotEntry) = [||]
-register spec_sdb_iter : list(SpecSlotEntry) = [||]
-register spec_sdb_incomplete : list(hash) = [||]
 
 /* first-insert-wins append (keeps insertion order) */
 val spec_span_insert : (list(SpecSpanEntry), hash, bits(64), bits(64)) -> list(SpecSpanEntry)
@@ -899,167 +877,3 @@ function nodedb_sel(h : hash) -> bool = {
 function nodedb_sel_off() -> bits(64) = spec_span_off(spec_ndb_sel)
 
 function nodedb_sel_len() -> bits(64) = spec_span_len(spec_ndb_sel)
-
-function acctdb_reset() -> unit = {
-    spec_adb = [||];
-    spec_adb_sel = [||];
-    spec_adb_iter = [||]
-}
-
-function acctdb_insert(h : hash, off : bits(64), len : bits(64)) -> unit =
-    spec_adb = spec_span_insert(spec_adb, h, off, len)
-
-function acctdb_sel(h : hash) -> bool = {
-    spec_adb_sel = spec_span_find(spec_adb, h);
-    match spec_adb_sel {
-        [||] => false,
-        _ => true,
-    }
-}
-
-function acctdb_sel_off() -> bits(64) = spec_span_off(spec_adb_sel)
-
-function acctdb_sel_len() -> bits(64) = spec_span_len(spec_adb_sel)
-
-function acctdb_count() -> bits(64) = get_slice_int(64, list_len(spec_adb), 0)
-
-function acctdb_at(idx : bits(64)) -> unit =
-    if unsigned(idx) < list_len(spec_adb) then {
-        spec_adb_iter =
-            [|
-                list_nth(
-                    spec_adb,
-                    unsigned(idx),
-                    struct { se_key = sail_zeros(256), se_off = 0x0000000000000000, se_len = 0x0000000000000000 },
-                ),
-            |]
-    } else {
-        spec_adb_iter = [||]
-    }
-
-function acctdb_at_key() -> hash =
-    match spec_adb_iter {
-        e :: _ => e.se_key,
-        [||] => sail_zeros(256),
-    }
-
-function acctdb_at_off() -> bits(64) = spec_span_off(spec_adb_iter)
-
-function acctdb_at_len() -> bits(64) = spec_span_len(spec_adb_iter)
-
-/* overwrite-on-insert, existed recomputed from the new value */
-val spec_slot_insert : (list(SpecSlotEntry), hash, hash, word) -> list(SpecSlotEntry)
-function spec_slot_insert(es, a, s, v) =
-    match es {
-        [||] => [|struct { sle_acct = a, sle_slot = s, sle_val = v, sle_existed = v != sail_zeros(256) }|],
-        e :: t => if (e.sle_acct == a) & (e.sle_slot == s) then {
-            struct { sle_acct = a, sle_slot = s, sle_val = v, sle_existed = v != sail_zeros(256) } :: t
-        } else {
-            e :: spec_slot_insert(t, a, s, v)
-        },
-    }
-
-val spec_slot_find : (list(SpecSlotEntry), hash, hash) -> list(SpecSlotEntry)
-function spec_slot_find(es, a, s) =
-    match es {
-        [||] => [||],
-        e :: t => if (e.sle_acct == a) & (e.sle_slot == s) then {
-            [|e|]
-        } else {
-            spec_slot_find(t, a, s)
-        },
-    }
-
-val spec_hash_member : (list(hash), hash) -> bool
-function spec_hash_member(hs, h) =
-    match hs {
-        [||] => false,
-        x :: t => if x == h then {
-            true
-        } else {
-            spec_hash_member(t, h)
-        },
-    }
-
-function slotdb_reset() -> unit = {
-    spec_sdb = [||];
-    spec_sdb_sel = [||];
-    spec_sdb_iter = [||];
-    spec_sdb_incomplete = [||]
-}
-
-function slotdb_insert(a : hash, s : hash, v : word) -> unit = spec_sdb = spec_slot_insert(spec_sdb, a, s, v)
-
-function slotdb_sel(a : hash, s : hash) -> bool = {
-    spec_sdb_sel = spec_slot_find(spec_sdb, a, s);
-    match spec_sdb_sel {
-        [||] => false,
-        _ => true,
-    }
-}
-
-function slotdb_selval() -> word =
-    match spec_sdb_sel {
-        e :: _ => e.sle_val,
-        [||] => sail_zeros(256),
-    }
-
-function slotdb_sel_existed() -> bool =
-    match spec_sdb_sel {
-        e :: _ => e.sle_existed,
-        [||] => false,
-    }
-
-function slotdb_count() -> bits(64) = get_slice_int(64, list_len(spec_sdb), 0)
-
-function slotdb_at(idx : bits(64)) -> unit =
-    if unsigned(idx) < list_len(spec_sdb) then {
-        spec_sdb_iter =
-            [|
-                list_nth(
-                    spec_sdb,
-                    unsigned(idx),
-                    struct {
-                        sle_acct = sail_zeros(256),
-                        sle_slot = sail_zeros(256),
-                        sle_val = sail_zeros(256),
-                        sle_existed = false,
-                    },
-                ),
-            |]
-    } else {
-        spec_sdb_iter = [||]
-    }
-
-function slotdb_at_acct() -> hash =
-    match spec_sdb_iter {
-        e :: _ => e.sle_acct,
-        [||] => sail_zeros(256),
-    }
-
-function slotdb_at_slot() -> hash =
-    match spec_sdb_iter {
-        e :: _ => e.sle_slot,
-        [||] => sail_zeros(256),
-    }
-
-function slotdb_at_val() -> word =
-    match spec_sdb_iter {
-        e :: _ => e.sle_val,
-        [||] => sail_zeros(256),
-    }
-
-function slotdb_at_existed() -> bool =
-    match spec_sdb_iter {
-        e :: _ => e.sle_existed,
-        [||] => false,
-    }
-
-function storage_mark_incomplete(a : hash) -> unit =
-    if spec_hash_member(spec_sdb_incomplete, a) then {
-        ()
-    } else {
-        spec_sdb_incomplete = a :: spec_sdb_incomplete
-    }
-
-function storage_harvest_complete_raw(a : hash) -> bool = not_bool(spec_hash_member(spec_sdb_incomplete, a))

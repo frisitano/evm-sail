@@ -56,9 +56,6 @@ function trie_ref_to_root(r : list(byte)) -> bits(256) =
         _ => keccak256(r),
     }
 
-function mpt_node_hash(node : list(byte)) -> hash =
-    keccak256(node)
-
 /* Hash full code bytes, store them in the code database, and return codeHash. */
 function code_hash_and_store(c : list(byte)) -> hash = {
     let h : hash = keccak256(c);

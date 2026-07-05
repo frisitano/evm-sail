@@ -1,10 +1,16 @@
 /* ======================================================================== */
 /* WITNESS RE-ROOT PROBE                                                    */
 /*                                                                          */
-/* A native probe for the stateless pre-state check: re-root a state-trie   */
-/* witness and verify it against the committed root. This isolates the      */
-/* witness reader (lib/mpt.sail) from block execution so its trie parsing   */
-/* can be exercised directly.                                               */
+/* A native probe for the stateless witness reader: re-root a state-trie    */
+/* witness and verify it against the committed root. This exercises the     */
+/* trie parsing shared with lib/mpt.sail (node-db, RLP node decoding,       */
+/* hex-prefix paths, child references) directly, without block execution.   */
+/*                                                                          */
+/* The eager re-root walk itself lives HERE, not in lib/mpt.sail: block     */
+/* validation authenticates witness material lazily (walks from the         */
+/* anchored parent root, each a hash-chain proof through the keccak(node)-  */
+/* keyed node-db), so the full-trie walk survives only as this probe's      */
+/* debugging device.                                                        */
 /*                                                                          */
 /* Input contract: a schema-prefixed SSZ SszStatelessInput read from stdin  */
 /* through ssz_src (host/io.sail), the private-input byte source the zkVM   */
@@ -24,6 +30,78 @@
 /* ======================================================================== */
 
 $include <string.sail>
+
+/* Recursive re-root walk: present children are traversed, child hashes
+ * missing from the node-db are preserved as blinded frontier references.
+ * No leaves are recorded -- the probe only certifies parsing. */
+val witness_node_ref : (list(byte), int) -> list(byte)
+val witness_child_ref : (RlpField, int) -> list(byte)
+
+/* child field: descend if present, preserve if blinded */
+function witness_child_ref(f : RlpField, fuel : int) -> list(byte) = {
+    if f.is_list then {
+        witness_node_ref(f.full, fuel)
+    } else {
+        let c = f.content;
+        if list_len(c) == 32 then {
+            let node = node_db_lookup(bytes_be256(c));
+            if list_len(node) == 0 then {
+                hash_child_ref(c)
+            } else {
+                witness_node_ref(node, fuel)
+            }
+        } else {
+            trie_empty_ref()
+        }
+    }
+}
+
+function witness_node_ref(node : list(byte), fuel : int) -> list(byte) = {
+    if fuel <= 0 | list_len(node) == 0 then {
+        trie_empty_ref()
+    } else {
+        let items = rlp_node_items(node);
+        let n = list_len(items);
+        if n == 2 then {
+            let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).content);
+            if is_leaf then {
+                leaf_child_ref(seg, list_nth(items, 1, RLP_NONE).content)
+            } else {
+                merge_ext_ref(seg, witness_child_ref(list_nth(items, 1, RLP_NONE), fuel - 1))
+            }
+        } else {
+            if n == 17 then {
+                var mask : bits(16) = 0x0000;
+                var children : list(list(byte)) = [||];
+                foreach (i from 0 to 15) {
+                    let cref = witness_child_ref(list_nth(items, i, RLP_NONE), fuel - 1);
+                    if not_bool(trie_ref_is_empty(cref)) then {
+                        mask = branch_mask_set_bit(mask, i);
+                        children = list_append(children, [|cref|])
+                    }
+                };
+                canonical_branch_ref(mask, children)
+            } else {
+                trie_empty_ref()
+            }
+        }
+    }
+}
+termination_measure witness_node_ref(node, fuel) = fuel
+termination_measure witness_child_ref(f, fuel) = fuel
+
+/* re-root the trie at `root` from the witness node-db */
+function witness_reroot(root : bits(256)) -> bits(256) =
+    if root == EMPTY_TRIE_ROOT then {
+        EMPTY_TRIE_ROOT
+    } else {
+        let rootnode = node_db_lookup(root);
+        if list_len(rootnode) == 0 then {
+            trie_ref_to_root(trie_empty_ref())
+        } else {
+            trie_ref_to_root(witness_node_ref(rootnode, 256))
+        }
+    }
 
 function main() -> unit = {
     build_node_db();

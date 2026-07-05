@@ -21,12 +21,13 @@
 /* collapse problem while multiplying hashing. Do not migrate this to       */
 /* incremental per-operation insert/delete.                                 */
 /* (2) Witness reads and the pre-state overlay: stateless verification --   */
-/* re-root a partial trie from a node witness to authenticate it against a  */
-/* committed root, resolve account/storage values by Merkle proof, and      */
-/* compute post-state roots by recursively traversing the witnessed node    */
-/* database, applying the ordered update list only along touched paths and  */
-/* preserving untouched (possibly blinded) children by reference. Every     */
-/* root produced here must agree with TRIE over the composed map.           */
+/* materialize a hash-keyed node database from the witness, resolve         */
+/* account/storage values lazily by Merkle proof from the authenticated     */
+/* parent root, and compute post-state roots by recursively traversing the  */
+/* witnessed node database, applying the ordered update list only along     */
+/* touched paths and preserving untouched (possibly blinded) children by    */
+/* reference. Every root produced here must agree with TRIE over the        */
+/* composed map.                                                            */
 /* ======================================================================== */
 
 
@@ -76,29 +77,6 @@ function account_rlp(nonce : int, balance : word, sroot : bits(256), chash : bit
     rlp_push(rlp_word(chash));
     rlp_list(list_reverse(rlp_scratch)) /* prepend builds newest-first; reverse -> field order */
 }
-
-/* harvest context: while re-rooting an account's storage trie, the recursive
- * witness leaf sink switches from the account leaf store to slotdb, keyed by
- * hv_acct. */
-register hv_storage : bool = false
-register hv_acct : bits(256) = sail_zeros(256)
-
-/* insert a harvested (acct, slot) -> value into the slot store */
-function slot_insert(acct : bits(256), slot : bits(256), v : word) -> unit = slotdb_insert(acct, slot, v)
-
-function storage_mark_partial(acct : bits(256)) -> unit = storage_mark_incomplete(acct)
-
-function storage_harvest_complete(acct : bits(256)) -> bool = storage_harvest_complete_raw(acct)
-
-function slot_existed(acct : bits(256), slot : bits(256)) -> bool = slotdb_sel(acct, slot) & slotdb_sel_existed()
-
-/* the cached slotdb_sel value as a 256-bit word */
-function slot_selword() -> word = slotdb_selval()
-
-/* 256-bit acct key / slot key / value of the currently-selected slotdb row */
-function slot_at_slot() -> bits(256) = slotdb_at_slot()
-function slot_at_val() -> word = slotdb_at_val()
-function slot_at_acct() -> bits(256) = slotdb_at_acct()
 
 /* secure-trie updates for one account's post-state storage, selected by
  * keccak(address). Base-layer contract (defined per entry): the witness
@@ -154,37 +132,6 @@ function storage_updates_union(ak : bits(256)) -> list(TrieUpdate) = {
         }
     };
     out
-}
-
-/* Full live post-state storage for a stateless account whose storage harvest is
- * complete. This is used for delete overlays: deletion can collapse
- * branch/extension structure in ways that would otherwise require materializing
- * an untouched child. The slotdb rows are the authenticated pre-state storage
- * leaves, while `writes` is the ordered transaction update set; composing the
- * surviving slotdb entries plus live writes gives the same textbook sorted-map
- * trie build as execution-specs. Partial optional-proof witnesses must use the
- * preserving overlay instead, because omitted blinded children may contain
- * untouched live slots. */
-function storage_live_updates_from_harvest(ak : bits(256), writes : list(TrieUpdate)) -> list(TrieUpdate) = {
-    var out : list(TrieUpdate) = [||];
-    let n = unsigned(slotdb_count());
-    foreach (j from 0 to (n - 1)) {
-        slotdb_at(get_slice_int(64, j, 0));
-        if slot_at_acct() == ak then {
-            let sk = slot_at_slot();
-            let key = to_nibbles(word_to_bytes32(sk));
-            let slot_val = slot_at_val();
-            if   (slotdb_at_existed())
-               & word_nonzero(slot_val)
-               & not_bool(updates_has_key(writes, key)) then {
-                out = update_insert_sorted(
-                    struct { key = key, is_delete = false, value = rlp_int(unsigned(slot_val)) },
-                    out,
-                )
-            }
-        }
-    };
-    updates_insert_all(writes, out)
 }
 
 /* post-state storage root for keccak(address). Defined after the recursive
@@ -277,14 +224,15 @@ val compute_state_root_overlay : unit -> bits(256)
 /* Stateless verification of the world-state trie from a Merkle witness     */
 /* (the node set covering the proof paths), mirroring execution-specs       */
 /* witness_state.py. A node database keyed by keccak256(node) (C-backed,    */
-/* ffi/trie_node_db.c) backs two operations.                                */
+/* ffi/trie_node_db.c) backs every read.                                    */
 /*                                                                          */
-/* Re-rooting recursively traverses the witnessed nodes and checks the      */
-/* result against the committed pre-state root, authenticating every        */
-/* supplied node at once. Point reads walk the secure trie by               */
-/* keccak256(key) nibbles (branch / extension / leaf, hex-prefix paths) to  */
-/* the account leaf and decode RLP([nonce, balance, storageRoot,            */
-/* codeHash]); storage reads walk the account's storage root the same way.  */
+/* Reads are LAZY: point reads walk the secure trie from the authenticated  */
+/* parent root (k_parent_state_root) by keccak256(key) nibbles (branch /    */
+/* extension / leaf, hex-prefix paths) to the account leaf and decode       */
+/* RLP([nonce, balance, storageRoot, codeHash]); storage reads walk the     */
+/* account's storage root the same way. Because the node database is keyed  */
+/* by keccak256(node), every walk is itself a hash-chain proof from its     */
+/* root -- no up-front re-root pass is needed to authenticate the witness.  */
 /*                                                                          */
 /* A node absent from the witness on a walked path is a missing proof and   */
 /* fails closed. Depends on the RLP library and the SSZ                     */
@@ -295,9 +243,7 @@ val compute_state_root_overlay : unit -> bits(256)
  * Account struct's storage_root default can reference it. */
 let EMPTY_CODE_HASH : bits(256) = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
 
-/* decode an account leaf value: (nonce, balance, storage_root, code_hash).
- * Defined here (ahead of the witness reader) so both the inline storage harvest
- * and the lazy account read can use it. */
+/* decode an account leaf value: (nonce, balance, storage_root, code_hash) */
 function decode_account(leaf : list(byte)) -> (int, word, bits(256), bits(256)) = {
     let items = rlp_node_items(leaf);
     let nonce = rlp_field_int(rlp_item(items, 0));
@@ -1049,126 +995,6 @@ function trie_walk(node : list(byte), key : list(nibble), pos : int, fuel : int)
 }
 termination_measure trie_walk(node, key, pos, fuel) = fuel
 
-/* ---- witness recursive re-root ----------------------------------------- */
-/* A left-to-right recursive walk reconstructs the witnessed trie root. Present
- * children are traversed; child hashes missing from the node-db are preserved as
- * blinded frontier references. Account leaves are recorded in acctdb for lazy
- * reads, and storage leaves are harvested into slotdb during storage traversal. */
-
-/* 64 nibbles (MSB-first) -> bits(256) */
-function nibbles_to_h256(nibs : list(nibble)) -> bits(256) = {
-    var acc : bits(256) = sail_zeros(256);
-    let n = list_len(nibs);
-    foreach (k from 0 to (n - 1)) {
-        acc = or_vec(sail_shiftleft(acc, 4), sail_zero_extend(list_nth(nibs, k, 0x0), 256))
-    };
-    acc
-}
-
-val witness_node_ref : (list(byte), list(nibble), int) -> list(byte)
-val witness_child_ref : (RlpField, list(nibble), int) -> list(byte)
-
-function record_witness_leaf(node : list(byte), key : list(nibble), value : list(byte)) -> unit = {
-    if list_len(key) == 64 then {
-        if hv_storage then {
-            let sv = rlp_str_word(value);
-            slot_insert(hv_acct, nibbles_to_h256(key), sv)
-        } else {
-            let ak = nibbles_to_h256(key);
-            let hn = mpt_node_hash(node);
-            let _ = nodedb_sel(hn);
-            acctdb_insert(ak, nodedb_sel_off(), nodedb_sel_len())
-        }
-    }
-}
-
-/* child field at nibble-path `key`: descend if present, preserve if blinded */
-function witness_child_ref(f : RlpField, key : list(nibble), fuel : int) -> list(byte) = {
-    if f.is_list then {
-        witness_node_ref(f.full, key, fuel)
-    } else {
-        let c = f.content;
-        if list_len(c) == 0 then {
-            trie_empty_ref()
-        } else {
-            if list_len(c) == 32 then {
-                let node = node_db_lookup(bytes_be256(c));
-                if list_len(node) == 0 then {
-                    if hv_storage then {
-                        storage_mark_partial(hv_acct)
-                    };
-                    hash_child_ref(c)
-                } else {
-                    witness_node_ref(node, key, fuel)
-                }
-            } else {
-                trie_empty_ref()
-            }
-        }
-    }
-}
-
-function witness_node_ref(node : list(byte), prefix : list(nibble), fuel : int) -> list(byte) = {
-    if fuel <= 0 | list_len(node) == 0 then {
-        if fuel <= 0 then {
-            k_witness_bad = true
-        };
-        trie_empty_ref()
-    } else {
-        let items = rlp_node_items(node);
-        let n = list_len(items);
-        if n == 2 then {
-            let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).content);
-            let key = list_append(prefix, seg);
-            if is_leaf then {
-                let value = list_nth(items, 1, RLP_NONE).content;
-                record_witness_leaf(node, key, value);
-                leaf_child_ref(seg, value)
-            } else {
-                merge_ext_ref(seg, witness_child_ref(list_nth(items, 1, RLP_NONE), key, fuel - 1))
-            } /* extension */
-        } else {
-            if n == 17 then {
-                let v = list_nth(items, 16, RLP_NONE).content;
-                if list_len(v) > 0 then {
-                    k_witness_bad = true
-                };
-                var mask : bits(16) = 0x0000;
-                var children : list(list(byte)) = [||];
-                foreach (i from 0 to 15) {
-                    let cref = witness_child_ref(list_nth(items, i, RLP_NONE), list_append(prefix, [|get_slice_int(4, i, 0)|]), fuel - 1);
-                    if not_bool(trie_ref_is_empty(cref)) then {
-                        mask = branch_mask_set_bit(mask, i);
-                        children = list_append(children, [|cref|])
-                    }
-                };
-                canonical_branch_ref(mask, children)
-            } else {
-                trie_empty_ref()
-            }
-        }
-    }
-}
-termination_measure witness_node_ref(node, prefix, fuel) = fuel
-termination_measure witness_child_ref(f, key, fuel) = fuel
-
-/* re-root the trie at `root` from the witness. The walk also records each
- * account's leaf span into acctdb; storage tries are authenticated and harvested
- * in a second pass driven by acctdb. */
-function witness_reroot(root : bits(256)) -> bits(256) = {
-    acctdb_reset();
-    if root == EMPTY_TRIE_ROOT then {
-        EMPTY_TRIE_ROOT
-    } else {
-        let rootnode = node_db_lookup(root);
-        if list_len(rootnode) == 0 then {
-            trie_ref_to_root(trie_empty_ref())
-        } else {
-            trie_ref_to_root(witness_node_ref(rootnode, [||], 256))
-        }
-    }
-}
-
 /* ---- account / storage resolution against the witness ------------------ */
 
 /* populate the C node-db from witness.state: keccak(node) -> span. The node is
@@ -1195,110 +1021,62 @@ function parent_state_root() -> bits(256) = {
     bytes_be256(list_nth(items, 3, RLP_NONE).content)
 }
 
+/* EIP-8025 (optional proofs): the witness omits an account's storage proof when
+ * the block never touches its storage. Such an account has a non-empty committed
+ * storage_root whose root node is ABSENT from the witness node-db -- its storage
+ * is unchanged, so its post-state storage_root stays the committed value, and
+ * any storage read against it is a missing proof. */
+function storage_proof_omitted(sroot : bits(256)) -> bool =
+    (list_len(node_db_lookup(sroot)) == 0) & (sroot != EMPTY_TRIE_ROOT)
+
 /* Stateless storage resolver (declared in host/state.sail): the (a, s) pre-state
- * value from the witness. The slot store holds the present pre-state slots
- * harvested during the witness pass, so a hit is an O(1) lookup. On a MISS the
- * value is resolved (and its presence/absence PROVEN) by a Merkle walk of the
- * account's storage trie from its authenticated pre-state root:
+ * value, resolved (and its presence/absence PROVEN) by a lazy Merkle walk of the
+ * account's storage trie from its authenticated pre-state root. The node-db is
+ * keyed by keccak256(node), so the walk is itself a hash-chain proof from that
+ * root:
  *   - the walk reaches the leaf            => present, use that value;
  *   - the walk reaches a diverging/empty
  *     terminus through present nodes        => PROVEN ABSENT => 0;
  *   - the walk hits a blinded (witness-
- *     absent) node on the path              => trie_walk asserts "witness missing
- *                                              trie node" => fail closed.
- * The resolved value (or proven-absent 0) is cached in the slot store, so repeat
- * reads are O(1) without repeating the walk. */
+ *     absent) node on the path              => missing proof => fail closed
+ *                                              (k_witness_bad).
+ * The callers (k_sload / k_orig, host/base_witness.sail) seed the resolved value
+ * into the layered working set, so repeat reads never re-walk. */
 function stateless_storage(a : address, s : word) -> word = {
-    let ak = keccak256_address(a);
-    let sk = keccak256_word(s);
-    if slotdb_sel(ak, sk) then {
-        slot_selword()
-    } else {
-        let sroot = load_account(a).storage_root;
-        let leaf = trie_walk(node_db_lookup(sroot), hash_nibbles(sk), 0, 256);
-        let v : word = if list_len(leaf) > 0 then {
-                rlp_str_word(leaf)
-            } else {
-                sail_zeros(256)
-            };
-        slot_insert(ak, sk, v); /* cache the proven value / proven-absent 0 */
-        v
-    }
-}
-
-/* Authenticate + harvest one account's storage trie: recursively re-root it from
- * the witness (with hv_storage routing leaves into the slot store under `ak`)
- * and assert the reconstructed root equals the account's committed storage root. */
-/* EIP-8025 (optional proofs): the witness omits an account's storage proof when
- * the block never touches its storage. Such an account has a non-empty committed
- * storage_root whose root node is ABSENT from the witness node-db -- there is
- * nothing to harvest or re-root, and the storage is unchanged, so its post-state
- * storage_root stays the committed value. */
-function storage_proof_omitted(sroot : bits(256)) -> bool =
-    (list_len(node_db_lookup(sroot)) == 0) & (sroot != EMPTY_TRIE_ROOT)
-
-function harvest_storage(ak : bits(256), sroot : bits(256)) -> unit = {
+    let sroot = load_account(a).storage_root;
     if storage_proof_omitted(sroot) then {
-        ()
+        /* the block reads storage whose proof the witness omitted */
+        k_witness_bad = true;
+        sail_zeros(256)
     } else {
-        hv_storage = true;
-        hv_acct = ak;
-        let got = if sroot == EMPTY_TRIE_ROOT then {
-                EMPTY_TRIE_ROOT
-            } else {
-                trie_ref_to_root(witness_node_ref(node_db_lookup(sroot), [||] : list(nibble), 256))
-            };
-        hv_storage = false;
-
-        /* a storage proof that does not re-root to the account's committed
-           storage_root is deficient -> graceful invalid (not an abort). */
-        if got != sroot then {
-            k_witness_bad = true
-        }
-    }
-}
-
-/* 256-bit keccak(addr) of the current acctdb_at row */
-function acctdb_at_acct() -> bits(256) = acctdb_at_key()
-
-/* Storage-harvest pass: for every account leaf recorded in the acctdb during the
- * state re-root, authenticate + harvest its storage trie into the slot store.
- * Runs after witness_reroot, driven by the acctdb (the C-backed cross-pass
- * enumerator -- no Sail leaf list). After this the slot
- * store holds the witnessed pre-state storage leaves, plus a per-account
- * completeness marker for storage tries that preserved blinded children. */
-function harvest_all_storage() -> unit = {
-    let n = unsigned(acctdb_count());
-    foreach (i from 0 to (n - 1)) {
-        acctdb_at(get_slice_int(64, i, 0));
-        let ak = acctdb_at_acct();
-        let node = ssz_bytes(unsigned(acctdb_at_off()), unsigned(acctdb_at_len()));
-        let value = list_nth(rlp_node_items(node), 1, RLP_NONE).content;
-        let (_, _, sroot, _) = decode_account(value);
-        if sroot != EMPTY_TRIE_ROOT then {
-            harvest_storage(ak, sroot)
+        let leaf = trie_walk(node_db_lookup(sroot), hash_nibbles(keccak256_word(s)), 0, 256);
+        if list_len(leaf) > 0 then {
+            rlp_str_word(leaf)
+        } else {
+            sail_zeros(256)
         }
     }
 }
 
 /* Stateless account materialization (declared in host/state.sail): bind `a` on
- * first touch. A hit in the acctdb (account leaves recorded during the witness
- * re-root) materializes from the leaf span. On a MISS, presence/absence is PROVEN
- * by a Merkle walk of the state trie from the authenticated pre-state root:
+ * first touch. Presence/absence is PROVEN by a lazy Merkle walk of the state
+ * trie from the authenticated parent root (k_parent_state_root):
  *   - the walk reaches the leaf             => present, decode + seed;
  *   - reaches a diverging/empty terminus
  *     through present nodes                  => PROVEN ABSENT => empty account;
- *   - hits a blinded (witness-absent) node   => trie_walk asserts => fail closed.
+ *   - hits a blinded (witness-absent) node   => missing proof => fail closed
+ *                                              (k_witness_bad).
  * So a not-materialized account is never silently treated as empty -- its
  * absence is a witness-proven exclusion. The result is cached raw in the acctmap
  * (k_seed_account_hashed), so subsequent load_account(a) is an O(1) raw read. */
 function stateless_account_load(a : address) -> unit = {
     let ak = keccak256_address(a);
-    let value : list(byte) = if acctdb_sel(ak) then {
-            list_nth(rlp_node_items(ssz_bytes(unsigned(acctdb_sel_off()), unsigned(acctdb_sel_len()))), 1, RLP_NONE).content
-        } else {
-            trie_walk(node_db_lookup(parent_state_root()), hash_nibbles(ak), 0, 256)
-        };
+    let rootnode = node_db_lookup(k_parent_state_root);
+    if (list_len(rootnode) == 0) & (k_parent_state_root != EMPTY_TRIE_ROOT) then {
+        /* the anchor root itself is missing from the witness */
+        k_witness_bad = true
+    };
+    let value = trie_walk(rootnode, hash_nibbles(ak), 0, 256);
     if list_len(value) > 0 then {
         let (nonce, bal, sroot, chash) = decode_account(value);
         k_seed_account_hashed(a, nonce, bal, sroot, chash);
@@ -1344,9 +1122,9 @@ function compute_state_root_updates_only() -> bits(256) =
 function compute_state_root_overlay() -> bits(256) = {
     let updates = state_updates_map();
     let r = if updates_has_delete(updates) then {
-            trie_overlay_root(parent_state_root(), updates)
+            trie_overlay_root(k_parent_state_root, updates)
         } else {
-            trie_overlay_root_preserve(parent_state_root(), updates)
+            trie_overlay_root_preserve(k_parent_state_root, updates)
         };
     r
 }

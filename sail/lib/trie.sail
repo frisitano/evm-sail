@@ -254,7 +254,6 @@ function trie_ref_is_empty(r : list(byte)) -> bool =
     list_len(r) == 1 & list_nth(r, 0, 0x00) == 0x80
 
 val trie_ref_to_root : list(byte) -> bits(256)
-val mpt_node_hash : list(byte) -> hash
 
 function node_to_ref(node : list(byte)) -> list(byte) =
     if list_len(node) == 0 then {
@@ -317,12 +316,6 @@ function update_insert_sorted(u : TrieUpdate, us : list(TrieUpdate)) -> list(Tri
                 v :: update_insert_sorted(u, r)
             }
         },
-    }
-
-function updates_insert_all(src : list(TrieUpdate), dst : list(TrieUpdate)) -> list(TrieUpdate) =
-    match src {
-        [||]   => dst,
-        u :: r => updates_insert_all(r, update_insert_sorted(u, dst)),
     }
 
 function updates_strictly_sorted(us : list(TrieUpdate)) -> bool =

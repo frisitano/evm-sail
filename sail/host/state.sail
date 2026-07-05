@@ -221,6 +221,17 @@ register k_witness_bad : bool =
     false /* witness proof deficient/inconsistent: validation FAILS (valid=false)
            gracefully instead of aborting (EIP-8025 optional-proofs tests) */
 
+register k_parent_state_root : hash =
+    sail_zeros(256) /* the authenticated pre-state anchor: the parent header's
+                    state_root, set once per block (authenticate_parent_state) and ONLY
+                    AFTER the witness header chain validates, so it never holds a root
+                    from an unvalidated chain. Together with the keccak(node)-keyed
+                    node-db this is the whole lazy-witness model -- "node database + one
+                    authenticated root register": every lazy account/storage walk and
+                    the post-state overlay anchor here, and each walk is itself a
+                    hash-chain proof from this root. Per-block input, same lifetime as
+                    the node-db: k_world_reset must NOT clear it. */
+
 register k_fork : int = 99 /* active fork level (higher = newer); set by the runner */
 
 /* fork levels for fork-gated rules (chronological; only thresholds matter) */

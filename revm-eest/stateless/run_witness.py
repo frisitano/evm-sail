@@ -4,9 +4,10 @@
 For each EEST fixture `pre` alloc, build a REAL secure-trie execution witness
 (py-trie, via zkvm/gen_vector.py), wrap it as a schema-prefixed SSZ
 `SszStatelessInput`, and feed it to the native `witness_probe` binary, which
-builds the witness node-db and re-roots the state trie via lib/mpt.sail's
-witness reader (`build_node_db` + `witness_reroot`). We then diff the Sail
-reader's REROOT against the trusted py-trie root.
+builds the witness node-db (`build_node_db`, lib/mpt.sail) and re-roots the
+state trie with the probe's own `witness_reroot` walk (block validation reads
+the witness lazily; the full-trie walk lives only in the probe). We then diff
+the Sail reader's REROOT against the trusted py-trie root.
 
 `witness_reroot` walks the entire witness trie and rebuilds it, so a match
 certifies the reader parsed every node (branch/extension/leaf, hex-prefix,

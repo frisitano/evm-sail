@@ -215,37 +215,24 @@ Record WorldStateContract := {
 
 Definition span := (Z * Z)%type.
 
-(* sail/lib/mpt.sail witness-facing externs:
-   nodedb_*, acctdb_*, slotdb_*, storage_mark_incomplete,
-   storage_harvest_complete. *)
+(* sail/lib/mpt.sail witness-facing externs: nodedb_*. The node table plus the
+   Sail-side authenticated parent-root register (k_parent_state_root) is the
+   whole lazy-witness model: every walk from that root is a hash-chain proof
+   through keccak(node)-keyed lookups. *)
 Record WitnessDbContract := {
   witness_state : Type;
 
   node_lookup_ref : witness_state -> word256 -> option span;
-  account_leaf_lookup_ref : witness_state -> account_hash -> option span;
-  slot_lookup_ref :
-    witness_state -> account_hash -> storage_key -> option (word256 * bool);
   witness_bytes_ref : witness_state -> span -> byte_seq;
 
   node_lookup_wf :
     forall witness node_hash span,
       node_lookup_ref witness node_hash = Some span ->
       uint256_wf node_hash /\ bytes_wf (witness_bytes_ref witness span);
-  account_leaf_lookup_wf :
-    forall witness account_key span,
-      account_leaf_lookup_ref witness account_key = Some span ->
-      uint256_wf account_key /\ bytes_wf (witness_bytes_ref witness span);
-  slot_lookup_wf :
-    forall witness account_key slot value existed,
-      slot_lookup_ref witness account_key slot = Some (value, existed) ->
-      uint256_wf account_key /\ uint256_wf slot /\ uint256_wf value;
 
   node_db_insert_select_contract : Prop;
-  account_db_insert_select_contract : Prop;
-  slot_db_insert_select_contract : Prop;
   witness_span_bounds_contract : Prop;
   mpt_authenticated_frontier_contract : Prop;
-  mpt_storage_harvest_contract : Prop;
 }.
 
 Record GuestExternContract := {
@@ -278,8 +265,6 @@ Definition main_boundary (contract : GuestExternContract) : Prop :=
   storage_frame_commit_revert_contract contract.(guest_world_state) /\
   code_db_contract contract.(guest_world_state) /\
   node_db_insert_select_contract contract.(guest_witness_db) /\
-  account_db_insert_select_contract contract.(guest_witness_db) /\
-  slot_db_insert_select_contract contract.(guest_witness_db) /\
   mpt_authenticated_frontier_contract contract.(guest_witness_db).
 
 End EvmSailExternBoundary.

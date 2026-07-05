@@ -573,19 +573,21 @@ struct Block = {
     body : BlockBody,
 }
 
-/* Authenticate the pre-state witness, harvest storage witnesses, then reset the
- * execution overlay. This is the block-level pre-state obligation consumed by
- * later stateless reads and the post-state root pass.
- */
+/* Materialize the hash-keyed witness node store, anchor the authenticated
+ * pre-state root, then reset the execution overlay. There is no eager re-root
+ * or harvest pass: every later stateless read is a lazy walk from
+ * k_parent_state_root, and because the node-db is keyed by keccak(node) each
+ * walk is itself a hash-chain proof -- witness material is authenticated
+ * exactly where it is consumed. The anchor register is set only after the
+ * witness header chain validates. */
 function authenticate_parent_state() -> unit = {
     build_node_db();
-    slotdb_reset();
     register_witness_codes();
-    let sr = parent_state_root();
-    if witness_reroot(sr) != sr then {
+    if headers_ok() then {
+        k_parent_state_root = parent_state_root()
+    } else {
         k_witness_bad = true
     };
-    harvest_all_storage();
     k_world_reset()
 }
 
@@ -1146,11 +1148,11 @@ function main() -> unit = {
 
     /* The witness backs the base layer for BOTH accounts and storage (the
        witness base backend, host/base_witness.sail, statically linked into this
-       entry). A touched account is materialized from its authenticated witness
-       record on first load_account (one keccak, then cached raw in the acctmap);
-       a touched slot resolves from the harvested slot store on first read
-       (k_sload/k_orig) and is cached read-through. Nothing is pre-seeded -- no
-       eager account/slot pass. */
+       entry). A touched account is proven present-or-absent by a lazy Merkle
+       walk from the authenticated parent root on first load_account (then
+       cached raw in the acctmap); a touched slot is proven the same way from
+       the account's storage root on first read (k_sload/k_orig) and seeded into
+       the working set. Nothing is pre-seeded -- no eager account/slot pass. */
 
     /* Block STF over the materialized block: system calls, each decoded tx in
        order via the shared per-tx STF unit, then withdrawals and block-end
