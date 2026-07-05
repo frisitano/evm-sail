@@ -74,6 +74,45 @@ function hp_compact(nibs : list(nibble), is_leaf : bool) -> list(byte) = {
     list_reverse(out)
 }
 
+/* hex-prefix decode: (is_leaf, path nibbles) */
+function hp_decode(p : list(byte)) -> (bool, list(nibble)) = {
+    let n = list_len(p);
+    if n == 0 then {
+        (false, [||])
+    } else {
+        let fb = bytes_get(p, 0);
+        let flag : nibble = fb[7 .. 4];
+        let is_leaf : bool = flag[1] == bitone;
+        let odd : bool = flag[0] == bitone;
+        var rev : list(nibble) = [||];
+        if odd then {
+            rev = fb[3 .. 0] :: rev
+        };
+        foreach (i from 1 to (n - 1)) {
+            let b = bytes_get(p, i);
+            rev = b[7 .. 4] :: rev;
+            rev = b[3 .. 0] :: rev
+        };
+        (is_leaf, list_reverse(rev))
+    }
+}
+
+/* do seg nibbles match key[pos ..] ? */
+function nibs_match(key : list(nibble), pos : int, seg : list(nibble)) -> bool = {
+    let m = list_len(seg);
+    if pos + m > list_len(key) then {
+        false
+    } else {
+        var ok : bool = true;
+        foreach (k from 0 to (m - 1)) {
+            if list_nth(key, pos + k, 0x0) != list_nth(seg, k, 0x0) then {
+                ok = false
+            }
+        };
+        ok
+    }
+}
+
 /* reference to a child node (Yellow Paper Appendix D, the node cap function n):
  * the node's RLP inline when under 32 bytes, otherwise 0xa0 ++ keccak256(node). */
 val child_ref : list(byte) -> list(byte)
