@@ -16,6 +16,11 @@ Definition account_hash := word256.
 Definition storage_key := word256.
 Definition byte_seq := list byte.
 
+Inductive ByteSourceKind : Type :=
+| WitnessSource
+| MemorySource
+| TxInputSource.
+
 Definition byte_wf (b : byte) : Prop := 0 <= b < 256.
 Definition bytes_wf (bs : byte_seq) : Prop := Forall byte_wf bs.
 Definition uint64_wf (x : word64) : Prop := 0 <= x < 2 ^ 64.
@@ -107,15 +112,13 @@ Record OutputTraceContract := {
       bytes_wf (output_bytes (emit_out_step trace b));
 }.
 
-(* sail/host/io.sail: host crypto plus staged precompile wrappers. *)
-Record HostCryptoContract := {
-  host_hash_ref : Z -> byte_seq -> word256;
+(* sail/host/io.sail: abstract crypto/precompile functions plus staged
+   precompile wrappers for the executable implementation. *)
+Record CryptoContract := {
   keccak256_ref : byte_seq -> word256;
   sha256_ref : byte_seq -> word256;
   precompile_ref : Z -> byte_seq -> option byte_seq;
 
-  host_hash_ref_wf :
-    forall id msg, bytes_wf msg -> uint256_wf (host_hash_ref id msg);
   keccak256_ref_wf :
     forall msg, bytes_wf msg -> uint256_wf (keccak256_ref msg);
   sha256_ref_wf :
@@ -126,15 +129,30 @@ Record HostCryptoContract := {
       precompile_ref id input = Some output ->
       bytes_wf output;
 
-  host_hash_id_0_is_keccak256 :
-    forall msg, bytes_wf msg -> host_hash_ref 0 msg = keccak256_ref msg;
-  host_hash_id_2_is_sha256 :
-    forall msg, bytes_wf msg -> host_hash_ref 2 msg = sha256_ref msg;
-  host_precompile_protocol_refines_refs : Prop;
+  staged_precompile_protocol_refines_ref : Prop;
 }.
 
-(* sail/host/memory.sail and sail/evm/machine.sail host_mem_*, hm_*, hr_*,
-   txin_*, txd_*, code_db_*, hs_*. *)
+(* C-side byte sources. Sail hash semantics are byte-list functions; optimized
+   native paths such as code_db_store_source may resolve a pointer/length pair,
+   but must refine the same materialized byte sequence. *)
+Record ByteSourceContract := {
+  byte_source_state : Type;
+  byte_source_bytes_ref : byte_source_state -> ByteSourceKind -> Z -> Z -> byte_seq;
+
+  byte_source_bytes_wf :
+    forall st kind off len,
+      0 <= off ->
+      0 <= len ->
+      bytes_wf (byte_source_bytes_ref st kind off len);
+
+  byte_source_resolve_contract : Prop;
+  byte_source_keccak_refinement_contract : Prop;
+  witness_sha256_request_digest_refinement_contract : Prop;
+  byte_source_code_store_contract : Prop;
+}.
+
+(* sail/host/memory.sail and sail/evm/machine.sail host_mem_*, hm_*,
+   returndata_*, txin_*, txd_*, code_db_*, hs_*. *)
 Record MemoryStackContract := {
   memory_state : Type;
   stack_state : Type;
@@ -233,7 +251,8 @@ Record WitnessDbContract := {
 Record GuestExternContract := {
   guest_input : InputOracle;
   guest_output : OutputTraceContract;
-  guest_host_crypto : HostCryptoContract;
+  guest_crypto : CryptoContract;
+  guest_byte_sources : ByteSourceContract;
   guest_memory_stack : MemoryStackContract;
   guest_world_state : WorldStateContract;
   guest_witness_db : WitnessDbContract;
@@ -245,7 +264,11 @@ Definition input_well_formed_boundary (contract : GuestExternContract) : Prop :=
     Z.of_nat (length (input_bytes (guest_input contract))).
 
 Definition main_boundary (contract : GuestExternContract) : Prop :=
-  host_precompile_protocol_refines_refs contract.(guest_host_crypto) /\
+  staged_precompile_protocol_refines_ref contract.(guest_crypto) /\
+  byte_source_resolve_contract contract.(guest_byte_sources) /\
+  byte_source_keccak_refinement_contract contract.(guest_byte_sources) /\
+  witness_sha256_request_digest_refinement_contract contract.(guest_byte_sources) /\
+  byte_source_code_store_contract contract.(guest_byte_sources) /\
   memory_frame_lifo_contract contract.(guest_memory_stack) /\
   calldata_view_contract contract.(guest_memory_stack) /\
   returndata_frame_contract contract.(guest_memory_stack) /\

@@ -1,4 +1,5 @@
 #include "host_crypto.h"
+#include "code_db.h"
 #include "memory.h"
 #include "zkvm_accelerators.h"
 
@@ -8,10 +9,11 @@
 
 extern const uint8_t *evmsail_ssz_ptr(uint64_t off, uint64_t len);
 
-static uint64_t HOST_digest[4];
+static const uint8_t HOST_empty_source = 0;
 static uint8_t *HOST_bytes;
 static uint64_t HOST_bytes_len;
 static uint64_t HOST_bytes_cap;
+static int HOST_bytes_ok = 1;
 
 #ifdef ACCEL_MMIO
 static const uintptr_t CRYPTO_MMIO_BASE = 0x40000000UL;
@@ -44,38 +46,45 @@ static uint64_t host_be64(const uint8_t *p) {
   return w;
 }
 
-static int host_bytes_fit(uint64_t need) {
-  if (need <= HOST_bytes_cap) return 1;
-  uint64_t n = HOST_bytes_cap ? HOST_bytes_cap : 128;
-  while (n < need) {
-    if (n > UINT64_MAX / 2) return 0;
-    n *= 2;
+static void host_put_be64(uint8_t *p, uint64_t w) {
+  for (int i = 7; i >= 0; i--) {
+    p[7 - i] = (uint8_t)(w >> (8 * i));
   }
-  if (n > (uint64_t)SIZE_MAX) return 0;
-  uint8_t *p = (uint8_t *)realloc(HOST_bytes, (size_t)n);
-  if (p == NULL) return 0;
-  HOST_bytes = p;
-  HOST_bytes_cap = n;
-  return 1;
 }
 
-static void host_bytes_append_raw(const uint8_t *p, uint64_t len) {
-  if (len == 0) return;
-  if (p == NULL) return;
-  if (len > UINT64_MAX - HOST_bytes_len) return;
-  if (!host_bytes_fit(HOST_bytes_len + len)) return;
-  memcpy(HOST_bytes + HOST_bytes_len, p, (size_t)len);
-  HOST_bytes_len += len;
+static void host_put_be32(uint8_t *p, uint64_t w) {
+  for (int i = 3; i >= 0; i--) {
+    p[3 - i] = (uint8_t)(w >> (8 * i));
+  }
 }
 
-static void host_bytes_append_byte_raw(uint8_t b) {
-  if (!host_bytes_fit(HOST_bytes_len + 1)) return;
-  HOST_bytes[HOST_bytes_len++] = b;
+static void host_put_word(uint8_t *p, uint64_t w3, uint64_t w2, uint64_t w1, uint64_t w0) {
+  host_put_be64(p + 0, w3);
+  host_put_be64(p + 8, w2);
+  host_put_be64(p + 16, w1);
+  host_put_be64(p + 24, w0);
 }
 
-static void host_bytes_append8_raw(uint64_t w) {
-  if (!host_bytes_fit(HOST_bytes_len + 8)) return;
-  for (int i = 7; i >= 0; i--) HOST_bytes[HOST_bytes_len++] = (uint8_t)(w >> (8 * i));
+static void host_put_address(uint8_t *p, uint64_t a2, uint64_t a1, uint64_t a0) {
+  host_put_be64(p + 0, a2);
+  host_put_be64(p + 8, a1);
+  host_put_be32(p + 16, a0);
+}
+
+static void host_words_to_lbits(lbits *rop, const uint64_t words[4]) {
+  rop->len = 256;
+#ifdef SAIL_INT_LIMBS
+  rop->d[0] = words[3];
+  rop->d[1] = words[2];
+  rop->d[2] = words[1];
+  rop->d[3] = words[0];
+#else
+  mpz_set_ui(*rop->bits, 0);
+  for (int i = 0; i < 4; i++) {
+    mpz_mul_2exp(*rop->bits, *rop->bits, 64);
+    mpz_add_ui(*rop->bits, *rop->bits, words[i]);
+  }
+#endif
 }
 
 static void host_hash_bytes(uint64_t id, uint64_t out[4], const uint8_t *p, uint64_t len) {
@@ -117,102 +126,182 @@ void host_sha256_bytes(uint64_t out[4], const uint8_t *p, uint64_t len) {
   host_hash_bytes(2, out, p, len);
 }
 
+void host_keccak256_lbits(lbits *rop, const uint8_t *p, uint64_t len) {
+  uint64_t out[4] = {0, 0, 0, 0};
+  host_keccak256_bytes(out, p, len);
+  host_words_to_lbits(rop, out);
+}
+
+void host_sha256_lbits(lbits *rop, const uint8_t *p, uint64_t len) {
+  uint64_t out[4] = {0, 0, 0, 0};
+  host_sha256_bytes(out, p, len);
+  host_words_to_lbits(rop, out);
+}
+
+void host_keccak_word(lbits *rop, uint64_t w3, uint64_t w2, uint64_t w1, uint64_t w0) {
+  uint8_t buf[32];
+  host_put_word(buf, w3, w2, w1, w0);
+  host_keccak256_lbits(rop, buf, sizeof buf);
+}
+
+void host_keccak_address(lbits *rop, uint64_t a2, uint64_t a1, uint64_t a0) {
+  uint8_t buf[20];
+  host_put_address(buf, a2, a1, a0);
+  host_keccak256_lbits(rop, buf, sizeof buf);
+}
+
+void host_keccak_create2(lbits *rop, uint64_t a2, uint64_t a1, uint64_t a0,
+                         uint64_t salt3, uint64_t salt2, uint64_t salt1, uint64_t salt0,
+                         uint64_t init3, uint64_t init2, uint64_t init1, uint64_t init0) {
+  uint8_t buf[85];
+  buf[0] = 0xff;
+  host_put_address(buf + 1, a2, a1, a0);
+  host_put_word(buf + 21, salt3, salt2, salt1, salt0);
+  host_put_word(buf + 53, init3, init2, init1, init0);
+  host_keccak256_lbits(rop, buf, sizeof buf);
+}
+
+void host_sha256_pair(lbits *rop, uint64_t a3, uint64_t a2, uint64_t a1, uint64_t a0,
+                      uint64_t b3, uint64_t b2, uint64_t b1, uint64_t b0) {
+  uint8_t buf[64];
+  host_put_word(buf, a3, a2, a1, a0);
+  host_put_word(buf + 32, b3, b2, b1, b0);
+  host_sha256_lbits(rop, buf, sizeof buf);
+}
+
+void host_sha256_execution_requests(lbits *rop,
+                                    uint64_t has0, uint64_t d03, uint64_t d02,
+                                    uint64_t d01, uint64_t d00,
+                                    uint64_t has1, uint64_t d13, uint64_t d12,
+                                    uint64_t d11, uint64_t d10,
+                                    uint64_t has2, uint64_t d23, uint64_t d22,
+                                    uint64_t d21, uint64_t d20) {
+  uint8_t buf[96];
+  uint64_t len = 0;
+  if (has0) {
+    host_put_word(buf + len, d03, d02, d01, d00);
+    len += 32;
+  }
+  if (has1) {
+    host_put_word(buf + len, d13, d12, d11, d10);
+    len += 32;
+  }
+  if (has2) {
+    host_put_word(buf + len, d23, d22, d21, d20);
+    len += 32;
+  }
+  host_sha256_lbits(rop, buf, len);
+}
+
+static int host_bytes_reserve(uint64_t need) {
+  if (need <= HOST_bytes_cap) return 1;
+  uint64_t cap = HOST_bytes_cap ? HOST_bytes_cap : 256;
+  while (cap < need) {
+    if (cap > UINT64_MAX / 2) return 0;
+    cap *= 2;
+  }
+  uint8_t *p = realloc(HOST_bytes, (size_t)cap);
+  if (!p) return 0;
+  HOST_bytes = p;
+  HOST_bytes_cap = cap;
+  return 1;
+}
+
 unit host_bytes_reset(const unit u) {
   (void)u;
   HOST_bytes_len = 0;
+  HOST_bytes_ok = 1;
   return UNIT;
 }
 
-unit host_bytes_append_byte(uint64_t b) {
-  host_bytes_append_byte_raw((uint8_t)b);
-  return UNIT;
-}
-
-unit host_bytes_append8(uint64_t w) {
-  host_bytes_append8_raw(w);
-  return UNIT;
-}
-
-const uint8_t *host_bytes_data(uint64_t *len_out) {
-  if (len_out) *len_out = HOST_bytes_len;
-  return HOST_bytes_len ? HOST_bytes : NULL;
-}
-
-unit host_keccak_input(const unit u) {
-  (void)u;
-  host_keccak256_bytes(HOST_digest, HOST_bytes, HOST_bytes_len);
-  return UNIT;
-}
-
-unit host_sha256_input(const unit u) {
-  (void)u;
-  host_sha256_bytes(HOST_digest, HOST_bytes, HOST_bytes_len);
-  return UNIT;
-}
-
-unit host_keccak_witness(uint64_t off, uint64_t len) {
-  const uint8_t *p = evmsail_ssz_ptr(off, len);
-  host_keccak256_bytes(HOST_digest, p, len);
-  return UNIT;
-}
-
-unit host_sha256_request_digest(uint64_t request_type, uint64_t off, uint64_t len) {
-  HOST_bytes_len = 0;
-  host_bytes_append_byte_raw((uint8_t)request_type);
-  host_bytes_append_raw(evmsail_ssz_ptr(off, len), len);
-  host_sha256_bytes(HOST_digest, HOST_bytes, HOST_bytes_len);
-  HOST_bytes_len = 0;
-  return UNIT;
-}
-
-unit host_keccak_word(uint64_t w0, uint64_t w1, uint64_t w2, uint64_t w3) {
-  HOST_bytes_len = 0;
-  host_bytes_append8_raw(w0);
-  host_bytes_append8_raw(w1);
-  host_bytes_append8_raw(w2);
-  host_bytes_append8_raw(w3);
-  host_keccak256_bytes(HOST_digest, HOST_bytes, HOST_bytes_len);
-  HOST_bytes_len = 0;
-  return UNIT;
-}
-
-unit host_keccak_address(uint64_t a0, uint64_t a1, uint64_t a2) {
-  HOST_bytes_len = 0;
-  host_bytes_append8_raw(a0);
-  host_bytes_append8_raw(a1);
-  if (host_bytes_fit(HOST_bytes_len + 4)) {
-    HOST_bytes[HOST_bytes_len++] = (uint8_t)(a2 >> 24);
-    HOST_bytes[HOST_bytes_len++] = (uint8_t)(a2 >> 16);
-    HOST_bytes[HOST_bytes_len++] = (uint8_t)(a2 >> 8);
-    HOST_bytes[HOST_bytes_len++] = (uint8_t)a2;
+unit host_bytes_push(uint64_t b) {
+  if (HOST_bytes_ok && host_bytes_reserve(HOST_bytes_len + 1)) {
+    HOST_bytes[HOST_bytes_len++] = (uint8_t)b;
+  } else {
+    HOST_bytes_ok = 0;
   }
-  host_keccak256_bytes(HOST_digest, HOST_bytes, HOST_bytes_len);
-  HOST_bytes_len = 0;
   return UNIT;
 }
 
-unit host_sha256_pair_words(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3,
-                            uint64_t b0, uint64_t b1, uint64_t b2, uint64_t b3) {
-  HOST_bytes_len = 0;
-  host_bytes_append8_raw(a0);
-  host_bytes_append8_raw(a1);
-  host_bytes_append8_raw(a2);
-  host_bytes_append8_raw(a3);
-  host_bytes_append8_raw(b0);
-  host_bytes_append8_raw(b1);
-  host_bytes_append8_raw(b2);
-  host_bytes_append8_raw(b3);
-  host_sha256_bytes(HOST_digest, HOST_bytes, HOST_bytes_len);
-  HOST_bytes_len = 0;
+unit host_bytes_push8(uint64_t w) {
+  if (HOST_bytes_ok && host_bytes_reserve(HOST_bytes_len + 8)) {
+    for (int i = 0; i < 8; i++) {
+      HOST_bytes[HOST_bytes_len + (uint64_t)i] = (uint8_t)(w >> (8 * (7 - i)));
+    }
+    HOST_bytes_len += 8;
+  } else {
+    HOST_bytes_ok = 0;
+  }
   return UNIT;
 }
 
-unit host_keccak_memory(uint64_t off, uint64_t len) {
-  const uint8_t *p = len ? hm_rd(off, len) : NULL;
-  host_keccak256_bytes(HOST_digest, p, len);
-  return UNIT;
+void host_bytes_keccak_finish(lbits *rop, const unit u) {
+  (void)u;
+  if (HOST_bytes_ok) host_keccak256_lbits(rop, HOST_bytes, HOST_bytes_len);
+  else host_keccak256_lbits(rop, NULL, UINT64_MAX);
 }
 
-uint64_t host_hash_word(uint64_t i) {
-  return i < 4 ? HOST_digest[i] : 0;
+void host_bytes_sha256_finish(lbits *rop, const unit u) {
+  (void)u;
+  if (HOST_bytes_ok) host_sha256_lbits(rop, HOST_bytes, HOST_bytes_len);
+  else host_sha256_lbits(rop, NULL, UINT64_MAX);
+}
+
+int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
+                                const uint8_t **p, uint64_t *resolved_len) {
+  const uint8_t *src = NULL;
+  if (kind != EVMSAIL_SOURCE_WITNESS &&
+      kind != EVMSAIL_SOURCE_MEMORY &&
+      kind != EVMSAIL_SOURCE_TX_INPUT &&
+      kind != EVMSAIL_SOURCE_ACTIVE_CODE) {
+    return 0;
+  }
+  if (len == 0) {
+    src = &HOST_empty_source;
+  } else if (kind == EVMSAIL_SOURCE_WITNESS) {
+    src = evmsail_ssz_ptr(off, len);
+  } else if (kind == EVMSAIL_SOURCE_MEMORY) {
+    if (off > UINT64_MAX - (len - 1)) return 0;
+    src = hm_rd(off, len);
+  } else if (kind == EVMSAIL_SOURCE_TX_INPUT) {
+    src = txd_rd(off, len);
+  } else if (kind == EVMSAIL_SOURCE_ACTIVE_CODE) {
+    return code_db_frame_resolve_code(off, len, p, resolved_len);
+  } else {
+    return 0;
+  }
+  if (src == NULL) return 0;
+  if (p) *p = src;
+  if (resolved_len) *resolved_len = len;
+  return 1;
+}
+
+void host_source_keccak(lbits *rop, uint64_t source_kind, uint64_t off, uint64_t len) {
+  const uint8_t *src = NULL;
+  uint64_t resolved_len = 0;
+  if (evmsail_resolve_byte_source(source_kind, off, len, &src, &resolved_len) &&
+      resolved_len == len) {
+    host_keccak256_lbits(rop, src, len);
+  } else {
+    host_keccak256_lbits(rop, NULL, UINT64_MAX);
+  }
+}
+
+void host_source_sha256_prefixed(lbits *rop, uint64_t prefix, uint64_t source_kind,
+                                 uint64_t off, uint64_t len) {
+  const uint8_t *src = NULL;
+  uint64_t resolved_len = 0;
+  uint64_t out[4] = {0, 0, 0, 0};
+  if (len <= UINT32_MAX - 1 &&
+      evmsail_resolve_byte_source(source_kind, off, len, &src, &resolved_len) &&
+      resolved_len == len) {
+    uint8_t *prefixed = malloc((size_t)len + 1);
+    if (prefixed != NULL) {
+      prefixed[0] = (uint8_t)prefix;
+      if (len != 0) memcpy(prefixed + 1, src, (size_t)len);
+      host_sha256_bytes(out, prefixed, len + 1);
+      free(prefixed);
+    }
+  }
+  host_words_to_lbits(rop, out);
 }

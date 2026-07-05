@@ -95,12 +95,7 @@ function hp_compact(nibs : list(int), is_leaf : bool) -> list(byte) = {
 
 /* reference to a child node (Yellow Paper Appendix D, the node cap function n):
  * the node's RLP inline when under 32 bytes, otherwise 0xa0 ++ keccak256(node). */
-function child_ref(enc : list(byte)) -> list(byte) =
-    if list_len(enc) < 32 then {
-        enc
-    } else {
-        rlp_bytes(word_to_bytes32(keccak256(enc)))
-    }
+val child_ref : list(byte) -> list(byte)
 
 /* A trie leaf VALUE is the RLP encoding of the slot value (a string), e.g.
  * RLP(132) = 0x81 0x84, RLP(32-byte) = 0xa0 ++ 32 bytes. rlp_field_word reads
@@ -431,43 +426,19 @@ function updates_has_key(us : list(TrieUpdate), key : list(int)) -> bool =
  * pre-state storage. Point lookup (slotdb_sel + slotdb_selval) serves stateless
  * reads; iteration (slotdb_count + slotdb_at + slotdb_at_*) feeds the post-state
  * root. Each 256-bit key half crosses as four big-endian words (w3 most sig). */
-val slotdb_reset = impure { _: "slotdb_reset" } : unit -> unit
-val slotdb_insert = impure { _: "slotdb_insert" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> unit
-val slotdb_sel = impure { _: "slotdb_sel" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> bits(64)
-val slotdb_selval = impure { _: "slotdb_selval" } : bits(64) -> bits(64)
-val slotdb_sel_existed = impure { _: "slotdb_sel_existed" } : unit -> bits(64)
-val slotdb_count = impure { _: "slotdb_count" } : unit -> bits(64)
-val slotdb_at = impure { _: "slotdb_at" } : bits(64) -> unit
-val slotdb_at_acct = impure { _: "slotdb_at_acct" } : bits(64) -> bits(64)
-val slotdb_at_slot = impure { _: "slotdb_at_slot" } : bits(64) -> bits(64)
-val slotdb_at_val = impure { _: "slotdb_at_val" } : bits(64) -> bits(64)
-val slotdb_at_existed = impure { _: "slotdb_at_existed" } : unit -> bits(64)
-val storage_mark_incomplete = impure { _: "storage_mark_incomplete" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val storage_harvest_complete_raw = impure { _: "storage_harvest_complete" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(
-        64,
-    )
+val slotdb_reset : unit -> unit
+val slotdb_insert : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
+val slotdb_sel : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val slotdb_selval : bits(64) -> bits(64)
+val slotdb_sel_existed : unit -> bits(64)
+val slotdb_count : unit -> bits(64)
+val slotdb_at : bits(64) -> unit
+val slotdb_at_acct : bits(64) -> bits(64)
+val slotdb_at_slot : bits(64) -> bits(64)
+val slotdb_at_val : bits(64) -> bits(64)
+val slotdb_at_existed : unit -> bits(64)
+val storage_mark_incomplete : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val storage_harvest_complete_raw : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
 
 /* harvest context: while re-rooting an account's storage trie, the recursive
  * witness leaf sink switches from the account leaf store to slotdb, keyed by
@@ -569,7 +540,7 @@ function storage_updates(ak : bits(256)) -> list(TrieUpdate) = {
                 storage_hashed_entry(j)
             };
         if eak == ak then {
-            let sk = keccak256_source(WordSource(es));
+            let sk = keccak256_word(es);
             if k_stateless & word_is_zero(ev) & not_bool(slot_existed(ak, sk)) then {
                 ()
             } else {
@@ -826,26 +797,26 @@ function nibs_match(key : list(int), pos : int, seg : list(int)) -> bool = {
  * O(N^2); this is an O(1)-amortized hash map, so the walk is O(N). The 256-bit
  * key crosses as four big-endian words (k3 most significant); nodedb_sel caches
  * the matched span for the off/len accessors. */
-val nodedb_reset = impure { _: "nodedb_reset" } : unit -> unit
-val nodedb_insert = impure { _: "nodedb_insert" } : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
-val nodedb_sel = impure { _: "nodedb_sel" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
-val nodedb_sel_off = impure { _: "nodedb_sel_off" } : unit -> bits(64)
-val nodedb_sel_len = impure { _: "nodedb_sel_len" } : unit -> bits(64)
+val nodedb_reset : unit -> unit
+val nodedb_insert : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
+val nodedb_sel : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val nodedb_sel_off : unit -> bits(64)
+val nodedb_sel_len : unit -> bits(64)
 
 /* C-backed witness account-leaf store (ffi/trie_node_db.c): keccak(addr) ->
  * (offset, len) span of the account's leaf node in the SSZ witness buffer.
  * Recorded during the state re-root walk; a stateless account read looks the span
  * up here (O(1)) and decodes the leaf lazily. Same span model as the node-db. */
-val acctdb_reset = impure { _: "acctdb_reset" } : unit -> unit
-val acctdb_insert = impure { _: "acctdb_insert" } : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
-val acctdb_sel = impure { _: "acctdb_sel" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
-val acctdb_sel_off = impure { _: "acctdb_sel_off" } : unit -> bits(64)
-val acctdb_sel_len = impure { _: "acctdb_sel_len" } : unit -> bits(64)
-val acctdb_count = impure { _: "acctdb_count" } : unit -> bits(64)
-val acctdb_at = impure { _: "acctdb_at" } : bits(64) -> unit
-val acctdb_at_key = impure { _: "acctdb_at_key" } : bits(64) -> bits(64)
-val acctdb_at_off = impure { _: "acctdb_at_off" } : unit -> bits(64)
-val acctdb_at_len = impure { _: "acctdb_at_len" } : unit -> bits(64)
+val acctdb_reset : unit -> unit
+val acctdb_insert : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
+val acctdb_sel : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val acctdb_sel_off : unit -> bits(64)
+val acctdb_sel_len : unit -> bits(64)
+val acctdb_count : unit -> bits(64)
+val acctdb_at : bits(64) -> unit
+val acctdb_at_key : bits(64) -> bits(64)
+val acctdb_at_off : unit -> bits(64)
+val acctdb_at_len : unit -> bits(64)
 
 /* node bytes for keccak `h` from the C node-db, or [] if absent (read straight
  * from the witness buffer by the recorded span -- no per-node Sail copy held). */
@@ -890,15 +861,8 @@ function trie_empty_ref() -> list(byte) = [|0x80|]
 function trie_ref_is_empty(r : list(byte)) -> bool =
     list_len(r) == 1 & list_nth(r, 0, 0x00) == 0x80
 
-function trie_ref_to_root(r : list(byte)) -> bits(256) =
-    match r {
-        0xa0 :: h => if list_len(h) == 32 then {
-            bytes_to_word_be256(h)
-        } else {
-            keccak256(r)
-        },
-        _ => keccak256(r),
-    }
+val trie_ref_to_root : list(byte) -> bits(256)
+val mpt_node_hash : list(byte) -> hash
 
 function field_to_ref(f : RlpField) -> list(byte) =
     if f.is_list then {
@@ -1624,7 +1588,7 @@ function record_witness_leaf(node : list(byte), key : list(int), value : list(by
             slot_insert(hv_acct, nibbles_to_h256(key), sv)
         } else {
             let ak = nibbles_to_h256(key);
-            let hn = keccak256(node);
+            let hn = mpt_node_hash(node);
             let _ = nodedb_sel(hn[255 .. 192], hn[191 .. 128], hn[127 .. 64], hn[63 .. 0]);
             acctdb_insert(
                 ak[255 .. 192],
@@ -1718,7 +1682,7 @@ function witness_reroot(root : bits(256)) -> bits(256) = {
     } else {
         let rootnode = node_db_lookup(root);
         if list_len(rootnode) == 0 then {
-            keccak256([|0x80|])
+            trie_ref_to_root(trie_empty_ref())
         } else {
             trie_ref_to_root(witness_node_ref(rootnode, [||], 256))
         }
@@ -1735,7 +1699,7 @@ function build_node_db() -> unit = {
     let n = wit_n_state();
     foreach (i from 0 to (n - 1)) {
         let (off, len) = ssz_witness_node_span(i);
-        let h = keccak256_source(WitnessSource(ssz_witness_node_slice(i)));
+        let h = witness_keccak(ssz_witness_node_slice(i));
         nodedb_insert(
             h[255 .. 192],
             h[191 .. 128],
@@ -1772,8 +1736,8 @@ function parent_state_root() -> bits(256) = {
  * The resolved value (or proven-absent 0) is cached in the slot store, so repeat
  * reads are O(1) without repeating the walk. */
 function stateless_storage(a : address, s : word) -> word = {
-    let ak = keccak256_source(AddressSource(a));
-    let sk = keccak256_source(WordSource(s));
+    let ak = keccak256_address(a);
+    let sk = keccak256_word(s);
     if slotdb_sel(
         ak[255 .. 192],
         ak[191 .. 128],
@@ -1873,7 +1837,7 @@ function harvest_all_storage() -> unit = {
  * absence is a witness-proven exclusion. The result is cached raw in the acctmap
  * (k_seed_account_hashed), so subsequent load_account(a) is an O(1) raw read. */
 function stateless_account_load(a : address) -> unit = {
-    let ak = keccak256_source(AddressSource(a));
+    let ak = keccak256_address(a);
     let value : list(byte) = if acctdb_sel(ak[255 .. 192], ak[191 .. 128], ak[127 .. 64], ak[63 .. 0]) !=
             0x0000000000000000 then {
             list_nth(rlp_node_items(ssz_bytes(unsigned(acctdb_sel_off()), unsigned(acctdb_sel_len()))), 1, RLP_NONE).content
@@ -1923,7 +1887,7 @@ function storage_root_from(ak : bits(256), sroot : bits(256)) -> bits(256) = {
 }
 
 function storage_root(a : address) -> bits(256) =
-    storage_root_from(keccak256_source(AddressSource(a)), load_account(a).storage_root)
+    storage_root_from(keccak256_address(a), load_account(a).storage_root)
 
 function compute_state_root_updates_only() -> bits(256) =
     updates_root(state_updates_map())

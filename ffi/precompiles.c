@@ -1,6 +1,5 @@
 #include "precompiles.h"
 #include "host_crypto.h"
-#include "memory.h"
 #include "returndata.h"
 #include "zkvm_accelerators.h"
 
@@ -70,13 +69,26 @@ static void precompile_begin(uint64_t id) {
 
 static void precompile_set_input(uint64_t id, const uint8_t *src, uint64_t len) {
   precompile_begin(id);
-  if (len > PRE_INMAX) len = PRE_INMAX;
-  if (len && src) {
-    memcpy(PRE_in, src, (size_t)len);
-    PRE_inlen = (uint32_t)len;
-  } else {
-    PRE_inlen = 0;
+  if (len > UINT32_MAX || (len && !src)) {
+    PRE_ok = 0;
+    return;
   }
+  PRE_src = len ? src : PRE_in;
+  PRE_inlen = (uint32_t)len;
+}
+
+static int precompile_materialize_input(uint64_t padded_len) {
+  if (padded_len > PRE_INMAX || PRE_inlen > PRE_INMAX) {
+    PRE_ok = 0;
+    PRE_outlen = 0;
+    return 0;
+  }
+  if (PRE_src != PRE_in) {
+    if (PRE_inlen) memcpy(PRE_in, PRE_src, PRE_inlen);
+    PRE_src = PRE_in;
+  }
+  for (uint64_t i = PRE_inlen; i < padded_len; i++) PRE_in[i] = 0;
+  return 1;
 }
 
 #ifdef ACCEL_MMIO
@@ -142,24 +154,6 @@ static void bls_out_g2(uint32_t off, const uint8_t *b192) {
   bls_pad_fp(off + 64,  b192 + 0);
   bls_pad_fp(off + 128, b192 + 144);
   bls_pad_fp(off + 192, b192 + 96);
-}
-
-unit precompile_stage_memory(uint64_t id, uint64_t off, uint64_t len) {
-  precompile_set_input(id, len ? hm_rd(off, len) : NULL, len);
-  return UNIT;
-}
-
-unit precompile_stage_tx(uint64_t id) {
-  precompile_begin(id);
-  uint64_t len = txd_length(UNIT);
-  if (len > PRE_INMAX) len = PRE_INMAX;
-  if (len) txd_copy(PRE_in, len);
-  PRE_inlen = (uint32_t)len;
-  return UNIT;
-}
-
-uint64_t precompile_input_byte(uint64_t i) {
-  return (i < PRE_inlen) ? PRE_src[i] : 0;
 }
 
 static uint64_t precompile_run_current(void) {
@@ -241,7 +235,7 @@ static uint64_t precompile_run_current(void) {
       if (ml == 0) { PRE_ok = 1; PRE_outlen = 0; break; }
       uint64_t need = (uint64_t)96 + bl + el + ml;
       if (need > PRE_INMAX || ml > PRE_outcap) { PRE_ok = 0; PRE_outlen = 0; break; }
-      for (uint32_t i = PRE_inlen; i < need; i++) PRE_in[i] = 0;
+      if (!precompile_materialize_input(need)) break;
       if (zkvm_modexp(PRE_in + 96, bl, PRE_in + 96 + bl, el, PRE_in + 96 + bl + el, ml, PRE_out) == ZKVM_EOK)
         PRE_outlen = ml;
       else { PRE_ok = 0; PRE_outlen = 0; }
@@ -250,6 +244,7 @@ static uint64_t precompile_run_current(void) {
     case 8: {
       if (PRE_inlen % 192 != 0) { PRE_ok = 0; PRE_outlen = 0; break; }
       bool verified = false;
+      if (!precompile_materialize_input(PRE_inlen)) break;
       if (zkvm_bn254_pairing((const zkvm_bn254_pairing_pair*)PRE_in, (size_t)(PRE_inlen / 192), &verified) == ZKVM_EOK) {
         memset(PRE_out, 0, 32);
         PRE_out[31] = verified ? 1 : 0;
@@ -426,28 +421,114 @@ static uint64_t precompile_run_current(void) {
 #endif
 }
 
-uint64_t precompile_run_staged_to_returndata(const unit u) {
-  (void)u;
+uint64_t precompile_run_source_to_returndata(uint64_t id, uint64_t source_kind,
+                                            uint64_t off, uint64_t len) {
+  const uint8_t *src = NULL;
+  uint64_t resolved_len = 0;
+  if (!evmsail_resolve_byte_source(source_kind, off, len, &src, &resolved_len) ||
+      resolved_len != len) {
+    precompile_begin(id);
+    PRE_ok = 0;
+    returndata_set_pending_len(0);
+    return 0;
+  }
+  precompile_set_input(id, src, len);
   precompile_output_pending();
-  uint64_t n = precompile_run_current();
+  (void)precompile_run_current();
   returndata_set_pending_len(PRE_ok ? PRE_outlen : 0);
   precompile_output_scratch();
-  return n;
-}
-
-uint64_t precompile_run_host_input(uint64_t id) {
-  uint64_t len = 0;
-  const uint8_t *p = host_bytes_data(&len);
-  precompile_set_input(id, p, len);
-  precompile_output_scratch();
-  return precompile_run_current();
-}
-
-uint64_t precompile_ok(const unit u) {
-  (void)u;
   return (uint64_t)PRE_ok;
 }
 
-uint64_t precompile_out(uint64_t i) {
-  return (i < PRE_outlen) ? PRE_out[i] : 0;
+static uint64_t precompile_be64(const uint8_t *p) {
+  uint64_t w = 0;
+  for (int i = 0; i < 8; i++) w = (w << 8) | p[i];
+  return w;
+}
+
+static void precompile_put_be64(uint8_t *p, uint64_t w) {
+  for (int i = 7; i >= 0; i--) {
+    p[7 - i] = (uint8_t)(w >> (8 * i));
+  }
+}
+
+static void precompile_put_word(uint8_t *p, uint64_t w3, uint64_t w2,
+                                uint64_t w1, uint64_t w0) {
+  precompile_put_be64(p + 0, w3);
+  precompile_put_be64(p + 8, w2);
+  precompile_put_be64(p + 16, w1);
+  precompile_put_be64(p + 24, w0);
+}
+
+uint64_t precompile_secp256k1_verify_hash_sig_pub(
+    uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
+    uint64_t r3, uint64_t r2, uint64_t r1, uint64_t r0,
+    uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0,
+    uint64_t x3, uint64_t x2, uint64_t x1, uint64_t x0,
+    uint64_t y3, uint64_t y2, uint64_t y1, uint64_t y0) {
+  uint8_t h[32], sig[64], pk[64];
+  bool verified = false;
+  precompile_put_word(h, h3, h2, h1, h0);
+  precompile_put_word(sig, r3, r2, r1, r0);
+  precompile_put_word(sig + 32, s3, s2, s1, s0);
+  precompile_put_word(pk, x3, x2, x1, x0);
+  precompile_put_word(pk + 32, y3, y2, y1, y0);
+  return zkvm_secp256k1_verify((const zkvm_secp256k1_hash*)h,
+                               (const zkvm_secp256k1_signature*)sig,
+                               (const zkvm_secp256k1_pubkey*)pk,
+                               &verified) == ZKVM_EOK && verified;
+}
+
+static void precompile_recovered_address_lbits(lbits *rop, int ok, const uint8_t addr[20]) {
+  rop->len = 168;
+#ifdef SAIL_INT_LIMBS
+  rop->d[0] = rop->d[1] = rop->d[2] = rop->d[3] = 0;
+  if (ok) {
+    uint64_t hi = ((uint64_t)addr[0] << 24) | ((uint64_t)addr[1] << 16)
+        | ((uint64_t)addr[2] << 8) | addr[3];
+    rop->d[0] = precompile_be64(addr + 12);
+    rop->d[1] = precompile_be64(addr + 4);
+    rop->d[2] = hi | (1ull << 32);
+  }
+#else
+  mpz_set_ui(*rop->bits, 0);
+  if (ok) {
+    mpz_set_ui(*rop->bits, 1);
+    mpz_mul_2exp(*rop->bits, *rop->bits, 160);
+    mpz_t t; mpz_init(t);
+    mpz_set_ui(t, 0);
+    for (int i = 0; i < 20; i++) {
+      mpz_mul_2exp(t, t, 8);
+      mpz_add_ui(t, t, addr[i]);
+    }
+    mpz_add(*rop->bits, *rop->bits, t);
+    mpz_clear(t);
+  }
+#endif
+}
+
+void precompile_ecrecover_hash_sig(
+    lbits *rop,
+    uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,
+    uint64_t yparity,
+    uint64_t r3, uint64_t r2, uint64_t r1, uint64_t r0,
+    uint64_t s3, uint64_t s2, uint64_t s1, uint64_t s0) {
+  uint8_t h[32], sig[64], pub[64], addr_hash[32], addr[20] = {0};
+  uint64_t out[4] = {0, 0, 0, 0};
+  int ok = (yparity <= 1);
+  precompile_put_word(h, h3, h2, h1, h0);
+  precompile_put_word(sig, r3, r2, r1, r0);
+  precompile_put_word(sig + 32, s3, s2, s1, s0);
+  if (ok) {
+    ok = zkvm_secp256k1_ecrecover((const zkvm_secp256k1_hash*)h,
+                                  (const zkvm_secp256k1_signature*)sig,
+                                  (uint8_t)yparity,
+                                  (zkvm_secp256k1_pubkey*)pub) == ZKVM_EOK;
+  }
+  if (ok) {
+    host_keccak256_bytes(out, pub, sizeof pub);
+    for (int i = 0; i < 4; i++) precompile_put_be64(addr_hash + i * 8, out[i]);
+    memcpy(addr, addr_hash + 12, 20);
+  }
+  precompile_recovered_address_lbits(rop, ok, addr);
 }

@@ -309,7 +309,7 @@ function enter_transaction_frame(tx : Transaction, intrinsic : gas) -> unit = {
     gas_remaining = to_gas(tx.gas_limit - intrinsic);
     stack_clear();
     mem_clear();
-    hr_reset();
+    returndata_reset_all();
     memory_size = 0;
     frame_status = Running()
 }
@@ -342,16 +342,15 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
         frame_code_txd();
         interpret();
         if frame_succeeded() then {
-            let dep_len = unsigned(hr_pending_len());
+            let dep_len = returndata_pending_size();
             let deposit = G_codedeposit * dep_len;
-            let code_ok = (dep_len <= max_code_size()) &
-                    ((dep_len == 0) | (hr_pending_byte(get_slice_int(64, 0, 0)) != 0xef)); /* EIP-3541 */
+            let code_ok = (dep_len <= max_code_size()) & ((dep_len == 0) | (returndata_pending_byte(0) != 0xef)); /* EIP-3541 */
             if code_ok & (gas_remaining >= deposit) then {
                 gas_remaining = to_gas(gas_remaining - deposit);
-                k_set_code(new_addr, pending_output_list());
-                hr_discard()
+                k_set_code(new_addr, returndata_pending_bytes());
+                returndata_discard_pending()
             } else {
-                hr_discard();
+                returndata_discard_pending();
                 exc_halt(OutOfGas)
             } /* failed deploy */
         }
@@ -367,16 +366,15 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
         /* tx directly to a precompile: run it as the top-level frame, gas-checked
            FIRST (an OOG precompile must not execute). Failure or OOG is an
            exceptional halt (all gas consumed, value transfer reverted). */
-        stage_precompile_txd(an);
-        let used = precompile_gas(an, dlen);
+        let used = precompile_gas_tx_input(an, dlen);
         let ok : bool = if used <= gas_remaining then {
-                k_precompile(an)
+                run_precompile_tx_input(an)
             } else {
                 false
             };
         if ok & (used <= gas_remaining) then {
             gas_remaining = to_gas(gas_remaining - used);
-            hr_adopt();
+            returndata_adopt_pending();
             frame_status = Halted(HaltReturn)
         } else {
             exc_halt(OutOfGas)
@@ -470,7 +468,7 @@ function settle_transaction(tx : Transaction, sender : address, fr : TxFrameResu
 function process_transaction(tx : Transaction) -> Receipt = {
     k_tx_reset();
     k_set_tx(struct { origin = tx.sender, gas_price = tx.gas_price, blob_hashes = tx.blob_hashes });
-    hr_reset();
+    returndata_reset_all();
 
     /* Stage this tx's input into the owned C buffer; gas, validity, calldata and
        initcode all read it from there during execution. */

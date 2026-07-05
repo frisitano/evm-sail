@@ -10,7 +10,9 @@ unit code_db_reset(const unit u);
 /* Streaming FFI bridge for Sail's code_db_store_code(hash, list(byte)) helper. */
 uint64_t code_db_stream_code_begin(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);
 unit code_db_stream_code_byte(uint64_t b);
-unit code_db_store_ssz_code(uint64_t off, uint64_t len);
+unit code_db_store_source(uint64_t source_kind, uint64_t off, uint64_t len);
+int code_db_frame_resolve_code(uint64_t off, uint64_t len,
+                               const uint8_t **p, uint64_t *resolved_len);
 uint64_t code_db_stored_code_length(uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0);
 unit code_db_copy_stored_code_to_memory(
     uint64_t h3, uint64_t h2, uint64_t h1, uint64_t h0,

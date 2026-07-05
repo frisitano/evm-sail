@@ -101,7 +101,7 @@ of revm, which is a production interpreter, not a specification. Calling a
 ## Layout
 
 ```
-sail/        the specification (evm.sail is the root include)
+sail/        the specification (evm.sail_project selects core/entry files)
   runner.sail         single-block / EEST runner entry point (reads input, runs)
   host/
     state.sail        world state: accounts, storage overlays, warm sets,
@@ -129,7 +129,7 @@ ffi/         C backends: memory.c (memory/calldata), transient_storage.c
              (code store + frame descriptors + JUMPDEST bitmaps), trie_node_db.c
              (witness node-db), host_crypto.c + precompiles.c +
              zkvm_accelerators.h (eth-act zkvm-standards crypto)
-revm-eest/   the EEST harness: run_eest.py (drives sail/runner.sail) + the
+revm-eest/   the EEST harness: run_eest.py (drives EVM_ENTRY=runner) + the
              parallel Rust runner (all cores) + stateless/ (witness-reroot gate)
 zkvm/        RISC-V zkVM guest target (riscv64im, stateless block validation)
   runtime/sailfix     GMP-free fixed-width Sail runtime (guest-shared)
@@ -151,7 +151,7 @@ Type-check the specification (block execution is validated by the EEST harness
 and the zkVM guest, below):
 
 ```sh
-make check                                  # type-check sail/evm.sail
+make check                                  # type-check sail/evm.sail_project
 make lint                                   # sail --all-warnings + source hygiene
 make fmt-check                              # verify sail --fmt formatting
 ```

@@ -1,0 +1,29 @@
+variable EVM_BACKEND = spec
+variable EVM_ENTRY = core
+
+evm {
+  files
+    prelude.sail,
+    host/io.sail,
+    lib/rlp.sail,
+    exceptions.sail,
+    host/state.sail,
+    host/kernel.sail,
+    host/memory.sail,
+    evm/machine.sail,
+    evm/gas.sail,
+    evm/instructions.sail,
+    evm/execute.sail,
+    evm/interpreter.sail,
+    evm/transaction.sail,
+    lib/mpt.sail,
+    if $EVM_BACKEND == spec then spec.sail
+    else if $EVM_BACKEND == build then build.sail
+    else error("EVM_BACKEND must be spec or build"),
+    if $EVM_ENTRY == core then []
+    else if $EVM_ENTRY == guest then [lib/ssz_htr.sail, main.sail]
+    else if $EVM_ENTRY == runner then runner.sail
+    else if $EVM_ENTRY == witness_probe then "../revm-eest/stateless/witness_probe.sail"
+    else if $EVM_ENTRY == bench then "../zkvm/zkvm_bench.sail"
+    else error("EVM_ENTRY must be core, guest, runner, witness_probe, or bench")
+}

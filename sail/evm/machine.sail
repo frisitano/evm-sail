@@ -45,22 +45,14 @@ register call_depth : int = 0
  * one code_db_frame_push_immediate_word call. Only the length is kept on the Sail side. */
 register code_len : int = 0
 
-val code_db_frame_jumpdest_valid = impure { _: "code_db_frame_jumpdest_valid" } : bits(64) -> bool
-val code_db_frame_code_byte = impure { _: "code_db_frame_code_byte" } : bits(64) -> bits(8)
-val code_db_frame_push_immediate_word = impure { _: "code_db_frame_push_immediate_word" } : (bits(64), bits(64)) -> word
-val code_db_frame_set_stored_code = impure { _: "code_db_frame_set_stored_code" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> bits(64)
-val code_db_prepare_child_frame_memory_code = impure { _: "code_db_prepare_child_frame_memory_code" } : (
-        bits(64),
-        bits(64),
-    ) -> bits(64)
-val code_db_frame_set_tx_input_code = impure { _: "code_db_frame_set_tx_input_code" } : unit -> bits(64)
-val code_db_frame_clear_code = impure { _: "code_db_frame_clear_code" } : unit -> unit
-val code_db_frame_code_length = impure { _: "code_db_frame_code_length" } : unit -> bits(64)
+val code_db_frame_jumpdest_valid : bits(64) -> bool
+val code_db_frame_code_byte : bits(64) -> bits(8)
+val code_db_frame_push_immediate_word : (bits(64), bits(64)) -> word
+val code_db_frame_set_stored_code : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val code_db_prepare_child_frame_memory_code : (bits(64), bits(64)) -> bits(64)
+val code_db_frame_set_tx_input_code : unit -> bits(64)
+val code_db_frame_clear_code : unit -> unit
+val code_db_frame_code_length : unit -> bits(64)
 
 /* Bind the current frame's code to an account's store entry (O(1): the bytes
  * and JUMPDEST bitmap were prepared when the code was written), to the
@@ -94,14 +86,14 @@ function code_byte(i : int) -> byte = code_db_frame_code_byte(get_slice_int(64, 
  * heap cons per PUSH). The frame lifecycle pairs with calls: stack_frame_enter
  * on a sub-call, stack_frame_leave on return, stack_clear per transaction. */
 
-val hs_reset = impure { _: "hs_reset" } : unit -> unit
-val hs_enter = impure { _: "hs_enter" } : unit -> unit
-val hs_leave = impure { _: "hs_leave" } : unit -> unit
-val hs_depth = impure { _: "hs_depth" } : unit -> bits(64)
-val hs_push_w = impure { _: "hs_push_w" } : word -> unit
-val hs_pop = impure { _: "hs_pop" } : unit -> unit
-val hs_peek_w = impure { _: "hs_peek_w" } : bits(64) -> word
-val hs_set_w = impure { _: "hs_set_w" } : (bits(64), word) -> unit
+val hs_reset : unit -> unit
+val hs_enter : unit -> unit
+val hs_leave : unit -> unit
+val hs_depth : unit -> bits(64)
+val hs_push_w : word -> unit
+val hs_pop : unit -> unit
+val hs_peek_w : bits(64) -> word
+val hs_set_w : (bits(64), word) -> unit
 
 let STACK_LIMIT : int = 1024 /* YP: 1024-element operand-stack limit */
 

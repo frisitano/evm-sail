@@ -226,13 +226,13 @@ function account_cost(warm : bool) -> gas =
 function sload_cost(warm : bool) -> gas =
     if warm then { G_warm_access } else { G_cold_sload } /* EIP-2929: cold SLOAD = 2100 */
 
-/* Big-endian integer from the STAGED precompile input, reading n bytes at
- * off and treating bytes past the end as zero (matching the execution-specs
+/* Big-endian integer from a materialized precompile input, reading n bytes at off
+ * and treating bytes past the end as zero (matching the execution-specs
  * buffer_read semantics used to parse precompile input headers). */
-function pc_be(off : int, n : int) -> int = {
+function pc_be(input : list(byte), off : int, n : int) -> int = {
     var v : int = 0;
     foreach (i from 0 to (n - 1)) {
-        v = v * 256 + unsigned(precompile_input_byte(off + i))
+        v = v * 256 + unsigned(list_nth(input, off + i, 0x00))
     };
     v
 }
@@ -252,10 +252,10 @@ function bit_length(v : int) -> int = {
  * Input layout: bsize[32] esize[32] msize[32] base[bsize] exp[esize] mod[msize].
  * Gas grows with the multiplication-complexity of the larger of base/mod and
  * with an iteration count derived from the exponent's bit length. */
-function modexp_gas() -> gas = {
-    let bl = pc_be(0, 32); /* the length fields are read at FULL 32-byte  */
-    let el = pc_be(32, 32); /* width: an oversized length (e.g. 2^64) must */
-    let ml = pc_be(64, 32); /* price OOG, not wrap into the low 4 bytes    */
+function modexp_gas(input : list(byte)) -> gas = {
+    let bl = pc_be(input, 0, 32); /* the length fields are read at FULL 32-byte  */
+    let el = pc_be(input, 32, 32); /* width: an oversized length (e.g. 2^64) must */
+    let ml = pc_be(input, 64, 32); /* price OOG, not wrap into the low 4 bytes    */
 
     /* EIP-7823 (Osaka) caps base/exp/mod at 1024 bytes each; a larger field
      * fails the call. Modeled by returning a cost beyond any forwardable child
@@ -286,14 +286,14 @@ function modexp_gas() -> gas = {
        long exponent, big_mul per extra word past the first 32 bytes plus the
        leading word's bit length. */
     let iter : int = if el <= 32 then {
-            let ev = pc_be(exp_off, el);
+            let ev = pc_be(input, exp_off, el);
             if ev == 0 then {
                 0
             } else {
                 bit_length(ev) - 1
             }
         } else {
-            let head = pc_be(exp_off, 32); /* first 32 bytes of exponent */
+            let head = pc_be(input, exp_off, 32); /* first 32 bytes of exponent */
             let hb = if bit_length(head) > 0 then {
                     bit_length(head) - 1
                 } else {
@@ -594,21 +594,22 @@ function bls_msm_gas(table : list(int), base : gas, maxd : int, k : int) -> gas 
 
 /* Gas for the precompile at address `num`, by input length (the host returns
  * only output; gas is pure EVM policy). Length-only costs are computed from
- * `words`; the two input-dependent curves (MODEXP, BLAKE2F rounds) inspect the
- * STAGED input bytes in O(1). The cases below are the precompile catalog with
+ * `words`; the two input-dependent curves (MODEXP, BLAKE2F rounds) inspect
+ * the materialized byte list. The cases below are the precompile catalog with
  * their addresses and pricing EIPs. */
-function precompile_gas(num : int, input_len : int) -> gas = {
+function precompile_gas(num : int, input : list(byte)) -> gas = {
+    let input_len = list_len(input);
     let words = ediv_int(input_len + 31, 32);
     let g : int = match num {
         1 => 3000, /* ECRECOVER (0x01) */
         2 => 60 + 12 * words, /* SHA-256 (0x02) */
         3 => 600 + 120 * words, /* RIPEMD-160 (0x03) */
         4 => 15 + 3 * words, /* IDENTITY (0x04) */
-        5 => modexp_gas(), /* MODEXP (0x05), EIP-2565/7883 */
+        5 => modexp_gas(input), /* MODEXP (0x05), EIP-2565/7883 */
         6 => 150, /* BN_ADD (0x06), EIP-1108 */
         7 => 6000, /* BN_MUL (0x07), EIP-1108 */
         8 => 45000 + 34000 * ediv_int(input_len, 192), /* BN_PAIRING (0x08), EIP-1108 */
-        9 => pc_be(0, 4), /* BLAKE2F (0x09): gas = round count */
+        9 => pc_be(input, 0, 4), /* BLAKE2F (0x09): gas = round count */
         10 => 50000, /* POINT_EVALUATION (0x0a), EIP-4844 */
         /* EIP-2537 BLS12-381 */
         11 => 375, /* G1ADD            */
@@ -623,6 +624,9 @@ function precompile_gas(num : int, input_len : int) -> gas = {
     };
     to_gas(g)
 }
+
+val precompile_gas_memory_input : (int, int, int) -> gas
+val precompile_gas_tx_input : (int, int) -> gas
 
 /* ----------------- EIP-2200/2929/3529 SSTORE cost+refund ---------------- */
 /* SSTORE pricing is a three-way comparison (EIP-2200) of: original = the     */

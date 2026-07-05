@@ -23,6 +23,7 @@ uint64_t cd_len(const unit u);
 uint64_t txd_copy(uint8_t *dst, uint64_t cap);
 uint64_t txd_at(uint64_t i);
 uint64_t txd_length(const unit u);
+const uint8_t *txd_rd(uint64_t off, uint64_t len);
 uint64_t cd_byte(uint64_t i);
 unit cd_to_mem(uint64_t dst, uint64_t off, uint64_t len);
 #endif

@@ -33,6 +33,40 @@ type hash    = bits(256)
 /* keccak-256 / storage-key sized digest          */
 type byte    = bits(8)
 
+/* Byte-source slices identify contiguous bytes without saying whether the
+ * backend materializes them. The spec backend defines their meaning as
+ * mathematical byte lists; the build backend resolves them to pointer/length
+ * pairs when possible. */
+enum ByteSource = {
+    WitnessSource,
+    MemorySource,
+    TxInputSource,
+    ActiveCodeSource,
+}
+
+type source_offset = bits(64)
+type source_len    = bits(64)
+
+function to_source_offset(i : int) -> source_offset = get_slice_int(64, i, 0)
+function to_source_len(i : int) -> source_len = get_slice_int(64, i, 0)
+
+struct ByteSlice = {
+    source : ByteSource,
+    off    : source_offset,
+    len    : source_len,
+}
+
+function byte_slice(src : ByteSource, off : int, len : int) -> ByteSlice =
+    struct { source = src, off = to_source_offset(off), len = to_source_len(len) }
+
+function byte_source_kind(src : ByteSource) -> bits(64) =
+    match src {
+        WitnessSource => 0x0000000000000001,
+        MemorySource => 0x0000000000000002,
+        TxInputSource => 0x0000000000000003,
+        ActiveCodeSource => 0x0000000000000004,
+    }
+
 /* Byte-indexed offsets/counts at C-backed host boundaries. Keep decoder and
  * EVM arithmetic in int; narrow only when crossing the FFI. */
 type witness_offset = bits(64)
@@ -53,6 +87,9 @@ struct witness_slice = {
 function witness_slice(off : int, len : int) -> witness_slice =
     struct { off = to_witness_offset(off), len = to_witness_len(len) }
 
+function witness_byte_slice(s : witness_slice) -> ByteSlice =
+    struct { source = WitnessSource, off = s.off, len = s.len }
+
 struct memory_slice = {
     off : memory_offset,
     len : memory_len,
@@ -61,17 +98,14 @@ struct memory_slice = {
 function memory_slice(off : int, len : int) -> memory_slice =
     struct { off = to_memory_offset(off), len = to_memory_len(len) }
 
-/* A byte source records where a contiguous byte sequence lives. The semantic
- * operation is always "hash/read these bytes"; the constructor chooses the
- * host access path, mirroring Sail RISC-V's use of typed source/target values
- * at impure boundaries. */
-union byte_source = {
-  ByteListSource : list(byte),
-  WitnessSource  : witness_slice,
-  MemorySource   : memory_slice,
-  WordSource     : word,
-  AddressSource  : address,
-}
+function memory_byte_slice(off : int, len : int) -> ByteSlice =
+    byte_slice(MemorySource, off, len)
+
+function tx_input_byte_slice(off : int, len : int) -> ByteSlice =
+    byte_slice(TxInputSource, off, len)
+
+function active_code_byte_slice(off : int, len : int) -> ByteSlice =
+    byte_slice(ActiveCodeSource, off, len)
 
 /* Gas is a non-negative counter, bounded to range(0, 2^63 - 1) = INT64_MAX.
  * The bound must EXCEED the largest tx/block gas limit a fixture can set: the

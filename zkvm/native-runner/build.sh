@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ===========================================================================
 # Build a NATIVE (host, not RISC-V) conformance runner for the evm-sail zkVM
-# stateless block guest (sail/main.sail -> main).
+# stateless block guest (sail/evm.sail_project evm, EVM_ENTRY=guest -> main).
 #
 # This mirrors:
 #   - the EEST sail256 native build in revm-eest/run_eest.py (accel-host cdylib,
@@ -73,10 +73,13 @@ for src in sail.c sail_native.c sail_failure.c; do
 done
 
 # --- 3. generate guest C (no main, preserve entry symbol) -------------------
-#   run from repo root so the relative $include in sail/main.sail resolves.
+#   run from repo root so the project files resolve their Sail sources.
 ( cd "$ROOT" && "$SAIL" -c -O --c-no-main --c-no-rts --c-preserve main \
     --c-include zkvm_input.h \
-    sail/main.sail -o "$BUILD/zkvm_block" )
+    sail/evm.sail_project evm \
+    --variable EVM_BACKEND=build \
+    --variable EVM_ENTRY=guest \
+    -o "$BUILD/zkvm_block" )
 
 # NOTE: the toolchain's sail.h (-I"$SAIL_LIB") #includes <gmp.h>. The GMP-free
 # sail256 runtime ships its own GMP-free sail.h, so -I"$SF" MUST precede

@@ -76,24 +76,16 @@ function zero_bytes(n : int) -> list(byte) = {
     out
 }
 
-/* CREATE address (Yellow Paper): keccak256(rlp([sender, nonce]))[12:] -- the
- * low 20 bytes of the hash of the RLP-encoded (sender, nonce) pair. */
-function create_address(sender : address, nonce : int) -> address = {
-    var payload : list(byte) = rlp_addr(sender);
-    payload = list_append(payload, rlp_int(nonce));
-    word_to_address(keccak256(rlp_list(payload)))
-}
+/* CREATE address (Yellow Paper): low 20 bytes of
+ * keccak256(rlp([sender, nonce])). */
+val create_address : (address, int) -> address
 
-/* CREATE2 address (EIP-1014): the low 20 bytes of
- * keccak256(0xff ++ sender ++ salt ++ keccak256(init_code)) -- a salted,
- * init-code-committed address independent of the sender's nonce. */
-function create2_address(sender : address, salt : word, init_hash : hash) -> address = {
-    var preimage : list(byte) = [|0xff|];
-    preimage = list_append(preimage, address_to_bytes(sender));
-    preimage = list_append(preimage, word_to_bytes32(salt));
-    preimage = list_append(preimage, word_to_bytes32(init_hash));
-    word_to_address(keccak256(preimage))
-}
+/* CREATE2 address (EIP-1014): low 20 bytes of
+ * keccak256(0xff ++ sender ++ salt ++ init_hash). */
+val create2_address : (address, word, hash) -> address
+
+function legacy_sig_chain_id(v : int) -> int =
+    ediv_int(v - 35, 2)
 
 struct RlpField = {
   is_list : bool,
@@ -261,6 +253,12 @@ function rlp_fields_encoded_prefix(items : list(RlpField), count : int) -> list(
     };
     out
 }
+
+/* Transaction and EIP-7702 authorization signing hashes. Spec definitions
+ * materialize the canonical RLP preimage; build definitions can refine this
+ * boundary without exposing a generic byte-list hash to common code. */
+val tx_signing_hash : (int, list(RlpField), int, int) -> bits(256)
+val auth_signing_hash : list(RlpField) -> bits(256)
 
 /* content of an RlpField as a big-endian integer / 256-bit word */
 function rlp_field_int(f : RlpField) -> int = {

@@ -88,7 +88,7 @@ check-extern-boundary:
 	test -s $(EXTERN_BOUNDARY_DOC)
 	grep -q "Record InputOracle" $(EXTERN_BOUNDARY_COQ)
 	grep -q "Record OutputTraceContract" $(EXTERN_BOUNDARY_COQ)
-	grep -q "Record HostCryptoContract" $(EXTERN_BOUNDARY_COQ)
+	grep -q "Record CryptoContract" $(EXTERN_BOUNDARY_COQ)
 	grep -q "Record MemoryStackContract" $(EXTERN_BOUNDARY_COQ)
 	grep -q "Record WorldStateContract" $(EXTERN_BOUNDARY_COQ)
 	grep -q "Record WitnessDbContract" $(EXTERN_BOUNDARY_COQ)
@@ -129,7 +129,7 @@ check-sail-coq: run-sail-coq
 
 run-evm-sail-core-coq:
 	mkdir -p $(EVM_SAIL_COQ_CORE_DIR)
-	$(SAIL) --coq --coq-output-dir $(EVM_SAIL_COQ_CORE_DIR) -o evm ../sail/evm.sail
+	$(SAIL) --coq --coq-output-dir $(EVM_SAIL_COQ_CORE_DIR) -o evm ../sail/evm.sail_project evm --variable EVM_BACKEND=spec --variable EVM_ENTRY=core
 
 check-evm-sail-core-coq: run-evm-sail-core-coq
 	test -s $(EVM_SAIL_COQ_CORE_DIR)/evm.v
@@ -139,7 +139,7 @@ check-evm-sail-core-coq: run-evm-sail-core-coq
 
 run-evm-sail-guest-coq:
 	mkdir -p $(EVM_SAIL_COQ_GUEST_DIR)
-	$(SAIL) --coq --coq-output-dir $(EVM_SAIL_COQ_GUEST_DIR) -o evm_guest ../sail/main.sail
+	$(SAIL) --coq --coq-output-dir $(EVM_SAIL_COQ_GUEST_DIR) -o evm_guest ../sail/evm.sail_project evm --variable EVM_BACKEND=spec --variable EVM_ENTRY=guest
 
 check-evm-sail-guest-coq: run-evm-sail-guest-coq
 	test -s $(EVM_SAIL_COQ_GUEST_DIR)/evm_guest.v

@@ -98,9 +98,19 @@ PY
   #    --c-include injects the guest extern decls (host crypto/precompile
   #    adapters + zkvm_input private-input reader) so the generated call sites
   #    compile.
-  "$SAIL" -c --c-no-main --c-no-rts --c-preserve main \
-      --c-include zkvm_input.h \
-      "${GUEST:-$ROOT/sail/main.sail}" -o "$BUILD/zkvm_block"
+  if [ -n "${GUEST:-}" ]; then
+    "$SAIL" -c --c-no-main --c-no-rts --c-preserve main \
+        --c-include zkvm_input.h \
+        "$GUEST" -o "$BUILD/zkvm_block"
+  else
+    local guest_entry="${GUEST_ENTRY:-guest}"
+    ( cd "$ROOT" && "$SAIL" -c --c-no-main --c-no-rts --c-preserve main \
+        --c-include zkvm_input.h \
+        sail/evm.sail_project evm \
+        --variable EVM_BACKEND=build \
+        --variable EVM_ENTRY="$guest_entry" \
+        -o "$BUILD/zkvm_block" )
+  fi
   # 2. Compile the generated model (stock Sail GMP-ABI, backed by mini-gmp).
   #    The model calls setup_rts/cleanup_rts (provided by runtime.c) without a
   #    prototype since --c-no-rts omits rts.h; downgrade that to a warning.

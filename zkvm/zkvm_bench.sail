@@ -8,14 +8,10 @@
 /*                                                                          */
 /* The list-based storage (st_update / st_lookup are O(current size)) makes */
 /* N accesses cost O(N^2); this run quantifies that before any per-tx       */
-/* block-access-list (BAL) refactor. Drive it with GUEST=zkvm_bench.sail    */
+/* block-access-list (BAL) refactor. Drive it with GUEST_ENTRY=bench        */
 /* ./build.sh run. Shares the zkvm_out_* register output convention with    */
 /* zkvm_block.sail.                                                         */
 /* ======================================================================== */
-
-$include "../sail/evm.sail"
-
-val ssz_src_le = impure { _: "ssz_src_le" } : (int, int) -> bits(64)
 
 register zkvm_out_gas : int = 0
 register zkvm_out_storage0 : int = 0

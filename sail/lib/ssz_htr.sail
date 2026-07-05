@@ -283,15 +283,6 @@ function htr_versioned_hashes(zh : list(bits(256))) -> bits(256) = {
     mix_in_length(merkle_vhashes(zh, vh_start, cnt, 0, 12), cnt)
 }
 
-/* SszExecutionRequests is a container of three variable lists (offsets at
- * req+{0,4,8}); execution_requests is field 3 of SszNewPayloadRequest, whose
- * offset sits at npr+40 (after the 32-byte parent_beacon_block_root @ npr+8). */
-function req_start() -> int = npr_start() + ssz_u32(npr_start() + 40)
-function dep_start() -> int = req_start() + ssz_u32(req_start() + 0)
-function wreq_start() -> int = req_start() + ssz_u32(req_start() + 4)
-function creq_start() -> int = req_start() + ssz_u32(req_start() + 8)
-function req_end() -> int = npr_end() /* execution_requests is the last npr field */
-
 /* SszDepositRequest { pubkey[48], withdrawal_credentials[32], amount:u64,
  * signature[96], index:u64 } -> 192 bytes, 5 fields (depth 3). */
 function htr_deposit(zh : list(bits(256)), i : int) -> bits(256) = {

@@ -27,12 +27,6 @@
 /* needing no GMP and only memset from libc.                                */
 /* ======================================================================== */
 
-$include "evm.sail"
-$include "lib/ssz_htr.sail"
-
-/* one byte of the canonical SSZ public output, via write_output (runtime/zkvm_input.c) */
-val emit_out = impure { _: "el_emit_out" } : bits(8) -> unit
-
 /* Output facts, read by the C harness after main(). All fit in 64 bits.     */
 register zkvm_out_gas : int = 0 /* total gas used                     */
 register zkvm_out_storage0 : int = 0 /* contract storage slot 0            */
@@ -47,19 +41,6 @@ function withdrawer() -> address = 0x0000000000000000000000000000000000004895
 
 /* PUSH1 0x2a; PUSH1 0x00; SSTORE; STOP  (store 42 at slot 0) */
 function contract_code() -> list(byte) = [|0x60, 0x2a, 0x60, 0x00, 0x55, 0x00|]
-
-/* Exercise the keccak-256 C accelerator ON the RISC-V guest: compute the two
- * reference digests through the freestanding mini-gmp + FFI path and assert
- * them. A broken on-guest accelerator (ABI/endianness/mini-gmp) fails the
- * assert -> abnormal termination (non-zero exit), so exit 0 proves keccak runs
- * correctly on the guest, not just that it links. */
-function keccak_selfcheck() -> unit = {
-    assert(keccak256([||]) == 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470, "keccak('') on guest");
-    assert(
-        keccak256([|0x61, 0x62, 0x63|]) == 0x4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45,
-        "keccak('abc') on guest"
-    )
-}
 
 /* Register every witness code blob into the hash-keyed C code store. The C side
  * hashes the SSZ input span and copies the bytes into the owned code_db entry. */
@@ -80,7 +61,7 @@ function headers_ok() -> bool = {
         var ok : bool = true;
         foreach (i from 1 to (n - 1)) {
             let parent_hash = bytes_be256(list_nth(rlp_node_items(ssz_witness_header(i)), 0, RLP_NONE).content);
-            let prev_hash = keccak256_source(WitnessSource(ssz_witness_header_slice(i - 1)));
+            let prev_hash = witness_keccak(ssz_witness_header_slice(i - 1));
             if parent_hash != prev_hash then {
                 ok = false
             }
@@ -234,17 +215,8 @@ function decode_word_list(f : RlpField) -> list(word) = {
 let SECP_N_HALF : bits(256) = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0
 let SECP_N_FULL : bits(256) = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
 
-/* secp256k1 ECDSA verify (accelerator id 257): input hash ++ r ++ s ++ x ++ y,
- * each a 32-byte big-endian word -> true iff (r,s) verifies for pubkey (x,y). */
-function secp256k1_verify(h : bits(256), r : word, s : word, x : bits(256), y : bits(256)) -> bool = {
-    var inp : list(byte) = word_to_bytes32(h);
-    inp = list_append(inp, word_to_bytes32(r));
-    inp = list_append(inp, word_to_bytes32(s));
-    inp = list_append(inp, word_to_bytes32(x));
-    inp = list_append(inp, word_to_bytes32(y));
-    let (_, out) = run_precompile(257, inp);
-    list_len(out) == 32
-}
+function secp256k1_verify(h : bits(256), r : word, s : word, x : bits(256), y : bits(256)) -> bool =
+    secp256k1_verify_precompile(h, r, s, x, y)
 
 /* index of the first signature field (v / yParity) by tx type */
 function tx_sig_field(ttype : int) -> int = match ttype {
@@ -255,36 +227,12 @@ function tx_sig_field(ttype : int) -> int = match ttype {
     _ => 10,
 }
 
-function legacy_sig_chain_id(v : int) -> int =
-    ediv_int(v - 35, 2)
-
 function tx_sig_v_ok(ttype : int, v : int) -> bool =
     if ttype == 0 then {
         (v == 27) | (v == 28) | ((v >= 35) & (legacy_sig_chain_id(v) == cc_chain_id()))
     } else {
         (v == 0) | (v == 1)
     }
-
-/* keccak of the signing preimage: the unsigned RLP fields (contiguous and already
- * encoded in the stored tx, fields 0..i_v-1) re-wrapped in a fresh list header.
- * Typed envelopes prepend the transaction type byte. Legacy transactions have
- * two historical forms: unprotected v=27/28 signs only the first six fields;
- * EIP-155 protected v>=35 appends chain_id,0,0 before hashing. */
-function tx_signing_hash(ttype : int, fields : list(RlpField), i_v : int, v : int) -> bits(256) = {
-    var content : list(byte) = rlp_fields_encoded_prefix(fields, i_v);
-    if (ttype == 0) & (v >= 35) then {
-        content = list_append(content, rlp_int(legacy_sig_chain_id(v)));
-        content = list_append(content, [|0x80, 0x80|])
-    };
-    var pre : list(byte) = if ttype != 0 then {
-            [|get_slice_int(8, ttype, 0)|]
-        } else {
-            [||]
-        };
-    pre = list_append(pre, rlp_list_prefix(list_len(content)));
-    pre = list_append(pre, content);
-    keccak256(pre)
-}
 
 /* authenticate tx i: EIP-2 low-s, then bind public_keys[i] to the signature */
 function tx_auth_ok(i : int, h : bits(256), r : word, s : word) -> bool =
@@ -302,30 +250,8 @@ register auth_ok : bool = true
  * signed by the AUTHORITY, whose address is recovered (not witnessed) via
  * ecrecover over keccak(0x05 ++ rlp([chainId, address, nonce])). */
 
-/* ecrecover (accelerator id 1): input hash ++ v ++ r ++ s (4 * 32 BE bytes, v in
- * the low byte = 27 + yParity) -> the recovered address, or (false, 0) on failure. */
-function ecrecover_addr(h : bits(256), yparity : int, r : word, s : word) -> (bool, address) = {
-    var inp : list(byte) = word_to_bytes32(h);
-    inp = list_append(inp, word_to_bytes32(word_of_int(27 + yparity)));
-    inp = list_append(inp, word_to_bytes32(r));
-    inp = list_append(inp, word_to_bytes32(s));
-    let (_, out) = run_precompile(1, inp);
-    if list_len(out) == 32 then {
-        (true, word_to_address(bytes_be256(out)))
-    } else {
-        (false, ZERO_ADDR)
-    }
-}
-
-/* keccak of the authorization signing preimage: 0x05 ++ rlp([chainId, address,
- * nonce]) -- the first three tuple fields (contiguous in the stored tuple) re-wrapped. */
-function auth_signing_hash(fields : list(RlpField)) -> bits(256) = {
-    let content : list(byte) = rlp_fields_encoded_prefix(fields, 3);
-    var pre : list(byte) = [|0x05|];
-    pre = list_append(pre, rlp_list_prefix(list_len(content)));
-    pre = list_append(pre, content);
-    keccak256(pre)
-}
+function ecrecover_addr(h : bits(256), yparity : int, r : word, s : word) -> (bool, address) =
+    ecrecover_precompile(h, yparity, r, s)
 
 /* decode an EIP-7702 authorization list into Authorizations,
  * recovering each authority. valid_sig records tuple-local signature validity
@@ -388,7 +314,7 @@ function decode_auth_list(f : RlpField) -> list(Authorization) = {
  * type. Type-4 (EIP-7702) authorization tuples are decoded and their authorities
  * recovered (decode_auth_list); process_auth_list then applies the delegations. */
 function decode_tx_ssz(i : int, base_fee : word) -> Transaction = {
-    let sender = word_to_address(keccak256_source(WitnessSource(witness_slice(cc_end() + i * 65 + 1, 64))));
+    let sender = word_to_address(witness_keccak(witness_slice(cc_end() + i * 65 + 1, 64)));
     let (tx_off, tx_len) = ssz_list_span(pl_txs_start(), pl_n_txs(), pl_wds_start(), i);
     let tx_bytes = ssz_bytes(tx_off, tx_len);
 
@@ -538,7 +464,7 @@ function enter_system_call_frame(tgt : address, input_len : int) -> unit = {
     gas_remaining = to_gas(30000000);
     stack_clear();
     mem_clear();
-    hr_reset();
+    returndata_reset_all();
     memory_size = 0;
     frame_status = Running();
     cd_set_tx(); /* AFTER mem_clear: it points the base frame's calldata at the slot */
@@ -628,25 +554,6 @@ struct BlockExecutionResult = {
     block_gas_overflow : bool,
     blob_gas_overflow : bool,
     receipts : list(Receipt),
-}
-
-struct BlockHeader = {
-    number : int,
-    timestamp : int,
-    gas_limit : int,
-    gas_used : int,
-    prev_randao : word,
-    base_fee : word,
-    blob_gas_used : int,
-    excess_blob_gas : int,
-    state_root : bits(256),
-    receipts_root : bits(256),
-    logs_bloom : list(byte),
-    block_hash : bits(256),
-    fee_recipient : address,
-    parent_hash : bits(256),
-    parent_beacon_block_root : bits(256),
-    slot_number : int,
 }
 
 struct Withdrawal = {
@@ -914,12 +821,9 @@ function bloom_set_bit(bloom : list(byte), bit_to_set : int) -> list(byte) = {
 }
 
 function bloom_add_entry(bloom : list(byte), entry : list(byte)) -> list(byte) = {
-    let h = word_to_bytes32(keccak256(entry));
     var out : list(byte) = bloom;
     foreach (i from 0 to 2) {
-        let j = i * 2;
-        let bit_to_set = emod_int(unsigned(bytes_get(h, j)) * 256 + unsigned(bytes_get(h, j + 1)), 2048);
-        out = bloom_set_bit(out, bit_to_set)
+        out = bloom_set_bit(out, bloom_entry_bit(entry, i))
     };
     out
 }
@@ -1081,64 +985,11 @@ function receipts_trie_root(receipts : list(Receipt)) -> hash = {
     updates_root(updates)
 }
 
-function request_digest_bytes(request_type : int, body_start : int, body_len : int) -> list(byte) = {
-    if body_len == 0 then {
-        [||]
-    } else {
-        word_to_bytes32(sha256_request_digest(request_type, witness_slice(body_start, body_len)))
-    }
-}
-
-function execution_requests_hash() -> hash = {
-    var payload : list(byte) = [||];
-    payload = list_append(payload, request_digest_bytes(0, dep_start(), wreq_start() - dep_start()));
-    payload = list_append(payload, request_digest_bytes(1, wreq_start(), creq_start() - wreq_start()));
-    payload = list_append(payload, request_digest_bytes(2, creq_start(), req_end() - creq_start()));
-    sha256(payload)
-}
-
-let EMPTY_OMMER_HASH : hash = 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347
-
-function block_header_hash(
-    header : BlockHeader,
-    transactions_root : hash,
-    withdrawals_root : hash,
-    requests_hash : hash,
-    block_access_list_hash : hash,
-) -> (
-    hash
-) = {
-    var payload : list(byte) = rlp_word(header.parent_hash);
-    payload = list_append(payload, rlp_word(EMPTY_OMMER_HASH));
-    payload = list_append(payload, rlp_addr(header.fee_recipient));
-    payload = list_append(payload, rlp_word(header.state_root));
-    payload = list_append(payload, rlp_word(transactions_root));
-    payload = list_append(payload, rlp_word(header.receipts_root));
-    payload = list_append(payload, rlp_bytes(header.logs_bloom));
-    payload = list_append(payload, rlp_int(0));
-    payload = list_append(payload, rlp_int(header.number));
-    payload = list_append(payload, rlp_int(header.gas_limit));
-    payload = list_append(payload, rlp_int(header.gas_used));
-    payload = list_append(payload, rlp_int(header.timestamp));
-    payload = list_append(payload, rlp_bytes(ssz_bytes(pl_extra_start(), pl_txs_start() - pl_extra_start())));
-    payload = list_append(payload, rlp_word(header.prev_randao));
-    payload = list_append(payload, rlp_bytes(zero_bytes(8)));
-    payload = list_append(payload, rlp_int_word(header.base_fee));
-    payload = list_append(payload, rlp_word(withdrawals_root));
-    payload = list_append(payload, rlp_int(header.blob_gas_used));
-    payload = list_append(payload, rlp_int(header.excess_blob_gas));
-    payload = list_append(payload, rlp_word(header.parent_beacon_block_root));
-    payload = list_append(payload, rlp_word(requests_hash));
-    payload = list_append(payload, rlp_word(block_access_list_hash));
-    payload = list_append(payload, rlp_int(header.slot_number));
-    keccak256(rlp_list(payload))
-}
-
 function parent_hash_ok(header : BlockHeader) -> bool =
     if wit_n_headers() < 1 then {
         false
     } else {
-        header.parent_hash == keccak256_source(WitnessSource(ssz_witness_header_slice(wit_n_headers() - 1)))
+        header.parent_hash == witness_keccak(ssz_witness_header_slice(wit_n_headers() - 1))
     }
 
 function validate_block_outputs(block : Block, exec_ok : bool, block_result : BlockExecutionResult) -> bool = {
@@ -1171,9 +1022,7 @@ function validate_block_outputs(block : Block, exec_ok : bool, block_result : Bl
     let transactions_root = transaction_trie_root();
     let withdrawals_root = withdrawals_trie_root(block.body.withdrawals);
     let requests_hash = execution_requests_hash();
-    let block_access_list_hash = keccak256_source(
-        WitnessSource(witness_slice(pl_bal_start(), payload_end() - pl_bal_start())),
-    );
+    let block_access_list_hash = witness_keccak(witness_slice(pl_bal_start(), payload_end() - pl_bal_start()));
     let block_hash = block_header_hash(
         header,
         transactions_root,

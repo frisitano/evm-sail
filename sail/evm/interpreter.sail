@@ -374,7 +374,7 @@ function run_call(mode : int) -> unit = {
     if not_bool(depth_ok) | not_bool(balance_ok) then {
         /* the call does not happen: the child gas (including stipend) is
            refunded to the caller and CALL pushes 0. */
-        hr_clear();
+        returndata_clear_current();
         gas_remaining = to_gas(gas_remaining + child_gas);
         push(WORD_ZERO)
     } else {
@@ -382,22 +382,20 @@ function run_call(mode : int) -> unit = {
             /* PRECOMPILE call. The precompile set is fork-gated (the highest is
                0x100 P256VERIFY, EIP-7951/Osaka); an address outside the active
                set is an ordinary code call. The precompile's input is the
-               child message's calldata, a snapshot of
-               mem[args_off .. args_off+args_len) staged host-side in one copy;
-               precompile_gas inspects the staged bytes O(1). */
+               child message's calldata: mem[args_off .. args_off+args_len).
+               Gas inspects the same memory source before execution. */
             let in_len = if is_running() then { args_len } else { 0 };
-            stage_precompile_input(an, args_off, in_len);
-            let used = precompile_gas(an, in_len);
+            let used = precompile_gas_memory_input(an, args_off, in_len);
 
             /* gas check FIRST: an out-of-gas precompile call must not execute (e.g. a
                blake2f with a huge round count would otherwise run before failing). */
             let ok : bool = if used <= child_gas then {
-                    k_precompile(an)
+                    run_precompile_memory_input(an, args_off, in_len)
                 } else {
                     false
                 };
             if ok & (used <= child_gas) then {
-                hr_adopt();
+                returndata_adopt_pending();
 
                 /* the value transfer is part of the (successful) call */
                 if (mode == 0) & word_nonzero(value) then {
@@ -410,7 +408,7 @@ function run_call(mode : int) -> unit = {
                 /* precompile failure (bad input) or OOG is a non-revert error: it consumes
                    ALL the call's gas (no refund of child_gas), CALL returns 0, and the
                    RETURNDATA buffer is EMPTY (no output escapes a failed precompile). */
-                hr_clear();
+                returndata_clear_current();
                 push(WORD_ZERO)
             }
         } else {
@@ -477,7 +475,7 @@ function run_call(mode : int) -> unit = {
             stack_frame_enter();
             frame_status = Running();
             mem_frame_enter();
-            hr_clear();
+            returndata_clear_current();
             memory_size = 0;
             frame_code_exec(target, tg_deleg, tg_target); /* EIP-7702 delegation */
             call_depth = call_depth + 1;
@@ -497,7 +495,7 @@ function run_call(mode : int) -> unit = {
             frame_code_resync();
             memory_size = saved_memory_size;
             call_depth = call_depth - 1;
-            hr_adopt();
+            returndata_adopt_pending();
             gas_remaining = to_gas(saved_gas_remaining + child_left);
 
             /* copy returndata into the caller's output region on both success
@@ -603,7 +601,7 @@ function run_create(is2 : bool) -> unit = {
         let nonce_ok : bool = nonce < 18446744073709551615;
 
         if not_bool(depth_ok) | not_bool(balance_ok) | not_bool(nonce_ok) then {
-            hr_clear();
+            returndata_clear_current();
             gas_remaining = to_gas(gas_remaining + child_gas);
             push(WORD_ZERO)
         } else {
@@ -613,7 +611,7 @@ function run_create(is2 : bool) -> unit = {
              * process_create_message). */
             let _ = k_access_account(new_addr);
             let occupied : bool = k_account_occupied(new_addr);
-            hr_clear();
+            returndata_clear_current();
             k_bump_nonce(creator);
             if occupied then {
                 /* address collision (the target already has code, a nonzero
@@ -660,7 +658,7 @@ function run_create(is2 : bool) -> unit = {
                 stack_frame_enter();
                 frame_status = Running();
                 mem_frame_enter();
-                hr_clear();
+                returndata_clear_current();
                 memory_size = 0;
                 code_len = ic_len;
                 if is_running() & (len == 0) then {
@@ -674,14 +672,14 @@ function run_create(is2 : bool) -> unit = {
                    sets the EIP-170 size check and the per-byte deposit cost. */
                 let succeeded = frame_succeeded();
                 let child_left = gas_remaining;
-                let dep_len = unsigned(hr_pending_len());
+                let dep_len = returndata_pending_size();
                 let deposit = G_codedeposit * dep_len;
 
                 /* deployed-code validity: within the EIP-170 size limit and,
                    from London onward, not beginning with 0xEF (EIP-3541, the
                    reserved EOF prefix). */
                 let code_ok = (dep_len <= max_code_size()) &
-                        ((k_fork < FORK_LONDON) | (dep_len == 0) | (hr_pending_byte(get_slice_int(64, 0, 0)) != 0xef));
+                        ((k_fork < FORK_LONDON) | (dep_len == 0) | (returndata_pending_byte(0) != 0xef));
 
                 /* leave the initcode frame: restore the parent's registers. */
                 pc = saved_pc;
@@ -695,9 +693,9 @@ function run_create(is2 : bool) -> unit = {
 
                 /* a successful create yields EMPTY returndata; a revert exposes its data */
                 if succeeded then {
-                    hr_clear()
+                    returndata_clear_current()
                 } else {
-                    hr_adopt()
+                    returndata_adopt_pending()
                 };
                 gas_remaining = to_gas(saved_gas_remaining + child_left);
 
@@ -706,8 +704,8 @@ function run_create(is2 : bool) -> unit = {
                    commits; the new address is pushed. */
                 if succeeded & code_ok & (child_left >= deposit) then {
                     gas_remaining = to_gas(gas_remaining - deposit);
-                    k_set_code(new_addr, pending_output_list());
-                    hr_discard();
+                    k_set_code(new_addr, returndata_pending_bytes());
+                    returndata_discard_pending();
                     k_commit();
                     push(address_to_word(new_addr))
                 } else {
@@ -721,7 +719,7 @@ function run_create(is2 : bool) -> unit = {
                     if succeeded then {
                         gas_remaining = saved_gas_remaining
                     };
-                    hr_discard();
+                    returndata_discard_pending();
                     k_revert();
                     push(WORD_ZERO)
                 }

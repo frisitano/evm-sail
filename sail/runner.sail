@@ -33,7 +33,6 @@
 /* wantRoot is set, "ROOT <hex>" carrying the recomputed post-state root.   */
 /* ======================================================================== */
 
-$include "evm.sail"
 $include <string.sail>
 
 /* Cursor over the private-input byte stream (ssz_src, host/io.sail), the byte

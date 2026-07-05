@@ -136,8 +136,8 @@ rtk make -C proof check-evm-sail-guest-coq
 rtk make -C proof check-evm-sail-coq
 ```
 
-`check-evm-sail-core-coq` extracts the core EVM model rooted at
-`sail/evm.sail` into:
+`check-evm-sail-core-coq` extracts the core EVM model from
+`sail/evm.sail_project` with `EVM_ENTRY=core` into:
 
 ```text
 /tmp/evm-sail-proof-lowering/evm-sail-coq-core/evm.v

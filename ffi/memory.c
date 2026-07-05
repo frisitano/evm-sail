@@ -124,6 +124,13 @@ uint64_t txd_copy(uint8_t *dst, uint64_t cap) {
 }
 uint64_t txd_at(uint64_t i)  { return txin_byte_at(&txin, i); }
 uint64_t txd_length(const unit u) { (void)u; return txin.len; }
+const uint8_t *txd_rd(uint64_t off, uint64_t len) {
+  static const uint8_t zero = 0;
+  if (len == 0) return &zero;
+  if (off > UINT64_MAX - len) return NULL;
+  if (off + len > txin.len) return NULL;
+  return txin.buf ? txin.buf + off : NULL;
+}
 
 /* calldata byte i (0 past the end -- and 0 past the source's ALLOCATED cap:
  * an expansion-charged but never-written parent range reads as zeros) */

@@ -23,7 +23,6 @@
 /* the role execution-specs' stateless mode gives witness_state.py.         */
 /* ======================================================================== */
 
-$include "../../sail/evm.sail"
 $include <string.sail>
 
 function main() -> unit = {

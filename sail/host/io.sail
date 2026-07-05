@@ -1,14 +1,14 @@
 /* ======================================================================== */
-/* HOST I/O: HOST CRYPTO, PRECOMPILES, STATELESS SSZ INPUT                  */
+/* HOST I/O: CRYPTO, PRECOMPILES, STATELESS SSZ INPUT                       */
 /*                                                                          */
 /* Everything the model obtains from OUTSIDE itself -- the boundary between */
 /* the EVM specification and its environment. Three layers:                 */
 /*                                                                          */
-/* (1) FFI BINDING -- direct host hash helpers and staged precompile input. */
-/* The model commits to WHAT is serialized or executed; C supplies          */
-/* pointer/length calls to host crypto and precompile implementations.      */
+/* (1) ABSTRACT HOST I/O -- staged precompile input, stateless input bytes, */
+/* and guest public-output bytes. The model commits to WHAT is serialized   */
+/* or executed; build.sail supplies the concrete C-backed bindings.         */
 /*                                                                          */
-/* (2) HOST CRYPTO -- keccak256 (the Ethereum hash: KECCAK256, trie/RLP     */
+/* (2) CRYPTO -- keccak256 (the Ethereum hash: KECCAK256, trie/RLP          */
 /* node references, CREATE2 salt) and sha256 (precompile 0x02 + SSZ         */
 /* merkleization), the EVM precompiles over staged byte ranges, and the     */
 /* CREATE (Yellow Paper) / CREATE2 (EIP-1014) address derivations.          */
@@ -32,148 +32,30 @@
  * host/state.sail (which also consumes it). */
 struct SlotKey = { address : address, slot : word }
 
-/* ===================== (1) FFI BINDING ================================= */
+/* ===================== (1) ABSTRACT HOST I/O =========================== */
 
-val precompile_input_byte_ffi = impure { _: "precompile_input_byte" } : bits(64) -> bits(8)
-val precompile_stage_tx = impure { _: "precompile_stage_tx" } : bits(64) -> unit
-val precompile_run_staged_to_returndata = impure { _: "precompile_run_staged_to_returndata" } : unit -> bits(64)
-val precompile_run_host_input = impure { _: "precompile_run_host_input" } : bits(64) -> bits(64)
-val precompile_ok = impure { _: "precompile_ok" } : unit -> bits(8)
-val precompile_out = impure { _: "precompile_out" } : bits(64) -> bits(8)
-val host_bytes_reset = impure { _: "host_bytes_reset" } : unit -> unit
-val host_bytes_append_byte = impure { _: "host_bytes_append_byte" } : bits(8) -> unit
-val host_bytes_append8 = impure { _: "host_bytes_append8" } : bits(64) -> unit
-val host_keccak_input = impure { _: "host_keccak_input" } : unit -> unit
-val host_sha256_input = impure { _: "host_sha256_input" } : unit -> unit
-val host_keccak_witness = impure { _: "host_keccak_witness" } : (witness_offset, witness_len) -> unit
-val host_keccak_memory = impure { _: "host_keccak_memory" } : (memory_offset, memory_len) -> unit
-val host_sha256_request_digest = impure { _: "host_sha256_request_digest" } : (bits(64), witness_offset, witness_len) -> unit
-val host_keccak_word = impure { _: "host_keccak_word" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val host_keccak_address = impure { _: "host_keccak_address" } : (bits(64), bits(64), bits(64)) -> unit
-val host_sha256_pair_words = impure { _: "host_sha256_pair_words" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> unit
-val host_hash_word = impure { _: "host_hash_word" } : bits(64) -> bits(64)
+/* Run a precompile over a concrete input source. The gas rules inspect the
+ * same source bytes directly (memory or top-level tx data) before this is
+ * called. Build backends may stage/snapshot the input internally and write
+ * successful output directly into pending returndata. */
+val run_precompile_memory_input : (int, int, int) -> bool
+val run_precompile_tx_input : int -> bool
 
-function host_bytes_append_list(msg : list(byte)) -> unit = match msg {
-    b0 :: (b1 :: (b2 :: (b3 :: (b4 :: (b5 :: (b6 :: (b7 :: r))))))) => {
-        host_bytes_append8(append(b0, append(b1, append(b2, append(b3, append(b4, append(b5, append(b6, b7))))))));
-        host_bytes_append_list(r)
-    },
-    b :: r => {
-        host_bytes_append_byte(b);
-        host_bytes_append_list(r)
-    },
-    [||] => (),
-}
+/* One byte of the canonical SSZ public output, via write_output in the guest
+ * runtime. Only guest entries call this; core specs leave it abstract. */
+val emit_out : bits(8) -> unit
 
-function host_digest() -> bits(256) = {
-    let w0 : bits(64) = host_hash_word(get_slice_int(64, 0, 0));
-    let w1 : bits(64) = host_hash_word(get_slice_int(64, 1, 0));
-    let w2 : bits(64) = host_hash_word(get_slice_int(64, 2, 0));
-    let w3 : bits(64) = host_hash_word(get_slice_int(64, 3, 0));
-    append(w0, append(w1, append(w2, w3)))
-}
+/* ===================== (2) CRYPTO ======================================= */
 
-function keccak256_source(src : byte_source) -> bits(256) = match src {
-    ByteListSource(msg) => {
-        host_bytes_reset();
-        host_bytes_append_list(msg);
-        host_keccak_input();
-        let h = host_digest();
-        host_bytes_reset();
-        h
-    },
-    WitnessSource(s) => {
-        host_keccak_witness(s.off, s.len);
-        host_digest()
-    },
-    MemorySource(s) => {
-        host_keccak_memory(s.off, s.len);
-        host_digest()
-    },
-    WordSource(w) => {
-        host_keccak_word(w[255 .. 192], w[191 .. 128], w[127 .. 64], w[63 .. 0]);
-        host_digest()
-    },
-    AddressSource(a) => {
-        host_keccak_address(a[159 .. 96], a[95 .. 32], sail_zero_extend(a[31 .. 0], 64));
-        host_digest()
-    },
-}
-
-function sha256_request_digest(request_type : int, s : witness_slice) -> bits(256) = {
-    host_sha256_request_digest(get_slice_int(64, request_type, 0), s.off, s.len);
-    host_digest()
-}
-
-/* ===================== (2) HOST CRYPTO ================================= */
-
-/* The i-th byte of the STAGED precompile input, zero past the end. A
- * precompile's input is staged once (a snapshot of the caller's memory slice
- * for a CALL, or the tx data for a tx-to-precompile); gas inspection (the
- * MODEXP length header, the BLAKE2F rounds count) reads only the leading
- * bytes it needs, directly from the staged buffer. */
-function precompile_input_byte(i : int) -> byte = precompile_input_byte_ffi(get_slice_int(64, i, 0))
-
-/* Stage a precompile's input from the streamed tx buffer (a transaction
- * sent directly to a precompile; CALL-family staging is memory-sourced --
- * see stage_precompile_input in host/memory.sail). */
-function stage_precompile_txd(num : int) -> unit = precompile_stage_tx(get_slice_int(64, num, 0))
-
-/* Run the staged precompile (input already snapshotted from memory or tx data).
- * Output is written directly into pending returndata.
- * Returns false on precompile failure, which the interpreter maps to a CALL
- * result of 0 with empty returndata. */
-function run_precompile_staged() -> bool = {
-    let _ = precompile_run_staged_to_returndata();
-    unsigned(precompile_ok()) == 1
-}
-
-/* Read `n` bytes from the most recent precompile scratch output into a list. */
-function precompile_read(n : int) -> list(byte) = {
-    var out : list(byte) = [||];
-    foreach (i from 0 to (n - 1)) {
-        out = precompile_out(get_slice_int(64, i, 0)) :: out
-    };
-    list_reverse(out)
-}
-
-/* List-in / list-out precompile wrapper for tx-auth helpers and vector tests.
- * The list is first materialized in the host byte scratch; C then invokes the
- * same pointer/length precompile path used by staged execution. */
-function run_precompile(num : int, input : list(byte)) -> (bool, list(byte)) = {
-    host_bytes_reset();
-    host_bytes_append_list(input);
-    let n = unsigned(precompile_run_host_input(get_slice_int(64, num, 0)));
-    let ok = unsigned(precompile_ok()) == 1;
-    let out = if not_bool(ok) then {
-            [||]
-        } else {
-            precompile_read(n)
-        };
-    host_bytes_reset();
-    (ok, out)
-}
-
-/* ======================================================================== */
-/* HASH PRIMITIVES + CREATE ADDRESS DERIVATION                              */
-/*                                                                          */
-/* keccak256 and sha256 route through the host byte scratch and host-crypto */
-/* pointer/length boundary. The model defines what is hashed; the host      */
-/* computes the digest behind the standard accelerator header.              */
-/* ======================================================================== */
-
-/* Keccak-256, the Ethereum hash function: the KECCAK256 opcode, trie/RLP
- * node references, code hashes, and CREATE2 init-code commitments. id 0. */
-function keccak256(msg : list(byte)) -> bits(256) = keccak256_source(ByteListSource(msg))
+/* ======================================================================= */
+/* HASHED SEMANTIC OPERATIONS                                              */
+/*                                                                         */
+/* Common execution code names the operation it needs: secure trie keys,   */
+/* SSZ Merkle parents, code storage, tx/auth preimage hashing, and signing */
+/* precompile checks. spec.sail defines these in terms of canonical byte   */
+/* lists. build.sail may refine these with pointer/length FFI hooks or     */
+/* staged byte sinks.                                                      */
+/* ======================================================================= */
 
 /* Big-endian byte serializations used by RLP, the tries, and address derivation. */
 function word_to_bytes32(w : word) -> list(byte) = {
@@ -190,6 +72,13 @@ function address_to_bytes(a : address) -> list(byte) = {
     };
     out
 }
+
+val bytes_keccak : ByteSlice -> bits(256)
+val bytes_sha256_prefixed : (byte, ByteSlice) -> bits(256)
+val code_db_store_slice : ByteSlice -> unit
+
+val keccak256_word : word -> bits(256)
+val keccak256_address : address -> bits(256)
 
 function word_be_len(w : word) -> int = {
     var n : int = 0;
@@ -231,49 +120,58 @@ function rlp_nonce(nonce : int) -> list(byte) =
         }
     }
 
-/* SHA-256 (id 2): the precompile 0x02 hash and the SSZ merkleization hash --
- * distinct from the keccak256 used throughout execution. */
-function sha256(msg : list(byte)) -> bits(256) = {
-    host_bytes_reset();
-    host_bytes_append_list(msg);
-    host_sha256_input();
-    let h = host_digest();
-    host_bytes_reset();
-    h
-}
-
 /* SSZ merkle parent: SHA-256(left ++ right) over two 32-byte chunks. */
-function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) = {
-    host_sha256_pair_words(
-        a[255 .. 192],
-        a[191 .. 128],
-        a[127 .. 64],
-        a[63 .. 0],
-        b[255 .. 192],
-        b[191 .. 128],
-        b[127 .. 64],
-        b[63 .. 0],
-    );
-    host_digest()
-}
+val sha256_pair : (bits(256), bits(256)) -> bits(256)
 
 /* SHA-256 self-check against the standard "" and "abc" reference vectors. */
-function sha256_selfcheck() -> unit = {
-    assert(sha256([||]) == 0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855, "sha256('') on guest");
-    assert(
-        sha256([|0x61, 0x62, 0x63|]) == 0xba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad,
-        "sha256('abc') on guest"
-    )
+val sha256_selfcheck : unit -> unit
+
+/* Keccak self-check against Ethereum's "" and "abc" vectors. */
+val keccak_selfcheck : unit -> unit
+
+struct BlockHeader = {
+    number : int,
+    timestamp : int,
+    gas_limit : int,
+    gas_used : int,
+    prev_randao : word,
+    base_fee : word,
+    blob_gas_used : int,
+    excess_blob_gas : int,
+    state_root : bits(256),
+    receipts_root : bits(256),
+    logs_bloom : list(byte),
+    block_hash : bits(256),
+    fee_recipient : address,
+    parent_hash : bits(256),
+    parent_beacon_block_root : bits(256),
+    slot_number : int,
 }
+
+let EMPTY_OMMER_HASH : hash = 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347
+
+/* Hash full code bytes, store them in the code database, and return codeHash. */
+val code_hash_and_store : list(byte) -> hash
+
+/* Signature/authentication helpers. Spec uses the mathematical precompile
+ * input byte strings; build may use direct staged or native accelerator calls. */
+val secp256k1_verify_precompile : (bits(256), word, word, bits(256), bits(256)) -> bool
+val ecrecover_precompile : (bits(256), int, word, word) -> (bool, address)
+
+/* Domain operations whose spec definitions may materialize canonical bytes,
+ * while build definitions may stream or hash from host byte sources. */
+val bloom_entry_bit : (list(byte), int) -> int
+val execution_requests_hash : unit -> hash
+val block_header_hash : (BlockHeader, hash, hash, hash, hash) -> hash
 
 /* ===================== (3) STATELESS SSZ INPUT ========================= */
 
-val ssz_src_len = impure { _: "ssz_src_len" } : unit -> bits(64)
-val ssz_src_byte = impure { _: "ssz_src_byte" } : int -> bits(8)
+val ssz_src_len : unit -> bits(64)
+val ssz_src_byte : int -> bits(8)
 
-/* bulk readers: n (<=8) bytes from the input in one FFI call (LE / BE) */
-val ssz_src_le = impure { _: "ssz_src_le" } : (int, int) -> bits(64)
-val ssz_src_be = impure { _: "ssz_src_be" } : (int, int) -> bits(64)
+/* bulk readers: n (<=8) bytes from the input in LE / BE order. */
+val ssz_src_le : (int, int) -> bits(64)
+val ssz_src_be : (int, int) -> bits(64)
 
 function ib(i : int) -> int = unsigned(ssz_src_byte(i))
 
@@ -322,6 +220,15 @@ function payload_end() -> int = {
     n + ssz_u32(n + 4)
 }
 function npr_end() -> int = witness_start() /* npr is the first top field */
+
+/* SszExecutionRequests is a container of three variable lists (offsets at
+ * req+{0,4,8}); execution_requests is field 3 of SszNewPayloadRequest, whose
+ * offset sits at npr+40 (after the 32-byte parent_beacon_block_root @ npr+8). */
+function req_start() -> int = npr_start() + ssz_u32(npr_start() + 40)
+function dep_start() -> int = req_start() + ssz_u32(req_start() + 0)
+function wreq_start() -> int = req_start() + ssz_u32(req_start() + 4)
+function creq_start() -> int = req_start() + ssz_u32(req_start() + 8)
+function req_end() -> int = npr_end() /* execution_requests is the last npr field */
 
 /* SszExecutionPayload fixed-region field offsets (bytes from payload start) */
 let PL_FEE_RECIPIENT : int = 32
@@ -534,6 +441,10 @@ function ssz_list_slice(start : int, n : int, stop : int, i : int) -> witness_sl
 }
 function read_witness_slice(s : witness_slice) -> list(byte) =
     ssz_bytes(unsigned(s.off), unsigned(s.len))
+function witness_keccak(s : witness_slice) -> bits(256) =
+    bytes_keccak(witness_byte_slice(s))
+function sha256_request_digest(request_type : int, s : witness_slice) -> bits(256) =
+    bytes_sha256_prefixed(get_slice_int(8, request_type, 0), witness_byte_slice(s))
 function ssz_witness_node_span(i : int) -> (int, int) =
     ssz_list_span(wit_state_start(), wit_n_state(), wit_codes_start(), i)
 function ssz_witness_node_slice(i : int) -> witness_slice =

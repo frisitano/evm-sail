@@ -21,8 +21,11 @@ duplicating instructions elsewhere.
 
 ## Repo Map
 
-- `sail/evm.sail` is the model root include.
-- `sail/runner.sail` is the EEST state-test runner entry point.
+- `sail/evm.sail_project` is the model project file. Use the `evm` module with
+  `EVM_ENTRY=core|guest|runner|witness_probe|bench` and
+  `EVM_BACKEND=spec|build`.
+- `sail/runner.sail` is the EEST state-test runner entry file selected with
+  `EVM_ENTRY=runner`.
 - `sail/host/state.sail` and `sail/host/kernel.sail` define the host world-state
   interface used by EVM execution.
 - `sail/lib/mpt.sail` owns account/storage MPT root computation and stateless
@@ -31,8 +34,8 @@ duplicating instructions elsewhere.
   memory/calldata/returndata, `state_db.c` for accounts and persistent
   storage cache/update rows, `transient_storage.c`
   for transient storage, code DB, node DB, operand stack, and accelerator shims.
-- `revm-eest/run_eest.py` runs EEST state-test fixtures through
-  `sail/runner.sail`.
+- `revm-eest/run_eest.py` runs EEST state-test fixtures through the project
+  runner entry.
 - `revm-eest/src/main.rs` is the parallel Rust EEST state-test runner.
 - `zkvm/native-runner/run_fixtures.py` runs blockchain/stateless fixtures that
   carry `statelessInputBytes`.

@@ -64,10 +64,12 @@ def build_probe(rebuild=False):
                "transient_storage", "state_db", "stack", "code_db",
                "trie_node_db")]
     ffi_c = os.path.join(EEST, "runner_ffi.c")  # ssz_src over buffered stdin
-    src = os.path.join(HERE, "witness_probe.sail")
     subprocess.check_call(
-        ["sail", "-c", "-O", "--c-include", "runner_ffi.h", src, "-o",
-         BIN + "_gen"], cwd=ELDIR)
+        ["sail", "-c", "-O", "--c-include", "runner_ffi.h",
+         "sail/evm.sail_project", "evm",
+         "--variable", "EVM_BACKEND=build",
+         "--variable", "EVM_ENTRY=witness_probe",
+         "-o", BIN + "_gen"], cwd=ELDIR)
     if sailfix:
         objs = []
         for s in ("sail.c", "sail_native.c", "sail_failure.c"):

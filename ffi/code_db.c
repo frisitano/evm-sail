@@ -21,8 +21,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-extern const uint8_t *evmsail_ssz_ptr(uint64_t off, uint64_t len);
-
 #define FC_MAXDEPTH 1100
 #define CODE_DB_INIT_CAP 256u     /* power of two */
 
@@ -137,10 +135,13 @@ unit code_db_stream_code_byte(uint64_t b) {
   return UNIT;
 }
 
-unit code_db_store_ssz_code(uint64_t off, uint64_t len) {
+unit code_db_store_source(uint64_t source_kind, uint64_t off, uint64_t len) {
   if (!len || len > UINT32_MAX) return UNIT;
-  const uint8_t *src = evmsail_ssz_ptr(off, len);
-  if (!src) return UNIT;
+  const uint8_t *src = NULL;
+  uint64_t source_len = 0;
+  if (!evmsail_resolve_byte_source(source_kind, off, len, &src, &source_len))
+    return UNIT;
+  if (!src || source_len != len) return UNIT;
 
   uint64_t key[4] = {0, 0, 0, 0};
   host_keccak256_bytes(key, src, len);
@@ -176,6 +177,21 @@ static fc_desc fc[FC_MAXDEPTH];
 static struct { uint8_t *p; uint8_t *bm; uint32_t cap; } fc_inl[FC_MAXDEPTH];
 
 static fc_desc *fc_cur(void) { return &fc[hm_depth(UNIT)]; }
+
+int code_db_frame_resolve_code(uint64_t off, uint64_t len,
+                               const uint8_t **p, uint64_t *resolved_len) {
+  static const uint8_t empty = 0;
+  fc_desc *f = fc_cur();
+  if (len == 0) {
+    if (p) *p = &empty;
+    if (resolved_len) *resolved_len = 0;
+    return 1;
+  }
+  if (!f->p || off > f->len || len > (uint64_t)f->len - off) return 0;
+  if (p) *p = f->p + off;
+  if (resolved_len) *resolved_len = len;
+  return 1;
+}
 
 static uint8_t fc_byte_at(const fc_desc *f, uint64_t i) {
   return (i < f->len) ? f->p[i] : 0;

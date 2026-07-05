@@ -199,8 +199,7 @@ function k_bump_nonce(a : address) -> unit = {
  * the account's codeHash. Used by CREATE/CREATE2 deploys and EIP-7702. */
 function k_set_code(a : address, c : list(byte)) -> unit = {
     journal_push(JAcct(a, load_account(a)));
-    let h : hash = keccak256(c);
-    code_db_store_code(h, c);
+    let h : hash = code_hash_and_store(c);
     store_account(a, { load_account(a) with code_hash = h })
 }
 
@@ -216,9 +215,7 @@ function addr_bytes(a : address) -> list(byte) = {
 }
 function delegation_code(a : address) -> list(byte) = 0xef :: 0x01 :: 0x00 :: addr_bytes(a)
 
-val code_db_read_delegation = impure { _: "code_db_read_delegation" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(
-        168,
-    )
+val code_db_read_delegation : (bits(64), bits(64), bits(64), bits(64)) -> bits(168)
 
 /* EIP-7702: resolve whether addr's stored code is a delegation designation,
  * probed by codeHash in ONE host call (run on every CALL-family target). Returns
@@ -275,8 +272,7 @@ function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
 
 /* Seed an account from full code bytes (intern them in the code store). */
 function k_seed_account(a : address, nonce : int, bal : word, c : list(byte)) -> unit = {
-    let h : hash = keccak256(c);
-    code_db_store_code(h, c);
+    let h : hash = code_hash_and_store(c);
     account_seed(a, struct { nonce = nonce, balance = bal, code_hash = h, storage_root = EMPTY_TRIE_ROOT })
 }
 
@@ -346,7 +342,7 @@ function k_blockhash(n : word) -> hash = {
                 k_witness_bad = true;
                 word_of_int(0)
             } else {
-                keccak256_source(WitnessSource(ssz_witness_header_slice(idx)))
+                witness_keccak(ssz_witness_header_slice(idx))
             }
         }
     }
@@ -361,17 +357,6 @@ function k_blobhash(i : int) -> word = {
 function k_create_addr(a : address, nonce : int) -> address = create_address(a, nonce)
 function k_create2_addr(a : address, salt : word, inithash : hash) -> address =
     create2_address(a, salt, inithash)
-
-/* precompile syscall: the input was STAGED by the EVM (a snapshot of the
- * caller's mem[args .. args+len) -- the child message's calldata -- or the tx
- * input). Output is staged directly as pending returndata. Gas is computed by
- * the EVM (policy, evm/gas.sail). */
-function k_precompile(num : int) -> bool =
-    if is_precompile(num) then {
-        run_precompile_staged()
-    } else {
-        false
-    }
 
 /* --- logs (LOG0..LOG4) + the gas-refund counter --- */
 function k_log(a : address, topics : list(word), data : list(byte)) -> unit = {
@@ -485,7 +470,6 @@ function k_snapshot() -> unit = {
 
 /* full world wipe between independent blocks/fixtures (driver/test only) */
 function k_world_reset() -> unit = {
-    host_bytes_reset();
     acctmap_reset();
     storage_map_reset();
     transient_reset();

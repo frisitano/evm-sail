@@ -7,16 +7,16 @@
 #include "sail.h"
 #include <stdint.h>
 
-unit hr_reset(const unit u);
-unit hr_clear(const unit u);
-unit hr_discard(const unit u);
-unit hr_capture(uint64_t off, uint64_t len);
-unit hr_adopt(const unit u);
-uint64_t hr_len(const unit u);
-uint64_t hr_pending_len(const unit u);
-uint64_t hr_pending_byte(uint64_t i);
-unit hr_to_mem(uint64_t dst, uint64_t off, uint64_t len);
-unit hr_out_region(uint64_t dst, uint64_t want);
+unit returndata_reset_all(const unit u);
+unit returndata_clear_current(const unit u);
+unit returndata_discard_pending(const unit u);
+unit returndata_capture_memory(uint64_t off, uint64_t len);
+unit returndata_adopt_pending(const unit u);
+uint64_t returndata_current_len(const unit u);
+uint64_t returndata_pending_len(const unit u);
+uint64_t returndata_pending_byte(uint64_t i);
+unit returndata_copy_current_to_memory(uint64_t dst, uint64_t off, uint64_t len);
+unit returndata_copy_current_prefix_to_memory(uint64_t dst, uint64_t want);
 
 uint8_t *returndata_prepare_pending(uint64_t cap);
 unit returndata_set_pending_len(uint64_t len);

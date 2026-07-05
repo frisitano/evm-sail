@@ -119,122 +119,62 @@ register k_logs : list(LogEntry) = [||]
 /* ---- C-backed transient storage (ffi/transient_storage.c) ----
  * id 0 = EIP-1153 transient storage. Warm access sets are Sail values.
  * Persistent storage is split below into a separate secure-keyed backend. */
-val transient_storage_reset = impure { _: "transient_storage_reset" } : bits(64) -> unit
-val transient_storage_key = impure { _: "transient_storage_key" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> unit
-val transient_storage_write = impure { _: "transient_storage_store" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val transient_storage_read_word = impure { _: "transient_storage_word" } : bits(64) -> bits(64)
+val transient_storage_reset : bits(64) -> unit
+val transient_storage_key : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
+val transient_storage_write : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val transient_storage_read_word : bits(64) -> bits(64)
 
 /* ---- C-backed persistent storage (ffi/state_db.c): cache/update split ----
  * Cache rows are authenticated pre-state/fixture material; update rows are
  * execution writes. Both are sorted by (keccak(address), keccak(slot)), while
  * update rows remain layered for frame rollback. */
-val storage_map_reset = impure { _: "storage_map_reset" } : unit -> unit
-val storage_map_push = impure { _: "storage_map_push" } : unit -> unit
-val storage_map_pop_commit = impure { _: "storage_map_pop_commit" } : unit -> unit
-val storage_map_pop_discard = impure { _: "storage_map_pop_discard" } : unit -> unit
-val storage_map_key = impure { _: "storage_map_key" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> unit
-val storage_map_seed = impure { _: "storage_map_seed" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val storage_map_store = impure { _: "storage_map_store" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val storage_map_word = impure { _: "storage_map_word" } : bits(64) -> bits(64)
-val storage_map_base_word = impure { _: "storage_map_base_word" } : bits(64) -> bits(64)
-val storage_map_present = impure { _: "storage_map_present" } : unit -> bits(64)
-val storage_map_base_present = impure { _: "storage_map_base_present" } : unit -> bits(64)
-val storage_map_has_acct_hash = impure { _: "storage_map_has_acct_hash" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(
-        64,
-    )
-val storage_map_wipe_acct_hash = impure { _: "storage_map_wipe_acct_hash" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val storage_map_count = impure { _: "storage_map_count" } : unit -> bits(64)
-val storage_map_update_count = impure { _: "storage_map_update_count" } : unit -> bits(64)
-val storage_map_at = impure { _: "storage_map_at" } : bits(64) -> unit
-val storage_map_update_at = impure { _: "storage_map_update_at" } : bits(64) -> unit
-val storage_map_it_acct_hash = impure { _: "storage_map_it_acct_hash" } : bits(64) -> bits(64)
-val storage_map_it_slot = impure { _: "storage_map_it_slot" } : bits(64) -> bits(64)
-val storage_map_it_val = impure { _: "storage_map_it_val" } : bits(64) -> bits(64)
+val storage_map_reset : unit -> unit
+val storage_map_push : unit -> unit
+val storage_map_pop_commit : unit -> unit
+val storage_map_pop_discard : unit -> unit
+val storage_map_key : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
+val storage_map_seed : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val storage_map_store : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val storage_map_word : bits(64) -> bits(64)
+val storage_map_base_word : bits(64) -> bits(64)
+val storage_map_present : unit -> bits(64)
+val storage_map_base_present : unit -> bits(64)
+val storage_map_has_acct_hash : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val storage_map_wipe_acct_hash : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val storage_map_count : unit -> bits(64)
+val storage_map_update_count : unit -> bits(64)
+val storage_map_at : bits(64) -> unit
+val storage_map_update_at : bits(64) -> unit
+val storage_map_it_acct_hash : bits(64) -> bits(64)
+val storage_map_it_slot : bits(64) -> bits(64)
+val storage_map_it_val : bits(64) -> bits(64)
 
 /* ---- C-backed account map (ffi/state_db.c): the kernel account working
  * set (k_accounts), split into materialized base/cache rows and execution
  * update rows. Both tables are ordered by keccak256(address). Point access
  * selects the secure trie key once, then accessors resolve update first, cache
  * second. ---- */
-val acctmap_reset = impure { _: "acctmap_reset" } : unit -> unit
-val acctmap_key = impure { _: "acctmap_key" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val acctmap_present = impure { _: "acctmap_present" } : unit -> bits(64)
-val acctmap_store = impure { _: "acctmap_store" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> unit
-val acctmap_mark_base_exists = impure { _: "acctmap_mark_base_exists" } : unit -> unit
-val acctmap_seed = impure { _: "acctmap_seed" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> unit
-val acctmap_nonce = impure { _: "acctmap_nonce" } : unit -> bits(64)
-val acctmap_bal = impure { _: "acctmap_bal" } : bits(64) -> bits(64)
-val acctmap_sroot = impure { _: "acctmap_sroot" } : bits(64) -> bits(64)
-val acctmap_chash = impure { _: "acctmap_chash" } : bits(64) -> bits(64)
-val acctmap_remove = impure { _: "acctmap_remove" } : (bits(64), bits(64), bits(64), bits(64)) -> unit
-val acctmap_count = impure { _: "acctmap_count" } : unit -> bits(64)
-val acctmap_update_count = impure { _: "acctmap_update_count" } : unit -> bits(64)
-val acctmap_at = impure { _: "acctmap_at" } : bits(64) -> unit
-val acctmap_update_at = impure { _: "acctmap_update_at" } : bits(64) -> unit
-val acctmap_at_hkey = impure { _: "acctmap_at_hkey" } : bits(64) -> bits(64)
-val acctmap_at_nonce = impure { _: "acctmap_at_nonce" } : unit -> bits(64)
-val acctmap_at_bal = impure { _: "acctmap_at_bal" } : bits(64) -> bits(64)
-val acctmap_at_sroot = impure { _: "acctmap_at_sroot" } : bits(64) -> bits(64)
-val acctmap_at_chash = impure { _: "acctmap_at_chash" } : bits(64) -> bits(64)
-val acctmap_at_base_exists = impure { _: "acctmap_at_base_exists" } : unit -> bits(64)
+val acctmap_reset : unit -> unit
+val acctmap_key : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val acctmap_present : unit -> bits(64)
+val acctmap_store : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
+val acctmap_mark_base_exists : unit -> unit
+val acctmap_seed : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
+val acctmap_nonce : unit -> bits(64)
+val acctmap_bal : bits(64) -> bits(64)
+val acctmap_sroot : bits(64) -> bits(64)
+val acctmap_chash : bits(64) -> bits(64)
+val acctmap_remove : (bits(64), bits(64), bits(64), bits(64)) -> unit
+val acctmap_count : unit -> bits(64)
+val acctmap_update_count : unit -> bits(64)
+val acctmap_at : bits(64) -> unit
+val acctmap_update_at : bits(64) -> unit
+val acctmap_at_hkey : bits(64) -> bits(64)
+val acctmap_at_nonce : unit -> bits(64)
+val acctmap_at_bal : bits(64) -> bits(64)
+val acctmap_at_sroot : bits(64) -> bits(64)
+val acctmap_at_chash : bits(64) -> bits(64)
+val acctmap_at_base_exists : unit -> bits(64)
 
 /* ---- C code store (ffi/code_db.c): contract code, content-addressed --------
  * Keyed by codeHash (not address): each entry holds the code bytes AND the
@@ -243,27 +183,11 @@ val acctmap_at_base_exists = impure { _: "acctmap_at_base_exists" } : unit -> bi
  * de-duplicated and append-only, so REVERT needs no code rollback: restoring an
  * account's codeHash restores its code. An account resolves its code by codeHash
  * (k_code_key). */
-val code_db_reset = impure { _: "code_db_reset" } : unit -> unit
-val code_db_stream_code_begin = impure { _: "code_db_stream_code_begin" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(
-        64,
-    )
-val code_db_stored_code_length = impure { _: "code_db_stored_code_length" } : (bits(64), bits(64), bits(64), bits(64)) -> bits(
-        64,
-    )
-val code_db_copy_stored_code_to_memory = impure { _: "code_db_copy_stored_code_to_memory" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> unit
-val code_db_stream_code_byte = impure { _: "code_db_stream_code_byte" } : bits(8) -> unit
-val code_db_store_ssz_code = impure { _: "code_db_store_ssz_code" } : (witness_offset, witness_len) -> unit
-
-function code_db_store_witness_code(s : witness_slice) -> unit =
-    code_db_store_ssz_code(s.off, s.len)
+val code_db_reset : unit -> unit
+val code_db_stream_code_begin : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val code_db_stored_code_length : (bits(64), bits(64), bits(64), bits(64)) -> bits(64)
+val code_db_copy_stored_code_to_memory : (bits(64), bits(64), bits(64), bits(64), bits(64), bits(64), bits(64)) -> unit
+val code_db_stream_code_byte : bits(8) -> unit
 
 /* Store code `c` in the content-addressed code store under its keccak hash `h`.
  * If `h` is already present (identical bytes) the byte stream is skipped
@@ -286,9 +210,14 @@ function code_db_store_code(h : hash, c : list(byte)) -> unit = {
     }
 }
 
+/* Store a witness code blob into the content-addressed code store. The spec
+ * backend materializes the witness bytes; the build backend may hash/copy the
+ * witness slice directly. */
+val code_db_store_witness_code : witness_slice -> unit
+
 function storage_select(a : address, s : word) -> unit = {
-    let ah : hash = keccak256_source(AddressSource(a));
-    let sh : hash = keccak256_source(WordSource(s));
+    let ah : hash = keccak256_address(a);
+    let sh : hash = keccak256_word(s);
     storage_map_key(
         s[255 .. 192],
         s[191 .. 128],
@@ -352,7 +281,7 @@ function storage_base_present(a : address, s : word) -> bool = {
 }
 
 function storage_wipe_addr(a : address) -> unit = {
-    let ah : hash = keccak256_source(AddressSource(a));
+    let ah : hash = keccak256_address(a);
     storage_map_wipe_acct_hash(ah[255 .. 192], ah[191 .. 128], ah[127 .. 64], ah[63 .. 0])
 }
 
@@ -449,7 +378,7 @@ function storage_has_live_acct_hash(ak : bits(256)) -> bool = {
     found
 }
 function storage_has_live_addr(a : address) -> bool =
-    storage_has_live_acct_hash(keccak256_source(AddressSource(a)))
+    storage_has_live_acct_hash(keccak256_address(a))
 register k_refund : int = 0 /* gas-refund counter (SSTORE clears; EIP-3529 cap applied at tx end) */
 register k_selfdestr : list(address) = [||] /* addresses SELFDESTRUCTed this tx */
 
@@ -518,7 +447,7 @@ register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob
 /* select the acctmap key for address `a` (caches it for the accessors below) */
 function acctmap_select_hashed(h : bits(256)) -> unit =
     acctmap_key(h[255 .. 192], h[191 .. 128], h[127 .. 64], h[63 .. 0])
-function acctmap_select(a : address) -> unit = acctmap_select_hashed(keccak256_source(AddressSource(a)))
+function acctmap_select(a : address) -> unit = acctmap_select_hashed(keccak256_address(a))
 
 /* the three 256-bit account fields at the currently selected acctmap key
  * (word 3 most significant), reassembled from the per-word C accessors. */
@@ -563,7 +492,7 @@ function account_lookup(a : address) -> Account = {
 }
 
 function acctmap_write_account(a : address, v : Account, update : bool) -> unit = {
-    let h = keccak256_source(AddressSource(a));
+    let h = keccak256_address(a);
     acctmap_select_hashed(h);
     if update then {
         acctmap_store(
