@@ -31,6 +31,37 @@
 
 $include <string.sail>
 
+/* Probe-local branch reassembly (formerly lib/mpt.sail): tolerate a branch
+ * left with a single present child (non-canonical witness input) by merging
+ * it into an extension. The production builder never needs this -- its
+ * branches have >= 2 children by construction. */
+function mask_single_index(mask : bits(16)) -> int = {
+    var ix : int = 0;
+    foreach (i from 0 to 15) {
+        if branch_mask_has_bit(mask, i) then {
+            ix = i
+        }
+    };
+    ix
+}
+
+function first_child_ref(children : list(list(byte))) -> list(byte) =
+    match children {
+        c :: _ => c,
+        [||] => trie_empty_ref(),
+    }
+
+function canonical_branch_ref(mask : bits(16), children : list(list(byte))) -> list(byte) =
+    if mask == 0x0000 then {
+        trie_empty_ref()
+    } else {
+        if branch_mask_popcount(mask) == 1 then {
+            merge_ext_ref([|get_slice_int(4, mask_single_index(mask), 0)|], first_child_ref(children))
+        } else {
+            branch_child_ref(mask, children)
+        }
+    }
+
 /* Recursive re-root walk: present children are traversed, child hashes
  * missing from the node-db are preserved as blinded frontier references.
  * No leaves are recorded -- the probe only certifies parsing. */
