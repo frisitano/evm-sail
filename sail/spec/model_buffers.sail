@@ -179,7 +179,7 @@ function cd_to_mem(dst : bits(64), off : bits(64), len : bits(64)) -> unit =
     }
 
 /* CALLDATALOAD: the 32-byte word at calldata offset i (zero-padded) */
-function code_db_calldata_load_word(i : bits(64)) -> word = {
+function calldata_load_word(i : bits(64)) -> word = {
     var out : list(byte) = [||];
     foreach (k from 0 to 31) {
         out = spec_cd_byte(unsigned(i) + (31 - k)) :: out
@@ -336,7 +336,7 @@ function spec_fc_cur() = spec_fc_get(spec_fc, spec_mem_depth())
 
 /* current frame's code := the store entry for codeHash h; its length,
  * or an empty binding and 0 when h is not stored with bytes */
-function code_db_frame_set_stored_code(h : hash) -> bits(64) = {
+function frame_code_bind_stored(h : hash) -> bits(64) = {
     let (found, c) = spec_code_find(spec_code_db, h);
     if found & (list_len(c) > 0) then {
         spec_fc = spec_fc_put(spec_fc, spec_mem_depth(), c);
@@ -348,7 +348,7 @@ function code_db_frame_set_stored_code(h : hash) -> bits(64) = {
 }
 
 /* the NEXT child frame's code := a copy of THIS frame's memory range */
-function code_db_prepare_child_frame_memory_code(off : bits(64), len : bits(64)) -> bits(64) = {
+function frame_code_bind_memory(off : bits(64), len : bits(64)) -> bits(64) = {
     let child = spec_mem_depth() + 1;
     if unsigned(len) == 0 then {
         spec_fc = spec_fc_put(spec_fc, child, [||]);
@@ -360,7 +360,7 @@ function code_db_prepare_child_frame_memory_code(off : bits(64), len : bits(64))
 }
 
 /* current frame's code := the streamed tx input (a create-tx's initcode) */
-function code_db_frame_set_tx_input_code() -> bits(64) = {
+function frame_code_bind_tx_input() -> bits(64) = {
     let n = list_len(spec_txin);
     if n == 0 then {
         spec_fc = spec_fc_put(spec_fc, spec_mem_depth(), [||]);
@@ -371,11 +371,39 @@ function code_db_frame_set_tx_input_code() -> bits(64) = {
     }
 }
 
-function code_db_frame_clear_code() -> unit = spec_fc = spec_fc_put(spec_fc, spec_mem_depth(), [||])
+function frame_code_clear() -> unit = spec_fc = spec_fc_put(spec_fc, spec_mem_depth(), [||])
 
-function code_db_frame_code_byte(i : bits(64)) -> bits(8) = bytes_get(spec_fc_cur(), unsigned(i))
+function frame_code_byte(i : bits(64)) -> bits(8) = bytes_get(spec_fc_cur(), unsigned(i))
 
-function code_db_frame_code_length() -> bits(64) = get_slice_int(64, list_len(spec_fc_cur()), 0)
+function frame_code_length() -> bits(64) = get_slice_int(64, list_len(spec_fc_cur()), 0)
+
+/* ---- byte-source materialization (the spec/hybrid backing of the byte
+ * sources: read a source into a Sail list). Build reads sources directly via
+ * FFI and never materializes, so these live only here. read_byte_slice is
+ * the reader that iface/crypto.sail's bytes_keccak and iface/code_db.sail's
+ * code_db_store_slice hash/store under spec/hybrid. ---- */
+
+function read_active_code_slice(off : int, len : int) -> list(byte) = {
+    var out : list(byte) = [||];
+    foreach (k from 0 to (len - 1)) {
+        out = frame_code_byte(get_slice_int(64, off + (len - 1 - k), 0)) :: out
+    };
+    out
+}
+
+function read_byte_slice(s : ByteSlice) -> list(byte) =
+    match s.source {
+        WitnessSource => ssz_bytes(unsigned(s.off), unsigned(s.len)),
+        MemorySource => mem_read_range(unsigned(s.off), unsigned(s.len)),
+        TxInputSource => txdata_read_range(unsigned(s.off), unsigned(s.len)),
+        ActiveCodeSource => read_active_code_slice(unsigned(s.off), unsigned(s.len)),
+    }
+
+/* Source-backed code storage under spec/hybrid: materialize the bytes, then
+ * store the list under its keccak hash (the content-addressed code store,
+ * model_state.sail). Build's build/code_db.sail copies the span C-side. */
+function code_db_store_slice(s : ByteSlice) -> unit =
+    code_db_store_code(bytes_keccak(s), read_byte_slice(s))
 
 /* drop the first n bytes (empty past the end; no padding) */
 val spec_bytes_drop : (list(byte), int) -> list(byte)
@@ -412,17 +440,17 @@ function spec_jumpdest_scan(c, i) =
         },
     }
 
-function code_db_frame_jumpdest_valid(i : bits(64)) -> bool = spec_jumpdest_scan(spec_fc_cur(), unsigned(i))
+function frame_jumpdest_valid(i : bits(64)) -> bool = spec_jumpdest_scan(spec_fc_cur(), unsigned(i))
 
 /* CODECOPY: code[off .. off+len) -> memory[dst ..), zero-padded past end */
-function code_db_copy_frame_code_to_memory(dst : bits(64), off : bits(64), len : bits(64)) -> unit =
+function frame_code_copy_to_memory(dst : bits(64), off : bits(64), len : bits(64)) -> unit =
     if unsigned(len) > 0 then {
         spec_mem_write_range(unsigned(dst), bytes_slice(spec_fc_cur(), unsigned(off), unsigned(len)))
     }
 
 /* the n-byte PUSH immediate starting at offset i, right-aligned (n > 32
  * clamps to 32; past-end bytes read as zero) */
-function code_db_frame_push_immediate_word(i : bits(64), n : bits(64)) -> word = {
+function frame_push_immediate_word(i : bits(64), n : bits(64)) -> word = {
     let cnt = if unsigned(n) < 32 then {
             unsigned(n)
         } else {

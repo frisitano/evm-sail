@@ -1,43 +1,20 @@
 /* ======================================================================== */
-/* BUILD BACKEND: BYTE SOURCES, CRYPTO, AND PRECOMPILES                     */
+/* BUILD BACKEND: CRYPTO CORE (source-free)                                 */
 /*                                                                          */
-/* Executable definitions for abstract host byte operations. These use C    */
-/* FFI hooks that operate over pointer-backed byte sources without first    */
-/* materializing Sail byte lists. The corresponding canonical definitions   */
-/* live in sail/spec/crypto.sail; shared consumers in                       */
-/* lib/consensus_hash.sail call through the primitives defined here.        */
+/* Executable definitions for hashing and the signing precompiles that      */
+/* carry NO byte source: the C host-bytes hash channel, the fixed-width     */
+/* hash helpers, and the signature precompiles. Shared by EVM_BACKEND=build */
+/* and EVM_BACKEND=hybrid -- both hash via the C channel; only the          */
+/* source-tagged bytes_keccak / bytes_sha256_prefixed differ, so those live */
+/* in build/crypto_source.sail (build) and hybrid/crypto.sail (hybrid). The */
+/* spec backend's canonical byte-list definitions live in spec/crypto.sail; */
+/* shared consumers in lib/consensus_hash.sail call these primitives.       */
 /* ======================================================================== */
-
-val precompile_run_source_to_returndata_ffi = impure { _: "precompile_run_source_to_returndata" } : (
-        bits(64),
-        bits(64),
-        bits(64),
-        bits(64),
-    ) -> bool
-
-function run_precompile_slice(num : int, s : ByteSlice) -> bool =
-    precompile_run_source_to_returndata_ffi(get_slice_int(64, num, 0), byte_source_kind(s.source), s.off, s.len)
-
-function run_precompile_memory_input(num : int, off : int, len : int) -> bool =
-    run_precompile_slice(num, memory_byte_slice(off, len))
-
-function run_precompile_tx_input(num : int) -> bool =
-    run_precompile_slice(num, tx_input_byte_slice(0, txdata_size()))
-
-/* Optimized read+keccak hook. The reference semantics for each source is
- * keccak256(read_source_bytes(source, off, len)); C backends may avoid
- * materializing that byte list. */
-val host_source_keccak = impure { _: "host_source_keccak" } : (bits(64), bits(64), bits(64)) -> bits(256)
-val host_source_sha256_prefixed = impure { _: "host_source_sha256_prefixed" } : (bits(8), bits(64), bits(64), bits(64)) -> bits(
-        256,
-    )
 
 val host_keccak_word_ffi = impure { _: "host_keccak_word" } : word -> hash
 val host_keccak_address_ffi = impure { _: "host_keccak_address" } : address -> hash
 val host_keccak_create2_ffi = impure { _: "host_keccak_create2" } : (address, word, hash) -> hash
 val host_sha256_pair_ffi = impure { _: "host_sha256_pair" } : (hash, hash) -> hash
-
-val code_db_store_source_ffi = impure { _: "code_db_store_source" } : (bits(64), bits(64), bits(64)) -> unit
 
 val host_bytes_reset_ffi = impure { _: "host_bytes_reset" } : unit -> unit
 val host_bytes_push_ffi = impure { _: "host_bytes_push" } : bits(8) -> unit
@@ -110,15 +87,6 @@ function keccak_rlp_payload(domain : list(byte), payload : list(byte)) -> bits(2
     build_hash_push_bytes(payload);
     host_bytes_keccak_finish_ffi()
 }
-
-function bytes_keccak(s : ByteSlice) -> bits(256) =
-    host_source_keccak(byte_source_kind(s.source), s.off, s.len)
-
-function bytes_sha256_prefixed(prefix : byte, s : ByteSlice) -> bits(256) =
-    host_source_sha256_prefixed(prefix, byte_source_kind(s.source), s.off, s.len)
-
-function code_db_store_slice(s : ByteSlice) -> unit =
-    code_db_store_source_ffi(byte_source_kind(s.source), s.off, s.len)
 
 function keccak256_word(w : word) -> bits(256) = host_keccak_word_ffi(w)
 

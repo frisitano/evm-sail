@@ -47,5 +47,10 @@ val cd_set_tx : unit -> unit
 val txin_begin : unit -> unit
 val txin_byte : bits(8) -> unit
 val cd_to_mem : (bits(64), bits(64), bits(64)) -> unit
+
+/* CALLDATALOAD: the 32-byte word at calldata offset i (zero-padded past the
+ * end). Implemented in ffi/code_db.c, which owns the frame-buffer machinery
+ * that calldata shares with the frame code view. */
+val calldata_load_word : bits(64) -> word
 val txd_at : bits(64) -> bits(8)
 val txd_length : unit -> bits(64)

@@ -1,33 +1,15 @@
 /* ======================================================================== */
-/* SPEC BACKEND: BYTE SOURCES, CRYPTO, AND PRECOMPILES                      */
+/* SPEC BACKEND: CRYPTO                                                     */
 /*                                                                          */
-/* Canonical definitions for abstract host byte operations. These           */
-/* definitions materialize mathematical byte lists before hashing or        */
-/* storing bytes. Build roots replace the same abstract functions with      */
-/* pointer-backed implementations in sail/build/. Shared consumers live in  */
-/* lib/consensus_hash.sail; only the true refinement pairs are here.        */
+/* Canonical definitions for hashing and the signing precompiles. They      */
+/* materialize mathematical byte lists (read_byte_slice in                  */
+/* model_buffers.sail) before hashing. Build roots replace the same         */
+/* abstract functions with pointer-backed implementations in sail/build/.   */
+/* keccak256 / sha256 are declared in iface/crypto.sail and stay abstract   */
+/* here (the axiomatic crypto core); run_precompile is spec/precompile.     */
+/* Shared consumers live in lib/consensus_hash.sail; only the true          */
+/* refinement pairs are here.                                               */
 /* ======================================================================== */
-
-/* The spec-side crypto axioms: keccak256 / sha256 are declared in
- * iface/crypto.sail and stay abstract here. run_precompile is the abstract
- * precompile executor over a materialized input list. */
-val run_precompile : (int, list(byte)) -> (bool, list(byte))
-
-function read_active_code_slice(off : int, len : int) -> list(byte) = {
-    var out : list(byte) = [||];
-    foreach (k from 0 to (len - 1)) {
-        out = code_db_frame_code_byte(get_slice_int(64, off + (len - 1 - k), 0)) :: out
-    };
-    out
-}
-
-function read_byte_slice(s : ByteSlice) -> list(byte) =
-    match s.source {
-        WitnessSource => ssz_bytes(unsigned(s.off), unsigned(s.len)),
-        MemorySource => mem_read_range(unsigned(s.off), unsigned(s.len)),
-        TxInputSource => txdata_read_range(unsigned(s.off), unsigned(s.len)),
-        ActiveCodeSource => read_active_code_slice(unsigned(s.off), unsigned(s.len)),
-    }
 
 /* The canonical meaning of the streamed RLP-payload hash. */
 function keccak_rlp_payload(domain : list(byte), payload : list(byte)) -> bits(256) = {
@@ -42,9 +24,6 @@ function bytes_keccak(s : ByteSlice) -> bits(256) =
 
 function bytes_sha256_prefixed(prefix : byte, s : ByteSlice) -> bits(256) =
     sha256(prefix :: read_byte_slice(s))
-
-function code_db_store_slice(s : ByteSlice) -> unit =
-    code_db_store_code(bytes_keccak(s), read_byte_slice(s))
 
 function keccak256_word(w : word) -> bits(256) =
     keccak256(word_to_bytes32(w))

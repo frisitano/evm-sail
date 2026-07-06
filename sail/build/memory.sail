@@ -82,6 +82,9 @@ function txin_byte(x0 : bits(8)) -> unit = txin_byte_ffi(x0)
 val cd_to_mem_ffi = impure { _: "cd_to_mem" } : (bits(64), bits(64), bits(64)) -> unit
 function cd_to_mem(x0 : bits(64), x1 : bits(64), x2 : bits(64)) -> unit = cd_to_mem_ffi(x0, x1, x2)
 
+val calldata_load_word_ffi = impure { _: "calldata_load_word" } : bits(64) -> word
+function calldata_load_word(i : bits(64)) -> word = calldata_load_word_ffi(i)
+
 val txd_at_ffi = impure { _: "txd_at" } : bits(64) -> bits(8)
 function txd_at(x0 : bits(64)) -> bits(8) = txd_at_ffi(x0)
 

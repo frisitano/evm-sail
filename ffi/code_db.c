@@ -201,7 +201,7 @@ static void fc_inl_fit(int d, uint32_t need) {
 }
 
 /* current frame's code := the store entry for codeHash `h`; len */
-uint64_t code_db_frame_set_stored_code(const lbits h) {
+uint64_t frame_code_bind_stored(const lbits h) {
   fc_desc *f = fc_cur();
   if (code_db) {
     uint64_t key[4];
@@ -221,7 +221,7 @@ uint64_t code_db_frame_set_stored_code(const lbits h) {
  * Code is immutable once the frame starts, so we avoid keeping a pointer into
  * mutable caller memory even though the caller is suspended while the child
  * runs. */
-uint64_t code_db_prepare_child_frame_memory_code(uint64_t off, uint64_t len) {
+uint64_t frame_code_bind_memory(uint64_t off, uint64_t len) {
   int child = (int)hm_depth(UNIT) + 1;
   if (child >= FC_MAXDEPTH) return 0;
   fc_desc *f = &fc[child];
@@ -234,7 +234,7 @@ uint64_t code_db_prepare_child_frame_memory_code(uint64_t off, uint64_t len) {
   return len;
 }
 /* current frame's code := the streamed tx input (a create-tx's initcode) */
-uint64_t code_db_frame_set_tx_input_code(const unit u) {
+uint64_t frame_code_bind_tx_input(const unit u) {
   (void)u;
   int d = (int)hm_depth(UNIT);
   fc_desc *f = &fc[d];
@@ -247,7 +247,7 @@ uint64_t code_db_frame_set_tx_input_code(const unit u) {
   f->p = fc_inl[d].p; f->bm = fc_inl[d].bm; f->len = len;
   return len;
 }
-unit code_db_frame_clear_code(const unit u) {
+unit frame_code_clear(const unit u) {
   (void)u;
   fc_desc *f = fc_cur();
   f->p = NULL; f->bm = NULL; f->len = 0;
@@ -300,19 +300,19 @@ void code_db_read_delegation(lbits *rop, const lbits h) {
 
 /* ------------------------------ accessors ------------------------------ */
 
-uint64_t code_db_frame_code_byte(uint64_t i) {
+uint64_t frame_code_byte(uint64_t i) {
   const fc_desc *f = fc_cur();
   return fc_byte_at(f, i);
 }
 
 /* the current frame's code length (frame re-entry resync after a child pops) */
-uint64_t code_db_frame_code_length(const unit u) { (void)u; return fc_cur()->len; }
-bool code_db_frame_jumpdest_valid(uint64_t i) {
+uint64_t frame_code_length(const unit u) { (void)u; return fc_cur()->len; }
+bool frame_jumpdest_valid(uint64_t i) {
   const fc_desc *f = fc_cur();
   return i < f->len && ((f->bm[i >> 3] >> (i & 7)) & 1);
 }
 /* CODECOPY: code[off..off+len) -> memory[dst..), zero-padded past the end */
-unit code_db_copy_frame_code_to_memory(uint64_t dst, uint64_t off, uint64_t len) {
+unit frame_code_copy_to_memory(uint64_t dst, uint64_t off, uint64_t len) {
   if (!len) return UNIT;
   uint8_t *d = hm_wr(dst, len);
   if (!d) return UNIT;
@@ -326,7 +326,7 @@ unit code_db_copy_frame_code_to_memory(uint64_t dst, uint64_t off, uint64_t len)
 }
 
 /* the n-byte PUSH immediate starting at offset i, as a right-aligned word */
-void code_db_frame_push_immediate_word(lbits *rop, uint64_t i, uint64_t n) {
+void frame_push_immediate_word(lbits *rop, uint64_t i, uint64_t n) {
   const fc_desc *f = fc_cur();
   uint8_t b[32];
   uint64_t cnt = n < 32 ? n : 32;
@@ -334,7 +334,7 @@ void code_db_frame_push_immediate_word(lbits *rop, uint64_t i, uint64_t n) {
   be_bytes_to_lbits(rop, 256, b, (size_t)cnt);
 }
 /* CALLDATALOAD: the 32-byte word at calldata offset i (zero-padded) */
-void code_db_calldata_load_word(lbits *rop, uint64_t i) {
+void calldata_load_word(lbits *rop, uint64_t i) {
   uint8_t b[32];
   for (int k = 0; k < 32; k++) b[k] = (uint8_t)cd_byte(i + (uint64_t)k);
   be_bytes_to_lbits(rop, 256, b, 32);

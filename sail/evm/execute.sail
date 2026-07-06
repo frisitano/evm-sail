@@ -39,7 +39,7 @@ function guard_static() -> bool =
  * (the precomputed valid-destination set, YP 9.4.3); otherwise an invalid-jump
  * exceptional halt. PUSH-data bytes that happen to equal 0x5b are not valid. */
 function do_jump(dest : int) -> unit =
-    if dest >= 0 & dest < code_len & code_db_frame_jumpdest_valid(get_slice_int(64, dest, 0)) then {
+    if dest >= 0 & dest < code_len & frame_jumpdest_valid(get_slice_int(64, dest, 0)) then {
         pc = dest
     } else {
         exc_halt(InvalidJump)

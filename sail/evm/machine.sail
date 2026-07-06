@@ -42,7 +42,7 @@ register call_depth : int = 0
 /* --------------------------- code length -------------------------------- */
 /* The frame's code bytes live in the C buffer (code_db.c), streamed once by
  * set_code; fetch is an O(1) array read and PUSH immediates are assembled by
- * one code_db_frame_push_immediate_word call. Only the length is kept on the Sail side. */
+ * one frame_push_immediate_word call. Only the length is kept on the Sail side. */
 register code_len : int = 0
 
 /* Bind the current frame's code to an account's store entry (O(1): the bytes
@@ -52,24 +52,24 @@ register code_len : int = 0
  * range, so execution code never aliases mutable memory. */
 function frame_code_addr(a : address) -> unit = {
     let h : hash = k_code_key(a);
-    code_len = unsigned(code_db_frame_set_stored_code(h))
+    code_len = unsigned(frame_code_bind_stored(h))
 }
 
 /* re-read the (C-side) frame descriptor's length after a child frame pops.
  * NOT a saved Sail local: sail -O's register-effect analysis is per-function
  * body, so a `let saved = code_len ... code_len = saved` round-trip with no
  * direct write in between gets eliminated as a self-assignment. */
-function frame_code_resync() -> unit = code_len = unsigned(code_db_frame_code_length())
-function frame_code_txd() -> unit = code_len = unsigned(code_db_frame_set_tx_input_code())
+function frame_code_resync() -> unit = code_len = unsigned(frame_code_length())
+function frame_code_txd() -> unit = code_len = unsigned(frame_code_bind_tx_input())
 function frame_code_empty() -> unit = {
-    code_db_frame_clear_code();
+    frame_code_clear();
     code_len = 0
 }
 function frame_code_pend_mem(off : int, len : int) -> int =
-    unsigned(code_db_prepare_child_frame_memory_code(get_slice_int(64, off, 0), get_slice_int(64, len, 0)))
+    unsigned(frame_code_bind_memory(get_slice_int(64, off, 0), get_slice_int(64, len, 0)))
 
 /* code[i], zero past the end (the EVM's implicit STOP padding) */
-function code_byte(i : int) -> byte = code_db_frame_code_byte(get_slice_int(64, i, 0))
+function code_byte(i : int) -> byte = frame_code_byte(get_slice_int(64, i, 0))
 
 /* ------------------------------ the stack ------------------------------- */
 

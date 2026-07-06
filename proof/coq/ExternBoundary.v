@@ -152,7 +152,8 @@ Record ByteSourceContract := {
 }.
 
 (* sail/host/memory.sail and sail/evm/machine.sail host_mem_*, hm_*,
-   returndata_*, txin_*, txd_*, code_db_*, hs_*. *)
+   returndata_*, txin_*, txd_*, frame_code_*/frame_*, calldata_load_word,
+   code_db_*, hs_*. *)
 Record MemoryStackContract := {
   memory_state : Type;
   stack_state : Type;

@@ -98,7 +98,7 @@ function mem_mcopy(dst : int, src : int, len : int) -> unit =
  * calldata_copy_to_mem): a past-end source must zero-fill the destination. */
 function mem_codecopy(dst : int, off : int, len : int) -> unit = {
     let o = if off > 16777216 then { 16777216 } else { off };
-    code_db_copy_frame_code_to_memory(get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
+    frame_code_copy_to_memory(get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
 }
 
 /* KECCAK256 over the memory range [off, off+len). Semantically, the caller
@@ -142,7 +142,7 @@ function txdata_read_range(off : int, len : int) -> list(byte) = {
     out
 }
 
-function calldata_word(off : int) -> word = code_db_calldata_load_word(get_slice_int(64, off, 0))
+function calldata_word(off : int) -> word = calldata_load_word(get_slice_int(64, off, 0))
 
 /* clamp a beyond-2^64 source offset to a beyond-any-calldata sentinel so the
  * 64-bit truncation cannot wrap back into real calldata: a past-end source

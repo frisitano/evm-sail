@@ -6,9 +6,11 @@ evm {
     prelude.sail,
     iface/oracle.sail,
     iface/crypto.sail,
+    iface/precompile.sail,
     iface/stack.sail,
     iface/memory.sail,
     iface/code_db.sail,
+    iface/frame_code.sail,
     iface/state.sail,
     iface/witness_db.sail,
     host/io.sail,
@@ -25,21 +27,32 @@ evm {
     evm/transaction.sail,
     lib/mpt.sail,
     lib/consensus_hash.sail,
-    if $EVM_BACKEND == spec then [spec/oracle.sail, spec/crypto.sail, spec/model_state.sail, spec/model_buffers.sail]
+    if $EVM_BACKEND == spec then [
+      spec/oracle.sail,
+      spec/precompile.sail,
+      spec/model_state.sail,
+      spec/model_buffers.sail,
+      spec/crypto.sail
+    ]
     else if $EVM_BACKEND == build then [
       build/oracle.sail,
       build/crypto.sail,
+      build/crypto_source.sail,
+      build/precompile.sail,
       build/stack.sail,
       build/memory.sail,
       build/code_db.sail,
+      build/frame_code.sail,
       build/state.sail,
       build/witness_db.sail
     ]
     else if $EVM_BACKEND == hybrid then [
       build/oracle.sail,
-      spec/hybrid_crypto.sail,
+      build/crypto.sail,
+      hybrid/precompile.sail,
       spec/model_state.sail,
-      spec/model_buffers.sail
+      spec/model_buffers.sail,
+      hybrid/crypto.sail
     ]
     else error("EVM_BACKEND must be spec, build, or hybrid"),
     if $EVM_ENTRY == core then []

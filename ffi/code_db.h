@@ -17,14 +17,14 @@ unit code_db_copy_stored_code_to_memory(const lbits h, uint64_t dst, uint64_t of
 void code_db_read_delegation(lbits *rop, const lbits h);
 
 /* Per-frame executable code views. */
-uint64_t code_db_frame_set_stored_code(const lbits h);
-uint64_t code_db_prepare_child_frame_memory_code(uint64_t off, uint64_t len);
-uint64_t code_db_frame_set_tx_input_code(const unit u);
-unit code_db_frame_clear_code(const unit u);
-uint64_t code_db_frame_code_byte(uint64_t i);
-uint64_t code_db_frame_code_length(const unit u);
-bool code_db_frame_jumpdest_valid(uint64_t i);
-unit code_db_copy_frame_code_to_memory(uint64_t dst, uint64_t off, uint64_t len);
-void code_db_frame_push_immediate_word(lbits *rop, uint64_t i, uint64_t n);
-void code_db_calldata_load_word(lbits *rop, uint64_t i);
+uint64_t frame_code_bind_stored(const lbits h);
+uint64_t frame_code_bind_memory(uint64_t off, uint64_t len);
+uint64_t frame_code_bind_tx_input(const unit u);
+unit frame_code_clear(const unit u);
+uint64_t frame_code_byte(uint64_t i);
+uint64_t frame_code_length(const unit u);
+bool frame_jumpdest_valid(uint64_t i);
+unit frame_code_copy_to_memory(uint64_t dst, uint64_t off, uint64_t len);
+void frame_push_immediate_word(lbits *rop, uint64_t i, uint64_t n);
+void calldata_load_word(lbits *rop, uint64_t i);
 #endif
