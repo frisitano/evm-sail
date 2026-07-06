@@ -65,6 +65,10 @@ function load_account(a : address) -> Account = {
     account_lookup(a)
 }
 
-function storage_updates(ak : bits(256)) -> list(TrieUpdate) = storage_updates_writes_only(ak)
+function storage_updates(ak : bits(256)) -> list(TriePatch) = storage_updates_writes_only(ak)
 
-function state_updates_map() -> list(TrieUpdate) = state_updates_map_updates_only()
+function state_updates_map() -> list(TriePatch) = state_updates_map_updates_only()
+
+/* the state trie anchors at the authenticated parent root; trie_root fails
+ * closed on any witness node missing along a touched path */
+function state_root_anchor() -> bits(256) = k_parent_state_root

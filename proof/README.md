@@ -148,7 +148,7 @@ The important initial symbols include:
 
 ```text
 evm.v: Definition process_transaction
-evm.v: Definition compute_state_root_overlay
+evm.v: Definition compute_state_root
 ```
 
 `check-evm-sail-guest-coq` extracts the executable stateless zkVM guest rooted
@@ -458,7 +458,7 @@ This target refuses to write `instrs.v` unless coverage is complete.
    structures should become explicit assumptions or imported contracts.
 3. Add a small hand-written Coq harness module that imports the generated core
    theory and states the first source-level lemmas around
-   `process_transaction` and `compute_state_root_overlay`.
+   `process_transaction` and `compute_state_root`.
 4. Add a second harness for the guest entry point around
    `input_well_formed` and `main`, then relate that guest-level contract back
    to the core EVM semantics.

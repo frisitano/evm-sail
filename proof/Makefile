@@ -135,7 +135,8 @@ check-evm-sail-core-coq: run-evm-sail-core-coq
 	test -s $(EVM_SAIL_COQ_CORE_DIR)/evm.v
 	test -s $(EVM_SAIL_COQ_CORE_DIR)/evm_types.v
 	grep -q "Definition process_transaction" $(EVM_SAIL_COQ_CORE_DIR)/evm.v
-	grep -q "Definition compute_state_root_overlay" $(EVM_SAIL_COQ_CORE_DIR)/evm.v
+	grep -q "Definition compute_state_root " $(EVM_SAIL_COQ_CORE_DIR)/evm.v
+	grep -q "Definition trie_root " $(EVM_SAIL_COQ_CORE_DIR)/evm.v
 
 run-evm-sail-guest-coq:
 	mkdir -p $(EVM_SAIL_COQ_GUEST_DIR)

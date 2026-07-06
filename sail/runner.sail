@@ -282,7 +282,7 @@ function main() -> unit = {
         run_one();
         if want_root != 0 then {
             /* recomputed world-state root (YP stateRoot) from the seeded case state */
-            print_endline(concat_str("ROOT ", hex_str(unsigned(compute_state_root_updates_only()))))
+            print_endline(concat_str("ROOT ", hex_str(unsigned(compute_state_root()))))
         };
         more = ni()
     }

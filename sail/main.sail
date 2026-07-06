@@ -772,16 +772,13 @@ function trie_index_key(i : int) -> list(nibble) =
     to_nibbles(rlp_int(i))
 
 function transaction_trie_root() -> hash = {
-    var updates : list(TrieUpdate) = [||];
+    var updates : list(TriePatch) = [||];
     let n = pl_n_txs();
     foreach (i from 0 to (n - 1)) {
         let (off, len) = ssz_list_span(pl_txs_start(), n, pl_wds_start(), i);
-        updates = update_insert_sorted(
-            struct { key = trie_index_key(i), is_delete = false, value = ssz_bytes(off, len) },
-            updates,
-        )
+        updates = patch_insert_sorted(patch_leaf(trie_index_key(i), ssz_bytes(off, len)), updates)
     };
-    updates_root(updates)
+    trie_root(EMPTY_TRIE_ROOT, updates)
 }
 
 function withdrawal_rlp(w : Withdrawal) -> list(byte) = {
@@ -794,24 +791,21 @@ function withdrawal_rlp(w : Withdrawal) -> list(byte) = {
 }
 
 function withdrawals_trie_root(withdrawals : list(Withdrawal)) -> hash = {
-    var updates : list(TrieUpdate) = [||];
+    var updates : list(TriePatch) = [||];
     var rest : list(Withdrawal) = withdrawals;
     var i : int = 0;
     var more : bool = true;
     while more do {
         match rest {
             w :: tail => {
-                updates = update_insert_sorted(
-                    struct { key = trie_index_key(i), is_delete = false, value = withdrawal_rlp(w) },
-                    updates,
-                );
+                updates = patch_insert_sorted(patch_leaf(trie_index_key(i), withdrawal_rlp(w)), updates);
                 rest = tail;
                 i = i + 1
             },
             [||] => more = false,
         }
     };
-    updates_root(updates)
+    trie_root(EMPTY_TRIE_ROOT, updates)
 }
 
 function bloom_set_bit(bloom : list(byte), bit_to_set : int) -> list(byte) = {
@@ -965,7 +959,7 @@ function receipt_encoded(r : Receipt, cumulative_gas_used : int) -> list(byte) =
 }
 
 function receipts_trie_root(receipts : list(Receipt)) -> hash = {
-    var updates : list(TrieUpdate) = [||];
+    var updates : list(TriePatch) = [||];
     var rest : list(Receipt) = receipts;
     var i : int = 0;
     var cumulative : int = 0;
@@ -974,17 +968,14 @@ function receipts_trie_root(receipts : list(Receipt)) -> hash = {
         match rest {
             r :: tail => {
                 cumulative = cumulative + r.gas_used;
-                updates = update_insert_sorted(
-                    struct { key = trie_index_key(i), is_delete = false, value = receipt_encoded(r, cumulative) },
-                    updates,
-                );
+                updates = patch_insert_sorted(patch_leaf(trie_index_key(i), receipt_encoded(r, cumulative)), updates);
                 rest = tail;
                 i = i + 1
             },
             [||] => more = false,
         }
     };
-    updates_root(updates)
+    trie_root(EMPTY_TRIE_ROOT, updates)
 }
 
 function parent_hash_ok(header : BlockHeader) -> bool =
@@ -1015,7 +1006,7 @@ function validate_block_outputs(block : Block, exec_ok : bool, block_result : Bl
     let gas_used_ok = block_result.gas_acc == header.gas_used;
     let blob_gas_used_ok = block_result.blob_gas_acc == header.blob_gas_used;
     let excess_blob_gas_ok = header.excess_blob_gas == expected_payload_excess_blob_gas();
-    let computed_root = compute_state_root_overlay();
+    let computed_root = compute_state_root();
     let expected_root = header.state_root;
     let poststate_ok = computed_root == expected_root;
     let receipts_root = receipts_trie_root(block_result.receipts);

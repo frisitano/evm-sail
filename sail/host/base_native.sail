@@ -22,6 +22,11 @@ function k_blockhash(_ : word) -> hash = word_of_int(0)
 
 function load_account(a : address) -> Account = account_lookup(a)
 
-function storage_updates(ak : bits(256)) -> list(TrieUpdate) = storage_updates_union(ak)
+function storage_updates(ak : bits(256)) -> list(TriePatch) = storage_updates_union(ak)
 
-function state_updates_map() -> list(TrieUpdate) = state_updates_map_union()
+function state_updates_map() -> list(TriePatch) = state_updates_map_union()
+
+/* no authenticated parent root: anchor at the empty trie, so trie_root's
+ * empty-base restriction (= TRIE(I), the same single implementation) builds
+ * the root from the full cache/update union without touching the node-db */
+function state_root_anchor() -> bits(256) = EMPTY_TRIE_ROOT
