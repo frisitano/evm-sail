@@ -43,12 +43,6 @@
 /* (1) trie primitives                                                      */
 /* ======================================================================== */
 
-function list_nonempty forall ('a : Type). (xs : list('a)) -> bool =
-    match xs {
-        [||] => false,
-        _ => true,
-    }
-
 /* A nibble is half a byte: the unit of trie path traversal (YP Appendix D:
  * "Any series of bytes may also trivially be viewed as a series of nibbles"). */
 type nibble = bits(4)
@@ -57,14 +51,15 @@ type nibble = bits(4)
 function to_nibbles(bs : list(byte)) -> list(nibble) = {
     var out : list(nibble) = [||];
     var rest : list(byte) = bs;
-    while list_nonempty(rest) do {
+    var more : bool = true;
+    while more do {
         match rest {
             b :: r => {
                 out = b[7 .. 4] :: out;
                 out = b[3 .. 0] :: out;
                 rest = r
             },
-            [||] => (),
+            [||] => more = false,
         }
     };
     list_reverse(out)
@@ -72,7 +67,7 @@ function to_nibbles(bs : list(byte)) -> list(nibble) = {
 
 /* hex-prefix (compact) encoding of a nibble path + leaf/extension flag
  * (Yellow Paper Appendix C.1, the HP function). */
-function hp_compact(nibs : list(nibble), is_leaf : bool) -> list(byte) = {
+function hex_prefix_compact(nibs : list(nibble), is_leaf : bool) -> list(byte) = {
     let len = list_len(nibs);
     let odd = emod_int(len, 2) == 1;
     let flag : nibble = if is_leaf then { 0x2 } else { 0x0 };
@@ -89,20 +84,21 @@ function hp_compact(nibs : list(nibble), is_leaf : bool) -> list(byte) = {
     } else {
         out = append(flag, 0x0) :: out
     };
-    while list_nonempty(rest) do {
+    var more : bool = true;
+    while more do {
         match rest {
             a :: (b :: t) => {
                 out = append(a, b) :: out;
                 rest = t
             },
-            _ => rest = [||],
+            _ => more = false,
         }
     };
     list_reverse(out)
 }
 
 /* hex-prefix decode (Appendix C.1 inverted): (is_leaf, path nibbles) */
-function hp_decode(p : list(byte)) -> (bool, list(nibble)) = {
+function hex_prefix_decode(p : list(byte)) -> (bool, list(nibble)) = {
     let n = list_len(p);
     if n == 0 then {
         (false, [||])
@@ -239,19 +235,19 @@ function bytes_be256(c : list(byte)) -> bits(256) = {
 }
 
 /* ---- node composition (Yellow Paper Appendix D, Eq. 208's node forms) --- */
-/* leaf:      child_ref( rlp[ hp_compact(key,leaf) , value ] )                 */
-/* extension: child_ref( rlp[ hp_compact(key,ext)  , child-ref ] )            */
+/* leaf:      child_ref( rlp[ hex_prefix_compact(key,leaf) , value ] )         */
+/* extension: child_ref( rlp[ hex_prefix_compact(key,ext)  , child-ref ] )     */
 /* branch:    child_ref( rlp[ 16 child-refs-or-0x80 , 0x80 ] )                 */
 /* word:      0xa0 ++ hash   (a blinded subtree / >=32B child, already a ref)  */
 function leaf_node_rlp(key : list(nibble), value : list(byte)) -> list(byte) =
-    rlp_list(list_append(rlp_bytes(hp_compact(key, true)), rlp_bytes(value)))
+    rlp_list(rlp_bytes(hex_prefix_compact(key, true)) ++ rlp_bytes(value))
 function extension_node_rlp(key : list(nibble), childref : list(byte)) -> list(byte) =
-    rlp_list(list_append(rlp_bytes(hp_compact(key, false)), childref))
+    rlp_list(rlp_bytes(hex_prefix_compact(key, false)) ++ childref)
 function leaf_child_ref(key : list(nibble), value : list(byte)) -> list(byte) =
     child_ref(leaf_node_rlp(key, value))
 function extension_child_ref(key : list(nibble), childref : list(byte)) -> list(byte) =
     child_ref(extension_node_rlp(key, childref))
-function hash_child_ref(hash : list(byte)) -> list(byte) = list_append([|0xa0|], hash)
+function hash_child_ref(hash : list(byte)) -> list(byte) = [|0xa0|] ++ hash
 
 function branch_payload_rlp(mask : bits(16), children : list(list(byte))) -> list(byte) = {
     var payload : list(byte) = [||];
@@ -260,16 +256,16 @@ function branch_payload_rlp(mask : bits(16), children : list(list(byte))) -> lis
         if branch_mask_has_bit(mask, i) then {
             match ch {
                 c :: t => {
-                    payload = list_append(payload, c);
+                    payload = payload ++ c;
                     ch = t
                 },
                 [||] => (),
             }
         } else {
-            payload = list_append(payload, [|0x80|])
+            payload = payload ++ [|0x80|]
         }
     };
-    list_append(payload, [|0x80|]) /* branch value slot: empty */
+    payload ++ [|0x80|] /* branch value slot: empty */
 }
 function branch_node_rlp(mask : bits(16), children : list(list(byte))) -> list(byte) =
     rlp_list(branch_payload_rlp(mask, children))
@@ -368,16 +364,6 @@ function patches_empty(ps : list(TriePatch)) -> bool =
     match ps {
         [||] => true,
         _ => false,
-    }
-
-function patches_has_key(ps : list(TriePatch), key : list(nibble)) -> bool =
-    match ps {
-        [||] => false,
-        p :: r => if nib_eq(p.key, key) then {
-            true
-        } else {
-            patches_has_key(r, key)
-        },
     }
 
 function patches_at_nibble(ps : list(TriePatch), depth : int, nib : nibble) -> list(TriePatch) =
@@ -493,8 +479,8 @@ function merge_ext_node(prefix : list(nibble), childnode : list(byte)) -> list(b
             let items = rlp_node_items(childnode);
             let n = list_len(items);
             if n == 2 then {
-                let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).content);
-                let key = list_append(prefix, seg);
+                let (is_leaf, seg) = hex_prefix_decode(list_nth(items, 0, RLP_NONE).content);
+                let key = prefix ++ seg;
                 if is_leaf then {
                     leaf_node_rlp(key, list_nth(items, 1, RLP_NONE).content)
                 } else {
@@ -523,8 +509,8 @@ function merge_ext_ref(prefix : list(nibble), childref : list(byte)) -> list(byt
                     let items = rlp_node_items(childref);
                     let n = list_len(items);
                     if n == 2 then {
-                        let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).content);
-                        let key = list_append(prefix, seg);
+                        let (is_leaf, seg) = hex_prefix_decode(list_nth(items, 0, RLP_NONE).content);
+                        let key = prefix ++ seg;
                         if is_leaf then {
                             leaf_child_ref(key, list_nth(items, 1, RLP_NONE).content)
                         } else {
@@ -572,6 +558,28 @@ function patches_live_items(ps : list(TriePatch)) -> list(TrieItem) =
             patches_live_items(r)
         } else {
             item_leaf(p.key, p.bytes) :: patches_live_items(r)
+        },
+    }
+
+/* the post-state items at a base leaf, in one pass: the live update leaves
+ * with the base leaf inserted at its sorted position; an update on the
+ * leaf's own key replaces (write) or erases (delete) it, and diverging
+ * updates are inserts */
+function leaf_overlay_items(ps : list(TriePatch), key : list(nibble), value : list(byte)) -> list(TrieItem) =
+    match ps {
+        [||] => [|item_leaf(key, value)|],
+        p :: r => if nib_eq(p.key, key) then {
+            patches_live_items(ps)
+        } else {
+            if nib_lt(key, p.key) then {
+                item_leaf(key, value) :: patches_live_items(ps)
+            } else {
+                if p.is_delete then {
+                    leaf_overlay_items(r, key, value)
+                } else {
+                    item_leaf(p.key, p.bytes) :: leaf_overlay_items(r, key, value)
+                }
+            }
         },
     }
 
@@ -688,7 +696,7 @@ function build_group(items : list(TrieItem), depth : int, fuel : int) -> list(by
                         let group = items_at_nibble(items, depth, get_slice_int(4, i, 0));
                         if list_len(group) > 0 then {
                             mask = branch_mask_set_bit(mask, i);
-                            children = list_append(children, [|build_group(group, depth + 1, fuel - 1)|])
+                            children = children ++ [|build_group(group, depth + 1, fuel - 1)|]
                         }
                     };
                     branch_child_ref(mask, children)
@@ -772,17 +780,10 @@ function witness_items(
             let items = rlp_node_items(node);
             let n = list_len(items);
             if n == 2 then {
-                let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).content);
-                let key = list_append(prefix, seg);
+                let (is_leaf, seg) = hex_prefix_decode(list_nth(items, 0, RLP_NONE).content);
+                let key = prefix ++ seg;
                 if is_leaf then {
-                    /* an update on the leaf's own key replaces (write) or
-                       erases (delete) it; diverging updates are inserts */
-                    let base : list(TrieItem) = if patches_has_key(updates, key) then {
-                            [||]
-                        } else {
-                            [|item_leaf(key, list_nth(items, 1, RLP_NONE).content)|]
-                        };
-                    items_merge(patches_live_items(updates), base)
+                    leaf_overlay_items(updates, key, list_nth(items, 1, RLP_NONE).content)
                 } else {
                     let under = patches_under_prefix(updates, key);
                     let outside = patches_outside_prefix(updates, key);
@@ -806,26 +807,31 @@ function witness_items(
                     };
                     var out : list(TrieItem) = [||];
                     foreach (i from 0 to 15) {
+                        let nib : nibble = get_slice_int(4, i, 0);
                         let field = list_nth(items, i, RLP_NONE);
-                        let child_prefix = list_append(prefix, [|get_slice_int(4, i, 0)|]);
-                        let group = patches_at_nibble(updates, list_len(prefix), get_slice_int(4, i, 0));
-                        let present = not_bool(trie_ref_is_empty(field_to_ref(field)));
+                        let group = patches_at_nibble(updates, list_len(prefix), nib);
+
+                        /* a child slot holds an embedded node, a 32-byte hash,
+                           or nothing (field_to_ref of anything else is empty) */
+                        let present = field.is_list | list_len(field.content) == 32;
                         let contrib : list(TrieItem) = if patches_empty(group) then {
                                 if present then {
                                     /* untouched branch child: node type unknown
                                        for hash refs (is_branch = false) */
-                                    [|item_subtree(child_prefix, field_to_ref(field), false)|]
+                                    [|item_subtree(prefix ++ [|nib|], field_to_ref(field), false)|]
                                 } else {
                                     [||]
                                 }
                             } else {
                                 if present then {
-                                    witness_child_items(field, child_prefix, group, fuel - 1)
+                                    witness_child_items(field, prefix ++ [|nib|], group, fuel - 1)
                                 } else {
+                                    /* no base child: the surviving updates are
+                                       pure inserts */
                                     patches_live_items(group)
                                 }
                             };
-                        out = list_append(out, contrib)
+                        out = out ++ contrib
                     };
                     out
                 } else {
@@ -1120,7 +1126,7 @@ function trie_walk(node : list(byte), key : list(nibble), pos : int, fuel : int)
         let items = rlp_node_items(node);
         let n = list_len(items);
         if n == 2 then {
-            let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).content);
+            let (is_leaf, seg) = hex_prefix_decode(list_nth(items, 0, RLP_NONE).content);
             if not_bool(nibs_match(key, pos, seg)) then {
                 [||]
             } else {

@@ -94,7 +94,7 @@ function witness_node_ref(node : list(byte), fuel : int) -> list(byte) = {
         let items = rlp_node_items(node);
         let n = list_len(items);
         if n == 2 then {
-            let (is_leaf, seg) = hp_decode(list_nth(items, 0, RLP_NONE).content);
+            let (is_leaf, seg) = hex_prefix_decode(list_nth(items, 0, RLP_NONE).content);
             if is_leaf then {
                 leaf_child_ref(seg, list_nth(items, 1, RLP_NONE).content)
             } else {

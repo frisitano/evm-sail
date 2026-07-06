@@ -195,6 +195,11 @@ function list_append forall ('a : Type). (xs : list('a), ys : list('a)) -> list(
         h :: t => h :: list_append(t, ys),
     }
 
+/* list concatenation operator (sail-riscv operator-overload style; Sail's
+ * built-in @ is bitvector concat and is not overloadable) */
+infixl 6 ++
+overload operator ++ = {list_append}
+
 function rev_onto forall ('a : Type). (xs : list('a), acc : list('a)) -> list('a) =
     match xs {
         [||] => acc,
