@@ -143,14 +143,13 @@ function transient_storage_read(id : bits(64), a : address, s : word) -> word =
  * "original" view); present is any layer or the cache. wipe_addr deletes
  * the address's rows from the cache and every layer.
  *
- * Iteration: count/at enumerate the cache/layer union with upper layers
- * overriding, ascending by (keccak(address), keccak(slot)) compared as
- * unsigned 256-bit integers; update_count/update_at enumerate the merged
- * update overlay only. Both rebuild the row snapshot and reset the cursor
- * to the requested index (count resets it to 0); it_* read the selected
- * row and yield zeros when the selection is out of range. Matching the C,
- * every mutation except push invalidates the snapshot, and at/update_at
- * always see a freshly merged view. */
+ * Enumeration is per account and stateless (no cursor):
+ * storage_map_acct_count/slot/val serve the rows of one keccak(address)
+ * over the cache/layer union with upper layers overriding, ascending by
+ * keccak(slot) compared as unsigned 256-bit integers; the acct_update_*
+ * variants serve the merged update overlay only. Out-of-range indices
+ * yield zeros. The model recomputes the merged view per call, matching
+ * the C backend's invalidate-on-mutation snapshot. */
 
 struct SpecStorageRow = { srow_addr : address, srow_slot : word, srow_val : word }
 
@@ -159,9 +158,6 @@ struct SpecStorageIterRow = { sit_ah : hash, sit_sh : hash, sit_slot : word, sit
 
 register spec_sm_cache : list(SpecStorageRow) = [||]
 register spec_sm_layers : list(list(SpecStorageRow)) = [|[||]|]
-register spec_sm_iter_rows : list(SpecStorageIterRow) = [||]
-register spec_sm_iter_sel : bits(64) = 0x0000000000000000
-
 val spec_srow_lookup : (list(SpecStorageRow), address, word) -> (bool, word)
 function spec_srow_lookup(rows, a, s) =
     match rows {
@@ -281,48 +277,33 @@ function spec_sm_merged(updates_only) = {
     spec_sm_overlay_layers(base, spec_sm_layers)
 }
 
-val spec_sm_iter_clear : unit -> unit
-function spec_sm_iter_clear() = {
-    spec_sm_iter_rows = [||];
-    spec_sm_iter_sel = 0x0000000000000000
-}
-
 function storage_map_reset() -> unit = {
     spec_sm_cache = [||];
-    spec_sm_layers = [|[||]|];
-    spec_sm_iter_clear()
+    spec_sm_layers = [|[||]|]
 }
 
 function storage_map_push() -> unit = spec_sm_layers = [||] :: spec_sm_layers
 
-function storage_map_pop_commit() -> unit = {
+function storage_map_pop_commit() -> unit =
     match spec_sm_layers {
         top :: (below :: rest) => spec_sm_layers = spec_sm_commit_layer(below, top) :: rest,
         _ => (),
-    };
-    spec_sm_iter_clear()
-}
+    }
 
-function storage_map_pop_discard() -> unit = {
+function storage_map_pop_discard() -> unit =
     match spec_sm_layers {
         _ :: (below :: rest) => spec_sm_layers = below :: rest,
         _ => (),
-    };
-    spec_sm_iter_clear()
-}
+    }
 
-function storage_map_seed(a : address, s : word, v : word) -> unit = {
-    spec_sm_cache = spec_srow_put(spec_sm_cache, a, s, v);
-    spec_sm_iter_clear()
-}
+function storage_map_seed(a : address, s : word, v : word) -> unit =
+    spec_sm_cache = spec_srow_put(spec_sm_cache, a, s, v)
 
-function storage_map_store(a : address, s : word, v : word) -> unit = {
+function storage_map_store(a : address, s : word, v : word) -> unit =
     match spec_sm_layers {
         top :: rest => spec_sm_layers = spec_srow_put(top, a, s, v) :: rest,
         [||] => spec_sm_layers = [|spec_srow_put([||], a, s, v)|],
-    };
-    spec_sm_iter_clear()
-}
+    }
 
 function storage_map_load(a : address, s : word) -> word = {
     let (found, v) = spec_sm_layers_lookup(spec_sm_layers, a, s);
@@ -373,38 +354,37 @@ function spec_sm_wipe_layers(ls, a) =
 
 function storage_map_wipe_addr(a : address) -> unit = {
     spec_sm_cache = spec_srow_wipe(spec_sm_cache, a);
-    spec_sm_layers = spec_sm_wipe_layers(spec_sm_layers, a);
-    spec_sm_iter_clear()
+    spec_sm_layers = spec_sm_wipe_layers(spec_sm_layers, a)
 }
 
-function storage_map_count() -> bits(64) = {
-    spec_sm_iter_rows = spec_sm_merged(false);
-    spec_sm_iter_sel = 0x0000000000000000;
-    get_slice_int(64, list_len(spec_sm_iter_rows), 0)
+/* the merged rows of one account, in (ah, sh) order (spec_sm_merged is
+ * sorted, so filtering preserves the per-account order the C backend serves
+ * from its account-sorted snapshot) */
+val spec_sm_acct_rows : (hash, bool) -> list(SpecStorageIterRow)
+function spec_sm_acct_rows(ak, updates_only) = {
+    var out : list(SpecStorageIterRow) = [||];
+    var rest : list(SpecStorageIterRow) = spec_sm_merged(updates_only);
+    var more : bool = true;
+    while more do {
+        match rest {
+            e :: t => {
+                if e.sit_ah == ak then {
+                    out = e :: out
+                };
+                rest = t
+            },
+            [||] => more = false,
+        }
+    };
+    list_reverse(out)
 }
 
-function storage_map_update_count() -> bits(64) = {
-    spec_sm_iter_rows = spec_sm_merged(true);
-    spec_sm_iter_sel = 0x0000000000000000;
-    get_slice_int(64, list_len(spec_sm_iter_rows), 0)
-}
-
-function storage_map_at(j : bits(64)) -> unit = {
-    spec_sm_iter_rows = spec_sm_merged(false);
-    spec_sm_iter_sel = j
-}
-
-function storage_map_update_at(j : bits(64)) -> unit = {
-    spec_sm_iter_rows = spec_sm_merged(true);
-    spec_sm_iter_sel = j
-}
-
-/* the selected iteration row; all-zero fields when out of range */
-val spec_sm_iter_row : unit -> SpecStorageIterRow
-function spec_sm_iter_row() =
+/* row j of one account; all-zero fields when out of range */
+val spec_sm_acct_row : (hash, bool, bits(64)) -> SpecStorageIterRow
+function spec_sm_acct_row(ak, updates_only, j) =
     list_nth(
-        spec_sm_iter_rows,
-        unsigned(spec_sm_iter_sel),
+        spec_sm_acct_rows(ak, updates_only),
+        unsigned(j),
         struct {
             sit_ah = sail_zeros(256),
             sit_sh = sail_zeros(256),
@@ -413,11 +393,19 @@ function spec_sm_iter_row() =
         },
     )
 
-function storage_map_it_acct_hash() -> hash = spec_sm_iter_row().sit_ah
+function storage_map_acct_count(ak : hash) -> bits(64) =
+    get_slice_int(64, list_len(spec_sm_acct_rows(ak, false)), 0)
 
-function storage_map_it_slot() -> word = spec_sm_iter_row().sit_slot
+function storage_map_acct_slot(ak : hash, j : bits(64)) -> word = spec_sm_acct_row(ak, false, j).sit_slot
 
-function storage_map_it_val() -> word = spec_sm_iter_row().sit_val
+function storage_map_acct_val(ak : hash, j : bits(64)) -> word = spec_sm_acct_row(ak, false, j).sit_val
+
+function storage_map_acct_update_count(ak : hash) -> bits(64) =
+    get_slice_int(64, list_len(spec_sm_acct_rows(ak, true)), 0)
+
+function storage_map_acct_update_slot(ak : hash, j : bits(64)) -> word = spec_sm_acct_row(ak, true, j).sit_slot
+
+function storage_map_acct_update_val(ak : hash, j : bits(64)) -> word = spec_sm_acct_row(ak, true, j).sit_val
 
 /* ---- account map (iface/state.sail; refines ffi/state_db.c) -------------
  * The kernel account working set: TWO tables of account rows -- CACHE
@@ -461,9 +449,6 @@ struct SpecAccountIterRow = {
 
 register spec_am_cache : list(SpecAccountRow) = [||]
 register spec_am_updates : list(SpecAccountRow) = [||]
-
-/* the cached iteration row: empty = invalid cursor (at_* read zeros) */
-register spec_am_iter : list(SpecAccountIterRow) = [||]
 
 val spec_arow_find : (list(SpecAccountRow), address) -> (bool, SpecAccountRow)
 function spec_arow_find(rows, a) =
@@ -510,8 +495,7 @@ function spec_arow_remove(rows, a) =
 
 function acctmap_reset() -> unit = {
     spec_am_cache = [||];
-    spec_am_updates = [||];
-    spec_am_iter = [||]
+    spec_am_updates = [||]
 }
 
 /* the row bound to `a` (updates override cache rows) */
@@ -541,8 +525,7 @@ function acctmap_seed(a : address, nonce : bits(64), bal : word, sroot : hash, c
             arow_chash = chash,
             arow_base = false,
         },
-    );
-    spec_am_iter = [||]
+    )
 }
 
 function acctmap_store(a : address, nonce : bits(64), bal : word, sroot : hash, chash : hash) -> unit = {
@@ -567,8 +550,7 @@ function acctmap_store(a : address, nonce : bits(64), bal : word, sroot : hash, 
             arow_chash = chash,
             arow_base = base,
         },
-    );
-    spec_am_iter = [||]
+    )
 }
 
 function acctmap_mark_base_exists(a : address) -> unit = {
@@ -578,8 +560,7 @@ function acctmap_mark_base_exists(a : address) -> unit = {
         let (ufound, u) = spec_arow_find(spec_am_updates, a);
         if ufound then {
             spec_am_updates = spec_arow_put(spec_am_updates, { u with arow_base = true })
-        };
-        spec_am_iter = [||]
+        }
     }
 }
 
@@ -617,8 +598,7 @@ function acctmap_chash(a : address) -> hash = {
 
 function acctmap_remove(a : address) -> unit = {
     spec_am_cache = spec_arow_remove(spec_am_cache, a);
-    spec_am_updates = spec_arow_remove(spec_am_updates, a);
-    spec_am_iter = [||]
+    spec_am_updates = spec_arow_remove(spec_am_updates, a)
 }
 
 /* insert into a list sorted ascending by hkey, replacing on an equal key */
@@ -667,40 +647,13 @@ function acctmap_count() -> bits(64) = get_slice_int(64, list_len(spec_am_order(
 
 function acctmap_update_count() -> bits(64) = get_slice_int(64, list_len(spec_am_updates), 0)
 
-val spec_am_select : (list(SpecAccountIterRow), bits(64)) -> unit
-function spec_am_select(rows, idx) = {
-    let i = unsigned(idx);
-    if i < list_len(rows) then {
-        spec_am_iter =
-            [|
-                list_nth(
-                    rows,
-                    i,
-                    struct {
-                        ait_hkey = sail_zeros(256),
-                        ait_nonce = 0x0000000000000000,
-                        ait_bal = sail_zeros(256),
-                        ait_sroot = sail_zeros(256),
-                        ait_chash = sail_zeros(256),
-                        ait_base = false,
-                    },
-                ),
-            |]
-    } else {
-        spec_am_iter = [||]
-    }
-}
-
-function acctmap_at(idx : bits(64)) -> unit = spec_am_select(spec_am_order(), idx)
-
-function acctmap_update_at(idx : bits(64)) -> unit = spec_am_select(spec_am_updates_order(), idx)
-
-/* the cursor row; all-zero fields when the cursor is invalid */
-val spec_am_iter_row : unit -> SpecAccountIterRow
-function spec_am_iter_row() =
-    match spec_am_iter {
-        r :: _ => r,
-        [||] => struct {
+/* row idx of a sorted row list; all-zero fields when out of range */
+val spec_am_row : (list(SpecAccountIterRow), bits(64)) -> SpecAccountIterRow
+function spec_am_row(rows, idx) =
+    list_nth(
+        rows,
+        unsigned(idx),
+        struct {
             ait_hkey = sail_zeros(256),
             ait_nonce = 0x0000000000000000,
             ait_bal = sail_zeros(256),
@@ -708,19 +661,32 @@ function spec_am_iter_row() =
             ait_chash = sail_zeros(256),
             ait_base = false,
         },
-    }
+    )
 
-function acctmap_at_hkey() -> hash = spec_am_iter_row().ait_hkey
+function acctmap_row_hkey(idx : bits(64)) -> hash = spec_am_row(spec_am_order(), idx).ait_hkey
 
-function acctmap_at_nonce() -> bits(64) = spec_am_iter_row().ait_nonce
+function acctmap_row_nonce(idx : bits(64)) -> bits(64) = spec_am_row(spec_am_order(), idx).ait_nonce
 
-function acctmap_at_bal() -> word = spec_am_iter_row().ait_bal
+function acctmap_row_bal(idx : bits(64)) -> word = spec_am_row(spec_am_order(), idx).ait_bal
 
-function acctmap_at_sroot() -> hash = spec_am_iter_row().ait_sroot
+function acctmap_row_sroot(idx : bits(64)) -> hash = spec_am_row(spec_am_order(), idx).ait_sroot
 
-function acctmap_at_chash() -> hash = spec_am_iter_row().ait_chash
+function acctmap_row_chash(idx : bits(64)) -> hash = spec_am_row(spec_am_order(), idx).ait_chash
 
-function acctmap_at_base_exists() -> bool = spec_am_iter_row().ait_base
+function acctmap_row_base_exists(idx : bits(64)) -> bool = spec_am_row(spec_am_order(), idx).ait_base
+
+function acctmap_update_row_hkey(idx : bits(64)) -> hash = spec_am_row(spec_am_updates_order(), idx).ait_hkey
+
+function acctmap_update_row_nonce(idx : bits(64)) -> bits(64) = spec_am_row(spec_am_updates_order(), idx).ait_nonce
+
+function acctmap_update_row_bal(idx : bits(64)) -> word = spec_am_row(spec_am_updates_order(), idx).ait_bal
+
+function acctmap_update_row_sroot(idx : bits(64)) -> hash = spec_am_row(spec_am_updates_order(), idx).ait_sroot
+
+function acctmap_update_row_chash(idx : bits(64)) -> hash = spec_am_row(spec_am_updates_order(), idx).ait_chash
+
+function acctmap_update_row_base_exists(idx : bits(64)) -> bool =
+    spec_am_row(spec_am_updates_order(), idx).ait_base
 
 /* ---- code content store (iface/code_db.sail; refines ffi/code_db.c) -----
  * The content-addressed contract-code store: codeHash -> code bytes.
@@ -809,17 +775,14 @@ function code_db_read_delegation(h : hash) -> bits(168) = {
  *
  *   nodedb : keccak(node) -> (off, len) span into the witness buffer
  *
- * FIRST-insert-wins. nodedb_sel is a point lookup that caches the matched
- * row for its accessors; on a miss the model clears the cursor so the
- * accessors read zeros, where the C leaves the previous hit's values --
- * every Sail caller guards on the sel result (lib/mpt.sail's
- * node_db_lookup), so the two are observationally equal; new callers must
- * preserve that precondition. */
+ * FIRST-insert-wins. Lookups are argument-keyed getters (no cursor):
+ * nodedb_len(h) is 0 exactly when the key is absent (witness nodes are
+ * never empty), and nodedb_off(h) reads 0 for absent keys -- callers guard
+ * on the length (lib/mpt.sail's node_db_lookup). */
 
 struct SpecSpanEntry = { se_key : hash, se_off : bits(64), se_len : bits(64) }
 
 register spec_ndb : list(SpecSpanEntry) = [||]
-register spec_ndb_sel : list(SpecSpanEntry) = [||]
 
 /* first-insert-wins append (keeps insertion order) */
 val spec_span_insert : (list(SpecSpanEntry), hash, bits(64), bits(64)) -> list(SpecSpanEntry)
@@ -858,22 +821,11 @@ function spec_span_len(sel) =
         [||] => 0x0000000000000000,
     }
 
-function nodedb_reset() -> unit = {
-    spec_ndb = [||];
-    spec_ndb_sel = [||]
-}
+function nodedb_reset() -> unit = spec_ndb = [||]
 
 function nodedb_insert(h : hash, off : bits(64), len : bits(64)) -> unit =
     spec_ndb = spec_span_insert(spec_ndb, h, off, len)
 
-function nodedb_sel(h : hash) -> bool = {
-    spec_ndb_sel = spec_span_find(spec_ndb, h);
-    match spec_ndb_sel {
-        [||] => false,
-        _ => true,
-    }
-}
+function nodedb_off(h : hash) -> bits(64) = spec_span_off(spec_span_find(spec_ndb, h))
 
-function nodedb_sel_off() -> bits(64) = spec_span_off(spec_ndb_sel)
-
-function nodedb_sel_len() -> bits(64) = spec_span_len(spec_ndb_sel)
+function nodedb_len(h : hash) -> bits(64) = spec_span_len(spec_span_find(spec_ndb, h))

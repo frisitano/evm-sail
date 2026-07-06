@@ -25,9 +25,11 @@ static nd_entry *nd_tab = NULL;
 static uint32_t nd_cap = 0;
 static uint32_t nd_n = 0;
 
-/* cached result of the last nodedb_sel hit */
-static uint64_t nd_sel_off;
-static uint64_t nd_sel_len;
+/* memoized last lookup (off/len getters share one probe per key) */
+static uint64_t nd_memo_key[4];
+static uint64_t nd_memo_off;
+static uint64_t nd_memo_len; /* 0 = absent (witness nodes are never empty) */
+static int nd_memo_valid = 0;
 
 static uint64_t nd_hash(const uint64_t *k) {
   uint64_t h = 0xcbf29ce484222325ull; /* FNV-1a over the 4 key words */
@@ -79,8 +81,7 @@ unit nodedb_reset(const unit u) {
   nd_tab = (nd_entry *)calloc(ND_INIT_CAP, sizeof(nd_entry));
   nd_cap = ND_INIT_CAP;
   nd_n = 0;
-  nd_sel_off = 0;
-  nd_sel_len = 0;
+  nd_memo_valid = 0;
   return UNIT;
 }
 
@@ -90,34 +91,42 @@ unit nodedb_insert(const lbits kh, uint64_t off, uint64_t len) {
   if (!nd_tab)
     nodedb_reset(UNIT);
   nd_put(k, off, len);
+  nd_memo_valid = 0;
   return UNIT;
 }
 
-/* 1 if keccak key is present (and caches its span), 0 otherwise */
-bool nodedb_sel(const lbits kh) {
+/* memoized point lookup: one probe serves the off/len getter pair */
+static void nd_find(const lbits kh) {
   uint64_t k[4];
   lbits_to_le_words4(k, kh);
+  if (nd_memo_valid && memcmp(nd_memo_key, k, 32) == 0)
+    return;
+  memcpy(nd_memo_key, k, 32);
+  nd_memo_off = 0;
+  nd_memo_len = 0;
+  nd_memo_valid = 1;
   if (!nd_tab)
-    return 0;
+    return;
   uint32_t m = nd_cap - 1;
   uint32_t i = (uint32_t)nd_hash(k) & m;
   while (nd_tab[i].used) {
     if (memcmp(nd_tab[i].key, k, 32) == 0) {
-      nd_sel_off = nd_tab[i].off;
-      nd_sel_len = nd_tab[i].len;
-      return 1;
+      nd_memo_off = nd_tab[i].off;
+      nd_memo_len = nd_tab[i].len;
+      return;
     }
     i = (i + 1) & m;
   }
-  return 0;
 }
 
-uint64_t nodedb_sel_off(const unit u) {
-  (void)u;
-  return nd_sel_off;
+/* span length of keccak key `kh`; 0 when absent (nodes are never empty) */
+uint64_t nodedb_len(const lbits kh) {
+  nd_find(kh);
+  return nd_memo_len;
 }
 
-uint64_t nodedb_sel_len(const unit u) {
-  (void)u;
-  return nd_sel_len;
+/* span offset of keccak key `kh`; 0 when absent (guard on nodedb_len) */
+uint64_t nodedb_off(const lbits kh) {
+  nd_find(kh);
+  return nd_memo_off;
 }

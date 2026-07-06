@@ -175,29 +175,25 @@ function transient_store(a : address, s : word, v : word) -> unit =
  * reads can fall through to it on a working-set miss. */
 val stateless_storage : (address, word) -> word
 
-/* flattened storage enumeration (dump_state / state root; cold path) */
-function storage_count() -> int = unsigned(storage_map_count())
-function storage_update_count() -> int = unsigned(storage_map_update_count())
-function storage_selected_slot() -> word = storage_map_it_slot()
-function storage_selected_val() -> word = storage_map_it_val()
-function storage_selected_hashed_entry() -> (bits(256), word, word) =
-    (storage_map_it_acct_hash(), storage_selected_slot(), storage_selected_val())
-function storage_hashed_entry(j : int) -> (bits(256), word, word) = {
-    storage_map_at(get_slice_int(64, j, 0));
-    storage_selected_hashed_entry()
-}
-function storage_hashed_update_entry(j : int) -> (bits(256), word, word) = {
-    storage_map_update_at(get_slice_int(64, j, 0));
-    storage_selected_hashed_entry()
-}
+/* per-account storage enumeration (dump_state / state root; cold path):
+ * getters keyed by keccak(address), no selection state */
+function storage_acct_rows(ak : bits(256)) -> int = unsigned(storage_map_acct_count(ak))
+function storage_acct_row(ak : bits(256), j : int) -> (word, word) =
+    (storage_map_acct_slot(ak, get_slice_int(64, j, 0)), storage_map_acct_val(ak, get_slice_int(64, j, 0)))
+function storage_acct_update_rows(ak : bits(256)) -> int = unsigned(storage_map_acct_update_count(ak))
+function storage_acct_update_row(ak : bits(256), j : int) -> (word, word) =
+    (
+        storage_map_acct_update_slot(ak, get_slice_int(64, j, 0)),
+        storage_map_acct_update_val(ak, get_slice_int(64, j, 0)),
+    )
 
 function storage_has_live_acct_hash(ak : bits(256)) -> bool = {
-    let n = storage_count();
+    let n = storage_acct_rows(ak);
     var j : int = 0;
     var found : bool = false;
     while (j < n) & not_bool(found) do {
-        let (eak, _, ev) = storage_hashed_entry(j);
-        if (eak == ak) & word_nonzero(ev) then {
+        let (_, ev) = storage_acct_row(ak, j);
+        if word_nonzero(ev) then {
             found = true
         } else {
             ()
@@ -208,6 +204,42 @@ function storage_has_live_acct_hash(ak : bits(256)) -> bool = {
 }
 function storage_has_live_addr(a : address) -> bool =
     storage_has_live_acct_hash(keccak256_address(a))
+
+/* one enumerated account row (dump_state / state root; cold path): getters
+ * keyed by row index, no selection state. `acctmap_row` reads the secure-key
+ * sorted cache/update union; `acctmap_update_row` reads the update table. */
+struct AcctRow = {
+    row_hkey : hash,
+    row_nonce : bits(64),
+    row_bal : word,
+    row_sroot : hash,
+    row_chash : hash,
+    row_base_exists : bool,
+}
+
+function acctmap_row(j : int) -> AcctRow = {
+    let idx = get_slice_int(64, j, 0);
+    struct {
+        row_hkey = acctmap_row_hkey(idx),
+        row_nonce = acctmap_row_nonce(idx),
+        row_bal = acctmap_row_bal(idx),
+        row_sroot = acctmap_row_sroot(idx),
+        row_chash = acctmap_row_chash(idx),
+        row_base_exists = acctmap_row_base_exists(idx),
+    }
+}
+
+function acctmap_update_row(j : int) -> AcctRow = {
+    let idx = get_slice_int(64, j, 0);
+    struct {
+        row_hkey = acctmap_update_row_hkey(idx),
+        row_nonce = acctmap_update_row_nonce(idx),
+        row_bal = acctmap_update_row_bal(idx),
+        row_sroot = acctmap_update_row_sroot(idx),
+        row_chash = acctmap_update_row_chash(idx),
+        row_base_exists = acctmap_update_row_base_exists(idx),
+    }
+}
 register k_refund : int = 0 /* gas-refund counter (SSTORE clears; EIP-3529 cap applied at tx end) */
 register k_selfdestr : list(address) = [||] /* addresses SELFDESTRUCTed this tx */
 

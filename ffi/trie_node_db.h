@@ -13,12 +13,13 @@
  *
  * The map stores spans, not bytes: node bytes stay in the witness buffer and
  * are materialized by offset only when a node is actually visited. The 256-bit
- * keccak key crosses the FFI as a whole lbits value. nodedb_sel caches the
- * matched span so the off/len accessors need no re-lookup. */
+ * keccak key crosses the FFI as a whole lbits value. Lookups are
+ * argument-keyed getters (no cursor): nodedb_len(kh) is 0 exactly when the
+ * key is absent (nodes are never empty), and a memoized last-key probe
+ * serves the off/len pair with one table walk. */
 unit nodedb_reset(const unit u);
 unit nodedb_insert(const lbits kh, uint64_t off, uint64_t len);
-bool nodedb_sel(const lbits kh);
-uint64_t nodedb_sel_off(const unit u);
-uint64_t nodedb_sel_len(const unit u);
+uint64_t nodedb_off(const lbits kh);
+uint64_t nodedb_len(const lbits kh);
 
 #endif

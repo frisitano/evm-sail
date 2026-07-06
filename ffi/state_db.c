@@ -135,9 +135,6 @@ static account_row *account_order = NULL;
 static uint32_t account_order_count = 0;
 static int account_order_valid = 0;
 
-/* cached iteration row (acctmap_at / acctmap_update_at) */
-static account_row account_iter;
-static int account_iter_valid = 0;
 
 static int compare_u64x4(const uint64_t *a, const uint64_t *b) {
   for (int i = 0; i < 4; i++) {
@@ -164,7 +161,6 @@ static void account_invalidate_order(void) {
   account_order = NULL;
   account_order_count = 0;
   account_order_valid = 0;
-  account_iter_valid = 0;
 }
 
 static void account_table_reset(account_table *t) {
@@ -384,7 +380,9 @@ unit acctmap_remove(const lbits a) {
   return UNIT;
 }
 
-/* iteration (post-state root): acctmap_at(i) caches secure-key sorted row i */
+/* enumeration (post-state root): index-argument getters, no cursor. `row`
+   reads the secure-key sorted cache/update union; `update_row` reads the
+   update table alone. Out-of-range indices read as zeros. */
 uint64_t acctmap_count(const unit u) {
   (void)u;
   account_build_order();
@@ -396,48 +394,63 @@ uint64_t acctmap_update_count(const unit u) {
   return account_updates.n;
 }
 
-unit acctmap_at(uint64_t idx) {
-  account_iter_valid = 0;
+static const account_row *acctmap_row_ptr(uint64_t idx) {
   account_build_order();
-  if (idx < account_order_count) {
-    account_iter = account_order[idx];
-    account_iter_valid = 1;
-  }
-  return UNIT;
+  return idx < account_order_count ? &account_order[idx] : NULL;
 }
 
-unit acctmap_update_at(uint64_t idx) {
-  account_iter_valid = 0;
-  if (idx < account_updates.n) {
-    account_iter = account_updates.rows[idx];
-    account_iter_valid = 1;
-  }
-  return UNIT;
+static const account_row *acctmap_update_row_ptr(uint64_t idx) {
+  return idx < account_updates.n ? &account_updates.rows[idx] : NULL;
 }
 
-void acctmap_at_hkey(lbits *rop, const unit u) {
-  (void)u;
-  be_words4_to_lbits(rop, account_iter_valid ? account_iter.hkey : account_zero_val);
+void acctmap_row_hkey(lbits *rop, uint64_t idx) {
+  const account_row *r = acctmap_row_ptr(idx);
+  be_words4_to_lbits(rop, r ? r->hkey : account_zero_val);
 }
-uint64_t acctmap_at_nonce(const unit u) {
-  (void)u;
-  return account_iter_valid ? account_iter.nonce : 0;
+uint64_t acctmap_row_nonce(uint64_t idx) {
+  const account_row *r = acctmap_row_ptr(idx);
+  return r ? r->nonce : 0;
 }
-void acctmap_at_bal(lbits *rop, const unit u) {
-  (void)u;
-  le_words4_to_lbits(rop, account_iter_valid ? account_iter.bal : account_zero_val);
+void acctmap_row_bal(lbits *rop, uint64_t idx) {
+  const account_row *r = acctmap_row_ptr(idx);
+  le_words4_to_lbits(rop, r ? r->bal : account_zero_val);
 }
-void acctmap_at_sroot(lbits *rop, const unit u) {
-  (void)u;
-  le_words4_to_lbits(rop, account_iter_valid ? account_iter.sroot : account_zero_val);
+void acctmap_row_sroot(lbits *rop, uint64_t idx) {
+  const account_row *r = acctmap_row_ptr(idx);
+  le_words4_to_lbits(rop, r ? r->sroot : account_zero_val);
 }
-void acctmap_at_chash(lbits *rop, const unit u) {
-  (void)u;
-  le_words4_to_lbits(rop, account_iter_valid ? account_iter.chash : account_zero_val);
+void acctmap_row_chash(lbits *rop, uint64_t idx) {
+  const account_row *r = acctmap_row_ptr(idx);
+  le_words4_to_lbits(rop, r ? r->chash : account_zero_val);
 }
-bool acctmap_at_base_exists(const unit u) {
-  (void)u;
-  return account_iter_valid ? account_iter.base_exists : 0;
+bool acctmap_row_base_exists(uint64_t idx) {
+  const account_row *r = acctmap_row_ptr(idx);
+  return r ? r->base_exists : 0;
+}
+
+void acctmap_update_row_hkey(lbits *rop, uint64_t idx) {
+  const account_row *r = acctmap_update_row_ptr(idx);
+  be_words4_to_lbits(rop, r ? r->hkey : account_zero_val);
+}
+uint64_t acctmap_update_row_nonce(uint64_t idx) {
+  const account_row *r = acctmap_update_row_ptr(idx);
+  return r ? r->nonce : 0;
+}
+void acctmap_update_row_bal(lbits *rop, uint64_t idx) {
+  const account_row *r = acctmap_update_row_ptr(idx);
+  le_words4_to_lbits(rop, r ? r->bal : account_zero_val);
+}
+void acctmap_update_row_sroot(lbits *rop, uint64_t idx) {
+  const account_row *r = acctmap_update_row_ptr(idx);
+  le_words4_to_lbits(rop, r ? r->sroot : account_zero_val);
+}
+void acctmap_update_row_chash(lbits *rop, uint64_t idx) {
+  const account_row *r = acctmap_update_row_ptr(idx);
+  le_words4_to_lbits(rop, r ? r->chash : account_zero_val);
+}
+bool acctmap_update_row_base_exists(uint64_t idx) {
+  const account_row *r = acctmap_update_row_ptr(idx);
+  return r ? r->base_exists : 0;
 }
 
 #define STORAGE_INIT_CAP 64u
@@ -465,8 +478,13 @@ static storage_layer *storage_updates = NULL;
 
 static storage_row *storage_iter_rows = NULL;
 static uint32_t storage_iter_count = 0;
-static uint32_t storage_iter_selected = 0;
 static int storage_iter_updates_only = -1;
+
+/* memoized per-account row range over the account-sorted snapshot */
+static uint64_t storage_acct_memo_key[4];
+static uint32_t storage_acct_memo_start = 0;
+static uint32_t storage_acct_memo_count = 0;
+static int storage_acct_memo_valid = 0;
 
 static int compare_words(const uint64_t *a, const uint64_t *b, int n) {
   for (int i = 0; i < n; i++) {
@@ -493,8 +511,8 @@ static void storage_iter_clear(void) {
   free(storage_iter_rows);
   storage_iter_rows = NULL;
   storage_iter_count = 0;
-  storage_iter_selected = 0;
   storage_iter_updates_only = -1;
+  storage_acct_memo_valid = 0;
 }
 
 static void storage_table_reset(storage_table *t) {
@@ -658,10 +676,49 @@ static uint64_t storage_build_iter(int updates_only) {
       memcpy(storage_iter_rows, scratch.rows, (size_t)scratch.n * sizeof(storage_row));
       storage_iter_count = scratch.n;
       storage_iter_updates_only = updates_only ? 1 : 0;
+      /* storage_table_put keeps every table sorted by (acct_hash,
+         slot_hash), and overlaying preserves that, so the snapshot is
+         sorted as-is: per-account rows are one contiguous range, found by
+         binary search below (no libc sort -- the guest is freestanding) */
     }
   }
   storage_table_reset(&scratch);
   return storage_iter_count;
+}
+
+/* bind the memoized range to account `ak` over the `updates_only` snapshot
+   (rebuilding the snapshot if it is absent or of the other mode) */
+static void storage_acct_range(const lbits ak, int updates_only) {
+  uint64_t key[4];
+  lbits_to_be_words4(key, ak);
+  if (!storage_iter_rows || storage_iter_updates_only != updates_only) {
+    (void)storage_build_iter(updates_only);
+  } else if (storage_acct_memo_valid && compare_words(storage_acct_memo_key, key, 4) == 0) {
+    return;
+  }
+  uint32_t lo = 0, hi = storage_iter_count;
+  while (lo < hi) {
+    uint32_t mid = lo + (hi - lo) / 2;
+    if (compare_words(storage_iter_rows[mid].acct_hash, key, 4) < 0)
+      lo = mid + 1;
+    else
+      hi = mid;
+  }
+  uint32_t end = lo;
+  while (end < storage_iter_count &&
+         compare_words(storage_iter_rows[end].acct_hash, key, 4) == 0)
+    end++;
+  memcpy(storage_acct_memo_key, key, sizeof(storage_acct_memo_key));
+  storage_acct_memo_start = lo;
+  storage_acct_memo_count = end - lo;
+  storage_acct_memo_valid = 1;
+}
+
+static const storage_row *storage_acct_row_at(const lbits ak, int updates_only, uint64_t j) {
+  storage_acct_range(ak, updates_only);
+  if (j >= storage_acct_memo_count)
+    return NULL;
+  return &storage_iter_rows[storage_acct_memo_start + (uint32_t)j];
 }
 
 unit storage_map_reset(const unit u) {
@@ -791,47 +848,35 @@ unit storage_map_wipe_addr(const lbits a) {
   return UNIT;
 }
 
-uint64_t storage_map_count(const unit u) {
-  (void)u;
-  return storage_build_iter(0);
+/* per-account enumeration over the flattened cache/update union: row count
+   and (slot, value) getters keyed by keccak(address) */
+uint64_t storage_map_acct_count(const lbits ak) {
+  storage_acct_range(ak, 0);
+  return storage_acct_memo_count;
 }
 
-uint64_t storage_map_update_count(const unit u) {
-  (void)u;
-  return storage_build_iter(1);
+void storage_map_acct_slot(lbits *rop, const lbits ak, uint64_t j) {
+  const storage_row *e = storage_acct_row_at(ak, 0, j);
+  be_words4_to_lbits(rop, e ? e->slot : storage_zero_val);
 }
 
-unit storage_map_at(uint64_t j) {
-  if (!storage_iter_rows || storage_iter_updates_only != 0 || j >= storage_iter_count)
-    (void)storage_build_iter(0);
-  storage_iter_selected = (uint32_t)j;
-  return UNIT;
+void storage_map_acct_val(lbits *rop, const lbits ak, uint64_t j) {
+  const storage_row *e = storage_acct_row_at(ak, 0, j);
+  be_words4_to_lbits(rop, e ? e->val : storage_zero_val);
 }
 
-unit storage_map_update_at(uint64_t j) {
-  if (!storage_iter_rows || storage_iter_updates_only != 1 || j >= storage_iter_count)
-    (void)storage_build_iter(1);
-  storage_iter_selected = (uint32_t)j;
-  return UNIT;
+/* per-account enumeration over the write set only */
+uint64_t storage_map_acct_update_count(const lbits ak) {
+  storage_acct_range(ak, 1);
+  return storage_acct_memo_count;
 }
 
-void storage_map_it_acct_hash(lbits *rop, const unit u) {
-  (void)u;
-  be_words4_to_lbits(rop, storage_iter_selected < storage_iter_count
-                              ? storage_iter_rows[storage_iter_selected].acct_hash
-                              : storage_zero_val);
+void storage_map_acct_update_slot(lbits *rop, const lbits ak, uint64_t j) {
+  const storage_row *e = storage_acct_row_at(ak, 1, j);
+  be_words4_to_lbits(rop, e ? e->slot : storage_zero_val);
 }
 
-void storage_map_it_slot(lbits *rop, const unit u) {
-  (void)u;
-  be_words4_to_lbits(rop, storage_iter_selected < storage_iter_count
-                              ? storage_iter_rows[storage_iter_selected].slot
-                              : storage_zero_val);
-}
-
-void storage_map_it_val(lbits *rop, const unit u) {
-  (void)u;
-  be_words4_to_lbits(rop, storage_iter_selected < storage_iter_count
-                              ? storage_iter_rows[storage_iter_selected].val
-                              : storage_zero_val);
+void storage_map_acct_update_val(lbits *rop, const lbits ak, uint64_t j) {
+  const storage_row *e = storage_acct_row_at(ak, 1, j);
+  be_words4_to_lbits(rop, e ? e->val : storage_zero_val);
 }

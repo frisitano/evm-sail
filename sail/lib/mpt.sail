@@ -424,10 +424,11 @@ function patches_outside_prefix(ps : list(TriePatch), prefix : list(nibble)) -> 
 /* node bytes for keccak `h` from the C node-db, or [] if absent (read straight
  * from the witness buffer by the recorded span -- no per-node Sail copy held). */
 function node_db_lookup(h : bits(256)) -> list(byte) = {
-    if not_bool(nodedb_sel(h)) then {
+    let len = unsigned(nodedb_len(h));
+    if len == 0 then {
         [||]
     } else {
-        ssz_bytes(unsigned(nodedb_sel_off()), unsigned(nodedb_sel_len()))
+        ssz_bytes(unsigned(nodedb_off(h)), len)
     }
 }
 
@@ -939,37 +940,13 @@ val storage_updates : bits(256) -> list(TriePatch)
  * pre-state leaf is dropped (nothing to delete). */
 function storage_updates_writes_only(ak : bits(256)) -> list(TriePatch) = {
     var out : list(TriePatch) = [||];
-    let n = storage_update_count();
+    let n = storage_acct_update_rows(ak);
     foreach (j from 0 to (n - 1)) {
-        let (eak, es, ev) = storage_hashed_update_entry(j);
-        if eak == ak then {
-            let sk = keccak256_word(es);
-            if word_is_zero(ev) & not_bool(storage_map_cache_nonzero(ak, sk)) then {
-                ()
-            } else {
-                let key = to_nibbles(word_to_bytes32(sk));
-                out = patch_insert_sorted(
-                    if word_is_zero(ev) then {
-                        patch_delete(key)
-                    } else {
-                        patch_leaf(key, rlp_int(unsigned(ev)))
-                    },
-                    out,
-                )
-            }
-        }
-    };
-    out
-}
-
-/* full live cache/update union (native fixture base) */
-function storage_updates_union(ak : bits(256)) -> list(TriePatch) = {
-    var out : list(TriePatch) = [||];
-    let n = storage_count();
-    foreach (j from 0 to (n - 1)) {
-        let (eak, es, ev) = storage_hashed_entry(j);
-        if eak == ak then {
-            let sk = keccak256_word(es);
+        let (es, ev) = storage_acct_update_row(ak, j);
+        let sk = keccak256_word(es);
+        if word_is_zero(ev) & not_bool(storage_map_cache_nonzero(ak, sk)) then {
+            ()
+        } else {
             let key = to_nibbles(word_to_bytes32(sk));
             out = patch_insert_sorted(
                 if word_is_zero(ev) then {
@@ -980,6 +957,26 @@ function storage_updates_union(ak : bits(256)) -> list(TriePatch) = {
                 out,
             )
         }
+    };
+    out
+}
+
+/* full live cache/update union (native fixture base) */
+function storage_updates_union(ak : bits(256)) -> list(TriePatch) = {
+    var out : list(TriePatch) = [||];
+    let n = storage_acct_rows(ak);
+    foreach (j from 0 to (n - 1)) {
+        let (es, ev) = storage_acct_row(ak, j);
+        let sk = keccak256_word(es);
+        let key = to_nibbles(word_to_bytes32(sk));
+        out = patch_insert_sorted(
+            if word_is_zero(ev) then {
+                patch_delete(key)
+            } else {
+                patch_leaf(key, rlp_int(unsigned(ev)))
+            },
+            out,
+        )
     };
     out
 }
@@ -995,14 +992,6 @@ function storage_root_from(ak : bits(256), sroot : bits(256)) -> bits(256) =
 function account_empty(acc : Account) -> bool =
     (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance)
 
-/* 256-bit account field (balance / code_hash) of the current acctmap_at row */
-function selected_account_balance() -> word = acctmap_at_bal()
-function selected_account_code_hash() -> word = acctmap_at_chash()
-function selected_account_storage_root() -> word = acctmap_at_sroot()
-
-/* secure trie key of the current acctmap_at row (keccak(address)) */
-function selected_account_key_hash() -> bits(256) = acctmap_at_hkey()
-
 /* secure-trie updates for the account map. Base-layer contract (defined per
  * entry): stateless block validation consumes only execution updates
  * (witness-materialized read-only accounts are base-state cache, not
@@ -1010,20 +999,19 @@ function selected_account_key_hash() -> bits(256) = acctmap_at_hkey()
  * it uses the complete cache/update union to build a full empty-base root. */
 val state_updates_map : unit -> list(TriePatch)
 
-/* trie update for the currently-selected acctmap row. skip_empty_unbased
- * drops empty accounts with no authenticated base leaf (witness base: there
- * is nothing to delete); otherwise empty accounts become deletes. */
-function state_updates_selected_row(prev : list(TriePatch), skip_empty_unbased : bool) -> list(TriePatch) = {
-    let ak_hash = selected_account_key_hash();
+/* trie update for one enumerated acctmap row (AcctRow, host/state.sail).
+ * skip_empty_unbased drops empty accounts with no authenticated base leaf
+ * (witness base: there is nothing to delete); otherwise empty accounts
+ * become deletes. */
+function state_updates_account_row(row : AcctRow, prev : list(TriePatch), skip_empty_unbased : bool) -> list(TriePatch) = {
     let acc : Account = struct {
-            nonce = unsigned(acctmap_at_nonce()),
-            balance = selected_account_balance(),
-            code_hash = selected_account_code_hash(),
-            storage_root = selected_account_storage_root(),
+            nonce = unsigned(row.row_nonce),
+            balance = row.row_bal,
+            code_hash = row.row_chash,
+            storage_root = row.row_sroot,
         };
-    let ak = to_nibbles(word_to_bytes32(ak_hash));
-    let base_exists = acctmap_at_base_exists();
-    if skip_empty_unbased & account_empty(acc) & not_bool(base_exists) then {
+    let ak = to_nibbles(word_to_bytes32(row.row_hkey));
+    if skip_empty_unbased & account_empty(acc) & not_bool(row.row_base_exists) then {
         prev
     } else {
         let upd : TriePatch = if account_empty(acc) then {
@@ -1031,7 +1019,12 @@ function state_updates_selected_row(prev : list(TriePatch), skip_empty_unbased :
             } else {
                 patch_leaf(
                     ak,
-                    account_rlp(acc.nonce, acc.balance, storage_root_from(ak_hash, acc.storage_root), acc.code_hash),
+                    account_rlp(
+                        acc.nonce,
+                        acc.balance,
+                        storage_root_from(row.row_hkey, acc.storage_root),
+                        acc.code_hash,
+                    ),
                 )
             };
         patch_insert_sorted(upd, prev)
@@ -1043,8 +1036,7 @@ function state_updates_map_updates_only() -> list(TriePatch) = {
     var out : list(TriePatch) = [||];
     let n = unsigned(acctmap_update_count());
     foreach (j from 0 to (n - 1)) {
-        acctmap_update_at(get_slice_int(64, j, 0));
-        out = state_updates_selected_row(out, true)
+        out = state_updates_account_row(acctmap_update_row(j), out, true)
     };
     out
 }
@@ -1054,8 +1046,7 @@ function state_updates_map_union() -> list(TriePatch) = {
     var out : list(TriePatch) = [||];
     let n = unsigned(acctmap_count());
     foreach (j from 0 to (n - 1)) {
-        acctmap_at(get_slice_int(64, j, 0));
-        out = state_updates_selected_row(out, false)
+        out = state_updates_account_row(acctmap_row(j), out, false)
     };
     out
 }

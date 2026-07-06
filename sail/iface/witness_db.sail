@@ -4,7 +4,7 @@
 /* Abstract `val` declarations for the C-backed witness node store (the     */
 /* "Witness and MPT DB" contract group of proof/extern-boundary.md). The    */
 /* node table refines authenticated MPT witness spans over SSZ input bytes; */
-/* insert/select operations preserve the same abstract rows: build          */
+/* insert/lookup operations preserve the same abstract rows: build          */
 /* implementations must refine those materialized list-model semantics.     */
 /* ======================================================================== */
 
@@ -15,10 +15,10 @@
  * Because the key is keccak(node), every walk from an authenticated root is
  * itself a hash-chain proof -- this table plus the anchored parent-root
  * register (k_parent_state_root) is the whole lazy-witness model. The 256-bit
- * key crosses as a whole hash value; nodedb_sel caches the matched span for
- * the off/len accessors. */
+ * key crosses as a whole hash value; lookups are argument-keyed getters
+ * (no cursor): nodedb_len(kh) is 0 exactly when the key is absent (witness
+ * nodes are never empty). */
 val nodedb_reset : unit -> unit
 val nodedb_insert : (hash, bits(64), bits(64)) -> unit
-val nodedb_sel : hash -> bool
-val nodedb_sel_off : unit -> bits(64)
-val nodedb_sel_len : unit -> bits(64)
+val nodedb_off : hash -> bits(64)
+val nodedb_len : hash -> bits(64)

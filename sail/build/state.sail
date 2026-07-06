@@ -47,26 +47,23 @@ function storage_map_cache_nonzero(ah : hash, sh : hash) -> bool = storage_map_c
 val storage_map_wipe_addr_ffi = impure { _: "storage_map_wipe_addr" } : address -> unit
 function storage_map_wipe_addr(a : address) -> unit = storage_map_wipe_addr_ffi(a)
 
-val storage_map_count_ffi = impure { _: "storage_map_count" } : unit -> bits(64)
-function storage_map_count() -> bits(64) = storage_map_count_ffi()
+val storage_map_acct_count_ffi = impure { _: "storage_map_acct_count" } : hash -> bits(64)
+function storage_map_acct_count(ak : hash) -> bits(64) = storage_map_acct_count_ffi(ak)
 
-val storage_map_update_count_ffi = impure { _: "storage_map_update_count" } : unit -> bits(64)
-function storage_map_update_count() -> bits(64) = storage_map_update_count_ffi()
+val storage_map_acct_slot_ffi = impure { _: "storage_map_acct_slot" } : (hash, bits(64)) -> word
+function storage_map_acct_slot(ak : hash, j : bits(64)) -> word = storage_map_acct_slot_ffi(ak, j)
 
-val storage_map_at_ffi = impure { _: "storage_map_at" } : bits(64) -> unit
-function storage_map_at(x0 : bits(64)) -> unit = storage_map_at_ffi(x0)
+val storage_map_acct_val_ffi = impure { _: "storage_map_acct_val" } : (hash, bits(64)) -> word
+function storage_map_acct_val(ak : hash, j : bits(64)) -> word = storage_map_acct_val_ffi(ak, j)
 
-val storage_map_update_at_ffi = impure { _: "storage_map_update_at" } : bits(64) -> unit
-function storage_map_update_at(x0 : bits(64)) -> unit = storage_map_update_at_ffi(x0)
+val storage_map_acct_update_count_ffi = impure { _: "storage_map_acct_update_count" } : hash -> bits(64)
+function storage_map_acct_update_count(ak : hash) -> bits(64) = storage_map_acct_update_count_ffi(ak)
 
-val storage_map_it_acct_hash_ffi = impure { _: "storage_map_it_acct_hash" } : unit -> hash
-function storage_map_it_acct_hash() -> hash = storage_map_it_acct_hash_ffi()
+val storage_map_acct_update_slot_ffi = impure { _: "storage_map_acct_update_slot" } : (hash, bits(64)) -> word
+function storage_map_acct_update_slot(ak : hash, j : bits(64)) -> word = storage_map_acct_update_slot_ffi(ak, j)
 
-val storage_map_it_slot_ffi = impure { _: "storage_map_it_slot" } : unit -> word
-function storage_map_it_slot() -> word = storage_map_it_slot_ffi()
-
-val storage_map_it_val_ffi = impure { _: "storage_map_it_val" } : unit -> word
-function storage_map_it_val() -> word = storage_map_it_val_ffi()
+val storage_map_acct_update_val_ffi = impure { _: "storage_map_acct_update_val" } : (hash, bits(64)) -> word
+function storage_map_acct_update_val(ak : hash, j : bits(64)) -> word = storage_map_acct_update_val_ffi(ak, j)
 
 val acctmap_reset_ffi = impure { _: "acctmap_reset" } : unit -> unit
 function acctmap_reset() -> unit = acctmap_reset_ffi()
@@ -106,26 +103,38 @@ function acctmap_count() -> bits(64) = acctmap_count_ffi()
 val acctmap_update_count_ffi = impure { _: "acctmap_update_count" } : unit -> bits(64)
 function acctmap_update_count() -> bits(64) = acctmap_update_count_ffi()
 
-val acctmap_at_ffi = impure { _: "acctmap_at" } : bits(64) -> unit
-function acctmap_at(x0 : bits(64)) -> unit = acctmap_at_ffi(x0)
+val acctmap_row_hkey_ffi = impure { _: "acctmap_row_hkey" } : bits(64) -> hash
+function acctmap_row_hkey(idx : bits(64)) -> hash = acctmap_row_hkey_ffi(idx)
 
-val acctmap_update_at_ffi = impure { _: "acctmap_update_at" } : bits(64) -> unit
-function acctmap_update_at(x0 : bits(64)) -> unit = acctmap_update_at_ffi(x0)
+val acctmap_row_nonce_ffi = impure { _: "acctmap_row_nonce" } : bits(64) -> bits(64)
+function acctmap_row_nonce(idx : bits(64)) -> bits(64) = acctmap_row_nonce_ffi(idx)
 
-val acctmap_at_hkey_ffi = impure { _: "acctmap_at_hkey" } : unit -> hash
-function acctmap_at_hkey() -> hash = acctmap_at_hkey_ffi()
+val acctmap_row_bal_ffi = impure { _: "acctmap_row_bal" } : bits(64) -> word
+function acctmap_row_bal(idx : bits(64)) -> word = acctmap_row_bal_ffi(idx)
 
-val acctmap_at_nonce_ffi = impure { _: "acctmap_at_nonce" } : unit -> bits(64)
-function acctmap_at_nonce() -> bits(64) = acctmap_at_nonce_ffi()
+val acctmap_row_sroot_ffi = impure { _: "acctmap_row_sroot" } : bits(64) -> hash
+function acctmap_row_sroot(idx : bits(64)) -> hash = acctmap_row_sroot_ffi(idx)
 
-val acctmap_at_bal_ffi = impure { _: "acctmap_at_bal" } : unit -> word
-function acctmap_at_bal() -> word = acctmap_at_bal_ffi()
+val acctmap_row_chash_ffi = impure { _: "acctmap_row_chash" } : bits(64) -> hash
+function acctmap_row_chash(idx : bits(64)) -> hash = acctmap_row_chash_ffi(idx)
 
-val acctmap_at_sroot_ffi = impure { _: "acctmap_at_sroot" } : unit -> hash
-function acctmap_at_sroot() -> hash = acctmap_at_sroot_ffi()
+val acctmap_row_base_exists_ffi = impure { _: "acctmap_row_base_exists" } : bits(64) -> bool
+function acctmap_row_base_exists(idx : bits(64)) -> bool = acctmap_row_base_exists_ffi(idx)
 
-val acctmap_at_chash_ffi = impure { _: "acctmap_at_chash" } : unit -> hash
-function acctmap_at_chash() -> hash = acctmap_at_chash_ffi()
+val acctmap_update_row_hkey_ffi = impure { _: "acctmap_update_row_hkey" } : bits(64) -> hash
+function acctmap_update_row_hkey(idx : bits(64)) -> hash = acctmap_update_row_hkey_ffi(idx)
 
-val acctmap_at_base_exists_ffi = impure { _: "acctmap_at_base_exists" } : unit -> bool
-function acctmap_at_base_exists() -> bool = acctmap_at_base_exists_ffi()
+val acctmap_update_row_nonce_ffi = impure { _: "acctmap_update_row_nonce" } : bits(64) -> bits(64)
+function acctmap_update_row_nonce(idx : bits(64)) -> bits(64) = acctmap_update_row_nonce_ffi(idx)
+
+val acctmap_update_row_bal_ffi = impure { _: "acctmap_update_row_bal" } : bits(64) -> word
+function acctmap_update_row_bal(idx : bits(64)) -> word = acctmap_update_row_bal_ffi(idx)
+
+val acctmap_update_row_sroot_ffi = impure { _: "acctmap_update_row_sroot" } : bits(64) -> hash
+function acctmap_update_row_sroot(idx : bits(64)) -> hash = acctmap_update_row_sroot_ffi(idx)
+
+val acctmap_update_row_chash_ffi = impure { _: "acctmap_update_row_chash" } : bits(64) -> hash
+function acctmap_update_row_chash(idx : bits(64)) -> hash = acctmap_update_row_chash_ffi(idx)
+
+val acctmap_update_row_base_exists_ffi = impure { _: "acctmap_update_row_base_exists" } : bits(64) -> bool
+function acctmap_update_row_base_exists(idx : bits(64)) -> bool = acctmap_update_row_base_exists_ffi(idx)

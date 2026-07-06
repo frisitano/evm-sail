@@ -70,18 +70,24 @@ function nbytes(n : int) -> list(byte) = {
  * "STO accountHash slot value" line per storage row. The harness maps fixture
  * addresses to keccak(address) before comparing. */
 function dump_storage() -> unit = {
-    let ns = storage_count();
-    foreach (j from 0 to (ns - 1)) {
-        let (ak, s, v) = storage_hashed_entry(j);
-        print_endline(
-            concat_str(
-                "STO ",
+    /* every storage row's account is in the acctmap (seeding and SSTORE both
+       load the account first), so per-account getters cover the whole map */
+    let n = unsigned(acctmap_count());
+    foreach (i from 0 to (n - 1)) {
+        let ak = acctmap_row_hkey(get_slice_int(64, i, 0));
+        let ns = storage_acct_rows(ak);
+        foreach (j from 0 to (ns - 1)) {
+            let (s, v) = storage_acct_row(ak, j);
+            print_endline(
                 concat_str(
-                    dec_str(unsigned(ak)),
-                    concat_str(" ", concat_str(dec_str(unsigned(s)), concat_str(" ", dec_str(unsigned(v))))),
+                    "STO ",
+                    concat_str(
+                        dec_str(unsigned(ak)),
+                        concat_str(" ", concat_str(dec_str(unsigned(s)), concat_str(" ", dec_str(unsigned(v))))),
+                    ),
                 ),
-            ),
-        )
+            )
+        }
     }
 }
 
@@ -89,19 +95,15 @@ function dump_storage() -> unit = {
 function dump_accounts() -> unit = {
     let n = unsigned(acctmap_count());
     foreach (j from 0 to (n - 1)) {
-        acctmap_at(get_slice_int(64, j, 0));
-        let ak = selected_account_key_hash();
+        let row = acctmap_row(j);
         print_endline(
             concat_str(
                 "ACC ",
                 concat_str(
-                    dec_str(unsigned(ak)),
+                    dec_str(unsigned(row.row_hkey)),
                     concat_str(
                         " ",
-                        concat_str(
-                            dec_str(unsigned(acctmap_at_nonce())),
-                            concat_str(" ", dec_str(unsigned(selected_account_balance()))),
-                        ),
+                        concat_str(dec_str(unsigned(row.row_nonce)), concat_str(" ", dec_str(unsigned(row.row_bal)))),
                     ),
                 ),
             ),

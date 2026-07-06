@@ -26,14 +26,18 @@ unit acctmap_remove(const lbits a);
 
 uint64_t acctmap_count(const unit u);
 uint64_t acctmap_update_count(const unit u);
-unit acctmap_at(uint64_t idx);
-unit acctmap_update_at(uint64_t idx);
-void acctmap_at_hkey(lbits *rop, const unit u);
-uint64_t acctmap_at_nonce(const unit u);
-void acctmap_at_bal(lbits *rop, const unit u);
-void acctmap_at_sroot(lbits *rop, const unit u);
-void acctmap_at_chash(lbits *rop, const unit u);
-bool acctmap_at_base_exists(const unit u);
+void acctmap_row_hkey(lbits *rop, uint64_t idx);
+uint64_t acctmap_row_nonce(uint64_t idx);
+void acctmap_row_bal(lbits *rop, uint64_t idx);
+void acctmap_row_sroot(lbits *rop, uint64_t idx);
+void acctmap_row_chash(lbits *rop, uint64_t idx);
+bool acctmap_row_base_exists(uint64_t idx);
+void acctmap_update_row_hkey(lbits *rop, uint64_t idx);
+uint64_t acctmap_update_row_nonce(uint64_t idx);
+void acctmap_update_row_bal(lbits *rop, uint64_t idx);
+void acctmap_update_row_sroot(lbits *rop, uint64_t idx);
+void acctmap_update_row_chash(lbits *rop, uint64_t idx);
+bool acctmap_update_row_base_exists(uint64_t idx);
 
 /* Persistent storage map: materialized base/cache rows plus frame overlays. */
 unit storage_map_reset(const unit u);
@@ -48,12 +52,11 @@ bool storage_map_present(const lbits a, const lbits s);
 bool storage_map_base_present(const lbits a, const lbits s);
 bool storage_map_cache_nonzero(const lbits ah, const lbits sh);
 unit storage_map_wipe_addr(const lbits a);
-uint64_t storage_map_count(const unit u);
-uint64_t storage_map_update_count(const unit u);
-unit storage_map_at(uint64_t j);
-unit storage_map_update_at(uint64_t j);
-void storage_map_it_acct_hash(lbits *rop, const unit u);
-void storage_map_it_slot(lbits *rop, const unit u);
-void storage_map_it_val(lbits *rop, const unit u);
+uint64_t storage_map_acct_count(const lbits ak);
+void storage_map_acct_slot(lbits *rop, const lbits ak, uint64_t j);
+void storage_map_acct_val(lbits *rop, const lbits ak, uint64_t j);
+uint64_t storage_map_acct_update_count(const lbits ak);
+void storage_map_acct_update_slot(lbits *rop, const lbits ak, uint64_t j);
+void storage_map_acct_update_val(lbits *rop, const lbits ak, uint64_t j);
 
 #endif

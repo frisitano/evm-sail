@@ -33,13 +33,16 @@ val storage_map_present : (address, word) -> bool
 val storage_map_base_present : (address, word) -> bool
 val storage_map_cache_nonzero : (hash, hash) -> bool
 val storage_map_wipe_addr : address -> unit
-val storage_map_count : unit -> bits(64)
-val storage_map_update_count : unit -> bits(64)
-val storage_map_at : bits(64) -> unit
-val storage_map_update_at : bits(64) -> unit
-val storage_map_it_acct_hash : unit -> hash
-val storage_map_it_slot : unit -> word
-val storage_map_it_val : unit -> word
+
+/* per-account enumeration, keyed by keccak(address): row count and
+ * (slot, value) getters over the flattened cache/update union and over the
+ * write set only -- no selection state */
+val storage_map_acct_count : hash -> bits(64)
+val storage_map_acct_slot : (hash, bits(64)) -> word
+val storage_map_acct_val : (hash, bits(64)) -> word
+val storage_map_acct_update_count : hash -> bits(64)
+val storage_map_acct_update_slot : (hash, bits(64)) -> word
+val storage_map_acct_update_val : (hash, bits(64)) -> word
 
 /* ---- C-backed account map (ffi/state_db.c): the kernel account working
  * set (k_accounts), split into materialized base/cache rows and execution
@@ -58,11 +61,19 @@ val acctmap_chash : address -> hash
 val acctmap_remove : address -> unit
 val acctmap_count : unit -> bits(64)
 val acctmap_update_count : unit -> bits(64)
-val acctmap_at : bits(64) -> unit
-val acctmap_update_at : bits(64) -> unit
-val acctmap_at_hkey : unit -> hash
-val acctmap_at_nonce : unit -> bits(64)
-val acctmap_at_bal : unit -> word
-val acctmap_at_sroot : unit -> hash
-val acctmap_at_chash : unit -> hash
-val acctmap_at_base_exists : unit -> bool
+
+/* enumeration by row index, no cursor: `row` reads the secure-key sorted
+ * cache/update union, `update_row` reads the update table alone;
+ * out-of-range indices read as zeros */
+val acctmap_row_hkey : bits(64) -> hash
+val acctmap_row_nonce : bits(64) -> bits(64)
+val acctmap_row_bal : bits(64) -> word
+val acctmap_row_sroot : bits(64) -> hash
+val acctmap_row_chash : bits(64) -> hash
+val acctmap_row_base_exists : bits(64) -> bool
+val acctmap_update_row_hkey : bits(64) -> hash
+val acctmap_update_row_nonce : bits(64) -> bits(64)
+val acctmap_update_row_bal : bits(64) -> word
+val acctmap_update_row_sroot : bits(64) -> hash
+val acctmap_update_row_chash : bits(64) -> hash
+val acctmap_update_row_base_exists : bits(64) -> bool
