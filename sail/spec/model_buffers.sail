@@ -126,6 +126,25 @@ function txd_at(i : bits(64)) -> bits(8) = bytes_get(spec_txin, unsigned(i))
 
 function txd_length() -> bits(64) = get_slice_int(64, list_len(spec_txin), 0)
 
+/* one-call tx-input staging (the spec/hybrid refinement of iface/memory.sail):
+ * materialize the whole input into the buffer. txdata_set_source lives after
+ * read_byte_slice (below); the word/count refinements loop here. */
+function txdata_set_word(w : word) -> int = {
+    spec_txin = word_to_bytes32(w);
+    32
+}
+
+function txd_count_nonzero() -> bits(64) = {
+    let n = list_len(spec_txin);
+    var c : int = 0;
+    foreach (i from 0 to (n - 1)) {
+        if bytes_get(spec_txin, i) != 0x00 then {
+            c = c + 1
+        }
+    };
+    get_slice_int(64, c, 0)
+}
+
 /* the current frame's calldata byte i (0 past the end; a memory-sourced
  * descriptor reads the source frame's write log, so never-written bytes of
  * an expansion-charged range read as zeros, like the C's cap check) */
@@ -404,6 +423,13 @@ function read_byte_slice(s : ByteSlice) -> list(byte) =
  * model_state.sail). Build's build/code_db.sail copies the span C-side. */
 function code_db_store_slice(s : ByteSlice) -> unit =
     code_db_store_code(bytes_keccak(s), read_byte_slice(s))
+
+/* Stage the tx input from a byte source (spec/hybrid): materialize the source
+ * bytes into the input buffer. Build copies the span C-side in one memcpy. */
+function txdata_set_source(s : ByteSlice) -> int = {
+    spec_txin = read_byte_slice(s);
+    list_len(spec_txin)
+}
 
 /* drop the first n bytes (empty past the end; no padding) */
 val spec_bytes_drop : (list(byte), int) -> list(byte)

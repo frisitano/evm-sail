@@ -9,6 +9,8 @@
  *
  * Only mach_bits cross the FFI (uint64_t), matching the other host FFI modules. */
 #include "sail.h"
+#include "lbits_convert.h"
+#include "host_crypto.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -113,6 +115,48 @@ unit txin_byte(uint64_t b) {
   }
   txin.buf[txin.len++] = (uint8_t)b;
   return UNIT;
+}
+
+static void txin_ensure(uint64_t need) {
+  if (need > txin.cap) {
+    uint64_t n = txin.cap ? txin.cap : 1024;
+    while (n < need) n <<= 1;
+    txin.buf = (uint8_t *)realloc(txin.buf, n);
+    txin.cap = n;
+  }
+}
+
+/* stage the tx input in one call by copying its resolved byte source. For a
+ * stateless tx this is the witness span; for the already-staged native-runner
+ * input it is a self-reference (memmove tolerates the aliasing -- an in-place
+ * copy never grows the buffer, so `src` cannot dangle). Fail-closed on a bad
+ * source, matching the empty-input path. */
+uint64_t txin_set_from_source(uint64_t kind, uint64_t off, uint64_t len) {
+  if (len == 0) { txin.len = 0; return 0; }
+  const uint8_t *src = NULL;
+  uint64_t rlen = 0;
+  if (!evmsail_resolve_byte_source(kind, off, len, &src, &rlen) || !src || rlen != len) {
+    txin.len = 0;
+    return 0;
+  }
+  txin_ensure(len);
+  memmove(txin.buf, src, len);
+  txin.len = len;
+  return len;
+}
+
+uint64_t txin_set_word(const lbits w) {
+  txin_ensure(32);
+  lbits_to_be_bytes(txin.buf, 32, w);
+  txin.len = 32;
+  return 32;
+}
+
+uint64_t txd_count_nonzero(const unit u) {
+  (void)u;
+  uint64_t c = 0;
+  for (uint64_t i = 0; i < txin.len; i++) if (txin.buf[i]) c++;
+  return c;
 }
 
 /* the executing tx's input (a create-tx's initcode source; gas byte reads) */

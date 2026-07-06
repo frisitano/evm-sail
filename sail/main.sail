@@ -359,6 +359,18 @@ function decode_tx_ssz(i : int, base_fee : word) -> Transaction = {
 
     let to_f = rlp_item(fields, i_to);
     let data_f = rlp_item(fields, i_data);
+
+    /* The tx input bytes are a contiguous span of the witness: the data field's
+       RLP content, at `tx_off (+1 for a typed envelope) + its offset within the
+       payload`. Carry that span so the build backend stages calldata in one
+       memcpy from the witness rather than streaming a materialized list. */
+    let input_off = (if typed then {
+            tx_off + 1
+        } else {
+            tx_off
+        }) +
+            rlp_top_item_content_offset(payload, i_data);
+    let input_src = byte_slice(WitnessSource, input_off, list_len(data_f.content));
     let nonce = rlp_field_int(rlp_item(fields, i_nonce));
     let transaction_gas_limit = rlp_field_int(rlp_item(fields, i_gas));
     let is_create = list_len(to_f.content) == 0; /* empty `to` field = contract creation */
@@ -423,7 +435,7 @@ function decode_tx_ssz(i : int, base_fee : word) -> Transaction = {
         is_create = is_create,
         recipient = recipient,
         value = value,
-        input = data_f.content,
+        input_src = input_src,
         access_list_addresses = decoded_access_list_addresses,
         access_list_slots = decoded_access_list_slots,
         is_access_list = ttype == 1,
@@ -485,7 +497,7 @@ function system_call(tgt : address, input : bits(256)) -> unit = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         () /* system contract absent -> skip (EIP-4788 / EIP-2935) */
     } else {
-        let _ = txdata_set_input(word_to_bytes32(input)); /* the call's 32-byte calldata */
+        let _ = txdata_set_word(input); /* the call's 32-byte calldata */
         enter_system_call_frame(tgt, 32);
         interpret();
         if frame_succeeded() then {
@@ -510,7 +522,7 @@ function system_call_checked(tgt : address) -> bool = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         false /* checked: a missing system predeploy invalidates the block */
     } else {
-        let _ = txdata_set_input([||]); /* empty calldata: the SYSTEM caller dequeues */
+        let _ = txdata_set_source(byte_slice(WitnessSource, 0, 0)); /* empty calldata: the SYSTEM caller dequeues */
         enter_system_call_frame(tgt, 0);
         interpret();
         if frame_succeeded() then {

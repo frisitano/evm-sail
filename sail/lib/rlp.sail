@@ -225,6 +225,39 @@ function rlp_item(items : list(RlpField), idx : int) -> RlpField = {
     }
 }
 
+/* The content start offset (into `node`) of top-level item `idx` of an RLP list.
+ * Mirrors rlp_split's header walk without materializing item bytes, so a caller
+ * can map a decoded field back to its contiguous span in the underlying witness
+ * buffer. 0 if node is not a list or idx is out of range; pair it with the
+ * item's already-decoded content length. */
+function rlp_top_item_content_offset(node : list(byte), idx : int) -> int = {
+    if list_len(node) == 0 then {
+        0
+    } else {
+        let (isl, cs, cl) = rlp_hdr(node, 0);
+        if not_bool(isl) then {
+            0
+        } else {
+            let stop = cs + cl;
+            var pos : int = cs;
+            var j : int = 0;
+            var res : int = 0;
+            var more : bool = true;
+            while (pos < stop) & more do {
+                let (_, ics, icl) = rlp_hdr(node, pos);
+                if j == idx then {
+                    res = ics;
+                    more = false
+                } else {
+                    j = j + 1;
+                    pos = ics + icl
+                }
+            };
+            res
+        }
+    }
+}
+
 function rlp_list_items(f : RlpField) -> list(RlpField) =
     if f.is_list then {
         rlp_node_items(f.full)

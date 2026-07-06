@@ -167,14 +167,16 @@ function run_one() -> unit = {
     let decoded_is_create = ni();
     let decoded_recipient = na();
     let decoded_value = nw();
-    let decoded_input_len = ni();
 
-    var decoded_input : list(byte) = [||];
+    /* Stream the decoded input straight into the owned tx-input buffer (the
+       native decode reads it one scalar-encoded byte at a time). process_transaction
+       then re-stages it in one op from the TxInputSource self-reference below. */
+    let decoded_input_len = ni();
+    txin_begin();
     foreach (i from 0 to (decoded_input_len - 1)) {
         let _ = i;
-        decoded_input = get_slice_int(8, ni(), 0) :: decoded_input
+        txin_byte(get_slice_int(8, ni(), 0))
     };
-    decoded_input = list_reverse(decoded_input);
 
     /* EIP-2930 access list: n_addrs addresses, then n_keys (addr, slot) pairs */
     let access_list_address_count = ni();
@@ -251,7 +253,7 @@ function run_one() -> unit = {
             is_create = decoded_is_create != 0,
             recipient = decoded_recipient,
             value = decoded_value,
-            input = decoded_input,
+            input_src = byte_slice(TxInputSource, 0, decoded_input_len),
             access_list_addresses = decoded_access_list_addresses,
             access_list_slots = decoded_access_list_slots,
             is_access_list = is_access_list_tx != 0,

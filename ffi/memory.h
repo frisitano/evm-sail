@@ -19,6 +19,16 @@ unit cd_set_empty(const unit u);
 unit cd_set_tx(const unit u);
 unit txin_begin(const unit u);
 unit txin_byte(uint64_t b);
+/* stage the whole tx input in one call (no Sail byte loop):
+ *   txin_set_from_source: copy a resolved byte source (the witness span for a
+ *     stateless tx; a self-reference for the already-staged native-runner input)
+ *     into the tx-input buffer; returns the staged length (0 on a bad source).
+ *   txin_set_word: stage a 32-byte big-endian word (a block system call's input).
+ *   txd_count_nonzero: number of nonzero bytes in the staged input (EIP-2028 /
+ *     EIP-7623 calldata gas, counted C-side). */
+uint64_t txin_set_from_source(uint64_t kind, uint64_t off, uint64_t len);
+uint64_t txin_set_word(const lbits w);
+uint64_t txd_count_nonzero(const unit u);
 uint64_t txd_copy(uint8_t *dst, uint64_t cap);
 uint64_t txd_at(uint64_t i);
 uint64_t txd_length(const unit u);

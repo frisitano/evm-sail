@@ -79,6 +79,19 @@ function txin_begin() -> unit = txin_begin_ffi()
 val txin_byte_ffi = impure { _: "txin_byte" } : bits(8) -> unit
 function txin_byte(x0 : bits(8)) -> unit = txin_byte_ffi(x0)
 
+/* one-call tx-input staging (no Sail byte loop): copy the resolved byte source
+ * / 32-byte word straight into the C tx-input buffer, and count nonzero bytes
+ * C-side for the calldata gas. */
+val txin_set_from_source_ffi = impure { _: "txin_set_from_source" } : (bits(64), bits(64), bits(64)) -> bits(64)
+function txdata_set_source(s : ByteSlice) -> int =
+    unsigned(txin_set_from_source_ffi(byte_source_kind(s.source), s.off, s.len))
+
+val txin_set_word_ffi = impure { _: "txin_set_word" } : word -> bits(64)
+function txdata_set_word(w : word) -> int = unsigned(txin_set_word_ffi(w))
+
+val txd_count_nonzero_ffi = impure { _: "txd_count_nonzero" } : unit -> bits(64)
+function txd_count_nonzero() -> bits(64) = txd_count_nonzero_ffi()
+
 val cd_to_mem_ffi = impure { _: "cd_to_mem" } : (bits(64), bits(64), bits(64)) -> unit
 function cd_to_mem(x0 : bits(64), x1 : bits(64), x2 : bits(64)) -> unit = cd_to_mem_ffi(x0, x1, x2)
 

@@ -44,6 +44,20 @@ val returndata_copy_current_prefix_to_memory : (bits(64), bits(64)) -> unit
 val cd_set : (bits(64), bits(64)) -> unit
 val cd_set_empty : unit -> unit
 val cd_set_tx : unit -> unit
+
+/* Byte-loop-free tx-input staging (the build backend does each C-side in one
+ * call; spec/hybrid materialize + loop). txdata_set_source stages a byte source
+ * (the witness span for a stateless tx, or the already-staged native-runner
+ * input) and txdata_set_word a 32-byte word (a block system call); each returns
+ * the staged length. txd_count_nonzero counts nonzero staged bytes for the
+ * EIP-2028 / EIP-7623 calldata gas. */
+val txdata_set_source : ByteSlice -> int
+val txdata_set_word : word -> int
+val txd_count_nonzero : unit -> bits(64)
+
+/* Streamed tx-input staging: retained ONLY for the native-runner pre-state
+ * decode path (it decodes the input a scalar at a time); the stateless guest
+ * proving path never streams -- it stages the witness span in one memcpy. */
 val txin_begin : unit -> unit
 val txin_byte : bits(8) -> unit
 val cd_to_mem : (bits(64), bits(64), bits(64)) -> unit

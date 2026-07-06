@@ -153,23 +153,3 @@ function calldata_copy_to_mem(dst : int, off : int, len : int) -> unit = {
 }
 function calldata_set_next(off : int, len : int) -> unit =
     cd_set(get_slice_int(64, off, 0), get_slice_int(64, len, 0))
-
-/* Load the current transaction's input bytes into the owned C buffer and return
- * the staged length. */
-function txdata_set_input(data : list(byte)) -> int = {
-    txin_begin();
-    var rest : list(byte) = data;
-    var n : int = 0;
-    var more : bool = true;
-    while more do {
-        match rest {
-            b :: t => {
-                txin_byte(b);
-                n = n + 1;
-                rest = t
-            },
-            [||] => more = false,
-        }
-    };
-    n
-}

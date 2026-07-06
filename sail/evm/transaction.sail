@@ -30,7 +30,10 @@ struct Transaction = {
   tx_type : int,             /* EIP-2718 envelope type: 0 legacy, 1..4 typed */
   sender : address, nonce : int, gas_price : word, priority_fee : word,
   gas_limit : gas, is_create : bool, recipient : address, value : word,
-  input : list(byte),          /* calldata, or initcode for contract creation */
+  input_src : ByteSlice,       /* calldata / creation initcode as a host byte source
+                                  (the witness span for a stateless tx, or the
+                                  already-staged native-runner input) -- staged in
+                                  one op, never streamed byte-by-byte in the guest */
   access_list_addresses : list(address),   /* EIP-2930 access-list addresses (one per entry) */
   access_list_slots  : list(SlotKey),   /* EIP-2930 access-list (address, slot) pairs      */
   is_access_list : bool,      /* type-1 (EIP-2930) envelope, even if the list is empty */
@@ -68,24 +71,20 @@ let G_access_list_storage_key : gas = 1900 /* EIP-2930 ACCESS_LIST_STORAGE_KEY_C
 let PER_AUTH_BASE : gas = 12500 /* EIP-7702 PER_AUTH_BASE_COST          */
 let PER_EMPTY_ACCOUNT : gas = 25000 /* EIP-7702 PER_EMPTY_ACCOUNT_COST      */
 
+/* EIP-2028: 4 gas per zero byte, 16 per non-zero, over the loaded tx input. The
+ * nonzero count comes from the host (one C pass on the build backend) rather than
+ * a Sail byte loop; zero bytes are the remainder. */
 function calldata_cost() -> gas = {
-    /* EIP-2028: 4 gas per zero byte, 16 per non-zero, over the loaded tx input */
     let n = txdata_size();
-    var g : int = 0;
-    foreach (i from 0 to (n - 1)) {
-        g = g + (if txdata_byte(i) == 0x00 then G_txdatazero else G_txdatanonzero)
-    };
-    to_gas(g)
+    let nz = unsigned(txd_count_nonzero());
+    to_gas(G_txdatazero * (n - nz) + G_txdatanonzero * nz)
 }
 
 /* EIP-7623 calldata tokens: each zero byte = 1 token, each nonzero byte = 4. */
 function calldata_tokens() -> int = {
     let n = txdata_size();
-    var t : int = 0;
-    foreach (i from 0 to (n - 1)) {
-        t = t + (if txdata_byte(i) == 0x00 then 1 else 4)
-    };
-    t
+    let nz = unsigned(txd_count_nonzero());
+    (n - nz) + 4 * nz
 }
 
 /* EIP-4844: every blob versioned hash must carry VERSIONED_HASH_VERSION_KZG (0x01). */
@@ -470,9 +469,10 @@ function process_transaction(tx : Transaction) -> Receipt = {
     k_set_tx(struct { origin = tx.sender, gas_price = tx.gas_price, blob_hashes = tx.blob_hashes });
     returndata_reset_all();
 
-    /* Stage this tx's input into the owned C buffer; gas, validity, calldata and
-       initcode all read it from there during execution. */
-    let dlen = txdata_set_input(tx.input);
+    /* Stage this tx's input into the owned C buffer in one op (no Sail byte loop
+       on the build backend); gas, validity, calldata and initcode all read it
+       from there during execution. */
+    let dlen = txdata_set_source(tx.input_src);
     let validity = check_transaction_validity(tx, dlen);
     if not_bool(validity.valid) then {
         return invalid_receipt()
