@@ -73,6 +73,12 @@ uint64_t returndata_pending_byte(uint64_t i) {
   return i < returndata_pending.len ? returndata_pending.p[i] : 0;
 }
 
+int returndata_pending_span(const uint8_t **p, uint64_t *len) {
+  if (p) *p = returndata_pending.p;
+  if (len) *len = returndata_pending.len;
+  return 1;
+}
+
 unit returndata_copy_current_to_memory(uint64_t dst, uint64_t off, uint64_t len) {
   returndata_buf *slot = &returndata_frame[hm_depth(UNIT)];
   if (!len || off + len > slot->len) return UNIT;

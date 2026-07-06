@@ -131,10 +131,10 @@ function process_auth(au : Authorization) -> unit = {
         if code_ok & nonce_ok then {
             let existed = not_bool(k_account_is_empty(authority));
             if unsigned(address_to_word(au.address)) == 0 then {
-                k_set_code(authority, [||])
+                k_clear_code(authority)
                 /* clear delegation */
             } else {
-                k_set_code(authority, delegation_code(au.address))
+                k_set_delegation(authority, au.address)
             };
             k_bump_nonce(authority);
             if existed then {
@@ -347,7 +347,7 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
             let code_ok = (dep_len <= max_code_size()) & ((dep_len == 0) | (returndata_pending_byte(0) != 0xef)); /* EIP-3541 */
             if code_ok & (gas_remaining >= deposit) then {
                 gas_remaining = to_gas(gas_remaining - deposit);
-                k_set_code(new_addr, returndata_pending_bytes());
+                k_deploy_returndata_code(new_addr);
                 returndata_discard_pending()
             } else {
                 returndata_discard_pending();

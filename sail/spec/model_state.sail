@@ -770,6 +770,13 @@ function code_db_read_delegation(h : hash) -> bits(168) = {
     }
 }
 
+/* Deploy-path interning (the spec/hybrid refinement of iface/code_db.sail's
+ * code_intern_*): materialize the code blob from its host byte source, then
+ * hash-and-store it. The build backend does both C-side in one call. */
+function code_intern_returndata() -> hash = code_hash_and_store(returndata_pending_bytes())
+
+function code_intern_delegation(a : address) -> hash = code_hash_and_store(delegation_code(a))
+
 /* ---- witness node database (iface/witness_db.sail; refines ffi/trie_node_db.c)
  * One store materialized from the SSZ stateless witness:
  *

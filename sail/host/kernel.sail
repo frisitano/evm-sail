@@ -169,12 +169,27 @@ function k_bump_nonce(a : address) -> unit = {
     store_account(a, { load_account(a) with nonce = load_account(a).nonce + 1 })
 }
 
-/* Set an account's code: hash it, intern the bytes in the code store, and bind
- * the account's codeHash. Used by CREATE/CREATE2 deploys and EIP-7702. */
-function k_set_code(a : address, c : list(byte)) -> unit = {
+/* Set an account's code by binding its codeHash, journaling the prior account.
+ * The code blob is interned straight from its host byte source (no Sail byte
+ * loop on the build backend):
+ *   k_deploy_returndata_code: a CREATE/CREATE2 deploy's returned code (the
+ *     pending returndata buffer).
+ *   k_set_delegation: the EIP-7702 designation 0xef0100 ++ target.
+ *   k_clear_code: reset to codeless (KECCAK_EMPTY); no store entry is needed
+ *     (an empty code blob is never interned; a missing key reads length 0). */
+function k_deploy_returndata_code(a : address) -> unit = {
     journal_push(JAcct(a, load_account(a)));
-    let h : hash = code_hash_and_store(c);
+    let h : hash = code_intern_returndata();
     store_account(a, { load_account(a) with code_hash = h })
+}
+function k_set_delegation(a : address, target : address) -> unit = {
+    journal_push(JAcct(a, load_account(a)));
+    let h : hash = code_intern_delegation(target);
+    store_account(a, { load_account(a) with code_hash = h })
+}
+function k_clear_code(a : address) -> unit = {
+    journal_push(JAcct(a, load_account(a)));
+    store_account(a, { load_account(a) with code_hash = KECCAK_EMPTY })
 }
 
 /* ---- EIP-7702 delegation designation: the 23-byte code 0xef0100 ++ address

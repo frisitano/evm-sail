@@ -28,3 +28,12 @@ function code_db_read_delegation(h : hash) -> bits(168) = code_db_read_delegatio
 val code_db_store_source_ffi = impure { _: "code_db_store_source" } : (bits(64), bits(64), bits(64)) -> unit
 function code_db_store_slice(s : ByteSlice) -> unit =
     code_db_store_source_ffi(byte_source_kind(s.source), s.off, s.len)
+
+/* Deploy-path interning: one C call hashes + stores the blob from its host byte
+ * source (the pending returndata buffer / the C-built designation) and returns
+ * the codeHash -- no Sail byte loop. */
+val code_intern_returndata_ffi = impure { _: "code_intern_returndata" } : unit -> hash
+function code_intern_returndata() -> hash = code_intern_returndata_ffi()
+
+val code_intern_delegation_ffi = impure { _: "code_intern_delegation" } : address -> hash
+function code_intern_delegation(a : address) -> hash = code_intern_delegation_ffi(a)

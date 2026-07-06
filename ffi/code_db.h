@@ -10,6 +10,8 @@
 uint64_t code_db_stream_code_begin(const lbits h);
 unit code_db_stream_code_byte(uint64_t b);
 unit code_db_store_source(uint64_t source_kind, uint64_t off, uint64_t len);
+void code_intern_returndata(lbits *rop, const unit u);
+void code_intern_delegation(lbits *rop, const lbits addr);
 int code_db_frame_resolve_code(uint64_t off, uint64_t len,
                                const uint8_t **p, uint64_t *resolved_len);
 uint64_t code_db_stored_code_length(const lbits h);

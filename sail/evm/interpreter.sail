@@ -704,7 +704,7 @@ function run_create(is2 : bool) -> unit = {
                    commits; the new address is pushed. */
                 if succeeded & code_ok & (child_left >= deposit) then {
                     gas_remaining = to_gas(gas_remaining - deposit);
-                    k_set_code(new_addr, returndata_pending_bytes());
+                    k_deploy_returndata_code(new_addr);
                     returndata_discard_pending();
                     k_commit();
                     push(address_to_word(new_addr))

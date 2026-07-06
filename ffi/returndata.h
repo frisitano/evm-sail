@@ -15,6 +15,9 @@ unit returndata_adopt_pending(const unit u);
 uint64_t returndata_current_len(const unit u);
 uint64_t returndata_pending_len(const unit u);
 uint64_t returndata_pending_byte(uint64_t i);
+/* the pending buffer as a (pointer, length) span; the code store interns it as
+ * a CREATE deploy's code without re-streaming the bytes through Sail. */
+int returndata_pending_span(const uint8_t **p, uint64_t *len);
 unit returndata_copy_current_to_memory(uint64_t dst, uint64_t off, uint64_t len);
 unit returndata_copy_current_prefix_to_memory(uint64_t dst, uint64_t want);
 

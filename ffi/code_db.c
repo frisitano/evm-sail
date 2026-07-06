@@ -17,6 +17,7 @@
 #include "lbits_convert.h"
 #include "host_crypto.h"
 #include "memory.h"
+#include "returndata.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -125,6 +126,28 @@ unit code_db_stream_code_byte(uint64_t b) {
   return UNIT;
 }
 
+/* Content-address `src[0..len)` under the precomputed keccak `key`: find-or-insert
+ * the entry, fit the buffer, copy the bytes, and build the JUMPDEST bitmap. A
+ * hash already present with bytes is left untouched (the store is de-duplicated
+ * and append-only). Empty code interns nothing -- a codeless account carries
+ * KECCAK_EMPTY with no store entry (stored_code_length of a missing key is 0). */
+static void code_db_intern(const uint64_t key[4], const uint8_t *src, uint32_t len) {
+  if (!len) return;
+  if (!code_db) code_db_grow();
+  code_db_ent *e = code_db_find(key);
+  if (e->used && e->len) return;   /* already present */
+  if (!e->used) {
+    e->used = 1;
+    e->a[0] = key[0]; e->a[1] = key[1]; e->a[2] = key[2]; e->a[3] = key[3];
+    code_db_n++;
+    if (code_db_n * 10 >= code_db_cap * 7) { code_db_grow(); e = code_db_find(key); }
+  }
+  code_db_fit(e, len);
+  memcpy(e->p, src, len);
+  code_db_build_jumpdest_bitmap(e->bm, e->p, len);
+  e->len = len;
+}
+
 unit code_db_store_source(uint64_t source_kind, uint64_t off, uint64_t len) {
   if (!len || len > UINT32_MAX) return UNIT;
   const uint8_t *src = NULL;
@@ -135,23 +158,33 @@ unit code_db_store_source(uint64_t source_kind, uint64_t off, uint64_t len) {
 
   uint64_t key[4] = {0, 0, 0, 0};
   host_keccak256_bytes(key, src, len);
-
-  if (!code_db) code_db_grow();
-  code_db_ent *e = code_db_find(key);
-  if (e->used && e->len) return UNIT;   /* already present */
-  if (!e->used) {
-    e->used = 1;
-    e->a[0] = key[0]; e->a[1] = key[1]; e->a[2] = key[2]; e->a[3] = key[3];
-    code_db_n++;
-    if (code_db_n * 10 >= code_db_cap * 7) { code_db_grow(); e = code_db_find(key); }
-  }
-
-  uint32_t n = (uint32_t)len;
-  code_db_fit(e, n);
-  memcpy(e->p, src, n);
-  code_db_build_jumpdest_bitmap(e->bm, e->p, n);
-  e->len = n;
+  code_db_intern(key, src, (uint32_t)len);
   return UNIT;
+}
+
+/* Intern the pending returndata buffer (a CREATE/CREATE2 deploy's returned
+ * code) under its keccak hash in one call; return the codeHash. */
+void code_intern_returndata(lbits *rop, const unit u) {
+  (void)u;
+  const uint8_t *p = NULL;
+  uint64_t len = 0;
+  returndata_pending_span(&p, &len);
+  uint64_t key[4] = {0, 0, 0, 0};
+  host_keccak256_bytes(key, p, len);
+  if (len <= UINT32_MAX) code_db_intern(key, p, (uint32_t)len);
+  be_words4_to_lbits(rop, key);
+}
+
+/* Intern the 23-byte EIP-7702 delegation designation 0xef0100 ++ addr under its
+ * keccak hash in one call; return the codeHash. */
+void code_intern_delegation(lbits *rop, const lbits addr) {
+  uint8_t b[23];
+  b[0] = 0xef; b[1] = 0x01; b[2] = 0x00;
+  lbits_to_be_bytes(b + 3, 20, addr);
+  uint64_t key[4] = {0, 0, 0, 0};
+  host_keccak256_bytes(key, b, sizeof b);
+  code_db_intern(key, b, (uint32_t)sizeof b);
+  be_words4_to_lbits(rop, key);
 }
 
 /* ------------------------- per-frame descriptors ------------------------ */
