@@ -89,3 +89,19 @@ val acctmap_update_row_bal : bits(64) -> word
 val acctmap_update_row_sroot : bits(64) -> hash
 val acctmap_update_row_chash : bits(64) -> hash
 val acctmap_update_row_base_exists : bits(64) -> bool
+
+/* ---- write-set account overlay (ffi/state_db.c acct_wset_*): the per-tx
+ * overlay + block base replacing account_updates. account_cache stays the
+ * resolver backing below; a miss here is resolved there / via
+ * stateless_account_load. storage_root is the pre-state anchor, not mutated. */
+val acct_wset_reset : unit -> unit
+val acct_wset_tx_clear : unit -> unit
+val acct_wset_merge : unit -> unit
+val acct_wset_wipe_addr : address -> unit
+val acct_wset_present : address -> bool
+val acct_wset_nonce : address -> bits(64)
+val acct_wset_bal : address -> word
+val acct_wset_sroot : address -> hash
+val acct_wset_chash : address -> hash
+val acct_wset_write : (address, bits(64), word, hash, hash) -> unit
+val acct_wset_restore : (address, bits(64), word, hash, hash) -> unit

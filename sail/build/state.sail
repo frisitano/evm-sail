@@ -163,3 +163,39 @@ function acctmap_update_row_chash(idx : bits(64)) -> hash = acctmap_update_row_c
 
 val acctmap_update_row_base_exists_ffi = impure { _: "acctmap_update_row_base_exists" } : bits(64) -> bool
 function acctmap_update_row_base_exists(idx : bits(64)) -> bool = acctmap_update_row_base_exists_ffi(idx)
+
+/* ---- write-set account overlay (ffi/state_db.c acct_wset_*) ---- */
+val acct_wset_reset_ffi = impure { _: "acct_wset_reset" } : unit -> unit
+function acct_wset_reset() -> unit = acct_wset_reset_ffi()
+
+val acct_wset_tx_clear_ffi = impure { _: "acct_wset_tx_clear" } : unit -> unit
+function acct_wset_tx_clear() -> unit = acct_wset_tx_clear_ffi()
+
+val acct_wset_merge_ffi = impure { _: "acct_wset_merge" } : unit -> unit
+function acct_wset_merge() -> unit = acct_wset_merge_ffi()
+
+val acct_wset_wipe_addr_ffi = impure { _: "acct_wset_wipe_addr" } : address -> unit
+function acct_wset_wipe_addr(a : address) -> unit = acct_wset_wipe_addr_ffi(a)
+
+val acct_wset_present_ffi = impure { _: "acct_wset_present" } : address -> bool
+function acct_wset_present(a : address) -> bool = acct_wset_present_ffi(a)
+
+val acct_wset_nonce_ffi = impure { _: "acct_wset_nonce" } : address -> bits(64)
+function acct_wset_nonce(a : address) -> bits(64) = acct_wset_nonce_ffi(a)
+
+val acct_wset_bal_ffi = impure { _: "acct_wset_bal" } : address -> word
+function acct_wset_bal(a : address) -> word = acct_wset_bal_ffi(a)
+
+val acct_wset_sroot_ffi = impure { _: "acct_wset_sroot" } : address -> hash
+function acct_wset_sroot(a : address) -> hash = acct_wset_sroot_ffi(a)
+
+val acct_wset_chash_ffi = impure { _: "acct_wset_chash" } : address -> hash
+function acct_wset_chash(a : address) -> hash = acct_wset_chash_ffi(a)
+
+val acct_wset_write_ffi = impure { _: "acct_wset_write" } : (address, bits(64), word, hash, hash) -> unit
+function acct_wset_write(a : address, nonce : bits(64), bal : word, sroot : hash, chash : hash) -> unit =
+    acct_wset_write_ffi(a, nonce, bal, sroot, chash)
+
+val acct_wset_restore_ffi = impure { _: "acct_wset_restore" } : (address, bits(64), word, hash, hash) -> unit
+function acct_wset_restore(a : address, nonce : bits(64), bal : word, sroot : hash, chash : hash) -> unit =
+    acct_wset_restore_ffi(a, nonce, bal, sroot, chash)

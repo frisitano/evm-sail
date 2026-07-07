@@ -1035,3 +1035,248 @@ void storage_wset_union_val(lbits *rop, const lbits ak, uint64_t j) {
   uint64_t k[4]; lbits_to_be_words4(k, ak); swb_union_build(k);
   be_words4_to_lbits(rop, j < swb_union_n ? swb_union_rows[j].val : storage_zero_val);
 }
+
+/* ======================================================================== */
+/* WRITE-SET ACCOUNT OVERLAY (stage 2: two-level account working set)         */
+/*                                                                            */
+/* Mirrors the storage write-set: a per-tx overlay (acct_wset_tx) over a      */
+/* block base (acct_wset_block), keyed by keccak(address), each sorted by     */
+/* hkey. A row carries the current AND the tx-start/pre-state original        */
+/* account (nonce, balance, storage_root, code_hash) plus base_exists (did    */
+/* the authenticated pre-state leaf exist) and written. account_cache below   */
+/* stays the RESOLVER backing (native seed + witness read-cache); a miss      */
+/* here asks it, then stateless_account_load. storage_root is NOT mutated by  */
+/* account writes -- it is the pre-state anchor, and the post-state root is    */
+/* derived at compute_root. dirty == written && current != original.          */
+/* ======================================================================== */
+
+typedef struct {
+  uint64_t hkey[4];
+  uint64_t cur_nonce;  uint64_t cur_bal[4];  uint64_t cur_sroot[4];  uint64_t cur_chash[4];
+  uint64_t orig_nonce; uint64_t orig_bal[4]; uint64_t orig_sroot[4]; uint64_t orig_chash[4];
+  uint8_t base_exists;   /* authenticated pre-state leaf existed */
+  uint8_t written;       /* a store reached this row */
+} acct_wset_row;
+
+typedef struct { acct_wset_row *rows; uint32_t n, cap; } acct_wset_table;
+
+static acct_wset_table acct_wset_tx    = {NULL, 0, 0};
+static acct_wset_table acct_wset_block = {NULL, 0, 0};
+
+/* per-account compute_root snapshots are invalidated when the block base
+   changes (defined with the builders below) */
+static void acct_wset_iter_invalidate(void);
+
+static uint32_t acct_wset_find(const acct_wset_table *t, const uint64_t h[4], int *found) {
+  uint32_t lo = 0, hi = t->n;
+  while (lo < hi) {
+    uint32_t mid = lo + ((hi - lo) >> 1);
+    if (compare_u64x4(t->rows[mid].hkey, h) < 0) lo = mid + 1; else hi = mid;
+  }
+  *found = (lo < t->n && compare_u64x4(t->rows[lo].hkey, h) == 0);
+  return lo;
+}
+
+static acct_wset_row *acct_wset_get(acct_wset_table *t, const uint64_t h[4]) {
+  int f = 0;
+  uint32_t i = acct_wset_find(t, h, &f);
+  return f ? &t->rows[i] : NULL;
+}
+
+static acct_wset_row *acct_wset_intern(acct_wset_table *t, const uint64_t h[4]) {
+  int f = 0;
+  uint32_t i = acct_wset_find(t, h, &f);
+  if (f) return &t->rows[i];
+  if (t->cap < t->n + 1) {
+    uint32_t nc = t->cap ? t->cap * 2 : ACCOUNT_INIT_CAP;
+    while (nc < t->n + 1) nc *= 2;
+    acct_wset_row *nr = (acct_wset_row *)realloc(t->rows, (size_t)nc * sizeof(acct_wset_row));
+    if (!nr) return NULL;
+    t->rows = nr; t->cap = nc;
+  }
+  if (i < t->n)
+    memmove(&t->rows[i + 1], &t->rows[i], (size_t)(t->n - i) * sizeof(acct_wset_row));
+  acct_wset_row *e = &t->rows[i];
+  memset(e, 0, sizeof(*e));
+  memcpy(e->hkey, h, sizeof(e->hkey));
+  t->n++;
+  return e;
+}
+
+static void acct_wset_table_reset(acct_wset_table *t) {
+  free(t->rows);
+  t->rows = NULL; t->n = 0; t->cap = 0;
+}
+
+/* current-vs-original: account writes only touch nonce/bal/chash (sroot is the
+   pre-state anchor, base_exists is metadata), so those three decide dirtiness */
+static int acct_wset_dirty(const acct_wset_row *e) {
+  return e->written &&
+         (e->cur_nonce != e->orig_nonce ||
+          compare_u64x4(e->cur_bal, e->orig_bal) != 0 ||
+          compare_u64x4(e->cur_chash, e->orig_chash) != 0 ||
+          compare_u64x4(e->cur_sroot, e->orig_sroot) != 0);
+}
+
+/* the live row (tx write over committed block write); NULL on a miss */
+static acct_wset_row *acct_wset_live(const uint64_t h[4]) {
+  acct_wset_row *e = acct_wset_get(&acct_wset_tx, h);
+  if (e && e->written) return e;
+  acct_wset_row *b = acct_wset_get(&acct_wset_block, h);
+  return (b && b->written) ? b : NULL;
+}
+
+/* --- lifecycle --- */
+unit acct_wset_reset(const unit u) {
+  (void)u;
+  acct_wset_table_reset(&acct_wset_tx);
+  acct_wset_table_reset(&acct_wset_block);
+  acct_wset_iter_invalidate();
+  return UNIT;
+}
+
+unit acct_wset_tx_clear(const unit u) {
+  (void)u;
+  acct_wset_table_reset(&acct_wset_tx);
+  return UNIT;
+}
+
+/* merge dirty tx rows into the block base, then clear the tx overlay.
+   base.original + base_exists freeze at the block pre-state (set once). */
+unit acct_wset_merge(const unit u) {
+  (void)u;
+  for (uint32_t i = 0; i < acct_wset_tx.n; i++) {
+    acct_wset_row *e = &acct_wset_tx.rows[i];
+    if (!acct_wset_dirty(e)) continue;
+    acct_wset_row *b = acct_wset_intern(&acct_wset_block, e->hkey);
+    if (!b) continue;
+    if (!b->written) {
+      b->written = 1;
+      b->orig_nonce = e->orig_nonce;
+      memcpy(b->orig_bal, e->orig_bal, sizeof(b->orig_bal));
+      memcpy(b->orig_sroot, e->orig_sroot, sizeof(b->orig_sroot));
+      memcpy(b->orig_chash, e->orig_chash, sizeof(b->orig_chash));
+      b->base_exists = e->base_exists;
+    }
+    b->cur_nonce = e->cur_nonce;
+    memcpy(b->cur_bal, e->cur_bal, sizeof(b->cur_bal));
+    memcpy(b->cur_sroot, e->cur_sroot, sizeof(b->cur_sroot));
+    memcpy(b->cur_chash, e->cur_chash, sizeof(b->cur_chash));
+  }
+  acct_wset_table_reset(&acct_wset_tx);
+  acct_wset_iter_invalidate();
+  return UNIT;
+}
+
+/* --- reads (overlay only; a miss => Sail asks account_cache / resolver) --- */
+bool acct_wset_present(const lbits a) {
+  uint64_t h[4]; acct_secure_key(a, h);
+  return acct_wset_live(h) ? 1 : 0;
+}
+uint64_t acct_wset_nonce(const lbits a) {
+  uint64_t h[4]; acct_secure_key(a, h);
+  acct_wset_row *e = acct_wset_live(h);
+  return e ? e->cur_nonce : 0;
+}
+void acct_wset_bal(lbits *rop, const lbits a) {
+  uint64_t h[4]; acct_secure_key(a, h);
+  acct_wset_row *e = acct_wset_live(h);
+  le_words4_to_lbits(rop, e ? e->cur_bal : account_zero_val);
+}
+void acct_wset_sroot(lbits *rop, const lbits a) {
+  uint64_t h[4]; acct_secure_key(a, h);
+  acct_wset_row *e = acct_wset_live(h);
+  le_words4_to_lbits(rop, e ? e->cur_sroot : account_zero_val);
+}
+void acct_wset_chash(lbits *rop, const lbits a) {
+  uint64_t h[4]; acct_secure_key(a, h);
+  acct_wset_row *e = acct_wset_live(h);
+  le_words4_to_lbits(rop, e ? e->cur_chash : account_zero_val);
+}
+
+/* --- writes / restore / wipe --- */
+/* write the current account into the tx overlay; on the FIRST write this tx
+   the original + base_exists freeze at the tx-start account, read from the
+   block base if committed there, else the resolver cache (load_account always
+   runs before a store, so the cache holds the resolved pre-state). */
+unit acct_wset_write(const lbits a, uint64_t nonce,
+                     const lbits bal, const lbits sroot, const lbits chash) {
+  uint64_t h[4]; acct_secure_key(a, h);
+  acct_wset_row *e = acct_wset_intern(&acct_wset_tx, h);
+  if (!e) return UNIT;
+  if (!e->written) {
+    e->written = 1;
+    acct_wset_row *b = acct_wset_get(&acct_wset_block, h);
+    if (b && b->written) {
+      e->orig_nonce = b->cur_nonce;
+      memcpy(e->orig_bal, b->cur_bal, sizeof(e->orig_bal));
+      memcpy(e->orig_sroot, b->cur_sroot, sizeof(e->orig_sroot));
+      memcpy(e->orig_chash, b->cur_chash, sizeof(e->orig_chash));
+      e->base_exists = b->base_exists;
+    } else {
+      const account_row *c = account_table_const_get(&account_cache, h);
+      if (c) {
+        e->orig_nonce = c->nonce;
+        memcpy(e->orig_bal, c->bal, sizeof(e->orig_bal));
+        memcpy(e->orig_sroot, c->sroot, sizeof(e->orig_sroot));
+        memcpy(e->orig_chash, c->chash, sizeof(e->orig_chash));
+        e->base_exists = c->base_exists;
+      }
+      /* else absent pre-state: original stays zeroed, base_exists 0 */
+    }
+  }
+  uint64_t b4[4], sr[4], ch[4];
+  lbits_to_le_words4(b4, bal);
+  lbits_to_le_words4(sr, sroot);
+  lbits_to_le_words4(ch, chash);
+  e->cur_nonce = nonce;
+  memcpy(e->cur_bal, b4, sizeof(e->cur_bal));
+  memcpy(e->cur_sroot, sr, sizeof(e->cur_sroot));
+  memcpy(e->cur_chash, ch, sizeof(e->cur_chash));
+  return UNIT;
+}
+
+/* JAcct undo: restore the tx-overlay current account to a prior value; keeps
+   the row (membership) and its frozen original. */
+unit acct_wset_restore(const lbits a, uint64_t nonce,
+                       const lbits bal, const lbits sroot, const lbits chash) {
+  uint64_t h[4]; acct_secure_key(a, h);
+  acct_wset_row *e = acct_wset_get(&acct_wset_tx, h);
+  if (!e) return UNIT;
+  uint64_t b4[4], sr[4], ch[4];
+  lbits_to_le_words4(b4, bal);
+  lbits_to_le_words4(sr, sroot);
+  lbits_to_le_words4(ch, chash);
+  e->cur_nonce = nonce;
+  memcpy(e->cur_bal, b4, sizeof(e->cur_bal));
+  memcpy(e->cur_sroot, sr, sizeof(e->cur_sroot));
+  memcpy(e->cur_chash, ch, sizeof(e->cur_chash));
+  return UNIT;
+}
+
+static void acct_wset_table_remove_hkey(acct_wset_table *t, const uint64_t h[4]) {
+  int f = 0;
+  uint32_t i = acct_wset_find(t, h, &f);
+  if (!f) return;
+  if (i + 1 < t->n)
+    memmove(&t->rows[i], &t->rows[i + 1], (size_t)(t->n - i - 1) * sizeof(acct_wset_row));
+  t->n--;
+}
+
+/* EIP-6780 tx-end delete: drop the address's overlay rows (tx + block) */
+unit acct_wset_wipe_addr(const lbits a) {
+  uint64_t h[4]; acct_secure_key(a, h);
+  acct_wset_table_remove_hkey(&acct_wset_tx, h);
+  acct_wset_table_remove_hkey(&acct_wset_block, h);
+  acct_wset_iter_invalidate();
+  return UNIT;
+}
+
+/* --- base (block-only) reads: the tx-start account (committed prior txs) --- */
+bool acct_wset_base_present(const lbits a) {
+  uint64_t h[4]; acct_secure_key(a, h);
+  acct_wset_row *b = acct_wset_get(&acct_wset_block, h);
+  return (b && b->written) ? 1 : 0;
+}
+
+static void acct_wset_iter_invalidate(void) { }

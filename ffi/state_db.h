@@ -73,4 +73,19 @@ uint64_t storage_wset_union_count(const lbits ak);
 void storage_wset_union_slot(lbits *rop, const lbits ak, uint64_t j);
 void storage_wset_union_val(lbits *rop, const lbits ak, uint64_t j);
 
+/* write-set account overlay (stage 2: per-tx overlay + block base) */
+unit acct_wset_reset(const unit u);
+unit acct_wset_tx_clear(const unit u);
+unit acct_wset_merge(const unit u);
+unit acct_wset_wipe_addr(const lbits a);
+bool acct_wset_present(const lbits a);
+uint64_t acct_wset_nonce(const lbits a);
+void acct_wset_bal(lbits *rop, const lbits a);
+void acct_wset_sroot(lbits *rop, const lbits a);
+void acct_wset_chash(lbits *rop, const lbits a);
+unit acct_wset_write(const lbits a, uint64_t nonce,
+                     const lbits bal, const lbits sroot, const lbits chash);
+unit acct_wset_restore(const lbits a, uint64_t nonce,
+                       const lbits bal, const lbits sroot, const lbits chash);
+
 #endif
