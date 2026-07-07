@@ -59,6 +59,43 @@ function create_address(sender : address, nonce : int) -> address = {
     word_to_address(keccak_rlp_payload([||], payload))
 }
 
+/* Block hash: keccak(rlp([...header fields...])). Build re-encodes the header
+ * in C from the scalar fields plus the logs_bloom / extraData witness spans
+ * (build/crypto.sail); this materialized RLP body is the canonical field
+ * layout both backends must agree on. */
+function block_header_hash(
+    header : BlockHeader,
+    transactions_root : hash,
+    withdrawals_root : hash,
+    requests_hash : hash,
+    block_access_list_hash : hash,
+) -> hash = {
+    var payload : list(byte) = rlp_word(header.parent_hash);
+    payload = list_append(payload, rlp_word(EMPTY_OMMER_HASH));
+    payload = list_append(payload, rlp_addr(header.fee_recipient));
+    payload = list_append(payload, rlp_word(header.state_root));
+    payload = list_append(payload, rlp_word(transactions_root));
+    payload = list_append(payload, rlp_word(header.receipts_root));
+    payload = list_append(payload, rlp_bytes(header.logs_bloom));
+    payload = list_append(payload, rlp_int(0));
+    payload = list_append(payload, rlp_int(header.number));
+    payload = list_append(payload, rlp_int(header.gas_limit));
+    payload = list_append(payload, rlp_int(header.gas_used));
+    payload = list_append(payload, rlp_int(header.timestamp));
+    payload = list_append(payload, rlp_bytes(ssz_bytes(pl_extra_start(), pl_txs_start() - pl_extra_start())));
+    payload = list_append(payload, rlp_word(header.prev_randao));
+    payload = list_append(payload, rlp_bytes(zero_bytes(8)));
+    payload = list_append(payload, rlp_int_word(header.base_fee));
+    payload = list_append(payload, rlp_word(withdrawals_root));
+    payload = list_append(payload, rlp_int(header.blob_gas_used));
+    payload = list_append(payload, rlp_int(header.excess_blob_gas));
+    payload = list_append(payload, rlp_word(header.parent_beacon_block_root));
+    payload = list_append(payload, rlp_word(requests_hash));
+    payload = list_append(payload, rlp_word(block_access_list_hash));
+    payload = list_append(payload, rlp_int(header.slot_number));
+    keccak_rlp_payload([||], payload)
+}
+
 function secp256k1_verify_precompile(h : bits(256), r : word, s : word, x : bits(256), y : bits(256)) -> bool = {
     var inp : list(byte) = word_to_bytes32(h);
     inp = list_append(inp, word_to_bytes32(r));

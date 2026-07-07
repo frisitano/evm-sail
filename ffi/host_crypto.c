@@ -140,6 +140,132 @@ void host_create_address(lbits *rop, const lbits sender, uint64_t nonce) {
   host_keccak256_lbits(rop, buf, n + 1);
 }
 
+/* ---- RLP append helpers over a caller buffer (build-side header framing) --- */
+static void rlp_put_raw(uint8_t *buf, size_t *n, const uint8_t *p, size_t len) {
+  memcpy(buf + *n, p, len);
+  *n += len;
+}
+
+/* 0xa0 ++ 32-byte word (rlp_word). */
+static void rlp_put_word32(uint8_t *buf, size_t *n, const lbits w) {
+  buf[(*n)++] = 0xa0;
+  lbits_to_be_bytes(buf + *n, 32, w);
+  *n += 32;
+}
+
+/* 0x94 ++ 20-byte address (rlp_addr). */
+static void rlp_put_addr(uint8_t *buf, size_t *n, const lbits a) {
+  buf[(*n)++] = 0x94;
+  lbits_to_be_bytes(buf + *n, 20, a);
+  *n += 20;
+}
+
+/* minimal big-endian 256-bit scalar (rlp_int_word). */
+static void rlp_put_word_min(uint8_t *buf, size_t *n, const lbits w) {
+  uint8_t be[32];
+  lbits_to_be_bytes(be, 32, w);
+  int i = 0;
+  while (i < 32 && be[i] == 0) i++;
+  size_t len = 32 - (size_t)i;
+  if (len == 0) {
+    buf[(*n)++] = 0x80;
+  } else if (len == 1 && be[i] < 0x80) {
+    buf[(*n)++] = be[i];
+  } else {
+    buf[(*n)++] = (uint8_t)(0x80 + len);
+    rlp_put_raw(buf, n, be + i, len);
+  }
+}
+
+/* RLP-encode a byte string (rlp_bytes). */
+static void rlp_put_str(uint8_t *buf, size_t *n, const uint8_t *p, size_t len) {
+  if (len == 1 && p[0] < 0x80) {
+    buf[(*n)++] = p[0];
+    return;
+  }
+  if (len <= 55) {
+    buf[(*n)++] = (uint8_t)(0x80 + len);
+  } else {
+    uint8_t lb[8];
+    int m = 0;
+    for (size_t x = len; x != 0; x >>= 8) lb[m++] = (uint8_t)(x & 0xff);
+    buf[(*n)++] = (uint8_t)(0xb7 + m);
+    for (int i = 0; i < m; i++) buf[(*n)++] = lb[m - 1 - i];
+  }
+  rlp_put_raw(buf, n, p, len);
+}
+
+/* Ommer hash of an empty ommer list: keccak(rlp([])). */
+static const uint8_t HOST_EMPTY_OMMER[32] = {
+    0x1d, 0xcc, 0x4d, 0xe8, 0xde, 0xc7, 0x5d, 0x7a, 0xab, 0x85, 0xb5,
+    0x67, 0xb6, 0xcc, 0xd4, 0x1a, 0xd3, 0x12, 0x45, 0x1b, 0x94, 0x8a,
+    0x74, 0x13, 0xf0, 0xa1, 0x42, 0xfd, 0x40, 0xd4, 0x93, 0x47};
+
+void host_block_header_hash(
+    lbits *rop, const lbits parent_hash, const lbits fee_recipient,
+    const lbits state_root, const lbits transactions_root,
+    const lbits receipts_root, uint64_t bloom_off, uint64_t number,
+    uint64_t gas_limit, uint64_t gas_used, uint64_t timestamp,
+    uint64_t extra_off, uint64_t extra_len, const lbits prev_randao,
+    const lbits base_fee, const lbits withdrawals_root, uint64_t blob_gas_used,
+    uint64_t excess_blob_gas, const lbits parent_beacon_block_root,
+    const lbits requests_hash, const lbits block_access_list_hash,
+    uint64_t slot_number) {
+  const uint8_t *bloom = evmsail_ssz_ptr(bloom_off, 256);
+  const uint8_t *extra = NULL;
+  if (extra_len != 0) extra = evmsail_ssz_ptr(extra_off, extra_len);
+  if (bloom == NULL || extra_len > 1024 || (extra_len != 0 && extra == NULL)) {
+    host_keccak256_lbits(rop, NULL, UINT64_MAX); /* invalid witness -> zero digest */
+    return;
+  }
+
+  uint8_t payload[2048];
+  size_t n = 0;
+  rlp_put_word32(payload, &n, parent_hash);
+  payload[n++] = 0xa0; /* ommers hash */
+  rlp_put_raw(payload, &n, HOST_EMPTY_OMMER, 32);
+  rlp_put_addr(payload, &n, fee_recipient);
+  rlp_put_word32(payload, &n, state_root);
+  rlp_put_word32(payload, &n, transactions_root);
+  rlp_put_word32(payload, &n, receipts_root);
+  rlp_put_str(payload, &n, bloom, 256);
+  payload[n++] = 0x80; /* difficulty = 0 */
+  n += host_rlp_uint(payload + n, number);
+  n += host_rlp_uint(payload + n, gas_limit);
+  n += host_rlp_uint(payload + n, gas_used);
+  n += host_rlp_uint(payload + n, timestamp);
+  {
+    const uint8_t empty = 0;
+    rlp_put_str(payload, &n, extra ? extra : &empty, (size_t)extra_len);
+  }
+  rlp_put_word32(payload, &n, prev_randao);
+  {
+    uint8_t z[8] = {0};
+    rlp_put_str(payload, &n, z, 8); /* nonce = 0x0000000000000000 */
+  }
+  rlp_put_word_min(payload, &n, base_fee);
+  rlp_put_word32(payload, &n, withdrawals_root);
+  n += host_rlp_uint(payload + n, blob_gas_used);
+  n += host_rlp_uint(payload + n, excess_blob_gas);
+  rlp_put_word32(payload, &n, parent_beacon_block_root);
+  rlp_put_word32(payload, &n, requests_hash);
+  rlp_put_word32(payload, &n, block_access_list_hash);
+  n += host_rlp_uint(payload + n, slot_number);
+
+  /* frame the list: payload is always > 55 bytes here */
+  uint8_t out[2064];
+  size_t hn = 0;
+  {
+    uint8_t lb[8];
+    int m = 0;
+    for (size_t x = n; x != 0; x >>= 8) lb[m++] = (uint8_t)(x & 0xff);
+    out[hn++] = (uint8_t)(0xf7 + m);
+    for (int i = 0; i < m; i++) out[hn++] = lb[m - 1 - i];
+  }
+  memcpy(out + hn, payload, n);
+  host_keccak256_lbits(rop, out, hn + n);
+}
+
 static int host_bytes_reserve(uint64_t need) {
   if (need <= HOST_bytes_cap) return 1;
   uint64_t cap = HOST_bytes_cap ? HOST_bytes_cap : 256;

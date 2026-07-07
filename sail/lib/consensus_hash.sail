@@ -97,38 +97,3 @@ function execution_requests_hash() -> hash = {
     let m = (if l0 != 0 then 1 else 0) + (if l1 != 0 then 2 else 0) + (if l2 != 0 then 4 else 0);
     sha256_digests3(get_slice_int(8, m, 0), d0, d1, d2)
 }
-
-function block_header_hash(
-    header : BlockHeader,
-    transactions_root : hash,
-    withdrawals_root : hash,
-    requests_hash : hash,
-    block_access_list_hash : hash,
-) -> (
-    hash
-) = {
-    var payload : list(byte) = rlp_word(header.parent_hash);
-    payload = list_append(payload, rlp_word(EMPTY_OMMER_HASH));
-    payload = list_append(payload, rlp_addr(header.fee_recipient));
-    payload = list_append(payload, rlp_word(header.state_root));
-    payload = list_append(payload, rlp_word(transactions_root));
-    payload = list_append(payload, rlp_word(header.receipts_root));
-    payload = list_append(payload, rlp_bytes(header.logs_bloom));
-    payload = list_append(payload, rlp_int(0));
-    payload = list_append(payload, rlp_int(header.number));
-    payload = list_append(payload, rlp_int(header.gas_limit));
-    payload = list_append(payload, rlp_int(header.gas_used));
-    payload = list_append(payload, rlp_int(header.timestamp));
-    payload = list_append(payload, rlp_bytes(ssz_bytes(pl_extra_start(), pl_txs_start() - pl_extra_start())));
-    payload = list_append(payload, rlp_word(header.prev_randao));
-    payload = list_append(payload, rlp_bytes(zero_bytes(8)));
-    payload = list_append(payload, rlp_int_word(header.base_fee));
-    payload = list_append(payload, rlp_word(withdrawals_root));
-    payload = list_append(payload, rlp_int(header.blob_gas_used));
-    payload = list_append(payload, rlp_int(header.excess_blob_gas));
-    payload = list_append(payload, rlp_word(header.parent_beacon_block_root));
-    payload = list_append(payload, rlp_word(requests_hash));
-    payload = list_append(payload, rlp_word(block_access_list_hash));
-    payload = list_append(payload, rlp_int(header.slot_number));
-    keccak_rlp_list(payload)
-}

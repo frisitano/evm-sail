@@ -16,6 +16,33 @@ val host_keccak_address_ffi = impure { _: "host_keccak_address" } : address -> h
 val host_keccak_create2_ffi = impure { _: "host_keccak_create2" } : (address, word, hash) -> hash
 val host_create_address_ffi = impure { _: "host_create_address" } : (address, bits(64)) -> hash
 val host_sha256_pair_ffi = impure { _: "host_sha256_pair" } : (hash, hash) -> hash
+
+/* Block-header RLP is framed and hashed C-side. Args are in RLP field order;
+ * logs_bloom (256B) and extraData are passed as witness offsets/length, the
+ * remaining fields as fixed words / u64 scalars. */
+val host_block_header_hash_ffi = impure { _: "host_block_header_hash" } : (
+        hash,     /* parent_hash */
+        address,  /* fee_recipient */
+        hash,     /* state_root */
+        hash,     /* transactions_root */
+        hash,     /* receipts_root */
+        bits(64), /* logs_bloom witness offset (length 256) */
+        bits(64), /* number */
+        bits(64), /* gas_limit */
+        bits(64), /* gas_used */
+        bits(64), /* timestamp */
+        bits(64), /* extraData witness offset */
+        bits(64), /* extraData length */
+        hash,     /* prev_randao */
+        word,     /* base_fee */
+        hash,     /* withdrawals_root */
+        bits(64), /* blob_gas_used */
+        bits(64), /* excess_blob_gas */
+        hash,     /* parent_beacon_block_root */
+        hash,     /* requests_hash */
+        hash,     /* block_access_list_hash */
+        bits(64), /* slot_number */
+    ) -> hash
 val host_sha256_digests3_ffi = impure { _: "host_sha256_digests3" } : (bits(8), hash, hash, hash) -> hash
 
 val host_bytes_reset_ffi = impure { _: "host_bytes_reset" } : unit -> unit
@@ -106,6 +133,44 @@ function create2_address(sender : address, salt : word, init_hash : hash) -> add
  * C (nonce is a u64 account nonce). Refines keccak256(rlp([sender, nonce])). */
 function create_address(sender : address, nonce : int) -> address =
     word_to_address(host_create_address_ffi(sender, get_slice_int(64, nonce, 0)))
+
+/* Block hash: build re-reads logs_bloom / extraData from the witness (they are
+ * decoded from there) and passes the remaining header fields as scalars, so the
+ * whole RLP header is framed and hashed C-side with no Sail list. Refines the
+ * spec/crypto.sail block_header_hash body. */
+function block_header_hash(
+    header : BlockHeader,
+    transactions_root : hash,
+    withdrawals_root : hash,
+    requests_hash : hash,
+    block_access_list_hash : hash,
+) -> hash = {
+    let extra_off = pl_extra_start();
+    let extra_len = pl_txs_start() - extra_off;
+    host_block_header_hash_ffi(
+        header.parent_hash,
+        header.fee_recipient,
+        header.state_root,
+        transactions_root,
+        header.receipts_root,
+        get_slice_int(64, payload_start() + PL_LOGS_BLOOM, 0),
+        get_slice_int(64, header.number, 0),
+        get_slice_int(64, header.gas_limit, 0),
+        get_slice_int(64, header.gas_used, 0),
+        get_slice_int(64, header.timestamp, 0),
+        get_slice_int(64, extra_off, 0),
+        get_slice_int(64, extra_len, 0),
+        header.prev_randao,
+        header.base_fee,
+        withdrawals_root,
+        get_slice_int(64, header.blob_gas_used, 0),
+        get_slice_int(64, header.excess_blob_gas, 0),
+        header.parent_beacon_block_root,
+        requests_hash,
+        block_access_list_hash,
+        get_slice_int(64, header.slot_number, 0),
+    )
+}
 
 function secp256k1_verify_precompile(h : bits(256), r : word, s : word, x : bits(256), y : bits(256)) -> bool =
     precompile_secp256k1_verify_hash_sig_pub_ffi(h, r, s, x, y)
