@@ -1066,22 +1066,23 @@ function state_updates_account_row(row : AcctRow, prev : list(TriePatch), skip_e
     }
 }
 
-/* execution updates only (witness base) */
+/* execution updates only (witness base): the account write-set's dirty block
+ * rows = accounts changed vs the authenticated pre-state */
 function state_updates_map_updates_only() -> list(TriePatch) = {
     var out : list(TriePatch) = [||];
-    let n = unsigned(acctmap_update_count());
+    let n = unsigned(acct_wset_block_dirty_count());
     foreach (j from 0 to (n - 1)) {
-        out = state_updates_account_row(acctmap_update_row(j), out, true)
+        out = state_updates_account_row(acct_wset_dirty_row(j), out, true)
     };
     out
 }
 
-/* complete cache/update union (native fixture base) */
+/* complete cache-union-block (native fixture base): every post-state account */
 function state_updates_map_union() -> list(TriePatch) = {
     var out : list(TriePatch) = [||];
-    let n = unsigned(acctmap_count());
+    let n = unsigned(acct_wset_union_count());
     foreach (j from 0 to (n - 1)) {
-        out = state_updates_account_row(acctmap_row(j), out, false)
+        out = state_updates_account_row(acct_wset_union_row(j), out, false)
     };
     out
 }

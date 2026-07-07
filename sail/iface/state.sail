@@ -105,3 +105,20 @@ val acct_wset_sroot : address -> hash
 val acct_wset_chash : address -> hash
 val acct_wset_write : (address, bits(64), word, hash, hash) -> unit
 val acct_wset_restore : (address, bits(64), word, hash, hash) -> unit
+
+/* compute_root enumeration over acct_wset_block (fields mirror AcctRow):
+ * witness = dirty rows (changed vs pre-state); native = cache-union-block rows */
+val acct_wset_block_dirty_count : unit -> bits(64)
+val acct_wset_block_dirty_hkey : bits(64) -> hash
+val acct_wset_block_dirty_nonce : bits(64) -> bits(64)
+val acct_wset_block_dirty_bal : bits(64) -> word
+val acct_wset_block_dirty_sroot : bits(64) -> hash
+val acct_wset_block_dirty_chash : bits(64) -> hash
+val acct_wset_block_dirty_base_exists : bits(64) -> bool
+val acct_wset_union_count : unit -> bits(64)
+val acct_wset_union_hkey : bits(64) -> hash
+val acct_wset_union_nonce : bits(64) -> bits(64)
+val acct_wset_union_bal : bits(64) -> word
+val acct_wset_union_sroot : bits(64) -> hash
+val acct_wset_union_chash : bits(64) -> hash
+val acct_wset_union_base_exists : bits(64) -> bool

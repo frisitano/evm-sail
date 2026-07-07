@@ -70,11 +70,11 @@ function nbytes(n : int) -> list(byte) = {
  * "STO accountHash slot value" line per storage row. The harness maps fixture
  * addresses to keccak(address) before comparing. */
 function dump_storage() -> unit = {
-    /* every storage row's account is in the acctmap (seeding and SSTORE both
-       load the account first), so per-account getters cover the whole map */
-    let n = unsigned(acctmap_count());
+    /* iterate the post-state account union (cache-union-block); every account
+       with storage is in it (native seeds pre-state, CREATE writes the overlay) */
+    let n = unsigned(acct_wset_union_count());
     foreach (i from 0 to (n - 1)) {
-        let ak = acctmap_row_hkey(get_slice_int(64, i, 0));
+        let ak = acct_wset_union_hkey(get_slice_int(64, i, 0));
         /* the post-state union the native root is built from: seeded pre-state
            cache overlaid with the write-set block base (host/base_native.sail) */
         let ns = storage_wset_union_rows(ak);
@@ -95,9 +95,9 @@ function dump_storage() -> unit = {
 
 /* one "ACC accountHash nonce balance" line per account in the working set */
 function dump_accounts() -> unit = {
-    let n = unsigned(acctmap_count());
+    let n = unsigned(acct_wset_union_count());
     foreach (j from 0 to (n - 1)) {
-        let row = acctmap_row(j);
+        let row = acct_wset_union_row(j);
         print_endline(
             concat_str(
                 "ACC ",

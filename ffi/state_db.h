@@ -88,4 +88,21 @@ unit acct_wset_write(const lbits a, uint64_t nonce,
 unit acct_wset_restore(const lbits a, uint64_t nonce,
                        const lbits bal, const lbits sroot, const lbits chash);
 
+/* compute_root enumeration over acct_wset_block: witness = dirty rows, native =
+   cache-union-block rows. Fields mirror AcctRow (host/state.sail). */
+uint64_t acct_wset_block_dirty_count(const unit u);
+void acct_wset_block_dirty_hkey(lbits *rop, uint64_t i);
+uint64_t acct_wset_block_dirty_nonce(uint64_t i);
+void acct_wset_block_dirty_bal(lbits *rop, uint64_t i);
+void acct_wset_block_dirty_sroot(lbits *rop, uint64_t i);
+void acct_wset_block_dirty_chash(lbits *rop, uint64_t i);
+bool acct_wset_block_dirty_base_exists(uint64_t i);
+uint64_t acct_wset_union_count(const unit u);
+void acct_wset_union_hkey(lbits *rop, uint64_t i);
+uint64_t acct_wset_union_nonce(uint64_t i);
+void acct_wset_union_bal(lbits *rop, uint64_t i);
+void acct_wset_union_sroot(lbits *rop, uint64_t i);
+void acct_wset_union_chash(lbits *rop, uint64_t i);
+bool acct_wset_union_base_exists(uint64_t i);
+
 #endif

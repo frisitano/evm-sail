@@ -199,3 +199,33 @@ function acct_wset_write(a : address, nonce : bits(64), bal : word, sroot : hash
 val acct_wset_restore_ffi = impure { _: "acct_wset_restore" } : (address, bits(64), word, hash, hash) -> unit
 function acct_wset_restore(a : address, nonce : bits(64), bal : word, sroot : hash, chash : hash) -> unit =
     acct_wset_restore_ffi(a, nonce, bal, sroot, chash)
+
+/* ---- acct_wset compute_root enumeration ---- */
+val acct_wset_block_dirty_count_ffi = impure { _: "acct_wset_block_dirty_count" } : unit -> bits(64)
+function acct_wset_block_dirty_count() -> bits(64) = acct_wset_block_dirty_count_ffi()
+val acct_wset_block_dirty_hkey_ffi = impure { _: "acct_wset_block_dirty_hkey" } : bits(64) -> hash
+function acct_wset_block_dirty_hkey(i : bits(64)) -> hash = acct_wset_block_dirty_hkey_ffi(i)
+val acct_wset_block_dirty_nonce_ffi = impure { _: "acct_wset_block_dirty_nonce" } : bits(64) -> bits(64)
+function acct_wset_block_dirty_nonce(i : bits(64)) -> bits(64) = acct_wset_block_dirty_nonce_ffi(i)
+val acct_wset_block_dirty_bal_ffi = impure { _: "acct_wset_block_dirty_bal" } : bits(64) -> word
+function acct_wset_block_dirty_bal(i : bits(64)) -> word = acct_wset_block_dirty_bal_ffi(i)
+val acct_wset_block_dirty_sroot_ffi = impure { _: "acct_wset_block_dirty_sroot" } : bits(64) -> hash
+function acct_wset_block_dirty_sroot(i : bits(64)) -> hash = acct_wset_block_dirty_sroot_ffi(i)
+val acct_wset_block_dirty_chash_ffi = impure { _: "acct_wset_block_dirty_chash" } : bits(64) -> hash
+function acct_wset_block_dirty_chash(i : bits(64)) -> hash = acct_wset_block_dirty_chash_ffi(i)
+val acct_wset_block_dirty_base_exists_ffi = impure { _: "acct_wset_block_dirty_base_exists" } : bits(64) -> bool
+function acct_wset_block_dirty_base_exists(i : bits(64)) -> bool = acct_wset_block_dirty_base_exists_ffi(i)
+val acct_wset_union_count_ffi = impure { _: "acct_wset_union_count" } : unit -> bits(64)
+function acct_wset_union_count() -> bits(64) = acct_wset_union_count_ffi()
+val acct_wset_union_hkey_ffi = impure { _: "acct_wset_union_hkey" } : bits(64) -> hash
+function acct_wset_union_hkey(i : bits(64)) -> hash = acct_wset_union_hkey_ffi(i)
+val acct_wset_union_nonce_ffi = impure { _: "acct_wset_union_nonce" } : bits(64) -> bits(64)
+function acct_wset_union_nonce(i : bits(64)) -> bits(64) = acct_wset_union_nonce_ffi(i)
+val acct_wset_union_bal_ffi = impure { _: "acct_wset_union_bal" } : bits(64) -> word
+function acct_wset_union_bal(i : bits(64)) -> word = acct_wset_union_bal_ffi(i)
+val acct_wset_union_sroot_ffi = impure { _: "acct_wset_union_sroot" } : bits(64) -> hash
+function acct_wset_union_sroot(i : bits(64)) -> hash = acct_wset_union_sroot_ffi(i)
+val acct_wset_union_chash_ffi = impure { _: "acct_wset_union_chash" } : bits(64) -> hash
+function acct_wset_union_chash(i : bits(64)) -> hash = acct_wset_union_chash_ffi(i)
+val acct_wset_union_base_exists_ffi = impure { _: "acct_wset_union_base_exists" } : bits(64) -> bool
+function acct_wset_union_base_exists(i : bits(64)) -> bool = acct_wset_union_base_exists_ffi(i)

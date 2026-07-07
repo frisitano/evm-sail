@@ -262,6 +262,33 @@ function acctmap_update_row(j : int) -> AcctRow = {
         row_base_exists = acctmap_update_row_base_exists(idx),
     }
 }
+
+/* account write-set block enumeration for compute_root (host/base_*.sail
+ * state_updates_map): dirty rows = the net change vs pre-state (witness); the
+ * cache-union-block = the full post-state accounts (native). */
+function acct_wset_dirty_row(j : int) -> AcctRow = {
+    let idx = get_slice_int(64, j, 0);
+    struct {
+        row_hkey = acct_wset_block_dirty_hkey(idx),
+        row_nonce = acct_wset_block_dirty_nonce(idx),
+        row_bal = acct_wset_block_dirty_bal(idx),
+        row_sroot = acct_wset_block_dirty_sroot(idx),
+        row_chash = acct_wset_block_dirty_chash(idx),
+        row_base_exists = acct_wset_block_dirty_base_exists(idx),
+    }
+}
+
+function acct_wset_union_row(j : int) -> AcctRow = {
+    let idx = get_slice_int(64, j, 0);
+    struct {
+        row_hkey = acct_wset_union_hkey(idx),
+        row_nonce = acct_wset_union_nonce(idx),
+        row_bal = acct_wset_union_bal(idx),
+        row_sroot = acct_wset_union_sroot(idx),
+        row_chash = acct_wset_union_chash(idx),
+        row_base_exists = acct_wset_union_base_exists(idx),
+    }
+}
 register k_refund : int = 0 /* gas-refund counter (SSTORE clears; EIP-3529 cap applied at tx end) */
 register k_witness_bad : bool =
     false /* witness proof deficient/inconsistent: validation FAILS (valid=false)
@@ -332,7 +359,16 @@ register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob
 /* the account bound to `a` (EMPTY_ACCOUNT if absent), read from the acctmap.
  * The hooks are keyed by raw address; the C backend memoizes keccak(address). */
 function account_lookup(a : address) -> Account = {
-    if acctmap_present(a) then {
+    if acct_wset_present(a) then {
+        /* live overlay: this block's write (tx over committed block) */
+        struct {
+            nonce = unsigned(acct_wset_nonce(a)),
+            balance = acct_wset_bal(a),
+            code_hash = acct_wset_chash(a),
+            storage_root = acct_wset_sroot(a),
+        }
+    } else if acctmap_present(a) then {
+        /* resolver backing: seeded pre-state (native) / read-cached witness leaf */
         struct {
             nonce = unsigned(acctmap_nonce(a)),
             balance = acctmap_bal(a),
@@ -357,9 +393,10 @@ function account_seed(a : address, v : Account) -> unit = acctmap_write_account(
 /* bind `a` -> v in the acctmap as an execution mutation. */
 function account_update(a : address, v : Account) -> unit = acctmap_write_account(a, v, true)
 
-/* whether `a` has been materialized into the acctmap (distinct from account_lookup,
- * which returns EMPTY_ACCOUNT for both absent and not-yet-loaded). */
-function account_loaded(a : address) -> bool = acctmap_present(a)
+/* whether `a` has been materialized (resolver cache) or written (overlay);
+ * distinct from account_lookup, which returns EMPTY_ACCOUNT for absent and
+ * not-yet-loaded alike. Gates the witness resolve-once in load_account. */
+function account_loaded(a : address) -> bool = acctmap_present(a) | acct_wset_present(a)
 
 /* Stateless account materialization (defined in lib/mpt.sail, the witness reader,
  * included later): resolve `a` from the authenticated witness leaf store and bind
@@ -375,7 +412,11 @@ val stateless_account_load : address -> unit
  * mutations). */
 val load_account : address -> Account
 
-function store_account(a : address, v : Account) -> unit = account_update(a, v)
+/* a mutation writes the per-tx account overlay (acct_wset); the first write this
+ * tx freezes the tx-start original C-side. Reverts run through the JAcct journal
+ * (apply_undo below restores the overlay current), not the resolver cache. */
+function store_account(a : address, v : Account) -> unit =
+    acct_wset_write(a, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
 
 /* --- journal (undo log) adapter: JEntry <-> the C-backed scalar journal ---
  * The kernel works in JEntry; these functions are the only place a JEntry is

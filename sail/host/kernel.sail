@@ -64,8 +64,10 @@ function k_orig(a : address, s : word) -> word =
 function k_sstore(a : address, s : word, v : word) -> unit = {
     let orig = k_orig(a, s);                                    /* EIP-2200 tx-start value */
     journal_push(JStor(a, s, storage_wset_prior(a, s, orig)));  /* undo -> value before this write */
-    storage_wset_write(a, s, v, orig);                          /* orig adopted on first write this tx */
-    store_account(a, load_account(a)) /* storage-root changes require a fresh account trie leaf */
+    storage_wset_write(a, s, v, orig)                           /* orig adopted on first write this tx */
+    /* NO account leaf refresh: the storage root is derived at compute_root, and
+       the witness account iteration unions storage-changed accounts from the
+       storage write-set (host/base_witness.sail state_updates_map). */
 }
 
 /* un-journaled storage read (drivers/examples; same overlay+base view as SLOAD) */
@@ -429,9 +431,10 @@ function k_snapshot() -> unit = {
 
 /* full world wipe between independent blocks/fixtures (driver/test only) */
 function k_world_reset() -> unit = {
-    acctmap_reset();
-    storage_map_reset();     /* native base cache */
-    storage_wset_reset();    /* write-set overlay (tx + block) */
+    acctmap_reset();         /* account resolver cache */
+    acct_wset_reset();       /* account write-set overlay (tx + block) */
+    storage_map_reset();     /* native base storage cache */
+    storage_wset_reset();    /* storage write-set overlay (tx + block) */
     transient_reset();
     warm_reset();
     logs_reset();
@@ -470,7 +473,10 @@ function k_commit() -> unit = {
  * Only dirty (net-change) rows reach the base; a fully-reverted boundary leaves
  * none, so this just clears the overlay. The block base is the compute_root
  * cursor (host/base_*.sail storage_updates). */
-function k_tx_merge() -> unit = storage_wset_merge()
+function k_tx_merge() -> unit = {
+    storage_wset_merge();
+    acct_wset_merge()
+}
 
 /* revert: replay undo entries back to (and dropping) the most recent checkpoint.
  * Decode the top entry into a JEntry, drop it, then dispatch: stop on JCheck,
