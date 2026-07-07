@@ -59,28 +59,6 @@ function code_hash_and_store(c : list(byte)) -> hash = {
 function code_db_store_witness_code(s : witness_slice) -> unit =
     code_db_store_slice(witness_byte_slice(s))
 
-/* The tx signing preimage hash: typed txs prepend the type byte as a domain
- * separator; legacy EIP-155 txs append (chain_id, 0, 0) to the content. */
-function tx_signing_hash(ttype : int, fields : list(RlpField), i_v : int, v : int) -> bits(256) = {
-    var content : list(byte) = rlp_fields_encoded_prefix(fields, i_v);
-    if (ttype == 0) & (v >= 35) then {
-        content = list_append(content, rlp_int(legacy_sig_chain_id(v)));
-        content = list_append(content, [|0x80, 0x80|])
-    };
-    let domain : list(byte) = if ttype != 0 then {
-            [|get_slice_int(8, ttype, 0)|]
-        } else {
-            [||]
-        };
-    keccak_rlp_payload(domain, content)
-}
-
-/* EIP-7702 authorization signing hash: 0x05 || rlp([chain_id, address, nonce]). */
-function auth_signing_hash(fields : list(RlpField)) -> bits(256) = {
-    let content : list(byte) = rlp_fields_encoded_prefix(fields, 3);
-    keccak_rlp_payload([|0x05|], content)
-}
-
 /* EIP-7685 commitment: sha256 over the concatenation of each present request
  * type's 32-byte per-type digest (deposit, withdrawal, consolidation, in that
  * order; an empty request body contributes nothing). Each digest hashes a

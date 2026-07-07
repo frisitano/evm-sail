@@ -270,7 +270,8 @@ function decode_auth_list(f : RlpField) -> list(Authorization) = {
                 let y = rlp_field_int(rlp_item(fields, 3));
                 let r = rlp_field_uint_word(rlp_item(fields, 4));
                 let s = rlp_field_uint_word(rlp_item(fields, 5));
-                let (ok, authority) = ecrecover_addr(auth_signing_hash(fields), y, r, s);
+                let auth_addr = word_to_address(rlp_field_word(rlp_item(fields, 1)));
+                let (ok, authority) = ecrecover_addr(auth_signing_hash(chain_id, auth_addr, auth_nonce), y, r, s);
                 out = list_append(
                     out,
                     [|
@@ -422,8 +423,16 @@ function decode_tx_ssz(i : int, base_fee : word) -> Transaction = {
     let sig_v = rlp_field_int(rlp_item(fields, i_v));
     let sig_r = rlp_field_uint_word(rlp_item(fields, i_v + 1));
     let sig_s = rlp_field_uint_word(rlp_item(fields, i_v + 2));
+    /* The signing preimage content is the RLP of fields[0..i_v), a contiguous
+       span of the witness tx bytes: it begins at the payload list's content
+       offset (after tx_off, +1 for a typed envelope) and runs for the summed
+       full-encoding length of those fields. The build backend frames + hashes
+       this span C-side instead of materializing the field list. */
+    let (_, sig_cs, _) = rlp_hdr(payload, 0);
+    let sig_content_off = (if typed then tx_off + 1 else tx_off) + sig_cs;
+    let sig_content_src = byte_slice(WitnessSource, sig_content_off, rlp_fields_prefix_len(fields, i_v));
     auth_ok =
-        auth_ok & tx_sig_v_ok(ttype, sig_v) & tx_auth_ok(i, tx_signing_hash(ttype, fields, i_v, sig_v), sig_r, sig_s);
+        auth_ok & tx_sig_v_ok(ttype, sig_v) & tx_auth_ok(i, tx_signing_hash(ttype, sig_content_src, sig_v), sig_r, sig_s);
 
     struct {
         tx_type = ttype,

@@ -34,6 +34,35 @@ function keccak256_address(a : address) -> bits(256) =
 function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) =
     sha256(list_append(word_to_bytes32(a), word_to_bytes32(b)))
 
+/* EIP-7702 authorization signing hash: 0x05 || rlp([chain_id, address, nonce]).
+ * The tuple's three signed fields are canonical for any valid authorization, so
+ * both backends re-encode them from the decoded values; build frames + hashes
+ * C-side (build/crypto.sail). */
+function auth_signing_hash(chain_id : int, addr : address, nonce : int) -> hash = {
+    var content : list(byte) = rlp_int(chain_id);
+    content = list_append(content, rlp_addr(addr));
+    content = list_append(content, rlp_int(nonce));
+    keccak_rlp_payload([|0x05|], content)
+}
+
+/* Tx signing preimage hash. `content_src` spans the RLP of the pre-signature
+ * fields in the witness; legacy EIP-155 txs append (chain_id, 0, 0), typed txs
+ * prepend the type byte as a domain separator. Build frames + hashes this
+ * C-side (build/crypto.sail). */
+function tx_signing_hash(ttype : int, content_src : ByteSlice, v : int) -> hash = {
+    var content : list(byte) = read_byte_slice(content_src);
+    if (ttype == 0) & (v >= 35) then {
+        content = list_append(content, rlp_int(legacy_sig_chain_id(v)));
+        content = list_append(content, [|0x80, 0x80|])
+    };
+    let domain : list(byte) = if ttype != 0 then {
+            [|get_slice_int(8, ttype, 0)|]
+        } else {
+            [||]
+        };
+    keccak_rlp_payload(domain, content)
+}
+
 function sha256_digests3(mask : bits(8), d0 : bits(256), d1 : bits(256), d2 : bits(256)) -> bits(256) = {
     var payload : list(byte) = [||];
     if mask[0] == bitone then payload = list_append(payload, word_to_bytes32(d0));

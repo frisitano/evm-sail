@@ -266,32 +266,35 @@ function rlp_list_items(f : RlpField) -> list(RlpField) =
         [||]
     }
 
-function rlp_fields_encoded_prefix(items : list(RlpField), count : int) -> list(byte) = {
-    var out : list(byte) = [||];
+/* Total byte length of the first `count` fields' full encodings -- the length
+ * of their concatenated RLP without materializing it, used to size the
+ * signing-content witness span. */
+function rlp_fields_prefix_len(items : list(RlpField), count : int) -> int = {
+    var total : int = 0;
     var rest : list(RlpField) = items;
     var i : int = 0;
     var more : bool = true;
     while more & (i < count) do {
         match rest {
             f :: t => {
-                out = list_append(out, f.full);
+                total = total + list_len(f.full);
                 rest = t;
                 i = i + 1
             },
-            [||] => {
-                rlp_decode_ok = false;
-                more = false
-            },
+            [||] => more = false,
         }
     };
-    out
+    total
 }
+
 
 /* Transaction and EIP-7702 authorization signing hashes. Spec definitions
  * materialize the canonical RLP preimage; build definitions can refine this
- * boundary without exposing a generic byte-list hash to common code. */
-val tx_signing_hash : (int, list(RlpField), int, int) -> bits(256)
-val auth_signing_hash : list(RlpField) -> bits(256)
+ * boundary without exposing a generic byte-list hash to common code. The tx
+ * signing content is a contiguous witness span (the pre-signature fields'
+ * RLP); build frames + hashes it C-side rather than materializing the list. */
+val tx_signing_hash : (int, ByteSlice, int) -> hash
+val auth_signing_hash : (int, address, int) -> hash
 
 /* content of an RlpField as a big-endian integer / 256-bit word */
 function rlp_field_int(f : RlpField) -> int = {

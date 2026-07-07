@@ -266,6 +266,78 @@ void host_block_header_hash(
   host_keccak256_lbits(rop, out, hn + n);
 }
 
+/* Tx signing preimage hash. The pre-signature RLP content is a witness span
+ * (src_kind/off/len); frame it with the optional type-byte domain, the RLP
+ * list prefix, and the optional EIP-155 (chain_id, 0, 0) suffix, then keccak. */
+void host_tx_signing_hash(lbits *rop, uint64_t ttype, uint64_t apply_155,
+                          const lbits chain_id, uint64_t src_kind, uint64_t off,
+                          uint64_t len) {
+  const uint8_t *content = NULL;
+  uint64_t rlen = 0;
+  if (!evmsail_resolve_byte_source(src_kind, off, len, &content, &rlen) ||
+      rlen != len) {
+    host_keccak256_lbits(rop, NULL, UINT64_MAX);
+    return;
+  }
+
+  uint8_t suffix[36]; /* rlp_int(chain_id) <= 33, then 0x80 0x80 */
+  size_t sl = 0;
+  if (apply_155) {
+    rlp_put_word_min(suffix, &sl, chain_id);
+    suffix[sl++] = 0x80;
+    suffix[sl++] = 0x80;
+  }
+  size_t content_len = (size_t)len + sl;
+
+  uint8_t hdr[10]; /* domain byte + list prefix (<= 9) */
+  size_t hl = 0;
+  if (ttype != 0) hdr[hl++] = (uint8_t)ttype;
+  if (content_len <= 55) {
+    hdr[hl++] = (uint8_t)(0xc0 + content_len);
+  } else {
+    uint8_t lb[8];
+    int m = 0;
+    for (size_t x = content_len; x != 0; x >>= 8) lb[m++] = (uint8_t)(x & 0xff);
+    hdr[hl++] = (uint8_t)(0xf7 + m);
+    for (int i = 0; i < m; i++) hdr[hl++] = lb[m - 1 - i];
+  }
+
+  size_t total = hl + (size_t)len + sl;
+  uint8_t *buf = malloc(total);
+  if (buf == NULL) {
+    host_keccak256_lbits(rop, NULL, UINT64_MAX);
+    return;
+  }
+  memcpy(buf, hdr, hl);
+  memcpy(buf + hl, content, (size_t)len);
+  memcpy(buf + hl + (size_t)len, suffix, sl);
+  host_keccak256_lbits(rop, buf, total);
+  free(buf);
+}
+
+/* EIP-7702 authorization signing hash: keccak(0x05 ++ rlp([chain_id, address,
+ * nonce])). The three signed fields are re-encoded from decoded values. */
+void host_auth_signing_hash(lbits *rop, const lbits chain_id, const lbits address,
+                            uint64_t nonce) {
+  uint8_t payload[64]; /* rlp_int(word) <= 33 + rlp_addr 21 + rlp_int(u64) <= 9 */
+  size_t n = 0;
+  rlp_put_word_min(payload, &n, chain_id);
+  rlp_put_addr(payload, &n, address);
+  n += host_rlp_uint(payload + n, nonce);
+  uint8_t buf[80];
+  size_t bn = 0;
+  buf[bn++] = 0x05; /* EIP-7702 magic domain */
+  if (n <= 55) {
+    buf[bn++] = (uint8_t)(0xc0 + n);
+  } else {
+    buf[bn++] = 0xf8; /* n < 256 */
+    buf[bn++] = (uint8_t)n;
+  }
+  memcpy(buf + bn, payload, n);
+  bn += n;
+  host_keccak256_lbits(rop, buf, bn);
+}
+
 static int host_bytes_reserve(uint64_t need) {
   if (need <= HOST_bytes_cap) return 1;
   uint64_t cap = HOST_bytes_cap ? HOST_bytes_cap : 256;

@@ -43,6 +43,21 @@ val host_block_header_hash_ffi = impure { _: "host_block_header_hash" } : (
         hash,     /* block_access_list_hash */
         bits(64), /* slot_number */
     ) -> hash
+
+/* Tx signing hash: frame the pre-signature RLP content (a witness span) with
+ * the type-byte domain / list prefix / EIP-155 suffix and hash it C-side.
+ * apply_155 selects the (chain_id, 0, 0) legacy suffix. */
+val host_tx_signing_hash_ffi = impure { _: "host_tx_signing_hash" } : (
+        bits(8),  /* tx type (0 = legacy, else typed domain byte) */
+        bits(8),  /* apply EIP-155 (chain_id, 0, 0) suffix */
+        word,     /* EIP-155 chain id */
+        bits(64), /* content byte-source kind */
+        bits(64), /* content offset */
+        bits(64), /* content length */
+    ) -> hash
+
+/* EIP-7702 auth signing hash: frame 0x05 || rlp([chain_id, address, nonce]). */
+val host_auth_signing_hash_ffi = impure { _: "host_auth_signing_hash" } : (word, address, bits(64)) -> hash
 val host_sha256_digests3_ffi = impure { _: "host_sha256_digests3" } : (bits(8), hash, hash, hash) -> hash
 
 val host_bytes_reset_ffi = impure { _: "host_bytes_reset" } : unit -> unit
@@ -171,6 +186,22 @@ function block_header_hash(
         get_slice_int(64, header.slot_number, 0),
     )
 }
+
+function tx_signing_hash(ttype : int, content_src : ByteSlice, v : int) -> hash = {
+    let apply_155 : bool = (ttype == 0) & (v >= 35);
+    let chain_id : word = if apply_155 then get_slice_int(256, legacy_sig_chain_id(v), 0) else sail_zeros(256);
+    host_tx_signing_hash_ffi(
+        get_slice_int(8, ttype, 0),
+        if apply_155 then 0x01 else 0x00,
+        chain_id,
+        byte_source_kind(content_src.source),
+        content_src.off,
+        content_src.len,
+    )
+}
+
+function auth_signing_hash(chain_id : int, addr : address, nonce : int) -> hash =
+    host_auth_signing_hash_ffi(get_slice_int(256, chain_id, 0), addr, get_slice_int(64, nonce, 0))
 
 function secp256k1_verify_precompile(h : bits(256), r : word, s : word, x : bits(256), y : bits(256)) -> bool =
     precompile_secp256k1_verify_hash_sig_pub_ffi(h, r, s, x, y)

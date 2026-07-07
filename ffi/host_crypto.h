@@ -36,6 +36,11 @@ void host_block_header_hash(
     uint64_t excess_blob_gas, const lbits parent_beacon_block_root,
     const lbits requests_hash, const lbits block_access_list_hash,
     uint64_t slot_number);
+void host_tx_signing_hash(lbits *rop, uint64_t ttype, uint64_t apply_155,
+                          const lbits chain_id, uint64_t src_kind, uint64_t off,
+                          uint64_t len);
+void host_auth_signing_hash(lbits *rop, const lbits chain_id, const lbits address,
+                            uint64_t nonce);
 void host_sha256_pair(lbits *rop, const lbits a, const lbits b);
 void host_sha256_digests3(lbits *rop, uint64_t mask, const lbits d0, const lbits d1,
                           const lbits d2);
