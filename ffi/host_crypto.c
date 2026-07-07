@@ -447,12 +447,44 @@ unit node_asm_push_ref(uint64_t kind, const lbits data, uint64_t len) {
   return UNIT;
 }
 
-/* frame the accumulated payload (with the branch value slot 0x80 appended) as
- * an RLP list; return the node length and stage its inline bytes / keccak. */
-uint64_t node_asm_finish_branch(const unit u) {
-  (void)u;
-  uint8_t vb = 0x80;
-  nasm_append(&vb, 1); /* branch 17th item (value slot): empty */
+/* extract nibble j (0 = most significant) from a big-endian nibble array a32
+ * holding `cnt` nibbles right-aligned. */
+static uint8_t nasm_nib(const uint8_t *a32, uint64_t cnt, uint64_t j) {
+  uint64_t p = 4 * (cnt - 1 - j);
+  size_t b = 31 - (size_t)(p / 8);
+  return (p % 8 == 0) ? (a32[b] & 0xf) : (a32[b] >> 4);
+}
+
+/* append rlp_bytes(hex_prefix_compact(nibbles, is_leaf)) as a node item. The
+ * `cnt` nibbles are packed big-endian in the 256-bit `nibbles` word (top nibble
+ * first, right-aligned); mirrors lib/mpt.sail hex_prefix_compact. */
+unit node_asm_push_path(const lbits nibbles, uint64_t cnt, uint64_t is_leaf) {
+  uint8_t a32[32];
+  lbits_to_be_bytes(a32, 32, nibbles);
+  uint8_t fn = is_leaf ? 2 : 0;
+  uint8_t path[33];
+  size_t pl = 0;
+  uint64_t start;
+  if (cnt & 1) {
+    path[pl++] = (uint8_t)(((fn | 1) << 4) | nasm_nib(a32, cnt, 0));
+    start = 1;
+  } else {
+    path[pl++] = (uint8_t)(fn << 4);
+    start = 0;
+  }
+  for (uint64_t j = start; j < cnt; j += 2) {
+    path[pl++] = (uint8_t)((nasm_nib(a32, cnt, j) << 4) | nasm_nib(a32, cnt, j + 1));
+  }
+  uint8_t enc[40];
+  size_t en = 0;
+  rlp_put_str(enc, &en, path, pl);
+  nasm_append(enc, en);
+  return UNIT;
+}
+
+/* frame the accumulated payload as an RLP list; stage node length + inline
+ * bytes / keccak so Sail can form the child ref. */
+static uint64_t nasm_frame(void) {
   if (!NASM_ok) {
     NASM_node_len = 0;
     return 0;
@@ -471,6 +503,20 @@ uint64_t node_asm_finish_branch(const unit u) {
   NASM_node_len = hn + NASM_n;
   if (NASM_node_len >= 32) host_keccak256_bytes(NASM_hash, NASM_node, NASM_node_len);
   return (uint64_t)NASM_node_len;
+}
+
+/* branch node: append the empty 17th value slot, then frame. */
+uint64_t node_asm_finish_branch(const unit u) {
+  (void)u;
+  uint8_t vb = 0x80;
+  nasm_append(&vb, 1);
+  return nasm_frame();
+}
+
+/* leaf / extension node: frame the two pushed items as-is. */
+uint64_t node_asm_finish(const unit u) {
+  (void)u;
+  return nasm_frame();
 }
 
 /* the finished node's bytes (< 32) right-aligned into a 256-bit word, so Sail

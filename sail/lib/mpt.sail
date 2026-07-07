@@ -245,9 +245,13 @@ function extension_node_rlp(key : list(nibble), childref : list(byte)) -> list(b
     rlp_list(rlp_bytes(hex_prefix_compact(key, false)) ++ childref)
 function leaf_child_ref(key : list(nibble), value : list(byte)) -> list(byte) =
     child_ref(leaf_node_rlp(key, value))
-function extension_child_ref(key : list(nibble), childref : list(byte)) -> list(byte) =
-    child_ref(extension_node_rlp(key, childref))
 function hash_child_ref(hash : list(byte)) -> list(byte) = [|0xa0|] ++ hash
+
+/* extension child ref (Eq. 208 extension form): a refinement pair. The spec
+ * backend composes and hashes rlp([hp(key,ext), childref]) as a byte list
+ * (spec/mpt.sail); the build backend assembles it in C from the compact path
+ * and the fixed-width child ref (build/mpt.sail). */
+val extension_child_ref : (list(nibble), list(byte)) -> list(byte)
 
 function branch_payload_rlp(mask : bits(16), children : list(list(byte))) -> list(byte) = {
     var payload : list(byte) = [||];

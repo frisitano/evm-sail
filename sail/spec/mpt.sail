@@ -5,3 +5,6 @@
 
 function branch_child_ref(mask : bits(16), children : list(list(byte))) -> list(byte) =
     child_ref(branch_node_rlp(mask, children))
+
+function extension_child_ref(key : list(nibble), childref : list(byte)) -> list(byte) =
+    child_ref(extension_node_rlp(key, childref))

@@ -5,7 +5,9 @@
 
 val node_asm_reset_ffi = impure { _: "node_asm_reset" } : unit -> unit
 val node_asm_push_ref_ffi = impure { _: "node_asm_push_ref" } : (bits(64), word, bits(64)) -> unit
+val node_asm_push_path_ffi = impure { _: "node_asm_push_path" } : (word, bits(64), bits(64)) -> unit
 val node_asm_finish_branch_ffi = impure { _: "node_asm_finish_branch" } : unit -> bits(64)
+val node_asm_finish_ffi = impure { _: "node_asm_finish" } : unit -> bits(64)
 val node_asm_result_data_ffi = impure { _: "node_asm_result_data" } : unit -> word
 val node_asm_result_hash_ffi = impure { _: "node_asm_result_hash" } : unit -> hash
 
@@ -37,6 +39,35 @@ function build_word_to_ref(data : word, len : int) -> list(byte) = {
     out
 }
 
+/* the finished node's child ref (Eq. 207): inline node bytes when < 32, else
+ * 0xa0 ++ keccak(node). `nlen` is the encoded node length from finish. */
+function nasm_result_ref(nlen : int) -> list(byte) =
+    if nlen < 32 then {
+        build_word_to_ref(node_asm_result_data_ffi(), nlen)
+    } else {
+        hash_child_ref(word_to_bytes32(node_asm_result_hash_ffi()))
+    }
+
+/* pack a nibble list big-endian, top nibble first, into a 256-bit word (64
+ * nibbles max), returning the word and the nibble count. */
+function pack_nibbles(nibs : list(nibble)) -> (word, int) = {
+    var acc : word = sail_zeros(256);
+    var cnt : int = 0;
+    var rest : list(nibble) = nibs;
+    var more : bool = true;
+    while more do {
+        match rest {
+            n :: t => {
+                acc = or_vec(sail_shiftleft(acc, 4), sail_zero_extend(n, 256));
+                cnt = cnt + 1;
+                rest = t
+            },
+            [||] => more = false,
+        }
+    };
+    (acc, cnt)
+}
+
 function branch_child_ref(mask : bits(16), children : list(list(byte))) -> list(byte) = {
     node_asm_reset_ffi();
     var ch : list(list(byte)) = children;
@@ -53,10 +84,13 @@ function branch_child_ref(mask : bits(16), children : list(list(byte))) -> list(
             node_asm_push_ref_ffi(0x0000000000000000, sail_zeros(256), 0x0000000000000000)
         }
     };
-    let nlen = unsigned(node_asm_finish_branch_ffi());
-    if nlen < 32 then {
-        build_word_to_ref(node_asm_result_data_ffi(), nlen)
-    } else {
-        hash_child_ref(word_to_bytes32(node_asm_result_hash_ffi()))
-    }
+    nasm_result_ref(unsigned(node_asm_finish_branch_ffi()))
+}
+
+function extension_child_ref(key : list(nibble), childref : list(byte)) -> list(byte) = {
+    node_asm_reset_ffi();
+    let (packed, cnt) = pack_nibbles(key);
+    node_asm_push_path_ffi(packed, get_slice_int(64, cnt, 0), 0x0000000000000000);
+    build_push_ref(childref);
+    nasm_result_ref(unsigned(node_asm_finish_ffi()))
 }
