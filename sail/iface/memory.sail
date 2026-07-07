@@ -68,3 +68,10 @@ val cd_to_mem : (bits(64), bits(64), bits(64)) -> unit
 val calldata_load_word : bits(64) -> word
 val txd_at : bits(64) -> bits(8)
 val txd_length : unit -> bits(64)
+
+/* Source -> bytes: the read side of the byte-source interface. Build mode
+ * hashes/stages each source C-side without materializing, so this is uncalled
+ * there; spec mode uses it as the abstract read axiom that the crypto and
+ * precompile refinements are written over. Law: read_byte_slice(s) yields
+ * exactly s.len bytes of source s starting at offset s.off. */
+val read_byte_slice : ByteSlice -> list(byte)

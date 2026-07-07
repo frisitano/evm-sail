@@ -30,8 +30,6 @@ evm {
     if $EVM_BACKEND == spec then [
       spec/oracle.sail,
       spec/precompile.sail,
-      spec/model_state.sail,
-      spec/model_buffers.sail,
       spec/crypto.sail,
       spec/mpt.sail
     ]
@@ -48,16 +46,7 @@ evm {
       build/witness_db.sail,
       build/mpt.sail
     ]
-    else if $EVM_BACKEND == hybrid then [
-      build/oracle.sail,
-      build/crypto.sail,
-      hybrid/precompile.sail,
-      spec/model_state.sail,
-      spec/model_buffers.sail,
-      hybrid/crypto.sail,
-      spec/mpt.sail
-    ]
-    else error("EVM_BACKEND must be spec, build, or hybrid"),
+    else error("EVM_BACKEND must be spec or build"),
     if $EVM_ENTRY == core then []
     else if $EVM_ENTRY == guest then [host/base_witness.sail, lib/ssz_htr.sail, main.sail]
     else if $EVM_ENTRY == runner then [host/base_native.sail, runner.sail]

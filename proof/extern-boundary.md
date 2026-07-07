@@ -32,8 +32,34 @@ proof/coq/ExternBoundary.v
 ## Sail Interface Files
 
 The abstract `val` declarations for each contract group live in
-`sail/iface/*.sail` (included immediately after `sail/prelude.sail`); the
-backend definitions live in `sail/spec/*.sail` and `sail/build/*.sail`.
+`sail/iface/*.sail` (included immediately after `sail/prelude.sail`). Only the
+`build` backend defines them, in C (`sail/build/*.sail`). The `spec` backend
+leaves the host / world-state / buffer / stack operations as **bodyless
+axioms** — there is no concrete Sail reference model — so the Coq export
+represents them as parameters constrained by the laws in this file rather than
+by a second implementation. `sail/spec/*.sail` retains only the pure refinement
+bodies that `build` refines to C (`spec/crypto.sail`, `spec/mpt.sail`) plus the
+oracle and precompile axioms. The read side of the byte-source interface is the
+axiom `read_byte_slice : ByteSlice -> list(byte)` (`sail/iface/memory.sail`);
+every source-materializing spec body and every refinement law here is written
+over it.
+
+## Store Laws
+
+The mutable host stores (memory, returndata, transient/persistent storage,
+accounts, code, witness DB) and the read-only sources (witness, calldata,
+tx-input, active code) share one law schema over `read(source, addr, len)` /
+`write(source, addr, len, value)`, where `addr` is a byte offset for linear
+sources and the (256-bit) secure key for keyed stores:
+
+- **read-after-write** — `read(write(s, a, n, v), a, n) = v`.
+- **frame / disjointness** — `read(write(s, a1, n1, v), a2, n2) = read(s, a2, n2)`
+  when the two spans do not overlap.
+- **default** — an unwritten span reads as zero.
+- **length** — `read(s, a, n)` yields exactly `n` bytes.
+
+Read-only sources admit only the read laws. Layered stores (storage/accounts)
+add the cache/update and commit/revert laws noted in their contract-group rows.
 
 | Contract group | Interface file |
 | --- | --- |
