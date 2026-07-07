@@ -16,6 +16,7 @@ val host_keccak_address_ffi = impure { _: "host_keccak_address" } : address -> h
 val host_keccak_create2_ffi = impure { _: "host_keccak_create2" } : (address, word, hash) -> hash
 val host_create_address_ffi = impure { _: "host_create_address" } : (address, bits(64)) -> hash
 val host_sha256_pair_ffi = impure { _: "host_sha256_pair" } : (hash, hash) -> hash
+val host_sha256_digests3_ffi = impure { _: "host_sha256_digests3" } : (bits(8), hash, hash, hash) -> hash
 
 val host_bytes_reset_ffi = impure { _: "host_bytes_reset" } : unit -> unit
 val host_bytes_push_ffi = impure { _: "host_bytes_push" } : bits(8) -> unit
@@ -94,6 +95,9 @@ function keccak256_word(w : word) -> bits(256) = host_keccak_word_ffi(w)
 function keccak256_address(a : address) -> bits(256) = host_keccak_address_ffi(a)
 
 function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) = host_sha256_pair_ffi(a, b)
+
+function sha256_digests3(mask : bits(8), d0 : bits(256), d1 : bits(256), d2 : bits(256)) -> bits(256) =
+    host_sha256_digests3_ffi(mask, d0, d1, d2)
 
 function create2_address(sender : address, salt : word, init_hash : hash) -> address =
     word_to_address(host_keccak_create2_ffi(sender, salt, init_hash))

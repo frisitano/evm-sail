@@ -828,10 +828,21 @@ function bloom_set_bit(bloom : list(byte), bit_to_set : int) -> list(byte) = {
     list_set(bloom, byte_index, or_vec(old, get_slice_int(8, bit_value, 0)))
 }
 
-function bloom_add_entry(bloom : list(byte), entry : list(byte)) -> list(byte) = {
+/* One of a LOG entry's bloom filter bits (Yellow Paper section 4.4.1):
+ * bytes (2i, 2i+1) of the entry keccak hash, mod 2048. The entry is always
+ * a 20-byte address or a 32-byte topic, so callers hash it via the
+ * fixed-width keccak256_address / keccak256_word FFI -- no list(byte)
+ * reaches the build hash on this path. */
+function bloom_bit(h : bits(256), i : int) -> int = {
+    let hb = word_to_bytes32(h);
+    let j = i * 2;
+    emod_int(unsigned(bytes_get(hb, j)) * 256 + unsigned(bytes_get(hb, j + 1)), 2048)
+}
+
+function bloom_add_entry_hash(bloom : list(byte), h : bits(256)) -> list(byte) = {
     var out : list(byte) = bloom;
     foreach (i from 0 to 2) {
-        out = bloom_set_bit(out, bloom_entry_bit(entry, i))
+        out = bloom_set_bit(out, bloom_bit(h, i))
     };
     out
 }
@@ -843,7 +854,7 @@ function bloom_add_topics(bloom : list(byte), topics : list(word)) -> list(byte)
     while more do {
         match rest {
             topic :: tail => {
-                out = bloom_add_entry(out, word_to_bytes32(topic));
+                out = bloom_add_entry_hash(out, keccak256_word(topic));
                 rest = tail
             },
             [||] => more = false,
@@ -853,7 +864,7 @@ function bloom_add_topics(bloom : list(byte), topics : list(word)) -> list(byte)
 }
 
 function bloom_add_log(bloom : list(byte), log : LogEntry) -> list(byte) = {
-    let with_address = bloom_add_entry(bloom, address_to_bytes(log.address));
+    let with_address = bloom_add_entry_hash(bloom, keccak256_address(log.address));
     bloom_add_topics(with_address, log.topics)
 }
 

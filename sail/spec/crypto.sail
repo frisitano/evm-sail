@@ -34,6 +34,14 @@ function keccak256_address(a : address) -> bits(256) =
 function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) =
     sha256(list_append(word_to_bytes32(a), word_to_bytes32(b)))
 
+function sha256_digests3(mask : bits(8), d0 : bits(256), d1 : bits(256), d2 : bits(256)) -> bits(256) = {
+    var payload : list(byte) = [||];
+    if mask[0] == bitone then payload = list_append(payload, word_to_bytes32(d0));
+    if mask[1] == bitone then payload = list_append(payload, word_to_bytes32(d1));
+    if mask[2] == bitone then payload = list_append(payload, word_to_bytes32(d2));
+    sha256(payload)
+}
+
 function create2_address(sender : address, salt : word, init_hash : hash) -> address = {
     var preimage : list(byte) = [|0xff|];
     preimage = list_append(preimage, address_to_bytes(sender));

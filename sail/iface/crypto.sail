@@ -35,6 +35,12 @@ val keccak256_address : address -> bits(256)
 /* SSZ merkle parent: SHA-256(left ++ right) over two 32-byte chunks. */
 val sha256_pair : (bits(256), bits(256)) -> bits(256)
 
+/* SHA-256 of the concatenation of the present 32-byte digests (mask bits 0..2
+ * select d0,d1,d2, concatenated in order). The EIP-7685 execution-requests
+ * commitment; build concatenates and hashes C-side, so no payload list is
+ * streamed. Refines sha256 of the masked-and-concatenated word bytes. */
+val sha256_digests3 : (bits(8), bits(256), bits(256), bits(256)) -> bits(256)
+
 /* Signature/authentication helpers. Spec uses the mathematical precompile
  * input byte strings; build may use direct staged or native accelerator calls. */
 val secp256k1_verify_precompile : (bits(256), word, word, bits(256), bits(256)) -> bool

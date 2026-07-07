@@ -122,7 +122,6 @@ val code_hash_and_store : list(byte) -> hash
 
 /* Domain operations whose spec definitions may materialize canonical bytes,
  * while build definitions may stream or hash from host byte sources. */
-val bloom_entry_bit : (list(byte), int) -> int
 val execution_requests_hash : unit -> hash
 val block_header_hash : (BlockHeader, hash, hash, hash, hash) -> hash
 

@@ -81,29 +81,21 @@ function auth_signing_hash(fields : list(RlpField)) -> bits(256) = {
     keccak_rlp_payload([|0x05|], content)
 }
 
-/* One of a LOG entry's bloom filter bits (Yellow Paper section 4.4.1):
- * bytes (2i, 2i+1) of keccak(entry), mod 2048. */
-function bloom_entry_bit(entry : list(byte), i : int) -> int = {
-    let h = word_to_bytes32(keccak256(entry));
-    let j = i * 2;
-    emod_int(unsigned(bytes_get(h, j)) * 256 + unsigned(bytes_get(h, j + 1)), 2048)
-}
-
-/* EIP-7685: per-type request digest, or the empty string for an empty body. */
-function request_digest_bytes(request_type : int, body_start : int, body_len : int) -> list(byte) = {
-    if body_len == 0 then {
-        [||]
-    } else {
-        word_to_bytes32(sha256_request_digest(request_type, witness_slice(body_start, body_len)))
-    }
-}
-
+/* EIP-7685 commitment: sha256 over the concatenation of each present request
+ * type's 32-byte per-type digest (deposit, withdrawal, consolidation, in that
+ * order; an empty request body contributes nothing). Each digest hashes a
+ * witness span (source-based); the final concat-and-hash is a refinement pair
+ * (sha256_digests3) so the build backend never streams the <=96-byte payload
+ * list -- the present-digest mask and the three digests cross as fixed words. */
 function execution_requests_hash() -> hash = {
-    var payload : list(byte) = [||];
-    payload = list_append(payload, request_digest_bytes(0, dep_start(), wreq_start() - dep_start()));
-    payload = list_append(payload, request_digest_bytes(1, wreq_start(), creq_start() - wreq_start()));
-    payload = list_append(payload, request_digest_bytes(2, creq_start(), req_end() - creq_start()));
-    sha256(payload)
+    let l0 = wreq_start() - dep_start();
+    let l1 = creq_start() - wreq_start();
+    let l2 = req_end() - creq_start();
+    let d0 : hash = if l0 != 0 then sha256_request_digest(0, witness_slice(dep_start(), l0)) else sail_zeros(256);
+    let d1 : hash = if l1 != 0 then sha256_request_digest(1, witness_slice(wreq_start(), l1)) else sail_zeros(256);
+    let d2 : hash = if l2 != 0 then sha256_request_digest(2, witness_slice(creq_start(), l2)) else sail_zeros(256);
+    let m = (if l0 != 0 then 1 else 0) + (if l1 != 0 then 2 else 0) + (if l2 != 0 then 4 else 0);
+    sha256_digests3(get_slice_int(8, m, 0), d0, d1, d2)
 }
 
 function block_header_hash(

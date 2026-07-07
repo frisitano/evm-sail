@@ -99,6 +99,18 @@ void host_sha256_pair(lbits *rop, const lbits a, const lbits b) {
   host_sha256_lbits(rop, buf, sizeof buf);
 }
 
+/* sha256 of the present 32-byte digests concatenated in order (mask bits 0..2
+ * select d0,d1,d2). The EIP-7685 execution-requests commitment. */
+void host_sha256_digests3(lbits *rop, uint64_t mask, const lbits d0, const lbits d1,
+                          const lbits d2) {
+  uint8_t buf[96];
+  size_t n = 0;
+  if (mask & 1) { lbits_to_be_bytes(buf + n, 32, d0); n += 32; }
+  if (mask & 2) { lbits_to_be_bytes(buf + n, 32, d1); n += 32; }
+  if (mask & 4) { lbits_to_be_bytes(buf + n, 32, d2); n += 32; }
+  host_sha256_lbits(rop, buf, n);
+}
+
 /* RLP-encode a non-negative u64 as its minimal big-endian scalar string into
  * out (<= 9 bytes); returns the encoded length. 0 -> 0x80, v < 0x80 -> [v],
  * else 0x80+len ++ big-endian bytes with no leading zeros. */
