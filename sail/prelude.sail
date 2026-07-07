@@ -42,6 +42,7 @@ enum ByteSource = {
     MemorySource,
     TxInputSource,
     ActiveCodeSource,
+    TrieArenaSource,
 }
 
 type source_offset = bits(64)
@@ -65,7 +66,12 @@ function byte_source_kind(src : ByteSource) -> bits(64) =
         MemorySource => 0x0000000000000002,
         TxInputSource => 0x0000000000000003,
         ActiveCodeSource => 0x0000000000000004,
+        TrieArenaSource => 0x0000000000000005,
     }
+
+/* the empty byte source (zero-length); a placeholder ByteSlice for item/patch
+ * fields whose value role is unused (subtree refs, deletes). */
+let EMPTY_SLICE : ByteSlice = struct { source = WitnessSource, off = 0x0000000000000000, len = 0x0000000000000000 }
 
 /* Byte-indexed offsets/counts at C-backed host boundaries. Keep decoder and
  * EVM arithmetic in int; narrow only when crossing the FFI. */

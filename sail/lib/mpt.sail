@@ -243,9 +243,25 @@ function leaf_node_rlp(key : list(nibble), value : list(byte)) -> list(byte) =
     rlp_list(rlp_bytes(hex_prefix_compact(key, true)) ++ rlp_bytes(value))
 function extension_node_rlp(key : list(nibble), childref : list(byte)) -> list(byte) =
     rlp_list(rlp_bytes(hex_prefix_compact(key, false)) ++ childref)
-function leaf_child_ref(key : list(nibble), value : list(byte)) -> list(byte) =
-    child_ref(leaf_node_rlp(key, value))
 function hash_child_ref(hash : list(byte)) -> list(byte) = [|0xa0|] ++ hash
+
+/* leaf child ref (Eq. 208 leaf form): a refinement pair. The spec backend
+ * composes rlp([hp(key,leaf), value]) and hashes it (spec/mpt.sail); the build
+ * backend frames the compact path and the value -- read from its byte source
+ * (the value arena for update leaves, the witness for base leaves) -- in C, so
+ * the leaf value byte list never crosses the FFI hash channel (build/mpt.sail). */
+val leaf_child_ref : (list(nibble), ByteSlice) -> list(byte)
+
+/* An update leaf's RLP value, staged into the trie value arena and referenced
+ * by slice so the value list never crosses. account: rlp([nonce, balance,
+ * sroot, chash]); storage: rlp_int(value). A refinement pair: spec interns the
+ * canonical byte list (arena_intern); build builds the RLP in C from the fields
+ * (build/mpt.sail). arena_intern is the write side of the byte-source interface
+ * (spec-only axiom): read_byte_slice(arena_intern(l)) = l. */
+val account_leaf_value : (int, word, hash, hash) -> ByteSlice
+val storage_leaf_value : word -> ByteSlice
+val arena_intern : list(byte) -> ByteSlice
+val trie_arena_reset : unit -> unit
 
 /* extension child ref (Eq. 208 extension form): a refinement pair. The spec
  * backend composes and hashes rlp([hp(key,ext), childref]) as a byte list
@@ -345,14 +361,14 @@ function nib_prefix_of(prefix : list(nibble), key : list(nibble)) -> bool =
 struct TriePatch = {
     key : list(nibble),
     is_delete : bool,
-    bytes : list(byte),
+    value : ByteSlice,
 }
 
-function patch_leaf(key : list(nibble), value : list(byte)) -> TriePatch =
-    struct { key = key, is_delete = false, bytes = value }
+function patch_leaf(key : list(nibble), value : ByteSlice) -> TriePatch =
+    struct { key = key, is_delete = false, value = value }
 
 function patch_delete(key : list(nibble)) -> TriePatch =
-    struct { key = key, is_delete = true, bytes = [||] }
+    struct { key = key, is_delete = true, value = EMPTY_SLICE }
 
 function patch_insert_sorted(p : TriePatch, ps : list(TriePatch)) -> list(TriePatch) =
     match ps {
@@ -521,7 +537,10 @@ function merge_ext_ref(prefix : list(nibble), childref : list(byte)) -> list(byt
                         let (is_leaf, seg) = hex_prefix_decode(list_nth(items, 0, RLP_NONE).content);
                         let key = prefix ++ seg;
                         if is_leaf then {
-                            leaf_child_ref(key, list_nth(items, 1, RLP_NONE).content)
+                            /* delete-collapse of an inline (< 32B) ref: the value
+                               lives inside a constructed ref list, not a source,
+                               so hash the tiny re-keyed leaf list-side (rare) */
+                            child_ref(leaf_node_rlp(key, list_nth(items, 1, RLP_NONE).content))
                         } else {
                             extension_child_ref(key, field_to_ref(list_nth(items, 1, RLP_NONE)))
                         }
@@ -550,14 +569,15 @@ struct TrieItem = {
     path : list(nibble),
     is_ref : bool,
     is_branch : bool,
-    bytes : list(byte),
+    subref : list(byte), /* subtree child ref (is_ref); [] for leaves        */
+    value : ByteSlice,   /* leaf value byte source (!is_ref); EMPTY for refs */
 }
 
-function item_leaf(path : list(nibble), value : list(byte)) -> TrieItem =
-    struct { path = path, is_ref = false, is_branch = false, bytes = value }
+function item_leaf(path : list(nibble), value : ByteSlice) -> TrieItem =
+    struct { path = path, is_ref = false, is_branch = false, subref = [||], value = value }
 
 function item_subtree(path : list(nibble), childref : list(byte), is_branch : bool) -> TrieItem =
-    struct { path = path, is_ref = true, is_branch = is_branch, bytes = childref }
+    struct { path = path, is_ref = true, is_branch = is_branch, subref = childref, value = EMPTY_SLICE }
 
 /* sorted live-leaf items of an update list (deletes emit nothing) */
 function patches_live_items(ps : list(TriePatch)) -> list(TrieItem) =
@@ -566,7 +586,7 @@ function patches_live_items(ps : list(TriePatch)) -> list(TrieItem) =
         p :: r => if p.is_delete then {
             patches_live_items(r)
         } else {
-            item_leaf(p.key, p.bytes) :: patches_live_items(r)
+            item_leaf(p.key, p.value) :: patches_live_items(r)
         },
     }
 
@@ -574,7 +594,7 @@ function patches_live_items(ps : list(TriePatch)) -> list(TrieItem) =
  * with the base leaf inserted at its sorted position; an update on the
  * leaf's own key replaces (write) or erases (delete) it, and diverging
  * updates are inserts */
-function leaf_overlay_items(ps : list(TriePatch), key : list(nibble), value : list(byte)) -> list(TrieItem) =
+function leaf_overlay_items(ps : list(TriePatch), key : list(nibble), value : ByteSlice) -> list(TrieItem) =
     match ps {
         [||] => [|item_leaf(key, value)|],
         p :: r => if nib_eq(p.key, key) then {
@@ -586,7 +606,7 @@ function leaf_overlay_items(ps : list(TriePatch), key : list(nibble), value : li
                 if p.is_delete then {
                     leaf_overlay_items(r, key, value)
                 } else {
-                    item_leaf(p.key, p.bytes) :: leaf_overlay_items(r, key, value)
+                    item_leaf(p.key, p.value) :: leaf_overlay_items(r, key, value)
                 }
             }
         },
@@ -631,27 +651,27 @@ function items_at_nibble(items : list(TrieItem), depth : int, nib : nibble) -> l
 function item_ref(it : TrieItem, depth : int) -> list(byte) = {
     let suffix = list_drop_prefix(it.path, depth);
     if not_bool(it.is_ref) then {
-        leaf_child_ref(suffix, it.bytes)
+        leaf_child_ref(suffix, it.value)
     } else {
         if list_len(suffix) == 0 then {
-            it.bytes
+            it.subref
         } else {
             if it.is_branch then {
-                merge_ext_ref(suffix, it.bytes)
+                merge_ext_ref(suffix, it.subref)
             } else {
-                match it.bytes {
+                match it.subref {
                     0xa0 :: h => if list_len(h) == 32 then {
                         let node = node_db_lookup(bytes_be256(h));
                         if list_len(node) == 0 then {
                             k_witness_bad = true;
-                            extension_child_ref(suffix, it.bytes)
+                            extension_child_ref(suffix, it.subref)
                         } else {
                             node_to_ref(merge_ext_node(suffix, node))
                         }
                     } else {
-                        merge_ext_ref(suffix, it.bytes)
+                        merge_ext_ref(suffix, it.subref)
                     },
-                    _ => merge_ext_ref(suffix, it.bytes),
+                    _ => merge_ext_ref(suffix, it.subref),
                 }
             }
         }
@@ -735,11 +755,16 @@ function items_root(items : list(TrieItem)) -> bits(256) =
  * no base leaf (the walk proves absence) emits nothing. Whatever survives
  * is rebuilt by build_group, so a branch losing children to deletes
  * collapses in the builder with no walker involvement. */
-val witness_items : (list(byte), list(nibble), list(TriePatch), int) -> list(TrieItem)
-val witness_child_items : (RlpField, list(nibble), list(TriePatch), int) -> list(TrieItem)
+/* `node_off` / `f_off` is the witness-buffer offset of `node` / `f.full` (a node
+ * or embedded child is always a contiguous SSZ-witness span), so a base leaf's
+ * value can be handed to leaf_overlay_items as a WitnessSource slice rather than
+ * a materialized byte list -- the value is hashed C-side and never crosses. */
+val witness_items : (list(byte), int, list(nibble), list(TriePatch), int) -> list(TrieItem)
+val witness_child_items : (RlpField, int, list(nibble), list(TriePatch), int) -> list(TrieItem)
 
 function witness_child_items(
     f : RlpField,
+    f_off : int,
     prefix : list(nibble),
     updates : list(TriePatch),
     fuel : int,
@@ -747,7 +772,7 @@ function witness_child_items(
     list(TrieItem)
 ) = {
     if f.is_list then {
-        witness_items(f.full, prefix, updates, fuel)
+        witness_items(f.full, f_off, prefix, updates, fuel)
     } else {
         let c = f.content;
         if list_len(c) == 0 then {
@@ -755,14 +780,15 @@ function witness_child_items(
             patches_live_items(updates)
         } else {
             if list_len(c) == 32 then {
-                let node = node_db_lookup(bytes_be256(c));
+                let h = bytes_be256(c);
+                let node = node_db_lookup(h);
                 if list_len(node) == 0 then {
                     /* missing proof on a touched path: fail closed; keep the
                        blinded ref so the (already invalid) stream stays a trie */
                     k_witness_bad = true;
                     [|item_subtree(prefix, field_to_ref(f), false)|]
                 } else {
-                    witness_items(node, prefix, updates, fuel)
+                    witness_items(node, unsigned(nodedb_off(h)), prefix, updates, fuel)
                 }
             } else {
                 [||]
@@ -773,6 +799,7 @@ function witness_child_items(
 
 function witness_items(
     node : list(byte),
+    node_off : int,
     prefix : list(nibble),
     updates : list(TriePatch),
     fuel : int,
@@ -792,7 +819,9 @@ function witness_items(
                 let (is_leaf, seg) = hex_prefix_decode(list_nth(items, 0, RLP_NONE).content);
                 let key = prefix ++ seg;
                 if is_leaf then {
-                    leaf_overlay_items(updates, key, list_nth(items, 1, RLP_NONE).content)
+                    let vlen = list_len(list_nth(items, 1, RLP_NONE).content);
+                    let voff = node_off + rlp_top_item_content_offset(node, 1);
+                    leaf_overlay_items(updates, key, byte_slice(WitnessSource, voff, vlen))
                 } else {
                     let under = patches_under_prefix(updates, key);
                     let outside = patches_outside_prefix(updates, key);
@@ -801,7 +830,7 @@ function witness_items(
                                ref; an extension's child is always a branch */
                             [|item_subtree(key, field_to_ref(list_nth(items, 1, RLP_NONE)), true)|]
                         } else {
-                            witness_child_items(list_nth(items, 1, RLP_NONE), key, under, fuel - 1)
+                            witness_child_items(list_nth(items, 1, RLP_NONE), node_off + rlp_top_item_full_offset(node, 1), key, under, fuel - 1)
                         };
 
                     /* updates diverging inside the extension segment become
@@ -833,7 +862,7 @@ function witness_items(
                                 }
                             } else {
                                 if present then {
-                                    witness_child_items(field, prefix ++ [|nib|], group, fuel - 1)
+                                    witness_child_items(field, node_off + rlp_top_item_full_offset(node, i), prefix ++ [|nib|], group, fuel - 1)
                                 } else {
                                     /* no base child: the surviving updates are
                                        pure inserts */
@@ -850,8 +879,8 @@ function witness_items(
         }
     }
 }
-termination_measure witness_items(node, prefix, updates, fuel) = fuel
-termination_measure witness_child_items(f, prefix, updates, fuel) = fuel
+termination_measure witness_items(node, node_off, prefix, updates, fuel) = fuel
+termination_measure witness_child_items(f, f_off, prefix, updates, fuel) = fuel
 
 /* ---- THE trie entry ------------------------------------------------------
  *
@@ -879,7 +908,7 @@ function trie_root(base_root : bits(256), updates : list(TriePatch)) -> bits(256
                 k_witness_bad = true;
                 base_root
             } else {
-                items_root(witness_items(node, [||], updates, 256))
+                items_root(witness_items(node, unsigned(nodedb_off(base_root)), [||], updates, 256))
             }
         }
     }
@@ -960,7 +989,7 @@ function storage_updates_writes_only(ak : bits(256)) -> list(TriePatch) = {
                 if word_is_zero(ev) then {
                     patch_delete(key)
                 } else {
-                    patch_leaf(key, rlp_int(unsigned(ev)))
+                    patch_leaf(key, storage_leaf_value(ev))
                 },
                 out,
             )
@@ -981,7 +1010,7 @@ function storage_updates_union(ak : bits(256)) -> list(TriePatch) = {
             if word_is_zero(ev) then {
                 patch_delete(key)
             } else {
-                patch_leaf(key, rlp_int(unsigned(ev)))
+                patch_leaf(key, storage_leaf_value(ev))
             },
             out,
         )
@@ -1027,7 +1056,7 @@ function state_updates_account_row(row : AcctRow, prev : list(TriePatch), skip_e
             } else {
                 patch_leaf(
                     ak,
-                    account_rlp(
+                    account_leaf_value(
                         acc.nonce,
                         acc.balance,
                         storage_root_from(row.row_hkey, acc.storage_root),
@@ -1065,8 +1094,10 @@ val state_root_anchor : unit -> bits(256)
 
 /* the post-state world root: the single trie entry over the per-backend
  * anchor and update collection. */
-function compute_state_root() -> bits(256) =
+function compute_state_root() -> bits(256) = {
+    trie_arena_reset();
     trie_root(state_root_anchor(), state_updates_map())
+}
 
 /* ======================================================================== */
 /* (5) stateless witness-backed reads                                       */

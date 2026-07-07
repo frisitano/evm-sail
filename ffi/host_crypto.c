@@ -409,6 +409,14 @@ static uint8_t NASM_node[NASM_CAP + 16];
 static size_t NASM_node_len;
 static uint64_t NASM_hash[4];
 
+/* a leaf's value bytes are not buffered in NASM_payload (a tx/receipt value can
+ * be megabytes -- far past NASM_CAP): the RLP header is appended to the payload
+ * and the value bytes are held by pointer, then streamed into the node at frame
+ * time. NASM_payload thus only ever holds the small path + value-header. */
+static const uint8_t *NASM_val_src;
+static size_t NASM_val_len;
+static int NASM_has_val;
+
 static void nasm_append(const uint8_t *p, size_t len) {
   if (!NASM_ok || NASM_n + len > NASM_CAP) {
     NASM_ok = 0;
@@ -422,6 +430,7 @@ unit node_asm_reset(const unit u) {
   (void)u;
   NASM_n = 0;
   NASM_ok = 1;
+  NASM_has_val = 0;
   return UNIT;
 }
 
@@ -489,20 +498,45 @@ static uint64_t nasm_frame(void) {
     NASM_node_len = 0;
     return 0;
   }
+  /* payload = buffered (path + refs + value header) followed by the deferred
+   * value bytes (leaf only). The list header sizes over the total payload. */
+  size_t val_len = NASM_has_val ? NASM_val_len : 0;
+  size_t payload = NASM_n + val_len;
+  uint8_t hdr[9];
   size_t hn = 0;
-  if (NASM_n <= 55) {
-    NASM_node[hn++] = (uint8_t)(0xc0 + NASM_n);
+  if (payload <= 55) {
+    hdr[hn++] = (uint8_t)(0xc0 + payload);
   } else {
     uint8_t lb[8];
     int m = 0;
-    for (size_t x = NASM_n; x != 0; x >>= 8) lb[m++] = (uint8_t)(x & 0xff);
-    NASM_node[hn++] = (uint8_t)(0xf7 + m);
-    for (int i = 0; i < m; i++) NASM_node[hn++] = lb[m - 1 - i];
+    for (size_t x = payload; x != 0; x >>= 8) lb[m++] = (uint8_t)(x & 0xff);
+    hdr[hn++] = (uint8_t)(0xf7 + m);
+    for (int i = 0; i < m; i++) hdr[hn++] = lb[m - 1 - i];
   }
-  memcpy(NASM_node + hn, NASM_payload, NASM_n);
-  NASM_node_len = hn + NASM_n;
-  if (NASM_node_len >= 32) host_keccak256_bytes(NASM_hash, NASM_node, NASM_node_len);
-  return (uint64_t)NASM_node_len;
+  size_t node_len = hn + payload;
+  if (node_len <= NASM_CAP + 16) {
+    /* small node: assemble in the static buffer (inline ref needs the bytes) */
+    memcpy(NASM_node, hdr, hn);
+    memcpy(NASM_node + hn, NASM_payload, NASM_n);
+    if (val_len) memcpy(NASM_node + hn + NASM_n, NASM_val_src, val_len);
+    NASM_node_len = node_len;
+    if (node_len >= 32) host_keccak256_bytes(NASM_hash, NASM_node, node_len);
+  } else {
+    /* large leaf value (always > 32 -> hash ref): assemble once off-buffer */
+    uint8_t *buf = (uint8_t *)malloc(node_len);
+    if (buf == NULL) {
+      NASM_ok = 0;
+      NASM_node_len = 0;
+      return 0;
+    }
+    memcpy(buf, hdr, hn);
+    memcpy(buf + hn, NASM_payload, NASM_n);
+    memcpy(buf + hn + NASM_n, NASM_val_src, val_len);
+    host_keccak256_bytes(NASM_hash, buf, node_len);
+    free(buf);
+    NASM_node_len = node_len;
+  }
+  return (uint64_t)node_len;
 }
 
 /* branch node: append the empty 17th value slot, then frame. */
@@ -564,15 +598,25 @@ static uint64_t tarena_put(const uint8_t *p, size_t len) {
 /* rlp([nonce, balance, storageRoot, codeHash]) -> arena (mirrors account_rlp). */
 uint64_t host_account_rlp_to_arena(uint64_t nonce, const lbits balance,
                                    const lbits sroot, const lbits chash) {
-  uint8_t payload[80];
+  uint8_t payload[128];
   size_t pn = 0;
   pn += host_rlp_uint(payload + pn, nonce);
   rlp_put_word_min(payload, &pn, balance);
   rlp_put_word32(payload, &pn, sroot);
   rlp_put_word32(payload, &pn, chash);
-  uint8_t node[88];
+  /* the account payload (>= sroot 33 + chash 33) always exceeds 55 bytes, so
+   * the list uses the long-form 0xf7 + |len| header. */
+  uint8_t node[136];
   size_t nn = 0;
-  node[nn++] = (uint8_t)(0xc0 + pn); /* account payload is always <= 55 bytes */
+  if (pn <= 55) {
+    node[nn++] = (uint8_t)(0xc0 + pn);
+  } else {
+    uint8_t lb[8];
+    int m = 0;
+    for (size_t x = pn; x != 0; x >>= 8) lb[m++] = (uint8_t)(x & 0xff);
+    node[nn++] = (uint8_t)(0xf7 + m);
+    for (int i = 0; i < m; i++) node[nn++] = lb[m - 1 - i];
+  }
   memcpy(node + nn, payload, pn);
   nn += pn;
   return tarena_put(node, nn);
@@ -586,6 +630,25 @@ uint64_t host_storage_rlp_to_arena(const lbits value) {
   return tarena_put(buf, bn);
 }
 
+/* streamed intern for computed top-level-trie values (withdrawal / receipt RLP)
+ * that are built as Sail lists: begin records the span start, push appends a
+ * byte, finish returns pack(off,len). Used only off the hot state-trie path. */
+static size_t TARENA_intern_start;
+unit host_arena_intern_begin(const unit u) {
+  (void)u;
+  TARENA_intern_start = TARENA_n;
+  return UNIT;
+}
+unit host_arena_intern_push(uint64_t b) {
+  if (TARENA_n < TARENA_CAP) TARENA_buf[TARENA_n++] = (uint8_t)(b & 0xff);
+  return UNIT;
+}
+uint64_t host_arena_intern_finish(const unit u) {
+  (void)u;
+  return ((uint64_t)TARENA_intern_start << 32) |
+         (uint64_t)(TARENA_n - TARENA_intern_start);
+}
+
 /* append rlp_bytes(value) for a leaf node's value item, reading the value from
  * a byte source (arena for update leaves, witness for base leaves) so the value
  * list never crosses. Mirrors rlp_bytes framing. */
@@ -596,12 +659,13 @@ unit node_asm_push_value_source(uint64_t kind, uint64_t off, uint64_t len) {
     NASM_ok = 0;
     return UNIT;
   }
+  /* append only the RLP header to the payload buffer; hold the value bytes by
+   * pointer so nasm_frame can stream them without a NASM_CAP limit. */
   if (len == 1 && src[0] < 0x80) {
-    nasm_append(src, 1);
+    /* single byte < 0x80 is its own encoding: no header */
   } else if (len <= 55) {
     uint8_t h = (uint8_t)(0x80 + len);
     nasm_append(&h, 1);
-    nasm_append(src, (size_t)len);
   } else {
     uint8_t lb[8];
     int m = 0;
@@ -609,8 +673,10 @@ unit node_asm_push_value_source(uint64_t kind, uint64_t off, uint64_t len) {
     uint8_t h = (uint8_t)(0xb7 + m);
     nasm_append(&h, 1);
     for (int i = 0; i < m; i++) nasm_append(&lb[m - 1 - i], 1);
-    nasm_append(src, (size_t)len);
   }
+  NASM_val_src = src;
+  NASM_val_len = (size_t)len;
+  NASM_has_val = 1;
   return UNIT;
 }
 

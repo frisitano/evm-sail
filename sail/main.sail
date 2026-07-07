@@ -797,7 +797,7 @@ function transaction_trie_root() -> hash = {
     let n = pl_n_txs();
     foreach (i from 0 to (n - 1)) {
         let (off, len) = ssz_list_span(pl_txs_start(), n, pl_wds_start(), i);
-        updates = patch_insert_sorted(patch_leaf(trie_index_key(i), ssz_bytes(off, len)), updates)
+        updates = patch_insert_sorted(patch_leaf(trie_index_key(i), byte_slice(WitnessSource, off, len)), updates)
     };
     trie_root(EMPTY_TRIE_ROOT, updates)
 }
@@ -812,6 +812,7 @@ function withdrawal_rlp(w : Withdrawal) -> list(byte) = {
 }
 
 function withdrawals_trie_root(withdrawals : list(Withdrawal)) -> hash = {
+    trie_arena_reset();
     var updates : list(TriePatch) = [||];
     var rest : list(Withdrawal) = withdrawals;
     var i : int = 0;
@@ -819,7 +820,7 @@ function withdrawals_trie_root(withdrawals : list(Withdrawal)) -> hash = {
     while more do {
         match rest {
             w :: tail => {
-                updates = patch_insert_sorted(patch_leaf(trie_index_key(i), withdrawal_rlp(w)), updates);
+                updates = patch_insert_sorted(patch_leaf(trie_index_key(i), arena_intern(withdrawal_rlp(w))), updates);
                 rest = tail;
                 i = i + 1
             },
@@ -991,6 +992,7 @@ function receipt_encoded(r : Receipt, cumulative_gas_used : int) -> list(byte) =
 }
 
 function receipts_trie_root(receipts : list(Receipt)) -> hash = {
+    trie_arena_reset();
     var updates : list(TriePatch) = [||];
     var rest : list(Receipt) = receipts;
     var i : int = 0;
@@ -1000,7 +1002,7 @@ function receipts_trie_root(receipts : list(Receipt)) -> hash = {
         match rest {
             r :: tail => {
                 cumulative = cumulative + r.gas_used;
-                updates = patch_insert_sorted(patch_leaf(trie_index_key(i), receipt_encoded(r, cumulative)), updates);
+                updates = patch_insert_sorted(patch_leaf(trie_index_key(i), arena_intern(receipt_encoded(r, cumulative))), updates);
                 rest = tail;
                 i = i + 1
             },

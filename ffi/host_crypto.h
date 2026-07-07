@@ -60,9 +60,19 @@ void host_bytes_sha256_finish(lbits *rop, const unit u);
 unit node_asm_reset(const unit u);
 unit node_asm_push_ref(uint64_t kind, const lbits data, uint64_t len);
 unit node_asm_push_path(const lbits nibbles, uint64_t cnt, uint64_t is_leaf);
+unit node_asm_push_value_source(uint64_t kind, uint64_t off, uint64_t len);
 uint64_t node_asm_finish_branch(const unit u);
 uint64_t node_asm_finish(const unit u);
 void node_asm_result_data(lbits *rop, const unit u);
 void node_asm_result_hash(lbits *rop, const unit u);
+
+/* trie value arena: leaf values built C-side, addressed as TrieArenaSource */
+unit host_trie_arena_reset(const unit u);
+uint64_t host_account_rlp_to_arena(uint64_t nonce, const lbits balance,
+                                   const lbits sroot, const lbits chash);
+uint64_t host_storage_rlp_to_arena(const lbits value);
+unit host_arena_intern_begin(const unit u);
+unit host_arena_intern_push(uint64_t b);
+uint64_t host_arena_intern_finish(const unit u);
 
 #endif

@@ -94,3 +94,54 @@ function extension_child_ref(key : list(nibble), childref : list(byte)) -> list(
     build_push_ref(childref);
     nasm_result_ref(unsigned(node_asm_finish_ffi()))
 }
+
+/* ---- leaf values + the trie value arena ----------------------------------- */
+val host_trie_arena_reset_ffi = impure { _: "host_trie_arena_reset" } : unit -> unit
+val host_account_rlp_to_arena_ffi = impure { _: "host_account_rlp_to_arena" } : (bits(64), word, hash, hash) -> bits(64)
+val host_storage_rlp_to_arena_ffi = impure { _: "host_storage_rlp_to_arena" } : word -> bits(64)
+val host_arena_intern_begin_ffi = impure { _: "host_arena_intern_begin" } : unit -> unit
+val host_arena_intern_push_ffi = impure { _: "host_arena_intern_push" } : bits(64) -> unit
+val host_arena_intern_finish_ffi = impure { _: "host_arena_intern_finish" } : unit -> bits(64)
+val node_asm_push_value_ffi = impure { _: "node_asm_push_value_source" } : (bits(64), bits(64), bits(64)) -> unit
+
+function trie_arena_reset() -> unit = host_trie_arena_reset_ffi()
+
+/* unpack pack(off,len) = (off << 32) | len into a TrieArenaSource slice */
+function arena_span_to_slice(packed : bits(64)) -> ByteSlice =
+    byte_slice(TrieArenaSource, unsigned(packed[63 .. 32]), unsigned(packed[31 .. 0]))
+
+/* update leaves: build the RLP in C from the structured fields, no list */
+function account_leaf_value(nonce : int, balance : word, sroot : hash, chash : hash) -> ByteSlice =
+    arena_span_to_slice(host_account_rlp_to_arena_ffi(get_slice_int(64, nonce, 0), balance, sroot, chash))
+
+function storage_leaf_value(value : word) -> ByteSlice =
+    arena_span_to_slice(host_storage_rlp_to_arena_ffi(value))
+
+/* streamed intern of a computed value list (top-level tx/withdrawals/receipts
+ * tries only -- off the hot state-trie path) */
+function arena_intern(bs : list(byte)) -> ByteSlice = {
+    host_arena_intern_begin_ffi();
+    var rest : list(byte) = bs;
+    var more : bool = true;
+    while more do {
+        match rest {
+            b :: t => {
+                host_arena_intern_push_ffi(sail_zero_extend(b, 64));
+                rest = t
+            },
+            [||] => more = false,
+        }
+    };
+    arena_span_to_slice(host_arena_intern_finish_ffi())
+}
+
+/* leaf child ref: frame the compact leaf path and the value (read from its byte
+ * source: the value arena for updates, the witness for base leaves) in C, then
+ * cap as inline node / keccak -- the value byte list never crosses. */
+function leaf_child_ref(key : list(nibble), value : ByteSlice) -> list(byte) = {
+    node_asm_reset_ffi();
+    let (packed, cnt) = pack_nibbles(key);
+    node_asm_push_path_ffi(packed, get_slice_int(64, cnt, 0), 0x0000000000000001);
+    node_asm_push_value_ffi(byte_source_kind(value.source), value.off, value.len);
+    nasm_result_ref(unsigned(node_asm_finish_ffi()))
+}
