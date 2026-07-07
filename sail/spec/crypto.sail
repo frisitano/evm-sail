@@ -42,6 +42,15 @@ function create2_address(sender : address, salt : word, init_hash : hash) -> add
     word_to_address(keccak256(preimage))
 }
 
+/* CREATE address: low 20 bytes of keccak(rlp([sender, nonce])). Build encodes
+ * and hashes the two-item list in C (build/crypto.sail); the two backends must
+ * agree on the RLP list framing. */
+function create_address(sender : address, nonce : int) -> address = {
+    var payload : list(byte) = rlp_addr(sender);
+    payload = list_append(payload, rlp_int(nonce));
+    word_to_address(keccak_rlp_payload([||], payload))
+}
+
 function secp256k1_verify_precompile(h : bits(256), r : word, s : word, x : bits(256), y : bits(256)) -> bool = {
     var inp : list(byte) = word_to_bytes32(h);
     inp = list_append(inp, word_to_bytes32(r));

@@ -14,6 +14,7 @@
 val host_keccak_word_ffi = impure { _: "host_keccak_word" } : word -> hash
 val host_keccak_address_ffi = impure { _: "host_keccak_address" } : address -> hash
 val host_keccak_create2_ffi = impure { _: "host_keccak_create2" } : (address, word, hash) -> hash
+val host_create_address_ffi = impure { _: "host_create_address" } : (address, bits(64)) -> hash
 val host_sha256_pair_ffi = impure { _: "host_sha256_pair" } : (hash, hash) -> hash
 
 val host_bytes_reset_ffi = impure { _: "host_bytes_reset" } : unit -> unit
@@ -96,6 +97,11 @@ function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) = host_sha256_pa
 
 function create2_address(sender : address, salt : word, init_hash : hash) -> address =
     word_to_address(host_keccak_create2_ffi(sender, salt, init_hash))
+
+/* CREATE address: the RLP two-item list [sender, nonce] is framed and hashed in
+ * C (nonce is a u64 account nonce). Refines keccak256(rlp([sender, nonce])). */
+function create_address(sender : address, nonce : int) -> address =
+    word_to_address(host_create_address_ffi(sender, get_slice_int(64, nonce, 0)))
 
 function secp256k1_verify_precompile(h : bits(256), r : word, s : word, x : bits(256), y : bits(256)) -> bool =
     precompile_secp256k1_verify_hash_sig_pub_ffi(h, r, s, x, y)

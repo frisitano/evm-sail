@@ -30,13 +30,6 @@ function keccak_selfcheck() -> unit = {
     )
 }
 
-/* CREATE address (Yellow Paper): keccak(rlp([sender, nonce]))[12..]. */
-function create_address(sender : address, nonce : int) -> address = {
-    var payload : list(byte) = rlp_addr(sender);
-    payload = list_append(payload, rlp_int(nonce));
-    word_to_address(keccak_rlp_list(payload))
-}
-
 /* MPT child reference: nodes under 32 bytes embed inline, larger nodes are
  * referenced by their keccak hash (Yellow Paper appendix D). */
 function child_ref(enc : list(byte)) -> list(byte) =

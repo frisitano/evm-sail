@@ -99,6 +99,35 @@ void host_sha256_pair(lbits *rop, const lbits a, const lbits b) {
   host_sha256_lbits(rop, buf, sizeof buf);
 }
 
+/* RLP-encode a non-negative u64 as its minimal big-endian scalar string into
+ * out (<= 9 bytes); returns the encoded length. 0 -> 0x80, v < 0x80 -> [v],
+ * else 0x80+len ++ big-endian bytes with no leading zeros. */
+static size_t host_rlp_uint(uint8_t *out, uint64_t v) {
+  if (v < 0x80) {
+    out[0] = v ? (uint8_t)v : 0x80;
+    return 1;
+  }
+  uint8_t be[8];
+  int n = 0;
+  for (uint64_t x = v; x != 0; x >>= 8) be[n++] = (uint8_t)(x & 0xff);
+  out[0] = (uint8_t)(0x80 + n);
+  for (int i = 0; i < n; i++) out[1 + i] = be[n - 1 - i];
+  return (size_t)(1 + n);
+}
+
+void host_create_address(lbits *rop, const lbits sender, uint64_t nonce) {
+  uint8_t payload[30]; /* rlp_addr = 21, rlp_int(u64) <= 9 */
+  size_t n = 0;
+  payload[n++] = 0x94; /* 0x80 + 20-byte address */
+  lbits_to_be_bytes(payload + n, 20, sender);
+  n += 20;
+  n += host_rlp_uint(payload + n, nonce);
+  uint8_t buf[31]; /* one-byte list header (payload < 55) + payload */
+  buf[0] = (uint8_t)(0xc0 + n);
+  memcpy(buf + 1, payload, n);
+  host_keccak256_lbits(rop, buf, n + 1);
+}
+
 static int host_bytes_reserve(uint64_t need) {
   if (need <= HOST_bytes_cap) return 1;
   uint64_t cap = HOST_bytes_cap ? HOST_bytes_cap : 256;
