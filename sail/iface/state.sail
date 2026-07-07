@@ -31,6 +31,10 @@ val storage_map_seed : (address, word, word) -> unit
 val storage_map_base_load : (address, word) -> word
 val storage_map_present : (address, word) -> bool
 val storage_map_base_present : (address, word) -> bool
+/* native base resolver backing: read the seeded pre-state cache directly
+ * (write-set model keeps the cache as the pure base k/v store; miss = absent) */
+val storage_cache_present : (address, word) -> bool
+val storage_cache_load : (address, word) -> word
 val storage_map_cache_nonzero : (hash, hash) -> bool
 val storage_map_wipe_addr : address -> unit
 
@@ -61,6 +65,16 @@ val storage_wset_restore : (address, word, word) -> unit     /* JStor undo: curr
 val storage_wset_warm : (address, word) -> bool              /* set warm; true iff was cold */
 val storage_wset_is_warm : (address, word) -> bool
 val storage_wset_unwarm : (address, word) -> unit            /* JWarmS undo */
+val storage_wset_wipe_addr : address -> unit                 /* EIP-6780 tx-end delete */
+
+/* compute_root enumeration over the block base, per account keccak(addr):
+ * witness = dirty rows (net change vs MPT); native = cache-union-block rows */
+val storage_wset_block_dirty_count : hash -> bits(64)
+val storage_wset_block_dirty_slot : (hash, bits(64)) -> word
+val storage_wset_block_dirty_val : (hash, bits(64)) -> word
+val storage_wset_union_count : hash -> bits(64)
+val storage_wset_union_slot : (hash, bits(64)) -> word
+val storage_wset_union_val : (hash, bits(64)) -> word
 
 /* ---- C-backed account map (ffi/state_db.c): the kernel account working
  * set (k_accounts), split into materialized base/cache rows and execution

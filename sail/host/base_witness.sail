@@ -10,29 +10,54 @@
 /* the authenticated parent root.                                           */
 /* ======================================================================== */
 
-/* SLOAD base: the slot's value in the layered working set; on a miss the
- * authenticated pre-value is resolved from the witness and cached
- * read-through. */
-function k_sload(a : address, s : word) -> word =
-    if storage_present(a, s) then {
-        storage_load(a, s)
+/* Stateless storage resolver (declared in host/state.sail): the (a, s) pre-state
+ * value, resolved (and its presence/absence PROVEN) by a lazy Merkle walk of the
+ * account's storage trie from its authenticated pre-state root. The node-db is
+ * keyed by keccak256(node), so the walk is itself a hash-chain proof from that
+ * root: reaching the leaf => present; a diverging/empty terminus through present
+ * nodes => PROVEN ABSENT => 0; a blinded (witness-absent) node => missing proof
+ * => fail closed (k_witness_bad). This is the base BELOW the writes-only overlay
+ * (host/kernel.sail k_sload/k_orig): no read-through caching, so a repeated read
+ * simply re-walks the witness. */
+function stateless_storage(a : address, s : word) -> word = {
+    let sroot = load_account(a).storage_root;
+    if storage_proof_omitted(sroot) then {
+        /* the block reads storage whose proof the witness omitted */
+        k_witness_bad = true;
+        sail_zeros(256)
     } else {
-        let v = stateless_storage(a, s);
-        storage_seed(a, s, v);
-        v
+        let leaf = trie_walk(node_db_lookup(sroot), hash_nibbles(keccak256_word(s)), 0, 256);
+        if list_len(leaf) > 0 then {
+            rlp_str_word(leaf)
+        } else {
+            sail_zeros(256)
+        }
     }
+}
 
-/* EIP-2200 "original" value: the slot at tx start = the BASE layer (committed
- * prior txs were pop_commit-merged in). A slot never committed to the base is
- * still at its witness pre-value, so resolve it from the witness. */
-function k_orig(a : address, s : word) -> word =
-    if storage_base_present(a, s) then {
-        storage_base_load(a, s)
+/* Stateless account materialization (declared in host/state.sail): bind `a` on
+ * first touch. Presence/absence is PROVEN by a lazy Merkle walk of the state
+ * trie from the authenticated parent root (k_parent_state_root): reaching the
+ * leaf => present, decode + seed; a diverging/empty terminus through present
+ * nodes => PROVEN ABSENT => empty account; a blinded node => missing proof =>
+ * fail closed (k_witness_bad). The result is cached raw in the acctmap
+ * (k_seed_account_hashed), so subsequent load_account(a) is an O(1) raw read. */
+function stateless_account_load(a : address) -> unit = {
+    let ak = keccak256_address(a);
+    let rootnode = node_db_lookup(k_parent_state_root);
+    if (list_len(rootnode) == 0) & (k_parent_state_root != EMPTY_TRIE_ROOT) then {
+        /* the anchor root itself is missing from the witness */
+        k_witness_bad = true
+    };
+    let value = trie_walk(rootnode, hash_nibbles(ak), 0, 256);
+    if list_len(value) > 0 then {
+        let (nonce, bal, sroot, chash) = decode_account(value);
+        k_seed_account_hashed(a, nonce, bal, sroot, chash);
+        acctmap_mark_base_exists(a)
     } else {
-        let v = stateless_storage(a, s);
-        storage_seed(a, s, v);
-        v
+        k_seed_account_hashed(a, 0, sail_zeros(256), EMPTY_TRIE_ROOT, KECCAK_EMPTY)
     }
+}
 
 /* EIP-2935/BLOCKHASH: the hash of the ancestor `offset` blocks back (1..256)
  * is keccak of the witness header at that depth. The witness headers run

@@ -817,6 +817,24 @@ bool storage_map_present(const lbits a, const lbits s) {
   return storage_walk(ah, sh) ? 1 : 0;
 }
 
+/* native base resolver backing (stateless_storage for the native runner): read
+ * the seeded pre-state cache DIRECTLY, ignoring the write-set overlay and the
+ * old update layers. The write-set model keeps the cache purely as the base
+ * k/v store; a miss is a genuine absent slot, which the native resolver treats
+ * as 0. */
+bool storage_cache_present(const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  return storage_table_get(&storage_cache, ah, sh) ? 1 : 0;
+}
+
+void storage_cache_load(lbits *rop, const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  storage_row *e = storage_table_get(&storage_cache, ah, sh);
+  be_words4_to_lbits(rop, e ? e->val : storage_zero_val);
+}
+
 /* nonzero authenticated pre-state (cache-layer) value at (acct_hash,
  * slot_hash). Canonical storage tries have no zero leaves, so this is
  * exactly "the slot existed in the block pre-state". Every update row has a
@@ -912,6 +930,10 @@ typedef struct { storage_wset_row *rows; uint32_t n, cap; } storage_wset_table;
 static storage_wset_table storage_wset_tx    = {NULL, 0, 0};
 static storage_wset_table storage_wset_block = {NULL, 0, 0};
 
+/* drop the per-account compute_root snapshots when the block base changes
+   (defined with the snapshot builders below) */
+static void storage_wset_iter_invalidate(void);
+
 static uint32_t storage_wset_find(const storage_wset_table *t, const uint64_t ah[4],
                          const uint64_t sh[4], int *found) {
   uint32_t lo = 0, hi = t->n;
@@ -972,6 +994,7 @@ unit storage_wset_reset(const unit u) {
   (void)u;
   storage_wset_table_reset(&storage_wset_tx);
   storage_wset_table_reset(&storage_wset_block);
+  storage_wset_iter_invalidate();
   return UNIT;
 }
 
@@ -1001,6 +1024,7 @@ unit storage_wset_merge(const unit u) {
     memcpy(b->current, e->current, sizeof(b->current));
   }
   storage_wset_table_reset(&storage_wset_tx);
+  storage_wset_iter_invalidate();
   return UNIT;
 }
 
@@ -1116,4 +1140,166 @@ unit storage_wset_unwarm(const lbits a, const lbits s) {
   storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
   if (e) e->is_warm = 0;
   return UNIT;
+}
+
+/* drop every row for one account_hash, compacting in place (keeps the table
+   sorted since the account's rows are a contiguous block) */
+static void storage_wset_table_remove_acct(storage_wset_table *t, const uint64_t ah[4]) {
+  uint32_t w = 0;
+  for (uint32_t i = 0; i < t->n; i++) {
+    if (compare_words(t->rows[i].acct_hash, ah, 4) == 0) continue;
+    if (w != i) t->rows[w] = t->rows[i];
+    w++;
+  }
+  t->n = w;
+}
+
+/* wipe an address's overlay rows (tx + block): EIP-6780 tx-end deletion. */
+unit storage_wset_wipe_addr(const lbits a) {
+  uint64_t h[4];
+  kmemo_keccak(&addr_keccak_memo, 20, a, h);
+  storage_wset_table_remove_acct(&storage_wset_tx, h);
+  storage_wset_table_remove_acct(&storage_wset_block, h);
+  storage_wset_iter_invalidate();
+  return UNIT;
+}
+
+/* ---- compute_root enumeration over storage_wset_block ------------------
+   Both tables are sorted by (acct_hash, slot_hash), so an account's rows form
+   a contiguous range found by binary search on acct_hash. Two per-account
+   snapshots feed the two backends' storage_updates:
+     witness -> DIRTY block rows (current != original): the net-change set over
+                the authenticated MPT anchor.
+     native  -> UNION(storage_cache, storage_wset_block) with block.current
+                overriding the cache: the full post-state over the empty anchor. */
+
+typedef struct { uint64_t slot[4]; uint64_t val[4]; } swb_snap_row;
+
+/* [start,end) block rows with acct_hash == ak */
+static void storage_wset_block_acct_range(const uint64_t ak[4], uint32_t *start, uint32_t *end) {
+  uint32_t lo = 0, hi = storage_wset_block.n;
+  while (lo < hi) {
+    uint32_t mid = lo + ((hi - lo) >> 1);
+    if (compare_words(storage_wset_block.rows[mid].acct_hash, ak, 4) < 0) lo = mid + 1; else hi = mid;
+  }
+  uint32_t e = lo;
+  while (e < storage_wset_block.n && compare_words(storage_wset_block.rows[e].acct_hash, ak, 4) == 0) e++;
+  *start = lo; *end = e;
+}
+
+/* [start,end) storage_cache rows with acct_hash == ak */
+static void storage_cache_acct_range(const uint64_t ak[4], uint32_t *start, uint32_t *end) {
+  uint32_t lo = 0, hi = storage_cache.n;
+  while (lo < hi) {
+    uint32_t mid = lo + ((hi - lo) >> 1);
+    if (compare_words(storage_cache.rows[mid].acct_hash, ak, 4) < 0) lo = mid + 1; else hi = mid;
+  }
+  uint32_t e = lo;
+  while (e < storage_cache.n && compare_words(storage_cache.rows[e].acct_hash, ak, 4) == 0) e++;
+  *start = lo; *end = e;
+}
+
+static void swb_snap_push(swb_snap_row **rows, uint32_t *n, uint32_t *cap,
+                          const uint64_t slot[4], const uint64_t val[4]) {
+  if (*cap < *n + 1) {
+    uint32_t nc = *cap ? *cap * 2 : 16;
+    while (nc < *n + 1) nc *= 2;
+    *rows = (swb_snap_row *)realloc(*rows, (size_t)nc * sizeof(swb_snap_row));
+    *cap = nc;
+  }
+  memcpy((*rows)[*n].slot, slot, 32);
+  memcpy((*rows)[*n].val, val, 32);
+  (*n)++;
+}
+
+/* --- witness: dirty block rows --- */
+static swb_snap_row *swb_dirty_rows = NULL;
+static uint32_t swb_dirty_n = 0, swb_dirty_cap = 0;
+static uint64_t swb_dirty_memo[4];
+static int swb_dirty_valid = 0;
+
+static void swb_dirty_build(const uint64_t ak[4]) {
+  if (swb_dirty_valid && compare_words(swb_dirty_memo, ak, 4) == 0) return;
+  swb_dirty_n = 0;
+  uint32_t s, e;
+  storage_wset_block_acct_range(ak, &s, &e);
+  for (uint32_t i = s; i < e; i++) {
+    storage_wset_row *r = &storage_wset_block.rows[i];
+    if (!storage_wset_dirty(r)) continue;
+    swb_snap_push(&swb_dirty_rows, &swb_dirty_n, &swb_dirty_cap, r->slot, r->current);
+  }
+  memcpy(swb_dirty_memo, ak, sizeof(swb_dirty_memo));
+  swb_dirty_valid = 1;
+}
+
+uint64_t storage_wset_block_dirty_count(const lbits ak) {
+  uint64_t k[4]; lbits_to_be_words4(k, ak); swb_dirty_build(k); return swb_dirty_n;
+}
+void storage_wset_block_dirty_slot(lbits *rop, const lbits ak, uint64_t j) {
+  uint64_t k[4]; lbits_to_be_words4(k, ak); swb_dirty_build(k);
+  be_words4_to_lbits(rop, j < swb_dirty_n ? swb_dirty_rows[j].slot : storage_zero_val);
+}
+void storage_wset_block_dirty_val(lbits *rop, const lbits ak, uint64_t j) {
+  uint64_t k[4]; lbits_to_be_words4(k, ak); swb_dirty_build(k);
+  be_words4_to_lbits(rop, j < swb_dirty_n ? swb_dirty_rows[j].val : storage_zero_val);
+}
+
+/* --- native: cache UNION block (block.current wins on a shared slot) --- */
+static swb_snap_row *swb_union_rows = NULL;
+static uint32_t swb_union_n = 0, swb_union_cap = 0;
+static uint64_t swb_union_memo[4];
+static int swb_union_valid = 0;
+
+static void swb_union_build(const uint64_t ak[4]) {
+  if (swb_union_valid && compare_words(swb_union_memo, ak, 4) == 0) return;
+  swb_union_n = 0;
+  uint32_t cs, ce, bs, be;
+  storage_cache_acct_range(ak, &cs, &ce);
+  storage_wset_block_acct_range(ak, &bs, &be);
+  uint32_t ci = cs, bi = bs;
+  while (ci < ce || bi < be) {
+    if (bi >= be) {
+      swb_snap_push(&swb_union_rows, &swb_union_n, &swb_union_cap,
+                    storage_cache.rows[ci].slot, storage_cache.rows[ci].val);
+      ci++;
+    } else if (ci >= ce) {
+      swb_snap_push(&swb_union_rows, &swb_union_n, &swb_union_cap,
+                    storage_wset_block.rows[bi].slot, storage_wset_block.rows[bi].current);
+      bi++;
+    } else {
+      int c = compare_words(storage_cache.rows[ci].slot_hash, storage_wset_block.rows[bi].slot_hash, 4);
+      if (c < 0) {
+        swb_snap_push(&swb_union_rows, &swb_union_n, &swb_union_cap,
+                      storage_cache.rows[ci].slot, storage_cache.rows[ci].val);
+        ci++;
+      } else if (c > 0) {
+        swb_snap_push(&swb_union_rows, &swb_union_n, &swb_union_cap,
+                      storage_wset_block.rows[bi].slot, storage_wset_block.rows[bi].current);
+        bi++;
+      } else {                 /* same slot: block overrides cache */
+        swb_snap_push(&swb_union_rows, &swb_union_n, &swb_union_cap,
+                      storage_wset_block.rows[bi].slot, storage_wset_block.rows[bi].current);
+        ci++; bi++;
+      }
+    }
+  }
+  memcpy(swb_union_memo, ak, sizeof(swb_union_memo));
+  swb_union_valid = 1;
+}
+
+static void storage_wset_iter_invalidate(void) {
+  swb_dirty_valid = 0;
+  swb_union_valid = 0;
+}
+
+uint64_t storage_wset_union_count(const lbits ak) {
+  uint64_t k[4]; lbits_to_be_words4(k, ak); swb_union_build(k); return swb_union_n;
+}
+void storage_wset_union_slot(lbits *rop, const lbits ak, uint64_t j) {
+  uint64_t k[4]; lbits_to_be_words4(k, ak); swb_union_build(k);
+  be_words4_to_lbits(rop, j < swb_union_n ? swb_union_rows[j].slot : storage_zero_val);
+}
+void storage_wset_union_val(lbits *rop, const lbits ak, uint64_t j) {
+  uint64_t k[4]; lbits_to_be_words4(k, ak); swb_union_build(k);
+  be_words4_to_lbits(rop, j < swb_union_n ? swb_union_rows[j].val : storage_zero_val);
 }

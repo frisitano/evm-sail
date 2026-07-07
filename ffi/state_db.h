@@ -50,6 +50,8 @@ void storage_map_load(lbits *rop, const lbits a, const lbits s);
 void storage_map_base_load(lbits *rop, const lbits a, const lbits s);
 bool storage_map_present(const lbits a, const lbits s);
 bool storage_map_base_present(const lbits a, const lbits s);
+bool storage_cache_present(const lbits a, const lbits s);
+void storage_cache_load(lbits *rop, const lbits a, const lbits s);
 bool storage_map_cache_nonzero(const lbits ah, const lbits sh);
 unit storage_map_wipe_addr(const lbits a);
 uint64_t storage_map_acct_count(const lbits ak);
@@ -74,5 +76,15 @@ unit storage_wset_restore(const lbits a, const lbits s, const lbits prior);
 bool storage_wset_warm(const lbits a, const lbits s);
 bool storage_wset_is_warm(const lbits a, const lbits s);
 unit storage_wset_unwarm(const lbits a, const lbits s);
+unit storage_wset_wipe_addr(const lbits a);
+
+/* compute_root enumeration over storage_wset_block, per account (keccak(addr)):
+   witness = dirty block rows; native = cache-union-block rows */
+uint64_t storage_wset_block_dirty_count(const lbits ak);
+void storage_wset_block_dirty_slot(lbits *rop, const lbits ak, uint64_t j);
+void storage_wset_block_dirty_val(lbits *rop, const lbits ak, uint64_t j);
+uint64_t storage_wset_union_count(const lbits ak);
+void storage_wset_union_slot(lbits *rop, const lbits ak, uint64_t j);
+void storage_wset_union_val(lbits *rop, const lbits ak, uint64_t j);
 
 #endif

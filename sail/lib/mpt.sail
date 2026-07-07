@@ -977,33 +977,31 @@ val storage_updates : bits(256) -> list(TriePatch)
  * pre-state leaf is dropped (nothing to delete). */
 function storage_updates_writes_only(ak : bits(256)) -> list(TriePatch) = {
     var out : list(TriePatch) = [||];
-    let n = storage_acct_update_rows(ak);
+    let n = storage_wset_dirty_rows(ak);
     foreach (j from 0 to (n - 1)) {
-        let (es, ev) = storage_acct_update_row(ak, j);
+        let (es, ev) = storage_wset_dirty_row(ak, j);
         let sk = keccak256_word(es);
-        if word_is_zero(ev) & not_bool(storage_map_cache_nonzero(ak, sk)) then {
-            ()
-        } else {
-            let key = to_nibbles(word_to_bytes32(sk));
-            out = patch_insert_sorted(
-                if word_is_zero(ev) then {
-                    patch_delete(key)
-                } else {
-                    patch_leaf(key, storage_leaf_value(ev))
-                },
-                out,
-            )
-        }
+        /* a dirty row has current != original: a zero current means the slot
+         * held a nonzero pre-state value, so it deletes a real MPT leaf */
+        let key = to_nibbles(word_to_bytes32(sk));
+        out = patch_insert_sorted(
+            if word_is_zero(ev) then {
+                patch_delete(key)
+            } else {
+                patch_leaf(key, storage_leaf_value(ev))
+            },
+            out,
+        )
     };
     out
 }
 
-/* full live cache/update union (native fixture base) */
+/* full live cache-union-block (native fixture base, empty anchor) */
 function storage_updates_union(ak : bits(256)) -> list(TriePatch) = {
     var out : list(TriePatch) = [||];
-    let n = storage_acct_rows(ak);
+    let n = storage_wset_union_rows(ak);
     foreach (j from 0 to (n - 1)) {
-        let (es, ev) = storage_acct_row(ak, j);
+        let (es, ev) = storage_wset_union_row(ak, j);
         let sk = keccak256_word(es);
         let key = to_nibbles(word_to_bytes32(sk));
         out = patch_insert_sorted(
@@ -1221,62 +1219,12 @@ function parent_state_root() -> bits(256) = {
 function storage_proof_omitted(sroot : bits(256)) -> bool =
     (list_len(node_db_lookup(sroot)) == 0) & (sroot != EMPTY_TRIE_ROOT)
 
-/* Stateless storage resolver (declared in host/state.sail): the (a, s) pre-state
- * value, resolved (and its presence/absence PROVEN) by a lazy Merkle walk of the
- * account's storage trie from its authenticated pre-state root. The node-db is
- * keyed by keccak256(node), so the walk is itself a hash-chain proof from that
- * root:
- *   - the walk reaches the leaf            => present, use that value;
- *   - the walk reaches a diverging/empty
- *     terminus through present nodes        => PROVEN ABSENT => 0;
- *   - the walk hits a blinded (witness-
- *     absent) node on the path              => missing proof => fail closed
- *                                              (k_witness_bad).
- * The callers (k_sload / k_orig, host/base_witness.sail) seed the resolved value
- * into the layered working set, so repeat reads never re-walk. */
-function stateless_storage(a : address, s : word) -> word = {
-    let sroot = load_account(a).storage_root;
-    if storage_proof_omitted(sroot) then {
-        /* the block reads storage whose proof the witness omitted */
-        k_witness_bad = true;
-        sail_zeros(256)
-    } else {
-        let leaf = trie_walk(node_db_lookup(sroot), hash_nibbles(keccak256_word(s)), 0, 256);
-        if list_len(leaf) > 0 then {
-            rlp_str_word(leaf)
-        } else {
-            sail_zeros(256)
-        }
-    }
-}
-
-/* Stateless account materialization (declared in host/state.sail): bind `a` on
- * first touch. Presence/absence is PROVEN by a lazy Merkle walk of the state
- * trie from the authenticated parent root (k_parent_state_root):
- *   - the walk reaches the leaf             => present, decode + seed;
- *   - reaches a diverging/empty terminus
- *     through present nodes                  => PROVEN ABSENT => empty account;
- *   - hits a blinded (witness-absent) node   => missing proof => fail closed
- *                                              (k_witness_bad).
- * So a not-materialized account is never silently treated as empty -- its
- * absence is a witness-proven exclusion. The result is cached raw in the acctmap
- * (k_seed_account_hashed), so subsequent load_account(a) is an O(1) raw read. */
-function stateless_account_load(a : address) -> unit = {
-    let ak = keccak256_address(a);
-    let rootnode = node_db_lookup(k_parent_state_root);
-    if (list_len(rootnode) == 0) & (k_parent_state_root != EMPTY_TRIE_ROOT) then {
-        /* the anchor root itself is missing from the witness */
-        k_witness_bad = true
-    };
-    let value = trie_walk(rootnode, hash_nibbles(ak), 0, 256);
-    if list_len(value) > 0 then {
-        let (nonce, bal, sroot, chash) = decode_account(value);
-        k_seed_account_hashed(a, nonce, bal, sroot, chash);
-        acctmap_mark_base_exists(a)
-    } else {
-        k_seed_account_hashed(a, 0, sail_zeros(256), EMPTY_TRIE_ROOT, KECCAK_EMPTY)
-    }
-}
+/* The stateless resolvers stateless_storage / stateless_account_load (declared in
+ * host/state.sail) are BACKEND-SELECTED, not defined here: the witness MPT-walk
+ * definitions live in host/base_witness.sail, the native seeded-cache reads in
+ * host/base_native.sail (selected per entry in evm.sail_project). They call the
+ * trie-walk / node-db helpers above; storage_proof_omitted is the shared helper
+ * the witness storage walk uses. */
 
 /* EIP-7928 block-access-list item count over the RLP-encoded BlockAccessList (a
  * ByteList in the payload): rlp([ [address, storage_changes, storage_reads,

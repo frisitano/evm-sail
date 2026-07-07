@@ -479,5 +479,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
     };
     apply_transaction_upfront_effects(tx, validity);
     let frame_result = run_transaction_frame(tx, validity);
-    settle_transaction(tx, validity.sender, frame_result)
+    let receipt = settle_transaction(tx, validity.sender, frame_result);
+    k_tx_merge(); /* commit this tx's net storage writes into the block base */
+    receipt
 }

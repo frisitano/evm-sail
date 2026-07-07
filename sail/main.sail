@@ -513,7 +513,8 @@ function system_call(tgt : address, input : bits(256)) -> unit = {
             k_commit()
         } else {
             k_revert()
-        }
+        };
+        k_tx_merge() /* system call is a top-level boundary: merge its storage */
     }
 }
 
@@ -534,13 +535,14 @@ function system_call_checked(tgt : address) -> bool = {
         let _ = txdata_set_source(byte_slice(WitnessSource, 0, 0)); /* empty calldata: the SYSTEM caller dequeues */
         enter_system_call_frame(tgt, 0);
         interpret();
-        if frame_succeeded() then {
-            k_commit();
-            true
+        let ok = frame_succeeded();
+        if ok then {
+            k_commit()
         } else {
-            k_revert();
-            false /* checked: a reverting/erroring system call invalidates the block */
-        }
+            k_revert() /* checked: a reverting/erroring system call invalidates the block */
+        };
+        k_tx_merge(); /* system call is a top-level boundary: merge its storage */
+        ok
     }
 }
 

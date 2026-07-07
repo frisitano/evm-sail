@@ -41,6 +41,12 @@ function storage_map_present(a : address, s : word) -> bool = storage_map_presen
 val storage_map_base_present_ffi = impure { _: "storage_map_base_present" } : (address, word) -> bool
 function storage_map_base_present(a : address, s : word) -> bool = storage_map_base_present_ffi(a, s)
 
+val storage_cache_present_ffi = impure { _: "storage_cache_present" } : (address, word) -> bool
+function storage_cache_present(a : address, s : word) -> bool = storage_cache_present_ffi(a, s)
+
+val storage_cache_load_ffi = impure { _: "storage_cache_load" } : (address, word) -> word
+function storage_cache_load(a : address, s : word) -> word = storage_cache_load_ffi(a, s)
+
 val storage_map_cache_nonzero_ffi = impure { _: "storage_map_cache_nonzero" } : (hash, hash) -> bool
 function storage_map_cache_nonzero(ah : hash, sh : hash) -> bool = storage_map_cache_nonzero_ffi(ah, sh)
 
@@ -107,6 +113,27 @@ function storage_wset_is_warm(a : address, s : word) -> bool = storage_wset_is_w
 
 val storage_wset_unwarm_ffi = impure { _: "storage_wset_unwarm" } : (address, word) -> unit
 function storage_wset_unwarm(a : address, s : word) -> unit = storage_wset_unwarm_ffi(a, s)
+
+val storage_wset_wipe_addr_ffi = impure { _: "storage_wset_wipe_addr" } : address -> unit
+function storage_wset_wipe_addr(a : address) -> unit = storage_wset_wipe_addr_ffi(a)
+
+val storage_wset_block_dirty_count_ffi = impure { _: "storage_wset_block_dirty_count" } : hash -> bits(64)
+function storage_wset_block_dirty_count(ak : hash) -> bits(64) = storage_wset_block_dirty_count_ffi(ak)
+
+val storage_wset_block_dirty_slot_ffi = impure { _: "storage_wset_block_dirty_slot" } : (hash, bits(64)) -> word
+function storage_wset_block_dirty_slot(ak : hash, j : bits(64)) -> word = storage_wset_block_dirty_slot_ffi(ak, j)
+
+val storage_wset_block_dirty_val_ffi = impure { _: "storage_wset_block_dirty_val" } : (hash, bits(64)) -> word
+function storage_wset_block_dirty_val(ak : hash, j : bits(64)) -> word = storage_wset_block_dirty_val_ffi(ak, j)
+
+val storage_wset_union_count_ffi = impure { _: "storage_wset_union_count" } : hash -> bits(64)
+function storage_wset_union_count(ak : hash) -> bits(64) = storage_wset_union_count_ffi(ak)
+
+val storage_wset_union_slot_ffi = impure { _: "storage_wset_union_slot" } : (hash, bits(64)) -> word
+function storage_wset_union_slot(ak : hash, j : bits(64)) -> word = storage_wset_union_slot_ffi(ak, j)
+
+val storage_wset_union_val_ffi = impure { _: "storage_wset_union_val" } : (hash, bits(64)) -> word
+function storage_wset_union_val(ak : hash, j : bits(64)) -> word = storage_wset_union_val_ffi(ak, j)
 
 val acctmap_reset_ffi = impure { _: "acctmap_reset" } : unit -> unit
 function acctmap_reset() -> unit = acctmap_reset_ffi()

@@ -75,9 +75,11 @@ function dump_storage() -> unit = {
     let n = unsigned(acctmap_count());
     foreach (i from 0 to (n - 1)) {
         let ak = acctmap_row_hkey(get_slice_int(64, i, 0));
-        let ns = storage_acct_rows(ak);
+        /* the post-state union the native root is built from: seeded pre-state
+           cache overlaid with the write-set block base (host/base_native.sail) */
+        let ns = storage_wset_union_rows(ak);
         foreach (j from 0 to (ns - 1)) {
-            let (s, v) = storage_acct_row(ak, j);
+            let (s, v) = storage_wset_union_row(ak, j);
             print_endline(
                 concat_str(
                     "STO ",

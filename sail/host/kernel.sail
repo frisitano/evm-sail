@@ -39,26 +39,37 @@ function k_access_slot(a : address, s : word) -> bool = {
 /* --- persistent storage (SLOAD/SSTORE): the C cache/update store, whose update
  * layers are pushed/popped by k_snapshot / k_commit / k_revert --- */
 
-/* Base-layer contracts (defined per entry: host/base_native.sail for the
- * fixture-seeded runner/bench, host/base_witness.sail for the stateless
- * guest/probe -- see the entry selection in evm.sail_project).
+/* k_sload: the slot's live value = the write-set overlay (this tx's write over
+ * committed block writes) when present, else the pre-state resolver
+ * stateless_storage. k_orig (EIP-2200 "original"): the slot at tx start = the
+ * block base (committed prior txs) when present, else stateless_storage. The
+ * overlay is writes-only, so a pure read never mutates it; storage reverts run
+ * through the JStor journal.
  *
- * k_sload: the slot's current value in the layered working set over the
- * pre-state base. k_orig: the EIP-2200 "original" value = the slot at tx
- * start (the BASE layer; committed prior txs were pop_commit-merged in).
- * The two backends refine the same semantics: the native base is the
- * fully-seeded map (absent == 0); the witness base resolves a working-set
- * miss from the authenticated witness (absence is a proven exclusion). */
-val k_sload : (address, word) -> word
-val k_orig : (address, word) -> word
+ * stateless_storage is the only backend-specific storage primitive (declared in
+ * host/state.sail, defined per entry: host/base_native.sail = seeded cache k/v
+ * read, host/base_witness.sail = authenticated MPT point-get). Everything above
+ * it -- the overlay, the read-through, the journal -- is common. */
+function k_sload(a : address, s : word) -> word =
+    match storage_wset_get(a, s) {
+        Some(v) => v,
+        None()  => stateless_storage(a, s),
+    }
+function k_orig(a : address, s : word) -> word =
+    match storage_wset_base_get(a, s) {
+        Some(v) => v,
+        None()  => stateless_storage(a, s),
+    }
 
 function k_sstore(a : address, s : word, v : word) -> unit = {
-    storage_store(a, s, v); /* writes the top storage update layer; revert discards it */
+    let orig = k_orig(a, s);                                    /* EIP-2200 tx-start value */
+    journal_push(JStor(a, s, storage_wset_prior(a, s, orig)));  /* undo -> value before this write */
+    storage_wset_write(a, s, v, orig);                          /* orig adopted on first write this tx */
     store_account(a, load_account(a)) /* storage-root changes require a fresh account trie leaf */
 }
 
-/* un-journaled storage read (drivers/examples; same layered view as SLOAD) */
-function k_storage_get(a : address, s : word) -> word = storage_load(a, s)
+/* un-journaled storage read (drivers/examples; same overlay+base view as SLOAD) */
+function k_storage_get(a : address, s : word) -> word = k_sload(a, s)
 
 /* EIP-1153 transient storage (TLOAD/TSTORE): per-tx scratch, discarded at tx end,
  * not part of the state trie. TSTORE journals the prior value for frame revert. */
@@ -410,16 +421,17 @@ function k_finalize_selfdestructs() -> unit = {
  * CREATE-family sub-call with a snapshot, then commits on success or reverts on
  * REVERT / exceptional halt, giving each frame's effects all-or-nothing atomicity --- */
 
-/* Open a checkpoint: push a journal marker AND a fresh storage overlay layer. */
+/* Open a checkpoint: push a journal marker. Storage writes are reverted via
+ * the JStor journal, so there is no separate storage overlay layer to push. */
 function k_snapshot() -> unit = {
-    journal_push(JCheck());
-    storage_map_push() /* open the frame's storage update overlay */
+    journal_push(JCheck())
 }
 
 /* full world wipe between independent blocks/fixtures (driver/test only) */
 function k_world_reset() -> unit = {
     acctmap_reset();
-    storage_map_reset();
+    storage_map_reset();     /* native base cache */
+    storage_wset_reset();    /* write-set overlay (tx + block) */
     transient_reset();
     warm_reset();
     logs_reset();
@@ -448,15 +460,23 @@ function k_tx_reset() -> unit = {
  * the parent frame (so a later parent revert also undoes them). The C journal
  * splices out the most recent checkpoint marker, keeping all other entries. */
 function k_commit() -> unit = {
-    storage_map_pop_commit(); /* merge the frame's storage update overlay */
-    journal_commit()
+    journal_commit() /* the frame's JStor undos fold into the parent; no overlay merge */
 }
+
+/* Merge a completed TOP-LEVEL boundary's net storage writes (a transaction or a
+ * system call) from the per-tx overlay into the block base, then clear the
+ * overlay. Called once after the boundary's OUTERMOST commit-or-revert -- never
+ * per call frame (a frame's writes must stay tx-atomic until the tx settles).
+ * Only dirty (net-change) rows reach the base; a fully-reverted boundary leaves
+ * none, so this just clears the overlay. The block base is the compute_root
+ * cursor (host/base_*.sail storage_updates). */
+function k_tx_merge() -> unit = storage_wset_merge()
 
 /* revert: replay undo entries back to (and dropping) the most recent checkpoint.
  * Decode the top entry into a JEntry, drop it, then dispatch: stop on JCheck,
  * otherwise apply_undo. Stop on an empty journal. */
 function k_revert() -> unit = {
-    storage_map_pop_discard(); /* drop the frame's storage update overlay */
+    /* storage undos are JStor entries replayed below; no overlay layer to drop */
     var done : bool = false;
     while not_bool(done) do {
         let tag = journal_top_tag();

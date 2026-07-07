@@ -168,7 +168,25 @@ function storage_present(a : address, s : word) -> bool = storage_map_present(a,
  * 0 is present, a never-committed slot is absent and resolved from the witness) */
 function storage_base_present(a : address, s : word) -> bool = storage_map_base_present(a, s)
 
-function storage_wipe_addr(a : address) -> unit = storage_map_wipe_addr(a)
+/* Write-set overlay lookups as option(word): Some(v) = a write is present (a
+ * stored 0 is Some(0x..0), distinct from an absent slot), None = miss -> the
+ * caller resolves the pre-state via stateless_storage. This is why the overlay
+ * cannot just return a bare word: 0 is a valid value. storage_wset_get is the
+ * live view (this tx over committed block writes = SLOAD); storage_wset_base_get
+ * is the block base only (committed prior txs = EIP-2200 tx-start original). */
+function storage_wset_get(a : address, s : word) -> option(word) =
+    if storage_wset_present(a, s) then Some(storage_wset_load(a, s)) else None()
+function storage_wset_base_get(a : address, s : word) -> option(word) =
+    if storage_wset_base_present(a, s) then Some(storage_wset_base_load(a, s)) else None()
+
+/* wipe an address's storage everywhere: the native base cache AND the write-set
+ * overlay (tx + block). Used by the EIP-6780 tx-end account deletion; without
+ * the overlay wipe a created+selfdestructed account's writes would still merge
+ * into the block base, and a same-block re-CREATE would inherit stale storage. */
+function storage_wipe_addr(a : address) -> unit = {
+    storage_map_wipe_addr(a);
+    storage_wset_wipe_addr(a)
+}
 
 function transient_reset() -> unit = transient_storage_reset(get_slice_int(64, 0, 0))
 
@@ -195,12 +213,32 @@ function storage_acct_update_row(ak : bits(256), j : int) -> (word, word) =
         storage_map_acct_update_val(ak, get_slice_int(64, j, 0)),
     )
 
+/* write-set block enumeration for compute_root (host/base_*.sail storage_updates):
+ * dirty rows = the net change over the authenticated MPT (witness); the
+ * cache-union-block = the full post-state over the empty anchor (native). */
+function storage_wset_dirty_rows(ak : bits(256)) -> int = unsigned(storage_wset_block_dirty_count(ak))
+function storage_wset_dirty_row(ak : bits(256), j : int) -> (word, word) =
+    (
+        storage_wset_block_dirty_slot(ak, get_slice_int(64, j, 0)),
+        storage_wset_block_dirty_val(ak, get_slice_int(64, j, 0)),
+    )
+function storage_wset_union_rows(ak : bits(256)) -> int = unsigned(storage_wset_union_count(ak))
+function storage_wset_union_row(ak : bits(256), j : int) -> (word, word) =
+    (
+        storage_wset_union_slot(ak, get_slice_int(64, j, 0)),
+        storage_wset_union_val(ak, get_slice_int(64, j, 0)),
+    )
+
+/* "has any live (nonzero) storage slot" -- the CREATE address-collision test
+ * (EIP-158 account_has_storage). The cache-union-block sees the native seeded
+ * pre-state and any block writes; for the witness the cache is empty, so this
+ * catches block writes and the caller also tests acc.storage_root != EMPTY. */
 function storage_has_live_acct_hash(ak : bits(256)) -> bool = {
-    let n = storage_acct_rows(ak);
+    let n = storage_wset_union_rows(ak);
     var j : int = 0;
     var found : bool = false;
     while (j < n) & not_bool(found) do {
-        let (_, ev) = storage_acct_row(ak, j);
+        let (_, ev) = storage_wset_union_row(ak, j);
         if word_nonzero(ev) then {
             found = true
         } else {
