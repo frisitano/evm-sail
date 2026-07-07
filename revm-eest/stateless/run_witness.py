@@ -63,7 +63,7 @@ def build_probe(rebuild=False):
     host_c = [os.path.join(ELDIR, "ffi", f"{m}.c") for m in
               ("host_crypto", "precompiles", "returndata", "memory",
                "transient_storage", "state_db", "stack", "code_db",
-               "trie_node_db")]
+               "kernel_state", "trie_node_db")]
     ffi_c = os.path.join(EEST, "runner_ffi.c")  # ssz_src over buffered stdin
     subprocess.check_call(
         ["sail", "-c", "-O", "--c-include", "runner_ffi.h",

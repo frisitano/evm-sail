@@ -153,6 +153,7 @@ def build_runner(rebuild=False):
                                os.path.join(ELDIR,"ffi","state_db.c"),
                                os.path.join(ELDIR,"ffi","stack.c"),
                                os.path.join(ELDIR,"ffi","code_db.c"),
+                               os.path.join(ELDIR,"ffi","kernel_state.c"),
                                os.path.join(ELDIR,"ffi","trie_node_db.c"),
                                *objs, *accel_flags, *stack_flags, "-o",BIN])
     else:
@@ -177,6 +178,7 @@ def build_runner(rebuild=False):
                                os.path.join(ELDIR,"ffi","state_db.c"),
                                os.path.join(ELDIR,"ffi","stack.c"),
                                os.path.join(ELDIR,"ffi","code_db.c"),
+                               os.path.join(ELDIR,"ffi","kernel_state.c"),
                                os.path.join(ELDIR,"ffi","trie_node_db.c"),
                                *objs, *accel_flags, *stack_flags, "-lgmp","-o",BIN])
     for p in (BIN+"_gen.c", BIN+"_gen.h"):

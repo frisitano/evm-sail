@@ -11,6 +11,7 @@
 #include "transient_storage.h"
 #include "stack.h"
 #include "code_db.h"
+#include "kernel_state.h"
 #include "trie_node_db.h"
 #include "state_db.h"
 uint64_t ssz_src_len(const unit u);                  /* unit -> bits(64) (byte count) */

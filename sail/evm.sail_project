@@ -12,6 +12,7 @@ evm {
     iface/code_db.sail,
     iface/frame_code.sail,
     iface/state.sail,
+    iface/kernel_state.sail,
     iface/witness_db.sail,
     host/io.sail,
     lib/rlp.sail,
@@ -43,6 +44,7 @@ evm {
       build/code_db.sail,
       build/frame_code.sail,
       build/state.sail,
+      build/kernel_state.sail,
       build/witness_db.sail,
       build/mpt.sail
     ]

@@ -627,7 +627,7 @@ function execute(op : ast) -> unit = match op {
              * register the deletion when the frame is still running, else the
              * out-of-gas SELFDESTRUCT must have no effect. */
             if is_running() then {
-                let first_selfdestruct = not_bool(address_list_contains(k_selfdestr, self_addr()));
+                let first_selfdestruct = not_bool(selfdestr_contains(self_addr()));
                 if (k_fork < FORK_LONDON) & first_selfdestruct then {
                     k_refund_add(R_selfdestruct_pre_london)
                 };

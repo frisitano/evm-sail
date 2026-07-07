@@ -20,17 +20,17 @@
  * bit (the EVM charges COLD_*_COST on a false result, WARM_STORAGE_READ_COST on
  * true). The warming is journaled so a frame revert un-warms it. --- */
 function k_access_account(a : address) -> bool = {
-    let prior = address_list_contains(k_warm_addr, a);
+    let prior = warm_addr_contains(a);
     if not_bool(prior) then {
-        k_warm_addr = a :: k_warm_addr;
+        warm_addr_insert(a);
         journal_push(JWarmA(a))
     };
     prior
 }
 function k_access_slot(a : address, s : word) -> bool = {
-    let prior = slot_list_contains(k_warm_slots, a, s);
+    let prior = warm_slot_contains(a, s);
     if not_bool(prior) then {
-        k_warm_slots = struct { address = a, slot = s } :: k_warm_slots;
+        warm_slot_insert(a, s);
         journal_push(JWarmS(a, s))
     };
     prior
@@ -118,15 +118,10 @@ function k_emit_transfer_log(src : address, dst : address, v : word) -> unit = {
         ()
     } else {
         journal_push(JLog());
-        k_logs = list_append(
-            k_logs,
-            [|
-                struct {
-                    address = eip7708_system_address(),
-                    topics = [|eip7708_transfer_topic(), address_to_word(src), address_to_word(dst)|],
-                    data = word_to_bytes32(v),
-                },
-            |],
+        emit_log(
+            eip7708_system_address(),
+            [|eip7708_transfer_topic(), address_to_word(src), address_to_word(dst)|],
+            word_to_bytes32(v),
         )
     }
 }
@@ -136,16 +131,7 @@ function k_emit_burn_log(a : address, v : word) -> unit = {
         ()
     } else {
         journal_push(JLog());
-        k_logs = list_append(
-            k_logs,
-            [|
-                struct {
-                    address = eip7708_system_address(),
-                    topics = [|eip7708_burn_topic(), address_to_word(a)|],
-                    data = word_to_bytes32(v),
-                },
-            |],
-        )
+        emit_log(eip7708_system_address(), [|eip7708_burn_topic(), address_to_word(a)|], word_to_bytes32(v))
     }
 }
 
@@ -318,7 +304,7 @@ function k_create2_addr(a : address, salt : word, inithash : hash) -> address =
 /* --- logs (LOG0..LOG4) + the gas-refund counter --- */
 function k_log(a : address, topics : list(word), data : list(byte)) -> unit = {
     journal_push(JLog());
-    k_logs = list_append(k_logs, [|struct { address = a, topics = topics, data = data }|])
+    emit_log(a, topics, data)
 }
 function k_refund_add(delta : int) -> unit = {
     journal_push(JRefund(k_refund));
@@ -330,20 +316,15 @@ function k_refund_add(delta : int) -> unit = {
  * at tx end, and only under the EIP-6780 condition (k_finalize_selfdestructs). */
 function k_selfdestruct(a : address) -> unit = {
     journal_push(JSelfD());
-    k_selfdestr = list_append(k_selfdestr, [|a|])
+    selfdestr_push(a)
 }
 
 /* --- EIP-6780 created-this-tx tracking --- */
 /* Mark an address as CREATEd in the current tx. Like EELS created_accounts the
  * marker is NOT removed when the creating frame reverts (harmless: the account
  * cannot selfdestruct later without being re-created, which re-marks it). */
-function k_mark_created(a : address) -> unit =
-    if address_list_contains(k_created, a) then {
-        ()
-    } else {
-        k_created = a :: k_created
-    }
-function k_was_created(a : address) -> bool = address_list_contains(k_created, a)
+function k_mark_created(a : address) -> unit = created_insert(a)
+function k_was_created(a : address) -> bool = created_contains(a)
 
 /* EIP-6780 (selfdestruct of a created-this-tx account): the originator's
  * balance is forced to 0 after the transfer, so a self-beneficiary transfer
@@ -392,6 +373,16 @@ function address_sort_unique(xs : list(address)) -> list(address) =
         x :: r => address_insert_sorted_unique(address_sort_unique(r), x),
     }
 
+/* read the C-backed SELFDESTRUCT set out into a Sail list (cold path: tx-end
+ * finalization sorts + dedups it). Order is irrelevant -- sort_unique reorders. */
+function read_selfdestr_rev(i : int, n : int, acc : list(address)) -> list(address) =
+    if i >= n then {
+        acc
+    } else {
+        read_selfdestr_rev(i + 1, n, selfdestr_get(get_slice_int(64, i, 0))[159 .. 0] :: acc)
+    }
+function read_selfdestr() -> list(address) = read_selfdestr_rev(0, unsigned(selfdestr_count()), [||])
+
 /* SELFDESTRUCT tx-end finalization. Before Cancun, every surviving
  * SELFDESTRUCT deletes the originator. Cancun+ applies EIP-6780: an account is
  * actually DELETED only if it was both CREATEd and SELFDESTRUCTed in this same
@@ -399,7 +390,7 @@ function address_sort_unique(xs : list(address)) -> list(address) =
  * already moved at SELFDESTRUCT time. Call AFTER the tx-level commit, so only
  * surviving (committed) selfdestructs are in k_selfdestr. */
 function k_finalize_selfdestructs() -> unit = {
-    var xs : list(address) = address_sort_unique(k_selfdestr);
+    var xs : list(address) = address_sort_unique(read_selfdestr());
     var more : bool = true;
     while more do {
         match xs {
@@ -430,13 +421,12 @@ function k_world_reset() -> unit = {
     acctmap_reset();
     storage_map_reset();
     transient_reset();
-    k_warm_addr = [||];
-    k_warm_slots = [||];
-    k_logs = [||];
+    warm_reset();
+    logs_reset();
     k_refund = 0;
-    k_selfdestr = [||];
-    k_created = [||];
-    k_journal = [||]
+    selfdestr_reset();
+    created_reset();
+    journal_reset()
 }
 
 /* --- tx-lifecycle / driver helpers (system layer, not EVM user space) --- */
@@ -444,57 +434,41 @@ function k_set_block(env : BlockEnv) -> unit = k_block = env
 function k_set_tx(env : TxEnv) -> unit = k_tx = env
 function k_tx_reset() -> unit = {
     /* per-tx: clear ephemeral state, snapshot tx-original storage */
-    k_warm_addr = [||];
-    k_warm_slots = [||];
+    warm_reset();
     transient_reset();
-    k_logs = [||];
+    logs_reset();
     k_refund = 0;
-    k_selfdestr = [||];
-    k_created = [||];
-    k_journal = [||]
+    selfdestr_reset();
+    created_reset();
+    journal_reset()
     /* no per-tx original-storage snapshot: the overlay's base layer IS tx-start state */
 }
 
 /* commit: drop the most recent checkpoint; the frame's undo entries fold into
- * the parent frame (so a later parent revert also undoes them). */
+ * the parent frame (so a later parent revert also undoes them). The C journal
+ * splices out the most recent checkpoint marker, keeping all other entries. */
 function k_commit() -> unit = {
     storage_map_pop_commit(); /* merge the frame's storage update overlay */
-    var pre : list(JEntry) = [||]; /* frame's entries before the checkpoint (reversed) */
-    var j : list(JEntry) = k_journal;
-    var done : bool = false;
-    while not_bool(done) do {
-        match j {
-            [||]          => done = true,
-            JCheck() :: r => {
-                j = r;
-                done = true
-            },
-            e :: r        => {
-                pre = e :: pre;
-                j = r
-            },
-        }
-    };
-    k_journal = rev_onto(pre, j)
+    journal_commit()
 }
 
-/* revert: replay undo entries back to (and dropping) the most recent checkpoint. */
+/* revert: replay undo entries back to (and dropping) the most recent checkpoint.
+ * Decode the top entry into a JEntry, drop it, then dispatch: stop on JCheck,
+ * otherwise apply_undo. Stop on an empty journal. */
 function k_revert() -> unit = {
     storage_map_pop_discard(); /* drop the frame's storage update overlay */
-    var j : list(JEntry) = k_journal;
     var done : bool = false;
     while not_bool(done) do {
-        match j {
-            [||]          => done = true,
-            JCheck() :: r => {
-                j = r;
-                done = true
-            },
-            e :: r        => {
-                apply_undo(e);
-                j = r
-            },
+        let tag = journal_top_tag();
+        if tag == JT_EMPTY then {
+            done = true
+        } else {
+            let e = journal_decode_top(tag);
+            journal_drop_top();
+            match e {
+                JCheck() => done = true,
+                _        => apply_undo(e),
+            }
         }
-    };
-    k_journal = j
+    }
 }

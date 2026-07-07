@@ -460,7 +460,7 @@ function settle_transaction(tx : Transaction, sender : address, fr : TxFrameResu
         valid = true,
         gas_used = to_gas(gas_used),
         block_gas = to_gas(block_gas),
-        logs = k_logs,
+        logs = read_logs(),
     }
 }
 

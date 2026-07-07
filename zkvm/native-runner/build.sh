@@ -100,7 +100,7 @@ done
 
 # --- 6. C host backends + direct host crypto/precompile adapters ------------
 HOST_OBJS=()
-for hc in memory transient_storage state_db stack code_db trie_node_db host_crypto precompiles returndata; do
+for hc in memory transient_storage state_db stack code_db kernel_state trie_node_db host_crypto precompiles returndata; do
   o="$BUILD/$hc.o"
   "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$FFI" -c "$FFI/$hc.c" -o "$o"
   HOST_OBJS+=("$o")

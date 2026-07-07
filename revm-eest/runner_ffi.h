@@ -10,6 +10,7 @@
 #include "../ffi/transient_storage.h"
 #include "../ffi/stack.h"
 #include "../ffi/code_db.h"
+#include "../ffi/kernel_state.h"
 #include "../ffi/trie_node_db.h"
 #include "../ffi/state_db.h"
 /* SSZ byte-input source (definitions in runner_ffi.c: buffered stdin). */

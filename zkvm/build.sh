@@ -155,7 +155,7 @@ PY
   # 3c. C host backends: memory/calldata, transient storage, returndata,
   #     operand stack, code store, witness/account databases, and frame
   #     descriptors.
-  for hc in memory transient_storage state_db stack code_db trie_node_db returndata; do
+  for hc in memory transient_storage state_db stack code_db kernel_state trie_node_db returndata; do
     "$GCC" "${CFLAGS[@]}" -I"$lib" \
         -Wno-unused -c "$ROOT/ffi/$hc.c" -o "$BUILD/$hc.o"
   done

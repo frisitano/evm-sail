@@ -10,9 +10,9 @@
 /*                                                                          */
 /* This is the privileged host's data; the transaction kernel (the EVM,     */
 /* user space) reaches it ONLY through the host kernel functions in         */
-/* host/kernel.sail. Accounts, persistent storage, and transient storage    */
-/* are held in C-backed structures; warm access sets, logs, and the journal */
-/* remain Sail values.                                                      */
+/* host/kernel.sail. Accounts, storage, transient storage, the warm access  */
+/* sets, logs, the SELFDESTRUCT/created sets, and the journal are all held  */
+/* in C-backed structures (the host holds no Sail data buffers).            */
 /* ======================================================================== */
 
 /* ------------------------------ structs --------------------------------- */
@@ -43,8 +43,8 @@ let EMPTY_TRIE_ROOT : hash = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc00
 /* The account table is the C-backed acctmap (keccak(address) -> Account; see
  * the ffi/state_db.c declarations below). Persistent storage is keyed by
  * (keccak(address), keccak(slot)); transient storage remains C-backed because
- * it is an execution-local word table. Warm address/slot sets are Sail values.
- * No Sail association lists for sigma. */
+ * it is an execution-local word table. Warm address/slot sets are C-backed too
+ * (ffi/kernel_state.c). No Sail association lists for sigma. */
 
 /* SlotKey (the BAL access-set key) is defined in host/io.sail (its bal_load
  * builder is the producer), included before this file. */
@@ -86,11 +86,19 @@ struct TxEnv = { origin : address, gas_price : word, blob_hashes : list(word) }
  * small undo entry. k_snapshot pushes a JCheck checkpoint marker, k_revert
  * replays undos back to it, k_commit drops the marker so the frame's entries
  * fold into the parent (a later parent revert still undoes them). This is the
- * EELS journal model: O(changes), not O(state). */
+ * EELS journal model: O(changes), not O(state).
+ *
+ * JEntry is the kernel-facing type: the kernel journals a mutation as
+ * `journal_push(JAcct(..))` and k_revert dispatches undos with `match e`. The
+ * entries themselves are NOT held in a Sail list -- the journal lives in the
+ * C-backed store (ffi/kernel_state.c behind iface/kernel_state.sail). A thin
+ * adapter (journal_push / journal_decode_top, below) encodes one JEntry into
+ * the scalar push ops and decodes the top C entry back into a JEntry, so a
+ * JEntry is only ever an ephemeral view -- built for a push, decoded for a
+ * revert -- never a stored buffer. */
 union JEntry = {
   JCheck  : unit,                     /* call-frame checkpoint marker            */
   JAcct   : (address, Account),       /* restore an account to its prior value   */
-  JStor   : (address, word, word),    /* restore storage slot to its prior value */
   JTran   : (address, word, word),    /* restore transient slot                  */
   JWarmA  : address,                  /* un-warm a newly-accessed address        */
   JWarmS  : (address, word),          /* un-warm a newly-accessed slot           */
@@ -111,10 +119,9 @@ let EMPTY_ACCOUNT : Account = struct {
     }
 
 /* the account working set is the C-backed acctmap (ffi/state_db.c), keyed by
- * keccak(address) -- no Sail assoc list. */
-register k_warm_addr : list(address) = [||]
-register k_warm_slots : list(SlotKey) = [||]
-register k_logs : list(LogEntry) = [||]
+ * keccak(address) -- no Sail assoc list. The EIP-2929 warm address/slot sets,
+ * the LOG series, and the SELFDESTRUCT/created sets and journal are likewise
+ * C-backed (ffi/kernel_state.c behind iface/kernel_state.sail). */
 
 /* Store code `c` in the content-addressed code store under its keccak hash `h`.
  * If `h` is already present (identical bytes) the byte stream is skipped
@@ -241,14 +248,6 @@ function acctmap_update_row(j : int) -> AcctRow = {
     }
 }
 register k_refund : int = 0 /* gas-refund counter (SSTORE clears; EIP-3529 cap applied at tx end) */
-register k_selfdestr : list(address) = [||] /* addresses SELFDESTRUCTed this tx */
-
-register k_created : list(address) =
-    [||] /* accounts CREATEd this tx (EIP-6780).
-            NOT journaled: like EELS created_accounts,
-            the marker survives a frame revert. */
-
-register k_journal : list(JEntry) = [||] /* undo log (call-frame revert) */
 register k_witness_bad : bool =
     false /* witness proof deficient/inconsistent: validation FAILS (valid=false)
            gracefully instead of aborting (EIP-8025 optional-proofs tests) */
@@ -342,24 +341,6 @@ function account_seed(a : address, v : Account) -> unit = acctmap_write_account(
 
 /* bind `a` -> v in the acctmap as an execution mutation. */
 function account_update(a : address, v : Account) -> unit = acctmap_write_account(a, v, true)
-function address_list_contains(xs : list(address), a : address) -> bool =
-    match xs {
-        [||] => false,
-        x :: r => if x == a then {
-            true
-        } else {
-            address_list_contains(r, a)
-        },
-    }
-function slot_list_contains(xs : list(SlotKey), a : address, s : word) -> bool =
-    match xs {
-        [||] => false,
-        x :: r => if x.address == a & x.slot == s then {
-            true
-        } else {
-            slot_list_contains(r, a, s)
-        },
-    }
 
 /* whether `a` has been materialized into the acctmap (distinct from account_lookup,
  * which returns EMPTY_ACCOUNT for both absent and not-yet-loaded). */
@@ -381,48 +362,126 @@ val load_account : address -> Account
 
 function store_account(a : address, v : Account) -> unit = account_update(a, v)
 
-/* --- journal (undo log) helpers --- */
-function journal_push(e : JEntry) -> unit = k_journal = e :: k_journal
-function remove_address_once(xs : list(address), a : address) -> list(address) =
-    match xs {
-        [||] => [||],
-        x :: r => if x == a then {
-            r
+/* --- journal (undo log) adapter: JEntry <-> the C-backed scalar journal ---
+ * The kernel works in JEntry; these functions are the only place a JEntry is
+ * (en/de)coded into the scalar push / top-getter ops of iface/kernel_state.sail.
+ * No JEntry is ever stored -- push encodes one and returns; k_revert decodes
+ * the top entry, matches on it, and drops it. */
+
+/* encode one undo entry into the C journal (kernel side: journal_push(JAcct ..)) */
+function journal_push(e : JEntry) -> unit = match e {
+    JCheck()       => journal_push_check(),
+    JAcct(a, old)  => journal_push_acct(a, get_slice_int(64, old.nonce, 0), old.balance, old.storage_root, old.code_hash),
+    JTran(a, s, v) => journal_push_tran(a, s, v),
+    JWarmA(a)      => journal_push_warma(a),
+    JWarmS(a, s)   => journal_push_warms(a, s),
+    JLog()         => journal_push_log(),
+    JRefund(old)   => journal_push_refund(get_slice_int(64, old, 0)),
+    JSelfD()       => journal_push_selfd(),
+}
+
+/* decode the journal's TOP entry into a JEntry (the payload getters are
+ * tag-indexed views over that one C entry record). The caller guards this with
+ * journal_top_tag() != JT_EMPTY, so the empty case never reaches here (it maps
+ * to JCheck, a no-op undo, purely to keep the match total). */
+function journal_decode_top(tag : bits(64)) -> JEntry =
+    if tag == JT_ACCT then {
+        JAcct(
+            journal_top_addr()[159 .. 0],
+            struct {
+                nonce = unsigned(journal_top_nonce()),
+                balance = journal_top_balance(),
+                code_hash = journal_top_chash(),
+                storage_root = journal_top_sroot(),
+            },
+        )
+    } else {
+        if tag == JT_TRAN then {
+            JTran(journal_top_addr()[159 .. 0], journal_top_slot(), journal_top_val())
         } else {
-            x :: remove_address_once(r, a)
-        },
-    }
-function remove_slot_once(xs : list(SlotKey), a : address, s : word) -> list(SlotKey) =
-    match xs {
-        [||] => [||],
-        x :: r => if x.address == a & x.slot == s then {
-            r
-        } else {
-            x :: remove_slot_once(r, a, s)
-        },
-    }
-function drop_last_log(xs : list(LogEntry)) -> list(LogEntry) =
-    match xs {
-        [||] => [||],
-        _ :: [||] => [||],
-        x :: r => x :: drop_last_log(r),
-    }
-function drop_last_address(xs : list(address)) -> list(address) =
-    match xs {
-        [||] => [||],
-        _ :: [||] => [||],
-        x :: r => x :: drop_last_address(r),
+            if tag == JT_WARMA then {
+                JWarmA(journal_top_addr()[159 .. 0])
+            } else {
+                if tag == JT_WARMS then {
+                    JWarmS(journal_top_addr()[159 .. 0], journal_top_slot())
+                } else {
+                    if tag == JT_LOG then {
+                        JLog()
+                    } else {
+                        if tag == JT_REFUND then {
+                            JRefund(signed(journal_top_refund()))
+                        } else {
+                            if tag == JT_SELFD then {
+                                JSelfD()
+                            } else {
+                                JCheck() /* JT_CHECK / JT_EMPTY: no undo effect */
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
 /* Apply one undo entry (k_revert replays these back to the checkpoint). */
 function apply_undo(e : JEntry) -> unit = match e {
     JCheck()       => (),
     JAcct(a, old)  => store_account(a, old),
-    JStor(_, _, _) => (), /* persistent-storage undo is the overlay layer's pop_discard */
     JTran(a, s, v) => transient_store(a, s, v),
-    JWarmA(a)      => k_warm_addr = remove_address_once(k_warm_addr, a),
-    JWarmS(a, s)   => k_warm_slots = remove_slot_once(k_warm_slots, a, s),
-    JLog()         => k_logs = drop_last_log(k_logs),
+    JWarmA(a)      => warm_addr_remove(a),
+    JWarmS(a, s)   => warm_slot_remove(a, s),
+    JLog()         => log_drop_last(),
     JRefund(old)   => k_refund = old,
-    JSelfD()       => k_selfdestr = drop_last_address(k_selfdestr),
+    JSelfD()       => selfdestr_drop_last(),
 }
+
+/* --- LOG series helpers: stream a record into the C log store, and read the
+ * whole ordered list back out (into the receipt) via the count/getters. --- */
+function log_stream_topics(ts : list(word)) -> unit =
+    match ts {
+        [||]   => (),
+        t :: r => {
+            log_add_topic(t);
+            log_stream_topics(r)
+        },
+    }
+function log_stream_data(bs : list(byte)) -> unit =
+    match bs {
+        [||]   => (),
+        b :: r => {
+            log_add_data_byte(b);
+            log_stream_data(r)
+        },
+    }
+function emit_log(a : address, topics : list(word), data : list(byte)) -> unit = {
+    log_begin(a);
+    log_stream_topics(topics);
+    log_stream_data(data)
+}
+
+/* read one stored log's topics (in order) / data bytes (reversed, caller flips) */
+function read_log_topics(i : bits(64), j : int, m : int, acc : list(word)) -> list(word) =
+    if j >= m then {
+        acc
+    } else {
+        read_log_topics(i, j + 1, m, acc ++ [|log_topic(i, get_slice_int(64, j, 0))|])
+    }
+function read_log_data_rev(i : bits(64), k : int, n : int, acc : list(byte)) -> list(byte) =
+    if k >= n then {
+        acc
+    } else {
+        read_log_data_rev(i, k + 1, n, log_data_byte(i, get_slice_int(64, k, 0)) :: acc)
+    }
+function read_log_entry(i : bits(64)) -> LogEntry =
+    struct {
+        address = log_addr(i)[159 .. 0],
+        topics = read_log_topics(i, 0, unsigned(log_topic_count(i)), [||]),
+        data = list_reverse(read_log_data_rev(i, 0, unsigned(log_data_len(i)), [||])),
+    }
+function read_logs_rev(i : int, n : int, acc : list(LogEntry)) -> list(LogEntry) =
+    if i >= n then {
+        acc
+    } else {
+        read_logs_rev(i + 1, n, read_log_entry(get_slice_int(64, i, 0)) :: acc)
+    }
+function read_logs() -> list(LogEntry) = list_reverse(read_logs_rev(0, unsigned(log_count()), [||]))
