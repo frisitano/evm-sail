@@ -880,3 +880,240 @@ void storage_map_acct_update_val(lbits *rop, const lbits ak, uint64_t j) {
   const storage_row *e = storage_acct_row_at(ak, 1, j);
   be_words4_to_lbits(rop, e ? e->val : storage_zero_val);
 }
+
+/* ======================================================================== */
+/* WRITE-SET STORAGE OVERLAY (stage 1: replaces the layered storage_map)     */
+/*                                                                          */
+/* Two flat tables keyed by (keccak(addr), keccak(slot)), each kept sorted   */
+/* by (acct_hash, slot_hash):                                                */
+/*   storage_wset_tx    -- per-transaction overlay: every touched slot (reads AND     */
+/*                writes). Membership == touched. Never removed on revert     */
+/*                (the journal rewinds `current`); merged into storage_wset_block and  */
+/*                cleared at tx end. `is_warm` (EIP-2929) lives here.         */
+/*   storage_wset_block -- block base: writes only = the net-change set vs the         */
+/*                authenticated pre-state = the compute_root cursor.          */
+/* A row carries (original, current); dirty == written && current!=original.  */
+/* The base read-through target below both (native seeded map / witness MPT   */
+/* point-get) is resolved in Sail; a miss here means "ask the base".          */
+/* ======================================================================== */
+
+typedef struct {
+  uint64_t acct_hash[4];
+  uint64_t slot_hash[4];
+  uint64_t slot[4];
+  uint64_t current[4];   /* live value    (valid iff written) */
+  uint64_t original[4];  /* tx-start value (tx) / block pre-state (block); valid iff written */
+  uint8_t  written;      /* 1: a write reached this row; 0: read-only member */
+  uint8_t  is_warm;      /* EIP-2929 warm bit (tx table only) */
+} storage_wset_row;
+
+typedef struct { storage_wset_row *rows; uint32_t n, cap; } storage_wset_table;
+
+static storage_wset_table storage_wset_tx    = {NULL, 0, 0};
+static storage_wset_table storage_wset_block = {NULL, 0, 0};
+
+static uint32_t storage_wset_find(const storage_wset_table *t, const uint64_t ah[4],
+                         const uint64_t sh[4], int *found) {
+  uint32_t lo = 0, hi = t->n;
+  while (lo < hi) {
+    uint32_t mid = lo + ((hi - lo) >> 1);
+    int c = storage_key_cmp(t->rows[mid].acct_hash, t->rows[mid].slot_hash, ah, sh);
+    if (c < 0) lo = mid + 1; else hi = mid;
+  }
+  *found = (lo < t->n &&
+            storage_key_cmp(t->rows[lo].acct_hash, t->rows[lo].slot_hash, ah, sh) == 0);
+  return lo;
+}
+
+static storage_wset_row *storage_wset_get(storage_wset_table *t, const uint64_t ah[4], const uint64_t sh[4]) {
+  int f = 0;
+  uint32_t i = storage_wset_find(t, ah, sh, &f);
+  return f ? &t->rows[i] : NULL;
+}
+
+/* insert-if-absent, keeping the table sorted; new rows are zeroed with the
+   keys set (written == 0 == read-only member) */
+static storage_wset_row *storage_wset_intern(storage_wset_table *t, const uint64_t ah[4], const uint64_t sh[4],
+                           const uint64_t slot[4]) {
+  int f = 0;
+  uint32_t i = storage_wset_find(t, ah, sh, &f);
+  if (f) return &t->rows[i];
+  if (t->cap < t->n + 1) {
+    uint32_t nc = t->cap ? t->cap * 2 : STORAGE_INIT_CAP;
+    while (nc < t->n + 1) nc *= 2;
+    storage_wset_row *nr = (storage_wset_row *)realloc(t->rows, (size_t)nc * sizeof(storage_wset_row));
+    if (!nr) return NULL;
+    t->rows = nr; t->cap = nc;
+  }
+  if (i < t->n)
+    memmove(&t->rows[i + 1], &t->rows[i], (size_t)(t->n - i) * sizeof(storage_wset_row));
+  storage_wset_row *e = &t->rows[i];
+  memset(e, 0, sizeof(*e));
+  memcpy(e->acct_hash, ah, sizeof(e->acct_hash));
+  memcpy(e->slot_hash, sh, sizeof(e->slot_hash));
+  memcpy(e->slot, slot, sizeof(e->slot));
+  t->n++;
+  return e;
+}
+
+static void storage_wset_table_reset(storage_wset_table *t) {
+  free(t->rows);
+  t->rows = NULL; t->n = 0; t->cap = 0;
+}
+
+static int storage_wset_dirty(const storage_wset_row *e) {
+  return e->written && compare_words(e->current, e->original, 4) != 0;
+}
+
+/* --- lifecycle -------------------------------------------------------- */
+
+/* full world wipe (between independent blocks/fixtures) */
+unit storage_wset_reset(const unit u) {
+  (void)u;
+  storage_wset_table_reset(&storage_wset_tx);
+  storage_wset_table_reset(&storage_wset_block);
+  return UNIT;
+}
+
+/* drop the per-tx overlay (called after BAL extraction + merge at tx end,
+   and to discard a fully-reverted tx). Clears membership + is_warm. */
+unit storage_wset_tx_clear(const unit u) {
+  (void)u;
+  storage_wset_table_reset(&storage_wset_tx);
+  return UNIT;
+}
+
+/* merge dirty tx rows into the block base, then clear the tx overlay. Only
+   dirty (real net change) rows reach the base; reads / net-zero writes do not.
+   base.original is frozen at the block pre-state (set once, when the key first
+   becomes a block write); base.current tracks the latest committed value. */
+unit storage_wset_merge(const unit u) {
+  (void)u;
+  for (uint32_t i = 0; i < storage_wset_tx.n; i++) {
+    storage_wset_row *e = &storage_wset_tx.rows[i];
+    if (!storage_wset_dirty(e)) continue;
+    storage_wset_row *b = storage_wset_intern(&storage_wset_block, e->acct_hash, e->slot_hash, e->slot);
+    if (!b) continue;
+    if (!b->written) {                 /* first write to reach the base */
+      b->written = 1;
+      memcpy(b->original, e->original, sizeof(b->original));
+    }
+    memcpy(b->current, e->current, sizeof(b->current));
+  }
+  storage_wset_table_reset(&storage_wset_tx);
+  return UNIT;
+}
+
+/* --- reads (over tx overlay then block base; a miss => ask the base) --- */
+
+/* present in the working set (tx or block has a WRITE for the slot) */
+bool storage_wset_present(const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
+  if (e && e->written) return 1;
+  storage_wset_row *b = storage_wset_get(&storage_wset_block, ah, sh);
+  return (b && b->written) ? 1 : 0;
+}
+
+/* the live value (tx write, else block write, else 0 -- caller resolves the
+   base on a miss via storage_wset_present) */
+void storage_wset_load(lbits *rop, const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
+  if (e && e->written) { be_words4_to_lbits(rop, e->current); return; }
+  storage_wset_row *b = storage_wset_get(&storage_wset_block, ah, sh);
+  be_words4_to_lbits(rop, (b && b->written) ? b->current : storage_zero_val);
+}
+
+/* EIP-2200 original: the tx-start value = block base (committed prior txs),
+   ignoring the current tx's overlay; a miss => ask the base. */
+bool storage_wset_base_present(const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  storage_wset_row *b = storage_wset_get(&storage_wset_block, ah, sh);
+  return (b && b->written) ? 1 : 0;
+}
+
+void storage_wset_base_load(lbits *rop, const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  storage_wset_row *b = storage_wset_get(&storage_wset_block, ah, sh);
+  be_words4_to_lbits(rop, (b && b->written) ? b->current : storage_zero_val);
+}
+
+/* --- writes / touches / warm ------------------------------------------ */
+
+/* record a touch (read) -- ensure tx membership so the slot is in the BAL
+   read set; leaves the row read-only (written unchanged) */
+unit storage_wset_touch(const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  (void)storage_wset_intern(&storage_wset_tx, ah, sh, slot);
+  return UNIT;
+}
+
+/* the value a frame-revert must restore `current` to (JStor payload): the
+   current tx value if already written this tx, else the tx-start `orig`. */
+void storage_wset_prior(lbits *rop, const lbits a, const lbits s, const lbits orig) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
+  if (e && e->written) { be_words4_to_lbits(rop, e->current); return; }
+  uint64_t o[4];
+  lbits_to_be_words4(o, orig);
+  be_words4_to_lbits(rop, o);
+}
+
+/* write v; `orig` (the tx-start value) is adopted only on the FIRST write */
+unit storage_wset_write(const lbits a, const lbits s, const lbits v, const lbits orig) {
+  uint64_t slot[4], ah[4], sh[4], w[4], o[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  lbits_to_be_words4(w, v);
+  lbits_to_be_words4(o, orig);
+  storage_wset_row *e = storage_wset_intern(&storage_wset_tx, ah, sh, slot);
+  if (!e) return UNIT;
+  if (!e->written) { e->written = 1; memcpy(e->original, o, sizeof(e->original)); }
+  memcpy(e->current, w, sizeof(e->current));
+  return UNIT;
+}
+
+/* restore `current` to `prior` (JStor revert). Keeps the row (membership). */
+unit storage_wset_restore(const lbits a, const lbits s, const lbits prior) {
+  uint64_t slot[4], ah[4], sh[4], p[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  lbits_to_be_words4(p, prior);
+  storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
+  if (e) memcpy(e->current, p, sizeof(e->current));
+  return UNIT;
+}
+
+/* EIP-2929 warm: set is_warm on the tx row (interning it); return whether it
+   was cold (so the caller journals JWarmS only on the cold->warm transition) */
+bool storage_wset_warm(const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  storage_wset_row *e = storage_wset_intern(&storage_wset_tx, ah, sh, slot);
+  if (!e) return 0;
+  int was_cold = !e->is_warm;
+  e->is_warm = 1;
+  return was_cold ? 1 : 0;
+}
+
+bool storage_wset_is_warm(const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
+  return (e && e->is_warm) ? 1 : 0;
+}
+
+/* un-warm on revert (JWarmS undo): only the frame that flipped cold->warm
+   pushed the entry, so this fires exactly once per transition */
+unit storage_wset_unwarm(const lbits a, const lbits s) {
+  uint64_t slot[4], ah[4], sh[4];
+  storage_secure_key(a, s, slot, ah, sh);
+  storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
+  if (e) e->is_warm = 0;
+  return UNIT;
+}

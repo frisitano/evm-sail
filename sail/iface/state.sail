@@ -44,6 +44,24 @@ val storage_map_acct_update_count : hash -> bits(64)
 val storage_map_acct_update_slot : (hash, bits(64)) -> word
 val storage_map_acct_update_val : (hash, bits(64)) -> word
 
+/* ---- write-set storage overlay (ffi/state_db.c storage_wset_*): the tx overlay +
+ * block base that replace the layered storage_map. A working-set miss falls
+ * through to the backend base resolver (native seeded map / witness MPT). */
+val storage_wset_reset : unit -> unit
+val storage_wset_tx_clear : unit -> unit
+val storage_wset_merge : unit -> unit
+val storage_wset_present : (address, word) -> bool          /* tx-or-block has a write */
+val storage_wset_load : (address, word) -> word             /* live value (0 on miss) */
+val storage_wset_base_present : (address, word) -> bool      /* block base has a write */
+val storage_wset_base_load : (address, word) -> word         /* tx-start value (k_orig) */
+val storage_wset_touch : (address, word) -> unit             /* mark touched (BAL reads) */
+val storage_wset_prior : (address, word, word) -> word       /* JStor payload: value a revert restores */
+val storage_wset_write : (address, word, word, word) -> unit /* (a,s,v,orig): orig adopted on first write */
+val storage_wset_restore : (address, word, word) -> unit     /* JStor undo: current := prior */
+val storage_wset_warm : (address, word) -> bool              /* set warm; true iff was cold */
+val storage_wset_is_warm : (address, word) -> bool
+val storage_wset_unwarm : (address, word) -> unit            /* JWarmS undo */
+
 /* ---- C-backed account map (ffi/state_db.c): the kernel account working
  * set (k_accounts), split into materialized base/cache rows and execution
  * update rows. Both tables are ordered by keccak256(address). The point-access

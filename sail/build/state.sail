@@ -65,6 +65,49 @@ function storage_map_acct_update_slot(ak : hash, j : bits(64)) -> word = storage
 val storage_map_acct_update_val_ffi = impure { _: "storage_map_acct_update_val" } : (hash, bits(64)) -> word
 function storage_map_acct_update_val(ak : hash, j : bits(64)) -> word = storage_map_acct_update_val_ffi(ak, j)
 
+/* ---- write-set storage overlay (ffi/state_db.c storage_wset_*) ---- */
+val storage_wset_reset_ffi = impure { _: "storage_wset_reset" } : unit -> unit
+function storage_wset_reset() -> unit = storage_wset_reset_ffi()
+
+val storage_wset_tx_clear_ffi = impure { _: "storage_wset_tx_clear" } : unit -> unit
+function storage_wset_tx_clear() -> unit = storage_wset_tx_clear_ffi()
+
+val storage_wset_merge_ffi = impure { _: "storage_wset_merge" } : unit -> unit
+function storage_wset_merge() -> unit = storage_wset_merge_ffi()
+
+val storage_wset_present_ffi = impure { _: "storage_wset_present" } : (address, word) -> bool
+function storage_wset_present(a : address, s : word) -> bool = storage_wset_present_ffi(a, s)
+
+val storage_wset_load_ffi = impure { _: "storage_wset_load" } : (address, word) -> word
+function storage_wset_load(a : address, s : word) -> word = storage_wset_load_ffi(a, s)
+
+val storage_wset_base_present_ffi = impure { _: "storage_wset_base_present" } : (address, word) -> bool
+function storage_wset_base_present(a : address, s : word) -> bool = storage_wset_base_present_ffi(a, s)
+
+val storage_wset_base_load_ffi = impure { _: "storage_wset_base_load" } : (address, word) -> word
+function storage_wset_base_load(a : address, s : word) -> word = storage_wset_base_load_ffi(a, s)
+
+val storage_wset_touch_ffi = impure { _: "storage_wset_touch" } : (address, word) -> unit
+function storage_wset_touch(a : address, s : word) -> unit = storage_wset_touch_ffi(a, s)
+
+val storage_wset_prior_ffi = impure { _: "storage_wset_prior" } : (address, word, word) -> word
+function storage_wset_prior(a : address, s : word, orig : word) -> word = storage_wset_prior_ffi(a, s, orig)
+
+val storage_wset_write_ffi = impure { _: "storage_wset_write" } : (address, word, word, word) -> unit
+function storage_wset_write(a : address, s : word, v : word, orig : word) -> unit = storage_wset_write_ffi(a, s, v, orig)
+
+val storage_wset_restore_ffi = impure { _: "storage_wset_restore" } : (address, word, word) -> unit
+function storage_wset_restore(a : address, s : word, prior : word) -> unit = storage_wset_restore_ffi(a, s, prior)
+
+val storage_wset_warm_ffi = impure { _: "storage_wset_warm" } : (address, word) -> bool
+function storage_wset_warm(a : address, s : word) -> bool = storage_wset_warm_ffi(a, s)
+
+val storage_wset_is_warm_ffi = impure { _: "storage_wset_is_warm" } : (address, word) -> bool
+function storage_wset_is_warm(a : address, s : word) -> bool = storage_wset_is_warm_ffi(a, s)
+
+val storage_wset_unwarm_ffi = impure { _: "storage_wset_unwarm" } : (address, word) -> unit
+function storage_wset_unwarm(a : address, s : word) -> unit = storage_wset_unwarm_ffi(a, s)
+
 val acctmap_reset_ffi = impure { _: "acctmap_reset" } : unit -> unit
 function acctmap_reset() -> unit = acctmap_reset_ffi()
 

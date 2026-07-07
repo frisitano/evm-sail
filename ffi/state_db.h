@@ -59,4 +59,20 @@ uint64_t storage_map_acct_update_count(const lbits ak);
 void storage_map_acct_update_slot(lbits *rop, const lbits ak, uint64_t j);
 void storage_map_acct_update_val(lbits *rop, const lbits ak, uint64_t j);
 
+/* write-set storage overlay (stage 1: tx overlay + block base) */
+unit storage_wset_reset(const unit u);
+unit storage_wset_tx_clear(const unit u);
+unit storage_wset_merge(const unit u);
+bool storage_wset_present(const lbits a, const lbits s);
+void storage_wset_load(lbits *rop, const lbits a, const lbits s);
+bool storage_wset_base_present(const lbits a, const lbits s);
+void storage_wset_base_load(lbits *rop, const lbits a, const lbits s);
+unit storage_wset_touch(const lbits a, const lbits s);
+void storage_wset_prior(lbits *rop, const lbits a, const lbits s, const lbits orig);
+unit storage_wset_write(const lbits a, const lbits s, const lbits v, const lbits orig);
+unit storage_wset_restore(const lbits a, const lbits s, const lbits prior);
+bool storage_wset_warm(const lbits a, const lbits s);
+bool storage_wset_is_warm(const lbits a, const lbits s);
+unit storage_wset_unwarm(const lbits a, const lbits s);
+
 #endif

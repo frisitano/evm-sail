@@ -68,6 +68,7 @@ val journal_reset : unit -> unit
 val journal_push_check : unit -> unit
 val journal_push_acct : (address, bits(64), word, hash, hash) -> unit
 val journal_push_tran : (address, word, word) -> unit
+val journal_push_stor : (address, word, word) -> unit
 val journal_push_warma : address -> unit
 val journal_push_warms : (address, word) -> unit
 val journal_push_log : unit -> unit
@@ -95,3 +96,4 @@ let JT_WARMS : bits(64) = 0x0000000000000005
 let JT_LOG : bits(64) = 0x0000000000000006
 let JT_REFUND : bits(64) = 0x0000000000000007
 let JT_SELFD : bits(64) = 0x0000000000000008
+let JT_STOR : bits(64) = 0x0000000000000009

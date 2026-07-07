@@ -97,6 +97,9 @@ function journal_push_acct(a : address, nonce : bits(64), bal : word, sroot : ha
 val journal_push_tran_ffi = impure { _: "journal_push_tran" } : (address, word, word) -> unit
 function journal_push_tran(a : address, slot : word, val_ : word) -> unit = journal_push_tran_ffi(a, slot, val_)
 
+val journal_push_stor_ffi = impure { _: "journal_push_stor" } : (address, word, word) -> unit
+function journal_push_stor(a : address, slot : word, prior : word) -> unit = journal_push_stor_ffi(a, slot, prior)
+
 val journal_push_warma_ffi = impure { _: "journal_push_warma" } : address -> unit
 function journal_push_warma(a : address) -> unit = journal_push_warma_ffi(a)
 

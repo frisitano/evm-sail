@@ -100,6 +100,7 @@ union JEntry = {
   JCheck  : unit,                     /* call-frame checkpoint marker            */
   JAcct   : (address, Account),       /* restore an account to its prior value   */
   JTran   : (address, word, word),    /* restore transient slot                  */
+  JStor   : (address, word, word),    /* restore a storage slot's current value  */
   JWarmA  : address,                  /* un-warm a newly-accessed address        */
   JWarmS  : (address, word),          /* un-warm a newly-accessed slot           */
   JLog    : unit,                     /* drop the most recent log                */
@@ -373,6 +374,7 @@ function journal_push(e : JEntry) -> unit = match e {
     JCheck()       => journal_push_check(),
     JAcct(a, old)  => journal_push_acct(a, get_slice_int(64, old.nonce, 0), old.balance, old.storage_root, old.code_hash),
     JTran(a, s, v) => journal_push_tran(a, s, v),
+    JStor(a, s, p) => journal_push_stor(a, s, p),
     JWarmA(a)      => journal_push_warma(a),
     JWarmS(a, s)   => journal_push_warms(a, s),
     JLog()         => journal_push_log(),
@@ -399,6 +401,9 @@ function journal_decode_top(tag : bits(64)) -> JEntry =
         if tag == JT_TRAN then {
             JTran(journal_top_addr()[159 .. 0], journal_top_slot(), journal_top_val())
         } else {
+          if tag == JT_STOR then {
+            JStor(journal_top_addr()[159 .. 0], journal_top_slot(), journal_top_val())
+          } else {
             if tag == JT_WARMA then {
                 JWarmA(journal_top_addr()[159 .. 0])
             } else {
@@ -420,6 +425,7 @@ function journal_decode_top(tag : bits(64)) -> JEntry =
                     }
                 }
             }
+          }
         }
     }
 
@@ -428,6 +434,7 @@ function apply_undo(e : JEntry) -> unit = match e {
     JCheck()       => (),
     JAcct(a, old)  => store_account(a, old),
     JTran(a, s, v) => transient_store(a, s, v),
+    JStor(a, s, p) => storage_wset_restore(a, s, p),
     JWarmA(a)      => warm_addr_remove(a),
     JWarmS(a, s)   => warm_slot_remove(a, s),
     JLog()         => log_drop_last(),

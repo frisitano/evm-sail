@@ -56,6 +56,7 @@ unit journal_reset(const unit u);
 unit journal_push_check(const unit u);
 unit journal_push_acct(const lbits a, uint64_t nonce, const lbits bal, const lbits sroot, const lbits chash);
 unit journal_push_tran(const lbits a, const lbits slot, const lbits val);
+unit journal_push_stor(const lbits a, const lbits slot, const lbits prior);
 unit journal_push_warma(const lbits a);
 unit journal_push_warms(const lbits a, const lbits slot);
 unit journal_push_log(const unit u);

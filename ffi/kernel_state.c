@@ -281,7 +281,7 @@ bool created_contains(const lbits a) {
 /* tag values: MUST match the JT_* constants in sail/iface/kernel_state.sail */
 enum {
   JT_EMPTY = 0, JT_CHECK = 1, JT_ACCT = 2, JT_TRAN = 3, JT_WARMA = 4,
-  JT_WARMS = 5, JT_LOG = 6, JT_REFUND = 7, JT_SELFD = 8
+  JT_WARMS = 5, JT_LOG = 6, JT_REFUND = 7, JT_SELFD = 8, JT_STOR = 9
 };
 
 typedef struct {
@@ -329,6 +329,17 @@ unit journal_push_tran(const lbits a, const lbits slot, const lbits val) {
     e->a = lb_word(a);
     e->w0 = lb_word(slot);
     e->w1 = lb_word(val);
+  }
+  return UNIT;
+}
+/* JStor: (address, slot, prior_current) -- storage revert restores current to
+   prior. Same layout as TRAN; decode reuses journal_top_slot / journal_top_val. */
+unit journal_push_stor(const lbits a, const lbits slot, const lbits prior) {
+  jentry *e = jrn_push(JT_STOR);
+  if (e) {
+    e->a = lb_word(a);
+    e->w0 = lb_word(slot);
+    e->w1 = lb_word(prior);
   }
   return UNIT;
 }
