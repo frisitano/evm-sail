@@ -392,6 +392,105 @@ void host_bytes_sha256_finish(lbits *rop, const unit u) {
   else host_sha256_lbits(rop, NULL, UINT64_MAX);
 }
 
+/* ---- trie node-assembly channel (build-side node encode + child_ref) ------
+ * Accumulate an MPT node's already-encoded child-ref fields as fixed-width
+ * refs, frame them as an RLP list, and return the node's child_ref: the node
+ * bytes inline when < 32 bytes, else 0xa0 ++ keccak(node). A ref crosses the
+ * FFI as (kind, data, len): kind 0 = empty (RLP 0x80), kind 1 = an inline node
+ * (data holds its low `len` big-endian bytes), kind 2 = a keccak hash (data
+ * holds the 32-byte hash, framed as 0xa0 ++ hash). Mirrors lib/mpt.sail's
+ * branch_child_ref / branch_payload_rlp so the build backend never streams the
+ * node byte list through the hash channel. */
+#define NASM_CAP 4096
+static uint8_t NASM_payload[NASM_CAP];
+static size_t NASM_n;
+static int NASM_ok = 1;
+static uint8_t NASM_node[NASM_CAP + 16];
+static size_t NASM_node_len;
+static uint64_t NASM_hash[4];
+
+static void nasm_append(const uint8_t *p, size_t len) {
+  if (!NASM_ok || NASM_n + len > NASM_CAP) {
+    NASM_ok = 0;
+    return;
+  }
+  memcpy(NASM_payload + NASM_n, p, len);
+  NASM_n += len;
+}
+
+unit node_asm_reset(const unit u) {
+  (void)u;
+  NASM_n = 0;
+  NASM_ok = 1;
+  return UNIT;
+}
+
+unit node_asm_push_ref(uint64_t kind, const lbits data, uint64_t len) {
+  uint8_t buf[33];
+  if (kind == 0) {
+    buf[0] = 0x80;
+    nasm_append(buf, 1);
+  } else if (kind == 1) {
+    if (len > 32) {
+      NASM_ok = 0;
+      return UNIT;
+    }
+    lbits_to_be_bytes(buf, 32, data);
+    nasm_append(buf + (32 - (size_t)len), (size_t)len);
+  } else if (kind == 2) {
+    buf[0] = 0xa0;
+    lbits_to_be_bytes(buf + 1, 32, data);
+    nasm_append(buf, 33);
+  } else {
+    NASM_ok = 0;
+  }
+  return UNIT;
+}
+
+/* frame the accumulated payload (with the branch value slot 0x80 appended) as
+ * an RLP list; return the node length and stage its inline bytes / keccak. */
+uint64_t node_asm_finish_branch(const unit u) {
+  (void)u;
+  uint8_t vb = 0x80;
+  nasm_append(&vb, 1); /* branch 17th item (value slot): empty */
+  if (!NASM_ok) {
+    NASM_node_len = 0;
+    return 0;
+  }
+  size_t hn = 0;
+  if (NASM_n <= 55) {
+    NASM_node[hn++] = (uint8_t)(0xc0 + NASM_n);
+  } else {
+    uint8_t lb[8];
+    int m = 0;
+    for (size_t x = NASM_n; x != 0; x >>= 8) lb[m++] = (uint8_t)(x & 0xff);
+    NASM_node[hn++] = (uint8_t)(0xf7 + m);
+    for (int i = 0; i < m; i++) NASM_node[hn++] = lb[m - 1 - i];
+  }
+  memcpy(NASM_node + hn, NASM_payload, NASM_n);
+  NASM_node_len = hn + NASM_n;
+  if (NASM_node_len >= 32) host_keccak256_bytes(NASM_hash, NASM_node, NASM_node_len);
+  return (uint64_t)NASM_node_len;
+}
+
+/* the finished node's bytes (< 32) right-aligned into a 256-bit word, so Sail
+ * reconstructs the inline child ref; valid only when the node is inline. */
+void node_asm_result_data(lbits *rop, const unit u) {
+  (void)u;
+  uint8_t b32[32] = {0};
+  size_t n = NASM_node_len < 32 ? NASM_node_len : 32;
+  memcpy(b32 + (32 - n), NASM_node, n);
+  uint64_t out[4];
+  for (int i = 0; i < 4; i++) out[i] = host_be64(b32 + i * 8);
+  host_words_to_lbits(rop, out);
+}
+
+/* the finished node's keccak (valid when the node is >= 32 bytes). */
+void node_asm_result_hash(lbits *rop, const unit u) {
+  (void)u;
+  host_words_to_lbits(rop, NASM_hash);
+}
+
 int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
                                 const uint8_t **p, uint64_t *resolved_len) {
   const uint8_t *src = NULL;

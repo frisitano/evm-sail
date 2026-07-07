@@ -56,4 +56,10 @@ unit host_bytes_push8(uint64_t w);
 void host_bytes_keccak_finish(lbits *rop, const unit u);
 void host_bytes_sha256_finish(lbits *rop, const unit u);
 
+unit node_asm_reset(const unit u);
+unit node_asm_push_ref(uint64_t kind, const lbits data, uint64_t len);
+uint64_t node_asm_finish_branch(const unit u);
+void node_asm_result_data(lbits *rop, const unit u);
+void node_asm_result_hash(lbits *rop, const unit u);
+
 #endif

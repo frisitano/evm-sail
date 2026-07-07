@@ -269,8 +269,12 @@ function branch_payload_rlp(mask : bits(16), children : list(list(byte))) -> lis
 }
 function branch_node_rlp(mask : bits(16), children : list(list(byte))) -> list(byte) =
     rlp_list(branch_payload_rlp(mask, children))
-function branch_child_ref(mask : bits(16), children : list(list(byte))) -> list(byte) =
-    child_ref(branch_node_rlp(mask, children))
+
+/* branch child ref (Eq. 208 branch form): a refinement pair. The spec backend
+ * composes and hashes the 17-item node as a byte list (spec/mpt.sail); the
+ * build backend assembles it in C from fixed-width child refs so the node byte
+ * list never crosses the FFI hash channel (build/mpt.sail). */
+val branch_child_ref : (bits(16), list(list(byte))) -> list(byte)
 
 function trie_empty_ref() -> list(byte) = [|0x80|]
 
