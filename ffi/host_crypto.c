@@ -537,13 +537,91 @@ void node_asm_result_hash(lbits *rop, const unit u) {
   host_words_to_lbits(rop, NASM_hash);
 }
 
+/* ---- trie value arena (build-side computed leaf values) -------------------
+ * Update leaves' RLP values (account rows, storage words) are built here in C
+ * from their structured fields and referenced by a TrieArenaSource ByteSlice,
+ * so the value byte list is never materialized in Sail nor streamed through the
+ * hash channel. Reset once per state-root pass. The builders return a packed
+ * span pack(off,len) = (off << 32) | len that Sail turns into a ByteSlice. */
+#define TARENA_CAP (1u << 24)
+static uint8_t TARENA_buf[TARENA_CAP];
+static size_t TARENA_n;
+
+unit host_trie_arena_reset(const unit u) {
+  (void)u;
+  TARENA_n = 0;
+  return UNIT;
+}
+
+static uint64_t tarena_put(const uint8_t *p, size_t len) {
+  size_t off = TARENA_n;
+  if (off + len > TARENA_CAP) return UINT64_MAX; /* overflow sentinel */
+  memcpy(TARENA_buf + off, p, len);
+  TARENA_n += len;
+  return ((uint64_t)off << 32) | (uint64_t)len;
+}
+
+/* rlp([nonce, balance, storageRoot, codeHash]) -> arena (mirrors account_rlp). */
+uint64_t host_account_rlp_to_arena(uint64_t nonce, const lbits balance,
+                                   const lbits sroot, const lbits chash) {
+  uint8_t payload[80];
+  size_t pn = 0;
+  pn += host_rlp_uint(payload + pn, nonce);
+  rlp_put_word_min(payload, &pn, balance);
+  rlp_put_word32(payload, &pn, sroot);
+  rlp_put_word32(payload, &pn, chash);
+  uint8_t node[88];
+  size_t nn = 0;
+  node[nn++] = (uint8_t)(0xc0 + pn); /* account payload is always <= 55 bytes */
+  memcpy(node + nn, payload, pn);
+  nn += pn;
+  return tarena_put(node, nn);
+}
+
+/* rlp_int(unsigned(value)) -> arena (a storage leaf's raw RLP value). */
+uint64_t host_storage_rlp_to_arena(const lbits value) {
+  uint8_t buf[34];
+  size_t bn = 0;
+  rlp_put_word_min(buf, &bn, value);
+  return tarena_put(buf, bn);
+}
+
+/* append rlp_bytes(value) for a leaf node's value item, reading the value from
+ * a byte source (arena for update leaves, witness for base leaves) so the value
+ * list never crosses. Mirrors rlp_bytes framing. */
+unit node_asm_push_value_source(uint64_t kind, uint64_t off, uint64_t len) {
+  const uint8_t *src = NULL;
+  uint64_t rlen = 0;
+  if (!evmsail_resolve_byte_source(kind, off, len, &src, &rlen) || rlen != len) {
+    NASM_ok = 0;
+    return UNIT;
+  }
+  if (len == 1 && src[0] < 0x80) {
+    nasm_append(src, 1);
+  } else if (len <= 55) {
+    uint8_t h = (uint8_t)(0x80 + len);
+    nasm_append(&h, 1);
+    nasm_append(src, (size_t)len);
+  } else {
+    uint8_t lb[8];
+    int m = 0;
+    for (uint64_t x = len; x != 0; x >>= 8) lb[m++] = (uint8_t)(x & 0xff);
+    uint8_t h = (uint8_t)(0xb7 + m);
+    nasm_append(&h, 1);
+    for (int i = 0; i < m; i++) nasm_append(&lb[m - 1 - i], 1);
+    nasm_append(src, (size_t)len);
+  }
+  return UNIT;
+}
+
 int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
                                 const uint8_t **p, uint64_t *resolved_len) {
   const uint8_t *src = NULL;
   if (kind != EVMSAIL_SOURCE_WITNESS &&
       kind != EVMSAIL_SOURCE_MEMORY &&
       kind != EVMSAIL_SOURCE_TX_INPUT &&
-      kind != EVMSAIL_SOURCE_ACTIVE_CODE) {
+      kind != EVMSAIL_SOURCE_ACTIVE_CODE &&
+      kind != EVMSAIL_SOURCE_TRIE_ARENA) {
     return 0;
   }
   if (len == 0) {
@@ -557,6 +635,9 @@ int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
     src = txd_rd(off, len);
   } else if (kind == EVMSAIL_SOURCE_ACTIVE_CODE) {
     return code_db_frame_resolve_code(off, len, p, resolved_len);
+  } else if (kind == EVMSAIL_SOURCE_TRIE_ARENA) {
+    if (off > TARENA_n || len > TARENA_n - off) return 0;
+    src = TARENA_buf + off;
   } else {
     return 0;
   }
