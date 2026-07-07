@@ -56,39 +56,20 @@ val storage_wset_union_count : hash -> bits(64)
 val storage_wset_union_slot : (hash, bits(64)) -> word
 val storage_wset_union_val : (hash, bits(64)) -> word
 
-/* ---- C-backed account map (ffi/state_db.c): the kernel account working
- * set (k_accounts), split into materialized base/cache rows and execution
- * update rows. Both tables are ordered by keccak256(address). The point-access
- * hooks are keyed by raw address; the backend computes and memoizes the secure
- * trie key, and accessors resolve update first, cache second. ---- */
+/* ---- C-backed account resolver cache (ffi/state_db.c account_cache): the
+ * authenticated base BELOW the account write-set overlay. The native driver
+ * seeds it (acctmap_seed) and the witness backend read-caches resolved MPT
+ * leaves into it; account_lookup reads it on an overlay miss. Point-access
+ * hooks are keyed by raw address (the backend memoizes the secure trie key).
+ * The live working set is the acct_wset overlay below. ---- */
 val acctmap_reset : unit -> unit
 val acctmap_present : address -> bool
-val acctmap_store : (address, bits(64), word, hash, hash) -> unit
 val acctmap_mark_base_exists : address -> unit
 val acctmap_seed : (address, bits(64), word, hash, hash) -> unit
 val acctmap_nonce : address -> bits(64)
 val acctmap_bal : address -> word
 val acctmap_sroot : address -> hash
 val acctmap_chash : address -> hash
-val acctmap_remove : address -> unit
-val acctmap_count : unit -> bits(64)
-val acctmap_update_count : unit -> bits(64)
-
-/* enumeration by row index, no cursor: `row` reads the secure-key sorted
- * cache/update union, `update_row` reads the update table alone;
- * out-of-range indices read as zeros */
-val acctmap_row_hkey : bits(64) -> hash
-val acctmap_row_nonce : bits(64) -> bits(64)
-val acctmap_row_bal : bits(64) -> word
-val acctmap_row_sroot : bits(64) -> hash
-val acctmap_row_chash : bits(64) -> hash
-val acctmap_row_base_exists : bits(64) -> bool
-val acctmap_update_row_hkey : bits(64) -> hash
-val acctmap_update_row_nonce : bits(64) -> bits(64)
-val acctmap_update_row_bal : bits(64) -> word
-val acctmap_update_row_sroot : bits(64) -> hash
-val acctmap_update_row_chash : bits(64) -> hash
-val acctmap_update_row_base_exists : bits(64) -> bool
 
 /* ---- write-set account overlay (ffi/state_db.c acct_wset_*): the per-tx
  * overlay + block base replacing account_updates. account_cache stays the

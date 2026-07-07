@@ -227,9 +227,9 @@ function storage_has_live_acct_hash(ak : bits(256)) -> bool = {
 function storage_has_live_addr(a : address) -> bool =
     storage_has_live_acct_hash(keccak256_address(a))
 
-/* one enumerated account row (dump_state / state root; cold path): getters
- * keyed by row index, no selection state. `acctmap_row` reads the secure-key
- * sorted cache/update union; `acctmap_update_row` reads the update table. */
+/* one enumerated account row (dump_state / state root; cold path). Rows come
+ * from the account write-set block base -- acct_wset_dirty_row (witness) and
+ * acct_wset_union_row (native) below. */
 struct AcctRow = {
     row_hkey : hash,
     row_nonce : bits(64),
@@ -237,30 +237,6 @@ struct AcctRow = {
     row_sroot : hash,
     row_chash : hash,
     row_base_exists : bool,
-}
-
-function acctmap_row(j : int) -> AcctRow = {
-    let idx = get_slice_int(64, j, 0);
-    struct {
-        row_hkey = acctmap_row_hkey(idx),
-        row_nonce = acctmap_row_nonce(idx),
-        row_bal = acctmap_row_bal(idx),
-        row_sroot = acctmap_row_sroot(idx),
-        row_chash = acctmap_row_chash(idx),
-        row_base_exists = acctmap_row_base_exists(idx),
-    }
-}
-
-function acctmap_update_row(j : int) -> AcctRow = {
-    let idx = get_slice_int(64, j, 0);
-    struct {
-        row_hkey = acctmap_update_row_hkey(idx),
-        row_nonce = acctmap_update_row_nonce(idx),
-        row_bal = acctmap_update_row_bal(idx),
-        row_sroot = acctmap_update_row_sroot(idx),
-        row_chash = acctmap_update_row_chash(idx),
-        row_base_exists = acctmap_update_row_base_exists(idx),
-    }
 }
 
 /* account write-set block enumeration for compute_root (host/base_*.sail
@@ -380,18 +356,11 @@ function account_lookup(a : address) -> Account = {
     }
 }
 
-function acctmap_write_account(a : address, v : Account, update : bool) -> unit =
-    if update then {
-        acctmap_store(a, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
-    } else {
-        acctmap_seed(a, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
-    }
-
-/* bind `a` -> v in the acctmap as authenticated pre-state/cache material. */
-function account_seed(a : address, v : Account) -> unit = acctmap_write_account(a, v, false)
-
-/* bind `a` -> v in the acctmap as an execution mutation. */
-function account_update(a : address, v : Account) -> unit = acctmap_write_account(a, v, true)
+/* bind `a` -> v in the resolver cache as authenticated pre-state/fixture
+ * material (native driver seeding + witness read-through). Execution mutations
+ * go to the write-set overlay (store_account -> acct_wset_write). */
+function account_seed(a : address, v : Account) -> unit =
+    acctmap_seed(a, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
 
 /* whether `a` has been materialized (resolver cache) or written (overlay);
  * distinct from account_lookup, which returns EMPTY_ACCOUNT for absent and

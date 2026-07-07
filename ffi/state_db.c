@@ -127,14 +127,9 @@ typedef struct {
   uint32_t cap;
 } account_table;
 
+/* the account resolver cache: authenticated pre-state / read-through leaves,
+   the base below the acct_wset overlay. Execution mutations go to acct_wset. */
 static account_table account_cache = {NULL, 0, 0};
-static account_table account_updates = {NULL, 0, 0};
-
-/* sorted cache/update union for acctmap_at(i) */
-static account_row *account_order = NULL;
-static uint32_t account_order_count = 0;
-static int account_order_valid = 0;
-
 
 static int compare_u64x4(const uint64_t *a, const uint64_t *b) {
   for (int i = 0; i < 4; i++) {
@@ -150,17 +145,6 @@ static int account_hash_cmp(const uint64_t *ah, const uint64_t *bh) {
 
 static int account_row_hash_cmp(const account_row *r, const uint64_t *h) {
   return account_hash_cmp(r->hkey, h);
-}
-
-static int account_row_cmp(const account_row *a, const account_row *b) {
-  return account_hash_cmp(a->hkey, b->hkey);
-}
-
-static void account_invalidate_order(void) {
-  free(account_order);
-  account_order = NULL;
-  account_order_count = 0;
-  account_order_valid = 0;
 }
 
 static void account_table_reset(account_table *t) {
@@ -226,16 +210,6 @@ static account_row *account_table_put(account_table *t, const uint64_t *h) {
   return &t->rows[i];
 }
 
-static void account_table_remove(account_table *t, const uint64_t *h) {
-  int found = 0;
-  uint32_t i = account_table_find(t, h, &found);
-  if (!found)
-    return;
-  if (i + 1 < t->n)
-    memmove(&t->rows[i], &t->rows[i + 1], (size_t)(t->n - i - 1) * sizeof(account_row));
-  t->n--;
-}
-
 /* bal/sroot/chash are 4 little-endian-ordered words each (index 3 = MS) */
 static void account_row_set(account_row *e,
                            uint64_t nonce,
@@ -248,107 +222,48 @@ static void account_row_set(account_row *e,
   memcpy(e->chash, chash, sizeof(e->chash));
 }
 
-static void account_build_order(void) {
-  if (account_order_valid)
-    return;
-  free(account_order);
-  uint32_t max_n = account_cache.n + account_updates.n;
-  account_order = (account_row *)calloc(max_n ? max_n : 1, sizeof(account_row));
-  account_order_count = 0;
-  if (!account_order) {
-    account_order_valid = 1;
-    return;
-  }
-
-  uint32_t i = 0;
-  uint32_t j = 0;
-  while (i < account_cache.n || j < account_updates.n) {
-    if (i == account_cache.n) {
-      account_order[account_order_count++] = account_updates.rows[j++];
-    } else if (j == account_updates.n) {
-      account_order[account_order_count++] = account_cache.rows[i++];
-    } else {
-      int c = account_row_cmp(&account_cache.rows[i], &account_updates.rows[j]);
-      if (c < 0) {
-        account_order[account_order_count++] = account_cache.rows[i++];
-      } else if (c > 0) {
-        account_order[account_order_count++] = account_updates.rows[j++];
-      } else {
-        account_order[account_order_count++] = account_updates.rows[j++];
-        i++;
-      }
-    }
-  }
-  account_order_valid = 1;
-}
-
 unit acctmap_reset(const unit u) {
   (void)u;
   account_table_reset(&account_cache);
-  account_table_reset(&account_updates);
-  account_invalidate_order();
   return UNIT;
 }
 
-/* the account row bound to address `a` (updates override cache rows) */
+/* the resolver-cache account row bound to address `a` */
 static account_row *acct_row_of(const lbits a) {
   uint64_t h[4];
   acct_secure_key(a, h);
-  account_row *u = account_table_get(&account_updates, h);
-  return u ? u : account_table_get(&account_cache, h);
+  return account_table_get(&account_cache, h);
 }
 
 bool acctmap_present(const lbits a) {
   return acct_row_of(a) ? 1 : 0;
 }
 
-static unit acctmap_write(uint8_t update, const lbits a, uint64_t nonce,
-                          const lbits bal, const lbits sroot, const lbits chash) {
+/* seed the resolver cache (native pre-state / witness read-through leaf).
+   base_exists starts false; the witness backend raises it via
+   acctmap_mark_base_exists when the account is present in the pre-state trie. */
+unit acctmap_seed(const lbits a, uint64_t nonce,
+                  const lbits bal, const lbits sroot, const lbits chash) {
   uint64_t h[4];
   acct_secure_key(a, h);
-  account_table *target = update ? &account_updates : &account_cache;
-  account_row *e = account_table_put(target, h);
+  account_row *e = account_table_put(&account_cache, h);
   if (!e)
     return UNIT;
-
-  if (update) {
-    const account_row *base = account_table_const_get(&account_cache, h);
-    if (!e->base_exists && base)
-      e->base_exists = base->base_exists;
-  } else {
-    e->base_exists = 0;
-  }
-
+  e->base_exists = 0;
   uint64_t b[4], sr[4], ch[4];
   lbits_to_le_words4(b, bal);
   lbits_to_le_words4(sr, sroot);
   lbits_to_le_words4(ch, chash);
   account_row_set(e, nonce, b, sr, ch);
-  account_invalidate_order();
   return UNIT;
-}
-
-unit acctmap_seed(const lbits a, uint64_t nonce,
-                  const lbits bal, const lbits sroot, const lbits chash) {
-  return acctmap_write(0, a, nonce, bal, sroot, chash);
-}
-
-unit acctmap_store(const lbits a, uint64_t nonce,
-                   const lbits bal, const lbits sroot, const lbits chash) {
-  return acctmap_write(1, a, nonce, bal, sroot, chash);
 }
 
 unit acctmap_mark_base_exists(const lbits a) {
   uint64_t h[4];
   acct_secure_key(a, h);
   account_row *e = account_table_get(&account_cache, h);
-  if (e) {
+  if (e)
     e->base_exists = 1;
-    account_row *urow = account_table_get(&account_updates, h);
-    if (urow)
-      urow->base_exists = 1;
-    account_invalidate_order();
-  }
   return UNIT;
 }
 
@@ -369,88 +284,6 @@ void acctmap_sroot(lbits *rop, const lbits a) {
 void acctmap_chash(lbits *rop, const lbits a) {
   account_row *e = acct_row_of(a);
   le_words4_to_lbits(rop, e ? e->chash : account_zero_val);
-}
-
-unit acctmap_remove(const lbits a) {
-  uint64_t h[4];
-  acct_secure_key(a, h);
-  account_table_remove(&account_cache, h);
-  account_table_remove(&account_updates, h);
-  account_invalidate_order();
-  return UNIT;
-}
-
-/* enumeration (post-state root): index-argument getters, no cursor. `row`
-   reads the secure-key sorted cache/update union; `update_row` reads the
-   update table alone. Out-of-range indices read as zeros. */
-uint64_t acctmap_count(const unit u) {
-  (void)u;
-  account_build_order();
-  return account_order_count;
-}
-
-uint64_t acctmap_update_count(const unit u) {
-  (void)u;
-  return account_updates.n;
-}
-
-static const account_row *acctmap_row_ptr(uint64_t idx) {
-  account_build_order();
-  return idx < account_order_count ? &account_order[idx] : NULL;
-}
-
-static const account_row *acctmap_update_row_ptr(uint64_t idx) {
-  return idx < account_updates.n ? &account_updates.rows[idx] : NULL;
-}
-
-void acctmap_row_hkey(lbits *rop, uint64_t idx) {
-  const account_row *r = acctmap_row_ptr(idx);
-  be_words4_to_lbits(rop, r ? r->hkey : account_zero_val);
-}
-uint64_t acctmap_row_nonce(uint64_t idx) {
-  const account_row *r = acctmap_row_ptr(idx);
-  return r ? r->nonce : 0;
-}
-void acctmap_row_bal(lbits *rop, uint64_t idx) {
-  const account_row *r = acctmap_row_ptr(idx);
-  le_words4_to_lbits(rop, r ? r->bal : account_zero_val);
-}
-void acctmap_row_sroot(lbits *rop, uint64_t idx) {
-  const account_row *r = acctmap_row_ptr(idx);
-  le_words4_to_lbits(rop, r ? r->sroot : account_zero_val);
-}
-void acctmap_row_chash(lbits *rop, uint64_t idx) {
-  const account_row *r = acctmap_row_ptr(idx);
-  le_words4_to_lbits(rop, r ? r->chash : account_zero_val);
-}
-bool acctmap_row_base_exists(uint64_t idx) {
-  const account_row *r = acctmap_row_ptr(idx);
-  return r ? r->base_exists : 0;
-}
-
-void acctmap_update_row_hkey(lbits *rop, uint64_t idx) {
-  const account_row *r = acctmap_update_row_ptr(idx);
-  be_words4_to_lbits(rop, r ? r->hkey : account_zero_val);
-}
-uint64_t acctmap_update_row_nonce(uint64_t idx) {
-  const account_row *r = acctmap_update_row_ptr(idx);
-  return r ? r->nonce : 0;
-}
-void acctmap_update_row_bal(lbits *rop, uint64_t idx) {
-  const account_row *r = acctmap_update_row_ptr(idx);
-  le_words4_to_lbits(rop, r ? r->bal : account_zero_val);
-}
-void acctmap_update_row_sroot(lbits *rop, uint64_t idx) {
-  const account_row *r = acctmap_update_row_ptr(idx);
-  le_words4_to_lbits(rop, r ? r->sroot : account_zero_val);
-}
-void acctmap_update_row_chash(lbits *rop, uint64_t idx) {
-  const account_row *r = acctmap_update_row_ptr(idx);
-  le_words4_to_lbits(rop, r ? r->chash : account_zero_val);
-}
-bool acctmap_update_row_base_exists(uint64_t idx) {
-  const account_row *r = acctmap_update_row_ptr(idx);
-  return r ? r->base_exists : 0;
 }
 
 #define STORAGE_INIT_CAP 64u

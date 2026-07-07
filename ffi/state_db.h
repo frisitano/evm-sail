@@ -10,11 +10,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Account map: materialized base/cache rows plus execution update rows. */
+/* Account resolver cache: authenticated pre-state / read-through leaves, the
+   base below the acct_wset overlay. Execution mutations go to acct_wset. */
 unit acctmap_reset(const unit u);
 bool acctmap_present(const lbits a);
-unit acctmap_store(const lbits a, uint64_t nonce,
-                   const lbits bal, const lbits sroot, const lbits chash);
 unit acctmap_mark_base_exists(const lbits a);
 unit acctmap_seed(const lbits a, uint64_t nonce,
                   const lbits bal, const lbits sroot, const lbits chash);
@@ -22,22 +21,6 @@ uint64_t acctmap_nonce(const lbits a);
 void acctmap_bal(lbits *rop, const lbits a);
 void acctmap_sroot(lbits *rop, const lbits a);
 void acctmap_chash(lbits *rop, const lbits a);
-unit acctmap_remove(const lbits a);
-
-uint64_t acctmap_count(const unit u);
-uint64_t acctmap_update_count(const unit u);
-void acctmap_row_hkey(lbits *rop, uint64_t idx);
-uint64_t acctmap_row_nonce(uint64_t idx);
-void acctmap_row_bal(lbits *rop, uint64_t idx);
-void acctmap_row_sroot(lbits *rop, uint64_t idx);
-void acctmap_row_chash(lbits *rop, uint64_t idx);
-bool acctmap_row_base_exists(uint64_t idx);
-void acctmap_update_row_hkey(lbits *rop, uint64_t idx);
-uint64_t acctmap_update_row_nonce(uint64_t idx);
-void acctmap_update_row_bal(lbits *rop, uint64_t idx);
-void acctmap_update_row_sroot(lbits *rop, uint64_t idx);
-void acctmap_update_row_chash(lbits *rop, uint64_t idx);
-bool acctmap_update_row_base_exists(uint64_t idx);
 
 /* Native base storage cache (seeded pre-state k/v; host/base_native.sail's
    stateless_storage reads it). The live working set is the write-set overlay. */

@@ -96,10 +96,6 @@ function acctmap_reset() -> unit = acctmap_reset_ffi()
 val acctmap_present_ffi = impure { _: "acctmap_present" } : address -> bool
 function acctmap_present(a : address) -> bool = acctmap_present_ffi(a)
 
-val acctmap_store_ffi = impure { _: "acctmap_store" } : (address, bits(64), word, hash, hash) -> unit
-function acctmap_store(a : address, nonce : bits(64), bal : word, sroot : hash, chash : hash) -> unit =
-    acctmap_store_ffi(a, nonce, bal, sroot, chash)
-
 val acctmap_mark_base_exists_ffi = impure { _: "acctmap_mark_base_exists" } : address -> unit
 function acctmap_mark_base_exists(a : address) -> unit = acctmap_mark_base_exists_ffi(a)
 
@@ -118,51 +114,6 @@ function acctmap_sroot(a : address) -> hash = acctmap_sroot_ffi(a)
 
 val acctmap_chash_ffi = impure { _: "acctmap_chash" } : address -> hash
 function acctmap_chash(a : address) -> hash = acctmap_chash_ffi(a)
-
-val acctmap_remove_ffi = impure { _: "acctmap_remove" } : address -> unit
-function acctmap_remove(a : address) -> unit = acctmap_remove_ffi(a)
-
-val acctmap_count_ffi = impure { _: "acctmap_count" } : unit -> bits(64)
-function acctmap_count() -> bits(64) = acctmap_count_ffi()
-
-val acctmap_update_count_ffi = impure { _: "acctmap_update_count" } : unit -> bits(64)
-function acctmap_update_count() -> bits(64) = acctmap_update_count_ffi()
-
-val acctmap_row_hkey_ffi = impure { _: "acctmap_row_hkey" } : bits(64) -> hash
-function acctmap_row_hkey(idx : bits(64)) -> hash = acctmap_row_hkey_ffi(idx)
-
-val acctmap_row_nonce_ffi = impure { _: "acctmap_row_nonce" } : bits(64) -> bits(64)
-function acctmap_row_nonce(idx : bits(64)) -> bits(64) = acctmap_row_nonce_ffi(idx)
-
-val acctmap_row_bal_ffi = impure { _: "acctmap_row_bal" } : bits(64) -> word
-function acctmap_row_bal(idx : bits(64)) -> word = acctmap_row_bal_ffi(idx)
-
-val acctmap_row_sroot_ffi = impure { _: "acctmap_row_sroot" } : bits(64) -> hash
-function acctmap_row_sroot(idx : bits(64)) -> hash = acctmap_row_sroot_ffi(idx)
-
-val acctmap_row_chash_ffi = impure { _: "acctmap_row_chash" } : bits(64) -> hash
-function acctmap_row_chash(idx : bits(64)) -> hash = acctmap_row_chash_ffi(idx)
-
-val acctmap_row_base_exists_ffi = impure { _: "acctmap_row_base_exists" } : bits(64) -> bool
-function acctmap_row_base_exists(idx : bits(64)) -> bool = acctmap_row_base_exists_ffi(idx)
-
-val acctmap_update_row_hkey_ffi = impure { _: "acctmap_update_row_hkey" } : bits(64) -> hash
-function acctmap_update_row_hkey(idx : bits(64)) -> hash = acctmap_update_row_hkey_ffi(idx)
-
-val acctmap_update_row_nonce_ffi = impure { _: "acctmap_update_row_nonce" } : bits(64) -> bits(64)
-function acctmap_update_row_nonce(idx : bits(64)) -> bits(64) = acctmap_update_row_nonce_ffi(idx)
-
-val acctmap_update_row_bal_ffi = impure { _: "acctmap_update_row_bal" } : bits(64) -> word
-function acctmap_update_row_bal(idx : bits(64)) -> word = acctmap_update_row_bal_ffi(idx)
-
-val acctmap_update_row_sroot_ffi = impure { _: "acctmap_update_row_sroot" } : bits(64) -> hash
-function acctmap_update_row_sroot(idx : bits(64)) -> hash = acctmap_update_row_sroot_ffi(idx)
-
-val acctmap_update_row_chash_ffi = impure { _: "acctmap_update_row_chash" } : bits(64) -> hash
-function acctmap_update_row_chash(idx : bits(64)) -> hash = acctmap_update_row_chash_ffi(idx)
-
-val acctmap_update_row_base_exists_ffi = impure { _: "acctmap_update_row_base_exists" } : bits(64) -> bool
-function acctmap_update_row_base_exists(idx : bits(64)) -> bool = acctmap_update_row_base_exists_ffi(idx)
 
 /* ---- write-set account overlay (ffi/state_db.c acct_wset_*) ---- */
 val acct_wset_reset_ffi = impure { _: "acct_wset_reset" } : unit -> unit
