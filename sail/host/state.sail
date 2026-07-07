@@ -151,22 +151,10 @@ function code_db_store_code(h : hash, c : list(byte)) -> unit = {
 val code_db_store_witness_code : witness_slice -> unit
 
 /* Persistent storage, keyed by raw (address, slot). The C backend derives and
- * memoizes the secure trie hashes, so Sail never re-hashes storage keys. */
-function storage_load(a : address, s : word) -> word = storage_map_load(a, s)
-
-function storage_store(a : address, s : word, v : word) -> unit = storage_map_store(a, s, v)
-
+ * memoizes the secure trie hashes, so Sail never re-hashes storage keys.
+ * storage_seed populates the native base cache (host/base_native.sail's
+ * stateless_storage reads it); the live working set is the write-set overlay. */
 function storage_seed(a : address, s : word, v : word) -> unit = storage_map_seed(a, s, v)
-
-/* value in the BASE layer only (the state at tx start -- EIP-2200 original) */
-function storage_base_load(a : address, s : word) -> word = storage_map_base_load(a, s)
-
-/* present in ANY layer (an explicit 0 is present; fail-closed stateless test) */
-function storage_present(a : address, s : word) -> bool = storage_map_present(a, s)
-
-/* present in the BASE layer only (EIP-2200 "original" presence; a committed base
- * 0 is present, a never-committed slot is absent and resolved from the witness) */
-function storage_base_present(a : address, s : word) -> bool = storage_map_base_present(a, s)
 
 /* Write-set overlay lookups as option(word): Some(v) = a write is present (a
  * stored 0 is Some(0x..0), distinct from an absent slot), None = miss -> the
@@ -200,18 +188,6 @@ function transient_store(a : address, s : word, v : word) -> unit =
  * (the witness reader, included later); declared here so the kernel's storage
  * reads can fall through to it on a working-set miss. */
 val stateless_storage : (address, word) -> word
-
-/* per-account storage enumeration (dump_state / state root; cold path):
- * getters keyed by keccak(address), no selection state */
-function storage_acct_rows(ak : bits(256)) -> int = unsigned(storage_map_acct_count(ak))
-function storage_acct_row(ak : bits(256), j : int) -> (word, word) =
-    (storage_map_acct_slot(ak, get_slice_int(64, j, 0)), storage_map_acct_val(ak, get_slice_int(64, j, 0)))
-function storage_acct_update_rows(ak : bits(256)) -> int = unsigned(storage_map_acct_update_count(ak))
-function storage_acct_update_row(ak : bits(256), j : int) -> (word, word) =
-    (
-        storage_map_acct_update_slot(ak, get_slice_int(64, j, 0)),
-        storage_map_acct_update_val(ak, get_slice_int(64, j, 0)),
-    )
 
 /* write-set block enumeration for compute_root (host/base_*.sail storage_updates):
  * dirty rows = the net change over the authenticated MPT (witness); the

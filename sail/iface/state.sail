@@ -16,37 +16,17 @@ val transient_storage_reset : bits(64) -> unit
 val transient_storage_write : (bits(64), address, word, word) -> unit
 val transient_storage_read : (bits(64), address, word) -> word
 
-/* ---- C-backed persistent storage (ffi/state_db.c): cache/update split ----
- * Cache rows are authenticated pre-state/fixture material; update rows are
- * execution writes. Both are sorted by (keccak(address), keccak(slot)), while
- * update rows remain layered for frame rollback. The hooks are keyed by raw
- * (address, slot); the backend computes and memoizes the secure trie hashes. */
+/* ---- C-backed native base storage cache (ffi/state_db.c) ----
+ * The seeded pre-state k/v store, keyed by (keccak(address), keccak(slot)). It
+ * is the base BELOW the write-set overlay: host/base_native.sail's
+ * stateless_storage reads it, the native driver seeds it (storage_map_seed),
+ * and it is reset/wiped between blocks and on EIP-6780 deletion. The live
+ * working set is the write-set overlay below, not this cache. */
 val storage_map_reset : unit -> unit
-val storage_map_push : unit -> unit
-val storage_map_pop_commit : unit -> unit
-val storage_map_pop_discard : unit -> unit
-val storage_map_load : (address, word) -> word
-val storage_map_store : (address, word, word) -> unit
 val storage_map_seed : (address, word, word) -> unit
-val storage_map_base_load : (address, word) -> word
-val storage_map_present : (address, word) -> bool
-val storage_map_base_present : (address, word) -> bool
-/* native base resolver backing: read the seeded pre-state cache directly
- * (write-set model keeps the cache as the pure base k/v store; miss = absent) */
+val storage_map_wipe_addr : address -> unit
 val storage_cache_present : (address, word) -> bool
 val storage_cache_load : (address, word) -> word
-val storage_map_cache_nonzero : (hash, hash) -> bool
-val storage_map_wipe_addr : address -> unit
-
-/* per-account enumeration, keyed by keccak(address): row count and
- * (slot, value) getters over the flattened cache/update union and over the
- * write set only -- no selection state */
-val storage_map_acct_count : hash -> bits(64)
-val storage_map_acct_slot : (hash, bits(64)) -> word
-val storage_map_acct_val : (hash, bits(64)) -> word
-val storage_map_acct_update_count : hash -> bits(64)
-val storage_map_acct_update_slot : (hash, bits(64)) -> word
-val storage_map_acct_update_val : (hash, bits(64)) -> word
 
 /* ---- write-set storage overlay (ffi/state_db.c storage_wset_*): the tx overlay +
  * block base that replace the layered storage_map. A working-set miss falls

@@ -39,27 +39,13 @@ void acctmap_update_row_sroot(lbits *rop, uint64_t idx);
 void acctmap_update_row_chash(lbits *rop, uint64_t idx);
 bool acctmap_update_row_base_exists(uint64_t idx);
 
-/* Persistent storage map: materialized base/cache rows plus frame overlays. */
+/* Native base storage cache (seeded pre-state k/v; host/base_native.sail's
+   stateless_storage reads it). The live working set is the write-set overlay. */
 unit storage_map_reset(const unit u);
-unit storage_map_push(const unit u);
-unit storage_map_pop_commit(const unit u);
-unit storage_map_pop_discard(const unit u);
 unit storage_map_seed(const lbits a, const lbits s, const lbits v);
-unit storage_map_store(const lbits a, const lbits s, const lbits v);
-void storage_map_load(lbits *rop, const lbits a, const lbits s);
-void storage_map_base_load(lbits *rop, const lbits a, const lbits s);
-bool storage_map_present(const lbits a, const lbits s);
-bool storage_map_base_present(const lbits a, const lbits s);
+unit storage_map_wipe_addr(const lbits a);
 bool storage_cache_present(const lbits a, const lbits s);
 void storage_cache_load(lbits *rop, const lbits a, const lbits s);
-bool storage_map_cache_nonzero(const lbits ah, const lbits sh);
-unit storage_map_wipe_addr(const lbits a);
-uint64_t storage_map_acct_count(const lbits ak);
-void storage_map_acct_slot(lbits *rop, const lbits ak, uint64_t j);
-void storage_map_acct_val(lbits *rop, const lbits ak, uint64_t j);
-uint64_t storage_map_acct_update_count(const lbits ak);
-void storage_map_acct_update_slot(lbits *rop, const lbits ak, uint64_t j);
-void storage_map_acct_update_val(lbits *rop, const lbits ak, uint64_t j);
 
 /* write-set storage overlay (stage 1: tx overlay + block base) */
 unit storage_wset_reset(const unit u);

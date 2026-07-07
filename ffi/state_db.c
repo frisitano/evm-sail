@@ -468,23 +468,10 @@ typedef struct {
   uint32_t cap;
 } storage_table;
 
-typedef struct storage_layer {
-  storage_table table;
-  struct storage_layer *below;
-} storage_layer;
-
+/* the native pre-state base cache (seeded via storage_map_seed; read by
+   host/base_native.sail's stateless_storage). The live working set is the
+   write-set overlay further below. */
 static storage_table storage_cache = {NULL, 0, 0};
-static storage_layer *storage_updates = NULL;
-
-static storage_row *storage_iter_rows = NULL;
-static uint32_t storage_iter_count = 0;
-static int storage_iter_updates_only = -1;
-
-/* memoized per-account row range over the account-sorted snapshot */
-static uint64_t storage_acct_memo_key[4];
-static uint32_t storage_acct_memo_start = 0;
-static uint32_t storage_acct_memo_count = 0;
-static int storage_acct_memo_valid = 0;
 
 static int compare_words(const uint64_t *a, const uint64_t *b, int n) {
   for (int i = 0; i < n; i++) {
@@ -505,14 +492,6 @@ static int storage_row_key_cmp(const storage_row *e,
                            const uint64_t *acct_hash,
                            const uint64_t *slot_hash) {
   return storage_key_cmp(e->acct_hash, e->slot_hash, acct_hash, slot_hash);
-}
-
-static void storage_iter_clear(void) {
-  free(storage_iter_rows);
-  storage_iter_rows = NULL;
-  storage_iter_count = 0;
-  storage_iter_updates_only = -1;
-  storage_acct_memo_valid = 0;
 }
 
 static void storage_table_reset(storage_table *t) {
@@ -587,38 +566,6 @@ static void storage_table_remove_account_hash(storage_table *t, const uint64_t *
   t->n = w;
 }
 
-static storage_layer *storage_layer_new(storage_layer *below) {
-  storage_layer *l = (storage_layer *)calloc(1, sizeof(storage_layer));
-  if (!l)
-    return NULL;
-  l->below = below;
-  return l;
-}
-
-static storage_layer *storage_update_top(void) {
-  if (!storage_updates)
-    storage_updates = storage_layer_new(NULL);
-  return storage_updates;
-}
-
-static storage_layer *storage_update_base(void) {
-  storage_layer *l = storage_update_top();
-  if (!l)
-    return NULL;
-  while (l->below)
-    l = l->below;
-  return l;
-}
-
-static void storage_free_layers(storage_layer *l) {
-  while (l) {
-    storage_layer *b = l->below;
-    storage_table_reset(&l->table);
-    free(l);
-    l = b;
-  }
-}
-
 /* the secure storage key of raw (address, slot): (keccak(a), keccak(s)) */
 static void storage_secure_key(const lbits a, const lbits s,
                                uint64_t slot[4], uint64_t ah[4], uint64_t sh[4]) {
@@ -638,132 +585,11 @@ static storage_row storage_make_row(const uint64_t ah[4], const uint64_t sh[4],
   return e;
 }
 
-static storage_row *storage_walk_updates(const uint64_t ah[4], const uint64_t sh[4]) {
-  for (storage_layer *l = storage_updates; l; l = l->below) {
-    storage_row *e = storage_table_get(&l->table, ah, sh);
-    if (e)
-      return e;
-  }
-  return NULL;
-}
-
-static storage_row *storage_walk(const uint64_t ah[4], const uint64_t sh[4]) {
-  storage_row *e = storage_walk_updates(ah, sh);
-  return e ? e : storage_table_get(&storage_cache, ah, sh);
-}
-
-static void storage_overlay_table(storage_table *dst, const storage_table *src) {
-  for (uint32_t i = 0; i < src->n; i++)
-    (void)storage_table_put(dst, &src->rows[i]);
-}
-
-static uint64_t storage_build_iter(int updates_only) {
-  storage_iter_clear();
-  storage_table scratch = {NULL, 0, 0};
-  if (!updates_only)
-    storage_overlay_table(&scratch, &storage_cache);
-
-  storage_layer *stack[64];
-  int depth = 0;
-  for (storage_layer *l = storage_updates; l && depth < 64; l = l->below)
-    stack[depth++] = l;
-  for (int d = depth - 1; d >= 0; d--)
-    storage_overlay_table(&scratch, &stack[d]->table);
-
-  if (scratch.n) {
-    storage_iter_rows = (storage_row *)calloc(scratch.n, sizeof(storage_row));
-    if (storage_iter_rows) {
-      memcpy(storage_iter_rows, scratch.rows, (size_t)scratch.n * sizeof(storage_row));
-      storage_iter_count = scratch.n;
-      storage_iter_updates_only = updates_only ? 1 : 0;
-      /* storage_table_put keeps every table sorted by (acct_hash,
-         slot_hash), and overlaying preserves that, so the snapshot is
-         sorted as-is: per-account rows are one contiguous range, found by
-         binary search below (no libc sort -- the guest is freestanding) */
-    }
-  }
-  storage_table_reset(&scratch);
-  return storage_iter_count;
-}
-
-/* bind the memoized range to account `ak` over the `updates_only` snapshot
-   (rebuilding the snapshot if it is absent or of the other mode) */
-static void storage_acct_range(const lbits ak, int updates_only) {
-  uint64_t key[4];
-  lbits_to_be_words4(key, ak);
-  if (!storage_iter_rows || storage_iter_updates_only != updates_only) {
-    (void)storage_build_iter(updates_only);
-  } else if (storage_acct_memo_valid && compare_words(storage_acct_memo_key, key, 4) == 0) {
-    return;
-  }
-  uint32_t lo = 0, hi = storage_iter_count;
-  while (lo < hi) {
-    uint32_t mid = lo + (hi - lo) / 2;
-    if (compare_words(storage_iter_rows[mid].acct_hash, key, 4) < 0)
-      lo = mid + 1;
-    else
-      hi = mid;
-  }
-  uint32_t end = lo;
-  while (end < storage_iter_count &&
-         compare_words(storage_iter_rows[end].acct_hash, key, 4) == 0)
-    end++;
-  memcpy(storage_acct_memo_key, key, sizeof(storage_acct_memo_key));
-  storage_acct_memo_start = lo;
-  storage_acct_memo_count = end - lo;
-  storage_acct_memo_valid = 1;
-}
-
-static const storage_row *storage_acct_row_at(const lbits ak, int updates_only, uint64_t j) {
-  storage_acct_range(ak, updates_only);
-  if (j >= storage_acct_memo_count)
-    return NULL;
-  return &storage_iter_rows[storage_acct_memo_start + (uint32_t)j];
-}
-
 unit storage_map_reset(const unit u) {
   (void)u;
   storage_table_reset(&storage_cache);
-  storage_free_layers(storage_updates);
-  storage_updates = NULL;
-  storage_iter_clear();
   /* the keccak memos survive resets: keccak is pure, so cached hashes stay
    * valid across transactions/blocks */
-  return UNIT;
-}
-
-unit storage_map_push(const unit u) {
-  (void)u;
-  storage_layer *top = storage_update_top();
-  storage_layer *n = storage_layer_new(top);
-  if (n)
-    storage_updates = n;
-  return UNIT;
-}
-
-unit storage_map_pop_commit(const unit u) {
-  (void)u;
-  if (storage_updates && storage_updates->below) {
-    storage_layer *top = storage_updates;
-    storage_layer *below = top->below;
-    storage_overlay_table(&below->table, &top->table);
-    storage_updates = below;
-    storage_table_reset(&top->table);
-    free(top);
-  }
-  storage_iter_clear();
-  return UNIT;
-}
-
-unit storage_map_pop_discard(const unit u) {
-  (void)u;
-  if (storage_updates && storage_updates->below) {
-    storage_layer *top = storage_updates;
-    storage_updates = top->below;
-    storage_table_reset(&top->table);
-    free(top);
-  }
-  storage_iter_clear();
   return UNIT;
 }
 
@@ -773,49 +599,10 @@ unit storage_map_seed(const lbits a, const lbits s, const lbits v) {
   lbits_to_be_words4(w, v);
   storage_row e = storage_make_row(ah, sh, slot, w);
   (void)storage_table_put(&storage_cache, &e);
-  storage_iter_clear();
-  return UNIT;
-}
-
-unit storage_map_store(const lbits a, const lbits s, const lbits v) {
-  storage_layer *top = storage_update_top();
-  if (top) {
-    uint64_t slot[4], ah[4], sh[4], w[4];
-    storage_secure_key(a, s, slot, ah, sh);
-    lbits_to_be_words4(w, v);
-    storage_row e = storage_make_row(ah, sh, slot, w);
-    (void)storage_table_put(&top->table, &e);
-    storage_iter_clear();
-  }
   return UNIT;
 }
 
 static const uint64_t storage_zero_val[4] = {0, 0, 0, 0};
-
-/* the 256-bit value at (address, slot) across all layers; 0 if absent */
-void storage_map_load(lbits *rop, const lbits a, const lbits s) {
-  uint64_t slot[4], ah[4], sh[4];
-  storage_secure_key(a, s, slot, ah, sh);
-  storage_row *e = storage_walk(ah, sh);
-  be_words4_to_lbits(rop, e ? e->val : storage_zero_val);
-}
-
-/* the value in the BASE layer only; 0 if absent */
-void storage_map_base_load(lbits *rop, const lbits a, const lbits s) {
-  uint64_t slot[4], ah[4], sh[4];
-  storage_secure_key(a, s, slot, ah, sh);
-  storage_layer *base = storage_update_base();
-  storage_row *e = base ? storage_table_get(&base->table, ah, sh) : NULL;
-  if (!e)
-    e = storage_table_get(&storage_cache, ah, sh);
-  be_words4_to_lbits(rop, e ? e->val : storage_zero_val);
-}
-
-bool storage_map_present(const lbits a, const lbits s) {
-  uint64_t slot[4], ah[4], sh[4];
-  storage_secure_key(a, s, slot, ah, sh);
-  return storage_walk(ah, sh) ? 1 : 0;
-}
 
 /* native base resolver backing (stateless_storage for the native runner): read
  * the seeded pre-state cache DIRECTLY, ignoring the write-set overlay and the
@@ -835,68 +622,13 @@ void storage_cache_load(lbits *rop, const lbits a, const lbits s) {
   be_words4_to_lbits(rop, e ? e->val : storage_zero_val);
 }
 
-/* nonzero authenticated pre-state (cache-layer) value at (acct_hash,
- * slot_hash). Canonical storage tries have no zero leaves, so this is
- * exactly "the slot existed in the block pre-state". Every update row has a
- * cache row beneath it (SSTORE always reads first, which seeds the cache). */
-bool storage_map_cache_nonzero(const lbits ah, const lbits sh) {
-  uint64_t a[4], s[4];
-  lbits_to_be_words4(a, ah);
-  lbits_to_be_words4(s, sh);
-  storage_row *e = storage_table_get(&storage_cache, a, s);
-  return e != NULL && (e->val[0] | e->val[1] | e->val[2] | e->val[3]) != 0;
-}
-
-bool storage_map_base_present(const lbits a, const lbits s) {
-  uint64_t slot[4], ah[4], sh[4];
-  storage_secure_key(a, s, slot, ah, sh);
-  storage_layer *base = storage_update_base();
-  if (base && storage_table_get(&base->table, ah, sh))
-    return 1;
-  return storage_table_get(&storage_cache, ah, sh) ? 1 : 0;
-}
-
+/* wipe an address's rows from the native base cache (EIP-6780 delete; the
+   overlay is wiped separately by storage_wset_wipe_addr) */
 unit storage_map_wipe_addr(const lbits a) {
   uint64_t h[4];
   kmemo_keccak(&addr_keccak_memo, 20, a, h);
   storage_table_remove_account_hash(&storage_cache, h);
-  for (storage_layer *l = storage_updates; l; l = l->below)
-    storage_table_remove_account_hash(&l->table, h);
-  storage_iter_clear();
   return UNIT;
-}
-
-/* per-account enumeration over the flattened cache/update union: row count
-   and (slot, value) getters keyed by keccak(address) */
-uint64_t storage_map_acct_count(const lbits ak) {
-  storage_acct_range(ak, 0);
-  return storage_acct_memo_count;
-}
-
-void storage_map_acct_slot(lbits *rop, const lbits ak, uint64_t j) {
-  const storage_row *e = storage_acct_row_at(ak, 0, j);
-  be_words4_to_lbits(rop, e ? e->slot : storage_zero_val);
-}
-
-void storage_map_acct_val(lbits *rop, const lbits ak, uint64_t j) {
-  const storage_row *e = storage_acct_row_at(ak, 0, j);
-  be_words4_to_lbits(rop, e ? e->val : storage_zero_val);
-}
-
-/* per-account enumeration over the write set only */
-uint64_t storage_map_acct_update_count(const lbits ak) {
-  storage_acct_range(ak, 1);
-  return storage_acct_memo_count;
-}
-
-void storage_map_acct_update_slot(lbits *rop, const lbits ak, uint64_t j) {
-  const storage_row *e = storage_acct_row_at(ak, 1, j);
-  be_words4_to_lbits(rop, e ? e->slot : storage_zero_val);
-}
-
-void storage_map_acct_update_val(lbits *rop, const lbits ak, uint64_t j) {
-  const storage_row *e = storage_acct_row_at(ak, 1, j);
-  be_words4_to_lbits(rop, e ? e->val : storage_zero_val);
 }
 
 /* ======================================================================== */

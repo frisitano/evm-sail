@@ -14,32 +14,8 @@ function transient_storage_read(x0 : bits(64), a : address, s : word) -> word = 
 val storage_map_reset_ffi = impure { _: "storage_map_reset" } : unit -> unit
 function storage_map_reset() -> unit = storage_map_reset_ffi()
 
-val storage_map_push_ffi = impure { _: "storage_map_push" } : unit -> unit
-function storage_map_push() -> unit = storage_map_push_ffi()
-
-val storage_map_pop_commit_ffi = impure { _: "storage_map_pop_commit" } : unit -> unit
-function storage_map_pop_commit() -> unit = storage_map_pop_commit_ffi()
-
-val storage_map_pop_discard_ffi = impure { _: "storage_map_pop_discard" } : unit -> unit
-function storage_map_pop_discard() -> unit = storage_map_pop_discard_ffi()
-
-val storage_map_load_ffi = impure { _: "storage_map_load" } : (address, word) -> word
-function storage_map_load(a : address, s : word) -> word = storage_map_load_ffi(a, s)
-
-val storage_map_store_ffi = impure { _: "storage_map_store" } : (address, word, word) -> unit
-function storage_map_store(a : address, s : word, v : word) -> unit = storage_map_store_ffi(a, s, v)
-
 val storage_map_seed_ffi = impure { _: "storage_map_seed" } : (address, word, word) -> unit
 function storage_map_seed(a : address, s : word, v : word) -> unit = storage_map_seed_ffi(a, s, v)
-
-val storage_map_base_load_ffi = impure { _: "storage_map_base_load" } : (address, word) -> word
-function storage_map_base_load(a : address, s : word) -> word = storage_map_base_load_ffi(a, s)
-
-val storage_map_present_ffi = impure { _: "storage_map_present" } : (address, word) -> bool
-function storage_map_present(a : address, s : word) -> bool = storage_map_present_ffi(a, s)
-
-val storage_map_base_present_ffi = impure { _: "storage_map_base_present" } : (address, word) -> bool
-function storage_map_base_present(a : address, s : word) -> bool = storage_map_base_present_ffi(a, s)
 
 val storage_cache_present_ffi = impure { _: "storage_cache_present" } : (address, word) -> bool
 function storage_cache_present(a : address, s : word) -> bool = storage_cache_present_ffi(a, s)
@@ -47,29 +23,8 @@ function storage_cache_present(a : address, s : word) -> bool = storage_cache_pr
 val storage_cache_load_ffi = impure { _: "storage_cache_load" } : (address, word) -> word
 function storage_cache_load(a : address, s : word) -> word = storage_cache_load_ffi(a, s)
 
-val storage_map_cache_nonzero_ffi = impure { _: "storage_map_cache_nonzero" } : (hash, hash) -> bool
-function storage_map_cache_nonzero(ah : hash, sh : hash) -> bool = storage_map_cache_nonzero_ffi(ah, sh)
-
 val storage_map_wipe_addr_ffi = impure { _: "storage_map_wipe_addr" } : address -> unit
 function storage_map_wipe_addr(a : address) -> unit = storage_map_wipe_addr_ffi(a)
-
-val storage_map_acct_count_ffi = impure { _: "storage_map_acct_count" } : hash -> bits(64)
-function storage_map_acct_count(ak : hash) -> bits(64) = storage_map_acct_count_ffi(ak)
-
-val storage_map_acct_slot_ffi = impure { _: "storage_map_acct_slot" } : (hash, bits(64)) -> word
-function storage_map_acct_slot(ak : hash, j : bits(64)) -> word = storage_map_acct_slot_ffi(ak, j)
-
-val storage_map_acct_val_ffi = impure { _: "storage_map_acct_val" } : (hash, bits(64)) -> word
-function storage_map_acct_val(ak : hash, j : bits(64)) -> word = storage_map_acct_val_ffi(ak, j)
-
-val storage_map_acct_update_count_ffi = impure { _: "storage_map_acct_update_count" } : hash -> bits(64)
-function storage_map_acct_update_count(ak : hash) -> bits(64) = storage_map_acct_update_count_ffi(ak)
-
-val storage_map_acct_update_slot_ffi = impure { _: "storage_map_acct_update_slot" } : (hash, bits(64)) -> word
-function storage_map_acct_update_slot(ak : hash, j : bits(64)) -> word = storage_map_acct_update_slot_ffi(ak, j)
-
-val storage_map_acct_update_val_ffi = impure { _: "storage_map_acct_update_val" } : (hash, bits(64)) -> word
-function storage_map_acct_update_val(ak : hash, j : bits(64)) -> word = storage_map_acct_update_val_ffi(ak, j)
 
 /* ---- write-set storage overlay (ffi/state_db.c storage_wset_*) ---- */
 val storage_wset_reset_ffi = impure { _: "storage_wset_reset" } : unit -> unit
