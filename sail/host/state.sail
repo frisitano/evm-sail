@@ -78,9 +78,9 @@ val transient_load = impure { c: "transient_storage_read" } : (address, word) ->
 val storage_wset_reset = impure { c: "storage_wset_reset" } : unit -> unit
 val storage_wset_tx_clear = impure { c: "storage_wset_tx_clear" } : unit -> unit
 val storage_wset_merge = impure { c: "storage_wset_merge" } : unit -> unit
-val storage_wset_cache_read = impure { c: "storage_wset_cache_read" } : (address, word, word) -> unit /* cache resolved base + mark read (EIP-7928 read record) */
+val storage_tx_cache = impure { c: "storage_tx_cache" } : (address, word, word) -> unit /* cache resolved base + mark read (EIP-7928 read record) */
 val storage_wset_prior = impure { c: "storage_wset_prior" } : (address, word, word) -> word /* JStor payload: value a revert restores */
-val storage_wset_write = impure { c: "storage_wset_write" } : (address, word, word, word) -> unit /* (a,s,v,orig): orig adopted on first write */
+val storage_tx_set = impure { c: "storage_tx_set" } : (address, word, word, word) -> unit /* (a,s,v,orig): tx-layer write; orig adopted on first write */
 val storage_wset_restore = impure { c: "storage_wset_restore" } : (address, word, word) -> unit /* JStor undo: current := prior */
 val storage_wset_warm = impure { c: "storage_wset_warm" } : (address, word) -> bool /* set warm; true iff was cold */
 val storage_wset_is_warm = impure { c: "storage_wset_is_warm" } : (address, word) -> bool
@@ -91,18 +91,15 @@ val storage_wset_wipe_addr = impure { c: "storage_wset_wipe_addr" } : address ->
  * query with a StorageRow (crossing the boundary as a whole union value, like
  * JEntry -- decoded by ffi/journal_glue.c from state_db.c's row tables). The
  * layer-precedence semantics -- which layer wins, and what the EIP-2200
- * tx-start original is -- live in SAIL (storage_wset_get / storage_wset_base_get
- * below), not in C. A cached read holds one value (current == original == the
- * resolved base); a write holds (current, original = the frozen tx-start
- * value). */
-union StorageRow = {
-  RowAbsent  : unit,          /* no row: this layer never touched the slot     */
-  RowRead    : word,          /* cached read of the resolved base              */
-  RowWritten : (word, word)   /* (current, original): a write reached this row */
-}
+ * tx-start original is -- live in SAIL (host/kernel.sail k_sload and
+ * storage_wset_base_get below), not in C. None = this layer never touched the
+ * slot. An entry's curr is the live value; orig is the layer-start value
+ * (frozen from the base on the first write; a cached read has curr == orig =
+ * the resolved base). */
+struct StorageEntry = { curr : word, orig : word }
 
-val storage_tx_row = impure { c: "storage_tx_row" } : (address, word) -> StorageRow
-val storage_block_row = impure { c: "storage_block_row" } : (address, word) -> StorageRow
+val storage_tx_get = impure { c: "storage_tx_get" } : (address, word) -> option(StorageEntry)
+val storage_block_get = impure { c: "storage_block_get" } : (address, word) -> option(StorageEntry)
 
 /* compute_root enumeration over the block base, per account keccak(addr):
  * witness = dirty rows (net change vs MPT); native = cache-union-block rows */
@@ -329,38 +326,26 @@ function code_db_store_code(h : hash, c : list(byte)) -> unit = {
  * witness slice directly. */
 val code_db_store_witness_code : witness_slice -> unit
 
-/* Write-set overlay lookups as option(word): Some(v) = the working set holds a
- * value for the slot (a stored 0 is Some(0x..0), distinct from an absent slot),
- * None = miss -> the caller resolves the pre-state via stateless_storage. This is
- * why the overlay cannot just return a bare word: 0 is a valid value, so presence
- * is a separate signal. Both lookups compose the per-layer StorageRow views --
- * the layer precedence is spec-level meaning, defined HERE over the row axioms.
- * The two row queries share the memoized slot keccak (storage_secure_key
- * C-side), so the pair is one keccak + two cheap gets. */
-
-/* the live view (SLOAD): this tx's write > a committed block write > this tx's
- * cached read > a prior tx's cached read. A write outranks a cached read
- * because a write supersedes the base value a read cached. */
-function storage_wset_get(a : address, s : word) -> option(word) =
-    match (storage_tx_row(a, s), storage_block_row(a, s)) {
-        (RowWritten(c, _), _) => Some(c),
-        (_, RowWritten(c, _)) => Some(c),
-        (RowRead(v), _) => Some(v),
-        (_, RowRead(v)) => Some(v),
-        (RowAbsent(), RowAbsent()) => None(),
-    }
-
-/* the EIP-2200 tx-start view (k_sload_orig): any tx row answers with its
- * original (a cached read's original IS its value); else a block row's current
- * -- a committed block write or cached read is this tx's starting value. */
-function storage_wset_base_get(a : address, s : word) -> option(word) =
-    match (storage_tx_row(a, s), storage_block_row(a, s)) {
-        (RowWritten(_, o), _) => Some(o),
-        (RowRead(v), _) => Some(v),
-        (_, RowWritten(c, _)) => Some(c),
-        (_, RowRead(v)) => Some(v),
-        (RowAbsent(), RowAbsent()) => None(),
-    }
+/* The EIP-2200 tx-start view (k_sload_orig), as option(word): Some(v) = a
+ * layer holds the slot (a stored 0 is Some(0x..0), distinct from an absent
+ * slot -- why this cannot return a bare word), None = miss -> the caller
+ * resolves the pre-state via stateless_storage. A tx entry answers with its
+ * orig (the frozen tx-start value); else a block entry's curr -- a committed
+ * block write or cached read is this tx's starting value. The live view is
+ * composed the same way, inline in k_sload (host/kernel.sail). The two layer
+ * queries share the memoized slot keccak (storage_secure_key C-side), so the
+ * pair is one keccak + two cheap gets. */
+function storage_wset_base_get(a : address, s : word) -> option(word) = {
+    match storage_tx_get(a, s) {
+        Some(e) => return Some(e.orig),
+        None() => (),
+    };
+    match storage_block_get(a, s) {
+        Some(e) => return Some(e.curr),
+        None() => (),
+    };
+    None()
+}
 
 /* wipe an address's storage in the write-set overlay (tx + block). Used by the
  * EIP-6780 tx-end account deletion; without the overlay wipe a created+

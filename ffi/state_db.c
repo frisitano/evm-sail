@@ -311,7 +311,7 @@ unit storage_wset_merge(const unit u) {
 /* --- reads: per-layer row probe -----------------------------------------
    The layer-precedence semantics (which layer wins a lookup, and what the
    EIP-2200 tx-start original is) live in SAIL (host/state.sail
-   storage_wset_get / storage_wset_base_get over the StorageRow union); C only
+   k_sload / storage_wset_base_get over the StorageRow union); C only
    answers point queries against one layer's row table. A row is a cached READ
    (was_read: current == original == the resolved base) or WRITTEN (current =
    the write, original = the frozen tx-start value); `written` covers rows
@@ -338,7 +338,7 @@ uint64_t storage_row_probe(uint64_t layer, const lbits a, const lbits s,
    the value is the pre-state base (stateless_storage). was_read = the EIP-7928
    read record AND the "value resolved" flag; current==original==base so the row
    is not dirty (a pure read). is_warm is left untouched (gas is independent). */
-unit storage_wset_cache_read(const lbits a, const lbits s, const lbits v) {
+unit storage_tx_cache(const lbits a, const lbits s, const lbits v) {
   uint64_t slot[4], ah[4], sh[4], w[4];
   storage_secure_key(a, s, slot, ah, sh);
   lbits_to_be_words4(w, v);
@@ -363,7 +363,7 @@ void storage_wset_prior(lbits *rop, const lbits a, const lbits s, const lbits or
 }
 
 /* write v; `orig` (the tx-start value) is adopted only on the FIRST write */
-unit storage_wset_write(const lbits a, const lbits s, const lbits v, const lbits orig) {
+unit storage_tx_set(const lbits a, const lbits s, const lbits v, const lbits orig) {
   uint64_t slot[4], ah[4], sh[4], w[4], o[4];
   storage_secure_key(a, s, slot, ah, sh);
   lbits_to_be_words4(w, v);

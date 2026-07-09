@@ -9,9 +9,9 @@
  * journal_pop after journal_push(e) yields e; pop on an empty journal yields
  * JCheck without popping anything.
  *
- * (2) storage_tx_row / storage_block_row: per-layer StorageRow views over
- * state_db.c's row tables (storage_row_probe); the layer-precedence
- * semantics live in Sail, not here.
+ * (2) storage_tx_get / storage_block_get: per-layer option(StorageEntry)
+ * views over state_db.c's row tables (storage_row_probe); the layer
+ * precedence lives in Sail (k_sload / storage_wset_base_get), not here.
  */
 #include EVMSAIL_MODEL_H
 #include "kernel_state.h"
@@ -126,33 +126,29 @@ void journal_pop(struct zJEntry *out, unit u) {
   journal_drop_top(UNIT);
 }
 
-/* per-layer storage row views: probe state_db's layer table and build the
- * StorageRow union (RowAbsent / RowRead(current) / RowWritten(current,
- * original)); read rows carry one value (current == original). */
-static void storage_row_out(struct zStorageRow *out, uint64_t layer,
-                            const lbits a, const lbits s) {
+/* per-layer storage entry views: probe state_db's layer table and build
+ * option(StorageEntry) -- None = the layer never touched the slot; Some
+ * carries (curr, orig). The written/read distinction stays C-internal (a
+ * cached read has curr == orig). */
+static void storage_entry_out(struct zoptionzIRStorageEntryzK *out,
+                              uint64_t layer, const lbits a, const lbits s) {
   lbits cur, orig;
-  switch (storage_row_probe(layer, a, s, &cur, &orig)) {
-  case 2:
-    out->kind = Kind_zRowWritten;
-    out->variants.zRowWritten.ztup0 = cur;
-    out->variants.zRowWritten.ztup1 = orig;
-    break;
-  case 1:
-    out->kind = Kind_zRowRead;
-    out->variants.zRowRead = cur;
-    break;
-  default:
-    out->kind = Kind_zRowAbsent;
-    out->variants.zRowAbsent = UNIT;
-    break;
+  if (storage_row_probe(layer, a, s, &cur, &orig)) {
+    out->kind = Kind_zSomezIRStorageEntryzK;
+    out->variants.zSomezIRStorageEntryzK.zcurr = cur;
+    out->variants.zSomezIRStorageEntryzK.zorig = orig;
+  } else {
+    out->kind = Kind_zNonezIRStorageEntryzK;
+    out->variants.zNonezIRStorageEntryzK = UNIT;
   }
 }
 
-void storage_tx_row(struct zStorageRow *out, const lbits a, const lbits s) {
-  storage_row_out(out, 0, a, s);
+void storage_tx_get(struct zoptionzIRStorageEntryzK *out, const lbits a,
+                    const lbits s) {
+  storage_entry_out(out, 0, a, s);
 }
 
-void storage_block_row(struct zStorageRow *out, const lbits a, const lbits s) {
-  storage_row_out(out, 1, a, s);
+void storage_block_get(struct zoptionzIRStorageEntryzK *out, const lbits a,
+                       const lbits s) {
+  storage_entry_out(out, 1, a, s);
 }

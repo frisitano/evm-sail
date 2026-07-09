@@ -51,19 +51,25 @@ function k_slot_is_warm(a : address, s : word) -> bool = {
  * both the witness and the harness-built alloc trie). Everything above it -- the
  * overlay, the read-through, the journal -- is common. */
 function k_sload(a : address, s : word) -> word =
-    /* live value = the working set (this tx's write / a committed block write /
-       an already-cached read) when present; otherwise a TRUE base miss: resolve
+    /* live value = this tx's layer over the block layer: a tx entry (write or
+       cached read) can only form when the block layer misses, so tx-over-block
+       is the whole precedence. Both layers absent = a TRUE base miss: resolve
        the pre-state once (stateless_storage) and cache it as a read member
-       (storage_wset_cache_read sets was_read = the EIP-7928 read record). Repeat
-       reads then hit the working set, and the merge propagates the read to the
-       block base so a later tx skips the witness walk too. */
-    match storage_wset_get(a, s) {
-        Some(v) => v,
-        None()  => {
-            let v = stateless_storage(a, s);
-            storage_wset_cache_read(a, s, v);
-            v
-        },
+       (storage_tx_cache sets was_read = the EIP-7928 read record).
+       Repeat reads then hit the working set, and the merge propagates the
+       read to the block base so a later tx skips the witness walk too. */
+    {
+        match storage_tx_get(a, s) {
+            Some(e) => return e.curr,
+            None() => (),
+        };
+        match storage_block_get(a, s) {
+            Some(e) => return e.curr,
+            None() => (),
+        };
+        let v = stateless_storage(a, s);
+        storage_tx_cache(a, s, v);
+        v
     }
 function k_sload_orig(a : address, s : word) -> word =
     match storage_wset_base_get(a, s) {
@@ -79,7 +85,7 @@ function k_sstore(a : address, s : word, v : word) -> unit = {
        storage root is derived at compute_root, and the witness account iteration
        unions storage-changed accounts from the storage write-set
        (lib/mpt.sail state_updates_map). */
-    storage_wset_write(a, s, v, orig)
+    storage_tx_set(a, s, v, orig)
 }
 
 /* EIP-1153 transient storage (TLOAD/TSTORE): per-tx scratch, discarded at tx end,
