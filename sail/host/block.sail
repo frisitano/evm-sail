@@ -549,3 +549,40 @@ function withdrawal_at(i : int) -> Withdrawal =
  * each on demand (decode_tx_ssz / withdrawal_at), so the full block never lives in
  * program state. A malformed tx / bad signature THROWS during that decode. */
 function decode_block_ssz() -> unit = k_set_header(decode_block_header_ssz())
+
+/* Block hash (val in host/io.sail): keccak(rlp([...header fields...])), the
+ * canonical field layout. logs_bloom / extraData are re-read from their
+ * witness spans. */
+function block_header_hash(
+    transactions_root : hash,
+    withdrawals_root : hash,
+    requests_hash : hash,
+    block_access_list_hash : hash,
+) -> (
+    hash
+) = {
+    var payload : list(byte) = rlp_word(k_header.parent_hash);
+    payload = list_append(payload, rlp_word(EMPTY_OMMER_HASH));
+    payload = list_append(payload, rlp_addr(k_header.fee_recipient));
+    payload = list_append(payload, rlp_word(k_header.state_root));
+    payload = list_append(payload, rlp_word(transactions_root));
+    payload = list_append(payload, rlp_word(k_header.receipts_root));
+    payload = list_append(payload, rlp_bytes(k_header.logs_bloom));
+    payload = list_append(payload, rlp_int(0));
+    payload = list_append(payload, rlp_int(k_header.number));
+    payload = list_append(payload, rlp_int(k_header.gas_limit));
+    payload = list_append(payload, rlp_int(k_header.gas_used));
+    payload = list_append(payload, rlp_int(k_header.timestamp));
+    payload = list_append(payload, rlp_bytes(ssz_bytes(pl_extra_start(), pl_txs_start() - pl_extra_start())));
+    payload = list_append(payload, rlp_word(k_header.prev_randao));
+    payload = list_append(payload, rlp_bytes(zero_bytes(8)));
+    payload = list_append(payload, rlp_int_word(k_header.base_fee));
+    payload = list_append(payload, rlp_word(withdrawals_root));
+    payload = list_append(payload, rlp_int(k_header.blob_gas_used));
+    payload = list_append(payload, rlp_int(k_header.excess_blob_gas));
+    payload = list_append(payload, rlp_word(k_header.parent_beacon_block_root));
+    payload = list_append(payload, rlp_word(requests_hash));
+    payload = list_append(payload, rlp_word(block_access_list_hash));
+    payload = list_append(payload, rlp_int(k_header.slot_number));
+    keccak_rlp_payload([||], payload)
+}

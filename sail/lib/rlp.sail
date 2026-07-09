@@ -78,11 +78,36 @@ function zero_bytes(n : int) -> list(byte) = {
 
 /* CREATE address (Yellow Paper): low 20 bytes of
  * keccak256(rlp([sender, nonce])). */
+/* keccak256(domain ++ rlp_list_prefix(len(payload)) ++ payload) (val in
+ * host/io.sail), streamed part-by-part through the hash channel so the three
+ * parts are never concatenated. */
+function keccak_rlp_payload(domain : list(byte), payload : list(byte)) -> bits(256) = {
+    host_bytes_reset();
+    hash_push_bytes(domain);
+    hash_push_bytes(rlp_list_prefix(list_len(payload)));
+    hash_push_bytes(payload);
+    host_bytes_keccak_finish()
+}
+
 val create_address : (address, int) -> address
+
+function create_address(sender : address, nonce : int) -> address = {
+    var payload : list(byte) = rlp_addr(sender);
+    payload = list_append(payload, rlp_int(nonce));
+    word_to_address(keccak_rlp_payload([||], payload))
+}
 
 /* CREATE2 address (EIP-1014): low 20 bytes of
  * keccak256(0xff ++ sender ++ salt ++ init_hash). */
 val create2_address : (address, word, hash) -> address
+
+function create2_address(sender : address, salt : word, init_hash : hash) -> address = {
+    var preimage : list(byte) = [|0xff|];
+    preimage = list_append(preimage, address_to_bytes(sender));
+    preimage = list_append(preimage, word_to_bytes32(salt));
+    preimage = list_append(preimage, word_to_bytes32(init_hash));
+    word_to_address(keccak256(preimage))
+}
 
 function legacy_sig_chain_id(v : int) -> int =
     ediv_int(v - 35, 2)
@@ -323,6 +348,27 @@ function rlp_fields_prefix_len(items : list(RlpField), count : int) -> int = {
  * RLP); build frames + hashes it C-side rather than materializing the list. */
 val tx_signing_hash : (int, ByteSlice, int) -> hash
 val auth_signing_hash : (int, address, int) -> hash
+
+/* Tx signing preimage hash. `content_src` spans the RLP of the pre-signature
+ * fields in the witness; legacy EIP-155 txs append (chain_id, 0, 0), typed txs
+ * prepend the type byte as a domain separator. */
+function tx_signing_hash(ttype : int, content_src : ByteSlice, v : int) -> hash = {
+    var content : list(byte) = read_byte_slice(content_src);
+    if (ttype == 0) & (v >= 35) then {
+        content = list_append(content, rlp_int(legacy_sig_chain_id(v)));
+        content = list_append(content, [|0x80, 0x80|])
+    };
+    let domain : list(byte) = if ttype != 0 then { [|get_slice_int(8, ttype, 0)|] } else { [||] };
+    keccak_rlp_payload(domain, content)
+}
+
+/* EIP-7702 authorization signing hash: 0x05 || rlp([chain_id, address, nonce]). */
+function auth_signing_hash(chain_id : int, addr : address, nonce : int) -> hash = {
+    var content : list(byte) = rlp_int(chain_id);
+    content = list_append(content, rlp_addr(addr));
+    content = list_append(content, rlp_int(nonce));
+    keccak_rlp_payload([|0x05|], content)
+}
 
 /* content of an RlpField as a big-endian integer / 256-bit word */
 function rlp_field_int(f : RlpField) -> int = {

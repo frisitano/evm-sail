@@ -99,29 +99,81 @@ function rlp_nonce(nonce : int) -> list(byte) =
  * TxInput/ActiveCode source of a ByteSlice denotes an abstract byte sequence:
  * bytes_keccak(s) = keccak256(read_byte_slice(s)), and the prefixed SHA-256
  * digest = sha256(type_byte :: bytes). ---- */
-val keccak256 : list(byte) -> bits(256)
-val sha256 : list(byte) -> bits(256)
+/* keccak256 / sha256: the byte lists stream through the C hash channel
+ * (sail/c/crypto.sail host_bytes_*) 8 bytes per crossing; the channel
+ * primitives are the axiomatic crypto core. */
+function hash_push_bytes(bs : list(byte)) -> unit = {
+    var rest : list(byte) = bs;
+    var more : bool = true;
+    while more do {
+        match rest {
+            b0 :: (b1 :: (b2 :: (b3 :: (b4 :: (b5 :: (b6 :: (b7 :: t))))))) => {
+                host_bytes_push8(append(b0, append(b1, append(b2, append(b3, append(b4, append(b5, append(b6, b7))))))));
+                rest = t
+            },
+            b :: t => {
+                host_bytes_push(b);
+                rest = t
+            },
+            [||] => more = false,
+        }
+    }
+}
+
+function keccak256(bs : list(byte)) -> bits(256) = {
+    host_bytes_reset();
+    hash_push_bytes(bs);
+    host_bytes_keccak_finish()
+}
+
+function sha256(bs : list(byte)) -> bits(256) = {
+    host_bytes_reset();
+    hash_push_bytes(bs);
+    host_bytes_sha256_finish()
+}
+
+/* keccak256(domain ++ rlp_list_prefix(len(payload)) ++ payload); body in
+ * lib/rlp.sail (it needs rlp_list_prefix), streamed part-by-part. */
 val keccak_rlp_payload : (list(byte), list(byte)) -> bits(256)
 
-val bytes_keccak : ByteSlice -> bits(256)
-val bytes_sha256_prefixed : (byte, ByteSlice) -> bits(256)
+/* Source-tagged hashing: bytes_keccak(s) = keccak256(read_byte_slice(s)); the
+ * prefixed digest = sha256(type_byte :: bytes). C hashes the source without
+ * materializing it (host_source_*, sail/c/crypto.sail). */
+function bytes_keccak(s : ByteSlice) -> bits(256) =
+    host_source_keccak(byte_source_kind(s.source), s.off, s.len)
 
-val keccak256_word : word -> bits(256)
-val keccak256_address : address -> bits(256)
+function bytes_sha256_prefixed(prefix : byte, s : ByteSlice) -> bits(256) =
+    host_source_sha256_prefixed(prefix, byte_source_kind(s.source), s.off, s.len)
+
+/* Fixed-width helpers: pure meaning over keccak256/sha256. The one-call C
+ * fast paths in sail/c/crypto.sail override these bodies when included
+ * (secure-trie keys hash on every state access -- the hot path). */
+function keccak256_word(w : word) -> bits(256) = keccak256(word_to_bytes32(w))
+
+function keccak256_address(a : address) -> bits(256) = keccak256(address_to_bytes(a))
 
 /* SSZ merkle parent: SHA-256(left ++ right) over two 32-byte chunks. */
-val sha256_pair : (bits(256), bits(256)) -> bits(256)
+function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) =
+    sha256(list_append(word_to_bytes32(a), word_to_bytes32(b)))
 
 /* SHA-256 of the concatenation of the present 32-byte digests (mask bits 0..2
  * select d0,d1,d2, concatenated in order); the EIP-7685 execution-requests
  * commitment. Build concatenates + hashes C-side, so no payload list is
  * streamed. Refines sha256 of the masked-and-concatenated word bytes. */
-val sha256_digests3 : (bits(8), bits(256), bits(256), bits(256)) -> bits(256)
+function sha256_digests3(mask : bits(8), d0 : bits(256), d1 : bits(256), d2 : bits(256)) -> bits(256) = {
+    var payload : list(byte) = [||];
+    if mask[0] == bitone then { payload = list_append(payload, word_to_bytes32(d0)) };
+    if mask[1] == bitone then { payload = list_append(payload, word_to_bytes32(d1)) };
+    if mask[2] == bitone then { payload = list_append(payload, word_to_bytes32(d2)) };
+    sha256(payload)
+}
 
 /* Signature / authentication precompiles. Spec uses the mathematical precompile
  * input byte strings; build may use direct staged or native accelerator calls. */
-val secp256k1_verify_precompile : (bits(256), word, word, bits(256), bits(256)) -> bool
-val ecrecover_precompile : (bits(256), int, word, word) -> (bool, address)
+function ecrecover_precompile(h : bits(256), yparity : int, r : word, s : word) -> (bool, address) = {
+    let recovered = precompile_ecrecover_hash_sig(h, get_slice_int(64, yparity, 0), r, s);
+    (recovered[160] == bitone, recovered[159 .. 0])
+}
 
 /* Run a precompile over a concrete input byte source (a memory range or the
  * top-level tx data). The gas rules inspect the same source bytes directly
@@ -129,8 +181,18 @@ val ecrecover_precompile : (bits(256), int, word, word) -> (bool, address)
  * output straight into pending returndata. Canonical meaning
  * run_precompile(id, read_byte_slice(source)) -- the spec backend's list-typed
  * executor axiom (spec.sail). */
-val run_precompile_memory_input : (int, int, int) -> bool
-val run_precompile_tx_input : int -> bool
+function run_precompile_slice(num : int, s : ByteSlice) -> bool =
+    precompile_run_source_to_returndata(get_slice_int(64, num, 0), byte_source_kind(s.source), s.off, s.len)
+
+function run_precompile_memory_input(num : int, off : int, len : int) -> bool =
+    run_precompile_slice(num, memory_byte_slice(off, len))
+
+val run_precompile_tx_input : int -> bool /* body in host/memory.sail (txdata_size) */
+
+/* Source -> bytes: the read side of the byte-source interface. Law:
+ * read_byte_slice(s) yields exactly s.len bytes of source s from offset s.off.
+ * Body in lib/mpt.sail (it needs the trie value arena). */
+val read_byte_slice : ByteSlice -> list(byte)
 
 /* SHA-256 self-check against the standard "" and "abc" reference vectors. */
 val sha256_selfcheck : unit -> unit
@@ -174,13 +236,26 @@ val block_header_hash : (hash, hash, hash, hash) -> hash
  * views over one bounded byte vector -- the little-/big-endian bulk readers are
  * derived from the same bytes. emit_out appends exactly one byte to the guest
  * public-output trace; only guest entries call it, core specs leave it abstract. */
-val emit_out : bits(8) -> unit
-val ssz_src_len : unit -> bits(64)
-val ssz_src_byte : int -> bits(8)
+/* emit_out / ssz_src_len / ssz_src_byte are declared in sail/c/io.sail (the
+ * input/output axioms; no pure body exists). The bulk readers below are pure
+ * derivations of ssz_src_byte -- consistent LE/BE views over one bounded byte
+ * vector -- overridden by the one-call C readers when sail/c/io.sail is
+ * included. */
+function ssz_src_le(b : int, n : int) -> bits(64) = {
+    var acc : bits(64) = 0x0000000000000000;
+    foreach (k from 0 to (n - 1)) {
+        acc = or_vec(acc, sail_shiftleft(sail_zero_extend(ssz_src_byte(b + k), 64), 8 * k))
+    };
+    acc
+}
 
-/* bulk readers: n (<=8) bytes from the input in LE / BE order. */
-val ssz_src_le : (int, int) -> bits(64)
-val ssz_src_be : (int, int) -> bits(64)
+function ssz_src_be(b : int, n : int) -> bits(64) = {
+    var acc : bits(64) = 0x0000000000000000;
+    foreach (k from 0 to (n - 1)) {
+        acc = or_vec(sail_shiftleft(acc, 8), sail_zero_extend(ssz_src_byte(b + k), 64))
+    };
+    acc
+}
 
 function ib(i : int) -> int = unsigned(ssz_src_byte(i))
 

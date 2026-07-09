@@ -262,29 +262,59 @@ function extension_node_rlp(key : list(nibble), childref : list(byte)) -> list(b
     rlp_list(rlp_bytes(hex_prefix_compact(key, false)) ++ childref)
 function hash_child_ref(hash : list(byte)) -> list(byte) = [|0xa0|] ++ hash
 
-/* leaf child ref (Eq. 208 leaf form): a refinement pair. The spec backend
- * composes rlp([hp(key,leaf), value]) and hashes it (spec.sail); the build
- * backend frames the compact path and the value -- read from its byte source
- * (the value arena for update leaves, the witness for base leaves) -- in C, so
- * the leaf value byte list never crosses the FFI hash channel (build.sail). */
-val leaf_child_ref : (list(nibble), ByteSlice) -> list(byte)
+/* ---- the trie value arena: a pure append buffer. An update leaf's RLP value
+ * is interned here and referenced by ByteSlice, satisfying the read/write law
+ * read_byte_slice(arena_intern(l)) = l. account: rlp([nonce, balance, sroot,
+ * chash]); storage: rlp_int(value). ---- */
+register trie_arena : list(byte) = [||]
+register trie_arena_len : int = 0
 
-/* An update leaf's RLP value, staged into the trie value arena and referenced
- * by slice so the value list never crosses. account: rlp([nonce, balance,
- * sroot, chash]); storage: rlp_int(value). A refinement pair: spec interns the
- * canonical byte list (arena_intern); build builds the RLP in C from the fields
- * (build.sail). arena_intern is the write side of the byte-source interface
- * (spec-only axiom): read_byte_slice(arena_intern(l)) = l. */
-val account_leaf_value : (int, word, hash, hash) -> ByteSlice
+function trie_arena_reset() -> unit = {
+    trie_arena = [||];
+    trie_arena_len = 0
+}
+
+function arena_intern(bs : list(byte)) -> ByteSlice = {
+    let off = trie_arena_len;
+    let n = list_len(bs);
+    trie_arena = list_append(trie_arena, bs);
+    trie_arena_len = off + n;
+    byte_slice(TrieArenaSource, off, n)
+}
+
+val account_leaf_value : (int, word, hash, hash) -> ByteSlice /* body below account_rlp */
 val storage_leaf_value : word -> ByteSlice
-val arena_intern : list(byte) -> ByteSlice
-val trie_arena_reset : unit -> unit
 
-/* extension child ref (Eq. 208 extension form): a refinement pair. The spec
- * backend composes and hashes rlp([hp(key,ext), childref]) as a byte list
- * (spec.sail); the build backend assembles it in C from the compact path
- * and the fixed-width child ref (build.sail). */
-val extension_child_ref : (list(nibble), list(byte)) -> list(byte)
+/* Source -> bytes (val in host/io.sail): materialize a byte slice by
+ * per-source byte reads. Every source is readable from Sail: the witness via
+ * the input oracle, memory / tx input / active code via their byte hooks, and
+ * the arena above. */
+function read_byte_slice(s : ByteSlice) -> list(byte) = {
+    let off = unsigned(s.off);
+    let len = unsigned(s.len);
+    var out : list(byte) = [||];
+    foreach (i from 0 to (len - 1)) {
+        let b : byte = match s.source {
+            WitnessSource => ssz_src_byte(off + i),
+            MemorySource => mem_get_byte(off + i),
+            TxInputSource => txdata_byte(off + i),
+            ActiveCodeSource => frame_code_byte(get_slice_int(64, off + i, 0)),
+            TrieArenaSource => list_nth(trie_arena, off + i, 0x00),
+        };
+        out = b :: out
+    };
+    list_reverse(out)
+}
+
+/* leaf child ref (Eq. 208 leaf form): compose rlp([hp(key,leaf), value]) --
+ * the value materialized from its byte source (the arena for update leaves,
+ * the witness for base leaves) -- and cap it. */
+function leaf_child_ref(key : list(nibble), value : ByteSlice) -> list(byte) =
+    child_ref(leaf_node_rlp(key, read_byte_slice(value)))
+
+/* extension child ref (Eq. 208 extension form) */
+function extension_child_ref(key : list(nibble), childref : list(byte)) -> list(byte) =
+    child_ref(extension_node_rlp(key, childref))
 
 function branch_payload_rlp(mask : bits(16), children : list(list(byte))) -> list(byte) = {
     var payload : list(byte) = [||];
@@ -307,11 +337,9 @@ function branch_payload_rlp(mask : bits(16), children : list(list(byte))) -> lis
 function branch_node_rlp(mask : bits(16), children : list(list(byte))) -> list(byte) =
     rlp_list(branch_payload_rlp(mask, children))
 
-/* branch child ref (Eq. 208 branch form): a refinement pair. The spec backend
- * composes and hashes the 17-item node as a byte list (spec.sail); the
- * build backend assembles it in C from fixed-width child refs so the node byte
- * list never crosses the FFI hash channel (build.sail). */
-val branch_child_ref : (bits(16), list(list(byte))) -> list(byte)
+/* branch child ref (Eq. 208 branch form): compose and cap the 17-item node. */
+function branch_child_ref(mask : bits(16), children : list(list(byte))) -> list(byte) =
+    child_ref(branch_node_rlp(mask, children))
 
 function trie_empty_ref() -> list(byte) = [|0x80|]
 
@@ -990,6 +1018,12 @@ function account_rlp(nonce : int, balance : word, sroot : bits(256), chash : bit
     rlp_push(rlp_word(chash));
     rlp_list(list_reverse(rlp_scratch)) /* prepend builds newest-first; reverse -> field order */
 }
+
+function account_leaf_value(nonce : int, balance : word, sroot : hash, chash : hash) -> ByteSlice =
+    arena_intern(account_rlp(nonce, balance, sroot, chash))
+
+function storage_leaf_value(value : word) -> ByteSlice =
+    arena_intern(rlp_int(unsigned(value)))
 
 /* secure-trie updates for one account's post-state storage, selected by
  * keccak(address). Base-layer contract (defined per entry): the witness

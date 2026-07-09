@@ -117,12 +117,6 @@ val frame_jumpdest_valid = impure { c: "frame_jumpdest_valid" } : bits(64) -> bo
 val frame_push_immediate_word = impure { c: "frame_push_immediate_word" } : (bits(64), bits(64)) -> word
 val frame_code_copy_to_memory = impure { c: "frame_code_copy_to_memory" } : (bits(64), bits(64), bits(64)) -> unit
 
-/* Source -> bytes: the read side of the byte-source interface (no C binding).
- * Build hashes/stages each source C-side without materializing, so this is
- * uncalled there; spec uses it as the abstract read axiom the crypto and
- * precompile refinements are written over. Law: read_byte_slice(s) yields
- * exactly s.len bytes of source s starting at offset s.off. */
-val read_byte_slice : ByteSlice -> list(byte)
 
 /* kept only as the type of the (now unused) StackFrame snapshot field */
 struct MemByte = { offset : int, value : byte }
@@ -243,6 +237,9 @@ function returndata_pending_bytes() -> list(byte) = {
  * checks read it here, byte-addressed, rather than re-walking a Sail list. */
 function txdata_byte(i : int) -> byte = txd_at(get_slice_int(64, i, 0))
 function txdata_size() -> int = unsigned(txd_length())
+
+function run_precompile_tx_input(num : int) -> bool =
+    run_precompile_slice(num, tx_input_byte_slice(0, txdata_size()))
 function txdata_read_range(off : int, len : int) -> list(byte) = {
     var out : list(byte) = [||];
     foreach (k from 0 to (len - 1)) {
