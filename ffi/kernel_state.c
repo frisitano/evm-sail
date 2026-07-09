@@ -278,7 +278,9 @@ bool created_contains(const lbits a) {
 }
 
 /* ------------------------------- journal -------------------------------- */
-/* tag values: MUST match the JT_* constants in sail/iface/kernel_state.sail */
+/* tag values: C-internal row tags. The Sail side no longer sees them (its
+ * journal boundary is journal_push/journal_pop over whole JEntry values);
+ * ffi/journal_glue.c mirrors this enum (GJT_*) for its (en/de)coding. */
 enum {
   JT_EMPTY = 0, JT_CHECK = 1, JT_ACCT = 2, JT_TRAN = 3, JT_WARMA = 4,
   JT_WARMS = 5, JT_LOG = 6, JT_REFUND = 7, JT_SELFD = 8, JT_STOR = 9

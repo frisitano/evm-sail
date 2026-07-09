@@ -47,7 +47,7 @@ function k_slot_is_warm(a : address, s : word) -> bool = {
  * through the JStor journal.
  *
  * stateless_storage is the base storage primitive (declared in host/state.sail,
- * defined in host/base.sail as an authenticated MPT point-get -- one backend for
+ * defined in lib/mpt.sail as an authenticated MPT point-get -- one walk for
  * both the witness and the harness-built alloc trie). Everything above it -- the
  * overlay, the read-through, the journal -- is common. */
 function k_sload(a : address, s : word) -> word =
@@ -78,7 +78,7 @@ function k_sstore(a : address, s : word, v : word) -> unit = {
     /* orig is adopted on the first write this tx. NO account leaf refresh: the
        storage root is derived at compute_root, and the witness account iteration
        unions storage-changed accounts from the storage write-set
-       (host/base.sail state_updates_map). */
+       (lib/mpt.sail state_updates_map). */
     storage_wset_write(a, s, v, orig)
 }
 
@@ -296,11 +296,30 @@ function k_env(f : EnvField) -> word = {
 }
 function k_coinbase() -> address = k_header.fee_recipient
 
-/* BLOCKHASH: hash of one of the 256 most recent ancestor blocks. Base-layer
- * contract (per-entry): the witness backend hashes the authenticated witness
- * header at that depth (EIP-2935); the native backend has no ancestors in a
- * state-test fixture and models it as 0. */
-val k_blockhash : word -> hash
+/* BLOCKHASH / EIP-2935: the hash of the ancestor `offset` blocks back (1..256)
+ * is keccak of the witness header at that depth. Headers run oldest..newest
+ * with the parent (offset 1) LAST, so the ancestor at `offset` is
+ * header[k_n_headers - offset]. k_n_headers is the authenticated witness
+ * header count (authenticate_parent_state -> wit_n_headers()): the guest
+ * carries its real ancestor chain; the native runner carries a single dummy
+ * parent (count 1), so only BLOCKHASH of the immediate parent resolves and
+ * anything deeper is idx < 0. A requested header beyond the witness is a
+ * deficient proof -> throw InvalidBlock(WitnessDeficient), caught once at the
+ * top (run_one). */
+function k_blockhash(n : word) -> hash = {
+    let req = unsigned(n);
+    let offset = k_header.number - req;
+    if offset < 1 | offset > 256 then {
+        word_of_int(0)
+    } else {
+        let idx = k_n_headers - offset;
+        if idx < 0 then {
+            throw InvalidBlock(WitnessDeficient)
+        } else {
+            witness_keccak(ssz_witness_header_slice(idx))
+        }
+    }
+}
 
 /* BLOBHASH (EIP-4844): the i-th versioned hash of the current tx, 0 past the end. */
 function k_blobhash(i : int) -> word = {
@@ -461,7 +480,7 @@ function k_commit() -> unit = {
  * per call frame (a frame's writes must stay tx-atomic until the tx settles).
  * Only dirty (net-change) rows reach the base; a fully-reverted boundary leaves
  * none, so this just clears the overlay. The block base is the compute_root
- * cursor (host/base_*.sail storage_updates). */
+ * cursor (lib/mpt.sail storage_updates). */
 function k_tx_merge() -> unit = {
     /* the merges harvest this tx's EIP-7928 changes/reads from the overlays
        (tagged with the ambient bal_set_index) before clearing them. */
@@ -470,22 +489,16 @@ function k_tx_merge() -> unit = {
 }
 
 /* revert: replay undo entries back to (and dropping) the most recent checkpoint.
- * Decode the top entry into a JEntry, drop it, then dispatch: stop on JCheck,
- * otherwise apply_undo. Stop on an empty journal. */
+ * journal_pop decodes + drops the top entry: stop on JCheck (the checkpoint
+ * marker, or an empty journal), otherwise apply_undo. */
 function k_revert() -> unit = {
     /* storage undos are JStor entries replayed below; no overlay layer to drop */
     var done : bool = false;
     while not_bool(done) do {
-        let tag = journal_top_tag();
-        if tag == JT_EMPTY then {
-            done = true
-        } else {
-            let e = journal_decode_top(tag);
-            journal_drop_top();
-            match e {
-                JCheck() => done = true,
-                _        => apply_undo(e),
-            }
+        let e = journal_pop();
+        match e {
+            JCheck() => done = true,
+            _        => apply_undo(e),
         }
     }
 }

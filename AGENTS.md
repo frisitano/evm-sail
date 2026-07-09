@@ -22,10 +22,11 @@ duplicating instructions elsewhere.
 ## Repo Map
 
 - `sail/evm.sail_project` is the model project file. Use the `evm` module with
-  `EVM_ENTRY=core|guest|runner` and
-  `EVM_BACKEND=spec|build`.
-- `sail/runner.sail` is the EEST state-test runner entry file selected with
-  `EVM_ENTRY=runner`.
+  `EVM_ENTRY=core|guest|runner`. There is no backend variable: the Sail
+  specification is single-configuration.
+- `sail/bin/` holds the executable entry files (`bin/main.sail` the stateless
+  guest, `bin/runner.sail` the EEST state-test runner), selected with
+  `EVM_ENTRY=guest|runner`.
 - `sail/host/state.sail` and `sail/host/kernel.sail` define the host world-state
   interface used by EVM execution.
 - `sail/lib/mpt.sail` is the single trie implementation: one public entry
@@ -34,14 +35,26 @@ duplicating instructions elsewhere.
   stateless witness traversal. The Yellow Paper Appendix C/D equations are
   kept as documentation on the internal functions; an empty base computes
   TRIE(I) directly.
-- The impure host interface is an abstract `val` contract layer declared in the
-  module files themselves (`host/io.sail` crypto/oracle, `lib/mpt.sail` trie node
-  refs, `lib/rlp.sail` create_address; see `proof/extern-boundary.md`), with two
-  backend definitions selected by `EVM_BACKEND`: `sail/spec.sail` (pure list-typed
-  reference bodies; `keccak256`/`sha256` stay axiomatic, so spec is proof-only and
-  non-executable) and `sail/build.sail` (the executable path: thin C-FFI bindings
-  that stream Sail lists/structs through the host byte/node channels). The old
-  per-module `sail/iface,build,spec/*.sail` split was consolidated into these.
+- The impure host interface is an abstract `val` contract layer declared inline
+  in the module files themselves as `val X = impure { c: "sym" } : T`
+  (`host/io.sail` crypto/oracle, `host/state.sail` / `host/memory.sail` world
+  state and buffers, `lib/mpt.sail` trie node refs, `lib/rlp.sail`
+  create_address; see `proof/extern-boundary.md`). These `c:`-bound vals are the
+  TRUE axioms (crypto core, I/O oracle, mutable host stores) -- proof targets
+  see them as bodyless parameters; executables link their C definitions from
+  `ffi/`. The boundary is scalar-typed with ONE exception: the journal
+  (`journal_push : JEntry -> unit` / `journal_pop : unit -> JEntry`) crosses
+  whole JEntry union values; `ffi/journal_glue.c` compiles per build against
+  the GENERATED model header (`-DEVMSAIL_MODEL_H`, `-I` build dir) so the
+  `struct zJEntry` layout is never hand-mirrored, and (en/de)codes against the
+  scalar journal rows in `ffi/kernel_state.c`. Everything else, including the
+  former C fast-path hooks
+  (`keccak256_word`, `keccak256_address`, `sha256_pair`, `sha256_digests3`,
+  `ssz_src_le`, `ssz_src_be`), is a pure Sail body compiled and executed
+  directly; the dormant one-call C versions in `ffi/host_crypto.c` and the I/O
+  shims are candidates for future link-time override (weak-stub mechanism, not
+  yet wired). The old `sail/c/*.sail` extern-binding menu and the
+  `EVM_BACKEND=spec|build` project variable were deleted (this change).
 - `ffi/` contains native C backends for performance-sensitive host structures:
   memory/calldata/returndata, `state_db.c` for accounts and persistent
   storage cache/update rows, `transient_storage.c`
@@ -59,7 +72,7 @@ duplicating instructions elsewhere.
     exception that escaped the run (the runner catches nothing; the dump
     captures `have_exception` + the InvalidBlock BlockError variant +
     `throw_location`, e.g. `InvalidBlock(WitnessDeficient) @
-    sail/host/base.sail:77`). The root IS the pass criterion. `--dump` prints
+    sail/lib/mpt.sail:1275`). The root IS the pass criterion. `--dump` prints
     the model's live post-run state (write-set accounts+storage, stack,
     memory) from the same snapshot.
   - `--guest` (`EVM_ENTRY=guest`, `build_lib.sh` -> `libevmsail_guest.dylib`):

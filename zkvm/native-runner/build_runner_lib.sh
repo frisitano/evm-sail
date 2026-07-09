@@ -56,13 +56,18 @@ done
     --c-preserve compute_state_root \
     --c-include zkvm_input.h \
     sail/evm.sail_project evm \
-    --variable EVM_BACKEND=build \
     --variable EVM_ENTRY=runner \
     -o "$BUILD/zkvm_runner" )
 
 # 4. compile the generated model
 "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
     -c "$BUILD/zkvm_runner.c" -o "$BUILD/zkvm_runner.o"
+
+# 4b. journal glue: JEntry values cross the extern boundary as the GENERATED
+#     struct zJEntry, so the glue compiles against this build's model header.
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
+    -DEVMSAIL_MODEL_H='"zkvm_runner.h"' \
+    -c "$FFI/journal_glue.c" -o "$BUILD/journal_glue.o"
 
 # 5. the harness shim: I/O buffers + ssz_src + clear_memory + run_once + dump
 "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
@@ -83,7 +88,7 @@ case "$(uname -s)" in
 esac
 OUT="$BUILD/libevmsail_runner.$EXT"
 LINK_CMD=("$CC" "${CFLAGS[@]}" "${SHFLAG[@]}"
-    "$BUILD/zkvm_runner.o" "$BUILD/test_utils.o"
+    "$BUILD/zkvm_runner.o" "$BUILD/journal_glue.o" "$BUILD/test_utils.o"
     "${HOST_OBJS[@]}" "${SF_OBJS[@]}"
     -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB"
     -o "$OUT")

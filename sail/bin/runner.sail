@@ -102,7 +102,7 @@ function run_one() -> unit = {
        it, and headers_ok() is vacuously true at n=1. authenticate_parent_state()
        sets k_n_headers = wit_n_headers() = 1, so BLOCKHASH of the immediate parent
        resolves from that dummy header and anything deeper fail-closes to 0
-       (base.sail k_blockhash).
+       (host/kernel.sail k_blockhash).
        The world starts empty -- the ctypes harness calls evmsail_clear_memory
        before each run -- so there is no overlay wipe here. */
     authenticate_parent_state();

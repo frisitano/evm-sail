@@ -7,7 +7,7 @@
 /* runner (runner.sail: execute-tx + dump post-state) reach execution data  */
 /* through ONE input structure. Depends only on the common layer (io.sail   */
 /* SSZ accessors, rlp.sail, transaction.sail, mpt.sail witness walk); it    */
-/* does NOT touch host/base.sail or any entry-specific code.                */
+/* does NOT touch any entry-specific code.                                  */
 /* ======================================================================== */
 
 /* Register every witness code blob into the hash-keyed C code store. The C side
@@ -503,7 +503,7 @@ function authenticate_parent_state() -> unit = {
     register_witness_codes();
 
     /* Publish the authenticated ancestor-header count to the register BLOCKHASH
-       reads (k_blockhash, host/base.sail). The guest gets its real witness chain;
+       reads (k_blockhash, host/kernel.sail). The guest gets its real witness chain;
        the runner gets its single dummy parent (wit_n_headers() == 1). */
     k_n_headers = wit_n_headers();
     if headers_ok() then {

@@ -983,7 +983,7 @@ function trie_root(base_root : bits(256), updates : list(TriePatch)) -> bits(256
 /*                                                                          */
 /* compute_state_root over the post-execution world equals the block's      */
 /* stateRoot exactly when execution is correct -- it authenticates the      */
-/* result. Both worlds share one base (host/base.sail): the execution write */
+/* result. Both worlds share one base (this file): the execution write      */
 /* set overlaid on the authenticated parent root (the SSZ witness for the   */
 /* guest, the harness-built alloc MPT for the runner), feeding trie_root.   */
 /* ======================================================================== */
@@ -1026,17 +1026,11 @@ function storage_leaf_value(value : word) -> ByteSlice =
     arena_intern(rlp_int(unsigned(value)))
 
 /* secure-trie updates for one account's post-state storage, selected by
- * keccak(address). Base-layer contract (defined per entry): the witness
- * backend consumes only the write set (untouched slots remain inside the
- * recursive overlay rooted at the account's pre-state storage root); the
- * native backend enumerates the full live cache/update union because it has
- * no authenticated witness root. */
-val storage_updates : bits(256) -> list(TriePatch)
-
-/* write-set-only updates (witness base): nonzero writes set RLP(value), zero
- * writes delete the slot; a zero write to a slot with no authenticated
- * pre-state leaf is dropped (nothing to delete). */
-function storage_updates_writes_only(ak : bits(256)) -> list(TriePatch) = {
+ * keccak(address): the write set only -- untouched slots remain inside the
+ * recursive overlay rooted at the account's pre-state storage root. Nonzero
+ * writes set RLP(value), zero writes delete the slot; a zero write to a slot
+ * with no authenticated pre-state leaf is dropped (nothing to delete). */
+function storage_updates(ak : bits(256)) -> list(TriePatch) = {
     var out : list(TriePatch) = [||];
     let n = storage_wset_dirty_rows(ak);
     foreach (j from 0 to (n - 1)) {
@@ -1068,13 +1062,6 @@ function storage_root_from(ak : bits(256), sroot : bits(256)) -> bits(256) =
 
 function account_empty(acc : Account) -> bool =
     (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance)
-
-/* secure-trie updates for the account map. Base-layer contract (defined per
- * entry): stateless block validation consumes only execution updates
- * (witness-materialized read-only accounts are base-state cache, not
- * post-state updates); the native EEST runner has no parent root anchor, so
- * it uses the complete cache/update union to build a full empty-base root. */
-val state_updates_map : unit -> list(TriePatch)
 
 /* trie update for one enumerated eest_account row (AcctRow, host/state.sail).
  * skip_empty_unbased drops empty accounts with no authenticated base leaf
@@ -1108,9 +1095,11 @@ function state_updates_account_row(row : AcctRow, prev : list(TriePatch), skip_e
     }
 }
 
-/* execution updates only (witness base): the account write-set's dirty block
- * rows = accounts changed vs the authenticated pre-state */
-function state_updates_map_updates_only() -> list(TriePatch) = {
+/* secure-trie updates for the account map: execution updates only -- the
+ * account write-set's dirty block rows = accounts changed vs the authenticated
+ * pre-state (witness-materialized read-only accounts are base-state cache,
+ * not post-state updates). */
+function state_updates_map() -> list(TriePatch) = {
     var out : list(TriePatch) = [||];
     let n = unsigned(acct_wset_block_dirty_count());
     foreach (j from 0 to (n - 1)) {
@@ -1240,11 +1229,67 @@ function parent_state_root() -> bits(256) = {
     bytes_be256(list_nth(items, 3, RLP_NONE).content)
 }
 
-/* The stateless resolvers stateless_storage / stateless_account_load (declared in
- * host/state.sail) are defined once in host/base.sail, not here: they call the
- * trie-walk / node-db helpers above, anchoring at k_parent_state_root. It is one
- * lazy Merkle walk for both worlds -- over the authenticated SSZ witness for the
- * guest, over the harness-built alloc MPT for the runner (the node-db and anchor
- * are populated the same way). EIP-8025 (optional proofs): a committed non-empty
- * storage_root whose node is ABSENT from the node-db is a required proof the
- * witness omitted -> fail closed; handled inline in stateless_storage. */
+/* The stateless resolvers (declared in host/state.sail): one lazy Merkle walk
+ * from the authenticated parent-root anchor (k_parent_state_root) over the
+ * node DB, for both worlds -- the authenticated SSZ witness for the guest, the
+ * harness-built alloc MPT for the runner (the node-db and anchor are populated
+ * the same way). Either way the trie is complete along every touched path
+ * (fail closed on a missing node), so the resolvers are identical. */
+
+/* Stateless storage resolver: the (a, s) pre-state value via a Merkle walk of
+ * the account's storage trie from its pre-state root. An empty storage_root
+ * short-circuits to 0 (no walk); a committed non-empty root whose node is
+ * absent is a proof the witness omitted (EIP-8025) -> fail closed (never fires
+ * for a complete alloc MPT); a diverging or empty terminus is a proven-absent
+ * slot => 0. Base BELOW the writes-only overlay (host/kernel.sail k_sload /
+ * k_sload_orig): no read-through caching. */
+function stateless_storage(a : address, s : word) -> word = {
+    let sroot = load_account(a).storage_root;
+    if sroot == EMPTY_TRIE_ROOT then {
+        sail_zeros(256)
+    } else {
+        let rootnode = node_db_lookup(sroot);
+        if list_len(rootnode) == 0 then {
+            throw InvalidBlock(WitnessDeficient)
+        } else {
+            let leaf = trie_walk(rootnode, hash_nibbles(keccak256_word(s)), 0, 256);
+            if list_len(leaf) > 0 then {
+                rlp_str_word(leaf)
+            } else {
+                sail_zeros(256)
+            }
+        }
+    }
+}
+
+/* Stateless account materialization: bind `a` on first touch by walking the
+ * state trie from the parent-root anchor. Reaching the leaf => present (decode
+ * + seed); a diverging/empty terminus => proven-empty account; a blinded node
+ * => missing proof => fail closed. The result is bound as a block-level read
+ * member of the account working set (acct_wset_seed_read), so subsequent
+ * load_account(a) is an O(1) working-set read. */
+function stateless_account_load(a : address) -> unit = {
+    let ak = keccak256_address(a);
+    let rootnode = node_db_lookup(k_parent_state_root);
+    if (list_len(rootnode) == 0) & (k_parent_state_root != EMPTY_TRIE_ROOT) then {
+        throw InvalidBlock(WitnessDeficient)
+    };
+    let value = trie_walk(rootnode, hash_nibbles(ak), 0, 256);
+    if list_len(value) > 0 then {
+        let (nonce, bal, sroot, chash) = decode_account(value);
+        acct_wset_seed_read(a, get_slice_int(64, nonce, 0), bal, sroot, chash);
+        acct_wset_mark_base_exists(a)
+    } else {
+        acct_wset_seed_read(a, sail_zeros(64), sail_zeros(256), EMPTY_TRIE_ROOT, KECCAK_EMPTY)
+    }
+}
+
+/* A not-yet-materialized account is bound from the authenticated base on first
+ * access (un-journaled, so a frame revert keeps the revealed pre-state and only
+ * undoes recorded mutations). */
+function load_account(a : address) -> Account = {
+    if not_bool(account_loaded(a)) then {
+        stateless_account_load(a)
+    };
+    account_lookup(a)
+}

@@ -1,16 +1,8 @@
-variable EVM_BACKEND = spec
 variable EVM_ENTRY = core
 
 evm {
   files
     prelude.sail,
-    /* C bindings: each file selects one C subsystem under ffi; a binding
-       OVERRIDES the shared pure Sail body (extern rule), absence leaves the
-       body in force. Both backends currently include the same crypto/IO set;
-       they diverge as the pure store models land (EVM_BACKEND=spec will drop
-       the state/stack/code bindings). */
-    c/io.sail,
-    c/crypto.sail,
     exceptions.sail,
     host/io.sail,
     lib/rlp.sail,
@@ -26,11 +18,8 @@ evm {
     lib/mpt.sail,
     host/bal.sail,
     lib/consensus_hash.sail,
-    if $EVM_BACKEND == spec then []
-    else if $EVM_BACKEND == build then []
-    else error("EVM_BACKEND must be spec or build"),
     if $EVM_ENTRY == core then []
-    else if $EVM_ENTRY == guest then [host/base.sail, host/block.sail, lib/ssz_htr.sail, main.sail]
-    else if $EVM_ENTRY == runner then [host/base.sail, host/block.sail, runner.sail]
+    else if $EVM_ENTRY == guest then [host/block.sail, lib/ssz_htr.sail, bin/main.sail]
+    else if $EVM_ENTRY == runner then [host/block.sail, bin/runner.sail]
     else error("EVM_ENTRY must be core, guest, or runner")
 }

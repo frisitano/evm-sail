@@ -81,7 +81,6 @@ for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
 ( cd "$ROOT" && "$SAIL" -c -O --c-no-main --c-no-rts "${PRESERVE_FLAGS[@]}" \
     --c-include zkvm_input.h \
     sail/evm.sail_project evm \
-    --variable EVM_BACKEND=build \
     --variable EVM_ENTRY=guest \
     -o "$BUILD/zkvm_block" )
 
@@ -93,6 +92,12 @@ for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
 #   -I zkvm/runtime so the generated C finds the injected zkvm_input.h.
 "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
     -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
+
+# --- 4b. journal glue: JEntry crosses the extern boundary as the GENERATED
+#     struct zJEntry, so the glue compiles against this build's model header.
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
+    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+    -c "$FFI/journal_glue.c" -o "$BUILD/journal_glue.o"
 
 # --- 5. shared harness I/O + CLI main ---------------------------------------
 #   test_utils.c is the ONE native I/O + run_once surface (input buffer,
@@ -115,7 +120,7 @@ done
 # --- 7. link ----------------------------------------------------------------
 OUT="$BUILD/zkvm_native"
 LINK_CMD=("$CC" "${CFLAGS[@]}"
-    "$BUILD/zkvm_block.o" "$BUILD/test_utils.o" "$BUILD/main.o"
+    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/test_utils.o" "$BUILD/main.o"
     "${HOST_OBJS[@]}" "${SF_OBJS[@]}"
     "${ACCEL_FLAGS[@]}" "${STACK_FLAGS[@]}"
     -o "$OUT")

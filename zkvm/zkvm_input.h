@@ -20,4 +20,10 @@ uint64_t ssz_src_le(sail_int off, sail_int n);       /* (int,int) -> bits(64): n
 uint64_t ssz_src_be(sail_int off, sail_int n);       /* (int,int) -> bits(64): n<=8 BE */
 const uint8_t *evmsail_ssz_ptr(uint64_t off, uint64_t len);
 unit     el_emit_out(uint64_t b);                    /* bits(8) -> unit: write_output one byte */
+/* journal boundary (ffi/journal_glue.c): whole JEntry values cross as the
+ * generated struct zJEntry -- declared incomplete here (this header precedes
+ * the generated type definitions in the model translation unit). */
+struct zJEntry;
+unit journal_push(struct zJEntry e);                 /* JEntry -> unit */
+void journal_pop(struct zJEntry *rop, unit u);       /* unit -> JEntry */
 #endif

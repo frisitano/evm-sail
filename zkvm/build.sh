@@ -115,7 +115,6 @@ PY
     ( cd "$ROOT" && "$SAIL" -c --c-no-main --c-no-rts --c-preserve main \
         --c-include zkvm_input.h \
         sail/evm.sail_project evm \
-        --variable EVM_BACKEND=build \
         --variable EVM_ENTRY="$guest_entry" \
         -o "$BUILD/zkvm_block" )
   fi
@@ -125,6 +124,11 @@ PY
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
       -Wno-unused -Wno-error=implicit-function-declaration \
       -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
+  # 2b. journal glue: JEntry crosses the extern boundary as the GENERATED
+  #     struct zJEntry, so the glue compiles against this build's model header.
+  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+      -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+      -c "$ROOT/ffi/journal_glue.c" -o "$BUILD/journal_glue.o"
   # 3. GMP-free fixed-width Sail runtime (sailfix) replacing stock sail.c +
   #    mini-gmp: sail_int = 512-bit sign-magnitude, lbits = 256-bit inline.
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
@@ -179,6 +183,7 @@ link_guest() {
       "$BUILD/zkvm_input_data.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
       "$BUILD/host_crypto.o" "$BUILD/precompiles.o" "$BUILD/accel_guest.o" \
+      "$BUILD/journal_glue.o" \
       "$BUILD/memory.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
       "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/returndata.o" \
       "$BUILD/zkvm_block.o" \

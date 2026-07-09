@@ -129,7 +129,7 @@ check-sail-coq: run-sail-coq
 
 run-evm-sail-core-coq:
 	mkdir -p $(EVM_SAIL_COQ_CORE_DIR)
-	$(SAIL) --coq --coq-output-dir $(EVM_SAIL_COQ_CORE_DIR) -o evm ../sail/evm.sail_project evm --variable EVM_BACKEND=spec --variable EVM_ENTRY=core
+	$(SAIL) --coq --coq-output-dir $(EVM_SAIL_COQ_CORE_DIR) -o evm ../sail/evm.sail_project evm --variable EVM_ENTRY=core
 
 check-evm-sail-core-coq: run-evm-sail-core-coq
 	test -s $(EVM_SAIL_COQ_CORE_DIR)/evm.v
@@ -140,7 +140,7 @@ check-evm-sail-core-coq: run-evm-sail-core-coq
 
 run-evm-sail-guest-coq:
 	mkdir -p $(EVM_SAIL_COQ_GUEST_DIR)
-	$(SAIL) --coq --coq-output-dir $(EVM_SAIL_COQ_GUEST_DIR) -o evm_guest ../sail/evm.sail_project evm --variable EVM_BACKEND=spec --variable EVM_ENTRY=guest
+	$(SAIL) --coq --coq-output-dir $(EVM_SAIL_COQ_GUEST_DIR) -o evm_guest ../sail/evm.sail_project evm --variable EVM_ENTRY=guest
 
 check-evm-sail-guest-coq: run-evm-sail-guest-coq
 	test -s $(EVM_SAIL_COQ_GUEST_DIR)/evm_guest.v

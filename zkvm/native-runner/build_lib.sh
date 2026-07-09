@@ -48,7 +48,7 @@ OUT="$BUILD/libevmsail_guest.$EXT"
 # el_emit_out, the output buffer, and run_once. The real guests' I/O
 # (zkvm_input.c / zkvm_io.c) is never linked into host builds.
 LINK_CMD=("$CC" "${CFLAGS[@]}" "${SHFLAG[@]}"
-    "$BUILD/zkvm_block.o" "$BUILD/test_utils.o"
+    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/test_utils.o"
     "${HOST_OBJS[@]}"
     "$BUILD/sf_sail.o" "$BUILD/sf_sail_native.o" "$BUILD/sf_sail_failure.o"
     -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB"

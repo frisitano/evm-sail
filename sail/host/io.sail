@@ -6,7 +6,7 @@
 /*                                                                          */
 /* (1) ABSTRACT HOST I/O -- staged precompile input, stateless input bytes, */
 /* and guest public-output bytes. The model commits to WHAT is serialized   */
-/* or executed; build.sail supplies the concrete C-backed bindings.         */
+/* or executed; the inline `c:`-bound vals are the C boundary (ffi/).       */
 /*                                                                          */
 /* (2) CRYPTO -- keccak256 (the Ethereum hash: KECCAK256, trie/RLP          */
 /* node references, CREATE2 salt) and sha256 (precompile 0x02 + SSZ         */
@@ -22,7 +22,7 @@
 /* Host mechanism, like memory and storage. Included early -- the crypto is */
 /* used by state, kernel, gas, and transaction; the SSZ                     */
 /* decoders are called only by the outer stateless layers (the lib/mpt.sail */
-/* witness reader, sail/main.sail, the EEST runner).                        */
+/* witness reader, the sail/bin entries).                                   */
 /* ======================================================================== */
 
 /* The block-access-list key: an (address, slot) pair (EIP-7928). bal_load
@@ -90,18 +90,27 @@ function rlp_nonce(nonce : int) -> list(byte) =
         }
     }
 
-/* ---- Crypto core (spec backend: abstract axioms; build backend: the C crypto
- * sources via build.sail; the vals below stay
- * bodyless on the proof targets). keccak256 and sha256 are the axiomatic hash
- * core; keccak_rlp_payload refines keccak256(domain ++ rlp_list_prefix(len) ++
- * payload), streamed part-by-part by build. All shared consensus hashing
- * (lib/consensus_hash.sail) is written against these three. The Witness/Memory/
- * TxInput/ActiveCode source of a ByteSlice denotes an abstract byte sequence:
- * bytes_keccak(s) = keccak256(read_byte_slice(s)), and the prefixed SHA-256
- * digest = sha256(type_byte :: bytes). ---- */
+/* ---- Crypto core. The `c:`-bound vals below are the axiomatic boundary:
+ * hash/signature primitives with NO pure Sail body (ffi/host_crypto.c,
+ * ffi/precompiles.c -- the eth-act zkvm-standards accelerator surface); proof
+ * targets see them as bodyless axioms (the c: key binds only C). keccak256 and
+ * sha256 are the axiomatic hash core; keccak_rlp_payload refines
+ * keccak256(domain ++ rlp_list_prefix(len) ++ payload). All shared consensus
+ * hashing (lib/consensus_hash.sail) is written against these three. The
+ * Witness/Memory/TxInput/ActiveCode source of a ByteSlice denotes an abstract
+ * byte sequence: bytes_keccak(s) = keccak256(read_byte_slice(s)), and the
+ * prefixed SHA-256 digest = sha256(type_byte :: bytes). ---- */
+
+/* streaming hash channel: reset, push bytes, finish = digest */
+val host_bytes_reset = impure { c: "host_bytes_reset" } : unit -> unit
+val host_bytes_push = impure { c: "host_bytes_push" } : bits(8) -> unit
+val host_bytes_push8 = impure { c: "host_bytes_push8" } : bits(64) -> unit
+val host_bytes_keccak_finish = impure { c: "host_bytes_keccak_finish" } : unit -> bits(256)
+val host_bytes_sha256_finish = impure { c: "host_bytes_sha256_finish" } : unit -> bits(256)
+
 /* keccak256 / sha256: the byte lists stream through the C hash channel
- * (sail/c/crypto.sail host_bytes_*) 8 bytes per crossing; the channel
- * primitives are the axiomatic crypto core. */
+ * (host_bytes_*) 8 bytes per crossing; the channel primitives are the
+ * axiomatic crypto core. */
 function hash_push_bytes(bs : list(byte)) -> unit = {
     var rest : list(byte) = bs;
     var more : bool = true;
@@ -138,16 +147,22 @@ val keccak_rlp_payload : (list(byte), list(byte)) -> bits(256)
 
 /* Source-tagged hashing: bytes_keccak(s) = keccak256(read_byte_slice(s)); the
  * prefixed digest = sha256(type_byte :: bytes). C hashes the source without
- * materializing it (host_source_*, sail/c/crypto.sail). */
+ * materializing it. */
+val host_source_keccak = impure { c: "host_source_keccak" } : (bits(64), bits(64), bits(64)) -> bits(256)
+val host_source_sha256_prefixed = impure { c: "host_source_sha256_prefixed" } : (bits(8), bits(64), bits(64), bits(64)) -> bits(
+        256,
+    )
+
 function bytes_keccak(s : ByteSlice) -> bits(256) =
     host_source_keccak(byte_source_kind(s.source), s.off, s.len)
 
 function bytes_sha256_prefixed(prefix : byte, s : ByteSlice) -> bits(256) =
     host_source_sha256_prefixed(prefix, byte_source_kind(s.source), s.off, s.len)
 
-/* Fixed-width helpers: pure meaning over keccak256/sha256. The one-call C
- * fast paths in sail/c/crypto.sail override these bodies when included
- * (secure-trie keys hash on every state access -- the hot path). */
+/* Fixed-width helpers: pure meaning over keccak256/sha256. The dormant
+ * one-call C fast paths in ffi/host_crypto.c (host_keccak_word & co) are
+ * future link-time overrides for the hot path (secure-trie keys hash on
+ * every state access). */
 function keccak256_word(w : word) -> bits(256) = keccak256(word_to_bytes32(w))
 
 function keccak256_address(a : address) -> bits(256) = keccak256(address_to_bytes(a))
@@ -168,8 +183,18 @@ function sha256_digests3(mask : bits(8), d0 : bits(256), d1 : bits(256), d2 : bi
     sha256(payload)
 }
 
-/* Signature / authentication precompiles. Spec uses the mathematical precompile
- * input byte strings; build may use direct staged or native accelerator calls. */
+/* Signature / authentication precompiles (k256 accelerator axioms). */
+val secp256k1_verify_precompile = impure { c: "precompile_secp256k1_verify_hash_sig_pub" } : (
+        bits(256),
+        word,
+        word,
+        bits(256),
+        bits(256),
+    ) -> bool
+val precompile_ecrecover_hash_sig = impure { c: "precompile_ecrecover_hash_sig" } : (bits(256), bits(64), word, word) -> bits(
+        168,
+    )
+
 function ecrecover_precompile(h : bits(256), yparity : int, r : word, s : word) -> (bool, address) = {
     let recovered = precompile_ecrecover_hash_sig(h, get_slice_int(64, yparity, 0), r, s);
     (recovered[160] == bitone, recovered[159 .. 0])
@@ -179,8 +204,15 @@ function ecrecover_precompile(h : bits(256), yparity : int, r : word, s : word) 
  * top-level tx data). The gas rules inspect the same source bytes directly
  * before this is called; build may stage/snapshot the input and write successful
  * output straight into pending returndata. Canonical meaning
- * run_precompile(id, read_byte_slice(source)) -- the spec backend's list-typed
- * executor axiom (spec.sail). */
+ * run_precompile(id, read_byte_slice(source)); successful output lands in
+ * pending returndata C-side. */
+val precompile_run_source_to_returndata = impure { c: "precompile_run_source_to_returndata" } : (
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+    ) -> bool
+
 function run_precompile_slice(num : int, s : ByteSlice) -> bool =
     precompile_run_source_to_returndata(get_slice_int(64, num, 0), byte_source_kind(s.source), s.off, s.len)
 
@@ -231,16 +263,18 @@ val block_header_hash : (hash, hash, hash, hash) -> hash
 
 /* ===================== (3) STATELESS SSZ INPUT ========================= */
 
-/* Private-input oracle + guest output trace (spec backend: abstract axioms;
- * build backend: build.sail over ffi). All input reads are consistent
- * views over one bounded byte vector -- the little-/big-endian bulk readers are
- * derived from the same bytes. emit_out appends exactly one byte to the guest
- * public-output trace; only guest entries call it, core specs leave it abstract. */
-/* emit_out / ssz_src_len / ssz_src_byte are declared in sail/c/io.sail (the
- * input/output axioms; no pure body exists). The bulk readers below are pure
- * derivations of ssz_src_byte -- consistent LE/BE views over one bounded byte
- * vector -- overridden by the one-call C readers when sail/c/io.sail is
- * included. */
+/* Private-input oracle + guest output trace: the input/output axioms (no pure
+ * body exists; C provides them -- test_utils.c natively, zkvm_input.c /
+ * zkvm_io.c on the guest). All input reads are consistent views over one
+ * bounded byte vector. emit_out appends exactly one byte to the guest
+ * public-output trace; only guest entries call it, core specs leave it
+ * abstract. */
+val ssz_src_len = impure { c: "ssz_src_len" } : unit -> bits(64)
+val ssz_src_byte = impure { c: "ssz_src_byte" } : int -> bits(8)
+val emit_out = impure { c: "el_emit_out" } : bits(8) -> unit
+
+/* The bulk readers below are pure derivations of ssz_src_byte -- consistent
+ * LE/BE views over one bounded byte vector. */
 function ssz_src_le(b : int, n : int) -> bits(64) = {
     var acc : bits(64) = 0x0000000000000000;
     foreach (k from 0 to (n - 1)) {

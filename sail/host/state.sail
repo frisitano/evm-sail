@@ -213,43 +213,12 @@ val created_reset = impure { c: "created_reset" } : unit -> unit
 val created_insert = impure { c: "created_insert" } : address -> unit
 val created_contains = impure { c: "created_contains" } : address -> bool
 
-/* call-frame journal (undo log): a stack of undo entries. push_* append one;
- * commit folds the frame's entries into the parent; revert reads the top entry's
- * tag + payload (top_*), the caller dispatches its undo, then drop_top pops back
- * to and including the checkpoint. top_tag returns JT_EMPTY when empty. */
+/* call-frame journal (undo log) lifecycle: reset clears the whole journal;
+ * commit folds the newest frame's entries into the parent (drops its JCheck
+ * checkpoint marker). The entry-level operations are journal_push /
+ * journal_pop, declared after union JEntry below. */
 val journal_reset = impure { c: "journal_reset" } : unit -> unit
-val journal_push_check = impure { c: "journal_push_check" } : unit -> unit
-val journal_push_acct = impure { c: "journal_push_acct" } : (address, bits(64), word, hash, hash) -> unit
-val journal_push_tran = impure { c: "journal_push_tran" } : (address, word, word) -> unit
-val journal_push_stor = impure { c: "journal_push_stor" } : (address, word, word) -> unit
-val journal_push_warma = impure { c: "journal_push_warma" } : address -> unit
-val journal_push_warms = impure { c: "journal_push_warms" } : (address, word) -> unit
-val journal_push_log = impure { c: "journal_push_log" } : unit -> unit
-val journal_push_refund = impure { c: "journal_push_refund" } : bits(64) -> unit
-val journal_push_selfd = impure { c: "journal_push_selfd" } : unit -> unit
 val journal_commit = impure { c: "journal_commit" } : unit -> unit
-val journal_top_tag = impure { c: "journal_top_tag" } : unit -> bits(64)
-val journal_drop_top = impure { c: "journal_drop_top" } : unit -> unit
-val journal_top_addr = impure { c: "journal_top_addr" } : unit -> word
-val journal_top_nonce = impure { c: "journal_top_nonce" } : unit -> bits(64)
-val journal_top_balance = impure { c: "journal_top_balance" } : unit -> word
-val journal_top_sroot = impure { c: "journal_top_sroot" } : unit -> hash
-val journal_top_chash = impure { c: "journal_top_chash" } : unit -> hash
-val journal_top_slot = impure { c: "journal_top_slot" } : unit -> word
-val journal_top_val = impure { c: "journal_top_val" } : unit -> word
-val journal_top_refund = impure { c: "journal_top_refund" } : unit -> bits(64)
-
-/* journal entry tags, shared with ffi/kernel_state.c (MUST stay in sync). */
-let JT_EMPTY : bits(64) = 0x0000000000000000
-let JT_CHECK : bits(64) = 0x0000000000000001
-let JT_ACCT : bits(64) = 0x0000000000000002
-let JT_TRAN : bits(64) = 0x0000000000000003
-let JT_WARMA : bits(64) = 0x0000000000000004
-let JT_WARMS : bits(64) = 0x0000000000000005
-let JT_LOG : bits(64) = 0x0000000000000006
-let JT_REFUND : bits(64) = 0x0000000000000007
-let JT_SELFD : bits(64) = 0x0000000000000008
-let JT_STOR : bits(64) = 0x0000000000000009
 
 /* A LOG record (Yellow Paper section 4.4.1, the log series): emitting address,
  * 0..4 topics (LOG0..LOG4), and the data bytes. */
@@ -286,12 +255,12 @@ struct TxEnv = { origin : address, gas_price : word, blob_hashes : list(word) }
  *
  * JEntry is the kernel-facing type: the kernel journals a mutation as
  * `journal_push(JAcct(..))` and k_revert dispatches undos with `match e`. The
- * entries themselves are NOT held in a Sail list -- the journal lives in the
- * C-backed store (ffi/kernel_state.c; the journal_* bindings above). A thin
- * adapter (journal_push / journal_decode_top, below) encodes one JEntry into
- * the scalar push ops and decodes the top C entry back into a JEntry, so a
- * JEntry is only ever an ephemeral view -- built for a push, decoded for a
- * revert -- never a stored buffer. */
+ * journal itself is abstract: journal_push / journal_pop (below) are
+ * `c:`-bound axioms and whole JEntry values cross the boundary, so a JEntry
+ * is only ever an ephemeral view -- built for a push, decoded for a revert --
+ * never a Sail-side buffer. The C side (ffi/journal_glue.c over the
+ * ffi/kernel_state.c scalar store) owns both the storage and the
+ * (en/de)coding. */
 union JEntry = {
   JCheck  : unit,                     /* call-frame checkpoint marker            */
   JAcct   : (address, Account),       /* restore an account to its prior value   */
@@ -388,9 +357,8 @@ function transient_store(a : address, s : word, v : word) -> unit =
  * reads can fall through to it on a working-set miss. */
 val stateless_storage : (address, word) -> word
 
-/* write-set block enumeration for compute_root (host/base_*.sail storage_updates):
- * dirty rows = the net change over the authenticated MPT (witness); the
- * cache-union-block = the full post-state over the empty anchor (native). */
+/* write-set block enumeration for compute_root (lib/mpt.sail storage_updates):
+ * dirty rows = the net change over the authenticated MPT base. */
 function storage_wset_dirty_rows(ak : bits(256)) -> int = unsigned(storage_wset_block_dirty_count(ak))
 function storage_wset_dirty_row(ak : bits(256), j : int) -> (word, word) =
     (
@@ -435,9 +403,9 @@ struct AcctRow = {
     row_base_exists : bool,
 }
 
-/* account write-set block enumeration for compute_root (host/base_*.sail
- * state_updates_map): dirty rows = the net change vs pre-state (witness); the
- * cache-union-block = the full post-state accounts (native). */
+/* account write-set block enumeration for compute_root (lib/mpt.sail
+ * state_updates_map): dirty rows = the net change vs the authenticated
+ * pre-state. */
 function acct_wset_dirty_row(j : int) -> AcctRow = {
     let idx = get_slice_int(64, j, 0);
     struct {
@@ -464,7 +432,7 @@ register k_parent_state_root : hash =
                     nodedb_reset) must NOT clear it mid-run. */
 
 /* number of authenticated ancestor headers available to BLOCKHASH (k_blockhash,
- * host/base.sail). Both entries publish it from the SSZ witness header chain in
+ * host/kernel.sail). Both entries publish it from the SSZ witness header chain in
  * authenticate_parent_state() (k_n_headers = wit_n_headers()): the guest carries
  * its real ancestor chain; the runner a single dummy parent (count 1). A request
  * beyond the witness is a deficient proof -> throw InvalidBlock(WitnessDeficient).
@@ -562,11 +530,9 @@ function account_loaded(a : address) -> bool = acct_wset_present(a)
 val stateless_account_load : address -> unit
 
 /* internal (un-journaled) account accessor used inside the kernel functions.
- * Base-layer contract (defined per entry): the native backend reads the seeded
- * map directly (absent == EMPTY_ACCOUNT); the witness backend materializes a
- * not-yet-loaded account from the witness on first access (un-journaled, so a
- * frame revert keeps the revealed pre-state and only undoes recorded
- * mutations). */
+ * Defined in lib/mpt.sail: a not-yet-loaded account is materialized from the
+ * witness base on first access (un-journaled, so a frame revert keeps the
+ * revealed pre-state and only undoes recorded mutations). */
 val load_account : address -> Account
 
 /* a mutation writes the per-tx account overlay (acct_wset); the first write this
@@ -575,71 +541,17 @@ val load_account : address -> Account
 function store_account(a : address, v : Account) -> unit =
     acct_wset_write(a, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
 
-/* --- journal (undo log) adapter: JEntry <-> the C-backed scalar journal ---
- * The kernel works in JEntry; these functions are the only place a JEntry is
- * (en/de)coded into the scalar push / top-getter journal_* ops above.
- * No JEntry is ever stored -- push encodes one and returns; k_revert decodes
- * the top entry, matches on it, and drops it. */
-
-/* encode one undo entry into the C journal (kernel side: journal_push(JAcct ..)) */
-function journal_push(e : JEntry) -> unit = match e {
-    JCheck()       => journal_push_check(),
-    JAcct(a, old)  => journal_push_acct(a, get_slice_int(64, old.nonce, 0), old.balance, old.storage_root, old.code_hash),
-    JTran(a, s, v) => journal_push_tran(a, s, v),
-    JStor(a, s, p) => journal_push_stor(a, s, p),
-    JWarmA(a)      => journal_push_warma(a),
-    JWarmS(a, s)   => journal_push_warms(a, s),
-    JLog()         => journal_push_log(),
-    JRefund(old)   => journal_push_refund(get_slice_int(64, old, 0)),
-    JSelfD()       => journal_push_selfd(),
-}
-
-/* decode the journal's TOP entry into a JEntry (the payload getters are
- * tag-indexed views over that one C entry record). The caller guards this with
- * journal_top_tag() != JT_EMPTY, so the empty case never reaches here (it maps
- * to JCheck, a no-op undo, purely to keep the match total). */
-function journal_decode_top(tag : bits(64)) -> JEntry =
-    if tag == JT_ACCT then {
-        JAcct(
-            journal_top_addr()[159 .. 0],
-            struct {
-                nonce = unsigned(journal_top_nonce()),
-                balance = journal_top_balance(),
-                code_hash = journal_top_chash(),
-                storage_root = journal_top_sroot(),
-            },
-        )
-    } else {
-        if tag == JT_TRAN then {
-            JTran(journal_top_addr()[159 .. 0], journal_top_slot(), journal_top_val())
-        } else {
-            if tag == JT_STOR then {
-                JStor(journal_top_addr()[159 .. 0], journal_top_slot(), journal_top_val())
-            } else {
-                if tag == JT_WARMA then {
-                    JWarmA(journal_top_addr()[159 .. 0])
-                } else {
-                    if tag == JT_WARMS then {
-                        JWarmS(journal_top_addr()[159 .. 0], journal_top_slot())
-                    } else {
-                        if tag == JT_LOG then {
-                            JLog()
-                        } else {
-                            if tag == JT_REFUND then {
-                                JRefund(signed(journal_top_refund()))
-                            } else {
-                                if tag == JT_SELFD then {
-                                    JSelfD()
-                                } else {
-                                    JCheck() /* JT_CHECK / JT_EMPTY: no undo effect */
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+/* --- journal boundary: push / pop whole JEntry values ---
+ * The one place a user-defined Sail type crosses the C boundary. The glue
+ * (ffi/journal_glue.c, compiled against the generated model header) encodes a
+ * pushed JEntry into the scalar journal store (ffi/kernel_state.c) and
+ * decodes the top entry back out. journal_pop pops AND returns the top entry;
+ * on an empty journal it returns JCheck -- a no-op undo that also terminates
+ * the k_revert loop -- without popping anything, so no caller needs a
+ * separate emptiness guard. Laws: LIFO -- pop after push(e) yields e;
+ * journal_commit drops exactly the newest JCheck checkpoint marker. */
+val journal_push = impure { c: "journal_push" } : JEntry -> unit
+val journal_pop = impure { c: "journal_pop" } : unit -> JEntry
 
 /* Apply one undo entry (k_revert replays these back to the checkpoint). */
 function apply_undo(e : JEntry) -> unit = match e {
