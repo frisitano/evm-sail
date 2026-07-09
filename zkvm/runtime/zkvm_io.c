@@ -26,8 +26,8 @@
 /* ---- private input region ----------------------------------------------- */
 
 /* Preloaded private input: the schema-prefixed SSZ stateless input, embedded at
- * build time as `zkvm_input_bytes` (generated from vectors/*.ssz). A real zkVM
- * host would instead populate this region from the proof's private witness. */
+ * build time as `zkvm_input_bytes` (baked from the VEC file by build.sh). A real
+ * zkVM host would instead populate this region from the proof's private witness. */
 extern const unsigned char zkvm_input_bytes[];
 extern const unsigned long  zkvm_input_bytes_len;
 

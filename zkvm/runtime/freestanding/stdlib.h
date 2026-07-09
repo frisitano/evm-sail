@@ -11,15 +11,9 @@ void  free(void *ptr);
 
 void  abort(void) __attribute__((noreturn));
 void  exit(int status) __attribute__((noreturn));
-void  _exit(int status) __attribute__((noreturn));
 
-long  strtol(const char *nptr, char **endptr, int base);
-int   atoi(const char *nptr);
-
-int   rand(void);
-void  srand(unsigned int seed);
-int   abs(int j);
-long long llabs(long long j);
+void  qsort(void *base, size_t nmemb, size_t size,
+            int (*compar)(const void *, const void *));
 
 #ifndef EXIT_SUCCESS
 #define EXIT_SUCCESS 0

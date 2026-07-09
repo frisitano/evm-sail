@@ -37,13 +37,7 @@ type byte    = bits(8)
  * backend materializes them. The spec backend defines their meaning as
  * mathematical byte lists; the build backend resolves them to pointer/length
  * pairs when possible. */
-enum ByteSource = {
-    WitnessSource,
-    MemorySource,
-    TxInputSource,
-    ActiveCodeSource,
-    TrieArenaSource,
-}
+enum ByteSource = { WitnessSource, MemorySource, TxInputSource, ActiveCodeSource, TrieArenaSource }
 
 type source_offset = bits(64)
 type source_len    = bits(64)

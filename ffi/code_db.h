@@ -15,6 +15,7 @@ void code_intern_delegation(lbits *rop, const lbits addr);
 int code_db_frame_resolve_code(uint64_t off, uint64_t len,
                                const uint8_t **p, uint64_t *resolved_len);
 uint64_t code_db_stored_code_length(const lbits h);
+const uint8_t *code_db_code_by_words(const uint64_t key_be[4], uint64_t *len_out);
 unit code_db_copy_stored_code_to_memory(const lbits h, uint64_t dst, uint64_t off, uint64_t len);
 void code_db_read_delegation(lbits *rop, const lbits h);
 

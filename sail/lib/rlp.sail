@@ -95,9 +95,9 @@ struct RlpField = {
 
 let RLP_NONE : RlpField = struct { is_list = false, content = [||], full = [||] }
 
-/* Soft RLP decode validity flag for stateless validation. Malformed scalars are
- * a normal invalid-block outcome, not a guest abort. */
-register rlp_decode_ok : bool = true
+/* Malformed RLP is a normal invalid-block outcome: the decoders THROW
+ * InvalidBlock(RlpDecode) at the point of detection, caught once at the guest /
+ * runner top level (mirroring EELS `raise` on a decoding error). */
 
 /* big-endian integer from n content bytes at offset pos */
 function rlp_be_int(b : list(byte), pos : int, n : int) -> int = {
@@ -220,8 +220,7 @@ function rlp_item(items : list(RlpField), idx : int) -> RlpField = {
     if (idx >= 0) & (idx < list_len(items)) then {
         list_nth(items, idx, RLP_NONE)
     } else {
-        rlp_decode_ok = false;
-        RLP_NONE
+        throw InvalidBlock(RlpDecode)
     }
 }
 
@@ -293,8 +292,7 @@ function rlp_list_items(f : RlpField) -> list(RlpField) =
     if f.is_list then {
         rlp_node_items(f.full)
     } else {
-        rlp_decode_ok = false;
-        [||]
+        throw InvalidBlock(RlpDecode)
     }
 
 /* Total byte length of the first `count` fields' full encodings -- the length
@@ -318,7 +316,6 @@ function rlp_fields_prefix_len(items : list(RlpField), count : int) -> int = {
     total
 }
 
-
 /* Transaction and EIP-7702 authorization signing hashes. Spec definitions
  * materialize the canonical RLP preimage; build definitions can refine this
  * boundary without exposing a generic byte-list hash to common code. The tx
@@ -332,8 +329,7 @@ function rlp_field_int(f : RlpField) -> int = {
     if not_bool(f.is_list) & rlp_uint_item_canonical(f.full, f.content) then {
         rlp_be_int(f.content, 0, list_len(f.content))
     } else {
-        rlp_decode_ok = false;
-        0
+        throw InvalidBlock(RlpDecode)
     }
 }
 function rlp_field_word(f : RlpField) -> word = {
@@ -350,8 +346,7 @@ function rlp_field_uint_word(f : RlpField) -> word = {
     if not_bool(f.is_list) & rlp_uint_item_canonical(f.full, f.content) then {
         rlp_field_word(f)
     } else {
-        rlp_decode_ok = false;
-        sail_zeros(256)
+        throw InvalidBlock(RlpDecode)
     }
 }
 

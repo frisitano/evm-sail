@@ -22,7 +22,7 @@ duplicating instructions elsewhere.
 ## Repo Map
 
 - `sail/evm.sail_project` is the model project file. Use the `evm` module with
-  `EVM_ENTRY=core|guest|runner|witness_probe|bench` and
+  `EVM_ENTRY=core|guest|runner` and
   `EVM_BACKEND=spec|build`.
 - `sail/runner.sail` is the EEST state-test runner entry file selected with
   `EVM_ENTRY=runner`.
@@ -34,18 +34,52 @@ duplicating instructions elsewhere.
   stateless witness traversal. The Yellow Paper Appendix C/D equations are
   kept as documentation on the internal functions; an empty base computes
   TRIE(I) directly.
-- `sail/iface/*.sail` holds the abstract `val` contract layer for the impure
-  host interface (see `proof/extern-boundary.md`); `sail/spec/*.sail` and
-  `sail/build/*.sail` are the backend definitions selected by `EVM_BACKEND`.
+- The impure host interface is an abstract `val` contract layer declared in the
+  module files themselves (`host/io.sail` crypto/oracle, `lib/mpt.sail` trie node
+  refs, `lib/rlp.sail` create_address; see `proof/extern-boundary.md`), with two
+  backend definitions selected by `EVM_BACKEND`: `sail/spec.sail` (pure list-typed
+  reference bodies; `keccak256`/`sha256` stay axiomatic, so spec is proof-only and
+  non-executable) and `sail/build.sail` (the executable path: thin C-FFI bindings
+  that stream Sail lists/structs through the host byte/node channels). The old
+  per-module `sail/iface,build,spec/*.sail` split was consolidated into these.
 - `ffi/` contains native C backends for performance-sensitive host structures:
   memory/calldata/returndata, `state_db.c` for accounts and persistent
   storage cache/update rows, `transient_storage.c`
   for transient storage, code DB, node DB, operand stack, and accelerator shims.
-- `revm-eest/run_eest.py` runs EEST state-test fixtures through the project
-  runner entry.
-- `revm-eest/src/main.rs` is the parallel Rust EEST state-test runner.
-- `zkvm/native-runner/run_fixtures.py` runs blockchain/stateless fixtures that
-  carry `statelessInputBytes`.
+- `harness/run.py` is the SINGLE fixture harness for both executable
+  entries, built ONCE as shared libraries and driven IN-PROCESS via ctypes
+  (`harness/dump_state.py`). Each case is serialized to the SSZ
+  `SszStatelessInput` (`ssz_builder.py`, under the execution-specs venv).
+  - Default (runner, `EVM_ENTRY=runner`, `build_runner_lib.sh` ->
+    `libevmsail_runner.dylib`): cross-fork state-test execution. The runner
+    emits NO byte stream: the harness reads the result C-side from the
+    `evmsail_dump_snapshot` 'G' section -- the per-entry `zkvm_out_gas`
+    register, the post-state root (the dump calls the model's own
+    `compute_state_root`, `--c-preserve`d in the runner build), and any Sail
+    exception that escaped the run (the runner catches nothing; the dump
+    captures `have_exception` + the InvalidBlock BlockError variant +
+    `throw_location`, e.g. `InvalidBlock(WitnessDeficient) @
+    sail/host/base.sail:77`). The root IS the pass criterion. `--dump` prints
+    the model's live post-run state (write-set accounts+storage, stack,
+    memory) from the same snapshot.
+  - `--guest` (`EVM_ENTRY=guest`, `build_lib.sh` -> `libevmsail_guest.dylib`):
+    the Amsterdam stateless full-block validator, gated BYTE-EXACT against the
+    EELS reference. State-test cases are executed through the in-process EELS
+    t8n (ssz_builder guest mode), which builds a fully VALID single-tx block
+    input AND the reference `run_stateless_guest` output bytes; fixtures that
+    already carry `statelessInputBytes`/`statelessOutputBytes` are fed
+    directly. `--spike` swaps the execution vehicle for the REAL RISC-V guest
+    ELF on spike (zkvm/build.sh; baked vector, REBAKE_ONLY per case). This
+    subsumes the old `zkvm/native-runner/run_fixtures*.py` and
+    `zkvm/run_guest_smoke.py` guest runners (deleted).
+  This is the sole fixture runner; the parallel Rust runner was removed. The
+  old `runner_ffi.c` (stdin ssz_src) is deleted, and the driver/test
+  world-wipe lives in `test_utils.c` `evmsail_clear_memory` (the model no
+  longer defines `k_world_reset`). The dedicated `witness_probe` re-root
+  harness was also removed: every stateless account/storage lookup walks the
+  witness trie from the authenticated root (parsing each node on the path), so
+  the runner's full-corpus post-state-root checks already exercise + validate
+  the witness node reader (`lib/mpt.sail`).
 
 ## Current State-Root Model
 
@@ -79,52 +113,75 @@ unrelated files unless that is part of the requested task.
 
 ## Stable EEST Fixtures
 
-Small, checked-in fixture anchors live under `revm-eest/fixtures/`:
+Small, checked-in fixture anchors live under `harness/fixtures/`:
 
-- `revm-eest/fixtures/smoke/`
+- `harness/fixtures/smoke/`
   - `state_root_transfer.json`
   - `state_root_precompile.json`
-- `revm-eest/fixtures/eels/shanghai_push0/`
+- `harness/fixtures/eels/shanghai_push0/`
   - Generated from EELS `tests/shanghai/eip3855_push0`.
   - Expected Sail root run: `10/10` passed, `10/10` state-root matches.
-- `revm-eest/fixtures/eels/cancun_selfdestruct/`
+- `harness/fixtures/eels/cancun_selfdestruct/`
   - Generated from EELS `tests/cancun/eip6780_selfdestruct/test_selfdestruct.py`.
   - Expected Sail root run: `114/114` passed, `114/114` state-root matches.
 
 The `eels/*` directories preserve generated `state_tests/`,
 `blockchain_tests/`, `blockchain_tests_engine/`, and `.meta/` content. The
 generated blockchain fixtures in these two subsets do not carry
-`statelessInputBytes`; use `zkvm/native-runner/run_fixtures.py` only for
-blockchain fixtures that contain those fields.
+`statelessInputBytes`; `run.py --guest` runs embedded
+`statelessInputBytes` blocks directly when a fixture has them, and otherwise
+builds guest inputs from the state-test cases via t8n.
+
+The `smoke/` fixtures are hand-maintained: their tx is signed from the
+canonical EEST secret key (sender `0xa94f...bf0b`) because the SSZ input path
+derives the sender from the recovered public key -- a fixture with an
+unsignable placeholder sender cannot run. Their post `hash` values were
+computed with EELS t8n (`state_test` mode).
 
 ## EEST Commands
 
-Run from `revm-eest/`:
+Run from `harness/`:
 
 ```sh
-rtk python3 run_eest.py fixtures/smoke/state_root_transfer.json fixtures/smoke/state_root_precompile.json --fork Cancun --quiet --timeout 30 --root
-rtk python3 run_eest.py fixtures/eels/shanghai_push0/state_tests/for_shanghai --fork Shanghai --quiet --timeout 30 --root
-rtk python3 run_eest.py fixtures/eels/cancun_selfdestruct/state_tests/for_cancun --fork Cancun --quiet --timeout 30 --root
+rtk python3 run.py fixtures/smoke/state_root_transfer.json fixtures/smoke/state_root_precompile.json --fork Cancun --quiet --timeout 30
+rtk python3 run.py fixtures/eels/shanghai_push0/state_tests/for_shanghai --fork Shanghai --quiet --timeout 30
+rtk python3 run.py fixtures/eels/cancun_selfdestruct/state_tests/for_cancun --fork Cancun --quiet --timeout 30
 ```
 
-Use `--rebuild` when generated C or FFI changes need a fresh runner binary.
+Guest (byte-exact vs the EELS reference; state tests are executed as Amsterdam
+blocks regardless of the fixture's fill fork):
+
+```sh
+rtk python3 run.py --guest fixtures/eels/shanghai_push0/state_tests/for_shanghai --fork Shanghai --quiet
+rtk python3 run.py --guest fixtures/eels/cancun_selfdestruct/state_tests/for_cancun --fork Cancun --quiet
+```
+
+Use `--rebuild` when generated C or FFI changes need a fresh runner/guest
+library.
 
 ## zkVM Guest Smoke Gate
 
-EEST-generated stateless fixtures (Amsterdam blockchain_tests carrying
-`statelessInputBytes`/`statelessOutputBytes`, filled from execution-specs
-`projects/zkevm` @ `02c6c2510916`) live under `zkvm/fixtures/smoke/`. Both
-gates diff the guest output byte-exactly against the reference:
+Same harness, real RISC-V ELF on spike (`--spike`; run one small state-test
+file, each case = rebake + relink + spike boot, so keep it smoke-scale):
 
 ```sh
-rtk python3 zkvm/native-runner/run_fixtures.py --bin zkvm/native-runner/.build/zkvm_native --quiet zkvm/fixtures/smoke
-rtk python3 zkvm/run_guest_smoke.py            # spike guest; full build once, then REBAKE_ONLY per vector
+rtk python3 harness/run.py --guest --spike harness/fixtures/eels/shanghai_push0/state_tests/for_shanghai/shanghai/eip3855_push0/push0/push0_contracts.json --fork Shanghai --quiet
 ```
 
-Expected: 10 pass each. The hand-rolled `zkvm/vectors/fixture_*.ssz`
-(gen_vector.py) are development probes only; their placeholder
-parent_hash/receipts_root/block_hash fields do not validate and they are NOT
-the smoke gate.
+The guest inputs + expected outputs are built per case by the in-process EELS
+t8n (`ssz_builder.py` guest mode) -- there is NO checked-in stateless fixture
+corpus anymore (`zkvm/fixtures/` deleted; fixtures carrying
+`statelessInputBytes`/`statelessOutputBytes` still run directly if pointed at,
+e.g. under `zkvm/.fixtures/`). The spike vehicle pays the full RISC-V model
+build on the first case, then REBAKE_ONLY per case, in an isolated
+per-invocation ZKVM_BUILD dir (concurrent gates sharing `zkvm/build/` race on
+the baked vector/ELF).
+
+Deleted (recover from git history if needed): `zkvm/run_guest_smoke.py` and
+`zkvm/native-runner/run_fixtures*.py` (superseded by run.py --guest),
+`zkvm/vectors/` + `gen_vector.py` (dev probes), `zkvm/ere-guest/` (unbuilt ere
+SDK template), `runtime/derisk_main.c` + `runtime/traptest_main.c` (platform
+bring-up probes). build.sh's `VEC` is required (no default vector).
 
 Full post-Berlin EEST state and EELS/stateless blockchain sweeps require an
 external generated fixture corpus; do not claim the full suite has been rerun
@@ -149,7 +206,7 @@ Current aligned corpora in this worktree were generated from
   - Amsterdam state-test corpus.
   - Generated 2026-07-02 with `fill -m state_test --fork Amsterdam ./tests/`.
   - Fixture generation result: `13917 passed, 6 skipped`.
-  - Rust state runner result: `13917/13917 passed`, `0 timeouts`.
+  - State runner result: `13917/13917 passed`, `0 timeouts` (run.py).
 
 Do not use `zkvm/.fixtures/fixtures/` as aligned proof unless explicitly
 requested. That unpack is older metadata:
@@ -169,8 +226,8 @@ rtk uv run fill --output /private/tmp/evm-sail-eest-selfdestruct-fixtures --clea
 After regeneration, copy the outputs back to:
 
 ```text
-revm-eest/fixtures/eels/shanghai_push0/
-revm-eest/fixtures/eels/cancun_selfdestruct/
+harness/fixtures/eels/shanghai_push0/
+harness/fixtures/eels/cancun_selfdestruct/
 ```
 
 Then rerun the EEST commands above and update this file if the expected counts

@@ -2,31 +2,32 @@
  * Freestanding C runtime for the eth-act zkVM RISC-V standard target.
  *
  * The guest is built -ffreestanding -nostdlib: there is no OS, no libc, and no
- * syscalls.  This file supplies the small slice of the hosted environment that
- * the Sail-generated model, the stock Sail runtime (sail.c), and the vendored
- * mini-gmp need:
+ * syscalls.  This file supplies EXACTLY the slice of the hosted environment the
+ * linked objects reference (audited with nm against every guest object; if a
+ * future model/runtime edit needs more, the link fails loudly -- add it back
+ * from git history):
  *
  *   - a heap allocator (malloc/free/realloc/calloc) over the linker-defined
  *     heap region, with a first-fit free list + coalescing,
- *   - the handful of <string.h>/<ctype.h> routines they call,
- *   - the standardized termination mapping: abort()/assert failure, Sail match
- *     failures, and Sail asserts all halt the machine and report ABNORMAL
- *     termination (non-zero exit) to the host (see standard-termination-
- *     semantics),
+ *   - the mem-copy/compare family + strlen (gcc emits calls to these for
+ *     struct copies even under -ffreestanding) and qsort (ffi/state_db.c BAL
+ *     sorting),
+ *   - the standardized termination mapping: abort()/exit, the Sail failure
+ *     contract (sail_assert / sail_failure / sail_match_failure), and the
+ *     trap-vector handler all halt the machine and report ABNORMAL termination
+ *     (non-zero exit) to the host (see standard-termination-semantics),
  *   - no-op stubs for the parts of the Sail RTS the model references but that a
- *     freestanding guest does not use (setup_rts/cleanup_rts, diagnostic I/O).
+ *     freestanding guest does not use (setup_rts/cleanup_rts), and a
+ *     format-free fprintf routing diagnostics to the HTIF console.
  * =========================================================================== */
 
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include <stdarg.h>
 
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
-#include "ctype.h"
-#include "time.h"
 #include "htif.h"
 
 /* Standardized abnormal-termination exit code (non-zero). A Type-2 verifier can
@@ -82,9 +83,9 @@ __attribute__((noreturn)) void zkvm_trap(uint64_t mcause, uint64_t mepc, uint64_
     htif_exit(ZKVM_ABORT_CODE);
 }
 
-/* ----- <string.h> / <ctype.h> subset --------------------------------------
- * gcc also lowers struct copies / memcpy idioms to calls to these even under
- * -ffreestanding, so they must exist as real symbols. */
+/* ----- <string.h> subset ---------------------------------------------------
+ * gcc lowers struct copies / memcpy idioms to calls to these even under
+ * -ffreestanding, so they must exist as real symbols; strlen backs fprintf. */
 
 void *memcpy(void *dst, const void *src, size_t n)
 {
@@ -148,73 +149,9 @@ size_t strlen(const char *s)
     return (size_t)(p - s);
 }
 
-int strcmp(const char *a, const char *b)
-{
-    while (*a && *a == *b) {
-        a++;
-        b++;
-    }
-    return (int)(unsigned char)*a - (int)(unsigned char)*b;
-}
-
-int strncmp(const char *a, const char *b, size_t n)
-{
-    while (n && *a && *a == *b) {
-        a++;
-        b++;
-        n--;
-    }
-    if (n == 0) {
-        return 0;
-    }
-    return (int)(unsigned char)*a - (int)(unsigned char)*b;
-}
-
-char *strcpy(char *dst, const char *src)
-{
-    char *d = dst;
-    while ((*d++ = *src++)) {
-        ;
-    }
-    return dst;
-}
-
-char *strncpy(char *dst, const char *src, size_t n)
-{
-    char *d = dst;
-    while (n && (*d = *src)) {
-        d++;
-        src++;
-        n--;
-    }
-    while (n--) {
-        *d++ = '\0';
-    }
-    return dst;
-}
-
-char *strchr(const char *s, int c)
-{
-    for (; *s; s++) {
-        if (*s == (char)c) {
-            return (char *)s;
-        }
-    }
-    return (c == 0) ? (char *)s : NULL;
-}
-
-int isdigit(int c)  { return c >= '0' && c <= '9'; }
-int isspace(int c)  { return c == ' ' || (c >= '\t' && c <= '\r'); }
-int isxdigit(int c) { return isdigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
-int isalpha(int c)  { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
-int isupper(int c)  { return c >= 'A' && c <= 'Z'; }
-int islower(int c)  { return c >= 'a' && c <= 'z'; }
-int toupper(int c)  { return islower(c) ? c - 'a' + 'A' : c; }
-int tolower(int c)  { return isupper(c) ? c - 'A' + 'a' : c; }
-
 /* ----- heap allocator -----------------------------------------------------
  * First-fit free list with boundary-tag coalescing over [__heap_start,
- * __heap_end).  mini-gmp and the Sail list/string runtime allocate and free
+ * __heap_end).  The sailfix runtime and the FFI backends allocate and free
  * many short-lived objects during a block run, so reclaiming freed memory
  * (rather than a pure bump allocator) keeps the working set bounded. */
 
@@ -354,21 +291,6 @@ void exit(int code)
     htif_exit(code);
 }
 
-void _exit(int code)
-{
-    htif_exit(code);
-}
-
-/* newlib-style assert backend (in case any TU pulls <assert.h> without NDEBUG) */
-void __assert_func(const char *file, int line, const char *fn, const char *expr)
-{
-    (void)file;
-    (void)line;
-    (void)fn;
-    (void)expr;
-    zkvm_abort("assertion failed");
-}
-
 /* ----- Sail failure backend (sail_failure.h) ------------------------------- */
 
 void sail_match_failure(char *msg)
@@ -397,183 +319,64 @@ int sail_assert(bool result, char *msg)
 void setup_rts(void)   {}
 void cleanup_rts(void) {}
 
-int sail_get_verbosity(void) { return 0; }
-
-time_t time(time_t *tloc)
+/* qsort: heapsort -- in-place, no recursion, no allocation, O(n log n) worst
+ * case, fully deterministic for a total-order comparator (the BAL builder in
+ * ffi/state_db.c sorts consensus-critical row arrays through this). */
+static void qsort_swap(char *a, char *b, size_t sz)
 {
-    if (tloc) {
-        *tloc = 0;
+    while (sz--) {
+        char t = *a;
+        *a++ = *b;
+        *b++ = t;
     }
-    return 0;   /* the guest has no clock */
 }
 
-int atoi(const char *s) { return (int)strtol(s, NULL, 10); }
-
-int       abs(int j)        { return j < 0 ? -j : j; }
-long long llabs(long long j){ return j < 0 ? -j : j; }
-int       rand(void)        { return 0; }   /* deterministic; guest is not random */
-void      srand(unsigned s) { (void)s; }
-
-int clock_gettime(int clk, struct timespec *tp)
+static void qsort_sift(char *base, size_t sz, size_t root, size_t n,
+                       int (*cmp)(const void *, const void *))
 {
-    (void)clk;
-    if (tp) {
-        tp->tv_sec = 0;
-        tp->tv_nsec = 0;
-    }
-    return 0;
-}
-
-char *strcat(char *dst, const char *src)
-{
-    char *d = dst + strlen(dst);
-    while ((*d++ = *src++)) {
-        ;
-    }
-    return dst;
-}
-
-char *strstr(const char *hay, const char *needle)
-{
-    if (!*needle) {
-        return (char *)hay;
-    }
-    for (; *hay; hay++) {
-        const char *h = hay, *n = needle;
-        while (*h && *n && *h == *n) {
-            h++;
-            n++;
+    for (;;) {
+        size_t child = 2 * root + 1;
+        if (child >= n) {
+            return;
         }
-        if (!*n) {
-            return (char *)hay;
+        if (child + 1 < n && cmp(base + child * sz, base + (child + 1) * sz) < 0) {
+            child++;
         }
+        if (cmp(base + root * sz, base + child * sz) >= 0) {
+            return;
+        }
+        qsort_swap(base + root * sz, base + child * sz, sz);
+        root = child;
     }
-    return NULL;
 }
 
-/* GMP entry points absent from mini-gmp. Only Sail's unused diagnostic/format/
- * float helpers reference these; --gc-sections normally drops them. Defined so
- * the link always resolves; if ever reached they fail closed. */
-void mpf_set_default_prec(unsigned long prec) { (void)prec; }
-int  gmp_asprintf(char **pp, const char *fmt, ...) { (void)fmt; if (pp) { *pp = malloc(1); (*pp)[0] = '\0'; } return 0; }
-int  gmp_sscanf(const char *s, const char *fmt, ...) { (void)s; (void)fmt; return 0; }
-int  gmp_printf(const char *fmt, ...) { htif_puts(fmt); return 0; }
-int  gmp_fprintf(FILE *fp, const char *fmt, ...) { (void)fp; htif_puts(fmt); return 0; }
-
-long strtol(const char *s, char **endptr, int base)
+void qsort(void *b, size_t n, size_t sz,
+           int (*cmp)(const void *, const void *))
 {
-    long v = 0;
-    int neg = 0;
-    if (base != 10 && base != 0) {
-        /* only base 10 is needed by the retained surface */
+    char *base = b;
+    if (n < 2 || sz == 0) {
+        return;
     }
-    while (isspace((int)*s)) {
-        s++;
+    for (size_t i = n / 2; i-- > 0;) {
+        qsort_sift(base, sz, i, n, cmp);
     }
-    if (*s == '-') {
-        neg = 1;
-        s++;
-    } else if (*s == '+') {
-        s++;
+    for (size_t i = n - 1; i > 0; i--) {
+        qsort_swap(base, base + i * sz, sz);
+        qsort_sift(base, sz, 0, i, cmp);
     }
-    while (isdigit((int)*s)) {
-        v = v * 10 + (*s - '0');
-        s++;
-    }
-    if (endptr) {
-        *endptr = (char *)s;
-    }
-    return neg ? -v : v;
 }
 
-/* Minimal stdio surface that mini-gmp's OOM/diagnostic paths and any retained
- * Sail diagnostic routines reference.  We never do real file I/O; bytes route
- * to the HTIF console. */
+/* The only stdio the linked objects reference: the sailfix runtime's
+ * diagnostic/error paths call fprintf(stderr, ...). We never do real file I/O
+ * and perform NO conversion-specifier expansion (none is needed on the
+ * executed paths) -- the literal format text routes to the HTIF console. */
 struct __zkvm_FILE { int fd; };
-static struct __zkvm_FILE zkvm_stdout_obj = { 1 };
 static struct __zkvm_FILE zkvm_stderr_obj = { 2 };
-static struct __zkvm_FILE zkvm_stdin_obj  = { 0 };
-FILE *stdout = &zkvm_stdout_obj;
 FILE *stderr = &zkvm_stderr_obj;
-FILE *stdin  = &zkvm_stdin_obj;
 
-int fputc(int c, FILE *stream)
+int fprintf(FILE *s, const char *fmt, ...)
 {
-    (void)stream;
-    htif_putchar((char)c);
-    return c;
-}
-
-int fputs(const char *s, FILE *stream)
-{
-    (void)stream;
-    htif_puts(s);
-    return 0;
-}
-
-int putchar(int c)
-{
-    htif_putchar((char)c);
-    return c;
-}
-
-int puts(const char *s)
-{
-    htif_puts(s);
-    htif_putchar('\n');
-    return 0;
-}
-
-int fflush(FILE *stream) { (void)stream; return 0; }
-
-size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
-{
-    (void)stream;
-    const unsigned char *p = ptr;
-    size_t total = size * nmemb;
-    for (size_t i = 0; i < total; i++) {
-        htif_putchar((char)p[i]);
-    }
-    return nmemb;
-}
-
-/* printf-family stubs.  The model's happy path performs NO printing; these exist
- * only so any retained diagnostic/error-formatting code links and, if ever hit,
- * emits the literal format text rather than faulting.  No conversion-specifier
- * expansion is performed (none is needed on the executed paths). */
-static int emit_str(const char *s)
-{
-    htif_puts(s);
-    return (int)strlen(s);
-}
-
-int printf(const char *fmt, ...)               { return emit_str(fmt); }
-int fprintf(FILE *s, const char *fmt, ...)      { (void)s; return emit_str(fmt); }
-int sprintf(char *str, const char *fmt, ...)    { strcpy(str, fmt); return (int)strlen(str); }
-int snprintf(char *str, size_t n, const char *fmt, ...)
-{
-    strncpy(str, fmt, n);
-    if (n) {
-        str[n - 1] = '\0';
-    }
-    return (int)strlen(str);
-}
-int vsnprintf(char *str, size_t n, const char *fmt, va_list ap)
-{
-    (void)ap;
-    strncpy(str, fmt, n);
-    if (n) {
-        str[n - 1] = '\0';
-    }
-    return (int)strlen(str);
-}
-/* asprintf is used only by Sail's int->string formatting, which the guest does
- * not exercise. Provide a safe allocating stub. */
-int asprintf(char **strp, const char *fmt, ...)
-{
-    size_t len = strlen(fmt);
-    char *buf = malloc(len + 1);
-    strcpy(buf, fmt);
-    *strp = buf;
-    return (int)len;
+    (void)s;
+    htif_puts(fmt);
+    return (int)strlen(fmt);
 }

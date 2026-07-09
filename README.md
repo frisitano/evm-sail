@@ -91,7 +91,7 @@ Three host runtimes compile the same generated C:
 | `sailfix` | inline 512-bit (guest-shared, zkVM) | below GMP |
 | `sail256` | inline 512-bit, host-optimized | **~28–35 Mgas/s** |
 
-*Workload mix (`revm-eest/bench.py`): ~28 Mgas/s on an execution-bound
+*Workload mix: ~28 Mgas/s on an execution-bound
 TSTORE loop, ~35 Mgas/s across the mix, with calls/creates/precompiles well
 above (deep reentrant CALLs ~940, 49KB-initcode CREATE ~170, blake2f ~100).
 A 30–45M-gas mainnet block executes in ~1–1.5s under `sail256` — within ~13×
@@ -129,8 +129,9 @@ ffi/         C backends: memory.c (memory/calldata), transient_storage.c
              (code store + frame descriptors + JUMPDEST bitmaps), trie_node_db.c
              (witness node-db), host_crypto.c + precompiles.c +
              zkvm_accelerators.h (eth-act zkvm-standards crypto)
-revm-eest/   the EEST harness: run_eest.py (drives EVM_ENTRY=runner) + the
-             parallel Rust runner (all cores) + stateless/ (witness-reroot gate)
+harness/   the EEST harness: run.py drives BOTH entries in-process
+             (EVM_ENTRY=runner state tests by post-state root; --guest gates the
+             stateless guest byte-exact vs the EELS reference via in-process t8n)
 zkvm/        RISC-V zkVM guest target (riscv64im, stateless block validation)
   runtime/sailfix     GMP-free fixed-width Sail runtime (guest-shared)
   runtime/sail256     host-optimized variant (sized limbs, Knuth-D division)
@@ -167,18 +168,18 @@ Run the conformance suite against a local
 state-fixtures checkout:
 
 ```sh
-cd revm-eest
-SAIL256=1 python3 run_eest.py --rebuild --fork Cancun <fixtures>/state_tests/cancun
+cd harness
+SAIL256=1 python3 run.py --rebuild --fork Cancun <fixtures>/state_tests/cancun
 
-# or across all cores, with the Rust runner:
-cd ../../revm-eest && cargo build --release
-./target/release/revm-eest --bin ../examples/eest/.runner_bin \
-    --fork Cancun --timeout 60 <fixtures>/state_tests/cancun
+# gate the stateless guest byte-exact against the EELS reference:
+python3 run.py --guest --fork Cancun fixtures/eels/cancun_selfdestruct/state_tests/for_cancun
+python3 run.py --guest --fork Cancun <fixtures>/state_tests/cancun
 ```
 
-`run_eest.py --verbose` prints per-account balance/nonce/storage diffs (the
-debugging loop); `revm-eest` is the bulk measurement tool; `--root`
-additionally computes and checks the post-state MPT root. The crypto
+The pass criterion is the recomputed post-state MPT root (a commitment to the
+full post-state) for the runner, and byte-exact output agreement with the EELS
+reference guest for `--guest`; `--verbose` + `--dump` print diagnostics and the
+model's live post-run state on a failure (the debugging loop). The crypto
 (keccak/secp256k1/bn254/BLS12-381/KZG/modexp/blake2f/P-256) runs through the
 eth-act zkvm-standards accelerator boundary, backed by the industry libraries
 in `zkvm/accel-host` (blst, k256, c-kzg, aurora-engine-modexp, p256).

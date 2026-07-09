@@ -114,7 +114,7 @@ function intrinsic_gas(tx : Transaction) -> gas = {
  * delegation, bump the authority nonce; refund if the authority already existed). */
 function process_auth(au : Authorization) -> unit = {
     let authority = au.authority;
-    let chain_ok = (au.chain_id == 0) | (au.chain_id == unsigned(k_block.chain_id));
+    let chain_ok = (au.chain_id == 0) | (au.chain_id == cc_chain_id());
 
     /* EELS validates sig + chain id from the tuple ALONE before reading the
      * authority's account; a tuple rejected there (e.g. wrong chain id) touches
@@ -164,7 +164,7 @@ function warm_access_list_slots(xs : list(SlotKey)) -> unit =
     match xs {
         [||] => (),
         k :: r => {
-            let _ = k_access_slot(k.address, k.slot);
+            let _ = k_slot_is_warm(k.address, k.slot);
             warm_access_list_slots(r)
         },
     }
@@ -218,7 +218,7 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
     let sender = tx.sender;
     let nonce_before = k_get_nonce(sender);
     let intrinsic = intrinsic_gas(tx);
-    let blob_fee = tx.blob_count * GAS_PER_BLOB * unsigned(k_block.blob_base_fee);
+    let blob_fee = tx.blob_count * GAS_PER_BLOB * blob_base_fee(k_header.excess_blob_gas);
 
     /* Transaction validity: an invalid tx is REJECTED with no state change at all
        (no nonce bump, no gas charge). The upfront-balance test uses the fee CAPS
@@ -252,11 +252,11 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
                 & /* gas covers intrinsic     */
                   floor_ok
                 & /* EIP-7623 floor coverage  */
-                  (unsigned(tx.max_fee) >= unsigned(k_block.base_fee))
+                  (unsigned(tx.max_fee) >= unsigned(k_header.base_fee))
                 & /* >= base fee */
                   ((tx.blob_count == 0) |
                       /* blob fee cap >= price    */
-                      (unsigned(tx.max_blob_fee) >= unsigned(k_block.blob_base_fee)))
+                      (unsigned(tx.max_blob_fee) >= blob_base_fee(k_header.excess_blob_gas)))
                 & blob_ok
                 & (not_bool(tx.is_create) | (dlen <= max_initcode_size()))
                 & /* EIP-3860 */
@@ -276,7 +276,7 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
                 & /* EIP-7702 is Prague+: a type-4 tx is invalid on an earlier fork */
                   (nonce_before < 18446744073709551615)
                 & /* EIP-2681: nonce < 2^64-1 (incrementable) */
-                  (tx.gas_limit <= unsigned(k_block.gas_limit)); /* tx gas <= block gas limit */
+                  (tx.gas_limit <= k_header.gas_limit); /* tx gas <= block gas limit */
 
     struct {
         valid = valid,
@@ -357,6 +357,10 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
 }
 
 function run_call_transaction_frame(tx : Transaction, sender : address, dlen : int) -> unit = {
+    /* EELS reads the recipient account during message setup (get_account for its
+     * code) for every call-transaction, so it is always a state access -- keep it
+     * in the account set (BAL), including a tx sent directly to a precompile. */
+    let _ = load_account(tx.recipient);
     if word_nonzero(tx.value) then {
         k_transfer(sender, tx.recipient, tx.value)
     };
@@ -395,6 +399,10 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
         let (tx_deleg, tx_dtgt) = k_deleg_target(tx.recipient);
         if tx_deleg then {
             let _ = k_access_account(tx_dtgt);
+
+            /* EELS reads get_account(code_address) on the resolved delegate, so
+               the delegate is touched (kept in the BAL account set). */
+            let _ = load_account(tx_dtgt);
             ()
         };
         frame_code_exec(tx.recipient, tx_deleg, tx_dtgt); /* follow a delegation designation */

@@ -51,3 +51,42 @@ struct CallOutcome = {
   gas_left   : gas,
   reverted   : bool
 }
+
+/* ======================================================================== */
+/* BLOCK VALIDATION FAILURES  (the InvalidBlock hierarchy, as data)         */
+/*                                                                          */
+/* Mirrors EELS `InvalidBlock` (execution-specs amsterdam/fork.py           */
+/* state_transition): every `raise InvalidBlock` site maps to one variant.  */
+/* Modeled as a typed enum, NOT a thrown exception -- the same data-flow    */
+/* discipline as ExceptionKind above, keeping validation total. The guest   */
+/* reports the FIRST failure it finds (block_validation_error, main.sail);  */
+/* a valid block yields None. Only the pass/fail boolean is emitted, so the */
+/* reason is diagnostic (and a hook for future structured output).          */
+enum BlockError = {
+    InvalidConfig, /* chain config: wrong fork / inactive activation      */
+    HeaderChainBroken, /* witness ancestor headers not contiguous             */
+    RlpDecode, /* a transaction failed to RLP-decode                  */
+    InvalidSignature, /* a tx signature did not authenticate its sender      */
+    GasUsedExceedsLimit, /* EIP-7778: a tx exceeds the block's remaining gas    */
+    BlobGasLimitExceeded, /* a tx exceeds the block's remaining blob gas         */
+    ExecutionInvalid, /* an invalid tx or a failed block-end system call     */
+    InvalidGasUsed, /* recomputed cumulative gas != header.gas_used        */
+    InvalidBlobGasUsed, /* recomputed blob gas != header.blob_gas_used         */
+    InvalidExcessBlobGas, /* header.excess_blob_gas != expected                  */
+    InvalidStateRoot, /* recomputed post-state root != header.state_root     */
+    InvalidReceiptsRoot, /* recomputed receipts root != header.receipts_root    */
+    InvalidLogsBloom, /* recomputed logs bloom != header.logs_bloom          */
+    InvalidBlockHash, /* recomputed block hash != header.block_hash          */
+    InvalidParentHash, /* header.parent_hash != authenticated parent          */
+    BlockAccessListTooLarge, /* EIP-7928: BAL item count > gas_limit / 2000         */
+    WitnessDeficient, /* a missing/inconsistent proof node (thrown at use)   */
+}
+
+/* The single Sail exception type. Block validation THROWS InvalidBlock(reason)
+ * at the failure point (mirroring EELS `raise InvalidBlock`), and run_one catches
+ * it once -- any failure becomes successful_validation=false. This is exactly the
+ * EELS verify_stateless_new_payload try/except structure. Sail's C backend unwinds
+ * via have_exception return-checks (no longjmp), so it is zkVM-guest safe. */
+union exception = {
+    InvalidBlock : BlockError,
+}

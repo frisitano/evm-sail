@@ -1,0 +1,60 @@
+{
+    "stateRootTransfer::singleLegacyTransfer": {
+        "env": {
+            "currentCoinbase": "0x0000000000000000000000000000000000001003",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x01",
+            "currentGasLimit": "0x100000",
+            "currentBaseFee": "0x00",
+            "currentRandom": "0x00",
+            "currentExcessBlobGas": "0x00",
+            "slotNumber": "0x00"
+        },
+        "pre": {
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+                "balance": "0x64",
+                "nonce": "0x00",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "nonce": "0x00",
+            "gasPrice": "0x00",
+            "gasLimit": [
+                "0x5208"
+            ],
+            "to": "0x0000000000000000000000000000000000001002",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "secretKey": "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "hash": "0x274ba4b7fc5cb99077bb3d9fe5f0bcb58b48b8306db6ac03a8550354160c16b5",
+                    "state": {
+                        "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+                            "balance": "0x63",
+                            "nonce": "0x01"
+                        },
+                        "0x0000000000000000000000000000000000001002": {
+                            "balance": "0x01",
+                            "nonce": "0x00"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

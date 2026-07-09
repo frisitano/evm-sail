@@ -1,295 +1,134 @@
 /* ======================================================================== */
-/* SINGLE-BLOCK / EEST RUNNER                                               */
+/* SINGLE-BLOCK / EEST RUNNER  (SSZ stateless input)                        */
 /*                                                                          */
-/* The native entry point that runs an Ethereum block end to end. A test    */
-/* harness compiles this model ONCE, then feeds it a stream of fixtures at  */
-/* runtime: each case seeds a pre-state, sets the block environment, builds */
-/* one transaction, runs it through process_transaction, and dumps          */
-/* the resulting accounts + storage for an external comparator. The data is */
+/* The native entry point that runs one EEST state-test through the model.  */
+/* A test harness compiles this model ONCE, then feeds it one fixture per   */
+/* invocation as an SSZ SszStatelessInput (the SAME structure the zkVM      */
+/* guest consumes -- see host/block.sail). The runner decodes that input    */
+/* through the shared decoders and runs the transaction(s). The data is     */
 /* INPUT, not generated code -- there is no per-fixture recompilation.      */
 /*                                                                          */
-/* The Ethereum Execution Spec Tests (EEST) driver revm-eest/run_eest.py    */
-/* encodes each fixture into the wire stream, then diffs the ACC/STO/GAS/   */
-/* ROOT lines below against the fixture's expected post-state.              */
+/* Unlike the guest (main.sail), the runner does NOT perform full-block     */
+/* validation (block hash / receipts root / BAL / fork==Amsterdam). A state */
+/* test is pure transaction execution against a pre-state: no block-start   */
+/* system calls, no withdrawals, no block reward. So the runner reuses the  */
+/* fork-agnostic SSZ *decode* path but runs each tx under the fork selected */
+/* by chain_config (k_fork below), which is why it stays cross-fork while   */
+/* the guest's validator is Amsterdam-locked.                               */
 /*                                                                          */
-/* Input contract: the stream is read through ssz_src (host/io.sail), the   */
-/* same input byte source the zkVM guest uses; revm-eest/runner_ffi.c       */
-/* buffers stdin once and serves it by index. Each value is a varint        */
-/* [len : 1 byte][big-endian magnitude : len bytes]; ni() reads one. Stream */
-/* schema (a flat sequence of varints):                                     */
-/*   fork  wantRoot                                                         */
-/*   repeat: 1  <case>            ... then 0 to stop                        */
-/*   <case> = nAcc                                                          */
-/*             { addr nonce balance codeLen <codeBytes> nSto {slot val}* }* */
-/*           number timestamp gasLimit coinbase baseFee prevRandao chainId  */
-/*             blobBaseFee                                                  */
-/*           sender txNonce gasPrice prioFee gasLimit isCreate to value     */
-/*             dataLen <dataBytes>                                          */
-/*           <EIP-2930 access list> <EIP-7702 auth list> <EIP-4844 blobs>   */
+/* Input contract: set_input() hands the model one SszStatelessInput; the   */
+/* pre-state is the authenticated witness (execution_witness state nodes +  */
+/* codes) plus a single DUMMY parent header whose state_root carries the    */
+/* pre-state root -- the clean way to feed parent_state_root() the anchor.  */
 /*                                                                          */
-/* Output contract (one line per record, decimal unless noted): "CASE" per  */
-/* case; "ACC accountHash nonce balance" per account; "STO accountHash slot */
-/* value" per live storage slot; "GAS gasUsed" for the tx; and, when        */
-/* wantRoot is set, "ROOT <hex>" carrying the recomputed post-state root.   */
+/* Output contract: NO byte stream and NO result plumbing in the model. The */
+/* runner only accumulates gas into the shared zkvm_out_gas register; the   */
+/* post-state root is computed C-SIDE by the harness dump calling the       */
+/* model's own compute_state_root (test_utils.c evmsail_dump_snapshot, 'G'  */
+/* section). A thrown InvalidBlock (malformed tx, deficient witness) is NOT */
+/* caught here: it propagates out of main and the harness captures it from  */
+/* the generated have_exception flag, reporting the case as an exception    */
+/* instead of a bogus partial-state root mismatch.                          */
 /* ======================================================================== */
 
-$include <string.sail>
-
-/* Cursor over the private-input byte stream (ssz_src, host/io.sail), the byte
- * source the model reads everywhere; revm-eest/runner_ffi.c serves it from
- * stdin. ni() reads one varint scalar: [len : 1 byte][big-endian magnitude]. */
-register in_pos : int = 0
-function ni() -> int = {
-    let l = unsigned(ssz_src_byte(in_pos));
-    var v : int = 0;
-    foreach (k from 0 to (l - 1)) {
-        v = v * 256 + unsigned(ssz_src_byte(in_pos + 1 + k))
-    };
-    in_pos = in_pos + 1 + l;
-    v
-}
-
-/* one scalar as a 256-bit word */
-function nw() -> word = word_of_int(ni())
-
-/* one scalar as the low-20-byte address */
-function na() -> address = word_to_address(word_of_int(ni()))
-
-/* the next n scalars as raw bytes (code / calldata) */
-function nbytes(n : int) -> list(byte) = {
-    /* prepend then reverse (O(n)); list_append-per-byte was O(n^2) on large code/data */
-    var out : list(byte) = [||];
-    foreach (i from 0 to (n - 1)) {
-        let _ = i;
-        out = get_slice_int(8, ni(), 0) :: out
-    };
-    list_reverse(out)
-}
-
-/* emit the post-state for the external comparator: one
- * "STO accountHash slot value" line per storage row. The harness maps fixture
- * addresses to keccak(address) before comparing. */
-function dump_storage() -> unit = {
-    /* iterate the post-state account union (cache-union-block); every account
-       with storage is in it (native seeds pre-state, CREATE writes the overlay) */
-    let n = unsigned(acct_wset_union_count());
-    foreach (i from 0 to (n - 1)) {
-        let ak = acct_wset_union_hkey(get_slice_int(64, i, 0));
-        /* the post-state union the native root is built from: seeded pre-state
-           cache overlaid with the write-set block base (host/base_native.sail) */
-        let ns = storage_wset_union_rows(ak);
-        foreach (j from 0 to (ns - 1)) {
-            let (s, v) = storage_wset_union_row(ak, j);
-            print_endline(
-                concat_str(
-                    "STO ",
-                    concat_str(
-                        dec_str(unsigned(ak)),
-                        concat_str(" ", concat_str(dec_str(unsigned(s)), concat_str(" ", dec_str(unsigned(v))))),
-                    ),
-                ),
-            )
-        }
-    }
-}
-
-/* one "ACC accountHash nonce balance" line per account in the working set */
-function dump_accounts() -> unit = {
-    let n = unsigned(acct_wset_union_count());
-    foreach (j from 0 to (n - 1)) {
-        let row = acct_wset_union_row(j);
-        print_endline(
-            concat_str(
-                "ACC ",
-                concat_str(
-                    dec_str(unsigned(row.row_hkey)),
-                    concat_str(
-                        " ",
-                        concat_str(dec_str(unsigned(row.row_nonce)), concat_str(" ", dec_str(unsigned(row.row_bal)))),
-                    ),
-                ),
-            ),
-        )
-    }
-}
-function dump_state() -> unit = {
-    dump_accounts();
-    dump_storage()
-}
-
-/* decode and run one fixture: seed pre-state, set the block env, build the
- * single transaction, run process_transaction, and dump the post-state. */
-function run_one() -> unit = {
-    k_world_reset();
-    let nacc = ni();
-    foreach (i from 0 to (nacc - 1)) {
-        let _ = i;
-        let a = na();
-        let nonce = ni();
-        let bal = nw();
-        let clen = ni();
-        let cbytes = nbytes(clen);
-        k_seed_account(a, nonce, bal, cbytes);
-        let nsto = ni();
-        foreach (j from 0 to (nsto - 1)) {
-            let _ = j;
-            let s = nw();
-            let v = nw();
-            k_seed_storage(a, s, v)
-        }
-    };
-    let bnum = nw();
-    let bts = nw();
-    let bgl = nw();
-    let bcb = na();
-    let bbf = nw();
-    let bpr = nw();
-    let bci = nw();
-    let bbbf = nw();
-    let bslot = nw(); /* EIP-7843 SLOTNUM: env slotNumber */
-    k_set_block(
-        struct {
-            number = bnum,
-            timestamp = bts,
-            gas_limit = bgl,
-            coinbase = bcb,
-            base_fee = bbf,
-            prev_randao = bpr,
-            chain_id = bci,
-            blob_base_fee = bbbf,
-            excess_blob_gas = word_of_int(0),
-            slot = bslot,
-        },
-    );
-    let sender = na();
-    let decoded_nonce = ni();
-    let decoded_gas_price = nw();
-    let decoded_priority_fee = nw();
-    let decoded_gas_limit = ni();
-    let decoded_is_create = ni();
-    let decoded_recipient = na();
-    let decoded_value = nw();
-
-    /* Stream the decoded input straight into the owned tx-input buffer (the
-       native decode reads it one scalar-encoded byte at a time). process_transaction
-       then re-stages it in one op from the TxInputSource self-reference below. */
-    let decoded_input_len = ni();
-    txin_begin();
-    foreach (i from 0 to (decoded_input_len - 1)) {
-        let _ = i;
-        txin_byte(get_slice_int(8, ni(), 0))
-    };
-
-    /* EIP-2930 access list: n_addrs addresses, then n_keys (addr, slot) pairs */
-    let access_list_address_count = ni();
-    var decoded_access_list_addresses : list(address) = [||];
-    foreach (i from 0 to (access_list_address_count - 1)) {
-        let _ = i;
-        decoded_access_list_addresses = list_append(decoded_access_list_addresses, [|na()|])
-    };
-    let access_list_slot_count = ni();
-    var decoded_access_list_slots : list(SlotKey) = [||];
-    foreach (i from 0 to (access_list_slot_count - 1)) {
-        let _ = i;
-        let ka = na();
-        let ks = nw();
-        decoded_access_list_slots = list_append(decoded_access_list_slots, [|struct { address = ka, slot = ks }|])
-    };
-    let is_access_list_tx = ni(); /* type-1 (EIP-2930) envelope flag */
-    let is_dynamic_fee_tx = ni(); /* EIP-1559-style fee-market envelope flag */
-    let decoded_blob_count = ni();
-    let decoded_max_fee = nw();
-    let decoded_max_blob_fee = nw();
-    let decoded_max_priority_fee = nw();
-    let decoded_is_set_code = ni(); /* type-4 (set-code) envelope flag */
-
-    /* EIP-7702 authorization list: n_auth tuples (valid_sig, authority, address, nonce, chain_id) */
-    let authorization_count = ni();
-    var decoded_authorizations : list(Authorization) = [||];
-    foreach (i from 0 to (authorization_count - 1)) {
-        let _ = i;
-        let decoded_valid_sig = ni();
-        let decoded_authority = na();
-        let decoded_delegation_address = na();
-        let decoded_authorization_nonce = ni();
-        let decoded_authorization_chain_id = ni();
-        decoded_authorizations = list_append(
-            decoded_authorizations,
-            [|
-                struct {
-                    valid_sig = decoded_valid_sig != 0,
-                    authority = decoded_authority,
-                    address = decoded_delegation_address,
-                    nonce = decoded_authorization_nonce,
-                    chain_id = decoded_authorization_chain_id,
-                },
-            |],
-        )
-    };
-
-    /* EIP-4844 blob section: is_blob flag (type-3 marker), then n 32-byte
-       versioned hashes (decimal words). Mirrors run_eest.py / revm-eest encode(). */
-    let is_blob = ni();
-    let blob_hash_count = ni();
-    var decoded_blob_hashes : list(word) = [||];
-    foreach (i from 0 to (blob_hash_count - 1)) {
-        let _ = i;
-        decoded_blob_hashes = list_append(decoded_blob_hashes, [|nw()|])
-    };
-    let txn : Transaction = struct {
-            tx_type =
-                if decoded_is_set_code != 0 then {
-                    4
+/* ProtocolFork SSZ index (chain_config.active_fork, execution-specs
+ * tuple(ProtocolFork) order) -> the model's fork level (host/state.sail
+ * FORK_*). This is what makes the runner cross-fork: the guest hard-locks to
+ * Amsterdam (index 20) in its validator, but the runner just selects the
+ * execution rules. Indices: Shanghai=14 Cancun=15 Prague=16 Osaka=17
+ * BPO1=18 BPO2=19 Amsterdam=20. */
+function k_fork_from_ssz(idx : int) -> int = {
+    if idx >= 20 then {
+        FORK_AMSTERDAM
+    } /* Amsterdam (20) and beyond */
+    else {
+        if idx >= 17 then {
+            FORK_OSAKA
+        } /* Osaka(17), BPO1(18), BPO2(19) */
+        else {
+            if idx == 16 then {
+                FORK_PRAGUE
+            } else {
+                if idx == 15 then {
+                    FORK_CANCUN
                 } else {
-                    if is_blob != 0 then {
-                        3
+                    if idx == 14 then {
+                        FORK_SHANGHAI
                     } else {
-                        if is_dynamic_fee_tx != 0 then { 2 } else { if is_access_list_tx != 0 then { 1 } else { 0 } }
+                        if idx == 13 then {
+                            FORK_PARIS
+                        } else {
+                            if idx == 10 then {
+                                FORK_LONDON
+                            } else {
+                                if idx == 9 then {
+                                    FORK_BERLIN
+                                } else {
+                                    if idx == 7 then {
+                                        FORK_ISTANBUL
+                                    } else {
+                                        if idx == 5 then {
+                                            FORK_BYZANTIUM
+                                        } else {
+                                            if idx == 1 then { FORK_HOMESTEAD } else { FORK_FRONTIER }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-                },
-            sender = sender,
-            nonce = decoded_nonce,
-            gas_price = decoded_gas_price,
-            priority_fee = decoded_priority_fee,
-            gas_limit = to_gas(decoded_gas_limit),
-            is_create = decoded_is_create != 0,
-            recipient = decoded_recipient,
-            value = decoded_value,
-            input_src = byte_slice(TxInputSource, 0, decoded_input_len),
-            access_list_addresses = decoded_access_list_addresses,
-            access_list_slots = decoded_access_list_slots,
-            is_access_list = is_access_list_tx != 0,
-            is_dynamic_fee = is_dynamic_fee_tx != 0,
-            blob_count = decoded_blob_count,
-            max_fee = decoded_max_fee,
-            max_blob_fee = decoded_max_blob_fee,
-            max_priority_fee = decoded_max_priority_fee,
-            is_set_code = decoded_is_set_code != 0,
-            authorizations = decoded_authorizations,
-            is_blob = is_blob != 0,
-            blob_hashes = decoded_blob_hashes,
-        };
-
-    /* the block env is already seeded (k_set_block above); a state-test case is a
-       single transaction with no withdrawals, so the shared per-tx STF unit
-       (process_transaction) IS the block -- no list-based block wrapper needed. */
-    let r = process_transaction(txn);
-    dump_state();
-    print_endline(concat_str("GAS ", dec_str(r.gas_used)))
-}
-
-/* read the stream header (fork, wantRoot), then run cases until the 0 sentinel */
-function main() -> unit = {
-    k_fork = ni(); /* active fork level: selects the fork-gated gas/opcode rules */
-    let want_root : int = ni(); /* 0 = skip state root (fast), 1 = compute it */
-    var more : int = ni();
-    while more != 0 do {
-        print_endline("CASE");
-        run_one();
-        if want_root != 0 then {
-            /* recomputed world-state root (YP stateRoot) from the seeded case state */
-            print_endline(concat_str("ROOT ", hex_str(unsigned(compute_state_root()))))
-        };
-        more = ni()
+                }
+            }
+        }
     }
 }
+
+/* Cumulative gas of the run, read C-side by the harness dump (test_utils.c
+ * 'G' section). Declared per entry -- main.sail declares the guest's own copy
+ * of the same C symbol; the entries are never compiled together. */
+register zkvm_out_gas : int = 0
+
+/* Decode one SszStatelessInput and run it: select the fork, authenticate the
+ * witness pre-state, decode the header into k_header, run the transaction(s) by
+ * SSZ index, and dump the post-state. A state test carries a single tx and no
+ * withdrawals, so the shared per-tx STF unit (process_transaction) IS the block
+ * -- no block-start system calls / block-end / rewards. */
+function run_one() -> unit = {
+    k_fork = k_fork_from_ssz(cc_fork());
+
+    /* Load witness nodes + codes and anchor the pre-state root, exactly as the
+       guest does. A state test carries a single DUMMY parent header whose
+       state_root is the pre-state root (headers len 1); parent_state_root() reads
+       it, and headers_ok() is vacuously true at n=1. authenticate_parent_state()
+       sets k_n_headers = wit_n_headers() = 1, so BLOCKHASH of the immediate parent
+       resolves from that dummy header and anything deeper fail-closes to 0
+       (base.sail k_blockhash).
+       The world starts empty -- the ctypes harness calls evmsail_clear_memory
+       before each run -- so there is no overlay wipe here. */
+    authenticate_parent_state();
+
+    decode_block_ssz();
+
+    /* Run each tx decoded on demand by its SSZ index -- no materialized block. A
+       malformed tx / bad signature (or a deficient witness during execution)
+       THROWS InvalidBlock, which deliberately propagates uncaught: the harness
+       reads the generated have_exception flag after the run and reports the
+       case as an exception. Gas is accumulated into the shared register per tx
+       so a multi-tx input keeps its progress observable. */
+    let base_fee = k_header.base_fee;
+    let n_txs = pl_n_txs();
+    zkvm_out_gas = 0;
+    var i : int = 0;
+    while i < n_txs do {
+        let r = process_transaction(decode_tx_ssz(i, base_fee));
+        zkvm_out_gas = zkvm_out_gas + r.gas_used;
+        i = i + 1
+    }
+}
+
+/* One SszStatelessInput per invocation: the harness sets the input, runs, then
+ * reads the result C-SIDE (snapshot dump: gas register + compute_state_root +
+ * have_exception) and resets (clear_memory) before the next case. The
+ * recomputed post-state root is the sole pass criterion (a commitment to the
+ * FULL post-state, base + overlay). */
+function main() -> unit = run_one()

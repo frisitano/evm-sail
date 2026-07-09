@@ -4,19 +4,9 @@ variable EVM_ENTRY = core
 evm {
   files
     prelude.sail,
-    iface/oracle.sail,
-    iface/crypto.sail,
-    iface/precompile.sail,
-    iface/stack.sail,
-    iface/memory.sail,
-    iface/code_db.sail,
-    iface/frame_code.sail,
-    iface/state.sail,
-    iface/kernel_state.sail,
-    iface/witness_db.sail,
+    exceptions.sail,
     host/io.sail,
     lib/rlp.sail,
-    exceptions.sail,
     host/state.sail,
     host/kernel.sail,
     host/memory.sail,
@@ -27,32 +17,13 @@ evm {
     evm/interpreter.sail,
     evm/transaction.sail,
     lib/mpt.sail,
+    host/bal.sail,
     lib/consensus_hash.sail,
-    if $EVM_BACKEND == spec then [
-      spec/oracle.sail,
-      spec/precompile.sail,
-      spec/crypto.sail,
-      spec/mpt.sail
-    ]
-    else if $EVM_BACKEND == build then [
-      build/oracle.sail,
-      build/crypto.sail,
-      build/crypto_source.sail,
-      build/precompile.sail,
-      build/stack.sail,
-      build/memory.sail,
-      build/code_db.sail,
-      build/frame_code.sail,
-      build/state.sail,
-      build/kernel_state.sail,
-      build/witness_db.sail,
-      build/mpt.sail
-    ]
+    if $EVM_BACKEND == spec then [spec.sail]
+    else if $EVM_BACKEND == build then [build.sail]
     else error("EVM_BACKEND must be spec or build"),
     if $EVM_ENTRY == core then []
-    else if $EVM_ENTRY == guest then [host/base_witness.sail, lib/ssz_htr.sail, main.sail]
-    else if $EVM_ENTRY == runner then [host/base_native.sail, runner.sail]
-    else if $EVM_ENTRY == witness_probe then [host/base_witness.sail, "../revm-eest/stateless/witness_probe.sail"]
-    else if $EVM_ENTRY == bench then [host/base_native.sail, "../zkvm/zkvm_bench.sail"]
-    else error("EVM_ENTRY must be core, guest, runner, witness_probe, or bench")
+    else if $EVM_ENTRY == guest then [host/base.sail, host/block.sail, lib/ssz_htr.sail, main.sail]
+    else if $EVM_ENTRY == runner then [host/base.sail, host/block.sail, runner.sail]
+    else error("EVM_ENTRY must be core, guest, or runner")
 }

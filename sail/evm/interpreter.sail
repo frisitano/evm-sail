@@ -353,12 +353,22 @@ function run_call(mode : int) -> unit = {
        call to a 7702-delegated target still detects an omitted delegate-code
        proof, matching EELS; an OOG call returned above and never reaches here. */
     if tg_deleg then {
-        note_code_resolved(k_code_key(tg_target))
+        note_code_resolved(k_code_key(tg_target));
+
+        /* EELS reads get_account(code_address) on the resolved delegate, so the
+           delegate is touched (kept in the BAL account set). */
+        let _ = load_account(tg_target)
     };
     if m_max > memory_size then {
         memory_size = m_max
     };
     let child_gas = base_child + stipend;
+
+    /* EELS reads get_account(code_address).code_hash for every call once gas is
+     * charged, before the depth/balance guards -- so the call target is always a
+     * state access (kept in the BAL account set), including precompiles and calls
+     * that then fail the depth/balance guard below. */
+    let _ = load_account(target);
 
     /* call-failure guards (checked AFTER gas is charged): the depth ceiling
        (EIP-150, 1024 frames) and, for a value-bearing CALL/CALLCODE, the

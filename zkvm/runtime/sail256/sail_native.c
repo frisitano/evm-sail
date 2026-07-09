@@ -93,3 +93,10 @@ unit print_endline(const_sail_string str) { fputs(str, stdout); fputc('\n', stdo
 void setup_rts(void)   {}
 void cleanup_rts(void) {}
 int  process_arguments(int argc, char **argv) { (void)argc; (void)argv; return 0; }  /* 0 = ok */
+
+/* Declared in sail.h but only defined in the toolchain's GMP sail.c (not linked
+ * here): right-shift returning 0 when the count >= word width, avoiding C's UB on
+ * over-wide shifts. The generated model references it (e.g. zsszz_addr). Defined
+ * in the runtime so every sail256-linked binary gets it, instead of each app
+ * (test_utils.c) backfilling its own copy. */
+fbits safe_rshift(const fbits x, const fbits n) { return (n >= 64) ? (fbits)0 : (x >> n); }

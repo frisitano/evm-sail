@@ -2,7 +2,7 @@
 /* SHARED CONSENSUS HASHING                                                 */
 /*                                                                          */
 /* Consensus-critical derivations written once, against the abstract hash   */
-/* primitives keccak256 / sha256 / keccak_rlp_payload (iface/crypto.sail).  */
+/* primitives keccak256 / sha256 / keccak_rlp_payload (host/io.sail).       */
 /* Both backends execute exactly this code; only the primitives differ      */
 /* (spec: axioms over materialized lists; build: streamed C host-bytes).    */
 /* Nothing here may call an FFI hook directly.                              */
@@ -69,9 +69,21 @@ function execution_requests_hash() -> hash = {
     let l0 = wreq_start() - dep_start();
     let l1 = creq_start() - wreq_start();
     let l2 = req_end() - creq_start();
-    let d0 : hash = if l0 != 0 then sha256_request_digest(0, witness_slice(dep_start(), l0)) else sail_zeros(256);
-    let d1 : hash = if l1 != 0 then sha256_request_digest(1, witness_slice(wreq_start(), l1)) else sail_zeros(256);
-    let d2 : hash = if l2 != 0 then sha256_request_digest(2, witness_slice(creq_start(), l2)) else sail_zeros(256);
+    let d0 : hash = if l0 != 0 then {
+            sha256_request_digest(0, witness_slice(dep_start(), l0))
+        } else {
+            sail_zeros(256)
+        };
+    let d1 : hash = if l1 != 0 then {
+            sha256_request_digest(1, witness_slice(wreq_start(), l1))
+        } else {
+            sail_zeros(256)
+        };
+    let d2 : hash = if l2 != 0 then {
+            sha256_request_digest(2, witness_slice(creq_start(), l2))
+        } else {
+            sail_zeros(256)
+        };
     let m = (if l0 != 0 then 1 else 0) + (if l1 != 0 then 2 else 0) + (if l2 != 0 then 4 else 0);
     sha256_digests3(get_slice_int(8, m, 0), d0, d1, d2)
 }

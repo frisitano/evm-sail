@@ -12,24 +12,19 @@ semantics wired up.
 ## Result (validated)
 
 ```
-$ ./build.sh run
-[zkvm] evm-sail guest on riscv64im_zicclsm (GMP-free)
-input_size=0
-gas_used=43106
-storage0=42
-withdrawal_balance=500
-coinbase_balance=43106
-trace_len=29
-tx_success=1
-[zkvm] block executed: all fixture facts verified. SUCCESS.
---- spike exit code: 0 ---
+$ python3 ../harness/run.py --guest --spike --fork Shanghai --quiet \
+    ../harness/fixtures/eels/shanghai_push0/state_tests/for_shanghai/shanghai/eip3855_push0/push0/push0_contracts.json
+=== 2/2 passed (spike guest, byte-exact) ===
 ```
 
-`gas_used=43106`, `storage0=42`, `withdrawal_balance=500`, `tx_success=1` match the
-native Sail/C reference exactly — the block (a 1-tx block: `PUSH1 0x2a;
-PUSH1 0x00; SSTORE; STOP`, plus a 500-wei withdrawal) produces identical state and gas on
-the RISC-V guest as in the Sail/C reference. A mismatch is an abnormal termination, so a
-wrong execution cannot exit 0.
+The gate diffs the guest's canonical SSZ `SszStatelessValidationResult` BYTE-EXACT
+against the EELS reference: any EEST state test is executed through the
+in-process EELS t8n (`harness/ssz_builder.py`), which produces a fully VALID
+Amsterdam block input AND the reference guest's expected output bytes over that
+exact input (fixtures already carrying `statelessInputBytes`/
+`statelessOutputBytes` run directly). The same harness drives the native
+in-process build (drop `--spike`), so the RISC-V guest and the native reference
+are held to the identical oracle.
 
 The guest also runs on-guest **keccak + SHA-256 self-checks** before the block, so
 exit 0 additionally proves the C accelerators compute correctly on RISC-V through the
@@ -46,18 +41,17 @@ root and checks it commits to `payload.state_root`, computes
 the canonical `SszStatelessValidationResult` via `write_output`.
 
 ```
-$ ./build.sh run                 # default fixture vector (valid block)
-successful_validation=1          # public output byte 32; public_output_bytes=105
---- spike exit code: 0 ---
-$ VEC=vectors/fixture_block_bad.ssz ./build.sh run   # tampered state_root
-successful_validation=0          # a failed validation is a NORMAL result
+$ VEC=<raw SszStatelessInput file> ./build.sh run
+successful_validation=1          # public output byte 32
 --- spike exit code: 0 ---
 ```
 
-Vectors are produced
-host-side by `gen_vector.py` (`--bad` for the fail path); the SSZ codec,
-witness-MPT walk, and SSZ `hash_tree_root` live in `../sail/{ssz,mpt_witness,
-sha256,ssz_htr}.sail`, while the shared RLP helpers live in `../sail/lib/rlp.sail`.
+A failed validation is a NORMAL result (`successful_validation=0`, exit 0).
+Input vectors are raw `statelessInputBytes` — from EEST-generated fixtures or
+built from any state test by `harness/ssz_builder.py` (in-process EELS t8n);
+`run.py --guest --spike` supplies them per fixture. The stateless
+validator itself is `../sail/main.sail` over the shared decoders/trie/HTR in
+`../sail/host/` and `../sail/lib/`.
 
 ## Conformance to the standard target
 
@@ -98,7 +92,7 @@ No `stdin`/libc IO is used anywhere.
 ### Memory layout + guard regions (`memory-safety-guard-regions` standard)
 
 `runtime/link.ld` is the vendor linker script. Two mandatory guard regions are
-**unmapped** and enforced (validated — see `./build.sh traptest`):
+**unmapped** and enforced:
 
 * **Null-pointer trap [0x0, 0xFFF]** — guest memory starts at `0x80000000`, so the entire
   low range (incl. the first 4 KiB) is unmapped; a null access faults.
@@ -112,16 +106,12 @@ The simulator memory ranges must match (the guard gap is deliberately omitted):
 spike --isa=rv64im --misaligned -m0x80000000:0x10000000,0x90010000:0x00100000 <elf>
 ```
 
-Validated guard enforcement:
-
-```
-$ ./build.sh traptest 0       # null-pointer read at 0x0
-[zkvm] ABNORMAL TERMINATION (trap): load access fault ... mcause=0x5 mtval=0x0
---- spike exit code: 134 ---
-$ ./build.sh traptest 1       # read into the stack guard gap
-[zkvm] ABNORMAL TERMINATION (trap): load access fault ... mtval=0x9000ffc0
---- spike exit code: 134 ---
-```
+Guard enforcement was validated with a dedicated trap-test probe (a guest that
+deliberately reads address 0x0 / the stack guard gap and must terminate
+ABNORMALLY, exit 134). The probe and the HTIF de-risk program were one-time
+platform bring-up tools, since deleted — recover `derisk_main.c` /
+`traptest_main.c` and their `build.sh` targets from git history if the
+platform glue (`start.S` / `link.ld` / `htif.c`) changes.
 
 ### Termination semantics (`standard-termination-semantics` + misaligned-instruction)
 
@@ -163,20 +153,26 @@ termination mapping).
 
 ```
 zkvm/
-  build.sh              driver: derisk | guest | run | traptest [0|1] | clean
-  zkvm_block.sail       Sail guest entry (runs the block; exposes result facts in registers)
+  build.sh              driver: guest | run | clean (VEC = the baked input vector)
   zkvm_io.h             the standard IO header (verbatim from zkvm-standards)
+  zkvm_input.h          guest extern decls injected into the generated model C
+  zkvm_accel_mmio.h     spike MMIO wire protocol (accel_guest.c <-> accel_device.cc)
+  accel-host/           Rust crypto cdylib (the ONE accelerator implementation)
+  accel-device/         spike MMIO device dispatching 1:1 into accel-host
+  native-runner/        host builds: zkvm_native exe + the ctypes libs
+                        (libevmsail_guest / libevmsail_runner) over test_utils.c
   runtime/
     link.ld             vendor linker script (null trap + stack guard regions)
     start.S             machine-mode crt0 + trap vector (platform glue; uses Zicsr)
     htif.c/.h           HTIF console + exit (spike host channel; validation only)
     runtime.c           freestanding libc subset + allocator + termination mapping
     zkvm_io.c           read_input / write_output (io-interface standard)
-    harness.c           drives model_init → zkvm_run → write_output → terminate
-    derisk_main.c       minimal HTIF smoke test
-    traptest_main.c     guard-region enforcement test
+    zkvm_input.c        private-input plumbing (baked vector / ere read_input)
+    harness.c           drives model init → guest main → write_output → terminate
+    accel_guest.c       guest half of the accelerator API (MMIO marshalling)
     freestanding/       minimal hosted-header shims (decouple from newlib)
     sailfix/            GMP-free fixed-width Sail runtime (512-bit int, 256-bit lbits)
+    sail256/            host-optimized GMP-free runtime (native exe + ctypes libs)
 ```
 
 ## Building / running
@@ -185,11 +181,9 @@ Requires `sail` (opam), `riscv64-unknown-elf-gcc`, and `spike` on `PATH`
 (`eval $(opam env --root=$HOME/.opam --switch=sail)` for sail).
 
 ```
-./build.sh run            # build the GMP-free guest and execute the block on spike
-./build.sh guest          # build only (produces build/zkvm_guest.elf)
-./build.sh traptest 0     # validate the null-pointer guard region
-./build.sh traptest 1     # validate the stack guard region
-./build.sh derisk         # HTIF harness smoke test
+python3 ../harness/run.py --guest --spike <state-test.json> --fork F   # the gate
+VEC=<input.ssz> ./build.sh run     # one vector: build the guest, run on spike
+VEC=<input.ssz> ./build.sh guest   # build only (produces build/zkvm_guest.elf)
 ./build.sh clean
 ```
 

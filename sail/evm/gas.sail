@@ -9,21 +9,21 @@
 /*                                                                          */
 /* The cost groups, with their governing specifications:                    */
 /*                                                                          */
-/*   - Static G_* constants: the Yellow Paper Appendix G symbols, as        */
-/*     repriced by EIP-150 (SLOAD/CALL/SELFDESTRUCT), EIP-160 (G_expbyte),  */
-/*     and EIP-2929 (cold/warm).                                            */
-/*   - Memory-expansion gas (YP C_mem): quadratic in the high-water word    */
-/*     count, charged on any addressed touch.                               */
-/*   - EIP-2929 access costs: cold/warm surcharges for account and storage  */
-/*     access (the kernel owns the warm set; the EVM only prices it).       */
-/*   - EIP-2200 / EIP-3529 SSTORE cost and refund, under the EIP-3529       */
-/*     refund cap (applied at tx scope, not here).                          */
+/* - Static G_* constants: the Yellow Paper Appendix G symbols, as          */
+/* repriced by EIP-150 (SLOAD/CALL/SELFDESTRUCT), EIP-160 (G_expbyte),      */
+/* and EIP-2929 (cold/warm).                                                */
+/* - Memory-expansion gas (YP C_mem): quadratic in the high-water word      */
+/* count, charged on any addressed touch.                                   */
+/* - EIP-2929 access costs: cold/warm surcharges for account and storage    */
+/* access (the kernel owns the warm set; the EVM only prices it).           */
+/* - EIP-2200 / EIP-3529 SSTORE cost and refund, under the EIP-3529         */
+/* refund cap (applied at tx scope, not here).                              */
 /*   - Per-opcode dynamic gas: KECCAK256 / *COPY per-word, LOG per-         */
-/*     byte/topic, EXP per-byte, EIP-3860 per-initcode-word.                */
+/* byte/topic, EXP per-byte, EIP-3860 per-initcode-word.                    */
 /*   - Call gas: the EIP-150 all-but-one-64th forwarding cap and the value- */
-/*     transfer stipend.                                                    */
-/*   - Per-precompile gas, including the EIP-2565 / EIP-7883 MODEXP curve   */
-/*     and the EIP-2537 BLS12-381 MSM discount tables.                      */
+/* transfer stipend.                                                        */
+/* - Per-precompile gas, including the EIP-2565 / EIP-7883 MODEXP curve     */
+/* and the EIP-2537 BLS12-381 MSM discount tables.                          */
 /* ======================================================================== */
 
 /* --- EIP-4844/EIP-7918 blob accounting (from excess_blob_gas) ---

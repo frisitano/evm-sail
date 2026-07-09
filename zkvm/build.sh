@@ -4,10 +4,14 @@
 # standard target (riscv64im_zicclsm-unknown-none-elf) and (optionally) run it
 # on spike.
 #
-#   ./build.sh derisk   - build+run the HTIF de-risk program (harness check)
-#   ./build.sh guest    - build the full evm-sail block guest ELF
-#   ./build.sh run       - build the guest and run it on spike
-#   ./build.sh clean     - remove build artifacts
+#   VEC=<input> ./build.sh guest  - build the evm-sail block guest ELF
+#   VEC=<input> ./build.sh run    - build the guest and run it on spike
+#   ./build.sh clean              - remove build artifacts
+#
+# VEC = a raw schema-prefixed SszStatelessInput file, baked into the ELF as
+# the private input. The canonical driver is harness/run.py
+# --guest --spike (it supplies VEC per fixture and REBAKE_ONLY after the
+# first build).
 #
 # Requires: sail (opam), riscv64-unknown-elf-gcc, spike.
 # ===========================================================================
@@ -16,7 +20,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RT="$HERE/runtime"
 # Override for concurrency: two gate runs sharing one build dir race on the
-# baked input vector + relinked ELF (run_guest_smoke.py isolates itself).
+# baked input vector + relinked ELF (run.py --guest --spike isolates itself).
 BUILD="${ZKVM_BUILD:-$HERE/build}"
 ROOT="$(cd "$HERE/.." && pwd)"
 
@@ -68,22 +72,18 @@ build_runtime() {
   "$GCC" "${CFLAGS[@]}" -Wall -Wextra -c "$RT/htif.c"  -o "$BUILD/htif.o"
 }
 
-cmd_derisk() {
-  build_runtime
-  "$GCC" "${CFLAGS[@]}" -Wall -Wextra -c "$RT/derisk_main.c" -o "$BUILD/derisk_main.o"
-  "$GCC" "${CFLAGS[@]}" "${LDFLAGS[@]}" \
-      "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/derisk_main.o" -o "$BUILD/derisk.elf"
-  echo "built $BUILD/derisk.elf"
-  echo "--- spike run ---"
-  "$SPIKE" "${SPIKE_FLAGS[@]}" "$BUILD/derisk.elf"
-}
-
 cmd_guest() {
   local lib; lib="$(sail_lib)"
   build_runtime
   # 0. Embed the schema-prefixed SSZ test vector as the preloaded private input
-  #    (zkvm_input_bytes). A real zkVM host supplies these bytes instead.
-  local vec="${VEC:-$ROOT/zkvm/vectors/fixture_block.ssz}"
+  #    (zkvm_input_bytes). A real zkVM host supplies these bytes instead. The
+  #    canonical driver is harness/run.py --guest --spike, which always
+  #    passes VEC (a raw statelessInputBytes file).
+  local vec="${VEC:-}"
+  if [ -z "$vec" ]; then
+    echo "error: set VEC=<raw SszStatelessInput file> (see run.py --guest --spike)" >&2
+    exit 2
+  fi
   python3 - "$vec" "$BUILD/zkvm_input_data.c" <<'PY'
 import sys
 data = open(sys.argv[1], "rb").read()
@@ -180,7 +180,7 @@ link_guest() {
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
       "$BUILD/host_crypto.o" "$BUILD/precompiles.o" "$BUILD/accel_guest.o" \
       "$BUILD/memory.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
-      "$BUILD/code_db.o" "$BUILD/trie_node_db.o" "$BUILD/returndata.o" \
+      "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/returndata.o" \
       "$BUILD/zkvm_block.o" \
       -o "$BUILD/zkvm_guest.elf"
   echo "built $BUILD/zkvm_guest.elf"
@@ -198,32 +198,15 @@ cmd_run() {
   return $rc
 }
 
-# Guard-region enforcement test: build a program that touches a guard region and
-# run it on spike. Expected: the trap vector reports ABNORMAL termination and a
-# NON-zero exit code (kind 0 = null trap, kind 1 = stack guard).
-cmd_traptest() {
-  local kind="${2:-0}"
-  build_runtime
-  "$GCC" "${CFLAGS[@]}" -Wall -Wextra -c "$RT/runtime.c" -o "$BUILD/runtime.o"
-  "$GCC" "${CFLAGS[@]}" -DZKVM_TRAP_KIND="$kind" \
-      -c "$RT/traptest_main.c" -o "$BUILD/traptest_main.o"
-  "$GCC" "${CFLAGS[@]}" "${LDFLAGS[@]}" \
-      "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/runtime.o" "$BUILD/traptest_main.o" \
-      -o "$BUILD/traptest.elf"
-  echo "--- spike run (trap kind=$kind; expect non-zero exit) ---"
-  set +e
-  "$SPIKE" "${SPIKE_FLAGS[@]}" "$BUILD/traptest.elf"
-  echo "--- spike exit code: $? ---"
-  set -e
-}
-
 cmd_clean() { rm -rf "$BUILD"; echo "cleaned"; }
 
+# The one-time platform bring-up probes (derisk: HTIF smoke; traptest:
+# guard-region enforcement) were deleted once the real guest gate
+# (run.py --guest --spike) covered the platform end-to-end; recover them
+# from git history if the platform glue (start.S / link.ld / htif.c) changes.
 case "${1:-run}" in
-  derisk)   cmd_derisk ;;
   guest)    cmd_guest ;;
   run)      cmd_run ;;
-  traptest) cmd_traptest "$@" ;;
   clean)    cmd_clean ;;
-  *) echo "usage: $0 {derisk|guest|run|traptest [0|1]|clean}"; exit 2 ;;
+  *) echo "usage: $0 {guest|run|clean}"; exit 2 ;;
 esac

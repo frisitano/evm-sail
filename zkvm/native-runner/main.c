@@ -5,9 +5,11 @@
  * decoder strips it). Runs the guest entry main() over those bytes and
  * prints the guest's canonical SSZ output as a single lowercase hex line.
  *
- * Mirrors zkvm/ere-guest/ere_bridge.c's flow:
- *   set_input -> model_init -> main -> flush_output -> model_fini
- * but with a host file/stdout I/O harness instead of the ere SDK.
+ * A thin CLI over the SHARED harness surface in test_utils.c — the exact
+ * same input/ssz_src/output/run_once plumbing the ctypes libs
+ * (libevmsail_guest / libevmsail_runner) use — so there is ONE native I/O
+ * implementation. evmsail_run_once executes the guest on a dedicated
+ * 512 MB-stack thread (deep SSZ-list recursion).
  *
  * If a Sail assertion/exception fires, the GMP-free runtime calls
  * exit(EXIT_FAILURE); the driver treats a nonzero exit / empty output as
@@ -17,25 +19,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "sail.h" /* unit / UNIT */
-
 /* Version banner. Printed on -v / --version / version so the EEST `consume
  * direct` harness can identify this binary (its FixtureConsumerTool matches
  * `detect_binary_pattern = ^evm-sail`). Keep the leading token "evm-sail". */
 #define EVMSAIL_VERSION "evm-sail zkvm stateless guest 0.1.0"
 
-/* model entry points (Sail-generated + sail256 runtime) */
-extern unit zmain(unit);
-extern void model_init(void);
-extern void model_fini(void);
-
-/* zkvm_input.c, compiled -DERE_GUEST */
-extern void evmsail_set_input(const unsigned char *p, unsigned long n);
-extern void evmsail_flush_output(void);
-
-/* native_io.c */
-extern const unsigned char *zkvm_output_buffer(void);
-extern size_t zkvm_output_size(void);
+/* test_utils.c: the shared harness surface (also the ctypes lib ABI) */
+extern void evmsail_lib_init(void);
+extern void evmsail_lib_fini(void);
+extern unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
+                                      const unsigned char **out);
 
 static unsigned char *read_file(const char *path, unsigned long *out_len)
 {
@@ -73,15 +66,12 @@ int main(int argc, char **argv)
     unsigned char *in = read_file(argv[1], &in_len);
     if (!in) return 2;
 
-    evmsail_set_input(in, in_len);
-    model_init();
-    (void)zmain(UNIT);
-    evmsail_flush_output();
-    model_fini();
+    evmsail_lib_init();
+    const unsigned char *out = NULL;
+    unsigned long out_len = evmsail_run_once(in, in_len, &out);
+    evmsail_lib_fini();
 
-    const unsigned char *out = zkvm_output_buffer();
-    size_t out_len = zkvm_output_size();
-    for (size_t i = 0; i < out_len; i++) {
+    for (unsigned long i = 0; i < out_len; i++) {
         printf("%02x", out[i]);
     }
     printf("\n");

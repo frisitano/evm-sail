@@ -5,8 +5,8 @@
 /* computed by ONE witness-native implementation with ONE public entry,     */
 /* trie_root(base_root, updates). It operates over comprehensive witnesses: */
 /* every hash reference that must be resolved is looked up in the witness   */
-/* node database, and any missing node material aborts the computation      */
-/* (k_witness_bad, fail closed). There is no separate from-scratch          */
+/* node database, and any missing node material throws InvalidBlock         */
+/* (WitnessDeficient), surfaced by the harness. There is no from-scratch    */
 /* ("yellow paper") trie build; the Yellow Paper survives as documentation  */
 /* -- Appendix C.1 (hex-prefix) and Appendix D (Eq. 206 TRIE / Eq. 207 n /  */
 /* Eq. 208 c) are cited on the corresponding internal functions, and        */
@@ -15,19 +15,19 @@
 /*                                                                          */
 /* Layers:                                                                  */
 /* (1) trie primitives: nibbles, hex-prefix paths, node RLP composition,    */
-/*     child references with the < 32-byte inline cap.                      */
+/* child references with the < 32-byte inline cap.                          */
 /* (2) the update list: ONE ordered external update type (leaf writes and   */
-/*     leaf deletes over the composed map).                                 */
+/* leaf deletes over the composed map).                                     */
 /* (3) the item stream: the witness walker merges the pre-state trie with   */
-/*     the update list along touched paths only and emits the post-state    */
-/*     map in key order (leaves + untouched-subtree refs; deletes emit      */
-/*     nothing); the trie builder recomposes the stream by recursive        */
-/*     lookahead, canonical by construction. trie_root is the single entry. */
+/* the update list along touched paths only and emits the post-state        */
+/* map in key order (leaves + untouched-subtree refs; deletes emit          */
+/* nothing); the trie builder recomposes the stream by recursive            */
+/* lookahead, canonical by construction. trie_root is the single entry.     */
 /* (4) world state: account/storage update collection and the state root    */
-/*     (keyed by keccak256(address) / keccak256(slot), value                */
-/*     RLP([nonce, balance, storageRoot, codeHash])).                       */
+/* (keyed by keccak256(address) / keccak256(slot), value                    */
+/* RLP([nonce, balance, storageRoot, codeHash])).                           */
 /* (5) lazy witness reads: authenticated Merkle walks resolving accounts    */
-/*     and storage slots from the anchored parent root.                     */
+/* and storage slots from the anchored parent root.                         */
 /*                                                                          */
 /* Design decision (final): post-state roots are computed in BATCH -- one   */
 /* walk + one build over the whole ordered update list -- NOT by per-op     */
@@ -38,6 +38,23 @@
 /* collapse problem while multiplying hashing. Do not migrate this to       */
 /* incremental per-operation insert/delete.                                 */
 /* ======================================================================== */
+
+/* ======================================================================== */
+/* C-BACKED WITNESS NODE DATABASE (ffi/trie_node_db.c)                      */
+/*                                                                          */
+/* keccak(node) -> (offset, len) span into the SSZ witness buffer, an       */
+/* O(1)-amortized hash map (node_db_lookup below materializes the bytes via */
+/* ssz_bytes). Because the key is keccak(node), every walk from an          */
+/* authenticated root is itself a hash-chain proof -- this table plus the   */
+/* anchored parent-root register (k_parent_state_root) is the whole         */
+/* lazy-witness model. nodedb_len(kh) is 0 exactly when the key is absent   */
+/* (witness nodes are never empty). The `c:` extern binds only the C        */
+/* executable; proof targets see bodyless axioms.                           */
+/* ======================================================================== */
+val nodedb_reset = impure { c: "nodedb_reset" } : unit -> unit
+val nodedb_insert = impure { c: "nodedb_insert" } : (hash, bits(64), bits(64)) -> unit
+val nodedb_off = impure { c: "nodedb_off" } : hash -> bits(64)
+val nodedb_len = impure { c: "nodedb_len" } : hash -> bits(64)
 
 /* ======================================================================== */
 /* (1) trie primitives                                                      */
@@ -246,17 +263,17 @@ function extension_node_rlp(key : list(nibble), childref : list(byte)) -> list(b
 function hash_child_ref(hash : list(byte)) -> list(byte) = [|0xa0|] ++ hash
 
 /* leaf child ref (Eq. 208 leaf form): a refinement pair. The spec backend
- * composes rlp([hp(key,leaf), value]) and hashes it (spec/mpt.sail); the build
+ * composes rlp([hp(key,leaf), value]) and hashes it (spec.sail); the build
  * backend frames the compact path and the value -- read from its byte source
  * (the value arena for update leaves, the witness for base leaves) -- in C, so
- * the leaf value byte list never crosses the FFI hash channel (build/mpt.sail). */
+ * the leaf value byte list never crosses the FFI hash channel (build.sail). */
 val leaf_child_ref : (list(nibble), ByteSlice) -> list(byte)
 
 /* An update leaf's RLP value, staged into the trie value arena and referenced
  * by slice so the value list never crosses. account: rlp([nonce, balance,
  * sroot, chash]); storage: rlp_int(value). A refinement pair: spec interns the
  * canonical byte list (arena_intern); build builds the RLP in C from the fields
- * (build/mpt.sail). arena_intern is the write side of the byte-source interface
+ * (build.sail). arena_intern is the write side of the byte-source interface
  * (spec-only axiom): read_byte_slice(arena_intern(l)) = l. */
 val account_leaf_value : (int, word, hash, hash) -> ByteSlice
 val storage_leaf_value : word -> ByteSlice
@@ -265,8 +282,8 @@ val trie_arena_reset : unit -> unit
 
 /* extension child ref (Eq. 208 extension form): a refinement pair. The spec
  * backend composes and hashes rlp([hp(key,ext), childref]) as a byte list
- * (spec/mpt.sail); the build backend assembles it in C from the compact path
- * and the fixed-width child ref (build/mpt.sail). */
+ * (spec.sail); the build backend assembles it in C from the compact path
+ * and the fixed-width child ref (build.sail). */
 val extension_child_ref : (list(nibble), list(byte)) -> list(byte)
 
 function branch_payload_rlp(mask : bits(16), children : list(list(byte))) -> list(byte) = {
@@ -291,9 +308,9 @@ function branch_node_rlp(mask : bits(16), children : list(list(byte))) -> list(b
     rlp_list(branch_payload_rlp(mask, children))
 
 /* branch child ref (Eq. 208 branch form): a refinement pair. The spec backend
- * composes and hashes the 17-item node as a byte list (spec/mpt.sail); the
+ * composes and hashes the 17-item node as a byte list (spec.sail); the
  * build backend assembles it in C from fixed-width child refs so the node byte
- * list never crosses the FFI hash channel (build/mpt.sail). */
+ * list never crosses the FFI hash channel (build.sail). */
 val branch_child_ref : (bits(16), list(list(byte))) -> list(byte)
 
 function trie_empty_ref() -> list(byte) = [|0x80|]
@@ -427,22 +444,22 @@ function patches_outside_prefix(ps : list(TriePatch), prefix : list(nibble)) -> 
 /* (the shape of alloy-trie's HashBuilder / TrieWalker split, in recursive  */
 /* form):                                                                   */
 /*                                                                          */
-/*   witness_items  walks the witnessed pre-state trie along touched paths  */
-/*                  only, merging in the update list, and emits the         */
-/*                  post-state map in key order: live leaves carry full     */
-/*                  keys, untouched subtrees pass through as one ref item   */
+/* witness_items  walks the witnessed pre-state trie along touched paths    */
+/* only, merging in the update list, and emits the                          */
+/* post-state map in key order: live leaves carry full                      */
+/* keys, untouched subtrees pass through as one ref item                    */
 /*                  with their full path prefix. Deletes emit nothing --    */
-/*                  no delete or collapse logic exists anywhere else.       */
-/*   build_group    composes the stream back into a trie by recursive       */
-/*                  lookahead: a node closes exactly where the sorted keys  */
-/*                  diverge, so canonical shape (extension merging, branch  */
-/*                  only when >= 2 children survive) holds by construction  */
-/*                  -- there is no separate collapse pass.                  */
+/* no delete or collapse logic exists anywhere else.                        */
+/* build_group    composes the stream back into a trie by recursive         */
+/* lookahead: a node closes exactly where the sorted keys                   */
+/* diverge, so canonical shape (extension merging, branch                   */
+/* only when >= 2 children survive) holds by construction                   */
+/* -- there is no separate collapse pass.                                   */
 /*                                                                          */
 /* Stateless verification mirrors execution-specs witness_state.py: the     */
 /* node database is keyed by keccak256(node) (C-backed,                     */
 /* ffi/trie_node_db.c) and a node absent from the witness on a needed path  */
-/* is a missing proof that fails closed (k_witness_bad).                    */
+/* is a missing proof that throws InvalidBlock(WitnessDeficient).           */
 /* ======================================================================== */
 
 /* node bytes for keccak `h` from the C node-db, or [] if absent (read straight
@@ -468,11 +485,11 @@ function resolve_child(f : RlpField) -> list(byte) =
             let node = node_db_lookup(bytes_be256(f.content));
 
             /* a 32-byte ref absent from the witness means the proof is deficient:
-               flag the block invalid (valid=false) and end the walk here, rather
-               than aborting -- a missing proof is a NORMAL failure outcome
-               (EIP-8025 optional proofs), not a guest crash. */
+               the block is invalid (EIP-8025 optional proofs) -- throw
+               InvalidBlock, caught once at the top (run_one), so a missing proof
+               is a NORMAL failure outcome, not a guest crash. */
             if list_len(node) == 0 then {
-                k_witness_bad = true
+                throw InvalidBlock(WitnessDeficient)
             };
             node
         } else {
@@ -663,8 +680,7 @@ function item_ref(it : TrieItem, depth : int) -> list(byte) = {
                     0xa0 :: h => if list_len(h) == 32 then {
                         let node = node_db_lookup(bytes_be256(h));
                         if list_len(node) == 0 then {
-                            k_witness_bad = true;
-                            extension_child_ref(suffix, it.subref)
+                            throw InvalidBlock(WitnessDeficient)
                         } else {
                             node_to_ref(merge_ext_node(suffix, node))
                         }
@@ -700,8 +716,7 @@ function item_ref(it : TrieItem, depth : int) -> list(byte) = {
  * for the termination checker: keys are 64 nibbles, callers pass 256. */
 function build_group(items : list(TrieItem), depth : int, fuel : int) -> list(byte) = {
     if fuel <= 0 then {
-        k_witness_bad = true;
-        trie_empty_ref()
+        throw InvalidBlock(WitnessDeficient)
     } else {
         match items {
             [||] => trie_empty_ref(),
@@ -783,10 +798,9 @@ function witness_child_items(
                 let h = bytes_be256(c);
                 let node = node_db_lookup(h);
                 if list_len(node) == 0 then {
-                    /* missing proof on a touched path: fail closed; keep the
-                       blinded ref so the (already invalid) stream stays a trie */
-                    k_witness_bad = true;
-                    [|item_subtree(prefix, field_to_ref(f), false)|]
+                    /* missing proof on a touched path: the block is invalid --
+                       throw InvalidBlock (caught once at run_one) */
+                    throw InvalidBlock(WitnessDeficient)
                 } else {
                     witness_items(node, unsigned(nodedb_off(h)), prefix, updates, fuel)
                 }
@@ -807,8 +821,7 @@ function witness_items(
     list(TrieItem)
 ) = {
     if fuel <= 0 then {
-        k_witness_bad = true;
-        [||]
+        throw InvalidBlock(WitnessDeficient)
     } else {
         if list_len(node) == 0 then {
             patches_live_items(updates)
@@ -830,7 +843,13 @@ function witness_items(
                                ref; an extension's child is always a branch */
                             [|item_subtree(key, field_to_ref(list_nth(items, 1, RLP_NONE)), true)|]
                         } else {
-                            witness_child_items(list_nth(items, 1, RLP_NONE), node_off + rlp_top_item_full_offset(node, 1), key, under, fuel - 1)
+                            witness_child_items(
+                                list_nth(items, 1, RLP_NONE),
+                                node_off + rlp_top_item_full_offset(node, 1),
+                                key,
+                                under,
+                                fuel - 1,
+                            )
                         };
 
                     /* updates diverging inside the extension segment become
@@ -840,8 +859,11 @@ function witness_items(
             } else {
                 if n == 17 then {
                     let branch_value = list_nth(items, 16, RLP_NONE).content;
+
+                    /* a branch value at slot 16 is impossible for 64-nibble hashed
+                       keys (no key is a prefix of another): a malformed witness. */
                     if list_len(branch_value) > 0 then {
-                        k_witness_bad = true
+                        throw InvalidBlock(WitnessDeficient)
                     };
                     var out : list(TrieItem) = [||];
                     foreach (i from 0 to 15) {
@@ -862,7 +884,13 @@ function witness_items(
                                 }
                             } else {
                                 if present then {
-                                    witness_child_items(field, node_off + rlp_top_item_full_offset(node, i), prefix ++ [|nib|], group, fuel - 1)
+                                    witness_child_items(
+                                        field,
+                                        node_off + rlp_top_item_full_offset(node, i),
+                                        prefix ++ [|nib|],
+                                        group,
+                                        fuel - 1,
+                                    )
                                 } else {
                                     /* no base child: the surviving updates are
                                        pure inserts */
@@ -887,8 +915,9 @@ termination_measure witness_child_items(f, f_off, prefix, updates, fuel) = fuel
  * trie_root(base_root, updates): the root of the trie anchored at base_root
  * after applying the ordered update list. This is the ONLY public root
  * computation: witness-native and fail-closed -- the walker resolves every
- * touched hash reference in the witness node-db and any missing node sets
- * k_witness_bad; the builder recomposes the emitted stream canonically.
+ * touched hash reference in the witness node-db and any missing node throws
+ * InvalidBlock(WitnessDeficient); otherwise the builder recomposes the emitted
+ * stream canonically.
  *
  * Theorem-shaped remark: restricted to an empty base
  * (base_root = EMPTY_TRIE_ROOT), the walker is the identity on the live
@@ -905,8 +934,7 @@ function trie_root(base_root : bits(256), updates : list(TriePatch)) -> bits(256
         } else {
             let node = node_db_lookup(base_root);
             if list_len(node) == 0 then {
-                k_witness_bad = true;
-                base_root
+                throw InvalidBlock(WitnessDeficient)
             } else {
                 items_root(witness_items(node, unsigned(nodedb_off(base_root)), [||], updates, 256))
             }
@@ -927,10 +955,9 @@ function trie_root(base_root : bits(256), updates : list(TriePatch)) -> bits(256
 /*                                                                          */
 /* compute_state_root over the post-execution world equals the block's      */
 /* stateRoot exactly when execution is correct -- it authenticates the      */
-/* result. The legitimate per-backend difference is update COLLECTION and   */
-/* the base anchor (host/base_witness.sail: the write set over the          */
-/* authenticated parent root; host/base_native.sail: the full cache/update  */
-/* union over the empty trie) -- both feed the single trie_root.            */
+/* result. Both worlds share one base (host/base.sail): the execution write */
+/* set overlaid on the authenticated parent root (the SSZ witness for the   */
+/* guest, the harness-built alloc MPT for the runner), feeding trie_root.   */
 /* ======================================================================== */
 
 /* Reused account-RLP payload accumulator. account_rlp is invoked once per account
@@ -981,28 +1008,9 @@ function storage_updates_writes_only(ak : bits(256)) -> list(TriePatch) = {
     foreach (j from 0 to (n - 1)) {
         let (es, ev) = storage_wset_dirty_row(ak, j);
         let sk = keccak256_word(es);
+
         /* a dirty row has current != original: a zero current means the slot
          * held a nonzero pre-state value, so it deletes a real MPT leaf */
-        let key = to_nibbles(word_to_bytes32(sk));
-        out = patch_insert_sorted(
-            if word_is_zero(ev) then {
-                patch_delete(key)
-            } else {
-                patch_leaf(key, storage_leaf_value(ev))
-            },
-            out,
-        )
-    };
-    out
-}
-
-/* full live cache-union-block (native fixture base, empty anchor) */
-function storage_updates_union(ak : bits(256)) -> list(TriePatch) = {
-    var out : list(TriePatch) = [||];
-    let n = storage_wset_union_rows(ak);
-    foreach (j from 0 to (n - 1)) {
-        let (es, ev) = storage_wset_union_row(ak, j);
-        let sk = keccak256_word(es);
         let key = to_nibbles(word_to_bytes32(sk));
         out = patch_insert_sorted(
             if word_is_zero(ev) then {
@@ -1034,7 +1042,7 @@ function account_empty(acc : Account) -> bool =
  * it uses the complete cache/update union to build a full empty-base root. */
 val state_updates_map : unit -> list(TriePatch)
 
-/* trie update for one enumerated acctmap row (AcctRow, host/state.sail).
+/* trie update for one enumerated eest_account row (AcctRow, host/state.sail).
  * skip_empty_unbased drops empty accounts with no authenticated base leaf
  * (witness base: there is nothing to delete); otherwise empty accounts
  * become deletes. */
@@ -1077,25 +1085,11 @@ function state_updates_map_updates_only() -> list(TriePatch) = {
     out
 }
 
-/* complete cache-union-block (native fixture base): every post-state account */
-function state_updates_map_union() -> list(TriePatch) = {
-    var out : list(TriePatch) = [||];
-    let n = unsigned(acct_wset_union_count());
-    foreach (j from 0 to (n - 1)) {
-        out = state_updates_account_row(acct_wset_union_row(j), out, false)
-    };
-    out
-}
-
-/* the base anchor of the state trie (defined per entry): the authenticated
- * parent state root (witness base) or EMPTY_TRIE_ROOT (native base). */
-val state_root_anchor : unit -> bits(256)
-
-/* the post-state world root: the single trie entry over the per-backend
- * anchor and update collection. */
+/* the post-state world root: the single trie entry over the authenticated
+ * parent-root anchor (k_parent_state_root) and the execution update collection. */
 function compute_state_root() -> bits(256) = {
     trie_arena_reset();
-    trie_root(state_root_anchor(), state_updates_map())
+    trie_root(k_parent_state_root, state_updates_map())
 }
 
 /* ======================================================================== */
@@ -1212,54 +1206,11 @@ function parent_state_root() -> bits(256) = {
     bytes_be256(list_nth(items, 3, RLP_NONE).content)
 }
 
-/* EIP-8025 (optional proofs): the witness omits an account's storage proof when
- * the block never touches its storage. Such an account has a non-empty committed
- * storage_root whose root node is ABSENT from the witness node-db -- its storage
- * is unchanged, so its post-state storage_root stays the committed value, and
- * any storage read against it is a missing proof. */
-function storage_proof_omitted(sroot : bits(256)) -> bool =
-    (list_len(node_db_lookup(sroot)) == 0) & (sroot != EMPTY_TRIE_ROOT)
-
 /* The stateless resolvers stateless_storage / stateless_account_load (declared in
- * host/state.sail) are BACKEND-SELECTED, not defined here: the witness MPT-walk
- * definitions live in host/base_witness.sail, the native seeded-cache reads in
- * host/base_native.sail (selected per entry in evm.sail_project). They call the
- * trie-walk / node-db helpers above; storage_proof_omitted is the shared helper
- * the witness storage walk uses. */
-
-/* EIP-7928 block-access-list item count over the RLP-encoded BlockAccessList (a
- * ByteList in the payload): rlp([ [address, storage_changes, storage_reads,
- * balance_changes, nonce_changes, code_changes], ... ]). Item count =
- * #accounts + sum over accounts of (#storage_changes + #storage_reads), where
- * storage_changes (RLP item 1) is a list of [slot, changes] pairs and
- * storage_reads (item 2) is a list of slots. EELS
- * validate_block_access_list_gas_limit rejects the block if this exceeds
- * block_gas_limit / BLOCK_ACCESS_LIST_ITEM (2000). */
-function bal_account_items(acc : list(byte)) -> int = {
-    let items = rlp_node_items(acc);
-    let sc = list_nth(items, 1, RLP_NONE);
-    let sr = list_nth(items, 2, RLP_NONE);
-    1 + list_len(rlp_node_items(sc.full)) + list_len(rlp_node_items(sr.full))
-}
-
-function bal_item_count() -> int = {
-    let b = pl_bal_start();
-    let e = payload_end();
-    if b >= e then {
-        0
-    } else {
-        var total : int = 0;
-        var rest : list(RlpField) = rlp_node_items(ssz_bytes(b, e - b));
-        var more : bool = true;
-        while more do {
-            match rest {
-                a :: r => {
-                    total = total + bal_account_items(a.full);
-                    rest = r
-                },
-                [||] => more = false,
-            }
-        };
-        total
-    }
-}
+ * host/state.sail) are defined once in host/base.sail, not here: they call the
+ * trie-walk / node-db helpers above, anchoring at k_parent_state_root. It is one
+ * lazy Merkle walk for both worlds -- over the authenticated SSZ witness for the
+ * guest, over the harness-built alloc MPT for the runner (the node-db and anchor
+ * are populated the same way). EIP-8025 (optional proofs): a committed non-empty
+ * storage_root whose node is ABSENT from the node-db is a required proof the
+ * witness omitted -> fail closed; handled inline in stateless_storage. */

@@ -392,7 +392,7 @@ function execute(op : ast) -> unit = match op {
     BLOBBASEFEE() => {
         /* EIP-7516 */
         charge(G_base);
-        push(k_env(F_BlobBaseFee))
+        push(word_of_int(blob_base_fee(k_header.excess_blob_gas)))
     },
     BLOBHASH() => {
         /* EIP-4844 */
@@ -446,7 +446,7 @@ function execute(op : ast) -> unit = match op {
     SLOAD() => {
         /* EIP-2929: cold (2100) vs warm (100) by the slot's accessed-set bit */
         let s = pop();
-        let warm = k_access_slot(self_addr(), s);
+        let warm = k_slot_is_warm(self_addr(), s);
         charge(sload_cost(warm));
 
         /* read the slot ONLY if the access charge was covered (OOG must touch no
@@ -467,17 +467,24 @@ function execute(op : ast) -> unit = match op {
             } else {
                 let s = pop();
                 let v = pop();
-                let warm = k_access_slot(self_addr(), s); /* kernel: access accounting */
-                let current = k_sload(self_addr(), s); /* kernel: read current      */
-                let original = k_orig(self_addr(), s); /* kernel: tx-original        */
-                let (cost, refund) = sstore_gas(original, current, v, not_bool(warm)); /* USER policy */
-                charge(cost);
-                if refund != 0 then {
-                    k_refund_add(refund)
-                };
-                if current != v then {
-                    k_sstore(self_addr(), s, v)
-                } /* effect ONLY if it changes */
+
+                /* a stack underflow in the pops above exceptionally halts the
+                   frame (pop returns 0 but sets the halt); EELS raises before any
+                   state access, so guard the storage read/write on is_running so
+                   an underflowing SSTORE records no EIP-7928 storage access. */
+                if is_running() then {
+                    let warm = k_slot_is_warm(self_addr(), s); /* kernel: access accounting */
+                    let current = k_sload(self_addr(), s); /* kernel: read current      */
+                    let original = k_sload_orig(self_addr(), s); /* kernel: tx-original        */
+                    let (cost, refund) = sstore_gas(original, current, v, not_bool(warm)); /* USER policy */
+                    charge(cost);
+                    if refund != 0 then {
+                        k_refund_add(refund)
+                    };
+                    if current != v then {
+                        k_sstore(self_addr(), s, v)
+                    } /* effect ONLY if it changes */
+                }
             }
         }
     },
@@ -618,7 +625,8 @@ function execute(op : ast) -> unit = match op {
                 charge(G_cold_account)
             }; /* EIP-2929 */
             if is_running() & word_nonzero(bal) & k_account_is_empty(beneficiary) then {
-                /* new account */
+                /* new account; the beneficiary is always touched via k_transfer's
+                 * unconditional move_ether read below (EELS parity). */
                 charge(G_newaccount)
             };
 

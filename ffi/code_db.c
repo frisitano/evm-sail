@@ -69,6 +69,29 @@ static void code_db_grow(void) {
   free(otab);
 }
 
+/* Reuse-layer / test-harness reset: drop every stored code so a subsequent run
+ * starts with an EMPTY code DB. Content-addressed accumulation is otherwise
+ * safe, but a warm process reusing this DB across fixtures would let a code
+ * blob registered by one fixture satisfy a later negative "code missing" test
+ * (the witness deliberately omits that code, expecting valid=false). The model
+ * never calls this; it exists for the in-process harness (test_utils.c) whose
+ * evmsail_clear_memory wipes state between fixtures. Frees each entry's owned
+ * code/bitmap buffers, keeps the (zeroed) table allocation for reuse. */
+unit code_db_reset(const unit u) {
+  (void)u;
+  for (uint32_t i = 0; i < code_db_cap; i++) {
+    if (code_db[i].used) {
+      free(code_db[i].p);
+      free(code_db[i].bm);
+    }
+  }
+  if (code_db) memset(code_db, 0, (size_t)code_db_cap * sizeof(code_db_ent));
+  code_db_n = 0;
+  code_db_cur = NULL;
+  code_db_skip = 0;
+  return UNIT;
+}
+
 static void code_db_fit(code_db_ent *e, uint32_t need) {
   if (e->cap < need) {
     uint32_t old = e->cap;
@@ -302,6 +325,17 @@ static const code_db_ent *code_db_get(const lbits h) {
 uint64_t code_db_stored_code_length(const lbits h) {
   const code_db_ent *e = code_db_get(h);
   return e ? e->len : 0;
+}
+
+/* EIP-7928 BAL code_changes: raw deployed code bytes for a code hash given as BE
+   64-bit limbs (avoids constructing an lbits). NULL/0 for KECCAK_EMPTY / missing. */
+const uint8_t *code_db_code_by_words(const uint64_t key_be[4], uint64_t *len_out) {
+  *len_out = 0;
+  if (!code_db) return NULL;
+  const code_db_ent *e = code_db_find(key_be);
+  if (!(e->used && e->len)) return NULL;
+  *len_out = e->len;
+  return e->p;
 }
 
 /* EXTCODECOPY: code(hash)[off..off+len) -> memory[dst..), zero-padded */

@@ -10,23 +10,13 @@ sail_smt_cache
 # zkVM RISC-V guest build artifacts
 zkvm/build/
 
-# EEST harness build artifacts
-revm-eest/.runner_bin*
-revm-eest/.rtcache/
-revm-eest/_eest*
-
-# witness-reader coverage harness build artifacts
-revm-eest/stateless/.witness_probe_bin*
-revm-eest/stateless/.rtcache/
-
-# stateless vector-gen venv
-zkvm/.vecgen/
+# harness caches
+harness/.rtcache/
 
 # python
 **/__pycache__/
 
 # Rust runner
-revm-eest/target/
 
 # generated spec HTML (regenerate with: make html)
 docs/evm-sail.html
@@ -39,3 +29,6 @@ docs/*.toc
 
 # canonical zkevm conformance fixtures (tests-zkevm@v0.4.1, ~360MB)
 zkvm/.fixtures/
+
+# native conformance runner build artifacts
+zkvm/native-runner/.build/

@@ -76,8 +76,8 @@ static void emit_kv(const char *label, uint64_t v)
 
 int zkvm_start(void)
 {
-    /* (1) Exercise the private-input interface. The block under test is built
-     * inside the Sail model, so the input is informational here. */
+    /* (1) Exercise the private-input interface. The Sail SSZ decoder reads the
+     * same preloaded region through ssz_src_* (zkvm_input.c). */
     const uint8_t *in_ptr;
     size_t         in_size;
     read_input(&in_ptr, &in_size);
@@ -108,7 +108,7 @@ int zkvm_start(void)
     emit_kv("coinbase_balance", cbbal);
     emit_kv("trace_len", tracelen);
     emit_kv("tx_success", success);
-    /* zkvm_run emitted the canonical SSZ result via write_output; report its size
+    /* zmain emitted the canonical SSZ result via write_output; report its size
      * and successful_validation (byte 32, right after the 32-byte request root). */
     emit_kv("public_output_bytes", (uint64_t)zkvm_output_size());
     if (zkvm_output_size() >= 33)

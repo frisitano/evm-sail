@@ -27,7 +27,7 @@ function k_access_account(a : address) -> bool = {
     };
     prior
 }
-function k_access_slot(a : address, s : word) -> bool = {
+function k_slot_is_warm(a : address, s : word) -> bool = {
     let prior = warm_slot_contains(a, s);
     if not_bool(prior) then {
         warm_slot_insert(a, s);
@@ -41,37 +41,46 @@ function k_access_slot(a : address, s : word) -> bool = {
 
 /* k_sload: the slot's live value = the write-set overlay (this tx's write over
  * committed block writes) when present, else the pre-state resolver
- * stateless_storage. k_orig (EIP-2200 "original"): the slot at tx start = the
+ * stateless_storage. k_sload_orig (EIP-2200 "original"): the slot at tx start = the
  * block base (committed prior txs) when present, else stateless_storage. The
  * overlay is writes-only, so a pure read never mutates it; storage reverts run
  * through the JStor journal.
  *
- * stateless_storage is the only backend-specific storage primitive (declared in
- * host/state.sail, defined per entry: host/base_native.sail = seeded cache k/v
- * read, host/base_witness.sail = authenticated MPT point-get). Everything above
- * it -- the overlay, the read-through, the journal -- is common. */
+ * stateless_storage is the base storage primitive (declared in host/state.sail,
+ * defined in host/base.sail as an authenticated MPT point-get -- one backend for
+ * both the witness and the harness-built alloc trie). Everything above it -- the
+ * overlay, the read-through, the journal -- is common. */
 function k_sload(a : address, s : word) -> word =
+    /* live value = the working set (this tx's write / a committed block write /
+       an already-cached read) when present; otherwise a TRUE base miss: resolve
+       the pre-state once (stateless_storage) and cache it as a read member
+       (storage_wset_cache_read sets was_read = the EIP-7928 read record). Repeat
+       reads then hit the working set, and the merge propagates the read to the
+       block base so a later tx skips the witness walk too. */
     match storage_wset_get(a, s) {
         Some(v) => v,
-        None()  => stateless_storage(a, s),
+        None()  => {
+            let v = stateless_storage(a, s);
+            storage_wset_cache_read(a, s, v);
+            v
+        },
     }
-function k_orig(a : address, s : word) -> word =
+function k_sload_orig(a : address, s : word) -> word =
     match storage_wset_base_get(a, s) {
         Some(v) => v,
         None()  => stateless_storage(a, s),
     }
 
 function k_sstore(a : address, s : word, v : word) -> unit = {
-    let orig = k_orig(a, s);                                    /* EIP-2200 tx-start value */
-    journal_push(JStor(a, s, storage_wset_prior(a, s, orig)));  /* undo -> value before this write */
-    storage_wset_write(a, s, v, orig)                           /* orig adopted on first write this tx */
-    /* NO account leaf refresh: the storage root is derived at compute_root, and
-       the witness account iteration unions storage-changed accounts from the
-       storage write-set (host/base_witness.sail state_updates_map). */
-}
+    let orig = k_sload_orig(a, s); /* EIP-2200 tx-start value */
+    journal_push(JStor(a, s, storage_wset_prior(a, s, orig))); /* undo -> prior value */
 
-/* un-journaled storage read (drivers/examples; same overlay+base view as SLOAD) */
-function k_storage_get(a : address, s : word) -> word = k_sload(a, s)
+    /* orig is adopted on the first write this tx. NO account leaf refresh: the
+       storage root is derived at compute_root, and the witness account iteration
+       unions storage-changed accounts from the storage write-set
+       (host/base.sail state_updates_map). */
+    storage_wset_write(a, s, v, orig)
+}
 
 /* EIP-1153 transient storage (TLOAD/TSTORE): per-tx scratch, discarded at tx end,
  * not part of the state trie. TSTORE journals the prior value for frame revert. */
@@ -151,6 +160,10 @@ function k_emit_burn_log(a : address, v : word) -> unit = {
 /* Move `v` wei from src to dst (the value field of a CALL or a tx). Both
  * balances are journaled; the EVM checks sufficiency before calling. */
 function k_transfer(src : address, dst : address, v : word) -> unit = {
+    /* EELS move_ether reads (touches) both accounts unconditionally -- even a
+     * zero or self transfer -- so both stay in the account set (BAL). */
+    let _ = load_account(src);
+    let _ = load_account(dst);
     if word_is_zero(v) | (src == dst) then {
         ()
     } else {
@@ -213,7 +226,7 @@ function delegation_code(a : address) -> list(byte) = 0xef :: 0x01 :: 0x00 :: ad
  * account as codeless. KECCAK_EMPTY accounts are legitimately codeless. */
 function note_code_resolved(h : hash) -> unit =
     if (h != KECCAK_EMPTY) & (unsigned(code_db_stored_code_length(h)) == 0) then {
-        k_witness_bad = true
+        throw InvalidBlock(WitnessDeficient)
     }
 
 function k_deleg_target(a : address) -> (bool, address) = {
@@ -245,37 +258,23 @@ function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
     code_db_copy_stored_code_to_memory(h, get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
 }
 
-/* --- pre-state seeding (driver / runner; not part of execution) --- */
-
-/* Seed an account from full code bytes (intern them in the code store). */
-function k_seed_account(a : address, nonce : int, bal : word, c : list(byte)) -> unit = {
-    let h : hash = code_hash_and_store(c);
-    account_seed(a, struct { nonce = nonce, balance = bal, code_hash = h, storage_root = EMPTY_TRIE_ROOT })
-}
-
-/* seed an account whose code is already in the store (a stateless witness input
- * span): the codeHash and pre-state storage root are given, no bytes are streamed. */
-function k_seed_account_hashed(a : address, nonce : int, bal : word, sroot : hash, codehash : hash) -> unit =
-    account_seed(a, struct { nonce = nonce, balance = bal, code_hash = codehash, storage_root = sroot })
-function k_seed_storage(a : address, s : word, v : word) -> unit =
-    storage_seed(a, s, v) /* authenticated pre-state/cache material */
-
 /* single-account balance credit/debit (gas fees, the coinbase priority-fee
  * payment, withdrawals); both journal the prior account for frame revert. */
 function k_add_balance(a : address, v : word) -> unit = {
-    if word_is_zero(v) then {
-        ()
-    } else {
-        journal_push(JAcct(a, load_account(a)));
-        store_account(a, { load_account(a) with balance = alu_add(load_account(a).balance, v) })
+    /* EELS modify_state always reads (touches) the account, even for a zero
+     * delta, so it stays in the account set (BAL). Only the write is skipped
+     * at zero -- a zero delta is not a net balance change. */
+    let cur = load_account(a);
+    if not_bool(word_is_zero(v)) then {
+        journal_push(JAcct(a, cur));
+        store_account(a, { cur with balance = alu_add(cur.balance, v) })
     }
 }
 function k_sub_balance(a : address, v : word) -> unit = {
-    if word_is_zero(v) then {
-        ()
-    } else {
-        journal_push(JAcct(a, load_account(a)));
-        store_account(a, { load_account(a) with balance = alu_sub(load_account(a).balance, v) })
+    let cur = load_account(a);
+    if not_bool(word_is_zero(v)) then {
+        journal_push(JAcct(a, cur));
+        store_account(a, { cur with balance = alu_sub(cur.balance, v) })
     }
 }
 
@@ -283,20 +282,19 @@ function k_sub_balance(a : address, v : word) -> unit = {
  * CHAINID, GASLIMIT, PREVRANDAO, BLOBBASEFEE, ORIGIN, GASPRICE) --- */
 function k_env(f : EnvField) -> word = {
     match f {
-        F_Number => k_block.number,
-        F_Timestamp => k_block.timestamp,
-        F_Coinbase => address_to_word(k_block.coinbase),
-        F_BaseFee => k_block.base_fee,
-        F_ChainId => k_block.chain_id,
-        F_GasLimit => k_block.gas_limit,
-        F_PrevRandao => k_block.prev_randao,
-        F_BlobBaseFee => k_block.blob_base_fee,
+        F_Number => word_of_int(k_header.number),
+        F_Timestamp => word_of_int(k_header.timestamp),
+        F_Coinbase => address_to_word(k_header.fee_recipient),
+        F_BaseFee => k_header.base_fee,
+        F_ChainId => word_of_int(cc_chain_id()),
+        F_GasLimit => word_of_int(k_header.gas_limit),
+        F_PrevRandao => k_header.prev_randao,
         F_Origin => address_to_word(k_tx.origin),
         F_GasPrice => k_tx.gas_price,
-        F_SlotNumber => k_block.slot,
+        F_SlotNumber => word_of_int(k_header.slot_number),
     }
 }
-function k_coinbase() -> address = k_block.coinbase
+function k_coinbase() -> address = k_header.fee_recipient
 
 /* BLOCKHASH: hash of one of the 256 most recent ancestor blocks. Base-layer
  * contract (per-entry): the witness backend hashes the authenticated witness
@@ -351,15 +349,15 @@ function k_zero_balance(a : address) -> unit = {
     }
 }
 
-/* delete an account outright: drop it from the acctmap and wipe its storage.
+/* delete an account outright: drop it from the eest_account and wipe its storage.
  * Used by the EIP-6780 tx-end finalization (created AND selfdestructed in the
  * same tx). Unrecorded: the tx-end reduction is host bookkeeping. */
 function k_account_delete(a : address) -> unit = {
-    /* Set the account EMPTY in place (do NOT acctmap_remove it). Removing it would
+    /* Set the account EMPTY in place (do NOT eest_account_remove it). Removing it would
        let a later load_account(a) RE-MATERIALIZE the account from the pre-state witness
        leaf -- wrong for an account CREATEd+SELFDESTRUCTed and then re-CREATEd later
        in the same block (the stale pre-state balance would resurface). Kept empty
-       in the acctmap, a later read sees the deletion, the post-state walk drops it
+       in the eest_account, a later read sees the deletion, the post-state walk drops it
        (account_empty) AND marks it touched (sb_touched) so its pre-state leaf is not
        reused -- subsuming the old k_deleted mechanism. */
     store_account(a, EMPTY_ACCOUNT);
@@ -429,23 +427,14 @@ function k_snapshot() -> unit = {
     journal_push(JCheck())
 }
 
-/* full world wipe between independent blocks/fixtures (driver/test only) */
-function k_world_reset() -> unit = {
-    acctmap_reset();         /* account resolver cache */
-    acct_wset_reset();       /* account write-set overlay (tx + block) */
-    storage_map_reset();     /* native base storage cache */
-    storage_wset_reset();    /* storage write-set overlay (tx + block) */
-    transient_reset();
-    warm_reset();
-    logs_reset();
-    k_refund = 0;
-    selfdestr_reset();
-    created_reset();
-    journal_reset()
-}
+/* The full world wipe between independent blocks/fixtures is a DRIVER/TEST
+ * concern, not EVM semantics, so it lives in the harness (test_utils.c
+ * evmsail_clear_memory) rather than the model. The production guest never needs
+ * it (fresh process, zeroed FFI statics); the in-process ctypes harnesses call
+ * clear_memory between runs. k_world_reset was removed accordingly. */
 
 /* --- tx-lifecycle / driver helpers (system layer, not EVM user space) --- */
-function k_set_block(env : BlockEnv) -> unit = k_block = env
+function k_set_header(h : BlockHeader) -> unit = k_header = h
 function k_set_tx(env : TxEnv) -> unit = k_tx = env
 function k_tx_reset() -> unit = {
     /* per-tx: clear ephemeral state, snapshot tx-original storage */
@@ -474,6 +463,8 @@ function k_commit() -> unit = {
  * none, so this just clears the overlay. The block base is the compute_root
  * cursor (host/base_*.sail storage_updates). */
 function k_tx_merge() -> unit = {
+    /* the merges harvest this tx's EIP-7928 changes/reads from the overlays
+       (tagged with the ambient bal_set_index) before clearing them. */
     storage_wset_merge();
     acct_wset_merge()
 }

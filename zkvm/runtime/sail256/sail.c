@@ -388,6 +388,13 @@ void sail_signed(sail_int *rop, const lbits op) {
 /* ===================== strings / assert ================================ */
 void create_sail_string(sail_string *str) { char *s = (char *)malloc(1); s[0] = 0; *str = s; }
 void kill_sail_string(sail_string *str) { free((void *)*str); }
+/* Needed by Sail's exception codegen (throw records its source location as a
+ * string). Standard RTS semantics: realloc-and-copy into *str. */
+void copy_sail_string(sail_string *str1, const_sail_string str2) {
+    size_t len = strlen(str2);
+    *str1 = (char *)realloc((void *)*str1, len + 1);
+    memcpy(*str1, str2, len + 1);
+}
 
 /* sail -c -O emits RECREATE calls (reuse-an-allocation hint; for inline
  * fixed-width values it is just re-initialization) */

@@ -90,6 +90,48 @@ function rlp_nonce(nonce : int) -> list(byte) =
         }
     }
 
+/* ---- Crypto core (spec backend: abstract axioms; build backend: the C crypto
+ * sources via build.sail; the vals below stay
+ * bodyless on the proof targets). keccak256 and sha256 are the axiomatic hash
+ * core; keccak_rlp_payload refines keccak256(domain ++ rlp_list_prefix(len) ++
+ * payload), streamed part-by-part by build. All shared consensus hashing
+ * (lib/consensus_hash.sail) is written against these three. The Witness/Memory/
+ * TxInput/ActiveCode source of a ByteSlice denotes an abstract byte sequence:
+ * bytes_keccak(s) = keccak256(read_byte_slice(s)), and the prefixed SHA-256
+ * digest = sha256(type_byte :: bytes). ---- */
+val keccak256 : list(byte) -> bits(256)
+val sha256 : list(byte) -> bits(256)
+val keccak_rlp_payload : (list(byte), list(byte)) -> bits(256)
+
+val bytes_keccak : ByteSlice -> bits(256)
+val bytes_sha256_prefixed : (byte, ByteSlice) -> bits(256)
+
+val keccak256_word : word -> bits(256)
+val keccak256_address : address -> bits(256)
+
+/* SSZ merkle parent: SHA-256(left ++ right) over two 32-byte chunks. */
+val sha256_pair : (bits(256), bits(256)) -> bits(256)
+
+/* SHA-256 of the concatenation of the present 32-byte digests (mask bits 0..2
+ * select d0,d1,d2, concatenated in order); the EIP-7685 execution-requests
+ * commitment. Build concatenates + hashes C-side, so no payload list is
+ * streamed. Refines sha256 of the masked-and-concatenated word bytes. */
+val sha256_digests3 : (bits(8), bits(256), bits(256), bits(256)) -> bits(256)
+
+/* Signature / authentication precompiles. Spec uses the mathematical precompile
+ * input byte strings; build may use direct staged or native accelerator calls. */
+val secp256k1_verify_precompile : (bits(256), word, word, bits(256), bits(256)) -> bool
+val ecrecover_precompile : (bits(256), int, word, word) -> (bool, address)
+
+/* Run a precompile over a concrete input byte source (a memory range or the
+ * top-level tx data). The gas rules inspect the same source bytes directly
+ * before this is called; build may stage/snapshot the input and write successful
+ * output straight into pending returndata. Canonical meaning
+ * run_precompile(id, read_byte_slice(source)) -- the spec backend's list-typed
+ * executor axiom (spec.sail). */
+val run_precompile_memory_input : (int, int, int) -> bool
+val run_precompile_tx_input : int -> bool
+
 /* SHA-256 self-check against the standard "" and "abc" reference vectors. */
 val sha256_selfcheck : unit -> unit
 
@@ -123,9 +165,22 @@ val code_hash_and_store : list(byte) -> hash
 /* Domain operations whose spec definitions may materialize canonical bytes,
  * while build definitions may stream or hash from host byte sources. */
 val execution_requests_hash : unit -> hash
-val block_header_hash : (BlockHeader, hash, hash, hash, hash) -> hash
+val block_header_hash : (hash, hash, hash, hash) -> hash
 
 /* ===================== (3) STATELESS SSZ INPUT ========================= */
+
+/* Private-input oracle + guest output trace (spec backend: abstract axioms;
+ * build backend: build.sail over ffi). All input reads are consistent
+ * views over one bounded byte vector -- the little-/big-endian bulk readers are
+ * derived from the same bytes. emit_out appends exactly one byte to the guest
+ * public-output trace; only guest entries call it, core specs leave it abstract. */
+val emit_out : bits(8) -> unit
+val ssz_src_len : unit -> bits(64)
+val ssz_src_byte : int -> bits(8)
+
+/* bulk readers: n (<=8) bytes from the input in LE / BE order. */
+val ssz_src_le : (int, int) -> bits(64)
+val ssz_src_be : (int, int) -> bits(64)
 
 function ib(i : int) -> int = unsigned(ssz_src_byte(i))
 

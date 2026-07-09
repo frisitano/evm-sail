@@ -10,26 +10,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Account resolver cache: authenticated pre-state / read-through leaves, the
-   base below the acct_wset overlay. Execution mutations go to acct_wset. */
-unit acctmap_reset(const unit u);
-bool acctmap_present(const lbits a);
-unit acctmap_mark_base_exists(const lbits a);
-unit acctmap_seed(const lbits a, uint64_t nonce,
-                  const lbits bal, const lbits sroot, const lbits chash);
-uint64_t acctmap_nonce(const lbits a);
-void acctmap_bal(lbits *rop, const lbits a);
-void acctmap_sroot(lbits *rop, const lbits a);
-void acctmap_chash(lbits *rop, const lbits a);
-
-/* Native base storage cache (seeded pre-state k/v; host/base_native.sail's
-   stateless_storage reads it). The live working set is the write-set overlay. */
-unit storage_map_reset(const unit u);
-unit storage_map_seed(const lbits a, const lbits s, const lbits v);
-unit storage_map_wipe_addr(const lbits a);
-bool storage_cache_present(const lbits a, const lbits s);
-void storage_cache_load(lbits *rop, const lbits a, const lbits s);
-
 /* write-set storage overlay (stage 1: tx overlay + block base) */
 unit storage_wset_reset(const unit u);
 unit storage_wset_tx_clear(const unit u);
@@ -39,6 +19,7 @@ void storage_wset_load(lbits *rop, const lbits a, const lbits s);
 bool storage_wset_base_present(const lbits a, const lbits s);
 void storage_wset_base_load(lbits *rop, const lbits a, const lbits s);
 unit storage_wset_touch(const lbits a, const lbits s);
+unit storage_wset_cache_read(const lbits a, const lbits s, const lbits v);
 void storage_wset_prior(lbits *rop, const lbits a, const lbits s, const lbits orig);
 unit storage_wset_write(const lbits a, const lbits s, const lbits v, const lbits orig);
 unit storage_wset_restore(const lbits a, const lbits s, const lbits prior);
@@ -70,6 +51,9 @@ unit acct_wset_write(const lbits a, uint64_t nonce,
                      const lbits bal, const lbits sroot, const lbits chash);
 unit acct_wset_restore(const lbits a, uint64_t nonce,
                        const lbits bal, const lbits sroot, const lbits chash);
+unit acct_wset_seed_read(const lbits a, uint64_t nonce,
+                         const lbits bal, const lbits sroot, const lbits chash);
+unit acct_wset_mark_base_exists(const lbits a);
 
 /* compute_root enumeration over acct_wset_block: witness = dirty rows, native =
    cache-union-block rows. Fields mirror AcctRow (host/state.sail). */
@@ -87,5 +71,12 @@ void acct_wset_union_bal(lbits *rop, uint64_t i);
 void acct_wset_union_sroot(lbits *rop, uint64_t i);
 void acct_wset_union_chash(lbits *rop, uint64_t i);
 bool acct_wset_union_base_exists(uint64_t i);
+
+/* EIP-7928 block access list, recomputed from execution. The overlay merges
+   harvest the changes/reads (keyed by keccak(address), tagged with bal_set_index);
+   bal_recompute_hash returns keccak(rlp(bal)) for the header commitment. */
+unit bal_reset(const unit u);
+unit bal_set_index(uint64_t n);
+void bal_recompute_hash(lbits *rop, const unit u);
 
 #endif

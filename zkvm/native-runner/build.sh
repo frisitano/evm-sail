@@ -3,16 +3,14 @@
 # Build a NATIVE (host, not RISC-V) conformance runner for the evm-sail zkVM
 # stateless block guest (sail/evm.sail_project evm, EVM_ENTRY=guest -> main).
 #
-# This mirrors:
-#   - the EEST sail256 native build in revm-eest/run_eest.py (accel-host cdylib,
-#     GMP-free sail256 runtime, explicit host crypto/precompile/backends, and
-#     big main-thread stack), and
-#   - the guest sail-compile flags in zkvm/build.sh (--c-no-main, --c-preserve
-#     zkvm_run, --c-include zkvm_input.h).
+# This mirrors the guest sail-compile flags in zkvm/build.sh (--c-no-main,
+# --c-preserve main, --c-include zkvm_input.h) with the host-optimized sail256
+# runtime and the directly-linked Rust accel-host cdylib.
 #
-# It compiles zkvm/runtime/zkvm_input.c with -DERE_GUEST so the SSZ input is
-# supplied at runtime (evmsail_set_input) and output is buffered for a single
-# write_output (provided here natively by native_io.c — NOT the spike HTIF I/O).
+# I/O + run harness = test_utils.c, the ONE shared native surface (input
+# buffer + ssz_src, emit_out sink, large-stack run_once, clear_memory) also
+# linked by the ctypes libs. The real guests' I/O (zkvm_input.c baked/ere,
+# zkvm_io.c HTIF) is never linked into host builds.
 #
 # Idempotent: rebuilds the accel-host cdylib only if its library is missing.
 #
@@ -40,7 +38,7 @@ if [ ! -f "$SAIL_LIB/sail.h" ]; then
   exit 1
 fi
 
-# sail256: GMP-free fixed-width Sail runtime (matches run_eest.py SAIL256 path).
+# sail256: GMP-free fixed-width Sail runtime, host-optimized (SF_RUNTIME overrides).
 SF="${SF_RUNTIME:-$ROOT/zkvm/runtime/sail256}"
 RT="$ROOT/zkvm/runtime"
 ZKVM="$ROOT/zkvm"          # zkvm_input.h / zkvm_io.h live here
@@ -75,7 +73,12 @@ done
 
 # --- 3. generate guest C (no main, preserve entry symbol) -------------------
 #   run from repo root so the project files resolve their Sail sources.
-( cd "$ROOT" && "$SAIL" -c -O --c-no-main --c-no-rts --c-preserve main \
+#   EXTRA_PRESERVE (space-separated Sail names) keeps otherwise-DCE'd functions
+#   externally linkable (none needed today; build_runner_lib.sh preserves
+#   compute_state_root via its own flag).
+PRESERVE_FLAGS=(--c-preserve main)
+for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
+( cd "$ROOT" && "$SAIL" -c -O --c-no-main --c-no-rts "${PRESERVE_FLAGS[@]}" \
     --c-include zkvm_input.h \
     sail/evm.sail_project evm \
     --variable EVM_BACKEND=build \
@@ -84,19 +87,22 @@ done
 
 # NOTE: the toolchain's sail.h (-I"$SAIL_LIB") #includes <gmp.h>. The GMP-free
 # sail256 runtime ships its own GMP-free sail.h, so -I"$SF" MUST precede
-# -I"$SAIL_LIB" in every unit that includes sail.h (exactly like run_eest.py's
-# `-I{sfdir} -I{lib}` ordering).
+# -I"$SAIL_LIB" in every unit that includes sail.h.
 
 # --- 4. compile generated model --------------------------------------------
 #   -I zkvm/runtime so the generated C finds the injected zkvm_input.h.
 "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
     -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
 
-# --- 5. runtime input hook (-DERE_GUEST) + native IO + main -----------------
-"$CC" "${CFLAGS[@]}" -DERE_GUEST -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
-    -c "$RT/zkvm_input.c" -o "$BUILD/zkvm_input.o"
-"$CC" "${CFLAGS[@]}" -c "$HERE/native_io.c" -o "$BUILD/native_io.o"
-"$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -c "$HERE/main.c" -o "$BUILD/main.o"
+# --- 5. shared harness I/O + CLI main ---------------------------------------
+#   test_utils.c is the ONE native I/O + run_once surface (input buffer,
+#   ssz_src accessors, emit_out sink, large-stack run, clear_memory) shared by
+#   this exe and the ctypes libs (build_lib.sh / build_runner_lib.sh). The real
+#   guest keeps its own I/O in zkvm_input.c / zkvm_io.c (baked vector, HTIF) --
+#   never linked here.
+"$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
+    -c "$HERE/test_utils.c" -o "$BUILD/test_utils.o"
+"$CC" "${CFLAGS[@]}" -c "$HERE/main.c" -o "$BUILD/main.o"
 
 # --- 6. C host backends + direct host crypto/precompile adapters ------------
 HOST_OBJS=()
@@ -109,7 +115,7 @@ done
 # --- 7. link ----------------------------------------------------------------
 OUT="$BUILD/zkvm_native"
 LINK_CMD=("$CC" "${CFLAGS[@]}"
-    "$BUILD/zkvm_block.o" "$BUILD/zkvm_input.o" "$BUILD/native_io.o" "$BUILD/main.o"
+    "$BUILD/zkvm_block.o" "$BUILD/test_utils.o" "$BUILD/main.o"
     "${HOST_OBJS[@]}" "${SF_OBJS[@]}"
     "${ACCEL_FLAGS[@]}" "${STACK_FLAGS[@]}"
     -o "$OUT")
