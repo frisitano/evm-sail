@@ -1,19 +1,21 @@
-/* JEntry <-> C journal glue: the definitions of the Sail journal boundary
- * externs `journal_push` / `journal_pop` (sail/host/state.sail).
+/* Generated-type glue: the ONE hand-written C file that handles generated
+ * Sail types, compiled per build against that build's model header
+ * (EVMSAIL_MODEL_H, e.g. "zkvm_runner.h" / "zkvm_block.h") so it always sees
+ * the exact generated layout -- never a hand-mirrored one. Two boundaries:
  *
- * This is the ONE hand-written C file that handles a generated Sail type:
- * `struct zJEntry` from the generated model header (EVMSAIL_MODEL_H, e.g.
- * "zkvm_runner.h" / "zkvm_block.h"). It is compiled per build with -I into
- * that build's directory, so it always sees the exact generated layout --
- * never a hand-mirrored one. Entry storage stays in the scalar journal rows
- * (kernel_state.c); this file only (en/de)codes.
+ * (1) journal_push / journal_pop (sail/host/state.sail): whole JEntry union
+ * values cross; entry storage stays in the scalar journal rows
+ * (kernel_state.c), this file only (en/de)codes. Contract: LIFO --
+ * journal_pop after journal_push(e) yields e; pop on an empty journal yields
+ * JCheck without popping anything.
  *
- * Contract (sail/host/state.sail): the journal is LIFO -- journal_pop after
- * journal_push(e) yields e; pop on an empty journal yields JCheck without
- * popping anything.
+ * (2) storage_tx_row / storage_block_row: per-layer StorageRow views over
+ * state_db.c's row tables (storage_row_probe); the layer-precedence
+ * semantics live in Sail, not here.
  */
 #include EVMSAIL_MODEL_H
 #include "kernel_state.h"
+#include "state_db.h"
 
 /* C journal row tags (kernel_state.c jrn enum; C-internal -- the Sail side
  * no longer sees tags). */
@@ -122,4 +124,35 @@ void journal_pop(struct zJEntry *out, unit u) {
     break;
   }
   journal_drop_top(UNIT);
+}
+
+/* per-layer storage row views: probe state_db's layer table and build the
+ * StorageRow union (RowAbsent / RowRead(current) / RowWritten(current,
+ * original)); read rows carry one value (current == original). */
+static void storage_row_out(struct zStorageRow *out, uint64_t layer,
+                            const lbits a, const lbits s) {
+  lbits cur, orig;
+  switch (storage_row_probe(layer, a, s, &cur, &orig)) {
+  case 2:
+    out->kind = Kind_zRowWritten;
+    out->variants.zRowWritten.ztup0 = cur;
+    out->variants.zRowWritten.ztup1 = orig;
+    break;
+  case 1:
+    out->kind = Kind_zRowRead;
+    out->variants.zRowRead = cur;
+    break;
+  default:
+    out->kind = Kind_zRowAbsent;
+    out->variants.zRowAbsent = UNIT;
+    break;
+  }
+}
+
+void storage_tx_row(struct zStorageRow *out, const lbits a, const lbits s) {
+  storage_row_out(out, 0, a, s);
+}
+
+void storage_block_row(struct zStorageRow *out, const lbits a, const lbits s) {
+  storage_row_out(out, 1, a, s);
 }

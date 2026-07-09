@@ -14,11 +14,10 @@
 unit storage_wset_reset(const unit u);
 unit storage_wset_tx_clear(const unit u);
 unit storage_wset_merge(const unit u);
-bool storage_wset_present(const lbits a, const lbits s);
-void storage_wset_load(lbits *rop, const lbits a, const lbits s);
-bool storage_wset_base_present(const lbits a, const lbits s);
-void storage_wset_base_load(lbits *rop, const lbits a, const lbits s);
-unit storage_wset_touch(const lbits a, const lbits s);
+/* per-layer row probe (layer 0 = tx overlay, 1 = block base) for the Sail
+   StorageRow glue (journal_glue.c): 0 = absent, 1 = read, 2 = written */
+uint64_t storage_row_probe(uint64_t layer, const lbits a, const lbits s,
+                           lbits *cur, lbits *orig);
 unit storage_wset_cache_read(const lbits a, const lbits s, const lbits v);
 void storage_wset_prior(lbits *rop, const lbits a, const lbits s, const lbits orig);
 unit storage_wset_write(const lbits a, const lbits s, const lbits v, const lbits orig);

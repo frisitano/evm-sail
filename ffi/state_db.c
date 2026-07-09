@@ -308,80 +308,30 @@ unit storage_wset_merge(const unit u) {
   return UNIT;
 }
 
-/* --- reads (over tx overlay then block base; a miss => resolve+cache) ---
-   A row carries a live value if it was WRITTEN (current = the write) or READ
-   (was_read: current = the resolved base cached by storage_wset_cache_read).
-   Live precedence: this tx's write > a committed block write > this tx's cached
-   read > a prior tx's cached read. `written` outranks `was_read` because a write
-   supersedes the base a read cached. A true miss (no row anywhere) => the caller
-   resolves stateless_storage and caches it (storage_wset_cache_read).
-
-   present() answers hit-vs-miss (a stored 0 is a hit, distinct from an absent
-   slot: a slot cleared to 0 must NOT re-resolve the base); load() then returns the
-   value. Two calls, but storage_secure_key memoizes the slot keccak, so the pair
-   costs one keccak + a second cheap hashtable get -- no need for a stateful
-   found-flag to fuse them. */
-
-/* present == the working set already holds a value (written or cached-read) */
-bool storage_wset_present(const lbits a, const lbits s) {
+/* --- reads: per-layer row probe -----------------------------------------
+   The layer-precedence semantics (which layer wins a lookup, and what the
+   EIP-2200 tx-start original is) live in SAIL (host/state.sail
+   storage_wset_get / storage_wset_base_get over the StorageRow union); C only
+   answers point queries against one layer's row table. A row is a cached READ
+   (was_read: current == original == the resolved base) or WRITTEN (current =
+   the write, original = the frozen tx-start value); `written` covers rows
+   that were read first and written later. storage_secure_key memoizes the
+   slot keccak, so the tx + block probe pair costs one keccak + two cheap
+   hashtable gets. Returns 0 = absent, 1 = read, 2 = written; the value words
+   land in cur/orig (untouched when absent). */
+uint64_t storage_row_probe(uint64_t layer, const lbits a, const lbits s,
+                           lbits *cur, lbits *orig) {
   uint64_t slot[4], ah[4], sh[4];
   storage_secure_key(a, s, slot, ah, sh);
-  storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
-  if (e && (e->written || e->was_read)) return 1;
-  storage_wset_row *b = storage_wset_get(&storage_wset_block, ah, sh);
-  return (b && (b->written || b->was_read)) ? 1 : 0;
+  storage_wset_table *t = layer == 0 ? &storage_wset_tx : &storage_wset_block;
+  storage_wset_row *e = storage_wset_get(t, ah, sh);
+  if (!e || !(e->written || e->was_read)) return 0;
+  be_words4_to_lbits(cur, e->current);
+  be_words4_to_lbits(orig, e->original);
+  return e->written ? 2 : 1;
 }
 
-void storage_wset_load(lbits *rop, const lbits a, const lbits s) {
-  uint64_t slot[4], ah[4], sh[4];
-  storage_secure_key(a, s, slot, ah, sh);
-  storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
-  storage_wset_row *b = storage_wset_get(&storage_wset_block, ah, sh);
-  if (e && e->written)  { be_words4_to_lbits(rop, e->current); return; }
-  if (b && b->written)  { be_words4_to_lbits(rop, b->current); return; }
-  if (e && e->was_read) { be_words4_to_lbits(rop, e->current); return; }
-  if (b && b->was_read) { be_words4_to_lbits(rop, b->current); return; }
-  be_words4_to_lbits(rop, storage_zero_val);
-}
-
-/* EIP-2200 original: the tx-start value, IGNORING the current tx's own write.
-   present-side companion: a tx row is present if written OR cached-read; else the
-   block base (committed prior tx write or a prior tx's cached base). */
-bool storage_wset_base_present(const lbits a, const lbits s) {
-  uint64_t slot[4], ah[4], sh[4];
-  storage_secure_key(a, s, slot, ah, sh);
-  storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
-  if (e && (e->written || e->was_read)) return 1;
-  storage_wset_row *b = storage_wset_get(&storage_wset_block, ah, sh);
-  return (b && (b->written || b->was_read)) ? 1 : 0;
-}
-
-/* A tx row's `original` IS the tx-start value -- frozen from the base on the first
-   write, or the cached base for a read member -- so it is used regardless of
-   whether the tx has since written the slot (current may be a later write).
-   Otherwise it is a committed block write (b->current) or a prior tx's cached base. */
-void storage_wset_base_load(lbits *rop, const lbits a, const lbits s) {
-  uint64_t slot[4], ah[4], sh[4];
-  storage_secure_key(a, s, slot, ah, sh);
-  storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
-  if (e && (e->written || e->was_read)) { be_words4_to_lbits(rop, e->original); return; }
-  storage_wset_row *b = storage_wset_get(&storage_wset_block, ah, sh);
-  if (b && b->written)  { be_words4_to_lbits(rop, b->current); return; }
-  if (b && b->was_read) { be_words4_to_lbits(rop, b->current); return; }
-  be_words4_to_lbits(rop, storage_zero_val);
-}
-
-/* --- writes / touches / warm ------------------------------------------ */
-
-/* record a touch (read) -- ensure tx membership so the slot is in the BAL
-   read set; leaves the row read-only (written unchanged) */
-unit storage_wset_touch(const lbits a, const lbits s) {
-  uint64_t slot[4], ah[4], sh[4];
-  storage_secure_key(a, s, slot, ah, sh);
-  storage_wset_row *e = storage_wset_intern(&storage_wset_tx, ah, sh, slot);
-  if (e) e->was_read = 1;  /* SLOAD: EIP-7928 storage read (survives revert/delete) */
-  return UNIT;
-}
+/* --- writes / warm ------------------------------------------------------ */
 
 /* cache a resolved base value on the tx row and mark it read. Called by k_sload
    ONLY on a true working-set miss (no written or cached-read value anywhere), so

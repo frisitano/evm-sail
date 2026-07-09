@@ -26,4 +26,7 @@ unit     el_emit_out(uint64_t b);                    /* bits(8) -> unit: write_o
 struct zJEntry;
 unit journal_push(struct zJEntry e);                 /* JEntry -> unit */
 void journal_pop(struct zJEntry *rop, unit u);       /* unit -> JEntry */
+struct zStorageRow;                                  /* per-layer storage row views */
+void storage_tx_row(struct zStorageRow *rop, const lbits a, const lbits s);
+void storage_block_row(struct zStorageRow *rop, const lbits a, const lbits s);
 #endif
