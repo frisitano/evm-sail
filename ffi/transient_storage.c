@@ -106,17 +106,15 @@ static h_entry *h_get(h_table *m, const uint64_t *k, uint64_t h) {
 }
 
 /* clear transient storage at tx/world reset */
-unit transient_storage_reset(uint64_t id) {
-  if (id == 0) {
-    h_table_clear(&h_transient);
-  }
+unit transient_storage_reset(const unit u) {
+  (void)u;
+  h_table_clear(&h_transient);
   return UNIT;
 }
 
-/* build the 7-word (address, slot) key; returns 0 for an unknown id */
-static int transient_key(uint64_t id, const lbits addr, const lbits slot,
-                         uint64_t key[7], uint64_t *hash) {
-  if (id != 0) return 0;
+/* build the 7-word (address, slot) key */
+static void transient_key(const lbits addr, const lbits slot,
+                          uint64_t key[7], uint64_t *hash) {
   uint64_t a[4], sw[4];
   lbits_to_be_words4(a, addr);   /* a[0] = 0 (160-bit value), a[1..3] = address */
   lbits_to_be_words4(sw, slot);
@@ -128,13 +126,13 @@ static int transient_key(uint64_t id, const lbits addr, const lbits slot,
   key[5] = sw[2];
   key[6] = sw[3];
   *hash = h_hash(key);
-  return 1;
 }
 
 /* store the 256-bit value at (address, slot) */
-unit transient_storage_write(uint64_t id, const lbits addr, const lbits slot, const lbits v) {
+unit transient_storage_write(const lbits addr, const lbits slot, const lbits v) {
   uint64_t key[7], h;
-  if (transient_key(id, addr, slot, key, &h) && h_ensure(&h_transient)) {
+  transient_key(addr, slot, key, &h);
+  if (h_ensure(&h_transient)) {
     uint64_t w[4];
     lbits_to_be_words4(w, v);
     (void)h_put(&h_transient, key, h, w);
@@ -143,12 +141,10 @@ unit transient_storage_write(uint64_t id, const lbits addr, const lbits slot, co
 }
 
 /* the 256-bit value at (address, slot); 0 if absent */
-void transient_storage_read(lbits *rop, uint64_t id, const lbits addr, const lbits slot) {
+void transient_storage_read(lbits *rop, const lbits addr, const lbits slot) {
   static const uint64_t zero[4] = {0, 0, 0, 0};
   uint64_t key[7], h;
-  h_entry *e = NULL;
-  if (transient_key(id, addr, slot, key, &h)) {
-    e = h_get(&h_transient, key, h);
-  }
+  transient_key(addr, slot, key, &h);
+  h_entry *e = h_get(&h_transient, key, h);
   be_words4_to_lbits(rop, e ? e->val : zero);
 }

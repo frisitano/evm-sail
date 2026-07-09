@@ -94,7 +94,7 @@ extern unit acct_wset_reset(unit);           /* block account write-set overlay 
 extern unit storage_wset_reset(unit);        /* block storage write-set overlay */
 extern unit bal_reset(unit);                 /* EIP-7928 block-access-list accumulator */
 extern unit warm_reset(unit);                /* EIP-2929 warm sets */
-extern unit transient_storage_reset(uint64_t id); /* EIP-1153 transient storage */
+extern unit transient_storage_reset(unit u); /* EIP-1153 transient storage */
 extern unit logs_reset(unit);
 extern unit selfdestr_reset(unit);
 extern unit created_reset(unit);
@@ -118,7 +118,7 @@ void evmsail_clear_memory(void)
     /* ephemeral per-frame/per-tx state (also cleared by k_tx_reset, but a
      * zero-transaction block would otherwise inherit it) */
     warm_reset(UNIT);
-    transient_storage_reset(0);
+    transient_storage_reset(UNIT);
     logs_reset(UNIT);
     selfdestr_reset(UNIT);
     created_reset(UNIT);

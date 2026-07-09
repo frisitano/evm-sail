@@ -65,10 +65,12 @@ let EMPTY_TRIE_ROOT : hash = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc00
 /* sets, LOG series, selfdestruct/created sets, call-frame journal).        */
 /* ======================================================================== */
 
-/* ---- transient storage (ffi/transient_storage.c): id 0 = EIP-1153. ---- */
-val transient_storage_reset = impure { c: "transient_storage_reset" } : bits(64) -> unit
-val transient_storage_write = impure { c: "transient_storage_write" } : (bits(64), address, word, word) -> unit
-val transient_storage_read = impure { c: "transient_storage_read" } : (bits(64), address, word) -> word
+/* ---- EIP-1153 transient storage (ffi/transient_storage.c): per-tx scratch
+ * keyed by (address, slot), discarded at tx end, never in the state trie.
+ * TSTORE frame-revert runs through the journal (JTran), not here. ---- */
+val transient_reset = impure { c: "transient_storage_reset" } : unit -> unit
+val transient_store = impure { c: "transient_storage_write" } : (address, word, word) -> unit
+val transient_load = impure { c: "transient_storage_read" } : (address, word) -> word
 
 /* ---- write-set storage overlay (ffi/state_db.c storage_wset_*): the tx overlay +
  * block base. A working-set miss falls through to the base resolver (the alloc
@@ -343,13 +345,6 @@ function storage_wset_base_get(a : address, s : word) -> option(word) =
  * not mutated -- a deleted account's storage_root goes empty in the overlay. */
 function storage_wipe_addr(a : address) -> unit =
     storage_wset_wipe_addr(a)
-
-function transient_reset() -> unit = transient_storage_reset(get_slice_int(64, 0, 0))
-
-function transient_load(a : address, s : word) -> word = transient_storage_read(get_slice_int(64, 0, 0), a, s)
-
-function transient_store(a : address, s : word, v : word) -> unit =
-    transient_storage_write(get_slice_int(64, 0, 0), a, s, v)
 
 /* Stateless storage resolver: the value of (a, s) in the witness pre-state,
  * walked from the account's authenticated storage root. Defined in lib/mpt.sail
