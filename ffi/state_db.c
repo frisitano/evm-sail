@@ -311,7 +311,7 @@ unit storage_wset_merge(const unit u) {
 /* --- reads: per-layer row probe -----------------------------------------
    The layer-precedence semantics (which layer wins a lookup, and what the
    EIP-2200 tx-start original is) live in SAIL (host/state.sail
-   k_sload / storage_wset_base_get over the StorageRow union); C only
+   k_sload / k_sload_orig over option(StorageEntry)); C only
    answers point queries against one layer's row table. A row is a cached READ
    (was_read: current == original == the resolved base) or WRITTEN (current =
    the write, original = the frozen tx-start value); `written` covers rows

@@ -72,9 +72,21 @@ function k_sload(a : address, s : word) -> word =
         v
     }
 function k_sload_orig(a : address, s : word) -> word =
-    match storage_wset_base_get(a, s) {
-        Some(v) => v,
-        None()  => stateless_storage(a, s),
+    /* the EIP-2200 tx-start value: a tx entry answers with its orig (the
+       frozen tx-start value; a cached read's orig IS its value); else a block
+       entry's curr -- a committed block write or cached read is this tx's
+       starting value; else the pre-state base. No caching on a miss: k_sstore
+       adopts orig into the tx row it writes. */
+    {
+        match storage_tx_get(a, s) {
+            Some(e) => return e.orig,
+            None() => (),
+        };
+        match storage_block_get(a, s) {
+            Some(e) => return e.curr,
+            None() => (),
+        };
+        stateless_storage(a, s)
     }
 
 function k_sstore(a : address, s : word, v : word) -> unit = {

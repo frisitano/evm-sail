@@ -11,7 +11,7 @@
  *
  * (2) storage_tx_get / storage_block_get: per-layer option(StorageEntry)
  * views over state_db.c's row tables (storage_row_probe); the layer
- * precedence lives in Sail (k_sload / storage_wset_base_get), not here.
+ * precedence lives in Sail (k_sload / k_sload_orig), not here.
  */
 #include EVMSAIL_MODEL_H
 #include "kernel_state.h"
