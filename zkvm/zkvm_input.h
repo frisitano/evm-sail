@@ -32,4 +32,8 @@ void storage_block_get(struct zoptionzIRStorageEntryzK *rop, const lbits a, cons
 struct zoptionzIRAccountzK;                          /* option(Account) per-layer views */
 void acct_tx_get(struct zoptionzIRAccountzK *rop, const lbits a);
 void acct_block_get(struct zoptionzIRAccountzK *rop, const lbits a);
+struct zStorageTxRow;                                /* EIP-7928 merge-harvest views */
+struct zAcctTxRow;
+void storage_tx_row(struct zStorageTxRow *rop, uint64_t i);
+void acct_tx_row(struct zAcctTxRow *rop, uint64_t i);
 #endif

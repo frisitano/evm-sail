@@ -99,6 +99,33 @@ struct StorageEntry = { curr : word, orig : word }
 val storage_tx_get = impure { c: "storage_tx_get" } : (address, word) -> option(StorageEntry)
 val storage_block_get = impure { c: "storage_block_get" } : (address, word) -> option(StorageEntry)
 
+/* tx-layer row enumeration at merge time: the EIP-7928 harvest view. Sail
+ * (host/kernel.sail k_tx_merge) walks these rows and DECIDES what the tx
+ * changed; the bal_* sinks below only record. written = a write reached the
+ * row this tx (a storage_change even if rewritten back to the start value);
+ * was_read = the row was SLOAD-cached (a storage_read; the serializer drops
+ * reads of changed slots and dedups). */
+struct StorageTxRow = { ahash : hash, slot : word, curr : word, written : bool, was_read : bool }
+
+val storage_tx_row_count = impure { c: "storage_tx_row_count" } : unit -> bits(64)
+val storage_tx_row = impure { c: "storage_tx_row" } : bits(64) -> StorageTxRow
+
+/* account harvest view: the (curr, orig) pair -- per-field diffs vs the
+ * tx-start original decide the nonce/balance/code change records. */
+struct AcctTxRow = { ahash : hash, curr : Account, orig : Account }
+
+val acct_tx_row_count = impure { c: "acct_tx_row_count" } : unit -> bits(64)
+val acct_tx_row = impure { c: "acct_tx_row" } : bits(64) -> AcctTxRow
+
+/* EIP-7928 block-access-list record sinks (ffi/state_db.c): append one
+ * record, tagged C-side with the ambient bal_set_index. Pure recorders --
+ * all change/read DETECTION happens in Sail (k_tx_merge). */
+val bal_storage_change = impure { c: "bal_note_storage_change" } : (hash, word, word) -> unit
+val bal_storage_read = impure { c: "bal_note_storage_read" } : (hash, word) -> unit
+val bal_balance_change = impure { c: "bal_note_balance_change" } : (hash, word) -> unit
+val bal_nonce_change = impure { c: "bal_note_nonce_change" } : (hash, bits(64)) -> unit
+val bal_code_change = impure { c: "bal_note_code_change" } : (hash, hash) -> unit
+
 /* compute_root enumeration over the block base, per account keccak(addr):
  * witness = dirty rows (net change vs MPT); native = cache-union-block rows */
 val storage_wset_block_dirty_count = impure { c: "storage_wset_block_dirty_count" } : hash -> bits(64)

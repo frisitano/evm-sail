@@ -127,6 +127,41 @@ static void bal_add_code_change(const uint64_t ah[4], const uint64_t chash[4]) {
   r->idx = bal_index; r->seq = bal_seq++;
 }
 
+/* Sail-facing EIP-7928 record sinks (host/kernel.sail k_tx_merge does the
+   change/read detection; these only append records). Layouts match the row
+   fields the serializer decodes: hashes/slots/storage values BE words,
+   balance/code-hash LE words. */
+unit bal_note_storage_change(const lbits ah, const lbits slot, const lbits val) {
+  uint64_t a4[4], s4[4], v4[4];
+  lbits_to_be_words4(a4, ah); lbits_to_be_words4(s4, slot); lbits_to_be_words4(v4, val);
+  bal_add_storage_change(a4, s4, v4);
+  return UNIT;
+}
+unit bal_note_storage_read(const lbits ah, const lbits slot) {
+  uint64_t a4[4], s4[4];
+  lbits_to_be_words4(a4, ah); lbits_to_be_words4(s4, slot);
+  bal_add_storage_read(a4, s4);
+  return UNIT;
+}
+unit bal_note_balance_change(const lbits ah, const lbits val) {
+  uint64_t a4[4], v4[4];
+  lbits_to_be_words4(a4, ah); lbits_to_le_words4(v4, val);
+  bal_add_balance_change(a4, v4);
+  return UNIT;
+}
+unit bal_note_nonce_change(const lbits ah, uint64_t nonce) {
+  uint64_t a4[4];
+  lbits_to_be_words4(a4, ah);
+  bal_add_nonce_change(a4, nonce);
+  return UNIT;
+}
+unit bal_note_code_change(const lbits ah, const lbits chash) {
+  uint64_t a4[4], c4[4];
+  lbits_to_be_words4(a4, ah); lbits_to_le_words4(c4, chash);
+  bal_add_code_change(a4, c4);
+  return UNIT;
+}
+
 #define STORAGE_INIT_CAP 64u
 
 static int compare_words(const uint64_t *a, const uint64_t *b, int n) {
@@ -275,7 +310,6 @@ unit storage_wset_merge(const unit u) {
          (SLOAD opcode, or an SSTORE's current-value read). A net-zero SSTORE is
          a read in EELS (get_storage recorded; no net change to exclude it). */
       if (e->was_read) {
-        bal_add_storage_read(e->acct_hash, e->slot);
         /* cache the resolved base into the block so a later tx reads it from the
            working set instead of re-walking the witness (once per key per block).
            Never downgrade an existing block write; just mark it read. */
@@ -293,7 +327,6 @@ unit storage_wset_merge(const unit u) {
       }
       continue;
     }
-    bal_add_storage_change(e->acct_hash, e->slot, e->current);   /* EIP-7928 storage change */
     storage_wset_row *b = storage_wset_get(&storage_wset_block, e->acct_hash, e->slot_hash);
     int fresh = (b == NULL);   /* slot not yet in the block working set */
     if (fresh) b = storage_wset_intern(&storage_wset_block, e->acct_hash, e->slot_hash, e->slot);
@@ -330,6 +363,18 @@ uint64_t storage_row_probe(uint64_t layer, const lbits a, const lbits s,
   be_words4_to_lbits(orig, e->original);
   return e->written ? 2 : 1;
 }
+
+/* tx-layer row enumeration for the merge harvest (glue: StorageTxRow).
+   Returns written<<1 | was_read for row i; fields land in the out params. */
+uint64_t storage_tx_probe_row(uint64_t i, lbits *ahash, lbits *slot, lbits *curr) {
+  if (i >= storage_wset_tx.n) return 0;
+  const storage_wset_row *e = &storage_wset_tx.rows[i];
+  be_words4_to_lbits(ahash, e->acct_hash);
+  be_words4_to_lbits(slot, e->slot);
+  be_words4_to_lbits(curr, e->current);
+  return ((uint64_t)(e->written ? 1 : 0) << 1) | (e->was_read ? 1 : 0);
+}
+uint64_t storage_tx_row_count(const unit u) { (void)u; return storage_wset_tx.n; }
 
 /* --- writes / warm ------------------------------------------------------ */
 
@@ -643,12 +688,6 @@ unit acct_wset_merge(const unit u) {
   for (uint32_t i = 0; i < acct_wset_tx.n; i++) {
     acct_wset_row *e = &acct_wset_tx.rows[i];
     int dirty = acct_wset_dirty(e);
-    if (dirty) {
-      /* EIP-7928 per-field changes vs this tx's start (sroot is not a BAL field) */
-      if (e->cur_nonce != e->orig_nonce) bal_add_nonce_change(e->hkey, e->cur_nonce);
-      if (memcmp(e->cur_bal, e->orig_bal, 32) != 0) bal_add_balance_change(e->hkey, e->cur_bal);
-      if (memcmp(e->cur_chash, e->orig_chash, 32) != 0) bal_add_code_change(e->hkey, e->cur_chash);
-    }
     /* EVERY tx row reaches the block layer -- reads included: a read member
        caches the resolved pre-state for later txs AND puts the touched
        account into the BAL account list (bal_recompute enumerates the block
@@ -698,6 +737,24 @@ uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
   le_words4_to_lbits(sroot, e->cur_sroot);
   le_words4_to_lbits(chash, e->cur_chash);
   return 1;
+}
+
+/* tx-layer account enumeration for the merge harvest (glue: AcctTxRow). */
+uint64_t acct_tx_row_count(const unit u) { (void)u; return acct_wset_tx.n; }
+unit acct_tx_probe_row(uint64_t i, lbits *hkey, uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
+                       uint64_t *on, lbits *ob, lbits *os, lbits *oc) {
+  if (i >= acct_wset_tx.n) return UNIT;
+  const acct_wset_row *e = &acct_wset_tx.rows[i];
+  be_words4_to_lbits(hkey, e->hkey);
+  *cn = e->cur_nonce;
+  le_words4_to_lbits(cb, e->cur_bal);
+  le_words4_to_lbits(cs, e->cur_sroot);
+  le_words4_to_lbits(cc, e->cur_chash);
+  *on = e->orig_nonce;
+  le_words4_to_lbits(ob, e->orig_bal);
+  le_words4_to_lbits(os, e->orig_sroot);
+  le_words4_to_lbits(oc, e->orig_chash);
+  return UNIT;
 }
 
 /* --- writes / restore / wipe --- */

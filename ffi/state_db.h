@@ -72,4 +72,15 @@ unit bal_reset(const unit u);
 unit bal_set_index(uint64_t n);
 void bal_recompute_hash(lbits *rop, const unit u);
 
+/* EIP-7928 record sinks + tx-row enumeration (harvest logic is Sail-side) */
+unit bal_note_storage_change(const lbits ah, const lbits slot, const lbits val);
+unit bal_note_storage_read(const lbits ah, const lbits slot);
+unit bal_note_balance_change(const lbits ah, const lbits val);
+unit bal_note_nonce_change(const lbits ah, uint64_t nonce);
+unit bal_note_code_change(const lbits ah, const lbits chash);
+uint64_t storage_tx_row_count(const unit u);
+uint64_t storage_tx_probe_row(uint64_t i, lbits *ahash, lbits *slot, lbits *curr);
+uint64_t acct_tx_row_count(const unit u);
+unit acct_tx_probe_row(uint64_t i, lbits *hkey, uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
+                       uint64_t *on, lbits *ob, lbits *os, lbits *oc);
 #endif

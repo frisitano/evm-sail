@@ -481,9 +481,35 @@ function k_commit() -> unit = {
  * none, so this just clears the overlay. The block base is the compute_root
  * cursor (lib/mpt.sail storage_updates). */
 function k_tx_merge() -> unit = {
-    /* the merges harvest this tx's EIP-7928 changes/reads from the overlays
-       (tagged with the ambient bal_set_index) before clearing them. */
-    storage_wset_merge();
+    /* EIP-7928 harvest -- SAIL decides what this tx changed, walking the tx
+       layers before the merges clear them; the bal_* sinks only record
+       (tagged C-side with the ambient bal_set_index). Storage: a written row
+       is a storage_change with the tx-final value (even one rewritten back
+       to its start value); else a read row is a storage_read. Accounts:
+       per-field diffs vs the tx-start original. */
+    let ns = unsigned(storage_tx_row_count());
+    foreach (j from 0 to (ns - 1)) {
+        let r = storage_tx_row(get_slice_int(64, j, 0));
+        if r.written then {
+            bal_storage_change(r.ahash, r.slot, r.curr)
+        } else if r.was_read then {
+            bal_storage_read(r.ahash, r.slot)
+        }
+    };
+    let na = unsigned(acct_tx_row_count());
+    foreach (j from 0 to (na - 1)) {
+        let r = acct_tx_row(get_slice_int(64, j, 0));
+        if r.curr.nonce != r.orig.nonce then {
+            bal_nonce_change(r.ahash, get_slice_int(64, r.curr.nonce, 0))
+        };
+        if r.curr.balance != r.orig.balance then {
+            bal_balance_change(r.ahash, r.curr.balance)
+        };
+        if r.curr.code_hash != r.orig.code_hash then {
+            bal_code_change(r.ahash, r.curr.code_hash)
+        };
+    };
+    storage_wset_merge(); /* pure row propagation; harvesting done above */
     acct_wset_merge()
 }
 

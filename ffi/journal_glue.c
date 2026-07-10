@@ -15,7 +15,11 @@
  *
  * (3) acct_tx_get / acct_block_get: per-layer option(Account) views over
  * state_db.c's account tables (acct_row_probe); tx-over-block precedence
- * lives in Sail (account_lookup).
+ * lives in Sail (k_aload).
+ *
+ * (4) storage_tx_row / acct_tx_row: tx-layer row enumeration for the
+ * EIP-7928 merge harvest (k_tx_merge decides what changed; state_db.c's
+ * bal_note_* sinks record).
  */
 #include EVMSAIL_MODEL_H
 #include "kernel_state.h"
@@ -182,4 +186,21 @@ void acct_tx_get(struct zoptionzIRAccountzK *out, const lbits a) {
 
 void acct_block_get(struct zoptionzIRAccountzK *out, const lbits a) {
   acct_entry_out(out, 1, a);
+}
+
+/* tx-layer row enumeration for the EIP-7928 merge harvest (k_tx_merge). */
+void storage_tx_row(struct zStorageTxRow *out, uint64_t i) {
+  uint64_t flags = storage_tx_probe_row(i, &out->zahash, &out->zslot, &out->zcurr);
+  out->zwritten = (flags >> 1) & 1;
+  out->zwas_read = flags & 1;
+}
+
+void acct_tx_row(struct zAcctTxRow *out, uint64_t i) {
+  uint64_t cn = 0, on = 0;
+  acct_tx_probe_row(i, &out->zahash, &cn, &out->zcurr.zbalance,
+                    &out->zcurr.zstorage_root, &out->zcurr.zcode_hash, &on,
+                    &out->zorig.zbalance, &out->zorig.zstorage_root,
+                    &out->zorig.zcode_hash);
+  CONVERT_OF(sail_int, mach_int)(&out->zcurr.znonce, (mach_int)cn);
+  CONVERT_OF(sail_int, mach_int)(&out->zorig.znonce, (mach_int)on);
 }
