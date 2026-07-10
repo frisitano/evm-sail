@@ -1262,14 +1262,12 @@ function stateless_storage(a : address, s : word) -> word = {
     }
 }
 
-/* Stateless account materialization: bind `a` on first touch by walking the
- * state trie from the parent-root anchor. Reaching the leaf => present (decode
- * + cache); a diverging/empty terminus => proven-empty account; a blinded node
- * => missing proof => fail closed. The result is cached as a TX-layer read
- * member (acct_tx_cache, like storage's cache-on-read), so subsequent
- * load_account(a) is an O(1) layer hit; the merge propagates it to the block
- * layer for later txs. */
-function stateless_account_load(a : address) -> Account = {
+/* Stateless account resolution (PURE, mirroring stateless_storage): walk the
+ * state trie from the parent-root anchor. Reaching the leaf => Some(account);
+ * a diverging/empty terminus => None (proven-absent); a blinded node =>
+ * missing proof => fail closed. The caller (load_account) caches the result
+ * into the tx layer -- no overlay mutation happens here. */
+function stateless_account(a : address) -> option(Account) = {
     let ak = keccak256_address(a);
     let rootnode = node_db_lookup(k_parent_state_root);
     if (list_len(rootnode) == 0) & (k_parent_state_root != EMPTY_TRIE_ROOT) then {
@@ -1278,11 +1276,8 @@ function stateless_account_load(a : address) -> Account = {
     let value = trie_walk(rootnode, hash_nibbles(ak), 0, 256);
     if list_len(value) > 0 then {
         let (nonce, bal, sroot, chash) = decode_account(value);
-        acct_tx_cache(a, get_slice_int(64, nonce, 0), bal, sroot, chash);
-        acct_tx_mark_base_exists(a);
-        struct { nonce = nonce, balance = bal, code_hash = chash, storage_root = sroot }
+        Some(struct { nonce = nonce, balance = bal, code_hash = chash, storage_root = sroot })
     } else {
-        acct_tx_cache(a, sail_zeros(64), sail_zeros(256), EMPTY_TRIE_ROOT, KECCAK_EMPTY);
-        EMPTY_ACCOUNT
+        None()
     }
 }

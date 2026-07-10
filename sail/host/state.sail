@@ -110,7 +110,7 @@ val storage_wset_union_val = impure { c: "storage_wset_union_val" } : (hash, bit
 
 /* ---- write-set account overlay (ffi/state_db.c acct_wset_*): the per-tx
  * overlay + block base. A miss here is resolved by the base resolver /
- * stateless_account_load. storage_root is the pre-state anchor, not mutated. */
+ * stateless_account. storage_root is the pre-state anchor, not mutated. */
 val acct_wset_reset = impure { c: "acct_wset_reset" } : unit -> unit
 val acct_wset_tx_clear = impure { c: "acct_wset_tx_clear" } : unit -> unit
 val acct_wset_merge = impure { c: "acct_wset_merge" } : unit -> unit
@@ -125,8 +125,7 @@ val acct_tx_update = impure { c: "acct_tx_update" } : (address, bits(64), word, 
 
 /* witness base-resolver read-through: bind a resolved pre-state account as a
  * block-level read member */
-val acct_tx_cache = impure { c: "acct_tx_cache" } : (address, bits(64), word, hash, hash) -> unit /* cache a resolved account as a tx read member (cur == orig) */
-val acct_tx_mark_base_exists = impure { c: "acct_tx_mark_base_exists" } : address -> unit /* the read member's pre-state leaf exists (EIP-158/6780) */
+val acct_tx_cache = impure { c: "acct_tx_cache" } : (address, bits(64), word, hash, hash, bool) -> unit /* cache a resolved account as a tx read member (cur == orig). The bool: the pre-state leaf exists (EIP-158/6780); on a block-layer hit C inherits the block row's flag instead */
 
 /* compute_root enumeration over acct_wset_block (fields mirror AcctRow):
  * witness = dirty rows (changed vs pre-state); native = cache-union-block rows */
@@ -477,19 +476,19 @@ register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob
 
 /* Stateless account materialization (defined in lib/mpt.sail, the witness reader,
  * included later): resolve `a` from the authenticated witness leaf store and bind
- * it (nonce/balance/storageRoot/codeHash); absent in the witness -> empty. The
- * witness IS the base, so load_account loads on first touch -- no eager seeding. */
-val stateless_account_load : address -> Account
+ * it (nonce/balance/storageRoot/codeHash) as Some(account); proven-absent in
+ * the witness -> None. PURE: the caller does the caching. The witness IS the
+ * base, so load_account loads on first touch -- no eager seeding. */
+val stateless_account : address -> option(Account)
 
 /* internal (un-journaled) account accessor used inside the kernel functions,
- * k_sload-shaped: this tx's layer, else the block layer, else materialize
- * from the witness base. Every resolution is cached into the TX layer (a
- * block hit here; the witness walk caches inside stateless_account_load), so
- * after any load the account is live in the tx layer -- the invariant
- * acct_tx_update (store_account) relies on -- and the merge propagates read
- * members to the block layer for later txs and the BAL account list.
- * Un-journaled: a frame revert keeps the revealed pre-state and only undoes
- * recorded mutations. */
+ * exactly k_sload-shaped: this tx's layer, else the block layer, else the
+ * pure witness resolver (stateless_account; None = proven-absent = empty).
+ * Every resolution is cached HERE into the tx layer, so after any load the
+ * account is live in the tx layer -- the invariant acct_tx_update
+ * (store_account) relies on -- and the merge propagates read members to the
+ * block layer for later txs and the BAL account list. Un-journaled: a frame
+ * revert keeps the revealed pre-state and only undoes recorded mutations. */
 function load_account(a : address) -> Account = {
     match acct_tx_get(a) {
         Some(acc) => return acc,
@@ -497,10 +496,21 @@ function load_account(a : address) -> Account = {
     };
     match acct_block_get(a) {
         Some(acc) => {
-            acct_tx_cache(a, get_slice_int(64, acc.nonce, 0), acc.balance, acc.storage_root, acc.code_hash);
+            /* base_exists is inherited from the block row by the cache */
+            acct_tx_cache(a, get_slice_int(64, acc.nonce, 0), acc.balance, acc.storage_root, acc.code_hash, false);
+            return acc
+        },
+        None() => (),
+    };
+    match stateless_account(a) {
+        Some(acc) => {
+            acct_tx_cache(a, get_slice_int(64, acc.nonce, 0), acc.balance, acc.storage_root, acc.code_hash, true);
             acc
         },
-        None() => stateless_account_load(a),
+        None() => {
+            acct_tx_cache(a, sail_zeros(64), sail_zeros(256), EMPTY_TRIE_ROOT, KECCAK_EMPTY, false);
+            EMPTY_ACCOUNT
+        },
     }
 }
 

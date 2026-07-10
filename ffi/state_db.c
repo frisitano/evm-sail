@@ -542,7 +542,7 @@ void storage_wset_union_val(lbits *rop, const lbits ak, uint64_t j) {
 /* account (nonce, balance, storage_root, code_hash) plus base_exists (did    */
 /* the authenticated pre-state leaf exist) and written. eest_account below   */
 /* stays the RESOLVER backing (native seed + witness read-cache); a miss      */
-/* here asks it, then stateless_account_load. storage_root is NOT mutated by  */
+/* here asks it, then stateless_account. storage_root is NOT mutated by       */
 /* account writes -- it is the pre-state anchor, and the post-state root is    */
 /* derived at compute_root. dirty == written && current != original.          */
 /* ======================================================================== */
@@ -724,13 +724,12 @@ unit acct_tx_update(const lbits a, uint64_t nonce,
 
 /* cache a resolved account as a tx-layer READ member (cur == orig = the
    resolution, un-journaled so a frame revert keeps the revealed value) --
-   load_account's cache-on-every-read, mirroring storage_tx_cache. On a
-   block-layer hit the block row's base_exists is inherited; on a witness
-   resolve there is no block row and acct_tx_mark_base_exists raises the flag
-   when the leaf existed. Only reached when the tx layer misses, so the row
-   is always fresh -- bind unconditionally. */
+   load_account's cache-on-every-read, mirroring storage_tx_cache. base_exists:
+   on a block-layer hit the block row's flag is inherited; else the caller's
+   flag (the witness walk reached a leaf). Only reached when the tx layer
+   misses, so the row is always fresh -- bind unconditionally. */
 unit acct_tx_cache(const lbits a, uint64_t nonce, const lbits bal,
-                   const lbits sroot, const lbits chash) {
+                   const lbits sroot, const lbits chash, bool base_exists) {
   uint64_t h[4]; acct_secure_key(a, h);
   acct_wset_row *e = acct_wset_intern(&acct_wset_tx, h);
   if (!e) return UNIT;
@@ -744,16 +743,7 @@ unit acct_tx_cache(const lbits a, uint64_t nonce, const lbits bal,
   memcpy(e->cur_sroot, sr, sizeof(e->cur_sroot)); memcpy(e->orig_sroot, sr, sizeof(e->orig_sroot));
   memcpy(e->cur_chash, ch, sizeof(e->cur_chash)); memcpy(e->orig_chash, ch, sizeof(e->orig_chash));
   acct_wset_row *b = acct_wset_get(&acct_wset_block, h);
-  e->base_exists = b ? b->base_exists : 0;
-  return UNIT;
-}
-
-/* witness base-resolver: mark the tx read member's pre-state leaf as present
-   (EIP-158/6780 distinguishes proven-absent from empty-but-present). */
-unit acct_tx_mark_base_exists(const lbits a) {
-  uint64_t h[4]; acct_secure_key(a, h);
-  acct_wset_row *e = acct_wset_get(&acct_wset_tx, h);
-  if (e) e->base_exists = 1;
+  e->base_exists = b ? b->base_exists : (base_exists ? 1 : 0);
   return UNIT;
 }
 

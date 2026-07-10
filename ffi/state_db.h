@@ -46,8 +46,7 @@ uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
 unit acct_tx_update(const lbits a, uint64_t nonce,
                     const lbits bal, const lbits sroot, const lbits chash);
 unit acct_tx_cache(const lbits a, uint64_t nonce, const lbits bal,
-                   const lbits sroot, const lbits chash);
-unit acct_tx_mark_base_exists(const lbits a);
+                   const lbits sroot, const lbits chash, bool base_exists);
 
 /* compute_root enumeration over acct_wset_block: witness = dirty rows, native =
    cache-union-block rows. Fields mirror AcctRow (host/state.sail). */
