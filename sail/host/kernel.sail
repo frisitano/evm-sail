@@ -540,7 +540,6 @@ function k_tx_merge() -> unit = {
                         e.value.orig.balance,
                         e.value.orig.storage_root,
                         e.value.orig.code_hash,
-                        e.base_exists,
                     )
                 } else {
                     acct_block_cache(
@@ -549,7 +548,6 @@ function k_tx_merge() -> unit = {
                         e.value.curr.balance,
                         e.value.curr.storage_root,
                         e.value.curr.code_hash,
-                        e.base_exists,
                     )
                 }
             },

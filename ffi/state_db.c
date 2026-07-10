@@ -574,10 +574,9 @@ void storage_wset_union_val(lbits *rop, const lbits ak, uint64_t j) {
 /* Mirrors the storage write-set: a per-tx overlay (acct_wset_tx) over a      */
 /* block base (acct_wset_block), keyed by keccak(address), each sorted by     */
 /* hkey. A row carries the current AND the tx-start/pre-state original        */
-/* account (nonce, balance, storage_root, code_hash) plus base_exists (did    */
-/* the authenticated pre-state leaf exist) and written. eest_account below   */
-/* stays the RESOLVER backing (native seed + witness read-cache); a miss      */
-/* here asks it, then stateless_account. storage_root is NOT mutated by       */
+/* account (nonce, balance, storage_root, code_hash). A miss here means the   */
+/* account was never touched; k_aload resolves it from the block layer or     */
+/* the witness walk (stateless_account). storage_root is NOT mutated by       */
 /* account writes -- it is the pre-state anchor, and the post-state root is    */
 /* derived at compute_root. dirty == written && current != original.          */
 /* ======================================================================== */
@@ -587,7 +586,7 @@ typedef struct {
   uint64_t cur_nonce;  uint64_t cur_bal[4];  uint64_t cur_sroot[4];  uint64_t cur_chash[4];
   uint64_t orig_nonce; uint64_t orig_bal[4]; uint64_t orig_sroot[4]; uint64_t orig_chash[4];
   uint8_t raw_addr[20];  /* EIP-7928 BAL account key/order (set on seed/first write) */
-  uint8_t base_exists;   /* authenticated pre-state leaf existed */
+   /* authenticated pre-state leaf existed */
 } acct_wset_row;
 
 typedef struct { acct_wset_row *rows; uint32_t n, cap; } acct_wset_table;
@@ -643,7 +642,7 @@ static void acct_wset_table_reset(acct_wset_table *t) {
 }
 
 /* current-vs-original: account writes only touch nonce/bal/chash (sroot is the
-   pre-state anchor, base_exists is metadata), so those three decide dirtiness */
+   pre-state anchor), so those three decide dirtiness */
 static int acct_wset_dirty(const acct_wset_row *e) {
   /* changed vs the frozen tx-start original. A read member is seeded cur==orig
      and only a write can diverge them, so this alone identifies a real change
@@ -666,7 +665,7 @@ unit acct_wset_reset(const unit u) {
 }
 
 /* merge the tx overlay into the block base, then clear it. The merge only
-   ever updates the block CURRENT; the block ORIGINAL (+ base_exists) is the
+   ever updates the block CURRENT; the block ORIGINAL is the
    pre-state and is frozen ONCE, when the account first enters the block
    working set (from the tx row, which froze it at cache time from the base
    resolver). A row that already exists here already carries the correct
@@ -674,7 +673,7 @@ unit acct_wset_reset(const unit u) {
 /* drain-one pop for the Sail merge (k_tx_merge): SIDE-EFFECT-FREE hand-over
    of tx account row [cursor] incl. the address preimage (the block row's BAL
    serialization key); on drain the tx table resets and 0 returns (else
-   1 | base_exists<<1). Sail decides records + propagation per row. */
+   1). Sail decides records + propagation per row. */
 uint64_t acct_tx_pop_probe(lbits *addr,
                            uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
                            uint64_t *on, lbits *ob, lbits *os, lbits *oc) {
@@ -694,7 +693,7 @@ uint64_t acct_tx_pop_probe(lbits *addr,
   le_words4_to_lbits(ob, e->orig_bal);
   le_words4_to_lbits(os, e->orig_sroot);
   le_words4_to_lbits(oc, e->orig_chash);
-  return 1u | ((uint64_t)(e->base_exists ? 1 : 0) << 1);
+  return 1;
 }
 
 /* block-layer propagation hooks (pure mechanism; Sail chose the action).
@@ -709,11 +708,11 @@ static acct_wset_row *acct_block_bind(const lbits a, int *fresh) {
   return b;
 }
 
-/* changed account: fresh freezes orig + base_exists; curr always lands */
+/* changed account: fresh freezes orig; curr always lands */
 unit acct_block_write(const lbits a, uint64_t nonce, const lbits bal,
                       const lbits sroot, const lbits chash,
                       uint64_t ononce, const lbits obal,
-                      const lbits osroot, const lbits ochash, bool base_exists) {
+                      const lbits osroot, const lbits ochash) {
   int fresh = 0;
   acct_wset_row *b = acct_block_bind(a, &fresh);
   if (!b) return UNIT;
@@ -722,9 +721,6 @@ unit acct_block_write(const lbits a, uint64_t nonce, const lbits bal,
     lbits_to_le_words4(b->orig_bal, obal);
     lbits_to_le_words4(b->orig_sroot, osroot);
     lbits_to_le_words4(b->orig_chash, ochash);
-    b->base_exists = base_exists ? 1 : 0;
-  } else {
-    b->base_exists |= base_exists ? 1 : 0;
   }
   b->cur_nonce = nonce;
   lbits_to_le_words4(b->cur_bal, bal);
@@ -733,9 +729,9 @@ unit acct_block_write(const lbits a, uint64_t nonce, const lbits bal,
   return UNIT;
 }
 
-/* read member: fresh binds curr == orig; existing only ORs base_exists */
+/* read member: fresh binds curr == orig; an existing row is untouched */
 unit acct_block_cache(const lbits a, uint64_t nonce, const lbits bal,
-                      const lbits sroot, const lbits chash, bool base_exists) {
+                      const lbits sroot, const lbits chash) {
   int fresh = 0;
   acct_wset_row *b = acct_block_bind(a, &fresh);
   if (!b) return UNIT;
@@ -744,9 +740,6 @@ unit acct_block_cache(const lbits a, uint64_t nonce, const lbits bal,
     lbits_to_le_words4(b->cur_bal, bal);    lbits_to_le_words4(b->orig_bal, bal);
     lbits_to_le_words4(b->cur_sroot, sroot); lbits_to_le_words4(b->orig_sroot, sroot);
     lbits_to_le_words4(b->cur_chash, chash); lbits_to_le_words4(b->orig_chash, chash);
-    b->base_exists = base_exists ? 1 : 0;
-  } else {
-    b->base_exists |= base_exists ? 1 : 0;
   }
   return UNIT;
 }
@@ -770,7 +763,7 @@ uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
 }
 
 /* account row enumeration (layer 0 = tx, for the merge harvest AcctTxRow;
-   layer 1 = block, for the state-root AcctBlockRow). Returns base_exists. */
+   layer 1 = block, for the state-root AcctEntry). */
 uint64_t acct_tx_row_count(const unit u) { (void)u; return acct_wset_tx.n; }
 uint64_t acct_block_row_count(const unit u) { (void)u; return acct_wset_block.n; }
 uint64_t acct_block_probe_row(uint64_t i, lbits *addr,
@@ -788,14 +781,14 @@ uint64_t acct_block_probe_row(uint64_t i, lbits *addr,
   le_words4_to_lbits(ob, e->orig_bal);
   le_words4_to_lbits(os, e->orig_sroot);
   le_words4_to_lbits(oc, e->orig_chash);
-  return e->base_exists ? 1 : 0;
+  return 1;
 }
 
 /* --- writes / restore / wipe --- */
 /* update the current account on the EXISTING tx row (store_account; the JAcct
    undo). k_aload always runs before a store and caches every resolution
-   into the tx layer (acct_tx_cache), so the row -- with orig + base_exists
-   already frozen at the tx-start account -- is guaranteed live. An absent row
+   into the tx layer (acct_tx_cache), so the row -- with orig already frozen
+   at the tx-start account -- is guaranteed live. An absent row
    (wiped by the EIP-6780 delete) is a no-op. */
 unit acct_tx_update(const lbits a, uint64_t nonce,
                     const lbits bal, const lbits sroot, const lbits chash) {
@@ -815,12 +808,10 @@ unit acct_tx_update(const lbits a, uint64_t nonce,
 
 /* cache a resolved account as a tx-layer READ member (cur == orig = the
    resolution, un-journaled so a frame revert keeps the revealed value) --
-   k_aload's cache-on-every-read, mirroring storage_tx_cache. base_exists:
-   on a block-layer hit the block row's flag is inherited; else the caller's
-   flag (the witness walk reached a leaf). Only reached when the tx layer
+   k_aload's cache-on-every-read, mirroring storage_tx_cache.
    misses, so the row is always fresh -- bind unconditionally. */
 unit acct_tx_cache(const lbits a, uint64_t nonce, const lbits bal,
-                   const lbits sroot, const lbits chash, bool base_exists) {
+                   const lbits sroot, const lbits chash) {
   uint64_t h[4]; acct_secure_key(a, h);
   acct_wset_row *e = acct_wset_intern(&acct_wset_tx, h);
   if (!e) return UNIT;
@@ -833,8 +824,6 @@ unit acct_tx_cache(const lbits a, uint64_t nonce, const lbits bal,
   memcpy(e->cur_bal, b4, sizeof(e->cur_bal));    memcpy(e->orig_bal, b4, sizeof(e->orig_bal));
   memcpy(e->cur_sroot, sr, sizeof(e->cur_sroot)); memcpy(e->orig_sroot, sr, sizeof(e->orig_sroot));
   memcpy(e->cur_chash, ch, sizeof(e->cur_chash)); memcpy(e->orig_chash, ch, sizeof(e->orig_chash));
-  acct_wset_row *b = acct_wset_get(&acct_wset_block, h);
-  e->base_exists = b ? b->base_exists : (base_exists ? 1 : 0);
   return UNIT;
 }
 
@@ -855,12 +844,12 @@ static void acct_wset_table_remove_hkey(acct_wset_table *t, const uint64_t h[4])
 typedef struct {
   uint64_t hkey[4];
   uint64_t nonce; uint64_t bal[4]; uint64_t sroot[4]; uint64_t chash[4];
-  uint8_t base_exists;
+
 } acct_snap_row;
 
 static void acct_snap_push(acct_snap_row **rows, uint32_t *n, uint32_t *cap,
                            const uint64_t hkey[4], uint64_t nonce, const uint64_t bal[4],
-                           const uint64_t sroot[4], const uint64_t chash[4], uint8_t base_exists) {
+                           const uint64_t sroot[4], const uint64_t chash[4]) {
   if (*cap < *n + 1) {
     uint32_t nc = *cap ? *cap * 2 : 16;
     while (nc < *n + 1) nc *= 2;
@@ -870,7 +859,6 @@ static void acct_snap_push(acct_snap_row **rows, uint32_t *n, uint32_t *cap,
   acct_snap_row *r = &(*rows)[*n];
   memcpy(r->hkey, hkey, 32); r->nonce = nonce;
   memcpy(r->bal, bal, 32); memcpy(r->sroot, sroot, 32); memcpy(r->chash, chash, 32);
-  r->base_exists = base_exists;
   (*n)++;
 }
 
@@ -886,7 +874,7 @@ static void acct_union_build(void) {
   for (uint32_t bi = 0; bi < acct_wset_block.n; bi++) {
     const acct_wset_row *b = &acct_wset_block.rows[bi];
     acct_snap_push(&acct_union_rows, &acct_union_n, &acct_union_cap,
-                   b->hkey, b->cur_nonce, b->cur_bal, b->cur_sroot, b->cur_chash, b->base_exists);
+                   b->hkey, b->cur_nonce, b->cur_bal, b->cur_sroot, b->cur_chash);
   }
   acct_union_valid = 1;
 }
@@ -905,7 +893,6 @@ void acct_wset_union_sroot(lbits *rop, uint64_t i) {
 void acct_wset_union_chash(lbits *rop, uint64_t i) {
   acct_union_build(); le_words4_to_lbits(rop, i < acct_union_n ? acct_union_rows[i].chash : account_zero_val);
 }
-bool acct_wset_union_base_exists(uint64_t i) { acct_union_build(); return i < acct_union_n ? acct_union_rows[i].base_exists : 0; }
 
 static void acct_wset_iter_invalidate(void) {
   acct_union_valid = 0;

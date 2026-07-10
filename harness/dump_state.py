@@ -134,7 +134,7 @@ def _w(b, p):   return int.from_bytes(b[p:p + 32], "big"), p + 32
 def decode_snapshot(b):
     """Blob (see test_utils.c evmsail_dump_snapshot) -> {gas, root, accounts, stack,
     mem_frame_depth}.
-    accounts: {acct_hash_int: {nonce, bal, sroot, chash, base_exists, storage:{slot:val}}}
+    accounts: {acct_hash_int: {nonce, bal, sroot, chash, storage:{slot:val}}}
     (write-set union = what execution touched; unchanged witness-base values are not
     enumerable here -- that is what the state root commits to). stack: [word,...] top-first."""
     (ok, gas, root, exc), p = _parse_result(b)
@@ -144,13 +144,12 @@ def decode_snapshot(b):
     for _ in range(na):
         hk, p = _w(b, p); nonce, p = _u64(b, p); bal, p = _w(b, p)
         sroot, p = _w(b, p); chash, p = _w(b, p)
-        base = b[p]; p += 1
         ns, p = _u32(b, p)
         sto = {}
         for _ in range(ns):
             slot, p = _w(b, p); val, p = _w(b, p); sto[slot] = val
         accounts[hk] = {"nonce": nonce, "bal": bal, "sroot": sroot, "chash": chash,
-                        "base_exists": bool(base), "storage": sto}
+                        "storage": sto}
     assert b[p:p + 1] == b"S", "bad snapshot: missing stack section"; p += 1
     sd, p = _u32(b, p)
     stack = []
@@ -170,8 +169,7 @@ def format_snapshot(snap, limit=0):
     for i, (hk, a) in enumerate(snap["accounts"].items()):
         if limit and i >= limit:
             lines.append(f"  ... (+{len(snap['accounts']) - limit} more)"); break
-        lines.append(f"  {hk:#066x} nonce={a['nonce']} bal={a['bal']}"
-                     f"{' [new]' if not a['base_exists'] else ''}")
+        lines.append(f"  {hk:#066x} nonce={a['nonce']} bal={a['bal']}")
         for slot, val in a["storage"].items():
             lines.append(f"      [{slot:#x}] = {val:#x}")
     if snap["stack"]:

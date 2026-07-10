@@ -1056,9 +1056,12 @@ function storage_updates(a : address) -> list(TriePatch) = {
 function account_empty(acc : Account) -> bool =
     (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance)
 
-/* trie update for one changed block account row. Empty accounts with no
- * authenticated base leaf are dropped (witness base: there is nothing to
- * delete); otherwise empty accounts become deletes. A live account's leaf
+/* trie update for one changed block account row. An account that ends the
+ * block EIP-161-empty is a DELETE when its pre-state was a real leaf, else
+ * it is dropped (nothing to delete). The verdict is read off the value:
+ * a structurally non-empty orig can only come from decoding a leaf --
+ * value-as-existence, exactly as storage_updates treats a zero write to a
+ * leafless slot (curr == orig == 0 => skipped). A live account's leaf
  * embeds its post-state storage root: the single trie entry over the
  * account's pre-state storage root and its net storage changes (an empty
  * update list keeps the committed root, including an EIP-8025 omitted
@@ -1067,7 +1070,7 @@ function account_empty(acc : Account) -> bool =
 function state_updates_account_row(row : AcctEntry, s_upd : list(TriePatch), prev : list(TriePatch)) -> list(TriePatch) = {
     let acc = row.value.curr;
     let ak = to_nibbles(word_to_bytes32(keccak256_address(row.addr)));
-    if account_empty(acc) & not_bool(row.base_exists) then {
+    if account_empty(acc) & not_bool(account_changed(row.value.orig, EMPTY_ACCOUNT)) then {
         prev
     } else {
         let upd : TriePatch = if account_empty(acc) then {

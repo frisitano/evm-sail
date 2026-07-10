@@ -112,7 +112,7 @@ val storage_tx_pop = impure { c: "storage_tx_pop" } : unit -> option(StorageEntr
 
 struct AcctValue = { curr : Account, orig : Account }
 
-struct AcctEntry = { addr : address, base_exists : bool, value : AcctValue }
+struct AcctEntry = { addr : address, value : AcctValue }
 
 val acct_tx_pop = impure { c: "acct_tx_pop" } : unit -> option(AcctEntry)
 
@@ -122,11 +122,11 @@ val acct_tx_pop = impure { c: "acct_tx_pop" } : unit -> option(AcctEntry)
  * a fresh row binds curr == orig = the value; an existing row is only
  * marked read -- never downgraded. The account pair mirrors it, keyed by
  * the address preimage (the block row keeps it as the BAL serialization
- * key); base_exists ORs into the block row. */
+ * key). */
 val storage_block_put = impure { c: "storage_block_put" } : (address, word, word, word) -> unit /* (a, slot, curr, orig) */
 val storage_block_cache = impure { c: "storage_block_cache" } : (address, word, word) -> unit /* (a, slot, value) */
-val acct_block_write = impure { c: "acct_block_write" } : (address, bits(64), word, hash, hash, bits(64), word, hash, hash, bool) -> unit /* (a, curr n/b/sr/ch, orig n/b/sr/ch, base_exists) */
-val acct_block_cache = impure { c: "acct_block_cache" } : (address, bits(64), word, hash, hash, bool) -> unit /* (a, n/b/sr/ch, base_exists) */
+val acct_block_write = impure { c: "acct_block_write" } : (address, bits(64), word, hash, hash, bits(64), word, hash, hash) -> unit /* (a, curr n/b/sr/ch, orig n/b/sr/ch) */
+val acct_block_cache = impure { c: "acct_block_cache" } : (address, bits(64), word, hash, hash) -> unit /* (a, n/b/sr/ch) */
 
 /* EIP-6780 tx-end account deletion (k_account_delete). storage_tx_wipe pops
  * ONE of the address's tx rows, returning its slot -- Sail drains it,
@@ -177,7 +177,7 @@ val acct_tx_update = impure { c: "acct_tx_update" } : (address, bits(64), word, 
 
 /* witness base-resolver read-through: bind a resolved pre-state account as a
  * block-level read member */
-val acct_tx_cache = impure { c: "acct_tx_cache" } : (address, bits(64), word, hash, hash, bool) -> unit /* cache a resolved account as a tx read member (cur == orig). The bool: the pre-state leaf exists (EIP-158/6780); on a block-layer hit C inherits the block row's flag instead */
+val acct_tx_cache = impure { c: "acct_tx_cache" } : (address, bits(64), word, hash, hash) -> unit /* cache a resolved account as a tx read member (cur == orig) */
 
 /* compute_root enumeration over acct_wset_block (fields mirror AcctRow):
  * witness = dirty rows (changed vs pre-state); native = cache-union-block rows */
@@ -497,14 +497,14 @@ function k_aload(a : address) -> Account = {
         Some(acc) => return acc,
         None() => (),
     };
-    let (acc, base_exists) : (Account, bool) = match acct_block_get(a) {
-        Some(acc) => (acc, false), /* the cache inherits the block row's flag */
+    let acc : Account = match acct_block_get(a) {
+        Some(acc) => acc,
         None() => match stateless_account(a) {
-            Some(acc) => (acc, true), /* the witness walk reached the leaf */
-            None() => (EMPTY_ACCOUNT, false), /* proven-absent */
+            Some(acc) => acc,
+            None() => EMPTY_ACCOUNT, /* proven-absent reads as empty */
         },
     };
-    acct_tx_cache(a, get_slice_int(64, acc.nonce, 0), acc.balance, acc.storage_root, acc.code_hash, base_exists);
+    acct_tx_cache(a, get_slice_int(64, acc.nonce, 0), acc.balance, acc.storage_root, acc.code_hash);
     acc
 }
 

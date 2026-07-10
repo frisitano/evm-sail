@@ -219,7 +219,6 @@ void acct_tx_pop(struct zoptionzIRAcctEntryzK *out, unit u) {
     return;
   }
   out->kind = Kind_zSomezIRAcctEntryzK;
-  e->zbase_exists = (flags >> 1) & 1;
   CONVERT_OF(sail_int, mach_int)(&e->zvalue.zcurr.znonce, (mach_int)cn);
   CONVERT_OF(sail_int, mach_int)(&e->zvalue.zorig.znonce, (mach_int)on);
 }
@@ -233,11 +232,10 @@ void storage_block_row(struct zStorageEntry *out, const lbits a, uint64_t j) {
 
 void acct_block_row(struct zAcctEntry *out, uint64_t i) {
   uint64_t cn = 0, on = 0;
-  out->zbase_exists =
-      acct_block_probe_row(i, &out->zaddr, &cn, &out->zvalue.zcurr.zbalance,
-                           &out->zvalue.zcurr.zstorage_root, &out->zvalue.zcurr.zcode_hash, &on,
-                           &out->zvalue.zorig.zbalance, &out->zvalue.zorig.zstorage_root,
-                           &out->zvalue.zorig.zcode_hash) != 0;
+  acct_block_probe_row(i, &out->zaddr, &cn, &out->zvalue.zcurr.zbalance,
+                       &out->zvalue.zcurr.zstorage_root, &out->zvalue.zcurr.zcode_hash, &on,
+                       &out->zvalue.zorig.zbalance, &out->zvalue.zorig.zstorage_root,
+                       &out->zvalue.zorig.zcode_hash);
   CONVERT_OF(sail_int, mach_int)(&out->zvalue.zcurr.znonce, (mach_int)cn);
   CONVERT_OF(sail_int, mach_int)(&out->zvalue.zorig.znonce, (mach_int)on);
 }

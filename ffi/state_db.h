@@ -36,7 +36,7 @@ uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
 unit acct_tx_update(const lbits a, uint64_t nonce,
                     const lbits bal, const lbits sroot, const lbits chash);
 unit acct_tx_cache(const lbits a, uint64_t nonce, const lbits bal,
-                   const lbits sroot, const lbits chash, bool base_exists);
+                   const lbits sroot, const lbits chash);
 
 /* compute_root enumeration over acct_wset_block: witness = dirty rows, native =
    cache-union-block rows. Fields mirror AcctRow (host/state.sail). */
@@ -46,7 +46,6 @@ uint64_t acct_wset_union_nonce(uint64_t i);
 void acct_wset_union_bal(lbits *rop, uint64_t i);
 void acct_wset_union_sroot(lbits *rop, uint64_t i);
 void acct_wset_union_chash(lbits *rop, uint64_t i);
-bool acct_wset_union_base_exists(uint64_t i);
 
 /* EIP-7928 block access list, recomputed from execution. The overlay merges
    harvest the changes/reads (keyed by keccak(address), tagged with bal_set_index);
@@ -79,7 +78,7 @@ uint64_t acct_tx_pop_probe(lbits *addr,
 unit acct_block_write(const lbits a, uint64_t nonce, const lbits bal,
                       const lbits sroot, const lbits chash,
                       uint64_t ononce, const lbits obal,
-                      const lbits osroot, const lbits ochash, bool base_exists);
+                      const lbits osroot, const lbits ochash);
 unit acct_block_cache(const lbits a, uint64_t nonce, const lbits bal,
-                      const lbits sroot, const lbits chash, bool base_exists);
+                      const lbits sroot, const lbits chash);
 #endif

@@ -220,7 +220,6 @@ extern uint64_t acct_wset_union_nonce(uint64_t);
 extern void     acct_wset_union_bal(lbits *, uint64_t);
 extern void     acct_wset_union_sroot(lbits *, uint64_t);
 extern void     acct_wset_union_chash(lbits *, uint64_t);
-extern bool     acct_wset_union_base_exists(uint64_t);
 extern uint64_t storage_wset_union_count(lbits);
 extern void     storage_wset_union_slot(lbits *, lbits, uint64_t);
 extern void     storage_wset_union_val(lbits *, lbits, uint64_t);
@@ -293,7 +292,6 @@ unsigned long evmsail_dump_snapshot(const unsigned char **out)
         acct_wset_union_bal(&w, i);   d_word(&w);
         acct_wset_union_sroot(&w, i); d_word(&w);
         acct_wset_union_chash(&w, i); d_word(&w);
-        d_byte(acct_wset_union_base_exists(i) ? 1 : 0);
         uint64_t ns = storage_wset_union_count(hk);
         d_u32((uint32_t)ns);
         for (uint64_t j = 0; j < ns; j++) {
