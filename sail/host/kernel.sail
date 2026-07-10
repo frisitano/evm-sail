@@ -2,7 +2,7 @@
 /* HOST KERNEL FUNCTIONS                                                    */
 /*                                                                          */
 /* The host's syscall surface (k_*): the ONLY interface through which the   */
-/* transaction kernel (the EVM, user space) reads or mutates world state    */
+/* EVM (user space) reads or mutates world state                            */
 /* (host/state.sail). Each function performs one effect (a balance          */
 /* transfer, an SSTORE, a log emission, a snapshot/commit/revert) or        */
 /* answers one query (a balance, a code hash, an EIP-2929 warm bit).        */

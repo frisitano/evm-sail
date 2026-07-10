@@ -8,8 +8,8 @@
 /* and transaction environment, and the journal (the undo log that makes a  */
 /* call frame's effects atomically revertible).                             */
 /*                                                                          */
-/* This is the privileged host's data; the transaction kernel (the EVM,     */
-/* user space) reaches it ONLY through the host kernel functions in         */
+/* This is the privileged host's data; the EVM (user space) reaches it      */
+/* ONLY through the host kernel functions (the k_* syscall surface) in      */
 /* host/kernel.sail. Accounts, storage, transient storage, the warm access  */
 /* sets, logs, the SELFDESTRUCT/created sets, and the journal are all held  */
 /* in C-backed structures (the host holds no Sail data buffers).            */

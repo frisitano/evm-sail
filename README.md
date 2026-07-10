@@ -34,7 +34,7 @@ Objectives:
   syscall interface — exactly where symbolic execution, differential fuzzing,
   and witness-based (stateless) execution attach.
 
-## Architecture: a host, and the transaction kernel over user space
+## Architecture: a host kernel, and the EVM as user space
 
 - **The host** (`sail/host/`): Ethereum world state — user accounts, storage, transient
   storage, warm sets, logs, refunds, snapshots, the block/tx environment —
@@ -51,12 +51,13 @@ Prim:     k_create_addr  k_create2_addr  k_precompile
 Utils:    k_snapshot  k_commit  k_revert  k_refund_add  k_log
 ```
 
-- **The transaction kernel = the EVM** (`sail/evm/`): the opcode
+- **The EVM** (`sail/evm/`): the opcode
   interpreter, the gas counter, and **all** policy — the full fork-gated gas
   schedule, the EIP-2929/2200/3529 rules, transaction validity
   (EIP-1559/2930/3860/4844/7623/7702/7825), and *the decision of whether an
-  effect happens* (a no-op SSTORE charges gas in the transaction kernel but
-  performs no host write). It operates over user accounts — user space.
+  effect happens* (a no-op SSTORE charges gas in the EVM but performs no
+  host write). User space: it holds no world state of its own and reaches
+  it only through the k_* syscalls.
 
 The host-call boundary is what makes the model a natural front end for proof
 systems (each kernel function is an interface channel), for stateless
