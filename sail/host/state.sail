@@ -335,6 +335,17 @@ register k_parent_state_root : hash =
                     the node-db: the between-run wipe (test_utils.c clear_memory ->
                     nodedb_reset) must NOT clear it mid-run. */
 
+/* Witness-header pass results (index_witness_headers, host/block.sail): the
+ * single traversal hashes each header once and decodes the NEWEST (the parent
+ * of the block under validation) once; every later consumer -- headers_ok in
+ * block validation, parent_state_root, the parent gas/blob fields, the
+ * parent-hash check, BLOCKHASH -- reads these instead of re-materializing
+ * or re-hashing headers. */
+register in_headers_ok : bool = false
+register in_header_hashes : list(hash) = [||] /* header i hash at position i (oldest..newest) */
+register in_parent_header_hash : hash = ZERO_WORD
+register in_parent_header_items : list(RlpField) = [||] /* newest header, RLP-split once */
+
 /* number of authenticated ancestor headers available to BLOCKHASH (k_blockhash,
  * host/kernel.sail). Both entries publish it from the SSZ witness header chain in
  * authenticate_parent_state() (k_n_headers = wit_n_headers()): the guest carries

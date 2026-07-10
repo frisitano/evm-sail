@@ -113,10 +113,8 @@ struct BlockExecutionResult = {
     receipts : list(Receipt),
 }
 
-function parent_header_int_field(idx : int) -> int = {
-    let items = rlp_node_items(ssz_witness_header(wit_n_headers() - 1));
-    rlp_field_int(rlp_item(items, idx))
-}
+function parent_header_int_field(idx : int) -> int =
+    rlp_field_int(rlp_item(in_parent_header_items, idx))
 
 function expected_payload_excess_blob_gas() -> int =
     next_excess_blob_gas(parent_header_int_field(18), parent_header_int_field(17), parent_header_int_field(15))
@@ -437,7 +435,7 @@ function parent_hash_ok() -> bool =
     if wit_n_headers() < 1 then {
         false
     } else {
-        k_header.parent_hash == keccak256(ssz_witness_header_slice(wit_n_headers() - 1))
+        k_header.parent_hash == in_parent_header_hash
     }
 
 function validate_block(exec_ok : bool, block_result : BlockExecutionResult) -> unit = {

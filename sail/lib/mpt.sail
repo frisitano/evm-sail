@@ -1220,10 +1220,8 @@ function build_node_db() -> unit = {
  * extends the NEWEST, so its parent is header[n-1] -- NOT header[0]. With a
  * single header they coincide; when BLOCKHASH/EIP-2935 pulls in older headers
  * (EIP-8025 witness header collection) the parent is the last one. */
-function parent_state_root() -> bits(256) = {
-    let items = rlp_node_items(ssz_witness_header(wit_n_headers() - 1));
-    bytes_be256(list_nth(items, 3, RLP_NONE).content)
-}
+function parent_state_root() -> bits(256) =
+    bytes_be256(list_nth(in_parent_header_items, 3, RLP_NONE).content)
 
 /* The stateless resolvers (declared in host/state.sail): one lazy Merkle walk
  * from the authenticated parent-root anchor (k_parent_state_root) over the

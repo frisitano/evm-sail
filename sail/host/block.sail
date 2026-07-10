@@ -19,24 +19,40 @@ function register_witness_codes() -> unit = {
     }
 }
 
-/* validate_headers: the witness headers form a contiguous chain
- * (header[i].parent_hash == keccak(header[i-1])). */
-function headers_ok() -> bool = {
+/* The single witness-header traversal: hash each header ONCE, checking the
+ * chain link (header[i].parent_hash == keccak(header[i-1])) as we go, capture
+ * every hash for BLOCKHASH/EIP-2935 (k_blockhash), and RLP-split the NEWEST
+ * header -- the parent of the block being validated -- exactly once. Field
+ * DECODING from the captured items stays at the original consumer sites
+ * (parent_state_root, parent_header_int_field), so a non-canonical field
+ * still throws exactly where it used to. */
+function index_witness_headers() -> unit = {
     let n = wit_n_headers();
-    if n < 1 then {
-        false
-    } else {
-        var ok : bool = true;
-        foreach (i from 1 to (n - 1)) {
-            let parent_hash = bytes_be256(list_nth(rlp_node_items(ssz_witness_header(i)), 0, RLP_NONE).content);
-            let prev_hash = keccak256(ssz_witness_header_slice(i - 1));
-            if parent_hash != prev_hash then {
-                ok = false
+    var hashes : list(hash) = [||];
+    var prev : hash = ZERO_WORD;
+    var ok : bool = n >= 1;
+    foreach (i from 0 to (n - 1)) {
+        let s = ssz_witness_header_slice(i);
+        if (i > 0) | (i == n - 1) then {
+            let items = rlp_node_items(read_byte_slice(s));
+            if i > 0 then {
+                if bytes_be256(list_nth(items, 0, RLP_NONE).content) != prev then {
+                    ok = false
+                }
+            };
+            if i == n - 1 then {
+                in_parent_header_items = items
             }
         };
-        ok
-    }
+        prev = keccak256(s);
+        hashes = prev :: hashes
+    };
+    in_header_hashes = list_reverse(hashes);
+    in_parent_header_hash = prev;
+    in_headers_ok = ok
 }
+
+function headers_ok() -> bool = in_headers_ok
 
 /* Effective fee for a typed (EIP-1559) tx: the gas price actually paid is
  * min(max_fee_per_gas, base_fee + max_priority_fee), and the priority tip paid to
@@ -489,6 +505,7 @@ function input_well_formed() -> bool = {
 function authenticate_parent_state() -> unit = {
     build_node_db();
     register_witness_codes();
+    index_witness_headers();
 
     /* Publish the authenticated ancestor-header count to the register BLOCKHASH
        reads (k_blockhash, host/kernel.sail). The guest gets its real witness chain;

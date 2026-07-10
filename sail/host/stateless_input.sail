@@ -284,17 +284,6 @@ function wit_n_state() -> int = in_n_wit_state
 function wit_n_codes() -> int = in_n_wit_codes
 function wit_n_headers() -> int = in_n_wit_headers
 
-/* element i bytes of a List[ByteList] given its [start, end) span + count */
-function ssz_list_elem(start : int, n : int, stop : int, i : int) -> list(byte) = {
-    let off_i = ssz_u32(start + i * SSZ_OFF_BYTES);
-    let off_next = if i + 1 < n then {
-            ssz_u32(start + (i + 1) * SSZ_OFF_BYTES)
-        } else {
-            stop - start
-        };
-    ssz_bytes(start + off_i, off_next - off_i)
-}
-
 /* (start, len) of element i of a List[ByteList] given its [start, stop) span */
 function ssz_list_span(start : int, n : int, stop : int, i : int) -> (int, int) = {
     let off_i = ssz_u32(start + i * SSZ_OFF_BYTES);
@@ -313,13 +302,9 @@ function sha256_request_digest(request_type : int, s : ByteSlice) -> bits(256) =
     bytes_sha256_prefixed(get_slice_int(8, request_type, 0), s)
 function ssz_witness_node_slice(i : int) -> ByteSlice =
     ssz_list_slice(wit_state_start(), wit_n_state(), wit_codes_start(), i)
-function ssz_witness_node(i : int) -> list(byte) =
-    read_byte_slice(ssz_witness_node_slice(i))
 function ssz_witness_code_slice(i : int) -> ByteSlice =
     ssz_list_slice(wit_codes_start(), wit_n_codes(), wit_headers_start(), i)
 function ssz_witness_header_slice(i : int) -> ByteSlice =
     ssz_list_slice(wit_headers_start(), wit_n_headers(), cc_start(), i)
-function ssz_witness_header(i : int) -> list(byte) =
-    read_byte_slice(ssz_witness_header_slice(i))
 
 /* transactions[i] raw bytes (legacy = RLP list; typed = type byte ++ payload) */
