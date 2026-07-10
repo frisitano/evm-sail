@@ -702,7 +702,7 @@ uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
 
 /* --- writes / restore / wipe --- */
 /* update the current account on the EXISTING tx row (store_account; the JAcct
-   undo). load_account always runs before a store and caches every resolution
+   undo). k_aload always runs before a store and caches every resolution
    into the tx layer (acct_tx_cache), so the row -- with orig + base_exists
    already frozen at the tx-start account -- is guaranteed live. An absent row
    (wiped by the EIP-6780 delete) is a no-op. */
@@ -724,7 +724,7 @@ unit acct_tx_update(const lbits a, uint64_t nonce,
 
 /* cache a resolved account as a tx-layer READ member (cur == orig = the
    resolution, un-journaled so a frame revert keeps the revealed value) --
-   load_account's cache-on-every-read, mirroring storage_tx_cache. base_exists:
+   k_aload's cache-on-every-read, mirroring storage_tx_cache. base_exists:
    on a block-layer hit the block row's flag is inherited; else the caller's
    flag (the witness walk reached a leaf). Only reached when the tx layer
    misses, so the row is always fresh -- bind unconditionally. */

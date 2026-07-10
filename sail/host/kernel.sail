@@ -93,19 +93,19 @@ function k_tstore(a : address, s : word, v : word) -> unit = {
 
 /* --- accounts (BALANCE / EXTCODEHASH / EXTCODESIZE / nonce, transfers) --- */
 function k_get_balance(a : address) -> word = {
-    load_account(a).balance
+    k_aload(a).balance
 }
 function k_get_nonce(a : address) -> int = {
-    load_account(a).nonce
+    k_aload(a).nonce
 }
 
 /* the raw codeHash used to key the code store (KECCAK_EMPTY for codeless accounts) */
-function k_code_key(a : address) -> hash = load_account(a).code_hash
+function k_code_key(a : address) -> hash = k_aload(a).code_hash
 
 /* EXTCODEHASH (EIP-1052): the account's code binding. A truly empty
  * (nonexistent per EIP-161) account reads as 0, not KECCAK_EMPTY. */
 function k_get_codehash(a : address) -> hash = {
-    let acc = load_account(a);
+    let acc = k_aload(a);
     if (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance) then {
         word_of_int(0)
     } else {
@@ -114,7 +114,7 @@ function k_get_codehash(a : address) -> hash = {
 }
 function k_account_is_empty(a : address) -> bool = {
     /* EIP-161 "empty" account: nonce 0, balance 0, no code (unrecorded query) */
-    let acc = load_account(a);
+    let acc = k_aload(a);
     (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance)
 }
 
@@ -122,7 +122,7 @@ function k_account_is_empty(a : address) -> bool = {
  * target is occupied if it has code OR a nonzero nonce OR any storage
  * (EELS account_has_code_or_nonce || account_has_storage). */
 function k_account_occupied(a : address) -> bool = {
-    let acc = load_account(a);
+    let acc = k_aload(a);
     let has_code : bool = acc.code_hash != KECCAK_EMPTY;
     let has_storage : bool = (acc.storage_root != EMPTY_TRIE_ROOT) | storage_has_live_addr(a);
     has_code | (acc.nonce != 0) | has_storage
@@ -161,23 +161,23 @@ function k_emit_burn_log(a : address, v : word) -> unit = {
 function k_transfer(src : address, dst : address, v : word) -> unit = {
     /* EELS move_ether reads (touches) both accounts unconditionally -- even a
      * zero or self transfer -- so both stay in the account set (BAL). */
-    let _ = load_account(src);
-    let _ = load_account(dst);
+    let _ = k_aload(src);
+    let _ = k_aload(dst);
     if word_is_zero(v) | (src == dst) then {
         ()
     } else {
-        journal_push(JAcct(src, load_account(src)));
-        journal_push(JAcct(dst, load_account(dst)));
-        store_account(src, { load_account(src) with balance = alu_sub(load_account(src).balance, v) });
-        store_account(dst, { load_account(dst) with balance = alu_add(load_account(dst).balance, v) });
+        journal_push(JAcct(src, k_aload(src)));
+        journal_push(JAcct(dst, k_aload(dst)));
+        store_account(src, { k_aload(src) with balance = alu_sub(k_aload(src).balance, v) });
+        store_account(dst, { k_aload(dst) with balance = alu_add(k_aload(dst).balance, v) });
         k_emit_transfer_log(src, dst, v)
     }
 }
 
 /* Increment an account's nonce (sender per tx, creator at CREATE/CREATE2). */
 function k_bump_nonce(a : address) -> unit = {
-    journal_push(JAcct(a, load_account(a)));
-    store_account(a, { load_account(a) with nonce = load_account(a).nonce + 1 })
+    journal_push(JAcct(a, k_aload(a)));
+    store_account(a, { k_aload(a) with nonce = k_aload(a).nonce + 1 })
 }
 
 /* Set an account's code by binding its codeHash, journaling the prior account.
@@ -189,18 +189,18 @@ function k_bump_nonce(a : address) -> unit = {
  *   k_clear_code: reset to codeless (KECCAK_EMPTY); no store entry is needed
  *     (an empty code blob is never interned; a missing key reads length 0). */
 function k_deploy_returndata_code(a : address) -> unit = {
-    journal_push(JAcct(a, load_account(a)));
+    journal_push(JAcct(a, k_aload(a)));
     let h : hash = code_intern_returndata();
-    store_account(a, { load_account(a) with code_hash = h })
+    store_account(a, { k_aload(a) with code_hash = h })
 }
 function k_set_delegation(a : address, target : address) -> unit = {
-    journal_push(JAcct(a, load_account(a)));
+    journal_push(JAcct(a, k_aload(a)));
     let h : hash = code_intern_delegation(target);
-    store_account(a, { load_account(a) with code_hash = h })
+    store_account(a, { k_aload(a) with code_hash = h })
 }
 function k_clear_code(a : address) -> unit = {
-    journal_push(JAcct(a, load_account(a)));
-    store_account(a, { load_account(a) with code_hash = KECCAK_EMPTY })
+    journal_push(JAcct(a, k_aload(a)));
+    store_account(a, { k_aload(a) with code_hash = KECCAK_EMPTY })
 }
 
 /* ---- EIP-7702 delegation designation: the 23-byte code 0xef0100 ++ address
@@ -263,14 +263,14 @@ function k_add_balance(a : address, v : word) -> unit = {
     /* EELS modify_state always reads (touches) the account, even for a zero
      * delta, so it stays in the account set (BAL). Only the write is skipped
      * at zero -- a zero delta is not a net balance change. */
-    let cur = load_account(a);
+    let cur = k_aload(a);
     if not_bool(word_is_zero(v)) then {
         journal_push(JAcct(a, cur));
         store_account(a, { cur with balance = alu_add(cur.balance, v) })
     }
 }
 function k_sub_balance(a : address, v : word) -> unit = {
-    let cur = load_account(a);
+    let cur = k_aload(a);
     if not_bool(word_is_zero(v)) then {
         journal_push(JAcct(a, cur));
         store_account(a, { cur with balance = alu_sub(cur.balance, v) })
@@ -359,11 +359,11 @@ function k_was_created(a : address) -> bool = created_contains(a)
  * balance is forced to 0 after the transfer, so a self-beneficiary transfer
  * burns the ether (journaled; a frame revert restores it). */
 function k_zero_balance(a : address) -> unit = {
-    if word_is_zero(load_account(a).balance) then {
+    if word_is_zero(k_aload(a).balance) then {
         ()
     } else {
-        journal_push(JAcct(a, load_account(a)));
-        store_account(a, { load_account(a) with balance = ZERO_WORD })
+        journal_push(JAcct(a, k_aload(a)));
+        store_account(a, { k_aload(a) with balance = ZERO_WORD })
     }
 }
 
@@ -372,7 +372,7 @@ function k_zero_balance(a : address) -> unit = {
  * same tx). Unrecorded: the tx-end reduction is host bookkeeping. */
 function k_account_delete(a : address) -> unit = {
     /* Set the account EMPTY in place (do NOT eest_account_remove it). Removing it would
-       let a later load_account(a) RE-MATERIALIZE the account from the pre-state witness
+       let a later k_aload(a) RE-MATERIALIZE the account from the pre-state witness
        leaf -- wrong for an account CREATEd+SELFDESTRUCTed and then re-CREATEd later
        in the same block (the stale pre-state balance would resurface). Kept empty
        in the eest_account, a later read sees the deletion, the post-state walk drops it
@@ -425,7 +425,7 @@ function k_finalize_selfdestructs() -> unit = {
         match xs {
             a :: r => {
                 if (k_fork < FORK_CANCUN) | k_was_created(a) then {
-                    k_emit_burn_log(a, load_account(a).balance);
+                    k_emit_burn_log(a, k_aload(a).balance);
                     k_account_delete(a)
                 };
                 xs = r

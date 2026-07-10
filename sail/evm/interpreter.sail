@@ -357,7 +357,7 @@ function run_call(mode : int) -> unit = {
 
         /* EELS reads get_account(code_address) on the resolved delegate, so the
            delegate is touched (kept in the BAL account set). */
-        let _ = load_account(tg_target)
+        let _ = k_aload(tg_target)
     };
     if m_max > memory_size then {
         memory_size = m_max
@@ -368,7 +368,7 @@ function run_call(mode : int) -> unit = {
      * charged, before the depth/balance guards -- so the call target is always a
      * state access (kept in the BAL account set), including precompiles and calls
      * that then fail the depth/balance guard below. */
-    let _ = load_account(target);
+    let _ = k_aload(target);
 
     /* call-failure guards (checked AFTER gas is charged): the depth ceiling
        (EIP-150, 1024 frames) and, for a value-bearing CALL/CALLCODE, the

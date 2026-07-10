@@ -478,7 +478,7 @@ register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob
  * included later): resolve `a` from the authenticated witness leaf store and bind
  * it (nonce/balance/storageRoot/codeHash) as Some(account); proven-absent in
  * the witness -> None. PURE: the caller does the caching. The witness IS the
- * base, so load_account loads on first touch -- no eager seeding. */
+ * base, so k_aload loads on first touch -- no eager seeding. */
 val stateless_account : address -> option(Account)
 
 /* internal (un-journaled) account accessor used inside the kernel functions,
@@ -489,29 +489,20 @@ val stateless_account : address -> option(Account)
  * (store_account) relies on -- and the merge propagates read members to the
  * block layer for later txs and the BAL account list. Un-journaled: a frame
  * revert keeps the revealed pre-state and only undoes recorded mutations. */
-function load_account(a : address) -> Account = {
+function k_aload(a : address) -> Account = {
     match acct_tx_get(a) {
         Some(acc) => return acc,
         None() => (),
     };
-    match acct_block_get(a) {
-        Some(acc) => {
-            /* base_exists is inherited from the block row by the cache */
-            acct_tx_cache(a, get_slice_int(64, acc.nonce, 0), acc.balance, acc.storage_root, acc.code_hash, false);
-            return acc
+    let (acc, base_exists) : (Account, bool) = match acct_block_get(a) {
+        Some(acc) => (acc, false), /* the cache inherits the block row's flag */
+        None() => match stateless_account(a) {
+            Some(acc) => (acc, true), /* the witness walk reached the leaf */
+            None() => (EMPTY_ACCOUNT, false), /* proven-absent */
         },
-        None() => (),
     };
-    match stateless_account(a) {
-        Some(acc) => {
-            acct_tx_cache(a, get_slice_int(64, acc.nonce, 0), acc.balance, acc.storage_root, acc.code_hash, true);
-            acc
-        },
-        None() => {
-            acct_tx_cache(a, sail_zeros(64), sail_zeros(256), EMPTY_TRIE_ROOT, KECCAK_EMPTY, false);
-            EMPTY_ACCOUNT
-        },
-    }
+    acct_tx_cache(a, get_slice_int(64, acc.nonce, 0), acc.balance, acc.storage_root, acc.code_hash, base_exists);
+    acc
 }
 
 /* a mutation writes the per-tx account overlay (acct_wset); the first write this

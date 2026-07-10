@@ -360,7 +360,7 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
     /* EELS reads the recipient account during message setup (get_account for its
      * code) for every call-transaction, so it is always a state access -- keep it
      * in the account set (BAL), including a tx sent directly to a precompile. */
-    let _ = load_account(tx.recipient);
+    let _ = k_aload(tx.recipient);
     if word_nonzero(tx.value) then {
         k_transfer(sender, tx.recipient, tx.value)
     };
@@ -402,7 +402,7 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
 
             /* EELS reads get_account(code_address) on the resolved delegate, so
                the delegate is touched (kept in the BAL account set). */
-            let _ = load_account(tx_dtgt);
+            let _ = k_aload(tx_dtgt);
             ()
         };
         frame_code_exec(tx.recipient, tx_deleg, tx_dtgt); /* follow a delegation designation */

@@ -622,7 +622,7 @@ function main() -> unit = {
     /* The witness backs the base layer for BOTH accounts and storage (the
        witness base backend, host/base_witness.sail, statically linked into this
        entry). A touched account is proven present-or-absent by a lazy Merkle
-       walk from the authenticated parent root on first load_account (then
+       walk from the authenticated parent root on first k_aload (then
        cached raw in the acctmap); a touched slot is proven the same way from
        the account's storage root on first read (k_sload) and seeded into
        the working set. Nothing is pre-seeded -- no eager account/slot pass. */
@@ -645,8 +645,8 @@ function main() -> unit = {
     };
 
     let gas_used = to_gas(block_result.gas_acc);
-    let wbal = load_account(first_withdrawal_address()).balance;
-    let cbbal = load_account(k_header.fee_recipient).balance;
+    let wbal = k_aload(first_withdrawal_address()).balance;
+    let cbbal = k_aload(k_header.fee_recipient).balance;
 
     zkvm_out_gas = gas_used;
     zkvm_out_storage0 = 0; /* legacy debug scalar, no longer computed */

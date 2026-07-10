@@ -1244,7 +1244,7 @@ function parent_state_root() -> bits(256) = {
  * slot => 0. Base BELOW the overlay layers (host/kernel.sail k_sload, which
  * caches the resolved value in the tx layer). */
 function stateless_storage(a : address, s : word) -> word = {
-    let sroot = load_account(a).storage_root;
+    let sroot = k_aload(a).storage_root;
     if sroot == EMPTY_TRIE_ROOT then {
         sail_zeros(256)
     } else {
@@ -1265,7 +1265,7 @@ function stateless_storage(a : address, s : word) -> word = {
 /* Stateless account resolution (PURE, mirroring stateless_storage): walk the
  * state trie from the parent-root anchor. Reaching the leaf => Some(account);
  * a diverging/empty terminus => None (proven-absent); a blinded node =>
- * missing proof => fail closed. The caller (load_account) caches the result
+ * missing proof => fail closed. The caller (k_aload) caches the result
  * into the tx layer -- no overlay mutation happens here. */
 function stateless_account(a : address) -> option(Account) = {
     let ak = keccak256_address(a);
