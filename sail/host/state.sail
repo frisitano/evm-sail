@@ -115,11 +115,12 @@ val acct_wset_reset = impure { c: "acct_wset_reset" } : unit -> unit
 val acct_wset_tx_clear = impure { c: "acct_wset_tx_clear" } : unit -> unit
 val acct_wset_merge = impure { c: "acct_wset_merge" } : unit -> unit
 val acct_wset_wipe_addr = impure { c: "acct_wset_wipe_addr" } : address -> unit
-val acct_wset_present = impure { c: "acct_wset_present" } : address -> bool
-val acct_wset_nonce = impure { c: "acct_wset_nonce" } : address -> bits(64)
-val acct_wset_bal = impure { c: "acct_wset_bal" } : address -> word
-val acct_wset_sroot = impure { c: "acct_wset_sroot" } : address -> hash
-val acct_wset_chash = impure { c: "acct_wset_chash" } : address -> hash
+/* Per-layer account views, mirroring storage_tx_get / storage_block_get: each
+ * layer answers a point query with option(Account), crossing the boundary as
+ * one whole value (ffi/journal_glue.c over the acct row tables); the
+ * tx-over-block precedence lives in Sail (account_lookup below). */
+val acct_tx_get = impure { c: "acct_tx_get" } : address -> option(Account)
+val acct_block_get = impure { c: "acct_block_get" } : address -> option(Account)
 val acct_wset_write = impure { c: "acct_wset_write" } : (address, bits(64), word, hash, hash) -> unit
 val acct_wset_restore = impure { c: "acct_wset_restore" } : (address, bits(64), word, hash, hash) -> unit
 
@@ -487,22 +488,29 @@ register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob
  * block-level read member on first touch (acct_wset_seed_read, in the base
  * resolver stateless_account_load), so the overlay is the single source. */
 function account_lookup(a : address) -> Account = {
-    if acct_wset_present(a) then {
-        struct {
-            nonce = unsigned(acct_wset_nonce(a)),
-            balance = acct_wset_bal(a),
-            code_hash = acct_wset_chash(a),
-            storage_root = acct_wset_sroot(a),
-        }
-    } else {
-        EMPTY_ACCOUNT
+    match acct_tx_get(a) {
+        Some(acc) => return acc,
+        None() => (),
+    };
+    match acct_block_get(a) {
+        Some(acc) => acc,
+        None() => EMPTY_ACCOUNT,
     }
 }
 
 /* whether `a` has been materialized as a working-set read member or written;
  * distinct from account_lookup, which returns EMPTY_ACCOUNT for absent and
  * not-yet-loaded alike. Gates the resolve-once in load_account. */
-function account_loaded(a : address) -> bool = acct_wset_present(a)
+function account_loaded(a : address) -> bool = {
+    match acct_tx_get(a) {
+        Some(_) => return true,
+        None() => (),
+    };
+    match acct_block_get(a) {
+        Some(_) => true,
+        None() => false,
+    }
+}
 
 /* Stateless account materialization (defined in lib/mpt.sail, the witness reader,
  * included later): resolve `a` from the authenticated witness leaf store and bind

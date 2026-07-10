@@ -29,4 +29,7 @@ void journal_pop(struct zJEntry *rop, unit u);       /* unit -> JEntry */
 struct zoptionzIRStorageEntryzK;                     /* option(StorageEntry) per-layer views */
 void storage_tx_get(struct zoptionzIRStorageEntryzK *rop, const lbits a, const lbits s);
 void storage_block_get(struct zoptionzIRStorageEntryzK *rop, const lbits a, const lbits s);
+struct zoptionzIRAccountzK;                          /* option(Account) per-layer views */
+void acct_tx_get(struct zoptionzIRAccountzK *rop, const lbits a);
+void acct_block_get(struct zoptionzIRAccountzK *rop, const lbits a);
 #endif

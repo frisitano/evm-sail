@@ -39,11 +39,10 @@ unit acct_wset_reset(const unit u);
 unit acct_wset_tx_clear(const unit u);
 unit acct_wset_merge(const unit u);
 unit acct_wset_wipe_addr(const lbits a);
-bool acct_wset_present(const lbits a);
-uint64_t acct_wset_nonce(const lbits a);
-void acct_wset_bal(lbits *rop, const lbits a);
-void acct_wset_sroot(lbits *rop, const lbits a);
-void acct_wset_chash(lbits *rop, const lbits a);
+/* per-layer account probe (layer 0 = tx, 1 = block) for the Sail
+   option(Account) glue: 0 = absent, 1 = present (fields in the out params) */
+uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
+                        lbits *bal, lbits *sroot, lbits *chash);
 unit acct_wset_write(const lbits a, uint64_t nonce,
                      const lbits bal, const lbits sroot, const lbits chash);
 unit acct_wset_restore(const lbits a, uint64_t nonce,

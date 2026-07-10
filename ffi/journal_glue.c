@@ -11,7 +11,11 @@
  *
  * (2) storage_tx_get / storage_block_get: per-layer option(StorageEntry)
  * views over state_db.c's row tables (storage_row_probe); the layer
- * precedence lives in Sail (k_sload / k_sload_orig), not here.
+ * precedence lives in Sail (k_sload / k_sstore), not here.
+ *
+ * (3) acct_tx_get / acct_block_get: per-layer option(Account) views over
+ * state_db.c's account tables (acct_row_probe); tx-over-block precedence
+ * lives in Sail (account_lookup).
  */
 #include EVMSAIL_MODEL_H
 #include "kernel_state.h"
@@ -151,4 +155,31 @@ void storage_tx_get(struct zoptionzIRStorageEntryzK *out, const lbits a,
 void storage_block_get(struct zoptionzIRStorageEntryzK *out, const lbits a,
                        const lbits s) {
   storage_entry_out(out, 1, a, s);
+}
+
+/* per-layer account views: probe state_db's layer table and build
+ * option(Account). */
+static void acct_entry_out(struct zoptionzIRAccountzK *out, uint64_t layer,
+                           const lbits a) {
+  uint64_t nonce;
+  lbits bal, sroot, chash;
+  if (acct_row_probe(layer, a, &nonce, &bal, &sroot, &chash)) {
+    out->kind = Kind_zSomezIRAccountzK;
+    struct zAccount *acc = &out->variants.zSomezIRAccountzK;
+    CONVERT_OF(sail_int, mach_int)(&acc->znonce, (mach_int)nonce);
+    acc->zbalance = bal;
+    acc->zstorage_root = sroot;
+    acc->zcode_hash = chash;
+  } else {
+    out->kind = Kind_zNonezIRAccountzK;
+    out->variants.zNonezIRAccountzK = UNIT;
+  }
+}
+
+void acct_tx_get(struct zoptionzIRAccountzK *out, const lbits a) {
+  acct_entry_out(out, 0, a);
+}
+
+void acct_block_get(struct zoptionzIRAccountzK *out, const lbits a) {
+  acct_entry_out(out, 1, a);
 }

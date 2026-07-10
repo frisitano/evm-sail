@@ -622,12 +622,6 @@ static int acct_wset_dirty(const acct_wset_row *e) {
    a block row is a committed write or a witness read member (cur=resolved
    pre-state) -- both carry the live base value in cur, so any block row wins once
    the tx overlay has none. Native's block table holds only merged writes. */
-static acct_wset_row *acct_wset_live(const uint64_t h[4]) {
-  acct_wset_row *e = acct_wset_get(&acct_wset_tx, h);
-  if (e) return e;
-  return acct_wset_get(&acct_wset_block, h);
-}
-
 /* --- lifecycle --- */
 unit acct_wset_reset(const unit u) {
   (void)u;
@@ -683,29 +677,21 @@ unit acct_wset_merge(const unit u) {
 }
 
 /* --- reads (overlay only; a miss => Sail asks eest_account / resolver) --- */
-bool acct_wset_present(const lbits a) {
-  uint64_t h[4]; acct_secure_key(a, h);
-  return acct_wset_live(h) ? 1 : 0;
-}
-uint64_t acct_wset_nonce(const lbits a) {
-  uint64_t h[4]; acct_secure_key(a, h);
-  acct_wset_row *e = acct_wset_live(h);
-  return e ? e->cur_nonce : 0;
-}
-void acct_wset_bal(lbits *rop, const lbits a) {
-  uint64_t h[4]; acct_secure_key(a, h);
-  acct_wset_row *e = acct_wset_live(h);
-  le_words4_to_lbits(rop, e ? e->cur_bal : account_zero_val);
-}
-void acct_wset_sroot(lbits *rop, const lbits a) {
-  uint64_t h[4]; acct_secure_key(a, h);
-  acct_wset_row *e = acct_wset_live(h);
-  le_words4_to_lbits(rop, e ? e->cur_sroot : account_zero_val);
-}
-void acct_wset_chash(lbits *rop, const lbits a) {
-  uint64_t h[4]; acct_secure_key(a, h);
-  acct_wset_row *e = acct_wset_live(h);
-  le_words4_to_lbits(rop, e ? e->cur_chash : account_zero_val);
+/* per-layer account probe (layer 0 = tx, 1 = block) for the Sail
+   option(Account) glue (journal_glue.c): returns presence; the field words
+   land in the out params (untouched when absent). The tx-over-block
+   precedence lives in Sail (account_lookup). */
+uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
+                        lbits *bal, lbits *sroot, lbits *chash) {
+  uint64_t h[4];
+  acct_secure_key(a, h);
+  acct_wset_row *e = acct_wset_get(layer == 0 ? &acct_wset_tx : &acct_wset_block, h);
+  if (!e) return 0;
+  *nonce = e->cur_nonce;
+  le_words4_to_lbits(bal, e->cur_bal);
+  le_words4_to_lbits(sroot, e->cur_sroot);
+  le_words4_to_lbits(chash, e->cur_chash);
+  return 1;
 }
 
 /* --- writes / restore / wipe --- */
