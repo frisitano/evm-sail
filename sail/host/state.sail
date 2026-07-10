@@ -79,9 +79,7 @@ val storage_wset_reset = impure { c: "storage_wset_reset" } : unit -> unit
 val storage_wset_tx_clear = impure { c: "storage_wset_tx_clear" } : unit -> unit
 val storage_wset_merge = impure { c: "storage_wset_merge" } : unit -> unit
 val storage_tx_cache = impure { c: "storage_tx_cache" } : (address, word, word) -> unit /* cache resolved base + mark read (EIP-7928 read record) */
-val storage_wset_prior = impure { c: "storage_wset_prior" } : (address, word, word) -> word /* JStor payload: value a revert restores */
-val storage_tx_set = impure { c: "storage_tx_set" } : (address, word, word, word) -> unit /* (a,s,v,orig): tx-layer write; orig adopted on first write */
-val storage_wset_restore = impure { c: "storage_wset_restore" } : (address, word, word) -> unit /* JStor undo: current := prior */
+val storage_tx_update = impure { c: "storage_tx_update" } : (address, word, word) -> unit /* current := v on the existing tx row (re-write; JStor undo) */
 val storage_wset_warm = impure { c: "storage_wset_warm" } : (address, word) -> bool /* set warm; true iff was cold */
 val storage_wset_is_warm = impure { c: "storage_wset_is_warm" } : (address, word) -> bool
 val storage_wset_unwarm = impure { c: "storage_wset_unwarm" } : (address, word) -> unit /* JWarmS undo */
@@ -92,7 +90,7 @@ val storage_wset_wipe_addr = impure { c: "storage_wset_wipe_addr" } : address ->
  * union value, like JEntry -- built by ffi/journal_glue.c from state_db.c's
  * row tables). The layer-precedence semantics -- which layer wins, and what
  * the EIP-2200 tx-start original is -- live in SAIL (host/kernel.sail
- * k_sload / k_sload_orig), not in C. None = this layer never touched the
+ * k_sload / k_sstore), not in C. None = this layer never touched the
  * slot. An entry's curr is the live value; orig is the layer-start value
  * (frozen from the base on the first write; a cached read has curr == orig =
  * the resolved base). */
@@ -541,7 +539,7 @@ function apply_undo(e : JEntry) -> unit = match e {
     JCheck()       => (),
     JAcct(a, old)  => store_account(a, old),
     JTran(a, s, v) => transient_store(a, s, v),
-    JStor(a, s, p) => storage_wset_restore(a, s, p),
+    JStor(a, s, p) => storage_tx_update(a, s, p),
     JWarmA(a)      => warm_addr_remove(a),
     JWarmS(a, s)   => warm_slot_remove(a, s),
     JLog()         => log_drop_last(),

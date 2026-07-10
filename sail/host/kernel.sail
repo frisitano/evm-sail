@@ -39,65 +39,46 @@ function k_slot_is_warm(a : address, s : word) -> bool = {
 /* --- persistent storage (SLOAD/SSTORE): the C cache/update store, whose update
  * layers are pushed/popped by k_snapshot / k_commit / k_revert --- */
 
-/* k_sload: the slot's live value = the write-set overlay (this tx's write over
- * committed block writes) when present, else the pre-state resolver
- * stateless_storage. k_sload_orig (EIP-2200 "original"): the slot at tx start = the
- * block base (committed prior txs) when present, else stateless_storage. The
- * overlay is writes-only, so a pure read never mutates it; storage reverts run
- * through the JStor journal.
+/* k_sload: resolve the slot to its live StorageEntry -- curr is the value
+ * SLOAD pushes; orig is the EIP-2200 tx-start value the SSTORE gas policy
+ * compares against. One resolution serves both views: a tx entry carries the
+ * pair; a block-layer hit or a pre-state walk yields curr == orig = the
+ * resolved value (nothing this tx has changed it yet), which is ALWAYS cached
+ * as a tx read entry, so after any k_sload the slot is live in the tx layer
+ * -- the invariant k_sstore's update relies on. storage_tx_cache also marks
+ * the EIP-7928 read; the serializer emits distinct read slots not present in
+ * storage_changes, so re-reads and reads of written slots add nothing to the
+ * BAL. The merge propagates reads to the block layer, so a later tx skips
+ * the witness walk. Storage reverts run through the JStor journal.
  *
  * stateless_storage is the base storage primitive (declared in host/state.sail,
  * defined in lib/mpt.sail as an authenticated MPT point-get -- one walk for
- * both the witness and the harness-built alloc trie). Everything above it -- the
- * overlay, the read-through, the journal -- is common. */
-function k_sload(a : address, s : word) -> word =
-    /* live value = this tx's layer over the block layer: a tx entry (write or
-       cached read) can only form when the block layer misses, so tx-over-block
-       is the whole precedence. Both layers absent = a TRUE base miss: resolve
-       the pre-state once (stateless_storage) and cache it as a read member
-       (storage_tx_cache sets was_read = the EIP-7928 read record).
-       Repeat reads then hit the working set, and the merge propagates the
-       read to the block base so a later tx skips the witness walk too. */
-    {
-        match storage_tx_get(a, s) {
-            Some(e) => return e.curr,
-            None() => (),
-        };
-        match storage_block_get(a, s) {
-            Some(e) => return e.curr,
-            None() => (),
-        };
-        let v = stateless_storage(a, s);
-        storage_tx_cache(a, s, v);
-        v
-    }
-function k_sload_orig(a : address, s : word) -> word =
-    /* the EIP-2200 tx-start value: a tx entry answers with its orig (the
-       frozen tx-start value; a cached read's orig IS its value); else a block
-       entry's curr -- a committed block write or cached read is this tx's
-       starting value; else the pre-state base. No caching on a miss: k_sstore
-       adopts orig into the tx row it writes. */
-    {
-        match storage_tx_get(a, s) {
-            Some(e) => return e.orig,
-            None() => (),
-        };
-        match storage_block_get(a, s) {
-            Some(e) => return e.curr,
-            None() => (),
-        };
-        stateless_storage(a, s)
-    }
+ * both the witness and the harness-built alloc trie). Everything above it --
+ * the overlay, the read-through, the journal -- is common. */
+function k_sload(a : address, s : word) -> StorageEntry = {
+    match storage_tx_get(a, s) {
+        Some(e) => return e,
+        None() => (),
+    };
+    let v : word = match storage_block_get(a, s) {
+        Some(e) => e.curr,
+        None() => stateless_storage(a, s),
+    };
+    storage_tx_cache(a, s, v);
+    struct { curr = v, orig = v }
+}
 
-function k_sstore(a : address, s : word, v : word) -> unit = {
-    let orig = k_sload_orig(a, s); /* EIP-2200 tx-start value */
-    journal_push(JStor(a, s, storage_wset_prior(a, s, orig))); /* undo -> prior value */
-
-    /* orig is adopted on the first write this tx. NO account leaf refresh: the
-       storage root is derived at compute_root, and the witness account iteration
-       unions storage-changed accounts from the storage write-set
-       (lib/mpt.sail state_updates_map). */
-    storage_tx_set(a, s, v, orig)
+/* SSTORE: journal the pre-write current (the value a frame revert must put
+ * back), then update the tx row. current comes from the caller -- the SSTORE
+ * opcode already resolved it for the EIP-2200 gas policy, and its k_sload
+ * guarantees the tx layer holds the slot (cache-on-every-read), with orig
+ * already frozen at the tx-start value. NO account leaf refresh: the storage
+ * root is derived at compute_root, and the witness account iteration unions
+ * storage-changed accounts from the storage write-set (lib/mpt.sail
+ * state_updates_map). */
+function k_sstore(a : address, s : word, v : word, current : word) -> unit = {
+    journal_push(JStor(a, s, current)); /* undo -> the value this write overwrites */
+    storage_tx_update(a, s, v)
 }
 
 /* EIP-1153 transient storage (TLOAD/TSTORE): per-tx scratch, discarded at tx end,

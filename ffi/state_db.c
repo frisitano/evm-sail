@@ -350,38 +350,17 @@ unit storage_tx_cache(const lbits a, const lbits s, const lbits v) {
   return UNIT;
 }
 
-/* the value a frame-revert must restore `current` to (JStor payload): the
-   current tx value if already written this tx, else the tx-start `orig`. */
-void storage_wset_prior(lbits *rop, const lbits a, const lbits s, const lbits orig) {
-  uint64_t slot[4], ah[4], sh[4];
-  storage_secure_key(a, s, slot, ah, sh);
-  storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
-  if (e && e->written) { be_words4_to_lbits(rop, e->current); return; }
-  uint64_t o[4];
-  lbits_to_be_words4(o, orig);
-  be_words4_to_lbits(rop, o);
-}
-
-/* write v; `orig` (the tx-start value) is adopted only on the FIRST write */
-unit storage_tx_set(const lbits a, const lbits s, const lbits v, const lbits orig) {
-  uint64_t slot[4], ah[4], sh[4], w[4], o[4];
+/* update `current` on the EXISTING tx row and mark it written. Serves both
+   SSTORE on a row the tx already holds (a cached read upgrades to written;
+   its original is already the tx-start value) and the JStor revert (the row
+   a journaled write created; written=1 is idempotent there). An absent row
+   (wiped by the EIP-6780 delete) is a no-op, as the old restore was. */
+unit storage_tx_update(const lbits a, const lbits s, const lbits v) {
+  uint64_t slot[4], ah[4], sh[4], w[4];
   storage_secure_key(a, s, slot, ah, sh);
   lbits_to_be_words4(w, v);
-  lbits_to_be_words4(o, orig);
-  storage_wset_row *e = storage_wset_intern(&storage_wset_tx, ah, sh, slot);
-  if (!e) return UNIT;
-  if (!e->written) { e->written = 1; memcpy(e->original, o, sizeof(e->original)); }
-  memcpy(e->current, w, sizeof(e->current));
-  return UNIT;
-}
-
-/* restore `current` to `prior` (JStor revert). Keeps the row (membership). */
-unit storage_wset_restore(const lbits a, const lbits s, const lbits prior) {
-  uint64_t slot[4], ah[4], sh[4], p[4];
-  storage_secure_key(a, s, slot, ah, sh);
-  lbits_to_be_words4(p, prior);
   storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
-  if (e) memcpy(e->current, p, sizeof(e->current));
+  if (e) { e->written = 1; memcpy(e->current, w, sizeof(e->current)); }
   return UNIT;
 }
 

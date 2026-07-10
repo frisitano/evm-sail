@@ -624,7 +624,7 @@ function main() -> unit = {
        entry). A touched account is proven present-or-absent by a lazy Merkle
        walk from the authenticated parent root on first load_account (then
        cached raw in the acctmap); a touched slot is proven the same way from
-       the account's storage root on first read (k_sload/k_orig) and seeded into
+       the account's storage root on first read (k_sload) and seeded into
        the working set. Nothing is pre-seeded -- no eager account/slot pass. */
 
     /* Block STF, header-only in program state: system calls, then each tx decoded

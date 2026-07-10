@@ -19,9 +19,7 @@ unit storage_wset_merge(const unit u);
 uint64_t storage_row_probe(uint64_t layer, const lbits a, const lbits s,
                            lbits *cur, lbits *orig);
 unit storage_tx_cache(const lbits a, const lbits s, const lbits v);
-void storage_wset_prior(lbits *rop, const lbits a, const lbits s, const lbits orig);
-unit storage_tx_set(const lbits a, const lbits s, const lbits v, const lbits orig);
-unit storage_wset_restore(const lbits a, const lbits s, const lbits prior);
+unit storage_tx_update(const lbits a, const lbits s, const lbits v);
 bool storage_wset_warm(const lbits a, const lbits s);
 bool storage_wset_is_warm(const lbits a, const lbits s);
 unit storage_wset_unwarm(const lbits a, const lbits s);

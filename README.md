@@ -42,7 +42,7 @@ Objectives:
   no policy. State is reachable **only** through the host's kernel functions:
 
 ```
-Storage:  k_access_slot  k_sload  k_sstore  k_tload  k_tstore  k_orig
+Storage:  k_access_slot  k_sload  k_sstore  k_tload  k_tstore
 Account:  k_access_account  k_get_balance/nonce/code/codehash  k_transfer
           k_bump_nonce  k_set_code  k_get_code_size  k_code_copy
           k_deleg_target  k_seed_account

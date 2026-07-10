@@ -452,7 +452,7 @@ function execute(op : ast) -> unit = match op {
         /* read the slot ONLY if the access charge was covered (OOG must touch no
            state, so the stateless witness need not prove an unread slot). */
         if is_running() then {
-            push(k_sload(self_addr(), s))
+            push(k_sload(self_addr(), s).curr)
         }
     },
     SSTORE() => {
@@ -474,15 +474,14 @@ function execute(op : ast) -> unit = match op {
                    an underflowing SSTORE records no EIP-7928 storage access. */
                 if is_running() then {
                     let warm = k_slot_is_warm(self_addr(), s); /* kernel: access accounting */
-                    let current = k_sload(self_addr(), s); /* kernel: read current      */
-                    let original = k_sload_orig(self_addr(), s); /* kernel: tx-original        */
-                    let (cost, refund) = sstore_gas(original, current, v, not_bool(warm)); /* USER policy */
+                    let entry = k_sload(self_addr(), s); /* kernel: live + tx-start values */
+                    let (cost, refund) = sstore_gas(entry.orig, entry.curr, v, not_bool(warm)); /* USER policy */
                     charge(cost);
                     if refund != 0 then {
                         k_refund_add(refund)
                     };
-                    if current != v then {
-                        k_sstore(self_addr(), s, v)
+                    if entry.curr != v then {
+                        k_sstore(self_addr(), s, v, entry.curr)
                     } /* effect ONLY if it changes */
                 }
             }

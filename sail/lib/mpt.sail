@@ -1241,8 +1241,8 @@ function parent_state_root() -> bits(256) = {
  * short-circuits to 0 (no walk); a committed non-empty root whose node is
  * absent is a proof the witness omitted (EIP-8025) -> fail closed (never fires
  * for a complete alloc MPT); a diverging or empty terminus is a proven-absent
- * slot => 0. Base BELOW the writes-only overlay (host/kernel.sail k_sload /
- * k_sload_orig): no read-through caching. */
+ * slot => 0. Base BELOW the overlay layers (host/kernel.sail k_sload, which
+ * caches the resolved value in the tx layer). */
 function stateless_storage(a : address, s : word) -> word = {
     let sroot = load_account(a).storage_root;
     if sroot == EMPTY_TRIE_ROOT then {
