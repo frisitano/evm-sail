@@ -645,13 +645,17 @@ function main() -> unit = {
     };
 
     let gas_used = to_gas(block_result.gas_acc);
-    let wbal = k_aload(first_withdrawal_address()).balance;
-    let cbbal = k_aload(k_header.fee_recipient).balance;
 
     zkvm_out_gas = gas_used;
     zkvm_out_storage0 = 0; /* legacy debug scalar, no longer computed */
-    zkvm_out_wbal = unsigned(wbal);
-    zkvm_out_cbbal = unsigned(cbbal);
+    /* wbal/cbbal legacy debug scalars are gone: loading the withdrawer and
+       fee recipient HERE touched accounts the block may never have read --
+       and a MINIMAL witness (EELS proves only what execution touched) then
+       legitimately lacks their proofs, turning a valid block into an
+       uncaught WitnessDeficient abort. The model must touch pre-state ONLY
+       where EELS does. */
+    zkvm_out_wbal = 0;
+    zkvm_out_cbbal = 0;
     zkvm_out_tracelen = 0; /* the ELOp trace machinery was removed */
     zkvm_out_success = if valid then { 1 } else { 0 };
 
