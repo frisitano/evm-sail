@@ -281,21 +281,14 @@ static int storage_wset_dirty(const storage_wset_row *e) {
 /* --- lifecycle -------------------------------------------------------- */
 
 /* full world wipe (between independent blocks/fixtures) */
+/* whole-overlay wipe (both layers): the HARNESS world reset
+   (test_utils.c evmsail_clear_memory); no Sail caller. */
 unit storage_wset_reset(const unit u) {
   (void)u;
   storage_tx_pop_cursor = 0;
   storage_wset_table_reset(&storage_wset_tx);
   storage_wset_table_reset(&storage_wset_block);
   storage_wset_iter_invalidate();
-  return UNIT;
-}
-
-/* drop the per-tx overlay (used to discard a fully-reverted tx; the normal
-   path drains through storage_tx_pop). Clears membership. */
-unit storage_wset_tx_clear(const unit u) {
-  (void)u;
-  storage_tx_pop_cursor = 0;
-  storage_wset_table_reset(&storage_wset_tx);
   return UNIT;
 }
 
@@ -655,19 +648,13 @@ static int acct_wset_dirty(const acct_wset_row *e) {
 }
 
 /* --- lifecycle --- */
+/* whole-overlay wipe (both layers): the HARNESS world reset; no Sail caller. */
 unit acct_wset_reset(const unit u) {
   (void)u;
   acct_tx_pop_cursor = 0;
   acct_wset_table_reset(&acct_wset_tx);
   acct_wset_table_reset(&acct_wset_block);
   acct_wset_iter_invalidate();
-  return UNIT;
-}
-
-unit acct_wset_tx_clear(const unit u) {
-  (void)u;
-  acct_tx_pop_cursor = 0;
-  acct_wset_table_reset(&acct_wset_tx);
   return UNIT;
 }
 

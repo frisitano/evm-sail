@@ -12,7 +12,6 @@
 
 /* write-set storage overlay (stage 1: tx overlay + block base) */
 unit storage_wset_reset(const unit u);
-unit storage_wset_tx_clear(const unit u);
 /* per-layer row probe (layer 0 = tx overlay, 1 = block base) for the Sail
    StorageRow glue (journal_glue.c): 0 = absent, 1 = read, 2 = written */
 uint64_t storage_row_probe(uint64_t layer, const lbits a, const lbits s,
@@ -29,7 +28,6 @@ void storage_wset_union_val(lbits *rop, const lbits ak, uint64_t j);
 
 /* write-set account overlay (stage 2: per-tx overlay + block base) */
 unit acct_wset_reset(const unit u);
-unit acct_wset_tx_clear(const unit u);
 unit acct_wset_wipe_addr(const lbits a);
 /* per-layer account probe (layer 0 = tx, 1 = block) for the Sail
    option(Account) glue: 0 = absent, 1 = present (fields in the out params) */

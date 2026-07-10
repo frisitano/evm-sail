@@ -75,8 +75,6 @@ val transient_load = impure { c: "transient_storage_read" } : (address, word) ->
 /* ---- write-set storage overlay (ffi/state_db.c storage_wset_*): the tx overlay +
  * block base. A working-set miss falls through to the base resolver (the alloc
  * MPT natively / the witness MPT in the guest). */
-val storage_wset_reset = impure { c: "storage_wset_reset" } : unit -> unit
-val storage_wset_tx_clear = impure { c: "storage_wset_tx_clear" } : unit -> unit
 val storage_tx_cache = impure { c: "storage_tx_cache" } : (address, word, word) -> unit /* cache resolved base + mark read (EIP-7928 read record) */
 val storage_tx_update = impure { c: "storage_tx_update" } : (address, word, word) -> unit /* current := v on the existing tx row (re-write; JStor undo) */
 val storage_wset_wipe_addr = impure { c: "storage_wset_wipe_addr" } : address -> unit /* EIP-6780 tx-end delete */
@@ -157,8 +155,6 @@ val storage_wset_union_val = impure { c: "storage_wset_union_val" } : (hash, bit
 /* ---- write-set account overlay (ffi/state_db.c acct_wset_*): the per-tx
  * overlay + block base. A miss here is resolved by the base resolver /
  * stateless_account. storage_root is the pre-state anchor, not mutated. */
-val acct_wset_reset = impure { c: "acct_wset_reset" } : unit -> unit
-val acct_wset_tx_clear = impure { c: "acct_wset_tx_clear" } : unit -> unit
 val acct_wset_wipe_addr = impure { c: "acct_wset_wipe_addr" } : address -> unit
 /* Per-layer account views, mirroring storage_tx_get / storage_block_get: each
  * layer answers a point query with option(Account), crossing the boundary as
