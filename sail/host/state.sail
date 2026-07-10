@@ -77,12 +77,8 @@ val transient_load = impure { c: "transient_storage_read" } : (address, word) ->
  * MPT natively / the witness MPT in the guest). */
 val storage_wset_reset = impure { c: "storage_wset_reset" } : unit -> unit
 val storage_wset_tx_clear = impure { c: "storage_wset_tx_clear" } : unit -> unit
-val storage_wset_merge = impure { c: "storage_wset_merge" } : unit -> unit
 val storage_tx_cache = impure { c: "storage_tx_cache" } : (address, word, word) -> unit /* cache resolved base + mark read (EIP-7928 read record) */
 val storage_tx_update = impure { c: "storage_tx_update" } : (address, word, word) -> unit /* current := v on the existing tx row (re-write; JStor undo) */
-val storage_wset_warm = impure { c: "storage_wset_warm" } : (address, word) -> bool /* set warm; true iff was cold */
-val storage_wset_is_warm = impure { c: "storage_wset_is_warm" } : (address, word) -> bool
-val storage_wset_unwarm = impure { c: "storage_wset_unwarm" } : (address, word) -> unit /* JWarmS undo */
 val storage_wset_wipe_addr = impure { c: "storage_wset_wipe_addr" } : address -> unit /* EIP-6780 tx-end delete */
 
 /* Per-layer entry views: the tx overlay and the block base each answer a
@@ -99,23 +95,38 @@ struct StorageEntry = { curr : word, orig : word }
 val storage_tx_get = impure { c: "storage_tx_get" } : (address, word) -> option(StorageEntry)
 val storage_block_get = impure { c: "storage_block_get" } : (address, word) -> option(StorageEntry)
 
-/* tx-layer row enumeration at merge time: the EIP-7928 harvest view. Sail
- * (host/kernel.sail k_tx_merge) walks these rows and DECIDES what the tx
- * changed; the bal_* sinks below only record. written = a write reached the
- * row this tx (a storage_change even if rewritten back to the start value);
- * was_read = the row was SLOAD-cached (a storage_read; the serializer drops
- * reads of changed slots and dedups). */
-struct StorageTxRow = { ahash : hash, slot : word, curr : word, written : bool, was_read : bool }
+/* Drain-one views of the tx layers at merge time, journal_pop-style and
+ * SIDE-EFFECT-FREE: each pop hands back one row; None = drained (the tx
+ * layer resets). The merge itself is SAIL (host/kernel.sail k_tx_merge):
+ * inspect the popped row, emit the EIP-7928 records it warrants, and apply
+ * the block-layer propagation it needs through the storage_block_* /
+ * acct_block_* hooks below. Every tx row was read (storage_tx_cache is the
+ * only row creator, and every SSTORE's k_sload precedes it), so a row is
+ * either a net change or a read -- no flag crosses. */
+struct StorageTxRow = { ahash : hash, slot : word, curr : word, orig : word }
 
-val storage_tx_row_count = impure { c: "storage_tx_row_count" } : unit -> bits(64)
-val storage_tx_row = impure { c: "storage_tx_row" } : bits(64) -> StorageTxRow
+val storage_tx_pop = impure { c: "storage_tx_pop" } : unit -> option(StorageTxRow)
 
-/* account harvest view: the (curr, orig) pair -- per-field diffs vs the
- * tx-start original decide the nonce/balance/code change records. */
-struct AcctTxRow = { ahash : hash, curr : Account, orig : Account }
+struct AcctTxRow = { addr : address, ahash : hash, base_exists : bool, curr : Account, orig : Account }
 
-val acct_tx_row_count = impure { c: "acct_tx_row_count" } : unit -> bits(64)
-val acct_tx_row = impure { c: "acct_tx_row" } : bits(64) -> AcctTxRow
+val acct_tx_pop = impure { c: "acct_tx_pop" } : unit -> option(AcctTxRow)
+
+/* Block-layer propagation hooks (pure mechanism; Sail chose the action).
+ * put = a net change: a fresh block row freezes orig as the pre-state, an
+ * existing one keeps its own; curr always lands. cache = a read member:
+ * a fresh row binds curr == orig = the value; an existing row is only
+ * marked read -- never downgraded. The account pair mirrors it, keyed by
+ * the address preimage (the block row keeps it as the BAL serialization
+ * key); base_exists ORs into the block row. */
+val storage_block_put = impure { c: "storage_block_put" } : (hash, word, word, word) -> unit /* (ahash, slot, curr, orig) */
+val storage_block_cache = impure { c: "storage_block_cache" } : (hash, word, word) -> unit /* (ahash, slot, value) */
+val acct_block_write = impure { c: "acct_block_write" } : (address, bits(64), word, hash, hash, bits(64), word, hash, hash, bool) -> unit /* (a, curr n/b/sr/ch, orig n/b/sr/ch, base_exists) */
+val acct_block_cache = impure { c: "acct_block_cache" } : (address, bits(64), word, hash, hash, bool) -> unit /* (a, n/b/sr/ch, base_exists) */
+
+/* whether the account changed (per-field diff vs the tx-start / pre-state
+ * original) -- the merge and state-root inclusion rule, stated in Sail. */
+function account_changed(c : Account, o : Account) -> bool =
+    c.nonce != o.nonce | c.balance != o.balance | c.code_hash != o.code_hash | c.storage_root != o.storage_root
 
 /* state-root enumeration: UNFILTERED block rows -- Sail decides which rows
  * are net changes vs the pre-state (lib/mpt.sail storage_updates /
@@ -148,7 +159,6 @@ val storage_wset_union_val = impure { c: "storage_wset_union_val" } : (hash, bit
  * stateless_account. storage_root is the pre-state anchor, not mutated. */
 val acct_wset_reset = impure { c: "acct_wset_reset" } : unit -> unit
 val acct_wset_tx_clear = impure { c: "acct_wset_tx_clear" } : unit -> unit
-val acct_wset_merge = impure { c: "acct_wset_merge" } : unit -> unit
 val acct_wset_wipe_addr = impure { c: "acct_wset_wipe_addr" } : address -> unit
 /* Per-layer account views, mirroring storage_tx_get / storage_block_get: each
  * layer answers a point query with option(Account), crossing the boundary as

@@ -481,36 +481,70 @@ function k_commit() -> unit = {
  * none, so this just clears the overlay. The block base is the compute_root
  * cursor (lib/mpt.sail storage_updates). */
 function k_tx_merge() -> unit = {
-    /* EIP-7928 harvest -- SAIL decides what this tx changed, walking the tx
-       layers before the merges clear them; the bal_* sinks only record
-       (tagged C-side with the ambient bal_set_index). Storage: a written row
-       is a storage_change with the tx-final value (even one rewritten back
-       to its start value); else a read row is a storage_read. Accounts:
-       per-field diffs vs the tx-start original. */
-    let ns = unsigned(storage_tx_row_count());
-    foreach (j from 0 to (ns - 1)) {
-        let r = storage_tx_row(get_slice_int(64, j, 0));
-        if r.written then {
-            bal_storage_change(r.ahash, r.slot, r.curr)
-        } else if r.was_read then {
-            bal_storage_read(r.ahash, r.slot)
+    /* THE MERGE, stated here: drain each tx layer (pop is side-effect-free;
+       None = drained and the layer resets), and per row decide BOTH the
+       EIP-7928 records (tagged C-side with the ambient bal_set_index) and
+       the block-layer propagation. Storage: a net change (curr != orig) is
+       a storage_change with the tx-final value and a block put; else the
+       row is a read (every tx row was read: storage_tx_cache is the only
+       row creator) -- a storage_read record and a block read-cache; a
+       net-zero SSTORE is a read, matching EELS.
+       Accounts: per-field diffs vs the tx-start original make the records;
+       a changed account writes the block layer, an unchanged one merges as
+       a read member (it must still reach the BAL account list). */
+    var more : bool = true;
+    while more do {
+        match storage_tx_pop() {
+            Some(r) => if r.curr != r.orig then {
+                bal_storage_change(r.ahash, r.slot, r.curr);
+                storage_block_put(r.ahash, r.slot, r.curr, r.orig)
+            } else {
+                bal_storage_read(r.ahash, r.slot);
+                storage_block_cache(r.ahash, r.slot, r.curr)
+            },
+            None() => more = false,
         }
     };
-    let na = unsigned(acct_tx_row_count());
-    foreach (j from 0 to (na - 1)) {
-        let r = acct_tx_row(get_slice_int(64, j, 0));
-        if r.curr.nonce != r.orig.nonce then {
-            bal_nonce_change(r.ahash, get_slice_int(64, r.curr.nonce, 0))
-        };
-        if r.curr.balance != r.orig.balance then {
-            bal_balance_change(r.ahash, r.curr.balance)
-        };
-        if r.curr.code_hash != r.orig.code_hash then {
-            bal_code_change(r.ahash, r.curr.code_hash)
-        };
-    };
-    storage_wset_merge(); /* pure row propagation; harvesting done above */
-    acct_wset_merge()
+    more = true;
+    while more do {
+        match acct_tx_pop() {
+            Some(r) => {
+                if r.curr.nonce != r.orig.nonce then {
+                    bal_nonce_change(r.ahash, get_slice_int(64, r.curr.nonce, 0))
+                };
+                if r.curr.balance != r.orig.balance then {
+                    bal_balance_change(r.ahash, r.curr.balance)
+                };
+                if r.curr.code_hash != r.orig.code_hash then {
+                    bal_code_change(r.ahash, r.curr.code_hash)
+                };
+                if account_changed(r.curr, r.orig) then {
+                    acct_block_write(
+                        r.addr,
+                        get_slice_int(64, r.curr.nonce, 0),
+                        r.curr.balance,
+                        r.curr.storage_root,
+                        r.curr.code_hash,
+                        get_slice_int(64, r.orig.nonce, 0),
+                        r.orig.balance,
+                        r.orig.storage_root,
+                        r.orig.code_hash,
+                        r.base_exists,
+                    )
+                } else {
+                    acct_block_cache(
+                        r.addr,
+                        get_slice_int(64, r.curr.nonce, 0),
+                        r.curr.balance,
+                        r.curr.storage_root,
+                        r.curr.code_hash,
+                        r.base_exists,
+                    )
+                }
+            },
+            None() => more = false,
+        }
+    }
 }
 
 /* revert: replay undo entries back to (and dropping) the most recent checkpoint.

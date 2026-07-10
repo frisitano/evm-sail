@@ -17,9 +17,10 @@
  * state_db.c's account tables (acct_row_probe); tx-over-block precedence
  * lives in Sail (k_aload).
  *
- * (4) storage_tx_row / acct_tx_row: tx-layer row enumeration for the
- * EIP-7928 merge harvest (k_tx_merge decides what changed; state_db.c's
- * bal_note_* sinks record).
+ * (4) storage_tx_pop / acct_tx_pop: side-effect-free drain pops over the
+ * tx layers -- k_tx_merge IS the merge: it decides the EIP-7928 records
+ * (bal_note_* sinks) and the block propagation (storage_block_* /
+ * acct_block_* hooks) per popped row.
  */
 #include EVMSAIL_MODEL_H
 #include "kernel_state.h"
@@ -188,21 +189,38 @@ void acct_block_get(struct zoptionzIRAccountzK *out, const lbits a) {
   acct_entry_out(out, 1, a);
 }
 
-/* tx-layer row enumeration for the EIP-7928 merge harvest (k_tx_merge). */
-void storage_tx_row(struct zStorageTxRow *out, uint64_t i) {
-  uint64_t flags = storage_tx_probe_row(i, &out->zahash, &out->zslot, &out->zcurr);
-  out->zwritten = (flags >> 1) & 1;
-  out->zwas_read = flags & 1;
+/* k_tx_merge drain pops: side-effect-free option(row) views over the tx
+ * layers; None = drained (the C probe resets the table). Sail decides the
+ * EIP-7928 records and the block-layer propagation per row. */
+void storage_tx_pop(struct zoptionzIRStorageTxRowzK *out, unit u) {
+  (void)u;
+  struct zStorageTxRow *r = &out->variants.zSomezIRStorageTxRowzK;
+  uint64_t flags = storage_tx_pop_probe(&r->zahash, &r->zslot, &r->zcurr, &r->zorig);
+  if (flags == 0) {
+    out->kind = Kind_zNonezIRStorageTxRowzK;
+    out->variants.zNonezIRStorageTxRowzK = UNIT;
+    return;
+  }
+  out->kind = Kind_zSomezIRStorageTxRowzK;
 }
 
-void acct_tx_row(struct zAcctTxRow *out, uint64_t i) {
+void acct_tx_pop(struct zoptionzIRAcctTxRowzK *out, unit u) {
+  (void)u;
+  struct zAcctTxRow *r = &out->variants.zSomezIRAcctTxRowzK;
   uint64_t cn = 0, on = 0;
-  acct_probe_row(0, i, &out->zahash, &cn, &out->zcurr.zbalance,
-                 &out->zcurr.zstorage_root, &out->zcurr.zcode_hash, &on,
-                 &out->zorig.zbalance, &out->zorig.zstorage_root,
-                 &out->zorig.zcode_hash);
-  CONVERT_OF(sail_int, mach_int)(&out->zcurr.znonce, (mach_int)cn);
-  CONVERT_OF(sail_int, mach_int)(&out->zorig.znonce, (mach_int)on);
+  uint64_t flags = acct_tx_pop_probe(&r->zaddr, &r->zahash, &cn, &r->zcurr.zbalance,
+                                     &r->zcurr.zstorage_root, &r->zcurr.zcode_hash, &on,
+                                     &r->zorig.zbalance, &r->zorig.zstorage_root,
+                                     &r->zorig.zcode_hash);
+  if (flags == 0) {
+    out->kind = Kind_zNonezIRAcctTxRowzK;
+    out->variants.zNonezIRAcctTxRowzK = UNIT;
+    return;
+  }
+  out->kind = Kind_zSomezIRAcctTxRowzK;
+  r->zbase_exists = (flags >> 1) & 1;
+  CONVERT_OF(sail_int, mach_int)(&r->zcurr.znonce, (mach_int)cn);
+  CONVERT_OF(sail_int, mach_int)(&r->zorig.znonce, (mach_int)on);
 }
 
 /* state-root enumeration views: unfiltered block rows; Sail filters. */

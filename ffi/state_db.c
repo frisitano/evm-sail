@@ -53,10 +53,10 @@ static const uint64_t account_zero_val[4] = {0, 0, 0, 0};
 /* ======================================================================== */
 /* EIP-7928 block access list accumulator.                                  */
 /*                                                                          */
-/* All recording is HARVESTED from the write-set overlays at merge time --   */
-/* storage_wset_merge emits the tx's storage changes (dirty rows) and reads   */
-/* (touched-but-not-changed members); acct_wset_merge emits balance/nonce/    */
-/* code changes -- so there is no per-op BAL hook. Records are keyed by        */
+/* All recording is HARVESTED from the tx overlays at merge time by SAIL     */
+/* (host/kernel.sail k_tx_merge pops each row and decides the records); the   */
+/* bal_note_* sinks below only append -- so there is no per-op BAL hook.      */
+/* Records are keyed by                                                        */
 /* keccak(address) (matching the overlays); the raw address the BAL sorts/     */
 /* encodes by, and the read-only account set, come from eest_account at       */
 /* serialize time (= the accounts touched on the witness path). Changes carry   */
@@ -197,7 +197,7 @@ static const uint64_t storage_zero_val[4] = {0, 0, 0, 0};
 /*   storage_wset_tx    -- per-transaction overlay: every touched slot (reads AND     */
 /*                writes). Membership == touched. Never removed on revert     */
 /*                (the journal rewinds `current`); merged into storage_wset_block and  */
-/*                cleared at tx end. `is_warm` (EIP-2929) lives here.         */
+/*                cleared at tx end.                                          */
 /*   storage_wset_block -- block base: writes only = the net-change set vs the         */
 /*                authenticated pre-state = the compute_root cursor.          */
 /* A row carries (original, current); dirty == written && current!=original.  */
@@ -212,7 +212,6 @@ typedef struct {
   uint64_t current[4];   /* live value    (valid iff written) */
   uint64_t original[4];  /* tx-start value (tx) / block pre-state (block); valid iff written */
   uint8_t  written;      /* 1: a write reached this row; 0: read-only member */
-  uint8_t  is_warm;      /* EIP-2929 warm bit (tx table only) */
   uint8_t  was_read;     /* 1: this slot was SLOADed (EIP-7928 storage_reads) */
 } storage_wset_row;
 
@@ -220,6 +219,7 @@ typedef struct { storage_wset_row *rows; uint32_t n, cap; } storage_wset_table;
 
 static storage_wset_table storage_wset_tx    = {NULL, 0, 0};
 static storage_wset_table storage_wset_block = {NULL, 0, 0};
+static uint32_t storage_tx_pop_cursor = 0; /* k_tx_merge drain position */
 
 /* drop the per-account compute_root snapshots when the block base changes
    (defined with the snapshot builders below) */
@@ -283,16 +283,18 @@ static int storage_wset_dirty(const storage_wset_row *e) {
 /* full world wipe (between independent blocks/fixtures) */
 unit storage_wset_reset(const unit u) {
   (void)u;
+  storage_tx_pop_cursor = 0;
   storage_wset_table_reset(&storage_wset_tx);
   storage_wset_table_reset(&storage_wset_block);
   storage_wset_iter_invalidate();
   return UNIT;
 }
 
-/* drop the per-tx overlay (called after BAL extraction + merge at tx end,
-   and to discard a fully-reverted tx). Clears membership + is_warm. */
+/* drop the per-tx overlay (used to discard a fully-reverted tx; the normal
+   path drains through storage_tx_pop). Clears membership. */
 unit storage_wset_tx_clear(const unit u) {
   (void)u;
+  storage_tx_pop_cursor = 0;
   storage_wset_table_reset(&storage_wset_tx);
   return UNIT;
 }
@@ -301,45 +303,65 @@ unit storage_wset_tx_clear(const unit u) {
    dirty (real net change) rows reach the base; reads / net-zero writes do not.
    base.original is frozen at the block pre-state (set once, when the key first
    becomes a block write); base.current tracks the latest committed value. */
-unit storage_wset_merge(const unit u) {
-  (void)u;
-  for (uint32_t i = 0; i < storage_wset_tx.n; i++) {
-    storage_wset_row *e = &storage_wset_tx.rows[i];
-    if (!storage_wset_dirty(e)) {
-      /* touched but not net-changed this tx: an EIP-7928 read iff it was SLOADed
-         (SLOAD opcode, or an SSTORE's current-value read). A net-zero SSTORE is
-         a read in EELS (get_storage recorded; no net change to exclude it). */
-      if (e->was_read) {
-        /* cache the resolved base into the block so a later tx reads it from the
-           working set instead of re-walking the witness (once per key per block).
-           Never downgrade an existing block write; just mark it read. */
-        storage_wset_row *b = storage_wset_get(&storage_wset_block, e->acct_hash, e->slot_hash);
-        if (!b) {
-          b = storage_wset_intern(&storage_wset_block, e->acct_hash, e->slot_hash, e->slot);
-          if (b) {
-            memcpy(b->current, e->current, sizeof(b->current));
-            memcpy(b->original, e->original, sizeof(b->original));
-            b->was_read = 1;
-          }
-        } else {
-          b->was_read = 1;
-        }
-      }
-      continue;
-    }
-    storage_wset_row *b = storage_wset_get(&storage_wset_block, e->acct_hash, e->slot_hash);
-    int fresh = (b == NULL);   /* slot not yet in the block working set */
-    if (fresh) b = storage_wset_intern(&storage_wset_block, e->acct_hash, e->slot_hash, e->slot);
-    if (!b) continue;
-    if (fresh) memcpy(b->original, e->original, sizeof(b->original));  /* freeze pre-state once */
-    b->written = 1;
-    b->was_read |= e->was_read;
-    memcpy(b->current, e->current, sizeof(b->current));
+/* drain-one pop for the Sail merge (k_tx_merge): SIDE-EFFECT-FREE hand-over
+   of tx row [cursor]; on drain the tx table resets and 0 returns (else 1).
+   Sail decides records + propagation per row. */
+uint64_t storage_tx_pop_probe(lbits *ahash, lbits *slot, lbits *curr, lbits *orig) {
+  if (storage_tx_pop_cursor >= storage_wset_tx.n) {
+    storage_wset_table_reset(&storage_wset_tx);
+    storage_tx_pop_cursor = 0;
+    storage_wset_iter_invalidate();
+    return 0; /* drained: 1 = a row was handed over */
   }
-  storage_wset_table_reset(&storage_wset_tx);
-  storage_wset_iter_invalidate();
+  const storage_wset_row *e = &storage_wset_tx.rows[storage_tx_pop_cursor++];
+  be_words4_to_lbits(ahash, e->acct_hash);
+  be_words4_to_lbits(slot, e->slot);
+  be_words4_to_lbits(curr, e->current);
+  be_words4_to_lbits(orig, e->original);
+  return 1;
+}
+
+/* block-layer propagation hooks (pure mechanism; Sail chose the action).
+   Keyed by (keccak(address), slot); the slot's secure key is recomputed. */
+/* net change: a fresh block row freezes orig as the pre-state; curr lands */
+unit storage_block_put(const lbits ah, const lbits s_, const lbits curr,
+                       const lbits orig) {
+  uint64_t slot[4], a4[4], sh[4], c4[4], o4[4];
+  lbits_to_be_words4(a4, ah);
+  lbits_to_be_words4(slot, s_);
+  secure_keccak(32, s_, sh);
+  storage_wset_row *b = storage_wset_get(&storage_wset_block, a4, sh);
+  int fresh = (b == NULL);
+  if (fresh) b = storage_wset_intern(&storage_wset_block, a4, sh, slot);
+  if (!b) return UNIT;
+  lbits_to_be_words4(c4, curr);
+  if (fresh) { lbits_to_be_words4(o4, orig); memcpy(b->original, o4, sizeof(b->original)); }
+  b->written = 1;
+  memcpy(b->current, c4, sizeof(b->current));
   return UNIT;
 }
+
+/* read member: fresh binds curr == orig = value; existing is only marked */
+unit storage_block_cache(const lbits ah, const lbits s_, const lbits v) {
+  uint64_t slot[4], a4[4], sh[4], v4[4];
+  lbits_to_be_words4(a4, ah);
+  lbits_to_be_words4(slot, s_);
+  secure_keccak(32, s_, sh);
+  storage_wset_row *b = storage_wset_get(&storage_wset_block, a4, sh);
+  if (!b) {
+    b = storage_wset_intern(&storage_wset_block, a4, sh, slot);
+    if (b) {
+      lbits_to_be_words4(v4, v);
+      memcpy(b->current, v4, sizeof(b->current));
+      memcpy(b->original, v4, sizeof(b->original));
+      b->was_read = 1;
+    }
+  } else {
+    b->was_read = 1;
+  }
+  return UNIT;
+}
+
 
 /* --- reads: per-layer row probe -----------------------------------------
    The layer-precedence semantics (which layer wins a lookup, and what the
@@ -406,35 +428,6 @@ unit storage_tx_update(const lbits a, const lbits s, const lbits v) {
   lbits_to_be_words4(w, v);
   storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
   if (e) { e->written = 1; memcpy(e->current, w, sizeof(e->current)); }
-  return UNIT;
-}
-
-/* EIP-2929 warm: set is_warm on the tx row (interning it); return whether it
-   was cold (so the caller journals JWarmS only on the cold->warm transition) */
-bool storage_wset_warm(const lbits a, const lbits s) {
-  uint64_t slot[4], ah[4], sh[4];
-  storage_secure_key(a, s, slot, ah, sh);
-  storage_wset_row *e = storage_wset_intern(&storage_wset_tx, ah, sh, slot);
-  if (!e) return 0;
-  int was_cold = !e->is_warm;
-  e->is_warm = 1;
-  return was_cold ? 1 : 0;
-}
-
-bool storage_wset_is_warm(const lbits a, const lbits s) {
-  uint64_t slot[4], ah[4], sh[4];
-  storage_secure_key(a, s, slot, ah, sh);
-  storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
-  return (e && e->is_warm) ? 1 : 0;
-}
-
-/* un-warm on revert (JWarmS undo): only the frame that flipped cold->warm
-   pushed the entry, so this fires exactly once per transition */
-unit storage_wset_unwarm(const lbits a, const lbits s) {
-  uint64_t slot[4], ah[4], sh[4];
-  storage_secure_key(a, s, slot, ah, sh);
-  storage_wset_row *e = storage_wset_get(&storage_wset_tx, ah, sh);
-  if (e) e->is_warm = 0;
   return UNIT;
 }
 
@@ -592,6 +585,17 @@ typedef struct { acct_wset_row *rows; uint32_t n, cap; } acct_wset_table;
 
 static acct_wset_table acct_wset_tx    = {NULL, 0, 0};
 static acct_wset_table acct_wset_block = {NULL, 0, 0};
+static uint32_t acct_tx_pop_cursor = 0; /* k_tx_merge drain position */
+
+/* 20 raw address bytes -> lbits of length 160 */
+static void addr20_to_lbits(lbits *rop, const uint8_t a[20]) {
+  uint64_t be[4] = {0, 0, 0, 0};
+  for (int i = 0; i < 4; i++)  be[1] = (be[1] << 8) | a[i];
+  for (int i = 4; i < 12; i++) be[2] = (be[2] << 8) | a[i];
+  for (int i = 12; i < 20; i++) be[3] = (be[3] << 8) | a[i];
+  be_words4_to_lbits(rop, be);
+  rop->len = 160;
+}
 
 /* per-account compute_root snapshots are invalidated when the block base
    changes (defined with the builders below) */
@@ -653,6 +657,7 @@ static int acct_wset_dirty(const acct_wset_row *e) {
 /* --- lifecycle --- */
 unit acct_wset_reset(const unit u) {
   (void)u;
+  acct_tx_pop_cursor = 0;
   acct_wset_table_reset(&acct_wset_tx);
   acct_wset_table_reset(&acct_wset_block);
   acct_wset_iter_invalidate();
@@ -661,6 +666,7 @@ unit acct_wset_reset(const unit u) {
 
 unit acct_wset_tx_clear(const unit u) {
   (void)u;
+  acct_tx_pop_cursor = 0;
   acct_wset_table_reset(&acct_wset_tx);
   return UNIT;
 }
@@ -671,41 +677,84 @@ unit acct_wset_tx_clear(const unit u) {
    working set (from the tx row, which froze it at cache time from the base
    resolver). A row that already exists here already carries the correct
    frozen original, so the merge must never touch it. */
-unit acct_wset_merge(const unit u) {
-  (void)u;
-  for (uint32_t i = 0; i < acct_wset_tx.n; i++) {
-    acct_wset_row *e = &acct_wset_tx.rows[i];
-    int dirty = acct_wset_dirty(e);
-    /* EVERY tx row reaches the block layer -- reads included: a read member
-       caches the resolved pre-state for later txs AND puts the touched
-       account into the BAL account list (bal_recompute enumerates the block
-       members). Read rows of an existing block row mirror it exactly (the
-       cache copied from it and the block layer is frozen mid-tx). */
-    acct_wset_row *b = acct_wset_get(&acct_wset_block, e->hkey);
-    int fresh = (b == NULL);   /* account not yet in the block working set */
-    if (fresh) b = acct_wset_intern(&acct_wset_block, e->hkey);
-    if (!b) continue;
-    memcpy(b->raw_addr, e->raw_addr, sizeof(b->raw_addr));  /* preserve BAL key */
-    if (fresh) {
-      /* new to the block WS: freeze the pre-state original from the tx (which
-         froze it from the base resolver). Pre-existing rows keep their own. */
-      b->orig_nonce = e->orig_nonce;
-      memcpy(b->orig_bal, e->orig_bal, sizeof(b->orig_bal));
-      memcpy(b->orig_sroot, e->orig_sroot, sizeof(b->orig_sroot));
-      memcpy(b->orig_chash, e->orig_chash, sizeof(b->orig_chash));
-      b->base_exists = e->base_exists;
-    } else {
-      b->base_exists |= e->base_exists;
-    }
-    if (fresh || dirty) {
-      b->cur_nonce = e->cur_nonce;
-      memcpy(b->cur_bal, e->cur_bal, sizeof(b->cur_bal));
-      memcpy(b->cur_sroot, e->cur_sroot, sizeof(b->cur_sroot));
-      memcpy(b->cur_chash, e->cur_chash, sizeof(b->cur_chash));
-    }
+/* drain-one pop for the Sail merge (k_tx_merge): SIDE-EFFECT-FREE hand-over
+   of tx account row [cursor] incl. the address preimage (the block row's BAL
+   serialization key); on drain the tx table resets and 0 returns (else
+   1 | base_exists<<1). Sail decides records + propagation per row. */
+uint64_t acct_tx_pop_probe(lbits *addr, lbits *hkey,
+                           uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
+                           uint64_t *on, lbits *ob, lbits *os, lbits *oc) {
+  if (acct_tx_pop_cursor >= acct_wset_tx.n) {
+    acct_wset_table_reset(&acct_wset_tx);
+    acct_tx_pop_cursor = 0;
+    acct_wset_iter_invalidate();
+    return 0;
   }
-  acct_wset_table_reset(&acct_wset_tx);
-  acct_wset_iter_invalidate();
+  const acct_wset_row *e = &acct_wset_tx.rows[acct_tx_pop_cursor++];
+  addr20_to_lbits(addr, e->raw_addr);
+  be_words4_to_lbits(hkey, e->hkey);
+  *cn = e->cur_nonce;
+  le_words4_to_lbits(cb, e->cur_bal);
+  le_words4_to_lbits(cs, e->cur_sroot);
+  le_words4_to_lbits(cc, e->cur_chash);
+  *on = e->orig_nonce;
+  le_words4_to_lbits(ob, e->orig_bal);
+  le_words4_to_lbits(os, e->orig_sroot);
+  le_words4_to_lbits(oc, e->orig_chash);
+  return 1u | ((uint64_t)(e->base_exists ? 1 : 0) << 1);
+}
+
+/* block-layer propagation hooks (pure mechanism; Sail chose the action).
+   Keyed by the address preimage: the row keeps it for BAL serialization. */
+static acct_wset_row *acct_block_bind(const lbits a, int *fresh) {
+  uint64_t h[4];
+  acct_secure_key(a, h);
+  acct_wset_row *b = acct_wset_get(&acct_wset_block, h);
+  *fresh = (b == NULL);
+  if (*fresh) b = acct_wset_intern(&acct_wset_block, h);
+  if (b) lbits_to_be_bytes(b->raw_addr, 20, a);
+  return b;
+}
+
+/* changed account: fresh freezes orig + base_exists; curr always lands */
+unit acct_block_write(const lbits a, uint64_t nonce, const lbits bal,
+                      const lbits sroot, const lbits chash,
+                      uint64_t ononce, const lbits obal,
+                      const lbits osroot, const lbits ochash, bool base_exists) {
+  int fresh = 0;
+  acct_wset_row *b = acct_block_bind(a, &fresh);
+  if (!b) return UNIT;
+  if (fresh) {
+    b->orig_nonce = ononce;
+    lbits_to_le_words4(b->orig_bal, obal);
+    lbits_to_le_words4(b->orig_sroot, osroot);
+    lbits_to_le_words4(b->orig_chash, ochash);
+    b->base_exists = base_exists ? 1 : 0;
+  } else {
+    b->base_exists |= base_exists ? 1 : 0;
+  }
+  b->cur_nonce = nonce;
+  lbits_to_le_words4(b->cur_bal, bal);
+  lbits_to_le_words4(b->cur_sroot, sroot);
+  lbits_to_le_words4(b->cur_chash, chash);
+  return UNIT;
+}
+
+/* read member: fresh binds curr == orig; existing only ORs base_exists */
+unit acct_block_cache(const lbits a, uint64_t nonce, const lbits bal,
+                      const lbits sroot, const lbits chash, bool base_exists) {
+  int fresh = 0;
+  acct_wset_row *b = acct_block_bind(a, &fresh);
+  if (!b) return UNIT;
+  if (fresh) {
+    b->cur_nonce = nonce;  b->orig_nonce = nonce;
+    lbits_to_le_words4(b->cur_bal, bal);    lbits_to_le_words4(b->orig_bal, bal);
+    lbits_to_le_words4(b->cur_sroot, sroot); lbits_to_le_words4(b->orig_sroot, sroot);
+    lbits_to_le_words4(b->cur_chash, chash); lbits_to_le_words4(b->orig_chash, chash);
+    b->base_exists = base_exists ? 1 : 0;
+  } else {
+    b->base_exists |= base_exists ? 1 : 0;
+  }
   return UNIT;
 }
 

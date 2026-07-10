@@ -1056,11 +1056,6 @@ function storage_updates(ak : bits(256)) -> list(TriePatch) = {
 function account_empty(acc : Account) -> bool =
     (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance)
 
-/* whether the account changed over the block (per-field diff vs the frozen
- * pre-state original) -- the state-root inclusion rule, stated in Sail. */
-function account_changed(c : Account, o : Account) -> bool =
-    c.nonce != o.nonce | c.balance != o.balance | c.code_hash != o.code_hash | c.storage_root != o.storage_root
-
 /* trie update for one changed block account row. Empty accounts with no
  * authenticated base leaf are dropped (witness base: there is nothing to
  * delete); otherwise empty accounts become deletes. A live account's leaf
