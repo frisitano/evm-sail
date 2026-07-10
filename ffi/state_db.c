@@ -437,20 +437,28 @@ static void storage_wset_table_remove_acct(storage_wset_table *t, const uint64_t
 }
 
 /* wipe an address's overlay rows (tx + block): EIP-6780 tx-end deletion. */
-unit storage_wset_wipe_addr(const lbits a) {
+/* EIP-6780 deletion, tx half: remove ONE of the address's tx rows and hand
+   back its slot (0 return = none left). Sail (k_account_delete) drains this,
+   deciding the EIP-7928 read records; C only removes. */
+uint64_t storage_tx_wipe_probe(const lbits a, lbits *slot) {
   uint64_t h[4];
   secure_keccak(20, a, h);
-  /* EIP-7928: storage reads survive account deletion (EELS accumulates
-     block_state.storage_reads independently of the account's live state). This
-     tx's read-only members are about to be dropped with the account, so harvest
-     them into the BAL read set now -- a created-and-selfdestructed account still
-     reports the slots it SLOADed. Its changes are correctly voided by the wipe. */
   for (uint32_t i = 0; i < storage_wset_tx.n; i++) {
     storage_wset_row *e = &storage_wset_tx.rows[i];
-    if (compare_u64x4(e->acct_hash, h) == 0 && e->was_read)
-      bal_add_storage_read(e->acct_hash, e->slot);
+    if (compare_u64x4(e->acct_hash, h) == 0) {
+      be_words4_to_lbits(slot, e->slot);
+      memmove(e, e + 1, (size_t)(storage_wset_tx.n - i - 1) * sizeof(*e));
+      storage_wset_tx.n--;
+      return 1;
+    }
   }
-  storage_wset_table_remove_acct(&storage_wset_tx, h);
+  return 0;
+}
+
+/* EIP-6780 deletion, block half: drop the address's block rows. */
+unit storage_block_wipe(const lbits a) {
+  uint64_t h[4];
+  secure_keccak(20, a, h);
   storage_wset_table_remove_acct(&storage_wset_block, h);
   storage_wset_iter_invalidate();
   return UNIT;
@@ -839,15 +847,6 @@ static void acct_wset_table_remove_hkey(acct_wset_table *t, const uint64_t h[4])
   if (i + 1 < t->n)
     memmove(&t->rows[i], &t->rows[i + 1], (size_t)(t->n - i - 1) * sizeof(acct_wset_row));
   t->n--;
-}
-
-/* EIP-6780 tx-end delete: drop the address's overlay rows (tx + block) */
-unit acct_wset_wipe_addr(const lbits a) {
-  uint64_t h[4]; acct_secure_key(a, h);
-  acct_wset_table_remove_hkey(&acct_wset_tx, h);
-  acct_wset_table_remove_hkey(&acct_wset_block, h);
-  acct_wset_iter_invalidate();
-  return UNIT;
 }
 
 /* ---- compute_root enumeration over acct_wset_block ---------------------

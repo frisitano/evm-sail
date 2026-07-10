@@ -379,7 +379,19 @@ function k_account_delete(a : address) -> unit = {
        (account_empty) AND marks it touched (sb_touched) so its pre-state leaf is not
        reused -- subsuming the old k_deleted mechanism. */
     store_account(a, EMPTY_ACCOUNT);
-    storage_wipe_addr(a)
+    /* EIP-7928: storage reads survive account deletion (EELS) -- drain the
+       address's tx rows, recording each touched slot as a read (every tx row
+       was read; its changes are voided by the drop), then drop the block rows
+       so a same-block re-CREATE cannot inherit stale cached storage. */
+    let ah = keccak256_address(a);
+    var more : bool = true;
+    while more do {
+        match storage_tx_wipe(a) {
+            Some(slot) => bal_storage_read(ah, slot),
+            None() => more = false,
+        }
+    };
+    storage_block_wipe(a)
 }
 
 function address_insert_sorted_unique(xs : list(address), a : address) -> list(address) =

@@ -18,7 +18,8 @@ uint64_t storage_row_probe(uint64_t layer, const lbits a, const lbits s,
                            lbits *cur, lbits *orig);
 unit storage_tx_cache(const lbits a, const lbits s, const lbits v);
 unit storage_tx_update(const lbits a, const lbits s, const lbits v);
-unit storage_wset_wipe_addr(const lbits a);
+uint64_t storage_tx_wipe_probe(const lbits a, lbits *slot);
+unit storage_block_wipe(const lbits a);
 
 /* compute_root enumeration over storage_wset_block, per account (keccak(addr)):
    witness = dirty block rows; native = cache-union-block rows */
@@ -28,7 +29,6 @@ void storage_wset_union_val(lbits *rop, const lbits ak, uint64_t j);
 
 /* write-set account overlay (stage 2: per-tx overlay + block base) */
 unit acct_wset_reset(const unit u);
-unit acct_wset_wipe_addr(const lbits a);
 /* per-layer account probe (layer 0 = tx, 1 = block) for the Sail
    option(Account) glue: 0 = absent, 1 = present (fields in the out params) */
 uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,

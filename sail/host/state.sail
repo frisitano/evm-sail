@@ -77,7 +77,6 @@ val transient_load = impure { c: "transient_storage_read" } : (address, word) ->
  * MPT natively / the witness MPT in the guest). */
 val storage_tx_cache = impure { c: "storage_tx_cache" } : (address, word, word) -> unit /* cache resolved base + mark read (EIP-7928 read record) */
 val storage_tx_update = impure { c: "storage_tx_update" } : (address, word, word) -> unit /* current := v on the existing tx row (re-write; JStor undo) */
-val storage_wset_wipe_addr = impure { c: "storage_wset_wipe_addr" } : address -> unit /* EIP-6780 tx-end delete */
 
 /* Per-layer entry views: the tx overlay and the block base each answer a
  * point query with option(StorageEntry) (crossing the boundary as a whole
@@ -121,6 +120,15 @@ val storage_block_cache = impure { c: "storage_block_cache" } : (hash, word, wor
 val acct_block_write = impure { c: "acct_block_write" } : (address, bits(64), word, hash, hash, bits(64), word, hash, hash, bool) -> unit /* (a, curr n/b/sr/ch, orig n/b/sr/ch, base_exists) */
 val acct_block_cache = impure { c: "acct_block_cache" } : (address, bits(64), word, hash, hash, bool) -> unit /* (a, n/b/sr/ch, base_exists) */
 
+/* EIP-6780 tx-end account deletion (k_account_delete). storage_tx_wipe pops
+ * ONE of the address's tx rows, returning its slot -- Sail drains it,
+ * recording each touched slot as an EIP-7928 read (reads survive deletion in
+ * EELS; the account's changes are voided by the drop). storage_block_wipe
+ * then drops the block rows: a same-block re-CREATE must not inherit stale
+ * cached storage. The pre-state (node DB) is never mutated. */
+val storage_tx_wipe = impure { c: "storage_tx_wipe" } : address -> option(word)
+val storage_block_wipe = impure { c: "storage_block_wipe" } : address -> unit
+
 /* whether the account changed (per-field diff vs the tx-start / pre-state
  * original) -- the merge and state-root inclusion rule, stated in Sail. */
 function account_changed(c : Account, o : Account) -> bool =
@@ -155,7 +163,6 @@ val storage_wset_union_val = impure { c: "storage_wset_union_val" } : (hash, bit
 /* ---- write-set account overlay (ffi/state_db.c acct_wset_*): the per-tx
  * overlay + block base. A miss here is resolved by the base resolver /
  * stateless_account. storage_root is the pre-state anchor, not mutated. */
-val acct_wset_wipe_addr = impure { c: "acct_wset_wipe_addr" } : address -> unit
 /* Per-layer account views, mirroring storage_tx_get / storage_block_get: each
  * layer answers a point query with option(Account), crossing the boundary as
  * one whole value (ffi/journal_glue.c over the acct row tables); the
@@ -349,14 +356,6 @@ function code_db_store_code(h : hash, c : list(byte)) -> unit = {
  * backend materializes the witness bytes; the build backend may hash/copy the
  * witness slice directly. */
 val code_db_store_witness_code : witness_slice -> unit
-
-/* wipe an address's storage in the write-set overlay (tx + block). Used by the
- * EIP-6780 tx-end account deletion; without the overlay wipe a created+
- * selfdestructed account's writes would still merge into the block base, and a
- * same-block re-CREATE would inherit stale storage. The pre-state (node DB) is
- * not mutated -- a deleted account's storage_root goes empty in the overlay. */
-function storage_wipe_addr(a : address) -> unit =
-    storage_wset_wipe_addr(a)
 
 /* Stateless storage resolver: the value of (a, s) in the witness pre-state,
  * walked from the account's authenticated storage root. Defined in lib/mpt.sail

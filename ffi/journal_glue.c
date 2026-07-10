@@ -238,3 +238,16 @@ void acct_block_row(struct zAcctBlockRow *out, uint64_t i) {
   CONVERT_OF(sail_int, mach_int)(&out->zcurr.znonce, (mach_int)cn);
   CONVERT_OF(sail_int, mach_int)(&out->zorig.znonce, (mach_int)on);
 }
+
+/* EIP-6780 deletion drain: pop one of the address's tx rows as option(slot);
+ * Sail records the read and loops until None. */
+void storage_tx_wipe(struct zoptionzIbzK *out, const lbits a) {
+  lbits slot;
+  if (storage_tx_wipe_probe(a, &slot)) {
+    out->kind = Kind_zSomezIbzK;
+    out->variants.zSomezIbzK = slot;
+  } else {
+    out->kind = Kind_zNonezIbzK;
+    out->variants.zNonezIbzK = UNIT;
+  }
+}

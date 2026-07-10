@@ -36,6 +36,8 @@ struct zoptionzIRStorageTxRowzK;                     /* k_tx_merge drain pops */
 struct zoptionzIRAcctTxRowzK;
 void storage_tx_pop(struct zoptionzIRStorageTxRowzK *rop, unit u);
 void acct_tx_pop(struct zoptionzIRAcctTxRowzK *rop, unit u);
+struct zoptionzIbzK;                                 /* option(word): EIP-6780 wipe drain */
+void storage_tx_wipe(struct zoptionzIbzK *rop, const lbits a);
 struct zStorageBlockRow;                             /* state-root enumeration views */
 struct zAcctBlockRow;
 void storage_block_row(struct zStorageBlockRow *rop, const lbits ak, uint64_t j);
