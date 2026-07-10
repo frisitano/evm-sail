@@ -315,7 +315,7 @@ union JEntry = {
   JWarmA  : address,                  /* un-warm a newly-accessed address        */
   JWarmS  : (address, word),          /* un-warm a newly-accessed slot           */
   JLog    : unit,                     /* drop the most recent log                */
-  JRefund : int,                      /* restore the refund counter              */
+  JRefund : i64,                      /* restore the refund counter              */
   JSelfD  : unit                      /* drop the most recent selfdestruct       */
 }
 
@@ -393,7 +393,7 @@ function storage_has_live_acct_hash(ak : bits(256)) -> bool = {
 function storage_has_live_addr(a : address) -> bool =
     storage_has_live_acct_hash(keccak256_address(a))
 
-register k_refund : int = 0 /* gas-refund counter (SSTORE clears; EIP-3529 cap applied at tx end) */
+register k_refund : i64 = 0 /* gas-refund counter (SSTORE clears; EIP-3529 cap applied at tx end) */
 
 register k_parent_state_root : hash =
     sail_zeros(256) /* the authenticated pre-state anchor: the parent header's

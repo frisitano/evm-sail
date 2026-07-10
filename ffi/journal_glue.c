@@ -59,10 +59,8 @@ unit journal_push(struct zJEntry e) {
   case Kind_zJLog:
     return journal_push_log(UNIT);
   case Kind_zJRefund:
-    /* two's-complement roundtrip through the row's 64-bit word (the Sail side
-     * previously pushed get_slice_int(64, refund, 0)) */
-    return journal_push_refund(
-        (uint64_t)CONVERT_OF(mach_int, sail_int)(e.variants.zJRefund));
+    /* i64 counter, stored as its two's-complement 64-bit word */
+    return journal_push_refund((uint64_t)e.variants.zJRefund);
   case Kind_zJSelfD:
     return journal_push_selfd(UNIT);
   }
@@ -120,8 +118,7 @@ void journal_pop(struct zJEntry *out, unit u) {
     break;
   case GJT_REFUND:
     out->kind = Kind_zJRefund;
-    CONVERT_OF(sail_int, mach_int)(&out->variants.zJRefund,
-                                   (mach_int)journal_top_refund(UNIT));
+    out->variants.zJRefund = (int64_t)journal_top_refund(UNIT);
     break;
   case GJT_SELFD:
     out->kind = Kind_zJSelfD;

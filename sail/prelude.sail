@@ -127,6 +127,16 @@ function to_gas(x : int) -> gas =
  * therefore only a typed range guard for the generated code. */
 function gas_sub(a : gas, b : gas) -> gas = to_gas(a - b)
 
+/* Signed 64-bit counter (machine int in the generated code). The gas-refund
+ * counter is the one genuinely SIGNED quantity in the model (EIP-2200/3529
+ * deltas un-clear as well as clear); its magnitude is gas-bounded, so the
+ * clamp in to_i64 is a typed range guard, never semantics. */
+type i64 = range(- 9223372036854775808, 9223372036854775807)
+function to_i64(x : int) -> i64 =
+    if x < - 9223372036854775808 then { - 9223372036854775808 } else {
+        if x <= 9223372036854775807 then { x } else { 9223372036854775807 }
+    }
+
 let WORD_BYTES : int = 32
 let WORD_BITS : int = 256
 

@@ -340,7 +340,7 @@ function k_log(a : address, topics : list(word), data : list(byte)) -> unit = {
 }
 function k_refund_add(delta : int) -> unit = {
     journal_push(JRefund(k_refund));
-    k_refund = k_refund + delta
+    k_refund = to_i64(k_refund + delta)
 }
 
 /* Record that `a` issued SELFDESTRUCT this tx (the balance transfer to the
