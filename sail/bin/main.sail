@@ -462,8 +462,8 @@ function validate_block(exec_ok : bool, block_result : BlockExecutionResult) -> 
 
     let hdr_ok = headers_ok();
     let gas_used_ok = block_result.gas_acc == header.gas_used;
-    let blob_gas_used_ok = block_result.blob_gas_acc == header.blob_gas_used;
-    let excess_blob_gas_ok = header.excess_blob_gas == expected_payload_excess_blob_gas();
+    let blob_gas_used_ok = block_result.blob_gas_acc == unsigned(header.blob_gas_used);
+    let excess_blob_gas_ok = unsigned(header.excess_blob_gas) == expected_payload_excess_blob_gas();
     let computed_root = compute_state_root();
     let poststate_ok = computed_root == header.state_root;
     let receipts_root = receipts_trie_root(block_result.receipts);

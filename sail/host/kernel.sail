@@ -293,7 +293,7 @@ function k_env(f : EnvField) -> word = {
         F_PrevRandao => k_header.prev_randao,
         F_Origin => address_to_word(k_tx.origin),
         F_GasPrice => k_tx.gas_price,
-        F_SlotNumber => word_of_int(k_header.slot_number),
+        F_SlotNumber => sail_zero_extend(k_header.slot_number, 256),
     }
 }
 function k_coinbase() -> address = k_header.fee_recipient

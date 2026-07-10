@@ -24,9 +24,9 @@ uint64_t ssz_src_len(const unit u)
     return (uint64_t)zkvm_input_bytes_len;
 }
 
-uint64_t ssz_src_byte(sail_int idx)
+uint64_t ssz_src_byte(uint64_t idx)
 {
-    unsigned long i = mpz_get_ui(idx);
+    uint64_t i = idx;
     return (i < zkvm_input_bytes_len) ? (uint64_t)zkvm_input_bytes[i] : 0;
 }
 

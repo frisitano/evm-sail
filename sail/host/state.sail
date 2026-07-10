@@ -462,8 +462,8 @@ register k_header : BlockHeader =
         gas_used = 0,
         prev_randao = ZERO_WORD,
         base_fee = ZERO_WORD,
-        blob_gas_used = 0,
-        excess_blob_gas = 0,
+        blob_gas_used = sail_zeros(64),
+        excess_blob_gas = sail_zeros(64),
         state_root = ZERO_WORD,
         receipts_root = ZERO_WORD,
         logs_bloom = [||],
@@ -471,7 +471,7 @@ register k_header : BlockHeader =
         fee_recipient = ZERO_ADDR,
         parent_hash = ZERO_WORD,
         parent_beacon_block_root = ZERO_WORD,
-        slot_number = 0,
+        slot_number = sail_zeros(64),
     }
 register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob_hashes = [||] }
 

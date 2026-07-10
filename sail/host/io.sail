@@ -239,8 +239,8 @@ struct BlockHeader = {
     gas_used : int,
     prev_randao : word,
     base_fee : word,
-    blob_gas_used : int,
-    excess_blob_gas : int,
+    blob_gas_used : u64, /* EELS U64 */
+    excess_blob_gas : u64, /* EELS U64 */
     state_root : bits(256),
     receipts_root : bits(256),
     logs_bloom : list(byte),
@@ -248,7 +248,7 @@ struct BlockHeader = {
     fee_recipient : address,
     parent_hash : bits(256),
     parent_beacon_block_root : bits(256),
-    slot_number : int,
+    slot_number : u64, /* EELS U64 (EIP-7843) */
 }
 
 let EMPTY_OMMER_HASH : hash = 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347
@@ -270,7 +270,11 @@ val block_header_hash : (hash, hash, hash, hash) -> hash
  * public-output trace; only guest entries call it, core specs leave it
  * abstract. */
 val ssz_src_len = impure { c: "ssz_src_len" } : unit -> bits(64)
-val ssz_src_byte = impure { c: "ssz_src_byte" } : int -> bits(8)
+val ssz_src_byte_at = impure { c: "ssz_src_byte" } : u64 -> bits(8)
+
+/* int-offset adapter: the ONE remaining sail_int FFI crossing became u64;
+ * all decode arithmetic stays in the int domain and converts here. */
+function ssz_src_byte(i : int) -> byte = ssz_src_byte_at(get_slice_int(64, i, 0))
 val emit_out = impure { c: "el_emit_out" } : bits(8) -> unit
 
 /* The bulk readers below are pure derivations of ssz_src_byte -- consistent
@@ -386,15 +390,15 @@ function ssz_u256(b : int) -> word = {
 
 let PL_PREV_RANDAO : int = 372
 function pl_block_number() -> int = ssz_u64(payload_start() + PL_BLOCK_NUMBER)
-function pl_slot_number() -> int = ssz_u64(payload_start() + 532) /* EIP-7843 */
+function pl_slot_number() -> u64 = ssz_src_le(payload_start() + 532, 8) /* EIP-7843 */
 function pl_gas_limit() -> int = ssz_u64(payload_start() + PL_GAS_LIMIT)
 function pl_gas_used() -> int = ssz_u64(payload_start() + PL_GAS_USED)
 function pl_timestamp() -> int = ssz_u64(payload_start() + PL_TIMESTAMP)
 function pl_fee_recipient() -> address = ssz_addr(payload_start() + PL_FEE_RECIPIENT)
 function pl_prev_randao() -> bits(256) = ssz_bytes32(payload_start() + PL_PREV_RANDAO)
 function pl_base_fee() -> word = ssz_u256(payload_start() + PL_BASE_FEE)
-function pl_blob_gas_used() -> int = ssz_u64(payload_start() + PL_BLOB_GAS_USED)
-function pl_excess_blob_gas() -> int = ssz_u64(payload_start() + PL_EXCESS_BLOB_GAS)
+function pl_blob_gas_used() -> u64 = ssz_src_le(payload_start() + PL_BLOB_GAS_USED, 8)
+function pl_excess_blob_gas() -> u64 = ssz_src_le(payload_start() + PL_EXCESS_BLOB_GAS, 8)
 function pl_state_root() -> bits(256) = ssz_bytes32(payload_start() + PL_STATE_ROOT)
 function pl_receipts_root() -> bits(256) = ssz_bytes32(payload_start() + PL_RECEIPTS_ROOT)
 function pl_logs_bloom() -> list(byte) = ssz_bytes(payload_start() + PL_LOGS_BLOOM, 256)

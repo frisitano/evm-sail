@@ -18,6 +18,22 @@
 #include <stdint.h>
 #include <string.h>
 
+/* Domain-typed views of lbits, mirroring the Sail aliases (word/address/
+   hash). Transparent typedefs: same ABI as the generated callers, but the C
+   signatures read one-for-one against the Sail val declarations. The runtime
+   width in .len is the one piece of type information that survives to C --
+   sail_expect_len makes it a debug-build assertion (compiled out under
+   NDEBUG, e.g. the zkVM guest). */
+typedef lbits sail_word;    /* bits(256): word            */
+typedef lbits sail_address; /* bits(160): address         */
+typedef lbits sail_hash;    /* bits(256): hash / trie key */
+
+#include <assert.h>
+static inline void sail_expect_len(const lbits v, uint64_t n) {
+  (void)v; (void)n;
+  assert(v.len == n);
+}
+
 /* extract a 256-bit lbits into 4 big-endian-ordered 64-bit words */
 static inline void lbits_to_be_words4(uint64_t w[4], const lbits v) {
 #ifdef SAIL_INT_LIMBS

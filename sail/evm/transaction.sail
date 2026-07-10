@@ -220,7 +220,7 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
     let sender = tx.sender;
     let nonce_before = k_get_nonce(sender);
     let intrinsic = intrinsic_gas(tx);
-    let blob_fee = tx.blob_count * GAS_PER_BLOB * blob_base_fee(k_header.excess_blob_gas);
+    let blob_fee = tx.blob_count * GAS_PER_BLOB * blob_base_fee(unsigned(k_header.excess_blob_gas));
 
     /* Transaction validity: an invalid tx is REJECTED with no state change at all
        (no nonce bump, no gas charge). The upfront-balance test uses the fee CAPS
@@ -258,7 +258,7 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
                 & /* >= base fee */
                   ((tx.blob_count == 0) |
                       /* blob fee cap >= price    */
-                      (unsigned(tx.max_blob_fee) >= blob_base_fee(k_header.excess_blob_gas)))
+                      (unsigned(tx.max_blob_fee) >= blob_base_fee(unsigned(k_header.excess_blob_gas))))
                 & blob_ok
                 & (not_bool(tx.is_create) | (dlen <= max_initcode_size()))
                 & /* EIP-3860 */

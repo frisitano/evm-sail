@@ -25,6 +25,7 @@
 #include EVMSAIL_MODEL_H
 #include "kernel_state.h"
 #include "state_db.h"
+#include "lbits_convert.h"
 
 
 /* C journal row tags (kernel_state.c jrn enum; C-internal -- the Sail side
@@ -137,7 +138,7 @@ void journal_pop(struct zJEntry *out, unit u) {
  * carries (curr, orig). The written/read distinction stays C-internal (a
  * cached read has curr == orig). */
 static void storage_value_out(struct zoptionzIRStorageValuezK *out,
-                              uint64_t layer, const lbits a, const lbits s) {
+                              uint64_t layer, const sail_address a, const sail_word s) {
   lbits cur, orig;
   if (storage_row_probe(layer, a, s, &cur, &orig)) {
     out->kind = Kind_zSomezIRStorageValuezK;
@@ -149,20 +150,21 @@ static void storage_value_out(struct zoptionzIRStorageValuezK *out,
   }
 }
 
-void storage_tx_get(struct zoptionzIRStorageValuezK *out, const lbits a,
-                    const lbits s) {
+void storage_tx_get(struct zoptionzIRStorageValuezK *out, const sail_address a,
+                    const sail_word s) {
+  sail_expect_len(a, 160);
   storage_value_out(out, 0, a, s);
 }
 
-void storage_block_get(struct zoptionzIRStorageValuezK *out, const lbits a,
-                       const lbits s) {
+void storage_block_get(struct zoptionzIRStorageValuezK *out, const sail_address a,
+                       const sail_word s) {
   storage_value_out(out, 1, a, s);
 }
 
 /* per-layer account views: probe state_db's layer table and build
  * option(Account). */
 static void acct_entry_out(struct zoptionzIRAccountzK *out, uint64_t layer,
-                           const lbits a) {
+                           const sail_address a) {
   uint64_t nonce;
   lbits bal, sroot, chash;
   if (acct_row_probe(layer, a, &nonce, &bal, &sroot, &chash)) {
@@ -178,11 +180,11 @@ static void acct_entry_out(struct zoptionzIRAccountzK *out, uint64_t layer,
   }
 }
 
-void acct_tx_get(struct zoptionzIRAccountzK *out, const lbits a) {
+void acct_tx_get(struct zoptionzIRAccountzK *out, const sail_address a) {
   acct_entry_out(out, 0, a);
 }
 
-void acct_block_get(struct zoptionzIRAccountzK *out, const lbits a) {
+void acct_block_get(struct zoptionzIRAccountzK *out, const sail_address a) {
   acct_entry_out(out, 1, a);
 }
 
@@ -222,7 +224,7 @@ void acct_tx_pop(struct zoptionzIRAcctEntryzK *out, unit u) {
 
 /* state-root enumeration views: unfiltered block entries; Sail filters. The
  * storage entry's key.addr is the caller's query address. */
-void storage_block_row(struct zStorageEntry *out, const lbits a, uint64_t j) {
+void storage_block_row(struct zStorageEntry *out, const sail_address a, uint64_t j) {
   out->zkey.zaddr = a;
   storage_block_probe_row(a, j, &out->zkey.zslot, &out->zvalue.zcurr, &out->zvalue.zorig);
 }
@@ -239,7 +241,7 @@ void acct_block_row(struct zAcctEntry *out, uint64_t i) {
 
 /* EIP-6780 deletion drain: pop one of the address's tx rows as option(slot);
  * Sail records the read and loops until None. */
-void storage_tx_wipe(struct zoptionzIbzK *out, const lbits a) {
+void storage_tx_wipe(struct zoptionzIbzK *out, const sail_address a) {
   lbits slot;
   if (storage_tx_wipe_probe(a, &slot)) {
     out->kind = Kind_zSomezIbzK;

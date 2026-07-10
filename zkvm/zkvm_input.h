@@ -15,7 +15,7 @@
 #include "trie_node_db.h"
 #include "state_db.h"
 uint64_t ssz_src_len(const unit u);                  /* unit -> bits(64) (byte count) */
-uint64_t ssz_src_byte(sail_int idx);                 /* int  -> bits(8) */
+uint64_t ssz_src_byte(uint64_t idx);                 /* u64 -> bits(8) */
 uint64_t ssz_src_le(sail_int off, sail_int n);       /* (int,int) -> bits(64): n<=8 LE */
 uint64_t ssz_src_be(sail_int off, sail_int n);       /* (int,int) -> bits(64): n<=8 BE */
 const uint8_t *evmsail_ssz_ptr(uint64_t off, uint64_t len);

@@ -578,11 +578,11 @@ function block_header_hash(
     payload = list_append(payload, rlp_bytes(zero_bytes(8)));
     payload = list_append(payload, rlp_int_word(k_header.base_fee));
     payload = list_append(payload, rlp_word(withdrawals_root));
-    payload = list_append(payload, rlp_int(k_header.blob_gas_used));
-    payload = list_append(payload, rlp_int(k_header.excess_blob_gas));
+    payload = list_append(payload, rlp_int(unsigned(k_header.blob_gas_used)));
+    payload = list_append(payload, rlp_int(unsigned(k_header.excess_blob_gas)));
     payload = list_append(payload, rlp_word(k_header.parent_beacon_block_root));
     payload = list_append(payload, rlp_word(requests_hash));
     payload = list_append(payload, rlp_word(block_access_list_hash));
-    payload = list_append(payload, rlp_int(k_header.slot_number));
+    payload = list_append(payload, rlp_int(unsigned(k_header.slot_number)));
     keccak_rlp_payload([||], payload)
 }

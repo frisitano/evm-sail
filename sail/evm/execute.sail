@@ -392,7 +392,7 @@ function execute(op : ast) -> unit = match op {
     BLOBBASEFEE() => {
         /* EIP-7516 */
         charge(G_base);
-        push(word_of_int(blob_base_fee(k_header.excess_blob_gas)))
+        push(word_of_int(blob_base_fee(unsigned(k_header.excess_blob_gas))))
     },
     BLOBHASH() => {
         /* EIP-4844 */
