@@ -76,14 +76,14 @@ let PER_EMPTY_ACCOUNT : gas = 25000 /* EIP-7702 PER_EMPTY_ACCOUNT_COST      */
  * a Sail byte loop; zero bytes are the remainder. */
 function calldata_cost() -> gas = {
     let n = txdata_size();
-    let nz = unsigned(txd_count_nonzero());
+    let nz = unsigned(txdata_count_nonzero());
     to_gas(G_txdatazero * (n - nz) + G_txdatanonzero * nz)
 }
 
 /* EIP-7623 calldata tokens: each zero byte = 1 token, each nonzero byte = 4. */
 function calldata_tokens() -> int = {
     let n = txdata_size();
-    let nz = unsigned(txd_count_nonzero());
+    let nz = unsigned(txdata_count_nonzero());
     (n - nz) + 4 * nz
 }
 
@@ -383,7 +383,7 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
             exc_halt(OutOfGas)
         }
     } else {
-        cd_set_tx();
+        calldata_bind_tx_input();
         message =
             struct {
                 caller = sender,

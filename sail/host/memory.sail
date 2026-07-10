@@ -105,13 +105,19 @@ function mem_size_words() -> int = ediv_int(memory_size + 31, 32)
 function mem_mcopy(dst : int, src : int, len : int) -> unit =
     hm_move(get_slice_int(64, dst, 0), get_slice_int(64, src, 0), get_slice_int(64, len, 0))
 
-/* CODECOPY: the current frame's code (already in the C buffer) into memory.
- * Clamp a beyond-2^64 source offset to a beyond-any-code sentinel (see
- * calldata_copy_to_mem): a past-end source must zero-fill the destination. */
-function mem_codecopy(dst : int, off : int, len : int) -> unit = {
-    let o = if off > 16777216 then { 16777216 } else { off };
-    frame_code_copy_to_memory(get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
-}
+/* Clamp a beyond-2^64 source offset to a beyond-any-source sentinel (2^24,
+ * larger than any code/calldata/returndata can be): the 64-bit truncation at
+ * the FFI would otherwise wrap a huge offset back into real data. A past-end
+ * source must read as zeros / zero-fill its destination (EELS buffer_read). */
+function clamp_source_offset(off : int) -> int = if off > 16777216 then { 16777216 } else { off }
+
+/* CODECOPY: the current frame's code (already in the C buffer) into memory. */
+function mem_codecopy(dst : int, off : int, len : int) -> unit =
+    frame_code_copy_to_memory(
+        get_slice_int(64, dst, 0),
+        get_slice_int(64, clamp_source_offset(off), 0),
+        get_slice_int(64, len, 0),
+    )
 
 /* KECCAK256 over the memory range [off, off+len). Semantically, the caller
  * reads the addressed bytes and hashes that byte list. */

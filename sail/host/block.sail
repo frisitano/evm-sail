@@ -400,7 +400,7 @@ function enter_system_call_frame(tgt : address, input_len : int) -> unit = {
     returndata_reset_all();
     memory_size = 0;
     frame_status = Running();
-    cd_set_tx(); /* AFTER mem_clear: it points the base frame's calldata at the slot */
+    calldata_bind_tx_input(); /* AFTER mem_clear: it points the base frame's calldata at the slot */
     message =
         struct {
             caller = SYSTEM_ADDRESS(),

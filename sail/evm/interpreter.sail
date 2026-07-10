@@ -475,7 +475,7 @@ function run_call(mode : int) -> unit = {
             if is_running() then {
                 calldata_set_next(args_off, args_len)
             } else {
-                cd_set_empty()
+                calldata_bind_empty()
             };
 
             /* enter the child frame: pc at 0, its own gas/stack/memory, code
@@ -657,7 +657,7 @@ function run_create(is2 : bool) -> unit = {
 
                 /* the initcode frame has no calldata; its executing code is the
                    initcode copied from memory[off, off+len). */
-                cd_set_empty();
+                calldata_bind_empty();
                 let ic_len = if is_running() then {
                         frame_code_pend_mem(off, len)
                     } else {

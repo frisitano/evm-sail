@@ -86,37 +86,21 @@ unit host_mem_push(const unit u) {
 }
 
 /* the NEXT child's calldata := this frame's memory [off, off+len) */
-unit cd_set(uint64_t off, uint64_t len) {
+unit calldata_bind_memory(uint64_t off, uint64_t len) {
   cd_pending.src = h_top; cd_pending.off = off; cd_pending.len = len;
   return UNIT;
 }
-unit cd_set_empty(const unit u) {
+unit calldata_bind_empty(const unit u) {
   (void)u;
   cd_pending.src = -2; cd_pending.off = 0; cd_pending.len = 0;
   return UNIT;
 }
 /* the CURRENT (tx-level) frame's calldata := the streamed tx input */
-unit cd_set_tx(const unit u) {
+unit calldata_bind_tx_input(const unit u) {
   (void)u;
   cd[h_top].src = -1; cd[h_top].off = 0; cd[h_top].len = txin.len;
   return UNIT;
 }
-/* begin populating the owned tx input buffer (resets length; storage is cached) */
-unit txin_begin(const unit u) {
-  (void)u;
-  txin.len = 0;
-  return UNIT;
-}
-unit txin_byte(uint64_t b) {
-  if (txin.len >= txin.cap) {
-    uint64_t n = txin.cap ? txin.cap * 2 : 1024;
-    txin.buf = (uint8_t *)realloc(txin.buf, n);
-    txin.cap = n;
-  }
-  txin.buf[txin.len++] = (uint8_t)b;
-  return UNIT;
-}
-
 static void txin_ensure(uint64_t need) {
   if (need > txin.cap) {
     uint64_t n = txin.cap ? txin.cap : 1024;
@@ -131,7 +115,7 @@ static void txin_ensure(uint64_t need) {
  * input it is a self-reference (memmove tolerates the aliasing -- an in-place
  * copy never grows the buffer, so `src` cannot dangle). Fail-closed on a bad
  * source, matching the empty-input path. */
-uint64_t txin_set_from_source(uint64_t kind, uint64_t off, uint64_t len) {
+uint64_t txdata_stage_source(uint64_t kind, uint64_t off, uint64_t len) {
   if (len == 0) { txin.len = 0; return 0; }
   const uint8_t *src = NULL;
   uint64_t rlen = 0;
@@ -145,14 +129,14 @@ uint64_t txin_set_from_source(uint64_t kind, uint64_t off, uint64_t len) {
   return len;
 }
 
-uint64_t txin_set_word(const lbits w) {
+uint64_t txdata_stage_word(const lbits w) {
   txin_ensure(32);
   lbits_to_be_bytes(txin.buf, 32, w);
   txin.len = 32;
   return 32;
 }
 
-uint64_t txd_count_nonzero(const unit u) {
+uint64_t txdata_count_nonzero(const unit u) {
   (void)u;
   uint64_t c = 0;
   for (uint64_t i = 0; i < txin.len; i++) if (txin.buf[i]) c++;
@@ -165,8 +149,8 @@ uint64_t txd_copy(uint8_t *dst, uint64_t cap) {
   for (uint64_t i = 0; i < n; i++) dst[i] = txin_byte_at(&txin, i);
   return n;
 }
-uint64_t txd_at(uint64_t i)  { return txin_byte_at(&txin, i); }
-uint64_t txd_length(const unit u) { (void)u; return txin.len; }
+uint64_t txdata_byte_at(uint64_t i)  { return txin_byte_at(&txin, i); }
+uint64_t txdata_length(const unit u) { (void)u; return txin.len; }
 const uint8_t *txd_rd(uint64_t off, uint64_t len) {
   static const uint8_t zero = 0;
   if (len == 0) return &zero;
@@ -193,7 +177,7 @@ uint64_t cd_byte(uint64_t i) { return cd_at(&cd[h_top], i); }
  * `off` arrives truncated to 64 bits from a 256-bit EVM offset; a past-end
  * source offset must zero-fill the WHOLE dest, so guard against the uint64
  * wraparound of `off + k` re-aliasing back into the real calldata. */
-unit cd_to_mem(uint64_t dst, uint64_t off, uint64_t len) {
+unit calldata_copy_to_memory(uint64_t dst, uint64_t off, uint64_t len) {
   if (!len) return UNIT;
   uint8_t *d = hm_wr(dst, len);
   if (!d) return UNIT;

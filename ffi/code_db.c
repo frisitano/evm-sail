@@ -294,7 +294,7 @@ uint64_t frame_code_bind_tx_input(const unit u) {
   (void)u;
   int d = (int)hm_depth(UNIT);
   fc_desc *f = &fc[d];
-  uint64_t len64 = txd_length(UNIT);
+  uint64_t len64 = txdata_length(UNIT);
   uint32_t len = len64 > UINT32_MAX ? UINT32_MAX : (uint32_t)len64;
   if (!len) { f->p = NULL; f->bm = NULL; f->len = 0; return 0; }
   fc_inl_fit(d, len);
