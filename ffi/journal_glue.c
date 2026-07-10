@@ -25,6 +25,17 @@
 #include EVMSAIL_MODEL_H
 #include "kernel_state.h"
 #include "state_db.h"
+#include "lbits_convert.h"
+
+/* uint64 -> sail_int, UNSIGNED (CONVERT_OF(sail_int, mach_int) is a signed
+ * int64 roundtrip and corrupts values >= 2^63 -- nonces can be 2^64-1). */
+static void sail_int_from_u64(sail_int *rop, uint64_t v) {
+  lbits tmp;
+  uint64_t le[4] = {v, 0, 0, 0};
+  le_words4_to_lbits(&tmp, le);
+  tmp.len = 64;
+  sail_unsigned(rop, tmp);
+}
 
 /* C journal row tags (kernel_state.c jrn enum; C-internal -- the Sail side
  * no longer sees tags). */
@@ -87,8 +98,7 @@ void journal_pop(struct zJEntry *out, unit u) {
   case GJT_ACCT:
     out->kind = Kind_zJAcct;
     top_addr160(&out->variants.zJAcct.ztup0);
-    CONVERT_OF(sail_int, mach_int)(&out->variants.zJAcct.ztup1.znonce,
-                                   (mach_int)journal_top_nonce(UNIT));
+    sail_int_from_u64(&out->variants.zJAcct.ztup1.znonce, journal_top_nonce(UNIT));
     journal_top_balance(&out->variants.zJAcct.ztup1.zbalance, UNIT);
     journal_top_sroot(&out->variants.zJAcct.ztup1.zstorage_root, UNIT);
     journal_top_chash(&out->variants.zJAcct.ztup1.zcode_hash, UNIT);
@@ -171,7 +181,7 @@ static void acct_entry_out(struct zoptionzIRAccountzK *out, uint64_t layer,
   if (acct_row_probe(layer, a, &nonce, &bal, &sroot, &chash)) {
     out->kind = Kind_zSomezIRAccountzK;
     struct zAccount *acc = &out->variants.zSomezIRAccountzK;
-    CONVERT_OF(sail_int, mach_int)(&acc->znonce, (mach_int)nonce);
+    sail_int_from_u64(&acc->znonce, nonce);
     acc->zbalance = bal;
     acc->zstorage_root = sroot;
     acc->zcode_hash = chash;
@@ -219,8 +229,8 @@ void acct_tx_pop(struct zoptionzIRAcctEntryzK *out, unit u) {
     return;
   }
   out->kind = Kind_zSomezIRAcctEntryzK;
-  CONVERT_OF(sail_int, mach_int)(&e->zvalue.zcurr.znonce, (mach_int)cn);
-  CONVERT_OF(sail_int, mach_int)(&e->zvalue.zorig.znonce, (mach_int)on);
+  sail_int_from_u64(&e->zvalue.zcurr.znonce, cn);
+  sail_int_from_u64(&e->zvalue.zorig.znonce, on);
 }
 
 /* state-root enumeration views: unfiltered block entries; Sail filters. The
@@ -236,8 +246,8 @@ void acct_block_row(struct zAcctEntry *out, uint64_t i) {
                        &out->zvalue.zcurr.zstorage_root, &out->zvalue.zcurr.zcode_hash, &on,
                        &out->zvalue.zorig.zbalance, &out->zvalue.zorig.zstorage_root,
                        &out->zvalue.zorig.zcode_hash);
-  CONVERT_OF(sail_int, mach_int)(&out->zvalue.zcurr.znonce, (mach_int)cn);
-  CONVERT_OF(sail_int, mach_int)(&out->zvalue.zorig.znonce, (mach_int)on);
+  sail_int_from_u64(&out->zvalue.zcurr.znonce, cn);
+  sail_int_from_u64(&out->zvalue.zorig.znonce, on);
 }
 
 /* EIP-6780 deletion drain: pop one of the address's tx rows as option(slot);
