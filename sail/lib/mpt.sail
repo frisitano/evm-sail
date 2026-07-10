@@ -282,7 +282,7 @@ function arena_intern(bs : list(byte)) -> ByteSlice = {
     byte_slice(TrieArenaSource, off, n)
 }
 
-val account_leaf_value : (int, word, hash, hash) -> ByteSlice /* body below account_rlp */
+val account_leaf_value : (u64, word, hash, hash) -> ByteSlice /* body below account_rlp */
 val storage_leaf_value : word -> ByteSlice
 
 /* Source -> bytes (val in host/io.sail): materialize a byte slice by
@@ -1010,16 +1010,16 @@ function rlp_push(bs : list(byte)) -> unit = {
 }
 
 /* rlp([nonce, balance, storageRoot, codeHash]) */
-function account_rlp(nonce : int, balance : word, sroot : bits(256), chash : bits(256)) -> list(byte) = {
+function account_rlp(nonce : u64, balance : word, sroot : bits(256), chash : bits(256)) -> list(byte) = {
     rlp_scratch = [||];
-    rlp_push(rlp_int(nonce));
+    rlp_push(rlp_int(unsigned(nonce)));
     rlp_push(rlp_int(unsigned(balance)));
     rlp_push(rlp_word(sroot));
     rlp_push(rlp_word(chash));
     rlp_list(list_reverse(rlp_scratch)) /* prepend builds newest-first; reverse -> field order */
 }
 
-function account_leaf_value(nonce : int, balance : word, sroot : hash, chash : hash) -> ByteSlice =
+function account_leaf_value(nonce : u64, balance : word, sroot : hash, chash : hash) -> ByteSlice =
     arena_intern(account_rlp(nonce, balance, sroot, chash))
 
 function storage_leaf_value(value : word) -> ByteSlice =
@@ -1054,7 +1054,7 @@ function storage_updates(a : address) -> list(TriePatch) = {
 }
 
 function account_empty(acc : Account) -> bool =
-    (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance)
+    (acc.code_hash == KECCAK_EMPTY) & acc.nonce == sail_zeros(64) & word_is_zero(acc.balance)
 
 /* trie update for one changed block account row. An account that ends the
  * block EIP-161-empty is a DELETE when its pre-state was a real leaf, else
@@ -1276,7 +1276,7 @@ function stateless_account(a : address) -> option(Account) = {
     let value = trie_walk(rootnode, hash_nibbles(ak), 0, 256);
     if list_len(value) > 0 then {
         let (nonce, bal, sroot, chash) = decode_account(value);
-        Some(struct { nonce = nonce, balance = bal, code_hash = chash, storage_root = sroot })
+        Some(struct { nonce = get_slice_int(64, nonce, 0), balance = bal, code_hash = chash, storage_root = sroot })
     } else {
         None()
     }

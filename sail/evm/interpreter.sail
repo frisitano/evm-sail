@@ -608,7 +608,7 @@ function run_create(is2 : bool) -> unit = {
            incrementable). */
         let depth_ok : bool = call_depth + 1 <= DEPTH_LIMIT;
         let balance_ok : bool = unsigned(k_get_balance(creator)) >= unsigned(value);
-        let nonce_ok : bool = nonce < 18446744073709551615;
+        let nonce_ok : bool = nonce != 0xFFFFFFFFFFFFFFFF; /* EIP-2681 */
 
         if not_bool(depth_ok) | not_bool(balance_ok) | not_bool(nonce_ok) then {
             returndata_clear_current();

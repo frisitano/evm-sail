@@ -89,11 +89,11 @@ function keccak_rlp_payload(domain : list(byte), payload : list(byte)) -> bits(2
     host_bytes_keccak_finish()
 }
 
-val create_address : (address, int) -> address
+val create_address : (address, u64) -> address
 
-function create_address(sender : address, nonce : int) -> address = {
+function create_address(sender : address, nonce : u64) -> address = {
     var payload : list(byte) = rlp_addr(sender);
-    payload = list_append(payload, rlp_int(nonce));
+    payload = list_append(payload, rlp_int(unsigned(nonce)));
     word_to_address(keccak_rlp_payload([||], payload))
 }
 

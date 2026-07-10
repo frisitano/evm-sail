@@ -126,7 +126,9 @@ function process_auth(au : Authorization) -> unit = {
         let _ = k_access_account(authority);
         let (is_deleg, _) = k_deleg_target(authority);
         let code_ok = (k_code_key(authority) == KECCAK_EMPTY) | is_deleg;
-        let nonce_ok = k_get_nonce(authority) == au.nonce;
+        /* the decoded auth nonce is an unbounded int: compare in the int
+           domain so an oversized (>= 2^64) nonce can never alias a real one */
+        let nonce_ok = unsigned(k_get_nonce(authority)) == au.nonce;
         if code_ok & nonce_ok then {
             let existed = not_bool(k_account_is_empty(authority));
             if unsigned(address_to_word(au.address)) == 0 then {
@@ -200,7 +202,7 @@ function prewarm(tx : Transaction) -> unit = {
 struct TxValidity = {
     valid : bool,
     sender : address,
-    nonce_before : int,
+    nonce_before : u64,
     intrinsic_gas : gas,
     blob_fee : int,
     input_len : int,
@@ -274,7 +276,7 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
                 & /* EIP-7702: non-empty auth list */
                   (not_bool(tx.is_set_code) | (k_fork >= FORK_PRAGUE))
                 & /* EIP-7702 is Prague+: a type-4 tx is invalid on an earlier fork */
-                  (nonce_before < 18446744073709551615)
+                  (nonce_before != 0xFFFFFFFFFFFFFFFF)
                 & /* EIP-2681: nonce < 2^64-1 (incrementable) */
                   (tx.gas_limit <= k_header.gas_limit); /* tx gas <= block gas limit */
 
@@ -313,7 +315,7 @@ function enter_transaction_frame(tx : Transaction, intrinsic : gas) -> unit = {
     frame_status = Running()
 }
 
-function run_create_transaction_frame(tx : Transaction, sender : address, nonce_before : int) -> unit = {
+function run_create_transaction_frame(tx : Transaction, sender : address, nonce_before : u64) -> unit = {
     let new_addr = k_create_addr(sender, nonce_before);
     let _ = k_access_account(new_addr);
 

@@ -95,7 +95,7 @@ function k_tstore(a : address, s : word, v : word) -> unit = {
 function k_get_balance(a : address) -> word = {
     k_aload(a).balance
 }
-function k_get_nonce(a : address) -> int = {
+function k_get_nonce(a : address) -> u64 = {
     k_aload(a).nonce
 }
 
@@ -106,7 +106,7 @@ function k_code_key(a : address) -> hash = k_aload(a).code_hash
  * (nonexistent per EIP-161) account reads as 0, not KECCAK_EMPTY. */
 function k_get_codehash(a : address) -> hash = {
     let acc = k_aload(a);
-    if (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance) then {
+    if (acc.code_hash == KECCAK_EMPTY) & acc.nonce == sail_zeros(64) & word_is_zero(acc.balance) then {
         word_of_int(0)
     } else {
         acc.code_hash
@@ -115,7 +115,7 @@ function k_get_codehash(a : address) -> hash = {
 function k_account_is_empty(a : address) -> bool = {
     /* EIP-161 "empty" account: nonce 0, balance 0, no code (unrecorded query) */
     let acc = k_aload(a);
-    (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance)
+    (acc.code_hash == KECCAK_EMPTY) & acc.nonce == sail_zeros(64) & word_is_zero(acc.balance)
 }
 
 /* CREATE/CREATE2/create-tx address-collision test (unrecorded query): the
@@ -125,7 +125,7 @@ function k_account_occupied(a : address) -> bool = {
     let acc = k_aload(a);
     let has_code : bool = acc.code_hash != KECCAK_EMPTY;
     let has_storage : bool = (acc.storage_root != EMPTY_TRIE_ROOT) | storage_has_live_addr(a);
-    has_code | (acc.nonce != 0) | has_storage
+    has_code | (acc.nonce != sail_zeros(64)) | has_storage
 }
 
 function eip7708_system_address() -> address = 0xfffffffffffffffffffffffffffffffffffffffe
@@ -174,10 +174,13 @@ function k_transfer(src : address, dst : address, v : word) -> unit = {
     }
 }
 
-/* Increment an account's nonce (sender per tx, creator at CREATE/CREATE2). */
+/* Increment an account's nonce (sender per tx, creator at CREATE/CREATE2).
+ * The u64 increment cannot wrap: EIP-2681 guards every path that reaches a
+ * bump (tx validity rejects a sender at 2^64-1; CREATE and EIP-7702
+ * authorization processing skip at the cap before incrementing). */
 function k_bump_nonce(a : address) -> unit = {
     journal_push(JAcct(a, k_aload(a)));
-    store_account(a, { k_aload(a) with nonce = k_aload(a).nonce + 1 })
+    store_account(a, { k_aload(a) with nonce = get_slice_int(64, unsigned(k_aload(a).nonce) + 1, 0) })
 }
 
 /* Set an account's code by binding its codeHash, journaling the prior account.
@@ -326,7 +329,7 @@ function k_blobhash(i : int) -> word = {
 }
 
 /* --- address derivation primitives (CREATE / CREATE2) --- */
-function k_create_addr(a : address, nonce : int) -> address = create_address(a, nonce)
+function k_create_addr(a : address, nonce : u64) -> address = create_address(a, nonce)
 function k_create2_addr(a : address, salt : word, inithash : hash) -> address =
     create2_address(a, salt, inithash)
 
@@ -521,7 +524,7 @@ function k_tx_merge() -> unit = {
         match acct_tx_pop() {
             Some(e) => {
                 if e.value.curr.nonce != e.value.orig.nonce then {
-                    bal_nonce_change(e.addr, get_slice_int(64, e.value.curr.nonce, 0))
+                    bal_nonce_change(e.addr, e.value.curr.nonce)
                 };
                 if e.value.curr.balance != e.value.orig.balance then {
                     bal_balance_change(e.addr, e.value.curr.balance)
@@ -532,11 +535,11 @@ function k_tx_merge() -> unit = {
                 if account_changed(e.value.curr, e.value.orig) then {
                     acct_block_write(
                         e.addr,
-                        get_slice_int(64, e.value.curr.nonce, 0),
+                        e.value.curr.nonce,
                         e.value.curr.balance,
                         e.value.curr.storage_root,
                         e.value.curr.code_hash,
-                        get_slice_int(64, e.value.orig.nonce, 0),
+                        e.value.orig.nonce,
                         e.value.orig.balance,
                         e.value.orig.storage_root,
                         e.value.orig.code_hash,
@@ -544,7 +547,7 @@ function k_tx_merge() -> unit = {
                 } else {
                     acct_block_cache(
                         e.addr,
-                        get_slice_int(64, e.value.curr.nonce, 0),
+                        e.value.curr.nonce,
                         e.value.curr.balance,
                         e.value.curr.storage_root,
                         e.value.curr.code_hash,

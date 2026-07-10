@@ -27,7 +27,7 @@
  * state (EXTCODEHASH, EIP-1052) and the binding a stateless witness checks code
  * against. */
 struct Account = {
-    nonce        : int,   /* sigma[a]_n: nonce (txs sent / contracts created)      */
+    nonce        : u64,   /* sigma[a]_n: nonce (u64: EIP-2681 caps it at 2^64-1)   */
     balance      : word,  /* sigma[a]_b: balance in wei                            */
     code_hash     : hash,  /* sigma[a]_c: keccak256(code); KECCAK_EMPTY if codeless */
     storage_root : hash,  /* sigma[a]_s: PRE-STATE storage root, the witness anchor */
@@ -324,7 +324,7 @@ union JEntry = {
 let ZERO_WORD : word = 0x0000000000000000000000000000000000000000000000000000000000000000
 let ZERO_ADDR : address = 0x0000000000000000000000000000000000000000
 let EMPTY_ACCOUNT : Account = struct {
-        nonce = 0,
+        nonce = sail_zeros(64),
         balance = ZERO_WORD,
         code_hash = KECCAK_EMPTY,
         storage_root = EMPTY_TRIE_ROOT,
@@ -504,7 +504,7 @@ function k_aload(a : address) -> Account = {
             None() => EMPTY_ACCOUNT, /* proven-absent reads as empty */
         },
     };
-    acct_tx_cache(a, get_slice_int(64, acc.nonce, 0), acc.balance, acc.storage_root, acc.code_hash);
+    acct_tx_cache(a, acc.nonce, acc.balance, acc.storage_root, acc.code_hash);
     acc
 }
 
@@ -512,7 +512,7 @@ function k_aload(a : address) -> Account = {
  * tx freezes the tx-start original C-side. Reverts run through the JAcct journal
  * (apply_undo below restores the overlay current), not the resolver cache. */
 function store_account(a : address, v : Account) -> unit =
-    acct_tx_update(a, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
+    acct_tx_update(a, v.nonce, v.balance, v.storage_root, v.code_hash)
 
 /* --- journal boundary: push / pop whole JEntry values ---
  * The one place a user-defined Sail type crosses the C boundary. The glue

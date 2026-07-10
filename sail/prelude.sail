@@ -33,6 +33,9 @@ type hash    = bits(256)
 /* keccak-256 / storage-key sized digest          */
 type byte    = bits(8)
 
+/* 8-bit byte                                     */
+type u64     = bits(64)
+
 /* Byte-source slices identify contiguous bytes without saying whether the
  * backend materializes them. The spec backend defines their meaning as
  * mathematical byte lists; the build backend resolves them to pointer/length
