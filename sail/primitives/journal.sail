@@ -1,18 +1,9 @@
 /* ======================================================================== */
-/* PRIMITIVES: WORLD-STATE TYPES                                            */
+/* PRIMITIVES: JOURNAL TYPES                                                */
 /*                                                                          */
-/* The shared data vocabulary of the host state that is not account-shaped: */
-/* logs, the per-tx environment, and the journal entry union. Pure data --  */
-/* no registers, no externs.                                                */
+/* The journal (undo-log) entry union the kernel pushes and the revert path */
+/* decodes. Pure data -- no registers, no externs.                          */
 /* ======================================================================== */
-
-/* A LOG record (Yellow Paper section 4.4.1, the log series): emitting address,
- * 0..4 topics (LOG0..LOG4), and the data bytes. */
-struct LogEntry     = { address : address, topics : list(word), data : list(byte) }
-
-/* Per-transaction environment: ORIGIN/GASPRICE (YP I_o, I_p) + the EIP-4844
- * blob versioned hashes the BLOBHASH opcode reads. */
-struct TxEnv = { origin : address, gas_price : word, blob_hashes : list(word) }
 
 /* Journal (undo-log) entry: one reversible state mutation. A call frame's
  * effects must roll back atomically on REVERT or an exceptional halt; rather

@@ -1131,10 +1131,6 @@ function compute_state_root() -> bits(256) = {
 /* witness-list readers (host/io.sail).                                     */
 /* ======================================================================== */
 
-/* EMPTY_TRIE_ROOT is defined in host/state.sail (next to KECCAK_EMPTY) so the
- * Account struct's storage_root default can reference it. */
-let EMPTY_CODE_HASH : bits(256) = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
-
 /* decode an account leaf value: (nonce, balance, storage_root, code_hash) */
 function decode_account(leaf : list(byte)) -> (int, word, bits(256), bits(256)) = {
     let items = rlp_node_items(leaf);
@@ -1148,7 +1144,7 @@ function decode_account(leaf : list(byte)) -> (int, word, bits(256), bits(256)) 
             bytes_be256(sr_f.content)
         };
     let chash = if list_len(ch_f.content) == 0 then {
-            EMPTY_CODE_HASH
+            KECCAK_EMPTY
         } else {
             bytes_be256(ch_f.content)
         };

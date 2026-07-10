@@ -22,13 +22,6 @@ struct Account = {
     storage_root : hash,  /* sigma[a]_s: PRE-STATE storage root, the witness anchor */
 }
 
-/* keccak256 of the empty string: the codeHash of every codeless account */
-let KECCAK_EMPTY : hash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
-
-/* keccak256(rlp("")) -- the root of an empty Merkle-Patricia trie: the storage
- * root of every account with no storage (EMPTY_ACCOUNT, freshly created). */
-let EMPTY_TRIE_ROOT : hash = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
-
 struct StorageValue = { curr : word, orig : word }
 
 struct StorageKey = { addr : address, slot : word }

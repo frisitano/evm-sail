@@ -1,9 +1,8 @@
 /* ======================================================================== */
 /* PRIMITIVES: TRANSACTION + CALL-FRAME TYPES                               */
 /*                                                                          */
-/* The decoded transaction and its EIP-7702 authorization tuple, the        */
-/* receipt, the tx validity/frame result records, and the per-frame call    */
-/* Message. Pure data -- no registers, no externs.                          */
+/* The decoded transaction and its EIP-7702 authorization tuple, the log    */
+/* record, and the receipt. Pure data -- no registers, no externs.          */
 /* ======================================================================== */
 
 /* An EIP-7702 set-code authorization tuple. The runner pre-recovers the
@@ -39,6 +38,10 @@ struct Transaction = {
   blob_hashes : list(word)    /* EIP-4844 versioned hashes (BLOBHASH operands)    */
 }
 
+/* A LOG record (Yellow Paper section 4.4.1, the log series): emitting address,
+ * 0..4 topics (LOG0..LOG4), and the data bytes. */
+struct LogEntry     = { address : address, topics : list(word), data : list(byte) }
+
 /* success: the top-level frame returned/stopped without reverting or
  * exceptionally halting (used for create-tx code deposit, log inclusion).
  * valid: the tx passed transaction VALIDITY (nonce/balance/intrinsic/floor/
@@ -52,38 +55,3 @@ struct Transaction = {
  * for the block gas-availability check and the header gas_used; it differs from
  * gas_used (the receipt's refunded gas) precisely by the refund. */
 struct Receipt = { tx_type : int, success : bool, valid : bool, gas_used : gas, block_gas : gas, logs : list(LogEntry) }
-
-struct TxValidity = {
-    valid : bool,
-    sender : address,
-    nonce_before : u64,
-    intrinsic_gas : gas,
-    blob_fee : int,
-    input_len : int,
-}
-
-struct TxFrameResult = {
-    success : bool,
-    gas_remaining : gas,
-}
-
-struct Message = {
-    caller       : address,  /* CALLER (I_s)                                  */
-    address      : address,  /* ADDRESS / storage owner = self (I_a)          */
-    code_address : address,  /* account whose code runs (differs under        */
-                                 /* DELEGATECALL/CALLCODE and EIP-7702 delegation) */
-    value        : word,     /* CALLVALUE (I_v)                               */
-    data_len     : int,      /* CALLDATA length (bytes are C-backed, host_mem) */
-    is_static    : bool,     /* inside a STATICCALL frame (EIP-214)           */
-    depth        : int,      /* call depth (YP I_e), bounded by DEPTH_LIMIT   */
-}
-
-let DEFAULT_MESSAGE : Message = struct {
-        caller = ZERO_ADDR,
-        address = ZERO_ADDR,
-        code_address = ZERO_ADDR,
-        value = ZERO_WORD,
-        data_len = 0,
-        is_static = false,
-        depth = 0,
-    }

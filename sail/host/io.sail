@@ -8,10 +8,10 @@
 /* and guest public-output bytes. The model commits to WHAT is serialized   */
 /* or executed; the inline `c:`-bound vals are the C boundary (ffi/).       */
 /*                                                                          */
-/* (2) CRYPTO -- keccak256 (the Ethereum hash: KECCAK256, trie/RLP          */
-/* node references, CREATE2 salt) and sha256 (precompile 0x02 + SSZ         */
-/* merkleization), the EVM precompiles over staged byte ranges, and the     */
-/* CREATE (Yellow Paper) / CREATE2 (EIP-1014) address derivations.          */
+/* (2) CRYPTO -- signature recovery (secp256k1/ecrecover), the EVM          */
+/* precompiles over staged byte ranges, and the CREATE (Yellow Paper) /     */
+/* CREATE2 (EIP-1014) address derivations. The keccak256/sha256 hash core   */
+/* itself lives in primitives/crypto.sail.                                  */
 /*                                                                          */
 /* (3) STATELESS INPUT -- decode the canonical SSZ SszStatelessInput from   */
 /* the private-input region (ssz_src_*): the execution payload, the         */
@@ -26,22 +26,6 @@
 /* ======================================================================== */
 
 /* ===================== (2) CRYPTO ======================================= */
-
-/* Big-endian byte serializations used by RLP, the tries, and address derivation. */
-function word_to_bytes32(w : word) -> list(byte) = {
-    var out : list(byte) = [||]; /* O(n): prepend big-endian */
-    foreach (k from 0 to 31) {
-        out = sail_shiftright(w, 8 * k)[7 .. 0] :: out
-    };
-    out
-}
-function address_to_bytes(a : address) -> list(byte) = {
-    var out : list(byte) = [||];
-    foreach (k from 0 to 19) {
-        out = sail_shiftright(a, 8 * k)[7 .. 0] :: out
-    };
-    out
-}
 
 function word_be_len(w : word) -> int = {
     var n : int = 0;
@@ -82,87 +66,6 @@ function rlp_nonce(nonce : int) -> list(byte) =
             list_append([|get_slice_int(8, 128 + int_be_len(nonce), 0)|], int_to_be_bytes(nonce))
         }
     }
-
-/* ---- Crypto core. The `c:`-bound vals below are the axiomatic boundary:
- * hash/signature primitives with NO pure Sail body (ffi/host_crypto.c,
- * ffi/precompiles.c -- the eth-act zkvm-standards accelerator surface); proof
- * targets see them as bodyless axioms (the c: key binds only C). keccak256 and
- * sha256 are the axiomatic hash core; keccak_rlp_payload refines
- * keccak256(domain ++ rlp_list_prefix(len) ++ payload). All shared consensus
- * hashing (lib/consensus_hash.sail) is written against these three. The
- * Witness/Memory/TxInput/ActiveCode source of a ByteSlice denotes an abstract
- * byte sequence: bytes_keccak(s) = keccak256(read_byte_slice(s)), and the
- * prefixed SHA-256 digest = sha256(type_byte :: bytes). ---- */
-
-/* streaming hash channel: reset, push bytes, finish = digest */
-val host_bytes_reset = impure { c: "host_bytes_reset" } : unit -> unit
-val host_bytes_push = impure { c: "host_bytes_push" } : bits(8) -> unit
-val host_bytes_push8 = impure { c: "host_bytes_push8" } : bits(64) -> unit
-val host_bytes_keccak_finish = impure { c: "host_bytes_keccak_finish" } : unit -> bits(256)
-val host_bytes_sha256_finish = impure { c: "host_bytes_sha256_finish" } : unit -> bits(256)
-
-/* keccak256 / sha256: the byte lists stream through the C hash channel
- * (host_bytes_*) 8 bytes per crossing; the channel primitives are the
- * axiomatic crypto core. */
-function hash_push_bytes(bs : list(byte)) -> unit = {
-    var rest : list(byte) = bs;
-    var more : bool = true;
-    while more do {
-        match rest {
-            b0 :: (b1 :: (b2 :: (b3 :: (b4 :: (b5 :: (b6 :: (b7 :: t))))))) => {
-                host_bytes_push8(append(b0, append(b1, append(b2, append(b3, append(b4, append(b5, append(b6, b7))))))));
-                rest = t
-            },
-            b :: t => {
-                host_bytes_push(b);
-                rest = t
-            },
-            [||] => more = false,
-        }
-    }
-}
-
-function keccak256(bs : list(byte)) -> bits(256) = {
-    host_bytes_reset();
-    hash_push_bytes(bs);
-    host_bytes_keccak_finish()
-}
-
-function sha256(bs : list(byte)) -> bits(256) = {
-    host_bytes_reset();
-    hash_push_bytes(bs);
-    host_bytes_sha256_finish()
-}
-
-/* keccak256(domain ++ rlp_list_prefix(len(payload)) ++ payload); body in
- * lib/rlp.sail (it needs rlp_list_prefix), streamed part-by-part. */
-val keccak_rlp_payload : (list(byte), list(byte)) -> bits(256)
-
-/* Source-tagged hashing: bytes_keccak(s) = keccak256(read_byte_slice(s)); the
- * prefixed digest = sha256(type_byte :: bytes). C hashes the source without
- * materializing it. */
-val host_source_keccak = impure { c: "host_source_keccak" } : (bits(64), bits(64), bits(64)) -> bits(256)
-val host_source_sha256_prefixed = impure { c: "host_source_sha256_prefixed" } : (bits(8), bits(64), bits(64), bits(64)) -> bits(
-        256,
-    )
-
-function bytes_keccak(s : ByteSlice) -> bits(256) =
-    host_source_keccak(byte_source_kind(s.source), s.off, s.len)
-
-function bytes_sha256_prefixed(prefix : byte, s : ByteSlice) -> bits(256) =
-    host_source_sha256_prefixed(prefix, byte_source_kind(s.source), s.off, s.len)
-
-/* Fixed-width helpers: pure meaning over keccak256/sha256. The dormant
- * one-call C fast paths in ffi/host_crypto.c (host_keccak_word & co) are
- * future link-time overrides for the hot path (secure-trie keys hash on
- * every state access). */
-function keccak256_word(w : word) -> bits(256) = keccak256(word_to_bytes32(w))
-
-function keccak256_address(a : address) -> bits(256) = keccak256(address_to_bytes(a))
-
-/* SSZ merkle parent: SHA-256(left ++ right) over two 32-byte chunks. */
-function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) =
-    sha256(list_append(word_to_bytes32(a), word_to_bytes32(b)))
 
 /* SHA-256 of the concatenation of the present 32-byte digests (mask bits 0..2
  * select d0,d1,d2, concatenated in order); the EIP-7685 execution-requests

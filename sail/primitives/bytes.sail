@@ -79,3 +79,19 @@ function tx_input_byte_slice(off : int, len : int) -> ByteSlice =
 
 function active_code_byte_slice(off : int, len : int) -> ByteSlice =
     byte_slice(ActiveCodeSource, off, len)
+
+/* Big-endian byte serializations used by RLP, the tries, and address derivation. */
+function word_to_bytes32(w : word) -> list(byte) = {
+    var out : list(byte) = [||]; /* O(n): prepend big-endian */
+    foreach (k from 0 to 31) {
+        out = sail_shiftright(w, 8 * k)[7 .. 0] :: out
+    };
+    out
+}
+function address_to_bytes(a : address) -> list(byte) = {
+    var out : list(byte) = [||];
+    foreach (k from 0 to 19) {
+        out = sail_shiftright(a, 8 * k)[7 .. 0] :: out
+    };
+    out
+}
