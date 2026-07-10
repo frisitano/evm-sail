@@ -10,27 +10,6 @@
 
 /* The per-frame call context (YP "message call" I = (I_a, I_o, I_s, ...)).
  * One Message per active frame; sub-calls save/restore it (interpreter.sail). */
-struct Message = {
-    caller       : address,  /* CALLER (I_s)                                  */
-    address      : address,  /* ADDRESS / storage owner = self (I_a)          */
-    code_address : address,  /* account whose code runs (differs under        */
-                                 /* DELEGATECALL/CALLCODE and EIP-7702 delegation) */
-    value        : word,     /* CALLVALUE (I_v)                               */
-    data_len     : int,      /* CALLDATA length (bytes are C-backed, host_mem) */
-    is_static    : bool,     /* inside a STATICCALL frame (EIP-214)           */
-    depth        : int,      /* call depth (YP I_e), bounded by DEPTH_LIMIT   */
-}
-
-let DEFAULT_MESSAGE : Message = struct {
-        caller = ZERO_ADDR,
-        address = ZERO_ADDR,
-        code_address = ZERO_ADDR,
-        value = ZERO_WORD,
-        data_len = 0,
-        is_static = false,
-        depth = 0,
-    }
-
 /* ----------------------- active-frame registers ------------------------- */
 
 register pc : int = 0

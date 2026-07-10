@@ -27,9 +27,6 @@ val host_mem_pop = impure { c: "host_mem_pop" } : unit -> unit
  * already live in C buffers, so copies stay C-side. */
 val hm_move = impure { c: "hm_move" } : (bits(64), bits(64), bits(64)) -> unit
 
-/* kept only as the type of the (now unused) StackFrame snapshot field */
-struct MemByte = { offset : int, value : byte }
-
 /* The high-water mark, in bytes: the largest offset ever touched in this
  * frame. MSIZE rounds it up to a word; memory-expansion gas is charged on
  * each growth of mem_size_words (Yellow Paper section 9.4.1, the C_mem term). */

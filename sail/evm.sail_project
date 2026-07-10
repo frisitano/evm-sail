@@ -4,6 +4,10 @@ evm {
   files
     prelude.sail,
     exceptions.sail,
+    primitives/bytes.sail,
+    primitives/state.sail,
+    primitives/block.sail,
+    primitives/tx.sail,
     host/io.sail,
     lib/rlp.sail,
     host/state.sail,

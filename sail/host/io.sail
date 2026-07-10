@@ -25,13 +25,6 @@
 /* witness reader, the sail/bin entries).                                   */
 /* ======================================================================== */
 
-/* The block-access-list key: an (address, slot) pair (EIP-7928). bal_load
- * (below) materializes the permitted access set from the SSZ input, and the
- * kernel's storage guards reject any SLOAD/SSTORE outside it. Defined here
- * because bal_load is its producer and host I/O is included before
- * host/state.sail (which also consumes it). */
-struct SlotKey = { address : address, slot : word }
-
 /* ===================== (2) CRYPTO ======================================= */
 
 /* Big-endian byte serializations used by RLP, the tries, and address derivation. */
@@ -231,27 +224,6 @@ val sha256_selfcheck : unit -> unit
 
 /* Keccak self-check against Ethereum's "" and "abc" vectors. */
 val keccak_selfcheck : unit -> unit
-
-struct BlockHeader = {
-    number : int,
-    timestamp : int,
-    gas_limit : int,
-    gas_used : int,
-    prev_randao : word,
-    base_fee : word,
-    blob_gas_used : u64, /* EELS U64 */
-    excess_blob_gas : u64, /* EELS U64 */
-    state_root : bits(256),
-    receipts_root : bits(256),
-    logs_bloom : list(byte),
-    block_hash : bits(256),
-    fee_recipient : address,
-    parent_hash : bits(256),
-    parent_beacon_block_root : bits(256),
-    slot_number : u64, /* EELS U64 (EIP-7843) */
-}
-
-let EMPTY_OMMER_HASH : hash = 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347
 
 /* Hash full code bytes, store them in the code database, and return codeHash. */
 val code_hash_and_store : list(byte) -> hash

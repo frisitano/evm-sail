@@ -1,0 +1,34 @@
+/* ======================================================================== */
+/* PRIMITIVES: BLOCK-LEVEL TYPES                                            */
+/*                                                                          */
+/* The decoded block header registerd as k_header (host/state.sail) and the */
+/* EIP-4895 withdrawal record. Pure data -- no registers, no externs.       */
+/* ======================================================================== */
+
+struct BlockHeader = {
+    number : int,
+    timestamp : int,
+    gas_limit : int,
+    gas_used : int,
+    prev_randao : word,
+    base_fee : word,
+    blob_gas_used : u64, /* EELS U64 */
+    excess_blob_gas : u64, /* EELS U64 */
+    state_root : bits(256),
+    receipts_root : bits(256),
+    logs_bloom : list(byte),
+    block_hash : bits(256),
+    fee_recipient : address,
+    parent_hash : bits(256),
+    parent_beacon_block_root : bits(256),
+    slot_number : u64, /* EELS U64 (EIP-7843) */
+}
+
+let EMPTY_OMMER_HASH : hash = 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347
+
+struct Withdrawal = {
+    index : int,
+    validator_index : int,
+    address : address,
+    amount : int,
+}

@@ -481,13 +481,6 @@ function input_well_formed() -> bool = {
     }
 }
 
-struct Withdrawal = {
-    index : int,
-    validator_index : int,
-    address : address,
-    amount : int,
-}
-
 /* Materialize the hash-keyed witness node store and anchor the authenticated
  * pre-state root. There is no eager re-root or harvest pass: every later
  * stateless read is a lazy walk from k_parent_state_root, and because the

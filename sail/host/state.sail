@@ -17,29 +17,6 @@
 
 /* ------------------------------ structs --------------------------------- */
 
-/* Account state (Yellow Paper section 4.1, the account tuple sigma[a]).
- * storage_root is the account's PRE-STATE storage root -- the witness anchor
- * that stateless storage reads walk on a working-set miss. It is set when the
- * account is materialized from the witness and is NOT kept live during execution
- * (storage mutates in the overlay maps; the post-state root is computed on demand
- * in state_root.sail). Code BYTES are not held here -- the account carries only
- * codeHash, a content address into the code store; codeHash is itself observable
- * state (EXTCODEHASH, EIP-1052) and the binding a stateless witness checks code
- * against. */
-struct Account = {
-    nonce        : u64,   /* sigma[a]_n: nonce (u64: EIP-2681 caps it at 2^64-1)   */
-    balance      : word,  /* sigma[a]_b: balance in wei                            */
-    code_hash     : hash,  /* sigma[a]_c: keccak256(code); KECCAK_EMPTY if codeless */
-    storage_root : hash,  /* sigma[a]_s: PRE-STATE storage root, the witness anchor */
-}
-
-/* keccak256 of the empty string: the codeHash of every codeless account */
-let KECCAK_EMPTY : hash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
-
-/* keccak256(rlp("")) -- the root of an empty Merkle-Patricia trie: the storage
- * root of every account with no storage (EMPTY_ACCOUNT, freshly created). */
-let EMPTY_TRIE_ROOT : hash = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
-
 /* The account table is the C-backed write-set overlay (keccak(address) -> row;
  * ffi/state_db.c acct_wset_*). Persistent storage is keyed by (keccak(address),
  * keccak(slot)) in the same overlay; transient storage remains C-backed because
@@ -88,7 +65,6 @@ val storage_tx_update = impure { c: "storage_tx_update" } : (address, word, word
  * (frozen from the base on the first write; a cached read has curr == orig =
  * the resolved base). Point lookups know their key, so only the VALUE
  * returns; enumerations return whole entries (StorageEntry below). */
-struct StorageValue = { curr : word, orig : word }
 
 val storage_tx_get = impure { c: "storage_tx_get" } : (address, word) -> option(StorageValue)
 val storage_block_get = impure { c: "storage_block_get" } : (address, word) -> option(StorageValue)
@@ -104,15 +80,11 @@ val storage_block_get = impure { c: "storage_block_get" } : (address, word) -> o
  * row was read (storage_tx_cache is the only row creator, and every
  * SSTORE's k_sload precedes it), so an entry is either a net change or a
  * read -- no flag crosses. */
-struct StorageKey = { addr : address, slot : word }
 
-struct StorageEntry = { key : StorageKey, value : StorageValue }
 
 val storage_tx_pop = impure { c: "storage_tx_pop" } : unit -> option(StorageEntry)
 
-struct AcctValue = { curr : Account, orig : Account }
 
-struct AcctEntry = { addr : address, value : AcctValue }
 
 val acct_tx_pop = impure { c: "acct_tx_pop" } : unit -> option(AcctEntry)
 
@@ -266,9 +238,6 @@ val created_contains = impure { c: "created_contains" } : address -> bool
 val journal_reset = impure { c: "journal_reset" } : unit -> unit
 val journal_commit = impure { c: "journal_commit" } : unit -> unit
 
-/* A LOG record (Yellow Paper section 4.4.1, the log series): emitting address,
- * 0..4 topics (LOG0..LOG4), and the data bytes. */
-struct LogEntry     = { address : address, topics : list(word), data : list(byte) }
 
 enum EnvField = {
     F_Number,
@@ -287,48 +256,10 @@ enum EnvField = {
  * excess_blob_gas via the gas-schedule blob_base_fee(), so it is computed at the
  * EVM layer (the opcode + transaction.sail), never in the host kernel. */
 
-/* Per-transaction environment: ORIGIN/GASPRICE (YP I_o, I_p) + the EIP-4844
- * blob versioned hashes the BLOBHASH opcode reads. */
-struct TxEnv = { origin : address, gas_price : word, blob_hashes : list(word) }
 
-/* Journal (undo-log) entry: one reversible state mutation. A call frame's
- * effects must roll back atomically on REVERT or an exceptional halt; rather
- * than snapshot the whole world per frame (O(state)), each mutation records a
- * small undo entry. k_snapshot pushes a JCheck checkpoint marker, k_revert
- * replays undos back to it, k_commit drops the marker so the frame's entries
- * fold into the parent (a later parent revert still undoes them). This is the
- * EELS journal model: O(changes), not O(state).
- *
- * JEntry is the kernel-facing type: the kernel journals a mutation as
- * `journal_push(JAcct(..))` and k_revert dispatches undos with `match e`. The
- * journal itself is abstract: journal_push / journal_pop (below) are
- * `c:`-bound axioms and whole JEntry values cross the boundary, so a JEntry
- * is only ever an ephemeral view -- built for a push, decoded for a revert --
- * never a Sail-side buffer. The C side (ffi/journal_glue.c over the
- * ffi/kernel_state.c scalar store) owns both the storage and the
- * (en/de)coding. */
-union JEntry = {
-  JCheck  : unit,                     /* call-frame checkpoint marker            */
-  JAcct   : (address, Account),       /* restore an account to its prior value   */
-  JTran   : (address, word, word),    /* restore transient slot                  */
-  JStor   : (address, word, word),    /* restore a storage slot's current value  */
-  JWarmA  : address,                  /* un-warm a newly-accessed address        */
-  JWarmS  : (address, word),          /* un-warm a newly-accessed slot           */
-  JLog    : unit,                     /* drop the most recent log                */
-  JRefund : i64,                      /* restore the refund counter              */
-  JSelfD  : unit                      /* drop the most recent selfdestruct       */
-}
 
 /* ----------------------------- kernel state ----------------------------- */
 
-let ZERO_WORD : word = 0x0000000000000000000000000000000000000000000000000000000000000000
-let ZERO_ADDR : address = 0x0000000000000000000000000000000000000000
-let EMPTY_ACCOUNT : Account = struct {
-        nonce = sail_zeros(64),
-        balance = ZERO_WORD,
-        code_hash = KECCAK_EMPTY,
-        storage_root = EMPTY_TRIE_ROOT,
-    }
 
 /* the account working set is the C-backed eest_account (ffi/state_db.c), keyed by
  * keccak(address) -- no Sail assoc list. The EIP-2929 warm address/slot sets,
