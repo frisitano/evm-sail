@@ -64,9 +64,9 @@ function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : w
 /* Decode an EIP-2930 access list (RLP [[address, [slot, ...]], ...]) from the
  * access-list field into the flat representation the Transaction and intrinsic-
  * gas accounting use: the addresses (one per entry) and the (address, slot) pairs. */
-function decode_access_list(f : RlpField) -> (list(address), list(SlotKey)) = {
+function decode_access_list(f : RlpField) -> (list(address), list(StorageKey)) = {
     var addresses : list(address) = [||];
-    var storage_slots : list(SlotKey) = [||];
+    var storage_slots : list(StorageKey) = [||];
     var entries : list(RlpField) = rlp_list_items(f);
     var more_entries : bool = true;
     while more_entries do {
@@ -82,7 +82,7 @@ function decode_access_list(f : RlpField) -> (list(address), list(SlotKey)) = {
                         key :: rest_keys => {
                             storage_slots = list_append(
                                 storage_slots,
-                                [|struct { address = addr, slot = rlp_field_word(key) }|],
+                                [|struct { addr = addr, slot = rlp_field_word(key) }|],
                             );
                             keys = rest_keys
                         },
@@ -303,7 +303,7 @@ function decode_tx_ssz(i : int, base_fee : word) -> Transaction = {
         };
 
     /* EIP-2930 access list (present on every typed envelope) */
-    let (decoded_access_list_addresses, decoded_access_list_slots) : (list(address), list(SlotKey)) = if typed then {
+    let (decoded_access_list_addresses, decoded_access_list_slots) : (list(address), list(StorageKey)) = if typed then {
             decode_access_list(rlp_item(fields, i_al))
         } else {
             ([||], [||])

@@ -115,11 +115,11 @@ function warm_access_list_addresses(xs : list(address)) -> unit =
             warm_access_list_addresses(r)
         },
     }
-function warm_access_list_slots(xs : list(SlotKey)) -> unit =
+function warm_access_list_slots(xs : list(StorageKey)) -> unit =
     match xs {
         [||] => (),
         k :: r => {
-            let _ = k_slot_is_warm(k.address, k.slot);
+            let _ = k_slot_is_warm(k.addr, k.slot);
             warm_access_list_slots(r)
         },
     }

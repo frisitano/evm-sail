@@ -5,6 +5,7 @@ evm {
     prelude.sail,
     exceptions.sail,
     primitives/bytes.sail,
+    primitives/account.sail,
     primitives/state.sail,
     primitives/block.sail,
     primitives/tx.sail,

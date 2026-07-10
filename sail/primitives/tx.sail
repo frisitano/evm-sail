@@ -26,7 +26,7 @@ struct Transaction = {
                                   already-staged native-runner input) -- staged in
                                   one op, never streamed byte-by-byte in the guest */
   access_list_addresses : list(address),   /* EIP-2930 access-list addresses (one per entry) */
-  access_list_slots  : list(SlotKey),   /* EIP-2930 access-list (address, slot) pairs      */
+  access_list_slots  : list(StorageKey),   /* EIP-2930 access-list (address, slot) pairs      */
   is_access_list : bool,      /* type-1 (EIP-2930) envelope, even if the list is empty */
   is_dynamic_fee : bool,      /* EIP-1559-style fee-market envelope (types 2/3/4) */
   blob_count : int,           /* EIP-4844 number of blob versioned hashes         */

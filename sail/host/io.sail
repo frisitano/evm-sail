@@ -402,12 +402,12 @@ function pl_block_access_list() -> list(byte) =
  * bal_load materializes the permitted (addr,slot) set; the kernel's k_sload/k_sstore
  * panic on any access outside it (k_bal_enable / bal_guard). */
 function bal_count() -> int = ssz_u32(pl_bal_start())
-function bal_load() -> list(SlotKey) = {
+function bal_load() -> list(StorageKey) = {
     let base = pl_bal_start() + 4;
     let n = bal_count();
-    var xs : list(SlotKey) = [||];
+    var xs : list(StorageKey) = [||];
     foreach (i from 0 to (n - 1)) {
-        xs = struct { address = ssz_addr(base + i * 52), slot = ssz_bytes32(base + i * 52 + 20) } :: xs
+        xs = struct { addr = ssz_addr(base + i * 52), slot = ssz_bytes32(base + i * 52 + 20) } :: xs
     };
     xs
 }

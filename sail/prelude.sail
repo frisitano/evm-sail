@@ -36,6 +36,10 @@ type byte    = bits(8)
 /* 8-bit byte                                     */
 type u64     = bits(64)
 
+/* the all-zero word / address constants */
+let ZERO_WORD : word = 0x0000000000000000000000000000000000000000000000000000000000000000
+let ZERO_ADDR : address = 0x0000000000000000000000000000000000000000
+
 /* Gas is a non-negative counter, bounded to range(0, 2^63 - 1) = INT64_MAX.
  * The bound must EXCEED the largest tx/block gas limit a fixture can set: the
  * EEST state-test suite uses gas limits up to 0x7fe0000000000001 (~9.21e18,

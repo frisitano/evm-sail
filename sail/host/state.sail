@@ -23,9 +23,6 @@
  * it is an execution-local word table. Warm address/slot sets are C-backed too
  * (ffi/kernel_state.c). No Sail association lists for sigma. */
 
-/* SlotKey (the BAL access-set key) is defined in host/io.sail (its bal_load
- * builder is the producer), included before this file. */
-
 /* ======================================================================== */
 /* C-BACKED HOST BINDINGS (world state, code store, kernel collections)     */
 /*                                                                          */
