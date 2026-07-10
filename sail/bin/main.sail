@@ -401,10 +401,10 @@ function receipt_payload_rlp(r : Receipt, cumulative_gas_used : int) -> list(byt
 
 function receipt_encoded(r : Receipt, cumulative_gas_used : int) -> list(byte) = {
     let payload = receipt_payload_rlp(r, cumulative_gas_used);
-    if r.tx_type == 0 then {
+    if tx_type_byte(r.tx_type) == 0 then {
         payload
     } else {
-        let type_byte : byte = get_slice_int(8, r.tx_type, 0);
+        let type_byte : byte = get_slice_int(8, tx_type_byte(r.tx_type), 0);
         type_byte :: payload
     }
 }

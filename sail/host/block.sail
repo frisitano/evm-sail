@@ -266,7 +266,6 @@ function decode_tx_ssz(i : int, base_fee : word) -> Transaction = {
     let i_al : int = if ttype == 1 then { 7 } else { 8 }; /* typed only */
 
     let to_f = rlp_item(fields, i_to);
-    let data_f = rlp_item(fields, i_data);
 
     /* The tx input bytes are a contiguous span of the witness: the data field's
        RLP content, at `tx_off (+1 for a typed envelope) + its offset within the
@@ -278,7 +277,7 @@ function decode_tx_ssz(i : int, base_fee : word) -> Transaction = {
             tx_off
         }) +
             rlp_top_item_content_offset(payload, i_data);
-    let input_src = byte_slice(WitnessSource, input_off, list_len(data_f.content));
+    let input_src = byte_slice(WitnessSource, input_off, rlp_top_item_content_length(payload, i_data));
     let nonce = rlp_field_int(rlp_item(fields, i_nonce));
     let transaction_gas_limit = rlp_field_int(rlp_item(fields, i_gas));
     let is_create = list_len(to_f.content) == 0; /* empty `to` field = contract creation */
@@ -347,7 +346,7 @@ function decode_tx_ssz(i : int, base_fee : word) -> Transaction = {
     };
 
     struct {
-        tx_type = ttype,
+        tx_type = tx_type_of(ttype),
         sender = sender,
         nonce = nonce,
         gas_price = gas_price,
@@ -359,15 +358,11 @@ function decode_tx_ssz(i : int, base_fee : word) -> Transaction = {
         input_src = input_src,
         access_list_addresses = decoded_access_list_addresses,
         access_list_slots = decoded_access_list_slots,
-        is_access_list = ttype == 1,
-        is_dynamic_fee = (ttype == 2) | (ttype == 3) | (ttype == 4),
         blob_count = list_len(blob_hashes),
         max_fee = max_fee,
         max_blob_fee = max_blob_fee,
         max_priority_fee = max_priority_fee_cap,
-        is_set_code = ttype == 4,
         authorizations = decoded_authorizations,
-        is_blob = ttype == 3,
         blob_hashes = blob_hashes,
     }
 }

@@ -153,7 +153,7 @@ function prewarm(tx : Transaction) -> unit = {
 }
 
 function invalid_receipt() -> Receipt =
-    struct { tx_type = 0, success = false, valid = false, gas_used = 0, block_gas = 0, logs = [||] }
+    struct { tx_type = LegacyTx, success = false, valid = false, gas_used = 0, block_gas = 0, logs = [||] }
 
 function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity = {
     let sender = tx.sender;
@@ -172,7 +172,7 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
        Prague max 9 per block, Osaka adds MAX_BLOBS_PER_TX = 6. A type-3 tx must
        carry >= 1 blob, must not create, and every versioned hash must be 0x01-tagged. */
     let max_blobs : int = if k_fork >= FORK_OSAKA then { 6 } else { if k_fork >= FORK_PRAGUE then { 9 } else { 6 } };
-    let blob_ok : bool = if tx.is_blob then {
+    let blob_ok : bool = if tx_is_blob(tx.tx_type) then {
               (k_fork >= FORK_CANCUN)
             & (tx.blob_count >= 1)
             & (tx.blob_count <= max_blobs)
@@ -205,15 +205,15 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
                 & /* EIP-7825: gas cap 2^24 */
                   (unsigned(tx.max_priority_fee) <= unsigned(tx.max_fee))
                 & /* EIP-1559: prio cap <= fee cap */
-                  (not_bool(tx.is_access_list) | (k_fork >= FORK_BERLIN))
+                  (not_bool(tx_is_access_list(tx.tx_type)) | (k_fork >= FORK_BERLIN))
                 & /* EIP-2930 type-1 tx is Berlin+ */
-                  (not_bool(tx.is_dynamic_fee) | (k_fork >= FORK_LONDON))
+                  (not_bool(tx_is_dynamic_fee(tx.tx_type)) | (k_fork >= FORK_LONDON))
                 & /* EIP-1559 fee-market txs are London+ */
-                  (not_bool(tx.is_set_code) | not_bool(tx.is_create))
+                  (not_bool(tx_is_set_code(tx.tx_type)) | not_bool(tx.is_create))
                 & /* EIP-7702: type-4 has to != nil */
-                  (not_bool(tx.is_set_code) | (list_len(tx.authorizations) > 0))
+                  (not_bool(tx_is_set_code(tx.tx_type)) | (list_len(tx.authorizations) > 0))
                 & /* EIP-7702: non-empty auth list */
-                  (not_bool(tx.is_set_code) | (k_fork >= FORK_PRAGUE))
+                  (not_bool(tx_is_set_code(tx.tx_type)) | (k_fork >= FORK_PRAGUE))
                 & /* EIP-7702 is Prague+: a type-4 tx is invalid on an earlier fork */
                   (nonce_before != 0xFFFFFFFFFFFFFFFF)
                 & /* EIP-2681: nonce < 2^64-1 (incrementable) */

@@ -282,6 +282,38 @@ function rlp_top_item_content_offset(node : list(byte), idx : int) -> int = {
     }
 }
 
+/* The content LENGTH of top-level item `idx` of an RLP list: the companion of
+ * rlp_top_item_content_offset, so a caller can carry an item as a span into the
+ * underlying witness buffer without materializing its bytes. 0 if node is not a
+ * list or idx is out of range. */
+function rlp_top_item_content_length(node : list(byte), idx : int) -> int = {
+    if list_len(node) == 0 then {
+        0
+    } else {
+        let (isl, cs, cl) = rlp_hdr(node, 0);
+        if not_bool(isl) then {
+            0
+        } else {
+            let stop = cs + cl;
+            var pos : int = cs;
+            var j : int = 0;
+            var res : int = 0;
+            var more : bool = true;
+            while (pos < stop) & more do {
+                let (_, ics, icl) = rlp_hdr(node, pos);
+                if j == idx then {
+                    res = icl;
+                    more = false
+                } else {
+                    j = j + 1;
+                    pos = ics + icl
+                }
+            };
+            res
+        }
+    }
+}
+
 /* Like rlp_top_item_content_offset but returns the item's FULL start offset
  * (its header byte), so an embedded child node's contiguous witness span can be
  * recovered. 0 if not a list or idx is out of range. */
