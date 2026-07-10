@@ -131,33 +131,33 @@ static void bal_add_code_change(const uint64_t ah[4], const uint64_t chash[4]) {
    change/read detection; these only append records). Layouts match the row
    fields the serializer decodes: hashes/slots/storage values BE words,
    balance/code-hash LE words. */
-unit bal_note_storage_change(const lbits ah, const lbits slot, const lbits val) {
+unit bal_note_storage_change(const lbits a, const lbits slot, const lbits val) {
   uint64_t a4[4], s4[4], v4[4];
-  lbits_to_be_words4(a4, ah); lbits_to_be_words4(s4, slot); lbits_to_be_words4(v4, val);
+  secure_keccak(20, a, a4); lbits_to_be_words4(s4, slot); lbits_to_be_words4(v4, val);
   bal_add_storage_change(a4, s4, v4);
   return UNIT;
 }
-unit bal_note_storage_read(const lbits ah, const lbits slot) {
+unit bal_note_storage_read(const lbits a, const lbits slot) {
   uint64_t a4[4], s4[4];
-  lbits_to_be_words4(a4, ah); lbits_to_be_words4(s4, slot);
+  secure_keccak(20, a, a4); lbits_to_be_words4(s4, slot);
   bal_add_storage_read(a4, s4);
   return UNIT;
 }
-unit bal_note_balance_change(const lbits ah, const lbits val) {
+unit bal_note_balance_change(const lbits a, const lbits val) {
   uint64_t a4[4], v4[4];
-  lbits_to_be_words4(a4, ah); lbits_to_le_words4(v4, val);
+  secure_keccak(20, a, a4); lbits_to_le_words4(v4, val);
   bal_add_balance_change(a4, v4);
   return UNIT;
 }
-unit bal_note_nonce_change(const lbits ah, uint64_t nonce) {
+unit bal_note_nonce_change(const lbits a, uint64_t nonce) {
   uint64_t a4[4];
-  lbits_to_be_words4(a4, ah);
+  secure_keccak(20, a, a4);
   bal_add_nonce_change(a4, nonce);
   return UNIT;
 }
-unit bal_note_code_change(const lbits ah, const lbits chash) {
+unit bal_note_code_change(const lbits a, const lbits chash) {
   uint64_t a4[4], c4[4];
-  lbits_to_be_words4(a4, ah); lbits_to_le_words4(c4, chash);
+  secure_keccak(20, a, a4); lbits_to_le_words4(c4, chash);
   bal_add_code_change(a4, c4);
   return UNIT;
 }
@@ -187,6 +187,16 @@ static void storage_secure_key(const lbits a, const lbits s,
   secure_keccak(32, s, sh);
 }
 
+/* 20 raw address bytes -> lbits of length 160 */
+static void addr20_to_lbits(lbits *rop, const uint8_t a[20]) {
+  uint64_t be[4] = {0, 0, 0, 0};
+  for (int i = 0; i < 4; i++)  be[1] = (be[1] << 8) | a[i];
+  for (int i = 4; i < 12; i++) be[2] = (be[2] << 8) | a[i];
+  for (int i = 12; i < 20; i++) be[3] = (be[3] << 8) | a[i];
+  be_words4_to_lbits(rop, be);
+  rop->len = 160;
+}
+
 static const uint64_t storage_zero_val[4] = {0, 0, 0, 0};
 
 /* ======================================================================== */
@@ -209,6 +219,7 @@ typedef struct {
   uint64_t acct_hash[4];
   uint64_t slot_hash[4];
   uint64_t slot[4];
+  uint8_t  raw_addr[20]; /* address preimage (tx rows; set by storage_tx_cache) */
   uint64_t current[4];   /* live value    (valid iff written) */
   uint64_t original[4];  /* tx-start value (tx) / block pre-state (block); valid iff written */
   uint8_t  written;      /* 1: a write reached this row; 0: read-only member */
@@ -299,7 +310,7 @@ unit storage_wset_reset(const unit u) {
 /* drain-one pop for the Sail merge (k_tx_merge): SIDE-EFFECT-FREE hand-over
    of tx row [cursor]; on drain the tx table resets and 0 returns (else 1).
    Sail decides records + propagation per row. */
-uint64_t storage_tx_pop_probe(lbits *ahash, lbits *slot, lbits *curr, lbits *orig) {
+uint64_t storage_tx_pop_probe(lbits *addr, lbits *slot, lbits *curr, lbits *orig) {
   if (storage_tx_pop_cursor >= storage_wset_tx.n) {
     storage_wset_table_reset(&storage_wset_tx);
     storage_tx_pop_cursor = 0;
@@ -307,7 +318,7 @@ uint64_t storage_tx_pop_probe(lbits *ahash, lbits *slot, lbits *curr, lbits *ori
     return 0; /* drained: 1 = a row was handed over */
   }
   const storage_wset_row *e = &storage_wset_tx.rows[storage_tx_pop_cursor++];
-  be_words4_to_lbits(ahash, e->acct_hash);
+  addr20_to_lbits(addr, e->raw_addr);
   be_words4_to_lbits(slot, e->slot);
   be_words4_to_lbits(curr, e->current);
   be_words4_to_lbits(orig, e->original);
@@ -317,12 +328,10 @@ uint64_t storage_tx_pop_probe(lbits *ahash, lbits *slot, lbits *curr, lbits *ori
 /* block-layer propagation hooks (pure mechanism; Sail chose the action).
    Keyed by (keccak(address), slot); the slot's secure key is recomputed. */
 /* net change: a fresh block row freezes orig as the pre-state; curr lands */
-unit storage_block_put(const lbits ah, const lbits s_, const lbits curr,
+unit storage_block_put(const lbits a, const lbits s_, const lbits curr,
                        const lbits orig) {
   uint64_t slot[4], a4[4], sh[4], c4[4], o4[4];
-  lbits_to_be_words4(a4, ah);
-  lbits_to_be_words4(slot, s_);
-  secure_keccak(32, s_, sh);
+  storage_secure_key(a, s_, slot, a4, sh);
   storage_wset_row *b = storage_wset_get(&storage_wset_block, a4, sh);
   int fresh = (b == NULL);
   if (fresh) b = storage_wset_intern(&storage_wset_block, a4, sh, slot);
@@ -335,11 +344,9 @@ unit storage_block_put(const lbits ah, const lbits s_, const lbits curr,
 }
 
 /* read member: fresh binds curr == orig = value; existing is only marked */
-unit storage_block_cache(const lbits ah, const lbits s_, const lbits v) {
+unit storage_block_cache(const lbits a, const lbits s_, const lbits v) {
   uint64_t slot[4], a4[4], sh[4], v4[4];
-  lbits_to_be_words4(a4, ah);
-  lbits_to_be_words4(slot, s_);
-  secure_keccak(32, s_, sh);
+  storage_secure_key(a, s_, slot, a4, sh);
   storage_wset_row *b = storage_wset_get(&storage_wset_block, a4, sh);
   if (!b) {
     b = storage_wset_intern(&storage_wset_block, a4, sh, slot);
@@ -404,6 +411,7 @@ unit storage_tx_cache(const lbits a, const lbits s, const lbits v) {
   lbits_to_be_words4(w, v);
   storage_wset_row *e = storage_wset_intern(&storage_wset_tx, ah, sh, slot);
   if (!e) return UNIT;
+  lbits_to_be_bytes(e->raw_addr, 20, a); /* key preimage for the pop drain */
   memcpy(e->current, w, sizeof(e->current));
   memcpy(e->original, w, sizeof(e->original));
   e->was_read = 1;
@@ -503,15 +511,15 @@ static void swb_snap_push(swb_snap_row **rows, uint32_t *n, uint32_t *cap,
 /* unfiltered block rows for an account (glue: StorageBlockRow). SAIL does the
    dirty filtering (lib/mpt.sail storage_updates: curr != orig); C only hands
    over row j of the account's contiguous block range. */
-uint64_t storage_block_row_count(const lbits ak) {
+uint64_t storage_block_row_count(const lbits a) {
   uint64_t k[4]; uint32_t bs, be;
-  lbits_to_be_words4(k, ak);
+  secure_keccak(20, a, k);
   storage_wset_block_acct_range(k, &bs, &be);
   return be - bs;
 }
-unit storage_block_probe_row(const lbits ak, uint64_t j, lbits *slot, lbits *curr, lbits *orig) {
+unit storage_block_probe_row(const lbits a, uint64_t j, lbits *slot, lbits *curr, lbits *orig) {
   uint64_t k[4]; uint32_t bs, be;
-  lbits_to_be_words4(k, ak);
+  secure_keccak(20, a, k);
   storage_wset_block_acct_range(k, &bs, &be);
   if (bs + j >= be) return UNIT;
   const storage_wset_row *e = &storage_wset_block.rows[bs + j];
@@ -588,15 +596,6 @@ static acct_wset_table acct_wset_tx    = {NULL, 0, 0};
 static acct_wset_table acct_wset_block = {NULL, 0, 0};
 static uint32_t acct_tx_pop_cursor = 0; /* k_tx_merge drain position */
 
-/* 20 raw address bytes -> lbits of length 160 */
-static void addr20_to_lbits(lbits *rop, const uint8_t a[20]) {
-  uint64_t be[4] = {0, 0, 0, 0};
-  for (int i = 0; i < 4; i++)  be[1] = (be[1] << 8) | a[i];
-  for (int i = 4; i < 12; i++) be[2] = (be[2] << 8) | a[i];
-  for (int i = 12; i < 20; i++) be[3] = (be[3] << 8) | a[i];
-  be_words4_to_lbits(rop, be);
-  rop->len = 160;
-}
 
 /* per-account compute_root snapshots are invalidated when the block base
    changes (defined with the builders below) */
@@ -676,7 +675,7 @@ unit acct_wset_reset(const unit u) {
    of tx account row [cursor] incl. the address preimage (the block row's BAL
    serialization key); on drain the tx table resets and 0 returns (else
    1 | base_exists<<1). Sail decides records + propagation per row. */
-uint64_t acct_tx_pop_probe(lbits *addr, lbits *hkey,
+uint64_t acct_tx_pop_probe(lbits *addr,
                            uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
                            uint64_t *on, lbits *ob, lbits *os, lbits *oc) {
   if (acct_tx_pop_cursor >= acct_wset_tx.n) {
@@ -687,7 +686,6 @@ uint64_t acct_tx_pop_probe(lbits *addr, lbits *hkey,
   }
   const acct_wset_row *e = &acct_wset_tx.rows[acct_tx_pop_cursor++];
   addr20_to_lbits(addr, e->raw_addr);
-  be_words4_to_lbits(hkey, e->hkey);
   *cn = e->cur_nonce;
   le_words4_to_lbits(cb, e->cur_bal);
   le_words4_to_lbits(cs, e->cur_sroot);
@@ -775,13 +773,13 @@ uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
    layer 1 = block, for the state-root AcctBlockRow). Returns base_exists. */
 uint64_t acct_tx_row_count(const unit u) { (void)u; return acct_wset_tx.n; }
 uint64_t acct_block_row_count(const unit u) { (void)u; return acct_wset_block.n; }
-uint64_t acct_probe_row(uint64_t layer, uint64_t i, lbits *hkey,
-                        uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
-                        uint64_t *on, lbits *ob, lbits *os, lbits *oc) {
-  const acct_wset_table *t = layer == 0 ? &acct_wset_tx : &acct_wset_block;
+uint64_t acct_block_probe_row(uint64_t i, lbits *addr,
+                              uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
+                              uint64_t *on, lbits *ob, lbits *os, lbits *oc) {
+  const acct_wset_table *t = &acct_wset_block;
   if (i >= t->n) return 0;
   const acct_wset_row *e = &t->rows[i];
-  be_words4_to_lbits(hkey, e->hkey);
+  addr20_to_lbits(addr, e->raw_addr);
   *cn = e->cur_nonce;
   le_words4_to_lbits(cb, e->cur_bal);
   le_words4_to_lbits(cs, e->cur_sroot);

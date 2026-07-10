@@ -1033,18 +1033,18 @@ function storage_leaf_value(value : word) -> ByteSlice =
  * curr deletes the slot (curr != orig means the pre-state held a nonzero
  * value, so a real MPT leaf exists to delete -- a zero write to a slot with
  * no pre-state leaf has curr == orig == 0 and is skipped). */
-function storage_updates(ak : bits(256)) -> list(TriePatch) = {
+function storage_updates(a : address) -> list(TriePatch) = {
     var out : list(TriePatch) = [||];
-    let n = unsigned(storage_block_row_count(ak));
+    let n = unsigned(storage_block_row_count(a));
     foreach (j from 0 to (n - 1)) {
-        let r = storage_block_row(ak, get_slice_int(64, j, 0));
-        if r.curr != r.orig then {
-            let key = to_nibbles(word_to_bytes32(keccak256_word(r.slot)));
+        let e = storage_block_row(a, get_slice_int(64, j, 0));
+        if e.value.curr != e.value.orig then {
+            let key = to_nibbles(word_to_bytes32(keccak256_word(e.key.slot)));
             out = patch_insert_sorted(
-                if word_is_zero(r.curr) then {
+                if word_is_zero(e.value.curr) then {
                     patch_delete(key)
                 } else {
-                    patch_leaf(key, storage_leaf_value(r.curr))
+                    patch_leaf(key, storage_leaf_value(e.value.curr))
                 },
                 out,
             )
@@ -1064,9 +1064,9 @@ function account_empty(acc : Account) -> bool =
  * update list keeps the committed root, including an EIP-8025 omitted
  * storage proof -- only deficient if the block actually writes that
  * account's storage, when trie_root's missing-root path fails closed). */
-function state_updates_account_row(row : AcctBlockRow, s_upd : list(TriePatch), prev : list(TriePatch)) -> list(TriePatch) = {
-    let acc = row.curr;
-    let ak = to_nibbles(word_to_bytes32(row.hkey));
+function state_updates_account_row(row : AcctEntry, s_upd : list(TriePatch), prev : list(TriePatch)) -> list(TriePatch) = {
+    let acc = row.value.curr;
+    let ak = to_nibbles(word_to_bytes32(keccak256_address(row.addr)));
     if account_empty(acc) & not_bool(row.base_exists) then {
         prev
     } else {
@@ -1097,8 +1097,8 @@ function state_updates_map() -> list(TriePatch) = {
     let n = unsigned(acct_block_row_count());
     foreach (j from 0 to (n - 1)) {
         let row = acct_block_row(get_slice_int(64, j, 0));
-        let s_upd = storage_updates(row.hkey);
-        if account_changed(row.curr, row.orig) | (list_len(s_upd) > 0) then {
+        let s_upd = storage_updates(row.addr);
+        if account_changed(row.value.curr, row.value.orig) | (list_len(s_upd) > 0) then {
             out = state_updates_account_row(row, s_upd, out)
         }
     };

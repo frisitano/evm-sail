@@ -84,29 +84,37 @@ val storage_tx_update = impure { c: "storage_tx_update" } : (address, word, word
  * row tables). The layer-precedence semantics -- which layer wins, and what
  * the EIP-2200 tx-start original is -- live in SAIL (host/kernel.sail
  * k_sload / k_sstore), not in C. None = this layer never touched the
- * slot. An entry's curr is the live value; orig is the layer-start value
+ * slot. A value's curr is the live word; orig is the layer-start word
  * (frozen from the base on the first write; a cached read has curr == orig =
- * the resolved base). */
-struct StorageEntry = { curr : word, orig : word }
+ * the resolved base). Point lookups know their key, so only the VALUE
+ * returns; enumerations return whole entries (StorageEntry below). */
+struct StorageValue = { curr : word, orig : word }
 
-val storage_tx_get = impure { c: "storage_tx_get" } : (address, word) -> option(StorageEntry)
-val storage_block_get = impure { c: "storage_block_get" } : (address, word) -> option(StorageEntry)
+val storage_tx_get = impure { c: "storage_tx_get" } : (address, word) -> option(StorageValue)
+val storage_block_get = impure { c: "storage_block_get" } : (address, word) -> option(StorageValue)
 
-/* Drain-one views of the tx layers at merge time, journal_pop-style and
- * SIDE-EFFECT-FREE: each pop hands back one row; None = drained (the tx
- * layer resets). The merge itself is SAIL (host/kernel.sail k_tx_merge):
- * inspect the popped row, emit the EIP-7928 records it warrants, and apply
- * the block-layer propagation it needs through the storage_block_* /
- * acct_block_* hooks below. Every tx row was read (storage_tx_cache is the
- * only row creator, and every SSTORE's k_sload precedes it), so a row is
- * either a net change or a read -- no flag crosses. */
-struct StorageTxRow = { ahash : hash, slot : word, curr : word, orig : word }
+/* Entries: key/value pairs in DOMAIN terms -- the key is (address, slot),
+ * never a hash; secure-key hashing is a trie/table detail (C hashes for its
+ * table keys, the spec hashes visibly where the trie needs it). Drain-one
+ * pops are journal_pop-style and SIDE-EFFECT-FREE: each hands back one
+ * entry; None = drained (the tx layer resets). The merge itself is SAIL
+ * (host/kernel.sail k_tx_merge): inspect the popped entry, emit the
+ * EIP-7928 records it warrants, and apply the block-layer propagation it
+ * needs through the storage_block_* / acct_block_* hooks below. Every tx
+ * row was read (storage_tx_cache is the only row creator, and every
+ * SSTORE's k_sload precedes it), so an entry is either a net change or a
+ * read -- no flag crosses. */
+struct StorageKey = { addr : address, slot : word }
 
-val storage_tx_pop = impure { c: "storage_tx_pop" } : unit -> option(StorageTxRow)
+struct StorageEntry = { key : StorageKey, value : StorageValue }
 
-struct AcctTxRow = { addr : address, ahash : hash, base_exists : bool, curr : Account, orig : Account }
+val storage_tx_pop = impure { c: "storage_tx_pop" } : unit -> option(StorageEntry)
 
-val acct_tx_pop = impure { c: "acct_tx_pop" } : unit -> option(AcctTxRow)
+struct AcctValue = { curr : Account, orig : Account }
+
+struct AcctEntry = { addr : address, base_exists : bool, value : AcctValue }
+
+val acct_tx_pop = impure { c: "acct_tx_pop" } : unit -> option(AcctEntry)
 
 /* Block-layer propagation hooks (pure mechanism; Sail chose the action).
  * put = a net change: a fresh block row freezes orig as the pre-state, an
@@ -115,8 +123,8 @@ val acct_tx_pop = impure { c: "acct_tx_pop" } : unit -> option(AcctTxRow)
  * marked read -- never downgraded. The account pair mirrors it, keyed by
  * the address preimage (the block row keeps it as the BAL serialization
  * key); base_exists ORs into the block row. */
-val storage_block_put = impure { c: "storage_block_put" } : (hash, word, word, word) -> unit /* (ahash, slot, curr, orig) */
-val storage_block_cache = impure { c: "storage_block_cache" } : (hash, word, word) -> unit /* (ahash, slot, value) */
+val storage_block_put = impure { c: "storage_block_put" } : (address, word, word, word) -> unit /* (a, slot, curr, orig) */
+val storage_block_cache = impure { c: "storage_block_cache" } : (address, word, word) -> unit /* (a, slot, value) */
 val acct_block_write = impure { c: "acct_block_write" } : (address, bits(64), word, hash, hash, bits(64), word, hash, hash, bool) -> unit /* (a, curr n/b/sr/ch, orig n/b/sr/ch, base_exists) */
 val acct_block_cache = impure { c: "acct_block_cache" } : (address, bits(64), word, hash, hash, bool) -> unit /* (a, n/b/sr/ch, base_exists) */
 
@@ -134,27 +142,23 @@ val storage_block_wipe = impure { c: "storage_block_wipe" } : address -> unit
 function account_changed(c : Account, o : Account) -> bool =
     c.nonce != o.nonce | c.balance != o.balance | c.code_hash != o.code_hash | c.storage_root != o.storage_root
 
-/* state-root enumeration: UNFILTERED block rows -- Sail decides which rows
+/* state-root enumeration: UNFILTERED block entries -- Sail decides which
  * are net changes vs the pre-state (lib/mpt.sail storage_updates /
- * state_updates_map filter on curr != orig); C only hands rows over. */
-struct StorageBlockRow = { slot : word, curr : word, orig : word }
-
-val storage_block_row_count = impure { c: "storage_block_row_count" } : hash -> bits(64)
-val storage_block_row = impure { c: "storage_block_row" } : (hash, bits(64)) -> StorageBlockRow
-
-struct AcctBlockRow = { hkey : hash, curr : Account, orig : Account, base_exists : bool }
+ * state_updates_map filter on curr != orig); C only hands entries over. */
+val storage_block_row_count = impure { c: "storage_block_row_count" } : address -> bits(64)
+val storage_block_row = impure { c: "storage_block_row" } : (address, bits(64)) -> StorageEntry
 
 val acct_block_row_count = impure { c: "acct_block_row_count" } : unit -> bits(64)
-val acct_block_row = impure { c: "acct_block_row" } : bits(64) -> AcctBlockRow
+val acct_block_row = impure { c: "acct_block_row" } : bits(64) -> AcctEntry
 
 /* EIP-7928 block-access-list record sinks (ffi/state_db.c): append one
  * record, tagged C-side with the ambient bal_set_index. Pure recorders --
  * all change/read DETECTION happens in Sail (k_tx_merge). */
-val bal_storage_change = impure { c: "bal_note_storage_change" } : (hash, word, word) -> unit
-val bal_storage_read = impure { c: "bal_note_storage_read" } : (hash, word) -> unit
-val bal_balance_change = impure { c: "bal_note_balance_change" } : (hash, word) -> unit
-val bal_nonce_change = impure { c: "bal_note_nonce_change" } : (hash, bits(64)) -> unit
-val bal_code_change = impure { c: "bal_note_code_change" } : (hash, hash) -> unit
+val bal_storage_change = impure { c: "bal_note_storage_change" } : (address, word, word) -> unit
+val bal_storage_read = impure { c: "bal_note_storage_read" } : (address, word) -> unit
+val bal_balance_change = impure { c: "bal_note_balance_change" } : (address, word) -> unit
+val bal_nonce_change = impure { c: "bal_note_nonce_change" } : (address, bits(64)) -> unit
+val bal_code_change = impure { c: "bal_note_code_change" } : (address, hash) -> unit
 
 val storage_wset_union_count = impure { c: "storage_wset_union_count" } : hash -> bits(64)
 val storage_wset_union_slot = impure { c: "storage_wset_union_slot" } : (hash, bits(64)) -> word

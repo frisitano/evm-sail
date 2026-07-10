@@ -55,7 +55,7 @@ function k_slot_is_warm(a : address, s : word) -> bool = {
  * defined in lib/mpt.sail as an authenticated MPT point-get -- one walk for
  * both the witness and the harness-built alloc trie). Everything above it --
  * the overlay, the read-through, the journal -- is common. */
-function k_sload(a : address, s : word) -> StorageEntry = {
+function k_sload(a : address, s : word) -> StorageValue = {
     match storage_tx_get(a, s) {
         Some(e) => return e,
         None() => (),
@@ -383,11 +383,10 @@ function k_account_delete(a : address) -> unit = {
        address's tx rows, recording each touched slot as a read (every tx row
        was read; its changes are voided by the drop), then drop the block rows
        so a same-block re-CREATE cannot inherit stale cached storage. */
-    let ah = keccak256_address(a);
     var more : bool = true;
     while more do {
         match storage_tx_wipe(a) {
-            Some(slot) => bal_storage_read(ah, slot),
+            Some(slot) => bal_storage_read(a, slot),
             None() => more = false,
         }
     };
@@ -507,12 +506,12 @@ function k_tx_merge() -> unit = {
     var more : bool = true;
     while more do {
         match storage_tx_pop() {
-            Some(r) => if r.curr != r.orig then {
-                bal_storage_change(r.ahash, r.slot, r.curr);
-                storage_block_put(r.ahash, r.slot, r.curr, r.orig)
+            Some(e) => if e.value.curr != e.value.orig then {
+                bal_storage_change(e.key.addr, e.key.slot, e.value.curr);
+                storage_block_put(e.key.addr, e.key.slot, e.value.curr, e.value.orig)
             } else {
-                bal_storage_read(r.ahash, r.slot);
-                storage_block_cache(r.ahash, r.slot, r.curr)
+                bal_storage_read(e.key.addr, e.key.slot);
+                storage_block_cache(e.key.addr, e.key.slot, e.value.curr)
             },
             None() => more = false,
         }
@@ -520,37 +519,37 @@ function k_tx_merge() -> unit = {
     more = true;
     while more do {
         match acct_tx_pop() {
-            Some(r) => {
-                if r.curr.nonce != r.orig.nonce then {
-                    bal_nonce_change(r.ahash, get_slice_int(64, r.curr.nonce, 0))
+            Some(e) => {
+                if e.value.curr.nonce != e.value.orig.nonce then {
+                    bal_nonce_change(e.addr, get_slice_int(64, e.value.curr.nonce, 0))
                 };
-                if r.curr.balance != r.orig.balance then {
-                    bal_balance_change(r.ahash, r.curr.balance)
+                if e.value.curr.balance != e.value.orig.balance then {
+                    bal_balance_change(e.addr, e.value.curr.balance)
                 };
-                if r.curr.code_hash != r.orig.code_hash then {
-                    bal_code_change(r.ahash, r.curr.code_hash)
+                if e.value.curr.code_hash != e.value.orig.code_hash then {
+                    bal_code_change(e.addr, e.value.curr.code_hash)
                 };
-                if account_changed(r.curr, r.orig) then {
+                if account_changed(e.value.curr, e.value.orig) then {
                     acct_block_write(
-                        r.addr,
-                        get_slice_int(64, r.curr.nonce, 0),
-                        r.curr.balance,
-                        r.curr.storage_root,
-                        r.curr.code_hash,
-                        get_slice_int(64, r.orig.nonce, 0),
-                        r.orig.balance,
-                        r.orig.storage_root,
-                        r.orig.code_hash,
-                        r.base_exists,
+                        e.addr,
+                        get_slice_int(64, e.value.curr.nonce, 0),
+                        e.value.curr.balance,
+                        e.value.curr.storage_root,
+                        e.value.curr.code_hash,
+                        get_slice_int(64, e.value.orig.nonce, 0),
+                        e.value.orig.balance,
+                        e.value.orig.storage_root,
+                        e.value.orig.code_hash,
+                        e.base_exists,
                     )
                 } else {
                     acct_block_cache(
-                        r.addr,
-                        get_slice_int(64, r.curr.nonce, 0),
-                        r.curr.balance,
-                        r.curr.storage_root,
-                        r.curr.code_hash,
-                        r.base_exists,
+                        e.addr,
+                        get_slice_int(64, e.value.curr.nonce, 0),
+                        e.value.curr.balance,
+                        e.value.curr.storage_root,
+                        e.value.curr.code_hash,
+                        e.base_exists,
                     )
                 }
             },

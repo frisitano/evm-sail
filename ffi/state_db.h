@@ -56,24 +56,24 @@ unit bal_set_index(uint64_t n);
 void bal_recompute_hash(lbits *rop, const unit u);
 
 /* EIP-7928 record sinks + tx-row enumeration (harvest logic is Sail-side) */
-unit bal_note_storage_change(const lbits ah, const lbits slot, const lbits val);
-unit bal_note_storage_read(const lbits ah, const lbits slot);
-unit bal_note_balance_change(const lbits ah, const lbits val);
-unit bal_note_nonce_change(const lbits ah, uint64_t nonce);
-unit bal_note_code_change(const lbits ah, const lbits chash);
+unit bal_note_storage_change(const lbits a, const lbits slot, const lbits val);
+unit bal_note_storage_read(const lbits a, const lbits slot);
+unit bal_note_balance_change(const lbits a, const lbits val);
+unit bal_note_nonce_change(const lbits a, uint64_t nonce);
+unit bal_note_code_change(const lbits a, const lbits chash);
 /* state-root enumeration: unfiltered block rows (Sail filters curr != orig) */
-uint64_t storage_block_row_count(const lbits ak);
-unit storage_block_probe_row(const lbits ak, uint64_t j, lbits *slot, lbits *curr, lbits *orig);
+uint64_t storage_block_row_count(const lbits a);
+unit storage_block_probe_row(const lbits a, uint64_t j, lbits *slot, lbits *curr, lbits *orig);
 uint64_t acct_block_row_count(const unit u);
-uint64_t acct_probe_row(uint64_t layer, uint64_t i, lbits *hkey,
-                        uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
-                        uint64_t *on, lbits *ob, lbits *os, lbits *oc);
+uint64_t acct_block_probe_row(uint64_t i, lbits *addr,
+                              uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
+                              uint64_t *on, lbits *ob, lbits *os, lbits *oc);
 /* k_tx_merge drain pops (side-effect-free) + block propagation hooks */
-uint64_t storage_tx_pop_probe(lbits *ahash, lbits *slot, lbits *curr, lbits *orig);
-unit storage_block_put(const lbits ah, const lbits s_, const lbits curr,
+uint64_t storage_tx_pop_probe(lbits *addr, lbits *slot, lbits *curr, lbits *orig);
+unit storage_block_put(const lbits a, const lbits s_, const lbits curr,
                        const lbits orig);
-unit storage_block_cache(const lbits ah, const lbits s_, const lbits v);
-uint64_t acct_tx_pop_probe(lbits *addr, lbits *hkey,
+unit storage_block_cache(const lbits a, const lbits s_, const lbits v);
+uint64_t acct_tx_pop_probe(lbits *addr,
                            uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
                            uint64_t *on, lbits *ob, lbits *os, lbits *oc);
 unit acct_block_write(const lbits a, uint64_t nonce, const lbits bal,

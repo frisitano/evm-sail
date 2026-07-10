@@ -139,27 +139,27 @@ void journal_pop(struct zJEntry *out, unit u) {
  * option(StorageEntry) -- None = the layer never touched the slot; Some
  * carries (curr, orig). The written/read distinction stays C-internal (a
  * cached read has curr == orig). */
-static void storage_entry_out(struct zoptionzIRStorageEntryzK *out,
+static void storage_value_out(struct zoptionzIRStorageValuezK *out,
                               uint64_t layer, const lbits a, const lbits s) {
   lbits cur, orig;
   if (storage_row_probe(layer, a, s, &cur, &orig)) {
-    out->kind = Kind_zSomezIRStorageEntryzK;
-    out->variants.zSomezIRStorageEntryzK.zcurr = cur;
-    out->variants.zSomezIRStorageEntryzK.zorig = orig;
+    out->kind = Kind_zSomezIRStorageValuezK;
+    out->variants.zSomezIRStorageValuezK.zcurr = cur;
+    out->variants.zSomezIRStorageValuezK.zorig = orig;
   } else {
-    out->kind = Kind_zNonezIRStorageEntryzK;
-    out->variants.zNonezIRStorageEntryzK = UNIT;
+    out->kind = Kind_zNonezIRStorageValuezK;
+    out->variants.zNonezIRStorageValuezK = UNIT;
   }
 }
 
-void storage_tx_get(struct zoptionzIRStorageEntryzK *out, const lbits a,
+void storage_tx_get(struct zoptionzIRStorageValuezK *out, const lbits a,
                     const lbits s) {
-  storage_entry_out(out, 0, a, s);
+  storage_value_out(out, 0, a, s);
 }
 
-void storage_block_get(struct zoptionzIRStorageEntryzK *out, const lbits a,
+void storage_block_get(struct zoptionzIRStorageValuezK *out, const lbits a,
                        const lbits s) {
-  storage_entry_out(out, 1, a, s);
+  storage_value_out(out, 1, a, s);
 }
 
 /* per-layer account views: probe state_db's layer table and build
@@ -192,51 +192,54 @@ void acct_block_get(struct zoptionzIRAccountzK *out, const lbits a) {
 /* k_tx_merge drain pops: side-effect-free option(row) views over the tx
  * layers; None = drained (the C probe resets the table). Sail decides the
  * EIP-7928 records and the block-layer propagation per row. */
-void storage_tx_pop(struct zoptionzIRStorageTxRowzK *out, unit u) {
+void storage_tx_pop(struct zoptionzIRStorageEntryzK *out, unit u) {
   (void)u;
-  struct zStorageTxRow *r = &out->variants.zSomezIRStorageTxRowzK;
-  uint64_t flags = storage_tx_pop_probe(&r->zahash, &r->zslot, &r->zcurr, &r->zorig);
+  struct zStorageEntry *e = &out->variants.zSomezIRStorageEntryzK;
+  uint64_t flags = storage_tx_pop_probe(&e->zkey.zaddr, &e->zkey.zslot,
+                                        &e->zvalue.zcurr, &e->zvalue.zorig);
   if (flags == 0) {
-    out->kind = Kind_zNonezIRStorageTxRowzK;
-    out->variants.zNonezIRStorageTxRowzK = UNIT;
+    out->kind = Kind_zNonezIRStorageEntryzK;
+    out->variants.zNonezIRStorageEntryzK = UNIT;
     return;
   }
-  out->kind = Kind_zSomezIRStorageTxRowzK;
+  out->kind = Kind_zSomezIRStorageEntryzK;
 }
 
-void acct_tx_pop(struct zoptionzIRAcctTxRowzK *out, unit u) {
+void acct_tx_pop(struct zoptionzIRAcctEntryzK *out, unit u) {
   (void)u;
-  struct zAcctTxRow *r = &out->variants.zSomezIRAcctTxRowzK;
+  struct zAcctEntry *e = &out->variants.zSomezIRAcctEntryzK;
   uint64_t cn = 0, on = 0;
-  uint64_t flags = acct_tx_pop_probe(&r->zaddr, &r->zahash, &cn, &r->zcurr.zbalance,
-                                     &r->zcurr.zstorage_root, &r->zcurr.zcode_hash, &on,
-                                     &r->zorig.zbalance, &r->zorig.zstorage_root,
-                                     &r->zorig.zcode_hash);
+  uint64_t flags = acct_tx_pop_probe(&e->zaddr, &cn, &e->zvalue.zcurr.zbalance,
+                                     &e->zvalue.zcurr.zstorage_root, &e->zvalue.zcurr.zcode_hash, &on,
+                                     &e->zvalue.zorig.zbalance, &e->zvalue.zorig.zstorage_root,
+                                     &e->zvalue.zorig.zcode_hash);
   if (flags == 0) {
-    out->kind = Kind_zNonezIRAcctTxRowzK;
-    out->variants.zNonezIRAcctTxRowzK = UNIT;
+    out->kind = Kind_zNonezIRAcctEntryzK;
+    out->variants.zNonezIRAcctEntryzK = UNIT;
     return;
   }
-  out->kind = Kind_zSomezIRAcctTxRowzK;
-  r->zbase_exists = (flags >> 1) & 1;
-  CONVERT_OF(sail_int, mach_int)(&r->zcurr.znonce, (mach_int)cn);
-  CONVERT_OF(sail_int, mach_int)(&r->zorig.znonce, (mach_int)on);
+  out->kind = Kind_zSomezIRAcctEntryzK;
+  e->zbase_exists = (flags >> 1) & 1;
+  CONVERT_OF(sail_int, mach_int)(&e->zvalue.zcurr.znonce, (mach_int)cn);
+  CONVERT_OF(sail_int, mach_int)(&e->zvalue.zorig.znonce, (mach_int)on);
 }
 
-/* state-root enumeration views: unfiltered block rows; Sail filters. */
-void storage_block_row(struct zStorageBlockRow *out, const lbits ak, uint64_t j) {
-  storage_block_probe_row(ak, j, &out->zslot, &out->zcurr, &out->zorig);
+/* state-root enumeration views: unfiltered block entries; Sail filters. The
+ * storage entry's key.addr is the caller's query address. */
+void storage_block_row(struct zStorageEntry *out, const lbits a, uint64_t j) {
+  out->zkey.zaddr = a;
+  storage_block_probe_row(a, j, &out->zkey.zslot, &out->zvalue.zcurr, &out->zvalue.zorig);
 }
 
-void acct_block_row(struct zAcctBlockRow *out, uint64_t i) {
+void acct_block_row(struct zAcctEntry *out, uint64_t i) {
   uint64_t cn = 0, on = 0;
   out->zbase_exists =
-      acct_probe_row(1, i, &out->zhkey, &cn, &out->zcurr.zbalance,
-                     &out->zcurr.zstorage_root, &out->zcurr.zcode_hash, &on,
-                     &out->zorig.zbalance, &out->zorig.zstorage_root,
-                     &out->zorig.zcode_hash) != 0;
-  CONVERT_OF(sail_int, mach_int)(&out->zcurr.znonce, (mach_int)cn);
-  CONVERT_OF(sail_int, mach_int)(&out->zorig.znonce, (mach_int)on);
+      acct_block_probe_row(i, &out->zaddr, &cn, &out->zvalue.zcurr.zbalance,
+                           &out->zvalue.zcurr.zstorage_root, &out->zvalue.zcurr.zcode_hash, &on,
+                           &out->zvalue.zorig.zbalance, &out->zvalue.zorig.zstorage_root,
+                           &out->zvalue.zorig.zcode_hash) != 0;
+  CONVERT_OF(sail_int, mach_int)(&out->zvalue.zcurr.znonce, (mach_int)cn);
+  CONVERT_OF(sail_int, mach_int)(&out->zvalue.zorig.znonce, (mach_int)on);
 }
 
 /* EIP-6780 deletion drain: pop one of the address's tx rows as option(slot);
