@@ -437,7 +437,7 @@ function parent_hash_ok() -> bool =
     if wit_n_headers() < 1 then {
         false
     } else {
-        k_header.parent_hash == witness_keccak(ssz_witness_header_slice(wit_n_headers() - 1))
+        k_header.parent_hash == keccak256(ssz_witness_header_slice(wit_n_headers() - 1))
     }
 
 function validate_block(exec_ok : bool, block_result : BlockExecutionResult) -> unit = {
@@ -472,7 +472,7 @@ function validate_block(exec_ok : bool, block_result : BlockExecutionResult) -> 
     let transactions_root = transaction_trie_root();
     let withdrawals_root = withdrawals_trie_root();
     let requests_hash = execution_requests_hash();
-    let block_access_list_hash = witness_keccak(witness_slice(pl_bal_start(), payload_end() - pl_bal_start()));
+    let block_access_list_hash = keccak256(witness_byte_slice(pl_bal_start(), payload_end() - pl_bal_start()));
     let block_hash = block_header_hash(transactions_root, withdrawals_root, requests_hash, block_access_list_hash);
     let block_hash_ok = block_hash == header.block_hash;
     let parent_ok = parent_hash_ok();

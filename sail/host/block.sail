@@ -29,7 +29,7 @@ function headers_ok() -> bool = {
         var ok : bool = true;
         foreach (i from 1 to (n - 1)) {
             let parent_hash = bytes_be256(list_nth(rlp_node_items(ssz_witness_header(i)), 0, RLP_NONE).content);
-            let prev_hash = witness_keccak(ssz_witness_header_slice(i - 1));
+            let prev_hash = keccak256(ssz_witness_header_slice(i - 1));
             if parent_hash != prev_hash then {
                 ok = false
             }
@@ -223,7 +223,7 @@ function decode_auth_list(f : RlpField) -> list(Authorization) = {
  * type. Type-4 (EIP-7702) authorization tuples are decoded and their authorities
  * recovered (decode_auth_list); process_auth_list then applies the delegations. */
 function decode_tx_ssz(i : int, base_fee : word) -> Transaction = {
-    let sender = word_to_address(witness_keccak(witness_slice(cc_end() + i * 65 + 1, 64)));
+    let sender = word_to_address(keccak256(witness_byte_slice(cc_end() + i * 65 + 1, 64)));
     let (tx_off, tx_len) = ssz_list_span(pl_txs_start(), pl_n_txs(), pl_wds_start(), i);
     let tx_bytes = ssz_bytes(tx_off, tx_len);
 

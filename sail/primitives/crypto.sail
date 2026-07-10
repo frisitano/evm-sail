@@ -24,7 +24,7 @@ let EMPTY_TRIE_ROOT : hash = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc00
  * keccak256(domain ++ rlp_list_prefix(len) ++ payload). All shared consensus
  * hashing (lib/consensus_hash.sail) is written against these three. The
  * Witness/Memory/TxInput/ActiveCode source of a ByteSlice denotes an abstract
- * byte sequence: bytes_keccak(s) = keccak256(read_byte_slice(s)), and the
+ * byte sequence: keccak256(s : ByteSlice) = keccak256(read_byte_slice(s)); the
  * prefixed SHA-256 digest = sha256(type_byte :: bytes). ---- */
 
 /* streaming hash channel: reset, push bytes, finish = digest */
@@ -55,7 +55,7 @@ function hash_push_bytes(bs : list(byte)) -> unit = {
     }
 }
 
-function keccak256(bs : list(byte)) -> bits(256) = {
+function keccak256_bytes(bs : list(byte)) -> bits(256) = {
     host_bytes_reset();
     hash_push_bytes(bs);
     host_bytes_keccak_finish()
@@ -71,16 +71,20 @@ function sha256(bs : list(byte)) -> bits(256) = {
  * lib/rlp.sail (it needs rlp_list_prefix), streamed part-by-part. */
 val keccak_rlp_payload : (list(byte), list(byte)) -> bits(256)
 
-/* Source-tagged hashing: bytes_keccak(s) = keccak256(read_byte_slice(s)); the
- * prefixed digest = sha256(type_byte :: bytes). C hashes the source without
- * materializing it. */
+/* Source-tagged hashing: keccak256_slice(s) = keccak256(read_byte_slice(s));
+ * the prefixed digest = sha256(type_byte :: bytes). C hashes the source
+ * without materializing it. */
 val host_source_keccak = impure { c: "host_source_keccak" } : (bits(64), bits(64), bits(64)) -> bits(256)
 val host_source_sha256_prefixed = impure { c: "host_source_sha256_prefixed" } : (bits(8), bits(64), bits(64), bits(64)) -> bits(
         256,
     )
 
-function bytes_keccak(s : ByteSlice) -> bits(256) =
+function keccak256_slice(s : ByteSlice) -> bits(256) =
     host_source_keccak(byte_source_kind(s.source), s.off, s.len)
+
+/* keccak256 is overloaded: materialized bytes or a source-tagged ByteSlice
+ * both hash through the same axiomatic core. */
+overload keccak256 = { keccak256_bytes, keccak256_slice }
 
 function bytes_sha256_prefixed(prefix : byte, s : ByteSlice) -> bits(256) =
     host_source_sha256_prefixed(prefix, byte_source_kind(s.source), s.off, s.len)

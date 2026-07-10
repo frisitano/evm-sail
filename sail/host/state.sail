@@ -287,7 +287,7 @@ function code_db_store_code(h : hash, c : list(byte)) -> unit = {
 /* Store a witness code blob into the content-addressed code store. The spec
  * backend materializes the witness bytes; the build backend may hash/copy the
  * witness slice directly. */
-val code_db_store_witness_code : witness_slice -> unit
+val code_db_store_witness_code : ByteSlice -> unit
 
 /* Stateless storage resolver: the value of (a, s) in the witness pre-state,
  * walked from the account's authenticated storage root. Defined in lib/mpt.sail

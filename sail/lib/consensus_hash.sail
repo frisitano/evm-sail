@@ -56,8 +56,7 @@ function code_hash_and_store(c : list(byte)) -> hash = {
     h
 }
 
-function code_db_store_witness_code(s : witness_slice) -> unit =
-    code_db_store_slice(witness_byte_slice(s))
+function code_db_store_witness_code(s : ByteSlice) -> unit = code_db_store_slice(s)
 
 /* EIP-7685 commitment: sha256 over the concatenation of each present request
  * type's 32-byte per-type digest (deposit, withdrawal, consolidation, in that
@@ -70,17 +69,17 @@ function execution_requests_hash() -> hash = {
     let l1 = creq_start() - wreq_start();
     let l2 = req_end() - creq_start();
     let d0 : hash = if l0 != 0 then {
-            sha256_request_digest(0, witness_slice(dep_start(), l0))
+            sha256_request_digest(0, witness_byte_slice(dep_start(), l0))
         } else {
             sail_zeros(256)
         };
     let d1 : hash = if l1 != 0 then {
-            sha256_request_digest(1, witness_slice(wreq_start(), l1))
+            sha256_request_digest(1, witness_byte_slice(wreq_start(), l1))
         } else {
             sail_zeros(256)
         };
     let d2 : hash = if l2 != 0 then {
-            sha256_request_digest(2, witness_slice(creq_start(), l2))
+            sha256_request_digest(2, witness_byte_slice(creq_start(), l2))
         } else {
             sail_zeros(256)
         };

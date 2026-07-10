@@ -119,4 +119,4 @@ function mem_codecopy(dst : int, off : int, len : int) -> unit =
 /* KECCAK256 over the memory range [off, off+len). Semantically, the caller
  * reads the addressed bytes and hashes that byte list. */
 function mem_keccak(off : int, len : int) -> word =
-    bytes_keccak(memory_byte_slice(off, len))
+    keccak256(memory_byte_slice(off, len))

@@ -287,31 +287,27 @@ function ssz_list_span(start : int, n : int, stop : int, i : int) -> (int, int) 
         };
     (start + off_i, off_next - off_i)
 }
-function ssz_list_slice(start : int, n : int, stop : int, i : int) -> witness_slice = {
+function ssz_list_slice(start : int, n : int, stop : int, i : int) -> ByteSlice = {
     let (off, len) = ssz_list_span(start, n, stop, i);
-    witness_slice(off, len)
+    witness_byte_slice(off, len)
 }
-function read_witness_slice(s : witness_slice) -> list(byte) =
-    ssz_bytes(unsigned(s.off), unsigned(s.len))
-function witness_keccak(s : witness_slice) -> bits(256) =
-    bytes_keccak(witness_byte_slice(s))
-function sha256_request_digest(request_type : int, s : witness_slice) -> bits(256) =
-    bytes_sha256_prefixed(get_slice_int(8, request_type, 0), witness_byte_slice(s))
+function sha256_request_digest(request_type : int, s : ByteSlice) -> bits(256) =
+    bytes_sha256_prefixed(get_slice_int(8, request_type, 0), s)
 function ssz_witness_node_span(i : int) -> (int, int) =
     ssz_list_span(wit_state_start(), wit_n_state(), wit_codes_start(), i)
-function ssz_witness_node_slice(i : int) -> witness_slice =
+function ssz_witness_node_slice(i : int) -> ByteSlice =
     ssz_list_slice(wit_state_start(), wit_n_state(), wit_codes_start(), i)
 function ssz_witness_node(i : int) -> list(byte) =
-    read_witness_slice(ssz_witness_node_slice(i))
+    read_byte_slice(ssz_witness_node_slice(i))
 function ssz_witness_code_span(i : int) -> (int, int) =
     ssz_list_span(wit_codes_start(), wit_n_codes(), wit_headers_start(), i)
-function ssz_witness_code_slice(i : int) -> witness_slice =
+function ssz_witness_code_slice(i : int) -> ByteSlice =
     ssz_list_slice(wit_codes_start(), wit_n_codes(), wit_headers_start(), i)
 function ssz_witness_header_span(i : int) -> (int, int) =
     ssz_list_span(wit_headers_start(), wit_n_headers(), cc_start(), i)
-function ssz_witness_header_slice(i : int) -> witness_slice =
+function ssz_witness_header_slice(i : int) -> ByteSlice =
     ssz_list_slice(wit_headers_start(), wit_n_headers(), cc_start(), i)
 function ssz_witness_header(i : int) -> list(byte) =
-    read_witness_slice(ssz_witness_header_slice(i))
+    read_byte_slice(ssz_witness_header_slice(i))
 
 /* transactions[i] raw bytes (legacy = RLP list; typed = type byte ++ payload) */

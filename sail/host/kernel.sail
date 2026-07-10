@@ -318,7 +318,7 @@ function k_blockhash(n : word) -> hash = {
         if idx < 0 then {
             throw InvalidBlock(WitnessDeficient)
         } else {
-            witness_keccak(ssz_witness_header_slice(idx))
+            keccak256(ssz_witness_header_slice(idx))
         }
     }
 }

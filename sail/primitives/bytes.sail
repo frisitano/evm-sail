@@ -40,36 +40,8 @@ function byte_source_kind(src : ByteSource) -> bits(64) =
  * fields whose value role is unused (subtree refs, deletes). */
 let EMPTY_SLICE : ByteSlice = struct { source = WitnessSource, off = 0x0000000000000000, len = 0x0000000000000000 }
 
-/* Byte-indexed offsets/counts at C-backed host boundaries. Keep decoder and
- * EVM arithmetic in int; narrow only when crossing the FFI. */
-type witness_offset = bits(64)
-type witness_len    = bits(64)
-function to_witness_offset(i : int) -> witness_offset = get_slice_int(64, i, 0)
-function to_witness_len(i : int) -> witness_len = get_slice_int(64, i, 0)
-
-type memory_offset = bits(64)
-type memory_len    = bits(64)
-function to_memory_offset(i : int) -> memory_offset = get_slice_int(64, i, 0)
-function to_memory_len(i : int) -> memory_len = get_slice_int(64, i, 0)
-
-struct witness_slice = {
-    off : witness_offset,
-    len : witness_len,
-}
-
-function witness_slice(off : int, len : int) -> witness_slice =
-    struct { off = to_witness_offset(off), len = to_witness_len(len) }
-
-function witness_byte_slice(s : witness_slice) -> ByteSlice =
-    struct { source = WitnessSource, off = s.off, len = s.len }
-
-struct memory_slice = {
-    off : memory_offset,
-    len : memory_len,
-}
-
-function memory_slice(off : int, len : int) -> memory_slice =
-    struct { off = to_memory_offset(off), len = to_memory_len(len) }
+function witness_byte_slice(off : int, len : int) -> ByteSlice =
+    byte_slice(WitnessSource, off, len)
 
 function memory_byte_slice(off : int, len : int) -> ByteSlice =
     byte_slice(MemorySource, off, len)
