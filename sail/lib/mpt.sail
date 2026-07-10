@@ -1208,9 +1208,9 @@ function build_node_db() -> unit = {
     nodedb_reset();
     let n = wit_n_state();
     foreach (i from 0 to (n - 1)) {
-        let (off, len) = ssz_witness_node_span(i);
-        let h = keccak256(ssz_witness_node_slice(i));
-        nodedb_insert(h, get_slice_int(64, off, 0), get_slice_int(64, len, 0))
+        let s = ssz_witness_node_slice(i);
+        let h = keccak256(s);
+        nodedb_insert(h, s.off, s.len)
     }
 }
 

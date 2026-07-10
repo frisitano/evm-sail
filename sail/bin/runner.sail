@@ -94,6 +94,7 @@ register zkvm_out_gas : int = 0
  * withdrawals, so the shared per-tx STF unit (process_transaction) IS the block
  * -- no block-start system calls / block-end / rewards. */
 function run_one() -> unit = {
+    stateless_input_index();
     k_fork = k_fork_from_ssz(cc_fork());
 
     /* Load witness nodes + codes and anchor the pre-state root, exactly as the

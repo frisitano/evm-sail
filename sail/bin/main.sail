@@ -612,6 +612,9 @@ function main() -> unit = {
         return ()
     };
 
+    /* decode the SSZ container geometry ONCE; every accessor below reads it */
+    stateless_input_index();
+
     /* S2f: decode only the header into the k_header register, then execute against
        witness state. Transactions and withdrawals are NOT materialized -- the STF
        loops over their SSZ indices and decodes each on demand; a tx's input is
