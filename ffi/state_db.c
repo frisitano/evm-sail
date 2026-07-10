@@ -617,11 +617,6 @@ static int acct_wset_dirty(const acct_wset_row *e) {
          compare_u64x4(e->cur_sroot, e->orig_sroot) != 0;
 }
 
-/* the live row (tx write over committed block write over a witness read member);
-   NULL on a miss. A tx row is always a write (only acct_wset_write interns there);
-   a block row is a committed write or a witness read member (cur=resolved
-   pre-state) -- both carry the live base value in cur, so any block row wins once
-   the tx overlay has none. Native's block table holds only merged writes. */
 /* --- lifecycle --- */
 unit acct_wset_reset(const unit u) {
   (void)u;
@@ -637,21 +632,28 @@ unit acct_wset_tx_clear(const unit u) {
   return UNIT;
 }
 
-/* merge dirty tx rows into the block base, then clear the tx overlay. The merge
-   only ever updates the block CURRENT; the block ORIGINAL (+ base_exists) is the
-   pre-state and is frozen ONCE, when the account first enters the block working
-   set -- as a witness read member (acct_wset_seed_read) or, on native where there
-   are no read members, at this first-write intern. A row that already exists here
-   already carries the correct frozen original, so the merge must never touch it. */
+/* merge the tx overlay into the block base, then clear it. The merge only
+   ever updates the block CURRENT; the block ORIGINAL (+ base_exists) is the
+   pre-state and is frozen ONCE, when the account first enters the block
+   working set (from the tx row, which froze it at cache time from the base
+   resolver). A row that already exists here already carries the correct
+   frozen original, so the merge must never touch it. */
 unit acct_wset_merge(const unit u) {
   (void)u;
   for (uint32_t i = 0; i < acct_wset_tx.n; i++) {
     acct_wset_row *e = &acct_wset_tx.rows[i];
-    if (!acct_wset_dirty(e)) continue;
-    /* EIP-7928 per-field changes vs this tx's start (sroot is not a BAL field) */
-    if (e->cur_nonce != e->orig_nonce) bal_add_nonce_change(e->hkey, e->cur_nonce);
-    if (memcmp(e->cur_bal, e->orig_bal, 32) != 0) bal_add_balance_change(e->hkey, e->cur_bal);
-    if (memcmp(e->cur_chash, e->orig_chash, 32) != 0) bal_add_code_change(e->hkey, e->cur_chash);
+    int dirty = acct_wset_dirty(e);
+    if (dirty) {
+      /* EIP-7928 per-field changes vs this tx's start (sroot is not a BAL field) */
+      if (e->cur_nonce != e->orig_nonce) bal_add_nonce_change(e->hkey, e->cur_nonce);
+      if (memcmp(e->cur_bal, e->orig_bal, 32) != 0) bal_add_balance_change(e->hkey, e->cur_bal);
+      if (memcmp(e->cur_chash, e->orig_chash, 32) != 0) bal_add_code_change(e->hkey, e->cur_chash);
+    }
+    /* EVERY tx row reaches the block layer -- reads included: a read member
+       caches the resolved pre-state for later txs AND puts the touched
+       account into the BAL account list (bal_recompute enumerates the block
+       members). Read rows of an existing block row mirror it exactly (the
+       cache copied from it and the block layer is frozen mid-tx). */
     acct_wset_row *b = acct_wset_get(&acct_wset_block, e->hkey);
     int fresh = (b == NULL);   /* account not yet in the block working set */
     if (fresh) b = acct_wset_intern(&acct_wset_block, e->hkey);
@@ -665,11 +667,15 @@ unit acct_wset_merge(const unit u) {
       memcpy(b->orig_sroot, e->orig_sroot, sizeof(b->orig_sroot));
       memcpy(b->orig_chash, e->orig_chash, sizeof(b->orig_chash));
       b->base_exists = e->base_exists;
+    } else {
+      b->base_exists |= e->base_exists;
     }
-    b->cur_nonce = e->cur_nonce;
-    memcpy(b->cur_bal, e->cur_bal, sizeof(b->cur_bal));
-    memcpy(b->cur_sroot, e->cur_sroot, sizeof(b->cur_sroot));
-    memcpy(b->cur_chash, e->cur_chash, sizeof(b->cur_chash));
+    if (fresh || dirty) {
+      b->cur_nonce = e->cur_nonce;
+      memcpy(b->cur_bal, e->cur_bal, sizeof(b->cur_bal));
+      memcpy(b->cur_sroot, e->cur_sroot, sizeof(b->cur_sroot));
+      memcpy(b->cur_chash, e->cur_chash, sizeof(b->cur_chash));
+    }
   }
   acct_wset_table_reset(&acct_wset_tx);
   acct_wset_iter_invalidate();
@@ -695,34 +701,16 @@ uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
 }
 
 /* --- writes / restore / wipe --- */
-/* write the current account into the tx overlay; on the FIRST write this tx
-   the original + base_exists freeze at the tx-start account, read from the
-   block base if committed there, else the resolver cache (load_account always
-   runs before a store, so the cache holds the resolved pre-state). */
-unit acct_wset_write(const lbits a, uint64_t nonce,
-                     const lbits bal, const lbits sroot, const lbits chash) {
+/* update the current account on the EXISTING tx row (store_account; the JAcct
+   undo). load_account always runs before a store and caches every resolution
+   into the tx layer (acct_tx_cache), so the row -- with orig + base_exists
+   already frozen at the tx-start account -- is guaranteed live. An absent row
+   (wiped by the EIP-6780 delete) is a no-op. */
+unit acct_tx_update(const lbits a, uint64_t nonce,
+                    const lbits bal, const lbits sroot, const lbits chash) {
   uint64_t h[4]; acct_secure_key(a, h);
   acct_wset_row *e = acct_wset_get(&acct_wset_tx, h);
-  int fresh = (e == NULL);   /* first write to this account this tx */
-  if (fresh) e = acct_wset_intern(&acct_wset_tx, h);
   if (!e) return UNIT;
-  lbits_to_be_bytes(e->raw_addr, 20, a);   /* BAL key; carried to block at merge */
-  if (fresh) {
-    acct_wset_row *b = acct_wset_get(&acct_wset_block, h);
-    if (b) {
-      /* tx-start value = the committed block row: a WRITTEN member's cur (prior
-         tx) or a witness READ member's cur (resolved pre-state); both are the
-         correct EIP-2200 original. */
-      e->orig_nonce = b->cur_nonce;
-      memcpy(e->orig_bal, b->cur_bal, sizeof(e->orig_bal));
-      memcpy(e->orig_sroot, b->cur_sroot, sizeof(e->orig_sroot));
-      memcpy(e->orig_chash, b->cur_chash, sizeof(e->orig_chash));
-      e->base_exists = b->base_exists;
-    }
-    /* else: the pre-state read member is materialized before any write
-       (stateless_account_load -> acct_wset_seed_read), so a missing block row
-       means a never-loaded account; original stays zeroed, base_exists 0. */
-  }
   uint64_t b4[4], sr[4], ch[4];
   lbits_to_le_words4(b4, bal);
   lbits_to_le_words4(sr, sroot);
@@ -734,16 +722,17 @@ unit acct_wset_write(const lbits a, uint64_t nonce,
   return UNIT;
 }
 
-/* witness base-resolver read-through: bind a resolved pre-state account as a
-   block-level READ member (written=0, cur=orig=pre-state, un-journaled so a frame
-   revert keeps the revealed pre-state). Replaces the eest_account read-through
-   seed; native seeds eest_account instead and never calls this. Only reached
-   when the account is not yet loaded (load_account gates on account_loaded), so
-   the block row is always fresh -- bind unconditionally. */
-unit acct_wset_seed_read(const lbits a, uint64_t nonce, const lbits bal,
-                         const lbits sroot, const lbits chash) {
+/* cache a resolved account as a tx-layer READ member (cur == orig = the
+   resolution, un-journaled so a frame revert keeps the revealed value) --
+   load_account's cache-on-every-read, mirroring storage_tx_cache. On a
+   block-layer hit the block row's base_exists is inherited; on a witness
+   resolve there is no block row and acct_tx_mark_base_exists raises the flag
+   when the leaf existed. Only reached when the tx layer misses, so the row
+   is always fresh -- bind unconditionally. */
+unit acct_tx_cache(const lbits a, uint64_t nonce, const lbits bal,
+                   const lbits sroot, const lbits chash) {
   uint64_t h[4]; acct_secure_key(a, h);
-  acct_wset_row *e = acct_wset_intern(&acct_wset_block, h);
+  acct_wset_row *e = acct_wset_intern(&acct_wset_tx, h);
   if (!e) return UNIT;
   lbits_to_be_bytes(e->raw_addr, 20, a);   /* EIP-7928 BAL account key/order */
   uint64_t b4[4], sr[4], ch[4];
@@ -754,34 +743,17 @@ unit acct_wset_seed_read(const lbits a, uint64_t nonce, const lbits bal,
   memcpy(e->cur_bal, b4, sizeof(e->cur_bal));    memcpy(e->orig_bal, b4, sizeof(e->orig_bal));
   memcpy(e->cur_sroot, sr, sizeof(e->cur_sroot)); memcpy(e->orig_sroot, sr, sizeof(e->orig_sroot));
   memcpy(e->cur_chash, ch, sizeof(e->cur_chash)); memcpy(e->orig_chash, ch, sizeof(e->orig_chash));
-  e->base_exists = 0;   /* raised by acct_wset_mark_base_exists when the leaf existed */
+  acct_wset_row *b = acct_wset_get(&acct_wset_block, h);
+  e->base_exists = b ? b->base_exists : 0;
   return UNIT;
 }
 
-/* witness base-resolver: mark the block read member's pre-state leaf as present
+/* witness base-resolver: mark the tx read member's pre-state leaf as present
    (EIP-158/6780 distinguishes proven-absent from empty-but-present). */
-unit acct_wset_mark_base_exists(const lbits a) {
-  uint64_t h[4]; acct_secure_key(a, h);
-  acct_wset_row *e = acct_wset_get(&acct_wset_block, h);
-  if (e) e->base_exists = 1;
-  return UNIT;
-}
-
-/* JAcct undo: restore the tx-overlay current account to a prior value; keeps
-   the row (membership) and its frozen original. */
-unit acct_wset_restore(const lbits a, uint64_t nonce,
-                       const lbits bal, const lbits sroot, const lbits chash) {
+unit acct_tx_mark_base_exists(const lbits a) {
   uint64_t h[4]; acct_secure_key(a, h);
   acct_wset_row *e = acct_wset_get(&acct_wset_tx, h);
-  if (!e) return UNIT;
-  uint64_t b4[4], sr[4], ch[4];
-  lbits_to_le_words4(b4, bal);
-  lbits_to_le_words4(sr, sroot);
-  lbits_to_le_words4(ch, chash);
-  e->cur_nonce = nonce;
-  memcpy(e->cur_bal, b4, sizeof(e->cur_bal));
-  memcpy(e->cur_sroot, sr, sizeof(e->cur_sroot));
-  memcpy(e->cur_chash, ch, sizeof(e->cur_chash));
+  if (e) e->base_exists = 1;
   return UNIT;
 }
 

@@ -1264,11 +1264,12 @@ function stateless_storage(a : address, s : word) -> word = {
 
 /* Stateless account materialization: bind `a` on first touch by walking the
  * state trie from the parent-root anchor. Reaching the leaf => present (decode
- * + seed); a diverging/empty terminus => proven-empty account; a blinded node
- * => missing proof => fail closed. The result is bound as a block-level read
- * member of the account working set (acct_wset_seed_read), so subsequent
- * load_account(a) is an O(1) working-set read. */
-function stateless_account_load(a : address) -> unit = {
+ * + cache); a diverging/empty terminus => proven-empty account; a blinded node
+ * => missing proof => fail closed. The result is cached as a TX-layer read
+ * member (acct_tx_cache, like storage's cache-on-read), so subsequent
+ * load_account(a) is an O(1) layer hit; the merge propagates it to the block
+ * layer for later txs. */
+function stateless_account_load(a : address) -> Account = {
     let ak = keccak256_address(a);
     let rootnode = node_db_lookup(k_parent_state_root);
     if (list_len(rootnode) == 0) & (k_parent_state_root != EMPTY_TRIE_ROOT) then {
@@ -1277,19 +1278,11 @@ function stateless_account_load(a : address) -> unit = {
     let value = trie_walk(rootnode, hash_nibbles(ak), 0, 256);
     if list_len(value) > 0 then {
         let (nonce, bal, sroot, chash) = decode_account(value);
-        acct_wset_seed_read(a, get_slice_int(64, nonce, 0), bal, sroot, chash);
-        acct_wset_mark_base_exists(a)
+        acct_tx_cache(a, get_slice_int(64, nonce, 0), bal, sroot, chash);
+        acct_tx_mark_base_exists(a);
+        struct { nonce = nonce, balance = bal, code_hash = chash, storage_root = sroot }
     } else {
-        acct_wset_seed_read(a, sail_zeros(64), sail_zeros(256), EMPTY_TRIE_ROOT, KECCAK_EMPTY)
+        acct_tx_cache(a, sail_zeros(64), sail_zeros(256), EMPTY_TRIE_ROOT, KECCAK_EMPTY);
+        EMPTY_ACCOUNT
     }
-}
-
-/* A not-yet-materialized account is bound from the authenticated base on first
- * access (un-journaled, so a frame revert keeps the revealed pre-state and only
- * undoes recorded mutations). */
-function load_account(a : address) -> Account = {
-    if not_bool(account_loaded(a)) then {
-        stateless_account_load(a)
-    };
-    account_lookup(a)
 }

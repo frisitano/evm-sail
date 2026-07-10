@@ -121,13 +121,12 @@ val acct_wset_wipe_addr = impure { c: "acct_wset_wipe_addr" } : address -> unit
  * tx-over-block precedence lives in Sail (account_lookup below). */
 val acct_tx_get = impure { c: "acct_tx_get" } : address -> option(Account)
 val acct_block_get = impure { c: "acct_block_get" } : address -> option(Account)
-val acct_wset_write = impure { c: "acct_wset_write" } : (address, bits(64), word, hash, hash) -> unit
-val acct_wset_restore = impure { c: "acct_wset_restore" } : (address, bits(64), word, hash, hash) -> unit
+val acct_tx_update = impure { c: "acct_tx_update" } : (address, bits(64), word, hash, hash) -> unit /* cur := fields on the existing tx row (store_account; JAcct undo) */
 
 /* witness base-resolver read-through: bind a resolved pre-state account as a
  * block-level read member */
-val acct_wset_seed_read = impure { c: "acct_wset_seed_read" } : (address, bits(64), word, hash, hash) -> unit
-val acct_wset_mark_base_exists = impure { c: "acct_wset_mark_base_exists" } : address -> unit
+val acct_tx_cache = impure { c: "acct_tx_cache" } : (address, bits(64), word, hash, hash) -> unit /* cache a resolved account as a tx read member (cur == orig) */
+val acct_tx_mark_base_exists = impure { c: "acct_tx_mark_base_exists" } : address -> unit /* the read member's pre-state leaf exists (EIP-158/6780) */
 
 /* compute_root enumeration over acct_wset_block (fields mirror AcctRow):
  * witness = dirty rows (changed vs pre-state); native = cache-union-block rows */
@@ -138,13 +137,6 @@ val acct_wset_block_dirty_bal = impure { c: "acct_wset_block_dirty_bal" } : bits
 val acct_wset_block_dirty_sroot = impure { c: "acct_wset_block_dirty_sroot" } : bits(64) -> hash
 val acct_wset_block_dirty_chash = impure { c: "acct_wset_block_dirty_chash" } : bits(64) -> hash
 val acct_wset_block_dirty_base_exists = impure { c: "acct_wset_block_dirty_base_exists" } : bits(64) -> bool
-val acct_wset_union_count = impure { c: "acct_wset_union_count" } : unit -> bits(64)
-val acct_wset_union_hkey = impure { c: "acct_wset_union_hkey" } : bits(64) -> hash
-val acct_wset_union_nonce = impure { c: "acct_wset_union_nonce" } : bits(64) -> bits(64)
-val acct_wset_union_bal = impure { c: "acct_wset_union_bal" } : bits(64) -> word
-val acct_wset_union_sroot = impure { c: "acct_wset_union_sroot" } : bits(64) -> hash
-val acct_wset_union_chash = impure { c: "acct_wset_union_chash" } : bits(64) -> hash
-val acct_wset_union_base_exists = impure { c: "acct_wset_union_base_exists" } : bits(64) -> bool
 
 /* ---- EIP-7928 block access list, recomputed from execution (ffi/state_db.c
  * bal_*). The write-set overlay merges harvest this block's changes/reads
@@ -483,52 +475,40 @@ register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob
 
 /* ----------------------------- assoc helpers ---------------------------- */
 
-/* the account bound to `a` (EMPTY_ACCOUNT if absent), read from the account
- * working set. A base pre-state leaf is materialized into the working set as a
- * block-level read member on first touch (acct_wset_seed_read, in the base
- * resolver stateless_account_load), so the overlay is the single source. */
-function account_lookup(a : address) -> Account = {
+/* Stateless account materialization (defined in lib/mpt.sail, the witness reader,
+ * included later): resolve `a` from the authenticated witness leaf store and bind
+ * it (nonce/balance/storageRoot/codeHash); absent in the witness -> empty. The
+ * witness IS the base, so load_account loads on first touch -- no eager seeding. */
+val stateless_account_load : address -> Account
+
+/* internal (un-journaled) account accessor used inside the kernel functions,
+ * k_sload-shaped: this tx's layer, else the block layer, else materialize
+ * from the witness base. Every resolution is cached into the TX layer (a
+ * block hit here; the witness walk caches inside stateless_account_load), so
+ * after any load the account is live in the tx layer -- the invariant
+ * acct_tx_update (store_account) relies on -- and the merge propagates read
+ * members to the block layer for later txs and the BAL account list.
+ * Un-journaled: a frame revert keeps the revealed pre-state and only undoes
+ * recorded mutations. */
+function load_account(a : address) -> Account = {
     match acct_tx_get(a) {
         Some(acc) => return acc,
         None() => (),
     };
     match acct_block_get(a) {
-        Some(acc) => acc,
-        None() => EMPTY_ACCOUNT,
+        Some(acc) => {
+            acct_tx_cache(a, get_slice_int(64, acc.nonce, 0), acc.balance, acc.storage_root, acc.code_hash);
+            acc
+        },
+        None() => stateless_account_load(a),
     }
 }
-
-/* whether `a` has been materialized as a working-set read member or written;
- * distinct from account_lookup, which returns EMPTY_ACCOUNT for absent and
- * not-yet-loaded alike. Gates the resolve-once in load_account. */
-function account_loaded(a : address) -> bool = {
-    match acct_tx_get(a) {
-        Some(_) => return true,
-        None() => (),
-    };
-    match acct_block_get(a) {
-        Some(_) => true,
-        None() => false,
-    }
-}
-
-/* Stateless account materialization (defined in lib/mpt.sail, the witness reader,
- * included later): resolve `a` from the authenticated witness leaf store and bind
- * it (nonce/balance/storageRoot/codeHash); absent in the witness -> empty. The
- * witness IS the base, so load_account loads on first touch -- no eager seeding. */
-val stateless_account_load : address -> unit
-
-/* internal (un-journaled) account accessor used inside the kernel functions.
- * Defined in lib/mpt.sail: a not-yet-loaded account is materialized from the
- * witness base on first access (un-journaled, so a frame revert keeps the
- * revealed pre-state and only undoes recorded mutations). */
-val load_account : address -> Account
 
 /* a mutation writes the per-tx account overlay (acct_wset); the first write this
  * tx freezes the tx-start original C-side. Reverts run through the JAcct journal
  * (apply_undo below restores the overlay current), not the resolver cache. */
 function store_account(a : address, v : Account) -> unit =
-    acct_wset_write(a, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
+    acct_tx_update(a, get_slice_int(64, v.nonce, 0), v.balance, v.storage_root, v.code_hash)
 
 /* --- journal boundary: push / pop whole JEntry values ---
  * The one place a user-defined Sail type crosses the C boundary. The glue

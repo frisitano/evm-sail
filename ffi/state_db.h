@@ -43,13 +43,11 @@ unit acct_wset_wipe_addr(const lbits a);
    option(Account) glue: 0 = absent, 1 = present (fields in the out params) */
 uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
                         lbits *bal, lbits *sroot, lbits *chash);
-unit acct_wset_write(const lbits a, uint64_t nonce,
-                     const lbits bal, const lbits sroot, const lbits chash);
-unit acct_wset_restore(const lbits a, uint64_t nonce,
-                       const lbits bal, const lbits sroot, const lbits chash);
-unit acct_wset_seed_read(const lbits a, uint64_t nonce,
-                         const lbits bal, const lbits sroot, const lbits chash);
-unit acct_wset_mark_base_exists(const lbits a);
+unit acct_tx_update(const lbits a, uint64_t nonce,
+                    const lbits bal, const lbits sroot, const lbits chash);
+unit acct_tx_cache(const lbits a, uint64_t nonce, const lbits bal,
+                   const lbits sroot, const lbits chash);
+unit acct_tx_mark_base_exists(const lbits a);
 
 /* compute_root enumeration over acct_wset_block: witness = dirty rows, native =
    cache-union-block rows. Fields mirror AcctRow (host/state.sail). */
