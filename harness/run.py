@@ -240,6 +240,57 @@ def run_guest(files, args):
         sys.exit(1)
 
 
+
+def run_sharded(files, args):
+    """Shard fixture files across N self-invocations (one library instance per
+    process -- the C world state is process-global, so this is the only safe
+    concurrency) and aggregate their summaries."""
+    import ast, concurrent.futures as cf
+    n = min(args.jobs, len(files))
+    shards = [files[i::n] for i in range(n)]
+    flags = ["--quiet"] if args.quiet else ([])
+    if args.verbose: flags.append("--verbose")
+    if args.guest: flags.append("--guest")
+    if args.fork: flags += ["--fork", args.fork]
+    if args.limit: flags += ["--limit", str(args.limit)]
+    if args.timeout is not None: flags += ["--timeout", str(args.timeout)]
+    if args.fail_limit: flags += ["--fail-limit", str(args.fail_limit)]
+    script = os.path.abspath(__file__)
+
+    def run_shard(shard):
+        return subprocess.run([sys.executable, script] + shard + flags,
+                              capture_output=True, text=True)
+
+    npass = ntotal = ntimeout = 0
+    cats = {}
+    rc = 0
+    with cf.ThreadPoolExecutor(n) as ex:
+        futs = {ex.submit(run_shard, sh): i for i, sh in enumerate(shards)}
+        for fut in cf.as_completed(futs):
+            r = fut.result()
+            out = r.stdout + r.stderr
+            for ln in out.splitlines():
+                if ln.startswith(("FAIL", "TIMEOUT")):
+                    print(ln)
+            m = re.search(r"=== (\d+)/(\d+) passed(?: \((\d+) timeouts\))?", out)
+            if m:
+                npass += int(m.group(1)); ntotal += int(m.group(2))
+                ntimeout += int(m.group(3) or 0)
+                print(f"[shard {futs[fut] + 1}/{n} done: {m.group(1)}/{m.group(2)}]")
+            else:
+                rc = 1
+                print(f"[shard {futs[fut] + 1}/{n} produced no summary; rc={r.returncode}]")
+                print("\n".join(out.splitlines()[-10:]))
+            mc = re.search(r"fail categories: (\{.*\})", out)
+            if mc:
+                for k, v in ast.literal_eval(mc.group(1)).items():
+                    cats[k] = cats.get(k, 0) + v
+    mode = " (guest, byte-exact)" if args.guest else f" ({ntimeout} timeouts)"
+    print(f"\n=== {npass}/{ntotal} passed{mode} === [{n} jobs]")
+    if cats: print("fail categories:", dict(sorted(cats.items(), key=lambda x: -x[1])))
+    return 1 if (rc or ntotal == 0 or npass != ntotal or ntimeout != 0) else 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("files", nargs="+"); ap.add_argument("--fork", default=None)
@@ -262,6 +313,11 @@ def main():
     ap.add_argument("--dump", action="store_true",
                     help="on a FAIL, re-run the case and print the post-run state snapshot "
                          "(write-set accounts+storage, stack, memory) for analysis")
+    ap.add_argument("--jobs", type=int, default=1,
+                    help="shard fixture FILES across N worker processes (each worker "
+                         "loads its own library instance, so the process-global C "
+                         "world state stays isolated); incompatible with --spike, "
+                         "--dump and --rebuild (rebuild once with --jobs 1 first)")
     args = ap.parse_args()
 
     # expand directories to the .json files within (recursive)
@@ -275,6 +331,12 @@ def main():
 
     if args.spike and not args.guest:
         ap.error("--spike requires --guest (the runner has no spike build)")
+    if args.jobs > 1:
+        if args.spike or args.dump or args.rebuild:
+            ap.error("--jobs is incompatible with --spike/--dump/--rebuild")
+        if len(files) > 1:
+            sys.exit(run_sharded(files, args))
+        # a single file: nothing to shard, fall through sequentially
     if args.guest:
         run_guest(files, args)
         return
