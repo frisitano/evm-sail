@@ -27,9 +27,6 @@ unit storage_wset_wipe_addr(const lbits a);
 
 /* compute_root enumeration over storage_wset_block, per account (keccak(addr)):
    witness = dirty block rows; native = cache-union-block rows */
-uint64_t storage_wset_block_dirty_count(const lbits ak);
-void storage_wset_block_dirty_slot(lbits *rop, const lbits ak, uint64_t j);
-void storage_wset_block_dirty_val(lbits *rop, const lbits ak, uint64_t j);
 uint64_t storage_wset_union_count(const lbits ak);
 void storage_wset_union_slot(lbits *rop, const lbits ak, uint64_t j);
 void storage_wset_union_val(lbits *rop, const lbits ak, uint64_t j);
@@ -50,13 +47,6 @@ unit acct_tx_cache(const lbits a, uint64_t nonce, const lbits bal,
 
 /* compute_root enumeration over acct_wset_block: witness = dirty rows, native =
    cache-union-block rows. Fields mirror AcctRow (host/state.sail). */
-uint64_t acct_wset_block_dirty_count(const unit u);
-void acct_wset_block_dirty_hkey(lbits *rop, uint64_t i);
-uint64_t acct_wset_block_dirty_nonce(uint64_t i);
-void acct_wset_block_dirty_bal(lbits *rop, uint64_t i);
-void acct_wset_block_dirty_sroot(lbits *rop, uint64_t i);
-void acct_wset_block_dirty_chash(lbits *rop, uint64_t i);
-bool acct_wset_block_dirty_base_exists(uint64_t i);
 uint64_t acct_wset_union_count(const unit u);
 void acct_wset_union_hkey(lbits *rop, uint64_t i);
 uint64_t acct_wset_union_nonce(uint64_t i);
@@ -81,6 +71,11 @@ unit bal_note_code_change(const lbits ah, const lbits chash);
 uint64_t storage_tx_row_count(const unit u);
 uint64_t storage_tx_probe_row(uint64_t i, lbits *ahash, lbits *slot, lbits *curr);
 uint64_t acct_tx_row_count(const unit u);
-unit acct_tx_probe_row(uint64_t i, lbits *hkey, uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
-                       uint64_t *on, lbits *ob, lbits *os, lbits *oc);
+/* state-root enumeration: unfiltered block rows (Sail filters curr != orig) */
+uint64_t storage_block_row_count(const lbits ak);
+unit storage_block_probe_row(const lbits ak, uint64_t j, lbits *slot, lbits *curr, lbits *orig);
+uint64_t acct_block_row_count(const unit u);
+uint64_t acct_probe_row(uint64_t layer, uint64_t i, lbits *hkey,
+                        uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
+                        uint64_t *on, lbits *ob, lbits *os, lbits *oc);
 #endif

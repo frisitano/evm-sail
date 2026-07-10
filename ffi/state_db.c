@@ -506,36 +506,25 @@ static void swb_snap_push(swb_snap_row **rows, uint32_t *n, uint32_t *cap,
   (*n)++;
 }
 
-/* --- witness: dirty block rows --- */
-static swb_snap_row *swb_dirty_rows = NULL;
-static uint32_t swb_dirty_n = 0, swb_dirty_cap = 0;
-static uint64_t swb_dirty_memo[4];
-static int swb_dirty_valid = 0;
-
-static void swb_dirty_build(const uint64_t ak[4]) {
-  if (swb_dirty_valid && compare_words(swb_dirty_memo, ak, 4) == 0) return;
-  swb_dirty_n = 0;
-  uint32_t s, e;
-  storage_wset_block_acct_range(ak, &s, &e);
-  for (uint32_t i = s; i < e; i++) {
-    storage_wset_row *r = &storage_wset_block.rows[i];
-    if (!storage_wset_dirty(r)) continue;
-    swb_snap_push(&swb_dirty_rows, &swb_dirty_n, &swb_dirty_cap, r->slot, r->current);
-  }
-  memcpy(swb_dirty_memo, ak, sizeof(swb_dirty_memo));
-  swb_dirty_valid = 1;
+/* unfiltered block rows for an account (glue: StorageBlockRow). SAIL does the
+   dirty filtering (lib/mpt.sail storage_updates: curr != orig); C only hands
+   over row j of the account's contiguous block range. */
+uint64_t storage_block_row_count(const lbits ak) {
+  uint64_t k[4]; uint32_t bs, be;
+  lbits_to_be_words4(k, ak);
+  storage_wset_block_acct_range(k, &bs, &be);
+  return be - bs;
 }
-
-uint64_t storage_wset_block_dirty_count(const lbits ak) {
-  uint64_t k[4]; lbits_to_be_words4(k, ak); swb_dirty_build(k); return swb_dirty_n;
-}
-void storage_wset_block_dirty_slot(lbits *rop, const lbits ak, uint64_t j) {
-  uint64_t k[4]; lbits_to_be_words4(k, ak); swb_dirty_build(k);
-  be_words4_to_lbits(rop, j < swb_dirty_n ? swb_dirty_rows[j].slot : storage_zero_val);
-}
-void storage_wset_block_dirty_val(lbits *rop, const lbits ak, uint64_t j) {
-  uint64_t k[4]; lbits_to_be_words4(k, ak); swb_dirty_build(k);
-  be_words4_to_lbits(rop, j < swb_dirty_n ? swb_dirty_rows[j].val : storage_zero_val);
+unit storage_block_probe_row(const lbits ak, uint64_t j, lbits *slot, lbits *curr, lbits *orig) {
+  uint64_t k[4]; uint32_t bs, be;
+  lbits_to_be_words4(k, ak);
+  storage_wset_block_acct_range(k, &bs, &be);
+  if (bs + j >= be) return UNIT;
+  const storage_wset_row *e = &storage_wset_block.rows[bs + j];
+  be_words4_to_lbits(slot, e->slot);
+  be_words4_to_lbits(curr, e->current);
+  be_words4_to_lbits(orig, e->original);
+  return UNIT;
 }
 
 /* --- all block rows for an account (every written/read member, dirty or not).
@@ -562,7 +551,6 @@ static void swb_union_build(const uint64_t ak[4]) {
 }
 
 static void storage_wset_iter_invalidate(void) {
-  swb_dirty_valid = 0;
   swb_union_valid = 0;
 }
 
@@ -739,12 +727,16 @@ uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
   return 1;
 }
 
-/* tx-layer account enumeration for the merge harvest (glue: AcctTxRow). */
+/* account row enumeration (layer 0 = tx, for the merge harvest AcctTxRow;
+   layer 1 = block, for the state-root AcctBlockRow). Returns base_exists. */
 uint64_t acct_tx_row_count(const unit u) { (void)u; return acct_wset_tx.n; }
-unit acct_tx_probe_row(uint64_t i, lbits *hkey, uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
-                       uint64_t *on, lbits *ob, lbits *os, lbits *oc) {
-  if (i >= acct_wset_tx.n) return UNIT;
-  const acct_wset_row *e = &acct_wset_tx.rows[i];
+uint64_t acct_block_row_count(const unit u) { (void)u; return acct_wset_block.n; }
+uint64_t acct_probe_row(uint64_t layer, uint64_t i, lbits *hkey,
+                        uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
+                        uint64_t *on, lbits *ob, lbits *os, lbits *oc) {
+  const acct_wset_table *t = layer == 0 ? &acct_wset_tx : &acct_wset_block;
+  if (i >= t->n) return 0;
+  const acct_wset_row *e = &t->rows[i];
   be_words4_to_lbits(hkey, e->hkey);
   *cn = e->cur_nonce;
   le_words4_to_lbits(cb, e->cur_bal);
@@ -754,7 +746,7 @@ unit acct_tx_probe_row(uint64_t i, lbits *hkey, uint64_t *cn, lbits *cb, lbits *
   le_words4_to_lbits(ob, e->orig_bal);
   le_words4_to_lbits(os, e->orig_sroot);
   le_words4_to_lbits(oc, e->orig_chash);
-  return UNIT;
+  return e->base_exists ? 1 : 0;
 }
 
 /* --- writes / restore / wipe --- */
@@ -849,49 +841,8 @@ static void acct_snap_push(acct_snap_row **rows, uint32_t *n, uint32_t *cap,
   (*n)++;
 }
 
-/* witness: dirty block rows (current values) */
-static acct_snap_row *acct_dirty_rows = NULL;
-static uint32_t acct_dirty_n = 0, acct_dirty_cap = 0;
-static int acct_dirty_valid = 0;
-
-static void acct_dirty_build(void) {
-  if (acct_dirty_valid) return;
-  acct_dirty_n = 0;
-  /* (1) accounts changed in the account overlay (balance / nonce / code) */
-  for (uint32_t i = 0; i < acct_wset_block.n; i++) {
-    acct_wset_row *r = &acct_wset_block.rows[i];
-    if (!acct_wset_dirty(r)) continue;
-    acct_snap_push(&acct_dirty_rows, &acct_dirty_n, &acct_dirty_cap,
-                   r->hkey, r->cur_nonce, r->cur_bal, r->cur_sroot, r->cur_chash, r->base_exists);
-  }
-  /* (2) accounts changed ONLY in storage: walk the distinct account hashes of
-     the storage block base (sorted by acct_hash, so a group is contiguous) and
-     add any not already emitted as a dirty account. Its account fields come
-     from the account overlay if written there, else the resolver cache (SSTORE
-     loads the account first, so the cache holds it). The leaf is otherwise the
-     pre-state account with a re-derived storage root. */
-  uint32_t i = 0;
-  while (i < storage_wset_block.n) {
-    uint64_t ah[4];
-    memcpy(ah, storage_wset_block.rows[i].acct_hash, sizeof(ah));
-    acct_wset_row *ab = acct_wset_get(&acct_wset_block, ah);
-    if (!(ab && acct_wset_dirty(ab))) {   /* not already emitted in step (1) */
-      if (ab) {
-        /* a block member (written or a read member); cur holds the account
-           fields -- pre-state for a read member, committed for a write. SSTORE
-           loads the account first, so storage-touched accounts always have one. */
-        acct_snap_push(&acct_dirty_rows, &acct_dirty_n, &acct_dirty_cap,
-                       ab->hkey, ab->cur_nonce, ab->cur_bal, ab->cur_sroot, ab->cur_chash, ab->base_exists);
-      }
-    }
-    while (i < storage_wset_block.n && compare_words(storage_wset_block.rows[i].acct_hash, ah, 4) == 0) i++;
-  }
-  acct_dirty_valid = 1;
-}
-
-/* all block rows (every written/read member). The pre-state base lives in the
-   MPT node-db, not a flat cache, so the "union" is just the block overlay rows;
-   an account untouched by the block is not enumerated (post == pre). */
+/* the touched-account union: every block member (current values) -- the
+   harness dump's account enumeration */
 static acct_snap_row *acct_union_rows = NULL;
 static uint32_t acct_union_n = 0, acct_union_cap = 0;
 static int acct_union_valid = 0;
@@ -906,22 +857,6 @@ static void acct_union_build(void) {
   }
   acct_union_valid = 1;
 }
-
-uint64_t acct_wset_block_dirty_count(const unit u) { (void)u; acct_dirty_build(); return acct_dirty_n; }
-void acct_wset_block_dirty_hkey(lbits *rop, uint64_t i) {
-  acct_dirty_build(); be_words4_to_lbits(rop, i < acct_dirty_n ? acct_dirty_rows[i].hkey : account_zero_val);
-}
-uint64_t acct_wset_block_dirty_nonce(uint64_t i) { acct_dirty_build(); return i < acct_dirty_n ? acct_dirty_rows[i].nonce : 0; }
-void acct_wset_block_dirty_bal(lbits *rop, uint64_t i) {
-  acct_dirty_build(); le_words4_to_lbits(rop, i < acct_dirty_n ? acct_dirty_rows[i].bal : account_zero_val);
-}
-void acct_wset_block_dirty_sroot(lbits *rop, uint64_t i) {
-  acct_dirty_build(); le_words4_to_lbits(rop, i < acct_dirty_n ? acct_dirty_rows[i].sroot : account_zero_val);
-}
-void acct_wset_block_dirty_chash(lbits *rop, uint64_t i) {
-  acct_dirty_build(); le_words4_to_lbits(rop, i < acct_dirty_n ? acct_dirty_rows[i].chash : account_zero_val);
-}
-bool acct_wset_block_dirty_base_exists(uint64_t i) { acct_dirty_build(); return i < acct_dirty_n ? acct_dirty_rows[i].base_exists : 0; }
 
 uint64_t acct_wset_union_count(const unit u) { (void)u; acct_union_build(); return acct_union_n; }
 void acct_wset_union_hkey(lbits *rop, uint64_t i) {
@@ -940,7 +875,6 @@ void acct_wset_union_chash(lbits *rop, uint64_t i) {
 bool acct_wset_union_base_exists(uint64_t i) { acct_union_build(); return i < acct_union_n ? acct_union_rows[i].base_exists : 0; }
 
 static void acct_wset_iter_invalidate(void) {
-  acct_dirty_valid = 0;
   acct_union_valid = 0;
 }
 

@@ -36,4 +36,8 @@ struct zStorageTxRow;                                /* EIP-7928 merge-harvest v
 struct zAcctTxRow;
 void storage_tx_row(struct zStorageTxRow *rop, uint64_t i);
 void acct_tx_row(struct zAcctTxRow *rop, uint64_t i);
+struct zStorageBlockRow;                             /* state-root enumeration views */
+struct zAcctBlockRow;
+void storage_block_row(struct zStorageBlockRow *rop, const lbits ak, uint64_t j);
+void acct_block_row(struct zAcctBlockRow *rop, uint64_t i);
 #endif

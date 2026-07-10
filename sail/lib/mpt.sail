@@ -1026,56 +1026,53 @@ function storage_leaf_value(value : word) -> ByteSlice =
     arena_intern(rlp_int(unsigned(value)))
 
 /* secure-trie updates for one account's post-state storage, selected by
- * keccak(address): the write set only -- untouched slots remain inside the
- * recursive overlay rooted at the account's pre-state storage root. Nonzero
- * writes set RLP(value), zero writes delete the slot; a zero write to a slot
- * with no authenticated pre-state leaf is dropped (nothing to delete). */
+ * keccak(address): enumerate the account's block rows and keep the NET
+ * CHANGES vs the pre-state (curr != orig -- the filter is stated here, not in
+ * C). Untouched slots remain inside the recursive overlay rooted at the
+ * account's pre-state storage root. A nonzero curr sets RLP(value); a zero
+ * curr deletes the slot (curr != orig means the pre-state held a nonzero
+ * value, so a real MPT leaf exists to delete -- a zero write to a slot with
+ * no pre-state leaf has curr == orig == 0 and is skipped). */
 function storage_updates(ak : bits(256)) -> list(TriePatch) = {
     var out : list(TriePatch) = [||];
-    let n = storage_wset_dirty_rows(ak);
+    let n = unsigned(storage_block_row_count(ak));
     foreach (j from 0 to (n - 1)) {
-        let (es, ev) = storage_wset_dirty_row(ak, j);
-        let sk = keccak256_word(es);
-
-        /* a dirty row has current != original: a zero current means the slot
-         * held a nonzero pre-state value, so it deletes a real MPT leaf */
-        let key = to_nibbles(word_to_bytes32(sk));
-        out = patch_insert_sorted(
-            if word_is_zero(ev) then {
-                patch_delete(key)
-            } else {
-                patch_leaf(key, storage_leaf_value(ev))
-            },
-            out,
-        )
+        let r = storage_block_row(ak, get_slice_int(64, j, 0));
+        if r.curr != r.orig then {
+            let key = to_nibbles(word_to_bytes32(keccak256_word(r.slot)));
+            out = patch_insert_sorted(
+                if word_is_zero(r.curr) then {
+                    patch_delete(key)
+                } else {
+                    patch_leaf(key, storage_leaf_value(r.curr))
+                },
+                out,
+            )
+        }
     };
     out
 }
 
-/* post-state storage root for keccak(address): the single trie entry over the
- * account's pre-state storage root. An empty update list keeps the committed
- * root (including an EIP-8025 omitted storage proof, which is only deficient
- * if the block actually writes that account's storage -- then trie_root's
- * missing-root path fails closed). */
-function storage_root_from(ak : bits(256), sroot : bits(256)) -> bits(256) =
-    trie_root(sroot, storage_updates(ak))
-
 function account_empty(acc : Account) -> bool =
     (acc.code_hash == KECCAK_EMPTY) & acc.nonce == 0 & word_is_zero(acc.balance)
 
-/* trie update for one enumerated eest_account row (AcctRow, host/state.sail).
- * skip_empty_unbased drops empty accounts with no authenticated base leaf
- * (witness base: there is nothing to delete); otherwise empty accounts
- * become deletes. */
-function state_updates_account_row(row : AcctRow, prev : list(TriePatch), skip_empty_unbased : bool) -> list(TriePatch) = {
-    let acc : Account = struct {
-            nonce = unsigned(row.row_nonce),
-            balance = row.row_bal,
-            code_hash = row.row_chash,
-            storage_root = row.row_sroot,
-        };
-    let ak = to_nibbles(word_to_bytes32(row.row_hkey));
-    if skip_empty_unbased & account_empty(acc) & not_bool(row.row_base_exists) then {
+/* whether the account changed over the block (per-field diff vs the frozen
+ * pre-state original) -- the state-root inclusion rule, stated in Sail. */
+function account_changed(c : Account, o : Account) -> bool =
+    c.nonce != o.nonce | c.balance != o.balance | c.code_hash != o.code_hash | c.storage_root != o.storage_root
+
+/* trie update for one changed block account row. Empty accounts with no
+ * authenticated base leaf are dropped (witness base: there is nothing to
+ * delete); otherwise empty accounts become deletes. A live account's leaf
+ * embeds its post-state storage root: the single trie entry over the
+ * account's pre-state storage root and its net storage changes (an empty
+ * update list keeps the committed root, including an EIP-8025 omitted
+ * storage proof -- only deficient if the block actually writes that
+ * account's storage, when trie_root's missing-root path fails closed). */
+function state_updates_account_row(row : AcctBlockRow, s_upd : list(TriePatch), prev : list(TriePatch)) -> list(TriePatch) = {
+    let acc = row.curr;
+    let ak = to_nibbles(word_to_bytes32(row.hkey));
+    if account_empty(acc) & not_bool(row.base_exists) then {
         prev
     } else {
         let upd : TriePatch = if account_empty(acc) then {
@@ -1086,7 +1083,7 @@ function state_updates_account_row(row : AcctRow, prev : list(TriePatch), skip_e
                     account_leaf_value(
                         acc.nonce,
                         acc.balance,
-                        storage_root_from(row.row_hkey, acc.storage_root),
+                        trie_root(acc.storage_root, s_upd),
                         acc.code_hash,
                     ),
                 )
@@ -1095,15 +1092,20 @@ function state_updates_account_row(row : AcctRow, prev : list(TriePatch), skip_e
     }
 }
 
-/* secure-trie updates for the account map: execution updates only -- the
- * account write-set's dirty block rows = accounts changed vs the authenticated
- * pre-state (witness-materialized read-only accounts are base-state cache,
- * not post-state updates). */
+/* secure-trie updates for the account map: enumerate ALL block rows and keep
+ * the net changes -- an account feeds the root when its FIELDS changed vs the
+ * pre-state original OR its STORAGE has net changes (read-only rows with
+ * untouched storage are base-state cache, not post-state updates). The
+ * filter is stated here; C hands over unfiltered rows. */
 function state_updates_map() -> list(TriePatch) = {
     var out : list(TriePatch) = [||];
-    let n = unsigned(acct_wset_block_dirty_count());
+    let n = unsigned(acct_block_row_count());
     foreach (j from 0 to (n - 1)) {
-        out = state_updates_account_row(acct_wset_dirty_row(j), out, true)
+        let row = acct_block_row(get_slice_int(64, j, 0));
+        let s_upd = storage_updates(row.hkey);
+        if account_changed(row.curr, row.orig) | (list_len(s_upd) > 0) then {
+            out = state_updates_account_row(row, s_upd, out)
+        }
     };
     out
 }

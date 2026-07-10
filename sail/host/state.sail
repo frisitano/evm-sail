@@ -117,6 +117,19 @@ struct AcctTxRow = { ahash : hash, curr : Account, orig : Account }
 val acct_tx_row_count = impure { c: "acct_tx_row_count" } : unit -> bits(64)
 val acct_tx_row = impure { c: "acct_tx_row" } : bits(64) -> AcctTxRow
 
+/* state-root enumeration: UNFILTERED block rows -- Sail decides which rows
+ * are net changes vs the pre-state (lib/mpt.sail storage_updates /
+ * state_updates_map filter on curr != orig); C only hands rows over. */
+struct StorageBlockRow = { slot : word, curr : word, orig : word }
+
+val storage_block_row_count = impure { c: "storage_block_row_count" } : hash -> bits(64)
+val storage_block_row = impure { c: "storage_block_row" } : (hash, bits(64)) -> StorageBlockRow
+
+struct AcctBlockRow = { hkey : hash, curr : Account, orig : Account, base_exists : bool }
+
+val acct_block_row_count = impure { c: "acct_block_row_count" } : unit -> bits(64)
+val acct_block_row = impure { c: "acct_block_row" } : bits(64) -> AcctBlockRow
+
 /* EIP-7928 block-access-list record sinks (ffi/state_db.c): append one
  * record, tagged C-side with the ambient bal_set_index. Pure recorders --
  * all change/read DETECTION happens in Sail (k_tx_merge). */
@@ -126,11 +139,6 @@ val bal_balance_change = impure { c: "bal_note_balance_change" } : (hash, word) 
 val bal_nonce_change = impure { c: "bal_note_nonce_change" } : (hash, bits(64)) -> unit
 val bal_code_change = impure { c: "bal_note_code_change" } : (hash, hash) -> unit
 
-/* compute_root enumeration over the block base, per account keccak(addr):
- * witness = dirty rows (net change vs MPT); native = cache-union-block rows */
-val storage_wset_block_dirty_count = impure { c: "storage_wset_block_dirty_count" } : hash -> bits(64)
-val storage_wset_block_dirty_slot = impure { c: "storage_wset_block_dirty_slot" } : (hash, bits(64)) -> word
-val storage_wset_block_dirty_val = impure { c: "storage_wset_block_dirty_val" } : (hash, bits(64)) -> word
 val storage_wset_union_count = impure { c: "storage_wset_union_count" } : hash -> bits(64)
 val storage_wset_union_slot = impure { c: "storage_wset_union_slot" } : (hash, bits(64)) -> word
 val storage_wset_union_val = impure { c: "storage_wset_union_val" } : (hash, bits(64)) -> word
@@ -156,13 +164,6 @@ val acct_tx_cache = impure { c: "acct_tx_cache" } : (address, bits(64), word, ha
 
 /* compute_root enumeration over acct_wset_block (fields mirror AcctRow):
  * witness = dirty rows (changed vs pre-state); native = cache-union-block rows */
-val acct_wset_block_dirty_count = impure { c: "acct_wset_block_dirty_count" } : unit -> bits(64)
-val acct_wset_block_dirty_hkey = impure { c: "acct_wset_block_dirty_hkey" } : bits(64) -> hash
-val acct_wset_block_dirty_nonce = impure { c: "acct_wset_block_dirty_nonce" } : bits(64) -> bits(64)
-val acct_wset_block_dirty_bal = impure { c: "acct_wset_block_dirty_bal" } : bits(64) -> word
-val acct_wset_block_dirty_sroot = impure { c: "acct_wset_block_dirty_sroot" } : bits(64) -> hash
-val acct_wset_block_dirty_chash = impure { c: "acct_wset_block_dirty_chash" } : bits(64) -> hash
-val acct_wset_block_dirty_base_exists = impure { c: "acct_wset_block_dirty_base_exists" } : bits(64) -> bool
 
 /* ---- EIP-7928 block access list, recomputed from execution (ffi/state_db.c
  * bal_*). The write-set overlay merges harvest this block's changes/reads
@@ -357,14 +358,6 @@ function storage_wipe_addr(a : address) -> unit =
  * reads can fall through to it on a working-set miss. */
 val stateless_storage : (address, word) -> word
 
-/* write-set block enumeration for compute_root (lib/mpt.sail storage_updates):
- * dirty rows = the net change over the authenticated MPT base. */
-function storage_wset_dirty_rows(ak : bits(256)) -> int = unsigned(storage_wset_block_dirty_count(ak))
-function storage_wset_dirty_row(ak : bits(256), j : int) -> (word, word) =
-    (
-        storage_wset_block_dirty_slot(ak, get_slice_int(64, j, 0)),
-        storage_wset_block_dirty_val(ak, get_slice_int(64, j, 0)),
-    )
 function storage_wset_union_rows(ak : bits(256)) -> int = unsigned(storage_wset_union_count(ak))
 function storage_wset_union_row(ak : bits(256), j : int) -> (word, word) =
     (storage_wset_union_slot(ak, get_slice_int(64, j, 0)), storage_wset_union_val(ak, get_slice_int(64, j, 0)))
@@ -391,32 +384,6 @@ function storage_has_live_acct_hash(ak : bits(256)) -> bool = {
 function storage_has_live_addr(a : address) -> bool =
     storage_has_live_acct_hash(keccak256_address(a))
 
-/* one enumerated account row (dump_state / state root; cold path). Rows come
- * from the account write-set block base -- acct_wset_dirty_row (witness) and
- * acct_wset_union_row (native) below. */
-struct AcctRow = {
-    row_hkey : hash,
-    row_nonce : bits(64),
-    row_bal : word,
-    row_sroot : hash,
-    row_chash : hash,
-    row_base_exists : bool,
-}
-
-/* account write-set block enumeration for compute_root (lib/mpt.sail
- * state_updates_map): dirty rows = the net change vs the authenticated
- * pre-state. */
-function acct_wset_dirty_row(j : int) -> AcctRow = {
-    let idx = get_slice_int(64, j, 0);
-    struct {
-        row_hkey = acct_wset_block_dirty_hkey(idx),
-        row_nonce = acct_wset_block_dirty_nonce(idx),
-        row_bal = acct_wset_block_dirty_bal(idx),
-        row_sroot = acct_wset_block_dirty_sroot(idx),
-        row_chash = acct_wset_block_dirty_chash(idx),
-        row_base_exists = acct_wset_block_dirty_base_exists(idx),
-    }
-}
 register k_refund : int = 0 /* gas-refund counter (SSTORE clears; EIP-3529 cap applied at tx end) */
 
 register k_parent_state_root : hash =

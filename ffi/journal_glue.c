@@ -197,10 +197,26 @@ void storage_tx_row(struct zStorageTxRow *out, uint64_t i) {
 
 void acct_tx_row(struct zAcctTxRow *out, uint64_t i) {
   uint64_t cn = 0, on = 0;
-  acct_tx_probe_row(i, &out->zahash, &cn, &out->zcurr.zbalance,
-                    &out->zcurr.zstorage_root, &out->zcurr.zcode_hash, &on,
-                    &out->zorig.zbalance, &out->zorig.zstorage_root,
-                    &out->zorig.zcode_hash);
+  acct_probe_row(0, i, &out->zahash, &cn, &out->zcurr.zbalance,
+                 &out->zcurr.zstorage_root, &out->zcurr.zcode_hash, &on,
+                 &out->zorig.zbalance, &out->zorig.zstorage_root,
+                 &out->zorig.zcode_hash);
+  CONVERT_OF(sail_int, mach_int)(&out->zcurr.znonce, (mach_int)cn);
+  CONVERT_OF(sail_int, mach_int)(&out->zorig.znonce, (mach_int)on);
+}
+
+/* state-root enumeration views: unfiltered block rows; Sail filters. */
+void storage_block_row(struct zStorageBlockRow *out, const lbits ak, uint64_t j) {
+  storage_block_probe_row(ak, j, &out->zslot, &out->zcurr, &out->zorig);
+}
+
+void acct_block_row(struct zAcctBlockRow *out, uint64_t i) {
+  uint64_t cn = 0, on = 0;
+  out->zbase_exists =
+      acct_probe_row(1, i, &out->zhkey, &cn, &out->zcurr.zbalance,
+                     &out->zcurr.zstorage_root, &out->zcurr.zcode_hash, &on,
+                     &out->zorig.zbalance, &out->zorig.zstorage_root,
+                     &out->zorig.zcode_hash) != 0;
   CONVERT_OF(sail_int, mach_int)(&out->zcurr.znonce, (mach_int)cn);
   CONVERT_OF(sail_int, mach_int)(&out->zorig.znonce, (mach_int)on);
 }
