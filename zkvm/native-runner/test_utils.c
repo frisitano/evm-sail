@@ -223,8 +223,8 @@ extern void     acct_wset_union_chash(lbits *, uint64_t);
 extern uint64_t storage_wset_union_count(lbits);
 extern void     storage_wset_union_slot(lbits *, lbits, uint64_t);
 extern void     storage_wset_union_val(lbits *, lbits, uint64_t);
-extern uint64_t hs_depth(unit);
-extern void     hs_peek_w(lbits *, uint64_t);
+extern uint64_t stack_depth(unit);
+extern void     stack_peek_word(lbits *, uint64_t);
 extern uint64_t hm_depth(unit);
 
 /* The run result, WITHOUT model-side plumbing: the per-entry gas register
@@ -301,9 +301,9 @@ unsigned long evmsail_dump_snapshot(const unsigned char **out)
     }
 
     d_byte('S');
-    uint64_t sd = hs_depth(UNIT);
+    uint64_t sd = stack_depth(UNIT);
     d_u32((uint32_t)sd);
-    for (uint64_t n = 0; n < sd; n++) { hs_peek_w(&w, n); d_word(&w); }
+    for (uint64_t n = 0; n < sd; n++) { stack_peek_word(&w, n); d_word(&w); }
 
     d_byte('M');
     d_u32((uint32_t)hm_depth(UNIT));

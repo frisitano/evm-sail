@@ -83,20 +83,20 @@ function exc_halt(k : ExceptionKind) -> unit = {
     frame_status = Exceptional(k)
 }
 
-function stack_clear() -> unit = hs_reset()
-function stack_frame_enter() -> unit = hs_enter()
-function stack_frame_leave() -> unit = hs_leave()
+function stack_clear() -> unit = stack_reset()
+function stack_frame_enter() -> unit = stack_enter_frame()
+function stack_frame_leave() -> unit = stack_leave_frame()
 
-function stack_height() -> int = unsigned(hs_depth())
+function stack_height() -> int = unsigned(stack_depth())
 
 /* nth-from-top operand (n = 0 is the top); zero if out of range */
-function peek(n : int) -> word = hs_peek_w(get_slice_int(64, n, 0))
+function peek(n : int) -> word = stack_peek_word(get_slice_int(64, n, 0))
 
 function push(w : word) -> unit =
     if stack_height() >= STACK_LIMIT then {
         exc_halt(StackOverflow)
     } else {
-        hs_push_w(w)
+        stack_push_word(w)
     }
 
 function pop() -> word =
@@ -104,13 +104,11 @@ function pop() -> word =
         exc_halt(StackUnderflow);
         WORD_ZERO
     } else {
-        let w = peek(0);
-        hs_pop();
-        w
+        stack_pop_word()
     }
 
 /* overwrite the nth-from-top operand (SWAP) */
-function stack_set(n : int, w : word) -> unit = hs_set_w(get_slice_int(64, n, 0), w)
+function stack_set(n : int, w : word) -> unit = stack_set_word(get_slice_int(64, n, 0), w)
 
 function pop_int() -> int = unsigned(pop())
 
