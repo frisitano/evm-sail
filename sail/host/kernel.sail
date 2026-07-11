@@ -281,7 +281,23 @@ function k_sub_balance(a : address, v : word) -> unit = {
 }
 
 /* --- block / tx environment reads (NUMBER, TIMESTAMP, COINBASE, BASEFEE,
- * CHAINID, GASLIMIT, PREVRANDAO, BLOBBASEFEE, ORIGIN, GASPRICE) --- */
+ * CHAINID, GASLIMIT, PREVRANDAO, ORIGIN, GASPRICE) --- */
+enum EnvField = {
+    F_Number,
+    F_Timestamp,
+    F_Coinbase,
+    F_BaseFee,
+    F_ChainId,
+    F_GasLimit,
+    F_PrevRandao,
+    F_Origin,
+    F_GasPrice,
+    F_SlotNumber, /* EIP-7843 SLOTNUM */
+}
+
+/* BLOBBASEFEE (EIP-4844) is NOT an EnvField: it is derived from the header's
+ * excess_blob_gas via the gas-schedule blob_base_fee(), so it is computed at the
+ * EVM layer (the opcode + transaction.sail), never in the host kernel. */
 function k_env(f : EnvField) -> word = {
     match f {
         F_Number => word_of_int(k_header.number),
