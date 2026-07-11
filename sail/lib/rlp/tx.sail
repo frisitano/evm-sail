@@ -22,14 +22,15 @@ function legacy_sig_chain_id(v : int) -> int =
 /* Tx signing preimage hash. `content_src` spans the RLP of the pre-signature
  * fields in the witness; legacy EIP-155 txs append (chain_id, 0, 0), typed txs
  * prepend the type byte as a domain separator. */
-function tx_signing_hash(ttype : int, content_src : ByteSlice, v : int) -> hash = {
+function tx_signing_hash(t : TxType, content_src : ByteSlice, v : int) -> hash = {
+    let tb = tx_type_byte(t);
     var content : list(byte) = read_byte_slice(content_src);
-    if (ttype == 0) & (v >= 35) then {
+    if (tb == 0) & (v >= 35) then {
         content = list_append(content, rlp_int(legacy_sig_chain_id(v)));
         content = list_append(content, [|0x80, 0x80|])
     };
-    let domain : list(byte) = if ttype != 0 then {
-            [|get_slice_int(8, ttype, 0)|]
+    let domain : list(byte) = if tb != 0 then {
+            [|get_slice_int(8, tb, 0)|]
         } else {
             [||]
         };
@@ -267,7 +268,7 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
                 authorizations = [||],
                 blob_hashes = [||],
                 pubkey = pubkey,
-                signing_hash = tx_signing_hash(0, tx_sig_span(tx, payload_rel, sig_cs, fields, 6), v),
+                signing_hash = tx_signing_hash(LegacyTx, tx_sig_span(tx, payload_rel, sig_cs, fields, 6), v),
                 sig_v = v,
                 sig_r = rlp_field_uint_word(r_f),
                 sig_s = rlp_field_uint_word(s_f),
@@ -299,7 +300,7 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
                 authorizations = [||],
                 blob_hashes = [||],
                 pubkey = pubkey,
-                signing_hash = tx_signing_hash(1, tx_sig_span(tx, payload_rel, sig_cs, fields, 8), v),
+                signing_hash = tx_signing_hash(AccessListTx, tx_sig_span(tx, payload_rel, sig_cs, fields, 8), v),
                 sig_v = v,
                 sig_r = rlp_field_uint_word(r_f),
                 sig_s = rlp_field_uint_word(s_f),
@@ -332,7 +333,7 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
                 authorizations = [||],
                 blob_hashes = [||],
                 pubkey = pubkey,
-                signing_hash = tx_signing_hash(2, tx_sig_span(tx, payload_rel, sig_cs, fields, 9), v),
+                signing_hash = tx_signing_hash(FeeMarketTx, tx_sig_span(tx, payload_rel, sig_cs, fields, 9), v),
                 sig_v = v,
                 sig_r = rlp_field_uint_word(r_f),
                 sig_s = rlp_field_uint_word(s_f),
@@ -369,7 +370,7 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
                 authorizations = [||],
                 blob_hashes = blob_hashes,
                 pubkey = pubkey,
-                signing_hash = tx_signing_hash(3, tx_sig_span(tx, payload_rel, sig_cs, fields, 11), v),
+                signing_hash = tx_signing_hash(BlobTx, tx_sig_span(tx, payload_rel, sig_cs, fields, 11), v),
                 sig_v = v,
                 sig_r = rlp_field_uint_word(r_f),
                 sig_s = rlp_field_uint_word(s_f),
@@ -404,7 +405,7 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
                 authorizations = decode_auth_list(auth_f),
                 blob_hashes = [||],
                 pubkey = pubkey,
-                signing_hash = tx_signing_hash(4, tx_sig_span(tx, payload_rel, sig_cs, fields, 10), v),
+                signing_hash = tx_signing_hash(SetCodeTx, tx_sig_span(tx, payload_rel, sig_cs, fields, 10), v),
                 sig_v = v,
                 sig_r = rlp_field_uint_word(r_f),
                 sig_s = rlp_field_uint_word(s_f),
