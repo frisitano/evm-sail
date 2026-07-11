@@ -352,7 +352,7 @@ function execute(op : ast) -> unit = match op {
     BLOCKHASH() => {
         charge(20);
         let n = pop();
-        push(k_blockhash(n))
+        push(k_blockhash(unsigned(n)))
     },
     COINBASE() => {
         charge(G_base);

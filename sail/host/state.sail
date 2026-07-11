@@ -338,7 +338,7 @@ register k_parent_state_root : hash =
  * indexed by DISTANCE: slot j holds keccak(header[n-1-j]), the
  * (j+1)-blocks-back ancestor, so BLOCKHASH offset o reads slot o-1. Captured
  * by the witness-header pass (index_witness_headers, host/block.sail); only
- * the first k_n_headers slots are readable (k_ancestor_hash guards), so no
+ * the first k_n_headers slots are readable (k_blockhash guards), so no
  * reset is needed between runs. */
 val headerhash_set = impure { c: "headerhash_set" } : (bits(64), hash) -> unit
 val headerhash_get = impure { c: "headerhash_get" } : bits(64) -> hash

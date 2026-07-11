@@ -303,7 +303,7 @@ function k_coinbase() -> address = k_header.fee_recipient
  * The distance-indexed C hash table is the storage detail; a request inside
  * the window but beyond the carried witness chain is a deficient proof ->
  * throw InvalidBlock(WitnessDeficient). */
-function k_ancestor_hash(number : int) -> hash = {
+function k_blockhash(number : int) -> hash = {
     let offset = k_header.number - number;
     if offset < 1 | offset > 256 then {
         word_of_int(0)
@@ -316,7 +316,6 @@ function k_ancestor_hash(number : int) -> hash = {
     }
 }
 
-function k_blockhash(n : word) -> hash = k_ancestor_hash(unsigned(n))
 
 /* BLOBHASH (EIP-4844): the i-th versioned hash of the current tx, 0 past the end. */
 function k_blobhash(i : int) -> word = {
