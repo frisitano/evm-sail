@@ -36,7 +36,6 @@ evm {
     evm/interpreter.sail,
     evm/transaction.sail,
     lib/mpt.sail,
-    host/bal.sail,
     lib/consensus_hash.sail,
     if $EVM_ENTRY == core then []
     else if $EVM_ENTRY == guest then [host/block.sail, lib/ssz_htr.sail, bin/main.sail]

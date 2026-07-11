@@ -222,6 +222,47 @@ function run_checked_block_end_system_calls(all_ok : bool) -> bool = {
 function trie_index_key(i : int) -> list(nibble) =
     to_nibbles(rlp_int(i))
 
+/* ---- EIP-7928 block-access-list item-count validation ------------------ */
+/* EELS validate_block_access_list_gas_limit: the block is invalid when the
+ * BAL's total item count exceeds block_gas_limit / 2000. The accumulator that
+ * RECOMPUTES the BAL from execution (and its keccak(rlp) hash) lives in
+ * ffi/state_db.c (bal_*); this is the pure count over the RLP-encoded list
+ * the payload carries. */
+
+/* Items contributed by one account entry: rlp([ address, storage_changes,
+ * storage_reads, balance_changes, nonce_changes, code_changes ]). Per account
+ * the count is 1 + #storage_changes + #storage_reads, where storage_changes
+ * (RLP item 1) is a list of [slot, changes] pairs and storage_reads (item 2)
+ * is a list of slots. */
+function bal_account_items(acc : list(byte)) -> int = {
+    let items = rlp_node_items(acc);
+    let sc = list_nth(items, 1, RLP_NONE);
+    let sr = list_nth(items, 2, RLP_NONE);
+    1 + list_len(rlp_node_items(sc.full)) + list_len(rlp_node_items(sr.full))
+}
+
+/* total item count over the whole BlockAccessList (a ByteList in the payload):
+ * #accounts + sum over accounts of (#storage_changes + #storage_reads). */
+function bal_item_count(bal : ByteSlice) -> int = {
+    if unsigned(bal.len) == 0 then {
+        0
+    } else {
+        var total : int = 0;
+        var rest : list(RlpField) = rlp_node_items(read_byte_slice(bal));
+        var more : bool = true;
+        while more do {
+            match rest {
+                a :: r => {
+                    total = total + bal_account_items(a.full);
+                    rest = r
+                },
+                [||] => more = false,
+            }
+        };
+        total
+    }
+}
+
 function transaction_trie_root(txs : list(Transaction)) -> hash = {
     var updates : list(TriePatch) = [||];
     var rest : list(Transaction) = txs;
