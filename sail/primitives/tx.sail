@@ -73,17 +73,6 @@ function tx_type_byte(t : TxType) -> int = match t {
     SetCodeTx => 4,
 }
 
-/* Decode edge: an unknown envelope type byte makes the tx undecodable
- * (EELS TransactionTypeError -> invalid block). */
-function tx_type_of(b : int) -> TxType = match b {
-    0 => LegacyTx,
-    1 => AccessListTx,
-    2 => FeeMarketTx,
-    3 => BlobTx,
-    4 => SetCodeTx,
-    _ => throw InvalidBlock(RlpDecode),
-}
-
 function tx_is_access_list(t : TxType) -> bool = match t {
     AccessListTx => true,
     _ => false,

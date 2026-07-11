@@ -43,6 +43,10 @@ let EMPTY_SLICE : ByteSlice = struct { source = WitnessSource, off = 0x000000000
 function witness_byte_slice(off : int, len : int) -> ByteSlice =
     byte_slice(WitnessSource, off, len)
 
+/* a relative sub-range of a slice (same source) */
+function sub_slice(s : ByteSlice, off : int, len : int) -> ByteSlice =
+    byte_slice(s.source, unsigned(s.off) + off, len)
+
 function memory_byte_slice(off : int, len : int) -> ByteSlice =
     byte_slice(MemorySource, off, len)
 

@@ -93,66 +93,6 @@ function wreq_start() -> int = req_start() + ssz_u32(req_start() + REQ_WITHDRAWA
 function creq_start() -> int = req_start() + ssz_u32(req_start() + REQ_CONSOLIDATIONS_OFF)
 function req_end() -> int = witness_start() /* execution_requests is the last npr field */
 
-/* the single geometry pass: each container offset is read exactly once */
-function decode_input_layout() -> SszLayout = {
-    let npr = SSZ_BODY + ssz_u32(SSZ_BODY + IN_NPR_OFF);
-    let wit = SSZ_BODY + ssz_u32(SSZ_BODY + IN_WITNESS_OFF);
-    let cc = SSZ_BODY + ssz_u32(SSZ_BODY + IN_CHAIN_CONFIG_OFF);
-    let cce = SSZ_BODY + ssz_u32(SSZ_BODY + IN_PUBLIC_KEYS_OFF);
-    let p = npr + ssz_u32(npr + NPR_PAYLOAD_OFF);
-    let pe = npr + ssz_u32(npr + NPR_VHASHES_OFF);
-    let req = npr + ssz_u32(npr + NPR_REQUESTS_OFF);
-    let txs = p + ssz_u32(p + PL_TXS_OFF);
-    let wds = p + ssz_u32(p + PL_WDS_OFF);
-    let bal = p + ssz_u32(p + PL_BAL_OFF);
-    let ws = wit + ssz_u32(wit + WIT_STATE_OFF);
-    let wc = wit + ssz_u32(wit + WIT_CODES_OFF);
-    let wh = wit + ssz_u32(wit + WIT_HEADERS_OFF);
-    struct {
-        npr = npr,
-        witness = wit,
-        cc = cc,
-        cc_end = cce,
-        payload = p,
-        payload_end = pe,
-        dep = req + ssz_u32(req + REQ_DEPOSITS_OFF),
-        wreq = req + ssz_u32(req + REQ_WITHDRAWALS_OFF),
-        creq = req + ssz_u32(req + REQ_CONSOLIDATIONS_OFF),
-        txs = txs,
-        n_txs =
-            if txs == wds then {
-                0
-            } else {
-                ediv_int(ssz_u32(txs), SSZ_OFF_BYTES)
-            },
-        wds = wds,
-        n_wds = ediv_int(bal - wds, WD_SIZE),
-        bal = bal,
-        extra = p + ssz_u32(p + PL_EXTRA_OFF),
-        wit_state = ws,
-        n_wit_state =
-            if ws == wc then {
-                0
-            } else {
-                ediv_int(ssz_u32(ws), SSZ_OFF_BYTES)
-            },
-        wit_codes = wc,
-        n_wit_codes =
-            if wc == wh then {
-                0
-            } else {
-                ediv_int(ssz_u32(wc), SSZ_OFF_BYTES)
-            },
-        wit_headers = wh,
-        n_wit_headers =
-            if wh == cc then {
-                0
-            } else {
-                ediv_int(ssz_u32(wh), SSZ_OFF_BYTES)
-            },
-    }
-}
-
 /* big-endian 32-byte field (Bytes32, e.g. prev_randao) -- four FFI reads */
 function ssz_bytes32(b : int) -> bits(256) = {
     let w0 = ssz_src_be(b + 0, 8);
@@ -276,11 +216,5 @@ function ssz_list_slice(start : int, n : int, stop : int, i : int) -> ByteSlice 
 }
 function sha256_request_digest(request_type : int, s : ByteSlice) -> bits(256) =
     bytes_sha256_prefixed(get_slice_int(8, request_type, 0), s)
-function ssz_witness_node_slice(l : SszLayout, i : int) -> ByteSlice =
-    ssz_list_slice(l.wit_state, l.n_wit_state, l.wit_codes, i)
-function ssz_witness_code_slice(l : SszLayout, i : int) -> ByteSlice =
-    ssz_list_slice(l.wit_codes, l.n_wit_codes, l.wit_headers, i)
-function ssz_witness_header_slice(l : SszLayout, i : int) -> ByteSlice =
-    ssz_list_slice(l.wit_headers, l.n_wit_headers, l.cc, i)
 
 /* transactions[i] raw bytes (legacy = RLP list; typed = type byte ++ payload) */
