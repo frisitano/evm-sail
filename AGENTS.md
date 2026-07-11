@@ -38,8 +38,7 @@ duplicating instructions elsewhere.
 - The impure host interface is an abstract `val` contract layer declared inline
   in the module files themselves as `val X = impure { c: "sym" } : T`
   (`host/io.sail` crypto/oracle, `host/state.sail` / `host/memory.sail` world
-  state and buffers, `lib/mpt.sail` trie node refs, `lib/rlp.sail`
-  create_address; see `proof/extern-boundary.md`). These `c:`-bound vals are the
+  state and buffers, `lib/mpt.sail` trie node refs; see `proof/extern-boundary.md`). These `c:`-bound vals are the
   TRUE axioms (crypto core, I/O oracle, mutable host stores) -- proof targets
   see them as bodyless parameters; executables link their C definitions from
   `ffi/`. The boundary is scalar-typed with TWO exceptions,

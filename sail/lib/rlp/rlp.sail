@@ -76,37 +76,10 @@ function zero_bytes(n : int) -> list(byte) = {
     out
 }
 
-/* CREATE address (Yellow Paper): low 20 bytes of
- * keccak256(rlp([sender, nonce])). */
-/* keccak256(domain ++ rlp_list_prefix(len(payload)) ++ payload) (val in
- * host/io.sail), streamed part-by-part through the hash channel so the three
- * parts are never concatenated. */
+/* keccak256(domain ++ rlp_list_prefix(len(payload)) ++ payload), as segments
+ * (val in primitives/crypto.sail). */
 function keccak_rlp_payload(domain : list(byte), payload : list(byte)) -> bits(256) =
     keccak256([|BytesList(domain), BytesList(rlp_list_prefix(list_len(payload))), BytesList(payload)|])
-
-val create_address : (address, u64) -> address
-
-function create_address(sender : address, nonce : u64) -> address = {
-    var payload : list(byte) = rlp_addr(sender);
-    payload = list_append(payload, rlp_int(unsigned(nonce)));
-    word_to_address(keccak_rlp_payload([||], payload))
-}
-
-/* CREATE2 address (EIP-1014): low 20 bytes of
- * keccak256(0xff ++ sender ++ salt ++ init_hash). */
-val create2_address : (address, word, hash) -> address
-
-function create2_address(sender : address, salt : word, init_hash : hash) -> address =
-    word_to_address(
-        keccak256(
-            [|
-                BytesList([|0xff|]),
-                BytesList(address_to_bytes(sender)),
-                BytesList(word_to_bytes32(salt)),
-                BytesList(word_to_bytes32(init_hash)),
-            |],
-        ),
-    )
 
 struct RlpField = {
   is_list : bool,

@@ -15,6 +15,7 @@ evm {
     host/io.sail,
     host/stateless_input.sail,
     lib/rlp/rlp.sail,
+    lib/address.sail,
     lib/tx.sail,
     lib/rlp/tx.sail,
     lib/rlp/block.sail,

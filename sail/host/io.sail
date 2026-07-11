@@ -49,18 +49,6 @@ function int_to_be_bytes(n : int) -> list(byte) = {
     out
 }
 
-/* RLP encoding of the account nonce, as used in CREATE address derivation
- * (0 encodes as 0x80; a single byte < 128 is itself; otherwise length-prefixed). */
-function rlp_nonce(nonce : int) -> list(byte) =
-    if nonce == 0 then {
-        [|0x80|]
-    } else {
-        if nonce < 128 then {
-            [|get_slice_int(8, nonce, 0)|]
-        } else {
-            list_append([|get_slice_int(8, 128 + int_be_len(nonce), 0)|], int_to_be_bytes(nonce))
-        }
-    }
 
 /* Run a precompile over a concrete input byte source (a memory range or the
  * top-level tx data). The gas rules inspect the same source bytes directly
