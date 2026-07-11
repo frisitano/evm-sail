@@ -298,25 +298,25 @@ function k_env(f : EnvField) -> word = {
 }
 function k_coinbase() -> address = k_header.fee_recipient
 
-/* BLOCKHASH / EIP-2935: the hash of the ancestor `offset` blocks back
- * (1..256), from the captured witness header-hash chain (k_header_hashes,
- * oldest..newest with the parent LAST): the ancestor at `offset` is hash
- * [len - offset]. A request beyond the witness is a deficient proof ->
+/* The block_number -> block_hash API (BLOCKHASH / EIP-2935): the hash of
+ * ancestor block `number`, ZERO_WORD outside the 256-deep protocol window.
+ * The distance-indexed C hash table is the storage detail; a request inside
+ * the window but beyond the carried witness chain is a deficient proof ->
  * throw InvalidBlock(WitnessDeficient). */
-function k_blockhash(n : word) -> hash = {
-    let req = unsigned(n);
-    let offset = k_header.number - req;
+function k_ancestor_hash(number : int) -> hash = {
+    let offset = k_header.number - number;
     if offset < 1 | offset > 256 then {
         word_of_int(0)
     } else {
-        let idx = list_len(k_header_hashes) - offset;
-        if idx < 0 then {
+        if offset > k_n_headers then {
             throw InvalidBlock(WitnessDeficient)
         } else {
-            list_nth(k_header_hashes, idx, ZERO_WORD)
+            headerhash_get(get_slice_int(64, offset - 1, 0))
         }
     }
 }
+
+function k_blockhash(n : word) -> hash = k_ancestor_hash(unsigned(n))
 
 /* BLOBHASH (EIP-4844): the i-th versioned hash of the current tx, 0 past the end. */
 function k_blobhash(i : int) -> word = {

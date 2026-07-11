@@ -96,7 +96,7 @@ register zkvm_out_gas : int = 0
 function run_one() -> unit = {
     /* THE single traversal (host/block.sail decode_stateless_input): geometry,
        witness node/code/header stores, block header, every tx -- decoded once,
-       returned as values; also installs k_header / k_header_hashes /
+       returned as values; also installs k_header / the ancestor-hash table /
        k_parent_state_root. A state test carries a single DUMMY parent header
        whose state_root is the pre-state root (headers len 1, chain vacuously
        contiguous), so BLOCKHASH of the immediate parent resolves from it and

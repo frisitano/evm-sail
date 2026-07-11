@@ -19,8 +19,8 @@ function register_witness_codes(start : int, n : int, stop : int) -> unit = {
 }
 
 /* Parse the witness header chain, asserting it against the ALREADY-decoded
- * block: each header is hashed once (captured in k_header_hashes for
- * BLOCKHASH/EIP-2935, k_blockhash), the chain prefix must be contiguous
+ * block: each header is hashed once (captured in the distance-indexed
+ * ancestor-hash table for BLOCKHASH/EIP-2935), the chain prefix must be contiguous
  * (header[i].parent_hash == keccak(header[i-1])), and the NEWEST header must
  * be the decoded block's parent (keccak(header[n-1]) == expected_parent).
  * Returns (chain contiguous, block parent hash matches, newest header's RLP
@@ -37,7 +37,6 @@ function index_witness_headers(
 ) = {
 
     var prev : hash = ZERO_WORD;
-    var hashes : list(hash) = [||];
     var ok : bool = n >= 1;
     var pitems : list(RlpField) = [||];
     foreach (i from 0 to (n - 1)) {
@@ -54,9 +53,12 @@ function index_witness_headers(
             }
         };
         prev = keccak256(s);
-        hashes = prev :: hashes
+        let j = n - 1 - i; /* distance-1 from the block under validation */
+        if j < 256 then {
+            headerhash_set(get_slice_int(64, j, 0), prev)
+        }
     };
-    k_header_hashes = list_reverse(hashes);
+    k_n_headers = n;
     (ok, prev == expected_parent, pitems)
 }
 
@@ -212,7 +214,7 @@ struct StatelessInput = {
 /* THE single traversal over the stateless input. In one pass, in container
  * order: the geometry (each offset once), the witness node DB and code DB
  * (C-side stores), the header chain (hashed once each, hashes into the C
- * k_header_hashes for BLOCKHASH, newest split once), the block header, and
+ * the ancestor-hash table for BLOCKHASH, newest split once), the block header, and
  * every transaction (sender recovery + signature verification, as EELS
  * decodes the block body before executing it) and withdrawal. Also installs
  * the execution-context registers (k_header, k_header_hashes,

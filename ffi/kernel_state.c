@@ -129,6 +129,22 @@ unit warm_slot_remove(const lbits a, const lbits s) {
   return UNIT;
 }
 
+/* ------------------------ ancestor header hashes ------------------------ */
+/* Fixed 256-slot table (the protocol's BLOCKHASH depth), distance-indexed:
+ * slot j = keccak of the (j+1)-blocks-back witness header. Writes come from
+ * the witness-header pass; reads are guarded Sail-side by k_n_headers, so
+ * stale slots are unreachable and no reset is needed. */
+static word256 hdrhash[256];
+
+unit headerhash_set(uint64_t j, const lbits h) {
+  if (j < 256) hdrhash[j] = lb_word(h);
+  return UNIT;
+}
+void headerhash_get(lbits *rop, uint64_t j) {
+  static const word256 zero = {{0, 0, 0, 0}};
+  word_out(rop, j < 256 ? &hdrhash[j] : &zero);
+}
+
 /* -------------------------------- logs ---------------------------------- */
 
 typedef struct {

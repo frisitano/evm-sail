@@ -248,6 +248,8 @@ void copy_lbits(lbits *rop, const lbits op) { *rop = op; }
 void zeros(lbits *rop, const sail_int op) {
   rop->len = si_lo(op); rop->d[0] = rop->d[1] = rop->d[2] = rop->d[3] = 0;
 }
+/* undefined = deterministic zero (register/vector default initialization) */
+void UNDEFINED(lbits)(lbits *rop, const sail_int len) { zeros(rop, len); }
 fbits convert_fbits_of_lbits(const lbits op, const bool direction) { (void)direction; return op.d[0]; }
 void convert_lbits_of_fbits(lbits *rop, const fbits op, const uint64_t len, const bool direction) {
   (void)direction; rop->len = len; rop->d[0] = op; rop->d[1] = rop->d[2] = rop->d[3] = 0; lb_mask(rop);

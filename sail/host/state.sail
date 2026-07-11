@@ -334,11 +334,15 @@ register k_parent_state_root : hash =
                     the node-db: the between-run wipe (test_utils.c clear_memory ->
                     nodedb_reset) must NOT clear it mid-run. */
 
-/* keccak(header[i]) for each witness header, oldest..newest, captured by the
- * single witness-header pass (index_witness_headers, host/block.sail).
- * BLOCKHASH (k_blockhash) resolves ancestors from it: the guest carries its
- * real ancestor chain, the runner a single dummy parent. */
-register k_header_hashes : list(hash) = [||]
+/* Witness ancestor-header hashes (fixed 256-slot C table, kernel_state.c),
+ * indexed by DISTANCE: slot j holds keccak(header[n-1-j]), the
+ * (j+1)-blocks-back ancestor, so BLOCKHASH offset o reads slot o-1. Captured
+ * by the witness-header pass (index_witness_headers, host/block.sail); only
+ * the first k_n_headers slots are readable (k_ancestor_hash guards), so no
+ * reset is needed between runs. */
+val headerhash_set = impure { c: "headerhash_set" } : (bits(64), hash) -> unit
+val headerhash_get = impure { c: "headerhash_get" } : bits(64) -> hash
+register k_n_headers : int = 0
 
 register k_fork : int = 99 /* active fork level (higher = newer); set by the runner */
 
