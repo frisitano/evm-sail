@@ -2,10 +2,17 @@
  *
  * Sail forbids recursive types, so an in-model balanced tree is impossible and a
  * list-backed memory is O(n) per access (O(n^2) over a fill/copy loop). Following
- * the sail-riscv pattern, memory lives in C: a flat, lazily-grown byte buffer per
- * call frame with O(1) read/write. Frames form a stack so a sub-call gets fresh
- * memory (mem_frame_enter) and the parent's is restored on return (mem_frame_leave); the
- * Sail side keeps the high-water mark (memory_size) for expansion gas.
+ * revm's SharedMemory, memory lives in C as ONE arena with per-frame
+ * checkpoints: frame d owns arena[f_base[d] ..), and a sub-call's frame begins
+ * where the (suspended) caller's ESTABLISHED extent ends. Offsets -- never
+ * pointers -- identify bytes, so arena growth cannot dangle, and any suspended
+ * frame's range is addressable as a plain (base + off) slice.
+ *
+ * Establishment discipline (no zeroing on frame exit): f_len[d] is the extent
+ * the frame has WRITTEN OR ZEROED. Reads beyond it return 0; any write or
+ * region grant that extends it first zero-fills the gap, so a dead child's
+ * bytes (which live above the parent's extent) can never be observed.
+ * mem_frame_leave just pops the checkpoint.
  *
  * Only mach_bits cross the FFI (uint64_t), matching the other host FFI modules. */
 #include "sail.h"
@@ -15,19 +22,46 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MEMORY_MAXDEPTH 1100   /* DEPTH_LIMIT(1024) + tx frame + slack */
+#define MEMORY_MAXDEPTH 1100          /* DEPTH_LIMIT(1024) + tx frame + slack */
+#define MEMORY_HARDCAP ((size_t)1 << 40) /* gas can never pay for more */
 
-typedef struct { uint8_t *buf; size_t cap; } h_memframe;
-
-static h_memframe h_stack[MEMORY_MAXDEPTH];
+static uint8_t *arena;
+static size_t arena_cap;
+static size_t f_base[MEMORY_MAXDEPTH];
+static size_t f_len[MEMORY_MAXDEPTH]; /* established (written-or-zeroed) extent */
 static int h_top = 0;
 
+static int arena_reserve(size_t need) {
+  if (need <= arena_cap) return 1;
+  if (need >= MEMORY_HARDCAP) return 0;
+  size_t ncap = arena_cap ? arena_cap : 4096;
+  while (ncap < need) ncap <<= 1;
+  uint8_t *nb = (uint8_t *)realloc(arena, ncap);
+  if (!nb) return 0; /* OOM: leave the access a no-op / zero read */
+  arena = nb;
+  arena_cap = ncap;
+  return 1;
+}
+
+/* extend the current frame's established extent to `end` (frame-relative),
+ * zero-filling the gap; 0 on overflow/OOM */
+static int f_establish(uint64_t end) {
+  if (end <= f_len[h_top]) return 1;
+  size_t base = f_base[h_top];
+  if (end >= MEMORY_HARDCAP - base) return 0;
+  if (!arena_reserve(base + (size_t)end)) return 0;
+  memset(arena + base + f_len[h_top], 0, (size_t)end - f_len[h_top]);
+  f_len[h_top] = (size_t)end;
+  return 1;
+}
+
 /* ---- CALLDATA: a per-frame descriptor aliasing the parent's memory ----
- * src: -2 = empty, -1 = the transaction input buffer, >= 0 = a (suspended)
- * ancestor memory frame. Resolved through h_stack at READ time, so a parent
- * realloc never leaves a stale pointer. The aliased frame cannot change while
- * its child executes (frames above it are suspended). */
-uint8_t *hm_wr(uint64_t off, uint64_t len);   /* fwd decl (defined below) */
+ * src: -2 = empty, -1 = the transaction input reference, >= 0 = a (suspended)
+ * ancestor frame -- resolved as arena[f_base[src] + off + i] at READ time,
+ * bounded by that frame's established extent (an expansion-charged but
+ * never-written parent range reads as zeros). The aliased frame cannot change
+ * while its child executes (frames above it are suspended). */
+uint8_t *hm_wr(uint64_t off, uint64_t len); /* fwd decl (defined below) */
 
 typedef struct { int src; uint64_t off, len; } hm_cd;
 static hm_cd cd[MEMORY_MAXDEPTH];
@@ -59,44 +93,39 @@ static uint8_t txin_byte(uint64_t i) {
   return p ? *p : 0;
 }
 
-static void memory_ensure(size_t off) {
-  h_memframe *f = &h_stack[h_top];
-  if (off < f->cap) return;
-  if (off >= ((size_t)1 << 40)) return;            /* hard cap: gas can never pay for this */
-  size_t ncap = f->cap ? f->cap : 4096;
-  while (ncap <= off) ncap <<= 1;
-  uint8_t *nb = (uint8_t *)realloc(f->buf, ncap);
-  if (!nb) return;                       /* OOM: leave write a no-op */
-  memset(nb + f->cap, 0, ncap - f->cap); /* new bytes are zero-initialised */
-  f->buf = nb;
-  f->cap = ncap;
-}
-
-/* clear all frames back to a single empty top-level frame (called per tx) */
+/* clear back to a single empty top-level frame (called per tx); the arena
+ * allocation is kept for reuse across transactions */
 unit mem_clear(const unit u) {
   (void)u;
-  for (int i = 0; i <= h_top; i++) {
-    free(h_stack[i].buf);
-    h_stack[i].buf = NULL;
-    h_stack[i].cap = 0;
-  }
   h_top = 0;
+  f_base[0] = 0;
+  f_len[0] = 0;
   cd[0].src = -2; cd[0].off = 0; cd[0].len = 0;
   cd_pending = cd[0];
   return UNIT;
 }
 
-/* enter a sub-call: push the current frame, start a fresh empty one; the
- * pending calldata descriptor (set by the caller just before) is adopted */
+/* enter a sub-call: checkpoint a fresh frame after the caller's established
+ * extent; the pending calldata descriptor (set by the caller just before) is
+ * adopted */
 unit mem_frame_enter(const unit u) {
   (void)u;
   if (h_top + 1 < MEMORY_MAXDEPTH) {
     h_top++;
-    h_stack[h_top].buf = NULL;
-    h_stack[h_top].cap = 0;
+    f_base[h_top] = f_base[h_top - 1] + f_len[h_top - 1];
+    f_len[h_top] = 0;
     cd[h_top] = cd_pending;
   }
   cd_pending.src = -2; cd_pending.off = 0; cd_pending.len = 0;
+  return UNIT;
+}
+
+/* leave a sub-call: pop the checkpoint. The dead frame's bytes sit above the
+ * parent's established extent, so establishment zero-fills over them before
+ * the parent could ever read them. */
+unit mem_frame_leave(const unit u) {
+  (void)u;
+  if (h_top > 0) h_top--;
   return UNIT;
 }
 
@@ -110,7 +139,7 @@ unit calldata_bind_empty(const unit u) {
   cd_pending.src = -2; cd_pending.off = 0; cd_pending.len = 0;
   return UNIT;
 }
-/* the CURRENT (tx-level) frame's calldata := the streamed tx input */
+/* the CURRENT (tx-level) frame's calldata := the bound tx input */
 unit calldata_bind_tx_input(const unit u) {
   (void)u;
   cd[h_top].src = -1; cd[h_top].off = 0; cd[h_top].len = txin.len;
@@ -160,15 +189,14 @@ const uint8_t *txd_rd(uint64_t off, uint64_t len) {
   return txin_region(off, len);
 }
 
-/* calldata byte i (0 past the end -- and 0 past the source's ALLOCATED cap:
- * an expansion-charged but never-written parent range reads as zeros) */
+/* calldata byte i (0 past the descriptor's end and past the source frame's
+ * established extent) */
 static uint8_t cd_at(const hm_cd *c, uint64_t i) {
   if (i >= c->len) return 0;
   if (c->src == -1) return txin_byte(i);
   if (c->src >= 0) {
-    const h_memframe *f = &h_stack[c->src];
     uint64_t p = c->off + i;
-    return (f->buf && p < f->cap) ? f->buf[p] : 0;
+    return (p < f_len[c->src]) ? arena[f_base[c->src] + p] : 0;
   }
   return 0;
 }
@@ -190,59 +218,44 @@ unit calldata_copy_to_memory(uint64_t dst, uint64_t off, uint64_t len) {
   return UNIT;
 }
 
-/* leave a sub-call: discard the current frame, restore the parent */
-unit mem_frame_leave(const unit u) {
-  (void)u;
-  free(h_stack[h_top].buf);
-  h_stack[h_top].buf = NULL;
-  h_stack[h_top].cap = 0;
-  if (h_top > 0) h_top--;
-  return UNIT;
-}
-
-/* bits(64) offset -> bits(8) byte (0 if never written / past the buffer) */
+/* bits(64) offset -> bits(8) byte (0 beyond the established extent) */
 uint64_t mem_read_byte(uint64_t off) {
-  h_memframe *f = &h_stack[h_top];
-  return (off < f->cap) ? (uint64_t)f->buf[off] : 0;
+  return (off < f_len[h_top]) ? (uint64_t)arena[f_base[h_top] + off] : 0;
 }
 
 /* current call-frame depth (the returndata slots in returndata.c key off it) */
 uint64_t hm_depth(const unit u) { (void)u; return (uint64_t)h_top; }
 
-/* ensure capacity (zero-filled) and return a READ pointer to [off, off+len) */
+/* establish + a READ pointer to [off, off+len) of the current frame */
 const uint8_t *mem_region(uint64_t off, uint64_t len) {
   static const uint8_t zero = 0;
   if (len == 0) return &zero;
-  memory_ensure((size_t)(off + len - 1));
-  h_memframe *f = &h_stack[h_top];
-  if (off + len > f->cap) return &zero;            /* OOM fallback */
-  return f->buf + off;
+  if (off > UINT64_MAX - len || !f_establish(off + len)) return &zero; /* OOM/overflow */
+  return arena + f_base[h_top] + off;
 }
 
-/* ensure capacity and return a WRITE pointer to [off, off+len) (the gas-side
- * watermark is raised by charge_expansion before any copy opcode writes) */
+/* establish + a WRITE pointer to [off, off+len) of the current frame (the
+ * gas-side watermark is raised by charge_expansion before any copy opcode
+ * writes) */
 uint8_t *hm_wr(uint64_t off, uint64_t len) {
   if (len == 0) return NULL;
-  memory_ensure((size_t)(off + len - 1));
-  h_memframe *f = &h_stack[h_top];
-  if (off + len > f->cap) return NULL;
-  return f->buf + off;
+  if (off > UINT64_MAX - len || !f_establish(off + len)) return NULL;
+  return arena + f_base[h_top] + off;
 }
 
-/* MLOAD: the 32-byte big-endian word at off. No ensure -- reads past the
- * buffer are zeros (same as mem_read_byte), and charge_expansion precedes
- * every MLOAD so the gas-side watermark already covers the range. */
+/* MLOAD: the 32-byte big-endian word at off. No establishment -- reads past
+ * the extent are zeros, and charge_expansion precedes every MLOAD so the
+ * gas-side watermark already covers the range. */
 void mem_load_word(lbits *rop, uint64_t off) {
-  h_memframe *f = &h_stack[h_top];
   uint8_t buf[32];
   for (int i = 0; i < 32; i++) {
     uint64_t o = off + (uint64_t)i;
-    buf[i] = (o < f->cap) ? f->buf[o] : 0;
+    buf[i] = (o >= off && o < f_len[h_top]) ? arena[f_base[h_top] + o] : 0;
   }
   be_bytes_to_lbits(rop, 256, buf, 32);
 }
 
-/* MSTORE: the 32-byte big-endian word at off (ensure + one memcpy) */
+/* MSTORE: the 32-byte big-endian word at off (establish + one memcpy) */
 unit mem_store_word(uint64_t off, const lbits w) {
   uint8_t buf[32];
   lbits_to_be_bytes(buf, 32, w);
@@ -251,20 +264,20 @@ unit mem_store_word(uint64_t off, const lbits w) {
   return UNIT;
 }
 
-/* MCOPY: overlapping-safe copy within the current frame */
+/* MCOPY: overlapping-safe copy within the current frame. Both ranges are
+ * established BEFORE either pointer is taken (a second establishment could
+ * realloc the arena from under the first pointer). */
 unit mem_move(uint64_t dst, uint64_t src, uint64_t len) {
-  if (len) {
-    const uint8_t *s = mem_region(src, len);
-    uint8_t *d = hm_wr(dst, len);
-    if (s && d) memmove(d, s, len);
-  }
+  if (!len) return UNIT;
+  if (src > UINT64_MAX - len || dst > UINT64_MAX - len) return UNIT;
+  if (!f_establish(src + len) || !f_establish(dst + len)) return UNIT;
+  memmove(arena + f_base[h_top] + dst, arena + f_base[h_top] + src, len);
   return UNIT;
 }
 
 /* (bits(64) offset, bits(8) value) -> unit */
 unit mem_write_byte(uint64_t off, uint64_t v) {
-  memory_ensure((size_t)off);
-  h_memframe *f = &h_stack[h_top];
-  if (off < f->cap) f->buf[off] = (uint8_t)(v & 0xff);
+  if (off == UINT64_MAX || !f_establish(off + 1)) return UNIT;
+  arena[f_base[h_top] + off] = (uint8_t)(v & 0xff);
   return UNIT;
 }
