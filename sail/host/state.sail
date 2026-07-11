@@ -162,11 +162,9 @@ val bal_recompute_hash = impure { c: "bal_recompute_hash" } : unit -> hash
 /* ---- content-addressed code store (ffi/code_db.c), keyed by codeHash: each
  * entry holds the code bytes AND the JUMPDEST bitmap. Content-addressing makes
  * the store de-duplicated and append-only, so REVERT needs no code rollback.
- * Streamed writes (begin/byte) seed native pre-state code; execution-path writes
- * (CREATE deploys, EIP-7702 designations) and the witness path intern a blob
- * directly from a host byte source (code_intern_* / code_db_store_slice). */
-val code_db_stream_code_begin = impure { c: "code_db_stream_code_begin" } : hash -> bits(64)
-val code_db_stream_code_byte = impure { c: "code_db_stream_code_byte" } : bits(8) -> unit
+ * ALL writes are reference-based: the witness harvest and EIP-7702
+ * designations intern a byte-source slice (code_db_store_slice), CREATE
+ * deploys intern the frame's returndata (code_intern_returndata). */
 val code_db_stored_code_length = impure { c: "code_db_stored_code_length" } : hash -> bits(64)
 val code_db_copy_stored_code_to_memory = impure { c: "code_db_copy_stored_code_to_memory" } : (
         hash,
@@ -261,32 +259,6 @@ enum EnvField = {
  * keccak(address) -- no Sail assoc list. The EIP-2929 warm address/slot sets,
  * the LOG series, and the SELFDESTRUCT/created sets and journal are likewise
  * C-backed (ffi/kernel_state.c; the bindings above). */
-
-/* Store code `c` in the content-addressed code store under its keccak hash `h`.
- * If `h` is already present (identical bytes) the byte stream is skipped
- * (code_db_stream_code_begin returns 0) -- the store is append-only and de-duplicated. */
-function code_db_store_code(h : hash, c : list(byte)) -> unit = {
-    if code_db_stream_code_begin(h) == 0x0000000000000000 then {
-        ()
-    } else {
-        var rest : list(byte) = c;
-        var more : bool = true;
-        while more do {
-            match rest {
-                b :: t => {
-                    code_db_stream_code_byte(b);
-                    rest = t
-                },
-                [||] => more = false,
-            }
-        }
-    }
-}
-
-/* Store a witness code blob into the content-addressed code store. The spec
- * backend materializes the witness bytes; the build backend may hash/copy the
- * witness slice directly. */
-val code_db_store_witness_code : ByteSlice -> unit
 
 /* Stateless storage resolver: the value of (a, s) in the witness pre-state,
  * walked from the account's authenticated storage root. Defined in lib/mpt.sail

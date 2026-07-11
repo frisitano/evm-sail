@@ -38,8 +38,6 @@ typedef struct {
 
 static code_db_ent *code_db;
 static uint32_t code_db_cap, code_db_n;
-static code_db_ent *code_db_cur;  /* entry selected by code_db_stream_code_begin */
-static uint32_t code_db_skip;     /* PUSH-immediate skip while streaming */
 
 static uint8_t code_db_byte(const code_db_ent *e, uint64_t i) {
   return (e && i < e->len) ? e->p[i] : 0;
@@ -87,8 +85,6 @@ unit code_db_reset(const unit u) {
   }
   if (code_db) memset(code_db, 0, (size_t)code_db_cap * sizeof(code_db_ent));
   code_db_n = 0;
-  code_db_cur = NULL;
-  code_db_skip = 0;
   return UNIT;
 }
 
@@ -115,39 +111,6 @@ static void code_db_build_jumpdest_bitmap(uint8_t *bm, const uint8_t *p, uint32_
   }
 }
 
-/* begin storing the code whose keccak is `h`; content-addressed --
- * returns 1 if this hash is new (caller streams the bytes via
- * code_db_stream_code_byte), 0 if it
- * is already stored (same hash == same bytes, so streaming is skipped). */
-uint64_t code_db_stream_code_begin(const lbits h) {
-  if (!code_db) code_db_grow();
-  uint64_t key[4];
-  lbits_to_be_words4(key, h);
-  code_db_ent *e = code_db_find(key);
-  if (e->used && e->len) { code_db_cur = e; return 0; }   /* already present */
-  if (!e->used) {
-    e->used = 1;
-    memcpy(e->a, key, sizeof(e->a));
-    code_db_n++;
-    if (code_db_n * 10 >= code_db_cap * 7) { code_db_grow(); e = code_db_find(key); }
-  }
-  e->len = 0;
-  code_db_cur = e;
-  code_db_skip = 0;
-  return 1;
-}
-unit code_db_stream_code_byte(uint64_t b) {
-  code_db_ent *e = code_db_cur;
-  if (!e) return UNIT;
-  if (e->len >= e->cap) code_db_fit(e, e->len + 1);
-  if ((e->len & 7) == 0) e->bm[e->len >> 3] = 0;   /* clear stale bits on re-stream */
-  e->p[e->len] = (uint8_t)b;
-  if (code_db_skip) code_db_skip--;
-  else if (b == 0x5b) e->bm[e->len >> 3] |= (uint8_t)(1u << (e->len & 7));
-  else if (b >= 0x60 && b <= 0x7f) code_db_skip = (uint32_t)(b - 0x5f);
-  e->len++;
-  return UNIT;
-}
 
 /* Content-address `src[0..len)` under the precomputed keccak `key`: find-or-insert
  * the entry, fit the buffer, copy the bytes, and build the JUMPDEST bitmap. A

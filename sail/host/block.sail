@@ -14,7 +14,7 @@
  * hashes the SSZ input span and copies the bytes into the owned code_db entry. */
 function register_witness_codes(start : int, n : int, stop : int) -> unit = {
     foreach (i from 0 to (n - 1)) {
-        code_db_store_witness_code(ssz_list_slice(start, n, stop, i))
+        code_db_store_slice(ssz_list_slice(start, n, stop, i))
     }
 }
 

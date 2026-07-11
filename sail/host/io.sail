@@ -82,9 +82,6 @@ val sha256_selfcheck : unit -> unit
 /* Keccak self-check against Ethereum's "" and "abc" vectors. */
 val keccak_selfcheck : unit -> unit
 
-/* Hash full code bytes, store them in the code database, and return codeHash. */
-val code_hash_and_store : list(byte) -> hash
-
 /* Domain operations whose spec definitions may materialize canonical bytes,
  * while build definitions may stream or hash from host byte sources. */
 val execution_requests_hash : unit -> hash

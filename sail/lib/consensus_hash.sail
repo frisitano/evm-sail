@@ -49,15 +49,6 @@ function trie_ref_to_root(r : list(byte)) -> bits(256) =
         _ => keccak256(r),
     }
 
-/* Hash full code bytes, store them in the code database, and return codeHash. */
-function code_hash_and_store(c : list(byte)) -> hash = {
-    let h : hash = keccak256(c);
-    code_db_store_code(h, c);
-    h
-}
-
-function code_db_store_witness_code(s : ByteSlice) -> unit = code_db_store_slice(s)
-
 /* EIP-7685 commitment: sha256 over the concatenation of each present request
  * type's 32-byte per-type digest (deposit, withdrawal, consolidation, in that
  * order; an empty request body contributes nothing). Each digest hashes a
