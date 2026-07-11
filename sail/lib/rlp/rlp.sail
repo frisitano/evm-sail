@@ -109,9 +109,6 @@ function create2_address(sender : address, salt : word, init_hash : hash) -> add
     word_to_address(keccak256(preimage))
 }
 
-function legacy_sig_chain_id(v : int) -> int =
-    ediv_int(v - 35, 2)
-
 struct RlpField = {
   is_list : bool,
   content : list(byte),   /* string value, or a list's payload bytes */
@@ -371,35 +368,6 @@ function rlp_fields_prefix_len(items : list(RlpField), count : int) -> int = {
         }
     };
     total
-}
-
-/* Transaction and EIP-7702 authorization signing hashes. Spec definitions
- * materialize the canonical RLP preimage; build definitions can refine this
- * boundary without exposing a generic byte-list hash to common code. The tx
- * signing content is a contiguous witness span (the pre-signature fields'
- * RLP); build frames + hashes it C-side rather than materializing the list. */
-val tx_signing_hash : (int, ByteSlice, int) -> hash
-val auth_signing_hash : (int, address, int) -> hash
-
-/* Tx signing preimage hash. `content_src` spans the RLP of the pre-signature
- * fields in the witness; legacy EIP-155 txs append (chain_id, 0, 0), typed txs
- * prepend the type byte as a domain separator. */
-function tx_signing_hash(ttype : int, content_src : ByteSlice, v : int) -> hash = {
-    var content : list(byte) = read_byte_slice(content_src);
-    if (ttype == 0) & (v >= 35) then {
-        content = list_append(content, rlp_int(legacy_sig_chain_id(v)));
-        content = list_append(content, [|0x80, 0x80|])
-    };
-    let domain : list(byte) = if ttype != 0 then { [|get_slice_int(8, ttype, 0)|] } else { [||] };
-    keccak_rlp_payload(domain, content)
-}
-
-/* EIP-7702 authorization signing hash: 0x05 || rlp([chain_id, address, nonce]). */
-function auth_signing_hash(chain_id : int, addr : address, nonce : int) -> hash = {
-    var content : list(byte) = rlp_int(chain_id);
-    content = list_append(content, rlp_addr(addr));
-    content = list_append(content, rlp_int(nonce));
-    keccak_rlp_payload([|0x05|], content)
 }
 
 /* content of an RlpField as a big-endian integer / 256-bit word */

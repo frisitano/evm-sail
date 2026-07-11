@@ -129,7 +129,6 @@ val code_hash_and_store : list(byte) -> hash
 /* Domain operations whose spec definitions may materialize canonical bytes,
  * while build definitions may stream or hash from host byte sources. */
 val execution_requests_hash : unit -> hash
-val block_header_hash : (hash, hash, hash, hash) -> hash
 
 /* Guest public-output trace: emit_out appends exactly one byte to the guest
  * public output; only guest entries call it, core specs leave it abstract

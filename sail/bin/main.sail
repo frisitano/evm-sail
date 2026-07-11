@@ -113,9 +113,6 @@ struct BlockExecutionResult = {
     receipts : list(Receipt),
 }
 
-function parent_header_int_field(items : list(RlpField), idx : int) -> int =
-    rlp_field_int(rlp_item(items, idx))
-
 function expected_payload_excess_blob_gas(items : list(RlpField)) -> int =
     next_excess_blob_gas(
         parent_header_int_field(items, 18),
@@ -233,15 +230,6 @@ function transaction_trie_root() -> hash = {
         updates = patch_insert_sorted(patch_leaf(trie_index_key(i), byte_slice(WitnessSource, off, len)), updates)
     };
     trie_root(EMPTY_TRIE_ROOT, updates)
-}
-
-function withdrawal_rlp(w : Withdrawal) -> list(byte) = {
-    var payload : list(byte) = [||];
-    payload = list_append(payload, rlp_int(w.index));
-    payload = list_append(payload, rlp_int(w.validator_index));
-    payload = list_append(payload, rlp_addr(w.address));
-    payload = list_append(payload, rlp_int(w.amount));
-    rlp_list(payload)
 }
 
 function withdrawals_trie_root(wds : list(Withdrawal)) -> hash = {
@@ -481,7 +469,7 @@ function validate_block(input : StatelessInput, exec_ok : bool, block_result : B
     let withdrawals_root = withdrawals_trie_root(input.block.body.withdrawals);
     let requests_hash = execution_requests_hash();
     let block_access_list_hash = keccak256(input.block.body.block_access_list);
-    let block_hash = block_header_hash(transactions_root, withdrawals_root, requests_hash, block_access_list_hash);
+    let block_hash = block_header_hash(header, transactions_root, withdrawals_root, requests_hash, block_access_list_hash);
     let block_hash_ok = block_hash == header.block_hash;
     let parent_ok = input.parent_hash_ok; /* asserted by the input pass against the witness chain */
 

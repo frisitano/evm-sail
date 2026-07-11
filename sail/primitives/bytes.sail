@@ -71,3 +71,13 @@ function address_to_bytes(a : address) -> list(byte) = {
     };
     out
 }
+
+/* big-endian bytes -> 256-bit word */
+function bytes_be256(c : list(byte)) -> bits(256) = {
+    var acc : bits(256) = sail_zeros(256);
+    let n = list_len(c);
+    foreach (k from 0 to (n - 1)) {
+        acc = or_vec(sail_shiftleft(acc, 8), sail_zero_extend(list_nth(c, k, 0x00), 256))
+    };
+    acc
+}
