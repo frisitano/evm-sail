@@ -228,6 +228,28 @@ uint8_t *hm_wr(uint64_t off, uint64_t len) {
   return f->buf + off;
 }
 
+/* MLOAD: the 32-byte big-endian word at off. No ensure -- reads past the
+ * buffer are zeros (same as mem_read_byte), and charge_expansion precedes
+ * every MLOAD so the gas-side watermark already covers the range. */
+void mem_load_word(lbits *rop, uint64_t off) {
+  h_memframe *f = &h_stack[h_top];
+  uint8_t buf[32];
+  for (int i = 0; i < 32; i++) {
+    uint64_t o = off + (uint64_t)i;
+    buf[i] = (o < f->cap) ? f->buf[o] : 0;
+  }
+  be_bytes_to_lbits(rop, 256, buf, 32);
+}
+
+/* MSTORE: the 32-byte big-endian word at off (ensure + one memcpy) */
+unit mem_store_word(uint64_t off, const lbits w) {
+  uint8_t buf[32];
+  lbits_to_be_bytes(buf, 32, w);
+  uint8_t *d = hm_wr(off, 32);
+  if (d) memcpy(d, buf, 32);
+  return UNIT;
+}
+
 /* MCOPY: overlapping-safe copy within the current frame */
 unit mem_move(uint64_t dst, uint64_t src, uint64_t len) {
   if (len) {

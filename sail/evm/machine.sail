@@ -95,3 +95,71 @@ function is_running() -> bool = match frame_status {
     Running() => true,
     _ => false,
 }
+
+/* ----------------------- frame memory (EVM view) ------------------------ */
+/* The EVM's view over the C-backed frame memory (host/memory.sail): every
+ * access is guarded by is_running -- a failed charge_expansion sets the halt
+ * status without aborting the opcode handler, and a post-out-of-gas write to
+ * a huge offset (e.g. MSTORE at 2^32) must not grow the C buffer -- and
+ * writes raise the high-water mark that MSIZE and memory-expansion gas read. */
+
+/* The high-water mark, in bytes: the largest offset ever touched in this
+ * frame. MSIZE rounds it up to a word; memory-expansion gas is charged on
+ * each growth of mem_size_words (Yellow Paper section 9.4.1, the C_mem term). */
+register memory_size : int = 0
+
+function mem_get_byte(off : int) -> byte =
+    if is_running() then {
+        mem_read_byte(get_slice_int(64, off, 0))
+    } else {
+        0x00
+    }
+
+function mem_set_byte(off : int, v : byte) -> unit =
+    if is_running() then {
+        mem_write_byte(get_slice_int(64, off, 0), v);
+        if off + 1 > memory_size then {
+            memory_size = off + 1
+        }
+    }
+
+/* --- word access (big-endian, 32 bytes): MLOAD / MSTORE / MSTORE8 --- */
+
+function mem_load(off : int) -> word =
+    if is_running() then {
+        mem_load_word(get_slice_int(64, off, 0))
+    } else {
+        ZERO_WORD
+    }
+
+function mem_store(off : int, w : word) -> unit =
+    if is_running() then {
+        mem_store_word(get_slice_int(64, off, 0), w);
+        if off + 32 > memory_size then {
+            memory_size = off + 32
+        }
+    }
+
+function mem_store_byte(off : int, w : word) -> unit =
+    mem_set_byte(off, w[7 .. 0])
+
+/* Current memory size in 32-byte words, rounded up (the MSIZE value, and the
+ * unit of memory-expansion gas). */
+function mem_size_words() -> int = ediv_int(memory_size + 31, 32)
+
+/* MCOPY (EIP-5656): overlapping-safe memory-to-memory copy (one C memmove). */
+function mem_mcopy(dst : int, src : int, len : int) -> unit =
+    mem_move(get_slice_int(64, dst, 0), get_slice_int(64, src, 0), get_slice_int(64, len, 0))
+
+/* CODECOPY: the current frame's code (already in the C buffer) into memory. */
+function mem_codecopy(dst : int, off : int, len : int) -> unit =
+    frame_code_copy_to_memory(
+        get_slice_int(64, dst, 0),
+        get_slice_int(64, clamp_source_offset(off), 0),
+        get_slice_int(64, len, 0),
+    )
+
+/* KECCAK256 over the memory range [off, off+len). Semantically, the caller
+ * reads the addressed bytes and hashes that byte list. */
+function mem_keccak(off : int, len : int) -> word =
+    keccak256(memory_byte_slice(off, len))

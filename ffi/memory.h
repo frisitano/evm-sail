@@ -14,6 +14,8 @@ uint64_t hm_depth(const unit u);                    /* call-frame depth   */
 const uint8_t *mem_region(uint64_t off, uint64_t len);  /* ensure + read ptr   */
 uint8_t *hm_wr(uint64_t off, uint64_t len);        /* ensure + write ptr  */
 unit mem_move(uint64_t dst, uint64_t src, uint64_t len);  /* MCOPY memmove */
+void mem_load_word(lbits *rop, uint64_t off);      /* MLOAD: 32-byte BE word  */
+unit mem_store_word(uint64_t off, const lbits w);  /* MSTORE: 32-byte BE word */
 unit calldata_bind_memory(uint64_t off, uint64_t len);   /* next child's calldata = mem range */
 unit calldata_bind_empty(const unit u);
 unit calldata_bind_tx_input(const unit u);
