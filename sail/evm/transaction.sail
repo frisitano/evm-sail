@@ -79,6 +79,7 @@ function process_auth(au : Authorization) -> unit = {
         let _ = k_access_account(authority);
         let (is_deleg, _) = k_deleg_target(authority);
         let code_ok = (k_code_key(authority) == KECCAK_EMPTY) | is_deleg;
+
         /* the decoded auth nonce is an unbounded int: compare in the int
            domain so an oversized (>= 2^64) nonce can never alias a real one */
         let nonce_ok = unsigned(k_get_nonce(authority)) == au.nonce;
@@ -155,7 +156,40 @@ function prewarm(tx : Transaction) -> unit = {
 function invalid_receipt() -> Receipt =
     struct { tx_type = LegacyTx, success = false, valid = false, gas_used = 0, block_gas = 0, logs = [||] }
 
+/* Effective fee for a typed (EIP-1559) tx: the gas price actually paid is
+ * min(max_fee_per_gas, base_fee + max_priority_fee), and the priority tip paid to
+ * the coinbase is that price minus the base fee. Legacy / 2930 txs carry a single
+ * gas_price, passed here as max_fee = max_priority = gas_price so this recovers
+ * (gas_price, gas_price - base_fee). The priority is clamped at 0 so an invalid
+ * sub-base-fee price (rejected later by the validity check) never underflows. */
+function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : word) -> (word, word) = {
+    let bf = unsigned(base_fee);
+    let cap = unsigned(max_fee);
+    let tip = unsigned(max_priority_fee);
+    let price = if cap < bf + tip then {
+            cap
+        } else {
+            bf + tip
+        };
+    let prio = if price >= bf then {
+            price - bf
+        } else {
+            0
+        };
+    (word_of_int(price), word_of_int(prio))
+}
+
 function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity = {
+    /* EELS check_transaction: the witnessed public key must verify this tx's
+       signature over the signing hash (recover_sender_from_public_key) -- a
+       forged key or bad v/r/s makes the whole BLOCK invalid, regardless of the
+       validity verdict below. */
+    if not_bool(tx_sig_v_ok(tx.tx_type, tx.sig_v) & tx_auth_ok(tx.pubkey, tx.signing_hash, tx.sig_r, tx.sig_s)) then {
+        throw InvalidBlock(InvalidSignature)
+    };
+
+    /* effective gas price (EELS: computed in check_transaction) */
+    let (eff_gas_price, eff_priority_fee) = eff_gas_price_for(k_header.base_fee, tx.max_fee, tx.max_priority_fee);
     let sender = tx.sender;
     let nonce_before = k_get_nonce(sender);
     let intrinsic = intrinsic_gas(tx);
@@ -226,12 +260,14 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
         intrinsic_gas = intrinsic,
         blob_fee = blob_fee,
         input_len = dlen,
+        gas_price = eff_gas_price,
+        priority_fee = eff_priority_fee,
     }
 }
 
 function apply_transaction_upfront_effects(tx : Transaction, v : TxValidity) -> unit = {
     /* upfront gas + nonce bump (persist across revert; taken before the snapshot) */
-    k_sub_balance(v.sender, word_of_int(tx.gas_limit * unsigned(tx.gas_price)));
+    k_sub_balance(v.sender, word_of_int(tx.gas_limit * unsigned(v.gas_price)));
 
     /* EIP-4844: burn the blob fee upfront (blob_gas_used * blob_gas_price), no refund */
     if v.blob_fee > 0 then {
@@ -368,7 +404,7 @@ function run_transaction_frame(tx : Transaction, v : TxValidity) -> TxFrameResul
     struct { success = success, gas_remaining = gas_remaining }
 }
 
-function settle_transaction(tx : Transaction, sender : address, fr : TxFrameResult) -> Receipt = {
+function settle_transaction(tx : Transaction, v : TxValidity, fr : TxFrameResult) -> Receipt = {
     /* Refund cap: gas_used / 2 before London, gas_used / 5 after EIP-3529. */
     let gas_left0 = fr.gas_remaining;
     let gas_used0 = tx.gas_limit - gas_left0;
@@ -393,8 +429,8 @@ function settle_transaction(tx : Transaction, sender : address, fr : TxFrameResu
     let block_gas = if gas_used0 < floor then { floor } else { gas_used0 };
 
     /* return unused gas to sender; pay coinbase the priority fee */
-    k_add_balance(sender, word_of_int(gas_left * unsigned(tx.gas_price)));
-    k_add_balance(k_coinbase(), word_of_int(gas_used * unsigned(tx.priority_fee)));
+    k_add_balance(v.sender, word_of_int(gas_left * unsigned(v.gas_price)));
+    k_add_balance(k_coinbase(), word_of_int(gas_used * unsigned(v.priority_fee)));
 
     /* EIP-6780 tx-end reduction: delete accounts created AND selfdestructed in
      * this tx (EELS destroys tx_output.accounts_to_delete after the fee
@@ -415,7 +451,6 @@ function settle_transaction(tx : Transaction, sender : address, fr : TxFrameResu
 
 function process_transaction(tx : Transaction) -> Receipt = {
     k_tx_reset();
-    k_set_tx(struct { origin = tx.sender, gas_price = tx.gas_price, blob_hashes = tx.blob_hashes });
     returndata_reset_all();
 
     /* Stage this tx's input into the owned C buffer in one op (no Sail byte loop
@@ -426,9 +461,10 @@ function process_transaction(tx : Transaction) -> Receipt = {
     if not_bool(validity.valid) then {
         return invalid_receipt()
     };
+    k_set_tx(struct { origin = tx.sender, gas_price = validity.gas_price, blob_hashes = tx.blob_hashes });
     apply_transaction_upfront_effects(tx, validity);
     let frame_result = run_transaction_frame(tx, validity);
-    let receipt = settle_transaction(tx, validity.sender, frame_result);
+    let receipt = settle_transaction(tx, validity, frame_result);
     k_tx_merge(); /* commit this tx's net storage writes into the block base */
     receipt
 }

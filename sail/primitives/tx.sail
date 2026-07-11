@@ -30,7 +30,7 @@ struct Authorization = {
  * the type-specific fields below are validity-relevant per their EIP. */
 struct Transaction = {
   tx_type : TxType,          /* EIP-2718 envelope type (the discriminant)    */
-  sender : address, nonce : int, gas_price : word, priority_fee : word,
+  sender : address, nonce : int,
   gas_limit : gas, is_create : bool, recipient : address, value : word,
   input_src : ByteSlice,       /* calldata / creation initcode as a host byte source
                                   (the witness span for a stateless tx, or the
@@ -43,7 +43,15 @@ struct Transaction = {
   max_blob_fee : word,        /* EIP-4844 max_fee_per_blob_gas (cap, for validity)*/
   max_priority_fee : word,        /* EIP-1559 max_priority_fee_per_gas (cap, for validity) */
   authorizations : list(Authorization), /* EIP-7702 set-code authorization tuples      */
-  blob_hashes : list(word)    /* EIP-4844 versioned hashes (BLOBHASH operands)    */
+  blob_hashes : list(word),   /* EIP-4844 versioned hashes (BLOBHASH operands)    */
+  pubkey : ByteSlice,          /* witnessed sender public key (0x04 ++ X ++ Y span);
+                                  NOT trusted -- verified against the signature at
+                                  execution (EELS recover_sender_from_public_key) */
+  signing_hash : hash,         /* keccak of the signing preimage (EIP-155 / EIP-2718
+                                  domain applied), computed structurally at decode  */
+  sig_v : int,                 /* v (legacy, EIP-155-bearing) / y_parity (typed)   */
+  sig_r : word,
+  sig_s : word
 }
 
 /* A LOG record (Yellow Paper section 4.4.1, the log series): emitting address,

@@ -16,6 +16,8 @@ struct TxValidity = {
     intrinsic_gas : gas,
     blob_fee : int,
     input_len : int,
+    gas_price : word, /* effective gas price (EIP-1559, from the caps + base fee) */
+    priority_fee : word, /* coinbase tip per gas (effective price minus base fee)    */
 }
 
 struct TxFrameResult = {

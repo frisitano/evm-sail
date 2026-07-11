@@ -5,9 +5,9 @@
 /* per-envelope destructuring into the Transaction type (one walk, exact    */
 /* field shape, mirroring EELS's per-envelope dataclasses), the EIP-2930    */
 /* access-list and EIP-7702 authorization-tuple decoders, the signing       */
-/* preimage hashes, and sender authentication (the witness public key is    */
-/* verified against the tx signature, never trusted). Standalone: input is  */
-/* a ByteSlice envelope + a ByteSlice public key, any source.               */
+/* preimage hashes, and the signature primitives execution authenticates    */
+/* with (tx_sig_v_ok / tx_auth_ok). Standalone and purely structural:       */
+/* input is a ByteSlice envelope + a ByteSlice public key, any source.      */
 /* ======================================================================== */
 
 /* EIP-155: the chain id encoded in a legacy signature v >= 35 */
@@ -42,29 +42,6 @@ function auth_signing_hash(chain_id : int, addr : address, nonce : int) -> hash 
     content = list_append(content, rlp_addr(addr));
     content = list_append(content, rlp_int(nonce));
     keccak_rlp_payload([|0x05|], content)
-}
-
-/* Effective fee for a typed (EIP-1559) tx: the gas price actually paid is
- * min(max_fee_per_gas, base_fee + max_priority_fee), and the priority tip paid to
- * the coinbase is that price minus the base fee. Legacy / 2930 txs carry a single
- * gas_price, passed here as max_fee = max_priority = gas_price so this recovers
- * (gas_price, gas_price - base_fee). The priority is clamped at 0 so an invalid
- * sub-base-fee price (rejected later by the validity check) never underflows. */
-function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : word) -> (word, word) = {
-    let bf = unsigned(base_fee);
-    let cap = unsigned(max_fee);
-    let tip = unsigned(max_priority_fee);
-    let price = if cap < bf + tip then {
-            cap
-        } else {
-            bf + tip
-        };
-    let prio = if price >= bf then {
-            price - bf
-        } else {
-            0
-        };
-    (word_of_int(price), word_of_int(prio))
 }
 
 /* Decode an EIP-2930 access list (RLP [[address, [slot, ...]], ...]) from the
@@ -139,12 +116,10 @@ let SECP_N_FULL : bits(256) = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03b
 function secp256k1_verify(h : bits(256), r : word, s : word, x : bits(256), y : bits(256)) -> bool =
     secp256k1_verify_precompile(h, r, s, x, y)
 
-function tx_sig_v_ok(ttype : int, v : int) -> bool =
-    if ttype == 0 then {
-        (v == 27) | (v == 28) | ((v >= 35) & (legacy_sig_chain_id(v) == cc_chain_id()))
-    } else {
-        (v == 0) | (v == 1)
-    }
+function tx_sig_v_ok(t : TxType, v : int) -> bool = match t {
+    LegacyTx => (v == 27) | (v == 28) | ((v >= 35) & (legacy_sig_chain_id(v) == cc_chain_id())),
+    _ => (v == 0) | (v == 1),
+}
 
 /* authenticate a tx: EIP-2 low-s, then bind its 65-byte witness public key
  * (0x04 ++ X ++ Y) to the signature over the signing hash */
@@ -218,22 +193,6 @@ function decode_auth_list(f : RlpField) -> list(Authorization) = {
     out
 }
 
-/* legacy / 2930 carry one gas_price; the coinbase tip is still
- * gas_price - base_fee (the base fee is burned) */
-function legacy_fees(base_fee : word, gp_f : RlpField) -> (word, word, word, word) = {
-    let gp = rlp_field_uint_word(gp_f);
-    let (_, pr) = eff_gas_price_for(base_fee, gp, gp);
-    (gp, pr, gp, gp)
-}
-
-/* 1559+: (max_priority_fee, max_fee) caps */
-function dynamic_fees(base_fee : word, mp_f : RlpField, mf_f : RlpField) -> (word, word, word, word) = {
-    let mp = rlp_field_uint_word(mp_f);
-    let mf = rlp_field_uint_word(mf_f);
-    let (gp, pr) = eff_gas_price_for(base_fee, mf, mp);
-    (gp, pr, mf, mp)
-}
-
 /* the data field's content span within a tx envelope: never materialized */
 function tx_input_span(tx : ByteSlice, payload : list(byte), payload_rel : int, i_data : int) -> ByteSlice =
     sub_slice(
@@ -247,33 +206,14 @@ function tx_input_span(tx : ByteSlice, payload : list(byte), payload_rel : int, 
 function tx_sig_span(tx : ByteSlice, payload_rel : int, sig_cs : int, fields : list(RlpField), i_v : int) -> ByteSlice =
     sub_slice(tx, payload_rel + sig_cs, rlp_fields_prefix_len(fields, i_v))
 
-/* authenticate: v-range per envelope, then the witness pubkey against the
- * signature over the signing hash -- throw at the point of detection */
-function tx_sig_auth(
-    pubkey : ByteSlice,
-    ttype : int,
-    sig_src : ByteSlice,
-    v_f : RlpField,
-    r_f : RlpField,
-    s_f : RlpField,
-) -> (
-    unit
-) = {
-    let v = rlp_field_int(v_f);
-    if not_bool(
-        tx_sig_v_ok(ttype, v) &
-            tx_auth_ok(pubkey, tx_signing_hash(ttype, sig_src, v), rlp_field_uint_word(r_f), rlp_field_uint_word(s_f)),
-    ) then {
-        throw InvalidBlock(InvalidSignature)
-    }
-}
-
-/* Decode ONE transaction from its raw envelope bytes -- standalone: `tx` is the
- * EIP-2718 envelope as a byte slice (any source), `pubkey` the 65-byte witness
- * public key (0x04 ++ X ++ Y) claimed for its sender. The sender derives from
- * the key (keccak(X||Y)[12:]); the key is NOT trusted -- the tx's signature is
- * verified against it over the signing hash, so a forged key throws
- * InvalidBlock(InvalidSignature) (EELS recover_sender).
+/* Decode ONE transaction from its raw envelope bytes -- standalone and purely
+ * STRUCTURAL: `tx` is the EIP-2718 envelope as a byte slice (any source),
+ * `pubkey` the 65-byte witness public key (0x04 ++ X ++ Y) claimed for its
+ * sender. The sender derives from the key (keccak(X||Y)[12:]) and the
+ * signature material (signing hash, v/r/s, the key itself) is CAPTURED on the
+ * Transaction; authentication happens at execution (check_transaction_validity
+ * -> tx_auth_ok), mirroring EELS recover_sender_from_public_key inside
+ * check_transaction. No trust decision and no fee derivation happens here.
  *
  * A leading byte >= 0xc0 is a legacy (type-0) RLP list; otherwise it is the
  * type byte (0x01 EIP-2930, 0x02 EIP-1559, 0x03 EIP-4844, 0x04 EIP-7702) and
@@ -282,7 +222,7 @@ function tx_sig_auth(
  * dataclasses); an unknown type byte or wrong arity is undecodable. The data
  * field is never materialized: input_src carries its (source, offset, length)
  * span, staged into the calldata backend only when the tx runs. */
-function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, base_fee : word) -> Transaction = {
+function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
     let sender = word_to_address(keccak256(sub_slice(pubkey, 1, 64)));
     let tx_len = unsigned(tx.len);
     let tx_bytes = read_byte_slice(tx);
@@ -307,14 +247,12 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, base_fee : word) -> T
 
     match (ttype, fields) {
         (0, nonce_f :: (gp_f :: (gas_f :: (to_f :: (value_f :: (_ :: (v_f :: (r_f :: (s_f :: [||]))))))))) => {
-            tx_sig_auth(pubkey, ttype, tx_sig_span(tx, payload_rel, sig_cs, fields, 6), v_f, r_f, s_f);
-            let (gas_price, priority, max_fee, max_priority) = legacy_fees(base_fee, gp_f);
+            let v = rlp_field_int(v_f);
+            let gp = rlp_field_uint_word(gp_f);
             struct {
                 tx_type = LegacyTx,
                 sender = sender,
                 nonce = rlp_field_int(nonce_f),
-                gas_price = gas_price,
-                priority_fee = priority,
                 gas_limit = to_gas(rlp_field_int(gas_f)),
                 is_create = list_len(to_f.content) == 0, /* empty `to` = contract creation */
                 recipient = word_to_address(rlp_field_word(to_f)),
@@ -323,11 +261,16 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, base_fee : word) -> T
                 access_list_addresses = [||],
                 access_list_slots = [||],
                 blob_count = 0,
-                max_fee = max_fee,
+                max_fee = gp,
                 max_blob_fee = ZERO_WORD,
-                max_priority_fee = max_priority,
+                max_priority_fee = gp,
                 authorizations = [||],
                 blob_hashes = [||],
+                pubkey = pubkey,
+                signing_hash = tx_signing_hash(0, tx_sig_span(tx, payload_rel, sig_cs, fields, 6), v),
+                sig_v = v,
+                sig_r = rlp_field_uint_word(r_f),
+                sig_s = rlp_field_uint_word(s_f),
             }
         },
         (
@@ -335,15 +278,13 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, base_fee : word) -> T
             _ ::
                 (nonce_f :: (gp_f :: (gas_f :: (to_f :: (value_f :: (_ :: (al_f :: (v_f :: (r_f :: (s_f :: [||])))))))))),
         ) => {
-            tx_sig_auth(pubkey, ttype, tx_sig_span(tx, payload_rel, sig_cs, fields, 8), v_f, r_f, s_f);
-            let (gas_price, priority, max_fee, max_priority) = legacy_fees(base_fee, gp_f);
+            let v = rlp_field_int(v_f);
+            let gp = rlp_field_uint_word(gp_f);
             let (al_addrs, al_slots) = decode_access_list(al_f);
             struct {
                 tx_type = AccessListTx,
                 sender = sender,
                 nonce = rlp_field_int(nonce_f),
-                gas_price = gas_price,
-                priority_fee = priority,
                 gas_limit = to_gas(rlp_field_int(gas_f)),
                 is_create = list_len(to_f.content) == 0, /* empty `to` = contract creation */
                 recipient = word_to_address(rlp_field_word(to_f)),
@@ -352,11 +293,16 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, base_fee : word) -> T
                 access_list_addresses = al_addrs,
                 access_list_slots = al_slots,
                 blob_count = 0,
-                max_fee = max_fee,
+                max_fee = gp,
                 max_blob_fee = ZERO_WORD,
-                max_priority_fee = max_priority,
+                max_priority_fee = gp,
                 authorizations = [||],
                 blob_hashes = [||],
+                pubkey = pubkey,
+                signing_hash = tx_signing_hash(1, tx_sig_span(tx, payload_rel, sig_cs, fields, 8), v),
+                sig_v = v,
+                sig_r = rlp_field_uint_word(r_f),
+                sig_s = rlp_field_uint_word(s_f),
             }
         },
         (
@@ -366,15 +312,12 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, base_fee : word) -> T
                     (mp_f ::
                         (mf_f :: (gas_f :: (to_f :: (value_f :: (_ :: (al_f :: (v_f :: (r_f :: (s_f :: [||]))))))))))),
         ) => {
-            tx_sig_auth(pubkey, ttype, tx_sig_span(tx, payload_rel, sig_cs, fields, 9), v_f, r_f, s_f);
-            let (gas_price, priority, max_fee, max_priority) = dynamic_fees(base_fee, mp_f, mf_f);
+            let v = rlp_field_int(v_f);
             let (al_addrs, al_slots) = decode_access_list(al_f);
             struct {
                 tx_type = FeeMarketTx,
                 sender = sender,
                 nonce = rlp_field_int(nonce_f),
-                gas_price = gas_price,
-                priority_fee = priority,
                 gas_limit = to_gas(rlp_field_int(gas_f)),
                 is_create = list_len(to_f.content) == 0, /* empty `to` = contract creation */
                 recipient = word_to_address(rlp_field_word(to_f)),
@@ -383,11 +326,16 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, base_fee : word) -> T
                 access_list_addresses = al_addrs,
                 access_list_slots = al_slots,
                 blob_count = 0,
-                max_fee = max_fee,
+                max_fee = rlp_field_uint_word(mf_f),
                 max_blob_fee = ZERO_WORD,
-                max_priority_fee = max_priority,
+                max_priority_fee = rlp_field_uint_word(mp_f),
                 authorizations = [||],
                 blob_hashes = [||],
+                pubkey = pubkey,
+                signing_hash = tx_signing_hash(2, tx_sig_span(tx, payload_rel, sig_cs, fields, 9), v),
+                sig_v = v,
+                sig_r = rlp_field_uint_word(r_f),
+                sig_s = rlp_field_uint_word(s_f),
             }
         },
         (
@@ -400,16 +348,13 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, base_fee : word) -> T
                                 (to_f ::
                                     (value_f :: (_ :: (al_f :: (mbf_f :: (bh_f :: (v_f :: (r_f :: (s_f :: [||]))))))))))))),
         ) => {
-            tx_sig_auth(pubkey, ttype, tx_sig_span(tx, payload_rel, sig_cs, fields, 11), v_f, r_f, s_f);
-            let (gas_price, priority, max_fee, max_priority) = dynamic_fees(base_fee, mp_f, mf_f);
+            let v = rlp_field_int(v_f);
             let (al_addrs, al_slots) = decode_access_list(al_f);
             let blob_hashes = decode_word_list(bh_f);
             struct {
                 tx_type = BlobTx,
                 sender = sender,
                 nonce = rlp_field_int(nonce_f),
-                gas_price = gas_price,
-                priority_fee = priority,
                 gas_limit = to_gas(rlp_field_int(gas_f)),
                 is_create = list_len(to_f.content) == 0, /* empty `to` = contract creation */
                 recipient = word_to_address(rlp_field_word(to_f)),
@@ -418,11 +363,16 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, base_fee : word) -> T
                 access_list_addresses = al_addrs,
                 access_list_slots = al_slots,
                 blob_count = list_len(blob_hashes),
-                max_fee = max_fee,
+                max_fee = rlp_field_uint_word(mf_f),
                 max_blob_fee = rlp_field_uint_word(mbf_f),
-                max_priority_fee = max_priority,
+                max_priority_fee = rlp_field_uint_word(mp_f),
                 authorizations = [||],
                 blob_hashes = blob_hashes,
+                pubkey = pubkey,
+                signing_hash = tx_signing_hash(3, tx_sig_span(tx, payload_rel, sig_cs, fields, 11), v),
+                sig_v = v,
+                sig_r = rlp_field_uint_word(r_f),
+                sig_s = rlp_field_uint_word(s_f),
             }
         },
         (
@@ -434,15 +384,12 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, base_fee : word) -> T
                             (gas_f ::
                                 (to_f :: (value_f :: (_ :: (al_f :: (auth_f :: (v_f :: (r_f :: (s_f :: [||])))))))))))),
         ) => {
-            tx_sig_auth(pubkey, ttype, tx_sig_span(tx, payload_rel, sig_cs, fields, 10), v_f, r_f, s_f);
-            let (gas_price, priority, max_fee, max_priority) = dynamic_fees(base_fee, mp_f, mf_f);
+            let v = rlp_field_int(v_f);
             let (al_addrs, al_slots) = decode_access_list(al_f);
             struct {
                 tx_type = SetCodeTx,
                 sender = sender,
                 nonce = rlp_field_int(nonce_f),
-                gas_price = gas_price,
-                priority_fee = priority,
                 gas_limit = to_gas(rlp_field_int(gas_f)),
                 is_create = list_len(to_f.content) == 0, /* empty `to` = contract creation */
                 recipient = word_to_address(rlp_field_word(to_f)),
@@ -451,11 +398,16 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, base_fee : word) -> T
                 access_list_addresses = al_addrs,
                 access_list_slots = al_slots,
                 blob_count = 0,
-                max_fee = max_fee,
+                max_fee = rlp_field_uint_word(mf_f),
                 max_blob_fee = ZERO_WORD,
-                max_priority_fee = max_priority,
+                max_priority_fee = rlp_field_uint_word(mp_f),
                 authorizations = decode_auth_list(auth_f),
                 blob_hashes = [||],
+                pubkey = pubkey,
+                signing_hash = tx_signing_hash(4, tx_sig_span(tx, payload_rel, sig_cs, fields, 10), v),
+                sig_v = v,
+                sig_r = rlp_field_uint_word(r_f),
+                sig_s = rlp_field_uint_word(s_f),
             }
         },
         _ => throw InvalidBlock(RlpDecode), /* unknown envelope type or wrong arity */
