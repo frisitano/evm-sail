@@ -16,7 +16,7 @@ evm {
     primitives/evm.sail,
     primitives/stateless_input.sail,
     host/io.sail,
-    host/stateless_input.sail,
+    lib/ssz.sail,
     lib/rlp/rlp.sail,
     lib/address.sail,
     lib/tx.sail,
@@ -38,7 +38,7 @@ evm {
     lib/mpt.sail,
     lib/consensus_hash.sail,
     if $EVM_ENTRY == core then []
-    else if $EVM_ENTRY == guest then [host/block.sail, lib/ssz_htr.sail, bin/main.sail]
+    else if $EVM_ENTRY == guest then [host/block.sail, lib/htr.sail, bin/main.sail]
     else if $EVM_ENTRY == runner then [host/block.sail, bin/runner.sail]
     else error("EVM_ENTRY must be core, guest, or runner")
 }
