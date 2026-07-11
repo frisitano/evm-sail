@@ -335,16 +335,13 @@ register k_parent_state_root : hash =
                     the node-db: the between-run wipe (test_utils.c clear_memory ->
                     nodedb_reset) must NOT clear it mid-run. */
 
-/* Witness-header pass results (index_witness_headers, host/block.sail): the
- * single traversal hashes each header once and decodes the NEWEST (the parent
- * of the block under validation) once; every later consumer -- headers_ok in
- * block validation, parent_state_root, the parent gas/blob fields, the
- * parent-hash check, BLOCKHASH -- reads these instead of re-materializing
- * or re-hashing headers. */
-register in_headers_ok : bool = false
-register in_header_hashes : list(hash) = [||] /* header i hash at position i (oldest..newest) */
-register in_parent_header_hash : hash = ZERO_WORD
-register in_parent_header_items : list(RlpField) = [||] /* newest header, RLP-split once */
+/* Witness header-hash store: keccak(header[i]) pushed in order (oldest ..
+ * newest) by the single witness-header pass (index_witness_headers,
+ * host/block.sail); BLOCKHASH resolves ancestors from here instead of
+ * re-hashing witness headers during execution. */
+val headerhash_reset = impure { c: "headerhash_reset" } : unit -> unit
+val headerhash_push = impure { c: "headerhash_push" } : hash -> unit
+val headerhash_get = impure { c: "headerhash_get" } : bits(64) -> hash
 
 /* number of authenticated ancestor headers available to BLOCKHASH (k_blockhash,
  * host/kernel.sail). Both entries publish it from the SSZ witness header chain in
@@ -392,7 +389,7 @@ function is_precompile(n : int) -> bool = {
  * its execution-observable subset through k_env / k_coinbase (kernel.sail), which
  * project + type-normalize these fields (int->word, address->word, chain_id from
  * chain config); block validation reads the full header (block hash, roots, output
- * checks). Set once per block from the SSZ payload (k_set_header in decode_block_ssz). */
+ * checks). Set once per block from the SSZ payload (k_set_header in decode_stateless_input). */
 register k_header : BlockHeader =
     struct {
         number = 0,

@@ -69,104 +69,89 @@ function ssz_bytes(b : int, len : int) -> list(byte) = {
 
 function ssz_schema_id() -> int = ib(0) * 256 + ib(1)
 
-/* ---- one-shot container index ------------------------------------------ */
-/* The SSZ container geometry, decoded ONCE per input (stateless_input_index,
- * called at each entry's start) and held in registers: the navigation getters
- * below read cached offsets instead of re-deriving the offset chain from the
- * container root on every call (each ssz_u32 in that chain costs four byte
- * crossings, and the witness preload loops call these per element). Mirrors
- * EELS, which decodes the SSZ input into objects up front. */
-register in_npr : int = 0 /* SszNewPayloadRequest                    */
-register in_witness : int = 0 /* SszExecutionWitness (= npr end)         */
-register in_cc : int = 0 /* SszChainConfig                          */
-register in_cc_end : int = 0 /* chain_config end (= public_keys start)  */
-register in_payload : int = 0 /* SszExecutionPayload fixed region        */
-register in_payload_end : int = 0 /* payload end (= versioned_hashes start)  */
-register in_dep : int = 0 /* execution requests: deposits            */
-register in_wreq : int = 0 /* execution requests: withdrawal reqs     */
-register in_creq : int = 0 /* execution requests: consolidation reqs  */
-register in_txs : int = 0 /* transactions List[ByteList]             */
-register in_wds : int = 0 /* withdrawals (fixed 44-byte elements)    */
-register in_bal : int = 0 /* block_access_list                       */
-register in_extra : int = 0 /* extra_data                              */
-register in_n_txs : int = 0
-register in_n_wds : int = 0
-register in_wit_state : int = 0 /* witness state nodes List[ByteList]      */
-register in_wit_codes : int = 0 /* witness codes List[ByteList]            */
-register in_wit_headers : int = 0 /* witness headers List[ByteList]          */
-register in_n_wit_state : int = 0
-register in_n_wit_codes : int = 0
-register in_n_wit_headers : int = 0
-
-/* the single decode pass: each container offset is read exactly once */
-function stateless_input_index() -> unit = {
-    in_npr = SSZ_BODY + ssz_u32(SSZ_BODY + IN_NPR_OFF);
-    in_witness = SSZ_BODY + ssz_u32(SSZ_BODY + IN_WITNESS_OFF);
-    in_cc = SSZ_BODY + ssz_u32(SSZ_BODY + IN_CHAIN_CONFIG_OFF);
-    in_cc_end = SSZ_BODY + ssz_u32(SSZ_BODY + IN_PUBLIC_KEYS_OFF);
-
-    /* SszNewPayloadRequest fixed region: execution_payload offset @0,
-       versioned_hashes offset @4, parent_beacon_block_root @8 (inline Bytes32),
-       execution_requests offset @40; SszExecutionRequests holds three variable
-       lists (offsets at req+{0,4,8}) and ends where npr does. */
-    in_payload = in_npr + ssz_u32(in_npr + NPR_PAYLOAD_OFF);
-    in_payload_end = in_npr + ssz_u32(in_npr + NPR_VHASHES_OFF);
-    let req = in_npr + ssz_u32(in_npr + NPR_REQUESTS_OFF);
-    in_dep = req + ssz_u32(req + REQ_DEPOSITS_OFF);
-    in_wreq = req + ssz_u32(req + REQ_WITHDRAWALS_OFF);
-    in_creq = req + ssz_u32(req + REQ_CONSOLIDATIONS_OFF);
-
-    /* payload variable sub-regions; tx count from the List[ByteList] leading
-       offset, withdrawal count from the fixed element size */
-    in_extra = in_payload + ssz_u32(in_payload + PL_EXTRA_OFF);
-    in_txs = in_payload + ssz_u32(in_payload + PL_TXS_OFF);
-    in_wds = in_payload + ssz_u32(in_payload + PL_WDS_OFF);
-    in_bal = in_payload + ssz_u32(in_payload + PL_BAL_OFF);
-    in_n_txs =
-        if in_txs == in_wds then {
-            0
-        } else {
-            ediv_int(ssz_u32(in_txs), SSZ_OFF_BYTES)
-        };
-    in_n_wds = ediv_int(in_bal - in_wds, WD_SIZE);
-
-    /* SszExecutionWitness: 3 variable List fields, offsets at witness+{0,4,8};
-       the witness container ends where chain_config begins */
-    in_wit_state = in_witness + ssz_u32(in_witness + WIT_STATE_OFF);
-    in_wit_codes = in_witness + ssz_u32(in_witness + WIT_CODES_OFF);
-    in_wit_headers = in_witness + ssz_u32(in_witness + WIT_HEADERS_OFF);
-    in_n_wit_state =
-        if in_wit_state == in_wit_codes then {
-            0
-        } else {
-            ediv_int(ssz_u32(in_wit_state), SSZ_OFF_BYTES)
-        };
-    in_n_wit_codes =
-        if in_wit_codes == in_wit_headers then {
-            0
-        } else {
-            ediv_int(ssz_u32(in_wit_codes), SSZ_OFF_BYTES)
-        };
-    in_n_wit_headers =
-        if in_wit_headers == in_cc then {
-            0
-        } else {
-            ediv_int(ssz_u32(in_wit_headers), SSZ_OFF_BYTES)
-        }
+/* Container navigation. The HOT paths (witness preloads, tx/withdrawal
+ * decode) run inside the single decode pass over the SszLayout value built by
+ * decode_input_layout below -- each offset read once. The lazy getters here
+ * re-derive from the container root and serve only the COLD once-per-block
+ * consumers (output HTR/echo, chain-config validation, header/trie hashing);
+ * no decode state lives in registers. */
+function npr_start() -> int = SSZ_BODY + ssz_u32(SSZ_BODY + IN_NPR_OFF)
+function witness_start() -> int = SSZ_BODY + ssz_u32(SSZ_BODY + IN_WITNESS_OFF)
+function cc_start() -> int = SSZ_BODY + ssz_u32(SSZ_BODY + IN_CHAIN_CONFIG_OFF)
+function cc_end() -> int = SSZ_BODY + ssz_u32(SSZ_BODY + IN_PUBLIC_KEYS_OFF) /* = public_keys start */
+function payload_start() -> int = {
+    let n = npr_start();
+    n + ssz_u32(n + NPR_PAYLOAD_OFF)
 }
+function payload_end() -> int = {
+    let n = npr_start();
+    n + ssz_u32(n + NPR_VHASHES_OFF)
+}
+function req_start() -> int = npr_start() + ssz_u32(npr_start() + NPR_REQUESTS_OFF)
+function dep_start() -> int = req_start() + ssz_u32(req_start() + REQ_DEPOSITS_OFF)
+function wreq_start() -> int = req_start() + ssz_u32(req_start() + REQ_WITHDRAWALS_OFF)
+function creq_start() -> int = req_start() + ssz_u32(req_start() + REQ_CONSOLIDATIONS_OFF)
+function req_end() -> int = witness_start() /* execution_requests is the last npr field */
 
-/* navigation getters over the index (kept as the read API) */
-function npr_start() -> int = in_npr
-function witness_start() -> int = in_witness
-function cc_start() -> int = in_cc
-function cc_end() -> int = in_cc_end /* = public_keys start */
-function payload_start() -> int = in_payload
-function payload_end() -> int = in_payload_end
-function npr_end() -> int = in_witness /* npr is the first top field */
-function dep_start() -> int = in_dep
-function wreq_start() -> int = in_wreq
-function creq_start() -> int = in_creq
-function req_end() -> int = in_witness /* execution_requests is the last npr field */
+/* the single geometry pass: each container offset is read exactly once */
+function decode_input_layout() -> SszLayout = {
+    let npr = SSZ_BODY + ssz_u32(SSZ_BODY + IN_NPR_OFF);
+    let wit = SSZ_BODY + ssz_u32(SSZ_BODY + IN_WITNESS_OFF);
+    let cc = SSZ_BODY + ssz_u32(SSZ_BODY + IN_CHAIN_CONFIG_OFF);
+    let cce = SSZ_BODY + ssz_u32(SSZ_BODY + IN_PUBLIC_KEYS_OFF);
+    let p = npr + ssz_u32(npr + NPR_PAYLOAD_OFF);
+    let pe = npr + ssz_u32(npr + NPR_VHASHES_OFF);
+    let req = npr + ssz_u32(npr + NPR_REQUESTS_OFF);
+    let txs = p + ssz_u32(p + PL_TXS_OFF);
+    let wds = p + ssz_u32(p + PL_WDS_OFF);
+    let bal = p + ssz_u32(p + PL_BAL_OFF);
+    let ws = wit + ssz_u32(wit + WIT_STATE_OFF);
+    let wc = wit + ssz_u32(wit + WIT_CODES_OFF);
+    let wh = wit + ssz_u32(wit + WIT_HEADERS_OFF);
+    struct {
+        npr = npr,
+        witness = wit,
+        cc = cc,
+        cc_end = cce,
+        payload = p,
+        payload_end = pe,
+        dep = req + ssz_u32(req + REQ_DEPOSITS_OFF),
+        wreq = req + ssz_u32(req + REQ_WITHDRAWALS_OFF),
+        creq = req + ssz_u32(req + REQ_CONSOLIDATIONS_OFF),
+        txs = txs,
+        n_txs =
+            if txs == wds then {
+                0
+            } else {
+                ediv_int(ssz_u32(txs), SSZ_OFF_BYTES)
+            },
+        wds = wds,
+        n_wds = ediv_int(bal - wds, WD_SIZE),
+        bal = bal,
+        extra = p + ssz_u32(p + PL_EXTRA_OFF),
+        wit_state = ws,
+        n_wit_state =
+            if ws == wc then {
+                0
+            } else {
+                ediv_int(ssz_u32(ws), SSZ_OFF_BYTES)
+            },
+        wit_codes = wc,
+        n_wit_codes =
+            if wc == wh then {
+                0
+            } else {
+                ediv_int(ssz_u32(wc), SSZ_OFF_BYTES)
+            },
+        wit_headers = wh,
+        n_wit_headers =
+            if wh == cc then {
+                0
+            } else {
+                ediv_int(ssz_u32(wh), SSZ_OFF_BYTES)
+            },
+    }
+}
 
 /* big-endian 32-byte field (Bytes32, e.g. prev_randao) -- four FFI reads */
 function ssz_bytes32(b : int) -> bits(256) = {
@@ -186,58 +171,56 @@ function ssz_u256(b : int) -> word = {
     append(c3, append(c2, append(c1, c0)))
 }
 
-function pl_block_number() -> int = ssz_u64(payload_start() + PL_BLOCK_NUMBER)
-function pl_slot_number() -> u64 = ssz_src_le(payload_start() + PL_SLOT_NUMBER, 8) /* EIP-7843 */
-function pl_gas_limit() -> int = ssz_u64(payload_start() + PL_GAS_LIMIT)
-function pl_gas_used() -> int = ssz_u64(payload_start() + PL_GAS_USED)
-function pl_timestamp() -> int = ssz_u64(payload_start() + PL_TIMESTAMP)
-function pl_fee_recipient() -> address = ssz_addr(payload_start() + PL_FEE_RECIPIENT)
-function pl_prev_randao() -> bits(256) = ssz_bytes32(payload_start() + PL_PREV_RANDAO)
-function pl_base_fee() -> word = ssz_u256(payload_start() + PL_BASE_FEE)
-function pl_blob_gas_used() -> u64 = ssz_src_le(payload_start() + PL_BLOB_GAS_USED, 8)
-function pl_excess_blob_gas() -> u64 = ssz_src_le(payload_start() + PL_EXCESS_BLOB_GAS, 8)
-function pl_state_root() -> bits(256) = ssz_bytes32(payload_start() + PL_STATE_ROOT)
-function pl_receipts_root() -> bits(256) = ssz_bytes32(payload_start() + PL_RECEIPTS_ROOT)
-function pl_logs_bloom() -> list(byte) = ssz_bytes(payload_start() + PL_LOGS_BLOOM, 256)
-function pl_block_hash() -> bits(256) = ssz_bytes32(payload_start() + PL_BLOCK_HASH)
+function pl_block_number(p : int) -> int = ssz_u64(p + PL_BLOCK_NUMBER)
+function pl_slot_number(p : int) -> u64 = ssz_src_le(p + PL_SLOT_NUMBER, 8) /* EIP-7843 */
+function pl_gas_limit(p : int) -> int = ssz_u64(p + PL_GAS_LIMIT)
+function pl_gas_used(p : int) -> int = ssz_u64(p + PL_GAS_USED)
+function pl_timestamp(p : int) -> int = ssz_u64(p + PL_TIMESTAMP)
+function pl_fee_recipient(p : int) -> address = ssz_addr(p + PL_FEE_RECIPIENT)
+function pl_prev_randao(p : int) -> bits(256) = ssz_bytes32(p + PL_PREV_RANDAO)
+function pl_base_fee(p : int) -> word = ssz_u256(p + PL_BASE_FEE)
+function pl_blob_gas_used(p : int) -> u64 = ssz_src_le(p + PL_BLOB_GAS_USED, 8)
+function pl_excess_blob_gas(p : int) -> u64 = ssz_src_le(p + PL_EXCESS_BLOB_GAS, 8)
+function pl_state_root(p : int) -> bits(256) = ssz_bytes32(p + PL_STATE_ROOT)
+function pl_receipts_root(p : int) -> bits(256) = ssz_bytes32(p + PL_RECEIPTS_ROOT)
+function pl_logs_bloom(p : int) -> list(byte) = ssz_bytes(p + PL_LOGS_BLOOM, 256)
+function pl_block_hash(p : int) -> bits(256) = ssz_bytes32(p + PL_BLOCK_HASH)
 
-/* variable sub-regions of the payload (decoded by stateless_input_index) */
-function pl_txs_start() -> int = in_txs
-function pl_wds_start() -> int = in_wds
-function pl_bal_start() -> int = in_bal
-function pl_extra_start() -> int = in_extra
-function pl_extra_data() -> list(byte) =
-    ssz_bytes(pl_extra_start(), pl_txs_start() - pl_extra_start())
-function pl_block_access_list() -> list(byte) =
-    ssz_bytes(pl_bal_start(), payload_end() - pl_bal_start())
-
-/* block_access_list (simplified): u32-LE count, then count*(addr[20] ++ slot[32 BE]).
- * bal_load materializes the permitted (addr,slot) set; the kernel's k_sload/k_sstore
- * panic on any access outside it (k_bal_enable / bal_guard). */
-function bal_count() -> int = ssz_u32(pl_bal_start())
-function bal_load() -> list(StorageKey) = {
-    let base = pl_bal_start() + BAL_COUNT_BYTES;
-    let n = bal_count();
-    var xs : list(StorageKey) = [||];
-    foreach (i from 0 to (n - 1)) {
-        xs =
-            struct {
-                addr = ssz_addr(base + i * BAL_ENTRY_SIZE),
-                slot = ssz_bytes32(base + i * BAL_ENTRY_SIZE + BAL_SLOT_OFF),
-            } ::
-                xs
-    };
-    xs
+/* variable sub-regions of the payload (lazy; cold callers only) */
+function pl_txs_start() -> int = {
+    let p = payload_start();
+    p + ssz_u32(p + PL_TXS_OFF)
+}
+function pl_wds_start() -> int = {
+    let p = payload_start();
+    p + ssz_u32(p + PL_WDS_OFF)
+}
+function pl_bal_start() -> int = {
+    let p = payload_start();
+    p + ssz_u32(p + PL_BAL_OFF)
+}
+function pl_extra_start() -> int = {
+    let p = payload_start();
+    p + ssz_u32(p + PL_EXTRA_OFF)
 }
 
-/* withdrawals: FIXED 44-byte SszWithdrawal elements, span [wds, bal) */
-function pl_n_withdrawals() -> int = in_n_wds
-function withdrawal_index(i : int) -> int = ssz_u64(pl_wds_start() + i * WD_SIZE + WD_INDEX)
-function withdrawal_validator_index(i : int) -> int = ssz_u64(pl_wds_start() + i * WD_SIZE + WD_VALIDATOR_INDEX)
-function withdrawal_amount(i : int) -> int = ssz_u64(pl_wds_start() + i * WD_SIZE + WD_AMOUNT)
-function withdrawal_addr(i : int) -> address = ssz_addr(pl_wds_start() + i * WD_SIZE + WD_ADDRESS)
+/* withdrawals: FIXED 44-byte SszWithdrawal elements at base wds (layout) */
+function withdrawal_index(wds : int, i : int) -> int = ssz_u64(wds + i * WD_SIZE + WD_INDEX)
+function withdrawal_validator_index(wds : int, i : int) -> int = ssz_u64(wds + i * WD_SIZE + WD_VALIDATOR_INDEX)
+function withdrawal_amount(wds : int, i : int) -> int = ssz_u64(wds + i * WD_SIZE + WD_AMOUNT)
+function withdrawal_addr(wds : int, i : int) -> address = ssz_addr(wds + i * WD_SIZE + WD_ADDRESS)
 
-function pl_n_txs() -> int = in_n_txs
+/* lazy counts (cold callers; the pass uses layout.n_txs / layout.n_wds) */
+function pl_n_txs() -> int = {
+    let t = pl_txs_start();
+    let w = pl_wds_start();
+    if t == w then {
+        0
+    } else {
+        ediv_int(ssz_u32(t), SSZ_OFF_BYTES)
+    }
+}
+function pl_n_withdrawals() -> int = ediv_int(pl_bal_start() - pl_wds_start(), WD_SIZE)
 
 /* SszChainConfig: chain_id u64 @ cc+0, active_fork (SszForkConfig) offset @ cc+8;
  * SszForkConfig: fork u64 @ 0 (ProtocolFork index; Amsterdam = 20 in current
@@ -271,18 +254,11 @@ function cc_activation_active() -> bool = {
     let bs_start = cc_blobsched_start();
     let bn_present = (ts_start - bn_start) >= 8; /* the optional list is non-empty */
     let ts_present = (bs_start - ts_start) >= 8;
-    let bn_ok = not_bool(bn_present) | (pl_block_number() >= ssz_u64(bn_start));
-    let ts_ok = not_bool(ts_present) | (pl_timestamp() >= ssz_u64(ts_start));
+    let p = payload_start();
+    let bn_ok = not_bool(bn_present) | (pl_block_number(p) >= ssz_u64(bn_start));
+    let ts_ok = not_bool(ts_present) | (pl_timestamp(p) >= ssz_u64(ts_start));
     (bn_present | ts_present) & bn_ok & ts_ok
 }
-
-/* SszExecutionWitness list getters over the index */
-function wit_state_start() -> int = in_wit_state
-function wit_codes_start() -> int = in_wit_codes
-function wit_headers_start() -> int = in_wit_headers
-function wit_n_state() -> int = in_n_wit_state
-function wit_n_codes() -> int = in_n_wit_codes
-function wit_n_headers() -> int = in_n_wit_headers
 
 /* (start, len) of element i of a List[ByteList] given its [start, stop) span */
 function ssz_list_span(start : int, n : int, stop : int, i : int) -> (int, int) = {
@@ -300,11 +276,11 @@ function ssz_list_slice(start : int, n : int, stop : int, i : int) -> ByteSlice 
 }
 function sha256_request_digest(request_type : int, s : ByteSlice) -> bits(256) =
     bytes_sha256_prefixed(get_slice_int(8, request_type, 0), s)
-function ssz_witness_node_slice(i : int) -> ByteSlice =
-    ssz_list_slice(wit_state_start(), wit_n_state(), wit_codes_start(), i)
-function ssz_witness_code_slice(i : int) -> ByteSlice =
-    ssz_list_slice(wit_codes_start(), wit_n_codes(), wit_headers_start(), i)
-function ssz_witness_header_slice(i : int) -> ByteSlice =
-    ssz_list_slice(wit_headers_start(), wit_n_headers(), cc_start(), i)
+function ssz_witness_node_slice(l : SszLayout, i : int) -> ByteSlice =
+    ssz_list_slice(l.wit_state, l.n_wit_state, l.wit_codes, i)
+function ssz_witness_code_slice(l : SszLayout, i : int) -> ByteSlice =
+    ssz_list_slice(l.wit_codes, l.n_wit_codes, l.wit_headers, i)
+function ssz_witness_header_slice(l : SszLayout, i : int) -> ByteSlice =
+    ssz_list_slice(l.wit_headers, l.n_wit_headers, l.cc, i)
 
 /* transactions[i] raw bytes (legacy = RLP list; typed = type byte ++ payload) */

@@ -94,21 +94,17 @@ register zkvm_out_gas : int = 0
  * withdrawals, so the shared per-tx STF unit (process_transaction) IS the block
  * -- no block-start system calls / block-end / rewards. */
 function run_one() -> unit = {
-    stateless_input_index();
-    k_fork = k_fork_from_ssz(cc_fork());
-
-    /* Load witness nodes + codes and anchor the pre-state root, exactly as the
-       guest does. A state test carries a single DUMMY parent header whose
-       state_root is the pre-state root (headers len 1); parent_state_root() reads
-       it, and headers_ok() is vacuously true at n=1. authenticate_parent_state()
-       sets k_n_headers = wit_n_headers() = 1, so BLOCKHASH of the immediate parent
-       resolves from that dummy header and anything deeper fail-closes to 0
-       (host/kernel.sail k_blockhash).
-       The world starts empty -- the ctypes harness calls evmsail_clear_memory
+    /* THE single traversal (host/block.sail decode_stateless_input): geometry,
+       witness node/code/header stores, block header, every tx -- decoded once,
+       returned as values; also installs k_header / k_n_headers /
+       k_parent_state_root. A state test carries a single DUMMY parent header
+       whose state_root is the pre-state root (headers len 1, chain vacuously
+       contiguous), so BLOCKHASH of the immediate parent resolves from it and
+       anything deeper fail-closes to 0 (host/kernel.sail k_blockhash). The
+       world starts empty -- the ctypes harness calls evmsail_clear_memory
        before each run -- so there is no overlay wipe here. */
-    authenticate_parent_state();
-
-    decode_block_ssz();
+    let input = decode_stateless_input();
+    k_fork = k_fork_from_ssz(input.fork);
 
     /* Run each tx decoded on demand by its SSZ index -- no materialized block. A
        malformed tx / bad signature (or a deficient witness during execution)
@@ -116,14 +112,18 @@ function run_one() -> unit = {
        reads the generated have_exception flag after the run and reports the
        case as an exception. Gas is accumulated into the shared register per tx
        so a multi-tx input keeps its progress observable. */
-    let base_fee = k_header.base_fee;
-    let n_txs = pl_n_txs();
     zkvm_out_gas = 0;
-    var i : int = 0;
-    while i < n_txs do {
-        let r = process_transaction(decode_tx_ssz(i, base_fee));
-        zkvm_out_gas = zkvm_out_gas + r.gas_used;
-        i = i + 1
+    var rest : list(Transaction) = input.block.body.transactions;
+    var more : bool = true;
+    while more do {
+        match rest {
+            [||] => more = false,
+            tx :: r => {
+                let res = process_transaction(tx);
+                zkvm_out_gas = zkvm_out_gas + res.gas_used;
+                rest = r
+            },
+        }
     }
 }
 

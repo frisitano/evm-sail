@@ -1204,24 +1204,14 @@ termination_measure trie_walk(node, key, pos, fuel) = fuel
 /* populate the C node-db from witness.state: keccak(node) -> span. The node is
  * materialized once here to hash it; the recorded span (not the bytes) is what
  * the walk reads back, so no per-node Sail copy is retained. */
-function build_node_db() -> unit = {
+function build_node_db(l : SszLayout) -> unit = {
     nodedb_reset();
-    let n = wit_n_state();
-    foreach (i from 0 to (n - 1)) {
-        let s = ssz_witness_node_slice(i);
+    foreach (i from 0 to (l.n_wit_state - 1)) {
+        let s = ssz_witness_node_slice(l, i);
         let h = keccak256(s);
         nodedb_insert(h, s.off, s.len)
     }
 }
-
-/* the parent header's state_root (field 3) = pre-state root. The witness headers
- * form a chain header[0] (oldest) .. header[n-1] (newest), where header[i]'s
- * parent is header[i-1] (validated by headers_ok). The block being validated
- * extends the NEWEST, so its parent is header[n-1] -- NOT header[0]. With a
- * single header they coincide; when BLOCKHASH/EIP-2935 pulls in older headers
- * (EIP-8025 witness header collection) the parent is the last one. */
-function parent_state_root() -> bits(256) =
-    bytes_be256(list_nth(in_parent_header_items, 3, RLP_NONE).content)
 
 /* The stateless resolvers (declared in host/state.sail): one lazy Merkle walk
  * from the authenticated parent-root anchor (k_parent_state_root) over the

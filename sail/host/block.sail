@@ -12,10 +12,9 @@
 
 /* Register every witness code blob into the hash-keyed C code store. The C side
  * hashes the SSZ input span and copies the bytes into the owned code_db entry. */
-function register_witness_codes() -> unit = {
-    let n = wit_n_codes();
-    foreach (i from 0 to (n - 1)) {
-        code_db_store_witness_code(ssz_witness_code_slice(i))
+function register_witness_codes(l : SszLayout) -> unit = {
+    foreach (i from 0 to (l.n_wit_codes - 1)) {
+        code_db_store_witness_code(ssz_witness_code_slice(l, i))
     }
 }
 
@@ -26,13 +25,21 @@ function register_witness_codes() -> unit = {
  * DECODING from the captured items stays at the original consumer sites
  * (parent_state_root, parent_header_int_field), so a non-canonical field
  * still throws exactly where it used to. */
-function index_witness_headers() -> unit = {
-    let n = wit_n_headers();
-    var hashes : list(hash) = [||];
+/* Parse the witness header chain, asserting it against the ALREADY-decoded
+ * block: each header is hashed once (kept in the C headerhash store for
+ * BLOCKHASH), the chain prefix must be contiguous
+ * (header[i].parent_hash == keccak(header[i-1])), and the NEWEST header must
+ * be the decoded block's parent (keccak(header[n-1]) == expected_parent).
+ * Returns (chain contiguous, block parent hash matches, newest header's RLP
+ * items). */
+function index_witness_headers(l : SszLayout, expected_parent : hash) -> (bool, bool, list(RlpField)) = {
+    headerhash_reset();
+    let n = l.n_wit_headers;
     var prev : hash = ZERO_WORD;
     var ok : bool = n >= 1;
+    var pitems : list(RlpField) = [||];
     foreach (i from 0 to (n - 1)) {
-        let s = ssz_witness_header_slice(i);
+        let s = ssz_witness_header_slice(l, i);
         if (i > 0) | (i == n - 1) then {
             let items = rlp_node_items(read_byte_slice(s));
             if i > 0 then {
@@ -41,18 +48,20 @@ function index_witness_headers() -> unit = {
                 }
             };
             if i == n - 1 then {
-                in_parent_header_items = items
+                pitems = items
             }
         };
         prev = keccak256(s);
-        hashes = prev :: hashes
+        headerhash_push(prev)
     };
-    in_header_hashes = list_reverse(hashes);
-    in_parent_header_hash = prev;
-    in_headers_ok = ok
+    (ok, prev == expected_parent, pitems)
 }
 
-function headers_ok() -> bool = in_headers_ok
+/* the parent header's state_root (field 3) = pre-state root. The witness
+ * headers run header[0] (oldest) .. header[n-1] (newest); the block being
+ * validated extends the NEWEST, so its parent is header[n-1]. */
+function parent_state_root(items : list(RlpField)) -> hash =
+    bytes_be256(list_nth(items, 3, RLP_NONE).content)
 
 /* Effective fee for a typed (EIP-1559) tx: the gas price actually paid is
  * min(max_fee_per_gas, base_fee + max_priority_fee), and the priority tip paid to
@@ -162,11 +171,11 @@ function tx_sig_v_ok(ttype : int, v : int) -> bool =
     }
 
 /* authenticate tx i: EIP-2 low-s, then bind public_keys[i] to the signature */
-function tx_auth_ok(i : int, h : bits(256), r : word, s : word) -> bool =
+function tx_auth_ok(pubkeys : int, i : int, h : bits(256), r : word, s : word) -> bool =
     if unsigned(s) > unsigned(SECP_N_HALF) then {
         false
     } else {
-        secp256k1_verify(h, r, s, ssz_bytes32(cc_end() + i * 65 + 1), ssz_bytes32(cc_end() + i * 65 + 33))
+        secp256k1_verify(h, r, s, ssz_bytes32(pubkeys + i * 65 + 1), ssz_bytes32(pubkeys + i * 65 + 33))
     }
 
 /* ---- EIP-7702 authorization-tuple recovery ---------------------------------
@@ -238,9 +247,9 @@ function decode_auth_list(f : RlpField) -> list(Authorization) = {
  * (max_priority_fee, max_fee) -- so the logical field indices are selected by
  * type. Type-4 (EIP-7702) authorization tuples are decoded and their authorities
  * recovered (decode_auth_list); process_auth_list then applies the delegations. */
-function decode_tx_ssz(i : int, base_fee : word) -> Transaction = {
-    let sender = word_to_address(keccak256(witness_byte_slice(cc_end() + i * 65 + 1, 64)));
-    let (tx_off, tx_len) = ssz_list_span(pl_txs_start(), pl_n_txs(), pl_wds_start(), i);
+function decode_tx_ssz(l : SszLayout, i : int, base_fee : word) -> Transaction = {
+    let sender = word_to_address(keccak256(witness_byte_slice(l.cc_end + i * 65 + 1, 64)));
+    let (tx_off, tx_len) = ssz_list_span(l.txs, l.n_txs, l.wds, i);
     let tx_bytes = ssz_bytes(tx_off, tx_len);
 
     let b0 : int = if tx_len == 0 then {
@@ -357,7 +366,10 @@ function decode_tx_ssz(i : int, base_fee : word) -> Transaction = {
 
     /* A tx whose signature does not authenticate its witness public key makes the
        block invalid -- throw at the point of detection (EELS recover_sender). */
-    if not_bool(tx_sig_v_ok(ttype, sig_v) & tx_auth_ok(i, tx_signing_hash(ttype, sig_content_src, sig_v), sig_r, sig_s)) then {
+    if not_bool(
+        tx_sig_v_ok(ttype, sig_v) &
+            tx_auth_ok(l.cc_end, i, tx_signing_hash(ttype, sig_content_src, sig_v), sig_r, sig_s),
+    ) then {
         throw InvalidBlock(InvalidSignature)
     };
 
@@ -502,58 +514,98 @@ function input_well_formed() -> bool = {
  * No execution-overlay wipe here: the world starts empty (fresh process for the
  * production guest; the ctypes harness calls evmsail_clear_memory before each
  * run -- test_utils.c), which is why the model no longer defines k_world_reset. */
-function authenticate_parent_state() -> unit = {
-    build_node_db();
-    register_witness_codes();
-    index_witness_headers();
-
-    /* Publish the authenticated ancestor-header count to the register BLOCKHASH
-       reads (k_blockhash, host/kernel.sail). The guest gets its real witness chain;
-       the runner gets its single dummy parent (wit_n_headers() == 1). */
-    k_n_headers = wit_n_headers();
-    if headers_ok() then {
-        k_parent_state_root = parent_state_root()
-    } else {
-        throw InvalidBlock(WitnessDeficient)
+function decode_block_header_ssz(l : SszLayout) -> BlockHeader =
+    struct {
+        number = pl_block_number(l.payload),
+        timestamp = pl_timestamp(l.payload),
+        gas_limit = pl_gas_limit(l.payload),
+        gas_used = pl_gas_used(l.payload),
+        prev_randao = pl_prev_randao(l.payload),
+        base_fee = pl_base_fee(l.payload),
+        blob_gas_used = pl_blob_gas_used(l.payload),
+        excess_blob_gas = pl_excess_blob_gas(l.payload),
+        state_root = pl_state_root(l.payload),
+        receipts_root = pl_receipts_root(l.payload),
+        logs_bloom = pl_logs_bloom(l.payload),
+        block_hash = pl_block_hash(l.payload),
+        fee_recipient = pl_fee_recipient(l.payload),
+        parent_hash = ssz_bytes32(l.payload + 0),
+        parent_beacon_block_root = ssz_bytes32(l.npr + NPR_BEACON_ROOT),
+        slot_number = pl_slot_number(l.payload),
     }
+
+function withdrawal_at(l : SszLayout, i : int) -> Withdrawal =
+    struct {
+        index = withdrawal_index(l.wds, i),
+        validator_index = withdrawal_validator_index(l.wds, i),
+        address = withdrawal_addr(l.wds, i),
+        amount = withdrawal_amount(l.wds, i),
+    }
+
+/* Everything the single decode pass returns: the decoded block (header,
+ * transactions, withdrawals) plus the witness-header results the validation
+ * layer reads. The parent header travels as its RLP items so field decoding
+ * (and its canonicity throws) stays at the original consumer sites. */
+struct StatelessInput = {
+    block : Block,
+    fork : int,
+    headers_ok : bool, /* witness header chain contiguous              */
+    parent_hash_ok : bool, /* newest witness header IS the block's parent  */
+    parent_header_items : list(RlpField),
 }
 
-function decode_block_header_ssz() -> BlockHeader =
-    struct {
-        number = pl_block_number(),
-        timestamp = pl_timestamp(),
-        gas_limit = pl_gas_limit(),
-        gas_used = pl_gas_used(),
-        prev_randao = pl_prev_randao(),
-        base_fee = pl_base_fee(),
-        blob_gas_used = pl_blob_gas_used(),
-        excess_blob_gas = pl_excess_blob_gas(),
-        state_root = pl_state_root(),
-        receipts_root = pl_receipts_root(),
-        logs_bloom = pl_logs_bloom(),
-        block_hash = pl_block_hash(),
-        fee_recipient = pl_fee_recipient(),
-        parent_hash = ssz_bytes32(payload_start() + 0),
-        parent_beacon_block_root = ssz_bytes32(npr_start() + 8),
-        slot_number = pl_slot_number(),
-    }
+/* THE single traversal over the stateless input. In one pass, in container
+ * order: the geometry (each offset once), the witness node DB and code DB
+ * (C-side stores), the header chain (hashed once each, hashes into the C
+ * headerhash store for BLOCKHASH, newest split once), the block header, and
+ * every transaction (sender recovery + signature verification, as EELS
+ * decodes the block body before executing it) and withdrawal. Also installs
+ * the execution-context registers (k_header, k_n_headers,
+ * k_parent_state_root) the EVM reads ambiently. Throws InvalidBlock on a
+ * broken header chain, malformed tx, or bad signature -- same sites, same
+ * order as the previous incremental decode. */
+function decode_stateless_input() -> StatelessInput = {
+    let l = decode_input_layout();
 
-/* Build the Withdrawal at index i from the SSZ payload accessors. Transient: the
- * withdrawal set is consumed by index (apply_withdrawals / withdrawals_trie_root),
- * never materialized as a block-wide list. */
-function withdrawal_at(i : int) -> Withdrawal =
-    struct {
-        index = withdrawal_index(i),
-        validator_index = withdrawal_validator_index(i),
-        address = withdrawal_addr(i),
-        amount = withdrawal_amount(i),
-    }
+    /* the block itself (payload region, first in container order) */
+    let header = decode_block_header_ssz(l);
+    k_set_header(header);
+    var txs_rev : list(Transaction) = [||];
+    foreach (i from 0 to (l.n_txs - 1)) {
+        txs_rev = decode_tx_ssz(l, i, header.base_fee) :: txs_rev
+    };
+    var wds_rev : list(Withdrawal) = [||];
+    foreach (i from 0 to (l.n_wds - 1)) {
+        wds_rev = withdrawal_at(l, i) :: wds_rev
+    };
 
-/* Decode ONLY the header into the k_header register. Transactions and withdrawals
- * are NOT materialized here: execution loops over their SSZ indices and decodes
- * each on demand (decode_tx_ssz / withdrawal_at), so the full block never lives in
- * program state. A malformed tx / bad signature THROWS during that decode. */
-function decode_block_ssz() -> unit = k_set_header(decode_block_header_ssz())
+    /* the witness region, asserted against the decoded block */
+    build_node_db(l);
+    register_witness_codes(l);
+    let (hok, pok, pitems) = index_witness_headers(l, header.parent_hash);
+    k_n_headers = l.n_wit_headers;
+    if hok then {
+        k_parent_state_root = parent_state_root(pitems)
+    } else {
+        throw InvalidBlock(WitnessDeficient)
+    };
+    struct {
+        block =
+            struct {
+                header = header,
+                body =
+                    struct {
+                        transactions = list_reverse(txs_rev),
+                        withdrawals = list_reverse(wds_rev),
+                        block_access_list = witness_byte_slice(l.bal, l.payload_end - l.bal),
+                    },
+            },
+        fork = cc_fork(),
+        headers_ok = hok,
+        parent_hash_ok = pok,
+        parent_header_items = pitems,
+    }
+}
 
 /* Block hash (val in host/io.sail): keccak(rlp([...header fields...])), the
  * canonical field layout. logs_bloom / extraData are re-read from their

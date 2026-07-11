@@ -318,7 +318,7 @@ function k_blockhash(n : word) -> hash = {
         if idx < 0 then {
             throw InvalidBlock(WitnessDeficient)
         } else {
-            list_nth(in_header_hashes, idx, ZERO_WORD)
+            headerhash_get(get_slice_int(64, idx, 0))
         }
     }
 }

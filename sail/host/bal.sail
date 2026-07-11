@@ -25,14 +25,12 @@ function bal_account_items(acc : list(byte)) -> int = {
 
 /* total item count over the whole BlockAccessList (a ByteList in the payload):
  * #accounts + sum over accounts of (#storage_changes + #storage_reads). */
-function bal_item_count() -> int = {
-    let b = pl_bal_start();
-    let e = payload_end();
-    if b >= e then {
+function bal_item_count(bal : ByteSlice) -> int = {
+    if unsigned(bal.len) == 0 then {
         0
     } else {
         var total : int = 0;
-        var rest : list(RlpField) = rlp_node_items(ssz_bytes(b, e - b));
+        var rest : list(RlpField) = rlp_node_items(read_byte_slice(bal));
         var more : bool = true;
         while more do {
             match rest {

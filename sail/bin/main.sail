@@ -113,11 +113,15 @@ struct BlockExecutionResult = {
     receipts : list(Receipt),
 }
 
-function parent_header_int_field(idx : int) -> int =
-    rlp_field_int(rlp_item(in_parent_header_items, idx))
+function parent_header_int_field(items : list(RlpField), idx : int) -> int =
+    rlp_field_int(rlp_item(items, idx))
 
-function expected_payload_excess_blob_gas() -> int =
-    next_excess_blob_gas(parent_header_int_field(18), parent_header_int_field(17), parent_header_int_field(15))
+function expected_payload_excess_blob_gas(items : list(RlpField)) -> int =
+    next_excess_blob_gas(
+        parent_header_int_field(items, 18),
+        parent_header_int_field(items, 17),
+        parent_header_int_field(items, 15),
+    )
 
 function run_block_start_system_calls() -> unit = {
     /* EIP-4788 / EIP-2935: write the parent beacon-block root and parent block
@@ -126,7 +130,7 @@ function run_block_start_system_calls() -> unit = {
     system_call(HISTORY_STORAGE_ADDR(), k_header.parent_hash)
 }
 
-function execute_block_transactions(block_gas_limit : int) -> BlockExecutionResult = {
+function execute_block_transactions(txs : list(Transaction), block_gas_limit : int) -> BlockExecutionResult = {
     var all_ok : bool = true;
     var gas_acc : int = 0;
     var blob_gas_acc : int = 0;
@@ -141,37 +145,41 @@ function execute_block_transactions(block_gas_limit : int) -> BlockExecutionResu
        witness omits the offending tx's proofs; the guest must likewise refrain
        from executing it (and every later tx), else it over-reads the witness
        and aborts on a node EELS never proved. */
-    /* Each tx is decoded on demand by its SSZ index -- the block is never
-       materialized as a list. A malformed tx / bad signature THROWS during
-       decode_tx_ssz (caught at run_one), so no rlp_decode_ok / auth_ok flag is
-       threaded. Decoding reads only witness/payload bytes, never state. */
-    let base_fee = k_header.base_fee;
-    let n_txs = pl_n_txs();
+    /* Transactions were decoded (and signature-verified) by the single input
+       pass, as EELS decodes the block body before executing it; this loop only
+       executes them. */
+    var rest : list(Transaction) = txs;
     var i : int = 0;
-    while i < n_txs do {
-        let tx = decode_tx_ssz(i, base_fee);
-        if not_bool(block_gas_overflow | blob_gas_overflow) then {
-            let tx_blob_gas = tx.blob_count * GAS_PER_BLOB;
-            if i == 0 then {
-                tx0_to = tx.recipient
-            };
-            if tx.gas_limit > block_gas_limit - gas_acc then {
-                block_gas_overflow = true
-            } else {
-                if tx_blob_gas > blob_max_gas_per_block() - blob_gas_acc then {
-                    blob_gas_overflow = true
-                } else {
-                    let r = process_transaction(tx);
-                    all_ok = all_ok & r.valid;
-                    gas_acc = gas_acc + r.block_gas;
-                    if r.valid then {
-                        receipts_rev = r :: receipts_rev;
-                        blob_gas_acc = blob_gas_acc + tx_blob_gas
+    var more : bool = true;
+    while more do {
+        match rest {
+            [||] => more = false,
+            tx :: txs_rest => {
+                rest = txs_rest;
+                if not_bool(block_gas_overflow | blob_gas_overflow) then {
+                    let tx_blob_gas = tx.blob_count * GAS_PER_BLOB;
+                    if i == 0 then {
+                        tx0_to = tx.recipient
+                    };
+                    if tx.gas_limit > block_gas_limit - gas_acc then {
+                        block_gas_overflow = true
+                    } else {
+                        if tx_blob_gas > blob_max_gas_per_block() - blob_gas_acc then {
+                            blob_gas_overflow = true
+                        } else {
+                            let r = process_transaction(tx);
+                            all_ok = all_ok & r.valid;
+                            gas_acc = gas_acc + r.block_gas;
+                            if r.valid then {
+                                receipts_rev = r :: receipts_rev;
+                                blob_gas_acc = blob_gas_acc + tx_blob_gas
+                            }
+                        }
                     }
-                }
-            }
-        };
-        i = i + 1
+                };
+                i = i + 1
+            },
+        }
     };
     struct {
         all_ok = all_ok & not_bool(block_gas_overflow) & not_bool(blob_gas_overflow),
@@ -184,14 +192,19 @@ function execute_block_transactions(block_gas_limit : int) -> BlockExecutionResu
     }
 }
 
-function apply_withdrawals() -> unit = {
-    let n = pl_n_withdrawals();
-    var i : int = 0;
-    while i < n do {
-        /* EIP-4895: the withdrawal `amount` field is denominated in Gwei; the
-           credited balance is amount * 10^9 wei. */
-        k_add_balance(withdrawal_addr(i), word_of_int(withdrawal_amount(i) * 1000000000));
-        i = i + 1
+function apply_withdrawals(wds : list(Withdrawal)) -> unit = {
+    var rest : list(Withdrawal) = wds;
+    var more : bool = true;
+    while more do {
+        match rest {
+            [||] => more = false,
+            w :: r => {
+                /* EIP-4895: the withdrawal `amount` field is denominated in Gwei;
+                   the credited balance is amount * 10^9 wei. */
+                k_add_balance(w.address, word_of_int(w.amount * 1000000000));
+                rest = r
+            },
+        }
     }
 }
 
@@ -231,17 +244,21 @@ function withdrawal_rlp(w : Withdrawal) -> list(byte) = {
     rlp_list(payload)
 }
 
-function withdrawals_trie_root() -> hash = {
+function withdrawals_trie_root(wds : list(Withdrawal)) -> hash = {
     trie_arena_reset();
     var updates : list(TriePatch) = [||];
-    let n = pl_n_withdrawals();
+    var rest : list(Withdrawal) = wds;
     var i : int = 0;
-    while i < n do {
-        updates = patch_insert_sorted(
-            patch_leaf(trie_index_key(i), arena_intern(withdrawal_rlp(withdrawal_at(i)))),
-            updates,
-        );
-        i = i + 1
+    var more : bool = true;
+    while more do {
+        match rest {
+            [||] => more = false,
+            w :: r => {
+                updates = patch_insert_sorted(patch_leaf(trie_index_key(i), arena_intern(withdrawal_rlp(w))), updates);
+                rest = r;
+                i = i + 1
+            },
+        }
     };
     trie_root(EMPTY_TRIE_ROOT, updates)
 }
@@ -431,14 +448,7 @@ function receipts_trie_root(receipts : list(Receipt)) -> hash = {
     trie_root(EMPTY_TRIE_ROOT, updates)
 }
 
-function parent_hash_ok() -> bool =
-    if wit_n_headers() < 1 then {
-        false
-    } else {
-        k_header.parent_hash == in_parent_header_hash
-    }
-
-function validate_block(exec_ok : bool, block_result : BlockExecutionResult) -> unit = {
+function validate_block(input : StatelessInput, exec_ok : bool, block_result : BlockExecutionResult) -> unit = {
     /* S5: stateless validation outcome (a failure is a NORMAL result -- the guest
        reports successful_validation=false, it does not abort):
          - chain config selects the Amsterdam fork
@@ -451,33 +461,33 @@ function validate_block(exec_ok : bool, block_result : BlockExecutionResult) -> 
        ALL are computed (so witness reads are unchanged vs the old AND), then the
        FIRST failure is reported as its BlockError; a valid block yields None. */
     let header = k_header;
-    let fork_ok = cc_fork() == 20; /* canonical ProtocolFork index for Amsterdam
+    let fork_ok = input.fork == 20; /* canonical ProtocolFork index for Amsterdam
                                   (execution-specs@02c6c2510: enum pruned, Osaka=17 BPO1=18 BPO2=19
                                   Amsterdam=20). */
 
     let active_ok = cc_activation_active();
     let cfg_ok = fork_ok & active_ok;
 
-    let hdr_ok = headers_ok();
+    let hdr_ok = input.headers_ok;
     let gas_used_ok = block_result.gas_acc == header.gas_used;
     let blob_gas_used_ok = block_result.blob_gas_acc == unsigned(header.blob_gas_used);
-    let excess_blob_gas_ok = unsigned(header.excess_blob_gas) == expected_payload_excess_blob_gas();
+    let excess_blob_gas_ok = unsigned(header.excess_blob_gas) == expected_payload_excess_blob_gas(input.parent_header_items);
     let computed_root = compute_state_root();
     let poststate_ok = computed_root == header.state_root;
     let receipts_root = receipts_trie_root(block_result.receipts);
     let receipts_root_ok = receipts_root == header.receipts_root;
     let logs_bloom_ok = bytes_equal(receipts_bloom(block_result.receipts), header.logs_bloom);
     let transactions_root = transaction_trie_root();
-    let withdrawals_root = withdrawals_trie_root();
+    let withdrawals_root = withdrawals_trie_root(input.block.body.withdrawals);
     let requests_hash = execution_requests_hash();
-    let block_access_list_hash = keccak256(witness_byte_slice(pl_bal_start(), payload_end() - pl_bal_start()));
+    let block_access_list_hash = keccak256(input.block.body.block_access_list);
     let block_hash = block_header_hash(transactions_root, withdrawals_root, requests_hash, block_access_list_hash);
     let block_hash_ok = block_hash == header.block_hash;
-    let parent_ok = parent_hash_ok();
+    let parent_ok = input.parent_hash_ok; /* asserted by the input pass against the witness chain */
 
     /* EIP-7928: the block access list must not exceed block_gas_limit / 2000 items. */
     let bal_limit = ediv_int(header.gas_limit, 2000);
-    let bal_ok : bool = bal_item_count() <= bal_limit;
+    let bal_ok : bool = bal_item_count(input.block.body.block_access_list) <= bal_limit;
 
     /* All checks are computed above (witness reads unchanged); each failure THROWS
        its BlockError, mirroring EELS `raise InvalidBlock`. block_gas_overflow /
@@ -529,13 +539,6 @@ function validate_block(exec_ok : bool, block_result : BlockExecutionResult) -> 
         throw InvalidBlock(BlockAccessListTooLarge)
     }
 }
-
-function first_withdrawal_address() -> address =
-    if pl_n_withdrawals() > 0 then {
-        withdrawal_addr(0)
-    } else {
-        ZERO_ADDR
-    }
 
 /* canonical "invalid input" output: a 32-byte ZERO new_payload_request_root,
  * successful_validation=false, and a FIXED default ChainConfig (the input's is
@@ -610,15 +613,11 @@ function main() -> unit = {
         return ()
     };
 
-    /* decode the SSZ container geometry ONCE; every accessor below reads it */
-    stateless_input_index();
-
-    /* S2f: decode only the header into the k_header register, then execute against
-       witness state. Transactions and withdrawals are NOT materialized -- the STF
-       loops over their SSZ indices and decodes each on demand; a tx's input is
-       staged into the byte-addressed backend only when that tx is actually run. */
-    decode_block_ssz();
-    authenticate_parent_state();
+    /* THE single traversal: geometry, node/code/header stores, block header,
+       every tx (sender recovery + sig verify) and withdrawal -- decoded once,
+       returned as values; also installs k_header / k_n_headers /
+       k_parent_state_root. */
+    let input = decode_stateless_input();
 
     /* The witness backs the base layer for BOTH accounts and storage (the
        witness base backend, host/base_witness.sail, statically linked into this
@@ -628,18 +627,17 @@ function main() -> unit = {
        the account's storage root on first read (k_sload) and seeded into
        the working set. Nothing is pre-seeded -- no eager account/slot pass. */
 
-    /* Block STF, header-only in program state: system calls, then each tx decoded
-       on demand by SSZ index via the shared per-tx STF unit, then withdrawals
-       (also index-driven) and block-end system calls. */
+    /* Block STF: system calls, then each decoded tx through the shared per-tx
+       STF unit, then withdrawals and block-end system calls. */
     run_block_start_system_calls();
 
-    let block_result = execute_block_transactions(k_header.gas_limit);
-    apply_withdrawals();
+    let block_result = execute_block_transactions(input.block.body.transactions, k_header.gas_limit);
+    apply_withdrawals(input.block.body.withdrawals);
     let exec_ok : bool = run_checked_block_end_system_calls(block_result.all_ok);
 
     /* EELS verify_stateless_new_payload: any InvalidBlock throw -> valid=false. */
     let valid : bool = try {
-        validate_block(exec_ok, block_result);
+        validate_block(input, exec_ok, block_result);
         true
     } catch {
         InvalidBlock(_) => false,

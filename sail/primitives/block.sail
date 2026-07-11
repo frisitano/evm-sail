@@ -32,3 +32,18 @@ struct Withdrawal = {
     address : address,
     amount : int,
 }
+
+/* The block body: what the block carries besides its header. Transactions and
+ * withdrawals are decoded by the single input pass; the block access list
+ * (EIP-7928) stays a REFERENCE to its raw SSZ bytes -- it is hashed into the
+ * header and size-capped, never decoded into a list. */
+struct BlockBody = {
+    transactions : list(Transaction),
+    withdrawals : list(Withdrawal),
+    block_access_list : ByteSlice,
+}
+
+struct Block = {
+    header : BlockHeader,
+    body : BlockBody,
+}

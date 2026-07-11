@@ -86,3 +86,31 @@ let FA_TIMESTAMP_OFF : int = 4
 let WIT_STATE_OFF : int = 0
 let WIT_CODES_OFF : int = 4
 let WIT_HEADERS_OFF : int = 8
+
+/* The decoded container geometry of one SszStatelessInput: every region start
+ * (and list count) read exactly once by decode_input_layout
+ * (host/stateless_input.sail) and threaded as a VALUE through the single
+ * decode pass. Pure data -- no registers, no externs. */
+struct SszLayout = {
+    npr : int, /* SszNewPayloadRequest                    */
+    witness : int, /* SszExecutionWitness (= npr end)         */
+    cc : int, /* SszChainConfig                          */
+    cc_end : int, /* chain_config end (= public_keys start)  */
+    payload : int, /* SszExecutionPayload fixed region        */
+    payload_end : int, /* payload end (= versioned_hashes start)  */
+    dep : int, /* execution requests: deposits            */
+    wreq : int, /* execution requests: withdrawal reqs     */
+    creq : int, /* execution requests: consolidation reqs  */
+    txs : int, /* transactions List[ByteList]             */
+    n_txs : int,
+    wds : int, /* withdrawals (fixed 44-byte elements)    */
+    n_wds : int,
+    bal : int, /* block_access_list                       */
+    extra : int, /* extra_data                              */
+    wit_state : int, /* witness state nodes List[ByteList]      */
+    n_wit_state : int,
+    wit_codes : int, /* witness codes List[ByteList]            */
+    n_wit_codes : int,
+    wit_headers : int, /* witness headers List[ByteList]          */
+    n_wit_headers : int,
+}
