@@ -48,7 +48,7 @@ function block_header_hash(
     payload = list_append(payload, rlp_int(h.gas_limit));
     payload = list_append(payload, rlp_int(h.gas_used));
     payload = list_append(payload, rlp_int(h.timestamp));
-    payload = list_append(payload, rlp_bytes(ssz_bytes(pl_extra_start(), pl_txs_start() - pl_extra_start())));
+    payload = list_append(payload, rlp_bytes(read_byte_slice(h.extra_data)));
     payload = list_append(payload, rlp_word(h.prev_randao));
     payload = list_append(payload, rlp_bytes(zero_bytes(8)));
     payload = list_append(payload, rlp_int_word(h.base_fee));

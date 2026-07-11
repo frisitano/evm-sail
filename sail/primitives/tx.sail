@@ -32,6 +32,8 @@ struct Transaction = {
   tx_type : TxType,          /* EIP-2718 envelope type (the discriminant)    */
   sender : address, nonce : int,
   gas_limit : gas, is_create : bool, recipient : address, value : word,
+  raw : ByteSlice,             /* the EIP-2718 envelope span this tx decoded from
+                                  (the transactions-trie leaf value)             */
   input_src : ByteSlice,       /* calldata / creation initcode as a host byte source
                                   (the witness span for a stateless tx, or the
                                   already-staged native-runner input) -- staged in

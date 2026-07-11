@@ -1196,12 +1196,18 @@ termination_measure trie_walk(node, key, pos, fuel) = fuel
 /* populate the C node-db from witness.state: keccak(node) -> span. The node is
  * materialized once here to hash it; the recorded span (not the bytes) is what
  * the walk reads back, so no per-node Sail copy is retained. */
-function build_node_db(start : int, n : int, stop : int) -> unit = {
+function build_node_db(nodes : list(ByteSlice)) -> unit = {
     nodedb_reset();
-    foreach (i from 0 to (n - 1)) {
-        let s = ssz_list_slice(start, n, stop, i);
-        let h = keccak256(s);
-        nodedb_insert(h, s.off, s.len)
+    var rest : list(ByteSlice) = nodes;
+    var more : bool = true;
+    while more do {
+        match rest {
+            [||] => more = false,
+            s :: r => {
+                nodedb_insert(keccak256(s), s.off, s.len);
+                rest = r
+            },
+        }
     }
 }
 

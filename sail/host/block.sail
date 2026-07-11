@@ -12,10 +12,27 @@
 
 /* Register every witness code blob into the hash-keyed C code store. The C side
  * hashes the SSZ input span and copies the bytes into the owned code_db entry. */
-function register_witness_codes(start : int, n : int, stop : int) -> unit = {
-    foreach (i from 0 to (n - 1)) {
-        code_db_store_slice(ssz_list_slice(start, n, stop, i))
+function register_witness_codes(codes : list(ByteSlice)) -> unit = {
+    var rest : list(ByteSlice) = codes;
+    var more : bool = true;
+    while more do {
+        match rest {
+            [||] => more = false,
+            c :: r => {
+                code_db_store_slice(c);
+                rest = r
+            },
+        }
     }
+}
+
+/* materialize a List[ByteList] region as element REFERENCES, in order */
+function ssz_slice_list(start : int, n : int, stop : int) -> list(ByteSlice) = {
+    var out : list(ByteSlice) = [||];
+    foreach (i from 0 to (n - 1)) {
+        out = ssz_list_slice(start, n, stop, n - 1 - i) :: out
+    };
+    out
 }
 
 /* Parse the witness header chain, asserting it against the ALREADY-decoded
@@ -27,35 +44,37 @@ function register_witness_codes(start : int, n : int, stop : int) -> unit = {
  * items); field DECODING from the captured items stays at the original
  * consumer sites (parent_state_root, parent_header_int_field), so a
  * non-canonical field still throws exactly where it used to. */
-function index_witness_headers(
-    start : int,
-    n : int,
-    stop : int,
-    expected_parent : hash,
-) -> (
-    (bool, bool, list(RlpField))
-) = {
-
+function index_witness_headers(headers : list(ByteSlice), expected_parent : hash) -> (bool, bool, list(RlpField)) = {
+    let n = list_len(headers);
     var prev : hash = ZERO_WORD;
     var ok : bool = n >= 1;
     var pitems : list(RlpField) = [||];
-    foreach (i from 0 to (n - 1)) {
-        let s = ssz_list_slice(start, n, stop, i);
-        if (i > 0) | (i == n - 1) then {
-            let items = rlp_node_items(read_byte_slice(s));
-            if i > 0 then {
-                if bytes_be256(list_nth(items, 0, RLP_NONE).content) != prev then {
-                    ok = false
-                }
-            };
-            if i == n - 1 then {
-                pitems = items
-            }
-        };
-        prev = keccak256(s);
-        let j = n - 1 - i; /* distance-1 from the block under validation */
-        if j < 256 then {
-            headerhash_set(get_slice_int(64, j, 0), prev)
+    var rest : list(ByteSlice) = headers;
+    var i : int = 0;
+    var more : bool = true;
+    while more do {
+        match rest {
+            [||] => more = false,
+            s :: r => {
+                rest = r;
+                if (i > 0) | (i == n - 1) then {
+                    let items = rlp_node_items(read_byte_slice(s));
+                    if i > 0 then {
+                        if bytes_be256(list_nth(items, 0, RLP_NONE).content) != prev then {
+                            ok = false
+                        }
+                    };
+                    if i == n - 1 then {
+                        pitems = items
+                    }
+                };
+                prev = keccak256(s);
+                let j = n - 1 - i; /* distance-1 from the block under validation */
+                if j < 256 then {
+                    headerhash_set(get_slice_int(64, j, 0), prev)
+                };
+                i = i + 1
+            },
         }
     };
     k_n_headers = n;
@@ -189,6 +208,8 @@ function decode_block_header_ssz(p : int, npr : int) -> BlockHeader =
         parent_hash = ssz_bytes32(p + 0),
         parent_beacon_block_root = ssz_bytes32(npr + NPR_BEACON_ROOT),
         slot_number = pl_slot_number(p),
+        extra_data =
+            witness_byte_slice(p + ssz_u32(p + PL_EXTRA_OFF), ssz_u32(p + PL_TXS_OFF) - ssz_u32(p + PL_EXTRA_OFF)),
     }
 
 function withdrawal_at(wds : int, i : int) -> Withdrawal =
@@ -222,18 +243,6 @@ function decode_chain_config(cc : int, number : int, timestamp : int) -> ChainCo
         fork = fork_of_protocol_index(fidx),
         activation_active = (bn_present | ts_present) & bn_ok & ts_ok,
     }
-}
-
-/* Everything the single decode pass returns: the decoded block (header,
- * transactions, withdrawals) plus the witness-header results the validation
- * layer reads. The parent header travels as its RLP items so field decoding
- * (and its canonicity throws) stays at the original consumer sites. */
-struct StatelessInput = {
-    block : Block,
-    chain_config : ChainConfig,
-    headers_ok : bool, /* witness header chain contiguous              */
-    parent_hash_ok : bool, /* newest witness header IS the block's parent  */
-    parent_header_items : list(RlpField),
 }
 
 /* THE single traversal over the stateless input. In one pass, in container
@@ -302,15 +311,21 @@ function decode_stateless_input() -> StatelessInput = {
        k_parent_state_root, so witness material is authenticated exactly where
        it is consumed -- no eager re-root pass. The anchor is set only after
        the header chain validates. */
-    build_node_db(ws, n_ws, wc);
-    register_witness_codes(wc, n_wc, wh);
-    let (hok, pok, pitems) = index_witness_headers(wh, n_wh, cc, header.parent_hash);
+    let nodes = ssz_slice_list(ws, n_ws, wc);
+    let codes = ssz_slice_list(wc, n_wc, wh);
+    let headers = ssz_slice_list(wh, n_wh, cc);
+    build_node_db(nodes);
+    register_witness_codes(codes);
+    let (hok, pok, pitems) = index_witness_headers(headers, header.parent_hash);
     if hok then {
         k_parent_state_root = parent_state_root(pitems)
     } else {
         throw InvalidBlock(WitnessDeficient)
     };
     struct {
+        nodes = nodes,
+        codes = codes,
+        headers = headers,
         block =
             struct {
                 header = header,

@@ -5,6 +5,7 @@ evm {
     prelude.sail,
     exceptions.sail,
     primitives/bytes.sail,
+    primitives/rlp.sail,
     primitives/crypto.sail,
     primitives/fork.sail,
     primitives/chain_config.sail,

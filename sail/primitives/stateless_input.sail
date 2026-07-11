@@ -86,3 +86,18 @@ let FA_TIMESTAMP_OFF : int = 4
 let WIT_STATE_OFF : int = 0
 let WIT_CODES_OFF : int = 4
 let WIT_HEADERS_OFF : int = 8
+
+/* Everything the single decode pass returns: the decoded block (header,
+ * transactions, withdrawals) plus the witness-header results the validation
+ * layer reads. The parent header travels as its RLP items so field decoding
+ * (and its canonicity throws) stays at the original consumer sites. */
+struct StatelessInput = {
+    block : Block,
+    chain_config : ChainConfig,
+    nodes : list(ByteSlice), /* witness state-node references (node DB source) */
+    codes : list(ByteSlice), /* witness code references (code DB source)       */
+    headers : list(ByteSlice), /* witness ancestor-header references              */
+    headers_ok : bool, /* witness header chain contiguous              */
+    parent_hash_ok : bool, /* newest witness header IS the block's parent  */
+    parent_header_items : list(RlpField),
+}

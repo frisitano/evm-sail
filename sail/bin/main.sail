@@ -222,12 +222,20 @@ function run_checked_block_end_system_calls(all_ok : bool) -> bool = {
 function trie_index_key(i : int) -> list(nibble) =
     to_nibbles(rlp_int(i))
 
-function transaction_trie_root() -> hash = {
+function transaction_trie_root(txs : list(Transaction)) -> hash = {
     var updates : list(TriePatch) = [||];
-    let n = pl_n_txs();
-    foreach (i from 0 to (n - 1)) {
-        let (off, len) = ssz_list_span(pl_txs_start(), n, pl_wds_start(), i);
-        updates = patch_insert_sorted(patch_leaf(trie_index_key(i), byte_slice(WitnessSource, off, len)), updates)
+    var rest : list(Transaction) = txs;
+    var i : int = 0;
+    var more : bool = true;
+    while more do {
+        match rest {
+            [||] => more = false,
+            t :: r => {
+                updates = patch_insert_sorted(patch_leaf(trie_index_key(i), t.raw), updates);
+                rest = r;
+                i = i + 1
+            },
+        }
     };
     trie_root(EMPTY_TRIE_ROOT, updates)
 }
@@ -465,7 +473,7 @@ function validate_block(input : StatelessInput, exec_ok : bool, block_result : B
     let receipts_root = receipts_trie_root(block_result.receipts);
     let receipts_root_ok = receipts_root == header.receipts_root;
     let logs_bloom_ok = bytes_equal(receipts_bloom(block_result.receipts), header.logs_bloom);
-    let transactions_root = transaction_trie_root();
+    let transactions_root = transaction_trie_root(input.block.body.transactions);
     let withdrawals_root = withdrawals_trie_root(input.block.body.withdrawals);
     let requests_hash = execution_requests_hash();
     let block_access_list_hash = keccak256(input.block.body.block_access_list);

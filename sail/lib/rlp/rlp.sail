@@ -81,14 +81,6 @@ function zero_bytes(n : int) -> list(byte) = {
 function keccak_rlp_payload(domain : list(byte), payload : list(byte)) -> bits(256) =
     keccak256([|BytesList(domain), BytesList(rlp_list_prefix(list_len(payload))), BytesList(payload)|])
 
-struct RlpField = {
-  is_list : bool,
-  content : list(byte),   /* string value, or a list's payload bytes */
-  full    : list(byte)    /* full item bytes incl header (an embedded node) */
-}
-
-let RLP_NONE : RlpField = struct { is_list = false, content = [||], full = [||] }
-
 /* Malformed RLP is a normal invalid-block outcome: the decoders THROW
  * InvalidBlock(RlpDecode) at the point of detection, caught once at the guest /
  * runner top level (mirroring EELS `raise` on a decoding error). */

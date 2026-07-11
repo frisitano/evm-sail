@@ -329,6 +329,7 @@ register k_header : BlockHeader =
     struct {
         number = 0,
         timestamp = 0,
+        extra_data = EMPTY_SLICE,
         gas_limit = 0,
         gas_used = 0,
         prev_randao = ZERO_WORD,

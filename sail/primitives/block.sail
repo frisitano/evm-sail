@@ -22,6 +22,8 @@ struct BlockHeader = {
     parent_hash : bits(256),
     parent_beacon_block_root : bits(256),
     slot_number : u64, /* EELS U64 (EIP-7843) */
+    extra_data : ByteSlice, /* reference into the payload (RLP-encoded whole for
+                               the header hash, never inspected) */
 }
 
 let EMPTY_OMMER_HASH : hash = 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347

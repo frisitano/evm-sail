@@ -185,6 +185,7 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
             struct {
                 tx_type = LegacyTx,
                 sender = sender,
+                raw = tx,
                 nonce = rlp_field_int(nonce_f),
                 gas_limit = to_gas(rlp_field_int(gas_f)),
                 is_create = list_len(to_f.content) == 0, /* empty `to` = contract creation */
@@ -217,6 +218,7 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
             struct {
                 tx_type = AccessListTx,
                 sender = sender,
+                raw = tx,
                 nonce = rlp_field_int(nonce_f),
                 gas_limit = to_gas(rlp_field_int(gas_f)),
                 is_create = list_len(to_f.content) == 0, /* empty `to` = contract creation */
@@ -250,6 +252,7 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
             struct {
                 tx_type = FeeMarketTx,
                 sender = sender,
+                raw = tx,
                 nonce = rlp_field_int(nonce_f),
                 gas_limit = to_gas(rlp_field_int(gas_f)),
                 is_create = list_len(to_f.content) == 0, /* empty `to` = contract creation */
@@ -287,6 +290,7 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
             struct {
                 tx_type = BlobTx,
                 sender = sender,
+                raw = tx,
                 nonce = rlp_field_int(nonce_f),
                 gas_limit = to_gas(rlp_field_int(gas_f)),
                 is_create = list_len(to_f.content) == 0, /* empty `to` = contract creation */
@@ -322,6 +326,7 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
             struct {
                 tx_type = SetCodeTx,
                 sender = sender,
+                raw = tx,
                 nonce = rlp_field_int(nonce_f),
                 gas_limit = to_gas(rlp_field_int(gas_f)),
                 is_create = list_len(to_f.content) == 0, /* empty `to` = contract creation */
