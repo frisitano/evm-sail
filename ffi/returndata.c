@@ -42,7 +42,7 @@ unit returndata_discard_pending(const unit u) {
 unit returndata_capture_memory(uint64_t off, uint64_t len) {
   returndata_fit(&returndata_pending, len ? len : 1);
   if (len) {
-    const uint8_t *p = hm_rd(off, len);
+    const uint8_t *p = mem_region(off, len);
     memcpy(returndata_pending.p, p, len);
   }
   returndata_pending.len = len;

@@ -5,15 +5,15 @@
 #define MEMORY_H
 #include "sail.h"
 #include <stdint.h>
-unit     host_mem_reset(const unit u);        /* clear to one empty frame (per tx)   */
-unit     host_mem_push(const unit u);         /* enter sub-call: fresh empty frame   */
-unit     host_mem_pop(const unit u);          /* leave sub-call: restore parent      */
-uint64_t host_mem_read(uint64_t off);         /* bits(64) -> bits(8): byte at off     */
-unit     host_mem_write(uint64_t off, uint64_t v); /* (bits(64), bits(8)) -> unit     */
+unit     mem_clear(const unit u);        /* clear to one empty frame (per tx)   */
+unit     mem_frame_enter(const unit u);         /* enter sub-call: fresh empty frame   */
+unit     mem_frame_leave(const unit u);          /* leave sub-call: restore parent      */
+uint64_t mem_read_byte(uint64_t off);         /* bits(64) -> bits(8): byte at off     */
+unit     mem_write_byte(uint64_t off, uint64_t v); /* (bits(64), bits(8)) -> unit     */
 uint64_t hm_depth(const unit u);                    /* call-frame depth   */
-const uint8_t *hm_rd(uint64_t off, uint64_t len);  /* ensure + read ptr   */
+const uint8_t *mem_region(uint64_t off, uint64_t len);  /* ensure + read ptr   */
 uint8_t *hm_wr(uint64_t off, uint64_t len);        /* ensure + write ptr  */
-unit hm_move(uint64_t dst, uint64_t src, uint64_t len);  /* MCOPY memmove */
+unit mem_move(uint64_t dst, uint64_t src, uint64_t len);  /* MCOPY memmove */
 unit calldata_bind_memory(uint64_t off, uint64_t len);   /* next child's calldata = mem range */
 unit calldata_bind_empty(const unit u);
 unit calldata_bind_tx_input(const unit u);

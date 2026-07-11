@@ -17,25 +17,22 @@
 /* frame push/pop laws.                                                     */
 /* ======================================================================== */
 
-val host_mem_read = impure { c: "host_mem_read" } : bits(64) -> bits(8)
-val host_mem_write = impure { c: "host_mem_write" } : (bits(64), bits(8)) -> unit
-val host_mem_reset = impure { c: "host_mem_reset" } : unit -> unit
-val host_mem_push = impure { c: "host_mem_push" } : unit -> unit
-val host_mem_pop = impure { c: "host_mem_pop" } : unit -> unit
+val mem_read_byte = impure { c: "mem_read_byte" } : bits(64) -> bits(8)
+val mem_write_byte = impure { c: "mem_write_byte" } : (bits(64), bits(8)) -> unit
+
+/* call-frame memory lifecycle (the C side owns the bytes) */
+val mem_clear = impure { c: "mem_clear" } : unit -> unit
+val mem_frame_enter = impure { c: "mem_frame_enter" } : unit -> unit
+val mem_frame_leave = impure { c: "mem_frame_leave" } : unit -> unit
 
 /* range copies (CALLDATACOPY / CODECOPY / RETURNDATACOPY / MCOPY): endpoints
  * already live in C buffers, so copies stay C-side. */
-val hm_move = impure { c: "hm_move" } : (bits(64), bits(64), bits(64)) -> unit
+val mem_move = impure { c: "mem_move" } : (bits(64), bits(64), bits(64)) -> unit
 
 /* The high-water mark, in bytes: the largest offset ever touched in this
  * frame. MSIZE rounds it up to a word; memory-expansion gas is charged on
  * each growth of mem_size_words (Yellow Paper section 9.4.1, the C_mem term). */
 register memory_size : int = 0
-
-/* call-frame memory lifecycle (the C side owns the bytes) */
-function mem_clear() -> unit = host_mem_reset()
-function mem_frame_enter() -> unit = host_mem_push()
-function mem_frame_leave() -> unit = host_mem_pop()
 
 /* --- raw byte access (O(1), C-backed) --- */
 
@@ -49,14 +46,14 @@ val is_running : unit -> bool
  * a huge offset (e.g. MSTORE at 2^32) would grow the C buffer to gigabytes. */
 function mem_get_byte(off : int) -> byte =
     if is_running() then {
-        host_mem_read(get_slice_int(64, off, 0))
+        mem_read_byte(get_slice_int(64, off, 0))
     } else {
         0x00
     }
 
 function mem_set_byte(off : int, v : byte) -> unit =
     if is_running() then {
-        host_mem_write(get_slice_int(64, off, 0), v);
+        mem_write_byte(get_slice_int(64, off, 0), v);
         if off + 1 > memory_size then {
             memory_size = off + 1
         }
@@ -83,30 +80,21 @@ function mem_store(off : int, w : word) -> unit = {
 function mem_store_byte(off : int, w : word) -> unit =
     mem_set_byte(off, w[7 .. 0])
 
-/* --- byte-range read (for KECCAK / RETURN / LOG / CALL args), as a list --- */
-
-/* Read mem[off .. off+len) into a list, in address order. */
-function mem_read_range(off : int, len : int) -> list(byte) = {
-    var out : list(byte) = [||]; /* prepend from the high end so the list ends in address order */
-    foreach (k from 0 to (len - 1)) {
-        out = mem_get_byte(off + (len - 1 - k)) :: out
-    };
-    out
-}
-
 /* Current memory size in 32-byte words, rounded up (the MSIZE value, and the
  * unit of memory-expansion gas). */
 function mem_size_words() -> int = ediv_int(memory_size + 31, 32)
 
 /* MCOPY (EIP-5656): overlapping-safe memory-to-memory copy (one C memmove). */
 function mem_mcopy(dst : int, src : int, len : int) -> unit =
-    hm_move(get_slice_int(64, dst, 0), get_slice_int(64, src, 0), get_slice_int(64, len, 0))
+    mem_move(get_slice_int(64, dst, 0), get_slice_int(64, src, 0), get_slice_int(64, len, 0))
 
-/* Clamp a beyond-2^64 source offset to a beyond-any-source sentinel (2^24,
- * larger than any code/calldata/returndata can be): the 64-bit truncation at
- * the FFI would otherwise wrap a huge offset back into real data. A past-end
- * source must read as zeros / zero-fill its destination (EELS buffer_read). */
-function clamp_source_offset(off : int) -> int = if off > 16777216 then { 16777216 } else { off }
+/* Beyond-any-source sentinel (2^24 > any code/calldata/returndata length):
+ * huge source offsets clamp here so the 64-bit truncation at the FFI cannot
+ * wrap them back into real data; a past-end source reads as zeros /
+ * zero-fills its destination (EELS buffer_read). */
+let SOURCE_PAST_END : int = 16777216
+
+function clamp_source_offset(off : int) -> int = if off > SOURCE_PAST_END then { SOURCE_PAST_END } else { off }
 
 /* CODECOPY: the current frame's code (already in the C buffer) into memory. */
 function mem_codecopy(dst : int, off : int, len : int) -> unit =

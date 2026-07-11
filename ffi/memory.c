@@ -4,7 +4,7 @@
  * list-backed memory is O(n) per access (O(n^2) over a fill/copy loop). Following
  * the sail-riscv pattern, memory lives in C: a flat, lazily-grown byte buffer per
  * call frame with O(1) read/write. Frames form a stack so a sub-call gets fresh
- * memory (host_mem_push) and the parent's is restored on return (host_mem_pop); the
+ * memory (mem_frame_enter) and the parent's is restored on return (mem_frame_leave); the
  * Sail side keeps the high-water mark (memory_size) for expansion gas.
  *
  * Only mach_bits cross the FFI (uint64_t), matching the other host FFI modules. */
@@ -58,7 +58,7 @@ static void memory_ensure(size_t off) {
 }
 
 /* clear all frames back to a single empty top-level frame (called per tx) */
-unit host_mem_reset(const unit u) {
+unit mem_clear(const unit u) {
   (void)u;
   for (int i = 0; i <= h_top; i++) {
     free(h_stack[i].buf);
@@ -73,7 +73,7 @@ unit host_mem_reset(const unit u) {
 
 /* enter a sub-call: push the current frame, start a fresh empty one; the
  * pending calldata descriptor (set by the caller just before) is adopted */
-unit host_mem_push(const unit u) {
+unit mem_frame_enter(const unit u) {
   (void)u;
   if (h_top + 1 < MEMORY_MAXDEPTH) {
     h_top++;
@@ -190,7 +190,7 @@ unit calldata_copy_to_memory(uint64_t dst, uint64_t off, uint64_t len) {
 }
 
 /* leave a sub-call: discard the current frame, restore the parent */
-unit host_mem_pop(const unit u) {
+unit mem_frame_leave(const unit u) {
   (void)u;
   free(h_stack[h_top].buf);
   h_stack[h_top].buf = NULL;
@@ -200,7 +200,7 @@ unit host_mem_pop(const unit u) {
 }
 
 /* bits(64) offset -> bits(8) byte (0 if never written / past the buffer) */
-uint64_t host_mem_read(uint64_t off) {
+uint64_t mem_read_byte(uint64_t off) {
   h_memframe *f = &h_stack[h_top];
   return (off < f->cap) ? (uint64_t)f->buf[off] : 0;
 }
@@ -209,7 +209,7 @@ uint64_t host_mem_read(uint64_t off) {
 uint64_t hm_depth(const unit u) { (void)u; return (uint64_t)h_top; }
 
 /* ensure capacity (zero-filled) and return a READ pointer to [off, off+len) */
-const uint8_t *hm_rd(uint64_t off, uint64_t len) {
+const uint8_t *mem_region(uint64_t off, uint64_t len) {
   static const uint8_t zero = 0;
   if (len == 0) return &zero;
   memory_ensure((size_t)(off + len - 1));
@@ -229,9 +229,9 @@ uint8_t *hm_wr(uint64_t off, uint64_t len) {
 }
 
 /* MCOPY: overlapping-safe copy within the current frame */
-unit hm_move(uint64_t dst, uint64_t src, uint64_t len) {
+unit mem_move(uint64_t dst, uint64_t src, uint64_t len) {
   if (len) {
-    const uint8_t *s = hm_rd(src, len);
+    const uint8_t *s = mem_region(src, len);
     uint8_t *d = hm_wr(dst, len);
     if (s && d) memmove(d, s, len);
   }
@@ -239,7 +239,7 @@ unit hm_move(uint64_t dst, uint64_t src, uint64_t len) {
 }
 
 /* (bits(64) offset, bits(8) value) -> unit */
-unit host_mem_write(uint64_t off, uint64_t v) {
+unit mem_write_byte(uint64_t off, uint64_t v) {
   memory_ensure((size_t)off);
   h_memframe *f = &h_stack[h_top];
   if (off < f->cap) f->buf[off] = (uint8_t)(v & 0xff);

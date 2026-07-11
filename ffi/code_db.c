@@ -282,7 +282,7 @@ uint64_t frame_code_bind_memory(uint64_t off, uint64_t len) {
   if (child >= FC_MAXDEPTH) return 0;
   fc_desc *f = &fc[child];
   if (!len) { f->p = NULL; f->bm = NULL; f->len = 0; return 0; }
-  const uint8_t *src = hm_rd(off, len);
+  const uint8_t *src = mem_region(off, len);
   fc_inl_fit(child, (uint32_t)len);
   memcpy(fc_inl[child].p, src, (uint32_t)len);
   fc_build_bitmap_bytes(fc_inl[child].bm, fc_inl[child].p, (uint32_t)len);

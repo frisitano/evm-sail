@@ -506,7 +506,7 @@ int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
     src = evmsail_ssz_ptr(off, len);
   } else if (kind == EVMSAIL_SOURCE_MEMORY) {
     if (off > UINT64_MAX - (len - 1)) return 0;
-    src = hm_rd(off, len);
+    src = mem_region(off, len);
   } else if (kind == EVMSAIL_SOURCE_TX_INPUT) {
     src = txd_rd(off, len);
   } else if (kind == EVMSAIL_SOURCE_ACTIVE_CODE) {
