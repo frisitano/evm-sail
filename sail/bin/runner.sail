@@ -32,45 +32,45 @@
 /* ======================================================================== */
 
 /* ProtocolFork SSZ index (chain_config.active_fork, execution-specs
- * tuple(ProtocolFork) order) -> the model's fork level (host/state.sail
- * FORK_*). This is what makes the runner cross-fork: the guest hard-locks to
+ * tuple(ProtocolFork) order) -> the model's Fork (primitives/fork.sail).
+ * This is what makes the runner cross-fork: the guest hard-locks to
  * Amsterdam (index 20) in its validator, but the runner just selects the
  * execution rules. Indices: Shanghai=14 Cancun=15 Prague=16 Osaka=17
  * BPO1=18 BPO2=19 Amsterdam=20. */
-function k_fork_from_ssz(idx : int) -> int = {
+function k_fork_from_ssz(idx : int) -> Fork = {
     if idx >= 20 then {
-        FORK_AMSTERDAM
+        Amsterdam
     } /* Amsterdam (20) and beyond */
     else {
         if idx >= 17 then {
-            FORK_OSAKA
+            Osaka
         } /* Osaka(17), BPO1(18), BPO2(19) */
         else {
             if idx == 16 then {
-                FORK_PRAGUE
+                Prague
             } else {
                 if idx == 15 then {
-                    FORK_CANCUN
+                    Cancun
                 } else {
                     if idx == 14 then {
-                        FORK_SHANGHAI
+                        Shanghai
                     } else {
                         if idx == 13 then {
-                            FORK_PARIS
+                            Paris
                         } else {
                             if idx == 10 then {
-                                FORK_LONDON
+                                London
                             } else {
                                 if idx == 9 then {
-                                    FORK_BERLIN
+                                    Berlin
                                 } else {
                                     if idx == 7 then {
-                                        FORK_ISTANBUL
+                                        Istanbul
                                     } else {
                                         if idx == 5 then {
-                                            FORK_BYZANTIUM
+                                            Byzantium
                                         } else {
-                                            if idx == 1 then { FORK_HOMESTEAD } else { FORK_FRONTIER }
+                                            if idx == 1 then { Homestead } else { Frontier }
                                         }
                                     }
                                 }

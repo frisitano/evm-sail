@@ -75,7 +75,7 @@ function decode_simple(b : int) -> ast =
                     27 => SHL(),
                     28 => SHR(),
                     29 => SAR(),
-                    30 => if k_fork >= FORK_OSAKA then {
+                    30 => if fork_gteq(k_fork, Osaka) then {
                         CLZ()
                     } else {
                         INVALID()
@@ -105,22 +105,22 @@ function decode_simple(b : int) -> ast =
                     69 => GASLIMIT(),
                     70 => CHAINID(),
                     71 => SELFBALANCE(),
-                    72 => if k_fork >= FORK_LONDON then {
+                    72 => if fork_gteq(k_fork, London) then {
                         BASEFEE()
                     } else {
                         INVALID()
                     },
-                    73 => if k_fork >= FORK_CANCUN then {
+                    73 => if fork_gteq(k_fork, Cancun) then {
                         BLOBHASH()
                     } else {
                         INVALID()
                     },
-                    74 => if k_fork >= FORK_CANCUN then {
+                    74 => if fork_gteq(k_fork, Cancun) then {
                         BLOBBASEFEE()
                     } else {
                         INVALID()
                     },
-                    75 => if k_fork >= FORK_AMSTERDAM then {
+                    75 => if fork_gteq(k_fork, Amsterdam) then {
                         SLOTNUM()
                     } else {
                         INVALID()
@@ -137,17 +137,17 @@ function decode_simple(b : int) -> ast =
                     89 => MSIZE(),
                     90 => GAS(),
                     91 => JUMPDEST(),
-                    92 => if k_fork >= FORK_CANCUN then {
+                    92 => if fork_gteq(k_fork, Cancun) then {
                         TLOAD()
                     } else {
                         INVALID()
                     },
-                    93 => if k_fork >= FORK_CANCUN then {
+                    93 => if fork_gteq(k_fork, Cancun) then {
                         TSTORE()
                     } else {
                         INVALID()
                     },
-                    94 => if k_fork >= FORK_CANCUN then {
+                    94 => if fork_gteq(k_fork, Cancun) then {
                         MCOPY()
                     } else {
                         INVALID()
@@ -178,7 +178,7 @@ function fetch() -> ast = {
     } else {
         let b = unsigned(code_byte(pc));
         pc = pc + 1;
-        if (b == 95) & (k_fork < FORK_SHANGHAI) then {
+        if (b == 95) & (fork_lt(k_fork, Shanghai)) then {
             INVALID()
         } else {
             if b >= 95 & b <= 127 then {
@@ -689,7 +689,7 @@ function run_create(is2 : bool) -> unit = {
                    from London onward, not beginning with 0xEF (EIP-3541, the
                    reserved EOF prefix). */
                 let code_ok = (dep_len <= max_code_size()) &
-                        ((k_fork < FORK_LONDON) | (dep_len == 0) | (returndata_pending_byte(0) != 0xef));
+                        ((fork_lt(k_fork, London)) | (dep_len == 0) | (returndata_pending_byte(0) != 0xef));
 
                 /* leave the initcode frame: restore the parent's registers. */
                 pc = saved_pc;

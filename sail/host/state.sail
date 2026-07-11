@@ -316,22 +316,10 @@ val headerhash_set = impure { c: "headerhash_set" } : (bits(64), hash) -> unit
 val headerhash_get = impure { c: "headerhash_get" } : bits(64) -> hash
 register k_n_headers : int = 0
 
-register k_fork : int = 99 /* active fork level (higher = newer); set by the runner */
+register k_fork : Fork = Amsterdam /* the active fork; the guest runs the
+                                      newest, the runner sets it per case
+                                      (k_fork_from_ssz) */
 
-/* fork levels for fork-gated rules (chronological; only thresholds matter) */
-let FORK_FRONTIER : int = 0
-let FORK_HOMESTEAD : int = 1
-let FORK_BYZANTIUM : int = 2
-let FORK_CONSTANTINOPLE : int = 3
-let FORK_ISTANBUL : int = 4
-let FORK_BERLIN : int = 5 /* EIP-2929/2930 access lists + warm/cold access costs */
-let FORK_LONDON : int = 6 /* EIP-1559 fee market + EIP-3529 refund reduction */
-let FORK_PARIS : int = 7
-let FORK_SHANGHAI : int = 8 /* EIP-3651 warm coinbase, EIP-3855 PUSH0, EIP-3860 initcode */
-let FORK_CANCUN : int = 9 /* EIP-1153/4844; precompiles 0x01-0x0a */
-let FORK_PRAGUE : int = 10 /* EIP-7623 calldata floor; +BLS 0x0b-0x11 */
-let FORK_OSAKA : int = 11 /* EIP-7883 modexp gas, EIP-7825 cap; +0x100 */
-let FORK_AMSTERDAM : int = 12 /* EIP-7954 code/initcode size bump (32768/65536) */
 
 /* Is `n` (the low bytes of an address, as an int) a precompile at the active
  * fork? The precompile set GROWS by fork: Frontier has 0x01-0x04, Byzantium
@@ -342,11 +330,11 @@ let FORK_AMSTERDAM : int = 12 /* EIP-7954 code/initcode size bump (32768/65536) 
  * not a precompile. */
 function is_precompile(n : int) -> bool = {
     let base = (n >= 1) & (n <= 4);
-    let byzantium = (n >= 5) & (n <= 8) & (k_fork >= FORK_BYZANTIUM);
-    let istanbul = (n == 9) & (k_fork >= FORK_ISTANBUL);
-    let kzg = (n == 10) & (k_fork >= FORK_CANCUN);
-    let bls = (n >= 11) & (n <= 17) & (k_fork >= FORK_PRAGUE);
-    let p256 = (n == 256) & (k_fork >= FORK_OSAKA);
+    let byzantium = (n >= 5) & (n <= 8) & (fork_gteq(k_fork, Byzantium));
+    let istanbul = (n == 9) & (fork_gteq(k_fork, Istanbul));
+    let kzg = (n == 10) & (fork_gteq(k_fork, Cancun));
+    let bls = (n >= 11) & (n <= 17) & (fork_gteq(k_fork, Prague));
+    let p256 = (n == 256) & (fork_gteq(k_fork, Osaka));
     base | byzantium | istanbul | kzg | bls | p256
 }
 

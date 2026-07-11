@@ -6,6 +6,7 @@ evm {
     exceptions.sail,
     primitives/bytes.sail,
     primitives/crypto.sail,
+    primitives/fork.sail,
     primitives/account.sail,
     primitives/journal.sail,
     primitives/tx.sail,

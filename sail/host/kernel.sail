@@ -135,7 +135,7 @@ function eip7708_burn_topic() -> word =
     0xcc16f5dbb4873280815c1ee09dbd06736cffcc184412cf7a71a0fdb75d397ca5
 
 function k_emit_transfer_log(src : address, dst : address, v : word) -> unit = {
-    if (k_fork < FORK_AMSTERDAM) | word_is_zero(v) | (src == dst) then {
+    if (fork_lt(k_fork, Amsterdam)) | word_is_zero(v) | (src == dst) then {
         ()
     } else {
         journal_push(JLog());
@@ -148,7 +148,7 @@ function k_emit_transfer_log(src : address, dst : address, v : word) -> unit = {
 }
 
 function k_emit_burn_log(a : address, v : word) -> unit = {
-    if (k_fork < FORK_AMSTERDAM) | word_is_zero(v) then {
+    if (fork_lt(k_fork, Amsterdam)) | word_is_zero(v) then {
         ()
     } else {
         journal_push(JLog());
@@ -432,7 +432,7 @@ function k_finalize_selfdestructs() -> unit = {
     while more do {
         match xs {
             a :: r => {
-                if (k_fork < FORK_CANCUN) | k_was_created(a) then {
+                if (fork_lt(k_fork, Cancun)) | k_was_created(a) then {
                     k_emit_burn_log(a, k_aload(a).balance);
                     k_account_delete(a)
                 };

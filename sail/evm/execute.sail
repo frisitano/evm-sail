@@ -635,12 +635,12 @@ function execute(op : ast) -> unit = match op {
              * out-of-gas SELFDESTRUCT must have no effect. */
             if is_running() then {
                 let first_selfdestruct = not_bool(selfdestr_contains(self_addr()));
-                if (k_fork < FORK_LONDON) & first_selfdestruct then {
+                if (fork_lt(k_fork, London)) & first_selfdestruct then {
                     k_refund_add(R_selfdestruct_pre_london)
                 };
                 k_transfer(self_addr(), beneficiary, bal);
 
-                if k_fork < FORK_CANCUN then {
+                if fork_lt(k_fork, Cancun) then {
                     /* Before EIP-6780, every successful SELFDESTRUCT deletes the
                      * originator at tx end. Its balance is also zeroed
                      * immediately after the transfer, including the
