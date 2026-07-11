@@ -547,7 +547,48 @@ function last_slice(xs : list(ByteSlice)) -> ByteSlice = match xs {
     _ :: r => last_slice(r),
 }
 
-function validate_block(input : StatelessInput, exec_ok : bool, block_result : BlockExecutionResult) -> unit = {
+/* Pre-execution payload validation (EELS: validate_chain_config + the
+ * payload -> block conversion checks run BEFORE any execution): the config
+ * selects Amsterdam and is active, the newest witness header IS the block's
+ * parent, the claimed block hash matches the reconstructed consensus header
+ * (derived tx/withdrawal trie roots, requests hash, BAL keccak), the
+ * header's excess_blob_gas follows from the parent, and the BAL respects the
+ * EIP-7928 item cap. Each failure THROWS its BlockError. */
+function validate_payload(input : StatelessInput) -> unit = {
+    let header = k_header;
+    if not_bool((input.chain_config.fork_index == 20) & input.chain_config.activation_active) then {
+        /* canonical ProtocolFork index for Amsterdam (execution-specs@02c6c251:
+           enum pruned, Osaka=17 BPO1=18 BPO2=19 Amsterdam=20) */
+        throw InvalidBlock(InvalidConfig)
+    };
+    if keccak256(last_slice(input.headers)) != header.parent_hash then {
+        throw InvalidBlock(InvalidParentHash)
+    };
+    let parent_items = rlp_node_items(read_byte_slice(last_slice(input.headers)));
+    if unsigned(header.excess_blob_gas) != expected_payload_excess_blob_gas(parent_items) then {
+        throw InvalidBlock(InvalidExcessBlobGas)
+    };
+    let transactions_root = transaction_trie_root(input.payload.block.body.transactions);
+    let withdrawals_root = withdrawals_trie_root(input.payload.block.body.withdrawals);
+    let requests_hash = execution_requests_hash();
+    let block_access_list_hash = keccak256(input.payload.block.body.block_access_list);
+    let block_hash = block_header_hash(
+        header,
+        transactions_root,
+        withdrawals_root,
+        requests_hash,
+        block_access_list_hash,
+    );
+    if block_hash != input.payload.block_hash then {
+        throw InvalidBlock(InvalidBlockHash)
+    };
+    /* EIP-7928: the block access list must not exceed block_gas_limit / 2000 items */
+    if bal_item_count(input.payload.block.body.block_access_list) > ediv_int(header.gas_limit, 2000) then {
+        throw InvalidBlock(BlockAccessListTooLarge)
+    }
+}
+
+function validate_block(exec_ok : bool, block_result : BlockExecutionResult) -> unit = {
     /* Stateless validation outcome (a failure is a NORMAL result -- the guest
        reports successful_validation=false, it does not abort):
          - chain config selects the Amsterdam fork
@@ -560,45 +601,13 @@ function validate_block(input : StatelessInput, exec_ok : bool, block_result : B
        ALL checks are computed unconditionally (fixed witness-read footprint); the
        FIRST failure is reported as its BlockError; a valid block yields None. */
     let header = k_header;
-    let fork_ok = input.chain_config.fork_index == 20; /* canonical ProtocolFork index for Amsterdam
-                                                      (execution-specs@02c6c2510: enum pruned, Osaka=17 BPO1=18 BPO2=19
-                                                      Amsterdam=20). */
-
-    let active_ok = input.chain_config.activation_active;
-    let cfg_ok = fork_ok & active_ok;
-
     let gas_used_ok = block_result.gas_acc == header.gas_used;
     let blob_gas_used_ok = block_result.blob_gas_acc == unsigned(header.blob_gas_used);
-    /* the parent header's RLP items, re-derived from its carried reference
-       (the pass already parsed these bytes, so a malformed header threw there) */
-    let parent_items = rlp_node_items(read_byte_slice(last_slice(input.headers)));
-    let excess_blob_gas_ok = unsigned(header.excess_blob_gas) ==
-            expected_payload_excess_blob_gas(parent_items);
     let computed_root = compute_state_root();
     let poststate_ok = computed_root == header.state_root;
     let receipts_root = receipts_trie_root(block_result.receipts);
     let receipts_root_ok = receipts_root == header.receipts_root;
     let logs_bloom_ok = bytes_equal(receipts_bloom(block_result.receipts), header.logs_bloom);
-    let transactions_root = transaction_trie_root(input.payload.block.body.transactions);
-    let withdrawals_root = withdrawals_trie_root(input.payload.block.body.withdrawals);
-    let requests_hash = execution_requests_hash();
-    let block_access_list_hash = keccak256(input.payload.block.body.block_access_list);
-    let block_hash = block_header_hash(
-        header,
-        transactions_root,
-        withdrawals_root,
-        requests_hash,
-        block_access_list_hash,
-    );
-    let block_hash_ok = block_hash == input.payload.block_hash;
-
-    /* the newest witness header must BE the block's parent (one keccak over
-       its carried reference; the pass guarantees a non-empty chain) */
-    let parent_ok = keccak256(last_slice(input.headers)) == header.parent_hash;
-
-    /* EIP-7928: the block access list must not exceed block_gas_limit / 2000 items. */
-    let bal_limit = ediv_int(header.gas_limit, 2000);
-    let bal_ok : bool = bal_item_count(input.payload.block.body.block_access_list) <= bal_limit;
 
     /* All checks are computed above (witness reads unchanged); each failure THROWS
        its BlockError, mirroring EELS `raise InvalidBlock`. block_gas_overflow /
@@ -607,9 +616,6 @@ function validate_block(input : StatelessInput, exec_ok : bool, block_result : B
        A deficient witness (missing/inconsistent proof node) throws WitnessDeficient
        at the point of use during execution/root recomputation, so it is not
        re-checked here. */
-    if not_bool(cfg_ok) then {
-        throw InvalidBlock(InvalidConfig)
-    };
     if block_result.block_gas_overflow then {
         throw InvalidBlock(GasUsedExceedsLimit)
     };
@@ -625,9 +631,6 @@ function validate_block(input : StatelessInput, exec_ok : bool, block_result : B
     if not_bool(blob_gas_used_ok) then {
         throw InvalidBlock(InvalidBlobGasUsed)
     };
-    if not_bool(excess_blob_gas_ok) then {
-        throw InvalidBlock(InvalidExcessBlobGas)
-    };
     if not_bool(poststate_ok) then {
         throw InvalidBlock(InvalidStateRoot)
     };
@@ -636,15 +639,6 @@ function validate_block(input : StatelessInput, exec_ok : bool, block_result : B
     };
     if not_bool(logs_bloom_ok) then {
         throw InvalidBlock(InvalidLogsBloom)
-    };
-    if not_bool(block_hash_ok) then {
-        throw InvalidBlock(InvalidBlockHash)
-    };
-    if not_bool(parent_ok) then {
-        throw InvalidBlock(InvalidParentHash)
-    };
-    if not_bool(bal_ok) then {
-        throw InvalidBlock(BlockAccessListTooLarge)
     }
 }
 
@@ -721,37 +715,35 @@ function main() -> unit = {
         return ()
     };
 
-    /* THE single traversal: geometry, node/code/header stores, block header,
-       every tx (sender recovery + sig verify) and withdrawal -- decoded once,
-       returned as values; also installs k_header / the ancestor-hash table /
-       k_parent_state_root. */
-    let input = decode_stateless_input();
+    /* EELS verify_stateless_new_payload: ONE try encloses everything --
+       decode, pre-execution payload validation, execution, post-execution
+       validation. Any InvalidBlock anywhere -> successful_validation=false;
+       the output root is computed from the raw input regardless.
 
-    /* The witness backs the base layer for BOTH accounts and storage (the
-       witness base backend, host/base_witness.sail, statically linked into this
-       entry). A touched account is proven present-or-absent by a lazy Merkle
-       walk from the authenticated parent root on first k_aload (then
-       cached raw in the acctmap); a touched slot is proven the same way from
-       the account's storage root on first read (k_sload) and seeded into
-       the working set. Nothing is pre-seeded -- no eager account/slot pass. */
+       The witness backs the base layer for BOTH accounts and storage: a
+       touched account is proven present-or-absent by a lazy Merkle walk from
+       the authenticated parent root on first k_aload, a touched slot the same
+       way from the account's storage root on first k_sload; nothing is
+       pre-seeded. */
+    let (valid, gas_used) : (bool, gas) = try {
+        /* THE single traversal: geometry, node/code/header stores, block
+           header, every tx (sender recovery + sig verify) and withdrawal --
+           decoded once, returned as values; installs k_header / the
+           ancestor-hash table / k_parent_state_root. */
+        let input = decode_stateless_input();
+        validate_payload(input);
 
-    /* Block STF: system calls, then each decoded tx through the shared per-tx
-       STF unit, then withdrawals and block-end system calls. */
-    run_block_start_system_calls();
-
-    let block_result = execute_block_transactions(input.payload.block.body.transactions, k_header.gas_limit);
-    apply_withdrawals(input.payload.block.body.withdrawals);
-    let exec_ok : bool = run_checked_block_end_system_calls(block_result.all_ok);
-
-    /* EELS verify_stateless_new_payload: any InvalidBlock throw -> valid=false. */
-    let valid : bool = try {
-        validate_block(input, exec_ok, block_result);
-        true
+        /* Block STF: system calls, then each decoded tx through the shared
+           per-tx STF unit, then withdrawals and block-end system calls. */
+        run_block_start_system_calls();
+        let block_result = execute_block_transactions(input.payload.block.body.transactions, k_header.gas_limit);
+        apply_withdrawals(input.payload.block.body.withdrawals);
+        let exec_ok : bool = run_checked_block_end_system_calls(block_result.all_ok);
+        validate_block(exec_ok, block_result);
+        (true, to_gas(block_result.gas_acc))
     } catch {
-        InvalidBlock(_) => false,
+        InvalidBlock(_) => (false, to_gas(0)),
     };
-
-    let gas_used = to_gas(block_result.gas_acc);
 
     /* Unused debug scalars stay ZERO: reading any account here (a minimal
        witness proves only what EXECUTION touched) would turn a valid block

@@ -277,7 +277,7 @@ function arena_intern(bs : list(byte)) -> ByteSlice = {
     let n = list_len(bs);
     trie_arena = list_append(trie_arena, bs);
     trie_arena_len = off + n;
-    byte_slice_test(TrieArenaSource, off, n)
+    byte_slice(TrieArenaSource, off, n)
 }
 
 val account_leaf_value : (u64, word, hash, hash) -> ByteSlice /* body below account_rlp */
@@ -869,7 +869,7 @@ function witness_items(
                 if is_leaf then {
                     let vlen = list_len(list_nth(items, 1, RLP_NONE).content);
                     let voff = node_off + rlp_top_item_content_offset(node, 1);
-                    leaf_overlay_items(updates, key, byte_slice_test(WitnessSource, voff, vlen))
+                    leaf_overlay_items(updates, key, byte_slice(WitnessSource, voff, vlen))
                 } else {
                     let under = patches_under_prefix(updates, key);
                     let outside = patches_outside_prefix(updates, key);

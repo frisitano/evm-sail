@@ -13,7 +13,7 @@ struct ByteSlice = {
     len    : bits(64),
 }
 
-function byte_slice_test(src : ByteSource, off : int, len : int) -> ByteSlice =
+function byte_slice(src : ByteSource, off : int, len : int) -> ByteSlice =
     struct { source = src, off = get_slice_int(64, off, 0), len = get_slice_int(64, len, 0) }
 
 function byte_source_kind(src : ByteSource) -> bits(64) =
@@ -30,20 +30,20 @@ function byte_source_kind(src : ByteSource) -> bits(64) =
 let EMPTY_SLICE : ByteSlice = struct { source = WitnessSource, off = 0x0000000000000000, len = 0x0000000000000000 }
 
 function witness_byte_slice(off : int, len : int) -> ByteSlice =
-    byte_slice_test(WitnessSource, off, len)
+    byte_slice(WitnessSource, off, len)
 
 /* a relative sub-range of a slice (same source) */
 function sub_slice(s : ByteSlice, off : int, len : int) -> ByteSlice =
-    byte_slice_test(s.source, unsigned(s.off) + off, len)
+    byte_slice(s.source, unsigned(s.off) + off, len)
 
 function memory_byte_slice(off : int, len : int) -> ByteSlice =
-    byte_slice_test(MemorySource, off, len)
+    byte_slice(MemorySource, off, len)
 
 function tx_input_byte_slice(off : int, len : int) -> ByteSlice =
-    byte_slice_test(TxInputSource, off, len)
+    byte_slice(TxInputSource, off, len)
 
 function active_code_byte_slice(off : int, len : int) -> ByteSlice =
-    byte_slice_test(ActiveCodeSource, off, len)
+    byte_slice(ActiveCodeSource, off, len)
 
 /* A byte-sequence segment: materialized Sail bytes or a C-backed span. A
  * list(Bytes) denotes the concatenation of its segments and crosses the FFI
