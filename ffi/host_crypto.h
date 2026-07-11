@@ -47,15 +47,7 @@ void host_sha256_digests3(lbits *rop, uint64_t mask, const lbits d0, const lbits
                           const lbits d2);
 int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
                                 const uint8_t **p, uint64_t *resolved_len);
-void host_source_keccak(lbits *rop, uint64_t source_kind, uint64_t off, uint64_t len);
-void host_source_sha256_prefixed(lbits *rop, uint64_t prefix, uint64_t source_kind,
-                                 uint64_t off, uint64_t len);
 
-unit host_bytes_reset(const unit u);
-unit host_bytes_push(uint64_t b);
-unit host_bytes_push8(uint64_t w);
-void host_bytes_keccak_finish(lbits *rop, const unit u);
-void host_bytes_sha256_finish(lbits *rop, const unit u);
 
 unit node_asm_reset(const unit u);
 unit node_asm_push_ref(uint64_t kind, const lbits data, uint64_t len);

@@ -62,8 +62,8 @@ function code_db_store_witness_code(s : ByteSlice) -> unit = code_db_store_slice
  * type's 32-byte per-type digest (deposit, withdrawal, consolidation, in that
  * order; an empty request body contributes nothing). Each digest hashes a
  * witness span (source-based); the final concat-and-hash is a refinement pair
- * (sha256_digests3) so the build backend never streams the <=96-byte payload
- * list -- the present-digest mask and the three digests cross as fixed words. */
+ * order; an empty request body contributes nothing) -- accumulated as
+ * segments and hashed in one call. */
 function execution_requests_hash() -> hash = {
     let l0 = wreq_start() - dep_start();
     let l1 = creq_start() - wreq_start();
@@ -83,6 +83,15 @@ function execution_requests_hash() -> hash = {
         } else {
             sail_zeros(256)
         };
-    let m = (if l0 != 0 then 1 else 0) + (if l1 != 0 then 2 else 0) + (if l2 != 0 then 4 else 0);
-    sha256_digests3(get_slice_int(8, m, 0), d0, d1, d2)
+    var segs : list(Bytes) = [||];
+    if l2 != 0 then {
+        segs = BytesList(word_to_bytes32(d2)) :: segs
+    };
+    if l1 != 0 then {
+        segs = BytesList(word_to_bytes32(d1)) :: segs
+    };
+    if l0 != 0 then {
+        segs = BytesList(word_to_bytes32(d0)) :: segs
+    };
+    sha256(segs)
 }

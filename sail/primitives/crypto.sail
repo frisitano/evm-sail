@@ -3,10 +3,10 @@
 /*                                                                          */
 /* The axiomatic hash core -- keccak256 (KECCAK256, trie/RLP node           */
 /* references, CREATE2 salt) and sha256 (precompile 0x02 + SSZ              */
-/* merkleization) over the C streaming hash channel -- plus the well-known  */
-/* digests of fixed inputs. Loaded before the account types: EMPTY_ACCOUNT  */
-/* and the kernel's emptiness checks read the digests long before           */
-/* lib/mpt.sail loads.                                                      */
+/* merkleization) as pure functions of Bytes segment lists -- plus the      */
+/* well-known digests of fixed inputs. Loaded before the account types:     */
+/* EMPTY_ACCOUNT and the kernel's emptiness checks read the digests long    */
+/* before lib/mpt.sail loads.                                               */
 /* ======================================================================== */
 
 /* keccak256 of the empty string: the codeHash of every codeless account */
@@ -27,67 +27,30 @@ let EMPTY_TRIE_ROOT : hash = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc00
  * byte sequence: keccak256(s : ByteSlice) = keccak256(read_byte_slice(s)); the
  * prefixed SHA-256 digest = sha256(type_byte :: bytes). ---- */
 
-/* streaming hash channel: reset, push bytes, finish = digest */
-val host_bytes_reset = impure { c: "host_bytes_reset" } : unit -> unit
-val host_bytes_push = impure { c: "host_bytes_push" } : bits(8) -> unit
-val host_bytes_push8 = impure { c: "host_bytes_push8" } : bits(64) -> unit
-val host_bytes_keccak_finish = impure { c: "host_bytes_keccak_finish" } : unit -> bits(256)
-val host_bytes_sha256_finish = impure { c: "host_bytes_sha256_finish" } : unit -> bits(256)
+/* ---- THE hash axioms: pure functions of a segment list. A preimage is
+ * accumulated Sail-side as list(Bytes) -- its denotation is the concatenation
+ * of the segments -- and crosses the boundary in ONE call; the C side
+ * (ffi/hash_glue.c, compiled per build against the generated model header)
+ * walks the segment list natively, resolves each BytesSlice from its source
+ * store, and hashes. No channel state, no per-byte crossings. ---- */
+val keccak256_segments = impure { c: "host_keccak_segments" } : list(Bytes) -> bits(256)
+val sha256_segments = impure { c: "host_sha256_segments" } : list(Bytes) -> bits(256)
 
-/* keccak256 / sha256: the byte lists stream through the C hash channel
- * (host_bytes_*) 8 bytes per crossing; the channel primitives are the
- * axiomatic crypto core. */
-function hash_push_bytes(bs : list(byte)) -> unit = {
-    var rest : list(byte) = bs;
-    var more : bool = true;
-    while more do {
-        match rest {
-            b0 :: (b1 :: (b2 :: (b3 :: (b4 :: (b5 :: (b6 :: (b7 :: t))))))) => {
-                host_bytes_push8(append(b0, append(b1, append(b2, append(b3, append(b4, append(b5, append(b6, b7))))))));
-                rest = t
-            },
-            b :: t => {
-                host_bytes_push(b);
-                rest = t
-            },
-            [||] => more = false,
-        }
-    }
-}
+function keccak256_bytes(bs : list(byte)) -> bits(256) = keccak256_segments([|BytesList(bs)|])
 
-function keccak256_bytes(bs : list(byte)) -> bits(256) = {
-    host_bytes_reset();
-    hash_push_bytes(bs);
-    host_bytes_keccak_finish()
-}
+function keccak256_slice(s : ByteSlice) -> bits(256) = keccak256_segments([|BytesSlice(s)|])
 
-function sha256(bs : list(byte)) -> bits(256) = {
-    host_bytes_reset();
-    hash_push_bytes(bs);
-    host_bytes_sha256_finish()
-}
+/* keccak256 / sha256 are overloaded over materialized bytes, a source-tagged
+ * slice, or a full segment list -- one axiomatic core. */
+overload keccak256 = { keccak256_bytes, keccak256_slice, keccak256_segments }
+
+function sha256_bytes(bs : list(byte)) -> bits(256) = sha256_segments([|BytesList(bs)|])
+
+overload sha256 = { sha256_bytes, sha256_segments }
 
 /* keccak256(domain ++ rlp_list_prefix(len(payload)) ++ payload); body in
- * lib/rlp.sail (it needs rlp_list_prefix), streamed part-by-part. */
+ * lib/rlp/rlp.sail (it needs rlp_list_prefix). */
 val keccak_rlp_payload : (list(byte), list(byte)) -> bits(256)
-
-/* Source-tagged hashing: keccak256_slice(s) = keccak256(read_byte_slice(s));
- * the prefixed digest = sha256(type_byte :: bytes). C hashes the source
- * without materializing it. */
-val host_source_keccak = impure { c: "host_source_keccak" } : (bits(64), bits(64), bits(64)) -> bits(256)
-val host_source_sha256_prefixed = impure { c: "host_source_sha256_prefixed" } : (bits(8), bits(64), bits(64), bits(64)) -> bits(
-        256,
-    )
-
-function keccak256_slice(s : ByteSlice) -> bits(256) =
-    host_source_keccak(byte_source_kind(s.source), s.off, s.len)
-
-/* keccak256 is overloaded: materialized bytes or a source-tagged ByteSlice
- * both hash through the same axiomatic core. */
-overload keccak256 = { keccak256_bytes, keccak256_slice }
-
-function bytes_sha256_prefixed(prefix : byte, s : ByteSlice) -> bits(256) =
-    host_source_sha256_prefixed(prefix, byte_source_kind(s.source), s.off, s.len)
 
 /* Fixed-width helpers: pure meaning over keccak256/sha256. The dormant
  * one-call C fast paths in ffi/host_crypto.c (host_keccak_word & co) are

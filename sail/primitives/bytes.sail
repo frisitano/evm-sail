@@ -56,6 +56,15 @@ function tx_input_byte_slice(off : int, len : int) -> ByteSlice =
 function active_code_byte_slice(off : int, len : int) -> ByteSlice =
     byte_slice(ActiveCodeSource, off, len)
 
+/* A byte-sequence SEGMENT: materialized Sail bytes or a C-backed span. Hash
+ * preimages are accumulated as list(Bytes) -- the list denotes the
+ * CONCATENATION of its segments -- and cross the FFI in ONE call
+ * (ffi/hash_glue.c walks the generated representation natively). */
+union Bytes = {
+    BytesList : list(byte),
+    BytesSlice : ByteSlice,
+}
+
 /* Big-endian byte serializations used by RLP, the tries, and address derivation. */
 function word_to_bytes32(w : word) -> list(byte) = {
     var out : list(byte) = [||]; /* O(n): prepend big-endian */

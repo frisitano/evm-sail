@@ -215,6 +215,6 @@ function ssz_list_slice(start : int, n : int, stop : int, i : int) -> ByteSlice 
     witness_byte_slice(off, len)
 }
 function sha256_request_digest(request_type : int, s : ByteSlice) -> bits(256) =
-    bytes_sha256_prefixed(get_slice_int(8, request_type, 0), s)
+    sha256([|BytesList([|get_slice_int(8, request_type, 0)|]), BytesSlice(s)|])
 
 /* transactions[i] raw bytes (legacy = RLP list; typed = type byte ++ payload) */

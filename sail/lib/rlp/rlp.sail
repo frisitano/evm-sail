@@ -81,13 +81,8 @@ function zero_bytes(n : int) -> list(byte) = {
 /* keccak256(domain ++ rlp_list_prefix(len(payload)) ++ payload) (val in
  * host/io.sail), streamed part-by-part through the hash channel so the three
  * parts are never concatenated. */
-function keccak_rlp_payload(domain : list(byte), payload : list(byte)) -> bits(256) = {
-    host_bytes_reset();
-    hash_push_bytes(domain);
-    hash_push_bytes(rlp_list_prefix(list_len(payload)));
-    hash_push_bytes(payload);
-    host_bytes_keccak_finish()
-}
+function keccak_rlp_payload(domain : list(byte), payload : list(byte)) -> bits(256) =
+    keccak256([|BytesList(domain), BytesList(rlp_list_prefix(list_len(payload))), BytesList(payload)|])
 
 val create_address : (address, u64) -> address
 

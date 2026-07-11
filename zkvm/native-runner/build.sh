@@ -99,6 +99,10 @@ for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/journal_glue.c" -o "$BUILD/journal_glue.o"
 
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
+    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+    -c "$FFI/hash_glue.c" -o "$BUILD/hash_glue.o"
+
 # --- 5. shared harness I/O + CLI main ---------------------------------------
 #   test_utils.c is the ONE native I/O + run_once surface (input buffer,
 #   ssz_src accessors, emit_out sink, large-stack run, clear_memory) shared by
@@ -120,7 +124,7 @@ done
 # --- 7. link ----------------------------------------------------------------
 OUT="$BUILD/zkvm_native"
 LINK_CMD=("$CC" "${CFLAGS[@]}"
-    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/test_utils.o" "$BUILD/main.o"
+    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/test_utils.o" "$BUILD/main.o"
     "${HOST_OBJS[@]}" "${SF_OBJS[@]}"
     "${ACCEL_FLAGS[@]}" "${STACK_FLAGS[@]}"
     -o "$OUT")

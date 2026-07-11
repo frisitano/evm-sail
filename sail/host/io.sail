@@ -62,18 +62,6 @@ function rlp_nonce(nonce : int) -> list(byte) =
         }
     }
 
-/* SHA-256 of the concatenation of the present 32-byte digests (mask bits 0..2
- * select d0,d1,d2, concatenated in order); the EIP-7685 execution-requests
- * commitment. Build concatenates + hashes C-side, so no payload list is
- * streamed. Refines sha256 of the masked-and-concatenated word bytes. */
-function sha256_digests3(mask : bits(8), d0 : bits(256), d1 : bits(256), d2 : bits(256)) -> bits(256) = {
-    var payload : list(byte) = [||];
-    if mask[0] == bitone then { payload = list_append(payload, word_to_bytes32(d0)) };
-    if mask[1] == bitone then { payload = list_append(payload, word_to_bytes32(d1)) };
-    if mask[2] == bitone then { payload = list_append(payload, word_to_bytes32(d2)) };
-    sha256(payload)
-}
-
 /* Run a precompile over a concrete input byte source (a memory range or the
  * top-level tx data). The gas rules inspect the same source bytes directly
  * before this is called; build may stage/snapshot the input and write successful

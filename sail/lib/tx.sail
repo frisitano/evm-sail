@@ -19,21 +19,25 @@ function legacy_sig_chain_id(v : int) -> int =
  * signing content is a contiguous witness span (the pre-signature fields'
  * RLP); build frames + hashes it C-side rather than materializing the list. */
 /* Tx signing preimage hash. `content_src` spans the RLP of the pre-signature
- * fields in the witness; legacy EIP-155 txs append (chain_id, 0, 0), typed txs
- * prepend the type byte as a domain separator. */
+ * fields in the witness and is hashed as a SEGMENT (never materialized);
+ * legacy EIP-155 txs append (chain_id, 0, 0), typed txs prepend the type
+ * byte as a domain separator. */
 function tx_signing_hash(t : TxType, content_src : ByteSlice, v : int) -> hash = {
     let tb = tx_type_byte(t);
-    var content : list(byte) = read_byte_slice(content_src);
-    if (tb == 0) & (v >= 35) then {
-        content = list_append(content, rlp_int(legacy_sig_chain_id(v)));
-        content = list_append(content, [|0x80, 0x80|])
-    };
+    let suffix : list(byte) = if (tb == 0) & (v >= 35) then {
+            list_append(rlp_int(legacy_sig_chain_id(v)), [|0x80, 0x80|])
+        } else {
+            [||]
+        };
     let domain : list(byte) = if tb != 0 then {
             [|get_slice_int(8, tb, 0)|]
         } else {
             [||]
         };
-    keccak_rlp_payload(domain, content)
+    let content_len = unsigned(content_src.len) + list_len(suffix);
+    keccak256(
+        [|BytesList(domain), BytesList(rlp_list_prefix(content_len)), BytesSlice(content_src), BytesList(suffix)|],
+    )
 }
 
 /* EIP-7702 authorization signing hash: 0x05 || rlp([chain_id, address, nonce]). */
