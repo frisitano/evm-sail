@@ -155,8 +155,15 @@ function nibs_match(key : list(nibble), pos : int, seg : list(nibble)) -> bool =
 
 /* reference to a child node (Yellow Paper Appendix D, the node cap function
  * n, Eq. 207): the node's RLP inline when under 32 bytes, otherwise
- * 0xa0 ++ keccak256(node). Defined in lib/consensus_hash.sail. */
-val child_ref : list(byte) -> list(byte)
+ * 0xa0 ++ keccak256(node). */
+/* MPT child reference: nodes under 32 bytes embed inline, larger nodes are
+ * referenced by their keccak hash (Yellow Paper appendix D). */
+function child_ref(enc : list(byte)) -> list(byte) =
+    if list_len(enc) < 32 then {
+        enc
+    } else {
+        rlp_bytes(word_to_bytes32(keccak256(enc)))
+    }
 
 /* A trie leaf VALUE is the RLP encoding of the slot value (a string), e.g.
  * RLP(132) = 0x81 0x84, RLP(32-byte) = 0xa0 ++ 32 bytes. rlp_field_word reads
@@ -338,7 +345,15 @@ function trie_empty_ref() -> list(byte) = [|0x80|]
 function trie_ref_is_empty(r : list(byte)) -> bool =
     list_len(r) == 1 & list_nth(r, 0, 0x00) == 0x80
 
-val trie_ref_to_root : list(byte) -> bits(256)
+function trie_ref_to_root(r : list(byte)) -> bits(256) =
+    match r {
+        0xa0 :: h => if list_len(h) == 32 then {
+            bytes_be256(h)
+        } else {
+            keccak256(r)
+        },
+        _ => keccak256(r),
+    }
 
 function node_to_ref(node : list(byte)) -> list(byte) =
     if list_len(node) == 0 then {

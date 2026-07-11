@@ -222,6 +222,62 @@ function run_checked_block_end_system_calls(all_ok : bool) -> bool = {
 function trie_index_key(i : int) -> list(nibble) =
     to_nibbles(rlp_int(i))
 
+/* SHA-256 self-check against the standard "" and "abc" reference vectors. */
+function sha256_selfcheck() -> unit = {
+    assert(sha256([||]) == 0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855, "sha256('') on guest");
+    assert(
+        sha256([|0x61, 0x62, 0x63|]) == 0xba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad,
+        "sha256('abc') on guest"
+    )
+}
+
+/* Keccak self-check against Ethereum's "" and "abc" vectors. */
+function keccak_selfcheck() -> unit = {
+    assert(keccak256([||]) == 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470, "keccak('') on guest");
+    assert(
+        keccak256([|0x61, 0x62, 0x63|]) == 0x4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45,
+        "keccak('abc') on guest"
+    )
+}
+
+/* EIP-7685 commitment: sha256 over the concatenation of each present request
+ * type's 32-byte per-type digest (deposit, withdrawal, consolidation, in that
+ * order; an empty request body contributes nothing). Each digest hashes a
+ * witness span (source-based); the final concat-and-hash is a refinement pair
+ * order; an empty request body contributes nothing) -- accumulated as
+ * segments and hashed in one call. */
+function execution_requests_hash() -> hash = {
+    let l0 = wreq_start() - dep_start();
+    let l1 = creq_start() - wreq_start();
+    let l2 = req_end() - creq_start();
+    let d0 : hash = if l0 != 0 then {
+            sha256_request_digest(0, witness_byte_slice(dep_start(), l0))
+        } else {
+            sail_zeros(256)
+        };
+    let d1 : hash = if l1 != 0 then {
+            sha256_request_digest(1, witness_byte_slice(wreq_start(), l1))
+        } else {
+            sail_zeros(256)
+        };
+    let d2 : hash = if l2 != 0 then {
+            sha256_request_digest(2, witness_byte_slice(creq_start(), l2))
+        } else {
+            sail_zeros(256)
+        };
+    var segs : list(Bytes) = [||];
+    if l2 != 0 then {
+        segs = BytesList(word_to_bytes32(d2)) :: segs
+    };
+    if l1 != 0 then {
+        segs = BytesList(word_to_bytes32(d1)) :: segs
+    };
+    if l0 != 0 then {
+        segs = BytesList(word_to_bytes32(d0)) :: segs
+    };
+    sha256(segs)
+}
+
 /* ---- EIP-7928 block-access-list item-count validation ------------------ */
 /* EELS validate_block_access_list_gas_limit: the block is invalid when the
  * BAL's total item count exceeds block_gas_limit / 2000. The accumulator that

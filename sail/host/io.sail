@@ -76,15 +76,6 @@ val run_precompile_tx_input : int -> bool /* body in host/calldata.sail (txdata_
  * Body in lib/mpt.sail (it needs the trie value arena). */
 val read_byte_slice : ByteSlice -> list(byte)
 
-/* SHA-256 self-check against the standard "" and "abc" reference vectors. */
-val sha256_selfcheck : unit -> unit
-
-/* Keccak self-check against Ethereum's "" and "abc" vectors. */
-val keccak_selfcheck : unit -> unit
-
-/* Domain operations whose spec definitions may materialize canonical bytes,
- * while build definitions may stream or hash from host byte sources. */
-val execution_requests_hash : unit -> hash
 
 /* Guest public-output trace: emit_out appends exactly one byte to the guest
  * public output; only guest entries call it, core specs leave it abstract
