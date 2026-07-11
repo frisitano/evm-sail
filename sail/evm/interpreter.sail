@@ -473,7 +473,7 @@ function run_call(mode : int) -> unit = {
                     depth = saved_call_depth + 1,
                 };
             if is_running() then {
-                calldata_set_next(args_off, args_len)
+                calldata_bind_next(args_off, args_len)
             } else {
                 calldata_bind_empty()
             };

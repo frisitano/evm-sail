@@ -53,7 +53,7 @@ function system_call(tgt : address, input : bits(256)) -> unit = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         () /* system contract absent -> skip (EIP-4788 / EIP-2935) */
     } else {
-        let _ = txdata_set_word(input); /* the call's 32-byte calldata */
+        txdata_set_word(input); /* the call's 32-byte calldata */
         enter_system_call_frame(tgt, 32);
         interpret();
         if frame_succeeded() then {

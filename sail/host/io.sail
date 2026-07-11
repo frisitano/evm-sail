@@ -69,8 +69,6 @@ function run_precompile_slice(num : int, s : ByteSlice) -> bool =
 function run_precompile_memory_input(num : int, off : int, len : int) -> bool =
     run_precompile_slice(num, memory_byte_slice(off, len))
 
-val run_precompile_tx_input : int -> bool /* body in host/calldata.sail (txdata_size) */
-
 /* Source -> bytes: the read side of the byte-source interface. Law:
  * read_byte_slice(s) yields exactly s.len bytes of source s from offset s.off.
  * Body in lib/mpt.sail (it needs the trie value arena). */
