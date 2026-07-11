@@ -97,5 +97,4 @@ struct StatelessInput = {
     nodes : list(ByteSlice), /* witness state-node references (node DB source) */
     codes : list(ByteSlice), /* witness code references (code DB source)       */
     headers : list(ByteSlice), /* witness ancestor-header references              */
-    parent_header_items : list(RlpField),
 }

@@ -472,8 +472,11 @@ function validate_block(input : StatelessInput, exec_ok : bool, block_result : B
 
     let gas_used_ok = block_result.gas_acc == header.gas_used;
     let blob_gas_used_ok = block_result.blob_gas_acc == unsigned(header.blob_gas_used);
+    /* the parent header's RLP items, re-derived from its carried reference
+       (the pass already parsed these bytes, so a malformed header threw there) */
+    let parent_items = rlp_node_items(read_byte_slice(last_slice(input.headers)));
     let excess_blob_gas_ok = unsigned(header.excess_blob_gas) ==
-            expected_payload_excess_blob_gas(input.parent_header_items);
+            expected_payload_excess_blob_gas(parent_items);
     let computed_root = compute_state_root();
     let poststate_ok = computed_root == header.state_root;
     let receipts_root = receipts_trie_root(block_result.receipts);

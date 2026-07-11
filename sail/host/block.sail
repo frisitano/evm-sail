@@ -156,7 +156,7 @@ function system_call_checked(tgt : address) -> bool = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         false /* checked: a missing system predeploy invalidates the block */
     } else {
-        let _ = txdata_set_source(byte_slice(WitnessSource, 0, 0)); /* empty calldata: the SYSTEM caller dequeues */
+        let _ = txdata_set_source(byte_slice_test(WitnessSource, 0, 0)); /* empty calldata: the SYSTEM caller dequeues */
         enter_system_call_frame(tgt, 0);
         interpret();
         let ok = frame_succeeded();
@@ -339,6 +339,5 @@ function decode_stateless_input() -> StatelessInput = {
                     },
             },
         chain_config = chain_config,
-        parent_header_items = pitems,
     }
 }
