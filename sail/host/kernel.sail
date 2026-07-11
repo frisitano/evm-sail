@@ -380,7 +380,7 @@ function k_account_delete(a : address) -> unit = {
        in the same block (the stale pre-state balance would resurface). Kept empty
        in the eest_account, a later read sees the deletion, the post-state walk drops it
        (account_empty) AND marks it touched (sb_touched) so its pre-state leaf is not
-       reused -- subsuming the old k_deleted mechanism. */
+       reused. */
     store_account(a, EMPTY_ACCOUNT);
     /* EIP-7928: storage reads survive account deletion (EELS) -- drain the
        address's tx rows, recording each touched slot as a read (every tx row

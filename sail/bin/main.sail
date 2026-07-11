@@ -437,7 +437,7 @@ function receipts_trie_root(receipts : list(Receipt)) -> hash = {
 }
 
 function validate_block(input : StatelessInput, exec_ok : bool, block_result : BlockExecutionResult) -> unit = {
-    /* S5: stateless validation outcome (a failure is a NORMAL result -- the guest
+    /* Stateless validation outcome (a failure is a NORMAL result -- the guest
        reports successful_validation=false, it does not abort):
          - chain config selects the Amsterdam fork
          - the witness headers are contiguous
@@ -446,7 +446,7 @@ function validate_block(input : StatelessInput, exec_ok : bool, block_result : B
          - every tx is VALID/applicable (a reverting valid tx keeps the block valid)
          - the recomputed post-state root commits to payload.state_root
        Every check mirrors an EELS `raise InvalidBlock` (amsterdam state_transition).
-       ALL are computed (so witness reads are unchanged vs the old AND), then the
+       ALL checks are computed unconditionally (fixed witness-read footprint); the
        FIRST failure is reported as its BlockError; a valid block yields None. */
     let header = k_header;
     let fork_ok = input.fork == 20; /* canonical ProtocolFork index for Amsterdam
@@ -633,17 +633,14 @@ function main() -> unit = {
 
     let gas_used = to_gas(block_result.gas_acc);
 
+    /* Unused debug scalars stay ZERO: reading any account here (a minimal
+       witness proves only what EXECUTION touched) would turn a valid block
+       into a WitnessDeficient abort -- touch pre-state only where EELS does. */
     zkvm_out_gas = gas_used;
-    zkvm_out_storage0 = 0; /* legacy debug scalar, no longer computed */
-    /* wbal/cbbal legacy debug scalars are gone: loading the withdrawer and
-       fee recipient HERE touched accounts the block may never have read --
-       and a MINIMAL witness (EELS proves only what execution touched) then
-       legitimately lacks their proofs, turning a valid block into an
-       uncaught WitnessDeficient abort. The model must touch pre-state ONLY
-       where EELS does. */
+    zkvm_out_storage0 = 0;
     zkvm_out_wbal = 0;
     zkvm_out_cbbal = 0;
-    zkvm_out_tracelen = 0; /* the ELOp trace machinery was removed */
+    zkvm_out_tracelen = 0;
     zkvm_out_success = if valid then { 1 } else { 0 };
 
     /* emit the canonical SSZ SszStatelessValidationResult as public output */

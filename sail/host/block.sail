@@ -167,16 +167,6 @@ function input_well_formed() -> bool = {
     }
 }
 
-/* Materialize the hash-keyed witness node store and anchor the authenticated
- * pre-state root. There is no eager re-root or harvest pass: every later
- * stateless read is a lazy walk from k_parent_state_root, and because the
- * node-db is keyed by keccak(node) each walk is itself a hash-chain proof --
- * witness material is authenticated exactly where it is consumed. The anchor
- * register is set only after the witness header chain validates.
- *
- * No execution-overlay wipe here: the world starts empty (fresh process for the
- * production guest; the ctypes harness calls evmsail_clear_memory before each
- * run -- test_utils.c), which is why the model no longer defines k_world_reset. */
 function decode_block_header_ssz(p : int, npr : int) -> BlockHeader =
     struct {
         number = pl_block_number(p),
@@ -276,7 +266,11 @@ function decode_stateless_input() -> StatelessInput = {
         wds_rev = withdrawal_at(wds, i) :: wds_rev
     };
 
-    /* the witness region, asserted against the decoded block */
+    /* The witness region, asserted against the decoded block. The node DB is
+       keyed by keccak(node): every later stateless read is a lazy walk from
+       k_parent_state_root, so witness material is authenticated exactly where
+       it is consumed -- no eager re-root pass. The anchor is set only after
+       the header chain validates. */
     build_node_db(ws, n_ws, wc);
     register_witness_codes(wc, n_wc, wh);
     let (hok, pok, pitems) = index_witness_headers(wh, n_wh, cc, header.parent_hash);
