@@ -449,11 +449,11 @@ function validate_block(input : StatelessInput, exec_ok : bool, block_result : B
        ALL checks are computed unconditionally (fixed witness-read footprint); the
        FIRST failure is reported as its BlockError; a valid block yields None. */
     let header = k_header;
-    let fork_ok = input.fork == 20; /* canonical ProtocolFork index for Amsterdam
+    let fork_ok = input.chain_config.fork_index == 20; /* canonical ProtocolFork index for Amsterdam
                                   (execution-specs@02c6c2510: enum pruned, Osaka=17 BPO1=18 BPO2=19
                                   Amsterdam=20). */
 
-    let active_ok = cc_activation_active();
+    let active_ok = input.chain_config.activation_active;
     let cfg_ok = fork_ok & active_ok;
 
     let hdr_ok = input.headers_ok;

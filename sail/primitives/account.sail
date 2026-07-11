@@ -18,7 +18,7 @@
 struct Account = {
     nonce        : u64,   /* sigma[a]_n: nonce (u64: EIP-2681 caps it at 2^64-1)   */
     balance      : word,  /* sigma[a]_b: balance in wei                            */
-    code_hash     : hash,  /* sigma[a]_c: keccak256(code); KECCAK_EMPTY if codeless */
+    code_hash    : hash,  /* sigma[a]_c: keccak256(code); KECCAK_EMPTY if codeless */
     storage_root : hash,  /* sigma[a]_s: PRE-STATE storage root, the witness anchor */
 }
 

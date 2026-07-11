@@ -48,3 +48,35 @@ function fork_lt(a : Fork, b : Fork) -> bool = fork_index(a) < fork_index(b)
 overload operator >= = { fork_gteq }
 
 overload operator < = { fork_lt }
+
+/* Deserialize an SSZ ProtocolFork index (execution-specs tuple(ProtocolFork)
+ * order: ... Shanghai=14 Cancun=15 Prague=16 Osaka=17 BPO1=18 BPO2=19
+ * Amsterdam=20) into the Fork whose EXECUTION RULES apply: blob-parameter-only
+ * forks collapse to their base, unknown future indices to the newest. The raw
+ * index is preserved separately (ChainConfig.fork_index) for exact checks. */
+function fork_of_protocol_index(idx : int) -> Fork =
+    if idx >= 20 then {
+        Amsterdam
+    } else if idx >= 17 then {
+        Osaka /* Osaka(17), BPO1(18), BPO2(19) */
+    } else if idx == 16 then {
+        Prague
+    } else if idx == 15 then {
+        Cancun
+    } else if idx == 14 then {
+        Shanghai
+    } else if idx == 13 then {
+        Paris
+    } else if idx == 10 then {
+        London
+    } else if idx == 9 then {
+        Berlin
+    } else if idx == 7 then {
+        Istanbul
+    } else if idx == 5 then {
+        Byzantium
+    } else if idx == 1 then {
+        Homestead
+    } else {
+        Frontier
+    }

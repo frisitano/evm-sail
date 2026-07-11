@@ -162,43 +162,6 @@ function pl_n_txs() -> int = {
 }
 function pl_n_withdrawals() -> int = ediv_int(pl_bal_start() - pl_wds_start(), WD_SIZE)
 
-/* SszChainConfig: chain_id u64 @ cc+0, active_fork (SszForkConfig) offset @ cc+8;
- * SszForkConfig: fork u64 @ 0 (ProtocolFork index; Amsterdam = 20 in current
- * projects/zkevm fixtures). */
-function cc_chain_id() -> int = ssz_u64(cc_start() + CC_CHAIN_ID)
-function cc_active_fork_start() -> int = {
-    let c = cc_start();
-    c + ssz_u32(c + CC_ACTIVE_FORK_OFF)
-}
-function cc_fork() -> int = ssz_u64(cc_active_fork_start() + FC_FORK)
-
-/* SszForkConfig { fork:u64 @0, activation:SszForkActivation (offset @8),
- * blob_schedule (offset @12) }; SszForkActivation { block_number, timestamp :
- * SszOptionalForkActivationValue (List[u64,1], offsets @ activation+{0,4}) }.
- * The active_fork's activation must be ACTIVE for the block (EELS
- * validate_chain_config -> _is_activation_active): at least one of block_number
- * / timestamp set, and any set value must not exceed the payload's -- a FUTURE
- * activation point makes the block invalid. */
-function cc_activation_start() -> int = {
-    let f = cc_active_fork_start();
-    f + ssz_u32(f + FC_ACTIVATION_OFF)
-}
-function cc_blobsched_start() -> int = {
-    let f = cc_active_fork_start();
-    f + ssz_u32(f + FC_BLOBSCHED_OFF)
-}
-function cc_activation_active() -> bool = {
-    let a = cc_activation_start();
-    let bn_start = a + ssz_u32(a + FA_BLOCK_NUMBER_OFF);
-    let ts_start = a + ssz_u32(a + FA_TIMESTAMP_OFF);
-    let bs_start = cc_blobsched_start();
-    let bn_present = (ts_start - bn_start) >= 8; /* the optional list is non-empty */
-    let ts_present = (bs_start - ts_start) >= 8;
-    let p = payload_start();
-    let bn_ok = not_bool(bn_present) | (pl_block_number(p) >= ssz_u64(bn_start));
-    let ts_ok = not_bool(ts_present) | (pl_timestamp(p) >= ssz_u64(ts_start));
-    (bn_present | ts_present) & bn_ok & ts_ok
-}
 
 /* (start, len) of element i of a List[ByteList] given its [start, stop) span */
 function ssz_list_span(start : int, n : int, stop : int, i : int) -> (int, int) = {

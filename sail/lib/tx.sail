@@ -55,8 +55,8 @@ function auth_signing_hash(chain_id : int, addr : address, nonce : int) -> hash 
  * from the authenticated key. A forged/wrong pubkey fails verification, so the
  * block is rejected (successful_validation = false). */
 
-function tx_sig_v_ok(t : TxType, v : int) -> bool = match t {
-    LegacyTx => (v == 27) | (v == 28) | ((v >= 35) & (legacy_sig_chain_id(v) == cc_chain_id())),
+function tx_sig_v_ok(chain_id : int, t : TxType, v : int) -> bool = match t {
+    LegacyTx => (v == 27) | (v == 28) | ((v >= 35) & (legacy_sig_chain_id(v) == chain_id)),
     _ => (v == 0) | (v == 1),
 }
 

@@ -67,7 +67,7 @@ function intrinsic_gas(tx : Transaction) -> gas = {
  * delegation, bump the authority nonce; refund if the authority already existed). */
 function process_auth(au : Authorization) -> unit = {
     let authority = au.authority;
-    let chain_ok = (au.chain_id == 0) | (au.chain_id == cc_chain_id());
+    let chain_ok = (au.chain_id == 0) | (au.chain_id == k_chain_id);
 
     /* EELS validates sig + chain id from the tuple ALONE before reading the
      * authority's account; a tuple rejected there (e.g. wrong chain id) touches
@@ -184,7 +184,7 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
        signature over the signing hash (recover_sender_from_public_key) -- a
        forged key or bad v/r/s makes the whole BLOCK invalid, regardless of the
        validity verdict below. */
-    if not_bool(tx_sig_v_ok(tx.tx_type, tx.sig_v) & tx_auth_ok(tx.pubkey, tx.signing_hash, tx.sig_r, tx.sig_s)) then {
+    if not_bool(tx_sig_v_ok(k_chain_id, tx.tx_type, tx.sig_v) & tx_auth_ok(tx.pubkey, tx.signing_hash, tx.sig_r, tx.sig_s)) then {
         throw InvalidBlock(InvalidSignature)
     };
 

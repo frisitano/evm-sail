@@ -31,57 +31,6 @@
 /* instead of a bogus partial-state root mismatch.                          */
 /* ======================================================================== */
 
-/* ProtocolFork SSZ index (chain_config.active_fork, execution-specs
- * tuple(ProtocolFork) order) -> the model's Fork (primitives/fork.sail).
- * This is what makes the runner cross-fork: the guest hard-locks to
- * Amsterdam (index 20) in its validator, but the runner just selects the
- * execution rules. Indices: Shanghai=14 Cancun=15 Prague=16 Osaka=17
- * BPO1=18 BPO2=19 Amsterdam=20. */
-function k_fork_from_ssz(idx : int) -> Fork = {
-    if idx >= 20 then {
-        Amsterdam
-    } /* Amsterdam (20) and beyond */
-    else {
-        if idx >= 17 then {
-            Osaka
-        } /* Osaka(17), BPO1(18), BPO2(19) */
-        else {
-            if idx == 16 then {
-                Prague
-            } else {
-                if idx == 15 then {
-                    Cancun
-                } else {
-                    if idx == 14 then {
-                        Shanghai
-                    } else {
-                        if idx == 13 then {
-                            Paris
-                        } else {
-                            if idx == 10 then {
-                                London
-                            } else {
-                                if idx == 9 then {
-                                    Berlin
-                                } else {
-                                    if idx == 7 then {
-                                        Istanbul
-                                    } else {
-                                        if idx == 5 then {
-                                            Byzantium
-                                        } else {
-                                            if idx == 1 then { Homestead } else { Frontier }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 /* Cumulative gas of the run, read C-side by the harness dump (test_utils.c
  * 'G' section). Declared per entry -- main.sail declares the guest's own copy
@@ -104,7 +53,7 @@ function run_one() -> unit = {
        world starts empty -- the ctypes harness calls evmsail_clear_memory
        before each run -- so there is no overlay wipe here. */
     let input = decode_stateless_input();
-    k_fork = k_fork_from_ssz(input.fork);
+    k_fork = input.chain_config.fork;
 
     /* Run each tx decoded on demand by its SSZ index -- no materialized block. A
        malformed tx / bad signature (or a deficient witness during execution)

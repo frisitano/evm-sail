@@ -199,13 +199,38 @@ function withdrawal_at(wds : int, i : int) -> Withdrawal =
         amount = withdrawal_amount(wds, i),
     }
 
+/* Decode the SszChainConfig at cc: chain_id (u64 @0) and the active
+ * SszForkConfig (offset @8: fork index u64 @0, SszForkActivation offset @8,
+ * blob_schedule offset @12). The activation point (optional block_number /
+ * timestamp, List[u64,1] each) must be REACHED by this payload (EELS
+ * validate_chain_config -> _is_activation_active): at least one bound set,
+ * none exceeding the payload's -- a future activation invalidates the block. */
+function decode_chain_config(cc : int, number : int, timestamp : int) -> ChainConfig = {
+    let f = cc + ssz_u32(cc + CC_ACTIVE_FORK_OFF);
+    let fidx = ssz_u64(f + FC_FORK);
+    let a = f + ssz_u32(f + FC_ACTIVATION_OFF);
+    let bs_start = f + ssz_u32(f + FC_BLOBSCHED_OFF);
+    let bn_start = a + ssz_u32(a + FA_BLOCK_NUMBER_OFF);
+    let ts_start = a + ssz_u32(a + FA_TIMESTAMP_OFF);
+    let bn_present = (ts_start - bn_start) >= 8; /* the optional list is non-empty */
+    let ts_present = (bs_start - ts_start) >= 8;
+    let bn_ok = not_bool(bn_present) | (number >= ssz_u64(bn_start));
+    let ts_ok = not_bool(ts_present) | (timestamp >= ssz_u64(ts_start));
+    struct {
+        chain_id = ssz_u64(cc + CC_CHAIN_ID),
+        fork_index = fidx,
+        fork = fork_of_protocol_index(fidx),
+        activation_active = (bn_present | ts_present) & bn_ok & ts_ok,
+    }
+}
+
 /* Everything the single decode pass returns: the decoded block (header,
  * transactions, withdrawals) plus the witness-header results the validation
  * layer reads. The parent header travels as its RLP items so field decoding
  * (and its canonicity throws) stays at the original consumer sites. */
 struct StatelessInput = {
     block : Block,
-    fork : int,
+    chain_config : ChainConfig,
     headers_ok : bool, /* witness header chain contiguous              */
     parent_hash_ok : bool, /* newest witness header IS the block's parent  */
     parent_header_items : list(RlpField),
@@ -261,6 +286,8 @@ function decode_stateless_input() -> StatelessInput = {
        an envelope slice + its 65-byte witness pubkey, decoded standalone */
     let header = decode_block_header_ssz(p, npr);
     k_set_header(header);
+    let chain_config = decode_chain_config(cc, header.number, header.timestamp);
+    k_chain_id = chain_config.chain_id;
     var txs_rev : list(Transaction) = [||];
     foreach (i from 0 to (n_txs - 1)) {
         txs_rev = rlp_decode_tx(ssz_list_slice(txs, n_txs, wds, i), witness_byte_slice(pubkeys + i * 65, 65)) :: txs_rev
@@ -294,7 +321,7 @@ function decode_stateless_input() -> StatelessInput = {
                         block_access_list = witness_byte_slice(bal, p_end - bal),
                     },
             },
-        fork = cc_fork(),
+        chain_config = chain_config,
         headers_ok = hok,
         parent_hash_ok = pok,
         parent_header_items = pitems,

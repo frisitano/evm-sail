@@ -7,6 +7,7 @@ evm {
     primitives/bytes.sail,
     primitives/crypto.sail,
     primitives/fork.sail,
+    primitives/chain_config.sail,
     primitives/account.sail,
     primitives/journal.sail,
     primitives/tx.sail,

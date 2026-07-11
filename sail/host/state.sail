@@ -296,6 +296,8 @@ val headerhash_set = impure { c: "headerhash_set" } : (bits(64), hash) -> unit
 val headerhash_get = impure { c: "headerhash_get" } : bits(64) -> hash
 register k_n_headers : int = 0
 
+register k_chain_id : int = 1 /* CHAINID / EIP-155 / EIP-7702 domain; set by
+                                 the input pass from the decoded ChainConfig */
 register k_fork : Fork = Amsterdam /* the active fork; the guest runs the
                                       newest, the runner sets it per case
                                       (k_fork_from_ssz) */
