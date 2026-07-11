@@ -472,7 +472,7 @@ function k_tx_reset() -> unit = {
     /* per-tx: clear ephemeral state, snapshot tx-original storage */
     warm_reset();
     transient_reset();
-    logs_reset();
+    logs_tx_reset();
     k_refund = 0;
     selfdestr_reset();
     created_reset();

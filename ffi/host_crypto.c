@@ -2,6 +2,7 @@
 #include "lbits_convert.h"
 #include "code_db.h"
 #include "memory.h"
+#include "kernel_state.h"
 #include "zkvm_accelerators.h"
 
 #include <stdint.h>
@@ -496,11 +497,7 @@ unit node_asm_push_value_source(uint64_t kind, uint64_t off, uint64_t len) {
 int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
                                 const uint8_t **p, uint64_t *resolved_len) {
   const uint8_t *src = NULL;
-  if (kind != EVMSAIL_SOURCE_WITNESS &&
-      kind != EVMSAIL_SOURCE_MEMORY &&
-      kind != EVMSAIL_SOURCE_TX_INPUT &&
-      kind != EVMSAIL_SOURCE_ACTIVE_CODE &&
-      kind != EVMSAIL_SOURCE_TRIE_ARENA) {
+  if (kind < EVMSAIL_SOURCE_WITNESS || kind > EVMSAIL_SOURCE_LOG_DATA) {
     return 0;
   }
   if (len == 0) {
@@ -517,6 +514,8 @@ int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
   } else if (kind == EVMSAIL_SOURCE_TRIE_ARENA) {
     if (off > TARENA_n || len > TARENA_n - off) return 0;
     src = TARENA_buf + off;
+  } else if (kind == EVMSAIL_SOURCE_LOG_DATA) {
+    src = log_data_region(off, len);
   } else {
     return 0;
   }

@@ -205,10 +205,12 @@ val warm_slot_remove = impure { c: "warm_slot_remove" } : (address, word) -> uni
  * system logs) and is snapshotted into the C store; ONE call reads the whole
  * ordered series back for the receipt. Both cross generated types via
  * ffi/hash_glue.c. The last record is dropped on a revert (JLog). */
-val logs_reset = impure { c: "logs_reset" } : unit -> unit
+val logs_tx_reset = impure { c: "logs_tx_reset" } : unit -> unit /* records only;
+                                  the data arena persists for receipt-held slices */
 val log_append = impure { c: "log_append_record" } : (address, list(word), Bytes) -> unit
 val log_drop_last = impure { c: "log_drop_last" } : unit -> unit
 val read_logs = impure { c: "logs_read_all" } : unit -> list(LogEntry)
+val log_arena_byte = impure { c: "log_arena_byte" } : bits(64) -> bits(8) /* read_byte_slice's LogDataSource view */
 
 /* SELFDESTRUCT set: ordered (push / drop-last on revert via JSelfD), with a
  * membership test and index enumeration for the EIP-6780 tx-end finalization. */

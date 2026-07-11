@@ -55,6 +55,8 @@ static uint64_t seg_source_kind(enum zByteSource s) {
     return 4;
   case zTrieArenaSource:
     return 5;
+  case zLogDataSource:
+    return 6;
   }
   return 0;
 }
@@ -181,16 +183,10 @@ void logs_read_all(zz5listz8z5structz0zzLogEntryz9 *rop, unit u) {
     }
     node->hd.ztopics = ts;
 
-    const uint8_t *dp = log_data_ptr(i);
-    zz5listz8z5bvz9 ds = NULL;
-    for (uint64_t k = log_data_len(i); k-- > 0;) {
-      struct node_zz5listz8z5bvz9 *dn = sail_new(struct node_zz5listz8z5bvz9);
-      dn->rc = 1;
-      dn->tl = ds;
-      be_bytes_to_lbits(&dn->hd, 8, dp + k, 1);
-      ds = dn;
-    }
-    node->hd.zdata = ds;
+    /* data stays a REFERENCE into the block-lifetime log arena */
+    node->hd.zdata.zsource = zLogDataSource;
+    node->hd.zdata.zoff = log_data_off(i);
+    node->hd.zdata.zlen = log_data_len(i);
 
     out = node;
   }

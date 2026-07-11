@@ -10,7 +10,7 @@
  * backend materializes them. The spec backend defines their meaning as
  * mathematical byte lists; the build backend resolves them to pointer/length
  * pairs when possible. */
-enum ByteSource = { WitnessSource, MemorySource, TxInputSource, ActiveCodeSource, TrieArenaSource }
+enum ByteSource = { WitnessSource, MemorySource, TxInputSource, ActiveCodeSource, TrieArenaSource, LogDataSource }
 
 type source_offset = bits(64)
 type source_len    = bits(64)
@@ -34,6 +34,7 @@ function byte_source_kind(src : ByteSource) -> bits(64) =
         TxInputSource => 0x0000000000000003,
         ActiveCodeSource => 0x0000000000000004,
         TrieArenaSource => 0x0000000000000005,
+        LogDataSource => 0x0000000000000006,
     }
 
 /* the empty byte source (zero-length); a placeholder ByteSlice for item/patch

@@ -373,7 +373,7 @@ function log_entry_rlp(log : LogEntry) -> list(byte) = {
     var payload : list(byte) = [||];
     payload = list_append(payload, rlp_addr(log.address));
     payload = list_append(payload, topics_rlp(log.topics));
-    payload = list_append(payload, rlp_bytes(log.data));
+    payload = list_append(payload, rlp_bytes(read_byte_slice(log.data)));
     rlp_list(payload)
 }
 

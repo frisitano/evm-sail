@@ -291,6 +291,7 @@ function read_byte_slice(s : ByteSlice) -> list(byte) = {
             TxInputSource => txdata_byte(off + i),
             ActiveCodeSource => frame_code_byte(get_slice_int(64, off + i, 0)),
             TrieArenaSource => list_nth(trie_arena, off + i, 0x00),
+            LogDataSource => log_arena_byte(get_slice_int(64, off + i, 0)),
         };
         out = b :: out
     };

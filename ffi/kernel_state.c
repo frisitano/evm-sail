@@ -184,6 +184,15 @@ unit logs_reset(const unit u) {
   data_n = 0;
   return UNIT;
 }
+/* per-tx reset: records + topics only. The DATA arena persists across the
+ * block -- receipt-held LogEntry slices (LogDataSource) reference it until
+ * block validation; the full logs_reset above runs per case/block. */
+unit logs_tx_reset(const unit u) {
+  (void)u;
+  logs_n = 0;
+  topics_n = 0;
+  return UNIT;
+}
 unit log_begin(const lbits a) {
   if (logrec_reserve(logs_n + 1)) {
     log_rec *r = &logs[logs_n++];
@@ -234,10 +243,15 @@ void log_topic(lbits *rop, uint64_t i, uint64_t j) {
   word_out(rop, t);
 }
 uint64_t log_data_len(uint64_t i) { return (i < logs_n) ? logs[i].data_len : 0; }
-const uint8_t *log_data_ptr(uint64_t i) {
+uint64_t log_data_off(uint64_t i) { return (i < logs_n) ? logs[i].data_off : 0; }
+
+uint64_t log_arena_byte(uint64_t off) { return (off < data_n) ? log_data[off] : 0; }
+
+/* bounds-checked view of the log-data arena (the LogDataSource resolver) */
+const uint8_t *log_data_region(uint64_t off, uint64_t len) {
   static const uint8_t empty = 0;
-  if (i < logs_n && logs[i].data_len) return log_data + logs[i].data_off;
-  return &empty;
+  if (off > data_n || len > data_n - off) return NULL;
+  return len ? log_data + off : &empty;
 }
 
 /* ---------------------------- selfdestruct set -------------------------- */

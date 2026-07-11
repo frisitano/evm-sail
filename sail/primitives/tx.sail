@@ -56,7 +56,13 @@ struct Transaction = {
 
 /* A LOG record (Yellow Paper section 4.4.1, the log series): emitting address,
  * 0..4 topics (LOG0..LOG4), and the data bytes. */
-struct LogEntry     = { address : address, topics : list(word), data : list(byte) }
+struct LogEntry = {
+    address : address,
+    topics : list(word),
+    data : ByteSlice, /* span into the C log-data arena (LogDataSource); the arena
+                         persists across the BLOCK (per-tx reset keeps it) so
+                         receipt-held entries stay valid until block validation */
+}
 
 /* success: the top-level frame returned/stopped without reverting or
  * exceptionally halting (used for create-tx code deposit, log inclusion).

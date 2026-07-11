@@ -36,7 +36,10 @@ void log_addr(lbits *rop, uint64_t i);
 uint64_t log_topic_count(uint64_t i);
 void log_topic(lbits *rop, uint64_t i, uint64_t j);
 uint64_t log_data_len(uint64_t i);
-const uint8_t *log_data_ptr(uint64_t i);
+unit logs_tx_reset(const unit u); /* records only; data arena persists  */
+uint64_t log_data_off(uint64_t i);
+uint64_t log_arena_byte(uint64_t off);
+const uint8_t *log_data_region(uint64_t off, uint64_t len);
 
 /* ---- SELFDESTRUCT set (ordered; push/drop-last, contains, enumerate) ---- */
 unit selfdestr_reset(const unit u);
