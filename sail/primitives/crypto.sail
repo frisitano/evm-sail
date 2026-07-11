@@ -100,3 +100,33 @@ function keccak256_address(a : address) -> bits(256) = keccak256(address_to_byte
 /* SSZ merkle parent: SHA-256(left ++ right) over two 32-byte chunks. */
 function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) =
     sha256(list_append(word_to_bytes32(a), word_to_bytes32(b)))
+
+/* ---- Signature core: secp256k1 verify / recover (k256 accelerator axioms,
+ * ffi/precompiles.c) and the curve-order constants signature validity rules
+ * bound r/s against. ---- */
+
+/* n and n/2 of the secp256k1 group order (EIP-2 low-s malleability bound) */
+let SECP_N_FULL : bits(256) = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
+let SECP_N_HALF : bits(256) = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0
+
+/* verify signature (r, s) over hash h against the uncompressed public key
+ * (x, y) -- cheaper than recovery, which is why stateless inputs witness the
+ * key (EELS recover_sender_from_public_key allows verifying implementations) */
+val secp256k1_verify = impure { c: "precompile_secp256k1_verify_hash_sig_pub" } : (
+        bits(256),
+        word,
+        word,
+        bits(256),
+        bits(256),
+    ) -> bool
+
+val precompile_ecrecover_hash_sig = impure { c: "precompile_ecrecover_hash_sig" } : (bits(256), bits(64), word, word) -> bits(
+        168,
+    )
+
+/* recover the signer address from (h, y_parity, r, s); the leading bit flags
+ * recovery success (EIP-7702 authority recovery) */
+function ecrecover_addr(h : bits(256), yparity : int, r : word, s : word) -> (bool, address) = {
+    let recovered = precompile_ecrecover_hash_sig(h, get_slice_int(64, yparity, 0), r, s);
+    (recovered[160] == bitone, recovered[159 .. 0])
+}

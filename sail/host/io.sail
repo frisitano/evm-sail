@@ -74,23 +74,6 @@ function sha256_digests3(mask : bits(8), d0 : bits(256), d1 : bits(256), d2 : bi
     sha256(payload)
 }
 
-/* Signature / authentication precompiles (k256 accelerator axioms). */
-val secp256k1_verify_precompile = impure { c: "precompile_secp256k1_verify_hash_sig_pub" } : (
-        bits(256),
-        word,
-        word,
-        bits(256),
-        bits(256),
-    ) -> bool
-val precompile_ecrecover_hash_sig = impure { c: "precompile_ecrecover_hash_sig" } : (bits(256), bits(64), word, word) -> bits(
-        168,
-    )
-
-function ecrecover_precompile(h : bits(256), yparity : int, r : word, s : word) -> (bool, address) = {
-    let recovered = precompile_ecrecover_hash_sig(h, get_slice_int(64, yparity, 0), r, s);
-    (recovered[160] == bitone, recovered[159 .. 0])
-}
-
 /* Run a precompile over a concrete input byte source (a memory range or the
  * top-level tx data). The gas rules inspect the same source bytes directly
  * before this is called; build may stage/snapshot the input and write successful

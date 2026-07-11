@@ -269,9 +269,7 @@ function decode_stateless_input() -> StatelessInput = {
     k_set_header(header);
     var txs_rev : list(Transaction) = [||];
     foreach (i from 0 to (n_txs - 1)) {
-        txs_rev =
-            rlp_decode_tx(ssz_list_slice(txs, n_txs, wds, i), witness_byte_slice(pubkeys + i * 65, 65)) ::
-                txs_rev
+        txs_rev = rlp_decode_tx(ssz_list_slice(txs, n_txs, wds, i), witness_byte_slice(pubkeys + i * 65, 65)) :: txs_rev
     };
     var wds_rev : list(Withdrawal) = [||];
     foreach (i from 0 to (n_wds - 1)) {
