@@ -57,7 +57,7 @@ function fake_exponential(factor : int, numerator : int, denominator : int) -> i
 }
 
 function blob_base_fee_update_fraction() -> int =
-    if fork_gteq(k_fork, Amsterdam) then {
+    if k_fork >= Amsterdam then {
         BLOB_BASE_FEE_UPDATE_FRACTION_AMSTERDAM
     } else {
         BLOB_BASE_FEE_UPDATE_FRACTION_OSAKA
@@ -67,17 +67,17 @@ function blob_base_fee(excess_blob_gas : int) -> int =
     fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas, blob_base_fee_update_fraction())
 
 function blob_schedule_target() -> int =
-    if fork_gteq(k_fork, Amsterdam) then {
+    if k_fork >= Amsterdam then {
         BLOB_SCHEDULE_TARGET_AMSTERDAM
     } else {
-        if fork_gteq(k_fork, Prague) then { BLOB_SCHEDULE_TARGET_PRAGUE } else { BLOB_SCHEDULE_TARGET_CANCUN }
+        if k_fork >= Prague then { BLOB_SCHEDULE_TARGET_PRAGUE } else { BLOB_SCHEDULE_TARGET_CANCUN }
     }
 
 function blob_schedule_max() -> int =
-    if fork_gteq(k_fork, Amsterdam) then {
+    if k_fork >= Amsterdam then {
         BLOB_SCHEDULE_MAX_AMSTERDAM
     } else {
-        if fork_gteq(k_fork, Prague) then { BLOB_SCHEDULE_MAX_PRAGUE } else { BLOB_SCHEDULE_MAX_CANCUN }
+        if k_fork >= Prague then { BLOB_SCHEDULE_MAX_PRAGUE } else { BLOB_SCHEDULE_MAX_CANCUN }
     }
 
 function blob_target_gas_per_block() -> int =
@@ -100,7 +100,7 @@ function next_excess_blob_gas(
     } else {
         let target_blob_gas_price = GAS_PER_BLOB * blob_base_fee(parent_excess_blob_gas);
         let base_blob_tx_price = BLOB_BASE_COST * parent_base_fee_per_gas;
-        if (fork_gteq(k_fork, Amsterdam)) & (base_blob_tx_price > target_blob_gas_price) then {
+        if (k_fork >= Amsterdam) & (base_blob_tx_price > target_blob_gas_price) then {
             parent_excess_blob_gas +
                 ediv_int(parent_blob_gas_used * (blob_schedule_max() - blob_schedule_target()), blob_schedule_max())
         } else {
@@ -147,16 +147,16 @@ let G_initcode_word : gas = 2 /* EIP-3860 (per word of initcode)            */
 /* EIP-170 deployed-code limit 24576, raised to 0x8000 = 32768 by EIP-7954 at
  * Amsterdam; the EIP-3860 initcode cap is always 2 * MAX_CODE_SIZE. Fork-
  * dependent so the shared interpreter serves both the pre-Amsterdam state-tests
- * (fork_lt(k_fork, Amsterdam)) and the guest (k_fork defaults to 99). */
-function max_code_size() -> int = if fork_gteq(k_fork, Amsterdam) then { 32768 } else { 24576 }
+ * (k_fork < Amsterdam) and the guest (k_fork defaults to 99). */
+function max_code_size() -> int = if k_fork >= Amsterdam then { 32768 } else { 24576 }
 function max_initcode_size() -> int =
-    if fork_gteq(k_fork, Shanghai) then {
+    if k_fork >= Shanghai then {
         2 * max_code_size()
     } else {
         9223372036854775807
     }
 function sstore_clear_refund() -> gas =
-    if fork_gteq(k_fork, London) then { R_sclear_london } else { R_sclear_pre_london }
+    if k_fork >= London then { R_sclear_london } else { R_sclear_pre_london }
 
 /* --------------------------- charging hook ------------------------------ */
 /* Debit `amount` from the frame's gas counter. A debit that cannot be       */
@@ -277,7 +277,7 @@ function modexp_gas(src : PcInputSource, base : int, input_len : int) -> gas = {
     /* EIP-7823 (Osaka) caps base/exp/mod at 1024 bytes each; a larger field
      * fails the call. Modeled by returning a cost beyond any forwardable child
      * gas, so run_call's used <= child_gas test rejects it. */
-    if (fork_gteq(k_fork, Osaka)) & ((bl > 1024) | (el > 1024) | (ml > 1024)) then {
+    if (k_fork >= Osaka) & ((bl > 1024) | (el > 1024) | (ml > 1024)) then {
         return 1000000000000
     };
 
@@ -286,7 +286,7 @@ function modexp_gas(src : PcInputSource, base : int, input_len : int) -> gas = {
 
     /* multiplication complexity: EIP-2565 uses words^2; EIP-7883 (Osaka)
        uses a flat 16 for inputs <= 32 bytes, else 2*words^2. */
-    let osaka = fork_gteq(k_fork, Osaka);
+    let osaka = k_fork >= Osaka;
     let mult = if osaka then {
             if maxlen <= 32 then {
                 16
@@ -732,7 +732,7 @@ function exp_gas(exponent : word) -> gas =
 
 /* EIP-3860 initcode word cost, charged by CREATE/CREATE2 and tx-deploy. */
 function initcode_gas(byte_len : int) -> gas =
-    if fork_gteq(k_fork, Shanghai) then {
+    if k_fork >= Shanghai then {
         to_gas(G_initcode_word * ediv_int(byte_len + 31, 32))
     } else {
         0

@@ -39,7 +39,12 @@ function fork_index(f : Fork) -> int = match f {
     Amsterdam => 12,
 }
 
-/* fork a is at least / strictly before fork b */
+/* fork a is at least / strictly before fork b; overloaded onto the
+ * comparison operators so fork gates read `k_fork >= Berlin` */
 function fork_gteq(a : Fork, b : Fork) -> bool = fork_index(a) >= fork_index(b)
 
 function fork_lt(a : Fork, b : Fork) -> bool = fork_index(a) < fork_index(b)
+
+overload operator >= = { fork_gteq }
+
+overload operator < = { fork_lt }

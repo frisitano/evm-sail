@@ -310,11 +310,11 @@ register k_fork : Fork = Amsterdam /* the active fork; the guest runs the
  * not a precompile. */
 function is_precompile(n : int) -> bool = {
     let base = (n >= 1) & (n <= 4);
-    let byzantium = (n >= 5) & (n <= 8) & (fork_gteq(k_fork, Byzantium));
-    let istanbul = (n == 9) & (fork_gteq(k_fork, Istanbul));
-    let kzg = (n == 10) & (fork_gteq(k_fork, Cancun));
-    let bls = (n >= 11) & (n <= 17) & (fork_gteq(k_fork, Prague));
-    let p256 = (n == 256) & (fork_gteq(k_fork, Osaka));
+    let byzantium = (n >= 5) & (n <= 8) & (k_fork >= Byzantium);
+    let istanbul = (n == 9) & (k_fork >= Istanbul);
+    let kzg = (n == 10) & (k_fork >= Cancun);
+    let bls = (n >= 11) & (n <= 17) & (k_fork >= Prague);
+    let p256 = (n == 256) & (k_fork >= Osaka);
     base | byzantium | istanbul | kzg | bls | p256
 }
 

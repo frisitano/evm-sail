@@ -134,7 +134,7 @@ function prewarm(tx : Transaction) -> unit = {
         } else {
             k_access_account(tx.recipient)
         };
-    if fork_gteq(k_fork, Shanghai) then {
+    if k_fork >= Shanghai then {
         let _ = k_access_account(k_coinbase())
     };
 
@@ -205,9 +205,9 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
     /* EIP-4844 / EIP-7691 / EIP-7594 blob-count bounds: Cancun max 6 per block,
        Prague max 9 per block, Osaka adds MAX_BLOBS_PER_TX = 6. A type-3 tx must
        carry >= 1 blob, must not create, and every versioned hash must be 0x01-tagged. */
-    let max_blobs : int = if fork_gteq(k_fork, Osaka) then { 6 } else { if fork_gteq(k_fork, Prague) then { 9 } else { 6 } };
+    let max_blobs : int = if k_fork >= Osaka then { 6 } else { if k_fork >= Prague then { 9 } else { 6 } };
     let blob_ok : bool = if tx_is_blob(tx.tx_type) then {
-              (fork_gteq(k_fork, Cancun))
+              (k_fork >= Cancun)
             & (tx.blob_count >= 1)
             & (tx.blob_count <= max_blobs)
             & not_bool(tx.is_create)
@@ -218,7 +218,7 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
 
     /* EIP-7623 (Prague+): the calldata floor is ALSO a validity bound -- a tx whose
        gas limit cannot cover 21000 + 10*tokens is rejected outright. */
-    let floor_ok : bool = (fork_lt(k_fork, Prague)) | (tx.gas_limit >= G_transaction + 10 * calldata_tokens());
+    let floor_ok : bool = (k_fork < Prague) | (tx.gas_limit >= G_transaction + 10 * calldata_tokens());
     let valid =   (unsigned(k_get_balance(sender)) >= upfront)
                 & /* covers upfront cost      */
                   ((k_code_key(sender) == KECCAK_EMPTY) | sender_deleg)
@@ -235,19 +235,19 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
                 & blob_ok
                 & (not_bool(tx.is_create) | (dlen <= max_initcode_size()))
                 & /* EIP-3860 */
-                  ((fork_lt(k_fork, Osaka)) | (tx.gas_limit <= 16777216))
+                  ((k_fork < Osaka) | (tx.gas_limit <= 16777216))
                 & /* EIP-7825: gas cap 2^24 */
                   (unsigned(tx.max_priority_fee) <= unsigned(tx.max_fee))
                 & /* EIP-1559: prio cap <= fee cap */
-                  (not_bool(tx_is_access_list(tx.tx_type)) | (fork_gteq(k_fork, Berlin)))
+                  (not_bool(tx_is_access_list(tx.tx_type)) | (k_fork >= Berlin))
                 & /* EIP-2930 type-1 tx is Berlin+ */
-                  (not_bool(tx_is_dynamic_fee(tx.tx_type)) | (fork_gteq(k_fork, London)))
+                  (not_bool(tx_is_dynamic_fee(tx.tx_type)) | (k_fork >= London))
                 & /* EIP-1559 fee-market txs are London+ */
                   (not_bool(tx_is_set_code(tx.tx_type)) | not_bool(tx.is_create))
                 & /* EIP-7702: type-4 has to != nil */
                   (not_bool(tx_is_set_code(tx.tx_type)) | (list_len(tx.authorizations) > 0))
                 & /* EIP-7702: non-empty auth list */
-                  (not_bool(tx_is_set_code(tx.tx_type)) | (fork_gteq(k_fork, Prague)))
+                  (not_bool(tx_is_set_code(tx.tx_type)) | (k_fork >= Prague))
                 & /* EIP-7702 is Prague+: a type-4 tx is invalid on an earlier fork */
                   (nonce_before != 0xFFFFFFFFFFFFFFFF)
                 & /* EIP-2681: nonce < 2^64-1 (incrementable) */
@@ -408,7 +408,7 @@ function settle_transaction(tx : Transaction, v : TxValidity, fr : TxFrameResult
     /* Refund cap: gas_used / 2 before London, gas_used / 5 after EIP-3529. */
     let gas_left0 = fr.gas_remaining;
     let gas_used0 = tx.gas_limit - gas_left0;
-    let refund_quotient = if fork_gteq(k_fork, London) then { 5 } else { 2 };
+    let refund_quotient = if k_fork >= London then { 5 } else { 2 };
     let refund_cap = ediv_int(gas_used0, refund_quotient);
     let refund = if k_refund < refund_cap then { k_refund } else { refund_cap };
     let refund_pos = if refund < 0 then { 0 } else { refund };
@@ -416,7 +416,7 @@ function settle_transaction(tx : Transaction, v : TxValidity, fr : TxFrameResult
     let gas_used1 = tx.gas_limit - gas_left1;
 
     /* EIP-7623 (Prague+): a tx pays at least the calldata floor 21000 + 10*tokens */
-    let floor : int = if fork_gteq(k_fork, Prague) then {
+    let floor : int = if k_fork >= Prague then {
             G_transaction + 10 * calldata_tokens()
         } else {
             0
