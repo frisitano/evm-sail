@@ -139,10 +139,10 @@ function k_emit_transfer_log(src : address, dst : address, v : word) -> unit = {
         ()
     } else {
         journal_push(JLog());
-        emit_log(
+        log_append(
             eip7708_system_address(),
             [|eip7708_transfer_topic(), address_to_word(src), address_to_word(dst)|],
-            word_to_bytes32(v),
+            BytesList(word_to_bytes32(v)),
         )
     }
 }
@@ -152,7 +152,7 @@ function k_emit_burn_log(a : address, v : word) -> unit = {
         ()
     } else {
         journal_push(JLog());
-        emit_log(eip7708_system_address(), [|eip7708_burn_topic(), address_to_word(a)|], word_to_bytes32(v))
+        log_append(eip7708_system_address(), [|eip7708_burn_topic(), address_to_word(a)|], BytesList(word_to_bytes32(v)))
     }
 }
 
@@ -334,9 +334,9 @@ function k_create2_addr(a : address, salt : word, inithash : hash) -> address =
     create2_address(a, salt, inithash)
 
 /* --- logs (LOG0..LOG4) + the gas-refund counter --- */
-function k_log(a : address, topics : list(word), data : list(byte)) -> unit = {
+function k_log(a : address, topics : list(word), data : Bytes) -> unit = {
     journal_push(JLog());
-    emit_log(a, topics, data)
+    log_append(a, topics, data)
 }
 function k_refund_add(delta : int) -> unit = {
     journal_push(JRefund(k_refund));

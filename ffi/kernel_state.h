@@ -29,14 +29,14 @@ void headerhash_get(lbits *rop, uint64_t i);
 unit logs_reset(const unit u);
 unit log_begin(const lbits a);         /* start a new record for emitter a      */
 unit log_add_topic(const lbits t);     /* append a topic to the current record  */
-unit log_add_data_byte(uint64_t b);    /* append a data byte to the current rec  */
+unit log_add_data_bulk(const uint8_t *p, uint64_t n); /* append data bytes (one memcpy) */
 unit log_drop_last(const unit u);      /* drop the most recent record (revert)   */
 uint64_t log_count(const unit u);
 void log_addr(lbits *rop, uint64_t i);
 uint64_t log_topic_count(uint64_t i);
 void log_topic(lbits *rop, uint64_t i, uint64_t j);
 uint64_t log_data_len(uint64_t i);
-uint64_t log_data_byte(uint64_t i, uint64_t k);
+const uint8_t *log_data_ptr(uint64_t i);
 
 /* ---- SELFDESTRUCT set (ordered; push/drop-last, contains, enumerate) ---- */
 unit selfdestr_reset(const unit u);

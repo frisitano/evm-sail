@@ -202,10 +202,11 @@ unit log_add_topic(const lbits t) {
   }
   return UNIT;
 }
-unit log_add_data_byte(uint64_t b) {
-  if (logs_n && data_reserve(data_n + 1)) {
-    log_data[data_n++] = (uint8_t)b;
-    logs[logs_n - 1].data_len++;
+unit log_add_data_bulk(const uint8_t *p, uint64_t n) {
+  if (logs_n && n && data_reserve(data_n + (uint32_t)n)) {
+    memcpy(log_data + data_n, p, (size_t)n);
+    data_n += (uint32_t)n;
+    logs[logs_n - 1].data_len += (uint32_t)n;
   }
   return UNIT;
 }
@@ -233,9 +234,10 @@ void log_topic(lbits *rop, uint64_t i, uint64_t j) {
   word_out(rop, t);
 }
 uint64_t log_data_len(uint64_t i) { return (i < logs_n) ? logs[i].data_len : 0; }
-uint64_t log_data_byte(uint64_t i, uint64_t k) {
-  if (i < logs_n && k < logs[i].data_len) return log_data[logs[i].data_off + k];
-  return 0;
+const uint8_t *log_data_ptr(uint64_t i) {
+  static const uint8_t empty = 0;
+  if (i < logs_n && logs[i].data_len) return log_data + logs[i].data_off;
+  return &empty;
 }
 
 /* ---------------------------- selfdestruct set -------------------------- */

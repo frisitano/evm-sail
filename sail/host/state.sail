@@ -199,19 +199,16 @@ val warm_slot_contains = impure { c: "warm_slot_contains" } : (address, word) ->
 val warm_slot_insert = impure { c: "warm_slot_insert" } : (address, word) -> unit
 val warm_slot_remove = impure { c: "warm_slot_remove" } : (address, word) -> unit
 
-/* LOG series: an ordered list of records (emitter, 0..4 topics, data bytes),
- * streamed (log_begin then topics/data), the last dropped on a revert (JLog). */
+/* LOG series: an ordered list of records (emitter, 0..4 topics, data
+ * bytes). ONE call appends a whole record -- the data crosses as a Bytes
+ * segment (the memory span for LOG0..4, materialized words for the EIP-7708
+ * system logs) and is snapshotted into the C store; ONE call reads the whole
+ * ordered series back for the receipt. Both cross generated types via
+ * ffi/hash_glue.c. The last record is dropped on a revert (JLog). */
 val logs_reset = impure { c: "logs_reset" } : unit -> unit
-val log_begin = impure { c: "log_begin" } : address -> unit
-val log_add_topic = impure { c: "log_add_topic" } : word -> unit
-val log_add_data_byte = impure { c: "log_add_data_byte" } : bits(8) -> unit
+val log_append = impure { c: "log_append_record" } : (address, list(word), Bytes) -> unit
 val log_drop_last = impure { c: "log_drop_last" } : unit -> unit
-val log_count = impure { c: "log_count" } : unit -> bits(64)
-val log_addr = impure { c: "log_addr" } : bits(64) -> word
-val log_topic_count = impure { c: "log_topic_count" } : bits(64) -> bits(64)
-val log_topic = impure { c: "log_topic" } : (bits(64), bits(64)) -> word
-val log_data_len = impure { c: "log_data_len" } : bits(64) -> bits(64)
-val log_data_byte = impure { c: "log_data_byte" } : (bits(64), bits(64)) -> bits(8)
+val read_logs = impure { c: "logs_read_all" } : unit -> list(LogEntry)
 
 /* SELFDESTRUCT set: ordered (push / drop-last on revert via JSelfD), with a
  * membership test and index enumeration for the EIP-6780 tx-end finalization. */
@@ -475,53 +472,3 @@ function apply_undo(e : JEntry) -> unit = match e {
     JSelfD()       => selfdestr_drop_last(),
 }
 
-/* --- LOG series helpers: stream a record into the C log store, and read the
- * whole ordered list back out (into the receipt) via the count/getters. --- */
-function log_stream_topics(ts : list(word)) -> unit =
-    match ts {
-        [||]   => (),
-        t :: r => {
-            log_add_topic(t);
-            log_stream_topics(r)
-        },
-    }
-function log_stream_data(bs : list(byte)) -> unit =
-    match bs {
-        [||]   => (),
-        b :: r => {
-            log_add_data_byte(b);
-            log_stream_data(r)
-        },
-    }
-function emit_log(a : address, topics : list(word), data : list(byte)) -> unit = {
-    log_begin(a);
-    log_stream_topics(topics);
-    log_stream_data(data)
-}
-
-/* read one stored log's topics (in order) / data bytes (reversed, caller flips) */
-function read_log_topics(i : bits(64), j : int, m : int, acc : list(word)) -> list(word) =
-    if j >= m then {
-        acc
-    } else {
-        read_log_topics(i, j + 1, m, acc ++ [|log_topic(i, get_slice_int(64, j, 0))|])
-    }
-function read_log_data_rev(i : bits(64), k : int, n : int, acc : list(byte)) -> list(byte) =
-    if k >= n then {
-        acc
-    } else {
-        read_log_data_rev(i, k + 1, n, log_data_byte(i, get_slice_int(64, k, 0)) :: acc)
-    }
-function read_log_entry(i : bits(64)) -> LogEntry =
-    struct {
-        address = log_addr(i)[159 .. 0],
-        topics = read_log_topics(i, 0, unsigned(log_topic_count(i)), [||]),
-        data = list_reverse(read_log_data_rev(i, 0, unsigned(log_data_len(i)), [||])),
-    }
-function read_logs_rev(i : int, n : int, acc : list(LogEntry)) -> list(LogEntry) =
-    if i >= n then {
-        acc
-    } else {
-        read_logs_rev(i + 1, n, read_log_entry(get_slice_int(64, i, 0)) :: acc)
-    }
-function read_logs() -> list(LogEntry) = list_reverse(read_logs_rev(0, unsigned(log_count()), [||]))

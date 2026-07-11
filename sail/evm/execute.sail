@@ -578,7 +578,7 @@ function execute(op : ast) -> unit = match op {
             charge(log_gas(n, len));
             charge_expansion(off, len);
             if is_running() then {
-                k_log(self_addr(), topics, mem_read_range(off, len))
+                k_log(self_addr(), topics, BytesSlice(memory_byte_slice(off, len)))
             }
         }
     },
