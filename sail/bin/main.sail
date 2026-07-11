@@ -95,7 +95,7 @@ function arith_selfcheck() -> unit = {
     assert(alu_mod(a, word_of_int(3)) == word_of_int(0), "alu_mod");
     assert(alu_mulmod(a, a, word_of_int(7)) == word_of_int(1), "alu_mulmod 512-bit");
 
-    /* alu_exp (square-and-multiply, 256x 512-bit mulmod) dropped from the hot path:
+/* alu_exp (square-and-multiply, 256x 512-bit mulmod) dropped from the hot path:
        ~17M instructions and redundant — EEST validates sailfix's full arithmetic,
        and alu_mulmod above already exercises the 512-bit product path. */
     let neg7 : word = word_of_int(-7);
