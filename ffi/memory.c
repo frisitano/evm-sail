@@ -33,15 +33,30 @@ typedef struct { int src; uint64_t off, len; } hm_cd;
 static hm_cd cd[MEMORY_MAXDEPTH];
 static hm_cd cd_pending = { -2, 0, 0 };
 
-/* The current transaction's input bytes. The runner / stateless decoder
- * materializes calldata or create initcode into this owned buffer before
- * execution; opcodes then read it byte-addressed through txd_* / cd_*. */
-typedef struct { uint8_t *buf; uint64_t len, cap; } txin_buf;
-static txin_buf txin = { NULL, 0, 0 };
+/* The current transaction's input as a SOURCE REFERENCE -- the witness span
+ * the decoder carried on Transaction.input_src, never copied. Block system
+ * calls stage their 32-byte word into the small owned slot instead
+ * (kind = TXIN_KIND_WORD). All txd_* / cd_* reads resolve through it. */
+#define TXIN_KIND_WORD UINT64_MAX
+static struct { uint64_t kind, off, len; } txin = { 0, 0, 0 };
+static uint8_t txin_word[32];
 
-static uint8_t txin_byte_at(const txin_buf *s, uint64_t i) {
-  if (i >= s->len) return 0;
-  return s->buf ? s->buf[i] : 0;
+int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
+                                const uint8_t **p, uint64_t *resolved_len);
+
+/* a READ pointer to tx-input[i, i+len), NULL past the end / on a bad source */
+static const uint8_t *txin_region(uint64_t i, uint64_t len) {
+  if (len == 0 || i > txin.len || len > txin.len - i) return NULL;
+  if (txin.kind == TXIN_KIND_WORD) return txin_word + i;
+  const uint8_t *p = NULL;
+  uint64_t rlen = 0;
+  if (!evmsail_resolve_byte_source(txin.kind, txin.off + i, len, &p, &rlen) || rlen != len) return NULL;
+  return p;
+}
+
+static uint8_t txin_byte(uint64_t i) {
+  const uint8_t *p = txin_region(i, 1);
+  return p ? *p : 0;
 }
 
 static void memory_ensure(size_t off) {
@@ -101,69 +116,55 @@ unit calldata_bind_tx_input(const unit u) {
   cd[h_top].src = -1; cd[h_top].off = 0; cd[h_top].len = txin.len;
   return UNIT;
 }
-static void txin_ensure(uint64_t need) {
-  if (need > txin.cap) {
-    uint64_t n = txin.cap ? txin.cap : 1024;
-    while (n < need) n <<= 1;
-    txin.buf = (uint8_t *)realloc(txin.buf, n);
-    txin.cap = n;
-  }
-}
-
-/* stage the tx input in one call by copying its resolved byte source. For a
- * stateless tx this is the witness span; for the already-staged native-runner
- * input it is a self-reference (memmove tolerates the aliasing -- an in-place
- * copy never grows the buffer, so `src` cannot dangle). Fail-closed on a bad
- * source, matching the empty-input path. */
-uint64_t txdata_stage_source(uint64_t kind, uint64_t off, uint64_t len) {
-  if (len == 0) { txin.len = 0; return 0; }
+/* bind the tx input BY REFERENCE (no copy). Fail-closed on a bad or
+ * self-referential source, matching the empty-input path. */
+uint64_t txdata_bind_source(uint64_t kind, uint64_t off, uint64_t len) {
+  txin.kind = 0; txin.off = 0; txin.len = 0;
+  if (len == 0) return 0;
   const uint8_t *src = NULL;
   uint64_t rlen = 0;
-  if (!evmsail_resolve_byte_source(kind, off, len, &src, &rlen) || !src || rlen != len) {
-    txin.len = 0;
+  if (kind == EVMSAIL_SOURCE_TX_INPUT ||
+      !evmsail_resolve_byte_source(kind, off, len, &src, &rlen) || !src || rlen != len) {
     return 0;
   }
-  txin_ensure(len);
-  memmove(txin.buf, src, len);
-  txin.len = len;
+  txin.kind = kind; txin.off = off; txin.len = len;
   return len;
 }
 
 uint64_t txdata_stage_word(const lbits w) {
-  txin_ensure(32);
-  lbits_to_be_bytes(txin.buf, 32, w);
-  txin.len = 32;
+  lbits_to_be_bytes(txin_word, 32, w);
+  txin.kind = TXIN_KIND_WORD; txin.off = 0; txin.len = 32;
   return 32;
 }
 
 uint64_t txdata_count_nonzero(const unit u) {
   (void)u;
+  const uint8_t *p = txin_region(0, txin.len);
   uint64_t c = 0;
-  for (uint64_t i = 0; i < txin.len; i++) if (txin.buf[i]) c++;
+  if (p) for (uint64_t i = 0; i < txin.len; i++) if (p[i]) c++;
   return c;
 }
 
 /* the executing tx's input (a create-tx's initcode source; gas byte reads) */
 uint64_t txd_copy(uint8_t *dst, uint64_t cap) {
   uint64_t n = txin.len < cap ? txin.len : cap;
-  for (uint64_t i = 0; i < n; i++) dst[i] = txin_byte_at(&txin, i);
+  const uint8_t *p = txin_region(0, n);
+  if (p) memcpy(dst, p, n); else n = 0;
   return n;
 }
-uint64_t txdata_byte_at(uint64_t i)  { return txin_byte_at(&txin, i); }
+uint64_t txdata_byte_at(uint64_t i)  { return txin_byte(i); }
 uint64_t txdata_length(const unit u) { (void)u; return txin.len; }
 const uint8_t *txd_rd(uint64_t off, uint64_t len) {
   static const uint8_t zero = 0;
   if (len == 0) return &zero;
-  if (off > UINT64_MAX - len) return NULL;
-  if (off + len > txin.len) return NULL;
-  return txin.buf ? txin.buf + off : NULL;
+  return txin_region(off, len);
 }
 
 /* calldata byte i (0 past the end -- and 0 past the source's ALLOCATED cap:
  * an expansion-charged but never-written parent range reads as zeros) */
 static uint8_t cd_at(const hm_cd *c, uint64_t i) {
   if (i >= c->len) return 0;
-  if (c->src == -1) return txin_byte_at(&txin, i);
+  if (c->src == -1) return txin_byte(i);
   if (c->src >= 0) {
     const h_memframe *f = &h_stack[c->src];
     uint64_t p = c->off + i;

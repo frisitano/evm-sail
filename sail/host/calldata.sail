@@ -4,26 +4,24 @@
 /* Two byte sources the evm layer reads but never mutates. CALLDATA (I_d):  */
 /* the current frame's input data, bound per call (a caller-memory slice,   */
 /* the empty string, or the whole tx input) and served to CALLDATALOAD /    */
-/* SIZE / COPY. The TX INPUT: the transaction's data field, staged into C   */
-/* ONCE per transaction; intrinsic-gas inspection (EIP-2028 / EIP-7623 zero */
-/* vs nonzero counting), tx-level precompile calls, and the pre-state       */
-/* decode read it byte-addressed. Bytes live in C (ffi/code_db.c            */
-/* frame-buffer machinery); proof targets see bodyless axioms over          */
-/* abstract byte-list models.                                               */
+/* SIZE / COPY. The TX INPUT: a REFERENCE to the transaction's data span    */
+/* (Transaction.input_src, usually the witness), bound once per tx and      */
+/* never copied; block system calls stage their 32-byte word instead.       */
+/* Reads resolve through the reference (ffi/memory.c); proof targets see    */
+/* bodyless axioms over abstract byte-list models.                          */
 /* ======================================================================== */
 
 val calldata_bind_memory = impure { c: "calldata_bind_memory" } : (bits(64), bits(64)) -> unit
 val calldata_bind_empty = impure { c: "calldata_bind_empty" } : unit -> unit
 val calldata_bind_tx_input = impure { c: "calldata_bind_tx_input" } : unit -> unit
 
-/* Byte-loop-free tx-input staging (each done C-side in one call).
- * txdata_set_source stages a byte source (the witness span / native-runner
- * input) and txdata_set_word a 32-byte word (a block system call); each returns
- * the staged length. txdata_count_nonzero counts nonzero staged bytes for the
- * EIP-2028 / EIP-7623 calldata gas. */
-val txdata_stage_source = impure { c: "txdata_stage_source" } : (bits(64), bits(64), bits(64)) -> bits(64)
+/* txdata_set_source BINDS the tx input by reference (no copy; returns the
+ * bound length, fail-closed 0 on a bad source); txdata_set_word stages a
+ * 32-byte word (a block system call). txdata_count_nonzero counts nonzero
+ * input bytes for the EIP-2028 / EIP-7623 calldata gas. */
+val txdata_bind_source = impure { c: "txdata_bind_source" } : (bits(64), bits(64), bits(64)) -> bits(64)
 function txdata_set_source(s : ByteSlice) -> int =
-    unsigned(txdata_stage_source(byte_source_kind(s.source), s.off, s.len))
+    unsigned(txdata_bind_source(byte_source_kind(s.source), s.off, s.len))
 val txdata_stage_word = impure { c: "txdata_stage_word" } : word -> bits(64)
 function txdata_set_word(w : word) -> int = unsigned(txdata_stage_word(w))
 val txdata_count_nonzero = impure { c: "txdata_count_nonzero" } : unit -> bits(64)
@@ -35,9 +33,8 @@ val calldata_load_word = impure { c: "calldata_load_word" } : bits(64) -> word
 val txdata_byte_at = impure { c: "txdata_byte_at" } : bits(64) -> bits(8)
 val txdata_length = impure { c: "txdata_length" } : unit -> bits(64)
 
-/* The transaction input, streamed into the C buffer ONCE per tx. Intrinsic-gas
- * inspection (EIP-2028 / EIP-7623 zero vs nonzero byte counting) and length
- * checks read it here, byte-addressed, rather than re-walking a Sail list. */
+/* Intrinsic-gas inspection (EIP-2028 / EIP-7623 zero vs nonzero counting)
+ * and length checks read the referenced input byte-addressed. */
 function txdata_byte(i : int) -> byte = txdata_byte_at(get_slice_int(64, i, 0))
 function txdata_size() -> int = unsigned(txdata_length())
 
