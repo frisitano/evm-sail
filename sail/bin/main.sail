@@ -444,6 +444,12 @@ function receipts_trie_root(receipts : list(Receipt)) -> hash = {
     trie_root(EMPTY_TRIE_ROOT, updates)
 }
 
+function last_slice(xs : list(ByteSlice)) -> ByteSlice = match xs {
+    [||] => EMPTY_SLICE,
+    s :: [||] => s,
+    _ :: r => last_slice(r),
+}
+
 function validate_block(input : StatelessInput, exec_ok : bool, block_result : BlockExecutionResult) -> unit = {
     /* Stateless validation outcome (a failure is a NORMAL result -- the guest
        reports successful_validation=false, it does not abort):
@@ -458,32 +464,41 @@ function validate_block(input : StatelessInput, exec_ok : bool, block_result : B
        FIRST failure is reported as its BlockError; a valid block yields None. */
     let header = k_header;
     let fork_ok = input.chain_config.fork_index == 20; /* canonical ProtocolFork index for Amsterdam
-                                  (execution-specs@02c6c2510: enum pruned, Osaka=17 BPO1=18 BPO2=19
-                                  Amsterdam=20). */
+                                                      (execution-specs@02c6c2510: enum pruned, Osaka=17 BPO1=18 BPO2=19
+                                                      Amsterdam=20). */
 
     let active_ok = input.chain_config.activation_active;
     let cfg_ok = fork_ok & active_ok;
 
-    let hdr_ok = input.headers_ok;
     let gas_used_ok = block_result.gas_acc == header.gas_used;
     let blob_gas_used_ok = block_result.blob_gas_acc == unsigned(header.blob_gas_used);
-    let excess_blob_gas_ok = unsigned(header.excess_blob_gas) == expected_payload_excess_blob_gas(input.parent_header_items);
+    let excess_blob_gas_ok = unsigned(header.excess_blob_gas) ==
+            expected_payload_excess_blob_gas(input.parent_header_items);
     let computed_root = compute_state_root();
     let poststate_ok = computed_root == header.state_root;
     let receipts_root = receipts_trie_root(block_result.receipts);
     let receipts_root_ok = receipts_root == header.receipts_root;
     let logs_bloom_ok = bytes_equal(receipts_bloom(block_result.receipts), header.logs_bloom);
-    let transactions_root = transaction_trie_root(input.block.body.transactions);
-    let withdrawals_root = withdrawals_trie_root(input.block.body.withdrawals);
+    let transactions_root = transaction_trie_root(input.payload.block.body.transactions);
+    let withdrawals_root = withdrawals_trie_root(input.payload.block.body.withdrawals);
     let requests_hash = execution_requests_hash();
-    let block_access_list_hash = keccak256(input.block.body.block_access_list);
-    let block_hash = block_header_hash(header, transactions_root, withdrawals_root, requests_hash, block_access_list_hash);
-    let block_hash_ok = block_hash == header.block_hash;
-    let parent_ok = input.parent_hash_ok; /* asserted by the input pass against the witness chain */
+    let block_access_list_hash = keccak256(input.payload.block.body.block_access_list);
+    let block_hash = block_header_hash(
+        header,
+        transactions_root,
+        withdrawals_root,
+        requests_hash,
+        block_access_list_hash,
+    );
+    let block_hash_ok = block_hash == input.payload.block_hash;
+
+    /* the newest witness header must BE the block's parent (one keccak over
+       its carried reference; the pass guarantees a non-empty chain) */
+    let parent_ok = keccak256(last_slice(input.headers)) == header.parent_hash;
 
     /* EIP-7928: the block access list must not exceed block_gas_limit / 2000 items. */
     let bal_limit = ediv_int(header.gas_limit, 2000);
-    let bal_ok : bool = bal_item_count(input.block.body.block_access_list) <= bal_limit;
+    let bal_ok : bool = bal_item_count(input.payload.block.body.block_access_list) <= bal_limit;
 
     /* All checks are computed above (witness reads unchanged); each failure THROWS
        its BlockError, mirroring EELS `raise InvalidBlock`. block_gas_overflow /
@@ -494,9 +509,6 @@ function validate_block(input : StatelessInput, exec_ok : bool, block_result : B
        re-checked here. */
     if not_bool(cfg_ok) then {
         throw InvalidBlock(InvalidConfig)
-    };
-    if not_bool(hdr_ok) then {
-        throw InvalidBlock(HeaderChainBroken)
     };
     if block_result.block_gas_overflow then {
         throw InvalidBlock(GasUsedExceedsLimit)
@@ -627,8 +639,8 @@ function main() -> unit = {
        STF unit, then withdrawals and block-end system calls. */
     run_block_start_system_calls();
 
-    let block_result = execute_block_transactions(input.block.body.transactions, k_header.gas_limit);
-    apply_withdrawals(input.block.body.withdrawals);
+    let block_result = execute_block_transactions(input.payload.block.body.transactions, k_header.gas_limit);
+    apply_withdrawals(input.payload.block.body.withdrawals);
     let exec_ok : bool = run_checked_block_end_system_calls(block_result.all_ok);
 
     /* EELS verify_stateless_new_payload: any InvalidBlock throw -> valid=false. */

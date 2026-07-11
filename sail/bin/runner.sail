@@ -62,7 +62,7 @@ function run_one() -> unit = {
        case as an exception. Gas is accumulated into the shared register per tx
        so a multi-tx input keeps its progress observable. */
     zkvm_out_gas = 0;
-    var rest : list(Transaction) = input.block.body.transactions;
+    var rest : list(Transaction) = input.payload.block.body.transactions;
     var more : bool = true;
     while more do {
         match rest {

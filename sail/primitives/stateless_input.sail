@@ -92,12 +92,10 @@ let WIT_HEADERS_OFF : int = 8
  * layer reads. The parent header travels as its RLP items so field decoding
  * (and its canonicity throws) stays at the original consumer sites. */
 struct StatelessInput = {
-    block : Block,
+    payload : ExecutionPayload,
     chain_config : ChainConfig,
     nodes : list(ByteSlice), /* witness state-node references (node DB source) */
     codes : list(ByteSlice), /* witness code references (code DB source)       */
     headers : list(ByteSlice), /* witness ancestor-header references              */
-    headers_ok : bool, /* witness header chain contiguous              */
-    parent_hash_ok : bool, /* newest witness header IS the block's parent  */
     parent_header_items : list(RlpField),
 }

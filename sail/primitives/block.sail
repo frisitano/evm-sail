@@ -17,7 +17,6 @@ struct BlockHeader = {
     state_root : bits(256),
     receipts_root : bits(256),
     logs_bloom : list(byte),
-    block_hash : bits(256),
     fee_recipient : address,
     parent_hash : bits(256),
     parent_beacon_block_root : bits(256),
@@ -48,4 +47,12 @@ struct BlockBody = {
 struct Block = {
     header : BlockHeader,
     body : BlockBody,
+}
+
+/* The engine-API view (EELS ExecutionPayload): the block plus the CLAIMED
+ * hash of its consensus header -- validation reconstructs the header (derived
+ * trie roots, requests hash, BAL hash) and checks its keccak against this. */
+struct ExecutionPayload = {
+    block_hash : hash,
+    block : Block,
 }

@@ -44,7 +44,7 @@ function ssz_slice_list(start : int, n : int, stop : int) -> list(ByteSlice) = {
  * items); field DECODING from the captured items stays at the original
  * consumer sites (parent_state_root, parent_header_int_field), so a
  * non-canonical field still throws exactly where it used to. */
-function index_witness_headers(headers : list(ByteSlice), expected_parent : hash) -> (bool, bool, list(RlpField)) = {
+function index_witness_headers(headers : list(ByteSlice)) -> list(RlpField) = {
     let n = list_len(headers);
     var prev : hash = ZERO_WORD;
     var ok : bool = n >= 1;
@@ -78,7 +78,10 @@ function index_witness_headers(headers : list(ByteSlice), expected_parent : hash
         }
     };
     k_n_headers = n;
-    (ok, prev == expected_parent, pitems)
+    if not_bool(ok) then {
+        throw InvalidBlock(WitnessDeficient)
+    };
+    pitems
 }
 
 /* ---- EIP-4788 / EIP-2935 block-start system calls ---------------------------
@@ -203,7 +206,6 @@ function decode_block_header_ssz(p : int, npr : int) -> BlockHeader =
         state_root = pl_state_root(p),
         receipts_root = pl_receipts_root(p),
         logs_bloom = pl_logs_bloom(p),
-        block_hash = pl_block_hash(p),
         fee_recipient = pl_fee_recipient(p),
         parent_hash = ssz_bytes32(p + 0),
         parent_beacon_block_root = ssz_bytes32(npr + NPR_BEACON_ROOT),
@@ -316,29 +318,27 @@ function decode_stateless_input() -> StatelessInput = {
     let headers = ssz_slice_list(wh, n_wh, cc);
     build_node_db(nodes);
     register_witness_codes(codes);
-    let (hok, pok, pitems) = index_witness_headers(headers, header.parent_hash);
-    if hok then {
-        k_parent_state_root = parent_state_root(pitems)
-    } else {
-        throw InvalidBlock(WitnessDeficient)
-    };
+    let pitems = index_witness_headers(headers);
+    k_parent_state_root = parent_state_root(pitems);
     struct {
         nodes = nodes,
         codes = codes,
         headers = headers,
-        block =
+        payload =
             struct {
-                header = header,
-                body =
+                block_hash = pl_block_hash(p),
+                block =
                     struct {
-                        transactions = list_reverse(txs_rev),
-                        withdrawals = list_reverse(wds_rev),
-                        block_access_list = witness_byte_slice(bal, p_end - bal),
+                        header = header,
+                        body =
+                            struct {
+                                transactions = list_reverse(txs_rev),
+                                withdrawals = list_reverse(wds_rev),
+                                block_access_list = witness_byte_slice(bal, p_end - bal),
+                            },
                     },
             },
         chain_config = chain_config,
-        headers_ok = hok,
-        parent_hash_ok = pok,
         parent_header_items = pitems,
     }
 }

@@ -339,7 +339,6 @@ register k_header : BlockHeader =
         state_root = ZERO_WORD,
         receipts_root = ZERO_WORD,
         logs_bloom = [||],
-        block_hash = ZERO_WORD,
         fee_recipient = ZERO_ADDR,
         parent_hash = ZERO_WORD,
         parent_beacon_block_root = ZERO_WORD,
