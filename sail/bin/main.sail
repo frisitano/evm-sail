@@ -123,8 +123,8 @@ function expected_payload_excess_blob_gas(items : list(RlpField)) -> int =
 function run_block_start_system_calls() -> unit = {
     /* EIP-4788 / EIP-2935: write the parent beacon-block root and parent block
        hash into their system contracts before the transactions run. */
-    system_call(BEACON_ROOTS_ADDR(), k_header.parent_beacon_block_root);
-    system_call(HISTORY_STORAGE_ADDR(), k_header.parent_hash)
+    system_call(BEACON_ROOTS_ADDR, k_header.parent_beacon_block_root);
+    system_call(HISTORY_STORAGE_ADDR, k_header.parent_hash)
 }
 
 function execute_block_transactions(txs : list(Transaction), block_gas_limit : int) -> BlockExecutionResult = {
@@ -211,8 +211,8 @@ function run_checked_block_end_system_calls(all_ok : bool) -> bool = {
        reaches this only if no earlier step raised, so run it only while the block
        is still valid; a missing predeploy or a failed call invalidates the block. */
     if all_ok then {
-        let rw = system_call_checked(WITHDRAWAL_REQUEST_ADDR());
-        let rc = system_call_checked(CONSOLIDATION_REQUEST_ADDR());
+        let rw = system_call_checked(WITHDRAWAL_REQUEST_ADDR);
+        let rc = system_call_checked(CONSOLIDATION_REQUEST_ADDR);
         all_ok & rw & rc
     } else {
         false

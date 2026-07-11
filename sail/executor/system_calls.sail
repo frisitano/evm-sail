@@ -16,9 +16,7 @@
  * their ring buffers. Each takes a 32-byte input, 30M gas, and bumps no nonce /
  * charges no fee / counts toward no block gas; it is skipped if the contract has
  * no code. Their committed storage writes shape the post-state root. */
-function SYSTEM_ADDRESS() -> address = 0xfffffffffffffffffffffffffffffffffffffffe
-function BEACON_ROOTS_ADDR() -> address = 0x000f3df6d732807ef1319fb7b8bb8522d0beac02
-function HISTORY_STORAGE_ADDR() -> address = 0x0000f90827f1c53a10cb7a02335b175320002935
+
 
 /* Enter a top-level protocol system-call frame.
  *
@@ -40,7 +38,7 @@ function enter_system_call_frame(tgt : address, input_len : int) -> unit = {
     calldata_bind_tx_input(); /* AFTER mem_clear: it points the base frame's calldata at the slot */
     message =
         struct {
-            caller = SYSTEM_ADDRESS(),
+            caller = SYSTEM_ADDRESS,
             address = tgt,
             code_address = tgt,
             value = ZERO_WORD,
@@ -74,8 +72,7 @@ function system_call(tgt : address, input : bits(256)) -> unit = {
  * dequeue clears the request queue in the contract's storage, shaping the
  * post-state root. "Checked" means: a missing contract (no code) OR a failed
  * call makes the whole block INVALID (returns false here). */
-function WITHDRAWAL_REQUEST_ADDR() -> address = 0x00000961ef480eb55e80d19ad83579a64c007002
-function CONSOLIDATION_REQUEST_ADDR() -> address = 0x0000bbddc7ce488642fb579f8b00f3a590007251
+
 
 function system_call_checked(tgt : address) -> bool = {
     if k_code_key(tgt) == KECCAK_EMPTY then {

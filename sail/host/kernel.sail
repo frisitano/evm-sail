@@ -128,11 +128,6 @@ function k_account_occupied(a : address) -> bool = {
     has_code | (acc.nonce != sail_zeros(64)) | has_storage
 }
 
-function eip7708_system_address() -> address = 0xfffffffffffffffffffffffffffffffffffffffe
-function eip7708_transfer_topic() -> word =
-    0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
-function eip7708_burn_topic() -> word =
-    0xcc16f5dbb4873280815c1ee09dbd06736cffcc184412cf7a71a0fdb75d397ca5
 
 function k_emit_transfer_log(src : address, dst : address, v : word) -> unit = {
     if (k_fork < Amsterdam) | word_is_zero(v) | (src == dst) then {
@@ -140,8 +135,8 @@ function k_emit_transfer_log(src : address, dst : address, v : word) -> unit = {
     } else {
         journal_push(JLog());
         log_append(
-            eip7708_system_address(),
-            [|eip7708_transfer_topic(), address_to_word(src), address_to_word(dst)|],
+            EIP7708_SYSTEM_ADDRESS,
+            [|EIP7708_TRANSFER_TOPIC, address_to_word(src), address_to_word(dst)|],
             BytesList(word_to_bytes32(v)),
         )
     }
@@ -152,7 +147,7 @@ function k_emit_burn_log(a : address, v : word) -> unit = {
         ()
     } else {
         journal_push(JLog());
-        log_append(eip7708_system_address(), [|eip7708_burn_topic(), address_to_word(a)|], BytesList(word_to_bytes32(v)))
+        log_append(EIP7708_SYSTEM_ADDRESS, [|EIP7708_BURN_TOPIC, address_to_word(a)|], BytesList(word_to_bytes32(v)))
     }
 }
 
