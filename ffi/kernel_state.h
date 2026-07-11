@@ -22,10 +22,6 @@ unit warm_slot_insert(const lbits a, const lbits s);
 unit warm_slot_remove(const lbits a, const lbits s);
 
 /* ---- LOG series (ordered; variable topics/data) ---- */
-unit headerhash_reset(const unit u);
-unit headerhash_push(const lbits h);
-void headerhash_get(lbits *rop, uint64_t i);
-
 unit logs_reset(const unit u);
 unit log_begin(const lbits a);         /* start a new record for emitter a      */
 unit log_add_topic(const lbits t);     /* append a topic to the current record  */

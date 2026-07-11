@@ -129,7 +129,6 @@ void evmsail_clear_memory(void)
      * not enough: the "codes_missing_*" negative tests need the code DB too. */
     nodedb_reset(UNIT);
     code_db_reset(UNIT);
-    headerhash_reset(UNIT);
     /* a Sail exception that propagated out of the previous run (runner: an
      * uncaught InvalidBlock, captured by the dump's ok flag). Left set it would
      * poison the next run: generated code short-circuits every call while

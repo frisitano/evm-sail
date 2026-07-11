@@ -413,24 +413,3 @@ void journal_top_slot(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_to
 void journal_top_val(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->w1); }
 uint64_t journal_top_refund(const unit u) { (void)u; return jrn_top()->n64; }
 
-/* ------------------------ witness header hashes ------------------------- */
-/* keccak(header[i]) for each witness header, captured in order by the single
- * witness-header pass (index_witness_headers); BLOCKHASH resolves ancestors
- * from here instead of re-hashing witness headers during execution. */
-#define HDRHASH_CAP 1024
-static word256 hdrhash[HDRHASH_CAP];
-static uint64_t hdrhash_n;
-
-unit headerhash_reset(const unit u) {
-  (void)u;
-  hdrhash_n = 0;
-  return UNIT;
-}
-unit headerhash_push(const lbits h) {
-  if (hdrhash_n < HDRHASH_CAP) hdrhash[hdrhash_n++] = lb_word(h);
-  return UNIT;
-}
-void headerhash_get(lbits *rop, uint64_t i) {
-  static const word256 zero = {{0, 0, 0, 0}};
-  word_out(rop, i < hdrhash_n ? &hdrhash[i] : &zero);
-}

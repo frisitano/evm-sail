@@ -19,7 +19,7 @@ function register_witness_codes(start : int, n : int, stop : int) -> unit = {
 }
 
 /* Parse the witness header chain, asserting it against the ALREADY-decoded
- * block: each header is hashed once (kept in the C headerhash store for
+ * block: each header is hashed once (captured in k_header_hashes for
  * BLOCKHASH/EIP-2935, k_blockhash), the chain prefix must be contiguous
  * (header[i].parent_hash == keccak(header[i-1])), and the NEWEST header must
  * be the decoded block's parent (keccak(header[n-1]) == expected_parent).
@@ -35,8 +35,9 @@ function index_witness_headers(
 ) -> (
     (bool, bool, list(RlpField))
 ) = {
-    headerhash_reset();
+
     var prev : hash = ZERO_WORD;
+    var hashes : list(hash) = [||];
     var ok : bool = n >= 1;
     var pitems : list(RlpField) = [||];
     foreach (i from 0 to (n - 1)) {
@@ -53,8 +54,9 @@ function index_witness_headers(
             }
         };
         prev = keccak256(s);
-        headerhash_push(prev)
+        hashes = prev :: hashes
     };
+    k_header_hashes = list_reverse(hashes);
     (ok, prev == expected_parent, pitems)
 }
 
@@ -210,10 +212,10 @@ struct StatelessInput = {
 /* THE single traversal over the stateless input. In one pass, in container
  * order: the geometry (each offset once), the witness node DB and code DB
  * (C-side stores), the header chain (hashed once each, hashes into the C
- * headerhash store for BLOCKHASH, newest split once), the block header, and
+ * k_header_hashes for BLOCKHASH, newest split once), the block header, and
  * every transaction (sender recovery + signature verification, as EELS
  * decodes the block body before executing it) and withdrawal. Also installs
- * the execution-context registers (k_header, k_n_headers,
+ * the execution-context registers (k_header, k_header_hashes,
  * k_parent_state_root) the EVM reads ambiently. Throws InvalidBlock on a
  * broken header chain, malformed tx, or bad signature -- same sites, same
  * order as the previous incremental decode. */
@@ -274,7 +276,6 @@ function decode_stateless_input() -> StatelessInput = {
     build_node_db(ws, n_ws, wc);
     register_witness_codes(wc, n_wc, wh);
     let (hok, pok, pitems) = index_witness_headers(wh, n_wh, cc, header.parent_hash);
-    k_n_headers = n_wh;
     if hok then {
         k_parent_state_root = parent_state_root(pitems)
     } else {

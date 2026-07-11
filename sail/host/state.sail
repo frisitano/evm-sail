@@ -334,21 +334,11 @@ register k_parent_state_root : hash =
                     the node-db: the between-run wipe (test_utils.c clear_memory ->
                     nodedb_reset) must NOT clear it mid-run. */
 
-/* Witness header-hash store: keccak(header[i]) pushed in order (oldest ..
- * newest) by the single witness-header pass (index_witness_headers,
- * host/block.sail); BLOCKHASH resolves ancestors from here instead of
- * re-hashing witness headers during execution. */
-val headerhash_reset = impure { c: "headerhash_reset" } : unit -> unit
-val headerhash_push = impure { c: "headerhash_push" } : hash -> unit
-val headerhash_get = impure { c: "headerhash_get" } : bits(64) -> hash
-
-/* number of authenticated ancestor headers available to BLOCKHASH (k_blockhash,
- * host/kernel.sail). Both entries publish it from the SSZ witness header chain in
- * authenticate_parent_state() (k_n_headers = wit_n_headers()): the guest carries
- * its real ancestor chain; the runner a single dummy parent (count 1). A request
- * beyond the witness is a deficient proof -> throw InvalidBlock(WitnessDeficient).
- * Data, not a per-backend k_blockhash definition. */
-register k_n_headers : int = 0
+/* keccak(header[i]) for each witness header, oldest..newest, captured by the
+ * single witness-header pass (index_witness_headers, host/block.sail).
+ * BLOCKHASH (k_blockhash) resolves ancestors from it: the guest carries its
+ * real ancestor chain, the runner a single dummy parent. */
+register k_header_hashes : list(hash) = [||]
 
 register k_fork : int = 99 /* active fork level (higher = newer); set by the runner */
 

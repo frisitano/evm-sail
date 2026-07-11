@@ -603,7 +603,7 @@ function main() -> unit = {
 
     /* THE single traversal: geometry, node/code/header stores, block header,
        every tx (sender recovery + sig verify) and withdrawal -- decoded once,
-       returned as values; also installs k_header / k_n_headers /
+       returned as values; also installs k_header / k_header_hashes /
        k_parent_state_root. */
     let input = decode_stateless_input();
 

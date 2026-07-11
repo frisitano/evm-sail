@@ -298,27 +298,22 @@ function k_env(f : EnvField) -> word = {
 }
 function k_coinbase() -> address = k_header.fee_recipient
 
-/* BLOCKHASH / EIP-2935: the hash of the ancestor `offset` blocks back (1..256)
- * is keccak of the witness header at that depth. Headers run oldest..newest
- * with the parent (offset 1) LAST, so the ancestor at `offset` is
- * header[k_n_headers - offset]. k_n_headers is the authenticated witness
- * header count (authenticate_parent_state -> wit_n_headers()): the guest
- * carries its real ancestor chain; the native runner carries a single dummy
- * parent (count 1), so only BLOCKHASH of the immediate parent resolves and
- * anything deeper is idx < 0. A requested header beyond the witness is a
- * deficient proof -> throw InvalidBlock(WitnessDeficient), caught once at the
- * top (run_one). */
+/* BLOCKHASH / EIP-2935: the hash of the ancestor `offset` blocks back
+ * (1..256), from the captured witness header-hash chain (k_header_hashes,
+ * oldest..newest with the parent LAST): the ancestor at `offset` is hash
+ * [len - offset]. A request beyond the witness is a deficient proof ->
+ * throw InvalidBlock(WitnessDeficient). */
 function k_blockhash(n : word) -> hash = {
     let req = unsigned(n);
     let offset = k_header.number - req;
     if offset < 1 | offset > 256 then {
         word_of_int(0)
     } else {
-        let idx = k_n_headers - offset;
+        let idx = list_len(k_header_hashes) - offset;
         if idx < 0 then {
             throw InvalidBlock(WitnessDeficient)
         } else {
-            headerhash_get(get_slice_int(64, idx, 0))
+            list_nth(k_header_hashes, idx, ZERO_WORD)
         }
     }
 }
