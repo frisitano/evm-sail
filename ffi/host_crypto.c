@@ -95,17 +95,6 @@ void host_sha256_pair(lbits *rop, const lbits a, const lbits b) {
   host_sha256_lbits(rop, buf, sizeof buf);
 }
 
-/* sha256 of the present 32-byte digests concatenated in order (mask bits 0..2
- * select d0,d1,d2). The EIP-7685 execution-requests commitment. */
-void host_sha256_digests3(lbits *rop, uint64_t mask, const lbits d0, const lbits d1,
-                          const lbits d2) {
-  uint8_t buf[96];
-  size_t n = 0;
-  if (mask & 1) { lbits_to_be_bytes(buf + n, 32, d0); n += 32; }
-  if (mask & 2) { lbits_to_be_bytes(buf + n, 32, d1); n += 32; }
-  if (mask & 4) { lbits_to_be_bytes(buf + n, 32, d2); n += 32; }
-  host_sha256_lbits(rop, buf, n);
-}
 
 /* RLP-encode a non-negative u64 as its minimal big-endian scalar string into
  * out (<= 9 bytes); returns the encoded length. 0 -> 0x80, v < 0x80 -> [v],
@@ -191,125 +180,7 @@ static void rlp_put_str(uint8_t *buf, size_t *n, const uint8_t *p, size_t len) {
   rlp_put_raw(buf, n, p, len);
 }
 
-/* Ommer hash of an empty ommer list: keccak(rlp([])). */
-static const uint8_t HOST_EMPTY_OMMER[32] = {
-    0x1d, 0xcc, 0x4d, 0xe8, 0xde, 0xc7, 0x5d, 0x7a, 0xab, 0x85, 0xb5,
-    0x67, 0xb6, 0xcc, 0xd4, 0x1a, 0xd3, 0x12, 0x45, 0x1b, 0x94, 0x8a,
-    0x74, 0x13, 0xf0, 0xa1, 0x42, 0xfd, 0x40, 0xd4, 0x93, 0x47};
 
-void host_block_header_hash(
-    lbits *rop, const lbits parent_hash, const lbits fee_recipient,
-    const lbits state_root, const lbits transactions_root,
-    const lbits receipts_root, uint64_t bloom_off, uint64_t number,
-    uint64_t gas_limit, uint64_t gas_used, uint64_t timestamp,
-    uint64_t extra_off, uint64_t extra_len, const lbits prev_randao,
-    const lbits base_fee, const lbits withdrawals_root, uint64_t blob_gas_used,
-    uint64_t excess_blob_gas, const lbits parent_beacon_block_root,
-    const lbits requests_hash, const lbits block_access_list_hash,
-    uint64_t slot_number) {
-  const uint8_t *bloom = evmsail_ssz_ptr(bloom_off, 256);
-  const uint8_t *extra = NULL;
-  if (extra_len != 0) extra = evmsail_ssz_ptr(extra_off, extra_len);
-  if (bloom == NULL || extra_len > 1024 || (extra_len != 0 && extra == NULL)) {
-    host_keccak256_lbits(rop, NULL, UINT64_MAX); /* invalid witness -> zero digest */
-    return;
-  }
-
-  uint8_t payload[2048];
-  size_t n = 0;
-  rlp_put_word32(payload, &n, parent_hash);
-  payload[n++] = 0xa0; /* ommers hash */
-  rlp_put_raw(payload, &n, HOST_EMPTY_OMMER, 32);
-  rlp_put_addr(payload, &n, fee_recipient);
-  rlp_put_word32(payload, &n, state_root);
-  rlp_put_word32(payload, &n, transactions_root);
-  rlp_put_word32(payload, &n, receipts_root);
-  rlp_put_str(payload, &n, bloom, 256);
-  payload[n++] = 0x80; /* difficulty = 0 */
-  n += host_rlp_uint(payload + n, number);
-  n += host_rlp_uint(payload + n, gas_limit);
-  n += host_rlp_uint(payload + n, gas_used);
-  n += host_rlp_uint(payload + n, timestamp);
-  {
-    const uint8_t empty = 0;
-    rlp_put_str(payload, &n, extra ? extra : &empty, (size_t)extra_len);
-  }
-  rlp_put_word32(payload, &n, prev_randao);
-  {
-    uint8_t z[8] = {0};
-    rlp_put_str(payload, &n, z, 8); /* nonce = 0x0000000000000000 */
-  }
-  rlp_put_word_min(payload, &n, base_fee);
-  rlp_put_word32(payload, &n, withdrawals_root);
-  n += host_rlp_uint(payload + n, blob_gas_used);
-  n += host_rlp_uint(payload + n, excess_blob_gas);
-  rlp_put_word32(payload, &n, parent_beacon_block_root);
-  rlp_put_word32(payload, &n, requests_hash);
-  rlp_put_word32(payload, &n, block_access_list_hash);
-  n += host_rlp_uint(payload + n, slot_number);
-
-  /* frame the list: payload is always > 55 bytes here */
-  uint8_t out[2064];
-  size_t hn = 0;
-  {
-    uint8_t lb[8];
-    int m = 0;
-    for (size_t x = n; x != 0; x >>= 8) lb[m++] = (uint8_t)(x & 0xff);
-    out[hn++] = (uint8_t)(0xf7 + m);
-    for (int i = 0; i < m; i++) out[hn++] = lb[m - 1 - i];
-  }
-  memcpy(out + hn, payload, n);
-  host_keccak256_lbits(rop, out, hn + n);
-}
-
-/* Tx signing preimage hash. The pre-signature RLP content is a witness span
- * (src_kind/off/len); frame it with the optional type-byte domain, the RLP
- * list prefix, and the optional EIP-155 (chain_id, 0, 0) suffix, then keccak. */
-void host_tx_signing_hash(lbits *rop, uint64_t ttype, uint64_t apply_155,
-                          const lbits chain_id, uint64_t src_kind, uint64_t off,
-                          uint64_t len) {
-  const uint8_t *content = NULL;
-  uint64_t rlen = 0;
-  if (!evmsail_resolve_byte_source(src_kind, off, len, &content, &rlen) ||
-      rlen != len) {
-    host_keccak256_lbits(rop, NULL, UINT64_MAX);
-    return;
-  }
-
-  uint8_t suffix[36]; /* rlp_int(chain_id) <= 33, then 0x80 0x80 */
-  size_t sl = 0;
-  if (apply_155) {
-    rlp_put_word_min(suffix, &sl, chain_id);
-    suffix[sl++] = 0x80;
-    suffix[sl++] = 0x80;
-  }
-  size_t content_len = (size_t)len + sl;
-
-  uint8_t hdr[10]; /* domain byte + list prefix (<= 9) */
-  size_t hl = 0;
-  if (ttype != 0) hdr[hl++] = (uint8_t)ttype;
-  if (content_len <= 55) {
-    hdr[hl++] = (uint8_t)(0xc0 + content_len);
-  } else {
-    uint8_t lb[8];
-    int m = 0;
-    for (size_t x = content_len; x != 0; x >>= 8) lb[m++] = (uint8_t)(x & 0xff);
-    hdr[hl++] = (uint8_t)(0xf7 + m);
-    for (int i = 0; i < m; i++) hdr[hl++] = lb[m - 1 - i];
-  }
-
-  size_t total = hl + (size_t)len + sl;
-  uint8_t *buf = malloc(total);
-  if (buf == NULL) {
-    host_keccak256_lbits(rop, NULL, UINT64_MAX);
-    return;
-  }
-  memcpy(buf, hdr, hl);
-  memcpy(buf + hl, content, (size_t)len);
-  memcpy(buf + hl + (size_t)len, suffix, sl);
-  host_keccak256_lbits(rop, buf, total);
-  free(buf);
-}
 
 /* EIP-7702 authorization signing hash: keccak(0x05 ++ rlp([chain_id, address,
  * nonce])). The three signed fields are re-encoded from decoded values. */

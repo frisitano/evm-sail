@@ -96,13 +96,17 @@ function create_address(sender : address, nonce : u64) -> address = {
  * keccak256(0xff ++ sender ++ salt ++ init_hash). */
 val create2_address : (address, word, hash) -> address
 
-function create2_address(sender : address, salt : word, init_hash : hash) -> address = {
-    var preimage : list(byte) = [|0xff|];
-    preimage = list_append(preimage, address_to_bytes(sender));
-    preimage = list_append(preimage, word_to_bytes32(salt));
-    preimage = list_append(preimage, word_to_bytes32(init_hash));
-    word_to_address(keccak256(preimage))
-}
+function create2_address(sender : address, salt : word, init_hash : hash) -> address =
+    word_to_address(
+        keccak256(
+            [|
+                BytesList([|0xff|]),
+                BytesList(address_to_bytes(sender)),
+                BytesList(word_to_bytes32(salt)),
+                BytesList(word_to_bytes32(init_hash)),
+            |],
+        ),
+    )
 
 struct RlpField = {
   is_list : bool,

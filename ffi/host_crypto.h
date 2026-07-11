@@ -27,24 +27,9 @@ void host_keccak_address(lbits *rop, const lbits a);
 void host_keccak_create2(lbits *rop, const lbits sender, const lbits salt,
                          const lbits init_hash);
 void host_create_address(lbits *rop, const lbits sender, uint64_t nonce);
-void host_block_header_hash(
-    lbits *rop, const lbits parent_hash, const lbits fee_recipient,
-    const lbits state_root, const lbits transactions_root,
-    const lbits receipts_root, uint64_t bloom_off, uint64_t number,
-    uint64_t gas_limit, uint64_t gas_used, uint64_t timestamp,
-    uint64_t extra_off, uint64_t extra_len, const lbits prev_randao,
-    const lbits base_fee, const lbits withdrawals_root, uint64_t blob_gas_used,
-    uint64_t excess_blob_gas, const lbits parent_beacon_block_root,
-    const lbits requests_hash, const lbits block_access_list_hash,
-    uint64_t slot_number);
-void host_tx_signing_hash(lbits *rop, uint64_t ttype, uint64_t apply_155,
-                          const lbits chain_id, uint64_t src_kind, uint64_t off,
-                          uint64_t len);
 void host_auth_signing_hash(lbits *rop, const lbits chain_id, const lbits address,
                             uint64_t nonce);
 void host_sha256_pair(lbits *rop, const lbits a, const lbits b);
-void host_sha256_digests3(lbits *rop, uint64_t mask, const lbits d0, const lbits d1,
-                          const lbits d2);
 int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
                                 const uint8_t **p, uint64_t *resolved_len);
 

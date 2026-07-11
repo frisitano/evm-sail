@@ -62,7 +62,7 @@ function keccak256_address(a : address) -> bits(256) = keccak256(address_to_byte
 
 /* SSZ merkle parent: SHA-256(left ++ right) over two 32-byte chunks. */
 function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) =
-    sha256(list_append(word_to_bytes32(a), word_to_bytes32(b)))
+    sha256([|BytesList(word_to_bytes32(a)), BytesList(word_to_bytes32(b))|])
 
 /* ---- Signature core: secp256k1 verify / recover (k256 accelerator axioms,
  * ffi/precompiles.c) and the curve-order constants signature validity rules

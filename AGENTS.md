@@ -42,18 +42,21 @@ duplicating instructions elsewhere.
   create_address; see `proof/extern-boundary.md`). These `c:`-bound vals are the
   TRUE axioms (crypto core, I/O oracle, mutable host stores) -- proof targets
   see them as bodyless parameters; executables link their C definitions from
-  `ffi/`. The boundary is scalar-typed with ONE exception: the journal
-  (`journal_push : JEntry -> unit` / `journal_pop : unit -> JEntry`) crosses
-  whole JEntry union values; `ffi/journal_glue.c` compiles per build against
-  the GENERATED model header (`-DEVMSAIL_MODEL_H`, `-I` build dir) so the
-  `struct zJEntry` layout is never hand-mirrored, and (en/de)codes against the
-  scalar journal rows in `ffi/kernel_state.c`. Everything else, including the
-  former C fast-path hooks
-  (`keccak256_word`, `keccak256_address`, `sha256_pair`, `sha256_digests3`,
-  `ssz_src_le`, `ssz_src_be`), is a pure Sail body compiled and executed
-  directly; the dormant one-call C versions in `ffi/host_crypto.c` and the I/O
-  shims are candidates for future link-time override (weak-stub mechanism, not
-  yet wired). The old `sail/c/*.sail` extern-binding menu and the
+  `ffi/`. The boundary is scalar-typed with TWO exceptions,
+  both handled by hand-written glue compiled per build against the GENERATED
+  model header (`-DEVMSAIL_MODEL_H`, `-I` build dir) so generated layouts are
+  never hand-mirrored: the journal (`journal_push : JEntry -> unit` /
+  `journal_pop : unit -> JEntry`, `ffi/journal_glue.c`, (en/de)coding against
+  the scalar journal rows in `ffi/kernel_state.c`) and the hash axioms
+  (`keccak256_segments` / `sha256_segments : list(Bytes) -> hash`,
+  `ffi/hash_glue.c`: a hash preimage is a list of Bytes segments --
+  materialized bytes or source-tagged slices -- crossing in ONE call; the old
+  streaming hash channel and fused source hashers are gone). Everything else,
+  including the former C fast-path hooks (`keccak256_word`,
+  `keccak256_address`, `sha256_pair`, `ssz_src_le`, `ssz_src_be`), is a pure
+  Sail body compiled and executed directly; the dormant one-call C versions in
+  `ffi/host_crypto.c` (shape-matching ones only) are candidates for future
+  link-time override (weak-stub mechanism, not yet wired). The old `sail/c/*.sail` extern-binding menu and the
   `EVM_BACKEND=spec|build` project variable were deleted (this change).
 - `ffi/` contains native C backends for performance-sensitive host structures:
   memory/calldata/returndata, `state_db.c` for accounts and persistent
