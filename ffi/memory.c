@@ -55,12 +55,13 @@ static int f_establish(uint64_t end) {
   return 1;
 }
 
-/* ---- CALLDATA: a per-frame descriptor aliasing the parent's memory ----
- * src: -2 = empty, -1 = the transaction input reference, >= 0 = a (suspended)
- * ancestor frame -- resolved as arena[f_base[src] + off + i] at READ time,
- * bounded by that frame's established extent (an expansion-charged but
- * never-written parent range reads as zeros). The aliased frame cannot change
- * while its child executes (frames above it are suspended). */
+/* ---- CALLDATA: a per-frame ABSOLUTE arena slice ----
+ * src: -2 = empty, -1 = the transaction input reference, 0 = arena bytes at
+ * an absolute offset. The caller ESTABLISHES the args range at bind time (it
+ * is already gas-charged, and establishment zero-fills the never-written
+ * part), so the slice needs no frame identity and no bound beyond its own
+ * length; the caller is suspended while its child reads, so the bytes are
+ * frozen. */
 uint8_t *hm_wr(uint64_t off, uint64_t len); /* fwd decl (defined below) */
 
 typedef struct { int src; uint64_t off, len; } hm_cd;
@@ -129,9 +130,14 @@ unit mem_frame_leave(const unit u) {
   return UNIT;
 }
 
-/* the NEXT child's calldata := this frame's memory [off, off+len) */
+/* the NEXT child's calldata := this frame's memory [off, off+len), as an
+ * absolute arena slice (fail-closed empty on overflow/OOM) */
 unit calldata_bind_memory(uint64_t off, uint64_t len) {
-  cd_pending.src = h_top; cd_pending.off = off; cd_pending.len = len;
+  if (len == 0 || off > UINT64_MAX - len || !f_establish(off + len)) {
+    cd_pending.src = -2; cd_pending.off = 0; cd_pending.len = 0;
+    return UNIT;
+  }
+  cd_pending.src = 0; cd_pending.off = f_base[h_top] + off; cd_pending.len = len;
   return UNIT;
 }
 unit calldata_bind_empty(const unit u) {
@@ -189,15 +195,12 @@ const uint8_t *txd_rd(uint64_t off, uint64_t len) {
   return txin_region(off, len);
 }
 
-/* calldata byte i (0 past the descriptor's end and past the source frame's
- * established extent) */
+/* calldata byte i (0 past the slice's end; the referenced bytes were
+ * established at bind time) */
 static uint8_t cd_at(const hm_cd *c, uint64_t i) {
   if (i >= c->len) return 0;
   if (c->src == -1) return txin_byte(i);
-  if (c->src >= 0) {
-    uint64_t p = c->off + i;
-    return (p < f_len[c->src]) ? arena[f_base[c->src] + p] : 0;
-  }
+  if (c->src == 0) return arena[c->off + i];
   return 0;
 }
 uint64_t cd_byte(uint64_t i) { return cd_at(&cd[h_top], i); }
