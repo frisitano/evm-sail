@@ -32,7 +32,7 @@ let DEPTH_LIMIT : int = 1024
 /* Assemble the n-byte big-endian immediate following a PUSHn opcode into a
  * 256-bit word; bytes past the end of code read as zero. */
 function read_push(n : int) -> word =
-    frame_push_immediate_word(get_slice_int(64, pc, 0), get_slice_int(64, n, 0))
+    slice_load_n(frame_code.bytes, pc, n)
 
 /* Decode one non-PUSH opcode byte to its AST node. The three contiguous
  * families fold to an arity argument -- DUP1..16 (0x80..0x8f), SWAP1..16
@@ -172,11 +172,11 @@ function decode_simple(b : int) -> ast =
  * PUSH0..PUSH32 (0x5f..0x7f) carry an n-byte immediate consumed here; every
  * other byte is decoded by decode_simple. */
 function fetch() -> ast = {
-    if pc >= code_len then {
+    if pc >= frame_code_len() then {
         pc = pc + 1;
         STOP()
     } else {
-        let b = unsigned(code_byte(pc));
+        let b = unsigned(slice_byte(frame_code.bytes, pc));
         pc = pc + 1;
         if (b == 95) & (k_fork < Shanghai) then {
             INVALID()
@@ -216,16 +216,16 @@ function frame_succeeded() -> bool =
  * runs the code at its delegation target, following exactly ONE hop; a
  * delegation whose target is a precompile (or has no code) executes as empty
  * code. An undelegated account runs its own code. */
-function frame_code_exec(target : address, dele : bool, dtgt : address) -> unit =
+function executable_code(target : address, dele : bool, dtgt : address) -> IndexedCode =
     if dele then {
         let n = unsigned(address_to_word(dtgt));
         if is_precompile(n) then {
-            frame_code_empty()
+            EMPTY_INDEXED_CODE
         } else {
-            frame_code_addr(dtgt)
+            code_db_indexed_code(k_code_key(dtgt))
         }
     } else {
-        frame_code_addr(target)
+        code_db_indexed_code(k_code_key(target))
     }
 
 /* ------------------------------ run_call -------------------------------- */
@@ -437,6 +437,8 @@ function run_call(mode : int) -> unit = {
             let saved_frame_status = frame_status;
             let saved_memory_size = memory_size;
             let saved_call_depth = call_depth;
+            let saved_frame_code = frame_code;
+            let child_code = executable_code(target, tg_deleg, tg_target);
 
             /* the child message context, by call mode:
                - address: target for CALL/STATICCALL; the CALLER's own address
@@ -483,12 +485,12 @@ function run_call(mode : int) -> unit = {
                selected by the EIP-7702 delegation rule, depth bumped. */
             pc = 0;
             gas_remaining = to_gas(child_gas);
-            stack_frame_enter();
+            stack_enter_frame();
             frame_status = Running();
             mem_frame_enter();
             returndata_clear_current();
             memory_size = 0;
-            frame_code_exec(target, tg_deleg, tg_target); /* EIP-7702 delegation */
+            frame_code = child_code;
             call_depth = call_depth + 1;
 
             interpret();
@@ -499,12 +501,12 @@ function run_call(mode : int) -> unit = {
             /* leave the child: restore every saved parent register, then credit
                the parent with the child's unspent gas. */
             pc = saved_pc;
-            stack_frame_leave();
+            stack_leave_frame();
             message = saved_message;
             calldata = saved_calldata;
             frame_status = saved_frame_status;
             mem_frame_leave();
-            frame_code_resync();
+            frame_code = saved_frame_code;
             memory_size = saved_memory_size;
             call_depth = call_depth - 1;
             returndata_adopt_pending();
@@ -645,6 +647,7 @@ function run_create(is2 : bool) -> unit = {
                 let saved_frame_status = frame_status;
                 let saved_memory_size = memory_size;
                 let saved_call_depth = call_depth;
+                let saved_frame_code = frame_code;
 
                 message =
                     struct {
@@ -661,22 +664,20 @@ function run_create(is2 : bool) -> unit = {
                    initcode referenced from memory[off, off+len). */
                 let saved_calldata = calldata;
                 calldata = EMPTY_SLICE;
-                let ic_len = if is_running() then {
-                        frame_code_pend_mem(off, len)
+                let initcode = if is_running() then {
+                        mem_slice(off, len)
                     } else {
-                        0
+                        EMPTY_SLICE
                     };
+                let child_code = code_db_indexed_code(code_db_index_and_store(initcode));
                 pc = 0;
                 gas_remaining = to_gas(child_gas);
-                stack_frame_enter();
+                stack_enter_frame();
                 frame_status = Running();
                 mem_frame_enter();
                 returndata_clear_current();
                 memory_size = 0;
-                code_len = ic_len;
-                if is_running() & (len == 0) then {
-                    frame_code_empty()
-                };
+                frame_code = child_code;
                 call_depth = call_depth + 1;
 
                 interpret();
@@ -696,12 +697,12 @@ function run_create(is2 : bool) -> unit = {
 
                 /* leave the initcode frame: restore the parent's registers. */
                 pc = saved_pc;
-                stack_frame_leave();
+                stack_leave_frame();
                 message = saved_message;
                 calldata = saved_calldata;
                 frame_status = saved_frame_status;
                 mem_frame_leave();
-                frame_code_resync();
+                frame_code = saved_frame_code;
                 memory_size = saved_memory_size;
                 call_depth = call_depth - 1;
 

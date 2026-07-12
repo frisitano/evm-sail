@@ -19,7 +19,14 @@ Definition byte_seq := list byte.
 Inductive ByteSourceKind : Type :=
 | WitnessSource
 | MemorySource
-| TxInputSource.
+| TxInputSource
+| CodeSource
+| TrieArenaSource
+| LogDataSource
+| MemoryArenaSource
+| ReturndataSource.
+
+Definition jumpdest_bitmap := list word64.
 
 Definition byte_wf (b : byte) : Prop := 0 <= b < 256.
 Definition bytes_wf (bs : byte_seq) : Prop := Forall byte_wf bs.
@@ -64,7 +71,8 @@ Definition account_wf (a : Account) : Prop :=
   uint256_wf a.(account_storage_root) /\
   uint256_wf a.(account_code_hash).
 
-(* sail/host/io.sail: ssz_src_len, ssz_src_byte, ssz_src_le, ssz_src_be. *)
+(* sail/lib/ssz/ssz.sail: ssz_src_len and ssz_src_byte. The endian views are
+   pure Sail functions derived from the same bytes. *)
 Record InputOracle := {
   input_bytes : byte_seq;
   input_bytes_wf : bytes_wf input_bytes;
@@ -95,7 +103,7 @@ Record InputOracle := {
         bytes_be_value (byte_window input_bytes off width);
 }.
 
-(* sail/main.sail: emit_out. *)
+(* sail/host/io.sail: emit_out. *)
 Record OutputTraceContract := {
   output_trace : Type;
   output_bytes : output_trace -> byte_seq;
@@ -112,8 +120,8 @@ Record OutputTraceContract := {
       bytes_wf (output_bytes (emit_out_step trace b));
 }.
 
-(* sail/host/io.sail: abstract crypto/precompile functions plus staged
-   precompile wrappers for the executable implementation. *)
+(* sail/primitives/crypto.sail and sail/host/io.sail: segmented hash axioms,
+   abstract crypto operations, and source-backed precompile execution. *)
 Record CryptoContract := {
   keccak256_ref : byte_seq -> word256;
   sha256_ref : byte_seq -> word256;
@@ -132,9 +140,9 @@ Record CryptoContract := {
   staged_precompile_protocol_refines_ref : Prop;
 }.
 
-(* C-side byte sources. Sail hash semantics are byte-list functions; optimized
-   native paths such as code_db_store_source may resolve a pointer/length pair,
-   but must refine the same materialized byte sequence. *)
+(* sail/primitives/bytes.sail and sail/host/byte_slice.sail. Calldata and code
+   share this source/slice contract. Native pointer/length resolution must
+   refine the same materialized byte sequence for every source kind. *)
 Record ByteSourceContract := {
   byte_source_state : Type;
   byte_source_bytes_ref : byte_source_state -> ByteSourceKind -> Z -> Z -> byte_seq;
@@ -146,19 +154,24 @@ Record ByteSourceContract := {
       bytes_wf (byte_source_bytes_ref st kind off len);
 
   byte_source_resolve_contract : Prop;
-  byte_source_keccak_refinement_contract : Prop;
-  witness_sha256_request_digest_refinement_contract : Prop;
-  byte_source_code_store_contract : Prop;
+  slice_byte_contract : Prop;
+  slice_load_word_contract : Prop;
+  slice_load_n_word_contract : Prop;
+  slice_copy_contract : Prop;
+  memory_slice_stability_contract : Prop;
+  tx_input_view_contract : Prop;
+  segmented_hash_refinement_contract : Prop;
+  source_precompile_refinement_contract : Prop;
 }.
 
-(* sail/host/memory.sail and sail/evm/machine.sail host_mem_*, hm_*,
-   returndata_*, txin_*, txd_*, frame_code_*/frame_*, calldata_load_word,
-   code_db_*, hs_*. *)
+(* sail/host/{memory,returndata,stack}.sail and sail/evm/machine.sail:
+   mem_*, returndata_*, stack_*, generic ByteSlice views, and the active
+   IndexedCode value. *)
 Record MemoryStackContract := {
   memory_state : Type;
   stack_state : Type;
-  code_state : Type;
-  calldata_state : Type;
+  byte_slice_state : Type;
+  indexed_code_state : Type;
   returndata_state : Type;
 
   host_mem_read_ref : memory_state -> word64 -> byte;
@@ -176,14 +189,13 @@ Record MemoryStackContract := {
   memory_frame_lifo_contract : Prop;
   memory_move_contract : Prop;
   codecopy_to_memory_contract : Prop;
-  calldata_view_contract : Prop;
+  generic_slice_view_contract : Prop;
   returndata_frame_contract : Prop;
-  tx_input_view_contract : Prop;
   evm_stack_lifo_contract : Prop;
-  frame_code_contract : Prop;
+  indexed_code_frame_contract : Prop;
 }.
 
-(* sail/host/state.sail and sail/host/kernel.sail state-facing externs:
+(* sail/host/state.sail state-facing externs:
    transient_storage_*, storage_map_*, acctmap_*, code_db_*. *)
 Record WorldStateContract := {
   world_state : Type;
@@ -210,6 +222,9 @@ Record WorldStateContract := {
   storage_cache_update_contract : Prop;
   storage_frame_commit_revert_contract : Prop;
   transient_storage_contract : Prop;
+  jumpdest_index_contract : Prop;
+  jumpdest_ref_contract : Prop;
+  indexed_code_lookup_contract : Prop;
   code_db_contract : Prop;
   code_delegation_contract : Prop;
 }.
@@ -254,16 +269,25 @@ Definition input_well_formed_boundary (contract : GuestExternContract) : Prop :=
 Definition main_boundary (contract : GuestExternContract) : Prop :=
   staged_precompile_protocol_refines_ref contract.(guest_crypto) /\
   byte_source_resolve_contract contract.(guest_byte_sources) /\
-  byte_source_keccak_refinement_contract contract.(guest_byte_sources) /\
-  witness_sha256_request_digest_refinement_contract contract.(guest_byte_sources) /\
-  byte_source_code_store_contract contract.(guest_byte_sources) /\
+  slice_byte_contract contract.(guest_byte_sources) /\
+  slice_load_word_contract contract.(guest_byte_sources) /\
+  slice_load_n_word_contract contract.(guest_byte_sources) /\
+  slice_copy_contract contract.(guest_byte_sources) /\
+  memory_slice_stability_contract contract.(guest_byte_sources) /\
+  tx_input_view_contract contract.(guest_byte_sources) /\
+  segmented_hash_refinement_contract contract.(guest_byte_sources) /\
+  source_precompile_refinement_contract contract.(guest_byte_sources) /\
   memory_frame_lifo_contract contract.(guest_memory_stack) /\
-  calldata_view_contract contract.(guest_memory_stack) /\
+  generic_slice_view_contract contract.(guest_memory_stack) /\
   returndata_frame_contract contract.(guest_memory_stack) /\
   evm_stack_lifo_contract contract.(guest_memory_stack) /\
+  indexed_code_frame_contract contract.(guest_memory_stack) /\
   account_cache_update_contract contract.(guest_world_state) /\
   storage_cache_update_contract contract.(guest_world_state) /\
   storage_frame_commit_revert_contract contract.(guest_world_state) /\
+  jumpdest_index_contract contract.(guest_world_state) /\
+  jumpdest_ref_contract contract.(guest_world_state) /\
+  indexed_code_lookup_contract contract.(guest_world_state) /\
   code_db_contract contract.(guest_world_state) /\
   node_db_insert_select_contract contract.(guest_witness_db) /\
   mpt_authenticated_frontier_contract contract.(guest_witness_db).

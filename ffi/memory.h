@@ -17,22 +17,25 @@ uint64_t mem_establish_absolute(uint64_t off, uint64_t len);
 const uint8_t *mem_arena_ptr(uint64_t abs);
 uint64_t mem_arena_byte(uint64_t off);
 const uint8_t *mem_arena_region(uint64_t off, uint64_t len);
+uint64_t slice_byte_at(uint64_t kind, uint64_t off, uint64_t len, uint64_t i);
+void slice_load_word(lbits *rop, uint64_t kind, uint64_t off, uint64_t len, uint64_t i);
+void slice_load_n_word(lbits *rop, uint64_t kind, uint64_t off, uint64_t len,
+                       uint64_t i, uint64_t n);
+unit slice_copy_to_memory(uint64_t kind, uint64_t off, uint64_t len,
+                          uint64_t dst, uint64_t i, uint64_t n);
 unit mem_move(uint64_t dst, uint64_t src, uint64_t len);  /* MCOPY memmove */
 void mem_load_word(lbits *rop, uint64_t off);      /* MLOAD: 32-byte BE word  */
 unit mem_store_word(uint64_t off, const lbits w);  /* MSTORE: 32-byte BE word */
-/* stage the whole tx input in one call (no Sail byte loop):
- *   txdata_stage_source: copy a resolved byte source (the witness span for a
- *     stateless tx; a self-reference for the already-staged native-runner input)
- *     into the tx-input buffer; returns the staged length (0 on a bad source).
+/* bind/stage the tx input in one call (no Sail byte loop):
+ *   txdata_bind_source: retain a resolved byte-source reference.
  *   txdata_stage_word: stage a 32-byte big-endian word (a block system call's input).
  *   txdata_count_nonzero: number of nonzero bytes in the staged input (EIP-2028 /
  *     EIP-7623 calldata gas, counted C-side). */
-uint64_t txdata_stage_source(uint64_t kind, uint64_t off, uint64_t len);
+uint64_t txdata_bind_source(uint64_t kind, uint64_t off, uint64_t len);
 uint64_t txdata_stage_word(const lbits w);
 uint64_t txdata_count_nonzero(const unit u);
 uint64_t txd_copy(uint8_t *dst, uint64_t cap);
 uint64_t txdata_byte_at(uint64_t i);
 uint64_t txdata_length(const unit u);
 const uint8_t *txd_rd(uint64_t off, uint64_t len);
-unit calldata_copy_to_memory(uint64_t dst, uint64_t off, uint64_t len);
 #endif

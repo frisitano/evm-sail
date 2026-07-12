@@ -73,6 +73,10 @@ done
     -DEVMSAIL_MODEL_H='"zkvm_runner.h"' \
     -c "$FFI/hash_glue.c" -o "$BUILD/hash_glue.o"
 
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
+    -DEVMSAIL_MODEL_H='"zkvm_runner.h"' \
+    -c "$FFI/code_glue.c" -o "$BUILD/code_glue.o"
+
 # 5. the harness shim: I/O buffers + ssz_src + clear_memory + run_once + dump
 "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
     -c "$HERE/test_utils.c" -o "$BUILD/test_utils.o"
@@ -92,7 +96,7 @@ case "$(uname -s)" in
 esac
 OUT="$BUILD/libevmsail_runner.$EXT"
 LINK_CMD=("$CC" "${CFLAGS[@]}" "${SHFLAG[@]}"
-    "$BUILD/zkvm_runner.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/test_utils.o"
+    "$BUILD/zkvm_runner.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/test_utils.o"
     "${HOST_OBJS[@]}" "${SF_OBJS[@]}"
     -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB"
     -o "$OUT")

@@ -23,7 +23,7 @@ let EMPTY_TRIE_ROOT : hash = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc00
  * sha256 are the axiomatic hash core; keccak_rlp_payload refines
  * keccak256(domain ++ rlp_list_prefix(len) ++ payload). All shared consensus
  * hashing (lib/consensus_hash.sail) is written against these three. The
- * Witness/Memory/TxInput/ActiveCode source of a ByteSlice denotes an abstract
+ * Witness/Memory/TxInput/Code source of a ByteSlice denotes an abstract
  * byte sequence: keccak256(s : ByteSlice) = keccak256(read_byte_slice(s)); the
  * prefixed SHA-256 digest = sha256(type_byte :: bytes). ---- */
 

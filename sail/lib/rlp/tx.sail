@@ -154,7 +154,7 @@ function tx_sig_span(tx : ByteSlice, payload_rel : int, sig_cs : int, fields : l
  * walk against its EXACT field shape (mirroring EELS's per-envelope
  * dataclasses); an unknown type byte or wrong arity is undecodable. The data
  * field is never materialized: input_src carries its (source, offset, length)
- * span, staged into the calldata backend only when the tx runs. */
+ * span, bound as the transaction input only when the tx runs. */
 function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
     let sender = word_to_address(keccak256(sub_slice(pubkey, 1, 64)));
     let tx_len = unsigned(tx.len);

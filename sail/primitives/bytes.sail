@@ -5,7 +5,16 @@
 /* A ByteSlice denotes a byte sequence inside one of the host's C-backed
  * stores without materializing it; byte_source_kind is the scalar tag it
  * crosses the FFI under. */
-enum ByteSource = { WitnessSource, MemorySource, TxInputSource, ActiveCodeSource, TrieArenaSource, LogDataSource, MemoryArenaSource }
+enum ByteSource = {
+    WitnessSource,
+    MemorySource,
+    TxInputSource,
+    CodeSource,
+    TrieArenaSource,
+    LogDataSource,
+    MemoryArenaSource,
+    ReturndataSource,
+}
 
 struct ByteSlice = {
     source : ByteSource,
@@ -21,10 +30,11 @@ function byte_source_kind(src : ByteSource) -> bits(64) =
         WitnessSource => 0x0000000000000001,
         MemorySource => 0x0000000000000002,
         TxInputSource => 0x0000000000000003,
-        ActiveCodeSource => 0x0000000000000004,
+        CodeSource => 0x0000000000000004,
         TrieArenaSource => 0x0000000000000005,
         LogDataSource => 0x0000000000000006,
         MemoryArenaSource => 0x0000000000000007,
+        ReturndataSource => 0x0000000000000008,
     }
 
 /* zero-length placeholder for unused value roles (subtree refs, deletes) */
@@ -43,8 +53,33 @@ function memory_byte_slice(off : int, len : int) -> ByteSlice =
 function tx_input_byte_slice(off : int, len : int) -> ByteSlice =
     byte_slice(TxInputSource, off, len)
 
-function active_code_byte_slice(off : int, len : int) -> ByteSlice =
-    byte_slice(ActiveCodeSource, off, len)
+/* Absolute span in the append-only content-addressed code arena. */
+function code_byte_slice(off : int, len : int) -> ByteSlice =
+    byte_slice(CodeSource, off, len)
+
+/* The PUSH-aware analysis is a genuine Sail value: one little-endian bitmap
+ * word per 64 code bytes. After insertion, JumpdestRef is the resolved,
+ * one-based word offset in the host's packed table arena (zero = empty). */
+type JumpdestBitmap = list(bits(64))
+type JumpdestRef = bits(64)
+let EMPTY_JUMPDEST_BITMAP : JumpdestBitmap = [||]
+let EMPTY_JUMPDEST_REF : JumpdestRef = 0x0000000000000000
+
+/* Before insertion, code carries the materialized Sail analysis. */
+struct AnalyzedCode = {
+    bytes : ByteSlice,
+    jumpdests : JumpdestBitmap,
+}
+
+/* Once inserted under keccak(bytes), code carries the immutable code-arena
+ * view and the resolved packed-table reference. The content hash is the
+ * stable code-DB key; the ref is only its efficient execution-time view. */
+struct IndexedCode = {
+    bytes : ByteSlice,
+    jumpdests : JumpdestRef,
+}
+
+let EMPTY_INDEXED_CODE : IndexedCode = struct { bytes = EMPTY_SLICE, jumpdests = EMPTY_JUMPDEST_REF }
 
 /* A byte-sequence segment: materialized Sail bytes or a C-backed span. A
  * list(Bytes) denotes the concatenation of its segments and crosses the FFI

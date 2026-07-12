@@ -39,7 +39,7 @@ unit acct_tx_cache(const lbits a, uint64_t nonce, const lbits bal,
                    const lbits sroot, const lbits chash);
 
 /* compute_root enumeration over acct_wset_block: witness = dirty rows, native =
-   cache-union-block rows. Fields mirror AcctRow (host/state.sail). */
+   cache-union-block rows. Fields mirror AcctEntry (primitives/account.sail). */
 uint64_t acct_wset_union_count(const unit u);
 void acct_wset_union_hkey(lbits *rop, uint64_t i);
 uint64_t acct_wset_union_nonce(uint64_t i);

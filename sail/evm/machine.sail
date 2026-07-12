@@ -4,7 +4,7 @@
 /*                                                                          */
 /* This is the user-space half. It holds the gas counter and all per-frame  */
 /* compute state (pc, stack, memory, code, message, returndata). World      */
-/* state lives in the host (host/kernel.sail) and is reached only via k_*   */
+/* state lives in the host kernel and is reached only via k_*               */
 /* calls. World rollback on revert is a kernel snapshot, NOT saved here.    */
 /* ======================================================================== */
 
@@ -18,37 +18,18 @@ register frame_status : FrameStatus = Running()
 register message : Message = DEFAULT_MESSAGE
 register call_depth : int = 0
 
-/* --------------------------- code length -------------------------------- */
-/* The frame's code bytes live in the C buffer (code_db.c), streamed once by
- * set_code; fetch is an O(1) array read and PUSH immediates are assembled by
- * one frame_push_immediate_word call. Only the length is kept on the Sail side. */
-register code_len : int = 0
+/* ------------------------- executable code ------------------------------ */
+/* The frame's executable code is one indivisible value: its ByteSlice plus
+ * the resolved JumpdestRef produced when that byte sequence was indexed and
+ * inserted. Frame creators supply this value; the interpreter only reads it.
+ * Keeping the pair in one register makes mismatched bytes/analysis
+ * unrepresentable during frame save and restore. */
+register frame_code : IndexedCode = EMPTY_INDEXED_CODE
 
-/* Bind the current frame's code to an account's store entry (O(1): the bytes
- * and JUMPDEST bitmap were prepared when the code was written), to the
- * streamed tx input, or to nothing. CREATE initcode uses frame_code_pend_mem
- * BEFORE the frame switch: the child's code is copied from this frame's memory
- * range, so execution code never aliases mutable memory. */
-function frame_code_addr(a : address) -> unit = {
-    let h : hash = k_code_key(a);
-    code_len = unsigned(frame_code_bind_stored(h))
-}
+function frame_code_len() -> int = unsigned(frame_code.bytes.len)
 
-/* re-read the (C-side) frame descriptor's length after a child frame pops.
- * NOT a saved Sail local: sail -O's register-effect analysis is per-function
- * body, so a `let saved = code_len ... code_len = saved` round-trip with no
- * direct write in between gets eliminated as a self-assignment. */
-function frame_code_resync() -> unit = code_len = unsigned(frame_code_length())
-function frame_code_txd() -> unit = code_len = unsigned(frame_code_bind_tx_input())
-function frame_code_empty() -> unit = {
-    frame_code_clear();
-    code_len = 0
-}
-function frame_code_pend_mem(off : int, len : int) -> int =
-    unsigned(frame_code_bind_memory(get_slice_int(64, off, 0), get_slice_int(64, len, 0)))
-
-/* code[i], zero past the end (the EVM's implicit STOP padding) */
-function code_byte(i : int) -> byte = frame_code_byte(get_slice_int(64, i, 0))
+function frame_jumpdest_valid(dest : int) -> bool =
+    jumpdest_ref_contains(frame_code.jumpdests, frame_code.bytes.len, get_slice_int(64, dest, 0))
 
 /* ------------------------------ the stack ------------------------------- */
 
@@ -62,10 +43,7 @@ function exc_halt(k : ExceptionKind) -> unit = {
     frame_status = Exceptional(k)
 }
 
-function stack_clear() -> unit = stack_reset()
-function stack_frame_enter() -> unit = stack_enter_frame()
-function stack_frame_leave() -> unit = stack_leave_frame()
-
+/* The host ABI returns a fixed-width scalar; EVM bounds use Sail integers. */
 function stack_height() -> int = unsigned(stack_depth())
 
 /* nth-from-top operand (n = 0 is the top); zero if out of range */
@@ -157,13 +135,9 @@ function mem_size_words() -> int = ediv_int(memory_size + 31, 32)
 function mem_mcopy(dst : int, src : int, len : int) -> unit =
     mem_move(get_slice_int(64, dst, 0), get_slice_int(64, src, 0), get_slice_int(64, len, 0))
 
-/* CODECOPY: the current frame's code (already in the C buffer) into memory. */
+/* CODECOPY: the current frame's code slice into memory. */
 function mem_codecopy(dst : int, off : int, len : int) -> unit =
-    frame_code_copy_to_memory(
-        get_slice_int(64, dst, 0),
-        get_slice_int(64, clamp_source_offset(off), 0),
-        get_slice_int(64, len, 0),
-    )
+    slice_copy(frame_code.bytes, dst, off, len)
 
 /* KECCAK256 over the memory range [off, off+len). Semantically, the caller
  * reads the addressed bytes and hashes that byte list. */

@@ -1,15 +1,13 @@
-/* C-backed CODE for the evm-sail model: a code-hash-keyed code_db and
- * per-call-frame code descriptors.
+/* C-backed CODE for the evm-sail model: a code-hash-keyed code_db, an
+ * append-only byte arena, and packed JUMPDEST-table storage.
  *
  * Account code is written rarely (seeding, CREATE deploys, EIP-7702
- * delegations) and executed constantly. The code_db owns each code byte slice
- * and its JUMPDEST bitmap, built once at write time; entering a call frame
- * binds a DESCRIPTOR (bytes + length + bitmap) to the frame -- O(1), no
- * re-streaming -- and leaving a frame is free because descriptors are indexed
- * by the memory-frame depth, which the frame teardown already pops. Witness
- * code is copied from the SSZ input into the database. CREATE initcode
- * (memory-sourced) and a create-tx's initcode (the streamed tx input) are
- * copied once into per-depth inline buffers.
+ * delegations) and executed constantly. Each code_db entry names an absolute
+ * span in the arena plus a JumpdestRef into a flat arena populated from the
+ * completed bitmap produced by Sail's index_code pass. C never analyzes
+ * opcodes: it only stores packed words and answers membership queries. Sail's
+ * single frame_code IndexedCode register is the complete active executable
+ * state.
  *
  * The Sail account store remains the authoritative account-code value;
  * this is the execution mirror. */
@@ -17,30 +15,80 @@
 #include "lbits_convert.h"
 #include "host_crypto.h"
 #include "memory.h"
-#include "returndata.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define FC_MAXDEPTH 1100
 #define CODE_DB_INIT_CAP 256u     /* power of two */
+
+/* -------------------------- jumpdest tables ---------------------------- */
+
+static uint64_t *jumpdest_arena;
+static size_t jumpdest_arena_cap, jumpdest_arena_len;
+
+static int jumpdest_arena_reserve(size_t need) {
+  if (need <= jumpdest_arena_cap) return 1;
+  size_t n = jumpdest_arena_cap ? jumpdest_arena_cap : 256;
+  while (n < need) {
+    if (n > SIZE_MAX / 2) return 0;
+    n <<= 1;
+  }
+  uint64_t *p = (uint64_t *)realloc(jumpdest_arena, n * sizeof(*p));
+  if (!p) return 0;
+  jumpdest_arena = p;
+  jumpdest_arena_cap = n;
+  return 1;
+}
+
+static int jumpdest_bitmap_matches(const uint64_t *words, uint64_t nwords,
+                                   uint32_t code_len) {
+  uint64_t expected = ((uint64_t)code_len + 63) / 64;
+  if (nwords != expected || (expected && !words)) return 0;
+  uint32_t used = code_len & 63u;
+  if (used && (words[expected - 1] >> used) != 0) return 0;
+  return 1;
+}
+
+/* Append one completed Sail bitmap. The one-based word offset is the
+ * JumpdestRef exposed to the model; zero remains the empty/invalid sentinel. */
+static uint64_t jumpdest_arena_insert(const uint64_t *words, uint64_t nwords) {
+  if (!nwords || nwords > SIZE_MAX - jumpdest_arena_len) return 0;
+  size_t off = jumpdest_arena_len;
+  size_t end = off + (size_t)nwords;
+  if (!jumpdest_arena_reserve(end)) return 0;
+  memcpy(jumpdest_arena + off, words, (size_t)nwords * sizeof(*words));
+  jumpdest_arena_len = end;
+  return (uint64_t)off + 1;
+}
+
+bool jumpdest_ref_contains(uint64_t ref, uint64_t code_len, uint64_t i) {
+  if (ref == 0 || i >= code_len) return false;
+  uint64_t base = ref - 1;
+  uint64_t word = i >> 6;
+  if (word > UINT64_MAX - base) return false;
+  uint64_t index = base + word;
+  return index < jumpdest_arena_len &&
+         ((jumpdest_arena[(size_t)index] >> (i & 63)) & UINT64_C(1));
+}
 
 /* ------------------------------ code_db -------------------------------- */
 
 typedef struct {
   uint64_t a[4];                  /* codeHash key (BE 64-bit limbs) */
-  uint8_t *p;                     /* owned code bytes                */
-  uint8_t *bm;                    /* owned JUMPDEST bitmap           */
-  uint32_t len, cap;
+  uint64_t off;                   /* absolute offset in code_arena   */
+  uint64_t jumpdest_ref;          /* resolved Sail-built bitmap      */
+  uint32_t len;
   uint8_t  used;
 } code_db_ent;
 
 static code_db_ent *code_db;
 static uint32_t code_db_cap, code_db_n;
+static uint8_t *code_arena;
+static size_t code_arena_cap, code_arena_len;
 
 static uint8_t code_db_byte(const code_db_ent *e, uint64_t i) {
-  return (e && i < e->len) ? e->p[i] : 0;
+  return (e && i < e->len) ? code_arena[e->off + i] : 0;
 }
 
 static uint64_t code_db_hash(const uint64_t *a) {
@@ -73,232 +121,119 @@ static void code_db_grow(void) {
  * blob registered by one fixture satisfy a later negative "code missing" test
  * (the witness deliberately omits that code, expecting valid=false). The model
  * never calls this; it exists for the in-process harness (test_utils.c) whose
- * evmsail_clear_memory wipes state between fixtures. Frees each entry's owned
- * code/bitmap buffers, keeps the (zeroed) table allocation for reuse. */
+ * evmsail_clear_memory wipes state between fixtures. The code, table, and
+ * jumpdest arenas retain their allocations but reset their logical lengths. */
 unit code_db_reset(const unit u) {
   (void)u;
-  for (uint32_t i = 0; i < code_db_cap; i++) {
-    if (code_db[i].used) {
-      free(code_db[i].p);
-      free(code_db[i].bm);
-    }
-  }
   if (code_db) memset(code_db, 0, (size_t)code_db_cap * sizeof(code_db_ent));
   code_db_n = 0;
+  code_arena_len = 0;
+  jumpdest_arena_len = 0;
   return UNIT;
 }
 
-static void code_db_fit(code_db_ent *e, uint32_t need) {
-  if (e->cap < need) {
-    uint32_t old = e->cap;
-    uint32_t n = old ? old : 64;
-    while (n < need) n <<= 1;
-    e->p = (uint8_t *)realloc(e->p, n);
-    e->bm = (uint8_t *)realloc(e->bm, n / 8 + 1);
-    memset(e->bm + (old / 8), 0, (n - old) / 8 + 1);
-    e->cap = n;
+static int code_arena_reserve(size_t need) {
+  if (need <= code_arena_cap) return 1;
+  size_t n = code_arena_cap ? code_arena_cap : 4096;
+  while (n < need) {
+    if (n > SIZE_MAX / 2) return 0;
+    n <<= 1;
   }
+  uint8_t *p = (uint8_t *)realloc(code_arena, n);
+  if (!p) return 0;
+  code_arena = p;
+  code_arena_cap = n;
+  return 1;
 }
 
-static void code_db_build_jumpdest_bitmap(uint8_t *bm, const uint8_t *p, uint32_t len) {
-  memset(bm, 0, len / 8 + 1);
-  uint32_t skip = 0;
-  for (uint32_t i = 0; i < len; i++) {
-    uint8_t b = p[i];
-    if (skip) skip--;
-    else if (b == 0x5b) bm[i >> 3] |= (uint8_t)(1u << (i & 7));
-    else if (b >= 0x60 && b <= 0x7f) skip = (uint32_t)(b - 0x5f);
-  }
-}
-
-
-/* Content-address `src[0..len)` under the precomputed keccak `key`: find-or-insert
- * the entry, fit the buffer, copy the bytes, and build the JUMPDEST bitmap. A
- * hash already present with bytes is left untouched (the store is de-duplicated
- * and append-only). Empty code interns nothing -- a codeless account carries
- * KECCAK_EMPTY with no store entry (stored_code_length of a missing key is 0). */
-static void code_db_intern(const uint64_t key[4], const uint8_t *src, uint32_t len) {
-  if (!len) return;
+/* Content-address `src[0..len)` under the precomputed keccak `key`: find or
+ * insert the bytes and Sail-supplied analysis result. A hash already present
+ * with bytes is left untouched. Empty code interns nothing -- a codeless
+ * account carries KECCAK_EMPTY with no store entry. */
+static int code_db_intern(const uint64_t key[4], const uint8_t *src,
+                          uint32_t len, const uint64_t *jumpdests,
+                          uint64_t nwords) {
+  if (!len) return nwords == 0;
+  if (!jumpdest_bitmap_matches(jumpdests, nwords, len)) return 0;
   if (!code_db) code_db_grow();
   code_db_ent *e = code_db_find(key);
-  if (e->used && e->len) return;   /* already present */
+  if (e->used && e->len) {
+    if (e->len != len || memcmp(code_arena + e->off, src, len) != 0 ||
+        e->jumpdest_ref == 0) return 0;
+    uint64_t base = e->jumpdest_ref - 1;
+    if (base > jumpdest_arena_len ||
+        nwords > (uint64_t)jumpdest_arena_len - base) return 0;
+    return memcmp(jumpdest_arena + (size_t)base, jumpdests,
+                  (size_t)nwords * sizeof(*jumpdests)) == 0;
+  }
   if (!e->used) {
     e->used = 1;
     e->a[0] = key[0]; e->a[1] = key[1]; e->a[2] = key[2]; e->a[3] = key[3];
     code_db_n++;
     if (code_db_n * 10 >= code_db_cap * 7) { code_db_grow(); e = code_db_find(key); }
   }
-  code_db_fit(e, len);
-  memcpy(e->p, src, len);
-  code_db_build_jumpdest_bitmap(e->bm, e->p, len);
+  /* A source may itself be a CodeSource sub-slice. Preserve its arena offset
+   * across reserve/realloc before copying the new (content-addressed) entry. */
+  int src_in_arena = 0;
+  size_t src_off = 0;
+  if (code_arena && src) {
+    uintptr_t base = (uintptr_t)code_arena;
+    uintptr_t addr = (uintptr_t)src;
+    if (addr >= base && addr - base <= code_arena_len &&
+        len <= code_arena_len - (size_t)(addr - base)) {
+      src_in_arena = 1;
+      src_off = (size_t)(addr - base);
+    }
+  }
+  if (len > SIZE_MAX - code_arena_len ||
+      !code_arena_reserve(code_arena_len + len)) return 0;
+  if (src_in_arena) src = code_arena + src_off;
+  uint64_t jumpdest_ref = jumpdest_arena_insert(jumpdests, nwords);
+  if (!jumpdest_ref) return 0;
+  e->off = (uint64_t)code_arena_len;
+  memmove(code_arena + code_arena_len, src, len);
+  code_arena_len += len;
   e->len = len;
+  e->jumpdest_ref = jumpdest_ref;
+  return 1;
 }
 
-unit code_db_store_source(uint64_t source_kind, uint64_t off, uint64_t len) {
-  if (!len || len > UINT32_MAX) return UNIT;
+void code_db_store_indexed_words(lbits *rop, uint64_t source_kind,
+                                 uint64_t off, uint64_t len,
+                                 const uint64_t *jumpdests,
+                                 uint64_t nwords) {
+  uint64_t key[4] = {0, 0, 0, 0};
+  if (len > UINT32_MAX ||
+      !jumpdest_bitmap_matches(jumpdests, nwords, (uint32_t)len)) {
+    be_words4_to_lbits(rop, key);
+    return;
+  }
   const uint8_t *src = NULL;
   uint64_t source_len = 0;
-  if (!evmsail_resolve_byte_source(source_kind, off, len, &src, &source_len))
-    return UNIT;
-  if (!src || source_len != len) return UNIT;
-
-  uint64_t key[4] = {0, 0, 0, 0};
+  if (!evmsail_resolve_byte_source(source_kind, off, len, &src, &source_len) ||
+      !src || source_len != len) {
+    be_words4_to_lbits(rop, key);
+    return;
+  }
   host_keccak256_bytes(key, src, len);
-  code_db_intern(key, src, (uint32_t)len);
-  return UNIT;
-}
-
-/* Intern the pending returndata buffer (a CREATE/CREATE2 deploy's returned
- * code) under its keccak hash in one call; return the codeHash. */
-void code_intern_returndata(lbits *rop, const unit u) {
-  (void)u;
-  const uint8_t *p = NULL;
-  uint64_t len = 0;
-  returndata_pending_span(&p, &len);
-  uint64_t key[4] = {0, 0, 0, 0};
-  host_keccak256_bytes(key, p, len);
-  if (len <= UINT32_MAX) code_db_intern(key, p, (uint32_t)len);
+  if (!code_db_intern(key, src, (uint32_t)len, jumpdests, nwords))
+    memset(key, 0, sizeof key);
   be_words4_to_lbits(rop, key);
 }
 
 /* Intern the 23-byte EIP-7702 delegation designation 0xef0100 ++ addr under its
- * keccak hash in one call; return the codeHash. */
-void code_intern_delegation(lbits *rop, const lbits addr) {
+ * keccak hash with the explicit Sail analysis; return the codeHash. */
+void code_intern_indexed_delegation_words(lbits *rop, const lbits addr,
+                                          const uint64_t *jumpdests,
+                                          uint64_t nwords) {
   uint8_t b[23];
   b[0] = 0xef; b[1] = 0x01; b[2] = 0x00;
   lbits_to_be_bytes(b + 3, 20, addr);
   uint64_t key[4] = {0, 0, 0, 0};
   host_keccak256_bytes(key, b, sizeof b);
-  code_db_intern(key, b, (uint32_t)sizeof b);
+  if (!code_db_intern(key, b, (uint32_t)sizeof b, jumpdests, nwords))
+    memset(key, 0, sizeof key);
   be_words4_to_lbits(rop, key);
-}
-
-/* ------------------------- per-frame descriptors ------------------------ */
-
-typedef struct {
-  const uint8_t *p;
-  const uint8_t *bm;
-  uint32_t len;
-  int kind;     /* FC_NONE / FC_STORE (p) / FC_ARENA (off) / FC_TXIN (off) */
-  uint64_t off; /* absolute arena offset / tx-input offset */
-} fc_desc;
-
-enum { FC_NONE = 0, FC_STORE, FC_ARENA, FC_TXIN };
-
-static fc_desc fc[FC_MAXDEPTH];
-/* per-depth JUMPDEST bitmaps for memory-/txdata-sourced initcode (the CODE
- * itself is a reference; only the bitmap is materialized, len/8+1 bytes) */
-static struct { uint8_t *bm; uint32_t cap; } fc_inl[FC_MAXDEPTH];
-
-uint64_t mem_establish_absolute(uint64_t off, uint64_t len);
-const uint8_t *mem_arena_ptr(uint64_t abs);
-const uint8_t *txd_rd(uint64_t off, uint64_t len);
-
-/* a contiguous READ view of code[off, off+len), NULL out of range. Arena
- * pointers are taken per call (growth-safe: offsets, not pointers, persist). */
-static const uint8_t *fc_region(const fc_desc *f, uint64_t off, uint64_t len) {
-  if (len == 0 || off > f->len || len > (uint64_t)f->len - off) return NULL;
-  switch (f->kind) {
-  case FC_STORE: return f->p + off;
-  case FC_ARENA: return mem_arena_ptr(f->off + off);
-  case FC_TXIN: return txd_rd(f->off + off, len);
-  }
-  return NULL;
-}
-
-static fc_desc *fc_cur(void) { return &fc[hm_depth(UNIT)]; }
-
-int code_db_frame_resolve_code(uint64_t off, uint64_t len,
-                               const uint8_t **p, uint64_t *resolved_len) {
-  static const uint8_t empty = 0;
-  fc_desc *f = fc_cur();
-  if (len == 0) {
-    if (p) *p = &empty;
-    if (resolved_len) *resolved_len = 0;
-    return 1;
-  }
-  const uint8_t *src = fc_region(f, off, len);
-  if (!src) return 0;
-  if (p) *p = src;
-  if (resolved_len) *resolved_len = len;
-  return 1;
-}
-
-static uint8_t fc_byte_at(const fc_desc *f, uint64_t i) {
-  const uint8_t *p = fc_region(f, i, 1);
-  return p ? *p : 0;
-}
-
-static void fc_build_bitmap_bytes(uint8_t *bm, const uint8_t *p, uint32_t len) {
-  code_db_build_jumpdest_bitmap(bm, p, len);
-}
-static void fc_inl_fit(int d, uint32_t code_len) {
-  uint32_t need = code_len / 8 + 1;
-  if (fc_inl[d].cap < need) {
-    uint32_t n = fc_inl[d].cap ? fc_inl[d].cap : 128;
-    while (n < need) n <<= 1;
-    fc_inl[d].bm = (uint8_t *)realloc(fc_inl[d].bm, n);
-    fc_inl[d].cap = n;
-  }
-}
-
-/* current frame's code := the store entry for codeHash `h`; len */
-uint64_t frame_code_bind_stored(const lbits h) {
-  fc_desc *f = fc_cur();
-  if (code_db) {
-    uint64_t key[4];
-    lbits_to_be_words4(key, h);
-    code_db_ent *e = code_db_find(key);
-    if (e->used && e->len) {
-      f->kind = FC_STORE;
-      f->p = e->p;
-      f->bm = e->bm;
-      f->len = e->len;
-      return f->len;
-    }
-  }
-  f->kind = FC_NONE; f->p = NULL; f->bm = NULL; f->len = 0;
-  return 0;
-}
-/* the NEXT child frame's code := THIS frame's memory [off, off+len) BY
- * REFERENCE: the caller establishes the range (already gas-charged) and the
- * descriptor keeps its absolute arena offset -- the caller is suspended and
- * its region frozen while the child executes, so the bytes cannot change.
- * Only the JUMPDEST bitmap is materialized (one pass, len/8 bytes). */
-uint64_t frame_code_bind_memory(uint64_t off, uint64_t len) {
-  int child = (int)hm_depth(UNIT) + 1;
-  if (child >= FC_MAXDEPTH || len > UINT32_MAX) return 0;
-  fc_desc *f = &fc[child];
-  f->kind = FC_NONE; f->p = NULL; f->bm = NULL; f->len = 0;
-  if (!len) return 0;
-  uint64_t abs = mem_establish_absolute(off, len);
-  if (abs == UINT64_MAX) return 0;
-  fc_inl_fit(child, (uint32_t)len);
-  fc_build_bitmap_bytes(fc_inl[child].bm, mem_arena_ptr(abs), (uint32_t)len);
-  f->kind = FC_ARENA; f->off = abs; f->bm = fc_inl[child].bm; f->len = (uint32_t)len;
-  return len;
-}
-/* current frame's code := the tx input reference (a create-tx's initcode) */
-uint64_t frame_code_bind_tx_input(const unit u) {
-  (void)u;
-  int d = (int)hm_depth(UNIT);
-  fc_desc *f = &fc[d];
-  f->kind = FC_NONE; f->p = NULL; f->bm = NULL; f->len = 0;
-  uint64_t len64 = txdata_length(UNIT);
-  uint32_t len = len64 > UINT32_MAX ? UINT32_MAX : (uint32_t)len64;
-  if (!len) return 0;
-  const uint8_t *src = txd_rd(0, len);
-  if (!src) return 0;
-  fc_inl_fit(d, len);
-  fc_build_bitmap_bytes(fc_inl[d].bm, src, len);
-  f->kind = FC_TXIN; f->off = 0; f->bm = fc_inl[d].bm; f->len = len;
-  return len;
-}
-unit frame_code_clear(const unit u) {
-  (void)u;
-  fc_desc *f = fc_cur();
-  f->kind = FC_NONE; f->p = NULL; f->bm = NULL; f->len = 0;
-  return UNIT;
 }
 
 /* --------------------- address-keyed read accessors --------------------- */
@@ -318,6 +253,35 @@ uint64_t code_db_stored_code_length(const lbits h) {
   return e ? e->len : 0;
 }
 
+uint64_t code_db_stored_code_offset(const lbits h) {
+  const code_db_ent *e = code_db_get(h);
+  return e ? e->off : 0;
+}
+
+uint64_t code_db_stored_jumpdest_ref(const lbits h) {
+  const code_db_ent *e = code_db_get(h);
+  return e ? e->jumpdest_ref : 0;
+}
+
+uint64_t code_db_byte_at(uint64_t off) {
+  return off < code_arena_len ? code_arena[off] : 0;
+}
+
+/* Resolve an absolute CodeSource arena span. Offsets, unlike pointers, remain
+ * valid when the arena allocation grows. */
+int code_db_resolve_code(uint64_t off, uint64_t len,
+                         const uint8_t **p, uint64_t *resolved_len) {
+  static const uint8_t empty = 0;
+  const uint8_t *src = &empty;
+  if (len != 0) {
+    if (off > code_arena_len || len > code_arena_len - off) return 0;
+    src = code_arena + off;
+  }
+  if (p) *p = src;
+  if (resolved_len) *resolved_len = len;
+  return 1;
+}
+
 /* EIP-7928 BAL code_changes: raw deployed code bytes for a code hash given as BE
    64-bit limbs (avoids constructing an lbits). NULL/0 for KECCAK_EMPTY / missing. */
 const uint8_t *code_db_code_by_words(const uint64_t key_be[4], uint64_t *len_out) {
@@ -326,7 +290,7 @@ const uint8_t *code_db_code_by_words(const uint64_t key_be[4], uint64_t *len_out
   const code_db_ent *e = code_db_find(key_be);
   if (!(e->used && e->len)) return NULL;
   *len_out = e->len;
-  return e->p;
+  return code_arena + e->off;
 }
 
 /* EXTCODECOPY: code(hash)[off..off+len) -> memory[dst..), zero-padded */
@@ -347,47 +311,12 @@ unit code_db_copy_stored_code_to_memory(const lbits h, uint64_t dst, uint64_t of
  * would be O(|code|) or a code-db walk) */
 void code_db_read_delegation(lbits *rop, const lbits h) {
   const code_db_ent *e = code_db_get(h);
-  int deleg = e && e->len == 23 && e->p[0] == 0xef && e->p[1] == 0x01 && e->p[2] == 0x00;
+  const uint8_t *p = e ? code_arena + e->off : NULL;
+  int deleg = e && e->len == 23 && p[0] == 0xef && p[1] == 0x01 && p[2] == 0x00;
   uint8_t b[21] = {0};
   if (deleg) {
     b[0] = 0x01;                    /* is_designation flag: bit 160 */
-    memcpy(b + 1, e->p + 3, 20);    /* target address              */
+    memcpy(b + 1, p + 3, 20);       /* target address              */
   }
   be_bytes_to_lbits(rop, 168, b, sizeof b);
-}
-
-/* ------------------------------ accessors ------------------------------ */
-
-uint64_t frame_code_byte(uint64_t i) {
-  const fc_desc *f = fc_cur();
-  return fc_byte_at(f, i);
-}
-
-/* the current frame's code length (frame re-entry resync after a child pops) */
-uint64_t frame_code_length(const unit u) { (void)u; return fc_cur()->len; }
-bool frame_jumpdest_valid(uint64_t i) {
-  const fc_desc *f = fc_cur();
-  return i < f->len && ((f->bm[i >> 3] >> (i & 7)) & 1);
-}
-/* CODECOPY: code[off..off+len) -> memory[dst..), zero-padded past the end */
-unit frame_code_copy_to_memory(uint64_t dst, uint64_t off, uint64_t len) {
-  if (!len) return UNIT;
-  uint8_t *d = hm_wr(dst, len);
-  if (!d) return UNIT;
-  const fc_desc *f = fc_cur();
-  for (uint64_t k = 0; k < len; k++) {
-    uint64_t i = off + k;
-    /* i < off => uint64 overflow of a past-end (truncated 256-bit) offset */
-    d[k] = (i >= off) ? fc_byte_at(f, i) : 0;
-  }
-  return UNIT;
-}
-
-/* the n-byte PUSH immediate starting at offset i, as a right-aligned word */
-void frame_push_immediate_word(lbits *rop, uint64_t i, uint64_t n) {
-  const fc_desc *f = fc_cur();
-  uint8_t b[32];
-  uint64_t cnt = n < 32 ? n : 32;
-  for (uint64_t k = 0; k < cnt; k++) b[k] = (uint8_t)fc_byte_at(f, i + k);
-  be_bytes_to_lbits(rop, 256, b, (size_t)cnt);
 }

@@ -3,8 +3,8 @@
  * EIP-6780 created-this-tx address sets, and the call-frame journal (undo log).
  *
  * These were Sail registers holding mutable data buffers; they now live behind
- * the abstract host interface (sail/iface/kernel_state.sail), C-backed here in
- * build mode. Declared here so the Sail-generated C call sites are prototyped
+ * the abstract host interface declared inline in sail/host/state.sail and
+ * C-backed here. Declared here so the Sail-generated C call sites are prototyped
  * via `sail -c --c-include`. Addresses/words/hashes cross as whole lbits;
  * counts, tags, bytes and the refund word cross as mach_bits. */
 #ifndef KERNEL_STATE_H

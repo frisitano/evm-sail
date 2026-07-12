@@ -132,6 +132,9 @@ PY
   "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
       -c "$ROOT/ffi/hash_glue.c" -o "$BUILD/hash_glue.o"
+  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+      -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+      -c "$ROOT/ffi/code_glue.c" -o "$BUILD/code_glue.o"
   # 3. GMP-free fixed-width Sail runtime (sailfix) replacing stock sail.c +
   #    mini-gmp: sail_int = 512-bit sign-magnitude, lbits = 256-bit inline.
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
@@ -159,9 +162,9 @@ PY
   "$HOSTCXX" -std=c++17 -fPIC -shared -I"$SPIKE_INC" -I"$ROOT/ffi" -I"$ROOT/zkvm" -undefined dynamic_lookup \
       -o "$ACCEL_SO" "$ROOT/zkvm/accel-device/accel_device.cc" \
       -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB"
-  # 3c. C host backends: memory/calldata, transient storage, returndata,
-  #     operand stack, code store, witness/account databases, and frame
-  #     descriptors.
+  # 3c. C host backends: memory/generic byte slices, transient storage,
+  #     returndata, operand stack, code/JUMPDEST arenas, and witness/account
+  #     databases.
   for hc in memory transient_storage state_db stack code_db kernel_state trie_node_db returndata; do
     "$GCC" "${CFLAGS[@]}" -I"$lib" \
         -Wno-unused -c "$ROOT/ffi/$hc.c" -o "$BUILD/$hc.o"
@@ -186,7 +189,7 @@ link_guest() {
       "$BUILD/zkvm_input_data.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
       "$BUILD/host_crypto.o" "$BUILD/precompiles.o" "$BUILD/accel_guest.o" \
-      "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" \
+      "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" \
       "$BUILD/memory.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
       "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/returndata.o" \
       "$BUILD/zkvm_block.o" \

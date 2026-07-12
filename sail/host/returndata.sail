@@ -40,6 +40,11 @@ function returndata_pending_size() -> int = unsigned(returndata_pending_len())
 function returndata_pending_byte(i : int) -> byte =
     returndata_pending_byte_at(get_slice_int(64, i, 0))
 
+/* Immutable only until the pending buffer is adopted or discarded. Code
+ * indexing and code-db insertion consume this view synchronously. */
+function returndata_pending_slice() -> ByteSlice =
+    byte_slice(ReturndataSource, 0, returndata_pending_size())
+
 /* Materialize the pending child output (the init-code return value a CREATE
  * deploys as the new account's code) as a Sail list. */
 function returndata_pending_bytes() -> list(byte) = {

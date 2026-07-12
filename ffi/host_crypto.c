@@ -2,6 +2,7 @@
 #include "lbits_convert.h"
 #include "code_db.h"
 #include "memory.h"
+#include "returndata.h"
 #include "kernel_state.h"
 #include "zkvm_accelerators.h"
 
@@ -213,7 +214,7 @@ void host_auth_signing_hash(lbits *rop, const lbits chain_id, const lbits addres
  * FFI as (kind, data, len): kind 0 = empty (RLP 0x80), kind 1 = an inline node
  * (data holds its low `len` big-endian bytes), kind 2 = a keccak hash (data
  * holds the 32-byte hash, framed as 0xa0 ++ hash). Mirrors lib/mpt.sail's
- * branch_child_ref / branch_payload_rlp so the build backend never streams the
+ * branch_child_ref / branch_payload_rlp so the native host never streams the
  * node byte list through the hash channel. */
 #define NASM_CAP 4096
 static uint8_t NASM_payload[NASM_CAP];
@@ -497,7 +498,7 @@ unit node_asm_push_value_source(uint64_t kind, uint64_t off, uint64_t len) {
 int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
                                 const uint8_t **p, uint64_t *resolved_len) {
   const uint8_t *src = NULL;
-  if (kind < EVMSAIL_SOURCE_WITNESS || kind > EVMSAIL_SOURCE_MEMORY_ARENA) {
+  if (kind < EVMSAIL_SOURCE_WITNESS || kind > EVMSAIL_SOURCE_RETURNDATA) {
     return 0;
   }
   if (len == 0) {
@@ -509,8 +510,8 @@ int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
     src = mem_region(off, len);
   } else if (kind == EVMSAIL_SOURCE_TX_INPUT) {
     src = txd_rd(off, len);
-  } else if (kind == EVMSAIL_SOURCE_ACTIVE_CODE) {
-    return code_db_frame_resolve_code(off, len, p, resolved_len);
+  } else if (kind == EVMSAIL_SOURCE_CODE) {
+    return code_db_resolve_code(off, len, p, resolved_len);
   } else if (kind == EVMSAIL_SOURCE_TRIE_ARENA) {
     if (off > TARENA_n || len > TARENA_n - off) return 0;
     src = TARENA_buf + off;
@@ -518,6 +519,12 @@ int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
     src = log_data_region(off, len);
   } else if (kind == EVMSAIL_SOURCE_MEMORY_ARENA) {
     src = mem_arena_region(off, len);
+  } else if (kind == EVMSAIL_SOURCE_RETURNDATA) {
+    const uint8_t *pending = NULL;
+    uint64_t pending_len = 0;
+    returndata_pending_span(&pending, &pending_len);
+    if (off > pending_len || len > pending_len - off) return 0;
+    src = pending + off;
   } else {
     return 0;
   }

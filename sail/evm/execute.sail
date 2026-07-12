@@ -39,7 +39,7 @@ function guard_static() -> bool =
  * (the precomputed valid-destination set, YP 9.4.3); otherwise an invalid-jump
  * exceptional halt. PUSH-data bytes that happen to equal 0x5b are not valid. */
 function do_jump(dest : int) -> unit =
-    if dest >= 0 & dest < code_len & frame_jumpdest_valid(get_slice_int(64, dest, 0)) then {
+    if dest >= 0 & dest < frame_code_len() & frame_jumpdest_valid(dest) then {
         pc = dest
     } else {
         exc_halt(InvalidJump)
@@ -248,7 +248,7 @@ function execute(op : ast) -> unit = match op {
     CALLDATALOAD() => {
         charge(G_verylow);
         let off = pop_int();
-        push(calldata_load(calldata, off))
+        push(slice_load(calldata, off))
     },
     CALLDATACOPY() => {
         charge(G_verylow);
@@ -258,12 +258,12 @@ function execute(op : ast) -> unit = match op {
         charge(copy_gas(len));
         charge_expansion(dest, len);
         if is_running() then {
-            calldata_copy(calldata, dest, off, len)
+            slice_copy(calldata, dest, off, len)
         }
     },
     CODESIZE() => {
         charge(G_base);
-        push(word_of_int(code_len))
+        push(word_of_int(frame_code_len()))
     },
     CODECOPY() => {
         charge(G_verylow);

@@ -30,7 +30,7 @@ function enter_system_call_frame(tgt : address, input_len : int) -> unit = {
     pc = 0;
     call_depth = 0;
     gas_remaining = to_gas(30000000);
-    stack_clear();
+    stack_reset();
     mem_clear();
     returndata_reset_all();
     memory_size = 0;
@@ -46,7 +46,7 @@ function enter_system_call_frame(tgt : address, input_len : int) -> unit = {
             is_static = false,
             depth = 0,
         };
-    frame_code_addr(tgt)
+    frame_code = code_db_indexed_code(k_code_key(tgt))
 }
 
 function system_call(tgt : address, input : bits(256)) -> unit = {

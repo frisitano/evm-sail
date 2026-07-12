@@ -27,8 +27,10 @@ duplicating instructions elsewhere.
 - `sail/bin/` holds the executable entry files (`bin/main.sail` the stateless
   guest, `bin/runner.sail` the EEST state-test runner), selected with
   `EVM_ENTRY=guest|runner`.
-- `sail/host/state.sail` and `sail/host/kernel.sail` define the host world-state
-  interface used by EVM execution.
+- `sail/host/state.sail` is the declaration-only host state surface for impure
+  FFI contracts. `sail/host/kernel/environment.sail` owns the kernel registers,
+  and the remaining `sail/host/kernel/` modules group pure Sail `k_*`
+  operations by subsystem.
 - `sail/lib/mpt.sail` is the single trie implementation: one public entry
   `trie_root(base_root, updates)` (witness-native overlay, fail-closed on
   missing node material) plus account/storage MPT root computation and
@@ -41,16 +43,17 @@ duplicating instructions elsewhere.
   state and buffers, `lib/mpt.sail` trie node refs; see `proof/extern-boundary.md`). These `c:`-bound vals are the
   TRUE axioms (crypto core, I/O oracle, mutable host stores) -- proof targets
   see them as bodyless parameters; executables link their C definitions from
-  `ffi/`. The boundary is scalar-typed with TWO exceptions,
-  both handled by hand-written glue compiled per build against the GENERATED
-  model header (`-DEVMSAIL_MODEL_H`, `-I` build dir) so generated layouts are
-  never hand-mirrored: the journal (`journal_push : JEntry -> unit` /
-  `journal_pop : unit -> JEntry`, `ffi/journal_glue.c`, (en/de)coding against
-  the scalar journal rows in `ffi/kernel_state.c`) and the hash axioms
-  (`keccak256_segments` / `sha256_segments : list(Bytes) -> hash`,
-  `ffi/hash_glue.c`: a hash preimage is a list of Bytes segments --
-  materialized bytes or source-tagged slices -- crossing in ONE call; the old
-  streaming hash channel and fused source hashers are gone). Everything else,
+  `ffi/`. Generated aggregate values cross through three hand-written glue
+  translation units compiled per build against the GENERATED model header
+  (`-DEVMSAIL_MODEL_H`, `-I` build dir), so generated layouts are never
+  hand-mirrored: `ffi/journal_glue.c` handles journal entries and structured
+  state rows/options; `ffi/hash_glue.c` handles the hash axioms
+  (`keccak256_segments` / `sha256_segments : list(Bytes) -> hash`) and log
+  records; and `ffi/code_glue.c` flattens Sail's
+  `JumpdestBitmap = list(bits(64))` for insertion into the packed C arena. A
+  hash preimage is a list of Bytes segments -- materialized bytes or
+  source-tagged slices -- crossing in ONE call; the old streaming hash channel
+  and fused source hashers are gone. Everything else,
   including the former C fast-path hooks (`keccak256_word`,
   `keccak256_address`, `sha256_pair`, `ssz_src_le`, `ssz_src_be`), is a pure
   Sail body compiled and executed directly; the dormant one-call C versions in
@@ -58,9 +61,10 @@ duplicating instructions elsewhere.
   link-time override (weak-stub mechanism, not yet wired). The old `sail/c/*.sail` extern-binding menu and the
   `EVM_BACKEND=spec|build` project variable were deleted (this change).
 - `ffi/` contains native C backends for performance-sensitive host structures:
-  memory/calldata/returndata, `state_db.c` for accounts and persistent
-  storage cache/update rows, `transient_storage.c`
-  for transient storage, code DB, node DB, operand stack, and accelerator shims.
+  memory/generic byte slices/returndata, `state_db.c` for accounts and
+  persistent storage cache/update rows, `transient_storage.c` for transient
+  storage, the content-addressed code and packed JUMPDEST arenas, node DB,
+  operand stack, and accelerator shims.
 - `harness/run.py` is the SINGLE fixture harness for both executable
   entries, built ONCE as shared libraries and driven IN-PROCESS via ctypes
   (`harness/dump_state.py`). Each case is serialized to the SSZ

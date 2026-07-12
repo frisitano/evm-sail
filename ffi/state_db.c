@@ -54,7 +54,7 @@ static const uint64_t account_zero_val[4] = {0, 0, 0, 0};
 /* EIP-7928 block access list accumulator.                                  */
 /*                                                                          */
 /* All recording is HARVESTED from the tx overlays at merge time by SAIL     */
-/* (host/kernel.sail k_tx_merge pops each row and decides the records); the   */
+/* (host/kernel/lifecycle.sail k_tx_merge decides the records); the           */
 /* bal_note_* sinks below only append -- so there is no per-op BAL hook.      */
 /* Records are keyed by                                                        */
 /* keccak(address) (matching the overlays); the raw address the BAL sorts/     */
@@ -127,7 +127,7 @@ static void bal_add_code_change(const uint64_t ah[4], const uint64_t chash[4]) {
   r->idx = bal_index; r->seq = bal_seq++;
 }
 
-/* Sail-facing EIP-7928 record sinks (host/kernel.sail k_tx_merge does the
+/* Sail-facing EIP-7928 record sinks (host/kernel/lifecycle.sail k_tx_merge does the
    change/read detection; these only append records). Layouts match the row
    fields the serializer decodes: hashes/slots/storage values BE words,
    balance/code-hash LE words. */
@@ -365,8 +365,8 @@ unit storage_block_cache(const lbits a, const lbits s_, const lbits v) {
 
 /* --- reads: per-layer row probe -----------------------------------------
    The layer-precedence semantics (which layer wins a lookup, and what the
-   EIP-2200 tx-start original is) live in SAIL (host/state.sail
-   k_sload / k_sload_orig over option(StorageEntry)); C only
+   EIP-2200 tx-start original is) live in SAIL (host/kernel/storage.sail
+   k_sload over option(StorageValue)); C only
    answers point queries against one layer's row table. A row is a cached READ
    (was_read: current == original == the resolved base) or WRITTEN (current =
    the write, original = the frozen tx-start value); `written` covers rows
@@ -839,7 +839,7 @@ static void acct_wset_table_remove_hkey(acct_wset_table *t, const uint64_t h[4])
 /* ---- compute_root enumeration over acct_wset_block ---------------------
    witness -> DIRTY block rows (account changed vs pre-state); native ->
    UNION(eest_account, acct_wset_block) with the block current overriding the
-   cache. Both feed state_updates_eest_account_row (host/state.sail AcctRow). */
+   cache. Both feed state_updates_eest_account_row (primitives/account.sail AcctEntry). */
 
 typedef struct {
   uint64_t hkey[4];

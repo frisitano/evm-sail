@@ -70,10 +70,13 @@ To *run* the model — the generated C compiled natively (`sail256`/`sailfix`) �
 the host's mechanism is backed by C FFI; the Sail definitions stay the
 specification while these provide the data structures underneath it.
 Performance-critical state lives behind C FFI with O(1) operations — EVM
-memory, calldata and returndata (`ffi/memory.c`, `ffi/returndata.c`), direct
-host crypto and precompile adapters (`ffi/host_crypto.c`, `ffi/precompiles.c`), the
-operand stack (`ffi/stack.c`), the account code store + per-frame code
-descriptors with prebuilt JUMPDEST bitmaps (`ffi/code_db.c`), transient
+memory, generic byte-slice sources, and returndata (`ffi/memory.c`,
+`ffi/returndata.c`), direct host crypto and precompile adapters
+(`ffi/host_crypto.c`, `ffi/precompiles.c`), the operand stack (`ffi/stack.c`),
+and the content-addressed code arena plus packed JUMPDEST tables
+(`ffi/code_db.c`). Sail performs PUSH-aware code analysis before insertion;
+each active frame holds one `IndexedCode` pairing the code slice with its
+resolved table reference. Transient
 storage (`ffi/transient_storage.c`, with frame rollback driven by the Sail
 journal), and account plus persistent storage state (`ffi/state_db.c`, sorted
 cache/update backends keyed by keccak(address) and keccak(slot)). In-memory representations keep raw keys
@@ -109,6 +112,7 @@ sail/        the specification (evm.sail_project selects core/entry files)
                       logs, journal, block/tx environment
     kernel.sail       the kernel functions (k_*): the only state interface
     memory.sail       per-frame byte memory (C-backed, O(1))
+    byte_slice.sail   generic calldata/code views + Sail JUMPDEST analysis
     io.sail           host I/O: accelerator FFI binding + keccak256/sha256 +
                       EVM precompiles + CREATE derivation + the stateless SSZ
                       input decoder (eth-act zkvm-standards C boundary)
@@ -124,10 +128,10 @@ sail/        the specification (evm.sail_project selects core/entry files)
     rlp.sail  ssz_htr.sail
     mpt.sail           MPT root builder + state trie + stateless witness reads
                        (feed, re-root, fail-closed lookups; C-backed node-db)
-ffi/         C backends: memory.c (memory/calldata), transient_storage.c
+ffi/         C backends: memory.c (memory/generic byte slices), transient_storage.c
              (transient storage), state_db.c (account and persistent storage
              cache/update maps), stack.c (operand stack), code_db.c
-             (code store + frame descriptors + JUMPDEST bitmaps), trie_node_db.c
+             (content-addressed code + packed JUMPDEST arenas), trie_node_db.c
              (witness node-db), host_crypto.c + precompiles.c +
              zkvm_accelerators.h (eth-act zkvm-standards crypto)
 harness/   the EEST harness: run.py drives BOTH entries in-process

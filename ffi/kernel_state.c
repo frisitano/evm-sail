@@ -3,8 +3,9 @@
  * The EIP-2929 warm address/slot sets, the LOG series, the SELFDESTRUCT and
  * EIP-6780 created-this-tx address sets, and the call-frame journal (undo log)
  * were Sail registers holding mutable data buffers. They now live here, behind
- * the abstract host interface (sail/iface/kernel_state.sail). This is a pure
- * refactor: dedup, ordering, and call-frame revert semantics are unchanged.
+ * the abstract host interface declared inline in sail/host/state.sail. This is
+ * a pure refactor: dedup, ordering, and call-frame revert semantics are
+ * unchanged.
  *
  * Addresses/words/hashes cross the FFI as whole lbits (stored as 4 big-endian
  * 64-bit words, low 160 bits used for addresses); the refund word, counts,
@@ -428,4 +429,3 @@ void journal_top_chash(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_t
 void journal_top_slot(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->w0); }
 void journal_top_val(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->w1); }
 uint64_t journal_top_refund(const unit u) { (void)u; return jrn_top()->n64; }
-

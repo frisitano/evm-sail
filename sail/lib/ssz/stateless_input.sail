@@ -21,8 +21,8 @@
 /* does NOT touch any entry-specific code.                                  */
 /* ======================================================================== */
 
-/* Register every witness code blob into the hash-keyed C code store. The C side
- * hashes the SSZ input span and copies the bytes into the owned code_db entry. */
+/* Index every witness code blob in Sail, then register its bytes and
+ * materialized JUMPDEST table together in the hash-keyed C code store. */
 function register_witness_codes(codes : list(ByteSlice)) -> unit = {
     var rest : list(ByteSlice) = codes;
     var more : bool = true;
@@ -30,7 +30,7 @@ function register_witness_codes(codes : list(ByteSlice)) -> unit = {
         match rest {
             [||] => more = false,
             c :: r => {
-                code_db_store_slice(c);
+                let _ = code_db_index_and_store(c);
                 rest = r
             },
         }

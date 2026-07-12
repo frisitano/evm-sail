@@ -25,8 +25,8 @@ let PER_AUTH_BASE : gas = 12500 /* EIP-7702 PER_AUTH_BASE_COST          */
 let PER_EMPTY_ACCOUNT : gas = 25000 /* EIP-7702 PER_EMPTY_ACCOUNT_COST      */
 
 /* EIP-2028: 4 gas per zero byte, 16 per non-zero, over the loaded tx input. The
- * nonzero count comes from the host (one C pass on the build backend) rather than
- * a Sail byte loop; zero bytes are the remainder. */
+ * nonzero count comes from the host (one native pass) rather than a Sail byte
+ * loop; zero bytes are the remainder. */
 function calldata_cost() -> gas = {
     let n = txdata_len();
     let nz = unsigned(txdata_count_nonzero());
@@ -283,10 +283,12 @@ function enter_transaction_frame(tx : Transaction, intrinsic : gas) -> unit = {
     pc = 0;
     call_depth = 0;
     gas_remaining = to_gas(tx.gas_limit - intrinsic);
-    stack_clear();
+    stack_reset();
     mem_clear();
     returndata_reset_all();
     memory_size = 0;
+    calldata = EMPTY_SLICE;
+    frame_code = EMPTY_INDEXED_CODE;
     frame_status = Running()
 }
 
@@ -315,7 +317,7 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
                 is_static = false,
                 depth = 0,
             };
-        frame_code_txd();
+        frame_code = code_db_indexed_code(code_db_index_and_store(tx_input_byte_slice(0, txdata_len())));
         interpret();
         if frame_succeeded() then {
             let dep_len = returndata_pending_size();
@@ -382,7 +384,7 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
             let _ = k_aload(tx_dtgt);
             ()
         };
-        frame_code_exec(tx.recipient, tx_deleg, tx_dtgt); /* follow a delegation designation */
+        frame_code = executable_code(tx.recipient, tx_deleg, tx_dtgt);
         interpret()
     }
 }

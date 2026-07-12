@@ -1,8 +1,8 @@
 /* ======================================================================== */
 /* PRIMITIVES: BLOCK-LEVEL TYPES                                            */
 /*                                                                          */
-/* The decoded block header registerd as k_header (host/state.sail) and the */
-/* EIP-4895 withdrawal record. Pure data -- no registers, no externs.       */
+/* BlockHeader is pure data. Its k_header register lives in                 */
+/* host/kernel/environment.sail alongside the EIP-4895 withdrawal record.   */
 /* ======================================================================== */
 
 struct BlockHeader = {

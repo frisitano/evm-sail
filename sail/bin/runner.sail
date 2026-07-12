@@ -49,7 +49,7 @@ function run_one() -> unit = {
        k_parent_state_root. A state test carries a single DUMMY parent header
        whose state_root is the pre-state root (headers len 1, chain vacuously
        contiguous), so BLOCKHASH of the immediate parent resolves from it and
-       anything deeper fail-closes to 0 (host/kernel.sail k_blockhash). The
+       anything deeper fail-closes to 0 (host/kernel/environment.sail k_blockhash). The
        world starts empty -- the ctypes harness calls evmsail_clear_memory
        before each run -- so there is no overlay wipe here. */
     let input = decode_stateless_input();

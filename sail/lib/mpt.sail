@@ -285,7 +285,7 @@ val storage_leaf_value : word -> ByteSlice
 
 /* Source -> bytes (val in host/io.sail): materialize a byte slice by
  * per-source byte reads. Every source is readable from Sail: the witness via
- * the input oracle, memory / tx input / active code via their byte hooks, and
+ * the input oracle, memory / tx input / stored code via their byte hooks, and
  * the arena above. */
 function read_byte_slice(s : ByteSlice) -> list(byte) = {
     let off = unsigned(s.off);
@@ -296,10 +296,11 @@ function read_byte_slice(s : ByteSlice) -> list(byte) = {
             WitnessSource => ssz_src_byte(off + i),
             MemorySource => mem_get_byte(off + i),
             TxInputSource => txdata_byte(off + i),
-            ActiveCodeSource => frame_code_byte(get_slice_int(64, off + i, 0)),
+            CodeSource => code_db_byte_at(get_slice_int(64, off + i, 0)),
             TrieArenaSource => list_nth(trie_arena, off + i, 0x00),
             LogDataSource => log_arena_byte(get_slice_int(64, off + i, 0)),
             MemoryArenaSource => mem_arena_byte_read(get_slice_int(64, off + i, 0)),
+            ReturndataSource => returndata_pending_byte(off + i),
         };
         out = b :: out
     };
@@ -1239,7 +1240,7 @@ function build_node_db(nodes : list(ByteSlice)) -> unit = {
  * short-circuits to 0 (no walk); a committed non-empty root whose node is
  * absent is a proof the witness omitted (EIP-8025) -> fail closed (never fires
  * for a complete alloc MPT); a diverging or empty terminus is a proven-absent
- * slot => 0. Base BELOW the overlay layers (host/kernel.sail k_sload, which
+ * slot => 0. Base BELOW the overlay layers (host/kernel/storage.sail k_sload, which
  * caches the resolved value in the tx layer). */
 function stateless_storage(a : address, s : word) -> word = {
     let sroot = k_aload(a).storage_root;

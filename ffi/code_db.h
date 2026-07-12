@@ -1,4 +1,5 @@
-/* C-backed code_db + per-frame code descriptors (see code_db.c).
+/* C-backed code_db + packed storage for Sail-built JUMPDEST bitmaps
+ * (see code_db.c).
  * Declared here so the Sail-generated C call sites are prototyped via
  * `sail -c --c-include`. */
 #ifndef CODE_DB_H
@@ -6,25 +7,35 @@
 #include "sail.h"
 #include <stdbool.h>
 
-/* Streaming FFI bridge for Sail's code_db_store_code(hash, list(byte)) helper. */
-unit code_db_store_source(uint64_t source_kind, uint64_t off, uint64_t len);
-void code_intern_returndata(lbits *rop, const unit u);
-void code_intern_delegation(lbits *rop, const lbits addr);
-int code_db_frame_resolve_code(uint64_t off, uint64_t len,
-                               const uint8_t **p, uint64_t *resolved_len);
+/* JumpdestBitmap is list(bits(64)). This header precedes the generated list
+ * definition in the model translation unit; code_glue.c compiles against the
+ * completed generated header and converts the list exactly once. */
+struct node_zz5listz8z5bvz9;
+void code_db_store_indexed_source(lbits *rop, uint64_t source_kind,
+                                  uint64_t off, uint64_t len,
+                                  struct node_zz5listz8z5bvz9 *jumpdests);
+void code_intern_indexed_delegation(
+    lbits *rop, const lbits addr,
+    struct node_zz5listz8z5bvz9 *jumpdests);
+
+/* Scalar core called by code_glue.c after decoding the generated list. */
+void code_db_store_indexed_words(lbits *rop, uint64_t source_kind,
+                                 uint64_t off, uint64_t len,
+                                 const uint64_t *jumpdests, uint64_t nwords);
+void code_intern_indexed_delegation_words(lbits *rop, const lbits addr,
+                                          const uint64_t *jumpdests,
+                                          uint64_t nwords);
+int code_db_resolve_code(uint64_t off, uint64_t len,
+                         const uint8_t **p, uint64_t *resolved_len);
 uint64_t code_db_stored_code_length(const lbits h);
+uint64_t code_db_stored_code_offset(const lbits h);
+uint64_t code_db_stored_jumpdest_ref(const lbits h);
+uint64_t code_db_byte_at(uint64_t off);
 const uint8_t *code_db_code_by_words(const uint64_t key_be[4], uint64_t *len_out);
 unit code_db_copy_stored_code_to_memory(const lbits h, uint64_t dst, uint64_t off, uint64_t len);
 void code_db_read_delegation(lbits *rop, const lbits h);
 
-/* Per-frame executable code views. */
-uint64_t frame_code_bind_stored(const lbits h);
-uint64_t frame_code_bind_memory(uint64_t off, uint64_t len);
-uint64_t frame_code_bind_tx_input(const unit u);
-unit frame_code_clear(const unit u);
-uint64_t frame_code_byte(uint64_t i);
-uint64_t frame_code_length(const unit u);
-bool frame_jumpdest_valid(uint64_t i);
-unit frame_code_copy_to_memory(uint64_t dst, uint64_t off, uint64_t len);
-void frame_push_immediate_word(lbits *rop, uint64_t i, uint64_t n);
+/* A JumpdestRef is a one-based word offset into the flat bitmap arena.
+ * `code_len` supplies the bound associated with the same code-hash entry. */
+bool jumpdest_ref_contains(uint64_t ref, uint64_t code_len, uint64_t i);
 #endif

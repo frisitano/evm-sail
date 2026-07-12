@@ -94,8 +94,8 @@ unit mem_clear(const unit u) {
 }
 
 /* enter a sub-call: checkpoint a fresh frame after the caller's established
- * extent; the pending calldata descriptor (set by the caller just before) is
- * adopted */
+ * extent. Calldata and frame code are Sail ByteSlice registers, so memory has
+ * no per-frame source descriptor to adopt. */
 unit mem_frame_enter(const unit u) {
   (void)u;
   if (h_top + 1 < MEMORY_MAXDEPTH) {
@@ -237,7 +237,7 @@ unit mem_write_byte(uint64_t off, uint64_t v) {
   return UNIT;
 }
 
-/* ---- generic slice reads (calldata is a Sail-side ByteSlice now) -------- */
+/* ---- generic ByteSlice reads (calldata and executable frame code) ------- */
 
 /* a raw byte of the arena at an ABSOLUTE offset (read_byte_slice's
  * MemoryArenaSource view) */
@@ -251,6 +251,15 @@ const uint8_t *mem_arena_region(uint64_t off, uint64_t len) {
   return arena + off;
 }
 
+/* one byte at slice offset i, zero past the slice's end */
+uint64_t slice_byte_at(uint64_t kind, uint64_t off, uint64_t len, uint64_t i) {
+  if (i >= len) return 0;
+  const uint8_t *p = NULL;
+  uint64_t resolved_len = 0;
+  return evmsail_resolve_byte_source(kind, off + i, 1, &p, &resolved_len) &&
+         p && resolved_len == 1 ? *p : 0;
+}
+
 /* the 32-byte word at slice offset i, zero-padded past the slice's end */
 void slice_load_word(lbits *rop, uint64_t kind, uint64_t off, uint64_t len, uint64_t i) {
   uint8_t b[32] = {0};
@@ -262,6 +271,23 @@ void slice_load_word(lbits *rop, uint64_t kind, uint64_t off, uint64_t len, uint
     if (evmsail_resolve_byte_source(kind, off + i, n, &p, &rl) && rl == n) memcpy(b, p, n);
   }
   be_bytes_to_lbits(rop, 256, b, 32);
+}
+
+/* the n-byte big-endian word at slice offset i, right-aligned and zero-padded
+ * past the slice's end (PUSH0..PUSH32) */
+void slice_load_n_word(lbits *rop, uint64_t kind, uint64_t off, uint64_t len,
+                       uint64_t i, uint64_t n) {
+  uint8_t b[32] = {0};
+  uint64_t cnt = n < 32 ? n : 32;
+  if (i < len) {
+    uint64_t m = len - i;
+    if (m > cnt) m = cnt;
+    const uint8_t *p = NULL;
+    uint64_t resolved_len = 0;
+    if (evmsail_resolve_byte_source(kind, off + i, m, &p, &resolved_len) &&
+        p && resolved_len == m) memcpy(b, p, m);
+  }
+  be_bytes_to_lbits(rop, 256, b, (size_t)cnt);
 }
 
 /* slice[i, i+n) into memory at dst, zero-filling past the slice's end. The

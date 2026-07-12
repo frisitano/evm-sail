@@ -80,6 +80,19 @@ static inline void lbits_to_le_words4(uint64_t w[4], const lbits v) {
 #endif
 }
 
+/* extract a bits(64) lbits as its scalar value */
+static inline uint64_t lbits_to_u64(const lbits v) {
+  sail_expect_len(v, 64);
+#ifdef SAIL_INT_LIMBS
+  return v.d[0];
+#else
+  uint64_t out = 0;
+  size_t n = 0;
+  mpz_export(&out, &n, -1, sizeof(out), 0, 0, *v.bits);
+  return out;
+#endif
+}
+
 /* build a 256-bit lbits from 4 little-endian-ordered words */
 static inline void le_words4_to_lbits(lbits *rop, const uint64_t w[4]) {
   rop->len = 256;
