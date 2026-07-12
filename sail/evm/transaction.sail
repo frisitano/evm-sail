@@ -28,14 +28,14 @@ let PER_EMPTY_ACCOUNT : gas = 25000 /* EIP-7702 PER_EMPTY_ACCOUNT_COST      */
  * nonzero count comes from the host (one C pass on the build backend) rather than
  * a Sail byte loop; zero bytes are the remainder. */
 function calldata_cost() -> gas = {
-    let n = txdata_size();
+    let n = txdata_len();
     let nz = unsigned(txdata_count_nonzero());
     to_gas(G_txdatazero * (n - nz) + G_txdatanonzero * nz)
 }
 
 /* EIP-7623 calldata tokens: each zero byte = 1 token, each nonzero byte = 4. */
 function calldata_tokens() -> int = {
-    let n = txdata_size();
+    let n = txdata_len();
     let nz = unsigned(txdata_count_nonzero());
     (n - nz) + 4 * nz
 }
@@ -52,7 +52,7 @@ function blob_hashes_versioned(xs : list(word)) -> bool =
     }
 
 /* intrinsic gas: tx input already loaded into the C buffer, so
- * calldata cost and the EIP-3860 initcode words read it via txdata_size. */
+ * calldata cost and the EIP-3860 initcode words read it via txdata_len. */
 function intrinsic_gas(tx : Transaction) -> gas = {
     let access_list_gas =   G_access_list_address
                           * list_len(tx.access_list_addresses)
@@ -60,7 +60,7 @@ function intrinsic_gas(tx : Transaction) -> gas = {
                           * list_len(tx.access_list_slots);
     let auth = PER_EMPTY_ACCOUNT * list_len(tx.authorizations); /* EIP-7702 */
     let base = G_transaction + calldata_cost() + access_list_gas + auth;
-    to_gas(if tx.is_create then base + G_txcreate + initcode_gas(txdata_size()) else base)
+    to_gas(if tx.is_create then base + G_txcreate + initcode_gas(txdata_len()) else base)
 }
 
 /* EIP-7702: apply one authorization (validate against current state, set/clear the
@@ -348,7 +348,7 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
            exceptional halt (all gas consumed, value transfer reverted). */
         let used = precompile_gas_tx_input(an, dlen);
         let ok : bool = if used <= gas_remaining then {
-                run_precompile_slice(an, tx_input_byte_slice(0, txdata_size()))
+                run_precompile_slice(an, tx_input_byte_slice(0, txdata_len()))
             } else {
                 false
             };
@@ -456,7 +456,7 @@ function process_transaction(tx : Transaction) -> Receipt = {
     /* Stage this tx's input into the owned C buffer in one op (no Sail byte loop
        on the build backend); gas, validity, calldata and initcode all read it
        from there during execution. */
-    let dlen = txdata_set_source(tx.input_src);
+    let dlen = txdata_bind(tx.input_src);
     let validity = check_transaction_validity(tx, dlen);
     if not_bool(validity.valid) then {
         return invalid_receipt()

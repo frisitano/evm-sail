@@ -248,7 +248,7 @@ function execute(op : ast) -> unit = match op {
     CALLDATALOAD() => {
         charge(G_verylow);
         let off = pop_int();
-        push(calldata_word(off))
+        push(calldata_load(off))
     },
     CALLDATACOPY() => {
         charge(G_verylow);
@@ -258,7 +258,7 @@ function execute(op : ast) -> unit = match op {
         charge(copy_gas(len));
         charge_expansion(dest, len);
         if is_running() then {
-            calldata_copy_to_mem(dest, off, len)
+            calldata_copy(dest, off, len)
         }
     },
     CODESIZE() => {
