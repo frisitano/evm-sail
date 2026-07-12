@@ -96,6 +96,12 @@ function is_running() -> bool = match frame_status {
     _ => false,
 }
 
+/* The current frame's calldata (I_d), as a REFERENCE: the tx input slice at
+ * the top level, a minted slice of the suspended caller's memory for
+ * sub-calls, EMPTY_SLICE for initcode frames. Saved/restored across
+ * sub-calls by the interpreter like the other frame registers. */
+register calldata : ByteSlice = EMPTY_SLICE
+
 /* ----------------------- frame memory (EVM view) ------------------------ */
 /* The EVM's view over the C-backed frame memory (host/memory.sail): every
  * access is guarded by is_running -- a failed charge_expansion sets the halt

@@ -5,7 +5,7 @@
 /* A ByteSlice denotes a byte sequence inside one of the host's C-backed
  * stores without materializing it; byte_source_kind is the scalar tag it
  * crosses the FFI under. */
-enum ByteSource = { WitnessSource, MemorySource, TxInputSource, ActiveCodeSource, TrieArenaSource, LogDataSource }
+enum ByteSource = { WitnessSource, MemorySource, TxInputSource, ActiveCodeSource, TrieArenaSource, LogDataSource, MemoryArenaSource }
 
 struct ByteSlice = {
     source : ByteSource,
@@ -24,6 +24,7 @@ function byte_source_kind(src : ByteSource) -> bits(64) =
         ActiveCodeSource => 0x0000000000000004,
         TrieArenaSource => 0x0000000000000005,
         LogDataSource => 0x0000000000000006,
+        MemoryArenaSource => 0x0000000000000007,
     }
 
 /* zero-length placeholder for unused value roles (subtree refs, deletes) */

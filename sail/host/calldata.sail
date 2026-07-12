@@ -2,19 +2,14 @@
 /* CALLDATA + TRANSACTION INPUT                                             */
 /*                                                                          */
 /* Two byte sources the evm layer reads but never mutates, both held as     */
-/* REFERENCES (ffi/memory.c) -- nothing on this path is copied.             */
+/* REFERENCES. The TX INPUT (ffi/memory.c): the transaction's data span     */
+/* (Transaction.input_src, usually the witness), BOUND once per tx; block   */
+/* system calls STAGE their 32-byte word instead (the one value with no     */
+/* backing span). CALLDATA (I_d) is a Sail-side ByteSlice -- the register   */
+/* lives in evm/machine.sail; the readers here take the slice as an         */
+/* argument and resolve it generically.                                     */
 /*                                                                          */
-/* TX INPUT: the transaction's data span (Transaction.input_src, usually    */
-/* the witness), BOUND once per tx; block system calls STAGE their 32-byte  */
-/* word instead (the one value that has no backing span). Intrinsic gas,    */
-/* create-tx initcode, and tx-level precompiles read it byte-addressed.     */
-/*                                                                          */
-/* CALLDATA (I_d): the current frame's input, a per-frame slice bound at    */
-/* call entry to a suspended caller-memory range, the empty string, or the  */
-/* whole tx input; served to CALLDATALOAD / CALLDATASIZE / CALLDATACOPY.    */
-/*                                                                          */
-/* Naming: `bind` = set a reference, `stage` = copy a value; the extern     */
-/* vals carry the C-level names, the functions the model-facing ones.       */
+/* Naming: `bind` = set a reference, `stage` = copy a value.                */
 /* Proof targets see the vals as bodyless axioms over abstract byte lists.  */
 /* ======================================================================== */
 
@@ -44,29 +39,48 @@ function txdata_byte(i : int) -> byte = txdata_byte_at(get_slice_int(64, i, 0))
 /* the bound input's length in bytes */
 function txdata_len() -> int = unsigned(txdata_length())
 
-/* ---- the current frame's calldata (bound per call) --------------------- */
+/* ---- generic slice reads (serve the calldata register) ----------------- */
 
-val calldata_bind_memory = impure { c: "calldata_bind_memory" } : (bits(64), bits(64)) -> unit
-val calldata_bind_empty = impure { c: "calldata_bind_empty" } : unit -> unit
-val calldata_bind_tx_input = impure { c: "calldata_bind_tx_input" } : unit -> unit
-val calldata_load_word = impure { c: "calldata_load_word" } : bits(64) -> word
-val calldata_copy_to_memory = impure { c: "calldata_copy_to_memory" } : (bits(64), bits(64), bits(64)) -> unit
+val slice_load_word = impure { c: "slice_load_word" } : (bits(64), bits(64), bits(64), bits(64)) -> word
+val slice_copy_to_memory = impure { c: "slice_copy_to_memory" } : (
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+        bits(64),
+    ) -> unit
+val mem_establish_absolute = impure { c: "mem_establish_absolute" } : (bits(64), bits(64)) -> bits(64)
 
-/* bind the NEXT frame's calldata to a range of the (about-to-suspend)
- * caller's memory: staged pending, adopted at mem_frame_enter */
-function calldata_bind_next(off : int, len : int) -> unit =
-    calldata_bind_memory(get_slice_int(64, off, 0), get_slice_int(64, len, 0))
+/* mint a slice of THIS frame's memory [off, off+len): the range is
+ * established (it is already gas-charged) and referenced by ABSOLUTE arena
+ * offset -- the frame is about to suspend, so the bytes are frozen for the
+ * reader. EMPTY_SLICE on overflow/OOM (fail-closed). */
+function mem_slice(off : int, len : int) -> ByteSlice =
+    if len == 0 then {
+        EMPTY_SLICE
+    } else {
+        let abs = mem_establish_absolute(get_slice_int(64, off, 0), get_slice_int(64, len, 0));
+        if abs == 0xFFFFFFFFFFFFFFFF then {
+            EMPTY_SLICE
+        } else {
+            struct { source = MemoryArenaSource, off = abs, len = get_slice_int(64, len, 0) }
+        }
+    }
 
-/* CALLDATALOAD: the 32-byte word at offset `off`. A past-end read is all
- * zeros; the offset passes through clamp_source_offset (host/memory.sail)
- * so 64-bit truncation cannot wrap a huge offset back into real data. */
-function calldata_load(off : int) -> word =
-    calldata_load_word(get_slice_int(64, clamp_source_offset(off), 0))
+/* CALLDATALOAD: the 32-byte word of slice `s` at offset `off`, zero-padded
+ * past the end. The offset passes through clamp_source_offset
+ * (host/memory.sail) so 64-bit truncation cannot wrap into real data. */
+function calldata_load(s : ByteSlice, off : int) -> word =
+    slice_load_word(byte_source_kind(s.source), s.off, s.len, get_slice_int(64, clamp_source_offset(off), 0))
 
-/* CALLDATACOPY: calldata[off, off+len) into memory at dst, zero-filling
+/* CALLDATACOPY: slice `s` [off, off+len) into memory at dst, zero-filling
  * past the end (EELS buffer_read); same clamp as calldata_load. */
-function calldata_copy(dst : int, off : int, len : int) -> unit =
-    calldata_copy_to_memory(
+function calldata_copy(s : ByteSlice, dst : int, off : int, len : int) -> unit =
+    slice_copy_to_memory(
+        byte_source_kind(s.source),
+        s.off,
+        s.len,
         get_slice_int(64, dst, 0),
         get_slice_int(64, clamp_source_offset(off), 0),
         get_slice_int(64, len, 0),

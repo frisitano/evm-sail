@@ -360,7 +360,7 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
             exc_halt(OutOfGas)
         }
     } else {
-        calldata_bind_tx_input();
+        calldata = tx_input_byte_slice(0, txdata_len());
         message =
             struct {
                 caller = sender,

@@ -17,6 +17,7 @@ enum evmsail_byte_source_kind {
   EVMSAIL_SOURCE_ACTIVE_CODE = 4,
   EVMSAIL_SOURCE_TRIE_ARENA = 5,
   EVMSAIL_SOURCE_LOG_DATA = 6,
+  EVMSAIL_SOURCE_MEMORY_ARENA = 7,
 };
 
 void host_keccak256_bytes(uint64_t out[4], const uint8_t *p, uint64_t len);

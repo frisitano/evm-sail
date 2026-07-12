@@ -209,6 +209,7 @@ val log_append = impure { c: "log_append_record" } : (address, list(word), Bytes
 val log_drop_last = impure { c: "log_drop_last" } : unit -> unit
 val read_logs = impure { c: "logs_read_all" } : unit -> list(LogEntry)
 val log_arena_byte = impure { c: "log_arena_byte" } : bits(64) -> bits(8) /* read_byte_slice's LogDataSource view */
+val mem_arena_byte_read = impure { c: "mem_arena_byte" } : bits(64) -> bits(8) /* read_byte_slice's MemoryArenaSource view */
 
 /* SELFDESTRUCT set: ordered (push / drop-last on revert via JSelfD), with a
  * membership test and index enumeration for the EIP-6780 tx-end finalization. */

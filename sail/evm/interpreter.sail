@@ -472,11 +472,12 @@ function run_call(mode : int) -> unit = {
                     is_static = child_static,
                     depth = saved_call_depth + 1,
                 };
-            if is_running() then {
-                calldata_bind_next(args_off, args_len)
-            } else {
-                calldata_bind_empty()
-            };
+            let saved_calldata = calldata;
+            calldata = if is_running() then {
+                    mem_slice(args_off, args_len)
+                } else {
+                    EMPTY_SLICE
+                };
 
             /* enter the child frame: pc at 0, its own gas/stack/memory, code
                selected by the EIP-7702 delegation rule, depth bumped. */
@@ -500,6 +501,7 @@ function run_call(mode : int) -> unit = {
             pc = saved_pc;
             stack_frame_leave();
             message = saved_message;
+            calldata = saved_calldata;
             frame_status = saved_frame_status;
             mem_frame_leave();
             frame_code_resync();
@@ -656,8 +658,9 @@ function run_create(is2 : bool) -> unit = {
                     };
 
                 /* the initcode frame has no calldata; its executing code is the
-                   initcode copied from memory[off, off+len). */
-                calldata_bind_empty();
+                   initcode referenced from memory[off, off+len). */
+                let saved_calldata = calldata;
+                calldata = EMPTY_SLICE;
                 let ic_len = if is_running() then {
                         frame_code_pend_mem(off, len)
                     } else {
@@ -695,6 +698,7 @@ function run_create(is2 : bool) -> unit = {
                 pc = saved_pc;
                 stack_frame_leave();
                 message = saved_message;
+                calldata = saved_calldata;
                 frame_status = saved_frame_status;
                 mem_frame_leave();
                 frame_code_resync();

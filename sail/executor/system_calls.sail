@@ -35,7 +35,7 @@ function enter_system_call_frame(tgt : address, input_len : int) -> unit = {
     returndata_reset_all();
     memory_size = 0;
     frame_status = Running();
-    calldata_bind_tx_input(); /* AFTER mem_clear: it points the base frame's calldata at the slot */
+    calldata = tx_input_byte_slice(0, txdata_len()); /* the staged system-call word */
     message =
         struct {
             caller = SYSTEM_ADDRESS,

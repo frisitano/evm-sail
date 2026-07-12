@@ -391,9 +391,3 @@ void frame_push_immediate_word(lbits *rop, uint64_t i, uint64_t n) {
   for (uint64_t k = 0; k < cnt; k++) b[k] = (uint8_t)fc_byte_at(f, i + k);
   be_bytes_to_lbits(rop, 256, b, (size_t)cnt);
 }
-/* CALLDATALOAD: the 32-byte word at calldata offset i (zero-padded) */
-void calldata_load_word(lbits *rop, uint64_t i) {
-  uint8_t b[32];
-  for (int k = 0; k < 32; k++) b[k] = (uint8_t)cd_byte(i + (uint64_t)k);
-  be_bytes_to_lbits(rop, 256, b, 32);
-}

@@ -15,12 +15,11 @@ const uint8_t *mem_region(uint64_t off, uint64_t len);  /* ensure + read ptr   *
 uint8_t *hm_wr(uint64_t off, uint64_t len);        /* ensure + write ptr  */
 uint64_t mem_establish_absolute(uint64_t off, uint64_t len);
 const uint8_t *mem_arena_ptr(uint64_t abs);
+uint64_t mem_arena_byte(uint64_t off);
+const uint8_t *mem_arena_region(uint64_t off, uint64_t len);
 unit mem_move(uint64_t dst, uint64_t src, uint64_t len);  /* MCOPY memmove */
 void mem_load_word(lbits *rop, uint64_t off);      /* MLOAD: 32-byte BE word  */
 unit mem_store_word(uint64_t off, const lbits w);  /* MSTORE: 32-byte BE word */
-unit calldata_bind_memory(uint64_t off, uint64_t len);   /* next child's calldata = mem range */
-unit calldata_bind_empty(const unit u);
-unit calldata_bind_tx_input(const unit u);
 /* stage the whole tx input in one call (no Sail byte loop):
  *   txdata_stage_source: copy a resolved byte source (the witness span for a
  *     stateless tx; a self-reference for the already-staged native-runner input)
@@ -35,6 +34,5 @@ uint64_t txd_copy(uint8_t *dst, uint64_t cap);
 uint64_t txdata_byte_at(uint64_t i);
 uint64_t txdata_length(const unit u);
 const uint8_t *txd_rd(uint64_t off, uint64_t len);
-uint64_t cd_byte(uint64_t i);
 unit calldata_copy_to_memory(uint64_t dst, uint64_t off, uint64_t len);
 #endif

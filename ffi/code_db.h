@@ -27,5 +27,4 @@ uint64_t frame_code_length(const unit u);
 bool frame_jumpdest_valid(uint64_t i);
 unit frame_code_copy_to_memory(uint64_t dst, uint64_t off, uint64_t len);
 void frame_push_immediate_word(lbits *rop, uint64_t i, uint64_t n);
-void calldata_load_word(lbits *rop, uint64_t i);
 #endif

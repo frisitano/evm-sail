@@ -55,18 +55,7 @@ static int f_establish(uint64_t end) {
   return 1;
 }
 
-/* ---- CALLDATA: a per-frame ABSOLUTE arena slice ----
- * src: -2 = empty, -1 = the transaction input reference, 0 = arena bytes at
- * an absolute offset. The caller ESTABLISHES the args range at bind time (it
- * is already gas-charged, and establishment zero-fills the never-written
- * part), so the slice needs no frame identity and no bound beyond its own
- * length; the caller is suspended while its child reads, so the bytes are
- * frozen. */
 uint8_t *hm_wr(uint64_t off, uint64_t len); /* fwd decl (defined below) */
-
-typedef struct { int src; uint64_t off, len; } hm_cd;
-static hm_cd cd[MEMORY_MAXDEPTH];
-static hm_cd cd_pending = { -2, 0, 0 };
 
 /* The current transaction's input as a SOURCE REFERENCE -- the witness span
  * the decoder carried on Transaction.input_src, never copied. Block system
@@ -101,8 +90,6 @@ unit mem_clear(const unit u) {
   h_top = 0;
   f_base[0] = 0;
   f_len[0] = 0;
-  cd[0].src = -2; cd[0].off = 0; cd[0].len = 0;
-  cd_pending = cd[0];
   return UNIT;
 }
 
@@ -115,9 +102,7 @@ unit mem_frame_enter(const unit u) {
     h_top++;
     f_base[h_top] = f_base[h_top - 1] + f_len[h_top - 1];
     f_len[h_top] = 0;
-    cd[h_top] = cd_pending;
   }
-  cd_pending.src = -2; cd_pending.off = 0; cd_pending.len = 0;
   return UNIT;
 }
 
@@ -130,27 +115,6 @@ unit mem_frame_leave(const unit u) {
   return UNIT;
 }
 
-/* the NEXT child's calldata := this frame's memory [off, off+len), as an
- * absolute arena slice (fail-closed empty on overflow/OOM) */
-unit calldata_bind_memory(uint64_t off, uint64_t len) {
-  if (len == 0 || off > UINT64_MAX - len || !f_establish(off + len)) {
-    cd_pending.src = -2; cd_pending.off = 0; cd_pending.len = 0;
-    return UNIT;
-  }
-  cd_pending.src = 0; cd_pending.off = f_base[h_top] + off; cd_pending.len = len;
-  return UNIT;
-}
-unit calldata_bind_empty(const unit u) {
-  (void)u;
-  cd_pending.src = -2; cd_pending.off = 0; cd_pending.len = 0;
-  return UNIT;
-}
-/* the CURRENT (tx-level) frame's calldata := the bound tx input */
-unit calldata_bind_tx_input(const unit u) {
-  (void)u;
-  cd[h_top].src = -1; cd[h_top].off = 0; cd[h_top].len = txin.len;
-  return UNIT;
-}
 /* bind the tx input BY REFERENCE (no copy). Fail-closed on a bad or
  * self-referential source, matching the empty-input path. */
 uint64_t txdata_bind_source(uint64_t kind, uint64_t off, uint64_t len) {
@@ -193,32 +157,6 @@ const uint8_t *txd_rd(uint64_t off, uint64_t len) {
   static const uint8_t zero = 0;
   if (len == 0) return &zero;
   return txin_region(off, len);
-}
-
-/* calldata byte i (0 past the slice's end; the referenced bytes were
- * established at bind time) */
-static uint8_t cd_at(const hm_cd *c, uint64_t i) {
-  if (i >= c->len) return 0;
-  if (c->src == -1) return txin_byte(i);
-  if (c->src == 0) return arena[c->off + i];
-  return 0;
-}
-uint64_t cd_byte(uint64_t i) { return cd_at(&cd[h_top], i); }
-
-/* CALLDATACOPY: calldata[off..off+len) -> memory[dst..), zero-padded.
- * `off` arrives truncated to 64 bits from a 256-bit EVM offset; a past-end
- * source offset must zero-fill the WHOLE dest, so guard against the uint64
- * wraparound of `off + k` re-aliasing back into the real calldata. */
-unit calldata_copy_to_memory(uint64_t dst, uint64_t off, uint64_t len) {
-  if (!len) return UNIT;
-  uint8_t *d = hm_wr(dst, len);
-  if (!d) return UNIT;
-  const hm_cd *c = &cd[h_top];
-  for (uint64_t k = 0; k < len; k++) {
-    uint64_t i = off + k;
-    d[k] = (i < off) ? 0 : cd_at(c, i); /* i < off => uint64 overflow => past-end */
-  }
-  return UNIT;
 }
 
 /* bits(64) offset -> bits(8) byte (0 beyond the established extent) */
@@ -296,5 +234,52 @@ unit mem_move(uint64_t dst, uint64_t src, uint64_t len) {
 unit mem_write_byte(uint64_t off, uint64_t v) {
   if (off == UINT64_MAX || !f_establish(off + 1)) return UNIT;
   arena[f_base[h_top] + off] = (uint8_t)(v & 0xff);
+  return UNIT;
+}
+
+/* ---- generic slice reads (calldata is a Sail-side ByteSlice now) -------- */
+
+/* a raw byte of the arena at an ABSOLUTE offset (read_byte_slice's
+ * MemoryArenaSource view) */
+uint64_t mem_arena_byte(uint64_t off) {
+  return (off < arena_cap) ? (uint64_t)arena[off] : 0;
+}
+
+/* a READ view of established arena bytes at an absolute offset */
+const uint8_t *mem_arena_region(uint64_t off, uint64_t len) {
+  if (len == 0 || off > arena_cap || len > arena_cap - off) return NULL;
+  return arena + off;
+}
+
+/* the 32-byte word at slice offset i, zero-padded past the slice's end */
+void slice_load_word(lbits *rop, uint64_t kind, uint64_t off, uint64_t len, uint64_t i) {
+  uint8_t b[32] = {0};
+  if (i < len) {
+    uint64_t n = len - i;
+    if (n > 32) n = 32;
+    const uint8_t *p = NULL;
+    uint64_t rl = 0;
+    if (evmsail_resolve_byte_source(kind, off + i, n, &p, &rl) && rl == n) memcpy(b, p, n);
+  }
+  be_bytes_to_lbits(rop, 256, b, 32);
+}
+
+/* slice[i, i+n) into memory at dst, zero-filling past the slice's end. The
+ * destination is established FIRST (it may realloc the arena); the source
+ * pointer is taken after and used immediately. */
+unit slice_copy_to_memory(uint64_t kind, uint64_t off, uint64_t len, uint64_t dst, uint64_t i, uint64_t n) {
+  if (!n) return UNIT;
+  uint8_t *d = hm_wr(dst, n);
+  if (!d) return UNIT;
+  uint64_t m = 0;
+  if (i < len) {
+    m = len - i;
+    if (m > n) m = n;
+    const uint8_t *p = NULL;
+    uint64_t rl = 0;
+    if (evmsail_resolve_byte_source(kind, off + i, m, &p, &rl) && rl == m) memmove(d, p, m);
+    else m = 0;
+  }
+  memset(d + m, 0, n - m);
   return UNIT;
 }

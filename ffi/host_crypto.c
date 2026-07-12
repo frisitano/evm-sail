@@ -497,7 +497,7 @@ unit node_asm_push_value_source(uint64_t kind, uint64_t off, uint64_t len) {
 int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
                                 const uint8_t **p, uint64_t *resolved_len) {
   const uint8_t *src = NULL;
-  if (kind < EVMSAIL_SOURCE_WITNESS || kind > EVMSAIL_SOURCE_LOG_DATA) {
+  if (kind < EVMSAIL_SOURCE_WITNESS || kind > EVMSAIL_SOURCE_MEMORY_ARENA) {
     return 0;
   }
   if (len == 0) {
@@ -516,6 +516,8 @@ int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
     src = TARENA_buf + off;
   } else if (kind == EVMSAIL_SOURCE_LOG_DATA) {
     src = log_data_region(off, len);
+  } else if (kind == EVMSAIL_SOURCE_MEMORY_ARENA) {
+    src = mem_arena_region(off, len);
   } else {
     return 0;
   }
