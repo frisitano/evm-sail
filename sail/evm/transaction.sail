@@ -348,7 +348,7 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
            exceptional halt (all gas consumed, value transfer reverted). */
         let used = precompile_gas_tx_input(an, dlen);
         let ok : bool = if used <= gas_remaining then {
-                run_precompile_tx_input(an)
+                run_precompile_slice(an, tx_input_byte_slice(0, txdata_size()))
             } else {
                 false
             };

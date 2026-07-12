@@ -34,9 +34,6 @@ function txdata_byte(i : int) -> byte = txdata_byte_at(get_slice_int(64, i, 0))
 
 function txdata_size() -> int = unsigned(txdata_length())
 
-function run_precompile_tx_input(num : int) -> bool =
-    run_precompile_slice(num, tx_input_byte_slice(0, txdata_size()))
-
 /* ---- the current frame's calldata (bound per call) --------------------- */
 
 val calldata_bind_memory = impure { c: "calldata_bind_memory" } : (bits(64), bits(64)) -> unit
