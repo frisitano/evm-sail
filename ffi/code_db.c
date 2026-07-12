@@ -179,11 +179,32 @@ typedef struct {
   const uint8_t *p;
   const uint8_t *bm;
   uint32_t len;
+  int kind;     /* FC_NONE / FC_STORE (p) / FC_ARENA (off) / FC_TXIN (off) */
+  uint64_t off; /* absolute arena offset / tx-input offset */
 } fc_desc;
 
+enum { FC_NONE = 0, FC_STORE, FC_ARENA, FC_TXIN };
+
 static fc_desc fc[FC_MAXDEPTH];
-/* per-depth inline buffers for memory-/txdata-sourced initcode */
-static struct { uint8_t *p; uint8_t *bm; uint32_t cap; } fc_inl[FC_MAXDEPTH];
+/* per-depth JUMPDEST bitmaps for memory-/txdata-sourced initcode (the CODE
+ * itself is a reference; only the bitmap is materialized, len/8+1 bytes) */
+static struct { uint8_t *bm; uint32_t cap; } fc_inl[FC_MAXDEPTH];
+
+uint64_t mem_establish_absolute(uint64_t off, uint64_t len);
+const uint8_t *mem_arena_ptr(uint64_t abs);
+const uint8_t *txd_rd(uint64_t off, uint64_t len);
+
+/* a contiguous READ view of code[off, off+len), NULL out of range. Arena
+ * pointers are taken per call (growth-safe: offsets, not pointers, persist). */
+static const uint8_t *fc_region(const fc_desc *f, uint64_t off, uint64_t len) {
+  if (len == 0 || off > f->len || len > (uint64_t)f->len - off) return NULL;
+  switch (f->kind) {
+  case FC_STORE: return f->p + off;
+  case FC_ARENA: return mem_arena_ptr(f->off + off);
+  case FC_TXIN: return txd_rd(f->off + off, len);
+  }
+  return NULL;
+}
 
 static fc_desc *fc_cur(void) { return &fc[hm_depth(UNIT)]; }
 
@@ -196,25 +217,27 @@ int code_db_frame_resolve_code(uint64_t off, uint64_t len,
     if (resolved_len) *resolved_len = 0;
     return 1;
   }
-  if (!f->p || off > f->len || len > (uint64_t)f->len - off) return 0;
-  if (p) *p = f->p + off;
+  const uint8_t *src = fc_region(f, off, len);
+  if (!src) return 0;
+  if (p) *p = src;
   if (resolved_len) *resolved_len = len;
   return 1;
 }
 
 static uint8_t fc_byte_at(const fc_desc *f, uint64_t i) {
-  return (i < f->len) ? f->p[i] : 0;
+  const uint8_t *p = fc_region(f, i, 1);
+  return p ? *p : 0;
 }
 
 static void fc_build_bitmap_bytes(uint8_t *bm, const uint8_t *p, uint32_t len) {
   code_db_build_jumpdest_bitmap(bm, p, len);
 }
-static void fc_inl_fit(int d, uint32_t need) {
+static void fc_inl_fit(int d, uint32_t code_len) {
+  uint32_t need = code_len / 8 + 1;
   if (fc_inl[d].cap < need) {
-    uint32_t n = fc_inl[d].cap ? fc_inl[d].cap : 1024;
+    uint32_t n = fc_inl[d].cap ? fc_inl[d].cap : 128;
     while (n < need) n <<= 1;
-    fc_inl[d].p = (uint8_t *)realloc(fc_inl[d].p, n);
-    fc_inl[d].bm = (uint8_t *)realloc(fc_inl[d].bm, n / 8 + 1);
+    fc_inl[d].bm = (uint8_t *)realloc(fc_inl[d].bm, n);
     fc_inl[d].cap = n;
   }
 }
@@ -227,49 +250,54 @@ uint64_t frame_code_bind_stored(const lbits h) {
     lbits_to_be_words4(key, h);
     code_db_ent *e = code_db_find(key);
     if (e->used && e->len) {
+      f->kind = FC_STORE;
       f->p = e->p;
       f->bm = e->bm;
       f->len = e->len;
       return f->len;
     }
   }
-  f->p = NULL; f->bm = NULL; f->len = 0;
+  f->kind = FC_NONE; f->p = NULL; f->bm = NULL; f->len = 0;
   return 0;
 }
-/* the NEXT child frame's code := a copy of THIS frame's memory [off, off+len).
- * Code is immutable once the frame starts, so we avoid keeping a pointer into
- * mutable caller memory even though the caller is suspended while the child
- * runs. */
+/* the NEXT child frame's code := THIS frame's memory [off, off+len) BY
+ * REFERENCE: the caller establishes the range (already gas-charged) and the
+ * descriptor keeps its absolute arena offset -- the caller is suspended and
+ * its region frozen while the child executes, so the bytes cannot change.
+ * Only the JUMPDEST bitmap is materialized (one pass, len/8 bytes). */
 uint64_t frame_code_bind_memory(uint64_t off, uint64_t len) {
   int child = (int)hm_depth(UNIT) + 1;
-  if (child >= FC_MAXDEPTH) return 0;
+  if (child >= FC_MAXDEPTH || len > UINT32_MAX) return 0;
   fc_desc *f = &fc[child];
-  if (!len) { f->p = NULL; f->bm = NULL; f->len = 0; return 0; }
-  const uint8_t *src = mem_region(off, len);
+  f->kind = FC_NONE; f->p = NULL; f->bm = NULL; f->len = 0;
+  if (!len) return 0;
+  uint64_t abs = mem_establish_absolute(off, len);
+  if (abs == UINT64_MAX) return 0;
   fc_inl_fit(child, (uint32_t)len);
-  memcpy(fc_inl[child].p, src, (uint32_t)len);
-  fc_build_bitmap_bytes(fc_inl[child].bm, fc_inl[child].p, (uint32_t)len);
-  f->p = fc_inl[child].p; f->bm = fc_inl[child].bm; f->len = (uint32_t)len;
+  fc_build_bitmap_bytes(fc_inl[child].bm, mem_arena_ptr(abs), (uint32_t)len);
+  f->kind = FC_ARENA; f->off = abs; f->bm = fc_inl[child].bm; f->len = (uint32_t)len;
   return len;
 }
-/* current frame's code := the streamed tx input (a create-tx's initcode) */
+/* current frame's code := the tx input reference (a create-tx's initcode) */
 uint64_t frame_code_bind_tx_input(const unit u) {
   (void)u;
   int d = (int)hm_depth(UNIT);
   fc_desc *f = &fc[d];
+  f->kind = FC_NONE; f->p = NULL; f->bm = NULL; f->len = 0;
   uint64_t len64 = txdata_length(UNIT);
   uint32_t len = len64 > UINT32_MAX ? UINT32_MAX : (uint32_t)len64;
-  if (!len) { f->p = NULL; f->bm = NULL; f->len = 0; return 0; }
+  if (!len) return 0;
+  const uint8_t *src = txd_rd(0, len);
+  if (!src) return 0;
   fc_inl_fit(d, len);
-  txd_copy(fc_inl[d].p, len);
-  fc_build_bitmap_bytes(fc_inl[d].bm, fc_inl[d].p, len);
-  f->p = fc_inl[d].p; f->bm = fc_inl[d].bm; f->len = len;
+  fc_build_bitmap_bytes(fc_inl[d].bm, src, len);
+  f->kind = FC_TXIN; f->off = 0; f->bm = fc_inl[d].bm; f->len = len;
   return len;
 }
 unit frame_code_clear(const unit u) {
   (void)u;
   fc_desc *f = fc_cur();
-  f->p = NULL; f->bm = NULL; f->len = 0;
+  f->kind = FC_NONE; f->p = NULL; f->bm = NULL; f->len = 0;
   return UNIT;
 }
 

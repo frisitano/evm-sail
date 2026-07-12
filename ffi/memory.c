@@ -229,6 +229,20 @@ uint64_t mem_read_byte(uint64_t off) {
 /* current call-frame depth (the returndata slots in returndata.c key off it) */
 uint64_t hm_depth(const unit u) { (void)u; return (uint64_t)h_top; }
 
+/* establish [off, off+len) of the CURRENT frame and return its ABSOLUTE
+ * arena offset (UINT64_MAX on overflow/OOM). Absolute offsets stay valid
+ * across arena growth; take pointers per read (mem_arena_ptr). */
+uint64_t mem_establish_absolute(uint64_t off, uint64_t len) {
+  if (len == 0 || off > UINT64_MAX - len || !f_establish(off + len)) return UINT64_MAX;
+  return (uint64_t)f_base[h_top] + off;
+}
+
+/* a raw pointer to an ESTABLISHED arena byte (valid until the next
+ * establishment reallocs) */
+const uint8_t *mem_arena_ptr(uint64_t abs) {
+  return arena + abs;
+}
+
 /* establish + a READ pointer to [off, off+len) of the current frame */
 const uint8_t *mem_region(uint64_t off, uint64_t len) {
   static const uint8_t zero = 0;
