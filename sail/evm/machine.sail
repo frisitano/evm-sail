@@ -24,7 +24,7 @@ register call_depth : int = 0
  * inserted. Frame creators supply this value; the interpreter only reads it.
  * Keeping the pair in one register makes mismatched bytes/analysis
  * unrepresentable during frame save and restore. */
-register frame_code : IndexedCode = EMPTY_INDEXED_CODE
+register frame_code : Code = EMPTY_CODE
 
 function frame_code_len() -> int = unsigned(frame_code.bytes.len)
 

@@ -32,11 +32,3 @@ val mem_move = impure { c: "mem_move" } : (bits(64), bits(64), bits(64)) -> unit
  * ONE crossing (YP 9.4.1; EELS memory_read_bytes / memory_write) */
 val mem_load_word = impure { c: "mem_load_word" } : bits(64) -> word
 val mem_store_word = impure { c: "mem_store_word" } : (bits(64), word) -> unit
-
-/* Beyond-any-source sentinel (2^24 > any code/calldata/returndata length):
- * huge source offsets clamp here so the 64-bit truncation at the FFI cannot
- * wrap them back into real data; a past-end source reads as zeros /
- * zero-fills its destination (EELS buffer_read). */
-let SOURCE_PAST_END : int = 16777216
-
-function clamp_source_offset(off : int) -> int = if off > SOURCE_PAST_END then { SOURCE_PAST_END } else { off }

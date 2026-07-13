@@ -74,7 +74,7 @@ function k_blockhash(number : int) -> hash = {
         if offset > k_n_headers then {
             throw InvalidBlock(WitnessDeficient)
         } else {
-            headerhash_get(get_slice_int(64, offset - 1, 0))
+            ancestor_hash_read(get_slice_int(8, offset - 1, 0))
         }
     }
 }

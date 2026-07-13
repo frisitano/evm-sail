@@ -1,9 +1,10 @@
 /* C-backed execution-time kernel collections for evm-sail.
  *
- * The EIP-2929 warm address/slot sets, the LOG series, the SELFDESTRUCT and
- * EIP-6780 created-this-tx address sets, and the call-frame journal (undo log)
- * were Sail registers holding mutable data buffers. They now live here, behind
- * the abstract host interface declared inline in sail/host/state.sail. This is
+ * The EIP-2929 warm address/slot sets, the LOG series, and the call-frame
+ * journal (undo log) were Sail registers holding mutable data buffers. They
+ * now live here, behind
+ * the abstract host interfaces declared in sail/host/state.sail and
+ * sail/host/environment.sail. This is
  * a pure refactor: dedup, ordering, and call-frame revert semantics are
  * unchanged.
  *
@@ -37,8 +38,7 @@ static inline int word_eq(const word256 *a, const word256 *b) {
 
 /* ---------------------------- address vector ---------------------------- */
 /* order-insensitive membership set backed by a flat array (contains is a
- * linear scan, as the prior Sail linked list was); used for warm addresses and
- * the created-this-tx set. */
+ * linear scan, as the prior Sail linked list was); used for warm addresses. */
 typedef struct { word256 *v; uint32_t n, cap; } addr_vec;
 
 static int av_reserve(addr_vec *m, uint32_t need) {
@@ -96,32 +96,26 @@ unit warm_reset(const unit u) {
   warm_slot.n = 0;
   return UNIT;
 }
-bool warm_addr_contains(const lbits a) {
+bool warm_addr_touch(const lbits a) {
   word256 k = lb_word(a);
-  return av_find(&warm_addr, &k) >= 0;
-}
-unit warm_addr_insert(const lbits a) {
-  word256 k = lb_word(a);
+  if (av_find(&warm_addr, &k) >= 0) return true;
   av_append(&warm_addr, &k);
-  return UNIT;
+  return false;
 }
 unit warm_addr_remove(const lbits a) {
   word256 k = lb_word(a);
   av_remove_once(&warm_addr, &k);
   return UNIT;
 }
-bool warm_slot_contains(const lbits a, const lbits s) {
+bool warm_slot_touch(const lbits a, const lbits s) {
   word256 ka = lb_word(a), ks = lb_word(s);
-  return sv_find(&warm_slot, &ka, &ks) >= 0;
-}
-unit warm_slot_insert(const lbits a, const lbits s) {
-  word256 ka = lb_word(a), ks = lb_word(s);
+  if (sv_find(&warm_slot, &ka, &ks) >= 0) return true;
   if (sv_reserve(&warm_slot, warm_slot.n + 1)) {
     warm_slot.v[warm_slot.n].a = ka;
     warm_slot.v[warm_slot.n].s = ks;
     warm_slot.n++;
   }
-  return UNIT;
+  return false;
 }
 unit warm_slot_remove(const lbits a, const lbits s) {
   word256 ka = lb_word(a), ks = lb_word(s);
@@ -137,11 +131,11 @@ unit warm_slot_remove(const lbits a, const lbits s) {
  * stale slots are unreachable and no reset is needed. */
 static word256 hdrhash[256];
 
-unit headerhash_set(uint64_t j, const lbits h) {
+unit ancestor_hash_write(uint64_t j, const lbits h) {
   if (j < 256) hdrhash[j] = lb_word(h);
   return UNIT;
 }
-void headerhash_get(lbits *rop, uint64_t j) {
+void ancestor_hash_read(lbits *rop, uint64_t j) {
   static const word256 zero = {{0, 0, 0, 0}};
   word_out(rop, j < 256 ? &hdrhash[j] : &zero);
 }
@@ -262,8 +256,6 @@ void log_topic(lbits *rop, uint64_t i, uint64_t j) {
 uint64_t log_data_len(uint64_t i) { return (i < logs_n) ? logs[i].data_len : 0; }
 uint64_t log_data_off(uint64_t i) { return (i < logs_n) ? logs[i].data_off : 0; }
 
-uint64_t log_arena_byte(uint64_t off) { return (off < data_n) ? log_data[off] : 0; }
-
 /* bounds-checked view of the log-data arena (the LogDataSource resolver) */
 const uint8_t *log_data_region(uint64_t off, uint64_t len) {
   static const uint8_t empty = 0;
@@ -271,61 +263,21 @@ const uint8_t *log_data_region(uint64_t off, uint64_t len) {
   return len ? log_data + off : &empty;
 }
 
-/* ---------------------------- selfdestruct set -------------------------- */
-/* ordered (push/drop-last for revert), plus contains and enumeration */
-static addr_vec selfdestr;
-
-unit selfdestr_reset(const unit u) { (void)u; selfdestr.n = 0; return UNIT; }
-unit selfdestr_push(const lbits a) {
-  word256 k = lb_word(a);
-  av_append(&selfdestr, &k);
-  return UNIT;
-}
-unit selfdestr_drop_last(const unit u) {
-  (void)u;
-  if (selfdestr.n) selfdestr.n--;
-  return UNIT;
-}
-bool selfdestr_contains(const lbits a) {
-  word256 k = lb_word(a);
-  return av_find(&selfdestr, &k) >= 0;
-}
-uint64_t selfdestr_count(const unit u) { (void)u; return selfdestr.n; }
-void selfdestr_get(lbits *rop, uint64_t i) {
-  static const word256 zero = {{0, 0, 0, 0}};
-  word_out(rop, (i < selfdestr.n) ? &selfdestr.v[i] : &zero);
-}
-
-/* ---------------------------- created set ------------------------------- */
-static addr_vec created;
-
-unit created_reset(const unit u) { (void)u; created.n = 0; return UNIT; }
-unit created_insert(const lbits a) {
-  word256 k = lb_word(a);
-  if (av_find(&created, &k) < 0) av_append(&created, &k); /* idempotent set */
-  return UNIT;
-}
-bool created_contains(const lbits a) {
-  word256 k = lb_word(a);
-  return av_find(&created, &k) >= 0;
-}
-
 /* ------------------------------- journal -------------------------------- */
 /* tag values: C-internal row tags. The Sail side no longer sees them (its
  * journal boundary is journal_push/journal_pop over whole JEntry values);
  * ffi/journal_glue.c mirrors this enum (GJT_*) for its (en/de)coding. */
 enum {
-  JT_EMPTY = 0, JT_CHECK = 1, JT_ACCT = 2, JT_TRAN = 3, JT_WARMA = 4,
-  JT_WARMS = 5, JT_LOG = 6, JT_REFUND = 7, JT_SELFD = 8, JT_STOR = 9
+  JT_EMPTY = 0, JT_TRAN = 1, JT_WARMA = 2,
+  JT_WARMS = 3, JT_LOG = 4, JT_REFUND = 5
 };
 
 typedef struct {
   uint32_t tag;
-  word256 a;   /* address     (ACCT / TRAN / WARMA / WARMS)          */
-  word256 w0;  /* balance     (ACCT)    | slot (TRAN, WARMS)          */
-  word256 w1;  /* storageRoot (ACCT)    | value (TRAN)                */
-  word256 w2;  /* codeHash    (ACCT)                                  */
-  uint64_t n64; /* nonce (ACCT) | prior refund word (REFUND)          */
+  word256 a;
+  word256 w0;
+  word256 w1;
+  uint64_t n64;
 } jentry;
 
 static jentry *jrn;
@@ -346,35 +298,13 @@ static jentry *jrn_push(uint32_t tag) {
 }
 
 unit journal_reset(const unit u) { (void)u; jrn_n = 0; return UNIT; }
-unit journal_push_check(const unit u) { (void)u; jrn_push(JT_CHECK); return UNIT; }
-unit journal_push_acct(const lbits a, uint64_t nonce, const lbits bal, const lbits sroot, const lbits chash) {
-  jentry *e = jrn_push(JT_ACCT);
-  if (e) {
-    e->a = lb_word(a);
-    e->n64 = nonce;
-    e->w0 = lb_word(bal);
-    e->w1 = lb_word(sroot);
-    e->w2 = lb_word(chash);
-  }
-  return UNIT;
-}
+uint64_t journal_len(const unit u) { (void)u; return jrn_n; }
 unit journal_push_tran(const lbits a, const lbits slot, const lbits val) {
   jentry *e = jrn_push(JT_TRAN);
   if (e) {
     e->a = lb_word(a);
     e->w0 = lb_word(slot);
     e->w1 = lb_word(val);
-  }
-  return UNIT;
-}
-/* JStor: (address, slot, prior_current) -- storage revert restores current to
-   prior. Same layout as TRAN; decode reuses journal_top_slot / journal_top_val. */
-unit journal_push_stor(const lbits a, const lbits slot, const lbits prior) {
-  jentry *e = jrn_push(JT_STOR);
-  if (e) {
-    e->a = lb_word(a);
-    e->w0 = lb_word(slot);
-    e->w1 = lb_word(prior);
   }
   return UNIT;
 }
@@ -397,35 +327,14 @@ unit journal_push_refund(uint64_t old) {
   if (e) e->n64 = old;
   return UNIT;
 }
-unit journal_push_selfd(const unit u) { (void)u; jrn_push(JT_SELFD); return UNIT; }
-
-/* commit: drop the most recent checkpoint marker, folding the frame's entries
- * (everything above it) into the parent frame -- identical to the Sail loop
- * that spliced out the first JCheck and kept all other entries in order. */
-unit journal_commit(const unit u) {
-  (void)u;
-  for (uint32_t i = jrn_n; i > 0; i--) {
-    if (jrn[i - 1].tag == JT_CHECK) {
-      memmove(&jrn[i - 1], &jrn[i], (jrn_n - i) * sizeof(jentry));
-      jrn_n--;
-      break;
-    }
-  }
-  return UNIT;
-}
-
 uint64_t journal_top_tag(const unit u) { (void)u; return jrn_n ? jrn[jrn_n - 1].tag : JT_EMPTY; }
 unit journal_drop_top(const unit u) { (void)u; if (jrn_n) jrn_n--; return UNIT; }
 
 static const jentry *jrn_top(void) {
-  static const jentry zero = {0, {{0,0,0,0}}, {{0,0,0,0}}, {{0,0,0,0}}, {{0,0,0,0}}, 0};
+  static const jentry zero = {0};
   return jrn_n ? &jrn[jrn_n - 1] : &zero;
 }
 void journal_top_addr(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->a); }
-uint64_t journal_top_nonce(const unit u) { (void)u; return jrn_top()->n64; }
-void journal_top_balance(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->w0); }
-void journal_top_sroot(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->w1); }
-void journal_top_chash(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->w2); }
 void journal_top_slot(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->w0); }
 void journal_top_val(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->w1); }
 uint64_t journal_top_refund(const unit u) { (void)u; return jrn_top()->n64; }

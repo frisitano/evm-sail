@@ -21,7 +21,6 @@ Inductive ByteSourceKind : Type :=
 | MemorySource
 | TxInputSource
 | CodeSource
-| TrieArenaSource
 | LogDataSource
 | MemoryArenaSource
 | ReturndataSource.
@@ -166,7 +165,7 @@ Record ByteSourceContract := {
 
 (* sail/host/{memory,returndata,stack}.sail and sail/evm/machine.sail:
    mem_*, returndata_*, stack_*, generic ByteSlice views, and the active
-   IndexedCode value. *)
+   Code value. *)
 Record MemoryStackContract := {
   memory_state : Type;
   stack_state : Type;

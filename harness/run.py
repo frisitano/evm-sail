@@ -312,7 +312,7 @@ def main():
                     help="print at most this many individual FAIL lines (0 = unlimited)")
     ap.add_argument("--dump", action="store_true",
                     help="on a FAIL, re-run the case and print the post-run state snapshot "
-                         "(write-set accounts+storage, stack, memory) for analysis")
+                         "(materialized accounts+storage, stack, memory) for analysis")
     ap.add_argument("--jobs", type=int, default=1,
                     help="shard fixture FILES across N worker processes (each worker "
                          "loads its own library instance, so the process-global C "

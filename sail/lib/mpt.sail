@@ -1,151 +1,168 @@
-/* ======================================================================== */
-/* MERKLE-PATRICIA TRIE AND WORLD-STATE ROOTS: ONE IMPLEMENTATION           */
-/*                                                                          */
-/* Single-implementation contract: every trie root in the system is         */
-/* computed by ONE witness-native implementation with ONE public entry,     */
-/* trie_root(base_root, updates). It operates over comprehensive witnesses: */
-/* every hash reference that must be resolved is looked up in the witness   */
-/* node database, and any missing node material throws InvalidBlock         */
-/* (WitnessDeficient), surfaced by the harness. There is no from-scratch    */
-/* ("yellow paper") trie build; the Yellow Paper survives as documentation  */
-/* -- Appendix C.1 (hex-prefix) and Appendix D (Eq. 206 TRIE / Eq. 207 n /  */
-/* Eq. 208 c) are cited on the corresponding internal functions, and        */
-/* restricting trie_root to an empty base computes TRIE(I) directly (see    */
-/* the remark at trie_root).                                                */
-/*                                                                          */
-/* Layers:                                                                  */
-/* (1) trie primitives: nibbles, hex-prefix paths, node RLP composition,    */
-/* child references with the < 32-byte inline cap.                          */
-/* (2) the update list: ONE ordered external update type (leaf writes and   */
-/* leaf deletes over the composed map).                                     */
-/* (3) the item stream: the witness walker merges the pre-state trie with   */
-/* the update list along touched paths only and emits the post-state        */
-/* map in key order (leaves + untouched-subtree refs; deletes emit          */
-/* nothing); the trie builder recomposes the stream by recursive            */
-/* lookahead, canonical by construction. trie_root is the single entry.     */
-/* (4) world state: account/storage update collection and the state root    */
-/* (keyed by keccak256(address) / keccak256(slot), value                    */
-/* RLP([nonce, balance, storageRoot, codeHash])).                           */
-/* (5) lazy witness reads: authenticated Merkle walks resolving accounts    */
-/* and storage slots from the anchored parent root.                         */
-/*                                                                          */
-/* Design decision (final): post-state roots are computed in BATCH -- one   */
-/* walk + one build over the whole ordered update list -- NOT by per-op     */
-/* insert/delete maintenance. The Yellow Paper defines the trie             */
-/* declaratively over the final map (Appendix D; S D.1 leaves maintenance   */
-/* strategy to implementations); the batch passes touch and hash each       */
-/* node once, and a per-op delete would face the same blinded-sibling       */
-/* collapse problem while multiplying hashing. Do not migrate this to       */
-/* incremental per-operation insert/delete.                                 */
-/* ======================================================================== */
+/* Witness-native Ethereum MPT. `trie_root` merges ordered updates into an
+ * authenticated base trie and fails closed when a touched hash is absent.
+ * With an empty base the same builder computes Yellow Paper TRIE(I). */
 
-/* ======================================================================== */
-/* C-BACKED WITNESS NODE DATABASE (ffi/trie_node_db.c)                      */
-/*                                                                          */
-/* keccak(node) -> (offset, len) span into the SSZ witness buffer, an       */
-/* O(1)-amortized hash map (node_db_lookup below materializes the bytes via */
-/* ssz_bytes). Because the key is keccak(node), every walk from an          */
-/* authenticated root is itself a hash-chain proof -- this table plus the   */
-/* anchored parent-root register (k_parent_state_root) is the whole         */
-/* lazy-witness model. nodedb_len(kh) is 0 exactly when the key is absent   */
-/* (witness nodes are never empty). The `c:` extern binds only the C        */
-/* executable; proof targets see bodyless axioms.                           */
-/* ======================================================================== */
+/* keccak(node) -> span in the SSZ witness buffer. */
 val nodedb_reset = impure { c: "nodedb_reset" } : unit -> unit
 val nodedb_insert = impure { c: "nodedb_insert" } : (hash, bits(64), bits(64)) -> unit
 val nodedb_off = impure { c: "nodedb_off" } : hash -> bits(64)
 val nodedb_len = impure { c: "nodedb_len" } : hash -> bits(64)
 
-/* ======================================================================== */
-/* (1) trie primitives                                                      */
-/* ======================================================================== */
+/* Paths and hex-prefix encoding. */
 
-/* A nibble is half a byte: the unit of trie path traversal (YP Appendix D:
- * "Any series of bytes may also trivially be viewed as a series of nibbles"). */
+/* Trie paths are at most 64 nibbles in every trie built here: secure state and
+ * storage keys are 32-byte hashes, while list tries use short RLP indices.
+ * `data` is high-aligned and `len` preserves leading zeroes and prefixes. */
 type nibble = bits(4)
+struct TriePath = { data : bits(256), len : bits(7) }
 
-/* 32-byte key -> 64 nibbles, high nibble first (single pass + reverse). */
-function to_nibbles(bs : list(byte)) -> list(nibble) = {
-    var out : list(nibble) = [||];
-    var rest : list(byte) = bs;
-    var more : bool = true;
-    while more do {
-        match rest {
-            b :: r => {
-                out = b[7 .. 4] :: out;
-                out = b[3 .. 0] :: out;
-                rest = r
-            },
-            [||] => more = false,
+function path_len(path : TriePath) -> int = unsigned(path.len)
+
+function path_new(data : bits(256), len : int) -> TriePath =
+    struct { data = data, len = get_slice_int(7, len, 0) }
+
+function path_empty() -> TriePath =
+    path_new(ZERO_WORD, 0)
+
+function path_from_bytes(bs : list(byte)) -> TriePath = {
+    let n = list_len(bs);
+    if n > 32 then {
+        throw InvalidBlock(WitnessDeficient)
+    } else {
+        path_new(
+            if n == 0 then { ZERO_WORD } else { sail_shiftleft(bytes_be256(bs), 256 - 8 * n) },
+            2 * n,
+        )
+    }
+}
+
+function path_from_hash(h : bits(256)) -> TriePath =
+    path_new(h, 64)
+
+function path_nibble(path : TriePath, i : int) -> nibble =
+    if (i < 0) | (i >= path_len(path)) then {
+        0x0
+    } else {
+        sail_shiftright(path.data, 4 * (63 - i))[3 .. 0]
+    }
+
+function path_single(n : nibble) -> TriePath =
+    path_new(sail_shiftleft(sail_zero_extend(n, 256), 252), 1)
+
+function path_concat(a : TriePath, b : TriePath) -> TriePath = {
+    let alen = path_len(a);
+    let blen = path_len(b);
+    if alen + blen > 64 then {
+        throw InvalidBlock(WitnessDeficient)
+    } else {
+        path_new(or_vec(a.data, sail_shiftright(b.data, 4 * alen)), alen + blen)
+    }
+}
+
+function path_take(path : TriePath, n : int) -> TriePath =
+    if n <= 0 then {
+        path_empty()
+    } else {
+        if n >= path_len(path) then {
+            path
+        } else {
+            let shift = 256 - 4 * n;
+            path_new(sail_shiftleft(sail_shiftright(path.data, shift), shift), n)
         }
+    }
+
+function path_drop(path : TriePath, n : int) -> TriePath = {
+    let remain = path_len(path) - n;
+    if remain <= 0 then {
+        path_empty()
+    } else {
+        if n <= 0 then {
+            path
+        } else {
+            path_new(sail_shiftleft(path.data, 4 * n), remain)
+        }
+    }
+}
+
+function path_eq(a : TriePath, b : TriePath) -> bool =
+    (a.len == b.len) & (a.data == b.data)
+
+function path_lt(a : TriePath, b : TriePath) -> bool =
+    if a.data == b.data then { path_len(a) < path_len(b) } else { word_ult(a.data, b.data) }
+
+function path_prefix_of(prefix : TriePath, path : TriePath) -> bool = {
+    if path_len(prefix) > path_len(path) then {
+        false
+    } else {
+        path_eq(prefix, path_take(path, path_len(prefix)))
+    }
+}
+
+function common_prefix_from(a : TriePath, b : TriePath, start : int) -> int = {
+    let alen = path_len(a);
+    let blen = path_len(b);
+    let stop = if alen < blen then { alen } else { blen };
+    var i : int = start;
+    while (i < stop) & (path_nibble(a, i) == path_nibble(b, i)) do {
+        i = i + 1
     };
-    list_reverse(out)
+    i - start
 }
 
 /* hex-prefix (compact) encoding of a nibble path + leaf/extension flag
  * (Yellow Paper Appendix C.1, the HP function). */
-function hex_prefix_compact(nibs : list(nibble), is_leaf : bool) -> list(byte) = {
-    let len = list_len(nibs);
-    let odd = emod_int(len, 2) == 1;
+function hex_prefix_compact(path : TriePath, is_leaf : bool) -> list(byte) = {
+    let odd = emod_int(path_len(path), 2) == 1;
     let flag : nibble = if is_leaf then { 0x2 } else { 0x0 };
     var out : list(byte) = [||];
-    var rest : list(nibble) = nibs;
+    var i : int = 0;
     if odd then {
-        match rest {
-            n0 :: t => {
-                out = append(flag | 0x1, n0) :: out;
-                rest = t
-            },
-            [||] => (),
-        }
+        out = append(flag | 0x1, path_nibble(path, 0)) :: out;
+        i = 1
     } else {
         out = append(flag, 0x0) :: out
     };
-    var more : bool = true;
-    while more do {
-        match rest {
-            a :: (b :: t) => {
-                out = append(a, b) :: out;
-                rest = t
-            },
-            _ => more = false,
-        }
+    while i < path_len(path) do {
+        out = append(path_nibble(path, i), path_nibble(path, i + 1)) :: out;
+        i = i + 2
     };
     list_reverse(out)
 }
 
-/* hex-prefix decode (Appendix C.1 inverted): (is_leaf, path nibbles) */
-function hex_prefix_decode(p : list(byte)) -> (bool, list(nibble)) = {
-    let n = list_len(p);
+/* Decode a compact path directly from its RLP source span. */
+function hex_prefix_decode_ref(f : RlpFieldRef) -> (bool, TriePath) = {
+    if f.is_list then {
+        throw InvalidBlock(RlpDecode)
+    };
+    let n = unsigned(f.content_len);
+    let off = unsigned(f.content_off);
     if n == 0 then {
-        (false, [||])
+        (false, path_empty())
     } else {
-        let fb = bytes_get(p, 0);
+        let fb = bytes_at(f.source, off);
         let flag : nibble = fb[7 .. 4];
         let is_leaf : bool = flag[1] == bitone;
         let odd : bool = flag[0] == bitone;
-        var rev : list(nibble) = [||];
+        var path = path_empty();
         if odd then {
-            rev = fb[3 .. 0] :: rev
+            path = path_concat(path, path_single(fb[3 .. 0]))
         };
         foreach (i from 1 to (n - 1)) {
-            let b = bytes_get(p, i);
-            rev = b[7 .. 4] :: rev;
-            rev = b[3 .. 0] :: rev
+            let b = bytes_at(f.source, off + i);
+            path = path_concat(path, path_single(b[7 .. 4]));
+            path = path_concat(path, path_single(b[3 .. 0]))
         };
-        (is_leaf, list_reverse(rev))
+        (is_leaf, path)
     }
 }
 
-/* do seg nibbles match key[pos ..] ? */
-function nibs_match(key : list(nibble), pos : int, seg : list(nibble)) -> bool = {
-    let m = list_len(seg);
-    if pos + m > list_len(key) then {
+function path_matches(key : TriePath, pos : int, seg : TriePath) -> bool = {
+    if pos + path_len(seg) > path_len(key) then {
         false
     } else {
         var ok : bool = true;
-        foreach (k from 0 to (m - 1)) {
-            if list_nth(key, pos + k, 0x0) != list_nth(seg, k, 0x0) then {
+        foreach (k from 0 to (path_len(seg) - 1)) {
+            if path_nibble(key, pos + k) != path_nibble(seg, k) then {
                 ok = false
             }
         };
@@ -153,178 +170,65 @@ function nibs_match(key : list(nibble), pos : int, seg : list(nibble)) -> bool =
     }
 }
 
-/* reference to a child node (Yellow Paper Appendix D, the node cap function
- * n, Eq. 207): the node's RLP inline when under 32 bytes, otherwise
- * 0xa0 ++ keccak256(node). */
-/* MPT child reference: nodes under 32 bytes embed inline, larger nodes are
- * referenced by their keccak hash (Yellow Paper appendix D). */
-function child_ref(enc : list(byte)) -> list(byte) =
+union NodeRef = {
+    EmptyRef : unit,
+    InlineRef : Bytes,
+    HashRef : hash,
+}
+
+function node_ref_rlp(r : NodeRef) -> list(byte) =
+    match r {
+        EmptyRef() => [|0x80|],
+        InlineRef(node) => bytes_to_list(node),
+        HashRef(h) => [|0xa0|] ++ word_to_bytes32(h),
+    }
+
+/* Appendix D, Eq. 207: inline nodes under 32 bytes, otherwise hash them. */
+function child_ref(enc : list(byte)) -> NodeRef =
     if list_len(enc) < 32 then {
-        enc
+        InlineRef(BytesList(enc))
     } else {
-        rlp_bytes(word_to_bytes32(keccak256(enc)))
+        HashRef(keccak256(enc))
     }
 
-/* A trie leaf VALUE is the RLP encoding of the slot value (a string), e.g.
- * RLP(132) = 0x81 0x84, RLP(32-byte) = 0xa0 ++ 32 bytes. rlp_field_word reads
- * content as a raw big-endian word, which is only correct AFTER the RLP
- * string header is stripped: decode the short-string header (0x80..0xb7 -> drop
- * the length byte; a single byte < 0x80 is the value itself). Without this, a
- * small value keeps its 0x81 prefix (e.g. -> 0x8184) and is double-encoded on
- * re-RLP; large 32-byte values happened to work only because the 0xa0 prefix
- * overflows out of the 256-bit word. */
-function rlp_str_word(bs : list(byte)) -> word =
-    match bs {
-        [||] => sail_zeros(256),
-        b0 :: rest => if unsigned(b0) < 128 then {
-            rlp_field_word(struct { is_list = false, content = bs, full = bs })
-        } else {
-            rlp_field_word(struct { is_list = false, content = rest, full = rest })
-        },
-    }
-
-function list_take_prefix forall ('a : Type). (xs : list('a), n : int) -> list('a) = {
-    var out : list('a) = [||];
-    var rest : list('a) = xs;
-    var i : int = 0;
-    while i < n do {
-        match rest {
-            h :: t => {
-                out = h :: out;
-                rest = t
-            },
-            [||] => (),
-        };
-        i = i + 1
-    };
-    list_reverse(out)
-}
-function list_drop_prefix forall ('a : Type). (xs : list('a), n : int) -> list('a) = {
-    var rest : list('a) = xs;
-    var i : int = 0;
-    while i < n do {
-        match rest {
-            _ :: t => rest = t,
-            [||] => (),
-        };
-        i = i + 1
-    };
-    rest
-}
-
-/* ---- branch masks: bit i set = child at nibble i present ---------------- */
+/* Bit i marks the child at nibble i. */
 function branch_mask_has_bit(mask : bits(16), i : int) -> bool =
     (sail_shiftright(mask, i) & 0x0001) == 0x0001
 function branch_mask_set_bit(mask : bits(16), i : int) -> bits(16) =
     mask | sail_shiftleft(0x0001, i)
-function branch_mask_popcount(mask : bits(16)) -> int = {
-    var c : int = 0;
-    foreach (i from 0 to 15) {
-        if branch_mask_has_bit(mask, i) then {
-            c = c + 1
-        }
-    };
-    c
-}
 
-/* longest common prefix length of two nibble lists */
-function common_prefix_len(a : list(nibble), b : list(nibble)) -> int = {
-    var i : int = 0;
-    var ra : list(nibble) = a;
-    var rb : list(nibble) = b;
-    var stop : bool = false;
-    while not_bool(stop) do {
-        match (ra, rb) {
-            (x :: ta, y :: tb) => if x == y then {
-                i = i + 1;
-                ra = ta;
-                rb = tb
-            } else {
-                stop = true
-            },
-            (_, _) => stop = true,
-        }
-    };
-    i
-}
-
-
-/* ---- node composition (Yellow Paper Appendix D, Eq. 208's node forms) --- */
-/* leaf:      child_ref( rlp[ hex_prefix_compact(key,leaf) , value ] )         */
-/* extension: child_ref( rlp[ hex_prefix_compact(key,ext)  , child-ref ] )     */
-/* branch:    child_ref( rlp[ 16 child-refs-or-0x80 , 0x80 ] )                 */
-/* word:      0xa0 ++ hash   (a blinded subtree / >=32B child, already a ref)  */
-function leaf_node_rlp(key : list(nibble), value : list(byte)) -> list(byte) =
+/* Yellow Paper Appendix D, Eq. 208 node forms. */
+function leaf_node_rlp(key : TriePath, value : list(byte)) -> list(byte) =
     rlp_list(rlp_bytes(hex_prefix_compact(key, true)) ++ rlp_bytes(value))
-function extension_node_rlp(key : list(nibble), childref : list(byte)) -> list(byte) =
-    rlp_list(rlp_bytes(hex_prefix_compact(key, false)) ++ childref)
-function hash_child_ref(hash : list(byte)) -> list(byte) = [|0xa0|] ++ hash
+function extension_node_rlp(key : TriePath, childref : NodeRef) -> list(byte) =
+    rlp_list(rlp_bytes(hex_prefix_compact(key, false)) ++ node_ref_rlp(childref))
 
-/* ---- the trie value arena: a pure append buffer. An update leaf's RLP value
- * is interned here and referenced by ByteSlice, satisfying the read/write law
- * read_byte_slice(arena_intern(l)) = l. account: rlp([nonce, balance, sroot,
- * chash]); storage: rlp_int(value). ---- */
-register trie_arena : list(byte) = [||]
-register trie_arena_len : int = 0
-
-function trie_arena_reset() -> unit = {
-    trie_arena = [||];
-    trie_arena_len = 0
+/* Keep leaf values in their native representation. Long nodes hash the RLP
+ * framing and value as segments; only an inline node materializes a slice. */
+function leaf_child_ref(key : TriePath, value : Bytes) -> NodeRef = {
+    let path = rlp_bytes(hex_prefix_compact(key, true));
+    let value_len = bytes_len(value);
+    let value_prefix = rlp_string_prefix(value_len, bytes_first(value));
+    let payload_len = list_len(path) + list_len(value_prefix) + value_len;
+    let head = rlp_list_prefix(payload_len) ++ path ++ value_prefix;
+    if list_len(head) + value_len < 32 then {
+        InlineRef(BytesList(head ++ bytes_to_list(value)))
+    } else {
+        HashRef(keccak256([|BytesList(head), value|]))
+    }
 }
 
-function arena_intern(bs : list(byte)) -> ByteSlice = {
-    let off = trie_arena_len;
-    let n = list_len(bs);
-    trie_arena = list_append(trie_arena, bs);
-    trie_arena_len = off + n;
-    byte_slice(TrieArenaSource, off, n)
-}
-
-val account_leaf_value : (u64, word, hash, hash) -> ByteSlice /* body below account_rlp */
-val storage_leaf_value : word -> ByteSlice
-
-/* Source -> bytes (val in host/io.sail): materialize a byte slice by
- * per-source byte reads. Every source is readable from Sail: the witness via
- * the input oracle, memory / tx input / stored code via their byte hooks, and
- * the arena above. */
-function read_byte_slice(s : ByteSlice) -> list(byte) = {
-    let off = unsigned(s.off);
-    let len = unsigned(s.len);
-    var out : list(byte) = [||];
-    foreach (i from 0 to (len - 1)) {
-        let b : byte = match s.source {
-            WitnessSource => ssz_src_byte(off + i),
-            MemorySource => mem_get_byte(off + i),
-            TxInputSource => txdata_byte(off + i),
-            CodeSource => code_db_byte_at(get_slice_int(64, off + i, 0)),
-            TrieArenaSource => list_nth(trie_arena, off + i, 0x00),
-            LogDataSource => log_arena_byte(get_slice_int(64, off + i, 0)),
-            MemoryArenaSource => mem_arena_byte_read(get_slice_int(64, off + i, 0)),
-            ReturndataSource => returndata_pending_byte(off + i),
-        };
-        out = b :: out
-    };
-    list_reverse(out)
-}
-
-/* leaf child ref (Eq. 208 leaf form): compose rlp([hp(key,leaf), value]) --
- * the value materialized from its byte source (the arena for update leaves,
- * the witness for base leaves) -- and cap it. */
-function leaf_child_ref(key : list(nibble), value : ByteSlice) -> list(byte) =
-    child_ref(leaf_node_rlp(key, read_byte_slice(value)))
-
-/* extension child ref (Eq. 208 extension form) */
-function extension_child_ref(key : list(nibble), childref : list(byte)) -> list(byte) =
+function extension_child_ref(key : TriePath, childref : NodeRef) -> NodeRef =
     child_ref(extension_node_rlp(key, childref))
 
-function branch_payload_rlp(mask : bits(16), children : list(list(byte))) -> list(byte) = {
+function branch_payload_rlp(mask : bits(16), children : list(NodeRef)) -> list(byte) = {
     var payload : list(byte) = [||];
-    var ch : list(list(byte)) = children; /* ascending nibble order */
+    var ch : list(NodeRef) = children; /* ascending nibble order */
     foreach (i from 0 to 15) {
         if branch_mask_has_bit(mask, i) then {
             match ch {
                 c :: t => {
-                    payload = payload ++ c;
+                    payload = payload ++ node_ref_rlp(c);
                     ch = t
                 },
                 [||] => (),
@@ -335,102 +239,48 @@ function branch_payload_rlp(mask : bits(16), children : list(list(byte))) -> lis
     };
     payload ++ [|0x80|] /* branch value slot: empty */
 }
-function branch_node_rlp(mask : bits(16), children : list(list(byte))) -> list(byte) =
-    rlp_list(branch_payload_rlp(mask, children))
+function branch_child_ref(mask : bits(16), children : list(NodeRef)) -> NodeRef =
+    child_ref(rlp_list(branch_payload_rlp(mask, children)))
 
-/* branch child ref (Eq. 208 branch form): compose and cap the 17-item node. */
-function branch_child_ref(mask : bits(16), children : list(list(byte))) -> list(byte) =
-    child_ref(branch_node_rlp(mask, children))
-
-function trie_empty_ref() -> list(byte) = [|0x80|]
-
-function trie_ref_is_empty(r : list(byte)) -> bool =
-    list_len(r) == 1 & list_nth(r, 0, 0x00) == 0x80
-
-function trie_ref_to_root(r : list(byte)) -> bits(256) =
+function trie_ref_to_root(r : NodeRef) -> bits(256) =
     match r {
-        0xa0 :: h => if list_len(h) == 32 then {
-            bytes_be256(h)
-        } else {
-            keccak256(r)
-        },
-        _ => keccak256(r),
+        EmptyRef() => EMPTY_TRIE_ROOT,
+        InlineRef(node) => keccak256([|node|]),
+        HashRef(h) => h,
     }
 
-function node_to_ref(node : list(byte)) -> list(byte) =
-    if list_len(node) == 0 then {
-        trie_empty_ref()
+function node_to_ref(node : Bytes) -> NodeRef =
+    if bytes_len(node) == 0 then {
+        EmptyRef()
     } else {
-        child_ref(node)
-    }
-
-/* ---- lexicographic nibble-key order (recursive trie composition) -------- */
-function nib_lt(a : list(nibble), b : list(nibble)) -> bool = {
-    var ra : list(nibble) = a;
-    var rb : list(nibble) = b;
-    var res : int = 0; /* 0 undecided, 1 a<b, 2 a>=b */
-    while res == 0 do {
-        match (ra, rb) {
-            ([||], [||]) => res = 2,
-            ([||], _) => res = 1,
-            (_, [||]) => res = 2,
-            (x :: ta, y :: tb) => if unsigned(x) < unsigned(y) then {
-                res = 1
-            } else {
-                if unsigned(x) > unsigned(y) then {
-                    res = 2
-                } else {
-                    ra = ta;
-                    rb = tb
-                }
-            },
+        if bytes_len(node) < 32 then {
+            InlineRef(node)
+        } else {
+            HashRef(keccak256([|node|]))
         }
-    };
-    res == 1
-}
-function nib_eq(a : list(nibble), b : list(nibble)) -> bool =
-    match (a, b) {
-        ([||], [||]) => true,
-        (x :: ta, y :: tb) => (x == y) & nib_eq(ta, tb),
-        (_, _) => false,
-    }
-function nib_prefix_of(prefix : list(nibble), key : list(nibble)) -> bool =
-    match prefix {
-        [||] => true,
-        x :: xs => match key {
-            [||] => false,
-            y :: ys => (x == y) & nib_prefix_of(xs, ys),
-        },
     }
 
-/* ======================================================================== */
-/* (2) the update list                                                      */
-/*                                                                          */
-/* THE single external update type: an ordered (lexicographic nibble-key)   */
-/* list of leaf writes and leaf deletes over the composed map. Deletes      */
-/* erase base-trie leaves; a delete of a key with no base leaf is a no-op.  */
-/* Subtree references never appear here -- they exist only in the internal  */
-/* item stream (TrieItem, below) that the witness walker emits.             */
-/* ======================================================================== */
-struct TriePatch = {
-    key : list(nibble),
-    is_delete : bool,
-    value : ByteSlice,
+/* Ordered leaf updates. */
+union TrieChange = {
+    TriePut : Bytes,
+    TrieDelete : unit,
 }
 
-function patch_leaf(key : list(nibble), value : ByteSlice) -> TriePatch =
-    struct { key = key, is_delete = false, value = value }
+struct TriePatch = { key : TriePath, change : TrieChange }
 
-function patch_delete(key : list(nibble)) -> TriePatch =
-    struct { key = key, is_delete = true, value = EMPTY_SLICE }
+function patch_leaf(key : TriePath, value : Bytes) -> TriePatch =
+    struct { key = key, change = TriePut(value) }
+
+function patch_delete(key : TriePath) -> TriePatch =
+    struct { key = key, change = TrieDelete() }
 
 function patch_insert_sorted(p : TriePatch, ps : list(TriePatch)) -> list(TriePatch) =
     match ps {
         [||] => [|p|],
-        q :: r => if nib_eq(p.key, q.key) then {
+        q :: r => if path_eq(p.key, q.key) then {
             p :: r
         } else {
-            if nib_lt(p.key, q.key) then {
+            if path_lt(p.key, q.key) then {
                 p :: ps
             } else {
                 q :: patch_insert_sorted(p, r)
@@ -447,126 +297,112 @@ function patches_empty(ps : list(TriePatch)) -> bool =
 function patches_at_nibble(ps : list(TriePatch), depth : int, nib : nibble) -> list(TriePatch) =
     match ps {
         [||] => [||],
-        p :: r => if list_len(p.key) > depth & list_nth(p.key, depth, 0x0) == nib then {
+        p :: r => if path_len(p.key) > depth & path_nibble(p.key, depth) == nib then {
             p :: patches_at_nibble(r, depth, nib)
         } else {
             patches_at_nibble(r, depth, nib)
         },
     }
 
-function patches_under_prefix(ps : list(TriePatch), prefix : list(nibble)) -> list(TriePatch) =
+function patches_partition_prefix(
+    ps : list(TriePatch),
+    prefix : TriePath,
+) -> (list(TriePatch), list(TriePatch)) =
     match ps {
-        [||] => [||],
-        p :: r => if nib_prefix_of(prefix, p.key) then {
-            p :: patches_under_prefix(r, prefix)
+        [||] => ([||], [||]),
+        p :: r => if path_prefix_of(prefix, p.key) then {
+            let (inside, outside) = patches_partition_prefix(r, prefix);
+            (p :: inside, outside)
         } else {
-            patches_under_prefix(r, prefix)
+            let (inside, outside) = patches_partition_prefix(r, prefix);
+            (inside, p :: outside)
         },
     }
 
-function patches_outside_prefix(ps : list(TriePatch), prefix : list(nibble)) -> list(TriePatch) =
-    match ps {
-        [||] => [||],
-        p :: r => if nib_prefix_of(prefix, p.key) then {
-            patches_outside_prefix(r, prefix)
-        } else {
-            p :: patches_outside_prefix(r, prefix)
-        },
-    }
+/* The walker merges patches into an ordered item stream; the builder turns
+ * that stream back into canonical trie nodes. Untouched subtrees stay refs. */
 
-/* ======================================================================== */
-/* (3) the item stream: witness walker -> trie builder                      */
-/*                                                                          */
-/* Root computation is two single-policy passes over ONE sorted stream      */
-/* (the shape of alloy-trie's HashBuilder / TrieWalker split, in recursive  */
-/* form):                                                                   */
-/*                                                                          */
-/* witness_items  walks the witnessed pre-state trie along touched paths    */
-/* only, merging in the update list, and emits the                          */
-/* post-state map in key order: live leaves carry full                      */
-/* keys, untouched subtrees pass through as one ref item                    */
-/*                  with their full path prefix. Deletes emit nothing --    */
-/* no delete or collapse logic exists anywhere else.                        */
-/* build_group    composes the stream back into a trie by recursive         */
-/* lookahead: a node closes exactly where the sorted keys                   */
-/* diverge, so canonical shape (extension merging, branch                   */
-/* only when >= 2 children survive) holds by construction                   */
-/* -- there is no separate collapse pass.                                   */
-/*                                                                          */
-/* Stateless verification mirrors execution-specs witness_state.py: the     */
-/* node database is keyed by keccak256(node) (C-backed,                     */
-/* ffi/trie_node_db.c) and a node absent from the witness on a needed path  */
-/* is a missing proof that throws InvalidBlock(WitnessDeficient).           */
-/* ======================================================================== */
-
-/* node bytes for keccak `h` from the C node-db, or [] if absent (read straight
- * from the witness buffer by the recorded span -- no per-node Sail copy held). */
-function node_db_lookup(h : bits(256)) -> list(byte) = {
+/* Node bytes for keccak `h`, retained as a witness slice. */
+function node_db_lookup(h : bits(256)) -> Bytes = {
     let len = unsigned(nodedb_len(h));
     if len == 0 then {
-        [||]
+        BytesList([||])
     } else {
-        ssz_bytes(unsigned(nodedb_off(h)), len)
+        BytesSlice(witness_byte_slice(unsigned(nodedb_off(h)), len))
     }
 }
 
-/* resolve a child reference: embedded node (full bytes), 32-byte hash, or empty.
- * A 32-byte hash that is absent from the witness is a MISSING node (the prover
- * omitted a node on a walked path) -- fail closed, so a resolved-empty result
- * always means a legitimate exclusion, never a withheld subtree. */
-function resolve_child(f : RlpField) -> list(byte) =
-    if f.is_list then {
-        f.full
-    } else {
-        if list_len(f.content) == 32 then {
-            let node = node_db_lookup(bytes_be256(f.content));
+struct LeafNodeData = { path : TriePath, value : RlpFieldRef }
+struct ExtensionNodeData = { path : TriePath, child : RlpFieldRef }
+struct BranchNodeData = { fields : list(RlpFieldRef) }
 
-            /* a 32-byte ref absent from the witness means the proof is deficient:
-               the block is invalid (EIP-8025 optional proofs) -- throw
-               InvalidBlock, caught once at the top (run_one), so a missing proof
-               is a NORMAL failure outcome, not a guest crash. */
-            if list_len(node) == 0 then {
-                throw InvalidBlock(WitnessDeficient)
-            };
-            node
-        } else {
-            [||]
-        }
-    }
+union TrieNode = {
+    LeafNode : LeafNodeData,
+    ExtensionNode : ExtensionNodeData,
+    BranchNode : BranchNodeData,
+    InvalidNode : unit,
+}
 
-function field_to_ref(f : RlpField) -> list(byte) =
-    if f.is_list then {
-        f.full
-    } else {
-        if list_len(f.content) == 32 then {
-            hash_child_ref(f.content)
-        } else {
-            trie_empty_ref()
-        }
-    }
-
-/* re-key a decoded child node under `prefix` nibbles: a leaf/extension child
- * absorbs the prefix into its own path (Yellow Paper canonical form); any
- * other node is referenced through an extension. */
-function merge_ext_node(prefix : list(nibble), childnode : list(byte)) -> list(byte) = {
-    if list_len(prefix) == 0 then {
-        childnode
-    } else {
-        if list_len(childnode) == 0 then {
-            [||]
-        } else {
-            let items = rlp_node_items(childnode);
-            let n = list_len(items);
-            if n == 2 then {
-                let (is_leaf, seg) = hex_prefix_decode(list_nth(items, 0, RLP_NONE).content);
-                let key = prefix ++ seg;
-                if is_leaf then {
-                    leaf_node_rlp(key, list_nth(items, 1, RLP_NONE).content)
-                } else {
-                    extension_node_rlp(key, field_to_ref(list_nth(items, 1, RLP_NONE)))
-                }
+function decode_trie_node(node : Bytes) -> TrieNode = {
+    let fields = rlp_node_refs(node);
+    match list_len(fields) {
+        2 => {
+            let (is_leaf, path) = hex_prefix_decode_ref(list_nth(fields, 0, RLP_REF_NONE));
+            if is_leaf then {
+                LeafNode(struct { path = path, value = list_nth(fields, 1, RLP_REF_NONE) })
             } else {
-                extension_node_rlp(prefix, node_to_ref(childnode))
+                ExtensionNode(struct { path = path, child = list_nth(fields, 1, RLP_REF_NONE) })
+            }
+        },
+        17 => BranchNode(struct { fields = fields }),
+        _ => InvalidNode(),
+    }
+}
+
+function field_to_ref(f : RlpFieldRef) -> NodeRef =
+    if f.is_list then {
+        InlineRef(rlp_ref_full(f))
+    } else {
+        if unsigned(f.content_len) == 32 then {
+            HashRef(rlp_ref_word(f))
+        } else {
+            EmptyRef()
+        }
+    }
+
+/* Resolving a missing hash is a deficient witness, never an empty subtree. */
+function resolve_ref(r : NodeRef) -> Bytes =
+    match r {
+        EmptyRef() => BytesList([||]),
+        InlineRef(node) => node,
+        HashRef(h) => {
+            let node = node_db_lookup(h);
+            if bytes_len(node) == 0 then {
+                throw InvalidBlock(WitnessDeficient)
+            } else {
+                node
+            }
+        },
+    }
+
+/* Re-key a decoded child under `prefix` without copying a leaf value. */
+function merge_ext_node(prefix : TriePath, childnode : Bytes) -> NodeRef = {
+    if path_len(prefix) == 0 then {
+        node_to_ref(childnode)
+    } else {
+        if bytes_len(childnode) == 0 then {
+            EmptyRef()
+        } else {
+            match decode_trie_node(childnode) {
+                LeafNode(leaf) => leaf_child_ref(
+                    path_concat(prefix, leaf.path),
+                    rlp_ref_content(leaf.value),
+                ),
+                ExtensionNode(ext) => extension_child_ref(
+                    path_concat(prefix, ext.path),
+                    field_to_ref(ext.child),
+                ),
+                _ => extension_child_ref(prefix, node_to_ref(childnode)),
             }
         }
     }
@@ -575,72 +411,56 @@ function merge_ext_node(prefix : list(nibble), childnode : list(byte)) -> list(b
 /* merge_ext_node over a child REF: an inline ref carries its node bytes and
  * re-keys canonically; a 32-byte hash ref is wrapped in an extension, which
  * is canonical ONLY when the referenced node is a branch. */
-function merge_ext_ref(prefix : list(nibble), childref : list(byte)) -> list(byte) = {
-    if list_len(prefix) == 0 then {
+function merge_ext_ref(prefix : TriePath, childref : NodeRef) -> NodeRef = {
+    if path_len(prefix) == 0 then {
         childref
     } else {
-        if trie_ref_is_empty(childref) then {
-            trie_empty_ref()
-        } else {
-            match childref {
-                0xa0 :: _ => extension_child_ref(prefix, childref),
-                _ => {
-                    let items = rlp_node_items(childref);
-                    let n = list_len(items);
-                    if n == 2 then {
-                        let (is_leaf, seg) = hex_prefix_decode(list_nth(items, 0, RLP_NONE).content);
-                        let key = prefix ++ seg;
-                        if is_leaf then {
-                            /* delete-collapse of an inline (< 32B) ref: the value
-                               lives inside a constructed ref list, not a source,
-                               so hash the tiny re-keyed leaf list-side (rare) */
-                            child_ref(leaf_node_rlp(key, list_nth(items, 1, RLP_NONE).content))
-                        } else {
-                            extension_child_ref(key, field_to_ref(list_nth(items, 1, RLP_NONE)))
-                        }
-                    } else {
-                        extension_child_ref(prefix, childref)
+        match childref {
+            EmptyRef() => EmptyRef(),
+            HashRef(_) => extension_child_ref(prefix, childref),
+            InlineRef(node) => {
+                    match decode_trie_node(node) {
+                        LeafNode(leaf) => leaf_child_ref(
+                            path_concat(prefix, leaf.path),
+                            rlp_ref_content(leaf.value),
+                        ),
+                        ExtensionNode(ext) => extension_child_ref(
+                            path_concat(prefix, ext.path),
+                            field_to_ref(ext.child),
+                        ),
+                        _ => extension_child_ref(prefix, childref),
                     }
                 },
-            }
         }
     }
 }
 
-/* ---- the item stream ----------------------------------------------------
- *
- * A TrieItem is one entry of the sorted post-state stream:
- *   - a live leaf (is_ref = false): path = full key, bytes = RLP value;
- *   - an untouched subtree (is_ref = true): path = the subtree's full path
- *     prefix, bytes = its child ref (inline node or 0xa0 ++ hash).
- * `is_branch` records subtree provenance: a ref taken from an extension's
- * child position is guaranteed a branch node (MPT invariant), so the
- * builder may wrap an extension around its hash without node material; a
- * ref taken from a branch child slot has unknown node type, and absorbing
- * extra path into it (delete collapse) must resolve the node from the
- * witness db -- EIP-8025 guarantees it is present exactly when needed. */
-struct TrieItem = {
-    path : list(nibble),
-    is_ref : bool,
-    is_branch : bool,
-    subref : list(byte), /* subtree child ref (is_ref); [] for leaves        */
-    value : ByteSlice,   /* leaf value byte source (!is_ref); EMPTY for refs */
+/* Extension children are known branches; branch children have unknown kind
+ * until resolved. That distinction permits untouched hashes to stay opaque. */
+union TrieItemValue = {
+    LeafItem : Bytes,
+    BranchItem : NodeRef,
+    SubtreeItem : NodeRef,
 }
 
-function item_leaf(path : list(nibble), value : ByteSlice) -> TrieItem =
-    struct { path = path, is_ref = false, is_branch = false, subref = [||], value = value }
+struct TrieItem = { path : TriePath, value : TrieItemValue }
 
-function item_subtree(path : list(nibble), childref : list(byte), is_branch : bool) -> TrieItem =
-    struct { path = path, is_ref = true, is_branch = is_branch, subref = childref, value = EMPTY_SLICE }
+function item_leaf(path : TriePath, value : Bytes) -> TrieItem =
+    struct { path = path, value = LeafItem(value) }
+
+function item_branch(path : TriePath, childref : NodeRef) -> TrieItem =
+    struct { path = path, value = BranchItem(childref) }
+
+function item_subtree(path : TriePath, childref : NodeRef) -> TrieItem =
+    struct { path = path, value = SubtreeItem(childref) }
 
 /* sorted live-leaf items of an update list (deletes emit nothing) */
 function patches_live_items(ps : list(TriePatch)) -> list(TrieItem) =
     match ps {
         [||] => [||],
-        p :: r => if p.is_delete then {
-            patches_live_items(r)
-        } else {
-            item_leaf(p.key, p.value) :: patches_live_items(r)
+        p :: r => match p.change {
+            TrieDelete() => patches_live_items(r),
+            TriePut(value) => item_leaf(p.key, value) :: patches_live_items(r),
         },
     }
 
@@ -648,19 +468,18 @@ function patches_live_items(ps : list(TriePatch)) -> list(TrieItem) =
  * with the base leaf inserted at its sorted position; an update on the
  * leaf's own key replaces (write) or erases (delete) it, and diverging
  * updates are inserts */
-function leaf_overlay_items(ps : list(TriePatch), key : list(nibble), value : ByteSlice) -> list(TrieItem) =
+function leaf_overlay_items(ps : list(TriePatch), key : TriePath, value : Bytes) -> list(TrieItem) =
     match ps {
         [||] => [|item_leaf(key, value)|],
-        p :: r => if nib_eq(p.key, key) then {
+        p :: r => if path_eq(p.key, key) then {
             patches_live_items(ps)
         } else {
-            if nib_lt(key, p.key) then {
+            if path_lt(key, p.key) then {
                 item_leaf(key, value) :: patches_live_items(ps)
             } else {
-                if p.is_delete then {
-                    leaf_overlay_items(r, key, value)
-                } else {
-                    item_leaf(p.key, p.value) :: leaf_overlay_items(r, key, value)
+                match p.change {
+                    TrieDelete() => leaf_overlay_items(r, key, value),
+                    TriePut(updated) => item_leaf(p.key, updated) :: leaf_overlay_items(r, key, value),
                 }
             }
         },
@@ -671,7 +490,7 @@ function items_merge(a : list(TrieItem), b : list(TrieItem)) -> list(TrieItem) =
     match (a, b) {
         ([||], _) => b,
         (_, [||]) => a,
-        (x :: ta, y :: tb) => if nib_lt(y.path, x.path) then {
+        (x :: ta, y :: tb) => if path_lt(y.path, x.path) then {
             y :: items_merge(a, tb)
         } else {
             x :: items_merge(ta, b)
@@ -679,9 +498,9 @@ function items_merge(a : list(TrieItem), b : list(TrieItem)) -> list(TrieItem) =
     }
 termination_measure items_merge(a, b) = list_len(a) + list_len(b)
 
-function items_last_path(items : list(TrieItem)) -> list(nibble) =
+function items_last_path(items : list(TrieItem)) -> TriePath =
     match items {
-        [||] => [||],
+        [||] => path_empty(),
         it :: r => match r {
             [||] => it.path,
             _ => items_last_path(r),
@@ -691,7 +510,7 @@ function items_last_path(items : list(TrieItem)) -> list(nibble) =
 function items_at_nibble(items : list(TrieItem), depth : int, nib : nibble) -> list(TrieItem) =
     match items {
         [||] => [||],
-        it :: r => if list_len(it.path) > depth & list_nth(it.path, depth, 0x0) == nib then {
+        it :: r => if path_len(it.path) > depth & path_nibble(it.path, depth) == nib then {
             it :: items_at_nibble(r, depth, nib)
         } else {
             items_at_nibble(r, depth, nib)
@@ -702,32 +521,30 @@ function items_at_nibble(items : list(TrieItem), depth : int, nib : nibble) -> l
  * path is absorbed into it. This is the ONE place a delete collapse can
  * demand node material: an unknown-type hash ref absorbing a nonempty
  * suffix resolves its node from the witness db (fail-closed). */
-function item_ref(it : TrieItem, depth : int) -> list(byte) = {
-    let suffix = list_drop_prefix(it.path, depth);
-    if not_bool(it.is_ref) then {
-        leaf_child_ref(suffix, it.value)
-    } else {
-        if list_len(suffix) == 0 then {
-            it.subref
+function item_ref(it : TrieItem, depth : int) -> NodeRef = {
+    let suffix = path_drop(it.path, depth);
+    match it.value {
+        LeafItem(value) => leaf_child_ref(suffix, value),
+        BranchItem(subref) => if path_len(suffix) == 0 then {
+            subref
         } else {
-            if it.is_branch then {
-                merge_ext_ref(suffix, it.subref)
-            } else {
-                match it.subref {
-                    0xa0 :: h => if list_len(h) == 32 then {
-                        let node = node_db_lookup(bytes_be256(h));
-                        if list_len(node) == 0 then {
-                            throw InvalidBlock(WitnessDeficient)
-                        } else {
-                            node_to_ref(merge_ext_node(suffix, node))
-                        }
+            merge_ext_ref(suffix, subref)
+        },
+        SubtreeItem(subref) => if path_len(suffix) == 0 then {
+            subref
+        } else {
+            match subref {
+                HashRef(h) => {
+                    let node = node_db_lookup(h);
+                    if bytes_len(node) == 0 then {
+                        throw InvalidBlock(WitnessDeficient)
                     } else {
-                        merge_ext_ref(suffix, it.subref)
-                    },
-                    _ => merge_ext_ref(suffix, it.subref),
-                }
+                        merge_ext_node(suffix, node)
+                    }
+                },
+                _ => merge_ext_ref(suffix, subref),
             }
-        }
+        },
     }
 }
 
@@ -751,28 +568,28 @@ function item_ref(it : TrieItem, depth : int) -> list(byte) = {
  * diverge -- the canonical form is reached by construction, with no
  * separate collapse or canonicalization step. `fuel` only bounds recursion
  * for the termination checker: keys are 64 nibbles, callers pass 256. */
-function build_group(items : list(TrieItem), depth : int, fuel : int) -> list(byte) = {
+function build_group(items : list(TrieItem), depth : int, fuel : int) -> NodeRef = {
     if fuel <= 0 then {
         throw InvalidBlock(WitnessDeficient)
     } else {
         match items {
-            [||] => trie_empty_ref(),
+            [||] => EmptyRef(),
             it :: [||] => item_ref(it, depth),
             it :: _ => {
                 let last = items_last_path(items);
-                let common = common_prefix_len(list_drop_prefix(it.path, depth), list_drop_prefix(last, depth));
+                let common = common_prefix_from(it.path, last, depth);
                 if common > 0 then {
                     /* >= 2 items share `shared`, so the child one level down
                        is necessarily a branch: a plain extension wrap is
                        canonical */
-                    let shared = list_take_prefix(list_drop_prefix(it.path, depth), common);
+                    let shared = path_take(path_drop(it.path, depth), common);
                     extension_child_ref(shared, build_group(items, depth + common, fuel - common))
                 } else {
                     /* >= 2 items diverge right here: a branch with >= 2
                        children by construction (groups of a nonempty sorted
                        stream are nonempty and never build to empty) */
                     var mask : bits(16) = 0x0000;
-                    var children : list(list(byte)) = [||];
+                    var children : list(NodeRef) = [||];
                     foreach (i from 0 to 15) {
                         let group = items_at_nibble(items, depth, get_slice_int(4, i, 0));
                         if list_len(group) > 0 then {
@@ -806,52 +623,39 @@ function items_root(items : list(TrieItem)) -> bits(256) =
  * here and only here: a delete suppresses its base leaf, and a delete with
  * no base leaf (the walk proves absence) emits nothing. Whatever survives
  * is rebuilt by build_group, so a branch losing children to deletes
- * collapses in the builder with no walker involvement. */
-/* `node_off` / `f_off` is the witness-buffer offset of `node` / `f.full` (a node
- * or embedded child is always a contiguous SSZ-witness span), so a base leaf's
- * value can be handed to leaf_overlay_items as a WitnessSource slice rather than
- * a materialized byte list -- the value is hashed C-side and never crosses. */
-val witness_items : (list(byte), int, list(nibble), list(TriePatch), int) -> list(TrieItem)
-val witness_child_items : (RlpField, int, list(nibble), list(TriePatch), int) -> list(TrieItem)
+ * collapses in the builder with no walker involvement. RLP fields retain their
+ * source and spans, so embedded nodes and leaf values remain witness slices. */
+val witness_items : (Bytes, TriePath, list(TriePatch), int) -> list(TrieItem)
+val witness_child_items : (RlpFieldRef, TriePath, list(TriePatch), int) -> list(TrieItem)
 
 function witness_child_items(
-    f : RlpField,
-    f_off : int,
-    prefix : list(nibble),
+    f : RlpFieldRef,
+    prefix : TriePath,
     updates : list(TriePatch),
     fuel : int,
 ) -> (
     list(TrieItem)
 ) = {
-    if f.is_list then {
-        witness_items(f.full, f_off, prefix, updates, fuel)
-    } else {
-        let c = f.content;
-        if list_len(c) == 0 then {
+    match field_to_ref(f) {
+        InlineRef(node) => witness_items(node, prefix, updates, fuel),
+        EmptyRef() => {
             /* proven-absent subtree: the surviving updates are pure inserts */
             patches_live_items(updates)
-        } else {
-            if list_len(c) == 32 then {
-                let h = bytes_be256(c);
-                let node = node_db_lookup(h);
-                if list_len(node) == 0 then {
-                    /* missing proof on a touched path: the block is invalid --
-                       throw InvalidBlock (caught once at run_one) */
-                    throw InvalidBlock(WitnessDeficient)
-                } else {
-                    witness_items(node, unsigned(nodedb_off(h)), prefix, updates, fuel)
-                }
+        },
+        HashRef(h) => {
+            let node = node_db_lookup(h);
+            if bytes_len(node) == 0 then {
+                throw InvalidBlock(WitnessDeficient)
             } else {
-                [||]
+                witness_items(node, prefix, updates, fuel)
             }
-        }
+        },
     }
 }
 
 function witness_items(
-    node : list(byte),
-    node_off : int,
-    prefix : list(nibble),
+    node : Bytes,
+    prefix : TriePath,
     updates : list(TriePatch),
     fuel : int,
 ) -> (
@@ -860,29 +664,24 @@ function witness_items(
     if fuel <= 0 then {
         throw InvalidBlock(WitnessDeficient)
     } else {
-        if list_len(node) == 0 then {
+        if bytes_len(node) == 0 then {
             patches_live_items(updates)
         } else {
-            let items = rlp_node_items(node);
-            let n = list_len(items);
-            if n == 2 then {
-                let (is_leaf, seg) = hex_prefix_decode(list_nth(items, 0, RLP_NONE).content);
-                let key = prefix ++ seg;
-                if is_leaf then {
-                    let vlen = list_len(list_nth(items, 1, RLP_NONE).content);
-                    let voff = node_off + rlp_top_item_content_offset(node, 1);
-                    leaf_overlay_items(updates, key, byte_slice(WitnessSource, voff, vlen))
-                } else {
-                    let under = patches_under_prefix(updates, key);
-                    let outside = patches_outside_prefix(updates, key);
+            match decode_trie_node(node) {
+                LeafNode(leaf) => {
+                    let key = path_concat(prefix, leaf.path);
+                    leaf_overlay_items(updates, key, rlp_ref_content(leaf.value))
+                },
+                ExtensionNode(ext) => {
+                    let key = path_concat(prefix, ext.path);
+                    let (under, outside) = patches_partition_prefix(updates, key);
                     let sub : list(TrieItem) = if patches_empty(under) then {
                             /* untouched extension child: one whole-subtree
                                ref; an extension's child is always a branch */
-                            [|item_subtree(key, field_to_ref(list_nth(items, 1, RLP_NONE)), true)|]
+                            [|item_branch(key, field_to_ref(ext.child))|]
                         } else {
                             witness_child_items(
-                                list_nth(items, 1, RLP_NONE),
-                                node_off + rlp_top_item_full_offset(node, 1),
+                                ext.child,
                                 key,
                                 under,
                                 fuel - 1,
@@ -892,30 +691,33 @@ function witness_items(
                     /* updates diverging inside the extension segment become
                        siblings; the builder reshapes the segment around them */
                     items_merge(patches_live_items(outside), sub)
-                }
-            } else {
-                if n == 17 then {
-                    let branch_value = list_nth(items, 16, RLP_NONE).content;
+                },
+                BranchNode(branch) => {
+                    let branch_value = list_nth(branch.fields, 16, RLP_REF_NONE);
 
                     /* a branch value at slot 16 is impossible for 64-nibble hashed
                        keys (no key is a prefix of another): a malformed witness. */
-                    if list_len(branch_value) > 0 then {
+                    if unsigned(branch_value.content_len) > 0 then {
                         throw InvalidBlock(WitnessDeficient)
                     };
                     var out : list(TrieItem) = [||];
                     foreach (i from 0 to 15) {
                         let nib : nibble = get_slice_int(4, i, 0);
-                        let field = list_nth(items, i, RLP_NONE);
-                        let group = patches_at_nibble(updates, list_len(prefix), nib);
+                        let field = list_nth(branch.fields, i, RLP_REF_NONE);
+                        let group = patches_at_nibble(updates, path_len(prefix), nib);
 
                         /* a child slot holds an embedded node, a 32-byte hash,
                            or nothing (field_to_ref of anything else is empty) */
-                        let present = field.is_list | list_len(field.content) == 32;
+                        let childref = field_to_ref(field);
+                        let present : bool = match childref {
+                                EmptyRef() => false,
+                                _ => true,
+                            };
                         let contrib : list(TrieItem) = if patches_empty(group) then {
                                 if present then {
                                     /* untouched branch child: node type unknown
                                        for hash refs (is_branch = false) */
-                                    [|item_subtree(prefix ++ [|nib|], field_to_ref(field), false)|]
+                                    [|item_subtree(path_concat(prefix, path_single(nib)), childref)|]
                                 } else {
                                     [||]
                                 }
@@ -923,8 +725,7 @@ function witness_items(
                                 if present then {
                                     witness_child_items(
                                         field,
-                                        node_off + rlp_top_item_full_offset(node, i),
-                                        prefix ++ [|nib|],
+                                        path_concat(prefix, path_single(nib)),
                                         group,
                                         fuel - 1,
                                     )
@@ -937,15 +738,14 @@ function witness_items(
                         out = out ++ contrib
                     };
                     out
-                } else {
-                    [||]
-                }
+                },
+                InvalidNode() => [||],
             }
         }
     }
 }
-termination_measure witness_items(node, node_off, prefix, updates, fuel) = fuel
-termination_measure witness_child_items(f, f_off, prefix, updates, fuel) = fuel
+termination_measure witness_items(node, prefix, updates, fuel) = fuel
+termination_measure witness_child_items(f, prefix, updates, fuel) = fuel
 
 /* ---- THE trie entry ------------------------------------------------------
  *
@@ -970,249 +770,72 @@ function trie_root(base_root : bits(256), updates : list(TriePatch)) -> bits(256
             items_root(patches_live_items(updates))
         } else {
             let node = node_db_lookup(base_root);
-            if list_len(node) == 0 then {
+            if bytes_len(node) == 0 then {
                 throw InvalidBlock(WitnessDeficient)
             } else {
-                items_root(witness_items(node, unsigned(nodedb_off(base_root)), [||], updates, 256))
+                items_root(witness_items(node, path_empty(), updates, 256))
             }
         }
     }
 }
 
-/* ======================================================================== */
-/* (4) Ethereum world-state trie                                            */
-/*                                                                          */
-/* The state root (Yellow Paper section 4.1): the secure-trie root over all */
-/* accounts. The trie is 'secure' -- keys are hashed: key =                 */
-/* keccak256(address), value = RLP([nonce, balance, storageRoot,            */
-/* codeHash]). storageRoot is the root of the account's storage trie, the   */
-/* secure trie over keccak256(slot) -> RLP(value) with zero-valued slots    */
-/* absent. Accounts that are empty per EIP-161 (zero nonce, zero balance,   */
-/* no code) are excluded.                                                   */
-/*                                                                          */
-/* compute_state_root over the post-execution world equals the block's      */
-/* stateRoot exactly when execution is correct -- it authenticates the      */
-/* result. Both worlds share one base (this file): the execution write      */
-/* set overlaid on the authenticated parent root (the SSZ witness for the   */
-/* guest, the harness-built alloc MPT for the runner), feeding trie_root.   */
-/* ======================================================================== */
-
-/* Reused account-RLP payload accumulator. account_rlp is invoked once per account
- * when authenticating the post-state root (compute_state_root); a block-level
- * root or the proving path runs it over the whole account set, so it builds the
- * payload into this single register (O(1) prepend, reversed once) instead of
- * allocating fresh intermediate lists per account. Not reentrant: cleared at the
- * start of every account_rlp call, and account_rlp calls nothing that touches it. */
-register rlp_scratch : list(byte) = [||]
-function rlp_push(bs : list(byte)) -> unit = {
-    var rest : list(byte) = bs;
-    var more : bool = true;
-    while more do {
-        match rest {
-            b :: t => {
-                rlp_scratch = b :: rlp_scratch;
-                rest = t
-            },
-            [||] => more = false,
-        }
-    }
-}
-
-/* rlp([nonce, balance, storageRoot, codeHash]) */
-function account_rlp(nonce : u64, balance : word, sroot : bits(256), chash : bits(256)) -> list(byte) = {
-    rlp_scratch = [||];
-    rlp_push(rlp_int(unsigned(nonce)));
-    rlp_push(rlp_int(unsigned(balance)));
-    rlp_push(rlp_word(sroot));
-    rlp_push(rlp_word(chash));
-    rlp_list(list_reverse(rlp_scratch)) /* prepend builds newest-first; reverse -> field order */
-}
-
-function account_leaf_value(nonce : u64, balance : word, sroot : hash, chash : hash) -> ByteSlice =
-    arena_intern(account_rlp(nonce, balance, sroot, chash))
-
-function storage_leaf_value(value : word) -> ByteSlice =
-    arena_intern(rlp_int(unsigned(value)))
-
-/* secure-trie updates for one account's post-state storage, selected by
- * keccak(address): enumerate the account's block rows and keep the NET
- * CHANGES vs the pre-state (curr != orig -- the filter is stated here, not in
- * C). Untouched slots remain inside the recursive overlay rooted at the
- * account's pre-state storage root. A nonzero curr sets RLP(value); a zero
- * curr deletes the slot (curr != orig means the pre-state held a nonzero
- * value, so a real MPT leaf exists to delete -- a zero write to a slot with
- * no pre-state leaf has curr == orig == 0 and is skipped). */
-function storage_updates(a : address) -> list(TriePatch) = {
-    var out : list(TriePatch) = [||];
-    let n = unsigned(storage_block_row_count(a));
-    foreach (j from 0 to (n - 1)) {
-        let e = storage_block_row(a, get_slice_int(64, j, 0));
-        if e.value.curr != e.value.orig then {
-            let key = to_nibbles(word_to_bytes32(keccak256_word(e.key.slot)));
-            out = patch_insert_sorted(
-                if word_is_zero(e.value.curr) then {
-                    patch_delete(key)
+/* Walk the secure trie without copying its leaf value. */
+function trie_walk(node : Bytes, key : TriePath, pos : int, fuel : int) -> Bytes = {
+    if fuel <= 0 | bytes_len(node) == 0 then {
+        BytesList([||])
+    } else {
+        match decode_trie_node(node) {
+            LeafNode(leaf) => if not_bool(path_matches(key, pos, leaf.path)) then {
+                    BytesList([||])
                 } else {
-                    patch_leaf(key, storage_leaf_value(e.value.curr))
-                },
-                out,
-            )
-        }
-    };
-    out
-}
-
-function account_empty(acc : Account) -> bool =
-    (acc.code_hash == KECCAK_EMPTY) & acc.nonce == sail_zeros(64) & word_is_zero(acc.balance)
-
-/* trie update for one changed block account row. An account that ends the
- * block EIP-161-empty is a DELETE when its pre-state was a real leaf, else
- * it is dropped (nothing to delete). The verdict is read off the value:
- * a structurally non-empty orig can only come from decoding a leaf --
- * value-as-existence, exactly as storage_updates treats a zero write to a
- * leafless slot (curr == orig == 0 => skipped). A live account's leaf
- * embeds its post-state storage root: the single trie entry over the
- * account's pre-state storage root and its net storage changes (an empty
- * update list keeps the committed root, including an EIP-8025 omitted
- * storage proof -- only deficient if the block actually writes that
- * account's storage, when trie_root's missing-root path fails closed). */
-function state_updates_account_row(row : AcctEntry, s_upd : list(TriePatch), prev : list(TriePatch)) -> list(TriePatch) = {
-    let acc = row.value.curr;
-    let ak = to_nibbles(word_to_bytes32(keccak256_address(row.addr)));
-    if account_empty(acc) & not_bool(account_changed(row.value.orig, EMPTY_ACCOUNT)) then {
-        prev
-    } else {
-        let upd : TriePatch = if account_empty(acc) then {
-                patch_delete(ak)
-            } else {
-                patch_leaf(
-                    ak,
-                    account_leaf_value(
-                        acc.nonce,
-                        acc.balance,
-                        trie_root(acc.storage_root, s_upd),
-                        acc.code_hash,
-                    ),
-                )
-            };
-        patch_insert_sorted(upd, prev)
-    }
-}
-
-/* secure-trie updates for the account map: enumerate ALL block rows and keep
- * the net changes -- an account feeds the root when its FIELDS changed vs the
- * pre-state original OR its STORAGE has net changes (read-only rows with
- * untouched storage are base-state cache, not post-state updates). The
- * filter is stated here; C hands over unfiltered rows. */
-function state_updates_map() -> list(TriePatch) = {
-    var out : list(TriePatch) = [||];
-    let n = unsigned(acct_block_row_count());
-    foreach (j from 0 to (n - 1)) {
-        let row = acct_block_row(get_slice_int(64, j, 0));
-        let s_upd = storage_updates(row.addr);
-        if account_changed(row.value.curr, row.value.orig) | (list_len(s_upd) > 0) then {
-            out = state_updates_account_row(row, s_upd, out)
-        }
-    };
-    out
-}
-
-/* the post-state world root: the single trie entry over the authenticated
- * parent-root anchor (k_parent_state_root) and the execution update collection. */
-function compute_state_root() -> bits(256) = {
-    trie_arena_reset();
-    trie_root(k_parent_state_root, state_updates_map())
-}
-
-/* ======================================================================== */
-/* (5) stateless witness-backed reads                                       */
-/*                                                                          */
-/* Reads are LAZY: point reads walk the secure trie from the authenticated  */
-/* parent root (k_parent_state_root) by keccak256(key) nibbles (branch /    */
-/* extension / leaf, hex-prefix paths) to the account leaf and decode       */
-/* RLP([nonce, balance, storageRoot, codeHash]); storage reads walk the     */
-/* account's storage root the same way. Because the node database is keyed  */
-/* by keccak256(node), every walk is itself a hash-chain proof from its     */
-/* root -- no up-front re-root pass is needed to authenticate the witness.  */
-/*                                                                          */
-/* A node absent from the witness on a walked path is a missing proof and   */
-/* fails closed. Depends on the RLP library and the SSZ                     */
-/* witness-list readers (host/io.sail).                                     */
-/* ======================================================================== */
-
-/* decode an account leaf value: (nonce, balance, storage_root, code_hash) */
-function decode_account(leaf : list(byte)) -> (int, word, bits(256), bits(256)) = {
-    let items = rlp_node_items(leaf);
-    let nonce = rlp_field_int(rlp_item(items, 0));
-    let balance = rlp_field_uint_word(rlp_item(items, 1));
-    let sr_f = rlp_item(items, 2);
-    let ch_f = rlp_item(items, 3);
-    let sroot = if list_len(sr_f.content) == 0 then {
-            EMPTY_TRIE_ROOT
-        } else {
-            bytes_be256(sr_f.content)
-        };
-    let chash = if list_len(ch_f.content) == 0 then {
-            KECCAK_EMPTY
-        } else {
-            bytes_be256(ch_f.content)
-        };
-    (nonce, balance, sroot, chash)
-}
-
-/* 64 nibbles (MSB-first) of a 256-bit key hash */
-function hash_nibbles(h : bits(256)) -> list(nibble) = {
-    var rev : list(nibble) = [||];
-    foreach (i from 0 to 63) {
-        rev = sail_shiftright(h, 4 * (63 - i))[3 .. 0] :: rev
-    };
-    list_reverse(rev)
-}
-
-/* walk the secure trie from `node` following key nibbles; return the leaf value */
-function trie_walk(node : list(byte), key : list(nibble), pos : int, fuel : int) -> list(byte) = {
-    if fuel <= 0 | list_len(node) == 0 then {
-        [||]
-    } else {
-        let items = rlp_node_items(node);
-        let n = list_len(items);
-        if n == 2 then {
-            let (is_leaf, seg) = hex_prefix_decode(list_nth(items, 0, RLP_NONE).content);
-            if not_bool(nibs_match(key, pos, seg)) then {
-                [||]
-            } else {
-                if is_leaf then {
-                    if pos + list_len(seg) == list_len(key) then {
-                        list_nth(items, 1, RLP_NONE).content
+                    if pos + path_len(leaf.path) == path_len(key) then {
+                        rlp_ref_content(leaf.value)
                     } else {
-                        [||]
+                        BytesList([||])
                     }
+                },
+            ExtensionNode(ext) => if not_bool(path_matches(key, pos, ext.path)) then {
+                    BytesList([||])
                 } else {
-                    let child = resolve_child(list_nth(items, 1, RLP_NONE));
-                    trie_walk(child, key, pos + list_len(seg), fuel - 1)
-                }
-            }
-        } else {
-            if n == 17 then {
-                if pos == list_len(key) then {
-                    list_nth(items, 16, RLP_NONE).content
+                    trie_walk(
+                        resolve_ref(field_to_ref(ext.child)),
+                        key,
+                        pos + path_len(ext.path),
+                        fuel - 1,
+                    )
+                },
+            BranchNode(branch) => {
+                if pos == path_len(key) then {
+                    rlp_ref_content(list_nth(branch.fields, 16, RLP_REF_NONE))
                 } else {
-                    let child = resolve_child(list_nth(items, unsigned(list_nth(key, pos, 0x0)), RLP_NONE));
+                    let child = resolve_ref(
+                        field_to_ref(
+                            list_nth(branch.fields, unsigned(path_nibble(key, pos)), RLP_REF_NONE),
+                        ),
+                    );
                     trie_walk(child, key, pos + 1, fuel - 1)
                 }
-            } else {
-                [||]
-            }
+            },
+            InvalidNode() => BytesList([||]),
         }
     }
 }
 termination_measure trie_walk(node, key, pos, fuel) = fuel
 
-/* ---- account / storage resolution against the witness ------------------ */
+function trie_lookup(root : hash, key : TriePath) -> Bytes = {
+    if root == EMPTY_TRIE_ROOT then {
+        BytesList([||])
+    } else {
+        let node = node_db_lookup(root);
+        if bytes_len(node) == 0 then {
+            throw InvalidBlock(WitnessDeficient)
+        } else {
+            trie_walk(node, key, 0, 256)
+        }
+    }
+}
 
-/* populate the C node-db from witness.state: keccak(node) -> span. The node is
- * materialized once here to hash it; the recorded span (not the bytes) is what
- * the walk reads back, so no per-node Sail copy is retained. */
+/* Populate the C node-db from witness.state: keccak(node) -> source span. */
 function build_node_db(nodes : list(ByteSlice)) -> unit = {
     nodedb_reset();
     var rest : list(ByteSlice) = nodes;
@@ -1225,58 +848,5 @@ function build_node_db(nodes : list(ByteSlice)) -> unit = {
                 rest = r
             },
         }
-    }
-}
-
-/* The stateless resolvers (declared in host/state.sail): one lazy Merkle walk
- * from the authenticated parent-root anchor (k_parent_state_root) over the
- * node DB, for both worlds -- the authenticated SSZ witness for the guest, the
- * harness-built alloc MPT for the runner (the node-db and anchor are populated
- * the same way). Either way the trie is complete along every touched path
- * (fail closed on a missing node), so the resolvers are identical. */
-
-/* Stateless storage resolver: the (a, s) pre-state value via a Merkle walk of
- * the account's storage trie from its pre-state root. An empty storage_root
- * short-circuits to 0 (no walk); a committed non-empty root whose node is
- * absent is a proof the witness omitted (EIP-8025) -> fail closed (never fires
- * for a complete alloc MPT); a diverging or empty terminus is a proven-absent
- * slot => 0. Base BELOW the overlay layers (host/kernel/storage.sail k_sload, which
- * caches the resolved value in the tx layer). */
-function stateless_storage(a : address, s : word) -> word = {
-    let sroot = k_aload(a).storage_root;
-    if sroot == EMPTY_TRIE_ROOT then {
-        sail_zeros(256)
-    } else {
-        let rootnode = node_db_lookup(sroot);
-        if list_len(rootnode) == 0 then {
-            throw InvalidBlock(WitnessDeficient)
-        } else {
-            let leaf = trie_walk(rootnode, hash_nibbles(keccak256_word(s)), 0, 256);
-            if list_len(leaf) > 0 then {
-                rlp_str_word(leaf)
-            } else {
-                sail_zeros(256)
-            }
-        }
-    }
-}
-
-/* Stateless account resolution (PURE, mirroring stateless_storage): walk the
- * state trie from the parent-root anchor. Reaching the leaf => Some(account);
- * a diverging/empty terminus => None (proven-absent); a blinded node =>
- * missing proof => fail closed. The caller (k_aload) caches the result
- * into the tx layer -- no overlay mutation happens here. */
-function stateless_account(a : address) -> option(Account) = {
-    let ak = keccak256_address(a);
-    let rootnode = node_db_lookup(k_parent_state_root);
-    if (list_len(rootnode) == 0) & (k_parent_state_root != EMPTY_TRIE_ROOT) then {
-        throw InvalidBlock(WitnessDeficient)
-    };
-    let value = trie_walk(rootnode, hash_nibbles(ak), 0, 256);
-    if list_len(value) > 0 then {
-        let (nonce, bal, sroot, chash) = decode_account(value);
-        Some(struct { nonce = get_slice_int(64, nonce, 0), balance = bal, code_hash = chash, storage_root = sroot })
-    } else {
-        None()
     }
 }

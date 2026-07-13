@@ -239,12 +239,6 @@ unit mem_write_byte(uint64_t off, uint64_t v) {
 
 /* ---- generic ByteSlice reads (calldata and executable frame code) ------- */
 
-/* a raw byte of the arena at an ABSOLUTE offset (read_byte_slice's
- * MemoryArenaSource view) */
-uint64_t mem_arena_byte(uint64_t off) {
-  return (off < arena_cap) ? (uint64_t)arena[off] : 0;
-}
-
 /* a READ view of established arena bytes at an absolute offset */
 const uint8_t *mem_arena_region(uint64_t off, uint64_t len) {
   if (len == 0 || off > arena_cap || len > arena_cap - off) return NULL;

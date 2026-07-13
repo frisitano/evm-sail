@@ -1,10 +1,11 @@
-/* Indexed-code insertion glue. JumpdestBitmap is a GENERATED
- * list(bits(64)), so this file compiles per build against the generated model
- * header rather than mirroring Sail's cons-cell layout.
+/* Code aggregate glue. JumpdestBitmap and option(Code) are
+ * GENERATED types, so this file compiles per build against the generated model
+ * header rather than mirroring Sail's layouts.
  *
  * Sail performs the complete PUSH-aware scan before either function is
- * called. The glue only flattens its immutable bitmap into scalar words for
- * code_db.c; opcode analysis never crosses into C. */
+ * called. The glue flattens its immutable bitmap into scalar words for
+ * code_db.c and assembles a typed lookup result; opcode analysis never crosses
+ * into C. */
 #include EVMSAIL_MODEL_H
 #include "code_db.h"
 #include "lbits_convert.h"
@@ -32,6 +33,21 @@ static int unpack_jumpdest_bitmap(uint64_t **out, uint64_t expected,
   }
   *out = words;
   return 1;
+}
+
+void code_db_lookup(struct zoptionzIRCodezK *out, const lbits h) {
+  uint64_t off = 0, len = 0, jumpdest_ref = 0;
+  if (!code_db_lookup_indexed(h, &off, &len, &jumpdest_ref)) {
+    out->kind = Kind_zNonezIRCodezK;
+    out->variants.zNonezIRCodezK = UNIT;
+    return;
+  }
+  out->kind = Kind_zSomezIRCodezK;
+  struct zCode *code = &out->variants.zSomezIRCodezK;
+  code->zbytes.zsource = zCodeSource;
+  code->zbytes.zoff = off;
+  code->zbytes.zlen = len;
+  code->zjumpdests = jumpdest_ref;
 }
 
 void code_db_store_indexed_source(lbits *rop, uint64_t source_kind,

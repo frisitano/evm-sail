@@ -90,14 +90,12 @@ unit el_emit_out(uint64_t b)
  * WITHOUT any Sail-level reset function. This is the whole point: k_world_reset
  * is driver/test plumbing, not EVM semantics, so it does not belong in the
  * model. We call its constituent FFI resets directly instead. */
-extern unit acct_wset_reset(unit);           /* block account write-set overlay */
-extern unit storage_wset_reset(unit);        /* block storage write-set overlay */
+extern unit acct_db_reset(unit);             /* transaction + block account state */
+extern unit storage_db_reset(unit);          /* transaction + block storage state */
 extern unit bal_reset(unit);                 /* EIP-7928 block-access-list accumulator */
 extern unit warm_reset(unit);                /* EIP-2929 warm sets */
 extern unit transient_storage_reset(unit u); /* EIP-1153 transient storage */
 extern unit logs_reset(unit);
-extern unit selfdestr_reset(unit);
-extern unit created_reset(unit);
 extern unit journal_reset(unit);
 extern unit nodedb_reset(unit);              /* hash-keyed witness node store */
 extern unit code_db_reset(unit);             /* content-addressed code store (missing-code tests) */
@@ -112,16 +110,14 @@ extern bool have_exception;                  /* generated: a Sail throw escaped 
 void evmsail_clear_memory(void)
 {
     /* block-level overlays -- the pieces per-tx k_tx_reset does NOT clear */
-    acct_wset_reset(UNIT);
-    storage_wset_reset(UNIT);
+    acct_db_reset(UNIT);
+    storage_db_reset(UNIT);
     bal_reset(UNIT);
     /* ephemeral per-frame/per-tx state (also cleared by k_tx_reset, but a
      * zero-transaction block would otherwise inherit it) */
     warm_reset(UNIT);
     transient_storage_reset(UNIT);
     logs_reset(UNIT);
-    selfdestr_reset(UNIT);
-    created_reset(UNIT);
     journal_reset(UNIT);
     /* content-addressed witness stores -- cleared so a fixture that
      * under-specifies its witness FAILS (valid=false) instead of borrowing a
@@ -211,18 +207,17 @@ unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
  *                                     is a Sail register, and for the runner
  *                                     memory is reset per tx -- empty post-run)
  *   'E'
- * The account/storage rows are the WRITE-SET UNION (what execution touched);
- * unchanged witness-base values are not enumerable here (that's what the root
- * commits to). */
-extern uint64_t acct_wset_union_count(unit);
-extern void     acct_wset_union_hkey(lbits *, uint64_t);
-extern uint64_t acct_wset_union_nonce(uint64_t);
-extern void     acct_wset_union_bal(lbits *, uint64_t);
-extern void     acct_wset_union_sroot(lbits *, uint64_t);
-extern void     acct_wset_union_chash(lbits *, uint64_t);
-extern uint64_t storage_wset_union_count(lbits);
-extern void     storage_wset_union_slot(lbits *, lbits, uint64_t);
-extern void     storage_wset_union_val(lbits *, lbits, uint64_t);
+ * The account/storage entries are the cumulative state touched by execution;
+ * unchanged authenticated-base values are not enumerable here. */
+extern uint64_t acct_dump_count(unit);
+extern void     acct_dump_hkey(lbits *, uint64_t);
+extern uint64_t acct_dump_nonce(uint64_t);
+extern void     acct_dump_balance(lbits *, uint64_t);
+extern void     acct_dump_storage_root(lbits *, uint64_t);
+extern void     acct_dump_code_hash(lbits *, uint64_t);
+extern uint64_t storage_dump_count(lbits);
+extern void     storage_dump_slot(lbits *, lbits, uint64_t);
+extern void     storage_dump_value(lbits *, lbits, uint64_t);
 extern uint64_t stack_depth(unit);
 extern void     stack_peek_word(lbits *, uint64_t);
 extern uint64_t hm_depth(unit);
@@ -283,20 +278,20 @@ unsigned long evmsail_dump_snapshot(const unsigned char **out)
     }
 
     d_byte('A');
-    uint64_t na = acct_wset_union_count(UNIT);
+    uint64_t na = acct_dump_count(UNIT);
     d_u32((uint32_t)na);
     for (uint64_t i = 0; i < na; i++) {
-        acct_wset_union_hkey(&w, i); d_word(&w);       /* keccak(address) */
+        acct_dump_hkey(&w, i); d_word(&w);       /* keccak(address) */
         lbits hk = w;                                   /* reuse as the storage account key */
-        d_u64(acct_wset_union_nonce(i));
-        acct_wset_union_bal(&w, i);   d_word(&w);
-        acct_wset_union_sroot(&w, i); d_word(&w);
-        acct_wset_union_chash(&w, i); d_word(&w);
-        uint64_t ns = storage_wset_union_count(hk);
+        d_u64(acct_dump_nonce(i));
+        acct_dump_balance(&w, i);   d_word(&w);
+        acct_dump_storage_root(&w, i); d_word(&w);
+        acct_dump_code_hash(&w, i); d_word(&w);
+        uint64_t ns = storage_dump_count(hk);
         d_u32((uint32_t)ns);
         for (uint64_t j = 0; j < ns; j++) {
-            storage_wset_union_slot(&w, hk, j); d_word(&w);
-            storage_wset_union_val(&w, hk, j);  d_word(&w);
+            storage_dump_slot(&w, hk, j); d_word(&w);
+            storage_dump_value(&w, hk, j);  d_word(&w);
         }
     }
 

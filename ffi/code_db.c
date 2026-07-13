@@ -6,7 +6,7 @@
  * span in the arena plus a JumpdestRef into a flat arena populated from the
  * completed bitmap produced by Sail's index_code pass. C never analyzes
  * opcodes: it only stores packed words and answers membership queries. Sail's
- * single frame_code IndexedCode register is the complete active executable
+ * single frame_code Code register is the complete active executable
  * state.
  *
  * The Sail account store remains the authoritative account-code value;
@@ -14,7 +14,6 @@
 #include "sail.h"
 #include "lbits_convert.h"
 #include "host_crypto.h"
-#include "memory.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -86,10 +85,6 @@ static code_db_ent *code_db;
 static uint32_t code_db_cap, code_db_n;
 static uint8_t *code_arena;
 static size_t code_arena_cap, code_arena_len;
-
-static uint8_t code_db_byte(const code_db_ent *e, uint64_t i) {
-  return (e && i < e->len) ? code_arena[e->off + i] : 0;
-}
 
 static uint64_t code_db_hash(const uint64_t *a) {
   uint64_t h = 0xcbf29ce484222325ull;
@@ -236,9 +231,9 @@ void code_intern_indexed_delegation_words(lbits *rop, const lbits addr,
   be_words4_to_lbits(rop, key);
 }
 
-/* --------------------- address-keyed read accessors --------------------- */
-/* EXTCODESIZE / EXTCODECOPY / EXTCODEHASH read the store directly: the Sail
- * account code value defines the value, but walking it is O(|code|) per opcode. */
+/* ----------------------- code-hash lookup ------------------------------- */
+/* Return the code span and its associated JUMPDEST table as one invariant.
+ * code_glue.c assembles the generated Code result. */
 
 static const code_db_ent *code_db_get(const lbits h) {
   if (!code_db) return NULL;
@@ -248,23 +243,14 @@ static const code_db_ent *code_db_get(const lbits h) {
   return (e->used && e->len) ? e : NULL;
 }
 
-uint64_t code_db_stored_code_length(const lbits h) {
+bool code_db_lookup_indexed(const lbits h, uint64_t *off, uint64_t *len,
+                            uint64_t *jumpdest_ref) {
   const code_db_ent *e = code_db_get(h);
-  return e ? e->len : 0;
-}
-
-uint64_t code_db_stored_code_offset(const lbits h) {
-  const code_db_ent *e = code_db_get(h);
-  return e ? e->off : 0;
-}
-
-uint64_t code_db_stored_jumpdest_ref(const lbits h) {
-  const code_db_ent *e = code_db_get(h);
-  return e ? e->jumpdest_ref : 0;
-}
-
-uint64_t code_db_byte_at(uint64_t off) {
-  return off < code_arena_len ? code_arena[off] : 0;
+  if (!e) return false;
+  *off = e->off;
+  *len = e->len;
+  *jumpdest_ref = e->jumpdest_ref;
+  return true;
 }
 
 /* Resolve an absolute CodeSource arena span. Offsets, unlike pointers, remain
@@ -291,19 +277,6 @@ const uint8_t *code_db_code_by_words(const uint64_t key_be[4], uint64_t *len_out
   if (!(e->used && e->len)) return NULL;
   *len_out = e->len;
   return code_arena + e->off;
-}
-
-/* EXTCODECOPY: code(hash)[off..off+len) -> memory[dst..), zero-padded */
-unit code_db_copy_stored_code_to_memory(const lbits h, uint64_t dst, uint64_t off, uint64_t len) {
-  if (!len) return UNIT;
-  uint8_t *d = hm_wr(dst, len);
-  if (!d) return UNIT;
-  const code_db_ent *e = code_db_get(h);
-  for (uint64_t k = 0; k < len; k++) {
-    uint64_t i = off + k;
-    d[k] = (i >= off) ? code_db_byte(e, i) : 0;
-  }
-  return UNIT;
 }
 
 /* EIP-7702 delegation probe: (is_designation << 160) | target, in one call

@@ -10,7 +10,6 @@ enum ByteSource = {
     MemorySource,
     TxInputSource,
     CodeSource,
-    TrieArenaSource,
     LogDataSource,
     MemoryArenaSource,
     ReturndataSource,
@@ -31,7 +30,6 @@ function byte_source_kind(src : ByteSource) -> bits(64) =
         MemorySource => 0x0000000000000002,
         TxInputSource => 0x0000000000000003,
         CodeSource => 0x0000000000000004,
-        TrieArenaSource => 0x0000000000000005,
         LogDataSource => 0x0000000000000006,
         MemoryArenaSource => 0x0000000000000007,
         ReturndataSource => 0x0000000000000008,
@@ -74,12 +72,12 @@ struct AnalyzedCode = {
 /* Once inserted under keccak(bytes), code carries the immutable code-arena
  * view and the resolved packed-table reference. The content hash is the
  * stable code-DB key; the ref is only its efficient execution-time view. */
-struct IndexedCode = {
+struct Code = {
     bytes : ByteSlice,
     jumpdests : JumpdestRef,
 }
 
-let EMPTY_INDEXED_CODE : IndexedCode = struct { bytes = EMPTY_SLICE, jumpdests = EMPTY_JUMPDEST_REF }
+let EMPTY_CODE : Code = struct { bytes = EMPTY_SLICE, jumpdests = EMPTY_JUMPDEST_REF }
 
 /* A byte-sequence segment: materialized Sail bytes or a C-backed span. A
  * list(Bytes) denotes the concatenation of its segments and crosses the FFI

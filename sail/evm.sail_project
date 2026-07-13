@@ -17,6 +17,7 @@ evm {
     primitives/evm.sail,
     primitives/stateless_input.sail,
     host/io.sail,
+    host/byte_slice.sail,
     lib/ssz/ssz.sail,
     lib/rlp/rlp.sail,
     lib/address.sail,
@@ -24,10 +25,10 @@ evm {
     lib/rlp/tx.sail,
     lib/rlp/block.sail,
     host/state.sail,
+    host/environment.sail,
     host/stack.sail,
     host/memory.sail,
     host/returndata.sail,
-    host/byte_slice.sail,
     host/kernel/environment.sail,
     host/kernel/storage.sail,
     host/kernel/logs.sail,
@@ -42,8 +43,9 @@ evm {
     evm/interpreter.sail,
     evm/transaction.sail,
     lib/mpt.sail,
+    lib/state_trie.sail,
     if $EVM_ENTRY == core then []
-    else if $EVM_ENTRY == guest then [lib/ssz/stateless_input.sail, executor/system_calls.sail, lib/htr.sail, bin/main.sail]
+    else if $EVM_ENTRY == guest then [lib/ssz/stateless_input.sail, executor/system_calls.sail, executor/block.sail, lib/htr.sail, bin/main.sail]
     else if $EVM_ENTRY == runner then [lib/ssz/stateless_input.sail, bin/runner.sail]
     else error("EVM_ENTRY must be core, guest, or runner")
 }

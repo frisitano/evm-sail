@@ -20,6 +20,10 @@
 extern void *malloc(unsigned long);
 extern void  free(void *);
 
+bool EQUAL(bool)(const bool a, const bool b) {
+  return a == b;
+}
+
 /* ===================== 512-bit unsigned magnitude ====================== */
 #define NI SAIL_INT_LIMBS   /* 8 limbs = 512 bits */
 

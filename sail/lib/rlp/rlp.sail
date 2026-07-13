@@ -17,23 +17,22 @@
 
 function rlp_byte(n : int) -> byte = get_slice_int(8, n, 0)
 
+function rlp_string_prefix(len : int, first : byte) -> list(byte) =
+    if (len == 1) & (unsigned(first) < 128) then {
+        [||]
+    } else {
+        if len <= 55 then {
+            [|rlp_byte(128 + len)|]
+        } else {
+            let lb = int_to_be_bytes(len);
+            rlp_byte(183 + list_len(lb)) :: lb
+        }
+    }
+
 /* RLP-encode a byte string. */
 function rlp_bytes(data : list(byte)) -> list(byte) = {
     let n = list_len(data);
-    if n == 1 then {
-        if unsigned(list_nth(data, 0, 0x00)) < 128 then {
-            data
-        } else {
-            list_append([|rlp_byte(129)|], data)
-        } /* 0x80 + 1 */
-    } else {
-        if n <= 55 then {
-            list_append([|rlp_byte(128 + n)|], data)
-        } else {
-            let lb = int_to_be_bytes(n);
-            list_append(list_append([|rlp_byte(183 + list_len(lb))|], lb), data)
-        }
-    }
+    list_append(rlp_string_prefix(n, list_nth(data, 0, 0x00)), data)
 }
 
 /* RLP list header for a payload of `len` content bytes. */
@@ -122,6 +121,168 @@ function rlp_hdr(b : list(byte), pos : int) -> (bool, int, int) = {
         }
     }
 }
+
+function rlp_ref_be_int(b : Bytes, pos : int, n : int) -> int = {
+    var acc : int = 0;
+    foreach (k from 0 to (n - 1)) {
+        acc = acc * 256 + unsigned(bytes_at(b, pos + k))
+    };
+    acc
+}
+
+function rlp_ref_hdr(b : Bytes, pos : int) -> (bool, int, int) = {
+    let h = unsigned(bytes_at(b, pos));
+    if h < 128 then {
+        (false, pos, 1)
+    } else if h < 184 then {
+        (false, pos + 1, h - 128)
+    } else if h < 192 then {
+        let lol = h - 183;
+        (false, pos + 1 + lol, rlp_ref_be_int(b, pos + 1, lol))
+    } else if h < 248 then {
+        (true, pos + 1, h - 192)
+    } else {
+        let lol = h - 247;
+        (true, pos + 1 + lol, rlp_ref_be_int(b, pos + 1, lol))
+    }
+}
+
+function rlp_field_ref(
+    source : Bytes,
+    is_list : bool,
+    full_off : int,
+    full_len : int,
+    content_off : int,
+    content_len : int,
+) -> RlpFieldRef = struct {
+    source = source,
+    is_list = is_list,
+    full_off = get_slice_int(64, full_off, 0),
+    full_len = get_slice_int(64, full_len, 0),
+    content_off = get_slice_int(64, content_off, 0),
+    content_len = get_slice_int(64, content_len, 0),
+}
+
+function rlp_split_refs(b : Bytes, start : int, stop : int) -> list(RlpFieldRef) = {
+    var out : list(RlpFieldRef) = [||];
+    var pos : int = start;
+    while pos < stop do {
+        let (isl, cs, cl) = rlp_ref_hdr(b, pos);
+        let nxt = cs + cl;
+        if nxt > stop then {
+            throw InvalidBlock(RlpDecode)
+        };
+        out = rlp_field_ref(b, isl, pos, nxt - pos, cs, cl) :: out;
+        pos = nxt
+    };
+    list_reverse(out)
+}
+
+function rlp_node_refs(node : Bytes) -> list(RlpFieldRef) = {
+    if bytes_len(node) == 0 then {
+        [||]
+    } else {
+        let (isl, cs, cl) = rlp_ref_hdr(node, 0);
+        if isl & (cs + cl == bytes_len(node)) then {
+            rlp_split_refs(node, cs, cs + cl)
+        } else {
+            [||]
+        }
+    }
+}
+
+function rlp_single_ref(item : Bytes) -> RlpFieldRef = {
+    if bytes_len(item) == 0 then {
+        throw InvalidBlock(RlpDecode)
+    } else {
+        let (isl, cs, cl) = rlp_ref_hdr(item, 0);
+        let len = cs + cl;
+        if len != bytes_len(item) then {
+            throw InvalidBlock(RlpDecode)
+        };
+        rlp_field_ref(item, isl, 0, len, cs, cl)
+    }
+}
+
+function rlp_ref_item(items : list(RlpFieldRef), idx : int) -> RlpFieldRef = {
+    if (idx >= 0) & (idx < list_len(items)) then {
+        list_nth(items, idx, RLP_REF_NONE)
+    } else {
+        throw InvalidBlock(RlpDecode)
+    }
+}
+
+function rlp_ref_content(f : RlpFieldRef) -> Bytes =
+    bytes_range(f.source, unsigned(f.content_off), unsigned(f.content_len))
+
+function rlp_ref_full(f : RlpFieldRef) -> Bytes =
+    bytes_range(f.source, unsigned(f.full_off), unsigned(f.full_len))
+
+function rlp_ref_list_items(f : RlpFieldRef) -> list(RlpFieldRef) =
+    if f.is_list then {
+        rlp_split_refs(
+            f.source,
+            unsigned(f.content_off),
+            unsigned(f.content_off) + unsigned(f.content_len),
+        )
+    } else {
+        throw InvalidBlock(RlpDecode)
+    }
+
+function rlp_ref_uint_canonical(f : RlpFieldRef) -> bool = {
+    let n = unsigned(f.content_len);
+    let fl = unsigned(f.full_len);
+    let fo = unsigned(f.full_off);
+    let co = unsigned(f.content_off);
+    if f.is_list | (fl == 0) then {
+        false
+    } else if n == 0 then {
+        (fl == 1) & (unsigned(bytes_at(f.source, fo)) == 128)
+    } else {
+        let first = unsigned(bytes_at(f.source, co));
+        if first == 0 then {
+            false
+        } else if (n == 1) & (first < 128) then {
+            (fl == 1) & (unsigned(bytes_at(f.source, fo)) == first)
+        } else if n <= 55 then {
+            (fl == n + 1) & (unsigned(bytes_at(f.source, fo)) == 128 + n)
+        } else {
+            let len_bytes = int_to_be_bytes(n);
+            let lol = list_len(len_bytes);
+            var ok : bool = (fl == 1 + lol + n)
+                & (unsigned(bytes_at(f.source, fo)) == 183 + lol);
+            foreach (k from 0 to (lol - 1)) {
+                ok = ok & (bytes_at(f.source, fo + 1 + k) == bytes_get(len_bytes, k))
+            };
+            ok
+        }
+    }
+}
+
+function rlp_ref_int(f : RlpFieldRef) -> int =
+    if rlp_ref_uint_canonical(f) then {
+        rlp_ref_be_int(f.source, unsigned(f.content_off), unsigned(f.content_len))
+    } else {
+        throw InvalidBlock(RlpDecode)
+    }
+
+function rlp_ref_word(f : RlpFieldRef) -> word = {
+    var acc : word = sail_zeros(256);
+    foreach (k from 0 to (unsigned(f.content_len) - 1)) {
+        acc = or_vec(
+            sail_shiftleft(acc, 8),
+            sail_zero_extend(bytes_at(f.source, unsigned(f.content_off) + k), 256),
+        )
+    };
+    acc
+}
+
+function rlp_ref_uint_word(f : RlpFieldRef) -> word =
+    if rlp_ref_uint_canonical(f) then {
+        rlp_ref_word(f)
+    } else {
+        throw InvalidBlock(RlpDecode)
+    }
 
 /* RLP's scalar integer convention: zero is the empty string (0x80), positive
  * integers are shortest big-endian byte strings, and the surrounding RLP string

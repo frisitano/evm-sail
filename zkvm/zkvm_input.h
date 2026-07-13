@@ -27,19 +27,28 @@ struct zJEntry;
 unit journal_push(struct zJEntry e);                 /* JEntry -> unit */
 void journal_pop(struct zJEntry *rop, unit u);       /* unit -> JEntry */
 struct zoptionzIRStorageValuezK;                     /* option(StorageValue) per-layer views */
-void storage_tx_get(struct zoptionzIRStorageValuezK *rop, const lbits a, const lbits s);
-void storage_block_get(struct zoptionzIRStorageValuezK *rop, const lbits a, const lbits s);
-struct zoptionzIRAccountzK;                          /* option(Account) per-layer views */
+struct zStorageKey;
+struct zStorageEntry;
+void storage_tx_get(struct zoptionzIRStorageValuezK *rop, struct zStorageKey key);
+void storage_block_get(struct zoptionzIRStorageValuezK *rop, struct zStorageKey key);
+unit storage_tx_cache(struct zStorageKey key, const lbits value);
+unit storage_tx_update(struct zStorageKey key, const lbits value);
+unit storage_block_put(struct zStorageEntry entry);
+unit storage_block_cache(struct zStorageKey key, const lbits value);
+struct zoptionzIRAccountzK;                          /* transaction Account view */
+struct zAccount;
+struct zAcctEntry;
 void acct_tx_get(struct zoptionzIRAccountzK *rop, const lbits a);
 void acct_block_get(struct zoptionzIRAccountzK *rop, const lbits a);
-struct zoptionzIRStorageEntryzK;                     /* k_tx_merge drain pops */
+unit acct_tx_update(const lbits a, struct zAccount account);
+unit acct_tx_cache(const lbits a, struct zAccount account);
+unit acct_block_write(struct zAcctEntry entry);
+unit acct_block_cache(const lbits a, struct zAccount account);
+struct zoptionzIRStorageMergeEntryzK;                /* k_tx_merge drain pops */
 struct zoptionzIRAcctEntryzK;
-void storage_tx_pop(struct zoptionzIRStorageEntryzK *rop, unit u);
+void storage_tx_pop(struct zoptionzIRStorageMergeEntryzK *rop, unit u);
 void acct_tx_pop(struct zoptionzIRAcctEntryzK *rop, unit u);
-struct zoptionzIbzK;                                 /* option(word): EIP-6780 wipe drain */
-void storage_tx_wipe(struct zoptionzIbzK *rop, const lbits a);
-struct zStorageEntry;                                /* state-root enumeration views */
-struct zAcctEntry;
+/* state-root enumeration views */
 void storage_block_row(struct zStorageEntry *rop, const lbits a, uint64_t j);
 void acct_block_row(struct zAcctEntry *rop, uint64_t i);
 #endif

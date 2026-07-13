@@ -39,7 +39,7 @@ void evmsail_clear_memory(void);
 unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
                                const unsigned char **out);
 
-/* Post-run analysis snapshot of the live FFI state (accounts + storage write-set,
+/* Post-run analysis snapshot of the live FFI state (materialized accounts + storage,
  * stack, memory frame depth) as a self-describing big-endian blob; *out points
  * into a static buffer (valid until the next dump). See test_utils.c for the
  * layout; dump_state.py decodes it into Python types. */

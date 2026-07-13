@@ -53,6 +53,22 @@ val host_slice_copy_to_memory = impure { c: "slice_copy_to_memory" } : (
     ) -> unit
 val mem_establish_absolute = impure { c: "mem_establish_absolute" } : (bits(64), bits(64)) -> bits(64)
 
+val code_db_lookup = impure { c: "code_db_lookup" } : hash -> option(Code)
+val jumpdest_ref_contains = impure { c: "jumpdest_ref_contains" } : (JumpdestRef, bits(64), bits(64)) -> bool
+val code_db_store_indexed_source = impure { c: "code_db_store_indexed_source" } : (
+        bits(64),
+        bits(64),
+        bits(64),
+        JumpdestBitmap,
+    ) -> hash
+val code_intern_indexed_delegation = impure { c: "code_intern_indexed_delegation" } : (address, JumpdestBitmap) -> hash
+val code_db_read_delegation = impure { c: "code_db_read_delegation" } : hash -> bits(168)
+
+let SOURCE_PAST_END : int = 16777216
+
+function clamp_source_offset(off : int) -> int =
+    if off > SOURCE_PAST_END then { SOURCE_PAST_END } else { off }
+
 /* mint a slice of THIS frame's memory [off, off+len): the range is
  * established (it is already gas-charged) and referenced by ABSOLUTE arena
  * offset -- the frame is about to suspend, so the bytes are frozen for the
@@ -72,6 +88,47 @@ function mem_slice(off : int, len : int) -> ByteSlice =
 /* The byte at slice offset `off`, zero past the end. */
 function slice_byte(s : ByteSlice, off : int) -> byte =
     host_slice_byte(byte_source_kind(s.source), s.off, s.len, get_slice_int(64, clamp_source_offset(off), 0))
+
+function read_byte_slice(s : ByteSlice) -> list(byte) = {
+    let len = unsigned(s.len);
+    var out : list(byte) = [||];
+    var i : int = 0;
+    while i < len do {
+        out = slice_byte(s, i) :: out;
+        i = i + 1
+    };
+    list_reverse(out)
+}
+
+function bytes_len(data : Bytes) -> int =
+    match data {
+        BytesList(bs) => list_len(bs),
+        BytesSlice(s) => unsigned(s.len),
+    }
+
+function bytes_first(data : Bytes) -> byte =
+    match data {
+        BytesList(bs) => list_nth(bs, 0, 0x00),
+        BytesSlice(s) => slice_byte(s, 0),
+    }
+
+function bytes_to_list(data : Bytes) -> list(byte) =
+    match data {
+        BytesList(bs) => bs,
+        BytesSlice(s) => read_byte_slice(s),
+    }
+
+function bytes_at(data : Bytes, off : int) -> byte =
+    match data {
+        BytesList(bs) => bytes_get(bs, off),
+        BytesSlice(s) => slice_byte(s, off),
+    }
+
+function bytes_range(data : Bytes, off : int, len : int) -> Bytes =
+    match data {
+        BytesList(bs) => BytesList(bytes_slice(bs, off, len)),
+        BytesSlice(s) => BytesSlice(sub_slice(s, off, len)),
+    }
 
 /* The 32-byte word at slice offset `off`, zero-padded past the end. */
 function slice_load(s : ByteSlice, off : int) -> word =
@@ -146,14 +203,12 @@ function code_db_store_indexed(code : AnalyzedCode) -> hash =
 
 function code_db_index_and_store(code : ByteSlice) -> hash = code_db_store_indexed(index_code(code))
 
-function code_db_indexed_code(h : hash) -> IndexedCode = {
-    let len = unsigned(code_db_stored_code_length(h));
-    if len == 0 then {
-        EMPTY_INDEXED_CODE
+function code_db_resolve(h : hash) -> Code =
+    if h == KECCAK_EMPTY then {
+        EMPTY_CODE
     } else {
-        struct {
-            bytes = code_byte_slice(unsigned(code_db_stored_code_offset(h)), len),
-            jumpdests = code_db_stored_jumpdest_ref(h),
+        match code_db_lookup(h) {
+            Some(code) => code,
+            None() => throw InvalidBlock(WitnessDeficient),
         }
     }
-}

@@ -15,7 +15,6 @@ const uint8_t *mem_region(uint64_t off, uint64_t len);  /* ensure + read ptr   *
 uint8_t *hm_wr(uint64_t off, uint64_t len);        /* ensure + write ptr  */
 uint64_t mem_establish_absolute(uint64_t off, uint64_t len);
 const uint8_t *mem_arena_ptr(uint64_t abs);
-uint64_t mem_arena_byte(uint64_t off);
 const uint8_t *mem_arena_region(uint64_t off, uint64_t len);
 uint64_t slice_byte_at(uint64_t kind, uint64_t off, uint64_t len, uint64_t i);
 void slice_load_word(lbits *rop, uint64_t kind, uint64_t off, uint64_t len, uint64_t i);

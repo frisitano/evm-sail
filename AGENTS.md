@@ -27,20 +27,23 @@ duplicating instructions elsewhere.
 - `sail/bin/` holds the executable entry files (`bin/main.sail` the stateless
   guest, `bin/runner.sail` the EEST state-test runner), selected with
   `EVM_ENTRY=guest|runner`.
-- `sail/host/state.sail` is the declaration-only host state surface for impure
-  FFI contracts. `sail/host/kernel/environment.sail` owns the kernel registers,
-  and the remaining `sail/host/kernel/` modules group pure Sail `k_*`
-  operations by subsystem.
-- `sail/lib/mpt.sail` is the single trie implementation: one public entry
-  `trie_root(base_root, updates)` (witness-native overlay, fail-closed on
-  missing node material) plus account/storage MPT root computation and
-  stateless witness traversal. The Yellow Paper Appendix C/D equations are
-  kept as documentation on the internal functions; an empty base computes
-  TRIE(I) directly.
+- `sail/host/state.sail` is the declaration-only host world-state surface for
+  impure FFI contracts. `sail/host/environment.sail` declares the fixed-size,
+  O(1) ancestor-hash host table. `sail/host/kernel/environment.sail` owns the
+  kernel registers, and the remaining `sail/host/kernel/` modules group pure
+  Sail `k_*` operations by subsystem.
+- `sail/lib/mpt.sail` is the generic trie implementation: one public root
+  entry `trie_root(base_root, updates)` (witness-native overlay, fail-closed on
+  missing node material) plus authenticated lookup. `sail/lib/state_trie.sail`
+  owns Ethereum account/storage decoding, stateless reads, and post-state-root
+  assembly over that core. The Yellow Paper Appendix C/D equations are kept as
+  documentation on the internal functions; an empty base computes TRIE(I)
+  directly.
 - The impure host interface is an abstract `val` contract layer declared inline
   in the module files themselves as `val X = impure { c: "sym" } : T`
-  (`host/io.sail` crypto/oracle, `host/state.sail` / `host/memory.sail` world
-  state and buffers, `lib/mpt.sail` trie node refs; see `proof/extern-boundary.md`). These `c:`-bound vals are the
+  (`host/io.sail` crypto/oracle, `host/state.sail` / `host/environment.sail` /
+  `host/memory.sail` world state, block environment, and buffers,
+  `lib/mpt.sail` trie node refs; see `proof/extern-boundary.md`). These `c:`-bound vals are the
   TRUE axioms (crypto core, I/O oracle, mutable host stores) -- proof targets
   see them as bodyless parameters; executables link their C definitions from
   `ffi/`. Generated aggregate values cross through three hand-written glue
@@ -50,7 +53,8 @@ duplicating instructions elsewhere.
   state rows/options; `ffi/hash_glue.c` handles the hash axioms
   (`keccak256_segments` / `sha256_segments : list(Bytes) -> hash`) and log
   records; and `ffi/code_glue.c` flattens Sail's
-  `JumpdestBitmap = list(bits(64))` for insertion into the packed C arena. A
+  `JumpdestBitmap = list(bits(64))` for insertion into the packed C arena and
+  constructs aggregate `option(Code)` lookup results. A
   hash preimage is a list of Bytes segments -- materialized bytes or
   source-tagged slices -- crossing in ONE call; the old streaming hash channel
   and fused source hashers are gone. Everything else,
@@ -79,7 +83,7 @@ duplicating instructions elsewhere.
     captures `have_exception` + the InvalidBlock BlockError variant +
     `throw_location`, e.g. `InvalidBlock(WitnessDeficient) @
     sail/lib/mpt.sail:1275`). The root IS the pass criterion. `--dump` prints
-    the model's live post-run state (write-set accounts+storage, stack,
+    the model's live post-run state (materialized accounts+storage, stack,
     memory) from the same snapshot.
   - `--guest` (`EVM_ENTRY=guest`, `build_lib.sh` -> `libevmsail_guest.dylib`):
     the Amsterdam stateless full-block validator, gated BYTE-EXACT against the

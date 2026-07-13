@@ -6,7 +6,7 @@ libevmsail_runner.dylib) linking test_utils.c, so run.py drives it in-process
 instead of forking a subprocess per case. Being in-process is what lets us read
 the model's live state AFTER a run: the runner emits NO byte stream at all --
 evmsail_dump_snapshot marshals the run RESULT (the shared zkvm_out_gas /
-zkvm_out_root registers) plus the write-set accounts+storage, the stack, and the
+zkvm_out_root registers) plus materialized accounts+storage, the stack, and the
 memory frame depth into a self-describing blob; result() reads just the (gas,
 root) pair, decode_snapshot() the whole thing.
 
@@ -135,7 +135,7 @@ def decode_snapshot(b):
     """Blob (see test_utils.c evmsail_dump_snapshot) -> {gas, root, accounts, stack,
     mem_frame_depth}.
     accounts: {acct_hash_int: {nonce, bal, sroot, chash, storage:{slot:val}}}
-    (write-set union = what execution touched; unchanged witness-base values are not
+    (materialized state = what execution touched; unchanged witness-base values are not
     enumerable here -- that is what the state root commits to). stack: [word,...] top-first."""
     (ok, gas, root, exc), p = _parse_result(b)
     assert b[p:p + 1] == b"A", "bad snapshot: missing accounts section"; p += 1
@@ -165,7 +165,7 @@ def format_snapshot(snap, limit=0):
     """Human-readable summary of a decoded snapshot (for FAIL analysis)."""
     exc = "" if snap["ok"] else f"  [ESCAPED: {snap['exc']}]"
     lines = [f"gas={snap['gas']} root={snap['root']:#066x}{exc}",
-             f"accounts (write-set): {len(snap['accounts'])}"]
+             f"accounts (materialized): {len(snap['accounts'])}"]
     for i, (hk, a) in enumerate(snap["accounts"].items()):
         if limit and i >= limit:
             lines.append(f"  ... (+{len(snap['accounts']) - limit} more)"); break

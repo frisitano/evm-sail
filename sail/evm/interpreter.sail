@@ -17,8 +17,8 @@
 /* run_create handles CREATE/CREATE2. A sub-call saves the parent's user-   */
 /* space frame registers, runs the child to a halt, then restores them. All */
 /* WORLD effects go through kernel syscalls: k_snapshot on entry,           */
-/* k_transfer for value, and k_commit / k_revert on exit -- the kernel      */
-/* rolls the world back atomically on a reverting child. The applicable     */
+/* k_transfer for value, and k_revert on failure -- the kernel rolls the    */
+/* world back atomically on a reverting child. The applicable               */
 /* rules are EIP-150 (63/64ths gas cap + stipend), EIP-214 (static-context  */
 /* write protection), EIP-2929 (cold/warm access), and EIP-7702 (delegated- */
 /* code execution).                                                         */
@@ -216,16 +216,16 @@ function frame_succeeded() -> bool =
  * runs the code at its delegation target, following exactly ONE hop; a
  * delegation whose target is a precompile (or has no code) executes as empty
  * code. An undelegated account runs its own code. */
-function executable_code(target : address, dele : bool, dtgt : address) -> IndexedCode =
+function executable_code(target : address, dele : bool, dtgt : address) -> Code =
     if dele then {
         let n = unsigned(address_to_word(dtgt));
         if is_precompile(n) then {
-            EMPTY_INDEXED_CODE
+            EMPTY_CODE
         } else {
-            code_db_indexed_code(k_code_key(dtgt))
+            code_db_resolve(k_code_key(dtgt))
         }
     } else {
-        code_db_indexed_code(k_code_key(target))
+        code_db_resolve(k_code_key(target))
     }
 
 /* ------------------------------ run_call -------------------------------- */
@@ -353,7 +353,7 @@ function run_call(mode : int) -> unit = {
        call to a 7702-delegated target still detects an omitted delegate-code
        proof, matching EELS; an OOG call returned above and never reaches here. */
     if tg_deleg then {
-        note_code_resolved(k_code_key(tg_target));
+        let _ = code_db_resolve(k_code_key(tg_target));
 
         /* EELS reads get_account(code_address) on the resolved delegate, so the
            delegate is touched (kept in the BAL account set). */
@@ -424,7 +424,7 @@ function run_call(mode : int) -> unit = {
         } else {
             /* CODE call. Snapshot the world (so a reverting child can be rolled
                back), then perform the CALL value transfer up front. */
-            k_snapshot();
+            let checkpoint = k_snapshot();
             if (mode == 0) & word_nonzero(value) then {
                 k_transfer(caller, target, value)
             };
@@ -516,14 +516,13 @@ function run_call(mode : int) -> unit = {
                AND revert (execution-specs generic_call), writing only
                min(ret_len, |output|) bytes and leaving the rest untouched. An
                exceptionally-halted child has empty output, so nothing is
-               written. The kernel then commits the child's world effects on
-               success, or rolls them back on failure. */
+               written. The child's world effects remain on success and are
+               rolled back on failure. */
             returndata_out_region(ret_off, ret_len);
             if succeeded then {
-                k_commit();
                 push(WORD_ONE)
             } else {
-                k_revert();
+                k_revert(checkpoint);
                 push(WORD_ZERO)
             }
         }
@@ -635,8 +634,9 @@ function run_create(is2 : bool) -> unit = {
             } else {
                 /* enter the new account: snapshot, mark it created this tx,
                    set its initial nonce to 1, and endow it with `value`. */
-                k_snapshot();
+                let checkpoint = k_snapshot();
                 k_mark_created(new_addr); /* EIP-6780: created this tx */
+                k_clear_storage(new_addr);
                 k_bump_nonce(new_addr); /* EIP-161: a created contract starts at nonce 1 */
                 k_transfer(creator, new_addr, value);
 
@@ -669,7 +669,7 @@ function run_create(is2 : bool) -> unit = {
                     } else {
                         EMPTY_SLICE
                     };
-                let child_code = code_db_indexed_code(code_db_index_and_store(initcode));
+                let child_code = code_db_resolve(code_db_index_and_store(initcode));
                 pc = 0;
                 gas_remaining = to_gas(child_gas);
                 stack_enter_frame();
@@ -715,13 +715,12 @@ function run_create(is2 : bool) -> unit = {
                 gas_remaining = to_gas(saved_gas_remaining + child_left);
 
                 /* finalize: an initcode that succeeded AND whose code is valid
-                   AND can pay its G_codedeposit cost deploys the code and
-                   commits; the new address is pushed. */
+                   AND can pay its G_codedeposit cost deploys the code; the new
+                   address is pushed. */
                 if succeeded & code_ok & (child_left >= deposit) then {
                     gas_remaining = to_gas(gas_remaining - deposit);
                     k_deploy_returndata_code(new_addr);
                     returndata_discard_pending();
-                    k_commit();
                     push(address_to_word(new_addr))
                 } else {
                     /* otherwise the create fails and is rolled back, pushing 0.
@@ -735,7 +734,7 @@ function run_create(is2 : bool) -> unit = {
                         gas_remaining = saved_gas_remaining
                     };
                     returndata_discard_pending();
-                    k_revert();
+                    k_revert(checkpoint);
                     push(WORD_ZERO)
                 }
             }

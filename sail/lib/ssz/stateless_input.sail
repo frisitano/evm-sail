@@ -82,7 +82,7 @@ function index_witness_headers(headers : list(ByteSlice)) -> list(RlpField) = {
                 prev = keccak256(s);
                 let j = n - 1 - i; /* distance-1 from the block under validation */
                 if j < 256 then {
-                    headerhash_set(get_slice_int(64, j, 0), prev)
+                    ancestor_hash_write(get_slice_int(8, j, 0), prev)
                 };
                 i = i + 1
             },

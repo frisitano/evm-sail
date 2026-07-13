@@ -32,7 +32,7 @@ generated model header:
 | --- | --- | --- |
 | `ffi/journal_glue.c` | `JEntry`, state rows, and options | Encode/decode structured state and journal values against scalar C stores. |
 | `ffi/hash_glue.c` | `list(Bytes)`, topics, and `list(LogEntry)` | Hash a whole segmented preimage in one call and translate log records. |
-| `ffi/code_glue.c` | `JumpdestBitmap = list(bits(64))` | Flatten a Sail-built bitmap once for insertion into the packed code-DB arena. |
+| `ffi/code_glue.c` | `JumpdestBitmap = list(bits(64))`, `option(Code)` | Flatten a Sail-built bitmap for insertion and construct aggregate lookup results. |
 
 No glue file hand-mirrors a generated union, struct, or list layout.
 
@@ -44,18 +44,17 @@ No glue file hand-mirrors a generated union, struct, or list layout.
 | Output trace | `emit_out` | Emitting one byte appends exactly that byte and preserves byte well-formedness. |
 | Segmented hashing | `keccak256_segments`, `sha256_segments` | `BytesList` denotes its list and `BytesSlice` denotes `read_byte_slice(slice)`; a segment list denotes concatenation in order. The host digest equals the corresponding hash of that concatenation. |
 | Generic byte slices | `slice_byte_at`, `slice_load_word`, `slice_load_n_word`, `slice_copy_to_memory`, `mem_establish_absolute`, `txdata_*` | All reads refine one `ByteSlice` model. A slice has a source, base offset, and length; reads past its length are zero. Word loads are big-endian and copies zero-fill their out-of-bounds suffix. A minted memory-arena slice remains stable while its caller frame is suspended. |
-| Code indexing and storage | `code_db_store_indexed_source`, `code_db_stored_code_*`, `jumpdest_ref_contains`, `code_db_byte_at`, `code_db_copy_stored_code_to_memory` | Sail computes the PUSH-aware bitmap. Insertion stores the exact bytes under `keccak256(bytes)` and associates that hash with the exact materialized bitmap. Lookup returns one `IndexedCode` pairing its code span and packed-table reference. C stores and queries the table but never analyzes instructions. |
+| Code indexing and storage | `code_db_store_indexed_source`, `code_db_lookup`, `jumpdest_ref_contains` | Sail computes the PUSH-aware bitmap. Insertion stores the exact bytes under `keccak256(bytes)` and associates that hash with the exact materialized bitmap. Lookup returns one `Code` pairing its code span and packed-table reference. C stores and queries the table but never analyzes instructions. |
 | Memory, returndata, and stack | `mem_*`, `returndata_*`, `stack_*` | Memory has read-after-write and disjoint-write laws; memory, returndata, and operand-stack frames are LIFO; copy/move operations refine byte-list operations; the stack has EVM LIFO/peek/set behavior. |
 | Crypto and precompiles | `precompile_run_source_to_returndata`, `secp256k1_verify`, `precompile_ecrecover_hash_sig` | Source-backed precompile execution equals execution over the slice's materialized bytes. Typed outputs carry explicit success information and remain within their declared widths. |
-| World state and journal | `transient_*`, `storage_*`, `acct_*`, `warm_*`, `journal_*`, logs and created/selfdestruct sets | Operations refine abstract maps and ordered collections with explicit cache/update, frame commit/revert, deduplication, and journal undo laws. |
-| Witness and MPT DB | `nodedb_*` | The node table refines authenticated witness spans. With Sail's anchored parent root, every lazy lookup is a hash-chain traversal through `keccak(node)`-keyed entries and fails closed when required material is absent. |
+| World state and journal | `transient_*`, `storage_*`, `acct_*`, `warm_*`, `journal_*`, and logs | Account and storage updates refine layered maps with independent undo-log checkpoints; the remaining journal refines ordered transient/warm/log/refund effects. Reverting restores all three cursors, while successful child completion discards only the checkpoint token. |
+| Witness and MPT DB | `nodedb_*` | The node table refines authenticated witness spans. From an explicitly supplied authenticated root, every lazy lookup is a hash-chain traversal through `keccak(node)`-keyed entries and fails closed when required material is absent. |
 
 ## Byte-Slice Law
 
 `ByteSource` currently has these cases, in the declaration order encoded by
 `byte_source_kind`: `WitnessSource`, `MemorySource`, `TxInputSource`,
-`CodeSource`, `TrieArenaSource`, `LogDataSource`, `MemoryArenaSource`, and
-`ReturndataSource`.
+`CodeSource`, `LogDataSource`, `MemoryArenaSource`, and `ReturndataSource`.
 
 For a well-formed slice `s = (source, off, len)`:
 
@@ -70,7 +69,7 @@ For a well-formed slice `s = (source, off, len)`:
 This one law covers calldata and executable code. They are distinct semantic
 roles in a frame, but not distinct storage or reader interfaces.
 
-## Indexed-Code Law
+## Code Law
 
 For `a = index_code(code)`, bitmap bit `i` is set exactly when:
 
@@ -90,7 +89,7 @@ If `code_db_store_indexed(a)` returns `h`, then:
 - `jumpdest_ref_contains(ref, code_len, i)` is true exactly for an in-range set
   bit in that table.
 
-The `IndexedCode` value is the invariant carrier: callers install and
+The `Code` value is the invariant carrier: callers install and
 save/restore its byte slice and table reference together. The interpreter
 does not reconstruct, rebind, or independently synchronize either half.
 
@@ -107,7 +106,9 @@ Mutable host stores use the usual refinement laws:
   LIFO and restore the parent view.
 
 Layered account and storage stores additionally need cache/update and
-commit/revert laws. The code store is content-addressed, deduplicated, and
+checkpoint/revert laws. A frame checkpoint is the product of their two undo
+cursors and the general journal length; successful child completion requires no
+host-side compaction. The code store is content-addressed, deduplicated, and
 append-only, so frame rollback never removes code or JUMPDEST tables.
 
 ## Proof Order

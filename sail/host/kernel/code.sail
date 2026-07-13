@@ -1,20 +1,20 @@
-function k_code_key(a : address) -> hash = k_aload(a).code_hash
+function k_code_key(a : address) -> hash = k_aload(a).info.code_hash
 
 /* EXTCODEHASH (EIP-1052): a truly empty account reads as 0, not
  * KECCAK_EMPTY. */
 function k_get_codehash(a : address) -> hash = {
     let acc = k_aload(a);
-    if (acc.code_hash == KECCAK_EMPTY) & acc.nonce == sail_zeros(64) & word_is_zero(acc.balance) then {
+    if not_bool(acc.exists) then {
         word_of_int(0)
     } else {
-        acc.code_hash
+        acc.info.code_hash
     }
 }
 
 function k_deploy_returndata_code(a : address) -> unit = {
-    journal_push(JAcct(a, k_aload(a)));
+    let cur = k_aload(a);
     let h : hash = code_db_index_and_store(returndata_pending_slice());
-    store_account(a, { k_aload(a) with code_hash = h })
+    store_account_info(a, cur, { cur.info with code_hash = h })
 }
 
 function delegation_jumpdest_bitmap(target : address) -> JumpdestBitmap = {
@@ -30,14 +30,14 @@ function delegation_jumpdest_bitmap(target : address) -> JumpdestBitmap = {
 }
 
 function k_set_delegation(a : address, target : address) -> unit = {
-    journal_push(JAcct(a, k_aload(a)));
+    let cur = k_aload(a);
     let h : hash = code_intern_indexed_delegation(target, delegation_jumpdest_bitmap(target));
-    store_account(a, { k_aload(a) with code_hash = h })
+    store_account_info(a, cur, { cur.info with code_hash = h })
 }
 
 function k_clear_code(a : address) -> unit = {
-    journal_push(JAcct(a, k_aload(a)));
-    store_account(a, { k_aload(a) with code_hash = KECCAK_EMPTY })
+    let cur = k_aload(a);
+    store_account_info(a, cur, { cur.info with code_hash = KECCAK_EMPTY })
 }
 
 function addr_bytes(a : address) -> list(byte) = {
@@ -51,11 +51,6 @@ function addr_bytes(a : address) -> list(byte) = {
 
 function delegation_code(a : address) -> list(byte) = 0xef :: 0x01 :: 0x00 :: addr_bytes(a)
 
-function note_code_resolved(h : hash) -> unit =
-    if (h != KECCAK_EMPTY) & (unsigned(code_db_stored_code_length(h)) == 0) then {
-        throw InvalidBlock(WitnessDeficient)
-    }
-
 function k_deleg_target(a : address) -> (bool, address) = {
     let h : hash = k_code_key(a);
     let r : bits(168) = code_db_read_delegation(h);
@@ -63,14 +58,12 @@ function k_deleg_target(a : address) -> (bool, address) = {
 }
 
 function k_get_code_size(a : address) -> int = {
-    let h : hash = k_code_key(a);
-    note_code_resolved(h);
-    unsigned(code_db_stored_code_length(h))
+    let code = code_db_resolve(k_code_key(a));
+    unsigned(code.bytes.len)
 }
 
 function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
-    let h : hash = k_code_key(a);
-    note_code_resolved(h);
+    let code = code_db_resolve(k_code_key(a));
     let o = if off > 16777216 then { 16777216 } else { off };
-    code_db_copy_stored_code_to_memory(h, get_slice_int(64, dst, 0), get_slice_int(64, o, 0), get_slice_int(64, len, 0))
+    slice_copy(code.bytes, dst, o, len)
 }

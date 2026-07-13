@@ -84,7 +84,7 @@ function process_auth(au : Authorization) -> unit = {
            domain so an oversized (>= 2^64) nonce can never alias a real one */
         let nonce_ok = unsigned(k_get_nonce(authority)) == au.nonce;
         if code_ok & nonce_ok then {
-            let existed = not_bool(k_account_is_empty(authority));
+            let existed = k_account_exists(authority);
             if unsigned(address_to_word(au.address)) == 0 then {
                 k_clear_code(authority)
                 /* clear delegation */
@@ -275,8 +275,7 @@ function apply_transaction_upfront_effects(tx : Transaction, v : TxValidity) -> 
     };
     k_bump_nonce(v.sender);
     prewarm(tx);
-    process_auth_list(tx.authorizations); /* EIP-7702: set delegations before execution (persist) */
-    k_snapshot()
+    process_auth_list(tx.authorizations) /* EIP-7702: set delegations before execution (persist) */
 }
 
 function enter_transaction_frame(tx : Transaction, intrinsic : gas) -> unit = {
@@ -288,7 +287,7 @@ function enter_transaction_frame(tx : Transaction, intrinsic : gas) -> unit = {
     returndata_reset_all();
     memory_size = 0;
     calldata = EMPTY_SLICE;
-    frame_code = EMPTY_INDEXED_CODE;
+    frame_code = EMPTY_CODE;
     frame_status = Running()
 }
 
@@ -303,6 +302,7 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
         exc_halt(AddressCollision)
     } else {
         k_mark_created(new_addr); /* EIP-6780: created this tx */
+        k_clear_storage(new_addr);
         k_bump_nonce(new_addr);
         if word_nonzero(tx.value) then {
             k_transfer(sender, new_addr, tx.value)
@@ -317,7 +317,7 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
                 is_static = false,
                 depth = 0,
             };
-        frame_code = code_db_indexed_code(code_db_index_and_store(tx_input_byte_slice(0, txdata_len())));
+        frame_code = code_db_resolve(code_db_index_and_store(tx_input_byte_slice(0, txdata_len())));
         interpret();
         if frame_succeeded() then {
             let dep_len = returndata_pending_size();
@@ -390,6 +390,7 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
 }
 
 function run_transaction_frame(tx : Transaction, v : TxValidity) -> TxFrameResult = {
+    let checkpoint = k_snapshot();
     enter_transaction_frame(tx, v.intrinsic_gas);
     if tx.is_create then {
         run_create_transaction_frame(tx, v.sender, v.nonce_before)
@@ -398,10 +399,8 @@ function run_transaction_frame(tx : Transaction, v : TxValidity) -> TxFrameResul
     };
 
     let success = frame_succeeded();
-    if success then {
-        k_commit()
-    } else {
-        k_revert()
+    if not_bool(success) then {
+        k_revert(checkpoint)
     };
     struct { success = success, gas_remaining = gas_remaining }
 }
@@ -434,12 +433,7 @@ function settle_transaction(tx : Transaction, v : TxValidity, fr : TxFrameResult
     k_add_balance(v.sender, word_of_int(gas_left * unsigned(v.gas_price)));
     k_add_balance(k_coinbase(), word_of_int(gas_used * unsigned(v.priority_fee)));
 
-    /* EIP-6780 tx-end reduction: delete accounts created AND selfdestructed in
-     * this tx (EELS destroys tx_output.accounts_to_delete after the fee
-     * transfers; a failed tx has no surviving selfdestructs to apply). */
-    if fr.success then {
-        k_finalize_selfdestructs()
-    };
+    k_tx_merge();
 
     struct {
         tx_type = tx.tx_type,
@@ -466,7 +460,5 @@ function process_transaction(tx : Transaction) -> Receipt = {
     k_set_tx(struct { origin = tx.sender, gas_price = validity.gas_price, blob_hashes = tx.blob_hashes });
     apply_transaction_upfront_effects(tx, validity);
     let frame_result = run_transaction_frame(tx, validity);
-    let receipt = settle_transaction(tx, validity, frame_result);
-    k_tx_merge(); /* commit this tx's net storage writes into the block base */
-    receipt
+    settle_transaction(tx, validity, frame_result)
 }

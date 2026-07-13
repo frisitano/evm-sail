@@ -9,8 +9,8 @@ touches of the same address or slot within a block re-hash needlessly.
 
 Previously this was memoized with a preimage → hash cache (open-addressing
 hashtable, FNV-1a over the preimage words). It was removed to keep the key
-derivation path stateless (no shared mutable memo global between the write-set
-overlay and the native base cache, simplifying the `eest_*` module split).
+derivation path stateless (no shared mutable memo global between transaction
+state and the native base cache, simplifying the `eest_*` module split).
 
 **Action:** reintroduce a preimage → keccak memo for `secure_keccak`, placed so
 both the overlay (`state_db.c`) and the extracted native base cache

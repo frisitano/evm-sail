@@ -103,16 +103,6 @@ function arith_selfcheck() -> unit = {
     assert(alu_smod(neg7, two) == 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff, "alu_smod")
 }
 
-struct BlockExecutionResult = {
-    all_ok : bool,
-    gas_acc : int,
-    blob_gas_acc : int,
-    first_tx_recipient : address,
-    block_gas_overflow : bool,
-    blob_gas_overflow : bool,
-    receipts : list(Receipt),
-}
-
 function expected_payload_excess_blob_gas(items : list(RlpField)) -> int =
     next_excess_blob_gas(
         parent_header_int_field(items, 18),
@@ -120,107 +110,8 @@ function expected_payload_excess_blob_gas(items : list(RlpField)) -> int =
         parent_header_int_field(items, 15),
     )
 
-function run_block_start_system_calls() -> unit = {
-    /* EIP-4788 / EIP-2935: write the parent beacon-block root and parent block
-       hash into their system contracts before the transactions run. */
-    system_call(BEACON_ROOTS_ADDR, k_header.parent_beacon_block_root);
-    system_call(HISTORY_STORAGE_ADDR, k_header.parent_hash)
-}
-
-function execute_block_transactions(txs : list(Transaction), block_gas_limit : int) -> BlockExecutionResult = {
-    var all_ok : bool = true;
-    var gas_acc : int = 0;
-    var blob_gas_acc : int = 0;
-    var tx0_to : address = ZERO_ADDR; /* tx 0 recipient, for the storage0 fact */
-    var block_gas_overflow : bool = false;
-    var blob_gas_overflow : bool = false;
-    var receipts_rev : list(Receipt) = [||];
-
-    /* EIP-7778 block gas accounting: a tx whose gas limit exceeds the block's
-       remaining gas raises GasUsedExceedsLimitError -> the whole block is
-       invalid. EELS performs this check BEFORE touching the tx's state, so the
-       witness omits the offending tx's proofs; the guest must likewise refrain
-       from executing it (and every later tx), else it over-reads the witness
-       and aborts on a node EELS never proved. */
-    /* Transactions were decoded (and signature-verified) by the single input
-       pass, as EELS decodes the block body before executing it; this loop only
-       executes them. */
-    var rest : list(Transaction) = txs;
-    var i : int = 0;
-    var more : bool = true;
-    while more do {
-        match rest {
-            [||] => more = false,
-            tx :: txs_rest => {
-                rest = txs_rest;
-                if not_bool(block_gas_overflow | blob_gas_overflow) then {
-                    let tx_blob_gas = tx.blob_count * GAS_PER_BLOB;
-                    if i == 0 then {
-                        tx0_to = tx.recipient
-                    };
-                    if tx.gas_limit > block_gas_limit - gas_acc then {
-                        block_gas_overflow = true
-                    } else {
-                        if tx_blob_gas > blob_max_gas_per_block() - blob_gas_acc then {
-                            blob_gas_overflow = true
-                        } else {
-                            let r = process_transaction(tx);
-                            all_ok = all_ok & r.valid;
-                            gas_acc = gas_acc + r.block_gas;
-                            if r.valid then {
-                                receipts_rev = r :: receipts_rev;
-                                blob_gas_acc = blob_gas_acc + tx_blob_gas
-                            }
-                        }
-                    }
-                };
-                i = i + 1
-            },
-        }
-    };
-    struct {
-        all_ok = all_ok & not_bool(block_gas_overflow) & not_bool(blob_gas_overflow),
-        gas_acc = gas_acc,
-        blob_gas_acc = blob_gas_acc,
-        first_tx_recipient = tx0_to,
-        block_gas_overflow = block_gas_overflow,
-        blob_gas_overflow = blob_gas_overflow,
-        receipts = list_reverse(receipts_rev),
-    }
-}
-
-function apply_withdrawals(wds : list(Withdrawal)) -> unit = {
-    var rest : list(Withdrawal) = wds;
-    var more : bool = true;
-    while more do {
-        match rest {
-            [||] => more = false,
-            w :: r => {
-                /* EIP-4895: the withdrawal `amount` field is denominated in Gwei;
-                   the credited balance is amount * 10^9 wei. */
-                k_add_balance(w.address, word_of_int(w.amount * 1000000000));
-                rest = r
-            },
-        }
-    }
-}
-
-function run_checked_block_end_system_calls(all_ok : bool) -> bool = {
-    /* EIP-7002 / EIP-7251: dequeue the withdrawal + consolidation requests via a
-       CHECKED system call to each predeploy (clearing their queue storage). EELS
-       reaches this only if no earlier step raised, so run it only while the block
-       is still valid; a missing predeploy or a failed call invalidates the block. */
-    if all_ok then {
-        let rw = system_call_checked(WITHDRAWAL_REQUEST_ADDR);
-        let rc = system_call_checked(CONSOLIDATION_REQUEST_ADDR);
-        all_ok & rw & rc
-    } else {
-        false
-    }
-}
-
-function trie_index_key(i : int) -> list(nibble) =
-    to_nibbles(rlp_int(i))
+function trie_index_key(i : int) -> TriePath =
+    path_from_bytes(rlp_int(i))
 
 /* SHA-256 self-check against the standard "" and "abc" reference vectors. */
 function sha256_selfcheck() -> unit = {
@@ -328,7 +219,7 @@ function transaction_trie_root(txs : list(Transaction)) -> hash = {
         match rest {
             [||] => more = false,
             t :: r => {
-                updates = patch_insert_sorted(patch_leaf(trie_index_key(i), t.raw), updates);
+                updates = patch_insert_sorted(patch_leaf(trie_index_key(i), BytesSlice(t.raw)), updates);
                 rest = r;
                 i = i + 1
             },
@@ -338,7 +229,6 @@ function transaction_trie_root(txs : list(Transaction)) -> hash = {
 }
 
 function withdrawals_trie_root(wds : list(Withdrawal)) -> hash = {
-    trie_arena_reset();
     var updates : list(TriePatch) = [||];
     var rest : list(Withdrawal) = wds;
     var i : int = 0;
@@ -347,7 +237,7 @@ function withdrawals_trie_root(wds : list(Withdrawal)) -> hash = {
         match rest {
             [||] => more = false,
             w :: r => {
-                updates = patch_insert_sorted(patch_leaf(trie_index_key(i), arena_intern(withdrawal_rlp(w))), updates);
+                updates = patch_insert_sorted(patch_leaf(trie_index_key(i), BytesList(withdrawal_rlp(w))), updates);
                 rest = r;
                 i = i + 1
             },
@@ -518,7 +408,6 @@ function receipt_encoded(r : Receipt, cumulative_gas_used : int) -> list(byte) =
 }
 
 function receipts_trie_root(receipts : list(Receipt)) -> hash = {
-    trie_arena_reset();
     var updates : list(TriePatch) = [||];
     var rest : list(Receipt) = receipts;
     var i : int = 0;
@@ -529,7 +418,7 @@ function receipts_trie_root(receipts : list(Receipt)) -> hash = {
             r :: tail => {
                 cumulative = cumulative + r.gas_used;
                 updates = patch_insert_sorted(
-                    patch_leaf(trie_index_key(i), arena_intern(receipt_encoded(r, cumulative))),
+                    patch_leaf(trie_index_key(i), BytesList(receipt_encoded(r, cumulative))),
                     updates,
                 );
                 rest = tail;
@@ -735,10 +624,11 @@ function main() -> unit = {
 
         /* Block STF: system calls, then each decoded tx through the shared
            per-tx STF unit, then withdrawals and block-end system calls. */
-        run_block_start_system_calls();
-        let block_result = execute_block_transactions(input.payload.block.body.transactions, k_header.gas_limit);
-        apply_withdrawals(input.payload.block.body.withdrawals);
-        let exec_ok : bool = run_checked_block_end_system_calls(block_result.all_ok);
+        let (exec_ok, block_result) = execute_block_body(
+            input.payload.block.body.transactions,
+            input.payload.block.body.withdrawals,
+            k_header.gas_limit,
+        );
         validate_block(exec_ok, block_result);
         (true, to_gas(block_result.gas_acc))
     } catch {

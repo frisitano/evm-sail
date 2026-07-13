@@ -1,57 +1,24 @@
-/* Generated-type glue: the ONE hand-written C file that handles generated
- * Sail types, compiled per build against that build's model header
- * (EVMSAIL_MODEL_H, e.g. "zkvm_runner.h" / "zkvm_block.h") so it always sees
- * the exact generated layout -- never a hand-mirrored one. Two boundaries:
- *
- * (1) journal_push / journal_pop (sail/host/state.sail): whole JEntry union
- * values cross; entry storage stays in the scalar journal rows
- * (kernel_state.c), this file only (en/de)codes. Contract: LIFO --
- * journal_pop after journal_push(e) yields e; pop on an empty journal yields
- * JCheck without popping anything.
- *
- * (2) storage_tx_get / storage_block_get: per-layer option(StorageEntry)
- * views over state_db.c's row tables (storage_row_probe); the layer
- * precedence lives in Sail (k_sload / k_sstore), not here.
- *
- * (3) acct_tx_get / acct_block_get: per-layer option(Account) views over
- * state_db.c's account tables (acct_row_probe); tx-over-block precedence
- * lives in Sail (k_aload).
- *
- * (4) storage_tx_pop / acct_tx_pop: side-effect-free drain pops over the
- * tx layers -- k_tx_merge IS the merge: it decides the EIP-7928 records
- * (bal_note_* sinks) and the block propagation (storage_block_* /
- * acct_block_* hooks) per popped row.
- */
+/* Generated state/journal glue. This is compiled against the generated model
+ * header named by EVMSAIL_MODEL_H, so structured Sail layouts are never
+ * mirrored by hand in the scalar C stores. */
 #include EVMSAIL_MODEL_H
 #include "kernel_state.h"
 #include "state_db.h"
 #include "lbits_convert.h"
+#include <stdlib.h>
 
-
-/* C journal row tags (kernel_state.c jrn enum; C-internal -- the Sail side
- * no longer sees tags). */
+/* C-internal journal tags, mirrored from kernel_state.c. */
 enum {
-  GJT_EMPTY = 0, GJT_CHECK = 1, GJT_ACCT = 2, GJT_TRAN = 3, GJT_WARMA = 4,
-  GJT_WARMS = 5, GJT_LOG = 6, GJT_REFUND = 7, GJT_SELFD = 8, GJT_STOR = 9
+  GJT_EMPTY = 0, GJT_TRAN = 1, GJT_WARMA = 2,
+  GJT_WARMS = 3, GJT_LOG = 4, GJT_REFUND = 5
 };
 
 unit journal_push(struct zJEntry e) {
   switch (e.kind) {
-  case Kind_zJCheck:
-    return journal_push_check(UNIT);
-  case Kind_zJAcct:
-    return journal_push_acct(
-        e.variants.zJAcct.ztup0,
-        e.variants.zJAcct.ztup1.znonce, /* Account.nonce is u64 = fbits */
-        e.variants.zJAcct.ztup1.zbalance,
-        e.variants.zJAcct.ztup1.zstorage_root,
-        e.variants.zJAcct.ztup1.zcode_hash);
   case Kind_zJTran:
-    return journal_push_tran(e.variants.zJTran.ztup0, e.variants.zJTran.ztup1,
+    return journal_push_tran(e.variants.zJTran.ztup0,
+                             e.variants.zJTran.ztup1,
                              e.variants.zJTran.ztup2);
-  case Kind_zJStor:
-    return journal_push_stor(e.variants.zJStor.ztup0, e.variants.zJStor.ztup1,
-                             e.variants.zJStor.ztup2);
   case Kind_zJWarmA:
     return journal_push_warma(e.variants.zJWarmA);
   case Kind_zJWarmS:
@@ -60,49 +27,26 @@ unit journal_push(struct zJEntry e) {
   case Kind_zJLog:
     return journal_push_log(UNIT);
   case Kind_zJRefund:
-    /* i64 counter, stored as its two's-complement 64-bit word */
     return journal_push_refund((uint64_t)e.variants.zJRefund);
-  case Kind_zJSelfD:
-    return journal_push_selfd(UNIT);
   }
   return UNIT;
 }
 
-/* address payloads are bits(160): read the row's 256-bit word back and narrow
- * the view (the stored magnitude fits in 160 bits -- it was pushed from an
- * lbits of length 160). Mirrors the former Sail decode's [159 .. 0]. */
-static void top_addr160(lbits *rop) {
-  journal_top_addr(rop, UNIT);
-  rop->len = 160;
+static void top_addr160(lbits *out) {
+  journal_top_addr(out, UNIT);
+  out->len = 160;
 }
 
 void journal_pop(struct zJEntry *out, unit u) {
   (void)u;
-  uint64_t tag = journal_top_tag(UNIT);
-  switch (tag) {
-  case GJT_EMPTY: /* empty journal: a JCheck view; nothing to pop */
-    out->kind = Kind_zJCheck;
-    out->variants.zJCheck = UNIT;
-    return;
-  case GJT_ACCT:
-    out->kind = Kind_zJAcct;
-    top_addr160(&out->variants.zJAcct.ztup0);
-    out->variants.zJAcct.ztup1.znonce = journal_top_nonce(UNIT);
-    journal_top_balance(&out->variants.zJAcct.ztup1.zbalance, UNIT);
-    journal_top_sroot(&out->variants.zJAcct.ztup1.zstorage_root, UNIT);
-    journal_top_chash(&out->variants.zJAcct.ztup1.zcode_hash, UNIT);
-    break;
+  switch (journal_top_tag(UNIT)) {
+  case GJT_EMPTY:
+    abort();
   case GJT_TRAN:
     out->kind = Kind_zJTran;
     top_addr160(&out->variants.zJTran.ztup0);
     journal_top_slot(&out->variants.zJTran.ztup1, UNIT);
     journal_top_val(&out->variants.zJTran.ztup2, UNIT);
-    break;
-  case GJT_STOR:
-    out->kind = Kind_zJStor;
-    top_addr160(&out->variants.zJStor.ztup0);
-    journal_top_slot(&out->variants.zJStor.ztup1, UNIT);
-    journal_top_val(&out->variants.zJStor.ztup2, UNIT);
     break;
   case GJT_WARMA:
     out->kind = Kind_zJWarmA;
@@ -121,28 +65,19 @@ void journal_pop(struct zJEntry *out, unit u) {
     out->kind = Kind_zJRefund;
     out->variants.zJRefund = (int64_t)journal_top_refund(UNIT);
     break;
-  case GJT_SELFD:
-    out->kind = Kind_zJSelfD;
-    out->variants.zJSelfD = UNIT;
-    break;
-  default: /* GJT_CHECK: the checkpoint marker (no undo payload) */
-    out->kind = Kind_zJCheck;
-    out->variants.zJCheck = UNIT;
-    break;
+  default:
+    abort();
   }
   journal_drop_top(UNIT);
 }
 
-/* per-layer storage entry views: probe state_db's layer table and build
- * option(StorageEntry) -- None = the layer never touched the slot; Some
- * carries (curr, orig). The written/read distinction stays C-internal (a
- * cached read has curr == orig). */
 static void storage_value_out(struct zoptionzIRStorageValuezK *out,
-                              uint64_t layer, const sail_address a, const sail_word s) {
-  lbits cur, orig;
-  if (storage_row_probe(layer, a, s, &cur, &orig)) {
+                              uint64_t layer, const lbits addr,
+                              const lbits slot) {
+  lbits curr, orig;
+  if (storage_row_probe(layer, addr, slot, &curr, &orig)) {
     out->kind = Kind_zSomezIRStorageValuezK;
-    out->variants.zSomezIRStorageValuezK.zcurr = cur;
+    out->variants.zSomezIRStorageValuezK.zcurr = curr;
     out->variants.zSomezIRStorageValuezK.zorig = orig;
   } else {
     out->kind = Kind_zNonezIRStorageValuezK;
@@ -150,104 +85,131 @@ static void storage_value_out(struct zoptionzIRStorageValuezK *out,
   }
 }
 
-void storage_tx_get(struct zoptionzIRStorageValuezK *out, const sail_address a,
-                    const sail_word s) {
-  sail_expect_len(a, 160);
-  storage_value_out(out, 0, a, s);
+void storage_tx_get(struct zoptionzIRStorageValuezK *out,
+                    struct zStorageKey key) {
+  sail_expect_len(key.zaddr, 160);
+  storage_value_out(out, 0, key.zaddr, key.zslot);
 }
 
-void storage_block_get(struct zoptionzIRStorageValuezK *out, const sail_address a,
-                       const sail_word s) {
-  storage_value_out(out, 1, a, s);
+void storage_block_get(struct zoptionzIRStorageValuezK *out,
+                       struct zStorageKey key) {
+  sail_expect_len(key.zaddr, 160);
+  storage_value_out(out, 1, key.zaddr, key.zslot);
 }
 
-/* per-layer account views: probe state_db's layer table and build
- * option(Account). */
-static void acct_entry_out(struct zoptionzIRAccountzK *out, uint64_t layer,
-                           const sail_address a) {
-  uint64_t nonce;
-  lbits bal, sroot, chash;
-  if (acct_row_probe(layer, a, &nonce, &bal, &sroot, &chash)) {
+unit storage_tx_cache(struct zStorageKey key, const sail_word value) {
+  sail_expect_len(key.zaddr, 160);
+  return storage_tx_cache_raw(key.zaddr, key.zslot, value);
+}
+
+unit storage_tx_update(struct zStorageKey key, const sail_word value) {
+  sail_expect_len(key.zaddr, 160);
+  return storage_tx_update_raw(key.zaddr, key.zslot, value);
+}
+
+unit storage_block_put(struct zStorageEntry entry) {
+  return storage_block_put_raw(entry.zkey.zaddr, entry.zkey.zslot,
+                               entry.zvalue.zcurr, entry.zvalue.zorig);
+}
+
+unit storage_block_cache(struct zStorageKey key, const sail_word value) {
+  return storage_block_cache_raw(key.zaddr, key.zslot, value);
+}
+
+static void account_out(struct zoptionzIRAccountzK *out, uint64_t layer,
+                        const sail_address addr) {
+  struct zAccount *account = &out->variants.zSomezIRAccountzK;
+  if (acct_row_probe(layer, addr, &account->zinfo.znonce,
+                     &account->zinfo.zbalance, &account->zinfo.zstorage_root,
+                     &account->zinfo.zcode_hash, &account->zexists,
+                     &account->zstorage_cleared, &account->zcreated,
+                     &account->zselfdestructed)) {
     out->kind = Kind_zSomezIRAccountzK;
-    struct zAccount *acc = &out->variants.zSomezIRAccountzK;
-    acc->znonce = nonce;
-    acc->zbalance = bal;
-    acc->zstorage_root = sroot;
-    acc->zcode_hash = chash;
   } else {
     out->kind = Kind_zNonezIRAccountzK;
     out->variants.zNonezIRAccountzK = UNIT;
   }
 }
 
-void acct_tx_get(struct zoptionzIRAccountzK *out, const sail_address a) {
-  acct_entry_out(out, 0, a);
+void acct_tx_get(struct zoptionzIRAccountzK *out, const sail_address addr) {
+  account_out(out, 0, addr);
 }
 
-void acct_block_get(struct zoptionzIRAccountzK *out, const sail_address a) {
-  acct_entry_out(out, 1, a);
+void acct_block_get(struct zoptionzIRAccountzK *out,
+                    const sail_address addr) {
+  account_out(out, 1, addr);
 }
 
-/* k_tx_merge drain pops: side-effect-free option(row) views over the tx
- * layers; None = drained (the C probe resets the table). Sail decides the
- * EIP-7928 records and the block-layer propagation per row. */
-void storage_tx_pop(struct zoptionzIRStorageEntryzK *out, unit u) {
+unit acct_tx_update(const sail_address addr, struct zAccount account) {
+  return acct_tx_update_raw(
+      addr, account.zinfo.znonce, account.zinfo.zbalance,
+      account.zinfo.zstorage_root, account.zinfo.zcode_hash, account.zexists,
+      account.zstorage_cleared, account.zcreated, account.zselfdestructed);
+}
+
+unit acct_tx_cache(const sail_address addr, struct zAccount account) {
+  return acct_tx_cache_raw(
+      addr, account.zinfo.znonce, account.zinfo.zbalance,
+      account.zinfo.zstorage_root, account.zinfo.zcode_hash, account.zexists,
+      account.zstorage_cleared, account.zcreated, account.zselfdestructed);
+}
+
+unit acct_block_write(struct zAcctEntry entry) {
+  struct zAccount *curr = &entry.zvalue.zcurr;
+  struct zAccount *orig = &entry.zvalue.zorig;
+  return acct_block_write_raw(
+      entry.zaddr, curr->zinfo.znonce, curr->zinfo.zbalance,
+      curr->zinfo.zstorage_root, curr->zinfo.zcode_hash, curr->zexists,
+      curr->zstorage_cleared, orig->zinfo.znonce, orig->zinfo.zbalance,
+      orig->zinfo.zstorage_root, orig->zinfo.zcode_hash, orig->zexists,
+      orig->zstorage_cleared);
+}
+
+unit acct_block_cache(const sail_address addr, struct zAccount account) {
+  return acct_block_cache_raw(
+      addr, account.zinfo.znonce, account.zinfo.zbalance,
+      account.zinfo.zstorage_root, account.zinfo.zcode_hash, account.zexists,
+      account.zstorage_cleared);
+}
+
+void storage_tx_pop(struct zoptionzIRStorageMergeEntryzK *out, unit u) {
   (void)u;
-  struct zStorageEntry *e = &out->variants.zSomezIRStorageEntryzK;
-  uint64_t flags = storage_tx_pop_probe(&e->zkey.zaddr, &e->zkey.zslot,
-                                        &e->zvalue.zcurr, &e->zvalue.zorig);
-  if (flags == 0) {
-    out->kind = Kind_zNonezIRStorageEntryzK;
-    out->variants.zNonezIRStorageEntryzK = UNIT;
-    return;
+  struct zStorageMergeEntry *entry =
+      &out->variants.zSomezIRStorageMergeEntryzK;
+  struct zStorageValue *write =
+      &entry->zwrite.variants.zSomezIRStorageValuezK;
+  uint64_t status = storage_tx_pop_probe(
+      &entry->zkey.zaddr, &entry->zkey.zslot, &write->zcurr, &write->zorig,
+      &entry->ztx_original);
+  if (status) {
+    out->kind = Kind_zSomezIRStorageMergeEntryzK;
+    if (status == 2) {
+      entry->zwrite.kind = Kind_zSomezIRStorageValuezK;
+    } else {
+      entry->zwrite.kind = Kind_zNonezIRStorageValuezK;
+      entry->zwrite.variants.zNonezIRStorageValuezK = UNIT;
+    }
+  } else {
+    out->kind = Kind_zNonezIRStorageMergeEntryzK;
+    out->variants.zNonezIRStorageMergeEntryzK = UNIT;
   }
-  out->kind = Kind_zSomezIRStorageEntryzK;
 }
 
 void acct_tx_pop(struct zoptionzIRAcctEntryzK *out, unit u) {
   (void)u;
-  struct zAcctEntry *e = &out->variants.zSomezIRAcctEntryzK;
-  uint64_t cn = 0, on = 0;
-  uint64_t flags = acct_tx_pop_probe(&e->zaddr, &cn, &e->zvalue.zcurr.zbalance,
-                                     &e->zvalue.zcurr.zstorage_root, &e->zvalue.zcurr.zcode_hash, &on,
-                                     &e->zvalue.zorig.zbalance, &e->zvalue.zorig.zstorage_root,
-                                     &e->zvalue.zorig.zcode_hash);
-  if (flags == 0) {
+  struct zAcctEntry *entry = &out->variants.zSomezIRAcctEntryzK;
+  struct zAccount *curr = &entry->zvalue.zcurr;
+  struct zAccount *orig = &entry->zvalue.zorig;
+  if (acct_tx_pop_probe(
+          &entry->zaddr, &curr->zinfo.znonce, &curr->zinfo.zbalance,
+          &curr->zinfo.zstorage_root, &curr->zinfo.zcode_hash, &curr->zexists,
+          &curr->zstorage_cleared, &curr->zcreated, &curr->zselfdestructed,
+          &orig->zinfo.znonce, &orig->zinfo.zbalance, &orig->zinfo.zstorage_root,
+          &orig->zinfo.zcode_hash, &orig->zexists, &orig->zstorage_cleared,
+          &orig->zcreated, &orig->zselfdestructed)) {
+    out->kind = Kind_zSomezIRAcctEntryzK;
+  } else {
     out->kind = Kind_zNonezIRAcctEntryzK;
     out->variants.zNonezIRAcctEntryzK = UNIT;
-    return;
-  }
-  out->kind = Kind_zSomezIRAcctEntryzK;
-  e->zvalue.zcurr.znonce = cn;
-  e->zvalue.zorig.znonce = on;
-}
-
-/* state-root enumeration views: unfiltered block entries; Sail filters. The
- * storage entry's key.addr is the caller's query address. */
-void storage_block_row(struct zStorageEntry *out, const sail_address a, uint64_t j) {
-  out->zkey.zaddr = a;
-  storage_block_probe_row(a, j, &out->zkey.zslot, &out->zvalue.zcurr, &out->zvalue.zorig);
-}
-
-void acct_block_row(struct zAcctEntry *out, uint64_t i) {
-  uint64_t cn = 0, on = 0;
-  acct_block_probe_row(i, &out->zaddr, &cn, &out->zvalue.zcurr.zbalance,
-                       &out->zvalue.zcurr.zstorage_root, &out->zvalue.zcurr.zcode_hash, &on,
-                       &out->zvalue.zorig.zbalance, &out->zvalue.zorig.zstorage_root,
-                       &out->zvalue.zorig.zcode_hash);
-  out->zvalue.zcurr.znonce = cn;
-  out->zvalue.zorig.znonce = on;
-}
-
-/* EIP-6780 deletion drain: pop one of the address's tx rows as option(slot);
- * Sail records the read and loops until None. */
-void storage_tx_wipe(struct zoptionzIbzK *out, const sail_address a) {
-  lbits slot;
-  if (storage_tx_wipe_probe(a, &slot)) {
-    out->kind = Kind_zSomezIbzK;
-    out->variants.zSomezIbzK = slot;
-  } else {
-    out->kind = Kind_zNonezIbzK;
-    out->variants.zNonezIbzK = UNIT;
   }
 }

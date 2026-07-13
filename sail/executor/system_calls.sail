@@ -25,8 +25,8 @@
  * boundary: pre-transaction and post-transaction system calls differ in
  * validation policy, not in execution-frame construction.
  */
-function enter_system_call_frame(tgt : address, input_len : int) -> unit = {
-    k_snapshot();
+function enter_system_call_frame(tgt : address, input_len : int) -> StateCheckpoint = {
+    let checkpoint = k_snapshot();
     pc = 0;
     call_depth = 0;
     gas_remaining = to_gas(30000000);
@@ -46,7 +46,8 @@ function enter_system_call_frame(tgt : address, input_len : int) -> unit = {
             is_static = false,
             depth = 0,
         };
-    frame_code = code_db_indexed_code(k_code_key(tgt))
+    frame_code = code_db_resolve(k_code_key(tgt));
+    checkpoint
 }
 
 function system_call(tgt : address, input : bits(256)) -> unit = {
@@ -54,12 +55,10 @@ function system_call(tgt : address, input : bits(256)) -> unit = {
         () /* system contract absent -> skip (EIP-4788 / EIP-2935) */
     } else {
         txdata_stage(input); /* the call's 32-byte calldata */
-        enter_system_call_frame(tgt, 32);
+        let checkpoint = enter_system_call_frame(tgt, 32);
         interpret();
-        if frame_succeeded() then {
-            k_commit()
-        } else {
-            k_revert()
+        if not_bool(frame_succeeded()) then {
+            k_revert(checkpoint)
         };
         k_tx_merge() /* system call is a top-level boundary: merge its storage */
     }
@@ -79,13 +78,11 @@ function system_call_checked(tgt : address) -> bool = {
         false /* checked: a missing system predeploy invalidates the block */
     } else {
         let _ = txdata_bind(byte_slice(WitnessSource, 0, 0)); /* empty calldata: the SYSTEM caller dequeues */
-        enter_system_call_frame(tgt, 0);
+        let checkpoint = enter_system_call_frame(tgt, 0);
         interpret();
         let ok = frame_succeeded();
-        if ok then {
-            k_commit()
-        } else {
-            k_revert() /* checked: a reverting/erroring system call invalidates the block */
+        if not_bool(ok) then {
+            k_revert(checkpoint) /* checked: a reverting/erroring system call invalidates the block */
         };
         k_tx_merge(); /* system call is a top-level boundary: merge its storage */
         ok
