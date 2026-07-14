@@ -1,15 +1,12 @@
 # EVM Sail Specification
 
 An executable specification of the Ethereum execution layer, written in
-[Sail](https://github.com/rems-project/sail). The Sail sources are the
-single normative artifact: this site is generated from them — module and
-section prose from `/*md … */` comments, definition documentation from
-`/*! … */` doc comments — and every definition is rendered with its source,
-cross-linked and hover-documented.
-
-The specification is self-contained: it cites the Yellow Paper sections
-and EIPs it implements, and nothing else. Fork-dependent rules are gated
-on the [Fork][type-Fork] ordering rather than duplicated per fork.
+[Sail](https://github.com/rems-project/sail). It defines the state
+transition function — transaction validity and execution, the EVM, gas,
+precompiled contracts, and the state trie — together with the stateless
+validation of execution payloads. Every rule cites the Yellow Paper
+section or EIP it implements; fork-dependent rules are gated on the
+[Fork][type-Fork] ordering rather than duplicated per fork.
 
 ## The state transition
 
