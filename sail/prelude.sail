@@ -1,7 +1,8 @@
 /*md
-# Prelude: the value model and the 256-bit word ALU
+# The prelude
 
-The arithmetic foundation of the specification. The EVM operates on 256-bit
+The value model and the 256-bit word ALU — the arithmetic foundation of
+the specification. The EVM operates on 256-bit
 words (Yellow Paper §9.1); this module defines that word type and gives
 every word operation its full two's-complement / unsigned semantics over
 `bits(256)`. Only KECCAK-256 and the precompile cryptography at the host

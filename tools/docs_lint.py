@@ -36,12 +36,20 @@ def lint_file(path: Path, rel: str) -> list[str]:
     md_blocks = MD_BLOCK.findall(text)
     doc_blocks = DOC_BLOCK.findall(text)
     if not md_blocks and not doc_blocks:
+        # a file with definitions but no documentation at all is a page
+        # with a filename title and no prose — never acceptable
+        if any(line.startswith(DEF_KEYWORDS) for line in text.split("\n")):
+            problems.append(f"{rel}: no documentation comments at all")
         return problems
 
     if md_blocks:
         first = md_blocks[0].strip()
         if not first.startswith("# "):
             problems.append(f"{rel}: first /*md block must open with a '# Title' heading")
+        else:
+            title = first.split("\n", 1)[0][2:].strip()
+            if len(title) > 40:
+                problems.append(f"{rel}: page title too long for the nav ({len(title)} chars): {title!r}")
 
     for block in md_blocks:
         for level, heading in HEADING.findall(block):
