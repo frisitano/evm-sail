@@ -1,9 +1,19 @@
+/*md
+# Trie nodes
+
+Merkle-Patricia trie node forms, references, and decoding
+(YP Appendix D).
+*/
+
+/*! A reference to a trie node: empty, inline (encodings under 32 bytes),
+    or by KECCAK-256 hash (YP Appendix D, Eq. 207). */
 union NodeRef = {
     EmptyRef : unit,
     InlineRef : Bytes,
     HashRef : hash,
 }
 
+/*! The RLP of a node reference as it appears inside a parent node. */
 function node_ref_rlp(r : NodeRef) -> list(byte) =
     match r {
         EmptyRef() => [|0x80|],
@@ -11,7 +21,8 @@ function node_ref_rlp(r : NodeRef) -> list(byte) =
         HashRef(h) => [|0xa0|] ++ word_to_bytes32(h),
     }
 
-/* Appendix D, Eq. 207: inline nodes under 32 bytes, otherwise hash them. */
+/*! The canonical child reference for an encoded node: inline under 32
+    bytes, otherwise its hash (YP Appendix D, Eq. 207). */
 function child_ref(enc : list(byte)) -> NodeRef =
     if list_len(enc) < 32 then {
         InlineRef(BytesList(enc))
@@ -19,20 +30,24 @@ function child_ref(enc : list(byte)) -> NodeRef =
         HashRef(keccak256(enc))
     }
 
-/* Bit i marks the child at nibble i. */
+/*! Whether the branch mask has a child at nibble `i`. */
 function branch_mask_has_bit(mask : bits(16), i : int) -> bool =
     (sail_shiftright(mask, i) & 0x0001) == 0x0001
+/*! Sets the branch-mask bit for nibble `i`. */
 function branch_mask_set_bit(mask : bits(16), i : int) -> bits(16) =
     mask | sail_shiftleft(0x0001, i)
 
-/* Yellow Paper Appendix D, Eq. 208 node forms. */
+/*! The RLP of a leaf node: `[HP(key, true), value]` (YP Appendix D,
+    Eq. 208). */
 function leaf_node_rlp(key : TriePath, value : list(byte)) -> list(byte) =
     rlp_list(rlp_bytes(hex_prefix_compact(key, true)) ++ rlp_bytes(value))
+/*! The RLP of an extension node: `[HP(key, false), child]`. */
 function extension_node_rlp(key : TriePath, childref : NodeRef) -> list(byte) =
     rlp_list(rlp_bytes(hex_prefix_compact(key, false)) ++ node_ref_rlp(childref))
 
-/* Keep leaf values in their native representation. Long nodes hash the RLP
- * framing and value as segments; only an inline node materializes a slice. */
+/*! The child reference of a leaf, keeping the value in its native
+    representation: long nodes hash the RLP framing and value as segments;
+    only an inline node materializes a slice. */
 function leaf_child_ref(key : TriePath, value : Bytes) -> NodeRef = {
     let path = rlp_bytes(hex_prefix_compact(key, true));
     let value_len = bytes_len(value);
@@ -46,9 +61,12 @@ function leaf_child_ref(key : TriePath, value : Bytes) -> NodeRef = {
     }
 }
 
+/*! The child reference of an extension node. */
 function extension_child_ref(key : TriePath, childref : NodeRef) -> NodeRef =
     child_ref(extension_node_rlp(key, childref))
 
+/*! The RLP payload of a branch: sixteen child slots in ascending nibble
+    order (absent children encode as `0x80`) plus the empty value slot. */
 function branch_payload_rlp(mask : bits(16), children : list(NodeRef)) -> list(byte) = {
     var payload_rev : list(byte) = [||];
     var ch : list(NodeRef) = children; /* ascending nibble order */
@@ -67,9 +85,12 @@ function branch_payload_rlp(mask : bits(16), children : list(NodeRef)) -> list(b
     };
     list_reverse(0x80 :: payload_rev) /* branch value slot: empty */
 }
+/*! The child reference of a branch node. */
 function branch_child_ref(mask : bits(16), children : list(NodeRef)) -> NodeRef =
     child_ref(rlp_list(branch_payload_rlp(mask, children)))
 
+/*! The root hash a node reference commits to; the empty reference is the
+    empty-trie root. */
 function trie_ref_to_root(r : NodeRef) -> bits(256) =
     match r {
         EmptyRef() => EMPTY_TRIE_ROOT,
@@ -77,6 +98,8 @@ function trie_ref_to_root(r : NodeRef) -> bits(256) =
         HashRef(h) => h,
     }
 
+/*! The reference form of raw node bytes: empty, inline under 32 bytes,
+    else hashed. */
 function node_to_ref(node : Bytes) -> NodeRef =
     if bytes_len(node) == 0 then {
         EmptyRef()
@@ -88,7 +111,8 @@ function node_to_ref(node : Bytes) -> NodeRef =
         }
     }
 
-/* Node bytes for keccak `h`, retained as a witness slice. */
+/*! The witness node bytes whose KECCAK-256 digest is `h`, retained as a
+    slice into the stateless input; empty if unwitnessed. */
 function node_db_lookup(h : bits(256)) -> Bytes = {
     let len = unsigned(nodedb_len(h));
     if len == 0 then {
@@ -98,11 +122,16 @@ function node_db_lookup(h : bits(256)) -> Bytes = {
     }
 }
 
+/*! A decoded leaf: its remaining path and value field. */
 struct LeafNodeData = { path : TriePath, value : RlpFieldRef }
+/*! A decoded extension: its shared path and child field. */
 struct ExtensionNodeData = { path : TriePath, child : RlpFieldRef }
 type BranchChildren = vector(16, dec, RlpFieldRef)
+/*! A decoded branch: sixteen child fields and the value field. */
 struct BranchNodeData = { children : BranchChildren, value : RlpFieldRef }
 
+/*! A decoded trie node, or `InvalidNode` when the bytes are not a
+    well-formed node. */
 union TrieNode = {
     LeafNode : LeafNodeData,
     ExtensionNode : ExtensionNodeData,
@@ -110,6 +139,8 @@ union TrieNode = {
     InvalidNode : unit,
 }
 
+/*! Decodes node bytes into leaf/extension/branch form by field count
+    (2 = leaf or extension by the HP flag; 17 = branch). */
 function decode_trie_node(node : Bytes) -> TrieNode = {
     let fields = rlp_node_cursor(node);
     if not_bool(fields.valid) | rlp_cursor_empty(fields) then {
@@ -157,6 +188,8 @@ function decode_trie_node(node : Bytes) -> TrieNode = {
     }
 }
 
+/*! The reference denoted by a child field: an inline list, a 32-byte
+    hash, or empty. */
 function field_to_ref(f : RlpFieldRef) -> NodeRef =
     if f.is_list then {
         InlineRef(rlp_ref_full(f))
@@ -168,7 +201,9 @@ function field_to_ref(f : RlpFieldRef) -> NodeRef =
         }
     }
 
-/* Resolving a missing hash is a deficient witness, never an empty subtree. */
+/*! Resolves a reference to node bytes. Resolving a missing hash is a
+    deficient witness (`InvalidBlock(WitnessDeficient)`), never an empty
+    subtree. */
 function resolve_ref(r : NodeRef) -> Bytes =
     match r {
         EmptyRef() => BytesList([||]),
@@ -183,7 +218,8 @@ function resolve_ref(r : NodeRef) -> Bytes =
         },
     }
 
-/* Re-key a decoded child under `prefix` without copying a leaf value. */
+/*! Re-keys a decoded child node under `prefix` without copying a leaf
+    value. */
 function merge_ext_node(prefix : TriePath, childnode : Bytes) -> NodeRef = {
     if path_len(prefix) == 0 then {
         node_to_ref(childnode)
@@ -200,9 +236,10 @@ function merge_ext_node(prefix : TriePath, childnode : Bytes) -> NodeRef = {
     }
 }
 
-/* merge_ext_node over a child REF: an inline ref carries its node bytes and
- * re-keys canonically; a 32-byte hash ref is wrapped in an extension, which
- * is canonical ONLY when the referenced node is a branch. */
+/*! [merge_ext_node][] over a child reference: an inline reference
+    carries its node bytes and re-keys canonically; a 32-byte hash
+    reference is wrapped in an extension, which is canonical only when the
+    referenced node is a branch. */
 function merge_ext_ref(prefix : TriePath, childref : NodeRef) -> NodeRef = {
     if path_len(prefix) == 0 then {
         childref

@@ -1,12 +1,22 @@
-/* Ordered leaf updates. */
+/*md
+# Trie updates and the canonical builder
 
+Ordered leaf updates, their merge into item streams, and the trie builder
+that recomposes canonical nodes (YP Appendix D).
+*/
+
+/*! A pending change at a trie key: a put of new leaf bytes, or a
+    delete. */
 union TrieChange = {
     TriePut : Bytes,
     TrieDelete : unit,
 }
 
+/*! An update: a full-path key and its change. Update lists are kept
+    sorted by key. */
 struct TrieUpdate = { key : TriePath, change : TrieChange }
 
+/*! Splits an update list at `count` (merge-sort helper). */
 function split_updates(updates : list(TrieUpdate), count : int) -> (list(TrieUpdate), list(TrieUpdate)) =
     if count <= 0 then {
         ([||], updates)
@@ -21,6 +31,7 @@ function split_updates(updates : list(TrieUpdate), count : int) -> (list(TrieUpd
     }
 termination_measure split_updates(updates, count) = count
 
+/*! Merges two sorted update lists, keeping key order. */
 function merge_updates(left : list(TrieUpdate), right : list(TrieUpdate)) -> list(TrieUpdate) =
     match (left, right) {
         ([||], _) => right,
@@ -57,17 +68,24 @@ function next_update_under(updates : list(TrieUpdate), prefix : TriePath) -> boo
         [||] => false,
     }
 
-/* The walker merges updates into an ordered item stream; the builder turns
- * that stream back into canonical trie nodes. Untouched subtrees stay refs. */
+/*md
+## Item streams
 
-/* Extension children are known branches; branch children have unknown kind
- * until resolved. That distinction permits untouched hashes to stay opaque. */
+The walker merges updates into an ordered item stream; the builder turns
+that stream back into canonical trie nodes. Untouched subtrees stay
+references.
+*/
+
+/*! An item's payload: a live leaf, a known-branch reference (extension
+    children are always branches), or a subtree reference of unknown kind.
+    The distinction permits untouched hashes to stay opaque. */
 union TrieItemValue = {
     LeafItem : Bytes,
     BranchItem : NodeRef,
     SubtreeItem : NodeRef,
 }
 
+/*! A sorted-stream item: a path and its payload. */
 struct TrieItem = { path : TriePath, value : TrieItemValue }
 
 function item_leaf(path : TriePath, value : Bytes) -> TrieItem =
@@ -79,7 +97,7 @@ function item_branch(path : TriePath, childref : NodeRef) -> TrieItem =
 function item_subtree(path : TriePath, childref : NodeRef) -> TrieItem =
     struct { path = path, value = SubtreeItem(childref) }
 
-/* Sorted live-leaf items of an update list (deletes emit nothing). */
+/*! The sorted live-leaf items of an update list; deletes emit nothing. */
 function live_update_items(updates : list(TrieUpdate)) -> list(TrieItem) =
     match updates {
         [||] => [||],
@@ -89,9 +107,10 @@ function live_update_items(updates : list(TrieUpdate)) -> list(TrieItem) =
         },
     }
 
-/* Consume the leading updates under `prefix`, returning the first update
- * outside that subtree to the caller. Sorted keys make the matching range
- * contiguous, so every update advances through the witness walk once. */
+/*! Consumes the leading updates under `prefix`, returning the first
+    update outside that subtree to the caller. Sorted keys make the
+    matching range contiguous, so every update advances through the
+    witness walk once. */
 function live_update_items_under(updates : list(TrieUpdate), prefix : TriePath) -> (list(TrieItem), list(TrieUpdate)) =
     match updates {
         [||] => ([||], [||]),
@@ -106,8 +125,8 @@ function live_update_items_under(updates : list(TrieUpdate), prefix : TriePath) 
         },
     }
 
-/* Overlay the contiguous update range for a base leaf and return the cursor
- * positioned at the next sibling subtree. */
+/*! Overlays the contiguous update range for a base leaf, returning the
+    cursor positioned at the next sibling subtree. */
 function leaf_overlay_items(
     updates : list(TrieUpdate),
     prefix : TriePath,
@@ -142,6 +161,7 @@ function leaf_overlay_items(
         },
     }
 
+/*! The path of the last item in a stream. */
 function items_last_path(items : list(TrieItem)) -> TriePath =
     match items {
         [||] => path_empty(),
@@ -151,6 +171,7 @@ function items_last_path(items : list(TrieItem)) -> TriePath =
         },
     }
 
+/*! Takes the leading items whose nibble at `depth` is `nib`. */
 function take_nibble_group(items : list(TrieItem), depth : int, nib : nibble) -> (list(TrieItem), list(TrieItem)) =
     match items {
         [||] => ([||], [||]),
@@ -162,10 +183,11 @@ function take_nibble_group(items : list(TrieItem), depth : int, nib : nibble) ->
         },
     }
 
-/* the child ref of a single-item subtree at `depth`: the item's remaining
- * path is absorbed into it. This is the ONE place a delete collapse can
- * demand node material: an unknown-type hash ref absorbing a nonempty
- * suffix resolves its node from the witness db (fail-closed). */
+/*! The child reference of a single-item subtree at `depth`: the item's
+    remaining path is absorbed into it. This is the one place a delete
+    collapse can demand node material: an unknown-type hash reference
+    absorbing a nonempty suffix resolves its node from the witness db
+    (fail-closed). */
 function item_ref(it : TrieItem, depth : int) -> NodeRef = {
     let suffix = path_drop(it.path, depth);
     match it.value {
@@ -193,26 +215,30 @@ function item_ref(it : TrieItem, depth : int) -> NodeRef = {
     }
 }
 
-/* ---- the trie builder (Yellow Paper Appendix D) --------------------------
- *
- * build_group composes the subtree of a sorted, prefix-free item group
- * whose paths all extend the group's first `depth` nibbles. On a leaf-only
- * stream this IS the protocol trie definition, transcribed from the Yellow
- * Paper (Shanghai version) and specialized to fixed-length secure-trie
- * keys (so a branch node's value slot -- the 17th item -- is always
- * empty):
- *
- *   c(I,i): leaf | extension | 17-item branch      (Eq. 208)  build_group
- *   n(I,i): () if I = {}; c(I,i) if ||RLP|| < 32;
- *           KEC(RLP(c(I,i))) otherwise             (Eq. 207)  child_ref cap
- *   TRIE(I) = KEC(RLP(c(I,0)))                     (Eq. 206)  items_root
- *
- * Node closure is by lookahead on the sorted keys: an extension covers
- * exactly the prefix shared by the whole group (first/last suffices when
- * sorted), and a branch materializes only where >= 2 key groups actually
- * diverge -- the canonical form is reached by construction, with no
- * separate collapse or canonicalization step. `fuel` only bounds recursion
- * for the termination checker: keys are 64 nibbles, callers pass 256. */
+/*md
+## The trie builder
+
+The canonical builder (YP Appendix D). On a leaf-only stream this is the
+protocol trie definition, transcribed from the Yellow Paper (Shanghai
+version) and specialized to fixed-length secure-trie keys (so a branch
+node's value slot — the 17th item — is always empty):
+
+```text
+c(I,i): leaf | extension | 17-item branch      (Eq. 208)  build_group
+n(I,i): () if I = {}; c(I,i) if ||RLP|| < 32;
+        KEC(RLP(c(I,i))) otherwise             (Eq. 207)  child_ref
+TRIE(I) = KEC(RLP(c(I,0)))                     (Eq. 206)  items_root
+```
+*/
+
+/*! Composes the subtree of a sorted, prefix-free item group whose paths
+    all extend the group's first `depth` nibbles. Node closure is by
+    lookahead on the sorted keys: an extension covers exactly the prefix
+    shared by the whole group (first/last suffices when sorted), and a
+    branch materializes only where ≥ 2 key groups actually diverge — the
+    canonical form is reached by construction, with no separate collapse
+    or canonicalization step. `fuel` only bounds recursion for the
+    termination checker: keys are 64 nibbles, callers pass 256. */
 function build_group(items : list(TrieItem), depth : int, fuel : int) -> NodeRef = {
     if fuel <= 0 then {
         throw InvalidBlock(WitnessDeficient)
@@ -259,7 +285,7 @@ function build_group(items : list(TrieItem), depth : int, fuel : int) -> NodeRef
 }
 termination_measure build_group(items, depth, fuel) = fuel
 
-/* TRIE of a sorted item stream (Eq. 206 on a leaf-only stream) */
+/*! `TRIE` of a sorted item stream (Eq. 206 on a leaf-only stream). */
 function items_root(items : list(TrieItem)) -> bits(256) =
     match items {
         [||] => EMPTY_TRIE_ROOT,

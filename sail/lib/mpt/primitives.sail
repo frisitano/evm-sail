@@ -1,19 +1,29 @@
-/* Paths and hex-prefix encoding. */
+/*md
+# Trie paths and hex-prefix encoding
 
-/* Trie paths are at most 64 nibbles in every trie built here: secure state and
- * storage keys are 32-byte hashes, while list tries use short RLP indices.
- * `data` is high-aligned and `len` preserves leading zeroes and prefixes. */
+Nibble paths through the Merkle-Patricia trie and the compact (hex-prefix)
+encoding of YP Appendix C.
+*/
+
 type nibble = bits(4)
+/*! A trie path of at most 64 nibbles — secure state and storage keys are
+    32-byte hashes, and list tries use short RLP indices. `data` is
+    high-aligned; `len` preserves leading zeroes and prefixes. */
 struct TriePath = { data : bits(256), len : bits(7) }
 
+/*! The path length in nibbles. */
 function path_len(path : TriePath) -> int = unsigned(path.len)
 
+/*! Constructs a path from high-aligned data and a nibble length. */
 function path_new(data : bits(256), len : int) -> TriePath =
     struct { data = data, len = get_slice_int(7, len, 0) }
 
+/*! The empty path. */
 function path_empty() -> TriePath =
     path_new(ZERO_WORD, 0)
 
+/*! The path of a byte key (two nibbles per byte); keys over 32 bytes are
+    a witness fault. */
 function path_from_bytes(bs : list(byte)) -> TriePath = {
     let n = list_len(bs);
     if n > 32 then {
@@ -30,9 +40,11 @@ function path_from_bytes(bs : list(byte)) -> TriePath = {
     }
 }
 
+/*! The 64-nibble path of a 32-byte hash — the secure-trie key form. */
 function path_from_hash(h : bits(256)) -> TriePath =
     path_new(h, 64)
 
+/*! The `i`-th nibble, most significant first; out of range yields `0`. */
 function path_nibble(path : TriePath, i : int) -> nibble =
     if (i < 0) | (i >= path_len(path)) then {
         0x0
@@ -40,9 +52,11 @@ function path_nibble(path : TriePath, i : int) -> nibble =
         sail_shiftright(path.data, 4 * (63 - i))[3 .. 0]
     }
 
+/*! A one-nibble path. */
 function path_single(n : nibble) -> TriePath =
     path_new(sail_shiftleft(sail_zero_extend(n, 256), 252), 1)
 
+/*! Path concatenation; over 64 nibbles is a witness fault. */
 function path_concat(a : TriePath, b : TriePath) -> TriePath = {
     let alen = path_len(a);
     let blen = path_len(b);
@@ -53,6 +67,7 @@ function path_concat(a : TriePath, b : TriePath) -> TriePath = {
     }
 }
 
+/*! The first `n` nibbles. */
 function path_take(path : TriePath, n : int) -> TriePath =
     if n <= 0 then {
         path_empty()
@@ -65,6 +80,7 @@ function path_take(path : TriePath, n : int) -> TriePath =
         }
     }
 
+/*! The path with its first `n` nibbles removed. */
 function path_drop(path : TriePath, n : int) -> TriePath = {
     let remain = path_len(path) - n;
     if remain <= 0 then {
@@ -78,9 +94,11 @@ function path_drop(path : TriePath, n : int) -> TriePath = {
     }
 }
 
+/*! Path equality. */
 function path_eq(a : TriePath, b : TriePath) -> bool =
     (a.len == b.len) & (a.data == b.data)
 
+/*! Lexicographic path order (data, then length). */
 function path_lt(a : TriePath, b : TriePath) -> bool =
     if a.data == b.data then {
         path_len(a) < path_len(b)
@@ -88,6 +106,7 @@ function path_lt(a : TriePath, b : TriePath) -> bool =
         word_ult(a.data, b.data)
     }
 
+/*! Whether `prefix` is a prefix of `path`. */
 function path_prefix_of(prefix : TriePath, path : TriePath) -> bool = {
     if path_len(prefix) > path_len(path) then {
         false
@@ -96,6 +115,8 @@ function path_prefix_of(prefix : TriePath, path : TriePath) -> bool = {
     }
 }
 
+/*! The length of the common prefix of `a` and `b` starting at nibble
+    `start`. */
 function common_prefix_from(a : TriePath, b : TriePath, start : int) -> int = {
     let alen = path_len(a);
     let blen = path_len(b);
@@ -107,8 +128,8 @@ function common_prefix_from(a : TriePath, b : TriePath, start : int) -> int = {
     i - start
 }
 
-/* hex-prefix (compact) encoding of a nibble path + leaf/extension flag
- * (Yellow Paper Appendix C.1, the HP function). */
+/*! The hex-prefix (compact) encoding of a nibble path with its
+    leaf/extension flag (YP Appendix C.1, the HP function). */
 function hex_prefix_compact(path : TriePath, is_leaf : bool) -> list(byte) = {
     let odd = emod_int(path_len(path), 2) == 1;
     let flag : nibble = if is_leaf then { 0x2 } else { 0x0 };
@@ -127,7 +148,8 @@ function hex_prefix_compact(path : TriePath, is_leaf : bool) -> list(byte) = {
     list_reverse(out)
 }
 
-/* Decode a compact path directly from its RLP source span. */
+/*! Decodes a compact path directly from its RLP source span, returning
+    the leaf flag and the path. */
 function hex_prefix_decode_ref(f : RlpFieldRef) -> (bool, TriePath) = {
     if f.is_list then {
         throw InvalidBlock(RlpDecode)
@@ -154,6 +176,7 @@ function hex_prefix_decode_ref(f : RlpFieldRef) -> (bool, TriePath) = {
     }
 }
 
+/*! Whether `seg` occurs in `key` at nibble position `pos`. */
 function path_matches(key : TriePath, pos : int, seg : TriePath) -> bool = {
     if pos + path_len(seg) > path_len(key) then {
         false

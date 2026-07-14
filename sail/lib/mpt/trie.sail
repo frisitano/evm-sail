@@ -1,23 +1,34 @@
-/* Witness-native Ethereum MPT. `trie_root` merges ordered updates into an
- * authenticated base trie and fails closed when a touched hash is absent.
- * With an empty base the same builder computes Yellow Paper TRIE(I). */
+/*md
+# The witness-native trie
 
-/* ---- the witness walker --------------------------------------------------
- *
- * witness_items(node, prefix, updates, fuel): the sorted post-state item
- * stream of the subtree rooted at `node` (whose position is `prefix`) and
- * the first update after that subtree. `updates` is a cursor into the one
- * globally sorted update stream; each call consumes its contiguous prefix
- * range and returns the cursor to its parent.
- *
- * The walker descends ONLY along touched paths; untouched children pass
- * through as single ref items with zero node-db work. Deletes are consumed
- * here and only here: a delete suppresses its base leaf, and a delete with
- * no base leaf (the walk proves absence) emits nothing. Whatever survives
- * is rebuilt by build_group, so a branch losing children to deletes
- * collapses in the builder with no walker involvement. RLP fields retain their
- * source and spans, so embedded nodes and leaf values remain witness slices. */
+The witness-native Ethereum Merkle-Patricia trie. [trie_root][] merges
+ordered updates into an authenticated base trie and fails closed when a
+touched hash is absent from the witness. With an empty base the same
+builder computes the Yellow Paper `TRIE(I)` directly.
+
+## The witness walker
+
+`witness_items(node, prefix, updates, fuel)` yields the sorted post-state
+item stream of the subtree rooted at `node` (whose position is `prefix`)
+and the first update after that subtree. `updates` is a cursor into the
+one globally sorted update stream; each call consumes its contiguous
+prefix range and returns the cursor to its parent.
+
+The walker descends only along touched paths; untouched children pass
+through as single reference items with zero node-db work. Deletes are
+consumed here and only here: a delete suppresses its base leaf, and a
+delete with no base leaf (the walk proves absence) emits nothing. Whatever
+survives is rebuilt by [build_group][], so a branch losing children to
+deletes collapses in the builder with no walker involvement. RLP fields
+retain their source and spans, so embedded nodes and leaf values remain
+witness slices.
+*/
+
+/*! The sorted post-state item stream of a subtree, and the update cursor
+    positioned after it. See the walker description above. */
 val witness_items : (Bytes, TriePath, list(TrieUpdate), int) -> (list(TrieItem), list(TrieUpdate))
+/*! [witness_items][] over a child field: resolves inline, proven-absent,
+    and hashed children (a missing hashed node is a deficient witness). */
 val witness_child_items : (RlpFieldRef, TriePath, list(TrieUpdate), int) -> (list(TrieItem), list(TrieUpdate))
 
 function witness_child_items(
@@ -153,21 +164,24 @@ function witness_items(
 termination_measure witness_items(node, prefix, updates, fuel) = fuel
 termination_measure witness_child_items(f, prefix, updates, fuel) = fuel
 
-/* ---- THE trie entry ------------------------------------------------------
- *
- * trie_root(base_root, updates): the root of the trie anchored at base_root
- * after applying the ordered update list. This is the ONLY public root
- * computation: witness-native and fail-closed -- the walker resolves every
- * touched hash reference in the witness node-db and any missing node throws
- * InvalidBlock(WitnessDeficient); otherwise the builder recomposes the emitted
- * stream canonically.
- *
- * Theorem-shaped remark: restricted to an empty base
- * (base_root = EMPTY_TRIE_ROOT), the walker is the identity on the live
- * update leaves and trie_root computes TRIE(I) of Appendix D directly -- an
- * empty base contains no hash refs, so the node-db is never consulted and
- * no failure path can fire. The native (full-state) backend exercises
- * exactly this restriction: same implementation, different input. */
+/*md
+## The trie entry point
+*/
+
+/*! The root of the trie anchored at `base_root` after applying the
+    ordered update list. This is the only public root computation:
+    witness-native and fail-closed — the walker resolves every touched
+    hash reference in the witness node-db and any missing node throws
+    `InvalidBlock(WitnessDeficient)`; otherwise the builder recomposes the
+    emitted stream canonically.
+
+    Theorem-shaped remark: restricted to an empty base
+    (`base_root = EMPTY_TRIE_ROOT`), the walker is the identity on the
+    live update leaves and `trie_root` computes `TRIE(I)` of Appendix D
+    directly — an empty base contains no hash references, so the node-db
+    is never consulted and no failure path can fire. The native
+    (full-state) backend exercises exactly this restriction: same
+    implementation, different input. */
 function trie_root(base_root : bits(256), updates : list(TrieUpdate)) -> bits(256) = {
     if updates_empty(updates) then {
         base_root
@@ -190,7 +204,8 @@ function trie_root(base_root : bits(256), updates : list(TrieUpdate)) -> bits(25
     }
 }
 
-/* Walk the secure trie without copying its leaf value. */
+/*! Walks the trie toward `key` from `pos`, returning the leaf value
+    without copying it; absent paths yield empty bytes. */
 function trie_walk(node : Bytes, key : TriePath, pos : int, fuel : int) -> Bytes = {
     if fuel <= 0 | bytes_len(node) == 0 then {
         BytesList([||])
@@ -224,6 +239,8 @@ function trie_walk(node : Bytes, key : TriePath, pos : int, fuel : int) -> Bytes
 }
 termination_measure trie_walk(node, key, pos, fuel) = fuel
 
+/*! Looks up `key` from a root hash; the root node itself must be
+    witnessed. */
 function trie_lookup(root : hash, key : TriePath) -> Bytes = {
     if root == EMPTY_TRIE_ROOT then {
         BytesList([||])
