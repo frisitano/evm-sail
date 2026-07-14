@@ -1,20 +1,20 @@
-/* ======================================================================== */
-/* PER-FRAME EVM MEMORY                                                     */
-/*                                                                          */
-/* The volatile byte array each call frame addresses from zero (Yellow      */
-/* Paper section 9.4.1): flat, byte-addressed, zero-initialized, and lazily */
-/* expanding in 32-byte words. MLOAD/MSTORE/MSTORE8/MSIZE and the *COPY     */
-/* opcodes read and write it; expansion past the high-water mark is charged */
-/* as memory-expansion gas.                                                 */
-/*                                                                          */
-/* Frames form a stack: a sub-call (CALL/CREATE) receives fresh memory      */
-/* (mem_frame_enter) and the caller's is restored on return                 */
-/* (mem_frame_leave); mem_clear resets to a single empty frame per          */
-/* transaction. This file is ONLY the boundary -- the bodyless axioms with  */
-/* read-after-write and LIFO frame laws; the EVM's view (out-of-gas guard,  */
-/* high-water tracking, MSIZE, the opcode helpers) lives in                 */
-/* evm/machine.sail where the frame context is defined.                     */
-/* ======================================================================== */
+/*md
+# Per-frame memory
+
+The volatile byte array each call frame addresses from zero (YP §9.4.1):
+flat, byte-addressed, zero-initialized, and lazily expanding in 32-byte
+words. `MLOAD`/`MSTORE`/`MSTORE8`/`MSIZE` and the `*COPY` opcodes read and
+write it; expansion past the high-water mark is charged as
+memory-expansion gas.
+
+Frames form a stack: a sub-call receives fresh memory
+([mem_frame_enter][]) and the caller's is restored on return
+([mem_frame_leave][]); [mem_clear][] resets to a single empty frame per
+transaction. This module is only the boundary — bodyless axioms with
+read-after-write and LIFO frame laws; the EVM's view (out-of-gas guard,
+high-water tracking, `MSIZE`, the opcode helpers) lives in the machine
+module where the frame context is defined.
+*/
 
 val mem_read_byte = impure { c: "mem_read_byte" } : bits(64) -> bits(8)
 val mem_write_byte = impure { c: "mem_write_byte" } : (bits(64), bits(8)) -> unit
@@ -36,6 +36,9 @@ val mem_store_word = impure { c: "mem_store_word" } : (bits(64), word) -> unit
 /* Freeze a range of the current frame in the absolute memory arena. */
 val mem_establish_absolute = impure { c: "mem_establish_absolute" } : (bits(64), bits(64)) -> bits(64)
 
+/*! Freezes `[off, off+len)` of the current frame into the absolute
+    memory arena and returns a slice over it (the source form of
+    `RETURN`/`REVERT`/`LOG` data). */
 function mem_slice(off : int, len : int) -> ByteSlice =
     if len == 0 then {
         EMPTY_SLICE

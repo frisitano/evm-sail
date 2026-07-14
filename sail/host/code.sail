@@ -1,4 +1,8 @@
-/* Content-addressed code storage and Sail JUMPDEST analysis. */
+/*md
+# Code storage
+
+Content-addressed code storage and the Sail-side `JUMPDEST` analysis.
+*/
 
 val code_db_lookup = impure { c: "code_db_lookup" } : hash -> option(Code)
 val code_db_store = impure { c: "code_db_store_indexed" } : (ByteSlice, JumpdestBitmap) -> hash
@@ -6,8 +10,9 @@ val jumpdest_ref_contains = impure { c: "jumpdest_ref_contains" } : (JumpdestRef
 val code_intern_delegation = impure { c: "code_intern_indexed_delegation" } : (address, JumpdestBitmap) -> hash
 val code_db_read_delegation = impure { c: "code_db_read_delegation" } : hash -> bits(168)
 
-/* PUSH immediate bytes are data even when they contain 0x5b. The completed
- * bitmap remains a first-class Sail value; the host never scans opcodes. */
+/*! The PUSH-aware `JUMPDEST` analysis (YP §9.4.3): PUSH immediate bytes
+    are data even when they contain `0x5b`. The completed bitmap remains a
+    first-class Sail value; the host never scans opcodes. */
 function analyze_code(code : ByteSlice) -> JumpdestBitmap = {
     let len = unsigned(code.len);
     let word_count = ediv_int(len + 63, 64);
@@ -41,9 +46,12 @@ function analyze_code(code : ByteSlice) -> JumpdestBitmap = {
     list_reverse(words)
 }
 
+/*! Analyzes and stores code, returning its content hash. */
 function code_db_insert(code : ByteSlice) -> hash =
     code_db_store(code, analyze_code(code))
 
+/*! The code for a code hash; `KECCAK_EMPTY` resolves to empty code, and
+    an unwitnessed hash is a deficient witness. */
 function code_db_resolve(code_hash : hash) -> Code =
     if code_hash == KECCAK_EMPTY then {
         EMPTY_CODE
