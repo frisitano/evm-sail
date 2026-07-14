@@ -1,12 +1,13 @@
-/* ======================================================================== */
-/* PRIMITIVES: PROTOCOL SYSTEM ADDRESSES + TOPICS                           */
-/*                                                                          */
-/* The protocol-defined system actors: the pseudo-caller of block-level     */
-/* system calls, the system predeploys they target, and the EIP-7708        */
-/* transfer-log identity. Pure data -- no registers, no externs.            */
-/* ======================================================================== */
+/*md
+# System addresses and topics
 
-/* the caller of protocol system calls (EIP-4788 / 2935 / 7002 / 7251) */
+The protocol-defined system actors: the pseudo-caller of block-level
+system calls, the system predeploys they target, and the EIP-7708
+transfer-log identity. Pure data — no registers, no externs.
+*/
+
+/*! The pseudo-caller of protocol system calls (EIP-4788, EIP-2935,
+    EIP-7002, EIP-7251). */
 let SYSTEM_ADDRESS : address = 0xfffffffffffffffffffffffffffffffffffffffe
 
 /* system predeploys */

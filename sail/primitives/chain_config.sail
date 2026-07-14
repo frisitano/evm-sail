@@ -1,19 +1,22 @@
-/* ======================================================================== */
-/* PRIMITIVES: CHAIN CONFIG                                                 */
-/*                                                                          */
-/* The decoded SszChainConfig: the chain id, the active fork -- BOTH as the */
-/* raw SSZ ProtocolFork index and as the Fork whose execution rules apply   */
-/* (difficulty-delay and blob-parameter-only forks collapse to their base)  */
-/* -- and whether the fork's activation point has been reached.             */
-/* been reached. Pure data -- no registers, no externs.                     */
-/* ======================================================================== */
+/*md
+# Chain configuration
 
+The decoded `SszChainConfig`: the chain id and the active fork — both as
+the raw SSZ `ProtocolFork` index and as the [Fork][type-Fork] whose
+execution rules apply (blob-parameter-only forks collapse to their base) —
+plus whether the fork's activation point has been reached. Pure data — no
+registers, no externs.
+*/
+
+/*! A fork's blob parameters (EIP-4844/EIP-7691): target and maximum blob
+    counts per block, and the base-fee update fraction. */
 struct BlobSchedule = {
     target : int,
     max : int,
     base_fee_update_fraction : int,
 }
 
+/*! The decoded chain configuration for the executing payload. */
 struct ChainConfig = {
     chain_id : int,
     fork_index : int, /* raw SSZ ProtocolFork index                     */
@@ -23,9 +26,13 @@ struct ChainConfig = {
     blob_schedule_shape_valid : bool,
 }
 
+/*! Structural equality of blob schedules. */
 function blob_schedule_equal(a : BlobSchedule, b : BlobSchedule) -> bool =
     (a.target == b.target) & (a.max == b.max) & (a.base_fee_update_fraction == b.base_fee_update_fraction)
 
+/*! The protocol-defined blob schedule for an SSZ `ProtocolFork` index:
+    Cancun 3/6, Prague/Osaka 6/9, BPO1 10/15, BPO2+ 14/21; forks before
+    Cancun have none. */
 function expected_blob_schedule(idx : int) -> option(BlobSchedule) =
     if idx < 15 then {
         None()
@@ -45,6 +52,8 @@ function expected_blob_schedule(idx : int) -> option(BlobSchedule) =
         }
     }
 
+/*! Whether the config's blob schedule is well-shaped and equals the
+    protocol-defined schedule for its fork index. */
 function chain_config_blob_schedule_valid(cc : ChainConfig) -> bool = {
     if not_bool(cc.blob_schedule_shape_valid) then {
         false
