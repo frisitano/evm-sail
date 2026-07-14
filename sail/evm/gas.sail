@@ -31,6 +31,7 @@ The cost groups, with their governing specifications:
 BLOB_BASE_FEE_UPDATE_FRACTION)`. The active target, maximum, and update
 fraction come from the validated SSZ chain config, including BPO1/BPO2.
 */
+
 let MIN_BLOB_BASE_FEE : int = 1
 let BLOB_BASE_COST : int = 8192
 let GAS_PER_BLOB : int = 131072
