@@ -1,11 +1,15 @@
-/* ======================================================================== */
-/* PRIMITIVES: PROTOCOL FORKS                                               */
-/*                                                                          */
-/* The protocol forks the model executes, oldest to newest -- declaration   */
-/* order IS the activation order, and every fork-gated rule compares on it  */
-/* (fork_ge / fork_lt). Pure data -- no registers, no externs.              */
-/* ======================================================================== */
+/*md
+# Protocol forks
 
+The protocol forks the model executes, oldest to newest. Declaration order
+is the activation order, and every fork-gated rule in the specification
+compares on it via [fork_gteq][] / [fork_lt][]. Pure data — no registers,
+no externs.
+*/
+
+/*! The supported protocol forks, in activation order. Blob-parameter-only
+    forks are not distinct members; they collapse to their base fork (see
+    [fork_of_protocol_index][]). */
 enum Fork = {
     Frontier,
     Homestead,
@@ -22,7 +26,7 @@ enum Fork = {
     Amsterdam, /* EIP-7954 code/initcode size bump (32768/65536)             */
 }
 
-/* activation index = declaration order */
+/*! The activation index of a fork: its declaration position. */
 function fork_index(f : Fork) -> int = match f {
     Frontier => 0,
     Homestead => 1,
@@ -39,21 +43,23 @@ function fork_index(f : Fork) -> int = match f {
     Amsterdam => 12,
 }
 
-/* fork a is at least / strictly before fork b; overloaded onto the
- * comparison operators so fork gates read `k_fork >= Berlin` */
+/*! Fork `a` activates no earlier than fork `b`. Overloaded onto `>=` so
+    fork gates read `k_fork >= Berlin`. */
 function fork_gteq(a : Fork, b : Fork) -> bool = fork_index(a) >= fork_index(b)
 
+/*! Fork `a` activates strictly before fork `b`; overloaded onto `<`. */
 function fork_lt(a : Fork, b : Fork) -> bool = fork_index(a) < fork_index(b)
 
 overload operator >= = { fork_gteq }
 
 overload operator < = { fork_lt }
 
-/* Deserialize an SSZ ProtocolFork index (execution-specs tuple(ProtocolFork)
- * order: ... Shanghai=14 Cancun=15 Prague=16 Osaka=17 BPO1=18 BPO2=19
- * Amsterdam=20) into the Fork whose EXECUTION RULES apply: blob-parameter-only
- * forks collapse to their base, unknown future indices to the newest. The raw
- * index is preserved separately (ChainConfig.fork_index) for exact checks. */
+/*! Deserializes an SSZ `ProtocolFork` index (execution-specs
+    `tuple(ProtocolFork)` order: … Shanghai=14, Cancun=15, Prague=16,
+    Osaka=17, BPO1=18, BPO2=19, Amsterdam=20) into the [Fork][type-Fork]
+    whose execution rules apply: blob-parameter-only forks collapse to
+    their base fork, unknown future indices to the newest. The raw index
+    is preserved separately (`ChainConfig.fork_index`) for exact checks. */
 function fork_of_protocol_index(idx : int) -> Fork =
     if idx >= 20 then {
         Amsterdam

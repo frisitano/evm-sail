@@ -1,18 +1,20 @@
-/* ======================================================================== */
-/* HALT KINDS AND THE EXCEPTIONAL HALTING STATE (Yellow Paper sec. 9.4.2)   */
-/*                                                                          */
-/* How an execution frame can end. A frame either halts normally (one of    */
-/* HaltKind: STOP / RETURN / REVERT / SELFDESTRUCT) or hits an exceptional  */
-/* halt (one of ExceptionKind). An exceptional halt is the YP "exceptional  */
-/* halting state": it consumes ALL remaining gas and reverts the frame's    */
-/* state changes. REVERT (EIP-140) is the sole failure that instead REFUNDS */
-/* the remaining gas while still rolling state back.                        */
-/*                                                                          */
-/* FrameStatus is the running/halted/exceptional tag. RETURN and REVERT     */
-/* carry the frame output directly; interpret() returns that value.         */
-/* ======================================================================== */
+/*md
+# Halting
 
-/* Ordinary frame stops. Only RETURN and REVERT produce output bytes. */
+How an execution frame ends (Yellow Paper §9.4.2). A frame either halts
+normally — one of [HaltKind][type-HaltKind]: `STOP`, `RETURN`, `REVERT`, or
+`SELFDESTRUCT` — or enters the exceptional halting state, one of
+[ExceptionKind][type-ExceptionKind]. An exceptional halt consumes all
+remaining gas and reverts the frame's state changes. `REVERT` (EIP-140) is
+the sole failure mode that instead refunds the remaining gas while still
+rolling state back.
+
+[FrameStatus][type-FrameStatus] is the running/halted/exceptional tag.
+`RETURN` and `REVERT` carry the frame output directly; [interpret][] returns
+that value.
+*/
+
+/*! Ordinary frame stops. Only `RETURN` and `REVERT` produce output bytes. */
 union HaltKind = {
   HaltStop         : unit,
   HaltReturn       : ByteSlice,
@@ -20,7 +22,8 @@ union HaltKind = {
   HaltSelfDestruct : unit
 }
 
-/* Exceptional halts: consume all remaining gas and revert the frame. */
+/*! Exceptional halts (YP §9.4.2): each consumes all remaining gas and
+    reverts the frame's state changes. */
 enum ExceptionKind = {
     StackUnderflow,
     StackOverflow,
@@ -36,23 +39,29 @@ enum ExceptionKind = {
     AddressCollision, /* EIP-684: CREATE into an occupied account     */
 }
 
-/* Per-frame execution status. */
+/*! Per-frame execution status: running, halted normally, or exceptionally
+    halted. */
 union FrameStatus = {
   Running     : unit,
   Halted      : HaltKind,
   Exceptional : ExceptionKind
 }
 
-/* ======================================================================== */
-/* BLOCK VALIDATION FAILURES  (the InvalidBlock hierarchy, as data)         */
-/*                                                                          */
-/* Mirrors EELS `InvalidBlock` (execution-specs amsterdam/fork.py           */
-/* state_transition): every `raise InvalidBlock` site maps to one variant.  */
-/* Modeled as a typed enum, NOT a thrown exception -- the same data-flow    */
-/* discipline as ExceptionKind above, keeping validation total. The guest   */
-/* reports the FIRST failure it finds (block_validation_error, main.sail);  */
-/* a valid block yields None. Only the pass/fail boolean is emitted, so the */
-/* reason is diagnostic (and a hook for future structured output).          */
+/*md
+## Block validation failures
+
+The `InvalidBlock` hierarchy, as data. Mirrors EELS `InvalidBlock`
+(execution-specs `amsterdam/fork.py`, `state_transition`): every
+`raise InvalidBlock` site maps to one variant. Failures are modeled as a
+typed enum, not a thrown exception — the same data-flow discipline as
+[ExceptionKind][type-ExceptionKind] — keeping validation total. The guest
+reports the first failure it finds ([block_validation_error][]); a valid
+block yields `None`. Only the pass/fail boolean is emitted, so the reason is
+diagnostic (and a hook for future structured output).
+*/
+
+/*! The reason a block fails validation. Each variant corresponds to an
+    EELS `raise InvalidBlock` site in `state_transition`. */
 enum BlockError = {
     InvalidConfig, /* chain config: wrong fork / inactive activation      */
     HeaderChainBroken, /* witness ancestor headers not contiguous             */
@@ -75,11 +84,13 @@ enum BlockError = {
     WitnessDeficient, /* a missing/inconsistent proof node (thrown at use)   */
 }
 
-/* The single Sail exception type. Block validation THROWS InvalidBlock(reason)
- * at the failure point (mirroring EELS `raise InvalidBlock`), and main catches
- * it once -- any failure becomes successful_validation=false. This is exactly the
- * EELS verify_stateless_new_payload try/except structure. Sail's C backend unwinds
- * via have_exception return-checks (no longjmp), so it is zkVM-guest safe. */
+/*! The single Sail exception type. Block validation throws
+    `InvalidBlock(reason)` at the failure point (mirroring EELS
+    `raise InvalidBlock`), and `main` catches it once — any failure becomes
+    `successful_validation = false`. This is exactly the EELS
+    `verify_stateless_new_payload` try/except structure. Sail's C backend
+    unwinds via `have_exception` return-checks (no `longjmp`), so it is
+    zkVM-guest safe. */
 union exception = {
     InvalidBlock : BlockError,
 }
