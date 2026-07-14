@@ -32,3 +32,6 @@ zkvm/.fixtures/
 
 # native conformance runner build artifacts
 zkvm/native-runner/.build/
+
+# generated MkDocs spec book (make docs-site)
+/book/

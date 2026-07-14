@@ -55,9 +55,9 @@ The `InvalidBlock` hierarchy, as data. Mirrors EELS `InvalidBlock`
 `raise InvalidBlock` site maps to one variant. Failures are modeled as a
 typed enum, not a thrown exception — the same data-flow discipline as
 [ExceptionKind][type-ExceptionKind] — keeping validation total. The guest
-reports the first failure it finds ([block_validation_error][]); a valid
-block yields `None`. Only the pass/fail boolean is emitted, so the reason is
-diagnostic (and a hook for future structured output).
+records the first failure it finds; a valid block yields no failure. Only
+the pass/fail boolean is emitted, so the reason is diagnostic (and a hook
+for future structured output).
 */
 
 /*! The reason a block fails validation. Each variant corresponds to an

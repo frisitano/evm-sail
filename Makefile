@@ -26,7 +26,7 @@ EEST_SMOKE := harness/fixtures/smoke/state_root_transfer.json
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail proof/sail -name '*.sail' | sort)
 
-.PHONY: all check clean help lint fmt fmt-check eest-smoke html pdf
+.PHONY: all check clean help lint fmt fmt-check eest-smoke html pdf docs-site
 
 help:
 	@echo "evm-sail targets:"
@@ -64,6 +64,22 @@ eest-smoke:
 	@cd harness && $(PYTHON) run.py fixtures/smoke/state_root_transfer.json --fork Cancun --limit 1 --quiet
 
 all: check lint fmt-check
+
+# Build the MkDocs Material specification book from the sources: docinfo
+# bundle -> sail-lsp semantic index -> generated pages (sail-book-gen) ->
+# strict mkdocs build. Prose lives in /*md and /*! comments in the .sail
+# sources. Requires uv, sail_lsp, and the mkdocstrings-sail package
+# (override MKDOCSTRINGS_SAIL with a local path, e.g. the Sail repo's
+# mkdocstrings-sail/ directory).
+BOOK ?= book
+MKDOCSTRINGS_SAIL ?= mkdocstrings-sail
+docs-site:
+	@mkdir -p $(BOOK)/doc $(BOOK)/docs
+	$(SAIL) --doc --doc-format identity --doc-embed plain --doc-embed-with-location --doc-bundle doc.json -o $(BOOK)/doc $(PROJECT) evm --variable EVM_ENTRY=guest
+	uv run --with '$(MKDOCSTRINGS_SAIL)' sail-lsp-index --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --output $(BOOK)/doc/lsp-index.json
+	uv run --with '$(MKDOCSTRINGS_SAIL)' python -m mkdocstrings_handlers.sail._book --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --book $(BOOK) --site-name "EVM Sail Specification"
+	cd $(BOOK) && uv run --with '$(MKDOCSTRINGS_SAIL)' --with mkdocs-material mkdocs build --strict -d site
+	@echo "book: $(BOOK)/site/index.html"
 
 # Render the whole spec to a single syntax-highlighted HTML page (sail --html).
 # sail --html can't take the project module directly, so concatenate the
