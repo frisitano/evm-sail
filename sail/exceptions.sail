@@ -50,9 +50,8 @@ union FrameStatus = {
 /*md
 ## Block validation failures
 
-The `InvalidBlock` hierarchy, as data. Mirrors EELS `InvalidBlock`
-(execution-specs `amsterdam/fork.py`, `state_transition`): every
-`raise InvalidBlock` site maps to one variant. Failures are modeled as a
+The block-validation failure taxonomy, as data: every rule whose
+violation invalidates a block maps to one variant. Failures are modeled as a
 typed enum, not a thrown exception — the same data-flow discipline as
 [ExceptionKind][type-ExceptionKind] — keeping validation total. The guest
 records the first failure it finds; a valid block yields no failure. Only
@@ -60,8 +59,8 @@ the pass/fail boolean is emitted, so the reason is diagnostic (and a hook
 for future structured output).
 */
 
-/*! The reason a block fails validation. Each variant corresponds to an
-    EELS `raise InvalidBlock` site in `state_transition`. */
+/*! The reason a block fails validation; one variant per violated
+    block-validity rule. */
 enum BlockError = {
     InvalidConfig, /* chain config: wrong fork / inactive activation      */
     HeaderChainBroken, /* witness ancestor headers not contiguous             */
@@ -85,10 +84,8 @@ enum BlockError = {
 }
 
 /*! The single Sail exception type. Block validation throws
-    `InvalidBlock(reason)` at the failure point (mirroring EELS
-    `raise InvalidBlock`), and `main` catches it once — any failure becomes
-    `successful_validation = false`. This is exactly the EELS
-    `verify_stateless_new_payload` try/except structure. Sail's C backend
+    `InvalidBlock(reason)` at the failure point, and `main` catches it
+    once — any failure yields an unsuccessful validation. Sail's C backend
     unwinds via `have_exception` return-checks (no `longjmp`), so it is
     zkVM-guest safe. */
 union exception = {

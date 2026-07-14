@@ -42,15 +42,15 @@ struct BlockHeader = {
     gas_used : int,
     prev_randao : word,
     base_fee : word,
-    blob_gas_used : u64, /* EELS U64 */
-    excess_blob_gas : u64, /* EELS U64 */
+    blob_gas_used : u64, /* uint64 */
+    excess_blob_gas : u64, /* uint64 */
     state_root : bits(256),
     receipts_root : bits(256),
     logs_bloom : LogsBloom,
     fee_recipient : address,
     parent_hash : bits(256),
     parent_beacon_block_root : bits(256),
-    slot_number : u64, /* EELS U64 (EIP-7843) */
+    slot_number : u64, /* uint64 (EIP-7843) */
     extra_data : ByteSlice, /* reference into the payload (RLP-encoded whole for
                                the header hash, never inspected) */
 }

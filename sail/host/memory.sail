@@ -23,17 +23,18 @@ module where the frame context is defined.
 val mem_read_byte = impure { c: "mem_read_byte" } : bits(64) -> bits(8)
 val mem_write_byte = impure { c: "mem_write_byte" } : (bits(64), bits(8)) -> unit
 
-/* call-frame memory lifecycle (the C side owns the bytes) */
+/* call-frame memory lifecycle (the implementation owns the bytes) */
 val mem_clear = impure { c: "mem_clear" } : unit -> unit
 val mem_frame_enter = impure { c: "mem_frame_enter" } : unit -> unit
 val mem_frame_leave = impure { c: "mem_frame_leave" } : unit -> unit
 
 /* range copies (CALLDATACOPY / CODECOPY / RETURNDATACOPY / MCOPY): endpoints
- * already live in C buffers, so copies stay C-side. */
+ * already live in host-interface regions, so copies never cross the
+ * interface. */
 val mem_move = impure { c: "mem_move" } : (bits(64), bits(64), bits(64)) -> unit
 
 /* word access: MLOAD/MSTORE read/write the 32-byte big-endian range at off in
- * ONE crossing (YP 9.4.1; EELS memory_read_bytes / memory_write) */
+ * ONE crossing (YP 9.4.1) */
 val mem_load_word = impure { c: "mem_load_word" } : bits(64) -> word
 val mem_store_word = impure { c: "mem_store_word" } : (bits(64), word) -> unit
 

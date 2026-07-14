@@ -7,11 +7,9 @@ section prose from `/*md … */` comments, definition documentation from
 `/*! … */` doc comments — and every definition is rendered with its source,
 cross-linked and hover-documented.
 
-The specification mirrors the
-[execution-specs](https://github.com/ethereum/execution-specs) (EELS)
-structure and terminology; core functions cite their EELS counterparts and
-the Yellow Paper sections and EIPs they implement. Fork-dependent rules are
-gated on the [Fork][type-Fork] ordering rather than duplicated per fork.
+The specification is self-contained: it cites the Yellow Paper sections
+and EIPs it implements, and nothing else. Fork-dependent rules are gated
+on the [Fork][type-Fork] ordering rather than duplicated per fork.
 
 ## The state transition
 
@@ -53,9 +51,14 @@ gated on the [Fork][type-Fork] ordering rather than duplicated per fork.
 The model is split into a **user-space machine** (the per-message-call
 compute state: program counter, stack, memory, gas) and a **host kernel**
 (the world state: accounts, storage, logs, and their transactional
-overlays). Every world effect crosses that boundary as an explicit `k_*`
-kernel call, and world rollback is a kernel snapshot/revert — the split
-makes the EVM's effect surface auditable and keeps the zkVM guest's host
-interface narrow. Pages under `host/` document that interface and are
+overlays). Every world effect crosses that split as an explicit `k_*`
+kernel call, and world rollback is a kernel snapshot/revert.
+
+Beneath both sits the **host interface**, with two facets: **regions** —
+the named byte stores ([ByteSource][type-ByteSource]: stateless input,
+frame memory, code, log data, output, scratch) that slices reference
+without copying — and the **accelerator interface**, the cryptographic
+functions the implementation computes (hashing, secp256k1, the precompile
+accelerators). Pages under `host/` document that interface and are
 **non-normative**: they specify the model's internal contracts, not
-protocol rules. The full nav is under the *Reference* tab.
+protocol rules.

@@ -11,9 +11,7 @@ list.
     throwing the specific `InvalidBlock` reason on the first failure:
     gas/blob-gas totals, post-state root, receipts root, logs bloom,
     execution-request bytes (Prague+), and block-access-list bytes and
-    size (Amsterdam+).
-
-    *EELS*: `state_transition (post-execution checks)`. */
+    size (Amsterdam+). */
 function validate_executed_block(
     block : Block,
     input_ref : StatelessInputRef,

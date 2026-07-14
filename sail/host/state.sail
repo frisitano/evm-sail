@@ -5,8 +5,9 @@ The host-side mutable state stores, as bodyless axioms: transient storage
 (EIP-1153), the two-layer account and storage overlays (transaction over
 block), the EIP-7928 block-access-list recorder, the EIP-2929 warm sets,
 the log store, and the journal. Sail owns all semantics — checkpointing,
-revert order, and merge discipline; the C side (`ffi/state_db.c`,
-`ffi/kernel_state.c`) owns only the containers.
+revert order, and merge discipline; the implementation behind the host
+interface (`ffi/state_db.c`, `ffi/kernel_state.c`) owns only the
+containers.
 
 !!! note "Non-normative"
     This page documents the model's host interface — internal contracts

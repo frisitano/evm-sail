@@ -6,9 +6,8 @@ record, and the receipt. Pure data — no registers, no externs.
 */
 
 /*! The EIP-2718 envelope type: the single transaction discriminant
-    (revm's `TransactionType`; execution-specs uses one dataclass per
-    variant). The type-derived predicates at the end of this module read
-    it — no boolean flags are stored. */
+    The type-derived predicates at the end of this module read it — no
+    boolean flags are stored. */
 enum TxType = {
     LegacyTx, /* type 0: pre-EIP-2718 RLP list  */
     AccessListTx, /* type 1: EIP-2930 access list   */
@@ -59,7 +58,7 @@ struct Transaction = {
   blob_hashes : BlobHashes,   /* source-backed EIP-4844 BLOBHASH operands         */
   pubkey : ByteSlice,          /* witnessed sender public key (0x04 ++ X ++ Y span);
                                   NOT trusted -- verified against the signature at
-                                  execution (EELS recover_sender_from_public_key) */
+                                  execution against the signing hash        */
   signing_hash : hash,         /* keccak of the signing preimage (EIP-155 / EIP-2718
                                   domain applied), computed structurally at decode  */
   sig_v : int,                 /* v (legacy, EIP-155-bearing) / y_parity (typed)   */
@@ -72,7 +71,7 @@ struct Transaction = {
 struct LogEntry = {
     address : address,
     topics : list(word),
-    data : ByteSlice, /* span into the C log-data arena (LogDataSource); the arena
+    data : ByteSlice, /* span into the log-data store (LogDataSource); the store
                          persists across the BLOCK (per-tx reset keeps it) so
                          receipt-held entries stay valid until block validation */
 }

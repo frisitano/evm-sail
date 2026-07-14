@@ -111,7 +111,7 @@ function slice_load_n(s : ByteSlice, off : int, n : int) -> word =
     host_slice_load_n_word(s, get_slice_int(64, clamp_source_offset(off), 0), get_slice_int(64, n, 0))
 
 /*! Copies slice range `[off, off+len)` into frame memory at `dst`,
-    zero-filling past the end (EELS `buffer_read`). */
+    zero-filling past the end. */
 function slice_copy(s : ByteSlice, dst : int, off : int, len : int) -> unit =
     host_slice_copy_to_memory(
         s,

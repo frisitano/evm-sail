@@ -162,7 +162,7 @@ function collect_deposit_requests(receipts : list(Receipt)) -> ByteSlice = {
     scratch_finish(start)
 }
 
-/* EELS processes request types in ascending order and stops immediately when
+/* Request types are processed in ascending order, stopping immediately when
  * a checked system call is missing or fails. */
 function collect_execution_requests(receipts : list(Receipt)) -> (bool, ExecutionRequests) = {
     let deposits = collect_deposit_requests(receipts);

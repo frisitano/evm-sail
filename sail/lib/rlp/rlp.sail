@@ -17,7 +17,7 @@ copying.
 
 Malformed RLP is a normal invalid-block outcome: the decoders throw
 `InvalidBlock(RlpDecode)` at the point of detection, caught once at the
-guest top level (mirroring the EELS `raise` on a decoding error).
+guest top level.
 */
 
 function rlp_byte(n : int) -> byte = get_slice_int(8, n, 0)

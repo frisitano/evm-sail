@@ -8,10 +8,10 @@ well-known digests of fixed inputs. Loaded before the account types:
 `EMPTY_ACCOUNT` and the kernel's emptiness checks read the digests long
 before `lib/mpt/primitives.sail` loads.
 
-The `c:`-bound `val`s in this module are the axiomatic boundary:
+The `c:`-bound `val`s in this module form the accelerator interface:
 hash/signature primitives with no pure Sail body (`ffi/host_crypto.c`,
 `ffi/precompiles.c` — the eth-act zkvm-standards accelerator surface).
-Proof targets see them as bodyless axioms; the `c:` key binds only C.
+Proof targets see them as bodyless axioms.
 */
 
 /*! keccak256 of the empty string: the `codeHash` of every codeless
@@ -28,10 +28,10 @@ let EMPTY_TRIE_ROOT : hash = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc00
 
 Pure functions of a segment list. A preimage is accumulated Sail-side as
 `list(Bytes)` — its denotation is the concatenation of the segments — and
-crosses the FFI boundary in one call; the C side (`ffi/hash_glue.c`,
-compiled per build against the generated model header) walks the segment
-list natively, resolves each `BytesSlice` from its source store, and
-hashes. No channel state, no per-byte crossings.
+crosses the host interface in one call; the implementation
+(`ffi/hash_glue.c`) walks the segment list natively, resolves each
+`BytesSlice` from its region, and hashes. No channel state, no
+per-byte crossings.
 
 The `StatelessInput`/`Memory`/`Code` source of a
 [ByteSlice][type-ByteSlice] denotes an abstract byte sequence:
@@ -68,10 +68,9 @@ overload sha256 = { sha256_bytes, sha256_segments }
 val keccak_rlp_payload : (list(byte), list(byte)) -> bits(256)
 
 /*! KECCAK-256 of a single word. Fixed-width helper with pure meaning over
-    [keccak256][function-keccak256_bytes]; the dormant one-call C fast
-    paths in `ffi/host_crypto.c` (`host_keccak_word` and companions) are
-    future link-time overrides for the hot path — secure-trie keys hash on
-    every state access. */
+    [keccak256][function-keccak256_bytes]; implementations may override
+    it with a one-call accelerator (`host_keccak_word`) — secure-trie keys
+    hash on every state access. */
 function keccak256_word(w : word) -> bits(256) = keccak256(word_to_bytes32(w))
 
 /*! KECCAK-256 of a 20-byte address (secure-trie account keys). */

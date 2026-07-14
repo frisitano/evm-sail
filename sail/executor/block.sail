@@ -32,9 +32,7 @@ function run_block_start_system_calls() -> unit = {
 
 /*! Executes the block's transactions in order, enforcing per-tx
     applicability and block gas/blob-gas availability (EIP-7778 block-gas
-    accounting), accumulating receipts.
-
-    *EELS*: `apply_body`. */
+    accounting), accumulating receipts. */
 function execute_block_transactions(
     transactions : SszListRef,
     public_keys : ByteSlice,

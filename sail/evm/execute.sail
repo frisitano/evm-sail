@@ -68,9 +68,7 @@ termination_measure pop_log_topics(count) = count
 */
 
 /*! The single-step transition function: one arm per opcode, in opcode
-    order, with the family structure annotated inline.
-
-    *EELS*: `op_implementation dispatch (vm/interpreter.py)`. */
+    order, with the family structure annotated inline. */
 function execute(op : ast) -> unit = match op {
     STOP() => frame_status = Halted(HaltStop()),
     /* ---- arithmetic (pure) ---- */
@@ -308,7 +306,7 @@ function execute(op : ast) -> unit = match op {
         /* read the account ONLY if the access charge was covered: an OOG'd
            BALANCE must touch no state (charge sets status but does not abort
            the handler), else the stateless witness would need to prove an
-           account EELS never read. */
+           account the protocol never read. */
         if is_running() then {
             push(k_get_balance(a))
         }
@@ -493,7 +491,7 @@ function execute(op : ast) -> unit = match op {
                 let v = pop();
 
                 /* a stack underflow in the pops above exceptionally halts the
-                   frame (pop returns 0 but sets the halt); EELS raises before any
+                   frame (pop returns 0 but sets the halt); the underflow precedes any
                    state access, so guard the storage read/write on is_running so
                    an underflowing SSTORE records no EIP-7928 storage access. */
                 if is_running() then {
@@ -567,7 +565,7 @@ function execute(op : ast) -> unit = match op {
         charge(G_verylow);
 
         /* DUP_n duplicates the n-th item (1-indexed): needs height >= n.
-           EELS dup_n raises StackUnderflowError when (n-1) >= len(stack). */
+           DUPn underflows when fewer than n items are on the stack. */
         if stack_height() < n then {
             exc_halt(StackUnderflow)
         } else {
@@ -578,7 +576,7 @@ function execute(op : ast) -> unit = match op {
         charge(G_verylow);
 
         /* SWAP_n swaps the top with the n-th-below item: needs height >= n+1.
-           EELS swap_n raises StackUnderflowError when n >= len(stack). */
+           SWAPn underflows when fewer than n+1 items are on the stack. */
         if stack_height() < n + 1 then {
             exc_halt(StackUnderflow)
         } else {
@@ -644,7 +642,7 @@ function execute(op : ast) -> unit = match op {
             }; /* EIP-2929 */
             if is_running() & word_nonzero(bal) & k_account_is_empty(beneficiary) then {
                 /* new account; the beneficiary is always touched via k_transfer's
-                 * unconditional move_ether read below (EELS parity). */
+                 * unconditional balance-move read below. */
                 charge(G_newaccount)
             };
 

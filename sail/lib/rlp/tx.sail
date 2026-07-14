@@ -2,8 +2,8 @@
 # Transaction decoding
 
 The EIP-2718 transaction envelope decoder: per-envelope destructuring into
-the [Transaction][type-Transaction] type (one walk, exact field shape,
-mirroring EELS's per-envelope dataclasses), plus the EIP-2930 access-list
+the [Transaction][type-Transaction] type (one walk, against each
+envelope's exact field shape), plus the EIP-2930 access-list
 and EIP-7702 authorization-tuple decoders. Standalone and purely
 structural: input is a `ByteSlice` envelope and a `ByteSlice` public key
 of any source; the signature rules and the cryptography live in their own
@@ -146,8 +146,7 @@ function tx_sig_span(payload : ByteSlice, first : RlpFieldRef, signature : RlpFi
     claimed for its sender. The sender derives from the key
     (`keccak256(X ‖ Y)[12:]`) and the signature material (signing hash,
     `v`/`r`/`s`, the key itself) is captured on the transaction;
-    authentication happens at execution ([tx_auth_ok][]), mirroring EELS
-    `recover_sender_from_public_key` inside `check_transaction`. No trust
+    authentication happens at execution ([tx_auth_ok][]). No trust
     decision and no fee derivation happens here.
 
     A leading byte `≥ 0xc0` is a legacy (type-0) RLP list; otherwise it is

@@ -1,14 +1,16 @@
 /*md
-# Byte sources
+# Regions and byte slices
 
-Unmaterialized byte sequences. A [ByteSlice][type-ByteSlice] denotes a byte
-range inside one of the host's C-backed stores without copying it into
-Sail; the complete value crosses the FFI, and the generated-type glue
-resolves its [ByteSource][type-ByteSource] without exposing a parallel
-numeric source tag to Sail.
+Unmaterialized byte sequences. The specification's bulk data lives in
+named **regions** of the host interface — the stateless input, frame
+memory, code, log data, output, and scratch stores enumerated by
+[ByteSource][type-ByteSource]. A [ByteSlice][type-ByteSlice] denotes a
+byte range inside one region without copying it into Sail; a slice's
+meaning is the byte sequence it references.
 */
 
-/*! The backing stores a [ByteSlice][type-ByteSlice] may reference. */
+/*! The regions of the host interface a [ByteSlice][type-ByteSlice] may
+    reference. */
 enum ByteSource = {
     StatelessInputSource,
     MemorySource,
@@ -19,9 +21,9 @@ enum ByteSource = {
     ScratchSource,
 }
 
-/*! An unmaterialized byte range: a backing store, an offset, and a
-    length. A slice denotes the byte sequence it references; reads resolve
-    in O(1) without copying. */
+/*! An unmaterialized byte range: a region, an offset, and a length. A
+    slice denotes the byte sequence it references; reads resolve in O(1)
+    without copying. */
 struct ByteSlice = {
     source : ByteSource,
     off    : bits(64),
@@ -57,12 +59,12 @@ function memory_byte_slice(off : int, len : int) -> ByteSlice =
 function code_byte_slice(off : int, len : int) -> ByteSlice =
     byte_slice(CodeSource, off, len)
 
-/*! A byte-sequence segment: materialized bytes or a store-backed span. A
-    `list(Bytes)` denotes the concatenation of its segments.
+/*! A byte-sequence segment: materialized bytes or a region-backed span.
+    A `list(Bytes)` denotes the concatenation of its segments.
 
     !!! note "Implementation"
-        A segment list crosses the FFI whole (`ffi/hash_glue.c`); no
-        per-byte crossings occur. */
+        A segment list crosses the host interface whole
+        (`ffi/hash_glue.c`); no per-byte crossings occur. */
 union Bytes = {
     BytesList : list(byte),
     BytesSlice : ByteSlice,

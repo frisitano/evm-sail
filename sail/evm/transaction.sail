@@ -70,19 +70,17 @@ function intrinsic_gas(tx : Transaction) -> gas = {
 
 /*! Applies one EIP-7702 authorization: validates it against current
     state, sets or clears the delegation, bumps the authority nonce, and
-    refunds if the authority already existed. EELS validates the
-    signature and chain id from the tuple alone before reading the
-    authority's account — a tuple rejected there touches no state, so its
-    authority need not be witnessed; every authority-state read is gated
-    on those checks. The authority is warmed before the code/nonce
-    checks, so a tuple later skipped still warms it.
-
-    *EELS*: `set_delegation`. */
+    refunds if the authority already existed. The signature and chain id
+    are validated from the tuple alone before the authority's account is
+    read — a tuple rejected there touches no state, so its authority need
+    not be witnessed; every authority-state read is gated on those
+    checks. The authority is warmed before the code/nonce
+    checks, so a tuple later skipped still warms it. */
 function process_auth(au : Authorization) -> unit = {
     let authority = au.authority;
     let chain_ok = (au.chain_id == 0) | (au.chain_id == k_chain_id);
 
-    /* EELS validates sig + chain id from the tuple ALONE before reading the
+    /* Sig + chain id are validated from the tuple ALONE before reading the
      * authority's account; a tuple rejected there (e.g. wrong chain id) touches
      * NO state, so its authority need not be witnessed -- reading it eagerly would
      * over-access the witness. Gate every authority-state read on sig & chain_ok. */
@@ -197,16 +195,14 @@ function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : w
     (word_of_int(price), word_of_int(prio))
 }
 
-/*! Transaction validity (YP §6.2; EELS `check_transaction`). First
+/*! Transaction validity (YP §6.2). First
     authenticates the witnessed public key against the signature over the
     signing hash — a forged key or bad `v`/`r`/`s` makes the whole block
     invalid regardless of the verdict — then applies the per-envelope
     validity rules (nonce, balance, intrinsic gas, fee caps, blob rules,
-    EIP-3607, EIP-7825) and derives the effective prices.
-
-    *EELS*: `check_transaction`. */
+    EIP-3607, EIP-7825) and derives the effective prices. */
 function check_transaction_validity(tx : Transaction) -> TxValidity = {
-    /* EELS check_transaction: the witnessed public key must verify this tx's
+    /* Sender authentication: the witnessed public key must verify this tx's
        signature over the signing hash (recover_sender_from_public_key) -- a
        forged key or bad v/r/s makes the whole BLOCK invalid, regardless of the
        validity verdict below. */
@@ -216,7 +212,7 @@ function check_transaction_validity(tx : Transaction) -> TxValidity = {
         throw InvalidBlock(InvalidSignature)
     };
 
-    /* effective gas price (EELS: computed in check_transaction) */
+    /* effective gas price (EIP-1559) */
     let (eff_gas_price, eff_priority_fee) = eff_gas_price_for(k_header.base_fee, tx.max_fee, tx.max_priority_fee);
     let sender = tx.sender;
     let input_len = unsigned(tx.input_src.len);
@@ -335,7 +331,7 @@ function enter_transaction_frame(tx : Transaction, intrinsic : gas) -> unit = {
 
 /*! Runs a create transaction's top-level frame: derives the new address
     from `(sender, nonce_before)`, fails outright on an address collision
-    (all gas consumed, no initcode runs — EELS `AddressCollision`), and
+    (all gas consumed, no initcode runs — EIP-684/EIP-7610), and
     otherwise deploys via the initcode path. */
 function run_create_transaction_frame(tx : Transaction, sender : address, nonce_before : u64) -> unit = {
     let new_addr = k_create_addr(sender, nonce_before);
@@ -343,7 +339,7 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
 
     /* create-tx address collision (code, nonzero nonce, or storage at the
      * target): the tx fails outright consuming ALL gas, no initcode runs
-     * (EELS process_message_call -> AddressCollision, gas_left = 0). */
+     * (EIP-684/EIP-7610; gas_left = 0). */
     if k_account_occupied(new_addr) then {
         exc_halt(AddressCollision)
     } else {
@@ -386,9 +382,9 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
     EIP-7702 delegation at the transaction level (delegate warmed, not
     separately charged). */
 function run_call_transaction_frame(tx : Transaction, sender : address) -> unit = {
-    /* EELS reads the recipient account during message setup (get_account for its
-     * code) for every call-transaction, so it is always a state access -- keep it
-     * in the account set (BAL), including a tx sent directly to a precompile. */
+    /* The recipient account is read during message setup (for its code) on
+     * every call-transaction, so it is always a state access -- keep it in the
+     * account set (BAL), including a tx sent directly to a precompile. */
     let _ = k_aload(tx.recipient);
     if word_nonzero(tx.value) then {
         k_transfer(sender, tx.recipient, tx.value)
@@ -428,8 +424,8 @@ function run_call_transaction_frame(tx : Transaction, sender : address) -> unit 
         if tx_deleg then {
             let _ = k_access_account(tx_dtgt);
 
-            /* EELS reads get_account(code_address) on the resolved delegate, so
-               the delegate is touched (kept in the BAL account set). */
+            /* The resolved delegate's account is read for its code, so the
+               delegate is touched (kept in the BAL account set). */
             let _ = k_aload(tx_dtgt);
             ()
         };
@@ -439,9 +435,7 @@ function run_call_transaction_frame(tx : Transaction, sender : address) -> unit 
 }
 
 /*! Runs the top-level frame under a snapshot, reverting the world on
-    failure; returns success and remaining gas.
-
-    *EELS*: `process_message_call`. */
+    failure; returns success and remaining gas. */
 function run_transaction_frame(tx : Transaction, v : TxValidity) -> TxFrameResult = {
     let checkpoint = k_snapshot();
     enter_transaction_frame(tx, v.intrinsic_gas);
@@ -463,9 +457,7 @@ function run_transaction_frame(tx : Transaction, v : TxValidity) -> TxFrameResul
     calldata floor (Prague+), and the EIP-7778 block-gas rule (Amsterdam+:
     the block charges the unrefunded, floored gas); returns unused gas to
     the sender, pays the coinbase the priority fee, merges the
-    transaction into the block layer, and emits the receipt.
-
-    *EELS*: `process_transaction (settlement)`. */
+    transaction into the block layer, and emits the receipt. */
 function settle_transaction(tx : Transaction, v : TxValidity, fr : TxFrameResult) -> Receipt = {
     /* Refund cap: gas_used / 2 before London, gas_used / 5 after EIP-3529. */
     let gas_left0 = fr.gas_remaining;
@@ -512,9 +504,7 @@ function settle_transaction(tx : Transaction, v : TxValidity, fr : TxFrameResult
 
 /*! The complete per-transaction step: reset, validate (an invalid
     transaction yields an invalid receipt and no state change), apply
-    upfront effects, run the frame, and settle.
-
-    *EELS*: `process_transaction`. */
+    upfront effects, run the frame, and settle. */
 function process_transaction(tx : Transaction) -> Receipt = {
     k_tx_reset();
 

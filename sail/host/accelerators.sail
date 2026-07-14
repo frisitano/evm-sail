@@ -1,7 +1,7 @@
 /*md
-# zkVM cryptographic accelerators
+# The accelerator interface
 
-Raw zkVM cryptographic accelerators (the eth-act zkvm-standards surface).
+Raw cryptographic accelerators (the eth-act zkvm-standards surface).
 These axioms know the accelerator ABI but not EVM precompile addresses,
 fork activation, gas, or validation; byte-array results are written to the
 shared precompile output arena. Proof targets see them as bodyless axioms.

@@ -5,8 +5,7 @@ The signature semantics of transactions, between the crypto core
 (secp verify/recover and the curve constants) and the envelope decoder:
 the signing preimage hashes, the per-envelope `v`-range rule, and sender
 authentication — binding the witnessed public key to a transaction's
-signature (EELS `recover_sender_from_public_key`), called from transaction
-validity.
+signature, called from transaction validity.
 */
 
 /*! The chain id encoded in a legacy signature with `v >= 35`

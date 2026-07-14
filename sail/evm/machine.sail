@@ -133,10 +133,12 @@ function returndata_copy_prefix(dst : int, want : int) -> unit = {
 /*md
 ## Frame memory (the EVM's view)
 
-The EVM's view over the C-backed frame memory. Every access is guarded by
+The EVM's view over frame memory, a region of the host interface. Every
+access is guarded by
 [is_running][] — a failed expansion charge sets the halt status without
 aborting the opcode handler, and a post-out-of-gas write to a huge offset
-(e.g. `MSTORE` at 2^32) must not grow the C buffer — and writes raise the
+(e.g. `MSTORE` at 2^32) must not grow the backing buffer — and writes
+raise the
 high-water mark that `MSIZE` and memory-expansion gas read.
 */
 

@@ -392,8 +392,8 @@ function decode_withdrawal(withdrawal : ByteSlice) -> Withdrawal = {
 /*! Decodes the `SszChainConfig` at `cc`: the chain id (`u64` at 0) and
     the active `SszForkConfig` (fork index, activation, blob schedule).
     The activation point (optional block number / timestamp, `List[u64,1]`
-    each) must be reached by this payload (EELS `validate_chain_config` →
-    `_is_activation_active`): at least one bound set, none exceeding the
+    each) must be reached by this payload: at least one bound set, none
+    exceeding the
     payload's — a future activation invalidates the block. */
 function decode_chain_config(cc : int, cc_end : int, number : int, timestamp : int) -> ChainConfig = {
     let f = cc + ssz_u32(cc + CC_ACTIVE_FORK_OFF);

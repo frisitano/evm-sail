@@ -73,11 +73,13 @@ all: check lint fmt-check
 # mkdocstrings-sail/ directory).
 BOOK ?= book
 MKDOCSTRINGS_SAIL ?= mkdocstrings-sail
+# optional: a local ethereum/EIPs EIPS/ checkout enables EIP hover cards
+EIPS_DIR ?=
 docs-site:
 	@mkdir -p $(BOOK)/doc $(BOOK)/docs
 	$(SAIL) --doc --doc-format identity --doc-embed plain --doc-embed-with-location --doc-bundle doc.json -o $(BOOK)/doc $(PROJECT) evm --variable EVM_ENTRY=guest
 	uv run --with '$(MKDOCSTRINGS_SAIL)' sail-lsp-index --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --output $(BOOK)/doc/lsp-index.json
-	uv run --with '$(MKDOCSTRINGS_SAIL)' python -m mkdocstrings_handlers.sail._book --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --book $(BOOK) --site-name "EVM Sail Specification"
+	uv run --with '$(MKDOCSTRINGS_SAIL)' python -m mkdocstrings_handlers.sail._book --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --book $(BOOK) --site-name "EVM Sail Specification" $(if $(EIPS_DIR),--eips $(EIPS_DIR))
 	cd $(BOOK) && uv run --with '$(MKDOCSTRINGS_SAIL)' --with mkdocs-material mkdocs build --strict -d site
 	@echo "book: $(BOOK)/site/index.html"
 

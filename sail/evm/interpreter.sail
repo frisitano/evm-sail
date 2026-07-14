@@ -203,9 +203,7 @@ function fetch() -> ast = {
 /*! The step loop; returns the frame's own output. `STOP`,
     `SELFDESTRUCT`, and exceptional halts return the empty slice;
     `RETURN` and `REVERT` carry their frozen memory slice in the halt
-    value.
-
-    *EELS*: `execute_code`. */
+    value. */
 function interpret() -> ByteSlice = {
     while is_running() do {
         let op = fetch();
@@ -262,9 +260,7 @@ function executable_code(target : address, dele : bool, dtgt : address) -> Code 
 
     Operand layout (top of stack first): `gas`, `target`, `value` (for
     `CALL`/`CALLCODE`), `argsOffset`, `argsLen`, `retOffset`, `retLen`.
-    Pushes 1 on success, 0 on failure.
-
-    *EELS*: `generic_call`. */
+    Pushes 1 on success, 0 on failure. */
 function run_call(mode : int) -> unit = {
     let caller = self_addr();
     let gas_req = pop_int();
@@ -280,7 +276,7 @@ function run_call(mode : int) -> unit = {
     let ret_len = pop_int();
 
     /* A stack underflow during the operand pops exceptionally halts the frame
-       (exc_halt zeroes the gas). The execution-specs unwind the whole op via
+       (exc_halt zeroes the gas). The protocol unwinds the whole op on
        an exception; Sail has no unwind, so bail out here before any gas is
        re-added below. */
     if not_bool(is_running()) then {
@@ -302,7 +298,7 @@ function run_call(mode : int) -> unit = {
     let m_max = if m_args > m_ret then { m_args } else { m_ret };
 
     /* memory-expansion cost is folded into the single message-call charge
-       below: the execution-specs charge message_call_gas.cost together with
+       below: the call's transfer cost is charged together with
        extend_memory.cost, then grow memory only if the frame did not run out
        of gas. */
     let mem_gas = if m_max > 0 then {
@@ -326,7 +322,7 @@ function run_call(mode : int) -> unit = {
     let target_cost : int = account_cost(warm);
     let transfer_cost : int = if word_nonzero(value) then { G_callvalue } else { 0 };
 
-    /* "check static gas before state access" (execution-specs generic_call): the
+    /* Static gas is checked before any state access: the
        target's access + value-transfer + memory cost is checked BEFORE reading
        any of the target's state. A frame that cannot afford it halts here, having
        touched no account -- so the stateless witness need not prove the target.
@@ -353,7 +349,7 @@ function run_call(mode : int) -> unit = {
     let extra_gas : int = access_cost + transfer_cost + create_cost;
     let stipend : int = if word_nonzero(value) then { G_callstipend } else { 0 };
 
-    /* Forwarded child gas, mirroring the execution-specs
+    /* Forwarded child gas, per the EIP-150
        calculate_message_call_gas. If the frame cannot even afford
        extra_gas + mem_gas, the call is charged the FULL requested gas (not the
        63/64-capped value), which forces the out-of-gas exceptional halt below.
@@ -374,15 +370,15 @@ function run_call(mode : int) -> unit = {
         return ()
     };
 
-    /* gas is now covered, so EELS proceeds to prepare_message, which loads the
+    /* gas is now covered; message preparation loads the
        delegate's CODE -- BEFORE the depth/balance guards below. Resolve it now
        (flagging a missing-code witness deficiency) so an insufficient-balance
        call to a 7702-delegated target still detects an omitted delegate-code
-       proof, matching EELS; an OOG call returned above and never reaches here. */
+       proof; an OOG call returned above and never reaches here. */
     if tg_deleg then {
         let _ = code_db_resolve(k_code_key(tg_target));
 
-        /* EELS reads get_account(code_address) on the resolved delegate, so the
+        /* The resolved delegate's account is read for its code, so the
            delegate is touched (kept in the BAL account set). */
         let _ = k_aload(tg_target)
     };
@@ -391,7 +387,7 @@ function run_call(mode : int) -> unit = {
     };
     let child_gas = base_child + stipend;
 
-    /* EELS reads get_account(code_address).code_hash for every call once gas is
+    /* The target's code hash is read for every call once gas is
      * charged, before the depth/balance guards -- so the call target is always a
      * state access (kept in the BAL account set), including precompiles and calls
      * that then fail the depth/balance guard below. */
@@ -542,7 +538,7 @@ function run_call(mode : int) -> unit = {
             gas_remaining = to_gas(saved_gas_remaining + child_left);
 
             /* copy returndata into the caller's output region on both success
-               AND revert (execution-specs generic_call), writing only
+               AND revert, writing only
                min(ret_len, |output|) bytes and leaving the rest untouched. An
                exceptionally-halted child has empty output, so nothing is
                written. The child's world effects remain on success and are
@@ -563,9 +559,7 @@ function run_call(mode : int) -> unit = {
     memory; the new address derives from `(creator, nonce)` for `CREATE`
     or `(creator, salt, keccak256(initcode))` for `CREATE2`. Operand
     layout: `value`, `offset`, `length`, `salt` (for `CREATE2`). Pushes
-    the new address on success, 0 on failure.
-
-    *EELS*: `generic_create`. */
+    the new address on success, 0 on failure. */
 function run_create(is2 : bool) -> unit = {
     let creator = self_addr();
     let value = pop();
@@ -626,7 +620,7 @@ function run_create(is2 : bool) -> unit = {
         let child_gas = avail - ediv_int(avail, 64);
         gas_remaining = to_gas(avail - child_gas);
 
-        /* EIP-214 (execution-specs generic_create): a CREATE in a static
+        /* EIP-214: a CREATE in a static
          * context (e.g. inside a STATICCALL frame) is a write and raises
          * WriteInStaticContext after the child gas is reserved -- an
          * exceptional halt that consumes all gas, bumps no nonce, runs no
@@ -651,7 +645,7 @@ function run_create(is2 : bool) -> unit = {
         } else {
             /* warm the new address and bump the creator nonce BEFORE the child
              * snapshot: both persist even if the initcode reverts (the
-             * execution-specs run them in the parent, before
+             * the protocol runs them in the parent, before
              * process_create_message). */
             let _ = k_access_account(new_addr);
             let occupied : bool = k_account_occupied(new_addr);

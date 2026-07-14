@@ -21,7 +21,7 @@ struct ChainConfig = {
     chain_id : int,
     fork_index : int, /* raw SSZ ProtocolFork index                     */
     fork : Fork, /* execution rules for that index                 */
-    activation_active : bool, /* EELS _is_activation_active for this payload    */
+    activation_active : bool, /* the fork's activation point is reached         */
     blob_schedule : option(BlobSchedule),
     blob_schedule_shape_valid : bool,
 }

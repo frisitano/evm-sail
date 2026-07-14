@@ -54,8 +54,8 @@ overload operator >= = { fork_gteq }
 
 overload operator < = { fork_lt }
 
-/*! Deserializes an SSZ `ProtocolFork` index (execution-specs
-    `tuple(ProtocolFork)` order: … Shanghai=14, Cancun=15, Prague=16,
+/*! Deserializes an SSZ `ProtocolFork` index (the consensus
+    `ProtocolFork` order: … Shanghai=14, Cancun=15, Prague=16,
     Osaka=17, BPO1=18, BPO2=19, Amsterdam=20) into the [Fork][type-Fork]
     whose execution rules apply: blob-parameter-only forks collapse to
     their base fork, unknown future indices to the newest. The raw index

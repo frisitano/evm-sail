@@ -2,7 +2,8 @@
 # Accounts and storage
 
 The account tuple and its sentinels, and the per-layer account/storage
-entry types that cross the C boundary (overlay rows, merge drains). Pure
+entry types that cross the host interface (overlay rows, merge
+enumeration). Pure
 data — no registers, no externs.
 */
 
