@@ -8,7 +8,7 @@ message, returndata). World state lives in the host kernel and is reached
 only via `k_*` calls; world rollback on revert is a kernel snapshot, not
 saved here.
 
-## Active-frame registers
+## The frame registers
 
 One [Message][type-Message] per active frame (YP "message call"
 `I = (I_a, I_o, I_s, …)`); sub-calls save and restore these registers in
@@ -131,7 +131,7 @@ function returndata_copy_prefix(dst : int, want : int) -> unit = {
 }
 
 /*md
-## Frame memory (the EVM's view)
+## The frame memory
 
 The EVM's view over frame memory, a region of the host interface. Every
 access is guarded by

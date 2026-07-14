@@ -44,7 +44,7 @@ function auth_signing_hash(chain_id : int, addr : address, nonce : int) -> hash 
 }
 
 /*md
-## Sender authentication
+## The sender authentication
 
 `public_keys[i]` is a witness, not trusted input: the guest authenticates
 it by verifying transaction `i`'s signature against it over the signing

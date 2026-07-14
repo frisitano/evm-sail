@@ -1,0 +1,52 @@
+# Specification style
+
+Conventions for the documentation comments that produce the specification
+book. Enforced by `tools/docs_lint.py` (part of `make lint`).
+
+## Page structure
+
+Each source file is one page. Its first `/*md` block must open with a
+`# Title` heading followed by the introduction (no "Introduction" heading).
+Subsequent `##` sections come from a controlled vocabulary, in this
+canonical order where the code permits:
+
+| Section | Content |
+| ------- | ------- |
+| `## Constants` | Protocol constants; a summary table when four or more are related |
+| `## Types` | The page's data types and containers |
+| `## Helpers` | Supporting definitions, with free-form `###` topic subsections |
+| `## The …` | An operative unit (e.g. `The run loop`, `The trie builder`); one per normative core, named as a definite noun phrase |
+
+`###` subsections are free-form under any `##` section.
+
+## Headings
+
+Headings never carry citations — no `EIP-…` or Yellow Paper references in
+heading text. Citations belong in the section's or definition's prose, so
+heading text and anchors stay stable as citation sets evolve.
+
+## Definition documentation (`/*!`)
+
+- The first sentence is definitional and self-contained, ending in a
+  period (it is rendered as the hover summary).
+- Cite the Yellow Paper section or EIP a rule implements inline
+  (`(YP §9.4.2)`, `(EIP-2929)`).
+- Non-normative content — implementation strategy, performance, proof
+  notes — goes in a `!!! note "Implementation"` admonition, never in the
+  definitional prose.
+- The specification describes the protocol; never reference other
+  specification codebases, the documentation tooling, or how this document
+  is produced.
+
+## Ordering
+
+Definitions cannot be reordered for documentation (documentation changes
+must be comments-only). For new code, declare constants before types
+before helpers before the operative functions, so pages follow the
+canonical section order naturally.
+
+## Non-normative pages
+
+Pages documenting the host interface (`sail/host/`, excluding
+`sail/host/kernel/`) carry a `!!! note "Non-normative"` banner immediately
+after the introduction.

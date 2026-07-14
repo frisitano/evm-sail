@@ -48,7 +48,7 @@ union FrameStatus = {
 }
 
 /*md
-## Block validation failures
+## The block-validation failures
 
 The block-validation failure taxonomy, as data: every rule whose
 violation invalidates a block maps to one variant. Failures are modeled as a

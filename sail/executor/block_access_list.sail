@@ -1,5 +1,5 @@
 /*md
-# The block access list (EIP-7928)
+# The block access list
 
 Reconstruction of the EIP-7928 block access list from the recorder's
 per-account change streams, as source-backed RLP that is compared against

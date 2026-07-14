@@ -21,7 +21,7 @@ $include <prelude.sail>
 $include <smt.sail>
 
 /*md
-## Core types
+## Types
 */
 
 /*! The EVM 256-bit machine word (YP §9.1). */
@@ -89,7 +89,9 @@ let WORD_BITS : int = 256
 let TWO_256 : int = 115792089237316195423570985008687907853269984665640564039457584007913129639936
 
 /*md
-## Integer ↔ word conversion
+## Helpers
+
+### Integer ↔ word conversion
 */
 
 /*! The low 256 bits of a (possibly huge or negative) integer: all word
@@ -147,7 +149,7 @@ function word_slt(a : word, b : word) -> bool = {
 /* pow2(n) = 2^n is a typed builtin from arith.sail (forall 'n. int(2^'n)). */
 
 /*md
-## Generic list utilities
+### List utilities
 
 Sail lists have no builtin length/append/index; these are used throughout
 for byte buffers (calldata, returndata, memory, code) and log lists.
@@ -254,7 +256,7 @@ function bytes_slice(data : list(byte), off : int, len : int) -> list(byte) = {
 }
 
 /*md
-## Address ↔ word conversion
+### Address ↔ word conversion
 */
 
 /*! Truncates a word to its low 160 bits, the address interpretation used

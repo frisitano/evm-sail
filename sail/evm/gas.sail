@@ -25,7 +25,7 @@ The cost groups, with their governing specifications:
 - **Per-precompile gas**, including the EIP-2565 / EIP-7883 `MODEXP`
   curve and the EIP-2537 BLS12-381 MSM discount tables.
 
-## Blob accounting (EIP-4844 / EIP-7918)
+## The blob-gas accounting
 
 `blob_base_fee = fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas,
 BLOB_BASE_FEE_UPDATE_FRACTION)`. The active target, maximum, and update
@@ -93,7 +93,7 @@ function next_excess_blob_gas(
 }
 
 /*md
-## Static cost constants
+## Constants
 
 The Yellow Paper Appendix G symbols, as repriced by EIP-150, EIP-160, and
 EIP-2929. The definitions below are normative; this table summarizes them.
@@ -163,7 +163,7 @@ let G_selfdestruct : gas = 5000 /* EIP-150 R_selfdestruct base                */
 let G_initcode_word : gas = 2 /* EIP-3860 (per word of initcode)            */
 
 /*md
-## Protocol code-size limits
+## The code-size limits
 */
 
 /*! The deployed-code size limit: 24576 (EIP-170), raised to 32768 by
@@ -205,7 +205,7 @@ function charge(amount : gas) -> unit =
     }
 
 /*md
-## Memory-expansion gas
+## The memory-expansion cost
 
 Memory is charged by its high-water mark in 32-byte words (YP C_mem):
 `C_mem(a) = G_memory·a + ⌊a²/512⌋`, a quadratic term that makes large
@@ -247,7 +247,7 @@ function charge_expansion(off : int, len : int) -> unit =
     }
 
 /*md
-## EIP-2929 access costs
+## The access costs
 
 The first touch of an account or storage slot in a transaction is cold
 and dear; a repeat touch is warm and cheap (EIP-2929 mitigates
@@ -265,7 +265,7 @@ function sload_cost(warm : bool) -> gas =
     if warm then { G_warm_access } else { G_cold_sload } /* EIP-2929: cold SLOAD = 2100 */
 
 /*md
-## Precompile gas
+## The precompile costs
 
 Precompile gas inspects the same byte slice that execution consumes;
 bytes past its declared length read as zero, matching `buffer_read`
@@ -673,7 +673,7 @@ function precompile_gas(num : int, input : ByteSlice) -> gas = {
 }
 
 /*md
-## SSTORE cost and refund (EIP-2200 / EIP-2929 / EIP-3529)
+## The SSTORE cost and refund
 */
 
 /*! `SSTORE` pricing: a three-way comparison (EIP-2200) of *original*
@@ -730,7 +730,7 @@ function sstore_gas(original : word, current : word, new : word, cold : bool) ->
 }
 
 /*md
-## Per-opcode dynamic gas
+## The per-opcode costs
 
 Operand-sized costs that ride on top of an opcode's static cost,
 word-counted via `⌈byte_len / 32⌉` where the spec charges per 32-byte
@@ -775,7 +775,7 @@ function initcode_gas(byte_len : int) -> gas =
     }
 
 /*md
-## Call gas (EIP-150)
+## The call-gas cap
 */
 
 /*! The EIP-150 forwarding cap: at most all-but-one-64th of the

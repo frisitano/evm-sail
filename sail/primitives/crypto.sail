@@ -82,7 +82,7 @@ function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) =
     sha256([|BytesList(word_to_bytes32(a)), BytesList(word_to_bytes32(b))|])
 
 /*md
-## Signature core
+## The signature core
 
 The `host/accelerators.sail` k256 axioms, plus the curve-order constants
 that signature validity rules bound `r`/`s` against.

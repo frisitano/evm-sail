@@ -10,7 +10,7 @@ the post-state root.
 */
 
 /*md
-## Block-start writes (EIP-4788 / EIP-2935)
+## The block-start writes
 
 Before the transactions, the protocol issues unchecked system calls from
 `SYSTEM_ADDRESS` to the beacon-roots (EIP-4788) and block-hash-history

@@ -27,7 +27,7 @@ opcodes. This module specifies that machinery in three layers:
 let DEPTH_LIMIT : int = 1024
 
 /*md
-## Fetch and decode
+## The decoder
 */
 
 /*! Assembles the `n`-byte big-endian immediate following a `PUSHn`
@@ -244,10 +244,10 @@ function executable_code(target : address, dele : bool, dtgt : address) -> Code 
     }
 
 /*md
-## Message calls
+## The message calls
 */
 
-/*! The four call opcodes, multiplexed on `mode`:
+/*! The four call opcodes, multiplexed on `mode`.
 
     - `0` — `CALL`: a new frame at `target`, may transfer value.
     - `1` — `CALLCODE`: runs the target's code in the caller's account,

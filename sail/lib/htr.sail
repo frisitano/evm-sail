@@ -99,7 +99,7 @@ function merkleize(leaves : list(hash), depth : int) -> hash = {
 }
 
 /*md
-## Basic types and byte sequences
+## Helpers
 */
 
 /*! `uint64` as a 32-byte chunk (value little-endian in the low 8
@@ -275,7 +275,9 @@ function htr_versioned_hashes(versioned_hashes : ByteSlice) -> hash = {
 }
 
 /*md
-## Execution requests (EIP-7685)
+## The execution requests
+
+The EIP-7685 execution-request commitments.
 */
 
 /*! `hash_tree_root` of one deposit request (5 fields, depth 3). */

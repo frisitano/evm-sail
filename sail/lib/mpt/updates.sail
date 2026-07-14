@@ -69,7 +69,7 @@ function next_update_under(updates : list(TrieUpdate), prefix : TriePath) -> boo
     }
 
 /*md
-## Item streams
+## The item streams
 
 The walker merges updates into an ordered item stream; the builder turns
 that stream back into canonical trie nodes. Untouched subtrees stay

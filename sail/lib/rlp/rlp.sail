@@ -20,6 +20,10 @@ Malformed RLP is a normal invalid-block outcome: the decoders throw
 guest top level.
 */
 
+/*md
+## The encoders
+*/
+
 function rlp_byte(n : int) -> byte = get_slice_int(8, n, 0)
 
 /*! The minimal big-endian encoding of a non-negative integer and its
@@ -178,7 +182,7 @@ function keccak_rlp_payload(domain : list(byte), payload : list(byte)) -> bits(2
     keccak256([|BytesList(domain), BytesList(rlp_list_prefix(list_len(payload))), BytesList(payload)|])
 
 /*md
-## Decoding
+## The decoders
 */
 
 /*! A big-endian integer read of `n` bytes at `pos` within an RLP source. */
