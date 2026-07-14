@@ -1,19 +1,20 @@
-/* ======================================================================== */
-/* TRANSACTION STATE TRANSITION                                             */
-/*                                                                          */
-/* The per-transaction step of the Ethereum state transition (Yellow Paper  */
-/* section 6): validate the transaction, charge upfront gas, run it as the  */
-/* top-level message call, then settle gas/refunds and the coinbase fee.    */
-/*                                                                          */
-/* Validity and intrinsic gas are user-space policy; every world effect is  */
-/* a kernel syscall, and a tx-level snapshot/commit/revert bounds the whole */
-/* transaction's world state. The typed-envelope rules covered here:        */
-/* EIP-2718 (typed tx), EIP-1559 (fee market: base fee + priority tip       */
-/* caps), EIP-2930 (access list), EIP-3860 (initcode size/gas), EIP-4844    */
-/* (blob tx + blob-gas burn), EIP-7702 (set-code authorizations), EIP-7623  */
-/* (calldata floor), EIP-3607 (no tx from an account with code), EIP-7825   */
-/* (gas cap). Gas refunds (SSTORE clears, etc.) are capped per EIP-3529.    */
-/* ======================================================================== */
+/*md
+# The transaction state transition
+
+The per-transaction step of the Ethereum state transition (Yellow Paper
+§6): validate the transaction, charge upfront gas, run it as the
+top-level message call, then settle gas, refunds, and the coinbase fee.
+
+Validity and intrinsic gas are user-space policy; every world effect is a
+kernel syscall, and a transaction-level snapshot/commit/revert bounds the
+whole transaction's world state. The typed-envelope rules covered here:
+EIP-2718 (typed transactions), EIP-1559 (fee market: base fee + priority
+tip caps), EIP-2930 (access lists), EIP-3860 (initcode size/gas),
+EIP-4844 (blob transactions + blob-gas burn), EIP-7702 (set-code
+authorizations), EIP-7623 (calldata floor), EIP-3607 (no transactions
+from an account with code), EIP-7825 (gas cap). Gas refunds (`SSTORE`
+clears) are capped per EIP-3529.
+*/
 
 let G_transaction : gas = 21000
 let G_txcreate : gas = 32000
@@ -24,22 +25,25 @@ let G_access_list_storage_key : gas = 1900 /* EIP-2930 ACCESS_LIST_STORAGE_KEY_C
 let PER_AUTH_BASE : gas = 12500 /* EIP-7702 PER_AUTH_BASE_COST          */
 let PER_EMPTY_ACCOUNT : gas = 25000 /* EIP-7702 PER_EMPTY_ACCOUNT_COST      */
 
-/* EIP-2028: 4 gas per zero byte, 16 per non-zero. The generic slice host
- * operation performs one native pass; zero bytes are the remainder. */
+/*! The EIP-2028 calldata cost: 4 gas per zero byte, 16 per nonzero. One
+    native pass counts the nonzero bytes; zero bytes are the
+    remainder. */
 function calldata_cost(input : ByteSlice) -> gas = {
     let n = unsigned(input.len);
     let nz = slice_count_nonzero(input);
     to_gas(G_txdatazero * (n - nz) + G_txdatanonzero * nz)
 }
 
-/* EIP-7623 calldata tokens: each zero byte = 1 token, each nonzero byte = 4. */
+/*! EIP-7623 calldata tokens: each zero byte counts 1, each nonzero
+    byte 4. */
 function calldata_tokens(input : ByteSlice) -> int = {
     let n = unsigned(input.len);
     let nz = slice_count_nonzero(input);
     (n - nz) + 4 * nz
 }
 
-/* EIP-4844: every blob versioned hash must carry VERSIONED_HASH_VERSION_KZG (0x01). */
+/*! EIP-4844: every blob versioned hash must carry
+    `VERSIONED_HASH_VERSION_KZG` (`0x01`). */
 function blob_hashes_versioned(hashes : BlobHashes) -> bool = {
     var i : int = 0;
     var valid : bool = true;
@@ -50,6 +54,10 @@ function blob_hashes_versioned(hashes : BlobHashes) -> bool = {
     valid
 }
 
+/*! The intrinsic gas of a transaction (YP §6.2, g_0): the 21000 base,
+    calldata cost, access-list cost (EIP-2930), authorization cost
+    (EIP-7702), and for creates the `G_txcreate` base plus EIP-3860
+    initcode words. */
 function intrinsic_gas(tx : Transaction) -> gas = {
     let access_list_gas =   G_access_list_address
                           * tx.access_list_address_count
@@ -60,8 +68,14 @@ function intrinsic_gas(tx : Transaction) -> gas = {
     to_gas(if tx.is_create then base + G_txcreate + initcode_gas(unsigned(tx.input_src.len)) else base)
 }
 
-/* EIP-7702: apply one authorization (validate against current state, set/clear the
- * delegation, bump the authority nonce; refund if the authority already existed). */
+/*! Applies one EIP-7702 authorization: validates it against current
+    state, sets or clears the delegation, bumps the authority nonce, and
+    refunds if the authority already existed. EELS validates the
+    signature and chain id from the tuple alone before reading the
+    authority's account — a tuple rejected there touches no state, so its
+    authority need not be witnessed; every authority-state read is gated
+    on those checks. The authority is warmed before the code/nonce
+    checks, so a tuple later skipped still warms it. */
 function process_auth(au : Authorization) -> unit = {
     let authority = au.authority;
     let chain_ok = (au.chain_id == 0) | (au.chain_id == k_chain_id);
@@ -96,6 +110,7 @@ function process_auth(au : Authorization) -> unit = {
     }
 }
 
+/*! Applies an authorization list in order. */
 function process_auth_list(xs : list(Authorization)) -> unit =
     match xs {
         [||] => (),
@@ -105,6 +120,7 @@ function process_auth_list(xs : list(Authorization)) -> unit =
         },
     }
 
+/*! Warms every access-list address (EIP-2930/EIP-2929 prewarming). */
 function warm_access_list_addresses(xs : list(address)) -> unit =
     match xs {
         [||] => (),
@@ -150,15 +166,18 @@ function prewarm(tx : Transaction) -> unit = {
     warm_access_list_slots(tx.access_list_slots)
 }
 
+/*! The receipt of an invalid (inapplicable) transaction. */
 function invalid_receipt() -> Receipt =
     struct { tx_type = LegacyTx, success = false, valid = false, gas_used = 0, block_gas = 0, logs = [||] }
 
-/* Effective fee for a typed (EIP-1559) tx: the gas price actually paid is
- * min(max_fee_per_gas, base_fee + max_priority_fee), and the priority tip paid to
- * the coinbase is that price minus the base fee. Legacy / 2930 txs carry a single
- * gas_price, passed here as max_fee = max_priority = gas_price so this recovers
- * (gas_price, gas_price - base_fee). The priority is clamped at 0 so an invalid
- * sub-base-fee price (rejected later by the validity check) never underflows. */
+/*! The EIP-1559 effective fee: the gas price actually paid is
+    `min(max_fee, base_fee + max_priority_fee)`, and the priority tip
+    paid to the coinbase is that price minus the base fee. Legacy and
+    EIP-2930 transactions carry a single `gas_price`, passed as
+    `max_fee = max_priority = gas_price`, so this recovers
+    `(gas_price, gas_price − base_fee)`. The priority is clamped at 0 so
+    an invalid sub-base-fee price (rejected later by validity) never
+    underflows. */
 function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : word) -> (word, word) = {
     let bf = unsigned(base_fee);
     let cap = unsigned(max_fee);
@@ -176,6 +195,12 @@ function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : w
     (word_of_int(price), word_of_int(prio))
 }
 
+/*! Transaction validity (YP §6.2; EELS `check_transaction`). First
+    authenticates the witnessed public key against the signature over the
+    signing hash — a forged key or bad `v`/`r`/`s` makes the whole block
+    invalid regardless of the verdict — then applies the per-envelope
+    validity rules (nonce, balance, intrinsic gas, fee caps, blob rules,
+    EIP-3607, EIP-7825) and derives the effective prices. */
 function check_transaction_validity(tx : Transaction) -> TxValidity = {
     /* EELS check_transaction: the witnessed public key must verify this tx's
        signature over the signing hash (recover_sender_from_public_key) -- a
@@ -272,6 +297,10 @@ function check_transaction_validity(tx : Transaction) -> TxValidity = {
     }
 }
 
+/*! The upfront effects, taken before the execution snapshot so they
+    persist across a revert: charge the full gas limit and the EIP-4844
+    blob fee (burned, no refund), bump the sender nonce, prewarm
+    (EIP-2929/EIP-3651), and apply EIP-7702 authorizations. */
 function apply_transaction_upfront_effects(tx : Transaction, v : TxValidity) -> unit = {
     /* upfront gas + nonce bump (persist across revert; taken before the snapshot) */
     k_sub_balance(v.sender, word_of_int(tx.gas_limit * unsigned(v.gas_price)));
@@ -285,6 +314,8 @@ function apply_transaction_upfront_effects(tx : Transaction, v : TxValidity) -> 
     process_auth_list(tx.authorizations) /* EIP-7702: set delegations before execution (persist) */
 }
 
+/*! Resets the user-space machine for the transaction's top-level frame,
+    funding it with `gas_limit − intrinsic`. */
 function enter_transaction_frame(tx : Transaction, intrinsic : gas) -> unit = {
     pc = 0;
     call_depth = 0;
@@ -298,6 +329,10 @@ function enter_transaction_frame(tx : Transaction, intrinsic : gas) -> unit = {
     frame_status = Running()
 }
 
+/*! Runs a create transaction's top-level frame: derives the new address
+    from `(sender, nonce_before)`, fails outright on an address collision
+    (all gas consumed, no initcode runs — EELS `AddressCollision`), and
+    otherwise deploys via the initcode path. */
 function run_create_transaction_frame(tx : Transaction, sender : address, nonce_before : u64) -> unit = {
     let new_addr = k_create_addr(sender, nonce_before);
     let _ = k_access_account(new_addr);
@@ -340,6 +375,12 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
     }
 }
 
+/*! Runs a call transaction's top-level frame: transfers value, then
+    either runs the recipient precompile as the top-level frame
+    (gas-checked first — an out-of-gas precompile must not execute) or
+    installs the message and interprets the recipient's code, resolving
+    EIP-7702 delegation at the transaction level (delegate warmed, not
+    separately charged). */
 function run_call_transaction_frame(tx : Transaction, sender : address) -> unit = {
     /* EELS reads the recipient account during message setup (get_account for its
      * code) for every call-transaction, so it is always a state access -- keep it
@@ -393,6 +434,8 @@ function run_call_transaction_frame(tx : Transaction, sender : address) -> unit 
     }
 }
 
+/*! Runs the top-level frame under a snapshot, reverting the world on
+    failure; returns success and remaining gas. */
 function run_transaction_frame(tx : Transaction, v : TxValidity) -> TxFrameResult = {
     let checkpoint = k_snapshot();
     enter_transaction_frame(tx, v.intrinsic_gas);
@@ -409,6 +452,12 @@ function run_transaction_frame(tx : Transaction, v : TxValidity) -> TxFrameResul
     struct { success = success, gas_remaining = gas_remaining }
 }
 
+/*! Settlement (YP §6.2 g*, A_r): applies the capped refund
+    (`gas_used/5` from London, `gas_used/2` before), the EIP-7623
+    calldata floor (Prague+), and the EIP-7778 block-gas rule (Amsterdam+:
+    the block charges the unrefunded, floored gas); returns unused gas to
+    the sender, pays the coinbase the priority fee, merges the
+    transaction into the block layer, and emits the receipt. */
 function settle_transaction(tx : Transaction, v : TxValidity, fr : TxFrameResult) -> Receipt = {
     /* Refund cap: gas_used / 2 before London, gas_used / 5 after EIP-3529. */
     let gas_left0 = fr.gas_remaining;
@@ -453,6 +502,9 @@ function settle_transaction(tx : Transaction, v : TxValidity, fr : TxFrameResult
     }
 }
 
+/*! The complete per-transaction step: reset, validate (an invalid
+    transaction yields an invalid receipt and no state change), apply
+    upfront effects, run the frame, and settle. */
 function process_transaction(tx : Transaction) -> Receipt = {
     k_tx_reset();
 
