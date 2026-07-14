@@ -1,5 +1,5 @@
 /*md
-# Kernel code access
+# State: account code
 
 Account code operations over the content-addressed code store, including
 EIP-7702 delegation designators.

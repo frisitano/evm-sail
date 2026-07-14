@@ -68,7 +68,9 @@ termination_measure pop_log_topics(count) = count
 */
 
 /*! The single-step transition function: one arm per opcode, in opcode
-    order, with the family structure annotated inline. */
+    order, with the family structure annotated inline.
+
+    *EELS*: `op_implementation dispatch (vm/interpreter.py)`. */
 function execute(op : ast) -> unit = match op {
     STOP() => frame_status = Halted(HaltStop()),
     /* ---- arithmetic (pure) ---- */

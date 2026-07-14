@@ -1,5 +1,5 @@
 /*md
-# Kernel accounts
+# State: accounts
 
 Account reads and mutations over the two-layer overlay (transaction over
 block) with the witness as base, plus the EIP-161/EIP-684 predicates and

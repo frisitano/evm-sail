@@ -203,7 +203,9 @@ function fetch() -> ast = {
 /*! The step loop; returns the frame's own output. `STOP`,
     `SELFDESTRUCT`, and exceptional halts return the empty slice;
     `RETURN` and `REVERT` carry their frozen memory slice in the halt
-    value. */
+    value.
+
+    *EELS*: `execute_code`. */
 function interpret() -> ByteSlice = {
     while is_running() do {
         let op = fetch();
@@ -260,7 +262,9 @@ function executable_code(target : address, dele : bool, dtgt : address) -> Code 
 
     Operand layout (top of stack first): `gas`, `target`, `value` (for
     `CALL`/`CALLCODE`), `argsOffset`, `argsLen`, `retOffset`, `retLen`.
-    Pushes 1 on success, 0 on failure. */
+    Pushes 1 on success, 0 on failure.
+
+    *EELS*: `generic_call`. */
 function run_call(mode : int) -> unit = {
     let caller = self_addr();
     let gas_req = pop_int();
@@ -559,7 +563,9 @@ function run_call(mode : int) -> unit = {
     memory; the new address derives from `(creator, nonce)` for `CREATE`
     or `(creator, salt, keccak256(initcode))` for `CREATE2`. Operand
     layout: `value`, `offset`, `length`, `salt` (for `CREATE2`). Pushes
-    the new address on success, 0 on failure. */
+    the new address on success, 0 on failure.
+
+    *EELS*: `generic_create`. */
 function run_create(is2 : bool) -> unit = {
     let creator = self_addr();
     let value = pop();

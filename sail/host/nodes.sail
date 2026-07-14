@@ -3,6 +3,10 @@
 
 The `keccak256(node) → span` index into the SSZ witness buffer, backing
 [node_db_lookup][].
+
+!!! note "Non-normative"
+    This page documents the model's host interface — internal contracts
+    of the executable specification, not protocol rules.
 */
 
 val nodedb_reset = impure { c: "nodedb_reset" } : unit -> unit

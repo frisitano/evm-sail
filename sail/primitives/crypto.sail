@@ -96,8 +96,8 @@ let SECP_N_FULL : bits(256) = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03b
 let SECP_N_HALF : bits(256) = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0
 
 /*! Recovers the signer address from `(h, y_parity, r, s)`; the leading
-    bit of the host result flags recovery success (used by EIP-7702
-    authority recovery). */
+    bit of the recovery result flags success (used by EIP-7702 authority
+    recovery). */
 function ecrecover_addr(h : bits(256), yparity : int, r : word, s : word) -> (bool, address) = {
     let recovered = host_ecrecover(h, get_slice_int(64, yparity, 0), r, s);
     (recovered[160] == bitone, recovered[159 .. 0])

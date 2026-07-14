@@ -16,7 +16,9 @@ struct GuestValidation = {
 
 /*! Decodes, verifies, and reports: `write_validation_result` on a
     decodable input (valid or not), `write_invalid_result` when decoding
-    itself fails. */
+    itself fails.
+
+    *EELS*: `verify_stateless_new_payload`. */
 function main() -> unit = {
     validation_debug_reset();
     cycle_scope_start(SCOPE_STATELESS_VALIDATION);

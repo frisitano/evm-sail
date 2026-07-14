@@ -9,6 +9,10 @@ form a stack of stacks: [stack_enter_frame][] on a sub-call,
 words live in C (`ffi/stack.c`) as per-frame flat arrays for O(1) access;
 proof targets see the `val`s as bodyless axioms over an abstract per-frame
 list-of-words model.
+
+!!! note "Non-normative"
+    This page documents the model's host interface — internal contracts
+    of the executable specification, not protocol rules.
 */
 
 val stack_reset = impure { c: "stack_reset" } : unit -> unit

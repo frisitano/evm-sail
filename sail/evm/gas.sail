@@ -95,8 +95,40 @@ function next_excess_blob_gas(
 /*md
 ## Static cost constants
 
-The YP Appendix G symbols, as repriced by EIP-150/EIP-160/EIP-2929; each
-constant's provenance is annotated inline.
+The Yellow Paper Appendix G symbols, as repriced by EIP-150, EIP-160, and
+EIP-2929. The definitions below are normative; this table summarizes them.
+
+| Name | Value | Description |
+| ---- | ----- | ----------- |
+| `G_zero` | `0` | `STOP`, `RETURN`, `REVERT` |
+| `G_jumpdest` | `1` | `JUMPDEST` |
+| `G_base` | `2` | Base-tier opcodes |
+| `G_verylow` | `3` | Very-low-tier opcodes |
+| `G_low` | `5` | Low-tier opcodes |
+| `G_mid` | `8` | Mid-tier opcodes |
+| `G_high` | `10` | High-tier opcodes (`JUMPI`) |
+| `G_warm_access` | `100` | Warm account/storage access (EIP-2929) |
+| `G_cold_sload` | `2100` | Cold `SLOAD` surcharge (EIP-2929) |
+| `G_cold_account` | `2600` | Cold account-access surcharge (EIP-2929) |
+| `G_keccak` | `30` | `KECCAK256` base |
+| `G_keccak_word` | `6` | `KECCAK256` per 32-byte word |
+| `G_copy_word` | `3` | `*COPY` per word |
+| `G_memory` | `3` | Memory expansion, per word |
+| `G_log` | `375` | `LOG` base |
+| `G_logtopic` | `375` | `LOG` per topic |
+| `G_logdata` | `8` | `LOG` per data byte |
+| `G_exp` | `10` | `EXP` base |
+| `G_expbyte` | `50` | `EXP` per exponent byte (EIP-160) |
+| `G_sset` | `20000` | `SSTORE` zero → nonzero (EIP-2200) |
+| `G_sreset` | `2900` | `SSTORE` reset (EIP-2200/EIP-2929) |
+| `R_sclear_london` | `4800` | `SSTORE`-clears refund (EIP-3529) |
+| `G_create` | `32000` | `CREATE`/`CREATE2` base |
+| `G_codedeposit` | `200` | Per deployed code byte |
+| `G_callvalue` | `9000` | `CALL` value transfer |
+| `G_callstipend` | `2300` | Stipend to a value-receiving call |
+| `G_newaccount` | `25000` | `CALL`/`SELFDESTRUCT` to a new account |
+| `G_selfdestruct` | `5000` | `SELFDESTRUCT` base (EIP-150) |
+| `G_initcode_word` | `2` | Per initcode word (EIP-3860) |
 */
 let G_zero : gas = 0 /* YP G_zero                                  */
 let G_jumpdest : gas = 1 /* YP G_jumpdest                              */
@@ -606,8 +638,9 @@ function bls_msm_gas(table : vector(128, inc, int), base : gas, maxd : int, k : 
     }
 }
 
-/*! The gas of the precompile at address `num` for a given input (the
-    host returns only output; gas is pure EVM policy). Length-only costs
+/*! The gas of the precompile at address `num` for a given input. Gas is
+    protocol policy defined entirely here; implementations return only
+    output. Length-only costs
     derive from the word count; the two input-dependent curves (`MODEXP`,
     `BLAKE2F` rounds) read the input in place. The match arms are the
     precompile catalog with their addresses and pricing EIPs. */

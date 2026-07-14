@@ -1,5 +1,5 @@
 /*md
-# Kernel storage access
+# State: storage
 
 Warm/cold accounting (EIP-2929), persistent storage (`SLOAD`/`SSTORE`),
 and transient storage (EIP-1153), over the host state stores.

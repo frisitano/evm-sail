@@ -14,6 +14,10 @@ transaction. This module is only the boundary — bodyless axioms with
 read-after-write and LIFO frame laws; the EVM's view (out-of-gas guard,
 high-water tracking, `MSIZE`, the opcode helpers) lives in the machine
 module where the frame context is defined.
+
+!!! note "Non-normative"
+    This page documents the model's host interface — internal contracts
+    of the executable specification, not protocol rules.
 */
 
 val mem_read_byte = impure { c: "mem_read_byte" } : bits(64) -> bits(8)

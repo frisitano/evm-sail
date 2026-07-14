@@ -45,8 +45,7 @@ function ssz_u32(b : int) -> int = unsigned(ssz_src_le(b, 4))
 /*! A little-endian `uint64` at absolute input offset `b`. */
 function ssz_u64(b : int) -> int = unsigned(ssz_src_le(b, 8))
 
-/*! A big-endian 20-byte address at offset `b` — three FFI reads
-    (8+8+4). */
+/*! A big-endian 20-byte address at offset `b`. */
 function ssz_addr(b : int) -> address = {
     let w0 = ssz_src_be(b + 0, 8);
     let w1 = ssz_src_be(b + 8, 8);
@@ -64,8 +63,7 @@ function ssz_bytes(b : int, len : int) -> list(byte) = {
     out
 }
 
-/*! A big-endian 32-byte field (`Bytes32`, e.g. `prev_randao`) — four FFI
-    reads. */
+/*! A big-endian 32-byte field (`Bytes32`, e.g. `prev_randao`). */
 function ssz_bytes32(b : int) -> bits(256) = {
     let w0 = ssz_src_be(b + 0, 8);
     let w1 = ssz_src_be(b + 8, 8);
@@ -87,8 +85,7 @@ function ssz_logs_bloom(b : int) -> LogsBloom = {
     out
 }
 
-/*! A little-endian 32-byte `uint256` (SSZ) — four FFI reads, low word
-    first. */
+/*! A little-endian 32-byte `uint256` (SSZ). */
 function ssz_u256(b : int) -> word = {
     let c0 = ssz_src_le(b + 0, 8);
     let c1 = ssz_src_le(b + 8, 8);

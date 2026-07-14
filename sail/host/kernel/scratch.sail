@@ -3,6 +3,10 @@
 
 A bump cursor makes construction order and lifetime visible in the Sail
 semantics while the bytes themselves remain in host-backed memory.
+
+!!! note "Non-normative"
+    This page documents the model's host interface — internal contracts
+    of the executable specification, not protocol rules.
 */
 
 /*! The scratch arena's bump cursor; Sail owns allocation order. */

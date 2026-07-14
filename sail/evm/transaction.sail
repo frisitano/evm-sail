@@ -75,7 +75,9 @@ function intrinsic_gas(tx : Transaction) -> gas = {
     authority's account — a tuple rejected there touches no state, so its
     authority need not be witnessed; every authority-state read is gated
     on those checks. The authority is warmed before the code/nonce
-    checks, so a tuple later skipped still warms it. */
+    checks, so a tuple later skipped still warms it.
+
+    *EELS*: `set_delegation`. */
 function process_auth(au : Authorization) -> unit = {
     let authority = au.authority;
     let chain_ok = (au.chain_id == 0) | (au.chain_id == k_chain_id);
@@ -200,7 +202,9 @@ function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : w
     signing hash — a forged key or bad `v`/`r`/`s` makes the whole block
     invalid regardless of the verdict — then applies the per-envelope
     validity rules (nonce, balance, intrinsic gas, fee caps, blob rules,
-    EIP-3607, EIP-7825) and derives the effective prices. */
+    EIP-3607, EIP-7825) and derives the effective prices.
+
+    *EELS*: `check_transaction`. */
 function check_transaction_validity(tx : Transaction) -> TxValidity = {
     /* EELS check_transaction: the witnessed public key must verify this tx's
        signature over the signing hash (recover_sender_from_public_key) -- a
@@ -435,7 +439,9 @@ function run_call_transaction_frame(tx : Transaction, sender : address) -> unit 
 }
 
 /*! Runs the top-level frame under a snapshot, reverting the world on
-    failure; returns success and remaining gas. */
+    failure; returns success and remaining gas.
+
+    *EELS*: `process_message_call`. */
 function run_transaction_frame(tx : Transaction, v : TxValidity) -> TxFrameResult = {
     let checkpoint = k_snapshot();
     enter_transaction_frame(tx, v.intrinsic_gas);
@@ -457,7 +463,9 @@ function run_transaction_frame(tx : Transaction, v : TxValidity) -> TxFrameResul
     calldata floor (Prague+), and the EIP-7778 block-gas rule (Amsterdam+:
     the block charges the unrefunded, floored gas); returns unused gas to
     the sender, pays the coinbase the priority fee, merges the
-    transaction into the block layer, and emits the receipt. */
+    transaction into the block layer, and emits the receipt.
+
+    *EELS*: `process_transaction (settlement)`. */
 function settle_transaction(tx : Transaction, v : TxValidity, fr : TxFrameResult) -> Receipt = {
     /* Refund cap: gas_used / 2 before London, gas_used / 5 after EIP-3529. */
     let gas_left0 = fr.gas_remaining;
@@ -504,7 +512,9 @@ function settle_transaction(tx : Transaction, v : TxValidity, fr : TxFrameResult
 
 /*! The complete per-transaction step: reset, validate (an invalid
     transaction yields an invalid receipt and no state change), apply
-    upfront effects, run the frame, and settle. */
+    upfront effects, run the frame, and settle.
+
+    *EELS*: `process_transaction`. */
 function process_transaction(tx : Transaction) -> Receipt = {
     k_tx_reset();
 

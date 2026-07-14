@@ -1,5 +1,5 @@
 /*md
-# Kernel logs and refunds
+# State: logs and refunds
 */
 
 /*! Appends a log record (YP §4.4.1) to the transaction's log series. */

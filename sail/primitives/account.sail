@@ -39,13 +39,15 @@ struct StorageValue = { curr : word, orig : word }
 /*! A fully qualified storage key: account address and 256-bit slot. */
 struct StorageKey = { addr : address, slot : word }
 
-/*! An overlay storage row, as drained across the FFI on merge. */
+/*! An overlay storage row: the form in which storage entries are
+    enumerated at transaction-end merge. */
 struct StorageEntry = { key : StorageKey, value : StorageValue }
 
 /*! An account's current and original (transaction-start) states. */
 struct AcctValue = { curr : Account, orig : Account }
 
-/*! An overlay account row, as drained across the FFI on merge. */
+/*! An overlay account row: the form in which account entries are
+    enumerated at transaction-end merge. */
 struct AcctEntry = { addr : address, value : AcctValue }
 
 /*! The empty account tuple: zero nonce and balance, `KECCAK_EMPTY` code

@@ -8,7 +8,7 @@ resolves its [ByteSource][type-ByteSource] without exposing a parallel
 numeric source tag to Sail.
 */
 
-/*! The host stores a [ByteSlice][type-ByteSlice] may point into. */
+/*! The backing stores a [ByteSlice][type-ByteSlice] may reference. */
 enum ByteSource = {
     StatelessInputSource,
     MemorySource,
@@ -19,8 +19,9 @@ enum ByteSource = {
     ScratchSource,
 }
 
-/*! An unmaterialized byte range: a source store, an offset, and a length.
-    Reads resolve through the host in O(1) without copying. */
+/*! An unmaterialized byte range: a backing store, an offset, and a
+    length. A slice denotes the byte sequence it references; reads resolve
+    in O(1) without copying. */
 struct ByteSlice = {
     source : ByteSource,
     off    : bits(64),
@@ -56,9 +57,12 @@ function memory_byte_slice(off : int, len : int) -> ByteSlice =
 function code_byte_slice(off : int, len : int) -> ByteSlice =
     byte_slice(CodeSource, off, len)
 
-/*! A byte-sequence segment: materialized Sail bytes or a C-backed span. A
-    `list(Bytes)` denotes the concatenation of its segments and crosses the
-    FFI whole (`ffi/hash_glue.c`). */
+/*! A byte-sequence segment: materialized bytes or a store-backed span. A
+    `list(Bytes)` denotes the concatenation of its segments.
+
+    !!! note "Implementation"
+        A segment list crosses the FFI whole (`ffi/hash_glue.c`); no
+        per-byte crossings occur. */
 union Bytes = {
     BytesList : list(byte),
     BytesSlice : ByteSlice,

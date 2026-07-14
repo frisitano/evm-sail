@@ -4,6 +4,10 @@
 Host-owned storage for a frame or precompile output that must outlive the
 mutable EVM memory from which it was produced. EVM returndata state and
 frame transitions remain entirely in Sail.
+
+!!! note "Non-normative"
+    This page documents the model's host interface — internal contracts
+    of the executable specification, not protocol rules.
 */
 
 val output_buffer_store = impure { c: "output_buffer_store" } : ByteSlice -> bool

@@ -1,5 +1,5 @@
 /*md
-# Selfdestruct and creation flags
+# State: selfdestruct and creation flags
 */
 
 /*! Marks an account selfdestructed (`SELFDESTRUCT`; deletion is decided

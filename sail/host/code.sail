@@ -2,6 +2,10 @@
 # Code storage
 
 Content-addressed code storage and the Sail-side `JUMPDEST` analysis.
+
+!!! note "Non-normative"
+    This page documents the model's host interface — internal contracts
+    of the executable specification, not protocol rules.
 */
 
 val code_db_lookup = impure { c: "code_db_lookup" } : hash -> option(Code)

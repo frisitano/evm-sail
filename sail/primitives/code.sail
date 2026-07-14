@@ -8,8 +8,8 @@ Executable code and its PUSH-aware `JUMPDEST` analysis (YP §9.4.3).
     bytes. */
 type JumpdestBitmap = list(bits(64))
 
-/*! A one-based word offset into the host's packed bitmap arena; zero
-    denotes the empty bitmap. */
+/*! A reference to a code's completed `JUMPDEST` analysis; zero denotes
+    the empty bitmap. */
 type JumpdestRef = bits(64)
 
 let EMPTY_JUMPDEST_BITMAP : JumpdestBitmap = [||]

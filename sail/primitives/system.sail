@@ -4,6 +4,16 @@
 The protocol-defined system actors: the pseudo-caller of block-level
 system calls, the system predeploys they target, and the EIP-7708
 transfer-log identity. Pure data — no registers, no externs.
+
+| Name | Address / Topic | Source |
+| ---- | --------------- | ------ |
+| `SYSTEM_ADDRESS` | `0xfffe…fffe` | EIP-4788/2935/7002/7251 caller |
+| `BEACON_ROOTS_ADDR` | `0x000f…ac02` | EIP-4788 |
+| `HISTORY_STORAGE_ADDR` | `0x0000…2935` | EIP-2935 |
+| `WITHDRAWAL_REQUEST_ADDR` | `0x0000…7002` | EIP-7002 |
+| `CONSOLIDATION_REQUEST_ADDR` | `0x0000…7251` | EIP-7251 |
+| `DEPOSIT_CONTRACT_ADDR` | `0x0000…05fa` | EIP-6110 |
+| `EIP7708_TRANSFER_TOPIC` | `keccak256("Transfer(…)")` | EIP-7708 |
 */
 
 /*! The pseudo-caller of protocol system calls (EIP-4788, EIP-2935,

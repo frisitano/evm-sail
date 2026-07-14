@@ -1,5 +1,5 @@
 /*md
-# Transaction lifecycle
+# State: the transaction lifecycle
 
 Snapshot, revert, per-transaction reset, and the transaction-end merge
 into the block layer.

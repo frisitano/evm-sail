@@ -7,6 +7,10 @@ block), the EIP-7928 block-access-list recorder, the EIP-2929 warm sets,
 the log store, and the journal. Sail owns all semantics — checkpointing,
 revert order, and merge discipline; the C side (`ffi/state_db.c`,
 `ffi/kernel_state.c`) owns only the containers.
+
+!!! note "Non-normative"
+    This page documents the model's host interface — internal contracts
+    of the executable specification, not protocol rules.
 */
 
 val transient_reset = impure { c: "transient_storage_reset" } : unit -> unit

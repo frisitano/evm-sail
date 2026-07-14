@@ -6,6 +6,10 @@ and executable frame code alike. Transaction input is already a
 source-backed slice; no parallel input buffer or per-frame source
 descriptor exists. Proof targets see the `val`s as bodyless axioms over
 abstract byte lists.
+
+!!! note "Non-normative"
+    This page documents the model's host interface — internal contracts
+    of the executable specification, not protocol rules.
 */
 
 val host_slice_byte = impure { c: "slice_byte_at" } : (ByteSlice, bits(64)) -> bits(8)

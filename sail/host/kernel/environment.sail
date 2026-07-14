@@ -1,5 +1,5 @@
 /*md
-# Kernel environment
+# The execution environment
 
 The block- and transaction-level environment registers, and the
 environment reads the `evm` layer serves opcodes from.
