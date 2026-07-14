@@ -3,6 +3,17 @@
 Conventions for the documentation comments that produce the specification
 book. Enforced by `tools/docs_lint.py` (part of `make lint`).
 
+## Section overviews
+
+Every definition-bearing source directory carries a `mod.md`: the
+section's overview page, opened by clicking the section title in the
+nav. It states the section's scope in a few paragraphs and guides the
+reading order with links to the section's pages. Its `# Title` matches
+the nav section title (40 characters or fewer); headings carry no
+citations; the same banned-vocabulary and prose rules apply as for
+source pages, and host-interface overviews carry the Non-normative
+banner.
+
 ## Page structure
 
 Each source file is one page. Its first `/*md` block must open with a

@@ -2,6 +2,7 @@
 - [The prelude](reference/sail/prelude.md)
 - [Halting](reference/sail/exceptions.md)
 - Protocol types
+    - [Protocol types](reference/sail/primitives/index.md)
     - [Protocol forks](reference/sail/primitives/fork.md)
     - [Chain configuration](reference/sail/primitives/chain_config.md)
     - [Accounts and storage](reference/sail/primitives/account.md)
@@ -18,6 +19,7 @@
     - [Stateless input](reference/sail/primitives/stateless_input.md)
     - reference/sail/primitives/*.md
 - The EVM
+    - [The EVM](reference/sail/evm/index.md)
     - [Machine state](reference/sail/evm/machine.md)
     - [The instruction set](reference/sail/evm/instructions.md)
     - [The interpreter](reference/sail/evm/interpreter.md)
@@ -26,7 +28,8 @@
     - [Precompiled contracts](reference/sail/evm/precompiles.md)
     - [The transaction state transition](reference/sail/evm/transaction.md)
 - Block execution
-    - [Block execution](reference/sail/executor/block.md)
+    - [Block execution](reference/sail/executor/index.md)
+    - [The block driver](reference/sail/executor/block.md)
     - [Protocol system calls](reference/sail/executor/system_calls.md)
     - [Payload commitments](reference/sail/executor/payload.md)
     - [Receipts, blooms, and the receipts trie](reference/sail/executor/receipts.md)
@@ -35,21 +38,27 @@
     - reference/sail/executor/*.md
     - [The guest entry point](reference/sail/main.md)
 - Serialization and tries
+    - [Serialization and tries](reference/sail/lib/index.md)
     - [Byte conversions](reference/sail/lib/bytes.md)
     - [Contract address derivation](reference/sail/lib/address.md)
     - [Transaction signature rules](reference/sail/lib/tx.md)
     - RLP
+        - [RLP](reference/sail/lib/rlp/index.md)
         - reference/sail/lib/rlp/*.md
     - SSZ
+        - [SSZ](reference/sail/lib/ssz/index.md)
         - reference/sail/lib/ssz/*.md
     - [SSZ hash_tree_root](reference/sail/lib/htr.md)
     - The trie
+        - [The trie](reference/sail/lib/mpt/index.md)
         - [Trie paths and hex-prefix encoding](reference/sail/lib/mpt/primitives.md)
         - [Trie nodes](reference/sail/lib/mpt/nodes.md)
         - [Trie updates and the canonical builder](reference/sail/lib/mpt/updates.md)
         - [The witness-native trie](reference/sail/lib/mpt/trie.md)
     - [The state trie](reference/sail/lib/state_trie.md)
 - Host interface
+    - [Host interface](reference/sail/host/index.md)
     - reference/sail/host/*.md
     - The state kernel
+        - [The state kernel](reference/sail/host/kernel/index.md)
         - reference/sail/host/kernel/*.md

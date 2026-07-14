@@ -1,8 +1,8 @@
 /*md
-# Block execution
+# The block driver
 
-The block driver: block-start system calls, the transaction loop with
-block-gas accounting, withdrawals, and block-end request collection.
+Block-start system calls, the transaction loop with block-gas
+accounting, withdrawals, and block-end request collection.
 */
 
 /*! Everything block validation needs from an executed body: overall

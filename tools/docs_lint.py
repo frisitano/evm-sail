@@ -159,12 +159,46 @@ def collect_functions(root: Path) -> None:
                 ALL_FUNCTIONS.add(name)
 
 
+def lint_mod(path: Path, rel: str) -> list[str]:
+    """A directory's mod.md section overview: title, prose, clean terms."""
+    problems = []
+    text = path.read_text()
+    if not text.startswith("# "):
+        problems.append(f"{rel}: must open with a '# Title' heading")
+    else:
+        title = text.split("\n", 1)[0][2:].strip()
+        if len(title) > 40:
+            problems.append(f"{rel}: title too long for the nav ({len(title)} chars): {title!r}")
+    for level, heading in HEADING.findall(text):
+        if CITED_HEADING.search(heading):
+            problems.append(f"{rel}: heading carries a citation: {heading!r}")
+    for match in BANNED.finditer(text):
+        line = text[: match.start()].count("\n") + 1
+        problems.append(f"{rel}:{line}: banned term {match.group(0)!r}")
+    if not any(line.strip() and not line.lstrip().startswith(("#", "-", "!!!", " ")) for line in text.splitlines()):
+        problems.append(f"{rel}: overview has no prose")
+    is_host = "/host/" in f"/{rel}" and "/host/kernel/" not in f"/{rel}"
+    if is_host and "Non-normative" not in text:
+        problems.append(f"{rel}: host-interface overview missing the Non-normative banner")
+    return problems
+
+
 def main() -> int:
     root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".")
     collect_functions(root)
     problems = []
     for path in sorted((root / "sail").rglob("*.sail")):
         problems.extend(lint_file(path, str(path.relative_to(root))))
+    # every definition-bearing subdirectory carries a mod.md section overview
+    for directory in sorted({p.parent for p in (root / "sail").rglob("*.sail")}):
+        if directory == root / "sail":
+            continue
+        mod = directory / "mod.md"
+        rel = str(mod.relative_to(root))
+        if not mod.exists():
+            problems.append(f"{rel}: missing section overview (mod.md)")
+        else:
+            problems.extend(lint_mod(mod, rel))
     if problems:
         print(f"docs-lint: {len(problems)} violation(s)")
         for p in problems:
