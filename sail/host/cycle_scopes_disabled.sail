@@ -1,7 +1,7 @@
 /*md
-# Cycle scopes (disabled)
+# Cycle scopes (optional)
 
-Build variant stubbing the instrumentation scopes.
+Default build variant stubbing the optional instrumentation scopes.
 
 !!! note "Non-normative"
     This page documents the model's host interface — internal contracts

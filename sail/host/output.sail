@@ -10,9 +10,17 @@ frame transitions remain entirely in Sail.
     of the executable specification, not protocol rules.
 */
 
+/*! Copies a slice into the host output buffer; the flag reports
+    acceptance. The axiom behind [freeze_output][]. */
 val output_buffer_store = impure { c: "output_buffer_store" } : ByteSlice -> bool
+/*! Stores one 32-byte word as the buffer contents; the axiom behind
+    [output_buffer_word][]. */
 val output_buffer_store_word = impure { c: "output_buffer_store_word" } : word -> bool
+/*! Stores two consecutive words as the buffer contents; the axiom
+    behind [output_buffer_words][]. */
 val output_buffer_store_words = impure { c: "output_buffer_store_words" } : (word, word) -> bool
+/*! Appends one byte to the guest's public output — the committed result
+    stream the verifier sees. */
 val public_output_write = impure { c: "el_emit_out" } : byte -> unit
 
 /*! A slice over the first `len` bytes of the output buffer. */

@@ -20,25 +20,41 @@ module where the frame context is defined.
     of the executable specification, not protocol rules.
 */
 
+/*! The byte at `off` of the current frame's memory; zero when never
+    written. */
 val mem_read_byte = impure { c: "mem_read_byte" } : bits(64) -> bits(8)
+/*! Writes one byte at `off` of the current frame's memory (`MSTORE8`). */
 val mem_write_byte = impure { c: "mem_write_byte" } : (bits(64), bits(8)) -> unit
 
 /* call-frame memory lifecycle (the implementation owns the bytes) */
+/*! Resets memory to a single empty frame (per-transaction reset). */
 val mem_clear = impure { c: "mem_clear" } : unit -> unit
+/*! Pushes a fresh, zeroed memory for a sub-call frame. */
 val mem_frame_enter = impure { c: "mem_frame_enter" } : unit -> unit
+/*! Pops the current frame's memory, restoring the caller's. */
 val mem_frame_leave = impure { c: "mem_frame_leave" } : unit -> unit
 
 /* range copies (CALLDATACOPY / CODECOPY / RETURNDATACOPY / MCOPY): endpoints
  * already live in host-interface regions, so copies never cross the
  * interface. */
+/*! Copies a byte range within the current frame's memory; overlapping
+    ranges behave as one atomic move (`MCOPY` and the destination side of
+    the `*COPY` opcodes). */
 val mem_move = impure { c: "mem_move" } : (bits(64), bits(64), bits(64)) -> unit
 
 /* word access: MLOAD/MSTORE read/write the 32-byte big-endian range at off in
  * ONE crossing (YP 9.4.1) */
+/*! Reads the 32-byte big-endian word at `off` in one interface crossing
+    (`MLOAD`). */
 val mem_load_word = impure { c: "mem_load_word" } : bits(64) -> word
+/*! Writes the 32-byte big-endian word at `off` in one interface
+    crossing (`MSTORE`). */
 val mem_store_word = impure { c: "mem_store_word" } : (bits(64), word) -> unit
 
 /* Freeze a range of the current frame in the absolute memory arena. */
+/*! Freezes `[off, off+len)` of the current frame into the absolute
+    memory arena and returns the arena offset (all-ones on failure); the
+    axiom behind [mem_slice][]. */
 val mem_establish_absolute = impure { c: "mem_establish_absolute" } : (bits(64), bits(64)) -> bits(64)
 
 /*! Freezes `[off, off+len)` of the current frame into the absolute

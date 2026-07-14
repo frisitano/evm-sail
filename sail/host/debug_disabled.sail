@@ -1,7 +1,8 @@
 /*md
-# Validation debug (disabled)
+# Validation debug (optional)
 
-Build variant discarding validation debug records.
+Default build variant discarding the optional validation debug
+records.
 
 !!! note "Non-normative"
     This page documents the model's host interface — internal contracts

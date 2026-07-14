@@ -8,10 +8,21 @@ Content-addressed code storage and the Sail-side `JUMPDEST` analysis.
     of the executable specification, not protocol rules.
 */
 
+/*! The stored code for a content hash, or `None` when not witnessed. */
 val code_db_lookup = impure { c: "code_db_lookup" } : hash -> option(Code)
+/*! Stores code with its precomputed `JUMPDEST` bitmap under its
+    KECCAK-256 hash and returns that hash. */
 val code_db_store = impure { c: "code_db_store_indexed" } : (ByteSlice, JumpdestBitmap) -> hash
+/*! Whether the referenced bitmap marks the given program counter as a
+    valid `JUMPDEST`. */
 val jumpdest_ref_contains = impure { c: "jumpdest_ref_contains" } : (JumpdestRef, bits(64), bits(64)) -> bool
+/*! Constructs and stores the EIP-7702 delegation designator
+    (`0xef0100` followed by the address) with its bitmap, returning its
+    code hash. */
 val code_intern_delegation = impure { c: "code_intern_indexed_delegation" } : (address, JumpdestBitmap) -> hash
+/*! Reads a stored delegation designator: the leading bit of the 168-bit
+    result flags a well-formed designator, the low 160 bits are the
+    delegate address. */
 val code_db_read_delegation = impure { c: "code_db_read_delegation" } : hash -> bits(168)
 
 /*! The PUSH-aware `JUMPDEST` analysis (YP §9.4.3): PUSH immediate bytes

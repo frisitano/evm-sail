@@ -16,11 +16,21 @@ list-of-words model.
     of the executable specification, not protocol rules.
 */
 
+/*! Resets to a single empty operand stack (per-transaction reset). */
 val stack_reset = impure { c: "stack_reset" } : unit -> unit
+/*! Pushes a fresh, empty operand stack for a sub-call frame. */
 val stack_enter_frame = impure { c: "stack_enter_frame" } : unit -> unit
+/*! Pops the current frame's stack, restoring the caller's. */
 val stack_leave_frame = impure { c: "stack_leave_frame" } : unit -> unit
+/*! The number of words on the current frame's stack; the 1024-item
+    bound is enforced by the EVM layer. */
 val stack_depth = impure { c: "stack_depth" } : unit -> bits(64)
+/*! Pushes a word (the depth bound is checked by the EVM layer). */
 val stack_push_word = impure { c: "stack_push_word" } : word -> unit
+/*! Pops and returns the top word (underflow is guarded by the EVM
+    layer). */
 val stack_pop_word = impure { c: "stack_pop_word" } : unit -> word /* pop AND return the top (caller guards underflow) */
+/*! The word at depth `n` from the top, without popping (`DUPn`). */
 val stack_peek_word = impure { c: "stack_peek_word" } : bits(64) -> word
+/*! Overwrites the word at depth `n` from the top (`SWAPn`). */
 val stack_set_word = impure { c: "stack_set_word" } : (bits(64), word) -> unit

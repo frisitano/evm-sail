@@ -7,7 +7,9 @@ Checks every sail/**/*.sail file:
 - no heading (any level) carries an EIP or Yellow Paper citation;
 - every /*! doc comment's first sentence ends with a period;
 - banned vocabulary never appears in /*md or /*! prose;
-- host-interface pages carry the Non-normative banner.
+- host-interface pages carry the Non-normative banner;
+- coverage: types, registers, mappings, substantial functions, and vals
+  (including the host interface's extern vals) carry /*! docs.
 
 Strict: exits non-zero listing every violation.
 """
@@ -78,8 +80,7 @@ def lint_file(path: Path, rel: str) -> list[str]:
         if not any(line.strip() and not line.lstrip().startswith("#") for line in intro.splitlines()):
             problems.append(f"{rel}: page introduction has no prose")
 
-    if not is_host:
-        problems.extend(coverage(text, rel))
+    problems.extend(coverage(text, rel))
 
     return problems
 

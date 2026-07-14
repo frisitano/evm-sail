@@ -47,15 +47,15 @@ canonical section order naturally.
 
 ## Coverage
 
-In normative modules (everything outside `sail/host/`, which includes
-`sail/host/kernel/`):
+In every module, including the host interface:
 
 - every `type`, `enum`, `struct`, `union`, `register`, and `mapping`
   carries a `/*!` doc comment;
 - every substantial function (four lines or more) carries `/*!`;
   one-line definitions may rely on their section's prose;
 - every `val` carries `/*!` unless it declares a function defined
-  elsewhere in the specification (the function carries the docs);
+  elsewhere in the specification (the function carries the docs) — in
+  particular, every host-interface extern `val` documents its contract;
 - a page declaring four or more capitalized constants has a
   `## Constants` section or a summary table.
 

@@ -12,12 +12,27 @@ abstract byte lists.
     of the executable specification, not protocol rules.
 */
 
+/*! The byte at a slice offset, zero past the end; the axiom behind
+    [slice_byte][]. */
 val host_slice_byte = impure { c: "slice_byte_at" } : (ByteSlice, bits(64)) -> bits(8)
+/*! The number of nonzero bytes in a slice; the axiom behind
+    [slice_count_nonzero][]. */
 val host_slice_count_nonzero = impure { c: "slice_count_nonzero" } : ByteSlice -> bits(64)
+/*! Whether `count` regions of `width` bytes, `stride` apart from
+    `start`, contain only zero bytes; the axiom behind
+    [slice_strided_zero][]. */
 val host_slice_strided_zero = impure { c: "slice_strided_zero" } : (ByteSlice, bits(64), bits(64), bits(64), bits(64)) -> bool
+/*! The 32-byte big-endian word at a slice offset, zero-padded past the
+    end; the axiom behind [slice_load][]. */
 val host_slice_load_word = impure { c: "slice_load_word" } : (ByteSlice, bits(64)) -> word
+/*! An `n`-byte big-endian word at a slice offset, right-aligned and
+    zero-padded; the axiom behind [slice_load_n][]. */
 val host_slice_load_n_word = impure { c: "slice_load_n_word" } : (ByteSlice, bits(64), bits(64)) -> word
+/*! Copies a slice range into frame memory, zero-filling past the end;
+    the axiom behind [slice_copy][]. */
 val host_slice_copy_to_memory = impure { c: "slice_copy_to_memory" } : (ByteSlice, bits(64), bits(64), bits(64)) -> unit
+/*! Whether the concatenation of the `Bytes` segments equals the slice
+    byte for byte, without materializing either side. */
 val bytes_segments_equal_slice = impure { c: "host_bytes_segments_equal_slice" } : (list(Bytes), ByteSlice) -> bool
 
 let SOURCE_PAST_END : int = 16777216
