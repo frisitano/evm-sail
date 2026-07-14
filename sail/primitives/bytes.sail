@@ -3,16 +3,17 @@
 /* ======================================================================== */
 
 /* A ByteSlice denotes a byte sequence inside one of the host's C-backed
- * stores without materializing it; byte_source_kind is the scalar tag it
- * crosses the FFI under. */
+ * stores without materializing it. The complete value crosses the FFI; the
+ * generated-type glue resolves its ByteSource without exposing a parallel
+ * numeric source tag to Sail. */
 enum ByteSource = {
-    WitnessSource,
+    StatelessInputSource,
     MemorySource,
-    TxInputSource,
     CodeSource,
     LogDataSource,
     MemoryArenaSource,
-    ReturndataSource,
+    OutputSource,
+    ScratchSource,
 }
 
 struct ByteSlice = {
@@ -24,22 +25,15 @@ struct ByteSlice = {
 function byte_slice(src : ByteSource, off : int, len : int) -> ByteSlice =
     struct { source = src, off = get_slice_int(64, off, 0), len = get_slice_int(64, len, 0) }
 
-function byte_source_kind(src : ByteSource) -> bits(64) =
-    match src {
-        WitnessSource => 0x0000000000000001,
-        MemorySource => 0x0000000000000002,
-        TxInputSource => 0x0000000000000003,
-        CodeSource => 0x0000000000000004,
-        LogDataSource => 0x0000000000000006,
-        MemoryArenaSource => 0x0000000000000007,
-        ReturndataSource => 0x0000000000000008,
+/* zero-length placeholder for unused value roles (subtree refs, deletes) */
+let EMPTY_SLICE : ByteSlice = struct {
+        source = StatelessInputSource,
+        off = 0x0000000000000000,
+        len = 0x0000000000000000,
     }
 
-/* zero-length placeholder for unused value roles (subtree refs, deletes) */
-let EMPTY_SLICE : ByteSlice = struct { source = WitnessSource, off = 0x0000000000000000, len = 0x0000000000000000 }
-
-function witness_byte_slice(off : int, len : int) -> ByteSlice =
-    byte_slice(WitnessSource, off, len)
+function stateless_input_byte_slice(off : int, len : int) -> ByteSlice =
+    byte_slice(StatelessInputSource, off, len)
 
 /* a relative sub-range of a slice (same source) */
 function sub_slice(s : ByteSlice, off : int, len : int) -> ByteSlice =
@@ -48,36 +42,9 @@ function sub_slice(s : ByteSlice, off : int, len : int) -> ByteSlice =
 function memory_byte_slice(off : int, len : int) -> ByteSlice =
     byte_slice(MemorySource, off, len)
 
-function tx_input_byte_slice(off : int, len : int) -> ByteSlice =
-    byte_slice(TxInputSource, off, len)
-
 /* Absolute span in the append-only content-addressed code arena. */
 function code_byte_slice(off : int, len : int) -> ByteSlice =
     byte_slice(CodeSource, off, len)
-
-/* The PUSH-aware analysis is a genuine Sail value: one little-endian bitmap
- * word per 64 code bytes. After insertion, JumpdestRef is the resolved,
- * one-based word offset in the host's packed table arena (zero = empty). */
-type JumpdestBitmap = list(bits(64))
-type JumpdestRef = bits(64)
-let EMPTY_JUMPDEST_BITMAP : JumpdestBitmap = [||]
-let EMPTY_JUMPDEST_REF : JumpdestRef = 0x0000000000000000
-
-/* Before insertion, code carries the materialized Sail analysis. */
-struct AnalyzedCode = {
-    bytes : ByteSlice,
-    jumpdests : JumpdestBitmap,
-}
-
-/* Once inserted under keccak(bytes), code carries the immutable code-arena
- * view and the resolved packed-table reference. The content hash is the
- * stable code-DB key; the ref is only its efficient execution-time view. */
-struct Code = {
-    bytes : ByteSlice,
-    jumpdests : JumpdestRef,
-}
-
-let EMPTY_CODE : Code = struct { bytes = EMPTY_SLICE, jumpdests = EMPTY_JUMPDEST_REF }
 
 /* A byte-sequence segment: materialized Sail bytes or a C-backed span. A
  * list(Bytes) denotes the concatenation of its segments and crosses the FFI
@@ -85,30 +52,4 @@ let EMPTY_CODE : Code = struct { bytes = EMPTY_SLICE, jumpdests = EMPTY_JUMPDEST
 union Bytes = {
     BytesList : list(byte),
     BytesSlice : ByteSlice,
-}
-
-/* Big-endian byte serializations used by RLP, the tries, and address derivation. */
-function word_to_bytes32(w : word) -> list(byte) = {
-    var out : list(byte) = [||]; /* O(n): prepend big-endian */
-    foreach (k from 0 to 31) {
-        out = sail_shiftright(w, 8 * k)[7 .. 0] :: out
-    };
-    out
-}
-function address_to_bytes(a : address) -> list(byte) = {
-    var out : list(byte) = [||];
-    foreach (k from 0 to 19) {
-        out = sail_shiftright(a, 8 * k)[7 .. 0] :: out
-    };
-    out
-}
-
-/* big-endian bytes -> 256-bit word */
-function bytes_be256(c : list(byte)) -> bits(256) = {
-    var acc : bits(256) = sail_zeros(256);
-    let n = list_len(c);
-    foreach (k from 0 to (n - 1)) {
-        acc = or_vec(sail_shiftleft(acc, 8), sail_zero_extend(list_nth(c, k, 0x00), 256))
-    };
-    acc
 }

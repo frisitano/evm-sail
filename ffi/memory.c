@@ -18,6 +18,7 @@
 #include "sail.h"
 #include "lbits_convert.h"
 #include "host_crypto.h"
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -57,32 +58,6 @@ static int f_establish(uint64_t end) {
 
 uint8_t *hm_wr(uint64_t off, uint64_t len); /* fwd decl (defined below) */
 
-/* The current transaction's input as a SOURCE REFERENCE -- the witness span
- * the decoder carried on Transaction.input_src, never copied. Block system
- * calls stage their 32-byte word into the small owned slot instead
- * (kind = TXIN_KIND_WORD). All txd_* / cd_* reads resolve through it. */
-#define TXIN_KIND_WORD UINT64_MAX
-static struct { uint64_t kind, off, len; } txin = { 0, 0, 0 };
-static uint8_t txin_word[32];
-
-int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
-                                const uint8_t **p, uint64_t *resolved_len);
-
-/* a READ pointer to tx-input[i, i+len), NULL past the end / on a bad source */
-static const uint8_t *txin_region(uint64_t i, uint64_t len) {
-  if (len == 0 || i > txin.len || len > txin.len - i) return NULL;
-  if (txin.kind == TXIN_KIND_WORD) return txin_word + i;
-  const uint8_t *p = NULL;
-  uint64_t rlen = 0;
-  if (!evmsail_resolve_byte_source(txin.kind, txin.off + i, len, &p, &rlen) || rlen != len) return NULL;
-  return p;
-}
-
-static uint8_t txin_byte(uint64_t i) {
-  const uint8_t *p = txin_region(i, 1);
-  return p ? *p : 0;
-}
-
 /* clear back to a single empty top-level frame (called per tx); the arena
  * allocation is kept for reuse across transactions */
 unit mem_clear(const unit u) {
@@ -115,56 +90,12 @@ unit mem_frame_leave(const unit u) {
   return UNIT;
 }
 
-/* bind the tx input BY REFERENCE (no copy). Fail-closed on a bad or
- * self-referential source, matching the empty-input path. */
-uint64_t txdata_bind_source(uint64_t kind, uint64_t off, uint64_t len) {
-  txin.kind = 0; txin.off = 0; txin.len = 0;
-  if (len == 0) return 0;
-  const uint8_t *src = NULL;
-  uint64_t rlen = 0;
-  if (kind == EVMSAIL_SOURCE_TX_INPUT ||
-      !evmsail_resolve_byte_source(kind, off, len, &src, &rlen) || !src || rlen != len) {
-    return 0;
-  }
-  txin.kind = kind; txin.off = off; txin.len = len;
-  return len;
-}
-
-uint64_t txdata_stage_word(const lbits w) {
-  lbits_to_be_bytes(txin_word, 32, w);
-  txin.kind = TXIN_KIND_WORD; txin.off = 0; txin.len = 32;
-  return 32;
-}
-
-uint64_t txdata_count_nonzero(const unit u) {
-  (void)u;
-  const uint8_t *p = txin_region(0, txin.len);
-  uint64_t c = 0;
-  if (p) for (uint64_t i = 0; i < txin.len; i++) if (p[i]) c++;
-  return c;
-}
-
-/* the executing tx's input (a create-tx's initcode source; gas byte reads) */
-uint64_t txd_copy(uint8_t *dst, uint64_t cap) {
-  uint64_t n = txin.len < cap ? txin.len : cap;
-  const uint8_t *p = txin_region(0, n);
-  if (p) memcpy(dst, p, n); else n = 0;
-  return n;
-}
-uint64_t txdata_byte_at(uint64_t i)  { return txin_byte(i); }
-uint64_t txdata_length(const unit u) { (void)u; return txin.len; }
-const uint8_t *txd_rd(uint64_t off, uint64_t len) {
-  static const uint8_t zero = 0;
-  if (len == 0) return &zero;
-  return txin_region(off, len);
-}
-
 /* bits(64) offset -> bits(8) byte (0 beyond the established extent) */
 uint64_t mem_read_byte(uint64_t off) {
   return (off < f_len[h_top]) ? (uint64_t)arena[f_base[h_top] + off] : 0;
 }
 
-/* current call-frame depth (the returndata slots in returndata.c key off it) */
+/* Current call-frame depth. */
 uint64_t hm_depth(const unit u) { (void)u; return (uint64_t)h_top; }
 
 /* establish [off, off+len) of the CURRENT frame and return its ABSOLUTE
@@ -246,7 +177,8 @@ const uint8_t *mem_arena_region(uint64_t off, uint64_t len) {
 }
 
 /* one byte at slice offset i, zero past the slice's end */
-uint64_t slice_byte_at(uint64_t kind, uint64_t off, uint64_t len, uint64_t i) {
+uint64_t slice_byte_at_source(uint64_t kind, uint64_t off, uint64_t len,
+                              uint64_t i) {
   if (i >= len) return 0;
   const uint8_t *p = NULL;
   uint64_t resolved_len = 0;
@@ -254,8 +186,48 @@ uint64_t slice_byte_at(uint64_t kind, uint64_t off, uint64_t len, uint64_t i) {
          p && resolved_len == 1 ? *p : 0;
 }
 
+/* Count nonzero bytes without materializing the slice in Sail. */
+uint64_t slice_count_nonzero_source(uint64_t kind, uint64_t off, uint64_t len) {
+  if (len == 0) return 0;
+  const uint8_t *p = NULL;
+  uint64_t resolved_len = 0;
+  if (!evmsail_resolve_byte_source(kind, off, len, &p, &resolved_len) ||
+      !p || resolved_len != len)
+    return 0;
+  uint64_t count = 0;
+  for (uint64_t i = 0; i < len; i++) count += p[i] != 0;
+  return count;
+}
+
+/* True when each width-byte region at start + i*stride is zero. Resolving the
+ * source once keeps regular-layout validation (notably padded BLS fields) at
+ * one host crossing while Sail remains explicit about the checked layout. */
+bool slice_strided_zero_source(uint64_t kind, uint64_t off, uint64_t len,
+                               uint64_t start, uint64_t stride, uint64_t width,
+                               uint64_t count) {
+  if (count == 0 || width == 0) return true;
+  if (start > len || width > len - start) return false;
+  if (count > 1 && (stride == 0 || count - 1 > (UINT64_MAX - start) / stride))
+    return false;
+  uint64_t last = start + (count - 1) * stride;
+  if (last > len || width > len - last) return false;
+
+  const uint8_t *p = NULL;
+  uint64_t resolved_len = 0;
+  if (!evmsail_resolve_byte_source(kind, off, len, &p, &resolved_len) ||
+      !p || resolved_len != len)
+    return false;
+  for (uint64_t i = 0; i < count; i++) {
+    const uint8_t *field = p + start + i * stride;
+    for (uint64_t j = 0; j < width; j++)
+      if (field[j] != 0) return false;
+  }
+  return true;
+}
+
 /* the 32-byte word at slice offset i, zero-padded past the slice's end */
-void slice_load_word(lbits *rop, uint64_t kind, uint64_t off, uint64_t len, uint64_t i) {
+void slice_load_word_source(lbits *rop, uint64_t kind, uint64_t off,
+                            uint64_t len, uint64_t i) {
   uint8_t b[32] = {0};
   if (i < len) {
     uint64_t n = len - i;
@@ -269,8 +241,8 @@ void slice_load_word(lbits *rop, uint64_t kind, uint64_t off, uint64_t len, uint
 
 /* the n-byte big-endian word at slice offset i, right-aligned and zero-padded
  * past the slice's end (PUSH0..PUSH32) */
-void slice_load_n_word(lbits *rop, uint64_t kind, uint64_t off, uint64_t len,
-                       uint64_t i, uint64_t n) {
+void slice_load_n_word_source(lbits *rop, uint64_t kind, uint64_t off,
+                              uint64_t len, uint64_t i, uint64_t n) {
   uint8_t b[32] = {0};
   uint64_t cnt = n < 32 ? n : 32;
   if (i < len) {
@@ -287,7 +259,8 @@ void slice_load_n_word(lbits *rop, uint64_t kind, uint64_t off, uint64_t len,
 /* slice[i, i+n) into memory at dst, zero-filling past the slice's end. The
  * destination is established FIRST (it may realloc the arena); the source
  * pointer is taken after and used immediately. */
-unit slice_copy_to_memory(uint64_t kind, uint64_t off, uint64_t len, uint64_t dst, uint64_t i, uint64_t n) {
+unit slice_copy_to_memory_source(uint64_t kind, uint64_t off, uint64_t len,
+                                 uint64_t dst, uint64_t i, uint64_t n) {
   if (!n) return UNIT;
   uint8_t *d = hm_wr(dst, n);
   if (!d) return UNIT;

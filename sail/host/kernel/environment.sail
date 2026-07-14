@@ -3,6 +3,7 @@ register k_parent_state_root : hash = sail_zeros(256)
 register k_n_headers : int = 0
 register k_chain_id : int = 1
 register k_fork : Fork = Amsterdam
+register k_blob_schedule : BlobSchedule = struct { target = 14, max = 21, base_fee_update_fraction = 11684671 }
 
 register k_header : BlockHeader =
     struct {
@@ -17,24 +18,14 @@ register k_header : BlockHeader =
         excess_blob_gas = sail_zeros(64),
         state_root = ZERO_WORD,
         receipts_root = ZERO_WORD,
-        logs_bloom = [||],
+        logs_bloom = EMPTY_LOGS_BLOOM,
         fee_recipient = ZERO_ADDR,
         parent_hash = ZERO_WORD,
         parent_beacon_block_root = ZERO_WORD,
         slot_number = sail_zeros(64),
     }
 
-register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob_hashes = [||] }
-
-function is_precompile(n : int) -> bool = {
-    let base = (n >= 1) & (n <= 4);
-    let byzantium = (n >= 5) & (n <= 8) & (k_fork >= Byzantium);
-    let istanbul = (n == 9) & (k_fork >= Istanbul);
-    let kzg = (n == 10) & (k_fork >= Cancun);
-    let bls = (n >= 11) & (n <= 17) & (k_fork >= Prague);
-    let p256 = (n == 256) & (k_fork >= Osaka);
-    base | byzantium | istanbul | kzg | bls | p256
-}
+register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob_hashes = EMPTY_BLOB_HASHES }
 
 enum EnvField = {
     F_Number,
@@ -80,7 +71,11 @@ function k_blockhash(number : int) -> hash = {
 }
 
 function k_blobhash(i : int) -> word = {
-    list_nth(k_tx.blob_hashes, i, word_of_int(0))
+    if i < 0 | i >= k_tx.blob_hashes.count then {
+        ZERO_WORD
+    } else {
+        slice_load_n(k_tx.blob_hashes.bytes, i * 33 + 1, 32)
+    }
 }
 
 function k_create_addr(a : address, nonce : u64) -> address = create_address(a, nonce)

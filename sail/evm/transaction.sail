@@ -24,43 +24,40 @@ let G_access_list_storage_key : gas = 1900 /* EIP-2930 ACCESS_LIST_STORAGE_KEY_C
 let PER_AUTH_BASE : gas = 12500 /* EIP-7702 PER_AUTH_BASE_COST          */
 let PER_EMPTY_ACCOUNT : gas = 25000 /* EIP-7702 PER_EMPTY_ACCOUNT_COST      */
 
-/* EIP-2028: 4 gas per zero byte, 16 per non-zero, over the loaded tx input. The
- * nonzero count comes from the host (one native pass) rather than a Sail byte
- * loop; zero bytes are the remainder. */
-function calldata_cost() -> gas = {
-    let n = txdata_len();
-    let nz = unsigned(txdata_count_nonzero());
+/* EIP-2028: 4 gas per zero byte, 16 per non-zero. The generic slice host
+ * operation performs one native pass; zero bytes are the remainder. */
+function calldata_cost(input : ByteSlice) -> gas = {
+    let n = unsigned(input.len);
+    let nz = slice_count_nonzero(input);
     to_gas(G_txdatazero * (n - nz) + G_txdatanonzero * nz)
 }
 
 /* EIP-7623 calldata tokens: each zero byte = 1 token, each nonzero byte = 4. */
-function calldata_tokens() -> int = {
-    let n = txdata_len();
-    let nz = unsigned(txdata_count_nonzero());
+function calldata_tokens(input : ByteSlice) -> int = {
+    let n = unsigned(input.len);
+    let nz = slice_count_nonzero(input);
     (n - nz) + 4 * nz
 }
 
 /* EIP-4844: every blob versioned hash must carry VERSIONED_HASH_VERSION_KZG (0x01). */
-function blob_hashes_versioned(xs : list(word)) -> bool =
-    match xs {
-        [||]   => true,
-        h :: r => if h[255 .. 248] == 0x01 then {
-            blob_hashes_versioned(r)
-        } else {
-            false
-        },
-    }
+function blob_hashes_versioned(hashes : BlobHashes) -> bool = {
+    var i : int = 0;
+    var valid : bool = true;
+    while valid & (i < hashes.count) do {
+        valid = slice_byte(hashes.bytes, i * 33 + 1) == 0x01;
+        i = i + 1
+    };
+    valid
+}
 
-/* intrinsic gas: tx input already loaded into the C buffer, so
- * calldata cost and the EIP-3860 initcode words read it via txdata_len. */
 function intrinsic_gas(tx : Transaction) -> gas = {
     let access_list_gas =   G_access_list_address
-                          * list_len(tx.access_list_addresses)
+                          * tx.access_list_address_count
                           + G_access_list_storage_key
-                          * list_len(tx.access_list_slots);
-    let auth = PER_EMPTY_ACCOUNT * list_len(tx.authorizations); /* EIP-7702 */
-    let base = G_transaction + calldata_cost() + access_list_gas + auth;
-    to_gas(if tx.is_create then base + G_txcreate + initcode_gas(txdata_len()) else base)
+                          * tx.access_list_slot_count;
+    let auth = PER_EMPTY_ACCOUNT * tx.authorization_count; /* EIP-7702 */
+    let base = G_transaction + calldata_cost(tx.input_src) + access_list_gas + auth;
+    to_gas(if tx.is_create then base + G_txcreate + initcode_gas(unsigned(tx.input_src.len)) else base)
 }
 
 /* EIP-7702: apply one authorization (validate against current state, set/clear the
@@ -179,26 +176,29 @@ function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : w
     (word_of_int(price), word_of_int(prio))
 }
 
-function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity = {
+function check_transaction_validity(tx : Transaction) -> TxValidity = {
     /* EELS check_transaction: the witnessed public key must verify this tx's
        signature over the signing hash (recover_sender_from_public_key) -- a
        forged key or bad v/r/s makes the whole BLOCK invalid, regardless of the
        validity verdict below. */
-    if not_bool(tx_sig_v_ok(k_chain_id, tx.tx_type, tx.sig_v) & tx_auth_ok(tx.pubkey, tx.signing_hash, tx.sig_r, tx.sig_s)) then {
+    if not_bool(
+        tx_sig_v_ok(k_chain_id, tx.tx_type, tx.sig_v) & tx_auth_ok(tx.pubkey, tx.signing_hash, tx.sig_r, tx.sig_s),
+    ) then {
         throw InvalidBlock(InvalidSignature)
     };
 
     /* effective gas price (EELS: computed in check_transaction) */
     let (eff_gas_price, eff_priority_fee) = eff_gas_price_for(k_header.base_fee, tx.max_fee, tx.max_priority_fee);
     let sender = tx.sender;
+    let input_len = unsigned(tx.input_src.len);
     let nonce_before = k_get_nonce(sender);
     let intrinsic = intrinsic_gas(tx);
-    let blob_fee = tx.blob_count * GAS_PER_BLOB * blob_base_fee(unsigned(k_header.excess_blob_gas));
+    let blob_fee = tx.blob_hashes.count * GAS_PER_BLOB * blob_base_fee(unsigned(k_header.excess_blob_gas));
 
     /* Transaction validity: an invalid tx is REJECTED with no state change at all
        (no nonce bump, no gas charge). The upfront-balance test uses the fee CAPS
        (max_fee_per_gas, max_fee_per_blob_gas), not the effective prices. */
-    let blob_gas = tx.blob_count * GAS_PER_BLOB;
+    let blob_gas = tx.blob_hashes.count * GAS_PER_BLOB;
     let upfront = tx.gas_limit * unsigned(tx.max_fee) + unsigned(tx.value) + blob_gas * unsigned(tx.max_blob_fee);
     let (sender_deleg, _) = k_deleg_target(sender);
 
@@ -208,8 +208,8 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
     let max_blobs : int = if k_fork >= Osaka then { 6 } else { if k_fork >= Prague then { 9 } else { 6 } };
     let blob_ok : bool = if tx_is_blob(tx.tx_type) then {
               (k_fork >= Cancun)
-            & (tx.blob_count >= 1)
-            & (tx.blob_count <= max_blobs)
+            & (tx.blob_hashes.count >= 1)
+            & (tx.blob_hashes.count <= max_blobs)
             & not_bool(tx.is_create)
             & blob_hashes_versioned(tx.blob_hashes)
         } else {
@@ -218,7 +218,11 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
 
     /* EIP-7623 (Prague+): the calldata floor is ALSO a validity bound -- a tx whose
        gas limit cannot cover 21000 + 10*tokens is rejected outright. */
-    let floor_ok : bool = (k_fork < Prague) | (tx.gas_limit >= G_transaction + 10 * calldata_tokens());
+    let floor_ok : bool = (k_fork < Prague) | (tx.gas_limit >= G_transaction + 10 * calldata_tokens(tx.input_src));
+    let chain_id_ok : bool = match tx.tx_type {
+        LegacyTx => true,
+        _ => tx.chain_id == k_chain_id,
+    };
     let valid =   (unsigned(k_get_balance(sender)) >= upfront)
                 & /* covers upfront cost      */
                   ((k_code_key(sender) == KECCAK_EMPTY) | sender_deleg)
@@ -229,11 +233,11 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
                 & /* EIP-7623 floor coverage  */
                   (unsigned(tx.max_fee) >= unsigned(k_header.base_fee))
                 & /* >= base fee */
-                  ((tx.blob_count == 0) |
+                  ((tx.blob_hashes.count == 0) |
                       /* blob fee cap >= price    */
                       (unsigned(tx.max_blob_fee) >= blob_base_fee(unsigned(k_header.excess_blob_gas))))
                 & blob_ok
-                & (not_bool(tx.is_create) | (dlen <= max_initcode_size()))
+                & (not_bool(tx.is_create) | (input_len <= max_initcode_size()))
                 & /* EIP-3860 */
                   ((k_fork < Osaka) | (tx.gas_limit <= 16777216))
                 & /* EIP-7825: gas cap 2^24 */
@@ -245,10 +249,14 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
                 & /* EIP-1559 fee-market txs are London+ */
                   (not_bool(tx_is_set_code(tx.tx_type)) | not_bool(tx.is_create))
                 & /* EIP-7702: type-4 has to != nil */
-                  (not_bool(tx_is_set_code(tx.tx_type)) | (list_len(tx.authorizations) > 0))
+                  (not_bool(tx_is_set_code(tx.tx_type)) | (tx.authorization_count > 0))
                 & /* EIP-7702: non-empty auth list */
                   (not_bool(tx_is_set_code(tx.tx_type)) | (k_fork >= Prague))
                 & /* EIP-7702 is Prague+: a type-4 tx is invalid on an earlier fork */
+                  chain_id_ok
+                & /* typed envelopes are bound to the active chain */
+                  (tx.nonce == unsigned(nonce_before))
+                & /* sender nonce must match exactly */
                   (nonce_before != 0xFFFFFFFFFFFFFFFF)
                 & /* EIP-2681: nonce < 2^64-1 (incrementable) */
                   (tx.gas_limit <= k_header.gas_limit); /* tx gas <= block gas limit */
@@ -259,7 +267,6 @@ function check_transaction_validity(tx : Transaction, dlen : int) -> TxValidity 
         nonce_before = nonce_before,
         intrinsic_gas = intrinsic,
         blob_fee = blob_fee,
-        input_len = dlen,
         gas_price = eff_gas_price,
         priority_fee = eff_priority_fee,
     }
@@ -284,7 +291,7 @@ function enter_transaction_frame(tx : Transaction, intrinsic : gas) -> unit = {
     gas_remaining = to_gas(tx.gas_limit - intrinsic);
     stack_reset();
     mem_clear();
-    returndata_reset_all();
+    returndata_clear();
     memory_size = 0;
     calldata = EMPTY_SLICE;
     frame_code = EMPTY_CODE;
@@ -317,25 +324,23 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
                 is_static = false,
                 depth = 0,
             };
-        frame_code = code_db_resolve(code_db_index_and_store(tx_input_byte_slice(0, txdata_len())));
-        interpret();
+        frame_code = code_db_resolve(code_db_insert(tx.input_src));
+        let deployed_code = interpret();
         if frame_succeeded() then {
-            let dep_len = returndata_pending_size();
+            let dep_len = unsigned(deployed_code.len);
             let deposit = G_codedeposit * dep_len;
-            let code_ok = (dep_len <= max_code_size()) & ((dep_len == 0) | (returndata_pending_byte(0) != 0xef)); /* EIP-3541 */
+            let code_ok = (dep_len <= max_code_size()) & ((dep_len == 0) | (slice_byte(deployed_code, 0) != 0xef)); /* EIP-3541 */
             if code_ok & (gas_remaining >= deposit) then {
                 gas_remaining = to_gas(gas_remaining - deposit);
-                k_deploy_returndata_code(new_addr);
-                returndata_discard_pending()
+                k_deploy_code(new_addr, deployed_code)
             } else {
-                returndata_discard_pending();
                 exc_halt(OutOfGas)
             } /* failed deploy */
         }
     }
 }
 
-function run_call_transaction_frame(tx : Transaction, sender : address, dlen : int) -> unit = {
+function run_call_transaction_frame(tx : Transaction, sender : address) -> unit = {
     /* EELS reads the recipient account during message setup (get_account for its
      * code) for every call-transaction, so it is always a state access -- keep it
      * in the account set (BAL), including a tx sent directly to a precompile. */
@@ -348,28 +353,27 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
         /* tx directly to a precompile: run it as the top-level frame, gas-checked
            FIRST (an OOG precompile must not execute). Failure or OOG is an
            exceptional halt (all gas consumed, value transfer reverted). */
-        let used = precompile_gas_tx_input(an, dlen);
-        let ok : bool = if used <= gas_remaining then {
-                run_precompile_slice(an, tx_input_byte_slice(0, txdata_len()))
+        let used = precompile_gas(an, tx.input_src);
+        let result = if used <= gas_remaining then {
+                run_precompile_slice(an, tx.input_src)
             } else {
-                false
+                precompile_failure()
             };
-        if ok & (used <= gas_remaining) then {
+        if result.success & (used <= gas_remaining) then {
             gas_remaining = to_gas(gas_remaining - used);
-            returndata_adopt_pending();
-            frame_status = Halted(HaltReturn)
+            frame_status = Halted(HaltReturn(result.output))
         } else {
             exc_halt(OutOfGas)
         }
     } else {
-        calldata = tx_input_byte_slice(0, txdata_len());
+        calldata = tx.input_src;
         message =
             struct {
                 caller = sender,
                 address = tx.recipient,
                 code_address = tx.recipient,
                 value = tx.value,
-                data_len = dlen,
+                data_len = unsigned(tx.input_src.len),
                 is_static = false,
                 depth = 0,
             };
@@ -385,7 +389,7 @@ function run_call_transaction_frame(tx : Transaction, sender : address, dlen : i
             ()
         };
         frame_code = executable_code(tx.recipient, tx_deleg, tx_dtgt);
-        interpret()
+        let _ = interpret()
     }
 }
 
@@ -395,7 +399,7 @@ function run_transaction_frame(tx : Transaction, v : TxValidity) -> TxFrameResul
     if tx.is_create then {
         run_create_transaction_frame(tx, v.sender, v.nonce_before)
     } else {
-        run_call_transaction_frame(tx, v.sender, v.input_len)
+        run_call_transaction_frame(tx, v.sender)
     };
 
     let success = frame_succeeded();
@@ -418,7 +422,7 @@ function settle_transaction(tx : Transaction, v : TxValidity, fr : TxFrameResult
 
     /* EIP-7623 (Prague+): a tx pays at least the calldata floor 21000 + 10*tokens */
     let floor : int = if k_fork >= Prague then {
-            G_transaction + 10 * calldata_tokens()
+            G_transaction + 10 * calldata_tokens(tx.input_src)
         } else {
             0
         };
@@ -427,7 +431,11 @@ function settle_transaction(tx : Transaction, v : TxValidity, fr : TxFrameResult
 
     /* EIP-7778: the block charges the UNREFUNDED gas (floored), not the receipt's
        refunded gas -- this is what bounds the block gas limit and the header. */
-    let block_gas = if gas_used0 < floor then { floor } else { gas_used0 };
+    let block_gas = if k_fork >= Amsterdam then {
+            if gas_used0 < floor then { floor } else { gas_used0 }
+        } else {
+            gas_used
+        };
 
     /* return unused gas to sender; pay coinbase the priority fee */
     k_add_balance(v.sender, word_of_int(gas_left * unsigned(v.gas_price)));
@@ -447,13 +455,8 @@ function settle_transaction(tx : Transaction, v : TxValidity, fr : TxFrameResult
 
 function process_transaction(tx : Transaction) -> Receipt = {
     k_tx_reset();
-    returndata_reset_all();
 
-    /* Stage this tx's input into the owned C buffer in one op (no Sail byte loop
-       on the build backend); gas, validity, calldata and initcode all read it
-       from there during execution. */
-    let dlen = txdata_bind(tx.input_src);
-    let validity = check_transaction_validity(tx, dlen);
+    let validity = check_transaction_validity(tx);
     if not_bool(validity.valid) then {
         return invalid_receipt()
     };

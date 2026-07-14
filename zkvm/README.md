@@ -12,7 +12,7 @@ semantics wired up.
 ## Result (validated)
 
 ```
-$ python3 ../harness/run.py --guest --spike --fork Shanghai --quiet \
+$ python3 ../harness/run.py --spike --fork Shanghai --quiet \
     ../harness/fixtures/eels/shanghai_push0/state_tests/for_shanghai/shanghai/eip3855_push0/push0/push0_contracts.json
 === 2/2 passed (spike guest, byte-exact) ===
 ```
@@ -49,7 +49,7 @@ successful_validation=1          # public output byte 32
 A failed validation is a NORMAL result (`successful_validation=0`, exit 0).
 Input vectors are raw `statelessInputBytes` — from EEST-generated fixtures or
 built from any state test by `harness/ssz_builder.py` (in-process EELS t8n);
-`run.py --guest --spike` supplies them per fixture. The stateless
+`run.py --spike` supplies them per fixture. The stateless
 validator itself is `../sail/main.sail` over the shared decoders/trie/HTR in
 `../sail/host/` and `../sail/lib/`.
 
@@ -160,7 +160,7 @@ zkvm/
   accel-host/           Rust crypto cdylib (the ONE accelerator implementation)
   accel-device/         spike MMIO device dispatching 1:1 into accel-host
   native-runner/        host builds: zkvm_native exe + the ctypes libs
-                        (libevmsail_guest / libevmsail_runner) over test_utils.c
+                        (libevmsail_guest) over test_utils.c
   runtime/
     link.ld             vendor linker script (null trap + stack guard regions)
     start.S             machine-mode crt0 + trap vector (platform glue; uses Zicsr)
@@ -181,7 +181,7 @@ Requires `sail` (opam), `riscv64-unknown-elf-gcc`, and `spike` on `PATH`
 (`eval $(opam env --root=$HOME/.opam --switch=sail)` for sail).
 
 ```
-python3 ../harness/run.py --guest --spike <state-test.json> --fork F   # the gate
+python3 ../harness/run.py --spike <state-test.json> --fork F   # the gate
 VEC=<input.ssz> ./build.sh run     # one vector: build the guest, run on spike
 VEC=<input.ssz> ./build.sh guest   # build only (produces build/zkvm_guest.elf)
 ./build.sh clean
@@ -203,8 +203,8 @@ VEC=<input.ssz> ./build.sh guest   # build only (produces build/zkvm_guest.elf)
   crypto runs as guest instructions. (The portable-C reference `zkvm_accelerators.c` has
   been removed.) Sail calls explicit C adapters instead of a catch-all shim:
   `../ffi/host_crypto.c` for direct hash pointer/length calls,
-  `../ffi/precompiles.c` for staged EVM precompile execution,
-  and `../ffi/returndata.c` for output ownership. keccak/sha256 are exercised + asserted on-guest by
+  `../ffi/precompiles.c` for EVM precompile execution,
+  and `../ffi/output.c` for output ownership. keccak/sha256 are exercised + asserted on-guest by
   `keccak_selfcheck`/`sha256_selfcheck`.
 * `start.S`/trap-vector use Zicsr (machine-mode CSRs) — these are **platform/crt0 glue**
   (a vendor responsibility under the memory-layout standard), not the proven STF, which

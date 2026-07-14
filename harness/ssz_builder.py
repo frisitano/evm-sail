@@ -1,30 +1,13 @@
 #!/usr/bin/env python3
-"""Build a serialized SSZ SszStatelessInput from an EEST state-test case, so the
-runner (EVM_ENTRY=runner) AND the stateless guest consume the SAME input
-structure produced by ONE harness.
+"""Build a valid stateless block input/output pair from an EEST state-test case.
 
 Runs under the execution-specs venv (it reuses that project's stateless SSZ types
-+ serializer, so the bytes match the model's io.sail decoder exactly). run.py
+and serializer, so the bytes match the model's stateless-input decoder exactly). run.py
 (which lacks these deps) drives this over --serve: one case JSON per stdin line,
 one JSON response per stdout line ({"input": hex[, "expected": hex]} or
 {"err": msg}).
 
-Two build modes, selected by the request's "mode":
-
-RUNNER (default) -- a state test as a degenerate stateless input:
-  - execution_witness.state  = the full pre-state MPT nodes (prestate_mpt.build)
-  - execution_witness.codes  = the account bytecode blobs
-  - execution_witness.headers = [one DUMMY parent header] whose state_root is the
-    pre-state root -- the clean way to feed parent_state_root() the anchor.
-  - payload = a single-tx block (tx signed from the fixture secretKey; the SSZ
-    path derives the sender from the recovered public key).
-  - chain_config.active_fork = the test's fork, so the runner selects the right
-    execution rules (k_fork_from_ssz). The serializer does not enforce Amsterdam.
-  The header carries NO post-execution commitments (gas_used, receipts root,
-  state root, ...), so this input can NOT satisfy the guest's full-block
-  validator -- the runner ignores those fields and roots the post-state itself.
-
-GUEST (mode="guest", Amsterdam only) -- a fully VALID single-tx block, built by
+A fully VALID single-tx block is built by
 executing the case through the in-process EELS t8n (blockchain mode): t8n runs
 the reference STF, fills every header commitment from the results, builds the
 execution witness, serializes the SszStatelessInput, AND runs the reference
@@ -44,7 +27,7 @@ things make validity achievable from a bare state test:
 The dummy ancestor chain is hash-chained; the parent anchors the pre-state
 root; t8n gets the same chain via env blockHeaders/blockHashes.
 """
-import argparse, io, logging, sys, json, dataclasses
+import argparse, io, logging, sys, json
 sys.path.insert(0, "/Users/f/dev/ethereum/execution-specs/src")
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -55,8 +38,6 @@ from ethereum_types.numeric import U256, Uint, U64
 from ethereum_types.bytes import Bytes, Bytes8, Bytes32
 from ethereum_spec_tools.forks import Hardfork
 from ethereum_spec_tools.evm_tools.loaders.fork_loader import ForkLoad
-from ethereum_spec_tools.evm_tools.loaders.transaction_loader import TransactionLoad
-from ethereum_spec_tools.evm_tools.utils import secp256k1_sign
 from ethereum_spec_tools.evm_tools.t8n import T8N, ForkCache
 import prestate_mpt  # reuse build() for the pre-state MPT
 
@@ -70,7 +51,6 @@ def _fork(name):
 Z32 = b"\x00" * 32
 EMPTY_TRIE = keccak256(rlp.encode(b""))
 
-def _hx(s): return bytes.fromhex(s[2:]) if s and s.startswith("0x") else (bytes.fromhex(s) if s else b"")
 def _hi(s): return int(s, 16) if isinstance(s, str) else int(s or 0)
 
 def _header(fk, **ov):
@@ -86,54 +66,7 @@ def _header(fk, **ov):
     d.update(ov)
     return fk.Header(**d)
 
-def _sign(fk, tx, idx, chain_id):
-    """Sign the indexed tx with its secretKey; return the block-encoded form."""
-    j = {"nonce": tx["nonce"], "gasLimit": tx["gasLimit"][idx["gas"]], "to": tx.get("to") or "",
-         "value": tx["value"][idx["value"]], "data": tx["data"][idx["data"]],
-         "secretKey": tx["secretKey"], "v": "0x0", "r": "0x0", "s": "0x0", "chainId": hex(chain_id)}
-    if "gasPrice" in tx:
-        j["gasPrice"] = tx["gasPrice"]
-    else:
-        j["maxFeePerGas"] = tx["maxFeePerGas"]; j["maxPriorityFeePerGas"] = tx["maxPriorityFeePerGas"]
-    loaded = TransactionLoad(j, fk).read()
-    sh = fk.signing_hash_155(loaded, U256(chain_id))
-    r, s, y = secp256k1_sign(sh, _hi(tx["secretKey"]))
-    j["v"] = hex(int(y) + chain_id * 2 + 35); j["r"] = hex(int(r)); j["s"] = hex(int(s))
-    return fk._module("transactions").encode_transaction(TransactionLoad(j, fk).read())
-
-def build_ssz(case):
-    """case: {env, pre, tx, fork, idx} -> serialized SszStatelessInput bytes."""
-    env, pre, tx = case["env"], case["pre"], case["tx"]
-    fork_name, idx = case["fork"], case["idx"]
-    chain_id = _hi(env.get("currentChainId", "0x1"))
-    fk = _fork("amsterdam")  # SSZ types + fork-stable signing/serialization
-    st = fk._module("stateless")
-
-    root_hex, nodes = prestate_mpt.build(pre)
-    pre_root = bytes.fromhex(root_hex[2:])
-    codes = [c for c in (_hx(a.get("code")) for a in pre.values()) if c]
-    tx_enc = _sign(fk, tx, idx, chain_id)
-
-    dummy_parent = rlp.encode(_header(fk, state_root=Bytes32(pre_root)))
-    witness = st.ExecutionWitness(state=tuple(nodes.values()), codes=tuple(codes), headers=(dummy_parent,))
-    randao = env.get("currentRandom", env.get("currentDifficulty", "0x0"))
-    bh = _header(fk, number=Uint(_hi(env.get("currentNumber", "0x0"))),
-                 timestamp=U256(_hi(env.get("currentTimestamp", "0x0"))),
-                 gas_limit=Uint(_hi(env.get("currentGasLimit", "0x0"))),
-                 coinbase=Bytes(_hx(env["currentCoinbase"])),
-                 base_fee_per_gas=Uint(_hi(env.get("currentBaseFee", "0x0"))),
-                 prev_randao=Bytes32(_hx(randao).rjust(32, b"\x00")))
-    block = fk.Block(header=bh, transactions=(tx_enc,), ommers=(), withdrawals=())
-    reqs = st.ExecutionRequests(deposits=(), withdrawals=(), consolidations=())
-    si = fk.build_stateless_input(block, execution_witness=witness, execution_requests=reqs,
-                                  block_access_list=[], chain_id=U64(chain_id))
-    # build_stateless_input hardcodes active_fork=Amsterdam; retag with the test's
-    # fork so the runner selects the right execution rules (k_fork_from_ssz).
-    new_active = dataclasses.replace(si.chain_config.active_fork, fork=st.ProtocolFork(fork_name))
-    si = dataclasses.replace(si, chain_config=dataclasses.replace(si.chain_config, active_fork=new_active))
-    return bytes(fk.serialize_stateless_input(si))
-
-# ------------------------- guest mode (EELS t8n) ---------------------------
+# ---------------------------- EELS t8n ------------------------------------
 
 _T8N_CACHE = None
 
@@ -329,9 +262,7 @@ def build_guest(case):
 
 
 def _serve():
-    """One case JSON per stdin line -> one JSON response per stdout line:
-    {"input": hex} (runner mode), {"input": hex, "expected": hex} (guest mode),
-    or {"err": msg}. A per-case failure never kills the server."""
+    """One case JSON per stdin line -> {input, expected} or {err}."""
     logging.getLogger("T8N").setLevel(logging.ERROR)  # rejected-tx noise
     for line in sys.stdin:
         line = line.strip()
@@ -339,11 +270,8 @@ def _serve():
             continue
         try:
             case = json.loads(line)
-            if case.get("mode") == "guest":
-                inp, exp = build_guest(case)
-                resp = {"input": inp.hex(), "expected": exp.hex()}
-            else:
-                resp = {"input": build_ssz(case).hex()}
+            inp, exp = build_guest(case)
+            resp = {"input": inp.hex(), "expected": exp.hex()}
         except Exception as e:
             resp = {"err": f"{type(e).__name__}: {e}"}
         sys.stdout.write(json.dumps(resp) + "\n")
@@ -354,8 +282,5 @@ if __name__ == "__main__":
         _serve()
     else:
         case = json.load(open(sys.argv[1]))
-        if case.get("mode") == "guest":
-            inp, exp = build_guest(case)
-            print(json.dumps({"input": inp.hex(), "expected": exp.hex()}))
-        else:
-            sys.stdout.write(build_ssz(case).hex() + "\n")
+        inp, exp = build_guest(case)
+        print(json.dumps({"input": inp.hex(), "expected": exp.hex()}))

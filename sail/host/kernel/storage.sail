@@ -26,15 +26,11 @@ function k_slot_is_warm(a : address, s : word) -> bool = {
 
 /* k_sload: resolve the slot to its live StorageEntry -- curr is the value
  * SLOAD pushes; orig is the EIP-2200 tx-start value the SSTORE gas policy
- * compares against. One resolution serves both views: a tx entry carries the
- * pair; a block-layer hit or a pre-state walk yields curr == orig = the
- * resolved value (nothing this tx has changed it yet), which is ALWAYS cached
- * as a tx read entry, so after any k_sload the slot is live in the tx layer
- * -- the invariant k_sstore's update relies on. storage_tx_cache also marks
- * the EIP-7928 read; the serializer emits distinct read slots not present in
- * storage_changes, so re-reads and reads of written slots add nothing to the
- * BAL. The merge propagates reads to the block layer, so a later tx skips
- * the witness walk. The host owns frame undo records and clear epochs.
+ * compares against. The guarded SLOAD/SSTORE opcode paths are the only callers,
+ * so reaching this function is the semantic EIP-7928 storage access boundary.
+ * Reads are recorded independently of the cache layer that supplies the value
+ * and survive frame rollback; the BAL encoder removes slots that also have a
+ * storage change.
  *
  * stateless_storage is the base storage primitive (declared above and defined
  * in lib/state_trie.sail as an authenticated MPT
@@ -42,30 +38,31 @@ function k_slot_is_warm(a : address, s : word) -> bool = {
  * trie). Everything above it -- the overlay, the read-through, the journal
  * -- is common. */
 function k_sload(a : address, s : word) -> StorageValue = {
+    bal_storage_read(a, s);
     let key = storage_key(a, s);
     match storage_tx_get(key) {
         Some(e) => return e,
         None() => (),
     };
     let acc = k_aload(a);
-    let v : word = match storage_block_get(key) {
-        Some(e) => e.curr,
-        None() => if acc.storage_cleared then {
+    match storage_block_get(key) {
+        Some(e) => return struct { curr = e.curr, orig = e.curr },
+        None() => (),
+    };
+    let v = if acc.storage_cleared then {
             ZERO_WORD
         } else {
             stateless_storage(acc.info.storage_root, s)
-        },
-    };
-    storage_tx_cache(key, v);
+        };
+    storage_block_cache(key, v);
     struct { curr = v, orig = v }
 }
 
-/* SSTORE: update the live tx row. The host records its prior current value for
- * frame rollback. The opcode's preceding k_sload guarantees the row exists and
- * that orig remains frozen at the tx-start value. NO account leaf refresh: the
- * storage root is derived by compute_state_root from the cumulative block map. */
-function k_sstore(a : address, s : word, v : word) -> unit =
-    storage_tx_update(storage_key(a, s), v)
+/* SSTORE: create or update the live tx row. The preceding k_sload supplies the
+ * transaction-original value; the host keeps clear generations and frame undo
+ * history private. */
+function k_sstore(a : address, s : word, v : StorageValue) -> unit =
+    storage_tx_update(struct { key = storage_key(a, s), value = v })
 
 /* EIP-1153 transient storage (TLOAD/TSTORE): per-tx scratch, discarded at tx end,
  * not part of the state trie. TSTORE journals the prior value for frame revert. */

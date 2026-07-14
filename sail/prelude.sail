@@ -5,8 +5,8 @@
 /* 256-bit words (YP section 9.1); this file defines that word type and     */
 /* gives every word operation its REAL two's-complement / unsigned          */
 /* semantics over bits(256). Only KECCAK-256 and the precompile crypto      */
-/* (host/io.sail) are opaque primitives; everything arithmetic or bitwise   */
-/* is fully defined here.                                                   */
+/* at the host boundary are opaque primitives; everything else is fully     */
+/* defined here.                                                            */
 /*                                                                          */
 /* Operator grounding: int->bits is get_slice_int; integer div/mod are the  */
 /* Euclidean ediv/emod from <smt.sail> with the truncating/flooring         */
@@ -63,7 +63,9 @@ function gas_sub(a : gas, b : gas) -> gas = to_gas(a - b)
  * clamp in to_i64 is a typed range guard, never semantics. */
 type i64 = range(- 9223372036854775808, 9223372036854775807)
 function to_i64(x : int) -> i64 =
-    if x < - 9223372036854775808 then { - 9223372036854775808 } else {
+    if x < -9223372036854775808 then {
+        -9223372036854775808
+    } else {
         if x <= 9223372036854775807 then { x } else { 9223372036854775807 }
     }
 
@@ -126,58 +128,71 @@ function word_slt(a : word, b : word) -> bool = {
 /* Sail lists have no builtin length/append/index; these are used throughout
  * for byte buffers (calldata/returndata/memory/code) and log lists. */
 
-function list_len forall ('a : Type). (xs : list('a)) -> int =
-    match xs {
-        [||] => 0,
-        _ :: t => 1 + list_len(t),
-    }
+function list_len forall ('a : Type). (xs : list('a)) -> int = {
+    var rest : list('a) = xs;
+    var length : int = 0;
+    var more : bool = true;
+    while more do {
+        match rest {
+            [||] => more = false,
+            _ :: tail => {
+                length = length + 1;
+                rest = tail
+            },
+        }
+    };
+    length
+}
+
+function rev_onto forall ('a : Type). (xs : list('a), acc : list('a)) -> list('a) = {
+    var rest : list('a) = xs;
+    var result : list('a) = acc;
+    var more : bool = true;
+    while more do {
+        match rest {
+            [||] => more = false,
+            head :: tail => {
+                result = head :: result;
+                rest = tail
+            },
+        }
+    };
+    result
+}
+function list_reverse forall ('a : Type). (xs : list('a)) -> list('a) = rev_onto(xs, [||])
 
 function list_append forall ('a : Type). (xs : list('a), ys : list('a)) -> list('a) =
-    match xs {
-        [||] => ys,
-        h :: t => h :: list_append(t, ys),
-    }
+    rev_onto(list_reverse(xs), ys)
 
 /* list concatenation operator (sail-riscv operator-overload style; Sail's
  * built-in @ is bitvector concat and is not overloadable) */
 infixl 6 ++
 overload operator ++ = {list_append}
 
-function rev_onto forall ('a : Type). (xs : list('a), acc : list('a)) -> list('a) =
-    match xs {
-        [||] => acc,
-        h :: t => rev_onto(t, h :: acc),
-    }
-function list_reverse forall ('a : Type). (xs : list('a)) -> list('a) = rev_onto(xs, [||])
-
-/* i-th element (0-based) or `dflt` if out of range. */
-function list_nth forall ('a : Type). (xs : list('a), i : int, dflt : 'a) -> 'a =
-    match xs {
-        [||] => dflt,
-        h :: t => if i <= 0 then {
-            h
-        } else {
-            list_nth(t, i - 1, dflt)
-        },
-    }
-
-/* set the i-th element (0-based); out-of-range leaves the list unchanged. */
-function list_set forall ('a : Type). (xs : list('a), i : int, v : 'a) -> list('a) =
-    match xs {
-        [||] => [||],
-        h :: t => if i <= 0 then {
-            v :: t
-        } else {
-            h :: list_set(t, i - 1, v)
-        },
-    }
-
-/* byte from a buffer at index i, zero outside [0, len). */
+/* A linked-list fallback for materialized byte fragments. Random access is
+ * deliberately not exposed as a generic list operation: source-backed input,
+ * code, calldata, and memory use O(1) ByteSlice reads instead. */
 function bytes_get(data : list(byte), i : int) -> byte =
     if i < 0 then {
         0x00
     } else {
-        list_nth(data, i, 0x00)
+        var rest : list(byte) = data;
+        var remaining : int = i;
+        var result : byte = 0x00;
+        var more : bool = true;
+        while more do {
+            match rest {
+                [||] => more = false,
+                head :: tail => if remaining == 0 then {
+                    result = head;
+                    more = false
+                } else {
+                    remaining = remaining - 1;
+                    rest = tail
+                },
+            }
+        };
+        result
     }
 
 /* zero-padded slice data[off .. off+len). */

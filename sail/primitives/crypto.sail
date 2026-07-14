@@ -6,7 +6,7 @@
 /* merkleization) as pure functions of Bytes segment lists -- plus the      */
 /* well-known digests of fixed inputs. Loaded before the account types:     */
 /* EMPTY_ACCOUNT and the kernel's emptiness checks read the digests long    */
-/* before lib/mpt.sail loads.                                               */
+/* before lib/mpt/primitives.sail loads.                                    */
 /* ======================================================================== */
 
 /* keccak256 of the empty string: the codeHash of every codeless account */
@@ -23,7 +23,7 @@ let EMPTY_TRIE_ROOT : hash = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc00
  * sha256 are the axiomatic hash core; keccak_rlp_payload refines
  * keccak256(domain ++ rlp_list_prefix(len) ++ payload). All shared consensus
  * hashing (lib/consensus_hash.sail) is written against these three. The
- * Witness/Memory/TxInput/Code source of a ByteSlice denotes an abstract
+ * StatelessInput/Memory/Code source of a ByteSlice denotes an abstract
  * byte sequence: keccak256(s : ByteSlice) = keccak256(read_byte_slice(s)); the
  * prefixed SHA-256 digest = sha256(type_byte :: bytes). ---- */
 
@@ -64,32 +64,16 @@ function keccak256_address(a : address) -> bits(256) = keccak256(address_to_byte
 function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) =
     sha256([|BytesList(word_to_bytes32(a)), BytesList(word_to_bytes32(b))|])
 
-/* ---- Signature core: secp256k1 verify / recover (k256 accelerator axioms,
- * ffi/precompiles.c) and the curve-order constants signature validity rules
- * bound r/s against. ---- */
+/* ---- Signature core: the host/accelerators.sail k256 axioms plus the
+ * curve-order constants signature validity rules bound r/s against. ---- */
 
 /* n and n/2 of the secp256k1 group order (EIP-2 low-s malleability bound) */
 let SECP_N_FULL : bits(256) = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
 let SECP_N_HALF : bits(256) = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0
 
-/* verify signature (r, s) over hash h against the uncompressed public key
- * (x, y) -- cheaper than recovery, which is why stateless inputs witness the
- * key (EELS recover_sender_from_public_key allows verifying implementations) */
-val secp256k1_verify = impure { c: "precompile_secp256k1_verify_hash_sig_pub" } : (
-        bits(256),
-        word,
-        word,
-        bits(256),
-        bits(256),
-    ) -> bool
-
-val precompile_ecrecover_hash_sig = impure { c: "precompile_ecrecover_hash_sig" } : (bits(256), bits(64), word, word) -> bits(
-        168,
-    )
-
 /* recover the signer address from (h, y_parity, r, s); the leading bit flags
  * recovery success (EIP-7702 authority recovery) */
 function ecrecover_addr(h : bits(256), yparity : int, r : word, s : word) -> (bool, address) = {
-    let recovered = precompile_ecrecover_hash_sig(h, get_slice_int(64, yparity, 0), r, s);
+    let recovered = host_ecrecover(h, get_slice_int(64, yparity, 0), r, s);
     (recovered[160] == bitone, recovered[159 .. 0])
 }

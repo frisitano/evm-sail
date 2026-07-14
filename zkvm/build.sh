@@ -10,7 +10,7 @@
 #
 # VEC = a raw schema-prefixed SszStatelessInput file, baked into the ELF as
 # the private input. The canonical driver is harness/run.py
-# --guest --spike (it supplies VEC per fixture and REBAKE_ONLY after the
+# --spike (it supplies VEC per fixture and REBAKE_ONLY after the
 # first build).
 #
 # Requires: sail (opam), riscv64-unknown-elf-gcc, spike.
@@ -20,7 +20,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RT="$HERE/runtime"
 # Override for concurrency: two gate runs sharing one build dir race on the
-# baked input vector + relinked ELF (run.py --guest --spike isolates itself).
+# baked input vector + relinked ELF (run.py --spike isolates itself).
 BUILD="${ZKVM_BUILD:-$HERE/build}"
 ROOT="$(cd "$HERE/.." && pwd)"
 
@@ -31,6 +31,12 @@ HOSTCC="${HOSTCC:-cc}"
 HOSTCXX="${HOSTCXX:-c++}"
 SPIKE_INC="${SPIKE_INC:-/opt/homebrew/Cellar/riscv-isa-sim/main/include}"
 ACCEL_SO="$BUILD/accel_device.so"
+EVM_PROFILE="${EVM_PROFILE:-off}"
+case "$EVM_PROFILE" in
+  off|on) ;;
+  *) echo "error: EVM_PROFILE must be off or on" >&2; exit 2 ;;
+esac
+PROFILE_OBJ=""
 
 # Standard target: RV64IM + Zicclsm, LP64 soft-float, machine mode, freestanding.
 ARCH=(-march=rv64im_zicclsm -mabi=lp64 -mcmodel=medany)
@@ -77,11 +83,11 @@ cmd_guest() {
   build_runtime
   # 0. Embed the schema-prefixed SSZ test vector as the preloaded private input
   #    (zkvm_input_bytes). A real zkVM host supplies these bytes instead. The
-  #    canonical driver is harness/run.py --guest --spike, which always
+  #    canonical driver is harness/run.py --spike, which always
   #    passes VEC (a raw statelessInputBytes file).
   local vec="${VEC:-}"
   if [ -z "$vec" ]; then
-    echo "error: set VEC=<raw SszStatelessInput file> (see run.py --guest --spike)" >&2
+    echo "error: set VEC=<raw SszStatelessInput file> (see run.py --spike)" >&2
     exit 2
   fi
   python3 - "$vec" "$BUILD/zkvm_input_data.c" <<'PY'
@@ -98,7 +104,9 @@ PY
   "$GCC" "${CFLAGS[@]}" -Wno-unused -c "$BUILD/zkvm_input_data.c" -o "$BUILD/zkvm_input_data.o"
   # REBAKE_ONLY=1: reuse every compiled object and only rebake the input vector
   # and relink -- the per-vector fast path for the EEST guest smoke gate.
-  if [ -n "${REBAKE_ONLY:-}" ] && [ -f "$BUILD/zkvm_block.o" ]; then
+  if [ -n "${REBAKE_ONLY:-}" ] && [ -f "$BUILD/zkvm_block.o" ] && \
+     [ -f "$BUILD/evm_profile" ] && [ "$(<"$BUILD/evm_profile")" = "$EVM_PROFILE" ]; then
+    if [ "$EVM_PROFILE" = on ]; then PROFILE_OBJ="$BUILD/cycle_scopes.o"; fi
     link_guest
     return
   fi
@@ -111,11 +119,11 @@ PY
         --c-include zkvm_input.h \
         "$GUEST" -o "$BUILD/zkvm_block"
   else
-    local guest_entry="${GUEST_ENTRY:-guest}"
     ( cd "$ROOT" && "$SAIL" -c --c-no-main --c-no-rts --c-preserve main \
         --c-include zkvm_input.h \
         sail/evm.sail_project evm \
-        --variable EVM_ENTRY="$guest_entry" \
+        --variable EVM_PROFILE="$EVM_PROFILE" \
+        --variable EVM_DEBUG=off \
         -o "$BUILD/zkvm_block" )
   fi
   # 2. Compile the generated model (stock Sail GMP-ABI, backed by mini-gmp).
@@ -135,6 +143,9 @@ PY
   "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
       -c "$ROOT/ffi/code_glue.c" -o "$BUILD/code_glue.o"
+  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+      -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+      -c "$ROOT/ffi/byte_slice_glue.c" -o "$BUILD/byte_slice_glue.o"
   # 3. GMP-free fixed-width Sail runtime (sailfix) replacing stock sail.c +
   #    mini-gmp: sail_int = 512-bit sign-magnitude, lbits = 256-bit inline.
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
@@ -163,9 +174,9 @@ PY
       -o "$ACCEL_SO" "$ROOT/zkvm/accel-device/accel_device.cc" \
       -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB"
   # 3c. C host backends: memory/generic byte slices, transient storage,
-  #     returndata, operand stack, code/JUMPDEST arenas, and witness/account
+  #     output arena, operand stack, code/JUMPDEST arenas, and witness/account
   #     databases.
-  for hc in memory transient_storage state_db stack code_db kernel_state trie_node_db returndata; do
+  for hc in memory scratch transient_storage state_db stack code_db kernel_state trie_node_db output; do
     "$GCC" "${CFLAGS[@]}" -I"$lib" \
         -Wno-unused -c "$ROOT/ffi/$hc.c" -o "$BUILD/$hc.o"
   done
@@ -179,6 +190,12 @@ PY
   # (platform glue, like start.S; the proven model stays rv64im_zicclsm).
   "$GCC" "${CFLAGS[@]}" -march=rv64im_zicsr_zicclsm -I"$lib" -Wall -Wextra \
       -c "$RT/harness.c" -o "$BUILD/harness.o"
+  if [ "$EVM_PROFILE" = on ]; then
+    "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra \
+        -c "$RT/cycle_scopes.c" -o "$BUILD/cycle_scopes.o"
+    PROFILE_OBJ="$BUILD/cycle_scopes.o"
+  fi
+  printf '%s\n' "$EVM_PROFILE" > "$BUILD/evm_profile"
   # 5. Link the static guest ELF with the vendor linker script.
   link_guest
 }
@@ -189,9 +206,10 @@ link_guest() {
       "$BUILD/zkvm_input_data.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
       "$BUILD/host_crypto.o" "$BUILD/precompiles.o" "$BUILD/accel_guest.o" \
-      "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" \
-      "$BUILD/memory.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
-      "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/returndata.o" \
+      "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" \
+      "$BUILD/memory.o" "$BUILD/scratch.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
+      "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/output.o" \
+      ${PROFILE_OBJ:+"$PROFILE_OBJ"} \
       "$BUILD/zkvm_block.o" \
       -o "$BUILD/zkvm_guest.elf"
   echo "built $BUILD/zkvm_guest.elf"
@@ -213,7 +231,7 @@ cmd_clean() { rm -rf "$BUILD"; echo "cleaned"; }
 
 # The one-time platform bring-up probes (derisk: HTIF smoke; traptest:
 # guard-region enforcement) were deleted once the real guest gate
-# (run.py --guest --spike) covered the platform end-to-end; recover them
+# (run.py --spike) covered the platform end-to-end; recover them
 # from git history if the platform glue (start.S / link.ld / htif.c) changes.
 case "${1:-run}" in
   guest)    cmd_guest ;;

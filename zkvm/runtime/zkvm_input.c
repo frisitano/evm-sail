@@ -30,7 +30,7 @@ uint64_t ssz_src_byte(uint64_t idx)
     return (i < zkvm_input_bytes_len) ? (uint64_t)zkvm_input_bytes[i] : 0;
 }
 
-const uint8_t *evmsail_ssz_ptr(uint64_t off, uint64_t len)
+const uint8_t *evmsail_stateless_input_ptr(uint64_t off, uint64_t len)
 {
     uint64_t total = (uint64_t)zkvm_input_bytes_len;
     if (off > total || len > total - off) return NULL;

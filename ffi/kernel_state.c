@@ -230,14 +230,13 @@ unit log_add_data_bulk(const uint8_t *p, uint64_t n) {
   }
   return UNIT;
 }
-/* drop the most recent record and truncate its topics/data back off the ends */
-unit log_drop_last(const unit u) {
-  (void)u;
-  if (logs_n) {
-    log_rec *r = &logs[logs_n - 1];
-    topics_n = r->topic_off;
-    data_n = r->data_off;
-    logs_n--;
+uint64_t logs_checkpoint(const unit u) { (void)u; return logs_n; }
+unit logs_revert(uint64_t checkpoint) {
+  if (checkpoint < logs_n) {
+    log_rec *first_removed = &logs[checkpoint];
+    topics_n = first_removed->topic_off;
+    data_n = first_removed->data_off;
+    logs_n = (uint32_t)checkpoint;
   }
   return UNIT;
 }
@@ -269,7 +268,7 @@ const uint8_t *log_data_region(uint64_t off, uint64_t len) {
  * ffi/journal_glue.c mirrors this enum (GJT_*) for its (en/de)coding. */
 enum {
   JT_EMPTY = 0, JT_TRAN = 1, JT_WARMA = 2,
-  JT_WARMS = 3, JT_LOG = 4, JT_REFUND = 5
+  JT_WARMS = 3, JT_REFUND = 4
 };
 
 typedef struct {
@@ -321,7 +320,6 @@ unit journal_push_warms(const lbits a, const lbits slot) {
   }
   return UNIT;
 }
-unit journal_push_log(const unit u) { (void)u; jrn_push(JT_LOG); return UNIT; }
 unit journal_push_refund(uint64_t old) {
   jentry *e = jrn_push(JT_REFUND);
   if (e) e->n64 = old;

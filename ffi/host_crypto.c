@@ -2,15 +2,16 @@
 #include "lbits_convert.h"
 #include "code_db.h"
 #include "memory.h"
-#include "returndata.h"
+#include "output.h"
 #include "kernel_state.h"
+#include "scratch.h"
 #include "zkvm_accelerators.h"
 
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-extern const uint8_t *evmsail_ssz_ptr(uint64_t off, uint64_t len);
+extern const uint8_t *evmsail_stateless_input_ptr(uint64_t off, uint64_t len);
 
 static const uint8_t HOST_empty_source = 0;
 
@@ -133,13 +134,6 @@ static void rlp_put_raw(uint8_t *buf, size_t *n, const uint8_t *p, size_t len) {
   *n += len;
 }
 
-/* 0xa0 ++ 32-byte word (rlp_word). */
-static void rlp_put_word32(uint8_t *buf, size_t *n, const lbits w) {
-  buf[(*n)++] = 0xa0;
-  lbits_to_be_bytes(buf + *n, 32, w);
-  *n += 32;
-}
-
 /* 0x94 ++ 20-byte address (rlp_addr). */
 static void rlp_put_addr(uint8_t *buf, size_t *n, const lbits a) {
   buf[(*n)++] = 0x94;
@@ -164,26 +158,6 @@ static void rlp_put_word_min(uint8_t *buf, size_t *n, const lbits w) {
   }
 }
 
-/* RLP-encode a byte string (rlp_bytes). */
-static void rlp_put_str(uint8_t *buf, size_t *n, const uint8_t *p, size_t len) {
-  if (len == 1 && p[0] < 0x80) {
-    buf[(*n)++] = p[0];
-    return;
-  }
-  if (len <= 55) {
-    buf[(*n)++] = (uint8_t)(0x80 + len);
-  } else {
-    uint8_t lb[8];
-    int m = 0;
-    for (size_t x = len; x != 0; x >>= 8) lb[m++] = (uint8_t)(x & 0xff);
-    buf[(*n)++] = (uint8_t)(0xb7 + m);
-    for (int i = 0; i < m; i++) buf[(*n)++] = lb[m - 1 - i];
-  }
-  rlp_put_raw(buf, n, p, len);
-}
-
-
-
 /* EIP-7702 authorization signing hash: keccak(0x05 ++ rlp([chain_id, address,
  * nonce])). The three signed fields are re-encoded from decoded values. */
 void host_auth_signing_hash(lbits *rop, const lbits chain_id, const lbits address,
@@ -207,242 +181,33 @@ void host_auth_signing_hash(lbits *rop, const lbits chain_id, const lbits addres
   host_keccak256_lbits(rop, buf, bn);
 }
 
-/* ---- trie node-assembly channel (build-side node encode + child_ref) ------
- * Accumulate an MPT node's already-encoded child-ref fields as fixed-width
- * refs, frame them as an RLP list, and return the node's child_ref: the node
- * bytes inline when < 32 bytes, else 0xa0 ++ keccak(node). A ref crosses the
- * FFI as (kind, data, len): kind 0 = empty (RLP 0x80), kind 1 = an inline node
- * (data holds its low `len` big-endian bytes), kind 2 = a keccak hash (data
- * holds the 32-byte hash, framed as 0xa0 ++ hash). Mirrors lib/mpt.sail's
- * branch_child_ref / branch_payload_rlp so the native host never streams the
- * node byte list through the hash channel. */
-#define NASM_CAP 4096
-static uint8_t NASM_payload[NASM_CAP];
-static size_t NASM_n;
-static int NASM_ok = 1;
-static uint8_t NASM_node[NASM_CAP + 16];
-static size_t NASM_node_len;
-static uint64_t NASM_hash[4];
-
-/* a leaf's value bytes are not buffered in NASM_payload (a tx/receipt value can
- * be megabytes -- far past NASM_CAP): the RLP header is appended to the payload
- * and the value bytes are held by pointer, then streamed into the node at frame
- * time. NASM_payload thus only ever holds the small path + value-header. */
-static const uint8_t *NASM_val_src;
-static size_t NASM_val_len;
-static int NASM_has_val;
-
-static void nasm_append(const uint8_t *p, size_t len) {
-  if (!NASM_ok || NASM_n + len > NASM_CAP) {
-    NASM_ok = 0;
-    return;
-  }
-  memcpy(NASM_payload + NASM_n, p, len);
-  NASM_n += len;
-}
-
-unit node_asm_reset(const unit u) {
-  (void)u;
-  NASM_n = 0;
-  NASM_ok = 1;
-  NASM_has_val = 0;
-  return UNIT;
-}
-
-unit node_asm_push_ref(uint64_t kind, const lbits data, uint64_t len) {
-  uint8_t buf[33];
-  if (kind == 0) {
-    buf[0] = 0x80;
-    nasm_append(buf, 1);
-  } else if (kind == 1) {
-    if (len > 32) {
-      NASM_ok = 0;
-      return UNIT;
-    }
-    lbits_to_be_bytes(buf, 32, data);
-    nasm_append(buf + (32 - (size_t)len), (size_t)len);
-  } else if (kind == 2) {
-    buf[0] = 0xa0;
-    lbits_to_be_bytes(buf + 1, 32, data);
-    nasm_append(buf, 33);
-  } else {
-    NASM_ok = 0;
-  }
-  return UNIT;
-}
-
-/* extract nibble j (0 = most significant) from a big-endian nibble array a32
- * holding `cnt` nibbles right-aligned. */
-static uint8_t nasm_nib(const uint8_t *a32, uint64_t cnt, uint64_t j) {
-  uint64_t p = 4 * (cnt - 1 - j);
-  size_t b = 31 - (size_t)(p / 8);
-  return (p % 8 == 0) ? (a32[b] & 0xf) : (a32[b] >> 4);
-}
-
-/* append rlp_bytes(hex_prefix_compact(nibbles, is_leaf)) as a node item. The
- * `cnt` nibbles are packed big-endian in the 256-bit `nibbles` word (top nibble
- * first, right-aligned); mirrors lib/mpt.sail hex_prefix_compact. */
-unit node_asm_push_path(const lbits nibbles, uint64_t cnt, uint64_t is_leaf) {
-  uint8_t a32[32];
-  lbits_to_be_bytes(a32, 32, nibbles);
-  uint8_t fn = is_leaf ? 2 : 0;
-  uint8_t path[33];
-  size_t pl = 0;
-  uint64_t start;
-  if (cnt & 1) {
-    path[pl++] = (uint8_t)(((fn | 1) << 4) | nasm_nib(a32, cnt, 0));
-    start = 1;
-  } else {
-    path[pl++] = (uint8_t)(fn << 4);
-    start = 0;
-  }
-  for (uint64_t j = start; j < cnt; j += 2) {
-    path[pl++] = (uint8_t)((nasm_nib(a32, cnt, j) << 4) | nasm_nib(a32, cnt, j + 1));
-  }
-  uint8_t enc[40];
-  size_t en = 0;
-  rlp_put_str(enc, &en, path, pl);
-  nasm_append(enc, en);
-  return UNIT;
-}
-
-/* frame the accumulated payload as an RLP list; stage node length + inline
- * bytes / keccak so Sail can form the child ref. */
-static uint64_t nasm_frame(void) {
-  if (!NASM_ok) {
-    NASM_node_len = 0;
-    return 0;
-  }
-  /* payload = buffered (path + refs + value header) followed by the deferred
-   * value bytes (leaf only). The list header sizes over the total payload. */
-  size_t val_len = NASM_has_val ? NASM_val_len : 0;
-  size_t payload = NASM_n + val_len;
-  uint8_t hdr[9];
-  size_t hn = 0;
-  if (payload <= 55) {
-    hdr[hn++] = (uint8_t)(0xc0 + payload);
-  } else {
-    uint8_t lb[8];
-    int m = 0;
-    for (size_t x = payload; x != 0; x >>= 8) lb[m++] = (uint8_t)(x & 0xff);
-    hdr[hn++] = (uint8_t)(0xf7 + m);
-    for (int i = 0; i < m; i++) hdr[hn++] = lb[m - 1 - i];
-  }
-  size_t node_len = hn + payload;
-  if (node_len <= NASM_CAP + 16) {
-    /* small node: assemble in the static buffer (inline ref needs the bytes) */
-    memcpy(NASM_node, hdr, hn);
-    memcpy(NASM_node + hn, NASM_payload, NASM_n);
-    if (val_len) memcpy(NASM_node + hn + NASM_n, NASM_val_src, val_len);
-    NASM_node_len = node_len;
-    if (node_len >= 32) host_keccak256_bytes(NASM_hash, NASM_node, node_len);
-  } else {
-    /* large leaf value (always > 32 -> hash ref): assemble once off-buffer */
-    uint8_t *buf = (uint8_t *)malloc(node_len);
-    if (buf == NULL) {
-      NASM_ok = 0;
-      NASM_node_len = 0;
-      return 0;
-    }
-    memcpy(buf, hdr, hn);
-    memcpy(buf + hn, NASM_payload, NASM_n);
-    memcpy(buf + hn + NASM_n, NASM_val_src, val_len);
-    host_keccak256_bytes(NASM_hash, buf, node_len);
-    free(buf);
-    NASM_node_len = node_len;
-  }
-  return (uint64_t)node_len;
-}
-
-/* branch node: append the empty 17th value slot, then frame. */
-uint64_t node_asm_finish_branch(const unit u) {
-  (void)u;
-  uint8_t vb = 0x80;
-  nasm_append(&vb, 1);
-  return nasm_frame();
-}
-
-/* leaf / extension node: frame the two pushed items as-is. */
-uint64_t node_asm_finish(const unit u) {
-  (void)u;
-  return nasm_frame();
-}
-
-/* the finished node's bytes (< 32) right-aligned into a 256-bit word, so Sail
- * reconstructs the inline child ref; valid only when the node is inline. */
-void node_asm_result_data(lbits *rop, const unit u) {
-  (void)u;
-  uint8_t b32[32] = {0};
-  size_t n = NASM_node_len < 32 ? NASM_node_len : 32;
-  memcpy(b32 + (32 - n), NASM_node, n);
-  uint64_t out[4];
-  for (int i = 0; i < 4; i++) out[i] = host_be64(b32 + i * 8);
-  host_words_to_lbits(rop, out);
-}
-
-/* the finished node's keccak (valid when the node is >= 32 bytes). */
-void node_asm_result_hash(lbits *rop, const unit u) {
-  (void)u;
-  host_words_to_lbits(rop, NASM_hash);
-}
-
-/* append rlp_bytes(value) for a leaf node's value item, reading the value from
- * a byte source so the value list never crosses. Mirrors rlp_bytes framing. */
-unit node_asm_push_value_source(uint64_t kind, uint64_t off, uint64_t len) {
-  const uint8_t *src = NULL;
-  uint64_t rlen = 0;
-  if (!evmsail_resolve_byte_source(kind, off, len, &src, &rlen) || rlen != len) {
-    NASM_ok = 0;
-    return UNIT;
-  }
-  /* append only the RLP header to the payload buffer; hold the value bytes by
-   * pointer so nasm_frame can stream them without a NASM_CAP limit. */
-  if (len == 1 && src[0] < 0x80) {
-    /* single byte < 0x80 is its own encoding: no header */
-  } else if (len <= 55) {
-    uint8_t h = (uint8_t)(0x80 + len);
-    nasm_append(&h, 1);
-  } else {
-    uint8_t lb[8];
-    int m = 0;
-    for (uint64_t x = len; x != 0; x >>= 8) lb[m++] = (uint8_t)(x & 0xff);
-    uint8_t h = (uint8_t)(0xb7 + m);
-    nasm_append(&h, 1);
-    for (int i = 0; i < m; i++) nasm_append(&lb[m - 1 - i], 1);
-  }
-  NASM_val_src = src;
-  NASM_val_len = (size_t)len;
-  NASM_has_val = 1;
-  return UNIT;
-}
-
 int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
                                 const uint8_t **p, uint64_t *resolved_len) {
   const uint8_t *src = NULL;
-  if (kind < EVMSAIL_SOURCE_WITNESS || kind > EVMSAIL_SOURCE_RETURNDATA) {
+  if (kind < EVMSAIL_SOURCE_STATELESS_INPUT || kind > EVMSAIL_SOURCE_SCRATCH) {
     return 0;
   }
   if (len == 0) {
     src = &HOST_empty_source;
-  } else if (kind == EVMSAIL_SOURCE_WITNESS) {
-    src = evmsail_ssz_ptr(off, len);
+  } else if (kind == EVMSAIL_SOURCE_STATELESS_INPUT) {
+    src = evmsail_stateless_input_ptr(off, len);
   } else if (kind == EVMSAIL_SOURCE_MEMORY) {
     if (off > UINT64_MAX - (len - 1)) return 0;
     src = mem_region(off, len);
-  } else if (kind == EVMSAIL_SOURCE_TX_INPUT) {
-    src = txd_rd(off, len);
   } else if (kind == EVMSAIL_SOURCE_CODE) {
     return code_db_resolve_code(off, len, p, resolved_len);
   } else if (kind == EVMSAIL_SOURCE_LOG_DATA) {
     src = log_data_region(off, len);
   } else if (kind == EVMSAIL_SOURCE_MEMORY_ARENA) {
     src = mem_arena_region(off, len);
-  } else if (kind == EVMSAIL_SOURCE_RETURNDATA) {
-    const uint8_t *pending = NULL;
-    uint64_t pending_len = 0;
-    returndata_pending_span(&pending, &pending_len);
-    if (off > pending_len || len > pending_len - off) return 0;
-    src = pending + off;
+  } else if (kind == EVMSAIL_SOURCE_OUTPUT) {
+    const uint8_t *data = NULL;
+    uint64_t data_len = 0;
+    output_buffer_span(&data, &data_len);
+    if (off > data_len || len > data_len - off) return 0;
+    src = data + off;
+  } else if (kind == EVMSAIL_SOURCE_SCRATCH) {
+    src = scratch_region(off, len);
   } else {
     return 0;
   }

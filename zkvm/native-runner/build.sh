@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ===========================================================================
-# Build a NATIVE (host, not RISC-V) conformance runner for the evm-sail zkVM
-# stateless block guest (sail/evm.sail_project evm, EVM_ENTRY=guest -> main).
+# Build a NATIVE (host, not RISC-V) conformance executable for the evm-sail zkVM
+# stateless block guest (sail/evm.sail_project evm -> main).
 #
 # This mirrors the guest sail-compile flags in zkvm/build.sh (--c-no-main,
 # --c-preserve main, --c-include zkvm_input.h) with the host-optimized sail256
@@ -29,6 +29,11 @@ mkdir -p "$BUILD"
 
 SAIL="${SAIL:-sail}"
 CC="${CC:-cc}"
+EVM_PROFILE="${EVM_PROFILE:-off}"
+case "$EVM_PROFILE" in
+  off|on) ;;
+  *) echo "error: EVM_PROFILE must be off or on" >&2; exit 2 ;;
+esac
 
 # --- Sail C runtime include dir (where sail.h lives) ------------------------
 SAILBIN="$(command -v "$SAIL")"
@@ -74,14 +79,14 @@ done
 # --- 3. generate guest C (no main, preserve entry symbol) -------------------
 #   run from repo root so the project files resolve their Sail sources.
 #   EXTRA_PRESERVE (space-separated Sail names) keeps otherwise-DCE'd functions
-#   externally linkable (none needed today; build_runner_lib.sh preserves
-#   compute_state_root via its own flag).
+#   externally linkable (none needed today).
 PRESERVE_FLAGS=(--c-preserve main)
 for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
 ( cd "$ROOT" && "$SAIL" -c -O --c-no-main --c-no-rts "${PRESERVE_FLAGS[@]}" \
     --c-include zkvm_input.h \
     sail/evm.sail_project evm \
-    --variable EVM_ENTRY=guest \
+    --variable EVM_PROFILE="$EVM_PROFILE" \
+    --variable EVM_DEBUG=on \
     -o "$BUILD/zkvm_block" )
 
 # NOTE: the toolchain's sail.h (-I"$SAIL_LIB") #includes <gmp.h>. The GMP-free
@@ -107,10 +112,14 @@ for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/code_glue.c" -o "$BUILD/code_glue.o"
 
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
+    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+    -c "$FFI/byte_slice_glue.c" -o "$BUILD/byte_slice_glue.o"
+
 # --- 5. shared harness I/O + CLI main ---------------------------------------
 #   test_utils.c is the ONE native I/O + run_once surface (input buffer,
 #   ssz_src accessors, emit_out sink, large-stack run, clear_memory) shared by
-#   this exe and the ctypes libs (build_lib.sh / build_runner_lib.sh). The real
+#   this exe and the ctypes library (build_lib.sh). The real
 #   guest keeps its own I/O in zkvm_input.c / zkvm_io.c (baked vector, HTIF) --
 #   never linked here.
 "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
@@ -119,16 +128,21 @@ for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
 
 # --- 6. C host backends + direct host crypto/precompile adapters ------------
 HOST_OBJS=()
-for hc in memory transient_storage state_db stack code_db kernel_state trie_node_db host_crypto precompiles returndata; do
+for hc in memory scratch transient_storage state_db stack code_db kernel_state trie_node_db host_crypto precompiles output; do
   o="$BUILD/$hc.o"
   "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$FFI" -c "$FFI/$hc.c" -o "$o"
   HOST_OBJS+=("$o")
 done
+if [ "$EVM_PROFILE" = on ]; then
+  o="$BUILD/cycle_scopes.o"
+  "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -c "$RT/cycle_scopes.c" -o "$o"
+  HOST_OBJS+=("$o")
+fi
 
 # --- 7. link ----------------------------------------------------------------
 OUT="$BUILD/zkvm_native"
 LINK_CMD=("$CC" "${CFLAGS[@]}"
-    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/test_utils.o" "$BUILD/main.o"
+    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/test_utils.o" "$BUILD/main.o"
     "${HOST_OBJS[@]}" "${SF_OBJS[@]}"
     "${ACCEL_FLAGS[@]}" "${STACK_FLAGS[@]}"
     -o "$OUT")

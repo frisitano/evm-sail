@@ -12,13 +12,16 @@ RISC-V slices and later compose into larger equivalence obligations.
 ## Current Slice
 
 - `sail/schema_prefix.sail`
-  - Lowers `sail/host/io.sail::ssz_schema_id`.
+  - Lowers the schema-prefix check in
+    `sail/lib/ssz/stateless_input.sail::input_well_formed`.
   - Captures that the `SszStatelessInput` schema id is parsed as big-endian:
     schema id `1` is bytes `00 01`.
 - `sail/io_contracts.sail`
-  - Lowers the pure byte-level part of `sail/main.sail::input_well_formed`.
-  - Models the fixed 18-byte SSZ header: two schema bytes plus four
-    little-endian offsets.
+  - Lowers the pure predicate over the schema bytes and offsets loaded by
+    `sail/lib/ssz/stateless_input.sail::input_well_formed`.
+  - Models the fixed 18-byte SSZ header without pretending random-access input
+    memory is a linked Sail list: two schema bytes plus four decoded
+    little-endian offsets cross into the relation as values.
   - Keeps the later payload, witness, chain-config, and public-key regions as
     length/offset obligations for subsequent slices.
 - `smt/schema-prefix-refinement.smt2`
@@ -131,17 +134,15 @@ seconds and are source-side proof artifacts, not the small RISC-V slice smoke
 test:
 
 ```sh
-rtk make -C proof check-evm-sail-core-coq
-rtk make -C proof check-evm-sail-guest-coq
 rtk make -C proof check-evm-sail-coq
 ```
 
-`check-evm-sail-core-coq` extracts the core EVM model from
-`sail/evm.sail_project` with `EVM_ENTRY=core` into:
+`check-evm-sail-coq` extracts the complete model and its sole executable entry
+from `sail/evm.sail_project` into:
 
 ```text
-/tmp/evm-sail-proof-lowering/evm-sail-coq-core/evm.v
-/tmp/evm-sail-proof-lowering/evm-sail-coq-core/evm_types.v
+/tmp/evm-sail-proof-lowering/evm-sail-coq/evm.v
+/tmp/evm-sail-proof-lowering/evm-sail-coq/evm_types.v
 ```
 
 The important initial symbols include:
@@ -149,21 +150,8 @@ The important initial symbols include:
 ```text
 evm.v: Definition process_transaction
 evm.v: Definition compute_state_root
-```
-
-`check-evm-sail-guest-coq` extracts the executable stateless zkVM guest rooted
-at `sail/main.sail` into:
-
-```text
-/tmp/evm-sail-proof-lowering/evm-sail-coq-guest/evm_guest.v
-/tmp/evm-sail-proof-lowering/evm-sail-coq-guest/evm_guest_types.v
-```
-
-The important initial symbols include:
-
-```text
-evm_guest.v: Definition input_well_formed
-evm_guest.v: Definition main
+evm.v: Definition decode_stateless_input_ref
+evm.v: Definition main
 ```
 
 ## Full evm-sail zkVM Guest ELF
@@ -452,16 +440,16 @@ This target refuses to write `instrs.v` unless coverage is complete.
 ## Next Source-Side Coq Steps
 
 1. Select or install a Coq switch with Sail's generated-library dependencies,
-   then compile `evm.v` and `evm_guest.v` to `.vo` files.
-2. Audit the generated extern/impure boundary in the core and guest Coq files:
+   then compile `evm.v` to a `.vo` file.
+2. Audit the generated extern/impure boundary in the generated Coq files:
    crypto accelerators, SSZ input reads, output emission, and C-backed host
    structures should become explicit assumptions or imported contracts.
-3. Add a small hand-written Coq harness module that imports the generated core
+3. Add a small hand-written Coq harness module that imports the generated
    theory and states the first source-level lemmas around
    `process_transaction` and `compute_state_root`.
-4. Add a second harness for the guest entry point around
-   `input_well_formed` and `main`, then relate that guest-level contract back
-   to the core EVM semantics.
+4. Add a second harness for the executable entry point around
+   `decode_stateless_input_ref` and `main`, then relate that guest-level
+   contract back to the core EVM semantics.
 
 ## Next RISC-V Lowering Steps
 

@@ -17,13 +17,20 @@ enum TxType = {
     SetCodeTx, /* type 4: EIP-7702 set code      */
 }
 
-/* An EIP-7702 set-code authorization tuple. The runner pre-recovers the
- * authority and validates the signature (s <= n/2, y_parity, r); valid_sig
- * records that result, and process_auth applies the chain-id/nonce/code checks. */
+/* An EIP-7702 set-code authorization tuple. RLP decoding recovers the authority
+ * and validates the signature (s <= n/2, y_parity, r); valid_sig records that
+ * result, and process_auth applies the chain-id/nonce/code checks. */
 struct Authorization = {
     valid_sig : bool, authority : address, address : address,
     nonce : int, chain_id : int,
 }
+
+struct BlobHashes = {
+    bytes : ByteSlice,
+    count : int,
+}
+
+let EMPTY_BLOB_HASHES : BlobHashes = struct { bytes = EMPTY_SLICE, count = 0 }
 
 /* A transaction. Covers the EIP-2718 typed envelopes 0..4: legacy, EIP-2930
  * (access list), EIP-1559 (fee market), EIP-4844 (blob), EIP-7702 (set code);
@@ -31,21 +38,22 @@ struct Authorization = {
 struct Transaction = {
   tx_type : TxType,          /* EIP-2718 envelope type (the discriminant)    */
   sender : address, nonce : int,
+  chain_id : int,             /* typed-envelope chain id; 0 for legacy txs    */
   gas_limit : gas, is_create : bool, recipient : address, value : word,
   raw : ByteSlice,             /* the EIP-2718 envelope span this tx decoded from
                                   (the transactions-trie leaf value)             */
   input_src : ByteSlice,       /* calldata / creation initcode as a host byte source
-                                  (the witness span for a stateless tx, or the
-                                  already-staged native-runner input) -- staged in
-                                  one op, never streamed byte-by-byte in the guest */
+                                  (normally a span of the stateless input)          */
   access_list_addresses : list(address),   /* EIP-2930 access-list addresses (one per entry) */
+  access_list_address_count : int,
   access_list_slots  : list(StorageKey),   /* EIP-2930 access-list (address, slot) pairs      */
-  blob_count : int,           /* EIP-4844 number of blob versioned hashes         */
+  access_list_slot_count : int,
   max_fee : word,             /* EIP-1559 max_fee_per_gas (cap, for validity)     */
   max_blob_fee : word,        /* EIP-4844 max_fee_per_blob_gas (cap, for validity)*/
   max_priority_fee : word,        /* EIP-1559 max_priority_fee_per_gas (cap, for validity) */
   authorizations : list(Authorization), /* EIP-7702 set-code authorization tuples      */
-  blob_hashes : list(word),   /* EIP-4844 versioned hashes (BLOBHASH operands)    */
+  authorization_count : int,
+  blob_hashes : BlobHashes,   /* source-backed EIP-4844 BLOBHASH operands         */
   pubkey : ByteSlice,          /* witnessed sender public key (0x04 ++ X ++ Y span);
                                   NOT trusted -- verified against the signature at
                                   execution (EELS recover_sender_from_public_key) */

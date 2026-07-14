@@ -4,7 +4,7 @@
  * Account code is written rarely (seeding, CREATE deploys, EIP-7702
  * delegations) and executed constantly. Each code_db entry names an absolute
  * span in the arena plus a JumpdestRef into a flat arena populated from the
- * completed bitmap produced by Sail's index_code pass. C never analyzes
+ * completed bitmap produced by Sail's code_db_insert pass. C never analyzes
  * opcodes: it only stores packed words and answers membership queries. Sail's
  * single frame_code Code register is the complete active executable
  * state.

@@ -48,7 +48,7 @@ Account:  k_access_account  k_get_balance/nonce/code/codehash  k_transfer
           k_deleg_target  k_seed_account
 Env:      k_env(field)  k_blockhash  k_blobhash  k_coinbase
 Prim:     k_create_addr  k_create2_addr  k_precompile
-Utils:    k_snapshot  k_commit  k_revert  k_refund_add  k_log
+Utils:    k_snapshot  k_revert  k_refund_add  k_log
 ```
 
 - **The EVM** (`sail/evm/`): the opcode
@@ -70,12 +70,12 @@ To *run* the model — the generated C compiled natively (`sail256`/`sailfix`) �
 the host's mechanism is backed by C FFI; the Sail definitions stay the
 specification while these provide the data structures underneath it.
 Performance-critical state lives behind C FFI with O(1) operations — EVM
-memory, generic byte-slice sources, and returndata (`ffi/memory.c`,
-`ffi/returndata.c`), direct host crypto and precompile adapters
+memory, generic byte-slice sources, and the output arena (`ffi/memory.c`,
+`ffi/output.c`), direct host crypto and precompile adapters
 (`ffi/host_crypto.c`, `ffi/precompiles.c`), the operand stack (`ffi/stack.c`),
 and the content-addressed code arena plus packed JUMPDEST tables
 (`ffi/code_db.c`). Sail performs PUSH-aware code analysis before insertion;
-each active frame holds one `IndexedCode` pairing the code slice with its
+each active frame holds one `Code` pairing the code slice with its
 resolved table reference. Transient
 storage (`ffi/transient_storage.c`, with frame rollback driven by the Sail
 journal), and account plus persistent storage state (`ffi/state_db.c`, sorted
@@ -105,17 +105,19 @@ of revm, which is a production interpreter, not a specification. Calling a
 ## Layout
 
 ```
-sail/        the specification (evm.sail_project selects core/entry files)
-  runner.sail         single-block / EEST runner entry point (reads input, runs)
+sail/        the specification (evm.sail_project defines the single build)
+  main.sail           the single stateless block executable entry
   host/
     state.sail        world state: accounts, storage overlays, warm sets,
                       logs, journal, block/tx environment
-    kernel.sail       the kernel functions (k_*): the only state interface
+    kernel/           the kernel functions (k_*): the only state interface
     memory.sail       per-frame byte memory (C-backed, O(1))
     byte_slice.sail   generic calldata/code views + Sail JUMPDEST analysis
-    io.sail           host I/O: accelerator FFI binding + keccak256/sha256 +
-                      EVM precompiles + CREATE derivation + the stateless SSZ
-                      input decoder (eth-act zkvm-standards C boundary)
+    scratch.sail      executor scratch-arena FFI contract
+    code.sail         content-addressed code/JUMPDEST FFI contract
+    nodes.sail        witness trie node DB FFI contract
+    accelerators.sail crypto/precompile accelerator FFI contract
+    output.sail       persistent frame output + public guest output contract
   evm/                THE TRANSACTION KERNEL (= the EVM)
     machine.sail      frame registers, gas counter, stack, code descriptors
     gas.sail          the complete gas schedule (fork-gated)
@@ -123,20 +125,32 @@ sail/        the specification (evm.sail_project selects core/entry files)
     execute.sail      per-opcode semantics (policy here, effects via k_*)
     interpreter.sail  fetch/decode, run loop, CALL*/CREATE*, precompiles
     transaction.sail  tx validity + the state transition + refunds
+  executor/
     block.sail        whole-block execution (txs + withdrawals)
+    payload.sail      transaction/withdrawal MPT roots for payload validation
+    system_calls.sail protocol system-call orchestration
+    block_access_list.sail EIP-7928 validation
   lib/
-    rlp.sail  ssz_htr.sail
-    mpt.sail           MPT root builder + state trie + stateless witness reads
-                       (feed, re-root, fail-closed lookups; C-backed node-db)
-ffi/         C backends: memory.c (memory/generic byte slices), transient_storage.c
+    rlp/rlp.sail       RLP decoding and encoding
+    ssz/
+      ssz.sail         generic source-backed SSZ readers and list navigation
+      stateless_input.sail concrete SszStatelessInput refs and decoder
+    htr.sail           SSZ hash-tree-root computation
+    mpt/               generic MPT implementation
+      primitives.sail  trie paths + hex-prefix encoding
+      nodes.sail       node refs, RLP encoding/decoding + C-backed node-db
+      updates.sail     ordered updates + canonical trie rebuilding
+      trie.sail        witness overlay, roots + fail-closed lookup
+ffi/         C backends: memory.c (memory/generic byte slices), scratch.c
+             (Sail-cursor-owned executor scratch arena), transient_storage.c
              (transient storage), state_db.c (account and persistent storage
              cache/update maps), stack.c (operand stack), code_db.c
              (content-addressed code + packed JUMPDEST arenas), trie_node_db.c
              (witness node-db), host_crypto.c + precompiles.c +
              zkvm_accelerators.h (eth-act zkvm-standards crypto)
-harness/   the EEST harness: run.py drives BOTH entries in-process
-             (EVM_ENTRY=runner state tests by post-state root; --guest gates the
-             stateless guest byte-exact vs the EELS reference via in-process t8n)
+harness/     the EEST harness: run.py drives main.sail in-process and gates its
+             canonical output byte-exactly against EELS; state tests are first
+             materialized as valid stateless blocks by the in-process t8n
 zkvm/        RISC-V zkVM guest target (riscv64im, stateless block validation)
   runtime/sailfix     GMP-free fixed-width Sail runtime (guest-shared)
   runtime/sail256     host-optimized variant (sized limbs, Knuth-D division)
@@ -174,17 +188,15 @@ state-fixtures checkout:
 
 ```sh
 cd harness
-SAIL256=1 python3 run.py --rebuild --fork Cancun <fixtures>/state_tests/cancun
-
-# gate the stateless guest byte-exact against the EELS reference:
-python3 run.py --guest --fork Cancun fixtures/eels/cancun_selfdestruct/state_tests/for_cancun
-python3 run.py --guest --fork Cancun <fixtures>/state_tests/cancun
+python3 run.py --rebuild --fork Cancun <fixtures>/state_tests/cancun
+python3 run.py --fork Cancun fixtures/eels/cancun_selfdestruct/state_tests/for_cancun
+python3 run.py --jobs 12 --quiet <fixtures>/blockchain_tests
 ```
 
-The pass criterion is the recomputed post-state MPT root (a commitment to the
-full post-state) for the runner, and byte-exact output agreement with the EELS
-reference guest for `--guest`; `--verbose` + `--dump` print diagnostics and the
-model's live post-run state on a failure (the debugging loop). The crypto
+The sole pass criterion is byte-exact output agreement with the EELS reference
+guest. `--debug` prints an on-demand native post-run state dump on failure;
+`--profile` enables optional zkVM cycle scopes without embedding them in normal
+builds. The crypto
 (keccak/secp256k1/bn254/BLS12-381/KZG/modexp/blake2f/P-256) runs through the
 eth-act zkvm-standards accelerator boundary, backed by the industry libraries
 in `zkvm/accel-host` (blst, k256, c-kzg, aurora-engine-modexp, p256).

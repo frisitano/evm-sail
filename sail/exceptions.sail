@@ -8,16 +8,16 @@
 /* state changes. REVERT (EIP-140) is the sole failure that instead REFUNDS */
 /* the remaining gas while still rolling state back.                        */
 /*                                                                          */
-/* FrameStatus is the running/halted/exceptional tag; CallOutcome is what a */
-/* finished sub-frame hands back to its caller.                             */
+/* FrameStatus is the running/halted/exceptional tag. RETURN and REVERT     */
+/* carry the frame output directly; interpret() returns that value.         */
 /* ======================================================================== */
 
-/* Ordinary frame stops. */
-enum HaltKind = {
-    HaltStop, /* STOP                                  */
-    HaltReturn, /* RETURN: success, returndata exposed   */
-    HaltRevert, /* REVERT: failure, state rolled back    */
-    HaltSelfDestruct, /* SELFDESTRUCT                          */
+/* Ordinary frame stops. Only RETURN and REVERT produce output bytes. */
+union HaltKind = {
+  HaltStop         : unit,
+  HaltReturn       : ByteSlice,
+  HaltRevert       : ByteSlice,
+  HaltSelfDestruct : unit
 }
 
 /* Exceptional halts: consume all remaining gas and revert the frame. */
@@ -41,15 +41,6 @@ union FrameStatus = {
   Running     : unit,
   Halted      : HaltKind,
   Exceptional : ExceptionKind
-}
-
-/* The result handed back to a caller when a sub-frame finishes:
- * success flag + returndata + gas left + whether state must roll back. */
-struct CallOutcome = {
-  success    : bool,
-  returndata : list(byte),
-  gas_left   : gas,
-  reverted   : bool
 }
 
 /* ======================================================================== */
@@ -76,14 +67,16 @@ enum BlockError = {
     InvalidStateRoot, /* recomputed post-state root != header.state_root     */
     InvalidReceiptsRoot, /* recomputed receipts root != header.receipts_root    */
     InvalidLogsBloom, /* recomputed logs bloom != header.logs_bloom          */
-    InvalidBlockHash, /* recomputed block hash != header.block_hash          */
+    InvalidBlockHash, /* recomputed block hash != payload expected hash     */
     InvalidParentHash, /* header.parent_hash != authenticated parent          */
     BlockAccessListTooLarge, /* EIP-7928: BAL item count > gas_limit / 2000         */
+    InvalidBlockAccessList, /* reconstructed EIP-7928 BAL bytes mismatch            */
+    InvalidExecutionRequests, /* reconstructed EIP-7685 request bytes mismatch       */
     WitnessDeficient, /* a missing/inconsistent proof node (thrown at use)   */
 }
 
 /* The single Sail exception type. Block validation THROWS InvalidBlock(reason)
- * at the failure point (mirroring EELS `raise InvalidBlock`), and run_one catches
+ * at the failure point (mirroring EELS `raise InvalidBlock`), and main catches
  * it once -- any failure becomes successful_validation=false. This is exactly the
  * EELS verify_stateless_new_payload try/except structure. Sail's C backend unwinds
  * via have_exception return-checks (no longjmp), so it is zkVM-guest safe. */

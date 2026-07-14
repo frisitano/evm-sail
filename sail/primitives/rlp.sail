@@ -1,19 +1,10 @@
 /* ======================================================================== */
 /* PRIMITIVES: RLP FIELD                                                    */
 /*                                                                          */
-/* One decoded top-level RLP item, as the codec (lib/rlp/) yields it.       */
+/* A decoded field that keeps offsets into its original byte source.        */
 /* Pure data -- no registers, no externs.                                   */
 /* ======================================================================== */
 
-struct RlpField = {
-    is_list : bool,
-    content : list(byte), /* string value, or a list's payload bytes         */
-    full : list(byte), /* full item bytes incl header (an embedded node)  */
-}
-
-let RLP_NONE : RlpField = struct { is_list = false, content = [||], full = [||] }
-
-/* A decoded field that keeps offsets into its original byte source. */
 struct RlpFieldRef = {
     source      : Bytes,
     is_list     : bool,
@@ -23,11 +14,20 @@ struct RlpFieldRef = {
     content_len : bits(64),
 }
 
-let RLP_REF_NONE : RlpFieldRef = struct {
-        source = BytesList([||]),
-        is_list = false,
-        full_off = 0x0000000000000000,
-        full_len = 0x0000000000000000,
-        content_off = 0x0000000000000000,
-        content_len = 0x0000000000000000,
-    }
+/* A one-pass view over the immediate children of an RLP list. */
+struct RlpCursor = {
+    source : Bytes,
+    current : int,
+    stop : int,
+    valid : bool,
+}
+
+/* An RLP byte sequence represented without flattening its source-backed
+ * payloads. Segments are accumulated in reverse order so appending a new
+ * encoded item never walks the already-built prefix. */
+struct RlpBuilder = {
+    segments_rev : list(Bytes),
+    len : int,
+}
+
+let EMPTY_RLP_BUILDER : RlpBuilder = struct { segments_rev = [||], len = 0 }

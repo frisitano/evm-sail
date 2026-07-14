@@ -7,7 +7,7 @@
  *
  * A thin CLI over the SHARED harness surface in test_utils.c — the exact
  * same input/ssz_src/output/run_once plumbing the ctypes libs
- * (libevmsail_guest / libevmsail_runner) use — so there is ONE native I/O
+ * (libevmsail_guest) use — so there is ONE native I/O
  * implementation. evmsail_run_once executes the guest on a dedicated
  * 512 MB-stack thread (deep SSZ-list recursion).
  *

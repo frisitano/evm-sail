@@ -17,8 +17,7 @@ ISLARIS_DUMP_DIR ?= $(PROOF_BUILD_DIR)/islaris-dump
 ISLARIS_COQ_DIR ?= $(PROOF_BUILD_DIR)/islaris-coq
 ISLARIS_STACK_SMOKE_COQ_DIR ?= $(PROOF_BUILD_DIR)/stack-store-smoke-coq
 SAIL_COQ_DIR ?= $(PROOF_BUILD_DIR)/sail-coq
-EVM_SAIL_COQ_CORE_DIR ?= $(PROOF_BUILD_DIR)/evm-sail-coq-core
-EVM_SAIL_COQ_GUEST_DIR ?= $(PROOF_BUILD_DIR)/evm-sail-coq-guest
+EVM_SAIL_COQ_DIR ?= $(PROOF_BUILD_DIR)/evm-sail-coq
 EVM_SAIL_ZKVM_DIR ?= $(CURDIR)/../zkvm
 EVM_SAIL_ZKVM_ELF ?= $(EVM_SAIL_ZKVM_DIR)/build/zkvm_guest.elf
 EVM_SAIL_ZKVM_ISLARIS_DIR ?= $(PROOF_BUILD_DIR)/evm-sail-zkvm-islaris
@@ -73,7 +72,7 @@ ifeq ($(REQUIRE_COQ_COMPILE),1)
 COQ_COMPILE_TARGETS := check-islaris-coq-compile
 endif
 
-.PHONY: check check-ere-full-dump check-ere-full-islaris-coq check-ere-full-islaris-progress check-ere-full-proof-dump check-evm-sail-coq check-evm-sail-core-coq check-evm-sail-guest-coq check-evm-sail-zkvm-dump check-evm-sail-zkvm-elf check-evm-sail-zkvm-islaris-coq check-evm-sail-zkvm-islaris-progress check-extern-boundary check-isla-ir check-islaris-coq check-islaris-coq-compile check-islaris-coq-stage check-islaris-dump check-islaris-stack-store-smoke check-proof-pipeline check-riscv check-riscv-no-rvc check-rustfmt check-sail check-sail-coq check-smt finalize-ere-full-islaris-coq finalize-evm-sail-zkvm-islaris-coq report-ere-full-islaris-coq report-evm-sail-zkvm-islaris-coq run-ere-full-dump run-ere-full-islaris-coq run-ere-full-islaris-coq-shard run-ere-full-proof-dump run-evm-sail-coq run-evm-sail-core-coq run-evm-sail-guest-coq run-evm-sail-zkvm-dump run-evm-sail-zkvm-elf run-evm-sail-zkvm-islaris-coq run-evm-sail-zkvm-islaris-coq-shard run-islaris-coq run-sail-coq stage-islaris-coq
+.PHONY: check check-ere-full-dump check-ere-full-islaris-coq check-ere-full-islaris-progress check-ere-full-proof-dump check-evm-sail-coq check-evm-sail-zkvm-dump check-evm-sail-zkvm-elf check-evm-sail-zkvm-islaris-coq check-evm-sail-zkvm-islaris-progress check-extern-boundary check-isla-ir check-islaris-coq check-islaris-coq-compile check-islaris-coq-stage check-islaris-dump check-islaris-stack-store-smoke check-proof-pipeline check-riscv check-riscv-no-rvc check-rustfmt check-sail check-sail-coq check-smt finalize-ere-full-islaris-coq finalize-evm-sail-zkvm-islaris-coq report-ere-full-islaris-coq report-evm-sail-zkvm-islaris-coq run-ere-full-dump run-ere-full-islaris-coq run-ere-full-islaris-coq-shard run-ere-full-proof-dump run-evm-sail-coq run-evm-sail-zkvm-dump run-evm-sail-zkvm-elf run-evm-sail-zkvm-islaris-coq run-evm-sail-zkvm-islaris-coq-shard run-islaris-coq run-sail-coq stage-islaris-coq
 
 check: check-sail check-smt check-extern-boundary
 
@@ -127,30 +126,18 @@ check-sail-coq: run-sail-coq
 	grep -q "Definition schema_prefix_ok" $(SAIL_COQ_DIR)/schema_prefix.v
 	grep -q "Definition input_header_well_formed" $(SAIL_COQ_DIR)/io_contracts.v
 
-run-evm-sail-core-coq:
-	mkdir -p $(EVM_SAIL_COQ_CORE_DIR)
-	$(SAIL) --coq --coq-output-dir $(EVM_SAIL_COQ_CORE_DIR) -o evm ../sail/evm.sail_project evm --variable EVM_ENTRY=core
+run-evm-sail-coq: check-extern-boundary
+	mkdir -p $(EVM_SAIL_COQ_DIR)
+	$(SAIL) --coq --coq-output-dir $(EVM_SAIL_COQ_DIR) -o evm ../sail/evm.sail_project evm
 
-check-evm-sail-core-coq: run-evm-sail-core-coq
-	test -s $(EVM_SAIL_COQ_CORE_DIR)/evm.v
-	test -s $(EVM_SAIL_COQ_CORE_DIR)/evm_types.v
-	grep -q "Definition process_transaction" $(EVM_SAIL_COQ_CORE_DIR)/evm.v
-	grep -q "Definition compute_state_root " $(EVM_SAIL_COQ_CORE_DIR)/evm.v
-	grep -q "Definition trie_root " $(EVM_SAIL_COQ_CORE_DIR)/evm.v
-
-run-evm-sail-guest-coq:
-	mkdir -p $(EVM_SAIL_COQ_GUEST_DIR)
-	$(SAIL) --coq --coq-output-dir $(EVM_SAIL_COQ_GUEST_DIR) -o evm_guest ../sail/evm.sail_project evm --variable EVM_ENTRY=guest
-
-check-evm-sail-guest-coq: run-evm-sail-guest-coq
-	test -s $(EVM_SAIL_COQ_GUEST_DIR)/evm_guest.v
-	test -s $(EVM_SAIL_COQ_GUEST_DIR)/evm_guest_types.v
-	grep -q "Definition input_well_formed" $(EVM_SAIL_COQ_GUEST_DIR)/evm_guest.v
-	grep -q "Definition main" $(EVM_SAIL_COQ_GUEST_DIR)/evm_guest.v
-
-run-evm-sail-coq: check-extern-boundary run-evm-sail-core-coq run-evm-sail-guest-coq
-
-check-evm-sail-coq: check-extern-boundary check-evm-sail-core-coq check-evm-sail-guest-coq
+check-evm-sail-coq: run-evm-sail-coq
+	test -s $(EVM_SAIL_COQ_DIR)/evm.v
+	test -s $(EVM_SAIL_COQ_DIR)/evm_types.v
+	grep -q "Definition process_transaction" $(EVM_SAIL_COQ_DIR)/evm.v
+	grep -q "Definition compute_state_root " $(EVM_SAIL_COQ_DIR)/evm.v
+	grep -q "Definition trie_root " $(EVM_SAIL_COQ_DIR)/evm.v
+	grep -q "Definition decode_stateless_input_ref" $(EVM_SAIL_COQ_DIR)/evm.v
+	grep -q "Definition main" $(EVM_SAIL_COQ_DIR)/evm.v
 
 run-evm-sail-zkvm-elf:
 	cd $(EVM_SAIL_ZKVM_DIR) && ./build.sh guest

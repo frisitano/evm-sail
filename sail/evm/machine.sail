@@ -80,6 +80,28 @@ function is_running() -> bool = match frame_status {
  * sub-calls by the interpreter like the other frame registers. */
 register calldata : ByteSlice = EMPTY_SLICE
 
+function calldata_install(data : ByteSlice) -> unit = calldata = data
+
+/* A running frame keeps the output of its latest child in `returndata`.
+ * The active frame's own output is carried by its RETURN/REVERT halt value
+ * and returned from interpret(), rather than stored in another register. */
+register returndata : ByteSlice = EMPTY_SLICE
+
+function returndata_clear() -> unit = returndata = EMPTY_SLICE
+
+function returndata_size() -> int = unsigned(returndata.len)
+
+function returndata_byte(index : int) -> byte =
+    slice_byte(returndata, index)
+
+function returndata_copy(dst : int, off : int, len : int) -> unit =
+    slice_copy(returndata, dst, off, len)
+
+function returndata_copy_prefix(dst : int, want : int) -> unit = {
+    let have = returndata_size();
+    slice_copy(returndata, dst, 0, if want < have then { want } else { have })
+}
+
 /* ----------------------- frame memory (EVM view) ------------------------ */
 /* The EVM's view over the C-backed frame memory (host/memory.sail): every
  * access is guarded by is_running -- a failed charge_expansion sets the halt

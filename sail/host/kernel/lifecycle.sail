@@ -2,7 +2,6 @@ function apply_undo(e : JEntry) -> unit = match e {
     JTran(a, s, v) => transient_store(a, s, v),
     JWarmA(a)      => warm_addr_remove(a),
     JWarmS(a, s)   => warm_slot_remove(a, s),
-    JLog()         => log_drop_last(),
     JRefund(old)   => k_refund = old,
 }
 
@@ -10,6 +9,7 @@ function k_snapshot() -> StateCheckpoint = struct {
     journal = journal_len(),
     accounts = acct_tx_checkpoint(),
     storage = storage_tx_checkpoint(),
+    logs = logs_checkpoint(),
 }
 
 function k_set_header(h : BlockHeader) -> unit = k_header = h
@@ -32,7 +32,7 @@ function account_deleted_at_tx_end(acc : Account) -> bool =
 function k_tx_merge() -> unit = {
     var more : bool = true;
     while more do {
-        match acct_tx_pop() {
+        match acct_tx_pop_ascending() {
             Some(e) => {
                 var curr : Account = e.value.curr;
                 let deleted = account_deleted_at_tx_end(curr);
@@ -52,10 +52,9 @@ function k_tx_merge() -> unit = {
                 if curr.info.code_hash != e.value.orig.info.code_hash then {
                     bal_code_change(e.addr, curr.info.code_hash)
                 };
+                curr = { curr with created = false,  selfdestructed = false };
                 if account_changed(curr, e.value.orig) then {
                     acct_block_write(struct { addr = e.addr, value = struct { curr = curr, orig = e.value.orig } })
-                } else {
-                    acct_block_cache(e.addr, curr)
                 }
             },
             None() => more = false,
@@ -65,20 +64,10 @@ function k_tx_merge() -> unit = {
     while more do {
         match storage_tx_pop() {
             Some(e) => {
-                bal_storage_read(e.key.addr, e.key.slot);
-                match acct_tx_get(e.key.addr) {
-                    Some(acc) => if acc.exists & not_bool(account_deleted_at_tx_end(acc)) then {
-                        match e.write {
-                            Some(v) => {
-                                if v.curr != e.tx_original then {
-                                    bal_storage_change(e.key.addr, e.key.slot, v.curr)
-                                };
-                                storage_block_put(struct { key = e.key, value = v })
-                            },
-                            None() => if not_bool(acc.storage_cleared) then {
-                                storage_block_cache(e.key, e.tx_original)
-                            },
-                        }
+                match acct_block_get(e.key.addr) {
+                    Some(acc) => if acc.exists & e.value.curr != e.value.orig then {
+                        bal_storage_change(e.key.addr, e.key.slot, e.value.curr);
+                        storage_block_put(e)
                     },
                     None() => (),
                 }
@@ -93,6 +82,7 @@ function k_tx_merge() -> unit = {
 function k_revert(checkpoint : StateCheckpoint) -> unit = {
     acct_tx_revert(checkpoint.accounts);
     storage_tx_revert(checkpoint.storage);
+    logs_revert(checkpoint.logs);
     var remaining : u64 = sub_bits(journal_len(), checkpoint.journal);
     while remaining != 0x0000000000000000 do {
         apply_undo(journal_pop());

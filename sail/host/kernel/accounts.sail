@@ -43,10 +43,9 @@ function store_account_info(a : address, acc : Account, info : AccountInfo) -> u
         storage_tx_clear(a)
     };
     let next = account_set_info(acc, info);
-    if (next.info.storage_root != acc.info.storage_root)
-        | (next.exists != acc.exists)
-        | (next.storage_cleared != acc.storage_cleared)
-    then {
+    if   (next.info.storage_root != acc.info.storage_root)
+       | (next.exists != acc.exists)
+       | (next.storage_cleared != acc.storage_cleared) then {
         store_account(a, next)
     } else {
         if next.info.balance != acc.info.balance then {
@@ -62,18 +61,20 @@ function store_account_info(a : address, acc : Account, info : AccountInfo) -> u
 }
 
 function k_aload(a : address) -> Account = {
+    bal_account_touch(a);
     match acct_tx_get(a) {
         Some(acc) => return acc,
         None() => (),
     };
-    let acc : Account = match acct_block_get(a) {
-        Some(acc) => acc,
-        None() => match stateless_account(k_parent_state_root, a) {
-            Some(info) => account_from_info(info),
-            None() => EMPTY_ACCOUNT,
-        },
+    match acct_block_get(a) {
+        Some(acc) => return acc,
+        None() => (),
     };
-    acct_tx_cache(a, acc);
+    let acc : Account = match stateless_account(k_parent_state_root, a) {
+        Some(info) => account_from_info(info),
+        None() => EMPTY_ACCOUNT,
+    };
+    acct_block_cache(a, acc);
     acc
 }
 
@@ -95,11 +96,10 @@ function k_account_is_empty(a : address) -> bool = {
 /* CREATE/CREATE2/create-tx address-collision test: the target is occupied if it
  * has code OR a nonzero nonce OR any storage. */
 function k_account_occupied(a : address) -> bool = {
-    let info = k_aload(a).info;
-    if (info.code_hash != KECCAK_EMPTY)
-        | (info.nonce != sail_zeros(64))
-        | (info.storage_root != EMPTY_TRIE_ROOT)
-    then {
+    let acc = k_aload(a);
+    let info = acc.info;
+    let anchored_storage = not_bool(acc.storage_cleared) & (info.storage_root != EMPTY_TRIE_ROOT);
+    if (info.code_hash != KECCAK_EMPTY) | (info.nonce != sail_zeros(64)) | anchored_storage then {
         true
     } else {
         storage_has_writes(a)

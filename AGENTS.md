@@ -21,29 +21,33 @@ duplicating instructions elsewhere.
 
 ## Repo Map
 
-- `sail/evm.sail_project` is the model project file. Use the `evm` module with
-  `EVM_ENTRY=core|guest|runner`. There is no backend variable: the Sail
-  specification is single-configuration.
-- `sail/bin/` holds the executable entry files (`bin/main.sail` the stateless
-  guest, `bin/runner.sail` the EEST state-test runner), selected with
-  `EVM_ENTRY=guest|runner`.
+- `sail/evm.sail_project` is the single model project and `sail/main.sail` is
+  its only executable entry. There is no entry/backend selection: every build
+  contains the full stateless validator. `EVM_PROFILE=on|off` controls optional
+  cycle scopes. `EVM_DEBUG=on|off` controls native-test validation diagnostics;
+  real zkVM guest builds set it to `off`.
 - `sail/host/state.sail` is the declaration-only host world-state surface for
   impure FFI contracts. `sail/host/environment.sail` declares the fixed-size,
   O(1) ancestor-hash host table. `sail/host/kernel/environment.sail` owns the
   kernel registers, and the remaining `sail/host/kernel/` modules group pure
   Sail `k_*` operations by subsystem.
-- `sail/lib/mpt.sail` is the generic trie implementation: one public root
-  entry `trie_root(base_root, updates)` (witness-native overlay, fail-closed on
-  missing node material) plus authenticated lookup. `sail/lib/state_trie.sail`
+- `sail/executor/payload.sail` owns the transaction and withdrawal MPT roots
+  used to reconstruct and validate the execution payload's block hash.
+- `sail/lib/mpt/` is the generic trie implementation, split by dependency
+  layer into paths/hex-prefix primitives, node encoding and decoding, ordered
+  updates/canonical rebuilding, and authenticated traversal. Its public root
+  entry is `trie_root(base_root, updates)` (witness-native overlay, fail-closed
+  on missing node material). `sail/lib/state_trie.sail`
   owns Ethereum account/storage decoding, stateless reads, and post-state-root
   assembly over that core. The Yellow Paper Appendix C/D equations are kept as
   documentation on the internal functions; an empty base computes TRIE(I)
   directly.
 - The impure host interface is an abstract `val` contract layer declared inline
   in the module files themselves as `val X = impure { c: "sym" } : T`
-  (`host/io.sail` crypto/oracle, `host/state.sail` / `host/environment.sail` /
+  (`primitives/crypto.sail` hashing, `lib/ssz/ssz.sail` input,
+  `host/output.sail` guest output, `host/state.sail` / `host/environment.sail` /
   `host/memory.sail` world state, block environment, and buffers,
-  `lib/mpt.sail` trie node refs; see `proof/extern-boundary.md`). These `c:`-bound vals are the
+  `host/nodes.sail` trie node DB; see `proof/extern-boundary.md`). These `c:`-bound vals are the
   TRUE axioms (crypto core, I/O oracle, mutable host stores) -- proof targets
   see them as bodyless parameters; executables link their C definitions from
   `ffi/`. Generated aggregate values cross through three hand-written glue
@@ -51,8 +55,8 @@ duplicating instructions elsewhere.
   (`-DEVMSAIL_MODEL_H`, `-I` build dir), so generated layouts are never
   hand-mirrored: `ffi/journal_glue.c` handles journal entries and structured
   state rows/options; `ffi/hash_glue.c` handles the hash axioms
-  (`keccak256_segments` / `sha256_segments : list(Bytes) -> hash`) and log
-  records; and `ffi/code_glue.c` flattens Sail's
+  (`keccak256_segments` / `sha256_segments : list(Bytes) -> hash`), segmented
+  byte equality, and log records; and `ffi/code_glue.c` flattens Sail's
   `JumpdestBitmap = list(bits(64))` for insertion into the packed C arena and
   constructs aggregate `option(Code)` lookup results. A
   hash preimage is a list of Bytes segments -- materialized bytes or
@@ -65,44 +69,32 @@ duplicating instructions elsewhere.
   link-time override (weak-stub mechanism, not yet wired). The old `sail/c/*.sail` extern-binding menu and the
   `EVM_BACKEND=spec|build` project variable were deleted (this change).
 - `ffi/` contains native C backends for performance-sensitive host structures:
-  memory/generic byte slices/returndata, `state_db.c` for accounts and
+  memory/generic byte slices/output storage, the Sail-cursor-owned executor
+  scratch arena, `state_db.c` for accounts and
   persistent storage cache/update rows, `transient_storage.c` for transient
   storage, the content-addressed code and packed JUMPDEST arenas, node DB,
   operand stack, and accelerator shims.
-- `harness/run.py` is the SINGLE fixture harness for both executable
-  entries, built ONCE as shared libraries and driven IN-PROCESS via ctypes
+- `harness/run.py` is the SINGLE fixture harness for the single executable
+  entry, built ONCE as a shared library and driven IN-PROCESS via ctypes
   (`harness/dump_state.py`). Each case is serialized to the SSZ
   `SszStatelessInput` (`ssz_builder.py`, under the execution-specs venv).
-  - Default (runner, `EVM_ENTRY=runner`, `build_runner_lib.sh` ->
-    `libevmsail_runner.dylib`): cross-fork state-test execution. The runner
-    emits NO byte stream: the harness reads the result C-side from the
-    `evmsail_dump_snapshot` 'G' section -- the per-entry `zkvm_out_gas`
-    register, the post-state root (the dump calls the model's own
-    `compute_state_root`, `--c-preserve`d in the runner build), and any Sail
-    exception that escaped the run (the runner catches nothing; the dump
-    captures `have_exception` + the InvalidBlock BlockError variant +
-    `throw_location`, e.g. `InvalidBlock(WitnessDeficient) @
-    sail/lib/mpt.sail:1275`). The root IS the pass criterion. `--dump` prints
-    the model's live post-run state (materialized accounts+storage, stack,
-    memory) from the same snapshot.
-  - `--guest` (`EVM_ENTRY=guest`, `build_lib.sh` -> `libevmsail_guest.dylib`):
-    the Amsterdam stateless full-block validator, gated BYTE-EXACT against the
-    EELS reference. State-test cases are executed through the in-process EELS
-    t8n (ssz_builder guest mode), which builds a fully VALID single-tx block
-    input AND the reference `run_stateless_guest` output bytes; fixtures that
-    already carry `statelessInputBytes`/`statelessOutputBytes` are fed
-    directly. `--spike` swaps the execution vehicle for the REAL RISC-V guest
-    ELF on spike (zkvm/build.sh; baked vector, REBAKE_ONLY per case). This
-    subsumes the old `zkvm/native-runner/run_fixtures*.py` and
-    `zkvm/run_guest_smoke.py` guest runners (deleted).
+  The Amsterdam stateless full-block validator is gated BYTE-EXACT against the
+  EELS reference. State-test cases are executed through the in-process EELS
+  t8n, which builds a fully VALID single-tx block input AND the reference
+  `run_stateless_guest` output bytes; fixtures that already carry
+  `statelessInputBytes`/`statelessOutputBytes` are fed directly. `--spike`
+  swaps the execution vehicle for the REAL RISC-V guest ELF on spike
+  (`zkvm/build.sh`; baked vector, REBAKE_ONLY per case). `--debug` invokes the
+  native-only `evmsail_debug_dump` after a failure; it is not linked into the
+  real guest. `--profile` enables optional cycle-scope markers.
   This is the sole fixture runner; the parallel Rust runner was removed. The
   old `runner_ffi.c` (stdin ssz_src) is deleted, and the driver/test
   world-wipe lives in `test_utils.c` `evmsail_clear_memory` (the model no
   longer defines `k_world_reset`). The dedicated `witness_probe` re-root
   harness was also removed: every stateless account/storage lookup walks the
   witness trie from the authenticated root (parsing each node on the path), so
-  the runner's full-corpus post-state-root checks already exercise + validate
-  the witness node reader (`lib/mpt.sail`).
+  the full-corpus byte-exact checks exercise + validate
+  the witness node reader (`lib/mpt/trie.sail`).
 
 ## Current State-Root Model
 
@@ -143,15 +135,15 @@ Small, checked-in fixture anchors live under `harness/fixtures/`:
   - `state_root_precompile.json`
 - `harness/fixtures/eels/shanghai_push0/`
   - Generated from EELS `tests/shanghai/eip3855_push0`.
-  - Expected Sail root run: `10/10` passed, `10/10` state-root matches.
+  - Expected Sail run: `10/10` byte-exact passes.
 - `harness/fixtures/eels/cancun_selfdestruct/`
   - Generated from EELS `tests/cancun/eip6780_selfdestruct/test_selfdestruct.py`.
-  - Expected Sail root run: `114/114` passed, `114/114` state-root matches.
+  - Expected Sail run: `114/114` byte-exact passes.
 
 The `eels/*` directories preserve generated `state_tests/`,
 `blockchain_tests/`, `blockchain_tests_engine/`, and `.meta/` content. The
 generated blockchain fixtures in these two subsets do not carry
-`statelessInputBytes`; `run.py --guest` runs embedded
+`statelessInputBytes`; `run.py` runs embedded
 `statelessInputBytes` blocks directly when a fixture has them, and otherwise
 builds guest inputs from the state-test cases via t8n.
 
@@ -171,15 +163,9 @@ rtk python3 run.py fixtures/eels/shanghai_push0/state_tests/for_shanghai --fork 
 rtk python3 run.py fixtures/eels/cancun_selfdestruct/state_tests/for_cancun --fork Cancun --quiet --timeout 30
 ```
 
-Guest (byte-exact vs the EELS reference; state tests are executed as Amsterdam
-blocks regardless of the fixture's fill fork):
-
-```sh
-rtk python3 run.py --guest fixtures/eels/shanghai_push0/state_tests/for_shanghai --fork Shanghai --quiet
-rtk python3 run.py --guest fixtures/eels/cancun_selfdestruct/state_tests/for_cancun --fork Cancun --quiet
-```
-
-Use `--rebuild` when generated C or FFI changes need a fresh runner/guest
+All runs are byte-exact vs the EELS reference; state tests are materialized as
+Amsterdam blocks regardless of the fixture's fill fork. Use `--rebuild` when
+generated C or FFI changes need a fresh guest
 library.
 
 ## zkVM Guest Smoke Gate
@@ -188,7 +174,7 @@ Same harness, real RISC-V ELF on spike (`--spike`; run one small state-test
 file, each case = rebake + relink + spike boot, so keep it smoke-scale):
 
 ```sh
-rtk python3 harness/run.py --guest --spike harness/fixtures/eels/shanghai_push0/state_tests/for_shanghai/shanghai/eip3855_push0/push0/push0_contracts.json --fork Shanghai --quiet
+rtk python3 harness/run.py --spike harness/fixtures/eels/shanghai_push0/state_tests/for_shanghai/shanghai/eip3855_push0/push0/push0_contracts.json --fork Shanghai --quiet
 ```
 
 The guest inputs + expected outputs are built per case by the in-process EELS
@@ -200,8 +186,9 @@ build on the first case, then REBAKE_ONLY per case, in an isolated
 per-invocation ZKVM_BUILD dir (concurrent gates sharing `zkvm/build/` race on
 the baked vector/ELF).
 
-Deleted (recover from git history if needed): `zkvm/run_guest_smoke.py` and
-`zkvm/native-runner/run_fixtures*.py` (superseded by run.py --guest),
+Deleted (recover from git history if needed): `sail/bin/runner.sail`,
+`zkvm/native-runner/build_runner_lib.sh`, `zkvm/run_guest_smoke.py`, and
+`zkvm/native-runner/run_fixtures*.py` (superseded by `run.py`),
 `zkvm/vectors/` + `gen_vector.py` (dev probes), `zkvm/ere-guest/` (unbuilt ere
 SDK template), `runtime/derisk_main.c` + `runtime/traptest_main.c` (platform
 bring-up probes). build.sh's `VEC` is required (no default vector).
@@ -229,7 +216,7 @@ Current aligned corpora in this worktree were generated from
   - Amsterdam state-test corpus.
   - Generated 2026-07-02 with `fill -m state_test --fork Amsterdam ./tests/`.
   - Fixture generation result: `13917 passed, 6 skipped`.
-  - State runner result: `13917/13917 passed`, `0 timeouts` (run.py).
+  - Native harness result: `13917/13917 passed`, `0 timeouts` (run.py).
 
 Do not use `zkvm/.fixtures/fixtures/` as aligned proof unless explicitly
 requested. That unpack is older metadata:

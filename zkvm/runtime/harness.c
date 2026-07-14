@@ -25,14 +25,6 @@ extern void model_init(void);
 extern void model_fini(void);
 extern unit zmain(unit);
 
-/* Output registers set by zmain (all hold values that fit in 64 bits). */
-extern sail_int zzzkvm_out_gas;
-extern sail_int zzzkvm_out_storage0;
-extern sail_int zzzkvm_out_wbal;
-extern sail_int zzzkvm_out_cbbal;
-extern sail_int zzzkvm_out_tracelen;
-extern sail_int zzzkvm_out_success;
-
 /* From runtime.c. */
 void zkvm_abort(const char *why);
 
@@ -94,21 +86,7 @@ int zkvm_start(void)
     __asm__ volatile("rdinstret %0" : "=r"(i1));
     emit_kv("instret_block", i1 - i0);
 
-    /* (4) Read result facts and publish them as the public output. */
-    uint64_t gas      = (uint64_t)mpz_get_ui(zzzkvm_out_gas);
-    uint64_t storage0 = (uint64_t)mpz_get_ui(zzzkvm_out_storage0);
-    uint64_t wbal     = (uint64_t)mpz_get_ui(zzzkvm_out_wbal);
-    uint64_t cbbal    = (uint64_t)mpz_get_ui(zzzkvm_out_cbbal);
-    uint64_t tracelen = (uint64_t)mpz_get_ui(zzzkvm_out_tracelen);
-    uint64_t success  = (uint64_t)mpz_get_ui(zzzkvm_out_success);
-
-    emit_kv("gas_used", gas);
-    emit_kv("storage0", storage0);
-    emit_kv("withdrawal_balance", wbal);
-    emit_kv("coinbase_balance", cbbal);
-    emit_kv("trace_len", tracelen);
-    emit_kv("tx_success", success);
-    /* zmain emitted the canonical SSZ result via write_output; report its size
+    /* (4) zmain emitted the canonical SSZ result via write_output; report its size
      * and successful_validation (byte 32, right after the 32-byte request root). */
     emit_kv("public_output_bytes", (uint64_t)zkvm_output_size());
     if (zkvm_output_size() >= 33)
@@ -134,7 +112,6 @@ int zkvm_start(void)
      * A failed validation (successful_validation=0) is a NORMAL result -> exit
      * 0; only a guest malfunction (input decode failure, Sail assert, or a fault)
      * is abnormal termination (non-zero exit, via the runtime/trap path). */
-    (void)gas; (void)storage0; (void)wbal; (void)success;
     htif_puts("[zkvm] stateless guest complete.\n");
     return 0;   /* successful termination */
 }

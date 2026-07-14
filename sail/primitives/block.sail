@@ -5,6 +5,29 @@
 /* host/kernel/environment.sail alongside the EIP-4895 withdrawal record.   */
 /* ======================================================================== */
 
+type LogsBloom = vector(256, dec, byte)
+
+let EMPTY_LOGS_BLOOM : LogsBloom = vector_init(256, 0x00)
+
+function logs_bloom_equal(a : LogsBloom, b : LogsBloom) -> bool = {
+    var i : int = 0;
+    var equal : bool = true;
+    while equal & (i < 256) do {
+        let index = unsigned(get_slice_int(8, i, 0));
+        equal = a[index] == b[index];
+        i = i + 1
+    };
+    equal
+}
+
+function logs_bloom_bytes(bloom : LogsBloom) -> list(byte) = {
+    var out : list(byte) = [||];
+    foreach (k from 0 to 255) {
+        out = bloom[unsigned(get_slice_int(8, 255 - k, 0))] :: out
+    };
+    out
+}
+
 struct BlockHeader = {
     number : int,
     timestamp : int,
@@ -16,7 +39,7 @@ struct BlockHeader = {
     excess_blob_gas : u64, /* EELS U64 */
     state_root : bits(256),
     receipts_root : bits(256),
-    logs_bloom : list(byte),
+    logs_bloom : LogsBloom,
     fee_recipient : address,
     parent_hash : bits(256),
     parent_beacon_block_root : bits(256),
@@ -34,13 +57,11 @@ struct Withdrawal = {
     amount : int,
 }
 
-/* The block body: what the block carries besides its header. Transactions and
- * withdrawals are decoded by the single input pass; the block access list
- * (EIP-7928) stays a REFERENCE to its raw SSZ bytes -- it is hashed into the
- * header and size-capped, never decoded into a list. */
+/* The semantic block structure remains explicit while its potentially large
+ * body fields stay source-backed until their individual elements are needed. */
 struct BlockBody = {
-    transactions : list(Transaction),
-    withdrawals : list(Withdrawal),
+    transactions : SszListRef,
+    withdrawals : SszListRef,
     block_access_list : ByteSlice,
 }
 
@@ -49,10 +70,21 @@ struct Block = {
     body : BlockBody,
 }
 
-/* The engine-API view (EELS ExecutionPayload): the block plus the CLAIMED
- * hash of its consensus header -- validation reconstructs the header (derived
- * trie roots, requests hash, BAL hash) and checks its keccak against this. */
 struct ExecutionPayload = {
-    block_hash : hash,
+    expected_block_hash : hash,
     block : Block,
 }
+
+/* Raw EIP-7685 request bodies. The request-type bytes are added only while
+ * computing the header commitment; the SSZ input carries one field per type. */
+struct ExecutionRequests = {
+    deposits : ByteSlice,
+    withdrawals : ByteSlice,
+    consolidations : ByteSlice,
+}
+
+let EMPTY_EXECUTION_REQUESTS : ExecutionRequests = struct {
+        deposits = EMPTY_SLICE,
+        withdrawals = EMPTY_SLICE,
+        consolidations = EMPTY_SLICE,
+    }

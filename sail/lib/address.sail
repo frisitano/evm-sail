@@ -5,8 +5,7 @@
 /* CREATE address (Yellow Paper): low 20 bytes of
  * keccak256(rlp([sender, nonce])). */
 function create_address(sender : address, nonce : u64) -> address = {
-    var payload : list(byte) = rlp_addr(sender);
-    payload = list_append(payload, rlp_int(unsigned(nonce)));
+    let payload = list_append(rlp_addr(sender), rlp_int(unsigned(nonce)));
     word_to_address(keccak_rlp_payload([||], payload))
 }
 

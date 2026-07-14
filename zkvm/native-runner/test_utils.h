@@ -39,10 +39,9 @@ void evmsail_clear_memory(void);
 unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
                                const unsigned char **out);
 
-/* Post-run analysis snapshot of the live FFI state (materialized accounts + storage,
- * stack, memory frame depth) as a self-describing big-endian blob; *out points
- * into a static buffer (valid until the next dump). See test_utils.c for the
- * layout; dump_state.py decodes it into Python types. */
-unsigned long evmsail_dump_snapshot(const unsigned char **out);
+/* On-demand post-run debug dump of the live FFI state and canonical main.sail
+ * output as a self-describing big-endian blob; *out points into a static buffer
+ * valid until the next dump. This function is native-test-only. */
+unsigned long evmsail_debug_dump(const unsigned char **out);
 
 #endif /* EVMSAIL_TEST_UTILS_H */

@@ -73,7 +73,7 @@ function fork_of_protocol_index(idx : int) -> Fork =
                         if idx == 13 then {
                             Paris
                         } else {
-                            if idx == 10 then {
+                            if (idx >= 10) & (idx <= 12) then {
                                 London
                             } else {
                                 if idx == 9 then {

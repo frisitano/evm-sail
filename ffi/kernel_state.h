@@ -29,7 +29,8 @@ unit logs_reset(const unit u);
 unit log_begin(const lbits a);         /* start a new record for emitter a      */
 unit log_add_topic(const lbits t);     /* append a topic to the current record  */
 unit log_add_data_bulk(const uint8_t *p, uint64_t n); /* append data bytes (one memcpy) */
-unit log_drop_last(const unit u);      /* drop the most recent record (revert)   */
+uint64_t logs_checkpoint(const unit u);
+unit logs_revert(uint64_t checkpoint);
 uint64_t log_count(const unit u);
 void log_addr(lbits *rop, uint64_t i);
 uint64_t log_topic_count(uint64_t i);
@@ -48,7 +49,6 @@ uint64_t journal_len(const unit u);
 unit journal_push_tran(const lbits a, const lbits slot, const lbits val);
 unit journal_push_warma(const lbits a);
 unit journal_push_warms(const lbits a, const lbits slot);
-unit journal_push_log(const unit u);
 unit journal_push_refund(uint64_t old);
 uint64_t journal_top_tag(const unit u);
 unit journal_drop_top(const unit u);

@@ -36,9 +36,10 @@ if [ -n "${SANITIZE:-}" ]; then CFLAGS+=(-g -fsanitize=address,undefined -fno-om
 
 # 2. link a shared library: build.sh's objects (incl. test_utils.o), minus main.o
 HOST_OBJS=()
-for hc in memory transient_storage state_db stack code_db kernel_state trie_node_db host_crypto precompiles returndata; do
+for hc in memory scratch transient_storage state_db stack code_db kernel_state trie_node_db host_crypto precompiles output; do
   HOST_OBJS+=("$BUILD/$hc.o")
 done
+if [ "${EVM_PROFILE:-off}" = on ]; then HOST_OBJS+=("$BUILD/cycle_scopes.o"); fi
 case "$(uname -s)" in
   Darwin) SHFLAG=(-dynamiclib -install_name "@rpath/libevmsail_guest.dylib"); EXT=dylib ;;
   *)      SHFLAG=(-shared); EXT=so ;;
@@ -48,7 +49,7 @@ OUT="$BUILD/libevmsail_guest.$EXT"
 # el_emit_out, the output buffer, and run_once. The real guests' I/O
 # (zkvm_input.c / zkvm_io.c) is never linked into host builds.
 LINK_CMD=("$CC" "${CFLAGS[@]}" "${SHFLAG[@]}"
-    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/test_utils.o"
+    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/test_utils.o"
     "${HOST_OBJS[@]}"
     "$BUILD/sf_sail.o" "$BUILD/sf_sail_native.o" "$BUILD/sf_sail_failure.o"
     -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB"

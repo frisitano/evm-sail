@@ -36,12 +36,6 @@ struct StorageKey = { addr : address, slot : word }
 
 struct StorageEntry = { key : StorageKey, value : StorageValue }
 
-struct StorageMergeEntry = {
-    key         : StorageKey,
-    tx_original : word,
-    write       : option(StorageValue),
-}
-
 struct AcctValue = { curr : Account, orig : Account }
 
 struct AcctEntry = { addr : address, value : AcctValue }
@@ -62,10 +56,4 @@ let EMPTY_ACCOUNT : Account = struct {
     }
 
 function account_from_info(info : AccountInfo) -> Account =
-    struct {
-        info = info,
-        exists = true,
-        storage_cleared = false,
-        created = false,
-        selfdestructed = false,
-    }
+    struct { info = info, exists = true, storage_cleared = false, created = false, selfdestructed = false }

@@ -45,10 +45,18 @@ function do_jump(dest : int) -> unit =
         exc_halt(InvalidJump)
     }
 
+function pop_log_topics(count : int) -> list(word) =
+    if count <= 0 then {
+        [||]
+    } else {
+        pop() :: pop_log_topics(count - 1)
+    }
+termination_measure pop_log_topics(count) = count
+
 /* ------------------------------- execute -------------------------------- */
 
 function execute(op : ast) -> unit = match op {
-    STOP() => frame_status = Halted(HaltStop),
+    STOP() => frame_status = Halted(HaltStop()),
     /* ---- arithmetic (pure) ---- */
     ADD() => {
         charge(G_verylow);
@@ -344,7 +352,7 @@ function execute(op : ast) -> unit = match op {
             exc_halt(InvalidOpcode)
         } else {
             if is_running() then {
-                returndata_copy_to_mem(dest, off, len)
+                returndata_copy(dest, off, len)
             }
         }
     },
@@ -481,7 +489,7 @@ function execute(op : ast) -> unit = match op {
                         k_refund_add(refund)
                     };
                     if entry.curr != v then {
-                        k_sstore(self_addr(), s, v)
+                        k_sstore(self_addr(), s, struct { curr = v, orig = entry.orig })
                     } /* effect ONLY if it changes */
                 }
             }
@@ -571,10 +579,7 @@ function execute(op : ast) -> unit = match op {
         } else {
             let off = pop_int();
             let len = pop_int();
-            var topics : list(word) = [||];
-            foreach (k from 0 to (n - 1)) {
-                topics = list_append(topics, [|pop()|])
-            };
+            let topics = pop_log_topics(n);
             charge(log_gas(n, len));
             charge_expansion(off, len);
             if is_running() then {
@@ -594,8 +599,7 @@ function execute(op : ast) -> unit = match op {
         let len = pop_int();
         charge_expansion(off, len);
         if is_running() then {
-            returndata_capture(off, len);
-            frame_status = Halted(HaltReturn)
+            frame_status = Halted(HaltReturn(freeze_output(memory_byte_slice(off, len))))
         }
     },
     REVERT() => {
@@ -604,8 +608,7 @@ function execute(op : ast) -> unit = match op {
         let len = pop_int();
         charge_expansion(off, len);
         if is_running() then {
-            returndata_capture(off, len);
-            frame_status = Halted(HaltRevert)
+            frame_status = Halted(HaltRevert(freeze_output(memory_byte_slice(off, len))))
         }
     },
     INVALID() => {
@@ -660,7 +663,7 @@ function execute(op : ast) -> unit = match op {
                         k_selfdestruct(self_addr())
                     }
                 };
-                frame_status = Halted(HaltSelfDestruct)
+                frame_status = Halted(HaltSelfDestruct())
             }
         }
     },

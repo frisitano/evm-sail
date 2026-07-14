@@ -17,13 +17,13 @@ Definition storage_key := word256.
 Definition byte_seq := list byte.
 
 Inductive ByteSourceKind : Type :=
-| WitnessSource
+| StatelessInputSource
 | MemorySource
-| TxInputSource
 | CodeSource
 | LogDataSource
 | MemoryArenaSource
-| ReturndataSource.
+| OutputSource
+| ScratchSource.
 
 Definition jumpdest_bitmap := list word64.
 
@@ -102,7 +102,7 @@ Record InputOracle := {
         bytes_be_value (byte_window input_bytes off width);
 }.
 
-(* sail/host/io.sail: emit_out. *)
+(* sail/main.sail and sail/host/output.sail: guest-only public output. *)
 Record OutputTraceContract := {
   output_trace : Type;
   output_bytes : output_trace -> byte_seq;
@@ -119,7 +119,7 @@ Record OutputTraceContract := {
       bytes_wf (output_bytes (emit_out_step trace b));
 }.
 
-(* sail/primitives/crypto.sail and sail/host/io.sail: segmented hash axioms,
+(* sail/primitives/crypto.sail and sail/host/byte_slice.sail: segmented hash axioms,
    abstract crypto operations, and source-backed precompile execution. *)
 Record CryptoContract := {
   keccak256_ref : byte_seq -> word256;
@@ -140,7 +140,8 @@ Record CryptoContract := {
 }.
 
 (* sail/primitives/bytes.sail and sail/host/byte_slice.sail. Calldata and code
-   share this source/slice contract. Native pointer/length resolution must
+   share this source/slice contract. Code analysis and storage are isolated in
+   sail/{primitives,host}/code.sail. Native pointer/length resolution must
    refine the same materialized byte sequence for every source kind. *)
 Record ByteSourceContract := {
   byte_source_state : Type;
@@ -157,21 +158,24 @@ Record ByteSourceContract := {
   slice_load_word_contract : Prop;
   slice_load_n_word_contract : Prop;
   slice_copy_contract : Prop;
+  segmented_equality_refinement_contract : Prop;
   memory_slice_stability_contract : Prop;
+  scratch_append_refinement_contract : Prop;
+  scratch_truncate_refinement_contract : Prop;
   tx_input_view_contract : Prop;
   segmented_hash_refinement_contract : Prop;
   source_precompile_refinement_contract : Prop;
 }.
 
-(* sail/host/{memory,returndata,stack}.sail and sail/evm/machine.sail:
-   mem_*, returndata_*, stack_*, generic ByteSlice views, and the active
-   Code value. *)
+(* sail/host/{memory,output,stack}.sail and sail/evm/machine.sail:
+   mem_*, output_buffer_*, stack_*, generic ByteSlice views, the active Code
+   value, and Sail-owned EVM returndata state. *)
 Record MemoryStackContract := {
   memory_state : Type;
   stack_state : Type;
   byte_slice_state : Type;
   indexed_code_state : Type;
-  returndata_state : Type;
+  output_buffer_state : Type;
 
   host_mem_read_ref : memory_state -> word64 -> byte;
   host_mem_write_ref : memory_state -> word64 -> byte -> memory_state;
@@ -189,7 +193,7 @@ Record MemoryStackContract := {
   memory_move_contract : Prop;
   codecopy_to_memory_contract : Prop;
   generic_slice_view_contract : Prop;
-  returndata_frame_contract : Prop;
+  output_buffer_contract : Prop;
   evm_stack_lifo_contract : Prop;
   indexed_code_frame_contract : Prop;
 }.
@@ -230,7 +234,7 @@ Record WorldStateContract := {
 
 Definition span := (Z * Z)%type.
 
-(* sail/lib/mpt.sail witness-facing externs: nodedb_*. The node table plus the
+(* sail/host/nodes.sail witness-facing externs: nodedb_*. The node table plus the
    Sail-side authenticated parent-root register (k_parent_state_root) is the
    whole lazy-witness model: every walk from that root is a hash-chain proof
    through keccak(node)-keyed lookups. *)
@@ -272,13 +276,14 @@ Definition main_boundary (contract : GuestExternContract) : Prop :=
   slice_load_word_contract contract.(guest_byte_sources) /\
   slice_load_n_word_contract contract.(guest_byte_sources) /\
   slice_copy_contract contract.(guest_byte_sources) /\
+  segmented_equality_refinement_contract contract.(guest_byte_sources) /\
   memory_slice_stability_contract contract.(guest_byte_sources) /\
   tx_input_view_contract contract.(guest_byte_sources) /\
   segmented_hash_refinement_contract contract.(guest_byte_sources) /\
   source_precompile_refinement_contract contract.(guest_byte_sources) /\
   memory_frame_lifo_contract contract.(guest_memory_stack) /\
   generic_slice_view_contract contract.(guest_memory_stack) /\
-  returndata_frame_contract contract.(guest_memory_stack) /\
+  output_buffer_contract contract.(guest_memory_stack) /\
   evm_stack_lifo_contract contract.(guest_memory_stack) /\
   indexed_code_frame_contract contract.(guest_memory_stack) /\
   account_cache_update_contract contract.(guest_world_state) /\

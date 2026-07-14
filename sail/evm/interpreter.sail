@@ -193,20 +193,27 @@ function fetch() -> ast = {
     }
 }
 
-/* The step loop: fetch then execute until the frame stops running -- a normal
- * halt (STOP/RETURN), a REVERT, or an exceptional halt all clear is_running. */
-function interpret() -> unit =
+/* The step loop returns the frame's own output. STOP, SELFDESTRUCT, and
+ * exceptional halts return the empty slice; RETURN and REVERT carry their
+ * frozen memory slice in the halt value. */
+function interpret() -> ByteSlice = {
     while is_running() do {
         let op = fetch();
         execute(op)
+    };
+    match frame_status {
+        Halted(HaltReturn(output)) => output,
+        Halted(HaltRevert(output)) => output,
+        _ => EMPTY_SLICE,
     }
+}
 
 /* Did the just-finished frame end successfully? A normal halt succeeds; a
  * REVERT and any exceptional halt do not (their world effects are rolled
  * back and CALL/CREATE reports failure). */
 function frame_succeeded() -> bool =
     match frame_status {
-        Halted(HaltRevert) => false,
+        Halted(HaltRevert(_)) => false,
         Halted(_) => true,
         Running() => true,
         Exceptional(_) => false,
@@ -384,7 +391,7 @@ function run_call(mode : int) -> unit = {
     if not_bool(depth_ok) | not_bool(balance_ok) then {
         /* the call does not happen: the child gas (including stipend) is
            refunded to the caller and CALL pushes 0. */
-        returndata_clear_current();
+        returndata_clear();
         gas_remaining = to_gas(gas_remaining + child_gas);
         push(WORD_ZERO)
     } else {
@@ -395,30 +402,31 @@ function run_call(mode : int) -> unit = {
                child message's calldata: mem[args_off .. args_off+args_len).
                Gas inspects the same memory source before execution. */
             let in_len = if is_running() then { args_len } else { 0 };
-            let used = precompile_gas_memory_input(an, args_off, in_len);
+            let input = memory_byte_slice(args_off, in_len);
+            let used = precompile_gas(an, input);
 
             /* gas check FIRST: an out-of-gas precompile call must not execute (e.g. a
                blake2f with a huge round count would otherwise run before failing). */
-            let ok : bool = if used <= child_gas then {
-                    run_precompile_memory_input(an, args_off, in_len)
+            let result = if used <= child_gas then {
+                    run_precompile_slice(an, input)
                 } else {
-                    false
+                    precompile_failure()
                 };
-            if ok & (used <= child_gas) then {
-                returndata_adopt_pending();
+            if result.success & (used <= child_gas) then {
+                returndata = result.output;
 
                 /* the value transfer is part of the (successful) call */
                 if (mode == 0) & word_nonzero(value) then {
                     k_transfer(caller, target, value)
                 };
-                returndata_out_region(ret_off, ret_len);
+                returndata_copy_prefix(ret_off, ret_len);
                 gas_remaining = to_gas(gas_remaining + (child_gas - used));
                 push(WORD_ONE)
             } else {
                 /* precompile failure (bad input) or OOG is a non-revert error: it consumes
                    ALL the call's gas (no refund of child_gas), CALL returns 0, and the
                    RETURNDATA buffer is EMPTY (no output escapes a failed precompile). */
-                returndata_clear_current();
+                returndata_clear();
                 push(WORD_ZERO)
             }
         } else {
@@ -475,11 +483,13 @@ function run_call(mode : int) -> unit = {
                     depth = saved_call_depth + 1,
                 };
             let saved_calldata = calldata;
-            calldata = if is_running() then {
+            calldata_install(
+                if is_running() then {
                     mem_slice(args_off, args_len)
                 } else {
                     EMPTY_SLICE
-                };
+                },
+            );
 
             /* enter the child frame: pc at 0, its own gas/stack/memory, code
                selected by the EIP-7702 delegation rule, depth bumped. */
@@ -488,12 +498,12 @@ function run_call(mode : int) -> unit = {
             stack_enter_frame();
             frame_status = Running();
             mem_frame_enter();
-            returndata_clear_current();
+            returndata_clear();
             memory_size = 0;
             frame_code = child_code;
             call_depth = call_depth + 1;
 
-            interpret();
+            returndata = interpret();
 
             let succeeded = frame_succeeded();
             let child_left = gas_remaining;
@@ -503,13 +513,12 @@ function run_call(mode : int) -> unit = {
             pc = saved_pc;
             stack_leave_frame();
             message = saved_message;
-            calldata = saved_calldata;
+            calldata_install(saved_calldata);
             frame_status = saved_frame_status;
             mem_frame_leave();
             frame_code = saved_frame_code;
             memory_size = saved_memory_size;
             call_depth = call_depth - 1;
-            returndata_adopt_pending();
             gas_remaining = to_gas(saved_gas_remaining + child_left);
 
             /* copy returndata into the caller's output region on both success
@@ -518,7 +527,7 @@ function run_call(mode : int) -> unit = {
                exceptionally-halted child has empty output, so nothing is
                written. The child's world effects remain on success and are
                rolled back on failure. */
-            returndata_out_region(ret_off, ret_len);
+            returndata_copy_prefix(ret_off, ret_len);
             if succeeded then {
                 push(WORD_ONE)
             } else {
@@ -614,7 +623,7 @@ function run_create(is2 : bool) -> unit = {
         let nonce_ok : bool = nonce != 0xFFFFFFFFFFFFFFFF; /* EIP-2681 */
 
         if not_bool(depth_ok) | not_bool(balance_ok) | not_bool(nonce_ok) then {
-            returndata_clear_current();
+            returndata_clear();
             gas_remaining = to_gas(gas_remaining + child_gas);
             push(WORD_ZERO)
         } else {
@@ -624,7 +633,7 @@ function run_create(is2 : bool) -> unit = {
              * process_create_message). */
             let _ = k_access_account(new_addr);
             let occupied : bool = k_account_occupied(new_addr);
-            returndata_clear_current();
+            returndata_clear();
             k_bump_nonce(creator);
             if occupied then {
                 /* address collision (the target already has code, a nonzero
@@ -663,55 +672,49 @@ function run_create(is2 : bool) -> unit = {
                 /* the initcode frame has no calldata; its executing code is the
                    initcode referenced from memory[off, off+len). */
                 let saved_calldata = calldata;
-                calldata = EMPTY_SLICE;
+                calldata_install(EMPTY_SLICE);
                 let initcode = if is_running() then {
                         mem_slice(off, len)
                     } else {
                         EMPTY_SLICE
                     };
-                let child_code = code_db_resolve(code_db_index_and_store(initcode));
+                let child_code = code_db_resolve(code_db_insert(initcode));
                 pc = 0;
                 gas_remaining = to_gas(child_gas);
                 stack_enter_frame();
                 frame_status = Running();
                 mem_frame_enter();
-                returndata_clear_current();
+                returndata_clear();
                 memory_size = 0;
                 frame_code = child_code;
                 call_depth = call_depth + 1;
 
-                interpret();
+                returndata = interpret();
 
                 /* the initcode's RETURN value is the deployed code; its length
                    sets the EIP-170 size check and the per-byte deposit cost. */
                 let succeeded = frame_succeeded();
                 let child_left = gas_remaining;
-                let dep_len = returndata_pending_size();
+                let dep_len = returndata_size();
                 let deposit = G_codedeposit * dep_len;
 
                 /* deployed-code validity: within the EIP-170 size limit and,
                    from London onward, not beginning with 0xEF (EIP-3541, the
                    reserved EOF prefix). */
                 let code_ok = (dep_len <= max_code_size()) &
-                        ((k_fork < London) | (dep_len == 0) | (returndata_pending_byte(0) != 0xef));
+                        ((k_fork < London) | (dep_len == 0) | (slice_byte(returndata, 0) != 0xef));
 
                 /* leave the initcode frame: restore the parent's registers. */
                 pc = saved_pc;
                 stack_leave_frame();
                 message = saved_message;
-                calldata = saved_calldata;
+                calldata_install(saved_calldata);
                 frame_status = saved_frame_status;
                 mem_frame_leave();
                 frame_code = saved_frame_code;
                 memory_size = saved_memory_size;
                 call_depth = call_depth - 1;
 
-                /* a successful create yields EMPTY returndata; a revert exposes its data */
-                if succeeded then {
-                    returndata_clear_current()
-                } else {
-                    returndata_adopt_pending()
-                };
                 gas_remaining = to_gas(saved_gas_remaining + child_left);
 
                 /* finalize: an initcode that succeeded AND whose code is valid
@@ -719,8 +722,7 @@ function run_create(is2 : bool) -> unit = {
                    address is pushed. */
                 if succeeded & code_ok & (child_left >= deposit) then {
                     gas_remaining = to_gas(gas_remaining - deposit);
-                    k_deploy_returndata_code(new_addr);
-                    returndata_discard_pending();
+                    k_deploy_code(new_addr, returndata);
                     push(address_to_word(new_addr))
                 } else {
                     /* otherwise the create fails and is rolled back, pushing 0.
@@ -733,9 +735,14 @@ function run_create(is2 : bool) -> unit = {
                     if succeeded then {
                         gas_remaining = saved_gas_remaining
                     };
-                    returndata_discard_pending();
                     k_revert(checkpoint);
                     push(WORD_ZERO)
+                };
+
+                /* CREATE exposes REVERT output, but clears successful initcode
+                 * output after it has been consumed as deployed code. */
+                if succeeded then {
+                    returndata_clear()
                 }
             }
         }

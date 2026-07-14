@@ -32,3 +32,18 @@ val mem_move = impure { c: "mem_move" } : (bits(64), bits(64), bits(64)) -> unit
  * ONE crossing (YP 9.4.1; EELS memory_read_bytes / memory_write) */
 val mem_load_word = impure { c: "mem_load_word" } : bits(64) -> word
 val mem_store_word = impure { c: "mem_store_word" } : (bits(64), word) -> unit
+
+/* Freeze a range of the current frame in the absolute memory arena. */
+val mem_establish_absolute = impure { c: "mem_establish_absolute" } : (bits(64), bits(64)) -> bits(64)
+
+function mem_slice(off : int, len : int) -> ByteSlice =
+    if len == 0 then {
+        EMPTY_SLICE
+    } else {
+        let absolute = mem_establish_absolute(get_slice_int(64, off, 0), get_slice_int(64, len, 0));
+        if absolute == 0xFFFFFFFFFFFFFFFF then {
+            EMPTY_SLICE
+        } else {
+            struct { source = MemoryArenaSource, off = absolute, len = get_slice_int(64, len, 0) }
+        }
+    }

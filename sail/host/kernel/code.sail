@@ -11,9 +11,9 @@ function k_get_codehash(a : address) -> hash = {
     }
 }
 
-function k_deploy_returndata_code(a : address) -> unit = {
+function k_deploy_code(a : address, code : ByteSlice) -> unit = {
     let cur = k_aload(a);
-    let h : hash = code_db_index_and_store(returndata_pending_slice());
+    let h : hash = code_db_insert(code);
     store_account_info(a, cur, { cur.info with code_hash = h })
 }
 
@@ -31,7 +31,7 @@ function delegation_jumpdest_bitmap(target : address) -> JumpdestBitmap = {
 
 function k_set_delegation(a : address, target : address) -> unit = {
     let cur = k_aload(a);
-    let h : hash = code_intern_indexed_delegation(target, delegation_jumpdest_bitmap(target));
+    let h : hash = code_intern_delegation(target, delegation_jumpdest_bitmap(target));
     store_account_info(a, cur, { cur.info with code_hash = h })
 }
 
@@ -44,7 +44,7 @@ function addr_bytes(a : address) -> list(byte) = {
     let w = address_to_word(a);
     var out : list(byte) = [||];
     foreach (k from 0 to 19) {
-        out = list_append(out, [|sail_shiftright(w, 8 * (19 - k))[7 .. 0]|])
+        out = sail_shiftright(w, 8 * k)[7 .. 0] :: out
     };
     out
 }

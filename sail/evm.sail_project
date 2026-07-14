@@ -1,10 +1,15 @@
-variable EVM_ENTRY = core
+variable EVM_PROFILE = off
+variable EVM_DEBUG = off
 
 evm {
   files
     prelude.sail,
-    exceptions.sail,
     primitives/bytes.sail,
+    exceptions.sail,
+    primitives/ssz.sail,
+    primitives/code.sail,
+    lib/bytes.sail,
+    host/accelerators.sail,
     primitives/rlp.sail,
     primitives/crypto.sail,
     primitives/fork.sail,
@@ -16,20 +21,22 @@ evm {
     primitives/block.sail,
     primitives/evm.sail,
     primitives/stateless_input.sail,
-    host/io.sail,
     host/byte_slice.sail,
+    host/scratch.sail,
+    host/code.sail,
+    host/nodes.sail,
     lib/ssz/ssz.sail,
     lib/rlp/rlp.sail,
     lib/address.sail,
     lib/tx.sail,
     lib/rlp/tx.sail,
-    lib/rlp/block.sail,
     host/state.sail,
     host/environment.sail,
     host/stack.sail,
     host/memory.sail,
-    host/returndata.sail,
+    host/output.sail,
     host/kernel/environment.sail,
+    host/kernel/scratch.sail,
     host/kernel/storage.sail,
     host/kernel/logs.sail,
     host/kernel/accounts.sail,
@@ -38,14 +45,31 @@ evm {
     host/kernel/lifecycle.sail,
     evm/machine.sail,
     evm/gas.sail,
+    evm/precompiles.sail,
     evm/instructions.sail,
     evm/execute.sail,
     evm/interpreter.sail,
     evm/transaction.sail,
-    lib/mpt.sail,
+    lib/mpt/primitives.sail,
+    lib/mpt/nodes.sail,
+    lib/mpt/updates.sail,
+    lib/mpt/trie.sail,
     lib/state_trie.sail,
-    if $EVM_ENTRY == core then []
-    else if $EVM_ENTRY == guest then [lib/ssz/stateless_input.sail, executor/system_calls.sail, executor/block.sail, lib/htr.sail, bin/main.sail]
-    else if $EVM_ENTRY == runner then [lib/ssz/stateless_input.sail, bin/runner.sail]
-    else error("EVM_ENTRY must be core, guest, or runner")
+    primitives/cycle_scopes.sail,
+    if $EVM_PROFILE == off then host/cycle_scopes_disabled.sail
+    else if $EVM_PROFILE == on then host/cycle_scopes_enabled.sail
+    else error("EVM_PROFILE must be off or on"),
+    if $EVM_DEBUG == off then host/debug_disabled.sail
+    else if $EVM_DEBUG == on then host/debug_enabled.sail
+    else error("EVM_DEBUG must be off or on"),
+    lib/ssz/stateless_input.sail,
+    executor/system_calls.sail,
+    executor/block_access_list.sail,
+    executor/block.sail,
+    executor/payload.sail,
+    executor/receipts.sail,
+    executor/stateless.sail,
+    lib/htr.sail,
+    executor/result.sail,
+    main.sail
 }

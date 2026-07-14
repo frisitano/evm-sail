@@ -28,21 +28,11 @@
 
 /* --- EIP-4844/EIP-7918 blob accounting (from excess_blob_gas) ---
  * blob_base_fee = fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas,
- * BLOB_BASE_FEE_UPDATE_FRACTION). fake_exponential approximates factor *
- * e^(numerator/denominator) by summing the Taylor terms until the
- * (integer-divided) term reaches 0. Amsterdam retunes the update fraction and
- * adds the EIP-7918 reserve-price branch to the excess-blob-gas transition. */
+ * BLOB_BASE_FEE_UPDATE_FRACTION). The active target, maximum, and update
+ * fraction come from the validated SSZ chain config, including BPO1/BPO2. */
 let MIN_BLOB_BASE_FEE : int = 1
 let BLOB_BASE_COST : int = 8192
 let GAS_PER_BLOB : int = 131072
-let BLOB_SCHEDULE_TARGET_CANCUN : int = 3
-let BLOB_SCHEDULE_MAX_CANCUN : int = 6
-let BLOB_SCHEDULE_TARGET_PRAGUE : int = 6
-let BLOB_SCHEDULE_MAX_PRAGUE : int = 9
-let BLOB_SCHEDULE_TARGET_AMSTERDAM : int = 14
-let BLOB_SCHEDULE_MAX_AMSTERDAM : int = 21
-let BLOB_BASE_FEE_UPDATE_FRACTION_OSAKA : int = 5007716
-let BLOB_BASE_FEE_UPDATE_FRACTION_AMSTERDAM : int = 11684671
 
 function fake_exponential(factor : int, numerator : int, denominator : int) -> int = {
     var i : int = 1;
@@ -56,29 +46,14 @@ function fake_exponential(factor : int, numerator : int, denominator : int) -> i
     ediv_int(output, denominator)
 }
 
-function blob_base_fee_update_fraction() -> int =
-    if k_fork >= Amsterdam then {
-        BLOB_BASE_FEE_UPDATE_FRACTION_AMSTERDAM
-    } else {
-        BLOB_BASE_FEE_UPDATE_FRACTION_OSAKA
-    }
+function blob_base_fee_update_fraction() -> int = k_blob_schedule.base_fee_update_fraction
 
 function blob_base_fee(excess_blob_gas : int) -> int =
     fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas, blob_base_fee_update_fraction())
 
-function blob_schedule_target() -> int =
-    if k_fork >= Amsterdam then {
-        BLOB_SCHEDULE_TARGET_AMSTERDAM
-    } else {
-        if k_fork >= Prague then { BLOB_SCHEDULE_TARGET_PRAGUE } else { BLOB_SCHEDULE_TARGET_CANCUN }
-    }
+function blob_schedule_target() -> int = k_blob_schedule.target
 
-function blob_schedule_max() -> int =
-    if k_fork >= Amsterdam then {
-        BLOB_SCHEDULE_MAX_AMSTERDAM
-    } else {
-        if k_fork >= Prague then { BLOB_SCHEDULE_MAX_PRAGUE } else { BLOB_SCHEDULE_MAX_CANCUN }
-    }
+function blob_schedule_max() -> int = k_blob_schedule.max
 
 function blob_target_gas_per_block() -> int =
     GAS_PER_BLOB * blob_schedule_target()
@@ -100,7 +75,7 @@ function next_excess_blob_gas(
     } else {
         let target_blob_gas_price = GAS_PER_BLOB * blob_base_fee(parent_excess_blob_gas);
         let base_blob_tx_price = BLOB_BASE_COST * parent_base_fee_per_gas;
-        if (k_fork >= Amsterdam) & (base_blob_tx_price > target_blob_gas_price) then {
+        if (k_fork >= Osaka) & (base_blob_tx_price > target_blob_gas_price) then {
             parent_excess_blob_gas +
                 ediv_int(parent_blob_gas_used * (blob_schedule_max() - blob_schedule_target()), blob_schedule_max())
         } else {
@@ -226,30 +201,14 @@ function account_cost(warm : bool) -> gas =
 function sload_cost(warm : bool) -> gas =
     if warm then { G_warm_access } else { G_cold_sload } /* EIP-2929: cold SLOAD = 2100 */
 
-/* The two places a precompile input can live: CALL-family args in the current
- * frame's memory (starting at `base`), or the top-level transaction input.
- * Gas rules inspect the input bytes in place through the abstract byte
- * primitives (mem_get_byte / txdata_byte), so both backends share this single
- * gas table. Bytes at or past the declared input length read as zero,
- * matching the execution-specs buffer_read semantics used to parse
- * precompile input headers. */
-enum PcInputSource = { PcInputMemory, PcInputTxData }
-
-function pc_input_byte(src : PcInputSource, base : int, off : int, input_len : int) -> byte =
-    if off >= input_len then {
-        0x00
-    } else {
-        match src {
-            PcInputMemory => mem_get_byte(base + off),
-            PcInputTxData => txdata_byte(off),
-        }
-    }
+/* Precompile gas inspects the same ByteSlice that execution consumes. Bytes
+ * past its declared length read as zero, matching buffer_read semantics. */
 
 /* Big-endian integer from the precompile input, reading n bytes at off. */
-function pc_be(src : PcInputSource, base : int, off : int, n : int, input_len : int) -> int = {
+function pc_be(input : ByteSlice, off : int, n : int) -> int = {
     var v : int = 0;
     foreach (i from 0 to (n - 1)) {
-        v = v * 256 + unsigned(pc_input_byte(src, base, off + i, input_len))
+        v = v * 256 + unsigned(slice_byte(input, off + i))
     };
     v
 }
@@ -269,10 +228,10 @@ function bit_length(v : int) -> int = {
  * Input layout: bsize[32] esize[32] msize[32] base[bsize] exp[esize] mod[msize].
  * Gas grows with the multiplication-complexity of the larger of base/mod and
  * with an iteration count derived from the exponent's bit length. */
-function modexp_gas(src : PcInputSource, base : int, input_len : int) -> gas = {
-    let bl = pc_be(src, base, 0, 32, input_len); /* the length fields are read at FULL 32-byte  */
-    let el = pc_be(src, base, 32, 32, input_len); /* width: an oversized length (e.g. 2^64) must */
-    let ml = pc_be(src, base, 64, 32, input_len); /* price OOG, not wrap into the low 4 bytes    */
+function modexp_gas(input : ByteSlice) -> gas = {
+    let bl = pc_be(input, 0, 32); /* the length fields are read at FULL 32-byte  */
+    let el = pc_be(input, 32, 32); /* width: an oversized length (e.g. 2^64) must */
+    let ml = pc_be(input, 64, 32); /* price OOG, not wrap into the low 4 bytes    */
 
     /* EIP-7823 (Osaka) caps base/exp/mod at 1024 bytes each; a larger field
      * fails the call. Modeled by returning a cost beyond any forwardable child
@@ -303,14 +262,14 @@ function modexp_gas(src : PcInputSource, base : int, input_len : int) -> gas = {
        long exponent, big_mul per extra word past the first 32 bytes plus the
        leading word's bit length. */
     let iter : int = if el <= 32 then {
-            let ev = pc_be(src, base, exp_off, el, input_len);
+            let ev = pc_be(input, exp_off, el);
             if ev == 0 then {
                 0
             } else {
                 bit_length(ev) - 1
             }
         } else {
-            let head = pc_be(src, base, exp_off, 32, input_len); /* first 32 bytes of exponent */
+            let head = pc_be(input, exp_off, 32); /* first 32 bytes of exponent */
             let hb = if bit_length(head) > 0 then {
                     bit_length(head) - 1
                 } else {
@@ -333,7 +292,7 @@ function modexp_gas(src : PcInputSource, base : int, input_len : int) -> gas = {
  * is the per-pair discount (in thousandths) applied to a k-pair MSM, so a
  * larger MSM is progressively cheaper per pair; the discount is constant for
  * k >= 128. Indexed k = 1 .. 128 (G1 and G2 use distinct curves). */
-let BLS_G1_DISCOUNT : list(int) = [|
+let BLS_G1_DISCOUNT : vector(128, inc, int) = [
         1000,
         949,
         848,
@@ -462,8 +421,8 @@ let BLS_G1_DISCOUNT : list(int) = [|
         520,
         520,
         519,
-    |]
-let BLS_G2_DISCOUNT : list(int) = [|
+    ]
+let BLS_G2_DISCOUNT : vector(128, inc, int) = [
         1000,
         1000,
         923,
@@ -592,18 +551,18 @@ let BLS_G2_DISCOUNT : list(int) = [|
         525,
         524,
         524,
-    |]
+    ]
 
 /* EIP-2537 MSM gas: gas = (k * base * discount(k)) / 1000, where discount(k)
  * is read from `table` and clamps to `maxd` (the k=128 entry) for k >= 128. */
-function bls_msm_gas(table : list(int), base : gas, maxd : int, k : int) -> gas = {
+function bls_msm_gas(table : vector(128, inc, int), base : gas, maxd : int, k : int) -> gas = {
     if k <= 0 then {
         0
     } else {
         let d = if k >= 128 then {
                 maxd
             } else {
-                list_nth(table, k - 1, maxd)
+                table[unsigned(get_slice_int(7, 128 - k, 0))]
             };
         to_gas(ediv_int(k * base * d, 1000))
     }
@@ -614,18 +573,19 @@ function bls_msm_gas(table : list(int), base : gas, maxd : int, k : int) -> gas 
  * `words`; the two input-dependent curves (MODEXP, BLAKE2F rounds) read the
  * input in place through pc_be. The cases below are the precompile catalog
  * with their addresses and pricing EIPs. */
-function precompile_gas(num : int, input_len : int, src : PcInputSource, base : int) -> gas = {
+function precompile_gas(num : int, input : ByteSlice) -> gas = {
+    let input_len = unsigned(input.len);
     let words = ediv_int(input_len + 31, 32);
     let g : int = match num {
         1 => 3000, /* ECRECOVER (0x01) */
         2 => 60 + 12 * words, /* SHA-256 (0x02) */
         3 => 600 + 120 * words, /* RIPEMD-160 (0x03) */
         4 => 15 + 3 * words, /* IDENTITY (0x04) */
-        5 => modexp_gas(src, base, input_len), /* MODEXP (0x05), EIP-2565/7883 */
+        5 => modexp_gas(input), /* MODEXP (0x05), EIP-2565/7883 */
         6 => 150, /* BN_ADD (0x06), EIP-1108 */
         7 => 6000, /* BN_MUL (0x07), EIP-1108 */
         8 => 45000 + 34000 * ediv_int(input_len, 192), /* BN_PAIRING (0x08), EIP-1108 */
-        9 => pc_be(src, base, 0, 4, input_len), /* BLAKE2F (0x09): gas = round count */
+        9 => pc_be(input, 0, 4), /* BLAKE2F (0x09): gas = round count */
         10 => 50000, /* POINT_EVALUATION (0x0a), EIP-4844 */
         /* EIP-2537 BLS12-381 */
         11 => 375, /* G1ADD            */
@@ -640,12 +600,6 @@ function precompile_gas(num : int, input_len : int, src : PcInputSource, base : 
     };
     to_gas(g)
 }
-
-function precompile_gas_memory_input(num : int, off : int, len : int) -> gas =
-    precompile_gas(num, len, PcInputMemory, off)
-
-function precompile_gas_tx_input(num : int, len : int) -> gas =
-    precompile_gas(num, len, PcInputTxData, 0)
 
 /* ----------------- EIP-2200/2929/3529 SSTORE cost+refund ---------------- */
 /* SSTORE pricing is a three-way comparison (EIP-2200) of: original = the     */

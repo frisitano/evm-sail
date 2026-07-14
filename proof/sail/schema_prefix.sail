@@ -1,8 +1,8 @@
 /* Pure proof adapter for the SszStatelessInput schema prefix.
  *
- * Mirrors sail/host/io.sail:
+ * Mirrors sail/lib/ssz/stateless_input.sail:
  *
- *   function ssz_schema_id() -> int = ib(0) * 256 + ib(1)
+ *   unsigned(ssz_src_byte(0)) * 256 + unsigned(ssz_src_byte(1)) == 1
  *
  * The executable model therefore treats the two schema bytes as big-endian.
  * Schema id 1 is byte prefix 00 01.
@@ -18,9 +18,6 @@ function schema_prefix_id(input0 : byte, input1 : byte) -> int =
 
 function schema_prefix_ok(input0 : byte, input1 : byte, len : int) -> bool =
     (len >= SCHEMA_PREFIX_LEN) & (schema_prefix_id(input0, input1) == STATELESS_INPUT_SCHEMA_ID)
-
-function schema_prefix_ok_bytes(input : list(byte), len : int) -> bool =
-    schema_prefix_ok(list_nth(input, 0, 0x00), list_nth(input, 1, 0x00), len)
 
 function schema_prefix_expected_bytes_equiv(input0 : byte, input1 : byte, len : int) -> bool = {
     let expected = (len >= SCHEMA_PREFIX_LEN) & (input0 == 0x00) & (input1 == 0x01);

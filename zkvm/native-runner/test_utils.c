@@ -1,14 +1,14 @@
 /* Self-contained native harness for the evm-sail model: the ONE host-side I/O
- * + run surface, linked into the ctypes .dylibs (build_lib.sh /
- * build_runner_lib.sh) AND the standalone zkvm_native exe (main.c CLI). Never
+ * + run surface, linked into the ctypes guest library (build_lib.sh) AND the
+ * standalone zkvm_native exe (main.c CLI). Never
  * linked into the real zkVM guest, whose baked-vector / HTIF paths stay in
  * zkvm_input.c / zkvm_io.c.
  *
  * This file owns the WHOLE native I/O + harness surface so every host build
- * links exactly one file: the input buffer + ssz_src accessors, the emit_out
+ * links exactly one file: the input buffer + ssz_src accessors, the public-output
  * output buffer + accessors, the model lifecycle, the large-stack run_once, and
  * the between-fixtures clear_memory. It replaces the old split across
- * zkvm_input.c (-DERE_GUEST) + native_io.c + runner_ffi.c and their duplicated
+ * zkvm_input.c (-DERE_GUEST) plus the native input/output adapters and their
  * ssz_src / double output buffer. See test_utils.h for the contract. */
 #include "sail.h" /* unit / UNIT / bool / sail_int */
 #include "test_utils.h"
@@ -19,7 +19,8 @@
 
 /* ------------------------- input byte source ---------------------------- */
 /* The host hands the guest its private input via evmsail_set_input; the Sail
- * SSZ/stream decoder reads it through ssz_src_* (io.sail). One buffer, indexed. */
+ * SSZ/stream decoder reads it through ssz_src_* (lib/ssz/ssz.sail). One buffer,
+ * indexed. */
 static const unsigned char *g_in = NULL;
 static unsigned long g_in_len = 0;
 
@@ -41,7 +42,7 @@ uint64_t ssz_src_byte(uint64_t idx)
     return (i < g_in_len) ? (uint64_t)g_in[i] : 0;
 }
 
-const uint8_t *evmsail_ssz_ptr(uint64_t off, uint64_t len)
+const uint8_t *evmsail_stateless_input_ptr(uint64_t off, uint64_t len)
 {
     uint64_t total = (uint64_t)g_in_len;
     if (off > total || len > total - off) return NULL;
@@ -74,8 +75,8 @@ uint64_t ssz_src_be(sail_int off, sail_int n) /* big-endian */
 }
 
 /* ------------------------- output byte sink ----------------------------- */
-/* The guest emits its canonical result byte-by-byte via emit_out -> el_emit_out
- * (io.sail / build.sail). Buffer it; the host reads the buffer after the run. */
+/* The guest emits its canonical result byte-by-byte via public_output_write ->
+ * el_emit_out (host/output.sail). Buffer it for the native harness. */
 static unsigned char g_out[1u << 17];
 static size_t g_out_len = 0;
 
@@ -86,7 +87,7 @@ unit el_emit_out(uint64_t b)
 }
 
 /* --------------------------- state resets ------------------------------- */
-/* Reset surface -- all plain C FFI symbols (ffi/*.c), so the harness wipes state
+/* Reset surface -- all plain C FFI symbols, so the harness wipes state
  * WITHOUT any Sail-level reset function. This is the whole point: k_world_reset
  * is driver/test plumbing, not EVM semantics, so it does not belong in the
  * model. We call its constituent FFI resets directly instead. */
@@ -125,8 +126,7 @@ void evmsail_clear_memory(void)
      * not enough: the "codes_missing_*" negative tests need the code DB too. */
     nodedb_reset(UNIT);
     code_db_reset(UNIT);
-    /* a Sail exception that propagated out of the previous run (runner: an
-     * uncaught InvalidBlock, captured by the dump's ok flag). Left set it would
+    /* a Sail exception that propagated out of the previous run. Left set it would
      * poison the next run: generated code short-circuits every call while
      * have_exception is true. */
     have_exception = false;
@@ -181,30 +181,30 @@ unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
     return (unsigned long)g_out_len;
 }
 
-/* --------------------- post-run state snapshot (analysis) ---------------- */
-/* A C-side dump of the model's live FFI state AFTER a run, marshalled into a
+/* ------------------------- debug state dump ------------------------------ */
+/* An on-demand C-side dump of the model's live FFI state AFTER a run,
+ * marshalled into a
  * self-describing binary blob that Python (dump_state.py) decodes into native
- * types. This is an ANALYSIS surface, separate from the runner's gas+root output
- * -- it lets a mismatch be inspected without the model emitting anything extra.
+ * types. This is a native test utility, never linked into the real guest, and
+ * normal fixture runs do not invoke it.
  *
  * Content (all multi-byte ints big-endian):
- *   'G' ok[1] gas[8] root[32]        (the run RESULT -- the runner's ONLY
- *                                     output channel: ok = no uncaught Sail
- *                                     exception; gas = the zkvm_out_gas
- *                                     register; root = compute_state_root(),
- *                                     called on the live post-run state, zeros
- *                                     when ok=0)
+ *   'G' ok[1] root[32]               (root = compute_state_root() over the live
+ *                                     post-run state, zeros when ok=0)
  *       when ok=0, followed by the CAPTURED exception:
  *       err[1] loc_len[2] loc[loc_len]   (err = the BlockError enum value of
  *                                     the InvalidBlock that escaped, 0xff if
  *                                     none recorded; loc = the Sail source
  *                                     position of the throw site)
- *   'A' u32 n_acct  { hkey[32] nonce[8] bal[32] sroot[32] chash[32] base[1]
+ *   'O' u32 len output[len]          (the canonical output emitted by main.sail)
+ *   'V' failed[1]                    (main.sail's caught validation failure)
+ *       when failed=1: scope[1] reason[1]
+ *   'A' u32 n_acct  { hkey[32] nonce[8] bal[32] sroot[32] chash[32]
  *                     u32 n_slot { slot[32] val[32] }* }*
  *   'S' u32 depth   { word[32] }*   (stack, top-first)
  *   'M' u32 frame_depth              (EVM memory: only the call-frame depth is
  *                                     available C-side; the logical byte length
- *                                     is a Sail register, and for the runner
+ *                                     is a Sail register, and after a block
  *                                     memory is reset per tx -- empty post-run)
  *   'E'
  * The account/storage entries are the cumulative state touched by execution;
@@ -222,12 +222,7 @@ extern uint64_t stack_depth(unit);
 extern void     stack_peek_word(lbits *, uint64_t);
 extern uint64_t hm_depth(unit);
 
-/* The run result, WITHOUT model-side plumbing: the per-entry gas register
- * (zkvm_out_gas), the model's OWN root computation called directly
- * (compute_state_root exists in both entries), and the generated exception
- * state (a Sail throw that propagated out of zmain -- e.g. the runner's
- * InvalidBlock on a malformed tx / deficient witness). */
-extern sail_int zzzkvm_out_gas;
+/* The model's own root computation and generated exception state. */
 extern void     zcompute_state_root(lbits *, unit);
 /* Mirror of the GENERATED exception representation (.build/zkvm_*.h): the
  * model's single constructor InvalidBlock(BlockError). The BlockError enum
@@ -237,6 +232,9 @@ extern void     zcompute_state_root(lbits *, unit);
 struct evmsail_exception { int kind; union { int block_error; } variants; };
 extern struct evmsail_exception *current_exception;
 extern char **throw_location;
+extern bool zvalidation_failure_present;
+extern uint64_t zvalidation_failure_scope;
+extern int zvalidation_failure_reason;
 
 static unsigned char g_dump[1u << 22];
 static size_t g_dump_len;
@@ -252,14 +250,14 @@ static void d_word(const lbits *v) {
     }
 }
 
-unsigned long evmsail_dump_snapshot(const unsigned char **out)
+unsigned long evmsail_debug_dump(const unsigned char **out)
 {
     g_dump_len = 0;
     lbits w;
 
+    if (!have_exception) zcompute_state_root(&w, UNIT);
     d_byte('G');
     d_byte(have_exception ? 0 : 1);
-    d_u64((uint64_t)mpz_get_ui(zzzkvm_out_gas));
     if (have_exception) {
         for (int i = 0; i < 32; i++) d_byte(0);
         d_byte(current_exception
@@ -273,8 +271,18 @@ unsigned long evmsail_dump_snapshot(const unsigned char **out)
         d_byte((unsigned char)(ln & 0xff));
         for (size_t i = 0; i < ln; i++) d_byte((unsigned char)loc[i]);
     } else {
-        zcompute_state_root(&w, UNIT);
         d_word(&w);
+    }
+
+    d_byte('O');
+    d_u32((uint32_t)g_out_len);
+    for (size_t i = 0; i < g_out_len; i++) d_byte(g_out[i]);
+
+    d_byte('V');
+    d_byte(zvalidation_failure_present ? 1 : 0);
+    if (zvalidation_failure_present) {
+        d_byte((unsigned char)zvalidation_failure_scope);
+        d_byte((unsigned char)zvalidation_failure_reason);
     }
 
     d_byte('A');
