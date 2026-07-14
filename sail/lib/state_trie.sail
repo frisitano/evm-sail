@@ -1,5 +1,14 @@
-/* Ethereum account and storage tries over the generic MPT core. */
+/*md
+# The state trie
 
+Ethereum account and storage tries over the generic MPT core: secure-trie
+reads for stateless execution, and the post-state root computation
+(YP §4.1).
+*/
+
+/*! Decodes an account trie leaf — `rlp([nonce, balance, storage_root,
+    code_hash])` — into an [AccountInfo][type-AccountInfo]; empty
+    root/hash fields decode to their empty-sentinel digests. */
 function decode_state_account(value : Bytes) -> AccountInfo = {
     let (nonce, fields) = rlp_cursor_pop(rlp_node_cursor(value));
     let (balance, fields) = rlp_cursor_pop(fields);
@@ -24,6 +33,9 @@ function decode_state_account(value : Bytes) -> AccountInfo = {
     }
 }
 
+/*! The witnessed account at address `a` under state root `root`,
+    reading the secure trie at `keccak256(a)`; `None` when the walk
+    proves absence. */
 function stateless_account(root : hash, a : address) -> option(AccountInfo) = {
     let value = trie_lookup(root, path_from_hash(keccak256_address(a)));
     if bytes_len(value) == 0 then {
@@ -33,6 +45,8 @@ function stateless_account(root : hash, a : address) -> option(AccountInfo) = {
     }
 }
 
+/*! The witnessed storage value of `slot` under a storage root, reading
+    the secure trie at `keccak256(slot)`; absent slots are zero. */
 function stateless_storage(root : hash, slot : word) -> word = {
     let value = trie_lookup(root, path_from_hash(keccak256_word(slot)));
     if bytes_len(value) == 0 then {
@@ -42,6 +56,11 @@ function stateless_storage(root : hash, slot : word) -> word = {
     }
 }
 
+/*! The post-state root: drains every changed account from the kernel's
+    block-level overlay, recomputes each touched account's storage root
+    from its changed slots (zero-valued slots delete), re-encodes the
+    account leaf (empty accounts delete, per EIP-161), and folds the
+    sorted update list into the parent state root via [trie_root][]. */
 function compute_state_root() -> hash = {
     var accounts : list(TrieUpdate) = [||];
     foreach (i from 0 to (unsigned(acct_block_count()) - 1)) {

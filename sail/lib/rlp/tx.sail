@@ -1,18 +1,19 @@
-/* ======================================================================== */
-/* RLP: TRANSACTION DECODE                                                  */
-/*                                                                          */
-/* The EIP-2718 transaction envelope decoder: per-envelope destructuring    */
-/* into the Transaction type (one walk, exact field shape, mirroring        */
-/* EELS's per-envelope dataclasses), plus the EIP-2930 access-list and      */
-/* EIP-7702 authorization-tuple decoders. Standalone and purely             */
-/* structural: input is a ByteSlice envelope + a ByteSlice public key, any  */
-/* source; signature RULES live in lib/tx.sail, the crypto in               */
-/* primitives/crypto.sail.                                                  */
-/* ======================================================================== */
+/*md
+# Transaction decoding
 
-/* Decode an EIP-2930 access list (RLP [[address, [slot, ...]], ...]) from the
- * access-list field into the flat representation the Transaction and intrinsic-
- * gas accounting use: the addresses (one per entry) and the (address, slot) pairs. */
+The EIP-2718 transaction envelope decoder: per-envelope destructuring into
+the [Transaction][type-Transaction] type (one walk, exact field shape,
+mirroring EELS's per-envelope dataclasses), plus the EIP-2930 access-list
+and EIP-7702 authorization-tuple decoders. Standalone and purely
+structural: input is a `ByteSlice` envelope and a `ByteSlice` public key
+of any source; the signature rules and the cryptography live in their own
+modules.
+*/
+
+/*! Decodes an EIP-2930 access list — RLP `[[address, [slot, …]], …]` —
+    into the flat representation the transaction and intrinsic-gas
+    accounting use: the addresses (one per entry) and the
+    `(address, slot)` pairs. */
 function decode_access_list(f : RlpFieldRef) -> (list(address), list(StorageKey), int, int) = {
     var addresses_rev : list(address) = [||];
     var storage_slots_rev : list(StorageKey) = [||];
@@ -42,9 +43,10 @@ function decode_access_list(f : RlpFieldRef) -> (list(address), list(StorageKey)
     (list_reverse(addresses_rev), list_reverse(storage_slots_rev), address_count, slot_count)
 }
 
-/* Validate the canonical RLP list of bytes32 blob versioned hashes once, then
- * retain its encoded content as a fixed-stride source view. Each element is
- * exactly 0xa0 followed by 32 bytes, so BLOBHASH can load item i at 33*i+1. */
+/*! Validates the canonical RLP list of `bytes32` blob versioned hashes
+    once, then retains its encoded content as a fixed-stride source view:
+    each element is exactly `0xa0` followed by 32 bytes, so `BLOBHASH` can
+    load item `i` at `33·i + 1`. */
 function decode_blob_hashes(f : RlpFieldRef) -> BlobHashes = {
     let bytes : ByteSlice = match f.source {
         BytesSlice(source) => sub_slice(source, unsigned(f.content_off), unsigned(f.content_len)),
@@ -69,15 +71,15 @@ function decode_blob_hashes(f : RlpFieldRef) -> BlobHashes = {
     struct { bytes = bytes, count = count }
 }
 
-/* ---- EIP-7702 authorization-tuple recovery ---------------------------------
- * Each set-code authorization tuple [chainId, address, nonce, yParity, r, s] is
- * signed by the AUTHORITY, whose address is recovered (not witnessed) via
- * ecrecover over keccak(0x05 ++ rlp([chainId, address, nonce])). */
-
-/* decode an EIP-7702 authorization list into Authorizations,
- * recovering each authority. valid_sig records tuple-local signature validity
- * (recoverable, low-s, r/y parity ranges, incrementable nonce); process_auth then
- * applies the chain-id / account nonce / code checks. */
+/*! Decodes an EIP-7702 authorization list into
+    [Authorization][type-Authorization] tuples, recovering each authority.
+    Each set-code tuple `[chainId, address, nonce, yParity, r, s]` is
+    signed by the authority, whose address is recovered (not witnessed)
+    via `ecrecover` over `keccak256(0x05 ++ rlp([chainId, address,
+    nonce]))`. `valid_sig` records tuple-local signature validity
+    (recoverable, low-`s`, `r`/`y_parity` ranges, incrementable nonce);
+    [process_auth][] then applies the chain-id / account nonce / code
+    checks. */
 function decode_auth_list(f : RlpFieldRef) -> (list(Authorization), int) = {
     var out_rev : list(Authorization) = [||];
     var count : int = 0;
@@ -122,9 +124,12 @@ function decode_auth_list(f : RlpFieldRef) -> (list(Authorization), int) = {
     (list_reverse(out_rev), count)
 }
 
+/*! The calldata/initcode span of the data field within the envelope. */
 function tx_input_span(payload : ByteSlice, data : RlpFieldRef) -> ByteSlice =
     sub_slice(payload, unsigned(data.content_off), unsigned(data.content_len))
 
+/*! The span of the pre-signature fields — from the first field to the
+    start of the signature — hashed by [tx_signing_hash][]. */
 function tx_sig_span(payload : ByteSlice, first : RlpFieldRef, signature : RlpFieldRef) -> ByteSlice = {
     let start = unsigned(first.full_off);
     let stop = unsigned(signature.full_off);
@@ -135,22 +140,23 @@ function tx_sig_span(payload : ByteSlice, first : RlpFieldRef, signature : RlpFi
     }
 }
 
-/* Decode ONE transaction from its raw envelope bytes -- standalone and purely
- * STRUCTURAL: `tx` is the EIP-2718 envelope as a byte slice (any source),
- * `pubkey` the 65-byte witness public key (0x04 ++ X ++ Y) claimed for its
- * sender. The sender derives from the key (keccak(X||Y)[12:]) and the
- * signature material (signing hash, v/r/s, the key itself) is CAPTURED on the
- * Transaction; authentication happens at execution (check_transaction_validity
- * -> tx_auth_ok), mirroring EELS recover_sender_from_public_key inside
- * check_transaction. No trust decision and no fee derivation happens here.
- *
- * A leading byte >= 0xc0 is a legacy (type-0) RLP list; otherwise it is the
- * type byte (0x01 EIP-2930, 0x02 EIP-1559, 0x03 EIP-4844, 0x04 EIP-7702) and
- * the RLP payload starts right after it. Each envelope is destructured in ONE
- * walk against its EXACT field shape (mirroring EELS's per-envelope
- * dataclasses); an unknown type byte or wrong arity is undecodable. The data
- * field is never materialized: input_src carries its (source, offset, length)
- * span, bound as the transaction input only when the tx runs. */
+/*! Decodes one transaction from its raw envelope bytes — standalone and
+    purely structural. `tx` is the EIP-2718 envelope as a byte slice (any
+    source); `pubkey` the 65-byte witness public key (`0x04 ++ X ++ Y`)
+    claimed for its sender. The sender derives from the key
+    (`keccak256(X ‖ Y)[12:]`) and the signature material (signing hash,
+    `v`/`r`/`s`, the key itself) is captured on the transaction;
+    authentication happens at execution ([tx_auth_ok][]), mirroring EELS
+    `recover_sender_from_public_key` inside `check_transaction`. No trust
+    decision and no fee derivation happens here.
+
+    A leading byte `≥ 0xc0` is a legacy (type-0) RLP list; otherwise it is
+    the type byte (`0x01` EIP-2930, `0x02` EIP-1559, `0x03` EIP-4844,
+    `0x04` EIP-7702) and the RLP payload starts right after it. Each
+    envelope is destructured in one walk against its exact field shape; an
+    unknown type byte or wrong arity is undecodable. The data field is
+    never materialized: `input_src` carries its (source, offset, length)
+    span, bound as the transaction input only when the tx runs. */
 function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
     let sender = word_to_address(keccak256(sub_slice(pubkey, 1, 64)));
     let tx_len = unsigned(tx.len);

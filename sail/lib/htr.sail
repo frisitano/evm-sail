@@ -1,19 +1,22 @@
-/* ======================================================================== */
-/* SSZ hash_tree_root: consensus-layer merkleization (SHA-256)              */
-/*                                                                          */
-/* Variable SSZ lists are consumed in source order. Each real leaf is       */
-/* folded into a Merkle frontier exactly once; final zero padding is then   */
-/* folded one level at a time. No leaf list or zero-hash lookup table is    */
-/* materialized.                                                            */
-/* ======================================================================== */
+/*md
+# SSZ hash_tree_root
 
+Consensus-layer merkleization (SHA-256). Variable SSZ lists are consumed
+in source order: each real leaf is folded into a Merkle frontier exactly
+once, and final zero padding is then folded one level at a time. No leaf
+list or zero-hash lookup table is materialized.
+*/
+
+/*! One level of the Merkle frontier: empty, or holding the pending left
+    subtree hash for that level. */
 union MerkleSlot = {
     EmptyMerkleSlot : unit,
     OccupiedMerkleSlot : hash,
 }
 
-/* Add leaf number `count` to a low-to-high frontier. A set bit in count has
- * one occupied slot at that level; carries consume those slots head-first. */
+/*! Adds leaf number `count` to a low-to-high frontier. A set bit in
+    `count` has one occupied slot at that level; carries consume those
+    slots head-first. */
 function merkle_push(frontier : list(MerkleSlot), count : int, leaf : hash) -> list(MerkleSlot) =
     if emod_int(count, 2) == 0 then {
         match frontier {
@@ -29,8 +32,9 @@ function merkle_push(frontier : list(MerkleSlot), count : int, leaf : hash) -> l
         }
     }
 
-/* Pad a frontier to 2^depth leaves. `zero` advances from the zero chunk to
- * the zero subtree for the current level, so padding is O(depth). */
+/*! Pads a frontier to `2^depth` leaves and returns its root. `zero`
+    advances from the zero chunk to the zero subtree for the current
+    level, so padding is O(depth). */
 function merkle_frontier_root(frontier : list(MerkleSlot), count : int, depth : int) -> hash = {
     if count > pow2(depth) then {
         throw InvalidBlock(WitnessDeficient)
@@ -75,6 +79,7 @@ function merkle_frontier_root(frontier : list(MerkleSlot), count : int, depth : 
     }
 }
 
+/*! `merkleize` of a fixed leaf list at `depth` (SSZ spec). */
 function merkleize(leaves : list(hash), depth : int) -> hash = {
     var rest : list(hash) = leaves;
     var frontier : list(MerkleSlot) = [||];
@@ -93,9 +98,12 @@ function merkleize(leaves : list(hash), depth : int) -> hash = {
     merkle_frontier_root(frontier, count, depth)
 }
 
-/* ---- basic types and byte sequences ----------------------------------- */
+/*md
+## Basic types and byte sequences
+*/
 
-/* uint64 -> 32-byte chunk (value little-endian in the low 8 bytes) */
+/*! `uint64` as a 32-byte chunk (value little-endian in the low 8
+    bytes). */
 function htr_u64(v : int) -> hash = {
     var acc : hash = sail_zeros(256);
     foreach (k from 0 to 7) {
@@ -105,7 +113,7 @@ function htr_u64(v : int) -> hash = {
     acc
 }
 
-/* uint256 word -> 32-byte little-endian chunk */
+/*! `uint256` as a 32-byte little-endian chunk. */
 function htr_u256(w : word) -> hash = {
     var acc : hash = sail_zeros(256);
     foreach (k from 0 to 31) {
@@ -115,11 +123,15 @@ function htr_u256(w : word) -> hash = {
     acc
 }
 
+/*! `Bytes32` chunks are themselves. */
 function htr_bytes32(b : bits(256)) -> hash = b
+/*! A 20-byte address, left-aligned in its chunk. */
 function htr_addr(a : address) -> hash = sail_shiftleft(sail_zero_extend(a, 256), 96)
 
+/*! `mix_in_length`: hashes the list root with its length chunk. */
 function mix_in_length(root : hash, len : int) -> hash = sha256_pair(root, htr_u64(len))
 
+/*! The ceiling of log2 — the Merkle depth of an `n`-chunk capacity. */
 function clog2(n : int) -> int = {
     var depth : int = 0;
     var capacity : int = 1;
@@ -130,6 +142,7 @@ function clog2(n : int) -> int = {
     depth
 }
 
+/*! The `chunk_index`-th 32-byte chunk of a byte span, zero-padded. */
 function htr_chunk(bytes : ByteSlice, chunk_index : int) -> hash = {
     var acc : hash = sail_zeros(256);
     let len = unsigned(bytes.len);
@@ -145,6 +158,7 @@ function htr_chunk(bytes : ByteSlice, chunk_index : int) -> hash = {
     acc
 }
 
+/*! The Merkle root of a byte span's chunks at `depth`. */
 function htr_bytes_root(bytes : ByteSlice, depth : int) -> hash = {
     let count = ediv_int(unsigned(bytes.len) + 31, 32);
     var frontier : list(MerkleSlot) = [||];
@@ -156,18 +170,24 @@ function htr_bytes_root(bytes : ByteSlice, depth : int) -> hash = {
     merkle_frontier_root(frontier, count, depth)
 }
 
+/*! `hash_tree_root` of a fixed-size `ByteVector`. */
 function htr_bytevector(bytes : ByteSlice) -> hash = {
     let chunks = ediv_int(unsigned(bytes.len) + 31, 32);
     htr_bytes_root(bytes, clog2(chunks))
 }
 
+/*! `hash_tree_root` of a `ByteList[limit_bytes]` (root at the limit's
+    depth, length mixed in). */
 function htr_bytelist(bytes : ByteSlice, limit_bytes : int) -> hash = {
     let capacity = ediv_int(limit_bytes + 31, 32);
     mix_in_length(htr_bytes_root(bytes, clog2(capacity)), unsigned(bytes.len))
 }
 
-/* ---- execution payload ------------------------------------------------ */
+/*md
+## The execution payload
+*/
 
+/*! `hash_tree_root` of one SSZ withdrawal (4 fields, depth 2). */
 function htr_withdrawal(withdrawal : ByteSlice) -> hash = {
     let b = unsigned(withdrawal.off);
     merkleize(
@@ -181,7 +201,8 @@ function htr_withdrawal(withdrawal : ByteSlice) -> hash = {
     )
 }
 
-/* List[ByteList[2^30], 2^20] */
+/*! `hash_tree_root` of the transactions list
+    (`List[ByteList[2^30], 2^20]`). */
 function htr_transactions(transactions : SszListRef) -> hash = {
     var cursor = ssz_list_cursor(transactions);
     var frontier : list(MerkleSlot) = [||];
@@ -195,7 +216,7 @@ function htr_transactions(transactions : SszListRef) -> hash = {
     mix_in_length(merkle_frontier_root(frontier, count, 20), count)
 }
 
-/* List[SszWithdrawal, 16] */
+/*! `hash_tree_root` of the withdrawals list (`List[SszWithdrawal, 16]`). */
 function htr_withdrawals(withdrawals : SszListRef) -> hash = {
     var rest : SszListRef = withdrawals;
     var frontier : list(MerkleSlot) = [||];
@@ -209,7 +230,7 @@ function htr_withdrawals(withdrawals : SszListRef) -> hash = {
     mix_in_length(merkle_frontier_root(frontier, count, 4), count)
 }
 
-/* SszExecutionPayload: 19 fields -> depth 5. */
+/*! `hash_tree_root` of the `SszExecutionPayload` (19 fields, depth 5). */
 function htr_execution_payload(input_ref : StatelessInputRef) -> hash = {
     let p = unsigned(input_ref.execution_payload.off);
     merkleize(
@@ -238,7 +259,7 @@ function htr_execution_payload(input_ref : StatelessInputRef) -> hash = {
     )
 }
 
-/* List[Bytes32, 4096] */
+/*! `hash_tree_root` of the versioned hashes (`List[Bytes32, 4096]`). */
 function htr_versioned_hashes(versioned_hashes : ByteSlice) -> hash = {
     let count = ediv_int(unsigned(versioned_hashes.len), 32);
     var rest : SszListRef = struct { bytes = versioned_hashes, count = count };
@@ -253,8 +274,11 @@ function htr_versioned_hashes(versioned_hashes : ByteSlice) -> hash = {
     mix_in_length(merkle_frontier_root(frontier, i, 12), i)
 }
 
-/* ---- execution requests ---------------------------------------------- */
+/*md
+## Execution requests (EIP-7685)
+*/
 
+/*! `hash_tree_root` of one deposit request (5 fields, depth 3). */
 function htr_deposit(deposit : ByteSlice) -> hash = {
     let b = unsigned(deposit.off);
     merkleize(
@@ -269,6 +293,7 @@ function htr_deposit(deposit : ByteSlice) -> hash = {
     )
 }
 
+/*! `hash_tree_root` of one withdrawal request (3 fields, depth 2). */
 function htr_withdrawal_request(request : ByteSlice) -> hash = {
     let b = unsigned(request.off);
     merkleize(
@@ -281,6 +306,7 @@ function htr_withdrawal_request(request : ByteSlice) -> hash = {
     )
 }
 
+/*! `hash_tree_root` of one consolidation request (3 fields, depth 2). */
 function htr_consolidation_request(request : ByteSlice) -> hash =
     merkleize(
         [|
@@ -291,6 +317,7 @@ function htr_consolidation_request(request : ByteSlice) -> hash =
         2,
     )
 
+/*! `hash_tree_root` of the deposit-request list (depth 13). */
 function htr_deposits(deposits : ByteSlice) -> hash = {
     let count = ediv_int(unsigned(deposits.len), 192);
     var rest : SszListRef = struct { bytes = deposits, count = count };
@@ -305,6 +332,7 @@ function htr_deposits(deposits : ByteSlice) -> hash = {
     mix_in_length(merkle_frontier_root(frontier, i, 13), i)
 }
 
+/*! `hash_tree_root` of the withdrawal-request list (depth 4). */
 function htr_withdrawal_requests(requests : ByteSlice) -> hash = {
     let count = ediv_int(unsigned(requests.len), 76);
     var rest : SszListRef = struct { bytes = requests, count = count };
@@ -319,6 +347,7 @@ function htr_withdrawal_requests(requests : ByteSlice) -> hash = {
     mix_in_length(merkle_frontier_root(frontier, i, 4), i)
 }
 
+/*! `hash_tree_root` of the consolidation-request list (depth 1). */
 function htr_consolidation_requests(requests : ByteSlice) -> hash = {
     let count = ediv_int(unsigned(requests.len), 116);
     var rest : SszListRef = struct { bytes = requests, count = count };
@@ -333,6 +362,7 @@ function htr_consolidation_requests(requests : ByteSlice) -> hash = {
     mix_in_length(merkle_frontier_root(frontier, i, 1), i)
 }
 
+/*! `hash_tree_root` of the `SszExecutionRequests` container. */
 function htr_execution_requests(input_ref : StatelessInputRef) -> hash =
     merkleize(
         [|
@@ -343,7 +373,8 @@ function htr_execution_requests(input_ref : StatelessInputRef) -> hash =
         2,
     )
 
-/* SszNewPayloadRequest: 4 fields -> depth 2. */
+/*! `hash_tree_root` of the `SszNewPayloadRequest` (4 fields, depth 2) —
+    the commitment the guest proves its input against. */
 function htr_new_payload_request(input_ref : StatelessInputRef) -> hash = {
     let npr = unsigned(input_ref.new_payload_request.off);
     merkleize(

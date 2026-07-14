@@ -1,11 +1,14 @@
-/* ======================================================================== */
-/* SSZ: SszStatelessInput REFS AND DECODER                                  */
-/*                                                                          */
-/* Materialized references into the concrete SszStatelessInput wire format  */
-/* and the stateless guest decoder.                                         */
-/* ======================================================================== */
+/*md
+# The stateless input decoder
 
-/* The input starts with a 2-byte big-endian schema id; the SSZ body follows. */
+Materialized references into the concrete `SszStatelessInput` wire format
+and the stateless guest decoder. The layout constants transcribe the SSZ
+schema; the decoder resolves every variable region once and hands
+consumers explicit source spans.
+*/
+
+/*! The input starts with a 2-byte big-endian schema id; the SSZ body
+    follows. */
 let SSZ_BODY : int = 2
 
 /* SszStatelessInput: 4 variable fields, offset table at body+{0,4,8,12}. */
@@ -66,6 +69,7 @@ let WIT_STATE_OFF : int = 0
 let WIT_CODES_OFF : int = 4
 let WIT_HEADERS_OFF : int = 8
 
+/*! A cursor at the first element of a variable-element SSZ list. */
 function ssz_list_cursor(items : SszListRef) -> SszListCursor = {
     let start = unsigned(items.bytes.off);
     let current = if items.count > 0 then {
@@ -76,8 +80,10 @@ function ssz_list_cursor(items : SszListRef) -> SszListCursor = {
     struct { items = items, index = 0, current = current }
 }
 
+/*! Whether the cursor has consumed all elements. */
 function ssz_list_cursor_empty(cursor : SszListCursor) -> bool = cursor.index >= cursor.items.count
 
+/*! The next element's span, and the advanced cursor. */
 function ssz_list_pop(cursor : SszListCursor) -> (ByteSlice, SszListCursor) = {
     let next_index = cursor.index + 1;
     let start = unsigned(cursor.items.bytes.off);
@@ -91,6 +97,7 @@ function ssz_list_pop(cursor : SszListCursor) -> (ByteSlice, SszListCursor) = {
     (item, struct { items = cursor.items, index = next_index, current = next })
 }
 
+/*! Pops one fixed-size element from a fixed-stride list reference. */
 function ssz_fixed_list_pop(items : SszListRef, item_size : int) -> (ByteSlice, SszListRef) = {
     let remaining = unsigned(items.bytes.len) - item_size;
     let item = sub_slice(items.bytes, 0, item_size);
@@ -98,8 +105,9 @@ function ssz_fixed_list_pop(items : SszListRef, item_size : int) -> (ByteSlice, 
     (item, rest)
 }
 
-/* Every variable region is resolved once before decoding. Consumers receive
- * explicit source spans instead of re-reading nested SSZ offset tables. */
+/*! Every variable region of the input, resolved once before decoding.
+    Consumers receive explicit source spans instead of re-reading nested
+    SSZ offset tables. */
 struct StatelessInputRef = {
     new_payload_request : ByteSlice,
     execution_payload : ByteSlice,
@@ -118,6 +126,9 @@ struct StatelessInputRef = {
     public_keys : ByteSlice,
 }
 
+/*! Resolves the input's offset tables into a
+    [StatelessInputRef][type-StatelessInputRef], validating the schema id
+    and every region bound; a malformed frame is `InvalidConfig`. */
 function decode_stateless_input_ref() -> StatelessInputRef = {
     let input_end = unsigned(ssz_src_len());
     if input_end < 18 then {
@@ -222,10 +233,13 @@ function decode_stateless_input_ref() -> StatelessInputRef = {
     }
 }
 
+/*! The EIP-7685 per-type request digest:
+    `sha256(request_type ‖ request_data)`. */
 function sha256_request_digest(request_type : int, s : ByteSlice) -> bits(256) =
     sha256([|BytesList([|get_slice_int(8, request_type, 0)|]), BytesSlice(s)|])
 
-/* Index every witness node/code directly from its SSZ list reference. */
+/*! Indexes every witness trie node into the node-db, keyed by its
+    KECCAK-256 digest, directly from the SSZ list reference. */
 function index_witness_nodes(nodes : SszListRef) -> unit = {
     var cursor = ssz_list_cursor(nodes);
     while not_bool(ssz_list_cursor_empty(cursor)) do {
@@ -235,6 +249,8 @@ function index_witness_nodes(nodes : SszListRef) -> unit = {
     }
 }
 
+/*! Indexes every witness code blob into the content-addressed code
+    store. */
 function index_witness_codes(codes : SszListRef) -> unit = {
     var cursor = ssz_list_cursor(codes);
     while not_bool(ssz_list_cursor_empty(cursor)) do {
@@ -244,10 +260,11 @@ function index_witness_codes(codes : SszListRef) -> unit = {
     }
 }
 
-/* Parse the witness header chain once. Each header is hashed into the
- * distance-indexed ancestor table, adjacent parent hashes are checked, and
- * the newest header's execution context is decoded while its fields are
- * consumed head-to-tail. */
+/*! Parses the witness header chain once. Each header is hashed into the
+    distance-indexed ancestor table (the `BLOCKHASH` source), adjacent
+    parent hashes are checked (a break is `HeaderChainBroken`), and the
+    newest header's execution context — parent state root, base fee, blob
+    gas — is decoded while its fields are consumed head-to-tail. */
 function index_witness_headers(headers : SszListRef) -> WitnessContext = {
     let n = headers.count;
     var prev : hash = ZERO_WORD;
@@ -336,6 +353,8 @@ function index_witness_headers(headers : SszListRef) -> WitnessContext = {
     }
 }
 
+/*! Decodes the execution-payload header fields from their fixed SSZ
+    offsets. */
 function decode_block_header_ssz(input_ref : StatelessInputRef) -> BlockHeader = {
     let p = unsigned(input_ref.execution_payload.off);
     let npr = unsigned(input_ref.new_payload_request.off);
@@ -359,6 +378,7 @@ function decode_block_header_ssz(input_ref : StatelessInputRef) -> BlockHeader =
     }
 }
 
+/*! Decodes one fixed-layout SSZ withdrawal element. */
 function decode_withdrawal(withdrawal : ByteSlice) -> Withdrawal = {
     let b = unsigned(withdrawal.off);
     struct {
@@ -369,12 +389,12 @@ function decode_withdrawal(withdrawal : ByteSlice) -> Withdrawal = {
     }
 }
 
-/* Decode the SszChainConfig at cc: chain_id (u64 @0) and the active
- * SszForkConfig (offset @8: fork index u64 @0, SszForkActivation offset @8,
- * blob_schedule offset @12). The activation point (optional block_number /
- * timestamp, List[u64,1] each) must be REACHED by this payload (EELS
- * validate_chain_config -> _is_activation_active): at least one bound set,
- * none exceeding the payload's -- a future activation invalidates the block. */
+/*! Decodes the `SszChainConfig` at `cc`: the chain id (`u64` at 0) and
+    the active `SszForkConfig` (fork index, activation, blob schedule).
+    The activation point (optional block number / timestamp, `List[u64,1]`
+    each) must be reached by this payload (EELS `validate_chain_config` →
+    `_is_activation_active`): at least one bound set, none exceeding the
+    payload's — a future activation invalidates the block. */
 function decode_chain_config(cc : int, cc_end : int, number : int, timestamp : int) -> ChainConfig = {
     let f = cc + ssz_u32(cc + CC_ACTIVE_FORK_OFF);
     let fidx = ssz_u64(f + FC_FORK);
@@ -408,8 +428,9 @@ function decode_chain_config(cc : int, cc_end : int, number : int, timestamp : i
     }
 }
 
-/* Decode the semantic payload structure without touching an encoded
- * transaction or withdrawal element. */
+/*! Decodes the semantic payload structure — header, chain config, body
+    references — without touching an encoded transaction or withdrawal
+    element, and installs the header and chain parameters in the kernel. */
 function decode_stateless_input(input_ref : StatelessInputRef) -> StatelessInput = {
     let p = unsigned(input_ref.execution_payload.off);
     let cc = unsigned(input_ref.chain_config.off);
@@ -445,8 +466,9 @@ function decode_stateless_input(input_ref : StatelessInputRef) -> StatelessInput
     }
 }
 
-/* Index the source-backed witness and install its authenticated parent-state
- * anchor. No witness list is materialized. */
+/*! Indexes the source-backed witness (nodes, codes, headers) and
+    installs its authenticated parent-state anchor; no witness list is
+    materialized. */
 function index_execution_witness(input_ref : StatelessInputRef) -> WitnessContext = {
     nodedb_reset();
     index_witness_nodes(input_ref.witness_state);
@@ -456,5 +478,6 @@ function index_execution_witness(input_ref : StatelessInputRef) -> WitnessContex
     witness
 }
 
+/*! Decodes one transaction envelope with its witnessed public key. */
 function decode_transaction(transaction : ByteSlice, public_key : ByteSlice) -> Transaction =
     rlp_decode_tx(transaction, public_key)
