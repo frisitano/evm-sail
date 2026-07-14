@@ -1,43 +1,45 @@
-/* ======================================================================== */
-/* THE INTERPRETER: FETCH/DECODE, RUN LOOP, AND THE MESSAGE-CALL MACHINERY  */
-/*                                                                          */
-/* The user-space EVM: it fetches and decodes bytecode (Yellow Paper        */
-/* section 9), drives the step loop, and spawns sub-frames for the call and */
-/* create opcodes. This module specifies that machinery in three layers.    */
-/*                                                                          */
-/* (1) Fetch/decode: read the opcode at pc, decode PUSH immediates inline,  */
-/* and map every other byte to its AST node (an undefined byte decodes to   */
-/* INVALID). Reading past the end of code yields STOP (YP: implicit halt).  */
-/*                                                                          */
-/* (2) Run loop: interpret() steps fetch-then-execute until the frame stops */
-/* running (normal halt, REVERT, or exceptional halt).                      */
-/*                                                                          */
-/* (3) Message calls: run_call handles                                      */
-/* CALL/CALLCODE/DELEGATECALL/STATICCALL (multiplexed on `mode`) and        */
-/* run_create handles CREATE/CREATE2. A sub-call saves the parent's user-   */
-/* space frame registers, runs the child to a halt, then restores them. All */
-/* WORLD effects go through kernel syscalls: k_snapshot on entry,           */
-/* k_transfer for value, and k_revert on failure -- the kernel rolls the    */
-/* world back atomically on a reverting child. The applicable               */
-/* rules are EIP-150 (63/64ths gas cap + stipend), EIP-214 (static-context  */
-/* write protection), EIP-2929 (cold/warm access), and EIP-7702 (delegated- */
-/* code execution).                                                         */
-/* ======================================================================== */
+/*md
+# The interpreter
 
-/* EIP-150 / YP: a message call may nest at most 1024 frames deep. */
+The user-space EVM: it fetches and decodes bytecode (Yellow Paper §9),
+drives the step loop, and spawns sub-frames for the call and create
+opcodes. This module specifies that machinery in three layers:
+
+1. **Fetch/decode** — read the opcode at `pc`, decode PUSH immediates
+   inline, and map every other byte to its AST node (an undefined byte
+   decodes to `INVALID`). Reading past the end of code yields `STOP`
+   (YP: implicit halt).
+2. **Run loop** — [interpret][] steps fetch-then-execute until the frame
+   stops running (normal halt, `REVERT`, or exceptional halt).
+3. **Message calls** — [run_call][] handles
+   `CALL`/`CALLCODE`/`DELEGATECALL`/`STATICCALL` (multiplexed on `mode`)
+   and [run_create][] handles `CREATE`/`CREATE2`. A sub-call saves the
+   parent's user-space frame registers, runs the child to a halt, then
+   restores them. All world effects go through kernel syscalls:
+   [k_snapshot][] on entry, [k_transfer][] for value, and [k_revert][] on
+   failure — the kernel rolls the world back atomically on a reverting
+   child. The applicable rules are EIP-150 (63/64ths gas cap + stipend),
+   EIP-214 (static-context write protection), EIP-2929 (cold/warm
+   access), and EIP-7702 (delegated-code execution).
+*/
+
+/*! A message call may nest at most 1024 frames deep (EIP-150 / YP). */
 let DEPTH_LIMIT : int = 1024
 
-/* ----------------------------- fetch/decode ----------------------------- */
+/*md
+## Fetch and decode
+*/
 
-/* Assemble the n-byte big-endian immediate following a PUSHn opcode into a
- * 256-bit word; bytes past the end of code read as zero. */
+/*! Assembles the `n`-byte big-endian immediate following a `PUSHn`
+    opcode into a word; bytes past the end of code read as zero. */
 function read_push(n : int) -> word =
     slice_load_n(frame_code.bytes, pc, n)
 
-/* Decode one non-PUSH opcode byte to its AST node. The three contiguous
- * families fold to an arity argument -- DUP1..16 (0x80..0x8f), SWAP1..16
- * (0x90..0x9f), LOG0..4 (0xa0..0xa4) -- and the remainder is a flat table.
- * Any byte with no defined opcode decodes to INVALID. */
+/*! Decodes one non-PUSH opcode byte to its AST node. The three
+    contiguous families fold to an arity argument — `DUP1`–`DUP16`
+    (0x80–0x8f), `SWAP1`–`SWAP16` (0x90–0x9f), `LOG0`–`LOG4` (0xa0–0xa4)
+    — and the remainder is a flat table. Any byte with no defined opcode
+    decodes to `INVALID`. */
 function decode_simple(b : int) -> ast =
     if b >= 128 & b <= 143 then {
         DUP(b - 127)
@@ -167,10 +169,11 @@ function decode_simple(b : int) -> ast =
         }
     }
 
-/* Fetch and decode the opcode at pc, advancing pc past the opcode and any
- * immediate. Past the end of code the frame implicitly executes STOP (YP).
- * PUSH0..PUSH32 (0x5f..0x7f) carry an n-byte immediate consumed here; every
- * other byte is decoded by decode_simple. */
+/*! Fetches and decodes the opcode at `pc`, advancing `pc` past the
+    opcode and any immediate. Past the end of code the frame implicitly
+    executes `STOP` (YP). `PUSH0`–`PUSH32` (0x5f–0x7f) carry an `n`-byte
+    immediate consumed here; every other byte decodes via
+    [decode_simple][]. */
 function fetch() -> ast = {
     if pc >= frame_code_len() then {
         pc = pc + 1;
@@ -193,9 +196,14 @@ function fetch() -> ast = {
     }
 }
 
-/* The step loop returns the frame's own output. STOP, SELFDESTRUCT, and
- * exceptional halts return the empty slice; RETURN and REVERT carry their
- * frozen memory slice in the halt value. */
+/*md
+## The run loop
+*/
+
+/*! The step loop; returns the frame's own output. `STOP`,
+    `SELFDESTRUCT`, and exceptional halts return the empty slice;
+    `RETURN` and `REVERT` carry their frozen memory slice in the halt
+    value. */
 function interpret() -> ByteSlice = {
     while is_running() do {
         let op = fetch();
@@ -208,9 +216,9 @@ function interpret() -> ByteSlice = {
     }
 }
 
-/* Did the just-finished frame end successfully? A normal halt succeeds; a
- * REVERT and any exceptional halt do not (their world effects are rolled
- * back and CALL/CREATE reports failure). */
+/*! Whether the just-finished frame ended successfully: a normal halt
+    succeeds; a `REVERT` and any exceptional halt do not (their world
+    effects are rolled back and `CALL`/`CREATE` reports failure). */
 function frame_succeeded() -> bool =
     match frame_status {
         Halted(HaltRevert(_)) => false,
@@ -219,10 +227,10 @@ function frame_succeeded() -> bool =
         Exceptional(_) => false,
     }
 
-/* Select the code a frame actually executes (EIP-7702). A delegated account
- * runs the code at its delegation target, following exactly ONE hop; a
- * delegation whose target is a precompile (or has no code) executes as empty
- * code. An undelegated account runs its own code. */
+/*! Selects the code a frame actually executes (EIP-7702). A delegated
+    account runs the code at its delegation target, following exactly one
+    hop; a delegation whose target is a precompile (or has no code)
+    executes as empty code. An undelegated account runs its own code. */
 function executable_code(target : address, dele : bool, dtgt : address) -> Code =
     if dele then {
         let n = unsigned(address_to_word(dtgt));
@@ -235,16 +243,24 @@ function executable_code(target : address, dele : bool, dtgt : address) -> Code 
         code_db_resolve(k_code_key(target))
     }
 
-/* ------------------------------ run_call -------------------------------- */
-/* The four call opcodes, multiplexed on `mode`:
- *   0 = CALL          new frame at `target`, may transfer value
- *   1 = CALLCODE      run target's code in the CALLER's account, may transfer
- *   2 = DELEGATECALL  run target's code in the caller's account, inheriting
- *                     the parent's caller/value/static context (EIP-7)
- *   3 = STATICCALL    like CALL with value 0 and a forced static context
- *                     (EIP-214)
- * Operand layout (top of stack first): gas, target, [value for CALL/CALLCODE],
- * argsOffset, argsLen, retOffset, retLen. Pushes 1 on success, 0 on failure. */
+/*md
+## Message calls
+*/
+
+/*! The four call opcodes, multiplexed on `mode`:
+
+    - `0` — `CALL`: a new frame at `target`, may transfer value.
+    - `1` — `CALLCODE`: runs the target's code in the caller's account,
+      may transfer.
+    - `2` — `DELEGATECALL` (EIP-7): runs the target's code in the
+      caller's account, inheriting the parent's caller/value/static
+      context.
+    - `3` — `STATICCALL` (EIP-214): `CALL` with value 0 and a forced
+      static context.
+
+    Operand layout (top of stack first): `gas`, `target`, `value` (for
+    `CALL`/`CALLCODE`), `argsOffset`, `argsLen`, `retOffset`, `retLen`.
+    Pushes 1 on success, 0 on failure. */
 function run_call(mode : int) -> unit = {
     let caller = self_addr();
     let gas_req = pop_int();
@@ -538,12 +554,12 @@ function run_call(mode : int) -> unit = {
     }
 }
 
-/* ----------------------------- run_create ------------------------------- */
-/* CREATE (is2 = false) and CREATE2 (is2 = true, EIP-1014). Both deploy a new
- * contract by running the initcode supplied in memory; the new address is
- * derived from (creator, nonce) for CREATE or (creator, salt, initcode hash)
- * for CREATE2. Operand layout: value, offset, length, [salt for CREATE2].
- * Pushes the new address on success, 0 on failure. */
+/*! `CREATE` (`is2 = false`) and `CREATE2` (`is2 = true`, EIP-1014).
+    Both deploy a new contract by running the initcode supplied in
+    memory; the new address derives from `(creator, nonce)` for `CREATE`
+    or `(creator, salt, keccak256(initcode))` for `CREATE2`. Operand
+    layout: `value`, `offset`, `length`, `salt` (for `CREATE2`). Pushes
+    the new address on success, 0 on failure. */
 function run_create(is2 : bool) -> unit = {
     let creator = self_addr();
     let value = pop();

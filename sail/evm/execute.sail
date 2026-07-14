@@ -1,32 +1,40 @@
-/* ======================================================================== */
-/* OPCODE SEMANTICS: execute(op)                                            */
-/*                                                                          */
-/* The single-step transition function of the EVM (Yellow Paper section 9): */
-/* given the decoded opcode, charge its gas, consume its stack operands,    */
-/* and produce its result or effect. One match arm per opcode, grouped by   */
-/* family (arithmetic / bitwise / keccak / environment / block / stack-     */
-/* memory / storage / flow / push-dup-swap / log / system).                 */
-/*                                                                          */
-/* Pure compute is done here; every world effect is a kernel syscall (k_*). */
-/* All gas/policy stays in the EVM: the EVM marks-and-prices access via the */
-/* kernel's returned warm bit (EIP-2929), decides whether an effect         */
-/* happens, and issues the syscall only for real effects (e.g. a no-op      */
-/* SSTORE charges gas but issues no host write). Memory-touching opcodes    */
-/* pay the quadratic expansion cost via charge_expansion before acting.     */
-/* Sub-calls and creates delegate to run_call / run_create                  */
-/* (interpreter.sail).                                                      */
-/* ======================================================================== */
+/*md
+# Opcode semantics
 
+The single-step transition function of the EVM (Yellow Paper §9): given
+the decoded opcode, [execute][] charges its gas, consumes its stack
+operands, and produces its result or effect. One match arm per opcode,
+grouped by family (arithmetic, bitwise, keccak, environment, block,
+stack/memory, storage, flow, push/dup/swap, log, system).
+
+Pure compute is done here; every world effect is a kernel syscall
+(`k_*`). All gas and policy stays in the EVM: it marks-and-prices access
+via the kernel's returned warm bit (EIP-2929), decides whether an effect
+happens, and issues the syscall only for real effects (a no-op `SSTORE`
+charges gas but issues no host write). Memory-touching opcodes pay the
+quadratic expansion cost via [charge_expansion][] before acting.
+Sub-calls and creates delegate to [run_call][] / [run_create][].
+*/
+
+/*! The call-family runner (0 = `CALL`, 1 = `CALLCODE`,
+    2 = `DELEGATECALL`, 3 = `STATICCALL`); defined with the
+    interpreter. */
 val run_call : int -> unit /* 0=CALL 1=CALLCODE 2=DELEGATECALL 3=STATICCALL */
-val run_create : bool -> unit /* true = CREATE2 */
+/*! The create runner (`true` = `CREATE2`); defined with the
+    interpreter. */
+val run_create : bool -> unit
 
-/* ----------------------------- helpers ---------------------------------- */
+/*md
+## Helpers
+*/
 
-/* the storage owner / I_a: SLOAD, SSTORE, LOG, SELFDESTRUCT act on this account */
+/*! The storage owner (YP I_a): `SLOAD`, `SSTORE`, `LOG`, and
+    `SELFDESTRUCT` act on this account. */
 function self_addr() -> address = message.address
 
-/* EIP-214 write protection: any state-modifying opcode in a STATICCALL frame
- * halts exceptionally. State-changing opcodes call this first; true => halted. */
+/*! EIP-214 write protection: any state-modifying opcode in a
+    `STATICCALL` frame halts exceptionally. State-changing opcodes call
+    this first; `true` means already halted. */
 function guard_static() -> bool =
     if message.is_static then {
         exc_halt(WriteProtection);
@@ -35,9 +43,10 @@ function guard_static() -> bool =
         false
     }
 
-/* JUMP/JUMPI target validity: dest must be in code range AND land on a JUMPDEST
- * (the precomputed valid-destination set, YP 9.4.3); otherwise an invalid-jump
- * exceptional halt. PUSH-data bytes that happen to equal 0x5b are not valid. */
+/*! `JUMP`/`JUMPI` target validity: the destination must be in code range
+    and land on a `JUMPDEST` (the precomputed valid-destination set,
+    YP §9.4.3); otherwise an invalid-jump exceptional halt. PUSH-data
+    bytes that happen to equal `0x5b` are not valid. */
 function do_jump(dest : int) -> unit =
     if dest >= 0 & dest < frame_code_len() & frame_jumpdest_valid(dest) then {
         pc = dest
@@ -45,6 +54,7 @@ function do_jump(dest : int) -> unit =
         exc_halt(InvalidJump)
     }
 
+/*! Pops `count` log topics from the stack. */
 function pop_log_topics(count : int) -> list(word) =
     if count <= 0 then {
         [||]
@@ -53,8 +63,12 @@ function pop_log_topics(count : int) -> list(word) =
     }
 termination_measure pop_log_topics(count) = count
 
-/* ------------------------------- execute -------------------------------- */
+/*md
+## The dispatch
+*/
 
+/*! The single-step transition function: one arm per opcode, in opcode
+    order, with the family structure annotated inline. */
 function execute(op : ast) -> unit = match op {
     STOP() => frame_status = Halted(HaltStop()),
     /* ---- arithmetic (pure) ---- */
