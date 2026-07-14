@@ -45,6 +45,22 @@ must be comments-only). For new code, declare constants before types
 before helpers before the operative functions, so pages follow the
 canonical section order naturally.
 
+## Coverage
+
+In normative modules (everything outside `sail/host/`, which includes
+`sail/host/kernel/`):
+
+- every `type`, `enum`, `struct`, `union`, `register`, and `mapping`
+  carries a `/*!` doc comment;
+- every substantial function (four lines or more) carries `/*!`;
+  one-line definitions may rely on their section's prose;
+- every `val` carries `/*!` unless it declares a function defined
+  elsewhere in the specification (the function carries the docs);
+- a page declaring four or more capitalized constants has a
+  `## Constants` section or a summary table.
+
+Every page's introduction contains prose, not just headings.
+
 ## Non-normative pages
 
 Pages documenting the host interface (`sail/host/`, excluding

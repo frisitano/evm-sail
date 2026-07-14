@@ -14,6 +14,17 @@ EIP-4844 (blob transactions + blob-gas burn), EIP-7702 (set-code
 authorizations), EIP-7623 (calldata floor), EIP-3607 (no transactions
 from an account with code), EIP-7825 (gas cap). Gas refunds (`SSTORE`
 clears) are capped per EIP-3529.
+
+| Name | Value | Description |
+| ---- | ----- | ----------- |
+| `G_transaction` | `21000` | Per-transaction base cost |
+| `G_txcreate` | `32000` | Create-transaction surcharge |
+| `G_txdatazero` | `4` | Per zero calldata byte (EIP-2028) |
+| `G_txdatanonzero` | `16` | Per nonzero calldata byte (EIP-2028) |
+| `G_access_list_address` | `2400` | Per access-list address (EIP-2930) |
+| `G_access_list_storage_key` | `1900` | Per access-list storage key (EIP-2930) |
+| `PER_AUTH_BASE` | `12500` | Per authorization (EIP-7702) |
+| `PER_EMPTY_ACCOUNT` | `25000` | Per authorization of a new account (EIP-7702) |
 */
 
 let G_transaction : gas = 21000
@@ -129,6 +140,8 @@ function warm_access_list_addresses(xs : list(address)) -> unit =
             warm_access_list_addresses(r)
         },
     }
+/*! Warms every access-list storage slot (EIP-2930/EIP-2929
+    prewarming). */
 function warm_access_list_slots(xs : list(StorageKey)) -> unit =
     match xs {
         [||] => (),
@@ -138,8 +151,10 @@ function warm_access_list_slots(xs : list(StorageKey)) -> unit =
         },
     }
 
-/* EIP-2929 + EIP-2930 pre-warm sender, target, precompiles, and the access
- * list. EIP-3651 additionally warms coinbase from Shanghai onward. */
+/*! Pre-warms the accessed-address set (EIP-2929): the sender, the call
+    target, the active fork's precompiles, and the access list
+    (EIP-2930); EIP-3651 additionally warms the coinbase from Shanghai
+    onward. */
 function prewarm(tx : Transaction) -> unit = {
     let _ = k_access_account(tx.sender);
     let _ = if tx.is_create then {

@@ -94,6 +94,8 @@ function execute_block_transactions(
     }
 }
 
+/*! Credits every withdrawal's recipient with its amount in gwei
+    (EIP-4895); withdrawals cannot fail and charge no gas. */
 function apply_withdrawals(withdrawals : SszListRef) -> unit = {
     var rest = withdrawals;
     while rest.count > 0 do {
@@ -104,6 +106,8 @@ function apply_withdrawals(withdrawals : SszListRef) -> unit = {
     }
 }
 
+/*! Runs the checked block-end request collection (Prague+, EIP-7685);
+    skipped entirely when the body already failed. */
 function run_checked_block_end_system_calls(all_ok : bool, receipts : list(Receipt)) -> (bool, ExecutionRequests) = {
     if not_bool(all_ok) then {
         (false, EMPTY_EXECUTION_REQUESTS)
@@ -116,6 +120,9 @@ function run_checked_block_end_system_calls(all_ok : bool, receipts : list(Recei
     }
 }
 
+/*! The block-end state effects: withdrawals (Shanghai+, EIP-4895), the
+    pre-merge static block reward before Paris, and the final merge into
+    the block layer. */
 function apply_block_end_state(body : BlockBody) -> unit = {
     if k_fork >= Shanghai then {
         apply_withdrawals(body.withdrawals)
@@ -126,6 +133,10 @@ function apply_block_end_state(body : BlockBody) -> unit = {
     k_tx_merge()
 }
 
+/*! Executes a block body end to end: block-start system calls, the
+    transaction loop, block-end state effects, and request collection;
+    returns overall success with the accumulated
+    [BlockExecutionResult][type-BlockExecutionResult]. */
 function execute_block_body(
     body : BlockBody,
     public_keys : ByteSlice,

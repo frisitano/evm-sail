@@ -31,6 +31,9 @@ val witness_items : (Bytes, TriePath, list(TrieUpdate), int) -> (list(TrieItem),
     and hashed children (a missing hashed node is a deficient witness). */
 val witness_child_items : (RlpFieldRef, TriePath, list(TrieUpdate), int) -> (list(TrieItem), list(TrieUpdate))
 
+/*! [witness_items][] over a child field: resolves inline,
+    proven-absent, and hashed children; a missing hashed node is a
+    deficient witness. */
 function witness_child_items(
     f : RlpFieldRef,
     prefix : TriePath,
@@ -56,6 +59,9 @@ function witness_child_items(
     }
 }
 
+/*! The sorted post-state item stream of the subtree rooted at `node`
+    (at position `prefix`), and the update cursor positioned after that
+    subtree — the witness walker described above. */
 function witness_items(
     node : Bytes,
     prefix : TriePath,

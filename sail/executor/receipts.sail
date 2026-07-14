@@ -50,11 +50,14 @@ function bloom_add_topics(bloom : LogsBloom, topics : list(word)) -> LogsBloom =
     out
 }
 
+/*! Adds a log record to the bloom: its address and every topic
+    (YP §4.4.1, the M function). */
 function bloom_add_log(bloom : LogsBloom, log : LogEntry) -> LogsBloom = {
     let with_address = bloom_add_entry_hash(bloom, keccak256_address(log.address));
     bloom_add_topics(with_address, log.topics)
 }
 
+/*! The bloom of one receipt's log series. */
 function logs_bloom_for_logs(logs : list(LogEntry)) -> LogsBloom = {
     var out = EMPTY_LOGS_BLOOM;
     var rest : list(LogEntry) = logs;
@@ -71,6 +74,8 @@ function logs_bloom_for_logs(logs : list(LogEntry)) -> LogsBloom = {
     out
 }
 
+/*! The block's logs bloom: the union over all receipts' logs (the
+    header `logs_bloom` commitment). */
 function receipts_bloom(receipts : list(Receipt)) -> LogsBloom = {
     var out = EMPTY_LOGS_BLOOM;
     var rest : list(Receipt) = receipts;
@@ -97,6 +102,7 @@ function receipts_bloom(receipts : list(Receipt)) -> LogsBloom = {
     out
 }
 
+/*! The concatenated RLP of a topic list. */
 function topics_rlp_payload(topics : list(word)) -> list(byte) =
     match topics {
         [||] => [||],
@@ -105,17 +111,21 @@ function topics_rlp_payload(topics : list(word)) -> list(byte) =
 
 function topics_rlp(topics : list(word)) -> list(byte) = rlp_list(topics_rlp_payload(topics))
 
+/*! Concatenates reversed encoded segments onto `tail` (single-pass
+    assembly of a list payload). */
 function concat_rlp_segments_rev(segments : list(list(byte)), tail : list(byte)) -> list(byte) =
     match segments {
         [||] => tail,
         segment :: rest => concat_rlp_segments_rev(rest, list_append(segment, tail)),
     }
 
+/*! The RLP of one log record: `[address, topics, data]` (YP §4.4.1). */
 function log_entry_rlp(log : LogEntry) -> list(byte) =
     rlp_list(
         list_append(rlp_addr(log.address), list_append(topics_rlp(log.topics), rlp_bytes(read_byte_slice(log.data)))),
     )
 
+/*! The RLP of a receipt's log series. */
 function logs_rlp(logs : list(LogEntry)) -> list(byte) = {
     var encoded_rev : list(list(byte)) = [||];
     var rest : list(LogEntry) = logs;
@@ -132,6 +142,8 @@ function logs_rlp(logs : list(LogEntry)) -> list(byte) = {
     rlp_list(concat_rlp_segments_rev(encoded_rev, [||]))
 }
 
+/*! The receipt payload: `rlp([status, cumulative_gas_used, bloom,
+    logs])` (EIP-658 status form). */
 function receipt_payload_rlp(r : Receipt, cumulative_gas_used : int) -> list(byte) =
     rlp_list(
         list_append(
@@ -143,6 +155,9 @@ function receipt_payload_rlp(r : Receipt, cumulative_gas_used : int) -> list(byt
         ),
     )
 
+/*! The receipt as stored in the receipts trie: the RLP payload,
+    prefixed by the envelope type byte for typed transactions
+    (EIP-2718). */
 function receipt_encoded(r : Receipt, cumulative_gas_used : int) -> list(byte) = {
     let payload = receipt_payload_rlp(r, cumulative_gas_used);
     if tx_type_byte(r.tx_type) == 0 then {
@@ -153,6 +168,8 @@ function receipt_encoded(r : Receipt, cumulative_gas_used : int) -> list(byte) =
     }
 }
 
+/*! The receipts-trie root (YP §4.4.2): leaf `i` holds receipt `i` with
+    its cumulative gas, keyed by `rlp(i)`. */
 function receipts_trie_root(receipts : list(Receipt)) -> hash = {
     var updates_rev : list(TrieUpdate) = [||];
     var rest : list(Receipt) = receipts;

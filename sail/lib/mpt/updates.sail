@@ -43,6 +43,7 @@ function merge_updates(left : list(TrieUpdate), right : list(TrieUpdate)) -> lis
         },
     }
 
+/*! Merge-sorts `count` updates by key. */
 function sort_updates_n(updates : list(TrieUpdate), count : int) -> list(TrieUpdate) =
     if count <= 1 then {
         updates
@@ -56,12 +57,14 @@ termination_measure sort_updates_n(updates, count) = count
 function sort_updates(updates : list(TrieUpdate)) -> list(TrieUpdate) =
     sort_updates_n(updates, list_len(updates))
 
+/*! Whether the update list is empty. */
 function updates_empty(updates : list(TrieUpdate)) -> bool =
     match updates {
         [||] => true,
         _ => false,
     }
 
+/*! Whether the cursor's next update falls under `prefix`. */
 function next_update_under(updates : list(TrieUpdate), prefix : TriePath) -> bool =
     match updates {
         update :: _ => path_prefix_of(prefix, update.key),

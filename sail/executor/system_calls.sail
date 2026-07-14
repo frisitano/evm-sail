@@ -47,6 +47,9 @@ function enter_system_call_frame(tgt : address, input : ByteSlice) -> StateCheck
     checkpoint
 }
 
+/*! Issues one unchecked block-start system call: a 30M-gas frame from
+    `SYSTEM_ADDRESS` with a 32-byte input; skipped when the target has no
+    code, and its output is discarded. */
 function system_call(tgt : address, input : bits(256)) -> unit = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         () /* system contract absent -> skip (EIP-4788 / EIP-2935) */
@@ -76,6 +79,9 @@ function system_call(tgt : address, input : bits(256)) -> unit = {
  * call makes the whole block INVALID (returns false here). */
 
 
+/*! Issues one checked block-end system call (EIP-7002/EIP-7251): the
+    target must exist and the call must succeed — otherwise the block is
+    invalid — and the returned dequeued requests are the call's output. */
 function system_call_checked(tgt : address) -> option(ByteSlice) = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         None() /* checked: a missing system predeploy invalidates the block */
@@ -101,6 +107,8 @@ function system_call_checked(tgt : address) -> option(ByteSlice) = {
     }
 }
 
+/*! Whether a log is a `DepositEvent` from the deposit contract
+    (EIP-6110). */
 function deposit_log_matches(log : LogEntry) -> bool =
     if log.address != DEPOSIT_CONTRACT_ADDR then {
         false
@@ -111,8 +119,9 @@ function deposit_log_matches(log : LogEntry) -> bool =
         }
     }
 
-/* Strip the ABI framing from one DepositEvent and append the consensus-layer
- * request fields directly to the scratch arena. */
+/*! Strips the ABI framing from one `DepositEvent` and appends the
+    consensus-layer deposit record's fields directly to the requests
+    scratch (EIP-6110). */
 function append_deposit_request(data : ByteSlice) -> unit = {
     if   (unsigned(data.len) != 576)
        | (slice_load(data, 0) != word_of_int(160))
@@ -134,6 +143,8 @@ function append_deposit_request(data : ByteSlice) -> unit = {
     scratch_push_slice(sub_slice(data, 544, 8))
 }
 
+/*! Reconstructs the EIP-6110 deposit requests from every receipt's
+    `DepositEvent` logs, in block order. */
 function collect_deposit_requests(receipts : list(Receipt)) -> ByteSlice = {
     let start = scratch_begin();
     var remaining_receipts : list(Receipt) = receipts;
@@ -164,6 +175,9 @@ function collect_deposit_requests(receipts : list(Receipt)) -> ByteSlice = {
 
 /* Request types are processed in ascending order, stopping immediately when
  * a checked system call is missing or fails. */
+/*! Collects the EIP-7685 execution requests at block end: deposits from
+    logs (EIP-6110), then the withdrawal (EIP-7002) and consolidation
+    (EIP-7251) queue dequeues. */
 function collect_execution_requests(receipts : list(Receipt)) -> (bool, ExecutionRequests) = {
     let deposits = collect_deposit_requests(receipts);
     match system_call_checked(WITHDRAWAL_REQUEST_ADDR) {

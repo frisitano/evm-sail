@@ -1,5 +1,8 @@
 /*md
 # State: selfdestruct and creation flags
+
+The per-transaction account lifecycle flags behind `SELFDESTRUCT`
+(EIP-6780) and same-transaction creation tracking.
 */
 
 /*! Marks an account selfdestructed (`SELFDESTRUCT`; deletion is decided

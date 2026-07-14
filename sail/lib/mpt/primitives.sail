@@ -5,6 +5,7 @@ Nibble paths through the Merkle-Patricia trie and the compact (hex-prefix)
 encoding of YP Appendix C.
 */
 
+/*! A four-bit path element (YP Appendix D). */
 type nibble = bits(4)
 /*! A trie path of at most 64 nibbles — secure state and storage keys are
     32-byte hashes, and list tries use short RLP indices. `data` is

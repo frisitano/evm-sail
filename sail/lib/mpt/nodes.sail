@@ -126,6 +126,7 @@ function node_db_lookup(h : bits(256)) -> Bytes = {
 struct LeafNodeData = { path : TriePath, value : RlpFieldRef }
 /*! A decoded extension: its shared path and child field. */
 struct ExtensionNodeData = { path : TriePath, child : RlpFieldRef }
+/*! The sixteen child fields of a decoded branch node. */
 type BranchChildren = vector(16, dec, RlpFieldRef)
 /*! A decoded branch: sixteen child fields and the value field. */
 struct BranchNodeData = { children : BranchChildren, value : RlpFieldRef }

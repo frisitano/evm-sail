@@ -5,9 +5,13 @@ The journal (undo-log) entry union the kernel pushes and the revert path
 decodes. Pure data — no registers, no externs.
 */
 
+/*! A length checkpoint of the undo journal. */
 type JournalCheckpoint = u64
+/*! A length checkpoint of the account overlay. */
 type AccountCheckpoint = u64
+/*! A length checkpoint of the storage overlay. */
 type StorageCheckpoint = u64
+/*! A length checkpoint of the log store. */
 type LogCheckpoint = u64
 
 /*! A four-counter snapshot of the mutable state stores; reverting a frame

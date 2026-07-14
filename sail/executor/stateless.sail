@@ -79,19 +79,23 @@ function validate_executed_block(
     }
 }
 
+/*! A validation failure: the pipeline stage it occurred in and the
+    violated rule. */
 struct StatelessValidationFailure = {
     scope : bits(8),
     reason : BlockError,
 }
 
+/*! The verdict of stateless payload verification. */
 union StatelessValidationResult = {
     StatelessPayloadValid : unit,
     StatelessPayloadInvalid : StatelessValidationFailure,
 }
 
-/* Stateless block flow: decode the small semantic envelope, index the witness,
- * validate all source-backed payload commitments, and only then decode and
- * execute transactions one at a time from BlockBody. */
+/*! The stateless verification pipeline: decode the semantic envelope,
+    index the witness, validate the payload commitments, execute the
+    block body one transaction at a time, and validate the execution
+    results; the first violated rule becomes the failure verdict. */
 function verify_stateless_payload(input_ref : StatelessInputRef) -> StatelessValidationResult = {
     var active_scope = SCOPE_DECODE_INPUT;
     try {

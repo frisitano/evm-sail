@@ -13,6 +13,14 @@ truncating/flooring `tdiv`/`tmod`/`fdiv` from `arith.sail`; subtraction on
 bits is `sub_bits`; `xor`/`and`/`or`/`not` are the `*_vec` builtins. The
 word comparisons are direct bit-slice definitions rather than opaque host
 predicates.
+
+| Name | Value | Description |
+| ---- | ----- | ----------- |
+| `WORD_BITS` / `WORD_BYTES` | `256` / `32` | The word width |
+| `TWO_256` | `2^256` | The word modulus |
+| `ZERO_WORD` / `WORD_ZERO` | `0` | The zero word |
+| `WORD_ONE` | `1` | The unit word |
+| `ZERO_ADDR` | `0` | The zero address |
 */
 
 default Order dec
@@ -36,6 +44,7 @@ type hash    = bits(256)
 /*! An 8-bit byte. */
 type byte    = bits(8)
 
+/*! A 64-bit unsigned quantity (nonces, gas fields, list counts). */
 type u64     = bits(64)
 
 /* the all-zero word / address constants */

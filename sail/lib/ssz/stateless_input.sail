@@ -7,6 +7,13 @@ schema; the decoder resolves every variable region once and hands
 consumers explicit source spans.
 */
 
+/*md
+## Constants
+
+The wire-format layout: field offsets transcribing the SSZ schema, grouped
+by container.
+*/
+
 /*! The input starts with a 2-byte big-endian schema id; the SSZ body
     follows. */
 let SSZ_BODY : int = 2

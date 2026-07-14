@@ -20,12 +20,15 @@ function bal_index_word(index : bits(64), value : word) -> RlpBuilder = {
     rlp_builder_list(content)
 }
 
+/*! One `[tx_index, nonce]` change pair as RLP. */
 function bal_index_nonce(index : bits(64), value : bits(64)) -> RlpBuilder = {
     var content = rlp_builder_encoded(rlp_int(unsigned(index)));
     content = rlp_builder_append_encoded(content, rlp_int(unsigned(value)));
     rlp_builder_list(content)
 }
 
+/*! One `[tx_index, code]` change pair as RLP; the code bytes stay
+    region-backed. */
 function bal_index_code(index : bits(64), code_hash : hash) -> RlpBuilder = {
     var content = rlp_builder_encoded(rlp_int(unsigned(index)));
     let code = code_db_resolve(code_hash);
@@ -66,6 +69,9 @@ function bal_storage_changes(account : bits(64)) -> (RlpBuilder, int) = {
     (rlp_builder_list(content), slot_count)
 }
 
+/*! The per-account read-slot list: slots read but never changed, slot
+    order, deduplicated against the change list (EIP-7928 excludes
+    changed slots from reads). */
 function bal_storage_reads(account : bits(64)) -> (RlpBuilder, int) = {
     let read_count = unsigned(bal_storage_read_count(account));
     let change_count = unsigned(bal_storage_change_count(account));
@@ -93,6 +99,8 @@ function bal_storage_reads(account : bits(64)) -> (RlpBuilder, int) = {
     (rlp_builder_list(content), included)
 }
 
+/*! The per-account balance-change list: one `[tx_index, post_balance]`
+    entry per touching transaction, keeping the last value per index. */
 function bal_balance_changes(account : bits(64)) -> RlpBuilder = {
     let count = unsigned(bal_balance_change_count(account));
     var content = EMPTY_RLP_BUILDER;
@@ -112,6 +120,8 @@ function bal_balance_changes(account : bits(64)) -> RlpBuilder = {
     rlp_builder_list(content)
 }
 
+/*! The per-account nonce-change list: one `[tx_index, nonce]` entry per
+    touching transaction, keeping the maximum nonce per index. */
 function bal_nonce_changes(account : bits(64)) -> RlpBuilder = {
     let count = unsigned(bal_nonce_change_count(account));
     var content = EMPTY_RLP_BUILDER;
@@ -133,6 +143,8 @@ function bal_nonce_changes(account : bits(64)) -> RlpBuilder = {
     rlp_builder_list(content)
 }
 
+/*! The per-account code-change list: one `[tx_index, code]` entry per
+    touching transaction, keeping the last code per index. */
 function bal_code_changes(account : bits(64)) -> RlpBuilder = {
     let count = unsigned(bal_code_change_count(account));
     var content = EMPTY_RLP_BUILDER;
@@ -152,6 +164,10 @@ function bal_code_changes(account : bits(64)) -> RlpBuilder = {
     rlp_builder_list(content)
 }
 
+/*! Reconstructs the canonical EIP-7928 block access list from the
+    recorder: per account (address order) — storage changes, storage
+    reads, balance, nonce, and code changes — counting items against the
+    `gas_limit / 2000` bound. */
 function encode_block_access_list() -> EncodedBlockAccessList = {
     bal_prepare();
     let account_count = unsigned(bal_account_count());

@@ -1,5 +1,8 @@
 /*md
 # State: logs and refunds
+
+Log emission (YP §4.4.1) — including the EIP-7708 transfer and burn
+logs — and the gas-refund counter.
 */
 
 /*! Appends a log record (YP §4.4.1) to the transaction's log series. */

@@ -12,6 +12,12 @@ The `c:`-bound `val`s in this module form the accelerator interface:
 hash/signature primitives with no pure Sail body (`ffi/host_crypto.c`,
 `ffi/precompiles.c` — the eth-act zkvm-standards accelerator surface).
 Proof targets see them as bodyless axioms.
+
+| Name | Value | Description |
+| ---- | ----- | ----------- |
+| `KECCAK_EMPTY` | `keccak256("")` | The codeless account's code hash |
+| `EMPTY_TRIE_ROOT` | `keccak256(rlp(""))` | The empty trie's root |
+| `SECP_N_FULL` / `SECP_N_HALF` | `n`, `n/2` | The secp256k1 group order bounds (EIP-2) |
 */
 
 /*! keccak256 of the empty string: the `codeHash` of every codeless

@@ -68,6 +68,8 @@ function rlp_string_prefix(len : int, first : byte) -> list(byte) =
         }
     }
 
+/*! RLP-encodes a byte string whose length is already known, avoiding a
+    second traversal. */
 function rlp_bytes_known_len(data : list(byte), len : int) -> list(byte) = {
     let first : byte = match data {
         b :: _ => b,
@@ -168,6 +170,7 @@ function rlp_int_word(w : word) -> list(byte) = {
     rlp_bytes_known_len(bytes, len)
 }
 
+/*! A list of `n` zero bytes. */
 function zero_bytes(n : int) -> list(byte) = {
     var out : list(byte) = [||];
     foreach (i from 0 to (n - 1)) {

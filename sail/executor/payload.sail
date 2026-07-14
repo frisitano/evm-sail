@@ -72,12 +72,14 @@ function block_header_hash(
     keccak256(rlp_builder_segments(rlp_builder_list(content)))
 }
 
+/*! The transactions/withdrawals-trie key for list index `i`:
+    `rlp(i)` as a nibble path (YP §4.4.2). */
 function trie_index_key(i : int) -> TriePath =
     path_from_bytes(rlp_int(i))
 
-/* RLP(index) keys sort as 1..127, 0, 128.. . Input bodies arrive in numeric
- * order, so move the first update past the single-byte index range in one
- * linear pass instead of inserting every update through an existing list. */
+/*! Moves the index-0 update past the single-byte index range in one
+    linear pass: `rlp(index)` keys sort as 1‥127, 0, 128‥, while input
+    bodies arrive in numeric order. */
 function place_zero_update(zero : TrieUpdate, rest : list(TrieUpdate), remaining : int) -> list(TrieUpdate) =
     match rest {
         next :: tail => if remaining > 0 then {
@@ -88,12 +90,15 @@ function place_zero_update(zero : TrieUpdate, rest : list(TrieUpdate), remaining
         [||] => [|zero|],
     }
 
+/*! Reorders numeric-order index updates into `rlp(index)` key order. */
 function order_trie_index_updates(updates : list(TrieUpdate)) -> list(TrieUpdate) =
     match updates {
         zero :: rest => place_zero_update(zero, rest, 127),
         [||] => [||],
     }
 
+/*! The transactions-trie root (YP §4.4.2): leaf `i` holds the raw
+    EIP-2718 envelope of transaction `i`, keyed by `rlp(i)`. */
 function transaction_trie_root(txs : SszListRef) -> hash = {
     var updates_rev : list(TrieUpdate) = [||];
     var cursor = ssz_list_cursor(txs);
@@ -106,6 +111,8 @@ function transaction_trie_root(txs : SszListRef) -> hash = {
     trie_root(EMPTY_TRIE_ROOT, order_trie_index_updates(list_reverse(updates_rev)))
 }
 
+/*! The withdrawals-trie root (EIP-4895): leaf `i` holds
+    `rlp(withdrawal_i)`, keyed by `rlp(i)`. */
 function withdrawals_trie_root(wds : SszListRef) -> hash = {
     let scratch_mark = scratch_begin();
     var updates_rev : list(TrieUpdate) = [||];
@@ -124,11 +131,14 @@ function withdrawals_trie_root(wds : SszListRef) -> hash = {
     root
 }
 
+/*! The `excess_blob_gas` the header must carry, derived from the
+    authenticated parent (EIP-4844). */
 function expected_payload_excess_blob_gas(witness : WitnessContext) -> int =
     next_excess_blob_gas(witness.parent_excess_blob_gas, witness.parent_blob_gas_used, witness.parent_base_fee_per_gas)
 
-/* EIP-7685 commitment over the present request-type digests, in request-type
- * order. The request bodies remain source-backed through the hash calls. */
+/*! The EIP-7685 requests hash: `sha256` over the present request-type
+    digests in request-type order; the request bodies remain
+    region-backed through the hash calls. */
 function execution_requests_hash(input_ref : StatelessInputRef) -> hash = {
     let l0 = unsigned(input_ref.deposits.len);
     let l1 = unsigned(input_ref.withdrawal_requests.len);
@@ -161,9 +171,12 @@ function execution_requests_hash(input_ref : StatelessInputRef) -> hash = {
     sha256(segs)
 }
 
-/* Validate commitments that can be checked before transaction decoding. The
- * supplied BAL is hashed once for the header; post-execution validation
- * compares its bytes directly with the canonical model encoding. */
+/*! Validates every commitment checkable before transaction decoding:
+    parent linkage, gas and blob-gas header rules, the transactions and
+    withdrawals roots, the requests hash, and the block hash. The
+    supplied block access list is hashed once for the header;
+    post-execution validation compares its bytes against the canonical
+    reconstruction. */
 function validate_execution_payload(
     input : StatelessInput,
     input_ref : StatelessInputRef,
