@@ -1,5 +1,17 @@
-/* Validate commitments produced by executing a block body. */
+/*md
+# Stateless block validation
 
+Validation of the commitments produced by executing a block body: gas and
+blob-gas accounting, the post-state root, the receipts root and logs
+bloom, the EIP-7685 execution requests, and the EIP-7928 block access
+list.
+*/
+
+/*! Checks every executed-block commitment against the header and payload,
+    throwing the specific `InvalidBlock` reason on the first failure:
+    gas/blob-gas totals, post-state root, receipts root, logs bloom,
+    execution-request bytes (Prague+), and block-access-list bytes and
+    size (Amsterdam+). */
 function validate_executed_block(
     block : Block,
     input_ref : StatelessInputRef,

@@ -1,8 +1,19 @@
+/*md
+# The block access list (EIP-7928)
+
+Reconstruction of the EIP-7928 block access list from the recorder's
+per-account change streams, as source-backed RLP that is compared against
+the payload's claimed bytes.
+*/
+
+/*! The reconstructed BAL: its RLP and its item count (bounded by
+    `gas_limit / 2000`). */
 struct EncodedBlockAccessList = {
     rlp : RlpBuilder,
     item_count : int,
 }
 
+/*! One `[tx_index, value]` change pair as RLP. */
 function bal_index_word(index : bits(64), value : word) -> RlpBuilder = {
     var content = rlp_builder_encoded(rlp_int(unsigned(index)));
     content = rlp_builder_append_encoded(content, rlp_int_word(value));
@@ -22,6 +33,7 @@ function bal_index_code(index : bits(64), code_hash : hash) -> RlpBuilder = {
     rlp_builder_list(content)
 }
 
+/*! The per-account storage-change list, slot-major. */
 function bal_storage_changes(account : bits(64)) -> (RlpBuilder, int) = {
     let count = unsigned(bal_storage_change_count(account));
     var content = EMPTY_RLP_BUILDER;

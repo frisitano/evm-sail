@@ -1,3 +1,13 @@
+/*md
+# Payload commitments
+
+The header-level commitments recomputed from the payload: the
+transactions and withdrawals tries, the EIP-7685 requests hash, and the
+block header hash itself.
+*/
+
+/*! The RLP of one withdrawal (EIP-4895), assembled in the scratch
+    arena. */
 function withdrawal_rlp(withdrawal : ByteSlice) -> ByteSlice = {
     let base = unsigned(withdrawal.off);
     let index = rlp_int(ssz_u64(base + WD_INDEX));
@@ -14,6 +24,9 @@ function withdrawal_rlp(withdrawal : ByteSlice) -> ByteSlice = {
     scratch_finish(start)
 }
 
+/*! The block header hash: `keccak256(rlp(header))` with the recomputed
+    body roots spliced in (YP §4.4; post-merge constants for ommers,
+    difficulty, and nonce). */
 function block_header_hash(
     h : BlockHeader,
     transactions_root : hash,

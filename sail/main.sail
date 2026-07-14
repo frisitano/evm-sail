@@ -1,8 +1,22 @@
+/*md
+# The guest entry point
+
+The zkVM guest's `main`: decode the stateless input, verify the payload,
+and emit the public validation result. Any thrown `InvalidBlock` — even
+during input decoding — resolves to an invalid verdict rather than a
+crash, mirroring the EELS `verify_stateless_new_payload` try/except
+structure.
+*/
+
+/*! A decoded input paired with its validation verdict. */
 struct GuestValidation = {
     input_ref : StatelessInputRef,
     valid : bool,
 }
 
+/*! Decodes, verifies, and reports: `write_validation_result` on a
+    decodable input (valid or not), `write_invalid_result` when decoding
+    itself fails. */
 function main() -> unit = {
     validation_debug_reset();
     cycle_scope_start(SCOPE_STATELESS_VALIDATION);

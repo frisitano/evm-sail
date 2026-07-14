@@ -1,3 +1,11 @@
+/*md
+# Receipts, blooms, and the receipts trie
+
+The logs-bloom construction (YP §4.4.1) and the receipts trie
+(EIP-2718 typed receipt encoding).
+*/
+
+/*! Sets one bit (0–2047) in the bloom, most-significant-byte first. */
 function bloom_set_bit(bloom : LogsBloom, bit_to_set : int) -> LogsBloom = {
     var out = bloom;
     let bit = unsigned(get_slice_int(11, bit_to_set, 0));
@@ -7,6 +15,8 @@ function bloom_set_bit(bloom : LogsBloom, bit_to_set : int) -> LogsBloom = {
     out
 }
 
+/*! The `i`-th bloom bit index of a hash: bytes `2i, 2i+1` mod 2048
+    (YP M3:2048). */
 function bloom_bit(h : bits(256), i : int) -> int = {
     let j = i * 2;
     let hi : byte = sail_shiftright(h, 8 * (31 - j))[7 .. 0];
@@ -14,6 +24,7 @@ function bloom_bit(h : bits(256), i : int) -> int = {
     emod_int(unsigned(hi) * 256 + unsigned(lo), 2048)
 }
 
+/*! Adds a hashed bloom entry: three bits from its KECCAK-256. */
 function bloom_add_entry_hash(bloom : LogsBloom, h : bits(256)) -> LogsBloom = {
     var out = bloom;
     foreach (i from 0 to 2) {
@@ -22,6 +33,7 @@ function bloom_add_entry_hash(bloom : LogsBloom, h : bits(256)) -> LogsBloom = {
     out
 }
 
+/*! Adds every topic of a log record to the bloom. */
 function bloom_add_topics(bloom : LogsBloom, topics : list(word)) -> LogsBloom = {
     var out = bloom;
     var rest : list(word) = topics;

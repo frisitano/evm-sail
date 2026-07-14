@@ -1,3 +1,13 @@
+/*md
+# Block execution
+
+The block driver: block-start system calls, the transaction loop with
+block-gas accounting, withdrawals, and block-end request collection.
+*/
+
+/*! Everything block validation needs from an executed body: overall
+    success, gas and blob-gas totals, receipts, and the collected
+    EIP-7685 requests. */
 struct BlockExecutionResult = {
     all_ok : bool,
     gas_acc : int,
@@ -9,6 +19,8 @@ struct BlockExecutionResult = {
     requests : ExecutionRequests,
 }
 
+/*! The block-start writes: beacon root (Cancun+, EIP-4788) and parent
+    hash history (Prague+, EIP-2935). */
 function run_block_start_system_calls() -> unit = {
     if k_fork >= Cancun then {
         system_call(BEACON_ROOTS_ADDR, k_header.parent_beacon_block_root)
@@ -18,6 +30,9 @@ function run_block_start_system_calls() -> unit = {
     }
 }
 
+/*! Executes the block's transactions in order, enforcing per-tx
+    applicability and block gas/blob-gas availability (EIP-7778 block-gas
+    accounting), accumulating receipts. */
 function execute_block_transactions(
     transactions : SszListRef,
     public_keys : ByteSlice,

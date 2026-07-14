@@ -1,26 +1,28 @@
-/* ======================================================================== */
-/* EXECUTOR: PROTOCOL SYSTEM CALLS                                          */
-/*                                                                          */
-/* The block-level system calls the protocol issues around the              */
-/* transactions: the EIP-4788 / EIP-2935 block-start writes (unchecked --   */
-/* skipped if the contract is absent) and the EIP-7002 / EIP-7251           */
-/* block-end request dequeues (checked -- absence or failure invalidates    */
-/* the block). Each is a 30M-gas frame from SYSTEM_ADDRESS whose committed  */
-/* storage writes shape the post-state root.                                */
-/* ======================================================================== */
+/*md
+# Protocol system calls
 
-/* ---- EIP-4788 / EIP-2935 block-start system calls ---------------------------
- * Before the transactions, the protocol issues unchecked system calls from
- * SYSTEM_ADDRESS to the beacon-roots (EIP-4788) and block-hash-history (EIP-2935)
- * contracts, writing the parent beacon-block root and the parent block hash into
- * their ring buffers. Each takes a 32-byte input, 30M gas, and bumps no nonce /
- * charges no fee / counts toward no block gas; it is skipped if the contract has
- * no code. Their committed storage writes shape the post-state root. */
+The block-level system calls the protocol issues around the transactions:
+the EIP-4788 / EIP-2935 block-start writes (unchecked — skipped if the
+contract is absent) and the EIP-7002 / EIP-7251 block-end request
+dequeues (checked — absence or failure invalidates the block). Each is a
+30M-gas frame from `SYSTEM_ADDRESS` whose committed storage writes shape
+the post-state root.
+*/
 
+/*md
+## Block-start writes (EIP-4788 / EIP-2935)
 
-/* Enter a top-level protocol system-call frame. The caller has already made a
- * fresh memory frame and, for a word input, frozen the parent-memory span that
- * `input` references. */
+Before the transactions, the protocol issues unchecked system calls from
+`SYSTEM_ADDRESS` to the beacon-roots (EIP-4788) and block-hash-history
+(EIP-2935) contracts, writing the parent beacon-block root and the parent
+block hash into their ring buffers. Each takes a 32-byte input and 30M
+gas, and bumps no nonce, charges no fee, and counts toward no block gas;
+it is skipped if the contract has no code.
+*/
+
+/*! Enters a top-level protocol system-call frame. The caller has already
+    made a fresh memory frame and, for a word input, frozen the
+    parent-memory span that `input` references. */
 function enter_system_call_frame(tgt : address, input : ByteSlice) -> StateCheckpoint = {
     let checkpoint = k_snapshot();
     pc = 0;
