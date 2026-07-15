@@ -10,8 +10,8 @@ list or zero-hash lookup table is materialized.
 /*! One level of the Merkle frontier: empty, or holding the pending left
     subtree hash for that level. */
 union MerkleSlot = {
-    EmptyMerkleSlot : unit,
-    OccupiedMerkleSlot : hash,
+    EmptyMerkleSlot : unit, /* no pending subtree at this level */
+    OccupiedMerkleSlot : hash, /* the pending left-subtree hash */
 }
 
 /*! Adds leaf number `count` to a low-to-high frontier. A set bit in

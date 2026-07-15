@@ -12,13 +12,13 @@ meaning is the byte sequence it references.
 /*! The regions of the host interface a [ByteSlice][type-ByteSlice] may
     reference. */
 enum ByteSource = {
-    StatelessInputSource,
-    MemorySource,
-    CodeSource,
-    LogDataSource,
-    MemoryArenaSource,
-    OutputSource,
-    ScratchSource,
+    StatelessInputSource, /* the SSZ stateless input envelope */
+    MemorySource, /* the current frame's memory */
+    CodeSource, /* stored contract code */
+    LogDataSource, /* log payloads retained for receipts */
+    MemoryArenaSource, /* frame memory frozen at halt */
+    OutputSource, /* the frozen output buffer */
+    ScratchSource, /* the executor scratch arena */
 }
 
 /*! An unmaterialized byte range: a region, an offset, and a length. A
@@ -66,6 +66,6 @@ function code_byte_slice(off : int, len : int) -> ByteSlice =
         A segment list crosses the host interface whole
         (`ffi/hash_glue.c`); no per-byte crossings occur. */
 union Bytes = {
-    BytesList : list(byte),
-    BytesSlice : ByteSlice,
+    BytesList : list(byte), /* materialized bytes */
+    BytesSlice : ByteSlice, /* a region-backed reference */
 }

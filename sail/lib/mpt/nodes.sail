@@ -8,9 +8,9 @@ Merkle-Patricia trie node forms, references, and decoding
 /*! A reference to a trie node: empty, inline (encodings under 32 bytes),
     or by KECCAK-256 hash (YP Appendix D, Eq. 207). */
 union NodeRef = {
-    EmptyRef : unit,
-    InlineRef : Bytes,
-    HashRef : hash,
+    EmptyRef : unit, /* the empty node */
+    InlineRef : Bytes, /* a node embedded in its parent (encoding under 32 bytes) */
+    HashRef : hash, /* a node referenced by its KECCAK-256 hash */
 }
 
 /*! The RLP of a node reference as it appears inside a parent node. */
@@ -134,10 +134,10 @@ struct BranchNodeData = { children : BranchChildren, value : RlpFieldRef }
 /*! A decoded trie node, or `InvalidNode` when the bytes are not a
     well-formed node. */
 union TrieNode = {
-    LeafNode : LeafNodeData,
-    ExtensionNode : ExtensionNodeData,
-    BranchNode : BranchNodeData,
-    InvalidNode : unit,
+    LeafNode : LeafNodeData, /* remaining path and value */
+    ExtensionNode : ExtensionNodeData, /* shared path prefix and single child */
+    BranchNode : BranchNodeData, /* sixteen children and an optional value */
+    InvalidNode : unit, /* undecodable bytes: a deficient witness */
 }
 
 /*! Decodes node bytes into leaf/extension/branch form by field count

@@ -88,8 +88,8 @@ struct StatelessValidationFailure = {
 
 /*! The verdict of stateless payload verification. */
 union StatelessValidationResult = {
-    StatelessPayloadValid : unit,
-    StatelessPayloadInvalid : StatelessValidationFailure,
+    StatelessPayloadValid : unit, /* every validation stage passed */
+    StatelessPayloadInvalid : StatelessValidationFailure, /* the first failing stage and its reason */
 }
 
 /*! The stateless verification pipeline: decode the semantic envelope,

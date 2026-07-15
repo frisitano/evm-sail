@@ -11,14 +11,14 @@ no externs.
     forks are not distinct members; they collapse to their base fork (see
     [fork_of_protocol_index][]). */
 enum Fork = {
-    Frontier,
-    Homestead,
-    Byzantium,
-    Constantinople,
-    Istanbul,
+    Frontier, /* launch protocol */
+    Homestead, /* EIP-2 create rules, EIP-7 DELEGATECALL */
+    Byzantium, /* EIP-140 REVERT, EIP-211 returndata; precompiles 0x05-0x08 */
+    Constantinople, /* EIP-145 shifts, EIP-1014 CREATE2, EIP-1052 EXTCODEHASH */
+    Istanbul, /* EIP-1344 CHAINID, EIP-2200 SSTORE metering */
     Berlin, /* EIP-2929/2930 access lists + warm/cold access costs        */
     London, /* EIP-1559 fee market + EIP-3529 refund reduction            */
-    Paris,
+    Paris, /* EIP-4399 PREVRANDAO replaces DIFFICULTY */
     Shanghai, /* EIP-3651 warm coinbase, EIP-3855 PUSH0, EIP-3860 initcode  */
     Cancun, /* EIP-1153/4844; precompiles 0x01-0x0a                       */
     Prague, /* EIP-7623 calldata floor; +BLS 0x0b-0x11                    */

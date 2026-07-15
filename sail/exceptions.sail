@@ -16,35 +16,35 @@ that value.
 
 /*! Ordinary frame stops. Only `RETURN` and `REVERT` produce output bytes. */
 union HaltKind = {
-  HaltStop         : unit,
-  HaltReturn       : ByteSlice,
-  HaltRevert       : ByteSlice,
-  HaltSelfDestruct : unit
+  HaltStop         : unit, /* STOP: success, empty return data */
+  HaltReturn       : ByteSlice, /* RETURN: success with output data */
+  HaltRevert       : ByteSlice, /* REVERT: state unwound, output kept (EIP-140) */
+  HaltSelfDestruct : unit /* SELFDESTRUCT: success, empty return data */
 }
 
 /*! Exceptional halts (YP §9.4.2): each consumes all remaining gas and
     reverts the frame's state changes. */
 enum ExceptionKind = {
-    StackUnderflow,
-    StackOverflow,
-    OutOfGas,
-    InvalidOpcode,
-    InvalidJump,
+    StackUnderflow, /* an opcode pops more items than the stack holds */
+    StackOverflow, /* a push would exceed the 1024-item stack limit */
+    OutOfGas, /* the operation's cost exceeds the remaining gas */
+    InvalidOpcode, /* an unassigned or fork-inactive opcode, or INVALID (0xfe) */
+    InvalidJump, /* a jump target that is not a valid JUMPDEST */
     StaticViolation, /* EIP-214: state-changing op inside a STATICCALL */
-    CallDepthExceeded,
-    InsufficientBalance,
+    CallDepthExceeded, /* a call or create beyond depth 1024 */
+    InsufficientBalance, /* a value transfer exceeding the sender's balance */
     WriteProtection, /* EIP-214 write protection                    */
     InitCodeTooLarge, /* EIP-3860 */
-    NonceOverflow,
+    NonceOverflow, /* a nonce at its maximum cannot be bumped (EIP-2681) */
     AddressCollision, /* EIP-684: CREATE into an occupied account     */
 }
 
 /*! Per-frame execution status: running, halted normally, or exceptionally
     halted. */
 union FrameStatus = {
-  Running     : unit,
-  Halted      : HaltKind,
-  Exceptional : ExceptionKind
+  Running     : unit, /* mid-execution */
+  Halted      : HaltKind, /* halted normally (YP §9.4.4) */
+  Exceptional : ExceptionKind /* halted exceptionally: all frame gas consumed, effects void */
 }
 
 /*md
@@ -89,5 +89,5 @@ enum BlockError = {
     unwinds via `have_exception` return-checks (no `longjmp`), so it is
     zkVM-guest safe. */
 union exception = {
-    InvalidBlock : BlockError,
+    InvalidBlock : BlockError, /* the block is invalid, with the failing rule */
 }

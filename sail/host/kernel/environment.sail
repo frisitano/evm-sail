@@ -46,16 +46,16 @@ register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob
 
 /*! The environment fields opcodes read through [k_env][]. */
 enum EnvField = {
-    F_Number,
-    F_Timestamp,
-    F_Coinbase,
-    F_BaseFee,
-    F_ChainId,
-    F_GasLimit,
-    F_PrevRandao,
-    F_Origin,
-    F_GasPrice,
-    F_SlotNumber,
+    F_Number, /* block number (`NUMBER`) */
+    F_Timestamp, /* block timestamp (`TIMESTAMP`) */
+    F_Coinbase, /* beneficiary address (`COINBASE`) */
+    F_BaseFee, /* block base fee (`BASEFEE`, EIP-3198) */
+    F_ChainId, /* chain identifier (`CHAINID`, EIP-1344) */
+    F_GasLimit, /* block gas limit (`GASLIMIT`) */
+    F_PrevRandao, /* randomness beacon (`PREVRANDAO`, EIP-4399) */
+    F_Origin, /* transaction sender (`ORIGIN`) */
+    F_GasPrice, /* effective gas price (`GASPRICE`) */
+    F_SlotNumber, /* consensus slot number (`SLOTNUM`, EIP-7843) */
 }
 
 /*! An environment field as the word its opcode pushes. */

@@ -68,7 +68,15 @@ In every module, including the host interface:
   elsewhere in the specification (the function carries the docs) — in
   particular, every host-interface extern `val` documents its contract;
 - a page declaring four or more capitalized constants has a
-  `## Constants` section or a summary table.
+  `## Constants` section or a summary table;
+- within every `enum` and `union` body, each member line is covered by
+  a comment: a trailing `/* … */` on the line, or a comment heading the
+  contiguous group of members it introduces (a blank line ends a
+  group). Use group comments where members form natural families (the
+  instruction set's opcode ranges); use trailing comments where each
+  member carries its own rule (error and halt kinds, fork features).
+  Member comments are ordinary comments, rendered with the definition
+  source.
 
 Every page's introduction contains prose, not just headings.
 

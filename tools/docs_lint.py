@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 SECTION = re.compile(r"^(Constants|Types|Helpers|The .+)$")
+ENUM_UNION = re.compile(r"^(enum|union) (\w+)[^=\n]*=\s*\{\n(.*?)^\}", re.M | re.S)
 HEADING = re.compile(r"^(#{1,6}) (.+)$", re.M)
 CITED_HEADING = re.compile(r"EIP-\d|Yellow Paper|YP\b")
 BANNED = re.compile(
@@ -139,6 +140,23 @@ def coverage(text: str, rel: str) -> list[str]:
         if kw == "val " and not has_doc(i) and name not in ALL_FUNCTIONS:
             # a val is covered by its function definition (any file)
             problems.append(f"{rel}:{i + 1}: undocumented val `{name}`")
+
+    for m in ENUM_UNION.finditer(text):
+        kind, name, body = m.groups()
+        base = text[: m.start(3)].count("\n")
+        covered = False
+        for i, line in enumerate(body.split("\n")):
+            s = line.strip()
+            if not s:
+                covered = False  # a blank line ends a comment-headed group
+                continue
+            if s.startswith("/*") or s.startswith("*"):
+                covered = True
+                continue
+            if not covered and "/*" not in line:
+                problems.append(
+                    f"{rel}:{base + i + 1}: uncommented member line in {kind} `{name}`: {s.split(',')[0].strip()!r}"
+                )
 
     if caps_lets >= 4:
         md = "\n".join(MD_BLOCK.findall(text))

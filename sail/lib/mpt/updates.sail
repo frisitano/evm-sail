@@ -8,8 +8,8 @@ that recomposes canonical nodes (YP Appendix D).
 /*! A pending change at a trie key: a put of new leaf bytes, or a
     delete. */
 union TrieChange = {
-    TriePut : Bytes,
-    TrieDelete : unit,
+    TriePut : Bytes, /* insert or replace the leaf bytes at the key */
+    TrieDelete : unit, /* remove the key */
 }
 
 /*! An update: a full-path key and its change. Update lists are kept
@@ -83,9 +83,9 @@ references.
     children are always branches), or a subtree reference of unknown kind.
     The distinction permits untouched hashes to stay opaque. */
 union TrieItemValue = {
-    LeafItem : Bytes,
-    BranchItem : NodeRef,
-    SubtreeItem : NodeRef,
+    LeafItem : Bytes, /* a live leaf's bytes */
+    BranchItem : NodeRef, /* a known-branch child reference */
+    SubtreeItem : NodeRef, /* an opaque subtree reference of unknown kind */
 }
 
 /*! A sorted-stream item: a path and its payload. */
