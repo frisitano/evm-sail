@@ -8,7 +8,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -44,11 +43,11 @@ open ByteSource
 open BlockError
 
 def undefined_LimbDivMod (_ : Unit) : SailM LimbDivMod := do
-  (pure { quotient := ← (undefined_bitvector 64)
+  (pure { quotient := ← (undefined_bitvector 64),
           remainder := ← (undefined_bitvector 64) })
 
 def undefined_WordDivMod (_ : Unit) : SailM WordDivMod := do
-  (pure { quotient := ← (undefined_bitvector 256)
+  (pure { quotient := ← (undefined_bitvector 256),
           remainder := ← (undefined_bitvector 256) })
 
 def ZERO_WORD : word := 0x0000000000000000000000000000000000000000000000000000000000000000#256
@@ -63,16 +62,16 @@ def WORD_ALL_ONES : word := 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 
 def WORD_SIGN_BIT : word := 0x8000000000000000000000000000000000000000000000000000000000000000#256
 
-/-- Type quantifiers: k_ex159621_ : Bool -/
-def word_of_bool (b : Bool) : (BitVec 256) :=
+/-- Type quantifiers: k_ex161000_ : Bool -/
+def word_of_bool (b : Bool) : word :=
   if (b : Bool)
   then WORD_ONE
   else WORD_ZERO
 
-def word_is_zero (w : (BitVec 256)) : Bool :=
+def word_is_zero (w : word) : Bool :=
   (w == WORD_ZERO)
 
-def word_nonzero (w : (BitVec 256)) : Bool :=
+def word_nonzero (w : word) : Bool :=
   (! (word_is_zero w))
 
 def LIMB_ZERO : limb := 0x0000000000000000#64
@@ -81,30 +80,30 @@ def LIMB_ONE : limb := 0x0000000000000001#64
 
 def LIMB_MAX : limb := 0xFFFFFFFFFFFFFFFF#64
 
-def limb_ult (a : (BitVec 64)) (b : (BitVec 64)) : Bool :=
+def limb_ult (a : limb) (b : limb) : Bool :=
   let difference := (a - b)
   let borrow :=
     (((Complement.complement a) &&& b) ||| ((Complement.complement (a ^^^ b)) &&& difference))
   ((borrow &&& 0x8000000000000000#64) != LIMB_ZERO)
 
-def limb_ule (a : (BitVec 64)) (b : (BitVec 64)) : Bool :=
+def limb_ule (a : limb) (b : limb) : Bool :=
   (! (limb_ult b a))
 
-def limb_checked_add (a : (BitVec 64)) (b : (BitVec 64)) : (Option (BitVec 64)) :=
+def limb_checked_add (a : limb) (b : limb) : (Option limb) :=
   let result := (a + b)
   if ((limb_ult result a) : Bool)
   then none
   else (some result)
 
-def limb_checked_sub (a : (BitVec 64)) (b : (BitVec 64)) : (Option (BitVec 64)) :=
+def limb_checked_sub (a : limb) (b : limb) : (Option limb) :=
   if ((limb_ult a b) : Bool)
   then none
   else (some (a - b))
 
-def limb_checked_mul (value : (BitVec 64)) (factor : (BitVec 64)) : (Option (BitVec 64)) := Id.run do
-  let result : limb := LIMB_ZERO
-  let addend : limb := value
-  let remaining : limb := factor
+def limb_checked_mul (value : limb) (factor : limb) : (Option limb) := Id.run do
+  let result : (BitVec 64) := LIMB_ZERO
+  let addend : (BitVec 64) := value
+  let remaining : (BitVec 64) := factor
   let valid : Bool := true
   let (addend, remaining, result, valid) ← (( do
     let loop_i_lower := 0
@@ -120,14 +119,14 @@ def limb_checked_mul (value : (BitVec 64)) (factor : (BitVec 64)) : (Option (Bit
             let (result, valid) : ((BitVec 64) × Bool) :=
               match added with
               | .some value =>
-                (let result : limb := value
+                (let result : (BitVec 64) := value
                 (result, valid))
               | none =>
                 (let valid : Bool := false
                 (result, valid))
             (result, valid))
           else (result, valid)
-        let remaining : limb := (remaining >>> 1)
+        let remaining : (BitVec 64) := (remaining >>> 1)
         let (addend, valid) : ((BitVec 64) × Bool) :=
           if ((valid && ((i <b 63) && (remaining != LIMB_ZERO))) : Bool)
           then
@@ -135,7 +134,7 @@ def limb_checked_mul (value : (BitVec 64)) (factor : (BitVec 64)) : (Option (Bit
             let (addend, valid) : ((BitVec 64) × Bool) :=
               match doubled with
               | .some value =>
-                (let addend : limb := value
+                (let addend : (BitVec 64) := value
                 (addend, valid))
               | none =>
                 (let valid : Bool := false
@@ -148,16 +147,16 @@ def limb_checked_mul (value : (BitVec 64)) (factor : (BitVec 64)) : (Option (Bit
   then (pure (some result))
   else (pure none)
 
-def limb_divmod (dividend : (BitVec 64)) (divisor : (BitVec 64)) : LimbDivMod := Id.run do
+def limb_divmod (dividend : limb) (divisor : limb) : LimbDivMod := Id.run do
   if ((divisor == LIMB_ZERO) : Bool)
   then
-    (pure { quotient := LIMB_ZERO
+    (pure { quotient := LIMB_ZERO,
             remainder := LIMB_ZERO })
   else
     (do
-      let quotient : limb := LIMB_ZERO
-      let remainder : limb := LIMB_ZERO
-      let remaining : limb := dividend
+      let quotient : (BitVec 64) := LIMB_ZERO
+      let remainder : (BitVec 64) := LIMB_ZERO
+      let remaining : (BitVec 64) := dividend
       let (quotient, remainder, remaining) ← (( do
         let loop__step_lower := 0
         let loop__step_upper := 63
@@ -170,65 +169,70 @@ def limb_divmod (dividend : (BitVec 64)) (divisor : (BitVec 64)) : LimbDivMod :=
               then LIMB_ONE
               else LIMB_ZERO
             let overflow := ((BitVec.access remainder 63) == 1#1)
-            let remainder : limb := ((remainder <<< 1) ||| incoming)
-            let remaining : limb := (remaining <<< 1)
-            let quotient : limb := (quotient <<< 1)
+            let remainder : (BitVec 64) := ((remainder <<< 1) ||| incoming)
+            let remaining : (BitVec 64) := (remaining <<< 1)
+            let quotient : (BitVec 64) := (quotient <<< 1)
             let (quotient, remainder) : ((BitVec 64) × (BitVec 64)) :=
               if ((overflow || (limb_ule divisor remainder)) : Bool)
               then
-                (let remainder : limb := (remainder - divisor)
-                let quotient : limb := (quotient ||| LIMB_ONE)
+                (let remainder : (BitVec 64) := (remainder - divisor)
+                let quotient : (BitVec 64) := (quotient ||| LIMB_ONE)
                 (quotient, remainder))
               else (quotient, remainder)
             (quotient, remainder, remaining)
         (pure loop_vars) ) : Id ((BitVec 64) × (BitVec 64) × (BitVec 64)) )
-      (pure { quotient := quotient
+      (pure { quotient := quotient,
               remainder := remainder }))
 
 /-- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 256 -/
-def word_bit_count_increment (value : Nat) : SailM Nat := do
-  if ((value <b 256) : Bool)
-  then (pure (value +i 1))
-  else
-    (do
-      assert false "sail/prelude.sail:155.20-155.21"
-      throw Error.Exit)
+def word_bit_count_increment (value : word_bit_count) : SailM word_bit_count := do
+  let value := (value).value
+  let semanticResult ← do
+    if ((value <b 256) : Bool)
+    then (pure (value + 1))
+    else
+      (do
+        assert false "sail/prelude.sail:155.20-155.21"
+        throw Error.Exit)
+  pure (⟨semanticResult⟩)
 
-def limb_bit_length (value : (BitVec 64)) : Nat := Id.run do
-  let remaining : limb := value
-  let length : limb_bit_count := 0
-  let (length, remaining) ← (( do
-    let loop_step_lower := 0
-    let loop_step_upper := 63
-    let mut loop_vars := (length, remaining)
-    for step in [loop_step_lower:loop_step_upper:1]i do
-      let (length, remaining) := loop_vars
-      loop_vars :=
-        let (length, remaining) : (Nat × (BitVec 64)) :=
-          if ((remaining != LIMB_ZERO) : Bool)
-          then
-            (let length : limb_bit_count := (step +i 1)
-            let remaining : limb := (remaining >>> 1)
-            (length, remaining))
-          else (length, remaining)
-        (length, remaining)
-    (pure loop_vars) ) : Id (Nat × (BitVec 64)) )
-  (pure length)
+def limb_bit_length (value : limb) : limb_bit_count := Id.run do
+  let semanticResult ← do
+    let remaining : (BitVec 64) := value
+    let length : Nat := 0
+    let (length, remaining) ← (( do
+      let loop_step_lower := 0
+      let loop_step_upper := 63
+      let mut loop_vars := (length, remaining)
+      for step in [loop_step_lower:loop_step_upper:1]i do
+        let (length, remaining) := loop_vars
+        loop_vars :=
+          let (length, remaining) : (Nat × (BitVec 64)) :=
+            if ((remaining != LIMB_ZERO) : Bool)
+            then
+              (let length : Nat := (step + 1)
+              let remaining : (BitVec 64) := (remaining >>> 1)
+              (length, remaining))
+            else (length, remaining)
+          (length, remaining)
+      (pure loop_vars) ) : Id (Nat × (BitVec 64)) )
+    (pure length)
+  pure (⟨semanticResult⟩)
 
-def word_to_limb (w : (BitVec 256)) : (Option (BitVec 64)) :=
+def word_to_limb (w : word) : (Option limb) :=
   if (((Sail.BitVec.extractLsb w 255 64) == (BitVec.zero 192)) : Bool)
   then (some (Sail.BitVec.extractLsb w 63 0))
   else none
 
-def limb_to_word (value : (BitVec 64)) : (BitVec 256) :=
+def limb_to_word (value : limb) : word :=
   (Sail.BitVec.zeroExtend value 256)
 
 /-- Type quantifiers: value : Nat, 0 ≤ value -/
-def word_of_nat (value : Nat) : SailM (BitVec 256) := do
+def word_of_nat (value : Nat) : SailM word := do
   assert (value <b (2 ^i 256)) "sail/prelude.sail:186.26-186.27"
   (pure (get_slice_int 256 value 0))
 
-def word_ult (a : (BitVec 256)) (b : (BitVec 256)) : Bool :=
+def word_ult (a : word) (b : word) : Bool :=
   if (((Sail.BitVec.extractLsb a 255 192) != (Sail.BitVec.extractLsb b 255 192)) : Bool)
   then (limb_ult (Sail.BitVec.extractLsb a 255 192) (Sail.BitVec.extractLsb b 255 192))
   else
@@ -239,30 +243,30 @@ def word_ult (a : (BitVec 256)) (b : (BitVec 256)) : Bool :=
       then (limb_ult (Sail.BitVec.extractLsb a 127 64) (Sail.BitVec.extractLsb b 127 64))
       else (limb_ult (Sail.BitVec.extractLsb a 63 0) (Sail.BitVec.extractLsb b 63 0))))
 
-def word_ule (a : (BitVec 256)) (b : (BitVec 256)) : Bool :=
+def word_ule (a : word) (b : word) : Bool :=
   (! (word_ult b a))
 
-def word_bit_length (value : (BitVec 256)) : Nat :=
-  if (((Sail.BitVec.extractLsb value 255 192) != LIMB_ZERO) : Bool)
-  then (192 +i (limb_bit_length (Sail.BitVec.extractLsb value 255 192)))
+def word_bit_length (value : word) : word_bit_count :=
+  ⟨if (((Sail.BitVec.extractLsb value 255 192) != LIMB_ZERO) : Bool)
+  then (192 + ((limb_bit_length (Sail.BitVec.extractLsb value 255 192))).value)
   else
     (if (((Sail.BitVec.extractLsb value 191 128) != LIMB_ZERO) : Bool)
-    then (128 +i (limb_bit_length (Sail.BitVec.extractLsb value 191 128)))
+    then (128 + ((limb_bit_length (Sail.BitVec.extractLsb value 191 128))).value)
     else
       (if (((Sail.BitVec.extractLsb value 127 64) != LIMB_ZERO) : Bool)
-      then (64 +i (limb_bit_length (Sail.BitVec.extractLsb value 127 64)))
-      else (limb_bit_length (Sail.BitVec.extractLsb value 63 0))))
+      then (64 + ((limb_bit_length (Sail.BitVec.extractLsb value 127 64))).value)
+      else ((limb_bit_length (Sail.BitVec.extractLsb value 63 0))).value))⟩
 
-def word_checked_add (a : (BitVec 256)) (b : (BitVec 256)) : (Option (BitVec 256)) :=
+def word_checked_add (a : word) (b : word) : (Option word) :=
   let result := (a + b)
   if ((word_ult result a) : Bool)
   then none
   else (some result)
 
-def word_checked_mul_limb (value : (BitVec 256)) (factor : (BitVec 64)) : (Option (BitVec 256)) := Id.run do
-  let result : word := ZERO_WORD
-  let addend : word := value
-  let remaining : limb := factor
+def word_checked_mul_limb (value : word) (factor : limb) : (Option word) := Id.run do
+  let result : (BitVec 256) := ZERO_WORD
+  let addend : (BitVec 256) := value
+  let remaining : (BitVec 64) := factor
   let valid : Bool := true
   let (addend, remaining, result, valid) ← (( do
     let loop_i_lower := 0
@@ -278,14 +282,14 @@ def word_checked_mul_limb (value : (BitVec 256)) (factor : (BitVec 64)) : (Optio
             let (result, valid) : ((BitVec 256) × Bool) :=
               match added with
               | .some value =>
-                (let result : word := value
+                (let result : (BitVec 256) := value
                 (result, valid))
               | none =>
                 (let valid : Bool := false
                 (result, valid))
             (result, valid))
           else (result, valid)
-        let remaining : limb := (remaining >>> 1)
+        let remaining : (BitVec 64) := (remaining >>> 1)
         let (addend, valid) : ((BitVec 256) × Bool) :=
           if ((valid && ((i <b 63) && (remaining != LIMB_ZERO))) : Bool)
           then
@@ -293,7 +297,7 @@ def word_checked_mul_limb (value : (BitVec 256)) (factor : (BitVec 64)) : (Optio
             let (addend, valid) : ((BitVec 256) × Bool) :=
               match doubled with
               | .some value =>
-                (let addend : word := value
+                (let addend : (BitVec 256) := value
                 (addend, valid))
               | none =>
                 (let valid : Bool := false
@@ -306,10 +310,10 @@ def word_checked_mul_limb (value : (BitVec 256)) (factor : (BitVec 64)) : (Optio
   then (pure (some result))
   else (pure none)
 
-def word_mul (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) := Id.run do
-  let result : word := WORD_ZERO
-  let addend : word := a
-  let remaining : word := b
+def word_mul (a : word) (b : word) : word := Id.run do
+  let result : (BitVec 256) := WORD_ZERO
+  let addend : (BitVec 256) := a
+  let remaining : (BitVec 256) := b
   let (addend, remaining, result) ← (( do
     let loop__step_lower := 0
     let loop__step_upper := 255
@@ -321,22 +325,22 @@ def word_mul (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) := Id.run do
           if (((BitVec.access remaining 0) == 1#1) : Bool)
           then (result + addend)
           else result
-        let addend : word := (addend <<< 1)
-        let remaining : word := (remaining >>> 1)
+        let addend : (BitVec 256) := (addend <<< 1)
+        let remaining : (BitVec 256) := (remaining >>> 1)
         (addend, remaining, result)
     (pure loop_vars) ) : Id ((BitVec 256) × (BitVec 256) × (BitVec 256)) )
   (pure result)
 
-def word_divmod (dividend : (BitVec 256)) (divisor : (BitVec 256)) : WordDivMod := Id.run do
+def word_divmod (dividend : word) (divisor : word) : WordDivMod := Id.run do
   if ((word_is_zero divisor) : Bool)
   then
-    (pure { quotient := WORD_ZERO
+    (pure { quotient := WORD_ZERO,
             remainder := WORD_ZERO })
   else
     (do
-      let quotient : word := WORD_ZERO
-      let remainder : word := WORD_ZERO
-      let remaining : word := dividend
+      let quotient : (BitVec 256) := WORD_ZERO
+      let remainder : (BitVec 256) := WORD_ZERO
+      let remaining : (BitVec 256) := dividend
       let (quotient, remainder, remaining) ← (( do
         let loop__step_lower := 0
         let loop__step_upper := 255
@@ -349,30 +353,30 @@ def word_divmod (dividend : (BitVec 256)) (divisor : (BitVec 256)) : WordDivMod 
               then WORD_ONE
               else WORD_ZERO
             let overflow := ((BitVec.access remainder 255) == 1#1)
-            let remainder : word := ((remainder <<< 1) ||| incoming)
-            let remaining : word := (remaining <<< 1)
-            let quotient : word := (quotient <<< 1)
+            let remainder : (BitVec 256) := ((remainder <<< 1) ||| incoming)
+            let remaining : (BitVec 256) := (remaining <<< 1)
+            let quotient : (BitVec 256) := (quotient <<< 1)
             let (quotient, remainder) : ((BitVec 256) × (BitVec 256)) :=
               if ((overflow || (word_ule divisor remainder)) : Bool)
               then
-                (let remainder : word := (remainder - divisor)
-                let quotient : word := (quotient ||| WORD_ONE)
+                (let remainder : (BitVec 256) := (remainder - divisor)
+                let quotient : (BitVec 256) := (quotient ||| WORD_ONE)
                 (quotient, remainder))
               else (quotient, remainder)
             (quotient, remainder, remaining)
         (pure loop_vars) ) : Id ((BitVec 256) × (BitVec 256) × (BitVec 256)) )
-      (pure { quotient := quotient
+      (pure { quotient := quotient,
               remainder := remainder }))
 
-def word_mod_add_reduced (a : (BitVec 256)) (b : (BitVec 256)) (modulus : (BitVec 256)) : (BitVec 256) :=
+def word_mod_add_reduced (a : word) (b : word) (modulus : word) : word :=
   let threshold := (modulus - b)
   if ((word_ule threshold a) : Bool)
   then (a - threshold)
   else (a + b)
 
-def word_shift_left_limb (value : (BitVec 256)) (amount : (BitVec 64)) : (BitVec 256) := Id.run do
-  let result : word := value
-  let remaining : limb := amount
+def word_shift_left_limb (value : word) (amount : limb) : word := Id.run do
+  let result : (BitVec 256) := value
+  let remaining : (BitVec 64) := amount
   let (remaining, result) ← (( do
     let loop__step_lower := 0
     let loop__step_upper := 255
@@ -383,17 +387,17 @@ def word_shift_left_limb (value : (BitVec 256)) (amount : (BitVec 64)) : (BitVec
         let (remaining, result) : ((BitVec 64) × (BitVec 256)) :=
           if ((remaining != LIMB_ZERO) : Bool)
           then
-            (let result : word := (result <<< 1)
-            let remaining : limb := (remaining - LIMB_ONE)
+            (let result : (BitVec 256) := (result <<< 1)
+            let remaining : (BitVec 64) := (remaining - LIMB_ONE)
             (remaining, result))
           else (remaining, result)
         (remaining, result)
     (pure loop_vars) ) : Id ((BitVec 64) × (BitVec 256)) )
   (pure result)
 
-def word_shift_right_limb (value : (BitVec 256)) (amount : (BitVec 64)) : (BitVec 256) := Id.run do
-  let result : word := value
-  let remaining : limb := amount
+def word_shift_right_limb (value : word) (amount : limb) : word := Id.run do
+  let result : (BitVec 256) := value
+  let remaining : (BitVec 64) := amount
   let (remaining, result) ← (( do
     let loop__step_lower := 0
     let loop__step_upper := 255
@@ -404,17 +408,17 @@ def word_shift_right_limb (value : (BitVec 256)) (amount : (BitVec 64)) : (BitVe
         let (remaining, result) : ((BitVec 64) × (BitVec 256)) :=
           if ((remaining != LIMB_ZERO) : Bool)
           then
-            (let result : word := (result >>> 1)
-            let remaining : limb := (remaining - LIMB_ONE)
+            (let result : (BitVec 256) := (result >>> 1)
+            let remaining : (BitVec 64) := (remaining - LIMB_ONE)
             (remaining, result))
           else (remaining, result)
         (remaining, result)
     (pure loop_vars) ) : Id ((BitVec 64) × (BitVec 256)) )
   (pure result)
 
-def word_arithmetic_shift_right_limb (value : (BitVec 256)) (amount : (BitVec 64)) : (BitVec 256) := Id.run do
-  let result : word := value
-  let remaining : limb := amount
+def word_arithmetic_shift_right_limb (value : word) (amount : limb) : word := Id.run do
+  let result : (BitVec 256) := value
+  let remaining : (BitVec 64) := amount
   let negative := ((BitVec.access value 255) == 1#1)
   let (remaining, result) ← (( do
     let loop__step_lower := 0
@@ -426,27 +430,27 @@ def word_arithmetic_shift_right_limb (value : (BitVec 256)) (amount : (BitVec 64
         let (remaining, result) : ((BitVec 64) × (BitVec 256)) :=
           if ((remaining != LIMB_ZERO) : Bool)
           then
-            (let result : word := (result >>> 1)
+            (let result : (BitVec 256) := (result >>> 1)
             let result : (BitVec 256) :=
               if (negative : Bool)
               then (result ||| WORD_SIGN_BIT)
               else result
-            let remaining : limb := (remaining - LIMB_ONE)
+            let remaining : (BitVec 64) := (remaining - LIMB_ONE)
             (remaining, result))
           else (remaining, result)
         (remaining, result)
     (pure loop_vars) ) : Id ((BitVec 64) × (BitVec 256)) )
   (pure result)
 
-def word_negate (value : (BitVec 256)) : (BitVec 256) :=
+def word_negate (value : word) : word :=
   (WORD_ZERO - value)
 
-def word_abs (value : (BitVec 256)) : (BitVec 256) :=
+def word_abs (value : word) : word :=
   if (((BitVec.access value 255) == 1#1) : Bool)
   then (word_negate value)
   else value
 
-def word_slt (a : (BitVec 256)) (b : (BitVec 256)) : Bool :=
+def word_slt (a : word) (b : word) : Bool :=
   let a_neg := ((BitVec.access a 255) == 1#1)
   let b_neg := ((BitVec.access b 255) == 1#1)
   if (a_neg : Bool)
@@ -459,32 +463,32 @@ def word_slt (a : (BitVec 256)) (b : (BitVec 256)) : Bool :=
     then false
     else (word_ult a b))
 
-def word_to_address (w : (BitVec 256)) : (BitVec 160) :=
+def word_to_address (w : word) : address :=
   (Sail.BitVec.extractLsb w 159 0)
 
-def address_to_word (a : (BitVec 160)) : (BitVec 256) :=
+def address_to_word (a : address) : word :=
   (Sail.BitVec.zeroExtend a 256)
 
-def alu_add (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_add (a : word) (b : word) : word :=
   (a + b)
 
-def alu_sub (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_sub (a : word) (b : word) : word :=
   (a - b)
 
-def alu_mul (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_mul (a : word) (b : word) : word :=
   (word_mul a b)
 
-def alu_div (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_div (a : word) (b : word) : word :=
   if ((word_is_zero b) : Bool)
   then WORD_ZERO
   else (word_divmod a b).quotient
 
-def alu_mod (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_mod (a : word) (b : word) : word :=
   if ((word_is_zero b) : Bool)
   then WORD_ZERO
   else (word_divmod a b).remainder
 
-def alu_sdiv (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_sdiv (a : word) (b : word) : word :=
   if ((word_is_zero b) : Bool)
   then WORD_ZERO
   else
@@ -493,7 +497,7 @@ def alu_sdiv (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
     then (word_negate quotient)
     else quotient)
 
-def alu_smod (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_smod (a : word) (b : word) : word :=
   if ((word_is_zero b) : Bool)
   then WORD_ZERO
   else
@@ -502,7 +506,7 @@ def alu_smod (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
     then (word_negate remainder)
     else remainder)
 
-def alu_addmod (a : (BitVec 256)) (b : (BitVec 256)) (n : (BitVec 256)) : (BitVec 256) :=
+def alu_addmod (a : word) (b : word) (n : word) : word :=
   if ((word_is_zero n) : Bool)
   then WORD_ZERO
   else
@@ -510,14 +514,14 @@ def alu_addmod (a : (BitVec 256)) (b : (BitVec 256)) (n : (BitVec 256)) : (BitVe
     let b_reduced := (word_divmod b n).remainder
     (word_mod_add_reduced a_reduced b_reduced n))
 
-def alu_mulmod (a : (BitVec 256)) (b : (BitVec 256)) (n : (BitVec 256)) : (BitVec 256) := Id.run do
+def alu_mulmod (a : word) (b : word) (n : word) : word := Id.run do
   if ((word_is_zero n) : Bool)
   then (pure WORD_ZERO)
   else
     (do
-      let result : word := WORD_ZERO
-      let addend : word := (word_divmod a n).remainder
-      let remaining : word := b
+      let result : (BitVec 256) := WORD_ZERO
+      let addend : (BitVec 256) := (word_divmod a n).remainder
+      let remaining : (BitVec 256) := b
       let (addend, remaining, result) ← (( do
         let loop__step_lower := 0
         let loop__step_upper := 255
@@ -529,16 +533,16 @@ def alu_mulmod (a : (BitVec 256)) (b : (BitVec 256)) (n : (BitVec 256)) : (BitVe
               if (((BitVec.access remaining 0) == 1#1) : Bool)
               then (word_mod_add_reduced result addend n)
               else result
-            let addend : word := (word_mod_add_reduced addend addend n)
-            let remaining : word := (remaining >>> 1)
+            let addend : (BitVec 256) := (word_mod_add_reduced addend addend n)
+            let remaining : (BitVec 256) := (remaining >>> 1)
             (addend, remaining, result)
         (pure loop_vars) ) : Id ((BitVec 256) × (BitVec 256) × (BitVec 256)) )
       (pure result))
 
-def alu_exp (base : (BitVec 256)) (exponent : (BitVec 256)) : (BitVec 256) := Id.run do
-  let result : word := WORD_ONE
-  let b : word := base
-  let e : word := exponent
+def alu_exp (base : word) (exponent : word) : word := Id.run do
+  let result : (BitVec 256) := WORD_ONE
+  let b : (BitVec 256) := base
+  let e : (BitVec 256) := exponent
   let (b, e, result) ← (( do
     let loop__step_lower := 0
     let loop__step_upper := 255
@@ -550,13 +554,13 @@ def alu_exp (base : (BitVec 256)) (exponent : (BitVec 256)) : (BitVec 256) := Id
           if (((BitVec.access e 0) == 1#1) : Bool)
           then (word_mul result b)
           else result
-        let b : word := (word_mul b b)
-        let e : word := (e >>> 1)
+        let b : (BitVec 256) := (word_mul b b)
+        let e : (BitVec 256) := (e >>> 1)
         (b, e, result)
     (pure loop_vars) ) : Id ((BitVec 256) × (BitVec 256) × (BitVec 256)) )
   (pure result)
 
-def alu_signextend (byte_index : (BitVec 256)) (value : (BitVec 256)) : (BitVec 256) :=
+def alu_signextend (byte_index : word) (value : word) : word :=
   match (word_to_limb byte_index) with
   | .some index =>
     (if ((limb_ult index 0x0000000000000020#64) : Bool)
@@ -571,37 +575,37 @@ def alu_signextend (byte_index : (BitVec 256)) (value : (BitVec 256)) : (BitVec 
     else value)
   | _ => value
 
-def alu_lt (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_lt (a : word) (b : word) : word :=
   (word_of_bool (word_ult a b))
 
-def alu_gt (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_gt (a : word) (b : word) : word :=
   (word_of_bool (word_ult b a))
 
-def alu_slt (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_slt (a : word) (b : word) : word :=
   (word_of_bool (word_slt a b))
 
-def alu_sgt (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_sgt (a : word) (b : word) : word :=
   (word_of_bool (word_slt b a))
 
-def alu_eq (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_eq (a : word) (b : word) : word :=
   (word_of_bool (a == b))
 
-def alu_iszero (a : (BitVec 256)) : (BitVec 256) :=
+def alu_iszero (a : word) : word :=
   (word_of_bool (word_is_zero a))
 
-def alu_and (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_and (a : word) (b : word) : word :=
   (a &&& b)
 
-def alu_or (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_or (a : word) (b : word) : word :=
   (a ||| b)
 
-def alu_xor (a : (BitVec 256)) (b : (BitVec 256)) : (BitVec 256) :=
+def alu_xor (a : word) (b : word) : word :=
   (a ^^^ b)
 
-def alu_not (a : (BitVec 256)) : (BitVec 256) :=
+def alu_not (a : word) : word :=
   (Complement.complement a)
 
-def alu_byte (i : (BitVec 256)) (x : (BitVec 256)) : (BitVec 256) :=
+def alu_byte (i : word) (x : word) : word :=
   match (word_to_limb i) with
   | .some index =>
     (if ((limb_ult index 0x0000000000000020#64) : Bool)
@@ -612,17 +616,17 @@ def alu_byte (i : (BitVec 256)) (x : (BitVec 256)) : (BitVec 256) :=
     else WORD_ZERO)
   | _ => WORD_ZERO
 
-def alu_shl (shift_amt : (BitVec 256)) (v : (BitVec 256)) : (BitVec 256) :=
+def alu_shl (shift_amt : word) (v : word) : word :=
   if ((! (word_ult shift_amt 0x0000000000000000000000000000000000000000000000000000000000000100#256)) : Bool)
   then WORD_ZERO
   else (word_shift_left_limb v (Sail.BitVec.extractLsb shift_amt 63 0))
 
-def alu_shr (shift_amt : (BitVec 256)) (v : (BitVec 256)) : (BitVec 256) :=
+def alu_shr (shift_amt : word) (v : word) : word :=
   if ((! (word_ult shift_amt 0x0000000000000000000000000000000000000000000000000000000000000100#256)) : Bool)
   then WORD_ZERO
   else (word_shift_right_limb v (Sail.BitVec.extractLsb shift_amt 63 0))
 
-def alu_sar (shift_amt : (BitVec 256)) (v : (BitVec 256)) : (BitVec 256) :=
+def alu_sar (shift_amt : word) (v : word) : word :=
   if ((! (word_ult shift_amt 0x0000000000000000000000000000000000000000000000000000000000000100#256)) : Bool)
   then
     (if (((BitVec.access v 255) == 1#1) : Bool)
@@ -630,8 +634,8 @@ def alu_sar (shift_amt : (BitVec 256)) (v : (BitVec 256)) : (BitVec 256) :=
     else WORD_ZERO)
   else (word_arithmetic_shift_right_limb v (Sail.BitVec.extractLsb shift_amt 63 0))
 
-def alu_clz (x : (BitVec 256)) : SailM (BitVec 256) := do
-  let count : word_bit_count := 0
+def alu_clz (x : word) : SailM word := do
+  let count : Nat := 0
   let found : Bool := false
   let (count, found) ← (( do
     let loop_i_lower := 0
@@ -649,7 +653,10 @@ def alu_clz (x : (BitVec 256)) : SailM (BitVec 256) := do
                 if (((BitVec.access x biinput_index) == 0#1) : Bool)
                 then
                   (do
-                    let count ← (word_bit_count_increment count)
+                    let count ←
+                      (do
+                          let semanticResult ← (word_bit_count_increment ⟨count⟩)
+                          pure ((semanticResult).value))
                     (pure (count, found)))
                 else
                   (let found : Bool := true

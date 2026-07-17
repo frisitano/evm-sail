@@ -12,7 +12,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -54,10 +53,26 @@ def apply_undo (e : JEntry) : SailM Unit := do
   | .JWarmS (a, s) => (warm_slot_remove a s)
 
 def k_state_checkpoint (_ : Unit) : SailM StateCheckpoint := do
-  (pure { journal := ← (journal_len ())
-          accounts := ← (acct_tx_checkpoint ())
-          storage := ← (storage_tx_checkpoint ())
-          logs := ← (logs_checkpoint ()) })
+  (pure { journal := ← do
+              let semanticField ← (do
+                  let semanticResult ← (journal_len ())
+                  pure ((semanticResult).value))
+              pure (⟨semanticField⟩),
+          accounts := ← do
+              let semanticField ← (do
+                  let semanticResult ← (acct_tx_checkpoint ())
+                  pure ((semanticResult).value))
+              pure (⟨semanticField⟩),
+          storage := ← do
+              let semanticField ← (do
+                  let semanticResult ← (storage_tx_checkpoint ())
+                  pure ((semanticResult).value))
+              pure (⟨semanticField⟩),
+          logs := ← do
+              let semanticField ← (do
+                  let semanticResult ← (logs_checkpoint ())
+                  pure ((semanticResult).value))
+              pure (⟨semanticField⟩) })
 
 def k_set_header (h : BlockHeader) : SailM Unit := do
   writeReg k_header h
@@ -79,10 +94,9 @@ def account_deleted_at_tx_end (acc : Account) : SailM Bool := do
 def k_tx_merge (_ : Unit) : SailM Unit := do
   let more : Bool := true
   let more ← (( do
-    let mut loop_vars := more
-    while (λ more => more) loop_vars do
-      let more := loop_vars
-      loop_vars ← do
+    let loop_vars ← whileFuelM (fuel :=(2 ^i 64)) (fun more => (pure more)) more
+      fun more => do
+        assert true "loop dummy assert"
         match (← (acct_tx_pop_ascending ())) with
         | .some e =>
           (do
@@ -98,8 +112,8 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
             if ((deleted || (curr.storage_cleared && (! e.value.orig.storage_cleared))) : Bool)
             then (storage_block_clear e.addr)
             else (pure ())
-            if ((curr.info.nonce != e.value.orig.info.nonce) : Bool)
-            then (bal_nonce_change e.addr curr.info.nonce)
+            if (((curr.info.nonce).value != (e.value.orig.info.nonce).value) : Bool)
+            then (bal_nonce_change e.addr ⟨(curr.info.nonce).value⟩)
             else (pure ())
             if ((curr.info.balance != e.value.orig.info.balance) : Bool)
             then (bal_balance_change e.addr curr.info.balance)
@@ -111,8 +125,8 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
             if ((account_changed curr e.value.orig) : Bool)
             then
               (acct_block_write
-                { addr := e.addr
-                  value := { curr := curr
+                { addr := e.addr,
+                  value := { curr := curr,
                              orig := e.value.orig } })
             else (pure ())
             (pure more))
@@ -120,10 +134,9 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
     (pure loop_vars) ) : SailM Bool )
   let more : Bool := true
   let more ← (( do
-    let mut loop_vars_1 := more
-    while (λ more => more) loop_vars_1 do
-      let more := loop_vars_1
-      loop_vars_1 ← do
+    let loop_vars_1 ← whileFuelM (fuel :=(2 ^i 64)) (fun more => (pure more)) more
+      fun more => do
+        assert true "loop dummy assert"
         match (← (storage_tx_pop ())) with
         | .some e =>
           (do
@@ -144,25 +157,29 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
   (storage_tx_reset ())
 
 def k_revert (checkpoint : StateCheckpoint) : SailM Unit := do
-  (acct_tx_revert checkpoint.accounts)
-  (storage_tx_revert checkpoint.storage)
-  (logs_revert checkpoint.logs)
-  let current ← do (journal_len ())
-  let saved := checkpoint.journal
+  (acct_tx_revert ⟨(checkpoint.accounts).value⟩)
+  (storage_tx_revert ⟨(checkpoint.storage).value⟩)
+  (logs_revert ⟨(checkpoint.logs).value⟩)
+  let current ← do
+    (do
+        let semanticResult ← (journal_len ())
+        pure ((semanticResult).value))
+  let saved := (checkpoint.journal).value
   let remaining ← (( do
     if ((saved ≤b current) : Bool)
     then (pure (current -i saved))
     else
       (do
-        assert false "sail/host/kernel/lifecycle.sail:89.24-89.25"
-        throw Error.Exit) ) : SailM JournalCheckpoint )
+        assert false "sail/host/kernel/lifecycle.sail:93.24-93.25"
+        throw Error.Exit) ) : SailM Nat )
   let remaining ← (( do
-    let mut loop_vars := remaining
-    while (λ remaining => (remaining != 0)) loop_vars do
-      let remaining := loop_vars
-      loop_vars ← do
+    let loop_vars ← whileFuelM (fuel :=remaining) (fun remaining => (pure (remaining != 0))) remaining
+      fun remaining => do
+        assert true "loop dummy assert"
         (apply_undo (← (journal_pop ())))
-        (protocol_quantity_decrement remaining)
+        (do
+            let semanticResult ← (protocol_quantity_decrement ⟨remaining⟩)
+            pure ((semanticResult).value))
     (pure loop_vars) ) : SailM Nat )
   (pure ())
 

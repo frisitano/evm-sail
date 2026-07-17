@@ -106,7 +106,7 @@ function block_header_hash(
 function transaction_trie_root(txs : SszListRef) -> hash = {
     var builder = trie_builder_empty();
     var cursor = rlp_index_cursor(txs.count);
-    while not_bool(rlp_index_cursor_empty(cursor)) do {
+    while not_bool(rlp_index_cursor_empty(cursor)) termination_measure(cursor.count - cursor.position) do {
         let (item, next) = rlp_index_cursor_pop(cursor);
         cursor = next;
         let tx = ssz_list_at(txs, item.index);
@@ -118,7 +118,7 @@ function transaction_trie_root(txs : SszListRef) -> hash = {
 function withdrawals_trie_root(wds : SszListRef) -> hash = {
     var builder = trie_builder_empty();
     var cursor = rlp_index_cursor(wds.count);
-    while not_bool(rlp_index_cursor_empty(cursor)) do {
+    while not_bool(rlp_index_cursor_empty(cursor)) termination_measure(cursor.count - cursor.position) do {
         let (item, next) = rlp_index_cursor_pop(cursor);
         cursor = next;
         let scratch_mark = scratch_begin();

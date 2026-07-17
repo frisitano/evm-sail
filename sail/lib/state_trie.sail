@@ -81,7 +81,7 @@ function encode_state_account(info : AccountInfo, storage_root : hash) -> ByteSl
 function storage_updates(addr : address) -> list(TrieUpdate) = {
     var remaining : item_count = storage_block_count(addr);
     var updates : list(TrieUpdate) = [||];
-    while remaining != 0 do {
+    while remaining != 0 termination_measure(remaining) do {
         remaining = protocol_quantity_decrement(remaining);
         let index = remaining;
         match storage_block_row(addr, index) {
@@ -121,7 +121,7 @@ function account_update(entry : AcctEntry, storage : list(TrieUpdate)) -> TrieUp
 function compute_state_root() -> hash = {
     var remaining : item_count = acct_block_count();
     var accounts : list(TrieUpdate) = [||];
-    while remaining != 0 do {
+    while remaining != 0 termination_measure(remaining) do {
         remaining = protocol_quantity_decrement(remaining);
         let index = remaining;
         match acct_block_row(index) {

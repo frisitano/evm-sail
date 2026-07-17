@@ -275,7 +275,11 @@ function decode_trie_node(node : ByteSlice) -> TrieNode = {
                 if is_leaf then {
                     LeafNode(struct { path = path, value = value })
                 } else {
-                    ExtensionNode(struct { path = path, child = value })
+                    if path_len(path) == 0 then {
+                        InvalidNode()
+                    } else {
+                        ExtensionNode(struct { path = path, child = value })
+                    }
                 }
             } else {
                 var children : BranchChildren = vector_init(16, first);

@@ -19,7 +19,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -63,27 +62,27 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg k_n_headers 0
   writeReg k_chain_id 1
   writeReg k_fork Amsterdam
-  writeReg k_blob_schedule { target := 14
-                             max := 21
-                             base_fee_update_fraction := 11684671 }
-  writeReg k_header { number := 0
-                      timestamp := 0
-                      extra_data := EMPTY_SLICE
-                      gas_limit := GAS_ZERO
-                      gas_used := GAS_ZERO
-                      prev_randao := ZERO_WORD
-                      base_fee := ZERO_WORD
-                      blob_gas_used := 0
-                      excess_blob_gas := 0
-                      state_root := ZERO_WORD
-                      receipts_root := ZERO_WORD
-                      logs_bloom := EMPTY_LOGS_BLOOM
-                      fee_recipient := ZERO_ADDR
-                      parent_hash := ZERO_WORD
-                      parent_beacon_block_root := ZERO_WORD
-                      slot_number := 0 }
-  writeReg k_tx { origin := ZERO_ADDR
-                  gas_price := ZERO_WORD
+  writeReg k_blob_schedule { target := ⟨14⟩,
+                             max := ⟨21⟩,
+                             base_fee_update_fraction := ⟨11684671⟩ }
+  writeReg k_header { number := ⟨0⟩,
+                      timestamp := ⟨0⟩,
+                      extra_data := EMPTY_SLICE,
+                      gas_limit := GAS_ZERO,
+                      gas_used := GAS_ZERO,
+                      prev_randao := ZERO_WORD,
+                      base_fee := ZERO_WORD,
+                      blob_gas_used := ⟨0⟩,
+                      excess_blob_gas := ⟨0⟩,
+                      state_root := ZERO_WORD,
+                      receipts_root := ZERO_WORD,
+                      logs_bloom := EMPTY_LOGS_BLOOM,
+                      fee_recipient := ZERO_ADDR,
+                      parent_hash := ZERO_WORD,
+                      parent_beacon_block_root := ZERO_WORD,
+                      slot_number := ⟨0⟩ }
+  writeReg k_tx { origin := ZERO_ADDR,
+                  gas_price := ZERO_WORD,
                   blob_hashes := EMPTY_BLOB_HASHES }
   writeReg pc BYTE_ZERO
   writeReg gas_remaining GAS_ZERO

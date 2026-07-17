@@ -8,7 +8,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -68,17 +67,19 @@ def OSAKA_TRANSACTION_GAS_LIMIT_VALUE : Nat := (2 ^i 24)
 def OSAKA_TRANSACTION_GAS_LIMIT : gas := (Gas (2 ^i 24))
 
 def undefined_Authorization (_ : Unit) : SailM Authorization := do
-  (pure { valid_sig := ← (undefined_bool ())
-          authority := ← (undefined_bitvector 160)
-          address := ← (undefined_bitvector 160)
-          nonce := ← (undefined_range 0 ((2 ^i 64) -i 1))
+  (pure { valid_sig := ← (undefined_bool ()),
+          authority := ← (undefined_bitvector 160),
+          address := ← (undefined_bitvector 160),
+          nonce := ← do
+              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
+              pure (⟨semanticField⟩),
           chain_id := ← (undefined_bitvector 256) })
 
 def EMPTY_BLOB_HASHES : BlobHashes :=
-  { bytes := EMPTY_SLICE
-    count := 0 }
+  { bytes := EMPTY_SLICE,
+    count := ⟨0⟩ }
 
-def tx_type_byte (t : TxType) : (BitVec 8) :=
+def tx_type_byte (t : TxType) : byte :=
   match t with
   | .LegacyTx => 0x00#8
   | .AccessListTx => 0x01#8

@@ -13,8 +13,13 @@ zkvm/build/
 # harness caches
 harness/.rtcache/
 
-# theorem-prover build artifacts (generated sources are tracked)
-**/.lake/build/
+# theorem-prover build artifacts (generated sources and manifests are tracked)
+**/.lake/
+/extractions/coq/**/*.aux
+/extractions/coq/**/*.glob
+/extractions/coq/**/*.vo
+/extractions/coq/**/*.vok
+/extractions/coq/**/*.vos
 
 # python
 **/__pycache__/

@@ -6,8 +6,8 @@
 type nibble = bits(4)
 type trie_path_len = range(0, 64)
 type trie_depth = range(0, 63)
-type trie_path_cursor = range(0, 65)
-type trie_fuel = range(0, 256)
+type trie_path_cursor = range(0, 64)
+type hex_prefix_cursor = range(0, 65)
 struct TriePath = { data : bits(256), len : trie_path_len }
 
 let HEX_PREFIX_MAX_LENGTH : byte_length = ByteQuantity(33)
@@ -17,13 +17,6 @@ function path_len(path : TriePath) -> trie_path_len = path.len
 function trie_path_len_increment(value : trie_path_len) -> trie_path_len =
     if value < 64 then {
         value + 1
-    } else {
-        throw InvalidBlock(WitnessDeficient)
-    }
-
-function trie_fuel_decrement(value : trie_fuel) -> trie_fuel =
-    if 0 < value then {
-        value - 1
     } else {
         throw InvalidBlock(WitnessDeficient)
     }
@@ -132,14 +125,14 @@ function common_prefix_from(a : TriePath, b : TriePath, start : trie_path_len) -
 
 /* Encode the remaining nibble pairs directly in wire order. The nibble index
  * increases by two and the secure-key path is bounded by 64 nibbles. */
-function hex_prefix_pairs(path : TriePath, index : trie_path_cursor) -> list(byte) =
+function hex_prefix_pairs(path : TriePath, index : hex_prefix_cursor) -> list(byte) =
     if path_len(path) <= index then {
         [||]
     } else {
         let next = index + 1;
         append(path_nibble(path, index), path_nibble(path, next)) :: hex_prefix_pairs(path, next + 1)
     }
-termination_measure hex_prefix_pairs(path, index) = 65 - index
+termination_measure hex_prefix_pairs(path, index) = path_len(path) - index
 
 /* hex-prefix (compact) encoding of a nibble path + leaf/extension flag
  * (Yellow Paper Appendix C.1, the HP function). Its length is known from the
@@ -152,7 +145,7 @@ function hex_prefix_compact(path : TriePath, is_leaf : bool) -> (list(byte), byt
         } else {
             append(flag, 0x0)
         };
-    let first_path_index : trie_path_cursor = if odd then { 1 } else { 0 };
+    let first_path_index : hex_prefix_cursor = if odd then { 1 } else { 0 };
     let encoded_len : byte_length = ByteQuantity(1 + exact_quotient(path_len(path), 2));
     (first :: hex_prefix_pairs(path, first_path_index), encoded_len)
 }
@@ -191,7 +184,7 @@ function hex_prefix_decode_ref(f : RlpFieldRef) -> (bool, TriePath) = {
     }
 }
 
-function path_matches(key : TriePath, pos : trie_path_len, seg : TriePath) -> bool = {
+function path_matches(key : TriePath, pos : trie_path_cursor, seg : TriePath) -> bool = {
     let stop = pos + path_len(seg);
     if path_len(key) < stop then {
         false

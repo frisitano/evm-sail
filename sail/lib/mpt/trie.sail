@@ -5,11 +5,6 @@
 /* Updates and surviving witness subtrees are emitted directly into a sink.
  * The sink retains one item for key lookahead, so touched paths are rebuilt
  * without materialising or partitioning an intermediate item list. */
-val witness_emit : (ByteSlice, TriePath, list(TrieUpdate), TrieItemSink, trie_fuel) -> (TrieItemSink, list(TrieUpdate))
-val witness_child_emit : (RlpFieldRef, TriePath, list(TrieUpdate), TrieItemSink, trie_fuel) -> (
-        TrieItemSink,
-        list(TrieUpdate),
-    )
 
 function emit_live_updates_under(
     sink : TrieItemSink,
@@ -88,59 +83,38 @@ function emit_leaf_overlay(
         },
     }
 
-function witness_child_emit(
-    field : RlpFieldRef,
-    prefix : TriePath,
-    updates : list(TrieUpdate),
-    sink : TrieItemSink,
-    fuel : trie_fuel,
-) -> (
-    (TrieItemSink, list(TrieUpdate))
-) =
-    match field_to_ref(field) {
-        InlineRef(node) => witness_emit(inline_node_slice(node), prefix, updates, sink, fuel),
-        EmptyRef() => emit_live_updates_under(sink, updates, prefix),
-        HashRef(node_hash) => {
-            let node = node_db_lookup(node_hash);
-            if node.len == BYTE_ZERO then {
-                throw InvalidBlock(WitnessDeficient)
-            } else {
-                witness_emit(node, prefix, updates, sink, fuel)
-            }
-        },
-    }
-
 function witness_emit(
     node : ByteSlice,
     prefix : TriePath,
     updates : list(TrieUpdate),
     sink : TrieItemSink,
-    fuel : trie_fuel,
+    cursor : trie_path_cursor,
 ) -> (
     (TrieItemSink, list(TrieUpdate))
 ) = {
-    if fuel == 0 then {
-        throw InvalidBlock(WitnessDeficient)
+    if node.len == BYTE_ZERO then {
+        emit_live_updates_under(sink, updates, prefix)
     } else {
-        if node.len == BYTE_ZERO then {
-            emit_live_updates_under(sink, updates, prefix)
-        } else {
-            match decode_trie_node(node) {
-                LeafNode(leaf) => {
-                    let key = path_concat(prefix, leaf.path);
-                    emit_leaf_overlay(sink, updates, prefix, key, rlp_ref_content(leaf.value))
-                },
-                ExtensionNode(extension) => {
+        match decode_trie_node(node) {
+            LeafNode(leaf) => {
+                let key = path_concat(prefix, leaf.path);
+                emit_leaf_overlay(sink, updates, prefix, key, rlp_ref_content(leaf.value))
+            },
+            ExtensionNode(extension) => {
+                let extension_len = path_len(extension.path);
+                let next_cursor = cursor + extension_len;
+                if extension_len == 0 | 64 < next_cursor then {
+                    throw InvalidBlock(WitnessDeficient)
+                } else {
                     let child_prefix = path_concat(prefix, extension.path);
                     let (before_sink, child_updates) = emit_updates_before_child(sink, updates, prefix, child_prefix);
                     let (child_sink, later_updates) = if next_update_under(child_updates, child_prefix) then {
-                            witness_child_emit(
-                                extension.child,
-                                child_prefix,
-                                child_updates,
-                                before_sink,
-                                trie_fuel_decrement(fuel),
-                            )
+                            let child = resolve_ref(field_to_ref(extension.child));
+                            if child.len == BYTE_ZERO then {
+                                emit_live_updates_under(before_sink, child_updates, child_prefix)
+                            } else {
+                                witness_emit(child, child_prefix, child_updates, before_sink, next_cursor)
+                            }
                         } else {
                             (
                                 trie_sink_emit(before_sink, item_branch(child_prefix, field_to_ref(extension.child))),
@@ -148,11 +122,13 @@ function witness_emit(
                             )
                         };
                     emit_live_updates_under(child_sink, later_updates, prefix)
-                },
-                BranchNode(branch) => {
-                    if branch.value.content_len != BYTE_ZERO then {
-                        throw InvalidBlock(WitnessDeficient)
-                    };
+                }
+            },
+            BranchNode(branch) => {
+                if branch.value.content_len != BYTE_ZERO | 64 <= cursor then {
+                    throw InvalidBlock(WitnessDeficient)
+                } else {
+                    let next_cursor = cursor + 1;
                     var current_sink = sink;
                     var remaining = updates;
                     var nib : nibble = 0x0;
@@ -166,12 +142,12 @@ function witness_emit(
                         };
                         if next_update_under(remaining, child_prefix) then {
                             let (next_sink, next_updates) = if present then {
-                                    witness_child_emit(
-                                        field,
+                                    witness_emit(
+                                        resolve_ref(childref),
                                         child_prefix,
                                         remaining,
                                         current_sink,
-                                        trie_fuel_decrement(fuel),
+                                        next_cursor,
                                     )
                                 } else {
                                     emit_live_updates_under(current_sink, remaining, child_prefix)
@@ -186,14 +162,13 @@ function witness_emit(
                         nib = add_bits(nib, 0x1)
                     };
                     (current_sink, remaining)
-                },
-                InvalidNode() => throw InvalidBlock(WitnessDeficient),
-            }
+                }
+            },
+            InvalidNode() => throw InvalidBlock(WitnessDeficient),
         }
     }
 }
-termination_measure witness_emit(node, prefix, updates, sink, fuel) = fuel
-termination_measure witness_child_emit(field, prefix, updates, sink, fuel) = fuel
+termination_measure witness_emit(node, prefix, updates, sink, cursor) = 64 - cursor
 
 /* ---- THE trie entry ------------------------------------------------------
  *
@@ -222,7 +197,7 @@ function trie_root(base_root : bits(256), updates : list(TrieUpdate)) -> bits(25
                 if node.len == BYTE_ZERO then {
                     throw InvalidBlock(WitnessDeficient)
                 } else {
-                    witness_emit(node, path_empty(), updates, sink, 256)
+                    witness_emit(node, path_empty(), updates, sink, 0)
                 }
             };
         if updates_empty(remaining) then {
@@ -234,8 +209,8 @@ function trie_root(base_root : bits(256), updates : list(TrieUpdate)) -> bits(25
 }
 
 /* Walk the secure trie without copying its leaf value. */
-function trie_walk(node : ByteSlice, key : TriePath, pos : trie_path_len, fuel : trie_fuel) -> ByteSlice = {
-    if fuel == 0 | node.len == BYTE_ZERO then {
+function trie_walk(node : ByteSlice, key : TriePath, pos : trie_path_cursor) -> ByteSlice = {
+    if node.len == BYTE_ZERO then {
         EMPTY_SLICE
     } else {
         match decode_trie_node(node) {
@@ -248,14 +223,21 @@ function trie_walk(node : ByteSlice, key : TriePath, pos : trie_path_len, fuel :
                     EMPTY_SLICE
                 }
             },
-            ExtensionNode(ext) => if not_bool(path_matches(key, pos, ext.path)) then {
-                EMPTY_SLICE
-            } else {
-                let next_pos = pos + path_len(ext.path);
-                if next_pos <= 64 then {
-                    trie_walk(resolve_ref(field_to_ref(ext.child)), key, next_pos, trie_fuel_decrement(fuel))
-                } else {
+            ExtensionNode(ext) => {
+                let extension_len : trie_path_len = path_len(ext.path);
+                if extension_len == 0 then {
                     EMPTY_SLICE
+                } else {
+                    if not_bool(path_matches(key, pos, ext.path)) then {
+                        EMPTY_SLICE
+                    } else {
+                        let next_pos = pos + extension_len;
+                        if next_pos <= 64 then {
+                            trie_walk(resolve_ref(field_to_ref(ext.child)), key, next_pos)
+                        } else {
+                            EMPTY_SLICE
+                        }
+                    }
                 }
             },
             BranchNode(branch) => {
@@ -266,7 +248,7 @@ function trie_walk(node : ByteSlice, key : TriePath, pos : trie_path_len, fuel :
                         let child = resolve_ref(
                             field_to_ref(branch_children_get(branch.children, path_nibble(key, pos))),
                         );
-                        trie_walk(child, key, trie_path_len_increment(pos), trie_fuel_decrement(fuel))
+                        trie_walk(child, key, pos + 1)
                     } else {
                         EMPTY_SLICE
                     }
@@ -276,7 +258,7 @@ function trie_walk(node : ByteSlice, key : TriePath, pos : trie_path_len, fuel :
         }
     }
 }
-termination_measure trie_walk(node, key, pos, fuel) = fuel
+termination_measure trie_walk(node, key, pos) = 64 - pos
 
 function trie_lookup(root : hash, key : TriePath) -> ByteSlice = {
     if root == EMPTY_TRIE_ROOT then {
@@ -286,7 +268,7 @@ function trie_lookup(root : hash, key : TriePath) -> ByteSlice = {
         if node.len == BYTE_ZERO then {
             throw InvalidBlock(WitnessDeficient)
         } else {
-            trie_walk(node, key, 0, 256)
+            trie_walk(node, key, 0)
         }
     }
 }

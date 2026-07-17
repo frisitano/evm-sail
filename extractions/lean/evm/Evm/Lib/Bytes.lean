@@ -8,7 +8,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -43,8 +42,8 @@ open Bytes
 open ByteSource
 open BlockError
 
-def word_to_bytes32 (w : (BitVec 256)) : (List (BitVec 8)) := Id.run do
-  let out : (List byte) := []
+def word_to_bytes32 (w : word) : (List byte) := Id.run do
+  let out : (List (BitVec 8)) := []
   let loop_k_lower := 0
   let loop_k_upper := 31
   let mut loop_vars := out
@@ -53,8 +52,8 @@ def word_to_bytes32 (w : (BitVec 256)) : (List (BitVec 8)) := Id.run do
     loop_vars := ((Sail.BitVec.extractLsb (w >>> (8 *i k)) 7 0) :: out)
   (pure loop_vars)
 
-def address_to_bytes (a : (BitVec 160)) : (List (BitVec 8)) := Id.run do
-  let out : (List byte) := []
+def address_to_bytes (a : address) : (List byte) := Id.run do
+  let out : (List (BitVec 8)) := []
   let loop_k_lower := 0
   let loop_k_upper := 19
   let mut loop_vars := out
@@ -63,9 +62,9 @@ def address_to_bytes (a : (BitVec 160)) : (List (BitVec 8)) := Id.run do
     loop_vars := ((Sail.BitVec.extractLsb (a >>> (8 *i k)) 7 0) :: out)
   (pure loop_vars)
 
-def bytes_be256 (bytes : (List (BitVec 8))) : (BitVec 256) := Id.run do
+def bytes_be256 (bytes : (List byte)) : (BitVec 256) := Id.run do
   let acc : (BitVec 256) := (BitVec.zero 256)
-  let rest : (List byte) := bytes
+  let rest : (List (BitVec 8)) := bytes
   let (acc, rest) ← (( do
     let loop_byte_index_lower := 0
     let loop_byte_index_upper := 31
@@ -77,7 +76,7 @@ def bytes_be256 (bytes : (List (BitVec 8))) : (BitVec 256) := Id.run do
           match rest with
           | (b :: tail) =>
             (let acc : (BitVec 256) := ((acc <<< 8) ||| (Sail.BitVec.zeroExtend b 256))
-            let rest : (List byte) := tail
+            let rest : (List (BitVec 8)) := tail
             (acc, rest))
           | [] => (acc, rest)
         (acc, rest)

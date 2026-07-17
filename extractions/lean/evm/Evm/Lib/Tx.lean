@@ -17,7 +17,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -52,7 +51,7 @@ open Bytes
 open ByteSource
 open BlockError
 
-def legacy_sig_chain_id (v : (BitVec 256)) : (BitVec 256) :=
+def legacy_sig_chain_id (v : word) : word :=
   (word_divmod (v - 0x0000000000000000000000000000000000000000000000000000000000000023#256)
     0x0000000000000000000000000000000000000000000000000000000000000002#256).quotient
 
@@ -62,7 +61,7 @@ def PUBLIC_KEY_Y_OFFSET : source_pointer := (ByteQuantity 33)
 
 def PUBLIC_KEY_BODY_LENGTH : byte_length := DOUBLE_WORD_BYTE_LENGTH
 
-def tx_signing_hash (t : TxType) (content_src : EvmByteSlice) (v : (BitVec 256)) : SailM (BitVec 256) := do
+def tx_signing_hash (t : TxType) (content_src : EvmByteSlice) (v : word) : SailM hash := do
   let tb := (tx_type_byte t)
   let eip155 :=
     ((tb == 0x00#8) && (word_ule
@@ -97,25 +96,27 @@ def tx_signing_hash (t : TxType) (content_src : EvmByteSlice) (v : (BitVec 256))
           [(bytes_list [tb] BYTE_ONE), (bytes_list evm_prefix' prefix_len), (BytesSlice content_src)])
       else (keccak256_segments [(bytes_list evm_prefix' prefix_len), (BytesSlice content_src)]))
 
-/-- Type quantifiers: nonce : Nat, 0 ≤ nonce ∧ nonce ≤ (2 ^ 64 - 1) -/
-def auth_signing_hash (chain_id : (BitVec 256)) (addr : (BitVec 160)) (nonce : Nat) : SailM (BitVec 256) := do
+/-- Type quantifiers: k_ex161084_ : Nat, 0 ≤ k_ex161084_ ∧ k_ex161084_ ≤ (2 ^ 64 - 1) -/
+def auth_signing_hash (chain_id : word) (addr : address) (nonce : account_nonce) : SailM hash := do
+  let nonce := (nonce).value
   let content_len ← do (rlp_uint_word_size chain_id)
   let content_len ← (byte_quantity_add content_len (rlp_addr_size ()))
-  let content_len ← (byte_quantity_add content_len (← (rlp_protocol_quantity_size nonce)))
+  let content_len ← (byte_quantity_add content_len (← (rlp_protocol_quantity_size ⟨nonce⟩)))
   let encoded_len ← do (byte_quantity_add BYTE_ONE (← (rlp_list_size content_len)))
   let mark ← do (scratch_begin ())
   (scratch_push_bytes [0x05#8] BYTE_ONE)
   (rlp_write_list_prefix content_len)
   (rlp_write_uint_word chain_id)
   (rlp_write_addr addr)
-  (rlp_write_protocol_quantity nonce)
+  (rlp_write_protocol_quantity ⟨nonce⟩)
   let encoded ← do (rlp_finish mark encoded_len)
   let signing_hash ← do (keccak256_slice encoded)
   (scratch_rewind mark)
   (pure signing_hash)
 
-/-- Type quantifiers: chain_id : Nat, 0 ≤ chain_id ∧ chain_id ≤ (2 ^ 64 - 1) -/
-def tx_sig_v_ok (chain_id : Nat) (t : TxType) (v : (BitVec 256)) : SailM Bool := do
+/-- Type quantifiers: k_ex161085_ : Nat, 0 ≤ k_ex161085_ ∧ k_ex161085_ ≤ (2 ^ 64 - 1) -/
+def tx_sig_v_ok (chain_id : chain_identifier) (t : TxType) (v : word) : SailM Bool := do
+  let chain_id := (chain_id).value
   match t with
   | .LegacyTx =>
     (pure ((v == 0x000000000000000000000000000000000000000000000000000000000000001B#256) || ((v == 0x000000000000000000000000000000000000000000000000000000000000001C#256) || ((word_ule
@@ -123,7 +124,7 @@ def tx_sig_v_ok (chain_id : Nat) (t : TxType) (v : (BitVec 256)) : SailM Bool :=
                 v) == (← (word_of_nat chain_id)))))))
   | _ => (pure ((v == WORD_ZERO) || (v == WORD_ONE)))
 
-def tx_auth_ok (pubkey : EvmByteSlice) (h : (BitVec 256)) (r : (BitVec 256)) (s : (BitVec 256)) : SailM Bool := do
+def tx_auth_ok (pubkey : EvmByteSlice) (h : (BitVec 256)) (r : word) (s : word) : SailM Bool := do
   if ((word_ult SECP_N_HALF s) : Bool)
   then (pure false)
   else

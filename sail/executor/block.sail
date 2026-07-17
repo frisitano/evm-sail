@@ -43,7 +43,7 @@ function execute_block_transactions(
     let deposits_start = scratch_begin();
     var cursor = ssz_list_cursor(transactions);
     var keys = public_keys;
-    while not_bool(ssz_list_cursor_empty(cursor)) do {
+    while not_bool(ssz_list_cursor_empty(cursor)) termination_measure(cursor.items.count - cursor.index) do {
         let i = cursor.index;
         let (transaction, next) = ssz_list_pop(cursor);
         cursor = next;
@@ -122,7 +122,7 @@ function execute_block_transactions(
 
 function apply_withdrawals(withdrawals : SszListRef) -> unit = {
     var rest = withdrawals;
-    while rest.count != 0 do {
+    while rest.count != 0 termination_measure(rest.count) do {
         let (withdrawal_ref, tail) = ssz_fixed_list_pop(rest, WD_SIZE);
         rest = tail;
         let withdrawal = decode_withdrawal(withdrawal_ref);

@@ -24,7 +24,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -70,15 +69,15 @@ def run_block_start_system_calls (_ : Unit) : SailM Unit := do
 def execute_block_transactions (transactions : SszListRef) (public_keys : EvmByteSlice) (block_gas_limit : gas) : SailM BlockExecutionResult := do
   let public_key_count ← do (byte_quantity_quotient public_keys.len PUBLIC_KEY_LENGTH)
   let .ByteQuantity public_key_count_value := public_key_count
-  if (((public_key_count_value != transactions.count) || (byte_quantity_not_equal public_keys.len
-         (← (byte_quantity_mul public_key_count PUBLIC_KEY_LENGTH)))) : Bool)
+  if (((public_key_count_value != (transactions.count).value) || (byte_quantity_not_equal
+         public_keys.len (← (byte_quantity_mul public_key_count PUBLIC_KEY_LENGTH)))) : Bool)
   then sailThrow ((InvalidBlock WitnessDeficient))
   else (pure ())
   let all_ok : Bool := true
   let gas_limit := block_gas_limit
   let gas_acc : gas := GAS_ZERO
-  let blob_gas_acc : blob_gas := 0
-  let tx0_to : address := ZERO_ADDR
+  let blob_gas_acc : Nat := 0
+  let tx0_to : (BitVec 160) := ZERO_ADDR
   let block_gas_overflow : Bool := false
   let blob_gas_overflow : Bool := false
   let receipts := (receipt_accumulator_empty ())
@@ -86,21 +85,18 @@ def execute_block_transactions (transactions : SszListRef) (public_keys : EvmByt
   let cursor ← do (ssz_list_cursor transactions)
   let keys := public_keys
   let (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) ← (( do
-    let mut loop_vars := (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to)
-    while (λ (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) =>
-      (! (ssz_list_cursor_empty cursor)))
-      loop_vars
-      do
-      let (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) := loop_vars
-      loop_vars ← do
-        let i := cursor.index
+    let loop_vars ← whileFuelM (fuel :=((cursor.items.count).value -i (cursor.index).value)) (fun (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) => (pure (! (ssz_list_cursor_empty
+          cursor)))) (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to)
+      fun (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) => do
+        assert true "loop dummy assert"
+        let i := (cursor.index).value
         let (transaction, next) ← do (ssz_list_pop cursor)
         let cursor : SszListCursor := next
         let public_key ← do (sub_slice keys BYTE_ZERO PUBLIC_KEY_LENGTH)
         let keys ←
           (sub_slice keys PUBLIC_KEY_LENGTH (← (byte_quantity_sub keys.len PUBLIC_KEY_LENGTH)))
         let tx ← do (decode_transaction transaction public_key)
-        (bal_set_index (← (protocol_quantity_increment i)))
+        (bal_set_index ⟨((← (protocol_quantity_increment ⟨i⟩))).value⟩)
         let (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts, tx0_to) ← (( do
           if ((! (block_gas_overflow || blob_gas_overflow)) : Bool)
           then
@@ -124,7 +120,8 @@ def execute_block_transactions (transactions : SszListRef) (public_keys : EvmByt
                         (pure (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts)))
                       else
                         (do
-                          let tx_blob_gas_value := (tx.blob_hashes.count *i GAS_PER_BLOB)
+                          let tx_blob_gas_value :=
+                            ((tx.blob_hashes.count).value *i (GAS_PER_BLOB).value)
                           let (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts) ← (( do
                             if ((tx_blob_gas_value >b ((2 ^i 64) -i 1)) : Bool)
                             then
@@ -132,13 +129,16 @@ def execute_block_transactions (transactions : SszListRef) (public_keys : EvmByt
                               (pure (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts)))
                             else
                               (do
-                                let tx_blob_gas : blob_gas := tx_blob_gas_value
+                                let tx_blob_gas : Nat := tx_blob_gas_value
                                 let blob_capacity_ok ← (( do
                                   if ((fork_lt (← readReg k_fork) Cancun) : Bool)
                                   then (pure true)
                                   else
                                     (do
-                                      let maximum ← do (blob_max_gas_per_block ())
+                                      let maximum ← do
+                                        (do
+                                            let semanticResult ← (blob_max_gas_per_block ())
+                                            pure ((semanticResult).value))
                                       if ((blob_gas_acc ≤b maximum) : Bool)
                                       then (pure (tx_blob_gas ≤b (maximum -i blob_gas_acc)))
                                       else (pure false)) ) : SailM Bool )
@@ -156,7 +156,7 @@ def execute_block_transactions (transactions : SszListRef) (public_keys : EvmByt
                                       let (block_gas_overflow, gas_acc) : (Bool × gas) :=
                                         if ((used ≤b (((2 ^i 63) -i 1) -i accumulated)) : Bool)
                                         then
-                                          (let gas_acc : gas := (Gas (accumulated +i used))
+                                          (let gas_acc : gas := (Gas (accumulated + used))
                                           let block_gas_overflow : Bool :=
                                             (gas_lt gas_limit gas_acc)
                                           (block_gas_overflow, gas_acc))
@@ -170,11 +170,11 @@ def execute_block_transactions (transactions : SszListRef) (public_keys : EvmByt
                                             let receipts ←
                                               (receipt_accumulator_push receipts receipt)
                                             (append_deposit_logs receipt.logs)
-                                            let next_blob_gas := (blob_gas_acc +i tx_blob_gas)
+                                            let next_blob_gas := (blob_gas_acc + tx_blob_gas)
                                             let (blob_gas_acc, blob_gas_overflow) : (Nat × Bool) :=
                                               if ((next_blob_gas ≤b ((2 ^i 64) -i 1)) : Bool)
                                               then
-                                                (let blob_gas_acc : blob_gas := next_blob_gas
+                                                (let blob_gas_acc : Nat := next_blob_gas
                                                 (blob_gas_acc, blob_gas_overflow))
                                               else
                                                 (let blob_gas_overflow : Bool := true
@@ -199,34 +199,33 @@ def execute_block_transactions (transactions : SszListRef) (public_keys : EvmByt
     (pure loop_vars) ) : SailM
     (Bool × Nat × Bool × Bool × SszListCursor × gas × EvmByteSlice × ReceiptAccumulator × (BitVec 160))
     )
-  (pure { all_ok := (all_ok && ((! block_gas_overflow) && (! blob_gas_overflow)))
-          gas_acc := gas_acc
-          blob_gas_acc := blob_gas_acc
-          first_tx_recipient := tx0_to
-          block_gas_overflow := block_gas_overflow
-          blob_gas_overflow := blob_gas_overflow
-          receipts_root := ← (receipt_accumulator_root receipts)
-          logs_bloom := receipts.bloom
-          deposits := ← (scratch_finish deposits_start)
+  (pure { all_ok := (all_ok && ((! block_gas_overflow) && (! blob_gas_overflow))),
+          gas_acc := gas_acc,
+          blob_gas_acc := ⟨blob_gas_acc⟩,
+          first_tx_recipient := tx0_to,
+          block_gas_overflow := block_gas_overflow,
+          blob_gas_overflow := blob_gas_overflow,
+          receipts_root := ← (receipt_accumulator_root receipts),
+          logs_bloom := receipts.bloom,
+          deposits := ← (scratch_finish deposits_start),
           requests := EMPTY_EXECUTION_REQUESTS })
 
 def apply_withdrawals (withdrawals : SszListRef) : SailM Unit := do
   let rest := withdrawals
   let rest ← (( do
-    let mut loop_vars := rest
-    while (λ rest => (rest.count != 0)) loop_vars do
-      let rest := loop_vars
-      loop_vars ← do
+    let loop_vars ← whileFuelM (fuel :=(rest.count).value) (fun rest => (pure ((rest.count).value != 0))) rest
+      fun rest => do
+        assert true "loop dummy assert"
         let (withdrawal_ref, tail) ← do (ssz_fixed_list_pop rest WD_SIZE)
         let rest : SszListRef := tail
         let withdrawal ← do (decode_withdrawal withdrawal_ref)
         (k_add_balance withdrawal.address
-          (alu_mul (← (word_of_nat withdrawal.amount)) (← (word_of_nat 1000000000))))
+          (alu_mul (← (word_of_nat (withdrawal.amount).value)) (← (word_of_nat 1000000000))))
         (pure rest)
     (pure loop_vars) ) : SailM SszListRef )
   (pure ())
 
-/-- Type quantifiers: k_ex160364_ : Bool -/
+/-- Type quantifiers: k_ex161870_ : Bool -/
 def run_checked_block_end_system_calls (all_ok : Bool) (deposits : EvmByteSlice) : SailM (Bool × ExecutionRequests) := do
   if ((! all_ok) : Bool)
   then (pure (false, EMPTY_EXECUTION_REQUESTS))
@@ -247,14 +246,17 @@ def apply_block_end_state (body : BlockBody) : SailM Unit := do
 
 def execute_block_body (body : BlockBody) (public_keys : EvmByteSlice) (block_gas_limit : gas) : SailM (Bool × BlockExecutionResult) := do
   (bal_reset ())
-  (bal_set_index 0)
+  (bal_set_index ⟨0⟩)
   (run_block_start_system_calls ())
   let result ← do (execute_block_transactions body.transactions public_keys block_gas_limit)
   let post_tx_index ← (( do
-    if ((body.transactions.count <b ((2 ^i 64) -i 1)) : Bool)
-    then (protocol_quantity_increment body.transactions.count)
-    else sailThrow ((InvalidBlock WitnessDeficient)) ) : SailM item_index )
-  (bal_set_index post_tx_index)
+    if (((body.transactions.count).value <b ((2 ^i 64) -i 1)) : Bool)
+    then
+      (do
+          let semanticResult ← (protocol_quantity_increment ⟨(body.transactions.count).value⟩)
+          pure ((semanticResult).value))
+    else sailThrow ((InvalidBlock WitnessDeficient)) ) : SailM Nat )
+  (bal_set_index ⟨post_tx_index⟩)
   (apply_block_end_state body)
   let (exec_ok, requests) ← do (run_checked_block_end_system_calls result.all_ok result.deposits)
   (pure (exec_ok, { result with requests := requests }))

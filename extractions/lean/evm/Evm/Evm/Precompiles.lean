@@ -17,7 +17,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -104,15 +103,15 @@ def ECRECOVER_S_OFFSET : source_pointer := (ByteQuantity 96)
 def TWO_COMPONENTS : byte_length := (ByteQuantity 2)
 
 def precompile_success (output : EvmByteSlice) : PrecompileResult :=
-  { success := true
+  { success := true,
     output := output }
 
 def precompile_failure (_ : Unit) : PrecompileResult :=
-  { success := false
+  { success := false,
     output := EMPTY_SLICE }
 
-/-- Type quantifiers: k_ex159812_ : Bool -/
-def accelerator_result (success : Bool) (output_len : byte_quantity) : PrecompileResult :=
+/-- Type quantifiers: k_ex161216_ : Bool -/
+def accelerator_result (success : Bool) (output_len : byte_length) : PrecompileResult :=
   if (success : Bool)
   then (precompile_success (output_buffer_slice output_len))
   else (precompile_failure ())
@@ -123,7 +122,7 @@ def copied_result (data : EvmByteSlice) : SailM PrecompileResult := do
   then (pure (precompile_success output))
   else (pure (precompile_failure ()))
 
-/-- Type quantifiers: k_ex159813_ : Bool -/
+/-- Type quantifiers: k_ex161217_ : Bool -/
 def boolean_result (value : Bool) : SailM PrecompileResult := do
   (pure (precompile_success
       (← (output_buffer_word
@@ -132,7 +131,8 @@ def boolean_result (value : Bool) : SailM PrecompileResult := do
           else WORD_ZERO)))))
 
 /-- Type quantifiers: n : Nat, 1 ≤ n ∧ n ≤ 256 -/
-def is_precompile (n : Nat) : SailM Bool := do
+def is_precompile (n : precompile_id) : SailM Bool := do
+  let n := (n).value
   let base := (n ≤b 4)
   let byzantium ← do
     (pure ((5 ≤b n) && ((n ≤b 8) && (fork_gteq (← readReg k_fork) Byzantium))))
@@ -151,9 +151,9 @@ def run_ecrecover (input : EvmByteSlice) : SailM PrecompileResult := do
       let parity ← (( do
         if ((v == (← (word_of_nat 27))) : Bool)
         then (pure 0)
-        else (pure 1) ) : SailM y_parity )
+        else (pure 1) ) : SailM Nat )
       let (recovered, address) ← do
-        (ecrecover_addr (← (slice_load input BYTE_ZERO)) parity
+        (ecrecover_addr (← (slice_load input BYTE_ZERO)) ⟨parity⟩
           (← (slice_load input PRECOMPILE_DOUBLE_WORD_LENGTH))
           (← (slice_load input ECRECOVER_S_OFFSET)))
       if (recovered : Bool)
@@ -175,7 +175,7 @@ def run_modexp (input : EvmByteSlice) : SailM PrecompileResult := do
   then (pure (precompile_success EMPTY_SLICE))
   else
     (do
-      let input_end := (((96 +i base_len) +i exponent_len) +i modulus_len)
+      let input_end := (((96 + base_len) + exponent_len) + modulus_len)
       if (((ACCELERATOR_INPUT_MAX <b base_len) || ((ACCELERATOR_INPUT_MAX <b exponent_len) || ((ACCELERATOR_INPUT_MAX <b modulus_len) || (ACCELERATOR_INPUT_MAX <b input_end)))) : Bool)
       then (pure (precompile_failure ()))
       else
@@ -194,19 +194,19 @@ def run_blake2f (input : EvmByteSlice) : SailM PrecompileResult := do
   then (pure (precompile_failure ()))
   else
     (do
-      let final_block : y_parity :=
+      let final_block : Nat :=
         if ((final_byte == 0x00#8) : Bool)
         then 0
         else 1
       (pure (accelerator_result
-          (← (accelerator_blake2f input (← (pc_blake2_rounds input)) final_block))
-          BLAKE2F_OUTPUT_LENGTH)))
+          (← (accelerator_blake2f input ⟨((← (pc_blake2_rounds input))).value⟩
+              ⟨final_block⟩)) BLAKE2F_OUTPUT_LENGTH)))
 
 def kzg_versioned_hash_matches (input : EvmByteSlice) : SailM Bool := do
   let commitment_hash ← do
     (sha256_segments
       [(BytesSlice (← (sub_slice input KZG_COMMITMENT_OFFSET KZG_COMMITMENT_LENGTH)))])
-  let expected : word := (0x01#8 +++ (Sail.BitVec.extractLsb commitment_hash 247 0))
+  let expected : (BitVec 256) := (0x01#8 +++ (Sail.BitVec.extractLsb commitment_hash 247 0))
   (pure ((← (slice_load input BYTE_ZERO)) == expected))
 
 def run_kzg_point_evaluation (input : EvmByteSlice) : SailM PrecompileResult := do
@@ -224,12 +224,12 @@ def run_kzg_point_evaluation (input : EvmByteSlice) : SailM PrecompileResult := 
                 (← (output_buffer_words FIELD_ELEMENTS_PER_BLOB BLS_MODULUS))))
           else (pure (precompile_failure ()))))
 
-def bls_g1_padding (input : EvmByteSlice) (base : byte_quantity) (stride : byte_quantity) (count : byte_quantity) : SailM Bool := do
+def bls_g1_padding (input : EvmByteSlice) (base : source_pointer) (stride : byte_length) (count : byte_length) : SailM Bool := do
   (pure ((← (slice_strided_zero input base stride BLS_FIELD_PADDING_LENGTH count)) && (← (slice_strided_zero
           input (← (byte_quantity_add base BLS_PADDED_FIELD_LENGTH)) stride
           BLS_FIELD_PADDING_LENGTH count))))
 
-def bls_g2_padding (input : EvmByteSlice) (base : byte_quantity) (stride : byte_quantity) (count : byte_quantity) : SailM Bool := do
+def bls_g2_padding (input : EvmByteSlice) (base : source_pointer) (stride : byte_length) (count : byte_length) : SailM Bool := do
   (pure ((← (slice_strided_zero input base stride BLS_FIELD_PADDING_LENGTH count)) && ((← (slice_strided_zero
             input (← (byte_quantity_add base BLS_PADDED_FIELD_LENGTH)) stride
             BLS_FIELD_PADDING_LENGTH count)) && ((← (slice_strided_zero input
@@ -324,8 +324,9 @@ def run_p256_verify (input : EvmByteSlice) : SailM PrecompileResult := do
   then (pure (precompile_success (← (output_buffer_word WORD_ONE))))
   else (pure (precompile_success EMPTY_SLICE))
 
-/-- Type quantifiers: num : Nat, 1 ≤ num ∧ num ≤ 256 -/
-def run_precompile_slice (num : Nat) (input : EvmByteSlice) : SailM PrecompileResult := do
+/-- Type quantifiers: k_ex161220_ : Nat, 1 ≤ k_ex161220_ ∧ k_ex161220_ ≤ 256 -/
+def run_precompile_slice (num : precompile_id) (input : EvmByteSlice) : SailM PrecompileResult := do
+  let num := (num).value
   match num with
   | 1 => (run_ecrecover input)
   | 2 => (run_sha256 input)

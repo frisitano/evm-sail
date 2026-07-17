@@ -9,7 +9,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -44,63 +43,93 @@ open Bytes
 open ByteSource
 open BlockError
 
-def word_to_account_nonce (value : (BitVec 256)) : (Option Nat) :=
-  let amount := (BitVec.toNatInt value)
+def word_to_account_nonce (value : word) : (Option account_nonce) :=
+  (Option.map (fun semanticValue => ⟨semanticValue⟩) (let amount := (BitVec.toNatInt value)
   if ((amount ≤b ((2 ^i 64) -i 1)) : Bool)
   then (some amount)
-  else none
+  else none))
 
-def word_to_precompile_id (value : (BitVec 256)) : (Option Nat) :=
-  let candidate := (BitVec.toNatInt (Sail.BitVec.extractLsb value 8 0))
+def word_to_precompile_id (value : word) : (Option precompile_id) :=
+  (Option.map (fun semanticValue => ⟨semanticValue⟩) (let candidate :=
+    (BitVec.toNatInt (Sail.BitVec.extractLsb value 8 0))
   if ((((Sail.BitVec.extractLsb value 255 9) == (BitVec.zero 247)) && ((1 ≤b candidate) && (candidate ≤b 256))) : Bool)
   then (some candidate)
-  else none
+  else none))
 
 /-- Type quantifiers: value : Nat, 1 ≤ value ∧ value ≤ 256 -/
-def word_of_precompile_id (value : Nat) : SailM (BitVec 256) := do
+def word_of_precompile_id (value : precompile_id) : SailM word := do
+  let value := (value).value
   (word_of_nat value)
 
 /-- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
-def account_nonce_increment (value : Nat) : SailM Nat := do
-  assert (value <b ((2 ^i 64) -i 1)) "sail/primitives/quantities.sail:70.29-70.30"
-  (pure (value +i 1))
+def account_nonce_increment (value : account_nonce) : SailM account_nonce := do
+  let value := (value).value
+  let semanticResult ← do
+    assert (value <b ((2 ^i 64) -i 1)) "sail/primitives/quantities.sail:70.29-70.30"
+    (pure (value + 1))
+  pure (⟨semanticResult⟩)
 
 /-- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
-def protocol_quantity_increment (value : Nat) : SailM Nat := do
-  assert (value <b ((2 ^i 64) -i 1)) "sail/primitives/quantities.sail:75.29-75.30"
-  (pure (value +i 1))
+def protocol_quantity_increment (value : protocol_quantity) : SailM protocol_quantity := do
+  let value := (value).value
+  let semanticResult ← do
+    assert (value <b ((2 ^i 64) -i 1)) "sail/primitives/quantities.sail:75.29-75.30"
+    (pure (value + 1))
+  pure (⟨semanticResult⟩)
 
 /-- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
-def protocol_quantity_decrement (value : Nat) : SailM Nat := do
-  assert (0 <b value) "sail/primitives/quantities.sail:80.20-80.21"
-  (pure (value -i 1))
+def protocol_quantity_decrement (value : protocol_quantity) : SailM protocol_quantity := do
+  let value := (value).value
+  let semanticResult ← do
+    assert (0 <b value) "sail/primitives/quantities.sail:80.20-80.21"
+    (pure (value -i 1))
+  pure (⟨semanticResult⟩)
 
 /-- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 1024 -/
-def frame_depth_increment (value : Nat) : SailM Nat := do
-  if ((value <b 1024) : Bool)
-  then (pure (value +i 1))
-  else
+def frame_depth_increment (value : frame_depth) : SailM frame_depth := do
+  let value := (value).value
+  let semanticResult ← do
+    if ((value <b 1024) : Bool)
+    then (pure (value + 1))
+    else
+      (do
+        assert false "sail/primitives/quantities.sail:88.20-88.21"
+        throw Error.Exit)
+  pure (⟨semanticResult⟩)
+
+/-- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
+def item_count_increment (value : item_count) : SailM item_count := do
+  let value := (value).value
+  let semanticResult ← do
     (do
-      assert false "sail/primitives/quantities.sail:88.20-88.21"
-      throw Error.Exit)
+        let semanticResult ← (protocol_quantity_increment ⟨value⟩)
+        pure ((semanticResult).value))
+  pure (⟨semanticResult⟩)
 
 /-- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
-def item_count_increment (value : Nat) : SailM Nat := do
-  (protocol_quantity_increment value)
-
-/-- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
-def item_index_increment (value : Nat) : SailM Nat := do
-  (protocol_quantity_increment value)
-
-/-- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 64 -/
-def merkle_depth_increment (value : Nat) : SailM Nat := do
-  assert (value <b 64) "sail/primitives/quantities.sail:101.21-101.22"
-  (pure (value +i 1))
+def item_index_increment (value : item_index) : SailM item_index := do
+  let value := (value).value
+  let semanticResult ← do
+    (do
+        let semanticResult ← (protocol_quantity_increment ⟨value⟩)
+        pure ((semanticResult).value))
+  pure (⟨semanticResult⟩)
 
 /-- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 64 -/
-def merkle_depth_decrement (value : Nat) : SailM Nat := do
-  assert (0 <b value) "sail/primitives/quantities.sail:106.20-106.21"
-  (pure (value -i 1))
+def merkle_depth_increment (value : merkle_depth) : SailM merkle_depth := do
+  let value := (value).value
+  let semanticResult ← do
+    assert (value <b 64) "sail/primitives/quantities.sail:101.21-101.22"
+    (pure (value + 1))
+  pure (⟨semanticResult⟩)
+
+/-- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 64 -/
+def merkle_depth_decrement (value : merkle_depth) : SailM merkle_depth := do
+  let value := (value).value
+  let semanticResult ← do
+    assert (0 <b value) "sail/primitives/quantities.sail:106.20-106.21"
+    (pure (value -i 1))
+  pure (⟨semanticResult⟩)
 
 def BYTE_ONE : byte_quantity := (ByteQuantity 1)
 
@@ -115,24 +144,28 @@ def byte_quantity_fits_limb (app_0 : byte_quantity) : Bool :=
   (nat_fits_limb value)
 
 /-- Type quantifiers: value : Nat, 0 ≤ value -/
-def nat_to_limb (value : Nat) : SailM (BitVec 64) := do
+def nat_to_limb (value : Nat) : SailM limb := do
   assert (nat_fits_limb value) "sail/primitives/quantities.sail:148.31-148.32"
   (pure (get_slice_int 64 value 0))
 
-def byte_quantity_to_limb (app_0 : byte_quantity) : SailM (BitVec 64) := do
+def byte_quantity_to_limb (app_0 : byte_quantity) : SailM limb := do
   let .ByteQuantity value := app_0
   (nat_to_limb value)
 
-def word_of_byte_quantity (app_0 : byte_quantity) : SailM (BitVec 256) := do
+def word_of_byte_quantity (app_0 : byte_quantity) : SailM word := do
   let .ByteQuantity value := app_0
   (word_of_nat value)
 
-/-- Type quantifiers: divisor : Nat, value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1), 1 ≤
-  divisor ∧ divisor ≤ 256 -/
-def protocol_quantity_quotient (value : Nat) (divisor : Nat) : SailM Nat := do
-  let quotient ← do (exact_quotient value divisor)
-  assert (quotient ≤b value) "sail/primitives/quantities.sail:177.28-177.29"
-  (pure quotient)
+/-- Type quantifiers: k_ex161015_ : Nat, k_ex161014_ : Nat, 0 ≤ k_ex161014_ ∧
+  k_ex161014_ ≤ (2 ^ 64 - 1), 1 ≤ k_ex161015_ ∧ k_ex161015_ ≤ 256 -/
+def protocol_quantity_quotient (value : protocol_quantity) (divisor : protocol_divisor) : SailM protocol_quantity := do
+  let value := (value).value
+  let divisor := (divisor).value
+  let semanticResult ← do
+    let quotient ← do (exact_quotient value divisor)
+    assert (quotient ≤b value) "sail/primitives/quantities.sail:177.28-177.29"
+    (pure quotient)
+  pure (⟨semanticResult⟩)
 
 def byte_quantity_quotient (typ_0 : byte_quantity) (typ_1 : byte_quantity) : SailM byte_quantity := do
   let .ByteQuantity dividend : byte_quantity := typ_0
@@ -140,13 +173,15 @@ def byte_quantity_quotient (typ_0 : byte_quantity) (typ_1 : byte_quantity) : Sai
   assert (dividend ≤b BYTE_QUANTITY_MAX) "sail/primitives/quantities.sail:230.40-230.41"
   (pure (ByteQuantity (← (exact_quotient dividend divisor))))
 
-/-- Type quantifiers: divisor : Nat, 1 ≤ divisor ∧ divisor ≤ 1000 -/
-def gas_cost_quotient (typ_0 : gas_cost) (divisor : Nat) : SailM gas_cost := do
+/-- Type quantifiers: k_ex161016_ : Nat, 1 ≤ k_ex161016_ ∧ k_ex161016_ ≤ 1000 -/
+def gas_cost_quotient (typ_0 : gas_cost) (divisor : gas_divisor) : SailM gas_cost := do
+  let divisor := (divisor).value
   let .GasCost value : gas_cost := typ_0
   (pure (GasCost (← (exact_quotient value divisor))))
 
-/-- Type quantifiers: divisor : Nat, 1 ≤ divisor ∧ divisor ≤ 1000 -/
-def gas_quotient (typ_0 : gas) (divisor : Nat) : SailM gas := do
+/-- Type quantifiers: k_ex161017_ : Nat, 1 ≤ k_ex161017_ ∧ k_ex161017_ ≤ 1000 -/
+def gas_quotient (typ_0 : gas) (divisor : gas_divisor) : SailM gas := do
+  let divisor := (divisor).value
   let .Gas value : gas := typ_0
   let quotient ← do (exact_quotient value divisor)
   assert (quotient ≤b value) "sail/primitives/gas.sail:116.28-116.29"

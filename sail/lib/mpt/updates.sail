@@ -156,64 +156,65 @@ function trie_builder_close(
 ) = {
     if fuel == 0 then {
         throw InvalidBlock(WitnessDeficient)
-    };
-    match builder.frames {
-        [||] => builder,
-        top :: _ => {
-            let should_close : bool = match next_common {
-                None() => true,
-                Some(depth) => depth < top.depth,
-            };
-            if not_bool(should_close) then {
-                builder
-            } else {
-                let (frame, popped) = trie_builder_pop(builder);
-                let child = branch_child_ref(frame.mask, frame.children);
-                let with_parent : TrieBuilder = match popped.frames {
-                    parent :: _ => match next_common {
-                        Some(common) => if parent.depth < common then {
-                            let intermediate = trie_builder_push(popped, common);
-                            trie_builder_attach(
-                                intermediate,
-                                anchor,
-                                trie_builder_wrap_branch(anchor, common, frame.depth, child),
-                            )
-                        } else {
-                            trie_builder_attach(
+    } else {
+        match builder.frames {
+            [||] => builder,
+            top :: _ => {
+                let should_close : bool = match next_common {
+                    None() => true,
+                    Some(depth) => depth < top.depth,
+                };
+                if not_bool(should_close) then {
+                    builder
+                } else {
+                    let (frame, popped) = trie_builder_pop(builder);
+                    let child = branch_child_ref(frame.mask, frame.children);
+                    let with_parent : TrieBuilder = match popped.frames {
+                        parent :: _ => match next_common {
+                            Some(common) => if parent.depth < common then {
+                                let intermediate = trie_builder_push(popped, common);
+                                trie_builder_attach(
+                                    intermediate,
+                                    anchor,
+                                    trie_builder_wrap_branch(anchor, common, frame.depth, child),
+                                )
+                            } else {
+                                trie_builder_attach(
+                                    popped,
+                                    anchor,
+                                    trie_builder_wrap_branch(anchor, parent.depth, frame.depth, child),
+                                )
+                            },
+                            None() => trie_builder_attach(
                                 popped,
                                 anchor,
                                 trie_builder_wrap_branch(anchor, parent.depth, frame.depth, child),
-                            )
+                            ),
                         },
-                        None() => trie_builder_attach(
-                            popped,
-                            anchor,
-                            trie_builder_wrap_branch(anchor, parent.depth, frame.depth, child),
-                        ),
-                    },
-                    [||] => match next_common {
-                        Some(common) => {
-                            let parent = trie_builder_push(popped, common);
-                            trie_builder_attach(
-                                parent,
-                                anchor,
-                                trie_builder_wrap_branch(anchor, common, frame.depth, child),
-                            )
+                        [||] => match next_common {
+                            Some(common) => {
+                                let parent = trie_builder_push(popped, common);
+                                trie_builder_attach(
+                                    parent,
+                                    anchor,
+                                    trie_builder_wrap_branch(anchor, common, frame.depth, child),
+                                )
+                            },
+                            None() => {
+                                let depth = frame.depth;
+                                let root = if depth == 0 then {
+                                        child
+                                    } else {
+                                        extension_child_ref(path_take(anchor, depth), child)
+                                    };
+                                struct { frames = popped.frames, root = root, complete = true }
+                            },
                         },
-                        None() => {
-                            let depth = frame.depth;
-                            let root = if depth == 0 then {
-                                    child
-                                } else {
-                                    extension_child_ref(path_take(anchor, depth), child)
-                                };
-                            struct { frames = popped.frames, root = root, complete = true }
-                        },
-                    },
-                };
-                trie_builder_close(with_parent, anchor, next_common, fuel - 1)
-            }
-        },
+                    };
+                    trie_builder_close(with_parent, anchor, next_common, fuel - 1)
+                }
+            },
+        }
     }
 }
 termination_measure trie_builder_close(builder, anchor, next_common, fuel) = fuel

@@ -30,7 +30,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -98,12 +97,12 @@ def calldata_tokens (input : EvmByteSlice) : SailM Nat := do
     if ((nonzeroes ≤b input_len) : Bool)
     then (pure (input_len -i nonzeroes))
     else sailThrow ((InvalidBlock ExecutionInvalid)) ) : SailM Nat )
-  (pure (zeroes +i (4 *i nonzeroes)))
+  (pure (zeroes + (4 *i nonzeroes)))
 
 def blob_hashes_versioned (hashes : BlobHashes) : SailM Bool := do
   let valid : Bool := true
-  let remaining : blob_count := hashes.count
-  let offset : source_pointer := BYTE_ONE
+  let remaining : Nat := (hashes.count).value
+  let offset : byte_quantity := BYTE_ONE
   let (offset, remaining, valid) ← (( do
     let loop_i_lower := 0
     let loop_i_upper := 8
@@ -116,7 +115,10 @@ def blob_hashes_versioned (hashes : BlobHashes) : SailM Bool := do
           then
             (do
               let valid ← (pure ((← (slice_byte hashes.bytes offset)) == 0x01#8))
-              let remaining ← (protocol_quantity_decrement remaining)
+              let remaining ←
+                (do
+                    let semanticResult ← (protocol_quantity_decrement ⟨remaining⟩)
+                    pure ((semanticResult).value))
               let offset ← (( do
                 if ((i <b 8) : Bool)
                 then
@@ -132,9 +134,10 @@ def blob_hashes_versioned (hashes : BlobHashes) : SailM Bool := do
 def intrinsic_gas (tx : Transaction) : SailM gas_cost := do
   let data_cost ← do (calldata_cost tx.input_src)
   let .ByteQuantity input_len := tx.input_src.len
-  let address_cost := (gas_constant_scale G_access_list_address tx.access_list_address_count)
-  let slot_cost := (gas_constant_scale G_access_list_storage_key tx.access_list_slot_count)
-  let auth_cost := (gas_constant_scale PER_EMPTY_ACCOUNT tx.authorization_count)
+  let address_cost :=
+    (gas_constant_scale G_access_list_address (tx.access_list_address_count).value)
+  let slot_cost := (gas_constant_scale G_access_list_storage_key (tx.access_list_slot_count).value)
+  let auth_cost := (gas_constant_scale PER_EMPTY_ACCOUNT (tx.authorization_count).value)
   let total : gas_cost := (gas_cost_add_constant data_cost G_transaction)
   let total : gas_cost := (gas_cost_add total address_cost)
   let total : gas_cost := (gas_cost_add total slot_cost)
@@ -150,52 +153,51 @@ def calldata_floor (input : EvmByteSlice) : SailM gas_cost := do
   (pure (gas_cost_add_constant (gas_constant_scale (GasConstant 10) (← (calldata_tokens input)))
       G_transaction))
 
-def transaction_costs (tx : Transaction) (blob_price : (BitVec 256)) : SailM (Option TransactionCosts) := SailME.run do
+def transaction_costs (tx : Transaction) (blob_price : word) : SailM (Option TransactionCosts) := SailME.run do
   let intrinsic ← do (intrinsic_gas tx)
   let floor ← do (calldata_floor tx.input_src)
-  let blob_gas_value := (tx.blob_hashes.count *i GAS_PER_BLOB)
+  let blob_gas_value := ((tx.blob_hashes.count).value *i (GAS_PER_BLOB).value)
   let blob_gas ← (( do
     if ((blob_gas_value ≤b ((2 ^i 64) -i 1)) : Bool)
     then (pure blob_gas_value)
-    else SailME.throw (none : (Option TransactionCosts)) ) : SailME (Option TransactionCosts)
-    blob_gas )
+    else SailME.throw (none : (Option TransactionCosts)) ) : SailME (Option TransactionCosts) Nat )
   let blob_fee ← (( do
     if ((blob_gas == 0) : Bool)
     then (pure ZERO_WORD)
     else
       (do
-        match (← (word_checked_mul_protocol_quantity blob_price blob_gas)) with
+        match (← (word_checked_mul_protocol_quantity blob_price ⟨blob_gas⟩)) with
         | .some amount => (pure amount)
         | none => SailME.throw (none : (Option TransactionCosts))) ) : SailME
-    (Option TransactionCosts) word )
+    (Option TransactionCosts) (BitVec 256) )
   let gas_cap ← (( do
     match (← (word_checked_mul_gas tx.max_fee tx.gas_limit)) with
     | .some amount => (pure amount)
     | none => SailME.throw (none : (Option TransactionCosts)) ) : SailME (Option TransactionCosts)
-    word )
+    (BitVec 256) )
   let blob_cap ← (( do
-    match (← (word_checked_mul_protocol_quantity tx.max_blob_fee blob_gas)) with
+    match (← (word_checked_mul_protocol_quantity tx.max_blob_fee ⟨blob_gas⟩)) with
     | .some amount => (pure amount)
     | none => SailME.throw (none : (Option TransactionCosts)) ) : SailME (Option TransactionCosts)
-    word )
+    (BitVec 256) )
   let gas_and_value ← (( do
     match (word_checked_add gas_cap tx.value) with
     | .some amount => (pure amount)
     | none => SailME.throw (none : (Option TransactionCosts)) ) : SailME (Option TransactionCosts)
-    word )
+    (BitVec 256) )
   let upfront ← (( do
     match (word_checked_add gas_and_value blob_cap) with
     | .some amount => (pure amount)
     | none => SailME.throw (none : (Option TransactionCosts)) ) : SailME (Option TransactionCosts)
-    word )
+    (BitVec 256) )
   (pure (some
-      { intrinsic := intrinsic
-        calldata_floor := floor
-        blob_gas := blob_gas
-        blob_fee := blob_fee
+      { intrinsic := intrinsic,
+        calldata_floor := floor,
+        blob_gas := ⟨blob_gas⟩,
+        blob_fee := blob_fee,
         upfront := upfront }))
 
-def validated_word_product (value : (BitVec 256)) (factor : gas) : SailM (BitVec 256) := do
+def validated_word_product (value : word) (factor : gas) : SailM word := do
   match (← (word_checked_mul_gas value factor)) with
   | .some product => (pure product)
   | none => sailThrow ((InvalidBlock ExecutionInvalid))
@@ -204,7 +206,7 @@ def validated_gas_add (typ_0 : gas) (typ_1 : gas) : SailM gas := do
   let .Gas left : gas := typ_0
   let .Gas right : gas := typ_1
   if ((right ≤b (((2 ^i 63) -i 1) -i left)) : Bool)
-  then (pure (Gas (left +i right)))
+  then (pure (Gas (left + right)))
   else sailThrow ((InvalidBlock ExecutionInvalid))
 
 def validated_gas_sub_gas (typ_0 : gas) (typ_1 : gas) : SailM gas := do
@@ -232,7 +234,7 @@ def process_auth (au : Authorization) : SailM gas_refund := do
       let _ ← do (k_access_account authority)
       let (is_deleg, _) ← do (k_deleg_target authority)
       let code_ok ← do (pure (((← (k_code_key authority)) == KECCAK_EMPTY) || is_deleg))
-      let nonce_ok ← do (pure ((← (k_get_nonce authority)) == au.nonce))
+      let nonce_ok ← do (pure (((← (k_get_nonce authority))).value == (au.nonce).value))
       if ((code_ok && nonce_ok) : Bool)
       then
         (do
@@ -254,7 +256,7 @@ def process_auth_list (xs : (List Authorization)) : SailM gas_refund := do
   | [] => (pure GAS_REFUND_ZERO)
   | (a :: r) => (pure (gas_refund_add (← (process_auth a)) (← (process_auth_list r))))
 
-def warm_access_list_addresses (xs : (List (BitVec 160))) : SailM Unit := do
+def warm_access_list_addresses (xs : (List address)) : SailM Unit := do
   match xs with
   | [] => (pure ())
   | (a :: r) =>
@@ -282,7 +284,7 @@ def prewarm (tx : Transaction) : SailM Unit := do
       let _ ← do (k_access_account (← (k_coinbase ())))
       (pure ()))
   else (pure ())
-  let precompile_addresses : (Vector precompile_id 17) :=
+  let precompile_addresses : (Vector Nat 17) :=
     #v[17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
   let loop_i_lower := 0
   let loop_i_upper := 16
@@ -291,32 +293,32 @@ def prewarm (tx : Transaction) : SailM Unit := do
     let () := loop_vars
     loop_vars ← do
       let p := (GetElem?.getElem! precompile_addresses i)
-      if ((← (is_precompile p)) : Bool)
+      if ((← (is_precompile ⟨p⟩)) : Bool)
       then
         (do
-          let _ ← do (k_access_account (word_to_address (← (word_of_precompile_id p))))
+          let _ ← do (k_access_account (word_to_address (← (word_of_precompile_id ⟨p⟩))))
           (pure ()))
       else (pure ())
   (pure loop_vars)
-  if ((← (is_precompile 256)) : Bool)
+  if ((← (is_precompile ⟨256⟩)) : Bool)
   then
     (do
-      let _ ← do (k_access_account (word_to_address (← (word_of_precompile_id 256))))
+      let _ ← do (k_access_account (word_to_address (← (word_of_precompile_id ⟨256⟩))))
       (pure ()))
   else (pure ())
   (warm_access_list_addresses tx.access_list_addresses)
   (warm_access_list_slots tx.access_list_slots)
 
 def invalid_receipt (_ : Unit) : Receipt :=
-  { tx_type := LegacyTx
-    success := false
-    valid := false
-    gas_used := GAS_ZERO
-    block_gas := GAS_ZERO
+  { tx_type := LegacyTx,
+    success := false,
+    valid := false,
+    gas_used := GAS_ZERO,
+    block_gas := GAS_ZERO,
     logs := [] }
 
-def eff_gas_price_for (base_fee : (BitVec 256)) (max_fee : (BitVec 256)) (max_priority_fee : (BitVec 256)) : ((BitVec 256) × (BitVec 256)) :=
-  let price : word :=
+def eff_gas_price_for (base_fee : word) (max_fee : word) (max_priority_fee : word) : (word × word) :=
+  let price : (BitVec 256) :=
     match (word_checked_add base_fee max_priority_fee) with
     | .some uncapped =>
       (if ((word_ult max_fee uncapped) : Bool)
@@ -330,7 +332,7 @@ def eff_gas_price_for (base_fee : (BitVec 256)) (max_fee : (BitVec 256)) (max_pr
   (price, priority)
 
 def check_transaction_validity (tx : Transaction) : SailM TxValidity := do
-  if ((! ((← (tx_sig_v_ok (← readReg k_chain_id) tx.tx_type tx.sig_v)) && (← (tx_auth_ok
+  if ((! ((← (tx_sig_v_ok ⟨(← readReg k_chain_id)⟩ tx.tx_type tx.sig_v)) && (← (tx_auth_ok
              tx.pubkey tx.signing_hash tx.sig_r tx.sig_s)))) : Bool)
   then sailThrow ((InvalidBlock InvalidSignature))
   else (pure ())
@@ -338,8 +340,11 @@ def check_transaction_validity (tx : Transaction) : SailM TxValidity := do
     (pure (eff_gas_price_for (← readReg k_header).base_fee tx.max_fee tx.max_priority_fee))
   let sender := tx.sender
   let .ByteQuantity input_len := tx.input_src.len
-  let nonce_before ← do (k_get_nonce sender)
-  let blob_price ← do (blob_base_fee (← readReg k_header).excess_blob_gas)
+  let nonce_before ← do
+    (do
+        let semanticResult ← (k_get_nonce sender)
+        pure ((semanticResult).value))
+  let blob_price ← do (blob_base_fee ⟨((← readReg k_header).excess_blob_gas).value⟩)
   let checked_costs ← do (transaction_costs tx blob_price)
   let costs_valid : Bool :=
     match checked_costs with
@@ -349,13 +354,13 @@ def check_transaction_validity (tx : Transaction) : SailM TxValidity := do
     match checked_costs with
     | .some costs => costs
     | none =>
-      { intrinsic := GAS_COST_ZERO
-        calldata_floor := GAS_COST_ZERO
-        blob_gas := 0
-        blob_fee := ZERO_WORD
+      { intrinsic := GAS_COST_ZERO,
+        calldata_floor := GAS_COST_ZERO,
+        blob_gas := ⟨0⟩,
+        blob_fee := ZERO_WORD,
         upfront := ZERO_WORD }
   let nonce_ok : Bool :=
-    match (word_to_account_nonce tx.nonce) with
+    match (Option.map (fun semanticValue => (semanticValue).value) ((word_to_account_nonce tx.nonce))) with
     | .some nonce => (nonce == nonce_before)
     | none => false
   let (sender_deleg, _) ← do (k_deleg_target sender)
@@ -366,13 +371,13 @@ def check_transaction_validity (tx : Transaction) : SailM TxValidity := do
       (do
         if ((fork_gteq (← readReg k_fork) Prague) : Bool)
         then (pure 9)
-        else (pure 6)) ) : SailM blob_count )
+        else (pure 6)) ) : SailM Nat )
   let blob_ok ← (( do
     if ((tx_is_blob tx.tx_type) : Bool)
     then
       (pure ((fork_gteq (← readReg k_fork) Cancun) && (← do
-            (pure ((tx.blob_hashes.count != 0) && (← do
-                  (pure ((tx.blob_hashes.count ≤b max_blobs) && ((! tx.is_create) && (← (blob_hashes_versioned
+            (pure (((tx.blob_hashes.count).value != 0) && (← do
+                  (pure (((tx.blob_hashes.count).value ≤b max_blobs) && ((! tx.is_create) && (← (blob_hashes_versioned
                             tx.blob_hashes)))))))))))
     else (pure true) ) : SailM Bool )
   let floor_ok ← (( do
@@ -381,7 +386,7 @@ def check_transaction_validity (tx : Transaction) : SailM TxValidity := do
   let chain_id_ok ← (( do
     match tx.tx_type with
     | .LegacyTx => (pure true)
-    | _ => (pure (tx.chain_id == (← readReg k_chain_id))) ) : SailM Bool )
+    | _ => (pure ((tx.chain_id).value == (← readReg k_chain_id))) ) : SailM Bool )
   let balance_ok ← (( do (pure (word_ule costs.upfront (← (k_get_balance sender)))) ) : SailM
     Bool )
   let sender_code_ok ← (( do (pure (((← (k_code_key sender)) == KECCAK_EMPTY) || sender_deleg))
@@ -390,7 +395,7 @@ def check_transaction_validity (tx : Transaction) : SailM TxValidity := do
   let fee_cap_ok ← (( do (pure (word_ule (← readReg k_header).base_fee tx.max_fee)) ) : SailM
     Bool )
   let blob_fee_cap_ok : Bool :=
-    ((tx.blob_hashes.count == 0) || (word_ule blob_price tx.max_blob_fee))
+    (((tx.blob_hashes.count).value == 0) || (word_ule blob_price tx.max_blob_fee))
   let initcode_ok ← (( do (pure ((! tx.is_create) || (← (initcode_size_allowed input_len)))) ) :
     SailM Bool )
   let priority_fee_ok : Bool := (word_ule tx.max_priority_fee tx.max_fee)
@@ -402,7 +407,7 @@ def check_transaction_validity (tx : Transaction) : SailM TxValidity := do
     Bool )
   let set_code_target_ok : Bool := ((! (tx_is_set_code tx.tx_type)) || (! tx.is_create))
   let set_code_authorizations_ok : Bool :=
-    ((! (tx_is_set_code tx.tx_type)) || ((tx.authorization_count != 0) : Bool))
+    ((! (tx_is_set_code tx.tx_type)) || (((tx.authorization_count).value != 0) : Bool))
   let set_code_fork_ok ← (( do
     (pure ((! (tx_is_set_code tx.tx_type)) || (fork_gteq (← readReg k_fork) Prague))) ) : SailM
     Bool )
@@ -411,13 +416,13 @@ def check_transaction_validity (tx : Transaction) : SailM TxValidity := do
     Bool )
   let valid :=
     (costs_valid && (balance_ok && (sender_code_ok && (intrinsic_ok && (floor_ok && (fee_cap_ok && (blob_fee_cap_ok && (blob_ok && (initcode_ok && (priority_fee_ok && (access_list_fork_ok && (dynamic_fee_fork_ok && (set_code_target_ok && (set_code_authorizations_ok && (set_code_fork_ok && (chain_id_ok && (nonce_ok && (nonce_incrementable && block_gas_ok))))))))))))))))))
-  (pure { valid := valid
-          sender := sender
-          nonce_before := nonce_before
-          intrinsic_gas := costs.intrinsic
-          calldata_floor := costs.calldata_floor
-          blob_fee := costs.blob_fee
-          gas_price := eff_gas_price
+  (pure { valid := valid,
+          sender := sender,
+          nonce_before := ⟨nonce_before⟩,
+          intrinsic_gas := costs.intrinsic,
+          calldata_floor := costs.calldata_floor,
+          blob_fee := costs.blob_fee,
+          gas_price := eff_gas_price,
           priority_fee := eff_priority_fee })
 
 def apply_transaction_upfront_effects (tx : Transaction) (v : TxValidity) : SailM gas_refund := do
@@ -441,9 +446,10 @@ def enter_transaction_frame (tx : Transaction) (intrinsic : gas_cost) : SailM Un
   writeReg frame_refund GAS_REFUND_ZERO
   writeReg frame_status (Running ())
 
-/-- Type quantifiers: nonce_before : Nat, 0 ≤ nonce_before ∧ nonce_before ≤ (2 ^ 64 - 1) -/
-def run_create_transaction_frame (tx : Transaction) (sender : (BitVec 160)) (nonce_before : Nat) : SailM Unit := do
-  let new_addr ← do (k_create_addr sender nonce_before)
+/-- Type quantifiers: k_ex161560_ : Nat, 0 ≤ k_ex161560_ ∧ k_ex161560_ ≤ (2 ^ 64 - 1) -/
+def run_create_transaction_frame (tx : Transaction) (sender : address) (nonce_before : account_nonce) : SailM Unit := do
+  let nonce_before := (nonce_before).value
+  let new_addr ← do (k_create_addr sender ⟨nonce_before⟩)
   let _ ← do (k_access_account new_addr)
   if ((← (k_account_occupied new_addr)) : Bool)
   then (exc_halt AddressCollision)
@@ -455,12 +461,12 @@ def run_create_transaction_frame (tx : Transaction) (sender : (BitVec 160)) (non
       if ((word_nonzero tx.value) : Bool)
       then (k_transfer sender new_addr tx.value)
       else (pure ())
-      writeReg message { caller := sender
-                         address := new_addr
-                         code_address := new_addr
-                         value := tx.value
-                         is_static := false
-                         depth := 0 }
+      writeReg message { caller := sender,
+                         address := new_addr,
+                         code_address := new_addr,
+                         value := tx.value,
+                         is_static := false,
+                         depth := ⟨0⟩ }
       writeReg frame_code (← (code_db_resolve (← (code_db_insert tx.input_src))))
       let deployed_code ← do (interpret ())
       if ((← (frame_succeeded ())) : Bool)
@@ -484,29 +490,30 @@ def run_create_transaction_frame (tx : Transaction) (sender : (BitVec 160)) (non
           else (exc_halt OutOfGas))
       else (pure ()))
 
-def run_call_transaction_frame (tx : Transaction) (sender : (BitVec 160)) : SailM Unit := do
+def run_call_transaction_frame (tx : Transaction) (sender : address) : SailM Unit := do
   let _ ← do (k_aload tx.recipient)
   if ((word_nonzero tx.value) : Bool)
   then (k_transfer sender tx.recipient tx.value)
   else (pure ())
   let precompile ← (( do
-    match (word_to_precompile_id (address_to_word tx.recipient)) with
+    match (Option.map (fun semanticValue => (semanticValue).value) ((word_to_precompile_id
+      (address_to_word tx.recipient)))) with
     | .some number =>
       (do
-        if ((← (is_precompile number)) : Bool)
+        if ((← (is_precompile ⟨number⟩)) : Bool)
         then (pure (some number))
         else (pure none))
-    | _ => (pure none) ) : SailM (Option precompile_id) )
+    | _ => (pure none) ) : SailM (Option Nat) )
   match precompile with
   | .some number =>
     (do
-      match (← (precompile_gas number tx.input_src)) with
+      match (← (precompile_gas ⟨number⟩ tx.input_src)) with
       | .some used =>
         (do
           if ((gas_cost_le_gas used (← readReg gas_remaining)) : Bool)
           then
             (do
-              let result ← do (run_precompile_slice number tx.input_src)
+              let result ← do (run_precompile_slice ⟨number⟩ tx.input_src)
               if (result.success : Bool)
               then
                 (do
@@ -520,12 +527,12 @@ def run_call_transaction_frame (tx : Transaction) (sender : (BitVec 160)) : Sail
   | none =>
     (do
       writeReg calldata tx.input_src
-      writeReg message { caller := sender
-                         address := tx.recipient
-                         code_address := tx.recipient
-                         value := tx.value
-                         is_static := false
-                         depth := 0 }
+      writeReg message { caller := sender,
+                         address := tx.recipient,
+                         code_address := tx.recipient,
+                         value := tx.value,
+                         is_static := false,
+                         depth := ⟨0⟩ }
       let (tx_deleg, tx_dtgt) ← do (k_deleg_target tx.recipient)
       if (tx_deleg : Bool)
       then
@@ -542,14 +549,14 @@ def run_transaction_frame (tx : Transaction) (v : TxValidity) : SailM TxFrameRes
   let checkpoint ← do (k_state_checkpoint ())
   (enter_transaction_frame tx v.intrinsic_gas)
   if (tx.is_create : Bool)
-  then (run_create_transaction_frame tx v.sender v.nonce_before)
+  then (run_create_transaction_frame tx v.sender ⟨(v.nonce_before).value⟩)
   else (run_call_transaction_frame tx v.sender)
   let success ← do (frame_succeeded ())
   if ((! success) : Bool)
   then (k_revert checkpoint)
   else (pure ())
-  (pure { success := success
-          gas_remaining := ← readReg gas_remaining
+  (pure { success := success,
+          gas_remaining := ← readReg gas_remaining,
           refund := ← if (success : Bool)
             then readReg frame_refund
             else (pure GAS_REFUND_ZERO) })
@@ -560,8 +567,8 @@ def settle_transaction (tx : Transaction) (v : TxValidity) (authorization_refund
   let refund_quotient ← (( do
     if ((fork_gteq (← readReg k_fork) London) : Bool)
     then (pure 5)
-    else (pure 2) ) : SailM gas_divisor )
-  let refund_cap ← do (gas_quotient gas_used0 refund_quotient)
+    else (pure 2) ) : SailM Nat )
+  let refund_cap ← do (gas_quotient gas_used0 ⟨refund_quotient⟩)
   let refund := (capped_gas_refund (gas_refund_add authorization_refund fr.refund) refund_cap)
   let gas_left1 ← do (validated_gas_add gas_left0 refund)
   let gas_used1 ← do (validated_gas_sub_gas tx.gas_limit gas_left1)
@@ -590,11 +597,11 @@ def settle_transaction (tx : Transaction) (v : TxValidity) (authorization_refund
   (k_add_balance v.sender (← (validated_word_product v.gas_price gas_left)))
   (k_add_balance (← (k_coinbase ())) (← (validated_word_product v.priority_fee gas_used)))
   (k_tx_merge ())
-  (pure { tx_type := tx.tx_type
-          success := fr.success
-          valid := true
-          gas_used := gas_used
-          block_gas := block_gas
+  (pure { tx_type := tx.tx_type,
+          success := fr.success,
+          valid := true,
+          gas_used := gas_used,
+          block_gas := block_gas,
           logs := ← (read_logs ()) })
 
 def process_transaction (tx : Transaction) : SailM Receipt := do
@@ -605,8 +612,8 @@ def process_transaction (tx : Transaction) : SailM Receipt := do
   else
     (do
       (k_set_tx
-        { origin := tx.sender
-          gas_price := validity.gas_price
+        { origin := tx.sender,
+          gas_price := validity.gas_price,
           blob_hashes := tx.blob_hashes })
       let authorization_refund ← do (apply_transaction_upfront_effects tx validity)
       let frame_result ← do (run_transaction_frame tx validity)

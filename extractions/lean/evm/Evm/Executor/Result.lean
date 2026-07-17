@@ -15,7 +15,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -52,22 +51,22 @@ open BlockError
 
 def RESULT_METADATA_LENGTH : byte_length := (ByteQuantity 5)
 
-/-- Type quantifiers: k_ex160379_ : Bool -/
-def result_prefix (root : (BitVec 256)) (success : Bool) : SailM Unit := do
+/-- Type quantifiers: k_ex161889_ : Bool -/
+def result_prefix (root : hash) (success : Bool) : SailM Unit := do
   (scratch_push_bytes (word_to_bytes32 root) WORD_BYTE_LENGTH)
   (scratch_push_bytes
-    [if (success : Bool)
+    [(if (success : Bool)
     then 0x01#8
-    else 0x00#8, 0x25#8, 0x00#8, 0x00#8, 0x00#8] RESULT_METADATA_LENGTH)
+    else 0x00#8), 0x25#8, 0x00#8, 0x00#8, 0x00#8] RESULT_METADATA_LENGTH)
 
-/-- Type quantifiers: k_ex160380_ : Bool -/
-def commit_validation_result (root : (BitVec 256)) (success : Bool) (chain_config : EvmByteSlice) : SailM Unit := do
+/-- Type quantifiers: k_ex161890_ : Bool -/
+def commit_validation_result (root : hash) (success : Bool) (chain_config : EvmByteSlice) : SailM Unit := do
   let start ← do (scratch_begin ())
   (result_prefix root success)
   (scratch_push_slice chain_config)
   assert (← (public_output_write (← (scratch_finish start)))) "public output write"
 
-/-- Type quantifiers: k_ex160381_ : Bool -/
+/-- Type quantifiers: k_ex161891_ : Bool -/
 def write_validation_result (input_ref : StatelessInputRef) (success : Bool) : SailM Unit := do
   let _ : Unit := (cycle_scope_start SCOPE_COMPUTE_OUTPUT_ROOT)
   let root ← do (htr_new_payload_request input_ref)
@@ -85,7 +84,7 @@ def write_invalid_result (_ : Unit) : SailM Unit := do
   for i in [loop_i_lower:loop_i_upper:1]i do
     let () := loop_vars
     loop_vars ← do
-      let b : byte :=
+      let b : (BitVec 8) :=
         match i with
         | 8 => 0x0C#8
         | 20 => 0x10#8

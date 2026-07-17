@@ -10,7 +10,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -45,23 +44,23 @@ open Bytes
 open ByteSource
 open BlockError
 
-def k_selfdestruct (a : (BitVec 160)) : SailM Unit := do
+def k_selfdestruct (a : address) : SailM Unit := do
   let cur ← do (k_aload a)
   if ((! cur.selfdestructed) : Bool)
   then (store_account a { cur with selfdestructed := true })
   else (pure ())
 
-def k_is_selfdestructed (a : (BitVec 160)) : SailM Bool := do
+def k_is_selfdestructed (a : address) : SailM Bool := do
   (pure (← (k_aload a)).selfdestructed)
 
-def k_mark_created (a : (BitVec 160)) : SailM Unit := do
+def k_mark_created (a : address) : SailM Unit := do
   let cur ← do (k_aload a)
   (store_account a { cur with created := true })
 
-def k_was_created (a : (BitVec 160)) : SailM Bool := do
+def k_was_created (a : address) : SailM Bool := do
   (pure (← (k_aload a)).created)
 
-def k_zero_balance (a : (BitVec 160)) : SailM Unit := do
+def k_zero_balance (a : address) : SailM Unit := do
   let cur ← do (k_aload a)
   if ((word_is_zero cur.info.balance) : Bool)
   then (pure ())

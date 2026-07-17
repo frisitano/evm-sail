@@ -16,7 +16,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -51,21 +50,21 @@ open Bytes
 open ByteSource
 open BlockError
 
-def k_code_key (a : (BitVec 160)) : SailM (BitVec 256) := do
+def k_code_key (a : address) : SailM hash := do
   (pure (← (k_aload a)).info.code_hash)
 
-def k_get_codehash (a : (BitVec 160)) : SailM (BitVec 256) := do
+def k_get_codehash (a : address) : SailM hash := do
   let acc ← do (k_aload a)
   if ((! acc.present) : Bool)
   then (pure WORD_ZERO)
   else (pure acc.info.code_hash)
 
-def k_deploy_code (a : (BitVec 160)) (code : EvmByteSlice) : SailM Unit := do
+def k_deploy_code (a : address) (code : EvmByteSlice) : SailM Unit := do
   let cur ← do (k_aload a)
-  let h ← (( do (code_db_insert code) ) : SailM hash )
+  let h ← (( do (code_db_insert code) ) : SailM (BitVec 256) )
   (store_account_info a cur { cur.info with code_hash := h })
 
-def delegation_jumpdest_chunk (target : (BitVec 160)) : (BitVec 256) := Id.run do
+def delegation_jumpdest_chunk (target : address) : JumpdestChunk := Id.run do
   let w := (address_to_word target)
   let bits := EMPTY_JUMPDEST_CHUNK
   let loop_k_lower := 0
@@ -76,13 +75,13 @@ def delegation_jumpdest_chunk (target : (BitVec 160)) : (BitVec 256) := Id.run d
     loop_vars :=
       let b := (Sail.BitVec.extractLsb (w >>> (8 *i (19 -i k))) 7 0)
       if ((b == 0x5B#8) : Bool)
-      then (bits ||| (WORD_ONE <<< (3 +i k)))
+      then (bits ||| (WORD_ONE <<< (3 + k)))
       else bits
   (pure loop_vars)
 
-def k_set_delegation (a : (BitVec 160)) (target : (BitVec 160)) : SailM Unit := do
+def k_set_delegation (a : address) (target : address) : SailM Unit := do
   let cur ← do (k_aload a)
-  let code_len : byte_length := (ByteQuantity 23)
+  let code_len : byte_quantity := (ByteQuantity 23)
   let table ← do (jumpdest_table_alloc code_len)
   assert (table != EMPTY_JUMPDEST_REF) "delegation JUMPDEST table allocation"
   let chunk := (delegation_jumpdest_chunk target)
@@ -92,16 +91,16 @@ def k_set_delegation (a : (BitVec 160)) (target : (BitVec 160)) : SailM Unit := 
       let stored ← do (jumpdest_table_store_chunk table code_len BYTE_ZERO chunk)
       assert stored "delegation JUMPDEST chunk store")
   else (pure ())
-  let h ← (( do (code_intern_delegation target table) ) : SailM hash )
+  let h ← (( do (code_intern_delegation target table) ) : SailM (BitVec 256) )
   (store_account_info a cur { cur.info with code_hash := h })
 
-def k_clear_code (a : (BitVec 160)) : SailM Unit := do
+def k_clear_code (a : address) : SailM Unit := do
   let cur ← do (k_aload a)
   (store_account_info a cur { cur.info with code_hash := KECCAK_EMPTY })
 
-def addr_bytes (a : (BitVec 160)) : (List (BitVec 8)) := Id.run do
+def addr_bytes (a : address) : (List byte) := Id.run do
   let w := (address_to_word a)
-  let out : (List byte) := []
+  let out : (List (BitVec 8)) := []
   let loop_k_lower := 0
   let loop_k_upper := 19
   let mut loop_vars := out
@@ -110,19 +109,19 @@ def addr_bytes (a : (BitVec 160)) : (List (BitVec 8)) := Id.run do
     loop_vars := ((Sail.BitVec.extractLsb (w >>> (8 *i k)) 7 0) :: out)
   (pure loop_vars)
 
-def delegation_code (a : (BitVec 160)) : (List (BitVec 8)) :=
+def delegation_code (a : address) : (List byte) :=
   (0xEF#8 :: (0x01#8 :: (0x00#8 :: (addr_bytes a))))
 
-def k_deleg_target (a : (BitVec 160)) : SailM (Bool × (BitVec 160)) := do
-  let h ← (( do (k_code_key a) ) : SailM hash )
+def k_deleg_target (a : address) : SailM (Bool × address) := do
+  let h ← (( do (k_code_key a) ) : SailM (BitVec 256) )
   let r ← (( do (code_db_read_delegation h) ) : SailM (BitVec 168) )
   (pure (((BitVec.access r 160) == 1#1), (Sail.BitVec.extractLsb r 159 0)))
 
-def k_get_code_size (a : (BitVec 160)) : SailM byte_quantity := do
+def k_get_code_size (a : address) : SailM byte_length := do
   let code ← do (code_db_resolve (← (k_code_key a)))
   (pure code.bytes.len)
 
-def k_code_copy (a : (BitVec 160)) (dst : byte_quantity) (off : (BitVec 256)) (len : byte_quantity) : SailM Unit := do
+def k_code_copy (a : address) (dst : memory_pointer) (off : word) (len : memory_length) : SailM Unit := do
   let code ← do (code_db_resolve (← (k_code_key a)))
   (slice_copy_word_offset code.bytes dst off len)
 

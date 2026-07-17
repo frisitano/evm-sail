@@ -29,7 +29,9 @@ function account_deleted_at_tx_end(acc : Account) -> bool =
 
 function k_tx_merge() -> unit = {
     var more : bool = true;
-    while more do {
+
+    /* Each pop advances a cursor over a protocol-sized host table. */
+    while more termination_measure(2 ^ 64) do {
         match acct_tx_pop_ascending() {
             Some(e) => {
                 var curr : Account = e.value.curr;
@@ -59,7 +61,9 @@ function k_tx_merge() -> unit = {
         }
     };
     more = true;
-    while more do {
+
+    /* Each pop advances a cursor over a protocol-sized host table. */
+    while more termination_measure(2 ^ 64) do {
         match storage_tx_pop() {
             Some(e) => {
                 match acct_block_get(e.key.addr) {
@@ -89,7 +93,7 @@ function k_revert(checkpoint : StateCheckpoint) -> unit = {
             assert(false);
             0
         };
-    while remaining != 0 do {
+    while remaining != 0 termination_measure(remaining) do {
         apply_undo(journal_pop());
         remaining = protocol_quantity_decrement(remaining)
     }

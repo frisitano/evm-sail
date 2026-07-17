@@ -9,7 +9,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -51,10 +50,10 @@ def EMPTY_TRIE_ROOT : hash := 0x56E81F171BCC55A6FF8345E692C0F86E5B48E01B996CADC0
 def keccak256_slice (s : EvmByteSlice) : SailM (BitVec 256) := do
   (keccak256_segments [(BytesSlice s)])
 
-def keccak256_word (w : (BitVec 256)) : SailM (BitVec 256) := do
+def keccak256_word (w : word) : SailM (BitVec 256) := do
   (keccak256_segments [(bytes_list (word_to_bytes32 w) WORD_BYTE_LENGTH)])
 
-def keccak256_address (a : (BitVec 160)) : SailM (BitVec 256) := do
+def keccak256_address (a : address) : SailM (BitVec 256) := do
   (keccak256_segments [(bytes_list (address_to_bytes a) ADDRESS_BYTE_LENGTH)])
 
 def sha256_pair (a : (BitVec 256)) (b : (BitVec 256)) : SailM (BitVec 256) := do
@@ -68,8 +67,9 @@ def SECP_N_FULL : (BitVec 256) :=
 def SECP_N_HALF : (BitVec 256) :=
   0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0#256
 
-/-- Type quantifiers: yparity : Nat, 0 ≤ yparity ∧ yparity ≤ 1 -/
-def ecrecover_addr (h : (BitVec 256)) (yparity : Nat) (r : (BitVec 256)) (s : (BitVec 256)) : SailM (Bool × (BitVec 160)) := do
-  let recovered ← do (host_ecrecover h yparity r s)
+/-- Type quantifiers: k_ex161056_ : Nat, 0 ≤ k_ex161056_ ∧ k_ex161056_ ≤ 1 -/
+def ecrecover_addr (h : (BitVec 256)) (yparity : y_parity) (r : word) (s : word) : SailM (Bool × address) := do
+  let yparity := (yparity).value
+  let recovered ← do (host_ecrecover h ⟨yparity⟩ r s)
   (pure (((BitVec.access recovered 160) == 1#1), (Sail.BitVec.extractLsb recovered 159 0)))
 

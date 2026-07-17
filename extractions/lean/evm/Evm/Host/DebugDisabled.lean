@@ -8,7 +8,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -49,9 +48,9 @@ def validation_debug_reset (_ : Unit) : Unit :=
 def validation_debug_record (_scope : (BitVec 8)) (_reason : BlockError) : Unit :=
   ()
 
-def debug_account_storage_root (_a : (BitVec 160)) : (BitVec 256) :=
+def debug_account_storage_root (_a : address) : hash :=
   EMPTY_TRIE_ROOT
 
-def debug_rebuild_state_root (_ : Unit) : (BitVec 256) :=
+def debug_rebuild_state_root (_ : Unit) : hash :=
   EMPTY_TRIE_ROOT
 

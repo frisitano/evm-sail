@@ -10,7 +10,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -45,7 +44,7 @@ open Bytes
 open ByteSource
 open BlockError
 
-def output_buffer_slice (len : byte_quantity) : EvmByteSlice :=
+def output_buffer_slice (len : byte_length) : EvmByteSlice :=
   if ((byte_quantity_equal len BYTE_ZERO) : Bool)
   then EMPTY_SLICE
   else (byte_slice OutputSource BYTE_ZERO len)
@@ -60,12 +59,12 @@ def freeze_output (data : EvmByteSlice) : SailM EvmByteSlice := do
       then (pure (output_buffer_slice len))
       else (pure EMPTY_SLICE))
 
-def output_buffer_word (value : (BitVec 256)) : SailM EvmByteSlice := do
+def output_buffer_word (value : word) : SailM EvmByteSlice := do
   if ((← (output_buffer_store_word value)) : Bool)
   then (pure (output_buffer_slice WORD_BYTE_LENGTH))
   else (pure EMPTY_SLICE)
 
-def output_buffer_words (first : (BitVec 256)) (second : (BitVec 256)) : SailM EvmByteSlice := do
+def output_buffer_words (first : word) (second : word) : SailM EvmByteSlice := do
   if ((← (output_buffer_store_words first second)) : Bool)
   then (pure (output_buffer_slice DOUBLE_WORD_BYTE_LENGTH))
   else (pure EMPTY_SLICE)

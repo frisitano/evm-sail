@@ -13,7 +13,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -48,10 +47,10 @@ open Bytes
 open ByteSource
 open BlockError
 
-def k_log (a : (BitVec 160)) (topics : (List (BitVec 256))) (data : Bytes) : SailM Unit := do
+def k_log (a : address) (topics : (List word)) (data : Bytes) : SailM Unit := do
   (log_append a topics data)
 
-def k_emit_transfer_log (src : (BitVec 160)) (dst : (BitVec 160)) (v : (BitVec 256)) : SailM Unit := do
+def k_emit_transfer_log (src : address) (dst : address) (v : word) : SailM Unit := do
   if (((fork_lt (← readReg k_fork) Amsterdam) || ((word_is_zero v) || (src == dst))) : Bool)
   then (pure ())
   else
@@ -59,7 +58,7 @@ def k_emit_transfer_log (src : (BitVec 160)) (dst : (BitVec 160)) (v : (BitVec 2
       [EIP7708_TRANSFER_TOPIC, (address_to_word src), (address_to_word dst)]
       (bytes_list (word_to_bytes32 v) WORD_BYTE_LENGTH))
 
-def k_emit_burn_log (a : (BitVec 160)) (v : (BitVec 256)) : SailM Unit := do
+def k_emit_burn_log (a : address) (v : word) : SailM Unit := do
   if (((fork_lt (← readReg k_fork) Amsterdam) || (word_is_zero v)) : Bool)
   then (pure ())
   else

@@ -12,7 +12,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -47,7 +46,7 @@ open Bytes
 open ByteSource
 open BlockError
 
-/-- Type quantifiers: k_ex159561_ : Bool, k_ex159560_ : Bool -/
+/-- Type quantifiers: k_ex160870_ : Bool, k_ex160869_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -106,8 +105,8 @@ def byte_quantity_lt (typ_0 : byte_quantity) (typ_1 : byte_quantity) : Bool :=
   let .ByteQuantity right : byte_quantity := typ_1
   (left <b right)
 
-def fork_index (f : Fork) : Nat :=
-  match f with
+def fork_index (f : Fork) : protocol_fork_index :=
+  ⟨match f with
   | .Frontier => 0
   | .Homestead => 1
   | .Byzantium => 2
@@ -120,10 +119,10 @@ def fork_index (f : Fork) : Nat :=
   | .Cancun => 9
   | .Prague => 10
   | .Osaka => 11
-  | .Amsterdam => 12
+  | .Amsterdam => 12⟩
 
 def fork_lt (a : Fork) (b : Fork) : Bool :=
-  ((fork_index a) <b (fork_index b))
+  (((fork_index a)).value <b ((fork_index b)).value)
 
 def gas_cost_lt (typ_0 : gas_cost) (typ_1 : gas_cost) : Bool :=
   let .GasCost left : gas_cost := typ_0
@@ -146,7 +145,7 @@ def byte_quantity_ge (typ_0 : byte_quantity) (typ_1 : byte_quantity) : Bool :=
   (left ≥b right)
 
 def fork_gteq (a : Fork) (b : Fork) : Bool :=
-  ((fork_index b) ≤b (fork_index a))
+  (((fork_index b)).value ≤b ((fork_index a)).value)
 
 def byte_quantity_gt (typ_0 : byte_quantity) (typ_1 : byte_quantity) : Bool :=
   let .ByteQuantity left : byte_quantity := typ_0

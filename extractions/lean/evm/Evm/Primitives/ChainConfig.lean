@@ -12,7 +12,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -48,49 +47,56 @@ open ByteSource
 open BlockError
 
 def undefined_BlobSchedule (_ : Unit) : SailM BlobSchedule := do
-  (pure { target := ← (undefined_range 0 ((2 ^i 64) -i 1))
-          max := ← (undefined_range 0 ((2 ^i 64) -i 1))
-          base_fee_update_fraction := ← (undefined_range 0 ((2 ^i 64) -i 1)) })
+  (pure { target := ← do
+              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
+              pure (⟨semanticField⟩),
+          max := ← do
+              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
+              pure (⟨semanticField⟩),
+          base_fee_update_fraction := ← do
+              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
+              pure (⟨semanticField⟩) })
 
 def blob_schedule_equal (a : BlobSchedule) (b : BlobSchedule) : Bool :=
-  ((a.target == b.target) && (((a.max == b.max) && ((a.base_fee_update_fraction == b.base_fee_update_fraction) : Bool)) : Bool))
+  (((a.target).value == (b.target).value) && ((((a.max).value == (b.max).value) && (((a.base_fee_update_fraction).value == (b.base_fee_update_fraction).value) : Bool)) : Bool))
 
 /-- Type quantifiers: idx : Nat, 0 ≤ idx ∧ idx ≤ (2 ^ 64 - 1) -/
-def expected_blob_schedule (idx : Nat) : (Option BlobSchedule) :=
+def expected_blob_schedule (idx : protocol_fork_index) : (Option BlobSchedule) :=
+  let idx := (idx).value
   if ((idx <b 15) : Bool)
   then none
   else
     (if ((idx == 15) : Bool)
     then
       (some
-        { target := 3
-          max := 6
-          base_fee_update_fraction := 3338477 })
+        { target := ⟨3⟩,
+          max := ⟨6⟩,
+          base_fee_update_fraction := ⟨3338477⟩ })
     else
       (if ((idx ≤b 17) : Bool)
       then
         (some
-          { target := 6
-            max := 9
-            base_fee_update_fraction := 5007716 })
+          { target := ⟨6⟩,
+            max := ⟨9⟩,
+            base_fee_update_fraction := ⟨5007716⟩ })
       else
         (if ((idx == 18) : Bool)
         then
           (some
-            { target := 10
-              max := 15
-              base_fee_update_fraction := 8346193 })
+            { target := ⟨10⟩,
+              max := ⟨15⟩,
+              base_fee_update_fraction := ⟨8346193⟩ })
         else
           (some
-            { target := 14
-              max := 21
-              base_fee_update_fraction := 11684671 }))))
+            { target := ⟨14⟩,
+              max := ⟨21⟩,
+              base_fee_update_fraction := ⟨11684671⟩ }))))
 
 def chain_config_blob_schedule_valid (cc : ChainConfig) : Bool :=
   if ((! cc.blob_schedule_shape_valid) : Bool)
   then false
   else
-    (match ((expected_blob_schedule cc.fork_index), cc.blob_schedule) with
+    (match ((expected_blob_schedule ⟨(cc.fork_index).value⟩), cc.blob_schedule) with
     | (none, none) => true
     | (.some expected, .some actual) => (blob_schedule_equal expected actual)
     | _ => false)

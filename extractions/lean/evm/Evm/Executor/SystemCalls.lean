@@ -21,7 +21,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -100,7 +99,7 @@ def DEPOSIT_INDEX_DATA : source_pointer := (ByteQuantity 544)
 
 def DEPOSIT_INDEX_LENGTH : byte_length := EIGHT_BYTE_LENGTH
 
-def enter_system_call_frame (tgt : (BitVec 160)) (input : EvmByteSlice) : SailM StateCheckpoint := do
+def enter_system_call_frame (tgt : address) (input : EvmByteSlice) : SailM StateCheckpoint := do
   let checkpoint ← do (k_state_checkpoint ())
   writeReg pc BYTE_ZERO
   writeReg call_depth 0
@@ -110,16 +109,16 @@ def enter_system_call_frame (tgt : (BitVec 160)) (input : EvmByteSlice) : SailM 
   (returndata_clear ())
   writeReg frame_status (Running ())
   writeReg calldata input
-  writeReg message { caller := SYSTEM_ADDRESS
-                     address := tgt
-                     code_address := tgt
-                     value := ZERO_WORD
-                     is_static := false
-                     depth := 0 }
+  writeReg message { caller := SYSTEM_ADDRESS,
+                     address := tgt,
+                     code_address := tgt,
+                     value := ZERO_WORD,
+                     is_static := false,
+                     depth := ⟨0⟩ }
   writeReg frame_code (← (code_db_resolve (← (k_code_key tgt))))
   (pure checkpoint)
 
-def system_call (tgt : (BitVec 160)) (input : (BitVec 256)) : SailM Unit := do
+def system_call (tgt : address) (input : (BitVec 256)) : SailM Unit := do
   if (((← (k_code_key tgt)) == KECCAK_EMPTY) : Bool)
   then (pure ())
   else
@@ -137,7 +136,7 @@ def system_call (tgt : (BitVec 160)) (input : (BitVec 256)) : SailM Unit := do
       else (pure ())
       (k_tx_merge ()))
 
-def system_call_checked (tgt : (BitVec 160)) : SailM (Option EvmByteSlice) := do
+def system_call_checked (tgt : address) : SailM (Option EvmByteSlice) := do
   if (((← (k_code_key tgt)) == KECCAK_EMPTY) : Bool)
   then (pure none)
   else
@@ -204,18 +203,18 @@ def append_deposit_logs (logs : (List LogEntry)) : SailM Unit := do
 def collect_execution_requests (deposits : EvmByteSlice) : SailM (Bool × ExecutionRequests) := do
   match (← (system_call_checked WITHDRAWAL_REQUEST_ADDR)) with
   | none =>
-    (pure (false, { deposits := deposits
-                    withdrawals := EMPTY_SLICE
+    (pure (false, { deposits := deposits,
+                    withdrawals := EMPTY_SLICE,
                     consolidations := EMPTY_SLICE }))
   | .some withdrawals =>
     (do
       match (← (system_call_checked CONSOLIDATION_REQUEST_ADDR)) with
       | none =>
-        (pure (false, { deposits := deposits
-                        withdrawals := withdrawals
+        (pure (false, { deposits := deposits,
+                        withdrawals := withdrawals,
                         consolidations := EMPTY_SLICE }))
       | .some consolidations =>
-        (pure (true, { deposits := deposits
-                       withdrawals := withdrawals
+        (pure (true, { deposits := deposits,
+                       withdrawals := withdrawals,
                        consolidations := consolidations })))
 

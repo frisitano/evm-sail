@@ -13,7 +13,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -63,7 +62,7 @@ def sail_main (_ : Unit) : SailM Unit := do
             (let _ : Unit := (validation_debug_record failure.scope failure.reason)
             false)
         (pure (some
-            { input_ref := input_ref
+            { input_ref := input_ref,
               valid := valid })))) (fun the_exception => 
       match the_exception with
         | .InvalidBlock reason =>

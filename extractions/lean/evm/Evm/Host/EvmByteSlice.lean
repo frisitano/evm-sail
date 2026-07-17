@@ -11,7 +11,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -46,35 +45,35 @@ open Bytes
 open ByteSource
 open BlockError
 
-def slice_byte (s : EvmByteSlice) (off : byte_quantity) : SailM (BitVec 8) := do
+def slice_byte (s : EvmByteSlice) (off : source_pointer) : SailM byte := do
   if ((byte_quantity_lt off s.len) : Bool)
   then (host_slice_byte s off)
   else (pure 0x00#8)
 
-def slice_count_nonzero (s : EvmByteSlice) : SailM byte_quantity := do
+def slice_count_nonzero (s : EvmByteSlice) : SailM byte_length := do
   (host_slice_count_nonzero s)
 
-def slice_strided_zero (s : EvmByteSlice) (start : byte_quantity) (stride : byte_quantity) (width : byte_quantity) (count : byte_quantity) : SailM Bool := do
+def slice_strided_zero (s : EvmByteSlice) (start : source_pointer) (stride : byte_length) (width : byte_length) (count : byte_length) : SailM Bool := do
   (host_slice_strided_zero s start stride width count)
 
-def slice_load (s : EvmByteSlice) (off : byte_quantity) : SailM (BitVec 256) := do
+def slice_load (s : EvmByteSlice) (off : source_pointer) : SailM word := do
   if ((byte_quantity_lt off s.len) : Bool)
   then (host_slice_load_word s off)
   else (pure ZERO_WORD)
 
-def slice_load_word_offset (s : EvmByteSlice) (off : (BitVec 256)) : SailM (BitVec 256) := do
+def slice_load_word_offset (s : EvmByteSlice) (off : word) : SailM word := do
   let offset := (BitVec.toNatInt off)
   let .ByteQuantity slice_len := s.len
   if ((offset <b slice_len) : Bool)
   then (slice_load s (ByteQuantity offset))
   else (pure ZERO_WORD)
 
-def slice_load_n (s : EvmByteSlice) (off : byte_quantity) (n : byte_quantity) : SailM (BitVec 256) := do
+def slice_load_n (s : EvmByteSlice) (off : source_pointer) (n : byte_length) : SailM word := do
   if ((byte_quantity_lt off s.len) : Bool)
   then (host_slice_load_n_word s off n)
   else (pure ZERO_WORD)
 
-def slice_copy (s : EvmByteSlice) (dst : byte_quantity) (off : byte_quantity) (len : byte_quantity) : SailM Unit := do
+def slice_copy (s : EvmByteSlice) (dst : memory_pointer) (off : source_pointer) (len : memory_length) : SailM Unit := do
   if ((byte_quantity_not_equal len BYTE_ZERO) : Bool)
   then
     (do
@@ -83,7 +82,7 @@ def slice_copy (s : EvmByteSlice) (dst : byte_quantity) (off : byte_quantity) (l
       else (host_slice_copy_to_memory EMPTY_SLICE dst BYTE_ZERO len))
   else (pure ())
 
-def slice_copy_word_offset (s : EvmByteSlice) (dst : byte_quantity) (off : (BitVec 256)) (len : byte_quantity) : SailM Unit := do
+def slice_copy_word_offset (s : EvmByteSlice) (dst : memory_pointer) (off : word) (len : memory_length) : SailM Unit := do
   let offset := (BitVec.toNatInt off)
   let .ByteQuantity slice_len := s.len
   if ((offset <b slice_len) : Bool)

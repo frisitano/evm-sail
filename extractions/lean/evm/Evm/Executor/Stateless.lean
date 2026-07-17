@@ -20,7 +20,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -55,12 +54,12 @@ open Bytes
 open ByteSource
 open BlockError
 
-/-- Type quantifiers: k_ex160365_ : Bool -/
+/-- Type quantifiers: k_ex161871_ : Bool -/
 def validate_executed_block (block' : Block) (input_ref : StatelessInputRef) (exec_ok : Bool) (result : BlockExecutionResult) : SailM Unit := do
   let header := block'.header
   let gas_used_ok := (gas_equal result.gas_acc header.gas_used)
   let blob_gas_used_ok ← do
-    (pure ((fork_lt (← readReg k_fork) Cancun) || ((result.blob_gas_acc == header.blob_gas_used) : Bool)))
+    (pure ((fork_lt (← readReg k_fork) Cancun) || (((result.blob_gas_acc).value == (header.blob_gas_used).value) : Bool)))
   let poststate_ok ← do (pure ((← (compute_state_root ())) == header.state_root))
   let receipts_root_ok := (result.receipts_root == header.receipts_root)
   let logs_bloom_ok := (logs_bloom_equal result.logs_bloom header.logs_bloom)
@@ -83,7 +82,8 @@ def validate_executed_block (block' : Block) (input_ref : StatelessInputRef) (ex
         let block_access_list ← do (encode_block_access_list ())
         let .Gas gas_limit := header.gas_limit
         let maximum_items ← do (exact_quotient gas_limit 2000)
-        let block_access_list_size_ok : Bool := (block_access_list.item_count ≤b maximum_items)
+        let block_access_list_size_ok : Bool :=
+          ((block_access_list.item_count).value ≤b maximum_items)
         let block_access_list_ok ←
           (bytes_segments_equal_slice [(BytesSlice block_access_list.bytes)]
             block'.body.block_access_list)
@@ -124,7 +124,7 @@ def validate_executed_block (block' : Block) (input_ref : StatelessInputRef) (ex
   else (pure ())
 
 def undefined_StatelessValidationFailure (_ : Unit) : SailM StatelessValidationFailure := do
-  (pure { scope := ← (undefined_bitvector 8)
+  (pure { scope := ← (undefined_bitvector 8),
           reason := ← (undefined_BlockError ()) })
 
 def verify_stateless_payload (input_ref : StatelessInputRef) : SailM StatelessValidationResult := do
@@ -158,6 +158,6 @@ def verify_stateless_payload (input_ref : StatelessInputRef) : SailM StatelessVa
       | .InvalidBlock reason =>
         (let _ : Unit := (cycle_scope_end active_scope)
         (pure (StatelessPayloadInvalid
-            { scope := active_scope
+            { scope := active_scope,
               reason := reason }))))
 

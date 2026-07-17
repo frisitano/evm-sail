@@ -15,7 +15,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -52,19 +51,22 @@ open BlockError
 
 def MIN_BLOB_BASE_FEE : word := WORD_ONE
 
-def GAS_PER_BLOB : blob_gas := 131072
+def GAS_PER_BLOB : blob_gas := ⟨131072⟩
 
 def undefined_ScaledBlobValue (_ : Unit) : SailM ScaledBlobValue := do
-  (pure { whole := ← (undefined_bitvector 256)
-          remainder := ← (undefined_range 0 ((2 ^i 64) -i 1)) })
+  (pure { whole := ← (undefined_bitvector 256),
+          remainder := ← do
+              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
+              pure (⟨semanticField⟩) })
 
-/-- Type quantifiers: denominator : Nat, 0 ≤ denominator ∧ denominator ≤ (2 ^ 64 - 1) -/
-def scaled_blob_add (left : ScaledBlobValue) (right : ScaledBlobValue) (denominator : Nat) : (Option ScaledBlobValue) := ExceptM.run do
+/-- Type quantifiers: k_ex161163_ : Nat, 0 ≤ k_ex161163_ ∧ k_ex161163_ ≤ (2 ^ 64 - 1) -/
+def scaled_blob_add (left : ScaledBlobValue) (right : ScaledBlobValue) (denominator : blob_fee_update_fraction) : (Option ScaledBlobValue) := ExceptM.run do
+  let denominator := (denominator).value
   if ((denominator == 0) : Bool)
   then (pure none)
   else
     (do
-      let combined := (left.remainder +i right.remainder)
+      let combined := ((left.remainder).value + (right.remainder).value)
       let carry := (denominator ≤b combined)
       let remainder :=
         if (carry : Bool)
@@ -78,24 +80,29 @@ def scaled_blob_add (left : ScaledBlobValue) (right : ScaledBlobValue) (denomina
             match (word_checked_add left.whole right.whole) with
             | .some value => (pure value)
             | none => throw (none : (Option ScaledBlobValue)) ) : ExceptM (Option ScaledBlobValue)
-            word )
+            (BitVec 256) )
           if (carry : Bool)
           then
             (match (word_checked_add whole WORD_ONE) with
             | .some value =>
               (pure (some
-                  { whole := value
-                    remainder := remainder }))
+                  { whole := value,
+                    remainder := ⟨remainder⟩ }))
             | none => (pure none))
           else
             (pure (some
-                { whole := whole
-                  remainder := remainder }))))
+                { whole := whole,
+                  remainder := ⟨remainder⟩ }))))
 
-/-- Type quantifiers: iteration : Nat, denominator : Nat, addend : Nat, factor : Nat, 0 ≤ factor
-  ∧ factor ≤ (2 ^ 64 - 1), 0 ≤ addend ∧ addend ≤ (2 ^ 64 - 1), 0 ≤ denominator ∧
-  denominator ≤ (2 ^ 64 - 1), 0 ≤ iteration ∧ iteration ≤ (2 ^ 64 - 1) -/
-def blob_product_divmod (value : (BitVec 256)) (factor : Nat) (addend : Nat) (denominator : Nat) (iteration : Nat) : SailM (Option WordDivMod) := SailME.run do
+/-- Type quantifiers: k_ex161167_ : Nat, k_ex161166_ : Nat, k_ex161165_ : Nat, k_ex161164_ : Nat, 0
+  ≤ k_ex161164_ ∧ k_ex161164_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161165_ ∧
+  k_ex161165_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161166_ ∧ k_ex161166_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex161167_ ∧ k_ex161167_ ≤ (2 ^ 64 - 1) -/
+def blob_product_divmod (value : word) (factor : blob_gas) (addend : protocol_quantity) (denominator : blob_fee_update_fraction) (iteration : item_index) : SailM (Option WordDivMod) := SailME.run do
+  let factor := (factor).value
+  let addend := (addend).value
+  let denominator := (denominator).value
+  let iteration := (iteration).value
   let divisor ← do (pure (word_mul (← (word_of_nat denominator)) (← (word_of_nat iteration))))
   if ((word_is_zero divisor) : Bool)
   then (pure none)
@@ -103,29 +110,35 @@ def blob_product_divmod (value : (BitVec 256)) (factor : Nat) (addend : Nat) (de
     (do
       let value_parts := (word_divmod value divisor)
       let whole ← (( do
-        match (← (word_checked_mul_protocol_quantity value_parts.quotient factor)) with
+        match (← (word_checked_mul_protocol_quantity value_parts.quotient ⟨factor⟩)) with
         | .some product => (pure product)
-        | none => SailME.throw (none : (Option WordDivMod)) ) : SailME (Option WordDivMod) word )
+        | none => SailME.throw (none : (Option WordDivMod)) ) : SailME (Option WordDivMod)
+        (BitVec 256) )
       let residual_product ← do (pure (word_mul value_parts.remainder (← (word_of_nat factor))))
       let residual_sum ← (( do
         match (word_checked_add residual_product (← (word_of_nat addend))) with
         | .some sum => (pure sum)
-        | none => SailME.throw (none : (Option WordDivMod)) ) : SailME (Option WordDivMod) word )
+        | none => SailME.throw (none : (Option WordDivMod)) ) : SailME (Option WordDivMod)
+        (BitVec 256) )
       let residual_parts := (word_divmod residual_sum divisor)
       let quotient ← (( do
         match (word_checked_add whole residual_parts.quotient) with
         | .some sum => (pure sum)
-        | none => SailME.throw (none : (Option WordDivMod)) ) : SailME (Option WordDivMod) word )
+        | none => SailME.throw (none : (Option WordDivMod)) ) : SailME (Option WordDivMod)
+        (BitVec 256) )
       (pure (some
-          { quotient := quotient
+          { quotient := quotient,
             remainder := residual_parts.remainder })))
 
-/-- Type quantifiers: iteration : Nat, denominator : Nat, numerator : Nat, 0 ≤ numerator ∧
-  numerator ≤ (2 ^ 64 - 1), 0 ≤ denominator ∧ denominator ≤ (2 ^ 64 - 1), 0 ≤ iteration
-  ∧ iteration ≤ (2 ^ 64 - 1) -/
-def scaled_blob_next (term : ScaledBlobValue) (numerator : Nat) (denominator : Nat) (iteration : Nat) : SailM (Option ScaledBlobValue) := SailME.run do
+/-- Type quantifiers: k_ex161170_ : Nat, k_ex161169_ : Nat, k_ex161168_ : Nat, 0 ≤ k_ex161168_ ∧
+  k_ex161168_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161169_ ∧ k_ex161169_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex161170_ ∧ k_ex161170_ ≤ (2 ^ 64 - 1) -/
+def scaled_blob_next (term : ScaledBlobValue) (numerator : blob_gas) (denominator : blob_fee_update_fraction) (iteration : item_index) : SailM (Option ScaledBlobValue) := SailME.run do
+  let numerator := (numerator).value
+  let denominator := (denominator).value
+  let iteration := (iteration).value
   let remainder_product ← do
-    (pure (word_mul (← (word_of_nat term.remainder)) (← (word_of_nat numerator))))
+    (pure (word_mul (← (word_of_nat (term.remainder).value)) (← (word_of_nat numerator))))
   let addend_word ← do
     (pure (word_divmod remainder_product (← (word_of_nat denominator))).quotient)
   if (((Sail.BitVec.extractLsb addend_word 255 64) != (BitVec.zero 192)) : Bool)
@@ -134,7 +147,8 @@ def scaled_blob_next (term : ScaledBlobValue) (numerator : Nat) (denominator : N
     (do
       let addend := (BitVec.toNatInt (Sail.BitVec.extractLsb addend_word 63 0))
       let divided ← (( do
-        match (← (blob_product_divmod term.whole numerator addend denominator iteration)) with
+        match (← (blob_product_divmod term.whole ⟨numerator⟩ ⟨addend⟩ ⟨denominator⟩
+            ⟨iteration⟩)) with
         | .some result => (pure result)
         | none => SailME.throw (none : (Option ScaledBlobValue)) ) : SailME (Option ScaledBlobValue)
         WordDivMod )
@@ -145,110 +159,141 @@ def scaled_blob_next (term : ScaledBlobValue) (numerator : Nat) (denominator : N
       else
         (let remainder := (BitVec.toNatInt (Sail.BitVec.extractLsb remainder_word 63 0))
         (pure (some
-            { whole := divided.quotient
-              remainder := remainder }))))
+            { whole := divided.quotient,
+              remainder := ⟨remainder⟩ }))))
 
-/-- Type quantifiers: denominator : Nat, numerator : Nat, 0 ≤ numerator ∧
-  numerator ≤ (2 ^ 64 - 1), 0 ≤ denominator ∧ denominator ≤ (2 ^ 64 - 1) -/
-def fake_exponential (factor : (BitVec 256)) (numerator : Nat) (denominator : Nat) : SailM (BitVec 256) := do
+/-- Type quantifiers: k_ex161172_ : Nat, k_ex161171_ : Nat, 0 ≤ k_ex161171_ ∧
+  k_ex161171_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161172_ ∧ k_ex161172_ ≤ (2 ^ 64 - 1) -/
+def fake_exponential (factor : word) (numerator : blob_gas) (denominator : blob_fee_update_fraction) : SailM word := do
+  let numerator := (numerator).value
+  let denominator := (denominator).value
   if ((denominator == 0) : Bool)
   then sailThrow ((InvalidBlock InvalidConfig))
   else (pure ())
-  let i : item_index := 1
+  let i : Nat := 1
   let output : ScaledBlobValue :=
-    { whole := ZERO_WORD
-      remainder := 0 }
+    { whole := ZERO_WORD,
+      remainder := ⟨0⟩ }
   let term : ScaledBlobValue :=
-    { whole := factor
-      remainder := 0 }
+    { whole := factor,
+      remainder := ⟨0⟩ }
   let (i, output, term) ← (( do
-    let mut loop_vars := (i, output, term)
-    while (λ (i, output, term) => ((word_nonzero term.whole) || ((term.remainder != 0) : Bool)))
-      loop_vars
-      do
-      let (i, output, term) := loop_vars
-      loop_vars ← do
+    let loop_vars ← whileFuelM (fuel :=((2 ^i 64) -i i)) (fun (i, output, term) => (pure ((word_nonzero
+          term.whole) || (((term.remainder).value != 0) : Bool)))) (i, output, term)
+      fun (i, output, term) => do
+        assert true "loop dummy assert"
         let output ←
-          match (scaled_blob_add output term denominator) with
+          match (scaled_blob_add output term ⟨denominator⟩) with
           | .some sum => (pure sum)
           | none => sailThrow ((InvalidBlock ExecutionInvalid))
         let term ←
-          match (← (scaled_blob_next term numerator denominator i)) with
+          match (← (scaled_blob_next term ⟨numerator⟩ ⟨denominator⟩ ⟨i⟩)) with
           | .some next => (pure next)
           | none => sailThrow ((InvalidBlock ExecutionInvalid))
         if ((i == ((2 ^i 64) -i 1)) : Bool)
         then sailThrow ((InvalidBlock ExecutionInvalid))
         else (pure ())
-        let i ← (item_count_increment i)
+        let i ←
+          (do
+              let semanticResult ← (item_count_increment ⟨i⟩)
+              pure ((semanticResult).value))
         (pure (i, output, term))
     (pure loop_vars) ) : SailM (Nat × ScaledBlobValue × ScaledBlobValue) )
   (pure output.whole)
 
-def blob_base_fee_update_fraction (_ : Unit) : SailM Nat := do
-  (pure (← readReg k_blob_schedule).base_fee_update_fraction)
+def blob_base_fee_update_fraction (_ : Unit) : SailM blob_fee_update_fraction := do
+  let semanticResult ← do (pure ((← readReg k_blob_schedule).base_fee_update_fraction).value)
+  pure (⟨semanticResult⟩)
 
 /-- Type quantifiers: excess_blob_gas : Nat, 0 ≤ excess_blob_gas ∧
   excess_blob_gas ≤ (2 ^ 64 - 1) -/
-def blob_base_fee (excess_blob_gas : Nat) : SailM (BitVec 256) := do
-  (fake_exponential MIN_BLOB_BASE_FEE excess_blob_gas (← (blob_base_fee_update_fraction ())))
+def blob_base_fee (excess_blob_gas : blob_gas) : SailM word := do
+  let excess_blob_gas := (excess_blob_gas).value
+  (fake_exponential MIN_BLOB_BASE_FEE ⟨excess_blob_gas⟩
+    ⟨((← (blob_base_fee_update_fraction ()))).value⟩)
 
-def blob_reserve_price_active (base_fee : (BitVec 256)) (price : (BitVec 256)) : Bool :=
+def blob_reserve_price_active (base_fee : word) (price : word) : Bool :=
   if (((Sail.BitVec.extractLsb price 255 252) == (BitVec.zero 4)) : Bool)
   then (word_ult (price <<< 4) base_fee)
   else false
 
-def blob_schedule_target (_ : Unit) : SailM Nat := do
-  (pure (← readReg k_blob_schedule).target)
+def blob_schedule_target (_ : Unit) : SailM blob_count := do
+  let semanticResult ← do (pure ((← readReg k_blob_schedule).target).value)
+  pure (⟨semanticResult⟩)
 
-def blob_schedule_max (_ : Unit) : SailM Nat := do
-  (pure (← readReg k_blob_schedule).max)
+def blob_schedule_max (_ : Unit) : SailM blob_count := do
+  let semanticResult ← do (pure ((← readReg k_blob_schedule).max).value)
+  pure (⟨semanticResult⟩)
 
 /-- Type quantifiers: count : Nat, 0 ≤ count ∧ count ≤ (2 ^ 64 - 1) -/
-def blob_gas_for_count (count : Nat) : SailM Nat := do
-  let product := (GAS_PER_BLOB *i count)
-  if ((product ≤b ((2 ^i 64) -i 1)) : Bool)
-  then (pure product)
-  else sailThrow ((InvalidBlock InvalidConfig))
+def blob_gas_for_count (count : blob_count) : SailM blob_gas := do
+  let count := (count).value
+  let semanticResult ← do
+    let product := ((GAS_PER_BLOB).value *i count)
+    if ((product ≤b ((2 ^i 64) -i 1)) : Bool)
+    then (pure product)
+    else sailThrow ((InvalidBlock InvalidConfig))
+  pure (⟨semanticResult⟩)
 
-def blob_target_gas_per_block (_ : Unit) : SailM Nat := do
-  (blob_gas_for_count (← (blob_schedule_target ())))
-
-def blob_max_gas_per_block (_ : Unit) : SailM Nat := do
-  (blob_gas_for_count (← (blob_schedule_max ())))
-
-/-- Type quantifiers: parent_blob_gas_used : Nat, parent_excess_blob_gas : Nat, 0 ≤
-  parent_excess_blob_gas ∧ parent_excess_blob_gas ≤ (2 ^ 64 - 1), 0 ≤ parent_blob_gas_used ∧
-  parent_blob_gas_used ≤ (2 ^ 64 - 1) -/
-def next_excess_blob_gas (parent_excess_blob_gas : Nat) (parent_blob_gas_used : Nat) (parent_base_fee_per_gas : (BitVec 256)) : SailM Nat := do
-  let parent_blob_gas := (parent_excess_blob_gas +i parent_blob_gas_used)
-  let target_blob_gas ← do (blob_target_gas_per_block ())
-  if ((parent_blob_gas <b target_blob_gas) : Bool)
-  then (pure 0)
-  else
+def blob_target_gas_per_block (_ : Unit) : SailM blob_gas := do
+  let semanticResult ← do
     (do
-      let price ← do (blob_base_fee parent_excess_blob_gas)
-      if (((fork_gteq (← readReg k_fork) Osaka) && (blob_reserve_price_active
-             parent_base_fee_per_gas price)) : Bool)
-      then
-        (do
-          let target ← do (blob_schedule_target ())
-          let maximum ← do (blob_schedule_max ())
-          if (((maximum == 0) || (maximum <b target)) : Bool)
-          then sailThrow ((InvalidBlock InvalidConfig))
-          else (pure ())
-          let schedule_delta := (maximum -i target)
-          let scaled := (parent_blob_gas_used *i schedule_delta)
-          let share ← do (exact_quotient scaled maximum)
-          let next := (parent_excess_blob_gas +i share)
-          if ((next ≤b ((2 ^i 64) -i 1)) : Bool)
-          then (pure next)
-          else sailThrow ((InvalidBlock InvalidConfig)))
-      else
-        (do
-          let next := (parent_blob_gas -i target_blob_gas)
-          if ((next ≤b ((2 ^i 64) -i 1)) : Bool)
-          then (pure next)
-          else sailThrow ((InvalidBlock InvalidConfig))))
+        let semanticResult ← (blob_gas_for_count ⟨((← (blob_schedule_target ()))).value⟩)
+        pure ((semanticResult).value))
+  pure (⟨semanticResult⟩)
+
+def blob_max_gas_per_block (_ : Unit) : SailM blob_gas := do
+  let semanticResult ← do
+    (do
+        let semanticResult ← (blob_gas_for_count ⟨((← (blob_schedule_max ()))).value⟩)
+        pure ((semanticResult).value))
+  pure (⟨semanticResult⟩)
+
+/-- Type quantifiers: k_ex161176_ : Nat, k_ex161175_ : Nat, 0 ≤ k_ex161175_ ∧
+  k_ex161175_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161176_ ∧ k_ex161176_ ≤ (2 ^ 64 - 1) -/
+def next_excess_blob_gas (parent_excess_blob_gas : blob_gas) (parent_blob_gas_used : blob_gas) (parent_base_fee_per_gas : word) : SailM blob_gas := do
+  let parent_excess_blob_gas := (parent_excess_blob_gas).value
+  let parent_blob_gas_used := (parent_blob_gas_used).value
+  let semanticResult ← do
+    let parent_blob_gas := (parent_excess_blob_gas + parent_blob_gas_used)
+    let target_blob_gas ← do
+      (do
+          let semanticResult ← (blob_target_gas_per_block ())
+          pure ((semanticResult).value))
+    if ((parent_blob_gas <b target_blob_gas) : Bool)
+    then (pure 0)
+    else
+      (do
+        let price ← do (blob_base_fee ⟨parent_excess_blob_gas⟩)
+        if (((fork_gteq (← readReg k_fork) Osaka) && (blob_reserve_price_active
+               parent_base_fee_per_gas price)) : Bool)
+        then
+          (do
+            let target ← do
+              (do
+                  let semanticResult ← (blob_schedule_target ())
+                  pure ((semanticResult).value))
+            let maximum ← do
+              (do
+                  let semanticResult ← (blob_schedule_max ())
+                  pure ((semanticResult).value))
+            if (((maximum == 0) || (maximum <b target)) : Bool)
+            then sailThrow ((InvalidBlock InvalidConfig))
+            else (pure ())
+            let schedule_delta := (maximum -i target)
+            let scaled := (parent_blob_gas_used *i schedule_delta)
+            let share ← do (exact_quotient scaled maximum)
+            let next := (parent_excess_blob_gas + share)
+            if ((next ≤b ((2 ^i 64) -i 1)) : Bool)
+            then (pure next)
+            else sailThrow ((InvalidBlock InvalidConfig)))
+        else
+          (do
+            let next := (parent_blob_gas -i target_blob_gas)
+            if ((next ≤b ((2 ^i 64) -i 1)) : Bool)
+            then (pure next)
+            else sailThrow ((InvalidBlock InvalidConfig))))
+  pure (⟨semanticResult⟩)
 
 def G_zero : gas_constant := (GasConstant 0)
 
@@ -312,7 +357,7 @@ def G_selfdestruct : gas_constant := (GasConstant 5000)
 
 def G_initcode_word : gas_constant := (GasConstant 2)
 
-def max_code_size (_ : Unit) : SailM byte_quantity := do
+def max_code_size (_ : Unit) : SailM code_length := do
   if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
   then (pure (ByteQuantity 32768))
   else (pure (ByteQuantity 24576))
@@ -327,9 +372,10 @@ def sstore_clear_refund (_ : Unit) : SailM gas_constant := do
   then (pure R_sclear_london)
   else (pure R_sclear_pre_london)
 
-/-- Type quantifiers: divisor : Nat, right : Nat, left : Nat, 0 ≤ left, 0 ≤ right, 1 ≤ divisor
-  ∧ divisor ≤ 1000 -/
-def gas_product_quotient (left : Nat) (right : Nat) (divisor : Nat) : SailM gas_cost := do
+/-- Type quantifiers: k_ex161180_ : Nat, k_ex161179_ : Nat, k_ex161178_ : Nat, 0 ≤ k_ex161178_, 0
+  ≤ k_ex161179_, 1 ≤ k_ex161180_ ∧ k_ex161180_ ≤ 1000 -/
+def gas_product_quotient (left : Nat) (right : Nat) (divisor : gas_divisor) : SailM gas_cost := do
+  let divisor := (divisor).value
   (pure (GasCost (← (exact_quotient (left *i right) divisor))))
 
 def charge_cost (app_0 : gas_cost) : SailM Unit := do
@@ -371,24 +417,24 @@ def refund_gas (app_0 : gas) : SailM Unit := do
   let .Gas amount := app_0
   let .Gas remaining ← do readReg gas_remaining
   if ((amount ≤b (((2 ^i 63) -i 1) -i remaining)) : Bool)
-  then writeReg gas_remaining (Gas (remaining +i amount))
+  then writeReg gas_remaining (Gas (remaining + amount))
   else sailThrow ((InvalidBlock ExecutionInvalid))
 
 /-- Type quantifiers: byte_len : Nat, 0 ≤ byte_len -/
 def memory_word_count (byte_len : Nat) : SailM Nat := do
-  (exact_quotient (byte_len +i 31) 32)
+  (exact_quotient (byte_len + 31) 32)
 
 /-- Type quantifiers: words : Nat, 0 ≤ words -/
 def mem_cost (words : Nat) : SailM gas_cost := do
   (pure (gas_cost_add (gas_constant_scale G_memory words)
-      (← (gas_product_quotient words words 512))))
+      (← (gas_product_quotient words words ⟨512⟩))))
 
-def memory_required_size (start : (BitVec 256)) (size : (BitVec 256)) : Nat :=
+def memory_required_size (start : word) (size : word) : Nat :=
   if ((word_is_zero size) : Bool)
   then 0
-  else ((BitVec.toNatInt start) +i (BitVec.toNatInt size))
+  else ((BitVec.toNatInt start) + (BitVec.toNatInt size))
 
-def maximum_memory_required_size (left_start : (BitVec 256)) (left_size : (BitVec 256)) (right_start : (BitVec 256)) (right_size : (BitVec 256)) : Nat :=
+def maximum_memory_required_size (left_start : word) (left_size : word) (right_start : word) (right_size : word) : Nat :=
   let left := (memory_required_size left_start left_size)
   let right := (memory_required_size right_start right_size)
   if ((left <b right) : Bool)
@@ -410,7 +456,7 @@ def expand_memory (required_size : Nat) : SailM Unit := do
   assert (nat_fits_limb expanded_size) "sail/evm/gas.sail:403.39-403.40"
   (memory_expand_to (ByteQuantity expanded_size))
 
-def charge_memory_expansion (start : (BitVec 256)) (size : (BitVec 256)) : SailM Unit := do
+def charge_memory_expansion (start : word) (size : word) : SailM Unit := do
   if ((← (is_running ())) : Bool)
   then
     (do
@@ -427,21 +473,21 @@ def expand_charged_memory (required_size : Nat) : SailM Unit := do
   then (expand_memory required_size)
   else (pure ())
 
-/-- Type quantifiers: k_ex159783_ : Bool -/
+/-- Type quantifiers: k_ex161186_ : Bool -/
 def account_cost (warm : Bool) : gas_constant :=
   if (warm : Bool)
   then G_warm_access
   else G_cold_account
 
-/-- Type quantifiers: k_ex159784_ : Bool -/
+/-- Type quantifiers: k_ex161187_ : Bool -/
 def sload_cost (warm : Bool) : gas_constant :=
   if (warm : Bool)
   then G_warm_access
   else G_cold_sload
 
-/-- Type quantifiers: byte_count : Nat, start : Nat, 0 ≤ start, 0 ≤ byte_count -/
-def pc_word (input : EvmByteSlice) (start : Nat) (byte_count : Nat) : SailM (BitVec 256) := do
-  let value : word := ZERO_WORD
+/-- Type quantifiers: k_ex161189_ : Nat, k_ex161188_ : Nat, 0 ≤ k_ex161188_, 0 ≤ k_ex161189_ -/
+def pc_word (input : EvmByteSlice) (start : Nat) (byte_count : Nat) : SailM word := do
+  let value : (BitVec 256) := ZERO_WORD
   let .ByteQuantity input_len := input.len
   let loop_byte_index_lower := 0
   let loop_byte_index_upper := 31
@@ -452,7 +498,7 @@ def pc_word (input : EvmByteSlice) (start : Nat) (byte_count : Nat) : SailM (Bit
       if ((byte_index <b byte_count) : Bool)
       then
         (do
-          let cursor := (start +i byte_index)
+          let cursor := (start + byte_index)
           let next_byte ← do
             if ((cursor <b input_len) : Bool)
             then (slice_byte input (ByteQuantity cursor))
@@ -461,8 +507,10 @@ def pc_word (input : EvmByteSlice) (start : Nat) (byte_count : Nat) : SailM (Bit
       else (pure value)
   (pure loop_vars)
 
-def pc_blake2_rounds (input : EvmByteSlice) : SailM Nat := do
-  (pure (BitVec.toNatInt (Sail.BitVec.extractLsb (← (pc_word input 0 4)) 31 0)))
+def pc_blake2_rounds (input : EvmByteSlice) : SailM blake2_rounds := do
+  let semanticResult ← do
+    (pure (BitVec.toNatInt (Sail.BitVec.extractLsb (← (pc_word input 0 4)) 31 0)))
+  pure (⟨semanticResult⟩)
 
 def modexp_gas (input : EvmByteSlice) : SailM (Option gas_cost) := do
   let bl_word ← do (pc_word input 0 32)
@@ -484,7 +532,7 @@ def modexp_gas (input : EvmByteSlice) : SailM (Option gas_cost) := do
             if ((ml <b bl) : Bool)
             then bl
             else ml
-          let words ← do (exact_quotient (maxlen +i 7) 8)
+          let words ← do (exact_quotient (maxlen + 7) 8)
           let words_squared := (words *i words)
           let mult : Nat :=
             if ((osaka && (maxlen ≤b 32)) : Bool)
@@ -497,12 +545,13 @@ def modexp_gas (input : EvmByteSlice) : SailM (Option gas_cost) := do
             if (osaka : Bool)
             then 16
             else 8
-          let exp_off := (96 +i bl)
+          let exp_off := (96 + bl)
           let iterations ← (( do
             if ((el ≤b 32) : Bool)
             then
               (do
-                let exponent_bits ← do (pure (word_bit_length (← (pc_word input exp_off el))))
+                let exponent_bits ← do
+                  (pure ((word_bit_length (← (pc_word input exp_off el)))).value)
                 if ((exponent_bits == 0) : Bool)
                 then (pure 1)
                 else
@@ -512,12 +561,13 @@ def modexp_gas (input : EvmByteSlice) : SailM (Option gas_cost) := do
                   else (pure count)))
             else
               (do
-                let head_bits ← do (pure (word_bit_length (← (pc_word input exp_off 32))))
+                let head_bits ← do
+                  (pure ((word_bit_length (← (pc_word input exp_off 32)))).value)
                 let high_bits :=
                   if ((head_bits != 0) : Bool)
                   then (head_bits -i 1)
                   else 0
-                let count := ((big_mul *i (el -i 32)) +i high_bits)
+                let count := ((big_mul *i (el -i 32)) + high_bits)
                 if ((count == 0) : Bool)
                 then (pure 1)
                 else (pure count)) ) : SailM Nat )
@@ -541,13 +591,15 @@ def BLS_G1_DISCOUNT : (Vector (BitVec 16) 128) :=
 def BLS_G2_DISCOUNT : (Vector (BitVec 16) 128) :=
   #v[0x020C#16, 0x020C#16, 0x020D#16, 0x020E#16, 0x020E#16, 0x020F#16, 0x0210#16, 0x0210#16, 0x0211#16, 0x0212#16, 0x0212#16, 0x0213#16, 0x0214#16, 0x0214#16, 0x0215#16, 0x0216#16, 0x0217#16, 0x0217#16, 0x0218#16, 0x0219#16, 0x0219#16, 0x021A#16, 0x021B#16, 0x021C#16, 0x021D#16, 0x021D#16, 0x021E#16, 0x021F#16, 0x0220#16, 0x0221#16, 0x0221#16, 0x0222#16, 0x0223#16, 0x0224#16, 0x0225#16, 0x0226#16, 0x0227#16, 0x0228#16, 0x0228#16, 0x0229#16, 0x022A#16, 0x022B#16, 0x022C#16, 0x022D#16, 0x022E#16, 0x022F#16, 0x0230#16, 0x0231#16, 0x0232#16, 0x0233#16, 0x0235#16, 0x0236#16, 0x0237#16, 0x0238#16, 0x0239#16, 0x023A#16, 0x023B#16, 0x023D#16, 0x023E#16, 0x023F#16, 0x0240#16, 0x0242#16, 0x0243#16, 0x0244#16, 0x0246#16, 0x0247#16, 0x0248#16, 0x024A#16, 0x024B#16, 0x024D#16, 0x024E#16, 0x0250#16, 0x0251#16, 0x0253#16, 0x0255#16, 0x0256#16, 0x0258#16, 0x025A#16, 0x025C#16, 0x025E#16, 0x025F#16, 0x0261#16, 0x0263#16, 0x0265#16, 0x0267#16, 0x026A#16, 0x026C#16, 0x026E#16, 0x0270#16, 0x0273#16, 0x0275#16, 0x0278#16, 0x027A#16, 0x027D#16, 0x0280#16, 0x0283#16, 0x0286#16, 0x0289#16, 0x028C#16, 0x028F#16, 0x0293#16, 0x0297#16, 0x029A#16, 0x029E#16, 0x02A2#16, 0x02A7#16, 0x02AB#16, 0x02B0#16, 0x02B5#16, 0x02BB#16, 0x02C0#16, 0x02C7#16, 0x02CD#16, 0x02D4#16, 0x02DC#16, 0x02E4#16, 0x02ED#16, 0x02F7#16, 0x0302#16, 0x030E#16, 0x031C#16, 0x032C#16, 0x0340#16, 0x0357#16, 0x0374#16, 0x039B#16, 0x03E8#16, 0x03E8#16]
 
-/-- Type quantifiers: k : Nat, maxd : Nat, 0 ≤ maxd ∧ maxd ≤ (2 ^ 16 - 1), 0 ≤ k -/
-def bls_msm_gas (table : (Vector (BitVec 16) 128)) (base : gas_constant) (maxd : Nat) (k : Nat) : SailM gas_cost := do
+/-- Type quantifiers: k_ex161204_ : Nat, k_ex161203_ : Nat, 0 ≤ k_ex161203_ ∧
+  k_ex161203_ ≤ (2 ^ 16 - 1), 0 ≤ k_ex161204_ -/
+def bls_msm_gas (table : (Vector (BitVec 16) 128)) (base : gas_constant) (maxd : bls_discount) (k : Nat) : SailM gas_cost := do
+  let maxd := (maxd).value
   if ((k == 0) : Bool)
   then (pure GAS_COST_ZERO)
   else
     (do
-      let discount : bls_discount := maxd
+      let discount : Nat := maxd
       let discount ← (( do
         if ((k <b 128) : Bool)
         then
@@ -565,19 +617,20 @@ def bls_msm_gas (table : (Vector (BitVec 16) 128)) (base : gas_constant) (maxd :
                     if ((cursor == target) : Bool)
                     then (BitVec.toNatInt (GetElem?.getElem! table index))
                     else discount
-                  let cursor : Nat := (cursor +i 1)
+                  let cursor : Nat := (cursor + 1)
                   (cursor, discount)
               (pure loop_vars) ) : SailM (Nat × Nat) )
             (pure discount))
         else (pure discount) ) : SailM Nat )
-      (gas_cost_quotient (gas_cost_scale (gas_constant_scale base discount) k) 1000))
+      (gas_cost_quotient (gas_cost_scale (gas_constant_scale base discount) k) ⟨1000⟩))
 
-/-- Type quantifiers: units : Nat, 0 ≤ units -/
+/-- Type quantifiers: k_ex161205_ : Nat, 0 ≤ k_ex161205_ -/
 def linear_gas (base : gas_constant) (per_unit : gas_constant) (units : Nat) : gas_cost :=
   (gas_cost_add_constant (gas_constant_scale per_unit units) base)
 
-/-- Type quantifiers: num : Nat, 1 ≤ num ∧ num ≤ 256 -/
-def precompile_gas (num : Nat) (input : EvmByteSlice) : SailM (Option gas_cost) := do
+/-- Type quantifiers: k_ex161206_ : Nat, 1 ≤ k_ex161206_ ∧ k_ex161206_ ≤ 256 -/
+def precompile_gas (num : precompile_id) (input : EvmByteSlice) : SailM (Option gas_cost) := do
+  let num := (num).value
   let .ByteQuantity input_len := input.len
   let words ← do (memory_word_count input_len)
   match num with
@@ -591,17 +644,17 @@ def precompile_gas (num : Nat) (input : EvmByteSlice) : SailM (Option gas_cost) 
   | 8 =>
     (pure (some
         (linear_gas (GasConstant 45000) (GasConstant 34000) (← (exact_quotient input_len 192)))))
-  | 9 => (pure (some (GasCost (← (pc_blake2_rounds input)))))
+  | 9 => (pure (some (GasCost ((← (pc_blake2_rounds input))).value)))
   | 10 => (pure (some (GasCost 50000)))
   | 11 => (pure (some (GasCost 375)))
   | 12 =>
     (pure (some
-        (← (bls_msm_gas BLS_G1_DISCOUNT (GasConstant 12000) 519
+        (← (bls_msm_gas BLS_G1_DISCOUNT (GasConstant 12000) ⟨519⟩
             (← (exact_quotient input_len 160))))))
   | 13 => (pure (some (GasCost 600)))
   | 14 =>
     (pure (some
-        (← (bls_msm_gas BLS_G2_DISCOUNT (GasConstant 22500) 524
+        (← (bls_msm_gas BLS_G2_DISCOUNT (GasConstant 22500) ⟨524⟩
             (← (exact_quotient input_len 288))))))
   | 15 =>
     (pure (some
@@ -611,8 +664,8 @@ def precompile_gas (num : Nat) (input : EvmByteSlice) : SailM (Option gas_cost) 
   | 256 => (pure (some (GasCost 6900)))
   | _ => (pure (some GAS_COST_ZERO))
 
-/-- Type quantifiers: k_ex159803_ : Bool -/
-def sstore_gas (original : (BitVec 256)) (current : (BitVec 256)) (new : (BitVec 256)) (cold : Bool) : SailM (gas_cost × gas_refund) := do
+/-- Type quantifiers: k_ex161207_ : Bool -/
+def sstore_gas (original : word) (current : word) (new : word) (cold : Bool) : SailM (gas_cost × gas_refund) := do
   let cold_cost : gas_constant :=
     if (cold : Bool)
     then G_cold_sload
@@ -664,7 +717,7 @@ def sstore_gas (original : (BitVec 256)) (current : (BitVec 256)) (new : (BitVec
   let cost := (gas_constant_add base cold_cost)
   (pure (cost, refund))
 
-/-- Type quantifiers: size : Nat, 0 ≤ size -/
+/-- Type quantifiers: k_ex161208_ : Nat, 0 ≤ k_ex161208_ -/
 def charge_memory_word_gas (base : gas_constant) (per_word : gas_constant) (size : Nat) : SailM Unit := do
   (charge_cost
     (gas_cost_add_constant (gas_constant_scale per_word (← (memory_word_count size))) base))
@@ -677,17 +730,18 @@ def charge_keccak_gas (size : Nat) : SailM Unit := do
 def charge_copy_gas (size : Nat) : SailM Unit := do
   (charge_memory_word_gas GAS_CONSTANT_ZERO G_copy_word size)
 
-/-- Type quantifiers: size : Nat, num_topics : Nat, 0 ≤ num_topics ∧ num_topics ≤ 4, 0 ≤
-  size -/
-def charge_log_gas (num_topics : Nat) (size : Nat) : SailM Unit := do
+/-- Type quantifiers: k_ex161212_ : Nat, k_ex161211_ : Nat, 0 ≤ k_ex161211_ ∧ k_ex161211_ ≤ 4, 0
+  ≤ k_ex161212_ -/
+def charge_log_gas (num_topics : log_topic_count) (size : Nat) : SailM Unit := do
+  let num_topics := (num_topics).value
   (charge_cost
     (gas_cost_add_constant
       (gas_cost_add (gas_constant_scale G_logtopic num_topics) (gas_constant_scale G_logdata size))
       G_log))
 
-def exp_gas (exponent : (BitVec 256)) : SailM gas_cost := do
-  let significant_bits := (word_bit_length exponent)
-  let byte_count ← do (exact_quotient (significant_bits +i 7) 8)
+def exp_gas (exponent : word) : SailM gas_cost := do
+  let significant_bits := ((word_bit_length exponent)).value
+  let byte_count ← do (exact_quotient (significant_bits + 7) 8)
   let significant_bytes ← (( do
     if ((byte_count ≤b 32) : Bool)
     then (pure byte_count)
@@ -703,8 +757,8 @@ def initcode_gas (byte_len : Nat) : SailM gas_cost := do
   then (pure (gas_constant_scale G_initcode_word (← (memory_word_count byte_len))))
   else (pure GAS_COST_ZERO)
 
-def call_gas_cap_word (available : gas) (requested : (BitVec 256)) : SailM gas := do
-  let retained ← do (gas_quotient available 64)
+def call_gas_cap_word (available : gas) (requested : word) : SailM gas := do
+  let retained ← do (gas_quotient available ⟨64⟩)
   let all_but_64th ← do (gas_sub_gas_or_oog available retained)
   match (word_to_gas requested) with
   | .some requested_gas =>

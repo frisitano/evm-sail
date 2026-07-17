@@ -10,7 +10,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -66,12 +65,12 @@ def nat_to_gas (value : Nat) : SailM gas := do
       assert false "sail/primitives/gas.sail:38.20-38.21"
       throw Error.Exit)
 
-def word_to_gas (value : (BitVec 256)) : (Option gas) :=
+def word_to_gas (value : word) : (Option gas) :=
   if (((Sail.BitVec.extractLsb value 255 63) == (BitVec.zero 193)) : Bool)
   then (some (Gas (BitVec.toNatInt (Sail.BitVec.extractLsb value 62 0))))
   else none
 
-def word_of_gas (app_0 : gas) : SailM (BitVec 256) := do
+def word_of_gas (app_0 : gas) : SailM word := do
   let .Gas value := app_0
   (word_of_nat value)
 
@@ -87,7 +86,7 @@ def gas_constant_to_refund (app_0 : gas_constant) : gas_refund :=
   let .GasConstant amount := app_0
   (GasRefund amount)
 
-def gas_cost_to_word (app_0 : gas_cost) : SailM (BitVec 256) := do
+def gas_cost_to_word (app_0 : gas_cost) : SailM word := do
   let .GasCost amount := app_0
   (word_of_nat amount)
 
@@ -105,11 +104,12 @@ def capped_gas_refund (typ_0 : gas_refund) (typ_1 : gas) : gas :=
     then (Gas refund)
     else (Gas limit))
 
-/-- Type quantifiers: factor : Nat, 0 ≤ factor ∧ factor ≤ (2 ^ 64 - 1) -/
-def word_checked_mul_protocol_quantity (value : (BitVec 256)) (factor : Nat) : SailM (Option (BitVec 256)) := do
-  let result : word := ZERO_WORD
-  let addend : word := value
-  let remaining : protocol_quantity := factor
+/-- Type quantifiers: k_ex161021_ : Nat, 0 ≤ k_ex161021_ ∧ k_ex161021_ ≤ (2 ^ 64 - 1) -/
+def word_checked_mul_protocol_quantity (value : word) (factor : protocol_quantity) : SailM (Option word) := do
+  let factor := (factor).value
+  let result : (BitVec 256) := ZERO_WORD
+  let addend : (BitVec 256) := value
+  let remaining : Nat := factor
   let valid : Bool := true
   let (addend, remaining, result, valid) ← (( do
     let loop_i_lower := 0
@@ -125,14 +125,17 @@ def word_checked_mul_protocol_quantity (value : (BitVec 256)) (factor : Nat) : S
             let (result, valid) : ((BitVec 256) × Bool) :=
               match added with
               | .some value =>
-                (let result : word := value
+                (let result : (BitVec 256) := value
                 (result, valid))
               | none =>
                 (let valid : Bool := false
                 (result, valid))
             (result, valid))
           else (result, valid)
-        let remaining ← (protocol_quantity_quotient remaining 2)
+        let remaining ←
+          (do
+              let semanticResult ← (protocol_quantity_quotient ⟨remaining⟩ ⟨2⟩)
+              pure ((semanticResult).value))
         let (addend, valid) : ((BitVec 256) × Bool) :=
           if ((valid && ((i <b 63) && ((remaining != 0) : Bool))) : Bool)
           then
@@ -140,7 +143,7 @@ def word_checked_mul_protocol_quantity (value : (BitVec 256)) (factor : Nat) : S
             let (addend, valid) : ((BitVec 256) × Bool) :=
               match doubled with
               | .some value =>
-                (let addend : word := value
+                (let addend : (BitVec 256) := value
                 (addend, valid))
               | none =>
                 (let valid : Bool := false
@@ -153,7 +156,7 @@ def word_checked_mul_protocol_quantity (value : (BitVec 256)) (factor : Nat) : S
   then (pure (some result))
   else (pure none)
 
-def word_checked_mul_gas (value : (BitVec 256)) (typ_1 : gas) : SailM (Option (BitVec 256)) := do
+def word_checked_mul_gas (value : word) (typ_1 : gas) : SailM (Option word) := do
   let .Gas factor : gas := typ_1
-  (word_checked_mul_protocol_quantity value factor)
+  (word_checked_mul_protocol_quantity value ⟨factor⟩)
 

@@ -105,13 +105,7 @@ function merkle_root_levels(
             } else {
                 sha256_pair(acc, zero)
             };
-        merkle_root_levels(
-            rest,
-            protocol_quantity_quotient(n, 2),
-            sha256_pair(zero, zero),
-            next_acc,
-            merkle_depth_decrement(remaining),
-        )
+        merkle_root_levels(rest, protocol_quantity_quotient(n, 2), sha256_pair(zero, zero), next_acc, remaining - 1)
     }
 termination_measure merkle_root_levels(slots, n, zero, acc, remaining) = remaining
 
@@ -211,7 +205,7 @@ function htr_bytes_root(bytes : ByteSlice, depth : merkle_depth) -> hash = {
     let count = htr_chunk_count(bytes.len);
     var accumulator = EMPTY_MERKLE_ACCUMULATOR;
     var index : item_index = 0;
-    while index < count do {
+    while index < count termination_measure(count - index) do {
         accumulator = merkle_accumulator_push(accumulator, htr_chunk(bytes, index));
         index = item_index_increment(index)
     };
@@ -251,7 +245,7 @@ function htr_withdrawal(withdrawal : ByteSlice) -> hash = {
 function htr_transactions(transactions : SszListRef) -> hash = {
     var cursor = ssz_list_cursor(transactions);
     var accumulator = EMPTY_MERKLE_ACCUMULATOR;
-    while not_bool(ssz_list_cursor_empty(cursor)) do {
+    while not_bool(ssz_list_cursor_empty(cursor)) termination_measure(cursor.items.count - cursor.index) do {
         let (transaction, next) = ssz_list_pop(cursor);
         cursor = next;
         accumulator = merkle_accumulator_push(accumulator, htr_bytelist(transaction, HTR_BYTE_LIST_LIMIT))
@@ -263,7 +257,7 @@ function htr_transactions(transactions : SszListRef) -> hash = {
 function htr_withdrawals(withdrawals : SszListRef) -> hash = {
     var rest : SszListRef = withdrawals;
     var accumulator = EMPTY_MERKLE_ACCUMULATOR;
-    while rest.count != 0 do {
+    while rest.count != 0 termination_measure(rest.count) do {
         let (withdrawal, tail) = ssz_fixed_list_pop(rest, WD_SIZE);
         rest = tail;
         accumulator = merkle_accumulator_push(accumulator, htr_withdrawal(withdrawal))
@@ -305,7 +299,7 @@ function htr_versioned_hashes(versioned_hashes : ByteSlice) -> hash = {
     let count = htr_fixed_count(versioned_hashes.len, WORD_BYTE_LENGTH);
     var rest : SszListRef = struct { bytes = versioned_hashes, count = count };
     var accumulator = EMPTY_MERKLE_ACCUMULATOR;
-    while rest.count != 0 do {
+    while rest.count != 0 termination_measure(rest.count) do {
         let (versioned_hash, tail) = ssz_fixed_list_pop(rest, WORD_BYTE_LENGTH);
         rest = tail;
         accumulator = merkle_accumulator_push(accumulator, slice_load(versioned_hash, BYTE_ZERO))
@@ -353,7 +347,7 @@ function htr_deposits(deposits : ByteSlice) -> hash = {
     let count = htr_fixed_count(deposits.len, HTR_DEPOSIT_LENGTH);
     var rest : SszListRef = struct { bytes = deposits, count = count };
     var accumulator = EMPTY_MERKLE_ACCUMULATOR;
-    while rest.count != 0 do {
+    while rest.count != 0 termination_measure(rest.count) do {
         let (deposit, tail) = ssz_fixed_list_pop(rest, HTR_DEPOSIT_LENGTH);
         rest = tail;
         accumulator = merkle_accumulator_push(accumulator, htr_deposit(deposit))
@@ -365,7 +359,7 @@ function htr_withdrawal_requests(requests : ByteSlice) -> hash = {
     let count = htr_fixed_count(requests.len, HTR_WITHDRAWAL_REQUEST_LENGTH);
     var rest : SszListRef = struct { bytes = requests, count = count };
     var accumulator = EMPTY_MERKLE_ACCUMULATOR;
-    while rest.count != 0 do {
+    while rest.count != 0 termination_measure(rest.count) do {
         let (request, tail) = ssz_fixed_list_pop(rest, HTR_WITHDRAWAL_REQUEST_LENGTH);
         rest = tail;
         accumulator = merkle_accumulator_push(accumulator, htr_withdrawal_request(request))
@@ -377,7 +371,7 @@ function htr_consolidation_requests(requests : ByteSlice) -> hash = {
     let count = htr_fixed_count(requests.len, HTR_CONSOLIDATION_REQUEST_LENGTH);
     var rest : SszListRef = struct { bytes = requests, count = count };
     var accumulator = EMPTY_MERKLE_ACCUMULATOR;
-    while rest.count != 0 do {
+    while rest.count != 0 termination_measure(rest.count) do {
         let (request, tail) = ssz_fixed_list_pop(rest, HTR_CONSOLIDATION_REQUEST_LENGTH);
         rest = tail;
         accumulator = merkle_accumulator_push(accumulator, htr_consolidation_request(request))

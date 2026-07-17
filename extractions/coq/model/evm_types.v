@@ -42,6 +42,8 @@ Instance Countable_byte_quantity : Countable byte_quantity := {|
 Instance dummy_byte_quantity : Inhabited (byte_quantity) := { inhabitant := ByteQuantity inhabitant
 }.
 
+Definition bits (n : Z) : Type := mword n.
+
 Inductive gas_constant :=
 | GasConstant : Z -> gas_constant.
 Arguments gas_constant : clear implicits.
@@ -247,7 +249,40 @@ Defined.
 Instance dummy_Fork : Inhabited Fork := { inhabitant := Frontier }.
 
 
-Definition bits (n : Z) : Type := mword n.
+Record protocol_quantity := { protocol_quantity_value : Z; }.
+Arguments protocol_quantity : clear implicits.
+#[export]
+Instance Decidable_eq_protocol_quantity : EqDecision protocol_quantity.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_protocol_quantity : Countable protocol_quantity.
+refine {|
+  encode x := encode (protocol_quantity_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_protocol_quantity x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'protocol_quantity_value' := e ]}" :=
+  {| protocol_quantity_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_protocol_quantity : Inhabited (protocol_quantity) := {
+  inhabitant := {| protocol_quantity_value := inhabitant
+|} }.
+
+
+Definition protocol_quantity_valid (x : protocol_quantity) : Prop :=
+0 <= x.(protocol_quantity_value) /\ x.(protocol_quantity_value) <= (2 ^ 64 - 1).
+
+Definition protocol_fork_index : Type := protocol_quantity.
 
 Definition word : Type := bits 256.
 
@@ -331,11 +366,71 @@ Instance dummy_WordDivMod : Inhabited (WordDivMod) := {
 |} }.
 
 
-Definition limb_bit_count : Type := Z.
+Record limb_bit_count := { limb_bit_count_value : Z; }.
+Arguments limb_bit_count : clear implicits.
+#[export]
+Instance Decidable_eq_limb_bit_count : EqDecision limb_bit_count.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_limb_bit_count : Countable limb_bit_count.
+refine {|
+  encode x := encode (limb_bit_count_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_limb_bit_count x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition word_bit_count : Type := Z.
+Notation "{[ r 'with' 'limb_bit_count_value' := e ]}" :=
+  {| limb_bit_count_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_limb_bit_count : Inhabited (limb_bit_count) := {
+  inhabitant := {| limb_bit_count_value := inhabitant
+|} }.
 
-Definition protocol_quantity : Type := Z.
+
+Definition limb_bit_count_valid (x : limb_bit_count) : Prop :=
+0 <= x.(limb_bit_count_value) /\ x.(limb_bit_count_value) <= 64.
+
+Record word_bit_count := { word_bit_count_value : Z; }.
+Arguments word_bit_count : clear implicits.
+#[export]
+Instance Decidable_eq_word_bit_count : EqDecision word_bit_count.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_word_bit_count : Countable word_bit_count.
+refine {|
+  encode x := encode (word_bit_count_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_word_bit_count x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'word_bit_count_value' := e ]}" :=
+  {| word_bit_count_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_word_bit_count : Inhabited (word_bit_count) := {
+  inhabitant := {| word_bit_count_value := inhabitant
+|} }.
+
+
+Definition word_bit_count_valid (x : word_bit_count) : Prop :=
+0 <= x.(word_bit_count_value) /\ x.(word_bit_count_value) <= 256.
 
 Definition account_nonce : Type := protocol_quantity.
 
@@ -351,8 +446,6 @@ Definition blob_fee_update_fraction : Type := protocol_quantity.
 
 Definition chain_identifier : Type := protocol_quantity.
 
-Definition protocol_fork_index : Type := protocol_quantity.
-
 Definition slot_number_typ : Type := protocol_quantity.
 
 Definition withdrawal_index : Type := protocol_quantity.
@@ -365,39 +458,562 @@ Definition item_count_typ : Type := protocol_quantity.
 
 Definition item_index : Type := protocol_quantity.
 
-Definition frame_depth : Type := Z.
+Record frame_depth := { frame_depth_value : Z; }.
+Arguments frame_depth : clear implicits.
+#[export]
+Instance Decidable_eq_frame_depth : EqDecision frame_depth.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_frame_depth : Countable frame_depth.
+refine {|
+  encode x := encode (frame_depth_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_frame_depth x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition push_width : Type := Z.
+Notation "{[ r 'with' 'frame_depth_value' := e ]}" :=
+  {| frame_depth_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_frame_depth : Inhabited (frame_depth) := {
+  inhabitant := {| frame_depth_value := inhabitant
+|} }.
 
-Definition operand_stack_height : Type := Z.
 
-Definition stack_index : Type := Z.
+Definition frame_depth_valid (x : frame_depth) : Prop :=
+0 <= x.(frame_depth_value) /\ x.(frame_depth_value) <= 1024.
 
-Definition stack_operation_index : Type := Z.
+Record push_width := { push_width_value : Z; }.
+Arguments push_width : clear implicits.
+#[export]
+Instance Decidable_eq_push_width : EqDecision push_width.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_push_width : Countable push_width.
+refine {|
+  encode x := encode (push_width_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_push_width x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition log_topic_count : Type := Z.
+Notation "{[ r 'with' 'push_width_value' := e ]}" :=
+  {| push_width_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_push_width : Inhabited (push_width) := {
+  inhabitant := {| push_width_value := inhabitant
+|} }.
 
-Definition y_parity : Type := Z.
 
-Definition merkle_depth : Type := Z.
+Definition push_width_valid (x : push_width) : Prop :=
+0 <= x.(push_width_value) /\ x.(push_width_value) <= 32.
 
-Definition opcode : Type := Z.
+Record operand_stack_height := { operand_stack_height_value : Z; }.
+Arguments operand_stack_height : clear implicits.
+#[export]
+Instance Decidable_eq_operand_stack_height : EqDecision operand_stack_height.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_operand_stack_height : Countable operand_stack_height.
+refine {|
+  encode x := encode (operand_stack_height_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_operand_stack_height x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition precompile_id : Type := Z.
+Notation "{[ r 'with' 'operand_stack_height_value' := e ]}" :=
+  {| operand_stack_height_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_operand_stack_height : Inhabited (operand_stack_height) := {
+  inhabitant := {| operand_stack_height_value := inhabitant
+|} }.
 
-Definition blake2_rounds : Type := Z.
 
-Definition bls_discount : Type := Z.
+Definition operand_stack_height_valid (x : operand_stack_height) : Prop :=
+0 <= x.(operand_stack_height_value) /\ x.(operand_stack_height_value) <= 1024.
 
-Definition bloom_bit_index : Type := Z.
+Record stack_index := { stack_index_value : Z; }.
+Arguments stack_index : clear implicits.
+#[export]
+Instance Decidable_eq_stack_index : EqDecision stack_index.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_stack_index : Countable stack_index.
+refine {|
+  encode x := encode (stack_index_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_stack_index x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition bloom_limb_index : Type := Z.
+Notation "{[ r 'with' 'stack_index_value' := e ]}" :=
+  {| stack_index_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_stack_index : Inhabited (stack_index) := {
+  inhabitant := {| stack_index_value := inhabitant
+|} }.
 
-Definition bloom_limb_bit : Type := Z.
 
-Definition ancestor_index : Type := Z.
+Definition stack_index_valid (x : stack_index) : Prop :=
+0 <= x.(stack_index_value) /\ x.(stack_index_value) <= 16.
 
-Definition protocol_divisor : Type := Z.
+Record stack_operation_index := { stack_operation_index_value : Z; }.
+Arguments stack_operation_index : clear implicits.
+#[export]
+Instance Decidable_eq_stack_operation_index : EqDecision stack_operation_index.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_stack_operation_index : Countable stack_operation_index.
+refine {|
+  encode x := encode (stack_operation_index_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_stack_operation_index x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'stack_operation_index_value' := e ]}" :=
+  {| stack_operation_index_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_stack_operation_index : Inhabited (stack_operation_index) := {
+  inhabitant := {| stack_operation_index_value := inhabitant
+|} }.
+
+
+Definition stack_operation_index_valid (x : stack_operation_index) : Prop :=
+1 <= x.(stack_operation_index_value) /\ x.(stack_operation_index_value) <= 16.
+
+Record log_topic_count := { log_topic_count_value : Z; }.
+Arguments log_topic_count : clear implicits.
+#[export]
+Instance Decidable_eq_log_topic_count : EqDecision log_topic_count.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_log_topic_count : Countable log_topic_count.
+refine {|
+  encode x := encode (log_topic_count_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_log_topic_count x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'log_topic_count_value' := e ]}" :=
+  {| log_topic_count_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_log_topic_count : Inhabited (log_topic_count) := {
+  inhabitant := {| log_topic_count_value := inhabitant
+|} }.
+
+
+Definition log_topic_count_valid (x : log_topic_count) : Prop :=
+0 <= x.(log_topic_count_value) /\ x.(log_topic_count_value) <= 4.
+
+Record y_parity := { y_parity_value : Z; }.
+Arguments y_parity : clear implicits.
+#[export]
+Instance Decidable_eq_y_parity : EqDecision y_parity.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_y_parity : Countable y_parity.
+refine {|
+  encode x := encode (y_parity_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_y_parity x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'y_parity_value' := e ]}" :=
+  {| y_parity_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_y_parity : Inhabited (y_parity) := { inhabitant := {| y_parity_value := inhabitant
+|} }.
+
+
+Definition y_parity_valid (x : y_parity) : Prop :=
+0 <= x.(y_parity_value) /\ x.(y_parity_value) <= 1.
+
+Record merkle_depth := { merkle_depth_value : Z; }.
+Arguments merkle_depth : clear implicits.
+#[export]
+Instance Decidable_eq_merkle_depth : EqDecision merkle_depth.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_merkle_depth : Countable merkle_depth.
+refine {|
+  encode x := encode (merkle_depth_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_merkle_depth x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'merkle_depth_value' := e ]}" :=
+  {| merkle_depth_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_merkle_depth : Inhabited (merkle_depth) := {
+  inhabitant := {| merkle_depth_value := inhabitant
+|} }.
+
+
+Definition merkle_depth_valid (x : merkle_depth) : Prop :=
+0 <= x.(merkle_depth_value) /\ x.(merkle_depth_value) <= 64.
+
+Record opcode := { opcode_value : Z; }.
+Arguments opcode : clear implicits.
+#[export]
+Instance Decidable_eq_opcode : EqDecision opcode.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_opcode : Countable opcode.
+refine {|
+  encode x := encode (opcode_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_opcode x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'opcode_value' := e ]}" := {| opcode_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_opcode : Inhabited (opcode) := { inhabitant := {| opcode_value := inhabitant |} }.
+
+
+Definition opcode_valid (x : opcode) : Prop :=
+0 <= x.(opcode_value) /\ x.(opcode_value) <= 255.
+
+Record precompile_id := { precompile_id_value : Z; }.
+Arguments precompile_id : clear implicits.
+#[export]
+Instance Decidable_eq_precompile_id : EqDecision precompile_id.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_precompile_id : Countable precompile_id.
+refine {|
+  encode x := encode (precompile_id_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_precompile_id x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'precompile_id_value' := e ]}" :=
+  {| precompile_id_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_precompile_id : Inhabited (precompile_id) := {
+  inhabitant := {| precompile_id_value := inhabitant
+|} }.
+
+
+Definition precompile_id_valid (x : precompile_id) : Prop :=
+1 <= x.(precompile_id_value) /\ x.(precompile_id_value) <= 256.
+
+Record blake2_rounds := { blake2_rounds_value : Z; }.
+Arguments blake2_rounds : clear implicits.
+#[export]
+Instance Decidable_eq_blake2_rounds : EqDecision blake2_rounds.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_blake2_rounds : Countable blake2_rounds.
+refine {|
+  encode x := encode (blake2_rounds_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_blake2_rounds x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'blake2_rounds_value' := e ]}" :=
+  {| blake2_rounds_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_blake2_rounds : Inhabited (blake2_rounds) := {
+  inhabitant := {| blake2_rounds_value := inhabitant
+|} }.
+
+
+Definition blake2_rounds_valid (x : blake2_rounds) : Prop :=
+0 <= x.(blake2_rounds_value) /\ x.(blake2_rounds_value) <= (2 ^ 32 - 1).
+
+Record bls_discount := { bls_discount_value : Z; }.
+Arguments bls_discount : clear implicits.
+#[export]
+Instance Decidable_eq_bls_discount : EqDecision bls_discount.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_bls_discount : Countable bls_discount.
+refine {|
+  encode x := encode (bls_discount_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_bls_discount x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'bls_discount_value' := e ]}" :=
+  {| bls_discount_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_bls_discount : Inhabited (bls_discount) := {
+  inhabitant := {| bls_discount_value := inhabitant
+|} }.
+
+
+Definition bls_discount_valid (x : bls_discount) : Prop :=
+0 <= x.(bls_discount_value) /\ x.(bls_discount_value) <= (2 ^ 16 - 1).
+
+Record bloom_bit_index := { bloom_bit_index_value : Z; }.
+Arguments bloom_bit_index : clear implicits.
+#[export]
+Instance Decidable_eq_bloom_bit_index : EqDecision bloom_bit_index.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_bloom_bit_index : Countable bloom_bit_index.
+refine {|
+  encode x := encode (bloom_bit_index_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_bloom_bit_index x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'bloom_bit_index_value' := e ]}" :=
+  {| bloom_bit_index_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_bloom_bit_index : Inhabited (bloom_bit_index) := {
+  inhabitant := {| bloom_bit_index_value := inhabitant
+|} }.
+
+
+Definition bloom_bit_index_valid (x : bloom_bit_index) : Prop :=
+0 <= x.(bloom_bit_index_value) /\ x.(bloom_bit_index_value) <= 2047.
+
+Record bloom_limb_index := { bloom_limb_index_value : Z; }.
+Arguments bloom_limb_index : clear implicits.
+#[export]
+Instance Decidable_eq_bloom_limb_index : EqDecision bloom_limb_index.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_bloom_limb_index : Countable bloom_limb_index.
+refine {|
+  encode x := encode (bloom_limb_index_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_bloom_limb_index x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'bloom_limb_index_value' := e ]}" :=
+  {| bloom_limb_index_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_bloom_limb_index : Inhabited (bloom_limb_index) := {
+  inhabitant := {| bloom_limb_index_value := inhabitant
+|} }.
+
+
+Definition bloom_limb_index_valid (x : bloom_limb_index) : Prop :=
+0 <= x.(bloom_limb_index_value) /\ x.(bloom_limb_index_value) <= 31.
+
+Record bloom_limb_bit := { bloom_limb_bit_value : Z; }.
+Arguments bloom_limb_bit : clear implicits.
+#[export]
+Instance Decidable_eq_bloom_limb_bit : EqDecision bloom_limb_bit.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_bloom_limb_bit : Countable bloom_limb_bit.
+refine {|
+  encode x := encode (bloom_limb_bit_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_bloom_limb_bit x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'bloom_limb_bit_value' := e ]}" :=
+  {| bloom_limb_bit_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_bloom_limb_bit : Inhabited (bloom_limb_bit) := {
+  inhabitant := {| bloom_limb_bit_value := inhabitant
+|} }.
+
+
+Definition bloom_limb_bit_valid (x : bloom_limb_bit) : Prop :=
+0 <= x.(bloom_limb_bit_value) /\ x.(bloom_limb_bit_value) <= 63.
+
+Record ancestor_index := { ancestor_index_value : Z; }.
+Arguments ancestor_index : clear implicits.
+#[export]
+Instance Decidable_eq_ancestor_index : EqDecision ancestor_index.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_ancestor_index : Countable ancestor_index.
+refine {|
+  encode x := encode (ancestor_index_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_ancestor_index x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'ancestor_index_value' := e ]}" :=
+  {| ancestor_index_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_ancestor_index : Inhabited (ancestor_index) := {
+  inhabitant := {| ancestor_index_value := inhabitant
+|} }.
+
+
+Definition ancestor_index_valid (x : ancestor_index) : Prop :=
+0 <= x.(ancestor_index_value) /\ x.(ancestor_index_value) <= 255.
+
+Record protocol_divisor := { protocol_divisor_value : Z; }.
+Arguments protocol_divisor : clear implicits.
+#[export]
+Instance Decidable_eq_protocol_divisor : EqDecision protocol_divisor.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_protocol_divisor : Countable protocol_divisor.
+refine {|
+  encode x := encode (protocol_divisor_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_protocol_divisor x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'protocol_divisor_value' := e ]}" :=
+  {| protocol_divisor_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_protocol_divisor : Inhabited (protocol_divisor) := {
+  inhabitant := {| protocol_divisor_value := inhabitant
+|} }.
+
+
+Definition protocol_divisor_valid (x : protocol_divisor) : Prop :=
+1 <= x.(protocol_divisor_value) /\ x.(protocol_divisor_value) <= 256.
 
 Definition source_pointer : Type := byte_quantity.
 
@@ -411,7 +1027,38 @@ Definition code_pointer : Type := byte_quantity.
 
 Definition code_length : Type := byte_quantity.
 
-Definition gas_divisor : Type := Z.
+Record gas_divisor := { gas_divisor_value : Z; }.
+Arguments gas_divisor : clear implicits.
+#[export]
+Instance Decidable_eq_gas_divisor : EqDecision gas_divisor.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_gas_divisor : Countable gas_divisor.
+refine {|
+  encode x := encode (gas_divisor_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_gas_divisor x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'gas_divisor_value' := e ]}" :=
+  {| gas_divisor_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_gas_divisor : Inhabited (gas_divisor) := {
+  inhabitant := {| gas_divisor_value := inhabitant
+|} }.
+
+
+Definition gas_divisor_valid (x : gas_divisor) : Prop :=
+1 <= x.(gas_divisor_value) /\ x.(gas_divisor_value) <= 1000.
 
 Inductive ByteSource :=
   | StatelessInputSource
@@ -2658,8 +3305,8 @@ Instance dummy_CallKind : Inhabited CallKind := { inhabitant := Call }.
 
 Record Message := {
   Message_caller : address_typ;
-  Message_address : address_typ;
   Message_code_address : address_typ;
+  Message_address : address_typ;
   Message_value : word;
   Message_is_static : bool;
   Message_depth : frame_depth;
@@ -2680,7 +3327,7 @@ Defined.
 #[export]
 Instance Countable_Message : Countable Message.
 refine {|
-  encode x := encode (Message_caller x, Message_address x, Message_code_address x, Message_value x, Message_is_static x, Message_depth x);
+  encode x := encode (Message_caller x, Message_code_address x, Message_address x, Message_value x, Message_is_static x, Message_depth x);
   decode x := '(x0, x1, x2, x3, x4, x5) ← decode x;
               mret (Build_Message x0 x1 x2 x3 x4 x5)
 |}.
@@ -2693,10 +3340,10 @@ Defined.
 Notation "{[ r 'with' 'Message_caller' := e ]}" :=
   match r with Build_Message _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) =>
     Build_Message e f1 f2 f3 f4 f5 end (at level 1).
-Notation "{[ r 'with' 'Message_address' := e ]}" :=
+Notation "{[ r 'with' 'Message_code_address' := e ]}" :=
   match r with Build_Message (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) =>
     Build_Message f0 e f2 f3 f4 f5 end (at level 1).
-Notation "{[ r 'with' 'Message_code_address' := e ]}" :=
+Notation "{[ r 'with' 'Message_address' := e ]}" :=
   match r with Build_Message (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) =>
     Build_Message f0 f1 e f3 f4 f5 end (at level 1).
 Notation "{[ r 'with' 'Message_value' := e ]}" :=
@@ -2712,8 +3359,8 @@ Notation "{[ r 'with' 'Message_depth' := e ]}" :=
 Instance dummy_Message : Inhabited (Message) := {
   inhabitant := {|
     Message_caller := inhabitant;
-    Message_address := inhabitant;
     Message_code_address := inhabitant;
+    Message_address := inhabitant;
     Message_value := inhabitant;
     Message_is_static := inhabitant;
     Message_depth := inhabitant
@@ -3122,7 +3769,38 @@ Defined.
 Instance dummy_EnvField : Inhabited EnvField := { inhabitant := F_Number }.
 
 
-Definition trie_path_len : Type := Z.
+Record trie_path_len := { trie_path_len_value : Z; }.
+Arguments trie_path_len : clear implicits.
+#[export]
+Instance Decidable_eq_trie_path_len : EqDecision trie_path_len.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_trie_path_len : Countable trie_path_len.
+refine {|
+  encode x := encode (trie_path_len_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_trie_path_len x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'trie_path_len_value' := e ]}" :=
+  {| trie_path_len_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_trie_path_len : Inhabited (trie_path_len) := {
+  inhabitant := {| trie_path_len_value := inhabitant
+|} }.
+
+
+Definition trie_path_len_valid (x : trie_path_len) : Prop :=
+0 <= x.(trie_path_len_value) /\ x.(trie_path_len_value) <= 64.
 
 Record TriePath := {
   TriePath_data : bits 256;
@@ -3381,9 +4059,38 @@ Instance Countable_NodeRef : Countable NodeRef := {|
 #[export]
 Instance dummy_NodeRef : Inhabited (NodeRef) := { inhabitant := EmptyRef inhabitant }.
 
-Definition trie_path_cursor : Type := Z.
+Record trie_path_cursor := { trie_path_cursor_value : Z; }.
+Arguments trie_path_cursor : clear implicits.
+#[export]
+Instance Decidable_eq_trie_path_cursor : EqDecision trie_path_cursor.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_trie_path_cursor : Countable trie_path_cursor.
+refine {|
+  encode x := encode (trie_path_cursor_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_trie_path_cursor x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition trie_fuel : Type := Z.
+Notation "{[ r 'with' 'trie_path_cursor_value' := e ]}" :=
+  {| trie_path_cursor_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_trie_path_cursor : Inhabited (trie_path_cursor) := {
+  inhabitant := {| trie_path_cursor_value := inhabitant
+|} }.
+
+
+Definition trie_path_cursor_valid (x : trie_path_cursor) : Prop :=
+0 <= x.(trie_path_cursor_value) /\ x.(trie_path_cursor_value) <= 64.
 
 Record ScaledBlobValue := {
   ScaledBlobValue_whole : word;
@@ -3795,7 +4502,71 @@ Instance dummy_TransactionCosts : Inhabited (TransactionCosts) := {
 |} }.
 
 
-Definition trie_depth : Type := Z.
+Record trie_depth := { trie_depth_value : Z; }.
+Arguments trie_depth : clear implicits.
+#[export]
+Instance Decidable_eq_trie_depth : EqDecision trie_depth.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_trie_depth : Countable trie_depth.
+refine {|
+  encode x := encode (trie_depth_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_trie_depth x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'trie_depth_value' := e ]}" :=
+  {| trie_depth_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_trie_depth : Inhabited (trie_depth) := {
+  inhabitant := {| trie_depth_value := inhabitant
+|} }.
+
+
+Definition trie_depth_valid (x : trie_depth) : Prop :=
+0 <= x.(trie_depth_value) /\ x.(trie_depth_value) <= 63.
+
+Record hex_prefix_cursor := { hex_prefix_cursor_value : Z; }.
+Arguments hex_prefix_cursor : clear implicits.
+#[export]
+Instance Decidable_eq_hex_prefix_cursor : EqDecision hex_prefix_cursor.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_hex_prefix_cursor : Countable hex_prefix_cursor.
+refine {|
+  encode x := encode (hex_prefix_cursor_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_hex_prefix_cursor x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'hex_prefix_cursor_value' := e ]}" :=
+  {| hex_prefix_cursor_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_hex_prefix_cursor : Inhabited (hex_prefix_cursor) := {
+  inhabitant := {| hex_prefix_cursor_value := inhabitant
+|} }.
+
+
+Definition hex_prefix_cursor_valid (x : hex_prefix_cursor) : Prop :=
+0 <= x.(hex_prefix_cursor_value) /\ x.(hex_prefix_cursor_value) <= 65.
 
 Definition BranchRefs : Type := vec NodeRef 16.
 
@@ -4148,7 +4919,38 @@ Instance dummy_RlpIndexItem : Inhabited (RlpIndexItem) := {
 |} }.
 
 
-Definition rlp_index_byte_width : Type := Z.
+Record rlp_index_byte_width := { rlp_index_byte_width_value : Z; }.
+Arguments rlp_index_byte_width : clear implicits.
+#[export]
+Instance Decidable_eq_rlp_index_byte_width : EqDecision rlp_index_byte_width.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_rlp_index_byte_width : Countable rlp_index_byte_width.
+refine {|
+  encode x := encode (rlp_index_byte_width_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_rlp_index_byte_width x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'rlp_index_byte_width_value' := e ]}" :=
+  {| rlp_index_byte_width_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_rlp_index_byte_width : Inhabited (rlp_index_byte_width) := {
+  inhabitant := {| rlp_index_byte_width_value := inhabitant
+|} }.
+
+
+Definition rlp_index_byte_width_valid (x : rlp_index_byte_width) : Prop :=
+1 <= x.(rlp_index_byte_width_value) /\ x.(rlp_index_byte_width_value) <= 8.
 
 Record StatelessInputRef := {
   StatelessInputRef_new_payload_request : ByteSlice;
@@ -4992,6 +5794,8 @@ Notation "{[ r 'with' 'GuestValidation_valid' := e ]}" :=
 Instance dummy_GuestValidation : Inhabited (GuestValidation) := {
   inhabitant := {| GuestValidation_input_ref := inhabitant; GuestValidation_valid := inhabitant
 |} }.
+
+
 
 
 

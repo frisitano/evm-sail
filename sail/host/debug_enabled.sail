@@ -28,7 +28,7 @@ function debug_account_storage_root(a : address) -> hash =
 function debug_rebuild_state_root() -> hash = {
     var remaining : item_count = acct_block_count();
     var accounts : list(TrieUpdate) = [||];
-    while remaining != 0 do {
+    while remaining != 0 termination_measure(remaining) do {
         remaining = protocol_quantity_decrement(remaining);
         match acct_block_row(remaining) {
             Some(entry) => accounts = account_update(entry, storage_updates(entry.addr)) :: accounts,

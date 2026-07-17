@@ -16,7 +16,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -54,7 +53,7 @@ open BlockError
 def inline_node_segment (node : InlineNode) : Bytes :=
   (bytes_list (inline_node_to_list node) node.len)
 
-def branch_refs_get (children : (Vector NodeRef 16)) (index : (BitVec 4)) : NodeRef :=
+def branch_refs_get (children : BranchRefs) (index : nibble) : NodeRef :=
   match index with
   | 0x0 => (GetElem?.getElem! children 0)
   | 0x1 => (GetElem?.getElem! children 1)
@@ -73,7 +72,7 @@ def branch_refs_get (children : (Vector NodeRef 16)) (index : (BitVec 4)) : Node
   | 0xE => (GetElem?.getElem! children 14)
   | _ => (GetElem?.getElem! children 15)
 
-def branch_refs_set (children : (Vector NodeRef 16)) (index : (BitVec 4)) (value : NodeRef) : (Vector NodeRef 16) :=
+def branch_refs_set (children : BranchRefs) (index : nibble) (value : NodeRef) : BranchRefs :=
   let result := children
   match index with
   | 0x0 => (vectorUpdate result 0 value)
@@ -93,7 +92,7 @@ def branch_refs_set (children : (Vector NodeRef 16)) (index : (BitVec 4)) (value
   | 0xE => (vectorUpdate result 14 value)
   | _ => (vectorUpdate result 15 value)
 
-def node_ref_size (r : NodeRef) : byte_quantity :=
+def node_ref_size (r : NodeRef) : byte_length :=
   match r with
   | .EmptyRef () => BYTE_ONE
   | .InlineRef node => node.len
@@ -110,7 +109,7 @@ def child_ref (encoded : EvmByteSlice) : SailM NodeRef := do
   then (pure (InlineRef (← (inline_node_from_slice encoded))))
   else (pure (HashRef (← (keccak256_slice encoded))))
 
-def branch_mask_for (index : (BitVec 4)) : (BitVec 16) :=
+def branch_mask_for (index : nibble) : (BitVec 16) :=
   match index with
   | 0x0 => 0x0001#16
   | 0x1 => 0x0002#16
@@ -129,10 +128,10 @@ def branch_mask_for (index : (BitVec 4)) : (BitVec 16) :=
   | 0xE => 0x4000#16
   | _ => 0x8000#16
 
-def branch_mask_has (mask : (BitVec 16)) (index : (BitVec 4)) : Bool :=
+def branch_mask_has (mask : (BitVec 16)) (index : nibble) : Bool :=
   ((mask &&& (branch_mask_for index)) != 0x0000#16)
 
-def branch_mask_set (mask : (BitVec 16)) (index : (BitVec 4)) : (BitVec 16) :=
+def branch_mask_set (mask : (BitVec 16)) (index : nibble) : (BitVec 16) :=
   (mask ||| (branch_mask_for index))
 
 def leaf_child_ref (key : TriePath) (value : EvmByteSlice) : SailM NodeRef := do
@@ -161,8 +160,8 @@ def extension_child_ref (key : TriePath) (childref : NodeRef) : SailM NodeRef :=
   (scratch_rewind mark)
   (pure result)
 
-def branch_child_ref (mask : (BitVec 16)) (children : (Vector NodeRef 16)) : SailM NodeRef := do
-  let content_len : byte_length := BYTE_ONE
+def branch_child_ref (mask : (BitVec 16)) (children : BranchRefs) : SailM NodeRef := do
+  let content_len : byte_quantity := BYTE_ONE
   let child_bit : (BitVec 16) := 0x0001#16
   let (child_bit, content_len) ← (( do
     let loop_i_lower := 0
@@ -219,7 +218,7 @@ def node_to_ref (node : EvmByteSlice) : SailM NodeRef := do
       else (pure (HashRef (← (keccak256_slice node)))))
 
 def merge_ext_node (evm_prefix' : TriePath) (childnode : EvmByteSlice) : SailM NodeRef := do
-  if (((path_len evm_prefix') == 0) : Bool)
+  if ((((path_len evm_prefix')).value == 0) : Bool)
   then (node_to_ref childnode)
   else
     (do
@@ -235,7 +234,7 @@ def merge_ext_node (evm_prefix' : TriePath) (childnode : EvmByteSlice) : SailM N
           | _ => (extension_child_ref evm_prefix' (← (node_to_ref childnode)))))
 
 def merge_ext_ref (evm_prefix' : TriePath) (childref : NodeRef) : SailM NodeRef := do
-  if (((path_len evm_prefix') == 0) : Bool)
+  if ((((path_len evm_prefix')).value == 0) : Bool)
   then (pure childref)
   else
     (do

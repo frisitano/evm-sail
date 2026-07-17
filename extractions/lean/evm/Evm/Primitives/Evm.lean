@@ -8,7 +8,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -62,18 +61,20 @@ def num_of_CallKind (arg_ : CallKind) : Int :=
   | .StaticCall => 3
 
 def undefined_Message (_ : Unit) : SailM Message := do
-  (pure { caller := ← (undefined_bitvector 160)
-          code_address := ← (undefined_bitvector 160)
-          address := ← (undefined_bitvector 160)
-          value := ← (undefined_bitvector 256)
-          is_static := ← (undefined_bool ())
-          depth := ← (undefined_range 0 1024) })
+  (pure { caller := ← (undefined_bitvector 160),
+          code_address := ← (undefined_bitvector 160),
+          address := ← (undefined_bitvector 160),
+          value := ← (undefined_bitvector 256),
+          is_static := ← (undefined_bool ()),
+          depth := ← do
+              let semanticField ← (undefined_range 0 1024)
+              pure (⟨semanticField⟩) })
 
 def DEFAULT_MESSAGE : Message :=
-  { caller := ZERO_ADDR
-    address := ZERO_ADDR
-    code_address := ZERO_ADDR
-    value := ZERO_WORD
-    is_static := false
-    depth := 0 }
+  { caller := ZERO_ADDR,
+    address := ZERO_ADDR,
+    code_address := ZERO_ADDR,
+    value := ZERO_WORD,
+    is_static := false,
+    depth := ⟨0⟩ }
 

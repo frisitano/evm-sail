@@ -8,7 +8,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -69,7 +68,7 @@ def to_bytes_le {n : _} (b : (BitVec (8 * n))) : (Vector (BitVec 8) n) := Id.run
   let mut loop_vars := res
   for i in [loop_i_lower:loop_i_upper:1]i do
     let res := loop_vars
-    loop_vars := (vectorUpdate res i (Sail.BitVec.extractLsb b ((8 *i i) +i 7) (8 *i i)))
+    loop_vars := (vectorUpdate res i (Sail.BitVec.extractLsb b ((8 *i i) + 7) (8 *i i)))
   (pure loop_vars)
 
 /-- Type quantifiers: n : Nat, n > 0 -/
@@ -80,6 +79,6 @@ def from_bytes_le {n : _} (v : (Vector (BitVec 8) n)) : (BitVec (8 * n)) := Id.r
   let mut loop_vars := res
   for i in [loop_i_lower:loop_i_upper:1]i do
     let res := loop_vars
-    loop_vars := (Sail.BitVec.updateSubrange res ((8 *i i) +i 7) (8 *i i) (GetElem?.getElem! v i))
+    loop_vars := (Sail.BitVec.updateSubrange res ((8 *i i) + 7) (8 *i i) (GetElem?.getElem! v i))
   (pure loop_vars)
 

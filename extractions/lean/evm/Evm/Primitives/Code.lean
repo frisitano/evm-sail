@@ -8,7 +8,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -49,6 +48,6 @@ def EMPTY_JUMPDEST_CHUNK : JumpdestChunk :=
 def EMPTY_JUMPDEST_REF : JumpdestRef := 0x0000000000000000#64
 
 def EMPTY_CODE : Code :=
-  { bytes := EMPTY_SLICE
+  { bytes := EMPTY_SLICE,
     jumpdests := EMPTY_JUMPDEST_REF }
 

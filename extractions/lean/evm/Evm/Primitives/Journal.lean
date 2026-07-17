@@ -12,7 +12,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -48,8 +47,16 @@ open ByteSource
 open BlockError
 
 def undefined_StateCheckpoint (_ : Unit) : SailM StateCheckpoint := do
-  (pure { journal := ← (undefined_range 0 ((2 ^i 64) -i 1))
-          accounts := ← (undefined_range 0 ((2 ^i 64) -i 1))
-          storage := ← (undefined_range 0 ((2 ^i 64) -i 1))
-          logs := ← (undefined_range 0 ((2 ^i 64) -i 1)) })
+  (pure { journal := ← do
+              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
+              pure (⟨semanticField⟩),
+          accounts := ← do
+              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
+              pure (⟨semanticField⟩),
+          storage := ← do
+              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
+              pure (⟨semanticField⟩),
+          logs := ← do
+              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
+              pure (⟨semanticField⟩) })
 

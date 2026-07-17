@@ -9,7 +9,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 namespace Defs
@@ -20,6 +19,8 @@ inductive byte_quantity where
   | ByteQuantity (_ : Nat)
   deriving Inhabited, BEq, Repr
   open byte_quantity
+
+abbrev bits k_n := (BitVec k_n)
 
 inductive gas_constant where
   | GasConstant (_ : Nat)
@@ -45,7 +46,16 @@ inductive Fork where | Frontier | Homestead | Byzantium | Constantinople | Istan
   deriving BEq, Inhabited, Repr
   open Fork
 
-abbrev bits k_n := (BitVec k_n)
+structure protocol_quantity where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace protocol_quantity
+def Valid (x : protocol_quantity) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ (2 ^ 64 - 1)
+end protocol_quantity
+
+abbrev protocol_fork_index := protocol_quantity
 
 /-- Type quantifiers: k_a : Type -/
 inductive option (k_a : Type) where
@@ -74,11 +84,23 @@ structure WordDivMod where
   remainder : word
   deriving BEq, Inhabited, Repr
 
-abbrev limb_bit_count := Nat
+structure limb_bit_count where
+  value : Nat
+  deriving Inhabited, BEq, Repr
 
-abbrev word_bit_count := Nat
+namespace limb_bit_count
+def Valid (x : limb_bit_count) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 64
+end limb_bit_count
 
-abbrev protocol_quantity := Nat
+structure word_bit_count where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace word_bit_count
+def Valid (x : word_bit_count) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 256
+end word_bit_count
 
 abbrev account_nonce := protocol_quantity
 
@@ -94,8 +116,6 @@ abbrev blob_fee_update_fraction := protocol_quantity
 
 abbrev chain_identifier := protocol_quantity
 
-abbrev protocol_fork_index := protocol_quantity
-
 abbrev slot_number := protocol_quantity
 
 abbrev withdrawal_index := protocol_quantity
@@ -108,39 +128,158 @@ abbrev item_count := protocol_quantity
 
 abbrev item_index := protocol_quantity
 
-abbrev frame_depth := Nat
+structure frame_depth where
+  value : Nat
+  deriving Inhabited, BEq, Repr
 
-abbrev push_width := Nat
+namespace frame_depth
+def Valid (x : frame_depth) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 1024
+end frame_depth
 
-abbrev operand_stack_height := Nat
+structure push_width where
+  value : Nat
+  deriving Inhabited, BEq, Repr
 
-abbrev stack_index := Nat
+namespace push_width
+def Valid (x : push_width) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 32
+end push_width
 
-abbrev stack_operation_index := Nat
+structure operand_stack_height where
+  value : Nat
+  deriving Inhabited, BEq, Repr
 
-abbrev log_topic_count := Nat
+namespace operand_stack_height
+def Valid (x : operand_stack_height) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 1024
+end operand_stack_height
 
-abbrev y_parity := Nat
+structure stack_index where
+  value : Nat
+  deriving Inhabited, BEq, Repr
 
-abbrev merkle_depth := Nat
+namespace stack_index
+def Valid (x : stack_index) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 16
+end stack_index
 
-abbrev opcode := Nat
+structure stack_operation_index where
+  value : Nat
+  deriving Inhabited, BEq, Repr
 
-abbrev precompile_id := Nat
+namespace stack_operation_index
+def Valid (x : stack_operation_index) : Prop :=
+  1 ≤ x.value ∧ x.value ≤ 16
+end stack_operation_index
 
-abbrev blake2_rounds := Nat
+structure log_topic_count where
+  value : Nat
+  deriving Inhabited, BEq, Repr
 
-abbrev bls_discount := Nat
+namespace log_topic_count
+def Valid (x : log_topic_count) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 4
+end log_topic_count
 
-abbrev bloom_bit_index := Nat
+structure y_parity where
+  value : Nat
+  deriving Inhabited, BEq, Repr
 
-abbrev bloom_limb_index := Nat
+namespace y_parity
+def Valid (x : y_parity) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 1
+end y_parity
 
-abbrev bloom_limb_bit := Nat
+structure merkle_depth where
+  value : Nat
+  deriving Inhabited, BEq, Repr
 
-abbrev ancestor_index := Nat
+namespace merkle_depth
+def Valid (x : merkle_depth) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 64
+end merkle_depth
 
-abbrev protocol_divisor := Nat
+structure opcode where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace opcode
+def Valid (x : opcode) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 255
+end opcode
+
+structure precompile_id where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace precompile_id
+def Valid (x : precompile_id) : Prop :=
+  1 ≤ x.value ∧ x.value ≤ 256
+end precompile_id
+
+structure blake2_rounds where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace blake2_rounds
+def Valid (x : blake2_rounds) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ (2 ^ 32 - 1)
+end blake2_rounds
+
+structure bls_discount where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace bls_discount
+def Valid (x : bls_discount) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ (2 ^ 16 - 1)
+end bls_discount
+
+structure bloom_bit_index where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace bloom_bit_index
+def Valid (x : bloom_bit_index) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 2047
+end bloom_bit_index
+
+structure bloom_limb_index where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace bloom_limb_index
+def Valid (x : bloom_limb_index) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 31
+end bloom_limb_index
+
+structure bloom_limb_bit where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace bloom_limb_bit
+def Valid (x : bloom_limb_bit) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 63
+end bloom_limb_bit
+
+structure ancestor_index where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace ancestor_index
+def Valid (x : ancestor_index) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 255
+end ancestor_index
+
+structure protocol_divisor where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace protocol_divisor
+def Valid (x : protocol_divisor) : Prop :=
+  1 ≤ x.value ∧ x.value ≤ 256
+end protocol_divisor
 
 abbrev source_pointer := byte_quantity
 
@@ -154,7 +293,14 @@ abbrev code_pointer := byte_quantity
 
 abbrev code_length := byte_quantity
 
-abbrev gas_divisor := Nat
+structure gas_divisor where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace gas_divisor
+def Valid (x : gas_divisor) : Prop :=
+  1 ≤ x.value ∧ x.value ≤ 1000
+end gas_divisor
 
 inductive ByteSource where | StatelessInputSource | EvmMemorySource | CodeSource | LogDataSource | OutputSource | ScratchSource
   deriving BEq, Inhabited, Repr
@@ -512,7 +658,14 @@ inductive EnvField where | F_Number | F_Timestamp | F_Coinbase | F_BaseFee | F_C
   deriving BEq, Inhabited, Repr
   open EnvField
 
-abbrev trie_path_len := Nat
+structure trie_path_len where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace trie_path_len
+def Valid (x : trie_path_len) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 64
+end trie_path_len
 
 structure TriePath where
   data : (BitVec 256)
@@ -558,9 +711,14 @@ inductive NodeRef where
   deriving Inhabited, BEq, Repr
   open NodeRef
 
-abbrev trie_path_cursor := Nat
+structure trie_path_cursor where
+  value : Nat
+  deriving Inhabited, BEq, Repr
 
-abbrev trie_fuel := Nat
+namespace trie_path_cursor
+def Valid (x : trie_path_cursor) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 64
+end trie_path_cursor
 
 structure ScaledBlobValue where
   whole : word
@@ -669,7 +827,23 @@ structure TransactionCosts where
   upfront : word
   deriving BEq, Inhabited, Repr
 
-abbrev trie_depth := Nat
+structure trie_depth where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace trie_depth
+def Valid (x : trie_depth) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 63
+end trie_depth
+
+structure hex_prefix_cursor where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace hex_prefix_cursor
+def Valid (x : hex_prefix_cursor) : Prop :=
+  0 ≤ x.value ∧ x.value ≤ 65
+end hex_prefix_cursor
 
 abbrev BranchRefs := (Vector NodeRef 16)
 
@@ -724,7 +898,14 @@ structure RlpIndexItem where
   next_key : (Option TriePath)
   deriving BEq, Inhabited, Repr
 
-abbrev rlp_index_byte_width := Nat
+structure rlp_index_byte_width where
+  value : Nat
+  deriving Inhabited, BEq, Repr
+
+namespace rlp_index_byte_width
+def Valid (x : rlp_index_byte_width) : Prop :=
+  1 ≤ x.value ∧ x.value ≤ 8
+end rlp_index_byte_width
 
 structure StatelessInputRef where
   new_payload_request : EvmByteSlice

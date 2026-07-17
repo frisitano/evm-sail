@@ -153,7 +153,7 @@ function fake_exponential(factor : word, numerator : blob_gas, denominator : blo
     var i : item_index = 1;
     var output : ScaledBlobValue = struct { whole = ZERO_WORD, remainder = 0 };
     var term : ScaledBlobValue = struct { whole = factor, remainder = 0 };
-    while word_nonzero(term.whole) | (term.remainder != 0) do {
+    while word_nonzero(term.whole) | (term.remainder != 0) termination_measure(2 ^ 64 - i) do {
         output = match scaled_blob_add(output, term, denominator) {
             Some(sum) => sum,
             None() => throw InvalidBlock(ExecutionInvalid),

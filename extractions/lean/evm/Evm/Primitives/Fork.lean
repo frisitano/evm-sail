@@ -12,7 +12,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -85,7 +84,8 @@ def num_of_Fork (arg_ : Fork) : Int :=
   | .Amsterdam => 12
 
 /-- Type quantifiers: idx : Nat, 0 ≤ idx ∧ idx ≤ (2 ^ 64 - 1) -/
-def fork_of_protocol_index (idx : Nat) : Fork :=
+def fork_of_protocol_index (idx : protocol_fork_index) : Fork :=
+  let idx := (idx).value
   if ((20 ≤b idx) : Bool)
   then Amsterdam
   else

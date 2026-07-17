@@ -15,7 +15,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -81,10 +80,10 @@ def num_of_EnvField (arg_ : EnvField) : Int :=
   | .F_GasPrice => 8
   | .F_SlotNumber => 9
 
-def k_env (f : EnvField) : SailM (BitVec 256) := do
+def k_env (f : EnvField) : SailM word := do
   match f with
-  | .F_Number => (word_of_nat (← readReg k_header).number)
-  | .F_Timestamp => (word_of_nat (← readReg k_header).timestamp)
+  | .F_Number => (word_of_nat ((← readReg k_header).number).value)
+  | .F_Timestamp => (word_of_nat ((← readReg k_header).timestamp).value)
   | .F_Coinbase => (pure (address_to_word (← readReg k_header).fee_recipient))
   | .F_BaseFee => (pure (← readReg k_header).base_fee)
   | .F_ChainId => (word_of_nat (← readReg k_chain_id))
@@ -92,13 +91,13 @@ def k_env (f : EnvField) : SailM (BitVec 256) := do
   | .F_PrevRandao => (pure (← readReg k_header).prev_randao)
   | .F_Origin => (pure (address_to_word (← readReg k_tx).origin))
   | .F_GasPrice => (pure (← readReg k_tx).gas_price)
-  | .F_SlotNumber => (word_of_nat (← readReg k_header).slot_number)
+  | .F_SlotNumber => (word_of_nat ((← readReg k_header).slot_number).value)
 
-def k_coinbase (_ : Unit) : SailM (BitVec 160) := do
+def k_coinbase (_ : Unit) : SailM address := do
   (pure (← readReg k_header).fee_recipient)
 
-def k_blockhash (number_word : (BitVec 256)) : SailM (BitVec 256) := do
-  let current ← do (pure (← readReg k_header).number)
+def k_blockhash (number_word : word) : SailM hash := do
+  let current ← do (pure ((← readReg k_header).number).value)
   let number := (BitVec.toNatInt number_word)
   if ((number <b current) : Bool)
   then
@@ -111,28 +110,29 @@ def k_blockhash (number_word : (BitVec 256)) : SailM (BitVec 256) := do
           then sailThrow ((InvalidBlock WitnessDeficient))
           else
             (do
-              let index : ancestor_index := (distance -i 1)
-              (ancestor_hash_read index)))
+              let index : Nat := (distance -i 1)
+              (ancestor_hash_read ⟨index⟩)))
       else (pure ZERO_WORD))
   else (pure ZERO_WORD)
 
-def k_blobhash (index_word : (BitVec 256)) : SailM (BitVec 256) := do
-  let count ← do (pure (← readReg k_tx).blob_hashes.count)
+def k_blobhash (index_word : word) : SailM word := do
+  let count ← do (pure ((← readReg k_tx).blob_hashes.count).value)
   let index := (BitVec.toNatInt index_word)
   if ((index <b count) : Bool)
   then
     (do
-      let offset := ((33 *i index) +i 1)
+      let offset := ((33 *i index) + 1)
       if ((offset ≤b BYTE_QUANTITY_MAX) : Bool)
       then
         (slice_load_n (← readReg k_tx).blob_hashes.bytes (ByteQuantity offset) WORD_BYTE_LENGTH)
       else (pure ZERO_WORD))
   else (pure ZERO_WORD)
 
-/-- Type quantifiers: nonce : Nat, 0 ≤ nonce ∧ nonce ≤ (2 ^ 64 - 1) -/
-def k_create_addr (a : (BitVec 160)) (nonce : Nat) : SailM (BitVec 160) := do
-  (create_address a nonce)
+/-- Type quantifiers: k_ex161140_ : Nat, 0 ≤ k_ex161140_ ∧ k_ex161140_ ≤ (2 ^ 64 - 1) -/
+def k_create_addr (a : address) (nonce : account_nonce) : SailM address := do
+  let nonce := (nonce).value
+  (create_address a ⟨nonce⟩)
 
-def k_create2_addr (a : (BitVec 160)) (salt : (BitVec 256)) (inithash : (BitVec 256)) : SailM (BitVec 160) := do
+def k_create2_addr (a : address) (salt : word) (inithash : hash) : SailM address := do
   (create2_address a salt inithash)
 

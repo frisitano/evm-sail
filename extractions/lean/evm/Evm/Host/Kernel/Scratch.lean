@@ -11,7 +11,6 @@ set_option match.ignoreUnusedAlts true
 open Sail
 open Sail.ConcurrencyInterfaceV1
 
-noncomputable section
 namespace Evm
 
 open ConcurrencyInterfaceV1
@@ -46,11 +45,11 @@ open Bytes
 open ByteSource
 open BlockError
 
-def scratch_begin (_ : Unit) : SailM byte_quantity := do
+def scratch_begin (_ : Unit) : SailM source_pointer := do
   readReg scratch_cursor
 
-def scratch_advance (width : byte_quantity) : SailM Unit := do
-  let cursor ← (( do readReg scratch_cursor ) : SailM source_pointer )
+def scratch_advance (width : byte_length) : SailM Unit := do
+  let cursor ← (( do readReg scratch_cursor ) : SailM byte_quantity )
   if ((byte_quantity_le cursor MAX_BYTE_QUANTITY) : Bool)
   then
     (do
@@ -59,7 +58,7 @@ def scratch_advance (width : byte_quantity) : SailM Unit := do
       else assert false "scratch cursor overflow")
   else assert false "scratch cursor overflow"
 
-def scratch_push_bytes (data : (List (BitVec 8))) (len : byte_quantity) : SailM Unit := do
+def scratch_push_bytes (data : (List byte)) (len : byte_length) : SailM Unit := do
   if ((byte_quantity_not_equal len BYTE_ZERO) : Bool)
   then
     (do
@@ -75,20 +74,20 @@ def scratch_push_slice (data : EvmByteSlice) : SailM Unit := do
       (scratch_advance data.len))
   else (pure ())
 
-def scratch_finish (start : byte_quantity) : SailM EvmByteSlice := do
-  let stop ← (( do readReg scratch_cursor ) : SailM source_pointer )
+def scratch_finish (start : source_pointer) : SailM EvmByteSlice := do
+  let stop ← (( do readReg scratch_cursor ) : SailM byte_quantity )
   if ((byte_quantity_le start stop) : Bool)
   then
     (do
-      let len ← (( do (byte_quantity_sub stop start) ) : SailM byte_length )
+      let len ← (( do (byte_quantity_sub stop start) ) : SailM byte_quantity )
       (pure (byte_slice ScratchSource start len)))
   else
     (do
       assert false "scratch finish mark"
       throw Error.Exit)
 
-def scratch_rewind (mark : byte_quantity) : SailM Unit := do
-  let cursor ← (( do readReg scratch_cursor ) : SailM source_pointer )
+def scratch_rewind (mark : source_pointer) : SailM Unit := do
+  let cursor ← (( do readReg scratch_cursor ) : SailM byte_quantity )
   if ((byte_quantity_le mark cursor) : Bool)
   then
     (do

@@ -16,8 +16,9 @@
 # and the zkVM guest (harness/run.py over the zkvm/native-runner builds).
 # ===========================================================================
 
-SAIL ?= sail
+SAIL ?= $(shell bash zkvm/resolve_optimized_sail.sh)
 LAKE ?= lake
+COQC ?= coqc
 PYTHON ?= python3
 
 PROJECT             := sail/evm.sail_project
@@ -30,47 +31,8 @@ COQ_MODEL_DIR       := $(COQ_DIR)/model
 LEAN_DIR            := extractions/lean
 LEAN_MODEL_DIR      := $(LEAN_DIR)/evm
 LEAN_HOST_AXIOMS    := $(CONTRACTS_DIR)/HostAxioms.lean
-LEAN_PARTIAL_FUNCTIONS := \
-	analyze_code_from \
-	trie_walk \
-	decode_access_list_keys \
-	decode_access_list_entries \
-	decode_blob_hash_items \
-	decode_auth_tuples \
-	hex_prefix_pairs \
-	index_witness_nodes_cursor \
-	index_witness_codes_cursor \
-	decode_parent_header_fields \
-	index_witness_header_cursor \
-	bal_storage_change_run_end \
-	bal_storage_slot_changes_size \
-	bal_write_storage_slot_changes \
-	bal_storage_change_groups_size \
-	bal_write_storage_change_groups \
-	bal_storage_read_run_end \
-	bal_storage_change_seek \
-	bal_storage_read_groups_size \
-	bal_write_storage_read_groups \
-	bal_balance_run_end \
-	bal_balance_groups_size \
-	bal_write_balance_groups \
-	bal_nonce_run \
-	bal_nonce_groups_size \
-	bal_write_nonce_groups \
-	bal_code_run_end \
-	bal_code_groups_size \
-	bal_write_code_groups \
-	bal_accounts_size \
-	bal_write_accounts \
-	execute \
-	interpret \
-	run_call \
-	run_create \
-	trie_builder_close \
-	witness_child_emit \
-	witness_emit \
-	merkle_root_levels
-LEAN_PARTIAL_FLAGS  := $(addprefix --lean-partial-function ,$(LEAN_PARTIAL_FUNCTIONS))
+COQ_SEMANTIC_FLAGS  := --coq-semantic-range-types --coq-undef-axioms
+LEAN_SEMANTIC_FLAGS := --lean-semantic-range-types
 SAIL_CONTRACTS      := $(CONTRACTS_DIR)/schema_prefix.sail $(CONTRACTS_DIR)/io_contracts.sail
 EXTERN_CONTRACT     := $(CONTRACTS_DIR)/ExternBoundary.v
 # Every Sail source owned by this repository, discovered rather than listed by
@@ -134,7 +96,7 @@ extract-coq: check-contracts
 	mkdir -p $(COQ_CONTRACTS_DIR) $(COQ_MODEL_DIR)
 	$(SAIL) --coq --coq-output-dir $(COQ_CONTRACTS_DIR) -o schema_prefix $(CONTRACTS_DIR)/schema_prefix.sail
 	$(SAIL) --coq --coq-output-dir $(COQ_CONTRACTS_DIR) -o io_contracts $(CONTRACTS_DIR)/io_contracts.sail
-	$(SAIL) --coq --coq-output-dir $(COQ_MODEL_DIR) -o evm $(MODEL)
+	$(SAIL) --coq $(COQ_SEMANTIC_FLAGS) --coq-output-dir $(COQ_MODEL_DIR) -o evm $(MODEL)
 	test -s $(COQ_CONTRACTS_DIR)/schema_prefix.v
 	test -s $(COQ_CONTRACTS_DIR)/schema_prefix_types.v
 	test -s $(COQ_CONTRACTS_DIR)/io_contracts.v
@@ -148,11 +110,21 @@ extract-coq: check-contracts
 	grep -q "Definition trie_root " $(COQ_MODEL_DIR)/evm.v
 	grep -q "Definition decode_stateless_input_ref" $(COQ_MODEL_DIR)/evm.v
 	grep -q "Definition main" $(COQ_MODEL_DIR)/evm.v
+	cd $(COQ_CONTRACTS_DIR) && $(COQC) schema_prefix_types.v
+	cd $(COQ_CONTRACTS_DIR) && $(COQC) schema_prefix.v
+	cd $(COQ_CONTRACTS_DIR) && $(COQC) io_contracts_types.v
+	cd $(COQ_CONTRACTS_DIR) && $(COQC) io_contracts.v
+	cd $(COQ_MODEL_DIR) && $(COQC) evm_types.v
+	cd $(COQ_MODEL_DIR) && $(COQC) evm.v
 
 extract-lean:
-	rm -rf $(LEAN_MODEL_DIR)
-	mkdir -p $(LEAN_DIR)
-	$(SAIL) --lean --lean-force-output --lean-noncomputable --lean-source-root sail $(LEAN_PARTIAL_FLAGS) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
+	mkdir -p $(LEAN_MODEL_DIR)
+	mkdir -p $(LEAN_MODEL_DIR)/.lake
+	@test ! -f $(LEAN_MODEL_DIR)/lake-manifest.json || cp $(LEAN_MODEL_DIR)/lake-manifest.json $(LEAN_MODEL_DIR)/.lake/lake-manifest.saved.json
+	rm -rf $(LEAN_MODEL_DIR)/Evm
+	rm -f $(LEAN_MODEL_DIR)/Evm.lean $(LEAN_MODEL_DIR)/lakefile.toml $(LEAN_MODEL_DIR)/lean-toolchain $(LEAN_MODEL_DIR)/.gitignore
+	$(SAIL) --lean --lean-force-output --lean-source-root sail $(LEAN_SEMANTIC_FLAGS) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
+	@test ! -f $(LEAN_MODEL_DIR)/.lake/lake-manifest.saved.json || mv $(LEAN_MODEL_DIR)/.lake/lake-manifest.saved.json $(LEAN_MODEL_DIR)/lake-manifest.json
 	find $(LEAN_MODEL_DIR) -name '*.lean' -exec sed -i.bak 's/ByteSlice/EvmByteSlice/g' {} +
 	find $(LEAN_MODEL_DIR)/Evm -name '*.lean' -exec sed -E -i.bak 's/(^|[^[:alnum:]_])prefix([^[:alnum:]_]|$$)/\1evm_prefix\2/g' {} +
 	find $(LEAN_MODEL_DIR) -name '*.bak' -exec rm -f {} +
@@ -166,7 +138,8 @@ extract-lean:
 	grep -R -q "^def trie_root " $(LEAN_MODEL_DIR)/Evm
 	grep -R -q "^def decode_stateless_input_ref " $(LEAN_MODEL_DIR)/Evm
 	grep -q "^def main " $(LEAN_MODEL_DIR)/Evm.lean
-	cd $(LEAN_MODEL_DIR) && $(LAKE) update
+	! grep -R -E -q "noncomputable (section|def)|^[[:space:]]*partial def" $(LEAN_MODEL_DIR)/Evm $(LEAN_MODEL_DIR)/Evm.lean
+	cd $(LEAN_MODEL_DIR) && { test -f lake-manifest.json || $(LAKE) update; }
 	cd $(LEAN_MODEL_DIR) && $(LAKE) build
 
 extract: extract-coq extract-lean

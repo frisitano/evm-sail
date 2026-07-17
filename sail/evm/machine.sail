@@ -19,6 +19,9 @@ register frame_status : FrameStatus = Running()
 register message : Message = DEFAULT_MESSAGE
 register call_depth : frame_depth = 0
 
+/* EIP-150 / YP: a message call may nest at most 1024 frames deep. */
+let DEPTH_LIMIT : frame_depth = 1024
+
 function record_refund(delta : gas_refund) -> unit =
     frame_refund = frame_refund + delta
 

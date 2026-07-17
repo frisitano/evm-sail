@@ -24,9 +24,6 @@
 /* code execution).                                                         */
 /* ======================================================================== */
 
-/* EIP-150 / YP: a message call may nest at most 1024 frames deep. */
-let DEPTH_LIMIT : frame_depth = 1024
-
 /* ----------------------------- fetch/decode ----------------------------- */
 
 /* Assemble the n-byte big-endian immediate following a PUSHn opcode into a
@@ -198,7 +195,8 @@ function fetch() -> ast = {
  * exceptional halts return the empty slice; RETURN and REVERT carry their
  * frozen memory slice in the halt value. */
 function interpret() -> ByteSlice = {
-    while is_running() do {
+    /* A running iteration either halts or consumes at least one unit of gas. */
+    while is_running() termination_measure(GAS_MAX_VALUE + 1) do {
         let op = fetch();
         execute(op)
     };
@@ -759,3 +757,12 @@ function run_create(is2 : bool) -> unit = {
         }
     }
 }
+
+/* The only recursive cycle is interpret -> execute -> run_call/run_create ->
+ * interpret. Each edge consumes one phase, and entering a child decreases the
+ * remaining protocol call depth. These measures are proof-only and do not
+ * add runtime fuel to executable backends. */
+termination_measure interpret() = 3 * (DEPTH_LIMIT - call_depth) + 2
+termination_measure execute(_) = 3 * (DEPTH_LIMIT - call_depth) + 1
+termination_measure run_call(_) = 3 * (DEPTH_LIMIT - call_depth)
+termination_measure run_create(_) = 3 * (DEPTH_LIMIT - call_depth)
