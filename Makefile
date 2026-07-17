@@ -82,7 +82,7 @@ docs-site:
 	$(SAIL) --doc --doc-format identity --doc-embed plain --doc-embed-with-location --doc-bundle doc.json -o $(BOOK)/doc $(PROJECT) evm --variable EVM_ENTRY=guest
 	uv run --with-editable '$(MKDOCSTRINGS_SAIL)' sail-lsp-index --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --output $(BOOK)/doc/lsp-index.json
 	uv run --with-editable '$(MKDOCSTRINGS_SAIL)' python -m mkdocstrings_handlers.sail._book --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --book $(BOOK) --site-name "EVM Sail Specification" $(if $(wildcard $(LEAN_DIR)/out),--lean $(LEAN_DIR)/out)
-	cd $(BOOK) && uv run --with-editable '$(MKDOCSTRINGS_SAIL)' --with mkdocs-material mkdocs build --strict -d site
+	cd $(BOOK) && uv run --with-editable '$(MKDOCSTRINGS_SAIL)' mkdocs build --strict -d site
 	@echo "book: $(BOOK)/site/index.html"
 
 # Extract the specification to a Lean 4 lake project. The custom backend
