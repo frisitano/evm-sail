@@ -1,407 +1,939 @@
-/* ======================================================================== */
-/* sail256: the HOST-OPTIMIZED variant of the sailfix runtime.                */
-/*                                                                           */
-/* Same representation and surface as sailfix (sail_int = 512-bit sign-       */
-/* magnitude, lbits = inline 256-bit, identical sail.h) but with the hot      */
-/* cores rewritten for speed:                                                 */
-/*   - all magnitude ops are SIZED (loop over significant limbs, not all 8);   */
-/*   - division is single-pass for 1-limb divisors and Knuth Algorithm D       */
-/*     (base 2^64, Hacker's Delight divmnu64 shape) for multi-limb ones --     */
-/*     sailfix's bit-by-bit restoring division was 512 iterations;             */
-/*   - get_slice_int (= word_of_int) extracts limb-wise, not bit-by-bit;       */
-/*   - decimal parsing accumulates 19-digit chunks (the EEST runner parses     */
-/*     millions of stream integers), not a full 8x8 multiply per digit.        */
-/* Differentially validated against the GMP build over the full EEST suite.   */
-/* ======================================================================== */
+/* GMP-free runtime for the EVM model's generated C.
+ *
+ * bits(256) is an inline four-limb value.  Sail int/nat retains its exact
+ * mathematical semantics through a sign-magnitude value with twelve 64-bit
+ * limbs.  The model-wide bound ledger puts the largest runtime intermediate
+ * below 2^765, so 768 bits is sufficient.  Every operation traps on a bound
+ * violation: this implementation never silently wraps or saturates an int. */
 
 #include "sail.h"
+
+#include <limits.h>
 #include <string.h>
 
-extern void *malloc(unsigned long);
-extern void  free(void *);
+typedef sail_int_struct integer;
 
-bool EQUAL(bool)(const bool a, const bool b) {
-  return a == b;
+enum { INTEGER_LIMBS = SAIL_INT_LIMBS };
+
+static __attribute__((noreturn)) void integer_failure(void) { abort(); }
+
+unit undefined_unit(const unit value) {
+  (void)value;
+  return UNIT;
 }
 
-/* ===================== 512-bit unsigned magnitude ====================== */
-#define NI SAIL_INT_LIMBS   /* 8 limbs = 512 bits */
-
-/* number of significant limbs (0 for the value 0) */
-static inline int mag_len(const uint64_t *a) {
-  int l = NI;
-  while (l > 0 && !a[l - 1]) l--;
-  return l;
+bool eq_unit(const unit lhs, const unit rhs) {
+  (void)lhs;
+  (void)rhs;
+  return true;
 }
-static inline void mag_zero(uint64_t *a, int n) { for (int i = 0; i < n; i++) a[i] = 0; }
-static int mag_cmp(const uint64_t *a, const uint64_t *b, int n) {
-  (void)n;
-  int la = mag_len(a), lb = mag_len(b);
-  if (la != lb) return la < lb ? -1 : 1;
-  for (int i = la - 1; i >= 0; i--) { if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; }
+
+unit skip(const unit value) {
+  (void)value;
+  return UNIT;
+}
+
+bool eq_bool(const bool lhs, const bool rhs) { return lhs == rhs; }
+
+bool undefined_bool(const unit value) {
+  (void)value;
+  return false;
+}
+
+bool eq_mach_int(const mach_int lhs, const mach_int rhs) {
+  return lhs == rhs;
+}
+
+bool eq_mach_uint(const mach_uint lhs, const mach_uint rhs) {
+  return lhs == rhs;
+}
+
+bool eq_bit(const fbits lhs, const fbits rhs) { return lhs == rhs; }
+
+bool eq_fbits(const fbits lhs, const fbits rhs) { return lhs == rhs; }
+
+bool eq_ref_fbits(const fbits *lhs, const fbits *rhs) {
+  return *lhs == *rhs;
+}
+
+fbits undefined_fbits(const unit value) {
+  (void)value;
+  return UINT64_C(0);
+}
+
+static int magnitude_normalize(const uint64_t *limbs, int length) {
+  while (length > 0 && limbs[length - 1] == 0) length--;
+  return length;
+}
+
+static int magnitude_compare(const uint64_t *lhs, int lhs_length,
+                             const uint64_t *rhs, int rhs_length) {
+  if (lhs_length != rhs_length) return lhs_length < rhs_length ? -1 : 1;
+  for (int i = lhs_length - 1; i >= 0; i--) {
+    if (lhs[i] != rhs[i]) return lhs[i] < rhs[i] ? -1 : 1;
+  }
   return 0;
 }
-/* r = a + b over NI limbs (sized loop; the carry tail is propagated) */
-static uint64_t mag_add(uint64_t *r, const uint64_t *a, const uint64_t *b, int n) {
-  (void)n;
-  int la = mag_len(a), lb = mag_len(b);
-  int l = la > lb ? la : lb;
-  unsigned __int128 c = 0;
-  for (int i = 0; i < l; i++) {
-    unsigned __int128 s = (unsigned __int128)a[i] + b[i] + c;
-    r[i] = (uint64_t)s; c = s >> 64;
+
+static int magnitude_add(uint64_t *result, const uint64_t *lhs, int lhs_length,
+                         const uint64_t *rhs, int rhs_length) {
+  int length = lhs_length > rhs_length ? lhs_length : rhs_length;
+  unsigned __int128 carry = 0;
+  for (int i = 0; i < length; i++) {
+    unsigned __int128 sum =
+        (unsigned __int128)(i < lhs_length ? lhs[i] : 0) +
+        (i < rhs_length ? rhs[i] : 0) + carry;
+    result[i] = (uint64_t)sum;
+    carry = sum >> 64;
   }
-  if (l < NI && c) { r[l] = (uint64_t)c; c = 0; l++; }
-  for (int i = l; i < NI; i++) r[i] = 0;
-  return (uint64_t)c;
-}
-/* r = a - b (a >= b), sized */
-static void mag_sub(uint64_t *r, const uint64_t *a, const uint64_t *b, int n) {
-  (void)n;
-  int la = mag_len(a);
-  unsigned __int128 bor = 0;
-  for (int i = 0; i < la; i++) {
-    unsigned __int128 d = (unsigned __int128)a[i] - b[i] - bor;
-    r[i] = (uint64_t)d; bor = (d >> 64) & 1;
+  if (carry != 0) {
+    if (length == INTEGER_LIMBS) integer_failure();
+    result[length++] = (uint64_t)carry;
   }
-  for (int i = la; i < NI; i++) r[i] = 0;
-}
-/* r = a * b truncated to NI limbs, sized schoolbook */
-static void mag_mul(uint64_t *r, const uint64_t *a, const uint64_t *b, int n) {
-  (void)n;
-  int la = mag_len(a), lb = mag_len(b);
-  uint64_t t[NI]; mag_zero(t, NI);
-  for (int i = 0; i < la; i++) {
-    if (!a[i]) continue;
-    unsigned __int128 carry = 0;
-    int jmax = lb < NI - i ? lb : NI - i;
-    for (int j = 0; j < jmax; j++) {
-      unsigned __int128 s = (unsigned __int128)a[i] * b[j] + t[i + j] + carry;
-      t[i + j] = (uint64_t)s; carry = s >> 64;
-    }
-    if (i + jmax < NI) t[i + jmax] += (uint64_t)carry;
-  }
-  for (int i = 0; i < NI; i++) r[i] = t[i];
-}
-/* r = a * m + add, single-limb multiplier (decimal-parse helper), sized */
-static void mag_mul_small(uint64_t *r, const uint64_t *a, uint64_t m, uint64_t add) {
-  int la = mag_len(a);
-  unsigned __int128 carry = add;
-  for (int i = 0; i < la; i++) {
-    unsigned __int128 s = (unsigned __int128)a[i] * m + carry;
-    r[i] = (uint64_t)s; carry = s >> 64;
-  }
-  int l = la;
-  while (carry && l < NI) { r[l++] = (uint64_t)carry; carry >>= 64; }
-  for (int i = l; i < NI; i++) r[i] = 0;
+  return magnitude_normalize(result, length);
 }
 
-/* q = a / b, rem = a % b (unsigned), b != 0 */
-static void mag_divmod(uint64_t *q, uint64_t *rem, const uint64_t *a, const uint64_t *b, int nn) {
-  (void)nn;
-  int m = mag_len(a), n = mag_len(b);
-  mag_zero(q, NI); mag_zero(rem, NI);
-  if (m < n || m == 0) { for (int i = 0; i < n && i < NI; i++) rem[i] = a[i]; return; }
-  if (n == 1) {
-    /* single-limb divisor: one pass, 128-bit intermediate */
-    uint64_t d = b[0];
-    unsigned __int128 r = 0;
-    for (int i = m - 1; i >= 0; i--) {
-      unsigned __int128 cur = (r << 64) | a[i];
-      q[i] = (uint64_t)(cur / d);
-      r = cur % d;
+/* Requires lhs >= rhs.  result may alias either operand. */
+static int magnitude_subtract(uint64_t *result, const uint64_t *lhs,
+                              int lhs_length, const uint64_t *rhs,
+                              int rhs_length) {
+  unsigned __int128 borrow = 0;
+  for (int i = 0; i < lhs_length; i++) {
+    unsigned __int128 difference =
+        (unsigned __int128)lhs[i] -
+        (i < rhs_length ? rhs[i] : 0) - borrow;
+    result[i] = (uint64_t)difference;
+    borrow = (difference >> 64) & 1;
+  }
+  if (borrow != 0) integer_failure();
+  return magnitude_normalize(result, lhs_length);
+}
+
+/* Compute the full product first, then reject a non-zero upper half.  This is
+ * the same fixed-limb schoolbook shape used by monomorphic uint libraries and
+ * makes truncation impossible to hide in the carry path. */
+static int magnitude_multiply(uint64_t *result, const uint64_t *lhs,
+                              int lhs_length, const uint64_t *rhs,
+                              int rhs_length) {
+  uint64_t product[INTEGER_LIMBS * 2] = {0};
+  for (int i = 0; i < lhs_length; i++) {
+    unsigned __int128 carry = 0;
+    for (int j = 0; j < rhs_length; j++) {
+      int index = i + j;
+      unsigned __int128 value = (unsigned __int128)lhs[i] * rhs[j] +
+                                product[index] + carry;
+      product[index] = (uint64_t)value;
+      carry = value >> 64;
     }
-    rem[0] = (uint64_t)r;
+    int index = i + rhs_length;
+    while (carry != 0) {
+      if (index >= INTEGER_LIMBS * 2) integer_failure();
+      unsigned __int128 value = (unsigned __int128)product[index] + carry;
+      product[index++] = (uint64_t)value;
+      carry = value >> 64;
+    }
+  }
+  for (int i = INTEGER_LIMBS; i < INTEGER_LIMBS * 2; i++) {
+    if (product[i] != 0) integer_failure();
+  }
+  for (int i = 0; i < INTEGER_LIMBS; i++) result[i] = product[i];
+  return magnitude_normalize(result, INTEGER_LIMBS);
+}
+
+static void magnitude_full(uint64_t *result, const uint64_t *value,
+                           int length) {
+  for (int i = 0; i < INTEGER_LIMBS; i++) {
+    result[i] = i < length ? value[i] : 0;
+  }
+}
+
+static int magnitude_full_compare(const uint64_t *lhs, const uint64_t *rhs) {
+  for (int i = INTEGER_LIMBS - 1; i >= 0; i--) {
+    if (lhs[i] != rhs[i]) return lhs[i] < rhs[i] ? -1 : 1;
+  }
+  return 0;
+}
+
+/* Full-width subtraction modulo 2^768.  In division, an incoming carry is an
+ * implicit 769th bit, so the wrapped low half is the exact post-subtraction
+ * remainder. */
+static void magnitude_full_subtract(uint64_t *result, const uint64_t *lhs,
+                                    const uint64_t *rhs) {
+  unsigned __int128 borrow = 0;
+  for (int i = 0; i < INTEGER_LIMBS; i++) {
+    unsigned __int128 difference =
+        (unsigned __int128)lhs[i] - rhs[i] - borrow;
+    result[i] = (uint64_t)difference;
+    borrow = (difference >> 64) & 1;
+  }
+}
+
+/* Divide (high << 64 | low) by a 64-bit divisor without relying on the
+ * compiler's 128-bit division runtime.  The caller maintains high < divisor,
+ * so both the quotient and remainder fit in one limb. */
+static uint64_t magnitude_divide_limb(uint64_t high, uint64_t low,
+                                      uint64_t divisor,
+                                      uint64_t *remainder) {
+  uint64_t quotient = 0;
+  uint64_t rem = high;
+  for (int bit = 63; bit >= 0; bit--) {
+    bool carry = (rem >> 63) != 0;
+    rem = (rem << 1) | ((low >> bit) & UINT64_C(1));
+    if (carry || rem >= divisor) {
+      rem -= divisor;
+      quotient |= UINT64_C(1) << bit;
+    }
+  }
+  *remainder = rem;
+  return quotient;
+}
+
+static void magnitude_divide(uint64_t *quotient, int *quotient_length,
+                             uint64_t *remainder, int *remainder_length,
+                             const uint64_t *dividend, int dividend_length,
+                             const uint64_t *divisor, int divisor_length) {
+  if (divisor_length == 0) integer_failure();
+  for (int i = 0; i < INTEGER_LIMBS; i++) {
+    quotient[i] = 0;
+    remainder[i] = 0;
+  }
+  if (dividend_length == 0) {
+    *quotient_length = 0;
+    *remainder_length = 0;
     return;
   }
-  /* Knuth Algorithm D, base 2^64 (Hacker's Delight divmnu64 shape) */
-  int s = __builtin_clzll(b[n - 1]);
-  uint64_t v[NI], u[NI + 1];
-  if (s) {
-    for (int i = n - 1; i > 0; i--) v[i] = (b[i] << s) | (b[i - 1] >> (64 - s));
-    v[0] = b[0] << s;
-    u[m] = a[m - 1] >> (64 - s);
-    for (int i = m - 1; i > 0; i--) u[i] = (a[i] << s) | (a[i - 1] >> (64 - s));
-    u[0] = a[0] << s;
-  } else {
-    for (int i = 0; i < n; i++) v[i] = b[i];
-    for (int i = 0; i < m; i++) u[i] = a[i];
-    u[m] = 0;
+
+  if (divisor_length == 1) {
+    uint64_t carry = 0;
+    for (int i = dividend_length - 1; i >= 0; i--) {
+      quotient[i] = magnitude_divide_limb(
+          carry, dividend[i], divisor[0], &carry);
+    }
+    if (carry != 0) remainder[0] = carry;
+    *quotient_length = magnitude_normalize(quotient, dividend_length);
+    *remainder_length = carry == 0 ? 0 : 1;
+    return;
   }
-  for (int j = m - n; j >= 0; j--) {
-    unsigned __int128 num = ((unsigned __int128)u[j + n] << 64) | u[j + n - 1];
-    unsigned __int128 qhat = num / v[n - 1];
-    unsigned __int128 rhat = num % v[n - 1];
-    while ((qhat >> 64) != 0 ||
-           (unsigned __int128)(uint64_t)qhat * v[n - 2] > ((rhat << 64) | u[j + n - 2])) {
-      qhat--; rhat += v[n - 1];
-      if ((rhat >> 64) != 0) break;
+
+  uint64_t divisor_full[INTEGER_LIMBS];
+  magnitude_full(divisor_full, divisor, divisor_length);
+  int top_bit = dividend_length * 64 - 1;
+  while (top_bit > 0 &&
+         ((dividend[top_bit >> 6] >> (top_bit & 63)) & 1) == 0) {
+    top_bit--;
+  }
+  for (int bit = top_bit; bit >= 0; bit--) {
+    uint64_t carry = 0;
+    for (int i = 0; i < INTEGER_LIMBS; i++) {
+      uint64_t next = remainder[i] >> 63;
+      remainder[i] = (remainder[i] << 1) | carry;
+      carry = next;
     }
-    /* multiply-subtract u[j..j+n] -= qhat * v */
-    uint64_t qh = (uint64_t)qhat;
-    uint64_t mul_carry = 0;
-    unsigned __int128 borrow = 0;
-    for (int i = 0; i < n; i++) {
-      unsigned __int128 p = (unsigned __int128)qh * v[i] + mul_carry;
-      mul_carry = (uint64_t)(p >> 64);
-      unsigned __int128 d = (unsigned __int128)u[i + j] - (uint64_t)p - borrow;
-      u[i + j] = (uint64_t)d;
-      borrow = (d >> 64) & 1;
+    remainder[0] |= (dividend[bit >> 6] >> (bit & 63)) & 1;
+    if (carry != 0 ||
+        magnitude_full_compare(remainder, divisor_full) >= 0) {
+      magnitude_full_subtract(remainder, remainder, divisor_full);
+      quotient[bit >> 6] |= UINT64_C(1) << (bit & 63);
     }
-    unsigned __int128 d = (unsigned __int128)u[j + n] - mul_carry - borrow;
-    u[j + n] = (uint64_t)d;
-    if ((d >> 64) & 1) {                       /* went negative: add back */
-      qh--;
-      unsigned __int128 c = 0;
-      for (int i = 0; i < n; i++) {
-        unsigned __int128 ss = (unsigned __int128)u[i + j] + v[i] + c;
-        u[i + j] = (uint64_t)ss; c = ss >> 64;
+  }
+  *quotient_length = magnitude_normalize(quotient, INTEGER_LIMBS);
+  *remainder_length = magnitude_normalize(remainder, INTEGER_LIMBS);
+}
+
+static void integer_zero(integer *value) {
+  value->negative = 0;
+  value->length = 0;
+}
+
+static void integer_one(integer *value) {
+  value->negative = 0;
+  value->length = 1;
+  value->limbs[0] = 1;
+}
+
+static uint64_t integer_small_unsigned(const sail_int value) {
+  if (value->negative || value->length > 1) integer_failure();
+  return value->length == 0 ? UINT64_C(0) : value->limbs[0];
+}
+
+static int integer_compare(const sail_int lhs, const sail_int rhs) {
+  if (lhs->negative != rhs->negative) return lhs->negative ? -1 : 1;
+  int comparison = magnitude_compare(lhs->limbs, lhs->length,
+                                     rhs->limbs, rhs->length);
+  return lhs->negative ? -comparison : comparison;
+}
+
+void create_sail_int(sail_int *result) { integer_zero(*result); }
+void recreate_sail_int(sail_int *result) { integer_zero(*result); }
+void kill_sail_int(sail_int *result) { (void)result; }
+void copy_sail_int(sail_int *result, const sail_int value) {
+  (*result)->negative = value->negative;
+  (*result)->length = value->length;
+  for (int i = 0; i < value->length; i++) {
+    (*result)->limbs[i] = value->limbs[i];
+  }
+}
+
+uint64_t sail_int_get_ui(const sail_int value) { return mpz_get_ui(value); }
+
+mach_uint convert_mach_uint_of_mach_int(const mach_int value) {
+  if (value < 0) integer_failure();
+  return (mach_uint)value;
+}
+
+mach_int convert_mach_int_of_mach_uint(const mach_uint value) {
+  if (value > INT64_MAX) integer_failure();
+  return (mach_int)value;
+}
+
+mach_uint convert_mach_uint_of_sail_int(const sail_int value) {
+  if (value->negative || value->length > 1) integer_failure();
+  return value->length == 0 ? UINT64_C(0) : value->limbs[0];
+}
+
+void convert_sail_int_of_mach_uint(sail_int *result, const mach_uint value) {
+  integer *out = *result;
+  out->negative = 0;
+  out->length = value == 0 ? 0 : 1;
+  if (value != 0) out->limbs[0] = value;
+}
+
+mach_int convert_mach_int_of_sail_int(const sail_int value) {
+  if (value->length > 1) integer_failure();
+  uint64_t magnitude = value->length == 0 ? 0 : value->limbs[0];
+  if (!value->negative) {
+    if (magnitude > INT64_MAX) integer_failure();
+    return (mach_int)magnitude;
+  }
+  if (magnitude > (UINT64_C(1) << 63)) integer_failure();
+  if (magnitude == (UINT64_C(1) << 63)) return INT64_MIN;
+  return -(mach_int)magnitude;
+}
+
+void convert_sail_int_of_mach_int(sail_int *result, const mach_int value) {
+  integer *out = *result;
+  if (value == 0) {
+    integer_zero(out);
+    return;
+  }
+  out->negative = value < 0;
+  out->length = 1;
+  out->limbs[0] = value < 0
+      ? (uint64_t)(-(value + 1)) + UINT64_C(1)
+      : (uint64_t)value;
+}
+
+void create_sail_int_of_mach_int(sail_int *result, const mach_int value) {
+  convert_sail_int_of_mach_int(result, value);
+}
+void recreate_sail_int_of_mach_int(sail_int *result, const mach_int value) {
+  convert_sail_int_of_mach_int(result, value);
+}
+mach_int create_mach_int_of_sail_int(const sail_int value) {
+  return convert_mach_int_of_sail_int(value);
+}
+
+void add_int(sail_int *result, const sail_int lhs, const sail_int rhs) {
+  integer *out = *result;
+  if (lhs->negative == rhs->negative) {
+    out->length = magnitude_add(out->limbs, lhs->limbs, lhs->length,
+                                rhs->limbs, rhs->length);
+    out->negative = out->length == 0 ? 0 : lhs->negative;
+    return;
+  }
+  int comparison = magnitude_compare(lhs->limbs, lhs->length,
+                                     rhs->limbs, rhs->length);
+  if (comparison == 0) {
+    integer_zero(out);
+  } else if (comparison > 0) {
+    out->length = magnitude_subtract(out->limbs, lhs->limbs, lhs->length,
+                                     rhs->limbs, rhs->length);
+    out->negative = lhs->negative;
+  } else {
+    out->length = magnitude_subtract(out->limbs, rhs->limbs, rhs->length,
+                                     lhs->limbs, lhs->length);
+    out->negative = rhs->negative;
+  }
+}
+
+void neg_int(sail_int *result, const sail_int value) {
+  copy_sail_int(result, value);
+  if ((*result)->length != 0) (*result)->negative = !(*result)->negative;
+}
+
+void abs_int(sail_int *result, const sail_int value) {
+  copy_sail_int(result, value);
+  (*result)->negative = 0;
+}
+
+void sub_int(sail_int *result, const sail_int lhs, const sail_int rhs) {
+  sail_int negative_rhs;
+  copy_sail_int(&negative_rhs, rhs);
+  if (negative_rhs->length != 0) negative_rhs->negative = !negative_rhs->negative;
+  add_int(result, lhs, negative_rhs);
+}
+
+void sub_nat(sail_int *result, const sail_int lhs, const sail_int rhs) {
+  sub_int(result, lhs, rhs);
+  if ((*result)->negative) integer_zero(*result);
+}
+
+void mult_int(sail_int *result, const sail_int lhs, const sail_int rhs) {
+  integer *out = *result;
+  out->length = magnitude_multiply(out->limbs, lhs->limbs, lhs->length,
+                                   rhs->limbs, rhs->length);
+  out->negative = out->length == 0 ? 0 : lhs->negative ^ rhs->negative;
+}
+
+static void integer_divide_magnitudes(uint64_t *quotient, int *quotient_length,
+                                      uint64_t *remainder,
+                                      int *remainder_length,
+                                      const sail_int lhs,
+                                      const sail_int rhs) {
+  uint64_t dividend[INTEGER_LIMBS], divisor[INTEGER_LIMBS];
+  int dividend_length = lhs->length;
+  int divisor_length = rhs->length;
+  for (int i = 0; i < dividend_length; i++) dividend[i] = lhs->limbs[i];
+  for (int i = 0; i < divisor_length; i++) divisor[i] = rhs->limbs[i];
+  magnitude_divide(quotient, quotient_length, remainder, remainder_length,
+                   dividend, dividend_length, divisor, divisor_length);
+}
+
+void tdiv_int(sail_int *result, const sail_int lhs, const sail_int rhs) {
+  uint64_t remainder[INTEGER_LIMBS];
+  int quotient_length, remainder_length;
+  integer *out = *result;
+  integer_divide_magnitudes(out->limbs, &quotient_length,
+                            remainder, &remainder_length, lhs, rhs);
+  out->length = (uint8_t)quotient_length;
+  out->negative = out->length == 0 ? 0 : lhs->negative ^ rhs->negative;
+}
+
+void tmod_int(sail_int *result, const sail_int lhs, const sail_int rhs) {
+  uint64_t quotient[INTEGER_LIMBS];
+  int quotient_length, remainder_length;
+  integer *out = *result;
+  integer_divide_magnitudes(quotient, &quotient_length, out->limbs,
+                            &remainder_length, lhs, rhs);
+  out->length = (uint8_t)remainder_length;
+  out->negative = out->length == 0 ? 0 : lhs->negative;
+}
+
+/* Euclidean division: remainder is always in [0, |rhs|). */
+void ediv_int(sail_int *result, const sail_int lhs, const sail_int rhs) {
+  uint64_t quotient[INTEGER_LIMBS], remainder[INTEGER_LIMBS];
+  int quotient_length, remainder_length;
+  integer_divide_magnitudes(quotient, &quotient_length,
+                            remainder, &remainder_length, lhs, rhs);
+  if (lhs->negative && remainder_length != 0) {
+    const uint64_t one[1] = {1};
+    quotient_length = magnitude_add(quotient, quotient, quotient_length,
+                                    one, 1);
+  }
+  integer *out = *result;
+  for (int i = 0; i < quotient_length; i++) out->limbs[i] = quotient[i];
+  out->length = quotient_length;
+  out->negative = out->length == 0 ? 0 : lhs->negative ^ rhs->negative;
+}
+
+void emod_int(sail_int *result, const sail_int lhs, const sail_int rhs) {
+  uint64_t quotient[INTEGER_LIMBS], remainder[INTEGER_LIMBS];
+  int quotient_length, remainder_length;
+  integer_divide_magnitudes(quotient, &quotient_length,
+                            remainder, &remainder_length, lhs, rhs);
+  integer *out = *result;
+  if (lhs->negative && remainder_length != 0) {
+    out->length = magnitude_subtract(out->limbs, rhs->limbs, rhs->length,
+                                     remainder, remainder_length);
+  } else {
+    for (int i = 0; i < remainder_length; i++) out->limbs[i] = remainder[i];
+    out->length = remainder_length;
+  }
+  out->negative = 0;
+}
+
+/* Flooring division: remainder has the divisor's sign. */
+void fdiv_int(sail_int *result, const sail_int lhs, const sail_int rhs) {
+  uint64_t quotient[INTEGER_LIMBS], remainder[INTEGER_LIMBS];
+  int quotient_length, remainder_length;
+  integer_divide_magnitudes(quotient, &quotient_length,
+                            remainder, &remainder_length, lhs, rhs);
+  bool negative = lhs->negative ^ rhs->negative;
+  if (negative && remainder_length != 0) {
+    const uint64_t one[1] = {1};
+    quotient_length = magnitude_add(quotient, quotient, quotient_length,
+                                    one, 1);
+  }
+  integer *out = *result;
+  for (int i = 0; i < quotient_length; i++) out->limbs[i] = quotient[i];
+  out->length = quotient_length;
+  out->negative = out->length == 0 ? 0 : negative;
+}
+
+void fmod_int(sail_int *result, const sail_int lhs, const sail_int rhs) {
+  uint64_t quotient[INTEGER_LIMBS], remainder[INTEGER_LIMBS];
+  int quotient_length, remainder_length;
+  integer_divide_magnitudes(quotient, &quotient_length,
+                            remainder, &remainder_length, lhs, rhs);
+  integer *out = *result;
+  if ((lhs->negative ^ rhs->negative) && remainder_length != 0) {
+    out->length = magnitude_subtract(out->limbs, rhs->limbs, rhs->length,
+                                     remainder, remainder_length);
+  } else {
+    for (int i = 0; i < remainder_length; i++) out->limbs[i] = remainder[i];
+    out->length = remainder_length;
+  }
+  out->negative = out->length == 0 ? 0 : rhs->negative;
+}
+
+void max_int(sail_int *result, const sail_int lhs, const sail_int rhs) {
+  copy_sail_int(result, integer_compare(lhs, rhs) < 0 ? rhs : lhs);
+}
+void min_int(sail_int *result, const sail_int lhs, const sail_int rhs) {
+  copy_sail_int(result, integer_compare(lhs, rhs) > 0 ? rhs : lhs);
+}
+
+bool eq_int(const sail_int lhs, const sail_int rhs) {
+  return integer_compare(lhs, rhs) == 0;
+}
+bool eq_sail_int(const sail_int lhs, const sail_int rhs) {
+  return eq_int(lhs, rhs);
+}
+bool lt(const sail_int lhs, const sail_int rhs) {
+  return integer_compare(lhs, rhs) < 0;
+}
+bool gt(const sail_int lhs, const sail_int rhs) {
+  return integer_compare(lhs, rhs) > 0;
+}
+bool lteq(const sail_int lhs, const sail_int rhs) {
+  return integer_compare(lhs, rhs) <= 0;
+}
+bool gteq(const sail_int lhs, const sail_int rhs) {
+  return integer_compare(lhs, rhs) >= 0;
+}
+
+void shl_int(sail_int *result, const sail_int value, const sail_int amount) {
+  uint64_t shift = integer_small_unsigned(amount);
+  if (value->length == 0) {
+    integer_zero(*result);
+    return;
+  }
+  if (shift >= INTEGER_LIMBS * 64) integer_failure();
+  int word_shift = (int)(shift >> 6);
+  int bit_shift = (int)(shift & 63);
+  uint64_t shifted[INTEGER_LIMBS] = {0};
+  for (int i = 0; i < value->length; i++) {
+    int target = i + word_shift;
+    if (target >= INTEGER_LIMBS) integer_failure();
+    shifted[target] |= value->limbs[i] << bit_shift;
+    if (bit_shift != 0) {
+      uint64_t high = value->limbs[i] >> (64 - bit_shift);
+      if (high != 0) {
+        if (target + 1 >= INTEGER_LIMBS) integer_failure();
+        shifted[target + 1] |= high;
       }
-      u[j + n] += (uint64_t)c;
     }
-    q[j] = qh;
   }
-  /* remainder = u[0..n-1] >> s */
-  if (s) {
-    for (int i = 0; i < n - 1; i++) rem[i] = (u[i] >> s) | (u[i + 1] << (64 - s));
-    rem[n - 1] = u[n - 1] >> s;
+  integer *out = *result;
+  for (int i = 0; i < INTEGER_LIMBS; i++) out->limbs[i] = shifted[i];
+  out->length = magnitude_normalize(out->limbs, INTEGER_LIMBS);
+  out->negative = value->negative;
+}
+
+void shr_int(sail_int *result, const sail_int value, const sail_int amount) {
+  uint64_t shift = integer_small_unsigned(amount);
+  bool negative = value->negative;
+  if (value->length == 0) {
+    integer_zero(*result);
+    return;
+  }
+  bool discarded = false;
+  if (shift >= INTEGER_LIMBS * 64) {
+    discarded = true;
+    integer_zero(*result);
   } else {
-    for (int i = 0; i < n; i++) rem[i] = u[i];
+    int word_shift = (int)(shift >> 6);
+    int bit_shift = (int)(shift & 63);
+    uint64_t shifted[INTEGER_LIMBS] = {0};
+    for (int i = 0; i < word_shift && i < value->length; i++) {
+      discarded |= value->limbs[i] != 0;
+    }
+    if (bit_shift != 0 && word_shift < value->length) {
+      discarded |= (value->limbs[word_shift] &
+                    ((UINT64_C(1) << bit_shift) - 1)) != 0;
+    }
+    for (int source = word_shift; source < value->length; source++) {
+      int target = source - word_shift;
+      shifted[target] |= value->limbs[source] >> bit_shift;
+      if (bit_shift != 0 && source + 1 < value->length) {
+        shifted[target] |= value->limbs[source + 1] << (64 - bit_shift);
+      }
+    }
+    integer *out = *result;
+    for (int i = 0; i < INTEGER_LIMBS; i++) out->limbs[i] = shifted[i];
+    out->length = magnitude_normalize(out->limbs, INTEGER_LIMBS);
+    out->negative = negative && out->length != 0;
+  }
+  if (negative && discarded) {
+    const uint64_t one[1] = {1};
+    integer *out = *result;
+    out->length = magnitude_add(out->limbs, out->limbs, out->length, one, 1);
+    out->negative = 1;
   }
 }
 
-/* ===================== sail_int (sign-magnitude) ======================= */
-typedef sail_int_struct si;
-static void si_norm(si *x) { if (mag_len(x->d) == 0) x->neg = 0; }
-
-void create_sail_int(sail_int *rop) { mag_zero((*rop)->d, NI); (*rop)->neg = 0; }
-void kill_sail_int(sail_int *rop)   { (void)rop; }
-void copy_sail_int(sail_int *rop, const sail_int op) {
-  for (int i = 0; i < NI; i++) (*rop)->d[i] = op->d[i]; (*rop)->neg = op->neg;
+mach_int shl_mach_int(const mach_int value, const mach_int amount) {
+  return value << amount;
 }
-uint64_t sail_int_get_ui(const sail_int op) { return op->d[0]; }
-mach_int convert_mach_int_of_sail_int(const sail_int op) {
-  int64_t v = (int64_t)op->d[0];
-  return op->neg ? -v : v;
-}
-void convert_sail_int_of_mach_int(sail_int *rop, const mach_int op) {
-  si *r = (*rop); mag_zero(r->d, NI);
-  if (op < 0) { r->neg = 1; r->d[0] = (uint64_t)(-(op + 1)) + 1; }
-  else { r->neg = 0; r->d[0] = (uint64_t)op; }
+mach_int shr_mach_int(const mach_int value, const mach_int amount) {
+  return value >> amount;
 }
 
-/* chunked decimal parse: up to 19 digits per 64-bit chunk, then one sized
- * mul_small + add per chunk (sailfix did a full 8x8 multiply PER DIGIT). */
-static void parse_dec(si *r, const char *str) {
-  static const uint64_t POW10[20] = {
-    1ULL, 10ULL, 100ULL, 1000ULL, 10000ULL, 100000ULL, 1000000ULL, 10000000ULL,
-    100000000ULL, 1000000000ULL, 10000000000ULL, 100000000000ULL, 1000000000000ULL,
-    10000000000000ULL, 100000000000000ULL, 1000000000000000ULL, 10000000000000000ULL,
-    100000000000000000ULL, 1000000000000000000ULL, 10000000000000000000ULL };
-  mag_zero(r->d, NI); r->neg = 0;
-  const char *p = str; int neg = 0;
-  if (*p == '-') { neg = 1; p++; }
-  uint64_t chunk = 0; int k = 0;
-  for (; *p; p++) {
-    if (*p < '0' || *p > '9') continue;
-    chunk = chunk * 10 + (uint64_t)(*p - '0');
-    if (++k == 19) { mag_mul_small(r->d, r->d, POW10[19], chunk); chunk = 0; k = 0; }
+void pow_int(sail_int *result, const sail_int base, const sail_int exponent) {
+  uint64_t power = integer_small_unsigned(exponent);
+  sail_int accumulated, factor, temporary;
+  integer_one(accumulated);
+  copy_sail_int(&factor, base);
+  while (power != 0) {
+    if ((power & 1) != 0) {
+      mult_int(&temporary, accumulated, factor);
+      copy_sail_int(&accumulated, temporary);
+    }
+    power >>= 1;
+    if (power != 0) {
+      mult_int(&temporary, factor, factor);
+      copy_sail_int(&factor, temporary);
+    }
   }
-  if (k) mag_mul_small(r->d, r->d, POW10[k], chunk);
-  r->neg = (neg && mag_len(r->d) != 0) ? 1 : 0;
+  copy_sail_int(result, accumulated);
 }
-void convert_sail_int_of_sail_string(sail_int *rop, const_sail_string str) { parse_dec((*rop), str); }
-int mpz_set_str(sail_int rop, const char *str, int base) { (void)base; parse_dec((si *)rop, str); return 0; }
 
-void add_int(sail_int *rop, const sail_int a, const sail_int b) {
-  si *r = (*rop);
-  if (a->neg == b->neg) { mag_add(r->d, a->d, b->d, NI); r->neg = a->neg; }
-  else { int c = mag_cmp(a->d, b->d, NI);
-    if (c >= 0) { mag_sub(r->d, a->d, b->d, NI); r->neg = a->neg; }
-    else        { mag_sub(r->d, b->d, a->d, NI); r->neg = b->neg; } }
-  si_norm(r);
+void pow2(sail_int *result, const sail_int exponent) {
+  uint64_t power = integer_small_unsigned(exponent);
+  if (power >= INTEGER_LIMBS * 64) integer_failure();
+  integer *out = *result;
+  int limb = (int)(power >> 6);
+  for (int i = 0; i <= limb; i++) out->limbs[i] = 0;
+  out->limbs[limb] = UINT64_C(1) << (power & 63);
+  out->length = limb + 1;
+  out->negative = 0;
 }
-void neg_int(sail_int *rop, const sail_int a) { copy_sail_int(rop, a); (*rop)->neg ^= 1; si_norm((*rop)); }
-void sub_int(sail_int *rop, const sail_int a, const sail_int b) {
-  sail_int nb; copy_sail_int(&nb, b); nb->neg ^= 1; si_norm(nb);
-  add_int(rop, a, nb);
+
+void undefined_int(sail_int *result, const int value) {
+  convert_sail_int_of_mach_int(result, value);
 }
-void mult_int(sail_int *rop, const sail_int a, const sail_int b) {
-  si *r = (*rop); mag_mul(r->d, a->d, b->d, NI); r->neg = (a->neg ^ b->neg); si_norm(r);
+void undefined_nat(sail_int *result, const unit value) {
+  (void)value;
+  integer_zero(*result);
 }
-/* truncated division (toward zero): SDIV / SMOD */
-void tdiv_int(sail_int *rop, const sail_int a, const sail_int b) {
-  si *r = (*rop); uint64_t rem[NI]; mag_divmod(r->d, rem, a->d, b->d, NI);
-  r->neg = (a->neg ^ b->neg); si_norm(r);
+void undefined_range(sail_int *result, const sail_int lower,
+                     const sail_int upper) {
+  (void)upper;
+  copy_sail_int(result, lower);
 }
-void tmod_int(sail_int *rop, const sail_int a, const sail_int b) {
-  si *r = (*rop); uint64_t q[NI]; mag_divmod(q, r->d, a->d, b->d, NI);
-  r->neg = a->neg; si_norm(r);  /* remainder takes the dividend's sign */
+void make_the_value(sail_int *result, const sail_int value) {
+  copy_sail_int(result, value);
 }
-/* Euclidean division: floor quotient, remainder in [0, |b|) */
-void ediv_int(sail_int *rop, const sail_int a, const sail_int b) {
-  si *r = (*rop); uint64_t qm[NI], rm[NI]; mag_divmod(qm, rm, a->d, b->d, NI);
-  int rzero = mag_len(rm) == 0;
-  if (a->neg && !rzero) {                       /* adjust toward -inf */
-    uint64_t one[NI]; mag_zero(one, NI); one[0] = 1; mag_add(qm, qm, one, NI);
+void size_itself_int(sail_int *result, const sail_int value) {
+  copy_sail_int(result, value);
+}
+
+int mpz_set_str(sail_int result, const char *string, int base) {
+  if (base != 0 && base != 10) return -1;
+  const char *cursor = string;
+  while (*cursor == ' ' || *cursor == '\t' || *cursor == '\n') cursor++;
+  bool negative = false;
+  if (*cursor == '-' || *cursor == '+') negative = *cursor++ == '-';
+  integer_zero(result);
+  bool digit_seen = false;
+  const uint64_t ten[1] = {10};
+  while (*cursor >= '0' && *cursor <= '9') {
+    digit_seen = true;
+    uint64_t product[INTEGER_LIMBS];
+    int product_length = magnitude_multiply(product, result->limbs,
+                                             result->length, ten, 1);
+    const uint64_t digit[1] = {(uint64_t)(*cursor++ - '0')};
+    result->length = magnitude_add(result->limbs, product, product_length,
+                                   digit, digit[0] == 0 ? 0 : 1);
   }
-  for (int i = 0; i < NI; i++) r->d[i] = qm[i];
-  r->neg = (a->neg ^ b->neg); si_norm(r);
-}
-void emod_int(sail_int *rop, const sail_int a, const sail_int b) {
-  si *r = (*rop); uint64_t qm[NI], rm[NI]; mag_divmod(qm, rm, a->d, b->d, NI);
-  int rzero = mag_len(rm) == 0;
-  if (a->neg && !rzero) { mag_sub(r->d, b->d, rm, NI); }   /* |b| - rm */
-  else { for (int i = 0; i < NI; i++) r->d[i] = rm[i]; }
-  r->neg = 0; si_norm(r);
-}
-void pow2(sail_int *rop, const sail_int op) {
-  si *r = (*rop); mag_zero(r->d, NI); r->neg = 0;
-  int e = (int)op->d[0];
-  if (e >= 0 && e < NI * 64) r->d[e >> 6] = (uint64_t)1 << (e & 63);
+  if (!digit_seen || *cursor != '\0') return -1;
+  result->negative = negative && result->length != 0;
+  return 0;
 }
 
-static int si_cmp(const sail_int a, const sail_int b) {
-  if (a->neg != b->neg) return a->neg ? -1 : 1;
-  int c = mag_cmp(a->d, b->d, NI); return a->neg ? -c : c;
+void convert_sail_int_of_sail_string(sail_int *result,
+                                     const_sail_string string) {
+  if (mpz_set_str(*result, string, 10) != 0) integer_failure();
 }
-bool eq_int(const sail_int a, const sail_int b) { return si_cmp(a, b) == 0; }
-bool lt(const sail_int a, const sail_int b)     { return si_cmp(a, b) <  0; }
-bool gt(const sail_int a, const sail_int b)     { return si_cmp(a, b) >  0; }
-bool lteq(const sail_int a, const sail_int b)   { return si_cmp(a, b) <= 0; }
-bool gteq(const sail_int a, const sail_int b)   { return si_cmp(a, b) >= 0; }
+void create_sail_int_of_sail_string(sail_int *result,
+                                    const_sail_string string) {
+  convert_sail_int_of_sail_string(result, string);
+}
+void recreate_sail_int_of_sail_string(sail_int *result,
+                                      const_sail_string string) {
+  convert_sail_int_of_sail_string(result, string);
+}
 
-/* ===================== lbits (256-bit inline) ========================== */
-static uint64_t lb_word_mask(int bits) { return bits >= 64 ? ~0ULL : (((uint64_t)1 << bits) - 1); }
-static void lb_mask(lbits *x) {
-  int len = (int)x->len;
+static uint64_t bitvector_word_mask(int bits) {
+  return bits >= 64 ? UINT64_MAX : ((UINT64_C(1) << bits) - 1);
+}
+
+static void bitvector_mask(lbits *value) {
+  int length = (int)value->len;
   for (int i = 0; i < 4; i++) {
-    int lo = i * 64;
-    if (len <= lo) x->d[i] = 0;
-    else if (len < lo + 64) x->d[i] &= lb_word_mask(len - lo);
-  }
-}
-static void d256_shl(uint64_t *d, int n) {
-  if (n >= 256) { d[0] = d[1] = d[2] = d[3] = 0; return; }
-  int w = n / 64, b = n % 64; uint64_t r[4] = {0, 0, 0, 0};
-  for (int i = 3; i >= 0; i--) { int s = i - w; if (s < 0) continue;
-    r[i] |= d[s] << b; if (b && s - 1 >= 0) r[i] |= d[s - 1] >> (64 - b); }
-  for (int i = 0; i < 4; i++) d[i] = r[i];
-}
-static void d256_shr(uint64_t *d, int n) {
-  if (n >= 256) { d[0] = d[1] = d[2] = d[3] = 0; return; }
-  int w = n / 64, b = n % 64; uint64_t r[4] = {0, 0, 0, 0};
-  for (int i = 0; i < 4; i++) { int s = i + w; if (s > 3) continue;
-    r[i] |= d[s] >> b; if (b && s + 1 <= 3) r[i] |= d[s + 1] << (64 - b); }
-  for (int i = 0; i < 4; i++) d[i] = r[i];
-}
-
-void create_lbits(lbits *rop) { rop->len = 0; rop->d[0] = rop->d[1] = rop->d[2] = rop->d[3] = 0; }
-void recreate_lbits(lbits *rop) { create_lbits(rop); }
-void kill_lbits(lbits *rop) { (void)rop; }
-void copy_lbits(lbits *rop, const lbits op) { *rop = op; }
-
-void zeros(lbits *rop, const sail_int op) {
-  rop->len = op->d[0]; rop->d[0] = rop->d[1] = rop->d[2] = rop->d[3] = 0;
-}
-/* undefined = deterministic zero (register/vector default initialization) */
-void UNDEFINED(lbits)(lbits *rop, const sail_int len) { zeros(rop, len); }
-fbits convert_fbits_of_lbits(const lbits op, const bool direction) { (void)direction; return op.d[0]; }
-void convert_lbits_of_fbits(lbits *rop, const fbits op, const uint64_t len, const bool direction) {
-  (void)direction; rop->len = len; rop->d[0] = op; rop->d[1] = rop->d[2] = rop->d[3] = 0; lb_mask(rop);
-}
-
-void and_bits(lbits *rop, const lbits a, const lbits b) { rop->len = a.len; for (int i = 0; i < 4; i++) rop->d[i] = a.d[i] & b.d[i]; }
-void or_bits(lbits *rop, const lbits a, const lbits b)  { rop->len = a.len; for (int i = 0; i < 4; i++) rop->d[i] = a.d[i] | b.d[i]; }
-void xor_bits(lbits *rop, const lbits a, const lbits b) { rop->len = a.len; for (int i = 0; i < 4; i++) rop->d[i] = a.d[i] ^ b.d[i]; }
-void not_bits(lbits *rop, const lbits a) { rop->len = a.len; for (int i = 0; i < 4; i++) rop->d[i] = ~a.d[i]; lb_mask(rop); }
-void add_bits(lbits *rop, const lbits a, const lbits b) {
-  rop->len = a.len; unsigned __int128 c = 0;
-  for (int i = 0; i < 4; i++) { unsigned __int128 s = (unsigned __int128)a.d[i] + b.d[i] + c; rop->d[i] = (uint64_t)s; c = s >> 64; }
-  lb_mask(rop);
-}
-void sub_bits(lbits *rop, const lbits a, const lbits b) {
-  rop->len = a.len; unsigned __int128 bor = 0;
-  for (int i = 0; i < 4; i++) { unsigned __int128 d = (unsigned __int128)a.d[i] - b.d[i] - bor; rop->d[i] = (uint64_t)d; bor = (d >> 64) & 1; }
-  lb_mask(rop);
-}
-bool eq_bits(const lbits a, const lbits b)  { for (int i = 0; i < 4; i++) if (a.d[i] != b.d[i]) return false; return true; }
-bool neq_bits(const lbits a, const lbits b) { return !eq_bits(a, b); }
-
-void shiftl(lbits *rop, const lbits a, const sail_int n) { *rop = a; d256_shl(rop->d, (int)n->d[0]); lb_mask(rop); }
-void shiftr(lbits *rop, const lbits a, const sail_int n) { *rop = a; d256_shr(rop->d, (int)n->d[0]); }
-void zero_extend(lbits *rop, const lbits a, const sail_int len) { *rop = a; rop->len = len->d[0]; lb_mask(rop); }
-void append(lbits *rop, const lbits a, const lbits b) {        /* a (high) ++ b (low) */
-  lbits hi = a; d256_shl(hi.d, (int)b.len);
-  rop->len = a.len + b.len;
-  for (int i = 0; i < 4; i++) rop->d[i] = hi.d[i] | b.d[i];
-  lb_mask(rop);
-}
-void append_64(lbits *rop, const lbits a, const fbits chunk) {
-  lbits c = {64, {chunk, 0, 0, 0}}; append(rop, a, c);
-}
-void vector_subrange_lbits(lbits *rop, const lbits op, const sail_int hi, const sail_int lo) {
-  int h = (int)hi->d[0], l = (int)lo->d[0];
-  *rop = op; d256_shr(rop->d, l); rop->len = (uint64_t)(h - l + 1); lb_mask(rop);
-}
-fbits bitvector_access(const lbits op, const sail_int n) {
-  int i = (int)n->d[0]; return (op.d[i >> 6] >> (i & 63)) & 1;
-}
-
-/* limb-wise get_slice_int (sailfix looped per BIT; this is word_of_int, one of
- * the hottest runtime calls in the model). Two's-complement limbs of n are
- * materialized once, then the [start, start+len) window is limb-extracted. */
-void get_slice_int(lbits *rop, const sail_int len, const sail_int n, const sail_int start) {
-  int L = (int)len->d[0], st = (int)start->d[0];
-  rop->len = (uint64_t)L;
-  rop->d[0] = rop->d[1] = rop->d[2] = rop->d[3] = 0;
-  uint64_t tw[NI];
-  uint64_t ext;                                /* sign extension beyond 512 bits */
-  if (!n->neg) {
-    for (int i = 0; i < NI; i++) tw[i] = n->d[i];
-    ext = 0;
-  } else {                                     /* two's complement: ~(|n|-1) */
-    uint64_t one[NI], m1[NI];
-    mag_zero(one, NI); one[0] = 1;
-    mag_sub(m1, n->d, one, NI);
-    for (int i = 0; i < NI; i++) tw[i] = ~m1[i];
-    ext = ~0ULL;
-  }
-  int nw = (L + 63) / 64;
-  for (int i = 0; i < nw && i < 4; i++) {
-    int bitpos = st + i * 64;
-    int w = bitpos >> 6, b = bitpos & 63;
-    uint64_t lo = (w >= 0 && w < NI) ? tw[w] : ext;
-    uint64_t hi = (w + 1 >= 0 && w + 1 < NI) ? tw[w + 1] : ext;
-    rop->d[i] = b ? ((lo >> b) | (hi << (64 - b))) : lo;
-  }
-  lb_mask(rop);
-}
-void sail_unsigned(sail_int *rop, const lbits op) {
-  si *r = (*rop); mag_zero(r->d, NI); r->neg = 0;
-  for (int i = 0; i < 4; i++) r->d[i] = op.d[i];
-}
-void sail_signed(sail_int *rop, const lbits op) {
-  si *r = (*rop); mag_zero(r->d, NI); r->neg = 0;
-  for (int i = 0; i < 4; i++) r->d[i] = op.d[i];
-  int top = (int)op.len - 1;
-  if (top >= 0 && ((op.d[top >> 6] >> (top & 63)) & 1)) {  /* negative: value - 2^len */
-    uint64_t p2[NI]; mag_zero(p2, NI); p2[op.len >> 6] = (uint64_t)1 << (op.len & 63);
-    mag_sub(r->d, p2, r->d, NI); r->neg = 1; si_norm(r);
+    int low = i * 64;
+    if (length <= low) value->d[i] = 0;
+    else if (length < low + 64) {
+      value->d[i] &= bitvector_word_mask(length - low);
+    }
   }
 }
 
-/* ===================== strings / assert ================================ */
-void create_sail_string(sail_string *str) { char *s = (char *)malloc(1); s[0] = 0; *str = s; }
-void kill_sail_string(sail_string *str) { free((void *)*str); }
-/* Needed by Sail's exception codegen (throw records its source location as a
- * string). Standard RTS semantics: realloc-and-copy into *str. */
-void copy_sail_string(sail_string *str1, const_sail_string str2) {
-    size_t len = strlen(str2);
-    *str1 = (char *)realloc((void *)*str1, len + 1);
-    memcpy(*str1, str2, len + 1);
+static void bitvector_shift_left(uint64_t *data, int amount) {
+  if (amount >= 256) {
+    data[0] = data[1] = data[2] = data[3] = 0;
+    return;
+  }
+  int words = amount / 64;
+  int bits = amount % 64;
+  uint64_t result[4] = {0, 0, 0, 0};
+  for (int i = 3; i >= 0; i--) {
+    int source = i - words;
+    if (source < 0) continue;
+    result[i] |= data[source] << bits;
+    if (bits != 0 && source > 0) {
+      result[i] |= data[source - 1] >> (64 - bits);
+    }
+  }
+  for (int i = 0; i < 4; i++) data[i] = result[i];
 }
 
-/* sail -c -O emits RECREATE calls (reuse-an-allocation hint; for inline
- * fixed-width values it is just re-initialization) */
-void recreate_sail_int(sail_int *rop) { create_sail_int(rop); }
+static void bitvector_shift_right(uint64_t *data, int amount) {
+  if (amount >= 256) {
+    data[0] = data[1] = data[2] = data[3] = 0;
+    return;
+  }
+  int words = amount / 64;
+  int bits = amount % 64;
+  uint64_t result[4] = {0, 0, 0, 0};
+  for (int i = 0; i < 4; i++) {
+    int source = i + words;
+    if (source > 3) continue;
+    result[i] |= data[source] >> bits;
+    if (bits != 0 && source < 3) {
+      result[i] |= data[source + 1] << (64 - bits);
+    }
+  }
+  for (int i = 0; i < 4; i++) data[i] = result[i];
+}
+
+void create_lbits(lbits *value) {
+  value->len = 0;
+  value->d[0] = value->d[1] = value->d[2] = value->d[3] = 0;
+}
+void recreate_lbits(lbits *value) { create_lbits(value); }
+void kill_lbits(lbits *value) { (void)value; }
+void copy_lbits(lbits *result, const lbits value) { *result = value; }
+
+void zeros(lbits *result, const sail_int width) {
+  result->len = integer_small_unsigned(width);
+  result->d[0] = result->d[1] = result->d[2] = result->d[3] = 0;
+}
+void undefined_lbits(lbits *result, const sail_int width) {
+  zeros(result, width);
+}
+
+fbits convert_fbits_of_lbits(const lbits value, const bool direction) {
+  (void)direction;
+  return value.d[0];
+}
+void convert_lbits_of_fbits(lbits *result, const fbits value,
+                            const uint64_t width, const bool direction) {
+  (void)direction;
+  result->len = width;
+  result->d[0] = value;
+  result->d[1] = result->d[2] = result->d[3] = 0;
+  bitvector_mask(result);
+}
+
+void and_bits(lbits *result, const lbits lhs, const lbits rhs) {
+  result->len = lhs.len;
+  for (int i = 0; i < 4; i++) result->d[i] = lhs.d[i] & rhs.d[i];
+}
+void or_bits(lbits *result, const lbits lhs, const lbits rhs) {
+  result->len = lhs.len;
+  for (int i = 0; i < 4; i++) result->d[i] = lhs.d[i] | rhs.d[i];
+}
+void xor_bits(lbits *result, const lbits lhs, const lbits rhs) {
+  result->len = lhs.len;
+  for (int i = 0; i < 4; i++) result->d[i] = lhs.d[i] ^ rhs.d[i];
+}
+void not_bits(lbits *result, const lbits value) {
+  result->len = value.len;
+  for (int i = 0; i < 4; i++) result->d[i] = ~value.d[i];
+  bitvector_mask(result);
+}
+void add_bits(lbits *result, const lbits lhs, const lbits rhs) {
+  result->len = lhs.len;
+  unsigned __int128 carry = 0;
+  for (int i = 0; i < 4; i++) {
+    unsigned __int128 sum = (unsigned __int128)lhs.d[i] + rhs.d[i] + carry;
+    result->d[i] = (uint64_t)sum;
+    carry = sum >> 64;
+  }
+  bitvector_mask(result);
+}
+void sub_bits(lbits *result, const lbits lhs, const lbits rhs) {
+  result->len = lhs.len;
+  unsigned __int128 borrow = 0;
+  for (int i = 0; i < 4; i++) {
+    unsigned __int128 difference =
+        (unsigned __int128)lhs.d[i] - rhs.d[i] - borrow;
+    result->d[i] = (uint64_t)difference;
+    borrow = (difference >> 64) & 1;
+  }
+  bitvector_mask(result);
+}
+bool eq_bits(const lbits lhs, const lbits rhs) {
+  for (int i = 0; i < 4; i++) {
+    if (lhs.d[i] != rhs.d[i]) return false;
+  }
+  return true;
+}
+bool neq_bits(const lbits lhs, const lbits rhs) { return !eq_bits(lhs, rhs); }
+
+void shiftl(lbits *result, const lbits value, const sail_int amount) {
+  *result = value;
+  uint64_t shift = integer_small_unsigned(amount);
+  bitvector_shift_left(result->d, shift > 256 ? 256 : (int)shift);
+  bitvector_mask(result);
+}
+void shiftr(lbits *result, const lbits value, const sail_int amount) {
+  *result = value;
+  uint64_t shift = integer_small_unsigned(amount);
+  bitvector_shift_right(result->d, shift > 256 ? 256 : (int)shift);
+}
+void zero_extend(lbits *result, const lbits value, const sail_int width) {
+  *result = value;
+  result->len = integer_small_unsigned(width);
+  bitvector_mask(result);
+}
+void append(lbits *result, const lbits high, const lbits low) {
+  lbits shifted = high;
+  bitvector_shift_left(shifted.d, (int)low.len);
+  result->len = high.len + low.len;
+  for (int i = 0; i < 4; i++) result->d[i] = shifted.d[i] | low.d[i];
+  bitvector_mask(result);
+}
+void append_64(lbits *result, const lbits high, const fbits low) {
+  lbits chunk = {64, {low, 0, 0, 0}};
+  append(result, high, chunk);
+}
+void vector_subrange_lbits(lbits *result, const lbits value,
+                           const sail_int high, const sail_int low) {
+  int high_bit = (int)integer_small_unsigned(high);
+  int low_bit = (int)integer_small_unsigned(low);
+  *result = value;
+  bitvector_shift_right(result->d, low_bit);
+  result->len = (uint64_t)(high_bit - low_bit + 1);
+  bitvector_mask(result);
+}
+fbits bitvector_access(const lbits value, const sail_int index) {
+  int bit = (int)integer_small_unsigned(index);
+  return (value.d[bit >> 6] >> (bit & 63)) & 1;
+}
+
+static void update_lbits_at(lbits *result, const lbits value,
+                            uint64_t index, const uint64_t bit) {
+  if (index >= value.len || index >= 256 || bit > 1) integer_failure();
+  *result = value;
+  uint64_t mask = UINT64_C(1) << (index & 63);
+  uint64_t *limb = &result->d[index >> 6];
+  *limb = bit == 0 ? *limb & ~mask : *limb | mask;
+}
+
+void update_lbits(lbits *result, const lbits value,
+                  const sail_int index, const uint64_t bit) {
+  update_lbits_at(result, value, integer_small_unsigned(index), bit);
+}
+
+void update_lbits_inc(lbits *result, const lbits value,
+                      const sail_int index, const uint64_t bit) {
+  uint64_t position = integer_small_unsigned(index);
+  if (position >= value.len) integer_failure();
+  update_lbits_at(result, value, value.len - 1 - position, bit);
+}
+
+static int integer_twos_complement_bit(const integer *value,
+                                       const uint64_t *magnitude_minus_one,
+                                       int minus_one_length, uint64_t bit) {
+  if (!value->negative) {
+    return bit < (uint64_t)value->length * 64
+        ? (int)((value->limbs[bit >> 6] >> (bit & 63)) & 1)
+        : 0;
+  }
+  uint64_t source = bit < (uint64_t)minus_one_length * 64
+      ? (magnitude_minus_one[bit >> 6] >> (bit & 63)) & 1
+      : 0;
+  return (int)(source ^ 1);
+}
+
+void get_slice_int(lbits *result, const sail_int length,
+                   const sail_int value, const sail_int start) {
+  uint64_t output_length_u64 = integer_small_unsigned(length);
+  uint64_t first_bit = integer_small_unsigned(start);
+  if (output_length_u64 > 256) integer_failure();
+  int output_length = (int)output_length_u64;
+  result->len = output_length;
+  result->d[0] = result->d[1] = result->d[2] = result->d[3] = 0;
+  uint64_t magnitude_minus_one[INTEGER_LIMBS];
+  int minus_one_length = 0;
+  if (value->negative) {
+    const uint64_t one[1] = {1};
+    minus_one_length = magnitude_subtract(
+        magnitude_minus_one, value->limbs, value->length, one, 1);
+  }
+  for (int i = 0; i < output_length; i++) {
+    uint64_t bit = first_bit + (uint64_t)i;
+    int value_bit = bit < first_bit
+        ? value->negative
+        : integer_twos_complement_bit(value, magnitude_minus_one,
+                                      minus_one_length, bit);
+    if (value_bit) {
+      result->d[i >> 6] |= UINT64_C(1) << (i & 63);
+    }
+  }
+}
+
+void sail_unsigned(sail_int *result, const lbits value) {
+  integer *out = *result;
+  out->negative = 0;
+  for (int i = 0; i < 4; i++) out->limbs[i] = value.d[i];
+  out->length = magnitude_normalize(out->limbs, 4);
+}
+
+void sail_signed(sail_int *result, const lbits value) {
+  sail_unsigned(result, value);
+  if (value.len == 0) return;
+  int top = (int)value.len - 1;
+  if (((value.d[top >> 6] >> (top & 63)) & 1) == 0) return;
+  uint64_t power[INTEGER_LIMBS] = {0};
+  power[value.len >> 6] = UINT64_C(1) << (value.len & 63);
+  int power_length = (int)(value.len >> 6) + 1;
+  integer *out = *result;
+  out->length = magnitude_subtract(out->limbs, power, power_length,
+                                   out->limbs, out->length);
+  out->negative = out->length == 0 ? 0 : 1;
+}
+
+void create_sail_string(sail_string *string) {
+  char *empty = (char *)malloc(1);
+  empty[0] = 0;
+  *string = empty;
+}
+void kill_sail_string(sail_string *string) { free((void *)*string); }
+void copy_sail_string(sail_string *result, const_sail_string value) {
+  size_t length = strlen(value);
+  *result = (char *)realloc((void *)*result, length + 1);
+  memcpy(*result, value, length + 1);
+}

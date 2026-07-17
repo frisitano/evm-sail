@@ -9,14 +9,14 @@
 /* ======================================================================== */
 
 struct BlobSchedule = {
-    target : int,
-    max : int,
-    base_fee_update_fraction : int,
+    target : blob_count,
+    max : blob_count,
+    base_fee_update_fraction : blob_fee_update_fraction,
 }
 
 struct ChainConfig = {
-    chain_id : int,
-    fork_index : int, /* raw SSZ ProtocolFork index                     */
+    chain_id : chain_identifier,
+    fork_index : protocol_fork_index, /* raw SSZ ProtocolFork index            */
     fork : Fork, /* execution rules for that index                 */
     activation_active : bool, /* EELS _is_activation_active for this payload    */
     blob_schedule : option(BlobSchedule),
@@ -26,7 +26,7 @@ struct ChainConfig = {
 function blob_schedule_equal(a : BlobSchedule, b : BlobSchedule) -> bool =
     (a.target == b.target) & (a.max == b.max) & (a.base_fee_update_fraction == b.base_fee_update_fraction)
 
-function expected_blob_schedule(idx : int) -> option(BlobSchedule) =
+function expected_blob_schedule(idx : protocol_fork_index) -> option(BlobSchedule) =
     if idx < 15 then {
         None()
     } else {

@@ -2,156 +2,198 @@
  * authenticated base trie and fails closed when a touched hash is absent.
  * With an empty base the same builder computes Yellow Paper TRIE(I). */
 
-/* ---- the witness walker --------------------------------------------------
- *
- * witness_items(node, prefix, updates, fuel): the sorted post-state item
- * stream of the subtree rooted at `node` (whose position is `prefix`) and
- * the first update after that subtree. `updates` is a cursor into the one
- * globally sorted update stream; each call consumes its contiguous prefix
- * range and returns the cursor to its parent.
- *
- * The walker descends ONLY along touched paths; untouched children pass
- * through as single ref items with zero node-db work. Deletes are consumed
- * here and only here: a delete suppresses its base leaf, and a delete with
- * no base leaf (the walk proves absence) emits nothing. Whatever survives
- * is rebuilt by build_group, so a branch losing children to deletes
- * collapses in the builder with no walker involvement. RLP fields retain their
- * source and spans, so embedded nodes and leaf values remain witness slices. */
-val witness_items : (Bytes, TriePath, list(TrieUpdate), int) -> (list(TrieItem), list(TrieUpdate))
-val witness_child_items : (RlpFieldRef, TriePath, list(TrieUpdate), int) -> (list(TrieItem), list(TrieUpdate))
+/* Updates and surviving witness subtrees are emitted directly into a sink.
+ * The sink retains one item for key lookahead, so touched paths are rebuilt
+ * without materialising or partitioning an intermediate item list. */
+val witness_emit : (ByteSlice, TriePath, list(TrieUpdate), TrieItemSink, trie_fuel) -> (TrieItemSink, list(TrieUpdate))
+val witness_child_emit : (RlpFieldRef, TriePath, list(TrieUpdate), TrieItemSink, trie_fuel) -> (
+        TrieItemSink,
+        list(TrieUpdate),
+    )
 
-function witness_child_items(
-    f : RlpFieldRef,
-    prefix : TriePath,
+function emit_live_updates_under(
+    sink : TrieItemSink,
     updates : list(TrieUpdate),
-    fuel : int,
+    prefix : TriePath,
 ) -> (
-    (list(TrieItem), list(TrieUpdate))
-) = {
-    match field_to_ref(f) {
-        InlineRef(node) => witness_items(node, prefix, updates, fuel),
-        EmptyRef() => {
-            /* proven-absent subtree: the surviving updates are pure inserts */
-            live_update_items_under(updates, prefix)
+    (TrieItemSink, list(TrieUpdate))
+) =
+    match updates {
+        [||] => (sink, [||]),
+        update :: rest => if path_prefix_of(prefix, update.key) then {
+            let next_sink : TrieItemSink = match update.change {
+                TrieDelete() => sink,
+                TriePut(value) => trie_sink_emit(sink, item_leaf(update.key, value)),
+            };
+            emit_live_updates_under(next_sink, rest, prefix)
+        } else {
+            (sink, updates)
         },
-        HashRef(h) => {
-            let node = node_db_lookup(h);
-            if bytes_len(node) == 0 then {
-                throw InvalidBlock(WitnessDeficient)
+    }
+
+function emit_updates_before_child(
+    sink : TrieItemSink,
+    updates : list(TrieUpdate),
+    prefix : TriePath,
+    child : TriePath,
+) -> (
+    (TrieItemSink, list(TrieUpdate))
+) =
+    match updates {
+        [||] => (sink, [||]),
+        update :: rest => if   not_bool(path_prefix_of(prefix, update.key))
+                             | path_prefix_of(child, update.key)
+                             | not_bool(path_lt(update.key, child)) then {
+            (sink, updates)
+        } else {
+            let next_sink : TrieItemSink = match update.change {
+                TrieDelete() => sink,
+                TriePut(value) => trie_sink_emit(sink, item_leaf(update.key, value)),
+            };
+            emit_updates_before_child(next_sink, rest, prefix, child)
+        },
+    }
+
+function emit_leaf_overlay(
+    sink : TrieItemSink,
+    updates : list(TrieUpdate),
+    prefix : TriePath,
+    key : TriePath,
+    value : ByteSlice,
+) -> (
+    (TrieItemSink, list(TrieUpdate))
+) =
+    match updates {
+        [||] => (trie_sink_emit(sink, item_leaf(key, value)), [||]),
+        update :: rest => if not_bool(path_prefix_of(prefix, update.key)) then {
+            (trie_sink_emit(sink, item_leaf(key, value)), updates)
+        } else {
+            if path_eq(update.key, key) then {
+                let updated_sink : TrieItemSink = match update.change {
+                    TrieDelete() => sink,
+                    TriePut(updated) => trie_sink_emit(sink, item_leaf(key, updated)),
+                };
+                emit_live_updates_under(updated_sink, rest, prefix)
             } else {
-                witness_items(node, prefix, updates, fuel)
+                if path_lt(key, update.key) then {
+                    emit_live_updates_under(trie_sink_emit(sink, item_leaf(key, value)), updates, prefix)
+                } else {
+                    let updated_sink : TrieItemSink = match update.change {
+                        TrieDelete() => sink,
+                        TriePut(updated) => trie_sink_emit(sink, item_leaf(update.key, updated)),
+                    };
+                    emit_leaf_overlay(updated_sink, rest, prefix, key, value)
+                }
             }
         },
     }
-}
 
-function witness_items(
-    node : Bytes,
+function witness_child_emit(
+    field : RlpFieldRef,
     prefix : TriePath,
     updates : list(TrieUpdate),
-    fuel : int,
+    sink : TrieItemSink,
+    fuel : trie_fuel,
 ) -> (
-    (list(TrieItem), list(TrieUpdate))
+    (TrieItemSink, list(TrieUpdate))
+) =
+    match field_to_ref(field) {
+        InlineRef(node) => witness_emit(inline_node_slice(node), prefix, updates, sink, fuel),
+        EmptyRef() => emit_live_updates_under(sink, updates, prefix),
+        HashRef(node_hash) => {
+            let node = node_db_lookup(node_hash);
+            if node.len == BYTE_ZERO then {
+                throw InvalidBlock(WitnessDeficient)
+            } else {
+                witness_emit(node, prefix, updates, sink, fuel)
+            }
+        },
+    }
+
+function witness_emit(
+    node : ByteSlice,
+    prefix : TriePath,
+    updates : list(TrieUpdate),
+    sink : TrieItemSink,
+    fuel : trie_fuel,
+) -> (
+    (TrieItemSink, list(TrieUpdate))
 ) = {
-    if fuel <= 0 then {
+    if fuel == 0 then {
         throw InvalidBlock(WitnessDeficient)
     } else {
-        if bytes_len(node) == 0 then {
-            live_update_items_under(updates, prefix)
+        if node.len == BYTE_ZERO then {
+            emit_live_updates_under(sink, updates, prefix)
         } else {
             match decode_trie_node(node) {
                 LeafNode(leaf) => {
                     let key = path_concat(prefix, leaf.path);
-                    leaf_overlay_items(updates, prefix, key, rlp_ref_content(leaf.value))
+                    emit_leaf_overlay(sink, updates, prefix, key, rlp_ref_content(leaf.value))
                 },
-                ExtensionNode(ext) => {
-                    let key = path_concat(prefix, ext.path);
-                    var before_rev : list(TrieItem) = [||];
-                    var remaining : list(TrieUpdate) = updates;
-                    var before_child : bool = true;
-
-                    /* Diverging updates below `prefix` but ordered before the
-                       extension child are emitted until the cursor reaches the
-                       child range or the next sibling subtree. */
-                    while before_child do {
-                        match remaining {
-                            [||] => before_child = false,
-                            update :: rest => if   not_bool(path_prefix_of(prefix, update.key))
-                                                 | path_prefix_of(key, update.key)
-                                                 | not_bool(path_lt(update.key, key)) then {
-                                before_child = false
-                            } else {
-                                match update.change {
-                                    TrieDelete() => (),
-                                    TriePut(value) => before_rev = item_leaf(update.key, value) :: before_rev,
-                                };
-                                remaining = rest
-                            },
-                        }
-                    };
-
-                    let (sub, after_sub) = if next_update_under(remaining, key) then {
-                            witness_child_items(ext.child, key, remaining, fuel - 1)
+                ExtensionNode(extension) => {
+                    let child_prefix = path_concat(prefix, extension.path);
+                    let (before_sink, child_updates) = emit_updates_before_child(sink, updates, prefix, child_prefix);
+                    let (child_sink, later_updates) = if next_update_under(child_updates, child_prefix) then {
+                            witness_child_emit(
+                                extension.child,
+                                child_prefix,
+                                child_updates,
+                                before_sink,
+                                trie_fuel_decrement(fuel),
+                            )
                         } else {
-                            /* untouched extension child: one whole-subtree
-                               ref; an extension's child is always a branch */
-                            ([|item_branch(key, field_to_ref(ext.child))|], remaining)
+                            (
+                                trie_sink_emit(before_sink, item_branch(child_prefix, field_to_ref(extension.child))),
+                                child_updates,
+                            )
                         };
-                    let (after, next) = live_update_items_under(after_sub, prefix);
-                    (list_append(list_reverse(before_rev), list_append(sub, after)), next)
+                    emit_live_updates_under(child_sink, later_updates, prefix)
                 },
                 BranchNode(branch) => {
-                    /* a branch value at slot 16 is impossible for 64-nibble hashed
-                       keys (no key is a prefix of another): a malformed witness. */
-                    if unsigned(branch.value.content_len) > 0 then {
+                    if branch.value.content_len != BYTE_ZERO then {
                         throw InvalidBlock(WitnessDeficient)
                     };
-                    var out_rev : list(TrieItem) = [||];
-                    var remaining : list(TrieUpdate) = updates;
+                    var current_sink = sink;
+                    var remaining = updates;
+                    var nib : nibble = 0x0;
                     foreach (i from 0 to 15) {
-                        let nib : nibble = get_slice_int(4, i, 0);
                         let field = branch.children[i];
                         let child_prefix = path_concat(prefix, path_single(nib));
-
-                        /* a child slot holds an embedded node, a 32-byte hash,
-                           or nothing (field_to_ref of anything else is empty) */
                         let childref = field_to_ref(field);
                         let present : bool = match childref {
                             EmptyRef() => false,
                             _ => true,
                         };
-                        let (contrib, next) = if next_update_under(remaining, child_prefix) then {
-                                if present then {
-                                    witness_child_items(field, child_prefix, remaining, fuel - 1)
+                        if next_update_under(remaining, child_prefix) then {
+                            let (next_sink, next_updates) = if present then {
+                                    witness_child_emit(
+                                        field,
+                                        child_prefix,
+                                        remaining,
+                                        current_sink,
+                                        trie_fuel_decrement(fuel),
+                                    )
                                 } else {
-                                    /* no base child: the surviving updates are
-                                       pure inserts */
-                                    live_update_items_under(remaining, child_prefix)
-                                }
-                            } else {
-                                if present then {
-                                    /* untouched branch child: node type unknown
-                                       for hash refs (is_branch = false) */
-                                    ([|item_subtree(child_prefix, childref)|], remaining)
-                                } else {
-                                    ([||], remaining)
-                                }
-                            };
-                        out_rev = rev_onto(contrib, out_rev);
-                        remaining = next
+                                    emit_live_updates_under(current_sink, remaining, child_prefix)
+                                };
+                            current_sink = next_sink;
+                            remaining = next_updates
+                        } else {
+                            if present then {
+                                current_sink = trie_sink_emit(current_sink, item_subtree(child_prefix, childref))
+                            }
+                        };
+                        nib = add_bits(nib, 0x1)
                     };
-                    (list_reverse(out_rev), remaining)
+                    (current_sink, remaining)
                 },
-                InvalidNode() => {
-                    let (_, remaining) = live_update_items_under(updates, prefix);
-                    ([||], remaining)
-                },
+                InvalidNode() => throw InvalidBlock(WitnessDeficient),
             }
         }
     }
 }
-termination_measure witness_items(node, prefix, updates, fuel) = fuel
-termination_measure witness_child_items(f, prefix, updates, fuel) = fuel
+termination_measure witness_emit(node, prefix, updates, sink, fuel) = fuel
+termination_measure witness_child_emit(field, prefix, updates, sink, fuel) = fuel
 
 /* ---- THE trie entry ------------------------------------------------------
  *
@@ -172,64 +214,76 @@ function trie_root(base_root : bits(256), updates : list(TrieUpdate)) -> bits(25
     if updates_empty(updates) then {
         base_root
     } else {
-        if base_root == EMPTY_TRIE_ROOT then {
-            items_root(live_update_items(updates))
-        } else {
-            let node = node_db_lookup(base_root);
-            if bytes_len(node) == 0 then {
-                throw InvalidBlock(WitnessDeficient)
+        let sink = trie_sink_empty();
+        let (updated_sink, remaining) = if base_root == EMPTY_TRIE_ROOT then {
+                emit_live_updates_under(sink, updates, path_empty())
             } else {
-                let (items, remaining) = witness_items(node, path_empty(), updates, 256);
-                if updates_empty(remaining) then {
-                    items_root(items)
-                } else {
+                let node = node_db_lookup(base_root);
+                if node.len == BYTE_ZERO then {
                     throw InvalidBlock(WitnessDeficient)
+                } else {
+                    witness_emit(node, path_empty(), updates, sink, 256)
                 }
-            }
+            };
+        if updates_empty(remaining) then {
+            trie_sink_root(trie_sink_finish(updated_sink))
+        } else {
+            throw InvalidBlock(WitnessDeficient)
         }
     }
 }
 
 /* Walk the secure trie without copying its leaf value. */
-function trie_walk(node : Bytes, key : TriePath, pos : int, fuel : int) -> Bytes = {
-    if fuel <= 0 | bytes_len(node) == 0 then {
-        BytesList([||])
+function trie_walk(node : ByteSlice, key : TriePath, pos : trie_path_len, fuel : trie_fuel) -> ByteSlice = {
+    if fuel == 0 | node.len == BYTE_ZERO then {
+        EMPTY_SLICE
     } else {
         match decode_trie_node(node) {
             LeafNode(leaf) => if not_bool(path_matches(key, pos, leaf.path)) then {
-                BytesList([||])
+                EMPTY_SLICE
             } else {
                 if pos + path_len(leaf.path) == path_len(key) then {
                     rlp_ref_content(leaf.value)
                 } else {
-                    BytesList([||])
+                    EMPTY_SLICE
                 }
             },
             ExtensionNode(ext) => if not_bool(path_matches(key, pos, ext.path)) then {
-                BytesList([||])
+                EMPTY_SLICE
             } else {
-                trie_walk(resolve_ref(field_to_ref(ext.child)), key, pos + path_len(ext.path), fuel - 1)
+                let next_pos = pos + path_len(ext.path);
+                if next_pos <= 64 then {
+                    trie_walk(resolve_ref(field_to_ref(ext.child)), key, next_pos, trie_fuel_decrement(fuel))
+                } else {
+                    EMPTY_SLICE
+                }
             },
             BranchNode(branch) => {
                 if pos == path_len(key) then {
                     rlp_ref_content(branch.value)
                 } else {
-                    let child = resolve_ref(field_to_ref(branch.children[unsigned(path_nibble(key, pos))]));
-                    trie_walk(child, key, pos + 1, fuel - 1)
+                    if pos < path_len(key) then {
+                        let child = resolve_ref(
+                            field_to_ref(branch_children_get(branch.children, path_nibble(key, pos))),
+                        );
+                        trie_walk(child, key, trie_path_len_increment(pos), trie_fuel_decrement(fuel))
+                    } else {
+                        EMPTY_SLICE
+                    }
                 }
             },
-            InvalidNode() => BytesList([||]),
+            InvalidNode() => EMPTY_SLICE,
         }
     }
 }
 termination_measure trie_walk(node, key, pos, fuel) = fuel
 
-function trie_lookup(root : hash, key : TriePath) -> Bytes = {
+function trie_lookup(root : hash, key : TriePath) -> ByteSlice = {
     if root == EMPTY_TRIE_ROOT then {
-        BytesList([||])
+        EMPTY_SLICE
     } else {
         let node = node_db_lookup(root);
-        if bytes_len(node) == 0 then {
+        if node.len == BYTE_ZERO then {
             throw InvalidBlock(WitnessDeficient)
         } else {
             trie_walk(node, key, 0, 256)

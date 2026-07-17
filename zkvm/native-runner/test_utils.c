@@ -1,89 +1,41 @@
-/* Self-contained native harness for the evm-sail model: the ONE host-side I/O
- * + run surface, linked into the ctypes guest library (build_lib.sh) AND the
- * standalone zkvm_native exe (main.c CLI). Never
- * linked into the real zkVM guest, whose baked-vector / HTIF paths stay in
- * zkvm_input.c / zkvm_io.c.
- *
- * This file owns the WHOLE native I/O + harness surface so every host build
- * links exactly one file: the input buffer + ssz_src accessors, the public-output
- * output buffer + accessors, the model lifecycle, the large-stack run_once, and
- * the between-fixtures clear_memory. It replaces the old split across
- * zkvm_input.c (-DERE_GUEST) plus the native input/output adapters and their
- * ssz_src / double output buffer. See test_utils.h for the contract. */
-#include "sail.h" /* unit / UNIT / bool / sail_int */
+/* Native implementation of the same standard read_input/write_output ABI used
+ * by the zkVM guest, plus the reusable test-process lifecycle and dump hooks. */
+#include "byte_slice_glue.h"
+#include "sail.h" /* unit / UNIT / bool */
 #include "test_utils.h"
+#include "zkvm_io.h"
 
 #include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
-/* ------------------------- input byte source ---------------------------- */
-/* The host hands the guest its private input via evmsail_set_input; the Sail
- * SSZ/stream decoder reads it through ssz_src_* (lib/ssz/ssz.sail). One buffer,
- * indexed. */
-static const unsigned char *g_in = NULL;
-static unsigned long g_in_len = 0;
+/* --------------------------- standard I/O ------------------------------- */
+static const uint8_t *g_in = NULL;
+static size_t g_in_len = 0;
 
-void evmsail_set_input(const unsigned char *p, unsigned long n)
+static void evmsail_set_input(const uint8_t *p, size_t n)
 {
     g_in = p;
     g_in_len = n;
+    evmsail_input_reset();
 }
 
-uint64_t ssz_src_len(const unit u)
+void read_input(const uint8_t **buf_ptr, size_t *buf_size)
 {
-    (void)u;
-    return (uint64_t)g_in_len;
+    *buf_ptr = g_in;
+    *buf_size = g_in_len;
 }
 
-uint64_t ssz_src_byte(uint64_t idx)
-{
-    uint64_t i = idx;
-    return (i < g_in_len) ? (uint64_t)g_in[i] : 0;
-}
-
-const uint8_t *evmsail_stateless_input_ptr(uint64_t off, uint64_t len)
-{
-    uint64_t total = (uint64_t)g_in_len;
-    if (off > total || len > total - off) return NULL;
-    return g_in + off;
-}
-
-/* Bulk slice readers: read n (<=8) bytes in ONE FFI call instead of n crossings
- * -- the hot path of SSZ decoding (offsets, fields). */
-uint64_t ssz_src_le(sail_int off, sail_int n) /* little-endian */
-{
-    unsigned long o = mpz_get_ui(off);
-    long k = (long)mpz_get_ui(n);
-    uint64_t v = 0;
-    for (long i = 0; i < k; i++) {
-        uint64_t b = (o + (unsigned long)i < g_in_len) ? g_in[o + i] : 0;
-        v |= b << (8 * i);
-    }
-    return v;
-}
-uint64_t ssz_src_be(sail_int off, sail_int n) /* big-endian */
-{
-    unsigned long o = mpz_get_ui(off);
-    long k = (long)mpz_get_ui(n);
-    uint64_t v = 0;
-    for (long i = 0; i < k; i++) {
-        uint64_t b = (o + (unsigned long)i < g_in_len) ? g_in[o + i] : 0;
-        v = (v << 8) | b;
-    }
-    return v;
-}
-
-/* ------------------------- output byte sink ----------------------------- */
-/* The guest emits its canonical result byte-by-byte via public_output_write ->
- * el_emit_out (host/output.sail). Buffer it for the native harness. */
 static unsigned char g_out[1u << 17];
 static size_t g_out_len = 0;
 
-unit el_emit_out(uint64_t b)
+void write_output(const uint8_t *output, size_t size)
 {
-    if (g_out_len < sizeof g_out) g_out[g_out_len++] = (unsigned char)(b & 0xff);
-    return UNIT;
+    size_t available = sizeof g_out - g_out_len;
+    if (size > available) size = available;
+    if (size != 0) memcpy(g_out + g_out_len, output, size);
+    g_out_len += size;
 }
 
 /* --------------------------- state resets ------------------------------- */
@@ -103,11 +55,7 @@ extern unit code_db_reset(unit);             /* content-addressed code store (mi
 extern bool have_exception;                  /* generated: a Sail throw escaped the run */
 
 /* clear_memory: the C-side full world wipe that replaces k_world_reset. Zeroes
- * every piece of guest state that persists across in-process runs.
- *
- * k_refund (a sail_int register) is intentionally NOT touched: k_tx_reset already
- * zeroes it on every transaction, and a fixture always runs its txs before the
- * refund is read -- so a C-side sail_int poke would be redundant. */
+ * every piece of guest state that persists across in-process runs. */
 void evmsail_clear_memory(void)
 {
     /* block-level overlays -- the pieces per-tx k_tx_reset does NOT clear */
@@ -189,8 +137,10 @@ unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
  * normal fixture runs do not invoke it.
  *
  * Content (all multi-byte ints big-endian):
- *   'G' ok[1] root[32]               (root = compute_state_root() over the live
- *                                     post-run state, zeros when ok=0)
+ *   'G' ok[1] root[32] rebuilt[32]   (root = compute_state_root() over the live
+ *                                     post-run state; rebuilt recomputes the
+ *                                     same materialized state from an empty
+ *                                     trie; both are zero when ok=0)
  *       when ok=0, followed by the CAPTURED exception:
  *       err[1] loc_len[2] loc[loc_len]   (err = the BlockError enum value of
  *                                     the InvalidBlock that escaped, 0xff if
@@ -199,7 +149,8 @@ unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
  *   'O' u32 len output[len]          (the canonical output emitted by main.sail)
  *   'V' failed[1]                    (main.sail's caught validation failure)
  *       when failed=1: scope[1] reason[1]
- *   'A' u32 n_acct  { hkey[32] nonce[8] bal[32] sroot[32] chash[32]
+ *   'A' u32 n_acct  { hkey[32] address[20] nonce[8] bal[32]
+ *                     base_sroot[32] computed_sroot[32] chash[32]
  *                     u32 n_slot { slot[32] val[32] }* }*
  *   'S' u32 depth   { word[32] }*   (stack, top-first)
  *   'M' u32 frame_depth              (EVM memory: only the call-frame depth is
@@ -211,6 +162,7 @@ unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
  * unchanged authenticated-base values are not enumerable here. */
 extern uint64_t acct_dump_count(unit);
 extern void     acct_dump_hkey(lbits *, uint64_t);
+extern void     acct_dump_address(lbits *, uint64_t);
 extern uint64_t acct_dump_nonce(uint64_t);
 extern void     acct_dump_balance(lbits *, uint64_t);
 extern void     acct_dump_storage_root(lbits *, uint64_t);
@@ -224,6 +176,8 @@ extern uint64_t hm_depth(unit);
 
 /* The model's own root computation and generated exception state. */
 extern void     zcompute_state_root(lbits *, unit);
+extern void     zdebug_account_storage_root(lbits *, lbits);
+extern void     zdebug_rebuild_state_root(lbits *, unit);
 /* Mirror of the GENERATED exception representation (.build/zkvm_*.h): the
  * model's single constructor InvalidBlock(BlockError). The BlockError enum
  * values are fixed by declaration order in sail/exceptions.sail;
@@ -253,9 +207,12 @@ static void d_word(const lbits *v) {
 unsigned long evmsail_debug_dump(const unsigned char **out)
 {
     g_dump_len = 0;
-    lbits w;
+    lbits w, rebuilt;
 
-    if (!have_exception) zcompute_state_root(&w, UNIT);
+    if (!have_exception) {
+        zcompute_state_root(&w, UNIT);
+        zdebug_rebuild_state_root(&rebuilt, UNIT);
+    }
     d_byte('G');
     d_byte(have_exception ? 0 : 1);
     if (have_exception) {
@@ -272,6 +229,11 @@ unsigned long evmsail_debug_dump(const unsigned char **out)
         for (size_t i = 0; i < ln; i++) d_byte((unsigned char)loc[i]);
     } else {
         d_word(&w);
+    }
+    if (have_exception) {
+        for (int i = 0; i < 32; i++) d_byte(0);
+    } else {
+        d_word(&rebuilt);
     }
 
     d_byte('O');
@@ -291,9 +253,16 @@ unsigned long evmsail_debug_dump(const unsigned char **out)
     for (uint64_t i = 0; i < na; i++) {
         acct_dump_hkey(&w, i); d_word(&w);       /* keccak(address) */
         lbits hk = w;                                   /* reuse as the storage account key */
+        lbits addr;
+        acct_dump_address(&addr, i);
+        for (int j = 0; j < 20; j++) {
+            unsigned shift = (unsigned)(19 - j) * 8u;
+            d_byte((unsigned char)(addr.d[shift / 64u] >> (shift % 64u)));
+        }
         d_u64(acct_dump_nonce(i));
         acct_dump_balance(&w, i);   d_word(&w);
         acct_dump_storage_root(&w, i); d_word(&w);
+        zdebug_account_storage_root(&w, addr); d_word(&w);
         acct_dump_code_hash(&w, i); d_word(&w);
         uint64_t ns = storage_dump_count(hk);
         d_u32((uint32_t)ns);

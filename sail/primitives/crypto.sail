@@ -20,12 +20,11 @@ let EMPTY_TRIE_ROOT : hash = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc00
  * hash/signature primitives with NO pure Sail body (ffi/host_crypto.c,
  * ffi/precompiles.c -- the eth-act zkvm-standards accelerator surface); proof
  * targets see them as bodyless axioms (the c: key binds only C). keccak256 and
- * sha256 are the axiomatic hash core; keccak_rlp_payload refines
- * keccak256(domain ++ rlp_list_prefix(len) ++ payload). All shared consensus
+ * sha256 are the axiomatic hash core. All shared consensus
  * hashing (lib/consensus_hash.sail) is written against these three. The
- * StatelessInput/Memory/Code source of a ByteSlice denotes an abstract
- * byte sequence: keccak256(s : ByteSlice) = keccak256(read_byte_slice(s)); the
- * prefixed SHA-256 digest = sha256(type_byte :: bytes). ---- */
+ * StatelessInput/Memory/Code source of a ByteSlice denotes its abstract byte
+ * sequence directly: keccak256(s : ByteSlice) hashes exactly that sequence;
+ * the prefixed SHA-256 digest = sha256(type_byte :: bytes). ---- */
 
 /* ---- THE hash axioms: pure functions of a segment list. A preimage is
  * accumulated Sail-side as list(Bytes) -- its denotation is the concatenation
@@ -36,33 +35,27 @@ let EMPTY_TRIE_ROOT : hash = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc00
 val keccak256_segments = impure { c: "host_keccak_segments" } : list(Bytes) -> bits(256)
 val sha256_segments = impure { c: "host_sha256_segments" } : list(Bytes) -> bits(256)
 
-function keccak256_bytes(bs : list(byte)) -> bits(256) = keccak256_segments([|BytesList(bs)|])
-
 function keccak256_slice(s : ByteSlice) -> bits(256) = keccak256_segments([|BytesSlice(s)|])
 
-/* keccak256 / sha256 are overloaded over materialized bytes, a source-tagged
- * slice, or a full segment list -- one axiomatic core. */
-overload keccak256 = { keccak256_bytes, keccak256_slice, keccak256_segments }
+/* Materialized fragments always enter through Bytes with an explicit length;
+ * source-backed payloads can use the single-slice overload directly. */
+overload keccak256 = { keccak256_slice, keccak256_segments }
 
-function sha256_bytes(bs : list(byte)) -> bits(256) = sha256_segments([|BytesList(bs)|])
-
-overload sha256 = { sha256_bytes, sha256_segments }
-
-/* keccak256(domain ++ rlp_list_prefix(len(payload)) ++ payload); body in
- * lib/rlp/rlp.sail (it needs rlp_list_prefix). */
-val keccak_rlp_payload : (list(byte), list(byte)) -> bits(256)
+overload sha256 = { sha256_segments }
 
 /* Fixed-width helpers: pure meaning over keccak256/sha256. The dormant
  * one-call C fast paths in ffi/host_crypto.c (host_keccak_word & co) are
  * future link-time overrides for the hot path (secure-trie keys hash on
  * every state access). */
-function keccak256_word(w : word) -> bits(256) = keccak256(word_to_bytes32(w))
+function keccak256_word(w : word) -> bits(256) =
+    keccak256([|bytes_list(word_to_bytes32(w), WORD_BYTE_LENGTH)|])
 
-function keccak256_address(a : address) -> bits(256) = keccak256(address_to_bytes(a))
+function keccak256_address(a : address) -> bits(256) =
+    keccak256([|bytes_list(address_to_bytes(a), ADDRESS_BYTE_LENGTH)|])
 
 /* SSZ merkle parent: SHA-256(left ++ right) over two 32-byte chunks. */
 function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) =
-    sha256([|BytesList(word_to_bytes32(a)), BytesList(word_to_bytes32(b))|])
+    sha256([|bytes_list(word_to_bytes32(a), WORD_BYTE_LENGTH), bytes_list(word_to_bytes32(b), WORD_BYTE_LENGTH)|])
 
 /* ---- Signature core: the host/accelerators.sail k256 axioms plus the
  * curve-order constants signature validity rules bound r/s against. ---- */
@@ -73,7 +66,7 @@ let SECP_N_HALF : bits(256) = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501d
 
 /* recover the signer address from (h, y_parity, r, s); the leading bit flags
  * recovery success (EIP-7702 authority recovery) */
-function ecrecover_addr(h : bits(256), yparity : int, r : word, s : word) -> (bool, address) = {
-    let recovered = host_ecrecover(h, get_slice_int(64, yparity, 0), r, s);
+function ecrecover_addr(h : bits(256), yparity : y_parity, r : word, s : word) -> (bool, address) = {
+    let recovered = host_ecrecover(h, yparity, r, s);
     (recovered[160] == bitone, recovered[159 .. 0])
 }

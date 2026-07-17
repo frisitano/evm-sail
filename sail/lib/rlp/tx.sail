@@ -13,60 +13,113 @@
 /* Decode an EIP-2930 access list (RLP [[address, [slot, ...]], ...]) from the
  * access-list field into the flat representation the Transaction and intrinsic-
  * gas accounting use: the addresses (one per entry) and the (address, slot) pairs. */
-function decode_access_list(f : RlpFieldRef) -> (list(address), list(StorageKey), int, int) = {
-    var addresses_rev : list(address) = [||];
-    var storage_slots_rev : list(StorageKey) = [||];
-    var address_count : int = 0;
-    var slot_count : int = 0;
-    var entries = rlp_ref_cursor(f);
-    while not_bool(rlp_cursor_empty(entries)) do {
-        let (entry, next_entry) = rlp_cursor_pop(entries);
-        entries = next_entry;
+struct AccessListDecode = {
+    addresses : list(address),
+    storage_slots : list(StorageKey),
+    address_count : item_count,
+    slot_count : item_count,
+}
 
+let EMPTY_ACCESS_LIST_DECODE : AccessListDecode = struct {
+        addresses = [||],
+        storage_slots = [||],
+        address_count = 0,
+        slot_count = 0,
+    }
+
+/* Prepend this entry's keys while recursive unwind restores their wire order.
+ * The unconsumed key-list content span strictly decreases on every call. */
+function decode_access_list_keys(cursor : RlpCursor, addr : address, tail : AccessListDecode) -> AccessListDecode =
+    if rlp_cursor_empty(cursor) then {
+        tail
+    } else {
+        let (key, next) = rlp_cursor_pop(cursor);
+        let storage_key : StorageKey = struct { addr = addr, slot = rlp_ref_word(key) };
+        let result = decode_access_list_keys(next, addr, tail);
+        if result.slot_count == 2 ^ 64 - 1 then {
+            throw InvalidBlock(RlpDecode)
+        } else {
+            struct {
+                addresses = result.addresses,
+                storage_slots = storage_key :: result.storage_slots,
+                address_count = result.address_count,
+                slot_count = protocol_quantity_increment(result.slot_count),
+            }
+        }
+    }
+termination_measure decode_access_list_keys(cursor, addr, tail) =
+    let ByteQuantity(stop) = cursor.stop in
+    let ByteQuantity(current) = cursor.current in
+    stop - current
+
+/* The unconsumed access-list content span strictly decreases on every call. */
+function decode_access_list_entries(cursor : RlpCursor) -> AccessListDecode =
+    if rlp_cursor_empty(cursor) then {
+        EMPTY_ACCESS_LIST_DECODE
+    } else {
+        let (entry, next) = rlp_cursor_pop(cursor);
         let (addr_f, entry_fields) = rlp_cursor_pop(rlp_ref_cursor(entry));
         let (keys_f, entry_fields) = rlp_cursor_pop(entry_fields);
         rlp_cursor_expect_end(entry_fields);
 
         let addr = word_to_address(rlp_ref_word(addr_f));
-        addresses_rev = addr :: addresses_rev;
-        address_count = address_count + 1;
-
-        var keys = rlp_ref_cursor(keys_f);
-        while not_bool(rlp_cursor_empty(keys)) do {
-            let (key, next_key) = rlp_cursor_pop(keys);
-            keys = next_key;
-            storage_slots_rev = struct { addr = addr, slot = rlp_ref_word(key) } :: storage_slots_rev;
-            slot_count = slot_count + 1
+        let tail = decode_access_list_entries(next);
+        let result = decode_access_list_keys(rlp_ref_cursor(keys_f), addr, tail);
+        if result.address_count == 2 ^ 64 - 1 then {
+            throw InvalidBlock(RlpDecode)
+        } else {
+            struct {
+                addresses = addr :: result.addresses,
+                storage_slots = result.storage_slots,
+                address_count = protocol_quantity_increment(result.address_count),
+                slot_count = result.slot_count,
+            }
         }
-    };
-    (list_reverse(addresses_rev), list_reverse(storage_slots_rev), address_count, slot_count)
+    }
+termination_measure decode_access_list_entries(cursor) =
+    let ByteQuantity(stop) = cursor.stop in
+    let ByteQuantity(current) = cursor.current in
+    stop - current
+
+function decode_access_list(f : RlpFieldRef) -> (list(address), list(StorageKey), item_count, item_count) = {
+    let decoded = decode_access_list_entries(rlp_ref_cursor(f));
+    (decoded.addresses, decoded.storage_slots, decoded.address_count, decoded.slot_count)
 }
 
 /* Validate the canonical RLP list of bytes32 blob versioned hashes once, then
  * retain its encoded content as a fixed-stride source view. Each element is
  * exactly 0xa0 followed by 32 bytes, so BLOBHASH can load item i at 33*i+1. */
-function decode_blob_hashes(f : RlpFieldRef) -> BlobHashes = {
-    let bytes : ByteSlice = match f.source {
-        BytesSlice(source) => sub_slice(source, unsigned(f.content_off), unsigned(f.content_len)),
-        BytesList(_) => throw InvalidBlock(RlpDecode),
-    };
-    var count : int = 0;
-    var items = rlp_ref_cursor(f);
-    while not_bool(rlp_cursor_empty(items)) do {
-        let (item, next) = rlp_cursor_pop(items);
-        items = next;
+let BLOB_HASH_RLP_LENGTH : byte_length = ByteQuantity(33)
+let BLOB_HASH_LENGTH : byte_length = WORD_BYTE_LENGTH
+
+/* The unconsumed hash-list content span strictly decreases on every call. */
+function decode_blob_hash_items(cursor : RlpCursor, count : blob_count) -> blob_count =
+    if rlp_cursor_empty(cursor) then {
+        count
+    } else {
+        let (item, next) = rlp_cursor_pop(cursor);
         if    item.is_list
-           |  unsigned(item.full_len)
-           != 33
-           |  unsigned(item.content_len)
-           != 32
-           |  bytes_at(item.source, unsigned(item.full_off))
+           |  item.full_len
+           != BLOB_HASH_RLP_LENGTH
+           |  item.content_len
+           != BLOB_HASH_LENGTH
+           |  slice_byte(item.source, item.full_off)
            != 0xa0 then {
             throw InvalidBlock(RlpDecode)
         };
-        count = count + 1
-    };
-    struct { bytes = bytes, count = count }
+        if count == 2 ^ 64 - 1 then {
+            throw InvalidBlock(RlpDecode)
+        };
+        decode_blob_hash_items(next, protocol_quantity_increment(count))
+    }
+termination_measure decode_blob_hash_items(cursor, count) =
+    let ByteQuantity(stop) = cursor.stop in
+    let ByteQuantity(current) = cursor.current in
+    stop - current
+
+function decode_blob_hashes(f : RlpFieldRef) -> BlobHashes = {
+    let bytes = sub_slice(f.source, f.content_off, f.content_len);
+    struct { bytes = bytes, count = decode_blob_hash_items(rlp_ref_cursor(f), 0) }
 }
 
 /* ---- EIP-7702 authorization-tuple recovery ---------------------------------
@@ -78,14 +131,16 @@ function decode_blob_hashes(f : RlpFieldRef) -> BlobHashes = {
  * recovering each authority. valid_sig records tuple-local signature validity
  * (recoverable, low-s, r/y parity ranges, incrementable nonce); process_auth then
  * applies the chain-id / account nonce / code checks. */
-function decode_auth_list(f : RlpFieldRef) -> (list(Authorization), int) = {
-    var out_rev : list(Authorization) = [||];
-    var count : int = 0;
-    var tuples = rlp_ref_cursor(f);
-    while not_bool(rlp_cursor_empty(tuples)) do {
-        let (tuple, next_tuple) = rlp_cursor_pop(tuples);
-        tuples = next_tuple;
+struct AuthorizationDecode = { authorizations : list(Authorization), count : item_count }
 
+let EMPTY_AUTHORIZATION_DECODE : AuthorizationDecode = struct { authorizations = [||], count = 0 }
+
+/* The unconsumed authorization-list content span strictly decreases on every call. */
+function decode_auth_tuples(cursor : RlpCursor) -> AuthorizationDecode =
+    if rlp_cursor_empty(cursor) then {
+        EMPTY_AUTHORIZATION_DECODE
+    } else {
+        let (tuple, next) = rlp_cursor_pop(cursor);
         let (chain_f, fields) = rlp_cursor_pop(rlp_ref_cursor(tuple));
         let (addr_f, fields) = rlp_cursor_pop(fields);
         let (nonce_f, fields) = rlp_cursor_pop(fields);
@@ -94,40 +149,60 @@ function decode_auth_list(f : RlpFieldRef) -> (list(Authorization), int) = {
         let (s_f, fields) = rlp_cursor_pop(fields);
         rlp_cursor_expect_end(fields);
 
-        let chain_id = rlp_ref_int(chain_f);
-        let auth_nonce = rlp_ref_int(nonce_f);
-        let y = rlp_ref_int(y_f);
+        let chain_id = rlp_ref_uint_word(chain_f);
+        let auth_nonce = rlp_ref_uint(nonce_f);
+        let y_value = rlp_ref_uint(y_f);
+        let y_valid = y_value <= 1;
+        let y : y_parity = if y_value == 0 then { 0 } else { 1 };
         let r = rlp_ref_uint_word(r_f);
         let s = rlp_ref_uint_word(s_f);
         let auth_addr = word_to_address(rlp_ref_word(addr_f));
-        let (ok, authority) = ecrecover_addr(auth_signing_hash(chain_id, auth_addr, auth_nonce), y, r, s);
-        out_rev =
-            struct {
+        let (ok, authority) = if y_valid then {
+                ecrecover_addr(auth_signing_hash(chain_id, auth_addr, auth_nonce), y, r, s)
+            } else {
+                (false, ZERO_ADDR)
+            };
+        let nonce_valid = auth_nonce != 2 ^ 64 - 1;
+        let authorization : Authorization = struct {
                 valid_sig =
                       ok
-                    & (y == 0 | y == 1)
-                    & (unsigned(r) >= 1)
-                    & (unsigned(r) < unsigned(SECP_N_FULL))
-                    & (unsigned(s) >= 1)
-                    & (unsigned(s) <= unsigned(SECP_N_HALF))
-                    & (auth_nonce < 18446744073709551615),
+                    & y_valid
+                    & word_ult(ZERO_WORD, r)
+                    & word_ult(r, SECP_N_FULL)
+                    & word_ult(ZERO_WORD, s)
+                    & word_ule(s, SECP_N_HALF)
+                    & nonce_valid,
                 authority = authority,
                 address = auth_addr,
                 nonce = auth_nonce,
                 chain_id = chain_id,
-            } ::
-                out_rev;
-        count = count + 1
-    };
-    (list_reverse(out_rev), count)
+            };
+        let tail = decode_auth_tuples(next);
+        if tail.count == 2 ^ 64 - 1 then {
+            throw InvalidBlock(RlpDecode)
+        } else {
+            struct {
+                authorizations = authorization :: tail.authorizations,
+                count = protocol_quantity_increment(tail.count),
+            }
+        }
+    }
+termination_measure decode_auth_tuples(cursor) =
+    let ByteQuantity(stop) = cursor.stop in
+    let ByteQuantity(current) = cursor.current in
+    stop - current
+
+function decode_auth_list(f : RlpFieldRef) -> (list(Authorization), item_count) = {
+    let decoded = decode_auth_tuples(rlp_ref_cursor(f));
+    (decoded.authorizations, decoded.count)
 }
 
 function tx_input_span(payload : ByteSlice, data : RlpFieldRef) -> ByteSlice =
-    sub_slice(payload, unsigned(data.content_off), unsigned(data.content_len))
+    sub_slice(payload, data.content_off, data.content_len)
 
 function tx_sig_span(payload : ByteSlice, first : RlpFieldRef, signature : RlpFieldRef) -> ByteSlice = {
-    let start = unsigned(first.full_off);
-    let stop = unsigned(signature.full_off);
+    let start = first.full_off;
+    let stop = signature.full_off;
     if stop < start then {
         throw InvalidBlock(RlpDecode)
     } else {
@@ -151,36 +226,61 @@ function tx_sig_span(payload : ByteSlice, first : RlpFieldRef, signature : RlpFi
  * dataclasses); an unknown type byte or wrong arity is undecodable. The data
  * field is never materialized: input_src carries its (source, offset, length)
  * span, bound as the transaction input only when the tx runs. */
-function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
-    let sender = word_to_address(keccak256(sub_slice(pubkey, 1, 64)));
-    let tx_len = unsigned(tx.len);
+function rlp_ref_gas(f : RlpFieldRef, fork : Fork) -> gas = {
+    let value = rlp_ref_uint(f);
+    if GAS_MAX_VALUE < value then {
+        throw InvalidBlock(GasUsedExceedsLimit)
+    };
+    if (fork >= Osaka) & (OSAKA_TRANSACTION_GAS_LIMIT_VALUE < value) then {
+        throw InvalidBlock(GasUsedExceedsLimit)
+    } else {
+        nat_to_gas(value)
+    }
+}
 
-    let b0 : int = if tx_len == 0 then {
+function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, fork : Fork) -> Transaction = {
+    let sender = word_to_address(keccak256(sub_slice(pubkey, BYTE_ONE, PUBLIC_KEY_BODY_LENGTH)));
+    let tx_len : byte_length = tx.len;
+    let b0 : byte = if tx_len == BYTE_ZERO then {
             throw InvalidBlock(RlpDecode)
         } else {
-            unsigned(slice_byte(tx, 0))
+            slice_byte(tx, BYTE_ZERO)
         };
-    let ttype : int = if b0 >= 192 then { 0 } else { b0 }; /* 0xc0 = RLP list tag */
-    let typed = ttype != 0;
+    let ttype : byte = if b0[7 .. 6] == 0b11 then { 0x00 } else { b0 }; /* 0xc0 = RLP list tag */
+    let typed = ttype != 0x00;
     let payload : ByteSlice = if typed then {
-            sub_slice(tx, 1, tx_len - 1)
+            if BYTE_ONE <= tx_len then {
+                sub_slice(tx, BYTE_ONE, tx_len - BYTE_ONE)
+            } else {
+                throw InvalidBlock(RlpDecode)
+            }
         } else {
             tx
         };
-    let fields = rlp_node_refs(BytesSlice(payload));
+    let fields = rlp_node_cursor(payload);
 
-    match (ttype, fields) {
-        (0, nonce_f :: (gp_f :: (gas_f :: (to_f :: (value_f :: (data_f :: (v_f :: (r_f :: (s_f :: [||]))))))))) => {
-            let v = rlp_ref_int(v_f);
+    match ttype {
+        0x00 => {
+            let (nonce_f, fields) = rlp_cursor_pop(fields);
+            let (gp_f, fields) = rlp_cursor_pop(fields);
+            let (gas_f, fields) = rlp_cursor_pop(fields);
+            let (to_f, fields) = rlp_cursor_pop(fields);
+            let (value_f, fields) = rlp_cursor_pop(fields);
+            let (data_f, fields) = rlp_cursor_pop(fields);
+            let (v_f, fields) = rlp_cursor_pop(fields);
+            let (r_f, fields) = rlp_cursor_pop(fields);
+            let (s_f, fields) = rlp_cursor_pop(fields);
+            rlp_cursor_expect_end(fields);
+            let v = rlp_ref_word(v_f);
             let gp = rlp_ref_uint_word(gp_f);
             struct {
                 tx_type = LegacyTx,
                 sender = sender,
                 raw = tx,
-                nonce = rlp_ref_int(nonce_f),
+                nonce = rlp_ref_uint_word(nonce_f),
                 chain_id = 0,
-                gas_limit = to_gas(rlp_ref_int(gas_f)),
-                is_create = unsigned(to_f.content_len) == 0,
+                gas_limit = rlp_ref_gas(gas_f, fork),
+                is_create = to_f.content_len == BYTE_ZERO,
                 recipient = word_to_address(rlp_ref_word(to_f)),
                 value = rlp_ref_uint_word(value_f),
                 input_src = tx_input_span(payload, data_f),
@@ -201,23 +301,30 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
                 sig_s = rlp_ref_uint_word(s_f),
             }
         },
-        (
-            1,
-            chain_f ::
-                (nonce_f ::
-                    (gp_f :: (gas_f :: (to_f :: (value_f :: (data_f :: (al_f :: (v_f :: (r_f :: (s_f :: [||])))))))))),
-        ) => {
-            let v = rlp_ref_int(v_f);
+        0x01 => {
+            let (chain_f, fields) = rlp_cursor_pop(fields);
+            let (nonce_f, fields) = rlp_cursor_pop(fields);
+            let (gp_f, fields) = rlp_cursor_pop(fields);
+            let (gas_f, fields) = rlp_cursor_pop(fields);
+            let (to_f, fields) = rlp_cursor_pop(fields);
+            let (value_f, fields) = rlp_cursor_pop(fields);
+            let (data_f, fields) = rlp_cursor_pop(fields);
+            let (al_f, fields) = rlp_cursor_pop(fields);
+            let (v_f, fields) = rlp_cursor_pop(fields);
+            let (r_f, fields) = rlp_cursor_pop(fields);
+            let (s_f, fields) = rlp_cursor_pop(fields);
+            rlp_cursor_expect_end(fields);
+            let v = rlp_ref_word(v_f);
             let gp = rlp_ref_uint_word(gp_f);
             let (al_addrs, al_slots, al_addr_count, al_slot_count) = decode_access_list(al_f);
             struct {
                 tx_type = AccessListTx,
                 sender = sender,
                 raw = tx,
-                nonce = rlp_ref_int(nonce_f),
-                chain_id = rlp_ref_int(chain_f),
-                gas_limit = to_gas(rlp_ref_int(gas_f)),
-                is_create = unsigned(to_f.content_len) == 0,
+                nonce = rlp_ref_uint_word(nonce_f),
+                chain_id = rlp_ref_uint(chain_f),
+                gas_limit = rlp_ref_gas(gas_f, fork),
+                is_create = to_f.content_len == BYTE_ZERO,
                 recipient = word_to_address(rlp_ref_word(to_f)),
                 value = rlp_ref_uint_word(value_f),
                 input_src = tx_input_span(payload, data_f),
@@ -238,23 +345,30 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
                 sig_s = rlp_ref_uint_word(s_f),
             }
         },
-        (
-            2,
-            chain_f ::
-                (nonce_f ::
-                    (mp_f ::
-                        (mf_f :: (gas_f :: (to_f :: (value_f :: (data_f :: (al_f :: (v_f :: (r_f :: (s_f :: [||]))))))))))),
-        ) => {
-            let v = rlp_ref_int(v_f);
+        0x02 => {
+            let (chain_f, fields) = rlp_cursor_pop(fields);
+            let (nonce_f, fields) = rlp_cursor_pop(fields);
+            let (mp_f, fields) = rlp_cursor_pop(fields);
+            let (mf_f, fields) = rlp_cursor_pop(fields);
+            let (gas_f, fields) = rlp_cursor_pop(fields);
+            let (to_f, fields) = rlp_cursor_pop(fields);
+            let (value_f, fields) = rlp_cursor_pop(fields);
+            let (data_f, fields) = rlp_cursor_pop(fields);
+            let (al_f, fields) = rlp_cursor_pop(fields);
+            let (v_f, fields) = rlp_cursor_pop(fields);
+            let (r_f, fields) = rlp_cursor_pop(fields);
+            let (s_f, fields) = rlp_cursor_pop(fields);
+            rlp_cursor_expect_end(fields);
+            let v = rlp_ref_word(v_f);
             let (al_addrs, al_slots, al_addr_count, al_slot_count) = decode_access_list(al_f);
             struct {
                 tx_type = FeeMarketTx,
                 sender = sender,
                 raw = tx,
-                nonce = rlp_ref_int(nonce_f),
-                chain_id = rlp_ref_int(chain_f),
-                gas_limit = to_gas(rlp_ref_int(gas_f)),
-                is_create = unsigned(to_f.content_len) == 0,
+                nonce = rlp_ref_uint_word(nonce_f),
+                chain_id = rlp_ref_uint(chain_f),
+                gas_limit = rlp_ref_gas(gas_f, fork),
+                is_create = to_f.content_len == BYTE_ZERO,
                 recipient = word_to_address(rlp_ref_word(to_f)),
                 value = rlp_ref_uint_word(value_f),
                 input_src = tx_input_span(payload, data_f),
@@ -275,28 +389,33 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
                 sig_s = rlp_ref_uint_word(s_f),
             }
         },
-        (
-            3,
-            chain_f ::
-                (nonce_f ::
-                    (mp_f ::
-                        (mf_f ::
-                            (gas_f ::
-                                (to_f ::
-                                    (value_f ::
-                                        (data_f :: (al_f :: (mbf_f :: (bh_f :: (v_f :: (r_f :: (s_f :: [||]))))))))))))),
-        ) => {
-            let v = rlp_ref_int(v_f);
+        0x03 => {
+            let (chain_f, fields) = rlp_cursor_pop(fields);
+            let (nonce_f, fields) = rlp_cursor_pop(fields);
+            let (mp_f, fields) = rlp_cursor_pop(fields);
+            let (mf_f, fields) = rlp_cursor_pop(fields);
+            let (gas_f, fields) = rlp_cursor_pop(fields);
+            let (to_f, fields) = rlp_cursor_pop(fields);
+            let (value_f, fields) = rlp_cursor_pop(fields);
+            let (data_f, fields) = rlp_cursor_pop(fields);
+            let (al_f, fields) = rlp_cursor_pop(fields);
+            let (mbf_f, fields) = rlp_cursor_pop(fields);
+            let (bh_f, fields) = rlp_cursor_pop(fields);
+            let (v_f, fields) = rlp_cursor_pop(fields);
+            let (r_f, fields) = rlp_cursor_pop(fields);
+            let (s_f, fields) = rlp_cursor_pop(fields);
+            rlp_cursor_expect_end(fields);
+            let v = rlp_ref_word(v_f);
             let (al_addrs, al_slots, al_addr_count, al_slot_count) = decode_access_list(al_f);
             let blob_hashes = decode_blob_hashes(bh_f);
             struct {
                 tx_type = BlobTx,
                 sender = sender,
                 raw = tx,
-                nonce = rlp_ref_int(nonce_f),
-                chain_id = rlp_ref_int(chain_f),
-                gas_limit = to_gas(rlp_ref_int(gas_f)),
-                is_create = unsigned(to_f.content_len) == 0,
+                nonce = rlp_ref_uint_word(nonce_f),
+                chain_id = rlp_ref_uint(chain_f),
+                gas_limit = rlp_ref_gas(gas_f, fork),
+                is_create = to_f.content_len == BYTE_ZERO,
                 recipient = word_to_address(rlp_ref_word(to_f)),
                 value = rlp_ref_uint_word(value_f),
                 input_src = tx_input_span(payload, data_f),
@@ -317,26 +436,32 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice) -> Transaction = {
                 sig_s = rlp_ref_uint_word(s_f),
             }
         },
-        (
-            4,
-            chain_f ::
-                (nonce_f ::
-                    (mp_f ::
-                        (mf_f ::
-                            (gas_f ::
-                                (to_f :: (value_f :: (data_f :: (al_f :: (auth_f :: (v_f :: (r_f :: (s_f :: [||])))))))))))),
-        ) => {
-            let v = rlp_ref_int(v_f);
+        0x04 => {
+            let (chain_f, fields) = rlp_cursor_pop(fields);
+            let (nonce_f, fields) = rlp_cursor_pop(fields);
+            let (mp_f, fields) = rlp_cursor_pop(fields);
+            let (mf_f, fields) = rlp_cursor_pop(fields);
+            let (gas_f, fields) = rlp_cursor_pop(fields);
+            let (to_f, fields) = rlp_cursor_pop(fields);
+            let (value_f, fields) = rlp_cursor_pop(fields);
+            let (data_f, fields) = rlp_cursor_pop(fields);
+            let (al_f, fields) = rlp_cursor_pop(fields);
+            let (auth_f, fields) = rlp_cursor_pop(fields);
+            let (v_f, fields) = rlp_cursor_pop(fields);
+            let (r_f, fields) = rlp_cursor_pop(fields);
+            let (s_f, fields) = rlp_cursor_pop(fields);
+            rlp_cursor_expect_end(fields);
+            let v = rlp_ref_word(v_f);
             let (al_addrs, al_slots, al_addr_count, al_slot_count) = decode_access_list(al_f);
             let (authorizations, authorization_count) = decode_auth_list(auth_f);
             struct {
                 tx_type = SetCodeTx,
                 sender = sender,
                 raw = tx,
-                nonce = rlp_ref_int(nonce_f),
-                chain_id = rlp_ref_int(chain_f),
-                gas_limit = to_gas(rlp_ref_int(gas_f)),
-                is_create = unsigned(to_f.content_len) == 0,
+                nonce = word_of_nat(rlp_ref_uint(nonce_f)),
+                chain_id = rlp_ref_uint(chain_f),
+                gas_limit = rlp_ref_gas(gas_f, fork),
+                is_create = to_f.content_len == BYTE_ZERO,
                 recipient = word_to_address(rlp_ref_word(to_f)),
                 value = rlp_ref_uint_word(value_f),
                 input_src = tx_input_span(payload, data_f),

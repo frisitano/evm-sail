@@ -14,8 +14,8 @@
 val stack_reset = impure { c: "stack_reset" } : unit -> unit
 val stack_enter_frame = impure { c: "stack_enter_frame" } : unit -> unit
 val stack_leave_frame = impure { c: "stack_leave_frame" } : unit -> unit
-val stack_depth = impure { c: "stack_depth" } : unit -> bits(64)
+val stack_depth = impure { c: "stack_depth" } : unit -> operand_stack_height
 val stack_push_word = impure { c: "stack_push_word" } : word -> unit
 val stack_pop_word = impure { c: "stack_pop_word" } : unit -> word /* pop AND return the top (caller guards underflow) */
-val stack_peek_word = impure { c: "stack_peek_word" } : bits(64) -> word
-val stack_set_word = impure { c: "stack_set_word" } : (bits(64), word) -> unit
+val stack_peek_word = impure { c: "stack_peek_word" } : stack_index -> word
+val stack_set_word = impure { c: "stack_set_word" } : (stack_index, word) -> unit

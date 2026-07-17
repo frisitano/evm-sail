@@ -23,7 +23,7 @@ enum Fork = {
 }
 
 /* activation index = declaration order */
-function fork_index(f : Fork) -> int = match f {
+function fork_index(f : Fork) -> protocol_fork_index = match f {
     Frontier => 0,
     Homestead => 1,
     Byzantium => 2,
@@ -41,7 +41,7 @@ function fork_index(f : Fork) -> int = match f {
 
 /* fork a is at least / strictly before fork b; overloaded onto the
  * comparison operators so fork gates read `k_fork >= Berlin` */
-function fork_gteq(a : Fork, b : Fork) -> bool = fork_index(a) >= fork_index(b)
+function fork_gteq(a : Fork, b : Fork) -> bool = fork_index(b) <= fork_index(a)
 
 function fork_lt(a : Fork, b : Fork) -> bool = fork_index(a) < fork_index(b)
 
@@ -54,11 +54,11 @@ overload operator < = { fork_lt }
  * Amsterdam=20) into the Fork whose EXECUTION RULES apply: blob-parameter-only
  * forks collapse to their base, unknown future indices to the newest. The raw
  * index is preserved separately (ChainConfig.fork_index) for exact checks. */
-function fork_of_protocol_index(idx : int) -> Fork =
-    if idx >= 20 then {
+function fork_of_protocol_index(idx : protocol_fork_index) -> Fork =
+    if 20 <= idx then {
         Amsterdam
     } else {
-        if idx >= 17 then {
+        if 17 <= idx then {
             Osaka /* Osaka(17), BPO1(18), BPO2(19) */
         } else {
             if idx == 16 then {
@@ -73,7 +73,7 @@ function fork_of_protocol_index(idx : int) -> Fork =
                         if idx == 13 then {
                             Paris
                         } else {
-                            if (idx >= 10) & (idx <= 12) then {
+                            if (10 <= idx) & (idx <= 12) then {
                                 London
                             } else {
                                 if idx == 9 then {

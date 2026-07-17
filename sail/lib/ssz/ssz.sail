@@ -1,87 +1,81 @@
 /* ======================================================================== */
-/* SSZ: GENERIC SOURCE DECODING                                             */
+/* SSZ: GENERIC SLICE DECODING                                              */
 /*                                                                          */
-/* Scalar readers and variable-list navigation over the private-input byte  */
-/* source. Concrete container layouts belong in their decoder modules.      */
+/* Scalar readers over a source-backed ByteSlice. Concrete container        */
+/* layouts belong in their decoder modules.                                 */
 /* ======================================================================== */
 
 /* Width of one entry in an SSZ variable-field offset table (uint32-LE). */
-let SSZ_OFF_BYTES : int = 4
+let SSZ_OFF_BYTES : byte_length = ByteQuantity(4)
+let SSZ_UINT_BYTES : byte_length = EIGHT_BYTE_LENGTH
 
-/* Private-input oracle. C provides one bounded byte vector through native and
- * guest implementations; every reader below is a view over that source. */
-val ssz_src_len = impure { c: "ssz_src_len" } : unit -> bits(64)
-val ssz_src_byte_at = impure { c: "ssz_src_byte" } : u64 -> bits(8)
+/* Container decoders establish that the complete fixed-width field lies in
+ * the input before calling these scalar readers. */
+function ssz_field_offset(base : source_pointer, delta : nat) -> source_pointer =
+    base + ByteQuantity(delta)
 
-/* int-offset adapter: the ONE remaining sail_int FFI crossing became u64;
- * all decode arithmetic stays in the int domain and converts here. */
-function ssz_src_byte(i : int) -> byte = ssz_src_byte_at(get_slice_int(64, i, 0))
-
-/* The bulk readers below are pure derivations of ssz_src_byte -- consistent
- * LE/BE views over one bounded byte vector. */
-function ssz_src_le(b : int, n : int) -> bits(64) = {
-    var acc : bits(64) = 0x0000000000000000;
-    foreach (k from 0 to (n - 1)) {
-        acc = or_vec(acc, sail_shiftleft(sail_zero_extend(ssz_src_byte(b + k), 64), 8 * k))
-    };
-    acc
+/* Fixed-width offset-table reader used by random-access collection cursors. */
+function ssz_u32_at(input : ByteSlice, offset : source_pointer) -> protocol_quantity = {
+    let b0 = sail_zero_extend(slice_byte(input, offset), 64);
+    let b1 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, 1)), 64);
+    let b2 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, 2)), 64);
+    let b3 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, 3)), 64);
+    unsigned(or_vec(b0, or_vec(sail_shiftleft(b1, 8), or_vec(sail_shiftleft(b2, 16), sail_shiftleft(b3, 24)))))
 }
 
-function ssz_src_be(b : int, n : int) -> bits(64) = {
-    var acc : bits(64) = 0x0000000000000000;
-    foreach (k from 0 to (n - 1)) {
-        acc = or_vec(sail_shiftleft(acc, 8), sail_zero_extend(ssz_src_byte(b + k), 64))
-    };
-    acc
+function ssz_u32(input : ByteSlice, offset : source_pointer) -> protocol_quantity = ssz_u32_at(input, offset)
+
+function ssz_limb(input : ByteSlice, offset : source_pointer) -> limb = {
+    let b0 = sail_zero_extend(slice_byte(input, offset), 64);
+    let b1 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, 1)), 64);
+    let b2 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, 2)), 64);
+    let b3 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, 3)), 64);
+    let b4 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, 4)), 64);
+    let b5 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, 5)), 64);
+    let b6 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, 6)), 64);
+    let b7 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, 7)), 64);
+    or_vec(
+        b0,
+        or_vec(
+            sail_shiftleft(b1, 8),
+            or_vec(
+                sail_shiftleft(b2, 16),
+                or_vec(
+                    sail_shiftleft(b3, 24),
+                    or_vec(
+                        sail_shiftleft(b4, 32),
+                        or_vec(sail_shiftleft(b5, 40), or_vec(sail_shiftleft(b6, 48), sail_shiftleft(b7, 56))),
+                    ),
+                ),
+            ),
+        ),
+    )
 }
 
-/* Little-endian fixed-width integers at absolute input offset b. */
-function ssz_u32(b : int) -> int = unsigned(ssz_src_le(b, 4))
-function ssz_u64(b : int) -> int = unsigned(ssz_src_le(b, 8))
+function ssz_uint(input : ByteSlice, offset : source_pointer) -> protocol_quantity =
+    unsigned(ssz_limb(input, offset))
 
-/* big-endian 20-byte address at offset b -- three FFI reads (8+8+4) */
-function ssz_addr(b : int) -> address = {
-    let w0 = ssz_src_be(b + 0, 8);
-    let w1 = ssz_src_be(b + 8, 8);
-    let w2 = ssz_src_be(b + 16, 4);
-    append(w0, append(w1, w2[31 .. 0]))
-}
+function ssz_addr(input : ByteSlice, offset : source_pointer) -> address =
+    slice_load_n(input, offset, ADDRESS_BYTE_LENGTH)[159 .. 0]
 
-/* read len bytes at absolute offset b into a list(byte) (O(len), cons+reverse) */
-function ssz_bytes(b : int, len : int) -> list(byte) = {
-    var out : list(byte) = [||];
-    foreach (k from 0 to (len - 1)) {
-        out = ssz_src_byte(b + (len - 1 - k)) :: out
-    };
-    out
-}
+function ssz_bytes32(input : ByteSlice, offset : source_pointer) -> bits(256) =
+    slice_load(input, offset)
 
-/* big-endian 32-byte field (Bytes32, e.g. prev_randao) -- four FFI reads */
-function ssz_bytes32(b : int) -> bits(256) = {
-    let w0 = ssz_src_be(b + 0, 8);
-    let w1 = ssz_src_be(b + 8, 8);
-    let w2 = ssz_src_be(b + 16, 8);
-    let w3 = ssz_src_be(b + 24, 8);
-    append(w0, append(w1, append(w2, w3)))
-}
-
-function ssz_logs_bloom(b : int) -> LogsBloom = {
-    var out : LogsBloom = vector_init(256, 0x00);
+function ssz_logs_bloom(input : ByteSlice, offset : source_pointer) -> LogsBloom = {
+    var out : LogsBloom = vector_init(32, LIMB_ZERO);
+    var cursor : source_pointer = offset;
     foreach (k from 0 to 31) {
-        let word = ssz_src_be(b + 8 * k, 8);
-        foreach (j from 0 to 7) {
-            let i = unsigned(get_slice_int(8, 8 * k + j, 0));
-            out[i] = sail_shiftright(word, 8 * (7 - j))[7 .. 0]
-        }
+        out[k] = slice_load_n(input, cursor, EIGHT_BYTE_LENGTH)[63 .. 0];
+        cursor = ssz_field_offset(cursor, 8)
     };
     out
 }
 
-/* little-endian 32-byte uint256 (SSZ) -- four FFI reads, low word first */
-function ssz_u256(b : int) -> word = {
-    let c0 = ssz_src_le(b + 0, 8);
-    let c1 = ssz_src_le(b + 8, 8);
-    let c2 = ssz_src_le(b + 16, 8);
-    let c3 = ssz_src_le(b + 24, 8);
+/* little-endian 32-byte uint256 (SSZ), low word first */
+function ssz_u256(input : ByteSlice, offset : source_pointer) -> word = {
+    let c0 = ssz_limb(input, offset);
+    let c1 = ssz_limb(input, ssz_field_offset(offset, 8));
+    let c2 = ssz_limb(input, ssz_field_offset(offset, 16));
+    let c3 = ssz_limb(input, ssz_field_offset(offset, 24));
     append(c3, append(c2, append(c1, c0)))
 }

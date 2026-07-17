@@ -17,18 +17,41 @@
  * charges no fee / counts toward no block gas; it is skipped if the contract has
  * no code. Their committed storage writes shape the post-state root. */
 
+let SYSTEM_CALL_INPUT_LENGTH : byte_length = WORD_BYTE_LENGTH
+
+let DEPOSIT_EVENT_DATA_LENGTH : byte_length = ByteQuantity(576)
+let DEPOSIT_PUBKEY_HEAD : source_pointer = BYTE_ZERO
+let DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD : source_pointer = ByteQuantity(32)
+let DEPOSIT_AMOUNT_HEAD : source_pointer = ByteQuantity(64)
+let DEPOSIT_SIGNATURE_HEAD : source_pointer = ByteQuantity(96)
+let DEPOSIT_INDEX_HEAD : source_pointer = ByteQuantity(128)
+let DEPOSIT_PUBKEY_LENGTH_WORD : source_pointer = ByteQuantity(160)
+let DEPOSIT_PUBKEY_DATA : source_pointer = ByteQuantity(192)
+let DEPOSIT_PUBKEY_LENGTH : byte_length = ByteQuantity(48)
+let DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD : source_pointer = ByteQuantity(256)
+let DEPOSIT_WITHDRAWAL_CREDENTIALS_DATA : source_pointer = ByteQuantity(288)
+let DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH : byte_length = WORD_BYTE_LENGTH
+let DEPOSIT_AMOUNT_LENGTH_WORD : source_pointer = ByteQuantity(320)
+let DEPOSIT_AMOUNT_DATA : source_pointer = ByteQuantity(352)
+let DEPOSIT_AMOUNT_LENGTH : byte_length = EIGHT_BYTE_LENGTH
+let DEPOSIT_SIGNATURE_LENGTH_WORD : source_pointer = ByteQuantity(384)
+let DEPOSIT_SIGNATURE_DATA : source_pointer = ByteQuantity(416)
+let DEPOSIT_SIGNATURE_LENGTH : byte_length = ByteQuantity(96)
+let DEPOSIT_INDEX_LENGTH_WORD : source_pointer = ByteQuantity(512)
+let DEPOSIT_INDEX_DATA : source_pointer = ByteQuantity(544)
+let DEPOSIT_INDEX_LENGTH : byte_length = EIGHT_BYTE_LENGTH
 
 /* Enter a top-level protocol system-call frame. The caller has already made a
  * fresh memory frame and, for a word input, frozen the parent-memory span that
  * `input` references. */
 function enter_system_call_frame(tgt : address, input : ByteSlice) -> StateCheckpoint = {
-    let checkpoint = k_snapshot();
-    pc = 0;
+    let checkpoint = k_state_checkpoint();
+    pc = BYTE_ZERO;
     call_depth = 0;
-    gas_remaining = to_gas(30000000);
+    gas_remaining = Gas(30000000);
+    frame_refund = GAS_REFUND_ZERO;
     stack_reset();
     returndata_clear();
-    memory_size = 0;
     frame_status = Running();
     calldata = input;
     message =
@@ -37,7 +60,6 @@ function enter_system_call_frame(tgt : address, input : ByteSlice) -> StateCheck
             address = tgt,
             code_address = tgt,
             value = ZERO_WORD,
-            data_len = unsigned(input.len),
             is_static = false,
             depth = 0,
         };
@@ -51,13 +73,14 @@ function system_call(tgt : address, input : bits(256)) -> unit = {
     } else {
         /* Freeze the word in a parent memory frame. The system call executes
          * above that frame, so its own memory writes cannot mutate calldata. */
-        mem_clear();
-        mem_store_word(0x0000000000000000, input);
-        let input_slice = mem_slice(0, 32);
-        mem_frame_enter();
+        memory_reset();
+        memory_expand_to(SYSTEM_CALL_INPUT_LENGTH);
+        mem_store_word(BYTE_ZERO, input);
+        let input_slice = memory_byte_slice(BYTE_ZERO, SYSTEM_CALL_INPUT_LENGTH);
+        let parent_memory = memory_frame_enter();
         let checkpoint = enter_system_call_frame(tgt, input_slice);
         let _ = interpret();
-        mem_frame_leave();
+        memory_frame_leave(parent_memory);
         if not_bool(frame_succeeded()) then {
             k_revert(checkpoint)
         };
@@ -78,8 +101,8 @@ function system_call_checked(tgt : address) -> option(ByteSlice) = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         None() /* checked: a missing system predeploy invalidates the block */
     } else {
-        mem_clear();
-        mem_frame_enter();
+        memory_reset();
+        let parent_memory = memory_frame_enter();
         let checkpoint = enter_system_call_frame(tgt, EMPTY_SLICE);
         let output = interpret();
         let ok = frame_succeeded();
@@ -90,7 +113,7 @@ function system_call_checked(tgt : address) -> option(ByteSlice) = {
             } else {
                 None()
             };
-        mem_frame_leave();
+        memory_frame_leave(parent_memory);
         if not_bool(ok) then {
             k_revert(checkpoint) /* checked: a reverting/erroring system call invalidates the block */
         };
@@ -112,58 +135,40 @@ function deposit_log_matches(log : LogEntry) -> bool =
 /* Strip the ABI framing from one DepositEvent and append the consensus-layer
  * request fields directly to the scratch arena. */
 function append_deposit_request(data : ByteSlice) -> unit = {
-    if   (unsigned(data.len) != 576)
-       | (slice_load(data, 0) != word_of_int(160))
-       | (slice_load(data, 32) != word_of_int(256))
-       | (slice_load(data, 64) != word_of_int(320))
-       | (slice_load(data, 96) != word_of_int(384))
-       | (slice_load(data, 128) != word_of_int(512))
-       | (slice_load(data, 160) != word_of_int(48))
-       | (slice_load(data, 256) != word_of_int(32))
-       | (slice_load(data, 320) != word_of_int(8))
-       | (slice_load(data, 384) != word_of_int(96))
-       | (slice_load(data, 512) != word_of_int(8)) then {
+    if   (data.len != DEPOSIT_EVENT_DATA_LENGTH)
+       | (slice_load(data, DEPOSIT_PUBKEY_HEAD) != word_of_nat(160))
+       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD) != word_of_nat(256))
+       | (slice_load(data, DEPOSIT_AMOUNT_HEAD) != word_of_nat(320))
+       | (slice_load(data, DEPOSIT_SIGNATURE_HEAD) != word_of_nat(384))
+       | (slice_load(data, DEPOSIT_INDEX_HEAD) != word_of_nat(512))
+       | (slice_load(data, DEPOSIT_PUBKEY_LENGTH_WORD) != word_of_nat(48))
+       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD) != word_of_nat(32))
+       | (slice_load(data, DEPOSIT_AMOUNT_LENGTH_WORD) != word_of_nat(8))
+       | (slice_load(data, DEPOSIT_SIGNATURE_LENGTH_WORD) != word_of_nat(96))
+       | (slice_load(data, DEPOSIT_INDEX_LENGTH_WORD) != word_of_nat(8)) then {
         throw InvalidBlock(InvalidExecutionRequests)
     };
-    scratch_push_slice(sub_slice(data, 192, 48));
-    scratch_push_slice(sub_slice(data, 288, 32));
-    scratch_push_slice(sub_slice(data, 352, 8));
-    scratch_push_slice(sub_slice(data, 416, 96));
-    scratch_push_slice(sub_slice(data, 544, 8))
+    scratch_push_slice(sub_slice(data, DEPOSIT_PUBKEY_DATA, DEPOSIT_PUBKEY_LENGTH));
+    scratch_push_slice(sub_slice(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_DATA, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH));
+    scratch_push_slice(sub_slice(data, DEPOSIT_AMOUNT_DATA, DEPOSIT_AMOUNT_LENGTH));
+    scratch_push_slice(sub_slice(data, DEPOSIT_SIGNATURE_DATA, DEPOSIT_SIGNATURE_LENGTH));
+    scratch_push_slice(sub_slice(data, DEPOSIT_INDEX_DATA, DEPOSIT_INDEX_LENGTH))
 }
 
-function collect_deposit_requests(receipts : list(Receipt)) -> ByteSlice = {
-    let start = scratch_begin();
-    var remaining_receipts : list(Receipt) = receipts;
-    var more_receipts : bool = true;
-    while more_receipts do {
-        match remaining_receipts {
-            receipt :: receipt_tail => {
-                var remaining_logs : list(LogEntry) = receipt.logs;
-                var more_logs : bool = true;
-                while more_logs do {
-                    match remaining_logs {
-                        log :: log_tail => {
-                            if deposit_log_matches(log) then {
-                                append_deposit_request(log.data)
-                            };
-                            remaining_logs = log_tail
-                        },
-                        [||] => more_logs = false,
-                    }
-                };
-                remaining_receipts = receipt_tail
-            },
-            [||] => more_receipts = false,
-        }
-    };
-    scratch_finish(start)
-}
+function append_deposit_logs(logs : list(LogEntry)) -> unit =
+    match logs {
+        [||] => (),
+        log :: rest => {
+            if deposit_log_matches(log) then {
+                append_deposit_request(log.data)
+            };
+            append_deposit_logs(rest)
+        },
+    }
 
 /* EELS processes request types in ascending order and stops immediately when
  * a checked system call is missing or fails. */
-function collect_execution_requests(receipts : list(Receipt)) -> (bool, ExecutionRequests) = {
-    let deposits = collect_deposit_requests(receipts);
+function collect_execution_requests(deposits : ByteSlice) -> (bool, ExecutionRequests) = {
     match system_call_checked(WITHDRAWAL_REQUEST_ADDR) {
         None() => (false, struct { deposits = deposits, withdrawals = EMPTY_SLICE, consolidations = EMPTY_SLICE }),
         Some(withdrawals) => match system_call_checked(CONSOLIDATION_REQUEST_ADDR) {

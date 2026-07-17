@@ -3,15 +3,16 @@
  *
  * Account code is written rarely (seeding, CREATE deploys, EIP-7702
  * delegations) and executed constantly. Each code_db entry names an absolute
- * span in the arena plus a JumpdestRef into a flat arena populated from the
- * completed bitmap produced by Sail's code_db_insert pass. C never analyzes
- * opcodes: it only stores packed words and answers membership queries. Sail's
- * single frame_code Code register is the complete active executable
- * state.
+ * span in the arena plus a JumpdestRef into a flat arena allocated once from
+ * the code length and populated with completed 256-bit chunks by Sail. C never
+ * analyzes opcodes: it only stores packed words and answers membership
+ * queries. Sail's single frame_code Code register is the complete active
+ * executable state.
  *
  * The Sail account store remains the authoritative account-code value;
  * this is the execution mirror. */
 #include "sail.h"
+#include "byte_slice_glue.h"
 #include "lbits_convert.h"
 #include "host_crypto.h"
 #include <stdint.h>
@@ -40,35 +41,90 @@ static int jumpdest_arena_reserve(size_t need) {
   return 1;
 }
 
-static int jumpdest_bitmap_matches(const uint64_t *words, uint64_t nwords,
-                                   uint32_t code_len) {
-  uint64_t expected = ((uint64_t)code_len + 63) / 64;
-  if (nwords != expected || (expected && !words)) return 0;
-  uint32_t used = code_len & 63u;
-  if (used && (words[expected - 1] >> used) != 0) return 0;
+static uint64_t jumpdest_word_count(uint64_t code_len) {
+  return (code_len >> 6) + ((code_len & UINT64_C(63)) != 0);
+}
+
+static int jumpdest_table_span(uint64_t ref, uint64_t code_len,
+                               size_t *base_out, uint64_t *nwords_out) {
+  if (!ref || !code_len || code_len > UINT32_MAX) return 0;
+  uint64_t nwords = jumpdest_word_count(code_len);
+  uint64_t base64 = ref - 1;
+  if (base64 > SIZE_MAX) return 0;
+  size_t base = (size_t)base64;
+  if (base > jumpdest_arena_len ||
+      nwords > (uint64_t)(jumpdest_arena_len - base)) return 0;
+  if (base_out) *base_out = base;
+  if (nwords_out) *nwords_out = nwords;
   return 1;
 }
 
-/* Append one completed Sail bitmap. The one-based word offset is the
- * JumpdestRef exposed to the model; zero remains the empty/invalid sentinel. */
-static uint64_t jumpdest_arena_insert(const uint64_t *words, uint64_t nwords) {
-  if (!nwords || nwords > SIZE_MAX - jumpdest_arena_len) return 0;
+static int jumpdest_table_matches(uint64_t ref, uint32_t code_len) {
+  if (!code_len) return ref == 0;
+  size_t base = 0;
+  uint64_t nwords = 0;
+  if (!jumpdest_table_span(ref, code_len, &base, &nwords)) return 0;
+  uint32_t used = code_len & 63u;
+  return !used || (jumpdest_arena[base + (size_t)nwords - 1] >> used) == 0;
+}
+
+/* Reserve the exact table size before Sail starts analysis. The arena is
+ * zeroed so chunks without JUMPDESTs need no writes. */
+uint64_t jumpdest_table_alloc(EVMSAIL_BYTE_QUANTITY_PARAM(code_len)) {
+  uint64_t code_len_value = evmsail_byte_quantity_value(code_len);
+  if (!code_len_value || code_len_value > UINT32_MAX) return 0;
+  uint64_t nwords = jumpdest_word_count(code_len_value);
+  if (nwords > SIZE_MAX - jumpdest_arena_len) return 0;
   size_t off = jumpdest_arena_len;
   size_t end = off + (size_t)nwords;
   if (!jumpdest_arena_reserve(end)) return 0;
-  memcpy(jumpdest_arena + off, words, (size_t)nwords * sizeof(*words));
+  memset(jumpdest_arena + off, 0, (size_t)nwords * sizeof(*jumpdest_arena));
   jumpdest_arena_len = end;
   return (uint64_t)off + 1;
 }
 
-bool jumpdest_ref_contains(uint64_t ref, uint64_t code_len, uint64_t i) {
-  if (ref == 0 || i >= code_len) return false;
+/* Store one completed Sail chunk. Chunk bit zero describes the first byte in
+ * the corresponding 256-byte code span, hence little-endian limb order. */
+bool jumpdest_table_store_chunk(uint64_t ref,
+                                EVMSAIL_BYTE_QUANTITY_PARAM(code_len),
+                                EVMSAIL_BYTE_QUANTITY_PARAM(chunk_index),
+                                const lbits chunk) {
+  uint64_t code_len_value = evmsail_byte_quantity_value(code_len);
+  uint64_t chunk_index_value = evmsail_byte_quantity_value(chunk_index);
+  size_t base = 0;
+  uint64_t nwords = 0;
+  if (!jumpdest_table_span(ref, code_len_value, &base, &nwords) ||
+      chunk_index_value > UINT64_MAX / 4)
+    return false;
+  uint64_t first = chunk_index_value * 4;
+  if (first >= nwords) return false;
+
+  uint64_t words[4];
+  lbits_to_le_words4(words, chunk);
+  uint64_t count = nwords - first;
+  if (count > 4) count = 4;
+  for (uint64_t i = count; i < 4; i++)
+    if (words[i] != 0) return false;
+  uint32_t used = (uint32_t)(code_len_value & 63u);
+  if (first + count == nwords && used && (words[count - 1] >> used) != 0)
+    return false;
+  memcpy(jumpdest_arena + base + (size_t)first, words,
+         (size_t)count * sizeof(*words));
+  return true;
+}
+
+bool jumpdest_ref_contains(uint64_t ref,
+                           EVMSAIL_BYTE_QUANTITY_PARAM(code_len),
+                           EVMSAIL_BYTE_QUANTITY_PARAM(i)) {
+  uint64_t code_len_value = evmsail_byte_quantity_value(code_len);
+  uint64_t index_value = evmsail_byte_quantity_value(i);
+  if (ref == 0 || index_value >= code_len_value) return false;
   uint64_t base = ref - 1;
-  uint64_t word = i >> 6;
+  uint64_t word = index_value >> 6;
   if (word > UINT64_MAX - base) return false;
   uint64_t index = base + word;
   return index < jumpdest_arena_len &&
-         ((jumpdest_arena[(size_t)index] >> (i & 63)) & UINT64_C(1));
+         ((jumpdest_arena[(size_t)index] >> (index_value & 63)) & UINT64_C(1));
 }
 
 /* ------------------------------ code_db -------------------------------- */
@@ -146,20 +202,20 @@ static int code_arena_reserve(size_t need) {
  * with bytes is left untouched. Empty code interns nothing -- a codeless
  * account carries KECCAK_EMPTY with no store entry. */
 static int code_db_intern(const uint64_t key[4], const uint8_t *src,
-                          uint32_t len, const uint64_t *jumpdests,
-                          uint64_t nwords) {
-  if (!len) return nwords == 0;
-  if (!jumpdest_bitmap_matches(jumpdests, nwords, len)) return 0;
+                          uint32_t len, uint64_t jumpdest_ref) {
+  if (!len) return jumpdest_ref == 0;
+  if (!jumpdest_table_matches(jumpdest_ref, len)) return 0;
   if (!code_db) code_db_grow();
   code_db_ent *e = code_db_find(key);
   if (e->used && e->len) {
     if (e->len != len || memcmp(code_arena + e->off, src, len) != 0 ||
         e->jumpdest_ref == 0) return 0;
-    uint64_t base = e->jumpdest_ref - 1;
-    if (base > jumpdest_arena_len ||
-        nwords > (uint64_t)jumpdest_arena_len - base) return 0;
-    return memcmp(jumpdest_arena + (size_t)base, jumpdests,
-                  (size_t)nwords * sizeof(*jumpdests)) == 0;
+    size_t old_base = 0, new_base = 0;
+    uint64_t nwords = 0;
+    if (!jumpdest_table_span(e->jumpdest_ref, len, &old_base, &nwords) ||
+        !jumpdest_table_span(jumpdest_ref, len, &new_base, NULL)) return 0;
+    return memcmp(jumpdest_arena + old_base, jumpdest_arena + new_base,
+                  (size_t)nwords * sizeof(*jumpdest_arena)) == 0;
   }
   if (!e->used) {
     e->used = 1;
@@ -183,8 +239,6 @@ static int code_db_intern(const uint64_t key[4], const uint8_t *src,
   if (len > SIZE_MAX - code_arena_len ||
       !code_arena_reserve(code_arena_len + len)) return 0;
   if (src_in_arena) src = code_arena + src_off;
-  uint64_t jumpdest_ref = jumpdest_arena_insert(jumpdests, nwords);
-  if (!jumpdest_ref) return 0;
   e->off = (uint64_t)code_arena_len;
   memmove(code_arena + code_arena_len, src, len);
   code_arena_len += len;
@@ -193,13 +247,12 @@ static int code_db_intern(const uint64_t key[4], const uint8_t *src,
   return 1;
 }
 
-void code_db_store_indexed_words(lbits *rop, uint64_t source_kind,
-                                 uint64_t off, uint64_t len,
-                                 const uint64_t *jumpdests,
-                                 uint64_t nwords) {
+void code_db_store_indexed_source(lbits *rop, uint64_t source_kind,
+                                  uint64_t off, uint64_t len,
+                                  uint64_t jumpdest_ref) {
   uint64_t key[4] = {0, 0, 0, 0};
   if (len > UINT32_MAX ||
-      !jumpdest_bitmap_matches(jumpdests, nwords, (uint32_t)len)) {
+      !jumpdest_table_matches(jumpdest_ref, (uint32_t)len)) {
     be_words4_to_lbits(rop, key);
     return;
   }
@@ -211,22 +264,21 @@ void code_db_store_indexed_words(lbits *rop, uint64_t source_kind,
     return;
   }
   host_keccak256_bytes(key, src, len);
-  if (!code_db_intern(key, src, (uint32_t)len, jumpdests, nwords))
+  if (!code_db_intern(key, src, (uint32_t)len, jumpdest_ref))
     memset(key, 0, sizeof key);
   be_words4_to_lbits(rop, key);
 }
 
 /* Intern the 23-byte EIP-7702 delegation designation 0xef0100 ++ addr under its
  * keccak hash with the explicit Sail analysis; return the codeHash. */
-void code_intern_indexed_delegation_words(lbits *rop, const lbits addr,
-                                          const uint64_t *jumpdests,
-                                          uint64_t nwords) {
+void code_intern_indexed_delegation(lbits *rop, const lbits addr,
+                                    uint64_t jumpdest_ref) {
   uint8_t b[23];
   b[0] = 0xef; b[1] = 0x01; b[2] = 0x00;
   lbits_to_be_bytes(b + 3, 20, addr);
   uint64_t key[4] = {0, 0, 0, 0};
   host_keccak256_bytes(key, b, sizeof b);
-  if (!code_db_intern(key, b, (uint32_t)sizeof b, jumpdests, nwords))
+  if (!code_db_intern(key, b, (uint32_t)sizeof b, jumpdest_ref))
     memset(key, 0, sizeof key);
   be_words4_to_lbits(rop, key);
 }

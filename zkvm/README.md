@@ -49,9 +49,10 @@ successful_validation=1          # public output byte 32
 A failed validation is a NORMAL result (`successful_validation=0`, exit 0).
 Input vectors are raw `statelessInputBytes` — from EEST-generated fixtures or
 built from any state test by `harness/ssz_builder.py` (in-process EELS t8n);
-`run.py --spike` supplies them per fixture. The stateless
-validator itself is `../sail/main.sail` over the shared decoders/trie/HTR in
-`../sail/host/` and `../sail/lib/`.
+`run.py --spike` supplies them to the unchanged ELF at runtime. The fixture is
+never compiled or linked into the guest. The stateless validator itself is
+`../sail/main.sail` over the shared decoders/trie/HTR in `../sail/host/` and
+`../sail/lib/`.
 
 ## Conformance to the standard target
 
@@ -67,7 +68,7 @@ Verified on the built ELF (`riscv64-unknown-elf-{readelf,objdump}`):
 | Soft-float (F/D excluded), LP64 ABI | 0 floating-point instructions |
 | No syscalls / environment calls | 0 `ecall`/`ebreak`/`mret`/`sret` in reachable text |
 | Statically linked ELF | single PT_LOAD, no `INTERP`/`DYNAMIC`, no `NEEDED` libs |
-| **GMP-free** | no `libgmp`/`mini-gmp`/`mpz`; fixed-width `sailfix` runtime (512-bit int, 256-bit lbits) |
+| **GMP-free** | no `libgmp`/`mini-gmp`; exact 768-bit bounded `sail_int` and inline 256-bit `lbits` |
 | Zicclsm (transparent misaligned data accesses) | run config `spike --misaligned` (see below) |
 
 `spike`'s `--isa` string does not name `Zicclsm`; that extension only mandates transparent
@@ -77,15 +78,17 @@ misaligned load/store support, which spike provides via `--misaligned`. So the r
 
 ### IO interface (`io-interface` standard)
 
-`zkvm_io.h` (the standard header) is implemented in `runtime/zkvm_io.c`:
+`../ffi/zkvm_io.h` (the standard header) is implemented for the Spike validation
+target in `io-device/guest.c`:
 
-* `read_input(&buf, &size)` — returns the private-input region (`__zkvm_input`,
-  idempotent; `size==0` ⇒ buffer invalid, as specified). The harness calls it and reports
-  `input_size`. For this milestone the block is built inside the Sail model, so input is
-  empty; loading the block *from* the private input is a documented follow-up.
+* `read_input(&buf, &size)` — loads the host-provided private input into guest
+  memory on its first call, then returns the same cached read-only span on every
+  call (`size==0` means the pointer is invalid, as specified). The Spike input
+  device receives the fixture path at process launch; no input bytes reside in
+  the ELF.
 * `write_output(ptr, size)` — accumulates the public output (concatenating across calls)
   and mirrors it to the host console so the result is observable on spike. The result
-  facts (`gas_used`, `storage0`, …) are published through `write_output`.
+  is published through `write_output`.
 
 No `stdin`/libc IO is used anywhere.
 
@@ -125,23 +128,21 @@ platform glue (`start.S` / `link.ld` / `htif.c`) changes.
 
 ## How the GMP-free build works
 
-The stock Sail C backend emits the GMP arbitrary-precision ABI (`mpz_t` integers, `lbits`
-bitvectors backed by `mpz`). The EVM uses 256-bit words (`bits(256)`), which exceed 64
-bits, so the toolchain's `nostd` value-ABI runtime (which caps `lbits` at 64 bits) is
-**not** usable, and width-bounding `sail_int` to 128 bits (`-DSAIL_INT128`) would silently
-truncate general 256-bit values.
+The model keeps EVM words in `bits(256)`, wire-sized runtime quantities in
+`bits(64)`, and exact semantic quantities in Sail `nat`/`int`.
+Transaction-controlled words are never silently narrowed: opcode-specific
+checked conversion preserves the required overflow result. Proven 64-bit
+ranges may lower to native `uint64_t`/`int64_t`; residual mathematical
+integers use the exact bounded representation below. The build deliberately
+does not use `--Ofixed-int`.
 
-Instead we link a **fixed-width runtime, [`runtime/sailfix/`](runtime/sailfix/)**, that
-replaces the stock `sail.c` + GMP entirely: `sail_int` is a **512-bit sign-magnitude**
-integer (declared as an array-of-1 so it keeps `mpz_t`'s pass-as-pointer ABI — the
-*unchanged* Sail-generated C recompiles against it), and `lbits` is a **256-bit inline**
-`{ len, d[4] }` (256 is the max bitvector width in the EVM). 512 bits covers every integer
-the EVM produces — MUL/MULMOD/EXP form `unsigned(a)*unsigned(b) <= 2^512` before
-truncation. It implements only the ~40 runtime functions the guest references (schoolbook
-512-bit multiply + bit-by-bit division with a 64-bit fast path), so there is **no `libgmp`,
-no `mini-gmp`, and no `mpz` in the binary**. Correctness is checked on-guest by
-`arith_selfcheck` (256-bit MUL/DIV/MOD, 512-bit MULMOD, EXP, signed SDIV/SMOD vs Python
-ground truth) and by the full stateless run.
+[`runtime/sail256/`](runtime/sail256/) replaces the stock `sail.c` + GMP entirely.
+Large bitvectors use the fixed inline representation `{ len, d[4] }`; residual
+Sail integers use a normalized sign plus 12 64-bit limbs. The 768-bit width
+comes from the pre-Osaka MODEXP gas bound (`< 2^765`), and every operation
+traps rather than wraps or saturates on overflow. The runtime has no dynamic
+integer allocation and links no `libgmp` or `mini-gmp`. `make runtime-test`
+differentially checks it against arbitrary-precision arithmetic.
 
 `runtime/freestanding/` holds minimal `<stdio.h>`/`<stdlib.h>`/`<string.h>`/`<ctype.h>`/
 `<assert.h>`/`<time.h>`/`<inttypes.h>` shims so the runtime decouples completely
@@ -153,12 +154,12 @@ termination mapping).
 
 ```
 zkvm/
-  build.sh              driver: guest | run | clean (VEC = the baked input vector)
-  zkvm_io.h             the standard IO header (verbatim from zkvm-standards)
-  zkvm_input.h          guest extern decls injected into the generated model C
+  build.sh              driver: guest | run | clean (VEC is runtime-only)
   zkvm_accel_mmio.h     spike MMIO wire protocol (accel_guest.c <-> accel_device.cc)
+  zkvm_io_mmio.h        spike-private transport behind ffi/zkvm_io.h
   accel-host/           Rust crypto cdylib (the ONE accelerator implementation)
   accel-device/         spike MMIO device dispatching 1:1 into accel-host
+  io-device/            spike runtime-input device (host file -> guest buffer)
   native-runner/        host builds: zkvm_native exe + the ctypes libs
                         (libevmsail_guest) over test_utils.c
   runtime/
@@ -166,24 +167,27 @@ zkvm/
     start.S             machine-mode crt0 + trap vector (platform glue; uses Zicsr)
     htif.c/.h           HTIF console + exit (spike host channel; validation only)
     runtime.c           freestanding libc subset + allocator + termination mapping
-    zkvm_io.c           read_input / write_output (io-interface standard)
-    zkvm_input.c        private-input plumbing (baked vector / ere read_input)
     harness.c           drives model init → guest main → write_output → terminate
     accel_guest.c       guest half of the accelerator API (MMIO marshalling)
     freestanding/       minimal hosted-header shims (decouple from newlib)
-    sailfix/            GMP-free fixed-width Sail runtime (512-bit int, 256-bit lbits)
-    sail256/            host-optimized GMP-free runtime (native exe + ctypes libs)
+    sail256/            exact bounded integers + inline 256-bit lbits
+  io-device/
+    guest.c             Spike implementation of standard read_input/write_output
 ```
 
 ## Building / running
 
-Requires `sail` (opam), `riscv64-unknown-elf-gcc`, and `spike` on `PATH`
-(`eval $(opam env --root=$HOME/.opam --switch=sail)` for sail).
+Requires `riscv64-unknown-elf-gcc` and `spike` on `PATH`. The optimized C
+lowering also requires a Sail compiler with spliceable type definitions and
+the `$[c_repr uint64]` newtype extension. The build's
+`resolve_optimized_sail.sh` uses `SAIL` when set, auto-detects the local feature
+worktree used by this repository, and otherwise uses the compiler on `PATH`.
+The real optimized model build is the capability check.
 
 ```
 python3 ../harness/run.py --spike <state-test.json> --fork F   # the gate
-VEC=<input.ssz> ./build.sh run     # one vector: build the guest, run on spike
-VEC=<input.ssz> ./build.sh guest   # build only (produces build/zkvm_guest.elf)
+VEC=<input.ssz> ./build.sh run     # build if needed, supply input, run on spike
+./build.sh guest                   # input-free build (build/zkvm_guest.elf)
 ./build.sh clean
 ```
 
@@ -204,8 +208,7 @@ VEC=<input.ssz> ./build.sh guest   # build only (produces build/zkvm_guest.elf)
   been removed.) Sail calls explicit C adapters instead of a catch-all shim:
   `../ffi/host_crypto.c` for direct hash pointer/length calls,
   `../ffi/precompiles.c` for EVM precompile execution,
-  and `../ffi/output.c` for output ownership. keccak/sha256 are exercised + asserted on-guest by
-  `keccak_selfcheck`/`sha256_selfcheck`.
+  and `../ffi/output.c` for output ownership.
 * `start.S`/trap-vector use Zicsr (machine-mode CSRs) — these are **platform/crt0 glue**
   (a vendor responsibility under the memory-layout standard), not the proven STF, which
   stays pure `rv64im_zicclsm`.
@@ -214,6 +217,7 @@ VEC=<input.ssz> ./build.sh guest   # build only (produces build/zkvm_guest.elf)
 
 ## Runtime provenance
 
-`runtime/sailfix/sail.h` is the stock Sail C runtime header with the GMP types swapped for
-the fixed-width `sail_int`/`lbits` above; `runtime/sailfix/sail.c` is an original GMP-free
-implementation of the int/bits primitives. No GMP/`mini-gmp` source is vendored or linked.
+`runtime/sail256/sail.h` specializes the Sail C runtime ABI to exact bounded
+integers and inline bitvectors up to 256 bits. `runtime/sail256/sail.c`
+implements the integer and bitvector primitives referenced by the model. No
+GMP/`mini-gmp` source is vendored or linked.

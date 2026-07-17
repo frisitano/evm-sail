@@ -12,9 +12,10 @@ struct TxEnv = { origin : address, gas_price : word, blob_hashes : BlobHashes }
 struct TxValidity = {
     valid : bool,
     sender : address,
-    nonce_before : u64,
-    intrinsic_gas : gas,
-    blob_fee : int,
+    nonce_before : account_nonce,
+    intrinsic_gas : gas_cost,
+    calldata_floor : gas_cost,
+    blob_fee : word,
     gas_price : word, /* effective gas price (EIP-1559, from the caps + base fee) */
     priority_fee : word, /* coinbase tip per gas (effective price minus base fee)    */
 }
@@ -22,17 +23,35 @@ struct TxValidity = {
 struct TxFrameResult = {
     success : bool,
     gas_remaining : gas,
+    refund : gas_refund,
 }
+
+enum CallKind = { Call, CallCode, DelegateCall, StaticCall }
 
 struct Message = {
     caller       : address,  /* CALLER (I_s)                                  */
-    address      : address,  /* ADDRESS / storage owner = self (I_a)          */
     code_address : address,  /* account whose code runs (differs under        */
                                  /* DELEGATECALL/CALLCODE and EIP-7702 delegation) */
+    address      : address,  /* ADDRESS / storage owner = self (I_a)          */
     value        : word,     /* CALLVALUE (I_v)                               */
-    data_len     : int,      /* CALLDATA length (calldata is a ByteSlice)       */
     is_static    : bool,     /* inside a STATICCALL frame (EIP-214)           */
-    depth        : int,      /* call depth (YP I_e), bounded by DEPTH_LIMIT   */
+    depth        : frame_depth, /* call depth (YP I_e), bounded by DEPTH_LIMIT */
+}
+
+/* The complete suspended parent frame at a nested execution boundary. The
+ * kernel checkpoint owns mutable world state; stack frames remain in the
+ * host's stack-of-stacks; returndata intentionally becomes the child output. */
+struct FrameCheckpoint = {
+    state : StateCheckpoint,
+    pc : code_pointer,
+    gas_remaining : gas,
+    refund : gas_refund,
+    status : FrameStatus,
+    message : Message,
+    call_depth : frame_depth,
+    code : Code,
+    calldata : ByteSlice,
+    memory : ByteSlice,
 }
 
 let DEFAULT_MESSAGE : Message = struct {
@@ -40,7 +59,6 @@ let DEFAULT_MESSAGE : Message = struct {
         address = ZERO_ADDR,
         code_address = ZERO_ADDR,
         value = ZERO_WORD,
-        data_len = 0,
         is_static = false,
         depth = 0,
     }

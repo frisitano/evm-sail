@@ -2,7 +2,8 @@
  *
  * Sail treats Keccak/SHA as abstract byte-list operations. C helpers here are
  * for optimized pointer/length refinements such as stateless-input code
- * insertion into the code DB.
+ * insertion into the code DB. Byte-source resolution belongs to
+ * byte_slice_glue.h and is deliberately not part of this interface.
  */
 #ifndef HOST_CRYPTO_H
 #define HOST_CRYPTO_H
@@ -10,15 +11,18 @@
 #include "sail.h"
 #include <stdint.h>
 
-enum evmsail_byte_source_kind {
-  EVMSAIL_SOURCE_STATELESS_INPUT = 1,
-  EVMSAIL_SOURCE_MEMORY = 2,
-  EVMSAIL_SOURCE_CODE = 4,
-  EVMSAIL_SOURCE_LOG_DATA = 6,
-  EVMSAIL_SOURCE_MEMORY_ARENA = 7,
-  EVMSAIL_SOURCE_OUTPUT = 8,
-  EVMSAIL_SOURCE_SCRATCH = 9,
-};
+/* Generated aggregate boundary implemented by hash_glue.c. These incomplete
+ * types let the generated model see the correct calling convention before it
+ * emits the corresponding Sail type definitions. */
+struct zByteSlice;
+struct node_zz5listz8z5unionz0zzBytesz9;
+void host_keccak_segments(
+    lbits *rop, struct node_zz5listz8z5unionz0zzBytesz9 *segments);
+void host_sha256_segments(
+    lbits *rop, struct node_zz5listz8z5unionz0zzBytesz9 *segments);
+bool host_bytes_segments_equal_slice(
+    struct node_zz5listz8z5unionz0zzBytesz9 *segments,
+    struct zByteSlice expected);
 
 void host_keccak256_bytes(uint64_t out[4], const uint8_t *p, uint64_t len);
 void host_sha256_bytes(uint64_t out[4], const uint8_t *p, uint64_t len);
@@ -32,7 +36,4 @@ void host_create_address(lbits *rop, const lbits sender, uint64_t nonce);
 void host_auth_signing_hash(lbits *rop, const lbits chain_id, const lbits address,
                             uint64_t nonce);
 void host_sha256_pair(lbits *rop, const lbits a, const lbits b);
-int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
-                                const uint8_t **p, uint64_t *resolved_len);
-
 #endif

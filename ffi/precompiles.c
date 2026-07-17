@@ -1,5 +1,6 @@
 #include "precompiles.h"
 
+#include "byte_slice_glue.h"
 #include "host_crypto.h"
 #include "lbits_convert.h"
 #include "output.h"

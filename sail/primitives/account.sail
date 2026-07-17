@@ -16,7 +16,7 @@
  * state (EXTCODEHASH, EIP-1052) and the binding a stateless witness checks code
  * against. */
 struct AccountInfo = {
-    nonce        : u64,   /* sigma[a]_n: nonce (u64: EIP-2681 caps it at 2^64-1)   */
+    nonce        : account_nonce, /* sigma[a]_n: nonce (EIP-2681 caps it at 2^64-1) */
     balance      : word,  /* sigma[a]_b: balance in wei                            */
     code_hash    : hash,  /* sigma[a]_c: keccak256(code); KECCAK_EMPTY if codeless */
     storage_root : hash,  /* sigma[a]_s: PRE-STATE storage root, the witness anchor */
@@ -24,7 +24,7 @@ struct AccountInfo = {
 
 struct Account = {
     info           : AccountInfo,
-    exists         : bool,
+    present        : bool,
     storage_cleared: bool,
     created        : bool,
     selfdestructed : bool,
@@ -41,7 +41,7 @@ struct AcctValue = { curr : Account, orig : Account }
 struct AcctEntry = { addr : address, value : AcctValue }
 
 let EMPTY_ACCOUNT_INFO : AccountInfo = struct {
-        nonce = sail_zeros(64),
+        nonce = 0,
         balance = ZERO_WORD,
         code_hash = KECCAK_EMPTY,
         storage_root = EMPTY_TRIE_ROOT,
@@ -49,11 +49,11 @@ let EMPTY_ACCOUNT_INFO : AccountInfo = struct {
 
 let EMPTY_ACCOUNT : Account = struct {
         info = EMPTY_ACCOUNT_INFO,
-        exists = false,
+        present = false,
         storage_cleared = true,
         created = false,
         selfdestructed = false,
     }
 
 function account_from_info(info : AccountInfo) -> Account =
-    struct { info = info, exists = true, storage_cleared = false, created = false, selfdestructed = false }
+    struct { info = info, present = true, storage_cleared = false, created = false, selfdestructed = false }

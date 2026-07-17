@@ -5,18 +5,18 @@
 val output_buffer_store = impure { c: "output_buffer_store" } : ByteSlice -> bool
 val output_buffer_store_word = impure { c: "output_buffer_store_word" } : word -> bool
 val output_buffer_store_words = impure { c: "output_buffer_store_words" } : (word, word) -> bool
-val public_output_write = impure { c: "el_emit_out" } : byte -> unit
+val public_output_write = impure { c: "public_output_write" } : ByteSlice -> bool
 
-function output_buffer_slice(len : int) -> ByteSlice =
-    if len == 0 then {
+function output_buffer_slice(len : byte_length) -> ByteSlice =
+    if len == BYTE_ZERO then {
         EMPTY_SLICE
     } else {
-        byte_slice(OutputSource, 0, len)
+        byte_slice(OutputSource, BYTE_ZERO, len)
     }
 
 function freeze_output(data : ByteSlice) -> ByteSlice = {
-    let len = unsigned(data.len);
-    if len == 0 then {
+    let len = data.len;
+    if len == BYTE_ZERO then {
         EMPTY_SLICE
     } else {
         if output_buffer_store(data) then {
@@ -29,7 +29,7 @@ function freeze_output(data : ByteSlice) -> ByteSlice = {
 
 function output_buffer_word(value : word) -> ByteSlice = {
     if output_buffer_store_word(value) then {
-        output_buffer_slice(32)
+        output_buffer_slice(WORD_BYTE_LENGTH)
     } else {
         EMPTY_SLICE
     }
@@ -37,7 +37,7 @@ function output_buffer_word(value : word) -> ByteSlice = {
 
 function output_buffer_words(first : word, second : word) -> ByteSlice = {
     if output_buffer_store_words(first, second) then {
-        output_buffer_slice(64)
+        output_buffer_slice(DOUBLE_WORD_BYTE_LENGTH)
     } else {
         EMPTY_SLICE
     }

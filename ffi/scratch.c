@@ -2,7 +2,7 @@
  * visible bump cursor; this backend retains and resolves the backing bytes. */
 #include "scratch.h"
 
-#include "host_crypto.h"
+#include "byte_slice_glue.h"
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -64,8 +64,9 @@ bool scratch_append_source(uint64_t dst, uint64_t source, uint64_t off,
   return true;
 }
 
-unit scratch_truncate(uint64_t len) {
-  if (len <= scratch_top) scratch_top = len;
+unit scratch_truncate(EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
+  uint64_t len_value = evmsail_byte_quantity_value(len);
+  if (len_value <= scratch_top) scratch_top = len_value;
   return UNIT;
 }
 

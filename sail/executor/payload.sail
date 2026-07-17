@@ -1,149 +1,168 @@
 function withdrawal_rlp(withdrawal : ByteSlice) -> ByteSlice = {
-    let base = unsigned(withdrawal.off);
-    let index = rlp_int(ssz_u64(base + WD_INDEX));
-    let validator_index = rlp_int(ssz_u64(base + WD_VALIDATOR_INDEX));
-    let amount = rlp_int(ssz_u64(base + WD_AMOUNT));
-    let payload_len = list_len(index) + list_len(validator_index) + 21 + list_len(amount);
+    let index = ssz_uint(withdrawal, WD_INDEX);
+    let validator_index = ssz_uint(withdrawal, WD_VALIDATOR_INDEX);
+    let address = sub_slice(withdrawal, WD_ADDRESS, ADDRESS_BYTE_LENGTH);
+    let amount = ssz_uint(withdrawal, WD_AMOUNT);
+    var content_len = rlp_uint_size(index);
+    content_len = content_len + rlp_uint_size(validator_index);
+    content_len = content_len + rlp_slice_size(address);
+    content_len = content_len + rlp_uint_size(amount);
+    let encoded_len = rlp_list_size(content_len);
     let start = scratch_begin();
-    scratch_push_bytes(rlp_list_prefix(payload_len));
-    scratch_push_bytes(index);
-    scratch_push_bytes(validator_index);
-    scratch_push_bytes([|0x94|]);
-    scratch_push_slice(sub_slice(withdrawal, WD_ADDRESS, 20));
-    scratch_push_bytes(amount);
-    scratch_finish(start)
+    rlp_write_list_prefix(content_len);
+    rlp_write_uint(index);
+    rlp_write_uint(validator_index);
+    rlp_write_slice(address);
+    rlp_write_uint(amount);
+    rlp_finish(start, encoded_len)
 }
 
 function block_header_hash(
-    h : BlockHeader,
+    header : BlockHeader,
     transactions_root : hash,
     withdrawals_root : hash,
     requests_hash : hash,
-    bal_hash : hash,
+    block_access_list_hash : hash,
 ) -> (
     hash
 ) = {
-    var content = rlp_builder_encoded(rlp_word(h.parent_hash));
-    content = rlp_builder_append_encoded(content, rlp_word(EMPTY_OMMER_HASH));
-    content = rlp_builder_append_encoded(content, rlp_addr(h.fee_recipient));
-    content = rlp_builder_append_encoded(content, rlp_word(h.state_root));
-    content = rlp_builder_append_encoded(content, rlp_word(transactions_root));
-    content = rlp_builder_append_encoded(content, rlp_word(h.receipts_root));
-    content = rlp_builder_append_encoded(content, rlp_bytes(logs_bloom_bytes(h.logs_bloom)));
-    content = rlp_builder_append_encoded(content, rlp_int(0));
-    content = rlp_builder_append_encoded(content, rlp_int(h.number));
-    content = rlp_builder_append_encoded(content, rlp_int(h.gas_limit));
-    content = rlp_builder_append_encoded(content, rlp_int(h.gas_used));
-    content = rlp_builder_append_encoded(content, rlp_int(h.timestamp));
-    content = rlp_builder_append(content, rlp_builder_slice(h.extra_data));
-    content = rlp_builder_append_encoded(content, rlp_word(h.prev_randao));
-    content = rlp_builder_append_encoded(content, rlp_bytes(zero_bytes(8)));
+    let bloom = logs_bloom_bytes(header.logs_bloom);
+    let nonce : list(byte) = [|0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00|];
+    var content_len = rlp_word_size();
+    content_len = content_len + rlp_word_size();
+    content_len = content_len + rlp_addr_size();
+    content_len = content_len + rlp_word_size();
+    content_len = content_len + rlp_word_size();
+    content_len = content_len + rlp_word_size();
+    content_len = content_len + rlp_bytes_size(bloom, LOGS_BLOOM_BYTE_LENGTH);
+    content_len = content_len + rlp_uint_size(0);
+    content_len = content_len + rlp_uint_size(header.number);
+    content_len = content_len + rlp_uint_size(header.gas_limit);
+    content_len = content_len + rlp_uint_size(header.gas_used);
+    content_len = content_len + rlp_uint_size(header.timestamp);
+    content_len = content_len + rlp_slice_size(header.extra_data);
+    content_len = content_len + rlp_word_size();
+    content_len = content_len + rlp_bytes_size(nonce, EIGHT_BYTE_LENGTH);
     if k_fork >= London then {
-        content = rlp_builder_append_encoded(content, rlp_int_word(h.base_fee))
+        content_len = content_len + rlp_uint_word_size(header.base_fee)
     };
     if k_fork >= Shanghai then {
-        content = rlp_builder_append_encoded(content, rlp_word(withdrawals_root))
+        content_len = content_len + rlp_word_size()
     };
     if k_fork >= Cancun then {
-        content = rlp_builder_append_encoded(content, rlp_int(unsigned(h.blob_gas_used)));
-        content = rlp_builder_append_encoded(content, rlp_int(unsigned(h.excess_blob_gas)));
-        content = rlp_builder_append_encoded(content, rlp_word(h.parent_beacon_block_root))
+        content_len = content_len + rlp_uint_size(header.blob_gas_used);
+        content_len = content_len + rlp_uint_size(header.excess_blob_gas);
+        content_len = content_len + rlp_word_size()
     };
     if k_fork >= Prague then {
-        content = rlp_builder_append_encoded(content, rlp_word(requests_hash))
+        content_len = content_len + rlp_word_size()
     };
     if k_fork >= Amsterdam then {
-        content = rlp_builder_append_encoded(content, rlp_word(bal_hash));
-        content = rlp_builder_append_encoded(content, rlp_int(unsigned(h.slot_number)))
+        content_len = content_len + rlp_word_size();
+        content_len = content_len + rlp_uint_size(header.slot_number)
     };
-    keccak256(rlp_builder_segments(rlp_builder_list(content)))
+    let encoded_len = rlp_list_size(content_len);
+    let mark = scratch_begin();
+    rlp_write_list_prefix(content_len);
+    rlp_write_word(header.parent_hash);
+    rlp_write_word(EMPTY_OMMER_HASH);
+    rlp_write_addr(header.fee_recipient);
+    rlp_write_word(header.state_root);
+    rlp_write_word(transactions_root);
+    rlp_write_word(header.receipts_root);
+    rlp_write_bytes(bloom, LOGS_BLOOM_BYTE_LENGTH);
+    rlp_write_uint(0);
+    rlp_write_uint(header.number);
+    rlp_write_uint(header.gas_limit);
+    rlp_write_uint(header.gas_used);
+    rlp_write_uint(header.timestamp);
+    rlp_write_slice(header.extra_data);
+    rlp_write_word(header.prev_randao);
+    rlp_write_bytes(nonce, EIGHT_BYTE_LENGTH);
+    if k_fork >= London then {
+        rlp_write_uint_word(header.base_fee)
+    };
+    if k_fork >= Shanghai then {
+        rlp_write_word(withdrawals_root)
+    };
+    if k_fork >= Cancun then {
+        rlp_write_uint(header.blob_gas_used);
+        rlp_write_uint(header.excess_blob_gas);
+        rlp_write_word(header.parent_beacon_block_root)
+    };
+    if k_fork >= Prague then {
+        rlp_write_word(requests_hash)
+    };
+    if k_fork >= Amsterdam then {
+        rlp_write_word(block_access_list_hash);
+        rlp_write_uint(header.slot_number)
+    };
+    let encoded = rlp_finish(mark, encoded_len);
+    let block_hash = keccak256_slice(encoded);
+    scratch_rewind(mark);
+    block_hash
 }
 
-function trie_index_key(i : int) -> TriePath =
-    path_from_bytes(rlp_int(i))
-
-/* RLP(index) keys sort as 1..127, 0, 128.. . Input bodies arrive in numeric
- * order, so move the first update past the single-byte index range in one
- * linear pass instead of inserting every update through an existing list. */
-function place_zero_update(zero : TrieUpdate, rest : list(TrieUpdate), remaining : int) -> list(TrieUpdate) =
-    match rest {
-        next :: tail => if remaining > 0 then {
-            next :: place_zero_update(zero, tail, remaining - 1)
-        } else {
-            zero :: rest
-        },
-        [||] => [|zero|],
-    }
-
-function order_trie_index_updates(updates : list(TrieUpdate)) -> list(TrieUpdate) =
-    match updates {
-        zero :: rest => place_zero_update(zero, rest, 127),
-        [||] => [||],
-    }
-
 function transaction_trie_root(txs : SszListRef) -> hash = {
-    var updates_rev : list(TrieUpdate) = [||];
-    var cursor = ssz_list_cursor(txs);
-    while not_bool(ssz_list_cursor_empty(cursor)) do {
-        let i = cursor.index;
-        let (tx, next) = ssz_list_pop(cursor);
+    var builder = trie_builder_empty();
+    var cursor = rlp_index_cursor(txs.count);
+    while not_bool(rlp_index_cursor_empty(cursor)) do {
+        let (item, next) = rlp_index_cursor_pop(cursor);
         cursor = next;
-        updates_rev = struct { key = trie_index_key(i), change = TriePut(BytesSlice(tx)) } :: updates_rev
+        let tx = ssz_list_at(txs, item.index);
+        builder = trie_insert_item(builder, item_leaf(item.key, tx), item.next_key)
     };
-    trie_root(EMPTY_TRIE_ROOT, order_trie_index_updates(list_reverse(updates_rev)))
+    trie_builder_root(builder)
 }
 
 function withdrawals_trie_root(wds : SszListRef) -> hash = {
-    let scratch_mark = scratch_begin();
-    var updates_rev : list(TrieUpdate) = [||];
-    var rest = wds;
-    var i : int = 0;
-    while rest.count > 0 do {
-        let (withdrawal_ref, tail) = ssz_fixed_list_pop(rest, WD_SIZE);
-        rest = tail;
-        updates_rev =
-            struct { key = trie_index_key(i), change = TriePut(BytesSlice(withdrawal_rlp(withdrawal_ref))) } ::
-                updates_rev;
-        i = i + 1
+    var builder = trie_builder_empty();
+    var cursor = rlp_index_cursor(wds.count);
+    while not_bool(rlp_index_cursor_empty(cursor)) do {
+        let (item, next) = rlp_index_cursor_pop(cursor);
+        cursor = next;
+        let scratch_mark = scratch_begin();
+        let withdrawal = ssz_fixed_list_at(wds, item.index, WD_SIZE);
+        let value = withdrawal_rlp(withdrawal);
+        builder = trie_insert_item(builder, item_leaf(item.key, value), item.next_key);
+        scratch_rewind(scratch_mark)
     };
-    let root = trie_root(EMPTY_TRIE_ROOT, order_trie_index_updates(list_reverse(updates_rev)));
-    scratch_rewind(scratch_mark);
-    root
+    trie_builder_root(builder)
 }
 
-function expected_payload_excess_blob_gas(witness : WitnessContext) -> int =
+function expected_payload_excess_blob_gas(witness : WitnessContext) -> blob_gas =
     next_excess_blob_gas(witness.parent_excess_blob_gas, witness.parent_blob_gas_used, witness.parent_base_fee_per_gas)
 
 /* EIP-7685 commitment over the present request-type digests, in request-type
  * order. The request bodies remain source-backed through the hash calls. */
 function execution_requests_hash(input_ref : StatelessInputRef) -> hash = {
-    let l0 = unsigned(input_ref.deposits.len);
-    let l1 = unsigned(input_ref.withdrawal_requests.len);
-    let l2 = unsigned(input_ref.consolidation_requests.len);
-    let d0 : hash = if l0 != 0 then {
-            sha256_request_digest(0, input_ref.deposits)
+    let l0 = input_ref.deposits.len;
+    let l1 = input_ref.withdrawal_requests.len;
+    let l2 = input_ref.consolidation_requests.len;
+    let d0 : hash = if l0 != BYTE_ZERO then {
+            sha256_request_digest(0x00, input_ref.deposits)
         } else {
             sail_zeros(256)
         };
-    let d1 : hash = if l1 != 0 then {
-            sha256_request_digest(1, input_ref.withdrawal_requests)
+    let d1 : hash = if l1 != BYTE_ZERO then {
+            sha256_request_digest(0x01, input_ref.withdrawal_requests)
         } else {
             sail_zeros(256)
         };
-    let d2 : hash = if l2 != 0 then {
-            sha256_request_digest(2, input_ref.consolidation_requests)
+    let d2 : hash = if l2 != BYTE_ZERO then {
+            sha256_request_digest(0x02, input_ref.consolidation_requests)
         } else {
             sail_zeros(256)
         };
     var segs : list(Bytes) = [||];
-    if l2 != 0 then {
-        segs = BytesList(word_to_bytes32(d2)) :: segs
+    if l2 != BYTE_ZERO then {
+        segs = bytes_list(word_to_bytes32(d2), WORD_BYTE_LENGTH) :: segs
     };
-    if l1 != 0 then {
-        segs = BytesList(word_to_bytes32(d1)) :: segs
+    if l1 != BYTE_ZERO then {
+        segs = bytes_list(word_to_bytes32(d1), WORD_BYTE_LENGTH) :: segs
     };
-    if l0 != 0 then {
-        segs = BytesList(word_to_bytes32(d0)) :: segs
+    if l0 != BYTE_ZERO then {
+        segs = bytes_list(word_to_bytes32(d0), WORD_BYTE_LENGTH) :: segs
     };
     sha256(segs)
 }
@@ -163,17 +182,20 @@ function validate_execution_payload(
     let header = block.header;
     let body = block.body;
     if not_bool(
-          (input.chain_config.fork_index >= 9)
+          (9 <= input.chain_config.fork_index)
         & (input.chain_config.fork_index <= 20)
         & input.chain_config.activation_active
         & chain_config_blob_schedule_valid(input.chain_config),
     ) then {
         throw InvalidBlock(InvalidConfig)
     };
+    if header.gas_limit < header.gas_used then {
+        throw InvalidBlock(InvalidGasUsed)
+    };
     if witness.parent_hash != header.parent_hash then {
         throw InvalidBlock(InvalidParentHash)
     };
-    if (k_fork >= Cancun) & (unsigned(header.excess_blob_gas) != expected_payload_excess_blob_gas(witness)) then {
+    if (k_fork >= Cancun) & (header.excess_blob_gas != expected_payload_excess_blob_gas(witness)) then {
         throw InvalidBlock(InvalidExcessBlobGas)
     };
     if k_fork >= Paris then {
@@ -188,7 +210,7 @@ function validate_execution_payload(
             } else {
                 ZERO_WORD
             };
-        let supplied_block_access_list_hash = if k_fork >= Amsterdam then {
+        let block_access_list_hash = if k_fork >= Amsterdam then {
                 keccak256(body.block_access_list)
             } else {
                 ZERO_WORD
@@ -198,7 +220,7 @@ function validate_execution_payload(
             transactions_root,
             withdrawals_root,
             requests_hash,
-            supplied_block_access_list_hash,
+            block_access_list_hash,
         );
         if computed_block_hash != payload.expected_block_hash then {
             throw InvalidBlock(InvalidBlockHash)

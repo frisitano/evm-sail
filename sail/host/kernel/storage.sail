@@ -22,7 +22,7 @@ function k_slot_is_warm(a : address, s : word) -> bool = {
 }
 
 /* --- persistent storage (SLOAD/SSTORE): the C cache/update store, whose
- * mutations are recorded between k_snapshot / k_revert boundaries --- */
+ * mutations are recorded between k_state_checkpoint / k_revert boundaries --- */
 
 /* k_sload: resolve the slot to its live StorageEntry -- curr is the value
  * SLOAD pushes; orig is the EIP-2200 tx-start value the SSTORE gas policy

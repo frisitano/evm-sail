@@ -48,7 +48,7 @@ Account:  k_access_account  k_get_balance/nonce/code/codehash  k_transfer
           k_deleg_target  k_seed_account
 Env:      k_env(field)  k_blockhash  k_blobhash  k_coinbase
 Prim:     k_create_addr  k_create2_addr  k_precompile
-Utils:    k_snapshot  k_revert  k_refund_add  k_log
+Utils:    k_state_checkpoint  k_revert  k_log
 ```
 
 - **The EVM** (`sail/evm/`): the opcode
@@ -66,7 +66,7 @@ symbolic engines (the world is an explicit, finite interface).
 
 ### Native execution: C FFI backends
 
-To *run* the model — the generated C compiled natively (`sail256`/`sailfix`) —
+To *run* the model — the generated C compiled against `sail256` —
 the host's mechanism is backed by C FFI; the Sail definitions stay the
 specification while these provide the data structures underneath it.
 Performance-critical state lives behind C FFI with O(1) operations — EVM
@@ -87,20 +87,14 @@ backends.
 
 ## Performance
 
-Three host runtimes compile the same generated C:
-
-| Runtime | 256-bit words | Throughput* |
-|---|---|---|
-| GMP (stock Sail) | heap `mpz_t` | ~5.6 Mgas/s |
-| `sailfix` | inline 512-bit (guest-shared, zkVM) | below GMP |
-| `sail256` | inline 512-bit, host-optimized | **~28–35 Mgas/s** |
-
-*Workload mix: ~28 Mgas/s on an execution-bound
-TSTORE loop, ~35 Mgas/s across the mix, with calls/creates/precompiles well
-above (deep reentrant CALLs ~940, 49KB-initcode CREATE ~170, blake2f ~100).
-A 30–45M-gas mainnet block executes in ~1–1.5s under `sail256` — within ~13×
-of revm, which is a production interpreter, not a specification. Calling a
-24KB-code contract costs the same as calling a 1-byte one (O(1) frame entry).
+Native and RISC-V builds now use one GMP-free runtime. EVM words remain inline
+four-limb `bits(256)` values; wire-sized lengths, offsets, and cursors are
+explicit `bits(64)` quantities with checked operations. Exact semantic gas
+costs and signed refunds remain Sail `nat`/`int`. Residual mathematical
+integers use a fixed 12-limb, 768-bit sign-magnitude runtime selected from the
+model-wide maximum intermediate; proven 64-bit ranges can still lower to
+native scalars. Operations trap rather than truncate if that audited bound is
+violated.
 
 ## Layout
 
@@ -151,9 +145,9 @@ ffi/         C backends: memory.c (memory/generic byte slices), scratch.c
 harness/     the EEST harness: run.py drives main.sail in-process and gates its
              canonical output byte-exactly against EELS; state tests are first
              materialized as valid stateless blocks by the in-process t8n
+extractions/ maintained Coq and Lean model generation plus extern contracts
 zkvm/        RISC-V zkVM guest target (riscv64im, stateless block validation)
-  runtime/sailfix     GMP-free fixed-width Sail runtime (guest-shared)
-  runtime/sail256     host-optimized variant (sized limbs, Knuth-D division)
+  runtime/sail256     shared GMP-free runtime (bounded integers, inline lbits)
   accel-host/         host crypto cdylib (blst, k256, c-kzg, aurora-modexp, p256)
 ```
 
@@ -167,6 +161,13 @@ opam init --bare -y && opam switch create sail 5.2.0 && eval "$(opam env --switc
 opam install -y sail && sail --version
 ```
 
+The pure model and extraction targets work with upstream Sail. Optimized C builds
+also require spliceable type definitions and the `$[c_repr uint64]` newtype
+representation extension. `zkvm/resolve_optimized_sail.sh` checks this by
+compiling a small representation probe: it respects an explicit `SAIL`,
+otherwise uses the local feature worktree when present, and fails before the
+full build if the selected compiler lacks the extension.
+
 Type-check the specification (block execution is validated by the EEST harness
 and the zkVM guest, below):
 
@@ -174,6 +175,8 @@ and the zkVM guest, below):
 make check                                  # type-check sail/evm.sail_project
 make lint                                   # sail --all-warnings + source hygiene
 make fmt-check                              # verify sail --fmt formatting
+make extract-coq                            # generate the complete Coq model
+make extract-lean                           # generate and compile the Lean model
 ```
 
 `make all` runs `check` + `lint` + `fmt-check`. `make lint`

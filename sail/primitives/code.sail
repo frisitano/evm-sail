@@ -1,12 +1,13 @@
 /* Executable code and its PUSH-aware JUMPDEST analysis. */
 
-/* One little-endian bitmap word per 64 code bytes. */
-type JumpdestBitmap = list(bits(64))
+/* One bit per code byte, with the lowest code offset in the least-significant
+ * bit. Analysis writes one completed 256-byte chunk at a time. */
+type JumpdestChunk = bits(256)
 
-/* One-based word offset in the host's packed bitmap arena; zero is empty. */
+/* Opaque handle to one preallocated table; zero is empty. */
 type JumpdestRef = bits(64)
 
-let EMPTY_JUMPDEST_BITMAP : JumpdestBitmap = [||]
+let EMPTY_JUMPDEST_CHUNK : JumpdestChunk = 0x0000000000000000000000000000000000000000000000000000000000000000
 let EMPTY_JUMPDEST_REF : JumpdestRef = 0x0000000000000000
 
 /* The interpreter saves and restores the byte span and its resolved table

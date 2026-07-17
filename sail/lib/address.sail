@@ -4,9 +4,17 @@
 
 /* CREATE address (Yellow Paper): low 20 bytes of
  * keccak256(rlp([sender, nonce])). */
-function create_address(sender : address, nonce : u64) -> address = {
-    let payload = list_append(rlp_addr(sender), rlp_int(unsigned(nonce)));
-    word_to_address(keccak_rlp_payload([||], payload))
+function create_address(sender : address, nonce : account_nonce) -> address = {
+    let content_len = rlp_addr_size() + rlp_uint_size(nonce);
+    let encoded_len = rlp_list_size(content_len);
+    let mark = scratch_begin();
+    rlp_write_list_prefix(content_len);
+    rlp_write_addr(sender);
+    rlp_write_uint(nonce);
+    let encoded = rlp_finish(mark, encoded_len);
+    let address = word_to_address(keccak256_slice(encoded));
+    scratch_rewind(mark);
+    address
 }
 
 /* CREATE2 address (EIP-1014): low 20 bytes of
@@ -15,10 +23,10 @@ function create2_address(sender : address, salt : word, init_hash : hash) -> add
     word_to_address(
         keccak256(
             [|
-                BytesList([|0xff|]),
-                BytesList(address_to_bytes(sender)),
-                BytesList(word_to_bytes32(salt)),
-                BytesList(word_to_bytes32(init_hash)),
+                bytes_list([|0xff|], BYTE_ONE),
+                bytes_list(address_to_bytes(sender), ADDRESS_BYTE_LENGTH),
+                bytes_list(word_to_bytes32(salt), WORD_BYTE_LENGTH),
+                bytes_list(word_to_bytes32(init_hash), WORD_BYTE_LENGTH),
             |],
         ),
     )

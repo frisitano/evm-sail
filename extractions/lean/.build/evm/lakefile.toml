@@ -1,0 +1,7 @@
+name = "evm"
+defaultTargets = ["Evm"]
+moreLeanArgs = ["--tstack=400000"]
+
+[[lean_lib]]
+name = "Evm"
+leanOptions.weak.linter.style.nameCheck = false

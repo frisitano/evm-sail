@@ -13,13 +13,14 @@ sources, auto-detected per fixture file:
   - blockchain/stateless fixtures already carrying statelessInputBytes /
     statelessOutputBytes (e.g. corpora under zkvm/.fixtures/): fed directly.
 Two execution vehicles: the native in-process ctypes lib (default), or the
-REAL RISC-V guest ELF on spike (--spike; input baked into the ELF, full build
-once then REBAKE_ONLY per case). This subsumes the old
+REAL RISC-V guest ELF on spike (--spike; full build once, then each case is
+provided through the runtime read_input ABI to the unchanged ELF). This subsumes the old
 zkvm/native-runner/run_fixtures*.py and zkvm/run_guest_smoke.py runners.
 
 Usage:
     python3 harness/run.py <test.json|dir> [...] [--fork F] [--limit N]
-            [--spike] [--rebuild] [--verbose] [--debug]
+            [--build standard|optimized] [--spike] [--rebuild]
+            [--verbose] [--debug]
 Requires `sail` on PATH and a C compiler; ssz_builder.py runs under the
 execution-specs venv (EXECSPECS_PY).
 """
@@ -35,18 +36,34 @@ def h2i(x):
 def ai(a):
     return int(a.lower().replace("0x", ""), 16) if a else 0
 
+
+def fixture_items(path):
+    """Yield fixtures from regular JSON or EEST worker-shard JSONL."""
+    if path.endswith(".jsonl"):
+        with open(path) as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                value = row["v"]
+                yield row["k"], json.loads(value) if isinstance(value, str) else value
+    else:
+        yield from json.load(open(path)).items()
+
+
 def collect(path, want_fork, limit):
     out = []
-    for name, t in json.load(open(path)).items():
+    for name, t in fixture_items(path):
         if "post" not in t: continue
         for fork, entries in t["post"].items():
             if want_fork and fork != want_fork: continue
             for pe in entries:
                 idx = pe["indexes"]; tx = t["transaction"]
                 out.append({
-                    "cid": f"{name.split('::')[-1][:46]}|{fork}|d{idx['data']}g{idx['gas']}v{idx['value']}",
+                    "cid": f"{name.split('::')[-1]}|{fork}|d{idx['data']}g{idx['gas']}v{idx['value']}",
                     "env": t["env"], "pre": t["pre"], "tx": tx,
                     "fork": fork, "idx": idx,   # for ssz_builder (fork rules + tx index)
+                    "config": t.get("config", {}), "txbytes": pe.get("txbytes"),
                     "gas": h2i(tx["gasLimit"][idx["gas"]]), "val": h2i(tx["value"][idx["value"]]),
                     "data": tx["data"][idx["data"]], "post": pe["state"], "hash": pe.get("hash"),
                     "al": (tx["accessLists"][idx["data"]] if "accessLists" in tx
@@ -55,10 +72,14 @@ def collect(path, want_fork, limit):
     return out
 
 # Interpreter for the execution-specs venv: it owns the stateless SSZ types, the
-# serializer, and the pre-state MPT builder. run.py's own interpreter lacks
-# those deps, so ssz_builder.py (which builds the MPT witness in-process) runs
-# there over --serve.
-EXECSPECS_PY = "/Users/f/dev/ethereum/execution-specs/.venv/bin/python3"
+# serializer, and the pre-state MPT builder. Default to the sibling checkout,
+# with environment overrides for other workspace layouts.
+EXECSPECS_ROOT = os.environ.get(
+    "EXECSPECS_ROOT", os.path.abspath(os.path.join(ELDIR, "..", "execution-specs"))
+)
+EXECSPECS_PY = os.environ.get(
+    "EXECSPECS_PY", os.path.join(EXECSPECS_ROOT, ".venv", "bin", "python3")
+)
 
 # Persistent SSZ SszStatelessInput builder (ssz_builder.py --serve), run under the
 # execution-specs venv (it owns the stateless SSZ types + serializer + t8n). One
@@ -84,15 +105,18 @@ def build_guest_pair(case):
     """case -> (input bytes, expected SszStatelessValidationResult bytes): a fully
     VALID Amsterdam block built by the in-process EELS t8n, plus the reference
     guest's byte-exact expected output over that exact input."""
-    resp = _serve_request({"env": case["env"], "pre": case["pre"], "tx": case["tx"],
-                           "fork": case["fork"], "idx": case["idx"]})
+    resp = _serve_request({
+        "env": case["env"], "pre": case["pre"], "tx": case["tx"],
+        "fork": case["fork"], "idx": case["idx"], "config": case["config"],
+        "txbytes": case["txbytes"],
+    })
     return bytes.fromhex(resp["input"]), bytes.fromhex(resp["expected"])
 
 def collect_stateless(path):
     """Blockchain/stateless fixture blocks carrying statelessInputBytes:
     [(cid, input_bytes, expected_bytes|None)]. Empty for state-test files."""
     out = []
-    for name, t in json.load(open(path)).items():
+    for name, t in fixture_items(path):
         for i, b in enumerate(t.get("blocks", [])):
             sib = b.get("statelessInputBytes")
             if not sib:
@@ -106,19 +130,18 @@ def collect_stateless(path):
 
 class SpikeGuest:
     """Drive the REAL RISC-V guest ELF on spike, one case at a time, through
-    zkvm/build.sh: the input vector is BAKED into the ELF (no host I/O in the
-    zkVM model), so each case is a rebake + relink + spike boot -- the first
-    case pays the full model build, later ones set REBAKE_ONLY. The build dir
-    is per-invocation (ZKVM_BUILD): concurrent gates sharing zkvm/build/ race
-    on the baked vector/ELF and byte-exactly report the WRONG fixture. Output
-    is the `output_hex=` line the harness prints on the spike console. Same
-    run_once(input)->bytes seam as the native ctypes guest, so everything
-    above the backend (input sources, reference oracle, reporting) is shared."""
+    zkvm/build.sh. The first case builds an input-agnostic ELF; every case then
+    supplies its bytes to the same ELF through the Spike implementation of the
+    standard read_input ABI. The build dir is per invocation (ZKVM_BUILD), so
+    concurrent gates cannot race on generated objects. Output is the
+    `output_hex=` line the harness prints on the Spike console. Same
+    run_once(input)->bytes seam as the native ctypes guest, so everything above
+    the backend (input sources, reference oracle, reporting) is shared."""
 
     def __init__(self, timeout, profile=False):
         self.zkvm = os.path.join(ELDIR, "zkvm")
         self.build_dir = tempfile.mkdtemp(prefix="zkvm-spike-")
-        self.rebake = False
+        self.built = False
         self.timeout = timeout
         self.profile = profile
 
@@ -128,15 +151,16 @@ class SpikeGuest:
             vec = tf.name
         env = dict(os.environ, VEC=vec, ZKVM_BUILD=self.build_dir)
         env["EVM_PROFILE"] = "on" if self.profile else "off"
-        if self.rebake:
-            env["REBAKE_ONLY"] = "1"
+        if self.built:
+            env["RUN_ONLY"] = "1"
         try:
             r = subprocess.run([os.path.join(self.zkvm, "build.sh"), "run"],
                                capture_output=True, env=env,
                                timeout=self.timeout, cwd=self.zkvm)
         finally:
             os.unlink(vec)
-        self.rebake = True
+        if r.returncode == 0:
+            self.built = True
         m = re.search(rb"^output_hex=([0-9a-f]*)\s*$", r.stdout, re.M)
         if r.returncode != 0 or not m:
             raise RuntimeError(f"spike run failed rc={r.returncode}: "
@@ -154,7 +178,11 @@ def run_fixtures(files, args):
     if args.spike:
         run_once = SpikeGuest(args.timeout or 900.0, profile=args.profile).run_once
     else:
-        dump_state.load_guest(rebuild=args.rebuild, profile=args.profile)
+        dump_state.load_guest(
+            rebuild=args.rebuild,
+            profile=args.profile,
+            build_mode=args.build_mode,
+        )
         run_once = dump_state.run_once_guest
     npass = ntotal = 0
     fail_reasons = {}
@@ -214,7 +242,7 @@ def run_fixtures(files, args):
                         print("\n".join("      " + ln for ln in snap.splitlines()))
                 else:
                     suppressed_fails += 1
-    vehicle = "spike guest" if args.spike else "guest"
+    vehicle = "spike guest" if args.spike else f"{args.build_mode} guest"
     print(f"\n=== {npass}/{ntotal} passed ({vehicle}, byte-exact) ===")
     if suppressed_fails:
         print(f"=== suppressed FAIL lines: {suppressed_fails} ===")
@@ -238,6 +266,7 @@ def run_sharded(files, args):
     flags.append("--_trace-files")
     if args.verbose: flags.append("--verbose")
     if args.profile: flags.append("--profile")
+    flags += ["--build", args.build_mode]
     if args.fork: flags += ["--fork", args.fork]
     if args.limit: flags += ["--limit", str(args.limit)]
     if args.timeout is not None: flags += ["--timeout", str(args.timeout)]
@@ -280,7 +309,10 @@ def run_sharded(files, args):
             if mc:
                 for k, v in ast.literal_eval(mc.group(1)).items():
                     cats[k] = cats.get(k, 0) + v
-    print(f"\n=== {npass}/{ntotal} passed (guest, byte-exact) === [{n} jobs]")
+    print(
+        f"\n=== {npass}/{ntotal} passed "
+        f"({args.build_mode} guest, byte-exact) === [{n} jobs]"
+    )
     if cats: print("fail categories:", dict(sorted(cats.items(), key=lambda x: -x[1])))
     return 1 if (rc or ntotal == 0 or npass != ntotal or ntimeout != 0) else 0
 
@@ -290,6 +322,14 @@ def main():
     ap.add_argument("files", nargs="+"); ap.add_argument("--fork", default=None)
     ap.add_argument("--limit", type=int, default=0); ap.add_argument("--rebuild", action="store_true")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument(
+        "--build",
+        dest="build_mode",
+        choices=("standard", "optimized"),
+        default="optimized",
+        help="native C build mode (default: optimized); standard omits the "
+             "c_optimized.sail splice",
+    )
     ap.add_argument("--timeout", type=float, default=None,
                     help="per-case wall-clock budget; only meaningful with --spike "
                          "(default 900s there) -- the warm in-process libs cannot "
@@ -297,7 +337,7 @@ def main():
     ap.add_argument("--quiet", action="store_true", help="only print failures + summary")
     ap.add_argument("--spike", action="store_true",
                     help="run the REAL RISC-V guest ELF on spike "
-                         "(full build once, then REBAKE_ONLY per case) instead of "
+                         "(full build once, runtime input per case) instead of "
                          "the native in-process lib")
     ap.add_argument("--profile", action="store_true",
                     help="build with optional zkVM cycle-scope markers")
@@ -313,13 +353,16 @@ def main():
     ap.add_argument("--_trace-files", dest="_trace_files", action="store_true",
                     help=argparse.SUPPRESS)
     args = ap.parse_args()
+    if args.spike and args.build_mode != "optimized":
+        ap.error("--spike currently supports only --build optimized")
 
-    # expand directories to the .json files within (recursive)
+    # Expand regular fixtures and EEST worker-shard JSONL files recursively.
     import glob as _glob
     files = []
     for p in args.files:
         if os.path.isdir(p):
             files += sorted(_glob.glob(os.path.join(p, "**", "*.json"), recursive=True))
+            files += sorted(_glob.glob(os.path.join(p, "**", "*.jsonl"), recursive=True))
         else:
             files.append(p)
 
@@ -327,7 +370,7 @@ def main():
         if args.spike or args.debug or args.rebuild:
             ap.error("--jobs is incompatible with --spike/--debug/--rebuild")
         if len(files) > 1:
-            dump_state.load_guest(profile=args.profile)
+            dump_state.load_guest(profile=args.profile, build_mode=args.build_mode)
             sys.exit(run_sharded(files, args))
         # a single file: nothing to shard, fall through sequentially
     run_fixtures(files, args)

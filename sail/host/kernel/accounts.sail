@@ -4,21 +4,21 @@ function account_info_changed(c : AccountInfo, o : AccountInfo) -> bool =
     c.nonce != o.nonce | c.balance != o.balance | c.code_hash != o.code_hash | c.storage_root != o.storage_root
 
 function account_info_empty(info : AccountInfo) -> bool =
-    (info.code_hash == KECCAK_EMPTY) & info.nonce == sail_zeros(64) & word_is_zero(info.balance)
+    (info.code_hash == KECCAK_EMPTY) & info.nonce == 0 & word_is_zero(info.balance)
 
 function account_changed(c : Account, o : Account) -> bool =
-    account_info_changed(c.info, o.info) | c.exists != o.exists | c.storage_cleared != o.storage_cleared
+    account_info_changed(c.info, o.info) | c.present != o.present | c.storage_cleared != o.storage_cleared
 
 function account_set_info(acc : Account, info : AccountInfo) -> Account =
     if account_info_empty(info) then {
         {
             acc with
             info = { EMPTY_ACCOUNT_INFO with storage_root = acc.info.storage_root },
-            exists = false,
+            present = false,
             storage_cleared = true,
         }
     } else {
-        { acc with info = info,  exists = true }
+        { acc with info = info,  present = true }
     }
 
 function account_clear_storage(acc : Account) -> Account =
@@ -31,7 +31,7 @@ function account_delete(acc : Account) -> Account =
     {
         acc with
         info = { EMPTY_ACCOUNT_INFO with storage_root = acc.info.storage_root },
-        exists = false,
+        present = false,
         storage_cleared = true,
     }
 
@@ -44,7 +44,7 @@ function store_account_info(a : address, acc : Account, info : AccountInfo) -> u
     };
     let next = account_set_info(acc, info);
     if   (next.info.storage_root != acc.info.storage_root)
-       | (next.exists != acc.exists)
+       | (next.present != acc.present)
        | (next.storage_cleared != acc.storage_cleared) then {
         store_account(a, next)
     } else {
@@ -82,11 +82,11 @@ function k_get_balance(a : address) -> word = {
     k_aload(a).info.balance
 }
 
-function k_get_nonce(a : address) -> u64 = {
+function k_get_nonce(a : address) -> account_nonce = {
     k_aload(a).info.nonce
 }
 
-function k_account_exists(a : address) -> bool = k_aload(a).exists
+function k_account_exists(a : address) -> bool = k_aload(a).present
 
 /* EIP-161 "empty" account: nonce 0, balance 0, no code. */
 function k_account_is_empty(a : address) -> bool = {
@@ -99,7 +99,7 @@ function k_account_occupied(a : address) -> bool = {
     let acc = k_aload(a);
     let info = acc.info;
     let anchored_storage = not_bool(acc.storage_cleared) & (info.storage_root != EMPTY_TRIE_ROOT);
-    if (info.code_hash != KECCAK_EMPTY) | (info.nonce != sail_zeros(64)) | anchored_storage then {
+    if (info.code_hash != KECCAK_EMPTY) | (info.nonce != 0) | anchored_storage then {
         true
     } else {
         storage_has_writes(a)
@@ -120,11 +120,11 @@ function k_transfer(src : address, dst : address, v : word) -> unit = {
     }
 }
 
-/* Increment an account's nonce. The u64 increment cannot wrap: EIP-2681
- * guards every path that reaches a bump. */
+/* Increment an account's nonce. EIP-2681 guards every path that reaches a
+ * bump, so the semantic account_nonce bound cannot be crossed. */
 function k_bump_nonce(a : address) -> unit = {
     let cur = k_aload(a);
-    store_account_info(a, cur, { cur.info with nonce = get_slice_int(64, unsigned(cur.info.nonce) + 1, 0) })
+    store_account_info(a, cur, { cur.info with nonce = account_nonce_increment(cur.info.nonce) })
 }
 
 function k_add_balance(a : address, v : word) -> unit = {

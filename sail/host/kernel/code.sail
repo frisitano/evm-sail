@@ -4,8 +4,8 @@ function k_code_key(a : address) -> hash = k_aload(a).info.code_hash
  * KECCAK_EMPTY. */
 function k_get_codehash(a : address) -> hash = {
     let acc = k_aload(a);
-    if not_bool(acc.exists) then {
-        word_of_int(0)
+    if not_bool(acc.present) then {
+        WORD_ZERO
     } else {
         acc.info.code_hash
     }
@@ -17,21 +17,29 @@ function k_deploy_code(a : address, code : ByteSlice) -> unit = {
     store_account_info(a, cur, { cur.info with code_hash = h })
 }
 
-function delegation_jumpdest_bitmap(target : address) -> JumpdestBitmap = {
+function delegation_jumpdest_chunk(target : address) -> JumpdestChunk = {
     let w = address_to_word(target);
-    var bits : bits(64) = 0x0000000000000000;
+    var bits = EMPTY_JUMPDEST_CHUNK;
     foreach (k from 0 to 19) {
         let b = sail_shiftright(w, 8 * (19 - k))[7 .. 0];
         if b == 0x5b then {
-            bits = or_vec(bits, sail_shiftleft(0x0000000000000001, 3 + k))
+            bits = or_vec(bits, sail_shiftleft(WORD_ONE, 3 + k))
         }
     };
-    [|bits|]
+    bits
 }
 
 function k_set_delegation(a : address, target : address) -> unit = {
     let cur = k_aload(a);
-    let h : hash = code_intern_delegation(target, delegation_jumpdest_bitmap(target));
+    let code_len : byte_length = ByteQuantity(23);
+    let table = jumpdest_table_alloc(code_len);
+    assert(table != EMPTY_JUMPDEST_REF, "delegation JUMPDEST table allocation");
+    let chunk = delegation_jumpdest_chunk(target);
+    if chunk != EMPTY_JUMPDEST_CHUNK then {
+        let stored = jumpdest_table_store_chunk(table, code_len, BYTE_ZERO, chunk);
+        assert(stored, "delegation JUMPDEST chunk store")
+    };
+    let h : hash = code_intern_delegation(target, table);
     store_account_info(a, cur, { cur.info with code_hash = h })
 }
 
@@ -57,13 +65,12 @@ function k_deleg_target(a : address) -> (bool, address) = {
     (r[160] == bitone, r[159 .. 0])
 }
 
-function k_get_code_size(a : address) -> int = {
+function k_get_code_size(a : address) -> byte_length = {
     let code = code_db_resolve(k_code_key(a));
-    unsigned(code.bytes.len)
+    code.bytes.len
 }
 
-function k_code_copy(a : address, dst : int, off : int, len : int) -> unit = {
+function k_code_copy(a : address, dst : memory_pointer, off : word, len : memory_length) -> unit = {
     let code = code_db_resolve(k_code_key(a));
-    let o = if off > 16777216 then { 16777216 } else { off };
-    slice_copy(code.bytes, dst, o, len)
+    slice_copy_word_offset(code.bytes, dst, off, len)
 }

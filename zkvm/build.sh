@@ -4,33 +4,35 @@
 # standard target (riscv64im_zicclsm-unknown-none-elf) and (optionally) run it
 # on spike.
 #
-#   VEC=<input> ./build.sh guest  - build the evm-sail block guest ELF
-#   VEC=<input> ./build.sh run    - build the guest and run it on spike
+#   ./build.sh guest              - build the input-agnostic guest ELF
+#   VEC=<input> ./build.sh run    - supply input at runtime and run on spike
 #   ./build.sh clean              - remove build artifacts
 #
-# VEC = a raw schema-prefixed SszStatelessInput file, baked into the ELF as
-# the private input. The canonical driver is harness/run.py
-# --spike (it supplies VEC per fixture and REBAKE_ONLY after the
-# first build).
+# VEC is a raw schema-prefixed SszStatelessInput file used only by the Spike
+# validation device. It is never compiled or linked into the ELF. The canonical
+# driver is harness/run.py --spike, which builds the guest once and supplies a
+# different runtime input to the unchanged ELF for each fixture.
 #
-# Requires: sail (opam), riscv64-unknown-elf-gcc, spike.
+# Requires: feature-capable Sail (resolved below), riscv64-unknown-elf-gcc,
+# spike.
 # ===========================================================================
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RT="$HERE/runtime"
-# Override for concurrency: two gate runs sharing one build dir race on the
-# baked input vector + relinked ELF (run.py --spike isolates itself).
+# Override for concurrency: two builds sharing one directory still race on
+# generated objects and the linked ELF (run.py --spike isolates itself).
 BUILD="${ZKVM_BUILD:-$HERE/build}"
 ROOT="$(cd "$HERE/.." && pwd)"
+C_SPLICE="$ROOT/sail/splices/c_optimized.sail"
 
-SAIL="${SAIL:-sail}"
+SAIL="${SAIL:-}"
 GCC="${GCC:-riscv64-unknown-elf-gcc}"
 SPIKE="${SPIKE:-spike}"
 HOSTCC="${HOSTCC:-cc}"
 HOSTCXX="${HOSTCXX:-c++}"
 SPIKE_INC="${SPIKE_INC:-/opt/homebrew/Cellar/riscv-isa-sim/main/include}"
-ACCEL_SO="$BUILD/accel_device.so"
+SPIKE_DEVICES_SO="$BUILD/spike_devices.so"
 EVM_PROFILE="${EVM_PROFILE:-off}"
 case "$EVM_PROFILE" in
   off|on) ;;
@@ -45,15 +47,15 @@ ARCH=(-march=rv64im_zicclsm -mabi=lp64 -mcmodel=medany)
 CFLAGS=("${ARCH[@]}" -O2 -ffreestanding -nostdlib -fno-builtin
         -fno-stack-protector -fno-pic -mno-relax -DNDEBUG
         -ffunction-sections -fdata-sections
-        -I"$RT/sailfix" -I"$RT/freestanding" -I"$RT" -I"$ROOT/zkvm" -I"$ROOT/ffi")
+        -I"$RT/sail256" -I"$RT/freestanding" -I"$RT"
+        -I"$ROOT/zkvm" -I"$ROOT/zkvm/io-device" -I"$ROOT/ffi")
 # -lgcc supplies compiler runtime helpers; --gc-sections drops the unused Sail
 # diagnostic/format surface (and its gmp_printf/asprintf references).
 LDFLAGS=(-T "$RT/link.ld" -Wl,--no-relax -Wl,--gc-sections -nostdlib -static)
 
 # Sail nostd runtime library (ships with the toolchain).
 sail_lib() {
-  local sb; sb="$(command -v "$SAIL")"
-  echo "$(dirname "$sb")/../share/sail/lib"
+  echo "$("$SAIL" --dir)/lib"
 }
 
 # spike memory ranges MUST match link.ld: MAIN, then (omitted guard gap), STACK.
@@ -61,8 +63,20 @@ SPIKE_MEM="0x80000000:0x10000000,0x90010000:0x04000000"
 # spike's --isa string does not name Zicclsm; that extension only mandates
 # transparent misaligned load/store support, which spike provides via
 # --misaligned. So rv64im + --misaligned is the Zicclsm-equivalent run config.
-SPIKE_ISA="rv64im_zicntr"   # zicntr enables instret for the harness cost readout
-SPIKE_FLAGS=(--isa="$SPIKE_ISA" --misaligned -m"$SPIKE_MEM" --extlib="$ACCEL_SO" --device=accel)
+SPIKE_ISA="rv64im"
+SPIKE_FLAGS=(--isa="$SPIKE_ISA" --misaligned -m"$SPIKE_MEM" --extlib="$SPIKE_DEVICES_SO" --device=accel)
+
+# Inject the owning FFI headers directly. There is deliberately no aggregate
+# model/input umbrella: each external operation is declared by its subsystem.
+MODEL_HEADERS=(
+  byte_slice_glue.h host_crypto.h precompiles.h output.h scratch.h memory.h
+  transient_storage.h stack.h code_db.h kernel_state.h trie_node_db.h
+  state_db.h cycle_scopes.h
+)
+MODEL_INCLUDE_FLAGS=()
+for header in "${MODEL_HEADERS[@]}"; do
+  MODEL_INCLUDE_FLAGS+=(--c-include "$header")
+done
 
 mkdir -p "$BUILD"
 
@@ -79,54 +93,31 @@ build_runtime() {
 }
 
 cmd_guest() {
+  if [ -z "${GUEST:-}" ]; then
+    SAIL="$(bash "$HERE/resolve_optimized_sail.sh")"
+  else
+    SAIL="${SAIL:-sail}"
+  fi
+  export SAIL
   local lib; lib="$(sail_lib)"
   build_runtime
-  # 0. Embed the schema-prefixed SSZ test vector as the preloaded private input
-  #    (zkvm_input_bytes). A real zkVM host supplies these bytes instead. The
-  #    canonical driver is harness/run.py --spike, which always
-  #    passes VEC (a raw statelessInputBytes file).
-  local vec="${VEC:-}"
-  if [ -z "$vec" ]; then
-    echo "error: set VEC=<raw SszStatelessInput file> (see run.py --spike)" >&2
-    exit 2
-  fi
-  python3 - "$vec" "$BUILD/zkvm_input_data.c" <<'PY'
-import sys
-data = open(sys.argv[1], "rb").read()
-with open(sys.argv[2], "w") as f:
-    f.write("/* generated from the SSZ test vector; do not edit */\n")
-    f.write("const unsigned char zkvm_input_bytes[] = {\n")
-    for i in range(0, len(data), 16):
-        f.write("  " + ",".join(str(b) for b in data[i:i+16]) + ",\n")
-    f.write("};\n")
-    f.write("const unsigned long zkvm_input_bytes_len = %d;\n" % len(data))
-PY
-  "$GCC" "${CFLAGS[@]}" -Wno-unused -c "$BUILD/zkvm_input_data.c" -o "$BUILD/zkvm_input_data.o"
-  # REBAKE_ONLY=1: reuse every compiled object and only rebake the input vector
-  # and relink -- the per-vector fast path for the EEST guest smoke gate.
-  if [ -n "${REBAKE_ONLY:-}" ] && [ -f "$BUILD/zkvm_block.o" ] && \
-     [ -f "$BUILD/evm_profile" ] && [ "$(<"$BUILD/evm_profile")" = "$EVM_PROFILE" ]; then
-    if [ "$EVM_PROFILE" = on ]; then PROFILE_OBJ="$BUILD/cycle_scopes.o"; fi
-    link_guest
-    return
-  fi
   # 1. Sail -> C: no main, no Sail runtime harness (we supply our own).
-  #    --c-include injects the guest extern decls (host crypto/precompile
-  #    adapters + zkvm_input private-input reader) so the generated call sites
-  #    compile.
   if [ -n "${GUEST:-}" ]; then
     "$SAIL" -c --c-no-main --c-no-rts --c-preserve main \
-        --c-include zkvm_input.h \
+        "${MODEL_INCLUDE_FLAGS[@]}" \
         "$GUEST" -o "$BUILD/zkvm_block"
   else
     ( cd "$ROOT" && "$SAIL" -c --c-no-main --c-no-rts --c-preserve main \
-        --c-include zkvm_input.h \
+        --c-specialize \
+        "${MODEL_INCLUDE_FLAGS[@]}" \
+        --splice "$C_SPLICE" \
         sail/evm.sail_project evm \
         --variable EVM_PROFILE="$EVM_PROFILE" \
         --variable EVM_DEBUG=off \
         -o "$BUILD/zkvm_block" )
   fi
-  # 2. Compile the generated model (stock Sail GMP-ABI, backed by mini-gmp).
+  # 2. Compile the generated model.  Proven small ranges lower to native
+  #    integers; mathematical int/nat values use sail256's exact bounded ABI.
   #    The model calls setup_rts/cleanup_rts (provided by runtime.c) without a
   #    prototype since --c-no-rts omits rts.h; downgrade that to a warning.
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
@@ -146,11 +137,10 @@ PY
   "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
       -c "$ROOT/ffi/byte_slice_glue.c" -o "$BUILD/byte_slice_glue.o"
-  # 3. GMP-free fixed-width Sail runtime (sailfix) replacing stock sail.c +
-  #    mini-gmp: sail_int = 512-bit sign-magnitude, lbits = 256-bit inline.
+  # 3. GMP-free Sail runtime: exact bounded integers and inline 256-bit lbits.
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
       -Wno-unused -Wno-error=implicit-function-declaration \
-      -c "$RT/sailfix/sail.c" -o "$BUILD/sail.o"
+      -c "$RT/sail256/sail.c" -o "$BUILD/sail.o"
   # 3b. Host crypto/precompile adapters: identical code to the native build,
   #     written against the zkvm_accelerators.h API. On the guest that API is
   #     implemented by accel_guest.c, which marshals each call to the host
@@ -163,15 +153,17 @@ PY
   done
   "$GCC" "${CFLAGS[@]}" -I"$ROOT/ffi" -I"$ROOT/zkvm" -Wall -Wextra \
       -c "$RT/accel_guest.c" -o "$BUILD/accel_guest.o"
-  # 3b'. Host accelerator device (spike --extlib): models a zkVM crypto precompile,
-  #      backed by the SAME Rust accel-host crypto the native build links
-  #      (keccak/sha256/secp256k1 verify). The crypto never enters guest instret.
+  # 3b'. Spike validation devices: the accelerator models zkVM crypto
+  #      precompiles through the SAME Rust accel-host implementation the native
+  #      build links, while the input device supplies read_input bytes at
+  #      runtime. Neither crypto nor fixture bytes are linked into the guest.
   ACCEL="$ROOT/zkvm/accel-host"; ACCEL_LIB="$ACCEL/target/release"
   if [ ! -f "$ACCEL_LIB/libzkvm_accel_host.dylib" ] && [ ! -f "$ACCEL_LIB/libzkvm_accel_host.so" ]; then
     ( cd "$ACCEL" && cargo build --release --target-dir target )  # local target (matches link path)
   fi
   "$HOSTCXX" -std=c++17 -fPIC -shared -I"$SPIKE_INC" -I"$ROOT/ffi" -I"$ROOT/zkvm" -undefined dynamic_lookup \
-      -o "$ACCEL_SO" "$ROOT/zkvm/accel-device/accel_device.cc" \
+      -o "$SPIKE_DEVICES_SO" \
+      "$ROOT/zkvm/accel-device/accel_device.cc" "$ROOT/zkvm/io-device/io_device.cc" \
       -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB"
   # 3c. C host backends: memory/generic byte slices, transient storage,
   #     output arena, operand stack, code/JUMPDEST arenas, and witness/account
@@ -180,15 +172,12 @@ PY
     "$GCC" "${CFLAGS[@]}" -I"$lib" \
         -Wno-unused -c "$ROOT/ffi/$hc.c" -o "$BUILD/$hc.o"
   done
-  # 4. Our freestanding runtime + IO + harness.
+  # 4. Our freestanding runtime + standard IO implementation + harness.
   "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra \
       -c "$RT/runtime.c" -o "$BUILD/runtime.o"
-  "$GCC" "${CFLAGS[@]}" -Wall -Wextra -c "$RT/zkvm_io.c"  -o "$BUILD/zkvm_io.o"
-  # private-input reader FFI for the Sail SSZ decoder (needs sail.h types).
-  "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra -c "$RT/zkvm_input.c" -o "$BUILD/zkvm_input.o"
-  # harness reads minstret (rdinstret) to report block execution cost -> Zicsr
-  # (platform glue, like start.S; the proven model stays rv64im_zicclsm).
-  "$GCC" "${CFLAGS[@]}" -march=rv64im_zicsr_zicclsm -I"$lib" -Wall -Wextra \
+  "$GCC" "${CFLAGS[@]}" -Wall -Wextra \
+      -c "$ROOT/zkvm/io-device/guest.c" -o "$BUILD/zkvm_io.o"
+  "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra \
       -c "$RT/harness.c" -o "$BUILD/harness.o"
   if [ "$EVM_PROFILE" = on ]; then
     "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra \
@@ -202,8 +191,7 @@ PY
 
 link_guest() {
   "$GCC" "${CFLAGS[@]}" "${LDFLAGS[@]}" \
-      "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/zkvm_io.o" "$BUILD/zkvm_input.o" \
-      "$BUILD/zkvm_input_data.o" \
+      "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/zkvm_io.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
       "$BUILD/host_crypto.o" "$BUILD/precompiles.o" "$BUILD/accel_guest.o" \
       "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" \
@@ -217,10 +205,20 @@ link_guest() {
 }
 
 cmd_run() {
-  cmd_guest
+  if [ -z "${RUN_ONLY:-}" ]; then
+    cmd_guest
+  elif [ ! -f "$BUILD/zkvm_guest.elf" ] || [ ! -f "$SPIKE_DEVICES_SO" ]; then
+    echo "error: RUN_ONLY requires an existing guest build" >&2
+    exit 2
+  fi
+  local vec="${VEC:-}"
+  if [ -z "$vec" ]; then
+    echo "error: set VEC=<raw SszStatelessInput file> for the Spike run" >&2
+    exit 2
+  fi
   echo "--- spike run (${SPIKE_FLAGS[*]}) ---"
   set +e
-  "$SPIKE" "${SPIKE_FLAGS[@]}" "$BUILD/zkvm_guest.elf"
+  "$SPIKE" "${SPIKE_FLAGS[@]}" --device="evmsail_input,$vec" "$BUILD/zkvm_guest.elf"
   local rc=$?
   set -e
   echo "--- spike exit code: $rc ---"

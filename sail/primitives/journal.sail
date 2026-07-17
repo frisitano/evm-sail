@@ -5,10 +5,10 @@
 /* decodes. Pure data -- no registers, no externs.                          */
 /* ======================================================================== */
 
-type JournalCheckpoint = u64
-type AccountCheckpoint = u64
-type StorageCheckpoint = u64
-type LogCheckpoint = u64
+type JournalCheckpoint = protocol_quantity
+type AccountCheckpoint = protocol_quantity
+type StorageCheckpoint = protocol_quantity
+type LogCheckpoint = protocol_quantity
 
 struct StateCheckpoint = {
   journal  : JournalCheckpoint,
@@ -18,8 +18,7 @@ struct StateCheckpoint = {
 }
 
 union JEntry = {
-  JTran   : (address, word, word),    /* restore transient slot                  */
-  JWarmA  : address,                  /* un-warm a newly-accessed address        */
-  JWarmS  : (address, word),          /* un-warm a newly-accessed slot           */
-  JRefund : i64                       /* restore the refund counter              */
+  JTran  : (address, word, word), /* restore transient slot           */
+  JWarmA : address,               /* un-warm a newly-accessed address */
+  JWarmS : (address, word)        /* un-warm a newly-accessed slot    */
 }

@@ -6,12 +6,25 @@
  * the abstract host interfaces declared in sail/host/state.sail and
  * sail/host/environment.sail and C-backed here. Declared here so the
  * Sail-generated C call sites are prototyped via `sail -c --c-include`.
- * Addresses/words/hashes cross as whole lbits;
- * counts, tags, bytes and the refund word cross as mach_bits. */
+ * Addresses/words/hashes cross as whole lbits; counts, tags, and bytes cross
+ * as mach_bits. */
 #ifndef KERNEL_STATE_H
 #define KERNEL_STATE_H
 #include "sail.h"
 #include <stdint.h>
+
+/* Generated aggregate adapters implemented by journal_glue.c/hash_glue.c. */
+struct zJEntry;
+struct zBytes;
+struct node_zz5listz8z5bvz9;
+struct node_zz5listz8z5structz0zzLogEntryz9;
+unit journal_push(struct zJEntry entry);
+void journal_pop(struct zJEntry *result, unit u);
+unit log_append_record(const lbits address,
+                       struct node_zz5listz8z5bvz9 *topics,
+                       struct zBytes data);
+void logs_read_all(struct node_zz5listz8z5structz0zzLogEntryz9 **result,
+                   unit u);
 
 /* ---- EIP-2929 warm sets ---- */
 unit warm_reset(const unit u);
@@ -49,12 +62,10 @@ uint64_t journal_len(const unit u);
 unit journal_push_tran(const lbits a, const lbits slot, const lbits val);
 unit journal_push_warma(const lbits a);
 unit journal_push_warms(const lbits a, const lbits slot);
-unit journal_push_refund(uint64_t old);
 uint64_t journal_top_tag(const unit u);
 unit journal_drop_top(const unit u);
 void journal_top_addr(lbits *rop, const unit u);
 void journal_top_slot(lbits *rop, const unit u);
 void journal_top_val(lbits *rop, const unit u);
-uint64_t journal_top_refund(const unit u);
 
 #endif

@@ -16,11 +16,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, ".."))
 _NR = os.path.join(ROOT, "zkvm", "native-runner")
 _EXT = "dylib" if sys.platform == "darwin" else "so"
-GUEST_LIB = os.path.join(_NR, ".build", f"libevmsail_guest.{_EXT}")
-PROFILE_MARKER = os.path.join(_NR, ".build", "libevmsail_guest.profile")
 
 _guest = None
 _guest_profile = None
+_guest_build_mode = None
+
+def _build_paths(build_mode):
+    if build_mode not in ("standard", "optimized"):
+        raise ValueError("build_mode must be 'standard' or 'optimized'")
+    build_dir = os.path.join(_NR, f".build-{build_mode}")
+    return (
+        build_dir,
+        os.path.join(build_dir, f"libevmsail_guest.{_EXT}"),
+        os.path.join(build_dir, "libevmsail_guest.profile"),
+    )
 
 def _bind(path):
     """dlopen a test_utils.c-shaped lib and bind the shared ctypes signatures."""
@@ -33,27 +42,37 @@ def _bind(path):
     lib.evmsail_lib_init()
     return lib
 
-def load_guest(rebuild=False, profile=False):
+def load_guest(rebuild=False, profile=False, build_mode="optimized"):
     """Load main.sail's native shared library, building it if needed."""
-    global _guest, _guest_profile
+    global _guest, _guest_profile, _guest_build_mode
+    build_dir, guest_lib, profile_marker = _build_paths(build_mode)
     wanted = "on" if profile else "off"
     if _guest is not None:
-        if _guest_profile != wanted:
-            raise RuntimeError("cannot switch EVM_PROFILE after loading the guest library")
+        if _guest_profile != wanted or _guest_build_mode != build_mode:
+            raise RuntimeError(
+                "cannot switch EVM_PROFILE or build mode after loading the guest library"
+            )
         return _guest
     try:
-        with open(PROFILE_MARKER) as f:
+        with open(profile_marker) as f:
             built_profile = f.read().strip()
     except FileNotFoundError:
         built_profile = None
-    if rebuild or not os.path.exists(GUEST_LIB) or built_profile != wanted:
-        print("# building guest lib (one-time)...", file=sys.stderr)
-        env = dict(os.environ, EVM_PROFILE=wanted)
+    if rebuild or not os.path.exists(guest_lib) or built_profile != wanted:
+        print(f"# building {build_mode} guest lib (one-time)...", file=sys.stderr)
+        env = dict(
+            os.environ,
+            EVM_BUILD_MODE=build_mode,
+            EVM_PROFILE=wanted,
+            NATIVE_BUILD=build_dir,
+            EXTRA_PRESERVE="debug_account_storage_root debug_rebuild_state_root",
+        )
         subprocess.check_call([os.path.join(_NR, "build_lib.sh")], env=env)
-        with open(PROFILE_MARKER, "w") as f:
+        with open(profile_marker, "w") as f:
             f.write(wanted + "\n")
-    _guest = _bind(GUEST_LIB)
+    _guest = _bind(guest_lib)
     _guest_profile = wanted
+    _guest_build_mode = build_mode
     return _guest
 
 def _run(lib, inp):
@@ -77,7 +96,7 @@ def _debug_dump_bytes():
 # generated C enum values the dump's err byte carries).
 BLOCK_ERRORS = [
     "InvalidConfig", "HeaderChainBroken", "RlpDecode", "InvalidSignature",
-    "GasUsedExceedsLimit", "BlobGasLimitExceeded", "ExecutionInvalid",
+    "InvalidGasLimit", "GasUsedExceedsLimit", "BlobGasLimitExceeded", "ExecutionInvalid",
     "InvalidGasUsed", "InvalidBlobGasUsed", "InvalidExcessBlobGas",
     "InvalidStateRoot", "InvalidReceiptsRoot", "InvalidLogsBloom",
     "InvalidBlockHash", "InvalidParentHash", "BlockAccessListTooLarge",
@@ -106,7 +125,8 @@ def _parse_result(b, p=0):
         loc = b[p:p + n].decode(errors="replace"); p += n
         name = BLOCK_ERRORS[err] if err < len(BLOCK_ERRORS) else f"?{err}"
         exc = f"InvalidBlock({name})" + (f" @ {loc}" if loc else "")
-    return (ok, root, exc), p
+    rebuilt_root, p = _w(b, p)
+    return (ok, root, rebuilt_root, exc), p
 
 def snapshot():
     """Decode an on-demand dump of the live post-run native state."""
@@ -119,10 +139,11 @@ def _w(b, p):   return int.from_bytes(b[p:p + 32], "big"), p + 32
 
 def decode_snapshot(b):
     """Blob (see test_utils.c evmsail_debug_dump) -> native debug state.
-    accounts: {acct_hash_int: {nonce, bal, sroot, chash, storage:{slot:val}}}
+    accounts: {acct_hash_int: {address, nonce, bal, sroot, computed_sroot,
+                               chash, storage:{slot:val}}}
     (materialized state = what execution touched; unchanged witness-base values are not
     enumerable here -- that is what the state root commits to). stack: [word,...] top-first."""
-    (ok, root, exc), p = _parse_result(b)
+    (ok, root, rebuilt_root, exc), p = _parse_result(b)
     assert b[p:p + 1] == b"O", "bad snapshot: missing output section"; p += 1
     output_len, p = _u32(b, p)
     output = b[p:p + output_len]; p += output_len
@@ -140,14 +161,17 @@ def decode_snapshot(b):
     na, p = _u32(b, p)
     accounts = {}
     for _ in range(na):
-        hk, p = _w(b, p); nonce, p = _u64(b, p); bal, p = _w(b, p)
-        sroot, p = _w(b, p); chash, p = _w(b, p)
+        hk, p = _w(b, p)
+        address = int.from_bytes(b[p:p + 20], "big"); p += 20
+        nonce, p = _u64(b, p); bal, p = _w(b, p)
+        sroot, p = _w(b, p); computed_sroot, p = _w(b, p); chash, p = _w(b, p)
         ns, p = _u32(b, p)
         sto = {}
         for _ in range(ns):
             slot, p = _w(b, p); val, p = _w(b, p); sto[slot] = val
-        accounts[hk] = {"nonce": nonce, "bal": bal, "sroot": sroot, "chash": chash,
-                        "storage": sto}
+        accounts[hk] = {"address": address, "nonce": nonce, "bal": bal,
+                        "sroot": sroot, "computed_sroot": computed_sroot,
+                        "chash": chash, "storage": sto}
     assert b[p:p + 1] == b"S", "bad snapshot: missing stack section"; p += 1
     sd, p = _u32(b, p)
     stack = []
@@ -156,7 +180,8 @@ def decode_snapshot(b):
     assert b[p:p + 1] == b"M", "bad snapshot: missing memory section"; p += 1
     md, p = _u32(b, p)
     assert b[p:p + 1] == b"E", "bad snapshot: missing end marker"
-    return {"ok": ok, "root": root, "exc": exc, "output": output,
+    return {"ok": ok, "root": root, "rebuilt_root": rebuilt_root,
+            "exc": exc, "output": output,
             "validation_failure": validation_failure,
             "accounts": accounts, "stack": stack, "mem_frame_depth": md}
 
@@ -168,12 +193,20 @@ def format_snapshot(snap, limit=0):
     failure = "" if rejected is None else (
         f"  [REJECTED: {rejected['reason']} during {rejected['scope']}]"
     )
-    lines = [f"state_root={snap['root']:#066x} validation={valid}{failure}{exc}",
+    lines = [f"state_root={snap['root']:#066x} "
+             f"rebuilt_root={snap['rebuilt_root']:#066x} "
+             f"validation={valid}{failure}{exc}",
              f"accounts (materialized): {len(snap['accounts'])}"]
     for i, (hk, a) in enumerate(snap["accounts"].items()):
         if limit and i >= limit:
             lines.append(f"  ... (+{len(snap['accounts']) - limit} more)"); break
-        lines.append(f"  {hk:#066x} nonce={a['nonce']} bal={a['bal']}")
+        lines.append(
+            f"  {hk:#066x} address={a['address']:#042x} "
+            f"nonce={a['nonce']} bal={a['bal']} "
+            f"base_sroot={a['sroot']:#066x} "
+            f"computed_sroot={a['computed_sroot']:#066x} "
+            f"chash={a['chash']:#066x}"
+        )
         for slot, val in a["storage"].items():
             lines.append(f"      [{slot:#x}] = {val:#x}")
     if snap["stack"]:

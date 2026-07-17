@@ -10,10 +10,10 @@ function validate_executed_block(
 ) = {
     let header = block.header;
     let gas_used_ok = result.gas_acc == header.gas_used;
-    let blob_gas_used_ok = (k_fork < Cancun) | (result.blob_gas_acc == unsigned(header.blob_gas_used));
+    let blob_gas_used_ok = (k_fork < Cancun) | (result.blob_gas_acc == header.blob_gas_used);
     let poststate_ok = compute_state_root() == header.state_root;
-    let receipts_root_ok = receipts_trie_root(result.receipts) == header.receipts_root;
-    let logs_bloom_ok = logs_bloom_equal(receipts_bloom(result.receipts), header.logs_bloom);
+    let receipts_root_ok = result.receipts_root == header.receipts_root;
+    let logs_bloom_ok = logs_bloom_equal(result.logs_bloom, header.logs_bloom);
     var block_access_list_size_ok : bool = true;
     var block_access_list_ok : bool = true;
     var execution_requests_ok : bool = true;
@@ -28,8 +28,13 @@ function validate_executed_block(
     };
     if k_fork >= Amsterdam then {
         let block_access_list = encode_block_access_list();
-        block_access_list_size_ok = block_access_list.item_count <= ediv_int(header.gas_limit, 2000);
-        block_access_list_ok = rlp_builder_equals_slice(block_access_list.rlp, block.body.block_access_list)
+        let Gas(gas_limit) = header.gas_limit;
+        let maximum_items = exact_quotient(gas_limit, 2000);
+        block_access_list_size_ok = block_access_list.item_count <= maximum_items;
+        block_access_list_ok = bytes_segments_equal_slice(
+            [|BytesSlice(block_access_list.bytes)|],
+            block.body.block_access_list,
+        )
     };
 
     if result.block_gas_overflow then {

@@ -10,8 +10,11 @@
 /* ======================================================================== */
 
 /* EIP-155: the chain id encoded in a legacy signature v >= 35 */
-function legacy_sig_chain_id(v : int) -> int =
-    ediv_int(v - 35, 2)
+function legacy_sig_chain_id(v : word) -> word =
+    word_divmod(
+        sub_bits(v, 0x0000000000000000000000000000000000000000000000000000000000000023),
+        0x0000000000000000000000000000000000000000000000000000000000000002,
+    ).quotient
 
 /* Transaction and EIP-7702 authorization signing hashes. Spec definitions
  * materialize the canonical RLP preimage; build definitions can refine this
@@ -22,28 +25,58 @@ function legacy_sig_chain_id(v : int) -> int =
  * fields in the witness and is hashed as a SEGMENT (never materialized);
  * legacy EIP-155 txs append (chain_id, 0, 0), typed txs prepend the type
  * byte as a domain separator. */
-function tx_signing_hash(t : TxType, content_src : ByteSlice, v : int) -> hash = {
+let LEGACY_SIGNATURE_SUFFIX_LENGTH : byte_length = ByteQuantity(2)
+let PUBLIC_KEY_Y_OFFSET : source_pointer = ByteQuantity(33)
+let PUBLIC_KEY_BODY_LENGTH : byte_length = DOUBLE_WORD_BYTE_LENGTH
+
+function tx_signing_hash(t : TxType, content_src : ByteSlice, v : word) -> hash = {
     let tb = tx_type_byte(t);
-    let suffix : list(byte) = if (tb == 0) & (v >= 35) then {
-            list_append(rlp_int(legacy_sig_chain_id(v)), [|0x80, 0x80|])
+    let eip155 = (tb == 0x00) & word_ule(0x0000000000000000000000000000000000000000000000000000000000000023, v);
+    let chain_id = if eip155 then {
+            legacy_sig_chain_id(v)
         } else {
-            [||]
+            ZERO_WORD
         };
-    let domain : list(byte) = if tb != 0 then {
-            [|get_slice_int(8, tb, 0)|]
+    let suffix_len = if eip155 then {
+            rlp_uint_word_size(chain_id) + LEGACY_SIGNATURE_SUFFIX_LENGTH
         } else {
-            [||]
+            BYTE_ZERO
         };
-    let content_len = unsigned(content_src.len) + list_len(suffix);
-    keccak256(
-        [|BytesList(domain), BytesList(rlp_list_prefix(content_len)), BytesSlice(content_src), BytesList(suffix)|],
-    )
+    let content_len = content_src.len + suffix_len;
+    let (prefix, prefix_len) = rlp_list_prefix(content_len);
+    if eip155 then {
+        let mark = scratch_begin();
+        rlp_write_uint_word(chain_id);
+        scratch_push_bytes([|0x80, 0x80|], LEGACY_SIGNATURE_SUFFIX_LENGTH);
+        let suffix = rlp_finish(mark, suffix_len);
+        let signing_hash = keccak256([|bytes_list(prefix, prefix_len), BytesSlice(content_src), BytesSlice(suffix)|]);
+        scratch_rewind(mark);
+        signing_hash
+    } else {
+        if tb != 0x00 then {
+            keccak256([|bytes_list([|tb|], BYTE_ONE), bytes_list(prefix, prefix_len), BytesSlice(content_src)|])
+        } else {
+            keccak256([|bytes_list(prefix, prefix_len), BytesSlice(content_src)|])
+        }
+    }
 }
 
 /* EIP-7702 authorization signing hash: 0x05 || rlp([chain_id, address, nonce]). */
-function auth_signing_hash(chain_id : int, addr : address, nonce : int) -> hash = {
-    let content = list_append(rlp_int(chain_id), list_append(rlp_addr(addr), rlp_int(nonce)));
-    keccak_rlp_payload([|0x05|], content)
+function auth_signing_hash(chain_id : word, addr : address, nonce : account_nonce) -> hash = {
+    var content_len = rlp_uint_word_size(chain_id);
+    content_len = content_len + rlp_addr_size();
+    content_len = content_len + rlp_protocol_quantity_size(nonce);
+    let encoded_len = BYTE_ONE + rlp_list_size(content_len);
+    let mark = scratch_begin();
+    scratch_push_bytes([|0x05|], BYTE_ONE);
+    rlp_write_list_prefix(content_len);
+    rlp_write_uint_word(chain_id);
+    rlp_write_addr(addr);
+    rlp_write_protocol_quantity(nonce);
+    let encoded = rlp_finish(mark, encoded_len);
+    let signing_hash = keccak256_slice(encoded);
+    scratch_rewind(mark);
+    signing_hash
 }
 
 /* ---- transaction sender authentication (EIP-2718 / EIP-155 + secp256k1) ------
@@ -53,18 +86,21 @@ function auth_signing_hash(chain_id : int, addr : address, nonce : int) -> hash 
  * from the authenticated key. A forged/wrong pubkey fails verification, so the
  * block is rejected (successful_validation = false). */
 
-function tx_sig_v_ok(chain_id : int, t : TxType, v : int) -> bool = match t {
-    LegacyTx => (v == 27) | (v == 28) | ((v >= 35) & (legacy_sig_chain_id(v) == chain_id)),
-    _ => (v == 0) | (v == 1),
+function tx_sig_v_ok(chain_id : chain_identifier, t : TxType, v : word) -> bool = match t {
+    LegacyTx =>   (v == 0x000000000000000000000000000000000000000000000000000000000000001b)
+                | (v == 0x000000000000000000000000000000000000000000000000000000000000001c)
+                | (word_ule(0x0000000000000000000000000000000000000000000000000000000000000023, v) &
+                      (legacy_sig_chain_id(v) == word_of_nat(chain_id))),
+    _ => (v == WORD_ZERO) | (v == WORD_ONE),
 }
 
 /* authenticate a tx: EIP-2 low-s, then bind its 65-byte witness public key
  * (0x04 ++ X ++ Y) to the signature over the signing hash */
 function tx_auth_ok(pubkey : ByteSlice, h : bits(256), r : word, s : word) -> bool =
-    if unsigned(s) > unsigned(SECP_N_HALF) then {
+    if word_ult(SECP_N_HALF, s) then {
         false
     } else {
-        let x = slice_load(pubkey, 1);
-        let y = slice_load(pubkey, 33);
+        let x = slice_load(pubkey, BYTE_ONE);
+        let y = slice_load(pubkey, PUBLIC_KEY_Y_OFFSET);
         secp256k1_verify(h, r, s, x, y)
     }

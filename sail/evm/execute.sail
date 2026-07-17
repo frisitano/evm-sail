@@ -17,7 +17,7 @@
 /* (interpreter.sail).                                                      */
 /* ======================================================================== */
 
-val run_call : int -> unit /* 0=CALL 1=CALLCODE 2=DELEGATECALL 3=STATICCALL */
+val run_call : CallKind -> unit
 val run_create : bool -> unit /* true = CREATE2 */
 
 /* ----------------------------- helpers ---------------------------------- */
@@ -38,20 +38,43 @@ function guard_static() -> bool =
 /* JUMP/JUMPI target validity: dest must be in code range AND land on a JUMPDEST
  * (the precomputed valid-destination set, YP 9.4.3); otherwise an invalid-jump
  * exceptional halt. PUSH-data bytes that happen to equal 0x5b are not valid. */
-function do_jump(dest : int) -> unit =
-    if dest >= 0 & dest < frame_code_len() & frame_jumpdest_valid(dest) then {
-        pc = dest
+function do_jump(dest_word : word) -> unit = {
+    if word_ult(dest_word, word_of_quantity(frame_code_len())) then {
+        let destination = ByteQuantity(unsigned(dest_word));
+        if frame_jumpdest_valid(destination) then {
+            pc = destination
+        } else {
+            exc_halt(InvalidJump)
+        }
     } else {
         exc_halt(InvalidJump)
     }
+}
 
-function pop_log_topics(count : int) -> list(word) =
-    if count <= 0 then {
-        [||]
-    } else {
-        pop() :: pop_log_topics(count - 1)
+function pop_log_topics(count : log_topic_count) -> list(word) =
+    match count {
+        0 => [||],
+        1 => [|pop()|],
+        2 => {
+            let t0 = pop();
+            let t1 = pop();
+            [|t0, t1|]
+        },
+        3 => {
+            let t0 = pop();
+            let t1 = pop();
+            let t2 = pop();
+            [|t0, t1, t2|]
+        },
+        4 => {
+            let t0 = pop();
+            let t1 = pop();
+            let t2 = pop();
+            let t3 = pop();
+            [|t0, t1, t2, t3|]
+        },
+        _ => [||],
     }
-termination_measure pop_log_topics(count) = count
 
 /* ------------------------------- execute -------------------------------- */
 
@@ -220,12 +243,12 @@ function execute(op : ast) -> unit = match op {
     },
     /* ---- keccak: hash via kernel primitive ---- */
     KECCAK256() => {
-        let off = pop_int();
-        let len = pop_int();
-        charge(keccak_gas(len));
-        charge_expansion(off, len);
+        let offset_word = pop();
+        let length_word = pop();
+        charge_keccak_gas(unsigned(length_word));
+        charge_memory_expansion(offset_word, length_word);
         if is_running() then {
-            push(mem_keccak(off, len))
+            push(mem_keccak(ByteQuantity(unsigned(offset_word)), ByteQuantity(unsigned(length_word))))
         }
     },
     /* ---- environment / account (kernel reads, EVM prices them) ---- */
@@ -251,37 +274,49 @@ function execute(op : ast) -> unit = match op {
     },
     CALLDATASIZE() => {
         charge(G_base);
-        push(word_of_int(message.data_len))
+        push(word_of_quantity(calldata.len))
     },
     CALLDATALOAD() => {
         charge(G_verylow);
-        let off = pop_int();
-        push(slice_load(calldata, off))
+        let offset_word = pop();
+        if is_running() then {
+            push(slice_load_word_offset(calldata, offset_word))
+        }
     },
     CALLDATACOPY() => {
         charge(G_verylow);
-        let dest = pop_int();
-        let off = pop_int();
-        let len = pop_int();
-        charge(copy_gas(len));
-        charge_expansion(dest, len);
+        let destination_word = pop();
+        let source_word = pop();
+        let length_word = pop();
+        charge_copy_gas(unsigned(length_word));
+        charge_memory_expansion(destination_word, length_word);
         if is_running() then {
-            slice_copy(calldata, dest, off, len)
+            slice_copy_word_offset(
+                calldata,
+                ByteQuantity(unsigned(destination_word)),
+                source_word,
+                ByteQuantity(unsigned(length_word)),
+            )
         }
     },
     CODESIZE() => {
         charge(G_base);
-        push(word_of_int(frame_code_len()))
+        push(word_of_quantity(frame_code_len()))
     },
     CODECOPY() => {
         charge(G_verylow);
-        let dest = pop_int();
-        let off = pop_int();
-        let len = pop_int();
-        charge(copy_gas(len));
-        charge_expansion(dest, len);
+        let destination_word = pop();
+        let source_word = pop();
+        let length_word = pop();
+        charge_copy_gas(unsigned(length_word));
+        charge_memory_expansion(destination_word, length_word);
         if is_running() then {
-            mem_codecopy(dest, off, len)
+            slice_copy_word_offset(
+                frame_code.bytes,
+                ByteQuantity(unsigned(destination_word)),
+                source_word,
+                ByteQuantity(unsigned(length_word)),
+            )
         }
     },
     BALANCE() => {
@@ -307,20 +342,20 @@ function execute(op : ast) -> unit = match op {
         let warm = k_access_account(a);
         charge(account_cost(warm));
         if is_running() then {
-            push(word_of_int(k_get_code_size(a)))
+            push(word_of_quantity(k_get_code_size(a)))
         }
     },
     EXTCODECOPY() => {
         let a = word_to_address(pop());
-        let dest = pop_int();
-        let off = pop_int();
-        let len = pop_int();
+        let destination_word = pop();
+        let source_word = pop();
+        let length_word = pop();
         let warm = k_access_account(a);
         charge(account_cost(warm));
-        charge(copy_gas(len));
-        charge_expansion(dest, len);
+        charge_copy_gas(unsigned(length_word));
+        charge_memory_expansion(destination_word, length_word);
         if is_running() then {
-            k_code_copy(a, dest, off, len)
+            k_code_copy(a, ByteQuantity(unsigned(destination_word)), source_word, ByteQuantity(unsigned(length_word)))
         }
     },
     EXTCODEHASH() => {
@@ -335,32 +370,27 @@ function execute(op : ast) -> unit = match op {
     RETURNDATASIZE() => {
         /* EIP-211 */
         charge(G_base);
-        push(word_of_int(returndata_size()))
+        push(word_of_quantity(returndata_size()))
     },
     RETURNDATACOPY() => {
         /* EIP-211 */
         charge(G_verylow);
-        let dest = pop_int();
-        let off = pop_int();
-        let len = pop_int();
-        charge(copy_gas(len));
-        charge_expansion(dest, len);
+        let destination_word = pop();
+        let source_word = pop();
+        let length_word = pop();
+        charge_copy_gas(unsigned(length_word));
+        charge_memory_expansion(destination_word, length_word);
 
         /* EIP-211: a read past the end of the return-data buffer is an
            exceptional halt (cannot read beyond the last sub-call's output). */
-        if off + len > returndata_size() then {
-            exc_halt(InvalidOpcode)
-        } else {
-            if is_running() then {
-                returndata_copy(dest, off, len)
-            }
+        if is_running() then {
+            returndata_copy_words(ByteQuantity(unsigned(destination_word)), source_word, length_word)
         }
     },
     /* ---- block (kernel reads) ---- */
     BLOCKHASH() => {
-        charge(20);
-        let n = pop();
-        push(k_blockhash(unsigned(n)))
+        charge(GasConstant(20));
+        push(k_blockhash(pop()))
     },
     COINBASE() => {
         charge(G_base);
@@ -400,13 +430,12 @@ function execute(op : ast) -> unit = match op {
     BLOBBASEFEE() => {
         /* EIP-7516 */
         charge(G_base);
-        push(word_of_int(blob_base_fee(unsigned(k_header.excess_blob_gas))))
+        push(blob_base_fee(k_header.excess_blob_gas))
     },
     BLOBHASH() => {
         /* EIP-4844 */
         charge(G_verylow);
-        let i = pop_int();
-        push(k_blobhash(i))
+        push(k_blobhash(pop()))
     },
     /* ---- stack / memory (pure, user-space) ---- */
     POP() => {
@@ -415,39 +444,55 @@ function execute(op : ast) -> unit = match op {
     },
     MLOAD() => {
         charge(G_verylow);
-        let off = pop_int();
-        charge_expansion(off, 32);
-        push(mem_load(off))
+        let offset_word = pop();
+        charge_memory_expansion(offset_word, word_of_nat(32));
+        if is_running() then {
+            let offset = ByteQuantity(unsigned(offset_word));
+            push(mem_load(offset))
+        }
     },
     MSTORE() => {
         charge(G_verylow);
-        let off = pop_int();
+        let offset_word = pop();
         let v = pop();
-        charge_expansion(off, 32);
-        mem_store(off, v)
+        charge_memory_expansion(offset_word, word_of_nat(32));
+        if is_running() then {
+            let offset = ByteQuantity(unsigned(offset_word));
+            mem_store(offset, v)
+        }
     },
     MSTORE8() => {
         charge(G_verylow);
-        let off = pop_int();
+        let offset_word = pop();
         let v = pop();
-        charge_expansion(off, 1);
-        mem_store_byte(off, v)
+        charge_memory_expansion(offset_word, WORD_ONE);
+        if is_running() then {
+            let offset = ByteQuantity(unsigned(offset_word));
+            mem_store_byte(offset, v)
+        }
     },
     MSIZE() => {
         charge(G_base);
-        push(word_of_int(mem_size_words() * 32))
+        push(word_of_quantity(evm_memory_size()))
     },
     MCOPY() => {
         /* EIP-5656 */
         charge(G_verylow);
-        let dest = pop_int();
-        let src = pop_int();
-        let len = pop_int();
-        charge(copy_gas(len));
-        let hi = if dest > src then { dest } else { src };
-        charge_expansion(hi, len);
+        let destination_word = pop();
+        let source_word = pop();
+        let length_word = pop();
+        let required_size = maximum_memory_required_size(destination_word, length_word, source_word, length_word);
+        charge_copy_gas(unsigned(length_word));
+        charge(memory_expansion_gas(required_size));
         if is_running() then {
-            mem_mcopy(dest, src, len)
+            expand_memory(required_size)
+        };
+        if is_running() then {
+            mem_mcopy(
+                ByteQuantity(unsigned(destination_word)),
+                ByteQuantity(unsigned(source_word)),
+                ByteQuantity(unsigned(length_word)),
+            )
         }
     },
     /* ---- storage: gas/decision in EVM, effect in kernel ---- */
@@ -485,8 +530,8 @@ function execute(op : ast) -> unit = match op {
                     let entry = k_sload(self_addr(), s); /* kernel: live + tx-start values */
                     let (cost, refund) = sstore_gas(entry.orig, entry.curr, v, not_bool(warm)); /* USER policy */
                     charge(cost);
-                    if refund != 0 then {
-                        k_refund_add(refund)
+                    if not_bool(refund == GAS_REFUND_ZERO) then {
+                        record_refund(refund)
                     };
                     if entry.curr != v then {
                         k_sstore(self_addr(), s, struct { curr = v, orig = entry.orig })
@@ -515,12 +560,12 @@ function execute(op : ast) -> unit = match op {
     /* ---- flow (pure over own code) ---- */
     JUMP() => {
         charge(G_mid);
-        let dest = pop_int();
+        let dest = pop();
         do_jump(dest)
     },
     JUMPI() => {
         charge(G_high);
-        let dest = pop_int();
+        let dest = pop();
         let cond = pop();
         if word_is_zero(cond) then {
             ()
@@ -530,11 +575,11 @@ function execute(op : ast) -> unit = match op {
     },
     PC() => {
         charge(G_base);
-        push(word_of_int(pc - 1))
+        push(alu_sub(word_of_quantity(pc), WORD_ONE))
     },
     GAS() => {
         charge(G_base);
-        push(word_of_int(gas_remaining))
+        push(word_of_gas(gas_remaining))
     },
     JUMPDEST() => charge(G_jumpdest),
     /* ---- push / dup / swap (pure) ---- */
@@ -577,42 +622,60 @@ function execute(op : ast) -> unit = match op {
         if guard_static() then {
             ()
         } else {
-            let off = pop_int();
-            let len = pop_int();
+            let offset_word = pop();
+            let length_word = pop();
             let topics = pop_log_topics(n);
-            charge(log_gas(n, len));
-            charge_expansion(off, len);
+            charge_log_gas(n, unsigned(length_word));
+            charge_memory_expansion(offset_word, length_word);
             if is_running() then {
-                k_log(self_addr(), topics, BytesSlice(memory_byte_slice(off, len)))
+                k_log(
+                    self_addr(),
+                    topics,
+                    BytesSlice(
+                        memory_byte_slice(ByteQuantity(unsigned(offset_word)), ByteQuantity(unsigned(length_word))),
+                    ),
+                )
             }
         }
     },
     /* ---- system ---- */
     CREATE() => run_create(false),
     CREATE2() => /* EIP-1014 */ run_create(true),
-    CALL() => run_call(0),
-    CALLCODE() => run_call(1),
-    DELEGATECALL() => /* EIP-7 */ run_call(2),
-    STATICCALL() => /* EIP-214 */ run_call(3),
+    CALL() => run_call(Call),
+    CALLCODE() => run_call(CallCode),
+    DELEGATECALL() => /* EIP-7 */ run_call(DelegateCall),
+    STATICCALL() => /* EIP-214 */ run_call(StaticCall),
     RETURN() => {
-        let off = pop_int();
-        let len = pop_int();
-        charge_expansion(off, len);
+        let offset_word = pop();
+        let length_word = pop();
+        charge_memory_expansion(offset_word, length_word);
         if is_running() then {
-            frame_status = Halted(HaltReturn(freeze_output(memory_byte_slice(off, len))))
+            frame_status = Halted(
+                HaltReturn(
+                    freeze_output(
+                        memory_byte_slice(ByteQuantity(unsigned(offset_word)), ByteQuantity(unsigned(length_word))),
+                    ),
+                ),
+            )
         }
     },
     REVERT() => {
         /* EIP-140 */
-        let off = pop_int();
-        let len = pop_int();
-        charge_expansion(off, len);
+        let offset_word = pop();
+        let length_word = pop();
+        charge_memory_expansion(offset_word, length_word);
         if is_running() then {
-            frame_status = Halted(HaltRevert(freeze_output(memory_byte_slice(off, len))))
+            frame_status = Halted(
+                HaltRevert(
+                    freeze_output(
+                        memory_byte_slice(ByteQuantity(unsigned(offset_word)), ByteQuantity(unsigned(length_word))),
+                    ),
+                ),
+            )
         }
     },
     INVALID() => {
-        gas_remaining = 0;
+        gas_remaining = GAS_ZERO;
         exc_halt(InvalidOpcode)
     },
     SELFDESTRUCT() => {
@@ -639,7 +702,7 @@ function execute(op : ast) -> unit = match op {
             if is_running() then {
                 let first_selfdestruct = not_bool(k_is_selfdestructed(self_addr()));
                 if (k_fork < London) & first_selfdestruct then {
-                    k_refund_add(R_selfdestruct_pre_london)
+                    record_refund(gas_constant_to_refund(R_selfdestruct_pre_london))
                 };
                 k_transfer(self_addr(), beneficiary, bal);
 

@@ -48,13 +48,13 @@ union ast = {
   TLOAD : unit, TSTORE : unit, MCOPY : unit,
 
   /* 0x5f, 0x7f: push (width 0..32, value) */
-  PUSH : (int, word),
+  PUSH : (push_width, word),
 
   /* 0x80, 0x9f: dup / swap (n) */
-  DUP : int, SWAP : int,
+  DUP : stack_operation_index, SWAP : stack_operation_index,
 
   /* 0xa0, 0xa4: log (num topics) */
-  LOG : int,
+  LOG : log_topic_count,
 
   /* 0xf0, 0xff: system */
   CREATE : unit, CALL : unit, CALLCODE : unit, RETURN : unit,

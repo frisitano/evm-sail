@@ -47,8 +47,9 @@ duplicating instructions elsewhere.
   (`primitives/crypto.sail` hashing, `lib/ssz/ssz.sail` input,
   `host/output.sail` guest output, `host/state.sail` / `host/environment.sail` /
   `host/memory.sail` world state, block environment, and buffers,
-  `host/nodes.sail` trie node DB; see `proof/extern-boundary.md`). These `c:`-bound vals are the
-  TRUE axioms (crypto core, I/O oracle, mutable host stores) -- proof targets
+  `host/nodes.sail` trie node DB; see
+  `extractions/contracts/ExternBoundary.v`). These `c:`-bound vals are the TRUE
+  axioms (crypto core, I/O oracle, mutable host stores) -- extraction targets
   see them as bodyless parameters; executables link their C definitions from
   `ffi/`. Generated aggregate values cross through three hand-written glue
   translation units compiled per build against the GENERATED model header
@@ -56,15 +57,18 @@ duplicating instructions elsewhere.
   hand-mirrored: `ffi/journal_glue.c` handles journal entries and structured
   state rows/options; `ffi/hash_glue.c` handles the hash axioms
   (`keccak256_segments` / `sha256_segments : list(Bytes) -> hash`), segmented
-  byte equality, and log records; and `ffi/code_glue.c` flattens Sail's
-  `JumpdestBitmap = list(bits(64))` for insertion into the packed C arena and
-  constructs aggregate `option(Code)` lookup results. A
+  byte equality, and log records; and `ffi/code_glue.c` constructs aggregate
+  `option(Code)` lookup results. Sail emits fixed 256-bit JUMPDEST chunks
+  directly into one length-preallocated packed C table, so no generated list
+  crosses that boundary. A
   hash preimage is a list of Bytes segments -- materialized bytes or
   source-tagged slices -- crossing in ONE call; the old streaming hash channel
   and fused source hashers are gone. Everything else,
   including the former C fast-path hooks (`keccak256_word`,
-  `keccak256_address`, `sha256_pair`, `ssz_src_le`, `ssz_src_be`), is a pure
-  Sail body compiled and executed directly; the dormant one-call C versions in
+  `keccak256_address`, `sha256_pair`), is a pure Sail body compiled and
+  executed directly. SSZ decoding reads only from the single input
+  `ByteSlice`; the old byte-at-a-time `ssz_src_*` oracle no longer exists. The
+  dormant one-call C versions in
   `ffi/host_crypto.c` (shape-matching ones only) are candidates for future
   link-time override (weak-stub mechanism, not yet wired). The old `sail/c/*.sail` extern-binding menu and the
   `EVM_BACKEND=spec|build` project variable were deleted (this change).
@@ -84,7 +88,9 @@ duplicating instructions elsewhere.
   `run_stateless_guest` output bytes; fixtures that already carry
   `statelessInputBytes`/`statelessOutputBytes` are fed directly. `--spike`
   swaps the execution vehicle for the REAL RISC-V guest ELF on spike
-  (`zkvm/build.sh`; baked vector, REBAKE_ONLY per case). `--debug` invokes the
+  (`zkvm/build.sh`); the ELF is built once without input, and each fixture is
+  supplied at runtime through the standard `ffi/zkvm_io.h` `read_input` ABI.
+  `--debug` invokes the
   native-only `evmsail_debug_dump` after a failure; it is not linked into the
   real guest. `--profile` enables optional cycle-scope markers.
   This is the sole fixture runner; the parallel Rust runner was removed. The
@@ -114,6 +120,12 @@ recursive and trie-shaped:
   available.
 
 ## Build And Lint
+
+Optimized native and RISC-V C builds run `zkvm/resolve_optimized_sail.sh` and
+require spliceable type definitions plus the `$[c_repr uint64]` newtype
+extension. Set `SAIL` explicitly to test another compiler; the resolver probes
+the generated representation before starting the full build. Pure model and
+extraction targets continue to use upstream Sail.
 
 Run from repo root unless noted:
 
@@ -171,7 +183,7 @@ library.
 ## zkVM Guest Smoke Gate
 
 Same harness, real RISC-V ELF on spike (`--spike`; run one small state-test
-file, each case = rebake + relink + spike boot, so keep it smoke-scale):
+file for the smoke gate):
 
 ```sh
 rtk python3 harness/run.py --spike harness/fixtures/eels/shanghai_push0/state_tests/for_shanghai/shanghai/eip3855_push0/push0/push0_contracts.json --fork Shanghai --quiet
@@ -181,17 +193,19 @@ The guest inputs + expected outputs are built per case by the in-process EELS
 t8n (`ssz_builder.py` guest mode) -- there is NO checked-in stateless fixture
 corpus anymore (`zkvm/fixtures/` deleted; fixtures carrying
 `statelessInputBytes`/`statelessOutputBytes` still run directly if pointed at,
-e.g. under `zkvm/.fixtures/`). The spike vehicle pays the full RISC-V model
-build on the first case, then REBAKE_ONLY per case, in an isolated
-per-invocation ZKVM_BUILD dir (concurrent gates sharing `zkvm/build/` race on
-the baked vector/ELF).
+e.g. under `zkvm/.fixtures/`). The Spike vehicle pays the full RISC-V model
+build on the first case, then runs the unchanged ELF with a new runtime input
+for each remaining case. It uses an isolated per-invocation `ZKVM_BUILD`
+directory because concurrent compiles sharing `zkvm/build/` race on generated
+objects.
 
 Deleted (recover from git history if needed): `sail/bin/runner.sail`,
 `zkvm/native-runner/build_runner_lib.sh`, `zkvm/run_guest_smoke.py`, and
 `zkvm/native-runner/run_fixtures*.py` (superseded by `run.py`),
 `zkvm/vectors/` + `gen_vector.py` (dev probes), `zkvm/ere-guest/` (unbuilt ere
 SDK template), `runtime/derisk_main.c` + `runtime/traptest_main.c` (platform
-bring-up probes). build.sh's `VEC` is required (no default vector).
+bring-up probes). `build.sh guest` produces an input-agnostic ELF; `VEC` is
+accepted only by `build.sh run` and is passed to Spike at runtime.
 
 Full post-Berlin EEST state and EELS/stateless blockchain sweeps require an
 external generated fixture corpus; do not claim the full suite has been rerun
@@ -212,11 +226,29 @@ Current aligned corpora in this worktree were generated from
   - Generated 2026-07-01 with `fill -m "blockchain_test or blockchain_test_engine" --fork Amsterdam ./tests/`.
   - Fixture generation result: `43111 passed, 14 skipped`.
   - `evm_sail_consumer` validation result: `20442 passed, 1104 skipped`.
+  - Current native `harness/run.py` result over the 23,266 blocks carrying
+    embedded `statelessInputBytes`/`statelessOutputBytes`: `23266/23266`
+    byte-exact in both standard and optimized builds (8 jobs). This count does
+    not include generated blocks without an embedded stateless pair.
 - `zkvm/.fixtures/current-state-02c6-full/`
   - Amsterdam state-test corpus.
   - Generated 2026-07-02 with `fill -m state_test --fork Amsterdam ./tests/`.
   - Fixture generation result: `13917 passed, 6 skipped`.
-  - Native harness result: `13917/13917 passed`, `0 timeouts` (run.py).
+  - The current unpack at this path contains only 14 selected fixture shards
+    yielding 964 executable cases; despite the directory name, do not report it
+    as the original full 13917-case state corpus.
+- `zkvm/.fixtures/current-state-02c6-berlin-amsterdam/`
+  - Historical state-test corpus covering the mainline forks from Berlin
+    through Amsterdam.
+  - The generated tests are stored as pytest-worker shards named
+    `*.partial.gwN.jsonl`. Here `partial` means that the file contains one
+    partition of the full fixture output, not that its fixtures are incomplete:
+    every JSONL record contains one complete generated state-test fixture
+    (`k` is the pytest node ID and `v` is the fixture JSON).
+  - Reuse these shards for historical `harness/run.py` sweeps. Do not regenerate
+    or discard them merely because their names contain `partial`.
+  - Current native result across the eight mainline fork directories:
+    `6422/6422` byte-exact in both standard and optimized builds (8 jobs).
 
 Do not use `zkvm/.fixtures/fixtures/` as aligned proof unless explicitly
 requested. That unpack is older metadata:

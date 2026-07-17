@@ -1,0 +1,63 @@
+import Evm.Prelude
+import Evm.Storage
+import Evm.Accounts
+
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 1_000_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
+
+open Sail
+open ConcurrencyInterfaceV1
+
+namespace Evm.Functions
+
+open option
+open gas_refund
+open gas_cost
+open gas_constant
+open gas
+open exception
+open byte_quantity
+open ast
+open TxType
+open TrieNode
+open TrieItemValue
+open TrieChange
+open StatelessValidationResult
+open Register
+open NodeRef
+open MerkleSlot
+open JEntry
+open HaltKind
+open FrameStatus
+open Fork
+open ExceptionKind
+open EnvField
+open CallKind
+open Bytes
+open ByteSource
+open BlockError
+
+def k_selfdestruct (a : (BitVec 160)) : SailM Unit := do
+  let cur ← do (k_aload a)
+  if ((! cur.selfdestructed) : Bool)
+  then (store_account a { cur with selfdestructed := true })
+  else (pure ())
+
+def k_is_selfdestructed (a : (BitVec 160)) : SailM Bool := do
+  (pure (← (k_aload a)).selfdestructed)
+
+def k_mark_created (a : (BitVec 160)) : SailM Unit := do
+  let cur ← do (k_aload a)
+  (store_account a { cur with created := true })
+
+def k_was_created (a : (BitVec 160)) : SailM Bool := do
+  (pure (← (k_aload a)).created)
+
+def k_zero_balance (a : (BitVec 160)) : SailM Unit := do
+  let cur ← do (k_aload a)
+  if ((word_is_zero cur.info.balance) : Bool)
+  then (pure ())
+  else (store_account_info a cur { cur.info with balance := ZERO_WORD })
+

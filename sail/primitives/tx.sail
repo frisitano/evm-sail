@@ -17,17 +17,20 @@ enum TxType = {
     SetCodeTx, /* type 4: EIP-7702 set code      */
 }
 
+let OSAKA_TRANSACTION_GAS_LIMIT_VALUE : nat = 2 ^ 24
+let OSAKA_TRANSACTION_GAS_LIMIT : gas = Gas(2 ^ 24)
+
 /* An EIP-7702 set-code authorization tuple. RLP decoding recovers the authority
  * and validates the signature (s <= n/2, y_parity, r); valid_sig records that
  * result, and process_auth applies the chain-id/nonce/code checks. */
 struct Authorization = {
     valid_sig : bool, authority : address, address : address,
-    nonce : int, chain_id : int,
+    nonce : account_nonce, chain_id : word,
 }
 
 struct BlobHashes = {
     bytes : ByteSlice,
-    count : int,
+    count : blob_count,
 }
 
 let EMPTY_BLOB_HASHES : BlobHashes = struct { bytes = EMPTY_SLICE, count = 0 }
@@ -37,29 +40,29 @@ let EMPTY_BLOB_HASHES : BlobHashes = struct { bytes = EMPTY_SLICE, count = 0 }
  * the type-specific fields below are validity-relevant per their EIP. */
 struct Transaction = {
   tx_type : TxType,          /* EIP-2718 envelope type (the discriminant)    */
-  sender : address, nonce : int,
-  chain_id : int,             /* typed-envelope chain id; 0 for legacy txs    */
+  sender : address, nonce : word,
+  chain_id : chain_identifier, /* typed-envelope chain id; 0 for legacy txs   */
   gas_limit : gas, is_create : bool, recipient : address, value : word,
   raw : ByteSlice,             /* the EIP-2718 envelope span this tx decoded from
                                   (the transactions-trie leaf value)             */
   input_src : ByteSlice,       /* calldata / creation initcode as a host byte source
                                   (normally a span of the stateless input)          */
   access_list_addresses : list(address),   /* EIP-2930 access-list addresses (one per entry) */
-  access_list_address_count : int,
+  access_list_address_count : item_count,
   access_list_slots  : list(StorageKey),   /* EIP-2930 access-list (address, slot) pairs      */
-  access_list_slot_count : int,
+  access_list_slot_count : item_count,
   max_fee : word,             /* EIP-1559 max_fee_per_gas (cap, for validity)     */
   max_blob_fee : word,        /* EIP-4844 max_fee_per_blob_gas (cap, for validity)*/
   max_priority_fee : word,        /* EIP-1559 max_priority_fee_per_gas (cap, for validity) */
   authorizations : list(Authorization), /* EIP-7702 set-code authorization tuples      */
-  authorization_count : int,
+  authorization_count : item_count,
   blob_hashes : BlobHashes,   /* source-backed EIP-4844 BLOBHASH operands         */
   pubkey : ByteSlice,          /* witnessed sender public key (0x04 ++ X ++ Y span);
                                   NOT trusted -- verified against the signature at
                                   execution (EELS recover_sender_from_public_key) */
   signing_hash : hash,         /* keccak of the signing preimage (EIP-155 / EIP-2718
                                   domain applied), computed structurally at decode  */
-  sig_v : int,                 /* v (legacy, EIP-155-bearing) / y_parity (typed)   */
+  sig_v : word,                /* v (legacy, EIP-155-bearing) / y_parity (typed)   */
   sig_r : word,
   sig_s : word
 }
@@ -86,15 +89,22 @@ struct LogEntry = {
  * (= max(gas_used_before_refund, calldata_floor)). The block driver sums this
  * for the block gas-availability check and the header gas_used; it differs from
  * gas_used (the receipt's refunded gas) precisely by the refund. */
-struct Receipt = { tx_type : TxType, success : bool, valid : bool, gas_used : gas, block_gas : gas, logs : list(LogEntry) }
+struct Receipt = {
+    tx_type : TxType,
+    success : bool,
+    valid : bool,
+    gas_used : gas,
+    block_gas : gas,
+    logs : list(LogEntry),
+}
 
 /* the envelope type byte (tx / receipt encoding) */
-function tx_type_byte(t : TxType) -> int = match t {
-    LegacyTx => 0,
-    AccessListTx => 1,
-    FeeMarketTx => 2,
-    BlobTx => 3,
-    SetCodeTx => 4,
+function tx_type_byte(t : TxType) -> byte = match t {
+    LegacyTx => 0x00,
+    AccessListTx => 0x01,
+    FeeMarketTx => 0x02,
+    BlobTx => 0x03,
+    SetCodeTx => 0x04,
 }
 
 function tx_is_access_list(t : TxType) -> bool = match t {

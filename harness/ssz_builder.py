@@ -27,10 +27,16 @@ things make validity achievable from a bare state test:
 The dummy ancestor chain is hash-chained; the parent anchors the pre-state
 root; t8n gets the same chain via env blockHeaders/blockHashes.
 """
-import argparse, io, logging, sys, json
-sys.path.insert(0, "/Users/f/dev/ethereum/execution-specs/src")
-import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import argparse, dataclasses, io, json, logging, os, sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+EVM_SAIL_ROOT = os.path.dirname(HERE)
+EXECSPECS_ROOT = os.environ.get(
+    "EXECSPECS_ROOT",
+    os.path.abspath(os.path.join(EVM_SAIL_ROOT, "..", "execution-specs")),
+)
+sys.path.insert(0, os.path.join(EXECSPECS_ROOT, "src"))
+sys.path.insert(0, HERE)
 
 from ethereum_rlp import rlp
 from ethereum.crypto.hash import keccak256
@@ -54,24 +60,27 @@ EMPTY_TRIE = keccak256(rlp.encode(b""))
 def _hi(s): return int(s, 16) if isinstance(s, str) else int(s or 0)
 
 def _header(fk, **ov):
-    """An amsterdam block header with zeroed defaults; override the live fields."""
+    """A fork-shaped block header with zeroed defaults."""
     d = dict(parent_hash=Bytes32(Z32), ommers_hash=keccak256(rlp.encode([])),
              coinbase=Bytes(b"\x00" * 20), state_root=Bytes32(Z32), transactions_root=Bytes32(Z32),
              receipt_root=Bytes32(Z32), bloom=Bytes(b"\x00" * 256), difficulty=Uint(0), number=Uint(0),
              gas_limit=Uint(0), gas_used=Uint(0), timestamp=U256(0), extra_data=Bytes(b""),
-             prev_randao=Bytes32(Z32), nonce=Bytes8(b"\x00" * 8), base_fee_per_gas=Uint(0),
+             mix_digest=Bytes32(Z32), prev_randao=Bytes32(Z32),
+             nonce=Bytes8(b"\x00" * 8), base_fee_per_gas=Uint(0),
              withdrawals_root=Bytes32(EMPTY_TRIE), blob_gas_used=U64(0), excess_blob_gas=U64(0),
              parent_beacon_block_root=Bytes32(Z32), requests_hash=Bytes32(Z32),
              block_access_list_hash=Bytes32(Z32), slot_number=U64(0))
     d.update(ov)
-    return fk.Header(**d)
+    header_fields = {field.name for field in dataclasses.fields(fk.Header)}
+    return fk.Header(**{name: value for name, value in d.items() if name in header_fields})
 
 # ---------------------------- EELS t8n ------------------------------------
 
 _T8N_CACHE = None
 
 
-def _t8n_options(chain_id):
+def _t8n_options(chain_id, fork="Amsterdam", no_stateless=False,
+                 state_reward=None):
     """The argparse surface T8N reads, shaped for one in-process blockchain-mode
     run over stdin-style inputs. state_test=False is what makes t8n build the
     full block + stateless input/output pair (t8n_types.Result.update)."""
@@ -80,9 +89,9 @@ def _t8n_options(chain_id):
         blob_parameters=None,
         output_alloc="alloc.json", output_result="result.json",
         output_body=None, output_basedir=".",
-        state_chainid=chain_id, state_fork="Amsterdam", state_reward=None,
+        state_chainid=chain_id, state_fork=fork, state_reward=state_reward,
         trace=False, opcode_count=None,
-        state_test=False, no_stateless=False,
+        state_test=False, no_stateless=no_stateless,
     )
 
 
@@ -142,13 +151,23 @@ def _t8n_tx(tx, idx, chain_id):
     else:
         j["maxFeePerGas"] = tx["maxFeePerGas"]
         j["maxPriorityFeePerGas"] = tx["maxPriorityFeePerGas"]
-    if "accessLists" in tx and idx["data"] < len(tx["accessLists"]) \
-            and tx["accessLists"][idx["data"]]:
+    # Presence selects EIP-2930 even when the selected list is empty. Dropping
+    # [] would make t8n sign a legacy transaction while the fixture's txbytes
+    # still carry a type-1 envelope, yielding a legacy receipt root for a typed
+    # payload.
+    if "accessLists" in tx and idx["data"] < len(tx["accessLists"]):
         j["accessList"] = tx["accessLists"][idx["data"]]
     for k in ("maxFeePerBlobGas", "blobVersionedHashes", "authorizationList"):
         if k in tx:
             j[k] = tx[k]
     return j
+
+
+def _t8n_rlp_transactions(tx_hex):
+    """Wrap one fixture transaction in t8n's RLP block-body input."""
+    raw = bytes.fromhex(tx_hex.removeprefix("0x"))
+    transaction = raw if raw[0] < 0x80 else rlp.decode(raw)
+    return "0x" + rlp.encode([transaction]).hex()
 
 
 # Canonical system-contract predeploys (extracted from the aligned Amsterdam
@@ -181,11 +200,308 @@ _PREDEPLOYS = {
 }
 
 
+def _fixture_chain_config(fork_name, chain_id):
+    """Build the shared stateless-input chain config for one active fork."""
+    from ethereum.forks.amsterdam.stateless import (
+        BlobSchedule,
+        ChainConfig,
+        ForkActivation,
+        ForkConfig,
+        ProtocolFork,
+    )
+
+    protocol_fork = ProtocolFork(fork_name)
+    blob_values = {
+        ProtocolFork.Cancun: (3, 6, 3338477),
+        ProtocolFork.Prague: (6, 9, 5007716),
+        ProtocolFork.Osaka: (6, 9, 5007716),
+        ProtocolFork.Amsterdam: (14, 21, 11684671),
+    }.get(protocol_fork)
+    blob_schedule = (
+        None
+        if blob_values is None
+        else BlobSchedule(
+            target=U64(blob_values[0]),
+            max=U64(blob_values[1]),
+            base_fee_update_fraction=U64(blob_values[2]),
+        )
+    )
+    timestamp_fork = tuple(ProtocolFork).index(protocol_fork) >= tuple(
+        ProtocolFork
+    ).index(ProtocolFork.Shanghai)
+    return ChainConfig(
+        chain_id=U64(chain_id),
+        active_fork=ForkConfig(
+            fork=protocol_fork,
+            activation=ForkActivation(
+                block_number=None if timestamp_fork else U64(0),
+                timestamp=U64(0) if timestamp_fork else None,
+            ),
+            blob_schedule=blob_schedule,
+        ),
+    )
+
+
+def _quantity_bytes32(value):
+    return Bytes32(_hi(value).to_bytes(32, "big"))
+
+
+def _build_historical_guest(case):
+    """Build a fork-correct shared SSZ input from a historical state test."""
+    from ethereum.crypto.hash import Hash32
+    from ethereum.forks.amsterdam.execution_engine.requests import (
+        decode_execution_requests,
+    )
+    from ethereum.forks.amsterdam.execution_engine.types import (
+        ExecutionPayload,
+        NewPayloadRequest,
+    )
+    from ethereum.forks.amsterdam.fork_types import Bloom
+    from ethereum.forks.amsterdam.stateless import (
+        ExecutionWitness,
+        StatelessInput,
+        StatelessValidationResult,
+        compute_new_payload_request_root,
+    )
+    from ethereum.forks.amsterdam.stateless_guest import (
+        serialize_stateless_output,
+    )
+    from ethereum.forks.amsterdam.stateless_host import (
+        serialize_stateless_input,
+    )
+    from ethereum.forks.amsterdam.transactions import (
+        BlobTransaction,
+        decode_transaction,
+        recover_transaction_public_key,
+    )
+    from ethereum.state import Address, Root
+
+    env, pre, tx, idx = case["env"], case["pre"], case["tx"], case["idx"]
+    fork_name = case["fork"]
+    fk = _fork(fork_name.lower())
+    header_fields = {field.name for field in dataclasses.fields(fk.Header)}
+    chain_id = _hi(
+        case.get("config", {}).get(
+            "chainid", env.get("currentChainId", "0x1")
+        )
+    )
+    number = _hi(env.get("currentNumber", "0x1"))
+    if number == 0:
+        raise ValueError("stateless state-test blocks require a parent header")
+
+    root_hex, nodes = prestate_mpt.build(pre)
+    pre_root = bytes.fromhex(root_hex[2:])
+    base_fee = _hi(env.get("currentBaseFee", "0x0"))
+    gas_limit = _hi(env.get("currentGasLimit", "0x0"))
+    has_blob_fields = "excess_blob_gas" in header_fields
+    if has_blob_fields and (
+        "parentExcessBlobGas" in env or "parentBlobGasUsed" in env
+    ):
+        parent_excess = _hi(env.get("parentExcessBlobGas", "0x0"))
+        parent_blob_used = _hi(env.get("parentBlobGasUsed", "0x0"))
+    elif has_blob_fields and "currentExcessBlobGas" in env:
+        parent_excess = _hi(env["currentExcessBlobGas"]) + _blob_target(fk)
+        parent_blob_used = 0
+    else:
+        parent_excess = parent_blob_used = 0
+
+    block_headers, block_hashes = _ancestor_headers(
+        fk,
+        pre_root,
+        number,
+        parent_excess,
+        parent_blob_used,
+        base_fee,
+        gas_limit,
+    )
+    randao = env.get("currentRandom", env.get("currentDifficulty", "0x0"))
+    t8n_env = {
+        "currentCoinbase": env["currentCoinbase"],
+        "currentGasLimit": env.get("currentGasLimit", "0x0"),
+        "currentNumber": hex(number),
+        "currentTimestamp": env.get("currentTimestamp", "0x0"),
+        "blockHeaders": block_headers,
+        "blockHashes": block_hashes,
+    }
+    if "prev_randao" in header_fields:
+        t8n_env["currentRandom"] = randao
+    else:
+        t8n_env["currentDifficulty"] = env.get(
+            "currentDifficulty", "0x0"
+        )
+    if "base_fee_per_gas" in header_fields:
+        t8n_env["currentBaseFee"] = hex(base_fee)
+        t8n_env["parentBaseFee"] = hex(base_fee)
+    if "withdrawals_root" in header_fields:
+        t8n_env["withdrawals"] = []
+    if has_blob_fields:
+        t8n_env["parentExcessBlobGas"] = hex(parent_excess)
+        t8n_env["parentBlobGasUsed"] = hex(parent_blob_used)
+    if "parent_beacon_block_root" in header_fields:
+        t8n_env["parentBeaconBlockRoot"] = "0x" + Z32.hex()
+
+    tx_hex = case.get("txbytes")
+    txs_input = (
+        _t8n_rlp_transactions(tx_hex)
+        if tx_hex
+        else [_t8n_tx(tx, idx, chain_id)]
+    )
+    stdin_json = {
+        "alloc": pre,
+        "env": t8n_env,
+        "txs": txs_input,
+    }
+    global _T8N_CACHE
+    if _T8N_CACHE is None:
+        _T8N_CACHE = ForkCache()
+    t8n = T8N(
+        _t8n_options(
+            chain_id,
+            fork=fork_name,
+            no_stateless=True,
+        ),
+        io.StringIO(),
+        io.StringIO(json.dumps(stdin_json)),
+        _T8N_CACHE,
+    )
+    t8n.run_blockchain_test()
+    result = t8n.result
+
+    if tx_hex:
+        tx_bytes = Bytes(bytes.fromhex(tx_hex.removeprefix("0x")))
+    else:
+        if len(t8n.txs.all_txs) != 1:
+            raise ValueError("t8n did not produce one signed transaction")
+        signed_tx = t8n.txs.all_txs[0]
+        tx_bytes = Bytes(
+            bytes(signed_tx)
+            if isinstance(signed_tx, bytes)
+            else rlp.encode(signed_tx)
+        )
+
+    decoded_tx = decode_transaction(tx_bytes)
+    public_key = recover_transaction_public_key(U64(chain_id), decoded_tx)
+    versioned_hashes = (
+        tuple(decoded_tx.blob_versioned_hashes)
+        if isinstance(decoded_tx, BlobTransaction)
+        else ()
+    )
+    execution_requests = decode_execution_requests(
+        tuple(Bytes(request) for request in (result.requests or ()))
+    )
+
+    parent_hash = Bytes32(
+        bytes.fromhex(block_hashes[hex(number - 1)].removeprefix("0x"))
+    )
+    is_pos = "prev_randao" in header_fields
+    request_hash = (
+        result.requests_hash
+        if result.requests_hash is not None
+        else __import__("hashlib").sha256(b"").digest()
+    )
+    header = _header(
+        fk,
+        parent_hash=parent_hash,
+        coinbase=Bytes(bytes.fromhex(env["currentCoinbase"][2:])),
+        state_root=Bytes32(bytes(result.state_root)),
+        transactions_root=Bytes32(bytes(result.tx_root)),
+        receipt_root=Bytes32(bytes(result.receipt_root)),
+        bloom=Bytes(bytes(result.bloom)),
+        difficulty=Uint(0 if is_pos else int(result.difficulty)),
+        number=Uint(number),
+        gas_limit=Uint(gas_limit),
+        gas_used=Uint(int(result.gas_used)),
+        timestamp=U256(_hi(env.get("currentTimestamp", "0x0"))),
+        extra_data=Bytes(b""),
+        mix_digest=Bytes32(Z32),
+        prev_randao=_quantity_bytes32(randao),
+        base_fee_per_gas=Uint(int(result.base_fee or 0)),
+        withdrawals_root=Bytes32(
+            bytes(result.withdrawals_root or EMPTY_TRIE)
+        ),
+        blob_gas_used=U64(int(result.blob_gas_used or 0)),
+        excess_blob_gas=U64(int(result.excess_blob_gas or 0)),
+        parent_beacon_block_root=Bytes32(Z32),
+        requests_hash=Bytes32(bytes(request_hash)),
+        slot_number=U64(_hi(env.get("slotNumber", "0x0"))),
+    )
+    block_hash = Hash32(keccak256(rlp.encode(header)))
+
+    witness_codes = sorted(
+        {
+            bytes.fromhex(account.get("code", "0x").removeprefix("0x"))
+            for account in pre.values()
+            if account.get("code", "0x") not in ("", "0x")
+        }
+    )
+    witness = ExecutionWitness(
+        state=tuple(Bytes(node) for node in nodes.values()),
+        codes=tuple(Bytes(code) for code in witness_codes),
+        headers=tuple(
+            Bytes(bytes.fromhex(encoded.removeprefix("0x")))
+            for encoded in block_headers.values()
+        ),
+    )
+    payload_prev_randao = (
+        _quantity_bytes32(randao)
+        if is_pos
+        else _quantity_bytes32(result.difficulty)
+    )
+    payload = ExecutionPayload(
+        parent_hash=parent_hash,
+        fee_recipient=Address(bytes.fromhex(env["currentCoinbase"][2:])),
+        state_root=Root(bytes(result.state_root)),
+        receipts_root=Root(bytes(result.receipt_root)),
+        logs_bloom=Bloom(bytes(result.bloom)),
+        prev_randao=payload_prev_randao,
+        block_number=Uint(number),
+        gas_limit=Uint(gas_limit),
+        gas_used=Uint(int(result.gas_used)),
+        timestamp=U256(_hi(env.get("currentTimestamp", "0x0"))),
+        extra_data=Bytes(b""),
+        base_fee_per_gas=Uint(int(result.base_fee or 0)),
+        block_hash=block_hash,
+        transactions=(tx_bytes,),
+        withdrawals=(),
+        blob_gas_used=U64(int(result.blob_gas_used or 0)),
+        excess_blob_gas=U64(int(result.excess_blob_gas or 0)),
+        block_access_list=Bytes(rlp.encode([])),
+        slot_number=U64(_hi(env.get("slotNumber", "0x0"))),
+    )
+    stateless_input = StatelessInput(
+        new_payload_request=NewPayloadRequest(
+            execution_payload=payload,
+            versioned_hashes=versioned_hashes,
+            parent_beacon_block_root=Root(Z32),
+            execution_requests=execution_requests,
+        ),
+        witness=witness,
+        chain_config=_fixture_chain_config(fork_name, chain_id),
+        public_keys=(Bytes(public_key),),
+    )
+    expected = StatelessValidationResult(
+        new_payload_request_root=compute_new_payload_request_root(
+            stateless_input
+        ),
+        successful_validation=(
+            result.block_exception is None and not t8n.txs.rejected_txs
+        ),
+        chain_config=stateless_input.chain_config,
+    )
+    return (
+        bytes(serialize_stateless_input(stateless_input)),
+        bytes(serialize_stateless_output(expected)),
+    )
+
+
 def build_guest(case):
     """case: {env, pre, tx, fork, idx} -> (input_bytes, expected_output_bytes).
     Amsterdam only (the stateless guest is Amsterdam-locked); the expected bytes
     are the EELS reference guest's SszStatelessValidationResult over the SAME
     input, so the model guest is gated byte-exact against the reference."""
+    if case["fork"] != "Amsterdam":
+        return _build_historical_guest(case)
+
     env, pre, tx, idx = case["env"], case["pre"], case["tx"], case["idx"]
     chain_id = _hi(env.get("currentChainId", "0x1"))
     fk = _fork("amsterdam")

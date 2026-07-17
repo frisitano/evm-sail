@@ -2,12 +2,12 @@
 
 struct SszListRef = {
     bytes : ByteSlice,
-    count : int,
+    count : item_count,
 }
 
 /* Sequential cursor for a variable-element SSZ list. */
 struct SszListCursor = {
     items : SszListRef,
-    index : int,
-    current : int,
+    index : item_index,
+    current : source_pointer,
 }

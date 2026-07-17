@@ -58,6 +58,7 @@ enum BlockError = {
     HeaderChainBroken, /* witness ancestor headers not contiguous             */
     RlpDecode, /* a transaction failed to RLP-decode                  */
     InvalidSignature, /* a tx signature did not authenticate its sender      */
+    InvalidGasLimit, /* header.gas_limit is outside the consensus domain    */
     GasUsedExceedsLimit, /* EIP-7778: a tx exceeds the block's remaining gas    */
     BlobGasLimitExceeded, /* a tx exceeds the block's remaining blob gas         */
     ExecutionInvalid, /* an invalid tx or a failed block-end system call     */

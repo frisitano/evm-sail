@@ -151,7 +151,7 @@ size_t strlen(const char *s)
 
 /* ----- heap allocator -----------------------------------------------------
  * First-fit free list with boundary-tag coalescing over [__heap_start,
- * __heap_end).  The sailfix runtime and the FFI backends allocate and free
+ * __heap_end).  The Sail runtime and the FFI backends allocate and free
  * many short-lived objects during a block run, so reclaiming freed memory
  * (rather than a pure bump allocator) keeps the working set bounded. */
 
@@ -366,7 +366,7 @@ void qsort(void *b, size_t n, size_t sz,
     }
 }
 
-/* The only stdio the linked objects reference: the sailfix runtime's
+/* The only stdio the linked objects reference: the Sail runtime's
  * diagnostic/error paths call fprintf(stderr, ...). We never do real file I/O
  * and perform NO conversion-specifier expansion (none is needed on the
  * executed paths) -- the literal format text routes to the HTIF console. */

@@ -1,6 +1,6 @@
 #include "output.h"
 
-#include "host_crypto.h"
+#include "byte_slice_glue.h"
 #include "lbits_convert.h"
 
 #include <stdbool.h>

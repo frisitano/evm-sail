@@ -22,7 +22,7 @@
  * storage. The account/storage hooks are keyed by raw (address[, slot]); this
  * computes the secure key on every call. NOTE: keccak is pure, so a preimage ->
  * hash memo would avoid re-hashing repeated touches of the same address/slot --
- * removed for now to keep the key path stateless; see TODO.md. */
+ * removed for now to keep the key path stateless. */
 static void secure_keccak(size_t pre_len, const lbits v, uint64_t out[4]) {
   uint8_t buf[32];
   lbits_to_be_bytes(buf, pre_len, v);
@@ -746,20 +746,14 @@ static const storage_state_row *storage_block_at(const lbits a, uint64_t i) {
   return bs + i < be ? &storage_block_table.rows[bs + i] : NULL;
 }
 
-bool storage_block_changed(const lbits a, uint64_t i) {
+uint64_t storage_block_row_probe(const lbits a, uint64_t i,
+                                 lbits *slot, lbits *curr, lbits *orig) {
   const storage_state_row *entry = storage_block_at(a, i);
-  return entry &&
-         memcmp(entry->current, entry->original, sizeof(entry->current)) != 0;
-}
-
-void storage_block_slot(lbits *rop, const lbits a, uint64_t i) {
-  const storage_state_row *entry = storage_block_at(a, i);
-  be_words4_to_lbits(rop, entry ? entry->slot : storage_zero_val);
-}
-
-void storage_block_current(lbits *rop, const lbits a, uint64_t i) {
-  const storage_state_row *entry = storage_block_at(a, i);
-  be_words4_to_lbits(rop, entry ? entry->current : storage_zero_val);
+  if (!entry) return 0;
+  be_words4_to_lbits(slot, entry->slot);
+  be_words4_to_lbits(curr, entry->current);
+  be_words4_to_lbits(orig, entry->original);
+  return 1;
 }
 
 /* All cumulative block entries for an account, including read-only entries.
@@ -1185,24 +1179,31 @@ uint64_t acct_block_count(const unit u) {
   return acct_block_table.n;
 }
 
-bool acct_block_changed(uint64_t i) {
-  if (i >= acct_block_table.n) return false;
+uint64_t acct_block_row_probe(uint64_t i, lbits *addr,
+                              uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
+                              bool *ce, bool *csc, bool *ccr, bool *csd,
+                              uint64_t *on, lbits *ob, lbits *os, lbits *oc,
+                              bool *oe, bool *osc, bool *ocr, bool *osd) {
+  if (i >= acct_block_table.n) return 0;
   const acct_state_row *entry = &acct_block_table.rows[i];
-  return entry->cur_nonce != entry->orig_nonce ||
-         memcmp(entry->cur_bal, entry->orig_bal, sizeof(entry->cur_bal)) != 0 ||
-         memcmp(entry->cur_sroot, entry->orig_sroot, sizeof(entry->cur_sroot)) != 0 ||
-         memcmp(entry->cur_chash, entry->orig_chash, sizeof(entry->cur_chash)) != 0 ||
-         entry->cur_exists != entry->orig_exists ||
-         entry->cur_storage_cleared != entry->orig_storage_cleared;
-}
-
-void acct_block_address(lbits *rop, uint64_t i) {
-  if (i >= acct_block_table.n) {
-    static const uint8_t zero_address[20] = {0};
-    addr20_to_lbits(rop, zero_address);
-    return;
-  }
-  addr20_to_lbits(rop, acct_block_table.rows[i].raw_addr);
+  addr20_to_lbits(addr, entry->raw_addr);
+  *cn = entry->cur_nonce;
+  le_words4_to_lbits(cb, entry->cur_bal);
+  le_words4_to_lbits(cs, entry->cur_sroot);
+  le_words4_to_lbits(cc, entry->cur_chash);
+  *ce = entry->cur_exists;
+  *csc = entry->cur_storage_cleared;
+  *ccr = entry->cur_created;
+  *csd = entry->cur_selfdestructed;
+  *on = entry->orig_nonce;
+  le_words4_to_lbits(ob, entry->orig_bal);
+  le_words4_to_lbits(os, entry->orig_sroot);
+  le_words4_to_lbits(oc, entry->orig_chash);
+  *oe = entry->orig_exists;
+  *osc = entry->orig_storage_cleared;
+  *ocr = entry->orig_created;
+  *osd = entry->orig_selfdestructed;
+  return 1;
 }
 
 /* Transaction rows are allocated lazily on the first write by cloning the
@@ -1298,12 +1299,14 @@ unit acct_tx_set_code_hash(const lbits a, const lbits code_hash) {
 
 typedef struct {
   uint64_t hkey[4];
+  uint8_t raw_addr[20];
   uint64_t nonce; uint64_t bal[4]; uint64_t sroot[4]; uint64_t chash[4];
 
 } acct_dump_entry;
 
 static void acct_dump_push(acct_dump_entry **rows, uint32_t *n, uint32_t *cap,
-                           const uint64_t hkey[4], uint64_t nonce, const uint64_t bal[4],
+                           const uint64_t hkey[4], const uint8_t raw_addr[20],
+                           uint64_t nonce, const uint64_t bal[4],
                            const uint64_t sroot[4], const uint64_t chash[4]) {
   if (*cap < *n + 1) {
     uint32_t nc = *cap ? *cap * 2 : 16;
@@ -1312,7 +1315,7 @@ static void acct_dump_push(acct_dump_entry **rows, uint32_t *n, uint32_t *cap,
     *cap = nc;
   }
   acct_dump_entry *r = &(*rows)[*n];
-  memcpy(r->hkey, hkey, 32); r->nonce = nonce;
+  memcpy(r->hkey, hkey, 32); memcpy(r->raw_addr, raw_addr, 20); r->nonce = nonce;
   memcpy(r->bal, bal, 32); memcpy(r->sroot, sroot, 32); memcpy(r->chash, chash, 32);
   (*n)++;
 }
@@ -1329,7 +1332,8 @@ static void acct_dump_build(void) {
     const acct_state_row *b = &acct_block_table.rows[bi];
     if (!b->cur_exists) continue;
     acct_dump_push(&acct_dump_entries, &acct_dump_len, &acct_dump_cap,
-                   b->hkey, b->cur_nonce, b->cur_bal, b->cur_sroot, b->cur_chash);
+                   b->hkey, b->raw_addr, b->cur_nonce, b->cur_bal,
+                   b->cur_sroot, b->cur_chash);
   }
   acct_dump_valid = 1;
 }
@@ -1337,6 +1341,11 @@ static void acct_dump_build(void) {
 uint64_t acct_dump_count(const unit u) { (void)u; acct_dump_build(); return acct_dump_len; }
 void acct_dump_hkey(lbits *rop, uint64_t i) {
   acct_dump_build(); be_words4_to_lbits(rop, i < acct_dump_len ? acct_dump_entries[i].hkey : account_zero_val);
+}
+void acct_dump_address(lbits *rop, uint64_t i) {
+  acct_dump_build();
+  if (i < acct_dump_len) addr20_to_lbits(rop, acct_dump_entries[i].raw_addr);
+  else addr20_to_lbits(rop, (const uint8_t[20]){0});
 }
 uint64_t acct_dump_nonce(uint64_t i) { acct_dump_build(); return i < acct_dump_len ? acct_dump_entries[i].nonce : 0; }
 void acct_dump_balance(lbits *rop, uint64_t i) {

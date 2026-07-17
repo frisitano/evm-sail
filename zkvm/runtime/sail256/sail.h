@@ -48,19 +48,25 @@
 #define SAIL_H
 
 #include <inttypes.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
-/* GMP removed — fixed-width sail_int / lbits (sailfix runtime). */
-
-/* Fixed-width sail_int: 512-bit sign-magnitude. Declared as an array-of-1 so it
- * carries the same (pass-as-pointer) ABI as GMP's mpz_t, letting the unchanged
- * Sail-generated C recompile against it. d[0] is the least significant limb. */
-#define SAIL_INT_LIMBS 8
-typedef struct { int neg; uint64_t d[SAIL_INT_LIMBS]; } sail_int_struct;
+/* Keep Sail's mathematical integer ABI while replacing GMP with a bounded,
+ * inline representation.  The model's bound ledger proves that every runtime
+ * value fits in 768 bits; the implementation traps instead of truncating if
+ * that contract is ever violated.  The array-of-one shape deliberately
+ * matches mpz_t, so ordinary C generated without --Ofixed-int needs no
+ * rewrite. */
+#define SAIL_INT_LIMBS 12
+#define SAIL_LBITS_256 1
+typedef struct {
+  uint8_t negative;
+  uint8_t length;
+  uint8_t _padding[6];
+  uint64_t limbs[SAIL_INT_LIMBS];
+} sail_int_struct;
 typedef sail_int_struct sail_int[1];
-/* Alias so stock rts.h (included by hosted/runner builds) compiles; its mpz_t-
- * using functions are declared but never called by the runner. */
 typedef sail_int_struct mpz_t[1];
 
 #include <time.h>
@@ -181,76 +187,75 @@ bool string_startswith(const_sail_string s, const_sail_string prefix);
 /* ***** Sail integers ***** */
 
 typedef int64_t mach_int;
+typedef uint64_t mach_uint;
 
 bool EQUAL(mach_int)(const mach_int, const mach_int);
+bool EQUAL(mach_uint)(const mach_uint, const mach_uint);
+mach_uint CONVERT_OF(mach_uint, mach_int)(const mach_int);
+mach_int CONVERT_OF(mach_int, mach_uint)(const mach_uint);
 
-uint64_t sail_int_get_ui(const sail_int);
+void setup_rts(void);
+void cleanup_rts(void);
 
-/* GMP-API compatibility shims: FFI/harness code (keccak_ffi.c, sha256_ffi.c,
- * zkvm_input.c, harness.c) calls mpz_* on sail_int values; these let that shared C
- * compile unchanged against sailfix (it resolves to real GMP in native builds). */
-static inline uint64_t mpz_get_ui(const sail_int op) { return op->d[0]; }
-static inline long     mpz_get_si(const sail_int op) { return op->neg ? -(long)op->d[0] : (long)op->d[0]; }
-static inline void     mpz_set_ui(sail_int rop, unsigned long v) {
-  rop->neg = 0; rop->d[0] = v; for (int i = 1; i < SAIL_INT_LIMBS; i++) rop->d[i] = 0;
+uint64_t sail_int_get_ui(const sail_int op);
+static inline uint64_t mpz_get_ui(const sail_int op) {
+  return op->length == 0 ? UINT64_C(0) : op->limbs[0];
 }
-static inline void     mpz_set_si(sail_int rop, long v) {
-  rop->neg = v < 0; rop->d[0] = v < 0 ? (unsigned long)(-(v + 1)) + 1 : (unsigned long)v;
-  for (int i = 1; i < SAIL_INT_LIMBS; i++) rop->d[i] = 0;
+static inline long mpz_get_si(const sail_int op) {
+  if (op->length > 1) abort();
+  uint64_t magnitude = mpz_get_ui(op);
+  if (!op->negative) {
+    if (magnitude > (uint64_t)LONG_MAX) abort();
+    return (long)magnitude;
+  }
+  if (magnitude > (uint64_t)LONG_MAX + UINT64_C(1)) abort();
+  if (magnitude == (uint64_t)LONG_MAX + UINT64_C(1)) return LONG_MIN;
+  return -(long)magnitude;
 }
-int mpz_set_str(sail_int rop, const char *str, int base);   /* decimal parse (sail.c) */
+static inline void mpz_set_ui(sail_int result, unsigned long value) {
+  result->negative = 0;
+  result->length = value == 0 ? 0 : 1;
+  if (value != 0) result->limbs[0] = value;
+}
+static inline void mpz_set_si(sail_int result, long value) {
+  uint64_t magnitude = value < 0
+      ? (uint64_t)(-(value + 1)) + UINT64_C(1)
+      : (uint64_t)value;
+  result->negative = value < 0;
+  result->length = magnitude == 0 ? 0 : 1;
+  if (magnitude != 0) result->limbs[0] = magnitude;
+}
+int mpz_set_str(sail_int result, const char *string, int base);
 
-#define SAIL_INT_FUNCTION(fname, rtype, ...) void fname(rtype*, __VA_ARGS__)
+#define SAIL_INT_FUNCTION(fname, rtype, ...) void fname(rtype *, __VA_ARGS__)
 
 SAIL_BUILTIN_TYPE(sail_int)
 
 void CREATE_OF(sail_int, mach_int)(sail_int *, const mach_int);
 void RECREATE_OF(sail_int, mach_int)(sail_int *, const mach_int);
-
 mach_int CREATE_OF(mach_int, sail_int)(const sail_int);
-
 void CREATE_OF(sail_int, sail_string)(sail_int *, const_sail_string);
 void RECREATE_OF(sail_int, sail_string)(sail_int *, const_sail_string);
-
 void CONVERT_OF(sail_int, sail_string)(sail_int *, const_sail_string);
-
 mach_int CONVERT_OF(mach_int, sail_int)(const sail_int);
 void CONVERT_OF(sail_int, mach_int)(sail_int *, const mach_int);
+mach_uint CONVERT_OF(mach_uint, sail_int)(const sail_int);
+void CONVERT_OF(sail_int, mach_uint)(sail_int *, const mach_uint);
 
-/*
- * Comparison operators for integers
- */
 bool eq_int(const sail_int, const sail_int);
 bool EQUAL(sail_int)(const sail_int, const sail_int);
-
 bool lt(const sail_int, const sail_int);
 bool gt(const sail_int, const sail_int);
 bool lteq(const sail_int, const sail_int);
 bool gteq(const sail_int, const sail_int);
 
-/*
- * Left and right shift for integers
- */
 mach_int shl_mach_int(const mach_int, const mach_int);
 mach_int shr_mach_int(const mach_int, const mach_int);
 SAIL_INT_FUNCTION(shl_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(shr_int, sail_int, const sail_int, const sail_int);
-
-/*
- * undefined_int and undefined_range can't use the UNDEFINED(TYPE)
- * macro, because they're slightly magical. They take extra parameters
- * to ensure that no undefined int can violate any type-guaranteed
- * constraints.
- */
 SAIL_INT_FUNCTION(undefined_int, sail_int, const int);
 SAIL_INT_FUNCTION(undefined_nat, sail_int, const unit);
 SAIL_INT_FUNCTION(undefined_range, sail_int, const sail_int, const sail_int);
-
-/*
- * Arithmetic operations in integers. We include functions for both
- * truncating towards zero, and rounding towards -infinity (floor) as
- * fdiv/fmod and tdiv/tmod respectively.
- */
 SAIL_INT_FUNCTION(add_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(sub_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(sub_nat, sail_int, const sail_int, const sail_int);
@@ -261,17 +266,12 @@ SAIL_INT_FUNCTION(tdiv_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(tmod_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(fdiv_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(fmod_int, sail_int, const sail_int, const sail_int);
-
 SAIL_INT_FUNCTION(max_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(min_int, sail_int, const sail_int, const sail_int);
-
 SAIL_INT_FUNCTION(neg_int, sail_int, const sail_int);
 SAIL_INT_FUNCTION(abs_int, sail_int, const sail_int);
-
 SAIL_INT_FUNCTION(pow_int, sail_int, const sail_int, const sail_int);
-
 SAIL_INT_FUNCTION(pow2, sail_int, const sail_int);
-
 void make_the_value(sail_int *, const sail_int);
 void size_itself_int(sail_int *, const sail_int);
 
@@ -338,6 +338,9 @@ void CONVERT_OF(lbits, sbits)(lbits *, const sbits, const bool);
 sbits CONVERT_OF(sbits, fbits)(const fbits, const uint64_t, const bool);
 sbits CONVERT_OF(sbits, lbits)(const lbits, const bool);
 
+void sail_unsigned(sail_int *rop, const lbits op);
+void sail_signed(sail_int *rop, const lbits op);
+
 void UNDEFINED(lbits)(lbits *, const sail_int len);
 fbits UNDEFINED(fbits)(const unit);
 
@@ -376,9 +379,9 @@ void sign_extend(lbits *rop, const lbits op, const sail_int len);
 fbits fast_sign_extend(const fbits op, const uint64_t n, const uint64_t m);
 fbits fast_sign_extend2(const sbits op, const uint64_t m);
 
-void length_lbits(sail_int *rop, const lbits op);
-void count_leading_zeros(sail_int *rop, const lbits op);
-void count_trailing_zeros(sail_int *rop, const lbits op);
+SAIL_INT_FUNCTION(length_lbits, sail_int, const lbits op);
+SAIL_INT_FUNCTION(count_leading_zeros, sail_int, const lbits op);
+SAIL_INT_FUNCTION(count_trailing_zeros, sail_int, const lbits op);
 
 bool eq_bits(const lbits op1, const lbits op2);
 bool EQUAL(lbits)(const lbits op1, const lbits op2);
@@ -403,9 +406,6 @@ fbits bitvector_access_inc(const lbits op, const sail_int n_mpz);
 
 fbits update_fbits(const fbits op, const uint64_t n, const fbits bit);
 
-void sail_unsigned(sail_int *rop, const lbits op);
-void sail_signed(sail_int *rop, const lbits op);
-
 mach_int fast_signed(const fbits, const uint64_t);
 mach_int fast_unsigned(const fbits);
 
@@ -417,14 +417,6 @@ sbits append_ss(const sbits, const sbits);
 
 void replicate_bits(lbits *rop, const lbits op1, const sail_int op2);
 fbits fast_replicate_bits(const fbits shift, const fbits v, const mach_int times);
-
-void get_slice_int(lbits *rop, const sail_int len_mpz, const sail_int n, const sail_int start_mpz);
-
-void set_slice_int(sail_int *rop,
-		   const sail_int len_mpz,
-		   const sail_int n,
-		   const sail_int start_mpz,
-		   const lbits slice);
 
 void update_lbits(lbits *rop, const lbits op, const sail_int n_mpz, const uint64_t bit);
 void update_lbits_inc(lbits *rop, const lbits op, const sail_int n_mpz, const uint64_t bit);
@@ -448,6 +440,10 @@ fbits fast_update_subrange(const fbits op,
 
 void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz);
 void slice_inc(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz);
+void get_slice_int(lbits *rop,
+                   const sail_int len_mpz,
+                   const sail_int n,
+                   const sail_int start_mpz);
 
 sbits sslice(const fbits op, const mach_int start, const mach_int len);
 
@@ -498,8 +494,8 @@ void div_real(real *rop, const real op1, const real op2);
 void sqrt_real(real *rop, const real op);
 void abs_real(real *rop, const real op);
 
-void round_up(sail_int *rop, const real op);
-void round_down(sail_int *rop, const real op);
+SAIL_INT_FUNCTION(round_up, sail_int, const real op);
+SAIL_INT_FUNCTION(round_down, sail_int, const real op);
 
 void to_real(real *rop, const sail_int op);
 
@@ -519,7 +515,7 @@ void random_real(real *rop, unit);
 
 /* ***** String utilities ***** */
 
-void string_length(sail_int *len, const_sail_string s);
+SAIL_INT_FUNCTION(string_length, sail_int, const_sail_string s);
 void string_drop(sail_string *dst, const_sail_string s, sail_int len);
 void string_take(sail_string *dst, const_sail_string s, sail_int len);
 
@@ -567,7 +563,7 @@ unit sail_putchar(const sail_int op);
 
 /* ***** Misc ***** */
 
-void get_time_ns(sail_int*, const unit);
+SAIL_INT_FUNCTION(get_time_ns, sail_int, const unit);
 
 /* ***** ARM optimisations ***** */
 

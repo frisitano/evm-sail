@@ -3,18 +3,18 @@
 # Build a NATIVE (host, not RISC-V) conformance executable for the evm-sail zkVM
 # stateless block guest (sail/evm.sail_project evm -> main).
 #
-# This mirrors the guest sail-compile flags in zkvm/build.sh (--c-no-main,
-# --c-preserve main, --c-include zkvm_input.h) with the host-optimized sail256
-# runtime and the directly-linked Rust accel-host cdylib.
+# This mirrors the guest sail-compile flags in zkvm/build.sh (--c-no-main and
+# --c-preserve main) with the host-optimized sail256 runtime and the
+# directly-linked Rust accel-host cdylib.
 #
-# I/O + run harness = test_utils.c, the ONE shared native surface (input
-# buffer + ssz_src, emit_out sink, large-stack run_once, clear_memory) also
-# linked by the ctypes libs. The real guests' I/O (zkvm_input.c baked/ere,
-# zkvm_io.c HTIF) is never linked into host builds.
+# I/O + run harness = test_utils.c, the ONE shared native implementation of
+# read_input/write_output plus large-stack run_once and clear_memory, also
+# linked by the ctypes libraries.
 #
 # Idempotent: rebuilds the accel-host cdylib only if its library is missing.
 #
-# Requires: sail (opam), a C compiler, cargo. NO gmp, NO HTIF, NO spike.
+# Requires: feature-capable Sail (resolved below), a C compiler, cargo.
+# NO gmp, NO HTIF, NO spike.
 #
 #   export PATH="$HOME/.opam/sail/bin:$PATH"
 #   eval "$(opam env --root=/Users/f/.opam --switch=sail)"
@@ -24,20 +24,28 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"      # repo root (evm-sail)
-BUILD="$HERE/.build"
+BUILD="${NATIVE_BUILD:-$HERE/.build}"
+C_OPTIMIZED_SPLICE="$ROOT/sail/splices/c_optimized.sail"
 mkdir -p "$BUILD"
 
-SAIL="${SAIL:-sail}"
+SAIL="$(bash "$ROOT/zkvm/resolve_optimized_sail.sh")"
+export SAIL
 CC="${CC:-cc}"
 EVM_PROFILE="${EVM_PROFILE:-off}"
+EVM_BUILD_MODE="${EVM_BUILD_MODE:-optimized}"
 case "$EVM_PROFILE" in
   off|on) ;;
   *) echo "error: EVM_PROFILE must be off or on" >&2; exit 2 ;;
 esac
+case "$EVM_BUILD_MODE" in
+  standard|optimized) ;;
+  *) echo "error: EVM_BUILD_MODE must be standard or optimized" >&2; exit 2 ;;
+esac
 
 # --- Sail C runtime include dir (where sail.h lives) ------------------------
-SAILBIN="$(command -v "$SAIL")"
-SAIL_LIB="$(cd "$(dirname "$SAILBIN")/../share/sail/lib" && pwd)"
+# Query Sail rather than deriving this from the executable path. This also
+# supports an uninstalled compiler worktree whose wrapper sets SAIL_DIR.
+SAIL_LIB="$("$SAIL" --dir)/lib"
 if [ ! -f "$SAIL_LIB/sail.h" ]; then
   echo "error: sail.h not found under $SAIL_LIB" >&2
   exit 1
@@ -46,8 +54,19 @@ fi
 # sail256: GMP-free fixed-width Sail runtime, host-optimized (SF_RUNTIME overrides).
 SF="${SF_RUNTIME:-$ROOT/zkvm/runtime/sail256}"
 RT="$ROOT/zkvm/runtime"
-ZKVM="$ROOT/zkvm"          # zkvm_input.h / zkvm_io.h live here
 FFI="$ROOT/ffi"
+
+# Inject the owning FFI headers directly. There is deliberately no aggregate
+# model/input umbrella: each external operation is declared by its subsystem.
+MODEL_HEADERS=(
+  byte_slice_glue.h host_crypto.h precompiles.h output.h scratch.h memory.h
+  transient_storage.h stack.h code_db.h kernel_state.h trie_node_db.h
+  state_db.h cycle_scopes.h
+)
+MODEL_INCLUDE_FLAGS=()
+for header in "${MODEL_HEADERS[@]}"; do
+  MODEL_INCLUDE_FLAGS+=(--c-include "$header")
+done
 
 # --- 1. accel-host crypto cdylib (idempotent) ------------------------------
 ACCEL="$ROOT/zkvm/accel-host"
@@ -66,6 +85,9 @@ case "$(uname -s)" in
 esac
 
 CFLAGS=(-O2 -Wno-error=implicit-function-declaration)
+if [ "$EVM_BUILD_MODE" = standard ]; then
+  CFLAGS+=(-DEVMSAIL_STANDARD_ABI)
+fi
 if [ -n "${SANITIZE:-}" ]; then CFLAGS+=(-g -fsanitize=address,undefined -fno-omit-frame-pointer); fi
 
 # --- 2. sail256 GMP-free runtime objects -----------------------------------
@@ -78,51 +100,61 @@ done
 
 # --- 3. generate guest C (no main, preserve entry symbol) -------------------
 #   run from repo root so the project files resolve their Sail sources.
-#   EXTRA_PRESERVE (space-separated Sail names) keeps otherwise-DCE'd functions
-#   externally linkable (none needed today).
-PRESERVE_FLAGS=(--c-preserve main)
+#   test_utils.c's debug snapshot calls these model functions directly, so they
+#   must remain externally linkable even when the guest entry does not call them.
+#   EXTRA_PRESERVE adds any one-off inspection symbols.
+PRESERVE_FLAGS=(
+  --c-preserve main
+  --c-preserve debug_account_storage_root
+  --c-preserve debug_rebuild_state_root
+)
 for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
-( cd "$ROOT" && "$SAIL" -c -O --c-no-main --c-no-rts "${PRESERVE_FLAGS[@]}" \
-    --c-include zkvm_input.h \
-    sail/evm.sail_project evm \
-    --variable EVM_PROFILE="$EVM_PROFILE" \
-    --variable EVM_DEBUG=on \
-    -o "$BUILD/zkvm_block" )
+SAIL_CMD=(
+  "$SAIL" -c -O --c-specialize --c-no-main --c-no-rts
+  "${PRESERVE_FLAGS[@]}"
+  "${MODEL_INCLUDE_FLAGS[@]}"
+)
+if [ "$EVM_BUILD_MODE" = optimized ]; then
+  SAIL_CMD+=(--splice "$C_OPTIMIZED_SPLICE")
+fi
+SAIL_CMD+=(
+  sail/evm.sail_project evm
+  --variable EVM_PROFILE="$EVM_PROFILE"
+  --variable EVM_DEBUG=on
+  -o "$BUILD/zkvm_block"
+)
+( cd "$ROOT" && "${SAIL_CMD[@]}" )
 
 # NOTE: the toolchain's sail.h (-I"$SAIL_LIB") #includes <gmp.h>. The GMP-free
 # sail256 runtime ships its own GMP-free sail.h, so -I"$SF" MUST precede
 # -I"$SAIL_LIB" in every unit that includes sail.h.
 
 # --- 4. compile generated model --------------------------------------------
-#   -I zkvm/runtime so the generated C finds the injected zkvm_input.h.
-"$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
 
 # --- 4b. journal glue: JEntry crosses the extern boundary as the GENERATED
 #     struct zJEntry, so the glue compiles against this build's model header.
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/journal_glue.c" -o "$BUILD/journal_glue.o"
 
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/hash_glue.c" -o "$BUILD/hash_glue.o"
 
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/code_glue.c" -o "$BUILD/code_glue.o"
 
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/byte_slice_glue.c" -o "$BUILD/byte_slice_glue.o"
 
 # --- 5. shared harness I/O + CLI main ---------------------------------------
-#   test_utils.c is the ONE native I/O + run_once surface (input buffer,
-#   ssz_src accessors, emit_out sink, large-stack run, clear_memory) shared by
-#   this exe and the ctypes library (build_lib.sh). The real
-#   guest keeps its own I/O in zkvm_input.c / zkvm_io.c (baked vector, HTIF) --
-#   never linked here.
-"$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$ZKVM" -I"$RT" -I"$FFI" \
+#   test_utils.c supplies the native standard I/O implementation, large-stack
+#   run, and clear-memory hooks shared by this executable and build_lib.sh.
+"$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -c "$HERE/test_utils.c" -o "$BUILD/test_utils.o"
 "$CC" "${CFLAGS[@]}" -c "$HERE/main.c" -o "$BUILD/main.o"
 
@@ -150,4 +182,4 @@ echo "# link:"
 printf '  %q' "${LINK_CMD[@]}"; echo
 "${LINK_CMD[@]}"
 
-echo "built $OUT"
+echo "built $OUT ($EVM_BUILD_MODE)"

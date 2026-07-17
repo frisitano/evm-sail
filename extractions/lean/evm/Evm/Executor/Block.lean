@@ -1,0 +1,261 @@
+import Evm.Flow
+import Evm.Arith
+import Evm.Prelude
+import Evm.Primitives.Quantities
+import Evm.Primitives.Gas
+import Evm.Primitives.Bytes
+import Evm.Primitives.System
+import Evm.Primitives.Block
+import Evm.Host.Kernel.Scratch
+import Evm.Host.Kernel.Environment
+import Evm.Host.Kernel.Accounts
+import Evm.Host.Kernel.Lifecycle
+import Evm.Evm.Gas
+import Evm.Evm.Transaction
+import Evm.Lib.Ssz.StatelessInput
+import Evm.Executor.Receipts
+import Evm.Executor.SystemCalls
+
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 1_000_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
+
+open Sail
+open Sail.ConcurrencyInterfaceV1
+
+noncomputable section
+namespace Evm
+
+open ConcurrencyInterfaceV1
+
+open Defs
+namespace Functions
+
+open option
+open gas_refund
+open gas_cost
+open gas_constant
+open gas
+open exception
+open byte_quantity
+open ast
+open TxType
+open TrieNode
+open TrieItemValue
+open TrieChange
+open StatelessValidationResult
+open Register
+open NodeRef
+open MerkleSlot
+open JEntry
+open HaltKind
+open FrameStatus
+open Fork
+open ExceptionKind
+open EnvField
+open CallKind
+open Bytes
+open ByteSource
+open BlockError
+
+def run_block_start_system_calls (_ : Unit) : SailM Unit := do
+  if ((fork_gteq (← readReg k_fork) Cancun) : Bool)
+  then (system_call BEACON_ROOTS_ADDR (← readReg k_header).parent_beacon_block_root)
+  else (pure ())
+  if ((fork_gteq (← readReg k_fork) Prague) : Bool)
+  then (system_call HISTORY_STORAGE_ADDR (← readReg k_header).parent_hash)
+  else (pure ())
+
+def execute_block_transactions (transactions : SszListRef) (public_keys : EvmByteSlice) (block_gas_limit : gas) : SailM BlockExecutionResult := do
+  let public_key_count ← do (byte_quantity_quotient public_keys.len PUBLIC_KEY_LENGTH)
+  let .ByteQuantity public_key_count_value := public_key_count
+  if (((public_key_count_value != transactions.count) || (byte_quantity_not_equal public_keys.len
+         (← (byte_quantity_mul public_key_count PUBLIC_KEY_LENGTH)))) : Bool)
+  then sailThrow ((InvalidBlock WitnessDeficient))
+  else (pure ())
+  let all_ok : Bool := true
+  let gas_limit := block_gas_limit
+  let gas_acc : gas := GAS_ZERO
+  let blob_gas_acc : blob_gas := 0
+  let tx0_to : address := ZERO_ADDR
+  let block_gas_overflow : Bool := false
+  let blob_gas_overflow : Bool := false
+  let receipts := (receipt_accumulator_empty ())
+  let deposits_start ← do (scratch_begin ())
+  let cursor ← do (ssz_list_cursor transactions)
+  let keys := public_keys
+  let (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) ← (( do
+    let mut loop_vars := (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to)
+    while (λ (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) =>
+      (! (ssz_list_cursor_empty cursor)))
+      loop_vars
+      do
+      let (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) := loop_vars
+      loop_vars ← do
+        let i := cursor.index
+        let (transaction, next) ← do (ssz_list_pop cursor)
+        let cursor : SszListCursor := next
+        let public_key ← do (sub_slice keys BYTE_ZERO PUBLIC_KEY_LENGTH)
+        let keys ←
+          (sub_slice keys PUBLIC_KEY_LENGTH (← (byte_quantity_sub keys.len PUBLIC_KEY_LENGTH)))
+        let tx ← do (decode_transaction transaction public_key)
+        (bal_set_index (← (protocol_quantity_increment i)))
+        let (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts, tx0_to) ← (( do
+          if ((! (block_gas_overflow || blob_gas_overflow)) : Bool)
+          then
+            (do
+              let tx0_to : (BitVec 160) :=
+                if ((i == 0) : Bool)
+                then tx.recipient
+                else tx0_to
+              let (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts) ← (( do
+                if ((gas_lt gas_limit gas_acc) : Bool)
+                then
+                  (let block_gas_overflow : Bool := true
+                  (pure (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts)))
+                else
+                  (do
+                    let available_gas ← do (gas_sub gas_limit gas_acc)
+                    let (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts) ← (( do
+                      if ((gas_lt available_gas tx.gas_limit) : Bool)
+                      then
+                        (let block_gas_overflow : Bool := true
+                        (pure (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts)))
+                      else
+                        (do
+                          let tx_blob_gas_value := (tx.blob_hashes.count *i GAS_PER_BLOB)
+                          let (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts) ← (( do
+                            if ((tx_blob_gas_value >b ((2 ^i 64) -i 1)) : Bool)
+                            then
+                              (let blob_gas_overflow : Bool := true
+                              (pure (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts)))
+                            else
+                              (do
+                                let tx_blob_gas : blob_gas := tx_blob_gas_value
+                                let blob_capacity_ok ← (( do
+                                  if ((fork_lt (← readReg k_fork) Cancun) : Bool)
+                                  then (pure true)
+                                  else
+                                    (do
+                                      let maximum ← do (blob_max_gas_per_block ())
+                                      if ((blob_gas_acc ≤b maximum) : Bool)
+                                      then (pure (tx_blob_gas ≤b (maximum -i blob_gas_acc)))
+                                      else (pure false)) ) : SailM Bool )
+                                let (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts) ← (( do
+                                  if ((! blob_capacity_ok) : Bool)
+                                  then
+                                    (let blob_gas_overflow : Bool := true
+                                    (pure (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts)))
+                                  else
+                                    (do
+                                      let receipt ← do (process_transaction tx)
+                                      let all_ok : Bool := (all_ok && receipt.valid)
+                                      let .Gas accumulated := gas_acc
+                                      let .Gas used := receipt.block_gas
+                                      let (block_gas_overflow, gas_acc) : (Bool × gas) :=
+                                        if ((used ≤b (((2 ^i 63) -i 1) -i accumulated)) : Bool)
+                                        then
+                                          (let gas_acc : gas := (Gas (accumulated +i used))
+                                          let block_gas_overflow : Bool :=
+                                            (gas_lt gas_limit gas_acc)
+                                          (block_gas_overflow, gas_acc))
+                                        else
+                                          (let block_gas_overflow : Bool := true
+                                          (block_gas_overflow, gas_acc))
+                                      let (blob_gas_acc, blob_gas_overflow, receipts) ← (( do
+                                        if (receipt.valid : Bool)
+                                        then
+                                          (do
+                                            let receipts ←
+                                              (receipt_accumulator_push receipts receipt)
+                                            (append_deposit_logs receipt.logs)
+                                            let next_blob_gas := (blob_gas_acc +i tx_blob_gas)
+                                            let (blob_gas_acc, blob_gas_overflow) : (Nat × Bool) :=
+                                              if ((next_blob_gas ≤b ((2 ^i 64) -i 1)) : Bool)
+                                              then
+                                                (let blob_gas_acc : blob_gas := next_blob_gas
+                                                (blob_gas_acc, blob_gas_overflow))
+                                              else
+                                                (let blob_gas_overflow : Bool := true
+                                                (blob_gas_acc, blob_gas_overflow))
+                                            (pure (blob_gas_acc, blob_gas_overflow, receipts)))
+                                        else (pure (blob_gas_acc, blob_gas_overflow, receipts)) ) :
+                                        SailM (Nat × Bool × ReceiptAccumulator) )
+                                      (pure (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts)))
+                                  ) : SailM
+                                  (Bool × Nat × Bool × Bool × gas × ReceiptAccumulator) )
+                                (pure (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts)))
+                            ) : SailM (Bool × Nat × Bool × Bool × gas × ReceiptAccumulator) )
+                          (pure (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts)))
+                      ) : SailM (Bool × Nat × Bool × Bool × gas × ReceiptAccumulator) )
+                    (pure (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts)))
+                ) : SailM (Bool × Nat × Bool × Bool × gas × ReceiptAccumulator) )
+              (pure (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts, tx0_to)))
+          else
+            (pure (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts, tx0_to))
+          ) : SailM (Bool × Nat × Bool × Bool × gas × ReceiptAccumulator × (BitVec 160)) )
+        (pure (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to))
+    (pure loop_vars) ) : SailM
+    (Bool × Nat × Bool × Bool × SszListCursor × gas × EvmByteSlice × ReceiptAccumulator × (BitVec 160))
+    )
+  (pure { all_ok := (all_ok && ((! block_gas_overflow) && (! blob_gas_overflow)))
+          gas_acc := gas_acc
+          blob_gas_acc := blob_gas_acc
+          first_tx_recipient := tx0_to
+          block_gas_overflow := block_gas_overflow
+          blob_gas_overflow := blob_gas_overflow
+          receipts_root := ← (receipt_accumulator_root receipts)
+          logs_bloom := receipts.bloom
+          deposits := ← (scratch_finish deposits_start)
+          requests := EMPTY_EXECUTION_REQUESTS })
+
+def apply_withdrawals (withdrawals : SszListRef) : SailM Unit := do
+  let rest := withdrawals
+  let rest ← (( do
+    let mut loop_vars := rest
+    while (λ rest => (rest.count != 0)) loop_vars do
+      let rest := loop_vars
+      loop_vars ← do
+        let (withdrawal_ref, tail) ← do (ssz_fixed_list_pop rest WD_SIZE)
+        let rest : SszListRef := tail
+        let withdrawal ← do (decode_withdrawal withdrawal_ref)
+        (k_add_balance withdrawal.address
+          (alu_mul (← (word_of_nat withdrawal.amount)) (← (word_of_nat 1000000000))))
+        (pure rest)
+    (pure loop_vars) ) : SailM SszListRef )
+  (pure ())
+
+/-- Type quantifiers: k_ex160364_ : Bool -/
+def run_checked_block_end_system_calls (all_ok : Bool) (deposits : EvmByteSlice) : SailM (Bool × ExecutionRequests) := do
+  if ((! all_ok) : Bool)
+  then (pure (false, EMPTY_EXECUTION_REQUESTS))
+  else
+    (do
+      if ((fork_gteq (← readReg k_fork) Prague) : Bool)
+      then (collect_execution_requests deposits)
+      else (pure (true, EMPTY_EXECUTION_REQUESTS)))
+
+def apply_block_end_state (body : BlockBody) : SailM Unit := do
+  if ((fork_gteq (← readReg k_fork) Shanghai) : Bool)
+  then (apply_withdrawals body.withdrawals)
+  else (pure ())
+  if ((fork_lt (← readReg k_fork) Paris) : Bool)
+  then (k_add_balance (← (k_coinbase ())) (← (word_of_nat 2000000000000000000)))
+  else (pure ())
+  (k_tx_merge ())
+
+def execute_block_body (body : BlockBody) (public_keys : EvmByteSlice) (block_gas_limit : gas) : SailM (Bool × BlockExecutionResult) := do
+  (bal_reset ())
+  (bal_set_index 0)
+  (run_block_start_system_calls ())
+  let result ← do (execute_block_transactions body.transactions public_keys block_gas_limit)
+  let post_tx_index ← (( do
+    if ((body.transactions.count <b ((2 ^i 64) -i 1)) : Bool)
+    then (protocol_quantity_increment body.transactions.count)
+    else sailThrow ((InvalidBlock WitnessDeficient)) ) : SailM item_index )
+  (bal_set_index post_tx_index)
+  (apply_block_end_state body)
+  let (exec_ok, requests) ← do (run_checked_block_end_system_calls result.all_ok result.deposits)
+  (pure (exec_ok, { result with requests := requests }))
+

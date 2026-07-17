@@ -1,40 +1,57 @@
 /* A bump cursor makes construction order and lifetime visible in the Sail
  * semantics while the bytes themselves remain in host-backed memory. */
 
-register scratch_cursor : bits(64) = 0x0000000000000000
+register scratch_cursor : source_pointer = BYTE_ZERO
 
-function scratch_begin() -> int = unsigned(scratch_cursor)
+function scratch_begin() -> source_pointer = scratch_cursor
 
-function scratch_push_bytes(data : list(byte)) -> unit = {
-    let len = list_len(data);
-    if len > 0 then {
-        let width = get_slice_int(64, len, 0);
-        assert(host_scratch_store_bytes(scratch_cursor, data, width), "scratch byte append");
-        scratch_cursor = scratch_cursor + width
+function scratch_advance(width : byte_length) -> unit = {
+    let cursor : source_pointer = scratch_cursor;
+    if cursor <= MAX_BYTE_QUANTITY then {
+        if width <= MAX_BYTE_QUANTITY - cursor then {
+            scratch_cursor = cursor + width
+        } else {
+            assert(false, "scratch cursor overflow")
+        }
+    } else {
+        assert(false, "scratch cursor overflow")
+    }
+}
+
+function scratch_push_bytes(data : list(byte), len : byte_length) -> unit = {
+    if len != BYTE_ZERO then {
+        assert(host_scratch_store_bytes(scratch_cursor, data, len), "scratch byte append");
+        scratch_advance(len)
     }
 }
 
 function scratch_push_slice(data : ByteSlice) -> unit = {
-    if data.len != 0x0000000000000000 then {
+    if data.len != BYTE_ZERO then {
         assert(host_scratch_store_slice(scratch_cursor, data), "scratch slice append");
-        scratch_cursor = scratch_cursor + data.len
+        scratch_advance(data.len)
     }
 }
 
-function scratch_finish(start : int) -> ByteSlice = {
-    let stop = unsigned(scratch_cursor);
-    assert((start >= 0) & (start <= stop), "scratch finish mark");
-    byte_slice(ScratchSource, start, stop - start)
-}
+function scratch_finish(start : source_pointer) -> ByteSlice =
+    let stop : source_pointer = scratch_cursor in
+    if start <= stop then {
+        let len : byte_length = stop - start;
+        byte_slice(ScratchSource, start, len)
+    } else {
+        assert(false, "scratch finish mark");
+        EMPTY_SLICE
+    }
 
-function scratch_rewind(mark : int) -> unit = {
-    let stop = unsigned(scratch_cursor);
-    assert((mark >= 0) & (mark <= stop), "scratch rewind mark");
-    scratch_cursor = get_slice_int(64, mark, 0);
-    host_scratch_truncate(scratch_cursor)
-}
+function scratch_rewind(mark : source_pointer) -> unit =
+    let cursor : source_pointer = scratch_cursor in
+    if mark <= cursor then {
+        scratch_cursor = mark;
+        host_scratch_truncate(scratch_cursor)
+    } else {
+        assert(false, "scratch rewind mark")
+    }
 
 function scratch_reset() -> unit = {
-    scratch_cursor = 0x0000000000000000;
+    scratch_cursor = BYTE_ZERO;
     host_scratch_truncate(scratch_cursor)
 }

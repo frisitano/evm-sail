@@ -10,7 +10,7 @@
 /* C-internal journal tags, mirrored from kernel_state.c. */
 enum {
   GJT_EMPTY = 0, GJT_TRAN = 1, GJT_WARMA = 2,
-  GJT_WARMS = 3, GJT_REFUND = 4
+  GJT_WARMS = 3
 };
 
 unit journal_push(struct zJEntry e) {
@@ -24,8 +24,6 @@ unit journal_push(struct zJEntry e) {
   case Kind_zJWarmS:
     return journal_push_warms(e.variants.zJWarmS.ztup0,
                               e.variants.zJWarmS.ztup1);
-  case Kind_zJRefund:
-    return journal_push_refund((uint64_t)e.variants.zJRefund);
   }
   return UNIT;
 }
@@ -54,10 +52,6 @@ void journal_pop(struct zJEntry *out, unit u) {
     out->kind = Kind_zJWarmS;
     top_addr160(&out->variants.zJWarmS.ztup0);
     journal_top_slot(&out->variants.zJWarmS.ztup1, UNIT);
-    break;
-  case GJT_REFUND:
-    out->kind = Kind_zJRefund;
-    out->variants.zJRefund = (int64_t)journal_top_refund(UNIT);
     break;
   default:
     abort();
@@ -91,6 +85,19 @@ void storage_block_get(struct zoptionzIRStorageValuezK *out,
   storage_value_out(out, 1, key.zaddr, key.zslot);
 }
 
+void storage_block_row(struct zoptionzIRStorageEntryzK *out,
+                       const sail_address addr, uint64_t index) {
+  struct zStorageEntry *entry = &out->variants.zSomezIRStorageEntryzK;
+  entry->zkey.zaddr = addr;
+  if (storage_block_row_probe(addr, index, &entry->zkey.zslot,
+                              &entry->zvalue.zcurr, &entry->zvalue.zorig)) {
+    out->kind = Kind_zSomezIRStorageEntryzK;
+  } else {
+    out->kind = Kind_zNonezIRStorageEntryzK;
+    out->variants.zNonezIRStorageEntryzK = UNIT;
+  }
+}
+
 unit storage_tx_update(struct zStorageEntry entry) {
   sail_expect_len(entry.zkey.zaddr, 160);
   return storage_tx_update_raw(entry.zkey.zaddr, entry.zkey.zslot,
@@ -111,7 +118,7 @@ static void account_out(struct zoptionzIRAccountzK *out, uint64_t layer,
   struct zAccount *account = &out->variants.zSomezIRAccountzK;
   if (acct_row_probe(layer, addr, &account->zinfo.znonce,
                      &account->zinfo.zbalance, &account->zinfo.zstorage_root,
-                     &account->zinfo.zcode_hash, &account->zexists,
+                     &account->zinfo.zcode_hash, &account->zpresent,
                      &account->zstorage_cleared, &account->zcreated,
                      &account->zselfdestructed)) {
     out->kind = Kind_zSomezIRAccountzK;
@@ -130,10 +137,29 @@ void acct_block_get(struct zoptionzIRAccountzK *out,
   account_out(out, 1, addr);
 }
 
+void acct_block_row(struct zoptionzIRAcctEntryzK *out, uint64_t index) {
+  struct zAcctEntry *entry = &out->variants.zSomezIRAcctEntryzK;
+  struct zAccount *curr = &entry->zvalue.zcurr;
+  struct zAccount *orig = &entry->zvalue.zorig;
+  if (acct_block_row_probe(
+          index, &entry->zaddr, &curr->zinfo.znonce, &curr->zinfo.zbalance,
+          &curr->zinfo.zstorage_root, &curr->zinfo.zcode_hash, &curr->zpresent,
+          &curr->zstorage_cleared, &curr->zcreated, &curr->zselfdestructed,
+          &orig->zinfo.znonce, &orig->zinfo.zbalance,
+          &orig->zinfo.zstorage_root, &orig->zinfo.zcode_hash, &orig->zpresent,
+          &orig->zstorage_cleared, &orig->zcreated,
+          &orig->zselfdestructed)) {
+    out->kind = Kind_zSomezIRAcctEntryzK;
+  } else {
+    out->kind = Kind_zNonezIRAcctEntryzK;
+    out->variants.zNonezIRAcctEntryzK = UNIT;
+  }
+}
+
 unit acct_tx_update(const sail_address addr, struct zAccount account) {
   return acct_tx_update_raw(
       addr, account.zinfo.znonce, account.zinfo.zbalance,
-      account.zinfo.zstorage_root, account.zinfo.zcode_hash, account.zexists,
+      account.zinfo.zstorage_root, account.zinfo.zcode_hash, account.zpresent,
       account.zstorage_cleared, account.zcreated, account.zselfdestructed);
 }
 
@@ -142,16 +168,16 @@ unit acct_block_write(struct zAcctEntry entry) {
   struct zAccount *orig = &entry.zvalue.zorig;
   return acct_block_write_raw(
       entry.zaddr, curr->zinfo.znonce, curr->zinfo.zbalance,
-      curr->zinfo.zstorage_root, curr->zinfo.zcode_hash, curr->zexists,
+      curr->zinfo.zstorage_root, curr->zinfo.zcode_hash, curr->zpresent,
       curr->zstorage_cleared, orig->zinfo.znonce, orig->zinfo.zbalance,
-      orig->zinfo.zstorage_root, orig->zinfo.zcode_hash, orig->zexists,
+      orig->zinfo.zstorage_root, orig->zinfo.zcode_hash, orig->zpresent,
       orig->zstorage_cleared);
 }
 
 unit acct_block_cache(const sail_address addr, struct zAccount account) {
   return acct_block_cache_raw(
       addr, account.zinfo.znonce, account.zinfo.zbalance,
-      account.zinfo.zstorage_root, account.zinfo.zcode_hash, account.zexists,
+      account.zinfo.zstorage_root, account.zinfo.zcode_hash, account.zpresent,
       account.zstorage_cleared);
 }
 
@@ -175,10 +201,10 @@ void acct_tx_pop_ascending(struct zoptionzIRAcctEntryzK *out, unit u) {
   struct zAccount *orig = &entry->zvalue.zorig;
   if (acct_tx_pop_probe(
           &entry->zaddr, &curr->zinfo.znonce, &curr->zinfo.zbalance,
-          &curr->zinfo.zstorage_root, &curr->zinfo.zcode_hash, &curr->zexists,
+          &curr->zinfo.zstorage_root, &curr->zinfo.zcode_hash, &curr->zpresent,
           &curr->zstorage_cleared, &curr->zcreated, &curr->zselfdestructed,
           &orig->zinfo.znonce, &orig->zinfo.zbalance, &orig->zinfo.zstorage_root,
-          &orig->zinfo.zcode_hash, &orig->zexists, &orig->zstorage_cleared,
+          &orig->zinfo.zcode_hash, &orig->zpresent, &orig->zstorage_cleared,
           &orig->zcreated, &orig->zselfdestructed)) {
     out->kind = Kind_zSomezIRAcctEntryzK;
   } else {

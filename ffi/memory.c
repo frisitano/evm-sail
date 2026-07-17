@@ -12,12 +12,12 @@
  * the frame has WRITTEN OR ZEROED. Reads beyond it return 0; any write or
  * region grant that extends it first zero-fills the gap, so a dead child's
  * bytes (which live above the parent's extent) can never be observed.
- * mem_frame_leave just pops the checkpoint.
- *
- * Only mach_bits cross the FFI (uint64_t), matching the other host FFI modules. */
+ * mem_frame_leave just pops the checkpoint. The canonical generated-C ABI is
+ * narrowed here after Sail has established the byte-quantity bound; the
+ * production ABI already exposes the same values as uint64_t. */
 #include "sail.h"
 #include "lbits_convert.h"
-#include "host_crypto.h"
+#include "byte_slice_glue.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -56,7 +56,7 @@ static int f_establish(uint64_t end) {
   return 1;
 }
 
-uint8_t *hm_wr(uint64_t off, uint64_t len); /* fwd decl (defined below) */
+static uint8_t *frame_write_region(uint64_t off, uint64_t len);
 
 /* clear back to a single empty top-level frame (called per tx); the arena
  * allocation is kept for reuse across transactions */
@@ -68,18 +68,27 @@ unit mem_clear(const unit u) {
   return UNIT;
 }
 
-/* enter a sub-call: checkpoint a fresh frame after the caller's established
- * extent. Calldata and frame code are Sail ByteSlice registers, so memory has
- * no per-frame source descriptor to adopt. */
-unit mem_frame_enter(const unit u) {
-  (void)u;
-  if (h_top + 1 < MEMORY_MAXDEPTH) {
-    h_top++;
-    f_base[h_top] = f_base[h_top - 1] + f_len[h_top - 1];
-    f_len[h_top] = 0;
-  }
-  return UNIT;
+/* Enter a sub-call and return the fresh frame's absolute arena base. Sail
+ * stores that base in the active frame's EvmMemorySource ByteSlice. */
+static uint64_t mem_frame_enter_value(void) {
+  if (h_top + 1 >= MEMORY_MAXDEPTH) return UINT64_MAX;
+  h_top++;
+  f_base[h_top] = f_base[h_top - 1] + f_len[h_top - 1];
+  f_len[h_top] = 0;
+  return (uint64_t)f_base[h_top];
 }
+
+#ifdef EVMSAIL_STANDARD_ABI
+void mem_frame_enter(sail_int *out, const unit u) {
+  (void)u;
+  evmsail_byte_quantity_set(out, mem_frame_enter_value());
+}
+#else
+uint64_t mem_frame_enter(const unit u) {
+  (void)u;
+  return mem_frame_enter_value();
+}
+#endif
 
 /* leave a sub-call: pop the checkpoint. The dead frame's bytes sit above the
  * parent's established extent, so establishment zero-fills over them before
@@ -90,40 +99,27 @@ unit mem_frame_leave(const unit u) {
   return UNIT;
 }
 
-/* bits(64) offset -> bits(8) byte (0 beyond the established extent) */
-uint64_t mem_read_byte(uint64_t off) {
-  return (off < f_len[h_top]) ? (uint64_t)arena[f_base[h_top] + off] : 0;
+/* byte-quantity offset -> bits(8) byte (0 beyond the established extent) */
+uint64_t mem_read_byte(EVMSAIL_BYTE_QUANTITY_PARAM(off)) {
+  uint64_t offset = evmsail_byte_quantity_value(off);
+  return (offset < f_len[h_top])
+             ? (uint64_t)arena[f_base[h_top] + offset]
+             : 0;
 }
 
 /* Current call-frame depth. */
 uint64_t hm_depth(const unit u) { (void)u; return (uint64_t)h_top; }
 
-/* establish [off, off+len) of the CURRENT frame and return its ABSOLUTE
- * arena offset (UINT64_MAX on overflow/OOM). Absolute offsets stay valid
- * across arena growth; take pointers per read (mem_arena_ptr). */
-uint64_t mem_establish_absolute(uint64_t off, uint64_t len) {
-  if (len == 0 || off > UINT64_MAX - len || !f_establish(off + len)) return UINT64_MAX;
-  return (uint64_t)f_base[h_top] + off;
-}
-
-/* a raw pointer to an ESTABLISHED arena byte (valid until the next
- * establishment reallocs) */
-const uint8_t *mem_arena_ptr(uint64_t abs) {
-  return arena + abs;
-}
-
-/* establish + a READ pointer to [off, off+len) of the current frame */
-const uint8_t *mem_region(uint64_t off, uint64_t len) {
-  static const uint8_t zero = 0;
-  if (len == 0) return &zero;
-  if (off > UINT64_MAX - len || !f_establish(off + len)) return &zero; /* OOM/overflow */
-  return arena + f_base[h_top] + off;
+/* Establish the current frame's complete logical extent. Sail updates the
+ * active ByteSlice length only when this succeeds. */
+bool mem_expand(EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
+  return f_establish(evmsail_byte_quantity_value(len)) != 0;
 }
 
 /* establish + a WRITE pointer to [off, off+len) of the current frame (the
  * gas-side watermark is raised by charge_expansion before any copy opcode
  * writes) */
-uint8_t *hm_wr(uint64_t off, uint64_t len) {
+static uint8_t *frame_write_region(uint64_t off, uint64_t len) {
   if (len == 0) return NULL;
   if (off > UINT64_MAX - len || !f_establish(off + len)) return NULL;
   return arena + f_base[h_top] + off;
@@ -132,20 +128,23 @@ uint8_t *hm_wr(uint64_t off, uint64_t len) {
 /* MLOAD: the 32-byte big-endian word at off. No establishment -- reads past
  * the extent are zeros, and charge_expansion precedes every MLOAD so the
  * gas-side watermark already covers the range. */
-void mem_load_word(lbits *rop, uint64_t off) {
+void mem_load_word(lbits *rop, EVMSAIL_BYTE_QUANTITY_PARAM(off)) {
+  uint64_t offset = evmsail_byte_quantity_value(off);
   uint8_t buf[32];
   for (int i = 0; i < 32; i++) {
-    uint64_t o = off + (uint64_t)i;
-    buf[i] = (o >= off && o < f_len[h_top]) ? arena[f_base[h_top] + o] : 0;
+    uint64_t o = offset + (uint64_t)i;
+    buf[i] = (o >= offset && o < f_len[h_top])
+                 ? arena[f_base[h_top] + o]
+                 : 0;
   }
   be_bytes_to_lbits(rop, 256, buf, 32);
 }
 
 /* MSTORE: the 32-byte big-endian word at off (establish + one memcpy) */
-unit mem_store_word(uint64_t off, const lbits w) {
+unit mem_store_word(EVMSAIL_BYTE_QUANTITY_PARAM(off), const lbits w) {
   uint8_t buf[32];
   lbits_to_be_bytes(buf, 32, w);
-  uint8_t *d = hm_wr(off, 32);
+  uint8_t *d = frame_write_region(evmsail_byte_quantity_value(off), 32);
   if (d) memcpy(d, buf, 32);
   return UNIT;
 }
@@ -153,25 +152,38 @@ unit mem_store_word(uint64_t off, const lbits w) {
 /* MCOPY: overlapping-safe copy within the current frame. Both ranges are
  * established BEFORE either pointer is taken (a second establishment could
  * realloc the arena from under the first pointer). */
-unit mem_move(uint64_t dst, uint64_t src, uint64_t len) {
-  if (!len) return UNIT;
-  if (src > UINT64_MAX - len || dst > UINT64_MAX - len) return UNIT;
-  if (!f_establish(src + len) || !f_establish(dst + len)) return UNIT;
-  memmove(arena + f_base[h_top] + dst, arena + f_base[h_top] + src, len);
+unit mem_move(EVMSAIL_BYTE_QUANTITY_PARAM(dst),
+              EVMSAIL_BYTE_QUANTITY_PARAM(src),
+              EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
+  uint64_t dst_value = evmsail_byte_quantity_value(dst);
+  uint64_t src_value = evmsail_byte_quantity_value(src);
+  uint64_t len_value = evmsail_byte_quantity_value(len);
+  if (!len_value) return UNIT;
+  if (src_value > UINT64_MAX - len_value ||
+      dst_value > UINT64_MAX - len_value)
+    return UNIT;
+  if (!f_establish(src_value + len_value) ||
+      !f_establish(dst_value + len_value))
+    return UNIT;
+  memmove(arena + f_base[h_top] + dst_value,
+          arena + f_base[h_top] + src_value, len_value);
   return UNIT;
 }
 
-/* (bits(64) offset, bits(8) value) -> unit */
-unit mem_write_byte(uint64_t off, uint64_t v) {
-  if (off == UINT64_MAX || !f_establish(off + 1)) return UNIT;
-  arena[f_base[h_top] + off] = (uint8_t)(v & 0xff);
+/* (byte-quantity offset, bits(8) value) -> unit */
+unit mem_write_byte(EVMSAIL_BYTE_QUANTITY_PARAM(off), uint64_t v) {
+  uint64_t offset = evmsail_byte_quantity_value(off);
+  if (offset == UINT64_MAX || !f_establish(offset + 1)) return UNIT;
+  arena[f_base[h_top] + offset] = (uint8_t)(v & 0xff);
   return UNIT;
 }
 
 /* ---- generic ByteSlice reads (calldata and executable frame code) ------- */
 
-/* a READ view of established arena bytes at an absolute offset */
-const uint8_t *mem_arena_region(uint64_t off, uint64_t len) {
+/* Read an absolute span minted by subslicing an active or suspended Sail
+ * EVM-memory frame pointer. Well-formed slices never exceed an established
+ * frame; the capacity check keeps malformed host inputs fail-closed. */
+const uint8_t *evm_memory_region(uint64_t off, uint64_t len) {
   if (len == 0 || off > arena_cap || len > arena_cap - off) return NULL;
   return arena + off;
 }
@@ -262,7 +274,7 @@ void slice_load_n_word_source(lbits *rop, uint64_t kind, uint64_t off,
 unit slice_copy_to_memory_source(uint64_t kind, uint64_t off, uint64_t len,
                                  uint64_t dst, uint64_t i, uint64_t n) {
   if (!n) return UNIT;
-  uint8_t *d = hm_wr(dst, n);
+  uint8_t *d = frame_write_region(dst, n);
   if (!d) return UNIT;
   uint64_t m = 0;
   if (i < len) {

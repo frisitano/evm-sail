@@ -1,106 +1,254 @@
+/* An inline MPT child is at most 31 bytes. Keep it self-contained so a node
+ * reference never borrows scratch memory or retains a heap byte list. `data`
+ * is the big-endian payload in the low bits. */
+
+struct InlineNode = {
+    data : bits(256),
+    len : byte_length,
+}
+
+let MPT_HASH_LENGTH : byte_length = WORD_BYTE_LENGTH
+
+function inline_node_from_slice(bytes : ByteSlice) -> InlineNode = {
+    let length = bytes.len;
+    if MPT_HASH_LENGTH <= length then {
+        throw InvalidBlock(WitnessDeficient)
+    };
+    var data : bits(256) = ZERO_WORD;
+    foreach (offset from 0 to 30) {
+        let byte_offset = ByteQuantity(offset);
+        if byte_offset < length then {
+            data = or_vec(sail_shiftleft(data, 8), sail_zero_extend(slice_byte(bytes, byte_offset), 256))
+        }
+    };
+    struct { data = data, len = length }
+}
+
+function inline_node_to_list(node : InlineNode) -> list(byte) = {
+    var bytes : list(byte) = [||];
+    var data : word = node.data;
+    foreach (index from 0 to 30) {
+        if ByteQuantity(index) < node.len then {
+            bytes = data[7 .. 0] :: bytes;
+            data = sail_shiftright(data, 8)
+        }
+    };
+    bytes
+}
+
+function inline_node_segment(node : InlineNode) -> Bytes =
+    bytes_list(inline_node_to_list(node), node.len)
+
+function inline_node_slice(node : InlineNode) -> ByteSlice = {
+    let start = scratch_begin();
+    scratch_push_bytes(inline_node_to_list(node), node.len);
+    scratch_finish(start)
+}
+
 union NodeRef = {
     EmptyRef : unit,
-    InlineRef : Bytes,
+    InlineRef : InlineNode,
     HashRef : hash,
 }
 
-function node_ref_rlp(r : NodeRef) -> list(byte) =
+type BranchRefs = vector(16, dec, NodeRef)
+
+function branch_refs_get(children : BranchRefs, index : nibble) -> NodeRef = match index {
+    0x0 => children[0],
+    0x1 => children[1],
+    0x2 => children[2],
+    0x3 => children[3],
+    0x4 => children[4],
+    0x5 => children[5],
+    0x6 => children[6],
+    0x7 => children[7],
+    0x8 => children[8],
+    0x9 => children[9],
+    0xa => children[10],
+    0xb => children[11],
+    0xc => children[12],
+    0xd => children[13],
+    0xe => children[14],
+    0xf => children[15],
+}
+
+function branch_refs_set(children : BranchRefs, index : nibble, value : NodeRef) -> BranchRefs = {
+    var result = children;
+    match index {
+        0x0 => result[0] = value,
+        0x1 => result[1] = value,
+        0x2 => result[2] = value,
+        0x3 => result[3] = value,
+        0x4 => result[4] = value,
+        0x5 => result[5] = value,
+        0x6 => result[6] = value,
+        0x7 => result[7] = value,
+        0x8 => result[8] = value,
+        0x9 => result[9] = value,
+        0xa => result[10] = value,
+        0xb => result[11] = value,
+        0xc => result[12] = value,
+        0xd => result[13] = value,
+        0xe => result[14] = value,
+        0xf => result[15] = value,
+    };
+    result
+}
+
+function node_ref_size(r : NodeRef) -> byte_length =
     match r {
-        EmptyRef() => [|0x80|],
-        InlineRef(node) => bytes_to_list(node),
-        HashRef(h) => [|0xa0|] ++ word_to_bytes32(h),
+        EmptyRef() => BYTE_ONE,
+        InlineRef(node) => node.len,
+        HashRef(_) => rlp_word_size(),
+    }
+
+function rlp_write_node_ref(r : NodeRef) -> unit =
+    match r {
+        EmptyRef() => scratch_push_bytes([|0x80|], BYTE_ONE),
+        InlineRef(node) => rlp_write_raw_bytes(inline_node_to_list(node), node.len),
+        HashRef(h) => rlp_write_word(h),
     }
 
 /* Appendix D, Eq. 207: inline nodes under 32 bytes, otherwise hash them. */
-function child_ref(enc : list(byte)) -> NodeRef =
-    if list_len(enc) < 32 then {
-        InlineRef(BytesList(enc))
+function child_ref(encoded : ByteSlice) -> NodeRef =
+    if encoded.len < MPT_HASH_LENGTH then {
+        InlineRef(inline_node_from_slice(encoded))
     } else {
-        HashRef(keccak256(enc))
+        HashRef(keccak256_slice(encoded))
     }
 
-/* Bit i marks the child at nibble i. */
-function branch_mask_has_bit(mask : bits(16), i : int) -> bool =
-    (sail_shiftright(mask, i) & 0x0001) == 0x0001
-function branch_mask_set_bit(mask : bits(16), i : int) -> bits(16) =
-    mask | sail_shiftleft(0x0001, i)
-
-/* Yellow Paper Appendix D, Eq. 208 node forms. */
-function leaf_node_rlp(key : TriePath, value : list(byte)) -> list(byte) =
-    rlp_list(rlp_bytes(hex_prefix_compact(key, true)) ++ rlp_bytes(value))
-function extension_node_rlp(key : TriePath, childref : NodeRef) -> list(byte) =
-    rlp_list(rlp_bytes(hex_prefix_compact(key, false)) ++ node_ref_rlp(childref))
-
-/* Keep leaf values in their native representation. Long nodes hash the RLP
- * framing and value as segments; only an inline node materializes a slice. */
-function leaf_child_ref(key : TriePath, value : Bytes) -> NodeRef = {
-    let path = rlp_bytes(hex_prefix_compact(key, true));
-    let value_len = bytes_len(value);
-    let value_prefix = rlp_string_prefix(value_len, bytes_first(value));
-    let payload_len = list_len(path) + list_len(value_prefix) + value_len;
-    let head = rlp_list_prefix(payload_len) ++ path ++ value_prefix;
-    if list_len(head) + value_len < 32 then {
-        InlineRef(BytesList(head ++ bytes_to_list(value)))
-    } else {
-        HashRef(keccak256([|BytesList(head), value|]))
-    }
+function branch_mask_for(index : nibble) -> bits(16) = match index {
+    0x0 => 0x0001,
+    0x1 => 0x0002,
+    0x2 => 0x0004,
+    0x3 => 0x0008,
+    0x4 => 0x0010,
+    0x5 => 0x0020,
+    0x6 => 0x0040,
+    0x7 => 0x0080,
+    0x8 => 0x0100,
+    0x9 => 0x0200,
+    0xa => 0x0400,
+    0xb => 0x0800,
+    0xc => 0x1000,
+    0xd => 0x2000,
+    0xe => 0x4000,
+    0xf => 0x8000,
 }
 
-function extension_child_ref(key : TriePath, childref : NodeRef) -> NodeRef =
-    child_ref(extension_node_rlp(key, childref))
+function branch_mask_has(mask : bits(16), index : nibble) -> bool =
+    and_vec(mask, branch_mask_for(index)) != 0x0000
 
-function branch_payload_rlp(mask : bits(16), children : list(NodeRef)) -> list(byte) = {
-    var payload_rev : list(byte) = [||];
-    var ch : list(NodeRef) = children; /* ascending nibble order */
+function branch_mask_set(mask : bits(16), index : nibble) -> bits(16) =
+    or_vec(mask, branch_mask_for(index))
+
+/* Yellow Paper Appendix D, Eq. 208. Keep leaf values in their native
+ * representation; only a sub-32-byte node is materialized into InlineNode. */
+function leaf_child_ref(key : TriePath, value : ByteSlice) -> NodeRef = {
+    let (path, encoded_path_len) = hex_prefix_compact(key, true);
+    let content_len = rlp_bytes_size(path, encoded_path_len) + rlp_slice_size(value);
+    let encoded_len = rlp_list_size(content_len);
+    let mark = scratch_begin();
+    rlp_write_list_prefix(content_len);
+    rlp_write_bytes(path, encoded_path_len);
+    rlp_write_slice(value);
+    let result = child_ref(rlp_finish(mark, encoded_len));
+    scratch_rewind(mark);
+    result
+}
+
+function extension_child_ref(key : TriePath, childref : NodeRef) -> NodeRef = {
+    let (path, encoded_path_len) = hex_prefix_compact(key, false);
+    let content_len = rlp_bytes_size(path, encoded_path_len) + node_ref_size(childref);
+    let encoded_len = rlp_list_size(content_len);
+    let mark = scratch_begin();
+    rlp_write_list_prefix(content_len);
+    rlp_write_bytes(path, encoded_path_len);
+    rlp_write_node_ref(childref);
+    let result = child_ref(rlp_finish(mark, encoded_len));
+    scratch_rewind(mark);
+    result
+}
+
+function branch_child_ref(mask : bits(16), children : BranchRefs) -> NodeRef = {
+    var content_len : byte_length = BYTE_ONE;
+    var child_bit : bits(16) = 0x0001;
     foreach (i from 0 to 15) {
-        if branch_mask_has_bit(mask, i) then {
-            match ch {
-                c :: t => {
-                    payload_rev = rev_onto(node_ref_rlp(c), payload_rev);
-                    ch = t
-                },
-                [||] => (),
-            }
+        if and_vec(mask, child_bit) != 0x0000 then {
+            content_len = content_len + node_ref_size(children[i])
         } else {
-            payload_rev = 0x80 :: payload_rev
-        }
+            content_len = content_len + BYTE_ONE
+        };
+        child_bit = sail_shiftleft(child_bit, 1)
     };
-    list_reverse(0x80 :: payload_rev) /* branch value slot: empty */
+    let encoded_len = rlp_list_size(content_len);
+    let mark = scratch_begin();
+    rlp_write_list_prefix(content_len);
+    child_bit = 0x0001;
+    foreach (i from 0 to 15) {
+        if and_vec(mask, child_bit) != 0x0000 then {
+            rlp_write_node_ref(children[i])
+        } else {
+            scratch_push_bytes([|0x80|], BYTE_ONE)
+        };
+        child_bit = sail_shiftleft(child_bit, 1)
+    };
+    scratch_push_bytes([|0x80|], BYTE_ONE);
+    let result = child_ref(rlp_finish(mark, encoded_len));
+    scratch_rewind(mark);
+    result
 }
-function branch_child_ref(mask : bits(16), children : list(NodeRef)) -> NodeRef =
-    child_ref(rlp_list(branch_payload_rlp(mask, children)))
 
 function trie_ref_to_root(r : NodeRef) -> bits(256) =
     match r {
         EmptyRef() => EMPTY_TRIE_ROOT,
-        InlineRef(node) => keccak256([|node|]),
+        InlineRef(node) => keccak256([|inline_node_segment(node)|]),
         HashRef(h) => h,
     }
 
-function node_to_ref(node : Bytes) -> NodeRef =
-    if bytes_len(node) == 0 then {
+function node_to_ref(node : ByteSlice) -> NodeRef =
+    if node.len == BYTE_ZERO then {
         EmptyRef()
     } else {
-        if bytes_len(node) < 32 then {
-            InlineRef(node)
+        if node.len < MPT_HASH_LENGTH then {
+            InlineRef(inline_node_from_slice(node))
         } else {
-            HashRef(keccak256([|node|]))
+            HashRef(keccak256_slice(node))
         }
     }
 
 /* Node bytes for keccak `h`, retained as a witness slice. */
-function node_db_lookup(h : bits(256)) -> Bytes = {
-    let len = unsigned(nodedb_len(h));
-    if len == 0 then {
-        BytesList([||])
+function node_db_lookup(h : bits(256)) -> ByteSlice = {
+    let len = nodedb_len(h);
+    if len == BYTE_ZERO then {
+        EMPTY_SLICE
     } else {
-        BytesSlice(stateless_input_byte_slice(unsigned(nodedb_off(h)), len))
+        stateless_input_byte_slice(nodedb_off(h), len)
     }
 }
 
 struct LeafNodeData = { path : TriePath, value : RlpFieldRef }
 struct ExtensionNodeData = { path : TriePath, child : RlpFieldRef }
 type BranchChildren = vector(16, dec, RlpFieldRef)
+
+function branch_children_get(children : BranchChildren, index : nibble) -> RlpFieldRef = match index {
+    0x0 => children[0],
+    0x1 => children[1],
+    0x2 => children[2],
+    0x3 => children[3],
+    0x4 => children[4],
+    0x5 => children[5],
+    0x6 => children[6],
+    0x7 => children[7],
+    0x8 => children[8],
+    0x9 => children[9],
+    0xa => children[10],
+    0xb => children[11],
+    0xc => children[12],
+    0xd => children[13],
+    0xe => children[14],
+    0xf => children[15],
+}
 struct BranchNodeData = { children : BranchChildren, value : RlpFieldRef }
 
 union TrieNode = {
@@ -110,7 +258,7 @@ union TrieNode = {
     InvalidNode : unit,
 }
 
-function decode_trie_node(node : Bytes) -> TrieNode = {
+function decode_trie_node(node : ByteSlice) -> TrieNode = {
     let fields = rlp_node_cursor(node);
     if not_bool(fields.valid) | rlp_cursor_empty(fields) then {
         InvalidNode()
@@ -134,15 +282,17 @@ function decode_trie_node(node : Bytes) -> TrieNode = {
                 children[0] = first;
                 children[1] = second;
                 var cursor = fields;
-                var index : int = 2;
-                while (index < 16) & not_bool(rlp_cursor_empty(cursor)) do {
-                    let (child, next) = rlp_cursor_pop(cursor);
-                    let child_index = unsigned(get_slice_int(4, index, 0));
-                    children[child_index] = child;
-                    cursor = next;
-                    index = index + 1
+                var complete : bool = true;
+                foreach (index from 2 to 15) {
+                    if rlp_cursor_empty(cursor) then {
+                        complete = false
+                    } else {
+                        let (child, next) = rlp_cursor_pop(cursor);
+                        children[index] = child;
+                        cursor = next
+                    }
                 };
-                if (index != 16) | rlp_cursor_empty(cursor) then {
+                if not_bool(complete) | rlp_cursor_empty(cursor) then {
                     InvalidNode()
                 } else {
                     let (value, cursor) = rlp_cursor_pop(cursor);
@@ -159,9 +309,9 @@ function decode_trie_node(node : Bytes) -> TrieNode = {
 
 function field_to_ref(f : RlpFieldRef) -> NodeRef =
     if f.is_list then {
-        InlineRef(rlp_ref_full(f))
+        InlineRef(inline_node_from_slice(rlp_ref_full(f)))
     } else {
-        if unsigned(f.content_len) == 32 then {
+        if f.content_len == MPT_HASH_LENGTH then {
             HashRef(rlp_ref_word(f))
         } else {
             EmptyRef()
@@ -169,13 +319,13 @@ function field_to_ref(f : RlpFieldRef) -> NodeRef =
     }
 
 /* Resolving a missing hash is a deficient witness, never an empty subtree. */
-function resolve_ref(r : NodeRef) -> Bytes =
+function resolve_ref(r : NodeRef) -> ByteSlice =
     match r {
-        EmptyRef() => BytesList([||]),
-        InlineRef(node) => node,
+        EmptyRef() => EMPTY_SLICE,
+        InlineRef(node) => inline_node_slice(node),
         HashRef(h) => {
             let node = node_db_lookup(h);
-            if bytes_len(node) == 0 then {
+            if node.len == BYTE_ZERO then {
                 throw InvalidBlock(WitnessDeficient)
             } else {
                 node
@@ -184,11 +334,11 @@ function resolve_ref(r : NodeRef) -> Bytes =
     }
 
 /* Re-key a decoded child under `prefix` without copying a leaf value. */
-function merge_ext_node(prefix : TriePath, childnode : Bytes) -> NodeRef = {
+function merge_ext_node(prefix : TriePath, childnode : ByteSlice) -> NodeRef = {
     if path_len(prefix) == 0 then {
         node_to_ref(childnode)
     } else {
-        if bytes_len(childnode) == 0 then {
+        if childnode.len == BYTE_ZERO then {
             EmptyRef()
         } else {
             match decode_trie_node(childnode) {
@@ -211,7 +361,7 @@ function merge_ext_ref(prefix : TriePath, childref : NodeRef) -> NodeRef = {
             EmptyRef() => EmptyRef(),
             HashRef(_) => extension_child_ref(prefix, childref),
             InlineRef(node) => {
-                match decode_trie_node(node) {
+                match decode_trie_node(inline_node_slice(node)) {
                     LeafNode(leaf) => leaf_child_ref(path_concat(prefix, leaf.path), rlp_ref_content(leaf.value)),
                     ExtensionNode(ext) => extension_child_ref(path_concat(prefix, ext.path), field_to_ref(ext.child)),
                     _ => extension_child_ref(prefix, childref),

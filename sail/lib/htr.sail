@@ -12,10 +12,34 @@ union MerkleSlot = {
     OccupiedMerkleSlot : hash,
 }
 
+struct MerkleAccumulator = {
+    frontier : list(MerkleSlot),
+    count : item_count,
+}
+
+let EMPTY_MERKLE_ACCUMULATOR : MerkleAccumulator = struct { frontier = [||], count = 0 }
+
+let HTR_BYTE_LIST_LIMIT : byte_length = ByteQuantity(1073741824)
+let HTR_DEPOSIT_LENGTH : byte_length = ByteQuantity(192)
+let HTR_DEPOSIT_PUBKEY : source_pointer = BYTE_ZERO
+let HTR_DEPOSIT_PUBKEY_LENGTH : byte_length = ByteQuantity(48)
+let HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS : source_pointer = ByteQuantity(48)
+let HTR_DEPOSIT_AMOUNT : source_pointer = ByteQuantity(80)
+let HTR_DEPOSIT_SIGNATURE : source_pointer = ByteQuantity(88)
+let HTR_DEPOSIT_SIGNATURE_LENGTH : byte_length = ByteQuantity(96)
+let HTR_DEPOSIT_INDEX : source_pointer = ByteQuantity(184)
+let HTR_WITHDRAWAL_REQUEST_LENGTH : byte_length = ByteQuantity(76)
+let HTR_REQUEST_SOURCE_ADDRESS : source_pointer = BYTE_ZERO
+let HTR_REQUEST_SOURCE_PUBKEY : source_pointer = ByteQuantity(20)
+let HTR_REQUEST_PUBKEY_LENGTH : byte_length = ByteQuantity(48)
+let HTR_WITHDRAWAL_REQUEST_AMOUNT : source_pointer = ByteQuantity(68)
+let HTR_CONSOLIDATION_REQUEST_LENGTH : byte_length = ByteQuantity(116)
+let HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY : source_pointer = ByteQuantity(68)
+
 /* Add leaf number `count` to a low-to-high frontier. A set bit in count has
  * one occupied slot at that level; carries consume those slots head-first. */
-function merkle_push(frontier : list(MerkleSlot), count : int, leaf : hash) -> list(MerkleSlot) =
-    if emod_int(count, 2) == 0 then {
+function merkle_push(frontier : list(MerkleSlot), count : item_count, leaf : hash) -> list(MerkleSlot) =
+    if tmod_int(count, 2) == 0 then {
         match frontier {
             _ :: rest => OccupiedMerkleSlot(leaf) :: rest,
             [||] => [|OccupiedMerkleSlot(leaf)|],
@@ -23,84 +47,95 @@ function merkle_push(frontier : list(MerkleSlot), count : int, leaf : hash) -> l
     } else {
         match frontier {
             OccupiedMerkleSlot(left) :: rest => EmptyMerkleSlot() ::
-                merkle_push(rest, ediv_int(count, 2), sha256_pair(left, leaf)),
+                merkle_push(rest, protocol_quantity_quotient(count, 2), sha256_pair(left, leaf)),
             EmptyMerkleSlot() :: _ => throw InvalidBlock(WitnessDeficient),
             [||] => throw InvalidBlock(WitnessDeficient),
         }
     }
 
+function merkle_accumulator_push(accumulator : MerkleAccumulator, leaf : hash) -> MerkleAccumulator =
+    if accumulator.count < 2 ^ 64 - 1 then {
+        struct {
+            frontier = merkle_push(accumulator.frontier, accumulator.count, leaf),
+            count = item_count_increment(accumulator.count),
+        }
+    } else {
+        throw InvalidBlock(WitnessDeficient)
+    }
+
 /* Pad a frontier to 2^depth leaves. `zero` advances from the zero chunk to
  * the zero subtree for the current level, so padding is O(depth). */
-function merkle_frontier_root(frontier : list(MerkleSlot), count : int, depth : int) -> hash = {
-    if count > pow2(depth) then {
-        throw InvalidBlock(WitnessDeficient)
-    };
-    var slots : list(MerkleSlot) = frontier;
-    var n : int = count;
-    var level : int = 0;
-    var zero : hash = sail_zeros(256);
-    var acc : hash = sail_zeros(256);
-    while level < depth do {
+function merkle_root_levels(
+    slots : list(MerkleSlot),
+    n : item_count,
+    zero : hash,
+    acc : hash,
+    remaining : merkle_depth,
+) -> (
+    hash
+) =
+    if remaining == 0 then {
+        if n == 0 then {
+            acc
+        } else {
+            if n == 1 then {
+                match slots {
+                    OccupiedMerkleSlot(root) :: _ => root,
+                    _ => throw InvalidBlock(WitnessDeficient),
+                }
+            } else {
+                throw InvalidBlock(WitnessDeficient)
+            }
+        }
+    } else {
         var slot : MerkleSlot = EmptyMerkleSlot();
+        var rest : list(MerkleSlot) = [||];
         match slots {
             head :: tail => {
                 slot = head;
-                slots = tail
+                rest = tail
             },
             [||] => (),
         };
-        if emod_int(n, 2) == 1 then {
-            match slot {
-                OccupiedMerkleSlot(left) => acc = sha256_pair(left, acc),
-                EmptyMerkleSlot() => throw InvalidBlock(WitnessDeficient),
-            }
-        } else {
-            acc = sha256_pair(acc, zero)
-        };
-        n = ediv_int(n, 2);
-        zero = sha256_pair(zero, zero);
-        level = level + 1
-    };
-    if n == 0 then {
-        acc
-    } else {
-        if n == 1 then {
-            match slots {
-                OccupiedMerkleSlot(root) :: _ => root,
-                _ => throw InvalidBlock(WitnessDeficient),
-            }
-        } else {
-            throw InvalidBlock(WitnessDeficient)
-        }
+        let next_acc = if tmod_int(n, 2) == 1 then {
+                match slot {
+                    OccupiedMerkleSlot(left) => sha256_pair(left, acc),
+                    EmptyMerkleSlot() => throw InvalidBlock(WitnessDeficient),
+                }
+            } else {
+                sha256_pair(acc, zero)
+            };
+        merkle_root_levels(
+            rest,
+            protocol_quantity_quotient(n, 2),
+            sha256_pair(zero, zero),
+            next_acc,
+            merkle_depth_decrement(remaining),
+        )
     }
-}
+termination_measure merkle_root_levels(slots, n, zero, acc, remaining) = remaining
 
-function merkleize(leaves : list(hash), depth : int) -> hash = {
-    var rest : list(hash) = leaves;
-    var frontier : list(MerkleSlot) = [||];
-    var count : int = 0;
-    var more : bool = true;
-    while more do {
-        match rest {
-            leaf :: tail => {
-                frontier = merkle_push(frontier, count, leaf);
-                count = count + 1;
-                rest = tail
-            },
-            [||] => more = false,
-        }
-    };
-    merkle_frontier_root(frontier, count, depth)
-}
+function merkle_accumulator_root(accumulator : MerkleAccumulator, depth : merkle_depth) -> hash =
+    merkle_root_levels(accumulator.frontier, accumulator.count, sail_zeros(256), sail_zeros(256), depth)
+
+function merkle_accumulate(leaves : list(hash), accumulator : MerkleAccumulator) -> MerkleAccumulator =
+    match leaves {
+        [||] => accumulator,
+        leaf :: rest => merkle_accumulate(rest, merkle_accumulator_push(accumulator, leaf)),
+    }
+
+function merkleize(leaves : list(hash), depth : merkle_depth) -> hash =
+    merkle_accumulator_root(merkle_accumulate(leaves, EMPTY_MERKLE_ACCUMULATOR), depth)
 
 /* ---- basic types and byte sequences ----------------------------------- */
 
-/* uint64 -> 32-byte chunk (value little-endian in the low 8 bytes) */
-function htr_u64(v : int) -> hash = {
+/* SSZ 64-bit unsigned integer -> 32-byte chunk (little-endian in low 8 bytes) */
+function htr_uint(v : protocol_quantity) -> hash = {
+    let value = word_of_nat(v);
     var acc : hash = sail_zeros(256);
     foreach (k from 0 to 7) {
-        let byte = emod_int(ediv_int(v, pow2(8 * k)), 256);
-        acc = or_vec(acc, sail_shiftleft(get_slice_int(256, byte, 0), 8 * (31 - k)))
+        let byte = sail_shiftright(value, 8 * k)[7 .. 0];
+        acc = or_vec(acc, sail_shiftleft(sail_zero_extend(byte, 256), 8 * (31 - k)))
     };
     acc
 }
@@ -118,64 +153,95 @@ function htr_u256(w : word) -> hash = {
 function htr_bytes32(b : bits(256)) -> hash = b
 function htr_addr(a : address) -> hash = sail_shiftleft(sail_zero_extend(a, 256), 96)
 
-function mix_in_length(root : hash, len : int) -> hash = sha256_pair(root, htr_u64(len))
+function mix_in_length(root : hash, len : item_count) -> hash = sha256_pair(root, htr_uint(len))
 
-function clog2(n : int) -> int = {
-    var depth : int = 0;
-    var capacity : int = 1;
-    while capacity < n do {
-        capacity = capacity * 2;
-        depth = depth + 1
+function clog2(n : item_count) -> merkle_depth = {
+    var remaining : item_count = if n == 0 then {
+            0
+        } else {
+            n - 1
+        };
+    var depth : merkle_depth = 0;
+    foreach (_step from 0 to 63) {
+        if remaining != 0 then {
+            depth = merkle_depth_increment(depth);
+            remaining = protocol_quantity_quotient(remaining, 2)
+        }
     };
     depth
 }
 
-function htr_chunk(bytes : ByteSlice, chunk_index : int) -> hash = {
+function htr_chunk(bytes : ByteSlice, chunk_index : item_index) -> hash = {
     var acc : hash = sail_zeros(256);
-    let len = unsigned(bytes.len);
-    foreach (i from 0 to 31) {
-        let index = chunk_index * 32 + i;
-        let b : byte = if index < len then {
-                slice_byte(bytes, index)
+    let start : source_pointer = ByteQuantity(chunk_index) * WORD_BYTE_LENGTH;
+    var cursor : source_pointer = start;
+    foreach (byte_index from 0 to 31) {
+        let b : byte = if cursor < bytes.len then {
+                slice_byte(bytes, cursor)
             } else {
                 0x00
             };
-        acc = or_vec(sail_shiftleft(acc, 8), sail_zero_extend(b, 256))
+        acc = or_vec(sail_shiftleft(acc, 8), sail_zero_extend(b, 256));
+        if byte_index < 31 then {
+            cursor = cursor + BYTE_ONE
+        }
     };
     acc
 }
 
-function htr_bytes_root(bytes : ByteSlice, depth : int) -> hash = {
-    let count = ediv_int(unsigned(bytes.len) + 31, 32);
-    var frontier : list(MerkleSlot) = [||];
-    var i : int = 0;
-    while i < count do {
-        frontier = merkle_push(frontier, i, htr_chunk(bytes, i));
-        i = i + 1
+function htr_chunk_count(ByteQuantity(byte_len) : byte_length) -> item_count = {
+    let count = exact_quotient(byte_len + 31, 32);
+    if count <= 2 ^ 64 - 1 then {
+        count
+    } else {
+        throw InvalidBlock(InvalidConfig)
+    }
+}
+
+function htr_fixed_count(ByteQuantity(byte_len) : byte_length, ByteQuantity(item_len) : byte_length) -> item_count = {
+    let count = exact_quotient(byte_len, item_len);
+    if count <= 2 ^ 64 - 1 then {
+        count
+    } else {
+        throw InvalidBlock(InvalidConfig)
+    }
+}
+
+function htr_bytes_root(bytes : ByteSlice, depth : merkle_depth) -> hash = {
+    let count = htr_chunk_count(bytes.len);
+    var accumulator = EMPTY_MERKLE_ACCUMULATOR;
+    var index : item_index = 0;
+    while index < count do {
+        accumulator = merkle_accumulator_push(accumulator, htr_chunk(bytes, index));
+        index = item_index_increment(index)
     };
-    merkle_frontier_root(frontier, count, depth)
+    merkle_accumulator_root(accumulator, depth)
 }
 
 function htr_bytevector(bytes : ByteSlice) -> hash = {
-    let chunks = ediv_int(unsigned(bytes.len) + 31, 32);
+    let chunks = htr_chunk_count(bytes.len);
     htr_bytes_root(bytes, clog2(chunks))
 }
 
-function htr_bytelist(bytes : ByteSlice, limit_bytes : int) -> hash = {
-    let capacity = ediv_int(limit_bytes + 31, 32);
-    mix_in_length(htr_bytes_root(bytes, clog2(capacity)), unsigned(bytes.len))
+function htr_bytelist(bytes : ByteSlice, limit_bytes : byte_length) -> hash = {
+    let capacity = htr_chunk_count(limit_bytes);
+    let ByteQuantity(byte_len) = bytes.len;
+    if byte_len <= 2 ^ 64 - 1 then {
+        mix_in_length(htr_bytes_root(bytes, clog2(capacity)), byte_len)
+    } else {
+        throw InvalidBlock(InvalidConfig)
+    }
 }
 
 /* ---- execution payload ------------------------------------------------ */
 
 function htr_withdrawal(withdrawal : ByteSlice) -> hash = {
-    let b = unsigned(withdrawal.off);
     merkleize(
         [|
-            htr_u64(ssz_u64(b + WD_INDEX)),
-            htr_u64(ssz_u64(b + WD_VALIDATOR_INDEX)),
-            htr_addr(ssz_addr(b + WD_ADDRESS)),
-            htr_u64(ssz_u64(b + WD_AMOUNT)),
+            htr_uint(ssz_uint(withdrawal, WD_INDEX)),
+            htr_uint(ssz_uint(withdrawal, WD_VALIDATOR_INDEX)),
+            htr_addr(ssz_addr(withdrawal, WD_ADDRESS)),
+            htr_uint(ssz_uint(withdrawal, WD_AMOUNT)),
         |],
         2,
     )
@@ -184,55 +250,51 @@ function htr_withdrawal(withdrawal : ByteSlice) -> hash = {
 /* List[ByteList[2^30], 2^20] */
 function htr_transactions(transactions : SszListRef) -> hash = {
     var cursor = ssz_list_cursor(transactions);
-    var frontier : list(MerkleSlot) = [||];
-    var count : int = 0;
+    var accumulator = EMPTY_MERKLE_ACCUMULATOR;
     while not_bool(ssz_list_cursor_empty(cursor)) do {
         let (transaction, next) = ssz_list_pop(cursor);
         cursor = next;
-        frontier = merkle_push(frontier, count, htr_bytelist(transaction, 1073741824));
-        count = count + 1
+        accumulator = merkle_accumulator_push(accumulator, htr_bytelist(transaction, HTR_BYTE_LIST_LIMIT))
     };
-    mix_in_length(merkle_frontier_root(frontier, count, 20), count)
+    mix_in_length(merkle_accumulator_root(accumulator, 20), accumulator.count)
 }
 
 /* List[SszWithdrawal, 16] */
 function htr_withdrawals(withdrawals : SszListRef) -> hash = {
     var rest : SszListRef = withdrawals;
-    var frontier : list(MerkleSlot) = [||];
-    var count : int = 0;
-    while rest.count > 0 do {
+    var accumulator = EMPTY_MERKLE_ACCUMULATOR;
+    while rest.count != 0 do {
         let (withdrawal, tail) = ssz_fixed_list_pop(rest, WD_SIZE);
         rest = tail;
-        frontier = merkle_push(frontier, count, htr_withdrawal(withdrawal));
-        count = count + 1
+        accumulator = merkle_accumulator_push(accumulator, htr_withdrawal(withdrawal))
     };
-    mix_in_length(merkle_frontier_root(frontier, count, 4), count)
+    mix_in_length(merkle_accumulator_root(accumulator, 4), accumulator.count)
 }
 
 /* SszExecutionPayload: 19 fields -> depth 5. */
 function htr_execution_payload(input_ref : StatelessInputRef) -> hash = {
-    let p = unsigned(input_ref.execution_payload.off);
+    let payload = input_ref.execution_payload;
     merkleize(
         [|
-            htr_bytes32(ssz_bytes32(p + 0)),
-            htr_addr(ssz_addr(p + PL_FEE_RECIPIENT)),
-            htr_bytes32(ssz_bytes32(p + PL_STATE_ROOT)),
-            htr_bytes32(ssz_bytes32(p + PL_RECEIPTS_ROOT)),
-            htr_bytevector(sub_slice(input_ref.execution_payload, PL_LOGS_BLOOM, 256)),
-            htr_bytes32(ssz_bytes32(p + PL_PREV_RANDAO)),
-            htr_u64(ssz_u64(p + PL_BLOCK_NUMBER)),
-            htr_u64(ssz_u64(p + PL_GAS_LIMIT)),
-            htr_u64(ssz_u64(p + PL_GAS_USED)),
-            htr_u64(ssz_u64(p + PL_TIMESTAMP)),
-            htr_bytelist(input_ref.extra_data, 32),
-            htr_u256(ssz_u256(p + PL_BASE_FEE)),
-            htr_bytes32(ssz_bytes32(p + PL_BLOCK_HASH)),
+            htr_bytes32(ssz_bytes32(payload, BYTE_ZERO)),
+            htr_addr(ssz_addr(payload, PL_FEE_RECIPIENT)),
+            htr_bytes32(ssz_bytes32(payload, PL_STATE_ROOT)),
+            htr_bytes32(ssz_bytes32(payload, PL_RECEIPTS_ROOT)),
+            htr_bytevector(sub_slice(payload, PL_LOGS_BLOOM, LOGS_BLOOM_BYTE_LENGTH)),
+            htr_bytes32(ssz_bytes32(payload, PL_PREV_RANDAO)),
+            htr_uint(ssz_uint(payload, PL_BLOCK_NUMBER)),
+            htr_uint(ssz_uint(payload, PL_GAS_LIMIT)),
+            htr_uint(ssz_uint(payload, PL_GAS_USED)),
+            htr_uint(ssz_uint(payload, PL_TIMESTAMP)),
+            htr_bytelist(input_ref.extra_data, WORD_BYTE_LENGTH),
+            htr_u256(ssz_u256(payload, PL_BASE_FEE)),
+            htr_bytes32(ssz_bytes32(payload, PL_BLOCK_HASH)),
             htr_transactions(input_ref.transactions),
             htr_withdrawals(input_ref.withdrawals),
-            htr_u64(ssz_u64(p + PL_BLOB_GAS_USED)),
-            htr_u64(ssz_u64(p + PL_EXCESS_BLOB_GAS)),
-            htr_bytelist(input_ref.block_access_list, 1073741824),
-            htr_u64(ssz_u64(p + PL_SLOT_NUMBER)),
+            htr_uint(ssz_uint(payload, PL_BLOB_GAS_USED)),
+            htr_uint(ssz_uint(payload, PL_EXCESS_BLOB_GAS)),
+            htr_bytelist(input_ref.block_access_list, HTR_BYTE_LIST_LIMIT),
+            htr_uint(ssz_uint(payload, PL_SLOT_NUMBER)),
         |],
         5,
     )
@@ -240,42 +302,38 @@ function htr_execution_payload(input_ref : StatelessInputRef) -> hash = {
 
 /* List[Bytes32, 4096] */
 function htr_versioned_hashes(versioned_hashes : ByteSlice) -> hash = {
-    let count = ediv_int(unsigned(versioned_hashes.len), 32);
+    let count = htr_fixed_count(versioned_hashes.len, WORD_BYTE_LENGTH);
     var rest : SszListRef = struct { bytes = versioned_hashes, count = count };
-    var frontier : list(MerkleSlot) = [||];
-    var i : int = 0;
-    while rest.count > 0 do {
-        let (versioned_hash, tail) = ssz_fixed_list_pop(rest, 32);
+    var accumulator = EMPTY_MERKLE_ACCUMULATOR;
+    while rest.count != 0 do {
+        let (versioned_hash, tail) = ssz_fixed_list_pop(rest, WORD_BYTE_LENGTH);
         rest = tail;
-        frontier = merkle_push(frontier, i, slice_load(versioned_hash, 0));
-        i = i + 1
+        accumulator = merkle_accumulator_push(accumulator, slice_load(versioned_hash, BYTE_ZERO))
     };
-    mix_in_length(merkle_frontier_root(frontier, i, 12), i)
+    mix_in_length(merkle_accumulator_root(accumulator, 12), accumulator.count)
 }
 
 /* ---- execution requests ---------------------------------------------- */
 
 function htr_deposit(deposit : ByteSlice) -> hash = {
-    let b = unsigned(deposit.off);
     merkleize(
         [|
-            htr_bytevector(sub_slice(deposit, 0, 48)),
-            htr_bytes32(ssz_bytes32(b + 48)),
-            htr_u64(ssz_u64(b + 80)),
-            htr_bytevector(sub_slice(deposit, 88, 96)),
-            htr_u64(ssz_u64(b + 184)),
+            htr_bytevector(sub_slice(deposit, HTR_DEPOSIT_PUBKEY, HTR_DEPOSIT_PUBKEY_LENGTH)),
+            htr_bytes32(ssz_bytes32(deposit, HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS)),
+            htr_uint(ssz_uint(deposit, HTR_DEPOSIT_AMOUNT)),
+            htr_bytevector(sub_slice(deposit, HTR_DEPOSIT_SIGNATURE, HTR_DEPOSIT_SIGNATURE_LENGTH)),
+            htr_uint(ssz_uint(deposit, HTR_DEPOSIT_INDEX)),
         |],
         3,
     )
 }
 
 function htr_withdrawal_request(request : ByteSlice) -> hash = {
-    let b = unsigned(request.off);
     merkleize(
         [|
-            htr_bytevector(sub_slice(request, 0, 20)),
-            htr_bytevector(sub_slice(request, 20, 48)),
-            htr_u64(ssz_u64(b + 68)),
+            htr_bytevector(sub_slice(request, HTR_REQUEST_SOURCE_ADDRESS, ADDRESS_BYTE_LENGTH)),
+            htr_bytevector(sub_slice(request, HTR_REQUEST_SOURCE_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH)),
+            htr_uint(ssz_uint(request, HTR_WITHDRAWAL_REQUEST_AMOUNT)),
         |],
         2,
     )
@@ -284,53 +342,47 @@ function htr_withdrawal_request(request : ByteSlice) -> hash = {
 function htr_consolidation_request(request : ByteSlice) -> hash =
     merkleize(
         [|
-            htr_bytevector(sub_slice(request, 0, 20)),
-            htr_bytevector(sub_slice(request, 20, 48)),
-            htr_bytevector(sub_slice(request, 68, 48)),
+            htr_bytevector(sub_slice(request, HTR_REQUEST_SOURCE_ADDRESS, ADDRESS_BYTE_LENGTH)),
+            htr_bytevector(sub_slice(request, HTR_REQUEST_SOURCE_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH)),
+            htr_bytevector(sub_slice(request, HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH)),
         |],
         2,
     )
 
 function htr_deposits(deposits : ByteSlice) -> hash = {
-    let count = ediv_int(unsigned(deposits.len), 192);
+    let count = htr_fixed_count(deposits.len, HTR_DEPOSIT_LENGTH);
     var rest : SszListRef = struct { bytes = deposits, count = count };
-    var frontier : list(MerkleSlot) = [||];
-    var i : int = 0;
-    while rest.count > 0 do {
-        let (deposit, tail) = ssz_fixed_list_pop(rest, 192);
+    var accumulator = EMPTY_MERKLE_ACCUMULATOR;
+    while rest.count != 0 do {
+        let (deposit, tail) = ssz_fixed_list_pop(rest, HTR_DEPOSIT_LENGTH);
         rest = tail;
-        frontier = merkle_push(frontier, i, htr_deposit(deposit));
-        i = i + 1
+        accumulator = merkle_accumulator_push(accumulator, htr_deposit(deposit))
     };
-    mix_in_length(merkle_frontier_root(frontier, i, 13), i)
+    mix_in_length(merkle_accumulator_root(accumulator, 13), accumulator.count)
 }
 
 function htr_withdrawal_requests(requests : ByteSlice) -> hash = {
-    let count = ediv_int(unsigned(requests.len), 76);
+    let count = htr_fixed_count(requests.len, HTR_WITHDRAWAL_REQUEST_LENGTH);
     var rest : SszListRef = struct { bytes = requests, count = count };
-    var frontier : list(MerkleSlot) = [||];
-    var i : int = 0;
-    while rest.count > 0 do {
-        let (request, tail) = ssz_fixed_list_pop(rest, 76);
+    var accumulator = EMPTY_MERKLE_ACCUMULATOR;
+    while rest.count != 0 do {
+        let (request, tail) = ssz_fixed_list_pop(rest, HTR_WITHDRAWAL_REQUEST_LENGTH);
         rest = tail;
-        frontier = merkle_push(frontier, i, htr_withdrawal_request(request));
-        i = i + 1
+        accumulator = merkle_accumulator_push(accumulator, htr_withdrawal_request(request))
     };
-    mix_in_length(merkle_frontier_root(frontier, i, 4), i)
+    mix_in_length(merkle_accumulator_root(accumulator, 4), accumulator.count)
 }
 
 function htr_consolidation_requests(requests : ByteSlice) -> hash = {
-    let count = ediv_int(unsigned(requests.len), 116);
+    let count = htr_fixed_count(requests.len, HTR_CONSOLIDATION_REQUEST_LENGTH);
     var rest : SszListRef = struct { bytes = requests, count = count };
-    var frontier : list(MerkleSlot) = [||];
-    var i : int = 0;
-    while rest.count > 0 do {
-        let (request, tail) = ssz_fixed_list_pop(rest, 116);
+    var accumulator = EMPTY_MERKLE_ACCUMULATOR;
+    while rest.count != 0 do {
+        let (request, tail) = ssz_fixed_list_pop(rest, HTR_CONSOLIDATION_REQUEST_LENGTH);
         rest = tail;
-        frontier = merkle_push(frontier, i, htr_consolidation_request(request));
-        i = i + 1
+        accumulator = merkle_accumulator_push(accumulator, htr_consolidation_request(request))
     };
-    mix_in_length(merkle_frontier_root(frontier, i, 1), i)
+    mix_in_length(merkle_accumulator_root(accumulator, 1), accumulator.count)
 }
 
 function htr_execution_requests(input_ref : StatelessInputRef) -> hash =
@@ -345,12 +397,11 @@ function htr_execution_requests(input_ref : StatelessInputRef) -> hash =
 
 /* SszNewPayloadRequest: 4 fields -> depth 2. */
 function htr_new_payload_request(input_ref : StatelessInputRef) -> hash = {
-    let npr = unsigned(input_ref.new_payload_request.off);
     merkleize(
         [|
             htr_execution_payload(input_ref),
             htr_versioned_hashes(input_ref.versioned_hashes),
-            htr_bytes32(ssz_bytes32(npr + NPR_BEACON_ROOT)),
+            htr_bytes32(ssz_bytes32(input_ref.new_payload_request, NPR_BEACON_ROOT)),
             htr_execution_requests(input_ref),
         |],
         2,

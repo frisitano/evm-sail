@@ -10,6 +10,37 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/* Generated account/storage adapters implemented by journal_glue.c. The Sail
+ * operations already live in host/state.sail; these declarations only fix the
+ * generated C calling convention for aggregate arguments and results. */
+struct zoptionzIRStorageValuezK;
+struct zoptionzIRStorageEntryzK;
+struct zStorageKey;
+struct zStorageEntry;
+void storage_tx_get(struct zoptionzIRStorageValuezK *result,
+                    struct zStorageKey key);
+void storage_block_get(struct zoptionzIRStorageValuezK *result,
+                       struct zStorageKey key);
+void storage_block_row(struct zoptionzIRStorageEntryzK *result,
+                       const lbits address, uint64_t index);
+unit storage_tx_update(struct zStorageEntry entry);
+unit storage_block_put(struct zStorageEntry entry);
+unit storage_block_cache(struct zStorageKey key, const lbits value);
+
+struct zoptionzIRAccountzK;
+struct zoptionzIRAcctEntryzK;
+struct zAccount;
+struct zAcctEntry;
+void acct_tx_get(struct zoptionzIRAccountzK *result, const lbits address);
+void acct_block_get(struct zoptionzIRAccountzK *result, const lbits address);
+void acct_block_row(struct zoptionzIRAcctEntryzK *result, uint64_t index);
+unit acct_tx_update(const lbits address, struct zAccount account);
+unit acct_block_write(struct zAcctEntry entry);
+unit acct_block_cache(const lbits address, struct zAccount account);
+
+void storage_tx_pop(struct zoptionzIRStorageEntryzK *result, unit u);
+void acct_tx_pop_ascending(struct zoptionzIRAcctEntryzK *result, unit u);
+
 /* Persistent storage transaction state and cumulative block state. */
 unit storage_db_reset(const unit u);
 /* Per-layer row probe (layer 0 = tx writes, 1 = block cache/update map). */
@@ -52,6 +83,7 @@ unit acct_tx_reset(const unit u);
 /* Debug snapshot enumeration over cumulative account state. */
 uint64_t acct_dump_count(const unit u);
 void acct_dump_hkey(lbits *rop, uint64_t i);
+void acct_dump_address(lbits *rop, uint64_t i);
 uint64_t acct_dump_nonce(uint64_t i);
 void acct_dump_balance(lbits *rop, uint64_t i);
 void acct_dump_storage_root(lbits *rop, uint64_t i);
@@ -90,12 +122,14 @@ unit bal_note_nonce_change(const lbits a, uint64_t nonce);
 unit bal_note_code_change(const lbits a, const lbits chash);
 /* State-root enumeration over the cumulative maps. */
 uint64_t storage_block_count(const lbits a);
-bool storage_block_changed(const lbits a, uint64_t i);
-void storage_block_slot(lbits *rop, const lbits a, uint64_t i);
-void storage_block_current(lbits *rop, const lbits a, uint64_t i);
+uint64_t storage_block_row_probe(const lbits a, uint64_t i,
+                                 lbits *slot, lbits *curr, lbits *orig);
 uint64_t acct_block_count(const unit u);
-bool acct_block_changed(uint64_t i);
-void acct_block_address(lbits *rop, uint64_t i);
+uint64_t acct_block_row_probe(uint64_t i, lbits *addr,
+                              uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
+                              bool *ce, bool *csc, bool *ccr, bool *csd,
+                              uint64_t *on, lbits *ob, lbits *os, lbits *oc,
+                              bool *oe, bool *osc, bool *ocr, bool *osd);
 /* k_tx_merge drain pops (side-effect-free) + block propagation hooks */
 uint64_t storage_tx_pop_probe(lbits *addr, lbits *slot, lbits *curr,
                               lbits *orig);

@@ -3,11 +3,11 @@
  * Byte-array results are written to the shared precompile output arena. */
 
 val accelerator_ripemd160 = impure { c: "accelerator_ripemd160" } : ByteSlice -> bool
-val host_accelerator_modexp = impure { c: "accelerator_modexp" } : (ByteSlice, bits(64), bits(64), bits(64)) -> bool
+val accelerator_modexp = impure { c: "accelerator_modexp" } : (ByteSlice, byte_length, byte_length, byte_length) -> bool
 val accelerator_bn254_add = impure { c: "accelerator_bn254_add" } : ByteSlice -> bool
 val accelerator_bn254_mul = impure { c: "accelerator_bn254_mul" } : ByteSlice -> bool
 val accelerator_bn254_pairing = impure { c: "accelerator_bn254_pairing" } : ByteSlice -> bits(2)
-val host_accelerator_blake2f = impure { c: "accelerator_blake2f" } : (ByteSlice, bits(64), bits(64)) -> bool
+val accelerator_blake2f = impure { c: "accelerator_blake2f" } : (ByteSlice, blake2_rounds, y_parity) -> bool
 val accelerator_kzg_point_evaluation = impure { c: "accelerator_kzg_point_evaluation" } : ByteSlice -> bool
 val accelerator_bls_g1_add = impure { c: "accelerator_bls_g1_add" } : ByteSlice -> bool
 val accelerator_bls_g1_msm = impure { c: "accelerator_bls_g1_msm" } : ByteSlice -> bool
@@ -25,15 +25,4 @@ val secp256k1_verify = impure { c: "precompile_secp256k1_verify_hash_sig_pub" } 
         bits(256),
         bits(256),
     ) -> bool
-val host_ecrecover = impure { c: "precompile_ecrecover_hash_sig" } : (bits(256), bits(64), word, word) -> bits(168)
-
-function accelerator_modexp(input : ByteSlice, base_len : int, exponent_len : int, modulus_len : int) -> bool =
-    host_accelerator_modexp(
-        input,
-        get_slice_int(64, base_len, 0),
-        get_slice_int(64, exponent_len, 0),
-        get_slice_int(64, modulus_len, 0),
-    )
-
-function accelerator_blake2f(input : ByteSlice, rounds : int, final_block : int) -> bool =
-    host_accelerator_blake2f(input, get_slice_int(64, rounds, 0), get_slice_int(64, final_block, 0))
+val host_ecrecover = impure { c: "precompile_ecrecover_hash_sig" } : (bits(256), y_parity, word, word) -> bits(168)

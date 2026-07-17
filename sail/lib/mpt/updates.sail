@@ -1,49 +1,11 @@
 /* Ordered leaf updates. */
 
 union TrieChange = {
-    TriePut : Bytes,
+    TriePut : ByteSlice,
     TrieDelete : unit,
 }
 
 struct TrieUpdate = { key : TriePath, change : TrieChange }
-
-function split_updates(updates : list(TrieUpdate), count : int) -> (list(TrieUpdate), list(TrieUpdate)) =
-    if count <= 0 then {
-        ([||], updates)
-    } else {
-        match updates {
-            [||] => ([||], [||]),
-            update :: rest => {
-                let (left, right) = split_updates(rest, count - 1);
-                (update :: left, right)
-            },
-        }
-    }
-termination_measure split_updates(updates, count) = count
-
-function merge_updates(left : list(TrieUpdate), right : list(TrieUpdate)) -> list(TrieUpdate) =
-    match (left, right) {
-        ([||], _) => right,
-        (_, [||]) => left,
-        (l :: ls, r :: rs) => if path_lt(r.key, l.key) then {
-            r :: merge_updates(left, rs)
-        } else {
-            l :: merge_updates(ls, right)
-        },
-    }
-
-function sort_updates_n(updates : list(TrieUpdate), count : int) -> list(TrieUpdate) =
-    if count <= 1 then {
-        updates
-    } else {
-        let left_count = ediv_int(count, 2);
-        let (left, right) = split_updates(updates, left_count);
-        merge_updates(sort_updates_n(left, left_count), sort_updates_n(right, count - left_count))
-    }
-termination_measure sort_updates_n(updates, count) = count
-
-function sort_updates(updates : list(TrieUpdate)) -> list(TrieUpdate) =
-    sort_updates_n(updates, list_len(updates))
 
 function updates_empty(updates : list(TrieUpdate)) -> bool =
     match updates {
@@ -63,14 +25,14 @@ function next_update_under(updates : list(TrieUpdate), prefix : TriePath) -> boo
 /* Extension children are known branches; branch children have unknown kind
  * until resolved. That distinction permits untouched hashes to stay opaque. */
 union TrieItemValue = {
-    LeafItem : Bytes,
+    LeafItem : ByteSlice,
     BranchItem : NodeRef,
     SubtreeItem : NodeRef,
 }
 
 struct TrieItem = { path : TriePath, value : TrieItemValue }
 
-function item_leaf(path : TriePath, value : Bytes) -> TrieItem =
+function item_leaf(path : TriePath, value : ByteSlice) -> TrieItem =
     struct { path = path, value = LeafItem(value) }
 
 function item_branch(path : TriePath, childref : NodeRef) -> TrieItem =
@@ -79,94 +41,11 @@ function item_branch(path : TriePath, childref : NodeRef) -> TrieItem =
 function item_subtree(path : TriePath, childref : NodeRef) -> TrieItem =
     struct { path = path, value = SubtreeItem(childref) }
 
-/* Sorted live-leaf items of an update list (deletes emit nothing). */
-function live_update_items(updates : list(TrieUpdate)) -> list(TrieItem) =
-    match updates {
-        [||] => [||],
-        update :: rest => match update.change {
-            TrieDelete() => live_update_items(rest),
-            TriePut(value) => item_leaf(update.key, value) :: live_update_items(rest),
-        },
-    }
-
-/* Consume the leading updates under `prefix`, returning the first update
- * outside that subtree to the caller. Sorted keys make the matching range
- * contiguous, so every update advances through the witness walk once. */
-function live_update_items_under(updates : list(TrieUpdate), prefix : TriePath) -> (list(TrieItem), list(TrieUpdate)) =
-    match updates {
-        [||] => ([||], [||]),
-        update :: rest => if path_prefix_of(prefix, update.key) then {
-            let (items, remaining) = live_update_items_under(rest, prefix);
-            match update.change {
-                TrieDelete() => (items, remaining),
-                TriePut(value) => (item_leaf(update.key, value) :: items, remaining),
-            }
-        } else {
-            ([||], updates)
-        },
-    }
-
-/* Overlay the contiguous update range for a base leaf and return the cursor
- * positioned at the next sibling subtree. */
-function leaf_overlay_items(
-    updates : list(TrieUpdate),
-    prefix : TriePath,
-    key : TriePath,
-    value : Bytes,
-) -> (
-    (list(TrieItem), list(TrieUpdate))
-) =
-    match updates {
-        [||] => ([|item_leaf(key, value)|], [||]),
-        update :: rest => if not_bool(path_prefix_of(prefix, update.key)) then {
-            ([|item_leaf(key, value)|], updates)
-        } else {
-            if path_eq(update.key, key) then {
-                let (items, remaining) = live_update_items_under(rest, prefix);
-                match update.change {
-                    TrieDelete() => (items, remaining),
-                    TriePut(updated) => (item_leaf(update.key, updated) :: items, remaining),
-                }
-            } else {
-                if path_lt(key, update.key) then {
-                    let (items, remaining) = live_update_items_under(updates, prefix);
-                    (item_leaf(key, value) :: items, remaining)
-                } else {
-                    let (items, remaining) = leaf_overlay_items(rest, prefix, key, value);
-                    match update.change {
-                        TrieDelete() => (items, remaining),
-                        TriePut(updated) => (item_leaf(update.key, updated) :: items, remaining),
-                    }
-                }
-            }
-        },
-    }
-
-function items_last_path(items : list(TrieItem)) -> TriePath =
-    match items {
-        [||] => path_empty(),
-        it :: r => match r {
-            [||] => it.path,
-            _ => items_last_path(r),
-        },
-    }
-
-function take_nibble_group(items : list(TrieItem), depth : int, nib : nibble) -> (list(TrieItem), list(TrieItem)) =
-    match items {
-        [||] => ([||], [||]),
-        it :: r => if path_len(it.path) > depth & path_nibble(it.path, depth) == nib then {
-            let (group, remaining) = take_nibble_group(r, depth, nib);
-            (it :: group, remaining)
-        } else {
-            ([||], items)
-        },
-    }
-
 /* the child ref of a single-item subtree at `depth`: the item's remaining
  * path is absorbed into it. This is the ONE place a delete collapse can
  * demand node material: an unknown-type hash ref absorbing a nonempty
  * suffix resolves its node from the witness db (fail-closed). */
-function item_ref(it : TrieItem, depth : int) -> NodeRef = {
+function item_ref(it : TrieItem, depth : trie_path_len) -> NodeRef = {
     let suffix = path_drop(it.path, depth);
     match it.value {
         LeafItem(value) => leaf_child_ref(suffix, value),
@@ -181,7 +60,7 @@ function item_ref(it : TrieItem, depth : int) -> NodeRef = {
             match subref {
                 HashRef(h) => {
                     let node = node_db_lookup(h);
-                    if bytes_len(node) == 0 then {
+                    if node.len == BYTE_ZERO then {
                         throw InvalidBlock(WitnessDeficient)
                     } else {
                         merge_ext_node(suffix, node)
@@ -193,75 +72,233 @@ function item_ref(it : TrieItem, depth : int) -> NodeRef = {
     }
 }
 
-/* ---- the trie builder (Yellow Paper Appendix D) --------------------------
- *
- * build_group composes the subtree of a sorted, prefix-free item group
- * whose paths all extend the group's first `depth` nibbles. On a leaf-only
- * stream this IS the protocol trie definition, transcribed from the Yellow
- * Paper (Shanghai version) and specialized to fixed-length secure-trie
- * keys (so a branch node's value slot -- the 17th item -- is always
- * empty):
- *
- *   c(I,i): leaf | extension | 17-item branch      (Eq. 208)  build_group
- *   n(I,i): () if I = {}; c(I,i) if ||RLP|| < 32;
- *           KEC(RLP(c(I,i))) otherwise             (Eq. 207)  child_ref cap
- *   TRIE(I) = KEC(RLP(c(I,0)))                     (Eq. 206)  items_root
- *
- * Node closure is by lookahead on the sorted keys: an extension covers
- * exactly the prefix shared by the whole group (first/last suffices when
- * sorted), and a branch materializes only where >= 2 key groups actually
- * diverge -- the canonical form is reached by construction, with no
- * separate collapse or canonicalization step. `fuel` only bounds recursion
- * for the termination checker: keys are 64 nibbles, callers pass 256. */
-function build_group(items : list(TrieItem), depth : int, fuel : int) -> NodeRef = {
-    if fuel <= 0 then {
-        throw InvalidBlock(WitnessDeficient)
+/* Incremental canonical builder for an already ordered, prefix-free item
+ * stream. It realizes the Yellow Paper c(I, i) / n(I, i) grouping directly:
+ * the next key determines which branch frames remain open, so no prefix
+ * partition or second walk is needed. The current value is fully consumed
+ * before this function returns. */
+struct TrieBranchFrame = {
+    depth : trie_depth,
+    mask : bits(16),
+    children : BranchRefs,
+}
+
+struct TrieBuilder = {
+    /* The open branch is the head. Sail lists are reference-counted, so a
+     * builder copy, push, or pop never copies the other open frames. */
+    frames : list(TrieBranchFrame),
+    root : NodeRef,
+    complete : bool,
+}
+
+function empty_trie_branch_frame(depth : trie_depth) -> TrieBranchFrame =
+    struct { depth = depth, mask = 0x0000, children = vector_init(16, EmptyRef()) }
+
+function trie_builder_empty() -> TrieBuilder =
+    struct { frames = [||], root = EmptyRef(), complete = false }
+
+function trie_builder_push(builder : TrieBuilder, depth : trie_depth) -> TrieBuilder =
+    struct {
+        frames = empty_trie_branch_frame(depth) :: builder.frames,
+        root = builder.root,
+        complete = builder.complete,
+    }
+
+function trie_builder_attach(builder : TrieBuilder, path : TriePath, child : NodeRef) -> TrieBuilder =
+    match builder.frames {
+        [||] => throw InvalidBlock(WitnessDeficient),
+        current :: rest => {
+            var frame = current;
+            let depth = frame.depth;
+            if path_len(path) <= depth then {
+                throw InvalidBlock(WitnessDeficient)
+            };
+            let child_index = path_nibble(path, depth);
+            if branch_mask_has(frame.mask, child_index) then {
+                throw InvalidBlock(WitnessDeficient)
+            };
+            frame.mask = branch_mask_set(frame.mask, child_index);
+            frame.children = branch_refs_set(frame.children, child_index, child);
+            struct { frames = frame :: rest, root = builder.root, complete = builder.complete }
+        },
+    }
+
+function trie_builder_pop(builder : TrieBuilder) -> (TrieBranchFrame, TrieBuilder) =
+    match builder.frames {
+        [||] => throw InvalidBlock(WitnessDeficient),
+        frame :: rest => (frame, struct { frames = rest, root = builder.root, complete = builder.complete }),
+    }
+
+function trie_builder_wrap_branch(
+    anchor : TriePath,
+    parent_depth : trie_depth,
+    child_depth : trie_depth,
+    child : NodeRef,
+) -> (
+    NodeRef
+) = {
+    let child_start : trie_path_len = parent_depth + 1;
+    if child_depth <= child_start then {
+        child
     } else {
-        match items {
-            [||] => EmptyRef(),
-            it :: [||] => item_ref(it, depth),
-            it :: _ => {
-                let last = items_last_path(items);
-                let common = common_prefix_from(it.path, last, depth);
-                if common > 0 then {
-                    /* >= 2 items share `shared`, so the child one level down
-                       is necessarily a branch: a plain extension wrap is
-                       canonical */
-                    let shared = path_take(path_drop(it.path, depth), common);
-                    extension_child_ref(shared, build_group(items, depth + common, fuel - common))
-                } else {
-                    /* >= 2 items diverge right here: a branch with >= 2
-                       children by construction (groups of a nonempty sorted
-                       stream are nonempty and never build to empty) */
-                    var mask : bits(16) = 0x0000;
-                    var children_rev : list(NodeRef) = [||];
-                    var remaining : list(TrieItem) = items;
-                    var more : bool = true;
-                    while more do {
-                        match remaining {
-                            [||] => more = false,
-                            next :: _ => if path_len(next.path) <= depth then {
-                                throw InvalidBlock(WitnessDeficient)
-                            } else {
-                                let nib = path_nibble(next.path, depth);
-                                let (group, rest) = take_nibble_group(remaining, depth, nib);
-                                mask = branch_mask_set_bit(mask, unsigned(nib));
-                                children_rev = build_group(group, depth + 1, fuel - 1) :: children_rev;
-                                remaining = rest
-                            },
-                        }
-                    };
-                    branch_child_ref(mask, list_reverse(children_rev))
-                }
+        let gap : trie_path_len = child_depth - child_start;
+        extension_child_ref(path_take(path_drop(anchor, child_start), gap), child)
+    }
+}
+
+function trie_builder_close(
+    builder : TrieBuilder,
+    anchor : TriePath,
+    next_common : option(trie_depth),
+    fuel : trie_path_len,
+) -> (
+    TrieBuilder
+) = {
+    if fuel == 0 then {
+        throw InvalidBlock(WitnessDeficient)
+    };
+    match builder.frames {
+        [||] => builder,
+        top :: _ => {
+            let should_close : bool = match next_common {
+                None() => true,
+                Some(depth) => depth < top.depth,
+            };
+            if not_bool(should_close) then {
+                builder
+            } else {
+                let (frame, popped) = trie_builder_pop(builder);
+                let child = branch_child_ref(frame.mask, frame.children);
+                let with_parent : TrieBuilder = match popped.frames {
+                    parent :: _ => match next_common {
+                        Some(common) => if parent.depth < common then {
+                            let intermediate = trie_builder_push(popped, common);
+                            trie_builder_attach(
+                                intermediate,
+                                anchor,
+                                trie_builder_wrap_branch(anchor, common, frame.depth, child),
+                            )
+                        } else {
+                            trie_builder_attach(
+                                popped,
+                                anchor,
+                                trie_builder_wrap_branch(anchor, parent.depth, frame.depth, child),
+                            )
+                        },
+                        None() => trie_builder_attach(
+                            popped,
+                            anchor,
+                            trie_builder_wrap_branch(anchor, parent.depth, frame.depth, child),
+                        ),
+                    },
+                    [||] => match next_common {
+                        Some(common) => {
+                            let parent = trie_builder_push(popped, common);
+                            trie_builder_attach(
+                                parent,
+                                anchor,
+                                trie_builder_wrap_branch(anchor, common, frame.depth, child),
+                            )
+                        },
+                        None() => {
+                            let depth = frame.depth;
+                            let root = if depth == 0 then {
+                                    child
+                                } else {
+                                    extension_child_ref(path_take(anchor, depth), child)
+                                };
+                            struct { frames = popped.frames, root = root, complete = true }
+                        },
+                    },
+                };
+                trie_builder_close(with_parent, anchor, next_common, fuel - 1)
+            }
+        },
+    }
+}
+termination_measure trie_builder_close(builder, anchor, next_common, fuel) = fuel
+
+function trie_item_next_common(item : TrieItem, next_key : option(TriePath)) -> option(trie_depth) =
+    match next_key {
+        None() => None(),
+        Some(next) => {
+            let common = common_prefix_from(item.path, next, 0);
+            if not_bool(path_lt(item.path, next)) | path_len(item.path) <= common | path_len(next) <= common then {
+                throw InvalidBlock(WitnessDeficient)
+            };
+            Some(to_trie_depth(common))
+        },
+    }
+
+function trie_insert_item(builder : TrieBuilder, item : TrieItem, next_key : option(TriePath)) -> TrieBuilder = {
+    if builder.complete then {
+        throw InvalidBlock(WitnessDeficient)
+    };
+    let next_common = trie_item_next_common(item, next_key);
+    let open_child : bool = match next_common {
+        None() => false,
+        Some(common) => match builder.frames {
+            [||] => true,
+            top :: _ => top.depth < common,
+        },
+    };
+    if open_child then {
+        match next_common {
+            Some(common) => {
+                let opened = trie_builder_push(builder, common);
+                trie_builder_attach(opened, item.path, item_ref(item, common + 1))
+            },
+            None() => throw InvalidBlock(WitnessDeficient),
+        }
+    } else {
+        match builder.frames {
+            [||] => struct { frames = builder.frames, root = item_ref(item, 0), complete = true },
+            top :: _ => {
+                let attached = trie_builder_attach(builder, item.path, item_ref(item, top.depth + 1));
+                trie_builder_close(attached, item.path, next_common, 64)
             },
         }
     }
 }
-termination_measure build_group(items, depth, fuel) = fuel
 
-/* TRIE of a sorted item stream (Eq. 206 on a leaf-only stream) */
-function items_root(items : list(TrieItem)) -> bits(256) =
-    match items {
-        [||] => EMPTY_TRIE_ROOT,
-        _ => trie_ref_to_root(build_group(items, 0, 256)),
+/* One-item lookahead turns any ordered producer into a streaming trie input.
+ * The pending item is consumed as soon as its successor supplies the next
+ * key; no item retains a source-backed payload after that call returns. */
+struct TrieItemSink = {
+    builder : TrieBuilder,
+    pending : option(TrieItem),
+}
+
+function trie_sink_empty() -> TrieItemSink =
+    struct { builder = trie_builder_empty(), pending = None() }
+
+function trie_sink_emit(sink : TrieItemSink, item : TrieItem) -> TrieItemSink =
+    match sink.pending {
+        None() => struct { builder = sink.builder, pending = Some(item) },
+        Some(previous) => struct {
+            builder = trie_insert_item(sink.builder, previous, Some(item.path)),
+            pending = Some(item),
+        },
+    }
+
+function trie_sink_finish(sink : TrieItemSink) -> TrieItemSink =
+    match sink.pending {
+        None() => sink,
+        Some(item) => struct { builder = trie_insert_item(sink.builder, item, None()), pending = None() },
+    }
+
+function trie_builder_root(builder : TrieBuilder) -> hash =
+    match builder.frames {
+        _ :: _ => throw InvalidBlock(WitnessDeficient),
+        [||] => if builder.complete then {
+            trie_ref_to_root(builder.root)
+        } else {
+            EMPTY_TRIE_ROOT
+        },
+    }
+
+function trie_sink_root(sink : TrieItemSink) -> hash =
+    match sink.pending {
+        Some(_) => throw InvalidBlock(WitnessDeficient),
+        None() => trie_builder_root(sink.builder),
     }

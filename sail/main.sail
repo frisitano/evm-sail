@@ -7,7 +7,7 @@ function main() -> unit = {
     validation_debug_reset();
     cycle_scope_start(SCOPE_STATELESS_VALIDATION);
     let result : option(GuestValidation) = try {
-        let input_ref = decode_stateless_input_ref();
+        let input_ref = decode_stateless_input_ref(stateless_input());
         let validation : StatelessValidationResult = verify_stateless_payload(input_ref);
         let valid : bool = match validation {
             StatelessPayloadValid() => true,

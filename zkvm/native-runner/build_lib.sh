@@ -17,17 +17,14 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-BUILD="$HERE/.build"
+BUILD="${NATIVE_BUILD:-$HERE/.build}"
 
 # 1. produce all objects (generated model C, sf runtime, FFI, test_utils
 #    harness). No EXTRA_PRESERVE needed: the reset shim (test_utils.c) calls
 #    the FFI reset symbols directly, so it depends on no Sail-level reset.
 "$HERE/build.sh"
 
-SAIL="${SAIL:-sail}"
 CC="${CC:-cc}"
-SAILBIN="$(command -v "$SAIL")"
-SAIL_LIB="$(cd "$(dirname "$SAILBIN")/../share/sail/lib" && pwd)"
 SF="${SF_RUNTIME:-$ROOT/zkvm/runtime/sail256}"
 ZKVM="$ROOT/zkvm"; RT="$ROOT/zkvm/runtime"; FFI="$ROOT/ffi"
 ACCEL_LIB="$ROOT/zkvm/accel-host/target/release"
@@ -45,9 +42,9 @@ case "$(uname -s)" in
   *)      SHFLAG=(-shared); EXT=so ;;
 esac
 OUT="$BUILD/libevmsail_guest.$EXT"
-# test_utils.o is the self-contained I/O + harness: it owns set_input, ssz_src_*,
-# el_emit_out, the output buffer, and run_once. The real guests' I/O
-# (zkvm_input.c / zkvm_io.c) is never linked into host builds.
+# test_utils.o is the self-contained native I/O harness: it owns set_input,
+# read_input, write_output, the output buffer, and run_once. The real guest's
+# Spike I/O device adapter is never linked into host builds.
 LINK_CMD=("$CC" "${CFLAGS[@]}" "${SHFLAG[@]}"
     "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/test_utils.o"
     "${HOST_OBJS[@]}"
@@ -57,4 +54,4 @@ LINK_CMD=("$CC" "${CFLAGS[@]}" "${SHFLAG[@]}"
 echo "# link lib:"
 printf '  %q' "${LINK_CMD[@]}"; echo
 "${LINK_CMD[@]}"
-echo "built $OUT"
+echo "built $OUT (${EVM_BUILD_MODE:-optimized})"

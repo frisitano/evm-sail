@@ -13,22 +13,23 @@ zkvm/build/
 # harness caches
 harness/.rtcache/
 
+# theorem-prover build artifacts (generated sources are tracked)
+**/.lake/build/
+
 # python
 **/__pycache__/
-
-# Rust runner
-
-# generated spec HTML (regenerate with: make html)
-docs/evm-sail.html
-docs/evm-sail.pdf
-docs/evm-sail.sail
-docs/*.aux
-docs/*.log
-docs/*.out
-docs/*.toc
 
 # canonical zkevm conformance fixtures (tests-zkevm@v0.4.1, ~360MB)
 zkvm/.fixtures/
 
 # native conformance runner build artifacts
-zkvm/native-runner/.build/
+zkvm/native-runner/.build*/
+
+# local editor, agent, and worktree state
+.DS_Store
+/.agent-deck/
+/.agents/
+/.claude/
+/.mcp.json
+/.vscode/
+/.worktrees/

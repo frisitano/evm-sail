@@ -3,26 +3,83 @@
  * mechanisms continue to consume the host source kind and span internally. */
 #include EVMSAIL_MODEL_H
 
+#include "byte_slice_glue.h"
 #include "code_db.h"
-#include "host_crypto.h"
+#include "kernel_state.h"
 #include "lbits_convert.h"
 #include "memory.h"
-#include "precompiles.h"
 #include "output.h"
+#include "precompiles.h"
 #include "scratch.h"
+#include "zkvm_io.h"
 
-static uint64_t source_kind(enum zByteSource source) {
-  switch (source) {
+#include <stddef.h>
+
+static const uint8_t *private_input;
+static size_t private_input_size;
+static bool private_input_ready;
+static const uint8_t empty_input;
+
+static uint64_t byte_slice_off(const struct zByteSlice *slice) {
+  return evmsail_byte_quantity_value(slice->zoff);
+}
+
+static uint64_t byte_slice_len(const struct zByteSlice *slice) {
+  return evmsail_byte_quantity_value(slice->zlen);
+}
+
+static void acquire_private_input(void) {
+  if (!private_input_ready) {
+    read_input(&private_input, &private_input_size);
+    private_input_ready = true;
+  }
+}
+
+void evmsail_input_reset(void) {
+  private_input = NULL;
+  private_input_size = 0;
+  private_input_ready = false;
+}
+
+const uint8_t *evmsail_stateless_input_ptr(uint64_t off, uint64_t len) {
+  acquire_private_input();
+  uint64_t total = (uint64_t)private_input_size;
+  if (off > total || len > total - off) return NULL;
+  if (len == 0) return &empty_input;
+  return private_input ? private_input + off : NULL;
+}
+
+static void stateless_input_value(struct zByteSlice *out) {
+  acquire_private_input();
+  out->zsource = zStatelessInputSource;
+  evmsail_byte_quantity_set(&out->zoff, 0);
+  evmsail_byte_quantity_set(&out->zlen, (uint64_t)private_input_size);
+}
+
+#ifdef EVMSAIL_STANDARD_ABI
+void stateless_input(struct zByteSlice *out, unit u) {
+  (void)u;
+  stateless_input_value(out);
+}
+#else
+struct zByteSlice stateless_input(unit u) {
+  struct zByteSlice out;
+  (void)u;
+  stateless_input_value(&out);
+  return out;
+}
+#endif
+
+uint64_t evmsail_source_kind(int generated_source) {
+  switch ((enum zByteSource)generated_source) {
     case zStatelessInputSource:
       return EVMSAIL_SOURCE_STATELESS_INPUT;
-    case zMemorySource:
-      return EVMSAIL_SOURCE_MEMORY;
+    case zEvmMemorySource:
+      return EVMSAIL_SOURCE_EVM_MEMORY;
     case zCodeSource:
       return EVMSAIL_SOURCE_CODE;
     case zLogDataSource:
       return EVMSAIL_SOURCE_LOG_DATA;
-    case zMemoryArenaSource:
-      return EVMSAIL_SOURCE_MEMORY_ARENA;
     case zOutputSource:
       return EVMSAIL_SOURCE_OUTPUT;
     case zScratchSource:
@@ -31,144 +88,251 @@ static uint64_t source_kind(enum zByteSource source) {
   return 0;
 }
 
-bool scratch_store_bytes(uint64_t off,
-                         struct node_zz5listz8z5bvz9 *bytes, uint64_t len) {
-  uint8_t *out = scratch_prepare(off, len);
-  if (len != 0 && !out) return false;
+int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
+                                const uint8_t **bytes,
+                                uint64_t *resolved_len) {
+  static const uint8_t empty_source;
+  const uint8_t *source = NULL;
+
+  if (len == 0) {
+    source = &empty_source;
+  } else {
+    switch (kind) {
+      case EVMSAIL_SOURCE_STATELESS_INPUT:
+        source = evmsail_stateless_input_ptr(off, len);
+        break;
+      case EVMSAIL_SOURCE_EVM_MEMORY:
+        source = evm_memory_region(off, len);
+        break;
+      case EVMSAIL_SOURCE_CODE:
+        return code_db_resolve_code(off, len, bytes, resolved_len);
+      case EVMSAIL_SOURCE_LOG_DATA:
+        source = log_data_region(off, len);
+        break;
+      case EVMSAIL_SOURCE_OUTPUT: {
+        const uint8_t *output = NULL;
+        uint64_t output_len = 0;
+        output_buffer_span(&output, &output_len);
+        if (off > output_len || len > output_len - off) return 0;
+        source = output + off;
+        break;
+      }
+      case EVMSAIL_SOURCE_SCRATCH:
+        source = scratch_region(off, len);
+        break;
+      default:
+        return 0;
+    }
+  }
+
+  if (!source) return 0;
+  if (bytes) *bytes = source;
+  if (resolved_len) *resolved_len = len;
+  return 1;
+}
+
+bool scratch_store_bytes(EVMSAIL_BYTE_QUANTITY_PARAM(off),
+                         struct node_zz5listz8z5bvz9 *bytes,
+                         EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
+  uint64_t off_value = evmsail_byte_quantity_value(off);
+  uint64_t len_value = evmsail_byte_quantity_value(len);
+  uint8_t *out = scratch_prepare(off_value, len_value);
+  if (len_value != 0 && !out) return false;
 
   struct node_zz5listz8z5bvz9 *byte = bytes;
-  for (uint64_t i = 0; i < len; i++) {
+  for (uint64_t i = 0; i < len_value; i++) {
     if (!byte) return false;
     lbits_to_be_bytes(out + i, 1, byte->hd);
     byte = byte->tl;
   }
   if (byte) return false;
-  return scratch_commit(off, len);
+  return scratch_commit(off_value, len_value);
 }
 
-bool scratch_store_slice(uint64_t off, struct zByteSlice slice) {
-  return scratch_append_source(off, source_kind(slice.zsource), slice.zoff,
-                               slice.zlen);
+bool scratch_store_slice(EVMSAIL_BYTE_QUANTITY_PARAM(off),
+                         struct zByteSlice slice) {
+  return scratch_append_source(
+      evmsail_byte_quantity_value(off), evmsail_source_kind(slice.zsource),
+      byte_slice_off(&slice), byte_slice_len(&slice));
 }
 
-uint64_t slice_byte_at(struct zByteSlice slice, uint64_t index) {
-  return slice_byte_at_source(source_kind(slice.zsource), slice.zoff,
-                              slice.zlen, index);
+bool public_output_write(struct zByteSlice output) {
+  const uint8_t *bytes = NULL;
+  uint64_t len = 0;
+  if (!evmsail_resolve_byte_source(evmsail_source_kind(output.zsource),
+                                   byte_slice_off(&output),
+                                   byte_slice_len(&output), &bytes, &len) ||
+      len > SIZE_MAX)
+    return false;
+  write_output(bytes, (size_t)len);
+  return true;
 }
 
+uint64_t slice_byte_at(struct zByteSlice slice,
+                       EVMSAIL_BYTE_QUANTITY_PARAM(index)) {
+  return slice_byte_at_source(
+      evmsail_source_kind(slice.zsource), byte_slice_off(&slice),
+      byte_slice_len(&slice), evmsail_byte_quantity_value(index));
+}
+
+#ifdef EVMSAIL_STANDARD_ABI
+void slice_count_nonzero(sail_int *out, struct zByteSlice slice) {
+  evmsail_byte_quantity_set(
+      out, slice_count_nonzero_source(evmsail_source_kind(slice.zsource),
+                                      byte_slice_off(&slice),
+                                      byte_slice_len(&slice)));
+}
+#else
 uint64_t slice_count_nonzero(struct zByteSlice slice) {
-  return slice_count_nonzero_source(source_kind(slice.zsource), slice.zoff,
-                                    slice.zlen);
+  return slice_count_nonzero_source(evmsail_source_kind(slice.zsource),
+                                    byte_slice_off(&slice),
+                                    byte_slice_len(&slice));
+}
+#endif
+
+bool slice_strided_zero(struct zByteSlice slice,
+                        EVMSAIL_BYTE_QUANTITY_PARAM(start),
+                        EVMSAIL_BYTE_QUANTITY_PARAM(stride),
+                        EVMSAIL_BYTE_QUANTITY_PARAM(width),
+                        EVMSAIL_BYTE_QUANTITY_PARAM(count)) {
+  return slice_strided_zero_source(
+      evmsail_source_kind(slice.zsource), byte_slice_off(&slice),
+      byte_slice_len(&slice), evmsail_byte_quantity_value(start),
+      evmsail_byte_quantity_value(stride), evmsail_byte_quantity_value(width),
+      evmsail_byte_quantity_value(count));
 }
 
-bool slice_strided_zero(struct zByteSlice slice, uint64_t start,
-                        uint64_t stride, uint64_t width, uint64_t count) {
-  return slice_strided_zero_source(source_kind(slice.zsource), slice.zoff,
-                                   slice.zlen, start, stride, width, count);
+void slice_load_word(lbits *result, struct zByteSlice slice,
+                     EVMSAIL_BYTE_QUANTITY_PARAM(index)) {
+  slice_load_word_source(
+      result, evmsail_source_kind(slice.zsource), byte_slice_off(&slice),
+      byte_slice_len(&slice), evmsail_byte_quantity_value(index));
 }
 
-void slice_load_word(lbits *result, struct zByteSlice slice, uint64_t index) {
-  slice_load_word_source(result, source_kind(slice.zsource), slice.zoff,
-                         slice.zlen, index);
+void slice_load_n_word(lbits *result, struct zByteSlice slice,
+                       EVMSAIL_BYTE_QUANTITY_PARAM(index),
+                       EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
+  slice_load_n_word_source(
+      result, evmsail_source_kind(slice.zsource), byte_slice_off(&slice),
+      byte_slice_len(&slice), evmsail_byte_quantity_value(index),
+      evmsail_byte_quantity_value(len));
 }
 
-void slice_load_n_word(lbits *result, struct zByteSlice slice, uint64_t index,
-                       uint64_t len) {
-  slice_load_n_word_source(result, source_kind(slice.zsource), slice.zoff,
-                           slice.zlen, index, len);
-}
-
-unit slice_copy_to_memory(struct zByteSlice slice, uint64_t dst,
-                          uint64_t index, uint64_t len) {
-  return slice_copy_to_memory_source(source_kind(slice.zsource), slice.zoff,
-                                     slice.zlen, dst, index, len);
+unit slice_copy_to_memory(struct zByteSlice slice,
+                          EVMSAIL_BYTE_QUANTITY_PARAM(dst),
+                          EVMSAIL_BYTE_QUANTITY_PARAM(index),
+                          EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
+  return slice_copy_to_memory_source(
+      evmsail_source_kind(slice.zsource), byte_slice_off(&slice),
+      byte_slice_len(&slice), evmsail_byte_quantity_value(dst),
+      evmsail_byte_quantity_value(index), evmsail_byte_quantity_value(len));
 }
 
 bool output_buffer_store(struct zByteSlice slice) {
-  return output_buffer_store_source(source_kind(slice.zsource), slice.zoff,
-                                    slice.zlen);
+  return output_buffer_store_source(evmsail_source_kind(slice.zsource),
+                                    byte_slice_off(&slice),
+                                    byte_slice_len(&slice));
 }
 
 void code_db_store_indexed(lbits *result, struct zByteSlice code,
-                           struct node_zz5listz8z5bvz9 *jumpdests) {
-  code_db_store_indexed_source(result, source_kind(code.zsource), code.zoff,
-                               code.zlen, jumpdests);
+                           uint64_t jumpdest_ref) {
+  code_db_store_indexed_source(result, evmsail_source_kind(code.zsource),
+                               byte_slice_off(&code), byte_slice_len(&code),
+                               jumpdest_ref);
 }
 
 bool accelerator_ripemd160(struct zByteSlice input) {
-  return accelerator_ripemd160_source(source_kind(input.zsource), input.zoff,
-                                      input.zlen);
+  return accelerator_ripemd160_source(evmsail_source_kind(input.zsource),
+                                      byte_slice_off(&input),
+                                      byte_slice_len(&input));
 }
 
-bool accelerator_modexp(struct zByteSlice input, uint64_t base_len,
-                        uint64_t exponent_len, uint64_t modulus_len) {
-  return accelerator_modexp_source(source_kind(input.zsource), input.zoff,
-                                   input.zlen, base_len, exponent_len,
-                                   modulus_len);
+bool accelerator_modexp(struct zByteSlice input,
+                        EVMSAIL_BYTE_QUANTITY_PARAM(base_len),
+                        EVMSAIL_BYTE_QUANTITY_PARAM(exponent_len),
+                        EVMSAIL_BYTE_QUANTITY_PARAM(modulus_len)) {
+  return accelerator_modexp_source(
+      evmsail_source_kind(input.zsource), byte_slice_off(&input),
+      byte_slice_len(&input), evmsail_byte_quantity_value(base_len),
+      evmsail_byte_quantity_value(exponent_len),
+      evmsail_byte_quantity_value(modulus_len));
 }
 
 bool accelerator_bn254_add(struct zByteSlice input) {
-  return accelerator_bn254_add_source(source_kind(input.zsource), input.zoff,
-                                      input.zlen);
+  return accelerator_bn254_add_source(evmsail_source_kind(input.zsource),
+                                      byte_slice_off(&input),
+                                      byte_slice_len(&input));
 }
 
 bool accelerator_bn254_mul(struct zByteSlice input) {
-  return accelerator_bn254_mul_source(source_kind(input.zsource), input.zoff,
-                                      input.zlen);
+  return accelerator_bn254_mul_source(evmsail_source_kind(input.zsource),
+                                      byte_slice_off(&input),
+                                      byte_slice_len(&input));
 }
 
 uint64_t accelerator_bn254_pairing(struct zByteSlice input) {
-  return accelerator_bn254_pairing_source(
-      source_kind(input.zsource), input.zoff, input.zlen);
+  return accelerator_bn254_pairing_source(evmsail_source_kind(input.zsource),
+                                          byte_slice_off(&input),
+                                          byte_slice_len(&input));
 }
 
 bool accelerator_blake2f(struct zByteSlice input, uint64_t rounds,
                          uint64_t final_block) {
-  return accelerator_blake2f_source(source_kind(input.zsource), input.zoff,
-                                    input.zlen, rounds, final_block);
+  return accelerator_blake2f_source(
+      evmsail_source_kind(input.zsource), byte_slice_off(&input),
+      byte_slice_len(&input), rounds, final_block);
 }
 
 bool accelerator_kzg_point_evaluation(struct zByteSlice input) {
   return accelerator_kzg_point_evaluation_source(
-      source_kind(input.zsource), input.zoff, input.zlen);
+      evmsail_source_kind(input.zsource), byte_slice_off(&input),
+      byte_slice_len(&input));
 }
 
 bool accelerator_bls_g1_add(struct zByteSlice input) {
-  return accelerator_bls_g1_add_source(source_kind(input.zsource), input.zoff,
-                                       input.zlen);
+  return accelerator_bls_g1_add_source(evmsail_source_kind(input.zsource),
+                                       byte_slice_off(&input),
+                                       byte_slice_len(&input));
 }
 
 bool accelerator_bls_g1_msm(struct zByteSlice input) {
-  return accelerator_bls_g1_msm_source(source_kind(input.zsource), input.zoff,
-                                       input.zlen);
+  return accelerator_bls_g1_msm_source(evmsail_source_kind(input.zsource),
+                                       byte_slice_off(&input),
+                                       byte_slice_len(&input));
 }
 
 bool accelerator_bls_g2_add(struct zByteSlice input) {
-  return accelerator_bls_g2_add_source(source_kind(input.zsource), input.zoff,
-                                       input.zlen);
+  return accelerator_bls_g2_add_source(evmsail_source_kind(input.zsource),
+                                       byte_slice_off(&input),
+                                       byte_slice_len(&input));
 }
 
 bool accelerator_bls_g2_msm(struct zByteSlice input) {
-  return accelerator_bls_g2_msm_source(source_kind(input.zsource), input.zoff,
-                                       input.zlen);
+  return accelerator_bls_g2_msm_source(evmsail_source_kind(input.zsource),
+                                       byte_slice_off(&input),
+                                       byte_slice_len(&input));
 }
 
 uint64_t accelerator_bls_pairing(struct zByteSlice input) {
-  return accelerator_bls_pairing_source(source_kind(input.zsource), input.zoff,
-                                        input.zlen);
+  return accelerator_bls_pairing_source(evmsail_source_kind(input.zsource),
+                                        byte_slice_off(&input),
+                                        byte_slice_len(&input));
 }
 
 bool accelerator_bls_map_fp_to_g1(struct zByteSlice input) {
   return accelerator_bls_map_fp_to_g1_source(
-      source_kind(input.zsource), input.zoff, input.zlen);
+      evmsail_source_kind(input.zsource), byte_slice_off(&input),
+      byte_slice_len(&input));
 }
 
 bool accelerator_bls_map_fp2_to_g2(struct zByteSlice input) {
   return accelerator_bls_map_fp2_to_g2_source(
-      source_kind(input.zsource), input.zoff, input.zlen);
+      evmsail_source_kind(input.zsource), byte_slice_off(&input),
+      byte_slice_len(&input));
 }
 
 bool accelerator_p256_verify(struct zByteSlice input) {
-  return accelerator_p256_verify_source(source_kind(input.zsource), input.zoff,
-                                        input.zlen);
+  return accelerator_p256_verify_source(evmsail_source_kind(input.zsource),
+                                        byte_slice_off(&input),
+                                        byte_slice_len(&input));
 }

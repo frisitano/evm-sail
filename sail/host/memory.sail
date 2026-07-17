@@ -7,43 +7,25 @@
 /* opcodes read and write it; expansion past the high-water mark is charged */
 /* as memory-expansion gas.                                                 */
 /*                                                                          */
-/* Frames form a stack: a sub-call (CALL/CREATE) receives fresh memory      */
-/* (mem_frame_enter) and the caller's is restored on return                 */
-/* (mem_frame_leave); mem_clear resets to a single empty frame per          */
-/* transaction. This file is ONLY the boundary -- the bodyless axioms with  */
-/* read-after-write and LIFO frame laws; the EVM's view (out-of-gas guard,  */
-/* high-water tracking, MSIZE, the opcode helpers) lives in                 */
-/* evm/machine.sail where the frame context is defined.                     */
+/* Frames form a stack in the backing arena. Sail owns the active frame's   */
+/* absolute ByteSlice and saves/restores it with the other frame registers; */
+/* this boundary only allocates, establishes, and releases arena frames.    */
 /* ======================================================================== */
 
-val mem_read_byte = impure { c: "mem_read_byte" } : bits(64) -> bits(8)
-val mem_write_byte = impure { c: "mem_write_byte" } : (bits(64), bits(8)) -> unit
+val mem_read_byte = impure { c: "mem_read_byte" } : byte_quantity -> bits(8)
+val mem_write_byte = impure { c: "mem_write_byte" } : (byte_quantity, bits(8)) -> unit
 
 /* call-frame memory lifecycle (the C side owns the bytes) */
 val mem_clear = impure { c: "mem_clear" } : unit -> unit
-val mem_frame_enter = impure { c: "mem_frame_enter" } : unit -> unit
+val mem_frame_enter = impure { c: "mem_frame_enter" } : unit -> byte_quantity
 val mem_frame_leave = impure { c: "mem_frame_leave" } : unit -> unit
+val mem_expand = impure { c: "mem_expand" } : byte_quantity -> bool
 
 /* range copies (CALLDATACOPY / CODECOPY / RETURNDATACOPY / MCOPY): endpoints
  * already live in C buffers, so copies stay C-side. */
-val mem_move = impure { c: "mem_move" } : (bits(64), bits(64), bits(64)) -> unit
+val mem_move = impure { c: "mem_move" } : (byte_quantity, byte_quantity, byte_quantity) -> unit
 
 /* word access: MLOAD/MSTORE read/write the 32-byte big-endian range at off in
  * ONE crossing (YP 9.4.1; EELS memory_read_bytes / memory_write) */
-val mem_load_word = impure { c: "mem_load_word" } : bits(64) -> word
-val mem_store_word = impure { c: "mem_store_word" } : (bits(64), word) -> unit
-
-/* Freeze a range of the current frame in the absolute memory arena. */
-val mem_establish_absolute = impure { c: "mem_establish_absolute" } : (bits(64), bits(64)) -> bits(64)
-
-function mem_slice(off : int, len : int) -> ByteSlice =
-    if len == 0 then {
-        EMPTY_SLICE
-    } else {
-        let absolute = mem_establish_absolute(get_slice_int(64, off, 0), get_slice_int(64, len, 0));
-        if absolute == 0xFFFFFFFFFFFFFFFF then {
-            EMPTY_SLICE
-        } else {
-            struct { source = MemoryArenaSource, off = absolute, len = get_slice_int(64, len, 0) }
-        }
-    }
+val mem_load_word = impure { c: "mem_load_word" } : byte_quantity -> word
+val mem_store_word = impure { c: "mem_store_word" } : (byte_quantity, word) -> unit

@@ -9,8 +9,8 @@
  * unchanged.
  *
  * Addresses/words/hashes cross the FFI as whole lbits (stored as 4 big-endian
- * 64-bit words, low 160 bits used for addresses); the refund word, counts,
- * tags, and bytes cross as mach_bits. Arrays grow on demand and are cleared
+ * 64-bit words, low 160 bits used for addresses); counts, tags, and bytes
+ * cross as mach_bits. Arrays grow on demand and are cleared
  * (count reset, allocation retained) at tx/world reset, matching the cached
  * per-frame arrays used elsewhere in the FFI. */
 #include "kernel_state.h"
@@ -268,7 +268,7 @@ const uint8_t *log_data_region(uint64_t off, uint64_t len) {
  * ffi/journal_glue.c mirrors this enum (GJT_*) for its (en/de)coding. */
 enum {
   JT_EMPTY = 0, JT_TRAN = 1, JT_WARMA = 2,
-  JT_WARMS = 3, JT_REFUND = 4
+  JT_WARMS = 3
 };
 
 typedef struct {
@@ -276,7 +276,6 @@ typedef struct {
   word256 a;
   word256 w0;
   word256 w1;
-  uint64_t n64;
 } jentry;
 
 static jentry *jrn;
@@ -320,11 +319,6 @@ unit journal_push_warms(const lbits a, const lbits slot) {
   }
   return UNIT;
 }
-unit journal_push_refund(uint64_t old) {
-  jentry *e = jrn_push(JT_REFUND);
-  if (e) e->n64 = old;
-  return UNIT;
-}
 uint64_t journal_top_tag(const unit u) { (void)u; return jrn_n ? jrn[jrn_n - 1].tag : JT_EMPTY; }
 unit journal_drop_top(const unit u) { (void)u; if (jrn_n) jrn_n--; return UNIT; }
 
@@ -335,4 +329,3 @@ static const jentry *jrn_top(void) {
 void journal_top_addr(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->a); }
 void journal_top_slot(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->w0); }
 void journal_top_val(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->w1); }
-uint64_t journal_top_refund(const unit u) { (void)u; return jrn_top()->n64; }

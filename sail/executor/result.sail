@@ -1,12 +1,15 @@
-function write_result_prefix(root : hash, success : bool) -> unit = {
-    foreach (i from 0 to 31) {
-        public_output_write(sail_shiftright(root, 8 * (31 - i))[7 .. 0])
-    };
-    public_output_write(if success then { 0x01 } else { 0x00 });
-    public_output_write(0x25);
-    public_output_write(0x00);
-    public_output_write(0x00);
-    public_output_write(0x00)
+let RESULT_METADATA_LENGTH : byte_length = ByteQuantity(5)
+
+function result_prefix(root : hash, success : bool) -> unit = {
+    scratch_push_bytes(word_to_bytes32(root), WORD_BYTE_LENGTH);
+    scratch_push_bytes([|if success then { 0x01 } else { 0x00 }, 0x25, 0x00, 0x00, 0x00|], RESULT_METADATA_LENGTH)
+}
+
+function commit_validation_result(root : hash, success : bool, chain_config : ByteSlice) -> unit = {
+    let start = scratch_begin();
+    result_prefix(root, success);
+    scratch_push_slice(chain_config);
+    assert(public_output_write(scratch_finish(start)), "public output write")
 }
 
 function write_validation_result(input_ref : StatelessInputRef, success : bool) -> unit = {
@@ -15,20 +18,13 @@ function write_validation_result(input_ref : StatelessInputRef, success : bool) 
     cycle_scope_end(SCOPE_COMPUTE_OUTPUT_ROOT);
 
     cycle_scope_start(SCOPE_SERIALIZE_OUTPUT);
-    write_result_prefix(root, success);
-    let start = unsigned(input_ref.chain_config.off);
-    let len = unsigned(input_ref.chain_config.len);
-    var i : int = 0;
-    while i < len do {
-        public_output_write(ssz_src_byte(start + i));
-        i = i + 1
-    };
+    commit_validation_result(root, success, input_ref.chain_config);
     cycle_scope_end(SCOPE_SERIALIZE_OUTPUT)
 }
 
 function write_invalid_result() -> unit = {
     cycle_scope_start(SCOPE_SERIALIZE_OUTPUT);
-    write_result_prefix(0x0000000000000000000000000000000000000000000000000000000000000000, false);
+    let start = scratch_begin();
     foreach (i from 0 to 35) {
         let b : byte = match i {
             8 => 0x0c,
@@ -38,7 +34,9 @@ function write_invalid_result() -> unit = {
             32 => 0x08,
             _ => 0x00,
         };
-        public_output_write(b)
+        scratch_push_bytes([|b|], BYTE_ONE)
     };
+    let chain_config = scratch_finish(start);
+    commit_validation_result(0x0000000000000000000000000000000000000000000000000000000000000000, false, chain_config);
     cycle_scope_end(SCOPE_SERIALIZE_OUTPUT)
 }

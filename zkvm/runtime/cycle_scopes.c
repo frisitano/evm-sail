@@ -1,6 +1,4 @@
-#include <stdint.h>
-
-#include "sail.h"
+#include "cycle_scopes.h"
 
 #if defined(__riscv)
 __asm__(

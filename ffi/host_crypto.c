@@ -1,19 +1,10 @@
 #include "host_crypto.h"
 #include "lbits_convert.h"
-#include "code_db.h"
-#include "memory.h"
-#include "output.h"
-#include "kernel_state.h"
-#include "scratch.h"
 #include "zkvm_accelerators.h"
 
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-
-extern const uint8_t *evmsail_stateless_input_ptr(uint64_t off, uint64_t len);
-
-static const uint8_t HOST_empty_source = 0;
 
 static uint64_t host_be64(const uint8_t *p) {
   uint64_t w = 0;
@@ -179,40 +170,4 @@ void host_auth_signing_hash(lbits *rop, const lbits chain_id, const lbits addres
   memcpy(buf + bn, payload, n);
   bn += n;
   host_keccak256_lbits(rop, buf, bn);
-}
-
-int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
-                                const uint8_t **p, uint64_t *resolved_len) {
-  const uint8_t *src = NULL;
-  if (kind < EVMSAIL_SOURCE_STATELESS_INPUT || kind > EVMSAIL_SOURCE_SCRATCH) {
-    return 0;
-  }
-  if (len == 0) {
-    src = &HOST_empty_source;
-  } else if (kind == EVMSAIL_SOURCE_STATELESS_INPUT) {
-    src = evmsail_stateless_input_ptr(off, len);
-  } else if (kind == EVMSAIL_SOURCE_MEMORY) {
-    if (off > UINT64_MAX - (len - 1)) return 0;
-    src = mem_region(off, len);
-  } else if (kind == EVMSAIL_SOURCE_CODE) {
-    return code_db_resolve_code(off, len, p, resolved_len);
-  } else if (kind == EVMSAIL_SOURCE_LOG_DATA) {
-    src = log_data_region(off, len);
-  } else if (kind == EVMSAIL_SOURCE_MEMORY_ARENA) {
-    src = mem_arena_region(off, len);
-  } else if (kind == EVMSAIL_SOURCE_OUTPUT) {
-    const uint8_t *data = NULL;
-    uint64_t data_len = 0;
-    output_buffer_span(&data, &data_len);
-    if (off > data_len || len > data_len - off) return 0;
-    src = data + off;
-  } else if (kind == EVMSAIL_SOURCE_SCRATCH) {
-    src = scratch_region(off, len);
-  } else {
-    return 0;
-  }
-  if (src == NULL) return 0;
-  if (p) *p = src;
-  if (resolved_len) *resolved_len = len;
-  return 1;
 }

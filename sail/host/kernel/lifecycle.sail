@@ -1,11 +1,10 @@
 function apply_undo(e : JEntry) -> unit = match e {
     JTran(a, s, v) => transient_store(a, s, v),
-    JWarmA(a)      => warm_addr_remove(a),
-    JWarmS(a, s)   => warm_slot_remove(a, s),
-    JRefund(old)   => k_refund = old,
+    JWarmA(a) => warm_addr_remove(a),
+    JWarmS(a, s) => warm_slot_remove(a, s),
 }
 
-function k_snapshot() -> StateCheckpoint = struct {
+function k_state_checkpoint() -> StateCheckpoint = struct {
     journal = journal_len(),
     accounts = acct_tx_checkpoint(),
     storage = storage_tx_checkpoint(),
@@ -22,7 +21,6 @@ function k_tx_reset() -> unit = {
     warm_reset();
     transient_reset();
     logs_tx_reset();
-    k_refund = 0;
     journal_reset()
 }
 
@@ -65,7 +63,7 @@ function k_tx_merge() -> unit = {
         match storage_tx_pop() {
             Some(e) => {
                 match acct_block_get(e.key.addr) {
-                    Some(acc) => if acc.exists & e.value.curr != e.value.orig then {
+                    Some(acc) => if acc.present & e.value.curr != e.value.orig then {
                         bal_storage_change(e.key.addr, e.key.slot, e.value.curr);
                         storage_block_put(e)
                     },
@@ -83,9 +81,16 @@ function k_revert(checkpoint : StateCheckpoint) -> unit = {
     acct_tx_revert(checkpoint.accounts);
     storage_tx_revert(checkpoint.storage);
     logs_revert(checkpoint.logs);
-    var remaining : u64 = sub_bits(journal_len(), checkpoint.journal);
-    while remaining != 0x0000000000000000 do {
+    let current = journal_len();
+    let saved = checkpoint.journal;
+    var remaining : JournalCheckpoint = if saved <= current then {
+            current - saved
+        } else {
+            assert(false);
+            0
+        };
+    while remaining != 0 do {
         apply_undo(journal_pop());
-        remaining = sub_bits(remaining, 0x0000000000000001)
+        remaining = protocol_quantity_decrement(remaining)
     }
 }

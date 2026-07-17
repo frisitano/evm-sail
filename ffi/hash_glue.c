@@ -9,10 +9,11 @@
  * of the segments. One FFI call performs each complete operation; the walk
  * over the generated cons cells is native pointer chasing.
  * A BytesList segment contributes its materialized Sail bytes; a BytesSlice
- * segment resolves through evmsail_resolve_byte_source (host_crypto.c) --
+ * segment resolves through the central ByteSlice source resolver --
  * an unresolvable slice poisons the preimage, yielding the same sentinel
  * digest path the old source hashers used. */
 #include EVMSAIL_MODEL_H
+#include "byte_slice_glue.h"
 #include "host_crypto.h"
 #include "kernel_state.h"
 #include "lbits_convert.h"
@@ -24,6 +25,19 @@
 static uint8_t *seg_buf;
 static uint64_t seg_len, seg_cap;
 static int seg_ok;
+
+static uint64_t materialized_bytes_len(
+    const struct zMaterializzedBytes *bytes) {
+  return evmsail_byte_quantity_value(bytes->zlen);
+}
+
+static uint64_t byte_slice_off(const struct zByteSlice *slice) {
+  return evmsail_byte_quantity_value(slice->zoff);
+}
+
+static uint64_t byte_slice_len(const struct zByteSlice *slice) {
+  return evmsail_byte_quantity_value(slice->zlen);
+}
 
 static void seg_put(const uint8_t *p, uint64_t n) {
   if (!seg_ok || n == 0) return;
@@ -42,43 +56,39 @@ static void seg_put(const uint8_t *p, uint64_t n) {
   seg_len += n;
 }
 
-/* Generated enum ordinals are not the host ABI: source kind 5 is deliberately
- * unused. Keep the mapping explicit and aligned with byte_source_kind. */
-static uint64_t seg_source_kind(enum zByteSource s) {
-  switch (s) {
-    case zStatelessInputSource: return EVMSAIL_SOURCE_STATELESS_INPUT;
-    case zMemorySource: return EVMSAIL_SOURCE_MEMORY;
-    case zCodeSource: return EVMSAIL_SOURCE_CODE;
-    case zLogDataSource: return EVMSAIL_SOURCE_LOG_DATA;
-    case zMemoryArenaSource: return EVMSAIL_SOURCE_MEMORY_ARENA;
-    case zOutputSource: return EVMSAIL_SOURCE_OUTPUT;
-    case zScratchSource: return EVMSAIL_SOURCE_SCRATCH;
-  }
-  return 0;
-}
-
 static void seg_accumulate(zz5listz8z5unionz0zzBytesz9 segs) {
   seg_len = 0;
   seg_ok = 1;
   for (const struct node_zz5listz8z5unionz0zzBytesz9 *n = segs; n; n = n->tl) {
     if (n->hd.kind == Kind_zBytesList) {
-      for (const struct node_zz5listz8z5bvz9 *b = n->hd.variants.zBytesList; b;
-           b = b->tl) {
+      const struct zMaterializzedBytes *materialized =
+          &n->hd.variants.zBytesList;
+      const struct node_zz5listz8z5bvz9 *b = materialized->zdata;
+      uint64_t remaining = materialized_bytes_len(materialized);
+      while (remaining && b) {
         uint8_t v;
         lbits_to_be_bytes(&v, 1, b->hd);
         seg_put(&v, 1);
+        b = b->tl;
+        remaining--;
+      }
+      if (remaining || b) {
+        seg_ok = 0;
+        return;
       }
     } else { /* Kind_zBytesSlice */
       const struct zByteSlice *s = &n->hd.variants.zBytesSlice;
       const uint8_t *p = NULL;
+      uint64_t off = byte_slice_off(s);
+      uint64_t len = byte_slice_len(s);
       uint64_t rlen = 0;
-      if (!evmsail_resolve_byte_source(seg_source_kind(s->zsource), s->zoff,
-                                       s->zlen, &p, &rlen) ||
-          rlen != s->zlen) {
+      if (!evmsail_resolve_byte_source(evmsail_source_kind(s->zsource), off,
+                                       len, &p, &rlen) ||
+          rlen != len) {
         seg_ok = 0;
         return;
       }
-      seg_put(p, s->zlen);
+      seg_put(p, len);
     }
   }
 }
@@ -90,52 +100,65 @@ static int seg_single_slice(zz5listz8z5unionz0zzBytesz9 segs, const uint8_t **p,
                             uint64_t *len) {
   if (!segs || segs->tl || segs->hd.kind != Kind_zBytesSlice) return 0;
   const struct zByteSlice *s = &segs->hd.variants.zBytesSlice;
+  uint64_t off = byte_slice_off(s);
+  uint64_t slice_len = byte_slice_len(s);
   uint64_t rlen = 0;
-  if (!evmsail_resolve_byte_source(seg_source_kind(s->zsource), s->zoff,
-                                   s->zlen, p, &rlen) ||
-      rlen != s->zlen)
+  if (!evmsail_resolve_byte_source(evmsail_source_kind(s->zsource), off,
+                                   slice_len, p, &rlen) ||
+      rlen != slice_len)
     return 0;
-  *len = s->zlen;
+  *len = slice_len;
   return 1;
 }
 
 bool host_bytes_segments_equal_slice(zz5listz8z5unionz0zzBytesz9 segs,
                                      struct zByteSlice expected) {
   const uint8_t *want = NULL;
+  uint64_t expected_off = byte_slice_off(&expected);
+  uint64_t expected_len = byte_slice_len(&expected);
   uint64_t want_len = 0;
-  if (!evmsail_resolve_byte_source(seg_source_kind(expected.zsource),
-                                   expected.zoff, expected.zlen, &want,
+  if (!evmsail_resolve_byte_source(evmsail_source_kind(expected.zsource),
+                                   expected_off, expected_len, &want,
                                    &want_len) ||
-      want_len != expected.zlen)
+      want_len != expected_len)
     return false;
 
   uint64_t offset = 0;
   for (const struct node_zz5listz8z5unionz0zzBytesz9 *n = segs; n;
        n = n->tl) {
     if (n->hd.kind == Kind_zBytesList) {
-      for (const struct node_zz5listz8z5bvz9 *b = n->hd.variants.zBytesList;
-           b; b = b->tl) {
-        if (offset >= expected.zlen) return false;
+      const struct zMaterializzedBytes *materialized =
+          &n->hd.variants.zBytesList;
+      const struct node_zz5listz8z5bvz9 *b = materialized->zdata;
+      uint64_t remaining = materialized_bytes_len(materialized);
+      while (remaining && b) {
+        if (offset >= expected_len) return false;
         uint8_t v;
         lbits_to_be_bytes(&v, 1, b->hd);
         if (v != want[offset]) return false;
         offset++;
+        b = b->tl;
+        remaining--;
       }
+      if (remaining || b) return false;
     } else { /* Kind_zBytesSlice */
       const struct zByteSlice *s = &n->hd.variants.zBytesSlice;
-      if (offset > expected.zlen || s->zlen > expected.zlen - offset)
+      uint64_t slice_off = byte_slice_off(s);
+      uint64_t slice_len = byte_slice_len(s);
+      if (offset > expected_len || slice_len > expected_len - offset)
         return false;
       const uint8_t *actual = NULL;
       uint64_t actual_len = 0;
-      if (!evmsail_resolve_byte_source(seg_source_kind(s->zsource), s->zoff,
-                                       s->zlen, &actual, &actual_len) ||
-          actual_len != s->zlen ||
-          memcmp(actual, want + offset, (size_t)s->zlen) != 0)
+      if (!evmsail_resolve_byte_source(evmsail_source_kind(s->zsource),
+                                       slice_off, slice_len, &actual,
+                                       &actual_len) ||
+          actual_len != slice_len ||
+          memcmp(actual, want + offset, (size_t)slice_len) != 0)
         return false;
-      offset += s->zlen;
+      offset += slice_len;
     }
   }
-  return offset == expected.zlen;
+  return offset == expected_len;
 }
 
 void host_keccak_segments(lbits *rop, zz5listz8z5unionz0zzBytesz9 segs) {
@@ -172,20 +195,26 @@ unit log_append_record(const lbits a, zz5listz8z5bvz9 topics, struct zBytes data
   for (const struct node_zz5listz8z5bvz9 *t = topics; t; t = t->tl)
     log_add_topic(t->hd);
   if (data.kind == Kind_zBytesList) {
-    for (const struct node_zz5listz8z5bvz9 *b = data.variants.zBytesList; b;
-         b = b->tl) {
+    const struct zMaterializzedBytes *materialized = &data.variants.zBytesList;
+    const struct node_zz5listz8z5bvz9 *b = materialized->zdata;
+    uint64_t remaining = materialized_bytes_len(materialized);
+    while (remaining && b) {
       uint8_t v;
       lbits_to_be_bytes(&v, 1, b->hd);
       log_add_data_bulk(&v, 1);
+      b = b->tl;
+      remaining--;
     }
   } else {
     const struct zByteSlice *s = &data.variants.zBytesSlice;
     const uint8_t *p = NULL;
+    uint64_t off = byte_slice_off(s);
+    uint64_t len = byte_slice_len(s);
     uint64_t rlen = 0;
-    if (evmsail_resolve_byte_source(seg_source_kind(s->zsource), s->zoff,
-                                    s->zlen, &p, &rlen) &&
-        rlen == s->zlen)
-      log_add_data_bulk(p, s->zlen);
+    if (evmsail_resolve_byte_source(evmsail_source_kind(s->zsource), off, len,
+                                    &p, &rlen) &&
+        rlen == len)
+      log_add_data_bulk(p, len);
   }
   return UNIT;
 }
@@ -220,8 +249,8 @@ void logs_read_all(zz5listz8z5structz0zzLogEntryz9 *rop, unit u) {
 
     /* data stays a REFERENCE into the block-lifetime log arena */
     node->hd.zdata.zsource = zLogDataSource;
-    node->hd.zdata.zoff = log_data_off(i);
-    node->hd.zdata.zlen = log_data_len(i);
+    evmsail_byte_quantity_set(&node->hd.zdata.zoff, log_data_off(i));
+    evmsail_byte_quantity_set(&node->hd.zdata.zlen, log_data_len(i));
 
     out = node;
   }
