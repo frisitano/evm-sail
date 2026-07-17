@@ -93,7 +93,7 @@ docs-site:
 # /-! module docstring.
 lean-extract:
 	@mkdir -p $(LEAN_DIR)
-	$(SAIL) --lean --lean-force-output --lean-output-dir $(LEAN_DIR) $(PROJECT) evm --variable EVM_ENTRY=guest
+	$(SAIL) --lean --lean-force-output --lean-output-dir $(LEAN_DIR) --lean-source-root . $(PROJECT) evm --variable EVM_ENTRY=guest
 	@echo "lean project: $(LEAN_DIR)/out"
 
 # Render the whole spec to a single syntax-highlighted HTML page (sail --html).
