@@ -1,22 +1,34 @@
-/* ======================================================================== */
-/* SSZ hash_tree_root: consensus-layer merkleization (SHA-256)              */
-/*                                                                          */
-/* Variable SSZ lists are consumed in source order. Each real leaf is       */
-/* folded into a Merkle frontier exactly once; final zero padding is then   */
-/* folded one level at a time. No leaf list or zero-hash lookup table is    */
-/* materialized.                                                            */
-/* ======================================================================== */
 
+/*md
+# SSZ hash_tree_root
+
+Consensus-layer merkleization (SHA-256). Variable SSZ lists are consumed
+in source order: each real leaf is folded into a Merkle frontier exactly
+once, and final zero padding is then folded one level at a time. No leaf
+list or zero-hash lookup table is materialized.
+*/
+/*! One level of the Merkle frontier: empty, or holding the pending left
+    subtree hash for that level. */
 union MerkleSlot = {
+    /* no pending subtree at this level */
     EmptyMerkleSlot : unit,
+    /* the pending left-subtree hash */
     OccupiedMerkleSlot : hash,
 }
 
+/*! A streaming Merkle frontier together with the number of leaves already
+    incorporated. */
 struct MerkleAccumulator = {
     frontier : list(MerkleSlot),
     count : item_count,
 }
 
+/*md
+## Constants
+
+The limits and byte offsets below are the SSZ dimensions of execution-layer
+requests and their constituent fields.
+*/
 let EMPTY_MERKLE_ACCUMULATOR : MerkleAccumulator = struct { frontier = [||], count = 0 }
 
 let HTR_BYTE_LIST_LIMIT : byte_length = ByteQuantity(1073741824)
@@ -38,6 +50,9 @@ let HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY : source_pointer = ByteQuantity(68)
 
 /* Add leaf number `count` to a low-to-high frontier. A set bit in count has
  * one occupied slot at that level; carries consume those slots head-first. */
+/*! Adds leaf number `count` to a low-to-high frontier. A set bit in
+    `count` has one occupied slot at that level; carries consume those
+    slots head-first. */
 function merkle_push(frontier : list(MerkleSlot), count : item_count, leaf : hash) -> list(MerkleSlot) =
     if tmod_int(count, 2) == 0 then {
         match frontier {
@@ -53,6 +68,7 @@ function merkle_push(frontier : list(MerkleSlot), count : item_count, leaf : has
         }
     }
 
+/*! Adds one leaf to a streaming Merkle accumulator. */
 function merkle_accumulator_push(accumulator : MerkleAccumulator, leaf : hash) -> MerkleAccumulator =
     if accumulator.count < 2 ^ 64 - 1 then {
         struct {
@@ -65,6 +81,8 @@ function merkle_accumulator_push(accumulator : MerkleAccumulator, leaf : hash) -
 
 /* Pad a frontier to 2^depth leaves. `zero` advances from the zero chunk to
  * the zero subtree for the current level, so padding is O(depth). */
+/*! Completes a frontier with zero subtrees through `remaining` levels and
+    returns its Merkle root. */
 function merkle_root_levels(
     slots : list(MerkleSlot),
     n : item_count,
@@ -112,18 +130,21 @@ termination_measure merkle_root_levels(slots, n, zero, acc, remaining) = remaini
 function merkle_accumulator_root(accumulator : MerkleAccumulator, depth : merkle_depth) -> hash =
     merkle_root_levels(accumulator.frontier, accumulator.count, sail_zeros(256), sail_zeros(256), depth)
 
+/*! Folds a leaf list into an existing Merkle accumulator in source order. */
 function merkle_accumulate(leaves : list(hash), accumulator : MerkleAccumulator) -> MerkleAccumulator =
     match leaves {
         [||] => accumulator,
         leaf :: rest => merkle_accumulate(rest, merkle_accumulator_push(accumulator, leaf)),
     }
 
+/*! `merkleize` of a fixed leaf list at `depth` (SSZ spec). */
 function merkleize(leaves : list(hash), depth : merkle_depth) -> hash =
     merkle_accumulator_root(merkle_accumulate(leaves, EMPTY_MERKLE_ACCUMULATOR), depth)
 
 /* ---- basic types and byte sequences ----------------------------------- */
 
 /* SSZ 64-bit unsigned integer -> 32-byte chunk (little-endian in low 8 bytes) */
+/*! Encodes a protocol quantity as an SSZ little-endian basic-value chunk. */
 function htr_uint(v : protocol_quantity) -> hash = {
     let value = word_of_nat(v);
     var acc : hash = sail_zeros(256);
@@ -134,7 +155,7 @@ function htr_uint(v : protocol_quantity) -> hash = {
     acc
 }
 
-/* uint256 word -> 32-byte little-endian chunk */
+/*! `uint256` as a 32-byte little-endian chunk. */
 function htr_u256(w : word) -> hash = {
     var acc : hash = sail_zeros(256);
     foreach (k from 0 to 31) {
@@ -144,11 +165,15 @@ function htr_u256(w : word) -> hash = {
     acc
 }
 
+/*! `Bytes32` chunks are themselves. */
 function htr_bytes32(b : bits(256)) -> hash = b
+/*! A 20-byte address, left-aligned in its chunk. */
 function htr_addr(a : address) -> hash = sail_shiftleft(sail_zero_extend(a, 256), 96)
 
+/*! `mix_in_length`: hashes the list root with its length chunk. */
 function mix_in_length(root : hash, len : item_count) -> hash = sha256_pair(root, htr_uint(len))
 
+/*! The ceiling of log2 — the Merkle depth of an `n`-chunk capacity. */
 function clog2(n : item_count) -> merkle_depth = {
     var remaining : item_count = if n == 0 then {
             0
@@ -165,6 +190,7 @@ function clog2(n : item_count) -> merkle_depth = {
     depth
 }
 
+/*! The `chunk_index`-th 32-byte chunk of a byte span, zero-padded. */
 function htr_chunk(bytes : ByteSlice, chunk_index : item_index) -> hash = {
     var acc : hash = sail_zeros(256);
     let start : source_pointer = ByteQuantity(chunk_index) * WORD_BYTE_LENGTH;
@@ -183,6 +209,7 @@ function htr_chunk(bytes : ByteSlice, chunk_index : item_index) -> hash = {
     acc
 }
 
+/*! Returns the number of 32-byte chunks needed to contain `byte_len` bytes. */
 function htr_chunk_count(ByteQuantity(byte_len) : byte_length) -> item_count = {
     let count = exact_quotient(byte_len + 31, 32);
     if count <= 2 ^ 64 - 1 then {
@@ -192,6 +219,7 @@ function htr_chunk_count(ByteQuantity(byte_len) : byte_length) -> item_count = {
     }
 }
 
+/*! Returns the number of fixed-width items in an exactly divisible byte span. */
 function htr_fixed_count(ByteQuantity(byte_len) : byte_length, ByteQuantity(item_len) : byte_length) -> item_count = {
     let count = exact_quotient(byte_len, item_len);
     if count <= 2 ^ 64 - 1 then {
@@ -201,6 +229,7 @@ function htr_fixed_count(ByteQuantity(byte_len) : byte_length, ByteQuantity(item
     }
 }
 
+/*! The Merkle root of a byte span's chunks at `depth`. */
 function htr_bytes_root(bytes : ByteSlice, depth : merkle_depth) -> hash = {
     let count = htr_chunk_count(bytes.len);
     var accumulator = EMPTY_MERKLE_ACCUMULATOR;
@@ -212,11 +241,17 @@ function htr_bytes_root(bytes : ByteSlice, depth : merkle_depth) -> hash = {
     merkle_accumulator_root(accumulator, depth)
 }
 
+/*md
+## Helpers
+*/
+/*! `hash_tree_root` of a fixed-size `ByteVector`. */
 function htr_bytevector(bytes : ByteSlice) -> hash = {
     let chunks = htr_chunk_count(bytes.len);
     htr_bytes_root(bytes, clog2(chunks))
 }
 
+/*! `hash_tree_root` of a `ByteList[limit_bytes]` (root at the limit's
+    depth, length mixed in). */
 function htr_bytelist(bytes : ByteSlice, limit_bytes : byte_length) -> hash = {
     let capacity = htr_chunk_count(limit_bytes);
     let ByteQuantity(byte_len) = bytes.len;
@@ -227,8 +262,10 @@ function htr_bytelist(bytes : ByteSlice, limit_bytes : byte_length) -> hash = {
     }
 }
 
-/* ---- execution payload ------------------------------------------------ */
-
+/*md
+## The execution payload
+*/
+/*! `hash_tree_root` of one SSZ withdrawal (4 fields, depth 2). */
 function htr_withdrawal(withdrawal : ByteSlice) -> hash = {
     merkleize(
         [|
@@ -241,7 +278,8 @@ function htr_withdrawal(withdrawal : ByteSlice) -> hash = {
     )
 }
 
-/* List[ByteList[2^30], 2^20] */
+/*! `hash_tree_root` of the transactions list
+    (`List[ByteList[2^30], 2^20]`). */
 function htr_transactions(transactions : SszListRef) -> hash = {
     var cursor = ssz_list_cursor(transactions);
     var accumulator = EMPTY_MERKLE_ACCUMULATOR;
@@ -253,7 +291,7 @@ function htr_transactions(transactions : SszListRef) -> hash = {
     mix_in_length(merkle_accumulator_root(accumulator, 20), accumulator.count)
 }
 
-/* List[SszWithdrawal, 16] */
+/*! `hash_tree_root` of the withdrawals list (`List[SszWithdrawal, 16]`). */
 function htr_withdrawals(withdrawals : SszListRef) -> hash = {
     var rest : SszListRef = withdrawals;
     var accumulator = EMPTY_MERKLE_ACCUMULATOR;
@@ -265,7 +303,7 @@ function htr_withdrawals(withdrawals : SszListRef) -> hash = {
     mix_in_length(merkle_accumulator_root(accumulator, 4), accumulator.count)
 }
 
-/* SszExecutionPayload: 19 fields -> depth 5. */
+/*! `hash_tree_root` of the `SszExecutionPayload` (19 fields, depth 5). */
 function htr_execution_payload(input_ref : StatelessInputRef) -> hash = {
     let payload = input_ref.execution_payload;
     merkleize(
@@ -294,7 +332,7 @@ function htr_execution_payload(input_ref : StatelessInputRef) -> hash = {
     )
 }
 
-/* List[Bytes32, 4096] */
+/*! `hash_tree_root` of the versioned hashes (`List[Bytes32, 4096]`). */
 function htr_versioned_hashes(versioned_hashes : ByteSlice) -> hash = {
     let count = htr_fixed_count(versioned_hashes.len, WORD_BYTE_LENGTH);
     var rest : SszListRef = struct { bytes = versioned_hashes, count = count };
@@ -307,8 +345,12 @@ function htr_versioned_hashes(versioned_hashes : ByteSlice) -> hash = {
     mix_in_length(merkle_accumulator_root(accumulator, 12), accumulator.count)
 }
 
-/* ---- execution requests ---------------------------------------------- */
+/*md
+## The execution requests
 
+The EIP-7685 execution-request commitments.
+*/
+/*! `hash_tree_root` of one deposit request (5 fields, depth 3). */
 function htr_deposit(deposit : ByteSlice) -> hash = {
     merkleize(
         [|
@@ -322,6 +364,7 @@ function htr_deposit(deposit : ByteSlice) -> hash = {
     )
 }
 
+/*! `hash_tree_root` of one withdrawal request (3 fields, depth 2). */
 function htr_withdrawal_request(request : ByteSlice) -> hash = {
     merkleize(
         [|
@@ -333,6 +376,7 @@ function htr_withdrawal_request(request : ByteSlice) -> hash = {
     )
 }
 
+/*! `hash_tree_root` of one consolidation request (3 fields, depth 2). */
 function htr_consolidation_request(request : ByteSlice) -> hash =
     merkleize(
         [|
@@ -343,6 +387,7 @@ function htr_consolidation_request(request : ByteSlice) -> hash =
         2,
     )
 
+/*! `hash_tree_root` of the deposit-request list (depth 13). */
 function htr_deposits(deposits : ByteSlice) -> hash = {
     let count = htr_fixed_count(deposits.len, HTR_DEPOSIT_LENGTH);
     var rest : SszListRef = struct { bytes = deposits, count = count };
@@ -355,6 +400,7 @@ function htr_deposits(deposits : ByteSlice) -> hash = {
     mix_in_length(merkle_accumulator_root(accumulator, 13), accumulator.count)
 }
 
+/*! `hash_tree_root` of the withdrawal-request list (depth 4). */
 function htr_withdrawal_requests(requests : ByteSlice) -> hash = {
     let count = htr_fixed_count(requests.len, HTR_WITHDRAWAL_REQUEST_LENGTH);
     var rest : SszListRef = struct { bytes = requests, count = count };
@@ -367,6 +413,7 @@ function htr_withdrawal_requests(requests : ByteSlice) -> hash = {
     mix_in_length(merkle_accumulator_root(accumulator, 4), accumulator.count)
 }
 
+/*! `hash_tree_root` of the consolidation-request list (depth 1). */
 function htr_consolidation_requests(requests : ByteSlice) -> hash = {
     let count = htr_fixed_count(requests.len, HTR_CONSOLIDATION_REQUEST_LENGTH);
     var rest : SszListRef = struct { bytes = requests, count = count };
@@ -379,6 +426,7 @@ function htr_consolidation_requests(requests : ByteSlice) -> hash = {
     mix_in_length(merkle_accumulator_root(accumulator, 1), accumulator.count)
 }
 
+/*! `hash_tree_root` of the `SszExecutionRequests` container. */
 function htr_execution_requests(input_ref : StatelessInputRef) -> hash =
     merkleize(
         [|
@@ -389,7 +437,8 @@ function htr_execution_requests(input_ref : StatelessInputRef) -> hash =
         2,
     )
 
-/* SszNewPayloadRequest: 4 fields -> depth 2. */
+/*! `hash_tree_root` of the `SszNewPayloadRequest` (4 fields, depth 2) —
+    the commitment the guest proves its input against. */
 function htr_new_payload_request(input_ref : StatelessInputRef) -> hash = {
     merkleize(
         [|

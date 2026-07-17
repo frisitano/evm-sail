@@ -1241,44 +1241,6 @@ Instance Countable_Bytes : Countable Bytes := {|
 #[export]
 Instance dummy_Bytes : Inhabited (Bytes) := { inhabitant := BytesList inhabitant }.
 
-Inductive HaltKind :=
-| HaltStop : unit -> HaltKind
-| HaltReturn : ByteSlice -> HaltKind
-| HaltRevert : ByteSlice -> HaltKind
-| HaltSelfDestruct : unit -> HaltKind.
-Arguments HaltKind : clear implicits.
-
-Definition sail_HaltKind_encode (x : HaltKind) := match x with
-  | HaltStop x' => encode (0, encode x')
-  | HaltReturn x' => encode (1, encode x')
-  | HaltRevert x' => encode (2, encode x')
-  | HaltSelfDestruct x' => encode (3, encode x') end.
-Definition sail_HaltKind_decode x : option HaltKind := match decode x with
-  | Some (0, x') => HaltStop <$> decode x'
-  | Some (1, x') => HaltReturn <$> decode x'
-  | Some (2, x') => HaltRevert <$> decode x'
-  | Some (3, x') => HaltSelfDestruct <$> decode x'
-  | _ => None end.
-Lemma sail_HaltKind_decode_encode : forall (x : HaltKind), sail_HaltKind_decode
-  (sail_HaltKind_encode x)  = Some x.
-Proof.
-  unfold sail_HaltKind_decode, sail_HaltKind_encode;
-  intros [x|x|x|x]; rewrite !decode_encode; reflexivity.
-Qed.
-
-#[export]
-Instance Decidable_eq_HaltKind : EqDecision HaltKind := decode_encode_eq_dec sail_HaltKind_encode
-  sail_HaltKind_decode sail_HaltKind_decode_encode .
-
-#[export]
-Instance Countable_HaltKind : Countable HaltKind := {|
-  encode := sail_HaltKind_encode;
-  decode := sail_HaltKind_decode;
-  decode_encode := sail_HaltKind_decode_encode
-|}.
-#[export]
-Instance dummy_HaltKind : Inhabited (HaltKind) := { inhabitant := HaltStop inhabitant }.
-
 Inductive ExceptionKind :=
   | StackUnderflow
   | StackOverflow
@@ -1366,41 +1328,6 @@ Defined.
 #[export]
 Instance dummy_ExceptionKind : Inhabited ExceptionKind := { inhabitant := StackUnderflow }.
 
-
-Inductive FrameStatus :=
-| Running : unit -> FrameStatus
-| Halted : HaltKind -> FrameStatus
-| Exceptional : ExceptionKind -> FrameStatus.
-Arguments FrameStatus : clear implicits.
-
-Definition sail_FrameStatus_encode (x : FrameStatus) := match x with
-  | Running x' => encode (0, encode x')
-  | Halted x' => encode (1, encode x')
-  | Exceptional x' => encode (2, encode x') end.
-Definition sail_FrameStatus_decode x : option FrameStatus := match decode x with
-  | Some (0, x') => Running <$> decode x'
-  | Some (1, x') => Halted <$> decode x'
-  | Some (2, x') => Exceptional <$> decode x'
-  | _ => None end.
-Lemma sail_FrameStatus_decode_encode : forall (x : FrameStatus), sail_FrameStatus_decode
-  (sail_FrameStatus_encode x)  = Some x.
-Proof.
-  unfold sail_FrameStatus_decode, sail_FrameStatus_encode;
-  intros [x|x|x]; rewrite !decode_encode; reflexivity.
-Qed.
-
-#[export]
-Instance Decidable_eq_FrameStatus : EqDecision FrameStatus := decode_encode_eq_dec
-  sail_FrameStatus_encode sail_FrameStatus_decode sail_FrameStatus_decode_encode .
-
-#[export]
-Instance Countable_FrameStatus : Countable FrameStatus := {|
-  encode := sail_FrameStatus_encode;
-  decode := sail_FrameStatus_decode;
-  decode_encode := sail_FrameStatus_decode_encode
-|}.
-#[export]
-Instance dummy_FrameStatus : Inhabited (FrameStatus) := { inhabitant := Running inhabitant }.
 
 Inductive BlockError :=
   | InvalidConfig
@@ -1542,6 +1469,79 @@ Instance Countable_exception : Countable exception := {|
 |}.
 #[export]
 Instance dummy_exception : Inhabited (exception) := { inhabitant := InvalidBlock inhabitant }.
+
+Inductive HaltKind :=
+| HaltStop : unit -> HaltKind
+| HaltReturn : ByteSlice -> HaltKind
+| HaltRevert : ByteSlice -> HaltKind
+| HaltSelfDestruct : unit -> HaltKind.
+Arguments HaltKind : clear implicits.
+
+Definition sail_HaltKind_encode (x : HaltKind) := match x with
+  | HaltStop x' => encode (0, encode x')
+  | HaltReturn x' => encode (1, encode x')
+  | HaltRevert x' => encode (2, encode x')
+  | HaltSelfDestruct x' => encode (3, encode x') end.
+Definition sail_HaltKind_decode x : option HaltKind := match decode x with
+  | Some (0, x') => HaltStop <$> decode x'
+  | Some (1, x') => HaltReturn <$> decode x'
+  | Some (2, x') => HaltRevert <$> decode x'
+  | Some (3, x') => HaltSelfDestruct <$> decode x'
+  | _ => None end.
+Lemma sail_HaltKind_decode_encode : forall (x : HaltKind), sail_HaltKind_decode
+  (sail_HaltKind_encode x)  = Some x.
+Proof.
+  unfold sail_HaltKind_decode, sail_HaltKind_encode;
+  intros [x|x|x|x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_HaltKind : EqDecision HaltKind := decode_encode_eq_dec sail_HaltKind_encode
+  sail_HaltKind_decode sail_HaltKind_decode_encode .
+
+#[export]
+Instance Countable_HaltKind : Countable HaltKind := {|
+  encode := sail_HaltKind_encode;
+  decode := sail_HaltKind_decode;
+  decode_encode := sail_HaltKind_decode_encode
+|}.
+#[export]
+Instance dummy_HaltKind : Inhabited (HaltKind) := { inhabitant := HaltStop inhabitant }.
+
+Inductive FrameStatus :=
+| Running : unit -> FrameStatus
+| Halted : HaltKind -> FrameStatus
+| Exceptional : ExceptionKind -> FrameStatus.
+Arguments FrameStatus : clear implicits.
+
+Definition sail_FrameStatus_encode (x : FrameStatus) := match x with
+  | Running x' => encode (0, encode x')
+  | Halted x' => encode (1, encode x')
+  | Exceptional x' => encode (2, encode x') end.
+Definition sail_FrameStatus_decode x : option FrameStatus := match decode x with
+  | Some (0, x') => Running <$> decode x'
+  | Some (1, x') => Halted <$> decode x'
+  | Some (2, x') => Exceptional <$> decode x'
+  | _ => None end.
+Lemma sail_FrameStatus_decode_encode : forall (x : FrameStatus), sail_FrameStatus_decode
+  (sail_FrameStatus_encode x)  = Some x.
+Proof.
+  unfold sail_FrameStatus_decode, sail_FrameStatus_encode;
+  intros [x|x|x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_FrameStatus : EqDecision FrameStatus := decode_encode_eq_dec
+  sail_FrameStatus_encode sail_FrameStatus_decode sail_FrameStatus_decode_encode .
+
+#[export]
+Instance Countable_FrameStatus : Countable FrameStatus := {|
+  encode := sail_FrameStatus_encode;
+  decode := sail_FrameStatus_decode;
+  decode_encode := sail_FrameStatus_decode_encode
+|}.
+#[export]
+Instance dummy_FrameStatus : Inhabited (FrameStatus) := { inhabitant := Running inhabitant }.
 
 Record SszListRef := {
   SszListRef_bytes : ByteSlice;

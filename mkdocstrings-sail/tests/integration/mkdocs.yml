@@ -1,0 +1,16 @@
+site_name: "Sail Handler Integration Fixture"
+theme:
+  name: material
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: sail
+      handlers:
+        sail:
+          bundle: doc/doc.json
+markdown_extensions:
+  - toc:
+      permalink: true
+nav:
+  - Home: index.md
+  - Definitions: definitions.md

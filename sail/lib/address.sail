@@ -1,9 +1,11 @@
-/* ======================================================================== */
-/* CONTRACT ADDRESS DERIVATION (CREATE / CREATE2)                           */
-/* ======================================================================== */
 
-/* CREATE address (Yellow Paper): low 20 bytes of
- * keccak256(rlp([sender, nonce])). */
+/*md
+# Contract address derivation
+
+The `CREATE` and `CREATE2` address rules (YP §7, EIP-1014).
+*/
+/*! The `CREATE` address (YP §7): the low 20 bytes of
+    `keccak256(rlp([sender, nonce]))`. */
 function create_address(sender : address, nonce : account_nonce) -> address = {
     let content_len = rlp_addr_size() + rlp_uint_size(nonce);
     let encoded_len = rlp_list_size(content_len);
@@ -17,8 +19,8 @@ function create_address(sender : address, nonce : account_nonce) -> address = {
     address
 }
 
-/* CREATE2 address (EIP-1014): low 20 bytes of
- * keccak256(0xff ++ sender ++ salt ++ init_hash). */
+/*! The `CREATE2` address (EIP-1014): the low 20 bytes of
+    `keccak256(0xff ++ sender ++ salt ++ keccak256(initcode))`. */
 function create2_address(sender : address, salt : word, init_hash : hash) -> address =
     word_to_address(
         keccak256(

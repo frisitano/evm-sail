@@ -116,6 +116,7 @@ function capped_gas_refund(GasRefund(refund) : gas_refund, limit : gas) -> gas =
 function bloom_bit_mask(bit_to_set : bloom_limb_bit) -> limb =
     sail_shiftleft(LIMB_ONE, bit_to_set)
 
+/*! Sets one bit (0–2047) in the bloom, most-significant-byte first. */
 function bloom_set_bit(bloom : LogsBloom, bit_to_set : bloom_bit_index) -> LogsBloom = {
     var out = bloom;
     let quotient = tdiv_int(bit_to_set, 64);
@@ -187,6 +188,12 @@ function memory_expansion_gas(required_size : nat) -> gas_cost = {
 /* MODEXP deliberately widens through a 256-bit integer. Once its three
  * lengths fit one limb, the complete EIP-2565/7883 expression is below 2^190, so
  * the EVM word algebra is exact rather than wrapping. */
+/*! `MODEXP` (precompile `0x05`) gas: EIP-2565 as amended by EIP-7883
+    (Osaka). Input layout: `bsize[32] esize[32] msize[32] base exp mod`.
+    Gas grows with the multiplication complexity of the larger of base
+    and modulus, and with an iteration count derived from the exponent's
+    bit length; EIP-7823 (Osaka) caps each field at 1024 bytes, modeled
+    as an unforwardable cost. */
 function modexp_gas(input : ByteSlice) -> option(gas_cost) = {
     let base_length_word = pc_word(input, 0, 32);
     let exponent_length_word = pc_word(input, 32, 32);
@@ -283,6 +290,8 @@ function modexp_gas(input : ByteSlice) -> option(gas_cost) = {
 
 /* Divide the pair count first so the EIP-2537 product never needs a wide
  * temporary: a*k/1000 = a*(k/1000) + floor(a*(k%1000)/1000). */
+/*! EIP-2537 MSM gas: `(k · base · discount(k)) / 1000`, with the
+    discount clamped to the `k = 128` entry beyond the table. */
 function bls_msm_gas(
     table : vector(128, inc, bits(16)),
     GasConstant(base) : gas_constant,

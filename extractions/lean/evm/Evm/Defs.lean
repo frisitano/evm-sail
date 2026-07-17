@@ -323,24 +323,9 @@ inductive Bytes where
   deriving Inhabited, BEq, Repr
   open Bytes
 
-inductive HaltKind where
-  | HaltStop (_ : Unit)
-  | HaltReturn (_ : EvmByteSlice)
-  | HaltRevert (_ : EvmByteSlice)
-  | HaltSelfDestruct (_ : Unit)
-  deriving Inhabited, BEq, Repr
-  open HaltKind
-
 inductive ExceptionKind where | StackUnderflow | StackOverflow | OutOfGas | InvalidOpcode | InvalidJump | StaticViolation | CallDepthExceeded | InsufficientBalance | WriteProtection | InitCodeTooLarge | NonceOverflow | AddressCollision
   deriving BEq, Inhabited, Repr
   open ExceptionKind
-
-inductive FrameStatus where
-  | Running (_ : Unit)
-  | Halted (_ : HaltKind)
-  | Exceptional (_ : ExceptionKind)
-  deriving Inhabited, BEq, Repr
-  open FrameStatus
 
 inductive BlockError where | InvalidConfig | HeaderChainBroken | RlpDecode | InvalidSignature | InvalidGasLimit | GasUsedExceedsLimit | BlobGasLimitExceeded | ExecutionInvalid | InvalidGasUsed | InvalidBlobGasUsed | InvalidExcessBlobGas | InvalidStateRoot | InvalidReceiptsRoot | InvalidLogsBloom | InvalidBlockHash | InvalidParentHash | BlockAccessListTooLarge | InvalidBlockAccessList | InvalidExecutionRequests | WitnessDeficient
   deriving BEq, Inhabited, Repr
@@ -350,6 +335,21 @@ inductive exception where
   | InvalidBlock (_ : BlockError)
   deriving Inhabited, BEq, Repr
   open exception
+
+inductive HaltKind where
+  | HaltStop (_ : Unit)
+  | HaltReturn (_ : EvmByteSlice)
+  | HaltRevert (_ : EvmByteSlice)
+  | HaltSelfDestruct (_ : Unit)
+  deriving Inhabited, BEq, Repr
+  open HaltKind
+
+inductive FrameStatus where
+  | Running (_ : Unit)
+  | Halted (_ : HaltKind)
+  | Exceptional (_ : ExceptionKind)
+  deriving Inhabited, BEq, Repr
+  open FrameStatus
 
 structure SszListRef where
   bytes : EvmByteSlice

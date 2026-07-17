@@ -1,9 +1,19 @@
+/*md
+# State: the transaction lifecycle
+
+Snapshot, revert, per-transaction reset, and the transaction-end merge
+into the block layer.
+*/
+
+/*! Replays one journal entry backward. */
 function apply_undo(e : JEntry) -> unit = match e {
     JTran(a, s, v) => transient_store(a, s, v),
     JWarmA(a) => warm_addr_remove(a),
     JWarmS(a, s) => warm_slot_remove(a, s),
 }
 
+/*! Captures the reversible journal, storage, log, and refund extents at a
+    frame boundary. */
 function k_state_checkpoint() -> StateCheckpoint = struct {
     journal = journal_len(),
     accounts = acct_tx_checkpoint(),
@@ -11,10 +21,14 @@ function k_state_checkpoint() -> StateCheckpoint = struct {
     logs = logs_checkpoint(),
 }
 
+/*! Installs the block header. */
 function k_set_header(h : BlockHeader) -> unit = k_header = h
 
+/*! Installs the per-transaction environment. */
 function k_set_tx(env : TxEnv) -> unit = k_tx = env
 
+/*! Resets every per-transaction store: overlays, warm sets, transient
+    storage, logs, refund counter, journal. */
 function k_tx_reset() -> unit = {
     acct_tx_reset();
     storage_tx_reset();
@@ -24,9 +38,17 @@ function k_tx_reset() -> unit = {
     journal_reset()
 }
 
+/*! Whether a selfdestructed account is actually deleted at transaction
+    end: always before Cancun; only if created in the same transaction
+    from Cancun on (EIP-6780). */
 function account_deleted_at_tx_end(acc : Account) -> bool =
     acc.selfdestructed & ((k_fork < Cancun) | acc.created)
 
+/*! The transaction-end merge: drains the transaction overlays into the
+    block layer, applying EIP-6780 deletion (with the EIP-7708 burn log),
+    storage-clear generations, and recording nonce/balance/code/storage
+    changes for the EIP-7928 block access list. Lifecycle flags reset as
+    rows merge. */
 function k_tx_merge() -> unit = {
     var more : bool = true;
 
@@ -81,6 +103,9 @@ function k_tx_merge() -> unit = {
     storage_tx_reset()
 }
 
+/*! Reverts a frame to its checkpoint: truncates the overlays and log
+    store, then replays the journal backward to the checkpointed
+    length. */
 function k_revert(checkpoint : StateCheckpoint) -> unit = {
     acct_tx_revert(checkpoint.accounts);
     storage_tx_revert(checkpoint.storage);

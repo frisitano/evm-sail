@@ -71,7 +71,7 @@ def bloom_set_bit (bloom : LogsBloom) (bit_to_set : bloom_bit_index) : SailM Log
     then (pure quotient)
     else
       (do
-        assert false "sail/executor/receipts.sail:15.24-15.25"
+        assert false "sail/executor/receipts.sail:24.24-24.25"
         throw Error.Exit) ) : SailM Nat )
   let limb_index : Nat := (31 -i natural_limb)
   let remainder := (Int.tmod bit_to_set 64)
@@ -80,7 +80,7 @@ def bloom_set_bit (bloom : LogsBloom) (bit_to_set : bloom_bit_index) : SailM Log
     then (pure remainder)
     else
       (do
-        assert false "sail/executor/receipts.sail:23.24-23.25"
+        assert false "sail/executor/receipts.sail:32.24-32.25"
         throw Error.Exit) ) : SailM Nat )
   (pure (vectorUpdate out limb_index
       ((GetElem?.getElem! out limb_index) ||| (bloom_bit_mask ⟨bit_in_limb⟩))))

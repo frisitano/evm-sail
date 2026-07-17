@@ -1,3 +1,13 @@
+/*md
+# Payload commitments
+
+The header-level commitments recomputed from the payload: the
+transactions and withdrawals tries, the EIP-7685 requests hash, and the
+block header hash itself.
+*/
+
+/*! The RLP of one withdrawal (EIP-4895), assembled in the scratch
+    arena. */
 function withdrawal_rlp(withdrawal : ByteSlice) -> ByteSlice = {
     let index = ssz_uint(withdrawal, WD_INDEX);
     let validator_index = ssz_uint(withdrawal, WD_VALIDATOR_INDEX);
@@ -17,6 +27,9 @@ function withdrawal_rlp(withdrawal : ByteSlice) -> ByteSlice = {
     rlp_finish(start, encoded_len)
 }
 
+/*! The block header hash: `keccak256(rlp(header))` with the recomputed
+    body roots spliced in (YP §4.4; post-merge constants for ommers,
+    difficulty, and nonce). */
 function block_header_hash(
     header : BlockHeader,
     transactions_root : hash,
@@ -85,6 +98,7 @@ function block_header_hash(
     if k_fork >= Shanghai then {
         rlp_write_word(withdrawals_root)
     };
+
     if k_fork >= Cancun then {
         rlp_write_uint(header.blob_gas_used);
         rlp_write_uint(header.excess_blob_gas);
@@ -103,6 +117,8 @@ function block_header_hash(
     block_hash
 }
 
+/*! The transactions-trie root (YP §4.4.2): leaf `i` holds the raw
+    EIP-2718 envelope of transaction `i`, keyed by `rlp(i)`. */
 function transaction_trie_root(txs : SszListRef) -> hash = {
     var builder = trie_builder_empty();
     var cursor = rlp_index_cursor(txs.count);
@@ -115,6 +131,8 @@ function transaction_trie_root(txs : SszListRef) -> hash = {
     trie_builder_root(builder)
 }
 
+/*! The withdrawals-trie root (EIP-4895): leaf `i` holds
+    `rlp(withdrawal_i)`, keyed by `rlp(i)`. */
 function withdrawals_trie_root(wds : SszListRef) -> hash = {
     var builder = trie_builder_empty();
     var cursor = rlp_index_cursor(wds.count);
@@ -130,11 +148,14 @@ function withdrawals_trie_root(wds : SszListRef) -> hash = {
     trie_builder_root(builder)
 }
 
+/*! The `excess_blob_gas` the header must carry, derived from the
+    authenticated parent (EIP-4844). */
 function expected_payload_excess_blob_gas(witness : WitnessContext) -> blob_gas =
     next_excess_blob_gas(witness.parent_excess_blob_gas, witness.parent_blob_gas_used, witness.parent_base_fee_per_gas)
 
-/* EIP-7685 commitment over the present request-type digests, in request-type
- * order. The request bodies remain source-backed through the hash calls. */
+/*! The EIP-7685 requests hash: `sha256` over the present request-type
+    digests in request-type order; the request bodies remain
+    region-backed through the hash calls. */
 function execution_requests_hash(input_ref : StatelessInputRef) -> hash = {
     let l0 = input_ref.deposits.len;
     let l1 = input_ref.withdrawal_requests.len;
@@ -167,9 +188,12 @@ function execution_requests_hash(input_ref : StatelessInputRef) -> hash = {
     sha256(segs)
 }
 
-/* Validate commitments that can be checked before transaction decoding. The
- * supplied BAL is hashed once for the header; post-execution validation
- * compares its bytes directly with the canonical model encoding. */
+/*! Validates every commitment checkable before transaction decoding:
+    parent linkage, gas and blob-gas header rules, the transactions and
+    withdrawals roots, the requests hash, and the block hash. The
+    supplied block access list is hashed once for the header;
+    post-execution validation compares its bytes against the canonical
+    reconstruction. */
 function validate_execution_payload(
     input : StatelessInput,
     input_ref : StatelessInputRef,

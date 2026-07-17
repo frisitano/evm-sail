@@ -1,28 +1,45 @@
-/* ======================================================================== */
-/* PRIMITIVES: PROTOCOL FORKS                                               */
-/*                                                                          */
-/* The protocol forks the model executes, oldest to newest -- declaration   */
-/* order IS the activation order, and every fork-gated rule compares on it  */
-/* (fork_ge / fork_lt). Pure data -- no registers, no externs.              */
-/* ======================================================================== */
 
+/*md
+# Protocol forks
+
+The protocol forks the model executes, oldest to newest. Declaration order
+is the activation order, and every fork-gated rule in the specification
+compares on it via [fork_gteq][] / [fork_lt][]. Pure data — no registers,
+no externs.
+*/
+/*! The supported protocol forks, in activation order. Blob-parameter-only
+    forks are not distinct members; they collapse to their base fork (see
+    [fork_of_protocol_index][]). */
 enum Fork = {
+    /* launch protocol */
     Frontier,
+    /* EIP-2 create rules, EIP-7 DELEGATECALL */
     Homestead,
+    /* EIP-140 REVERT, EIP-211 returndata; precompiles 0x05-0x08 */
     Byzantium,
+    /* EIP-145 shifts, EIP-1014 CREATE2, EIP-1052 EXTCODEHASH */
     Constantinople,
+    /* EIP-1344 CHAINID, EIP-2200 SSTORE metering */
     Istanbul,
-    Berlin, /* EIP-2929/2930 access lists + warm/cold access costs        */
-    London, /* EIP-1559 fee market + EIP-3529 refund reduction            */
+    /* EIP-2929/2930 access lists + warm/cold access costs */
+    Berlin,
+    /* EIP-1559 fee market + EIP-3529 refund reduction */
+    London,
+    /* EIP-4399 PREVRANDAO replaces DIFFICULTY */
     Paris,
-    Shanghai, /* EIP-3651 warm coinbase, EIP-3855 PUSH0, EIP-3860 initcode  */
-    Cancun, /* EIP-1153/4844; precompiles 0x01-0x0a                       */
-    Prague, /* EIP-7623 calldata floor; +BLS 0x0b-0x11                    */
-    Osaka, /* EIP-7883 modexp gas, EIP-7825 cap; +0x100                  */
-    Amsterdam, /* EIP-7954 code/initcode size bump (32768/65536)             */
+    /* EIP-3651 warm coinbase, EIP-3855 PUSH0, EIP-3860 initcode */
+    Shanghai,
+    /* EIP-1153/4844; precompiles 0x01-0x0a */
+    Cancun,
+    /* EIP-7623 calldata floor; +BLS 0x0b-0x11 */
+    Prague,
+    /* EIP-7883 modexp gas, EIP-7825 cap; +0x100 */
+    Osaka,
+    /* EIP-7954 code/initcode size bump (32768/65536) */
+    Amsterdam,
 }
 
-/* activation index = declaration order */
+/*! The activation index of a fork: its declaration position. */
 function fork_index(f : Fork) -> protocol_fork_index = match f {
     Frontier => 0,
     Homestead => 1,
@@ -39,21 +56,23 @@ function fork_index(f : Fork) -> protocol_fork_index = match f {
     Amsterdam => 12,
 }
 
-/* fork a is at least / strictly before fork b; overloaded onto the
- * comparison operators so fork gates read `k_fork >= Berlin` */
+/*! Fork `a` activates no earlier than fork `b`. Overloaded onto `>=` so
+    fork gates read `k_fork >= Berlin`. */
 function fork_gteq(a : Fork, b : Fork) -> bool = fork_index(b) <= fork_index(a)
 
+/*! Fork `a` activates strictly before fork `b`; overloaded onto `<`. */
 function fork_lt(a : Fork, b : Fork) -> bool = fork_index(a) < fork_index(b)
 
 overload operator >= = { fork_gteq }
 
 overload operator < = { fork_lt }
 
-/* Deserialize an SSZ ProtocolFork index (execution-specs tuple(ProtocolFork)
- * order: ... Shanghai=14 Cancun=15 Prague=16 Osaka=17 BPO1=18 BPO2=19
- * Amsterdam=20) into the Fork whose EXECUTION RULES apply: blob-parameter-only
- * forks collapse to their base, unknown future indices to the newest. The raw
- * index is preserved separately (ChainConfig.fork_index) for exact checks. */
+/*! Deserializes an SSZ `ProtocolFork` index (the consensus
+    `ProtocolFork` order: … Shanghai=14, Cancun=15, Prague=16,
+    Osaka=17, BPO1=18, BPO2=19, Amsterdam=20) into the [Fork][type-Fork]
+    whose execution rules apply: blob-parameter-only forks collapse to
+    their base fork, unknown future indices to the newest. The raw index
+    is preserved separately (`ChainConfig.fork_index`) for exact checks. */
 function fork_of_protocol_index(idx : protocol_fork_index) -> Fork =
     if 20 <= idx then {
         Amsterdam

@@ -207,7 +207,7 @@ Definition limb_divmod (dividend : mword 64) (divisor : mword 64) : LimbDivMod :
 Definition word_bit_count_increment (value : Z) (*(0 <=? value) && (value <=? 256)*) : M (Z) :=
    (if Z.ltb (value) (256) then returnM ((Z.add (value) (1)))
     else
-      assert_exp' false "extractions/contracts/../../sail/prelude.sail:155.20-155.21" >>= fun _ =>
+      assert_exp' false "extractions/contracts/../../sail/prelude.sail:188.20-188.21" >>= fun _ =>
       exit tt)
     : M (Z).
 
@@ -238,7 +238,7 @@ Definition word_to_limb (w : mword 256) : option (mword 64) :=
 Definition limb_to_word (value : mword 64) : mword 256 := zero_extend (value) (256).
 
 Definition word_of_nat (value : Z) (*0 <=? value*) : M (mword 256) :=
-   assert_exp' (Z.ltb (value) ((pow2 (256)))) "extractions/contracts/../../sail/prelude.sail:186.26-186.27" >>= fun _ =>
+   assert_exp' (Z.ltb (value) ((pow2 (256)))) "extractions/contracts/../../sail/prelude.sail:222.26-222.27" >>= fun _ =>
    returnM ((get_slice_int (256) (value) (0))).
 
 Definition word_ult (a : mword 256) (b : mword 256) : bool :=

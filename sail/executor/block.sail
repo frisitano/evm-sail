@@ -1,3 +1,13 @@
+/*md
+# The block driver
+
+Block-start system calls, the transaction loop with block-gas
+accounting, withdrawals, and block-end request collection.
+*/
+
+/*! Everything block validation needs from an executed body: overall
+    success, gas and blob-gas totals, receipts, and the collected
+    EIP-7685 requests. */
 struct BlockExecutionResult = {
     all_ok : bool,
     gas_acc : gas,
@@ -11,6 +21,8 @@ struct BlockExecutionResult = {
     requests : ExecutionRequests,
 }
 
+/*! The block-start writes: beacon root (Cancun+, EIP-4788) and parent
+    hash history (Prague+, EIP-2935). */
 function run_block_start_system_calls() -> unit = {
     if k_fork >= Cancun then {
         system_call(BEACON_ROOTS_ADDR, k_header.parent_beacon_block_root)
@@ -20,6 +32,9 @@ function run_block_start_system_calls() -> unit = {
     }
 }
 
+/*! Executes the block's transactions in order, enforcing per-tx
+    applicability and block gas/blob-gas availability (EIP-7778 block-gas
+    accounting), accumulating receipts. */
 function execute_block_transactions(
     transactions : SszListRef,
     public_keys : ByteSlice,
@@ -120,6 +135,8 @@ function execute_block_transactions(
     }
 }
 
+/*! Credits every withdrawal's recipient with its amount in gwei
+    (EIP-4895); withdrawals cannot fail and charge no gas. */
 function apply_withdrawals(withdrawals : SszListRef) -> unit = {
     var rest = withdrawals;
     while rest.count != 0 termination_measure(rest.count) do {
@@ -130,6 +147,8 @@ function apply_withdrawals(withdrawals : SszListRef) -> unit = {
     }
 }
 
+/*! Runs the checked block-end request collection (Prague+, EIP-7685);
+    skipped entirely when the body already failed. */
 function run_checked_block_end_system_calls(all_ok : bool, deposits : ByteSlice) -> (bool, ExecutionRequests) = {
     if not_bool(all_ok) then {
         (false, EMPTY_EXECUTION_REQUESTS)
@@ -142,6 +161,9 @@ function run_checked_block_end_system_calls(all_ok : bool, deposits : ByteSlice)
     }
 }
 
+/*! The block-end state effects: withdrawals (Shanghai+, EIP-4895), the
+    pre-merge static block reward before Paris, and the final merge into
+    the block layer. */
 function apply_block_end_state(body : BlockBody) -> unit = {
     if k_fork >= Shanghai then {
         apply_withdrawals(body.withdrawals)
@@ -152,6 +174,10 @@ function apply_block_end_state(body : BlockBody) -> unit = {
     k_tx_merge()
 }
 
+/*! Executes a block body end to end: block-start system calls, the
+    transaction loop, block-end state effects, and request collection;
+    returns overall success with the accumulated
+    [BlockExecutionResult][type-BlockExecutionResult]. */
 function execute_block_body(
     body : BlockBody,
     public_keys : ByteSlice,

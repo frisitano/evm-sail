@@ -1,0 +1,5 @@
+spec {
+  files
+    spec/lib/util.sail,
+    spec/core/machine.sail,
+}

@@ -170,7 +170,7 @@ def k_revert (checkpoint : StateCheckpoint) : SailM Unit := do
     then (pure (current -i saved))
     else
       (do
-        assert false "sail/host/kernel/lifecycle.sail:93.24-93.25"
+        assert false "sail/host/kernel/lifecycle.sail:118.24-118.25"
         throw Error.Exit) ) : SailM Nat )
   let remaining ← (( do
     let loop_vars ← whileFuelM (fuel :=remaining) (fun remaining => (pure (remaining != 0))) remaining

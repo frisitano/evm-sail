@@ -1,28 +1,49 @@
+/*md
+# The block access list
+
+Reconstruction of the EIP-7928 block access list from the recorder's
+per-account change streams, as source-backed RLP that is compared against
+the payload's claimed bytes.
+
+## Types
+
+The cursor records pair an encoded-content length with the ordered-table
+position reached by a sizing pass, so the subsequent writer follows exactly
+the same grouping boundaries.
+*/
+
+/*! The reconstructed BAL: its RLP and its item count (bounded by
+    `gas_limit / 2000`). */
 struct EncodedBlockAccessList = {
     bytes : ByteSlice,
     item_count : item_count,
 }
 
+/*! An encoded-content length paired with the next table cursor. */
 struct BalContentCursor = {
     content_len : byte_length,
     cursor : item_index,
 }
 
+/*! An encoded-content length paired with its logical BAL item count. */
 struct BalContentCount = {
     content_len : byte_length,
     count : item_count,
 }
 
+/*! The encoded length and logical item count contributed by one account. */
 struct BalAccountSize = {
     encoded_len : byte_length,
     item_count : item_count,
 }
 
+/*! The end and maximum value of one equal-index nonce run. */
 struct BalNonceRun = {
     cursor : item_index,
     maximum : account_nonce,
 }
 
+/*! Adds logical BAL item counts and rejects protocol-quantity overflow. */
 function bal_count_add(a : item_count, b : item_count) -> item_count =
     if b <= 2 ^ 64 - 1 - a then {
         a + b
@@ -36,6 +57,7 @@ function bal_index_word_content_size(index : item_index, value : word) -> byte_l
 function bal_index_word_size(index : item_index, value : word) -> byte_length =
     rlp_list_size(bal_index_word_content_size(index, value))
 
+/*! Writes one `[index, word]` BAL pair. */
 function bal_write_index_word(index : item_index, value : word) -> unit = {
     rlp_write_list_prefix(bal_index_word_content_size(index, value));
     rlp_write_uint(index);
@@ -48,12 +70,14 @@ function bal_index_nonce_content_size(index : item_index, value : account_nonce)
 function bal_index_nonce_size(index : item_index, value : account_nonce) -> byte_length =
     rlp_list_size(bal_index_nonce_content_size(index, value))
 
+/*! Writes one `[index, nonce]` BAL pair. */
 function bal_write_index_nonce(index : item_index, value : account_nonce) -> unit = {
     rlp_write_list_prefix(bal_index_nonce_content_size(index, value));
     rlp_write_uint(index);
     rlp_write_uint(value)
 }
 
+/*! Sizes the content of an index-and-code pair. */
 function bal_index_code_content_size(index : item_index, code_hash : hash) -> byte_length = {
     let code = code_db_resolve(code_hash);
     rlp_uint_size(index) + rlp_slice_size(code.bytes)
@@ -62,6 +86,7 @@ function bal_index_code_content_size(index : item_index, code_hash : hash) -> by
 function bal_index_code_size(index : item_index, code_hash : hash) -> byte_length =
     rlp_list_size(bal_index_code_content_size(index, code_hash))
 
+/*! Writes one `[index, code]` BAL pair after resolving the code hash. */
 function bal_write_index_code(index : item_index, code_hash : hash) -> unit = {
     let code = code_db_resolve(code_hash);
     rlp_write_list_prefix(rlp_uint_size(index) + rlp_slice_size(code.bytes));
@@ -70,6 +95,7 @@ function bal_write_index_code(index : item_index, code_hash : hash) -> unit = {
 }
 
 /* The unconsumed suffix of one (slot, index) run strictly decreases. */
+/*! Finds the end of an equal-slot, equal-index storage-change run. */
 function bal_storage_change_run_end(
     account : item_index,
     count : item_count,
@@ -92,6 +118,7 @@ termination_measure bal_storage_change_run_end(account, count, slot, index, curs
     count - cursor
 
 /* The unconsumed suffix of one slot's ordered change rows strictly decreases. */
+/*! Sizes the final values for all change indices of one storage slot. */
 function bal_storage_slot_changes_size(
     account : item_index,
     count : item_count,
@@ -118,6 +145,7 @@ termination_measure bal_storage_slot_changes_size(account, count, slot, cursor, 
     count - cursor
 
 /* The unconsumed suffix of one slot's ordered change rows strictly decreases. */
+/*! Writes the final value for each change index of one storage slot. */
 function bal_write_storage_slot_changes(
     account : item_index,
     count : item_count,
@@ -143,6 +171,7 @@ termination_measure bal_write_storage_slot_changes(account, count, slot, cursor)
     count - cursor
 
 /* The unconsumed ordered storage-change table strictly decreases. */
+/*! Sizes storage changes grouped by slot and counts the groups. */
 function bal_storage_change_groups_size(
     account : item_index,
     count : item_count,
@@ -171,6 +200,7 @@ termination_measure bal_storage_change_groups_size(account, count, cursor, resul
     count - cursor
 
 /* The unconsumed ordered storage-change table strictly decreases. */
+/*! Writes storage changes grouped by slot. */
 function bal_write_storage_change_groups(account : item_index, count : item_count, cursor : item_index) -> unit =
     if cursor < count then {
         let slot = bal_storage_change_slot(account, cursor);
@@ -186,6 +216,7 @@ function bal_write_storage_change_groups(account : item_index, count : item_coun
 termination_measure bal_write_storage_change_groups(account, count, cursor) =
     count - cursor
 
+/*! Sizes the storage-change list for one account. */
 function bal_storage_changes_size(account : item_index) -> BalContentCount =
     bal_storage_change_groups_size(
         account,
@@ -194,12 +225,14 @@ function bal_storage_changes_size(account : item_index) -> BalContentCount =
         struct { content_len = BYTE_ZERO, count = 0 },
     )
 
+/*! Writes the storage-change list for one account. */
 function bal_write_storage_changes(account : item_index, size : BalContentCount) -> unit = {
     rlp_write_list_prefix(size.content_len);
     bal_write_storage_change_groups(account, bal_storage_change_count(account), 0)
 }
 
 /* The unconsumed run of equal read slots strictly decreases. */
+/*! Finds the end of a run of equal storage-read slots. */
 function bal_storage_read_run_end(
     account : item_index,
     count : item_count,
@@ -221,6 +254,7 @@ termination_measure bal_storage_read_run_end(account, count, slot, cursor) =
     count - cursor
 
 /* The unconsumed ordered change table strictly decreases while seeking slot. */
+/*! Advances the ordered change cursor to the first slot not below a read. */
 function bal_storage_change_seek(
     account : item_index,
     count : item_count,
@@ -242,6 +276,7 @@ termination_measure bal_storage_change_seek(account, count, slot, cursor) =
     count - cursor
 
 /* The unconsumed ordered storage-read table strictly decreases. */
+/*! Sizes read slots that are not also represented by a storage change. */
 function bal_storage_read_groups_size(
     account : item_index,
     read_count : item_count,
@@ -277,6 +312,7 @@ termination_measure bal_storage_read_groups_size(account, read_count, change_cou
     read_count - read
 
 /* The unconsumed ordered storage-read table strictly decreases. */
+/*! Writes read slots that are not also represented by a storage change. */
 function bal_write_storage_read_groups(
     account : item_index,
     read_count : item_count,
@@ -303,6 +339,7 @@ function bal_write_storage_read_groups(
 termination_measure bal_write_storage_read_groups(account, read_count, change_count, read, change) =
     read_count - read
 
+/*! Sizes the storage-read list for one account. */
 function bal_storage_reads_size(account : item_index) -> BalContentCount =
     bal_storage_read_groups_size(
         account,
@@ -313,12 +350,14 @@ function bal_storage_reads_size(account : item_index) -> BalContentCount =
         struct { content_len = BYTE_ZERO, count = 0 },
     )
 
+/*! Writes the storage-read list for one account. */
 function bal_write_storage_reads(account : item_index, size : BalContentCount) -> unit = {
     rlp_write_list_prefix(size.content_len);
     bal_write_storage_read_groups(account, bal_storage_read_count(account), bal_storage_change_count(account), 0, 0)
 }
 
 /* The unconsumed run of equal balance-change indices strictly decreases. */
+/*! Finds the end of a run of equal balance-change indices. */
 function bal_balance_run_end(
     account : item_index,
     count : item_count,
@@ -339,6 +378,7 @@ function bal_balance_run_end(
 termination_measure bal_balance_run_end(account, count, index, cursor) = count - cursor
 
 /* The unconsumed ordered balance-change table strictly decreases. */
+/*! Sizes the final balance value for each change index. */
 function bal_balance_groups_size(
     account : item_index,
     count : item_count,
@@ -363,6 +403,7 @@ function bal_balance_groups_size(
 termination_measure bal_balance_groups_size(account, count, cursor, content_len) = count - cursor
 
 /* The unconsumed ordered balance-change table strictly decreases. */
+/*! Writes the final balance value for each change index. */
 function bal_write_balance_groups(account : item_index, count : item_count, cursor : item_index) -> unit =
     if cursor < count then {
         let index = bal_balance_change_index(account, cursor);
@@ -376,12 +417,14 @@ termination_measure bal_write_balance_groups(account, count, cursor) = count - c
 function bal_balance_changes_size(account : item_index) -> byte_length =
     bal_balance_groups_size(account, bal_balance_change_count(account), 0, BYTE_ZERO)
 
+/*! Writes the balance-change list for one account. */
 function bal_write_balance_changes(account : item_index, content_len : byte_length) -> unit = {
     rlp_write_list_prefix(content_len);
     bal_write_balance_groups(account, bal_balance_change_count(account), 0)
 }
 
 /* The unconsumed run of equal nonce-change indices strictly decreases. */
+/*! Finds one nonce-change run and its greatest observed nonce. */
 function bal_nonce_run(
     account : item_index,
     count : item_count,
@@ -405,6 +448,7 @@ function bal_nonce_run(
 termination_measure bal_nonce_run(account, count, index, cursor, maximum) = count - cursor
 
 /* The unconsumed ordered nonce-change table strictly decreases. */
+/*! Sizes the maximum nonce value for each change index. */
 function bal_nonce_groups_size(
     account : item_index,
     count : item_count,
@@ -424,6 +468,7 @@ function bal_nonce_groups_size(
 termination_measure bal_nonce_groups_size(account, count, cursor, content_len) = count - cursor
 
 /* The unconsumed ordered nonce-change table strictly decreases. */
+/*! Writes the maximum nonce value for each change index. */
 function bal_write_nonce_groups(account : item_index, count : item_count, cursor : item_index) -> unit =
     if cursor < count then {
         let index = bal_nonce_change_index(account, cursor);
@@ -437,12 +482,14 @@ termination_measure bal_write_nonce_groups(account, count, cursor) = count - cur
 function bal_nonce_changes_size(account : item_index) -> byte_length =
     bal_nonce_groups_size(account, bal_nonce_change_count(account), 0, BYTE_ZERO)
 
+/*! Writes the nonce-change list for one account. */
 function bal_write_nonce_changes(account : item_index, content_len : byte_length) -> unit = {
     rlp_write_list_prefix(content_len);
     bal_write_nonce_groups(account, bal_nonce_change_count(account), 0)
 }
 
 /* The unconsumed run of equal code-change indices strictly decreases. */
+/*! Finds the end of a run of equal code-change indices. */
 function bal_code_run_end(
     account : item_index,
     count : item_count,
@@ -463,6 +510,7 @@ function bal_code_run_end(
 termination_measure bal_code_run_end(account, count, index, cursor) = count - cursor
 
 /* The unconsumed ordered code-change table strictly decreases. */
+/*! Sizes the final code value for each change index. */
 function bal_code_groups_size(
     account : item_index,
     count : item_count,
@@ -487,6 +535,7 @@ function bal_code_groups_size(
 termination_measure bal_code_groups_size(account, count, cursor, content_len) = count - cursor
 
 /* The unconsumed ordered code-change table strictly decreases. */
+/*! Writes the final code value for each change index. */
 function bal_write_code_groups(account : item_index, count : item_count, cursor : item_index) -> unit =
     if cursor < count then {
         let index = bal_code_change_index(account, cursor);
@@ -500,11 +549,13 @@ termination_measure bal_write_code_groups(account, count, cursor) = count - curs
 function bal_code_changes_size(account : item_index) -> byte_length =
     bal_code_groups_size(account, bal_code_change_count(account), 0, BYTE_ZERO)
 
+/*! Writes the code-change list for one account. */
 function bal_write_code_changes(account : item_index, content_len : byte_length) -> unit = {
     rlp_write_list_prefix(content_len);
     bal_write_code_groups(account, bal_code_change_count(account), 0)
 }
 
+/*! Sizes all BAL fields contributed by one account. */
 function bal_account_size(account : item_index) -> BalAccountSize = {
     let storage_changes = bal_storage_changes_size(account);
     let storage_reads = bal_storage_reads_size(account);
@@ -523,6 +574,7 @@ function bal_account_size(account : item_index) -> BalAccountSize = {
     }
 }
 
+/*! Writes one account and all of its ordered BAL change lists. */
 function bal_write_account(account : item_index) -> unit = {
     let storage_changes = bal_storage_changes_size(account);
     let storage_reads = bal_storage_reads_size(account);
@@ -545,6 +597,7 @@ function bal_write_account(account : item_index) -> unit = {
 }
 
 /* The unconsumed ordered account table strictly decreases. */
+/*! Sizes all ordered BAL accounts and counts their logical items. */
 function bal_accounts_size(
     account_count : item_count,
     account : item_index,
@@ -568,6 +621,7 @@ function bal_accounts_size(
 termination_measure bal_accounts_size(account_count, account, result) = account_count - account
 
 /* The unconsumed ordered account table strictly decreases. */
+/*! Writes all BAL accounts in recorder order. */
 function bal_write_accounts(account_count : item_count, account : item_index) -> unit =
     if account < account_count then {
         bal_write_account(account);
@@ -575,6 +629,10 @@ function bal_write_accounts(account_count : item_count, account : item_index) ->
     }
 termination_measure bal_write_accounts(account_count, account) = account_count - account
 
+/*! Reconstructs the canonical EIP-7928 block access list from the
+    recorder: per account (address order) — storage changes, storage
+    reads, balance, nonce, and code changes — counting items against the
+    `gas_limit / 2000` bound. */
 function encode_block_access_list() -> EncodedBlockAccessList = {
     bal_prepare();
     let account_count = bal_account_count();

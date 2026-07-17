@@ -89,10 +89,10 @@ def stateless_input_byte_slice (off : source_pointer) (len : byte_length) : EvmB
   (byte_slice StatelessInputSource off len)
 
 def sub_slice (s : EvmByteSlice) (off : source_pointer) (len : byte_length) : SailM EvmByteSlice := do
-  assert (byte_quantity_le off s.len) "sail/primitives/bytes.sail:33.23-33.24"
-  assert (byte_quantity_le len (← (byte_quantity_sub s.len off))) "sail/primitives/bytes.sail:34.29-34.30"
-  assert (byte_quantity_le s.off MAX_BYTE_QUANTITY) "sail/primitives/bytes.sail:35.37-35.38"
-  assert (byte_quantity_le off (← (byte_quantity_sub MAX_BYTE_QUANTITY s.off))) "sail/primitives/bytes.sail:36.43-36.44"
+  assert (byte_quantity_le off s.len) "sail/primitives/bytes.sail:54.23-54.24"
+  assert (byte_quantity_le len (← (byte_quantity_sub s.len off))) "sail/primitives/bytes.sail:55.29-55.30"
+  assert (byte_quantity_le s.off MAX_BYTE_QUANTITY) "sail/primitives/bytes.sail:56.37-56.38"
+  assert (byte_quantity_le off (← (byte_quantity_sub MAX_BYTE_QUANTITY s.off))) "sail/primitives/bytes.sail:57.43-57.44"
   let absolute_off ← do (byte_quantity_add s.off off)
   (pure (byte_slice s.source absolute_off len))
 

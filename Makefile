@@ -20,6 +20,7 @@ SAIL ?= $(shell bash zkvm/resolve_optimized_sail.sh)
 LAKE ?= lake
 COQC ?= coqc
 PYTHON ?= python3
+UV ?= uv
 
 PROJECT             := sail/evm.sail_project
 MODEL               := $(PROJECT) evm
@@ -39,7 +40,7 @@ EXTERN_CONTRACT     := $(CONTRACTS_DIR)/ExternBoundary.v
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail extractions/contracts -name '*.sail' | sort)
 
-.PHONY: all check check-contracts clean eest-smoke extract extract-coq extract-lean fmt fmt-check help lint runtime-test
+.PHONY: all check check-contracts clean docs-site eest-smoke extract extract-coq extract-lean fmt fmt-check help lean-extract lint runtime-test
 
 help:
 	@echo "evm-sail targets:"
@@ -51,6 +52,7 @@ help:
 	@echo "  make eest-smoke     - run a tiny EEST fixture (root-checked)"
 	@echo "  make extract-coq    - generate and validate the complete Coq model"
 	@echo "  make extract-lean   - generate and compile the complete Lean model"
+	@echo "  make docs-site      - build the literate specification book"
 	@echo "  make extract        - run both theorem-prover extractions"
 	@echo "  make all            - check + lint + fmt-check"
 
@@ -66,6 +68,7 @@ lint:
 	@o=$$($(SAIL) --all-warnings $(MODEL) 2>&1); if printf '%s\n' "$$o" | grep -qiE "warning|error"; then printf '%s\n' "$$o" | grep -iE "warning|error" | head -20; echo "lint: FAILED (sail warnings)"; exit 1; fi; \
 	awk 'function ck(){if(n&&d)for(i=1;i<=n;i++)if(length(b[i])!=w){print f[i]":"l[i]": comment box width "length(b[i])" != "w;bad=1}} FNR==1{ck();n=0;d=0} /^\/\*.*\*\/$$/{b[++n]=$$0;l[n]=FNR;f[n]=FILENAME;if($$0~/^\/\* =+ \*\/$$/){d=1;w=length($$0)};next} {ck();n=0;d=0} END{ck();exit bad}' $(SAIL_FILES) || { echo "lint: FAILED (misaligned comment boxes)"; exit 1; }; \
 	echo "lint: clean"
+	@$(PYTHON) tools/docs_lint.py . || { echo "lint: FAILED (docs style)"; exit 1; }
 
 # one sail call per file: the files $include each other, so a single multi-file
 # invocation double-loads them and errors.
@@ -146,5 +149,24 @@ extract: extract-coq extract-lean
 
 all: check lint fmt-check
 
+# Build the MkDocs Material specification book from the sources: docinfo
+# bundle -> sail-lsp semantic index -> generated pages (sail-book-gen) ->
+# strict mkdocs build. Prose lives in /*md and /*! comments in the .sail
+# sources. Requires uv, sail_lsp, and the mkdocstrings-sail package
+# (override MKDOCSTRINGS_SAIL to test another package checkout).
+BOOK ?= book
+MKDOCSTRINGS_SAIL ?= mkdocstrings-sail
+LEAN_BOOK_ROOT ?= $(LEAN_MODEL_DIR)
+docs-site:
+	@mkdir -p $(BOOK)/doc $(BOOK)/docs
+	$(SAIL) --doc --doc-format identity --doc-embed plain --doc-embed-with-location --doc-bundle doc.json -o $(BOOK)/doc $(MODEL)
+	$(UV) run --with-editable '$(abspath $(MKDOCSTRINGS_SAIL))' sail-lsp-index --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --output $(BOOK)/doc/lsp-index.json
+	$(UV) run --with-editable '$(abspath $(MKDOCSTRINGS_SAIL))' sail-book-gen --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --book $(BOOK) --site-name "EVM Sail Specification" $(if $(wildcard $(LEAN_BOOK_ROOT)/Evm.lean),--lean $(LEAN_BOOK_ROOT))
+	cd $(BOOK) && DISABLE_MKDOCS_2_WARNING=true $(UV) run --with-editable '$(abspath $(MKDOCSTRINGS_SAIL))' mkdocs build --strict -d site
+	@echo "book: $(BOOK)/site/index.html"
+
+# Compatibility spelling retained for the docs workflow.
+lean-extract: extract-lean
+
 clean:
-	rm -rf sail_smt_cache sail/sail_smt_cache $(LEAN_MODEL_DIR)/.lake/build
+	rm -rf sail_smt_cache sail/sail_smt_cache $(LEAN_MODEL_DIR)/.lake/build $(BOOK)/site $(BOOK)/doc $(BOOK)/docs/reference $(BOOK)/docs/extraction $(BOOK)/docs/assets $(BOOK)/mkdocs.yml

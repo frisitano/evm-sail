@@ -1,35 +1,57 @@
-/* Ordered leaf updates. */
 
+/*md
+# Trie updates and the canonical builder
+
+Ordered leaf updates, their merge into item streams, and the trie builder
+that recomposes canonical nodes (YP Appendix D).
+*/
+/*! A pending change at a trie key: a put of new leaf bytes, or a
+    delete. */
 union TrieChange = {
+    /* insert or replace the leaf bytes at the key */
     TriePut : ByteSlice,
+    /* remove the key */
     TrieDelete : unit,
 }
 
+/*! An update: a full-path key and its change. Update lists are kept
+    sorted by key. */
 struct TrieUpdate = { key : TriePath, change : TrieChange }
 
+/*! Whether the update list is empty. */
 function updates_empty(updates : list(TrieUpdate)) -> bool =
     match updates {
         [||] => true,
         _ => false,
     }
 
+/*! Whether the cursor's next update falls under `prefix`. */
 function next_update_under(updates : list(TrieUpdate), prefix : TriePath) -> bool =
     match updates {
         update :: _ => path_prefix_of(prefix, update.key),
         [||] => false,
     }
 
-/* The walker merges updates into an ordered item stream; the builder turns
- * that stream back into canonical trie nodes. Untouched subtrees stay refs. */
+/*md
+## The item streams
 
-/* Extension children are known branches; branch children have unknown kind
- * until resolved. That distinction permits untouched hashes to stay opaque. */
+The walker merges updates into an ordered item stream; the builder turns
+that stream back into canonical trie nodes. Untouched subtrees stay
+references.
+*/
+/*! An item's payload: a live leaf, a known-branch reference (extension
+    children are always branches), or a subtree reference of unknown kind.
+    The distinction permits untouched hashes to stay opaque. */
 union TrieItemValue = {
+    /* a live leaf's bytes */
     LeafItem : ByteSlice,
+    /* a known-branch child reference */
     BranchItem : NodeRef,
+    /* an opaque subtree reference of unknown kind */
     SubtreeItem : NodeRef,
 }
 
+/*! A sorted-stream item: a path and its payload. */
 struct TrieItem = { path : TriePath, value : TrieItemValue }
 
 function item_leaf(path : TriePath, value : ByteSlice) -> TrieItem =
@@ -41,10 +63,11 @@ function item_branch(path : TriePath, childref : NodeRef) -> TrieItem =
 function item_subtree(path : TriePath, childref : NodeRef) -> TrieItem =
     struct { path = path, value = SubtreeItem(childref) }
 
-/* the child ref of a single-item subtree at `depth`: the item's remaining
- * path is absorbed into it. This is the ONE place a delete collapse can
- * demand node material: an unknown-type hash ref absorbing a nonempty
- * suffix resolves its node from the witness db (fail-closed). */
+/*! The child reference of a single-item subtree at `depth`: the item's
+    remaining path is absorbed into it. This is the one place a delete
+    collapse can demand node material: an unknown-type hash reference
+    absorbing a nonempty suffix resolves its node from the witness db
+    (fail-closed). */
 function item_ref(it : TrieItem, depth : trie_path_len) -> NodeRef = {
     let suffix = path_drop(it.path, depth);
     match it.value {
@@ -77,12 +100,29 @@ function item_ref(it : TrieItem, depth : trie_path_len) -> NodeRef = {
  * the next key determines which branch frames remain open, so no prefix
  * partition or second walk is needed. The current value is fully consumed
  * before this function returns. */
+/*md
+## The trie builder
+
+The canonical builder (YP Appendix D). On a leaf-only stream this is the
+protocol trie definition, transcribed from the Yellow Paper (Shanghai
+version) and specialized to fixed-length secure-trie keys (so a branch
+node's value slot — the 17th item — is always empty):
+
+```text
+c(I,i): leaf | extension | 17-item branch      (Eq. 208)  trie_insert_item
+n(I,i): () if I = {}; c(I,i) if ||RLP|| < 32;
+        KEC(RLP(c(I,i))) otherwise             (Eq. 207)  child_ref
+TRIE(I) = KEC(RLP(c(I,0)))                     (Eq. 206)  trie_sink_root
+```
+*/
+/*! One open branch in the incremental canonical trie builder. */
 struct TrieBranchFrame = {
     depth : trie_depth,
     mask : bits(16),
     children : BranchRefs,
 }
 
+/*! The open branch stack and completed root of a streaming trie build. */
 struct TrieBuilder = {
     /* The open branch is the head. Sail lists are reference-counted, so a
      * builder copy, push, or pop never copies the other open frames. */
@@ -97,6 +137,7 @@ function empty_trie_branch_frame(depth : trie_depth) -> TrieBranchFrame =
 function trie_builder_empty() -> TrieBuilder =
     struct { frames = [||], root = EmptyRef(), complete = false }
 
+/*! Opens an empty branch at `depth` on the builder stack. */
 function trie_builder_push(builder : TrieBuilder, depth : trie_depth) -> TrieBuilder =
     struct {
         frames = empty_trie_branch_frame(depth) :: builder.frames,
@@ -104,6 +145,7 @@ function trie_builder_push(builder : TrieBuilder, depth : trie_depth) -> TrieBui
         complete = builder.complete,
     }
 
+/*! Attaches one child to the open branch position selected by `path`. */
 function trie_builder_attach(builder : TrieBuilder, path : TriePath, child : NodeRef) -> TrieBuilder =
     match builder.frames {
         [||] => throw InvalidBlock(WitnessDeficient),
@@ -123,12 +165,15 @@ function trie_builder_attach(builder : TrieBuilder, path : TriePath, child : Nod
         },
     }
 
+/*! Removes and returns the innermost open branch. */
 function trie_builder_pop(builder : TrieBuilder) -> (TrieBranchFrame, TrieBuilder) =
     match builder.frames {
         [||] => throw InvalidBlock(WitnessDeficient),
         frame :: rest => (frame, struct { frames = rest, root = builder.root, complete = builder.complete }),
     }
 
+/*! Inserts an extension between parent and child depths when their paths have
+    an unbranched gap. */
 function trie_builder_wrap_branch(
     anchor : TriePath,
     parent_depth : trie_depth,
@@ -146,6 +191,7 @@ function trie_builder_wrap_branch(
     }
 }
 
+/*! Closes every branch deeper than the next key's common prefix. */
 function trie_builder_close(
     builder : TrieBuilder,
     anchor : TriePath,
@@ -219,6 +265,7 @@ function trie_builder_close(
 }
 termination_measure trie_builder_close(builder, anchor, next_common, fuel) = fuel
 
+/*! Computes the branch depth shared by an item and its ordered successor. */
 function trie_item_next_common(item : TrieItem, next_key : option(TriePath)) -> option(trie_depth) =
     match next_key {
         None() => None(),
@@ -231,6 +278,8 @@ function trie_item_next_common(item : TrieItem, next_key : option(TriePath)) -> 
         },
     }
 
+/*! Inserts one ordered, prefix-free item using its successor for branch
+    lookahead. */
 function trie_insert_item(builder : TrieBuilder, item : TrieItem, next_key : option(TriePath)) -> TrieBuilder = {
     if builder.complete then {
         throw InvalidBlock(WitnessDeficient)
@@ -265,6 +314,7 @@ function trie_insert_item(builder : TrieBuilder, item : TrieItem, next_key : opt
 /* One-item lookahead turns any ordered producer into a streaming trie input.
  * The pending item is consumed as soon as its successor supplies the next
  * key; no item retains a source-backed payload after that call returns. */
+/*! A one-item lookahead buffer feeding the incremental trie builder. */
 struct TrieItemSink = {
     builder : TrieBuilder,
     pending : option(TrieItem),
@@ -273,6 +323,7 @@ struct TrieItemSink = {
 function trie_sink_empty() -> TrieItemSink =
     struct { builder = trie_builder_empty(), pending = None() }
 
+/*! Queues an ordered item and commits the previously pending item. */
 function trie_sink_emit(sink : TrieItemSink, item : TrieItem) -> TrieItemSink =
     match sink.pending {
         None() => struct { builder = sink.builder, pending = Some(item) },
@@ -282,12 +333,14 @@ function trie_sink_emit(sink : TrieItemSink, item : TrieItem) -> TrieItemSink =
         },
     }
 
+/*! Commits the final pending item with no successor. */
 function trie_sink_finish(sink : TrieItemSink) -> TrieItemSink =
     match sink.pending {
         None() => sink,
         Some(item) => struct { builder = trie_insert_item(sink.builder, item, None()), pending = None() },
     }
 
+/*! Returns the root of a complete builder, or the canonical empty root. */
 function trie_builder_root(builder : TrieBuilder) -> hash =
     match builder.frames {
         _ :: _ => throw InvalidBlock(WitnessDeficient),
@@ -298,6 +351,7 @@ function trie_builder_root(builder : TrieBuilder) -> hash =
         },
     }
 
+/*! Returns the completed root after all sink lookahead has been consumed. */
 function trie_sink_root(sink : TrieItemSink) -> hash =
     match sink.pending {
         Some(_) => throw InvalidBlock(WitnessDeficient),

@@ -1,32 +1,39 @@
-/* ======================================================================== */
-/* OPCODE SEMANTICS: execute(op)                                            */
-/*                                                                          */
-/* The single-step transition function of the EVM (Yellow Paper section 9): */
-/* given the decoded opcode, charge its gas, consume its stack operands,    */
-/* and produce its result or effect. One match arm per opcode, grouped by   */
-/* family (arithmetic / bitwise / keccak / environment / block / stack-     */
-/* memory / storage / flow / push-dup-swap / log / system).                 */
-/*                                                                          */
-/* Pure compute is done here; every world effect is a kernel syscall (k_*). */
-/* All gas/policy stays in the EVM: the EVM marks-and-prices access via the */
-/* kernel's returned warm bit (EIP-2929), decides whether an effect         */
-/* happens, and issues the syscall only for real effects (e.g. a no-op      */
-/* SSTORE charges gas but issues no host write). Memory-touching opcodes    */
-/* pay the quadratic expansion cost via charge_expansion before acting.     */
-/* Sub-calls and creates delegate to run_call / run_create                  */
-/* (interpreter.sail).                                                      */
-/* ======================================================================== */
 
+/*md
+# Opcode semantics
+
+The single-step transition function of the EVM (Yellow Paper §9): given
+the decoded opcode, [execute][] charges its gas, consumes its stack
+operands, and produces its result or effect. One match arm per opcode,
+grouped by family (arithmetic, bitwise, keccak, environment, block,
+stack/memory, storage, flow, push/dup/swap, log, system).
+
+Pure compute is done here; every world effect is a kernel syscall
+(`k_*`). All gas and policy stays in the EVM: it marks-and-prices access
+via the kernel's returned warm bit (EIP-2929), decides whether an effect
+happens, and issues the syscall only for real effects (a no-op `SSTORE`
+charges gas but issues no host write). Memory-touching opcodes pay the
+quadratic expansion cost via [charge_memory_expansion][] before acting.
+Sub-calls and creates delegate to [run_call][] / [run_create][].
+*/
+/*! The call-family runner (0 = `CALL`, 1 = `CALLCODE`,
+    2 = `DELEGATECALL`, 3 = `STATICCALL`); defined with the
+    interpreter. */
 val run_call : CallKind -> unit
-val run_create : bool -> unit /* true = CREATE2 */
+/*! The create runner (`true` = `CREATE2`); defined with the
+    interpreter. */
+val run_create : bool -> unit
 
-/* ----------------------------- helpers ---------------------------------- */
-
-/* the storage owner / I_a: SLOAD, SSTORE, LOG, SELFDESTRUCT act on this account */
+/*md
+## Helpers
+*/
+/*! The storage owner (YP I_a): `SLOAD`, `SSTORE`, `LOG`, and
+    `SELFDESTRUCT` act on this account. */
 function self_addr() -> address = message.address
 
-/* EIP-214 write protection: any state-modifying opcode in a STATICCALL frame
- * halts exceptionally. State-changing opcodes call this first; true => halted. */
+/*! EIP-214 write protection: any state-modifying opcode in a
+    `STATICCALL` frame halts exceptionally. State-changing opcodes call
+    this first; `true` means already halted. */
 function guard_static() -> bool =
     if message.is_static then {
         exc_halt(WriteProtection);
@@ -35,9 +42,10 @@ function guard_static() -> bool =
         false
     }
 
-/* JUMP/JUMPI target validity: dest must be in code range AND land on a JUMPDEST
- * (the precomputed valid-destination set, YP 9.4.3); otherwise an invalid-jump
- * exceptional halt. PUSH-data bytes that happen to equal 0x5b are not valid. */
+/*! `JUMP`/`JUMPI` target validity: the destination must be in code range
+    and land on a `JUMPDEST` (the precomputed valid-destination set,
+    YP §9.4.3); otherwise an invalid-jump exceptional halt. PUSH-data
+    bytes that happen to equal `0x5b` are not valid. */
 function do_jump(dest_word : word) -> unit = {
     if word_ult(dest_word, word_of_quantity(frame_code_len())) then {
         let destination = ByteQuantity(unsigned(dest_word));
@@ -51,6 +59,7 @@ function do_jump(dest_word : word) -> unit = {
     }
 }
 
+/*! Pops `count` log topics from the stack. */
 function pop_log_topics(count : log_topic_count) -> list(word) =
     match count {
         0 => [||],
@@ -76,8 +85,11 @@ function pop_log_topics(count : log_topic_count) -> list(word) =
         _ => [||],
     }
 
-/* ------------------------------- execute -------------------------------- */
-
+/*md
+## The dispatch
+*/
+/*! The single-step transition function: one arm per opcode, in opcode
+    order, with the family structure annotated inline. */
 function execute(op : ast) -> unit = match op {
     STOP() => frame_status = Halted(HaltStop()),
     /* ---- arithmetic (pure) ---- */
@@ -327,7 +339,7 @@ function execute(op : ast) -> unit = match op {
         /* read the account ONLY if the access charge was covered: an OOG'd
            BALANCE must touch no state (charge sets status but does not abort
            the handler), else the stateless witness would need to prove an
-           account EELS never read. */
+           account the protocol never read. */
         if is_running() then {
             push(k_get_balance(a))
         }
@@ -522,7 +534,7 @@ function execute(op : ast) -> unit = match op {
                 let v = pop();
 
                 /* a stack underflow in the pops above exceptionally halts the
-                   frame (pop returns 0 but sets the halt); EELS raises before any
+                   frame (pop returns 0 but sets the halt); the underflow precedes any
                    state access, so guard the storage read/write on is_running so
                    an underflowing SSTORE records no EIP-7928 storage access. */
                 if is_running() then {
@@ -596,7 +608,7 @@ function execute(op : ast) -> unit = match op {
         charge(G_verylow);
 
         /* DUP_n duplicates the n-th item (1-indexed): needs height >= n.
-           EELS dup_n raises StackUnderflowError when (n-1) >= len(stack). */
+           DUPn underflows when fewer than n items are on the stack. */
         if stack_height() < n then {
             exc_halt(StackUnderflow)
         } else {
@@ -607,7 +619,7 @@ function execute(op : ast) -> unit = match op {
         charge(G_verylow);
 
         /* SWAP_n swaps the top with the n-th-below item: needs height >= n+1.
-           EELS swap_n raises StackUnderflowError when n >= len(stack). */
+           SWAPn underflows when fewer than n+1 items are on the stack. */
         if stack_height() < n + 1 then {
             exc_halt(StackUnderflow)
         } else {
@@ -691,7 +703,7 @@ function execute(op : ast) -> unit = match op {
             }; /* EIP-2929 */
             if is_running() & word_nonzero(bal) & k_account_is_empty(beneficiary) then {
                 /* new account; the beneficiary is always touched via k_transfer's
-                 * unconditional move_ether read below (EELS parity). */
+                 * unconditional balance-move read below. */
                 charge(G_newaccount)
             };
 

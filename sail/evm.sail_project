@@ -8,6 +8,7 @@ evm {
     primitives/gas.sail,
     primitives/bytes.sail,
     exceptions.sail,
+    evm/halt.sail,
     primitives/ssz.sail,
     primitives/code.sail,
     lib/bytes.sail,

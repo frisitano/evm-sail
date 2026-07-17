@@ -1,35 +1,37 @@
-/* ======================================================================== */
-/* THE GAS SCHEDULE                                                         */
-/*                                                                          */
-/* The complete fork-gated EVM gas schedule (Yellow Paper Appendix G plus   */
-/* the gas-repricing EIPs). Gas meters execution: every step debits the     */
-/* frame's gas counter, and a debit that would underflow raises an out-of-  */
-/* gas exceptional halt. This module owns the cost groups; the static per-  */
-/* opcode cost is attached to each opcode in execute.sail.                  */
-/*                                                                          */
-/* The cost groups, with their governing specifications:                    */
-/*                                                                          */
-/* - Static G_* constants: the Yellow Paper Appendix G symbols, as          */
-/* repriced by EIP-150 (SLOAD/CALL/SELFDESTRUCT), EIP-160 (G_expbyte),      */
-/* and EIP-2929 (cold/warm).                                                */
-/* - Memory-expansion gas (YP C_mem): quadratic in the high-water word      */
-/* count, charged on any addressed touch.                                   */
-/* - EIP-2929 access costs: cold/warm surcharges for account and storage    */
-/* access (the kernel owns the warm set; the EVM only prices it).           */
-/* - EIP-2200 / EIP-3529 SSTORE cost and refund, under the EIP-3529         */
-/* refund cap (applied at tx scope, not here).                              */
-/*   - Per-opcode dynamic gas: KECCAK256 / *COPY per-word, LOG per-         */
-/* byte/topic, EXP per-byte, EIP-3860 per-initcode-word.                    */
-/*   - Call gas: the EIP-150 all-but-one-64th forwarding cap and the value- */
-/* transfer stipend.                                                        */
-/* - Per-precompile gas, including the EIP-2565 / EIP-7883 MODEXP curve     */
-/* and the EIP-2537 BLS12-381 MSM discount tables.                          */
-/* ======================================================================== */
 
-/* --- EIP-4844/EIP-7918 blob accounting (from excess_blob_gas) ---
- * blob_base_fee = fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas,
- * BLOB_BASE_FEE_UPDATE_FRACTION). The active target, maximum, and update
- * fraction come from the validated SSZ chain config, including BPO1/BPO2. */
+/*md
+# The gas schedule
+
+The complete fork-gated EVM gas schedule (Yellow Paper Appendix G plus the
+gas-repricing EIPs). Gas meters execution: every step debits the frame's
+gas counter, and a debit that would underflow raises an out-of-gas
+exceptional halt. This module owns the cost groups; the static per-opcode
+cost is attached to each opcode in the dispatch module.
+
+The cost groups, with their governing specifications:
+
+- **Static `G_*` constants**: the YP Appendix G symbols, as repriced by
+  EIP-150 (`SLOAD`/`CALL`/`SELFDESTRUCT`), EIP-160 (`G_expbyte`), and
+  EIP-2929 (cold/warm).
+- **Memory-expansion gas** (YP C_mem): quadratic in the high-water word
+  count, charged on any addressed touch.
+- **EIP-2929 access costs**: cold/warm surcharges for account and storage
+  access (the kernel owns the warm set; the EVM only prices it).
+- **EIP-2200 / EIP-3529 `SSTORE` cost and refund**, under the EIP-3529
+  refund cap (applied at transaction scope, not here).
+- **Per-opcode dynamic gas**: `KECCAK256` / `*COPY` per word, `LOG` per
+  byte/topic, `EXP` per byte, EIP-3860 per initcode word.
+- **Call gas**: the EIP-150 all-but-one-64th forwarding cap and the
+  value-transfer stipend.
+- **Per-precompile gas**, including the EIP-2565 / EIP-7883 `MODEXP`
+  curve and the EIP-2537 BLS12-381 MSM discount tables.
+
+## The blob-gas accounting
+
+`blob_base_fee = fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas,
+BLOB_BASE_FEE_UPDATE_FRACTION)`. The active target, maximum, and update
+fraction come from the validated SSZ chain config, including BPO1/BPO2.
+*/
 let MIN_BLOB_BASE_FEE : word = WORD_ONE
 let GAS_PER_BLOB : blob_gas = 131072
 
@@ -44,11 +46,13 @@ let GAS_PER_BLOB : blob_gas = 131072
  * Taylor terms and their running sum are scaled by `denominator`. Keeping the
  * quotient and remainder separately computes the exact word-sized result
  * without either modular intermediate arithmetic or a Sail bigint. */
+/*! A non-negative blob-fee Taylor term scaled by a protocol denominator. */
 struct ScaledBlobValue = {
     whole : word,
     remainder : protocol_quantity,
 }
 
+/*! Adds two scaled blob-fee values without losing their fractional parts. */
 function scaled_blob_add(
     left : ScaledBlobValue,
     right : ScaledBlobValue,
@@ -87,6 +91,7 @@ function scaled_blob_add(
  * `denominator * iteration`. Both divisor factors fit one fixed-width limb, so after first
  * dividing `value`, the residual product is below 2^192 and cannot wrap a
  * word. None means that the exact quotient is larger than WORD_ALL_ONES. */
+/*! Divides an exact blob-fee product while detecting word overflow. */
 function blob_product_divmod(
     value : word,
     factor : blob_gas,
@@ -118,6 +123,7 @@ function blob_product_divmod(
     Some(struct { quotient = quotient, remainder = residual_parts.remainder })
 }
 
+/*! Computes the next scaled term of the blob-fee Taylor series. */
 function scaled_blob_next(
     term : ScaledBlobValue,
     numerator : blob_gas,
@@ -146,6 +152,8 @@ function scaled_blob_next(
     Some(struct { whole = divided.quotient, remainder = remainder })
 }
 
+/*! The EIP-4844 `fake_exponential`: an integer approximation of
+    `factor · e^(numerator/denominator)` by Taylor expansion. */
 function fake_exponential(factor : word, numerator : blob_gas, denominator : blob_fee_update_fraction) -> word = {
     if denominator == 0 then {
         throw InvalidBlock(InvalidConfig)
@@ -173,12 +181,14 @@ function fake_exponential(factor : word, numerator : blob_gas, denominator : blo
 function blob_base_fee_update_fraction() -> blob_fee_update_fraction =
     k_blob_schedule.base_fee_update_fraction
 
+/*! The blob base fee for a given excess blob gas. */
 function blob_base_fee(excess_blob_gas : blob_gas) -> word =
     fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas, blob_base_fee_update_fraction())
 
 /* EIP-7918 compares BLOB_BASE_COST*base_fee with GAS_PER_BLOB*blob_fee.
  * Their ratio is exactly 16, so compare base_fee with 16*blob_fee instead of
  * forming either potentially 257+-bit product. */
+/*! Tests the EIP-7918 reserve-price condition without overflowing a word. */
 function blob_reserve_price_active(base_fee : word, price : word) -> bool =
     if price[255 .. 252] == sail_zeros(4) then {
         word_ult(sail_shiftleft(price, 4), base_fee)
@@ -190,6 +200,7 @@ function blob_schedule_target() -> blob_count = k_blob_schedule.target
 
 function blob_schedule_max() -> blob_count = k_blob_schedule.max
 
+/*! Converts a blob count to blob gas and rejects an invalid schedule. */
 function blob_gas_for_count(count : blob_count) -> blob_gas = {
     let product = GAS_PER_BLOB * count;
     if product <= 2 ^ 64 - 1 then {
@@ -205,6 +216,10 @@ function blob_target_gas_per_block() -> blob_gas =
 function blob_max_gas_per_block() -> blob_gas =
     blob_gas_for_count(blob_schedule_max())
 
+/*! The header `excess_blob_gas` rule: decreases toward zero when the
+    parent underused blobs, otherwise accumulates; from Osaka, EIP-7918
+    substitutes the reserve-price form when the execution base fee
+    dominates. */
 function next_excess_blob_gas(
     parent_excess_blob_gas : blob_gas,
     parent_blob_gas_used : blob_gas,
@@ -244,8 +259,44 @@ function next_excess_blob_gas(
     }
 }
 
-/* --- static cost constants (Yellow Paper Appendix G symbols G_*, as
- *     repriced by EIP-150/160/2929) --- */
+/*md
+## Constants
+
+The Yellow Paper Appendix G symbols, as repriced by EIP-150, EIP-160, and
+EIP-2929. The definitions below are normative; this table summarizes them.
+
+| Name | Value | Description |
+| ---- | ----- | ----------- |
+| `G_zero` | `0` | `STOP`, `RETURN`, `REVERT` |
+| `G_jumpdest` | `1` | `JUMPDEST` |
+| `G_base` | `2` | Base-tier opcodes |
+| `G_verylow` | `3` | Very-low-tier opcodes |
+| `G_low` | `5` | Low-tier opcodes |
+| `G_mid` | `8` | Mid-tier opcodes |
+| `G_high` | `10` | High-tier opcodes (`JUMPI`) |
+| `G_warm_access` | `100` | Warm account/storage access (EIP-2929) |
+| `G_cold_sload` | `2100` | Cold `SLOAD` surcharge (EIP-2929) |
+| `G_cold_account` | `2600` | Cold account-access surcharge (EIP-2929) |
+| `G_keccak` | `30` | `KECCAK256` base |
+| `G_keccak_word` | `6` | `KECCAK256` per 32-byte word |
+| `G_copy_word` | `3` | `*COPY` per word |
+| `G_memory` | `3` | Memory expansion, per word |
+| `G_log` | `375` | `LOG` base |
+| `G_logtopic` | `375` | `LOG` per topic |
+| `G_logdata` | `8` | `LOG` per data byte |
+| `G_exp` | `10` | `EXP` base |
+| `G_expbyte` | `50` | `EXP` per exponent byte (EIP-160) |
+| `G_sset` | `20000` | `SSTORE` zero → nonzero (EIP-2200) |
+| `G_sreset` | `2900` | `SSTORE` reset (EIP-2200/EIP-2929) |
+| `R_sclear_london` | `4800` | `SSTORE`-clears refund (EIP-3529) |
+| `G_create` | `32000` | `CREATE`/`CREATE2` base |
+| `G_codedeposit` | `200` | Per deployed code byte |
+| `G_callvalue` | `9000` | `CALL` value transfer |
+| `G_callstipend` | `2300` | Stipend to a value-receiving call |
+| `G_newaccount` | `25000` | `CALL`/`SELFDESTRUCT` to a new account |
+| `G_selfdestruct` | `5000` | `SELFDESTRUCT` base (EIP-150) |
+| `G_initcode_word` | `2` | Per initcode word (EIP-3860) |
+*/
 let G_zero : gas_constant = GasConstant(0) /* YP G_zero                                  */
 let G_jumpdest : gas_constant = GasConstant(1) /* YP G_jumpdest                              */
 let G_base : gas_constant = GasConstant(2) /* YP G_base                                  */
@@ -278,11 +329,12 @@ let G_newaccount : gas_constant = GasConstant(25000) /* YP G_newaccount (CALL/SE
 let G_selfdestruct : gas_constant = GasConstant(5000) /* EIP-150 R_selfdestruct base                */
 let G_initcode_word : gas_constant = GasConstant(2) /* EIP-3860 (per word of initcode)            */
 
-/* --- protocol code-size limits --- */
-/* EIP-170 deployed-code limit 24576, raised to 0x8000 = 32768 by EIP-7954 at
- * Amsterdam; the EIP-3860 initcode cap is always 2 * MAX_CODE_SIZE. Fork-
- * dependent so the shared interpreter serves both the pre-Amsterdam state-tests
- * (k_fork < Amsterdam) and the guest (k_fork defaults to 99). */
+/*md
+## The code-size limits
+*/
+/*! The deployed-code size limit: 24576 (EIP-170), raised to 32768 by
+    EIP-7954 at Amsterdam; the shared interpreter serves both the
+    pre-Amsterdam state tests and the guest. */
 function max_code_size() -> code_length =
     if k_fork >= Amsterdam then {
         ByteQuantity(32768)
@@ -291,12 +343,17 @@ function max_code_size() -> code_length =
     }
 function initcode_size_allowed(size : nat) -> bool =
     (k_fork < Shanghai) | size <= 2 * max_code_size()
+/*! The `SSTORE`-clears refund: 4800 from London (EIP-3529), 15000
+    before. */
 function sstore_clear_refund() -> gas_constant =
     if k_fork >= London then { R_sclear_london } else { R_sclear_pre_london }
 
 /* Intermediate costs remain exact in the canonical model. Optimized C builds
  * splice the complete cost calculators that can exceed the live-gas range;
  * affordability is still decided only by charge or an explicit comparison. */
+/*md
+## The charging hook
+*/
 function gas_product_quotient(left : nat, right : nat, divisor : gas_divisor) -> gas_cost =
     GasCost(exact_quotient(left * right, divisor))
 
@@ -305,6 +362,7 @@ function gas_product_quotient(left : nat, right : nat, divisor : gas_divisor) ->
 /* covered raises an out-of-gas exceptional halt (YP: the step is invalid,   */
 /* all remaining gas is consumed). A non-positive amount is a no-op.         */
 
+/*! Debits an exact cost from the running frame or halts out of gas. */
 function charge_cost(GasCost(amount) : gas_cost) -> unit =
     if not_bool(is_running()) | amount == 0 then {
         ()
@@ -317,6 +375,7 @@ function charge_cost(GasCost(amount) : gas_cost) -> unit =
         }
     }
 
+/*! Debits a fixed schedule cost from the running frame. */
 function charge_constant(GasConstant(amount) : gas_constant) -> unit =
     charge_cost(GasCost(amount))
 
@@ -325,6 +384,7 @@ overload charge = {charge_cost, charge_constant}
 /* Subtraction is the one gas arithmetic operation whose invalid case is
  * observable: attempting to spend more than remains exceptionally halts. The
  * inert zero mirrors pop() after stack underflow and is ignored once halted. */
+/*! Subtracts an exact cost from gas or records an out-of-gas halt. */
 function gas_sub_cost_or_oog(Gas(left) : gas, GasCost(right) : gas_cost) -> gas =
     if right <= left then {
         Gas(left - right)
@@ -333,6 +393,7 @@ function gas_sub_cost_or_oog(Gas(left) : gas, GasCost(right) : gas_cost) -> gas 
         GAS_ZERO
     }
 
+/*! Subtracts bounded gas or records an out-of-gas halt. */
 function gas_sub_gas_or_oog(Gas(left) : gas, Gas(right) : gas) -> gas =
     if right <= left then {
         Gas(left - right)
@@ -343,6 +404,7 @@ function gas_sub_gas_or_oog(Gas(left) : gas, Gas(right) : gas) -> gas =
 
 overload gas_sub_or_oog = {gas_sub_cost_or_oog, gas_sub_gas_or_oog}
 
+/*! Returns unused child gas to the parent frame. */
 function refund_gas(Gas(amount) : gas) -> unit = {
     let Gas(remaining) = gas_remaining;
     if amount <= (2 ^ 63 - 1) - remaining then {
@@ -354,19 +416,20 @@ function refund_gas(Gas(amount) : gas) -> unit = {
 
 function memory_word_count(byte_len : nat) -> nat = exact_quotient(byte_len + 31, 32)
 
-/* --------------------- memory-expansion gas ----------------------------- */
-/* Memory is charged by its high-water mark in 32-byte words (YP C_mem):     */
-/* C_mem(a) = G_memory * a + floor(a^2 / 512), a quadratic term that makes   */
-/* large allocations progressively dearer. Expansion gas is the DIFFERENCE   */
-/* C_mem(new) - C_mem(old) -- you pay only for the words you newly reach.    */
+/*md
+## The memory-expansion cost
 
+Memory is charged by its high-water mark in 32-byte words (YP C_mem):
+`C_mem(a) = G_memory·a + ⌊a²/512⌋`, a quadratic term that makes large
+allocations progressively dearer. Expansion gas is the difference
+`C_mem(new) − C_mem(old)` — only newly reached words are paid for.
+*/
+/*! `C_mem` (YP §9.4.1): the cumulative memory cost of `words` words. */
 function mem_cost(words : nat) -> gas_cost =
     G_memory * words + gas_product_quotient(words, words, 512)
 
-/* Gas to expand memory so that byte range [0 .. new_bytes) is addressable;
- * rounds up to a word boundary and is zero when the watermark already covers
- * the range. */
 /* A zero-sized operand does not access memory, irrespective of its offset. */
+/*! Computes the exclusive end of an addressed memory range. */
 function memory_required_size(start : word, size : word) -> nat =
     if word_is_zero(size) then {
         0
@@ -374,6 +437,7 @@ function memory_required_size(start : word, size : word) -> nat =
         unsigned(start) + unsigned(size)
     }
 
+/*! Computes the larger exclusive end of two addressed memory ranges. */
 function maximum_memory_required_size(
     left_start : word,
     left_size : word,
@@ -387,6 +451,7 @@ function maximum_memory_required_size(
     if left < right then { right } else { left }
 }
 
+/*! Computes the incremental gas needed to reach a memory size. */
 function memory_expansion_gas(required_size : nat) -> gas_cost = {
     let new_words = memory_word_count(required_size);
     let ByteQuantity(old_size) = evm_memory_size();
@@ -398,6 +463,7 @@ function memory_expansion_gas(required_size : nat) -> gas_cost = {
     }
 }
 
+/*! Materializes the word-aligned memory size after gas has been charged. */
 function expand_memory(required_size : nat) -> unit = {
     let expanded_size = memory_word_count(required_size) * 32;
     assert(nat_fits_limb(expanded_size));
@@ -407,6 +473,7 @@ function expand_memory(required_size : nat) -> unit = {
 /* Charge before materializing the range. Exact arithmetic makes an
  * unaffordable transaction-controlled range out-of-gas before it reaches the
  * host memory boundary. */
+/*! Charges and applies the expansion implied by one memory range. */
 function charge_memory_expansion(start : word, size : word) -> unit =
     if is_running() then {
         let required_size = memory_required_size(start, size);
@@ -418,29 +485,39 @@ function charge_memory_expansion(start : word, size : word) -> unit =
 
 /* Apply an already-charged range, used by CALL where memory gas is included
  * in the single EIP-150 message-call charge. */
+/*! Applies a memory expansion whose gas was included in an earlier charge. */
 function expand_charged_memory(required_size : nat) -> unit =
     if is_running() then {
         expand_memory(required_size)
     }
 
-/* ----------------------- EIP-2929 access costs -------------------------- */
-/* First touch of an account or storage slot in a transaction is COLD and    */
-/* dear; a repeat touch is WARM and cheap (EIP-2929 mitigates state-access    */
-/* DoS). The warm set is kernel state: the kernel marks warm (k_access_*)     */
-/* and returns the PRIOR warm bit, and these helpers price that bit. No       */
-/* state is mutated here -- this is pure cost policy.                         */
+/*md
+## The access costs
 
+The first touch of an account or storage slot in a transaction is cold
+and dear; a repeat touch is warm and cheap (EIP-2929 mitigates
+state-access DoS). The warm set is kernel state: the kernel marks warm
+and returns the prior warm bit, and these helpers price that bit — pure
+cost policy, no state mutation.
+*/
+/*! The account-access cost for a prior warm bit. */
 function account_cost(warm : bool) -> gas_constant =
     if warm then { G_warm_access } else { G_cold_account }
 
+/*! The `SLOAD` cost for a prior warm bit (cold = 2100, EIP-2929). */
 function sload_cost(warm : bool) -> gas_constant =
     if warm then { G_warm_access } else { G_cold_sload } /* EIP-2929: cold SLOAD = 2100 */
 
-/* Precompile gas inspects the same ByteSlice that execution consumes. Bytes
- * past its declared length read as zero, matching buffer_read semantics. */
-
 /* At most 32 big-endian bytes from precompile input. The bounded construction
  * stays in the EVM word algebra; out-of-range input bytes are zero. */
+/*md
+## The precompile costs
+
+Precompile gas inspects the same byte slice that execution consumes;
+bytes past its declared length read as zero, matching [slice_byte][]
+semantics.
+*/
+/*! Reads up to 32 big-endian precompile input bytes with zero padding. */
 function pc_word(input : ByteSlice, start : nat, byte_count : nat) -> word = {
     var value : word = ZERO_WORD;
     let ByteQuantity(input_len) = input.len;
@@ -461,10 +538,12 @@ function pc_word(input : ByteSlice, start : nat, byte_count : nat) -> word = {
 function pc_blake2_rounds(input : ByteSlice) -> blake2_rounds =
     unsigned(pc_word(input, 0, 4)[31 .. 0])
 
-/* MODEXP (precompile 0x05) gas, EIP-2565 as amended by EIP-7883 (Osaka).
- * Input layout: bsize[32] esize[32] msize[32] base[bsize] exp[esize] mod[msize].
- * Gas grows with the multiplication-complexity of the larger of base/mod and
- * with an iteration count derived from the exponent's bit length. */
+/*! `MODEXP` (precompile `0x05`) gas: EIP-2565 as amended by EIP-7883
+    (Osaka). Input layout: `bsize[32] esize[32] msize[32] base exp mod`.
+    Gas grows with the multiplication complexity of the larger of base
+    and modulus, and with an iteration count derived from the exponent's
+    bit length; EIP-7823 (Osaka) caps each field at 1024 bytes, modeled
+    as an unforwardable cost. */
 function modexp_gas(input : ByteSlice) -> option(gas_cost) = {
     let bl_word = pc_word(input, 0, 32);
     let el_word = pc_word(input, 32, 32);
@@ -538,10 +617,9 @@ function modexp_gas(input : ByteSlice) -> option(gas_cost) = {
     Some(GasCost(if calculated < minimum then { minimum } else { calculated }))
 }
 
-/* EIP-2537 BLS12-381 multi-scalar-multiplication discount tables. Entry k-1
- * is the per-pair discount (in thousandths) applied to a k-pair MSM, so a
- * larger MSM is progressively cheaper per pair; the discount is constant for
- * k >= 128. Indexed k = 1 .. 128 (G1 and G2 use distinct curves). */
+/*! The EIP-2537 BLS12-381 G1 MSM discount table: entry `k−1` is the
+    per-pair discount (in thousandths) applied to a `k`-pair MSM,
+    constant for `k ≥ 128`. */
 let BLS_G1_DISCOUNT : vector(128, inc, bits(16)) = [
         0x03E8,
         0x03B5,
@@ -803,8 +881,8 @@ let BLS_G2_DISCOUNT : vector(128, inc, bits(16)) = [
         0x020C,
     ]
 
-/* EIP-2537 MSM gas: gas = (k * base * discount(k)) / 1000, where discount(k)
- * is read from `table` and clamps to `maxd` (the k=128 entry) for k >= 128. */
+/*! EIP-2537 MSM gas: `(k · base · discount(k)) / 1000`, with the
+    discount clamped to the `k = 128` entry beyond the table. */
 function bls_msm_gas(table : vector(128, inc, bits(16)), base : gas_constant, maxd : bls_discount, k : nat) -> gas_cost = {
     if k == 0 then {
         GAS_COST_ZERO
@@ -827,11 +905,12 @@ function bls_msm_gas(table : vector(128, inc, bits(16)), base : gas_constant, ma
 function linear_gas(base : gas_constant, per_unit : gas_constant, units : nat) -> gas_cost =
     per_unit * units + base
 
-/* Gas for the precompile at address `num`, by input length (the host returns
- * only output; gas is pure EVM policy). Length-only costs are computed from
- * `words`; the two input-dependent curves (MODEXP, BLAKE2F rounds) read the
- * input in place through pc_be. The cases below are the precompile catalog
- * with their addresses and pricing EIPs. */
+/*! The gas of the precompile at address `num` for a given input. Gas is
+    protocol policy defined entirely here; implementations return only
+    output. Length-only costs
+    derive from the word count; the two input-dependent curves (`MODEXP`,
+    `BLAKE2F` rounds) read the input in place. The match arms are the
+    precompile catalog with their addresses and pricing EIPs. */
 function precompile_gas(num : precompile_id, input : ByteSlice) -> option(gas_cost) = {
     let ByteQuantity(input_len) = input.len;
     let words = memory_word_count(input_len);
@@ -859,16 +938,19 @@ function precompile_gas(num : precompile_id, input : ByteSlice) -> option(gas_co
     }
 }
 
-/* ----------------- EIP-2200/2929/3529 SSTORE cost+refund ---------------- */
-/* SSTORE pricing is a three-way comparison (EIP-2200) of: original = the     */
-/* slot's value at the start of the transaction, current = its present value, */
-/* and new = the value being stored. Writing the same value, or dirtying an   */
-/* already-dirty slot, is cheap (warm-access only); a clean slot going        */
-/* zero<->nonzero pays G_sset / G_sreset. Returns (gas_cost, refund_delta);   */
-/* refunds track clearing/un-clearing and resetting a slot to its original    */
-/* value (EIP-3529 rates). The cold surcharge (EIP-2929) is added when the    */
-/* caller reports the slot was not yet warm. The refund_delta is summed and   */
-/* capped at tx scope (EIP-3529 gas_used/5), not here. */
+/*md
+## The SSTORE cost and refund
+*/
+/*! `SSTORE` pricing: a three-way comparison (EIP-2200) of *original*
+    (the slot's transaction-start value), *current*, and *new*. Writing
+    the same value, or dirtying an already-dirty slot, costs warm access
+    only; a clean slot going zero↔nonzero pays `G_sset` / `G_sreset`.
+    Returns `(gas_cost, refund_delta)`; refunds track
+    clearing/un-clearing and resetting a slot to its original value
+    (EIP-3529 rates). The EIP-2929 cold surcharge is added when the
+    caller reports the slot was not yet warm. The refund delta is summed
+    and capped at transaction scope (EIP-3529, `gas_used/5`), not
+    here. */
 function sstore_gas(original : word, current : word, new : word, cold : bool) -> (gas_cost, gas_refund) = {
     let cold_cost : gas_constant = if cold then { G_cold_sload } else { GAS_CONSTANT_ZERO };
     let clear_refund : gas_refund = gas_constant_to_refund(sstore_clear_refund());
@@ -913,12 +995,14 @@ function sstore_gas(original : word, current : word, new : word, cold : bool) ->
     (cost, refund)
 }
 
-/* ------------------------- per-op dynamic gas --------------------------- */
-/* Operand-sized costs that ride on top of an opcode's static cost. All are   */
-/* word-counted via ceil(byte_len / 32) where the spec charges per 32-byte    */
-/* word (YP Appendix G). */
-
 /* Per-word memory cost for an operand. Empty operands retain the opcode base. */
+/*md
+## The per-opcode costs
+
+Operand-sized costs that ride on top of an opcode's static cost,
+word-counted via `⌈byte_len / 32⌉` where the spec charges per 32-byte
+word (YP Appendix G).
+*/
 function charge_memory_word_gas(base : gas_constant, per_word : gas_constant, size : nat) -> unit =
     charge(per_word * memory_word_count(size) + base)
 
@@ -934,7 +1018,8 @@ function charge_copy_gas(size : nat) -> unit =
 function charge_log_gas(num_topics : log_topic_count, size : nat) -> unit =
     charge(G_logtopic * num_topics + G_logdata * size + G_log)
 
-/* EXP: base + G_expbyte per significant byte of the exponent (EIP-160). */
+/*! `EXP`: base plus `G_expbyte` per significant exponent byte
+    (EIP-160). */
 function exp_gas(exponent : word) -> gas_cost = {
     let significant_bits = word_bit_length(exponent);
     let byte_count = exact_quotient(significant_bits + 7, 8);
@@ -947,7 +1032,8 @@ function exp_gas(exponent : word) -> gas_cost = {
     G_expbyte * significant_bytes + G_exp
 }
 
-/* EIP-3860 initcode word cost, charged by CREATE/CREATE2 and tx-deploy. */
+/*! The EIP-3860 per-word initcode cost, charged by `CREATE`/`CREATE2`
+    and create transactions from Shanghai. */
 function initcode_gas(byte_len : nat) -> gas_cost =
     if k_fork >= Shanghai then {
         G_initcode_word * memory_word_count(byte_len)
@@ -955,10 +1041,10 @@ function initcode_gas(byte_len : nat) -> gas_cost =
         GAS_COST_ZERO
     }
 
-/* ----------------------- call gas (EIP-150 63/64) ----------------------- */
-/* EIP-150 forwards at most all-but-one-64th of the available gas to a        */
-/* sub-call, so a caller always retains floor(available/64) to finish its     */
-/* own frame. The forwarded amount is min(requested, available - available/64). */
+/*md
+## The call-gas cap
+*/
+/*! Applies the EIP-150 forwarding cap to a word-sized gas request. */
 function call_gas_cap_word(available : gas, requested : word) -> gas = {
     let retained = gas_quotient(available, 64);
     let all_but_64th = gas_sub_or_oog(available, retained);

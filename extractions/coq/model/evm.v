@@ -104,8 +104,8 @@ Definition BYTE_QUANTITY_MAX := (Z.sub ((pow2 (64))) (1))  : Z.
 Definition byte_quantity_add
 '((ByteQuantity left') : byte_quantity) '((ByteQuantity right') : byte_quantity)
 : M (byte_quantity) :=
-   assert_exp' (Z.leb (left') (BYTE_QUANTITY_MAX)) "sail/primitives/quantities.sail:200.36-200.37" >>= fun _ =>
-   assert_exp' (Z.leb (right') ((Z.sub (BYTE_QUANTITY_MAX) (left')))) "sail/primitives/quantities.sail:201.44-201.45" >>= fun _ =>
+   assert_exp' (Z.leb (left') (BYTE_QUANTITY_MAX)) "sail/primitives/quantities.sail:277.36-277.37" >>= fun _ =>
+   assert_exp' (Z.leb (right') ((Z.sub (BYTE_QUANTITY_MAX) (left')))) "sail/primitives/quantities.sail:278.44-278.45" >>= fun _ =>
    returnM ((ByteQuantity ((Z.add (left') (right'))))).
 
 Definition gas_constant_add
@@ -128,18 +128,18 @@ Definition gas_refund_add '((GasRefund left') : gas_refund) '((GasRefund right')
 Definition byte_quantity_sub
 '((ByteQuantity left') : byte_quantity) '((ByteQuantity right') : byte_quantity)
 : M (byte_quantity) :=
-   assert_exp' (Z.leb (left') (BYTE_QUANTITY_MAX)) "sail/primitives/quantities.sail:206.36-206.37" >>= fun _ =>
-   assert_exp' (Z.leb (right') (left')) "sail/primitives/quantities.sail:207.24-207.25" >>= fun _ =>
+   assert_exp' (Z.leb (left') (BYTE_QUANTITY_MAX)) "sail/primitives/quantities.sail:284.36-284.37" >>= fun _ =>
+   assert_exp' (Z.leb (right') (left')) "sail/primitives/quantities.sail:285.24-285.25" >>= fun _ =>
    returnM ((ByteQuantity ((Z.sub (left') (right'))))).
 
 Definition gas_constant_sub
 '((GasConstant left') : gas_constant) '((GasConstant right') : gas_constant)
 : M (gas_cost) :=
-   assert_exp' (Z.leb (right') (left')) "sail/primitives/gas.sail:135.24-135.25" >>= fun _ =>
+   assert_exp' (Z.leb (right') (left')) "sail/primitives/gas.sail:168.24-168.25" >>= fun _ =>
    returnM ((GasCost ((Z.sub (left') (right'))))).
 
 Definition gas_cost_sub '((GasCost left') : gas_cost) '((GasCost right') : gas_cost) : M (gas_cost) :=
-   assert_exp' (Z.leb (right') (left')) "sail/primitives/gas.sail:130.24-130.25" >>= fun _ =>
+   assert_exp' (Z.leb (right') (left')) "sail/primitives/gas.sail:162.24-162.25" >>= fun _ =>
    returnM ((GasCost ((Z.sub (left') (right'))))).
 
 Definition gas_refund_sub '((GasRefund left') : gas_refund) '((GasRefund right') : gas_refund)
@@ -147,13 +147,13 @@ Definition gas_refund_sub '((GasRefund left') : gas_refund) '((GasRefund right')
    GasRefund ((Z.sub (left') (right'))).
 
 Definition gas_sub '((Gas left') : gas) '((Gas right') : gas) : M (gas) :=
-   assert_exp' (Z.leb (right') (left')) "sail/primitives/gas.sail:110.24-110.25" >>= fun _ =>
+   assert_exp' (Z.leb (right') (left')) "sail/primitives/gas.sail:140.24-140.25" >>= fun _ =>
    returnM ((Gas ((Z.sub (left') (right'))))).
 
 Definition exact_quotient (dividend : Z) (divisor : Z) (*0 <=? dividend*) (*0 <=? divisor*) : M (Z) :=
-   assert_exp' (neq_int (divisor) (0)) "sail/primitives/quantities.sail:169.23-169.24" >>= fun _ =>
+   assert_exp' (neq_int (divisor) (0)) "sail/primitives/quantities.sail:244.23-244.24" >>= fun _ =>
    let quotient := Z.quot (dividend) (divisor) in
-   assert_exp' (Z.geb (quotient) (0)) "sail/primitives/quantities.sail:171.24-171.25" >>= fun _ =>
+   assert_exp' (Z.geb (quotient) (0)) "sail/primitives/quantities.sail:246.24-246.25" >>= fun _ =>
    returnM (quotient).
 
 Definition BYTE_ZERO : byte_quantity := ByteQuantity (0).
@@ -161,11 +161,11 @@ Definition BYTE_ZERO : byte_quantity := ByteQuantity (0).
 Definition byte_quantity_mul
 '((ByteQuantity left') : byte_quantity) '((ByteQuantity right') : byte_quantity)
 : M (byte_quantity) :=
-   assert_exp' (Z.leb (left') (BYTE_QUANTITY_MAX)) "sail/primitives/quantities.sail:212.36-212.37" >>= fun _ =>
+   assert_exp' (Z.leb (left') (BYTE_QUANTITY_MAX)) "sail/primitives/quantities.sail:291.36-291.37" >>= fun _ =>
    (if Z.eqb (left') (0) then returnM (BYTE_ZERO)
     else
       (exact_quotient (BYTE_QUANTITY_MAX) (left')) >>= fun (w__0 : Z) =>
-      assert_exp' (Z.leb (right') (w__0)) "sail/primitives/quantities.sail:216.63-216.64" >>= fun _ =>
+      assert_exp' (Z.leb (right') (w__0)) "sail/primitives/quantities.sail:295.63-295.64" >>= fun _ =>
       returnM ((ByteQuantity ((Z.mul (left') (right'))))))
     : M (byte_quantity).
 
@@ -380,7 +380,7 @@ Definition word_bit_count_increment (value : word_bit_count) (*(0 <=? value) && 
 : M (word_bit_count) :=
    let value := (value).(word_bit_count_value) in
    ((if Z.ltb (value) (256) then returnM ((Z.add (value) (1)))
-     else assert_exp' false "sail/prelude.sail:155.20-155.21" >>= fun _ => exit tt)
+     else assert_exp' false "sail/prelude.sail:188.20-188.21" >>= fun _ => exit tt)
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word_bit_count (semanticResult)).
 
@@ -411,7 +411,7 @@ Definition word_to_limb (w : mword 256) : option limb :=
 Definition limb_to_word (value : mword 64) : word := zero_extend (value) (256).
 
 Definition word_of_nat (value : Z) (*0 <=? value*) : M (word) :=
-   assert_exp' (Z.ltb (value) ((pow2 (256)))) "sail/prelude.sail:186.26-186.27" >>= fun _ =>
+   assert_exp' (Z.ltb (value) ((pow2 (256)))) "sail/prelude.sail:222.26-222.27" >>= fun _ =>
    returnM ((get_slice_int (256) (value) (0))).
 
 Definition word_ult (a : mword 256) (b : mword 256) : bool :=
@@ -807,7 +807,7 @@ Definition account_nonce_increment (value : account_nonce)
 (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
 : M (account_nonce) :=
    let value := (value).(protocol_quantity_value) in
-   (assert_exp' (Z.ltb (value) ((Z.sub ((pow2 (64))) (1)))) "sail/primitives/quantities.sail:70.29-70.30" >>= fun _ =>
+   (assert_exp' (Z.ltb (value) ((Z.sub ((pow2 (64))) (1)))) "sail/primitives/quantities.sail:125.29-125.30" >>= fun _ =>
     returnM ((Z.add (value) (1)))) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
 
@@ -815,7 +815,7 @@ Definition protocol_quantity_increment (value : protocol_quantity)
 (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
 : M (protocol_quantity) :=
    let value := (value).(protocol_quantity_value) in
-   (assert_exp' (Z.ltb (value) ((Z.sub ((pow2 (64))) (1)))) "sail/primitives/quantities.sail:75.29-75.30" >>= fun _ =>
+   (assert_exp' (Z.ltb (value) ((Z.sub ((pow2 (64))) (1)))) "sail/primitives/quantities.sail:131.29-131.30" >>= fun _ =>
     returnM ((Z.add (value) (1)))) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
 
@@ -823,7 +823,7 @@ Definition protocol_quantity_decrement (value : protocol_quantity)
 (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
 : M (protocol_quantity) :=
    let value := (value).(protocol_quantity_value) in
-   (assert_exp' (Z.ltb (0) (value)) "sail/primitives/quantities.sail:80.20-80.21" >>= fun _ =>
+   (assert_exp' (Z.ltb (0) (value)) "sail/primitives/quantities.sail:137.20-137.21" >>= fun _ =>
     returnM ((Z.sub (value) (1)))) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
 
@@ -831,7 +831,7 @@ Definition frame_depth_increment (value : frame_depth) (*(0 <=? value) && (value
 : M (frame_depth) :=
    let value := (value).(frame_depth_value) in
    ((if Z.ltb (value) (1024) then returnM ((Z.add (value) (1)))
-     else assert_exp' false "sail/primitives/quantities.sail:88.20-88.21" >>= fun _ => exit tt)
+     else assert_exp' false "sail/primitives/quantities.sail:146.20-146.21" >>= fun _ => exit tt)
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_frame_depth (semanticResult)).
 
@@ -855,14 +855,14 @@ Definition item_index_increment (value : item_index) (*(0 <=? value) && (value <
 Definition merkle_depth_increment (value : merkle_depth) (*(0 <=? value) && (value <=? 64)*)
 : M (merkle_depth) :=
    let value := (value).(merkle_depth_value) in
-   (assert_exp' (Z.ltb (value) (64)) "sail/primitives/quantities.sail:101.21-101.22" >>= fun _ =>
+   (assert_exp' (Z.ltb (value) (64)) "sail/primitives/quantities.sail:162.21-162.22" >>= fun _ =>
     returnM ((Z.add (value) (1)))) >>= fun semanticResult =>
    returnM (Build_merkle_depth (semanticResult)).
 
 Definition merkle_depth_decrement (value : merkle_depth) (*(0 <=? value) && (value <=? 64)*)
 : M (merkle_depth) :=
    let value := (value).(merkle_depth_value) in
-   (assert_exp' (Z.ltb (0) (value)) "sail/primitives/quantities.sail:106.20-106.21" >>= fun _ =>
+   (assert_exp' (Z.ltb (0) (value)) "sail/primitives/quantities.sail:168.20-168.21" >>= fun _ =>
     returnM ((Z.sub (value) (1)))) >>= fun semanticResult =>
    returnM (Build_merkle_depth (semanticResult)).
 
@@ -876,7 +876,7 @@ Definition byte_quantity_fits_limb '((ByteQuantity value) : byte_quantity) : boo
    nat_fits_limb (value).
 
 Definition nat_to_limb (value : Z) (*0 <=? value*) : M (limb) :=
-   assert_exp (nat_fits_limb (value)) "sail/primitives/quantities.sail:148.31-148.32" >>
+   assert_exp (nat_fits_limb (value)) "sail/primitives/quantities.sail:220.31-220.32" >>
    returnM ((get_slice_int (64) (value) (0))).
 
 Definition byte_quantity_to_limb '((ByteQuantity value) : byte_quantity) : M (limb) :=
@@ -891,14 +891,14 @@ Definition protocol_quantity_quotient (value : protocol_quantity) (divisor : pro
    let value := (value).(protocol_quantity_value) in
    let divisor := (divisor).(protocol_divisor_value) in
    ((exact_quotient (value) (divisor)) >>= fun quotient =>
-   assert_exp' (Z.leb (quotient) (value)) "sail/primitives/quantities.sail:177.28-177.29" >>= fun _ =>
+   assert_exp' (Z.leb (quotient) (value)) "sail/primitives/quantities.sail:253.28-253.29" >>= fun _ =>
    returnM (quotient)) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
 
 Definition byte_quantity_quotient
 '((ByteQuantity dividend) : byte_quantity) '((ByteQuantity divisor) : byte_quantity)
 : M (byte_quantity) :=
-   assert_exp' (Z.leb (dividend) (BYTE_QUANTITY_MAX)) "sail/primitives/quantities.sail:230.40-230.41" >>= fun _ =>
+   assert_exp' (Z.leb (dividend) (BYTE_QUANTITY_MAX)) "sail/primitives/quantities.sail:310.40-310.41" >>= fun _ =>
    (exact_quotient (dividend) (divisor)) >>= fun (w__0 : Z) => returnM ((ByteQuantity (w__0))).
 
 Definition gas_cost_quotient '((GasCost value) : gas_cost) (divisor : gas_divisor)
@@ -912,7 +912,7 @@ Definition gas_quotient '((Gas value) : gas) (divisor : gas_divisor)
 : M (gas) :=
    let divisor := (divisor).(gas_divisor_value) in
    (exact_quotient (value) (divisor)) >>= fun quotient =>
-   assert_exp' (Z.leb (quotient) (value)) "sail/primitives/gas.sail:116.28-116.29" >>= fun _ =>
+   assert_exp' (Z.leb (quotient) (value)) "sail/primitives/gas.sail:147.28-147.29" >>= fun _ =>
    returnM ((Gas (quotient))).
 
 Definition GAS_MAX_VALUE := (Z.sub ((pow2 (63))) (1))  : Z.
@@ -929,7 +929,7 @@ Definition GAS_REFUND_ZERO : gas_refund := GasRefund (0).
 #[export] Hint Unfold GAS_REFUND_ZERO : sail.
 Definition nat_to_gas (value : Z) (*0 <=? value*) : M (gas) :=
    (if Z.leb (value) ((Z.sub ((pow2 (63))) (1))) then returnM ((Gas (value)))
-    else assert_exp' false "sail/primitives/gas.sail:38.20-38.21" >>= fun _ => exit tt)
+    else assert_exp' false "sail/primitives/gas.sail:64.20-64.21" >>= fun _ => exit tt)
     : M (gas).
 
 Definition word_to_gas (value : mword 256) : option gas :=
@@ -1042,12 +1042,12 @@ Definition stateless_input_byte_slice (off : byte_quantity) (len : byte_quantity
    byte_slice (StatelessInputSource) (off) (len).
 
 Definition sub_slice (s : ByteSlice) (off : byte_quantity) (len : byte_quantity) : M (ByteSlice) :=
-   assert_exp (byte_quantity_le (off) (s.(ByteSlice_len))) "sail/primitives/bytes.sail:33.23-33.24" >>
+   assert_exp (byte_quantity_le (off) (s.(ByteSlice_len))) "sail/primitives/bytes.sail:54.23-54.24" >>
    (byte_quantity_sub (s.(ByteSlice_len)) (off)) >>= fun (w__0 : byte_quantity) =>
-   assert_exp (byte_quantity_le (len) (w__0)) "sail/primitives/bytes.sail:34.29-34.30" >>
-   assert_exp (byte_quantity_le (s.(ByteSlice_off)) (MAX_BYTE_QUANTITY)) "sail/primitives/bytes.sail:35.37-35.38" >>
+   assert_exp (byte_quantity_le (len) (w__0)) "sail/primitives/bytes.sail:55.29-55.30" >>
+   assert_exp (byte_quantity_le (s.(ByteSlice_off)) (MAX_BYTE_QUANTITY)) "sail/primitives/bytes.sail:56.37-56.38" >>
    (byte_quantity_sub (MAX_BYTE_QUANTITY) (s.(ByteSlice_off))) >>= fun (w__1 : byte_quantity) =>
-   assert_exp (byte_quantity_le (off) (w__1)) "sail/primitives/bytes.sail:36.43-36.44" >>
+   assert_exp (byte_quantity_le (off) (w__1)) "sail/primitives/bytes.sail:57.43-57.44" >>
    (byte_quantity_add (s.(ByteSlice_off)) (off)) >>= fun absolute_off =>
    returnM ((byte_slice (s.(ByteSlice_source)) (absolute_off) (len))).
 
@@ -2029,7 +2029,7 @@ Definition rlp_nat_length_byte (value : Z) (*(0 <=? value) && (value <=? 255)*) 
    get_slice_int (8) (value) (0).
 
 Definition rlp_byte_length_byte (value : byte_quantity) : M (byte) :=
-   assert_exp (byte_quantity_le (value) ((ByteQuantity (255)))) "sail/lib/rlp/rlp.sail:74.37-74.38" >>
+   assert_exp (byte_quantity_le (value) ((ByteQuantity (255)))) "sail/lib/rlp/rlp.sail:95.37-95.38" >>
    (byte_quantity_to_limb (value)) >>= fun (w__0 : mword 64) =>
    returnM ((subrange_vec_dec (w__0) (7) (0))).
 
@@ -4610,7 +4610,7 @@ Definition k_revert (checkpoint : StateCheckpoint) : M (unit) :=
    ((journal_len (tt)) >>= fun semanticResult => returnM (semanticResult).(protocol_quantity_value)) >>= fun current =>
    let saved := (checkpoint.(StateCheckpoint_journal)).(protocol_quantity_value) in
    (if Z.leb (saved) (current) then returnM ((Z.sub (current) (saved)))
-    else assert_exp' false "sail/host/kernel/lifecycle.sail:93.24-93.25" >>= fun _ => exit tt) >>= fun (remaining : Z) =>
+    else assert_exp' false "sail/host/kernel/lifecycle.sail:118.24-118.25" >>= fun _ => exit tt) >>= fun (remaining : Z) =>
    (whileMT
      remaining
      (fun remaining => remaining)
@@ -4649,7 +4649,7 @@ Definition exc_halt (k : ExceptionKind) : M (unit) :=
 Definition stack_height '(tt : unit) : M (operand_stack_height) :=
    (((stack_depth (tt)) >>= fun semanticResult =>
      returnM (semanticResult).(operand_stack_height_value)) >>= fun height =>
-   assert_exp' (Z.leb (height) ((STACK_LIMIT).(operand_stack_height_value))) "sail/evm/machine.sail:55.32-55.33" >>= fun _ =>
+   assert_exp' (Z.leb (height) ((STACK_LIMIT).(operand_stack_height_value))) "sail/evm/machine.sail:70.32-70.33" >>= fun _ =>
    returnM (height)) >>= fun semanticResult =>
    returnM (Build_operand_stack_height (semanticResult)).
 
@@ -5278,7 +5278,7 @@ Definition memory_expansion_gas (required_size : Z) (*0 <=? required_size*) : M 
 Definition expand_memory (required_size : Z) (*0 <=? required_size*) : M (unit) :=
    (memory_word_count (required_size)) >>= fun (w__0 : Z) =>
    let expanded_size := Z.mul (w__0) (32) in
-   assert_exp (nat_fits_limb (expanded_size)) "sail/evm/gas.sail:403.39-403.40" >>
+   assert_exp (nat_fits_limb (expanded_size)) "sail/evm/gas.sail:469.39-469.40" >>
    (memory_expand_to ((ByteQuantity (expanded_size))))
     : M (unit).
 
@@ -5563,7 +5563,7 @@ Definition exp_gas (exponent : mword 256) : M (gas_cost) :=
    let significant_bits := (word_bit_length (exponent)).(word_bit_count_value) in
    (exact_quotient ((Z.add (significant_bits) (7))) (8)) >>= fun byte_count =>
    (if Z.leb (byte_count) (32) then returnM (byte_count)
-    else assert_exp' false "sail/evm/gas.sail:944.24-944.25" >>= fun _ => exit tt) >>= fun (significant_bytes : Z) =>
+    else assert_exp' false "sail/evm/gas.sail:1029.24-1029.25" >>= fun _ => exit tt) >>= fun (significant_bytes : Z) =>
    returnM ((gas_cost_add_constant ((gas_constant_scale (G_expbyte) (significant_bytes))) (G_exp))).
 
 Definition initcode_gas (byte_len : Z) (*0 <=? byte_len*) : M (gas_cost) :=
@@ -10076,11 +10076,11 @@ Definition bloom_set_bit (bloom : vec (mword 64) 32) (bit_to_set : bloom_bit_ind
    let out := bloom in
    (exact_quotient (bit_to_set) (64)) >>= fun quotient =>
    (if Z.leb (quotient) (31) then returnM (quotient)
-    else assert_exp' false "sail/executor/receipts.sail:15.24-15.25" >>= fun _ => exit tt) >>= fun (natural_limb : Z) =>
+    else assert_exp' false "sail/executor/receipts.sail:24.24-24.25" >>= fun _ => exit tt) >>= fun (natural_limb : Z) =>
    let limb_index : Z := Z.sub (31) (natural_limb) in
    let remainder := Z.rem (bit_to_set) (64) in
    (if Z.leb (remainder) (63) then returnM (remainder)
-    else assert_exp' false "sail/executor/receipts.sail:23.24-23.25" >>= fun _ => exit tt) >>= fun (bit_in_limb : Z) =>
+    else assert_exp' false "sail/executor/receipts.sail:32.24-32.25" >>= fun _ => exit tt) >>= fun (bit_in_limb : Z) =>
    let out : vec (mword 64) 32 :=
      vec_update_dec (out) (limb_index)
        ((or_vec ((vec_access_dec (out) (limb_index)))

@@ -1,18 +1,16 @@
-/* ======================================================================== */
-/* RLP: TRANSACTION DECODE                                                  */
-/*                                                                          */
-/* The EIP-2718 transaction envelope decoder: per-envelope destructuring    */
-/* into the Transaction type (one walk, exact field shape, mirroring        */
-/* EELS's per-envelope dataclasses), plus the EIP-2930 access-list and      */
-/* EIP-7702 authorization-tuple decoders. Standalone and purely             */
-/* structural: input is a ByteSlice envelope + a ByteSlice public key, any  */
-/* source; signature RULES live in lib/tx.sail, the crypto in               */
-/* primitives/crypto.sail.                                                  */
-/* ======================================================================== */
 
-/* Decode an EIP-2930 access list (RLP [[address, [slot, ...]], ...]) from the
- * access-list field into the flat representation the Transaction and intrinsic-
- * gas accounting use: the addresses (one per entry) and the (address, slot) pairs. */
+/*md
+# Transaction decoding
+
+The EIP-2718 transaction envelope decoder: per-envelope destructuring into
+the [Transaction][type-Transaction] type (one walk, against each
+envelope's exact field shape), plus the EIP-2930 access-list
+and EIP-7702 authorization-tuple decoders. Standalone and purely
+structural: input is a `ByteSlice` envelope and a `ByteSlice` public key
+of any source; the signature rules and the cryptography live in their own
+modules.
+*/
+/*! A decoded access list and the counts needed for intrinsic gas. */
 struct AccessListDecode = {
     addresses : list(address),
     storage_slots : list(StorageKey),
@@ -29,6 +27,8 @@ let EMPTY_ACCESS_LIST_DECODE : AccessListDecode = struct {
 
 /* Prepend this entry's keys while recursive unwind restores their wire order.
  * The unconsumed key-list content span strictly decreases on every call. */
+/*! Decodes the storage keys of one access-list entry while preserving wire
+    order during recursive unwind. */
 function decode_access_list_keys(cursor : RlpCursor, addr : address, tail : AccessListDecode) -> AccessListDecode =
     if rlp_cursor_empty(cursor) then {
         tail
@@ -53,6 +53,7 @@ termination_measure decode_access_list_keys(cursor, addr, tail) =
     stop - current
 
 /* The unconsumed access-list content span strictly decreases on every call. */
+/*! Decodes the remaining access-list entries into a flat execution view. */
 function decode_access_list_entries(cursor : RlpCursor) -> AccessListDecode =
     if rlp_cursor_empty(cursor) then {
         EMPTY_ACCESS_LIST_DECODE
@@ -81,6 +82,10 @@ termination_measure decode_access_list_entries(cursor) =
     let ByteQuantity(current) = cursor.current in
     stop - current
 
+/*! Decodes an EIP-2930 access list — RLP `[[address, [slot, …]], …]` —
+    into the flat representation the transaction and intrinsic-gas
+    accounting use: the addresses (one per entry) and the
+    `(address, slot)` pairs. */
 function decode_access_list(f : RlpFieldRef) -> (list(address), list(StorageKey), item_count, item_count) = {
     let decoded = decode_access_list_entries(rlp_ref_cursor(f));
     (decoded.addresses, decoded.storage_slots, decoded.address_count, decoded.slot_count)
@@ -89,10 +94,17 @@ function decode_access_list(f : RlpFieldRef) -> (list(address), list(StorageKey)
 /* Validate the canonical RLP list of bytes32 blob versioned hashes once, then
  * retain its encoded content as a fixed-stride source view. Each element is
  * exactly 0xa0 followed by 32 bytes, so BLOBHASH can load item i at 33*i+1. */
+/*md
+## Constants
+
+Typed transaction decoding uses the fixed RLP widths of versioned blob hashes
+and the domain tags and field counts defined by the transaction EIPs.
+*/
 let BLOB_HASH_RLP_LENGTH : byte_length = ByteQuantity(33)
 let BLOB_HASH_LENGTH : byte_length = WORD_BYTE_LENGTH
 
 /* The unconsumed hash-list content span strictly decreases on every call. */
+/*! Validates every fixed-width versioned-hash item and returns their count. */
 function decode_blob_hash_items(cursor : RlpCursor, count : blob_count) -> blob_count =
     if rlp_cursor_empty(cursor) then {
         count
@@ -117,6 +129,10 @@ termination_measure decode_blob_hash_items(cursor, count) =
     let ByteQuantity(current) = cursor.current in
     stop - current
 
+/*! Validates the canonical RLP list of `bytes32` blob versioned hashes
+    once, then retains its encoded content as a fixed-stride source view:
+    each element is exactly `0xa0` followed by 32 bytes, so `BLOBHASH` can
+    load item `i` at `33·i + 1`. */
 function decode_blob_hashes(f : RlpFieldRef) -> BlobHashes = {
     let bytes = sub_slice(f.source, f.content_off, f.content_len);
     struct { bytes = bytes, count = decode_blob_hash_items(rlp_ref_cursor(f), 0) }
@@ -131,11 +147,14 @@ function decode_blob_hashes(f : RlpFieldRef) -> BlobHashes = {
  * recovering each authority. valid_sig records tuple-local signature validity
  * (recoverable, low-s, r/y parity ranges, incrementable nonce); process_auth then
  * applies the chain-id / account nonce / code checks. */
+/*! A decoded EIP-7702 authorization sequence and its item count. */
 struct AuthorizationDecode = { authorizations : list(Authorization), count : item_count }
 
 let EMPTY_AUTHORIZATION_DECODE : AuthorizationDecode = struct { authorizations = [||], count = 0 }
 
 /* The unconsumed authorization-list content span strictly decreases on every call. */
+/*! Decodes and signature-recovers the remaining EIP-7702 authorization
+    tuples in wire order. */
 function decode_auth_tuples(cursor : RlpCursor) -> AuthorizationDecode =
     if rlp_cursor_empty(cursor) then {
         EMPTY_AUTHORIZATION_DECODE
@@ -192,14 +211,26 @@ termination_measure decode_auth_tuples(cursor) =
     let ByteQuantity(current) = cursor.current in
     stop - current
 
+/*! Decodes an EIP-7702 authorization list into
+    [Authorization][type-Authorization] tuples, recovering each authority.
+    Each set-code tuple `[chainId, address, nonce, yParity, r, s]` is
+    signed by the authority, whose address is recovered (not witnessed)
+    via `ecrecover` over `keccak256(0x05 ++ rlp([chainId, address,
+    nonce]))`. `valid_sig` records tuple-local signature validity
+    (recoverable, low-`s`, `r`/`y_parity` ranges, incrementable nonce);
+    [process_auth][] then applies the chain-id / account nonce / code
+    checks. */
 function decode_auth_list(f : RlpFieldRef) -> (list(Authorization), item_count) = {
     let decoded = decode_auth_tuples(rlp_ref_cursor(f));
     (decoded.authorizations, decoded.count)
 }
 
+/*! The calldata/initcode span of the data field within the envelope. */
 function tx_input_span(payload : ByteSlice, data : RlpFieldRef) -> ByteSlice =
     sub_slice(payload, data.content_off, data.content_len)
 
+/*! The span of the pre-signature fields — from the first field to the
+    start of the signature — hashed by [tx_signing_hash][]. */
 function tx_sig_span(payload : ByteSlice, first : RlpFieldRef, signature : RlpFieldRef) -> ByteSlice = {
     let start = first.full_off;
     let stop = signature.full_off;
@@ -210,22 +241,8 @@ function tx_sig_span(payload : ByteSlice, first : RlpFieldRef, signature : RlpFi
     }
 }
 
-/* Decode ONE transaction from its raw envelope bytes -- standalone and purely
- * STRUCTURAL: `tx` is the EIP-2718 envelope as a byte slice (any source),
- * `pubkey` the 65-byte witness public key (0x04 ++ X ++ Y) claimed for its
- * sender. The sender derives from the key (keccak(X||Y)[12:]) and the
- * signature material (signing hash, v/r/s, the key itself) is CAPTURED on the
- * Transaction; authentication happens at execution (check_transaction_validity
- * -> tx_auth_ok), mirroring EELS recover_sender_from_public_key inside
- * check_transaction. No trust decision and no fee derivation happens here.
- *
- * A leading byte >= 0xc0 is a legacy (type-0) RLP list; otherwise it is the
- * type byte (0x01 EIP-2930, 0x02 EIP-1559, 0x03 EIP-4844, 0x04 EIP-7702) and
- * the RLP payload starts right after it. Each envelope is destructured in ONE
- * walk against its EXACT field shape (mirroring EELS's per-envelope
- * dataclasses); an unknown type byte or wrong arity is undecodable. The data
- * field is never materialized: input_src carries its (source, offset, length)
- * span, bound as the transaction input only when the tx runs. */
+/*! Decodes transaction gas and enforces the protocol and fork-specific
+    transaction bounds. */
 function rlp_ref_gas(f : RlpFieldRef, fork : Fork) -> gas = {
     let value = rlp_ref_uint(f);
     if GAS_MAX_VALUE < value then {
@@ -238,6 +255,22 @@ function rlp_ref_gas(f : RlpFieldRef, fork : Fork) -> gas = {
     }
 }
 
+/*! Decodes one transaction from its raw envelope bytes — standalone and
+    purely structural. `tx` is the EIP-2718 envelope as a byte slice (any
+    source); `pubkey` the 65-byte witness public key (`0x04 ++ X ++ Y`)
+    claimed for its sender. The sender derives from the key
+    (`keccak256(X ‖ Y)[12:]`) and the signature material (signing hash,
+    `v`/`r`/`s`, the key itself) is captured on the transaction;
+    authentication happens at execution ([tx_auth_ok][]). No trust
+    decision and no fee derivation happens here.
+
+    A leading byte `≥ 0xc0` is a legacy (type-0) RLP list; otherwise it is
+    the type byte (`0x01` EIP-2930, `0x02` EIP-1559, `0x03` EIP-4844,
+    `0x04` EIP-7702) and the RLP payload starts right after it. Each
+    envelope is destructured in one walk against its exact field shape; an
+    unknown type byte or wrong arity is undecodable. The data field is
+    never materialized: `input_src` carries its (source, offset, length)
+    span, bound as the transaction input only when the tx runs. */
 function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, fork : Fork) -> Transaction = {
     let sender = word_to_address(keccak256(sub_slice(pubkey, BYTE_ONE, PUBLIC_KEY_BODY_LENGTH)));
     let tx_len : byte_length = tx.len;

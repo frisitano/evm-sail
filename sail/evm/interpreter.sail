@@ -1,33 +1,37 @@
-/* ======================================================================== */
-/* THE INTERPRETER: FETCH/DECODE, RUN LOOP, AND THE MESSAGE-CALL MACHINERY  */
-/*                                                                          */
-/* The user-space EVM: it fetches and decodes bytecode (Yellow Paper        */
-/* section 9), drives the step loop, and spawns sub-frames for the call and */
-/* create opcodes. This module specifies that machinery in three layers.    */
-/*                                                                          */
-/* (1) Fetch/decode: read the opcode at pc, decode PUSH immediates inline,  */
-/* and map every other byte to its AST node (an undefined byte decodes to   */
-/* INVALID). Reading past the end of code yields STOP (YP: implicit halt).  */
-/*                                                                          */
-/* (2) Run loop: interpret() steps fetch-then-execute until the frame stops */
-/* running (normal halt, REVERT, or exceptional halt).                      */
-/*                                                                          */
-/* (3) Message calls: run_call handles                                      */
 /* CALL/CALLCODE/DELEGATECALL/STATICCALL (selected by `kind`) and           */
-/* run_create handles CREATE/CREATE2. A sub-call saves the parent's user-   */
-/* space frame registers, runs the child to a halt, then restores them. All */
 /* The complete parent frame, including a kernel state checkpoint, is       */
 /* suspended before child effects begin and restored on return. k_revert    */
 /* rolls the world back atomically when the child fails. The applicable     */
-/* rules are EIP-150 (63/64ths gas cap + stipend), EIP-214 (static-context  */
-/* write protection), EIP-2929 (cold/warm access), and EIP-7702 (delegated- */
-/* code execution).                                                         */
-/* ======================================================================== */
 
-/* ----------------------------- fetch/decode ----------------------------- */
+/*md
+# The interpreter
 
-/* Assemble the n-byte big-endian immediate following a PUSHn opcode into a
- * 256-bit word; bytes past the end of code read as zero. */
+The user-space EVM: it fetches and decodes bytecode (Yellow Paper §9),
+drives the step loop, and spawns sub-frames for the call and create
+opcodes. This module specifies that machinery in three layers:
+
+1. **Fetch/decode** — read the opcode at `pc`, decode PUSH immediates
+   inline, and map every other byte to its AST node (an undefined byte
+   decodes to `INVALID`). Reading past the end of code yields `STOP`
+   (YP: implicit halt).
+2. **Run loop** — [interpret][] steps fetch-then-execute until the frame
+   stops running (normal halt, `REVERT`, or exceptional halt).
+3. **Message calls** — [run_call][] handles
+   `CALL`/`CALLCODE`/`DELEGATECALL`/`STATICCALL` (multiplexed on `mode`)
+   and [run_create][] handles `CREATE`/`CREATE2`. A sub-call saves the
+   parent's user-space frame registers, runs the child to a halt, then
+   restores them. All world effects go through kernel syscalls:
+   [k_state_checkpoint][] on entry, [k_transfer][] for value, and [k_revert][] on
+   failure — the kernel rolls the world back atomically on a reverting
+   child. The applicable rules are EIP-150 (63/64ths gas cap + stipend),
+   EIP-214 (static-context write protection), EIP-2929 (cold/warm
+   access), and EIP-7702 (delegated-code execution).
+*/
+/*md
+## The decoder
+*/
+/*! Assembles the `n`-byte big-endian immediate following a `PUSHn`
+    opcode into a word; bytes past the end of code read as zero. */
 function read_push(n : code_length) -> word = slice_load_n(frame_code.bytes, pc, n)
 
 function advance_pc(delta : code_length) -> unit = pc = pc + delta
@@ -36,6 +40,11 @@ function advance_pc(delta : code_length) -> unit = pc = pc + delta
  * families fold to an arity argument -- DUP1..16 (0x80..0x8f), SWAP1..16
  * (0x90..0x9f), LOG0..4 (0xa0..0xa4) -- and the remainder is a flat table.
  * Any byte with no defined opcode decodes to INVALID. */
+/*! Decodes one non-PUSH opcode byte to its AST node. The three
+    contiguous families fold to an arity argument — `DUP1`–`DUP16`
+    (0x80–0x8f), `SWAP1`–`SWAP16` (0x90–0x9f), `LOG0`–`LOG4` (0xa0–0xa4)
+    — and the remainder is a flat table. Any byte with no defined opcode
+    decodes to `INVALID`. */
 function decode_simple(opcode : opcode) -> ast =
     if 128 <= opcode & opcode <= 143 then {
         DUP(opcode - 127)
@@ -165,10 +174,11 @@ function decode_simple(opcode : opcode) -> ast =
         }
     }
 
-/* Fetch and decode the opcode at pc, advancing pc past the opcode and any
- * immediate. Past the end of code the frame implicitly executes STOP (YP).
- * PUSH0..PUSH32 (0x5f..0x7f) carry an n-byte immediate consumed here; every
- * other byte is decoded by decode_simple. */
+/*! Fetches and decodes the opcode at `pc`, advancing `pc` past the
+    opcode and any immediate. Past the end of code the frame implicitly
+    executes `STOP` (YP). `PUSH0`–`PUSH32` (0x5f–0x7f) carry an `n`-byte
+    immediate consumed here; every other byte decodes via
+    [decode_simple][]. */
 function fetch() -> ast = {
     if not_bool(pc < frame_code_len()) then {
         STOP()
@@ -191,9 +201,13 @@ function fetch() -> ast = {
     }
 }
 
-/* The step loop returns the frame's own output. STOP, SELFDESTRUCT, and
- * exceptional halts return the empty slice; RETURN and REVERT carry their
- * frozen memory slice in the halt value. */
+/*md
+## The run loop
+*/
+/*! The step loop; returns the frame's own output. `STOP`,
+    `SELFDESTRUCT`, and exceptional halts return the empty slice;
+    `RETURN` and `REVERT` carry their frozen memory slice in the halt
+    value. */
 function interpret() -> ByteSlice = {
     /* A running iteration either halts or consumes at least one unit of gas. */
     while is_running() termination_measure(GAS_MAX_VALUE + 1) do {
@@ -207,9 +221,9 @@ function interpret() -> ByteSlice = {
     }
 }
 
-/* Did the just-finished frame end successfully? A normal halt succeeds; a
- * REVERT and any exceptional halt do not (their world effects are rolled
- * back and CALL/CREATE reports failure). */
+/*! Whether the just-finished frame ended successfully: a normal halt
+    succeeds; a `REVERT` and any exceptional halt do not (their world
+    effects are rolled back and `CALL`/`CREATE` reports failure). */
 function frame_succeeded() -> bool =
     match frame_status {
         Halted(HaltRevert(_)) => false,
@@ -218,10 +232,10 @@ function frame_succeeded() -> bool =
         Exceptional(_) => false,
     }
 
-/* Select the code a frame actually executes (EIP-7702). A delegated account
- * runs the code at its delegation target, following exactly ONE hop; a
- * delegation whose target is a precompile (or has no code) executes as empty
- * code. An undelegated account runs its own code. */
+/*! Selects the code a frame actually executes (EIP-7702). A delegated
+    account runs the code at its delegation target, following exactly one
+    hop; a delegation whose target is a precompile (or has no code)
+    executes as empty code. An undelegated account runs its own code. */
 function executable_code(target : address, dele : bool, dtgt : address) -> Code =
     if dele then {
         match word_to_precompile_id(address_to_word(dtgt)) {
@@ -232,7 +246,10 @@ function executable_code(target : address, dele : bool, dtgt : address) -> Code 
         code_db_resolve(k_code_key(target))
     }
 
-/* ------------------------------ run_call -------------------------------- */
+/*md
+## The message calls
+*/
+/*! Whether a call kind consumes an explicit value stack operand. */
 function call_takes_value(kind : CallKind) -> bool =
     match kind {
         Call => true,
@@ -240,12 +257,14 @@ function call_takes_value(kind : CallKind) -> bool =
         _ => false,
     }
 
+/*! Whether a call kind transfers value between distinct accounts. */
 function call_transfers_value(kind : CallKind) -> bool =
     match kind {
         Call => true,
         _ => false,
     }
 
+/*! Whether a call kind executes with the target as its storage address. */
 function call_uses_target_address(kind : CallKind) -> bool =
     match kind {
         Call => true,
@@ -253,12 +272,14 @@ function call_uses_target_address(kind : CallKind) -> bool =
         _ => false,
     }
 
+/*! Whether a call kind inherits the parent caller and call value. */
 function call_is_delegate(kind : CallKind) -> bool =
     match kind {
         DelegateCall => true,
         _ => false,
     }
 
+/*! Whether a call kind introduces a read-only execution context. */
 function call_is_static(kind : CallKind) -> bool =
     match kind {
         StaticCall => true,
@@ -271,6 +292,20 @@ function call_is_static(kind : CallKind) -> bool =
  * STATICCALL forces a static context and zero value.
  * Operand layout (top of stack first): gas, target, [value for CALL/CALLCODE],
  * argsOffset, argsLen, retOffset, retLen. Pushes 1 on success, 0 on failure. */
+/*! The four call opcodes, multiplexed on `mode`.
+
+    - `0` — `CALL`: a new frame at `target`, may transfer value.
+    - `1` — `CALLCODE`: runs the target's code in the caller's account,
+      may transfer.
+    - `2` — `DELEGATECALL` (EIP-7): runs the target's code in the
+      caller's account, inheriting the parent's caller/value/static
+      context.
+    - `3` — `STATICCALL` (EIP-214): `CALL` with value 0 and a forced
+      static context.
+
+    Operand layout (top of stack first): `gas`, `target`, `value` (for
+    `CALL`/`CALLCODE`), `argsOffset`, `argsLen`, `retOffset`, `retLen`.
+    Pushes 1 on success, 0 on failure. */
 function run_call(kind : CallKind) -> unit = {
     let caller = self_addr();
     let gas_request = pop();
@@ -286,7 +321,7 @@ function run_call(kind : CallKind) -> unit = {
     let ret_len_word = pop();
 
     /* A stack underflow during the operand pops exceptionally halts the frame
-       (exc_halt zeroes the gas). The execution-specs unwind the whole op via
+       (exc_halt zeroes the gas). The protocol unwinds the whole op on
        an exception; Sail has no unwind, so bail out here before any gas is
        re-added below. */
     if not_bool(is_running()) then {
@@ -298,7 +333,7 @@ function run_call(kind : CallKind) -> unit = {
     let required_memory_size = maximum_memory_required_size(args_off_word, args_len_word, ret_off_word, ret_len_word);
 
     /* memory-expansion cost is folded into the single message-call charge
-       below: the execution-specs charge message_call_gas.cost together with
+       below: the call's transfer cost is charged together with
        extend_memory.cost, then grow memory only if the frame did not run out
        of gas. */
     let mem_gas = memory_expansion_gas(required_memory_size);
@@ -317,14 +352,15 @@ function run_call(kind : CallKind) -> unit = {
     let warm = k_access_account(target);
     let target_cost : gas_constant = account_cost(warm);
     let transfer_cost : gas_constant = if word_nonzero(value) then { G_callvalue } else { GAS_CONSTANT_ZERO };
-    let static_cost = target_cost + transfer_cost + mem_gas;
 
-    /* "check static gas before state access" (execution-specs generic_call): the
+    /* Static gas is checked before any state access: the
        target's access + value-transfer + memory cost is checked BEFORE reading
        any of the target's state. A frame that cannot afford it halts here, having
        touched no account -- so the stateless witness need not prove the target.
        (Resolving the EIP-7702 delegation or the empty-account check below reads
        the target's account, which an OOG-before-access tx must never do.) */
+    let static_cost = target_cost + transfer_cost + mem_gas;
+
     if not_bool(is_running()) | gas_remaining < static_cost then {
         exc_halt(OutOfGas);
         return ()
@@ -353,12 +389,12 @@ function run_call(kind : CallKind) -> unit = {
         return ()
     };
 
-    /* Forwarded child gas, mirroring the execution-specs
-       calculate_message_call_gas. If the frame cannot afford extra_gas +
-       mem_gas, charging that required component already forces the same
-       exceptional halt, so no transaction-controlled request value needs to
-       be narrowed. Otherwise the EIP-150 63/64ths cap applies to the gas left
-       after subtracting mem_gas and extra_gas. */
+    /* Forwarded child gas, per the EIP-150
+       calculate_message_call_gas. If the frame cannot even afford
+       extra_gas + mem_gas, the call is charged the FULL requested gas (not the
+       63/64-capped value), which forces the out-of-gas exceptional halt below.
+       Otherwise the EIP-150 63/64ths cap applies to the gas left after
+       subtracting mem_gas and extra_gas. */
     let avail = gas_remaining;
     let base_child : gas = if avail < required then {
             GAS_ZERO
@@ -376,15 +412,15 @@ function run_call(kind : CallKind) -> unit = {
         return ()
     };
 
-    /* gas is now covered, so EELS proceeds to prepare_message, which loads the
+    /* gas is now covered; message preparation loads the
        delegate's CODE -- BEFORE the depth/balance guards below. Resolve it now
        (flagging a missing-code witness deficiency) so an insufficient-balance
        call to a 7702-delegated target still detects an omitted delegate-code
-       proof, matching EELS; an OOG call returned above and never reaches here. */
+       proof; an OOG call returned above and never reaches here. */
     if tg_deleg then {
         let _ = code_db_resolve(k_code_key(tg_target));
 
-        /* EELS reads get_account(code_address) on the resolved delegate, so the
+        /* The resolved delegate's account is read for its code, so the
            delegate is touched (kept in the BAL account set). */
         let _ = k_aload(tg_target)
     };
@@ -403,7 +439,7 @@ function run_call(kind : CallKind) -> unit = {
         return ()
     };
 
-    /* EELS reads get_account(code_address).code_hash for every call once gas is
+    /* The target's code hash is read for every call once gas is
      * charged, before the depth/balance guards -- so the call target is always a
      * state access (kept in the BAL account set), including precompiles and calls
      * that then fail the depth/balance guard below. */
@@ -541,11 +577,11 @@ function run_call(kind : CallKind) -> unit = {
                 refund_gas(child_left);
 
                 /* copy returndata into the caller's output region on both success
-                   AND revert (execution-specs generic_call), writing only
-                   min(ret_len, |output|) bytes and leaving the rest untouched. An
-                   exceptionally-halted child has empty output, so nothing is
-                   written. The child's world effects remain on success and are
-                   rolled back on failure. */
+                AND revert, writing only
+                min(ret_len, |output|) bytes and leaving the rest untouched. An
+                exceptionally-halted child has empty output, so nothing is
+                written. The child's world effects remain on success and are
+                rolled back on failure. */
                 returndata_copy_prefix(ByteQuantity(unsigned(ret_off_word)), ByteQuantity(unsigned(ret_len_word)));
                 if succeeded then {
                     record_refund(child_refund);
@@ -559,12 +595,12 @@ function run_call(kind : CallKind) -> unit = {
     }
 }
 
-/* ----------------------------- run_create ------------------------------- */
-/* CREATE (is2 = false) and CREATE2 (is2 = true, EIP-1014). Both deploy a new
- * contract by running the initcode supplied in memory; the new address is
- * derived from (creator, nonce) for CREATE or (creator, salt, initcode hash)
- * for CREATE2. Operand layout: value, offset, length, [salt for CREATE2].
- * Pushes the new address on success, 0 on failure. */
+/*! `CREATE` (`is2 = false`) and `CREATE2` (`is2 = true`, EIP-1014).
+    Both deploy a new contract by running the initcode supplied in
+    memory; the new address derives from `(creator, nonce)` for `CREATE`
+    or `(creator, salt, keccak256(initcode))` for `CREATE2`. Operand
+    layout: `value`, `offset`, `length`, `salt` (for `CREATE2`). Pushes
+    the new address on success, 0 on failure. */
 function run_create(is2 : bool) -> unit = {
     let creator = self_addr();
     let value = pop();
@@ -631,7 +667,7 @@ function run_create(is2 : bool) -> unit = {
         };
         gas_remaining = retained_gas;
 
-        /* EIP-214 (execution-specs generic_create): a CREATE in a static
+        /* EIP-214: a CREATE in a static
          * context (e.g. inside a STATICCALL frame) is a write and raises
          * WriteInStaticContext after the child gas is reserved -- an
          * exceptional halt that consumes all gas, bumps no nonce, runs no
@@ -656,7 +692,7 @@ function run_create(is2 : bool) -> unit = {
         } else {
             /* warm the new address and bump the creator nonce BEFORE the child
              * snapshot: both persist even if the initcode reverts (the
-             * execution-specs run them in the parent, before
+             * the protocol runs them in the parent, before
              * process_create_message). */
             let _ = k_access_account(new_addr);
             let occupied : bool = k_account_occupied(new_addr);

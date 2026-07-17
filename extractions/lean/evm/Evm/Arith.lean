@@ -47,8 +47,8 @@ def BYTE_QUANTITY_MAX : Nat := ((2 ^i 64) -i 1)
 def byte_quantity_add (typ_0 : byte_quantity) (typ_1 : byte_quantity) : SailM byte_quantity := do
   let .ByteQuantity left : byte_quantity := typ_0
   let .ByteQuantity right : byte_quantity := typ_1
-  assert (left ≤b BYTE_QUANTITY_MAX) "sail/primitives/quantities.sail:200.36-200.37"
-  assert (right ≤b (BYTE_QUANTITY_MAX -i left)) "sail/primitives/quantities.sail:201.44-201.45"
+  assert (left ≤b BYTE_QUANTITY_MAX) "sail/primitives/quantities.sail:277.36-277.37"
+  assert (right ≤b (BYTE_QUANTITY_MAX -i left)) "sail/primitives/quantities.sail:278.44-278.45"
   (pure (ByteQuantity (left + right)))
 
 def gas_constant_add (typ_0 : gas_constant) (typ_1 : gas_constant) : gas_cost :=
@@ -74,20 +74,20 @@ def gas_refund_add (typ_0 : gas_refund) (typ_1 : gas_refund) : gas_refund :=
 def byte_quantity_sub (typ_0 : byte_quantity) (typ_1 : byte_quantity) : SailM byte_quantity := do
   let .ByteQuantity left : byte_quantity := typ_0
   let .ByteQuantity right : byte_quantity := typ_1
-  assert (left ≤b BYTE_QUANTITY_MAX) "sail/primitives/quantities.sail:206.36-206.37"
-  assert (right ≤b left) "sail/primitives/quantities.sail:207.24-207.25"
+  assert (left ≤b BYTE_QUANTITY_MAX) "sail/primitives/quantities.sail:284.36-284.37"
+  assert (right ≤b left) "sail/primitives/quantities.sail:285.24-285.25"
   (pure (ByteQuantity (left -i right)))
 
 def gas_constant_sub (typ_0 : gas_constant) (typ_1 : gas_constant) : SailM gas_cost := do
   let .GasConstant left : gas_constant := typ_0
   let .GasConstant right : gas_constant := typ_1
-  assert (right ≤b left) "sail/primitives/gas.sail:135.24-135.25"
+  assert (right ≤b left) "sail/primitives/gas.sail:168.24-168.25"
   (pure (GasCost (left -i right)))
 
 def gas_cost_sub (typ_0 : gas_cost) (typ_1 : gas_cost) : SailM gas_cost := do
   let .GasCost left : gas_cost := typ_0
   let .GasCost right : gas_cost := typ_1
-  assert (right ≤b left) "sail/primitives/gas.sail:130.24-130.25"
+  assert (right ≤b left) "sail/primitives/gas.sail:162.24-162.25"
   (pure (GasCost (left -i right)))
 
 def gas_refund_sub (typ_0 : gas_refund) (typ_1 : gas_refund) : gas_refund :=
@@ -98,14 +98,14 @@ def gas_refund_sub (typ_0 : gas_refund) (typ_1 : gas_refund) : gas_refund :=
 def gas_sub (typ_0 : gas) (typ_1 : gas) : SailM gas := do
   let .Gas left : gas := typ_0
   let .Gas right : gas := typ_1
-  assert (right ≤b left) "sail/primitives/gas.sail:110.24-110.25"
+  assert (right ≤b left) "sail/primitives/gas.sail:140.24-140.25"
   (pure (Gas (left -i right)))
 
 /-- Type quantifiers: k_ex160907_ : Nat, k_ex160906_ : Nat, 0 ≤ k_ex160906_, 0 ≤ k_ex160907_ -/
 def exact_quotient (dividend : Nat) (divisor : Nat) : SailM Nat := do
-  assert (divisor != 0) "sail/primitives/quantities.sail:169.23-169.24"
+  assert (divisor != 0) "sail/primitives/quantities.sail:244.23-244.24"
   let quotient := (Int.tdiv dividend divisor)
-  assert (quotient ≥b 0) "sail/primitives/quantities.sail:171.24-171.25"
+  assert (quotient ≥b 0) "sail/primitives/quantities.sail:246.24-246.25"
   (pure quotient)
 
 def BYTE_ZERO : byte_quantity := (ByteQuantity 0)
@@ -113,12 +113,12 @@ def BYTE_ZERO : byte_quantity := (ByteQuantity 0)
 def byte_quantity_mul (typ_0 : byte_quantity) (typ_1 : byte_quantity) : SailM byte_quantity := do
   let .ByteQuantity left : byte_quantity := typ_0
   let .ByteQuantity right : byte_quantity := typ_1
-  assert (left ≤b BYTE_QUANTITY_MAX) "sail/primitives/quantities.sail:212.36-212.37"
+  assert (left ≤b BYTE_QUANTITY_MAX) "sail/primitives/quantities.sail:291.36-291.37"
   if ((left == 0) : Bool)
   then (pure BYTE_ZERO)
   else
     (do
-      assert (right ≤b (← (exact_quotient BYTE_QUANTITY_MAX left))) "sail/primitives/quantities.sail:216.63-216.64"
+      assert (right ≤b (← (exact_quotient BYTE_QUANTITY_MAX left))) "sail/primitives/quantities.sail:295.63-295.64"
       (pure (ByteQuantity (left *i right))))
 
 /-- Type quantifiers: k_ex160908_ : Nat, 0 ≤ k_ex160908_ -/

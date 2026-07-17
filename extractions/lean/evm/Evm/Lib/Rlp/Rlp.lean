@@ -138,7 +138,7 @@ def rlp_nat_length_byte (value : Nat) : byte :=
   (get_slice_int 8 value 0)
 
 def rlp_byte_length_byte (value : byte_length) : SailM byte := do
-  assert (byte_quantity_le value (ByteQuantity 255)) "sail/lib/rlp/rlp.sail:74.37-74.38"
+  assert (byte_quantity_le value (ByteQuantity 255)) "sail/lib/rlp/rlp.sail:95.37-95.38"
   (pure (Sail.BitVec.extractLsb (← (byte_quantity_to_limb value)) 7 0))
 
 def rlp_length_word (value : byte_length) : SailM word := do

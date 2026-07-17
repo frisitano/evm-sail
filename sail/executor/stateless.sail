@@ -1,5 +1,17 @@
-/* Validate commitments produced by executing a block body. */
 
+/*md
+# Stateless block validation
+
+Validation of the commitments produced by executing a block body: gas and
+blob-gas accounting, the post-state root, the receipts root and logs
+bloom, the EIP-7685 execution requests, and the EIP-7928 block access
+list.
+*/
+/*! Checks every executed-block commitment against the header and payload,
+    throwing the specific `InvalidBlock` reason on the first failure:
+    gas/blob-gas totals, post-state root, receipts root, logs bloom,
+    execution-request bytes (Prague+), and block-access-list bytes and
+    size (Amsterdam+). */
 function validate_executed_block(
     block : Block,
     input_ref : StatelessInputRef,
@@ -72,19 +84,25 @@ function validate_executed_block(
     }
 }
 
+/*! A validation failure: the pipeline stage it occurred in and the
+    violated rule. */
 struct StatelessValidationFailure = {
     scope : bits(8),
     reason : BlockError,
 }
 
+/*! The verdict of stateless payload verification. */
 union StatelessValidationResult = {
+    /* every validation stage passed */
     StatelessPayloadValid : unit,
+    /* the first failing stage and its reason */
     StatelessPayloadInvalid : StatelessValidationFailure,
 }
 
-/* Stateless block flow: decode the small semantic envelope, index the witness,
- * validate all source-backed payload commitments, and only then decode and
- * execute transactions one at a time from BlockBody. */
+/*! The stateless verification pipeline: decode the semantic envelope,
+    index the witness, validate the payload commitments, execute the
+    block body one transaction at a time, and validate the execution
+    results; the first violated rule becomes the failure verdict. */
 function verify_stateless_payload(input_ref : StatelessInputRef) -> StatelessValidationResult = {
     var active_scope = SCOPE_DECODE_INPUT;
     try {

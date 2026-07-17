@@ -1,22 +1,30 @@
-/* ======================================================================== */
-/* EXECUTOR: PROTOCOL SYSTEM CALLS                                          */
-/*                                                                          */
-/* The block-level system calls the protocol issues around the              */
-/* transactions: the EIP-4788 / EIP-2935 block-start writes (unchecked --   */
-/* skipped if the contract is absent) and the EIP-7002 / EIP-7251           */
-/* block-end request dequeues (checked -- absence or failure invalidates    */
-/* the block). Each is a 30M-gas frame from SYSTEM_ADDRESS whose committed  */
-/* storage writes shape the post-state root.                                */
-/* ======================================================================== */
 
-/* ---- EIP-4788 / EIP-2935 block-start system calls ---------------------------
- * Before the transactions, the protocol issues unchecked system calls from
- * SYSTEM_ADDRESS to the beacon-roots (EIP-4788) and block-hash-history (EIP-2935)
- * contracts, writing the parent beacon-block root and the parent block hash into
- * their ring buffers. Each takes a 32-byte input, 30M gas, and bumps no nonce /
- * charges no fee / counts toward no block gas; it is skipped if the contract has
- * no code. Their committed storage writes shape the post-state root. */
+/*md
+# Protocol system calls
 
+The block-level system calls the protocol issues around the transactions:
+the EIP-4788 / EIP-2935 block-start writes (unchecked — skipped if the
+contract is absent) and the EIP-7002 / EIP-7251 block-end request
+dequeues (checked — absence or failure invalidates the block). Each is a
+30M-gas frame from `SYSTEM_ADDRESS` whose committed storage writes shape
+the post-state root.
+
+## Constants
+
+The deposit offsets describe the ABI-encoded `DepositEvent` payload, while
+`SYSTEM_CALL_INPUT_LENGTH` is the fixed input length of each block-start
+system call.
+*/
+/*md
+## The block-start writes
+
+Before the transactions, the protocol issues unchecked system calls from
+`SYSTEM_ADDRESS` to the beacon-roots (EIP-4788) and block-hash-history
+(EIP-2935) contracts, writing the parent beacon-block root and the parent
+block hash into their ring buffers. Each takes a 32-byte input and 30M
+gas, and bumps no nonce, charges no fee, and counts toward no block gas;
+it is skipped if the contract has no code.
+*/
 let SYSTEM_CALL_INPUT_LENGTH : byte_length = WORD_BYTE_LENGTH
 
 let DEPOSIT_EVENT_DATA_LENGTH : byte_length = ByteQuantity(576)
@@ -44,6 +52,9 @@ let DEPOSIT_INDEX_LENGTH : byte_length = EIGHT_BYTE_LENGTH
 /* Enter a top-level protocol system-call frame. The caller has already made a
  * fresh memory frame and, for a word input, frozen the parent-memory span that
  * `input` references. */
+/*! Enters a top-level protocol system-call frame. The caller has already
+    made a fresh memory frame and, for a word input, frozen the
+    parent-memory span that `input` references. */
 function enter_system_call_frame(tgt : address, input : ByteSlice) -> StateCheckpoint = {
     let checkpoint = k_state_checkpoint();
     pc = BYTE_ZERO;
@@ -67,6 +78,9 @@ function enter_system_call_frame(tgt : address, input : ByteSlice) -> StateCheck
     checkpoint
 }
 
+/*! Issues one unchecked block-start system call: a 30M-gas frame from
+    `SYSTEM_ADDRESS` with a 32-byte input; skipped when the target has no
+    code, and its output is discarded. */
 function system_call(tgt : address, input : bits(256)) -> unit = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         () /* system contract absent -> skip (EIP-4788 / EIP-2935) */
@@ -97,6 +111,9 @@ function system_call(tgt : address, input : bits(256)) -> unit = {
  * call makes the whole block INVALID (returns false here). */
 
 
+/*! Issues one checked block-end system call (EIP-7002/EIP-7251): the
+    target must exist and the call must succeed — otherwise the block is
+    invalid — and the returned dequeued requests are the call's output. */
 function system_call_checked(tgt : address) -> option(ByteSlice) = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         None() /* checked: a missing system predeploy invalidates the block */
@@ -122,6 +139,8 @@ function system_call_checked(tgt : address) -> option(ByteSlice) = {
     }
 }
 
+/*! Whether a log is a `DepositEvent` from the deposit contract
+    (EIP-6110). */
 function deposit_log_matches(log : LogEntry) -> bool =
     if log.address != DEPOSIT_CONTRACT_ADDR then {
         false
@@ -132,8 +151,9 @@ function deposit_log_matches(log : LogEntry) -> bool =
         }
     }
 
-/* Strip the ABI framing from one DepositEvent and append the consensus-layer
- * request fields directly to the scratch arena. */
+/*! Strips the ABI framing from one `DepositEvent` and appends the
+    consensus-layer deposit record's fields directly to the requests
+    scratch (EIP-6110). */
 function append_deposit_request(data : ByteSlice) -> unit = {
     if   (data.len != DEPOSIT_EVENT_DATA_LENGTH)
        | (slice_load(data, DEPOSIT_PUBKEY_HEAD) != word_of_nat(160))
@@ -155,6 +175,7 @@ function append_deposit_request(data : ByteSlice) -> unit = {
     scratch_push_slice(sub_slice(data, DEPOSIT_INDEX_DATA, DEPOSIT_INDEX_LENGTH))
 }
 
+/*! Appends every matching deposit log in emission order. */
 function append_deposit_logs(logs : list(LogEntry)) -> unit =
     match logs {
         [||] => (),
@@ -166,8 +187,11 @@ function append_deposit_logs(logs : list(LogEntry)) -> unit =
         },
     }
 
-/* EELS processes request types in ascending order and stops immediately when
+/* Request types are processed in ascending order, stopping immediately when
  * a checked system call is missing or fails. */
+/*! Collects the EIP-7685 execution requests at block end: deposits from
+    logs (EIP-6110), then the withdrawal (EIP-7002) and consolidation
+    (EIP-7251) queue dequeues. */
 function collect_execution_requests(deposits : ByteSlice) -> (bool, ExecutionRequests) = {
     match system_call_checked(WITHDRAWAL_REQUEST_ADDR) {
         None() => (false, struct { deposits = deposits, withdrawals = EMPTY_SLICE, consolidations = EMPTY_SLICE }),

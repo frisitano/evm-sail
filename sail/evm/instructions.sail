@@ -1,19 +1,19 @@
-/* ======================================================================== */
-/* INSTRUCTION SURFACE                                                      */
-/*                                                                          */
-/* The abstract syntax of EVM bytecode: the full defined opcode set through */
-/* the Osaka fork (Yellow Paper Appendix H, plus the EIPs that extend it -- */
-/* e.g. PUSH0 EIP-3855, SHL/SHR/SAR EIP-145, CLZ EIP-7939, TLOAD/TSTORE     */
-/* EIP-1153, MCOPY EIP-5656, BLOBHASH/BLOBBASEFEE EIP-4844/7516).           */
-/*                                                                          */
-/* One `ast` constructor per opcode. Immediates are carried inline: PUSH    */
-/* holds its byte width (0..32) and value, DUP/SWAP hold the index n, LOG   */
-/* holds its topic count n. The constructor groups below are labelled with  */
-/* the opcode byte range they cover. Decoding code bytes into this AST      */
-/* lives in interpreter.sail (`fetch`); undefined bytes decode to INVALID   */
-/* and halt exceptionally when executed.                                    */
-/* ======================================================================== */
 
+/*md
+# The instruction set
+
+The abstract syntax of EVM bytecode: the full defined opcode set through
+the Osaka fork (Yellow Paper Appendix H, plus the EIPs that extend it —
+`PUSH0` EIP-3855, `SHL`/`SHR`/`SAR` EIP-145, `CLZ` EIP-7939,
+`TLOAD`/`TSTORE` EIP-1153, `MCOPY` EIP-5656, `BLOBHASH`/`BLOBBASEFEE`
+EIP-4844/EIP-7516).
+*/
+/*! One constructor per opcode. Immediates are carried inline: `PUSH`
+    holds its byte width (0–32) and value, `DUP`/`SWAP` hold the index
+    `n`, `LOG` holds its topic count. The constructor groups are labelled
+    with the opcode byte range they cover. Decoding code bytes into this
+    AST is [fetch][]'s job; undefined bytes decode to `INVALID` and halt
+    exceptionally when executed. */
 union ast = {
   /* 0x00, 0x0b: arithmetic */
   STOP : unit, ADD : unit, MUL : unit, SUB : unit, DIV : unit,
@@ -39,7 +39,8 @@ union ast = {
   BLOCKHASH : unit, COINBASE : unit, TIMESTAMP : unit, NUMBER : unit,
   PREVRANDAO : unit, GASLIMIT : unit, CHAINID : unit,
   SELFBALANCE : unit, BASEFEE : unit, BLOBHASH : unit, BLOBBASEFEE : unit,
-  SLOTNUM : unit, /* EIP-7843 (0x4b) */
+  /* EIP-7843 (0x4b) */
+  SLOTNUM : unit,
 
   /* 0x50, 0x5e: stack / memory / storage / flow */
   POP : unit, MLOAD : unit, MSTORE : unit, MSTORE8 : unit,

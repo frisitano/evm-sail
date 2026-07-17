@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mkdocstrings-sail"
+version = "0.2.2"
+description = "Sail handler for mkdocstrings, rendering definitions from sail --doc docinfo bundles"
+readme = "README.md"
+license = { text = "BSD-2-Clause" }
+requires-python = ">=3.10"
+dependencies = [
+    "mkdocstrings>=1.0",
+    # MkDocs 2.0 (unreleased) removes the plugin system entirely; this
+    # handler, mkdocstrings, and mkdocs-autorefs all require the 1.x API.
+    "mkdocs>=1.6,<2",
+    # patch releases only: Material minor bumps have changed code-block
+    # layout under us (9.7 grid); review before moving the pin
+    "mkdocs-material~=9.7.7",
+    "Markdown>=3.3",
+    "mkdocs-literate-nav>=0.6",
+    "mkdocs-section-index>=0.3",
+    "Pygments>=2.12",
+    "MarkupSafe>=2.0",
+]
+
+[project.entry-points."pygments.lexers"]
+sail = "mkdocstrings_handlers.sail._lexer:SailLexer"
+
+[project.scripts]
+sail-lsp-index = "mkdocstrings_handlers.sail._lsp:main"
+sail-book-gen = "mkdocstrings_handlers.sail._book:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mkdocstrings_handlers"]
+
+# invalidate uv's cached wheel when any package file changes, not just
+# pyproject.toml (the default) — editable local runs stay fresh
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "mkdocstrings_handlers/**" }, { file = "README.md" }]

@@ -453,7 +453,7 @@ def memory_expansion_gas (required_size : Nat) : SailM gas_cost := do
 /-- Type quantifiers: required_size : Nat, 0 ≤ required_size -/
 def expand_memory (required_size : Nat) : SailM Unit := do
   let expanded_size ← do (pure ((← (memory_word_count required_size)) *i 32))
-  assert (nat_fits_limb expanded_size) "sail/evm/gas.sail:403.39-403.40"
+  assert (nat_fits_limb expanded_size) "sail/evm/gas.sail:469.39-469.40"
   (memory_expand_to (ByteQuantity expanded_size))
 
 def charge_memory_expansion (start : word) (size : word) : SailM Unit := do
@@ -747,7 +747,7 @@ def exp_gas (exponent : word) : SailM gas_cost := do
     then (pure byte_count)
     else
       (do
-        assert false "sail/evm/gas.sail:944.24-944.25"
+        assert false "sail/evm/gas.sail:1029.24-1029.25"
         throw Error.Exit) ) : SailM Nat )
   (pure (gas_cost_add_constant (gas_constant_scale G_expbyte significant_bytes) G_exp))
 

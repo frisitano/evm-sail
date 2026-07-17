@@ -192,7 +192,7 @@ def word_bit_count_increment (value : word_bit_count) : SailM word_bit_count := 
     then (pure (value + 1))
     else
       (do
-        assert false "sail/prelude.sail:155.20-155.21"
+        assert false "sail/prelude.sail:188.20-188.21"
         throw Error.Exit)
   pure (⟨semanticResult⟩)
 
@@ -229,7 +229,7 @@ def limb_to_word (value : limb) : word :=
 
 /-- Type quantifiers: value : Nat, 0 ≤ value -/
 def word_of_nat (value : Nat) : SailM word := do
-  assert (value <b (2 ^i 256)) "sail/prelude.sail:186.26-186.27"
+  assert (value <b (2 ^i 256)) "sail/prelude.sail:222.26-222.27"
   (pure (get_slice_int 256 value 0))
 
 def word_ult (a : word) (b : word) : Bool :=

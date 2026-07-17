@@ -65,7 +65,7 @@ def word_of_precompile_id (value : precompile_id) : SailM word := do
 def account_nonce_increment (value : account_nonce) : SailM account_nonce := do
   let value := (value).value
   let semanticResult ← do
-    assert (value <b ((2 ^i 64) -i 1)) "sail/primitives/quantities.sail:70.29-70.30"
+    assert (value <b ((2 ^i 64) -i 1)) "sail/primitives/quantities.sail:125.29-125.30"
     (pure (value + 1))
   pure (⟨semanticResult⟩)
 
@@ -73,7 +73,7 @@ def account_nonce_increment (value : account_nonce) : SailM account_nonce := do
 def protocol_quantity_increment (value : protocol_quantity) : SailM protocol_quantity := do
   let value := (value).value
   let semanticResult ← do
-    assert (value <b ((2 ^i 64) -i 1)) "sail/primitives/quantities.sail:75.29-75.30"
+    assert (value <b ((2 ^i 64) -i 1)) "sail/primitives/quantities.sail:131.29-131.30"
     (pure (value + 1))
   pure (⟨semanticResult⟩)
 
@@ -81,7 +81,7 @@ def protocol_quantity_increment (value : protocol_quantity) : SailM protocol_qua
 def protocol_quantity_decrement (value : protocol_quantity) : SailM protocol_quantity := do
   let value := (value).value
   let semanticResult ← do
-    assert (0 <b value) "sail/primitives/quantities.sail:80.20-80.21"
+    assert (0 <b value) "sail/primitives/quantities.sail:137.20-137.21"
     (pure (value -i 1))
   pure (⟨semanticResult⟩)
 
@@ -93,7 +93,7 @@ def frame_depth_increment (value : frame_depth) : SailM frame_depth := do
     then (pure (value + 1))
     else
       (do
-        assert false "sail/primitives/quantities.sail:88.20-88.21"
+        assert false "sail/primitives/quantities.sail:146.20-146.21"
         throw Error.Exit)
   pure (⟨semanticResult⟩)
 
@@ -119,7 +119,7 @@ def item_index_increment (value : item_index) : SailM item_index := do
 def merkle_depth_increment (value : merkle_depth) : SailM merkle_depth := do
   let value := (value).value
   let semanticResult ← do
-    assert (value <b 64) "sail/primitives/quantities.sail:101.21-101.22"
+    assert (value <b 64) "sail/primitives/quantities.sail:162.21-162.22"
     (pure (value + 1))
   pure (⟨semanticResult⟩)
 
@@ -127,7 +127,7 @@ def merkle_depth_increment (value : merkle_depth) : SailM merkle_depth := do
 def merkle_depth_decrement (value : merkle_depth) : SailM merkle_depth := do
   let value := (value).value
   let semanticResult ← do
-    assert (0 <b value) "sail/primitives/quantities.sail:106.20-106.21"
+    assert (0 <b value) "sail/primitives/quantities.sail:168.20-168.21"
     (pure (value -i 1))
   pure (⟨semanticResult⟩)
 
@@ -145,7 +145,7 @@ def byte_quantity_fits_limb (app_0 : byte_quantity) : Bool :=
 
 /-- Type quantifiers: value : Nat, 0 ≤ value -/
 def nat_to_limb (value : Nat) : SailM limb := do
-  assert (nat_fits_limb value) "sail/primitives/quantities.sail:148.31-148.32"
+  assert (nat_fits_limb value) "sail/primitives/quantities.sail:220.31-220.32"
   (pure (get_slice_int 64 value 0))
 
 def byte_quantity_to_limb (app_0 : byte_quantity) : SailM limb := do
@@ -163,14 +163,14 @@ def protocol_quantity_quotient (value : protocol_quantity) (divisor : protocol_d
   let divisor := (divisor).value
   let semanticResult ← do
     let quotient ← do (exact_quotient value divisor)
-    assert (quotient ≤b value) "sail/primitives/quantities.sail:177.28-177.29"
+    assert (quotient ≤b value) "sail/primitives/quantities.sail:253.28-253.29"
     (pure quotient)
   pure (⟨semanticResult⟩)
 
 def byte_quantity_quotient (typ_0 : byte_quantity) (typ_1 : byte_quantity) : SailM byte_quantity := do
   let .ByteQuantity dividend : byte_quantity := typ_0
   let .ByteQuantity divisor : byte_quantity := typ_1
-  assert (dividend ≤b BYTE_QUANTITY_MAX) "sail/primitives/quantities.sail:230.40-230.41"
+  assert (dividend ≤b BYTE_QUANTITY_MAX) "sail/primitives/quantities.sail:310.40-310.41"
   (pure (ByteQuantity (← (exact_quotient dividend divisor))))
 
 /-- Type quantifiers: k_ex161016_ : Nat, 1 ≤ k_ex161016_ ∧ k_ex161016_ ≤ 1000 -/
@@ -184,6 +184,6 @@ def gas_quotient (typ_0 : gas) (divisor : gas_divisor) : SailM gas := do
   let divisor := (divisor).value
   let .Gas value : gas := typ_0
   let quotient ← do (exact_quotient value divisor)
-  assert (quotient ≤b value) "sail/primitives/gas.sail:116.28-116.29"
+  assert (quotient ≤b value) "sail/primitives/gas.sail:147.28-147.29"
   (pure (Gas quotient))
 

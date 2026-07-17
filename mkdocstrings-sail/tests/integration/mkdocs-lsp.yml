@@ -1,0 +1,19 @@
+site_name: "Sail Handler Integration Fixture"
+theme:
+  name: material
+plugins:
+  - search
+  - autorefs:
+      link_titles: false
+  - mkdocstrings:
+      default_handler: sail
+      handlers:
+        sail:
+          bundle: doc/doc.json
+          lsp_index: doc/lsp-index.json
+markdown_extensions:
+  - toc:
+      permalink: true
+nav:
+  - Home: index.md
+  - Definitions: definitions.md

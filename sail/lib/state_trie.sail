@@ -1,5 +1,14 @@
-/* Ethereum account and storage tries over the generic MPT core. */
 
+/*md
+# The state trie
+
+Ethereum account and storage tries over the generic MPT core: secure-trie
+reads for stateless execution, and the post-state root computation
+(YP §4.1).
+*/
+/*! Decodes an account trie leaf — `rlp([nonce, balance, storage_root,
+    code_hash])` — into an [AccountInfo][type-AccountInfo]; empty
+    root/hash fields decode to their empty-sentinel digests. */
 function decode_state_account(value : ByteSlice) -> AccountInfo = {
     let (nonce, fields) = rlp_cursor_pop(rlp_node_cursor(value));
     let (balance, fields) = rlp_cursor_pop(fields);
@@ -24,6 +33,9 @@ function decode_state_account(value : ByteSlice) -> AccountInfo = {
     }
 }
 
+/*! The witnessed account at address `a` under state root `root`,
+    reading the secure trie at `keccak256(a)`; `None` when the walk
+    proves absence. */
 function stateless_account(root : hash, a : address) -> option(AccountInfo) = {
     let value = trie_lookup(root, path_from_hash(keccak256_address(a)));
     if value.len == BYTE_ZERO then {
@@ -33,6 +45,8 @@ function stateless_account(root : hash, a : address) -> option(AccountInfo) = {
     }
 }
 
+/*! The witnessed storage value of `slot` under a storage root, reading
+    the secure trie at `keccak256(slot)`; absent slots are zero. */
 function stateless_storage(root : hash, slot : word) -> word = {
     let value = trie_lookup(root, path_from_hash(keccak256_word(slot)));
     if value.len == BYTE_ZERO then {
@@ -45,6 +59,7 @@ function stateless_storage(root : hash, slot : word) -> word = {
 function storage_value_changed(value : StorageValue) -> bool =
     not_bool(value.curr == value.orig)
 
+/*! Whether any persisted account field or lifecycle marker changed. */
 function account_value_changed(value : AcctValue) -> bool =
       not_bool(value.curr.info.nonce == value.orig.info.nonce)
     | not_bool(value.curr.info.balance == value.orig.info.balance)
@@ -53,6 +68,7 @@ function account_value_changed(value : AcctValue) -> bool =
     | not_bool(value.curr.present == value.orig.present)
     | not_bool(value.curr.storage_cleared == value.orig.storage_cleared)
 
+/*! Encodes a nonzero storage value as its minimal RLP integer leaf payload. */
 function encode_storage_value(value : word) -> ByteSlice = {
     let encoded_len = rlp_uint_word_size(value);
     let start = scratch_begin();
@@ -60,6 +76,7 @@ function encode_storage_value(value : word) -> ByteSlice = {
     rlp_finish(start, encoded_len)
 }
 
+/*! Encodes an account trie leaf with its recomputed storage root. */
 function encode_state_account(info : AccountInfo, storage_root : hash) -> ByteSlice = {
     var content_len = rlp_uint_size(info.nonce);
     content_len = content_len + rlp_uint_word_size(info.balance);
@@ -78,6 +95,8 @@ function encode_state_account(info : AccountInfo, storage_root : hash) -> ByteSl
 /* The host maps are already ordered by their secure trie keys. Iterate them
  * backwards while consing so the resulting cursor remains ascending without
  * sorting or reversing it. */
+/*! Collects changed storage slots of an account as ascending secure-trie
+    updates. */
 function storage_updates(addr : address) -> list(TrieUpdate) = {
     var remaining : item_count = storage_block_count(addr);
     var updates : list(TrieUpdate) = [||];
@@ -100,6 +119,8 @@ function storage_updates(addr : address) -> list(TrieUpdate) = {
     updates
 }
 
+/*! Converts one changed account and its storage updates into a state-trie
+    insertion or deletion. */
 function account_update(entry : AcctEntry, storage : list(TrieUpdate)) -> TrieUpdate = {
     let current = entry.value.curr;
     let key = path_from_hash(keccak256_address(entry.addr));
@@ -118,6 +139,11 @@ function account_update(entry : AcctEntry, storage : list(TrieUpdate)) -> TrieUp
     }
 }
 
+/*! The post-state root: drains every changed account from the kernel's
+    block-level overlay, recomputes each touched account's storage root
+    from its changed slots (zero-valued slots delete), re-encodes the
+    account leaf (empty accounts delete, per EIP-161), and folds the
+    sorted update list into the parent state root via [trie_root][]. */
 function compute_state_root() -> hash = {
     var remaining : item_count = acct_block_count();
     var accounts : list(TrieUpdate) = [||];

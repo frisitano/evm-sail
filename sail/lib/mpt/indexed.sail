@@ -1,18 +1,28 @@
-/* Ordered keys for transaction, withdrawal, and receipt tries. */
+/*md
+# Ordered trie indices
 
+Transaction, withdrawal, and receipt tries use RLP-encoded list indices as
+keys. Their bytewise trie order differs from numeric order, so this cursor
+emits indices directly in canonical key order.
+*/
+
+/*! The item count and next canonical-key position of an indexed trie. */
 struct RlpIndexCursor = {
     count : item_count,
     position : item_index,
 }
 
+/*! One numeric index, its trie key, and the following key when present. */
 struct RlpIndexItem = {
     index : item_index,
     key : TriePath,
     next_key : option(TriePath),
 }
 
+/*! The minimal nonzero byte width of a supported RLP list index. */
 type rlp_index_byte_width = range(1, 8)
 
+/*! Returns the minimal byte width of an indexed-trie position. */
 function rlp_index_encoded_width(value : item_index) -> rlp_index_byte_width =
     if value < 256 then {
         1
@@ -40,6 +50,8 @@ function rlp_index_encoded_width(value : item_index) -> rlp_index_byte_width =
         }
     }
 
+/*! The transactions/withdrawals-trie key for list index `i`:
+    `rlp(i)` as a nibble path (YP §4.4.2). */
 function trie_index_key(index : item_index) -> TriePath =
     if index == 0 then {
         path_new(sail_shiftleft(sail_zero_extend(0x80, 256), 248), 2)
@@ -61,6 +73,7 @@ function rlp_index_cursor(count : item_count) -> RlpIndexCursor =
 function rlp_index_cursor_empty(cursor : RlpIndexCursor) -> bool =
     cursor.count <= cursor.position
 
+/*! Counts the one-byte keys that sort before RLP index zero. */
 function rlp_index_single_count(count : item_count) -> item_count =
     if count == 0 then {
         0
@@ -69,6 +82,7 @@ function rlp_index_single_count(count : item_count) -> item_count =
         if rest < 127 then { rest } else { 127 }
     }
 
+/*! Maps a canonical-key cursor position back to its numeric list index. */
 function rlp_index_at_position(cursor : RlpIndexCursor) -> item_index = {
     if rlp_index_cursor_empty(cursor) then {
         throw InvalidBlock(WitnessDeficient)
@@ -85,6 +99,7 @@ function rlp_index_at_position(cursor : RlpIndexCursor) -> item_index = {
     }
 }
 
+/*! Removes the next canonical-key item and advances the cursor. */
 function rlp_index_cursor_pop(cursor : RlpIndexCursor) -> (RlpIndexItem, RlpIndexCursor) = {
     let index = rlp_index_at_position(cursor);
     let next_cursor : RlpIndexCursor = struct {

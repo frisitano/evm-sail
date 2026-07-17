@@ -1,86 +1,102 @@
-/* ======================================================================== */
-/* HALT KINDS AND THE EXCEPTIONAL HALTING STATE (Yellow Paper sec. 9.4.2)   */
-/*                                                                          */
-/* How an execution frame can end. A frame either halts normally (one of    */
-/* HaltKind: STOP / RETURN / REVERT / SELFDESTRUCT) or hits an exceptional  */
-/* halt (one of ExceptionKind). An exceptional halt is the YP "exceptional  */
-/* halting state": it consumes ALL remaining gas and reverts the frame's    */
-/* state changes. REVERT (EIP-140) is the sole failure that instead REFUNDS */
-/* the remaining gas while still rolling state back.                        */
-/*                                                                          */
-/* FrameStatus is the running/halted/exceptional tag. RETURN and REVERT     */
-/* carry the frame output directly; interpret() returns that value.         */
-/* ======================================================================== */
+/*md
+# Exceptions
 
-/* Ordinary frame stops. Only RETURN and REVERT produce output bytes. */
-union HaltKind = {
-  HaltStop         : unit,
-  HaltReturn       : ByteSlice,
-  HaltRevert       : ByteSlice,
-  HaltSelfDestruct : unit
-}
+The failures that interrupt EVM execution or invalidate a block. An
+[ExceptionKind][type-ExceptionKind] exceptionally halts the current frame,
+consumes its remaining gas, and reverts its state changes. A
+[BlockError][type-BlockError] rejects the entire payload and is carried by
+the model's single `exception` type.
+*/
 
-/* Exceptional halts: consume all remaining gas and revert the frame. */
+/*! Exceptional halts (YP §9.4.2): each consumes all remaining gas and
+    reverts the frame's state changes. */
 enum ExceptionKind = {
+    /* an opcode pops more items than the stack holds */
     StackUnderflow,
+    /* a push would exceed the 1024-item stack limit */
     StackOverflow,
+    /* the operation's cost exceeds the remaining gas */
     OutOfGas,
+    /* an unassigned or fork-inactive opcode, or INVALID (0xfe) */
     InvalidOpcode,
+    /* a jump target that is not a valid JUMPDEST */
     InvalidJump,
-    StaticViolation, /* EIP-214: state-changing op inside a STATICCALL */
+    /* EIP-214: state-changing op inside a STATICCALL */
+    StaticViolation,
+    /* a call or create beyond depth 1024 */
     CallDepthExceeded,
+    /* a value transfer exceeding the sender's balance */
     InsufficientBalance,
-    WriteProtection, /* EIP-214 write protection                    */
-    InitCodeTooLarge, /* EIP-3860 */
+    /* EIP-214 write protection */
+    WriteProtection,
+    /* EIP-3860 */
+    InitCodeTooLarge,
+    /* a nonce at its maximum cannot be bumped (EIP-2681) */
     NonceOverflow,
-    AddressCollision, /* EIP-684: CREATE into an occupied account     */
+    /* EIP-684: CREATE into an occupied account */
+    AddressCollision,
 }
 
-/* Per-frame execution status. */
-union FrameStatus = {
-  Running     : unit,
-  Halted      : HaltKind,
-  Exceptional : ExceptionKind
-}
+/*md
+## The block-validation failures
 
-/* ======================================================================== */
-/* BLOCK VALIDATION FAILURES  (the InvalidBlock hierarchy, as data)         */
-/*                                                                          */
-/* Mirrors EELS `InvalidBlock` (execution-specs amsterdam/fork.py           */
-/* state_transition): every `raise InvalidBlock` site maps to one variant.  */
-/* Modeled as a typed enum, NOT a thrown exception -- the same data-flow    */
-/* discipline as ExceptionKind above, keeping validation total. The guest   */
-/* reports the FIRST failure it finds (block_validation_error, main.sail);  */
-/* a valid block yields None. Only the pass/fail boolean is emitted, so the */
-/* reason is diagnostic (and a hook for future structured output).          */
+Every rule whose violation invalidates a block maps to one variant. The
+validator throws `InvalidBlock(reason)` at the point of detection and the
+guest catches it once at its boundary. A valid block yields no failure. Only
+the pass/fail boolean is emitted, so the reason is diagnostic (and a hook for
+future structured output).
+*/
+/*! The reason a block fails validation; one variant per violated
+    block-validity rule. */
 enum BlockError = {
-    InvalidConfig, /* chain config: wrong fork / inactive activation      */
-    HeaderChainBroken, /* witness ancestor headers not contiguous             */
-    RlpDecode, /* a transaction failed to RLP-decode                  */
-    InvalidSignature, /* a tx signature did not authenticate its sender      */
-    InvalidGasLimit, /* header.gas_limit is outside the consensus domain    */
-    GasUsedExceedsLimit, /* EIP-7778: a tx exceeds the block's remaining gas    */
-    BlobGasLimitExceeded, /* a tx exceeds the block's remaining blob gas         */
-    ExecutionInvalid, /* an invalid tx or a failed block-end system call     */
-    InvalidGasUsed, /* recomputed cumulative gas != header.gas_used        */
-    InvalidBlobGasUsed, /* recomputed blob gas != header.blob_gas_used         */
-    InvalidExcessBlobGas, /* header.excess_blob_gas != expected                  */
-    InvalidStateRoot, /* recomputed post-state root != header.state_root     */
-    InvalidReceiptsRoot, /* recomputed receipts root != header.receipts_root    */
-    InvalidLogsBloom, /* recomputed logs bloom != header.logs_bloom          */
-    InvalidBlockHash, /* recomputed block hash != payload expected hash     */
-    InvalidParentHash, /* header.parent_hash != authenticated parent          */
-    BlockAccessListTooLarge, /* EIP-7928: BAL item count > gas_limit / 2000         */
-    InvalidBlockAccessList, /* reconstructed EIP-7928 BAL bytes mismatch            */
-    InvalidExecutionRequests, /* reconstructed EIP-7685 request bytes mismatch       */
-    WitnessDeficient, /* a missing/inconsistent proof node (thrown at use)   */
+    /* chain config: wrong fork / inactive activation */
+    InvalidConfig,
+    /* witness ancestor headers not contiguous */
+    HeaderChainBroken,
+    /* a transaction failed to RLP-decode */
+    RlpDecode,
+    /* a tx signature did not authenticate its sender */
+    InvalidSignature,
+    /* header.gas_limit is outside the consensus domain */
+    InvalidGasLimit,
+    /* EIP-7778: a tx exceeds the block's remaining gas */
+    GasUsedExceedsLimit,
+    /* a tx exceeds the block's remaining blob gas */
+    BlobGasLimitExceeded,
+    /* an invalid tx or a failed block-end system call */
+    ExecutionInvalid,
+    /* recomputed cumulative gas != header.gas_used */
+    InvalidGasUsed,
+    /* recomputed blob gas != header.blob_gas_used */
+    InvalidBlobGasUsed,
+    /* header.excess_blob_gas != expected */
+    InvalidExcessBlobGas,
+    /* recomputed post-state root != header.state_root */
+    InvalidStateRoot,
+    /* recomputed receipts root != header.receipts_root */
+    InvalidReceiptsRoot,
+    /* recomputed logs bloom != header.logs_bloom */
+    InvalidLogsBloom,
+    /* recomputed block hash != payload expected hash */
+    InvalidBlockHash,
+    /* header.parent_hash != authenticated parent */
+    InvalidParentHash,
+    /* EIP-7928: BAL item count > gas_limit / 2000 */
+    BlockAccessListTooLarge,
+    /* reconstructed EIP-7928 BAL bytes mismatch */
+    InvalidBlockAccessList,
+    /* reconstructed EIP-7685 request bytes mismatch */
+    InvalidExecutionRequests,
+    /* a missing/inconsistent proof node (thrown at use) */
+    WitnessDeficient,
 }
 
-/* The single Sail exception type. Block validation THROWS InvalidBlock(reason)
- * at the failure point (mirroring EELS `raise InvalidBlock`), and main catches
- * it once -- any failure becomes successful_validation=false. This is exactly the
- * EELS verify_stateless_new_payload try/except structure. Sail's C backend unwinds
- * via have_exception return-checks (no longjmp), so it is zkVM-guest safe. */
+/*! The single Sail exception type. Block validation throws
+    `InvalidBlock(reason)` at the failure point, and `main` catches it
+    once — any failure yields an unsuccessful validation. Sail's C backend
+    unwinds via `have_exception` return-checks (no `longjmp`), so it is
+    zkVM-guest safe. */
 union exception = {
+    /* the block is invalid, with the failing rule */
     InvalidBlock : BlockError,
 }

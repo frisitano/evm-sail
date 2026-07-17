@@ -74,7 +74,7 @@ def stack_height (_ : Unit) : SailM operand_stack_height := do
       (do
           let semanticResult ← (stack_depth ())
           pure ((semanticResult).value))
-    assert (height ≤b (STACK_LIMIT).value) "sail/evm/machine.sail:55.32-55.33"
+    assert (height ≤b (STACK_LIMIT).value) "sail/evm/machine.sail:70.32-70.33"
     (pure height)
   pure (⟨semanticResult⟩)
 

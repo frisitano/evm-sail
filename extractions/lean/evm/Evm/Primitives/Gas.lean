@@ -62,7 +62,7 @@ def nat_to_gas (value : Nat) : SailM gas := do
   then (pure (Gas value))
   else
     (do
-      assert false "sail/primitives/gas.sail:38.20-38.21"
+      assert false "sail/primitives/gas.sail:64.20-64.21"
       throw Error.Exit)
 
 def word_to_gas (value : word) : (Option gas) :=

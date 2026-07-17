@@ -1,11 +1,20 @@
+/*md
+# Receipts, blooms, and the receipts trie
+
+The logs-bloom construction (YP §4.4.1) and the receipts trie
+(EIP-2718 typed receipt encoding).
+*/
+
 let LOGS_BLOOM_BYTE_LENGTH : byte_length = ByteQuantity(256)
 
+/*! Constructs a one-hot mask for a bit within a bloom limb. */
 function bloom_bit_mask(bit_to_set : bloom_limb_bit) -> limb = {
     var mask : limb = LIMB_ZERO;
     mask[bit_to_set] = bitone;
     mask
 }
 
+/*! Sets one bit (0–2047) in the bloom, most-significant-byte first. */
 function bloom_set_bit(bloom : LogsBloom, bit_to_set : bloom_bit_index) -> LogsBloom = {
     var out = bloom;
     let quotient = exact_quotient(bit_to_set, 64);
@@ -27,6 +36,7 @@ function bloom_set_bit(bloom : LogsBloom, bit_to_set : bloom_bit_index) -> LogsB
     out
 }
 
+/*! Adds a hashed bloom entry: three bits from its KECCAK-256. */
 function bloom_add_entry_hash(bloom : LogsBloom, h : bits(256)) -> LogsBloom = {
     var out = bloom_set_bit(bloom, unsigned(h[250 .. 240]));
     out = bloom_set_bit(out, unsigned(h[234 .. 224]));
@@ -34,25 +44,31 @@ function bloom_add_entry_hash(bloom : LogsBloom, h : bits(256)) -> LogsBloom = {
     out
 }
 
+/*! Adds every topic of a log record to the bloom. */
 function bloom_add_topics(bloom : LogsBloom, topics : list(word)) -> LogsBloom =
     match topics {
         [||] => bloom,
         topic :: rest => bloom_add_topics(bloom_add_entry_hash(bloom, keccak256_word(topic)), rest),
     }
 
+/*! Adds a log record to the bloom: its address and every topic
+    (YP §4.4.1, the M function). */
 function bloom_add_log(bloom : LogsBloom, log : LogEntry) -> LogsBloom = {
     let with_address = bloom_add_entry_hash(bloom, keccak256_address(log.address));
     bloom_add_topics(with_address, log.topics)
 }
 
+/*! Adds a sequence of log records to a bloom. */
 function bloom_add_logs(bloom : LogsBloom, logs : list(LogEntry)) -> LogsBloom =
     match logs {
         [||] => bloom,
         log :: rest => bloom_add_logs(bloom_add_log(bloom, log), rest),
     }
 
+/*! The bloom of one receipt's log series. */
 function logs_bloom_for_logs(logs : list(LogEntry)) -> LogsBloom = bloom_add_logs(EMPTY_LOGS_BLOOM, logs)
 
+/*! Sizes the RLP content of a topic list. */
 function topics_rlp_content_size(topics : list(word)) -> byte_length =
     match topics {
         [||] => BYTE_ZERO,
@@ -62,6 +78,7 @@ function topics_rlp_content_size(topics : list(word)) -> byte_length =
 function topics_rlp_size(topics : list(word)) -> byte_length =
     rlp_list_size(topics_rlp_content_size(topics))
 
+/*! Sizes the RLP content of one log entry. */
 function log_entry_rlp_content_size(log : LogEntry) -> byte_length = {
     var content_len = rlp_addr_size();
     content_len = content_len + topics_rlp_size(log.topics);
@@ -72,6 +89,7 @@ function log_entry_rlp_content_size(log : LogEntry) -> byte_length = {
 function log_entry_rlp_size(log : LogEntry) -> byte_length =
     rlp_list_size(log_entry_rlp_content_size(log))
 
+/*! Sizes the RLP content of a log-entry list. */
 function logs_rlp_content_size(logs : list(LogEntry)) -> byte_length =
     match logs {
         [||] => BYTE_ZERO,
@@ -81,6 +99,7 @@ function logs_rlp_content_size(logs : list(LogEntry)) -> byte_length =
 function logs_rlp_size(logs : list(LogEntry)) -> byte_length =
     rlp_list_size(logs_rlp_content_size(logs))
 
+/*! Writes topic words as the content of an RLP list. */
 function rlp_write_topics_content(topics : list(word)) -> unit =
     match topics {
         [||] => (),
@@ -90,11 +109,13 @@ function rlp_write_topics_content(topics : list(word)) -> unit =
         },
     }
 
+/*! Writes an RLP list of topic words. */
 function rlp_write_topics(topics : list(word)) -> unit = {
     rlp_write_list_prefix(topics_rlp_content_size(topics));
     rlp_write_topics_content(topics)
 }
 
+/*! Writes one canonical receipt log entry. */
 function rlp_write_log_entry(log : LogEntry) -> unit = {
     rlp_write_list_prefix(log_entry_rlp_content_size(log));
     rlp_write_addr(log.address);
@@ -102,6 +123,7 @@ function rlp_write_log_entry(log : LogEntry) -> unit = {
     rlp_write_slice(log.data)
 }
 
+/*! Writes log entries as the content of an RLP list. */
 function rlp_write_logs_content(logs : list(LogEntry)) -> unit =
     match logs {
         [||] => (),
@@ -111,11 +133,13 @@ function rlp_write_logs_content(logs : list(LogEntry)) -> unit =
         },
     }
 
+/*! Writes the RLP list of receipt logs. */
 function rlp_write_logs(logs : list(LogEntry)) -> unit = {
     rlp_write_list_prefix(logs_rlp_content_size(logs));
     rlp_write_logs_content(logs)
 }
 
+/*! Sizes a receipt payload from status, gas, bloom, and logs. */
 function receipt_payload_content_size(r : Receipt, cumulative_gas_used : gas) -> byte_length = {
     let status : protocol_quantity = if r.success then { 1 } else { 0 };
     var content_len = rlp_uint_size(status);
@@ -125,6 +149,9 @@ function receipt_payload_content_size(r : Receipt, cumulative_gas_used : gas) ->
     content_len
 }
 
+/*! The receipt as stored in the receipts trie: the RLP payload,
+    prefixed by the envelope type byte for typed transactions
+    (EIP-2718). */
 function receipt_encoded(r : Receipt, cumulative_gas_used : gas) -> ByteSlice = {
     let status : protocol_quantity = if r.success then { 1 } else { 0 };
     let bloom = logs_bloom_bytes(logs_bloom_for_logs(r.logs));
@@ -153,12 +180,14 @@ function receipt_encoded(r : Receipt, cumulative_gas_used : gas) -> ByteSlice = 
  * Retaining receipt zero plus one pending receipt is therefore sufficient to
  * bridge the only discontinuity; every other receipt is encoded and consumed
  * when its successor arrives. */
+/*! A receipt retained until its lexicographic trie successor is known. */
 struct PendingReceipt = {
     index : item_index,
     cumulative_gas_used : gas,
     receipt : Receipt,
 }
 
+/*! The streaming receipts-trie builder and block-wide receipt aggregates. */
 struct ReceiptAccumulator = {
     builder : TrieBuilder,
     first : option(PendingReceipt),
@@ -168,6 +197,7 @@ struct ReceiptAccumulator = {
     bloom : LogsBloom,
 }
 
+/*! Constructs an empty receipts-trie accumulator. */
 function receipt_accumulator_empty() -> ReceiptAccumulator =
     struct {
         builder = trie_builder_empty(),
@@ -178,6 +208,7 @@ function receipt_accumulator_empty() -> ReceiptAccumulator =
         bloom = EMPTY_LOGS_BLOOM,
     }
 
+/*! Encodes and inserts one pending receipt with its next lexical key. */
 function receipt_insert(builder : TrieBuilder, pending : PendingReceipt, next_key : option(TriePath)) -> TrieBuilder = {
     let mark = scratch_begin();
     let value = receipt_encoded(pending.receipt, pending.cumulative_gas_used);
@@ -186,6 +217,7 @@ function receipt_insert(builder : TrieBuilder, pending : PendingReceipt, next_ke
     inserted
 }
 
+/*! Adds the next numeric receipt while respecting trie-key lexical order. */
 function receipt_accumulator_push(acc : ReceiptAccumulator, receipt : Receipt) -> ReceiptAccumulator = {
     if not_bool(receipt.valid) then {
         throw InvalidBlock(ExecutionInvalid)
@@ -245,6 +277,7 @@ function receipt_accumulator_push(acc : ReceiptAccumulator, receipt : Receipt) -
     }
 }
 
+/*! Flushes retained receipts and returns the canonical receipts root. */
 function receipt_accumulator_root(acc : ReceiptAccumulator) -> hash = {
     var builder = acc.builder;
     if acc.count == 0 then {
