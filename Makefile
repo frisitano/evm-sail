@@ -77,13 +77,11 @@ MKDOCSTRINGS_SAIL ?= mkdocstrings-sail
 # extracted Lean 4 project (make lean-extract); when present, docs-site
 # renders it as the book's "Lean extraction" section
 LEAN_DIR ?= lean
-# optional: a local ethereum/EIPs EIPS/ checkout enables EIP hover cards
-EIPS_DIR ?=
 docs-site:
 	@mkdir -p $(BOOK)/doc $(BOOK)/docs
 	$(SAIL) --doc --doc-format identity --doc-embed plain --doc-embed-with-location --doc-bundle doc.json -o $(BOOK)/doc $(PROJECT) evm --variable EVM_ENTRY=guest
 	uv run --with-editable '$(MKDOCSTRINGS_SAIL)' sail-lsp-index --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --output $(BOOK)/doc/lsp-index.json
-	uv run --with-editable '$(MKDOCSTRINGS_SAIL)' python -m mkdocstrings_handlers.sail._book --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --book $(BOOK) --site-name "EVM Sail Specification" $(if $(EIPS_DIR),--eips $(EIPS_DIR)) $(if $(wildcard $(LEAN_DIR)/out),--lean $(LEAN_DIR)/out)
+	uv run --with-editable '$(MKDOCSTRINGS_SAIL)' python -m mkdocstrings_handlers.sail._book --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --book $(BOOK) --site-name "EVM Sail Specification" $(if $(wildcard $(LEAN_DIR)/out),--lean $(LEAN_DIR)/out)
 	cd $(BOOK) && uv run --with-editable '$(MKDOCSTRINGS_SAIL)' --with mkdocs-material mkdocs build --strict -d site
 	@echo "book: $(BOOK)/site/index.html"
 
