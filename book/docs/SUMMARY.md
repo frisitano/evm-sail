@@ -62,3 +62,6 @@
     - The state kernel
         - [The state kernel](reference/sail/host/kernel/index.md)
         - reference/sail/host/kernel/*.md
+- Lean extraction
+    - extraction/lean/Out/*.md
+    - extraction/lean/*.md

@@ -26,7 +26,7 @@ EEST_SMOKE := harness/fixtures/smoke/state_root_transfer.json
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail proof/sail -name '*.sail' | sort)
 
-.PHONY: all check clean help lint fmt fmt-check eest-smoke html pdf docs-site
+.PHONY: all check clean help lint fmt fmt-check eest-smoke html pdf docs-site lean-extract
 
 help:
 	@echo "evm-sail targets:"
@@ -74,15 +74,27 @@ all: check lint fmt-check
 # mkdocstrings-sail/ directory).
 BOOK ?= book
 MKDOCSTRINGS_SAIL ?= mkdocstrings-sail
+# extracted Lean 4 project (make lean-extract); when present, docs-site
+# renders it as the book's "Lean extraction" section
+LEAN_DIR ?= lean
 # optional: a local ethereum/EIPs EIPS/ checkout enables EIP hover cards
 EIPS_DIR ?=
 docs-site:
 	@mkdir -p $(BOOK)/doc $(BOOK)/docs
 	$(SAIL) --doc --doc-format identity --doc-embed plain --doc-embed-with-location --doc-bundle doc.json -o $(BOOK)/doc $(PROJECT) evm --variable EVM_ENTRY=guest
-	uv run --with '$(MKDOCSTRINGS_SAIL)' sail-lsp-index --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --output $(BOOK)/doc/lsp-index.json
-	uv run --with '$(MKDOCSTRINGS_SAIL)' python -m mkdocstrings_handlers.sail._book --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --book $(BOOK) --site-name "EVM Sail Specification" $(if $(EIPS_DIR),--eips $(EIPS_DIR))
-	cd $(BOOK) && uv run --with '$(MKDOCSTRINGS_SAIL)' --with mkdocs-material mkdocs build --strict -d site
+	uv run --with-editable '$(MKDOCSTRINGS_SAIL)' sail-lsp-index --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --output $(BOOK)/doc/lsp-index.json
+	uv run --with-editable '$(MKDOCSTRINGS_SAIL)' python -m mkdocstrings_handlers.sail._book --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --variable EVM_ENTRY=guest --book $(BOOK) --site-name "EVM Sail Specification" $(if $(EIPS_DIR),--eips $(EIPS_DIR)) $(if $(wildcard $(LEAN_DIR)/out),--lean $(LEAN_DIR)/out)
+	cd $(BOOK) && uv run --with-editable '$(MKDOCSTRINGS_SAIL)' --with mkdocs-material mkdocs build --strict -d site
 	@echo "book: $(BOOK)/site/index.html"
+
+# Extract the specification to a Lean 4 lake project. The custom backend
+# emits one Lean module per Sail source file and carries the /*! doc
+# comments as /-- docstrings and each file's leading /*md block as a
+# /-! module docstring.
+lean-extract:
+	@mkdir -p $(LEAN_DIR)
+	$(SAIL) --lean --lean-force-output --lean-output-dir $(LEAN_DIR) $(PROJECT) evm --variable EVM_ENTRY=guest
+	@echo "lean project: $(LEAN_DIR)/out"
 
 # Render the whole spec to a single syntax-highlighted HTML page (sail --html).
 # sail --html can't take the project module directly, so concatenate the

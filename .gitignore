@@ -38,5 +38,9 @@ zkvm/native-runner/.build/
 /book/site/
 /book/doc/
 /book/docs/reference/
+/book/docs/extraction/
 /book/docs/assets/
 /book/mkdocs.yml
+
+# extracted Lean project (make lean-extract)
+/lean/
