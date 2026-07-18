@@ -1,36 +1,11 @@
 
 /*md
-# Journal types
+# Semantic state checkpoint
 
-The journal (undo-log) entry union the kernel pushes and the revert path
-decodes. Pure data — no registers, no externs.
+An opaque handle denoting the complete revertible transaction state at a
+call-frame boundary. The model may store and return the handle, but cannot
+inspect subsystem cursors or replay an implementation journal.
 */
-/*! A length checkpoint of the undo journal. */
-type JournalCheckpoint = protocol_quantity
-/*! A length checkpoint of the account overlay. */
-type AccountCheckpoint = protocol_quantity
-/*! A length checkpoint of the storage overlay. */
-type StorageCheckpoint = protocol_quantity
-/*! A length checkpoint of the log store. */
-type LogCheckpoint = protocol_quantity
-
-/*! A four-counter snapshot of the mutable state stores; reverting a frame
-    truncates each store back to its counter. */
-struct StateCheckpoint = {
-  journal  : JournalCheckpoint,
-  accounts : AccountCheckpoint,
-  storage  : StorageCheckpoint,
-  logs     : LogCheckpoint,
-}
-
-/*! An undo-log entry. Transient-storage writes (EIP-1153), access-list
-    warmings (EIP-2929), and refund-counter changes are journaled; a revert
-    replays entries newest-first to restore the checkpointed state. */
-union JEntry = {
-  /* restore transient slot */
-  JTran : (address, word, word),
-  /* un-warm a newly-accessed address */
-  JWarmA : address,
-  /* un-warm a newly-accessed slot */
-  JWarmS : (address, word)
-}
+/*! An opaque host-issued handle for a semantic transaction-state snapshot.
+    Its representation and rollback mechanism are deliberately unobservable. */
+newtype StateCheckpoint = StateCheckpoint : protocol_quantity

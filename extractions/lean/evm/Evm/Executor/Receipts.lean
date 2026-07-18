@@ -39,10 +39,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -61,7 +61,7 @@ def bloom_bit_mask (bit_to_set : bloom_limb_bit) : limb :=
   let mask : (BitVec 64) := LIMB_ZERO
   (BitVec.update mask bit_to_set 1#1)
 
-/-- Type quantifiers: k_ex161667_ : Nat, 0 ≤ k_ex161667_ ∧ k_ex161667_ ≤ 2047 -/
+/-- Type quantifiers: k_ex161407_ : Nat, 0 ≤ k_ex161407_ ∧ k_ex161407_ ≤ 2047 -/
 def bloom_set_bit (bloom : LogsBloom) (bit_to_set : bloom_bit_index) : SailM LogsBloom := do
   let bit_to_set := (bit_to_set).value
   let out := bloom

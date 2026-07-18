@@ -35,10 +35,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -51,7 +51,7 @@ open BlockError
 
 def RESULT_METADATA_LENGTH : byte_length := (ByteQuantity 5)
 
-/-- Type quantifiers: k_ex161889_ : Bool -/
+/-- Type quantifiers: k_ex161629_ : Bool -/
 def result_prefix (root : hash) (success : Bool) : SailM Unit := do
   (scratch_push_bytes (word_to_bytes32 root) WORD_BYTE_LENGTH)
   (scratch_push_bytes
@@ -59,14 +59,14 @@ def result_prefix (root : hash) (success : Bool) : SailM Unit := do
     then 0x01#8
     else 0x00#8), 0x25#8, 0x00#8, 0x00#8, 0x00#8] RESULT_METADATA_LENGTH)
 
-/-- Type quantifiers: k_ex161890_ : Bool -/
+/-- Type quantifiers: k_ex161630_ : Bool -/
 def commit_validation_result (root : hash) (success : Bool) (chain_config : EvmByteSlice) : SailM Unit := do
   let start ← do (scratch_begin ())
   (result_prefix root success)
   (scratch_push_slice chain_config)
   assert (← (public_output_write (← (scratch_finish start)))) "public output write"
 
-/-- Type quantifiers: k_ex161891_ : Bool -/
+/-- Type quantifiers: k_ex161631_ : Bool -/
 def write_validation_result (input_ref : StatelessInputRef) (success : Bool) : SailM Unit := do
   let _ : Unit := (cycle_scope_start SCOPE_COMPUTE_OUTPUT_ROOT)
   let root ← do (htr_new_payload_request input_ref)

@@ -35,10 +35,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -357,11 +357,11 @@ def rlp_checked_add_quantity (a : source_pointer) (b : byte_length) : SailM sour
       else sailThrow ((InvalidBlock RlpDecode)))
   else sailThrow ((InvalidBlock RlpDecode))
 
-/-- Type quantifiers: k_ex161080_ : Nat, 0 ≤ k_ex161080_ -/
+/-- Type quantifiers: k_ex160823_ : Nat, 0 ≤ k_ex160823_ -/
 def rlp_checked_add_nat (a : source_pointer) (b : Nat) : SailM source_pointer := do
   (rlp_checked_add_quantity a (ByteQuantity b))
 
-/-- Type quantifiers: k_ex161081_ : Nat, 0 ≤ k_ex161081_ ∧ k_ex161081_ ≤ 8 -/
+/-- Type quantifiers: k_ex160824_ : Nat, 0 ≤ k_ex160824_ ∧ k_ex160824_ ≤ 8 -/
 def rlp_ref_be_length (source : EvmByteSlice) (start : source_pointer) (count : Nat) : SailM byte_length := do
   let value : (BitVec 64) := LIMB_ZERO
   let current : byte_quantity := start
@@ -451,7 +451,7 @@ def rlp_ref_hdr (b : EvmByteSlice) (pos : source_pointer) (stop : source_pointer
                   else (pure ())
                   (pure (true, content, (← (rlp_ref_be_length b length_start length_width))))))))
 
-/-- Type quantifiers: k_ex161082_ : Bool -/
+/-- Type quantifiers: k_ex160825_ : Bool -/
 def rlp_field_ref (source : EvmByteSlice) (is_list : Bool) (full_off : source_pointer) (full_len : byte_length) (content_off : source_pointer) (content_len : byte_length) : RlpFieldRef :=
   { source := source,
     is_list := is_list,

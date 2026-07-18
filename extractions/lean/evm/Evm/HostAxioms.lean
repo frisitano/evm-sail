@@ -4,6 +4,529 @@ open Sail
 open ConcurrencyInterfaceV1
 open Evm.Defs
 
+/-!
+## Extensional world-state contract
+
+The declarations in `Evm.Functions` below are the raw symbols imported by the
+generated Sail model.  This namespace gives those account, persistent-storage,
+and transient-storage symbols an implementation-independent meaning.
+
+Nothing here describes the layout of `ffi/state_db.c` or `ffi/kernel_state.c`:
+there are no table rows, generations, undo cursors, physical deletions, or
+first-write/copy-on-write rules.  Such devices are permitted only through a
+refinement from a backend state to the total maps and logical snapshots below.
+-/
+namespace Evm.Contracts
+
+structure PersistentWorld where
+  accountAt : address → Account
+  storageAt : address → word → word
+
+def accountWithClearedStorage (account : Account) : Account :=
+  { account with storage_cleared := true }
+
+def accountWithoutTransactionFlags (account : Account) : Account :=
+  { account with created := false, selfdestructed := false }
+
+def zeroAccountNonce : account_nonce :=
+  { value := 0 }
+
+def deletedAccount (emptyCodeHash : word) (account : Account) : Account :=
+  { account with
+    info :=
+      { account.info with
+        nonce := zeroAccountNonce
+        balance := BitVec.zero 256
+        code_hash := emptyCodeHash }
+    present := false
+    storage_cleared := true }
+
+def worldWriteAccount
+    (world : PersistentWorld) (target : address) (value : Account) :
+    PersistentWorld :=
+  { accountAt := fun candidate =>
+      if candidate = target then value else world.accountAt candidate
+    storageAt := world.storageAt }
+
+def worldWriteStorage
+    (world : PersistentWorld) (target : address) (targetSlot value : word) :
+    PersistentWorld :=
+  { accountAt := world.accountAt
+    storageAt := fun candidate candidateSlot =>
+      if candidate = target ∧ candidateSlot = targetSlot then
+        value
+      else
+        world.storageAt candidate candidateSlot }
+
+def worldClearStorage
+    (world : PersistentWorld) (target : address) : PersistentWorld :=
+  { accountAt := fun candidate =>
+      if candidate = target then
+        accountWithClearedStorage (world.accountAt candidate)
+      else
+        world.accountAt candidate
+    storageAt := fun candidate candidateSlot =>
+      if candidate = target then BitVec.zero 256
+      else world.storageAt candidate candidateSlot }
+
+def worldDeleteAccount
+    (emptyCodeHash : word) (world : PersistentWorld) (target : address) :
+    PersistentWorld :=
+  { accountAt := fun candidate =>
+      if candidate = target then
+        deletedAccount emptyCodeHash (world.accountAt candidate)
+      else
+        world.accountAt candidate
+    storageAt := fun candidate candidateSlot =>
+      if candidate = target then BitVec.zero 256
+      else world.storageAt candidate candidateSlot }
+
+abbrev TransientState := address → word → word
+abbrev WarmAddressState := address → Bool
+abbrev WarmSlotState := address → word → Bool
+
+def emptyTransientState : TransientState :=
+  fun _ _ => BitVec.zero 256
+
+def emptyWarmAddressState : WarmAddressState := fun _ => false
+def emptyWarmSlotState : WarmSlotState := fun _ _ => false
+
+def transientWrite
+    (transient : TransientState) (target : address) (targetSlot value : word) :
+    TransientState :=
+  fun candidate candidateSlot =>
+    if candidate = target ∧ candidateSlot = targetSlot then
+      value
+    else
+      transient candidate candidateSlot
+
+def warmAddressWrite
+    (warm : WarmAddressState) (target : address) : WarmAddressState :=
+  fun candidate => if candidate = target then true else warm candidate
+
+def warmSlotWrite
+    (warm : WarmSlotState) (target : address) (targetSlot : word) :
+    WarmSlotState :=
+  fun candidate candidateSlot =>
+    if candidate = target ∧ candidateSlot = targetSlot then true
+    else warm candidate candidateSlot
+
+/- `blockStart` is the authenticated parent state and `blockCurrent`
+accumulates successful transactions.  `txStart` is the EIP-2200 original-value
+snapshot; `txCurrent` is the live state of the executing transaction. -/
+structure ReferenceWorldState where
+  blockStart : PersistentWorld
+  blockCurrent : PersistentWorld
+  txStart : PersistentWorld
+  txCurrent : PersistentWorld
+  transient : TransientState
+  warmAddresses : WarmAddressState
+  warmSlots : WarmSlotState
+  logs : List LogEntry
+
+structure TransactionSnapshot where
+  txCurrent : PersistentWorld
+  transient : TransientState
+  warmAddresses : WarmAddressState
+  warmSlots : WarmSlotState
+  logs : List LogEntry
+
+def persistentWorldEquivalent (left right : PersistentWorld) : Prop :=
+  (∀ account, left.accountAt account = right.accountAt account) ∧
+  (∀ account slot, left.storageAt account slot = right.storageAt account slot)
+
+def transientStateEquivalent (left right : TransientState) : Prop :=
+  ∀ account slot, left account slot = right account slot
+
+def warmAddressStateEquivalent (left right : WarmAddressState) : Prop :=
+  ∀ account, left account = right account
+
+def warmSlotStateEquivalent (left right : WarmSlotState) : Prop :=
+  ∀ account slot, left account slot = right account slot
+
+def referenceWorldStateEquivalent
+    (left right : ReferenceWorldState) : Prop :=
+  persistentWorldEquivalent left.blockStart right.blockStart ∧
+  persistentWorldEquivalent left.blockCurrent right.blockCurrent ∧
+  persistentWorldEquivalent left.txStart right.txStart ∧
+  persistentWorldEquivalent left.txCurrent right.txCurrent ∧
+  transientStateEquivalent left.transient right.transient ∧
+  warmAddressStateEquivalent left.warmAddresses right.warmAddresses ∧
+  warmSlotStateEquivalent left.warmSlots right.warmSlots ∧
+  left.logs = right.logs
+
+def transactionSnapshotEquivalent
+    (left right : TransactionSnapshot) : Prop :=
+  persistentWorldEquivalent left.txCurrent right.txCurrent ∧
+  transientStateEquivalent left.transient right.transient ∧
+  warmAddressStateEquivalent left.warmAddresses right.warmAddresses ∧
+  warmSlotStateEquivalent left.warmSlots right.warmSlots ∧
+  left.logs = right.logs
+
+def referenceStartBlock (initial : PersistentWorld) : ReferenceWorldState :=
+  { blockStart := initial
+    blockCurrent := initial
+    txStart := initial
+    txCurrent := initial
+    transient := emptyTransientState
+    warmAddresses := emptyWarmAddressState
+    warmSlots := emptyWarmSlotState
+    logs := [] }
+
+def referenceBeginTransaction
+    (state : ReferenceWorldState) : ReferenceWorldState :=
+  { blockStart := state.blockStart
+    blockCurrent := state.blockCurrent
+    txStart := state.blockCurrent
+    txCurrent := state.blockCurrent
+    transient := emptyTransientState
+    warmAddresses := emptyWarmAddressState
+    warmSlots := emptyWarmSlotState
+    logs := [] }
+
+def referenceReadAccount
+    (state : ReferenceWorldState) (account : address) : Account :=
+  state.txCurrent.accountAt account
+
+def referenceReadStorageCurrent
+    (state : ReferenceWorldState) (account : address) (slot : word) : word :=
+  state.txCurrent.storageAt account slot
+
+/- SSTORE's original value is fixed by transaction entry, not by the first
+insertion into an implementation table. -/
+def referenceReadStorageOriginal
+    (state : ReferenceWorldState) (account : address) (slot : word) : word :=
+  state.txStart.storageAt account slot
+
+def referenceWriteAccount
+    (state : ReferenceWorldState) (account : address) (value : Account) :
+    ReferenceWorldState :=
+  { state with txCurrent := worldWriteAccount state.txCurrent account value }
+
+def referenceWriteStorage
+    (state : ReferenceWorldState) (account : address) (slot value : word) :
+    ReferenceWorldState :=
+  { state with txCurrent := worldWriteStorage state.txCurrent account slot value }
+
+def referenceClearStorage
+    (state : ReferenceWorldState) (account : address) : ReferenceWorldState :=
+  { state with txCurrent := worldClearStorage state.txCurrent account }
+
+def referenceDeleteAccount
+    (emptyCodeHash : word) (state : ReferenceWorldState) (account : address) :
+    ReferenceWorldState :=
+  { state with
+    txCurrent := worldDeleteAccount emptyCodeHash state.txCurrent account }
+
+def referenceReadTransient
+    (state : ReferenceWorldState) (account : address) (slot : word) : word :=
+  state.transient account slot
+
+def referenceWriteTransient
+    (state : ReferenceWorldState) (account : address) (slot value : word) :
+    ReferenceWorldState :=
+  { state with transient := transientWrite state.transient account slot value }
+
+def referenceTouchWarmAddress
+    (state : ReferenceWorldState) (account : address) :
+    Bool × ReferenceWorldState :=
+  (state.warmAddresses account,
+   { state with warmAddresses := warmAddressWrite state.warmAddresses account })
+
+def referenceTouchWarmSlot
+    (state : ReferenceWorldState) (account : address) (slot : word) :
+    Bool × ReferenceWorldState :=
+  (state.warmSlots account slot,
+   { state with warmSlots := warmSlotWrite state.warmSlots account slot })
+
+def referenceAppendLog
+    (state : ReferenceWorldState) (entry : LogEntry) : ReferenceWorldState :=
+  { state with logs := state.logs ++ [entry] }
+
+def referenceCheckpoint (state : ReferenceWorldState) : TransactionSnapshot :=
+  { txCurrent := state.txCurrent
+    transient := state.transient
+    warmAddresses := state.warmAddresses
+    warmSlots := state.warmSlots
+    logs := state.logs }
+
+def referenceRevert
+    (state : ReferenceWorldState) (snapshot : TransactionSnapshot) :
+    ReferenceWorldState :=
+  { state with
+    txCurrent := snapshot.txCurrent
+    transient := snapshot.transient
+    warmAddresses := snapshot.warmAddresses
+    warmSlots := snapshot.warmSlots
+    logs := snapshot.logs }
+
+def finalizedWorld
+    (emptyCodeHash : word) (deleteAtEnd : address → Bool)
+    (world : PersistentWorld) : PersistentWorld :=
+  { accountAt := fun account =>
+      accountWithoutTransactionFlags
+        (if deleteAtEnd account then
+          deletedAccount emptyCodeHash (world.accountAt account)
+        else
+          world.accountAt account)
+    storageAt := fun account slot =>
+      if deleteAtEnd account then BitVec.zero 256
+      else world.storageAt account slot }
+
+/- `deleteAtEnd` is computed by the pure Sail fork policy.  The host transition
+only applies that semantic decision and clears transaction-local flags. -/
+def referenceCommitTransaction
+    (emptyCodeHash : word) (deleteAtEnd : address → Bool)
+    (state : ReferenceWorldState) : ReferenceWorldState :=
+  let committed := finalizedWorld emptyCodeHash deleteAtEnd state.txCurrent
+  { blockStart := state.blockStart
+    blockCurrent := committed
+    txStart := committed
+    txCurrent := committed
+    transient := state.transient
+    warmAddresses := state.warmAddresses
+    warmSlots := state.warmSlots
+    logs := state.logs }
+
+/- A delta is a finite extensional witness for every changed key, not a cache
+or materialization log. -/
+structure WorldDelta where
+  accounts : List address
+  storage : address → List word
+
+def worldDeltaDescribes
+    (before after : PersistentWorld) (delta : WorldDelta) : Prop :=
+  delta.accounts.Nodup ∧
+  (∀ account,
+    account ∈ delta.accounts ↔
+      before.accountAt account ≠ after.accountAt account ∨
+      ∃ slot, before.storageAt account slot ≠ after.storageAt account slot) ∧
+  (∀ account,
+    (delta.storage account).Nodup ∧
+    ∀ slot,
+      slot ∈ delta.storage account ↔
+        before.storageAt account slot ≠ after.storageAt account slot)
+
+def keyBeforeAll {α : Type} (key : α → Nat) (first : α) : List α → Prop
+  | [] => True
+  | next :: tail => key first < key next ∧ keyBeforeAll key first tail
+
+def strictlySortedBy {α : Type} (key : α → Nat) : List α → Prop
+  | [] => True
+  | first :: rest =>
+      keyBeforeAll key first rest ∧ strictlySortedBy key rest
+
+def fixedBEBytes (width value : Nat) : List byte :=
+  (List.range width).map fun index =>
+    BitVec.ofNat 8 ((value / (256 ^ (width - 1 - index))) % 256)
+
+abbrev PureKeccak := List byte → word
+
+def accountSecureKey (keccak : PureKeccak) (account : address) : word :=
+  keccak (fixedBEBytes 20 account.toNat)
+
+def storageSecureKey (keccak : PureKeccak) (slot : word) : word :=
+  keccak (fixedBEBytes 32 slot.toNat)
+
+def worldDeltaSecurelyOrdered
+    (keccak : PureKeccak) (delta : WorldDelta) : Prop :=
+  strictlySortedBy (fun account => (accountSecureKey keccak account).toNat)
+    delta.accounts ∧
+  ∀ account,
+    strictlySortedBy (fun slot => (storageSecureKey keccak slot).toNat)
+      (delta.storage account)
+
+/- The raw account/storage/transient/warm/log externs collectively implement
+this operation-level interface.  `CheckpointHandle` models Sail's opaque
+`StateCheckpoint`; `checkpointDenotes` is a ghost relation between a handle and
+the semantic snapshot it names.  Numeric token encodings, registries, row
+encodings, active lengths, and drain cursors remain backend-private. -/
+structure WorldStateContract where
+  CheckpointHandle : Type
+  BackendState : Type
+  observe : BackendState → ReferenceWorldState
+  startBlock : PersistentWorld → BackendState
+  beginTransaction : BackendState → BackendState
+  readAccount : BackendState → address → Account
+  readStorageCurrent : BackendState → address → word → word
+  readStorageOriginal : BackendState → address → word → word
+  writeAccount : BackendState → address → Account → BackendState
+  writeStorage : BackendState → address → word → word → BackendState
+  clearStorage : BackendState → address → BackendState
+  deleteAccount : word → BackendState → address → BackendState
+  checkpoint : BackendState → CheckpointHandle × BackendState
+  checkpointDenotes : BackendState → CheckpointHandle → TransactionSnapshot → Prop
+  revert : BackendState → CheckpointHandle → Option BackendState
+  commitTransaction : word → (address → Bool) → BackendState → BackendState
+  cacheAccount : BackendState → address → Account → BackendState
+  cacheStorage : BackendState → address → word → word → BackendState
+  readTransient : BackendState → address → word → word
+  writeTransient : BackendState → address → word → word → BackendState
+  touchWarmAddress : BackendState → address → Bool × BackendState
+  touchWarmSlot : BackendState → address → word → Bool × BackendState
+  appendLog : BackendState → LogEntry → BackendState
+  readLogs : BackendState → List LogEntry
+  transactionDelta : BackendState → WorldDelta
+  blockDelta : BackendState → WorldDelta
+
+/- The canonical semantic instantiation uses the reference world directly and
+uses a `TransactionSnapshot` itself as the checkpoint handle.  Native backends
+may instead use any opaque handle related to the same snapshot by
+`checkpointDenotes`.  Delta enumerators are supplied explicitly because finite
+support cannot be computed constructively from arbitrary total functions. -/
+def referenceWorldStateContract
+    (transactionDelta blockDelta : ReferenceWorldState → WorldDelta) :
+    WorldStateContract where
+  CheckpointHandle := TransactionSnapshot
+  BackendState := ReferenceWorldState
+  observe := id
+  startBlock := referenceStartBlock
+  beginTransaction := referenceBeginTransaction
+  readAccount := referenceReadAccount
+  readStorageCurrent := referenceReadStorageCurrent
+  readStorageOriginal := referenceReadStorageOriginal
+  writeAccount := referenceWriteAccount
+  writeStorage := referenceWriteStorage
+  clearStorage := referenceClearStorage
+  deleteAccount := referenceDeleteAccount
+  checkpoint := fun state => (referenceCheckpoint state, state)
+  checkpointDenotes := fun _ handle snapshot =>
+    transactionSnapshotEquivalent handle snapshot
+  revert := fun state snapshot => some (referenceRevert state snapshot)
+  commitTransaction := referenceCommitTransaction
+  cacheAccount := fun state _ _ => state
+  cacheStorage := fun state _ _ _ => state
+  readTransient := referenceReadTransient
+  writeTransient := referenceWriteTransient
+  touchWarmAddress := referenceTouchWarmAddress
+  touchWarmSlot := referenceTouchWarmSlot
+  appendLog := referenceAppendLog
+  readLogs := ReferenceWorldState.logs
+  transactionDelta := transactionDelta
+  blockDelta := blockDelta
+
+def checkpointDenotationsPreserved
+    (contract : WorldStateContract)
+    (before after : contract.BackendState) : Prop :=
+  ∀ checkpoint snapshot,
+    contract.checkpointDenotes before checkpoint snapshot →
+    contract.checkpointDenotes after checkpoint snapshot
+
+/- Ordinary call-frame mutations preserve live checkpoint denotations.
+Transaction boundaries may invalidate every handle and therefore deliberately
+have no such obligation. -/
+
+def worldStateBoundary
+    (keccak : PureKeccak) (contract : WorldStateContract) : Prop :=
+  (∀ initial,
+    let state := contract.startBlock initial
+    referenceWorldStateEquivalent (contract.observe state)
+      (referenceStartBlock initial)) ∧
+  (∀ state,
+    let next := contract.beginTransaction state
+    referenceWorldStateEquivalent (contract.observe next)
+      (referenceBeginTransaction (contract.observe state))) ∧
+  (∀ state account,
+    contract.readAccount state account =
+      referenceReadAccount (contract.observe state) account) ∧
+  (∀ state account slot,
+    contract.readStorageCurrent state account slot =
+      referenceReadStorageCurrent (contract.observe state) account slot) ∧
+  (∀ state account slot,
+    contract.readStorageOriginal state account slot =
+      referenceReadStorageOriginal (contract.observe state) account slot) ∧
+  (∀ state account value,
+    let next := contract.writeAccount state account value
+    referenceWorldStateEquivalent (contract.observe next)
+      (referenceWriteAccount (contract.observe state) account value) ∧
+    checkpointDenotationsPreserved contract state next) ∧
+  (∀ state account slot value,
+    let next := contract.writeStorage state account slot value
+    referenceWorldStateEquivalent (contract.observe next)
+      (referenceWriteStorage (contract.observe state) account slot value) ∧
+    checkpointDenotationsPreserved contract state next) ∧
+  (∀ state account,
+    let next := contract.clearStorage state account
+    referenceWorldStateEquivalent (contract.observe next)
+      (referenceClearStorage (contract.observe state) account) ∧
+    checkpointDenotationsPreserved contract state next) ∧
+  (∀ emptyCodeHash state account,
+    let next := contract.deleteAccount emptyCodeHash state account
+    referenceWorldStateEquivalent (contract.observe next)
+      (referenceDeleteAccount emptyCodeHash (contract.observe state) account) ∧
+    checkpointDenotationsPreserved contract state next) ∧
+  (∀ state,
+    let result := contract.checkpoint state
+    referenceWorldStateEquivalent (contract.observe result.2)
+      (contract.observe state) ∧
+    contract.checkpointDenotes result.2 result.1
+      (referenceCheckpoint (contract.observe state)) ∧
+    checkpointDenotationsPreserved contract state result.2) ∧
+  (∀ state checkpoint snapshot,
+    contract.checkpointDenotes state checkpoint snapshot →
+    ∃ next,
+      contract.revert state checkpoint = some next ∧
+      referenceWorldStateEquivalent (contract.observe next)
+        (referenceRevert (contract.observe state) snapshot)) ∧
+  (∀ emptyCodeHash deleteAtEnd state,
+    let next := contract.commitTransaction emptyCodeHash deleteAtEnd state
+    referenceWorldStateEquivalent (contract.observe next)
+      (referenceCommitTransaction
+        emptyCodeHash deleteAtEnd (contract.observe state))) ∧
+  (∀ state account,
+    let next := contract.cacheAccount state account (contract.readAccount state account)
+    referenceWorldStateEquivalent (contract.observe next) (contract.observe state) ∧
+    checkpointDenotationsPreserved contract state next) ∧
+  (∀ state account slot,
+    let next := contract.cacheStorage state account slot
+      (contract.readStorageCurrent state account slot)
+    referenceWorldStateEquivalent (contract.observe next) (contract.observe state) ∧
+    checkpointDenotationsPreserved contract state next) ∧
+  (∀ state account slot,
+    contract.readTransient state account slot =
+      referenceReadTransient (contract.observe state) account slot) ∧
+  (∀ state account slot value,
+    let next := contract.writeTransient state account slot value
+    referenceWorldStateEquivalent (contract.observe next)
+      (referenceWriteTransient (contract.observe state) account slot value) ∧
+    checkpointDenotationsPreserved contract state next) ∧
+  (∀ state account,
+    let result := contract.touchWarmAddress state account
+    let expected := referenceTouchWarmAddress (contract.observe state) account
+    result.1 = expected.1 ∧
+    referenceWorldStateEquivalent (contract.observe result.2) expected.2 ∧
+    checkpointDenotationsPreserved contract state result.2) ∧
+  (∀ state account slot,
+    let result := contract.touchWarmSlot state account slot
+    let expected := referenceTouchWarmSlot (contract.observe state) account slot
+    result.1 = expected.1 ∧
+    referenceWorldStateEquivalent (contract.observe result.2) expected.2 ∧
+    checkpointDenotationsPreserved contract state result.2) ∧
+  (∀ state entry,
+    let next := contract.appendLog state entry
+    referenceWorldStateEquivalent (contract.observe next)
+      (referenceAppendLog (contract.observe state) entry) ∧
+    checkpointDenotationsPreserved contract state next) ∧
+  (∀ state, contract.readLogs state = (contract.observe state).logs) ∧
+  (∀ state,
+    worldDeltaDescribes
+      (contract.observe state).txStart
+      (contract.observe state).txCurrent
+      (contract.transactionDelta state)) ∧
+  (∀ state,
+    worldDeltaDescribes
+      (contract.observe state).blockStart
+      (contract.observe state).blockCurrent
+      (contract.blockDelta state)) ∧
+  (∀ state, worldDeltaSecurelyOrdered keccak (contract.blockDelta state))
+
+structure ValidWorldStateContract where
+  keccak : PureKeccak
+  operations : WorldStateContract
+  valid : worldStateBoundary keccak operations
+
+end Evm.Contracts
+
 namespace Evm.Functions
 
 @[extern "lean_evmsail_ancestor_hash_write"]
@@ -145,16 +668,19 @@ axiom transient_store : address → word → word → SailM Unit
 @[extern "lean_evmsail_transient_load"]
 axiom transient_load : address → word → SailM word
 
+@[extern "lean_evmsail_state_checkpoint_reset"]
+axiom state_checkpoint_reset : Unit → SailM Unit
+@[extern "lean_evmsail_state_checkpoint"]
+axiom state_checkpoint : Unit → SailM StateCheckpoint
+@[extern "lean_evmsail_state_revert"]
+axiom state_revert : StateCheckpoint → SailM Unit
+
 @[extern "lean_evmsail_storage_tx_update"]
 axiom storage_tx_update : StorageEntry → SailM Unit
 @[extern "lean_evmsail_storage_tx_get"]
 axiom storage_tx_get : StorageKey → SailM (Option StorageValue)
 @[extern "lean_evmsail_storage_tx_pop"]
 axiom storage_tx_pop : Unit → SailM (Option StorageEntry)
-@[extern "lean_evmsail_storage_tx_checkpoint"]
-axiom storage_tx_checkpoint : Unit → SailM StorageCheckpoint
-@[extern "lean_evmsail_storage_tx_revert"]
-axiom storage_tx_revert : StorageCheckpoint → SailM Unit
 @[extern "lean_evmsail_storage_tx_clear"]
 axiom storage_tx_clear : address → SailM Unit
 @[extern "lean_evmsail_storage_tx_reset"]
@@ -186,10 +712,6 @@ axiom acct_tx_set_nonce : address → account_nonce → SailM Unit
 axiom acct_tx_set_code_hash : address → hash → SailM Unit
 @[extern "lean_evmsail_acct_tx_pop_ascending"]
 axiom acct_tx_pop_ascending : Unit → SailM (Option AcctEntry)
-@[extern "lean_evmsail_acct_tx_checkpoint"]
-axiom acct_tx_checkpoint : Unit → SailM AccountCheckpoint
-@[extern "lean_evmsail_acct_tx_revert"]
-axiom acct_tx_revert : AccountCheckpoint → SailM Unit
 @[extern "lean_evmsail_acct_tx_reset"]
 axiom acct_tx_reset : Unit → SailM Unit
 @[extern "lean_evmsail_acct_block_get"]
@@ -260,32 +782,15 @@ axiom bal_code_change_hash : item_index → item_index → SailM hash
 axiom warm_reset : Unit → SailM Unit
 @[extern "lean_evmsail_warm_addr_touch"]
 axiom warm_addr_touch : address → SailM Bool
-@[extern "lean_evmsail_warm_addr_remove"]
-axiom warm_addr_remove : address → SailM Unit
 @[extern "lean_evmsail_warm_slot_touch"]
 axiom warm_slot_touch : address → word → SailM Bool
-@[extern "lean_evmsail_warm_slot_remove"]
-axiom warm_slot_remove : address → word → SailM Unit
 
 @[extern "lean_evmsail_logs_tx_reset"]
 axiom logs_tx_reset : Unit → SailM Unit
 @[extern "lean_evmsail_log_append"]
 axiom log_append : address → List word → Bytes → SailM Unit
-@[extern "lean_evmsail_logs_checkpoint"]
-axiom logs_checkpoint : Unit → SailM LogCheckpoint
-@[extern "lean_evmsail_logs_revert"]
-axiom logs_revert : LogCheckpoint → SailM Unit
 @[extern "lean_evmsail_read_logs"]
 axiom read_logs : Unit → SailM (List LogEntry)
-
-@[extern "lean_evmsail_journal_reset"]
-axiom journal_reset : Unit → SailM Unit
-@[extern "lean_evmsail_journal_len"]
-axiom journal_len : Unit → SailM JournalCheckpoint
-@[extern "lean_evmsail_journal_push"]
-axiom journal_push : JEntry → SailM Unit
-@[extern "lean_evmsail_journal_pop"]
-axiom journal_pop : Unit → SailM JEntry
 
 @[extern "lean_evmsail_nodedb_reset"]
 axiom nodedb_reset : Unit → SailM Unit

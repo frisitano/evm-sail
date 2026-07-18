@@ -44,10 +44,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -225,7 +225,7 @@ def apply_withdrawals (withdrawals : SszListRef) : SailM Unit := do
     (pure loop_vars) ) : SailM SszListRef )
   (pure ())
 
-/-- Type quantifiers: k_ex161870_ : Bool -/
+/-- Type quantifiers: k_ex161610_ : Bool -/
 def run_checked_block_end_system_calls (all_ok : Bool) (deposits : EvmByteSlice) : SailM (Bool × ExecutionRequests) := do
   if ((! all_ok) : Bool)
   then (pure (false, EMPTY_EXECUTION_REQUESTS))

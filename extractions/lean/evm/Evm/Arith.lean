@@ -28,10 +28,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -101,7 +101,7 @@ def gas_sub (typ_0 : gas) (typ_1 : gas) : SailM gas := do
   assert (right ≤b left) "sail/primitives/gas.sail:140.24-140.25"
   (pure (Gas (left -i right)))
 
-/-- Type quantifiers: k_ex160907_ : Nat, k_ex160906_ : Nat, 0 ≤ k_ex160906_, 0 ≤ k_ex160907_ -/
+/-- Type quantifiers: k_ex160649_ : Nat, k_ex160648_ : Nat, 0 ≤ k_ex160648_, 0 ≤ k_ex160649_ -/
 def exact_quotient (dividend : Nat) (divisor : Nat) : SailM Nat := do
   assert (divisor != 0) "sail/primitives/quantities.sail:244.23-244.24"
   let quotient := (Int.tdiv dividend divisor)
@@ -121,7 +121,7 @@ def byte_quantity_mul (typ_0 : byte_quantity) (typ_1 : byte_quantity) : SailM by
       assert (right ≤b (← (exact_quotient BYTE_QUANTITY_MAX left))) "sail/primitives/quantities.sail:295.63-295.64"
       (pure (ByteQuantity (left *i right))))
 
-/-- Type quantifiers: k_ex160908_ : Nat, 0 ≤ k_ex160908_ -/
+/-- Type quantifiers: k_ex160650_ : Nat, 0 ≤ k_ex160650_ -/
 def gas_constant_scale (typ_0 : gas_constant) (factor : Nat) : gas_cost :=
   let .GasConstant value : gas_constant := typ_0
   (GasCost (value *i factor))
@@ -131,29 +131,29 @@ def gas_constant_scale_byte_quantity (typ_0 : gas_constant) (typ_1 : byte_quanti
   let .ByteQuantity factor : byte_quantity := typ_1
   (GasCost (value *i factor))
 
-/-- Type quantifiers: k_ex160909_ : Nat, 0 ≤ k_ex160909_ -/
+/-- Type quantifiers: k_ex160651_ : Nat, 0 ≤ k_ex160651_ -/
 def gas_cost_scale (typ_0 : gas_cost) (factor : Nat) : gas_cost :=
   let .GasCost value : gas_cost := typ_0
   (GasCost (value *i factor))
 
-/-- Type quantifiers: k_ex160910_ : Nat, 0 ≤ k_ex160910_ -/
+/-- Type quantifiers: k_ex160652_ : Nat, 0 ≤ k_ex160652_ -/
 def nat_scale_byte_quantity (left : Nat) (typ_1 : byte_quantity) : Nat :=
   let .ByteQuantity right : byte_quantity := typ_1
   (left *i right)
 
-/-- Type quantifiers: k_ex160916_ : Int, k_ex160915_ : Int -/
+/-- Type quantifiers: k_ex160658_ : Int, k_ex160657_ : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
   if ((n ≥b 0) : Bool)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
-/-- Type quantifiers: k_ex160918_ : Int, k_ex160917_ : Int -/
+/-- Type quantifiers: k_ex160660_ : Int, k_ex160659_ : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
   if ((n ≥b 0) : Bool)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
-/-- Type quantifiers: k_ex160923_ : Int, k_ex160922_ : Int -/
+/-- Type quantifiers: k_ex160665_ : Int, k_ex160664_ : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (((n <b 0) && (m >b 0)) : Bool)
   then ((Int.tdiv (n +i 1) m) -i 1)
@@ -162,7 +162,7 @@ def fdiv_int (n : Int) (m : Int) : Int :=
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
-/-- Type quantifiers: k_ex160925_ : Int, k_ex160924_ : Int -/
+/-- Type quantifiers: k_ex160667_ : Int, k_ex160666_ : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
   (n -i (m *i (fdiv_int n m)))
 

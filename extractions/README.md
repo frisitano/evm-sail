@@ -13,6 +13,15 @@ Generated Coq and Lean sources are written directly below `coq/` and `lean/`
 and are kept in version control. Lean's compiled `.lake/build/` output remains
 ignored. The repository's root `Makefile` owns all extraction commands:
 
+`contracts/ExternBoundary.v` and `contracts/HostAxioms.lean` give the host
+account, persistent-storage, transient-storage, access-warmth, and log externs
+one extensional world-state semantics. The contract exposes total logical maps,
+transaction-entry originals, transaction snapshots, rollback, transaction
+commit, and exact ordered deltas. Sail's opaque `StateCheckpoint` is connected
+to a semantic snapshot only by a ghost relation; numeric handles, registries,
+cache rows, generations, undo cursors, allocation, physical cleanup, and
+copy-on-write rules are backend choices, not specification behavior.
+
 ```sh
 rtk make check-contracts
 rtk make extract-coq

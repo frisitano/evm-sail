@@ -54,8 +54,9 @@ duplicating instructions elsewhere.
   `ffi/`. Generated aggregate values cross through three hand-written glue
   translation units compiled per build against the GENERATED model header
   (`-DEVMSAIL_MODEL_H`, `-I` build dir), so generated layouts are never
-  hand-mirrored: `ffi/journal_glue.c` handles journal entries and structured
-  state rows/options; `ffi/hash_glue.c` handles the hash axioms
+  hand-mirrored: `ffi/journal_glue.c` handles structured account/storage
+  rows and options (the rollback journal itself is C-private);
+  `ffi/hash_glue.c` handles the hash axioms
   (`keccak256_segments` / `sha256_segments : list(Bytes) -> hash`), segmented
   byte equality, and log records; and `ffi/code_glue.c` constructs aggregate
   `option(Code)` lookup results. Sail emits fixed 256-bit JUMPDEST chunks

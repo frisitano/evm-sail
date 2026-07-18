@@ -38,10 +38,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -57,18 +57,10 @@ def storage_key (a : address) (s : word) : StorageKey :=
     slot := s }
 
 def k_access_account (a : address) : SailM Bool := do
-  let prior ← do (warm_addr_touch a)
-  if ((! prior) : Bool)
-  then (journal_push (JWarmA a))
-  else (pure ())
-  (pure prior)
+  (warm_addr_touch a)
 
 def k_slot_is_warm (a : address) (s : word) : SailM Bool := do
-  let prior ← do (warm_slot_touch a s)
-  if ((! prior) : Bool)
-  then (journal_push (JWarmS (a, s)))
-  else (pure ())
-  (pure prior)
+  (warm_slot_touch a s)
 
 def decode_state_account (value : EvmByteSlice) : SailM AccountInfo := do
   let (nonce, fields) ← do (rlp_cursor_pop (← (rlp_node_cursor value)))
@@ -89,7 +81,7 @@ def decode_state_account (value : EvmByteSlice) : SailM AccountInfo := do
             then (pure KECCAK_EMPTY)
             else (rlp_ref_word code) })
 
-/-- Type quantifiers: k_ex161143_ : Nat, 0 ≤ k_ex161143_ ∧ k_ex161143_ ≤ 64 -/
+/-- Type quantifiers: k_ex160883_ : Nat, 0 ≤ k_ex160883_ ∧ k_ex160883_ ≤ 64 -/
 def path_new (data : (BitVec 256)) (len : trie_path_len) : TriePath :=
   let len := (len).value
   { data := data,
@@ -293,7 +285,7 @@ def field_to_ref (f : RlpFieldRef) : SailM NodeRef := do
       then (pure (HashRef (← (rlp_ref_word f))))
       else (pure (EmptyRef ())))
 
-/-- Type quantifiers: k_ex161148_ : Nat, 0 ≤ k_ex161148_ ∧ k_ex161148_ ≤ 64 -/
+/-- Type quantifiers: k_ex160888_ : Nat, 0 ≤ k_ex160888_ ∧ k_ex160888_ ≤ 64 -/
 def path_nibble (path : TriePath) (i : trie_path_cursor) : nibble :=
   let i := (i).value
   if ((((path_len path)).value ≤b i) : Bool)
@@ -311,7 +303,7 @@ def trie_path_len_increment (value : trie_path_len) : SailM trie_path_len := do
     else sailThrow ((InvalidBlock WitnessDeficient))
   pure (⟨semanticResult⟩)
 
-/-- Type quantifiers: k_ex161150_ : Nat, 0 ≤ k_ex161150_ ∧ k_ex161150_ ≤ 64 -/
+/-- Type quantifiers: k_ex160890_ : Nat, 0 ≤ k_ex160890_ ∧ k_ex160890_ ≤ 64 -/
 def path_matches (key : TriePath) (pos : trie_path_cursor) (seg : TriePath) : SailM Bool := do
   let pos := (pos).value
   let stop := (pos + ((path_len seg)).value)
@@ -387,7 +379,7 @@ def resolve_ref (r : NodeRef) : SailM EvmByteSlice := do
       then sailThrow ((InvalidBlock WitnessDeficient))
       else (pure node))
 
-/-- Type quantifiers: _reclimit : Nat, k_ex161151_ : Nat, 0 ≤ k_ex161151_ ∧ k_ex161151_ ≤ 64, 0
+/-- Type quantifiers: _reclimit : Nat, k_ex160891_ : Nat, 0 ≤ k_ex160891_ ∧ k_ex160891_ ≤ 64, 0
   ≤ _reclimit -/
 def _rec_trie_walk (node : EvmByteSlice) (key : TriePath) (pos : trie_path_cursor) (_reclimit : Nat) : SailM EvmByteSlice := do
   let pos := (pos).value
@@ -522,6 +514,5 @@ def k_tload (a : address) (s : word) : SailM word := do
   (transient_load a s)
 
 def k_tstore (a : address) (s : word) (v : word) : SailM Unit := do
-  (journal_push (JTran (a, s, (← (transient_load a s)))))
   (transient_store a s v)
 

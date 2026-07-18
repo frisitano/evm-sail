@@ -49,7 +49,7 @@ extern unit bal_reset(unit);                 /* EIP-7928 block-access-list accum
 extern unit warm_reset(unit);                /* EIP-2929 warm sets */
 extern unit transient_storage_reset(unit u); /* EIP-1153 transient storage */
 extern unit logs_reset(unit);
-extern unit journal_reset(unit);
+extern unit host_state_checkpoint_reset(unit);
 extern unit nodedb_reset(unit);              /* hash-keyed witness node store */
 extern unit code_db_reset(unit);             /* content-addressed code store (missing-code tests) */
 extern bool have_exception;                  /* generated: a Sail throw escaped the run */
@@ -67,7 +67,7 @@ void evmsail_clear_memory(void)
     warm_reset(UNIT);
     transient_storage_reset(UNIT);
     logs_reset(UNIT);
-    journal_reset(UNIT);
+    host_state_checkpoint_reset(UNIT);
     /* content-addressed witness stores -- cleared so a fixture that
      * under-specifies its witness FAILS (valid=false) instead of borrowing a
      * stale node/code that an EARLIER fixture registered. The node DB alone is

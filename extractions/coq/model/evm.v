@@ -1163,7 +1163,7 @@ Axiom accelerator_blake2f :
   forall
 
   (_ : ByteSlice) (_ : blake2_rounds) (_ : y_parity)
-  (*(0 <=? ex185367_) && (ex185367_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex185368_) && (ex185368_ <=? 1)*),
+  (*(0 <=? ex185045_) && (ex185045_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex185046_) && (ex185046_ <=? 1)*),
   M (bool).
 
 Axiom accelerator_kzg_point_evaluation : forall  (_ : ByteSlice) , M (bool).
@@ -1195,7 +1195,7 @@ Axiom host_ecrecover :
   forall
 
   (_ : bits 256) (_ : y_parity) (_ : word) (_ : word)
-  (*(0 <=? ex185387_) && (ex185387_ <=? 1)*),
+  (*(0 <=? ex185065_) && (ex185065_ <=? 1)*),
   M (bits 168).
 
 Definition KECCAK_EMPTY : hash :=
@@ -1419,16 +1419,6 @@ Definition account_from_info (info : AccountInfo) : Account :=
       Account_storage_cleared := false;
       Account_created := false;
       Account_selfdestructed := false |}.
-
-Definition undefined_StateCheckpoint '(tt : unit) : M (StateCheckpoint) :=
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__0 : Z) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__1 : Z) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__2 : Z) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__3 : Z) =>
-   returnM (({| StateCheckpoint_journal := (Build_protocol_quantity (w__0));
-                StateCheckpoint_accounts := (Build_protocol_quantity (w__1));
-                StateCheckpoint_storage := (Build_protocol_quantity (w__2));
-                StateCheckpoint_logs := (Build_protocol_quantity (w__3)) |})).
 
 Definition undefined_TxType '(tt : unit) : M (TxType) :=
    (internal_pick ([LegacyTx; AccessListTx; FeeMarketTx; BlobTx; SetCodeTx]))  : M (TxType).
@@ -3257,20 +3247,17 @@ Axiom transient_store : forall  (_ : address_typ) (_ : word) (_ : word) , M (uni
 
 Axiom transient_load : forall  (_ : address_typ) (_ : word) , M (word).
 
+Axiom state_checkpoint_reset : forall  (_ : unit) , M (unit).
+
+Axiom state_checkpoint : forall  (_ : unit) , M (StateCheckpoint_typ).
+
+Axiom state_revert : forall  (_ : StateCheckpoint_typ) , M (unit).
+
 Axiom storage_tx_update : forall  (_ : StorageEntry) , M (unit).
 
 Axiom storage_tx_get : forall  (_ : StorageKey) , M (option StorageValue).
 
 Axiom storage_tx_pop : forall  (_ : unit) , M (option StorageEntry).
-
-Axiom storage_tx_checkpoint : forall  (_ : unit) , M (StorageCheckpoint).
-
-Axiom storage_tx_revert :
-  forall
-
-  (_ : StorageCheckpoint)
-  (*(0 <=? ex185529_) && (ex185529_ <=? (2 ^ 64 - 1))*),
-  M (unit).
 
 Axiom storage_tx_clear : forall  (_ : address_typ) , M (unit).
 
@@ -3292,7 +3279,7 @@ Axiom storage_block_row :
   forall
 
   (_ : address_typ) (_ : item_index)
-  (*(0 <=? ex185530_) && (ex185530_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185207_) && (ex185207_ <=? (2 ^ 64 - 1))*),
   M (option StorageEntry).
 
 Axiom acct_tx_get : forall  (_ : address_typ) , M (option Account).
@@ -3305,21 +3292,12 @@ Axiom acct_tx_set_nonce :
   forall
 
   (_ : address_typ) (_ : account_nonce)
-  (*(0 <=? ex185531_) && (ex185531_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185208_) && (ex185208_ <=? (2 ^ 64 - 1))*),
   M (unit).
 
 Axiom acct_tx_set_code_hash : forall  (_ : address_typ) (_ : hash) , M (unit).
 
 Axiom acct_tx_pop_ascending : forall  (_ : unit) , M (option AcctEntry).
-
-Axiom acct_tx_checkpoint : forall  (_ : unit) , M (AccountCheckpoint).
-
-Axiom acct_tx_revert :
-  forall
-
-  (_ : AccountCheckpoint)
-  (*(0 <=? ex185532_) && (ex185532_ <=? (2 ^ 64 - 1))*),
-  M (unit).
 
 Axiom acct_tx_reset : forall  (_ : unit) , M (unit).
 
@@ -3335,7 +3313,7 @@ Axiom acct_block_row :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185533_) && (ex185533_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185209_) && (ex185209_ <=? (2 ^ 64 - 1))*),
   M (option AcctEntry).
 
 Axiom bal_reset : forall  (_ : unit) , M (unit).
@@ -3344,7 +3322,7 @@ Axiom bal_set_index :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185534_) && (ex185534_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185210_) && (ex185210_ <=? (2 ^ 64 - 1))*),
   M (unit).
 
 Axiom bal_account_touch : forall  (_ : address_typ) , M (unit).
@@ -3359,7 +3337,7 @@ Axiom bal_nonce_change :
   forall
 
   (_ : address_typ) (_ : account_nonce)
-  (*(0 <=? ex185535_) && (ex185535_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185211_) && (ex185211_ <=? (2 ^ 64 - 1))*),
   M (unit).
 
 Axiom bal_code_change : forall  (_ : address_typ) (_ : hash) , M (unit).
@@ -3372,169 +3350,148 @@ Axiom bal_account_address :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185536_) && (ex185536_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185212_) && (ex185212_ <=? (2 ^ 64 - 1))*),
   M (address_typ).
 
 Axiom bal_storage_change_count :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185537_) && (ex185537_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185213_) && (ex185213_ <=? (2 ^ 64 - 1))*),
   M (item_count_typ).
 
 Axiom bal_storage_change_slot :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185538_) && (ex185538_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185539_) &&
-    (ex185539_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185214_) && (ex185214_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185215_) &&
+    (ex185215_ <=? (2 ^ 64 - 1))*),
   M (word).
 
 Axiom bal_storage_change_index :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185540_) && (ex185540_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185541_) &&
-    (ex185541_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185216_) && (ex185216_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185217_) &&
+    (ex185217_ <=? (2 ^ 64 - 1))*),
   M (item_index).
 
 Axiom bal_storage_change_value :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185542_) && (ex185542_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185543_) &&
-    (ex185543_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185218_) && (ex185218_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185219_) &&
+    (ex185219_ <=? (2 ^ 64 - 1))*),
   M (word).
 
 Axiom bal_storage_read_count :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185544_) && (ex185544_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185220_) && (ex185220_ <=? (2 ^ 64 - 1))*),
   M (item_count_typ).
 
 Axiom bal_storage_read_slot :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185545_) && (ex185545_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185546_) &&
-    (ex185546_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185221_) && (ex185221_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185222_) &&
+    (ex185222_ <=? (2 ^ 64 - 1))*),
   M (word).
 
 Axiom bal_balance_change_count :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185547_) && (ex185547_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185223_) && (ex185223_ <=? (2 ^ 64 - 1))*),
   M (item_count_typ).
 
 Axiom bal_balance_change_index :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185548_) && (ex185548_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185549_) &&
-    (ex185549_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185224_) && (ex185224_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185225_) &&
+    (ex185225_ <=? (2 ^ 64 - 1))*),
   M (item_index).
 
 Axiom bal_balance_change_value :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185550_) && (ex185550_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185551_) &&
-    (ex185551_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185226_) && (ex185226_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185227_) &&
+    (ex185227_ <=? (2 ^ 64 - 1))*),
   M (word).
 
 Axiom bal_nonce_change_count :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185552_) && (ex185552_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185228_) && (ex185228_ <=? (2 ^ 64 - 1))*),
   M (item_count_typ).
 
 Axiom bal_nonce_change_index :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185553_) && (ex185553_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185554_) &&
-    (ex185554_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185229_) && (ex185229_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185230_) &&
+    (ex185230_ <=? (2 ^ 64 - 1))*),
   M (item_index).
 
 Axiom bal_nonce_change_value :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185555_) && (ex185555_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185556_) &&
-    (ex185556_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185231_) && (ex185231_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185232_) &&
+    (ex185232_ <=? (2 ^ 64 - 1))*),
   M (account_nonce).
 
 Axiom bal_code_change_count :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185557_) && (ex185557_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185233_) && (ex185233_ <=? (2 ^ 64 - 1))*),
   M (item_count_typ).
 
 Axiom bal_code_change_index :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185558_) && (ex185558_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185559_) &&
-    (ex185559_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185234_) && (ex185234_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185235_) &&
+    (ex185235_ <=? (2 ^ 64 - 1))*),
   M (item_index).
 
 Axiom bal_code_change_hash :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185560_) && (ex185560_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185561_) &&
-    (ex185561_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185236_) && (ex185236_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185237_) &&
+    (ex185237_ <=? (2 ^ 64 - 1))*),
   M (hash).
 
 Axiom warm_reset : forall  (_ : unit) , M (unit).
 
 Axiom warm_addr_touch : forall  (_ : address_typ) , M (bool).
 
-Axiom warm_addr_remove : forall  (_ : address_typ) , M (unit).
-
 Axiom warm_slot_touch : forall  (_ : address_typ) (_ : word) , M (bool).
-
-Axiom warm_slot_remove : forall  (_ : address_typ) (_ : word) , M (unit).
 
 Axiom logs_tx_reset : forall  (_ : unit) , M (unit).
 
 Axiom log_append : forall  (_ : address_typ) (_ : list word) (_ : Bytes) , M (unit).
 
-Axiom logs_checkpoint : forall  (_ : unit) , M (LogCheckpoint).
-
-Axiom logs_revert :
-  forall
-
-  (_ : LogCheckpoint)
-  (*(0 <=? ex185562_) && (ex185562_ <=? (2 ^ 64 - 1))*),
-  M (unit).
-
 Axiom read_logs : forall  (_ : unit) , M (list LogEntry).
-
-Axiom journal_reset : forall  (_ : unit) , M (unit).
-
-Axiom journal_len : forall  (_ : unit) , M (JournalCheckpoint).
-
-Axiom journal_push : forall  (_ : JEntry) , M (unit).
-
-Axiom journal_pop : forall  (_ : unit) , M (JEntry).
 
 Axiom ancestor_hash_write :
   forall
 
   (_ : ancestor_index) (_ : hash)
-  (*(0 <=? ex185563_) && (ex185563_ <=? 255)*),
+  (*(0 <=? ex185238_) && (ex185238_ <=? 255)*),
   M (unit).
 
 Axiom ancestor_hash_read :
   forall
 
   (_ : ancestor_index)
-  (*(0 <=? ex185564_) && (ex185564_ <=? 255)*),
+  (*(0 <=? ex185239_) && (ex185239_ <=? 255)*),
   M (hash).
 
 Axiom stack_reset : forall  (_ : unit) , M (unit).
@@ -3553,14 +3510,14 @@ Axiom stack_peek_word :
   forall
 
   (_ : stack_index)
-  (*(0 <=? ex185565_) && (ex185565_ <=? 16)*),
+  (*(0 <=? ex185240_) && (ex185240_ <=? 16)*),
   M (word).
 
 Axiom stack_set_word :
   forall
 
   (_ : stack_index) (_ : word)
-  (*(0 <=? ex185566_) && (ex185566_ <=? 16)*),
+  (*(0 <=? ex185241_) && (ex185241_ <=? 16)*),
   M (unit).
 
 Axiom mem_read_byte : forall  (_ : byte_quantity) , M (bits 8).
@@ -3713,17 +3670,10 @@ Definition k_create2_addr (a : mword 160) (salt : mword 256) (inithash : mword 2
 Definition storage_key (a : mword 160) (s : mword 256) : StorageKey :=
    {| StorageKey_addr := a;  StorageKey_slot := s |}.
 
-Definition k_access_account (a : mword 160) : M (bool) :=
-   (warm_addr_touch (a)) >>= fun prior =>
-   (if negb (prior) return M (unit) then (journal_push ((JWarmA (a))))  : M (unit)
-    else returnM (tt)) >>
-   returnM (prior).
+Definition k_access_account (a : mword 160) : M (bool) := (warm_addr_touch (a))  : M (bool).
 
 Definition k_slot_is_warm (a : mword 160) (s : mword 256) : M (bool) :=
-   (warm_slot_touch (a) (s)) >>= fun prior =>
-   (if negb (prior) return M (unit) then (journal_push ((JWarmS ((a, s)))))  : M (unit)
-    else returnM (tt)) >>
-   returnM (prior).
+   (warm_slot_touch (a) (s))  : M (bool).
 
 Definition decode_state_account (value : ByteSlice) : M (AccountInfo) :=
    (rlp_node_cursor (value)) >>= fun (w__0 : RlpCursor) =>
@@ -4165,8 +4115,7 @@ Definition k_tload (a : mword 160) (s : mword 256) : M (word) :=
    (transient_load (a) (s))  : M (mword 256).
 
 Definition k_tstore (a : mword 160) (s : mword 256) (v : mword 256) : M (unit) :=
-   (transient_load (a) (s)) >>= fun (w__0 : mword 256) =>
-   (journal_push ((JTran ((a, s, w__0))))) >> (transient_store (a) (s) (v))  : M (unit).
+   (transient_store (a) (s) (v))  : M (unit).
 
 Definition k_log (a : mword 160) (topics : list (mword 256)) (data : Bytes) : M (unit) :=
    (log_append (a) (topics) (data))  : M (unit).
@@ -4460,26 +4409,8 @@ Definition k_zero_balance (a : mword 160) : M (unit) :=
        : M (unit))
     : M (unit).
 
-Definition apply_undo (e : JEntry) : M (unit) :=
-   match e with
-   | JTran (a, s, v) => (transient_store (a) (s) (v))  : M (unit)
-   | JWarmA a => (warm_addr_remove (a))  : M (unit)
-   | JWarmS (a, s) => (warm_slot_remove (a) (s))  : M (unit)
-   end
-    : M (unit).
-
-Definition k_state_checkpoint '(tt : unit) : M (StateCheckpoint) :=
-   ((journal_len (tt)) >>= fun semanticResult => returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__0 : Z) =>
-   ((acct_tx_checkpoint (tt)) >>= fun semanticResult =>
-    returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__1 : Z) =>
-   ((storage_tx_checkpoint (tt)) >>= fun semanticResult =>
-    returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__2 : Z) =>
-   ((logs_checkpoint (tt)) >>= fun semanticResult =>
-    returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__3 : Z) =>
-   returnM (({| StateCheckpoint_journal := (Build_protocol_quantity (w__0));
-                StateCheckpoint_accounts := (Build_protocol_quantity (w__1));
-                StateCheckpoint_storage := (Build_protocol_quantity (w__2));
-                StateCheckpoint_logs := (Build_protocol_quantity (w__3)) |})).
+Definition k_state_checkpoint '(tt : unit) : M (StateCheckpoint_typ) :=
+   (state_checkpoint (tt))  : M (StateCheckpoint_typ).
 
 Definition k_set_header (h : BlockHeader) : M (unit) := write_reg k_header h  : M (unit).
 
@@ -4489,7 +4420,7 @@ Definition k_tx_reset '(tt : unit) : M (unit) :=
    (acct_tx_reset (tt)) >>
    (storage_tx_reset (tt)) >>
    (warm_reset (tt)) >>
-   (transient_reset (tt)) >> (logs_tx_reset (tt)) >> (journal_reset (tt))  : M (unit).
+   (transient_reset (tt)) >> (logs_tx_reset (tt)) >> (state_checkpoint_reset (tt))  : M (unit).
 
 Definition account_deleted_at_tx_end (acc : Account) : M (bool) :=
    (and_boolM (returnM ((acc.(Account_selfdestructed)  : bool)))
@@ -4600,30 +4531,8 @@ Definition k_tx_merge '(tt : unit) : M (unit) :=
         : M (bool))) >>= fun (more : bool) =>
    (acct_tx_reset (tt)) >> (storage_tx_reset (tt))  : M (unit).
 
-Definition k_revert (checkpoint : StateCheckpoint) : M (unit) :=
-   (acct_tx_revert
-      (Build_protocol_quantity (((checkpoint.(StateCheckpoint_accounts)).(protocol_quantity_value))))) >>
-   (storage_tx_revert
-      (Build_protocol_quantity (((checkpoint.(StateCheckpoint_storage)).(protocol_quantity_value))))) >>
-   (logs_revert
-      (Build_protocol_quantity (((checkpoint.(StateCheckpoint_logs)).(protocol_quantity_value))))) >>
-   ((journal_len (tt)) >>= fun semanticResult => returnM (semanticResult).(protocol_quantity_value)) >>= fun current =>
-   let saved := (checkpoint.(StateCheckpoint_journal)).(protocol_quantity_value) in
-   (if Z.leb (saved) (current) then returnM ((Z.sub (current) (saved)))
-    else assert_exp' false "sail/host/kernel/lifecycle.sail:118.24-118.25" >>= fun _ => exit tt) >>= fun (remaining : Z) =>
-   (whileMT
-     remaining
-     (fun remaining => remaining)
-     (fun remaining => returnM ((neq_int (remaining) (0))))
-     (fun remaining =>
-       (assert_exp' true "loop dummy assert" >>= fun _ =>
-        (journal_pop (tt)) >>= fun (w__1 : JEntry) =>
-        (apply_undo (w__1)) >>
-        ((protocol_quantity_decrement (Build_protocol_quantity ((remaining)))) >>= fun semanticResult =>
-         returnM (semanticResult).(protocol_quantity_value))
-         : M (Z))
-        : M (Z))) >>= fun (remaining : Z) =>
-   returnM (tt).
+Definition k_revert (checkpoint : StateCheckpoint_typ) : M (unit) :=
+   (state_revert (checkpoint))  : M (unit).
 
 Definition DEPTH_LIMIT : frame_depth := (Build_frame_depth (1024)).
 #[export] Hint Unfold DEPTH_LIMIT : sail.
@@ -10411,7 +10320,7 @@ Definition DEPOSIT_INDEX_DATA : source_pointer := ByteQuantity (544).
 #[export] Hint Unfold DEPOSIT_INDEX_DATA : sail.
 Definition DEPOSIT_INDEX_LENGTH : byte_length := EIGHT_BYTE_LENGTH.
 #[export] Hint Unfold DEPOSIT_INDEX_LENGTH : sail.
-Definition enter_system_call_frame (tgt : mword 160) (input : ByteSlice) : M (StateCheckpoint) :=
+Definition enter_system_call_frame (tgt : mword 160) (input : ByteSlice) : M (StateCheckpoint_typ) :=
    (k_state_checkpoint (tt)) >>= fun checkpoint =>
    write_reg pc BYTE_ZERO >>
    write_reg call_depth 0 >>

@@ -1,9 +1,11 @@
 /* C-backed transient storage table for evm-sail.
  *
- * This file backs EIP-1153 TLOAD/TSTORE only. Warm address and warm slot sets
- * live in Sail registers, and persistent storage lives in state_db.c keyed by
- * secure trie keys. Only mach_bits (uint64_t) cross the FFI. */
+ * This file backs EIP-1153 TLOAD/TSTORE only. The public write operation
+ * records its prior logical value in kernel_state.c's private checkpoint undo
+ * log; rollback uses a separate non-journaling restore path. Persistent
+ * storage lives in state_db.c keyed by secure trie keys. */
 #include "transient_storage.h"
+#include "kernel_state.h"
 #include "lbits_convert.h"
 #include <stdint.h>
 #include <stdlib.h>
@@ -128,16 +130,29 @@ static void transient_key(const lbits addr, const lbits slot,
   *hash = h_hash(key);
 }
 
-/* store the 256-bit value at (address, slot) */
-unit transient_storage_write(const lbits addr, const lbits slot, const lbits v) {
+static unit transient_storage_write_raw(const lbits addr, const lbits slot,
+                                        const lbits v) {
   uint64_t key[7], h;
   transient_key(addr, slot, key, &h);
-  if (h_ensure(&h_transient)) {
-    uint64_t w[4];
-    lbits_to_be_words4(w, v);
-    (void)h_put(&h_transient, key, h, w);
-  }
+  uint64_t w[4];
+  lbits_to_be_words4(w, v);
+  if (!h_put(&h_transient, key, h, w)) abort();
   return UNIT;
+}
+
+/* Store a value and make the update part of the current semantic checkpoint.
+ * Transient storage is a total map with default zero, so restoring an absent
+ * key as an explicit zero is observationally identical. */
+unit transient_storage_write(const lbits addr, const lbits slot, const lbits v) {
+  lbits prior;
+  transient_storage_read(&prior, addr, slot);
+  state_journal_push_transient(addr, slot, prior);
+  return transient_storage_write_raw(addr, slot, v);
+}
+
+unit transient_storage_restore(const lbits addr, const lbits slot,
+                               const lbits v) {
+  return transient_storage_write_raw(addr, slot, v);
 }
 
 /* the 256-bit value at (address, slot); 0 if absent */

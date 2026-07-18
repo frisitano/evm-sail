@@ -50,10 +50,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -446,7 +446,7 @@ def enter_transaction_frame (tx : Transaction) (intrinsic : gas_cost) : SailM Un
   writeReg frame_refund GAS_REFUND_ZERO
   writeReg frame_status (Running ())
 
-/-- Type quantifiers: k_ex161560_ : Nat, 0 ≤ k_ex161560_ ∧ k_ex161560_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex161300_ : Nat, 0 ≤ k_ex161300_ ∧ k_ex161300_ ≤ (2 ^ 64 - 1) -/
 def run_create_transaction_frame (tx : Transaction) (sender : address) (nonce_before : account_nonce) : SailM Unit := do
   let nonce_before := (nonce_before).value
   let new_addr ← do (k_create_addr sender ⟨nonce_before⟩)

@@ -35,10 +35,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -59,7 +59,7 @@ def undefined_ScaledBlobValue (_ : Unit) : SailM ScaledBlobValue := do
               let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
               pure (⟨semanticField⟩) })
 
-/-- Type quantifiers: k_ex161163_ : Nat, 0 ≤ k_ex161163_ ∧ k_ex161163_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex160903_ : Nat, 0 ≤ k_ex160903_ ∧ k_ex160903_ ≤ (2 ^ 64 - 1) -/
 def scaled_blob_add (left : ScaledBlobValue) (right : ScaledBlobValue) (denominator : blob_fee_update_fraction) : (Option ScaledBlobValue) := ExceptM.run do
   let denominator := (denominator).value
   if ((denominator == 0) : Bool)
@@ -94,10 +94,10 @@ def scaled_blob_add (left : ScaledBlobValue) (right : ScaledBlobValue) (denomina
                 { whole := whole,
                   remainder := ⟨remainder⟩ }))))
 
-/-- Type quantifiers: k_ex161167_ : Nat, k_ex161166_ : Nat, k_ex161165_ : Nat, k_ex161164_ : Nat, 0
-  ≤ k_ex161164_ ∧ k_ex161164_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161165_ ∧
-  k_ex161165_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161166_ ∧ k_ex161166_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex161167_ ∧ k_ex161167_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex160907_ : Nat, k_ex160906_ : Nat, k_ex160905_ : Nat, k_ex160904_ : Nat, 0
+  ≤ k_ex160904_ ∧ k_ex160904_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex160905_ ∧
+  k_ex160905_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex160906_ ∧ k_ex160906_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex160907_ ∧ k_ex160907_ ≤ (2 ^ 64 - 1) -/
 def blob_product_divmod (value : word) (factor : blob_gas) (addend : protocol_quantity) (denominator : blob_fee_update_fraction) (iteration : item_index) : SailM (Option WordDivMod) := SailME.run do
   let factor := (factor).value
   let addend := (addend).value
@@ -130,9 +130,9 @@ def blob_product_divmod (value : word) (factor : blob_gas) (addend : protocol_qu
           { quotient := quotient,
             remainder := residual_parts.remainder })))
 
-/-- Type quantifiers: k_ex161170_ : Nat, k_ex161169_ : Nat, k_ex161168_ : Nat, 0 ≤ k_ex161168_ ∧
-  k_ex161168_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161169_ ∧ k_ex161169_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex161170_ ∧ k_ex161170_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex160910_ : Nat, k_ex160909_ : Nat, k_ex160908_ : Nat, 0 ≤ k_ex160908_ ∧
+  k_ex160908_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex160909_ ∧ k_ex160909_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex160910_ ∧ k_ex160910_ ≤ (2 ^ 64 - 1) -/
 def scaled_blob_next (term : ScaledBlobValue) (numerator : blob_gas) (denominator : blob_fee_update_fraction) (iteration : item_index) : SailM (Option ScaledBlobValue) := SailME.run do
   let numerator := (numerator).value
   let denominator := (denominator).value
@@ -162,8 +162,8 @@ def scaled_blob_next (term : ScaledBlobValue) (numerator : blob_gas) (denominato
             { whole := divided.quotient,
               remainder := ⟨remainder⟩ }))))
 
-/-- Type quantifiers: k_ex161172_ : Nat, k_ex161171_ : Nat, 0 ≤ k_ex161171_ ∧
-  k_ex161171_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161172_ ∧ k_ex161172_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex160912_ : Nat, k_ex160911_ : Nat, 0 ≤ k_ex160911_ ∧
+  k_ex160911_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex160912_ ∧ k_ex160912_ ≤ (2 ^ 64 - 1) -/
 def fake_exponential (factor : word) (numerator : blob_gas) (denominator : blob_fee_update_fraction) : SailM word := do
   let numerator := (numerator).value
   let denominator := (denominator).value
@@ -249,8 +249,8 @@ def blob_max_gas_per_block (_ : Unit) : SailM blob_gas := do
         pure ((semanticResult).value))
   pure (⟨semanticResult⟩)
 
-/-- Type quantifiers: k_ex161176_ : Nat, k_ex161175_ : Nat, 0 ≤ k_ex161175_ ∧
-  k_ex161175_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161176_ ∧ k_ex161176_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex160916_ : Nat, k_ex160915_ : Nat, 0 ≤ k_ex160915_ ∧
+  k_ex160915_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex160916_ ∧ k_ex160916_ ≤ (2 ^ 64 - 1) -/
 def next_excess_blob_gas (parent_excess_blob_gas : blob_gas) (parent_blob_gas_used : blob_gas) (parent_base_fee_per_gas : word) : SailM blob_gas := do
   let parent_excess_blob_gas := (parent_excess_blob_gas).value
   let parent_blob_gas_used := (parent_blob_gas_used).value
@@ -372,8 +372,8 @@ def sstore_clear_refund (_ : Unit) : SailM gas_constant := do
   then (pure R_sclear_london)
   else (pure R_sclear_pre_london)
 
-/-- Type quantifiers: k_ex161180_ : Nat, k_ex161179_ : Nat, k_ex161178_ : Nat, 0 ≤ k_ex161178_, 0
-  ≤ k_ex161179_, 1 ≤ k_ex161180_ ∧ k_ex161180_ ≤ 1000 -/
+/-- Type quantifiers: k_ex160920_ : Nat, k_ex160919_ : Nat, k_ex160918_ : Nat, 0 ≤ k_ex160918_, 0
+  ≤ k_ex160919_, 1 ≤ k_ex160920_ ∧ k_ex160920_ ≤ 1000 -/
 def gas_product_quotient (left : Nat) (right : Nat) (divisor : gas_divisor) : SailM gas_cost := do
   let divisor := (divisor).value
   (pure (GasCost (← (exact_quotient (left *i right) divisor))))
@@ -473,19 +473,19 @@ def expand_charged_memory (required_size : Nat) : SailM Unit := do
   then (expand_memory required_size)
   else (pure ())
 
-/-- Type quantifiers: k_ex161186_ : Bool -/
+/-- Type quantifiers: k_ex160926_ : Bool -/
 def account_cost (warm : Bool) : gas_constant :=
   if (warm : Bool)
   then G_warm_access
   else G_cold_account
 
-/-- Type quantifiers: k_ex161187_ : Bool -/
+/-- Type quantifiers: k_ex160927_ : Bool -/
 def sload_cost (warm : Bool) : gas_constant :=
   if (warm : Bool)
   then G_warm_access
   else G_cold_sload
 
-/-- Type quantifiers: k_ex161189_ : Nat, k_ex161188_ : Nat, 0 ≤ k_ex161188_, 0 ≤ k_ex161189_ -/
+/-- Type quantifiers: k_ex160929_ : Nat, k_ex160928_ : Nat, 0 ≤ k_ex160928_, 0 ≤ k_ex160929_ -/
 def pc_word (input : EvmByteSlice) (start : Nat) (byte_count : Nat) : SailM word := do
   let value : (BitVec 256) := ZERO_WORD
   let .ByteQuantity input_len := input.len
@@ -591,8 +591,8 @@ def BLS_G1_DISCOUNT : (Vector (BitVec 16) 128) :=
 def BLS_G2_DISCOUNT : (Vector (BitVec 16) 128) :=
   #v[0x020C#16, 0x020C#16, 0x020D#16, 0x020E#16, 0x020E#16, 0x020F#16, 0x0210#16, 0x0210#16, 0x0211#16, 0x0212#16, 0x0212#16, 0x0213#16, 0x0214#16, 0x0214#16, 0x0215#16, 0x0216#16, 0x0217#16, 0x0217#16, 0x0218#16, 0x0219#16, 0x0219#16, 0x021A#16, 0x021B#16, 0x021C#16, 0x021D#16, 0x021D#16, 0x021E#16, 0x021F#16, 0x0220#16, 0x0221#16, 0x0221#16, 0x0222#16, 0x0223#16, 0x0224#16, 0x0225#16, 0x0226#16, 0x0227#16, 0x0228#16, 0x0228#16, 0x0229#16, 0x022A#16, 0x022B#16, 0x022C#16, 0x022D#16, 0x022E#16, 0x022F#16, 0x0230#16, 0x0231#16, 0x0232#16, 0x0233#16, 0x0235#16, 0x0236#16, 0x0237#16, 0x0238#16, 0x0239#16, 0x023A#16, 0x023B#16, 0x023D#16, 0x023E#16, 0x023F#16, 0x0240#16, 0x0242#16, 0x0243#16, 0x0244#16, 0x0246#16, 0x0247#16, 0x0248#16, 0x024A#16, 0x024B#16, 0x024D#16, 0x024E#16, 0x0250#16, 0x0251#16, 0x0253#16, 0x0255#16, 0x0256#16, 0x0258#16, 0x025A#16, 0x025C#16, 0x025E#16, 0x025F#16, 0x0261#16, 0x0263#16, 0x0265#16, 0x0267#16, 0x026A#16, 0x026C#16, 0x026E#16, 0x0270#16, 0x0273#16, 0x0275#16, 0x0278#16, 0x027A#16, 0x027D#16, 0x0280#16, 0x0283#16, 0x0286#16, 0x0289#16, 0x028C#16, 0x028F#16, 0x0293#16, 0x0297#16, 0x029A#16, 0x029E#16, 0x02A2#16, 0x02A7#16, 0x02AB#16, 0x02B0#16, 0x02B5#16, 0x02BB#16, 0x02C0#16, 0x02C7#16, 0x02CD#16, 0x02D4#16, 0x02DC#16, 0x02E4#16, 0x02ED#16, 0x02F7#16, 0x0302#16, 0x030E#16, 0x031C#16, 0x032C#16, 0x0340#16, 0x0357#16, 0x0374#16, 0x039B#16, 0x03E8#16, 0x03E8#16]
 
-/-- Type quantifiers: k_ex161204_ : Nat, k_ex161203_ : Nat, 0 ≤ k_ex161203_ ∧
-  k_ex161203_ ≤ (2 ^ 16 - 1), 0 ≤ k_ex161204_ -/
+/-- Type quantifiers: k_ex160944_ : Nat, k_ex160943_ : Nat, 0 ≤ k_ex160943_ ∧
+  k_ex160943_ ≤ (2 ^ 16 - 1), 0 ≤ k_ex160944_ -/
 def bls_msm_gas (table : (Vector (BitVec 16) 128)) (base : gas_constant) (maxd : bls_discount) (k : Nat) : SailM gas_cost := do
   let maxd := (maxd).value
   if ((k == 0) : Bool)
@@ -624,11 +624,11 @@ def bls_msm_gas (table : (Vector (BitVec 16) 128)) (base : gas_constant) (maxd :
         else (pure discount) ) : SailM Nat )
       (gas_cost_quotient (gas_cost_scale (gas_constant_scale base discount) k) ⟨1000⟩))
 
-/-- Type quantifiers: k_ex161205_ : Nat, 0 ≤ k_ex161205_ -/
+/-- Type quantifiers: k_ex160945_ : Nat, 0 ≤ k_ex160945_ -/
 def linear_gas (base : gas_constant) (per_unit : gas_constant) (units : Nat) : gas_cost :=
   (gas_cost_add_constant (gas_constant_scale per_unit units) base)
 
-/-- Type quantifiers: k_ex161206_ : Nat, 1 ≤ k_ex161206_ ∧ k_ex161206_ ≤ 256 -/
+/-- Type quantifiers: k_ex160946_ : Nat, 1 ≤ k_ex160946_ ∧ k_ex160946_ ≤ 256 -/
 def precompile_gas (num : precompile_id) (input : EvmByteSlice) : SailM (Option gas_cost) := do
   let num := (num).value
   let .ByteQuantity input_len := input.len
@@ -664,7 +664,7 @@ def precompile_gas (num : precompile_id) (input : EvmByteSlice) : SailM (Option 
   | 256 => (pure (some (GasCost 6900)))
   | _ => (pure (some GAS_COST_ZERO))
 
-/-- Type quantifiers: k_ex161207_ : Bool -/
+/-- Type quantifiers: k_ex160947_ : Bool -/
 def sstore_gas (original : word) (current : word) (new : word) (cold : Bool) : SailM (gas_cost × gas_refund) := do
   let cold_cost : gas_constant :=
     if (cold : Bool)
@@ -717,7 +717,7 @@ def sstore_gas (original : word) (current : word) (new : word) (cold : Bool) : S
   let cost := (gas_constant_add base cold_cost)
   (pure (cost, refund))
 
-/-- Type quantifiers: k_ex161208_ : Nat, 0 ≤ k_ex161208_ -/
+/-- Type quantifiers: k_ex160948_ : Nat, 0 ≤ k_ex160948_ -/
 def charge_memory_word_gas (base : gas_constant) (per_word : gas_constant) (size : Nat) : SailM Unit := do
   (charge_cost
     (gas_cost_add_constant (gas_constant_scale per_word (← (memory_word_count size))) base))
@@ -730,8 +730,8 @@ def charge_keccak_gas (size : Nat) : SailM Unit := do
 def charge_copy_gas (size : Nat) : SailM Unit := do
   (charge_memory_word_gas GAS_CONSTANT_ZERO G_copy_word size)
 
-/-- Type quantifiers: k_ex161212_ : Nat, k_ex161211_ : Nat, 0 ≤ k_ex161211_ ∧ k_ex161211_ ≤ 4, 0
-  ≤ k_ex161212_ -/
+/-- Type quantifiers: k_ex160952_ : Nat, k_ex160951_ : Nat, 0 ≤ k_ex160951_ ∧ k_ex160951_ ≤ 4, 0
+  ≤ k_ex160952_ -/
 def charge_log_gas (num_topics : log_topic_count) (size : Nat) : SailM Unit := do
   let num_topics := (num_topics).value
   (charge_cost

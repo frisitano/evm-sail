@@ -442,27 +442,10 @@ structure AcctEntry where
   value : AcctValue
   deriving BEq, Inhabited, Repr
 
-abbrev JournalCheckpoint := protocol_quantity
-
-abbrev AccountCheckpoint := protocol_quantity
-
-abbrev StorageCheckpoint := protocol_quantity
-
-abbrev LogCheckpoint := protocol_quantity
-
-structure StateCheckpoint where
-  journal : JournalCheckpoint
-  accounts : AccountCheckpoint
-  storage : StorageCheckpoint
-  logs : LogCheckpoint
-  deriving BEq, Inhabited, Repr
-
-inductive JEntry where
-  | JTran (_ : (address × word × word))
-  | JWarmA (_ : address)
-  | JWarmS (_ : (address × word))
+inductive StateCheckpoint where
+  | StateCheckpoint (_ : protocol_quantity)
   deriving Inhabited, BEq, Repr
-  open JEntry
+  open StateCheckpoint
 
 inductive TxType where | LegacyTx | AccessListTx | FeeMarketTx | BlobTx | SetCodeTx
   deriving BEq, Inhabited, Repr

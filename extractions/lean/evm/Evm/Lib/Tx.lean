@@ -37,10 +37,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -96,7 +96,7 @@ def tx_signing_hash (t : TxType) (content_src : EvmByteSlice) (v : word) : SailM
           [(bytes_list [tb] BYTE_ONE), (bytes_list evm_prefix' prefix_len), (BytesSlice content_src)])
       else (keccak256_segments [(bytes_list evm_prefix' prefix_len), (BytesSlice content_src)]))
 
-/-- Type quantifiers: k_ex161084_ : Nat, 0 ≤ k_ex161084_ ∧ k_ex161084_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex160827_ : Nat, 0 ≤ k_ex160827_ ∧ k_ex160827_ ≤ (2 ^ 64 - 1) -/
 def auth_signing_hash (chain_id : word) (addr : address) (nonce : account_nonce) : SailM hash := do
   let nonce := (nonce).value
   let content_len ← do (rlp_uint_word_size chain_id)
@@ -114,7 +114,7 @@ def auth_signing_hash (chain_id : word) (addr : address) (nonce : account_nonce)
   (scratch_rewind mark)
   (pure signing_hash)
 
-/-- Type quantifiers: k_ex161085_ : Nat, 0 ≤ k_ex161085_ ∧ k_ex161085_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex160828_ : Nat, 0 ≤ k_ex160828_ ∧ k_ex160828_ ≤ (2 ^ 64 - 1) -/
 def tx_sig_v_ok (chain_id : chain_identifier) (t : TxType) (v : word) : SailM Bool := do
   let chain_id := (chain_id).value
   match t with

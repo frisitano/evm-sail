@@ -12,23 +12,11 @@ function storage_key(a : address, s : word) -> StorageKey = struct { addr = a, s
 
 /*! Marks an address warm and returns its prior warm bit (EIP-2929: the
     EVM charges the cold cost on `false`, the warm cost on `true`). The
-    warming is journaled so a frame revert un-warms it. */
-function k_access_account(a : address) -> bool = {
-    let prior = warm_addr_touch(a);
-    if not_bool(prior) then {
-        journal_push(JWarmA(a))
-    };
-    prior
-}
-/*! Marks a storage slot warm and returns its prior warm bit; journaled
-    like [k_access_account][]. */
-function k_slot_is_warm(a : address, s : word) -> bool = {
-    let prior = warm_slot_touch(a, s);
-    if not_bool(prior) then {
-        journal_push(JWarmS(a, s))
-    };
-    prior
-}
+    host includes a new warm entry in its semantic checkpoint. */
+function k_access_account(a : address) -> bool = warm_addr_touch(a)
+/*! Marks a storage slot warm and returns its prior warm bit. New entries
+    belong to the host's semantic checkpoint. */
+function k_slot_is_warm(a : address, s : word) -> bool = warm_slot_touch(a, s)
 
 /* --- persistent storage (SLOAD/SSTORE): the C cache/update store, whose
  * mutations are recorded between k_state_checkpoint / k_revert boundaries --- */
@@ -76,9 +64,6 @@ function k_sstore(a : address, s : word, v : StorageValue) -> unit =
 function k_tload(a : address, s : word) -> word = {
     transient_load(a, s)
 }
-/*! `TSTORE` (EIP-1153): writes transient storage, journaling the prior
-    value for frame revert. */
-function k_tstore(a : address, s : word, v : word) -> unit = {
-    journal_push(JTran(a, s, transient_load(a, s)));
-    transient_store(a, s, v)
-}
+/*! `TSTORE` (EIP-1153): writes transient storage. Frame rollback is part
+    of the host's semantic checkpoint contract. */
+function k_tstore(a : address, s : word, v : word) -> unit = transient_store(a, s, v)

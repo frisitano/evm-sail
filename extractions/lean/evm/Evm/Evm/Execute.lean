@@ -47,10 +47,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -135,7 +135,7 @@ def call_uses_target_address (kind : CallKind) : Bool :=
   | .StaticCall => true
   | _ => false
 
-/-- Type quantifiers: k_ex161225_ : Bool -/
+/-- Type quantifiers: k_ex160965_ : Bool -/
 def executable_code (target : address) (dele : Bool) (dtgt : address) : SailM Code := do
   if (dele : Bool)
   then
@@ -1270,7 +1270,7 @@ def _rec_run_call (kind : CallKind) (_reclimit : Nat) : SailM Unit := do
                                               (push WORD_ZERO))))))))))))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
-/-- Type quantifiers: _reclimit : Nat, k_ex161227_ : Bool, 0 ≤ _reclimit -/
+/-- Type quantifiers: _reclimit : Nat, k_ex160967_ : Bool, 0 ≤ _reclimit -/
 def _rec_run_create (is2 : Bool) (_reclimit : Nat) : SailM Unit := do
   match _reclimit with
   | 0 =>
@@ -1453,7 +1453,7 @@ def run_call (_arg0 : CallKind) : SailM Unit := do
   then throw Error.Exit
   else (_rec_run_call _arg0 (_measure + 1))
 
-/-- Type quantifiers: k_ex161229_ : Bool -/
+/-- Type quantifiers: k_ex160969_ : Bool -/
 def run_create (_arg0 : Bool) : SailM Unit := do
   let _measure ← do (pure (3 *i ((DEPTH_LIMIT).value -i (← readReg call_depth))))
   if ((_measure <b 0) : Bool)

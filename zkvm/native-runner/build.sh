@@ -133,8 +133,8 @@ SAIL_CMD+=(
 "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
 
-# --- 4b. journal glue: JEntry crosses the extern boundary as the GENERATED
-#     struct zJEntry, so the glue compiles against this build's model header.
+# --- 4b. state aggregate glue: account/storage rows use generated layouts;
+#     the rollback journal itself is C-private.
 "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/journal_glue.c" -o "$BUILD/journal_glue.o"

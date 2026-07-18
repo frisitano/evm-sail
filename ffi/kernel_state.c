@@ -1,8 +1,8 @@
 /* C-backed execution-time kernel collections for evm-sail.
  *
- * The EIP-2929 warm address/slot sets, the LOG series, and the call-frame
- * journal (undo log) were Sail registers holding mutable data buffers. They
- * now live here, behind
+ * The EIP-2929 warm address/slot sets, the LOG series, and semantic call-frame
+ * checkpoints were Sail-visible mutable data structures. They now live here,
+ * behind
  * the abstract host interfaces declared in sail/host/state.sail and
  * sail/host/environment.sail. This is
  * a pure refactor: dedup, ordering, and call-frame revert semantics are
@@ -15,6 +15,8 @@
  * per-frame arrays used elsewhere in the FFI. */
 #include "kernel_state.h"
 #include "lbits_convert.h"
+#include "state_db.h"
+#include "transient_storage.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +38,12 @@ static inline int word_eq(const word256 *a, const word256 *b) {
   return memcmp(a->w, b->w, sizeof a->w) == 0;
 }
 
+/* Warm-set insertions append their inverse operations to the private journal
+ * declared below. Keeping these helpers private prevents any journal shape or
+ * cursor from becoming part of the generated Sail ABI. */
+static void journal_push_warm_address(const word256 *a);
+static void journal_push_warm_slot(const word256 *a, const word256 *s);
+
 /* ---------------------------- address vector ---------------------------- */
 /* order-insensitive membership set backed by a flat array (contains is a
  * linear scan, as the prior Sail linked list was); used for warm addresses. */
@@ -55,9 +63,6 @@ static int av_find(const addr_vec *m, const word256 *a) {
   for (uint32_t i = 0; i < m->n; i++)
     if (word_eq(&m->v[i], a)) return (int)i;
   return -1;
-}
-static void av_append(addr_vec *m, const word256 *a) {
-  if (av_reserve(m, m->n + 1)) m->v[m->n++] = *a;
 }
 /* remove one occurrence (order-insensitive: swap with last) */
 static void av_remove_once(addr_vec *m, const word256 *a) {
@@ -99,29 +104,20 @@ unit warm_reset(const unit u) {
 bool warm_addr_touch(const lbits a) {
   word256 k = lb_word(a);
   if (av_find(&warm_addr, &k) >= 0) return true;
-  av_append(&warm_addr, &k);
+  if (!av_reserve(&warm_addr, warm_addr.n + 1)) abort();
+  journal_push_warm_address(&k);
+  warm_addr.v[warm_addr.n++] = k;
   return false;
-}
-unit warm_addr_remove(const lbits a) {
-  word256 k = lb_word(a);
-  av_remove_once(&warm_addr, &k);
-  return UNIT;
 }
 bool warm_slot_touch(const lbits a, const lbits s) {
   word256 ka = lb_word(a), ks = lb_word(s);
   if (sv_find(&warm_slot, &ka, &ks) >= 0) return true;
-  if (sv_reserve(&warm_slot, warm_slot.n + 1)) {
-    warm_slot.v[warm_slot.n].a = ka;
-    warm_slot.v[warm_slot.n].s = ks;
-    warm_slot.n++;
-  }
+  if (!sv_reserve(&warm_slot, warm_slot.n + 1)) abort();
+  journal_push_warm_slot(&ka, &ks);
+  warm_slot.v[warm_slot.n].a = ka;
+  warm_slot.v[warm_slot.n].s = ks;
+  warm_slot.n++;
   return false;
-}
-unit warm_slot_remove(const lbits a, const lbits s) {
-  word256 ka = lb_word(a), ks = lb_word(s);
-  int i = sv_find(&warm_slot, &ka, &ks);
-  if (i >= 0) warm_slot.v[i] = warm_slot.v[--warm_slot.n];
-  return UNIT;
 }
 
 /* ------------------------ ancestor header hashes ------------------------ */
@@ -262,13 +258,11 @@ const uint8_t *log_data_region(uint64_t off, uint64_t len) {
   return len ? log_data + off : &empty;
 }
 
-/* ------------------------------- journal -------------------------------- */
-/* tag values: C-internal row tags. The Sail side no longer sees them (its
- * journal boundary is journal_push/journal_pop over whole JEntry values);
- * ffi/journal_glue.c mirrors this enum (GJT_*) for its (en/de)coding. */
+/* ------------------------- private undo journal ------------------------- */
+/* These tags and rows are backend implementation details. Sail observes only
+ * a StateCheckpoint token and asks this module to restore it atomically. */
 enum {
-  JT_EMPTY = 0, JT_TRAN = 1, JT_WARMA = 2,
-  JT_WARMS = 3
+  JT_TRAN = 1, JT_WARMA = 2, JT_WARMS = 3
 };
 
 typedef struct {
@@ -285,7 +279,7 @@ static jentry *jrn_push(uint32_t tag) {
   if (jrn_n >= jrn_cap) {
     uint32_t cap = jrn_cap ? jrn_cap * 2 : 256;
     jentry *nv = (jentry *)realloc(jrn, cap * sizeof(jentry));
-    if (!nv) return NULL;
+    if (!nv) abort();
     jrn = nv;
     jrn_cap = cap;
   }
@@ -295,37 +289,104 @@ static jentry *jrn_push(uint32_t tag) {
   return e;
 }
 
-unit journal_reset(const unit u) { (void)u; jrn_n = 0; return UNIT; }
-uint64_t journal_len(const unit u) { (void)u; return jrn_n; }
-unit journal_push_tran(const lbits a, const lbits slot, const lbits val) {
+unit state_journal_push_transient(const lbits a, const lbits slot,
+                                  const lbits prior) {
   jentry *e = jrn_push(JT_TRAN);
-  if (e) {
-    e->a = lb_word(a);
-    e->w0 = lb_word(slot);
-    e->w1 = lb_word(val);
-  }
+  e->a = lb_word(a);
+  e->w0 = lb_word(slot);
+  e->w1 = lb_word(prior);
   return UNIT;
 }
-unit journal_push_warma(const lbits a) {
-  jentry *e = jrn_push(JT_WARMA);
-  if (e) e->a = lb_word(a);
-  return UNIT;
-}
-unit journal_push_warms(const lbits a, const lbits slot) {
-  jentry *e = jrn_push(JT_WARMS);
-  if (e) {
-    e->a = lb_word(a);
-    e->w0 = lb_word(slot);
-  }
-  return UNIT;
-}
-uint64_t journal_top_tag(const unit u) { (void)u; return jrn_n ? jrn[jrn_n - 1].tag : JT_EMPTY; }
-unit journal_drop_top(const unit u) { (void)u; if (jrn_n) jrn_n--; return UNIT; }
 
-static const jentry *jrn_top(void) {
-  static const jentry zero = {0};
-  return jrn_n ? &jrn[jrn_n - 1] : &zero;
+static void journal_push_warm_address(const word256 *a) {
+  jentry *e = jrn_push(JT_WARMA);
+  e->a = *a;
 }
-void journal_top_addr(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->a); }
-void journal_top_slot(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->w0); }
-void journal_top_val(lbits *rop, const unit u) { (void)u; word_out(rop, &jrn_top()->w1); }
+
+static void journal_push_warm_slot(const word256 *a, const word256 *s) {
+  jentry *e = jrn_push(JT_WARMS);
+  e->a = *a;
+  e->w0 = *s;
+}
+
+static void journal_revert(uint32_t checkpoint) {
+  if (checkpoint > jrn_n) abort();
+  while (jrn_n > checkpoint) {
+    const jentry *e = &jrn[--jrn_n];
+    if (e->tag == JT_TRAN) {
+      lbits address, slot, prior;
+      word_out(&address, &e->a);
+      address.len = 160;
+      word_out(&slot, &e->w0);
+      word_out(&prior, &e->w1);
+      transient_storage_restore(address, slot, prior);
+    } else if (e->tag == JT_WARMA) {
+      av_remove_once(&warm_addr, &e->a);
+    } else if (e->tag == JT_WARMS) {
+      int i = sv_find(&warm_slot, &e->a, &e->w0);
+      if (i < 0) abort();
+      warm_slot.v[i] = warm_slot.v[--warm_slot.n];
+    } else {
+      abort();
+    }
+  }
+}
+
+/* ---------------------- semantic checkpoint registry ------------------- */
+
+typedef struct {
+  uint64_t accounts;
+  uint64_t storage;
+  uint32_t journal;
+  uint32_t logs;
+} state_checkpoint_record;
+
+static state_checkpoint_record *state_checkpoints;
+static size_t state_checkpoints_n, state_checkpoints_cap;
+
+static void state_checkpoint_reserve(size_t need) {
+  if (need <= state_checkpoints_cap) return;
+  size_t cap = state_checkpoints_cap ? state_checkpoints_cap * 2 : 32;
+  while (cap < need) cap *= 2;
+  state_checkpoint_record *next = (state_checkpoint_record *)realloc(
+      state_checkpoints, cap * sizeof(state_checkpoint_record));
+  if (!next) abort();
+  state_checkpoints = next;
+  state_checkpoints_cap = cap;
+}
+
+unit host_state_checkpoint_reset(const unit u) {
+  (void)u;
+  state_checkpoints_n = 0;
+  jrn_n = 0;
+  return UNIT;
+}
+
+uint64_t host_state_checkpoint(const unit u) {
+  (void)u;
+  if (state_checkpoints_n == UINT64_MAX) abort();
+  state_checkpoint_reserve(state_checkpoints_n + 1);
+  state_checkpoint_record *record = &state_checkpoints[state_checkpoints_n];
+  record->journal = jrn_n;
+  record->logs = logs_n;
+  record->storage = storage_tx_checkpoint(UNIT);
+  record->accounts = acct_tx_checkpoint(UNIT);
+  state_checkpoints_n++;
+  return (uint64_t)state_checkpoints_n;
+}
+
+unit host_state_revert(uint64_t checkpoint) {
+  if (checkpoint == 0 || checkpoint > state_checkpoints_n) abort();
+  state_checkpoint_record record = state_checkpoints[checkpoint - 1];
+
+  acct_tx_revert(record.accounts);
+  storage_tx_revert(record.storage);
+  logs_revert(record.logs);
+  journal_revert(record.journal);
+
+  /* A reverted frame and every checkpoint issued beneath it are stale. The
+   * next sibling may reuse their private token values; Sail cannot inspect
+   * or manufacture a meaningful handle. */
+  state_checkpoints_n = (size_t)(checkpoint - 1);
+  return UNIT;
+}

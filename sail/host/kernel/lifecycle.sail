@@ -5,21 +5,9 @@ Snapshot, revert, per-transaction reset, and the transaction-end merge
 into the block layer.
 */
 
-/*! Replays one journal entry backward. */
-function apply_undo(e : JEntry) -> unit = match e {
-    JTran(a, s, v) => transient_store(a, s, v),
-    JWarmA(a) => warm_addr_remove(a),
-    JWarmS(a, s) => warm_slot_remove(a, s),
-}
-
-/*! Captures the reversible journal, storage, log, and refund extents at a
-    frame boundary. */
-function k_state_checkpoint() -> StateCheckpoint = struct {
-    journal = journal_len(),
-    accounts = acct_tx_checkpoint(),
-    storage = storage_tx_checkpoint(),
-    logs = logs_checkpoint(),
-}
+/*! Captures all frame-revertible transaction state. The frame checkpoint
+    stores its refund counter separately. */
+function k_state_checkpoint() -> StateCheckpoint = state_checkpoint()
 
 /*! Installs the block header. */
 function k_set_header(h : BlockHeader) -> unit = k_header = h
@@ -27,15 +15,14 @@ function k_set_header(h : BlockHeader) -> unit = k_header = h
 /*! Installs the per-transaction environment. */
 function k_set_tx(env : TxEnv) -> unit = k_tx = env
 
-/*! Resets every per-transaction store: overlays, warm sets, transient
-    storage, logs, refund counter, journal. */
+/*! Resets every per-transaction store and the private checkpoint history. */
 function k_tx_reset() -> unit = {
     acct_tx_reset();
     storage_tx_reset();
     warm_reset();
     transient_reset();
     logs_tx_reset();
-    journal_reset()
+    state_checkpoint_reset()
 }
 
 /*! Whether a selfdestructed account is actually deleted at transaction
@@ -103,23 +90,5 @@ function k_tx_merge() -> unit = {
     storage_tx_reset()
 }
 
-/*! Reverts a frame to its checkpoint: truncates the overlays and log
-    store, then replays the journal backward to the checkpointed
-    length. */
-function k_revert(checkpoint : StateCheckpoint) -> unit = {
-    acct_tx_revert(checkpoint.accounts);
-    storage_tx_revert(checkpoint.storage);
-    logs_revert(checkpoint.logs);
-    let current = journal_len();
-    let saved = checkpoint.journal;
-    var remaining : JournalCheckpoint = if saved <= current then {
-            current - saved
-        } else {
-            assert(false);
-            0
-        };
-    while remaining != 0 termination_measure(remaining) do {
-        apply_undo(journal_pop());
-        remaining = protocol_quantity_decrement(remaining)
-    }
-}
+/*! Atomically restores the transaction state captured at a frame boundary. */
+function k_revert(checkpoint : StateCheckpoint) -> unit = state_revert(checkpoint)

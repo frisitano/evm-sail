@@ -28,10 +28,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -62,7 +62,7 @@ def WORD_ALL_ONES : word := 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 
 def WORD_SIGN_BIT : word := 0x8000000000000000000000000000000000000000000000000000000000000000#256
 
-/-- Type quantifiers: k_ex161000_ : Bool -/
+/-- Type quantifiers: k_ex160742_ : Bool -/
 def word_of_bool (b : Bool) : word :=
   if (b : Bool)
   then WORD_ONE

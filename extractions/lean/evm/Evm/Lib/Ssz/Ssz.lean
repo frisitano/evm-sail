@@ -32,10 +32,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -50,7 +50,7 @@ def SSZ_OFF_BYTES : byte_length := (ByteQuantity 4)
 
 def SSZ_UINT_BYTES : byte_length := EIGHT_BYTE_LENGTH
 
-/-- Type quantifiers: k_ex161073_ : Nat, 0 ≤ k_ex161073_ -/
+/-- Type quantifiers: k_ex160816_ : Nat, 0 ≤ k_ex160816_ -/
 def ssz_field_offset (base : source_pointer) (delta : Nat) : SailM source_pointer := do
   (byte_quantity_add base (ByteQuantity delta))
 

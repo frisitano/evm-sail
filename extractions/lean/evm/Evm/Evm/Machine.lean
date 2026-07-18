@@ -37,10 +37,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -96,7 +96,7 @@ def pop (_ : Unit) : SailM word := do
       (pure WORD_ZERO))
   else (stack_pop_word ())
 
-/-- Type quantifiers: k_ex161160_ : Nat, 0 ≤ k_ex161160_ ∧ k_ex161160_ ≤ 16 -/
+/-- Type quantifiers: k_ex160900_ : Nat, 0 ≤ k_ex160900_ ∧ k_ex160900_ ≤ 16 -/
 def stack_set (n : stack_index) (w : word) : SailM Unit := do
   let n := (n).value
   (stack_set_word ⟨n⟩ w)

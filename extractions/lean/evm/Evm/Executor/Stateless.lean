@@ -40,10 +40,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -54,7 +54,7 @@ open Bytes
 open ByteSource
 open BlockError
 
-/-- Type quantifiers: k_ex161871_ : Bool -/
+/-- Type quantifiers: k_ex161611_ : Bool -/
 def validate_executed_block (block' : Block) (input_ref : StatelessInputRef) (exec_ok : Bool) (result : BlockExecutionResult) : SailM Unit := do
   let header := block'.header
   let gas_used_ok := (gas_equal result.gas_acc header.gas_used)

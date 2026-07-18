@@ -29,10 +29,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -67,7 +67,7 @@ def SECP_N_FULL : (BitVec 256) :=
 def SECP_N_HALF : (BitVec 256) :=
   0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0#256
 
-/-- Type quantifiers: k_ex161056_ : Nat, 0 ≤ k_ex161056_ ∧ k_ex161056_ ≤ 1 -/
+/-- Type quantifiers: k_ex160798_ : Nat, 0 ≤ k_ex160798_ ∧ k_ex160798_ ≤ 1 -/
 def ecrecover_addr (h : (BitVec 256)) (yparity : y_parity) (r : word) (s : word) : SailM (Bool × address) := do
   let yparity := (yparity).value
   let recovered ← do (host_ecrecover h ⟨yparity⟩ r s)

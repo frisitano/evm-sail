@@ -37,10 +37,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -87,7 +87,7 @@ def HTR_CONSOLIDATION_REQUEST_LENGTH : byte_length := (ByteQuantity 116)
 
 def HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY : source_pointer := (ByteQuantity 68)
 
-/-- Type quantifiers: k_ex161874_ : Nat, 0 ≤ k_ex161874_ ∧ k_ex161874_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex161614_ : Nat, 0 ≤ k_ex161614_ ∧ k_ex161614_ ≤ (2 ^ 64 - 1) -/
 def merkle_push (frontier : (List MerkleSlot)) (count : item_count) (leaf : hash) : SailM (List MerkleSlot) := do
   let count := (count).value
   if (((Int.tmod count 2) == 0) : Bool)
@@ -116,8 +116,8 @@ def merkle_accumulator_push (accumulator : MerkleAccumulator) (leaf : hash) : Sa
                 pure (⟨semanticField⟩) })
   else sailThrow ((InvalidBlock WitnessDeficient))
 
-/-- Type quantifiers: _reclimit : Nat, k_ex161876_ : Nat, k_ex161875_ : Nat, 0 ≤ k_ex161875_ ∧
-  k_ex161875_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161876_ ∧ k_ex161876_ ≤ 64, 0 ≤ _reclimit -/
+/-- Type quantifiers: _reclimit : Nat, k_ex161616_ : Nat, k_ex161615_ : Nat, 0 ≤ k_ex161615_ ∧
+  k_ex161615_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161616_ ∧ k_ex161616_ ≤ 64, 0 ≤ _reclimit -/
 def _rec_merkle_root_levels (slots : (List MerkleSlot)) (n : item_count) (zero : hash) (acc : hash) (remaining : merkle_depth) (_reclimit : Nat) : SailM hash := do
   let n := (n).value
   let remaining := (remaining).value
@@ -177,7 +177,7 @@ def merkle_root_levels (slots : (List MerkleSlot)) (n : item_count) (zero : hash
   then throw Error.Exit
   else (_rec_merkle_root_levels slots ⟨n⟩ zero acc ⟨remaining⟩ (_measure + 1))
 
-/-- Type quantifiers: k_ex161881_ : Nat, 0 ≤ k_ex161881_ ∧ k_ex161881_ ≤ 64 -/
+/-- Type quantifiers: k_ex161621_ : Nat, 0 ≤ k_ex161621_ ∧ k_ex161621_ ≤ 64 -/
 def merkle_accumulator_root (accumulator : MerkleAccumulator) (depth : merkle_depth) : SailM hash := do
   let depth := (depth).value
   (merkle_root_levels accumulator.frontier ⟨(accumulator.count).value⟩ (BitVec.zero 256)
@@ -188,7 +188,7 @@ def merkle_accumulate (leaves : (List hash)) (accumulator : MerkleAccumulator) :
   | [] => (pure accumulator)
   | (leaf :: rest) => (merkle_accumulate rest (← (merkle_accumulator_push accumulator leaf)))
 
-/-- Type quantifiers: k_ex161882_ : Nat, 0 ≤ k_ex161882_ ∧ k_ex161882_ ≤ 64 -/
+/-- Type quantifiers: k_ex161622_ : Nat, 0 ≤ k_ex161622_ ∧ k_ex161622_ ≤ 64 -/
 def merkleize (leaves : (List hash)) (depth : merkle_depth) : SailM hash := do
   let depth := (depth).value
   (merkle_accumulator_root (← (merkle_accumulate leaves EMPTY_MERKLE_ACCUMULATOR)) ⟨depth⟩)
@@ -226,7 +226,7 @@ def htr_bytes32 (b : (BitVec 256)) : hash :=
 def htr_addr (a : address) : hash :=
   ((Sail.BitVec.zeroExtend a 256) <<< 96)
 
-/-- Type quantifiers: k_ex161885_ : Nat, 0 ≤ k_ex161885_ ∧ k_ex161885_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex161625_ : Nat, 0 ≤ k_ex161625_ ∧ k_ex161625_ ≤ (2 ^ 64 - 1) -/
 def mix_in_length (root : hash) (len : item_count) : SailM hash := do
   let len := (len).value
   (sha256_pair root (← (htr_uint ⟨len⟩)))
@@ -266,7 +266,7 @@ def clog2 (n : item_count) : SailM merkle_depth := do
     (pure depth)
   pure (⟨semanticResult⟩)
 
-/-- Type quantifiers: k_ex161887_ : Nat, 0 ≤ k_ex161887_ ∧ k_ex161887_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex161627_ : Nat, 0 ≤ k_ex161627_ ∧ k_ex161627_ ≤ (2 ^ 64 - 1) -/
 def htr_chunk (bytes : EvmByteSlice) (chunk_index : item_index) : SailM hash := do
   let chunk_index := (chunk_index).value
   let acc : (BitVec 256) := (BitVec.zero 256)
@@ -314,7 +314,7 @@ def htr_fixed_count (typ_0 : byte_length) (typ_1 : byte_length) : SailM item_cou
     else sailThrow ((InvalidBlock InvalidConfig))
   pure (⟨semanticResult⟩)
 
-/-- Type quantifiers: k_ex161888_ : Nat, 0 ≤ k_ex161888_ ∧ k_ex161888_ ≤ 64 -/
+/-- Type quantifiers: k_ex161628_ : Nat, 0 ≤ k_ex161628_ ∧ k_ex161628_ ≤ 64 -/
 def htr_bytes_root (bytes : EvmByteSlice) (depth : merkle_depth) : SailM hash := do
   let depth := (depth).value
   let count ← do

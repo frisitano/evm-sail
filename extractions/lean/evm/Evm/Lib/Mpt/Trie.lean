@@ -34,10 +34,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -114,7 +114,7 @@ def emit_leaf_overlay (sink : TrieItemSink) (updates : (List TrieUpdate)) (evm_p
                     SailM TrieItemSink )
                   (emit_leaf_overlay updated_sink rest evm_prefix' key value)))))
 
-/-- Type quantifiers: _reclimit : Nat, k_ex161590_ : Nat, 0 ≤ k_ex161590_ ∧ k_ex161590_ ≤ 64, 0
+/-- Type quantifiers: _reclimit : Nat, k_ex161330_ : Nat, 0 ≤ k_ex161330_ ∧ k_ex161330_ ≤ 64, 0
   ≤ _reclimit -/
 def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : (List TrieUpdate)) (sink : TrieItemSink) (cursor : trie_path_cursor) (_reclimit : Nat) : SailM (TrieItemSink × (List TrieUpdate)) := do
   let cursor := (cursor).value

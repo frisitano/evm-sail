@@ -38,10 +38,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -154,8 +154,8 @@ def BLOB_HASH_RLP_LENGTH : byte_length := (ByteQuantity 33)
 
 def BLOB_HASH_LENGTH : byte_length := WORD_BYTE_LENGTH
 
-/-- Type quantifiers: _reclimit : Nat, k_ex161093_ : Nat, 0 ≤ k_ex161093_ ∧
-  k_ex161093_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/-- Type quantifiers: _reclimit : Nat, k_ex160836_ : Nat, 0 ≤ k_ex160836_ ∧
+  k_ex160836_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_decode_blob_hash_items (cursor : RlpCursor) (count : blob_count) (_reclimit : Nat) : SailM blob_count := do
   let count := (count).value
   let semanticResult ← do

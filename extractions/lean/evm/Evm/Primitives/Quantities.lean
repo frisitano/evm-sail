@@ -29,10 +29,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -156,8 +156,8 @@ def word_of_byte_quantity (app_0 : byte_quantity) : SailM word := do
   let .ByteQuantity value := app_0
   (word_of_nat value)
 
-/-- Type quantifiers: k_ex161015_ : Nat, k_ex161014_ : Nat, 0 ≤ k_ex161014_ ∧
-  k_ex161014_ ≤ (2 ^ 64 - 1), 1 ≤ k_ex161015_ ∧ k_ex161015_ ≤ 256 -/
+/-- Type quantifiers: k_ex160757_ : Nat, k_ex160756_ : Nat, 0 ≤ k_ex160756_ ∧
+  k_ex160756_ ≤ (2 ^ 64 - 1), 1 ≤ k_ex160757_ ∧ k_ex160757_ ≤ 256 -/
 def protocol_quantity_quotient (value : protocol_quantity) (divisor : protocol_divisor) : SailM protocol_quantity := do
   let value := (value).value
   let divisor := (divisor).value
@@ -173,13 +173,13 @@ def byte_quantity_quotient (typ_0 : byte_quantity) (typ_1 : byte_quantity) : Sai
   assert (dividend ≤b BYTE_QUANTITY_MAX) "sail/primitives/quantities.sail:310.40-310.41"
   (pure (ByteQuantity (← (exact_quotient dividend divisor))))
 
-/-- Type quantifiers: k_ex161016_ : Nat, 1 ≤ k_ex161016_ ∧ k_ex161016_ ≤ 1000 -/
+/-- Type quantifiers: k_ex160758_ : Nat, 1 ≤ k_ex160758_ ∧ k_ex160758_ ≤ 1000 -/
 def gas_cost_quotient (typ_0 : gas_cost) (divisor : gas_divisor) : SailM gas_cost := do
   let divisor := (divisor).value
   let .GasCost value : gas_cost := typ_0
   (pure (GasCost (← (exact_quotient value divisor))))
 
-/-- Type quantifiers: k_ex161017_ : Nat, 1 ≤ k_ex161017_ ∧ k_ex161017_ ≤ 1000 -/
+/-- Type quantifiers: k_ex160759_ : Nat, 1 ≤ k_ex160759_ ∧ k_ex160759_ ≤ 1000 -/
 def gas_quotient (typ_0 : gas) (divisor : gas_divisor) : SailM gas := do
   let divisor := (divisor).value
   let .Gas value : gas := typ_0

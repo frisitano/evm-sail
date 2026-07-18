@@ -30,10 +30,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -104,7 +104,7 @@ def capped_gas_refund (typ_0 : gas_refund) (typ_1 : gas) : gas :=
     then (Gas refund)
     else (Gas limit))
 
-/-- Type quantifiers: k_ex161021_ : Nat, 0 ≤ k_ex161021_ ∧ k_ex161021_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex160763_ : Nat, 0 ≤ k_ex160763_ ∧ k_ex160763_ ≤ (2 ^ 64 - 1) -/
 def word_checked_mul_protocol_quantity (value : word) (factor : protocol_quantity) : SailM (Option word) := do
   let factor := (factor).value
   let result : (BitVec 256) := ZERO_WORD

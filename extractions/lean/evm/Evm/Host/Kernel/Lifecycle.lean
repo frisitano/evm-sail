@@ -1,5 +1,4 @@
 import Evm.Flow
-import Evm.Primitives.Quantities
 import Evm.Host.Kernel.Environment
 import Evm.Host.Kernel.Logs
 import Evm.Host.Kernel.Accounts
@@ -32,10 +31,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -46,33 +45,8 @@ open Bytes
 open ByteSource
 open BlockError
 
-def apply_undo (e : JEntry) : SailM Unit := do
-  match e with
-  | .JTran (a, s, v) => (transient_store a s v)
-  | .JWarmA a => (warm_addr_remove a)
-  | .JWarmS (a, s) => (warm_slot_remove a s)
-
 def k_state_checkpoint (_ : Unit) : SailM StateCheckpoint := do
-  (pure { journal := ← do
-              let semanticField ← (do
-                  let semanticResult ← (journal_len ())
-                  pure ((semanticResult).value))
-              pure (⟨semanticField⟩),
-          accounts := ← do
-              let semanticField ← (do
-                  let semanticResult ← (acct_tx_checkpoint ())
-                  pure ((semanticResult).value))
-              pure (⟨semanticField⟩),
-          storage := ← do
-              let semanticField ← (do
-                  let semanticResult ← (storage_tx_checkpoint ())
-                  pure ((semanticResult).value))
-              pure (⟨semanticField⟩),
-          logs := ← do
-              let semanticField ← (do
-                  let semanticResult ← (logs_checkpoint ())
-                  pure ((semanticResult).value))
-              pure (⟨semanticField⟩) })
+  (state_checkpoint ())
 
 def k_set_header (h : BlockHeader) : SailM Unit := do
   writeReg k_header h
@@ -86,7 +60,7 @@ def k_tx_reset (_ : Unit) : SailM Unit := do
   (warm_reset ())
   (transient_reset ())
   (logs_tx_reset ())
-  (journal_reset ())
+  (state_checkpoint_reset ())
 
 def account_deleted_at_tx_end (acc : Account) : SailM Bool := do
   (pure (acc.selfdestructed && ((fork_lt (← readReg k_fork) Cancun) || acc.created)))
@@ -157,29 +131,5 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
   (storage_tx_reset ())
 
 def k_revert (checkpoint : StateCheckpoint) : SailM Unit := do
-  (acct_tx_revert ⟨(checkpoint.accounts).value⟩)
-  (storage_tx_revert ⟨(checkpoint.storage).value⟩)
-  (logs_revert ⟨(checkpoint.logs).value⟩)
-  let current ← do
-    (do
-        let semanticResult ← (journal_len ())
-        pure ((semanticResult).value))
-  let saved := (checkpoint.journal).value
-  let remaining ← (( do
-    if ((saved ≤b current) : Bool)
-    then (pure (current -i saved))
-    else
-      (do
-        assert false "sail/host/kernel/lifecycle.sail:118.24-118.25"
-        throw Error.Exit) ) : SailM Nat )
-  let remaining ← (( do
-    let loop_vars ← whileFuelM (fuel :=remaining) (fun remaining => (pure (remaining != 0))) remaining
-      fun remaining => do
-        assert true "loop dummy assert"
-        (apply_undo (← (journal_pop ())))
-        (do
-            let semanticResult ← (protocol_quantity_decrement ⟨remaining⟩)
-            pure ((semanticResult).value))
-    (pure loop_vars) ) : SailM Nat )
-  (pure ())
+  (state_revert checkpoint)
 

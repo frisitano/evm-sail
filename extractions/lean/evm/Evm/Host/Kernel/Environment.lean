@@ -35,10 +35,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -128,7 +128,7 @@ def k_blobhash (index_word : word) : SailM word := do
       else (pure ZERO_WORD))
   else (pure ZERO_WORD)
 
-/-- Type quantifiers: k_ex161140_ : Nat, 0 ≤ k_ex161140_ ∧ k_ex161140_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex160880_ : Nat, 0 ≤ k_ex160880_ ∧ k_ex160880_ ≤ (2 ^ 64 - 1) -/
 def k_create_addr (a : address) (nonce : account_nonce) : SailM address := do
   let nonce := (nonce).value
   (create_address a ⟨nonce⟩)

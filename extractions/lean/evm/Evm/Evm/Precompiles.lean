@@ -37,10 +37,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -110,7 +110,7 @@ def precompile_failure (_ : Unit) : PrecompileResult :=
   { success := false,
     output := EMPTY_SLICE }
 
-/-- Type quantifiers: k_ex161216_ : Bool -/
+/-- Type quantifiers: k_ex160956_ : Bool -/
 def accelerator_result (success : Bool) (output_len : byte_length) : PrecompileResult :=
   if (success : Bool)
   then (precompile_success (output_buffer_slice output_len))
@@ -122,7 +122,7 @@ def copied_result (data : EvmByteSlice) : SailM PrecompileResult := do
   then (pure (precompile_success output))
   else (pure (precompile_failure ()))
 
-/-- Type quantifiers: k_ex161217_ : Bool -/
+/-- Type quantifiers: k_ex160957_ : Bool -/
 def boolean_result (value : Bool) : SailM PrecompileResult := do
   (pure (precompile_success
       (← (output_buffer_word
@@ -324,7 +324,7 @@ def run_p256_verify (input : EvmByteSlice) : SailM PrecompileResult := do
   then (pure (precompile_success (← (output_buffer_word WORD_ONE))))
   else (pure (precompile_success EMPTY_SLICE))
 
-/-- Type quantifiers: k_ex161220_ : Nat, 1 ≤ k_ex161220_ ∧ k_ex161220_ ≤ 256 -/
+/-- Type quantifiers: k_ex160960_ : Nat, 1 ≤ k_ex160960_ ∧ k_ex160960_ ≤ 256 -/
 def run_precompile_slice (num : precompile_id) (input : EvmByteSlice) : SailM PrecompileResult := do
   let num := (num).value
   match num with

@@ -123,8 +123,8 @@ cmd_guest() {
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
       -Wno-unused -Wno-error=implicit-function-declaration \
       -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
-  # 2b. journal glue: JEntry crosses the extern boundary as the GENERATED
-  #     struct zJEntry, so the glue compiles against this build's model header.
+  # 2b. state aggregate glue: account/storage rows cross the extern boundary
+  #     using generated layouts; the rollback journal itself is C-private.
   "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
       -c "$ROOT/ffi/journal_glue.c" -o "$BUILD/journal_glue.o"

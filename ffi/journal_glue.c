@@ -1,63 +1,12 @@
-/* Generated state/journal glue. This is compiled against the generated model
- * header named by EVMSAIL_MODEL_H, so structured Sail layouts are never
- * mirrored by hand in the scalar C stores. */
+/* Generated account/storage glue. This is compiled against the generated
+ * model header named by EVMSAIL_MODEL_H, so structured Sail layouts are never
+ * mirrored by hand in the scalar C stores. Call-frame journaling is private
+ * to kernel_state.c and no generated journal value crosses this boundary. */
 #include EVMSAIL_MODEL_H
 #include "kernel_state.h"
 #include "state_db.h"
 #include "lbits_convert.h"
 #include <stdlib.h>
-
-/* C-internal journal tags, mirrored from kernel_state.c. */
-enum {
-  GJT_EMPTY = 0, GJT_TRAN = 1, GJT_WARMA = 2,
-  GJT_WARMS = 3
-};
-
-unit journal_push(struct zJEntry e) {
-  switch (e.kind) {
-  case Kind_zJTran:
-    return journal_push_tran(e.variants.zJTran.ztup0,
-                             e.variants.zJTran.ztup1,
-                             e.variants.zJTran.ztup2);
-  case Kind_zJWarmA:
-    return journal_push_warma(e.variants.zJWarmA);
-  case Kind_zJWarmS:
-    return journal_push_warms(e.variants.zJWarmS.ztup0,
-                              e.variants.zJWarmS.ztup1);
-  }
-  return UNIT;
-}
-
-static void top_addr160(lbits *out) {
-  journal_top_addr(out, UNIT);
-  out->len = 160;
-}
-
-void journal_pop(struct zJEntry *out, unit u) {
-  (void)u;
-  switch (journal_top_tag(UNIT)) {
-  case GJT_EMPTY:
-    abort();
-  case GJT_TRAN:
-    out->kind = Kind_zJTran;
-    top_addr160(&out->variants.zJTran.ztup0);
-    journal_top_slot(&out->variants.zJTran.ztup1, UNIT);
-    journal_top_val(&out->variants.zJTran.ztup2, UNIT);
-    break;
-  case GJT_WARMA:
-    out->kind = Kind_zJWarmA;
-    top_addr160(&out->variants.zJWarmA);
-    break;
-  case GJT_WARMS:
-    out->kind = Kind_zJWarmS;
-    top_addr160(&out->variants.zJWarmS.ztup0);
-    journal_top_slot(&out->variants.zJWarmS.ztup1, UNIT);
-    break;
-  default:
-    abort();
-  }
-  journal_drop_top(UNIT);
-}
 
 static void storage_value_out(struct zoptionzIRStorageValuezK *out,
                               uint64_t layer, const lbits addr,

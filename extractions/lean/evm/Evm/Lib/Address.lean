@@ -35,10 +35,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -49,7 +49,7 @@ open Bytes
 open ByteSource
 open BlockError
 
-/-- Type quantifiers: k_ex161083_ : Nat, 0 ≤ k_ex161083_ ∧ k_ex161083_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex160826_ : Nat, 0 ≤ k_ex160826_ ∧ k_ex160826_ ≤ (2 ^ 64 - 1) -/
 def create_address (sender : address) (nonce : account_nonce) : SailM address := do
   let nonce := (nonce).value
   let content_len ← do

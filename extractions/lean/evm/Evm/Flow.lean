@@ -32,10 +32,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -46,7 +46,7 @@ open Bytes
 open ByteSource
 open BlockError
 
-/-- Type quantifiers: k_ex160870_ : Bool, k_ex160869_ : Bool -/
+/-- Type quantifiers: k_ex160612_ : Bool, k_ex160611_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 

@@ -42,10 +42,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -201,7 +201,7 @@ def ssz_list_pop (cursor : SszListCursor) : SailM (EvmByteSlice × SszListCursor
                      current := next })))
   else sailThrow ((InvalidBlock InvalidConfig))
 
-/-- Type quantifiers: k_ex161648_ : Nat, 0 ≤ k_ex161648_ ∧ k_ex161648_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex161388_ : Nat, 0 ≤ k_ex161388_ ∧ k_ex161388_ ≤ (2 ^ 64 - 1) -/
 def ssz_list_at (items : SszListRef) (index : item_index) : SailM EvmByteSlice := do
   let index := (index).value
   if (((items.count).value ≤b index) : Bool)
@@ -224,7 +224,7 @@ def ssz_list_at (items : SszListRef) (index : item_index) : SailM EvmByteSlice :
   then (sub_slice items.bytes start (← (byte_quantity_sub stop start)))
   else sailThrow ((InvalidBlock InvalidConfig))
 
-/-- Type quantifiers: k_ex161649_ : Nat, 0 ≤ k_ex161649_ ∧ k_ex161649_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex161389_ : Nat, 0 ≤ k_ex161389_ ∧ k_ex161389_ ≤ (2 ^ 64 - 1) -/
 def ssz_fixed_list_at (items : SszListRef) (index : item_index) (item_size : byte_length) : SailM EvmByteSlice := do
   let index := (index).value
   if (((items.count).value ≤b index) : Bool)
@@ -261,7 +261,7 @@ def ssz_fixed_list_pop (items : SszListRef) (item_size : byte_length) : SailM (E
                 pure (⟨semanticField⟩) }) ) : SailM SszListRef )
   (pure (item, rest))
 
-/-- Type quantifiers: k_ex161650_ : Nat, 0 ≤ k_ex161650_ ∧ k_ex161650_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex161390_ : Nat, 0 ≤ k_ex161390_ ∧ k_ex161390_ ≤ (2 ^ 64 - 1) -/
 def ssz_checked_offset (base : source_pointer) (relative : protocol_quantity) (limit : source_pointer) : SailM source_pointer := do
   let relative := (relative).value
   let .ByteQuantity base_value := base
@@ -532,8 +532,8 @@ def EMPTY_PARENT_HEADER_FIELDS : ParentHeaderFields :=
     have_blob_gas := false,
     have_excess_blob_gas := false }
 
-/-- Type quantifiers: _reclimit : Nat, k_ex161658_ : Nat, 0 ≤ k_ex161658_ ∧
-  k_ex161658_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/-- Type quantifiers: _reclimit : Nat, k_ex161398_ : Nat, 0 ≤ k_ex161398_ ∧
+  k_ex161398_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_decode_parent_header_fields (cursor : RlpCursor) (field_index : item_index) (fields : ParentHeaderFields) (_reclimit : Nat) : SailM ParentHeaderFields := do
   let field_index := (field_index).value
   match _reclimit with
@@ -778,8 +778,8 @@ def decode_withdrawal (withdrawal : EvmByteSlice) : SailM Withdrawal := do
                   pure ((semanticResult).value))
               pure (⟨semanticField⟩) })
 
-/-- Type quantifiers: k_ex161665_ : Nat, k_ex161664_ : Nat, 0 ≤ k_ex161664_ ∧
-  k_ex161664_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161665_ ∧ k_ex161665_ ≤ (2 ^ 64 - 1) -/
+/-- Type quantifiers: k_ex161405_ : Nat, k_ex161404_ : Nat, 0 ≤ k_ex161404_ ∧
+  k_ex161404_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161405_ ∧ k_ex161405_ ≤ (2 ^ 64 - 1) -/
 def decode_chain_config (cc : EvmByteSlice) (number : block_number) (timestamp : block_timestamp) : SailM ChainConfig := do
   let number := (number).value
   let timestamp := (timestamp).value

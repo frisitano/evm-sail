@@ -33,10 +33,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -69,7 +69,7 @@ def item_subtree (path : TriePath) (childref : NodeRef) : TrieItem :=
   { path := path,
     value := (SubtreeItem childref) }
 
-/-- Type quantifiers: k_ex161576_ : Nat, 0 ≤ k_ex161576_ ∧ k_ex161576_ ≤ 64 -/
+/-- Type quantifiers: k_ex161316_ : Nat, 0 ≤ k_ex161316_ ∧ k_ex161316_ ≤ 64 -/
 def item_ref (it : TrieItem) (depth : trie_path_len) : SailM NodeRef := do
   let depth := (depth).value
   let suffix := (path_drop it.path ⟨depth⟩)
@@ -107,7 +107,7 @@ def trie_builder_empty (_ : Unit) : TrieBuilder :=
     root := (EmptyRef ()),
     complete := false }
 
-/-- Type quantifiers: k_ex161579_ : Nat, 0 ≤ k_ex161579_ ∧ k_ex161579_ ≤ 63 -/
+/-- Type quantifiers: k_ex161319_ : Nat, 0 ≤ k_ex161319_ ∧ k_ex161319_ ≤ 63 -/
 def trie_builder_push (builder : TrieBuilder) (depth : trie_depth) : TrieBuilder :=
   let depth := (depth).value
   { frames := ((empty_trie_branch_frame ⟨depth⟩) :: builder.frames),
@@ -143,8 +143,8 @@ def trie_builder_pop (builder : TrieBuilder) : SailM (TrieBranchFrame × TrieBui
                     root := builder.root,
                     complete := builder.complete }))
 
-/-- Type quantifiers: k_ex161581_ : Nat, k_ex161580_ : Nat, 0 ≤ k_ex161580_ ∧ k_ex161580_ ≤ 63, 0
-  ≤ k_ex161581_ ∧ k_ex161581_ ≤ 63 -/
+/-- Type quantifiers: k_ex161321_ : Nat, k_ex161320_ : Nat, 0 ≤ k_ex161320_ ∧ k_ex161320_ ≤ 63, 0
+  ≤ k_ex161321_ ∧ k_ex161321_ ≤ 63 -/
 def trie_builder_wrap_branch (anchor : TriePath) (parent_depth : trie_depth) (child_depth : trie_depth) (child : NodeRef) : SailM NodeRef := do
   let parent_depth := (parent_depth).value
   let child_depth := (child_depth).value
@@ -156,7 +156,7 @@ def trie_builder_wrap_branch (anchor : TriePath) (parent_depth : trie_depth) (ch
       let gap : Nat := (child_depth -i child_start)
       (extension_child_ref (path_take (path_drop anchor ⟨child_start⟩) ⟨gap⟩) child))
 
-/-- Type quantifiers: _reclimit : Nat, k_ex161582_ : Nat, 0 ≤ k_ex161582_ ∧ k_ex161582_ ≤ 64, 0
+/-- Type quantifiers: _reclimit : Nat, k_ex161322_ : Nat, 0 ≤ k_ex161322_ ∧ k_ex161322_ ≤ 64, 0
   ≤ _reclimit -/
 def _rec_trie_builder_close (builder : TrieBuilder) (anchor : TriePath) (next_common : (Option trie_depth)) (fuel : trie_path_len) (_reclimit : Nat) : SailM TrieBuilder := do
   let next_common := (Option.map (fun semanticValue => (semanticValue).value) (next_common))

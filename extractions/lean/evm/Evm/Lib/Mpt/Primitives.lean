@@ -31,10 +31,10 @@ open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
+open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
-open JEntry
 open HaltKind
 open FrameStatus
 open Fork
@@ -60,7 +60,7 @@ def to_trie_depth (value : trie_path_len) : SailM trie_depth := do
     else (pure value)
   pure (⟨semanticResult⟩)
 
-/-- Type quantifiers: k_ex161562_ : Nat, 0 ≤ k_ex161562_ ∧ k_ex161562_ ≤ 64 -/
+/-- Type quantifiers: k_ex161302_ : Nat, 0 ≤ k_ex161302_ ∧ k_ex161302_ ≤ 64 -/
 def path_take (path : TriePath) (n : trie_path_len) : TriePath :=
   let n := (n).value
   if ((n == 0) : Bool)
@@ -72,7 +72,7 @@ def path_take (path : TriePath) (n : trie_path_len) : TriePath :=
       (let shift := (256 -i (n *i 4))
       (path_new ((path.data >>> shift) <<< shift) ⟨n⟩)))
 
-/-- Type quantifiers: k_ex161563_ : Nat, 0 ≤ k_ex161563_ ∧ k_ex161563_ ≤ 64 -/
+/-- Type quantifiers: k_ex161303_ : Nat, 0 ≤ k_ex161303_ ∧ k_ex161303_ ≤ 64 -/
 def path_drop (path : TriePath) (n : trie_path_len) : TriePath :=
   let n := (n).value
   let length := ((path_len path)).value
@@ -98,7 +98,7 @@ def path_prefix_of (evm_prefix' : TriePath) (path : TriePath) : Bool :=
   then false
   else (path_eq evm_prefix' (path_take path ⟨((path_len evm_prefix')).value⟩))
 
-/-- Type quantifiers: k_ex161564_ : Nat, 0 ≤ k_ex161564_ ∧ k_ex161564_ ≤ 64 -/
+/-- Type quantifiers: k_ex161304_ : Nat, 0 ≤ k_ex161304_ ∧ k_ex161304_ ≤ 64 -/
 def common_prefix_from (a : TriePath) (b : TriePath) (start : trie_path_len) : SailM trie_path_len := do
   let start := (start).value
   let semanticResult ← do
@@ -145,7 +145,7 @@ def common_prefix_from (a : TriePath) (b : TriePath) (start : trie_path_len) : S
     (pure count)
   pure (⟨semanticResult⟩)
 
-/-- Type quantifiers: _reclimit : Nat, k_ex161565_ : Nat, 0 ≤ k_ex161565_ ∧ k_ex161565_ ≤ 65, 0
+/-- Type quantifiers: _reclimit : Nat, k_ex161305_ : Nat, 0 ≤ k_ex161305_ ∧ k_ex161305_ ≤ 65, 0
   ≤ _reclimit -/
 def _rec_hex_prefix_pairs (path : TriePath) (index : hex_prefix_cursor) (_reclimit : Nat) : SailM (List byte) := do
   let index := (index).value
@@ -174,7 +174,7 @@ def hex_prefix_pairs (path : TriePath) (index : hex_prefix_cursor) : SailM (List
   then throw Error.Exit
   else (_rec_hex_prefix_pairs path ⟨index⟩ (_measure + 1))
 
-/-- Type quantifiers: k_ex161569_ : Bool -/
+/-- Type quantifiers: k_ex161309_ : Bool -/
 def hex_prefix_compact (path : TriePath) (is_leaf : Bool) : SailM ((List byte) × byte_length) := do
   let odd := ((Int.tmod ((path_len path)).value 2) == 1)
   let flag : (BitVec 4) :=

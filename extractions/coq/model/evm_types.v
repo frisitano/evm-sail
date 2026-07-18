@@ -2181,100 +2181,37 @@ Instance dummy_AcctEntry : Inhabited (AcctEntry) := {
 |} }.
 
 
-Definition JournalCheckpoint : Type := protocol_quantity.
+Inductive StateCheckpoint_typ :=
+| StateCheckpoint : protocol_quantity -> StateCheckpoint_typ.
+Arguments StateCheckpoint_typ : clear implicits.
 
-Definition AccountCheckpoint : Type := protocol_quantity.
-
-Definition StorageCheckpoint : Type := protocol_quantity.
-
-Definition LogCheckpoint : Type := protocol_quantity.
-
-Record StateCheckpoint := {
-  StateCheckpoint_journal : JournalCheckpoint;
-  StateCheckpoint_accounts : AccountCheckpoint;
-  StateCheckpoint_storage : StorageCheckpoint;
-  StateCheckpoint_logs : LogCheckpoint;
-}.
-Arguments StateCheckpoint : clear implicits.
-#[export]
-Instance Decidable_eq_StateCheckpoint : EqDecision StateCheckpoint.
-   intros [x0 x1 x2 x3].
-   intros [y0 y1 y2 y3].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-  cmp_record_field x2 y2.
-  cmp_record_field x3 y3.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_StateCheckpoint : Countable StateCheckpoint.
-refine {|
-  encode x := encode (StateCheckpoint_journal x, StateCheckpoint_accounts x, StateCheckpoint_storage x, StateCheckpoint_logs x);
-  decode x := '(x0, x1, x2, x3) ← decode x;
-              mret (Build_StateCheckpoint x0 x1 x2 x3)
-|}.
-abstract (
-  intros [x0 x1 x2 x3];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'StateCheckpoint_journal' := e ]}" :=
-  match r with Build_StateCheckpoint _ (_ as f1) (_ as f2) (_ as f3) =>
-    Build_StateCheckpoint e f1 f2 f3 end (at level 1).
-Notation "{[ r 'with' 'StateCheckpoint_accounts' := e ]}" :=
-  match r with Build_StateCheckpoint (_ as f0) _ (_ as f2) (_ as f3) =>
-    Build_StateCheckpoint f0 e f2 f3 end (at level 1).
-Notation "{[ r 'with' 'StateCheckpoint_storage' := e ]}" :=
-  match r with Build_StateCheckpoint (_ as f0) (_ as f1) _ (_ as f3) =>
-    Build_StateCheckpoint f0 f1 e f3 end (at level 1).
-Notation "{[ r 'with' 'StateCheckpoint_logs' := e ]}" :=
-  match r with Build_StateCheckpoint (_ as f0) (_ as f1) (_ as f2) _ =>
-    Build_StateCheckpoint f0 f1 f2 e end (at level 1).
-#[export]
-Instance dummy_StateCheckpoint : Inhabited (StateCheckpoint) := {
-  inhabitant := {|
-    StateCheckpoint_journal := inhabitant;
-    StateCheckpoint_accounts := inhabitant;
-    StateCheckpoint_storage := inhabitant;
-    StateCheckpoint_logs := inhabitant
-|} }.
-
-
-Inductive JEntry :=
-| JTran : (address_typ * word * word) -> JEntry
-| JWarmA : address_typ -> JEntry
-| JWarmS : (address_typ * word) -> JEntry.
-Arguments JEntry : clear implicits.
-
-Definition sail_JEntry_encode (x : JEntry) := match x with
-  | JTran x' => encode (0, encode x')
-  | JWarmA x' => encode (1, encode x')
-  | JWarmS x' => encode (2, encode x') end.
-Definition sail_JEntry_decode x : option JEntry := match decode x with
-  | Some (0, x') => JTran <$> decode x'
-  | Some (1, x') => JWarmA <$> decode x'
-  | Some (2, x') => JWarmS <$> decode x'
+Definition sail_StateCheckpoint_typ_encode (x : StateCheckpoint_typ) := match x with
+  | StateCheckpoint x' => encode (0, encode x') end.
+Definition sail_StateCheckpoint_typ_decode x : option StateCheckpoint_typ := match decode x with
+  | Some (0, x') => StateCheckpoint <$> decode x'
   | _ => None end.
-Lemma sail_JEntry_decode_encode : forall (x : JEntry), sail_JEntry_decode (sail_JEntry_encode x)
-   = Some x.
+Lemma sail_StateCheckpoint_typ_decode_encode : forall (x : StateCheckpoint_typ),
+  sail_StateCheckpoint_typ_decode (sail_StateCheckpoint_typ_encode x)  = Some x.
 Proof.
-  unfold sail_JEntry_decode, sail_JEntry_encode;
-  intros [x|x|x]; rewrite !decode_encode; reflexivity.
+  unfold sail_StateCheckpoint_typ_decode, sail_StateCheckpoint_typ_encode;
+  intros [x]; rewrite !decode_encode; reflexivity.
 Qed.
 
 #[export]
-Instance Decidable_eq_JEntry : EqDecision JEntry := decode_encode_eq_dec sail_JEntry_encode
-  sail_JEntry_decode sail_JEntry_decode_encode .
+Instance Decidable_eq_StateCheckpoint_typ : EqDecision StateCheckpoint_typ := decode_encode_eq_dec
+  sail_StateCheckpoint_typ_encode sail_StateCheckpoint_typ_decode
+  sail_StateCheckpoint_typ_decode_encode .
 
 #[export]
-Instance Countable_JEntry : Countable JEntry := {|
-  encode := sail_JEntry_encode;
-  decode := sail_JEntry_decode;
-  decode_encode := sail_JEntry_decode_encode
+Instance Countable_StateCheckpoint_typ : Countable StateCheckpoint_typ := {|
+  encode := sail_StateCheckpoint_typ_encode;
+  decode := sail_StateCheckpoint_typ_decode;
+  decode_encode := sail_StateCheckpoint_typ_decode_encode
 |}.
 #[export]
-Instance dummy_JEntry : Inhabited (JEntry) := { inhabitant := JTran inhabitant }.
+Instance dummy_StateCheckpoint_typ : Inhabited (StateCheckpoint_typ) := {
+  inhabitant := StateCheckpoint inhabitant
+}.
 
 Inductive TxType := LegacyTx | AccessListTx | FeeMarketTx | BlobTx | SetCodeTx.
 Definition num_of_TxType (arg_ : TxType) : Z :=
@@ -3368,7 +3305,7 @@ Instance dummy_Message : Inhabited (Message) := {
 
 
 Record FrameCheckpoint := {
-  FrameCheckpoint_state : StateCheckpoint;
+  FrameCheckpoint_state : StateCheckpoint_typ;
   FrameCheckpoint_pc : code_pointer;
   FrameCheckpoint_gas_remaining : gas;
   FrameCheckpoint_refund : gas_refund;

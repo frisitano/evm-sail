@@ -4,10 +4,10 @@
 The host-side mutable state stores, as bodyless axioms: transient storage
 (EIP-1153), the two-layer account and storage overlays (transaction over
 block), the EIP-7928 block-access-list recorder, the EIP-2929 warm sets,
-the log store, and the journal. Sail owns all semantics — checkpointing,
-revert order, and merge discipline; the implementation behind the host
-interface (`ffi/state_db.c`, `ffi/kernel_state.c`) owns only the
-containers.
+and the log store. A single semantic checkpoint atomically captures every
+frame-revertible component. Its implementation may use cursors, snapshots,
+or an undo journal, but those representation choices are unobservable to the
+model.
 
 !!! note "Non-normative"
     This page documents the model's host interface — internal contracts
@@ -16,11 +16,20 @@ containers.
 
 /*! Clears all transient storage (EIP-1153); part of the per-transaction reset. */
 val transient_reset = impure { c: "transient_storage_reset" } : unit -> unit
-/*! Writes a transient storage slot — the raw store behind `TSTORE`
-    (journaling for frame revert happens in the kernel). */
+/*! Writes a transient storage slot and includes the mutation in the current
+    semantic checkpoint history. */
 val transient_store = impure { c: "transient_storage_write" } : (address, word, word) -> unit
 /*! Reads a transient storage slot; zero when never written (`TLOAD`). */
 val transient_load = impure { c: "transient_storage_read" } : (address, word) -> word
+
+/*! Clears the host's checkpoint handles and private rollback history at a
+    transaction boundary. */
+val state_checkpoint_reset = impure { c: "host_state_checkpoint_reset" } : unit -> unit
+/*! Captures the complete frame-revertible transaction state: account and
+    storage updates, transient storage, warm sets, and logs. */
+val state_checkpoint = impure { c: "host_state_checkpoint" } : unit -> StateCheckpoint
+/*! Restores exactly the semantic state denoted by `checkpoint`. */
+val state_revert = impure { c: "host_state_revert" } : StateCheckpoint -> unit
 
 /*! Inserts or overwrites a row in the transaction-layer storage overlay
     (the raw store behind `SSTORE`). */
@@ -31,12 +40,6 @@ val storage_tx_get = impure { c: "storage_tx_get" } : StorageKey -> option(Stora
 /*! Removes and returns one row of the transaction-layer overlay, or
     `None` when it is empty; the drain loop of the transaction-end merge. */
 val storage_tx_pop = impure { c: "storage_tx_pop" } : unit -> option(StorageEntry)
-/*! A token capturing the current extent of the transaction-layer
-    storage overlay, taken at every frame boundary. */
-val storage_tx_checkpoint = impure { c: "storage_tx_checkpoint" } : unit -> StorageCheckpoint
-/*! Truncates the transaction-layer storage overlay back to a
-    checkpoint, discarding rows written since it was taken. */
-val storage_tx_revert = impure { c: "storage_tx_revert" } : StorageCheckpoint -> unit
 /*! Drops every transaction-layer storage row of an address — the
     storage side of an account collapsing to empty or clearing its storage. */
 val storage_tx_clear = impure { c: "storage_tx_clear" } : address -> unit
@@ -85,12 +88,6 @@ val acct_tx_set_code_hash = impure { c: "acct_tx_set_code_hash" } : (address, ha
     lowest address, or `None` when the layer is empty; gives the
     transaction-end merge its deterministic order. */
 val acct_tx_pop_ascending = impure { c: "acct_tx_pop_ascending" } : unit -> option(AcctEntry)
-/*! A token capturing the current extent of the transaction-layer
-    account overlay, taken at every frame boundary. */
-val acct_tx_checkpoint = impure { c: "acct_tx_checkpoint" } : unit -> AccountCheckpoint
-/*! Truncates the transaction-layer account overlay back to a
-    checkpoint. */
-val acct_tx_revert = impure { c: "acct_tx_revert" } : AccountCheckpoint -> unit
 /*! Empties the transaction-layer account overlay (per-transaction
     reset). */
 val acct_tx_reset = impure { c: "acct_tx_reset" } : unit -> unit
@@ -183,14 +180,9 @@ val warm_reset = impure { c: "warm_reset" } : unit -> unit
 /*! Adds the address to the warm set and returns its prior membership —
     the EIP-2929 cold/warm discriminator. */
 val warm_addr_touch = impure { c: "warm_addr_touch" } : address -> bool
-/*! Removes the address from the warm set; the journal's undo for a
-    reverted first touch. */
-val warm_addr_remove = impure { c: "warm_addr_remove" } : address -> unit
 /*! Adds `(address, slot)` to the warm slot set and returns its prior
     membership. */
 val warm_slot_touch = impure { c: "warm_slot_touch" } : (address, word) -> bool
-/*! Removes `(address, slot)` from the warm slot set (journal undo). */
-val warm_slot_remove = impure { c: "warm_slot_remove" } : (address, word) -> unit
 
 /* the per-transaction log store */
 /*! Clears the transaction's log series (per-transaction reset). */
@@ -198,24 +190,6 @@ val logs_tx_reset = impure { c: "logs_tx_reset" } : unit -> unit
 /*! Appends a log record — emitter address, topics, data — to the
     transaction's series (YP §4.4.1). */
 val log_append = impure { c: "log_append_record" } : (address, list(word), Bytes) -> unit
-/*! A token capturing the current length of the log series, taken at
-    every frame boundary. */
-val logs_checkpoint = impure { c: "logs_checkpoint" } : unit -> LogCheckpoint
-/*! Truncates the log series back to a checkpoint, so logs of reverted
-    frames never surface. */
-val logs_revert = impure { c: "logs_revert" } : LogCheckpoint -> unit
 /*! The transaction's complete log series in emission order (receipt
     construction). */
 val read_logs = impure { c: "logs_read_all" } : unit -> list(LogEntry)
-
-/* the undo journal */
-/*! Empties the undo journal (per-transaction reset). */
-val journal_reset = impure { c: "journal_reset" } : unit -> unit
-/*! The journal length, used as the frame checkpoint token. */
-val journal_len = impure { c: "journal_len" } : unit -> JournalCheckpoint
-/*! Pushes an undo entry recording a prior value before an in-place
-    mutation. */
-val journal_push = impure { c: "journal_push" } : JEntry -> unit
-/*! Pops the most recent undo entry; [k_revert][] replays entries
-    backward to the checkpointed length. */
-val journal_pop = impure { c: "journal_pop" } : unit -> JEntry

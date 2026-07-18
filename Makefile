@@ -87,16 +87,32 @@ eest-smoke:
 check-contracts:
 	@for f in $(SAIL_CONTRACTS); do $(SAIL) "$$f"; done
 	test -s $(EXTERN_CONTRACT)
+	test -s $(LEAN_HOST_AXIOMS)
 	grep -q "Record InputOracle" $(EXTERN_CONTRACT)
 	grep -q "Record OutputTraceContract" $(EXTERN_CONTRACT)
 	grep -q "Record CryptoContract" $(EXTERN_CONTRACT)
 	grep -q "Record MemoryStackContract" $(EXTERN_CONTRACT)
+	grep -q "Record PersistentWorld" $(EXTERN_CONTRACT)
+	grep -q "Record TransactionSnapshot" $(EXTERN_CONTRACT)
+	grep -q "Definition reference_read_storage_original" $(EXTERN_CONTRACT)
+	grep -q "Definition world_delta_describes" $(EXTERN_CONTRACT)
 	grep -q "Record WorldStateContract" $(EXTERN_CONTRACT)
+	grep -q "world_checkpoint_denotes" $(EXTERN_CONTRACT)
+	grep -q "Definition reference_world_state_contract" $(EXTERN_CONTRACT)
+	grep -q "Definition world_state_boundary" $(EXTERN_CONTRACT)
 	grep -q "Record WitnessDbContract" $(EXTERN_CONTRACT)
 	grep -q "Record GuestExternContract" $(EXTERN_CONTRACT)
+	grep -q "^structure PersistentWorld where" $(LEAN_HOST_AXIOMS)
+	grep -q "^structure TransactionSnapshot where" $(LEAN_HOST_AXIOMS)
+	grep -q "^def referenceReadStorageOriginal" $(LEAN_HOST_AXIOMS)
+	grep -q "^def worldDeltaDescribes" $(LEAN_HOST_AXIOMS)
+	grep -q "checkpointDenotes" $(LEAN_HOST_AXIOMS)
+	grep -q "^def referenceWorldStateContract" $(LEAN_HOST_AXIOMS)
+	grep -q "^def worldStateBoundary" $(LEAN_HOST_AXIOMS)
 
 extract-coq: check-contracts
 	mkdir -p $(COQ_CONTRACTS_DIR) $(COQ_MODEL_DIR)
+	$(COQC) -q -noglob -o $(abspath $(COQ_CONTRACTS_DIR))/ExternBoundary.vo $(EXTERN_CONTRACT)
 	$(SAIL) --coq --coq-output-dir $(COQ_CONTRACTS_DIR) -o schema_prefix $(CONTRACTS_DIR)/schema_prefix.sail
 	$(SAIL) --coq --coq-output-dir $(COQ_CONTRACTS_DIR) -o io_contracts $(CONTRACTS_DIR)/io_contracts.sail
 	$(SAIL) --coq $(COQ_SEMANTIC_FLAGS) --coq-output-dir $(COQ_MODEL_DIR) -o evm $(MODEL)
@@ -141,6 +157,8 @@ extract-lean:
 	grep -R -q "^def trie_root " $(LEAN_MODEL_DIR)/Evm
 	grep -R -q "^def decode_stateless_input_ref " $(LEAN_MODEL_DIR)/Evm
 	grep -q "^def main " $(LEAN_MODEL_DIR)/Evm.lean
+	grep -q "^def referenceWorldStateContract" $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
+	grep -q "^def worldStateBoundary" $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
 	! grep -R -E -q "noncomputable (section|def)|^[[:space:]]*partial def" $(LEAN_MODEL_DIR)/Evm $(LEAN_MODEL_DIR)/Evm.lean
 	cd $(LEAN_MODEL_DIR) && { test -f lake-manifest.json || $(LAKE) update; }
 	cd $(LEAN_MODEL_DIR) && $(LAKE) build
