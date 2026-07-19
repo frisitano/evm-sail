@@ -15,6 +15,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -22,7 +23,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -34,6 +37,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -42,17 +46,17 @@ open Bytes
 open ByteSource
 open BlockError
 
-/-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
+/- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
   if ((len ≤b (Sail.BitVec.length v)) : Bool)
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
-/-- Type quantifiers: n : Nat, n ≥ 0 -/
+/- Type quantifiers: n : Nat, n ≥ 0 -/
 def sail_ones (n : Nat) : (BitVec n) :=
   (Complement.complement (BitVec.zero n))
 
-/-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
+/- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if ((l ≥b n) : Bool)
   then ((sail_ones n) <<< i)
@@ -60,7 +64,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
     (let one : (BitVec n) := (sail_mask n (1#1 : (BitVec 1)))
     (((one <<< l) - one) <<< i))
 
-/-- Type quantifiers: n : Nat, n > 0 -/
+/- Type quantifiers: n : Nat, n > 0 -/
 def to_bytes_le {n : _} (b : (BitVec (8 * n))) : (Vector (BitVec 8) n) := Id.run do
   let res := (vectorInit (BitVec.zero 8))
   let loop_i_lower := 0
@@ -71,7 +75,7 @@ def to_bytes_le {n : _} (b : (BitVec (8 * n))) : (Vector (BitVec 8) n) := Id.run
     loop_vars := (vectorUpdate res i (Sail.BitVec.extractLsb b ((8 *i i) + 7) (8 *i i)))
   (pure loop_vars)
 
-/-- Type quantifiers: n : Nat, n > 0 -/
+/- Type quantifiers: n : Nat, n > 0 -/
 def from_bytes_le {n : _} (v : (Vector (BitVec 8) n)) : (BitVec (8 * n)) := Id.run do
   let res := (BitVec.zero (8 *i n))
   let loop_i_lower := 0

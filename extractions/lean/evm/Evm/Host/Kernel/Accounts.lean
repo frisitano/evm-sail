@@ -21,6 +21,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -28,7 +29,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -40,6 +43,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -48,72 +52,103 @@ open Bytes
 open ByteSource
 open BlockError
 
-def account_info_changed (c : AccountInfo) (o : AccountInfo) : Bool :=
-  (((c.nonce).value != (o.nonce).value) || ((c.balance != o.balance) || ((c.code_hash != o.code_hash) || (c.storage_root != o.storage_root))))
+/-! # State: accounts
 
+Account reads and mutations over the two-layer overlay (transaction over
+block) with the witness as base, plus the EIP-161/EIP-684 predicates and
+value transfer. -/
+
+/-- Field-wise inequality of account tuples. -/
+def account_info_changed (c : AccountInfo) (o : AccountInfo) : Bool :=
+  (((c.nonce).value != (o.nonce).value) || ((bne c.balance o.balance) || ((bne c.code_hash
+          o.code_hash) || (bne c.storage_root o.storage_root))))
+
+/-- The EIP-161 emptiness test: no code, zero nonce, zero balance. -/
 def account_info_empty (info : AccountInfo) : Bool :=
   ((info.code_hash == KECCAK_EMPTY) && ((((info.nonce).value == 0) && (word_is_zero info.balance)) : Bool))
 
+/-- Whether an account differs from its original in any
+trie-observable way. -/
 def account_changed (c : Account) (o : Account) : Bool :=
   ((account_info_changed c.info o.info) || ((neq_bool c.present o.present) || (neq_bool
         c.storage_cleared o.storage_cleared)))
 
+/-- Installs a new tuple, collapsing to the non-existent form when it is
+EIP-161-empty. -/
 def account_set_info (acc : Account) (info : AccountInfo) : Account :=
   if ((account_info_empty info) : Bool)
   then
     { acc with info := { EMPTY_ACCOUNT_INFO with storage_root := acc.info.storage_root }, present := false, storage_cleared := true }
   else { acc with info := info, present := true }
 
+/-- Marks the account's storage cleared (fresh storage generation). -/
 def account_clear_storage (acc : Account) : Account :=
   { acc with storage_cleared := true }
 
+/-- The deleted form of an account: empty tuple, non-existent, storage
+cleared. -/
 def account_delete (acc : Account) : Account :=
   { acc with info := { EMPTY_ACCOUNT_INFO with storage_root := acc.info.storage_root }, present := false, storage_cleared := true }
 
+/-- Writes a whole-account row to the transaction overlay. -/
 def store_account (a : address) (v : Account) : SailM Unit := do
   (acct_tx_update a v)
 
+/-- Applies a tuple change with minimal overlay traffic: scalar-field
+fast paths when existence/storage state is unchanged, and a storage
+clear when the tuple collapses to empty. -/
 def store_account_info (a : address) (acc : Account) (info : AccountInfo) : SailM Unit := do
   if ((account_info_empty info) : Bool)
   then (storage_tx_clear a)
   else (pure ())
   let next := (account_set_info acc info)
-  if (((next.info.storage_root != acc.info.storage_root) || ((neq_bool next.present acc.present) || (neq_bool
+  if (((bne next.info.storage_root acc.info.storage_root) || ((neq_bool next.present acc.present) || (neq_bool
            next.storage_cleared acc.storage_cleared))) : Bool)
   then (store_account a next)
   else
     (do
-      if ((next.info.balance != acc.info.balance) : Bool)
+      if ((bne next.info.balance acc.info.balance) : Bool)
       then (acct_tx_set_balance a next.info.balance)
       else (pure ())
       if (((next.info.nonce).value != (acc.info.nonce).value) : Bool)
       then (acct_tx_set_nonce a ⟨(next.info.nonce).value⟩)
       else (pure ())
-      if ((next.info.code_hash != acc.info.code_hash) : Bool)
+      if ((bne next.info.code_hash acc.info.code_hash) : Bool)
       then (acct_tx_set_code_hash a next.info.code_hash)
       else (pure ()))
 
+/-- The account balance (`BALANCE`, `SELFBALANCE`). -/
 def k_get_balance (a : address) : SailM word := do
   (pure (← (k_aload a)).info.balance)
 
+/-- The account nonce. -/
 def k_get_nonce (a : address) : SailM account_nonce := do
   let semanticResult ← do (pure ((← (k_aload a)).info.nonce).value)
   pure (⟨semanticResult⟩)
 
+/-- Whether the account exists (post-EIP-161 sense). -/
 def k_account_exists (a : address) : SailM Bool := do
   (pure (← (k_aload a)).present)
 
+/-- The EIP-161 "empty" test on the live account: zero nonce, zero
+balance, no code. -/
 def k_account_is_empty (a : address) : SailM Bool := do
   (pure (account_info_empty (← (k_aload a)).info))
 
+/-- The `CREATE`/`CREATE2`/create-transaction address-collision test
+(EIP-684/EIP-7610): the target is occupied if it has code, a nonzero
+nonce, or any storage. -/
 def k_account_occupied (a : address) : SailM Bool := do
   let acc ← do (k_aload a)
   let info := acc.info
-  let anchored_storage := ((! acc.storage_cleared) && (info.storage_root != EMPTY_TRIE_ROOT))
-  if (((info.code_hash != KECCAK_EMPTY) || ((((info.nonce).value != 0) || anchored_storage) : Bool)) : Bool)
+  let anchored_storage := ((! acc.storage_cleared) && (bne info.storage_root EMPTY_TRIE_ROOT))
+  if (((bne info.code_hash KECCAK_EMPTY) || ((((info.nonce).value != 0) || anchored_storage) : Bool)) : Bool)
   then (pure true)
   else (storage_has_writes a)
 
+/-- Moves `v` wei from `src` to `dst` (both updates recorded for frame
+rollback; the EVM checks sufficiency before calling) and emits the
+EIP-7708 transfer log. -/
 def k_transfer (src : address) (dst : address) (v : word) : SailM Unit := do
   let src_acc ← do (k_aload src)
   let dst_acc ← do (k_aload dst)
@@ -127,6 +162,8 @@ def k_transfer (src : address) (dst : address) (v : word) : SailM Unit := do
         { dst_acc.info with balance := (alu_add dst_acc.info.balance v) })
       (k_emit_transfer_log src dst v))
 
+/-- Increments the account nonce. The `u64` increment cannot wrap:
+EIP-2681 guards every path that reaches a bump. -/
 def k_bump_nonce (a : address) : SailM Unit := do
   let cur ← do (k_aload a)
   (store_account_info a cur
@@ -136,18 +173,21 @@ def k_bump_nonce (a : address) : SailM Unit := do
             pure ((semanticResult).value))
         pure (⟨semanticField⟩) })
 
+/-- Credits `v` wei (no-op when zero). -/
 def k_add_balance (a : address) (v : word) : SailM Unit := do
   let cur ← do (k_aload a)
   if ((! (word_is_zero v)) : Bool)
   then (store_account_info a cur { cur.info with balance := (alu_add cur.info.balance v) })
   else (pure ())
 
+/-- Debits `v` wei (no-op when zero; caller guarantees sufficiency). -/
 def k_sub_balance (a : address) (v : word) : SailM Unit := do
   let cur ← do (k_aload a)
   if ((! (word_is_zero v)) : Bool)
   then (store_account_info a cur { cur.info with balance := (alu_sub cur.info.balance v) })
   else (pure ())
 
+/-- Clears the account's storage (create-time collision cleanup). -/
 def k_clear_storage (a : address) : SailM Unit := do
   let cur ← do (k_aload a)
   (storage_tx_clear a)

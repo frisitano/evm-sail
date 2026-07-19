@@ -13,7 +13,7 @@ function k_code_key(a : address) -> hash = k_aload(a).info.code_hash
 function k_get_codehash(a : address) -> hash = {
     let acc = k_aload(a);
     if not_bool(acc.present) then {
-        WORD_ZERO
+        ZERO_HASH
     } else {
         acc.info.code_hash
     }
@@ -32,9 +32,9 @@ function delegation_jumpdest_chunk(target : address) -> JumpdestChunk = {
     let w = address_to_word(target);
     var bits = EMPTY_JUMPDEST_CHUNK;
     foreach (k from 0 to 19) {
-        let b = sail_shiftright(w, 8 * (19 - k))[7 .. 0];
+        let b = word_low_byte(word_shift_right_limb(w, get_slice_int(64, 8 * (19 - k), 0)));
         if b == 0x5b then {
-            bits = or_vec(bits, sail_shiftleft(WORD_ONE, 3 + k))
+            bits = or_vec(bits, sail_shiftleft(sail_zero_extend(0x01, 256), 3 + k))
         }
     };
     bits
@@ -67,7 +67,7 @@ function addr_bytes(a : address) -> list(byte) = {
     let w = address_to_word(a);
     var out : list(byte) = [||];
     foreach (k from 0 to 19) {
-        out = sail_shiftright(w, 8 * k)[7 .. 0] :: out
+        out = word_low_byte(word_shift_right_limb(w, get_slice_int(64, 8 * k, 0))) :: out
     };
     out
 }
@@ -79,8 +79,8 @@ function delegation_code(a : address) -> list(byte) = 0xef :: 0x01 :: 0x00 :: ad
     false when the code is not a designator. */
 function k_deleg_target(a : address) -> (bool, address) = {
     let h : hash = k_code_key(a);
-    let r : bits(168) = code_db_read_delegation(h);
-    (r[160] == bitone, r[159 .. 0])
+    let r : AddressResult = code_db_read_delegation(h);
+    (r.success, r.address)
 }
 
 /*! `EXTCODESIZE`: the account's code length in bytes. */

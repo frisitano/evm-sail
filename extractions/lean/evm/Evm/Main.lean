@@ -20,6 +20,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -27,7 +28,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -39,6 +42,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -47,6 +51,16 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # The guest entry point
+
+The zkVM guest's `main`: decode the stateless input, verify the payload,
+and emit the public validation result. Any thrown `InvalidBlock` — even
+during input decoding — resolves to an invalid verdict rather than a
+crash: validation of an undecodable input is simply unsuccessful. -/
+
+/-- Decodes, verifies, and reports: `write_validation_result` on a
+decodable input (valid or not), `write_invalid_result` when decoding
+itself fails. -/
 def sail_main (_ : Unit) : SailM Unit := do
   let _ : Unit := (validation_debug_reset ())
   let _ : Unit := (cycle_scope_start SCOPE_STATELESS_VALIDATION)

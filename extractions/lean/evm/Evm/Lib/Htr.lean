@@ -24,6 +24,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -31,7 +32,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -43,6 +46,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -50,6 +54,13 @@ open CallKind
 open Bytes
 open ByteSource
 open BlockError
+
+/-! # SSZ hash_tree_root
+
+Consensus-layer merkleization (SHA-256). Variable SSZ lists are consumed
+in source order: each real leaf is folded into a Merkle frontier exactly
+once, and final zero padding is then folded one level at a time. No leaf
+list or zero-hash lookup table is materialized. -/
 
 def EMPTY_MERKLE_ACCUMULATOR : MerkleAccumulator :=
   { frontier := [],
@@ -87,7 +98,10 @@ def HTR_CONSOLIDATION_REQUEST_LENGTH : byte_length := (ByteQuantity 116)
 
 def HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY : source_pointer := (ByteQuantity 68)
 
-/-- Type quantifiers: k_ex161614_ : Nat, 0 ≤ k_ex161614_ ∧ k_ex161614_ ≤ (2 ^ 64 - 1) -/
+/-- Adds leaf number `count` to a low-to-high frontier. A set bit in
+`count` has one occupied slot at that level; carries consume those
+slots head-first. -/
+/- Type quantifiers: k_ex161662_ : Nat, 0 ≤ k_ex161662_ ∧ k_ex161662_ ≤ (2 ^ 64 - 1) -/
 def merkle_push (frontier : (List MerkleSlot)) (count : item_count) (leaf : hash) : SailM (List MerkleSlot) := do
   let count := (count).value
   if (((Int.tmod count 2) == 0) : Bool)
@@ -105,8 +119,9 @@ def merkle_push (frontier : (List MerkleSlot)) (count : item_count) (leaf : hash
       | (.EmptyMerkleSlot () :: _) => sailThrow ((InvalidBlock WitnessDeficient))
       | [] => sailThrow ((InvalidBlock WitnessDeficient)))
 
+/-- Adds one leaf to a streaming Merkle accumulator. -/
 def merkle_accumulator_push (accumulator : MerkleAccumulator) (leaf : hash) : SailM MerkleAccumulator := do
-  if (((accumulator.count).value <b ((2 ^i 64) -i 1)) : Bool)
+  if (((accumulator.count).value <b (BYTE_QUANTITY_MAX).value) : Bool)
   then
     (pure { frontier := ← (merkle_push accumulator.frontier ⟨(accumulator.count).value⟩ leaf),
             count := ← do
@@ -116,8 +131,10 @@ def merkle_accumulator_push (accumulator : MerkleAccumulator) (leaf : hash) : Sa
                 pure (⟨semanticField⟩) })
   else sailThrow ((InvalidBlock WitnessDeficient))
 
-/-- Type quantifiers: _reclimit : Nat, k_ex161616_ : Nat, k_ex161615_ : Nat, 0 ≤ k_ex161615_ ∧
-  k_ex161615_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161616_ ∧ k_ex161616_ ≤ 64, 0 ≤ _reclimit -/
+/-- Completes a frontier with zero subtrees through `remaining` levels and
+returns its Merkle root. -/
+/- Type quantifiers: _reclimit : Nat, k_ex161664_ : Nat, k_ex161663_ : Nat, 0 ≤ k_ex161663_ ∧
+  k_ex161663_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161664_ ∧ k_ex161664_ ≤ 64, 0 ≤ _reclimit -/
 def _rec_merkle_root_levels (slots : (List MerkleSlot)) (n : item_count) (zero : hash) (acc : hash) (remaining : merkle_depth) (_reclimit : Nat) : SailM hash := do
   let n := (n).value
   let remaining := (remaining).value
@@ -167,7 +184,9 @@ def _rec_merkle_root_levels (slots : (List MerkleSlot)) (n : item_count) (zero :
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
-/-- Type quantifiers: remaining : Nat, n : Nat, 0 ≤ n ∧ n ≤ (2 ^ 64 - 1), 0 ≤ remaining ∧
+/-- Completes a frontier with zero subtrees through `remaining` levels and
+returns its Merkle root. -/
+/- Type quantifiers: remaining : Nat, n : Nat, 0 ≤ n ∧ n ≤ (2 ^ 64 - 1), 0 ≤ remaining ∧
   remaining ≤ 64 -/
 def merkle_root_levels (slots : (List MerkleSlot)) (n : item_count) (zero : hash) (acc : hash) (remaining : merkle_depth) : SailM hash := do
   let n := (n).value
@@ -177,61 +196,74 @@ def merkle_root_levels (slots : (List MerkleSlot)) (n : item_count) (zero : hash
   then throw Error.Exit
   else (_rec_merkle_root_levels slots ⟨n⟩ zero acc ⟨remaining⟩ (_measure + 1))
 
-/-- Type quantifiers: k_ex161621_ : Nat, 0 ≤ k_ex161621_ ∧ k_ex161621_ ≤ 64 -/
+/- Type quantifiers: k_ex161669_ : Nat, 0 ≤ k_ex161669_ ∧ k_ex161669_ ≤ 64 -/
 def merkle_accumulator_root (accumulator : MerkleAccumulator) (depth : merkle_depth) : SailM hash := do
   let depth := (depth).value
-  (merkle_root_levels accumulator.frontier ⟨(accumulator.count).value⟩ (BitVec.zero 256)
-    (BitVec.zero 256) ⟨depth⟩)
+  (merkle_root_levels accumulator.frontier ⟨(accumulator.count).value⟩ ZERO_HASH ZERO_HASH
+    ⟨depth⟩)
 
+/-- Folds a leaf list into an existing Merkle accumulator in source order. -/
 def merkle_accumulate (leaves : (List hash)) (accumulator : MerkleAccumulator) : SailM MerkleAccumulator := do
   match leaves with
   | [] => (pure accumulator)
   | (leaf :: rest) => (merkle_accumulate rest (← (merkle_accumulator_push accumulator leaf)))
 
-/-- Type quantifiers: k_ex161622_ : Nat, 0 ≤ k_ex161622_ ∧ k_ex161622_ ≤ 64 -/
+/-- `merkleize` of a fixed leaf list at `depth` (SSZ spec). -/
+/- Type quantifiers: k_ex161670_ : Nat, 0 ≤ k_ex161670_ ∧ k_ex161670_ ≤ 64 -/
 def merkleize (leaves : (List hash)) (depth : merkle_depth) : SailM hash := do
   let depth := (depth).value
   (merkle_accumulator_root (← (merkle_accumulate leaves EMPTY_MERKLE_ACCUMULATOR)) ⟨depth⟩)
 
-/-- Type quantifiers: v : Nat, 0 ≤ v ∧ v ≤ (2 ^ 64 - 1) -/
+/-- Encodes a protocol quantity as an SSZ little-endian basic-value chunk. -/
+/- Type quantifiers: v : Nat, 0 ≤ v ∧ v ≤ (2 ^ 64 - 1) -/
 def htr_uint (v : protocol_quantity) : SailM hash := do
   let v := (v).value
-  let value ← do (word_of_nat v)
+  let value ← do (pure (word_to_bits (← (word_of_protocol_quantity ⟨v⟩))))
   let acc : (BitVec 256) := (BitVec.zero 256)
-  let loop_k_lower := 0
-  let loop_k_upper := 7
-  let mut loop_vars := acc
-  for k in [loop_k_lower:loop_k_upper:1]i do
-    let acc := loop_vars
-    loop_vars :=
-      let byte := (Sail.BitVec.extractLsb (value >>> (8 *i k)) 7 0)
-      (acc ||| ((Sail.BitVec.zeroExtend byte 256) <<< (8 *i (31 -i k))))
-  (pure loop_vars)
+  let acc ← (( do
+    let loop_k_lower := 0
+    let loop_k_upper := 7
+    let mut loop_vars := acc
+    for k in [loop_k_lower:loop_k_upper:1]i do
+      let acc := loop_vars
+      loop_vars :=
+        let byte := (Sail.BitVec.extractLsb (value >>> (8 *i k)) 7 0)
+        (acc ||| ((Sail.BitVec.zeroExtend byte 256) <<< (8 *i (31 -i k))))
+    (pure loop_vars) ) : SailM (BitVec 256) )
+  (pure (hash_from_bits acc))
 
-def htr_u256 (w : word) : hash := Id.run do
+/-- `uint256` as a 32-byte little-endian chunk. -/
+def htr_u256 (app_0 : word) : hash := Id.run do
+  let .U256 w := app_0
   let acc : (BitVec 256) := (BitVec.zero 256)
-  let loop_k_lower := 0
-  let loop_k_upper := 31
-  let mut loop_vars := acc
-  for k in [loop_k_lower:loop_k_upper:1]i do
-    let acc := loop_vars
-    loop_vars :=
-      let byte := (Sail.BitVec.extractLsb (w >>> (8 *i k)) 7 0)
-      (acc ||| ((Sail.BitVec.zeroExtend byte 256) <<< (8 *i (31 -i k))))
-  (pure loop_vars)
+  let acc ← (( do
+    let loop_k_lower := 0
+    let loop_k_upper := 31
+    let mut loop_vars := acc
+    for k in [loop_k_lower:loop_k_upper:1]i do
+      let acc := loop_vars
+      loop_vars :=
+        let byte := (Sail.BitVec.extractLsb (w >>> (8 *i k)) 7 0)
+        (acc ||| ((Sail.BitVec.zeroExtend byte 256) <<< (8 *i (31 -i k))))
+    (pure loop_vars) ) : Id (BitVec 256) )
+  (pure (hash_from_bits acc))
 
-def htr_bytes32 (b : (BitVec 256)) : hash :=
+/-- `Bytes32` chunks are themselves. -/
+def htr_bytes32 (b : hash) : hash :=
   b
 
+/-- A 20-byte address, left-aligned in its chunk. -/
 def htr_addr (a : address) : hash :=
-  ((Sail.BitVec.zeroExtend a 256) <<< 96)
+  (hash_from_bits ((Sail.BitVec.zeroExtend (address_to_bits a) 256) <<< 96))
 
-/-- Type quantifiers: k_ex161625_ : Nat, 0 ≤ k_ex161625_ ∧ k_ex161625_ ≤ (2 ^ 64 - 1) -/
+/-- `mix_in_length`: hashes the list root with its length chunk. -/
+/- Type quantifiers: k_ex161672_ : Nat, 0 ≤ k_ex161672_ ∧ k_ex161672_ ≤ (2 ^ 64 - 1) -/
 def mix_in_length (root : hash) (len : item_count) : SailM hash := do
   let len := (len).value
   (sha256_pair root (← (htr_uint ⟨len⟩)))
 
-/-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ (2 ^ 64 - 1) -/
+/-- The ceiling of log2 — the Merkle depth of an `n`-chunk capacity. -/
+/- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ (2 ^ 64 - 1) -/
 def clog2 (n : item_count) : SailM merkle_depth := do
   let n := (n).value
   let semanticResult ← do
@@ -266,7 +298,8 @@ def clog2 (n : item_count) : SailM merkle_depth := do
     (pure depth)
   pure (⟨semanticResult⟩)
 
-/-- Type quantifiers: k_ex161627_ : Nat, 0 ≤ k_ex161627_ ∧ k_ex161627_ ≤ (2 ^ 64 - 1) -/
+/-- The `chunk_index`-th 32-byte chunk of a byte span, zero-padded. -/
+/- Type quantifiers: k_ex161674_ : Nat, 0 ≤ k_ex161674_ ∧ k_ex161674_ ≤ (2 ^ 64 - 1) -/
 def htr_chunk (bytes : EvmByteSlice) (chunk_index : item_index) : SailM hash := do
   let chunk_index := (chunk_index).value
   let acc : (BitVec 256) := (BitVec.zero 256)
@@ -293,28 +326,31 @@ def htr_chunk (bytes : EvmByteSlice) (chunk_index : item_index) : SailM hash := 
           else (pure cursor) ) : SailM byte_quantity )
         (pure (acc, cursor))
     (pure loop_vars) ) : SailM ((BitVec 256) × byte_quantity) )
-  (pure acc)
+  (pure (hash_from_bits acc))
 
+/-- Returns the number of 32-byte chunks needed to contain `byte_len` bytes. -/
 def htr_chunk_count (app_0 : byte_length) : SailM item_count := do
   let semanticResult ← do
     let .ByteQuantity byte_len := app_0
     let count ← do (exact_quotient (byte_len + 31) 32)
-    if ((count ≤b ((2 ^i 64) -i 1)) : Bool)
+    if ((count ≤b (BYTE_QUANTITY_MAX).value) : Bool)
     then (pure count)
     else sailThrow ((InvalidBlock InvalidConfig))
   pure (⟨semanticResult⟩)
 
+/-- Returns the number of fixed-width items in an exactly divisible byte span. -/
 def htr_fixed_count (typ_0 : byte_length) (typ_1 : byte_length) : SailM item_count := do
   let semanticResult ← do
     let .ByteQuantity byte_len : byte_quantity := typ_0
     let .ByteQuantity item_len : byte_quantity := typ_1
     let count ← do (exact_quotient byte_len item_len)
-    if ((count ≤b ((2 ^i 64) -i 1)) : Bool)
+    if ((count ≤b (BYTE_QUANTITY_MAX).value) : Bool)
     then (pure count)
     else sailThrow ((InvalidBlock InvalidConfig))
   pure (⟨semanticResult⟩)
 
-/-- Type quantifiers: k_ex161628_ : Nat, 0 ≤ k_ex161628_ ∧ k_ex161628_ ≤ 64 -/
+/-- The Merkle root of a byte span's chunks at `depth`. -/
+/- Type quantifiers: k_ex161675_ : Nat, 0 ≤ k_ex161675_ ∧ k_ex161675_ ≤ 64 -/
 def htr_bytes_root (bytes : EvmByteSlice) (depth : merkle_depth) : SailM hash := do
   let depth := (depth).value
   let count ← do
@@ -337,6 +373,7 @@ def htr_bytes_root (bytes : EvmByteSlice) (depth : merkle_depth) : SailM hash :=
     (pure loop_vars) ) : SailM (MerkleAccumulator × Nat) )
   (merkle_accumulator_root accumulator ⟨depth⟩)
 
+/-- `hash_tree_root` of a fixed-size `ByteVector`. -/
 def htr_bytevector (bytes : EvmByteSlice) : SailM hash := do
   let chunks ← do
     (do
@@ -344,18 +381,21 @@ def htr_bytevector (bytes : EvmByteSlice) : SailM hash := do
         pure ((semanticResult).value))
   (htr_bytes_root bytes ⟨((← (clog2 ⟨chunks⟩))).value⟩)
 
+/-- `hash_tree_root` of a `ByteList[limit_bytes]` (root at the limit's
+depth, length mixed in). -/
 def htr_bytelist (bytes : EvmByteSlice) (limit_bytes : byte_length) : SailM hash := do
   let capacity ← do
     (do
         let semanticResult ← (htr_chunk_count limit_bytes)
         pure ((semanticResult).value))
   let .ByteQuantity byte_len := bytes.len
-  if ((byte_len ≤b ((2 ^i 64) -i 1)) : Bool)
+  if ((byte_len ≤b (BYTE_QUANTITY_MAX).value) : Bool)
   then
     (mix_in_length (← (htr_bytes_root bytes ⟨((← (clog2 ⟨capacity⟩))).value⟩))
       ⟨byte_len⟩)
   else sailThrow ((InvalidBlock InvalidConfig))
 
+/-- `hash_tree_root` of one SSZ withdrawal (4 fields, depth 2). -/
 def htr_withdrawal (withdrawal : EvmByteSlice) : SailM hash := do
   (merkleize
     [(← (htr_uint ⟨((← (ssz_uint withdrawal WD_INDEX))).value⟩)), (← (htr_uint
@@ -363,6 +403,8 @@ def htr_withdrawal (withdrawal : EvmByteSlice) : SailM hash := do
       (← (ssz_addr withdrawal WD_ADDRESS))), (← (htr_uint
         ⟨((← (ssz_uint withdrawal WD_AMOUNT))).value⟩))] ⟨2⟩)
 
+/-- `hash_tree_root` of the transactions list
+(`List[ByteList[2^30], 2^20]`). -/
 def htr_transactions (transactions : SszListRef) : SailM hash := do
   let cursor ← do (ssz_list_cursor transactions)
   let accumulator := EMPTY_MERKLE_ACCUMULATOR
@@ -380,6 +422,7 @@ def htr_transactions (transactions : SszListRef) : SailM hash := do
   (mix_in_length (← (merkle_accumulator_root accumulator ⟨20⟩))
     ⟨(accumulator.count).value⟩)
 
+/-- `hash_tree_root` of the withdrawals list (`List[SszWithdrawal, 16]`). -/
 def htr_withdrawals (withdrawals : SszListRef) : SailM hash := do
   let rest : SszListRef := withdrawals
   let accumulator := EMPTY_MERKLE_ACCUMULATOR
@@ -394,6 +437,7 @@ def htr_withdrawals (withdrawals : SszListRef) : SailM hash := do
     (pure loop_vars) ) : SailM (MerkleAccumulator × SszListRef) )
   (mix_in_length (← (merkle_accumulator_root accumulator ⟨4⟩)) ⟨(accumulator.count).value⟩)
 
+/-- `hash_tree_root` of the `SszExecutionPayload` (19 fields, depth 5). -/
 def htr_execution_payload (input_ref : StatelessInputRef) : SailM hash := do
   let payload := input_ref.execution_payload
   (merkleize
@@ -415,6 +459,7 @@ def htr_execution_payload (input_ref : StatelessInputRef) : SailM hash := do
         input_ref.block_access_list HTR_BYTE_LIST_LIMIT)), (← (htr_uint
         ⟨((← (ssz_uint payload PL_SLOT_NUMBER))).value⟩))] ⟨5⟩)
 
+/-- `hash_tree_root` of the versioned hashes (`List[Bytes32, 4096]`). -/
 def htr_versioned_hashes (versioned_hashes : EvmByteSlice) : SailM hash := do
   let count ← do
     (do
@@ -431,12 +476,14 @@ def htr_versioned_hashes (versioned_hashes : EvmByteSlice) : SailM hash := do
         let (versioned_hash, tail) ← do (ssz_fixed_list_pop rest WORD_BYTE_LENGTH)
         let rest : SszListRef := tail
         let accumulator ←
-          (merkle_accumulator_push accumulator (← (slice_load versioned_hash BYTE_ZERO)))
+          (merkle_accumulator_push accumulator
+            (word_to_hash (← (slice_load versioned_hash BYTE_ZERO))))
         (pure (accumulator, rest))
     (pure loop_vars) ) : SailM (MerkleAccumulator × SszListRef) )
   (mix_in_length (← (merkle_accumulator_root accumulator ⟨12⟩))
     ⟨(accumulator.count).value⟩)
 
+/-- `hash_tree_root` of one deposit request (5 fields, depth 3). -/
 def htr_deposit (deposit : EvmByteSlice) : SailM hash := do
   (merkleize
     [(← (htr_bytevector (← (sub_slice deposit HTR_DEPOSIT_PUBKEY HTR_DEPOSIT_PUBKEY_LENGTH)))), (htr_bytes32
@@ -445,12 +492,14 @@ def htr_deposit (deposit : EvmByteSlice) : SailM hash := do
         (← (sub_slice deposit HTR_DEPOSIT_SIGNATURE HTR_DEPOSIT_SIGNATURE_LENGTH)))), (← (htr_uint
         ⟨((← (ssz_uint deposit HTR_DEPOSIT_INDEX))).value⟩))] ⟨3⟩)
 
+/-- `hash_tree_root` of one withdrawal request (3 fields, depth 2). -/
 def htr_withdrawal_request (request : EvmByteSlice) : SailM hash := do
   (merkleize
     [(← (htr_bytevector (← (sub_slice request HTR_REQUEST_SOURCE_ADDRESS ADDRESS_BYTE_LENGTH)))), (← (htr_bytevector
         (← (sub_slice request HTR_REQUEST_SOURCE_PUBKEY HTR_REQUEST_PUBKEY_LENGTH)))), (← (htr_uint
         ⟨((← (ssz_uint request HTR_WITHDRAWAL_REQUEST_AMOUNT))).value⟩))] ⟨2⟩)
 
+/-- `hash_tree_root` of one consolidation request (3 fields, depth 2). -/
 def htr_consolidation_request (request : EvmByteSlice) : SailM hash := do
   (merkleize
     [(← (htr_bytevector (← (sub_slice request HTR_REQUEST_SOURCE_ADDRESS ADDRESS_BYTE_LENGTH)))), (← (htr_bytevector
@@ -458,6 +507,7 @@ def htr_consolidation_request (request : EvmByteSlice) : SailM hash := do
         (← (sub_slice request HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY HTR_REQUEST_PUBKEY_LENGTH))))]
     ⟨2⟩)
 
+/-- `hash_tree_root` of the deposit-request list (depth 13). -/
 def htr_deposits (deposits : EvmByteSlice) : SailM hash := do
   let count ← do
     (do
@@ -479,6 +529,7 @@ def htr_deposits (deposits : EvmByteSlice) : SailM hash := do
   (mix_in_length (← (merkle_accumulator_root accumulator ⟨13⟩))
     ⟨(accumulator.count).value⟩)
 
+/-- `hash_tree_root` of the withdrawal-request list (depth 4). -/
 def htr_withdrawal_requests (requests : EvmByteSlice) : SailM hash := do
   let count ← do
     (do
@@ -500,6 +551,7 @@ def htr_withdrawal_requests (requests : EvmByteSlice) : SailM hash := do
     (pure loop_vars) ) : SailM (MerkleAccumulator × SszListRef) )
   (mix_in_length (← (merkle_accumulator_root accumulator ⟨4⟩)) ⟨(accumulator.count).value⟩)
 
+/-- `hash_tree_root` of the consolidation-request list (depth 1). -/
 def htr_consolidation_requests (requests : EvmByteSlice) : SailM hash := do
   let count ← do
     (do
@@ -521,12 +573,15 @@ def htr_consolidation_requests (requests : EvmByteSlice) : SailM hash := do
     (pure loop_vars) ) : SailM (MerkleAccumulator × SszListRef) )
   (mix_in_length (← (merkle_accumulator_root accumulator ⟨1⟩)) ⟨(accumulator.count).value⟩)
 
+/-- `hash_tree_root` of the `SszExecutionRequests` container. -/
 def htr_execution_requests (input_ref : StatelessInputRef) : SailM hash := do
   (merkleize
     [(← (htr_deposits input_ref.deposits)), (← (htr_withdrawal_requests
         input_ref.withdrawal_requests)), (← (htr_consolidation_requests
         input_ref.consolidation_requests))] ⟨2⟩)
 
+/-- `hash_tree_root` of the `SszNewPayloadRequest` (4 fields, depth 2) —
+the commitment the guest proves its input against. -/
 def htr_new_payload_request (input_ref : StatelessInputRef) : SailM hash := do
   (merkleize
     [(← (htr_execution_payload input_ref)), (← (htr_versioned_hashes input_ref.versioned_hashes)), (htr_bytes32

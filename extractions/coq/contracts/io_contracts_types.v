@@ -14,15 +14,130 @@ Definition bit : Type := mword 1.
 
 Definition bits (n : Z) : Type := mword n.
 
-Definition word : Type := bits 256.
-
-Definition address : Type := bits 160.
-
-Definition hash : Type := bits 256.
-
 Definition byte : Type := bits 8.
 
+Inductive word :=
+| U256 : bits 256 -> word.
+Arguments word : clear implicits.
+
+Definition sail_word_encode (x : word) := match x with U256 x' => encode (0, encode x') end.
+Definition sail_word_decode x : option word := match decode x with
+  | Some (0, x') => U256 <$> decode x'
+  | _ => None end.
+Lemma sail_word_decode_encode : forall (x : word), sail_word_decode (sail_word_encode x)  = Some x.
+Proof.
+  unfold sail_word_decode, sail_word_encode;
+  intros [x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_word : EqDecision word := decode_encode_eq_dec sail_word_encode
+  sail_word_decode sail_word_decode_encode .
+
+#[export]
+Instance Countable_word : Countable word := {|
+  encode := sail_word_encode;
+  decode := sail_word_decode;
+  decode_encode := sail_word_decode_encode
+|}.
+#[export]
+Instance dummy_word : Inhabited (word) := { inhabitant := U256 inhabitant }.
+
+Inductive address_typ :=
+| Address : vec byte 20 -> address_typ.
+Arguments address_typ : clear implicits.
+
+Definition sail_address_typ_encode (x : address_typ) := match x with
+  | Address x' => encode (0, encode x') end.
+Definition sail_address_typ_decode x : option address_typ := match decode x with
+  | Some (0, x') => Address <$> decode x'
+  | _ => None end.
+Lemma sail_address_typ_decode_encode : forall (x : address_typ), sail_address_typ_decode
+  (sail_address_typ_encode x)  = Some x.
+Proof.
+  unfold sail_address_typ_decode, sail_address_typ_encode;
+  intros [x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_address_typ : EqDecision address_typ := decode_encode_eq_dec
+  sail_address_typ_encode sail_address_typ_decode sail_address_typ_decode_encode .
+
+#[export]
+Instance Countable_address_typ : Countable address_typ := {|
+  encode := sail_address_typ_encode;
+  decode := sail_address_typ_decode;
+  decode_encode := sail_address_typ_decode_encode
+|}.
+#[export]
+Instance dummy_address_typ : Inhabited (address_typ) := { inhabitant := Address inhabitant }.
+
+Inductive b256 :=
+| B256 : vec byte 32 -> b256.
+Arguments b256 : clear implicits.
+
+Definition sail_b256_encode (x : b256) := match x with B256 x' => encode (0, encode x') end.
+Definition sail_b256_decode x : option b256 := match decode x with
+  | Some (0, x') => B256 <$> decode x'
+  | _ => None end.
+Lemma sail_b256_decode_encode : forall (x : b256), sail_b256_decode (sail_b256_encode x)  = Some x.
+Proof.
+  unfold sail_b256_decode, sail_b256_encode;
+  intros [x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_b256 : EqDecision b256 := decode_encode_eq_dec sail_b256_encode
+  sail_b256_decode sail_b256_decode_encode .
+
+#[export]
+Instance Countable_b256 : Countable b256 := {|
+  encode := sail_b256_encode;
+  decode := sail_b256_decode;
+  decode_encode := sail_b256_decode_encode
+|}.
+#[export]
+Instance dummy_b256 : Inhabited (b256) := { inhabitant := B256 inhabitant }.
+
+Definition hash : Type := b256.
+
 Definition limb : Type := bits 64.
+
+Record AddressResult := {
+  AddressResult_success : bool;
+  AddressResult_address : address_typ;
+}.
+Arguments AddressResult : clear implicits.
+#[export]
+Instance Decidable_eq_AddressResult : EqDecision AddressResult.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_AddressResult : Countable AddressResult.
+refine {|
+  encode x := encode (AddressResult_success x, AddressResult_address x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_AddressResult x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'AddressResult_success' := e ]}" :=
+  match r with Build_AddressResult _ (_ as f1) => Build_AddressResult e f1 end (at level 1).
+Notation "{[ r 'with' 'AddressResult_address' := e ]}" :=
+  match r with Build_AddressResult (_ as f0) _ => Build_AddressResult f0 e end (at level 1).
+#[export]
+Instance dummy_AddressResult : Inhabited (AddressResult) := {
+  inhabitant := {| AddressResult_success := inhabitant; AddressResult_address := inhabitant
+|} }.
+
 
 Record LimbDivMod := {
   LimbDivMod_quotient : limb;

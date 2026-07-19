@@ -31,6 +31,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -38,7 +39,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -50,6 +53,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -58,6 +62,14 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # Payload commitments
+
+The header-level commitments recomputed from the payload: the
+transactions and withdrawals tries, the EIP-7685 requests hash, and the
+block header hash itself. -/
+
+/-- The RLP of one withdrawal (EIP-4895), assembled in the scratch
+arena. -/
 def withdrawal_rlp (withdrawal : EvmByteSlice) : SailM EvmByteSlice := do
   let index ← do
     (do
@@ -87,6 +99,9 @@ def withdrawal_rlp (withdrawal : EvmByteSlice) : SailM EvmByteSlice := do
   (rlp_write_protocol_quantity ⟨amount⟩)
   (rlp_finish start encoded_len)
 
+/-- The block header hash: `keccak256(rlp(header))` with the recomputed
+body roots spliced in (YP §4.4; post-merge constants for ommers,
+difficulty, and nonce). -/
 def block_header_hash (header : BlockHeader) (transactions_root : hash) (withdrawals_root : hash) (requests_hash : hash) (block_access_list_hash : hash) : SailM hash := do
   let bloom := (logs_bloom_bytes header.logs_bloom)
   let nonce : (List (BitVec 8)) := [0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8]
@@ -149,12 +164,12 @@ def block_header_hash (header : BlockHeader) (transactions_root : hash) (withdra
   let encoded_len ← do (rlp_list_size content_len)
   let mark ← do (scratch_begin ())
   (rlp_write_list_prefix content_len)
-  (rlp_write_word header.parent_hash)
-  (rlp_write_word EMPTY_OMMER_HASH)
+  (rlp_write_word (hash_to_word header.parent_hash))
+  (rlp_write_word (hash_to_word EMPTY_OMMER_HASH))
   (rlp_write_addr header.fee_recipient)
-  (rlp_write_word header.state_root)
-  (rlp_write_word transactions_root)
-  (rlp_write_word header.receipts_root)
+  (rlp_write_word (hash_to_word header.state_root))
+  (rlp_write_word (hash_to_word transactions_root))
+  (rlp_write_word (hash_to_word header.receipts_root))
   (rlp_write_bytes bloom LOGS_BLOOM_BYTE_LENGTH)
   (rlp_write_protocol_quantity ⟨0⟩)
   (rlp_write_protocol_quantity ⟨(header.number).value⟩)
@@ -168,22 +183,22 @@ def block_header_hash (header : BlockHeader) (transactions_root : hash) (withdra
   then (rlp_write_uint_word header.base_fee)
   else (pure ())
   if ((fork_gteq (← readReg k_fork) Shanghai) : Bool)
-  then (rlp_write_word withdrawals_root)
+  then (rlp_write_word (hash_to_word withdrawals_root))
   else (pure ())
   if ((fork_gteq (← readReg k_fork) Cancun) : Bool)
   then
     (do
       (rlp_write_protocol_quantity ⟨(header.blob_gas_used).value⟩)
       (rlp_write_protocol_quantity ⟨(header.excess_blob_gas).value⟩)
-      (rlp_write_word header.parent_beacon_block_root))
+      (rlp_write_word (hash_to_word header.parent_beacon_block_root)))
   else (pure ())
   if ((fork_gteq (← readReg k_fork) Prague) : Bool)
-  then (rlp_write_word requests_hash)
+  then (rlp_write_word (hash_to_word requests_hash))
   else (pure ())
   if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
   then
     (do
-      (rlp_write_word block_access_list_hash)
+      (rlp_write_word (hash_to_word block_access_list_hash))
       (rlp_write_protocol_quantity ⟨(header.slot_number).value⟩))
   else (pure ())
   let encoded ← do (rlp_finish mark encoded_len)
@@ -191,6 +206,8 @@ def block_header_hash (header : BlockHeader) (transactions_root : hash) (withdra
   (scratch_rewind mark)
   (pure block_hash)
 
+/-- The transactions-trie root (YP §4.4.2): leaf `i` holds the raw
+EIP-2718 envelope of transaction `i`, keyed by `rlp(i)`. -/
 def transaction_trie_root (txs : SszListRef) : SailM hash := do
   let builder := (trie_builder_empty ())
   let cursor := (rlp_index_cursor ⟨(txs.count).value⟩)
@@ -207,6 +224,8 @@ def transaction_trie_root (txs : SszListRef) : SailM hash := do
     (pure loop_vars) ) : SailM (TrieBuilder × RlpIndexCursor) )
   (trie_builder_root builder)
 
+/-- The withdrawals-trie root (EIP-4895): leaf `i` holds
+`rlp(withdrawal_i)`, keyed by `rlp(i)`. -/
 def withdrawals_trie_root (wds : SszListRef) : SailM hash := do
   let builder := (trie_builder_empty ())
   let cursor := (rlp_index_cursor ⟨(wds.count).value⟩)
@@ -226,6 +245,8 @@ def withdrawals_trie_root (wds : SszListRef) : SailM hash := do
     (pure loop_vars) ) : SailM (TrieBuilder × RlpIndexCursor) )
   (trie_builder_root builder)
 
+/-- The `excess_blob_gas` the header must carry, derived from the
+authenticated parent (EIP-4844). -/
 def expected_payload_excess_blob_gas (witness : WitnessContext) : SailM blob_gas := do
   let semanticResult ← do
     (do
@@ -234,37 +255,46 @@ def expected_payload_excess_blob_gas (witness : WitnessContext) : SailM blob_gas
         pure ((semanticResult).value))
   pure (⟨semanticResult⟩)
 
+/-- The EIP-7685 requests hash: `sha256` over the present request-type
+digests in request-type order; the request bodies remain
+region-backed through the hash calls. -/
 def execution_requests_hash (input_ref : StatelessInputRef) : SailM hash := do
   let l0 := input_ref.deposits.len
   let l1 := input_ref.withdrawal_requests.len
   let l2 := input_ref.consolidation_requests.len
   let d0 ← (( do
-    if ((byte_quantity_not_equal l0 BYTE_ZERO) : Bool)
+    if ((bne l0 BYTE_ZERO) : Bool)
     then (sha256_request_digest 0x00#8 input_ref.deposits)
-    else (pure (BitVec.zero 256)) ) : SailM (BitVec 256) )
+    else (pure ZERO_HASH) ) : SailM b256 )
   let d1 ← (( do
-    if ((byte_quantity_not_equal l1 BYTE_ZERO) : Bool)
+    if ((bne l1 BYTE_ZERO) : Bool)
     then (sha256_request_digest 0x01#8 input_ref.withdrawal_requests)
-    else (pure (BitVec.zero 256)) ) : SailM (BitVec 256) )
+    else (pure ZERO_HASH) ) : SailM b256 )
   let d2 ← (( do
-    if ((byte_quantity_not_equal l2 BYTE_ZERO) : Bool)
+    if ((bne l2 BYTE_ZERO) : Bool)
     then (sha256_request_digest 0x02#8 input_ref.consolidation_requests)
-    else (pure (BitVec.zero 256)) ) : SailM (BitVec 256) )
+    else (pure ZERO_HASH) ) : SailM b256 )
   let segs : (List Bytes) := []
   let segs : (List Bytes) :=
-    if ((byte_quantity_not_equal l2 BYTE_ZERO) : Bool)
-    then ((bytes_list (word_to_bytes32 d2) WORD_BYTE_LENGTH) :: segs)
+    if ((bne l2 BYTE_ZERO) : Bool)
+    then ((bytes_list (hash_to_bytes32 d2) WORD_BYTE_LENGTH) :: segs)
     else segs
   let segs : (List Bytes) :=
-    if ((byte_quantity_not_equal l1 BYTE_ZERO) : Bool)
-    then ((bytes_list (word_to_bytes32 d1) WORD_BYTE_LENGTH) :: segs)
+    if ((bne l1 BYTE_ZERO) : Bool)
+    then ((bytes_list (hash_to_bytes32 d1) WORD_BYTE_LENGTH) :: segs)
     else segs
   let segs : (List Bytes) :=
-    if ((byte_quantity_not_equal l0 BYTE_ZERO) : Bool)
-    then ((bytes_list (word_to_bytes32 d0) WORD_BYTE_LENGTH) :: segs)
+    if ((bne l0 BYTE_ZERO) : Bool)
+    then ((bytes_list (hash_to_bytes32 d0) WORD_BYTE_LENGTH) :: segs)
     else segs
   (sha256_segments segs)
 
+/-- Validates every commitment checkable before transaction decoding:
+parent linkage, gas and blob-gas header rules, the transactions and
+withdrawals roots, the requests hash, and the block hash. The
+supplied block access list is hashed once for the header;
+post-execution validation compares its bytes against the canonical
+reconstruction. -/
 def validate_execution_payload (input : StatelessInput) (input_ref : StatelessInputRef) (witness : WitnessContext) : SailM Unit := do
   let payload := input.payload
   let block' := payload.block'
@@ -277,7 +307,7 @@ def validate_execution_payload (input : StatelessInput) (input_ref : StatelessIn
   if ((gas_lt header.gas_limit header.gas_used) : Bool)
   then sailThrow ((InvalidBlock InvalidGasUsed))
   else (pure ())
-  if ((witness.parent_hash != header.parent_hash) : Bool)
+  if ((bne witness.parent_hash header.parent_hash) : Bool)
   then sailThrow ((InvalidBlock InvalidParentHash))
   else (pure ())
   if (((fork_gteq (← readReg k_fork) Cancun) && (← do
@@ -295,15 +325,15 @@ def validate_execution_payload (input : StatelessInput) (input_ref : StatelessIn
       let requests_hash ← do
         if ((fork_gteq (← readReg k_fork) Prague) : Bool)
         then (execution_requests_hash input_ref)
-        else (pure ZERO_WORD)
+        else (pure ZERO_HASH)
       let block_access_list_hash ← do
         if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
         then (keccak256_slice body.block_access_list)
-        else (pure ZERO_WORD)
+        else (pure ZERO_HASH)
       let computed_block_hash ← do
         (block_header_hash header transactions_root withdrawals_root requests_hash
           block_access_list_hash)
-      if ((computed_block_hash != payload.expected_block_hash) : Bool)
+      if ((bne computed_block_hash payload.expected_block_hash) : Bool)
       then sailThrow ((InvalidBlock InvalidBlockHash))
       else (pure ()))
   else (pure ())

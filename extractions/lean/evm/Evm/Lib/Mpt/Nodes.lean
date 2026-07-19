@@ -1,5 +1,6 @@
 import Evm.Flow
 import Evm.Arith
+import Evm.Prelude
 import Evm.Primitives.Quantities
 import Evm.Primitives.Bytes
 import Evm.Primitives.Crypto
@@ -23,6 +24,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -30,7 +32,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -42,6 +46,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -50,9 +55,15 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # Trie nodes
+
+Merkle-Patricia trie node forms, references, and decoding
+(YP Appendix D). -/
+
 def inline_node_segment (node : InlineNode) : Bytes :=
   (bytes_list (inline_node_to_list node) node.len)
 
+/-- Selects a branch reference by nibble value. -/
 def branch_refs_get (children : BranchRefs) (index : nibble) : NodeRef :=
   match index with
   | 0x0 => (GetElem?.getElem! children 0)
@@ -72,6 +83,7 @@ def branch_refs_get (children : BranchRefs) (index : nibble) : NodeRef :=
   | 0xE => (GetElem?.getElem! children 14)
   | _ => (GetElem?.getElem! children 15)
 
+/-- Returns the branch-reference vector with one nibble position replaced. -/
 def branch_refs_set (children : BranchRefs) (index : nibble) (value : NodeRef) : BranchRefs :=
   let result := children
   match index with
@@ -92,23 +104,28 @@ def branch_refs_set (children : BranchRefs) (index : nibble) (value : NodeRef) :
   | 0xE => (vectorUpdate result 14 value)
   | _ => (vectorUpdate result 15 value)
 
+/-- Returns the RLP width of a child reference in its parent node. -/
 def node_ref_size (r : NodeRef) : byte_length :=
   match r with
   | .EmptyRef () => BYTE_ONE
   | .InlineRef node => node.len
   | .HashRef _ => (rlp_word_size ())
 
+/-- Appends a child reference in its canonical RLP representation. -/
 def rlp_write_node_ref (r : NodeRef) : SailM Unit := do
   match r with
   | .EmptyRef () => (scratch_push_bytes [0x80#8] BYTE_ONE)
   | .InlineRef node => (rlp_write_raw_bytes (inline_node_to_list node) node.len)
-  | .HashRef h => (rlp_write_word h)
+  | .HashRef h => (rlp_write_word (hash_to_word h))
 
+/-- The canonical child reference for an encoded node: inline under 32
+bytes, otherwise its hash (YP Appendix D, Eq. 207). -/
 def child_ref (encoded : EvmByteSlice) : SailM NodeRef := do
   if ((byte_quantity_lt encoded.len MPT_HASH_LENGTH) : Bool)
   then (pure (InlineRef (← (inline_node_from_slice encoded))))
   else (pure (HashRef (← (keccak256_slice encoded))))
 
+/-- Returns the one-hot presence mask for a branch-child nibble. -/
 def branch_mask_for (index : nibble) : (BitVec 16) :=
   match index with
   | 0x0 => 0x0001#16
@@ -134,6 +151,9 @@ def branch_mask_has (mask : (BitVec 16)) (index : nibble) : Bool :=
 def branch_mask_set (mask : (BitVec 16)) (index : nibble) : (BitVec 16) :=
   (mask ||| (branch_mask_for index))
 
+/-- The child reference of a leaf, keeping the value in its native
+representation: long nodes hash the RLP framing and value as segments;
+only an inline node materializes a slice. -/
 def leaf_child_ref (key : TriePath) (value : EvmByteSlice) : SailM NodeRef := do
   let (path, encoded_path_len) ← do (hex_prefix_compact key true)
   let content_len ← do
@@ -147,6 +167,7 @@ def leaf_child_ref (key : TriePath) (value : EvmByteSlice) : SailM NodeRef := do
   (scratch_rewind mark)
   (pure result)
 
+/-- The child reference of an extension node. -/
 def extension_child_ref (key : TriePath) (childref : NodeRef) : SailM NodeRef := do
   let (path, encoded_path_len) ← do (hex_prefix_compact key false)
   let content_len ← do
@@ -160,6 +181,7 @@ def extension_child_ref (key : TriePath) (childref : NodeRef) : SailM NodeRef :=
   (scratch_rewind mark)
   (pure result)
 
+/-- The child reference of a branch node. -/
 def branch_child_ref (mask : (BitVec 16)) (children : BranchRefs) : SailM NodeRef := do
   let content_len : byte_quantity := BYTE_ONE
   let child_bit : (BitVec 16) := 0x0001#16
@@ -202,14 +224,18 @@ def branch_child_ref (mask : (BitVec 16)) (children : BranchRefs) : SailM NodeRe
   (scratch_rewind mark)
   (pure result)
 
-def trie_ref_to_root (r : NodeRef) : SailM (BitVec 256) := do
+/-- The root hash a node reference commits to; the empty reference is the
+empty-trie root. -/
+def trie_ref_to_root (r : NodeRef) : SailM hash := do
   match r with
   | .EmptyRef () => (pure EMPTY_TRIE_ROOT)
   | .InlineRef node => (keccak256_segments [(inline_node_segment node)])
   | .HashRef h => (pure h)
 
+/-- The reference form of raw node bytes: empty, inline under 32 bytes,
+else hashed. -/
 def node_to_ref (node : EvmByteSlice) : SailM NodeRef := do
-  if ((byte_quantity_equal node.len BYTE_ZERO) : Bool)
+  if ((node.len == BYTE_ZERO) : Bool)
   then (pure (EmptyRef ()))
   else
     (do
@@ -217,12 +243,14 @@ def node_to_ref (node : EvmByteSlice) : SailM NodeRef := do
       then (pure (InlineRef (← (inline_node_from_slice node))))
       else (pure (HashRef (← (keccak256_slice node)))))
 
+/-- Re-keys a decoded child node under `evm_prefix` without copying a leaf
+value. -/
 def merge_ext_node (evm_prefix' : TriePath) (childnode : EvmByteSlice) : SailM NodeRef := do
   if ((((path_len evm_prefix')).value == 0) : Bool)
   then (node_to_ref childnode)
   else
     (do
-      if ((byte_quantity_equal childnode.len BYTE_ZERO) : Bool)
+      if ((childnode.len == BYTE_ZERO) : Bool)
       then (pure (EmptyRef ()))
       else
         (do
@@ -233,6 +261,10 @@ def merge_ext_node (evm_prefix' : TriePath) (childnode : EvmByteSlice) : SailM N
             (extension_child_ref (← (path_concat evm_prefix' ext.path)) (← (field_to_ref ext.child)))
           | _ => (extension_child_ref evm_prefix' (← (node_to_ref childnode)))))
 
+/-- [merge_ext_node][] over a child reference: an inline reference
+carries its node bytes and re-keys canonically; a 32-byte hash
+reference is wrapped in an extension, which is canonical only when the
+referenced node is a branch. -/
 def merge_ext_ref (evm_prefix' : TriePath) (childref : NodeRef) : SailM NodeRef := do
   if ((((path_len evm_prefix')).value == 0) : Bool)
   then (pure childref)

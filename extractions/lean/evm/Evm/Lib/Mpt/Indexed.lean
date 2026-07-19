@@ -1,6 +1,7 @@
-import Evm.Prelude
+import Evm.Flow
 import Evm.Primitives.Quantities
 import Evm.Host.Kernel.Storage
+import Evm.Lib.Mpt.Primitives
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -17,6 +18,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -24,7 +26,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -36,6 +40,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -43,6 +48,12 @@ open CallKind
 open Bytes
 open ByteSource
 open BlockError
+
+/-! # Ordered trie indices
+
+Transaction, withdrawal, and receipt tries use RLP-encoded list indices as
+keys. Their bytewise trie order differs from numeric order, so this cursor
+emits indices directly in canonical key order. -/
 
 def undefined_RlpIndexCursor (_ : Unit) : SailM RlpIndexCursor := do
   (pure { count := ← do
@@ -52,7 +63,14 @@ def undefined_RlpIndexCursor (_ : Unit) : SailM RlpIndexCursor := do
               let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
               pure (⟨semanticField⟩) })
 
-/-- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
+/-- Decrements a positive RLP index byte width. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 8 -/
+def rlp_index_byte_width_decrement (value : Nat) : SailM Nat := do
+  assert (0 <b value) "sail/lib/mpt/indexed.sail:27.20-27.21"
+  (pure (value -i 1))
+
+/-- Returns the minimal byte width of an indexed-trie position. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
 def rlp_index_encoded_width (value : item_index) : rlp_index_byte_width :=
   let value := (value).value
   ⟨if ((value <b 256) : Bool)
@@ -77,25 +95,44 @@ def rlp_index_encoded_width (value : item_index) : rlp_index_byte_width :=
               then 7
               else 8))))))⟩
 
-/-- Type quantifiers: index : Nat, 0 ≤ index ∧ index ≤ (2 ^ 64 - 1) -/
+/-- The transactions/withdrawals-trie key for list index `i`:
+`rlp(i)` as a nibble path (YP §4.4.2). -/
+/- Type quantifiers: index : Nat, 0 ≤ index ∧ index ≤ (2 ^ 64 - 1) -/
 def trie_index_key (index : item_index) : SailM TriePath := do
   let index := (index).value
   if ((index == 0) : Bool)
-  then (pure (path_new ((Sail.BitVec.zeroExtend 0x80#8 256) <<< 248) ⟨2⟩))
+  then (path_append_byte (path_empty ()) 0x80#8)
   else
     (do
       if ((index ≤b 127) : Bool)
-      then (pure (path_new ((← (word_of_nat index)) <<< 248) ⟨2⟩))
+      then (path_append_byte (path_empty ()) (get_slice_int 8 index 0))
       else
         (do
           let width := ((rlp_index_encoded_width ⟨index⟩)).value
-          let byte_len := (width + 1)
-          let encoded ← do
-            (pure (((← (word_of_nat (128 + width))) <<< (width *i 8)) ||| (← (word_of_nat index))))
-          let align_shift := (256 -i (byte_len *i 8))
-          (pure (path_new (encoded <<< align_shift) ⟨(byte_len *i 2)⟩))))
+          let path ← do (path_append_byte (path_empty ()) (get_slice_int 8 (128 + width) 0))
+          let remaining : Nat := width
+          let (path, remaining) ← (( do
+            let loop__offset_lower := 0
+            let loop__offset_upper := 7
+            let mut loop_vars := (path, remaining)
+            for _offset in [loop__offset_lower:loop__offset_upper:1]i do
+              let (path, remaining) := loop_vars
+              loop_vars ← do
+                let (path, remaining) ← (( do
+                  if ((remaining != 0) : Bool)
+                  then
+                    (do
+                      let byte_offset ← do (rlp_index_byte_width_decrement remaining)
+                      let shift : Nat := (byte_offset *i 8)
+                      let path ← (path_append_byte path (get_slice_int 8 index shift))
+                      let remaining : Nat := byte_offset
+                      (pure (path, remaining)))
+                  else (pure (path, remaining)) ) : SailM (TriePath × Nat) )
+                (pure (path, remaining))
+            (pure loop_vars) ) : SailM (TriePath × Nat) )
+          (pure path)))
 
-/-- Type quantifiers: count : Nat, 0 ≤ count ∧ count ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: count : Nat, 0 ≤ count ∧ count ≤ (2 ^ 64 - 1) -/
 def rlp_index_cursor (count : item_count) : RlpIndexCursor :=
   let count := (count).value
   { count := ⟨count⟩,
@@ -104,7 +141,8 @@ def rlp_index_cursor (count : item_count) : RlpIndexCursor :=
 def rlp_index_cursor_empty (cursor : RlpIndexCursor) : Bool :=
   ((cursor.count).value ≤b (cursor.position).value)
 
-/-- Type quantifiers: count : Nat, 0 ≤ count ∧ count ≤ (2 ^ 64 - 1) -/
+/-- Counts the one-byte keys that sort before RLP index zero. -/
+/- Type quantifiers: count : Nat, 0 ≤ count ∧ count ≤ (2 ^ 64 - 1) -/
 def rlp_index_single_count (count : item_count) : SailM item_count := do
   let count := (count).value
   let semanticResult ← do
@@ -121,6 +159,7 @@ def rlp_index_single_count (count : item_count) : SailM item_count := do
         else (pure 127))
   pure (⟨semanticResult⟩)
 
+/-- Maps a canonical-key cursor position back to its numeric list index. -/
 def rlp_index_at_position (cursor : RlpIndexCursor) : SailM item_index := do
   let semanticResult ← do
     if ((rlp_index_cursor_empty cursor) : Bool)
@@ -141,6 +180,7 @@ def rlp_index_at_position (cursor : RlpIndexCursor) : SailM item_index := do
       else (pure (cursor.position).value))
   pure (⟨semanticResult⟩)
 
+/-- Removes the next canonical-key item and advances the cursor. -/
 def rlp_index_cursor_pop (cursor : RlpIndexCursor) : SailM (RlpIndexItem × RlpIndexCursor) := do
   let index ← do
     (do

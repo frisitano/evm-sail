@@ -37,16 +37,22 @@ let RLP_ENCODED_ADDRESS_LENGTH : byte_length = ByteQuantity(21)
 /*md
 ## The encoders
 */
+/*! Decrements a positive RLP length width. */
+function rlp_length_width_decrement(value : range(0, 8)) -> range(0, 8) = {
+    assert(0 < value);
+    value - 1
+}
+
 /*! Returns the minimal big-endian byte sequence of a protocol quantity and
     its length. */
 function minimal_protocol_quantity_bytes(n : protocol_quantity) -> (list(byte), range(0, 8)) = {
-    var remaining : nat = n;
+    var remaining : protocol_quantity = n;
     var out : list(byte) = [||];
     var len : range(0, 8) = 0;
     foreach (byte_index from 0 to 7) {
         if remaining != 0 then {
             out = get_slice_int(8, tmod_int(remaining, 256), 0) :: out;
-            remaining = exact_quotient(remaining, 256);
+            remaining = protocol_quantity_quotient(remaining, 256);
             len = byte_index + 1
         }
     };
@@ -77,8 +83,8 @@ function minimal_word_bytes(w : word) -> (list(byte), range(0, 32)) = {
     var len : range(0, 32) = 0;
     foreach (byte_index from 0 to 31) {
         if word_nonzero(remaining) then {
-            out = remaining[7 .. 0] :: out;
-            remaining = sail_shiftright(remaining, 8);
+            out = word_low_byte(remaining) :: out;
+            remaining = word_shift_right_limb(remaining, 0x0000000000000008);
             len = byte_index + 1
         }
     };
@@ -131,7 +137,7 @@ function rlp_minimal_word_len(w : word) -> range(0, 32) = {
     var len : range(0, 32) = 0;
     foreach (byte_index from 0 to 31) {
         if word_nonzero(remaining) then {
-            remaining = sail_shiftright(remaining, 8);
+            remaining = word_shift_right_limb(remaining, 0x0000000000000008);
             len = byte_index + 1
         }
     };
@@ -140,11 +146,11 @@ function rlp_minimal_word_len(w : word) -> range(0, 32) = {
 
 /*! Returns the minimal big-endian byte length of a protocol quantity. */
 function rlp_minimal_protocol_quantity_len(n : protocol_quantity) -> range(0, 8) = {
-    var remaining : nat = n;
+    var remaining : protocol_quantity = n;
     var len : range(0, 8) = 0;
     foreach (byte_index from 0 to 7) {
         if remaining != 0 then {
-            remaining = exact_quotient(remaining, 256);
+            remaining = protocol_quantity_quotient(remaining, 256);
             len = byte_index + 1
         }
     };
@@ -208,7 +214,7 @@ function rlp_uint_word_size(w : word) -> byte_length = {
     rlp_string_size(
         ByteQuantity(len),
         if len == 1 then {
-            w[7 .. 0]
+            word_low_byte(w)
         } else {
             0x00
         },
@@ -358,10 +364,12 @@ overload rlp_checked_add = { rlp_checked_add_quantity, rlp_checked_add_nat }
 function rlp_ref_be_length(source : ByteSlice, start : source_pointer, count : range(0, 8)) -> byte_length = {
     var value : limb = LIMB_ZERO;
     var current : source_pointer = start;
-    foreach (byte_index from 0 to 7) {
-        if byte_index < count then {
+    var remaining : range(0, 8) = count;
+    foreach (_byte_index from 0 to 7) {
+        if remaining != 0 then {
             value = or_vec(sail_shiftleft(value, 8), sail_zero_extend(slice_byte(source, current), 64));
-            current = rlp_checked_add(current, BYTE_ONE)
+            current = rlp_checked_add(current, BYTE_ONE);
+            remaining = rlp_length_width_decrement(remaining)
         }
     };
     ByteQuantity(unsigned(value))
@@ -406,7 +414,7 @@ function rlp_ref_hdr(b : ByteSlice, pos : source_pointer, stop : source_pointer)
             if h < 192 then {
                 let length_width : range(1, 8) = h - 183;
                 let length_start = rlp_checked_add(pos, BYTE_ONE);
-                let content = rlp_checked_add(length_start, length_width);
+                let content = rlp_checked_add(length_start, ByteQuantity(length_width));
                 if stop < content then {
                     throw InvalidBlock(RlpDecode)
                 };
@@ -417,7 +425,7 @@ function rlp_ref_hdr(b : ByteSlice, pos : source_pointer, stop : source_pointer)
                 } else {
                     let length_width : range(1, 8) = h - 247;
                     let length_start = rlp_checked_add(pos, BYTE_ONE);
-                    let content = rlp_checked_add(length_start, length_width);
+                    let content = rlp_checked_add(length_start, ByteQuantity(length_width));
                     if stop < content then {
                         throw InvalidBlock(RlpDecode)
                     };
@@ -625,10 +633,8 @@ function rlp_ref_uint_word(f : RlpFieldRef) -> word =
 /*! Decodes a canonical unsigned integer that fits the protocol-quantity
     domain. */
 function rlp_ref_uint(f : RlpFieldRef) -> protocol_quantity = {
-    let value = unsigned(rlp_ref_uint_word(f));
-    if value <= 2 ^ 64 - 1 then {
-        value
-    } else {
-        throw InvalidBlock(RlpDecode)
+    match word_to_limb(rlp_ref_uint_word(f)) {
+        Some(value) => unsigned(value),
+        None() => throw InvalidBlock(RlpDecode),
     }
 }

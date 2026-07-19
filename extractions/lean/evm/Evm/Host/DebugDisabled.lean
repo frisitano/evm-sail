@@ -15,6 +15,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -22,7 +23,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -34,6 +37,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -42,9 +46,21 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # Validation debug (optional)
+
+Default build variant discarding the optional validation debug
+records.
+
+!!! note "Non-normative"
+    This page documents the model's host interface — internal contracts
+    of the executable specification, not protocol rules. -/
+
+/-- Clears the recorded failure at the start of a validation attempt. -/
 def validation_debug_reset (_ : Unit) : Unit :=
   ()
 
+/-- Records the failing validation stage and reason for host
+inspection; a later record overwrites an earlier one. -/
 def validation_debug_record (_scope : (BitVec 8)) (_reason : BlockError) : Unit :=
   ()
 

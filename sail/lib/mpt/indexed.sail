@@ -22,6 +22,12 @@ struct RlpIndexItem = {
 /*! The minimal nonzero byte width of a supported RLP list index. */
 type rlp_index_byte_width = range(1, 8)
 
+/*! Decrements a positive RLP index byte width. */
+function rlp_index_byte_width_decrement(value : range(0, 8)) -> range(0, 7) = {
+    assert(0 < value);
+    value - 1
+}
+
 /*! Returns the minimal byte width of an indexed-trie position. */
 function rlp_index_encoded_width(value : item_index) -> rlp_index_byte_width =
     if value < 256 then {
@@ -54,16 +60,23 @@ function rlp_index_encoded_width(value : item_index) -> rlp_index_byte_width =
     `rlp(i)` as a nibble path (YP §4.4.2). */
 function trie_index_key(index : item_index) -> TriePath =
     if index == 0 then {
-        path_new(sail_shiftleft(sail_zero_extend(0x80, 256), 248), 2)
+        path_append_byte(path_empty(), 0x80)
     } else {
         if index <= 127 then {
-            path_new(sail_shiftleft(word_of_nat(index), 248), 2)
+            path_append_byte(path_empty(), get_slice_int(8, index, 0))
         } else {
             let width = rlp_index_encoded_width(index);
-            let byte_len = width + 1;
-            let encoded = or_vec(sail_shiftleft(word_of_nat(128 + width), width * 8), word_of_nat(index));
-            let align_shift = 256 - byte_len * 8;
-            path_new(sail_shiftleft(encoded, align_shift), byte_len * 2)
+            var path = path_append_byte(path_empty(), get_slice_int(8, 128 + width, 0));
+            var remaining : range(0, 8) = width;
+            foreach (_offset from 0 to 7) {
+                if remaining != 0 then {
+                    let byte_offset = rlp_index_byte_width_decrement(remaining);
+                    let shift : range(0, 56) = byte_offset * 8;
+                    path = path_append_byte(path, get_slice_int(8, index, shift));
+                    remaining = byte_offset
+                }
+            };
+            path
         }
     }
 

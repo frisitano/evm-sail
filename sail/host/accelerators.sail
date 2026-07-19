@@ -60,15 +60,5 @@ val accelerator_bls_map_fp2_to_g2 = impure { c: "accelerator_bls_map_fp2_to_g2" 
     outcome. */
 val accelerator_p256_verify = impure { c: "accelerator_p256_verify" } : ByteSlice -> bool
 
-/*! secp256k1 signature verification over `(hash, r, s, X, Y)` — the
-    sender-authentication axiom. */
-val secp256k1_verify = impure { c: "precompile_secp256k1_verify_hash_sig_pub" } : (
-        bits(256),
-        word,
-        word,
-        bits(256),
-        bits(256),
-    ) -> bool
-/*! secp256k1 public-key recovery; the leading bit of the 168-bit result
-    flags success, the low 160 bits are the address. */
-val host_ecrecover = impure { c: "precompile_ecrecover_hash_sig" } : (bits(256), y_parity, word, word) -> bits(168)
+/*! secp256k1 public-key recovery, returning its success flag and address. */
+val host_ecrecover = impure { c: "precompile_ecrecover_hash_sig" } : (hash, y_parity, word, word) -> AddressResult

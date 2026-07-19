@@ -1,0 +1,23 @@
+[workspace]
+
+[package]
+name = "stateless-validator-evm-sail-zisk"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[dependencies]
+ere-platform-zisk = { git = "https://github.com/eth-act/ere", tag = "v0.12.2", default-features = false, features = [
+    "inputcpy",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(zisk_hints)',
+    'cfg(zisk_hints_debug)',
+    'cfg(target_vendor, values("zisk"))',
+] }

@@ -747,12 +747,44 @@ fbits convert_fbits_of_lbits(const lbits value, const bool direction) {
   (void)direction;
   return value.d[0];
 }
+
+/* Generated code uses this helper for sub-64-bit extracts.  Keep it in the
+ * freestanding core rather than sail_native.c: the optimized RISC-V model
+ * references it too, and an over-wide C shift would otherwise be undefined. */
+fbits safe_rshift(const fbits value, const fbits amount) {
+  return amount >= UINT64_C(64) ? UINT64_C(0) : value >> amount;
+}
+
 void convert_lbits_of_fbits(lbits *result, const fbits value,
                             const uint64_t width, const bool direction) {
   (void)direction;
   result->len = width;
   result->d[0] = value;
   result->d[1] = result->d[2] = result->d[3] = 0;
+  bitvector_mask(result);
+}
+
+void sail_lbits_to_u64_array(uint64_t *limbs, size_t limb_count,
+                             const lbits value) {
+  for (size_t i = 0; i < limb_count; i++) {
+    limbs[i] = i < 4 ? value.d[i] : UINT64_C(0);
+  }
+  if (limb_count == 0 || value.len >= limb_count * 64) return;
+  const size_t top = (size_t)(value.len >> 6);
+  const unsigned bits = (unsigned)(value.len & UINT64_C(63));
+  if (top < limb_count && bits != 0) {
+    limbs[top] &= (UINT64_C(1) << bits) - UINT64_C(1);
+  }
+  for (size_t i = top + (bits != 0); i < limb_count; i++) limbs[i] = 0;
+}
+
+void sail_lbits_from_u64_array(lbits *result, const uint64_t *limbs,
+                               size_t limb_count, uint64_t len) {
+  if (len > UINT64_C(256) || limb_count > 4) integer_failure();
+  result->len = len;
+  for (size_t i = 0; i < 4; i++) {
+    result->d[i] = i < limb_count ? limbs[i] : UINT64_C(0);
+  }
   bitvector_mask(result);
 }
 
@@ -795,10 +827,17 @@ void sub_bits(lbits *result, const lbits lhs, const lbits rhs) {
   bitvector_mask(result);
 }
 bool eq_bits(const lbits lhs, const lbits rhs) {
+  if (lhs.len != rhs.len) return false;
   for (int i = 0; i < 4; i++) {
     if (lhs.d[i] != rhs.d[i]) return false;
   }
   return true;
+}
+bool EQUAL(lbits)(const lbits lhs, const lbits rhs) {
+  return eq_bits(lhs, rhs);
+}
+bool EQUAL(ref_lbits)(const lbits *lhs, const lbits *rhs) {
+  return eq_bits(*lhs, *rhs);
 }
 bool neq_bits(const lbits lhs, const lbits rhs) { return !eq_bits(lhs, rhs); }
 

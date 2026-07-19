@@ -99,14 +99,19 @@ Definition byte_quantity_gt
 
 Definition __id (x : Z) : Z := x.
 
-Definition BYTE_QUANTITY_MAX := (Z.sub ((pow2 (64))) (1))  : Z.
+Definition BYTE_QUANTITY_MAX : protocol_quantity :=
+(Build_protocol_quantity (18446744073709551615)).
 #[export] Hint Unfold BYTE_QUANTITY_MAX : sail.
 Definition byte_quantity_add
 '((ByteQuantity left') : byte_quantity) '((ByteQuantity right') : byte_quantity)
 : M (byte_quantity) :=
-   assert_exp' (Z.leb (left') (BYTE_QUANTITY_MAX)) "sail/primitives/quantities.sail:277.36-277.37" >>= fun _ =>
-   assert_exp' (Z.leb (right') ((Z.sub (BYTE_QUANTITY_MAX) (left')))) "sail/primitives/quantities.sail:278.44-278.45" >>= fun _ =>
+   assert_exp' (Z.leb (left') ((BYTE_QUANTITY_MAX).(protocol_quantity_value))) "sail/primitives/quantities.sail:312.36-312.37" >>= fun _ =>
+   assert_exp' (Z.leb (right') ((Z.sub ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) (left')))) "sail/primitives/quantities.sail:313.44-313.45" >>= fun _ =>
    returnM ((ByteQuantity ((Z.add (left') (right'))))).
+
+Definition gas_add '((Gas left') : gas) '((Gas right') : gas) : M (gas) :=
+   assert_exp' (Z.leb (right') ((Z.sub (9223372036854775807) (left')))) "sail/primitives/gas.sail:148.46-148.47" >>= fun _ =>
+   returnM ((Gas ((Z.add (left') (right'))))).
 
 Definition gas_constant_add
 '((GasConstant left') : gas_constant) '((GasConstant right') : gas_constant)
@@ -128,18 +133,18 @@ Definition gas_refund_add '((GasRefund left') : gas_refund) '((GasRefund right')
 Definition byte_quantity_sub
 '((ByteQuantity left') : byte_quantity) '((ByteQuantity right') : byte_quantity)
 : M (byte_quantity) :=
-   assert_exp' (Z.leb (left') (BYTE_QUANTITY_MAX)) "sail/primitives/quantities.sail:284.36-284.37" >>= fun _ =>
-   assert_exp' (Z.leb (right') (left')) "sail/primitives/quantities.sail:285.24-285.25" >>= fun _ =>
+   assert_exp' (Z.leb (left') ((BYTE_QUANTITY_MAX).(protocol_quantity_value))) "sail/primitives/quantities.sail:319.36-319.37" >>= fun _ =>
+   assert_exp' (Z.leb (right') (left')) "sail/primitives/quantities.sail:320.24-320.25" >>= fun _ =>
    returnM ((ByteQuantity ((Z.sub (left') (right'))))).
 
 Definition gas_constant_sub
 '((GasConstant left') : gas_constant) '((GasConstant right') : gas_constant)
 : M (gas_cost) :=
-   assert_exp' (Z.leb (right') (left')) "sail/primitives/gas.sail:168.24-168.25" >>= fun _ =>
+   assert_exp' (Z.leb (right') (left')) "sail/primitives/gas.sail:183.24-183.25" >>= fun _ =>
    returnM ((GasCost ((Z.sub (left') (right'))))).
 
 Definition gas_cost_sub '((GasCost left') : gas_cost) '((GasCost right') : gas_cost) : M (gas_cost) :=
-   assert_exp' (Z.leb (right') (left')) "sail/primitives/gas.sail:162.24-162.25" >>= fun _ =>
+   assert_exp' (Z.leb (right') (left')) "sail/primitives/gas.sail:177.24-177.25" >>= fun _ =>
    returnM ((GasCost ((Z.sub (left') (right'))))).
 
 Definition gas_refund_sub '((GasRefund left') : gas_refund) '((GasRefund right') : gas_refund)
@@ -147,13 +152,13 @@ Definition gas_refund_sub '((GasRefund left') : gas_refund) '((GasRefund right')
    GasRefund ((Z.sub (left') (right'))).
 
 Definition gas_sub '((Gas left') : gas) '((Gas right') : gas) : M (gas) :=
-   assert_exp' (Z.leb (right') (left')) "sail/primitives/gas.sail:140.24-140.25" >>= fun _ =>
+   assert_exp' (Z.leb (right') (left')) "sail/primitives/gas.sail:155.24-155.25" >>= fun _ =>
    returnM ((Gas ((Z.sub (left') (right'))))).
 
 Definition exact_quotient (dividend : Z) (divisor : Z) (*0 <=? dividend*) (*0 <=? divisor*) : M (Z) :=
-   assert_exp' (neq_int (divisor) (0)) "sail/primitives/quantities.sail:244.23-244.24" >>= fun _ =>
+   assert_exp' (neq_int (divisor) (0)) "sail/primitives/quantities.sail:279.23-279.24" >>= fun _ =>
    let quotient := Z.quot (dividend) (divisor) in
-   assert_exp' (Z.geb (quotient) (0)) "sail/primitives/quantities.sail:246.24-246.25" >>= fun _ =>
+   assert_exp' (Z.geb (quotient) (0)) "sail/primitives/quantities.sail:281.24-281.25" >>= fun _ =>
    returnM (quotient).
 
 Definition BYTE_ZERO : byte_quantity := ByteQuantity (0).
@@ -161,11 +166,11 @@ Definition BYTE_ZERO : byte_quantity := ByteQuantity (0).
 Definition byte_quantity_mul
 '((ByteQuantity left') : byte_quantity) '((ByteQuantity right') : byte_quantity)
 : M (byte_quantity) :=
-   assert_exp' (Z.leb (left') (BYTE_QUANTITY_MAX)) "sail/primitives/quantities.sail:291.36-291.37" >>= fun _ =>
+   assert_exp' (Z.leb (left') ((BYTE_QUANTITY_MAX).(protocol_quantity_value))) "sail/primitives/quantities.sail:326.36-326.37" >>= fun _ =>
    (if Z.eqb (left') (0) then returnM (BYTE_ZERO)
     else
-      (exact_quotient (BYTE_QUANTITY_MAX) (left')) >>= fun (w__0 : Z) =>
-      assert_exp' (Z.leb (right') (w__0)) "sail/primitives/quantities.sail:295.63-295.64" >>= fun _ =>
+      (exact_quotient ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) (left')) >>= fun (w__0 : Z) =>
+      assert_exp' (Z.leb (right') (w__0)) "sail/primitives/quantities.sail:330.63-330.64" >>= fun _ =>
       returnM ((ByteQuantity ((Z.mul (left') (right'))))))
     : M (byte_quantity).
 
@@ -178,8 +183,25 @@ Definition gas_constant_scale_byte_quantity
 : gas_cost :=
    GasCost ((Z.mul (value) (factor))).
 
+Definition gas_constant_scale_protocol_quantity
+'((GasConstant value) : gas_constant) (factor : protocol_quantity)
+(*(0 <=? factor) && (factor <=? (2 ^ 64 - 1))*)
+: gas_cost :=
+   let factor := (factor).(protocol_quantity_value) in GasCost ((Z.mul (value) (factor))).
+
 Definition gas_cost_scale '((GasCost value) : gas_cost) (factor : Z) (*0 <=? factor*) : gas_cost :=
    GasCost ((Z.mul (value) (factor))).
+
+Definition gas_cost_scale_byte_quantity
+'((GasCost value) : gas_cost) '((ByteQuantity factor) : byte_quantity)
+: gas_cost :=
+   GasCost ((Z.mul (value) (factor))).
+
+Definition gas_cost_scale_protocol_quantity
+'((GasCost value) : gas_cost) (factor : protocol_quantity)
+(*(0 <=? factor) && (factor <=? (2 ^ 64 - 1))*)
+: gas_cost :=
+   let factor := (factor).(protocol_quantity_value) in GasCost ((Z.mul (value) (factor))).
 
 Definition nat_scale_byte_quantity (left' : Z) '((ByteQuantity right') : byte_quantity)
 (*0 <=? left'*)
@@ -246,33 +268,151 @@ Definition undefined_LimbDivMod '(tt : unit) : M (LimbDivMod) :=
    (undefined_bitvector (64)) >>= fun (w__1 : mword 64) =>
    returnM (({| LimbDivMod_quotient := w__0;  LimbDivMod_remainder := w__1 |})).
 
-Definition undefined_WordDivMod '(tt : unit) : M (WordDivMod) :=
-   (undefined_bitvector (256)) >>= fun (w__0 : mword 256) =>
-   (undefined_bitvector (256)) >>= fun (w__1 : mword 256) =>
-   returnM (({| WordDivMod_quotient := w__0;  WordDivMod_remainder := w__1 |})).
+Definition address_from_bits (value : mword 160) : address_typ :=
+   let bytes : vec (mword 8) 20 := vector_init (20) ((Ox"00")) in
+   let bytes : vec (mword 8) 20 :=
+     let '(loop_k_lower) := 0 in
+     let '(loop_k_upper) := 19 in
+     (foreach_Z_up loop_k_lower loop_k_upper 1 bytes
+       (fun k bytes =>
+         vec_update_dec (bytes) (k)
+           ((subrange_vec_dec ((shiftr (value) ((Z.mul (8) (k))))) (7) (0))))) in
+   Address (bytes).
+
+Definition address_to_bits '((Address bytes) : address_typ) : bits 160 :=
+   let value : mword 160 := zeros (160) in
+   let '(loop_k_lower) := 0 in
+   let '(loop_k_upper) := 19 in
+   (foreach_Z_up loop_k_lower loop_k_upper 1 value
+     (fun k value =>
+       or_vec (value)
+         ((shiftl ((zero_extend ((vec_access_dec (bytes) (k))) (160))) ((Z.mul (8) (k))))))).
+
+Definition b256_from_bits (value : mword 256) : b256 :=
+   let bytes : vec (mword 8) 32 := vector_init (32) ((Ox"00")) in
+   let bytes : vec (mword 8) 32 :=
+     let '(loop_k_lower) := 0 in
+     let '(loop_k_upper) := 31 in
+     (foreach_Z_up loop_k_lower loop_k_upper 1 bytes
+       (fun k bytes =>
+         vec_update_dec (bytes) (k)
+           ((subrange_vec_dec ((shiftr (value) ((Z.mul (8) (k))))) (7) (0))))) in
+   B256 (bytes).
+
+Definition b256_to_bits '((B256 bytes) : b256) : bits 256 :=
+   let value : mword 256 := zeros (256) in
+   let '(loop_k_lower) := 0 in
+   let '(loop_k_upper) := 31 in
+   (foreach_Z_up loop_k_lower loop_k_upper 1 value
+     (fun k value =>
+       or_vec (value)
+         ((shiftl ((zero_extend ((vec_access_dec (bytes) (k))) (256))) ((Z.mul (8) (k))))))).
+
+Definition hash_from_bits (value : mword 256) : hash := b256_from_bits (value).
+
+Definition hash_to_bits (value : b256) : bits 256 := b256_to_bits (value).
+
+Definition b256_zero '(tt : unit) : b256 := B256 ((vector_init (32) ((Ox"00")))).
+
+Definition b256_lt '((B256 left') : b256) '((B256 right') : b256) : bool :=
+   let less : bool := false in
+   let equal : bool := true in
+   let '((equal, less)) :=
+     (let '(loop_offset_lower) := 0 in
+     let '(loop_offset_upper) := 31 in
+     (foreach_Z_up loop_offset_lower loop_offset_upper 1 (equal, less)
+       (fun offset '(equal, less) =>
+         let index := Z.sub (31) (offset) in
+         let '((equal, less)) :=
+           (if andb (equal)
+                 ((neq_vec ((vec_access_dec (left') (index))) ((vec_access_dec (right') (index)))))
+            then
+              let less : bool :=
+                Z.ltb ((uint ((vec_access_dec (left') (index)))))
+                  ((uint ((vec_access_dec (right') (index))))) in
+              let equal : bool := false in
+              (equal, less)
+            else (equal, less))
+            : (bool * bool) in
+         (equal, less))))
+      : (bool * bool) in
+   less.
+
+Definition hash_to_word (value : b256) : word := U256 ((hash_to_bits (value))).
+
+Definition word_to_hash '((U256 value) : word) : hash := hash_from_bits (value).
+
+Definition word_to_address '((U256 w) : word) : address_typ :=
+   address_from_bits ((subrange_vec_dec (w) (159) (0))).
+
+Definition address_to_word (a : address_typ) : word :=
+   U256 ((zero_extend ((address_to_bits (a))) (256))).
 
 Definition ZERO_WORD : word :=
-(Ox"0000000000000000000000000000000000000000000000000000000000000000").
+U256 ((Ox"0000000000000000000000000000000000000000000000000000000000000000")).
 #[export] Hint Unfold ZERO_WORD : sail.
-Definition ZERO_ADDR : address_typ := (Ox"0000000000000000000000000000000000000000").
+Definition ZERO_ADDR : address_typ := word_to_address (ZERO_WORD).
 #[export] Hint Unfold ZERO_ADDR : sail.
+Definition ZERO_HASH : hash := word_to_hash (ZERO_WORD).
+#[export] Hint Unfold ZERO_HASH : sail.
 Definition WORD_ZERO : word :=
-(Ox"0000000000000000000000000000000000000000000000000000000000000000").
+U256 ((Ox"0000000000000000000000000000000000000000000000000000000000000000")).
 #[export] Hint Unfold WORD_ZERO : sail.
 Definition WORD_ONE : word :=
-(Ox"0000000000000000000000000000000000000000000000000000000000000001").
+U256 ((Ox"0000000000000000000000000000000000000000000000000000000000000001")).
 #[export] Hint Unfold WORD_ONE : sail.
 Definition WORD_ALL_ONES : word :=
-(Ox"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF").
+U256 ((Ox"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")).
 #[export] Hint Unfold WORD_ALL_ONES : sail.
 Definition WORD_SIGN_BIT : word :=
-(Ox"8000000000000000000000000000000000000000000000000000000000000000").
+U256 ((Ox"8000000000000000000000000000000000000000000000000000000000000000")).
 #[export] Hint Unfold WORD_SIGN_BIT : sail.
+Definition word_to_bits '((U256 value) : word) : bits 256 := value.
+
+Definition word_add '((U256 left') : word) '((U256 right') : word) : word :=
+   U256 ((add_vec (left') (right'))).
+
+Definition word_sub '((U256 left') : word) '((U256 right') : word) : word :=
+   U256 ((sub_vec (left') (right'))).
+
+Definition word_and '((U256 left') : word) '((U256 right') : word) : word :=
+   U256 ((and_vec (left') (right'))).
+
+Definition word_or '((U256 left') : word) '((U256 right') : word) : word :=
+   U256 ((or_vec (left') (right'))).
+
+Definition word_xor '((U256 left') : word) '((U256 right') : word) : word :=
+   U256 ((xor_vec (left') (right'))).
+
+Definition word_not '((U256 value) : word) : word := U256 ((not_vec (value))).
+
+Definition word_bit '((U256 value) : word) (index : Z) (*(0 <=? index) && (index <=? 255)*) : bit :=
+   access_vec_dec (value) (index).
+
+Definition word_low_byte '((U256 value) : word) : byte := subrange_vec_dec (value) (7) (0).
+
+Definition word_limb_0 '((U256 value) : word) : limb := subrange_vec_dec (value) (63) (0).
+
+Definition word_limb_1 '((U256 value) : word) : limb := subrange_vec_dec (value) (127) (64).
+
+Definition word_limb_2 '((U256 value) : word) : limb := subrange_vec_dec (value) (191) (128).
+
+Definition word_limb_3 '((U256 value) : word) : limb := subrange_vec_dec (value) (255) (192).
+
+Definition word_from_limbs
+(limb_0 : mword 64) (limb_1 : mword 64) (limb_2 : mword 64) (limb_3 : mword 64)
+: word :=
+   U256 ((concat_vec (limb_3) ((concat_vec (limb_2) ((concat_vec (limb_1) (limb_0))))))).
+
+Definition word_shift_left_one '((U256 value) : word) : word := U256 ((shiftl (value) (1))).
+
+Definition word_shift_right_one '((U256 value) : word) : word := U256 ((shiftr (value) (1))).
+
 Definition word_of_bool (b : bool) : word := if b then WORD_ONE else WORD_ZERO.
 
-Definition word_is_zero (w : mword 256) : bool := eq_vec (w) (WORD_ZERO).
+Definition word_is_zero (w : word) : bool := generic_eq (w) (WORD_ZERO).
 
-Definition word_nonzero (w : mword 256) : bool := negb ((word_is_zero (w))).
+Definition word_nonzero (w : word) : bool := negb ((word_is_zero (w))).
 
 Definition LIMB_ZERO : limb := (Ox"0000000000000000").
 #[export] Hint Unfold LIMB_ZERO : sail.
@@ -380,7 +520,7 @@ Definition word_bit_count_increment (value : word_bit_count) (*(0 <=? value) && 
 : M (word_bit_count) :=
    let value := (value).(word_bit_count_value) in
    ((if Z.ltb (value) (256) then returnM ((Z.add (value) (1)))
-     else assert_exp' false "sail/prelude.sail:188.20-188.21" >>= fun _ => exit tt)
+     else assert_exp' false "sail/prelude.sail:293.20-293.21" >>= fun _ => exit tt)
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word_bit_count (semanticResult)).
 
@@ -403,18 +543,18 @@ Definition limb_bit_length (value : mword 64) : limb_bit_count :=
       : (Z * mword 64) in
    length)).
 
-Definition word_to_limb (w : mword 256) : option limb :=
+Definition word_to_limb '((U256 w) : word) : option limb :=
    if eq_vec ((subrange_vec_dec (w) (255) (64))) ((zeros (192))) then
      Some ((subrange_vec_dec (w) (63) (0)))
    else None.
 
-Definition limb_to_word (value : mword 64) : word := zero_extend (value) (256).
+Definition limb_to_word (value : mword 64) : word := U256 ((zero_extend (value) (256))).
 
 Definition word_of_nat (value : Z) (*0 <=? value*) : M (word) :=
-   assert_exp' (Z.ltb (value) ((pow2 (256)))) "sail/prelude.sail:222.26-222.27" >>= fun _ =>
-   returnM ((get_slice_int (256) (value) (0))).
+   assert_exp' (Z.ltb (value) ((pow2 (256)))) "sail/prelude.sail:327.26-327.27" >>= fun _ =>
+   returnM ((U256 ((get_slice_int (256) (value) (0))))).
 
-Definition word_ult (a : mword 256) (b : mword 256) : bool :=
+Definition word_ult '((U256 a) : word) '((U256 b) : word) : bool :=
    if neq_vec ((subrange_vec_dec (a) (255) (192))) ((subrange_vec_dec (b) (255) (192))) then
      limb_ult ((subrange_vec_dec (a) (255) (192))) ((subrange_vec_dec (b) (255) (192)))
    else if neq_vec ((subrange_vec_dec (a) (191) (128))) ((subrange_vec_dec (b) (191) (128))) then
@@ -423,9 +563,9 @@ Definition word_ult (a : mword 256) (b : mword 256) : bool :=
      limb_ult ((subrange_vec_dec (a) (127) (64))) ((subrange_vec_dec (b) (127) (64)))
    else limb_ult ((subrange_vec_dec (a) (63) (0))) ((subrange_vec_dec (b) (63) (0))).
 
-Definition word_ule (a : mword 256) (b : mword 256) : bool := negb ((word_ult (b) (a))).
+Definition word_ule (a : word) (b : word) : bool := negb ((word_ult (b) (a))).
 
-Definition word_bit_length (value : mword 256) : word_bit_count :=
+Definition word_bit_length '((U256 value) : word) : word_bit_count :=
    (Build_word_bit_count (if neq_vec ((subrange_vec_dec (value) (255) (192))) (LIMB_ZERO) then
      Z.add (192)
        (((limb_bit_length ((subrange_vec_dec (value) (255) (192)))).(limb_bit_count_value)))
@@ -436,14 +576,14 @@ Definition word_bit_length (value : mword 256) : word_bit_count :=
      Z.add (64) (((limb_bit_length ((subrange_vec_dec (value) (127) (64)))).(limb_bit_count_value)))
    else (limb_bit_length ((subrange_vec_dec (value) (63) (0)))).(limb_bit_count_value))).
 
-Definition word_checked_add (a : mword 256) (b : mword 256) : option word :=
-   let result := add_vec (a) (b) in
+Definition word_checked_add (a : word) (b : word) : option word :=
+   let result := word_add (a) (b) in
    if word_ult (result) (a) then None
    else Some (result).
 
-Definition word_checked_mul_limb (value : mword 256) (factor : mword 64) : option word :=
-   let result : mword 256 := ZERO_WORD in
-   let addend : mword 256 := value in
+Definition word_checked_mul_limb (value : word) (factor : mword 64) : option word :=
+   let result : word := ZERO_WORD in
+   let addend : word := value in
    let remaining : mword 64 := factor in
    let valid : bool := true in
    let '((addend, remaining, result, valid)) :=
@@ -457,16 +597,16 @@ Definition word_checked_mul_limb (value : mword 256) (factor : mword 64) : optio
               let '((result, valid)) :=
                 match added with
                 | Some value =>
-                   let result : mword 256 := value in
+                   let result : word := value in
                    (result, valid)
                 | None =>
                    let valid : bool := false in
                    (result, valid)
                 end
-                 : (mword 256 * bool) in
+                 : (word * bool) in
               (result, valid)
             else (result, valid))
-            : (mword 256 * bool) in
+            : (word * bool) in
          let remaining : mword 64 := shiftr (remaining) (1) in
          let '((addend, valid)) :=
            (if andb (valid) ((andb ((Z.ltb (i) (63))) ((neq_vec (remaining) (LIMB_ZERO))))) then
@@ -474,78 +614,78 @@ Definition word_checked_mul_limb (value : mword 256) (factor : mword 64) : optio
               let '((addend, valid)) :=
                 match doubled with
                 | Some value =>
-                   let addend : mword 256 := value in
+                   let addend : word := value in
                    (addend, valid)
                 | None =>
                    let valid : bool := false in
                    (addend, valid)
                 end
-                 : (mword 256 * bool) in
+                 : (word * bool) in
               (addend, valid)
             else (addend, valid))
-            : (mword 256 * bool) in
+            : (word * bool) in
          (addend, remaining, result, valid))))
-      : (mword 256 * mword 64 * mword 256 * bool) in
+      : (word * mword 64 * word * bool) in
    if valid then Some (result)
    else None.
 
-Definition word_mul (a : mword 256) (b : mword 256) : word :=
-   let result : mword 256 := WORD_ZERO in
-   let addend : mword 256 := a in
-   let remaining : mword 256 := b in
+Definition word_mul (a : word) (b : word) : word :=
+   let result : word := WORD_ZERO in
+   let addend : word := a in
+   let remaining : word := b in
    let '((addend, remaining, result)) :=
      (let '(loop__step_lower) := 0 in
      let '(loop__step_upper) := 255 in
      (foreach_Z_up loop__step_lower loop__step_upper 1 (addend, remaining, result)
        (fun _step '(addend, remaining, result) =>
-         let result : mword 256 :=
-           if eq_vec ((access_vec_dec (remaining) (0))) (('b"1")) then add_vec (result) (addend)
+         let result : word :=
+           if eq_vec ((word_bit (remaining) (0))) (('b"1")) then word_add (result) (addend)
            else result in
-         let addend : mword 256 := shiftl (addend) (1) in
-         let remaining : mword 256 := shiftr (remaining) (1) in
+         let addend : word := word_shift_left_one (addend) in
+         let remaining : word := word_shift_right_one (remaining) in
          (addend, remaining, result))))
-      : (mword 256 * mword 256 * mword 256) in
+      : (word * word * word) in
    result.
 
-Definition word_divmod (dividend : mword 256) (divisor : mword 256) : WordDivMod :=
+Definition word_divmod (dividend : word) (divisor : word) : WordDivMod :=
    if word_is_zero (divisor) then
      {| WordDivMod_quotient := WORD_ZERO;
         WordDivMod_remainder := WORD_ZERO |}
    else
-     let quotient : mword 256 := WORD_ZERO in
-     let remainder : mword 256 := WORD_ZERO in
-     let remaining : mword 256 := dividend in
+     let quotient : word := WORD_ZERO in
+     let remainder : word := WORD_ZERO in
+     let remaining : word := dividend in
      let '((quotient, remainder, remaining)) :=
        (let '(loop__step_lower) := 0 in
        let '(loop__step_upper) := 255 in
        (foreach_Z_up loop__step_lower loop__step_upper 1 (quotient, remainder, remaining)
          (fun _step '(quotient, remainder, remaining) =>
            let incoming :=
-             if eq_vec ((access_vec_dec (remaining) (255))) (('b"1")) then WORD_ONE
+             if eq_vec ((word_bit (remaining) (255))) (('b"1")) then WORD_ONE
              else WORD_ZERO in
-           let overflow := eq_vec ((access_vec_dec (remainder) (255))) (('b"1")) in
-           let remainder : mword 256 := or_vec ((shiftl (remainder) (1))) (incoming) in
-           let remaining : mword 256 := shiftl (remaining) (1) in
-           let quotient : mword 256 := shiftl (quotient) (1) in
+           let overflow := eq_vec ((word_bit (remainder) (255))) (('b"1")) in
+           let remainder : word := word_or ((word_shift_left_one (remainder))) (incoming) in
+           let remaining : word := word_shift_left_one (remaining) in
+           let quotient : word := word_shift_left_one (quotient) in
            let '((quotient, remainder)) :=
              (if orb (overflow) ((word_ule (divisor) (remainder))) then
-                let remainder : mword 256 := sub_vec (remainder) (divisor) in
-                let quotient : mword 256 := or_vec (quotient) (WORD_ONE) in
+                let remainder : word := word_sub (remainder) (divisor) in
+                let quotient : word := word_or (quotient) (WORD_ONE) in
                 (quotient, remainder)
               else (quotient, remainder))
-              : (mword 256 * mword 256) in
+              : (word * word) in
            (quotient, remainder, remaining))))
-        : (mword 256 * mword 256 * mword 256) in
+        : (word * word * word) in
      {| WordDivMod_quotient := quotient;
         WordDivMod_remainder := remainder |}.
 
-Definition word_mod_add_reduced (a : mword 256) (b : mword 256) (modulus : mword 256) : word :=
-   let threshold := sub_vec (modulus) (b) in
-   if word_ule (threshold) (a) then sub_vec (a) (threshold)
-   else add_vec (a) (b).
+Definition word_mod_add_reduced (a : word) (b : word) (modulus : word) : word :=
+   let threshold := word_sub (modulus) (b) in
+   if word_ule (threshold) (a) then word_sub (a) (threshold)
+   else word_add (a) (b).
 
-Definition word_shift_left_limb (value : mword 256) (amount : mword 64) : word :=
-   let result : mword 256 := value in
+Definition word_shift_left_limb (value : word) (amount : mword 64) : word :=
+   let result : word := value in
    let remaining : mword 64 := amount in
    let '((remaining, result)) :=
      (let '(loop__step_lower) := 0 in
@@ -554,17 +694,17 @@ Definition word_shift_left_limb (value : mword 256) (amount : mword 64) : word :
        (fun _step '(remaining, result) =>
          let '((remaining, result)) :=
            (if neq_vec (remaining) (LIMB_ZERO) then
-              let result : mword 256 := shiftl (result) (1) in
+              let result : word := word_shift_left_one (result) in
               let remaining : mword 64 := sub_vec (remaining) (LIMB_ONE) in
               (remaining, result)
             else (remaining, result))
-            : (mword 64 * mword 256) in
+            : (mword 64 * word) in
          (remaining, result))))
-      : (mword 64 * mword 256) in
+      : (mword 64 * word) in
    result.
 
-Definition word_shift_right_limb (value : mword 256) (amount : mword 64) : word :=
-   let result : mword 256 := value in
+Definition word_shift_right_limb (value : word) (amount : mword 64) : word :=
+   let result : word := value in
    let remaining : mword 64 := amount in
    let '((remaining, result)) :=
      (let '(loop__step_lower) := 0 in
@@ -573,19 +713,19 @@ Definition word_shift_right_limb (value : mword 256) (amount : mword 64) : word 
        (fun _step '(remaining, result) =>
          let '((remaining, result)) :=
            (if neq_vec (remaining) (LIMB_ZERO) then
-              let result : mword 256 := shiftr (result) (1) in
+              let result : word := word_shift_right_one (result) in
               let remaining : mword 64 := sub_vec (remaining) (LIMB_ONE) in
               (remaining, result)
             else (remaining, result))
-            : (mword 64 * mword 256) in
+            : (mword 64 * word) in
          (remaining, result))))
-      : (mword 64 * mword 256) in
+      : (mword 64 * word) in
    result.
 
-Definition word_arithmetic_shift_right_limb (value : mword 256) (amount : mword 64) : word :=
-   let result : mword 256 := value in
+Definition word_arithmetic_shift_right_limb (value : word) (amount : mword 64) : word :=
+   let result : word := value in
    let remaining : mword 64 := amount in
-   let negative := eq_vec ((access_vec_dec (value) (255))) (('b"1")) in
+   let negative := eq_vec ((word_bit (value) (255))) (('b"1")) in
    let '((remaining, result)) :=
      (let '(loop__step_lower) := 0 in
      let '(loop__step_upper) := 255 in
@@ -593,175 +733,164 @@ Definition word_arithmetic_shift_right_limb (value : mword 256) (amount : mword 
        (fun _step '(remaining, result) =>
          let '((remaining, result)) :=
            (if neq_vec (remaining) (LIMB_ZERO) then
-              let result : mword 256 := shiftr (result) (1) in
-              let result : mword 256 := if negative then or_vec (result) (WORD_SIGN_BIT) else result in
+              let result : word := word_shift_right_one (result) in
+              let result : word := if negative then word_or (result) (WORD_SIGN_BIT) else result in
               let remaining : mword 64 := sub_vec (remaining) (LIMB_ONE) in
               (remaining, result)
             else (remaining, result))
-            : (mword 64 * mword 256) in
+            : (mword 64 * word) in
          (remaining, result))))
-      : (mword 64 * mword 256) in
+      : (mword 64 * word) in
    result.
 
-Definition word_negate (value : mword 256) : word := sub_vec (WORD_ZERO) (value).
+Definition word_negate (value : word) : word := word_sub (WORD_ZERO) (value).
 
-Definition word_abs (value : mword 256) : word :=
-   if eq_vec ((access_vec_dec (value) (255))) (('b"1")) then word_negate (value) else value.
+Definition word_abs (value : word) : word :=
+   if eq_vec ((word_bit (value) (255))) (('b"1")) then word_negate (value) else value.
 
-Definition word_slt (a : mword 256) (b : mword 256) : bool :=
-   let a_neg := eq_vec ((access_vec_dec (a) (255))) (('b"1")) in
-   let b_neg := eq_vec ((access_vec_dec (b) (255))) (('b"1")) in
+Definition word_slt (a : word) (b : word) : bool :=
+   let a_neg := eq_vec ((word_bit (a) (255))) (('b"1")) in
+   let b_neg := eq_vec ((word_bit (b) (255))) (('b"1")) in
    if a_neg then if b_neg then word_ult (a) (b) else true
    else if b_neg then false
    else word_ult (a) (b).
 
-Definition word_to_address (w : mword 256) : address_typ := subrange_vec_dec (w) (159) (0).
+Definition alu_add (a : word) (b : word) : word := word_add (a) (b).
 
-Definition address_to_word (a : mword 160) : word := zero_extend (a) (256).
+Definition alu_sub (a : word) (b : word) : word := word_sub (a) (b).
 
-Definition alu_add (a : mword 256) (b : mword 256) : word := add_vec (a) (b).
+Definition alu_mul (a : word) (b : word) : word := word_mul (a) (b).
 
-Definition alu_sub (a : mword 256) (b : mword 256) : word := sub_vec (a) (b).
-
-Definition alu_mul (a : mword 256) (b : mword 256) : word := word_mul (a) (b).
-
-Definition alu_div (a : mword 256) (b : mword 256) : word :=
+Definition alu_div (a : word) (b : word) : word :=
    if word_is_zero (b) then WORD_ZERO else (word_divmod (a) (b)).(WordDivMod_quotient).
 
-Definition alu_mod (a : mword 256) (b : mword 256) : word :=
+Definition alu_mod (a : word) (b : word) : word :=
    if word_is_zero (b) then WORD_ZERO else (word_divmod (a) (b)).(WordDivMod_remainder).
 
-Definition alu_sdiv (a : mword 256) (b : mword 256) : word :=
+Definition alu_sdiv (a : word) (b : word) : word :=
    if word_is_zero (b) then WORD_ZERO
    else
      let quotient := (word_divmod ((word_abs (a))) ((word_abs (b)))).(WordDivMod_quotient) in
-     if neq_bool ((eq_vec ((access_vec_dec (a) (255))) (('b"1"))))
-          ((eq_vec ((access_vec_dec (b) (255))) (('b"1")))) then
+     if neq_bool ((eq_vec ((word_bit (a) (255))) (('b"1"))))
+          ((eq_vec ((word_bit (b) (255))) (('b"1")))) then
        word_negate (quotient)
      else quotient.
 
-Definition alu_smod (a : mword 256) (b : mword 256) : word :=
+Definition alu_smod (a : word) (b : word) : word :=
    if word_is_zero (b) then WORD_ZERO
    else
      let remainder := (word_divmod ((word_abs (a))) ((word_abs (b)))).(WordDivMod_remainder) in
-     if eq_vec ((access_vec_dec (a) (255))) (('b"1")) then word_negate (remainder)
+     if eq_vec ((word_bit (a) (255))) (('b"1")) then word_negate (remainder)
      else remainder.
 
-Definition alu_addmod (a : mword 256) (b : mword 256) (n : mword 256) : word :=
+Definition alu_addmod (a : word) (b : word) (n : word) : word :=
    if word_is_zero (n) then WORD_ZERO
    else
      let a_reduced := (word_divmod (a) (n)).(WordDivMod_remainder) in
      let b_reduced := (word_divmod (b) (n)).(WordDivMod_remainder) in
      word_mod_add_reduced (a_reduced) (b_reduced) (n).
 
-Definition alu_mulmod (a : mword 256) (b : mword 256) (n : mword 256) : word :=
+Definition alu_mulmod (a : word) (b : word) (n : word) : word :=
    if word_is_zero (n) then WORD_ZERO
    else
-     let result : mword 256 := WORD_ZERO in
-     let addend : mword 256 := (word_divmod (a) (n)).(WordDivMod_remainder) in
-     let remaining : mword 256 := b in
+     let result : word := WORD_ZERO in
+     let addend : word := (word_divmod (a) (n)).(WordDivMod_remainder) in
+     let remaining : word := b in
      let '((addend, remaining, result)) :=
        (let '(loop__step_lower) := 0 in
        let '(loop__step_upper) := 255 in
        (foreach_Z_up loop__step_lower loop__step_upper 1 (addend, remaining, result)
          (fun _step '(addend, remaining, result) =>
-           let result : mword 256 :=
-             if eq_vec ((access_vec_dec (remaining) (0))) (('b"1")) then
+           let result : word :=
+             if eq_vec ((word_bit (remaining) (0))) (('b"1")) then
                word_mod_add_reduced (result) (addend) (n)
              else result in
-           let addend : mword 256 := word_mod_add_reduced (addend) (addend) (n) in
-           let remaining : mword 256 := shiftr (remaining) (1) in
+           let addend : word := word_mod_add_reduced (addend) (addend) (n) in
+           let remaining : word := word_shift_right_one (remaining) in
            (addend, remaining, result))))
-        : (mword 256 * mword 256 * mword 256) in
+        : (word * word * word) in
      result.
 
-Definition alu_exp (base : mword 256) (exponent : mword 256) : word :=
-   let result : mword 256 := WORD_ONE in
-   let b : mword 256 := base in
-   let e : mword 256 := exponent in
+Definition alu_exp (base : word) (exponent : word) : word :=
+   let result : word := WORD_ONE in
+   let b : word := base in
+   let e : word := exponent in
    let '((b, e, result)) :=
      (let '(loop__step_lower) := 0 in
      let '(loop__step_upper) := 255 in
      (foreach_Z_up loop__step_lower loop__step_upper 1 (b, e, result)
        (fun _step '(b, e, result) =>
-         let result : mword 256 :=
-           if eq_vec ((access_vec_dec (e) (0))) (('b"1")) then word_mul (result) (b)
+         let result : word :=
+           if eq_vec ((word_bit (e) (0))) (('b"1")) then word_mul (result) (b)
            else result in
-         let b : mword 256 := word_mul (b) (b) in
-         let e : mword 256 := shiftr (e) (1) in
+         let b : word := word_mul (b) (b) in
+         let e : word := word_shift_right_one (e) in
          (b, e, result))))
-      : (mword 256 * mword 256 * mword 256) in
+      : (word * word * word) in
    result.
 
-Definition alu_signextend (byte_index : mword 256) (value : mword 256) : word :=
+Definition alu_signextend (byte_index : word) (value : word) : word :=
    match word_to_limb (byte_index) with
    | Some index =>
       if limb_ult (index) ((Ox"0000000000000020")) then
         let width := shiftl ((add_vec (index) (LIMB_ONE))) (3) in
         let sign_shift := sub_vec (width) (LIMB_ONE) in
         let sign_set :=
-          eq_vec ((and_vec ((word_shift_right_limb (value) (sign_shift))) (WORD_ONE))) (WORD_ONE) in
-        let low_mask := sub_vec ((word_shift_left_limb (WORD_ONE) (width))) (WORD_ONE) in
-        if sign_set then or_vec ((and_vec (value) (low_mask))) ((not_vec (low_mask)))
-        else and_vec (value) (low_mask)
+          generic_eq ((word_and ((word_shift_right_limb (value) (sign_shift))) (WORD_ONE)))
+            (WORD_ONE) in
+        let low_mask := word_sub ((word_shift_left_limb (WORD_ONE) (width))) (WORD_ONE) in
+        if sign_set then word_or ((word_and (value) (low_mask))) ((word_not (low_mask)))
+        else word_and (value) (low_mask)
       else value
    | _ => value
    end.
 
-Definition alu_lt (a : mword 256) (b : mword 256) : word := word_of_bool ((word_ult (a) (b))).
+Definition alu_lt (a : word) (b : word) : word := word_of_bool ((word_ult (a) (b))).
 
-Definition alu_gt (a : mword 256) (b : mword 256) : word := word_of_bool ((word_ult (b) (a))).
+Definition alu_gt (a : word) (b : word) : word := word_of_bool ((word_ult (b) (a))).
 
-Definition alu_slt (a : mword 256) (b : mword 256) : word := word_of_bool ((word_slt (a) (b))).
+Definition alu_slt (a : word) (b : word) : word := word_of_bool ((word_slt (a) (b))).
 
-Definition alu_sgt (a : mword 256) (b : mword 256) : word := word_of_bool ((word_slt (b) (a))).
+Definition alu_sgt (a : word) (b : word) : word := word_of_bool ((word_slt (b) (a))).
 
-Definition alu_eq (a : mword 256) (b : mword 256) : word := word_of_bool ((eq_vec (a) (b))).
+Definition alu_eq (a : word) (b : word) : word := word_of_bool ((generic_eq (a) (b))).
 
-Definition alu_iszero (a : mword 256) : word := word_of_bool ((word_is_zero (a))).
+Definition alu_iszero (a : word) : word := word_of_bool ((word_is_zero (a))).
 
-Definition alu_and (a : mword 256) (b : mword 256) : word := and_vec (a) (b).
+Definition alu_and (a : word) (b : word) : word := word_and (a) (b).
 
-Definition alu_or (a : mword 256) (b : mword 256) : word := or_vec (a) (b).
+Definition alu_or (a : word) (b : word) : word := word_or (a) (b).
 
-Definition alu_xor (a : mword 256) (b : mword 256) : word := xor_vec (a) (b).
+Definition alu_xor (a : word) (b : word) : word := word_xor (a) (b).
 
-Definition alu_not (a : mword 256) : word := not_vec (a).
+Definition alu_not (a : word) : word := word_not (a).
 
-Definition alu_byte (i : mword 256) (x : mword 256) : word :=
+Definition alu_byte (i : word) (x : word) : word :=
    match word_to_limb (i) with
    | Some index =>
       if limb_ult (index) ((Ox"0000000000000020")) then
         let byte_offset := sub_vec ((Ox"000000000000001F")) (index) in
         let shift := shiftl (byte_offset) (3) in
-        zero_extend ((subrange_vec_dec ((word_shift_right_limb (x) (shift))) (7) (0))) (256)
+        U256 ((zero_extend ((word_low_byte ((word_shift_right_limb (x) (shift))))) (256)))
       else WORD_ZERO
    | _ => WORD_ZERO
    end.
 
-Definition alu_shl (shift_amt : mword 256) (v : mword 256) : word :=
-   if negb
-        ((word_ult (shift_amt)
-            ((Ox"0000000000000000000000000000000000000000000000000000000000000100")))) then
-     WORD_ZERO
-   else word_shift_left_limb (v) ((subrange_vec_dec (shift_amt) (63) (0))).
+Definition alu_shl (shift_amt : word) (v : word) : word :=
+   if negb ((word_ult (shift_amt) ((limb_to_word ((Ox"0000000000000100")))))) then WORD_ZERO
+   else word_shift_left_limb (v) ((word_limb_0 (shift_amt))).
 
-Definition alu_shr (shift_amt : mword 256) (v : mword 256) : word :=
-   if negb
-        ((word_ult (shift_amt)
-            ((Ox"0000000000000000000000000000000000000000000000000000000000000100")))) then
-     WORD_ZERO
-   else word_shift_right_limb (v) ((subrange_vec_dec (shift_amt) (63) (0))).
+Definition alu_shr (shift_amt : word) (v : word) : word :=
+   if negb ((word_ult (shift_amt) ((limb_to_word ((Ox"0000000000000100")))))) then WORD_ZERO
+   else word_shift_right_limb (v) ((word_limb_0 (shift_amt))).
 
-Definition alu_sar (shift_amt : mword 256) (v : mword 256) : word :=
-   if negb
-        ((word_ult (shift_amt)
-            ((Ox"0000000000000000000000000000000000000000000000000000000000000100")))) then
-     if eq_vec ((access_vec_dec (v) (255))) (('b"1")) then WORD_ALL_ONES
+Definition alu_sar (shift_amt : word) (v : word) : word :=
+   if negb ((word_ult (shift_amt) ((limb_to_word ((Ox"0000000000000100")))))) then
+     if eq_vec ((word_bit (v) (255))) (('b"1")) then WORD_ALL_ONES
      else WORD_ZERO
-   else word_arithmetic_shift_right_limb (v) ((subrange_vec_dec (shift_amt) (63) (0))).
+   else word_arithmetic_shift_right_limb (v) ((word_limb_0 (shift_amt))).
 
-Definition alu_clz (x : mword 256) : M (word) :=
+Definition alu_clz (x : word) : M (word) :=
    let count : Z := 0 in
    let found : bool := false in
    (let '(loop_i_lower) := 0 in
@@ -770,7 +899,7 @@ Definition alu_clz (x : mword 256) : M (word) :=
      (fun i '(count, found) =>
        let biinput_index := Z.sub (255) (i) in
        (if negb (found) return M ((Z * bool)) then
-          (if eq_vec ((access_vec_dec (x) (biinput_index))) (('b"0")) return M ((Z * bool)) then
+          (if eq_vec ((word_bit (x) (biinput_index))) (('b"0")) return M ((Z * bool)) then
              ((word_bit_count_increment (Build_word_bit_count ((count)))) >>= fun semanticResult =>
               returnM (semanticResult).(word_bit_count_value)) >>= fun (w__0 : Z) =>
              let count := w__0  : Z in
@@ -782,32 +911,50 @@ Definition alu_clz (x : mword 256) : M (word) :=
         else returnM ((count, found)))
         : M ((Z * bool))))) >>= fun '((count, found)
    : (Z * bool)) =>
-   (word_of_nat (count))
-    : M (mword 256).
+   returnM ((limb_to_word ((get_slice_int (64) (count) (0))))).
 
-Definition word_to_account_nonce (value : mword 256) : option account_nonce :=
-   (option_map (fun semanticValue => (Build_protocol_quantity (semanticValue))) (let amount :=
-     uint (value) in
-   if Z.leb (amount) ((Z.sub ((pow2 (64))) (1))) then Some (amount)
-   else None)).
+Definition word_of_protocol_quantity (value : protocol_quantity)
+(*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
+: M (word) :=
+   let value := (value).(protocol_quantity_value) in (word_of_nat (value))  : M (word).
 
-Definition word_to_precompile_id (value : mword 256) : option precompile_id :=
-   (option_map (fun semanticValue => (Build_precompile_id (semanticValue))) (let candidate :=
-     uint ((subrange_vec_dec (value) (8) (0))) in
-   if andb ((eq_vec ((subrange_vec_dec (value) (255) (9))) ((zeros (247)))))
-        ((andb ((Z.leb (1) (candidate))) ((Z.leb (candidate) (256))))) then
-     Some (candidate)
-   else None)).
+Definition word_to_account_nonce (value : word) : option account_nonce :=
+   (option_map (fun semanticValue => (Build_protocol_quantity (semanticValue))) (match word_to_limb
+                                                                                         (value) with
+   | Some amount => Some ((uint (amount)))
+   | None => None
+   end)).
+
+Definition word_to_protocol_quantity (value : word) : option protocol_quantity :=
+   (option_map (fun semanticValue => (Build_protocol_quantity (semanticValue))) (match word_to_limb
+                                                                                         (value) with
+   | Some amount => Some ((uint (amount)))
+   | None => None
+   end)).
+
+Definition word_to_precompile_id (value : word) : option precompile_id :=
+   (option_map (fun semanticValue => (Build_precompile_id (semanticValue))) (match word_to_limb
+                                                                                     (value) with
+   | Some limb_value =>
+      let candidate := uint ((subrange_vec_dec (limb_value) (8) (0))) in
+      if andb ((eq_vec ((subrange_vec_dec (limb_value) (63) (9))) ((zeros (55)))))
+           ((andb ((Z.leb (1) (candidate))) ((Z.leb (candidate) (256))))) then
+        Some (candidate)
+      else None
+   | None => None
+   end)).
 
 Definition word_of_precompile_id (value : precompile_id) (*(1 <=? value) && (value <=? 256)*)
 : M (word) :=
-   let value := (value).(precompile_id_value) in (word_of_nat (value))  : M (mword 256).
+   let value := (value).(precompile_id_value) in
+   (word_of_protocol_quantity (Build_protocol_quantity ((value))))
+    : M (word).
 
 Definition account_nonce_increment (value : account_nonce)
 (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
 : M (account_nonce) :=
    let value := (value).(protocol_quantity_value) in
-   (assert_exp' (Z.ltb (value) ((Z.sub ((pow2 (64))) (1)))) "sail/primitives/quantities.sail:125.29-125.30" >>= fun _ =>
+   (assert_exp' (Z.ltb (value) ((BYTE_QUANTITY_MAX).(protocol_quantity_value))) "sail/primitives/quantities.sail:144.36-144.37" >>= fun _ =>
     returnM ((Z.add (value) (1)))) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
 
@@ -815,7 +962,7 @@ Definition protocol_quantity_increment (value : protocol_quantity)
 (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
 : M (protocol_quantity) :=
    let value := (value).(protocol_quantity_value) in
-   (assert_exp' (Z.ltb (value) ((Z.sub ((pow2 (64))) (1)))) "sail/primitives/quantities.sail:131.29-131.30" >>= fun _ =>
+   (assert_exp' (Z.ltb (value) ((BYTE_QUANTITY_MAX).(protocol_quantity_value))) "sail/primitives/quantities.sail:150.36-150.37" >>= fun _ =>
     returnM ((Z.add (value) (1)))) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
 
@@ -823,15 +970,33 @@ Definition protocol_quantity_decrement (value : protocol_quantity)
 (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
 : M (protocol_quantity) :=
    let value := (value).(protocol_quantity_value) in
-   (assert_exp' (Z.ltb (0) (value)) "sail/primitives/quantities.sail:137.20-137.21" >>= fun _ =>
+   (assert_exp' (Z.ltb (0) (value)) "sail/primitives/quantities.sail:156.20-156.21" >>= fun _ =>
     returnM ((Z.sub (value) (1)))) >>= fun semanticResult =>
+   returnM (Build_protocol_quantity (semanticResult)).
+
+Definition protocol_quantity_sub (left' : protocol_quantity) (right' : protocol_quantity)
+(*(0 <=? left') && (left' <=? (2 ^ 64 - 1))*) (*(0 <=? right') && (right' <=? (2 ^ 64 - 1))*)
+: M (protocol_quantity) :=
+   let left' := (left').(protocol_quantity_value) in
+   let right' := (right').(protocol_quantity_value) in
+   (assert_exp' (Z.leb (right') (left')) "sail/primitives/quantities.sail:162.24-162.25" >>= fun _ =>
+    returnM ((Z.sub (left') (right')))) >>= fun semanticResult =>
+   returnM (Build_protocol_quantity (semanticResult)).
+
+Definition protocol_quantity_add (left' : protocol_quantity) (right' : protocol_quantity)
+(*(0 <=? left') && (left' <=? (2 ^ 64 - 1))*) (*(0 <=? right') && (right' <=? (2 ^ 64 - 1))*)
+: M (protocol_quantity) :=
+   let left' := (left').(protocol_quantity_value) in
+   let right' := (right').(protocol_quantity_value) in
+   (assert_exp' (Z.leb (right') ((Z.sub ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) (left')))) "sail/primitives/quantities.sail:168.44-168.45" >>= fun _ =>
+    returnM ((Z.add (left') (right')))) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
 
 Definition frame_depth_increment (value : frame_depth) (*(0 <=? value) && (value <=? 1024)*)
 : M (frame_depth) :=
    let value := (value).(frame_depth_value) in
    ((if Z.ltb (value) (1024) then returnM ((Z.add (value) (1)))
-     else assert_exp' false "sail/primitives/quantities.sail:146.20-146.21" >>= fun _ => exit tt)
+     else assert_exp' false "sail/primitives/quantities.sail:177.20-177.21" >>= fun _ => exit tt)
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_frame_depth (semanticResult)).
 
@@ -855,35 +1020,40 @@ Definition item_index_increment (value : item_index) (*(0 <=? value) && (value <
 Definition merkle_depth_increment (value : merkle_depth) (*(0 <=? value) && (value <=? 64)*)
 : M (merkle_depth) :=
    let value := (value).(merkle_depth_value) in
-   (assert_exp' (Z.ltb (value) (64)) "sail/primitives/quantities.sail:162.21-162.22" >>= fun _ =>
+   (assert_exp' (Z.ltb (value) (64)) "sail/primitives/quantities.sail:193.21-193.22" >>= fun _ =>
     returnM ((Z.add (value) (1)))) >>= fun semanticResult =>
    returnM (Build_merkle_depth (semanticResult)).
 
 Definition merkle_depth_decrement (value : merkle_depth) (*(0 <=? value) && (value <=? 64)*)
 : M (merkle_depth) :=
    let value := (value).(merkle_depth_value) in
-   (assert_exp' (Z.ltb (0) (value)) "sail/primitives/quantities.sail:168.20-168.21" >>= fun _ =>
+   (assert_exp' (Z.ltb (0) (value)) "sail/primitives/quantities.sail:199.20-199.21" >>= fun _ =>
     returnM ((Z.sub (value) (1)))) >>= fun semanticResult =>
    returnM (Build_merkle_depth (semanticResult)).
 
 Definition BYTE_ONE : byte_quantity := ByteQuantity (1).
 #[export] Hint Unfold BYTE_ONE : sail.
-Definition MAX_BYTE_QUANTITY : byte_quantity := ByteQuantity (BYTE_QUANTITY_MAX).
+Definition MAX_BYTE_QUANTITY : byte_quantity :=
+ByteQuantity ((BYTE_QUANTITY_MAX).(protocol_quantity_value)).
 #[export] Hint Unfold MAX_BYTE_QUANTITY : sail.
-Definition nat_fits_limb (value : Z) (*0 <=? value*) : bool := Z.leb (value) (BYTE_QUANTITY_MAX).
+Definition nat_fits_limb (value : Z) (*0 <=? value*) : bool :=
+   Z.leb (value) ((BYTE_QUANTITY_MAX).(protocol_quantity_value)).
 
 Definition byte_quantity_fits_limb '((ByteQuantity value) : byte_quantity) : bool :=
    nat_fits_limb (value).
 
 Definition nat_to_limb (value : Z) (*0 <=? value*) : M (limb) :=
-   assert_exp (nat_fits_limb (value)) "sail/primitives/quantities.sail:220.31-220.32" >>
+   assert_exp (nat_fits_limb (value)) "sail/primitives/quantities.sail:250.31-250.32" >>
    returnM ((get_slice_int (64) (value) (0))).
 
 Definition byte_quantity_to_limb '((ByteQuantity value) : byte_quantity) : M (limb) :=
    (nat_to_limb (value))  : M (mword 64).
 
 Definition word_of_byte_quantity '((ByteQuantity value) : byte_quantity) : M (word) :=
-   (word_of_nat (value))  : M (mword 256).
+   (word_of_nat (value))  : M (word).
+
+Definition word_to_byte_quantity (value : word) : byte_quantity :=
+   ByteQuantity ((uint ((word_to_bits (value))))).
 
 Definition protocol_quantity_quotient (value : protocol_quantity) (divisor : protocol_divisor)
 (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*) (*(1 <=? divisor) && (divisor <=? 256)*)
@@ -891,35 +1061,35 @@ Definition protocol_quantity_quotient (value : protocol_quantity) (divisor : pro
    let value := (value).(protocol_quantity_value) in
    let divisor := (divisor).(protocol_divisor_value) in
    ((exact_quotient (value) (divisor)) >>= fun quotient =>
-   assert_exp' (Z.leb (quotient) (value)) "sail/primitives/quantities.sail:253.28-253.29" >>= fun _ =>
+   assert_exp' (Z.leb (quotient) (value)) "sail/primitives/quantities.sail:288.28-288.29" >>= fun _ =>
    returnM (quotient)) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
 
 Definition byte_quantity_quotient
 '((ByteQuantity dividend) : byte_quantity) '((ByteQuantity divisor) : byte_quantity)
 : M (byte_quantity) :=
-   assert_exp' (Z.leb (dividend) (BYTE_QUANTITY_MAX)) "sail/primitives/quantities.sail:310.40-310.41" >>= fun _ =>
+   assert_exp' (Z.leb (dividend) ((BYTE_QUANTITY_MAX).(protocol_quantity_value))) "sail/primitives/quantities.sail:345.40-345.41" >>= fun _ =>
    (exact_quotient (dividend) (divisor)) >>= fun (w__0 : Z) => returnM ((ByteQuantity (w__0))).
 
 Definition gas_cost_quotient '((GasCost value) : gas_cost) (divisor : gas_divisor)
-(*(1 <=? divisor) && (divisor <=? 1000)*)
+(*(1 <=? divisor) && (divisor <=? 2000)*)
 : M (gas_cost) :=
    let divisor := (divisor).(gas_divisor_value) in
    (exact_quotient (value) (divisor)) >>= fun (w__0 : Z) => returnM ((GasCost (w__0))).
 
 Definition gas_quotient '((Gas value) : gas) (divisor : gas_divisor)
-(*(1 <=? divisor) && (divisor <=? 1000)*)
+(*(1 <=? divisor) && (divisor <=? 2000)*)
 : M (gas) :=
    let divisor := (divisor).(gas_divisor_value) in
    (exact_quotient (value) (divisor)) >>= fun quotient =>
-   assert_exp' (Z.leb (quotient) (value)) "sail/primitives/gas.sail:147.28-147.29" >>= fun _ =>
+   assert_exp' (Z.leb (quotient) (value)) "sail/primitives/gas.sail:162.28-162.29" >>= fun _ =>
    returnM ((Gas (quotient))).
 
-Definition GAS_MAX_VALUE := (Z.sub ((pow2 (63))) (1))  : Z.
+Definition GAS_MAX_VALUE : protocol_quantity := (Build_protocol_quantity (9223372036854775807)).
 #[export] Hint Unfold GAS_MAX_VALUE : sail.
 Definition GAS_ZERO : gas := Gas (0).
 #[export] Hint Unfold GAS_ZERO : sail.
-Definition GAS_MAX : gas := Gas ((Z.sub ((pow2 (63))) (1))).
+Definition GAS_MAX : gas := Gas (9223372036854775807).
 #[export] Hint Unfold GAS_MAX : sail.
 Definition GAS_CONSTANT_ZERO : gas_constant := GasConstant (0).
 #[export] Hint Unfold GAS_CONSTANT_ZERO : sail.
@@ -927,17 +1097,26 @@ Definition GAS_COST_ZERO : gas_cost := GasCost (0).
 #[export] Hint Unfold GAS_COST_ZERO : sail.
 Definition GAS_REFUND_ZERO : gas_refund := GasRefund (0).
 #[export] Hint Unfold GAS_REFUND_ZERO : sail.
-Definition nat_to_gas (value : Z) (*0 <=? value*) : M (gas) :=
-   (if Z.leb (value) ((Z.sub ((pow2 (63))) (1))) then returnM ((Gas (value)))
-    else assert_exp' false "sail/primitives/gas.sail:64.20-64.21" >>= fun _ => exit tt)
+Definition gas_value_supported (value : protocol_quantity)
+(*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
+: bool :=
+   let value := (value).(protocol_quantity_value) in
+   Z.leb (value) ((GAS_MAX_VALUE).(protocol_quantity_value)).
+
+Definition nat_to_gas (value : protocol_quantity) (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
+: M (gas) :=
+   let value := (value).(protocol_quantity_value) in
+   (if Z.leb (value) (9223372036854775807) then returnM ((Gas (value)))
+    else assert_exp' false "sail/primitives/gas.sail:68.20-68.21" >>= fun _ => exit tt)
     : M (gas).
 
-Definition word_to_gas (value : mword 256) : option gas :=
-   if eq_vec ((subrange_vec_dec (value) (255) (63))) ((zeros (193))) then
-     Some ((Gas ((uint ((subrange_vec_dec (value) (62) (0)))))))
+Definition word_to_gas (value : word) : option gas :=
+   let bits := word_to_bits (value) in
+   if eq_vec ((subrange_vec_dec (bits) (255) (63))) ((zeros (193))) then
+     Some ((Gas ((uint ((subrange_vec_dec (bits) (62) (0)))))))
    else None.
 
-Definition word_of_gas '((Gas value) : gas) : M (word) := (word_of_nat (value))  : M (mword 256).
+Definition word_of_gas '((Gas value) : gas) : M (word) := (word_of_nat (value))  : M (word).
 
 Definition gas_to_cost '((Gas amount) : gas) : gas_cost := GasCost (amount).
 
@@ -947,7 +1126,7 @@ Definition gas_constant_to_refund '((GasConstant amount) : gas_constant) : gas_r
    GasRefund (amount).
 
 Definition gas_cost_to_word '((GasCost amount) : gas_cost) : M (word) :=
-   (word_of_nat (amount))  : M (mword 256).
+   (word_of_nat (amount))  : M (word).
 
 Definition gas_cost_to_refund '((GasCost amount) : gas_cost) : gas_refund := GasRefund (amount).
 
@@ -956,12 +1135,15 @@ Definition capped_gas_refund '((GasRefund refund) : gas_refund) '((Gas limit) : 
    else if Z.leb (refund) (limit) then Gas (refund)
    else Gas (limit).
 
-Definition word_checked_mul_protocol_quantity (value : mword 256) (factor : protocol_quantity)
+Definition gas_sum_supported '((Gas left') : gas) '((Gas right') : gas) : bool :=
+   Z.leb (right') ((Z.sub ((GAS_MAX_VALUE).(protocol_quantity_value)) (left'))).
+
+Definition word_checked_mul_protocol_quantity (value : word) (factor : protocol_quantity)
 (*(0 <=? factor) && (factor <=? (2 ^ 64 - 1))*)
 : M (option word) :=
    let factor := (factor).(protocol_quantity_value) in
-   let result : mword 256 := ZERO_WORD in
-   let addend : mword 256 := value in
+   let result : word := ZERO_WORD in
+   let addend : word := value in
    let remaining : Z := factor in
    let valid : bool := true in
    (let '(loop_i_lower) := 0 in
@@ -974,16 +1156,16 @@ Definition word_checked_mul_protocol_quantity (value : mword 256) (factor : prot
             let '((result, valid)) :=
               match added with
               | Some value =>
-                 let result : mword 256 := value in
+                 let result : word := value in
                  (result, valid)
               | None =>
                  let valid : bool := false in
                  (result, valid)
               end
-               : (mword 256 * bool) in
+               : (word * bool) in
             (result, valid)
           else (result, valid))
-          : (mword 256 * bool) in
+          : (word * bool) in
        ((protocol_quantity_quotient (Build_protocol_quantity ((remaining)))
            (Build_protocol_divisor ((2)))) >>= fun semanticResult =>
         returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__0 : Z) =>
@@ -994,23 +1176,23 @@ Definition word_checked_mul_protocol_quantity (value : mword 256) (factor : prot
             let '((addend, valid)) :=
               match doubled with
               | Some value =>
-                 let addend : mword 256 := value in
+                 let addend : word := value in
                  (addend, valid)
               | None =>
                  let valid : bool := false in
                  (addend, valid)
               end
-               : (mword 256 * bool) in
+               : (word * bool) in
             (addend, valid)
           else (addend, valid))
-          : (mword 256 * bool) in
+          : (word * bool) in
        returnM ((addend, remaining, result, valid))))) >>= fun '((addend, remaining, result, valid)
-   : (mword 256 * Z * mword 256 * bool)) =>
+   : (word * Z * word * bool)) =>
    returnM ((if valid then Some (result) else None)).
 
-Definition word_checked_mul_gas (value : mword 256) '((Gas factor) : gas) : M (option word) :=
+Definition word_checked_mul_gas (value : word) '((Gas factor) : gas) : M (option word) :=
    (word_checked_mul_protocol_quantity (value) (Build_protocol_quantity ((factor))))
-    : M (option (mword 256)).
+    : M (option word).
 
 Definition undefined_ByteSource '(tt : unit) : M (ByteSource) :=
    (internal_pick
@@ -1109,19 +1291,24 @@ Definition EMPTY_CODE : Code :=
 {| Code_bytes := EMPTY_SLICE;
    Code_jumpdests := EMPTY_JUMPDEST_REF |}.
 #[export] Hint Unfold EMPTY_CODE : sail.
-Definition word_to_bytes32 (w : mword 256) : list byte :=
+Definition word_to_bytes32 '((U256 w) : word) : list byte :=
    let out : list (mword 8) := [] in
    let '(loop_k_lower) := 0 in
    let '(loop_k_upper) := 31 in
    (foreach_Z_up loop_k_lower loop_k_upper 1 out
      (fun k out => (subrange_vec_dec ((shiftr (w) ((Z.mul (8) (k))))) (7) (0)) :: out)).
 
-Definition address_to_bytes (a : mword 160) : list byte :=
+Definition hash_to_bytes32 '((B256 bytes) : b256) : list byte :=
+   let out : list (mword 8) := [] in
+   let '(loop_k_lower) := 0 in
+   let '(loop_k_upper) := 31 in
+   (foreach_Z_up loop_k_lower loop_k_upper 1 out (fun k out => (vec_access_dec (bytes) (k)) :: out)).
+
+Definition address_to_bytes '((Address bytes) : address_typ) : list byte :=
    let out : list (mword 8) := [] in
    let '(loop_k_lower) := 0 in
    let '(loop_k_upper) := 19 in
-   (foreach_Z_up loop_k_lower loop_k_upper 1 out
-     (fun k out => (subrange_vec_dec ((shiftr (a) ((Z.mul (8) (k))))) (7) (0)) :: out)).
+   (foreach_Z_up loop_k_lower loop_k_upper 1 out (fun k out => (vec_access_dec (bytes) (k)) :: out)).
 
 Definition bytes_be256 (bytes : list (mword 8)) : bits 256 :=
    let acc : mword 256 := zeros (256) in
@@ -1163,7 +1350,7 @@ Axiom accelerator_blake2f :
   forall
 
   (_ : ByteSlice) (_ : blake2_rounds) (_ : y_parity)
-  (*(0 <=? ex185045_) && (ex185045_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex185046_) && (ex185046_ <=? 1)*),
+  (*(0 <=? ex185680_) && (ex185680_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex185681_) && (ex185681_ <=? 1)*),
   M (bool).
 
 Axiom accelerator_kzg_point_evaluation : forall  (_ : ByteSlice) , M (bool).
@@ -1184,59 +1371,50 @@ Axiom accelerator_bls_map_fp2_to_g2 : forall  (_ : ByteSlice) , M (bool).
 
 Axiom accelerator_p256_verify : forall  (_ : ByteSlice) , M (bool).
 
-Axiom secp256k1_verify :
-  forall
-
-  (_ : bits 256) (_ : word) (_ : word) (_ : bits 256) (_ : bits 256)
-  ,
-  M (bool).
-
 Axiom host_ecrecover :
   forall
 
-  (_ : bits 256) (_ : y_parity) (_ : word) (_ : word)
-  (*(0 <=? ex185065_) && (ex185065_ <=? 1)*),
-  M (bits 168).
+  (_ : hash) (_ : y_parity) (_ : word) (_ : word)
+  (*(0 <=? ex185683_) && (ex185683_ <=? 1)*),
+  M (AddressResult).
 
 Definition KECCAK_EMPTY : hash :=
-(Ox"C5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470").
+word_to_hash ((U256 ((Ox"C5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470")))).
 #[export] Hint Unfold KECCAK_EMPTY : sail.
 Definition EMPTY_TRIE_ROOT : hash :=
-(Ox"56E81F171BCC55A6FF8345E692C0F86E5B48E01B996CADC001622FB5E363B421").
+word_to_hash ((U256 ((Ox"56E81F171BCC55A6FF8345E692C0F86E5B48E01B996CADC001622FB5E363B421")))).
 #[export] Hint Unfold EMPTY_TRIE_ROOT : sail.
-Axiom keccak256_segments : forall  (_ : list Bytes) , M (bits 256).
+Axiom keccak256_segments : forall  (_ : list Bytes) , M (hash).
 
-Axiom sha256_segments : forall  (_ : list Bytes) , M (bits 256).
+Axiom sha256_segments : forall  (_ : list Bytes) , M (hash).
 
-Definition keccak256_slice (s : ByteSlice) : M (bits 256) :=
-   (keccak256_segments ([BytesSlice (s)]))  : M (mword 256).
+Definition keccak256_slice (s : ByteSlice) : M (hash) :=
+   (keccak256_segments ([BytesSlice (s)]))  : M (b256).
 
-Definition keccak256_word (w : mword 256) : M (bits 256) :=
-   (keccak256_segments ([bytes_list ((word_to_bytes32 (w))) (WORD_BYTE_LENGTH)]))  : M (mword 256).
+Definition keccak256_word (w : word) : M (hash) :=
+   (keccak256_segments ([bytes_list ((word_to_bytes32 (w))) (WORD_BYTE_LENGTH)]))  : M (b256).
 
-Definition keccak256_address (a : mword 160) : M (bits 256) :=
-   (keccak256_segments ([bytes_list ((address_to_bytes (a))) (ADDRESS_BYTE_LENGTH)]))
-    : M (mword 256).
+Definition keccak256_address (a : address_typ) : M (hash) :=
+   (keccak256_segments ([bytes_list ((address_to_bytes (a))) (ADDRESS_BYTE_LENGTH)]))  : M (b256).
 
-Definition sha256_pair (a : mword 256) (b : mword 256) : M (bits 256) :=
+Definition sha256_pair (a : b256) (b : b256) : M (hash) :=
    (sha256_segments
-      ([bytes_list ((word_to_bytes32 (a))) (WORD_BYTE_LENGTH);
-      bytes_list ((word_to_bytes32 (b))) (WORD_BYTE_LENGTH)]))
-    : M (mword 256).
+      ([bytes_list ((hash_to_bytes32 (a))) (WORD_BYTE_LENGTH);
+      bytes_list ((hash_to_bytes32 (b))) (WORD_BYTE_LENGTH)]))
+    : M (b256).
 
-Definition SECP_N_FULL : bits 256 :=
-(Ox"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141").
+Definition SECP_N_FULL : word :=
+U256 ((Ox"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141")).
 #[export] Hint Unfold SECP_N_FULL : sail.
-Definition SECP_N_HALF : bits 256 :=
-(Ox"7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0").
+Definition SECP_N_HALF : word :=
+U256 ((Ox"7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0")).
 #[export] Hint Unfold SECP_N_HALF : sail.
-Definition ecrecover_addr (h : mword 256) (yparity : y_parity) (r : mword 256) (s : mword 256)
+Definition ecrecover_addr (h : b256) (yparity : y_parity) (r : word) (s : word)
 (*(0 <=? yparity) && (yparity <=? 1)*)
 : M ((bool * address_typ)) :=
    let yparity := (yparity).(y_parity_value) in
    (host_ecrecover (h) (Build_y_parity ((yparity))) (r) (s)) >>= fun recovered =>
-   returnM ((eq_vec ((access_vec_dec (recovered) (160))) (('b"1")), subrange_vec_dec (recovered)
-                                                                      (159) (0))).
+   returnM ((recovered.(AddressResult_success), recovered.(AddressResult_address))).
 
 Definition undefined_Fork '(tt : unit) : M (Fork) :=
    (internal_pick
@@ -1329,77 +1507,36 @@ Definition chain_config_blob_schedule_valid (cc : ChainConfig) : bool :=
      | _ => false
      end.
 
-Definition SYSTEM_ADDRESS : address_typ := (Ox"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE").
+Definition SYSTEM_ADDRESS : address_typ :=
+word_to_address ((U256 ((Ox"000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE")))).
 #[export] Hint Unfold SYSTEM_ADDRESS : sail.
-Definition BEACON_ROOTS_ADDR : address_typ := (Ox"000F3DF6D732807EF1319FB7B8BB8522D0BEAC02").
+Definition BEACON_ROOTS_ADDR : address_typ :=
+word_to_address ((U256 ((Ox"000000000000000000000000000F3DF6D732807EF1319FB7B8BB8522D0BEAC02")))).
 #[export] Hint Unfold BEACON_ROOTS_ADDR : sail.
-Definition HISTORY_STORAGE_ADDR : address_typ := (Ox"0000F90827F1C53A10CB7A02335B175320002935").
+Definition HISTORY_STORAGE_ADDR : address_typ :=
+word_to_address ((U256 ((Ox"0000000000000000000000000000F90827F1C53A10CB7A02335B175320002935")))).
 #[export] Hint Unfold HISTORY_STORAGE_ADDR : sail.
-Definition WITHDRAWAL_REQUEST_ADDR : address_typ := (Ox"00000961EF480EB55E80D19AD83579A64C007002").
+Definition WITHDRAWAL_REQUEST_ADDR : address_typ :=
+word_to_address ((U256 ((Ox"00000000000000000000000000000961EF480EB55E80D19AD83579A64C007002")))).
 #[export] Hint Unfold WITHDRAWAL_REQUEST_ADDR : sail.
 Definition CONSOLIDATION_REQUEST_ADDR : address_typ :=
-(Ox"0000BBDDC7CE488642FB579F8B00F3A590007251").
+word_to_address ((U256 ((Ox"0000000000000000000000000000BBDDC7CE488642FB579F8B00F3A590007251")))).
 #[export] Hint Unfold CONSOLIDATION_REQUEST_ADDR : sail.
-Definition DEPOSIT_CONTRACT_ADDR : address_typ := (Ox"00000000219AB540356CBB839CBE05303D7705FA").
+Definition DEPOSIT_CONTRACT_ADDR : address_typ :=
+word_to_address ((U256 ((Ox"00000000000000000000000000000000219AB540356CBB839CBE05303D7705FA")))).
 #[export] Hint Unfold DEPOSIT_CONTRACT_ADDR : sail.
 Definition DEPOSIT_EVENT_TOPIC : word :=
-(Ox"649BBC62D0E31342AFEA4E5CD82D4049E7E1EE912FC0889AA790803BE39038C5").
+U256 ((Ox"649BBC62D0E31342AFEA4E5CD82D4049E7E1EE912FC0889AA790803BE39038C5")).
 #[export] Hint Unfold DEPOSIT_EVENT_TOPIC : sail.
-Definition EIP7708_SYSTEM_ADDRESS : address_typ := (Ox"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE").
+Definition EIP7708_SYSTEM_ADDRESS : address_typ :=
+word_to_address ((U256 ((Ox"000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE")))).
 #[export] Hint Unfold EIP7708_SYSTEM_ADDRESS : sail.
 Definition EIP7708_TRANSFER_TOPIC : word :=
-(Ox"DDF252AD1BE2C89B69C2B068FC378DAA952BA7F163C4A11628F55A4DF523B3EF").
+U256 ((Ox"DDF252AD1BE2C89B69C2B068FC378DAA952BA7F163C4A11628F55A4DF523B3EF")).
 #[export] Hint Unfold EIP7708_TRANSFER_TOPIC : sail.
 Definition EIP7708_BURN_TOPIC : word :=
-(Ox"CC16F5DBB4873280815C1EE09DBD06736CFFCC184412CF7A71A0FDB75D397CA5").
+U256 ((Ox"CC16F5DBB4873280815C1EE09DBD06736CFFCC184412CF7A71A0FDB75D397CA5")).
 #[export] Hint Unfold EIP7708_BURN_TOPIC : sail.
-Definition undefined_AccountInfo '(tt : unit) : M (AccountInfo) :=
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__0 : Z) =>
-   (undefined_bitvector (256)) >>= fun (w__1 : mword 256) =>
-   (undefined_bitvector (256)) >>= fun (w__2 : mword 256) =>
-   (undefined_bitvector (256)) >>= fun (w__3 : mword 256) =>
-   returnM (({| AccountInfo_nonce := (Build_protocol_quantity (w__0));
-                AccountInfo_balance := w__1;
-                AccountInfo_code_hash := w__2;
-                AccountInfo_storage_root := w__3 |})).
-
-Definition undefined_Account '(tt : unit) : M (Account) :=
-   (undefined_AccountInfo (tt)) >>= fun (w__0 : AccountInfo) =>
-   (undefined_bool (tt)) >>= fun (w__1 : bool) =>
-   (undefined_bool (tt)) >>= fun (w__2 : bool) =>
-   (undefined_bool (tt)) >>= fun (w__3 : bool) =>
-   (undefined_bool (tt)) >>= fun (w__4 : bool) =>
-   returnM (({| Account_info := w__0;
-                Account_present := w__1;
-                Account_storage_cleared := w__2;
-                Account_created := w__3;
-                Account_selfdestructed := w__4 |})).
-
-Definition undefined_StorageValue '(tt : unit) : M (StorageValue) :=
-   (undefined_bitvector (256)) >>= fun (w__0 : mword 256) =>
-   (undefined_bitvector (256)) >>= fun (w__1 : mword 256) =>
-   returnM (({| StorageValue_curr := w__0;  StorageValue_orig := w__1 |})).
-
-Definition undefined_StorageKey '(tt : unit) : M (StorageKey) :=
-   (undefined_bitvector (160)) >>= fun (w__0 : mword 160) =>
-   (undefined_bitvector (256)) >>= fun (w__1 : mword 256) =>
-   returnM (({| StorageKey_addr := w__0;  StorageKey_slot := w__1 |})).
-
-Definition undefined_StorageEntry '(tt : unit) : M (StorageEntry) :=
-   (undefined_StorageKey (tt)) >>= fun (w__0 : StorageKey) =>
-   (undefined_StorageValue (tt)) >>= fun (w__1 : StorageValue) =>
-   returnM (({| StorageEntry_key := w__0;  StorageEntry_value := w__1 |})).
-
-Definition undefined_AcctValue '(tt : unit) : M (AcctValue) :=
-   (undefined_Account (tt)) >>= fun (w__0 : Account) =>
-   (undefined_Account (tt)) >>= fun (w__1 : Account) =>
-   returnM (({| AcctValue_curr := w__0;  AcctValue_orig := w__1 |})).
-
-Definition undefined_AcctEntry '(tt : unit) : M (AcctEntry) :=
-   (undefined_bitvector (160)) >>= fun (w__0 : mword 160) =>
-   (undefined_AcctValue (tt)) >>= fun (w__1 : AcctValue) =>
-   returnM (({| AcctEntry_addr := w__0;  AcctEntry_value := w__1 |})).
-
 Definition EMPTY_ACCOUNT_INFO : AccountInfo :=
 {| AccountInfo_nonce := (Build_protocol_quantity (0));
    AccountInfo_balance := ZERO_WORD;
@@ -1423,22 +1560,11 @@ Definition account_from_info (info : AccountInfo) : Account :=
 Definition undefined_TxType '(tt : unit) : M (TxType) :=
    (internal_pick ([LegacyTx; AccessListTx; FeeMarketTx; BlobTx; SetCodeTx]))  : M (TxType).
 
-Definition OSAKA_TRANSACTION_GAS_LIMIT_VALUE := (pow2 (24))  : Z.
+Definition OSAKA_TRANSACTION_GAS_LIMIT_VALUE : protocol_quantity :=
+(Build_protocol_quantity (16777216)).
 #[export] Hint Unfold OSAKA_TRANSACTION_GAS_LIMIT_VALUE : sail.
-Definition OSAKA_TRANSACTION_GAS_LIMIT : gas := Gas ((pow2 (24))).
+Definition OSAKA_TRANSACTION_GAS_LIMIT : gas := Gas (16777216).
 #[export] Hint Unfold OSAKA_TRANSACTION_GAS_LIMIT : sail.
-Definition undefined_Authorization '(tt : unit) : M (Authorization) :=
-   (undefined_bool (tt)) >>= fun (w__0 : bool) =>
-   (undefined_bitvector (160)) >>= fun (w__1 : mword 160) =>
-   (undefined_bitvector (160)) >>= fun (w__2 : mword 160) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__3 : Z) =>
-   (undefined_bitvector (256)) >>= fun (w__4 : mword 256) =>
-   returnM (({| Authorization_valid_sig := w__0;
-                Authorization_authority := w__1;
-                Authorization_address := w__2;
-                Authorization_nonce := (Build_protocol_quantity (w__3));
-                Authorization_chain_id := w__4 |})).
-
 Definition EMPTY_BLOB_HASHES : BlobHashes :=
 {| BlobHashes_bytes := EMPTY_SLICE;
    BlobHashes_count := (Build_protocol_quantity (0)) |}.
@@ -1488,18 +1614,8 @@ Definition logs_bloom_bytes (bloom : vec (mword 64) 32) : list byte :=
        (subrange_vec_dec (limb) (63) (56)) :: out)).
 
 Definition EMPTY_OMMER_HASH : hash :=
-(Ox"1DCC4DE8DEC75D7AAB85B567B6CCD41AD312451B948A7413F0A142FD40D49347").
+word_to_hash ((U256 ((Ox"1DCC4DE8DEC75D7AAB85B567B6CCD41AD312451B948A7413F0A142FD40D49347")))).
 #[export] Hint Unfold EMPTY_OMMER_HASH : sail.
-Definition undefined_Withdrawal '(tt : unit) : M (Withdrawal) :=
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__0 : Z) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__1 : Z) =>
-   (undefined_bitvector (160)) >>= fun (w__2 : mword 160) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__3 : Z) =>
-   returnM (({| Withdrawal_index := (Build_protocol_quantity (w__0));
-                Withdrawal_validator_index := (Build_protocol_quantity (w__1));
-                Withdrawal_address := w__2;
-                Withdrawal_amount := (Build_protocol_quantity (w__3)) |})).
-
 Definition EMPTY_EXECUTION_REQUESTS : ExecutionRequests :=
 {| ExecutionRequests_deposits := EMPTY_SLICE;
    ExecutionRequests_withdrawals := EMPTY_SLICE;
@@ -1507,20 +1623,6 @@ Definition EMPTY_EXECUTION_REQUESTS : ExecutionRequests :=
 #[export] Hint Unfold EMPTY_EXECUTION_REQUESTS : sail.
 Definition undefined_CallKind '(tt : unit) : M (CallKind) :=
    (internal_pick ([Call; CallCode; DelegateCall; StaticCall]))  : M (CallKind).
-
-Definition undefined_Message '(tt : unit) : M (Message) :=
-   (undefined_bitvector (160)) >>= fun (w__0 : mword 160) =>
-   (undefined_bitvector (160)) >>= fun (w__1 : mword 160) =>
-   (undefined_bitvector (160)) >>= fun (w__2 : mword 160) =>
-   (undefined_bitvector (256)) >>= fun (w__3 : mword 256) =>
-   (undefined_bool (tt)) >>= fun (w__4 : bool) =>
-   (undefined_range (0) (1024)) >>= fun (w__5 : Z) =>
-   returnM (({| Message_caller := w__0;
-                Message_code_address := w__1;
-                Message_address := w__2;
-                Message_value := w__3;
-                Message_is_static := w__4;
-                Message_depth := (Build_frame_depth (w__5)) |})).
 
 Definition DEFAULT_MESSAGE : Message :=
 {| Message_caller := ZERO_ADDR;
@@ -1530,18 +1632,24 @@ Definition DEFAULT_MESSAGE : Message :=
    Message_is_static := false;
    Message_depth := (Build_frame_depth (0)) |}.
 #[export] Hint Unfold DEFAULT_MESSAGE : sail.
-Definition undefined_WitnessContext '(tt : unit) : M (WitnessContext) :=
-   (undefined_bitvector (256)) >>= fun (w__0 : mword 256) =>
-   (undefined_bitvector (256)) >>= fun (w__1 : mword 256) =>
-   (undefined_bitvector (256)) >>= fun (w__2 : mword 256) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__3 : Z) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__4 : Z) =>
-   returnM (({| WitnessContext_parent_hash := w__0;
-                WitnessContext_parent_state_root := w__1;
-                WitnessContext_parent_base_fee_per_gas := w__2;
-                WitnessContext_parent_blob_gas_used := (Build_protocol_quantity (w__3));
-                WitnessContext_parent_excess_blob_gas := (Build_protocol_quantity (w__4)) |})).
-
+Definition DEFAULT_FRAME_CHECKPOINT : FrameCheckpoint :=
+{| FrameCheckpoint_state := StateCheckpoint (Build_protocol_quantity ((0)));
+   FrameCheckpoint_pc := BYTE_ZERO;
+   FrameCheckpoint_gas_remaining := GAS_ZERO;
+   FrameCheckpoint_refund := GAS_REFUND_ZERO;
+   FrameCheckpoint_status := Running (tt);
+   FrameCheckpoint_message := DEFAULT_MESSAGE;
+   FrameCheckpoint_call_depth := (Build_frame_depth (0));
+   FrameCheckpoint_code := EMPTY_CODE;
+   FrameCheckpoint_calldata := EMPTY_SLICE;
+   FrameCheckpoint_memory := EMPTY_SLICE |}.
+#[export] Hint Unfold DEFAULT_FRAME_CHECKPOINT : sail.
+Definition DEFAULT_FRAME_CONTINUATION : FrameContinuation :=
+ResumeCall
+  (({| CallContinuation_checkpoint := DEFAULT_FRAME_CHECKPOINT;
+       CallContinuation_return_offset := BYTE_ZERO;
+       CallContinuation_return_length := BYTE_ZERO |})).
+#[export] Hint Unfold DEFAULT_FRAME_CONTINUATION : sail.
 Axiom stateless_input : forall  (_ : unit) , M (ByteSlice).
 
 Axiom host_slice_byte : forall  (_ : ByteSlice) (_ : byte_quantity) , M (bits 8).
@@ -1590,32 +1698,37 @@ Definition slice_strided_zero
    (host_slice_strided_zero (s) (start) (stride) (width) (count))  : M (bool).
 
 Definition slice_load (s : ByteSlice) (off : byte_quantity) : M (word) :=
-   (if byte_quantity_lt (off) (s.(ByteSlice_len)) return M (mword 256) then
+   (if byte_quantity_lt (off) (s.(ByteSlice_len)) return M (word) then
       (host_slice_load_word (s) (off))
-       : M (mword 256)
+       : M (word)
     else returnM (ZERO_WORD))
-    : M (mword 256).
+    : M (word).
 
-Definition slice_load_word_offset (s : ByteSlice) (off : mword 256) : M (word) :=
-   let offset := uint (off) in
-   let '((ByteQuantity slice_len)) := s.(ByteSlice_len) in
-   (if Z.ltb (offset) (slice_len) return M (mword 256) then
-      (slice_load (s) ((ByteQuantity (offset))))
-       : M (mword 256)
-    else returnM (ZERO_WORD))
-    : M (mword 256).
+Definition slice_load_word_offset (s : ByteSlice) (off : word) : M (word) :=
+   match word_to_limb (off) with
+   | Some offset_bits =>
+      let offset := uint (offset_bits) in
+      let '((ByteQuantity slice_len)) := s.(ByteSlice_len) in
+      (if Z.ltb (offset) (slice_len) return M (word) then
+         (slice_load (s) ((ByteQuantity (offset))))
+          : M (word)
+       else returnM (ZERO_WORD))
+       : M (word)
+   | None => returnM (ZERO_WORD)
+   end
+    : M (word).
 
 Definition slice_load_n (s : ByteSlice) (off : byte_quantity) (n : byte_quantity) : M (word) :=
-   (if byte_quantity_lt (off) (s.(ByteSlice_len)) return M (mword 256) then
+   (if byte_quantity_lt (off) (s.(ByteSlice_len)) return M (word) then
       (host_slice_load_n_word (s) (off) (n))
-       : M (mword 256)
+       : M (word)
     else returnM (ZERO_WORD))
-    : M (mword 256).
+    : M (word).
 
 Definition slice_copy
 (s : ByteSlice) (dst : byte_quantity) (off : byte_quantity) (len : byte_quantity)
 : M (unit) :=
-   (if byte_quantity_not_equal (len) (BYTE_ZERO) return M (unit) then
+   (if generic_neq (len) (BYTE_ZERO) return M (unit) then
       (if byte_quantity_lt (off) (s.(ByteSlice_len)) return M (unit) then
          (host_slice_copy_to_memory (s) (dst) (off) (len))
           : M (unit)
@@ -1625,14 +1738,19 @@ Definition slice_copy
     : M (unit).
 
 Definition slice_copy_word_offset
-(s : ByteSlice) (dst : byte_quantity) (off : mword 256) (len : byte_quantity)
+(s : ByteSlice) (dst : byte_quantity) (off : word) (len : byte_quantity)
 : M (unit) :=
-   let offset := uint (off) in
-   let '((ByteQuantity slice_len)) := s.(ByteSlice_len) in
-   (if Z.ltb (offset) (slice_len) return M (unit) then
-      (slice_copy (s) (dst) ((ByteQuantity (offset))) (len))
+   match word_to_limb (off) with
+   | Some offset_bits =>
+      let offset := uint (offset_bits) in
+      let '((ByteQuantity slice_len)) := s.(ByteSlice_len) in
+      (if Z.ltb (offset) (slice_len) return M (unit) then
+         (slice_copy (s) (dst) ((ByteQuantity (offset))) (len))
+          : M (unit)
+       else (slice_copy (EMPTY_SLICE) (dst) (BYTE_ZERO) (len))  : M (unit))
        : M (unit)
-    else (slice_copy (EMPTY_SLICE) (dst) (BYTE_ZERO) (len))  : M (unit))
+   | None => (slice_copy (EMPTY_SLICE) (dst) (BYTE_ZERO) (len))  : M (unit)
+   end
     : M (unit).
 
 Axiom host_scratch_store_bytes :
@@ -1663,7 +1781,7 @@ Definition scratch_advance (width : byte_quantity) : M (unit) :=
     : M (unit).
 
 Definition scratch_push_bytes (data : list (mword 8)) (len : byte_quantity) : M (unit) :=
-   (if byte_quantity_not_equal (len) (BYTE_ZERO) return M (unit) then
+   (if generic_neq (len) (BYTE_ZERO) return M (unit) then
       read_reg scratch_cursor >>= fun (w__0 : byte_quantity) =>
       (host_scratch_store_bytes (w__0) (data) (len)) >>= fun (w__1 : bool) =>
       assert_exp' w__1 "scratch byte append" >>= fun _ => (scratch_advance (len))  : M (unit)
@@ -1671,7 +1789,7 @@ Definition scratch_push_bytes (data : list (mword 8)) (len : byte_quantity) : M 
     : M (unit).
 
 Definition scratch_push_slice (data : ByteSlice) : M (unit) :=
-   (if byte_quantity_not_equal (data.(ByteSlice_len)) (BYTE_ZERO) return M (unit) then
+   (if generic_neq (data.(ByteSlice_len)) (BYTE_ZERO) return M (unit) then
       read_reg scratch_cursor >>= fun (w__0 : byte_quantity) =>
       (host_scratch_store_slice (w__0) (data)) >>= fun (w__1 : bool) =>
       assert_exp' w__1 "scratch slice append" >>= fun _ =>
@@ -1726,7 +1844,7 @@ Axiom jumpdest_ref_contains :
 
 Axiom code_intern_delegation : forall  (_ : address_typ) (_ : JumpdestRef) , M (hash).
 
-Axiom code_db_read_delegation : forall  (_ : hash) , M (bits 168).
+Axiom code_db_read_delegation : forall  (_ : hash) , M (AddressResult).
 
 Definition store_jumpdest_chunk
 (table : mword 64) (code_len : byte_quantity) (analysis : CodeAnalysis)
@@ -1810,7 +1928,7 @@ Definition analyze_code_from
     : M (unit).
 
 Definition analyze_code (code : ByteSlice) : M (JumpdestRef) :=
-   (if byte_quantity_equal (code.(ByteSlice_len)) (BYTE_ZERO) then returnM (EMPTY_JUMPDEST_REF)
+   (if generic_eq (code.(ByteSlice_len)) (BYTE_ZERO) then returnM (EMPTY_JUMPDEST_REF)
     else
       (jumpdest_table_alloc (code.(ByteSlice_len))) >>= fun table =>
       assert_exp (neq_vec (table) (EMPTY_JUMPDEST_REF)) "JUMPDEST table allocation" >>
@@ -1822,10 +1940,10 @@ Definition analyze_code (code : ByteSlice) : M (JumpdestRef) :=
     : M (mword 64).
 
 Definition code_db_insert (code : ByteSlice) : M (hash) :=
-   (analyze_code (code)) >>= fun (w__0 : mword 64) => (code_db_store (code) (w__0))  : M (mword 256).
+   (analyze_code (code)) >>= fun (w__0 : mword 64) => (code_db_store (code) (w__0))  : M (b256).
 
-Definition code_db_resolve (code_hash : mword 256) : M (Code) :=
-   (if eq_vec (code_hash) (KECCAK_EMPTY) then returnM (EMPTY_CODE)
+Definition code_db_resolve (code_hash : b256) : M (Code) :=
+   (if generic_eq (code_hash) (KECCAK_EMPTY) then returnM (EMPTY_CODE)
     else
       (code_db_lookup (code_hash)) >>= fun (w__0 : option Code) =>
       match w__0 with
@@ -1847,19 +1965,19 @@ Definition SSZ_OFF_BYTES : byte_length := ByteQuantity (4).
 #[export] Hint Unfold SSZ_OFF_BYTES : sail.
 Definition SSZ_UINT_BYTES : byte_length := EIGHT_BYTE_LENGTH.
 #[export] Hint Unfold SSZ_UINT_BYTES : sail.
-Definition ssz_field_offset (base : byte_quantity) (delta : Z) (*0 <=? delta*) : M (source_pointer) :=
-   (byte_quantity_add (base) ((ByteQuantity (delta))))  : M (byte_quantity).
+Definition ssz_field_offset (base : byte_quantity) (delta : byte_quantity) : M (source_pointer) :=
+   (byte_quantity_add (base) (delta))  : M (byte_quantity).
 
 Definition ssz_u32_at (input : ByteSlice) (offset : byte_quantity) : M (protocol_quantity) :=
    ((slice_byte (input) (offset)) >>= fun (w__0 : mword 8) =>
    let b0 := zero_extend (w__0) (64) in
-   (ssz_field_offset (offset) (1)) >>= fun (w__1 : byte_quantity) =>
+   (ssz_field_offset (offset) (BYTE_ONE)) >>= fun (w__1 : byte_quantity) =>
    (slice_byte (input) (w__1)) >>= fun (w__2 : mword 8) =>
    let b1 := zero_extend (w__2) (64) in
-   (ssz_field_offset (offset) (2)) >>= fun (w__3 : byte_quantity) =>
+   (ssz_field_offset (offset) ((ByteQuantity (2)))) >>= fun (w__3 : byte_quantity) =>
    (slice_byte (input) (w__3)) >>= fun (w__4 : mword 8) =>
    let b2 := zero_extend (w__4) (64) in
-   (ssz_field_offset (offset) (3)) >>= fun (w__5 : byte_quantity) =>
+   (ssz_field_offset (offset) ((ByteQuantity (3)))) >>= fun (w__5 : byte_quantity) =>
    (slice_byte (input) (w__5)) >>= fun (w__6 : mword 8) =>
    let b3 := zero_extend (w__6) (64) in
    returnM ((uint
@@ -1876,25 +1994,25 @@ Definition ssz_u32 (input : ByteSlice) (offset : byte_quantity) : M (protocol_qu
 Definition ssz_limb (input : ByteSlice) (offset : byte_quantity) : M (limb) :=
    (slice_byte (input) (offset)) >>= fun (w__0 : mword 8) =>
    let b0 := zero_extend (w__0) (64) in
-   (ssz_field_offset (offset) (1)) >>= fun (w__1 : byte_quantity) =>
+   (ssz_field_offset (offset) (BYTE_ONE)) >>= fun (w__1 : byte_quantity) =>
    (slice_byte (input) (w__1)) >>= fun (w__2 : mword 8) =>
    let b1 := zero_extend (w__2) (64) in
-   (ssz_field_offset (offset) (2)) >>= fun (w__3 : byte_quantity) =>
+   (ssz_field_offset (offset) ((ByteQuantity (2)))) >>= fun (w__3 : byte_quantity) =>
    (slice_byte (input) (w__3)) >>= fun (w__4 : mword 8) =>
    let b2 := zero_extend (w__4) (64) in
-   (ssz_field_offset (offset) (3)) >>= fun (w__5 : byte_quantity) =>
+   (ssz_field_offset (offset) ((ByteQuantity (3)))) >>= fun (w__5 : byte_quantity) =>
    (slice_byte (input) (w__5)) >>= fun (w__6 : mword 8) =>
    let b3 := zero_extend (w__6) (64) in
-   (ssz_field_offset (offset) (4)) >>= fun (w__7 : byte_quantity) =>
+   (ssz_field_offset (offset) (SSZ_OFF_BYTES)) >>= fun (w__7 : byte_quantity) =>
    (slice_byte (input) (w__7)) >>= fun (w__8 : mword 8) =>
    let b4 := zero_extend (w__8) (64) in
-   (ssz_field_offset (offset) (5)) >>= fun (w__9 : byte_quantity) =>
+   (ssz_field_offset (offset) ((ByteQuantity (5)))) >>= fun (w__9 : byte_quantity) =>
    (slice_byte (input) (w__9)) >>= fun (w__10 : mword 8) =>
    let b5 := zero_extend (w__10) (64) in
-   (ssz_field_offset (offset) (6)) >>= fun (w__11 : byte_quantity) =>
+   (ssz_field_offset (offset) ((ByteQuantity (6)))) >>= fun (w__11 : byte_quantity) =>
    (slice_byte (input) (w__11)) >>= fun (w__12 : mword 8) =>
    let b6 := zero_extend (w__12) (64) in
-   (ssz_field_offset (offset) (7)) >>= fun (w__13 : byte_quantity) =>
+   (ssz_field_offset (offset) ((ByteQuantity (7)))) >>= fun (w__13 : byte_quantity) =>
    (slice_byte (input) (w__13)) >>= fun (w__14 : mword 8) =>
    let b7 := zero_extend (w__14) (64) in
    returnM ((or_vec (b0)
@@ -1910,11 +2028,11 @@ Definition ssz_uint (input : ByteSlice) (offset : byte_quantity) : M (protocol_q
    returnM (Build_protocol_quantity (semanticResult)).
 
 Definition ssz_addr (input : ByteSlice) (offset : byte_quantity) : M (address_typ) :=
-   (slice_load_n (input) (offset) (ADDRESS_BYTE_LENGTH)) >>= fun (w__0 : mword 256) =>
-   returnM ((subrange_vec_dec (w__0) (159) (0))).
+   (slice_load_n (input) (offset) (ADDRESS_BYTE_LENGTH)) >>= fun (w__0 : word) =>
+   returnM ((word_to_address (w__0))).
 
-Definition ssz_bytes32 (input : ByteSlice) (offset : byte_quantity) : M (bits 256) :=
-   (slice_load (input) (offset))  : M (mword 256).
+Definition ssz_bytes32 (input : ByteSlice) (offset : byte_quantity) : M (hash) :=
+   (slice_load (input) (offset)) >>= fun (w__0 : word) => returnM ((word_to_hash (w__0))).
 
 Definition ssz_logs_bloom (input : ByteSlice) (offset : byte_quantity) : M (LogsBloom) :=
    let out : vec (mword 64) 32 := vector_init (32) (LIMB_ZERO) in
@@ -1923,11 +2041,9 @@ Definition ssz_logs_bloom (input : ByteSlice) (offset : byte_quantity) : M (Logs
    let '(loop_k_upper) := 31 in
    (foreach_ZM_up loop_k_lower loop_k_upper 1 (cursor, out)
      (fun k '(cursor, out) =>
-       (slice_load_n (input) (cursor) (EIGHT_BYTE_LENGTH)) >>= fun (w__0 : mword 256) =>
-       let out :=
-         (vec_update_dec (out) (k) ((subrange_vec_dec (w__0) (63) (0))))
-          : vec (mword 64) 32 in
-       (ssz_field_offset (cursor) (8)) >>= fun (w__1 : byte_quantity) =>
+       (slice_load_n (input) (cursor) (EIGHT_BYTE_LENGTH)) >>= fun (w__0 : word) =>
+       let out := (vec_update_dec (out) (k) ((word_limb_0 (w__0))))  : vec (mword 64) 32 in
+       (ssz_field_offset (cursor) (SSZ_UINT_BYTES)) >>= fun (w__1 : byte_quantity) =>
        let cursor := w__1  : byte_quantity in
        returnM ((cursor, out))))) >>= fun '((cursor, out)
    : (byte_quantity * vec (mword 64) 32)) =>
@@ -1935,13 +2051,12 @@ Definition ssz_logs_bloom (input : ByteSlice) (offset : byte_quantity) : M (Logs
 
 Definition ssz_u256 (input : ByteSlice) (offset : byte_quantity) : M (word) :=
    (ssz_limb (input) (offset)) >>= fun c0 =>
-   (ssz_field_offset (offset) (8)) >>= fun (w__0 : byte_quantity) =>
+   (ssz_field_offset (offset) (SSZ_UINT_BYTES)) >>= fun (w__0 : byte_quantity) =>
    (ssz_limb (input) (w__0)) >>= fun c1 =>
-   (ssz_field_offset (offset) (16)) >>= fun (w__1 : byte_quantity) =>
+   (ssz_field_offset (offset) ((ByteQuantity (16)))) >>= fun (w__1 : byte_quantity) =>
    (ssz_limb (input) (w__1)) >>= fun c2 =>
-   (ssz_field_offset (offset) (24)) >>= fun (w__2 : byte_quantity) =>
-   (ssz_limb (input) (w__2)) >>= fun c3 =>
-   returnM ((concat_vec (c3) ((concat_vec (c2) ((concat_vec (c1) (c0))))))).
+   (ssz_field_offset (offset) ((ByteQuantity (24)))) >>= fun (w__2 : byte_quantity) =>
+   (ssz_limb (input) (w__2)) >>= fun c3 => returnM ((word_from_limbs (c0) (c1) (c2) (c3))).
 
 Definition RLP_SHORT_LENGTH_LIMIT : byte_length := ByteQuantity (55).
 #[export] Hint Unfold RLP_SHORT_LENGTH_LIMIT : sail.
@@ -1951,6 +2066,10 @@ Definition RLP_ENCODED_WORD_LENGTH : byte_length := ByteQuantity (33).
 #[export] Hint Unfold RLP_ENCODED_WORD_LENGTH : sail.
 Definition RLP_ENCODED_ADDRESS_LENGTH : byte_length := ByteQuantity (21).
 #[export] Hint Unfold RLP_ENCODED_ADDRESS_LENGTH : sail.
+Definition rlp_length_width_decrement (value : Z) (*(0 <=? value) && (value <=? 8)*) : M (Z) :=
+   assert_exp' (Z.ltb (0) (value)) "sail/lib/rlp/rlp.sail:42.20-42.21" >>= fun _ =>
+   returnM ((Z.sub (value) (1))).
+
 Definition minimal_protocol_quantity_bytes (n : protocol_quantity)
 (*(0 <=? n) && (n <=? (2 ^ 64 - 1))*)
 : M ((list byte * Z)) :=
@@ -1964,7 +2083,9 @@ Definition minimal_protocol_quantity_bytes (n : protocol_quantity)
      (fun byte_index '(len, out, remaining) =>
        (if neq_int (remaining) (0) return M ((Z * list (mword 8) * Z)) then
           let out : list (mword 8) := (get_slice_int (8) ((Z.rem (remaining) (256))) (0)) :: out in
-          (exact_quotient (remaining) (256)) >>= fun (w__0 : Z) =>
+          ((protocol_quantity_quotient (Build_protocol_quantity ((remaining)))
+              (Build_protocol_divisor ((256)))) >>= fun semanticResult =>
+           returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__0 : Z) =>
           let remaining := w__0  : Z in
           let len : Z := Z.add (byte_index) (1) in
           returnM ((len, out, remaining))
@@ -1994,8 +2115,8 @@ Definition minimal_gas_bytes '((Gas n) : gas) : M ((list byte * Z)) :=
    : (Z * list (mword 8) * gas)) =>
    returnM ((out, len)).
 
-Definition minimal_word_bytes (w : mword 256) : (list byte * Z) :=
-   let remaining : mword 256 := w in
+Definition minimal_word_bytes (w : word) : (list byte * Z) :=
+   let remaining : word := w in
    let out : list (mword 8) := [] in
    let len : Z := 0 in
    let '((len, out, remaining)) :=
@@ -2005,30 +2126,29 @@ Definition minimal_word_bytes (w : mword 256) : (list byte * Z) :=
        (fun byte_index '(len, out, remaining) =>
          let '((len, out, remaining)) :=
            (if word_nonzero (remaining) then
-              let out : list (mword 8) := (subrange_vec_dec (remaining) (7) (0)) :: out in
-              let remaining : mword 256 := shiftr (remaining) (8) in
+              let out : list (mword 8) := (word_low_byte (remaining)) :: out in
+              let remaining : word := word_shift_right_limb (remaining) ((Ox"0000000000000008")) in
               let len : Z := Z.add (byte_index) (1) in
               (len, out, remaining)
             else (len, out, remaining))
-            : (Z * list (mword 8) * mword 256) in
+            : (Z * list (mword 8) * word) in
          (len, out, remaining))))
-      : (Z * list (mword 8) * mword 256) in
+      : (Z * list (mword 8) * word) in
    ((out, len)).
 
 Definition rlp_nat_length_byte (value : Z) (*(0 <=? value) && (value <=? 255)*) : byte :=
    get_slice_int (8) (value) (0).
 
 Definition rlp_byte_length_byte (value : byte_quantity) : M (byte) :=
-   assert_exp (byte_quantity_le (value) ((ByteQuantity (255)))) "sail/lib/rlp/rlp.sail:95.37-95.38" >>
+   assert_exp (byte_quantity_le (value) ((ByteQuantity (255)))) "sail/lib/rlp/rlp.sail:101.37-101.38" >>
    (byte_quantity_to_limb (value)) >>= fun (w__0 : mword 64) =>
    returnM ((subrange_vec_dec (w__0) (7) (0))).
 
 Definition rlp_length_word (value : byte_quantity) : M (word) :=
-   (word_of_byte_quantity (value))  : M (mword 256).
+   (word_of_byte_quantity (value))  : M (word).
 
 Definition rlp_string_prefix (len : byte_quantity) (first : mword 8) : M ((list byte * byte_length)) :=
-   (if andb ((byte_quantity_equal (len) (BYTE_ONE)))
-         ((eq_vec ((access_vec_dec (first) (7))) (('b"0")))) then
+   (if andb ((generic_eq (len) (BYTE_ONE))) ((eq_vec ((access_vec_dec (first) (7))) (('b"0")))) then
       returnM (([], BYTE_ZERO))
     else if byte_quantity_le (len) (RLP_SHORT_LENGTH_LIMIT)
       return
@@ -2036,7 +2156,7 @@ Definition rlp_string_prefix (len : byte_quantity) (first : mword 8) : M ((list 
       (rlp_byte_length_byte (len)) >>= fun (w__0 : mword 8) =>
       returnM (([add_vec ((Ox"80")) (w__0)], BYTE_ONE))
     else
-      (rlp_length_word (len)) >>= fun (w__1 : mword 256) =>
+      (rlp_length_word (len)) >>= fun (w__1 : word) =>
       let '((length_bytes, length_len)) := minimal_word_bytes (w__1) in
       returnM (((add_vec ((Ox"B7")) ((rlp_nat_length_byte (length_len)))) :: length_bytes, ByteQuantity
                                                                                              ((Z.add
@@ -2051,7 +2171,7 @@ Definition rlp_list_prefix (len : byte_quantity) : M ((list byte * byte_length))
       (rlp_byte_length_byte (len)) >>= fun (w__0 : mword 8) =>
       returnM (([add_vec ((Ox"C0")) (w__0)], BYTE_ONE))
     else
-      (rlp_length_word (len)) >>= fun (w__1 : mword 256) =>
+      (rlp_length_word (len)) >>= fun (w__1 : word) =>
       let '((length_bytes, length_len)) := minimal_word_bytes (w__1) in
       returnM (((add_vec ((Ox"F7")) ((rlp_nat_length_byte (length_len)))) :: length_bytes, ByteQuantity
                                                                                              ((Z.add
@@ -2059,8 +2179,8 @@ Definition rlp_list_prefix (len : byte_quantity) : M ((list byte * byte_length))
                                                                                                  (length_len))))))
     : M ((list (mword 8) * byte_quantity)).
 
-Definition rlp_minimal_word_len (w : mword 256) : Z :=
-   let remaining : mword 256 := w in
+Definition rlp_minimal_word_len (w : word) : Z :=
+   let remaining : word := w in
    let len : Z := 0 in
    let '((len, remaining)) :=
      (let '(loop_byte_index_lower) := 0 in
@@ -2069,13 +2189,13 @@ Definition rlp_minimal_word_len (w : mword 256) : Z :=
        (fun byte_index '(len, remaining) =>
          let '((len, remaining)) :=
            (if word_nonzero (remaining) then
-              let remaining : mword 256 := shiftr (remaining) (8) in
+              let remaining : word := word_shift_right_limb (remaining) ((Ox"0000000000000008")) in
               let len : Z := Z.add (byte_index) (1) in
               (len, remaining)
             else (len, remaining))
-            : (Z * mword 256) in
+            : (Z * word) in
          (len, remaining))))
-      : (Z * mword 256) in
+      : (Z * word) in
    len.
 
 Definition rlp_minimal_protocol_quantity_len (n : protocol_quantity)
@@ -2089,7 +2209,9 @@ Definition rlp_minimal_protocol_quantity_len (n : protocol_quantity)
    (foreach_ZM_up loop_byte_index_lower loop_byte_index_upper 1 (len, remaining)
      (fun byte_index '(len, remaining) =>
        (if neq_int (remaining) (0) return M ((Z * Z)) then
-          (exact_quotient (remaining) (256)) >>= fun (w__0 : Z) =>
+          ((protocol_quantity_quotient (Build_protocol_quantity ((remaining)))
+              (Build_protocol_divisor ((256)))) >>= fun semanticResult =>
+           returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__0 : Z) =>
           let remaining := w__0  : Z in
           let len : Z := Z.add (byte_index) (1) in
           returnM ((len, remaining))
@@ -2119,13 +2241,12 @@ Definition rlp_minimal_gas_len '((Gas n) : gas) : M (Z) :=
 Definition rlp_length_prefix_len (len : byte_quantity) : M (byte_length) :=
    (if byte_quantity_le (len) (RLP_SHORT_LENGTH_LIMIT) then returnM (BYTE_ONE)
     else
-      (rlp_length_word (len)) >>= fun (w__0 : mword 256) =>
+      (rlp_length_word (len)) >>= fun (w__0 : word) =>
       returnM ((ByteQuantity ((Z.add (1) ((rlp_minimal_word_len (w__0))))))))
     : M (byte_quantity).
 
 Definition rlp_string_size (len : byte_quantity) (first : mword 8) : M (byte_length) :=
-   (if andb ((byte_quantity_equal (len) (BYTE_ONE)))
-         ((eq_vec ((access_vec_dec (first) (7))) (('b"0")))) then
+   (if andb ((generic_eq (len) (BYTE_ONE))) ((eq_vec ((access_vec_dec (first) (7))) (('b"0")))) then
       returnM (BYTE_ONE)
     else
       (rlp_length_prefix_len (len)) >>= fun (w__0 : byte_quantity) =>
@@ -2139,15 +2260,15 @@ Definition rlp_bytes_size (data : list (mword 8)) (len : byte_quantity) : M (byt
     : M (byte_quantity).
 
 Definition rlp_slice_size (data : ByteSlice) : M (byte_length) :=
-   (if byte_quantity_equal (data.(ByteSlice_len)) (BYTE_ZERO) then returnM ((Ox"00"))
+   (if generic_eq (data.(ByteSlice_len)) (BYTE_ZERO) then returnM ((Ox"00"))
     else (slice_byte (data) (BYTE_ZERO))  : M (mword 8)) >>= fun (w__1 : mword 8) =>
    (rlp_string_size (data.(ByteSlice_len)) (w__1))
     : M (byte_quantity).
 
-Definition rlp_uint_word_size (w : mword 256) : M (byte_length) :=
+Definition rlp_uint_word_size (w : word) : M (byte_length) :=
    let len := rlp_minimal_word_len (w) in
    (rlp_string_size ((ByteQuantity (len)))
-      ((if Z.eqb (len) (1) then subrange_vec_dec (w) (7) (0)
+      ((if Z.eqb (len) (1) then word_low_byte (w)
         else (Ox"00"))))
     : M (byte_quantity).
 
@@ -2198,13 +2319,13 @@ Definition rlp_write_bytes (data : list (mword 8)) (len : byte_quantity) : M (un
    (rlp_write_string_prefix (len) (first)) >> (scratch_push_bytes (data) (len))  : M (unit).
 
 Definition rlp_write_slice (data : ByteSlice) : M (unit) :=
-   (if byte_quantity_equal (data.(ByteSlice_len)) (BYTE_ZERO) then returnM ((Ox"00"))
+   (if generic_eq (data.(ByteSlice_len)) (BYTE_ZERO) then returnM ((Ox"00"))
     else (slice_byte (data) (BYTE_ZERO))  : M (mword 8)) >>= fun (w__1 : mword 8) =>
    (rlp_write_string_prefix (data.(ByteSlice_len)) (w__1)) >>
    (scratch_push_slice (data))
     : M (unit).
 
-Definition rlp_write_uint_word (w : mword 256) : M (unit) :=
+Definition rlp_write_uint_word (w : word) : M (unit) :=
    let '((bytes, len)) := minimal_word_bytes (w) in
    (rlp_write_bytes (bytes) ((ByteQuantity (len))))
     : M (unit).
@@ -2221,15 +2342,15 @@ Definition rlp_write_gas (value : gas) : M (unit) :=
    (rlp_write_bytes (bytes) ((ByteQuantity (len))))
     : M (unit).
 
-Definition rlp_write_word (w : mword 256) : M (unit) :=
+Definition rlp_write_word (w : word) : M (unit) :=
    (rlp_write_bytes ((word_to_bytes32 (w))) (WORD_BYTE_LENGTH))  : M (unit).
 
-Definition rlp_write_addr (a : mword 160) : M (unit) :=
+Definition rlp_write_addr (a : address_typ) : M (unit) :=
    (rlp_write_bytes ((address_to_bytes (a))) (ADDRESS_BYTE_LENGTH))  : M (unit).
 
 Definition rlp_finish (start : byte_quantity) (expected_len : byte_quantity) : M (ByteSlice) :=
    (scratch_finish (start)) >>= fun encoded =>
-   assert_exp (byte_quantity_equal (encoded.(ByteSlice_len)) (expected_len)) "RLP forward writer length" >>
+   assert_exp (generic_eq (encoded.(ByteSlice_len)) (expected_len)) "RLP forward writer length" >>
    returnM (encoded).
 
 Definition rlp_checked_add_quantity (a : byte_quantity) (b : byte_quantity) : M (source_pointer) :=
@@ -2251,19 +2372,22 @@ Definition rlp_ref_be_length (source : ByteSlice) (start : byte_quantity) (count
 : M (byte_length) :=
    let value : mword 64 := LIMB_ZERO in
    let current : byte_quantity := start in
-   (let '(loop_byte_index_lower) := 0 in
-   let '(loop_byte_index_upper) := 7 in
-   (foreach_ZM_up loop_byte_index_lower loop_byte_index_upper 1 (current, value)
-     (fun byte_index '(current, value) =>
-       (if Z.ltb (byte_index) (count) return M ((byte_quantity * mword 64)) then
+   let remaining : Z := count in
+   (let '(loop__byte_index_lower) := 0 in
+   let '(loop__byte_index_upper) := 7 in
+   (foreach_ZM_up loop__byte_index_lower loop__byte_index_upper 1 (current, remaining, value)
+     (fun _byte_index '(current, remaining, value) =>
+       (if neq_int (remaining) (0) return M ((byte_quantity * Z * mword 64)) then
           (slice_byte (source) (current)) >>= fun (w__0 : mword 8) =>
           let value := (or_vec ((shiftl (value) (8))) ((zero_extend (w__0) (64))))  : mword 64 in
           (rlp_checked_add_quantity (current) (BYTE_ONE)) >>= fun (w__1 : byte_quantity) =>
           let current := w__1  : byte_quantity in
-          returnM ((current, value))
-        else returnM ((current, value)))
-        : M ((byte_quantity * mword 64))))) >>= fun '((current, value)
-   : (byte_quantity * mword 64)) =>
+          (rlp_length_width_decrement (remaining)) >>= fun (w__2 : Z) =>
+          let remaining := w__2  : Z in
+          returnM ((current, remaining, value))
+        else returnM ((current, remaining, value)))
+        : M ((byte_quantity * Z * mword 64))))) >>= fun '((current, remaining, value)
+   : (byte_quantity * Z * mword 64)) =>
    returnM ((ByteQuantity ((uint (value))))).
 
 Definition rlp_bytes_equal_at
@@ -2305,7 +2429,7 @@ Definition rlp_ref_hdr (b : ByteSlice) (pos : byte_quantity) (stop : byte_quanti
     else if Z.ltb (h) (192) return M ((bool * byte_quantity * byte_quantity)) then
       let length_width : Z := Z.sub (h) (183) in
       (rlp_checked_add_quantity (pos) (BYTE_ONE)) >>= fun length_start =>
-      (rlp_checked_add_nat (length_start) (length_width)) >>= fun content =>
+      (rlp_checked_add_quantity (length_start) ((ByteQuantity (length_width)))) >>= fun content =>
       (if byte_quantity_lt (stop) (content) return M (unit) then throw (InvalidBlock (RlpDecode))
        else returnM (tt)) >>
       (rlp_ref_be_length (b) (length_start) (length_width)) >>= fun (w__2 : byte_quantity) =>
@@ -2316,7 +2440,7 @@ Definition rlp_ref_hdr (b : ByteSlice) (pos : byte_quantity) (stop : byte_quanti
     else
       let length_width : Z := Z.sub (h) (247) in
       (rlp_checked_add_quantity (pos) (BYTE_ONE)) >>= fun length_start =>
-      (rlp_checked_add_nat (length_start) (length_width)) >>= fun content =>
+      (rlp_checked_add_quantity (length_start) ((ByteQuantity (length_width)))) >>= fun content =>
       (if byte_quantity_lt (stop) (content) return M (unit) then throw (InvalidBlock (RlpDecode))
        else returnM (tt)) >>
       (rlp_ref_be_length (b) (length_start) (length_width)) >>= fun (w__4 : byte_quantity) =>
@@ -2342,11 +2466,11 @@ Definition rlp_invalid_cursor (source : ByteSlice) : RlpCursor :=
 
 Definition rlp_node_cursor (node : ByteSlice) : M (RlpCursor) :=
    let n := node.(ByteSlice_len) in
-   (if byte_quantity_equal (n) (BYTE_ZERO) then returnM ((rlp_invalid_cursor (node)))
+   (if generic_eq (n) (BYTE_ZERO) then returnM ((rlp_invalid_cursor (node)))
     else
       (rlp_ref_hdr (node) (BYTE_ZERO) (n)) >>= fun '((is_list, content, content_len)) =>
       (rlp_checked_add_quantity (content) (content_len)) >>= fun content_stop =>
-      returnM ((if andb (is_list) ((byte_quantity_equal (content_stop) (n))) then
+      returnM ((if andb (is_list) ((generic_eq (content_stop) (n))) then
                   {| RlpCursor_source := node;
                      RlpCursor_current := content;
                      RlpCursor_stop := content_stop;
@@ -2366,7 +2490,7 @@ Definition rlp_ref_cursor (f : RlpFieldRef) : M (RlpCursor) :=
 
 Definition rlp_cursor_empty (cursor : RlpCursor) : bool :=
    andb (cursor.(RlpCursor_valid))
-     ((byte_quantity_equal (cursor.(RlpCursor_current)) (cursor.(RlpCursor_stop)))).
+     ((generic_eq (cursor.(RlpCursor_current)) (cursor.(RlpCursor_stop)))).
 
 Definition rlp_cursor_pop (cursor : RlpCursor) : M ((RlpFieldRef * RlpCursor)) :=
    let current : byte_quantity := cursor.(RlpCursor_current) in
@@ -2397,13 +2521,12 @@ Definition rlp_cursor_expect_end (cursor : RlpCursor) : M (unit) :=
 
 Definition rlp_single_ref (item : ByteSlice) : M (RlpFieldRef) :=
    let item_len := item.(ByteSlice_len) in
-   (if byte_quantity_equal (item_len) (BYTE_ZERO) return M (RlpFieldRef) then
+   (if generic_eq (item_len) (BYTE_ZERO) return M (RlpFieldRef) then
       throw (InvalidBlock (RlpDecode))
     else
       (rlp_ref_hdr (item) (BYTE_ZERO) (item_len)) >>= fun '((isl, cs, cl)) =>
       (rlp_checked_add_quantity (cs) (cl)) >>= fun len =>
-      (if byte_quantity_not_equal (len) (item_len) return M (unit) then
-         throw (InvalidBlock (RlpDecode))
+      (if generic_neq (len) (item_len) return M (unit) then throw (InvalidBlock (RlpDecode))
        else returnM (tt)) >>
       returnM ((rlp_field_ref (item) (isl) (BYTE_ZERO) (len) (cs) (cl))))
     : M (RlpFieldRef).
@@ -2421,20 +2544,20 @@ Definition rlp_ref_framing_canonical (f : RlpFieldRef) : M (bool) :=
    let fl := f.(RlpFieldRef_full_len) in
    let fo := f.(RlpFieldRef_full_off) in
    let co := f.(RlpFieldRef_content_off) in
-   (if byte_quantity_equal (fl) (BYTE_ZERO) then returnM (false)
+   (if generic_eq (fl) (BYTE_ZERO) then returnM (false)
     else if f.(RlpFieldRef_is_list) return M (bool) then
       (if byte_quantity_le (n) (RLP_SHORT_LENGTH_LIMIT) return M (bool) then
          (byte_quantity_add (n) (BYTE_ONE)) >>= fun encoded_len =>
-         (and_boolM (returnM (((byte_quantity_equal (fl) (encoded_len))  : bool)))
+         (and_boolM (returnM (((generic_eq (fl) (encoded_len))  : bool)))
             ((slice_byte (f.(RlpFieldRef_source)) (fo)) >>= fun (w__0 : mword 8) =>
              (rlp_byte_length_byte (n)) >>= fun (w__1 : mword 8) =>
              returnM (((eq_vec (w__0) ((add_vec ((Ox"C0")) (w__1))))  : bool))))
           : M (bool)
        else
-         (rlp_length_word (n)) >>= fun (w__3 : mword 256) =>
+         (rlp_length_word (n)) >>= fun (w__3 : word) =>
          let '((len_bytes, length_width)) := minimal_word_bytes (w__3) in
          (rlp_checked_add_quantity ((ByteQuantity ((Z.add (1) (length_width))))) (n)) >>= fun encoded_len =>
-         (and_boolM (returnM (((byte_quantity_equal (fl) (encoded_len))  : bool)))
+         (and_boolM (returnM (((generic_eq (fl) (encoded_len))  : bool)))
             ((and_boolM
                 ((slice_byte (f.(RlpFieldRef_source)) (fo)) >>= fun (w__4 : mword 8) =>
                  returnM (((eq_vec (w__4)
@@ -2446,33 +2569,32 @@ Definition rlp_ref_framing_canonical (f : RlpFieldRef) : M (bool) :=
              : M (bool)))
           : M (bool))
        : M (bool)
-    else if byte_quantity_equal (n) (BYTE_ZERO) return M (bool) then
-      (and_boolM (returnM (((byte_quantity_equal (fl) (BYTE_ONE))  : bool)))
+    else if generic_eq (n) (BYTE_ZERO) return M (bool) then
+      (and_boolM (returnM (((generic_eq (fl) (BYTE_ONE))  : bool)))
          ((slice_byte (f.(RlpFieldRef_source)) (fo)) >>= fun (w__10 : mword 8) =>
           returnM (((eq_vec (w__10) ((Ox"80")))  : bool))))
        : M (bool)
     else
       (slice_byte (f.(RlpFieldRef_source)) (co)) >>= fun first =>
-      (if andb ((byte_quantity_equal (n) (BYTE_ONE)))
-            ((eq_vec ((access_vec_dec (first) (7))) (('b"0"))))
+      (if andb ((generic_eq (n) (BYTE_ONE))) ((eq_vec ((access_vec_dec (first) (7))) (('b"0"))))
          return
          M (bool) then
-         (and_boolM (returnM (((byte_quantity_equal (fl) (BYTE_ONE))  : bool)))
+         (and_boolM (returnM (((generic_eq (fl) (BYTE_ONE))  : bool)))
             ((slice_byte (f.(RlpFieldRef_source)) (fo)) >>= fun (w__12 : mword 8) =>
              returnM (((eq_vec (w__12) (first))  : bool))))
           : M (bool)
        else if byte_quantity_le (n) (RLP_SHORT_LENGTH_LIMIT) return M (bool) then
          (byte_quantity_add (n) (BYTE_ONE)) >>= fun encoded_len =>
-         (and_boolM (returnM (((byte_quantity_equal (fl) (encoded_len))  : bool)))
+         (and_boolM (returnM (((generic_eq (fl) (encoded_len))  : bool)))
             ((slice_byte (f.(RlpFieldRef_source)) (fo)) >>= fun (w__14 : mword 8) =>
              (rlp_byte_length_byte (n)) >>= fun (w__15 : mword 8) =>
              returnM (((eq_vec (w__14) ((add_vec ((Ox"80")) (w__15))))  : bool))))
           : M (bool)
        else
-         (rlp_length_word (n)) >>= fun (w__17 : mword 256) =>
+         (rlp_length_word (n)) >>= fun (w__17 : word) =>
          let '((len_bytes, length_width)) := minimal_word_bytes (w__17) in
          (rlp_checked_add_quantity ((ByteQuantity ((Z.add (1) (length_width))))) (n)) >>= fun encoded_len =>
-         (and_boolM (returnM (((byte_quantity_equal (fl) (encoded_len))  : bool)))
+         (and_boolM (returnM (((generic_eq (fl) (encoded_len))  : bool)))
             ((and_boolM
                 ((slice_byte (f.(RlpFieldRef_source)) (fo)) >>= fun (w__18 : mword 8) =>
                  returnM (((eq_vec (w__18)
@@ -2496,8 +2618,7 @@ Definition rlp_ref_uint_canonical (f : RlpFieldRef) : M (bool) :=
    (rlp_ref_bytes_canonical (f)) >>= fun (w__0 : bool) =>
    (if negb (w__0) then returnM (false)
     else
-      (or_boolM
-         (returnM (((byte_quantity_equal (f.(RlpFieldRef_content_len)) (BYTE_ZERO))  : bool)))
+      (or_boolM (returnM (((generic_eq (f.(RlpFieldRef_content_len)) (BYTE_ZERO))  : bool)))
          ((slice_byte (f.(RlpFieldRef_source)) (f.(RlpFieldRef_content_off))) >>= fun (w__1 : mword 8) =>
           returnM (((neq_vec (w__1) ((Ox"00")))  : bool))))
        : M (bool))
@@ -2505,7 +2626,7 @@ Definition rlp_ref_uint_canonical (f : RlpFieldRef) : M (bool) :=
 
 Definition rlp_ref_fixed_bytes (f : RlpFieldRef) (len : byte_quantity) : M (ByteSlice) :=
    (and_boolM ((rlp_ref_bytes_canonical (f))  : M (bool))
-      (returnM (((byte_quantity_equal (f.(RlpFieldRef_content_len)) (len))  : bool)))) >>= fun (w__1 : bool) =>
+      (returnM (((generic_eq (f.(RlpFieldRef_content_len)) (len))  : bool)))) >>= fun (w__1 : bool) =>
    (if w__1 return M (ByteSlice) then (rlp_ref_content (f))  : M (ByteSlice)
     else throw (InvalidBlock (RlpDecode)))
     : M (ByteSlice).
@@ -2514,26 +2635,27 @@ Definition rlp_ref_word (f : RlpFieldRef) : M (word) :=
    let n := f.(RlpFieldRef_content_len) in
    (if orb (f.(RlpFieldRef_is_list)) ((byte_quantity_lt (RLP_WORD_LENGTH_LIMIT) (n)))
       return
-      M (mword 256) then
+      M (word) then
       throw (InvalidBlock (RlpDecode))
-    else (slice_load_n (f.(RlpFieldRef_source)) (f.(RlpFieldRef_content_off)) (n))  : M (mword 256))
-    : M (mword 256).
+    else (slice_load_n (f.(RlpFieldRef_source)) (f.(RlpFieldRef_content_off)) (n))  : M (word))
+    : M (word).
 
 Definition rlp_ref_uint_word (f : RlpFieldRef) : M (word) :=
    (rlp_ref_uint_canonical (f)) >>= fun (w__0 : bool) =>
-   (if w__0 return M (mword 256) then (rlp_ref_word (f))  : M (mword 256)
+   (if w__0 return M (word) then (rlp_ref_word (f))  : M (word)
     else throw (InvalidBlock (RlpDecode)))
-    : M (mword 256).
+    : M (word).
 
 Definition rlp_ref_uint (f : RlpFieldRef) : M (protocol_quantity) :=
-   ((rlp_ref_uint_word (f)) >>= fun (w__0 : mword 256) =>
-   let value := uint (w__0) in
-   (if Z.leb (value) ((Z.sub ((pow2 (64))) (1))) then returnM (value)
-    else throw (InvalidBlock (RlpDecode)))
+   ((rlp_ref_uint_word (f)) >>= fun (w__0 : word) =>
+   match word_to_limb (w__0) with
+   | Some value => returnM ((uint (value)))
+   | None => throw (InvalidBlock (RlpDecode))
+   end
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
 
-Definition create_address (sender : mword 160) (nonce : account_nonce)
+Definition create_address (sender : address_typ) (nonce : account_nonce)
 (*(0 <=? nonce) && (nonce <=? (2 ^ 64 - 1))*)
 : M (address_typ) :=
    let nonce := (nonce).(protocol_quantity_value) in
@@ -2545,35 +2667,30 @@ Definition create_address (sender : mword 160) (nonce : account_nonce)
    (rlp_write_addr (sender)) >>
    (rlp_write_protocol_quantity (Build_protocol_quantity ((nonce)))) >>
    (rlp_finish (mark) (encoded_len)) >>= fun encoded =>
-   (keccak256_slice (encoded)) >>= fun (w__1 : mword 256) =>
-   let address := word_to_address (w__1) in
+   (keccak256_slice (encoded)) >>= fun (w__1 : b256) =>
+   let address := word_to_address ((hash_to_word (w__1))) in
    (scratch_rewind (mark)) >> returnM (address).
 
-Definition create2_address (sender : mword 160) (salt : mword 256) (init_hash : mword 256)
-: M (address_typ) :=
+Definition create2_address (sender : address_typ) (salt : word) (init_hash : b256) : M (address_typ) :=
    (keccak256_segments
       ([bytes_list ([(Ox"FF")]) (BYTE_ONE);
       bytes_list ((address_to_bytes (sender))) (ADDRESS_BYTE_LENGTH);
       bytes_list ((word_to_bytes32 (salt))) (WORD_BYTE_LENGTH);
-      bytes_list ((word_to_bytes32 (init_hash))) (WORD_BYTE_LENGTH)])) >>= fun (w__0 : mword 256) =>
-   returnM ((word_to_address (w__0))).
+      bytes_list ((hash_to_bytes32 (init_hash))) (WORD_BYTE_LENGTH)])) >>= fun (w__0 : b256) =>
+   returnM ((word_to_address ((hash_to_word (w__0))))).
 
-Definition legacy_sig_chain_id (v : mword 256) : word :=
-   (word_divmod
-      ((sub_vec (v) ((Ox"0000000000000000000000000000000000000000000000000000000000000023"))))
-      ((Ox"0000000000000000000000000000000000000000000000000000000000000002"))).(WordDivMod_quotient).
+Definition legacy_sig_chain_id (v : word) : word :=
+   (word_divmod ((word_sub (v) ((limb_to_word ((Ox"0000000000000023"))))))
+      ((limb_to_word ((Ox"0000000000000002"))))).(WordDivMod_quotient).
 
 Definition LEGACY_SIGNATURE_SUFFIX_LENGTH : byte_length := ByteQuantity (2).
 #[export] Hint Unfold LEGACY_SIGNATURE_SUFFIX_LENGTH : sail.
-Definition PUBLIC_KEY_Y_OFFSET : source_pointer := ByteQuantity (33).
-#[export] Hint Unfold PUBLIC_KEY_Y_OFFSET : sail.
 Definition PUBLIC_KEY_BODY_LENGTH : byte_length := DOUBLE_WORD_BYTE_LENGTH.
 #[export] Hint Unfold PUBLIC_KEY_BODY_LENGTH : sail.
-Definition tx_signing_hash (t : TxType) (content_src : ByteSlice) (v : mword 256) : M (hash) :=
+Definition tx_signing_hash (t : TxType) (content_src : ByteSlice) (v : word) : M (hash) :=
    let tb := tx_type_byte (t) in
    let eip155 :=
-     andb ((eq_vec (tb) ((Ox"00"))))
-       ((word_ule ((Ox"0000000000000000000000000000000000000000000000000000000000000023")) (v))) in
+     andb ((eq_vec (tb) ((Ox"00")))) ((word_ule ((limb_to_word ((Ox"0000000000000023")))) (v))) in
    let chain_id := if eip155 then legacy_sig_chain_id (v) else ZERO_WORD in
    (if eip155 return M (byte_quantity) then
       (rlp_uint_word_size (chain_id)) >>= fun (w__0 : byte_quantity) =>
@@ -2582,7 +2699,7 @@ Definition tx_signing_hash (t : TxType) (content_src : ByteSlice) (v : mword 256
     else returnM (BYTE_ZERO)) >>= fun suffix_len =>
    (byte_quantity_add (content_src.(ByteSlice_len)) (suffix_len)) >>= fun content_len =>
    (rlp_list_prefix (content_len)) >>= fun '((prefix, prefix_len)) =>
-   (if eip155 return M (mword 256) then
+   (if eip155 return M (b256) then
       (scratch_begin (tt)) >>= fun mark =>
       (rlp_write_uint_word (chain_id)) >>
       (scratch_push_bytes ([(Ox"80"); (Ox"80")]) (LEGACY_SIGNATURE_SUFFIX_LENGTH)) >>
@@ -2592,18 +2709,18 @@ Definition tx_signing_hash (t : TxType) (content_src : ByteSlice) (v : mword 256
          BytesSlice (content_src);
          BytesSlice (suffix)])) >>= fun signing_hash =>
       (scratch_rewind (mark)) >> returnM (signing_hash)
-    else if neq_vec (tb) ((Ox"00")) return M (mword 256) then
+    else if neq_vec (tb) ((Ox"00")) return M (b256) then
       (keccak256_segments
          ([bytes_list ([tb]) (BYTE_ONE);
          bytes_list (prefix) (prefix_len);
          BytesSlice (content_src)]))
-       : M (mword 256)
+       : M (b256)
     else
       (keccak256_segments ([bytes_list (prefix) (prefix_len); BytesSlice (content_src)]))
-       : M (mword 256))
-    : M (mword 256).
+       : M (b256))
+    : M (b256).
 
-Definition auth_signing_hash (chain_id : mword 256) (addr : mword 160) (nonce : account_nonce)
+Definition auth_signing_hash (chain_id : word) (addr : address_typ) (nonce : account_nonce)
 (*(0 <=? nonce) && (nonce <=? (2 ^ 64 - 1))*)
 : M (hash) :=
    let nonce := (nonce).(protocol_quantity_value) in
@@ -2625,42 +2742,39 @@ Definition auth_signing_hash (chain_id : mword 256) (addr : mword 160) (nonce : 
    (keccak256_slice (encoded)) >>= fun signing_hash =>
    (scratch_rewind (mark)) >> returnM (signing_hash).
 
-Definition tx_sig_v_ok (chain_id : chain_identifier) (t : TxType) (v : mword 256)
+Definition tx_sig_v_ok (chain_id : chain_identifier) (t : TxType) (v : word)
 (*(0 <=? chain_id) && (chain_id <=? (2 ^ 64 - 1))*)
 : M (bool) :=
    let chain_id := (chain_id).(protocol_quantity_value) in
    match t with
    | LegacyTx =>
-      (or_boolM
-         (returnM (((eq_vec (v)
-                       ((Ox"000000000000000000000000000000000000000000000000000000000000001B")))
-           : bool)))
-         ((or_boolM
-             (returnM (((eq_vec (v)
-                           ((Ox"000000000000000000000000000000000000000000000000000000000000001C")))
-               : bool)))
+      (or_boolM (returnM (((generic_eq (v) ((limb_to_word ((Ox"000000000000001B")))))  : bool)))
+         ((or_boolM (returnM (((generic_eq (v) ((limb_to_word ((Ox"000000000000001C")))))  : bool)))
              ((and_boolM
-                 (returnM (((word_ule
-                               ((Ox"0000000000000000000000000000000000000000000000000000000000000023"))
-                               (v))
-                   : bool)))
-                 ((word_of_nat (chain_id)) >>= fun (w__0 : mword 256) =>
-                  returnM (((eq_vec ((legacy_sig_chain_id (v))) (w__0))  : bool))))
+                 (returnM (((word_ule ((limb_to_word ((Ox"0000000000000023")))) (v))  : bool)))
+                 ((word_of_protocol_quantity (Build_protocol_quantity ((chain_id)))) >>= fun (w__0 : word) =>
+                  returnM (((generic_eq ((legacy_sig_chain_id (v))) (w__0))  : bool))))
               : M (bool)))
           : M (bool)))
        : M (bool)
-   | _ => returnM ((orb ((eq_vec (v) (WORD_ZERO))) ((eq_vec (v) (WORD_ONE)))))
+   | _ => returnM ((orb ((generic_eq (v) (WORD_ZERO))) ((generic_eq (v) (WORD_ONE)))))
    end
     : M (bool).
 
-Definition tx_auth_ok (pubkey : ByteSlice) (h : mword 256) (r : mword 256) (s : mword 256)
+Definition tx_y_parity (t : TxType) (v : word) : y_parity :=
+   (Build_y_parity (match t with
+   | LegacyTx => if generic_eq ((word_and (v) (WORD_ONE))) (WORD_ONE) then 0 else 1
+   | _ => if generic_eq (v) (WORD_ZERO) then 0 else 1
+   end)).
+
+Definition tx_auth_ok (sender : address_typ) (h : b256) (parity : y_parity) (r : word) (s : word)
+(*(0 <=? parity) && (parity <=? 1)*)
 : M (bool) :=
+   let parity := (parity).(y_parity_value) in
    (if word_ult (SECP_N_HALF) (s) then returnM (false)
     else
-      (slice_load (pubkey) (BYTE_ONE)) >>= fun x =>
-      (slice_load (pubkey) (PUBLIC_KEY_Y_OFFSET)) >>= fun y =>
-      (secp256k1_verify (h) (r) (s) (x) (y))
-       : M (bool))
+      (ecrecover_addr (h) (Build_y_parity ((parity))) (r) (s)) >>= fun '((recovered, recovered_sender)) =>
+      returnM ((andb (recovered) ((generic_eq (recovered_sender) (sender))))))
     : M (bool).
 
 Definition EMPTY_ACCESS_LIST_DECODE : AccessListDecode :=
@@ -2670,7 +2784,7 @@ Definition EMPTY_ACCESS_LIST_DECODE : AccessListDecode :=
    AccessListDecode_slot_count := (Build_protocol_quantity (0)) |}.
 #[export] Hint Unfold EMPTY_ACCESS_LIST_DECODE : sail.
 Fixpoint _rec_decode_access_list_keys
-(cursor : RlpCursor) (addr : mword 160) (tail : AccessListDecode) (_reclimit : Z)
+(cursor : RlpCursor) (addr : address_typ) (tail : AccessListDecode) (_reclimit : Z)
 (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (AccessListDecode).
 exact (
@@ -2678,12 +2792,12 @@ exact (
    (if rlp_cursor_empty (cursor) then returnM (tail)
     else
       (rlp_cursor_pop (cursor)) >>= fun '((key, next)) =>
-      (rlp_ref_word (key)) >>= fun (w__0 : mword 256) =>
+      (rlp_ref_word (key)) >>= fun (w__0 : word) =>
       let storage_key : StorageKey := {| StorageKey_addr := addr;  StorageKey_slot := w__0 |} in
       (_rec_decode_access_list_keys (next) (addr) (tail) ((Z.sub (_reclimit) (1)))
          (_limit_reduces_bool _acc ltac:(assumption))) >>= fun result =>
       (if Z.eqb ((result.(AccessListDecode_slot_count)).(protocol_quantity_value))
-            ((Z.sub ((pow2 (64))) (1)))
+            ((BYTE_QUANTITY_MAX).(protocol_quantity_value))
          return
          M (AccessListDecode) then
          throw (InvalidBlock (RlpDecode))
@@ -2703,7 +2817,8 @@ exact (
 Defined.
 
 
-Definition decode_access_list_keys (cursor : RlpCursor) (addr : mword 160) (tail : AccessListDecode)
+Definition decode_access_list_keys
+(cursor : RlpCursor) (addr : address_typ) (tail : AccessListDecode)
 : M (AccessListDecode) :=
    let '((ByteQuantity stop)) := cursor.(RlpCursor_stop) in
    let '((ByteQuantity current)) := cursor.(RlpCursor_current) in
@@ -2723,14 +2838,14 @@ exact (
       (rlp_cursor_pop (w__0)) >>= fun '((addr_f, entry_fields)) =>
       (rlp_cursor_pop (entry_fields)) >>= fun '((keys_f, entry_fields)) =>
       (rlp_cursor_expect_end (entry_fields)) >>
-      (rlp_ref_word (addr_f)) >>= fun (w__1 : mword 256) =>
+      (rlp_ref_word (addr_f)) >>= fun (w__1 : word) =>
       let addr := word_to_address (w__1) in
       (_rec_decode_access_list_entries (next) ((Z.sub (_reclimit) (1)))
          (_limit_reduces_bool _acc ltac:(assumption))) >>= fun tail =>
       (rlp_ref_cursor (keys_f)) >>= fun (w__2 : RlpCursor) =>
       (decode_access_list_keys (w__2) (addr) (tail)) >>= fun result =>
       (if Z.eqb ((result.(AccessListDecode_address_count)).(protocol_quantity_value))
-            ((Z.sub ((pow2 (64))) (1)))
+            ((BYTE_QUANTITY_MAX).(protocol_quantity_value))
          return
          M (AccessListDecode) then
          throw (InvalidBlock (RlpDecode))
@@ -2777,12 +2892,10 @@ exact (
        (rlp_cursor_pop (cursor)) >>= fun '((item, next)) =>
        (or_boolM (returnM ((item.(RlpFieldRef_is_list)  : bool)))
           ((or_boolM
-              (returnM (((byte_quantity_not_equal (item.(RlpFieldRef_full_len))
-                            (BLOB_HASH_RLP_LENGTH))
+              (returnM (((generic_neq (item.(RlpFieldRef_full_len)) (BLOB_HASH_RLP_LENGTH))
                 : bool)))
               ((or_boolM
-                  (returnM (((byte_quantity_not_equal (item.(RlpFieldRef_content_len))
-                                (BLOB_HASH_LENGTH))
+                  (returnM (((generic_neq (item.(RlpFieldRef_content_len)) (BLOB_HASH_LENGTH))
                     : bool)))
                   ((slice_byte (item.(RlpFieldRef_source)) (item.(RlpFieldRef_full_off))) >>= fun (w__0 : mword 8) =>
                    returnM (((neq_vec (w__0) ((Ox"A0")))  : bool))))
@@ -2790,7 +2903,7 @@ exact (
            : M (bool))) >>= fun (w__3 : bool) =>
        (if w__3 return M (unit) then throw (InvalidBlock (RlpDecode))
         else returnM (tt)) >>
-       (if Z.eqb (count) ((Z.sub ((pow2 (64))) (1))) return M (unit) then
+       (if Z.eqb (count) ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) return M (unit) then
           throw (InvalidBlock (RlpDecode))
         else returnM (tt)) >>
        ((protocol_quantity_increment (Build_protocol_quantity ((count)))) >>= fun semanticResult =>
@@ -2854,14 +2967,14 @@ exact (
       let y : Z := if Z.eqb (y_value) (0) then 0 else 1 in
       (rlp_ref_uint_word (r_f)) >>= fun r =>
       (rlp_ref_uint_word (s_f)) >>= fun s =>
-      (rlp_ref_word (addr_f)) >>= fun (w__1 : mword 256) =>
+      (rlp_ref_word (addr_f)) >>= fun (w__1 : word) =>
       let auth_addr := word_to_address (w__1) in
-      (if y_valid return M ((bool * mword 160)) then
-         (auth_signing_hash (chain_id) (auth_addr) (Build_protocol_quantity ((auth_nonce)))) >>= fun (w__2 : mword 256) =>
+      (if y_valid return M ((bool * address_typ)) then
+         (auth_signing_hash (chain_id) (auth_addr) (Build_protocol_quantity ((auth_nonce)))) >>= fun (w__2 : b256) =>
          (ecrecover_addr (w__2) (Build_y_parity ((y))) (r) (s))
-          : M ((bool * mword 160))
+          : M ((bool * address_typ))
        else returnM ((false, ZERO_ADDR))) >>= fun '((ok, authority)) =>
-      let nonce_valid := neq_int (auth_nonce) ((Z.sub ((pow2 (64))) (1))) in
+      let nonce_valid := neq_int (auth_nonce) ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) in
       let authorization : Authorization :=
         {| Authorization_valid_sig :=
              andb (ok)
@@ -2877,7 +2990,7 @@ exact (
       (_rec_decode_auth_tuples (next) ((Z.sub (_reclimit) (1)))
          (_limit_reduces_bool _acc ltac:(assumption))) >>= fun tail =>
       (if Z.eqb ((tail.(AuthorizationDecode_count)).(protocol_quantity_value))
-            ((Z.sub ((pow2 (64))) (1)))
+            ((BYTE_QUANTITY_MAX).(protocol_quantity_value))
          return
          M (AuthorizationDecode) then
          throw (InvalidBlock (RlpDecode))
@@ -2923,22 +3036,23 @@ Definition tx_sig_span (payload : ByteSlice) (first : RlpFieldRef) (signature : 
 
 Definition rlp_ref_gas (f : RlpFieldRef) (fork : Fork) : M (gas) :=
    ((rlp_ref_uint (f)) >>= fun semanticResult => returnM (semanticResult).(protocol_quantity_value)) >>= fun value =>
-   (if Z.ltb (GAS_MAX_VALUE) (value) return M (unit) then throw (InvalidBlock (GasUsedExceedsLimit))
+   (if negb ((gas_value_supported (Build_protocol_quantity ((value))))) return M (unit) then
+      throw (InvalidBlock (GasUsedExceedsLimit))
     else returnM (tt)) >>
-   (if andb ((fork_gteq (fork) (Osaka))) ((Z.ltb (OSAKA_TRANSACTION_GAS_LIMIT_VALUE) (value)))
+   (if andb ((fork_gteq (fork) (Osaka)))
+         ((Z.ltb ((OSAKA_TRANSACTION_GAS_LIMIT_VALUE).(protocol_quantity_value)) (value)))
       return
       M (gas) then
       throw (InvalidBlock (GasUsedExceedsLimit))
-    else (nat_to_gas (value))  : M (gas))
+    else (nat_to_gas (Build_protocol_quantity ((value))))  : M (gas))
     : M (gas).
 
 Definition rlp_decode_tx (tx : ByteSlice) (pubkey : ByteSlice) (fork : Fork) : M (Transaction) :=
    (sub_slice (pubkey) (BYTE_ONE) (PUBLIC_KEY_BODY_LENGTH)) >>= fun (w__0 : ByteSlice) =>
-   (keccak256_slice (w__0)) >>= fun (w__1 : mword 256) =>
-   let sender := word_to_address (w__1) in
+   (keccak256_slice (w__0)) >>= fun (w__1 : b256) =>
+   let sender := word_to_address ((hash_to_word (w__1))) in
    let tx_len : byte_quantity := tx.(ByteSlice_len) in
-   (if byte_quantity_equal (tx_len) (BYTE_ZERO) return M (mword 8) then
-      throw (InvalidBlock (RlpDecode))
+   (if generic_eq (tx_len) (BYTE_ZERO) return M (mword 8) then throw (InvalidBlock (RlpDecode))
     else (slice_byte (tx) (BYTE_ZERO))  : M (mword 8)) >>= fun (b0 : mword 8) =>
    let ttype : mword 8 :=
      if eq_vec ((subrange_vec_dec (b0) (7) (6))) (('b"11")) then (Ox"00")
@@ -2967,23 +3081,22 @@ Definition rlp_decode_tx (tx : ByteSlice) (pubkey : ByteSlice) (fork : Fork) : M
       (rlp_cursor_expect_end (fields)) >>
       (rlp_ref_word (v_f)) >>= fun v =>
       (rlp_ref_uint_word (gp_f)) >>= fun gp =>
-      (rlp_ref_uint_word (nonce_f)) >>= fun (w__8 : mword 256) =>
+      (rlp_ref_uint_word (nonce_f)) >>= fun (w__8 : word) =>
       (rlp_ref_gas (gas_f) (fork)) >>= fun (w__9 : gas) =>
-      (rlp_ref_word (to_f)) >>= fun (w__10 : mword 256) =>
-      (rlp_ref_uint_word (value_f)) >>= fun (w__11 : mword 256) =>
+      (rlp_ref_word (to_f)) >>= fun (w__10 : word) =>
+      (rlp_ref_uint_word (value_f)) >>= fun (w__11 : word) =>
       (tx_input_span (payload) (data_f)) >>= fun (w__12 : ByteSlice) =>
       (tx_sig_span (payload) (nonce_f) (v_f)) >>= fun (w__13 : ByteSlice) =>
-      (tx_signing_hash (LegacyTx) (w__13) (v)) >>= fun (w__14 : mword 256) =>
-      (rlp_ref_uint_word (r_f)) >>= fun (w__15 : mword 256) =>
-      (rlp_ref_uint_word (s_f)) >>= fun (w__16 : mword 256) =>
+      (tx_signing_hash (LegacyTx) (w__13) (v)) >>= fun (w__14 : b256) =>
+      (rlp_ref_uint_word (r_f)) >>= fun (w__15 : word) =>
+      (rlp_ref_uint_word (s_f)) >>= fun (w__16 : word) =>
       returnM (({| Transaction_tx_type := LegacyTx;
                    Transaction_sender := sender;
                    Transaction_raw := tx;
                    Transaction_nonce := w__8;
                    Transaction_chain_id := (Build_protocol_quantity (0));
                    Transaction_gas_limit := w__9;
-                   Transaction_is_create :=
-                     byte_quantity_equal (to_f.(RlpFieldRef_content_len)) (BYTE_ZERO);
+                   Transaction_is_create := generic_eq (to_f.(RlpFieldRef_content_len)) (BYTE_ZERO);
                    Transaction_recipient := word_to_address (w__10);
                    Transaction_value := w__11;
                    Transaction_input_src := w__12;
@@ -3019,25 +3132,24 @@ Definition rlp_decode_tx (tx : ByteSlice) (pubkey : ByteSlice) (fork : Fork) : M
       (rlp_ref_uint_word (gp_f)) >>= fun gp =>
       ((decode_access_list (al_f)) >>= fun semanticResult =>
        returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in (semanticValue0, semanticValue1, (semanticValue2).(protocol_quantity_value), (semanticValue3).(protocol_quantity_value)))) >>= fun '((al_addrs, al_slots, al_addr_count, al_slot_count)) =>
-      (rlp_ref_uint_word (nonce_f)) >>= fun (w__17 : mword 256) =>
+      (rlp_ref_uint_word (nonce_f)) >>= fun (w__17 : word) =>
       ((rlp_ref_uint (chain_f)) >>= fun semanticResult =>
        returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__18 : Z) =>
       (rlp_ref_gas (gas_f) (fork)) >>= fun (w__19 : gas) =>
-      (rlp_ref_word (to_f)) >>= fun (w__20 : mword 256) =>
-      (rlp_ref_uint_word (value_f)) >>= fun (w__21 : mword 256) =>
+      (rlp_ref_word (to_f)) >>= fun (w__20 : word) =>
+      (rlp_ref_uint_word (value_f)) >>= fun (w__21 : word) =>
       (tx_input_span (payload) (data_f)) >>= fun (w__22 : ByteSlice) =>
       (tx_sig_span (payload) (chain_f) (v_f)) >>= fun (w__23 : ByteSlice) =>
-      (tx_signing_hash (AccessListTx) (w__23) (v)) >>= fun (w__24 : mword 256) =>
-      (rlp_ref_uint_word (r_f)) >>= fun (w__25 : mword 256) =>
-      (rlp_ref_uint_word (s_f)) >>= fun (w__26 : mword 256) =>
+      (tx_signing_hash (AccessListTx) (w__23) (v)) >>= fun (w__24 : b256) =>
+      (rlp_ref_uint_word (r_f)) >>= fun (w__25 : word) =>
+      (rlp_ref_uint_word (s_f)) >>= fun (w__26 : word) =>
       returnM (({| Transaction_tx_type := AccessListTx;
                    Transaction_sender := sender;
                    Transaction_raw := tx;
                    Transaction_nonce := w__17;
                    Transaction_chain_id := (Build_protocol_quantity (w__18));
                    Transaction_gas_limit := w__19;
-                   Transaction_is_create :=
-                     byte_quantity_equal (to_f.(RlpFieldRef_content_len)) (BYTE_ZERO);
+                   Transaction_is_create := generic_eq (to_f.(RlpFieldRef_content_len)) (BYTE_ZERO);
                    Transaction_recipient := word_to_address (w__20);
                    Transaction_value := w__21;
                    Transaction_input_src := w__22;
@@ -3074,27 +3186,26 @@ Definition rlp_decode_tx (tx : ByteSlice) (pubkey : ByteSlice) (fork : Fork) : M
       (rlp_ref_word (v_f)) >>= fun v =>
       ((decode_access_list (al_f)) >>= fun semanticResult =>
        returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in (semanticValue0, semanticValue1, (semanticValue2).(protocol_quantity_value), (semanticValue3).(protocol_quantity_value)))) >>= fun '((al_addrs, al_slots, al_addr_count, al_slot_count)) =>
-      (rlp_ref_uint_word (nonce_f)) >>= fun (w__27 : mword 256) =>
+      (rlp_ref_uint_word (nonce_f)) >>= fun (w__27 : word) =>
       ((rlp_ref_uint (chain_f)) >>= fun semanticResult =>
        returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__28 : Z) =>
       (rlp_ref_gas (gas_f) (fork)) >>= fun (w__29 : gas) =>
-      (rlp_ref_word (to_f)) >>= fun (w__30 : mword 256) =>
-      (rlp_ref_uint_word (value_f)) >>= fun (w__31 : mword 256) =>
+      (rlp_ref_word (to_f)) >>= fun (w__30 : word) =>
+      (rlp_ref_uint_word (value_f)) >>= fun (w__31 : word) =>
       (tx_input_span (payload) (data_f)) >>= fun (w__32 : ByteSlice) =>
-      (rlp_ref_uint_word (mf_f)) >>= fun (w__33 : mword 256) =>
-      (rlp_ref_uint_word (mp_f)) >>= fun (w__34 : mword 256) =>
+      (rlp_ref_uint_word (mf_f)) >>= fun (w__33 : word) =>
+      (rlp_ref_uint_word (mp_f)) >>= fun (w__34 : word) =>
       (tx_sig_span (payload) (chain_f) (v_f)) >>= fun (w__35 : ByteSlice) =>
-      (tx_signing_hash (FeeMarketTx) (w__35) (v)) >>= fun (w__36 : mword 256) =>
-      (rlp_ref_uint_word (r_f)) >>= fun (w__37 : mword 256) =>
-      (rlp_ref_uint_word (s_f)) >>= fun (w__38 : mword 256) =>
+      (tx_signing_hash (FeeMarketTx) (w__35) (v)) >>= fun (w__36 : b256) =>
+      (rlp_ref_uint_word (r_f)) >>= fun (w__37 : word) =>
+      (rlp_ref_uint_word (s_f)) >>= fun (w__38 : word) =>
       returnM (({| Transaction_tx_type := FeeMarketTx;
                    Transaction_sender := sender;
                    Transaction_raw := tx;
                    Transaction_nonce := w__27;
                    Transaction_chain_id := (Build_protocol_quantity (w__28));
                    Transaction_gas_limit := w__29;
-                   Transaction_is_create :=
-                     byte_quantity_equal (to_f.(RlpFieldRef_content_len)) (BYTE_ZERO);
+                   Transaction_is_create := generic_eq (to_f.(RlpFieldRef_content_len)) (BYTE_ZERO);
                    Transaction_recipient := word_to_address (w__30);
                    Transaction_value := w__31;
                    Transaction_input_src := w__32;
@@ -3134,28 +3245,27 @@ Definition rlp_decode_tx (tx : ByteSlice) (pubkey : ByteSlice) (fork : Fork) : M
       ((decode_access_list (al_f)) >>= fun semanticResult =>
        returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in (semanticValue0, semanticValue1, (semanticValue2).(protocol_quantity_value), (semanticValue3).(protocol_quantity_value)))) >>= fun '((al_addrs, al_slots, al_addr_count, al_slot_count)) =>
       (decode_blob_hashes (bh_f)) >>= fun blob_hashes =>
-      (rlp_ref_uint_word (nonce_f)) >>= fun (w__39 : mword 256) =>
+      (rlp_ref_uint_word (nonce_f)) >>= fun (w__39 : word) =>
       ((rlp_ref_uint (chain_f)) >>= fun semanticResult =>
        returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__40 : Z) =>
       (rlp_ref_gas (gas_f) (fork)) >>= fun (w__41 : gas) =>
-      (rlp_ref_word (to_f)) >>= fun (w__42 : mword 256) =>
-      (rlp_ref_uint_word (value_f)) >>= fun (w__43 : mword 256) =>
+      (rlp_ref_word (to_f)) >>= fun (w__42 : word) =>
+      (rlp_ref_uint_word (value_f)) >>= fun (w__43 : word) =>
       (tx_input_span (payload) (data_f)) >>= fun (w__44 : ByteSlice) =>
-      (rlp_ref_uint_word (mf_f)) >>= fun (w__45 : mword 256) =>
-      (rlp_ref_uint_word (mbf_f)) >>= fun (w__46 : mword 256) =>
-      (rlp_ref_uint_word (mp_f)) >>= fun (w__47 : mword 256) =>
+      (rlp_ref_uint_word (mf_f)) >>= fun (w__45 : word) =>
+      (rlp_ref_uint_word (mbf_f)) >>= fun (w__46 : word) =>
+      (rlp_ref_uint_word (mp_f)) >>= fun (w__47 : word) =>
       (tx_sig_span (payload) (chain_f) (v_f)) >>= fun (w__48 : ByteSlice) =>
-      (tx_signing_hash (BlobTx) (w__48) (v)) >>= fun (w__49 : mword 256) =>
-      (rlp_ref_uint_word (r_f)) >>= fun (w__50 : mword 256) =>
-      (rlp_ref_uint_word (s_f)) >>= fun (w__51 : mword 256) =>
+      (tx_signing_hash (BlobTx) (w__48) (v)) >>= fun (w__49 : b256) =>
+      (rlp_ref_uint_word (r_f)) >>= fun (w__50 : word) =>
+      (rlp_ref_uint_word (s_f)) >>= fun (w__51 : word) =>
       returnM (({| Transaction_tx_type := BlobTx;
                    Transaction_sender := sender;
                    Transaction_raw := tx;
                    Transaction_nonce := w__39;
                    Transaction_chain_id := (Build_protocol_quantity (w__40));
                    Transaction_gas_limit := w__41;
-                   Transaction_is_create :=
-                     byte_quantity_equal (to_f.(RlpFieldRef_content_len)) (BYTE_ZERO);
+                   Transaction_is_create := generic_eq (to_f.(RlpFieldRef_content_len)) (BYTE_ZERO);
                    Transaction_recipient := word_to_address (w__42);
                    Transaction_value := w__43;
                    Transaction_input_src := w__44;
@@ -3197,27 +3307,26 @@ Definition rlp_decode_tx (tx : ByteSlice) (pubkey : ByteSlice) (fork : Fork) : M
        returnM (let '(semanticValue0, semanticValue1) := semanticResult in (semanticValue0, (semanticValue1).(protocol_quantity_value)))) >>= fun '((authorizations, authorization_count)) =>
       ((rlp_ref_uint (nonce_f)) >>= fun semanticResult =>
        returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__52 : Z) =>
-      (word_of_nat (w__52)) >>= fun (w__53 : mword 256) =>
+      (word_of_protocol_quantity (Build_protocol_quantity ((w__52)))) >>= fun (w__53 : word) =>
       ((rlp_ref_uint (chain_f)) >>= fun semanticResult =>
        returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__54 : Z) =>
       (rlp_ref_gas (gas_f) (fork)) >>= fun (w__55 : gas) =>
-      (rlp_ref_word (to_f)) >>= fun (w__56 : mword 256) =>
-      (rlp_ref_uint_word (value_f)) >>= fun (w__57 : mword 256) =>
+      (rlp_ref_word (to_f)) >>= fun (w__56 : word) =>
+      (rlp_ref_uint_word (value_f)) >>= fun (w__57 : word) =>
       (tx_input_span (payload) (data_f)) >>= fun (w__58 : ByteSlice) =>
-      (rlp_ref_uint_word (mf_f)) >>= fun (w__59 : mword 256) =>
-      (rlp_ref_uint_word (mp_f)) >>= fun (w__60 : mword 256) =>
+      (rlp_ref_uint_word (mf_f)) >>= fun (w__59 : word) =>
+      (rlp_ref_uint_word (mp_f)) >>= fun (w__60 : word) =>
       (tx_sig_span (payload) (chain_f) (v_f)) >>= fun (w__61 : ByteSlice) =>
-      (tx_signing_hash (SetCodeTx) (w__61) (v)) >>= fun (w__62 : mword 256) =>
-      (rlp_ref_uint_word (r_f)) >>= fun (w__63 : mword 256) =>
-      (rlp_ref_uint_word (s_f)) >>= fun (w__64 : mword 256) =>
+      (tx_signing_hash (SetCodeTx) (w__61) (v)) >>= fun (w__62 : b256) =>
+      (rlp_ref_uint_word (r_f)) >>= fun (w__63 : word) =>
+      (rlp_ref_uint_word (s_f)) >>= fun (w__64 : word) =>
       returnM (({| Transaction_tx_type := SetCodeTx;
                    Transaction_sender := sender;
                    Transaction_raw := tx;
                    Transaction_nonce := w__53;
                    Transaction_chain_id := (Build_protocol_quantity (w__54));
                    Transaction_gas_limit := w__55;
-                   Transaction_is_create :=
-                     byte_quantity_equal (to_f.(RlpFieldRef_content_len)) (BYTE_ZERO);
+                   Transaction_is_create := generic_eq (to_f.(RlpFieldRef_content_len)) (BYTE_ZERO);
                    Transaction_recipient := word_to_address (w__56);
                    Transaction_value := w__57;
                    Transaction_input_src := w__58;
@@ -3279,7 +3388,7 @@ Axiom storage_block_row :
   forall
 
   (_ : address_typ) (_ : item_index)
-  (*(0 <=? ex185207_) && (ex185207_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185856_) && (ex185856_ <=? (2 ^ 64 - 1))*),
   M (option StorageEntry).
 
 Axiom acct_tx_get : forall  (_ : address_typ) , M (option Account).
@@ -3292,7 +3401,7 @@ Axiom acct_tx_set_nonce :
   forall
 
   (_ : address_typ) (_ : account_nonce)
-  (*(0 <=? ex185208_) && (ex185208_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185857_) && (ex185857_ <=? (2 ^ 64 - 1))*),
   M (unit).
 
 Axiom acct_tx_set_code_hash : forall  (_ : address_typ) (_ : hash) , M (unit).
@@ -3313,7 +3422,7 @@ Axiom acct_block_row :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185209_) && (ex185209_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185858_) && (ex185858_ <=? (2 ^ 64 - 1))*),
   M (option AcctEntry).
 
 Axiom bal_reset : forall  (_ : unit) , M (unit).
@@ -3322,7 +3431,7 @@ Axiom bal_set_index :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185210_) && (ex185210_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185859_) && (ex185859_ <=? (2 ^ 64 - 1))*),
   M (unit).
 
 Axiom bal_account_touch : forall  (_ : address_typ) , M (unit).
@@ -3337,7 +3446,7 @@ Axiom bal_nonce_change :
   forall
 
   (_ : address_typ) (_ : account_nonce)
-  (*(0 <=? ex185211_) && (ex185211_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185860_) && (ex185860_ <=? (2 ^ 64 - 1))*),
   M (unit).
 
 Axiom bal_code_change : forall  (_ : address_typ) (_ : hash) , M (unit).
@@ -3350,122 +3459,122 @@ Axiom bal_account_address :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185212_) && (ex185212_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185861_) && (ex185861_ <=? (2 ^ 64 - 1))*),
   M (address_typ).
 
 Axiom bal_storage_change_count :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185213_) && (ex185213_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185862_) && (ex185862_ <=? (2 ^ 64 - 1))*),
   M (item_count_typ).
 
 Axiom bal_storage_change_slot :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185214_) && (ex185214_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185215_) &&
-    (ex185215_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185863_) && (ex185863_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185864_) &&
+    (ex185864_ <=? (2 ^ 64 - 1))*),
   M (word).
 
 Axiom bal_storage_change_index :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185216_) && (ex185216_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185217_) &&
-    (ex185217_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185865_) && (ex185865_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185866_) &&
+    (ex185866_ <=? (2 ^ 64 - 1))*),
   M (item_index).
 
 Axiom bal_storage_change_value :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185218_) && (ex185218_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185219_) &&
-    (ex185219_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185867_) && (ex185867_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185868_) &&
+    (ex185868_ <=? (2 ^ 64 - 1))*),
   M (word).
 
 Axiom bal_storage_read_count :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185220_) && (ex185220_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185869_) && (ex185869_ <=? (2 ^ 64 - 1))*),
   M (item_count_typ).
 
 Axiom bal_storage_read_slot :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185221_) && (ex185221_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185222_) &&
-    (ex185222_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185870_) && (ex185870_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185871_) &&
+    (ex185871_ <=? (2 ^ 64 - 1))*),
   M (word).
 
 Axiom bal_balance_change_count :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185223_) && (ex185223_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185872_) && (ex185872_ <=? (2 ^ 64 - 1))*),
   M (item_count_typ).
 
 Axiom bal_balance_change_index :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185224_) && (ex185224_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185225_) &&
-    (ex185225_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185873_) && (ex185873_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185874_) &&
+    (ex185874_ <=? (2 ^ 64 - 1))*),
   M (item_index).
 
 Axiom bal_balance_change_value :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185226_) && (ex185226_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185227_) &&
-    (ex185227_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185875_) && (ex185875_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185876_) &&
+    (ex185876_ <=? (2 ^ 64 - 1))*),
   M (word).
 
 Axiom bal_nonce_change_count :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185228_) && (ex185228_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185877_) && (ex185877_ <=? (2 ^ 64 - 1))*),
   M (item_count_typ).
 
 Axiom bal_nonce_change_index :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185229_) && (ex185229_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185230_) &&
-    (ex185230_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185878_) && (ex185878_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185879_) &&
+    (ex185879_ <=? (2 ^ 64 - 1))*),
   M (item_index).
 
 Axiom bal_nonce_change_value :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185231_) && (ex185231_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185232_) &&
-    (ex185232_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185880_) && (ex185880_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185881_) &&
+    (ex185881_ <=? (2 ^ 64 - 1))*),
   M (account_nonce).
 
 Axiom bal_code_change_count :
   forall
 
   (_ : item_index)
-  (*(0 <=? ex185233_) && (ex185233_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185882_) && (ex185882_ <=? (2 ^ 64 - 1))*),
   M (item_count_typ).
 
 Axiom bal_code_change_index :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185234_) && (ex185234_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185235_) &&
-    (ex185235_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185883_) && (ex185883_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185884_) &&
+    (ex185884_ <=? (2 ^ 64 - 1))*),
   M (item_index).
 
 Axiom bal_code_change_hash :
   forall
 
   (_ : item_index) (_ : item_index)
-  (*(0 <=? ex185236_) && (ex185236_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185237_) &&
-    (ex185237_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex185885_) && (ex185885_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex185886_) &&
+    (ex185886_ <=? (2 ^ 64 - 1))*),
   M (hash).
 
 Axiom warm_reset : forall  (_ : unit) , M (unit).
@@ -3484,14 +3593,14 @@ Axiom ancestor_hash_write :
   forall
 
   (_ : ancestor_index) (_ : hash)
-  (*(0 <=? ex185238_) && (ex185238_ <=? 255)*),
+  (*(0 <=? ex185887_) && (ex185887_ <=? 255)*),
   M (unit).
 
 Axiom ancestor_hash_read :
   forall
 
   (_ : ancestor_index)
-  (*(0 <=? ex185239_) && (ex185239_ <=? 255)*),
+  (*(0 <=? ex185888_) && (ex185888_ <=? 255)*),
   M (hash).
 
 Axiom stack_reset : forall  (_ : unit) , M (unit).
@@ -3510,14 +3619,14 @@ Axiom stack_peek_word :
   forall
 
   (_ : stack_index)
-  (*(0 <=? ex185240_) && (ex185240_ <=? 16)*),
+  (*(0 <=? ex185889_) && (ex185889_ <=? 16)*),
   M (word).
 
 Axiom stack_set_word :
   forall
 
   (_ : stack_index) (_ : word)
-  (*(0 <=? ex185241_) && (ex185241_ <=? 16)*),
+  (*(0 <=? ex185890_) && (ex185890_ <=? 16)*),
   M (unit).
 
 Axiom mem_read_byte : forall  (_ : byte_quantity) , M (bits 8).
@@ -3547,24 +3656,23 @@ Axiom output_buffer_store_words : forall  (_ : word) (_ : word) , M (bool).
 Axiom public_output_write : forall  (_ : ByteSlice) , M (bool).
 
 Definition output_buffer_slice (len : byte_quantity) : ByteSlice :=
-   if byte_quantity_equal (len) (BYTE_ZERO) then EMPTY_SLICE
-   else byte_slice (OutputSource) (BYTE_ZERO) (len).
+   if generic_eq (len) (BYTE_ZERO) then EMPTY_SLICE else byte_slice (OutputSource) (BYTE_ZERO) (len).
 
 Definition freeze_output (data : ByteSlice) : M (ByteSlice) :=
    let len := data.(ByteSlice_len) in
-   (if byte_quantity_equal (len) (BYTE_ZERO) then returnM (EMPTY_SLICE)
+   (if generic_eq (len) (BYTE_ZERO) then returnM (EMPTY_SLICE)
     else
       (output_buffer_store (data)) >>= fun (w__0 : bool) =>
       let w__1 : ByteSlice := if w__0 then output_buffer_slice (len) else EMPTY_SLICE in
       returnM (w__1))
     : M (ByteSlice).
 
-Definition output_buffer_word (value : mword 256) : M (ByteSlice) :=
+Definition output_buffer_word (value : word) : M (ByteSlice) :=
    (output_buffer_store_word (value)) >>= fun (w__0 : bool) =>
    let w__1 : ByteSlice := if w__0 then output_buffer_slice (WORD_BYTE_LENGTH) else EMPTY_SLICE in
    returnM (w__1).
 
-Definition output_buffer_words (first : mword 256) (second : mword 256) : M (ByteSlice) :=
+Definition output_buffer_words (first : word) (second : word) : M (ByteSlice) :=
    (output_buffer_store_words (first) (second)) >>= fun (w__0 : bool) =>
    let w__1 : ByteSlice :=
      if w__0 then output_buffer_slice (DOUBLE_WORD_BYTE_LENGTH)
@@ -3589,22 +3697,27 @@ Definition k_env (f : EnvField) : M (word) :=
    match f with
    | F_Number =>
       read_reg k_header >>= fun (w__0 : BlockHeader) =>
-      (word_of_nat ((w__0.(BlockHeader_number)).(protocol_quantity_value)))
-       : M (mword 256)
+      (word_of_protocol_quantity
+         (Build_protocol_quantity (((w__0.(BlockHeader_number)).(protocol_quantity_value)))))
+       : M (word)
    | F_Timestamp =>
       read_reg k_header >>= fun (w__2 : BlockHeader) =>
-      (word_of_nat ((w__2.(BlockHeader_timestamp)).(protocol_quantity_value)))
-       : M (mword 256)
+      (word_of_protocol_quantity
+         (Build_protocol_quantity (((w__2.(BlockHeader_timestamp)).(protocol_quantity_value)))))
+       : M (word)
    | F_Coinbase =>
       read_reg k_header >>= fun (w__4 : BlockHeader) =>
       returnM ((address_to_word (w__4.(BlockHeader_fee_recipient))))
    | F_BaseFee =>
       read_reg k_header >>= fun (w__5 : BlockHeader) => returnM (w__5.(BlockHeader_base_fee))
-   | F_ChainId => read_reg k_chain_id >>= fun (w__6 : Z) => (word_of_nat (w__6))  : M (mword 256)
+   | F_ChainId =>
+      read_reg k_chain_id >>= fun (w__6 : Z) =>
+      (word_of_protocol_quantity (Build_protocol_quantity ((w__6))))
+       : M (word)
    | F_GasLimit =>
       read_reg k_header >>= fun (w__8 : BlockHeader) =>
       (word_of_gas (w__8.(BlockHeader_gas_limit)))
-       : M (mword 256)
+       : M (word)
    | F_PrevRandao =>
       read_reg k_header >>= fun (w__10 : BlockHeader) => returnM (w__10.(BlockHeader_prev_randao))
    | F_Origin =>
@@ -3612,67 +3725,76 @@ Definition k_env (f : EnvField) : M (word) :=
    | F_GasPrice => read_reg k_tx >>= fun (w__12 : TxEnv) => returnM (w__12.(TxEnv_gas_price))
    | F_SlotNumber =>
       read_reg k_header >>= fun (w__13 : BlockHeader) =>
-      (word_of_nat ((w__13.(BlockHeader_slot_number)).(protocol_quantity_value)))
-       : M (mword 256)
+      (word_of_protocol_quantity
+         (Build_protocol_quantity (((w__13.(BlockHeader_slot_number)).(protocol_quantity_value)))))
+       : M (word)
    end
-    : M (mword 256).
+    : M (word).
 
 Definition k_coinbase '(tt : unit) : M (address_typ) :=
    read_reg k_header >>= fun (w__0 : BlockHeader) => returnM (w__0.(BlockHeader_fee_recipient)).
 
-Definition k_blockhash (number_word : mword 256) : M (hash) :=
-   read_reg k_header >>= fun (w__0 : BlockHeader) =>
-   let current := (w__0.(BlockHeader_number)).(protocol_quantity_value) in
-   let number := uint (number_word) in
-   (if Z.ltb (number) (current) return M (mword 256) then
-      let distance := Z.sub (current) (number) in
-      (if Z.leb (distance) (256) return M (mword 256) then
-         read_reg k_n_headers >>= fun (w__1 : Z) =>
-         (if Z.ltb (w__1) (distance) return M (mword 256) then
-            throw (InvalidBlock (WitnessDeficient))
-          else
-            let index : Z := Z.sub (distance) (1) in
-            (ancestor_hash_read (Build_ancestor_index ((index))))
-             : M (mword 256))
-          : M (mword 256)
-       else returnM (ZERO_WORD))
-       : M (mword 256)
-    else returnM (ZERO_WORD))
-    : M (mword 256).
+Definition k_blockhash (number_word : word) : M (hash) :=
+   match word_to_limb (number_word) with
+   | Some number_bits =>
+      read_reg k_header >>= fun (w__0 : BlockHeader) =>
+      let current := (w__0.(BlockHeader_number)).(protocol_quantity_value) in
+      let number := uint (number_bits) in
+      (if Z.ltb (number) (current) return M (b256) then
+         let distance := Z.sub (current) (number) in
+         (if Z.leb (distance) (256) return M (b256) then
+            read_reg k_n_headers >>= fun (w__1 : Z) =>
+            (if Z.ltb (w__1) (distance) return M (b256) then throw (InvalidBlock (WitnessDeficient))
+             else
+               let index : Z := Z.sub (distance) (1) in
+               (ancestor_hash_read (Build_ancestor_index ((index))))
+                : M (b256))
+             : M (b256)
+          else returnM (ZERO_HASH))
+          : M (b256)
+       else returnM (ZERO_HASH))
+       : M (b256)
+   | None => returnM (ZERO_HASH)
+   end
+    : M (b256).
 
-Definition k_blobhash (index_word : mword 256) : M (word) :=
-   read_reg k_tx >>= fun (w__0 : TxEnv) =>
-   let count := (w__0.(TxEnv_blob_hashes).(BlobHashes_count)).(protocol_quantity_value) in
-   let index := uint (index_word) in
-   (if Z.ltb (index) (count) return M (mword 256) then
-      let offset := Z.add ((Z.mul (33) (index))) (1) in
-      (if Z.leb (offset) (BYTE_QUANTITY_MAX) return M (mword 256) then
-         read_reg k_tx >>= fun (w__1 : TxEnv) =>
-         (slice_load_n (w__1.(TxEnv_blob_hashes).(BlobHashes_bytes)) ((ByteQuantity (offset)))
-            (WORD_BYTE_LENGTH))
-          : M (mword 256)
+Definition k_blobhash (index_word : word) : M (word) :=
+   match (option_map (fun semanticValue => (semanticValue).(protocol_quantity_value)) (word_to_protocol_quantity
+                                                                                         (index_word))) with
+   | Some index =>
+      read_reg k_tx >>= fun (w__0 : TxEnv) =>
+      let count := (w__0.(TxEnv_blob_hashes).(BlobHashes_count)).(protocol_quantity_value) in
+      (if Z.ltb (index) (count) return M (word) then
+         (if Z.leb (index) (558992244657865200) return M (word) then
+            let offset : Z := Z.add ((Z.mul (33) (index))) (1) in
+            read_reg k_tx >>= fun (w__1 : TxEnv) =>
+            (slice_load_n (w__1.(TxEnv_blob_hashes).(BlobHashes_bytes)) ((ByteQuantity (offset)))
+               (WORD_BYTE_LENGTH))
+             : M (word)
+          else returnM (ZERO_WORD))
+          : M (word)
        else returnM (ZERO_WORD))
-       : M (mword 256)
-    else returnM (ZERO_WORD))
-    : M (mword 256).
+       : M (word)
+   | None => returnM (ZERO_WORD)
+   end
+    : M (word).
 
-Definition k_create_addr (a : mword 160) (nonce : account_nonce)
+Definition k_create_addr (a : address_typ) (nonce : account_nonce)
 (*(0 <=? nonce) && (nonce <=? (2 ^ 64 - 1))*)
 : M (address_typ) :=
    let nonce := (nonce).(protocol_quantity_value) in
    (create_address (a) (Build_protocol_quantity ((nonce))))
-    : M (mword 160).
+    : M (address_typ).
 
-Definition k_create2_addr (a : mword 160) (salt : mword 256) (inithash : mword 256)
-: M (address_typ) :=
-   (create2_address (a) (salt) (inithash))  : M (mword 160).
+Definition k_create2_addr (a : address_typ) (salt : word) (inithash : b256) : M (address_typ) :=
+   (create2_address (a) (salt) (inithash))  : M (address_typ).
 
-Definition storage_key (a : mword 160) (s : mword 256) : StorageKey :=
+Definition storage_key (a : address_typ) (s : word) : StorageKey :=
    {| StorageKey_addr := a;  StorageKey_slot := s |}.
 
-Definition k_access_account (a : mword 160) : M (bool) := (warm_addr_touch (a))  : M (bool).
+Definition k_access_account (a : address_typ) : M (bool) := (warm_addr_touch (a))  : M (bool).
 
-Definition k_slot_is_warm (a : mword 160) (s : mword 256) : M (bool) :=
+Definition k_slot_is_warm (a : address_typ) (s : word) : M (bool) :=
    (warm_slot_touch (a) (s))  : M (bool).
 
 Definition decode_state_account (value : ByteSlice) : M (AccountInfo) :=
@@ -3682,30 +3804,28 @@ Definition decode_state_account (value : ByteSlice) : M (AccountInfo) :=
    (rlp_cursor_pop (fields)) >>= fun '((storage, fields)) =>
    (rlp_cursor_pop (fields)) >>= fun '((code, fields)) =>
    (rlp_cursor_expect_end (fields)) >>
+   (if generic_eq (storage.(RlpFieldRef_content_len)) (BYTE_ZERO) then returnM (EMPTY_TRIE_ROOT)
+    else (rlp_ref_word (storage)) >>= fun (w__1 : word) => returnM ((word_to_hash (w__1)))) >>= fun storage_root =>
+   (if generic_eq (code.(RlpFieldRef_content_len)) (BYTE_ZERO) then returnM (KECCAK_EMPTY)
+    else (rlp_ref_word (code)) >>= fun (w__2 : word) => returnM ((word_to_hash (w__2)))) >>= fun code_hash =>
    ((rlp_ref_uint (nonce)) >>= fun semanticResult =>
-    returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__1 : Z) =>
-   (rlp_ref_uint_word (balance)) >>= fun (w__2 : mword 256) =>
-   (if byte_quantity_equal (storage.(RlpFieldRef_content_len)) (BYTE_ZERO) then
-      returnM (EMPTY_TRIE_ROOT)
-    else (rlp_ref_word (storage))  : M (mword 256)) >>= fun (w__4 : mword 256) =>
-   (if byte_quantity_equal (code.(RlpFieldRef_content_len)) (BYTE_ZERO) then returnM (KECCAK_EMPTY)
-    else (rlp_ref_word (code))  : M (mword 256)) >>= fun (w__6 : mword 256) =>
-   returnM (({| AccountInfo_nonce := (Build_protocol_quantity (w__1));
-                AccountInfo_balance := w__2;
-                AccountInfo_storage_root := w__4;
-                AccountInfo_code_hash := w__6 |})).
+    returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__3 : Z) =>
+   (rlp_ref_uint_word (balance)) >>= fun (w__4 : word) =>
+   returnM (({| AccountInfo_nonce := (Build_protocol_quantity (w__3));
+                AccountInfo_balance := w__4;
+                AccountInfo_storage_root := storage_root;
+                AccountInfo_code_hash := code_hash |})).
 
-Definition path_new (data : mword 256) (len : trie_path_len) (*(0 <=? len) && (len <=? 64)*)
-: TriePath :=
+Definition path_new (data : b256) (len : trie_path_len) (*(0 <=? len) && (len <=? 64)*) : TriePath :=
    let len := (len).(trie_path_len_value) in
    {| TriePath_data := data;
       TriePath_len := (Build_trie_path_len (len)) |}.
 
-Definition path_from_hash (h : mword 256) : TriePath := path_new (h) (Build_trie_path_len ((64))).
+Definition path_from_hash (h : b256) : TriePath := path_new (h) (Build_trie_path_len ((64))).
 
-Definition node_db_lookup (h : mword 256) : M (ByteSlice) :=
+Definition node_db_lookup (h : b256) : M (ByteSlice) :=
    (nodedb_len (h)) >>= fun len =>
-   (if byte_quantity_equal (len) (BYTE_ZERO) then returnM (EMPTY_SLICE)
+   (if generic_eq (len) (BYTE_ZERO) then returnM (EMPTY_SLICE)
     else
       (nodedb_off (h)) >>= fun (w__0 : byte_quantity) =>
       returnM ((stateless_input_byte_slice (w__0) (len))))
@@ -3730,24 +3850,87 @@ Definition branch_children_get (children : vec RlpFieldRef 16) (index : mword 4)
    else if eq_vec (p0_) ((Ox"E")) then vec_access_dec (children) (14)
    else vec_access_dec (children) (15).
 
+Definition path_byte_index (i : trie_path_cursor) (*(0 <=? i) && (i <=? 64)*) : M (b256_index) :=
+   let i := (i).(trie_path_cursor_value) in
+   (let quotient := Z.quot (i) (2) in
+   (if andb ((Z.leb (0) (quotient))) ((Z.leb (quotient) (31))) then returnM (quotient)
+    else assert_exp' false "sail/lib/mpt/primitives.sail:64.24-64.25" >>= fun _ => exit tt) >>= fun (natural_index : Z) =>
+   returnM ((Z.sub (31) (natural_index)))) >>= fun semanticResult =>
+   returnM (Build_b256_index (semanticResult)).
+
 Definition path_len (path : TriePath) : trie_path_len :=
    (Build_trie_path_len ((path.(TriePath_len)).(trie_path_len_value))).
+
+Definition trie_path_len_increment (value : trie_path_len) (*(0 <=? value) && (value <=? 64)*)
+: M (trie_path_len) :=
+   let value := (value).(trie_path_len_value) in
+   ((if Z.ltb (value) (64) then returnM ((Z.add (value) (1)))
+     else throw (InvalidBlock (WitnessDeficient)))
+    : M (Z)) >>= fun semanticResult =>
+   returnM (Build_trie_path_len (semanticResult)).
+
+Definition path_append_nibble (path : TriePath) (value : mword 4) : M (TriePath) :=
+   let length := (path_len (path)).(trie_path_len_value) in
+   (if Z.leb (64) (length) return M (unit) then throw (InvalidBlock (WitnessDeficient))
+    else returnM (tt)) >>
+   let '((B256 original)) := path.(TriePath_data) in
+   let bytes := original in
+   ((path_byte_index (Build_trie_path_cursor ((length)))) >>= fun semanticResult =>
+    returnM (semanticResult).(b256_index_value)) >>= fun byte_index =>
+   let bytes : vec (mword 8) 32 :=
+     if Z.eqb ((Z.rem (length) (2))) (0) then
+       vec_update_dec (bytes) (byte_index) ((concat_vec (value) ((Ox"0"))))
+     else
+       vec_update_dec (bytes) (byte_index)
+         ((concat_vec ((subrange_vec_dec ((vec_access_dec (bytes) (byte_index))) (7) (4))) (value))) in
+   ((trie_path_len_increment (Build_trie_path_len ((length)))) >>= fun semanticResult =>
+    returnM (semanticResult).(trie_path_len_value)) >>= fun (w__0 : Z) =>
+   returnM ((path_new ((B256 (bytes))) (Build_trie_path_len ((w__0))))).
+
+Definition path_nibble (path : TriePath) (i : trie_path_cursor) (*(0 <=? i) && (i <=? 64)*)
+: M (nibble) :=
+   let i := (i).(trie_path_cursor_value) in
+   (if Z.leb (((path_len (path)).(trie_path_len_value))) (i) then returnM ((Ox"0"))
+    else
+      let '((B256 bytes)) := path.(TriePath_data) in
+      ((path_byte_index (Build_trie_path_cursor ((i)))) >>= fun semanticResult =>
+       returnM (semanticResult).(b256_index_value)) >>= fun byte_index =>
+      returnM ((if Z.eqb ((Z.rem (i) (2))) (0) then
+                  subrange_vec_dec ((vec_access_dec (bytes) (byte_index))) (7) (4)
+                else subrange_vec_dec ((vec_access_dec (bytes) (byte_index))) (3) (0))))
+    : M (mword 4).
 
 Definition path_concat (a : TriePath) (b : TriePath) : M (TriePath) :=
    let alen := (path_len (a)).(trie_path_len_value) in
    let blen := (path_len (b)).(trie_path_len_value) in
    let combined := Z.add (alen) (blen) in
-   (if Z.leb (combined) (64) then
-      returnM ((path_new
-                  ((or_vec (a.(TriePath_data)) ((shiftr (b.(TriePath_data)) ((Z.mul (alen) (4)))))))
-                  (Build_trie_path_len ((combined)))))
+   (if Z.leb (combined) (64) return M (TriePath) then
+      let result := a in
+      let index : Z := 0 in
+      (let '(loop__step_lower) := 0 in
+      let '(loop__step_upper) := 63 in
+      (foreach_ZM_up loop__step_lower loop__step_upper 1 (index, result)
+        (fun _step '(index, result) =>
+          (if Z.ltb (index) (blen) return M ((Z * TriePath)) then
+             (path_nibble (b) (Build_trie_path_cursor ((index)))) >>= fun (w__0 : mword 4) =>
+             (path_append_nibble (result) (w__0)) >>= fun (w__1 : TriePath) =>
+             let result := w__1  : TriePath in
+             ((trie_path_len_increment (Build_trie_path_len ((index)))) >>= fun semanticResult =>
+              returnM (semanticResult).(trie_path_len_value)) >>= fun (w__2 : Z) =>
+             let index := w__2  : Z in
+             returnM ((index, result))
+           else returnM ((index, result)))
+           : M ((Z * TriePath))))) >>= fun '((index, result)
+      : (Z * TriePath)) =>
+      returnM (result)
     else throw (InvalidBlock (WitnessDeficient)))
     : M (TriePath).
 
-Definition path_empty '(tt : unit) : TriePath := path_new (ZERO_WORD) (Build_trie_path_len ((0))).
+Definition path_empty '(tt : unit) : TriePath :=
+   path_new ((b256_zero (tt))) (Build_trie_path_len ((0))).
 
-Definition path_single (n : mword 4) : TriePath :=
-   path_new ((shiftl ((zero_extend (n) (256))) (252))) (Build_trie_path_len ((1))).
+Definition path_single (n : mword 4) : M (TriePath) :=
+   (path_append_nibble ((path_empty (tt))) (n))  : M (TriePath).
 
 Definition HEX_PREFIX_MAX_LENGTH : byte_length := ByteQuantity (33).
 #[export] Hint Unfold HEX_PREFIX_MAX_LENGTH : sail.
@@ -3756,7 +3939,7 @@ Definition hex_prefix_decode_ref (f : RlpFieldRef) : M ((bool * TriePath)) :=
     else returnM (tt)) >>
    let n := f.(RlpFieldRef_content_len) in
    let off := f.(RlpFieldRef_content_off) in
-   (if byte_quantity_equal (n) (BYTE_ZERO) then returnM ((false, path_empty (tt)))
+   (if generic_eq (n) (BYTE_ZERO) then returnM ((false, path_empty (tt)))
     else
       (if byte_quantity_lt (HEX_PREFIX_MAX_LENGTH) (n) return M (unit) then
          throw (InvalidBlock (RlpDecode))
@@ -3767,7 +3950,8 @@ Definition hex_prefix_decode_ref (f : RlpFieldRef) : M ((bool * TriePath)) :=
       let odd : bool := eq_vec ((access_vec_dec (flag) (0))) (('b"1")) in
       let path := path_empty (tt) in
       (if odd return M (TriePath) then
-         (path_concat (path) ((path_single ((subrange_vec_dec (fb) (3) (0))))))
+         (path_single ((subrange_vec_dec (fb) (3) (0)))) >>= fun (w__0 : TriePath) =>
+         (path_concat (path) (w__0))
           : M (TriePath)
        else returnM (path)) >>= fun (path : TriePath) =>
       let cursor : byte_quantity := BYTE_ONE in
@@ -3776,14 +3960,16 @@ Definition hex_prefix_decode_ref (f : RlpFieldRef) : M ((bool * TriePath)) :=
       (foreach_ZM_up loop__step_lower loop__step_upper 1 (cursor, path)
         (fun _step '(cursor, path) =>
           (if byte_quantity_lt (cursor) (n) return M ((byte_quantity * TriePath)) then
-             (byte_quantity_add (off) (cursor)) >>= fun (w__1 : byte_quantity) =>
-             (slice_byte (f.(RlpFieldRef_source)) (w__1)) >>= fun b =>
-             (path_concat (path) ((path_single ((subrange_vec_dec (b) (7) (4)))))) >>= fun (w__2 : TriePath) =>
-             let path := w__2  : TriePath in
-             (path_concat (path) ((path_single ((subrange_vec_dec (b) (3) (0)))))) >>= fun (w__3 : TriePath) =>
-             let path := w__3  : TriePath in
-             (byte_quantity_add (cursor) (BYTE_ONE)) >>= fun (w__4 : byte_quantity) =>
-             let cursor := w__4  : byte_quantity in
+             (byte_quantity_add (off) (cursor)) >>= fun (w__2 : byte_quantity) =>
+             (slice_byte (f.(RlpFieldRef_source)) (w__2)) >>= fun b =>
+             (path_single ((subrange_vec_dec (b) (7) (4)))) >>= fun (w__3 : TriePath) =>
+             (path_concat (path) (w__3)) >>= fun (w__4 : TriePath) =>
+             let path := w__4  : TriePath in
+             (path_single ((subrange_vec_dec (b) (3) (0)))) >>= fun (w__5 : TriePath) =>
+             (path_concat (path) (w__5)) >>= fun (w__6 : TriePath) =>
+             let path := w__6  : TriePath in
+             (byte_quantity_add (cursor) (BYTE_ONE)) >>= fun (w__7 : byte_quantity) =>
+             let cursor := w__7  : byte_quantity in
              returnM ((cursor, path))
            else returnM ((cursor, path)))
            : M ((byte_quantity * TriePath))))) >>= fun '((cursor, path)
@@ -3853,7 +4039,7 @@ Definition inline_node_from_slice (bytes : ByteSlice) : M (InlineNode) :=
    (if byte_quantity_le (MPT_HASH_LENGTH) (length) return M (unit) then
       throw (InvalidBlock (WitnessDeficient))
     else returnM (tt)) >>
-   let data : mword 256 := ZERO_WORD in
+   let data : mword 256 := zeros (256) in
    (let '(loop_offset_lower) := 0 in
    let '(loop_offset_upper) := 30 in
    (foreach_ZM_up loop_offset_lower loop_offset_upper 1 data
@@ -3871,27 +4057,10 @@ Definition field_to_ref (f : RlpFieldRef) : M (NodeRef) :=
    (if f.(RlpFieldRef_is_list) return M (NodeRef) then
       (rlp_ref_full (f)) >>= fun (w__0 : ByteSlice) =>
       (inline_node_from_slice (w__0)) >>= fun (w__1 : InlineNode) => returnM ((InlineRef (w__1)))
-    else if byte_quantity_equal (f.(RlpFieldRef_content_len)) (MPT_HASH_LENGTH)
-      return
-      M (NodeRef) then
-      (rlp_ref_word (f)) >>= fun (w__2 : mword 256) => returnM ((HashRef (w__2)))
+    else if generic_eq (f.(RlpFieldRef_content_len)) (MPT_HASH_LENGTH) return M (NodeRef) then
+      (rlp_ref_word (f)) >>= fun (w__2 : word) => returnM ((HashRef ((word_to_hash (w__2)))))
     else returnM ((EmptyRef (tt))))
     : M (NodeRef).
-
-Definition path_nibble (path : TriePath) (i : trie_path_cursor) (*(0 <=? i) && (i <=? 64)*) : nibble :=
-   let i := (i).(trie_path_cursor_value) in
-   if Z.leb (((path_len (path)).(trie_path_len_value))) (i) then (Ox"0")
-   else
-     let distance := Z.sub (63) (i) in
-     subrange_vec_dec ((shiftr (path.(TriePath_data)) ((Z.mul (distance) (4))))) (3) (0).
-
-Definition trie_path_len_increment (value : trie_path_len) (*(0 <=? value) && (value <=? 64)*)
-: M (trie_path_len) :=
-   let value := (value).(trie_path_len_value) in
-   ((if Z.ltb (value) (64) then returnM ((Z.add (value) (1)))
-     else throw (InvalidBlock (WitnessDeficient)))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_trie_path_len (semanticResult)).
 
 Definition path_matches (key : TriePath) (pos : trie_path_cursor) (seg : TriePath)
 (*(0 <=? pos) && (pos <=? 64)*)
@@ -3908,16 +4077,15 @@ Definition path_matches (key : TriePath) (pos : trie_path_cursor) (seg : TriePat
         (fun _step '(offset, ok) =>
           (if Z.ltb (offset) (((path_len (seg)).(trie_path_len_value))) return M ((Z * bool)) then
              let key_index := Z.add (pos) (offset) in
-             let ok : bool :=
-               if Z.leb (key_index) (64) then
-                 if neq_vec ((path_nibble (key) (Build_trie_path_cursor ((key_index)))))
-                      ((path_nibble (seg) (Build_trie_path_cursor ((offset))))) then
-                   false
-                 else ok
-               else false in
+             (if Z.leb (key_index) (64) return M (bool) then
+                (path_nibble (key) (Build_trie_path_cursor ((key_index)))) >>= fun (w__0 : mword 4) =>
+                (path_nibble (seg) (Build_trie_path_cursor ((offset)))) >>= fun (w__1 : mword 4) =>
+                let ok : bool := if neq_vec (w__0) (w__1) then false else ok in
+                returnM (ok)
+              else returnM (false)) >>= fun (ok : bool) =>
              ((trie_path_len_increment (Build_trie_path_len ((offset)))) >>= fun semanticResult =>
-              returnM (semanticResult).(trie_path_len_value)) >>= fun (w__0 : Z) =>
-             let offset := w__0  : Z in
+              returnM (semanticResult).(trie_path_len_value)) >>= fun (w__2 : Z) =>
+             let offset := w__2  : Z in
              returnM ((offset, ok))
            else returnM ((offset, ok)))
            : M ((Z * bool))))) >>= fun '((offset, ok)
@@ -3956,7 +4124,7 @@ Definition resolve_ref (r : NodeRef) : M (ByteSlice) :=
    | InlineRef node => (inline_node_slice (node))  : M (ByteSlice)
    | HashRef h =>
       (node_db_lookup (h)) >>= fun node =>
-      (if byte_quantity_equal (node.(ByteSlice_len)) (BYTE_ZERO) return M (ByteSlice) then
+      (if generic_eq (node.(ByteSlice_len)) (BYTE_ZERO) return M (ByteSlice) then
          throw (InvalidBlock (WitnessDeficient))
        else returnM (node))
        : M (ByteSlice)
@@ -3969,7 +4137,7 @@ Fixpoint _rec_trie_walk (node : ByteSlice) (key : TriePath) (pos : trie_path_cur
 exact (
    let pos := (pos).(trie_path_cursor_value) in
    assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if byte_quantity_equal (node.(ByteSlice_len)) (BYTE_ZERO) then returnM (EMPTY_SLICE)
+   (if generic_eq (node.(ByteSlice_len)) (BYTE_ZERO) then returnM (EMPTY_SLICE)
     else
       (decode_trie_node (node)) >>= fun (w__0 : TrieNode) =>
       match w__0 with
@@ -4008,10 +4176,9 @@ exact (
             (rlp_ref_content (branch.(BranchNodeData_value)))
              : M (ByteSlice)
           else if Z.ltb (pos) (((path_len (key)).(trie_path_len_value))) return M (ByteSlice) then
-            (field_to_ref
-               ((branch_children_get (branch.(BranchNodeData_children))
-                   ((path_nibble (key) (Build_trie_path_cursor ((pos)))))))) >>= fun (w__13 : NodeRef) =>
-            (resolve_ref (w__13)) >>= fun child =>
+            (path_nibble (key) (Build_trie_path_cursor ((pos)))) >>= fun (w__13 : mword 4) =>
+            (field_to_ref ((branch_children_get (branch.(BranchNodeData_children)) (w__13)))) >>= fun (w__14 : NodeRef) =>
+            (resolve_ref (w__14)) >>= fun child =>
             (_rec_trie_walk (child) (key) (Build_trie_path_cursor (((Z.add (pos) (1)))))
                ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
              : M (ByteSlice)
@@ -4033,24 +4200,24 @@ Definition trie_walk (node : ByteSlice) (key : TriePath) (pos : trie_path_cursor
       (Zwf_guarded _))
     : M (ByteSlice).
 
-Definition trie_lookup (root : mword 256) (key : TriePath) : M (ByteSlice) :=
-   (if eq_vec (root) (EMPTY_TRIE_ROOT) then returnM (EMPTY_SLICE)
+Definition trie_lookup (root : b256) (key : TriePath) : M (ByteSlice) :=
+   (if generic_eq (root) (EMPTY_TRIE_ROOT) then returnM (EMPTY_SLICE)
     else
       (node_db_lookup (root)) >>= fun node =>
-      (if byte_quantity_equal (node.(ByteSlice_len)) (BYTE_ZERO) return M (ByteSlice) then
+      (if generic_eq (node.(ByteSlice_len)) (BYTE_ZERO) return M (ByteSlice) then
          throw (InvalidBlock (WitnessDeficient))
        else (trie_walk (node) (key) (Build_trie_path_cursor ((0))))  : M (ByteSlice))
        : M (ByteSlice))
     : M (ByteSlice).
 
-Definition stateless_account (root : mword 256) (a : mword 160) : M (option AccountInfo) :=
-   (keccak256_address (a)) >>= fun (w__0 : mword 256) =>
+Definition stateless_account (root : b256) (a : address_typ) : M (option AccountInfo) :=
+   (keccak256_address (a)) >>= fun (w__0 : b256) =>
    (trie_lookup (root) ((path_from_hash (w__0)))) >>= fun value =>
-   (if byte_quantity_equal (value.(ByteSlice_len)) (BYTE_ZERO) then returnM (None)
+   (if generic_eq (value.(ByteSlice_len)) (BYTE_ZERO) then returnM (None)
     else (decode_state_account (value)) >>= fun (w__1 : AccountInfo) => returnM ((Some (w__1))))
     : M (option AccountInfo).
 
-Definition k_aload (a : mword 160) : M (Account) :=
+Definition k_aload (a : address_typ) : M (Account) :=
    catch_early_return
      (liftR ((bal_account_touch (a))) >>
      liftR ((acct_tx_get (a))) >>= fun (w__0 : option Account) =>
@@ -4063,23 +4230,23 @@ Definition k_aload (a : mword 160) : M (Account) :=
      | Some acc => (early_return (acc  : Account) : MR Account unit)  : MR (Account) (unit)
      | None => returnR (Account) (tt)
      end >>
-     ((liftR (read_reg k_parent_state_root))  : MR (Account) (mword 256)) >>= fun (w__2 : mword 256) =>
+     liftR (read_reg k_parent_state_root) >>= fun (w__2 : b256) =>
      liftR ((stateless_account (w__2) (a))) >>= fun (w__3 : option AccountInfo) =>
      let acc : Account :=
        match w__3 with | Some info => account_from_info (info) | None => EMPTY_ACCOUNT end in
      liftR ((acct_block_cache (a) (acc))) >> returnR (Account) (acc)).
 
-Definition stateless_storage (root : mword 256) (slot : mword 256) : M (word) :=
-   (keccak256_word (slot)) >>= fun (w__0 : mword 256) =>
+Definition stateless_storage (root : b256) (slot : word) : M (word) :=
+   (keccak256_word (slot)) >>= fun (w__0 : b256) =>
    (trie_lookup (root) ((path_from_hash (w__0)))) >>= fun value =>
-   (if byte_quantity_equal (value.(ByteSlice_len)) (BYTE_ZERO) then returnM (ZERO_WORD)
+   (if generic_eq (value.(ByteSlice_len)) (BYTE_ZERO) then returnM (ZERO_WORD)
     else
       (rlp_single_ref (value)) >>= fun (w__1 : RlpFieldRef) =>
       (rlp_ref_uint_word (w__1))
-       : M (mword 256))
-    : M (mword 256).
+       : M (word))
+    : M (word).
 
-Definition k_sload (a : mword 160) (s : mword 256) : M (StorageValue) :=
+Definition k_sload (a : address_typ) (s : word) : M (StorageValue) :=
    catch_early_return
      (liftR ((bal_storage_read (a) (s))) >>
      let key := storage_key (a) (s) in
@@ -4103,27 +4270,26 @@ Definition k_sload (a : mword 160) (s : mword 256) : M (StorageValue) :=
      (if acc.(Account_storage_cleared) then returnR (StorageValue) (ZERO_WORD)
       else
         liftR ((stateless_storage (acc.(Account_info).(AccountInfo_storage_root)) (s)))
-         : MR (StorageValue) (mword 256)) >>= fun v =>
+         : MR (StorageValue) (word)) >>= fun v =>
      liftR ((storage_block_cache (key) (v))) >>
      returnR (StorageValue) (({| StorageValue_curr := v;  StorageValue_orig := v |}))).
 
-Definition k_sstore (a : mword 160) (s : mword 256) (v : StorageValue) : M (unit) :=
+Definition k_sstore (a : address_typ) (s : word) (v : StorageValue) : M (unit) :=
    (storage_tx_update (({| StorageEntry_key := storage_key (a) (s);  StorageEntry_value := v |})))
     : M (unit).
 
-Definition k_tload (a : mword 160) (s : mword 256) : M (word) :=
-   (transient_load (a) (s))  : M (mword 256).
+Definition k_tload (a : address_typ) (s : word) : M (word) := (transient_load (a) (s))  : M (word).
 
-Definition k_tstore (a : mword 160) (s : mword 256) (v : mword 256) : M (unit) :=
+Definition k_tstore (a : address_typ) (s : word) (v : word) : M (unit) :=
    (transient_store (a) (s) (v))  : M (unit).
 
-Definition k_log (a : mword 160) (topics : list (mword 256)) (data : Bytes) : M (unit) :=
+Definition k_log (a : address_typ) (topics : list word) (data : Bytes) : M (unit) :=
    (log_append (a) (topics) (data))  : M (unit).
 
-Definition k_emit_transfer_log (src : mword 160) (dst : mword 160) (v : mword 256) : M (unit) :=
+Definition k_emit_transfer_log (src : address_typ) (dst : address_typ) (v : word) : M (unit) :=
    (or_boolM
       (read_reg k_fork >>= fun (w__0 : Fork) => returnM (((fork_lt (w__0) (Amsterdam))  : bool)))
-      (returnM (((orb ((word_is_zero (v))) ((eq_vec (src) (dst))))  : bool)))) >>= fun (w__1 : bool) =>
+      (returnM (((orb ((word_is_zero (v))) ((generic_eq (src) (dst))))  : bool)))) >>= fun (w__1 : bool) =>
    (if w__1 then returnM (tt)
     else
       (log_append (EIP7708_SYSTEM_ADDRESS)
@@ -4133,7 +4299,7 @@ Definition k_emit_transfer_log (src : mword 160) (dst : mword 160) (v : mword 25
        : M (unit))
     : M (unit).
 
-Definition k_emit_burn_log (a : mword 160) (v : mword 256) : M (unit) :=
+Definition k_emit_burn_log (a : address_typ) (v : word) : M (unit) :=
    (or_boolM
       (read_reg k_fork >>= fun (w__0 : Fork) => returnM (((fork_lt (w__0) (Amsterdam))  : bool)))
       (returnM (((word_is_zero (v))  : bool)))) >>= fun (w__1 : bool) =>
@@ -4148,12 +4314,12 @@ Definition account_info_changed (c : AccountInfo) (o : AccountInfo) : bool :=
    orb
      ((neq_int ((c.(AccountInfo_nonce)).(protocol_quantity_value))
          ((o.(AccountInfo_nonce)).(protocol_quantity_value))))
-     ((orb ((neq_vec (c.(AccountInfo_balance)) (o.(AccountInfo_balance))))
-         ((orb ((neq_vec (c.(AccountInfo_code_hash)) (o.(AccountInfo_code_hash))))
-             ((neq_vec (c.(AccountInfo_storage_root)) (o.(AccountInfo_storage_root)))))))).
+     ((orb ((generic_neq (c.(AccountInfo_balance)) (o.(AccountInfo_balance))))
+         ((orb ((generic_neq (c.(AccountInfo_code_hash)) (o.(AccountInfo_code_hash))))
+             ((generic_neq (c.(AccountInfo_storage_root)) (o.(AccountInfo_storage_root)))))))).
 
 Definition account_info_empty (info : AccountInfo) : bool :=
-   andb ((eq_vec (info.(AccountInfo_code_hash)) (KECCAK_EMPTY)))
+   andb ((generic_eq (info.(AccountInfo_code_hash)) (KECCAK_EMPTY)))
      (((andb ((Z.eqb ((info.(AccountInfo_nonce)).(protocol_quantity_value)) (0)))
           ((word_is_zero (info.(AccountInfo_balance)))))
       : bool)).
@@ -4191,15 +4357,15 @@ Definition account_delete (acc : Account) : Account :=
       Account_created := acc.(Account_created);
       Account_selfdestructed := acc.(Account_selfdestructed) |}.
 
-Definition store_account (a : mword 160) (v : Account) : M (unit) :=
+Definition store_account (a : address_typ) (v : Account) : M (unit) :=
    (acct_tx_update (a) (v))  : M (unit).
 
-Definition store_account_info (a : mword 160) (acc : Account) (info : AccountInfo) : M (unit) :=
+Definition store_account_info (a : address_typ) (acc : Account) (info : AccountInfo) : M (unit) :=
    (if account_info_empty (info) return M (unit) then (storage_tx_clear (a))  : M (unit)
     else returnM (tt)) >>
    let next := account_set_info (acc) (info) in
    (if orb
-         ((neq_vec (next.(Account_info).(AccountInfo_storage_root))
+         ((generic_neq (next.(Account_info).(AccountInfo_storage_root))
              (acc.(Account_info).(AccountInfo_storage_root))))
          ((orb ((neq_bool (next.(Account_present)) (acc.(Account_present))))
              ((neq_bool (next.(Account_storage_cleared)) (acc.(Account_storage_cleared))))))
@@ -4208,7 +4374,7 @@ Definition store_account_info (a : mword 160) (acc : Account) (info : AccountInf
       (store_account (a) (next))
        : M (unit)
     else
-      (if neq_vec (next.(Account_info).(AccountInfo_balance))
+      (if generic_neq (next.(Account_info).(AccountInfo_balance))
             (acc.(Account_info).(AccountInfo_balance))
          return
          M (unit) then
@@ -4223,7 +4389,7 @@ Definition store_account_info (a : mword 160) (acc : Account) (info : AccountInf
             (Build_protocol_quantity (((next.(Account_info).(AccountInfo_nonce)).(protocol_quantity_value)))))
           : M (unit)
        else returnM (tt)) >>
-      (if neq_vec (next.(Account_info).(AccountInfo_code_hash))
+      (if generic_neq (next.(Account_info).(AccountInfo_code_hash))
             (acc.(Account_info).(AccountInfo_code_hash))
          return
          M (unit) then
@@ -4233,27 +4399,27 @@ Definition store_account_info (a : mword 160) (acc : Account) (info : AccountInf
        : M (unit))
     : M (unit).
 
-Definition k_get_balance (a : mword 160) : M (word) :=
+Definition k_get_balance (a : address_typ) : M (word) :=
    (k_aload (a)) >>= fun (w__0 : Account) => returnM (w__0.(Account_info).(AccountInfo_balance)).
 
-Definition k_get_nonce (a : mword 160) : M (account_nonce) :=
+Definition k_get_nonce (a : address_typ) : M (account_nonce) :=
    ((k_aload (a)) >>= fun (w__0 : Account) =>
    returnM ((w__0.(Account_info).(AccountInfo_nonce)).(protocol_quantity_value))) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
 
-Definition k_account_exists (a : mword 160) : M (bool) :=
+Definition k_account_exists (a : address_typ) : M (bool) :=
    (k_aload (a)) >>= fun (w__0 : Account) => returnM (w__0.(Account_present)).
 
-Definition k_account_is_empty (a : mword 160) : M (bool) :=
+Definition k_account_is_empty (a : address_typ) : M (bool) :=
    (k_aload (a)) >>= fun (w__0 : Account) => returnM ((account_info_empty (w__0.(Account_info)))).
 
-Definition k_account_occupied (a : mword 160) : M (bool) :=
+Definition k_account_occupied (a : address_typ) : M (bool) :=
    (k_aload (a)) >>= fun acc =>
    let info := acc.(Account_info) in
    let anchored_storage :=
      andb ((negb (acc.(Account_storage_cleared))))
-       ((neq_vec (info.(AccountInfo_storage_root)) (EMPTY_TRIE_ROOT))) in
-   (if orb ((neq_vec (info.(AccountInfo_code_hash)) (KECCAK_EMPTY)))
+       ((generic_neq (info.(AccountInfo_storage_root)) (EMPTY_TRIE_ROOT))) in
+   (if orb ((generic_neq (info.(AccountInfo_code_hash)) (KECCAK_EMPTY)))
          (((orb ((neq_int ((info.(AccountInfo_nonce)).(protocol_quantity_value)) (0)))
               (anchored_storage))
           : bool)) then
@@ -4261,10 +4427,10 @@ Definition k_account_occupied (a : mword 160) : M (bool) :=
     else (storage_has_writes (a))  : M (bool))
     : M (bool).
 
-Definition k_transfer (src : mword 160) (dst : mword 160) (v : mword 256) : M (unit) :=
+Definition k_transfer (src : address_typ) (dst : address_typ) (v : word) : M (unit) :=
    (k_aload (src)) >>= fun src_acc =>
    (k_aload (dst)) >>= fun dst_acc =>
-   (if orb ((word_is_zero (v))) ((eq_vec (src) (dst))) then returnM (tt)
+   (if orb ((word_is_zero (v))) ((generic_eq (src) (dst))) then returnM (tt)
     else
       (store_account_info (src) (src_acc)
          ({[ src_acc.(Account_info) with
@@ -4276,7 +4442,7 @@ Definition k_transfer (src : mword 160) (dst : mword 160) (v : mword 256) : M (u
        : M (unit))
     : M (unit).
 
-Definition k_bump_nonce (a : mword 160) : M (unit) :=
+Definition k_bump_nonce (a : address_typ) : M (unit) :=
    (k_aload (a)) >>= fun cur =>
    ((account_nonce_increment
        (Build_protocol_quantity (((cur.(Account_info).(AccountInfo_nonce)).(protocol_quantity_value))))) >>= fun semanticResult =>
@@ -4285,7 +4451,7 @@ Definition k_bump_nonce (a : mword 160) : M (unit) :=
       ({[ cur.(Account_info) with AccountInfo_nonce := (Build_protocol_quantity (w__0)) ]}))
     : M (unit).
 
-Definition k_add_balance (a : mword 160) (v : mword 256) : M (unit) :=
+Definition k_add_balance (a : address_typ) (v : word) : M (unit) :=
    (k_aload (a)) >>= fun cur =>
    (if negb ((word_is_zero (v))) return M (unit) then
       (store_account_info (a) (cur)
@@ -4295,7 +4461,7 @@ Definition k_add_balance (a : mword 160) (v : mword 256) : M (unit) :=
     else returnM (tt))
     : M (unit).
 
-Definition k_sub_balance (a : mword 160) (v : mword 256) : M (unit) :=
+Definition k_sub_balance (a : address_typ) (v : word) : M (unit) :=
    (k_aload (a)) >>= fun cur =>
    (if negb ((word_is_zero (v))) return M (unit) then
       (store_account_info (a) (cur)
@@ -4305,36 +4471,39 @@ Definition k_sub_balance (a : mword 160) (v : mword 256) : M (unit) :=
     else returnM (tt))
     : M (unit).
 
-Definition k_clear_storage (a : mword 160) : M (unit) :=
+Definition k_clear_storage (a : address_typ) : M (unit) :=
    (k_aload (a)) >>= fun cur =>
    (storage_tx_clear (a)) >> (store_account (a) ((account_clear_storage (cur))))  : M (unit).
 
-Definition k_code_key (a : mword 160) : M (hash) :=
+Definition k_code_key (a : address_typ) : M (hash) :=
    (k_aload (a)) >>= fun (w__0 : Account) => returnM (w__0.(Account_info).(AccountInfo_code_hash)).
 
-Definition k_get_codehash (a : mword 160) : M (hash) :=
+Definition k_get_codehash (a : address_typ) : M (hash) :=
    (k_aload (a)) >>= fun acc =>
-   returnM ((if negb (acc.(Account_present)) then WORD_ZERO
+   returnM ((if negb (acc.(Account_present)) then ZERO_HASH
              else acc.(Account_info).(AccountInfo_code_hash))).
 
-Definition k_deploy_code (a : mword 160) (code : ByteSlice) : M (unit) :=
+Definition k_deploy_code (a : address_typ) (code : ByteSlice) : M (unit) :=
    (k_aload (a)) >>= fun cur =>
-   (code_db_insert (code)) >>= fun (h : mword 256) =>
+   (code_db_insert (code)) >>= fun (h : b256) =>
    (store_account_info (a) (cur) ({[ cur.(Account_info) with AccountInfo_code_hash := h ]}))
     : M (unit).
 
-Definition delegation_jumpdest_chunk (target : mword 160) : JumpdestChunk :=
+Definition delegation_jumpdest_chunk (target : address_typ) : JumpdestChunk :=
    let w := address_to_word (target) in
    let bits := EMPTY_JUMPDEST_CHUNK in
    let '(loop_k_lower) := 0 in
    let '(loop_k_upper) := 19 in
    (foreach_Z_up loop_k_lower loop_k_upper 1 bits
      (fun k bits =>
-       let b := subrange_vec_dec ((shiftr (w) ((Z.mul (8) ((Z.sub (19) (k))))))) (7) (0) in
-       if eq_vec (b) ((Ox"5B")) then or_vec (bits) ((shiftl (WORD_ONE) ((Z.add (3) (k)))))
+       let b :=
+         word_low_byte
+           ((word_shift_right_limb (w) ((get_slice_int (64) ((Z.mul (8) ((Z.sub (19) (k))))) (0))))) in
+       if eq_vec (b) ((Ox"5B")) then
+         or_vec (bits) ((shiftl ((zero_extend ((Ox"01")) (256))) ((Z.add (3) (k)))))
        else bits)).
 
-Definition k_set_delegation (a : mword 160) (target : mword 160) : M (unit) :=
+Definition k_set_delegation (a : address_typ) (target : address_typ) : M (unit) :=
    (k_aload (a)) >>= fun cur =>
    let code_len : byte_quantity := ByteQuantity (23) in
    (jumpdest_table_alloc (code_len)) >>= fun table =>
@@ -4345,44 +4514,46 @@ Definition k_set_delegation (a : mword 160) (target : mword 160) : M (unit) :=
       (assert_exp stored "delegation JUMPDEST chunk store")
        : M (unit)
     else returnM (tt)) >>
-   (code_intern_delegation (target) (table)) >>= fun (h : mword 256) =>
+   (code_intern_delegation (target) (table)) >>= fun (h : b256) =>
    (store_account_info (a) (cur) ({[ cur.(Account_info) with AccountInfo_code_hash := h ]}))
     : M (unit).
 
-Definition k_clear_code (a : mword 160) : M (unit) :=
+Definition k_clear_code (a : address_typ) : M (unit) :=
    (k_aload (a)) >>= fun cur =>
    (store_account_info (a) (cur)
       ({[ cur.(Account_info) with AccountInfo_code_hash := KECCAK_EMPTY ]}))
     : M (unit).
 
-Definition addr_bytes (a : mword 160) : list byte :=
+Definition addr_bytes (a : address_typ) : list byte :=
    let w := address_to_word (a) in
    let out : list (mword 8) := [] in
    let '(loop_k_lower) := 0 in
    let '(loop_k_upper) := 19 in
    (foreach_Z_up loop_k_lower loop_k_upper 1 out
-     (fun k out => (subrange_vec_dec ((shiftr (w) ((Z.mul (8) (k))))) (7) (0)) :: out)).
+     (fun k out =>
+       (word_low_byte ((word_shift_right_limb (w) ((get_slice_int (64) ((Z.mul (8) (k))) (0)))))) ::
+         out)).
 
-Definition delegation_code (a : mword 160) : list byte :=
+Definition delegation_code (a : address_typ) : list byte :=
    (Ox"EF") :: ((Ox"01") :: ((Ox"00") :: (addr_bytes (a)))).
 
-Definition k_deleg_target (a : mword 160) : M ((bool * address_typ)) :=
-   (k_code_key (a)) >>= fun (h : mword 256) =>
-   (code_db_read_delegation (h)) >>= fun (r : mword 168) =>
-   returnM ((eq_vec ((access_vec_dec (r) (160))) (('b"1")), subrange_vec_dec (r) (159) (0))).
+Definition k_deleg_target (a : address_typ) : M ((bool * address_typ)) :=
+   (k_code_key (a)) >>= fun (h : b256) =>
+   (code_db_read_delegation (h)) >>= fun (r : AddressResult) =>
+   returnM ((r.(AddressResult_success), r.(AddressResult_address))).
 
-Definition k_get_code_size (a : mword 160) : M (byte_length) :=
-   (k_code_key (a)) >>= fun (w__0 : mword 256) =>
+Definition k_get_code_size (a : address_typ) : M (byte_length) :=
+   (k_code_key (a)) >>= fun (w__0 : b256) =>
    (code_db_resolve (w__0)) >>= fun code => returnM (code.(Code_bytes).(ByteSlice_len)).
 
-Definition k_code_copy (a : mword 160) (dst : byte_quantity) (off : mword 256) (len : byte_quantity)
+Definition k_code_copy (a : address_typ) (dst : byte_quantity) (off : word) (len : byte_quantity)
 : M (unit) :=
-   (k_code_key (a)) >>= fun (w__0 : mword 256) =>
+   (k_code_key (a)) >>= fun (w__0 : b256) =>
    (code_db_resolve (w__0)) >>= fun code =>
    (slice_copy_word_offset (code.(Code_bytes)) (dst) (off) (len))
     : M (unit).
 
-Definition k_selfdestruct (a : mword 160) : M (unit) :=
+Definition k_selfdestruct (a : address_typ) : M (unit) :=
    (k_aload (a)) >>= fun cur =>
    (if negb (cur.(Account_selfdestructed)) return M (unit) then
       (store_account (a) ({[ cur with Account_selfdestructed := true ]}))
@@ -4390,18 +4561,18 @@ Definition k_selfdestruct (a : mword 160) : M (unit) :=
     else returnM (tt))
     : M (unit).
 
-Definition k_is_selfdestructed (a : mword 160) : M (bool) :=
+Definition k_is_selfdestructed (a : address_typ) : M (bool) :=
    (k_aload (a)) >>= fun (w__0 : Account) => returnM (w__0.(Account_selfdestructed)).
 
-Definition k_mark_created (a : mword 160) : M (unit) :=
+Definition k_mark_created (a : address_typ) : M (unit) :=
    (k_aload (a)) >>= fun cur =>
    (store_account (a) ({[ cur with Account_created := true ]}))
     : M (unit).
 
-Definition k_was_created (a : mword 160) : M (bool) :=
+Definition k_was_created (a : address_typ) : M (bool) :=
    (k_aload (a)) >>= fun (w__0 : Account) => returnM (w__0.(Account_created)).
 
-Definition k_zero_balance (a : mword 160) : M (unit) :=
+Definition k_zero_balance (a : address_typ) : M (unit) :=
    (k_aload (a)) >>= fun cur =>
    (if word_is_zero (cur.(Account_info).(AccountInfo_balance)) then returnM (tt)
     else
@@ -4464,14 +4635,14 @@ Definition k_tx_merge '(tt : unit) : M (unit) :=
                  (Build_protocol_quantity (((curr.(Account_info).(AccountInfo_nonce)).(protocol_quantity_value)))))
                : M (unit)
             else returnM (tt)) >>
-           (if neq_vec (curr.(Account_info).(AccountInfo_balance))
+           (if generic_neq (curr.(Account_info).(AccountInfo_balance))
                  (e.(AcctEntry_value).(AcctValue_orig).(Account_info).(AccountInfo_balance))
               return
               M (unit) then
               (bal_balance_change (e.(AcctEntry_addr)) (curr.(Account_info).(AccountInfo_balance)))
                : M (unit)
             else returnM (tt)) >>
-           (if neq_vec (curr.(Account_info).(AccountInfo_code_hash))
+           (if generic_neq (curr.(Account_info).(AccountInfo_code_hash))
                  (e.(AcctEntry_value).(AcctValue_orig).(Account_info).(AccountInfo_code_hash))
               return
               M (unit) then
@@ -4511,7 +4682,7 @@ Definition k_tx_merge '(tt : unit) : M (unit) :=
            match w__2 with
            | Some acc =>
               (if andb (acc.(Account_present))
-                    ((neq_vec (e.(StorageEntry_value).(StorageValue_curr))
+                    ((generic_neq (e.(StorageEntry_value).(StorageValue_curr))
                         (e.(StorageEntry_value).(StorageValue_orig))))
                  return
                  M (unit) then
@@ -4536,6 +4707,31 @@ Definition k_revert (checkpoint : StateCheckpoint_typ) : M (unit) :=
 
 Definition DEPTH_LIMIT : frame_depth := (Build_frame_depth (1024)).
 #[export] Hint Unfold DEPTH_LIMIT : sail.
+Definition frame_stack_reset '(tt : unit) : M (unit) := write_reg frame_stack_top 0  : M (unit).
+
+Definition frame_stack_is_empty '(tt : unit) : M (bool) :=
+   read_reg frame_stack_top >>= fun (w__0 : Z) => returnM ((Z.eqb (w__0) (0))).
+
+Definition frame_stack_push (continuation : FrameContinuation) : M (unit) :=
+   read_reg frame_stack_top >>= fun top =>
+   (if Z.ltb (top) ((DEPTH_LIMIT).(frame_depth_value)) return M (unit) then
+      read_reg frame_stack >>= fun (w__0 : vec FrameContinuation 1024) =>
+      write_reg frame_stack (vec_update_dec (w__0) (top) (continuation)) >>
+      write_reg frame_stack_top (Z.add (top) (1))
+       : M (unit)
+    else assert_exp' false "sail/evm/machine.sail:55.20-55.21" >>= fun _ => exit tt)
+    : M (unit).
+
+Definition frame_stack_pop '(tt : unit) : M (FrameContinuation) :=
+   read_reg frame_stack_top >>= fun top =>
+   (if Z.ltb (0) (top) return M (FrameContinuation) then
+      let parent_top := Z.sub (top) (1) in
+      write_reg frame_stack_top parent_top >>
+      read_reg frame_stack >>= fun (w__0 : vec FrameContinuation 1024) =>
+      returnM ((vec_access_dec (w__0) (parent_top)))
+    else assert_exp' false "sail/evm/machine.sail:67.20-67.21" >>= fun _ => exit tt)
+    : M (FrameContinuation).
+
 Definition record_refund (delta : gas_refund) : M (unit) :=
    read_reg frame_refund >>= fun (w__0 : gas_refund) =>
    write_reg frame_refund (gas_refund_add (w__0) (delta))
@@ -4555,17 +4751,24 @@ Definition STACK_LIMIT : operand_stack_height := (Build_operand_stack_height (10
 Definition exc_halt (k : ExceptionKind) : M (unit) :=
    write_reg gas_remaining GAS_ZERO >> write_reg frame_status (Exceptional (k))  : M (unit).
 
+Definition word_to_byte_quantity_or_oog (value : word) : byte_quantity :=
+   word_to_byte_quantity (value).
+
+Definition word_byte_range_or_oog (offset : word) (length : word) : (byte_quantity * byte_quantity) :=
+   if word_is_zero (length) then ((BYTE_ZERO, BYTE_ZERO))
+   else ((word_to_byte_quantity_or_oog (offset), word_to_byte_quantity_or_oog (length))).
+
 Definition stack_height '(tt : unit) : M (operand_stack_height) :=
    (((stack_depth (tt)) >>= fun semanticResult =>
      returnM (semanticResult).(operand_stack_height_value)) >>= fun height =>
-   assert_exp' (Z.leb (height) ((STACK_LIMIT).(operand_stack_height_value))) "sail/evm/machine.sail:70.32-70.33" >>= fun _ =>
+   assert_exp' (Z.leb (height) ((STACK_LIMIT).(operand_stack_height_value))) "sail/evm/machine.sail:127.32-127.33" >>= fun _ =>
    returnM (height)) >>= fun semanticResult =>
    returnM (Build_operand_stack_height (semanticResult)).
 
 Definition peek (n : stack_index) (*(0 <=? n) && (n <=? 16)*) : M (word) :=
-   let n := (n).(stack_index_value) in (stack_peek_word (Build_stack_index ((n))))  : M (mword 256).
+   let n := (n).(stack_index_value) in (stack_peek_word (Build_stack_index ((n))))  : M (word).
 
-Definition push (w : mword 256) : M (unit) :=
+Definition push (w : word) : M (unit) :=
    ((stack_height (tt)) >>= fun semanticResult =>
     returnM (semanticResult).(operand_stack_height_value)) >>= fun (w__0 : Z) =>
    (if Z.leb ((STACK_LIMIT).(operand_stack_height_value)) (w__0) return M (unit) then
@@ -4577,11 +4780,11 @@ Definition push (w : mword 256) : M (unit) :=
 Definition pop '(tt : unit) : M (word) :=
    ((stack_height (tt)) >>= fun semanticResult =>
     returnM (semanticResult).(operand_stack_height_value)) >>= fun (w__0 : Z) =>
-   (if Z.eqb (w__0) (0) return M (mword 256) then (exc_halt (StackUnderflow)) >> returnM (WORD_ZERO)
-    else (stack_pop_word (tt))  : M (mword 256))
-    : M (mword 256).
+   (if Z.eqb (w__0) (0) return M (word) then (exc_halt (StackUnderflow)) >> returnM (WORD_ZERO)
+    else (stack_pop_word (tt))  : M (word))
+    : M (word).
 
-Definition stack_set (n : stack_index) (w : mword 256) (*(0 <=? n) && (n <=? 16)*) : M (unit) :=
+Definition stack_set (n : stack_index) (w : word) (*(0 <=? n) && (n <=? 16)*) : M (unit) :=
    let n := (n).(stack_index_value) in (stack_set_word (Build_stack_index ((n))) (w))  : M (unit).
 
 Definition is_running '(tt : unit) : M (bool) :=
@@ -4611,26 +4814,35 @@ Definition returndata_copy_prefix (dst : byte_quantity) (want : byte_quantity) :
    (slice_copy (w__0) (dst) (BYTE_ZERO) ((if byte_quantity_lt (want) (have) then want else have)))
     : M (unit).
 
-Definition returndata_copy_words
-(dst : byte_quantity) (source_offset : mword 256) (length : mword 256)
+Definition returndata_copy_words (dst : byte_quantity) (source_offset : word) (length : word)
 : M (unit) :=
    (returndata_size (tt)) >>= fun (w__0 : byte_quantity) =>
    (word_of_byte_quantity (w__0)) >>= fun available =>
-   (if andb ((word_ule (source_offset) (available)))
-         ((word_ule (length) ((sub_vec (available) (source_offset)))))
-      return
-      M (unit) then
-      (returndata_copy (dst) ((ByteQuantity ((uint (source_offset)))))
-         ((ByteQuantity ((uint (length))))))
+   match word_to_limb (source_offset) with
+   | Some source_bits =>
+      match word_to_limb (length) with
+      | Some length_bits =>
+         (if andb ((word_ule (source_offset) (available)))
+               ((word_ule (length) ((word_sub (available) (source_offset)))))
+            return
+            M (unit) then
+            (returndata_copy (dst) ((ByteQuantity ((uint (source_bits)))))
+               ((ByteQuantity ((uint (length_bits))))))
+             : M (unit)
+          else (exc_halt (InvalidOpcode))  : M (unit))
+          : M (unit)
+      | None => (exc_halt (InvalidOpcode))  : M (unit)
+      end
        : M (unit)
-    else (exc_halt (InvalidOpcode))  : M (unit))
+   | None => (exc_halt (InvalidOpcode))  : M (unit)
+   end
     : M (unit).
 
 Definition evm_memory_size '(tt : unit) : M (memory_length) :=
    read_reg evm_memory >>= fun (w__0 : ByteSlice) => returnM (w__0.(ByteSlice_len)).
 
 Definition memory_byte_slice (off : byte_quantity) (len : byte_quantity) : M (ByteSlice) :=
-   (if byte_quantity_equal (len) (BYTE_ZERO) then returnM (EMPTY_SLICE)
+   (if generic_eq (len) (BYTE_ZERO) then returnM (EMPTY_SLICE)
     else
       read_reg evm_memory >>= fun (w__0 : ByteSlice) =>
       (sub_slice (w__0) (off) (len))
@@ -4658,7 +4870,7 @@ Definition memory_expand_to (new_size : byte_quantity) : M (unit) :=
 Definition memory_frame_enter '(tt : unit) : M (ByteSlice) :=
    read_reg evm_memory >>= fun parent =>
    (mem_frame_enter (tt)) >>= fun base =>
-   (if byte_quantity_equal (base) (MAX_BYTE_QUANTITY) return M (unit) then
+   (if generic_eq (base) (MAX_BYTE_QUANTITY) return M (unit) then
       (exc_halt (OutOfGas)) >>
       write_reg evm_memory (byte_slice (EvmMemorySource) (BYTE_ZERO) (BYTE_ZERO))
        : M (unit)
@@ -4718,23 +4930,21 @@ Definition mem_set_byte (off : byte_quantity) (v : mword 8) : M (unit) :=
 
 Definition mem_load (off : byte_quantity) : M (word) :=
    (is_running (tt)) >>= fun (w__0 : bool) =>
-   (if w__0 return M (mword 256) then (mem_load_word (off))  : M (mword 256)
+   (if w__0 return M (word) then (mem_load_word (off))  : M (word)
     else returnM (ZERO_WORD))
-    : M (mword 256).
+    : M (word).
 
-Definition mem_store (off : byte_quantity) (w : mword 256) : M (unit) :=
+Definition mem_store (off : byte_quantity) (w : word) : M (unit) :=
    (is_running (tt)) >>= fun (w__0 : bool) =>
    (if w__0 return M (unit) then (mem_store_word (off) (w))  : M (unit)
     else returnM (tt))
     : M (unit).
 
-Definition mem_store_byte (off : byte_quantity) (w : mword 256) : M (unit) :=
-   (mem_set_byte (off) ((subrange_vec_dec (w) (7) (0))))  : M (unit).
+Definition mem_store_byte (off : byte_quantity) (w : word) : M (unit) :=
+   (mem_set_byte (off) ((word_low_byte (w))))  : M (unit).
 
 Definition mem_mcopy (dst : byte_quantity) (src : byte_quantity) (len : byte_quantity) : M (unit) :=
-   (if byte_quantity_not_equal (len) (BYTE_ZERO) return M (unit) then
-      (mem_move (dst) (src) (len))
-       : M (unit)
+   (if generic_neq (len) (BYTE_ZERO) return M (unit) then (mem_move (dst) (src) (len))  : M (unit)
     else returnM (tt))
     : M (unit).
 
@@ -4745,19 +4955,12 @@ Definition mem_codecopy (dst : byte_quantity) (off : byte_quantity) (len : byte_
 
 Definition mem_keccak (off : byte_quantity) (len : byte_quantity) : M (word) :=
    (memory_byte_slice (off) (len)) >>= fun (w__0 : ByteSlice) =>
-   (keccak256_slice (w__0))
-    : M (mword 256).
+   (keccak256_slice (w__0)) >>= fun (w__1 : b256) => returnM ((hash_to_word (w__1))).
 
 Definition MIN_BLOB_BASE_FEE : word := WORD_ONE.
 #[export] Hint Unfold MIN_BLOB_BASE_FEE : sail.
 Definition GAS_PER_BLOB : blob_gas_typ := (Build_protocol_quantity (131072)).
 #[export] Hint Unfold GAS_PER_BLOB : sail.
-Definition undefined_ScaledBlobValue '(tt : unit) : M (ScaledBlobValue) :=
-   (undefined_bitvector (256)) >>= fun (w__0 : mword 256) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__1 : Z) =>
-   returnM (({| ScaledBlobValue_whole := w__0;
-                ScaledBlobValue_remainder := (Build_protocol_quantity (w__1)) |})).
-
 Definition scaled_blob_add
 (left' : ScaledBlobValue) (right' : ScaledBlobValue) (denominator : blob_fee_update_fraction)
 (*(0 <=? denominator) && (denominator <=? (2 ^ 64 - 1))*)
@@ -4771,13 +4974,13 @@ Definition scaled_blob_add
              ((right'.(ScaledBlobValue_remainder)).(protocol_quantity_value)) in
          let carry := Z.leb (denominator) (combined) in
          let remainder := if carry then Z.sub (combined) (denominator) else combined in
-         (if Z.ltb ((Z.sub ((pow2 (64))) (1))) (remainder) then inr (None)
+         (if Z.ltb ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) (remainder) then inr (None)
           else
             match word_checked_add (left'.(ScaledBlobValue_whole)) (right'.(ScaledBlobValue_whole)) with
             | Some value => inr (value)
             | None =>
-               (inl (None  : option ScaledBlobValue) : sum (option ScaledBlobValue) (mword 256))
-                : sum (option ScaledBlobValue) (mword 256)
+               (inl (None  : option ScaledBlobValue) : sum (option ScaledBlobValue) word)
+                : sum (option ScaledBlobValue) (word)
             end >>$= fun '(whole) =>
             inr ((if carry then
                     match word_checked_add (whole) (WORD_ONE) with
@@ -4795,7 +4998,7 @@ Definition scaled_blob_add
       : sum (option ScaledBlobValue) (option ScaledBlobValue)).
 
 Definition blob_product_divmod
-(value : mword 256) (factor : blob_gas_typ) (addend : protocol_quantity)
+(value : word) (factor : blob_gas_typ) (addend : protocol_quantity)
 (denominator : blob_fee_update_fraction) (iteration : item_index)
 (*(0 <=? factor) && (factor <=? (2 ^ 64 - 1))*) (*(0 <=? addend) && (addend <=? (2 ^ 64 - 1))*)
 (*(0 <=? denominator) && (denominator <=? (2 ^ 64 - 1))*)
@@ -4806,36 +5009,36 @@ Definition blob_product_divmod
    let denominator := (denominator).(protocol_quantity_value) in
    let iteration := (iteration).(protocol_quantity_value) in
    catch_early_return
-     (liftR ((word_of_nat (denominator))) >>= fun (w__0 : mword 256) =>
-     liftR ((word_of_nat (iteration))) >>= fun (w__1 : mword 256) =>
+     (liftR ((word_of_protocol_quantity (Build_protocol_quantity ((denominator))))) >>= fun (w__0 : word) =>
+     liftR ((word_of_protocol_quantity (Build_protocol_quantity ((iteration))))) >>= fun (w__1 : word) =>
      let divisor := word_mul (w__0) (w__1) in
      (if word_is_zero (divisor) then returnR (option WordDivMod) (None)
       else
         let value_parts := word_divmod (value) (divisor) in
         liftR ((word_checked_mul_protocol_quantity (value_parts.(WordDivMod_quotient))
-                  (Build_protocol_quantity ((factor))))) >>= fun (w__2 : option (mword 256)) =>
+                  (Build_protocol_quantity ((factor))))) >>= fun (w__2 : option word) =>
         match w__2 with
         | Some product => returnR (option WordDivMod) (product)
         | None =>
-           (early_return (None  : option WordDivMod) : MR (option WordDivMod) (mword 256))
-            : MR (option WordDivMod) (mword 256)
-        end >>= fun (whole : mword 256) =>
-        liftR ((word_of_nat (factor))) >>= fun (w__4 : mword 256) =>
+           (early_return (None  : option WordDivMod) : MR (option WordDivMod) word)
+            : MR (option WordDivMod) (word)
+        end >>= fun (whole : word) =>
+        liftR ((word_of_protocol_quantity (Build_protocol_quantity ((factor))))) >>= fun (w__4 : word) =>
         let residual_product := word_mul (value_parts.(WordDivMod_remainder)) (w__4) in
-        liftR ((word_of_nat (addend))) >>= fun (w__5 : mword 256) =>
+        liftR ((word_of_protocol_quantity (Build_protocol_quantity ((addend))))) >>= fun (w__5 : word) =>
         match word_checked_add (residual_product) (w__5) with
         | Some sum => returnR (option WordDivMod) (sum)
         | None =>
-           (early_return (None  : option WordDivMod) : MR (option WordDivMod) (mword 256))
-            : MR (option WordDivMod) (mword 256)
-        end >>= fun (residual_sum : mword 256) =>
+           (early_return (None  : option WordDivMod) : MR (option WordDivMod) word)
+            : MR (option WordDivMod) (word)
+        end >>= fun (residual_sum : word) =>
         let residual_parts := word_divmod (residual_sum) (divisor) in
         match word_checked_add (whole) (residual_parts.(WordDivMod_quotient)) with
         | Some sum => returnR (option WordDivMod) (sum)
         | None =>
-           (early_return (None  : option WordDivMod) : MR (option WordDivMod) (mword 256))
-            : MR (option WordDivMod) (mword 256)
-        end >>= fun (quotient : mword 256) =>
+           (early_return (None  : option WordDivMod) : MR (option WordDivMod) word)
+            : MR (option WordDivMod) (word)
+        end >>= fun (quotient : word) =>
         returnR (option WordDivMod) ((Some
                                         (({| WordDivMod_quotient := quotient;
                                              WordDivMod_remainder :=
@@ -4852,43 +5055,44 @@ Definition scaled_blob_next
    let denominator := (denominator).(protocol_quantity_value) in
    let iteration := (iteration).(protocol_quantity_value) in
    catch_early_return
-     (liftR ((word_of_nat ((term.(ScaledBlobValue_remainder)).(protocol_quantity_value)))) >>= fun (w__0 : mword 256) =>
-     liftR ((word_of_nat (numerator))) >>= fun (w__1 : mword 256) =>
+     (liftR ((word_of_protocol_quantity
+                (Build_protocol_quantity (((term.(ScaledBlobValue_remainder)).(protocol_quantity_value)))))) >>= fun (w__0 : word) =>
+     liftR ((word_of_protocol_quantity (Build_protocol_quantity ((numerator))))) >>= fun (w__1 : word) =>
      let remainder_product := word_mul (w__0) (w__1) in
-     liftR ((word_of_nat (denominator))) >>= fun (w__2 : mword 256) =>
+     liftR ((word_of_protocol_quantity (Build_protocol_quantity ((denominator))))) >>= fun (w__2 : word) =>
      let addend_word := (word_divmod (remainder_product) (w__2)).(WordDivMod_quotient) in
-     (if neq_vec ((subrange_vec_dec (addend_word) (255) (64))) ((zeros (192))) then
-        returnR (option ScaledBlobValue) (None)
-      else
-        let addend := uint ((subrange_vec_dec (addend_word) (63) (0))) in
-        liftR ((blob_product_divmod (term.(ScaledBlobValue_whole))
-                  (Build_protocol_quantity ((numerator))) (Build_protocol_quantity ((addend)))
-                  (Build_protocol_quantity ((denominator))) (Build_protocol_quantity ((iteration))))) >>= fun (w__3 : option WordDivMod) =>
-        match w__3 with
-        | Some result => returnR (option ScaledBlobValue) (result)
-        | None =>
-           (early_return (None  : option ScaledBlobValue) : MR (option ScaledBlobValue) WordDivMod)
-            : MR (option ScaledBlobValue) (WordDivMod)
-        end >>= fun (divided : WordDivMod) =>
-        liftR ((word_of_nat (iteration))) >>= fun (w__5 : mword 256) =>
-        let remainder_word :=
-          (word_divmod (divided.(WordDivMod_remainder)) (w__5)).(WordDivMod_quotient) in
-        returnR (option ScaledBlobValue) ((if neq_vec
-                                                ((subrange_vec_dec (remainder_word) (255) (64)))
-                                                ((zeros (192))) then
-                                             None
-                                           else
-                                             let remainder :=
-                                               uint ((subrange_vec_dec (remainder_word) (63) (0))) in
-                                             Some
-                                               (({| ScaledBlobValue_whole :=
-                                                      divided.(WordDivMod_quotient);
-                                                    ScaledBlobValue_remainder :=
-                                                      (Build_protocol_quantity (remainder)) |})))))
-      : MR (option ScaledBlobValue) (option ScaledBlobValue)).
+     match word_to_limb (addend_word) with
+     | Some value => returnR (option ScaledBlobValue) ((uint (value)))
+     | None =>
+        (early_return (None  : option ScaledBlobValue) : MR (option ScaledBlobValue) Z)
+         : MR (option ScaledBlobValue) (Z)
+     end >>= fun (addend : Z) =>
+     liftR ((blob_product_divmod (term.(ScaledBlobValue_whole))
+               (Build_protocol_quantity ((numerator))) (Build_protocol_quantity ((addend)))
+               (Build_protocol_quantity ((denominator))) (Build_protocol_quantity ((iteration))))) >>= fun (w__4 : option WordDivMod) =>
+     match w__4 with
+     | Some result => returnR (option ScaledBlobValue) (result)
+     | None =>
+        (early_return (None  : option ScaledBlobValue) : MR (option ScaledBlobValue) WordDivMod)
+         : MR (option ScaledBlobValue) (WordDivMod)
+     end >>= fun (divided : WordDivMod) =>
+     liftR ((word_of_protocol_quantity (Build_protocol_quantity ((iteration))))) >>= fun (w__6 : word) =>
+     let remainder_word :=
+       (word_divmod (divided.(WordDivMod_remainder)) (w__6)).(WordDivMod_quotient) in
+     match word_to_limb (remainder_word) with
+     | Some value => returnR (option ScaledBlobValue) ((uint (value)))
+     | None =>
+        (early_return (None  : option ScaledBlobValue) : MR (option ScaledBlobValue) Z)
+         : MR (option ScaledBlobValue) (Z)
+     end >>= fun (remainder : Z) =>
+     returnR (option ScaledBlobValue) ((Some
+                                          (({| ScaledBlobValue_whole :=
+                                                 divided.(WordDivMod_quotient);
+                                               ScaledBlobValue_remainder :=
+                                                 (Build_protocol_quantity (remainder)) |}))))).
 
 Definition fake_exponential
-(factor : mword 256) (numerator : blob_gas_typ) (denominator : blob_fee_update_fraction)
+(factor : word) (numerator : blob_gas_typ) (denominator : blob_fee_update_fraction)
 (*(0 <=? numerator) && (numerator <=? (2 ^ 64 - 1))*)
 (*(0 <=? denominator) && (denominator <=? (2 ^ 64 - 1))*)
 : M (word) :=
@@ -4924,7 +5128,7 @@ Definition fake_exponential
         | None => throw (InvalidBlock (ExecutionInvalid))
         end >>= fun (w__4 : ScaledBlobValue) =>
         let term := w__4  : ScaledBlobValue in
-        (if Z.eqb (i) ((Z.sub ((pow2 (64))) (1))) return M (unit) then
+        (if Z.eqb (i) ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) return M (unit) then
            throw (InvalidBlock (ExecutionInvalid))
          else returnM (tt)) >>
         ((item_count_increment (Build_protocol_quantity ((i)))) >>= fun semanticResult =>
@@ -4948,11 +5152,11 @@ Definition blob_base_fee (excess_blob_gas : blob_gas_typ)
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__0 : Z) =>
    (fake_exponential (MIN_BLOB_BASE_FEE) (Build_protocol_quantity ((excess_blob_gas)))
       (Build_protocol_quantity ((w__0))))
-    : M (mword 256).
+    : M (word).
 
-Definition blob_reserve_price_active (base_fee : mword 256) (price : mword 256) : bool :=
-   if eq_vec ((subrange_vec_dec (price) (255) (252))) ((zeros (4))) then
-     word_ult ((shiftl (price) (4))) (base_fee)
+Definition blob_reserve_price_active (base_fee : word) (price : word) : bool :=
+   if eq_vec ((and_vec ((word_limb_3 (price))) ((Ox"F000000000000000")))) (LIMB_ZERO) then
+     word_ult ((word_shift_left_limb (price) ((Ox"0000000000000004")))) (base_fee)
    else false.
 
 Definition blob_schedule_target '(tt : unit) : M (blob_count) :=
@@ -4969,7 +5173,7 @@ Definition blob_gas_for_count (count : blob_count) (*(0 <=? count) && (count <=?
 : M (blob_gas_typ) :=
    let count := (count).(protocol_quantity_value) in
    (let product := Z.mul ((GAS_PER_BLOB).(protocol_quantity_value)) (count) in
-   (if Z.leb (product) ((Z.sub ((pow2 (64))) (1))) then returnM (product)
+   (if Z.leb (product) ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) then returnM (product)
     else throw (InvalidBlock (InvalidConfig)))
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
@@ -4990,9 +5194,26 @@ Definition blob_max_gas_per_block '(tt : unit) : M (blob_gas_typ) :=
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
 
+Definition checked_block_blob_gas_add (accumulated : blob_gas_typ) (transaction : blob_gas_typ)
+(*(0 <=? accumulated) && (accumulated <=? (2 ^ 64 - 1))*)
+(*(0 <=? transaction) && (transaction <=? (2 ^ 64 - 1))*)
+: M (blob_gas_typ) :=
+   let accumulated := (accumulated).(protocol_quantity_value) in
+   let transaction := (transaction).(protocol_quantity_value) in
+   (((blob_max_gas_per_block (tt)) >>= fun semanticResult =>
+     returnM (semanticResult).(protocol_quantity_value)) >>= fun maximum =>
+   (if Z.leb (accumulated) (maximum) return M (Z) then
+      (if Z.leb (transaction) ((Z.sub (maximum) (accumulated))) then
+         returnM ((Z.add (accumulated) (transaction)))
+       else throw (InvalidBlock (BlobGasLimitExceeded)))
+       : M (Z)
+    else throw (InvalidBlock (BlobGasLimitExceeded)))
+    : M (Z)) >>= fun semanticResult =>
+   returnM (Build_protocol_quantity (semanticResult)).
+
 Definition next_excess_blob_gas
 (parent_excess_blob_gas : blob_gas_typ) (parent_blob_gas_used : blob_gas_typ)
-(parent_base_fee_per_gas : mword 256)
+(parent_base_fee_per_gas : word)
 (*(0 <=? parent_excess_blob_gas) && (parent_excess_blob_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? parent_blob_gas_used) && (parent_blob_gas_used <=? (2 ^ 64 - 1))*)
 : M (blob_gas_typ) :=
@@ -5019,12 +5240,12 @@ Definition next_excess_blob_gas
          let scaled := Z.mul (parent_blob_gas_used) (schedule_delta) in
          (exact_quotient (scaled) (maximum)) >>= fun share =>
          let next := Z.add (parent_excess_blob_gas) (share) in
-         (if Z.leb (next) ((Z.sub ((pow2 (64))) (1))) then returnM (next)
+         (if Z.leb (next) ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) then returnM (next)
           else throw (InvalidBlock (InvalidConfig)))
           : M (Z)
        else
          let next := Z.sub (parent_blob_gas) (target_blob_gas) in
-         (if Z.leb (next) ((Z.sub ((pow2 (64))) (1))) then returnM (next)
+         (if Z.leb (next) ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) then returnM (next)
           else throw (InvalidBlock (InvalidConfig)))
           : M (Z))
        : M (Z))
@@ -5100,11 +5321,12 @@ Definition max_code_size '(tt : unit) : M (code_length) :=
      else ByteQuantity (24576) in
    returnM (w__1).
 
-Definition initcode_size_allowed (size : Z) (*0 <=? size*) : M (bool) :=
+Definition initcode_size_allowed (size : byte_quantity) : M (bool) :=
    (or_boolM
       (read_reg k_fork >>= fun (w__0 : Fork) => returnM (((fork_lt (w__0) (Shanghai))  : bool)))
       ((max_code_size (tt)) >>= fun (w__1 : byte_quantity) =>
-       returnM (((Z.leb (size) ((nat_scale_byte_quantity (2) (w__1))))  : bool))))
+       (byte_quantity_mul ((ByteQuantity (2))) (w__1)) >>= fun (w__2 : byte_quantity) =>
+       returnM (((byte_quantity_le (size) (w__2))  : bool))))
     : M (bool).
 
 Definition sstore_clear_refund '(tt : unit) : M (gas_constant) :=
@@ -5115,7 +5337,15 @@ Definition sstore_clear_refund '(tt : unit) : M (gas_constant) :=
    returnM (w__1).
 
 Definition gas_product_quotient (left' : Z) (right' : Z) (divisor : gas_divisor) (*0 <=? left'*)
-(*0 <=? right'*) (*(1 <=? divisor) && (divisor <=? 1000)*)
+(*0 <=? right'*) (*(1 <=? divisor) && (divisor <=? 2000)*)
+: M (gas_cost) :=
+   let divisor := (divisor).(gas_divisor_value) in
+   (exact_quotient ((Z.mul (left') (right'))) (divisor)) >>= fun (w__0 : Z) =>
+   returnM ((GasCost (w__0))).
+
+Definition gas_product_quotient_bytes
+'((ByteQuantity left') : byte_quantity) '((ByteQuantity right') : byte_quantity)
+(divisor : gas_divisor) (*(1 <=? divisor) && (divisor <=? 2000)*)
 : M (gas_cost) :=
    let divisor := (divisor).(gas_divisor_value) in
    (exact_quotient ((Z.mul (left') (right'))) (divisor)) >>= fun (w__0 : Z) =>
@@ -5147,51 +5377,58 @@ Definition gas_sub_gas_or_oog '((Gas left') : gas) '((Gas right') : gas) : M (ga
     : M (gas).
 
 Definition refund_gas '((Gas amount) : gas) : M (unit) :=
-   read_reg gas_remaining >>= fun '(Gas remaining) =>
-   (if Z.leb (amount) ((Z.sub ((Z.sub ((pow2 (63))) (1))) (remaining))) return M (unit) then
-      write_reg gas_remaining (Gas ((Z.add (remaining) (amount))))
+   read_reg gas_remaining >>= fun (w__0 : gas) =>
+   (if gas_sum_supported (w__0) ((Gas (amount))) return M (unit) then
+      read_reg gas_remaining >>= fun (w__1 : gas) =>
+      (gas_add (w__1) ((Gas (amount)))) >>= fun (w__2 : gas) =>
+      write_reg gas_remaining w__2
        : M (unit)
     else throw (InvalidBlock (ExecutionInvalid)))
     : M (unit).
 
-Definition memory_word_count (byte_len : Z) (*0 <=? byte_len*) : M (Z) :=
+Definition memory_word_count_nat (byte_len : Z) (*0 <=? byte_len*) : M (Z) :=
    (exact_quotient ((Z.add (byte_len) (31))) (32))  : M (Z).
 
-Definition mem_cost (words : Z) (*0 <=? words*) : M (gas_cost) :=
-   (gas_product_quotient (words) (words) (Build_gas_divisor ((512)))) >>= fun (w__0 : gas_cost) =>
-   returnM ((gas_cost_add ((gas_constant_scale (G_memory) (words))) (w__0))).
+Definition memory_word_count_bytes '((ByteQuantity byte_len) : byte_quantity) : M (byte_quantity) :=
+   (exact_quotient ((Z.add (byte_len) (31))) (32)) >>= fun (w__0 : Z) =>
+   returnM ((ByteQuantity (w__0))).
 
-Definition memory_required_size (start : mword 256) (size : mword 256) : Z :=
-   if word_is_zero (size) then 0 else Z.add ((uint (start))) ((uint (size))).
+Definition mem_cost (words : byte_quantity) : M (gas_cost) :=
+   (gas_product_quotient_bytes (words) (words) (Build_gas_divisor ((512)))) >>= fun (w__0 : gas_cost) =>
+   returnM ((gas_cost_add ((gas_constant_scale_byte_quantity (G_memory) (words))) (w__0))).
+
+Definition memory_required_size (start : word) (size : word) : byte_quantity :=
+   if word_is_zero (size) then BYTE_ZERO
+   else ByteQuantity ((Z.add ((uint ((word_to_bits (start))))) ((uint ((word_to_bits (size))))))).
 
 Definition maximum_memory_required_size
-(left_start : mword 256) (left_size : mword 256) (right_start : mword 256) (right_size : mword 256)
-: Z :=
+(left_start : word) (left_size : word) (right_start : word) (right_size : word)
+: byte_quantity :=
    let left' := memory_required_size (left_start) (left_size) in
    let right' := memory_required_size (right_start) (right_size) in
-   if Z.ltb (left') (right') then right'
+   if byte_quantity_lt (left') (right') then right'
    else left'.
 
-Definition memory_expansion_gas (required_size : Z) (*0 <=? required_size*) : M (gas_cost) :=
-   (memory_word_count (required_size)) >>= fun new_words =>
-   (evm_memory_size (tt)) >>= fun '(ByteQuantity old_size) =>
-   (memory_word_count (old_size)) >>= fun old_words =>
-   (if Z.leb (new_words) (old_words) then returnM (GAS_COST_ZERO)
+Definition memory_expansion_gas (required_size : byte_quantity) : M (gas_cost) :=
+   (memory_word_count_bytes (required_size)) >>= fun new_words =>
+   (evm_memory_size (tt)) >>= fun (w__0 : byte_quantity) =>
+   (memory_word_count_bytes (w__0)) >>= fun old_words =>
+   (if byte_quantity_le (new_words) (old_words) then returnM (GAS_COST_ZERO)
     else
-      (mem_cost (new_words)) >>= fun (w__0 : gas_cost) =>
-      (mem_cost (old_words)) >>= fun (w__1 : gas_cost) =>
-      (gas_cost_sub (w__0) (w__1))
+      (mem_cost (new_words)) >>= fun (w__1 : gas_cost) =>
+      (mem_cost (old_words)) >>= fun (w__2 : gas_cost) =>
+      (gas_cost_sub (w__1) (w__2))
        : M (gas_cost))
     : M (gas_cost).
 
-Definition expand_memory (required_size : Z) (*0 <=? required_size*) : M (unit) :=
-   (memory_word_count (required_size)) >>= fun (w__0 : Z) =>
-   let expanded_size := Z.mul (w__0) (32) in
-   assert_exp (nat_fits_limb (expanded_size)) "sail/evm/gas.sail:469.39-469.40" >>
-   (memory_expand_to ((ByteQuantity (expanded_size))))
+Definition expand_memory (required_size : byte_quantity) : M (unit) :=
+   (memory_word_count_bytes (required_size)) >>= fun (w__0 : byte_quantity) =>
+   (byte_quantity_mul (w__0) ((ByteQuantity (32)))) >>= fun expanded_size =>
+   assert_exp (byte_quantity_fits_limb (expanded_size)) "sail/evm/gas.sail:500.49-500.50" >>
+   (memory_expand_to (expanded_size))
     : M (unit).
 
-Definition charge_memory_expansion (start : mword 256) (size : mword 256) : M (unit) :=
+Definition charge_memory_expansion (start : word) (size : word) : M (unit) :=
    (is_running (tt)) >>= fun (w__0 : bool) =>
    (if w__0 return M (unit) then
       let required_size := memory_required_size (start) (size) in
@@ -5204,7 +5441,7 @@ Definition charge_memory_expansion (start : mword 256) (size : mword 256) : M (u
     else returnM (tt))
     : M (unit).
 
-Definition expand_charged_memory (required_size : Z) (*0 <=? required_size*) : M (unit) :=
+Definition expand_charged_memory (required_size : byte_quantity) : M (unit) :=
    (is_running (tt)) >>= fun (w__0 : bool) =>
    (if w__0 return M (unit) then (expand_memory (required_size))  : M (unit)
     else returnM (tt))
@@ -5215,39 +5452,40 @@ Definition account_cost (warm : bool) : gas_constant :=
 
 Definition sload_cost (warm : bool) : gas_constant := if warm then G_warm_access else G_cold_sload.
 
-Definition pc_word (input : ByteSlice) (start : Z) (byte_count : Z) (*0 <=? start*)
-(*0 <=? byte_count*)
+Definition pc_word (input : ByteSlice) (start : byte_quantity) (byte_count : byte_quantity)
 : M (word) :=
-   let value : mword 256 := ZERO_WORD in
-   let '((ByteQuantity input_len)) := input.(ByteSlice_len) in
+   let value : word := ZERO_WORD in
    (let '(loop_byte_index_lower) := 0 in
    let '(loop_byte_index_upper) := 31 in
    (foreach_ZM_up loop_byte_index_lower loop_byte_index_upper 1 value
      (fun byte_index value =>
-       (if Z.ltb (byte_index) (byte_count) return M (mword 256) then
-          let cursor := Z.add (start) (byte_index) in
-          (if Z.ltb (cursor) (input_len) return M (mword 8) then
-             (slice_byte (input) ((ByteQuantity (cursor))))
+       let offset : byte_quantity := ByteQuantity (byte_index) in
+       (if byte_quantity_lt (offset) (byte_count) return M (word) then
+          (byte_quantity_add (start) (offset)) >>= fun cursor =>
+          (if byte_quantity_lt (cursor) (input.(ByteSlice_len)) return M (mword 8) then
+             (slice_byte (input) (cursor))
               : M (mword 8)
            else returnM ((Ox"00"))) >>= fun next_byte =>
-          let value : mword 256 := or_vec ((shiftl (value) (8))) ((zero_extend (next_byte) (256))) in
+          let value : word :=
+            word_or ((word_shift_left_limb (value) ((Ox"0000000000000008"))))
+              ((U256 ((zero_extend (next_byte) (256))))) in
           returnM (value)
         else returnM (value))
-        : M (mword 256))))
-    : M (mword 256).
+        : M (word))))
+    : M (word).
 
 Definition pc_blake2_rounds (input : ByteSlice) : M (blake2_rounds) :=
-   ((pc_word (input) (0) (4)) >>= fun (w__0 : mword 256) =>
-   returnM ((uint ((subrange_vec_dec (w__0) (31) (0)))))) >>= fun semanticResult =>
+   ((pc_word (input) ((ByteQuantity (0))) ((ByteQuantity (4)))) >>= fun (w__0 : word) =>
+   returnM ((uint ((subrange_vec_dec ((word_limb_0 (w__0))) (31) (0)))))) >>= fun semanticResult =>
    returnM (Build_blake2_rounds (semanticResult)).
 
 Definition modexp_gas (input : ByteSlice) : M (option gas_cost) :=
-   (pc_word (input) (0) (32)) >>= fun bl_word =>
-   (pc_word (input) (32) (32)) >>= fun el_word =>
-   (pc_word (input) (64) (32)) >>= fun ml_word =>
-   let bl : Z := uint (bl_word) in
-   let el : Z := uint (el_word) in
-   let ml : Z := uint (ml_word) in
+   (pc_word (input) ((ByteQuantity (0))) ((ByteQuantity (32)))) >>= fun bl_word =>
+   (pc_word (input) ((ByteQuantity (32))) ((ByteQuantity (32)))) >>= fun el_word =>
+   (pc_word (input) ((ByteQuantity (64))) ((ByteQuantity (32)))) >>= fun ml_word =>
+   let bl : Z := uint ((word_to_bits (bl_word))) in
+   let el : Z := uint ((word_to_bits (el_word))) in
+   let ml : Z := uint ((word_to_bits (ml_word))) in
    read_reg k_fork >>= fun (w__0 : Fork) =>
    let osaka := fork_gteq (w__0) (Osaka) in
    (if andb (osaka)
@@ -5267,7 +5505,7 @@ Definition modexp_gas (input : ByteSlice) : M (option gas_cost) :=
       let big_mul : Z := if osaka then 16 else 8 in
       let exp_off := Z.add (96) (bl) in
       (if Z.leb (el) (32) return M (Z) then
-         (pc_word (input) (exp_off) (el)) >>= fun (w__1 : mword 256) =>
+         (pc_word (input) ((ByteQuantity (exp_off))) ((ByteQuantity (el)))) >>= fun (w__1 : word) =>
          let exponent_bits := (word_bit_length (w__1)).(word_bit_count_value) in
          returnM ((if Z.eqb (exponent_bits) (0) then 1
                    else
@@ -5275,7 +5513,7 @@ Definition modexp_gas (input : ByteSlice) : M (option gas_cost) :=
                      if Z.eqb (count) (0) then 1
                      else count))
        else
-         (pc_word (input) (exp_off) (32)) >>= fun (w__2 : mword 256) =>
+         (pc_word (input) ((ByteQuantity (exp_off))) ((ByteQuantity (32)))) >>= fun (w__2 : word) =>
          let head_bits := (word_bit_length (w__2)).(word_bit_count_value) in
          let high_bits := if neq_int (head_bits) (0) then Z.sub (head_bits) (1) else 0 in
          let count := Z.add ((Z.mul (big_mul) ((Z.sub (el) (32))))) (high_bits) in
@@ -5329,44 +5567,44 @@ vec_of_list_len [(Ox"03E8");(Ox"03E8");(Ox"039B");(Ox"0374");(Ox"0357");(Ox"0340
                  (Ox"020C");(Ox"020C")].
 #[export] Hint Unfold BLS_G2_DISCOUNT : sail.
 Definition bls_msm_gas
-(table : vec (mword 16) 128) (base : gas_constant) (maxd : bls_discount) (k : Z)
-(*(0 <=? maxd) && (maxd <=? (2 ^ 16 - 1))*) (*0 <=? k*)
+(table : vec (mword 16) 128) (base : gas_constant) (maxd : bls_discount) (k : byte_quantity)
+(*(0 <=? maxd) && (maxd <=? (2 ^ 16 - 1))*)
 : M (gas_cost) :=
    let maxd := (maxd).(bls_discount_value) in
-   (if Z.eqb (k) (0) then returnM (GAS_COST_ZERO)
+   (if generic_eq (k) (BYTE_ZERO) then returnM (GAS_COST_ZERO)
     else
       let discount : Z := maxd in
-      let discount : Z :=
-        if Z.ltb (k) (128) then
-          let target := Z.sub (128) (k) in
-          let cursor : Z := 0 in
-          let '((cursor, discount)) :=
-            (let '(loop_index_lower) := 0 in
-            let '(loop_index_upper) := 127 in
-            (foreach_Z_up loop_index_lower loop_index_upper 1 (cursor, discount)
-              (fun index '(cursor, discount) =>
-                let discount : Z :=
-                  if Z.eqb (cursor) (target) then uint ((vec_access_dec (table) (index)))
-                  else discount in
-                let cursor : Z := Z.add (cursor) (1) in
-                (cursor, discount))))
-             : (Z * Z) in
-          discount
-        else discount in
-      (gas_cost_quotient ((gas_cost_scale ((gas_constant_scale (base) (discount))) (k)))
+      (if byte_quantity_lt (k) ((ByteQuantity (128))) return M (Z) then
+         (byte_quantity_sub ((ByteQuantity (128))) (k)) >>= fun target =>
+         let cursor : byte_quantity := BYTE_ZERO in
+         (let '(loop_index_lower) := 0 in
+         let '(loop_index_upper) := 127 in
+         (foreach_ZM_up loop_index_lower loop_index_upper 1 (cursor, discount)
+           (fun index '(cursor, discount) =>
+             let discount : Z :=
+               if generic_eq (cursor) (target) then uint ((vec_access_dec (table) (index)))
+               else discount in
+             (byte_quantity_add (cursor) (BYTE_ONE)) >>= fun (w__0 : byte_quantity) =>
+             let cursor := w__0  : byte_quantity in
+             returnM ((cursor, discount))))) >>= fun '((cursor, discount)
+         : (byte_quantity * Z)) =>
+         returnM (discount)
+       else returnM (discount)) >>= fun (discount : Z) =>
+      (gas_cost_quotient
+         ((gas_cost_scale_byte_quantity ((gas_constant_scale (base) (discount))) (k)))
          (Build_gas_divisor ((1000))))
        : M (gas_cost))
     : M (gas_cost).
 
-Definition linear_gas (base : gas_constant) (per_unit : gas_constant) (units : Z) (*0 <=? units*)
+Definition linear_gas (base : gas_constant) (per_unit : gas_constant) (units : byte_quantity)
 : gas_cost :=
-   gas_cost_add_constant ((gas_constant_scale (per_unit) (units))) (base).
+   gas_cost_add_constant ((gas_constant_scale_byte_quantity (per_unit) (units))) (base).
 
 Definition precompile_gas (num : precompile_id) (input : ByteSlice) (*(1 <=? num) && (num <=? 256)*)
 : M (option gas_cost) :=
    let num := (num).(precompile_id_value) in
-   let '((ByteQuantity input_len)) := input.(ByteSlice_len) in
-   (memory_word_count (input_len)) >>= fun words =>
+   let input_len := input.(ByteSlice_len) in
+   (memory_word_count_bytes (input_len)) >>= fun words =>
    let l__0 := num in
    (if Z.eqb (l__0) (1) then returnM ((Some ((GasCost (3000)))))
     else if Z.eqb (l__0) (2) then
@@ -5381,7 +5619,7 @@ Definition precompile_gas (num : precompile_id) (input : ByteSlice) (*(1 <=? num
     else if Z.eqb (l__0) (6) then returnM ((Some ((GasCost (150)))))
     else if Z.eqb (l__0) (7) then returnM ((Some ((GasCost (6000)))))
     else if Z.eqb (l__0) (8) return M (option gas_cost) then
-      (exact_quotient (input_len) (192)) >>= fun (w__1 : Z) =>
+      (byte_quantity_quotient (input_len) ((ByteQuantity (192)))) >>= fun (w__1 : byte_quantity) =>
       returnM ((Some ((linear_gas ((GasConstant (45000))) ((GasConstant (34000))) (w__1)))))
     else if Z.eqb (l__0) (9) return M (option gas_cost) then
       ((pc_blake2_rounds (input)) >>= fun semanticResult =>
@@ -5390,16 +5628,16 @@ Definition precompile_gas (num : precompile_id) (input : ByteSlice) (*(1 <=? num
     else if Z.eqb (l__0) (10) then returnM ((Some ((GasCost (50000)))))
     else if Z.eqb (l__0) (11) then returnM ((Some ((GasCost (375)))))
     else if Z.eqb (l__0) (12) return M (option gas_cost) then
-      (exact_quotient (input_len) (160)) >>= fun (w__3 : Z) =>
+      (byte_quantity_quotient (input_len) ((ByteQuantity (160)))) >>= fun (w__3 : byte_quantity) =>
       (bls_msm_gas (BLS_G1_DISCOUNT) ((GasConstant (12000))) (Build_bls_discount ((519))) (w__3)) >>= fun (w__4 : gas_cost) =>
       returnM ((Some (w__4)))
     else if Z.eqb (l__0) (13) then returnM ((Some ((GasCost (600)))))
     else if Z.eqb (l__0) (14) return M (option gas_cost) then
-      (exact_quotient (input_len) (288)) >>= fun (w__5 : Z) =>
+      (byte_quantity_quotient (input_len) ((ByteQuantity (288)))) >>= fun (w__5 : byte_quantity) =>
       (bls_msm_gas (BLS_G2_DISCOUNT) ((GasConstant (22500))) (Build_bls_discount ((524))) (w__5)) >>= fun (w__6 : gas_cost) =>
       returnM ((Some (w__6)))
     else if Z.eqb (l__0) (15) return M (option gas_cost) then
-      (exact_quotient (input_len) (384)) >>= fun (w__7 : Z) =>
+      (byte_quantity_quotient (input_len) ((ByteQuantity (384)))) >>= fun (w__7 : byte_quantity) =>
       returnM ((Some ((linear_gas ((GasConstant (37700))) ((GasConstant (32600))) (w__7)))))
     else
       returnM ((if Z.eqb (l__0) (16) then Some ((GasCost (5500)))
@@ -5408,19 +5646,21 @@ Definition precompile_gas (num : precompile_id) (input : ByteSlice) (*(1 <=? num
                 else Some (GAS_COST_ZERO))))
     : M (option gas_cost).
 
-Definition sstore_gas (original : mword 256) (current : mword 256) (new : mword 256) (cold : bool)
+Definition sstore_gas (original : word) (current : word) (new : word) (cold : bool)
 : M ((gas_cost * gas_refund)) :=
    let cold_cost : gas_constant := if cold then G_cold_sload else GAS_CONSTANT_ZERO in
    (sstore_clear_refund (tt)) >>= fun (w__0 : gas_constant) =>
    let clear_refund : gas_refund := gas_constant_to_refund (w__0) in
    let base : gas_constant :=
-     if eq_vec (current) (new) then G_warm_access
-     else if eq_vec (original) (current) then if word_is_zero (original) then G_sset else G_sreset
+     if generic_eq (current) (new) then G_warm_access
+     else if generic_eq (original) (current) then
+       if word_is_zero (original) then G_sset
+       else G_sreset
      else G_warm_access in
    let refund : gas_refund := GAS_REFUND_ZERO in
    let refund : gas_refund :=
-     if neq_vec (current) (new) then
-       if eq_vec (original) (current) then
+     if generic_neq (current) (new) then
+       if generic_eq (original) (current) then
          if andb ((negb ((word_is_zero (original))))) ((word_is_zero (new))) then
            gas_refund_add (refund) (clear_refund)
          else refund
@@ -5433,7 +5673,7 @@ Definition sstore_gas (original : mword 256) (current : mword 256) (new : mword 
              if word_is_zero (new) then gas_refund_add (refund) (clear_refund)
              else refund
            else refund in
-         if eq_vec (original) (new) then
+         if generic_eq (original) (new) then
            if word_is_zero (original) then
              gas_refund_sub ((gas_refund_add (refund) ((gas_constant_to_refund (G_sset)))))
                ((gas_constant_to_refund (G_warm_access)))
@@ -5445,45 +5685,53 @@ Definition sstore_gas (original : mword 256) (current : mword 256) (new : mword 
    let cost := gas_constant_add (base) (cold_cost) in
    returnM ((cost, refund)).
 
-Definition charge_memory_word_gas (base : gas_constant) (per_word : gas_constant) (size : Z)
-(*0 <=? size*)
+Definition charge_memory_word_gas
+(base : gas_constant) (per_word : gas_constant) (size : byte_quantity)
 : M (unit) :=
-   (memory_word_count (size)) >>= fun (w__0 : Z) =>
-   (charge_cost ((gas_cost_add_constant ((gas_constant_scale (per_word) (w__0))) (base))))
+   (memory_word_count_bytes (size)) >>= fun (w__0 : byte_quantity) =>
+   (charge_cost
+      ((gas_cost_add_constant ((gas_constant_scale_byte_quantity (per_word) (w__0))) (base))))
     : M (unit).
 
-Definition charge_keccak_gas (size : Z) (*0 <=? size*) : M (unit) :=
+Definition charge_keccak_gas (size : byte_quantity) : M (unit) :=
    (charge_memory_word_gas (G_keccak) (G_keccak_word) (size))  : M (unit).
 
-Definition charge_copy_gas (size : Z) (*0 <=? size*) : M (unit) :=
+Definition charge_copy_gas (size : byte_quantity) : M (unit) :=
    (charge_memory_word_gas (GAS_CONSTANT_ZERO) (G_copy_word) (size))  : M (unit).
 
-Definition charge_log_gas (num_topics : log_topic_count) (size : Z)
-(*(0 <=? num_topics) && (num_topics <=? 4)*) (*0 <=? size*)
+Definition charge_log_gas (num_topics : log_topic_count) (size : byte_quantity)
+(*(0 <=? num_topics) && (num_topics <=? 4)*)
 : M (unit) :=
    let num_topics := (num_topics).(log_topic_count_value) in
    (charge_cost
       ((gas_cost_add_constant
-          ((gas_cost_add ((gas_constant_scale (G_logtopic) (num_topics)))
-              ((gas_constant_scale (G_logdata) (size))))) (G_log))))
+          ((gas_cost_add
+              ((gas_constant_scale_protocol_quantity (G_logtopic)
+                  (Build_protocol_quantity ((num_topics)))))
+              ((gas_constant_scale_byte_quantity (G_logdata) (size))))) (G_log))))
     : M (unit).
 
-Definition exp_gas (exponent : mword 256) : M (gas_cost) :=
+Definition exp_gas (exponent : word) : M (gas_cost) :=
    let significant_bits := (word_bit_length (exponent)).(word_bit_count_value) in
-   (exact_quotient ((Z.add (significant_bits) (7))) (8)) >>= fun byte_count =>
+   let rounded_bits : Z := Z.add (significant_bits) (7) in
+   ((protocol_quantity_quotient (Build_protocol_quantity ((rounded_bits)))
+       (Build_protocol_divisor ((8)))) >>= fun semanticResult =>
+    returnM (semanticResult).(protocol_quantity_value)) >>= fun byte_count =>
    (if Z.leb (byte_count) (32) then returnM (byte_count)
-    else assert_exp' false "sail/evm/gas.sail:1029.24-1029.25" >>= fun _ => exit tt) >>= fun (significant_bytes : Z) =>
-   returnM ((gas_cost_add_constant ((gas_constant_scale (G_expbyte) (significant_bytes))) (G_exp))).
+    else assert_exp' false "sail/evm/gas.sail:1073.24-1073.25" >>= fun _ => exit tt) >>= fun (significant_bytes : Z) =>
+   returnM ((gas_cost_add_constant
+               ((gas_constant_scale_protocol_quantity (G_expbyte)
+                   (Build_protocol_quantity ((significant_bytes))))) (G_exp))).
 
-Definition initcode_gas (byte_len : Z) (*0 <=? byte_len*) : M (gas_cost) :=
+Definition initcode_gas (byte_len : byte_quantity) : M (gas_cost) :=
    read_reg k_fork >>= fun (w__0 : Fork) =>
    (if fork_gteq (w__0) (Shanghai) return M (gas_cost) then
-      (memory_word_count (byte_len)) >>= fun (w__1 : Z) =>
-      returnM ((gas_constant_scale (G_initcode_word) (w__1)))
+      (memory_word_count_bytes (byte_len)) >>= fun (w__1 : byte_quantity) =>
+      returnM ((gas_constant_scale_byte_quantity (G_initcode_word) (w__1)))
     else returnM (GAS_COST_ZERO))
     : M (gas_cost).
 
-Definition call_gas_cap_word (available : gas) (requested : mword 256) : M (gas) :=
+Definition call_gas_cap_word (available : gas) (requested : word) : M (gas) :=
    (gas_quotient (available) (Build_gas_divisor ((64)))) >>= fun retained =>
    (gas_sub_gas_or_oog (available) (retained)) >>= fun all_but_64th =>
    returnM (match word_to_gas (requested) with
@@ -5492,13 +5740,13 @@ Definition call_gas_cap_word (available : gas) (requested : mword 256) : M (gas)
    | _ => all_but_64th
    end).
 
-Definition ACCELERATOR_INPUT_MAX := 2097152  : Z.
+Definition ACCELERATOR_INPUT_MAX : protocol_quantity := (Build_protocol_quantity (2097152)).
 #[export] Hint Unfold ACCELERATOR_INPUT_MAX : sail.
 Definition FIELD_ELEMENTS_PER_BLOB : word :=
-(Ox"0000000000000000000000000000000000000000000000000000000000001000").
+U256 ((Ox"0000000000000000000000000000000000000000000000000000000000001000")).
 #[export] Hint Unfold FIELD_ELEMENTS_PER_BLOB : sail.
 Definition BLS_MODULUS : word :=
-(Ox"73EDA753299D7D483339D80809A1D80553BDA402FFFE5BFEFFFFFFFF00000001").
+U256 ((Ox"73EDA753299D7D483339D80809A1D80553BDA402FFFE5BFEFFFFFFFF00000001")).
 #[export] Hint Unfold BLS_MODULUS : sail.
 Definition BLAKE2F_INPUT_LENGTH : byte_length := ByteQuantity (213).
 #[export] Hint Unfold BLAKE2F_INPUT_LENGTH : sail.
@@ -5556,7 +5804,7 @@ Definition accelerator_result (success : bool) (output_len : byte_quantity) : Pr
 
 Definition copied_result (data : ByteSlice) : M (PrecompileResult) :=
    (freeze_output (data)) >>= fun output =>
-   returnM ((if byte_quantity_equal (output.(ByteSlice_len)) (data.(ByteSlice_len)) then
+   returnM ((if generic_eq (output.(ByteSlice_len)) (data.(ByteSlice_len)) then
                precompile_success (output)
              else precompile_failure (tt))).
 
@@ -5585,15 +5833,17 @@ Definition is_precompile (n : precompile_id) (*(1 <=? n) && (n <=? 256)*) : M (b
 Definition run_ecrecover (input : ByteSlice) : M (PrecompileResult) :=
    (slice_load (input) (PRECOMPILE_WORD_LENGTH)) >>= fun v =>
    (or_boolM
-      ((word_of_nat (27)) >>= fun (w__0 : mword 256) => returnM (((eq_vec (v) (w__0))  : bool)))
-      ((word_of_nat (28)) >>= fun (w__1 : mword 256) => returnM (((eq_vec (v) (w__1))  : bool)))) >>= fun valid_v =>
+      ((word_of_protocol_quantity (Build_protocol_quantity ((27)))) >>= fun (w__0 : word) =>
+       returnM (((generic_eq (v) (w__0))  : bool)))
+      ((word_of_protocol_quantity (Build_protocol_quantity ((28)))) >>= fun (w__1 : word) =>
+       returnM (((generic_eq (v) (w__1))  : bool)))) >>= fun valid_v =>
    (if valid_v return M (PrecompileResult) then
-      (word_of_nat (27)) >>= fun (w__2 : mword 256) =>
-      let parity : Z := if eq_vec (v) (w__2) then 0 else 1 in
-      (slice_load (input) (BYTE_ZERO)) >>= fun (w__3 : mword 256) =>
-      (slice_load (input) (PRECOMPILE_DOUBLE_WORD_LENGTH)) >>= fun (w__4 : mword 256) =>
-      (slice_load (input) (ECRECOVER_S_OFFSET)) >>= fun (w__5 : mword 256) =>
-      (ecrecover_addr (w__3) (Build_y_parity ((parity))) (w__4) (w__5)) >>= fun '((recovered, address)) =>
+      (word_of_protocol_quantity (Build_protocol_quantity ((27)))) >>= fun (w__2 : word) =>
+      let parity : Z := if generic_eq (v) (w__2) then 0 else 1 in
+      (slice_load (input) (BYTE_ZERO)) >>= fun (w__3 : word) =>
+      (slice_load (input) (PRECOMPILE_DOUBLE_WORD_LENGTH)) >>= fun (w__4 : word) =>
+      (slice_load (input) (ECRECOVER_S_OFFSET)) >>= fun (w__5 : word) =>
+      (ecrecover_addr ((word_to_hash (w__3))) (Build_y_parity ((parity))) (w__4) (w__5)) >>= fun '((recovered, address)) =>
       (if recovered return M (PrecompileResult) then
          (output_buffer_word ((address_to_word (address)))) >>= fun (w__6 : ByteSlice) =>
          returnM ((precompile_success (w__6)))
@@ -5603,27 +5853,29 @@ Definition run_ecrecover (input : ByteSlice) : M (PrecompileResult) :=
     : M (PrecompileResult).
 
 Definition run_sha256 (input : ByteSlice) : M (PrecompileResult) :=
-   (sha256_segments ([BytesSlice (input)])) >>= fun (w__0 : mword 256) =>
-   (output_buffer_word (w__0)) >>= fun (w__1 : ByteSlice) => returnM ((precompile_success (w__1))).
+   (sha256_segments ([BytesSlice (input)])) >>= fun (w__0 : b256) =>
+   (output_buffer_word ((hash_to_word (w__0)))) >>= fun (w__1 : ByteSlice) =>
+   returnM ((precompile_success (w__1))).
 
 Definition run_ripemd160 (input : ByteSlice) : M (PrecompileResult) :=
    (accelerator_ripemd160 (input)) >>= fun (w__0 : bool) =>
    returnM ((accelerator_result (w__0) (PRECOMPILE_WORD_LENGTH))).
 
 Definition run_modexp (input : ByteSlice) : M (PrecompileResult) :=
-   (pc_word (input) (0) (32)) >>= fun (w__0 : mword 256) =>
-   let base_len : Z := uint (w__0) in
-   (pc_word (input) (32) (32)) >>= fun (w__1 : mword 256) =>
-   let exponent_len : Z := uint (w__1) in
-   (pc_word (input) (64) (32)) >>= fun (w__2 : mword 256) =>
-   let modulus_len : Z := uint (w__2) in
+   (pc_word (input) ((ByteQuantity (0))) ((ByteQuantity (32)))) >>= fun (w__0 : word) =>
+   let base_len : Z := uint ((word_to_bits (w__0))) in
+   (pc_word (input) ((ByteQuantity (32))) ((ByteQuantity (32)))) >>= fun (w__1 : word) =>
+   let exponent_len : Z := uint ((word_to_bits (w__1))) in
+   (pc_word (input) ((ByteQuantity (64))) ((ByteQuantity (32)))) >>= fun (w__2 : word) =>
+   let modulus_len : Z := uint ((word_to_bits (w__2))) in
    (if Z.eqb (modulus_len) (0) then returnM ((precompile_success (EMPTY_SLICE)))
     else
       let input_end := Z.add ((Z.add ((Z.add (96) (base_len))) (exponent_len))) (modulus_len) in
-      (if orb ((Z.ltb (ACCELERATOR_INPUT_MAX) (base_len)))
-            ((orb ((Z.ltb (ACCELERATOR_INPUT_MAX) (exponent_len)))
-                ((orb ((Z.ltb (ACCELERATOR_INPUT_MAX) (modulus_len)))
-                    ((Z.ltb (ACCELERATOR_INPUT_MAX) (input_end))))))) then
+      (if orb ((Z.ltb ((ACCELERATOR_INPUT_MAX).(protocol_quantity_value)) (base_len)))
+            ((orb ((Z.ltb ((ACCELERATOR_INPUT_MAX).(protocol_quantity_value)) (exponent_len)))
+                ((orb ((Z.ltb ((ACCELERATOR_INPUT_MAX).(protocol_quantity_value)) (modulus_len)))
+                    ((Z.ltb ((ACCELERATOR_INPUT_MAX).(protocol_quantity_value)) (input_end)))))))
+       then
          returnM ((precompile_failure (tt)))
        else
          (accelerator_modexp (input) ((ByteQuantity (base_len))) ((ByteQuantity (exponent_len)))
@@ -5641,7 +5893,7 @@ Definition pairing_result (result : mword 2) : M (PrecompileResult) :=
 
 Definition run_blake2f (input : ByteSlice) : M (PrecompileResult) :=
    (slice_byte (input) (BLAKE2F_FINAL_BLOCK_OFFSET)) >>= fun final_byte =>
-   (if orb ((byte_quantity_not_equal (input.(ByteSlice_len)) (BLAKE2F_INPUT_LENGTH)))
+   (if orb ((generic_neq (input.(ByteSlice_len)) (BLAKE2F_INPUT_LENGTH)))
          ((andb ((neq_vec (final_byte) ((Ox"00")))) ((neq_vec (final_byte) ((Ox"01")))))) then
       returnM ((precompile_failure (tt)))
     else
@@ -5655,13 +5907,14 @@ Definition run_blake2f (input : ByteSlice) : M (PrecompileResult) :=
 Definition kzg_versioned_hash_matches (input : ByteSlice) : M (bool) :=
    (sub_slice (input) (KZG_COMMITMENT_OFFSET) (KZG_COMMITMENT_LENGTH)) >>= fun (w__0 : ByteSlice) =>
    (sha256_segments ([BytesSlice (w__0)])) >>= fun commitment_hash =>
-   let expected : mword 256 :=
-     concat_vec ((Ox"01")) ((subrange_vec_dec (commitment_hash) (247) (0))) in
-   (slice_load (input) (BYTE_ZERO)) >>= fun (w__1 : mword 256) =>
-   returnM ((eq_vec (w__1) (expected))).
+   let expected : word :=
+     U256
+       ((concat_vec ((Ox"01")) ((subrange_vec_dec ((hash_to_bits (commitment_hash))) (247) (0))))) in
+   (slice_load (input) (BYTE_ZERO)) >>= fun (w__1 : word) =>
+   returnM ((generic_eq (w__1) (expected))).
 
 Definition run_kzg_point_evaluation (input : ByteSlice) : M (PrecompileResult) :=
-   (if byte_quantity_not_equal (input.(ByteSlice_len)) (KZG_INPUT_LENGTH) then
+   (if generic_neq (input.(ByteSlice_len)) (KZG_INPUT_LENGTH) then
       returnM ((precompile_failure (tt)))
     else
       (kzg_versioned_hash_matches (input)) >>= fun (w__0 : bool) =>
@@ -5709,7 +5962,7 @@ Definition bls_g2_padding
     : M (bool).
 
 Definition run_bls_g1_add (input : ByteSlice) : M (PrecompileResult) :=
-   (if byte_quantity_not_equal (input.(ByteSlice_len)) (BLS_G1_ADD_INPUT_LENGTH) then
+   (if generic_neq (input.(ByteSlice_len)) (BLS_G1_ADD_INPUT_LENGTH) then
       returnM ((precompile_failure (tt)))
     else
       (bls_g1_padding (input) (BYTE_ZERO) (BLS_G1_POINT_LENGTH) (TWO_COMPONENTS)) >>= fun (w__0 : bool) =>
@@ -5723,9 +5976,9 @@ Definition run_bls_g1_add (input : ByteSlice) : M (PrecompileResult) :=
 Definition run_bls_g1_msm (input : ByteSlice) : M (PrecompileResult) :=
    let length := input.(ByteSlice_len) in
    (byte_quantity_quotient (length) (BLS_G1_MSM_ITEM_LENGTH)) >>= fun pairs =>
-   (or_boolM (returnM (((byte_quantity_equal (length) (BYTE_ZERO))  : bool)))
+   (or_boolM (returnM (((generic_eq (length) (BYTE_ZERO))  : bool)))
       ((byte_quantity_mul (pairs) (BLS_G1_MSM_ITEM_LENGTH)) >>= fun (w__0 : byte_quantity) =>
-       returnM (((byte_quantity_not_equal (length) (w__0))  : bool)))) >>= fun (w__1 : bool) =>
+       returnM (((generic_neq (length) (w__0))  : bool)))) >>= fun (w__1 : bool) =>
    (if w__1 then returnM ((precompile_failure (tt)))
     else
       (bls_g1_padding (input) (BYTE_ZERO) (BLS_G1_MSM_ITEM_LENGTH) (pairs)) >>= fun (w__2 : bool) =>
@@ -5737,7 +5990,7 @@ Definition run_bls_g1_msm (input : ByteSlice) : M (PrecompileResult) :=
     : M (PrecompileResult).
 
 Definition run_bls_g2_add (input : ByteSlice) : M (PrecompileResult) :=
-   (if byte_quantity_not_equal (input.(ByteSlice_len)) (BLS_G2_ADD_INPUT_LENGTH) then
+   (if generic_neq (input.(ByteSlice_len)) (BLS_G2_ADD_INPUT_LENGTH) then
       returnM ((precompile_failure (tt)))
     else
       (bls_g2_padding (input) (BYTE_ZERO) (BLS_G2_POINT_LENGTH) (TWO_COMPONENTS)) >>= fun (w__0 : bool) =>
@@ -5751,9 +6004,9 @@ Definition run_bls_g2_add (input : ByteSlice) : M (PrecompileResult) :=
 Definition run_bls_g2_msm (input : ByteSlice) : M (PrecompileResult) :=
    let length := input.(ByteSlice_len) in
    (byte_quantity_quotient (length) (BLS_G2_MSM_ITEM_LENGTH)) >>= fun pairs =>
-   (or_boolM (returnM (((byte_quantity_equal (length) (BYTE_ZERO))  : bool)))
+   (or_boolM (returnM (((generic_eq (length) (BYTE_ZERO))  : bool)))
       ((byte_quantity_mul (pairs) (BLS_G2_MSM_ITEM_LENGTH)) >>= fun (w__0 : byte_quantity) =>
-       returnM (((byte_quantity_not_equal (length) (w__0))  : bool)))) >>= fun (w__1 : bool) =>
+       returnM (((generic_neq (length) (w__0))  : bool)))) >>= fun (w__1 : bool) =>
    (if w__1 then returnM ((precompile_failure (tt)))
     else
       (bls_g2_padding (input) (BYTE_ZERO) (BLS_G2_MSM_ITEM_LENGTH) (pairs)) >>= fun (w__2 : bool) =>
@@ -5767,9 +6020,9 @@ Definition run_bls_g2_msm (input : ByteSlice) : M (PrecompileResult) :=
 Definition run_bls_pairing (input : ByteSlice) : M (PrecompileResult) :=
    let length := input.(ByteSlice_len) in
    (byte_quantity_quotient (length) (BLS_PAIRING_ITEM_LENGTH)) >>= fun pairs =>
-   (or_boolM (returnM (((byte_quantity_equal (length) (BYTE_ZERO))  : bool)))
+   (or_boolM (returnM (((generic_eq (length) (BYTE_ZERO))  : bool)))
       ((byte_quantity_mul (pairs) (BLS_PAIRING_ITEM_LENGTH)) >>= fun (w__0 : byte_quantity) =>
-       returnM (((byte_quantity_not_equal (length) (w__0))  : bool)))) >>= fun (w__1 : bool) =>
+       returnM (((generic_neq (length) (w__0))  : bool)))) >>= fun (w__1 : bool) =>
    (if w__1 then returnM ((precompile_failure (tt)))
     else
       (and_boolM
@@ -5786,7 +6039,7 @@ Definition run_bls_pairing (input : ByteSlice) : M (PrecompileResult) :=
     : M (PrecompileResult).
 
 Definition run_bls_map_fp_to_g1 (input : ByteSlice) : M (PrecompileResult) :=
-   (if byte_quantity_not_equal (input.(ByteSlice_len)) (BLS_PADDED_FIELD_LENGTH) then
+   (if generic_neq (input.(ByteSlice_len)) (BLS_PADDED_FIELD_LENGTH) then
       returnM ((precompile_failure (tt)))
     else
       (slice_strided_zero (input) (BYTE_ZERO) (BLS_PADDED_FIELD_LENGTH) (BLS_FIELD_PADDING_LENGTH)
@@ -5799,7 +6052,7 @@ Definition run_bls_map_fp_to_g1 (input : ByteSlice) : M (PrecompileResult) :=
     : M (PrecompileResult).
 
 Definition run_bls_map_fp2_to_g2 (input : ByteSlice) : M (PrecompileResult) :=
-   (if byte_quantity_not_equal (input.(ByteSlice_len)) (BLS_G1_POINT_LENGTH) then
+   (if generic_neq (input.(ByteSlice_len)) (BLS_G1_POINT_LENGTH) then
       returnM ((precompile_failure (tt)))
     else
       (slice_strided_zero (input) (BYTE_ZERO) (BLS_PADDED_FIELD_LENGTH) (BLS_FIELD_PADDING_LENGTH)
@@ -5812,7 +6065,7 @@ Definition run_bls_map_fp2_to_g2 (input : ByteSlice) : M (PrecompileResult) :=
     : M (PrecompileResult).
 
 Definition run_p256_verify (input : ByteSlice) : M (PrecompileResult) :=
-   (if byte_quantity_equal (input.(ByteSlice_len)) (P256_INPUT_LENGTH) return M (bool) then
+   (if generic_eq (input.(ByteSlice_len)) (P256_INPUT_LENGTH) return M (bool) then
       (accelerator_p256_verify (input))
        : M (bool)
     else returnM (false)) >>= fun verified =>
@@ -5851,7 +6104,7 @@ Definition run_precompile_slice (num : precompile_id) (input : ByteSlice)
     else if Z.eqb (l__0) (8) return M (PrecompileResult) then
       (byte_quantity_quotient (input.(ByteSlice_len)) (BN254_PAIRING_ITEM_LENGTH)) >>= fun (w__7 : byte_quantity) =>
       (byte_quantity_mul (w__7) (BN254_PAIRING_ITEM_LENGTH)) >>= fun (w__8 : byte_quantity) =>
-      (if byte_quantity_equal (input.(ByteSlice_len)) (w__8) return M (PrecompileResult) then
+      (if generic_eq (input.(ByteSlice_len)) (w__8) return M (PrecompileResult) then
          (accelerator_bn254_pairing (input)) >>= fun (w__9 : mword 2) =>
          (pairing_result (w__9))
           : M (PrecompileResult)
@@ -5899,14 +6152,19 @@ Definition guard_static '(tt : unit) : M (bool) :=
     else returnM (false))
     : M (bool).
 
-Definition do_jump (dest_word : mword 256) : M (unit) :=
+Definition do_jump (dest_word : word) : M (unit) :=
    (frame_code_len (tt)) >>= fun (w__0 : byte_quantity) =>
-   (word_of_byte_quantity (w__0)) >>= fun (w__1 : mword 256) =>
+   (word_of_byte_quantity (w__0)) >>= fun (w__1 : word) =>
    (if word_ult (dest_word) (w__1) return M (unit) then
-      let destination := ByteQuantity ((uint (dest_word))) in
-      (frame_jumpdest_valid (destination)) >>= fun (w__2 : bool) =>
-      (if w__2 return M (unit) then write_reg pc destination  : M (unit)
-       else (exc_halt (InvalidJump))  : M (unit))
+      match word_to_limb (dest_word) with
+      | Some destination_bits =>
+         let destination := ByteQuantity ((uint (destination_bits))) in
+         (frame_jumpdest_valid (destination)) >>= fun (w__2 : bool) =>
+         (if w__2 return M (unit) then write_reg pc destination  : M (unit)
+          else (exc_halt (InvalidJump))  : M (unit))
+          : M (unit)
+      | None => (exc_halt (InvalidJump))  : M (unit)
+      end
        : M (unit)
     else (exc_halt (InvalidJump))  : M (unit))
     : M (unit).
@@ -5916,19 +6174,778 @@ Definition pop_log_topics (count : log_topic_count) (*(0 <=? count) && (count <=
    let count := (count).(log_topic_count_value) in
    let l__0 := count in
    (if Z.eqb (l__0) (0) then returnM ([])
-    else if Z.eqb (l__0) (1) return M (list (mword 256)) then
-      (pop (tt)) >>= fun (w__0 : mword 256) => returnM ([w__0])
-    else if Z.eqb (l__0) (2) return M (list (mword 256)) then
+    else if Z.eqb (l__0) (1) return M (list word) then
+      (pop (tt)) >>= fun (w__0 : word) => returnM ([w__0])
+    else if Z.eqb (l__0) (2) return M (list word) then
       (pop (tt)) >>= fun t0 => (pop (tt)) >>= fun t1 => returnM ([t0; t1])
-    else if Z.eqb (l__0) (3) return M (list (mword 256)) then
+    else if Z.eqb (l__0) (3) return M (list word) then
       (pop (tt)) >>= fun t0 =>
       (pop (tt)) >>= fun t1 => (pop (tt)) >>= fun t2 => returnM ([t0; t1; t2])
-    else if Z.eqb (l__0) (4) return M (list (mword 256)) then
+    else if Z.eqb (l__0) (4) return M (list word) then
       (pop (tt)) >>= fun t0 =>
       (pop (tt)) >>= fun t1 =>
       (pop (tt)) >>= fun t2 => (pop (tt)) >>= fun t3 => returnM ([t0; t1; t2; t3])
     else returnM ([]))
-    : M (list (mword 256)).
+    : M (list word).
+
+Definition execute_arithmetic (op : ast) : M (unit) :=
+   match op with
+   | ADD tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_add (a) (b))))  : M (unit)
+   | MUL tt =>
+      (charge_constant (G_low)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_mul (a) (b))))  : M (unit)
+   | SUB tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_sub (a) (b))))  : M (unit)
+   | DIV tt =>
+      (charge_constant (G_low)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_div (a) (b))))  : M (unit)
+   | SDIV tt =>
+      (charge_constant (G_low)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_sdiv (a) (b))))  : M (unit)
+   | MOD tt =>
+      (charge_constant (G_low)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_mod (a) (b))))  : M (unit)
+   | SMOD tt =>
+      (charge_constant (G_low)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_smod (a) (b))))  : M (unit)
+   | ADDMOD tt =>
+      (charge_constant (G_mid)) >>
+      (pop (tt)) >>= fun a =>
+      (pop (tt)) >>= fun b => (pop (tt)) >>= fun n => (push ((alu_addmod (a) (b) (n))))  : M (unit)
+   | MULMOD tt =>
+      (charge_constant (G_mid)) >>
+      (pop (tt)) >>= fun a =>
+      (pop (tt)) >>= fun b => (pop (tt)) >>= fun n => (push ((alu_mulmod (a) (b) (n))))  : M (unit)
+   | EXP tt =>
+      (pop (tt)) >>= fun a =>
+      (pop (tt)) >>= fun e =>
+      (exp_gas (e)) >>= fun (w__0 : gas_cost) =>
+      (charge_cost (w__0)) >> (push ((alu_exp (a) (e))))  : M (unit)
+   | SIGNEXTEND tt =>
+      (charge_constant (G_low)) >>
+      (pop (tt)) >>= fun bi =>
+      (pop (tt)) >>= fun v => (push ((alu_signextend (bi) (v))))  : M (unit)
+   | LT' tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_lt (a) (b))))  : M (unit)
+   | GT' tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_gt (a) (b))))  : M (unit)
+   | SLT tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_slt (a) (b))))  : M (unit)
+   | SGT tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_sgt (a) (b))))  : M (unit)
+   | EQ' tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_eq (a) (b))))  : M (unit)
+   | ISZERO tt =>
+      (charge_constant (G_verylow)) >> (pop (tt)) >>= fun a => (push ((alu_iszero (a))))  : M (unit)
+   | AND tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_and (a) (b))))  : M (unit)
+   | OR tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_or (a) (b))))  : M (unit)
+   | XOR tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_xor (a) (b))))  : M (unit)
+   | NOT tt =>
+      (charge_constant (G_verylow)) >> (pop (tt)) >>= fun a => (push ((alu_not (a))))  : M (unit)
+   | BYTE tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun i => (pop (tt)) >>= fun x => (push ((alu_byte (i) (x))))  : M (unit)
+   | SHL tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun s => (pop (tt)) >>= fun v => (push ((alu_shl (s) (v))))  : M (unit)
+   | SHR tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun s => (pop (tt)) >>= fun v => (push ((alu_shr (s) (v))))  : M (unit)
+   | SAR tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun s => (pop (tt)) >>= fun v => (push ((alu_sar (s) (v))))  : M (unit)
+   | CLZ tt =>
+      (charge_constant (G_low)) >>
+      (pop (tt)) >>= fun x => (alu_clz (x)) >>= fun (w__1 : word) => (push (w__1))  : M (unit)
+   | _ => assert_exp' false "sail/evm/execute.sail:259.21-259.22" >>= fun _ => exit tt
+   end
+    : M (unit).
+
+Definition execute_environment (op : ast) : M (unit) :=
+   match op with
+   | KECCAK256 tt =>
+      (pop (tt)) >>= fun offset_word =>
+      (pop (tt)) >>= fun length_word =>
+      (is_running (tt)) >>= fun (w__0 : bool) =>
+      (if w__0 return M (unit) then
+         let '((offset, length)) := word_byte_range_or_oog (offset_word) (length_word) in
+         (is_running (tt)) >>= fun (w__1 : bool) =>
+         (if w__1 return M (unit) then
+            (charge_keccak_gas (length)) >>
+            (charge_memory_expansion (offset_word) (length_word))
+             : M (unit)
+          else returnM (tt)) >>
+         (is_running (tt)) >>= fun (w__2 : bool) =>
+         (if w__2 return M (unit) then
+            (mem_keccak (offset) (length)) >>= fun (w__3 : word) => (push (w__3))  : M (unit)
+          else returnM (tt))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | ADDRESS tt =>
+      (charge_constant (G_base)) >>
+      (self_addr (tt)) >>= fun (w__4 : address_typ) => (push ((address_to_word (w__4))))  : M (unit)
+   | ORIGIN tt =>
+      (charge_constant (G_base)) >>
+      (k_env (F_Origin)) >>= fun (w__5 : word) => (push (w__5))  : M (unit)
+   | CALLER tt =>
+      (charge_constant (G_base)) >>
+      read_reg message >>= fun (w__6 : Message) =>
+      (push ((address_to_word (w__6.(Message_caller)))))
+       : M (unit)
+   | CALLVALUE tt =>
+      (charge_constant (G_base)) >>
+      read_reg message >>= fun (w__7 : Message) => (push (w__7.(Message_value)))  : M (unit)
+   | GASPRICE tt =>
+      (charge_constant (G_base)) >>
+      (k_env (F_GasPrice)) >>= fun (w__8 : word) => (push (w__8))  : M (unit)
+   | CALLDATASIZE tt =>
+      (charge_constant (G_base)) >>
+      read_reg calldata >>= fun (w__9 : ByteSlice) =>
+      (word_of_byte_quantity (w__9.(ByteSlice_len))) >>= fun (w__10 : word) =>
+      (push (w__10))
+       : M (unit)
+   | CALLDATALOAD tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun offset_word =>
+      (is_running (tt)) >>= fun (w__11 : bool) =>
+      (if w__11 return M (unit) then
+         read_reg calldata >>= fun (w__12 : ByteSlice) =>
+         (slice_load_word_offset (w__12) (offset_word)) >>= fun (w__13 : word) =>
+         (push (w__13))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | CALLDATACOPY tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun destination_word =>
+      (pop (tt)) >>= fun source_word =>
+      (pop (tt)) >>= fun length_word =>
+      (is_running (tt)) >>= fun (w__14 : bool) =>
+      (if w__14 return M (unit) then
+         let '((destination, length)) := word_byte_range_or_oog (destination_word) (length_word) in
+         (is_running (tt)) >>= fun (w__15 : bool) =>
+         (if w__15 return M (unit) then
+            (charge_copy_gas (length)) >>
+            (charge_memory_expansion (destination_word) (length_word))
+             : M (unit)
+          else returnM (tt)) >>
+         (is_running (tt)) >>= fun (w__16 : bool) =>
+         (if w__16 return M (unit) then
+            read_reg calldata >>= fun (w__17 : ByteSlice) =>
+            (slice_copy_word_offset (w__17) (destination) (source_word) (length))
+             : M (unit)
+          else returnM (tt))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | CODESIZE tt =>
+      (charge_constant (G_base)) >>
+      (frame_code_len (tt)) >>= fun (w__18 : byte_quantity) =>
+      (word_of_byte_quantity (w__18)) >>= fun (w__19 : word) => (push (w__19))  : M (unit)
+   | CODECOPY tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun destination_word =>
+      (pop (tt)) >>= fun source_word =>
+      (pop (tt)) >>= fun length_word =>
+      (is_running (tt)) >>= fun (w__20 : bool) =>
+      (if w__20 return M (unit) then
+         let '((destination, length)) := word_byte_range_or_oog (destination_word) (length_word) in
+         (is_running (tt)) >>= fun (w__21 : bool) =>
+         (if w__21 return M (unit) then
+            (charge_copy_gas (length)) >>
+            (charge_memory_expansion (destination_word) (length_word))
+             : M (unit)
+          else returnM (tt)) >>
+         (is_running (tt)) >>= fun (w__22 : bool) =>
+         (if w__22 return M (unit) then
+            read_reg frame_code >>= fun (w__23 : Code) =>
+            (slice_copy_word_offset (w__23.(Code_bytes)) (destination) (source_word) (length))
+             : M (unit)
+          else returnM (tt))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | BALANCE tt =>
+      (pop (tt)) >>= fun (w__24 : word) =>
+      let a := word_to_address (w__24) in
+      (k_access_account (a)) >>= fun warm =>
+      (charge_constant ((account_cost (warm)))) >>
+      (is_running (tt)) >>= fun (w__25 : bool) =>
+      (if w__25 return M (unit) then
+         (k_get_balance (a)) >>= fun (w__26 : word) => (push (w__26))  : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | SELFBALANCE tt =>
+      (charge_constant (G_low)) >>
+      (self_addr (tt)) >>= fun (w__27 : address_typ) =>
+      (k_get_balance (w__27)) >>= fun (w__28 : word) => (push (w__28))  : M (unit)
+   | EXTCODESIZE tt =>
+      (pop (tt)) >>= fun (w__29 : word) =>
+      let a := word_to_address (w__29) in
+      (k_access_account (a)) >>= fun warm =>
+      (charge_constant ((account_cost (warm)))) >>
+      (is_running (tt)) >>= fun (w__30 : bool) =>
+      (if w__30 return M (unit) then
+         (k_get_code_size (a)) >>= fun (w__31 : byte_quantity) =>
+         (word_of_byte_quantity (w__31)) >>= fun (w__32 : word) => (push (w__32))  : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | EXTCODECOPY tt =>
+      (pop (tt)) >>= fun (w__33 : word) =>
+      let a := word_to_address (w__33) in
+      (pop (tt)) >>= fun destination_word =>
+      (pop (tt)) >>= fun source_word =>
+      (pop (tt)) >>= fun length_word =>
+      (k_access_account (a)) >>= fun warm =>
+      (charge_constant ((account_cost (warm)))) >>
+      (is_running (tt)) >>= fun (w__34 : bool) =>
+      (if w__34 return M (unit) then
+         let '((destination, length)) := word_byte_range_or_oog (destination_word) (length_word) in
+         (is_running (tt)) >>= fun (w__35 : bool) =>
+         (if w__35 return M (unit) then
+            (charge_copy_gas (length)) >>
+            (charge_memory_expansion (destination_word) (length_word))
+             : M (unit)
+          else returnM (tt)) >>
+         (is_running (tt)) >>= fun (w__36 : bool) =>
+         (if w__36 return M (unit) then
+            (k_code_copy (a) (destination) (source_word) (length))
+             : M (unit)
+          else returnM (tt))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | EXTCODEHASH tt =>
+      (pop (tt)) >>= fun (w__37 : word) =>
+      let a := word_to_address (w__37) in
+      (k_access_account (a)) >>= fun warm =>
+      (charge_constant ((account_cost (warm)))) >>
+      (is_running (tt)) >>= fun (w__38 : bool) =>
+      (if w__38 return M (unit) then
+         (k_get_codehash (a)) >>= fun (w__39 : b256) => (push ((hash_to_word (w__39))))  : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | RETURNDATASIZE tt =>
+      (charge_constant (G_base)) >>
+      (returndata_size (tt)) >>= fun (w__40 : byte_quantity) =>
+      (word_of_byte_quantity (w__40)) >>= fun (w__41 : word) => (push (w__41))  : M (unit)
+   | RETURNDATACOPY tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun destination_word =>
+      (pop (tt)) >>= fun source_word =>
+      (pop (tt)) >>= fun length_word =>
+      (is_running (tt)) >>= fun (w__42 : bool) =>
+      (if w__42 return M (unit) then
+         let '((destination, length)) := word_byte_range_or_oog (destination_word) (length_word) in
+         (is_running (tt)) >>= fun (w__43 : bool) =>
+         (if w__43 return M (unit) then
+            (charge_copy_gas (length)) >>
+            (charge_memory_expansion (destination_word) (length_word))
+             : M (unit)
+          else returnM (tt)) >>
+         (is_running (tt)) >>= fun (w__44 : bool) =>
+         (if w__44 return M (unit) then
+            (returndata_copy_words (destination) (source_word) (length_word))
+             : M (unit)
+          else returnM (tt))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | _ => assert_exp' false "sail/evm/execute.sail:411.21-411.22" >>= fun _ => exit tt
+   end
+    : M (unit).
+
+Definition execute_block (op : ast) : M (unit) :=
+   match op with
+   | BLOCKHASH tt =>
+      (charge_constant ((GasConstant (20)))) >>
+      (pop (tt)) >>= fun (w__0 : word) =>
+      (k_blockhash (w__0)) >>= fun (w__1 : b256) => (push ((hash_to_word (w__1))))  : M (unit)
+   | COINBASE tt =>
+      (charge_constant (G_base)) >>
+      (k_env (F_Coinbase)) >>= fun (w__2 : word) => (push (w__2))  : M (unit)
+   | TIMESTAMP tt =>
+      (charge_constant (G_base)) >>
+      (k_env (F_Timestamp)) >>= fun (w__3 : word) => (push (w__3))  : M (unit)
+   | NUMBER tt =>
+      (charge_constant (G_base)) >>
+      (k_env (F_Number)) >>= fun (w__4 : word) => (push (w__4))  : M (unit)
+   | SLOTNUM tt =>
+      (charge_constant (G_base)) >>
+      (k_env (F_SlotNumber)) >>= fun (w__5 : word) => (push (w__5))  : M (unit)
+   | PREVRANDAO tt =>
+      (charge_constant (G_base)) >>
+      (k_env (F_PrevRandao)) >>= fun (w__6 : word) => (push (w__6))  : M (unit)
+   | GASLIMIT tt =>
+      (charge_constant (G_base)) >>
+      (k_env (F_GasLimit)) >>= fun (w__7 : word) => (push (w__7))  : M (unit)
+   | CHAINID tt =>
+      (charge_constant (G_base)) >>
+      (k_env (F_ChainId)) >>= fun (w__8 : word) => (push (w__8))  : M (unit)
+   | BASEFEE tt =>
+      (charge_constant (G_base)) >>
+      (k_env (F_BaseFee)) >>= fun (w__9 : word) => (push (w__9))  : M (unit)
+   | BLOBBASEFEE tt =>
+      (charge_constant (G_base)) >>
+      read_reg k_header >>= fun (w__10 : BlockHeader) =>
+      (blob_base_fee
+         (Build_protocol_quantity (((w__10.(BlockHeader_excess_blob_gas)).(protocol_quantity_value))))) >>= fun (w__11 : word) =>
+      (push (w__11))
+       : M (unit)
+   | BLOBHASH tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun (w__12 : word) =>
+      (k_blobhash (w__12)) >>= fun (w__13 : word) => (push (w__13))  : M (unit)
+   | _ => assert_exp' false "sail/evm/execute.sail:460.21-460.22" >>= fun _ => exit tt
+   end
+    : M (unit).
+
+Definition execute_memory (op : ast) : M (unit) :=
+   match op with
+   | POP tt => (charge_constant (G_base)) >> (pop (tt)) >>= fun '(_) => returnM (tt)
+   | MLOAD tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun offset_word =>
+      (word_of_protocol_quantity (Build_protocol_quantity ((32)))) >>= fun (w__0 : word) =>
+      (charge_memory_expansion (offset_word) (w__0)) >>
+      (is_running (tt)) >>= fun (w__1 : bool) =>
+      (if w__1 return M (unit) then
+         let offset := word_to_byte_quantity_or_oog (offset_word) in
+         (is_running (tt)) >>= fun (w__2 : bool) =>
+         (if w__2 return M (unit) then
+            (mem_load (offset)) >>= fun (w__3 : word) => (push (w__3))  : M (unit)
+          else returnM (tt))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | MSTORE tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun offset_word =>
+      (pop (tt)) >>= fun v =>
+      (word_of_protocol_quantity (Build_protocol_quantity ((32)))) >>= fun (w__4 : word) =>
+      (charge_memory_expansion (offset_word) (w__4)) >>
+      (is_running (tt)) >>= fun (w__5 : bool) =>
+      (if w__5 return M (unit) then
+         let offset := word_to_byte_quantity_or_oog (offset_word) in
+         (is_running (tt)) >>= fun (w__6 : bool) =>
+         (if w__6 return M (unit) then (mem_store (offset) (v))  : M (unit)
+          else returnM (tt))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | MSTORE8 tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun offset_word =>
+      (pop (tt)) >>= fun v =>
+      (charge_memory_expansion (offset_word) (WORD_ONE)) >>
+      (is_running (tt)) >>= fun (w__7 : bool) =>
+      (if w__7 return M (unit) then
+         let offset := word_to_byte_quantity_or_oog (offset_word) in
+         (is_running (tt)) >>= fun (w__8 : bool) =>
+         (if w__8 return M (unit) then (mem_store_byte (offset) (v))  : M (unit)
+          else returnM (tt))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | MSIZE tt =>
+      (charge_constant (G_base)) >>
+      (evm_memory_size (tt)) >>= fun (w__9 : byte_quantity) =>
+      (word_of_byte_quantity (w__9)) >>= fun (w__10 : word) => (push (w__10))  : M (unit)
+   | MCOPY tt =>
+      (charge_constant (G_verylow)) >>
+      (pop (tt)) >>= fun destination_word =>
+      (pop (tt)) >>= fun source_word =>
+      (pop (tt)) >>= fun length_word =>
+      let required_size :=
+        maximum_memory_required_size (destination_word) (length_word) (source_word) (length_word) in
+      (is_running (tt)) >>= fun (w__11 : bool) =>
+      (if w__11 return M (unit) then
+         let '((destination, length)) := word_byte_range_or_oog (destination_word) (length_word) in
+         let '((source, _)) := word_byte_range_or_oog (source_word) (length_word) in
+         (is_running (tt)) >>= fun (w__12 : bool) =>
+         (if w__12 return M (unit) then
+            (charge_copy_gas (length)) >>
+            (memory_expansion_gas (required_size)) >>= fun (w__13 : gas_cost) =>
+            (charge_cost (w__13))
+             : M (unit)
+          else returnM (tt)) >>
+         (is_running (tt)) >>= fun (w__14 : bool) =>
+         (if w__14 return M (unit) then (expand_memory (required_size))  : M (unit)
+          else returnM (tt)) >>
+         (is_running (tt)) >>= fun (w__15 : bool) =>
+         (if w__15 return M (unit) then (mem_mcopy (destination) (source) (length))  : M (unit)
+          else returnM (tt))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | _ => assert_exp' false "sail/evm/execute.sail:530.21-530.22" >>= fun _ => exit tt
+   end
+    : M (unit).
+
+Definition execute_storage (op : ast) : M (unit) :=
+   match op with
+   | SLOAD tt =>
+      (pop (tt)) >>= fun s =>
+      (self_addr (tt)) >>= fun (w__0 : address_typ) =>
+      (k_slot_is_warm (w__0) (s)) >>= fun warm =>
+      (charge_constant ((sload_cost (warm)))) >>
+      (is_running (tt)) >>= fun (w__1 : bool) =>
+      (if w__1 return M (unit) then
+         (self_addr (tt)) >>= fun (w__2 : address_typ) =>
+         (k_sload (w__2) (s)) >>= fun (w__3 : StorageValue) =>
+         (push (w__3.(StorageValue_curr)))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | SSTORE tt =>
+      (guard_static (tt)) >>= fun (w__4 : bool) =>
+      (if w__4 then returnM (tt)
+       else
+       read_reg gas_remaining >>= fun (w__5 : gas) =>
+       if gas_le (w__5) (G_callstipend) return M (unit) then (exc_halt (OutOfGas))  : M (unit)
+       else
+         (pop (tt)) >>= fun s =>
+         (pop (tt)) >>= fun v =>
+         (is_running (tt)) >>= fun (w__6 : bool) =>
+         (if w__6 return M (unit) then
+            (self_addr (tt)) >>= fun (w__7 : address_typ) =>
+            (k_slot_is_warm (w__7) (s)) >>= fun warm =>
+            (self_addr (tt)) >>= fun (w__8 : address_typ) =>
+            (k_sload (w__8) (s)) >>= fun entry =>
+            (sstore_gas (entry.(StorageValue_orig)) (entry.(StorageValue_curr)) (v) ((negb (warm)))) >>= fun '((cost, refund)) =>
+            (charge_cost (cost)) >>
+            (if negb ((generic_eq (refund) (GAS_REFUND_ZERO))) return M (unit) then
+               (record_refund (refund))
+                : M (unit)
+             else returnM (tt)) >>
+            (if generic_neq (entry.(StorageValue_curr)) (v) return M (unit) then
+               (self_addr (tt)) >>= fun (w__9 : address_typ) =>
+               (k_sstore (w__9) (s)
+                  (({| StorageValue_curr := v;
+                       StorageValue_orig := entry.(StorageValue_orig) |})))
+                : M (unit)
+             else returnM (tt))
+             : M (unit)
+          else returnM (tt))
+          : M (unit))
+       : M (unit)
+   | TLOAD tt =>
+      (charge_constant (G_warm_access)) >>
+      (pop (tt)) >>= fun s =>
+      (self_addr (tt)) >>= fun (w__10 : address_typ) =>
+      (k_tload (w__10) (s)) >>= fun (w__11 : word) => (push (w__11))  : M (unit)
+   | TSTORE tt =>
+      (guard_static (tt)) >>= fun (w__12 : bool) =>
+      (if w__12 then returnM (tt)
+       else
+         (charge_constant (G_warm_access)) >>
+         (pop (tt)) >>= fun s =>
+         (pop (tt)) >>= fun v =>
+         (self_addr (tt)) >>= fun (w__13 : address_typ) => (k_tstore (w__13) (s) (v))  : M (unit))
+       : M (unit)
+   | _ => assert_exp' false "sail/evm/execute.sail:585.21-585.22" >>= fun _ => exit tt
+   end
+    : M (unit).
+
+Definition execute_control (op : ast) : M (unit) :=
+   match op with
+   | JUMP tt => (charge_constant (G_mid)) >> (pop (tt)) >>= fun dest => (do_jump (dest))  : M (unit)
+   | JUMPI tt =>
+      (charge_constant (G_high)) >>
+      (pop (tt)) >>= fun dest =>
+      (pop (tt)) >>= fun cond =>
+      (if word_is_zero (cond) then returnM (tt)
+       else (do_jump (dest))  : M (unit))
+       : M (unit)
+   | PC tt =>
+      (charge_constant (G_base)) >>
+      read_reg pc >>= fun (w__0 : byte_quantity) =>
+      (word_of_byte_quantity (w__0)) >>= fun (w__1 : word) =>
+      (push ((alu_sub (w__1) (WORD_ONE))))
+       : M (unit)
+   | GAS tt =>
+      (charge_constant (G_base)) >>
+      read_reg gas_remaining >>= fun (w__2 : gas) =>
+      (word_of_gas (w__2)) >>= fun (w__3 : word) => (push (w__3))  : M (unit)
+   | JUMPDEST tt => (charge_constant (G_jumpdest))  : M (unit)
+   | PUSH (n, v) =>
+      let n := (n).(push_width_value) in
+      (if Z.eqb (n) (0) return M (unit) then (charge_constant (G_base))  : M (unit)
+       else (charge_constant (G_verylow))  : M (unit)) >>
+      (push (v))
+       : M (unit)
+   | DUP n =>
+      let n := (n).(stack_operation_index_value) in
+      (charge_constant (G_verylow)) >>
+      ((stack_height (tt)) >>= fun semanticResult =>
+       returnM (semanticResult).(operand_stack_height_value)) >>= fun (w__4 : Z) =>
+      (if Z.ltb (w__4) (n) return M (unit) then (exc_halt (StackUnderflow))  : M (unit)
+       else
+         (peek (Build_stack_index (((Z.sub (n) (1)))))) >>= fun (w__5 : word) =>
+         (push (w__5))
+          : M (unit))
+       : M (unit)
+   | SWAP n =>
+      let n := (n).(stack_operation_index_value) in
+      (charge_constant (G_verylow)) >>
+      ((stack_height (tt)) >>= fun semanticResult =>
+       returnM (semanticResult).(operand_stack_height_value)) >>= fun (w__6 : Z) =>
+      (if Z.ltb (w__6) ((Z.add (n) (1))) return M (unit) then
+         (exc_halt (StackUnderflow))
+          : M (unit)
+       else
+         (peek (Build_stack_index ((0)))) >>= fun top =>
+         (peek (Build_stack_index ((n)))) >>= fun other =>
+         (stack_set (Build_stack_index ((0))) (other)) >>
+         (stack_set (Build_stack_index ((n))) (top))
+          : M (unit))
+       : M (unit)
+   | _ => assert_exp' false "sail/evm/execute.sail:641.21-641.22" >>= fun _ => exit tt
+   end
+    : M (unit).
+
+Definition execute_log (op : ast) : M (unit) :=
+   match op with
+   | LOG n =>
+      let n := (n).(log_topic_count_value) in
+      (guard_static (tt)) >>= fun (w__0 : bool) =>
+      (if w__0 then returnM (tt)
+       else
+         (pop (tt)) >>= fun offset_word =>
+         (pop (tt)) >>= fun length_word =>
+         (pop_log_topics (Build_log_topic_count ((n)))) >>= fun topics =>
+         (is_running (tt)) >>= fun (w__1 : bool) =>
+         (if w__1 return M (unit) then
+            let '((offset, length)) := word_byte_range_or_oog (offset_word) (length_word) in
+            (is_running (tt)) >>= fun (w__2 : bool) =>
+            (if w__2 return M (unit) then
+               (charge_log_gas (Build_log_topic_count ((n))) (length)) >>
+               (charge_memory_expansion (offset_word) (length_word))
+                : M (unit)
+             else returnM (tt)) >>
+            (is_running (tt)) >>= fun (w__3 : bool) =>
+            (if w__3 return M (unit) then
+               (self_addr (tt)) >>= fun (w__4 : address_typ) =>
+               (memory_byte_slice (offset) (length)) >>= fun (w__5 : ByteSlice) =>
+               (k_log (w__4) (topics) ((BytesSlice (w__5))))
+                : M (unit)
+             else returnM (tt))
+             : M (unit)
+          else returnM (tt))
+          : M (unit))
+       : M (unit)
+   | _ => assert_exp' false "sail/evm/execute.sail:665.21-665.22" >>= fun _ => exit tt
+   end
+    : M (unit).
+
+Definition execute_halt (op : ast) : M (unit) :=
+   match op with
+   | STOP tt => write_reg frame_status (Halted ((HaltStop (tt))))  : M (unit)
+   | RETURN tt =>
+      (pop (tt)) >>= fun offset_word =>
+      (pop (tt)) >>= fun length_word =>
+      (charge_memory_expansion (offset_word) (length_word)) >>
+      (is_running (tt)) >>= fun (w__0 : bool) =>
+      (if w__0 return M (unit) then
+         let '((offset, length)) := word_byte_range_or_oog (offset_word) (length_word) in
+         (is_running (tt)) >>= fun (w__1 : bool) =>
+         (if w__1 return M (unit) then
+            (memory_byte_slice (offset) (length)) >>= fun (w__2 : ByteSlice) =>
+            (freeze_output (w__2)) >>= fun (w__3 : ByteSlice) =>
+            write_reg frame_status (Halted ((HaltReturn (w__3))))
+             : M (unit)
+          else returnM (tt))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | REVERT tt =>
+      (pop (tt)) >>= fun offset_word =>
+      (pop (tt)) >>= fun length_word =>
+      (charge_memory_expansion (offset_word) (length_word)) >>
+      (is_running (tt)) >>= fun (w__4 : bool) =>
+      (if w__4 return M (unit) then
+         let '((offset, length)) := word_byte_range_or_oog (offset_word) (length_word) in
+         (is_running (tt)) >>= fun (w__5 : bool) =>
+         (if w__5 return M (unit) then
+            (memory_byte_slice (offset) (length)) >>= fun (w__6 : ByteSlice) =>
+            (freeze_output (w__6)) >>= fun (w__7 : ByteSlice) =>
+            write_reg frame_status (Halted ((HaltRevert (w__7))))
+             : M (unit)
+          else returnM (tt))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | INVALID tt => write_reg gas_remaining GAS_ZERO >> (exc_halt (InvalidOpcode))  : M (unit)
+   | SELFDESTRUCT tt =>
+      (guard_static (tt)) >>= fun (w__8 : bool) =>
+      (if w__8 then returnM (tt)
+       else
+         (pop (tt)) >>= fun (w__9 : word) =>
+         let beneficiary := word_to_address (w__9) in
+         (self_addr (tt)) >>= fun (w__10 : address_typ) =>
+         (k_get_balance (w__10)) >>= fun bal =>
+         (k_access_account (beneficiary)) >>= fun warm =>
+         (charge_constant (G_selfdestruct)) >>
+         (if negb (warm) return M (unit) then (charge_constant (G_cold_account))  : M (unit)
+          else returnM (tt)) >>
+         (and_boolM ((is_running (tt))  : M (bool))
+            ((and_boolM (returnM (((word_nonzero (bal))  : bool)))
+                ((k_account_is_empty (beneficiary))
+                 : M (bool)))
+             : M (bool))) >>= fun (w__14 : bool) =>
+         (if w__14 return M (unit) then (charge_constant (G_newaccount))  : M (unit)
+          else returnM (tt)) >>
+         (is_running (tt)) >>= fun (w__15 : bool) =>
+         (if w__15 return M (unit) then
+            (self_addr (tt)) >>= fun (w__16 : address_typ) =>
+            (k_is_selfdestructed (w__16)) >>= fun (w__17 : bool) =>
+            let first_selfdestruct := negb (w__17) in
+            (and_boolM
+               (read_reg k_fork >>= fun (w__18 : Fork) =>
+                returnM (((fork_lt (w__18) (London))  : bool))) (returnM (first_selfdestruct))) >>= fun w__19 =>
+            (if w__19 return M (unit) then
+               (record_refund ((gas_constant_to_refund (R_selfdestruct_pre_london))))
+                : M (unit)
+             else returnM (tt)) >>
+            (self_addr (tt)) >>= fun (w__20 : address_typ) =>
+            (k_transfer (w__20) (beneficiary) (bal)) >>
+            read_reg k_fork >>= fun (w__21 : Fork) =>
+            (if fork_lt (w__21) (Cancun) return M (unit) then
+               (self_addr (tt)) >>= fun (w__22 : address_typ) =>
+               (k_zero_balance (w__22)) >>
+               (self_addr (tt)) >>= fun (w__23 : address_typ) =>
+               (k_selfdestruct (w__23))
+                : M (unit)
+             else
+               (self_addr (tt)) >>= fun (w__24 : address_typ) =>
+               (k_was_created (w__24)) >>= fun (w__25 : bool) =>
+               (if w__25 return M (unit) then
+                  (self_addr (tt)) >>= fun (w__26 : address_typ) =>
+                  (if generic_eq (beneficiary) (w__26) return M (unit) then
+                     (self_addr (tt)) >>= fun (w__27 : address_typ) =>
+                     (k_emit_burn_log (w__27) (bal))
+                      : M (unit)
+                   else returnM (tt)) >>
+                  (self_addr (tt)) >>= fun (w__28 : address_typ) =>
+                  (k_zero_balance (w__28)) >>
+                  (self_addr (tt)) >>= fun (w__29 : address_typ) =>
+                  (k_selfdestruct (w__29))
+                   : M (unit)
+                else returnM (tt))
+                : M (unit)) >>
+            write_reg frame_status (Halted ((HaltSelfDestruct (tt))))
+             : M (unit)
+          else returnM (tt))
+          : M (unit))
+       : M (unit)
+   | _ => assert_exp' false "sail/evm/execute.sail:734.21-734.22" >>= fun _ => exit tt
+   end
+    : M (unit).
+
+Definition execute_opcode (op : ast) : M (unit) :=
+   match op with
+   | STOP tt => (execute_halt (op))  : M (unit)
+   | ADD tt => (execute_arithmetic (op))  : M (unit)
+   | MUL tt => (execute_arithmetic (op))  : M (unit)
+   | SUB tt => (execute_arithmetic (op))  : M (unit)
+   | DIV tt => (execute_arithmetic (op))  : M (unit)
+   | SDIV tt => (execute_arithmetic (op))  : M (unit)
+   | MOD tt => (execute_arithmetic (op))  : M (unit)
+   | SMOD tt => (execute_arithmetic (op))  : M (unit)
+   | ADDMOD tt => (execute_arithmetic (op))  : M (unit)
+   | MULMOD tt => (execute_arithmetic (op))  : M (unit)
+   | EXP tt => (execute_arithmetic (op))  : M (unit)
+   | SIGNEXTEND tt => (execute_arithmetic (op))  : M (unit)
+   | LT' tt => (execute_arithmetic (op))  : M (unit)
+   | GT' tt => (execute_arithmetic (op))  : M (unit)
+   | SLT tt => (execute_arithmetic (op))  : M (unit)
+   | SGT tt => (execute_arithmetic (op))  : M (unit)
+   | EQ' tt => (execute_arithmetic (op))  : M (unit)
+   | ISZERO tt => (execute_arithmetic (op))  : M (unit)
+   | AND tt => (execute_arithmetic (op))  : M (unit)
+   | OR tt => (execute_arithmetic (op))  : M (unit)
+   | XOR tt => (execute_arithmetic (op))  : M (unit)
+   | NOT tt => (execute_arithmetic (op))  : M (unit)
+   | BYTE tt => (execute_arithmetic (op))  : M (unit)
+   | SHL tt => (execute_arithmetic (op))  : M (unit)
+   | SHR tt => (execute_arithmetic (op))  : M (unit)
+   | SAR tt => (execute_arithmetic (op))  : M (unit)
+   | CLZ tt => (execute_arithmetic (op))  : M (unit)
+   | KECCAK256 tt => (execute_environment (op))  : M (unit)
+   | ADDRESS tt => (execute_environment (op))  : M (unit)
+   | ORIGIN tt => (execute_environment (op))  : M (unit)
+   | CALLER tt => (execute_environment (op))  : M (unit)
+   | CALLVALUE tt => (execute_environment (op))  : M (unit)
+   | GASPRICE tt => (execute_environment (op))  : M (unit)
+   | CALLDATASIZE tt => (execute_environment (op))  : M (unit)
+   | CALLDATALOAD tt => (execute_environment (op))  : M (unit)
+   | CALLDATACOPY tt => (execute_environment (op))  : M (unit)
+   | CODESIZE tt => (execute_environment (op))  : M (unit)
+   | CODECOPY tt => (execute_environment (op))  : M (unit)
+   | BALANCE tt => (execute_environment (op))  : M (unit)
+   | SELFBALANCE tt => (execute_environment (op))  : M (unit)
+   | EXTCODESIZE tt => (execute_environment (op))  : M (unit)
+   | EXTCODECOPY tt => (execute_environment (op))  : M (unit)
+   | EXTCODEHASH tt => (execute_environment (op))  : M (unit)
+   | RETURNDATASIZE tt => (execute_environment (op))  : M (unit)
+   | RETURNDATACOPY tt => (execute_environment (op))  : M (unit)
+   | BLOCKHASH tt => (execute_block (op))  : M (unit)
+   | COINBASE tt => (execute_block (op))  : M (unit)
+   | TIMESTAMP tt => (execute_block (op))  : M (unit)
+   | NUMBER tt => (execute_block (op))  : M (unit)
+   | SLOTNUM tt => (execute_block (op))  : M (unit)
+   | PREVRANDAO tt => (execute_block (op))  : M (unit)
+   | GASLIMIT tt => (execute_block (op))  : M (unit)
+   | CHAINID tt => (execute_block (op))  : M (unit)
+   | BASEFEE tt => (execute_block (op))  : M (unit)
+   | BLOBBASEFEE tt => (execute_block (op))  : M (unit)
+   | BLOBHASH tt => (execute_block (op))  : M (unit)
+   | POP tt => (execute_memory (op))  : M (unit)
+   | MLOAD tt => (execute_memory (op))  : M (unit)
+   | MSTORE tt => (execute_memory (op))  : M (unit)
+   | MSTORE8 tt => (execute_memory (op))  : M (unit)
+   | MSIZE tt => (execute_memory (op))  : M (unit)
+   | MCOPY tt => (execute_memory (op))  : M (unit)
+   | SLOAD tt => (execute_storage (op))  : M (unit)
+   | SSTORE tt => (execute_storage (op))  : M (unit)
+   | TLOAD tt => (execute_storage (op))  : M (unit)
+   | TSTORE tt => (execute_storage (op))  : M (unit)
+   | JUMP tt => (execute_control (op))  : M (unit)
+   | JUMPI tt => (execute_control (op))  : M (unit)
+   | PC tt => (execute_control (op))  : M (unit)
+   | GAS tt => (execute_control (op))  : M (unit)
+   | JUMPDEST tt => (execute_control (op))  : M (unit)
+   | PUSH (_, _) => (execute_control (op))  : M (unit)
+   | DUP _ => (execute_control (op))  : M (unit)
+   | SWAP _ => (execute_control (op))  : M (unit)
+   | LOG _ => (execute_log (op))  : M (unit)
+   | CREATE tt => assert_exp' false "sail/evm/execute.sail:827.28-827.29" >>= fun _ => exit tt
+   | CREATE2 tt => assert_exp' false "sail/evm/execute.sail:828.29-828.30" >>= fun _ => exit tt
+   | CALL tt => assert_exp' false "sail/evm/execute.sail:829.26-829.27" >>= fun _ => exit tt
+   | CALLCODE tt => assert_exp' false "sail/evm/execute.sail:830.30-830.31" >>= fun _ => exit tt
+   | DELEGATECALL tt => assert_exp' false "sail/evm/execute.sail:831.34-831.35" >>= fun _ => exit tt
+   | STATICCALL tt => assert_exp' false "sail/evm/execute.sail:832.32-832.33" >>= fun _ => exit tt
+   | RETURN tt => (execute_halt (op))  : M (unit)
+   | REVERT tt => (execute_halt (op))  : M (unit)
+   | INVALID tt => (execute_halt (op))  : M (unit)
+   | SELFDESTRUCT tt => (execute_halt (op))  : M (unit)
+   end
+    : M (unit).
 
 Definition call_is_delegate (kind : CallKind) : bool :=
    match kind with | DelegateCall => true | _ => false end.
@@ -5945,7 +6962,7 @@ Definition call_transfers_value (kind : CallKind) : bool :=
 Definition call_uses_target_address (kind : CallKind) : bool :=
    match kind with | Call => true | StaticCall => true | _ => false end.
 
-Definition executable_code (target : mword 160) (dele : bool) (dtgt : mword 160) : M (Code) :=
+Definition executable_code (target : address_typ) (dele : bool) (dtgt : address_typ) : M (Code) :=
    (if dele return M (Code) then
       match (option_map (fun semanticValue => (semanticValue).(precompile_id_value)) (word_to_precompile_id
                                                                                         ((address_to_word
@@ -5953,25 +6970,444 @@ Definition executable_code (target : mword 160) (dele : bool) (dtgt : mword 160)
       | Some number =>
          (is_precompile (Build_precompile_id ((number)))) >>= fun (w__0 : bool) =>
          (if w__0 then returnM (EMPTY_CODE)
-          else
-            (k_code_key (dtgt)) >>= fun (w__1 : mword 256) => (code_db_resolve (w__1))  : M (Code))
+          else (k_code_key (dtgt)) >>= fun (w__1 : b256) => (code_db_resolve (w__1))  : M (Code))
           : M (Code)
-      | _ => (k_code_key (dtgt)) >>= fun (w__4 : mword 256) => (code_db_resolve (w__4))  : M (Code)
+      | _ => (k_code_key (dtgt)) >>= fun (w__4 : b256) => (code_db_resolve (w__4))  : M (Code)
       end
        : M (Code)
-    else (k_code_key (target)) >>= fun (w__7 : mword 256) => (code_db_resolve (w__7))  : M (Code))
+    else (k_code_key (target)) >>= fun (w__7 : b256) => (code_db_resolve (w__7))  : M (Code))
     : M (Code).
 
-Definition frame_succeeded '(tt : unit) : M (bool) :=
-   read_reg frame_status >>= fun (w__0 : FrameStatus) =>
-   let w__1 : bool :=
-     match w__0 with
-     | Halted (HaltRevert _) => false
-     | Halted _ => true
-     | Running tt => true
-     | Exceptional _ => false
-     end in
-   returnM (w__1).
+Definition run_call (kind : CallKind) : M (unit) :=
+   (self_addr (tt)) >>= fun caller =>
+   (pop (tt)) >>= fun gas_request =>
+   (pop (tt)) >>= fun (w__0 : word) =>
+   let target := word_to_address (w__0) in
+   (if call_takes_value (kind) return M (word) then (pop (tt))  : M (word)
+    else returnM (WORD_ZERO)) >>= fun value =>
+   (pop (tt)) >>= fun args_off_word =>
+   (pop (tt)) >>= fun args_len_word =>
+   (pop (tt)) >>= fun ret_off_word =>
+   (pop (tt)) >>= fun ret_len_word =>
+   (is_running (tt)) >>= fun (w__2 : bool) =>
+   (if negb (w__2) then returnM (tt)
+    else
+      let required_memory_size :=
+        maximum_memory_required_size (args_off_word) (args_len_word) (ret_off_word) (ret_len_word) in
+      (memory_expansion_gas (required_memory_size)) >>= fun mem_gas =>
+      (and_boolM (returnM (((call_transfers_value (kind))  : bool)))
+         ((and_boolM (returnM (((word_nonzero (value))  : bool)))
+             (read_reg message >>= fun (w__3 : Message) =>
+              returnM ((w__3.(Message_is_static)  : bool))))
+          : M (bool))) >>= fun (w__5 : bool) =>
+      (if w__5 return M (unit) then (exc_halt (WriteProtection))  : M (unit)
+       else
+         (k_access_account (target)) >>= fun warm =>
+         let target_cost : gas_constant := account_cost (warm) in
+         let transfer_cost : gas_constant :=
+           if word_nonzero (value) then G_callvalue
+           else GAS_CONSTANT_ZERO in
+         let static_cost :=
+           gas_cost_add ((gas_constant_add (target_cost) (transfer_cost))) (mem_gas) in
+         (or_boolM ((is_running (tt)) >>= fun (w__6 : bool) => returnM (((negb (w__6))  : bool)))
+            (read_reg gas_remaining >>= fun (w__7 : gas) =>
+             returnM (((gas_lt_cost (w__7) (static_cost))  : bool)))) >>= fun (w__8 : bool) =>
+         (if w__8 return M (unit) then (exc_halt (OutOfGas))  : M (unit)
+          else
+            (k_deleg_target (target)) >>= fun '((tg_deleg, tg_target)) =>
+            (if tg_deleg return M (gas_constant) then
+               (k_access_account (tg_target)) >>= fun dw => returnM ((account_cost (dw)))
+             else returnM (GAS_CONSTANT_ZERO)) >>= fun (delegation_cost : gas_constant) =>
+            let access_cost := gas_constant_add (target_cost) (delegation_cost) in
+            (and_boolM (returnM (((word_nonzero (value))  : bool)))
+               ((and_boolM (returnM (((call_transfers_value (kind))  : bool)))
+                   ((k_account_is_empty (target))
+                    : M (bool)))
+                : M (bool))) >>= fun (w__11 : bool) =>
+            let create_cost : gas_constant := if w__11 then G_newaccount else GAS_CONSTANT_ZERO in
+            let extra_gas :=
+              gas_cost_add_constant ((gas_cost_add_constant (access_cost) (transfer_cost)))
+                (create_cost) in
+            let required := gas_cost_add (extra_gas) (mem_gas) in
+            let stipend : gas := if word_nonzero (value) then G_callstipend else GAS_ZERO in
+            (is_running (tt)) >>= fun (w__12 : bool) =>
+            (if negb (w__12) then returnM (tt)
+             else
+               read_reg gas_remaining >>= fun avail =>
+               (if gas_lt_cost (avail) (required) then returnM (GAS_ZERO)
+                else
+                  (gas_sub_cost_or_oog (avail) (required)) >>= fun available_after_cost =>
+                  (call_gas_cap_word (available_after_cost) (gas_request))
+                   : M (gas)) >>= fun (base_child : gas) =>
+               let total_charge := gas_cost_add ((gas_to_cost (base_child))) (required) in
+               (charge_cost (total_charge)) >>
+               (is_running (tt)) >>= fun (w__14 : bool) =>
+               (if negb (w__14) then returnM (tt)
+                else
+                  (if tg_deleg return M (unit) then
+                     (k_code_key (tg_target)) >>= fun (w__15 : b256) =>
+                     (code_db_resolve (w__15)) >>= fun '(_) =>
+                     (k_aload (tg_target)) >>= fun '(_) => returnM (tt)
+                   else returnM (tt)) >>
+                  (expand_charged_memory (required_memory_size)) >>
+                  (is_running (tt)) >>= fun (w__16 : bool) =>
+                  (if negb (w__16) then returnM (tt)
+                   else
+                     let '((args_offset, args_length)) :=
+                       word_byte_range_or_oog (args_off_word) (args_len_word) in
+                     (is_running (tt)) >>= fun (w__17 : bool) =>
+                     (if negb (w__17) then returnM (tt)
+                      else
+                        let '((ret_offset, ret_length)) :=
+                          word_byte_range_or_oog (ret_off_word) (ret_len_word) in
+                        (is_running (tt)) >>= fun (w__18 : bool) =>
+                        (if negb (w__18) then returnM (tt)
+                         else
+                           (if gas_sum_supported (base_child) (stipend) return M (gas) then
+                              (gas_add (base_child) (stipend))
+                               : M (gas)
+                            else throw (InvalidBlock (ExecutionInvalid))) >>= fun (child_gas : gas) =>
+                           (is_running (tt)) >>= fun (w__21 : bool) =>
+                           (if negb (w__21) then returnM (tt)
+                            else
+                              (k_aload (target)) >>= fun '(_) =>
+                              read_reg call_depth >>= fun (w__22 : Z) =>
+                              let depth_ok := Z.ltb (w__22) ((DEPTH_LIMIT).(frame_depth_value)) in
+                              (if andb ((call_takes_value (kind))) ((word_nonzero (value)))
+                                 return
+                                 M (bool) then
+                                 (k_get_balance (caller)) >>= fun (w__23 : word) =>
+                                 returnM ((word_ule (value) (w__23)))
+                               else returnM (true)) >>= fun (balance_ok : bool) =>
+                              (if orb ((negb (depth_ok))) ((negb (balance_ok))) return M (unit) then
+                                 (returndata_clear (tt)) >>
+                                 (refund_gas (child_gas)) >> (push (WORD_ZERO))  : M (unit)
+                               else
+                                 match (option_map (fun semanticValue => (semanticValue).(precompile_id_value)) (word_to_precompile_id
+                                                                                                                   ((address_to_word
+                                                                                                                       (target))))) with
+                                 | Some precompile_number =>
+                                    (is_precompile (Build_precompile_id ((precompile_number)))) >>= fun (w__24 : bool) =>
+                                    (if w__24 return M (unit) then
+                                       (memory_byte_slice (args_offset) (args_length)) >>= fun input =>
+                                       (precompile_gas (Build_precompile_id ((precompile_number)))
+                                          (input)) >>= fun (w__25 : option gas_cost) =>
+                                       match w__25 with
+                                       | Some used =>
+                                          (if gas_cost_le_gas (used) (child_gas)
+                                             return
+                                             M (unit) then
+                                             (run_precompile_slice
+                                                (Build_precompile_id ((precompile_number))) (input)) >>= fun result =>
+                                             (if result.(PrecompileResult_success)
+                                                return
+                                                M (unit) then
+                                                write_reg
+                                                  returndata
+                                                  result.(PrecompileResult_output) >>
+                                                (if andb ((call_transfers_value (kind)))
+                                                      ((word_nonzero (value)))
+                                                   return
+                                                   M (unit) then
+                                                   (k_transfer (caller) (target) (value))
+                                                    : M (unit)
+                                                 else returnM (tt)) >>
+                                                (returndata_copy_prefix (ret_offset) (ret_length)) >>
+                                                (gas_sub_cost_or_oog (child_gas) (used)) >>= fun unused =>
+                                                (is_running (tt)) >>= fun (w__26 : bool) =>
+                                                (if w__26 return M (unit) then
+                                                   (refund_gas (unused)) >>
+                                                   (push (WORD_ONE))
+                                                    : M (unit)
+                                                 else returnM (tt))
+                                                 : M (unit)
+                                              else
+                                                (returndata_clear (tt)) >>
+                                                (push (WORD_ZERO))
+                                                 : M (unit))
+                                              : M (unit)
+                                           else
+                                             (returndata_clear (tt)) >>
+                                             (push (WORD_ZERO))
+                                              : M (unit))
+                                           : M (unit)
+                                       | _ =>
+                                          (returndata_clear (tt)) >> (push (WORD_ZERO))  : M (unit)
+                                       end
+                                        : M (unit)
+                                     else
+                                       (executable_code (target) (tg_deleg) (tg_target)) >>= fun child_code =>
+                                       let child_addr : address_typ :=
+                                         if call_uses_target_address (kind) then target
+                                         else caller in
+                                       (if call_is_delegate (kind) return M (address_typ) then
+                                          read_reg message >>= fun (w__27 : Message) =>
+                                          returnM (w__27.(Message_caller))
+                                        else returnM (caller)) >>= fun (child_caller : address_typ) =>
+                                       (if call_is_delegate (kind) return M (word) then
+                                          read_reg message >>= fun (w__28 : Message) =>
+                                          returnM (w__28.(Message_value))
+                                        else returnM (value)) >>= fun (child_value : word) =>
+                                       (if call_is_static (kind) then returnM (true)
+                                        else
+                                          read_reg message >>= fun (w__29 : Message) =>
+                                          returnM (w__29.(Message_is_static))) >>= fun (child_static : bool) =>
+                                       (is_running (tt)) >>= fun (w__30 : bool) =>
+                                       (if w__30 return M (ByteSlice) then
+                                          (memory_byte_slice (args_offset) (args_length))
+                                           : M (ByteSlice)
+                                        else returnM (EMPTY_SLICE)) >>= fun child_calldata =>
+                                       (suspend_frame (tt)) >>= fun checkpoint =>
+                                       (frame_stack_push
+                                          ((ResumeCall
+                                              (({| CallContinuation_checkpoint := checkpoint;
+                                                   CallContinuation_return_offset := ret_offset;
+                                                   CallContinuation_return_length := ret_length |}))))) >>
+                                       (if andb ((call_transfers_value (kind)))
+                                             ((word_nonzero (value)))
+                                          return
+                                          M (unit) then
+                                          (k_transfer (caller) (target) (value))
+                                           : M (unit)
+                                        else returnM (tt)) >>
+                                       ((frame_depth_increment
+                                           (Build_frame_depth (((checkpoint.(FrameCheckpoint_call_depth)).(frame_depth_value))))) >>= fun semanticResult =>
+                                        returnM (semanticResult).(frame_depth_value)) >>= fun (w__32 : Z) =>
+                                       write_reg
+                                         message
+                                         ({| Message_caller := child_caller;
+                                             Message_address := child_addr;
+                                             Message_code_address := target;
+                                             Message_value := child_value;
+                                             Message_is_static := child_static;
+                                             Message_depth := (Build_frame_depth (w__32)) |}) >>
+                                       (calldata_install (child_calldata)) >>
+                                       write_reg pc BYTE_ZERO >>
+                                       write_reg gas_remaining child_gas >>
+                                       write_reg frame_status (Running (tt)) >>
+                                       (returndata_clear (tt)) >>
+                                       write_reg frame_code child_code >>
+                                       ((frame_depth_increment
+                                           (Build_frame_depth (((checkpoint.(FrameCheckpoint_call_depth)).(frame_depth_value))))) >>= fun semanticResult =>
+                                        returnM (semanticResult).(frame_depth_value)) >>= fun (w__33 : Z) =>
+                                       write_reg call_depth w__33 >>
+                                       write_reg frame_refund GAS_REFUND_ZERO
+                                        : M (unit))
+                                     : M (unit)
+                                 | _ =>
+                                    (executable_code (target) (tg_deleg) (tg_target)) >>= fun child_code =>
+                                    let child_addr : address_typ :=
+                                      if call_uses_target_address (kind) then target
+                                      else caller in
+                                    (if call_is_delegate (kind) return M (address_typ) then
+                                       read_reg message >>= fun (w__34 : Message) =>
+                                       returnM (w__34.(Message_caller))
+                                     else returnM (caller)) >>= fun (child_caller : address_typ) =>
+                                    (if call_is_delegate (kind) return M (word) then
+                                       read_reg message >>= fun (w__35 : Message) =>
+                                       returnM (w__35.(Message_value))
+                                     else returnM (value)) >>= fun (child_value : word) =>
+                                    (if call_is_static (kind) then returnM (true)
+                                     else
+                                       read_reg message >>= fun (w__36 : Message) =>
+                                       returnM (w__36.(Message_is_static))) >>= fun (child_static : bool) =>
+                                    (is_running (tt)) >>= fun (w__37 : bool) =>
+                                    (if w__37 return M (ByteSlice) then
+                                       (memory_byte_slice (args_offset) (args_length))
+                                        : M (ByteSlice)
+                                     else returnM (EMPTY_SLICE)) >>= fun child_calldata =>
+                                    (suspend_frame (tt)) >>= fun checkpoint =>
+                                    (frame_stack_push
+                                       ((ResumeCall
+                                           (({| CallContinuation_checkpoint := checkpoint;
+                                                CallContinuation_return_offset := ret_offset;
+                                                CallContinuation_return_length := ret_length |}))))) >>
+                                    (if andb ((call_transfers_value (kind)))
+                                          ((word_nonzero (value)))
+                                       return
+                                       M (unit) then
+                                       (k_transfer (caller) (target) (value))
+                                        : M (unit)
+                                     else returnM (tt)) >>
+                                    ((frame_depth_increment
+                                        (Build_frame_depth (((checkpoint.(FrameCheckpoint_call_depth)).(frame_depth_value))))) >>= fun semanticResult =>
+                                     returnM (semanticResult).(frame_depth_value)) >>= fun (w__39 : Z) =>
+                                    write_reg
+                                      message
+                                      ({| Message_caller := child_caller;
+                                          Message_address := child_addr;
+                                          Message_code_address := target;
+                                          Message_value := child_value;
+                                          Message_is_static := child_static;
+                                          Message_depth := (Build_frame_depth (w__39)) |}) >>
+                                    (calldata_install (child_calldata)) >>
+                                    write_reg pc BYTE_ZERO >>
+                                    write_reg gas_remaining child_gas >>
+                                    write_reg frame_status (Running (tt)) >>
+                                    (returndata_clear (tt)) >>
+                                    write_reg frame_code child_code >>
+                                    ((frame_depth_increment
+                                        (Build_frame_depth (((checkpoint.(FrameCheckpoint_call_depth)).(frame_depth_value))))) >>= fun semanticResult =>
+                                     returnM (semanticResult).(frame_depth_value)) >>= fun (w__40 : Z) =>
+                                    write_reg call_depth w__40 >>
+                                    write_reg frame_refund GAS_REFUND_ZERO
+                                     : M (unit)
+                                 end
+                                  : M (unit))
+                               : M (unit))
+                            : M (unit))
+                         : M (unit))
+                      : M (unit))
+                   : M (unit))
+                : M (unit))
+             : M (unit))
+          : M (unit))
+       : M (unit))
+    : M (unit).
+
+Definition run_create (is2 : bool) : M (unit) :=
+   (self_addr (tt)) >>= fun creator =>
+   (pop (tt)) >>= fun value =>
+   (pop (tt)) >>= fun off_word =>
+   (pop (tt)) >>= fun len_word =>
+   (if is2 return M (word) then (pop (tt))  : M (word)
+    else returnM (WORD_ZERO)) >>= fun salt =>
+   (is_running (tt)) >>= fun (w__1 : bool) =>
+   (if negb (w__1) then returnM (tt)
+    else
+    (guard_static (tt)) >>= fun (w__2 : bool) =>
+    if w__2 then returnM (tt)
+    else
+      let initcode_size := word_to_byte_quantity_or_oog (len_word) in
+      (is_running (tt)) >>= fun (w__3 : bool) =>
+      (if negb (w__3) then returnM (tt)
+       else
+         (charge_memory_expansion (off_word) (len_word)) >>
+         (charge_constant (G_create)) >>
+         (initcode_gas (initcode_size)) >>= fun (w__4 : gas_cost) =>
+         (charge_cost (w__4)) >>
+         (if is2 return M (unit) then
+            (memory_word_count_bytes (initcode_size)) >>= fun (w__5 : byte_quantity) =>
+            (charge_cost ((gas_constant_scale_byte_quantity (G_keccak_word) (w__5))))
+             : M (unit)
+          else returnM (tt)) >>
+         (is_running (tt)) >>= fun (w__6 : bool) =>
+         (if negb (w__6) then returnM (tt)
+          else
+            let '((initcode_offset, initcode_length)) :=
+              word_byte_range_or_oog (off_word) (len_word) in
+            (is_running (tt)) >>= fun (w__7 : bool) =>
+            (if negb (w__7) then returnM (tt)
+             else
+             (initcode_size_allowed (initcode_size)) >>= fun (w__8 : bool) =>
+             if negb (w__8) return M (unit) then (exc_halt (InitCodeTooLarge))  : M (unit)
+             else
+               ((k_get_nonce (creator)) >>= fun semanticResult =>
+                returnM (semanticResult).(protocol_quantity_value)) >>= fun nonce =>
+               (and_boolM (returnM (is2)) ((is_running (tt))  : M (bool))) >>= fun w__10 =>
+               (if w__10 return M (address_typ) then
+                  (mem_keccak (initcode_offset) (initcode_length)) >>= fun (w__11 : word) =>
+                  (k_create2_addr (creator) (salt) ((word_to_hash (w__11))))
+                   : M (address_typ)
+                else
+                  (k_create_addr (creator) (Build_protocol_quantity ((nonce))))
+                   : M (address_typ)) >>= fun (new_addr : address_typ) =>
+               read_reg gas_remaining >>= fun avail =>
+               (gas_quotient (avail) (Build_gas_divisor ((64)))) >>= fun retained_gas =>
+               (gas_sub_gas_or_oog (avail) (retained_gas)) >>= fun child_gas =>
+               (is_running (tt)) >>= fun (w__14 : bool) =>
+               (if negb (w__14) then returnM (tt)
+                else
+                  write_reg gas_remaining retained_gas >>
+                  read_reg message >>= fun (w__15 : Message) =>
+                  (if w__15.(Message_is_static) return M (unit) then
+                     (exc_halt (WriteProtection))
+                      : M (unit)
+                   else
+                     read_reg call_depth >>= fun (w__16 : Z) =>
+                     let depth_ok := Z.ltb (w__16) ((DEPTH_LIMIT).(frame_depth_value)) in
+                     (k_get_balance (creator)) >>= fun (w__17 : word) =>
+                     let balance_ok : bool := word_ule (value) (w__17) in
+                     let nonce_ok : bool :=
+                       neq_int (nonce) ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) in
+                     (if orb ((negb (depth_ok))) ((orb ((negb (balance_ok))) ((negb (nonce_ok)))))
+                        return
+                        M (unit) then
+                        (returndata_clear (tt)) >>
+                        (refund_gas (child_gas)) >> (push (WORD_ZERO))  : M (unit)
+                      else
+                        (k_access_account (new_addr)) >>= fun '(_) =>
+                        (k_account_occupied (new_addr)) >>= fun (occupied : bool) =>
+                        (returndata_clear (tt)) >>
+                        (k_bump_nonce (creator)) >>
+                        (if occupied return M (unit) then (push (WORD_ZERO))  : M (unit)
+                         else
+                           (is_running (tt)) >>= fun (w__18 : bool) =>
+                           (if w__18 return M (ByteSlice) then
+                              (memory_byte_slice (initcode_offset) (initcode_length))
+                               : M (ByteSlice)
+                            else returnM (EMPTY_SLICE)) >>= fun initcode =>
+                           (code_db_insert (initcode)) >>= fun (w__20 : b256) =>
+                           (code_db_resolve (w__20)) >>= fun child_code =>
+                           (suspend_frame (tt)) >>= fun checkpoint =>
+                           (frame_stack_push
+                              ((ResumeCreate
+                                  (({| CreateContinuation_checkpoint := checkpoint;
+                                       CreateContinuation_address := new_addr |}))))) >>
+                           (k_mark_created (new_addr)) >>
+                           (k_clear_storage (new_addr)) >>
+                           (k_bump_nonce (new_addr)) >>
+                           (k_transfer (creator) (new_addr) (value)) >>
+                           ((frame_depth_increment
+                               (Build_frame_depth (((checkpoint.(FrameCheckpoint_call_depth)).(frame_depth_value))))) >>= fun semanticResult =>
+                            returnM (semanticResult).(frame_depth_value)) >>= fun (w__21 : Z) =>
+                           write_reg
+                             message
+                             ({| Message_caller := creator;
+                                 Message_address := new_addr;
+                                 Message_code_address := new_addr;
+                                 Message_value := value;
+                                 Message_is_static :=
+                                   checkpoint.(FrameCheckpoint_message).(Message_is_static);
+                                 Message_depth := (Build_frame_depth (w__21)) |}) >>
+                           (calldata_install (EMPTY_SLICE)) >>
+                           write_reg pc BYTE_ZERO >>
+                           write_reg gas_remaining child_gas >>
+                           write_reg frame_status (Running (tt)) >>
+                           (returndata_clear (tt)) >>
+                           write_reg frame_code child_code >>
+                           ((frame_depth_increment
+                               (Build_frame_depth (((checkpoint.(FrameCheckpoint_call_depth)).(frame_depth_value))))) >>= fun semanticResult =>
+                            returnM (semanticResult).(frame_depth_value)) >>= fun (w__22 : Z) =>
+                           write_reg call_depth w__22 >>
+                           write_reg frame_refund GAS_REFUND_ZERO
+                            : M (unit))
+                         : M (unit))
+                      : M (unit))
+                   : M (unit))
+                : M (unit))
+             : M (unit))
+          : M (unit))
+       : M (unit))
+    : M (unit).
+
+Definition execute (op : ast) : M (unit) :=
+   match op with
+   | CREATE tt => (run_create (false))  : M (unit)
+   | CREATE2 tt => (run_create (true))  : M (unit)
+   | CALL tt => (run_call (Call))  : M (unit)
+   | CALLCODE tt => (run_call (CallCode))  : M (unit)
+   | DELEGATECALL tt => (run_call (DelegateCall))  : M (unit)
+   | STATICCALL tt => (run_call (StaticCall))  : M (unit)
+   | _ => (execute_opcode (op))  : M (unit)
+   end
+    : M (unit).
+
+Definition read_push (n : byte_quantity) : M (word) :=
+   read_reg frame_code >>= fun (w__0 : Code) =>
+   read_reg pc >>= fun (w__1 : byte_quantity) =>
+   (slice_load_n (w__0.(Code_bytes)) (w__1) (n))
+    : M (word).
 
 Definition advance_pc (delta : byte_quantity) : M (unit) :=
    read_reg pc >>= fun (w__0 : byte_quantity) =>
@@ -6098,12 +7534,6 @@ Definition decode_simple (opcode : opcode) (*(0 <=? opcode) && (opcode <=? 255)*
        : M (ast))
     : M (ast).
 
-Definition read_push (n : byte_quantity) : M (word) :=
-   read_reg frame_code >>= fun (w__0 : Code) =>
-   read_reg pc >>= fun (w__1 : byte_quantity) =>
-   (slice_load_n (w__0.(Code_bytes)) (w__1) (n))
-    : M (mword 256).
-
 Definition fetch '(tt : unit) : M (ast) :=
    read_reg pc >>= fun (w__0 : byte_quantity) =>
    (frame_code_len (tt)) >>= fun (w__1 : byte_quantity) =>
@@ -6128,1093 +7558,124 @@ Definition fetch '(tt : unit) : M (ast) :=
        : M (ast))
     : M (ast).
 
-Fixpoint _rec_execute (op : ast) (_reclimit : Z) (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (unit)
-with _rec_interpret (arg0 : unit) (_reclimit : Z) (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (ByteSlice)
-with _rec_run_call (kind : CallKind) (_reclimit : Z) (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (unit)
-with _rec_run_create (is2 : bool) (_reclimit : Z) (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (unit).
-(*#rec#execute*) exact (
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   match op with
-   | STOP tt => write_reg frame_status (Halted ((HaltStop (tt))))  : M (unit)
-   | ADD tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_add (a) (b))))  : M (unit)
-   | MUL tt =>
-      (charge_constant (G_low)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_mul (a) (b))))  : M (unit)
-   | SUB tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_sub (a) (b))))  : M (unit)
-   | DIV tt =>
-      (charge_constant (G_low)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_div (a) (b))))  : M (unit)
-   | SDIV tt =>
-      (charge_constant (G_low)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_sdiv (a) (b))))  : M (unit)
-   | MOD tt =>
-      (charge_constant (G_low)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_mod (a) (b))))  : M (unit)
-   | SMOD tt =>
-      (charge_constant (G_low)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_smod (a) (b))))  : M (unit)
-   | ADDMOD tt =>
-      (charge_constant (G_mid)) >>
-      (pop (tt)) >>= fun a =>
-      (pop (tt)) >>= fun b => (pop (tt)) >>= fun n => (push ((alu_addmod (a) (b) (n))))  : M (unit)
-   | MULMOD tt =>
-      (charge_constant (G_mid)) >>
-      (pop (tt)) >>= fun a =>
-      (pop (tt)) >>= fun b => (pop (tt)) >>= fun n => (push ((alu_mulmod (a) (b) (n))))  : M (unit)
-   | EXP tt =>
-      (pop (tt)) >>= fun a =>
-      (pop (tt)) >>= fun e =>
-      (exp_gas (e)) >>= fun (w__0 : gas_cost) =>
-      (charge_cost (w__0)) >> (push ((alu_exp (a) (e))))  : M (unit)
-   | SIGNEXTEND tt =>
-      (charge_constant (G_low)) >>
-      (pop (tt)) >>= fun bi =>
-      (pop (tt)) >>= fun v => (push ((alu_signextend (bi) (v))))  : M (unit)
-   | LT' tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_lt (a) (b))))  : M (unit)
-   | GT' tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_gt (a) (b))))  : M (unit)
-   | SLT tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_slt (a) (b))))  : M (unit)
-   | SGT tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_sgt (a) (b))))  : M (unit)
-   | EQ' tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_eq (a) (b))))  : M (unit)
-   | ISZERO tt =>
-      (charge_constant (G_verylow)) >> (pop (tt)) >>= fun a => (push ((alu_iszero (a))))  : M (unit)
-   | AND tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_and (a) (b))))  : M (unit)
-   | OR tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_or (a) (b))))  : M (unit)
-   | XOR tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun a => (pop (tt)) >>= fun b => (push ((alu_xor (a) (b))))  : M (unit)
-   | NOT tt =>
-      (charge_constant (G_verylow)) >> (pop (tt)) >>= fun a => (push ((alu_not (a))))  : M (unit)
-   | BYTE tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun i => (pop (tt)) >>= fun x => (push ((alu_byte (i) (x))))  : M (unit)
-   | SHL tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun s => (pop (tt)) >>= fun v => (push ((alu_shl (s) (v))))  : M (unit)
-   | SHR tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun s => (pop (tt)) >>= fun v => (push ((alu_shr (s) (v))))  : M (unit)
-   | SAR tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun s => (pop (tt)) >>= fun v => (push ((alu_sar (s) (v))))  : M (unit)
-   | CLZ tt =>
-      (charge_constant (G_low)) >>
-      (pop (tt)) >>= fun x => (alu_clz (x)) >>= fun (w__1 : mword 256) => (push (w__1))  : M (unit)
-   | KECCAK256 tt =>
-      (pop (tt)) >>= fun offset_word =>
-      (pop (tt)) >>= fun length_word =>
-      (charge_keccak_gas ((uint (length_word)))) >>
-      (charge_memory_expansion (offset_word) (length_word)) >>
-      (is_running (tt)) >>= fun (w__2 : bool) =>
-      (if w__2 return M (unit) then
-         (mem_keccak ((ByteQuantity ((uint (offset_word))))) ((ByteQuantity ((uint (length_word)))))) >>= fun (w__3 : mword 256) =>
-         (push (w__3))
-          : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | ADDRESS tt =>
-      (charge_constant (G_base)) >>
-      (self_addr (tt)) >>= fun (w__4 : mword 160) => (push ((address_to_word (w__4))))  : M (unit)
-   | ORIGIN tt =>
-      (charge_constant (G_base)) >>
-      (k_env (F_Origin)) >>= fun (w__5 : mword 256) => (push (w__5))  : M (unit)
-   | CALLER tt =>
-      (charge_constant (G_base)) >>
-      read_reg message >>= fun (w__6 : Message) =>
-      (push ((address_to_word (w__6.(Message_caller)))))
-       : M (unit)
-   | CALLVALUE tt =>
-      (charge_constant (G_base)) >>
-      read_reg message >>= fun (w__7 : Message) => (push (w__7.(Message_value)))  : M (unit)
-   | GASPRICE tt =>
-      (charge_constant (G_base)) >>
-      (k_env (F_GasPrice)) >>= fun (w__8 : mword 256) => (push (w__8))  : M (unit)
-   | CALLDATASIZE tt =>
-      (charge_constant (G_base)) >>
-      read_reg calldata >>= fun (w__9 : ByteSlice) =>
-      (word_of_byte_quantity (w__9.(ByteSlice_len))) >>= fun (w__10 : mword 256) =>
-      (push (w__10))
-       : M (unit)
-   | CALLDATALOAD tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun offset_word =>
-      (is_running (tt)) >>= fun (w__11 : bool) =>
-      (if w__11 return M (unit) then
-         read_reg calldata >>= fun (w__12 : ByteSlice) =>
-         (slice_load_word_offset (w__12) (offset_word)) >>= fun (w__13 : mword 256) =>
-         (push (w__13))
-          : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | CALLDATACOPY tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun destination_word =>
-      (pop (tt)) >>= fun source_word =>
-      (pop (tt)) >>= fun length_word =>
-      (charge_copy_gas ((uint (length_word)))) >>
-      (charge_memory_expansion (destination_word) (length_word)) >>
-      (is_running (tt)) >>= fun (w__14 : bool) =>
-      (if w__14 return M (unit) then
-         read_reg calldata >>= fun (w__15 : ByteSlice) =>
-         (slice_copy_word_offset (w__15) ((ByteQuantity ((uint (destination_word))))) (source_word)
-            ((ByteQuantity ((uint (length_word))))))
-          : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | CODESIZE tt =>
-      (charge_constant (G_base)) >>
-      (frame_code_len (tt)) >>= fun (w__16 : byte_quantity) =>
-      (word_of_byte_quantity (w__16)) >>= fun (w__17 : mword 256) => (push (w__17))  : M (unit)
-   | CODECOPY tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun destination_word =>
-      (pop (tt)) >>= fun source_word =>
-      (pop (tt)) >>= fun length_word =>
-      (charge_copy_gas ((uint (length_word)))) >>
-      (charge_memory_expansion (destination_word) (length_word)) >>
-      (is_running (tt)) >>= fun (w__18 : bool) =>
-      (if w__18 return M (unit) then
-         read_reg frame_code >>= fun (w__19 : Code) =>
-         (slice_copy_word_offset (w__19.(Code_bytes)) ((ByteQuantity ((uint (destination_word)))))
-            (source_word) ((ByteQuantity ((uint (length_word))))))
-          : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | BALANCE tt =>
-      (pop (tt)) >>= fun (w__20 : mword 256) =>
-      let a := word_to_address (w__20) in
-      (k_access_account (a)) >>= fun warm =>
-      (charge_constant ((account_cost (warm)))) >>
-      (is_running (tt)) >>= fun (w__21 : bool) =>
-      (if w__21 return M (unit) then
-         (k_get_balance (a)) >>= fun (w__22 : mword 256) => (push (w__22))  : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | SELFBALANCE tt =>
-      (charge_constant (G_low)) >>
-      (self_addr (tt)) >>= fun (w__23 : mword 160) =>
-      (k_get_balance (w__23)) >>= fun (w__24 : mword 256) => (push (w__24))  : M (unit)
-   | EXTCODESIZE tt =>
-      (pop (tt)) >>= fun (w__25 : mword 256) =>
-      let a := word_to_address (w__25) in
-      (k_access_account (a)) >>= fun warm =>
-      (charge_constant ((account_cost (warm)))) >>
-      (is_running (tt)) >>= fun (w__26 : bool) =>
-      (if w__26 return M (unit) then
-         (k_get_code_size (a)) >>= fun (w__27 : byte_quantity) =>
-         (word_of_byte_quantity (w__27)) >>= fun (w__28 : mword 256) => (push (w__28))  : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | EXTCODECOPY tt =>
-      (pop (tt)) >>= fun (w__29 : mword 256) =>
-      let a := word_to_address (w__29) in
-      (pop (tt)) >>= fun destination_word =>
-      (pop (tt)) >>= fun source_word =>
-      (pop (tt)) >>= fun length_word =>
-      (k_access_account (a)) >>= fun warm =>
-      (charge_constant ((account_cost (warm)))) >>
-      (charge_copy_gas ((uint (length_word)))) >>
-      (charge_memory_expansion (destination_word) (length_word)) >>
-      (is_running (tt)) >>= fun (w__30 : bool) =>
-      (if w__30 return M (unit) then
-         (k_code_copy (a) ((ByteQuantity ((uint (destination_word))))) (source_word)
-            ((ByteQuantity ((uint (length_word))))))
-          : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | EXTCODEHASH tt =>
-      (pop (tt)) >>= fun (w__31 : mword 256) =>
-      let a := word_to_address (w__31) in
-      (k_access_account (a)) >>= fun warm =>
-      (charge_constant ((account_cost (warm)))) >>
-      (is_running (tt)) >>= fun (w__32 : bool) =>
-      (if w__32 return M (unit) then
-         (k_get_codehash (a)) >>= fun (w__33 : mword 256) => (push (w__33))  : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | RETURNDATASIZE tt =>
-      (charge_constant (G_base)) >>
-      (returndata_size (tt)) >>= fun (w__34 : byte_quantity) =>
-      (word_of_byte_quantity (w__34)) >>= fun (w__35 : mword 256) => (push (w__35))  : M (unit)
-   | RETURNDATACOPY tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun destination_word =>
-      (pop (tt)) >>= fun source_word =>
-      (pop (tt)) >>= fun length_word =>
-      (charge_copy_gas ((uint (length_word)))) >>
-      (charge_memory_expansion (destination_word) (length_word)) >>
-      (is_running (tt)) >>= fun (w__36 : bool) =>
-      (if w__36 return M (unit) then
-         (returndata_copy_words ((ByteQuantity ((uint (destination_word))))) (source_word)
-            (length_word))
-          : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | BLOCKHASH tt =>
-      (charge_constant ((GasConstant (20)))) >>
-      (pop (tt)) >>= fun (w__37 : mword 256) =>
-      (k_blockhash (w__37)) >>= fun (w__38 : mword 256) => (push (w__38))  : M (unit)
-   | COINBASE tt =>
-      (charge_constant (G_base)) >>
-      (k_env (F_Coinbase)) >>= fun (w__39 : mword 256) => (push (w__39))  : M (unit)
-   | TIMESTAMP tt =>
-      (charge_constant (G_base)) >>
-      (k_env (F_Timestamp)) >>= fun (w__40 : mword 256) => (push (w__40))  : M (unit)
-   | NUMBER tt =>
-      (charge_constant (G_base)) >>
-      (k_env (F_Number)) >>= fun (w__41 : mword 256) => (push (w__41))  : M (unit)
-   | SLOTNUM tt =>
-      (charge_constant (G_base)) >>
-      (k_env (F_SlotNumber)) >>= fun (w__42 : mword 256) => (push (w__42))  : M (unit)
-   | PREVRANDAO tt =>
-      (charge_constant (G_base)) >>
-      (k_env (F_PrevRandao)) >>= fun (w__43 : mword 256) => (push (w__43))  : M (unit)
-   | GASLIMIT tt =>
-      (charge_constant (G_base)) >>
-      (k_env (F_GasLimit)) >>= fun (w__44 : mword 256) => (push (w__44))  : M (unit)
-   | CHAINID tt =>
-      (charge_constant (G_base)) >>
-      (k_env (F_ChainId)) >>= fun (w__45 : mword 256) => (push (w__45))  : M (unit)
-   | BASEFEE tt =>
-      (charge_constant (G_base)) >>
-      (k_env (F_BaseFee)) >>= fun (w__46 : mword 256) => (push (w__46))  : M (unit)
-   | BLOBBASEFEE tt =>
-      (charge_constant (G_base)) >>
-      read_reg k_header >>= fun (w__47 : BlockHeader) =>
-      (blob_base_fee
-         (Build_protocol_quantity (((w__47.(BlockHeader_excess_blob_gas)).(protocol_quantity_value))))) >>= fun (w__48 : mword 256) =>
-      (push (w__48))
-       : M (unit)
-   | BLOBHASH tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun (w__49 : mword 256) =>
-      (k_blobhash (w__49)) >>= fun (w__50 : mword 256) => (push (w__50))  : M (unit)
-   | POP tt => (charge_constant (G_base)) >> (pop (tt)) >>= fun '(_) => returnM (tt)
-   | MLOAD tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun offset_word =>
-      (word_of_nat (32)) >>= fun (w__51 : mword 256) =>
-      (charge_memory_expansion (offset_word) (w__51)) >>
-      (is_running (tt)) >>= fun (w__52 : bool) =>
-      (if w__52 return M (unit) then
-         let offset := ByteQuantity ((uint (offset_word))) in
-         (mem_load (offset)) >>= fun (w__53 : mword 256) => (push (w__53))  : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | MSTORE tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun offset_word =>
-      (pop (tt)) >>= fun v =>
-      (word_of_nat (32)) >>= fun (w__54 : mword 256) =>
-      (charge_memory_expansion (offset_word) (w__54)) >>
-      (is_running (tt)) >>= fun (w__55 : bool) =>
-      (if w__55 return M (unit) then
-         let offset := ByteQuantity ((uint (offset_word))) in
-         (mem_store (offset) (v))
-          : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | MSTORE8 tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun offset_word =>
-      (pop (tt)) >>= fun v =>
-      (charge_memory_expansion (offset_word) (WORD_ONE)) >>
-      (is_running (tt)) >>= fun (w__56 : bool) =>
-      (if w__56 return M (unit) then
-         let offset := ByteQuantity ((uint (offset_word))) in
-         (mem_store_byte (offset) (v))
-          : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | MSIZE tt =>
-      (charge_constant (G_base)) >>
-      (evm_memory_size (tt)) >>= fun (w__57 : byte_quantity) =>
-      (word_of_byte_quantity (w__57)) >>= fun (w__58 : mword 256) => (push (w__58))  : M (unit)
-   | MCOPY tt =>
-      (charge_constant (G_verylow)) >>
-      (pop (tt)) >>= fun destination_word =>
-      (pop (tt)) >>= fun source_word =>
-      (pop (tt)) >>= fun length_word =>
-      let required_size :=
-        maximum_memory_required_size (destination_word) (length_word) (source_word) (length_word) in
-      (charge_copy_gas ((uint (length_word)))) >>
-      (memory_expansion_gas (required_size)) >>= fun (w__59 : gas_cost) =>
-      (charge_cost (w__59)) >>
-      (is_running (tt)) >>= fun (w__60 : bool) =>
-      (if w__60 return M (unit) then (expand_memory (required_size))  : M (unit)
-       else returnM (tt)) >>
-      (is_running (tt)) >>= fun (w__61 : bool) =>
-      (if w__61 return M (unit) then
-         (mem_mcopy ((ByteQuantity ((uint (destination_word)))))
-            ((ByteQuantity ((uint (source_word))))) ((ByteQuantity ((uint (length_word))))))
-          : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | SLOAD tt =>
-      (pop (tt)) >>= fun s =>
-      (self_addr (tt)) >>= fun (w__62 : mword 160) =>
-      (k_slot_is_warm (w__62) (s)) >>= fun warm =>
-      (charge_constant ((sload_cost (warm)))) >>
-      (is_running (tt)) >>= fun (w__63 : bool) =>
-      (if w__63 return M (unit) then
-         (self_addr (tt)) >>= fun (w__64 : mword 160) =>
-         (k_sload (w__64) (s)) >>= fun (w__65 : StorageValue) =>
-         (push (w__65.(StorageValue_curr)))
-          : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | SSTORE tt =>
-      (guard_static (tt)) >>= fun (w__66 : bool) =>
-      (if w__66 then returnM (tt)
-       else
-       read_reg gas_remaining >>= fun (w__67 : gas) =>
-       if gas_le (w__67) (G_callstipend) return M (unit) then (exc_halt (OutOfGas))  : M (unit)
-       else
-         (pop (tt)) >>= fun s =>
-         (pop (tt)) >>= fun v =>
-         (is_running (tt)) >>= fun (w__68 : bool) =>
-         (if w__68 return M (unit) then
-            (self_addr (tt)) >>= fun (w__69 : mword 160) =>
-            (k_slot_is_warm (w__69) (s)) >>= fun warm =>
-            (self_addr (tt)) >>= fun (w__70 : mword 160) =>
-            (k_sload (w__70) (s)) >>= fun entry =>
-            (sstore_gas (entry.(StorageValue_orig)) (entry.(StorageValue_curr)) (v) ((negb (warm)))) >>= fun '((cost, refund)) =>
-            (charge_cost (cost)) >>
-            (if negb ((gas_refund_equal (refund) (GAS_REFUND_ZERO))) return M (unit) then
-               (record_refund (refund))
-                : M (unit)
-             else returnM (tt)) >>
-            (if neq_vec (entry.(StorageValue_curr)) (v) return M (unit) then
-               (self_addr (tt)) >>= fun (w__71 : mword 160) =>
-               (k_sstore (w__71) (s)
-                  (({| StorageValue_curr := v;
-                       StorageValue_orig := entry.(StorageValue_orig) |})))
-                : M (unit)
-             else returnM (tt))
-             : M (unit)
-          else returnM (tt))
-          : M (unit))
-       : M (unit)
-   | TLOAD tt =>
-      (charge_constant (G_warm_access)) >>
-      (pop (tt)) >>= fun s =>
-      (self_addr (tt)) >>= fun (w__72 : mword 160) =>
-      (k_tload (w__72) (s)) >>= fun (w__73 : mword 256) => (push (w__73))  : M (unit)
-   | TSTORE tt =>
-      (guard_static (tt)) >>= fun (w__74 : bool) =>
-      (if w__74 then returnM (tt)
-       else
-         (charge_constant (G_warm_access)) >>
-         (pop (tt)) >>= fun s =>
-         (pop (tt)) >>= fun v =>
-         (self_addr (tt)) >>= fun (w__75 : mword 160) => (k_tstore (w__75) (s) (v))  : M (unit))
-       : M (unit)
-   | JUMP tt => (charge_constant (G_mid)) >> (pop (tt)) >>= fun dest => (do_jump (dest))  : M (unit)
-   | JUMPI tt =>
-      (charge_constant (G_high)) >>
-      (pop (tt)) >>= fun dest =>
-      (pop (tt)) >>= fun cond =>
-      (if word_is_zero (cond) then returnM (tt)
-       else (do_jump (dest))  : M (unit))
-       : M (unit)
-   | PC tt =>
-      (charge_constant (G_base)) >>
-      read_reg pc >>= fun (w__76 : byte_quantity) =>
-      (word_of_byte_quantity (w__76)) >>= fun (w__77 : mword 256) =>
-      (push ((alu_sub (w__77) (WORD_ONE))))
-       : M (unit)
-   | GAS tt =>
-      (charge_constant (G_base)) >>
-      read_reg gas_remaining >>= fun (w__78 : gas) =>
-      (word_of_gas (w__78)) >>= fun (w__79 : mword 256) => (push (w__79))  : M (unit)
-   | JUMPDEST tt => (charge_constant (G_jumpdest))  : M (unit)
-   | PUSH (n, v) =>
-      let n := (n).(push_width_value) in
-      (if Z.eqb (n) (0) return M (unit) then (charge_constant (G_base))  : M (unit)
-       else (charge_constant (G_verylow))  : M (unit)) >>
-      (push (v))
-       : M (unit)
-   | DUP n =>
-      let n := (n).(stack_operation_index_value) in
-      (charge_constant (G_verylow)) >>
-      ((stack_height (tt)) >>= fun semanticResult =>
-       returnM (semanticResult).(operand_stack_height_value)) >>= fun (w__80 : Z) =>
-      (if Z.ltb (w__80) (n) return M (unit) then (exc_halt (StackUnderflow))  : M (unit)
-       else
-         (peek (Build_stack_index (((Z.sub (n) (1)))))) >>= fun (w__81 : mword 256) =>
-         (push (w__81))
-          : M (unit))
-       : M (unit)
-   | SWAP n =>
-      let n := (n).(stack_operation_index_value) in
-      (charge_constant (G_verylow)) >>
-      ((stack_height (tt)) >>= fun semanticResult =>
-       returnM (semanticResult).(operand_stack_height_value)) >>= fun (w__82 : Z) =>
-      (if Z.ltb (w__82) ((Z.add (n) (1))) return M (unit) then
-         (exc_halt (StackUnderflow))
-          : M (unit)
-       else
-         (peek (Build_stack_index ((0)))) >>= fun top =>
-         (peek (Build_stack_index ((n)))) >>= fun other =>
-         (stack_set (Build_stack_index ((0))) (other)) >>
-         (stack_set (Build_stack_index ((n))) (top))
-          : M (unit))
-       : M (unit)
-   | LOG n =>
-      let n := (n).(log_topic_count_value) in
-      (guard_static (tt)) >>= fun (w__83 : bool) =>
-      (if w__83 then returnM (tt)
-       else
-         (pop (tt)) >>= fun offset_word =>
-         (pop (tt)) >>= fun length_word =>
-         (pop_log_topics (Build_log_topic_count ((n)))) >>= fun topics =>
-         (charge_log_gas (Build_log_topic_count ((n))) ((uint (length_word)))) >>
-         (charge_memory_expansion (offset_word) (length_word)) >>
-         (is_running (tt)) >>= fun (w__84 : bool) =>
-         (if w__84 return M (unit) then
-            (self_addr (tt)) >>= fun (w__85 : mword 160) =>
-            (memory_byte_slice ((ByteQuantity ((uint (offset_word)))))
-               ((ByteQuantity ((uint (length_word)))))) >>= fun (w__86 : ByteSlice) =>
-            (k_log (w__85) (topics) ((BytesSlice (w__86))))
-             : M (unit)
-          else returnM (tt))
-          : M (unit))
-       : M (unit)
-   | CREATE tt =>
-      (_rec_run_create (false) ((Z.sub (_reclimit) (1)))
-         (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (unit)
-   | CREATE2 tt =>
-      (_rec_run_create (true) ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (unit)
-   | CALL tt =>
-      (_rec_run_call (Call) ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (unit)
-   | CALLCODE tt =>
-      (_rec_run_call (CallCode) ((Z.sub (_reclimit) (1)))
-         (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (unit)
-   | DELEGATECALL tt =>
-      (_rec_run_call (DelegateCall) ((Z.sub (_reclimit) (1)))
-         (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (unit)
-   | STATICCALL tt =>
-      (_rec_run_call (StaticCall) ((Z.sub (_reclimit) (1)))
-         (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (unit)
-   | RETURN tt =>
-      (pop (tt)) >>= fun offset_word =>
-      (pop (tt)) >>= fun length_word =>
-      (charge_memory_expansion (offset_word) (length_word)) >>
-      (is_running (tt)) >>= fun (w__87 : bool) =>
-      (if w__87 return M (unit) then
-         (memory_byte_slice ((ByteQuantity ((uint (offset_word)))))
-            ((ByteQuantity ((uint (length_word)))))) >>= fun (w__88 : ByteSlice) =>
-         (freeze_output (w__88)) >>= fun (w__89 : ByteSlice) =>
-         write_reg frame_status (Halted ((HaltReturn (w__89))))
-          : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | REVERT tt =>
-      (pop (tt)) >>= fun offset_word =>
-      (pop (tt)) >>= fun length_word =>
-      (charge_memory_expansion (offset_word) (length_word)) >>
-      (is_running (tt)) >>= fun (w__90 : bool) =>
-      (if w__90 return M (unit) then
-         (memory_byte_slice ((ByteQuantity ((uint (offset_word)))))
-            ((ByteQuantity ((uint (length_word)))))) >>= fun (w__91 : ByteSlice) =>
-         (freeze_output (w__91)) >>= fun (w__92 : ByteSlice) =>
-         write_reg frame_status (Halted ((HaltRevert (w__92))))
-          : M (unit)
-       else returnM (tt))
-       : M (unit)
-   | INVALID tt => write_reg gas_remaining GAS_ZERO >> (exc_halt (InvalidOpcode))  : M (unit)
-   | SELFDESTRUCT tt =>
-      (guard_static (tt)) >>= fun (w__93 : bool) =>
-      (if w__93 then returnM (tt)
-       else
-         (pop (tt)) >>= fun (w__94 : mword 256) =>
-         let beneficiary := word_to_address (w__94) in
-         (self_addr (tt)) >>= fun (w__95 : mword 160) =>
-         (k_get_balance (w__95)) >>= fun bal =>
-         (k_access_account (beneficiary)) >>= fun warm =>
-         (charge_constant (G_selfdestruct)) >>
-         (if negb (warm) return M (unit) then (charge_constant (G_cold_account))  : M (unit)
-          else returnM (tt)) >>
-         (and_boolM ((is_running (tt))  : M (bool))
-            ((and_boolM (returnM (((word_nonzero (bal))  : bool)))
-                ((k_account_is_empty (beneficiary))
-                 : M (bool)))
-             : M (bool))) >>= fun (w__99 : bool) =>
-         (if w__99 return M (unit) then (charge_constant (G_newaccount))  : M (unit)
-          else returnM (tt)) >>
-         (is_running (tt)) >>= fun (w__100 : bool) =>
-         (if w__100 return M (unit) then
-            (self_addr (tt)) >>= fun (w__101 : mword 160) =>
-            (k_is_selfdestructed (w__101)) >>= fun (w__102 : bool) =>
-            let first_selfdestruct := negb (w__102) in
-            (and_boolM
-               (read_reg k_fork >>= fun (w__103 : Fork) =>
-                returnM (((fork_lt (w__103) (London))  : bool))) (returnM (first_selfdestruct))) >>= fun w__104 =>
-            (if w__104 return M (unit) then
-               (record_refund ((gas_constant_to_refund (R_selfdestruct_pre_london))))
-                : M (unit)
-             else returnM (tt)) >>
-            (self_addr (tt)) >>= fun (w__105 : mword 160) =>
-            (k_transfer (w__105) (beneficiary) (bal)) >>
-            read_reg k_fork >>= fun (w__106 : Fork) =>
-            (if fork_lt (w__106) (Cancun) return M (unit) then
-               (self_addr (tt)) >>= fun (w__107 : mword 160) =>
-               (k_zero_balance (w__107)) >>
-               (self_addr (tt)) >>= fun (w__108 : mword 160) =>
-               (k_selfdestruct (w__108))
-                : M (unit)
-             else
-               (self_addr (tt)) >>= fun (w__109 : mword 160) =>
-               (k_was_created (w__109)) >>= fun (w__110 : bool) =>
-               (if w__110 return M (unit) then
-                  (self_addr (tt)) >>= fun (w__111 : mword 160) =>
-                  (if eq_vec (beneficiary) (w__111) return M (unit) then
-                     (self_addr (tt)) >>= fun (w__112 : mword 160) =>
-                     (k_emit_burn_log (w__112) (bal))
-                      : M (unit)
-                   else returnM (tt)) >>
-                  (self_addr (tt)) >>= fun (w__113 : mword 160) =>
-                  (k_zero_balance (w__113)) >>
-                  (self_addr (tt)) >>= fun (w__114 : mword 160) =>
-                  (k_selfdestruct (w__114))
-                   : M (unit)
-                else returnM (tt))
-                : M (unit)) >>
-            write_reg frame_status (Halted ((HaltSelfDestruct (tt))))
-             : M (unit)
-          else returnM (tt))
-          : M (unit))
-       : M (unit)
-   end
-    : M (unit)
-).
-(*#rec#interpret*) exact (
-   let '(tt) := arg0 in
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (whileMT
-     tt
-     (fun _ => Z.add (GAS_MAX_VALUE) (1))
-     (fun _ => ((is_running (tt))  : M (bool))  : M (bool))
-     (fun _ =>
-       (assert_exp' true "loop dummy assert" >>= fun _ =>
-        (fetch (tt)) >>= fun op =>
-        (_rec_execute (op) ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
-         : M (unit))
-        : M (unit))) >>
-   read_reg frame_status >>= fun (w__1 : FrameStatus) =>
-   let w__2 : ByteSlice :=
-     match w__1 with
+Definition frame_output '(tt : unit) : M (ByteSlice) :=
+   read_reg frame_status >>= fun (w__0 : FrameStatus) =>
+   let w__1 : ByteSlice :=
+     match w__0 with
      | Halted (HaltReturn output) => output
      | Halted (HaltRevert output) => output
      | _ => EMPTY_SLICE
      end in
-   returnM (w__2)
-).
-(*#rec#run_call*) exact (
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (self_addr (tt)) >>= fun caller =>
-   (pop (tt)) >>= fun gas_request =>
-   (pop (tt)) >>= fun (w__0 : mword 256) =>
-   let target := word_to_address (w__0) in
-   (if call_takes_value (kind) return M (mword 256) then (pop (tt))  : M (mword 256)
-    else returnM (WORD_ZERO)) >>= fun value =>
-   (pop (tt)) >>= fun args_off_word =>
-   (pop (tt)) >>= fun args_len_word =>
-   (pop (tt)) >>= fun ret_off_word =>
-   (pop (tt)) >>= fun ret_len_word =>
-   (is_running (tt)) >>= fun (w__2 : bool) =>
-   (if negb (w__2) then returnM (tt)
+   returnM (w__1).
+
+Definition frame_succeeded '(tt : unit) : M (bool) :=
+   read_reg frame_status >>= fun (w__0 : FrameStatus) =>
+   let w__1 : bool :=
+     match w__0 with
+     | Halted (HaltRevert _) => false
+     | Halted _ => true
+     | Running tt => true
+     | Exceptional _ => false
+     end in
+   returnM (w__1).
+
+Definition resume_call (continuation : CallContinuation) (output : ByteSlice) : M (unit) :=
+   write_reg returndata output >>
+   let checkpoint := continuation.(CallContinuation_checkpoint) in
+   (frame_succeeded (tt)) >>= fun succeeded =>
+   read_reg gas_remaining >>= fun child_left =>
+   read_reg frame_refund >>= fun child_refund =>
+   (restore_frame (checkpoint)) >>
+   (refund_gas (child_left)) >>
+   (returndata_copy_prefix (continuation.(CallContinuation_return_offset))
+      (continuation.(CallContinuation_return_length))) >>
+   (if succeeded return M (unit) then
+      (record_refund (child_refund)) >> (push (WORD_ONE))  : M (unit)
+    else (k_revert (checkpoint.(FrameCheckpoint_state))) >> (push (WORD_ZERO))  : M (unit))
+    : M (unit).
+
+Definition resume_create (continuation : CreateContinuation) (output : ByteSlice) : M (unit) :=
+   write_reg returndata output >>
+   let checkpoint := continuation.(CreateContinuation_checkpoint) in
+   (frame_succeeded (tt)) >>= fun succeeded =>
+   read_reg gas_remaining >>= fun child_left =>
+   read_reg frame_refund >>= fun child_refund =>
+   (returndata_size (tt)) >>= fun deployed_length =>
+   (and_boolM
+      ((max_code_size (tt)) >>= fun (w__0 : byte_quantity) =>
+       returnM (((byte_quantity_le (deployed_length) (w__0))  : bool)))
+      ((or_boolM
+          (read_reg k_fork >>= fun (w__1 : Fork) => returnM (((fork_lt (w__1) (London))  : bool)))
+          ((or_boolM (returnM (((generic_eq (deployed_length) (BYTE_ZERO))  : bool)))
+              (read_reg returndata >>= fun (w__2 : ByteSlice) =>
+               (slice_byte (w__2) (BYTE_ZERO)) >>= fun (w__3 : mword 8) =>
+               returnM (((neq_vec (w__3) ((Ox"EF")))  : bool))))
+           : M (bool)))
+       : M (bool))) >>= fun code_ok =>
+   let deposit := gas_constant_scale_byte_quantity (G_codedeposit) (deployed_length) in
+   (restore_frame (checkpoint)) >>
+   (refund_gas (child_left)) >>
+   (if andb (succeeded) ((andb (code_ok) ((gas_cost_le_gas (deposit) (child_left)))))
+      return
+      M (unit) then
+      read_reg gas_remaining >>= fun (w__6 : gas) =>
+      (gas_sub_cost_or_oog (w__6) (deposit)) >>= fun (w__7 : gas) =>
+      write_reg gas_remaining w__7 >>
+      (is_running (tt)) >>= fun (w__8 : bool) =>
+      (if w__8 return M (unit) then
+         (record_refund (child_refund)) >>
+         read_reg returndata >>= fun (w__9 : ByteSlice) =>
+         (k_deploy_code (continuation.(CreateContinuation_address)) (w__9)) >>
+         (push ((address_to_word (continuation.(CreateContinuation_address)))))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
     else
-      let required_memory_size :=
-        maximum_memory_required_size (args_off_word) (args_len_word) (ret_off_word) (ret_len_word) in
-      (memory_expansion_gas (required_memory_size)) >>= fun mem_gas =>
-      (and_boolM (returnM (((call_transfers_value (kind))  : bool)))
-         ((and_boolM (returnM (((word_nonzero (value))  : bool)))
-             (read_reg message >>= fun (w__3 : Message) =>
-              returnM ((w__3.(Message_is_static)  : bool))))
-          : M (bool))) >>= fun (w__5 : bool) =>
-      (if w__5 return M (unit) then (exc_halt (WriteProtection))  : M (unit)
-       else
-         (k_access_account (target)) >>= fun warm =>
-         let target_cost : gas_constant := account_cost (warm) in
-         let transfer_cost : gas_constant :=
-           if word_nonzero (value) then G_callvalue
-           else GAS_CONSTANT_ZERO in
-         let static_cost :=
-           gas_cost_add ((gas_constant_add (target_cost) (transfer_cost))) (mem_gas) in
-         (or_boolM ((is_running (tt)) >>= fun (w__6 : bool) => returnM (((negb (w__6))  : bool)))
-            (read_reg gas_remaining >>= fun (w__7 : gas) =>
-             returnM (((gas_lt_cost (w__7) (static_cost))  : bool)))) >>= fun (w__8 : bool) =>
-         (if w__8 return M (unit) then (exc_halt (OutOfGas))  : M (unit)
-          else
-            (k_deleg_target (target)) >>= fun '((tg_deleg, tg_target)) =>
-            (if tg_deleg return M (gas_constant) then
-               (k_access_account (tg_target)) >>= fun dw => returnM ((account_cost (dw)))
-             else returnM (GAS_CONSTANT_ZERO)) >>= fun (delegation_cost : gas_constant) =>
-            let access_cost := gas_constant_add (target_cost) (delegation_cost) in
-            (and_boolM (returnM (((word_nonzero (value))  : bool)))
-               ((and_boolM (returnM (((call_transfers_value (kind))  : bool)))
-                   ((k_account_is_empty (target))
-                    : M (bool)))
-                : M (bool))) >>= fun (w__11 : bool) =>
-            let create_cost : gas_constant := if w__11 then G_newaccount else GAS_CONSTANT_ZERO in
-            let extra_gas :=
-              gas_cost_add_constant ((gas_cost_add_constant (access_cost) (transfer_cost)))
-                (create_cost) in
-            let required := gas_cost_add (extra_gas) (mem_gas) in
-            let stipend : gas := if word_nonzero (value) then G_callstipend else GAS_ZERO in
-            (is_running (tt)) >>= fun (w__12 : bool) =>
-            (if negb (w__12) then returnM (tt)
-             else
-               read_reg gas_remaining >>= fun avail =>
-               (if gas_lt_cost (avail) (required) then returnM (GAS_ZERO)
-                else
-                  (gas_sub_cost_or_oog (avail) (required)) >>= fun available_after_cost =>
-                  (call_gas_cap_word (available_after_cost) (gas_request))
-                   : M (gas)) >>= fun (base_child : gas) =>
-               let total_charge := gas_cost_add ((gas_to_cost (base_child))) (required) in
-               (charge_cost (total_charge)) >>
-               (is_running (tt)) >>= fun (w__14 : bool) =>
-               (if negb (w__14) then returnM (tt)
-                else
-                  (if tg_deleg return M (unit) then
-                     (k_code_key (tg_target)) >>= fun (w__15 : mword 256) =>
-                     (code_db_resolve (w__15)) >>= fun '(_) =>
-                     (k_aload (tg_target)) >>= fun '(_) => returnM (tt)
-                   else returnM (tt)) >>
-                  (expand_charged_memory (required_memory_size)) >>
-                  (is_running (tt)) >>= fun (w__16 : bool) =>
-                  (if negb (w__16) then returnM (tt)
-                   else
-                     let '((Gas base_child_amount)) := base_child in
-                     let '((Gas stipend_amount)) := stipend in
-                     (if Z.leb (stipend_amount)
-                           ((Z.sub ((Z.sub ((pow2 (63))) (1))) (base_child_amount))) then
-                        returnM ((Gas ((Z.add (base_child_amount) (stipend_amount)))))
-                      else throw (InvalidBlock (ExecutionInvalid))) >>= fun (child_gas : gas) =>
-                     (is_running (tt)) >>= fun (w__18 : bool) =>
-                     (if negb (w__18) then returnM (tt)
-                      else
-                        (k_aload (target)) >>= fun '(_) =>
-                        read_reg call_depth >>= fun (w__19 : Z) =>
-                        let depth_ok := Z.ltb (w__19) ((DEPTH_LIMIT).(frame_depth_value)) in
-                        (if andb ((call_takes_value (kind))) ((word_nonzero (value)))
-                           return
-                           M (bool) then
-                           (k_get_balance (caller)) >>= fun (w__20 : mword 256) =>
-                           returnM ((word_ule (value) (w__20)))
-                         else returnM (true)) >>= fun (balance_ok : bool) =>
-                        (if orb ((negb (depth_ok))) ((negb (balance_ok))) return M (unit) then
-                           (returndata_clear (tt)) >>
-                           (refund_gas (child_gas)) >> (push (WORD_ZERO))  : M (unit)
-                         else
-                           match (option_map (fun semanticValue => (semanticValue).(precompile_id_value)) (word_to_precompile_id
-                                                                                                             ((address_to_word
-                                                                                                                 (target))))) with
-                           | Some precompile_number =>
-                              (is_precompile (Build_precompile_id ((precompile_number)))) >>= fun (w__21 : bool) =>
-                              (if w__21 return M (unit) then
-                                 (memory_byte_slice ((ByteQuantity ((uint (args_off_word)))))
-                                    ((ByteQuantity ((uint (args_len_word)))))) >>= fun input =>
-                                 (precompile_gas (Build_precompile_id ((precompile_number))) (input)) >>= fun (w__22 : option gas_cost) =>
-                                 match w__22 with
-                                 | Some used =>
-                                    (if gas_cost_le_gas (used) (child_gas) return M (unit) then
-                                       (run_precompile_slice
-                                          (Build_precompile_id ((precompile_number))) (input)) >>= fun result =>
-                                       (if result.(PrecompileResult_success) return M (unit) then
-                                          write_reg returndata result.(PrecompileResult_output) >>
-                                          (if andb ((call_transfers_value (kind)))
-                                                ((word_nonzero (value)))
-                                             return
-                                             M (unit) then
-                                             (k_transfer (caller) (target) (value))
-                                              : M (unit)
-                                           else returnM (tt)) >>
-                                          (returndata_copy_prefix
-                                             ((ByteQuantity ((uint (ret_off_word)))))
-                                             ((ByteQuantity ((uint (ret_len_word)))))) >>
-                                          (gas_sub_cost_or_oog (child_gas) (used)) >>= fun unused =>
-                                          (is_running (tt)) >>= fun (w__23 : bool) =>
-                                          (if w__23 return M (unit) then
-                                             (refund_gas (unused)) >> (push (WORD_ONE))  : M (unit)
-                                           else returnM (tt))
-                                           : M (unit)
-                                        else
-                                          (returndata_clear (tt)) >> (push (WORD_ZERO))  : M (unit))
-                                        : M (unit)
-                                     else (returndata_clear (tt)) >> (push (WORD_ZERO))  : M (unit))
-                                     : M (unit)
-                                 | _ => (returndata_clear (tt)) >> (push (WORD_ZERO))  : M (unit)
-                                 end
-                                  : M (unit)
-                               else
-                                 (executable_code (target) (tg_deleg) (tg_target)) >>= fun child_code =>
-                                 let child_addr : mword 160 :=
-                                   if call_uses_target_address (kind) then target
-                                   else caller in
-                                 (if call_is_delegate (kind) return M (mword 160) then
-                                    read_reg message >>= fun (w__24 : Message) =>
-                                    returnM (w__24.(Message_caller))
-                                  else returnM (caller)) >>= fun (child_caller : mword 160) =>
-                                 (if call_is_delegate (kind) return M (mword 256) then
-                                    read_reg message >>= fun (w__25 : Message) =>
-                                    returnM (w__25.(Message_value))
-                                  else returnM (value)) >>= fun (child_value : mword 256) =>
-                                 (if call_is_static (kind) then returnM (true)
-                                  else
-                                    read_reg message >>= fun (w__26 : Message) =>
-                                    returnM (w__26.(Message_is_static))) >>= fun (child_static : bool) =>
-                                 (is_running (tt)) >>= fun (w__27 : bool) =>
-                                 (if w__27 return M (ByteSlice) then
-                                    (memory_byte_slice ((ByteQuantity ((uint (args_off_word)))))
-                                       ((ByteQuantity ((uint (args_len_word))))))
-                                     : M (ByteSlice)
-                                  else returnM (EMPTY_SLICE)) >>= fun child_calldata =>
-                                 (suspend_frame (tt)) >>= fun checkpoint =>
-                                 (if andb ((call_transfers_value (kind))) ((word_nonzero (value)))
-                                    return
-                                    M (unit) then
-                                    (k_transfer (caller) (target) (value))
-                                     : M (unit)
-                                  else returnM (tt)) >>
-                                 ((frame_depth_increment
-                                     (Build_frame_depth (((checkpoint.(FrameCheckpoint_call_depth)).(frame_depth_value))))) >>= fun semanticResult =>
-                                  returnM (semanticResult).(frame_depth_value)) >>= fun (w__29 : Z) =>
-                                 write_reg
-                                   message
-                                   ({| Message_caller := child_caller;
-                                       Message_address := child_addr;
-                                       Message_code_address := target;
-                                       Message_value := child_value;
-                                       Message_is_static := child_static;
-                                       Message_depth := (Build_frame_depth (w__29)) |}) >>
-                                 (calldata_install (child_calldata)) >>
-                                 write_reg pc BYTE_ZERO >>
-                                 write_reg gas_remaining child_gas >>
-                                 write_reg frame_status (Running (tt)) >>
-                                 (returndata_clear (tt)) >>
-                                 write_reg frame_code child_code >>
-                                 ((frame_depth_increment
-                                     (Build_frame_depth (((checkpoint.(FrameCheckpoint_call_depth)).(frame_depth_value))))) >>= fun semanticResult =>
-                                  returnM (semanticResult).(frame_depth_value)) >>= fun (w__30 : Z) =>
-                                 write_reg call_depth w__30 >>
-                                 write_reg frame_refund GAS_REFUND_ZERO >>
-                                 (_rec_interpret (tt) ((Z.sub (_reclimit) (1)))
-                                    (_limit_reduces_bool _acc ltac:(assumption))) >>= fun (w__31 : ByteSlice) =>
-                                 write_reg returndata w__31 >>
-                                 (frame_succeeded (tt)) >>= fun succeeded =>
-                                 read_reg gas_remaining >>= fun child_left =>
-                                 read_reg frame_refund >>= fun child_refund =>
-                                 (restore_frame (checkpoint)) >>
-                                 (refund_gas (child_left)) >>
-                                 (returndata_copy_prefix ((ByteQuantity ((uint (ret_off_word)))))
-                                    ((ByteQuantity ((uint (ret_len_word)))))) >>
-                                 (if succeeded return M (unit) then
-                                    (record_refund (child_refund)) >> (push (WORD_ONE))  : M (unit)
-                                  else
-                                    (k_revert (checkpoint.(FrameCheckpoint_state))) >>
-                                    (push (WORD_ZERO))
-                                     : M (unit))
-                                  : M (unit))
-                               : M (unit)
-                           | _ =>
-                              (executable_code (target) (tg_deleg) (tg_target)) >>= fun child_code =>
-                              let child_addr : mword 160 :=
-                                if call_uses_target_address (kind) then target
-                                else caller in
-                              (if call_is_delegate (kind) return M (mword 160) then
-                                 read_reg message >>= fun (w__32 : Message) =>
-                                 returnM (w__32.(Message_caller))
-                               else returnM (caller)) >>= fun (child_caller : mword 160) =>
-                              (if call_is_delegate (kind) return M (mword 256) then
-                                 read_reg message >>= fun (w__33 : Message) =>
-                                 returnM (w__33.(Message_value))
-                               else returnM (value)) >>= fun (child_value : mword 256) =>
-                              (if call_is_static (kind) then returnM (true)
-                               else
-                                 read_reg message >>= fun (w__34 : Message) =>
-                                 returnM (w__34.(Message_is_static))) >>= fun (child_static : bool) =>
-                              (is_running (tt)) >>= fun (w__35 : bool) =>
-                              (if w__35 return M (ByteSlice) then
-                                 (memory_byte_slice ((ByteQuantity ((uint (args_off_word)))))
-                                    ((ByteQuantity ((uint (args_len_word))))))
-                                  : M (ByteSlice)
-                               else returnM (EMPTY_SLICE)) >>= fun child_calldata =>
-                              (suspend_frame (tt)) >>= fun checkpoint =>
-                              (if andb ((call_transfers_value (kind))) ((word_nonzero (value)))
-                                 return
-                                 M (unit) then
-                                 (k_transfer (caller) (target) (value))
-                                  : M (unit)
-                               else returnM (tt)) >>
-                              ((frame_depth_increment
-                                  (Build_frame_depth (((checkpoint.(FrameCheckpoint_call_depth)).(frame_depth_value))))) >>= fun semanticResult =>
-                               returnM (semanticResult).(frame_depth_value)) >>= fun (w__37 : Z) =>
-                              write_reg
-                                message
-                                ({| Message_caller := child_caller;
-                                    Message_address := child_addr;
-                                    Message_code_address := target;
-                                    Message_value := child_value;
-                                    Message_is_static := child_static;
-                                    Message_depth := (Build_frame_depth (w__37)) |}) >>
-                              (calldata_install (child_calldata)) >>
-                              write_reg pc BYTE_ZERO >>
-                              write_reg gas_remaining child_gas >>
-                              write_reg frame_status (Running (tt)) >>
-                              (returndata_clear (tt)) >>
-                              write_reg frame_code child_code >>
-                              ((frame_depth_increment
-                                  (Build_frame_depth (((checkpoint.(FrameCheckpoint_call_depth)).(frame_depth_value))))) >>= fun semanticResult =>
-                               returnM (semanticResult).(frame_depth_value)) >>= fun (w__38 : Z) =>
-                              write_reg call_depth w__38 >>
-                              write_reg frame_refund GAS_REFUND_ZERO >>
-                              (_rec_interpret (tt) ((Z.sub (_reclimit) (1)))
-                                 (_limit_reduces_bool _acc ltac:(assumption))) >>= fun (w__39 : ByteSlice) =>
-                              write_reg returndata w__39 >>
-                              (frame_succeeded (tt)) >>= fun succeeded =>
-                              read_reg gas_remaining >>= fun child_left =>
-                              read_reg frame_refund >>= fun child_refund =>
-                              (restore_frame (checkpoint)) >>
-                              (refund_gas (child_left)) >>
-                              (returndata_copy_prefix ((ByteQuantity ((uint (ret_off_word)))))
-                                 ((ByteQuantity ((uint (ret_len_word)))))) >>
-                              (if succeeded return M (unit) then
-                                 (record_refund (child_refund)) >> (push (WORD_ONE))  : M (unit)
-                               else
-                                 (k_revert (checkpoint.(FrameCheckpoint_state))) >>
-                                 (push (WORD_ZERO))
-                                  : M (unit))
-                               : M (unit)
-                           end
-                            : M (unit))
-                         : M (unit))
-                      : M (unit))
-                   : M (unit))
-                : M (unit))
-             : M (unit))
-          : M (unit))
-       : M (unit))
-    : M (unit)
-).
-(*#rec#run_create*) exact (
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (self_addr (tt)) >>= fun creator =>
-   (pop (tt)) >>= fun value =>
-   (pop (tt)) >>= fun off_word =>
-   (pop (tt)) >>= fun len_word =>
-   (if is2 return M (mword 256) then (pop (tt))  : M (mword 256)
-    else returnM (WORD_ZERO)) >>= fun salt =>
-   (is_running (tt)) >>= fun (w__1 : bool) =>
-   (if negb (w__1) then returnM (tt)
-    else
-      let initcode_size : Z := uint (len_word) in
-      (guard_static (tt)) >>= fun (w__2 : bool) =>
-      (if w__2 then returnM (tt)
-       else
-         (charge_memory_expansion (off_word) (len_word)) >>
-         (charge_constant (G_create)) >>
-         (initcode_gas (initcode_size)) >>= fun (w__3 : gas_cost) =>
-         (charge_cost (w__3)) >>
-         (if is2 return M (unit) then
-            (memory_word_count (initcode_size)) >>= fun (w__4 : Z) =>
-            (charge_cost ((gas_constant_scale (G_keccak_word) (w__4))))
-             : M (unit)
-          else returnM (tt)) >>
-         (is_running (tt)) >>= fun (w__5 : bool) =>
-         (if negb (w__5) then returnM (tt)
-          else
-          (initcode_size_allowed (initcode_size)) >>= fun (w__6 : bool) =>
-          if negb (w__6) return M (unit) then (exc_halt (InitCodeTooLarge))  : M (unit)
-          else
-            ((k_get_nonce (creator)) >>= fun semanticResult =>
-             returnM (semanticResult).(protocol_quantity_value)) >>= fun nonce =>
-            (and_boolM (returnM (is2)) ((is_running (tt))  : M (bool))) >>= fun w__8 =>
-            (if w__8 return M (mword 160) then
-               (mem_keccak ((ByteQuantity ((uint (off_word))))) ((ByteQuantity (initcode_size)))) >>= fun (w__9 : mword 256) =>
-               (k_create2_addr (creator) (salt) (w__9))
-                : M (mword 160)
-             else (k_create_addr (creator) (Build_protocol_quantity ((nonce))))  : M (mword 160)) >>= fun (new_addr : mword 160) =>
-            read_reg gas_remaining >>= fun avail =>
-            (gas_quotient (avail) (Build_gas_divisor ((64)))) >>= fun retained_gas =>
-            (gas_sub_gas_or_oog (avail) (retained_gas)) >>= fun child_gas =>
-            (is_running (tt)) >>= fun (w__12 : bool) =>
-            (if negb (w__12) then returnM (tt)
-             else
-               write_reg gas_remaining retained_gas >>
-               read_reg message >>= fun (w__13 : Message) =>
-               (if w__13.(Message_is_static) return M (unit) then
-                  (exc_halt (WriteProtection))
-                   : M (unit)
-                else
-                  read_reg call_depth >>= fun (w__14 : Z) =>
-                  let depth_ok := Z.ltb (w__14) ((DEPTH_LIMIT).(frame_depth_value)) in
-                  (k_get_balance (creator)) >>= fun (w__15 : mword 256) =>
-                  let balance_ok : bool := word_ule (value) (w__15) in
-                  let nonce_ok : bool := neq_int (nonce) ((Z.sub ((pow2 (64))) (1))) in
-                  (if orb ((negb (depth_ok))) ((orb ((negb (balance_ok))) ((negb (nonce_ok)))))
-                     return
-                     M (unit) then
-                     (returndata_clear (tt)) >>
-                     (refund_gas (child_gas)) >> (push (WORD_ZERO))  : M (unit)
-                   else
-                     (k_access_account (new_addr)) >>= fun '(_) =>
-                     (k_account_occupied (new_addr)) >>= fun (occupied : bool) =>
-                     (returndata_clear (tt)) >>
-                     (k_bump_nonce (creator)) >>
-                     (if occupied return M (unit) then (push (WORD_ZERO))  : M (unit)
-                      else
-                        (is_running (tt)) >>= fun (w__16 : bool) =>
-                        (if w__16 return M (ByteSlice) then
-                           (memory_byte_slice ((ByteQuantity ((uint (off_word)))))
-                              ((ByteQuantity (initcode_size))))
-                            : M (ByteSlice)
-                         else returnM (EMPTY_SLICE)) >>= fun initcode =>
-                        (code_db_insert (initcode)) >>= fun (w__18 : mword 256) =>
-                        (code_db_resolve (w__18)) >>= fun child_code =>
-                        (suspend_frame (tt)) >>= fun checkpoint =>
-                        (k_mark_created (new_addr)) >>
-                        (k_clear_storage (new_addr)) >>
-                        (k_bump_nonce (new_addr)) >>
-                        (k_transfer (creator) (new_addr) (value)) >>
-                        ((frame_depth_increment
-                            (Build_frame_depth (((checkpoint.(FrameCheckpoint_call_depth)).(frame_depth_value))))) >>= fun semanticResult =>
-                         returnM (semanticResult).(frame_depth_value)) >>= fun (w__19 : Z) =>
-                        write_reg
-                          message
-                          ({| Message_caller := creator;
-                              Message_address := new_addr;
-                              Message_code_address := new_addr;
-                              Message_value := value;
-                              Message_is_static :=
-                                checkpoint.(FrameCheckpoint_message).(Message_is_static);
-                              Message_depth := (Build_frame_depth (w__19)) |}) >>
-                        (calldata_install (EMPTY_SLICE)) >>
-                        write_reg pc BYTE_ZERO >>
-                        write_reg gas_remaining child_gas >>
-                        write_reg frame_status (Running (tt)) >>
-                        (returndata_clear (tt)) >>
-                        write_reg frame_code child_code >>
-                        ((frame_depth_increment
-                            (Build_frame_depth (((checkpoint.(FrameCheckpoint_call_depth)).(frame_depth_value))))) >>= fun semanticResult =>
-                         returnM (semanticResult).(frame_depth_value)) >>= fun (w__20 : Z) =>
-                        write_reg call_depth w__20 >>
-                        write_reg frame_refund GAS_REFUND_ZERO >>
-                        (_rec_interpret (tt) ((Z.sub (_reclimit) (1)))
-                           (_limit_reduces_bool _acc ltac:(assumption))) >>= fun (w__21 : ByteSlice) =>
-                        write_reg returndata w__21 >>
-                        (frame_succeeded (tt)) >>= fun succeeded =>
-                        read_reg gas_remaining >>= fun child_left =>
-                        read_reg frame_refund >>= fun child_refund =>
-                        (returndata_size (tt)) >>= fun dep_len =>
-                        (and_boolM
-                           ((max_code_size (tt)) >>= fun (w__22 : byte_quantity) =>
-                            returnM (((byte_quantity_le (dep_len) (w__22))  : bool)))
-                           ((or_boolM
-                               (read_reg k_fork >>= fun (w__23 : Fork) =>
-                                returnM (((fork_lt (w__23) (London))  : bool)))
-                               ((or_boolM
-                                   (returnM (((byte_quantity_equal (dep_len) (BYTE_ZERO))  : bool)))
-                                   (read_reg returndata >>= fun (w__24 : ByteSlice) =>
-                                    (slice_byte (w__24) (BYTE_ZERO)) >>= fun (w__25 : mword 8) =>
-                                    returnM (((neq_vec (w__25) ((Ox"EF")))  : bool))))
-                                : M (bool)))
-                            : M (bool))) >>= fun code_ok =>
-                        let deposit := gas_constant_scale_byte_quantity (G_codedeposit) (dep_len) in
-                        (restore_frame (checkpoint)) >>
-                        (refund_gas (child_left)) >>
-                        (if andb (succeeded)
-                              ((andb (code_ok) ((gas_cost_le_gas (deposit) (child_left)))))
-                           return
-                           M (unit) then
-                           read_reg gas_remaining >>= fun (w__28 : gas) =>
-                           (gas_sub_cost_or_oog (w__28) (deposit)) >>= fun (w__29 : gas) =>
-                           write_reg gas_remaining w__29 >>
-                           (is_running (tt)) >>= fun (w__30 : bool) =>
-                           (if w__30 return M (unit) then
-                              (record_refund (child_refund)) >>
-                              read_reg returndata >>= fun (w__31 : ByteSlice) =>
-                              (k_deploy_code (new_addr) (w__31)) >>
-                              (push ((address_to_word (new_addr))))
-                               : M (unit)
-                            else returnM (tt))
-                            : M (unit)
-                         else
-                           (if succeeded return M (unit) then
-                              write_reg gas_remaining checkpoint.(FrameCheckpoint_gas_remaining)
-                               : M (unit)
-                            else returnM (tt)) >>
-                           (k_revert (checkpoint.(FrameCheckpoint_state))) >>
-                           (push (WORD_ZERO))
-                            : M (unit)) >>
-                        (if succeeded return M (unit) then (returndata_clear (tt))  : M (unit)
-                         else returnM (tt))
-                         : M (unit))
-                      : M (unit))
-                   : M (unit))
-                : M (unit))
-             : M (unit))
-          : M (unit))
-       : M (unit))
-    : M (unit)
-).
-Defined.
-
-
-Definition execute (_arg0 : ast) : M (unit) :=
-   read_reg call_depth >>= fun (w__0 : Z) =>
-   (_rec_execute (_arg0)
-      (((Z.add ((Z.mul (3) ((Z.sub ((DEPTH_LIMIT).(frame_depth_value)) (w__0))))) (1))
-       : Z)) (Zwf_guarded _))
+      (if succeeded return M (unit) then
+         write_reg gas_remaining checkpoint.(FrameCheckpoint_gas_remaining)
+          : M (unit)
+       else returnM (tt)) >>
+      (k_revert (checkpoint.(FrameCheckpoint_state))) >> (push (WORD_ZERO))  : M (unit)) >>
+   (if succeeded return M (unit) then (returndata_clear (tt))  : M (unit)
+    else returnM (tt))
     : M (unit).
 
-Definition interpret (_arg0 : unit) : M (ByteSlice) :=
-   read_reg call_depth >>= fun (w__0 : Z) =>
-   (_rec_interpret (_arg0)
-      (((Z.add ((Z.mul (3) ((Z.sub ((DEPTH_LIMIT).(frame_depth_value)) (w__0))))) (2))
-       : Z)) (Zwf_guarded _))
-    : M (ByteSlice).
-
-Definition run_call (_arg0 : CallKind) : M (unit) :=
-   read_reg call_depth >>= fun (w__0 : Z) =>
-   (_rec_run_call (_arg0) (((Z.mul (3) ((Z.sub ((DEPTH_LIMIT).(frame_depth_value)) (w__0))))  : Z))
-      (Zwf_guarded _))
+Definition resume_frame (continuation : FrameContinuation) (output : ByteSlice) : M (unit) :=
+   match continuation with
+   | ResumeCall call => (resume_call (call) (output))  : M (unit)
+   | ResumeCreate create => (resume_create (create) (output))  : M (unit)
+   end
     : M (unit).
 
-Definition run_create (_arg0 : bool) : M (unit) :=
-   read_reg call_depth >>= fun (w__0 : Z) =>
-   (_rec_run_create (_arg0)
-      (((Z.mul (3) ((Z.sub ((DEPTH_LIMIT).(frame_depth_value)) (w__0))))
-       : Z)) (Zwf_guarded _))
-    : M (unit).
+Definition interpret '(tt : unit) : M (ByteSlice) :=
+   (frame_stack_reset (tt)) >>
+   let interpreting : bool := true in
+   let result : ByteSlice := EMPTY_SLICE in
+   (whileMT
+     (interpreting, result)
+     (fun '(interpreting, result) =>
+       Z.mul (2) ((Z.add ((GAS_MAX_VALUE).(protocol_quantity_value)) (1))))
+     (fun '(interpreting, result) => returnM (interpreting))
+     (fun '(interpreting, result) =>
+       (assert_exp' true "loop dummy assert" >>= fun _ =>
+        (is_running (tt)) >>= fun (w__0 : bool) =>
+        (if w__0 return M ((bool * ByteSlice)) then
+           (fetch (tt)) >>= fun (w__1 : ast) => (execute (w__1)) >> returnM ((interpreting, result))
+         else
+           (frame_output (tt)) >>= fun output =>
+           (frame_stack_is_empty (tt)) >>= fun (w__2 : bool) =>
+           (if w__2 then
+              let result : ByteSlice := output in
+              let interpreting : bool := false in
+              returnM ((interpreting, result))
+            else
+              (frame_stack_pop (tt)) >>= fun (w__3 : FrameContinuation) =>
+              (resume_frame (w__3) (output)) >> returnM ((interpreting, result)))
+            : M ((bool * ByteSlice)))
+         : M ((bool * ByteSlice)))
+        : M ((bool * ByteSlice)))) >>= fun '((interpreting, result)
+   : (bool * ByteSlice)) =>
+   returnM (result).
 
 Definition G_transaction : gas_constant := GasConstant (21000).
 #[export] Hint Unfold G_transaction : sail.
@@ -7233,12 +7694,14 @@ Definition PER_AUTH_BASE : gas_constant := GasConstant (12500).
 Definition PER_EMPTY_ACCOUNT : gas_constant := GasConstant (25000).
 #[export] Hint Unfold PER_EMPTY_ACCOUNT : sail.
 Definition calldata_cost (input : ByteSlice) : M (gas_cost) :=
-   (slice_count_nonzero (input)) >>= fun '(ByteQuantity nonzeroes) =>
-   let '((ByteQuantity input_len)) := input.(ByteSlice_len) in
-   (if Z.leb (nonzeroes) (input_len) then returnM ((Z.sub (input_len) (nonzeroes)))
-    else throw (InvalidBlock (ExecutionInvalid))) >>= fun (zeroes : Z) =>
-   returnM ((gas_cost_add ((gas_constant_scale (G_txdatazero) (zeroes)))
-               ((gas_constant_scale (G_txdatanonzero) (nonzeroes))))).
+   (slice_count_nonzero (input)) >>= fun nonzeroes =>
+   let input_len := input.(ByteSlice_len) in
+   (if byte_quantity_le (nonzeroes) (input_len) return M (byte_quantity) then
+      (byte_quantity_sub (input_len) (nonzeroes))
+       : M (byte_quantity)
+    else throw (InvalidBlock (ExecutionInvalid))) >>= fun (zeroes : byte_quantity) =>
+   returnM ((gas_cost_add ((gas_constant_scale_byte_quantity (G_txdatazero) (zeroes)))
+               ((gas_constant_scale_byte_quantity (G_txdatanonzero) (nonzeroes))))).
 
 Definition calldata_tokens (input : ByteSlice) : M (Z) :=
    (slice_count_nonzero (input)) >>= fun '(ByteQuantity nonzeroes) =>
@@ -7275,16 +7738,16 @@ Definition blob_hashes_versioned (hashes : BlobHashes) : M (bool) :=
 
 Definition intrinsic_gas (tx : Transaction) : M (gas_cost) :=
    (calldata_cost (tx.(Transaction_input_src))) >>= fun data_cost =>
-   let '((ByteQuantity input_len)) := tx.(Transaction_input_src).(ByteSlice_len) in
+   let input_len := tx.(Transaction_input_src).(ByteSlice_len) in
    let address_cost :=
-     gas_constant_scale (G_access_list_address)
-       ((tx.(Transaction_access_list_address_count)).(protocol_quantity_value)) in
+     gas_constant_scale_protocol_quantity (G_access_list_address)
+       (Build_protocol_quantity (((tx.(Transaction_access_list_address_count)).(protocol_quantity_value)))) in
    let slot_cost :=
-     gas_constant_scale (G_access_list_storage_key)
-       ((tx.(Transaction_access_list_slot_count)).(protocol_quantity_value)) in
+     gas_constant_scale_protocol_quantity (G_access_list_storage_key)
+       (Build_protocol_quantity (((tx.(Transaction_access_list_slot_count)).(protocol_quantity_value)))) in
    let auth_cost :=
-     gas_constant_scale (PER_EMPTY_ACCOUNT)
-       ((tx.(Transaction_authorization_count)).(protocol_quantity_value)) in
+     gas_constant_scale_protocol_quantity (PER_EMPTY_ACCOUNT)
+       (Build_protocol_quantity (((tx.(Transaction_authorization_count)).(protocol_quantity_value)))) in
    let total : gas_cost := gas_cost_add_constant (data_cost) (G_transaction) in
    let total : gas_cost := gas_cost_add (total) (address_cost) in
    let total : gas_cost := gas_cost_add (total) (slot_cost) in
@@ -7298,63 +7761,83 @@ Definition intrinsic_gas (tx : Transaction) : M (gas_cost) :=
     : M (gas_cost).
 
 Definition calldata_floor (input : ByteSlice) : M (gas_cost) :=
-   (calldata_tokens (input)) >>= fun (w__0 : Z) =>
-   returnM ((gas_cost_add_constant ((gas_constant_scale ((GasConstant (10))) (w__0)))
+   (slice_count_nonzero (input)) >>= fun nonzeroes =>
+   let input_len := input.(ByteSlice_len) in
+   (if byte_quantity_le (nonzeroes) (input_len) return M (byte_quantity) then
+      (byte_quantity_sub (input_len) (nonzeroes))
+       : M (byte_quantity)
+    else throw (InvalidBlock (ExecutionInvalid))) >>= fun (zeroes : byte_quantity) =>
+   returnM ((gas_cost_add_constant
+               ((gas_cost_add ((gas_constant_scale_byte_quantity ((GasConstant (10))) (zeroes)))
+                   ((gas_constant_scale_byte_quantity ((GasConstant (40))) (nonzeroes)))))
                (G_transaction))).
 
-Definition transaction_costs (tx : Transaction) (blob_price : mword 256)
-: M (option TransactionCosts) :=
+Definition max_blobs_per_transaction '(tt : unit) : M (blob_count) :=
+   (read_reg k_fork >>= fun (w__0 : Fork) =>
+   (if fork_gteq (w__0) (Osaka) then returnM (6)
+    else
+      read_reg k_fork >>= fun (w__1 : Fork) =>
+      let w__2 : Z := if fork_gteq (w__1) (Prague) then 9 else 6 in
+      returnM (w__2))
+    : M (Z)) >>= fun semanticResult =>
+   returnM (Build_protocol_quantity (semanticResult)).
+
+Definition transaction_blob_gas (count : blob_count) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
+: M (blob_gas_typ) :=
+   let count := (count).(protocol_quantity_value) in
+   (((max_blobs_per_transaction (tt)) >>= fun semanticResult =>
+     returnM (semanticResult).(protocol_quantity_value)) >>= fun active_maximum =>
+   (if andb ((Z.leb (active_maximum) (9))) ((Z.leb (count) (active_maximum))) then
+      returnM ((Z.mul (131072) (count)))
+    else throw (InvalidBlock (ExecutionInvalid)))
+    : M (Z)) >>= fun semanticResult =>
+   returnM (Build_protocol_quantity (semanticResult)).
+
+Definition transaction_costs (tx : Transaction) (blob_price : word) : M (option TransactionCosts) :=
    catch_early_return
      (liftR ((intrinsic_gas (tx))) >>= fun intrinsic =>
      liftR ((calldata_floor (tx.(Transaction_input_src)))) >>= fun floor =>
-     let blob_gas_value :=
-       Z.mul ((tx.(Transaction_blob_hashes).(BlobHashes_count)).(protocol_quantity_value))
-         ((GAS_PER_BLOB).(protocol_quantity_value)) in
-     (if Z.leb (blob_gas_value) ((Z.sub ((pow2 (64))) (1))) then
-        returnR (option TransactionCosts) (blob_gas_value)
-      else
-        (early_return (None  : option TransactionCosts) : MR (option TransactionCosts) Z)
-         : MR (option TransactionCosts) (Z)) >>= fun (blob_gas : Z) =>
+     liftR (((transaction_blob_gas
+                (Build_protocol_quantity (((tx.(Transaction_blob_hashes).(BlobHashes_count)).(protocol_quantity_value))))) >>= fun semanticResult =>
+             returnM (semanticResult).(protocol_quantity_value))) >>= fun blob_gas =>
      (if Z.eqb (blob_gas) (0) then returnR (option TransactionCosts) (ZERO_WORD)
       else
         liftR ((word_checked_mul_protocol_quantity (blob_price)
-                  (Build_protocol_quantity ((blob_gas))))) >>= fun (w__1 : option (mword 256)) =>
-        match w__1 with
+                  (Build_protocol_quantity ((blob_gas))))) >>= fun (w__0 : option word) =>
+        match w__0 with
         | Some amount => returnR (option TransactionCosts) (amount)
         | None =>
-           (early_return (None
-            : option TransactionCosts) :
-             MR (option TransactionCosts) (mword 256))
-            : MR (option TransactionCosts) (mword 256)
+           (early_return (None  : option TransactionCosts) : MR (option TransactionCosts) word)
+            : MR (option TransactionCosts) (word)
         end
-         : MR (option TransactionCosts) (mword 256)) >>= fun (blob_fee : mword 256) =>
-     liftR ((word_checked_mul_gas (tx.(Transaction_max_fee)) (tx.(Transaction_gas_limit)))) >>= fun (w__4 : option (mword 256)) =>
-     match w__4 with
+         : MR (option TransactionCosts) (word)) >>= fun (blob_fee : word) =>
+     liftR ((word_checked_mul_gas (tx.(Transaction_max_fee)) (tx.(Transaction_gas_limit)))) >>= fun (w__3 : option word) =>
+     match w__3 with
      | Some amount => returnR (option TransactionCosts) (amount)
      | None =>
-        (early_return (None  : option TransactionCosts) : MR (option TransactionCosts) (mword 256))
-         : MR (option TransactionCosts) (mword 256)
-     end >>= fun (gas_cap : mword 256) =>
+        (early_return (None  : option TransactionCosts) : MR (option TransactionCosts) word)
+         : MR (option TransactionCosts) (word)
+     end >>= fun (gas_cap : word) =>
      liftR ((word_checked_mul_protocol_quantity (tx.(Transaction_max_blob_fee))
-               (Build_protocol_quantity ((blob_gas))))) >>= fun (w__6 : option (mword 256)) =>
-     match w__6 with
+               (Build_protocol_quantity ((blob_gas))))) >>= fun (w__5 : option word) =>
+     match w__5 with
      | Some amount => returnR (option TransactionCosts) (amount)
      | None =>
-        (early_return (None  : option TransactionCosts) : MR (option TransactionCosts) (mword 256))
-         : MR (option TransactionCosts) (mword 256)
-     end >>= fun (blob_cap : mword 256) =>
+        (early_return (None  : option TransactionCosts) : MR (option TransactionCosts) word)
+         : MR (option TransactionCosts) (word)
+     end >>= fun (blob_cap : word) =>
      match word_checked_add (gas_cap) (tx.(Transaction_value)) with
      | Some amount => returnR (option TransactionCosts) (amount)
      | None =>
-        (early_return (None  : option TransactionCosts) : MR (option TransactionCosts) (mword 256))
-         : MR (option TransactionCosts) (mword 256)
-     end >>= fun (gas_and_value : mword 256) =>
+        (early_return (None  : option TransactionCosts) : MR (option TransactionCosts) word)
+         : MR (option TransactionCosts) (word)
+     end >>= fun (gas_and_value : word) =>
      match word_checked_add (gas_and_value) (blob_cap) with
      | Some amount => returnR (option TransactionCosts) (amount)
      | None =>
-        (early_return (None  : option TransactionCosts) : MR (option TransactionCosts) (mword 256))
-         : MR (option TransactionCosts) (mword 256)
-     end >>= fun (upfront : mword 256) =>
+        (early_return (None  : option TransactionCosts) : MR (option TransactionCosts) word)
+         : MR (option TransactionCosts) (word)
+     end >>= fun (upfront : word) =>
      returnR (option TransactionCosts) ((Some
                                            (({| TransactionCosts_intrinsic := intrinsic;
                                                 TransactionCosts_calldata_floor := floor;
@@ -7363,17 +7846,18 @@ Definition transaction_costs (tx : Transaction) (blob_price : mword 256)
                                                 TransactionCosts_blob_fee := blob_fee;
                                                 TransactionCosts_upfront := upfront |}))))).
 
-Definition validated_word_product (value : mword 256) (factor : gas) : M (word) :=
-   (word_checked_mul_gas (value) (factor)) >>= fun (w__0 : option (mword 256)) =>
+Definition validated_word_product (value : word) (factor : gas) : M (word) :=
+   (word_checked_mul_gas (value) (factor)) >>= fun (w__0 : option word) =>
    match w__0 with
    | Some product => returnM (product)
    | None => throw (InvalidBlock (ExecutionInvalid))
    end
-    : M (mword 256).
+    : M (word).
 
-Definition validated_gas_add '((Gas left') : gas) '((Gas right') : gas) : M (gas) :=
-   (if Z.leb (right') ((Z.sub ((Z.sub ((pow2 (63))) (1))) (left'))) then
-      returnM ((Gas ((Z.add (left') (right')))))
+Definition validated_gas_add (left_gas : gas) (right_gas : gas) : M (gas) :=
+   (if gas_sum_supported (left_gas) (right_gas) return M (gas) then
+      (gas_add (left_gas) (right_gas))
+       : M (gas)
     else throw (InvalidBlock (ExecutionInvalid)))
     : M (gas).
 
@@ -7392,20 +7876,20 @@ Definition process_auth (au : Authorization) : M (gas_refund) :=
    let authority := au.(Authorization_authority) in
    (or_boolM (returnM (((word_is_zero (au.(Authorization_chain_id)))  : bool)))
       (read_reg k_chain_id >>= fun (w__0 : Z) =>
-       (word_of_nat (w__0)) >>= fun (w__1 : mword 256) =>
-       returnM (((eq_vec (au.(Authorization_chain_id)) (w__1))  : bool)))) >>= fun chain_ok =>
+       (word_of_protocol_quantity (Build_protocol_quantity ((w__0)))) >>= fun (w__1 : word) =>
+       returnM (((generic_eq (au.(Authorization_chain_id)) (w__1))  : bool)))) >>= fun chain_ok =>
    (if andb (au.(Authorization_valid_sig)) (chain_ok) return M (gas_refund) then
       (k_access_account (authority)) >>= fun '(_) =>
       (k_deleg_target (authority)) >>= fun '((is_deleg, _)) =>
       (or_boolM
-         ((k_code_key (authority)) >>= fun (w__2 : mword 256) =>
-          returnM (((eq_vec (w__2) (KECCAK_EMPTY))  : bool))) (returnM (is_deleg))) >>= fun code_ok =>
+         ((k_code_key (authority)) >>= fun (w__2 : b256) =>
+          returnM (((generic_eq (w__2) (KECCAK_EMPTY))  : bool))) (returnM (is_deleg))) >>= fun code_ok =>
       ((k_get_nonce (authority)) >>= fun semanticResult =>
        returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__3 : Z) =>
       let nonce_ok := Z.eqb (w__3) ((au.(Authorization_nonce)).(protocol_quantity_value)) in
       (if andb (code_ok) (nonce_ok) return M (gas_refund) then
          (k_account_exists (authority)) >>= fun existed =>
-         (if eq_vec (au.(Authorization_address)) (ZERO_ADDR) return M (unit) then
+         (if generic_eq (au.(Authorization_address)) (ZERO_ADDR) return M (unit) then
             (k_clear_code (authority))
              : M (unit)
           else (k_set_delegation (authority) (au.(Authorization_address)))  : M (unit)) >>
@@ -7431,7 +7915,7 @@ Fixpoint process_auth_list (xs : list Authorization) : M (gas_refund) :=
    end
     : M (gas_refund).
 
-Fixpoint warm_access_list_addresses (xs : list (mword 160)) : M (unit) :=
+Fixpoint warm_access_list_addresses (xs : list address_typ) : M (unit) :=
    match xs with
    | [] => returnM (tt)
    | a :: r => (k_access_account (a)) >>= fun '(_) => (warm_access_list_addresses (r))  : M (unit)
@@ -7454,7 +7938,7 @@ Definition prewarm (tx : Transaction) : M (unit) :=
     else (k_access_account (tx.(Transaction_recipient)))  : M (bool)) >>= fun '(_) =>
    read_reg k_fork >>= fun (w__1 : Fork) =>
    (if fork_gteq (w__1) (Shanghai) return M (unit) then
-      (k_coinbase (tt)) >>= fun (w__2 : mword 160) =>
+      (k_coinbase (tt)) >>= fun (w__2 : address_typ) =>
       (k_access_account (w__2)) >>= fun '(_) => returnM (tt)
     else returnM (tt)) >>
    let precompile_addresses : vec Z 17 :=
@@ -7466,13 +7950,13 @@ Definition prewarm (tx : Transaction) : M (unit) :=
        let p := vec_access_dec (precompile_addresses) (i) in
        (is_precompile (Build_precompile_id ((p)))) >>= fun (w__3 : bool) =>
        (if w__3 return M (unit) then
-          (word_of_precompile_id (Build_precompile_id ((p)))) >>= fun (w__4 : mword 256) =>
+          (word_of_precompile_id (Build_precompile_id ((p)))) >>= fun (w__4 : word) =>
           (k_access_account ((word_to_address (w__4)))) >>= fun '(_) => returnM (tt)
         else returnM (tt))
         : M (unit)))) >>
    (is_precompile (Build_precompile_id ((256)))) >>= fun (w__5 : bool) =>
    (if w__5 return M (unit) then
-      (word_of_precompile_id (Build_precompile_id ((256)))) >>= fun (w__6 : mword 256) =>
+      (word_of_precompile_id (Build_precompile_id ((256)))) >>= fun (w__6 : word) =>
       (k_access_account ((word_to_address (w__6)))) >>= fun '(_) => returnM (tt)
     else returnM (tt)) >>
    (warm_access_list_addresses (tx.(Transaction_access_list_addresses))) >>
@@ -7487,39 +7971,38 @@ Definition invalid_receipt '(tt : unit) : Receipt :=
       Receipt_block_gas := GAS_ZERO;
       Receipt_logs := [] |}.
 
-Definition eff_gas_price_for
-(base_fee : mword 256) (max_fee : mword 256) (max_priority_fee : mword 256)
+Definition eff_gas_price_for (base_fee : word) (max_fee : word) (max_priority_fee : word)
 : (word * word) :=
-   let price : mword 256 :=
+   let price : word :=
      match word_checked_add (base_fee) (max_priority_fee) with
      | Some uncapped => if word_ult (max_fee) (uncapped) then max_fee else uncapped
      | None => max_fee
      end in
-   let priority := if word_ule (base_fee) (price) then sub_vec (price) (base_fee) else ZERO_WORD in
+   let priority := if word_ule (base_fee) (price) then word_sub (price) (base_fee) else ZERO_WORD in
    ((price, priority)).
 
 Definition check_transaction_validity (tx : Transaction) : M (TxValidity) :=
-   (and_boolM
-      (read_reg k_chain_id >>= fun (w__0 : Z) =>
-       (tx_sig_v_ok (Build_protocol_quantity ((w__0))) (tx.(Transaction_tx_type))
-          (tx.(Transaction_sig_v)))
-        : M (bool))
-      ((tx_auth_ok (tx.(Transaction_pubkey)) (tx.(Transaction_signing_hash))
-          (tx.(Transaction_sig_r)) (tx.(Transaction_sig_s)))
-       : M (bool))) >>= fun (w__3 : bool) =>
-   (if negb (w__3) return M (unit) then throw (InvalidBlock (InvalidSignature))
+   read_reg k_chain_id >>= fun (w__0 : Z) =>
+   (tx_sig_v_ok (Build_protocol_quantity ((w__0))) (tx.(Transaction_tx_type))
+      (tx.(Transaction_sig_v))) >>= fun (w__1 : bool) =>
+   (if negb (w__1) return M (unit) then throw (InvalidBlock (InvalidSignature))
     else returnM (tt)) >>
-   read_reg k_header >>= fun (w__4 : BlockHeader) =>
+   let parity := (tx_y_parity (tx.(Transaction_tx_type)) (tx.(Transaction_sig_v))).(y_parity_value) in
+   (tx_auth_ok (tx.(Transaction_sender)) (tx.(Transaction_signing_hash)) (Build_y_parity ((parity)))
+      (tx.(Transaction_sig_r)) (tx.(Transaction_sig_s))) >>= fun (w__2 : bool) =>
+   (if negb (w__2) return M (unit) then throw (InvalidBlock (InvalidSignature))
+    else returnM (tt)) >>
+   read_reg k_header >>= fun (w__3 : BlockHeader) =>
    let '((eff_gas_price, eff_priority_fee)) :=
-     eff_gas_price_for (w__4.(BlockHeader_base_fee)) (tx.(Transaction_max_fee))
+     eff_gas_price_for (w__3.(BlockHeader_base_fee)) (tx.(Transaction_max_fee))
        (tx.(Transaction_max_priority_fee)) in
    let sender := tx.(Transaction_sender) in
-   let '((ByteQuantity input_len)) := tx.(Transaction_input_src).(ByteSlice_len) in
+   let input_len := tx.(Transaction_input_src).(ByteSlice_len) in
    ((k_get_nonce (sender)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun nonce_before =>
-   read_reg k_header >>= fun (w__5 : BlockHeader) =>
+   read_reg k_header >>= fun (w__4 : BlockHeader) =>
    (blob_base_fee
-      (Build_protocol_quantity (((w__5.(BlockHeader_excess_blob_gas)).(protocol_quantity_value))))) >>= fun blob_price =>
+      (Build_protocol_quantity (((w__4.(BlockHeader_excess_blob_gas)).(protocol_quantity_value))))) >>= fun blob_price =>
    (transaction_costs (tx) (blob_price)) >>= fun checked_costs =>
    let costs_valid : bool := match checked_costs with | Some _ => true | None => false end in
    let costs : TransactionCosts :=
@@ -7539,15 +8022,11 @@ Definition check_transaction_validity (tx : Transaction) : M (TxValidity) :=
      | None => false
      end in
    (k_deleg_target (sender)) >>= fun '((sender_deleg, _)) =>
-   read_reg k_fork >>= fun (w__6 : Fork) =>
-   (if fork_gteq (w__6) (Osaka) then returnM (6)
-    else
-      read_reg k_fork >>= fun (w__7 : Fork) =>
-      let w__8 : Z := if fork_gteq (w__7) (Prague) then 9 else 6 in
-      returnM (w__8)) >>= fun (max_blobs : Z) =>
+   ((max_blobs_per_transaction (tt)) >>= fun semanticResult =>
+    returnM (semanticResult).(protocol_quantity_value)) >>= fun max_blobs =>
    (if tx_is_blob (tx.(Transaction_tx_type)) return M (bool) then
       (and_boolM
-         (read_reg k_fork >>= fun (w__9 : Fork) => returnM (((fork_gteq (w__9) (Cancun))  : bool)))
+         (read_reg k_fork >>= fun (w__5 : Fork) => returnM (((fork_gteq (w__5) (Cancun))  : bool)))
          (((and_boolM
               (returnM (((neq_int
                             ((tx.(Transaction_blob_hashes).(BlobHashes_count)).(protocol_quantity_value))
@@ -7567,25 +8046,25 @@ Definition check_transaction_validity (tx : Transaction) : M (TxValidity) :=
        : M (bool)
     else returnM (true)) >>= fun (blob_ok : bool) =>
    (or_boolM
-      (read_reg k_fork >>= fun (w__15 : Fork) => returnM (((fork_lt (w__15) (Prague))  : bool)))
+      (read_reg k_fork >>= fun (w__11 : Fork) => returnM (((fork_lt (w__11) (Prague))  : bool)))
       (returnM (((gas_cost_le_gas (costs.(TransactionCosts_calldata_floor))
                     (tx.(Transaction_gas_limit)))
         : bool)))) >>= fun (floor_ok : bool) =>
    match tx.(Transaction_tx_type) with
    | LegacyTx => returnM (true)
    | _ =>
-      read_reg k_chain_id >>= fun (w__16 : Z) =>
-      returnM ((Z.eqb ((tx.(Transaction_chain_id)).(protocol_quantity_value)) (w__16)))
+      read_reg k_chain_id >>= fun (w__12 : Z) =>
+      returnM ((Z.eqb ((tx.(Transaction_chain_id)).(protocol_quantity_value)) (w__12)))
    end >>= fun (chain_id_ok : bool) =>
-   (k_get_balance (sender)) >>= fun (w__17 : mword 256) =>
-   let balance_ok : bool := word_ule (costs.(TransactionCosts_upfront)) (w__17) in
+   (k_get_balance (sender)) >>= fun (w__13 : word) =>
+   let balance_ok : bool := word_ule (costs.(TransactionCosts_upfront)) (w__13) in
    (or_boolM
-      ((k_code_key (sender)) >>= fun (w__18 : mword 256) =>
-       returnM (((eq_vec (w__18) (KECCAK_EMPTY))  : bool))) (returnM (sender_deleg))) >>= fun (sender_code_ok : bool) =>
+      ((k_code_key (sender)) >>= fun (w__14 : b256) =>
+       returnM (((generic_eq (w__14) (KECCAK_EMPTY))  : bool))) (returnM (sender_deleg))) >>= fun (sender_code_ok : bool) =>
    let intrinsic_ok : bool :=
      gas_cost_le_gas (costs.(TransactionCosts_intrinsic)) (tx.(Transaction_gas_limit)) in
-   read_reg k_header >>= fun (w__19 : BlockHeader) =>
-   let fee_cap_ok : bool := word_ule (w__19.(BlockHeader_base_fee)) (tx.(Transaction_max_fee)) in
+   read_reg k_header >>= fun (w__15 : BlockHeader) =>
+   let fee_cap_ok : bool := word_ule (w__15.(BlockHeader_base_fee)) (tx.(Transaction_max_fee)) in
    let blob_fee_cap_ok : bool :=
      orb ((Z.eqb ((tx.(Transaction_blob_hashes).(BlobHashes_count)).(protocol_quantity_value)) (0)))
        ((word_ule (blob_price) (tx.(Transaction_max_blob_fee)))) in
@@ -7595,9 +8074,9 @@ Definition check_transaction_validity (tx : Transaction) : M (TxValidity) :=
    let priority_fee_ok : bool :=
      word_ule (tx.(Transaction_max_priority_fee)) (tx.(Transaction_max_fee)) in
    (or_boolM (returnM (((negb ((tx_is_access_list (tx.(Transaction_tx_type)))))  : bool)))
-      (read_reg k_fork >>= fun (w__21 : Fork) => returnM (((fork_gteq (w__21) (Berlin))  : bool)))) >>= fun (access_list_fork_ok : bool) =>
+      (read_reg k_fork >>= fun (w__17 : Fork) => returnM (((fork_gteq (w__17) (Berlin))  : bool)))) >>= fun (access_list_fork_ok : bool) =>
    (or_boolM (returnM (((negb ((tx_is_dynamic_fee (tx.(Transaction_tx_type)))))  : bool)))
-      (read_reg k_fork >>= fun (w__22 : Fork) => returnM (((fork_gteq (w__22) (London))  : bool)))) >>= fun (dynamic_fee_fork_ok : bool) =>
+      (read_reg k_fork >>= fun (w__18 : Fork) => returnM (((fork_gteq (w__18) (London))  : bool)))) >>= fun (dynamic_fee_fork_ok : bool) =>
    let set_code_target_ok : bool :=
      orb ((negb ((tx_is_set_code (tx.(Transaction_tx_type))))))
        ((negb (tx.(Transaction_is_create)))) in
@@ -7606,10 +8085,11 @@ Definition check_transaction_validity (tx : Transaction) : M (TxValidity) :=
        (((neq_int ((tx.(Transaction_authorization_count)).(protocol_quantity_value)) (0))
         : bool)) in
    (or_boolM (returnM (((negb ((tx_is_set_code (tx.(Transaction_tx_type)))))  : bool)))
-      (read_reg k_fork >>= fun (w__23 : Fork) => returnM (((fork_gteq (w__23) (Prague))  : bool)))) >>= fun (set_code_fork_ok : bool) =>
-   let nonce_incrementable : bool := neq_int (nonce_before) ((Z.sub ((pow2 (64))) (1))) in
-   read_reg k_header >>= fun (w__24 : BlockHeader) =>
-   let block_gas_ok : bool := gas_le (tx.(Transaction_gas_limit)) (w__24.(BlockHeader_gas_limit)) in
+      (read_reg k_fork >>= fun (w__19 : Fork) => returnM (((fork_gteq (w__19) (Prague))  : bool)))) >>= fun (set_code_fork_ok : bool) =>
+   let nonce_incrementable : bool :=
+     neq_int (nonce_before) ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) in
+   read_reg k_header >>= fun (w__20 : BlockHeader) =>
+   let block_gas_ok : bool := gas_le (tx.(Transaction_gas_limit)) (w__20.(BlockHeader_gas_limit)) in
    let valid :=
      andb (costs_valid)
        ((andb (balance_ok)
@@ -7640,7 +8120,7 @@ Definition check_transaction_validity (tx : Transaction) : M (TxValidity) :=
                 TxValidity_priority_fee := eff_priority_fee |})).
 
 Definition apply_transaction_upfront_effects (tx : Transaction) (v : TxValidity) : M (gas_refund) :=
-   (validated_word_product (v.(TxValidity_gas_price)) (tx.(Transaction_gas_limit))) >>= fun (w__0 : mword 256) =>
+   (validated_word_product (v.(TxValidity_gas_price)) (tx.(Transaction_gas_limit))) >>= fun (w__0 : word) =>
    (k_sub_balance (v.(TxValidity_sender)) (w__0)) >>
    (if word_nonzero (v.(TxValidity_blob_fee)) return M (unit) then
       (k_sub_balance (v.(TxValidity_sender)) (v.(TxValidity_blob_fee)))
@@ -7662,7 +8142,7 @@ Definition enter_transaction_frame (tx : Transaction) (intrinsic : gas_cost) : M
    write_reg frame_refund GAS_REFUND_ZERO >> write_reg frame_status (Running (tt))  : M (unit).
 
 Definition run_create_transaction_frame
-(tx : Transaction) (sender : mword 160) (nonce_before : account_nonce)
+(tx : Transaction) (sender : address_typ) (nonce_before : account_nonce)
 (*(0 <=? nonce_before) && (nonce_before <=? (2 ^ 64 - 1))*)
 : M (unit) :=
    let nonce_before := (nonce_before).(protocol_quantity_value) in
@@ -7686,7 +8166,7 @@ Definition run_create_transaction_frame
             Message_value := tx.(Transaction_value);
             Message_is_static := false;
             Message_depth := (Build_frame_depth (0)) |}) >>
-      (code_db_insert (tx.(Transaction_input_src))) >>= fun (w__1 : mword 256) =>
+      (code_db_insert (tx.(Transaction_input_src))) >>= fun (w__1 : b256) =>
       (code_db_resolve (w__1)) >>= fun (w__2 : Code) =>
       write_reg frame_code w__2 >>
       (interpret (tt)) >>= fun deployed_code =>
@@ -7696,7 +8176,7 @@ Definition run_create_transaction_frame
          (and_boolM
             ((max_code_size (tt)) >>= fun (w__4 : byte_quantity) =>
              returnM (((byte_quantity_le (dep_len) (w__4))  : bool)))
-            ((or_boolM (returnM (((byte_quantity_equal (dep_len) (BYTE_ZERO))  : bool)))
+            ((or_boolM (returnM (((generic_eq (dep_len) (BYTE_ZERO))  : bool)))
                 ((slice_byte (deployed_code) (BYTE_ZERO)) >>= fun (w__5 : mword 8) =>
                  returnM (((neq_vec (w__5) ((Ox"EF")))  : bool))))
              : M (bool))) >>= fun code_ok =>
@@ -7717,7 +8197,7 @@ Definition run_create_transaction_frame
        : M (unit))
     : M (unit).
 
-Definition run_call_transaction_frame (tx : Transaction) (sender : mword 160) : M (unit) :=
+Definition run_call_transaction_frame (tx : Transaction) (sender : address_typ) : M (unit) :=
    (k_aload (tx.(Transaction_recipient))) >>= fun '(_) =>
    (if word_nonzero (tx.(Transaction_value)) return M (unit) then
       (k_transfer (sender) (tx.(Transaction_recipient)) (tx.(Transaction_value)))
@@ -7822,10 +8302,10 @@ Definition settle_transaction
    let block_gas :=
      if fork_gteq (w__4) (Amsterdam) then if gas_lt (gas_used0) (floor) then floor else gas_used0
      else gas_used in
-   (validated_word_product (v.(TxValidity_gas_price)) (gas_left)) >>= fun (w__5 : mword 256) =>
+   (validated_word_product (v.(TxValidity_gas_price)) (gas_left)) >>= fun (w__5 : word) =>
    (k_add_balance (v.(TxValidity_sender)) (w__5)) >>
-   (k_coinbase (tt)) >>= fun (w__6 : mword 160) =>
-   (validated_word_product (v.(TxValidity_priority_fee)) (gas_used)) >>= fun (w__7 : mword 256) =>
+   (k_coinbase (tt)) >>= fun (w__6 : address_typ) =>
+   (validated_word_product (v.(TxValidity_priority_fee)) (gas_used)) >>= fun (w__7 : word) =>
    (k_add_balance (w__6) (w__7)) >>
    (k_tx_merge (tt)) >>
    (read_logs (tt)) >>= fun (w__8 : list LogEntry) =>
@@ -7851,11 +8331,6 @@ Definition process_transaction (tx : Transaction) : M (Receipt) :=
        : M (Receipt))
     : M (Receipt).
 
-Definition undefined_TriePath '(tt : unit) : M (TriePath) :=
-   (undefined_bitvector (256)) >>= fun (w__0 : mword 256) =>
-   (undefined_range (0) (64)) >>= fun (w__1 : Z) =>
-   returnM (({| TriePath_data := w__0;  TriePath_len := (Build_trie_path_len (w__1)) |})).
-
 Definition to_trie_depth (value : trie_path_len) (*(0 <=? value) && (value <=? 64)*)
 : M (trie_depth) :=
    let value := (value).(trie_path_len_value) in
@@ -7864,41 +8339,87 @@ Definition to_trie_depth (value : trie_path_len) (*(0 <=? value) && (value <=? 6
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_trie_depth (semanticResult)).
 
-Definition path_take (path : TriePath) (n : trie_path_len) (*(0 <=? n) && (n <=? 64)*) : TriePath :=
-   let n := (n).(trie_path_len_value) in
-   if Z.eqb (n) (0) then path_empty (tt)
-   else if Z.leb (((path_len (path)).(trie_path_len_value))) (n) then path
-   else
-     let shift := Z.sub (256) ((Z.mul (n) (4))) in
-     path_new ((shiftl ((shiftr (path.(TriePath_data)) (shift))) (shift)))
-       (Build_trie_path_len ((n))).
+Definition path_append_byte (path : TriePath) (value : mword 8) : M (TriePath) :=
+   (path_append_nibble (path) ((subrange_vec_dec (value) (7) (4)))) >>= fun (w__0 : TriePath) =>
+   (path_append_nibble (w__0) ((subrange_vec_dec (value) (3) (0))))
+    : M (TriePath).
 
-Definition path_drop (path : TriePath) (n : trie_path_len) (*(0 <=? n) && (n <=? 64)*) : TriePath :=
+Definition path_take (path : TriePath) (n : trie_path_len) (*(0 <=? n) && (n <=? 64)*)
+: M (TriePath) :=
+   let n := (n).(trie_path_len_value) in
+   (if Z.eqb (n) (0) then returnM ((path_empty (tt)))
+    else if Z.leb (((path_len (path)).(trie_path_len_value))) (n) then returnM (path)
+    else
+      let result := path_empty (tt) in
+      let index : Z := 0 in
+      (let '(loop__step_lower) := 0 in
+      let '(loop__step_upper) := 63 in
+      (foreach_ZM_up loop__step_lower loop__step_upper 1 (index, result)
+        (fun _step '(index, result) =>
+          (if Z.ltb (index) (n) return M ((Z * TriePath)) then
+             (path_nibble (path) (Build_trie_path_cursor ((index)))) >>= fun (w__0 : mword 4) =>
+             (path_append_nibble (result) (w__0)) >>= fun (w__1 : TriePath) =>
+             let result := w__1  : TriePath in
+             ((trie_path_len_increment (Build_trie_path_len ((index)))) >>= fun semanticResult =>
+              returnM (semanticResult).(trie_path_len_value)) >>= fun (w__2 : Z) =>
+             let index := w__2  : Z in
+             returnM ((index, result))
+           else returnM ((index, result)))
+           : M ((Z * TriePath))))) >>= fun '((index, result)
+      : (Z * TriePath)) =>
+      returnM (result))
+    : M (TriePath).
+
+Definition path_drop (path : TriePath) (n : trie_path_len) (*(0 <=? n) && (n <=? 64)*)
+: M (TriePath) :=
    let n := (n).(trie_path_len_value) in
    let length := (path_len (path)).(trie_path_len_value) in
-   if Z.leb (length) (n) then path_empty (tt)
-   else if Z.eqb (n) (0) then path
-   else
-     let remain : Z := Z.sub (length) (n) in
-     path_new ((shiftl (path.(TriePath_data)) ((Z.mul (n) (4))))) (Build_trie_path_len ((remain))).
+   (if Z.leb (length) (n) then returnM ((path_empty (tt)))
+    else if Z.eqb (n) (0) then returnM (path)
+    else
+      let remain : Z := Z.sub (length) (n) in
+      let result := path_empty (tt) in
+      let offset : Z := 0 in
+      (let '(loop__step_lower) := 0 in
+      let '(loop__step_upper) := 63 in
+      (foreach_ZM_up loop__step_lower loop__step_upper 1 (offset, result)
+        (fun _step '(offset, result) =>
+          (if Z.ltb (offset) (remain) return M ((Z * TriePath)) then
+             let candidate := Z.add (n) (offset) in
+             (if andb ((Z.leb (0) (candidate))) ((Z.leb (candidate) (64))) then returnM (candidate)
+              else
+                assert_exp' false "sail/lib/mpt/primitives.sail:166.40-166.41" >>= fun _ => exit tt) >>= fun (source_index : Z) =>
+             (path_nibble (path) (Build_trie_path_cursor ((source_index)))) >>= fun (w__1 : mword 4) =>
+             (path_append_nibble (result) (w__1)) >>= fun (w__2 : TriePath) =>
+             let result := w__2  : TriePath in
+             ((trie_path_len_increment (Build_trie_path_len ((offset)))) >>= fun semanticResult =>
+              returnM (semanticResult).(trie_path_len_value)) >>= fun (w__3 : Z) =>
+             let offset := w__3  : Z in
+             returnM ((offset, result))
+           else returnM ((offset, result)))
+           : M ((Z * TriePath))))) >>= fun '((offset, result)
+      : (Z * TriePath)) =>
+      returnM (result))
+    : M (TriePath).
 
 Definition path_eq (a : TriePath) (b : TriePath) : bool :=
    andb
      ((Z.eqb ((a.(TriePath_len)).(trie_path_len_value)) ((b.(TriePath_len)).(trie_path_len_value))))
-     ((eq_vec (a.(TriePath_data)) (b.(TriePath_data)))).
+     ((generic_eq (a.(TriePath_data)) (b.(TriePath_data)))).
 
 Definition path_lt (a : TriePath) (b : TriePath) : bool :=
-   if eq_vec (a.(TriePath_data)) (b.(TriePath_data)) then
+   if generic_eq (a.(TriePath_data)) (b.(TriePath_data)) then
      Z.ltb (((path_len (a)).(trie_path_len_value))) (((path_len (b)).(trie_path_len_value)))
-   else word_ult (a.(TriePath_data)) (b.(TriePath_data)).
+   else b256_lt (a.(TriePath_data)) (b.(TriePath_data)).
 
-Definition path_prefix_of (prefix : TriePath) (path : TriePath) : bool :=
-   if Z.ltb (((path_len (path)).(trie_path_len_value)))
-        (((path_len (prefix)).(trie_path_len_value))) then
-     false
-   else
-     path_eq (prefix)
-       ((path_take (path) (Build_trie_path_len ((((path_len (prefix)).(trie_path_len_value))))))).
+Definition path_prefix_of (prefix : TriePath) (path : TriePath) : M (bool) :=
+   (if Z.ltb (((path_len (path)).(trie_path_len_value)))
+         (((path_len (prefix)).(trie_path_len_value))) then
+      returnM (false)
+    else
+      (path_take (path) (Build_trie_path_len ((((path_len (prefix)).(trie_path_len_value)))))) >>= fun (w__0 : TriePath) =>
+      returnM ((path_eq (prefix) (w__0))))
+    : M (bool).
 
 Definition common_prefix_from (a : TriePath) (b : TriePath) (start : trie_path_len)
 (*(0 <=? start) && (start <=? 64)*)
@@ -7915,16 +8436,15 @@ Definition common_prefix_from (a : TriePath) (b : TriePath) (start : trie_path_l
    (foreach_ZM_up loop__step_lower loop__step_upper 1 (count, index, matching)
      (fun _step '(count, index, matching) =>
        (if andb (matching) (((Z.ltb (index) (stop))  : bool)) return M ((Z * Z * bool)) then
-          (if eq_vec ((path_nibble (a) (Build_trie_path_cursor ((index)))))
-                ((path_nibble (b) (Build_trie_path_cursor ((index)))))
-             return
-             M ((Z * Z * bool)) then
+          (path_nibble (a) (Build_trie_path_cursor ((index)))) >>= fun (w__0 : mword 4) =>
+          (path_nibble (b) (Build_trie_path_cursor ((index)))) >>= fun (w__1 : mword 4) =>
+          (if eq_vec (w__0) (w__1) return M ((Z * Z * bool)) then
              ((trie_path_len_increment (Build_trie_path_len ((count)))) >>= fun semanticResult =>
-              returnM (semanticResult).(trie_path_len_value)) >>= fun (w__0 : Z) =>
-             let count := w__0  : Z in
+              returnM (semanticResult).(trie_path_len_value)) >>= fun (w__2 : Z) =>
+             let count := w__2  : Z in
              ((trie_path_len_increment (Build_trie_path_len ((index)))) >>= fun semanticResult =>
-              returnM (semanticResult).(trie_path_len_value)) >>= fun (w__1 : Z) =>
-             let index := w__1  : Z in
+              returnM (semanticResult).(trie_path_len_value)) >>= fun (w__3 : Z) =>
+             let index := w__3  : Z in
              returnM ((count, index, matching))
            else
              let matching : bool := false in
@@ -7945,11 +8465,11 @@ exact (
    (if Z.leb (((path_len (path)).(trie_path_len_value))) (index) then returnM ([])
     else
       let next := Z.add (index) (1) in
+      (path_nibble (path) (Build_trie_path_cursor ((index)))) >>= fun (w__0 : mword 4) =>
+      (path_nibble (path) (Build_trie_path_cursor ((next)))) >>= fun (w__1 : mword 4) =>
       (_rec_hex_prefix_pairs (path) (Build_hex_prefix_cursor (((Z.add (next) (1)))))
-         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun (w__0 : list (mword 8)) =>
-      returnM (((concat_vec ((path_nibble (path) (Build_trie_path_cursor ((index)))))
-                   ((path_nibble (path) (Build_trie_path_cursor ((next)))))) ::
-        w__0)))
+         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun (w__2 : list (mword 8)) =>
+      returnM (((concat_vec (w__0) (w__1)) :: w__2)))
     : M (list (mword 8))
 ).
 Defined.
@@ -7965,15 +8485,17 @@ Definition hex_prefix_pairs (path : TriePath) (index : hex_prefix_cursor)
     : M (list (mword 8)).
 
 Definition hex_prefix_compact (path : TriePath) (is_leaf : bool) : M ((list byte * byte_length)) :=
-   let odd := Z.eqb ((Z.rem (((path_len (path)).(trie_path_len_value))) (2))) (1) in
+   let length : Z := (path_len (path)).(trie_path_len_value) in
+   ((protocol_quantity_quotient (Build_protocol_quantity ((length))) (Build_protocol_divisor ((2)))) >>= fun semanticResult =>
+    returnM (semanticResult).(protocol_quantity_value)) >>= fun pair_count =>
+   let odd := neq_int (length) ((Z.mul (pair_count) (2))) in
    let flag : mword 4 := if is_leaf then (Ox"2") else (Ox"0") in
-   let first :=
-     if odd then
-       concat_vec ((or_vec (flag) ((Ox"1")))) ((path_nibble (path) (Build_trie_path_cursor ((0)))))
-     else concat_vec (flag) ((Ox"0")) in
+   (if odd return M (mword (4 + 4)) then
+      (path_nibble (path) (Build_trie_path_cursor ((0)))) >>= fun (w__0 : mword 4) =>
+      returnM ((concat_vec ((or_vec (flag) ((Ox"1")))) (w__0)))
+    else returnM ((concat_vec (flag) ((Ox"0"))))) >>= fun first =>
    let first_path_index : Z := if odd then 1 else 0 in
-   (exact_quotient (((path_len (path)).(trie_path_len_value))) (2)) >>= fun (w__0 : Z) =>
-   let encoded_len : byte_quantity := ByteQuantity ((Z.add (1) (w__0))) in
+   let encoded_len : byte_quantity := ByteQuantity ((Z.add (1) (pair_count))) in
    (hex_prefix_pairs (path) (Build_hex_prefix_cursor ((first_path_index)))) >>= fun (w__1 : list (mword 8)) =>
    returnM ((first :: w__1, encoded_len)).
 
@@ -8032,14 +8554,14 @@ Definition rlp_write_node_ref (r : NodeRef) : M (unit) :=
    | EmptyRef tt => (scratch_push_bytes ([(Ox"80")]) (BYTE_ONE))  : M (unit)
    | InlineRef node =>
       (rlp_write_raw_bytes ((inline_node_to_list (node))) (node.(InlineNode_len)))  : M (unit)
-   | HashRef h => (rlp_write_word (h))  : M (unit)
+   | HashRef h => (rlp_write_word ((hash_to_word (h))))  : M (unit)
    end
     : M (unit).
 
 Definition child_ref (encoded : ByteSlice) : M (NodeRef) :=
    (if byte_quantity_lt (encoded.(ByteSlice_len)) (MPT_HASH_LENGTH) return M (NodeRef) then
       (inline_node_from_slice (encoded)) >>= fun (w__0 : InlineNode) => returnM ((InlineRef (w__0)))
-    else (keccak256_slice (encoded)) >>= fun (w__1 : mword 256) => returnM ((HashRef (w__1))))
+    else (keccak256_slice (encoded)) >>= fun (w__1 : b256) => returnM ((HashRef (w__1))))
     : M (NodeRef).
 
 Definition branch_mask_for (index : mword 4) : bits 16 :=
@@ -8124,27 +8646,26 @@ Definition branch_child_ref (mask : mword 16) (children : vec NodeRef 16) : M (N
    (rlp_finish (mark) (encoded_len)) >>= fun (w__2 : ByteSlice) =>
    (child_ref (w__2)) >>= fun result => (scratch_rewind (mark)) >> returnM (result).
 
-Definition trie_ref_to_root (r : NodeRef) : M (bits 256) :=
+Definition trie_ref_to_root (r : NodeRef) : M (hash) :=
    match r with
    | EmptyRef tt => returnM (EMPTY_TRIE_ROOT)
-   | InlineRef node => (keccak256_segments ([inline_node_segment (node)]))  : M (mword 256)
+   | InlineRef node => (keccak256_segments ([inline_node_segment (node)]))  : M (b256)
    | HashRef h => returnM (h)
    end
-    : M (mword 256).
+    : M (b256).
 
 Definition node_to_ref (node : ByteSlice) : M (NodeRef) :=
-   (if byte_quantity_equal (node.(ByteSlice_len)) (BYTE_ZERO) then returnM ((EmptyRef (tt)))
+   (if generic_eq (node.(ByteSlice_len)) (BYTE_ZERO) then returnM ((EmptyRef (tt)))
     else if byte_quantity_lt (node.(ByteSlice_len)) (MPT_HASH_LENGTH) return M (NodeRef) then
       (inline_node_from_slice (node)) >>= fun (w__0 : InlineNode) => returnM ((InlineRef (w__0)))
-    else (keccak256_slice (node)) >>= fun (w__1 : mword 256) => returnM ((HashRef (w__1))))
+    else (keccak256_slice (node)) >>= fun (w__1 : b256) => returnM ((HashRef (w__1))))
     : M (NodeRef).
 
 Definition merge_ext_node (prefix : TriePath) (childnode : ByteSlice) : M (NodeRef) :=
    (if Z.eqb (((path_len (prefix)).(trie_path_len_value))) (0) return M (NodeRef) then
       (node_to_ref (childnode))
        : M (NodeRef)
-    else if byte_quantity_equal (childnode.(ByteSlice_len)) (BYTE_ZERO) then
-      returnM ((EmptyRef (tt)))
+    else if generic_eq (childnode.(ByteSlice_len)) (BYTE_ZERO) then returnM ((EmptyRef (tt)))
     else
       (decode_trie_node (childnode)) >>= fun (w__1 : TrieNode) =>
       match w__1 with
@@ -8196,11 +8717,12 @@ Definition merge_ext_ref (prefix : TriePath) (childref : NodeRef) : M (NodeRef) 
 Definition updates_empty (updates : list TrieUpdate) : bool :=
    match updates with | [] => true | _ => false end.
 
-Definition next_update_under (updates : list TrieUpdate) (prefix : TriePath) : bool :=
+Definition next_update_under (updates : list TrieUpdate) (prefix : TriePath) : M (bool) :=
    match updates with
-   | update :: _ => path_prefix_of (prefix) (update.(TrieUpdate_key))
-   | [] => false
-   end.
+   | update :: _ => (path_prefix_of (prefix) (update.(TrieUpdate_key)))  : M (bool)
+   | [] => returnM (false)
+   end
+    : M (bool).
 
 Definition item_leaf (path : TriePath) (value : ByteSlice) : TrieItem :=
    {| TrieItem_path := path;  TrieItem_value := LeafItem (value) |}.
@@ -8214,7 +8736,7 @@ Definition item_subtree (path : TriePath) (childref : NodeRef) : TrieItem :=
 Definition item_ref (it : TrieItem) (depth : trie_path_len) (*(0 <=? depth) && (depth <=? 64)*)
 : M (NodeRef) :=
    let depth := (depth).(trie_path_len_value) in
-   let suffix := path_drop (it.(TrieItem_path)) (Build_trie_path_len ((depth))) in
+   (path_drop (it.(TrieItem_path)) (Build_trie_path_len ((depth)))) >>= fun suffix =>
    match it.(TrieItem_value) with
    | LeafItem value => (leaf_child_ref (suffix) (value))  : M (NodeRef)
    | BranchItem subref =>
@@ -8227,7 +8749,7 @@ Definition item_ref (it : TrieItem) (depth : trie_path_len) (*(0 <=? depth) && (
          match subref with
          | HashRef h =>
             (node_db_lookup (h)) >>= fun node =>
-            (if byte_quantity_equal (node.(ByteSlice_len)) (BYTE_ZERO) return M (NodeRef) then
+            (if generic_eq (node.(ByteSlice_len)) (BYTE_ZERO) return M (NodeRef) then
                throw (InvalidBlock (WitnessDeficient))
              else (merge_ext_node (suffix) (node))  : M (NodeRef))
              : M (NodeRef)
@@ -8269,7 +8791,7 @@ Definition trie_builder_attach (builder : TrieBuilder) (path : TriePath) (child 
       (if Z.leb (((path_len (path)).(trie_path_len_value))) (depth) return M (unit) then
          throw (InvalidBlock (WitnessDeficient))
        else returnM (tt)) >>
-      let child_index := path_nibble (path) (Build_trie_path_cursor ((depth))) in
+      (path_nibble (path) (Build_trie_path_cursor ((depth)))) >>= fun child_index =>
       (if branch_mask_has (frame.(TrieBranchFrame_mask)) (child_index) return M (unit) then
          throw (InvalidBlock (WitnessDeficient))
        else returnM (tt)) >>
@@ -8306,9 +8828,9 @@ Definition trie_builder_wrap_branch
    (if Z.leb (child_depth) (child_start) then returnM (child)
     else
       let gap : Z := Z.sub (child_depth) (child_start) in
-      (extension_child_ref
-         ((path_take ((path_drop (anchor) (Build_trie_path_len ((child_start)))))
-             (Build_trie_path_len ((gap))))) (child))
+      (path_drop (anchor) (Build_trie_path_len ((child_start)))) >>= fun (w__0 : TriePath) =>
+      (path_take (w__0) (Build_trie_path_len ((gap)))) >>= fun (w__1 : TriePath) =>
+      (extension_child_ref (w__1) (child))
        : M (NodeRef))
     : M (NodeRef).
 
@@ -8377,8 +8899,8 @@ exact (
                   let depth := (frame.(TrieBranchFrame_depth)).(trie_depth_value) in
                   (if Z.eqb (depth) (0) then returnM (child)
                    else
-                     (extension_child_ref ((path_take (anchor) (Build_trie_path_len ((depth)))))
-                        (child))
+                     (path_take (anchor) (Build_trie_path_len ((depth)))) >>= fun (w__11 : TriePath) =>
+                     (extension_child_ref (w__11) (child))
                       : M (NodeRef)) >>= fun root =>
                   returnM (({| TrieBuilder_frames := popped.(TrieBuilder_frames);
                                TrieBuilder_root := root;
@@ -8504,26 +9026,30 @@ Definition trie_builder_root (builder : TrieBuilder) : M (hash) :=
    match builder.(TrieBuilder_frames) with
    | _ :: _ => throw (InvalidBlock (WitnessDeficient))
    | [] =>
-      (if builder.(TrieBuilder_complete) return M (mword 256) then
+      (if builder.(TrieBuilder_complete) return M (b256) then
          (trie_ref_to_root (builder.(TrieBuilder_root)))
-          : M (mword 256)
+          : M (b256)
        else returnM (EMPTY_TRIE_ROOT))
-       : M (mword 256)
+       : M (b256)
    end
-    : M (mword 256).
+    : M (b256).
 
 Definition trie_sink_root (sink : TrieItemSink) : M (hash) :=
    match sink.(TrieItemSink_pending) with
    | Some _ => throw (InvalidBlock (WitnessDeficient))
-   | None => (trie_builder_root (sink.(TrieItemSink_builder)))  : M (mword 256)
+   | None => (trie_builder_root (sink.(TrieItemSink_builder)))  : M (b256)
    end
-    : M (mword 256).
+    : M (b256).
 
 Definition undefined_RlpIndexCursor '(tt : unit) : M (RlpIndexCursor) :=
    (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__0 : Z) =>
    (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__1 : Z) =>
    returnM (({| RlpIndexCursor_count := (Build_protocol_quantity (w__0));
                 RlpIndexCursor_position := (Build_protocol_quantity (w__1)) |})).
+
+Definition rlp_index_byte_width_decrement (value : Z) (*(0 <=? value) && (value <=? 8)*) : M (Z) :=
+   assert_exp' (Z.ltb (0) (value)) "sail/lib/mpt/indexed.sail:27.20-27.21" >>= fun _ =>
+   returnM ((Z.sub (value) (1))).
 
 Definition rlp_index_encoded_width (value : item_index)
 (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
@@ -8541,22 +9067,32 @@ Definition rlp_index_encoded_width (value : item_index)
 Definition trie_index_key (index : item_index) (*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
 : M (TriePath) :=
    let index := (index).(protocol_quantity_value) in
-   (if Z.eqb (index) (0) then
-      returnM ((path_new ((shiftl ((zero_extend ((Ox"80")) (256))) (248)))
-                  (Build_trie_path_len ((2)))))
+   (if Z.eqb (index) (0) return M (TriePath) then
+      (path_append_byte ((path_empty (tt))) ((Ox"80")))
+       : M (TriePath)
     else if Z.leb (index) (127) return M (TriePath) then
-      (word_of_nat (index)) >>= fun (w__0 : mword 256) =>
-      returnM ((path_new ((shiftl (w__0) (248))) (Build_trie_path_len ((2)))))
+      (path_append_byte ((path_empty (tt))) ((get_slice_int (8) (index) (0))))
+       : M (TriePath)
     else
       let width :=
         (rlp_index_encoded_width (Build_protocol_quantity ((index)))).(rlp_index_byte_width_value) in
-      let byte_len := Z.add (width) (1) in
-      (word_of_nat ((Z.add (128) (width)))) >>= fun (w__1 : mword 256) =>
-      (word_of_nat (index)) >>= fun (w__2 : mword 256) =>
-      let encoded := or_vec ((shiftl (w__1) ((Z.mul (width) (8))))) (w__2) in
-      let align_shift := Z.sub (256) ((Z.mul (byte_len) (8))) in
-      returnM ((path_new ((shiftl (encoded) (align_shift)))
-                  (Build_trie_path_len (((Z.mul (byte_len) (2))))))))
+      (path_append_byte ((path_empty (tt))) ((get_slice_int (8) ((Z.add (128) (width))) (0)))) >>= fun path =>
+      let remaining : Z := width in
+      (let '(loop__offset_lower) := 0 in
+      let '(loop__offset_upper) := 7 in
+      (foreach_ZM_up loop__offset_lower loop__offset_upper 1 (path, remaining)
+        (fun _offset '(path, remaining) =>
+          (if neq_int (remaining) (0) return M ((TriePath * Z)) then
+             (rlp_index_byte_width_decrement (remaining)) >>= fun byte_offset =>
+             let shift : Z := Z.mul (byte_offset) (8) in
+             (path_append_byte (path) ((get_slice_int (8) (index) (shift)))) >>= fun (w__2 : TriePath) =>
+             let path := w__2  : TriePath in
+             let remaining : Z := byte_offset in
+             returnM ((path, remaining))
+           else returnM ((path, remaining)))
+           : M ((TriePath * Z))))) >>= fun '((path, remaining)
+      : (TriePath * Z)) =>
+      returnM (path))
     : M (TriePath).
 
 Definition rlp_index_cursor (count : item_count_typ) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
@@ -8629,9 +9165,8 @@ Fixpoint emit_live_updates_under
    match updates with
    | [] => returnM ((sink, []))
    | update :: rest =>
-      (if path_prefix_of (prefix) (update.(TrieUpdate_key))
-         return
-         M ((TrieItemSink * list TrieUpdate)) then
+      (path_prefix_of (prefix) (update.(TrieUpdate_key))) >>= fun (w__0 : bool) =>
+      (if w__0 return M ((TrieItemSink * list TrieUpdate)) then
          match update.(TrieUpdate_change) with
          | TrieDelete tt => returnM (sink)
          | TriePut value =>
@@ -8651,10 +9186,13 @@ Fixpoint emit_updates_before_child
    match updates with
    | [] => returnM ((sink, []))
    | update :: rest =>
-      (if orb ((negb ((path_prefix_of (prefix) (update.(TrieUpdate_key))))))
-            ((orb ((path_prefix_of (child) (update.(TrieUpdate_key))))
-                ((negb ((path_lt (update.(TrieUpdate_key)) (child))))))) then
-         returnM ((sink, updates))
+      (or_boolM
+         ((path_prefix_of (prefix) (update.(TrieUpdate_key))) >>= fun (w__0 : bool) =>
+          returnM (((negb (w__0))  : bool)))
+         ((or_boolM ((path_prefix_of (child) (update.(TrieUpdate_key)))  : M (bool))
+             (returnM (((negb ((path_lt (update.(TrieUpdate_key)) (child))))  : bool))))
+          : M (bool))) >>= fun (w__3 : bool) =>
+      (if w__3 then returnM ((sink, updates))
        else
          match update.(TrieUpdate_change) with
          | TrieDelete tt => returnM (sink)
@@ -8677,11 +9215,10 @@ Fixpoint emit_leaf_overlay
       (trie_sink_emit (sink) ((item_leaf (key) (value)))) >>= fun (w__0 : TrieItemSink) =>
       returnM ((w__0, []))
    | update :: rest =>
-      (if negb ((path_prefix_of (prefix) (update.(TrieUpdate_key))))
-         return
-         M ((TrieItemSink * list TrieUpdate)) then
-         (trie_sink_emit (sink) ((item_leaf (key) (value)))) >>= fun (w__1 : TrieItemSink) =>
-         returnM ((w__1, updates))
+      (path_prefix_of (prefix) (update.(TrieUpdate_key))) >>= fun (w__1 : bool) =>
+      (if negb (w__1) return M ((TrieItemSink * list TrieUpdate)) then
+         (trie_sink_emit (sink) ((item_leaf (key) (value)))) >>= fun (w__2 : TrieItemSink) =>
+         returnM ((w__2, updates))
        else if path_eq (update.(TrieUpdate_key)) (key)
          return
          M ((TrieItemSink * list TrieUpdate)) then
@@ -8695,8 +9232,8 @@ Fixpoint emit_leaf_overlay
        else if path_lt (key) (update.(TrieUpdate_key))
          return
          M ((TrieItemSink * list TrieUpdate)) then
-         (trie_sink_emit (sink) ((item_leaf (key) (value)))) >>= fun (w__4 : TrieItemSink) =>
-         (emit_live_updates_under (w__4) (updates) (prefix))
+         (trie_sink_emit (sink) ((item_leaf (key) (value)))) >>= fun (w__5 : TrieItemSink) =>
+         (emit_live_updates_under (w__5) (updates) (prefix))
           : M ((TrieItemSink * list TrieUpdate))
        else
          match update.(TrieUpdate_change) with
@@ -8719,7 +9256,7 @@ Fixpoint _rec_witness_emit
 exact (
    let cursor := (cursor).(trie_path_cursor_value) in
    assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if byte_quantity_equal (node.(ByteSlice_len)) (BYTE_ZERO)
+   (if generic_eq (node.(ByteSlice_len)) (BYTE_ZERO)
       return
       M ((TrieItemSink * list TrieUpdate)) then
       (emit_live_updates_under (sink) (updates) (prefix))
@@ -8742,12 +9279,11 @@ exact (
           else
             (path_concat (prefix) (extension.(ExtensionNodeData_path))) >>= fun child_prefix =>
             (emit_updates_before_child (sink) (updates) (prefix) (child_prefix)) >>= fun '((before_sink, child_updates)) =>
-            (if next_update_under (child_updates) (child_prefix)
-               return
-               M ((TrieItemSink * list TrieUpdate)) then
-               (field_to_ref (extension.(ExtensionNodeData_child))) >>= fun (w__5 : NodeRef) =>
-               (resolve_ref (w__5)) >>= fun child =>
-               (if byte_quantity_equal (child.(ByteSlice_len)) (BYTE_ZERO)
+            (next_update_under (child_updates) (child_prefix)) >>= fun (w__5 : bool) =>
+            (if w__5 return M ((TrieItemSink * list TrieUpdate)) then
+               (field_to_ref (extension.(ExtensionNodeData_child))) >>= fun (w__6 : NodeRef) =>
+               (resolve_ref (w__6)) >>= fun child =>
+               (if generic_eq (child.(ByteSlice_len)) (BYTE_ZERO)
                   return
                   M ((TrieItemSink * list TrieUpdate)) then
                   (emit_live_updates_under (before_sink) (child_updates) (child_prefix))
@@ -8759,16 +9295,16 @@ exact (
                    : M ((TrieItemSink * list TrieUpdate)))
                 : M ((TrieItemSink * list TrieUpdate))
              else
-               (field_to_ref (extension.(ExtensionNodeData_child))) >>= fun (w__9 : NodeRef) =>
-               (trie_sink_emit (before_sink) ((item_branch (child_prefix) (w__9)))) >>= fun (w__10 : TrieItemSink) =>
-               returnM ((w__10, child_updates))) >>= fun '((child_sink, later_updates)) =>
+               (field_to_ref (extension.(ExtensionNodeData_child))) >>= fun (w__10 : NodeRef) =>
+               (trie_sink_emit (before_sink) ((item_branch (child_prefix) (w__10)))) >>= fun (w__11 : TrieItemSink) =>
+               returnM ((w__11, child_updates))) >>= fun '((child_sink, later_updates)) =>
             (emit_live_updates_under (child_sink) (later_updates) (prefix))
              : M ((TrieItemSink * list TrieUpdate)))
           : M ((TrieItemSink * list TrieUpdate))
       | BranchNode branch =>
          (if orb
-               ((byte_quantity_not_equal (branch.(BranchNodeData_value).(RlpFieldRef_content_len))
-                   (BYTE_ZERO))) ((Z.leb (64) (cursor)))
+               ((generic_neq (branch.(BranchNodeData_value).(RlpFieldRef_content_len)) (BYTE_ZERO)))
+               ((Z.leb (64) (cursor)))
             return
             M ((TrieItemSink * list TrieUpdate)) then
             throw (InvalidBlock (WitnessDeficient))
@@ -8782,15 +9318,15 @@ exact (
             (foreach_ZM_up loop_i_lower loop_i_upper 1 (current_sink, nib, remaining)
               (fun i '(current_sink, nib, remaining) =>
                 let field' := vec_access_dec (branch.(BranchNodeData_children)) (i) in
-                (path_concat (prefix) ((path_single (nib)))) >>= fun child_prefix =>
+                (path_single (nib)) >>= fun (w__15 : TriePath) =>
+                (path_concat (prefix) (w__15)) >>= fun child_prefix =>
                 (field_to_ref (field')) >>= fun childref =>
                 let present : bool := match childref with | EmptyRef tt => false | _ => true end in
-                (if next_update_under (remaining) (child_prefix)
-                   return
-                   M ((TrieItemSink * list TrieUpdate)) then
+                (next_update_under (remaining) (child_prefix)) >>= fun (w__16 : bool) =>
+                (if w__16 return M ((TrieItemSink * list TrieUpdate)) then
                    (if present return M ((TrieItemSink * list TrieUpdate)) then
-                      (resolve_ref (childref)) >>= fun (w__14 : ByteSlice) =>
-                      (_rec_witness_emit (w__14) (child_prefix) (remaining) (current_sink)
+                      (resolve_ref (childref)) >>= fun (w__17 : ByteSlice) =>
+                      (_rec_witness_emit (w__17) (child_prefix) (remaining) (current_sink)
                          (Build_trie_path_cursor ((next_cursor))) ((Z.sub (_reclimit) (1)))
                          (_limit_reduces_bool _acc ltac:(assumption)))
                        : M ((TrieItemSink * list TrieUpdate))
@@ -8830,16 +9366,16 @@ Definition witness_emit
        : Z)) (Zwf_guarded _))
     : M ((TrieItemSink * list TrieUpdate)).
 
-Definition trie_root (base_root : mword 256) (updates : list TrieUpdate) : M (bits 256) :=
+Definition trie_root (base_root : b256) (updates : list TrieUpdate) : M (hash) :=
    (if updates_empty (updates) then returnM (base_root)
     else
       let sink := trie_sink_empty (tt) in
-      (if eq_vec (base_root) (EMPTY_TRIE_ROOT) return M ((TrieItemSink * list TrieUpdate)) then
+      (if generic_eq (base_root) (EMPTY_TRIE_ROOT) return M ((TrieItemSink * list TrieUpdate)) then
          (emit_live_updates_under (sink) (updates) ((path_empty (tt))))
           : M ((TrieItemSink * list TrieUpdate))
        else
          (node_db_lookup (base_root)) >>= fun node =>
-         (if byte_quantity_equal (node.(ByteSlice_len)) (BYTE_ZERO)
+         (if generic_eq (node.(ByteSlice_len)) (BYTE_ZERO)
             return
             M ((TrieItemSink * list TrieUpdate)) then
             throw (InvalidBlock (WitnessDeficient))
@@ -8847,16 +9383,16 @@ Definition trie_root (base_root : mword 256) (updates : list TrieUpdate) : M (bi
             (witness_emit (node) ((path_empty (tt))) (updates) (sink) (Build_trie_path_cursor ((0))))
              : M ((TrieItemSink * list TrieUpdate)))
           : M ((TrieItemSink * list TrieUpdate))) >>= fun '((updated_sink, remaining)) =>
-      (if updates_empty (remaining) return M (mword 256) then
+      (if updates_empty (remaining) return M (b256) then
          (trie_sink_finish (updated_sink)) >>= fun (w__4 : TrieItemSink) =>
          (trie_sink_root (w__4))
-          : M (mword 256)
+          : M (b256)
        else throw (InvalidBlock (WitnessDeficient)))
-       : M (mword 256))
-    : M (mword 256).
+       : M (b256))
+    : M (b256).
 
 Definition storage_value_changed (value : StorageValue) : bool :=
-   negb ((eq_vec (value.(StorageValue_curr)) (value.(StorageValue_orig)))).
+   negb ((generic_eq (value.(StorageValue_curr)) (value.(StorageValue_orig)))).
 
 Definition account_value_changed (value : AcctValue) : bool :=
    orb
@@ -8866,15 +9402,15 @@ Definition account_value_changed (value : AcctValue) : bool :=
              ((value.(AcctValue_orig).(Account_info).(AccountInfo_nonce)).(protocol_quantity_value))))))
      ((orb
          ((negb
-             ((eq_vec (value.(AcctValue_curr).(Account_info).(AccountInfo_balance))
+             ((generic_eq (value.(AcctValue_curr).(Account_info).(AccountInfo_balance))
                  (value.(AcctValue_orig).(Account_info).(AccountInfo_balance))))))
          ((orb
              ((negb
-                 ((eq_vec (value.(AcctValue_curr).(Account_info).(AccountInfo_storage_root))
+                 ((generic_eq (value.(AcctValue_curr).(Account_info).(AccountInfo_storage_root))
                      (value.(AcctValue_orig).(Account_info).(AccountInfo_storage_root))))))
              ((orb
                  ((negb
-                     ((eq_vec (value.(AcctValue_curr).(Account_info).(AccountInfo_code_hash))
+                     ((generic_eq (value.(AcctValue_curr).(Account_info).(AccountInfo_code_hash))
                          (value.(AcctValue_orig).(Account_info).(AccountInfo_code_hash))))))
                  ((orb
                      ((negb
@@ -8884,12 +9420,12 @@ Definition account_value_changed (value : AcctValue) : bool :=
                          ((Bool.eqb (value.(AcctValue_curr).(Account_storage_cleared))
                              (value.(AcctValue_orig).(Account_storage_cleared)))))))))))))).
 
-Definition encode_storage_value (value : mword 256) : M (ByteSlice) :=
+Definition encode_storage_value (value : word) : M (ByteSlice) :=
    (rlp_uint_word_size (value)) >>= fun encoded_len =>
    (scratch_begin (tt)) >>= fun start =>
    (rlp_write_uint_word (value)) >> (rlp_finish (start) (encoded_len))  : M (ByteSlice).
 
-Definition encode_state_account (info : AccountInfo) (storage_root : mword 256) : M (ByteSlice) :=
+Definition encode_state_account (info : AccountInfo) (storage_root : b256) : M (ByteSlice) :=
    (rlp_protocol_quantity_size
       (Build_protocol_quantity (((info.(AccountInfo_nonce)).(protocol_quantity_value))))) >>= fun content_len =>
    (rlp_uint_word_size (info.(AccountInfo_balance))) >>= fun (w__0 : byte_quantity) =>
@@ -8905,12 +9441,12 @@ Definition encode_state_account (info : AccountInfo) (storage_root : mword 256) 
    (rlp_write_protocol_quantity
       (Build_protocol_quantity (((info.(AccountInfo_nonce)).(protocol_quantity_value))))) >>
    (rlp_write_uint_word (info.(AccountInfo_balance))) >>
-   (rlp_write_word (storage_root)) >>
-   (rlp_write_word (info.(AccountInfo_code_hash))) >>
+   (rlp_write_word ((hash_to_word (storage_root)))) >>
+   (rlp_write_word ((hash_to_word (info.(AccountInfo_code_hash))))) >>
    (rlp_finish (start) (encoded_len))
     : M (ByteSlice).
 
-Definition storage_updates (addr : mword 160) : M (list TrieUpdate) :=
+Definition storage_updates (addr : address_typ) : M (list TrieUpdate) :=
    ((storage_block_count (addr)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (remaining : Z) =>
    let updates : list TrieUpdate := [] in
@@ -8928,7 +9464,7 @@ Definition storage_updates (addr : mword 160) : M (list TrieUpdate) :=
         match w__1 with
         | Some entry =>
            (if storage_value_changed (entry.(StorageEntry_value)) return M (list TrieUpdate) then
-              (keccak256_word (entry.(StorageEntry_key).(StorageKey_slot))) >>= fun (w__2 : mword 256) =>
+              (keccak256_word (entry.(StorageEntry_key).(StorageKey_slot))) >>= fun (w__2 : b256) =>
               let key := path_from_hash (w__2) in
               (if word_is_zero (entry.(StorageEntry_value).(StorageValue_curr)) then
                  returnM ((TrieDelete (tt)))
@@ -8949,7 +9485,7 @@ Definition storage_updates (addr : mword 160) : M (list TrieUpdate) :=
 
 Definition account_update (entry : AcctEntry) (storage : list TrieUpdate) : M (TrieUpdate) :=
    let current := entry.(AcctEntry_value).(AcctValue_curr) in
-   (keccak256_address (entry.(AcctEntry_addr))) >>= fun (w__0 : mword 256) =>
+   (keccak256_address (entry.(AcctEntry_addr))) >>= fun (w__0 : b256) =>
    let key := path_from_hash (w__0) in
    (if orb ((negb (current.(Account_present)))) ((account_info_empty (current.(Account_info)))) then
       returnM (({| TrieUpdate_key := key;  TrieUpdate_change := TrieDelete (tt) |}))
@@ -8992,9 +9528,7 @@ Definition compute_state_root '(tt : unit) : M (hash) :=
         returnM ((accounts, remaining)))
         : M ((list TrieUpdate * Z)))) >>= fun '((accounts, remaining)
    : (list TrieUpdate * Z)) =>
-   ((read_reg k_parent_state_root)  : M (mword 256)) >>= fun (w__3 : mword 256) =>
-   (trie_root (w__3) (accounts))
-    : M (mword 256).
+   read_reg k_parent_state_root >>= fun (w__3 : b256) => (trie_root (w__3) (accounts))  : M (b256).
 
 Definition SCOPE_STATELESS_VALIDATION : bits 8 := (Ox"00").
 #[export] Hint Unfold SCOPE_STATELESS_VALIDATION : sail.
@@ -9020,7 +9554,7 @@ Definition validation_debug_reset '(tt : unit) : unit := tt.
 
 Definition validation_debug_record (_scope : mword 8) (_reason : BlockError) : unit := tt.
 
-Definition debug_account_storage_root (_a : mword 160) : hash := EMPTY_TRIE_ROOT.
+Definition debug_account_storage_root (_a : address_typ) : hash := EMPTY_TRIE_ROOT.
 
 Definition debug_rebuild_state_root '(tt : unit) : hash := EMPTY_TRIE_ROOT.
 
@@ -9129,7 +9663,8 @@ Definition ssz_offset_table_position (index : item_index)
 : M (source_pointer) :=
    let index := (index).(protocol_quantity_value) in
    let position := Z.mul (index) (4) in
-   (if Z.leb (position) (BYTE_QUANTITY_MAX) then returnM ((ByteQuantity (position)))
+   (if Z.leb (position) ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) then
+      returnM ((ByteQuantity (position)))
     else throw (InvalidBlock (InvalidConfig)))
     : M (byte_quantity).
 
@@ -9219,7 +9754,7 @@ Definition ssz_fixed_list_at (items : SszListRef) (index : item_index) (item_siz
    let width := item_size in
    let '((ByteQuantity width_value)) := width in
    let offset_value := Z.mul (index) (width_value) in
-   (if Z.ltb (BYTE_QUANTITY_MAX) (offset_value) return M (unit) then
+   (if Z.ltb ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) (offset_value) return M (unit) then
       throw (InvalidBlock (InvalidConfig))
     else returnM (tt)) >>
    let offset : byte_quantity := ByteQuantity (offset_value) in
@@ -9259,7 +9794,7 @@ Definition ssz_checked_offset
    let relative := (relative).(protocol_quantity_value) in
    let '((ByteQuantity base_value)) := base in
    let resolved_value := Z.add (base_value) (relative) in
-   (if Z.ltb (BYTE_QUANTITY_MAX) (resolved_value) return M (unit) then
+   (if Z.ltb ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) (resolved_value) return M (unit) then
       throw (InvalidBlock (InvalidConfig))
     else returnM (tt)) >>
    let resolved : byte_quantity := ByteQuantity (resolved_value) in
@@ -9281,7 +9816,7 @@ Definition ssz_span (input : ByteSlice) (start : byte_quantity) (stop : byte_qua
 Definition ssz_variable_list_ref (input : ByteSlice) (start : byte_quantity) (stop : byte_quantity)
 : M (SszListRef) :=
    (ssz_span (input) (start) (stop)) >>= fun bytes =>
-   (if byte_quantity_equal (start) (stop) then
+   (if generic_eq (start) (stop) then
       returnM (({| SszListRef_bytes := bytes;
                    SszListRef_count := (Build_protocol_quantity (0)) |}))
     else
@@ -9309,17 +9844,15 @@ Definition ssz_fixed_list_ref
 (input : ByteSlice) (start : byte_quantity) (stop : byte_quantity) (item_size : byte_quantity)
 : M (SszListRef) :=
    (ssz_span (input) (start) (stop)) >>= fun bytes =>
-   (if byte_quantity_equal (item_size) (BYTE_ZERO) return M (unit) then
-      throw (InvalidBlock (InvalidConfig))
+   (if generic_eq (item_size) (BYTE_ZERO) return M (unit) then throw (InvalidBlock (InvalidConfig))
     else returnM (tt)) >>
    (byte_quantity_sub (stop) (start)) >>= fun span =>
    (byte_quantity_quotient (span) (item_size)) >>= fun count =>
    (byte_quantity_mul (count) (item_size)) >>= fun (w__0 : byte_quantity) =>
-   (if byte_quantity_not_equal (span) (w__0) return M (unit) then
-      throw (InvalidBlock (InvalidConfig))
+   (if generic_neq (span) (w__0) return M (unit) then throw (InvalidBlock (InvalidConfig))
     else returnM (tt)) >>
    let '((ByteQuantity count_value)) := count in
-   (if Z.ltb ((Z.sub ((pow2 (64))) (1))) (count_value) return M (unit) then
+   (if Z.ltb ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) (count_value) return M (unit) then
       throw (InvalidBlock (InvalidConfig))
     else returnM (tt)) >>
    returnM (({| SszListRef_bytes := bytes;
@@ -9363,7 +9896,7 @@ Definition decode_stateless_input_ref (input : ByteSlice) : M (StatelessInputRef
    (byte_quantity_sub (input_end) (public_keys)) >>= fun public_key_bytes =>
    (byte_quantity_quotient (public_key_bytes) (PUBLIC_KEY_LENGTH)) >>= fun public_key_count =>
    (byte_quantity_mul (public_key_count) (PUBLIC_KEY_LENGTH)) >>= fun (w__7 : byte_quantity) =>
-   (if byte_quantity_not_equal (public_key_bytes) (w__7) return M (unit) then
+   (if generic_neq (public_key_bytes) (w__7) return M (unit) then
       throw (InvalidBlock (InvalidConfig))
     else returnM (tt)) >>
    (ssz_checked_offset (npr) (Build_protocol_quantity ((44))) (witness)) >>= fun npr_fixed_end =>
@@ -9379,7 +9912,7 @@ Definition decode_stateless_input_ref (input : ByteSlice) : M (StatelessInputRef
    ((ssz_u32 (input) (w__12)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__13 : Z) =>
    (ssz_checked_offset (npr) (Build_protocol_quantity ((w__13))) (witness)) >>= fun requests =>
-   (if orb ((byte_quantity_not_equal (npr_fixed_end) (payload)))
+   (if orb ((generic_neq (npr_fixed_end) (payload)))
          ((orb ((byte_quantity_gt (payload) (versioned_hashes)))
              ((byte_quantity_gt (versioned_hashes) (requests)))))
       return
@@ -9399,7 +9932,7 @@ Definition decode_stateless_input_ref (input : ByteSlice) : M (StatelessInputRef
    ((ssz_u32 (input) (w__18)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__19 : Z) =>
    (ssz_checked_offset (requests) (Build_protocol_quantity ((w__19))) (witness)) >>= fun consolidation_requests =>
-   (if orb ((byte_quantity_not_equal (requests_fixed_end) (deposits)))
+   (if orb ((generic_neq (requests_fixed_end) (deposits)))
          ((orb ((byte_quantity_gt (deposits) (withdrawal_requests)))
              ((byte_quantity_gt (withdrawal_requests) (consolidation_requests)))))
       return
@@ -9423,7 +9956,7 @@ Definition decode_stateless_input_ref (input : ByteSlice) : M (StatelessInputRef
    ((ssz_u32 (input) (w__26)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__27 : Z) =>
    (ssz_checked_offset (payload) (Build_protocol_quantity ((w__27))) (versioned_hashes)) >>= fun block_access_list =>
-   (if orb ((byte_quantity_not_equal (payload_fixed_end) (extra_data)))
+   (if orb ((generic_neq (payload_fixed_end) (extra_data)))
          ((orb ((byte_quantity_gt (extra_data) (transactions)))
              ((orb ((byte_quantity_gt (transactions) (withdrawals)))
                  ((byte_quantity_gt (withdrawals) (block_access_list)))))))
@@ -9444,7 +9977,7 @@ Definition decode_stateless_input_ref (input : ByteSlice) : M (StatelessInputRef
    ((ssz_u32 (input) (w__32)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__33 : Z) =>
    (ssz_checked_offset (witness) (Build_protocol_quantity ((w__33))) (cc)) >>= fun witness_headers =>
-   (if orb ((byte_quantity_not_equal (witness_fixed_end) (witness_state)))
+   (if orb ((generic_neq (witness_fixed_end) (witness_state)))
          ((orb ((byte_quantity_gt (witness_state) (witness_codes)))
              ((byte_quantity_gt (witness_codes) (witness_headers)))))
       return
@@ -9482,8 +10015,8 @@ Definition decode_stateless_input_ref (input : ByteSlice) : M (StatelessInputRef
                 StatelessInputRef_chain_config := w__47;
                 StatelessInputRef_public_keys := w__48 |})).
 
-Definition sha256_request_digest (request_type : mword 8) (s : ByteSlice) : M (bits 256) :=
-   (sha256_segments ([bytes_list ([request_type]) (BYTE_ONE); BytesSlice (s)]))  : M (mword 256).
+Definition sha256_request_digest (request_type : mword 8) (s : ByteSlice) : M (hash) :=
+   (sha256_segments ([bytes_list ([request_type]) (BYTE_ONE); BytesSlice (s)]))  : M (b256).
 
 Fixpoint _rec_index_witness_nodes_cursor (cursor : SszListCursor) (_reclimit : Z)
 (_acc : Acc (Zwf 0) _reclimit)
@@ -9493,7 +10026,7 @@ exact (
    (if ssz_list_cursor_empty (cursor) then returnM (tt)
     else
       (ssz_list_pop (cursor)) >>= fun '((node, next)) =>
-      (keccak256_slice (node)) >>= fun (w__0 : mword 256) =>
+      (keccak256_slice (node)) >>= fun (w__0 : b256) =>
       (nodedb_insert (w__0) (node.(ByteSlice_off)) (node.(ByteSlice_len))) >>
       (_rec_index_witness_nodes_cursor (next) ((Z.sub (_reclimit) (1)))
          (_limit_reduces_bool _acc ltac:(assumption)))
@@ -9544,31 +10077,9 @@ Definition index_witness_codes (codes : SszListRef) : M (unit) :=
    (index_witness_codes_cursor (w__0))
     : M (unit).
 
-Definition undefined_ParentHeaderFields '(tt : unit) : M (ParentHeaderFields) :=
-   (undefined_bitvector (256)) >>= fun (w__0 : mword 256) =>
-   (undefined_bitvector (256)) >>= fun (w__1 : mword 256) =>
-   (undefined_bitvector (256)) >>= fun (w__2 : mword 256) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__3 : Z) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__4 : Z) =>
-   (undefined_bool (tt)) >>= fun (w__5 : bool) =>
-   (undefined_bool (tt)) >>= fun (w__6 : bool) =>
-   (undefined_bool (tt)) >>= fun (w__7 : bool) =>
-   (undefined_bool (tt)) >>= fun (w__8 : bool) =>
-   (undefined_bool (tt)) >>= fun (w__9 : bool) =>
-   returnM (({| ParentHeaderFields_parent_hash := w__0;
-                ParentHeaderFields_state_root := w__1;
-                ParentHeaderFields_base_fee := w__2;
-                ParentHeaderFields_blob_gas_used := (Build_protocol_quantity (w__3));
-                ParentHeaderFields_excess_blob_gas := (Build_protocol_quantity (w__4));
-                ParentHeaderFields_have_parent := w__5;
-                ParentHeaderFields_have_state := w__6;
-                ParentHeaderFields_have_base_fee := w__7;
-                ParentHeaderFields_have_blob_gas := w__8;
-                ParentHeaderFields_have_excess_blob_gas := w__9 |})).
-
 Definition EMPTY_PARENT_HEADER_FIELDS : ParentHeaderFields :=
-{| ParentHeaderFields_parent_hash := ZERO_WORD;
-   ParentHeaderFields_state_root := ZERO_WORD;
+{| ParentHeaderFields_parent_hash := ZERO_HASH;
+   ParentHeaderFields_state_root := ZERO_HASH;
    ParentHeaderFields_base_fee := ZERO_WORD;
    ParentHeaderFields_blob_gas_used := (Build_protocol_quantity (0));
    ParentHeaderFields_excess_blob_gas := (Build_protocol_quantity (0));
@@ -9590,23 +10101,23 @@ exact (
       (rlp_cursor_pop (cursor)) >>= fun '((field', next)) =>
       let decoded := fields in
       (if Z.eqb (field_index) (0) return M (ParentHeaderFields) then
-         (rlp_ref_word (field')) >>= fun (w__0 : mword 256) =>
+         (rlp_ref_word (field')) >>= fun (w__0 : word) =>
          let decoded :=
-           {[ decoded with ParentHeaderFields_parent_hash := w__0 ]}
+           {[ decoded with ParentHeaderFields_parent_hash := word_to_hash (w__0) ]}
             : ParentHeaderFields in
          let decoded : ParentHeaderFields :=
            {[ decoded with ParentHeaderFields_have_parent := true ]} in
          returnM (decoded)
        else if Z.eqb (field_index) (3) return M (ParentHeaderFields) then
-         (rlp_ref_word (field')) >>= fun (w__1 : mword 256) =>
+         (rlp_ref_word (field')) >>= fun (w__1 : word) =>
          let decoded :=
-           {[ decoded with ParentHeaderFields_state_root := w__1 ]}
+           {[ decoded with ParentHeaderFields_state_root := word_to_hash (w__1) ]}
             : ParentHeaderFields in
          let decoded : ParentHeaderFields :=
            {[ decoded with ParentHeaderFields_have_state := true ]} in
          returnM (decoded)
        else if Z.eqb (field_index) (15) return M (ParentHeaderFields) then
-         (rlp_ref_uint_word (field')) >>= fun (w__2 : mword 256) =>
+         (rlp_ref_uint_word (field')) >>= fun (w__2 : word) =>
          let decoded := {[ decoded with ParentHeaderFields_base_fee := w__2 ]}  : ParentHeaderFields in
          let decoded : ParentHeaderFields :=
            {[ decoded with ParentHeaderFields_have_base_fee := true ]} in
@@ -9675,7 +10186,7 @@ exact (
             let result : WitnessHeaderIndex :=
               if andb ((neq_int (index) (0)))
                    ((orb ((negb (decoded.(ParentHeaderFields_have_parent))))
-                       ((neq_vec (decoded.(ParentHeaderFields_parent_hash))
+                       ((generic_neq (decoded.(ParentHeaderFields_parent_hash))
                            (state.(WitnessHeaderIndex_previous_hash)))))) then
                 {[ result with WitnessHeaderIndex_valid := false ]}
               else result in
@@ -9726,10 +10237,16 @@ exact (
       (keccak256_slice (header)) >>= fun current_hash =>
       let result : WitnessHeaderIndex :=
         {[ result with WitnessHeaderIndex_previous_hash := current_hash ]} in
-      let distance :=
-        Z.sub
-          ((state.(WitnessHeaderIndex_cursor).(SszListCursor_items).(SszListRef_count)).(protocol_quantity_value))
-          ((next.(SszListCursor_index)).(protocol_quantity_value)) in
+      (if Z.leb ((next.(SszListCursor_index)).(protocol_quantity_value))
+            ((state.(WitnessHeaderIndex_cursor).(SszListCursor_items).(SszListRef_count)).(protocol_quantity_value))
+         return
+         M (Z) then
+         ((protocol_quantity_sub
+             (Build_protocol_quantity (((state.(WitnessHeaderIndex_cursor).(SszListCursor_items).(SszListRef_count)).(protocol_quantity_value))))
+             (Build_protocol_quantity (((next.(SszListCursor_index)).(protocol_quantity_value))))) >>= fun semanticResult =>
+          returnM (semanticResult).(protocol_quantity_value))
+          : M (Z)
+       else throw (InvalidBlock (WitnessDeficient))) >>= fun (distance : Z) =>
       (if Z.ltb (distance) (256) return M (unit) then
          let ancestor : Z := distance in
          (ancestor_hash_write (Build_ancestor_index ((ancestor))) (current_hash))
@@ -9755,10 +10272,10 @@ Definition index_witness_headers (headers : SszListRef) : M (WitnessContext) :=
    (ssz_list_cursor (headers)) >>= fun (w__0 : SszListCursor) =>
    (index_witness_header_cursor
       (({| WitnessHeaderIndex_cursor := w__0;
-           WitnessHeaderIndex_previous_hash := ZERO_WORD;
+           WitnessHeaderIndex_previous_hash := ZERO_HASH;
            WitnessHeaderIndex_valid :=
              neq_int ((headers.(SszListRef_count)).(protocol_quantity_value)) (0);
-           WitnessHeaderIndex_parent_state_root := ZERO_WORD;
+           WitnessHeaderIndex_parent_state_root := ZERO_HASH;
            WitnessHeaderIndex_parent_base_fee_per_gas := ZERO_WORD;
            WitnessHeaderIndex_parent_blob_gas_used := (Build_protocol_quantity (0));
            WitnessHeaderIndex_parent_excess_blob_gas := (Build_protocol_quantity (0));
@@ -9785,37 +10302,41 @@ Definition decode_block_header_ssz (input_ref : StatelessInputRef) : M (BlockHea
     returnM (semanticResult).(protocol_quantity_value)) >>= fun gas_limit_value =>
    ((ssz_uint (payload) (PL_GAS_USED)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun gas_used_value =>
-   (if Z.ltb (GAS_MAX_VALUE) (gas_limit_value) return M (unit) then
+   (if negb ((gas_value_supported (Build_protocol_quantity ((gas_limit_value)))))
+      return
+      M (unit) then
       throw (InvalidBlock (InvalidGasLimit))
     else returnM (tt)) >>
-   (if Z.ltb (GAS_MAX_VALUE) (gas_used_value) return M (unit) then
+   (if negb ((gas_value_supported (Build_protocol_quantity ((gas_used_value)))))
+      return
+      M (unit) then
       throw (InvalidBlock (InvalidGasUsed))
     else returnM (tt)) >>
    ((ssz_uint (payload) (PL_BLOCK_NUMBER)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__0 : Z) =>
    ((ssz_uint (payload) (PL_TIMESTAMP)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__1 : Z) =>
-   (nat_to_gas (gas_limit_value)) >>= fun (w__2 : gas) =>
-   (nat_to_gas (gas_used_value)) >>= fun (w__3 : gas) =>
-   (ssz_bytes32 (payload) (PL_PREV_RANDAO)) >>= fun (w__4 : mword 256) =>
-   (ssz_u256 (payload) (PL_BASE_FEE)) >>= fun (w__5 : mword 256) =>
+   (nat_to_gas (Build_protocol_quantity ((gas_limit_value)))) >>= fun (w__2 : gas) =>
+   (nat_to_gas (Build_protocol_quantity ((gas_used_value)))) >>= fun (w__3 : gas) =>
+   (ssz_bytes32 (payload) (PL_PREV_RANDAO)) >>= fun (w__4 : b256) =>
+   (ssz_u256 (payload) (PL_BASE_FEE)) >>= fun (w__5 : word) =>
    ((ssz_uint (payload) (PL_BLOB_GAS_USED)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__6 : Z) =>
    ((ssz_uint (payload) (PL_EXCESS_BLOB_GAS)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__7 : Z) =>
-   (ssz_bytes32 (payload) (PL_STATE_ROOT)) >>= fun (w__8 : mword 256) =>
-   (ssz_bytes32 (payload) (PL_RECEIPTS_ROOT)) >>= fun (w__9 : mword 256) =>
+   (ssz_bytes32 (payload) (PL_STATE_ROOT)) >>= fun (w__8 : b256) =>
+   (ssz_bytes32 (payload) (PL_RECEIPTS_ROOT)) >>= fun (w__9 : b256) =>
    (ssz_logs_bloom (payload) (PL_LOGS_BLOOM)) >>= fun (w__10 : vec (mword 64) 32) =>
-   (ssz_addr (payload) (PL_FEE_RECIPIENT)) >>= fun (w__11 : mword 160) =>
-   (ssz_bytes32 (payload) (BYTE_ZERO)) >>= fun (w__12 : mword 256) =>
-   (ssz_bytes32 (input_ref.(StatelessInputRef_new_payload_request)) (NPR_BEACON_ROOT)) >>= fun (w__13 : mword 256) =>
+   (ssz_addr (payload) (PL_FEE_RECIPIENT)) >>= fun (w__11 : address_typ) =>
+   (ssz_bytes32 (payload) (BYTE_ZERO)) >>= fun (w__12 : b256) =>
+   (ssz_bytes32 (input_ref.(StatelessInputRef_new_payload_request)) (NPR_BEACON_ROOT)) >>= fun (w__13 : b256) =>
    ((ssz_uint (payload) (PL_SLOT_NUMBER)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__14 : Z) =>
    returnM (({| BlockHeader_number := (Build_protocol_quantity (w__0));
                 BlockHeader_timestamp := (Build_protocol_quantity (w__1));
                 BlockHeader_gas_limit := w__2;
                 BlockHeader_gas_used := w__3;
-                BlockHeader_prev_randao := w__4;
+                BlockHeader_prev_randao := hash_to_word (w__4);
                 BlockHeader_base_fee := w__5;
                 BlockHeader_blob_gas_used := (Build_protocol_quantity (w__6));
                 BlockHeader_excess_blob_gas := (Build_protocol_quantity (w__7));
@@ -9833,7 +10354,7 @@ Definition decode_withdrawal (withdrawal : ByteSlice) : M (Withdrawal) :=
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__0 : Z) =>
    ((ssz_uint (withdrawal) (WD_VALIDATOR_INDEX)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__1 : Z) =>
-   (ssz_addr (withdrawal) (WD_ADDRESS)) >>= fun (w__2 : mword 160) =>
+   (ssz_addr (withdrawal) (WD_ADDRESS)) >>= fun (w__2 : address_typ) =>
    ((ssz_uint (withdrawal) (WD_AMOUNT)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__3 : Z) =>
    returnM (({| Withdrawal_index := (Build_protocol_quantity (w__0));
@@ -9882,7 +10403,7 @@ Definition decode_chain_config
    ((ssz_u32 (cc) (w__7)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__8 : Z) =>
    (ssz_checked_offset (a) (Build_protocol_quantity ((w__8))) (bs_start)) >>= fun ts_start =>
-   (if orb ((byte_quantity_not_equal (activation_fixed_end) (bn_start)))
+   (if orb ((generic_neq (activation_fixed_end) (bn_start)))
          ((byte_quantity_gt (bn_start) (ts_start)))
       return
       M (unit) then
@@ -9901,8 +10422,8 @@ Definition decode_chain_config
         returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__12 : Z) =>
        returnM (((Z.leb (w__12) (timestamp))  : bool)))) >>= fun ts_ok =>
    (byte_quantity_add (bs_start) (BLOB_SCHEDULE_LENGTH)) >>= fun (w__13 : byte_quantity) =>
-   let have_schedule := byte_quantity_equal (w__13) (cc_end) in
-   let blob_schedule_shape_valid := orb ((byte_quantity_equal (bs_start) (cc_end))) (have_schedule) in
+   let have_schedule := generic_eq (w__13) (cc_end) in
+   let blob_schedule_shape_valid := orb ((generic_eq (bs_start) (cc_end))) (have_schedule) in
    (if have_schedule return M (option BlobSchedule) then
       ((ssz_uint (cc) (bs_start)) >>= fun semanticResult =>
        returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__14 : Z) =>
@@ -9945,7 +10466,7 @@ Definition decode_stateless_input (input_ref : StatelessInputRef) : M (Stateless
            BlobSchedule_max := (Build_protocol_quantity (0));
            BlobSchedule_base_fee_update_fraction := (Build_protocol_quantity (1)) |}
      end >>
-   (ssz_bytes32 (input_ref.(StatelessInputRef_execution_payload)) (PL_BLOCK_HASH)) >>= fun (w__0 : mword 256) =>
+   (ssz_bytes32 (input_ref.(StatelessInputRef_execution_payload)) (PL_BLOCK_HASH)) >>= fun (w__0 : b256) =>
    returnM (({| StatelessInput_payload :=
                   {| ExecutionPayload_expected_block_hash := w__0;
                      ExecutionPayload_block :=
@@ -9996,18 +10517,19 @@ Definition bloom_set_bit (bloom : vec (mword 64) 32) (bit_to_set : bloom_bit_ind
            ((bloom_bit_mask (Build_bloom_limb_bit ((bit_in_limb))))))) in
    returnM (out).
 
-Definition bloom_add_entry_hash (bloom : vec (mword 64) 32) (h : mword 256) : M (LogsBloom) :=
-   (bloom_set_bit (bloom) (Build_bloom_bit_index (((uint ((subrange_vec_dec (h) (250) (240)))))))) >>= fun out =>
-   (bloom_set_bit (out) (Build_bloom_bit_index (((uint ((subrange_vec_dec (h) (234) (224)))))))) >>= fun (w__0 : vec (mword 64) 32) =>
+Definition bloom_add_entry_hash (bloom : vec (mword 64) 32) (h : b256) : M (LogsBloom) :=
+   let bits := hash_to_bits (h) in
+   (bloom_set_bit (bloom) (Build_bloom_bit_index (((uint ((subrange_vec_dec (bits) (250) (240)))))))) >>= fun out =>
+   (bloom_set_bit (out) (Build_bloom_bit_index (((uint ((subrange_vec_dec (bits) (234) (224)))))))) >>= fun (w__0 : vec (mword 64) 32) =>
    let out := w__0  : vec (mword 64) 32 in
-   (bloom_set_bit (out) (Build_bloom_bit_index (((uint ((subrange_vec_dec (h) (218) (208))))))))
+   (bloom_set_bit (out) (Build_bloom_bit_index (((uint ((subrange_vec_dec (bits) (218) (208))))))))
     : M (vec (mword 64) 32).
 
-Fixpoint bloom_add_topics (bloom : vec (mword 64) 32) (topics : list (mword 256)) : M (LogsBloom) :=
+Fixpoint bloom_add_topics (bloom : vec (mword 64) 32) (topics : list word) : M (LogsBloom) :=
    match topics with
    | [] => returnM (bloom)
    | topic :: rest =>
-      (keccak256_word (topic)) >>= fun (w__0 : mword 256) =>
+      (keccak256_word (topic)) >>= fun (w__0 : b256) =>
       (bloom_add_entry_hash (bloom) (w__0)) >>= fun (w__1 : vec (mword 64) 32) =>
       (bloom_add_topics (w__1) (rest))
        : M (vec (mword 64) 32)
@@ -10015,7 +10537,7 @@ Fixpoint bloom_add_topics (bloom : vec (mword 64) 32) (topics : list (mword 256)
     : M (vec (mword 64) 32).
 
 Definition bloom_add_log (bloom : vec (mword 64) 32) (log : LogEntry) : M (LogsBloom) :=
-   (keccak256_address (log.(LogEntry_address))) >>= fun (w__0 : mword 256) =>
+   (keccak256_address (log.(LogEntry_address))) >>= fun (w__0 : b256) =>
    (bloom_add_entry_hash (bloom) (w__0)) >>= fun with_address =>
    (bloom_add_topics (with_address) (log.(LogEntry_topics)))
     : M (vec (mword 64) 32).
@@ -10033,7 +10555,7 @@ Fixpoint bloom_add_logs (bloom : vec (mword 64) 32) (logs : list LogEntry) : M (
 Definition logs_bloom_for_logs (logs : list LogEntry) : M (LogsBloom) :=
    (bloom_add_logs (EMPTY_LOGS_BLOOM) (logs))  : M (vec (mword 64) 32).
 
-Fixpoint topics_rlp_content_size (topics : list (mword 256)) : M (byte_length) :=
+Fixpoint topics_rlp_content_size (topics : list word) : M (byte_length) :=
    match topics with
    | [] => returnM (BYTE_ZERO)
    | _ :: rest =>
@@ -10043,7 +10565,7 @@ Fixpoint topics_rlp_content_size (topics : list (mword 256)) : M (byte_length) :
    end
     : M (byte_quantity).
 
-Definition topics_rlp_size (topics : list (mword 256)) : M (byte_length) :=
+Definition topics_rlp_size (topics : list word) : M (byte_length) :=
    (topics_rlp_content_size (topics)) >>= fun (w__0 : byte_quantity) =>
    (rlp_list_size (w__0))
     : M (byte_quantity).
@@ -10078,14 +10600,14 @@ Definition logs_rlp_size (logs : list LogEntry) : M (byte_length) :=
    (rlp_list_size (w__0))
     : M (byte_quantity).
 
-Fixpoint rlp_write_topics_content (topics : list (mword 256)) : M (unit) :=
+Fixpoint rlp_write_topics_content (topics : list word) : M (unit) :=
    match topics with
    | [] => returnM (tt)
    | topic :: rest => (rlp_write_word (topic)) >> (rlp_write_topics_content (rest))  : M (unit)
    end
     : M (unit).
 
-Definition rlp_write_topics (topics : list (mword 256)) : M (unit) :=
+Definition rlp_write_topics (topics : list word) : M (unit) :=
    (topics_rlp_content_size (topics)) >>= fun (w__0 : byte_quantity) =>
    (rlp_write_list_prefix (w__0)) >> (rlp_write_topics_content (topics))  : M (unit).
 
@@ -10165,7 +10687,7 @@ Definition receipt_accumulator_push (acc : ReceiptAccumulator) (receipt : Receip
    (if negb (receipt.(Receipt_valid)) return M (unit) then throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
    (if Z.ltb ((acc.(ReceiptAccumulator_count)).(protocol_quantity_value))
-         ((Z.sub ((pow2 (64))) (1)))
+         ((BYTE_QUANTITY_MAX).(protocol_quantity_value))
       return
       M (Z) then
       ((protocol_quantity_increment
@@ -10173,10 +10695,11 @@ Definition receipt_accumulator_push (acc : ReceiptAccumulator) (receipt : Receip
        returnM (semanticResult).(protocol_quantity_value))
        : M (Z)
     else throw (InvalidBlock (WitnessDeficient))) >>= fun (next_count : Z) =>
-   let '((Gas cumulative_before)) := acc.(ReceiptAccumulator_cumulative_gas_used) in
-   let '((Gas receipt_gas)) := receipt.(Receipt_gas_used) in
-   (if Z.leb (receipt_gas) ((Z.sub ((Z.sub ((pow2 (63))) (1))) (cumulative_before))) then
-      returnM ((Gas ((Z.add (cumulative_before) (receipt_gas)))))
+   (if gas_sum_supported (acc.(ReceiptAccumulator_cumulative_gas_used)) (receipt.(Receipt_gas_used))
+      return
+      M (gas) then
+      (gas_add (acc.(ReceiptAccumulator_cumulative_gas_used)) (receipt.(Receipt_gas_used)))
+       : M (gas)
     else throw (InvalidBlock (ExecutionInvalid))) >>= fun (cumulative : gas) =>
    let current : PendingReceipt :=
      {| PendingReceipt_index :=
@@ -10194,16 +10717,16 @@ Definition receipt_accumulator_push (acc : ReceiptAccumulator) (receipt : Receip
       M ((TrieBuilder * option PendingReceipt * option PendingReceipt)) then
       match pending with
       | Some previous =>
-         (trie_index_key (Build_protocol_quantity ((0)))) >>= fun (w__3 : TriePath) =>
-         (receipt_insert (builder) (previous) ((Some (w__3))))
+         (trie_index_key (Build_protocol_quantity ((0)))) >>= fun (w__4 : TriePath) =>
+         (receipt_insert (builder) (previous) ((Some (w__4))))
           : M (TrieBuilder)
       | None => throw (InvalidBlock (WitnessDeficient))
       end >>= fun (builder : TrieBuilder) =>
       match first with
       | Some zero =>
          (trie_index_key
-            (Build_protocol_quantity (((acc.(ReceiptAccumulator_count)).(protocol_quantity_value))))) >>= fun (w__5 : TriePath) =>
-         (receipt_insert (builder) (zero) ((Some (w__5))))
+            (Build_protocol_quantity (((acc.(ReceiptAccumulator_count)).(protocol_quantity_value))))) >>= fun (w__6 : TriePath) =>
+         (receipt_insert (builder) (zero) ((Some (w__6))))
           : M (TrieBuilder)
       | None => throw (InvalidBlock (WitnessDeficient))
       end >>= fun (builder : TrieBuilder) =>
@@ -10214,9 +10737,9 @@ Definition receipt_accumulator_push (acc : ReceiptAccumulator) (receipt : Receip
       match pending with
       | Some previous =>
          (trie_index_key
-            (Build_protocol_quantity (((acc.(ReceiptAccumulator_count)).(protocol_quantity_value))))) >>= fun (w__7 : TriePath) =>
-         (receipt_insert (builder) (previous) ((Some (w__7)))) >>= fun (w__8 : TrieBuilder) =>
-         let builder := w__8  : TrieBuilder in
+            (Build_protocol_quantity (((acc.(ReceiptAccumulator_count)).(protocol_quantity_value))))) >>= fun (w__8 : TriePath) =>
+         (receipt_insert (builder) (previous) ((Some (w__8)))) >>= fun (w__9 : TrieBuilder) =>
+         let builder := w__9  : TrieBuilder in
          let pending : option PendingReceipt := Some (current) in
          returnM ((builder, pending))
       | None =>
@@ -10229,13 +10752,13 @@ Definition receipt_accumulator_push (acc : ReceiptAccumulator) (receipt : Receip
       : (TrieBuilder * option PendingReceipt)) =>
       returnM ((builder, first, pending))) >>= fun '((builder, first, pending)
    : (TrieBuilder * option PendingReceipt * option PendingReceipt)) =>
-   (bloom_add_logs (acc.(ReceiptAccumulator_bloom)) (receipt.(Receipt_logs))) >>= fun (w__9 : vec (mword 64) 32) =>
+   (bloom_add_logs (acc.(ReceiptAccumulator_bloom)) (receipt.(Receipt_logs))) >>= fun (w__10 : vec (mword 64) 32) =>
    returnM (({| ReceiptAccumulator_builder := builder;
                 ReceiptAccumulator_first := first;
                 ReceiptAccumulator_pending := pending;
                 ReceiptAccumulator_count := (Build_protocol_quantity (next_count));
                 ReceiptAccumulator_cumulative_gas_used := cumulative;
-                ReceiptAccumulator_bloom := w__9 |})).
+                ReceiptAccumulator_bloom := w__10 |})).
 
 Definition receipt_accumulator_root (acc : ReceiptAccumulator) : M (hash) :=
    let builder := acc.(ReceiptAccumulator_builder) in
@@ -10274,7 +10797,7 @@ Definition receipt_accumulator_root (acc : ReceiptAccumulator) : M (hash) :=
       end >>
       returnM (builder)) >>= fun (builder : TrieBuilder) =>
    (trie_builder_root (builder))
-    : M (mword 256).
+    : M (b256).
 
 Definition SYSTEM_CALL_INPUT_LENGTH : byte_length := WORD_BYTE_LENGTH.
 #[export] Hint Unfold SYSTEM_CALL_INPUT_LENGTH : sail.
@@ -10320,7 +10843,7 @@ Definition DEPOSIT_INDEX_DATA : source_pointer := ByteQuantity (544).
 #[export] Hint Unfold DEPOSIT_INDEX_DATA : sail.
 Definition DEPOSIT_INDEX_LENGTH : byte_length := EIGHT_BYTE_LENGTH.
 #[export] Hint Unfold DEPOSIT_INDEX_LENGTH : sail.
-Definition enter_system_call_frame (tgt : mword 160) (input : ByteSlice) : M (StateCheckpoint_typ) :=
+Definition enter_system_call_frame (tgt : address_typ) (input : ByteSlice) : M (StateCheckpoint_typ) :=
    (k_state_checkpoint (tt)) >>= fun checkpoint =>
    write_reg pc BYTE_ZERO >>
    write_reg call_depth 0 >>
@@ -10338,17 +10861,17 @@ Definition enter_system_call_frame (tgt : mword 160) (input : ByteSlice) : M (St
          Message_value := ZERO_WORD;
          Message_is_static := false;
          Message_depth := (Build_frame_depth (0)) |}) >>
-   (k_code_key (tgt)) >>= fun (w__0 : mword 256) =>
+   (k_code_key (tgt)) >>= fun (w__0 : b256) =>
    (code_db_resolve (w__0)) >>= fun (w__1 : Code) =>
    write_reg frame_code w__1 >> returnM (checkpoint).
 
-Definition system_call (tgt : mword 160) (input : mword 256) : M (unit) :=
-   (k_code_key (tgt)) >>= fun (w__0 : mword 256) =>
-   (if eq_vec (w__0) (KECCAK_EMPTY) then returnM (tt)
+Definition system_call (tgt : address_typ) (input : b256) : M (unit) :=
+   (k_code_key (tgt)) >>= fun (w__0 : b256) =>
+   (if generic_eq (w__0) (KECCAK_EMPTY) then returnM (tt)
     else
       (memory_reset (tt)) >>
       (memory_expand_to (SYSTEM_CALL_INPUT_LENGTH)) >>
-      (mem_store_word (BYTE_ZERO) (input)) >>
+      (mem_store_word (BYTE_ZERO) ((hash_to_word (input)))) >>
       (memory_byte_slice (BYTE_ZERO) (SYSTEM_CALL_INPUT_LENGTH)) >>= fun input_slice =>
       (memory_frame_enter (tt)) >>= fun parent_memory =>
       (enter_system_call_frame (tgt) (input_slice)) >>= fun checkpoint =>
@@ -10361,9 +10884,9 @@ Definition system_call (tgt : mword 160) (input : mword 256) : M (unit) :=
        : M (unit))
     : M (unit).
 
-Definition system_call_checked (tgt : mword 160) : M (option ByteSlice) :=
-   (k_code_key (tgt)) >>= fun (w__0 : mword 256) =>
-   (if eq_vec (w__0) (KECCAK_EMPTY) then returnM (None)
+Definition system_call_checked (tgt : address_typ) : M (option ByteSlice) :=
+   (k_code_key (tgt)) >>= fun (w__0 : b256) =>
+   (if generic_eq (w__0) (KECCAK_EMPTY) then returnM (None)
     else
       (memory_reset (tt)) >>
       (memory_frame_enter (tt)) >>= fun parent_memory =>
@@ -10382,56 +10905,56 @@ Definition system_call_checked (tgt : mword 160) : M (option ByteSlice) :=
     : M (option ByteSlice).
 
 Definition deposit_log_matches (log : LogEntry) : bool :=
-   if neq_vec (log.(LogEntry_address)) (DEPOSIT_CONTRACT_ADDR) then false
+   if generic_neq (log.(LogEntry_address)) (DEPOSIT_CONTRACT_ADDR) then false
    else
      match log.(LogEntry_topics) with
-     | topic :: _ => eq_vec (topic) (DEPOSIT_EVENT_TOPIC)
+     | topic :: _ => generic_eq (topic) (DEPOSIT_EVENT_TOPIC)
      | [] => false
      end.
 
 Definition append_deposit_request (data : ByteSlice) : M (unit) :=
-   (or_boolM
-      (returnM (((byte_quantity_not_equal (data.(ByteSlice_len)) (DEPOSIT_EVENT_DATA_LENGTH))
-        : bool)))
+   (or_boolM (returnM (((generic_neq (data.(ByteSlice_len)) (DEPOSIT_EVENT_DATA_LENGTH))  : bool)))
       ((or_boolM
-          ((slice_load (data) (DEPOSIT_PUBKEY_HEAD)) >>= fun (w__0 : mword 256) =>
-           (word_of_nat (160)) >>= fun (w__1 : mword 256) =>
-           returnM (((neq_vec (w__0) (w__1))  : bool)))
+          ((slice_load (data) (DEPOSIT_PUBKEY_HEAD)) >>= fun (w__0 : word) =>
+           (word_of_protocol_quantity (Build_protocol_quantity ((160)))) >>= fun (w__1 : word) =>
+           returnM (((generic_neq (w__0) (w__1))  : bool)))
           ((or_boolM
-              ((slice_load (data) (DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD)) >>= fun (w__2 : mword 256) =>
-               (word_of_nat (256)) >>= fun (w__3 : mword 256) =>
-               returnM (((neq_vec (w__2) (w__3))  : bool)))
+              ((slice_load (data) (DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD)) >>= fun (w__2 : word) =>
+               (word_of_protocol_quantity (Build_protocol_quantity ((256)))) >>= fun (w__3 : word) =>
+               returnM (((generic_neq (w__2) (w__3))  : bool)))
               ((or_boolM
-                  ((slice_load (data) (DEPOSIT_AMOUNT_HEAD)) >>= fun (w__4 : mword 256) =>
-                   (word_of_nat (320)) >>= fun (w__5 : mword 256) =>
-                   returnM (((neq_vec (w__4) (w__5))  : bool)))
+                  ((slice_load (data) (DEPOSIT_AMOUNT_HEAD)) >>= fun (w__4 : word) =>
+                   (word_of_protocol_quantity (Build_protocol_quantity ((320)))) >>= fun (w__5 : word) =>
+                   returnM (((generic_neq (w__4) (w__5))  : bool)))
                   ((or_boolM
-                      ((slice_load (data) (DEPOSIT_SIGNATURE_HEAD)) >>= fun (w__6 : mword 256) =>
-                       (word_of_nat (384)) >>= fun (w__7 : mword 256) =>
-                       returnM (((neq_vec (w__6) (w__7))  : bool)))
+                      ((slice_load (data) (DEPOSIT_SIGNATURE_HEAD)) >>= fun (w__6 : word) =>
+                       (word_of_protocol_quantity (Build_protocol_quantity ((384)))) >>= fun (w__7 : word) =>
+                       returnM (((generic_neq (w__6) (w__7))  : bool)))
                       ((or_boolM
-                          ((slice_load (data) (DEPOSIT_INDEX_HEAD)) >>= fun (w__8 : mword 256) =>
-                           (word_of_nat (512)) >>= fun (w__9 : mword 256) =>
-                           returnM (((neq_vec (w__8) (w__9))  : bool)))
+                          ((slice_load (data) (DEPOSIT_INDEX_HEAD)) >>= fun (w__8 : word) =>
+                           (word_of_protocol_quantity (Build_protocol_quantity ((512)))) >>= fun (w__9 : word) =>
+                           returnM (((generic_neq (w__8) (w__9))  : bool)))
                           ((or_boolM
-                              ((slice_load (data) (DEPOSIT_PUBKEY_LENGTH_WORD)) >>= fun (w__10 : mword 256) =>
-                               (word_of_nat (48)) >>= fun (w__11 : mword 256) =>
-                               returnM (((neq_vec (w__10) (w__11))  : bool)))
+                              ((slice_load (data) (DEPOSIT_PUBKEY_LENGTH_WORD)) >>= fun (w__10 : word) =>
+                               (word_of_protocol_quantity (Build_protocol_quantity ((48)))) >>= fun (w__11 : word) =>
+                               returnM (((generic_neq (w__10) (w__11))  : bool)))
                               ((or_boolM
-                                  ((slice_load (data) (DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD)) >>= fun (w__12 : mword 256) =>
-                                   (word_of_nat (32)) >>= fun (w__13 : mword 256) =>
-                                   returnM (((neq_vec (w__12) (w__13))  : bool)))
+                                  ((slice_load (data) (DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD)) >>= fun (w__12 : word) =>
+                                   (word_of_protocol_quantity (Build_protocol_quantity ((32)))) >>= fun (w__13 : word) =>
+                                   returnM (((generic_neq (w__12) (w__13))  : bool)))
                                   ((or_boolM
-                                      ((slice_load (data) (DEPOSIT_AMOUNT_LENGTH_WORD)) >>= fun (w__14 : mword 256) =>
-                                       (word_of_nat (8)) >>= fun (w__15 : mword 256) =>
-                                       returnM (((neq_vec (w__14) (w__15))  : bool)))
+                                      ((slice_load (data) (DEPOSIT_AMOUNT_LENGTH_WORD)) >>= fun (w__14 : word) =>
+                                       (word_of_protocol_quantity (Build_protocol_quantity ((8)))) >>= fun (w__15 : word) =>
+                                       returnM (((generic_neq (w__14) (w__15))  : bool)))
                                       ((or_boolM
-                                          ((slice_load (data) (DEPOSIT_SIGNATURE_LENGTH_WORD)) >>= fun (w__16 : mword 256) =>
-                                           (word_of_nat (96)) >>= fun (w__17 : mword 256) =>
-                                           returnM (((neq_vec (w__16) (w__17))  : bool)))
-                                          ((slice_load (data) (DEPOSIT_INDEX_LENGTH_WORD)) >>= fun (w__18 : mword 256) =>
-                                           (word_of_nat (8)) >>= fun (w__19 : mword 256) =>
-                                           returnM (((neq_vec (w__18) (w__19))  : bool))))
+                                          ((slice_load (data) (DEPOSIT_SIGNATURE_LENGTH_WORD)) >>= fun (w__16 : word) =>
+                                           (word_of_protocol_quantity
+                                              (Build_protocol_quantity ((96)))) >>= fun (w__17 : word) =>
+                                           returnM (((generic_neq (w__16) (w__17))  : bool)))
+                                          ((slice_load (data) (DEPOSIT_INDEX_LENGTH_WORD)) >>= fun (w__18 : word) =>
+                                           (word_of_protocol_quantity
+                                              (Build_protocol_quantity ((8)))) >>= fun (w__19 : word) =>
+                                           returnM (((generic_neq (w__18) (w__19))  : bool))))
                                        : M (bool)))
                                    : M (bool)))
                                : M (bool)))
@@ -10505,12 +11028,13 @@ Definition bal_count_add (a : item_count_typ) (b : item_count_typ)
 : M (item_count_typ) :=
    let a := (a).(protocol_quantity_value) in
    let b := (b).(protocol_quantity_value) in
-   ((if Z.leb (b) ((Z.sub ((Z.sub ((pow2 (64))) (1))) (a))) then returnM ((Z.add (a) (b)))
+   ((if Z.leb (b) ((Z.sub ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) (a))) then
+       returnM ((Z.add (a) (b)))
      else throw (InvalidBlock (ExecutionInvalid)))
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
 
-Definition bal_index_word_content_size (index : item_index) (value : mword 256)
+Definition bal_index_word_content_size (index : item_index) (value : word)
 (*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
 : M (byte_length) :=
    let index := (index).(protocol_quantity_value) in
@@ -10519,7 +11043,7 @@ Definition bal_index_word_content_size (index : item_index) (value : mword 256)
    (byte_quantity_add (w__0) (w__1))
     : M (byte_quantity).
 
-Definition bal_index_word_size (index : item_index) (value : mword 256)
+Definition bal_index_word_size (index : item_index) (value : word)
 (*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
 : M (byte_length) :=
    let index := (index).(protocol_quantity_value) in
@@ -10527,7 +11051,7 @@ Definition bal_index_word_size (index : item_index) (value : mword 256)
    (rlp_list_size (w__0))
     : M (byte_quantity).
 
-Definition bal_write_index_word (index : item_index) (value : mword 256)
+Definition bal_write_index_word (index : item_index) (value : word)
 (*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
 : M (unit) :=
    let index := (index).(protocol_quantity_value) in
@@ -10569,7 +11093,7 @@ Definition bal_write_index_nonce (index : item_index) (value : account_nonce)
    (rlp_write_protocol_quantity (Build_protocol_quantity ((value))))
     : M (unit).
 
-Definition bal_index_code_content_size (index : item_index) (code_hash : mword 256)
+Definition bal_index_code_content_size (index : item_index) (code_hash : b256)
 (*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
 : M (byte_length) :=
    let index := (index).(protocol_quantity_value) in
@@ -10579,7 +11103,7 @@ Definition bal_index_code_content_size (index : item_index) (code_hash : mword 2
    (byte_quantity_add (w__0) (w__1))
     : M (byte_quantity).
 
-Definition bal_index_code_size (index : item_index) (code_hash : mword 256)
+Definition bal_index_code_size (index : item_index) (code_hash : b256)
 (*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
 : M (byte_length) :=
    let index := (index).(protocol_quantity_value) in
@@ -10587,7 +11111,7 @@ Definition bal_index_code_size (index : item_index) (code_hash : mword 256)
    (rlp_list_size (w__0))
     : M (byte_quantity).
 
-Definition bal_write_index_code (index : item_index) (code_hash : mword 256)
+Definition bal_write_index_code (index : item_index) (code_hash : b256)
 (*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
 : M (unit) :=
    let index := (index).(protocol_quantity_value) in
@@ -10601,7 +11125,7 @@ Definition bal_write_index_code (index : item_index) (code_hash : mword 256)
     : M (unit).
 
 Fixpoint _rec_bal_storage_change_run_end
-(account : item_index) (count : item_count_typ) (slot : mword 256) (index : item_index)
+(account : item_index) (count : item_count_typ) (slot : word) (index : item_index)
 (cursor : item_index) (_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
 (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
 (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
@@ -10615,8 +11139,8 @@ exact (
     (if Z.ltb (cursor) (count) return M (Z) then
        (and_boolM
           ((bal_storage_change_slot (Build_protocol_quantity ((account)))
-              (Build_protocol_quantity ((cursor)))) >>= fun (w__0 : mword 256) =>
-           returnM (((eq_vec (w__0) (slot))  : bool)))
+              (Build_protocol_quantity ((cursor)))) >>= fun (w__0 : word) =>
+           returnM (((generic_eq (w__0) (slot))  : bool)))
           (((bal_storage_change_index (Build_protocol_quantity ((account)))
                (Build_protocol_quantity ((cursor)))) >>= fun semanticResult =>
             returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__1 : Z) =>
@@ -10640,7 +11164,7 @@ Defined.
 
 
 Definition bal_storage_change_run_end
-(account : item_index) (count : item_count_typ) (slot : mword 256) (index : item_index)
+(account : item_index) (count : item_count_typ) (slot : word) (index : item_index)
 (cursor : item_index) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
 (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
 (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
@@ -10657,7 +11181,7 @@ Definition bal_storage_change_run_end
    returnM (Build_protocol_quantity (semanticResult)).
 
 Fixpoint _rec_bal_storage_slot_changes_size
-(account : item_index) (count : item_count_typ) (slot : mword 256) (cursor : item_index)
+(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index)
 (content_len : byte_quantity) (_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
 (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
 (_acc : Acc (Zwf 0) _reclimit)
@@ -10669,8 +11193,8 @@ exact (
    assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
    (if Z.ltb (cursor) (count) return M (BalContentCursor) then
       (bal_storage_change_slot (Build_protocol_quantity ((account)))
-         (Build_protocol_quantity ((cursor)))) >>= fun (w__0 : mword 256) =>
-      (if eq_vec (w__0) (slot) return M (BalContentCursor) then
+         (Build_protocol_quantity ((cursor)))) >>= fun (w__0 : word) =>
+      (if generic_eq (w__0) (slot) return M (BalContentCursor) then
          ((bal_storage_change_index (Build_protocol_quantity ((account)))
              (Build_protocol_quantity ((cursor)))) >>= fun semanticResult =>
           returnM (semanticResult).(protocol_quantity_value)) >>= fun index =>
@@ -10681,7 +11205,7 @@ exact (
          ((protocol_quantity_decrement (Build_protocol_quantity ((next)))) >>= fun semanticResult =>
           returnM (semanticResult).(protocol_quantity_value)) >>= fun last =>
          (bal_storage_change_value (Build_protocol_quantity ((account)))
-            (Build_protocol_quantity ((last)))) >>= fun (w__1 : mword 256) =>
+            (Build_protocol_quantity ((last)))) >>= fun (w__1 : word) =>
          (bal_index_word_size (Build_protocol_quantity ((index))) (w__1)) >>= fun (w__2 : byte_quantity) =>
          (byte_quantity_add (content_len) (w__2)) >>= fun next_len =>
          (_rec_bal_storage_slot_changes_size (Build_protocol_quantity ((account)))
@@ -10701,7 +11225,7 @@ Defined.
 
 
 Definition bal_storage_slot_changes_size
-(account : item_index) (count : item_count_typ) (slot : mword 256) (cursor : item_index)
+(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index)
 (content_len : byte_quantity) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
 (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
 : M (BalContentCursor) :=
@@ -10715,10 +11239,9 @@ Definition bal_storage_slot_changes_size
     : M (BalContentCursor).
 
 Fixpoint _rec_bal_write_storage_slot_changes
-(account : item_index) (count : item_count_typ) (slot : mword 256) (cursor : item_index)
-(_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(_acc : Acc (Zwf 0) _reclimit)
+(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index) (_reclimit : Z)
+(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
+(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (item_index).
 exact (
    let account := (account).(protocol_quantity_value) in
@@ -10727,8 +11250,8 @@ exact (
    (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
     (if Z.ltb (cursor) (count) return M (Z) then
        (bal_storage_change_slot (Build_protocol_quantity ((account)))
-          (Build_protocol_quantity ((cursor)))) >>= fun (w__0 : mword 256) =>
-       (if eq_vec (w__0) (slot) return M (Z) then
+          (Build_protocol_quantity ((cursor)))) >>= fun (w__0 : word) =>
+       (if generic_eq (w__0) (slot) return M (Z) then
           ((bal_storage_change_index (Build_protocol_quantity ((account)))
               (Build_protocol_quantity ((cursor)))) >>= fun semanticResult =>
            returnM (semanticResult).(protocol_quantity_value)) >>= fun index =>
@@ -10739,7 +11262,7 @@ exact (
           ((protocol_quantity_decrement (Build_protocol_quantity ((next)))) >>= fun semanticResult =>
            returnM (semanticResult).(protocol_quantity_value)) >>= fun last =>
           (bal_storage_change_value (Build_protocol_quantity ((account)))
-             (Build_protocol_quantity ((last)))) >>= fun (w__1 : mword 256) =>
+             (Build_protocol_quantity ((last)))) >>= fun (w__1 : word) =>
           (bal_write_index_word (Build_protocol_quantity ((index))) (w__1)) >>
           ((_rec_bal_write_storage_slot_changes (Build_protocol_quantity ((account)))
               (Build_protocol_quantity ((count))) (slot) (Build_protocol_quantity ((next)))
@@ -10756,7 +11279,7 @@ Defined.
 
 
 Definition bal_write_storage_slot_changes
-(account : item_index) (count : item_count_typ) (slot : mword 256) (cursor : item_index)
+(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index)
 (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
 (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
 : M (item_index) :=
@@ -10896,10 +11419,9 @@ Definition bal_write_storage_changes (account : item_index) (size : BalContentCo
     : M (unit).
 
 Fixpoint _rec_bal_storage_read_run_end
-(account : item_index) (count : item_count_typ) (slot : mword 256) (cursor : item_index)
-(_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(_acc : Acc (Zwf 0) _reclimit)
+(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index) (_reclimit : Z)
+(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
+(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (item_index).
 exact (
    let account := (account).(protocol_quantity_value) in
@@ -10908,8 +11430,8 @@ exact (
    (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
     (if Z.ltb (cursor) (count) return M (Z) then
        (bal_storage_read_slot (Build_protocol_quantity ((account)))
-          (Build_protocol_quantity ((cursor)))) >>= fun (w__0 : mword 256) =>
-       (if eq_vec (w__0) (slot) return M (Z) then
+          (Build_protocol_quantity ((cursor)))) >>= fun (w__0 : word) =>
+       (if generic_eq (w__0) (slot) return M (Z) then
           ((item_index_increment (Build_protocol_quantity ((cursor)))) >>= fun semanticResult =>
            returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__1 : Z) =>
           ((_rec_bal_storage_read_run_end (Build_protocol_quantity ((account)))
@@ -10927,7 +11449,7 @@ Defined.
 
 
 Definition bal_storage_read_run_end
-(account : item_index) (count : item_count_typ) (slot : mword 256) (cursor : item_index)
+(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index)
 (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
 (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
 : M (item_index) :=
@@ -10943,10 +11465,9 @@ Definition bal_storage_read_run_end
    returnM (Build_protocol_quantity (semanticResult)).
 
 Fixpoint _rec_bal_storage_change_seek
-(account : item_index) (count : item_count_typ) (slot : mword 256) (cursor : item_index)
-(_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(_acc : Acc (Zwf 0) _reclimit)
+(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index) (_reclimit : Z)
+(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
+(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (item_index).
 exact (
    let account := (account).(protocol_quantity_value) in
@@ -10955,7 +11476,7 @@ exact (
    (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
     (if Z.ltb (cursor) (count) return M (Z) then
        (bal_storage_change_slot (Build_protocol_quantity ((account)))
-          (Build_protocol_quantity ((cursor)))) >>= fun (w__0 : mword 256) =>
+          (Build_protocol_quantity ((cursor)))) >>= fun (w__0 : word) =>
        (if word_ult (w__0) (slot) return M (Z) then
           ((item_index_increment (Build_protocol_quantity ((cursor)))) >>= fun semanticResult =>
            returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__1 : Z) =>
@@ -10974,7 +11495,7 @@ Defined.
 
 
 Definition bal_storage_change_seek
-(account : item_index) (count : item_count_typ) (slot : mword 256) (cursor : item_index)
+(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index)
 (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
 (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
 : M (item_index) :=
@@ -11016,8 +11537,8 @@ exact (
        returnM (semanticResult).(protocol_quantity_value)) >>= fun next_change =>
       (if Z.ltb (next_change) (change_count) return M (bool) then
          (bal_storage_change_slot (Build_protocol_quantity ((account)))
-            (Build_protocol_quantity ((next_change)))) >>= fun (w__0 : mword 256) =>
-         returnM ((eq_vec (w__0) (slot)))
+            (Build_protocol_quantity ((next_change)))) >>= fun (w__0 : word) =>
+         returnM ((generic_eq (w__0) (slot)))
        else returnM (false)) >>= fun changed =>
       (if changed then returnM (result)
        else
@@ -11087,8 +11608,8 @@ exact (
        returnM (semanticResult).(protocol_quantity_value)) >>= fun next_change =>
       (if Z.ltb (next_change) (change_count) return M (bool) then
          (bal_storage_change_slot (Build_protocol_quantity ((account)))
-            (Build_protocol_quantity ((next_change)))) >>= fun (w__0 : mword 256) =>
-         returnM ((eq_vec (w__0) (slot)))
+            (Build_protocol_quantity ((next_change)))) >>= fun (w__0 : word) =>
+         returnM ((generic_eq (w__0) (slot)))
        else returnM (false)) >>= fun changed =>
       (if negb (changed) return M (unit) then (rlp_write_uint_word (slot))  : M (unit)
        else returnM (tt)) >>
@@ -11223,7 +11744,7 @@ exact (
       ((protocol_quantity_decrement (Build_protocol_quantity ((next)))) >>= fun semanticResult =>
        returnM (semanticResult).(protocol_quantity_value)) >>= fun last =>
       (bal_balance_change_value (Build_protocol_quantity ((account)))
-         (Build_protocol_quantity ((last)))) >>= fun (w__0 : mword 256) =>
+         (Build_protocol_quantity ((last)))) >>= fun (w__0 : word) =>
       (bal_index_word_size (Build_protocol_quantity ((index))) (w__0)) >>= fun (w__1 : byte_quantity) =>
       (byte_quantity_add (content_len) (w__1)) >>= fun (w__2 : byte_quantity) =>
       (_rec_bal_balance_groups_size (Build_protocol_quantity ((account)))
@@ -11271,7 +11792,7 @@ exact (
       ((protocol_quantity_decrement (Build_protocol_quantity ((next)))) >>= fun semanticResult =>
        returnM (semanticResult).(protocol_quantity_value)) >>= fun last =>
       (bal_balance_change_value (Build_protocol_quantity ((account)))
-         (Build_protocol_quantity ((last)))) >>= fun (w__0 : mword 256) =>
+         (Build_protocol_quantity ((last)))) >>= fun (w__0 : word) =>
       (bal_write_index_word (Build_protocol_quantity ((index))) (w__0)) >>
       (_rec_bal_write_balance_groups (Build_protocol_quantity ((account)))
          (Build_protocol_quantity ((count))) (Build_protocol_quantity ((next)))
@@ -11567,7 +12088,7 @@ exact (
        returnM (semanticResult).(protocol_quantity_value)) >>= fun next =>
       ((protocol_quantity_decrement (Build_protocol_quantity ((next)))) >>= fun semanticResult =>
        returnM (semanticResult).(protocol_quantity_value)) >>= fun last =>
-      (bal_code_change_hash (Build_protocol_quantity ((account))) (Build_protocol_quantity ((last)))) >>= fun (w__0 : mword 256) =>
+      (bal_code_change_hash (Build_protocol_quantity ((account))) (Build_protocol_quantity ((last)))) >>= fun (w__0 : b256) =>
       (bal_index_code_size (Build_protocol_quantity ((index))) (w__0)) >>= fun (w__1 : byte_quantity) =>
       (byte_quantity_add (content_len) (w__1)) >>= fun (w__2 : byte_quantity) =>
       (_rec_bal_code_groups_size (Build_protocol_quantity ((account)))
@@ -11613,7 +12134,7 @@ exact (
        returnM (semanticResult).(protocol_quantity_value)) >>= fun next =>
       ((protocol_quantity_decrement (Build_protocol_quantity ((next)))) >>= fun semanticResult =>
        returnM (semanticResult).(protocol_quantity_value)) >>= fun last =>
-      (bal_code_change_hash (Build_protocol_quantity ((account))) (Build_protocol_quantity ((last)))) >>= fun (w__0 : mword 256) =>
+      (bal_code_change_hash (Build_protocol_quantity ((account))) (Build_protocol_quantity ((last)))) >>= fun (w__0 : b256) =>
       (bal_write_index_code (Build_protocol_quantity ((index))) (w__0)) >>
       (_rec_bal_write_code_groups (Build_protocol_quantity ((account)))
          (Build_protocol_quantity ((count))) (Build_protocol_quantity ((next)))
@@ -11720,7 +12241,7 @@ Definition bal_write_account (account : item_index)
    (byte_quantity_add (content_len) (w__8)) >>= fun (w__9 : byte_quantity) =>
    let content_len := w__9  : byte_quantity in
    (rlp_write_list_prefix (content_len)) >>
-   (bal_account_address (Build_protocol_quantity ((account)))) >>= fun (w__10 : mword 160) =>
+   (bal_account_address (Build_protocol_quantity ((account)))) >>= fun (w__10 : address_typ) =>
    (rlp_write_addr (w__10)) >>
    (bal_write_storage_changes (Build_protocol_quantity ((account))) (storage_changes)) >>
    (bal_write_storage_reads (Build_protocol_quantity ((account))) (storage_reads)) >>
@@ -11846,28 +12367,27 @@ Definition execute_block_transactions
       (returnM ((neq_int (public_key_count_value)
                    ((transactions.(SszListRef_count)).(protocol_quantity_value)))))
       ((byte_quantity_mul (public_key_count) (PUBLIC_KEY_LENGTH)) >>= fun (w__0 : byte_quantity) =>
-       returnM (((byte_quantity_not_equal (public_keys.(ByteSlice_len)) (w__0))  : bool)))) >>= fun w__1 =>
+       returnM (((generic_neq (public_keys.(ByteSlice_len)) (w__0))  : bool)))) >>= fun w__1 =>
    (if w__1 return M (unit) then throw (InvalidBlock (WitnessDeficient))
     else returnM (tt)) >>
    let all_ok : bool := true in
    let gas_limit := block_gas_limit in
    let gas_acc : gas := GAS_ZERO in
    let blob_gas_acc : Z := 0 in
-   let tx0_to : mword 160 := ZERO_ADDR in
+   let tx0_to : address_typ := ZERO_ADDR in
    let block_gas_overflow : bool := false in
-   let blob_gas_overflow : bool := false in
    let receipts := receipt_accumulator_empty (tt) in
    (scratch_begin (tt)) >>= fun deposits_start =>
    (ssz_list_cursor (transactions)) >>= fun cursor =>
    let keys := public_keys in
    (whileMT
-     (all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to)
-     (fun '(all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) =>
+     (all_ok, blob_gas_acc, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to)
+     (fun '(all_ok, blob_gas_acc, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) =>
        Z.sub ((cursor.(SszListCursor_items).(SszListRef_count)).(protocol_quantity_value))
          ((cursor.(SszListCursor_index)).(protocol_quantity_value)))
-     (fun '(all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) =>
+     (fun '(all_ok, blob_gas_acc, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) =>
        returnM ((negb ((ssz_list_cursor_empty (cursor))))))
-     (fun '(all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) =>
+     (fun '(all_ok, blob_gas_acc, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to) =>
        (assert_exp' true "loop dummy assert" >>= fun _ =>
         let i := (cursor.(SszListCursor_index)).(protocol_quantity_value) in
         (ssz_list_pop (cursor)) >>= fun '((transaction, next)) =>
@@ -11880,93 +12400,69 @@ Definition execute_block_transactions
         ((protocol_quantity_increment (Build_protocol_quantity ((i)))) >>= fun semanticResult =>
          returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__4 : Z) =>
         (bal_set_index (Build_protocol_quantity ((w__4)))) >>
-        (if negb ((orb (block_gas_overflow) (blob_gas_overflow)))
+        (if negb (block_gas_overflow)
            return
-           M ((bool * Z * bool * bool * gas * ReceiptAccumulator * mword 160)) then
-           let tx0_to : mword 160 := if Z.eqb (i) (0) then tx.(Transaction_recipient) else tx0_to in
+           M ((bool * Z * bool * gas * ReceiptAccumulator * address_typ)) then
+           let tx0_to : address_typ := if Z.eqb (i) (0) then tx.(Transaction_recipient) else tx0_to in
            (if gas_lt (gas_limit) (gas_acc) then
               let block_gas_overflow : bool := true in
-              returnM ((all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts))
+              returnM ((all_ok, blob_gas_acc, block_gas_overflow, gas_acc, receipts))
             else
               (gas_sub (gas_limit) (gas_acc)) >>= fun available_gas =>
               (if gas_lt (available_gas) (tx.(Transaction_gas_limit)) then
                  let block_gas_overflow : bool := true in
-                 returnM ((all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts))
+                 returnM ((all_ok, blob_gas_acc, block_gas_overflow, gas_acc, receipts))
                else
-                 let tx_blob_gas_value :=
-                   Z.mul
-                     ((tx.(Transaction_blob_hashes).(BlobHashes_count)).(protocol_quantity_value))
-                     ((GAS_PER_BLOB).(protocol_quantity_value)) in
-                 (if Z.gtb (tx_blob_gas_value) ((Z.sub ((pow2 (64))) (1))) then
-                    let blob_gas_overflow : bool := true in
-                    returnM ((all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts))
+                 ((transaction_blob_gas
+                     (Build_protocol_quantity (((tx.(Transaction_blob_hashes).(BlobHashes_count)).(protocol_quantity_value))))) >>= fun semanticResult =>
+                  returnM (semanticResult).(protocol_quantity_value)) >>= fun tx_blob_gas =>
+                 read_reg k_fork >>= fun (w__5 : Fork) =>
+                 (if fork_lt (w__5) (Cancun) then returnM (blob_gas_acc)
                   else
-                    let tx_blob_gas : Z := tx_blob_gas_value in
-                    read_reg k_fork >>= fun (w__5 : Fork) =>
-                    (if fork_lt (w__5) (Cancun) then returnM (true)
-                     else
-                       ((blob_max_gas_per_block (tt)) >>= fun semanticResult =>
-                        returnM (semanticResult).(protocol_quantity_value)) >>= fun maximum =>
-                       returnM ((if Z.leb (blob_gas_acc) (maximum) then
-                                   Z.leb (tx_blob_gas) ((Z.sub (maximum) (blob_gas_acc)))
-                                 else false))) >>= fun (blob_capacity_ok : bool) =>
-                    (if negb (blob_capacity_ok) then
-                       let blob_gas_overflow : bool := true in
-                       returnM ((all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts))
-                     else
-                       (process_transaction (tx)) >>= fun receipt =>
-                       let all_ok : bool := andb (all_ok) (receipt.(Receipt_valid)) in
-                       let '((Gas accumulated)) := gas_acc in
-                       let '((Gas used)) := receipt.(Receipt_block_gas) in
-                       let '((block_gas_overflow, gas_acc)) :=
-                         (if Z.leb (used) ((Z.sub ((Z.sub ((pow2 (63))) (1))) (accumulated))) then
-                            let gas_acc : gas := Gas ((Z.add (accumulated) (used))) in
-                            let block_gas_overflow : bool := gas_lt (gas_limit) (gas_acc) in
-                            (block_gas_overflow, gas_acc)
-                          else
-                            let block_gas_overflow : bool := true in
-                            (block_gas_overflow, gas_acc))
-                          : (bool * gas) in
-                       (if receipt.(Receipt_valid) return M ((Z * bool * ReceiptAccumulator)) then
-                          (receipt_accumulator_push (receipts) (receipt)) >>= fun (w__6 : ReceiptAccumulator) =>
-                          let receipts := w__6  : ReceiptAccumulator in
-                          (append_deposit_logs (receipt.(Receipt_logs))) >>
-                          let next_blob_gas := Z.add (blob_gas_acc) (tx_blob_gas) in
-                          let '((blob_gas_acc, blob_gas_overflow)) :=
-                            (if Z.leb (next_blob_gas) ((Z.sub ((pow2 (64))) (1))) then
-                               let blob_gas_acc : Z := next_blob_gas in
-                               (blob_gas_acc, blob_gas_overflow)
-                             else
-                               let blob_gas_overflow : bool := true in
-                               (blob_gas_acc, blob_gas_overflow))
-                             : (Z * bool) in
-                          returnM ((blob_gas_acc, blob_gas_overflow, receipts))
-                        else returnM ((blob_gas_acc, blob_gas_overflow, receipts))) >>= fun '((blob_gas_acc, blob_gas_overflow, receipts)
-                       : (Z * bool * ReceiptAccumulator)) =>
-                       returnM ((all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts)))
-                     : M ((bool * Z * bool * bool * gas * ReceiptAccumulator)))
-                  : M ((bool * Z * bool * bool * gas * ReceiptAccumulator)))
-               : M ((bool * Z * bool * bool * gas * ReceiptAccumulator))) >>= fun '((all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts)
-           : (bool * Z * bool * bool * gas * ReceiptAccumulator)) =>
-           returnM ((all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts, tx0_to))
-         else
-           returnM ((all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts, tx0_to))) >>= fun '((all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, gas_acc, receipts, tx0_to)
-        : (bool * Z * bool * bool * gas * ReceiptAccumulator * mword 160)) =>
-        returnM ((all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to)))
-        : M ((bool * Z * bool * bool * SszListCursor * gas * ByteSlice * ReceiptAccumulator * mword 160)))) >>= fun '((all_ok, blob_gas_acc, blob_gas_overflow, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to)
-   : (bool * Z * bool * bool * SszListCursor * gas * ByteSlice * ReceiptAccumulator * mword 160)) =>
-   (receipt_accumulator_root (receipts)) >>= fun (w__7 : mword 256) =>
-   (scratch_finish (deposits_start)) >>= fun (w__8 : ByteSlice) =>
-   returnM (({| BlockExecutionResult_all_ok :=
-                  andb (all_ok) ((andb ((negb (block_gas_overflow))) ((negb (blob_gas_overflow)))));
+                    ((checked_block_blob_gas_add (Build_protocol_quantity ((blob_gas_acc)))
+                        (Build_protocol_quantity ((tx_blob_gas)))) >>= fun semanticResult =>
+                     returnM (semanticResult).(protocol_quantity_value))
+                     : M (Z)) >>= fun (next_blob_gas : Z) =>
+                 (process_transaction (tx)) >>= fun receipt =>
+                 let all_ok : bool := andb (all_ok) (receipt.(Receipt_valid)) in
+                 (if gas_sum_supported (gas_acc) (receipt.(Receipt_block_gas))
+                    return
+                    M ((bool * gas)) then
+                    (gas_add (gas_acc) (receipt.(Receipt_block_gas))) >>= fun (w__7 : gas) =>
+                    let gas_acc := w__7  : gas in
+                    let block_gas_overflow : bool := gas_lt (gas_limit) (gas_acc) in
+                    returnM ((block_gas_overflow, gas_acc))
+                  else
+                    let block_gas_overflow : bool := true in
+                    returnM ((block_gas_overflow, gas_acc))) >>= fun '((block_gas_overflow, gas_acc)
+                 : (bool * gas)) =>
+                 (if receipt.(Receipt_valid) return M ((Z * ReceiptAccumulator)) then
+                    (receipt_accumulator_push (receipts) (receipt)) >>= fun (w__8 : ReceiptAccumulator) =>
+                    let receipts := w__8  : ReceiptAccumulator in
+                    (append_deposit_logs (receipt.(Receipt_logs))) >>
+                    let blob_gas_acc : Z := next_blob_gas in
+                    returnM ((blob_gas_acc, receipts))
+                  else returnM ((blob_gas_acc, receipts))) >>= fun '((blob_gas_acc, receipts)
+                 : (Z * ReceiptAccumulator)) =>
+                 returnM ((all_ok, blob_gas_acc, block_gas_overflow, gas_acc, receipts)))
+               : M ((bool * Z * bool * gas * ReceiptAccumulator))) >>= fun '((all_ok, blob_gas_acc, block_gas_overflow, gas_acc, receipts)
+           : (bool * Z * bool * gas * ReceiptAccumulator)) =>
+           returnM ((all_ok, blob_gas_acc, block_gas_overflow, gas_acc, receipts, tx0_to))
+         else returnM ((all_ok, blob_gas_acc, block_gas_overflow, gas_acc, receipts, tx0_to))) >>= fun '((all_ok, blob_gas_acc, block_gas_overflow, gas_acc, receipts, tx0_to)
+        : (bool * Z * bool * gas * ReceiptAccumulator * address_typ)) =>
+        returnM ((all_ok, blob_gas_acc, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to)))
+        : M ((bool * Z * bool * SszListCursor * gas * ByteSlice * ReceiptAccumulator * address_typ)))) >>= fun '((all_ok, blob_gas_acc, block_gas_overflow, cursor, gas_acc, keys, receipts, tx0_to)
+   : (bool * Z * bool * SszListCursor * gas * ByteSlice * ReceiptAccumulator * address_typ)) =>
+   (receipt_accumulator_root (receipts)) >>= fun (w__9 : b256) =>
+   (scratch_finish (deposits_start)) >>= fun (w__10 : ByteSlice) =>
+   returnM (({| BlockExecutionResult_all_ok := andb (all_ok) ((negb (block_gas_overflow)));
                 BlockExecutionResult_gas_acc := gas_acc;
                 BlockExecutionResult_blob_gas_acc := (Build_protocol_quantity (blob_gas_acc));
                 BlockExecutionResult_first_tx_recipient := tx0_to;
                 BlockExecutionResult_block_gas_overflow := block_gas_overflow;
-                BlockExecutionResult_blob_gas_overflow := blob_gas_overflow;
-                BlockExecutionResult_receipts_root := w__7;
+                BlockExecutionResult_receipts_root := w__9;
                 BlockExecutionResult_logs_bloom := receipts.(ReceiptAccumulator_bloom);
-                BlockExecutionResult_deposits := w__8;
+                BlockExecutionResult_deposits := w__10;
                 BlockExecutionResult_requests := EMPTY_EXECUTION_REQUESTS |})).
 
 Definition apply_withdrawals (withdrawals : SszListRef) : M (unit) :=
@@ -11980,8 +12476,9 @@ Definition apply_withdrawals (withdrawals : SszListRef) : M (unit) :=
         (ssz_fixed_list_pop (rest) (WD_SIZE)) >>= fun '((withdrawal_ref, tail)) =>
         let rest : SszListRef := tail in
         (decode_withdrawal (withdrawal_ref)) >>= fun withdrawal =>
-        (word_of_nat ((withdrawal.(Withdrawal_amount)).(protocol_quantity_value))) >>= fun (w__0 : mword 256) =>
-        (word_of_nat (1000000000)) >>= fun (w__1 : mword 256) =>
+        (word_of_protocol_quantity
+           (Build_protocol_quantity (((withdrawal.(Withdrawal_amount)).(protocol_quantity_value))))) >>= fun (w__0 : word) =>
+        (word_of_protocol_quantity (Build_protocol_quantity ((1000000000)))) >>= fun (w__1 : word) =>
         (k_add_balance (withdrawal.(Withdrawal_address)) ((alu_mul (w__0) (w__1)))) >>
         returnM (rest))
         : M (SszListRef))) >>= fun (rest : SszListRef) =>
@@ -12007,8 +12504,8 @@ Definition apply_block_end_state (body : BlockBody) : M (unit) :=
     else returnM (tt)) >>
    read_reg k_fork >>= fun (w__1 : Fork) =>
    (if fork_lt (w__1) (Paris) return M (unit) then
-      (k_coinbase (tt)) >>= fun (w__2 : mword 160) =>
-      (word_of_nat (2000000000000000000)) >>= fun (w__3 : mword 256) =>
+      (k_coinbase (tt)) >>= fun (w__2 : address_typ) =>
+      (word_of_protocol_quantity (Build_protocol_quantity ((2000000000000000000)))) >>= fun (w__3 : word) =>
       (k_add_balance (w__2) (w__3))
        : M (unit)
     else returnM (tt)) >>
@@ -12022,7 +12519,7 @@ Definition execute_block_body (body : BlockBody) (public_keys : ByteSlice) (bloc
    (run_block_start_system_calls (tt)) >>
    (execute_block_transactions (body.(BlockBody_transactions)) (public_keys) (block_gas_limit)) >>= fun result =>
    (if Z.ltb ((body.(BlockBody_transactions).(SszListRef_count)).(protocol_quantity_value))
-         ((Z.sub ((pow2 (64))) (1)))
+         ((BYTE_QUANTITY_MAX).(protocol_quantity_value))
       return
       M (Z) then
       ((protocol_quantity_increment
@@ -12065,8 +12562,8 @@ Definition withdrawal_rlp (withdrawal : ByteSlice) : M (ByteSlice) :=
     : M (ByteSlice).
 
 Definition block_header_hash
-(header : BlockHeader) (transactions_root : mword 256) (withdrawals_root : mword 256)
-(requests_hash : mword 256) (block_access_list_hash : mword 256)
+(header : BlockHeader) (transactions_root : b256) (withdrawals_root : b256) (requests_hash : b256)
+(block_access_list_hash : b256)
 : M (hash) :=
    let bloom := logs_bloom_bytes (header.(BlockHeader_logs_bloom)) in
    let nonce : list (mword 8) :=
@@ -12158,12 +12655,12 @@ Definition block_header_hash
    (rlp_list_size (content_len)) >>= fun encoded_len =>
    (scratch_begin (tt)) >>= fun mark =>
    (rlp_write_list_prefix (content_len)) >>
-   (rlp_write_word (header.(BlockHeader_parent_hash))) >>
-   (rlp_write_word (EMPTY_OMMER_HASH)) >>
+   (rlp_write_word ((hash_to_word (header.(BlockHeader_parent_hash))))) >>
+   (rlp_write_word ((hash_to_word (EMPTY_OMMER_HASH)))) >>
    (rlp_write_addr (header.(BlockHeader_fee_recipient))) >>
-   (rlp_write_word (header.(BlockHeader_state_root))) >>
-   (rlp_write_word (transactions_root)) >>
-   (rlp_write_word (header.(BlockHeader_receipts_root))) >>
+   (rlp_write_word ((hash_to_word (header.(BlockHeader_state_root))))) >>
+   (rlp_write_word ((hash_to_word (transactions_root)))) >>
+   (rlp_write_word ((hash_to_word (header.(BlockHeader_receipts_root))))) >>
    (rlp_write_bytes (bloom) (LOGS_BLOOM_BYTE_LENGTH)) >>
    (rlp_write_protocol_quantity (Build_protocol_quantity ((0)))) >>
    (rlp_write_protocol_quantity
@@ -12182,7 +12679,7 @@ Definition block_header_hash
     else returnM (tt)) >>
    read_reg k_fork >>= fun (w__40 : Fork) =>
    (if fork_gteq (w__40) (Shanghai) return M (unit) then
-      (rlp_write_word (withdrawals_root))
+      (rlp_write_word ((hash_to_word (withdrawals_root))))
        : M (unit)
     else returnM (tt)) >>
    read_reg k_fork >>= fun (w__41 : Fork) =>
@@ -12191,15 +12688,17 @@ Definition block_header_hash
          (Build_protocol_quantity (((header.(BlockHeader_blob_gas_used)).(protocol_quantity_value))))) >>
       (rlp_write_protocol_quantity
          (Build_protocol_quantity (((header.(BlockHeader_excess_blob_gas)).(protocol_quantity_value))))) >>
-      (rlp_write_word (header.(BlockHeader_parent_beacon_block_root)))
+      (rlp_write_word ((hash_to_word (header.(BlockHeader_parent_beacon_block_root)))))
        : M (unit)
     else returnM (tt)) >>
    read_reg k_fork >>= fun (w__42 : Fork) =>
-   (if fork_gteq (w__42) (Prague) return M (unit) then (rlp_write_word (requests_hash))  : M (unit)
+   (if fork_gteq (w__42) (Prague) return M (unit) then
+      (rlp_write_word ((hash_to_word (requests_hash))))
+       : M (unit)
     else returnM (tt)) >>
    read_reg k_fork >>= fun (w__43 : Fork) =>
    (if fork_gteq (w__43) (Amsterdam) return M (unit) then
-      (rlp_write_word (block_access_list_hash)) >>
+      (rlp_write_word ((hash_to_word (block_access_list_hash)))) >>
       (rlp_write_protocol_quantity
          (Build_protocol_quantity (((header.(BlockHeader_slot_number)).(protocol_quantity_value)))))
        : M (unit)
@@ -12231,7 +12730,7 @@ Definition transaction_trie_root (txs : SszListRef) : M (hash) :=
         : M ((TrieBuilder * RlpIndexCursor)))) >>= fun '((builder, cursor)
    : (TrieBuilder * RlpIndexCursor)) =>
    (trie_builder_root (builder))
-    : M (mword 256).
+    : M (b256).
 
 Definition withdrawals_trie_root (wds : SszListRef) : M (hash) :=
    let builder := trie_builder_empty (tt) in
@@ -12260,7 +12759,7 @@ Definition withdrawals_trie_root (wds : SszListRef) : M (hash) :=
         : M ((TrieBuilder * RlpIndexCursor)))) >>= fun '((builder, cursor)
    : (TrieBuilder * RlpIndexCursor)) =>
    (trie_builder_root (builder))
-    : M (mword 256).
+    : M (b256).
 
 Definition expected_payload_excess_blob_gas (witness : WitnessContext) : M (blob_gas_typ) :=
    (((next_excess_blob_gas
@@ -12275,33 +12774,33 @@ Definition execution_requests_hash (input_ref : StatelessInputRef) : M (hash) :=
    let l0 := input_ref.(StatelessInputRef_deposits).(ByteSlice_len) in
    let l1 := input_ref.(StatelessInputRef_withdrawal_requests).(ByteSlice_len) in
    let l2 := input_ref.(StatelessInputRef_consolidation_requests).(ByteSlice_len) in
-   (if byte_quantity_not_equal (l0) (BYTE_ZERO) return M (mword 256) then
+   (if generic_neq (l0) (BYTE_ZERO) return M (b256) then
       (sha256_request_digest ((Ox"00")) (input_ref.(StatelessInputRef_deposits)))
-       : M (mword 256)
-    else returnM ((zeros (256)))) >>= fun (d0 : mword 256) =>
-   (if byte_quantity_not_equal (l1) (BYTE_ZERO) return M (mword 256) then
+       : M (b256)
+    else returnM (ZERO_HASH)) >>= fun (d0 : b256) =>
+   (if generic_neq (l1) (BYTE_ZERO) return M (b256) then
       (sha256_request_digest ((Ox"01")) (input_ref.(StatelessInputRef_withdrawal_requests)))
-       : M (mword 256)
-    else returnM ((zeros (256)))) >>= fun (d1 : mword 256) =>
-   (if byte_quantity_not_equal (l2) (BYTE_ZERO) return M (mword 256) then
+       : M (b256)
+    else returnM (ZERO_HASH)) >>= fun (d1 : b256) =>
+   (if generic_neq (l2) (BYTE_ZERO) return M (b256) then
       (sha256_request_digest ((Ox"02")) (input_ref.(StatelessInputRef_consolidation_requests)))
-       : M (mword 256)
-    else returnM ((zeros (256)))) >>= fun (d2 : mword 256) =>
+       : M (b256)
+    else returnM (ZERO_HASH)) >>= fun (d2 : b256) =>
    let segs : list Bytes := [] in
    let segs : list Bytes :=
-     if byte_quantity_not_equal (l2) (BYTE_ZERO) then
-       (bytes_list ((word_to_bytes32 (d2))) (WORD_BYTE_LENGTH)) :: segs
+     if generic_neq (l2) (BYTE_ZERO) then
+       (bytes_list ((hash_to_bytes32 (d2))) (WORD_BYTE_LENGTH)) :: segs
      else segs in
    let segs : list Bytes :=
-     if byte_quantity_not_equal (l1) (BYTE_ZERO) then
-       (bytes_list ((word_to_bytes32 (d1))) (WORD_BYTE_LENGTH)) :: segs
+     if generic_neq (l1) (BYTE_ZERO) then
+       (bytes_list ((hash_to_bytes32 (d1))) (WORD_BYTE_LENGTH)) :: segs
      else segs in
    let segs : list Bytes :=
-     if byte_quantity_not_equal (l0) (BYTE_ZERO) then
-       (bytes_list ((word_to_bytes32 (d0))) (WORD_BYTE_LENGTH)) :: segs
+     if generic_neq (l0) (BYTE_ZERO) then
+       (bytes_list ((hash_to_bytes32 (d0))) (WORD_BYTE_LENGTH)) :: segs
      else segs in
    (sha256_segments (segs))
-    : M (mword 256).
+    : M (b256).
 
 Definition validate_execution_payload
 (input : StatelessInput) (input_ref : StatelessInputRef) (witness : WitnessContext)
@@ -12328,7 +12827,7 @@ Definition validate_execution_payload
    (if gas_lt (header.(BlockHeader_gas_limit)) (header.(BlockHeader_gas_used)) return M (unit) then
       throw (InvalidBlock (InvalidGasUsed))
     else returnM (tt)) >>
-   (if neq_vec (witness.(WitnessContext_parent_hash)) (header.(BlockHeader_parent_hash))
+   (if generic_neq (witness.(WitnessContext_parent_hash)) (header.(BlockHeader_parent_hash))
       return
       M (unit) then
       throw (InvalidBlock (InvalidParentHash))
@@ -12345,23 +12844,23 @@ Definition validate_execution_payload
    (if fork_gteq (w__3) (Paris) return M (unit) then
       (transaction_trie_root (body.(BlockBody_transactions))) >>= fun transactions_root =>
       read_reg k_fork >>= fun (w__4 : Fork) =>
-      (if fork_gteq (w__4) (Shanghai) return M (mword 256) then
+      (if fork_gteq (w__4) (Shanghai) return M (b256) then
          (withdrawals_trie_root (body.(BlockBody_withdrawals)))
-          : M (mword 256)
+          : M (b256)
        else returnM (EMPTY_TRIE_ROOT)) >>= fun withdrawals_root =>
       read_reg k_fork >>= fun (w__6 : Fork) =>
-      (if fork_gteq (w__6) (Prague) return M (mword 256) then
+      (if fork_gteq (w__6) (Prague) return M (b256) then
          (execution_requests_hash (input_ref))
-          : M (mword 256)
-       else returnM (ZERO_WORD)) >>= fun requests_hash =>
+          : M (b256)
+       else returnM (ZERO_HASH)) >>= fun requests_hash =>
       read_reg k_fork >>= fun (w__8 : Fork) =>
-      (if fork_gteq (w__8) (Amsterdam) return M (mword 256) then
+      (if fork_gteq (w__8) (Amsterdam) return M (b256) then
          (keccak256_slice (body.(BlockBody_block_access_list)))
-          : M (mword 256)
-       else returnM (ZERO_WORD)) >>= fun block_access_list_hash =>
+          : M (b256)
+       else returnM (ZERO_HASH)) >>= fun block_access_list_hash =>
       (block_header_hash (header) (transactions_root) (withdrawals_root) (requests_hash)
          (block_access_list_hash)) >>= fun computed_block_hash =>
-      (if neq_vec (computed_block_hash) (payload.(ExecutionPayload_expected_block_hash))
+      (if generic_neq (computed_block_hash) (payload.(ExecutionPayload_expected_block_hash))
          return
          M (unit) then
          throw (InvalidBlock (InvalidBlockHash))
@@ -12375,16 +12874,16 @@ Definition validate_executed_block
 : M (unit) :=
    let header := block.(Block_header) in
    let gas_used_ok :=
-     gas_equal (result.(BlockExecutionResult_gas_acc)) (header.(BlockHeader_gas_used)) in
+     generic_eq (result.(BlockExecutionResult_gas_acc)) (header.(BlockHeader_gas_used)) in
    (or_boolM
       (read_reg k_fork >>= fun (w__0 : Fork) => returnM (((fork_lt (w__0) (Cancun))  : bool)))
       (returnM (((Z.eqb ((result.(BlockExecutionResult_blob_gas_acc)).(protocol_quantity_value))
                     ((header.(BlockHeader_blob_gas_used)).(protocol_quantity_value)))
         : bool)))) >>= fun blob_gas_used_ok =>
-   (compute_state_root (tt)) >>= fun (w__1 : mword 256) =>
-   let poststate_ok := eq_vec (w__1) (header.(BlockHeader_state_root)) in
+   (compute_state_root (tt)) >>= fun (w__1 : b256) =>
+   let poststate_ok := generic_eq (w__1) (header.(BlockHeader_state_root)) in
    let receipts_root_ok :=
-     eq_vec (result.(BlockExecutionResult_receipts_root)) (header.(BlockHeader_receipts_root)) in
+     generic_eq (result.(BlockExecutionResult_receipts_root)) (header.(BlockHeader_receipts_root)) in
    let logs_bloom_ok :=
      logs_bloom_equal (result.(BlockExecutionResult_logs_bloom)) (header.(BlockHeader_logs_bloom)) in
    let block_access_list_size_ok : bool := true in
@@ -12414,8 +12913,8 @@ Definition validate_executed_block
    read_reg k_fork >>= fun (w__8 : Fork) =>
    (if fork_gteq (w__8) (Amsterdam) return M ((bool * bool)) then
       (encode_block_access_list (tt)) >>= fun block_access_list =>
-      let '((Gas gas_limit)) := header.(BlockHeader_gas_limit) in
-      (exact_quotient (gas_limit) (2000)) >>= fun maximum_items =>
+      (gas_quotient (header.(BlockHeader_gas_limit)) (Build_gas_divisor ((2000)))) >>= fun '(Gas
+        maximum_items) =>
       let block_access_list_size_ok : bool :=
         Z.leb ((block_access_list.(EncodedBlockAccessList_item_count)).(protocol_quantity_value))
           (maximum_items) in
@@ -12427,9 +12926,6 @@ Definition validate_executed_block
    : (bool * bool)) =>
    (if result.(BlockExecutionResult_block_gas_overflow) return M (unit) then
       throw (InvalidBlock (GasUsedExceedsLimit))
-    else returnM (tt)) >>
-   (if result.(BlockExecutionResult_blob_gas_overflow) return M (unit) then
-      throw (InvalidBlock (BlobGasLimitExceeded))
     else returnM (tt)) >>
    (if negb (exec_ok) return M (unit) then throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
@@ -12530,7 +13026,7 @@ Definition HTR_CONSOLIDATION_REQUEST_LENGTH : byte_length := ByteQuantity (116).
 #[export] Hint Unfold HTR_CONSOLIDATION_REQUEST_LENGTH : sail.
 Definition HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY : source_pointer := ByteQuantity (68).
 #[export] Hint Unfold HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY : sail.
-Fixpoint merkle_push (frontier : list MerkleSlot) (count : item_count_typ) (leaf : mword 256)
+Fixpoint merkle_push (frontier : list MerkleSlot) (count : item_count_typ) (leaf : b256)
 (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
 : M (list MerkleSlot) :=
    let count := (count).(protocol_quantity_value) in
@@ -12545,7 +13041,7 @@ Fixpoint merkle_push (frontier : list MerkleSlot) (count : item_count_typ) (leaf
          ((protocol_quantity_quotient (Build_protocol_quantity ((count)))
              (Build_protocol_divisor ((2)))) >>= fun semanticResult =>
           returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__0 : Z) =>
-         (sha256_pair (left') (leaf)) >>= fun (w__1 : mword 256) =>
+         (sha256_pair (left') (leaf)) >>= fun (w__1 : b256) =>
          (merkle_push (rest) (Build_protocol_quantity ((w__0))) (w__1)) >>= fun (w__2 : list MerkleSlot) =>
          returnM (((EmptyMerkleSlot (tt)) :: w__2))
       | (EmptyMerkleSlot tt) :: _ => throw (InvalidBlock (WitnessDeficient))
@@ -12554,10 +13050,10 @@ Fixpoint merkle_push (frontier : list MerkleSlot) (count : item_count_typ) (leaf
        : M (list MerkleSlot))
     : M (list MerkleSlot).
 
-Definition merkle_accumulator_push (accumulator : MerkleAccumulator) (leaf : mword 256)
+Definition merkle_accumulator_push (accumulator : MerkleAccumulator) (leaf : b256)
 : M (MerkleAccumulator) :=
    (if Z.ltb ((accumulator.(MerkleAccumulator_count)).(protocol_quantity_value))
-         ((Z.sub ((pow2 (64))) (1)))
+         ((BYTE_QUANTITY_MAX).(protocol_quantity_value))
       return
       M (MerkleAccumulator) then
       (merkle_push (accumulator.(MerkleAccumulator_frontier))
@@ -12572,24 +13068,24 @@ Definition merkle_accumulator_push (accumulator : MerkleAccumulator) (leaf : mwo
     : M (MerkleAccumulator).
 
 Fixpoint _rec_merkle_root_levels
-(slots : list MerkleSlot) (n : item_count_typ) (zero : mword 256) (acc : mword 256)
-(remaining : merkle_depth) (_reclimit : Z) (*(0 <=? n) && (n <=? (2 ^ 64 - 1))*)
-(*(0 <=? remaining) && (remaining <=? 64)*) (_acc : Acc (Zwf 0) _reclimit)
+(slots : list MerkleSlot) (n : item_count_typ) (zero : b256) (acc : b256) (remaining : merkle_depth)
+(_reclimit : Z) (*(0 <=? n) && (n <=? (2 ^ 64 - 1))*) (*(0 <=? remaining) && (remaining <=? 64)*)
+(_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (hash).
 exact (
    let n := (n).(protocol_quantity_value) in
    let remaining := (remaining).(merkle_depth_value) in
    assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if Z.eqb (remaining) (0) return M (mword 256) then
+   (if Z.eqb (remaining) (0) return M (b256) then
       (if Z.eqb (n) (0) then returnM (acc)
-       else if Z.eqb (n) (1) return M (mword 256) then
+       else if Z.eqb (n) (1) return M (b256) then
          match slots with
          | (OccupiedMerkleSlot root) :: _ => returnM (root)
          | _ => throw (InvalidBlock (WitnessDeficient))
          end
-          : M (mword 256)
+          : M (b256)
        else throw (InvalidBlock (WitnessDeficient)))
-       : M (mword 256)
+       : M (b256)
     else
       let slot : MerkleSlot := EmptyMerkleSlot (tt) in
       let rest : list MerkleSlot := [] in
@@ -12602,35 +13098,34 @@ exact (
         | [] => (rest, slot)
         end
          : (list MerkleSlot * MerkleSlot) in
-      (if Z.eqb ((Z.rem (n) (2))) (1) return M (mword 256) then
+      (if Z.eqb ((Z.rem (n) (2))) (1) return M (b256) then
          match slot with
-         | OccupiedMerkleSlot left' => (sha256_pair (left') (acc))  : M (mword 256)
+         | OccupiedMerkleSlot left' => (sha256_pair (left') (acc))  : M (b256)
          | EmptyMerkleSlot tt => throw (InvalidBlock (WitnessDeficient))
          end
-          : M (mword 256)
-       else (sha256_pair (acc) (zero))  : M (mword 256)) >>= fun next_acc =>
+          : M (b256)
+       else (sha256_pair (acc) (zero))  : M (b256)) >>= fun next_acc =>
       ((protocol_quantity_quotient (Build_protocol_quantity ((n))) (Build_protocol_divisor ((2)))) >>= fun semanticResult =>
        returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__9 : Z) =>
-      (sha256_pair (zero) (zero)) >>= fun (w__10 : mword 256) =>
+      (sha256_pair (zero) (zero)) >>= fun (w__10 : b256) =>
       (_rec_merkle_root_levels (rest) (Build_protocol_quantity ((w__9))) (w__10) (next_acc)
          (Build_merkle_depth (((Z.sub (remaining) (1))))) ((Z.sub (_reclimit) (1)))
          (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (mword 256))
-    : M (mword 256)
+       : M (b256))
+    : M (b256)
 ).
 Defined.
 
 
 Definition merkle_root_levels
-(slots : list MerkleSlot) (n : item_count_typ) (zero : mword 256) (acc : mword 256)
-(remaining : merkle_depth) (*(0 <=? n) && (n <=? (2 ^ 64 - 1))*)
-(*(0 <=? remaining) && (remaining <=? 64)*)
+(slots : list MerkleSlot) (n : item_count_typ) (zero : b256) (acc : b256) (remaining : merkle_depth)
+(*(0 <=? n) && (n <=? (2 ^ 64 - 1))*) (*(0 <=? remaining) && (remaining <=? 64)*)
 : M (hash) :=
    let n := (n).(protocol_quantity_value) in
    let remaining := (remaining).(merkle_depth_value) in
    (_rec_merkle_root_levels (slots) (Build_protocol_quantity ((n))) (zero) (acc)
       (Build_merkle_depth ((remaining))) ((remaining  : Z)) (Zwf_guarded _))
-    : M (mword 256).
+    : M (b256).
 
 Definition merkle_accumulator_root (accumulator : MerkleAccumulator) (depth : merkle_depth)
 (*(0 <=? depth) && (depth <=? 64)*)
@@ -12638,10 +13133,10 @@ Definition merkle_accumulator_root (accumulator : MerkleAccumulator) (depth : me
    let depth := (depth).(merkle_depth_value) in
    (merkle_root_levels (accumulator.(MerkleAccumulator_frontier))
       (Build_protocol_quantity (((accumulator.(MerkleAccumulator_count)).(protocol_quantity_value))))
-      ((zeros (256))) ((zeros (256))) (Build_merkle_depth ((depth))))
-    : M (mword 256).
+      (ZERO_HASH) (ZERO_HASH) (Build_merkle_depth ((depth))))
+    : M (b256).
 
-Fixpoint merkle_accumulate (leaves : list (mword 256)) (accumulator : MerkleAccumulator)
+Fixpoint merkle_accumulate (leaves : list b256) (accumulator : MerkleAccumulator)
 : M (MerkleAccumulator) :=
    match leaves with
    | [] => returnM (accumulator)
@@ -12652,17 +13147,17 @@ Fixpoint merkle_accumulate (leaves : list (mword 256)) (accumulator : MerkleAccu
    end
     : M (MerkleAccumulator).
 
-Definition merkleize (leaves : list (mword 256)) (depth : merkle_depth)
-(*(0 <=? depth) && (depth <=? 64)*)
+Definition merkleize (leaves : list b256) (depth : merkle_depth) (*(0 <=? depth) && (depth <=? 64)*)
 : M (hash) :=
    let depth := (depth).(merkle_depth_value) in
    (merkle_accumulate (leaves) (EMPTY_MERKLE_ACCUMULATOR)) >>= fun (w__0 : MerkleAccumulator) =>
    (merkle_accumulator_root (w__0) (Build_merkle_depth ((depth))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_uint (v : protocol_quantity) (*(0 <=? v) && (v <=? (2 ^ 64 - 1))*) : M (hash) :=
    let v := (v).(protocol_quantity_value) in
-   (word_of_nat (v)) >>= fun value =>
+   (word_of_protocol_quantity (Build_protocol_quantity ((v)))) >>= fun (w__0 : word) =>
+   let value := word_to_bits (w__0) in
    let acc : mword 256 := zeros (256) in
    let acc : mword 256 :=
      let '(loop_k_lower) := 0 in
@@ -12671,28 +13166,31 @@ Definition htr_uint (v : protocol_quantity) (*(0 <=? v) && (v <=? (2 ^ 64 - 1))*
        (fun k acc =>
          let byte := subrange_vec_dec ((shiftr (value) ((Z.mul (8) (k))))) (7) (0) in
          or_vec (acc) ((shiftl ((zero_extend (byte) (256))) ((Z.mul (8) ((Z.sub (31) (k))))))))) in
-   returnM (acc).
+   returnM ((hash_from_bits (acc))).
 
-Definition htr_u256 (w : mword 256) : hash :=
+Definition htr_u256 '((U256 w) : word) : hash :=
    let acc : mword 256 := zeros (256) in
-   let '(loop_k_lower) := 0 in
-   let '(loop_k_upper) := 31 in
-   (foreach_Z_up loop_k_lower loop_k_upper 1 acc
-     (fun k acc =>
-       let byte := subrange_vec_dec ((shiftr (w) ((Z.mul (8) (k))))) (7) (0) in
-       or_vec (acc) ((shiftl ((zero_extend (byte) (256))) ((Z.mul (8) ((Z.sub (31) (k))))))))).
+   let acc : mword 256 :=
+     let '(loop_k_lower) := 0 in
+     let '(loop_k_upper) := 31 in
+     (foreach_Z_up loop_k_lower loop_k_upper 1 acc
+       (fun k acc =>
+         let byte := subrange_vec_dec ((shiftr (w) ((Z.mul (8) (k))))) (7) (0) in
+         or_vec (acc) ((shiftl ((zero_extend (byte) (256))) ((Z.mul (8) ((Z.sub (31) (k))))))))) in
+   hash_from_bits (acc).
 
-Definition htr_bytes32 (b : mword 256) : hash := b.
+Definition htr_bytes32 (b : b256) : hash := b.
 
-Definition htr_addr (a : mword 160) : hash := shiftl ((zero_extend (a) (256))) (96).
+Definition htr_addr (a : address_typ) : hash :=
+   hash_from_bits ((shiftl ((zero_extend ((address_to_bits (a))) (256))) (96))).
 
-Definition mix_in_length (root : mword 256) (len : item_count_typ)
+Definition mix_in_length (root : b256) (len : item_count_typ)
 (*(0 <=? len) && (len <=? (2 ^ 64 - 1))*)
 : M (hash) :=
    let len := (len).(protocol_quantity_value) in
-   (htr_uint (Build_protocol_quantity ((len)))) >>= fun (w__0 : mword 256) =>
+   (htr_uint (Build_protocol_quantity ((len)))) >>= fun (w__0 : b256) =>
    (sha256_pair (root) (w__0))
-    : M (mword 256).
+    : M (b256).
 
 Definition clog2 (n : item_count_typ) (*(0 <=? n) && (n <=? (2 ^ 64 - 1))*) : M (merkle_depth) :=
    let n := (n).(protocol_quantity_value) in
@@ -12739,11 +13237,11 @@ Definition htr_chunk (bytes : ByteSlice) (chunk_index : item_index)
         else returnM (cursor)) >>= fun (cursor : byte_quantity) =>
        returnM ((acc, cursor))))) >>= fun '((acc, cursor)
    : (mword 256 * byte_quantity)) =>
-   returnM (acc).
+   returnM ((hash_from_bits (acc))).
 
 Definition htr_chunk_count '((ByteQuantity byte_len) : byte_quantity) : M (item_count_typ) :=
    ((exact_quotient ((Z.add (byte_len) (31))) (32)) >>= fun count =>
-   (if Z.leb (count) ((Z.sub ((pow2 (64))) (1))) then returnM (count)
+   (if Z.leb (count) ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) then returnM (count)
     else throw (InvalidBlock (InvalidConfig)))
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
@@ -12752,7 +13250,7 @@ Definition htr_fixed_count
 '((ByteQuantity byte_len) : byte_quantity) '((ByteQuantity item_len) : byte_quantity)
 : M (item_count_typ) :=
    ((exact_quotient (byte_len) (item_len)) >>= fun count =>
-   (if Z.leb (count) ((Z.sub ((pow2 (64))) (1))) then returnM (count)
+   (if Z.leb (count) ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) then returnM (count)
     else throw (InvalidBlock (InvalidConfig)))
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_protocol_quantity (semanticResult)).
@@ -12771,7 +13269,7 @@ Definition htr_bytes_root (bytes : ByteSlice) (depth : merkle_depth)
      (fun '(accumulator, index) => returnM ((Z.ltb (index) (count))))
      (fun '(accumulator, index) =>
        (assert_exp' true "loop dummy assert" >>= fun _ =>
-        (htr_chunk (bytes) (Build_protocol_quantity ((index)))) >>= fun (w__0 : mword 256) =>
+        (htr_chunk (bytes) (Build_protocol_quantity ((index)))) >>= fun (w__0 : b256) =>
         (merkle_accumulator_push (accumulator) (w__0)) >>= fun (w__1 : MerkleAccumulator) =>
         let accumulator := w__1  : MerkleAccumulator in
         ((item_index_increment (Build_protocol_quantity ((index)))) >>= fun semanticResult =>
@@ -12781,7 +13279,7 @@ Definition htr_bytes_root (bytes : ByteSlice) (depth : merkle_depth)
         : M ((MerkleAccumulator * Z)))) >>= fun '((accumulator, index)
    : (MerkleAccumulator * Z)) =>
    (merkle_accumulator_root (accumulator) (Build_merkle_depth ((depth))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_bytevector (bytes : ByteSlice) : M (hash) :=
    ((htr_chunk_count (bytes.(ByteSlice_len))) >>= fun semanticResult =>
@@ -12789,34 +13287,34 @@ Definition htr_bytevector (bytes : ByteSlice) : M (hash) :=
    ((clog2 (Build_protocol_quantity ((chunks)))) >>= fun semanticResult =>
     returnM (semanticResult).(merkle_depth_value)) >>= fun (w__0 : Z) =>
    (htr_bytes_root (bytes) (Build_merkle_depth ((w__0))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_bytelist (bytes : ByteSlice) (limit_bytes : byte_quantity) : M (hash) :=
    ((htr_chunk_count (limit_bytes)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun capacity =>
    let '((ByteQuantity byte_len)) := bytes.(ByteSlice_len) in
-   (if Z.leb (byte_len) ((Z.sub ((pow2 (64))) (1))) return M (mword 256) then
+   (if Z.leb (byte_len) ((BYTE_QUANTITY_MAX).(protocol_quantity_value)) return M (b256) then
       ((clog2 (Build_protocol_quantity ((capacity)))) >>= fun semanticResult =>
        returnM (semanticResult).(merkle_depth_value)) >>= fun (w__0 : Z) =>
-      (htr_bytes_root (bytes) (Build_merkle_depth ((w__0)))) >>= fun (w__1 : mword 256) =>
+      (htr_bytes_root (bytes) (Build_merkle_depth ((w__0)))) >>= fun (w__1 : b256) =>
       (mix_in_length (w__1) (Build_protocol_quantity ((byte_len))))
-       : M (mword 256)
+       : M (b256)
     else throw (InvalidBlock (InvalidConfig)))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_withdrawal (withdrawal : ByteSlice) : M (hash) :=
    ((ssz_uint (withdrawal) (WD_INDEX)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__0 : Z) =>
-   (htr_uint (Build_protocol_quantity ((w__0)))) >>= fun (w__1 : mword 256) =>
+   (htr_uint (Build_protocol_quantity ((w__0)))) >>= fun (w__1 : b256) =>
    ((ssz_uint (withdrawal) (WD_VALIDATOR_INDEX)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__2 : Z) =>
-   (htr_uint (Build_protocol_quantity ((w__2)))) >>= fun (w__3 : mword 256) =>
-   (ssz_addr (withdrawal) (WD_ADDRESS)) >>= fun (w__4 : mword 160) =>
+   (htr_uint (Build_protocol_quantity ((w__2)))) >>= fun (w__3 : b256) =>
+   (ssz_addr (withdrawal) (WD_ADDRESS)) >>= fun (w__4 : address_typ) =>
    ((ssz_uint (withdrawal) (WD_AMOUNT)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__5 : Z) =>
-   (htr_uint (Build_protocol_quantity ((w__5)))) >>= fun (w__6 : mword 256) =>
+   (htr_uint (Build_protocol_quantity ((w__5)))) >>= fun (w__6 : b256) =>
    (merkleize ([w__1; w__3; htr_addr (w__4); w__6]) (Build_merkle_depth ((2))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_transactions (transactions : SszListRef) : M (hash) :=
    (ssz_list_cursor (transactions)) >>= fun cursor =>
@@ -12831,16 +13329,16 @@ Definition htr_transactions (transactions : SszListRef) : M (hash) :=
        (assert_exp' true "loop dummy assert" >>= fun _ =>
         (ssz_list_pop (cursor)) >>= fun '((transaction, next)) =>
         let cursor : SszListCursor := next in
-        (htr_bytelist (transaction) (HTR_BYTE_LIST_LIMIT)) >>= fun (w__0 : mword 256) =>
+        (htr_bytelist (transaction) (HTR_BYTE_LIST_LIMIT)) >>= fun (w__0 : b256) =>
         (merkle_accumulator_push (accumulator) (w__0)) >>= fun (w__1 : MerkleAccumulator) =>
         let accumulator := w__1  : MerkleAccumulator in
         returnM ((accumulator, cursor)))
         : M ((MerkleAccumulator * SszListCursor)))) >>= fun '((accumulator, cursor)
    : (MerkleAccumulator * SszListCursor)) =>
-   (merkle_accumulator_root (accumulator) (Build_merkle_depth ((20)))) >>= fun (w__2 : mword 256) =>
+   (merkle_accumulator_root (accumulator) (Build_merkle_depth ((20)))) >>= fun (w__2 : b256) =>
    (mix_in_length (w__2)
       (Build_protocol_quantity (((accumulator.(MerkleAccumulator_count)).(protocol_quantity_value)))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_withdrawals (withdrawals : SszListRef) : M (hash) :=
    let rest : SszListRef := withdrawals in
@@ -12854,53 +13352,53 @@ Definition htr_withdrawals (withdrawals : SszListRef) : M (hash) :=
        (assert_exp' true "loop dummy assert" >>= fun _ =>
         (ssz_fixed_list_pop (rest) (WD_SIZE)) >>= fun '((withdrawal, tail)) =>
         let rest : SszListRef := tail in
-        (htr_withdrawal (withdrawal)) >>= fun (w__0 : mword 256) =>
+        (htr_withdrawal (withdrawal)) >>= fun (w__0 : b256) =>
         (merkle_accumulator_push (accumulator) (w__0)) >>= fun (w__1 : MerkleAccumulator) =>
         let accumulator := w__1  : MerkleAccumulator in
         returnM ((accumulator, rest)))
         : M ((MerkleAccumulator * SszListRef)))) >>= fun '((accumulator, rest)
    : (MerkleAccumulator * SszListRef)) =>
-   (merkle_accumulator_root (accumulator) (Build_merkle_depth ((4)))) >>= fun (w__2 : mword 256) =>
+   (merkle_accumulator_root (accumulator) (Build_merkle_depth ((4)))) >>= fun (w__2 : b256) =>
    (mix_in_length (w__2)
       (Build_protocol_quantity (((accumulator.(MerkleAccumulator_count)).(protocol_quantity_value)))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_execution_payload (input_ref : StatelessInputRef) : M (hash) :=
    let payload := input_ref.(StatelessInputRef_execution_payload) in
-   (ssz_bytes32 (payload) (BYTE_ZERO)) >>= fun (w__0 : mword 256) =>
-   (ssz_addr (payload) (PL_FEE_RECIPIENT)) >>= fun (w__1 : mword 160) =>
-   (ssz_bytes32 (payload) (PL_STATE_ROOT)) >>= fun (w__2 : mword 256) =>
-   (ssz_bytes32 (payload) (PL_RECEIPTS_ROOT)) >>= fun (w__3 : mword 256) =>
+   (ssz_bytes32 (payload) (BYTE_ZERO)) >>= fun (w__0 : b256) =>
+   (ssz_addr (payload) (PL_FEE_RECIPIENT)) >>= fun (w__1 : address_typ) =>
+   (ssz_bytes32 (payload) (PL_STATE_ROOT)) >>= fun (w__2 : b256) =>
+   (ssz_bytes32 (payload) (PL_RECEIPTS_ROOT)) >>= fun (w__3 : b256) =>
    (sub_slice (payload) (PL_LOGS_BLOOM) (LOGS_BLOOM_BYTE_LENGTH)) >>= fun (w__4 : ByteSlice) =>
-   (htr_bytevector (w__4)) >>= fun (w__5 : mword 256) =>
-   (ssz_bytes32 (payload) (PL_PREV_RANDAO)) >>= fun (w__6 : mword 256) =>
+   (htr_bytevector (w__4)) >>= fun (w__5 : b256) =>
+   (ssz_bytes32 (payload) (PL_PREV_RANDAO)) >>= fun (w__6 : b256) =>
    ((ssz_uint (payload) (PL_BLOCK_NUMBER)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__7 : Z) =>
-   (htr_uint (Build_protocol_quantity ((w__7)))) >>= fun (w__8 : mword 256) =>
+   (htr_uint (Build_protocol_quantity ((w__7)))) >>= fun (w__8 : b256) =>
    ((ssz_uint (payload) (PL_GAS_LIMIT)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__9 : Z) =>
-   (htr_uint (Build_protocol_quantity ((w__9)))) >>= fun (w__10 : mword 256) =>
+   (htr_uint (Build_protocol_quantity ((w__9)))) >>= fun (w__10 : b256) =>
    ((ssz_uint (payload) (PL_GAS_USED)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__11 : Z) =>
-   (htr_uint (Build_protocol_quantity ((w__11)))) >>= fun (w__12 : mword 256) =>
+   (htr_uint (Build_protocol_quantity ((w__11)))) >>= fun (w__12 : b256) =>
    ((ssz_uint (payload) (PL_TIMESTAMP)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__13 : Z) =>
-   (htr_uint (Build_protocol_quantity ((w__13)))) >>= fun (w__14 : mword 256) =>
-   (htr_bytelist (input_ref.(StatelessInputRef_extra_data)) (WORD_BYTE_LENGTH)) >>= fun (w__15 : mword 256) =>
-   (ssz_u256 (payload) (PL_BASE_FEE)) >>= fun (w__16 : mword 256) =>
-   (ssz_bytes32 (payload) (PL_BLOCK_HASH)) >>= fun (w__17 : mword 256) =>
-   (htr_transactions (input_ref.(StatelessInputRef_transactions))) >>= fun (w__18 : mword 256) =>
-   (htr_withdrawals (input_ref.(StatelessInputRef_withdrawals))) >>= fun (w__19 : mword 256) =>
+   (htr_uint (Build_protocol_quantity ((w__13)))) >>= fun (w__14 : b256) =>
+   (htr_bytelist (input_ref.(StatelessInputRef_extra_data)) (WORD_BYTE_LENGTH)) >>= fun (w__15 : b256) =>
+   (ssz_u256 (payload) (PL_BASE_FEE)) >>= fun (w__16 : word) =>
+   (ssz_bytes32 (payload) (PL_BLOCK_HASH)) >>= fun (w__17 : b256) =>
+   (htr_transactions (input_ref.(StatelessInputRef_transactions))) >>= fun (w__18 : b256) =>
+   (htr_withdrawals (input_ref.(StatelessInputRef_withdrawals))) >>= fun (w__19 : b256) =>
    ((ssz_uint (payload) (PL_BLOB_GAS_USED)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__20 : Z) =>
-   (htr_uint (Build_protocol_quantity ((w__20)))) >>= fun (w__21 : mword 256) =>
+   (htr_uint (Build_protocol_quantity ((w__20)))) >>= fun (w__21 : b256) =>
    ((ssz_uint (payload) (PL_EXCESS_BLOB_GAS)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__22 : Z) =>
-   (htr_uint (Build_protocol_quantity ((w__22)))) >>= fun (w__23 : mword 256) =>
-   (htr_bytelist (input_ref.(StatelessInputRef_block_access_list)) (HTR_BYTE_LIST_LIMIT)) >>= fun (w__24 : mword 256) =>
+   (htr_uint (Build_protocol_quantity ((w__22)))) >>= fun (w__23 : b256) =>
+   (htr_bytelist (input_ref.(StatelessInputRef_block_access_list)) (HTR_BYTE_LIST_LIMIT)) >>= fun (w__24 : b256) =>
    ((ssz_uint (payload) (PL_SLOT_NUMBER)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__25 : Z) =>
-   (htr_uint (Build_protocol_quantity ((w__25)))) >>= fun (w__26 : mword 256) =>
+   (htr_uint (Build_protocol_quantity ((w__25)))) >>= fun (w__26 : b256) =>
    (merkleize
       ([htr_bytes32 (w__0);
       htr_addr (w__1);
@@ -12921,7 +13419,7 @@ Definition htr_execution_payload (input_ref : StatelessInputRef) : M (hash) :=
       w__23;
       w__24;
       w__26]) (Build_merkle_depth ((5))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_versioned_hashes (versioned_hashes : ByteSlice) : M (hash) :=
    ((htr_fixed_count (versioned_hashes.(ByteSlice_len)) (WORD_BYTE_LENGTH)) >>= fun semanticResult =>
@@ -12939,52 +13437,52 @@ Definition htr_versioned_hashes (versioned_hashes : ByteSlice) : M (hash) :=
        (assert_exp' true "loop dummy assert" >>= fun _ =>
         (ssz_fixed_list_pop (rest) (WORD_BYTE_LENGTH)) >>= fun '((versioned_hash, tail)) =>
         let rest : SszListRef := tail in
-        (slice_load (versioned_hash) (BYTE_ZERO)) >>= fun (w__0 : mword 256) =>
-        (merkle_accumulator_push (accumulator) (w__0)) >>= fun (w__1 : MerkleAccumulator) =>
+        (slice_load (versioned_hash) (BYTE_ZERO)) >>= fun (w__0 : word) =>
+        (merkle_accumulator_push (accumulator) ((word_to_hash (w__0)))) >>= fun (w__1 : MerkleAccumulator) =>
         let accumulator := w__1  : MerkleAccumulator in
         returnM ((accumulator, rest)))
         : M ((MerkleAccumulator * SszListRef)))) >>= fun '((accumulator, rest)
    : (MerkleAccumulator * SszListRef)) =>
-   (merkle_accumulator_root (accumulator) (Build_merkle_depth ((12)))) >>= fun (w__2 : mword 256) =>
+   (merkle_accumulator_root (accumulator) (Build_merkle_depth ((12)))) >>= fun (w__2 : b256) =>
    (mix_in_length (w__2)
       (Build_protocol_quantity (((accumulator.(MerkleAccumulator_count)).(protocol_quantity_value)))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_deposit (deposit : ByteSlice) : M (hash) :=
    (sub_slice (deposit) (HTR_DEPOSIT_PUBKEY) (HTR_DEPOSIT_PUBKEY_LENGTH)) >>= fun (w__0 : ByteSlice) =>
-   (htr_bytevector (w__0)) >>= fun (w__1 : mword 256) =>
-   (ssz_bytes32 (deposit) (HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS)) >>= fun (w__2 : mword 256) =>
+   (htr_bytevector (w__0)) >>= fun (w__1 : b256) =>
+   (ssz_bytes32 (deposit) (HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS)) >>= fun (w__2 : b256) =>
    ((ssz_uint (deposit) (HTR_DEPOSIT_AMOUNT)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__3 : Z) =>
-   (htr_uint (Build_protocol_quantity ((w__3)))) >>= fun (w__4 : mword 256) =>
+   (htr_uint (Build_protocol_quantity ((w__3)))) >>= fun (w__4 : b256) =>
    (sub_slice (deposit) (HTR_DEPOSIT_SIGNATURE) (HTR_DEPOSIT_SIGNATURE_LENGTH)) >>= fun (w__5 : ByteSlice) =>
-   (htr_bytevector (w__5)) >>= fun (w__6 : mword 256) =>
+   (htr_bytevector (w__5)) >>= fun (w__6 : b256) =>
    ((ssz_uint (deposit) (HTR_DEPOSIT_INDEX)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__7 : Z) =>
-   (htr_uint (Build_protocol_quantity ((w__7)))) >>= fun (w__8 : mword 256) =>
+   (htr_uint (Build_protocol_quantity ((w__7)))) >>= fun (w__8 : b256) =>
    (merkleize ([w__1; htr_bytes32 (w__2); w__4; w__6; w__8]) (Build_merkle_depth ((3))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_withdrawal_request (request : ByteSlice) : M (hash) :=
    (sub_slice (request) (HTR_REQUEST_SOURCE_ADDRESS) (ADDRESS_BYTE_LENGTH)) >>= fun (w__0 : ByteSlice) =>
-   (htr_bytevector (w__0)) >>= fun (w__1 : mword 256) =>
+   (htr_bytevector (w__0)) >>= fun (w__1 : b256) =>
    (sub_slice (request) (HTR_REQUEST_SOURCE_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)) >>= fun (w__2 : ByteSlice) =>
-   (htr_bytevector (w__2)) >>= fun (w__3 : mword 256) =>
+   (htr_bytevector (w__2)) >>= fun (w__3 : b256) =>
    ((ssz_uint (request) (HTR_WITHDRAWAL_REQUEST_AMOUNT)) >>= fun semanticResult =>
     returnM (semanticResult).(protocol_quantity_value)) >>= fun (w__4 : Z) =>
-   (htr_uint (Build_protocol_quantity ((w__4)))) >>= fun (w__5 : mword 256) =>
+   (htr_uint (Build_protocol_quantity ((w__4)))) >>= fun (w__5 : b256) =>
    (merkleize ([w__1; w__3; w__5]) (Build_merkle_depth ((2))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_consolidation_request (request : ByteSlice) : M (hash) :=
    (sub_slice (request) (HTR_REQUEST_SOURCE_ADDRESS) (ADDRESS_BYTE_LENGTH)) >>= fun (w__0 : ByteSlice) =>
-   (htr_bytevector (w__0)) >>= fun (w__1 : mword 256) =>
+   (htr_bytevector (w__0)) >>= fun (w__1 : b256) =>
    (sub_slice (request) (HTR_REQUEST_SOURCE_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)) >>= fun (w__2 : ByteSlice) =>
-   (htr_bytevector (w__2)) >>= fun (w__3 : mword 256) =>
+   (htr_bytevector (w__2)) >>= fun (w__3 : b256) =>
    (sub_slice (request) (HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)) >>= fun (w__4 : ByteSlice) =>
-   (htr_bytevector (w__4)) >>= fun (w__5 : mword 256) =>
+   (htr_bytevector (w__4)) >>= fun (w__5 : b256) =>
    (merkleize ([w__1; w__3; w__5]) (Build_merkle_depth ((2))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_deposits (deposits : ByteSlice) : M (hash) :=
    ((htr_fixed_count (deposits.(ByteSlice_len)) (HTR_DEPOSIT_LENGTH)) >>= fun semanticResult =>
@@ -13002,16 +13500,16 @@ Definition htr_deposits (deposits : ByteSlice) : M (hash) :=
        (assert_exp' true "loop dummy assert" >>= fun _ =>
         (ssz_fixed_list_pop (rest) (HTR_DEPOSIT_LENGTH)) >>= fun '((deposit, tail)) =>
         let rest : SszListRef := tail in
-        (htr_deposit (deposit)) >>= fun (w__0 : mword 256) =>
+        (htr_deposit (deposit)) >>= fun (w__0 : b256) =>
         (merkle_accumulator_push (accumulator) (w__0)) >>= fun (w__1 : MerkleAccumulator) =>
         let accumulator := w__1  : MerkleAccumulator in
         returnM ((accumulator, rest)))
         : M ((MerkleAccumulator * SszListRef)))) >>= fun '((accumulator, rest)
    : (MerkleAccumulator * SszListRef)) =>
-   (merkle_accumulator_root (accumulator) (Build_merkle_depth ((13)))) >>= fun (w__2 : mword 256) =>
+   (merkle_accumulator_root (accumulator) (Build_merkle_depth ((13)))) >>= fun (w__2 : b256) =>
    (mix_in_length (w__2)
       (Build_protocol_quantity (((accumulator.(MerkleAccumulator_count)).(protocol_quantity_value)))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_withdrawal_requests (requests : ByteSlice) : M (hash) :=
    ((htr_fixed_count (requests.(ByteSlice_len)) (HTR_WITHDRAWAL_REQUEST_LENGTH)) >>= fun semanticResult =>
@@ -13029,16 +13527,16 @@ Definition htr_withdrawal_requests (requests : ByteSlice) : M (hash) :=
        (assert_exp' true "loop dummy assert" >>= fun _ =>
         (ssz_fixed_list_pop (rest) (HTR_WITHDRAWAL_REQUEST_LENGTH)) >>= fun '((request, tail)) =>
         let rest : SszListRef := tail in
-        (htr_withdrawal_request (request)) >>= fun (w__0 : mword 256) =>
+        (htr_withdrawal_request (request)) >>= fun (w__0 : b256) =>
         (merkle_accumulator_push (accumulator) (w__0)) >>= fun (w__1 : MerkleAccumulator) =>
         let accumulator := w__1  : MerkleAccumulator in
         returnM ((accumulator, rest)))
         : M ((MerkleAccumulator * SszListRef)))) >>= fun '((accumulator, rest)
    : (MerkleAccumulator * SszListRef)) =>
-   (merkle_accumulator_root (accumulator) (Build_merkle_depth ((4)))) >>= fun (w__2 : mword 256) =>
+   (merkle_accumulator_root (accumulator) (Build_merkle_depth ((4)))) >>= fun (w__2 : b256) =>
    (mix_in_length (w__2)
       (Build_protocol_quantity (((accumulator.(MerkleAccumulator_count)).(protocol_quantity_value)))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_consolidation_requests (requests : ByteSlice) : M (hash) :=
    ((htr_fixed_count (requests.(ByteSlice_len)) (HTR_CONSOLIDATION_REQUEST_LENGTH)) >>= fun semanticResult =>
@@ -13056,36 +13554,36 @@ Definition htr_consolidation_requests (requests : ByteSlice) : M (hash) :=
        (assert_exp' true "loop dummy assert" >>= fun _ =>
         (ssz_fixed_list_pop (rest) (HTR_CONSOLIDATION_REQUEST_LENGTH)) >>= fun '((request, tail)) =>
         let rest : SszListRef := tail in
-        (htr_consolidation_request (request)) >>= fun (w__0 : mword 256) =>
+        (htr_consolidation_request (request)) >>= fun (w__0 : b256) =>
         (merkle_accumulator_push (accumulator) (w__0)) >>= fun (w__1 : MerkleAccumulator) =>
         let accumulator := w__1  : MerkleAccumulator in
         returnM ((accumulator, rest)))
         : M ((MerkleAccumulator * SszListRef)))) >>= fun '((accumulator, rest)
    : (MerkleAccumulator * SszListRef)) =>
-   (merkle_accumulator_root (accumulator) (Build_merkle_depth ((1)))) >>= fun (w__2 : mword 256) =>
+   (merkle_accumulator_root (accumulator) (Build_merkle_depth ((1)))) >>= fun (w__2 : b256) =>
    (mix_in_length (w__2)
       (Build_protocol_quantity (((accumulator.(MerkleAccumulator_count)).(protocol_quantity_value)))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_execution_requests (input_ref : StatelessInputRef) : M (hash) :=
-   (htr_deposits (input_ref.(StatelessInputRef_deposits))) >>= fun (w__0 : mword 256) =>
-   (htr_withdrawal_requests (input_ref.(StatelessInputRef_withdrawal_requests))) >>= fun (w__1 : mword 256) =>
-   (htr_consolidation_requests (input_ref.(StatelessInputRef_consolidation_requests))) >>= fun (w__2 : mword 256) =>
+   (htr_deposits (input_ref.(StatelessInputRef_deposits))) >>= fun (w__0 : b256) =>
+   (htr_withdrawal_requests (input_ref.(StatelessInputRef_withdrawal_requests))) >>= fun (w__1 : b256) =>
+   (htr_consolidation_requests (input_ref.(StatelessInputRef_consolidation_requests))) >>= fun (w__2 : b256) =>
    (merkleize ([w__0; w__1; w__2]) (Build_merkle_depth ((2))))
-    : M (mword 256).
+    : M (b256).
 
 Definition htr_new_payload_request (input_ref : StatelessInputRef) : M (hash) :=
-   (htr_execution_payload (input_ref)) >>= fun (w__0 : mword 256) =>
-   (htr_versioned_hashes (input_ref.(StatelessInputRef_versioned_hashes))) >>= fun (w__1 : mword 256) =>
-   (ssz_bytes32 (input_ref.(StatelessInputRef_new_payload_request)) (NPR_BEACON_ROOT)) >>= fun (w__2 : mword 256) =>
-   (htr_execution_requests (input_ref)) >>= fun (w__3 : mword 256) =>
+   (htr_execution_payload (input_ref)) >>= fun (w__0 : b256) =>
+   (htr_versioned_hashes (input_ref.(StatelessInputRef_versioned_hashes))) >>= fun (w__1 : b256) =>
+   (ssz_bytes32 (input_ref.(StatelessInputRef_new_payload_request)) (NPR_BEACON_ROOT)) >>= fun (w__2 : b256) =>
+   (htr_execution_requests (input_ref)) >>= fun (w__3 : b256) =>
    (merkleize ([w__0; w__1; htr_bytes32 (w__2); w__3]) (Build_merkle_depth ((2))))
-    : M (mword 256).
+    : M (b256).
 
 Definition RESULT_METADATA_LENGTH : byte_length := ByteQuantity (5).
 #[export] Hint Unfold RESULT_METADATA_LENGTH : sail.
-Definition result_prefix (root : mword 256) (success : bool) : M (unit) :=
-   (scratch_push_bytes ((word_to_bytes32 (root))) (WORD_BYTE_LENGTH)) >>
+Definition result_prefix (root : b256) (success : bool) : M (unit) :=
+   (scratch_push_bytes ((hash_to_bytes32 (root))) (WORD_BYTE_LENGTH)) >>
    (scratch_push_bytes
       ([if success then (Ox"01")
       else (Ox"00");
@@ -13095,7 +13593,7 @@ Definition result_prefix (root : mword 256) (success : bool) : M (unit) :=
       (Ox"00")]) (RESULT_METADATA_LENGTH))
     : M (unit).
 
-Definition commit_validation_result (root : mword 256) (success : bool) (chain_config : ByteSlice)
+Definition commit_validation_result (root : b256) (success : bool) (chain_config : ByteSlice)
 : M (unit) :=
    (scratch_begin (tt)) >>= fun start =>
    (result_prefix (root) (success)) >>
@@ -13131,9 +13629,7 @@ Definition write_invalid_result '(tt : unit) : M (unit) :=
        (scratch_push_bytes ([b]) (BYTE_ONE))
         : M (unit)))) >>
    (scratch_finish (start)) >>= fun chain_config =>
-   (commit_validation_result
-      ((Ox"0000000000000000000000000000000000000000000000000000000000000000")) (false)
-      (chain_config)) >>
+   (commit_validation_result (ZERO_HASH) (false) (chain_config)) >>
    returnM ((cycle_scope_end (SCOPE_SERIALIZE_OUTPUT))).
 
 Definition main '(tt : unit) : M (unit) :=
@@ -13172,7 +13668,7 @@ Definition initialize_registers '(tt : unit) : unit := tt.
 
 Definition sail_model_init (_ : unit) : M (unit) :=
    write_reg scratch_cursor BYTE_ZERO >>
-   write_reg k_parent_state_root (zeros (256)) >>
+   write_reg k_parent_state_root ZERO_HASH >>
    write_reg k_n_headers 0 >>
    write_reg k_chain_id 1 >>
    write_reg k_fork Amsterdam >>
@@ -13192,12 +13688,12 @@ Definition sail_model_init (_ : unit) : M (unit) :=
          BlockHeader_base_fee := ZERO_WORD;
          BlockHeader_blob_gas_used := (Build_protocol_quantity (0));
          BlockHeader_excess_blob_gas := (Build_protocol_quantity (0));
-         BlockHeader_state_root := ZERO_WORD;
-         BlockHeader_receipts_root := ZERO_WORD;
+         BlockHeader_state_root := ZERO_HASH;
+         BlockHeader_receipts_root := ZERO_HASH;
          BlockHeader_logs_bloom := EMPTY_LOGS_BLOOM;
          BlockHeader_fee_recipient := ZERO_ADDR;
-         BlockHeader_parent_hash := ZERO_WORD;
-         BlockHeader_parent_beacon_block_root := ZERO_WORD;
+         BlockHeader_parent_hash := ZERO_HASH;
+         BlockHeader_parent_beacon_block_root := ZERO_HASH;
          BlockHeader_slot_number := (Build_protocol_quantity (0)) |}) >>
    write_reg
      k_tx
@@ -13210,6 +13706,8 @@ Definition sail_model_init (_ : unit) : M (unit) :=
    write_reg frame_status (Running (tt)) >>
    write_reg message DEFAULT_MESSAGE >>
    write_reg call_depth 0 >>
+   write_reg frame_stack (vector_init (1024) (DEFAULT_FRAME_CONTINUATION)) >>
+   write_reg frame_stack_top 0 >>
    write_reg frame_code EMPTY_CODE >>
    write_reg calldata EMPTY_SLICE >>
    write_reg returndata EMPTY_SLICE >>

@@ -13,9 +13,9 @@ The fixed offsets and lengths describe the canonical byte layouts accepted
 by each precompile; the field modulus and blob element count validate their
 respective algebraic inputs.
 */
-let ACCELERATOR_INPUT_MAX : nat = 2097152
-let FIELD_ELEMENTS_PER_BLOB : word = 0x0000000000000000000000000000000000000000000000000000000000001000
-let BLS_MODULUS : word = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001
+let ACCELERATOR_INPUT_MAX : protocol_quantity = 2097152
+let FIELD_ELEMENTS_PER_BLOB : word = U256(0x0000000000000000000000000000000000000000000000000000000000001000)
+let BLS_MODULUS : word = U256(0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001)
 
 let BLAKE2F_INPUT_LENGTH : byte_length = ByteQuantity(213)
 let BLAKE2F_FINAL_BLOCK_OFFSET : source_pointer = ByteQuantity(212)
@@ -99,11 +99,11 @@ function is_precompile(n : precompile_id) -> bool = {
     yields a successful call with empty output. */
 function run_ecrecover(input : ByteSlice) -> PrecompileResult = {
     let v = slice_load(input, PRECOMPILE_WORD_LENGTH);
-    let valid_v = (v == word_of_nat(27)) | (v == word_of_nat(28));
+    let valid_v = (v == word_of_protocol_quantity(27)) | (v == word_of_protocol_quantity(28));
     if valid_v then {
-        let parity : y_parity = if v == word_of_nat(27) then { 0 } else { 1 };
+        let parity : y_parity = if v == word_of_protocol_quantity(27) then { 0 } else { 1 };
         let (recovered, address) = ecrecover_addr(
-            slice_load(input, BYTE_ZERO),
+            word_to_hash(slice_load(input, BYTE_ZERO)),
             parity,
             slice_load(input, PRECOMPILE_DOUBLE_WORD_LENGTH),
             slice_load(input, ECRECOVER_S_OFFSET),
@@ -120,7 +120,7 @@ function run_ecrecover(input : ByteSlice) -> PrecompileResult = {
 
 /*! `SHA256` (0x02). */
 function run_sha256(input : ByteSlice) -> PrecompileResult =
-    precompile_success(output_buffer_word(sha256([|BytesSlice(input)|])))
+    precompile_success(output_buffer_word(hash_to_word(sha256([|BytesSlice(input)|]))))
 
 /*! `RIPEMD160` (0x03): 20-byte digest, left-padded to 32. */
 function run_ripemd160(input : ByteSlice) -> PrecompileResult =
@@ -130,9 +130,9 @@ function run_ripemd160(input : ByteSlice) -> PrecompileResult =
     exponentiation; a zero-length modulus yields empty output, and inputs
     beyond the accelerator bound fail the call. */
 function run_modexp(input : ByteSlice) -> PrecompileResult = {
-    let base_len : nat = unsigned(pc_word(input, 0, 32));
-    let exponent_len : nat = unsigned(pc_word(input, 32, 32));
-    let modulus_len : nat = unsigned(pc_word(input, 64, 32));
+    let base_len : nat = unsigned(word_to_bits(pc_word(input, ByteQuantity(0), ByteQuantity(32))));
+    let exponent_len : nat = unsigned(word_to_bits(pc_word(input, ByteQuantity(32), ByteQuantity(32))));
+    let modulus_len : nat = unsigned(word_to_bits(pc_word(input, ByteQuantity(64), ByteQuantity(32))));
     if modulus_len == 0 then {
         precompile_success(EMPTY_SLICE)
     } else {
@@ -180,7 +180,7 @@ function run_blake2f(input : ByteSlice) -> PrecompileResult = {
     equal `0x01 ‖ sha256(commitment)[1:]`. */
 function kzg_versioned_hash_matches(input : ByteSlice) -> bool = {
     let commitment_hash = sha256([|BytesSlice(sub_slice(input, KZG_COMMITMENT_OFFSET, KZG_COMMITMENT_LENGTH))|]);
-    let expected : word = append(0x01, commitment_hash[247 .. 0]);
+    let expected : word = U256(append(0x01, hash_to_bits(commitment_hash)[247 .. 0]));
     slice_load(input, BYTE_ZERO) == expected
 }
 

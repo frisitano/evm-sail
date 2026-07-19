@@ -26,6 +26,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -33,7 +34,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -45,6 +48,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -53,18 +57,27 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # The state trie
+
+Ethereum account and storage tries over the generic MPT core: secure-trie
+reads for stateless execution, and the post-state root computation
+(YP §4.1). -/
+
 def storage_value_changed (value : StorageValue) : Bool :=
   (! (value.curr == value.orig))
 
+/-- Whether any persisted account field or lifecycle marker changed. -/
 def account_value_changed (value : AcctValue) : Bool :=
   ((! ((value.curr.info.nonce).value == (value.orig.info.nonce).value)) || ((! (value.curr.info.balance == value.orig.info.balance)) || ((! (value.curr.info.storage_root == value.orig.info.storage_root)) || ((! (value.curr.info.code_hash == value.orig.info.code_hash)) || ((! (value.curr.present == value.orig.present)) || (! (value.curr.storage_cleared == value.orig.storage_cleared)))))))
 
+/-- Encodes a nonzero storage value as its minimal RLP integer leaf payload. -/
 def encode_storage_value (value : word) : SailM EvmByteSlice := do
   let encoded_len ← do (rlp_uint_word_size value)
   let start ← do (scratch_begin ())
   (rlp_write_uint_word value)
   (rlp_finish start encoded_len)
 
+/-- Encodes an account trie leaf with its recomputed storage root. -/
 def encode_state_account (info : AccountInfo) (storage_root : hash) : SailM EvmByteSlice := do
   let content_len ← do (rlp_protocol_quantity_size ⟨(info.nonce).value⟩)
   let content_len ← (byte_quantity_add content_len (← (rlp_uint_word_size info.balance)))
@@ -75,10 +88,12 @@ def encode_state_account (info : AccountInfo) (storage_root : hash) : SailM EvmB
   (rlp_write_list_prefix content_len)
   (rlp_write_protocol_quantity ⟨(info.nonce).value⟩)
   (rlp_write_uint_word info.balance)
-  (rlp_write_word storage_root)
-  (rlp_write_word info.code_hash)
+  (rlp_write_word (hash_to_word storage_root))
+  (rlp_write_word (hash_to_word info.code_hash))
   (rlp_finish start encoded_len)
 
+/-- Collects changed storage slots of an account as ascending secure-trie
+updates. -/
 def storage_updates (addr : address) : SailM (List TrieUpdate) := do
   let remaining ← (( do
     (do
@@ -114,6 +129,8 @@ def storage_updates (addr : address) : SailM (List TrieUpdate) := do
     (pure loop_vars) ) : SailM (Nat × (List TrieUpdate)) )
   (pure updates)
 
+/-- Converts one changed account and its storage updates into a state-trie
+insertion or deletion. -/
 def account_update (entry : AcctEntry) (storage : (List TrieUpdate)) : SailM TrieUpdate := do
   let current := entry.value.curr
   let key ← do (pure (path_from_hash (← (keccak256_address entry.addr))))
@@ -131,6 +148,11 @@ def account_update (entry : AcctEntry) (storage : (List TrieUpdate)) : SailM Tri
       (pure { key := key,
               change := ← (pure (TriePut (← (encode_state_account current.info storage_root)))) }))
 
+/-- The post-state root: drains every changed account from the kernel's
+block-level overlay, recomputes each touched account's storage root
+from its changed slots (zero-valued slots delete), re-encodes the
+account leaf (empty accounts delete, per EIP-161), and folds the
+sorted update list into the parent state root via [trie_root][]. -/
 def compute_state_root (_ : Unit) : SailM hash := do
   let remaining ← (( do
     (do

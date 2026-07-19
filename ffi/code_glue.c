@@ -5,7 +5,7 @@
 #include "code_db.h"
 #include <stdint.h>
 
-void code_db_lookup(struct zoptionzIRCodezK *out, const lbits h) {
+void code_db_lookup(struct zoptionzIRCodezK *out, sail_hash h) {
   uint64_t off = 0, len = 0, jumpdest_ref = 0;
   if (!code_db_lookup_indexed(h, &off, &len, &jumpdest_ref)) {
     out->kind = Kind_zNonezIRCodezK;

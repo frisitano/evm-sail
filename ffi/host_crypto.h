@@ -8,7 +8,7 @@
 #ifndef HOST_CRYPTO_H
 #define HOST_CRYPTO_H
 
-#include "sail.h"
+#include "sail_abi.h"
 #include <stdint.h>
 
 /* Generated aggregate boundary implemented by hash_glue.c. These incomplete
@@ -16,10 +16,12 @@
  * emits the corresponding Sail type definitions. */
 struct zByteSlice;
 struct node_zz5listz8z5unionz0zzBytesz9;
-void host_keccak_segments(
-    lbits *rop, struct node_zz5listz8z5unionz0zzBytesz9 *segments);
-void host_sha256_segments(
-    lbits *rop, struct node_zz5listz8z5unionz0zzBytesz9 *segments);
+EVMSAIL_HASH_RETURN host_keccak_segments(
+    EVMSAIL_HASH_RESULT(result)
+    struct node_zz5listz8z5unionz0zzBytesz9 *segments);
+EVMSAIL_HASH_RETURN host_sha256_segments(
+    EVMSAIL_HASH_RESULT(result)
+    struct node_zz5listz8z5unionz0zzBytesz9 *segments);
 bool host_bytes_segments_equal_slice(
     struct node_zz5listz8z5unionz0zzBytesz9 *segments,
     struct zByteSlice expected);

@@ -37,10 +37,11 @@ function bloom_set_bit(bloom : LogsBloom, bit_to_set : bloom_bit_index) -> LogsB
 }
 
 /*! Adds a hashed bloom entry: three bits from its KECCAK-256. */
-function bloom_add_entry_hash(bloom : LogsBloom, h : bits(256)) -> LogsBloom = {
-    var out = bloom_set_bit(bloom, unsigned(h[250 .. 240]));
-    out = bloom_set_bit(out, unsigned(h[234 .. 224]));
-    out = bloom_set_bit(out, unsigned(h[218 .. 208]));
+function bloom_add_entry_hash(bloom : LogsBloom, h : hash) -> LogsBloom = {
+    let bits = hash_to_bits(h);
+    var out = bloom_set_bit(bloom, unsigned(bits[250 .. 240]));
+    out = bloom_set_bit(out, unsigned(bits[234 .. 224]));
+    out = bloom_set_bit(out, unsigned(bits[218 .. 208]));
     out
 }
 
@@ -222,15 +223,13 @@ function receipt_accumulator_push(acc : ReceiptAccumulator, receipt : Receipt) -
     if not_bool(receipt.valid) then {
         throw InvalidBlock(ExecutionInvalid)
     };
-    let next_count : item_count = if acc.count < 2 ^ 64 - 1 then {
+    let next_count : item_count = if acc.count < BYTE_QUANTITY_MAX then {
             protocol_quantity_increment(acc.count)
         } else {
             throw InvalidBlock(WitnessDeficient)
         };
-    let Gas(cumulative_before) = acc.cumulative_gas_used;
-    let Gas(receipt_gas) = receipt.gas_used;
-    let cumulative : gas = if receipt_gas <= (2 ^ 63 - 1) - cumulative_before then {
-            Gas(cumulative_before + receipt_gas)
+    let cumulative : gas = if gas_sum_supported(acc.cumulative_gas_used, receipt.gas_used) then {
+            acc.cumulative_gas_used + receipt.gas_used
         } else {
             throw InvalidBlock(ExecutionInvalid)
         };

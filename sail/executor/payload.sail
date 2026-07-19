@@ -77,12 +77,12 @@ function block_header_hash(
     let encoded_len = rlp_list_size(content_len);
     let mark = scratch_begin();
     rlp_write_list_prefix(content_len);
-    rlp_write_word(header.parent_hash);
-    rlp_write_word(EMPTY_OMMER_HASH);
+    rlp_write_word(hash_to_word(header.parent_hash));
+    rlp_write_word(hash_to_word(EMPTY_OMMER_HASH));
     rlp_write_addr(header.fee_recipient);
-    rlp_write_word(header.state_root);
-    rlp_write_word(transactions_root);
-    rlp_write_word(header.receipts_root);
+    rlp_write_word(hash_to_word(header.state_root));
+    rlp_write_word(hash_to_word(transactions_root));
+    rlp_write_word(hash_to_word(header.receipts_root));
     rlp_write_bytes(bloom, LOGS_BLOOM_BYTE_LENGTH);
     rlp_write_uint(0);
     rlp_write_uint(header.number);
@@ -96,19 +96,19 @@ function block_header_hash(
         rlp_write_uint_word(header.base_fee)
     };
     if k_fork >= Shanghai then {
-        rlp_write_word(withdrawals_root)
+        rlp_write_word(hash_to_word(withdrawals_root))
     };
 
     if k_fork >= Cancun then {
         rlp_write_uint(header.blob_gas_used);
         rlp_write_uint(header.excess_blob_gas);
-        rlp_write_word(header.parent_beacon_block_root)
+        rlp_write_word(hash_to_word(header.parent_beacon_block_root))
     };
     if k_fork >= Prague then {
-        rlp_write_word(requests_hash)
+        rlp_write_word(hash_to_word(requests_hash))
     };
     if k_fork >= Amsterdam then {
-        rlp_write_word(block_access_list_hash);
+        rlp_write_word(hash_to_word(block_access_list_hash));
         rlp_write_uint(header.slot_number)
     };
     let encoded = rlp_finish(mark, encoded_len);
@@ -163,27 +163,27 @@ function execution_requests_hash(input_ref : StatelessInputRef) -> hash = {
     let d0 : hash = if l0 != BYTE_ZERO then {
             sha256_request_digest(0x00, input_ref.deposits)
         } else {
-            sail_zeros(256)
+            ZERO_HASH
         };
     let d1 : hash = if l1 != BYTE_ZERO then {
             sha256_request_digest(0x01, input_ref.withdrawal_requests)
         } else {
-            sail_zeros(256)
+            ZERO_HASH
         };
     let d2 : hash = if l2 != BYTE_ZERO then {
             sha256_request_digest(0x02, input_ref.consolidation_requests)
         } else {
-            sail_zeros(256)
+            ZERO_HASH
         };
     var segs : list(Bytes) = [||];
     if l2 != BYTE_ZERO then {
-        segs = bytes_list(word_to_bytes32(d2), WORD_BYTE_LENGTH) :: segs
+        segs = bytes_list(hash_to_bytes32(d2), WORD_BYTE_LENGTH) :: segs
     };
     if l1 != BYTE_ZERO then {
-        segs = bytes_list(word_to_bytes32(d1), WORD_BYTE_LENGTH) :: segs
+        segs = bytes_list(hash_to_bytes32(d1), WORD_BYTE_LENGTH) :: segs
     };
     if l0 != BYTE_ZERO then {
-        segs = bytes_list(word_to_bytes32(d0), WORD_BYTE_LENGTH) :: segs
+        segs = bytes_list(hash_to_bytes32(d0), WORD_BYTE_LENGTH) :: segs
     };
     sha256(segs)
 }
@@ -232,12 +232,12 @@ function validate_execution_payload(
         let requests_hash = if k_fork >= Prague then {
                 execution_requests_hash(input_ref)
             } else {
-                ZERO_WORD
+                ZERO_HASH
             };
         let block_access_list_hash = if k_fork >= Amsterdam then {
                 keccak256(body.block_access_list)
             } else {
-                ZERO_WORD
+                ZERO_HASH
             };
         let computed_block_hash = block_header_hash(
             header,

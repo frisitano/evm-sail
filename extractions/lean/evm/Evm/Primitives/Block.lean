@@ -17,6 +17,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -24,7 +25,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -36,6 +39,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -44,8 +48,15 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # Block types
+
+Block-level data structures. [BlockHeader][type-BlockHeader] is pure data;
+its `k_header` register lives in the kernel environment alongside the
+EIP-4895 withdrawal record. -/
+
 def EMPTY_LOGS_BLOOM : LogsBloom := (vectorInit LIMB_ZERO)
 
+/-- Byte-wise bloom equality (the header `logs_bloom` check). -/
 def logs_bloom_equal (a : LogsBloom) (b : LogsBloom) : Bool := Id.run do
   let equal : Bool := true
   let loop_i_lower := 0
@@ -56,6 +67,7 @@ def logs_bloom_equal (a : LogsBloom) (b : LogsBloom) : Bool := Id.run do
     loop_vars := (equal && ((GetElem?.getElem! a i) == (GetElem?.getElem! b i)))
   (pure loop_vars)
 
+/-- The bloom as a most-significant-first byte list, for RLP encoding. -/
 def logs_bloom_bytes (bloom : LogsBloom) : (List byte) := Id.run do
   let out : (List (BitVec 8)) := []
   let loop_k_lower := 0
@@ -75,20 +87,10 @@ def logs_bloom_bytes (bloom : LogsBloom) : (List byte) := Id.run do
       ((Sail.BitVec.extractLsb limb 63 56) :: out)
   (pure loop_vars)
 
+/-- `keccak256(rlp([]))` — the ommers hash of every post-merge block
+(EIP-3675 requires an empty ommers list). -/
 def EMPTY_OMMER_HASH : hash :=
-  0x1DCC4DE8DEC75D7AAB85B567B6CCD41AD312451B948A7413F0A142FD40D49347#256
-
-def undefined_Withdrawal (_ : Unit) : SailM Withdrawal := do
-  (pure { index := ← do
-              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
-              pure (⟨semanticField⟩),
-          validator_index := ← do
-              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
-              pure (⟨semanticField⟩),
-          address := ← (undefined_bitvector 160),
-          amount := ← do
-              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
-              pure (⟨semanticField⟩) })
+  (word_to_hash (U256 0x1DCC4DE8DEC75D7AAB85B567B6CCD41AD312451B948A7413F0A142FD40D49347#256))
 
 def EMPTY_EXECUTION_REQUESTS : ExecutionRequests :=
   { deposits := EMPTY_SLICE,

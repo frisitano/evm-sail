@@ -1,5 +1,5 @@
 import Evm.Flow
-import Evm.Arith
+import Evm.Primitives.Quantities
 import Evm.Exceptions
 import Evm.Primitives.Block
 import Evm.Host.Kernel.Scratch
@@ -27,6 +27,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -34,7 +35,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -46,6 +49,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -54,10 +58,22 @@ open Bytes
 open ByteSource
 open BlockError
 
-/-- Type quantifiers: k_ex161611_ : Bool -/
+/-! # Stateless block validation
+
+Validation of the commitments produced by executing a block body: gas and
+blob-gas accounting, the post-state root, the receipts root and logs
+bloom, the EIP-7685 execution requests, and the EIP-7928 block access
+list. -/
+
+/-- Checks every executed-block commitment against the header and payload,
+throwing the specific `InvalidBlock` reason on the first failure:
+gas/blob-gas totals, post-state root, receipts root, logs bloom,
+execution-request bytes (Prague+), and block-access-list bytes and
+size (Amsterdam+). -/
+/- Type quantifiers: k_ex161659_ : Bool -/
 def validate_executed_block (block' : Block) (input_ref : StatelessInputRef) (exec_ok : Bool) (result : BlockExecutionResult) : SailM Unit := do
   let header := block'.header
-  let gas_used_ok := (gas_equal result.gas_acc header.gas_used)
+  let gas_used_ok := (result.gas_acc == header.gas_used)
   let blob_gas_used_ok ← do
     (pure ((fork_lt (← readReg k_fork) Cancun) || (((result.blob_gas_acc).value == (header.blob_gas_used).value) : Bool)))
   let poststate_ok ← do (pure ((← (compute_state_root ())) == header.state_root))
@@ -80,8 +96,7 @@ def validate_executed_block (block' : Block) (input_ref : StatelessInputRef) (ex
     then
       (do
         let block_access_list ← do (encode_block_access_list ())
-        let .Gas gas_limit := header.gas_limit
-        let maximum_items ← do (exact_quotient gas_limit 2000)
+        let .Gas maximum_items ← do (gas_quotient header.gas_limit ⟨2000⟩)
         let block_access_list_size_ok : Bool :=
           ((block_access_list.item_count).value ≤b maximum_items)
         let block_access_list_ok ←
@@ -91,9 +106,6 @@ def validate_executed_block (block' : Block) (input_ref : StatelessInputRef) (ex
     else (pure (block_access_list_ok, block_access_list_size_ok)) ) : SailM (Bool × Bool) )
   if (result.block_gas_overflow : Bool)
   then sailThrow ((InvalidBlock GasUsedExceedsLimit))
-  else (pure ())
-  if (result.blob_gas_overflow : Bool)
-  then sailThrow ((InvalidBlock BlobGasLimitExceeded))
   else (pure ())
   if ((! exec_ok) : Bool)
   then sailThrow ((InvalidBlock ExecutionInvalid))
@@ -127,6 +139,10 @@ def undefined_StatelessValidationFailure (_ : Unit) : SailM StatelessValidationF
   (pure { scope := ← (undefined_bitvector 8),
           reason := ← (undefined_BlockError ()) })
 
+/-- The stateless verification pipeline: decode the semantic envelope,
+index the witness, validate the payload commitments, execute the
+block body one transaction at a time, and validate the execution
+results; the first violated rule becomes the failure verdict. -/
 def verify_stateless_payload (input_ref : StatelessInputRef) : SailM StatelessValidationResult := do
   let active_scope := SCOPE_DECODE_INPUT
   sailTryCatch ((do

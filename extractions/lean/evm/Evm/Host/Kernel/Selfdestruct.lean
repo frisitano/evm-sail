@@ -17,6 +17,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -24,7 +25,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -36,6 +39,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -44,22 +48,35 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # State: selfdestruct and creation flags
+
+The per-transaction account lifecycle flags behind `SELFDESTRUCT`
+(EIP-6780) and same-transaction creation tracking. -/
+
+/-- Marks an account selfdestructed (`SELFDESTRUCT`; deletion is decided
+at transaction end per EIP-6780). -/
 def k_selfdestruct (a : address) : SailM Unit := do
   let cur ← do (k_aload a)
   if ((! cur.selfdestructed) : Bool)
   then (store_account a { cur with selfdestructed := true })
   else (pure ())
 
+/-- Whether the account is marked selfdestructed this transaction. -/
 def k_is_selfdestructed (a : address) : SailM Bool := do
   (pure (← (k_aload a)).selfdestructed)
 
+/-- Marks an account as created in this transaction (EIP-6780's
+same-transaction test). -/
 def k_mark_created (a : address) : SailM Unit := do
   let cur ← do (k_aload a)
   (store_account a { cur with created := true })
 
+/-- Whether the account was created in this transaction. -/
 def k_was_created (a : address) : SailM Bool := do
   (pure (← (k_aload a)).created)
 
+/-- Zeroes an account's balance (the `SELFDESTRUCT` sweep of a
+self-beneficiary). -/
 def k_zero_balance (a : address) : SailM Unit := do
   let cur ← do (k_aload a)
   if ((word_is_zero cur.info.balance) : Bool)

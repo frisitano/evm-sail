@@ -15,21 +15,21 @@ function decode_state_account(value : ByteSlice) -> AccountInfo = {
     let (storage, fields) = rlp_cursor_pop(fields);
     let (code, fields) = rlp_cursor_pop(fields);
     rlp_cursor_expect_end(fields);
+    let storage_root = if storage.content_len == BYTE_ZERO then {
+            EMPTY_TRIE_ROOT
+        } else {
+            word_to_hash(rlp_ref_word(storage))
+        };
+    let code_hash = if code.content_len == BYTE_ZERO then {
+            KECCAK_EMPTY
+        } else {
+            word_to_hash(rlp_ref_word(code))
+        };
     struct {
         nonce = rlp_ref_uint(nonce),
         balance = rlp_ref_uint_word(balance),
-        storage_root =
-            if storage.content_len == BYTE_ZERO then {
-                EMPTY_TRIE_ROOT
-            } else {
-                rlp_ref_word(storage)
-            },
-        code_hash =
-            if code.content_len == BYTE_ZERO then {
-                KECCAK_EMPTY
-            } else {
-                rlp_ref_word(code)
-            },
+        storage_root = storage_root,
+        code_hash = code_hash,
     }
 }
 
@@ -87,8 +87,8 @@ function encode_state_account(info : AccountInfo, storage_root : hash) -> ByteSl
     rlp_write_list_prefix(content_len);
     rlp_write_uint(info.nonce);
     rlp_write_uint_word(info.balance);
-    rlp_write_word(storage_root);
-    rlp_write_word(info.code_hash);
+    rlp_write_word(hash_to_word(storage_root));
+    rlp_write_word(hash_to_word(info.code_hash));
     rlp_finish(start, encoded_len)
 }
 

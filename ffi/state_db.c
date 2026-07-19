@@ -23,15 +23,21 @@
  * computes the secure key on every call. NOTE: keccak is pure, so a preimage ->
  * hash memo would avoid re-hashing repeated touches of the same address/slot --
  * removed for now to keep the key path stateless. */
-static void secure_keccak(size_t pre_len, const lbits v, uint64_t out[4]) {
-  uint8_t buf[32];
-  lbits_to_be_bytes(buf, pre_len, v);
-  host_keccak256_bytes(out, buf, pre_len);
+static void secure_keccak_address(sail_address value, uint64_t out[4]) {
+  uint8_t bytes[20];
+  evmsail_address_to_be_bytes(bytes, value);
+  host_keccak256_bytes(out, bytes, sizeof(bytes));
+}
+
+static void secure_keccak_word(sail_word value, uint64_t out[4]) {
+  uint8_t bytes[32];
+  sail_word_to_be_bytes(bytes, value);
+  host_keccak256_bytes(out, bytes, sizeof(bytes));
 }
 
 /* h = keccak(address) -- the account secure trie key, BE words */
-static void acct_secure_key(const lbits a, uint64_t h[4]) {
-  secure_keccak(20, a, h);
+static void acct_secure_key(sail_address a, uint64_t h[4]) {
+  secure_keccak_address(a, h);
 }
 
 #define ACCOUNT_INIT_CAP 64u
@@ -106,7 +112,7 @@ static uint32_t bal_acc_find(const uint64_t ah[4], int *found) {
   return lo;
 }
 
-static void bal_touch_account_key(const lbits a, const uint64_t ah[4]) {
+static void bal_touch_account_key(sail_address a, const uint64_t ah[4]) {
   int found = 0;
   uint32_t i = bal_acc_find(ah, &found);
   if (found) return;
@@ -121,7 +127,7 @@ static void bal_touch_account_key(const lbits a, const uint64_t ah[4]) {
     memmove(&bal_acc.rows[i + 1], &bal_acc.rows[i],
             (size_t)(bal_acc.n - i) * sizeof(*bal_acc.rows));
   memcpy(bal_acc.rows[i].ah, ah, sizeof(bal_acc.rows[i].ah));
-  lbits_to_be_bytes(bal_acc.rows[i].raw_addr, 20, a);
+  evmsail_address_to_be_bytes(bal_acc.rows[i].raw_addr, a);
   bal_acc.n++;
   bal_prepared = 0;
 }
@@ -172,43 +178,48 @@ static void bal_add_code_change(const uint64_t ah[4], const uint64_t chash[4]) {
 /* Sail-facing EIP-7928 record sinks. Layouts match the row
    fields the serializer decodes: hashes/slots/storage values BE words,
    balance/code-hash LE words. */
-unit bal_note_account_touch(const lbits a) {
+unit bal_note_account_touch(sail_address a) {
   uint64_t a4[4];
-  secure_keccak(20, a, a4);
+  secure_keccak_address(a, a4);
   bal_touch_account_key(a, a4);
   return UNIT;
 }
-unit bal_note_storage_change(const lbits a, const lbits slot, const lbits val) {
+unit bal_note_storage_change(sail_address a, sail_word slot, sail_word val) {
   uint64_t a4[4], s4[4], v4[4];
-  secure_keccak(20, a, a4); lbits_to_be_words4(s4, slot); lbits_to_be_words4(v4, val);
+  secure_keccak_address(a, a4);
+  sail_word_to_be_words4(s4, slot);
+  sail_word_to_be_words4(v4, val);
   bal_touch_account_key(a, a4);
   bal_add_storage_change(a4, s4, v4);
   return UNIT;
 }
-unit bal_note_storage_read(const lbits a, const lbits slot) {
+unit bal_note_storage_read(sail_address a, sail_word slot) {
   uint64_t a4[4], s4[4];
-  secure_keccak(20, a, a4); lbits_to_be_words4(s4, slot);
+  secure_keccak_address(a, a4);
+  sail_word_to_be_words4(s4, slot);
   bal_touch_account_key(a, a4);
   bal_add_storage_read(a4, s4);
   return UNIT;
 }
-unit bal_note_balance_change(const lbits a, const lbits val) {
+unit bal_note_balance_change(sail_address a, sail_word val) {
   uint64_t a4[4], v4[4];
-  secure_keccak(20, a, a4); lbits_to_le_words4(v4, val);
+  secure_keccak_address(a, a4);
+  sail_word_to_le_words4(v4, val);
   bal_touch_account_key(a, a4);
   bal_add_balance_change(a4, v4);
   return UNIT;
 }
-unit bal_note_nonce_change(const lbits a, uint64_t nonce) {
+unit bal_note_nonce_change(sail_address a, uint64_t nonce) {
   uint64_t a4[4];
-  secure_keccak(20, a, a4);
+  secure_keccak_address(a, a4);
   bal_touch_account_key(a, a4);
   bal_add_nonce_change(a4, nonce);
   return UNIT;
 }
-unit bal_note_code_change(const lbits a, const lbits chash) {
+unit bal_note_code_change(sail_address a, sail_hash chash) {
   uint64_t a4[4], c4[4];
-  secure_keccak(20, a, a4); lbits_to_le_words4(c4, chash);
+  secure_keccak_address(a, a4);
+  sail_hash_to_le_words4(c4, chash);
   bal_touch_account_key(a, a4);
   bal_add_code_change(a4, c4);
   return UNIT;
@@ -236,11 +247,11 @@ static int storage_key_cmp(const uint64_t *aa, uint64_t ag, const uint64_t *as,
 }
 
 /* the secure storage key of raw (address, slot): (keccak(a), keccak(s)) */
-static void storage_secure_key(const lbits a, const lbits s,
+static void storage_secure_key(sail_address a, sail_word s,
                                uint64_t slot[4], uint64_t ah[4], uint64_t sh[4]) {
-  lbits_to_be_words4(slot, s);
-  secure_keccak(20, a, ah);
-  secure_keccak(32, s, sh);
+  sail_word_to_be_words4(slot, s);
+  secure_keccak_address(a, ah);
+  secure_keccak_word(s, sh);
 }
 
 /* 20 raw address bytes -> lbits of length 160 */
@@ -524,9 +535,9 @@ unit storage_tx_revert(uint64_t checkpoint) {
   return UNIT;
 }
 
-unit storage_tx_clear(const lbits a) {
+unit storage_tx_clear(sail_address a) {
   uint64_t ah[4];
-  secure_keccak(20, a, ah);
+  secure_keccak_address(a, ah);
   storage_epoch_row *epoch = storage_epoch_intern(ah);
   if (!epoch) return UNIT;
   storage_undo_entry *undo = storage_undo_push(STORAGE_UNDO_CLEAR);
@@ -540,17 +551,17 @@ unit storage_tx_clear(const lbits a) {
 
 /* Drain active transaction writes. Obsolete generations remain private
    rollback history and are skipped. */
-uint64_t storage_tx_pop_probe(lbits *addr, lbits *slot, lbits *curr,
-                              lbits *orig) {
+uint64_t storage_tx_pop_probe(sail_address *addr, sail_word *slot,
+                              sail_word *curr, sail_word *orig) {
   while (storage_tx_pop_cursor < storage_tx_table.n) {
     const storage_state_row *row =
         &storage_tx_table.rows[storage_tx_pop_cursor++];
     if (row->generation != storage_active_generation(row->acct_hash))
       continue;
-    addr20_to_lbits(addr, row->raw_addr);
-    be_words4_to_lbits(slot, row->slot);
-    be_words4_to_lbits(curr, row->current);
-    be_words4_to_lbits(orig, row->original);
+    *addr = be_bytes_to_sail_address(row->raw_addr);
+    *slot = be_words4_to_sail_word(row->slot);
+    *curr = be_words4_to_sail_word(row->current);
+    *orig = be_words4_to_sail_word(row->original);
     return 1;
   }
   return 0;
@@ -559,8 +570,8 @@ uint64_t storage_tx_pop_probe(lbits *addr, lbits *slot, lbits *curr,
 /* block-layer propagation hooks (pure mechanism; Sail chose the action).
    Keyed by (keccak(address), slot); the slot's secure key is recomputed. */
 /* net change: a fresh block row freezes orig as the pre-state; curr lands */
-unit storage_block_put_raw(const lbits a, const lbits s_, const lbits curr,
-                           const lbits orig) {
+unit storage_block_put_raw(sail_address a, sail_word s_, sail_word curr,
+                           sail_word orig) {
   uint64_t slot[4], a4[4], sh[4], c4[4], o4[4];
   storage_secure_key(a, s_, slot, a4, sh);
   storage_state_row *b = storage_table_get(
@@ -569,15 +580,18 @@ unit storage_block_put_raw(const lbits a, const lbits s_, const lbits curr,
   if (fresh) b = storage_table_intern(
       &storage_block_table, a4, STORAGE_BLOCK_GENERATION, sh, slot);
   if (!b) return UNIT;
-  lbits_to_be_words4(c4, curr);
-  if (fresh) { lbits_to_be_words4(o4, orig); memcpy(b->original, o4, sizeof(b->original)); }
+  sail_word_to_be_words4(c4, curr);
+  if (fresh) {
+    sail_word_to_be_words4(o4, orig);
+    memcpy(b->original, o4, sizeof(b->original));
+  }
   memcpy(b->current, c4, sizeof(b->current));
   storage_dump_invalidate();
   return UNIT;
 }
 
 /* read member: fresh binds curr == orig = value; existing is only marked */
-unit storage_block_cache_raw(const lbits a, const lbits s_, const lbits v) {
+unit storage_block_cache_raw(sail_address a, sail_word s_, sail_word v) {
   uint64_t slot[4], a4[4], sh[4], v4[4];
   storage_secure_key(a, s_, slot, a4, sh);
   storage_state_row *b = storage_table_get(
@@ -586,7 +600,7 @@ unit storage_block_cache_raw(const lbits a, const lbits s_, const lbits v) {
     b = storage_table_intern(
         &storage_block_table, a4, STORAGE_BLOCK_GENERATION, sh, slot);
     if (b) {
-      lbits_to_be_words4(v4, v);
+      sail_word_to_be_words4(v4, v);
       memcpy(b->current, v4, sizeof(b->current));
       memcpy(b->original, v4, sizeof(b->original));
     }
@@ -598,16 +612,16 @@ unit storage_block_cache_raw(const lbits a, const lbits s_, const lbits v) {
 
 /* A transaction miss after a storage clear resolves to zero instead of
    falling through to the block/witness base. */
-uint64_t storage_row_probe(uint64_t layer, const lbits a, const lbits s,
-                           lbits *cur, lbits *orig) {
+uint64_t storage_row_probe(uint64_t layer, sail_address a, sail_word s,
+                           sail_word *cur, sail_word *orig) {
   uint64_t slot[4], ah[4], sh[4];
   storage_secure_key(a, s, slot, ah, sh);
   if (layer != 0) {
     storage_state_row *e = storage_table_get(
         &storage_block_table, ah, STORAGE_BLOCK_GENERATION, sh);
     if (!e) return 0;
-    be_words4_to_lbits(cur, e->current);
-    be_words4_to_lbits(orig, e->original);
+    *cur = be_words4_to_sail_word(e->current);
+    *orig = be_words4_to_sail_word(e->original);
     return 1;
   }
 
@@ -615,13 +629,13 @@ uint64_t storage_row_probe(uint64_t layer, const lbits a, const lbits s,
   storage_state_row *row = storage_table_get(
       &storage_tx_table, ah, generation, sh);
   if (row) {
-    be_words4_to_lbits(cur, row->current);
-    be_words4_to_lbits(orig, row->original);
+    *cur = be_words4_to_sail_word(row->current);
+    *orig = be_words4_to_sail_word(row->original);
     return 1;
   }
   if (generation != STORAGE_INITIAL_GENERATION) {
-    be_words4_to_lbits(cur, storage_zero_val);
-    be_words4_to_lbits(orig, storage_zero_val);
+    *cur = be_words4_to_sail_word(storage_zero_val);
+    *orig = be_words4_to_sail_word(storage_zero_val);
     return 1;
   }
   return 0;
@@ -629,12 +643,12 @@ uint64_t storage_row_probe(uint64_t layer, const lbits a, const lbits s,
 
 /* Write the active generation. Sail supplies the transaction original from
    the preceding semantic SLOAD. */
-unit storage_tx_update_raw(const lbits a, const lbits s, const lbits v,
-                           const lbits orig) {
+unit storage_tx_update_raw(sail_address a, sail_word s, sail_word v,
+                           sail_word orig) {
   uint64_t slot[4], ah[4], sh[4], w[4], o[4];
   storage_secure_key(a, s, slot, ah, sh);
-  lbits_to_be_words4(w, v);
-  lbits_to_be_words4(o, orig);
+  sail_word_to_be_words4(w, v);
+  sail_word_to_be_words4(o, orig);
   const uint64_t generation = storage_active_generation(ah);
   storage_state_row *e = storage_table_get(&storage_tx_table, ah, generation, sh);
   const int fresh = (e == NULL);
@@ -651,7 +665,7 @@ unit storage_tx_update_raw(const lbits a, const lbits s, const lbits v,
       storage_undo_n--;
       return UNIT;
     }
-    lbits_to_be_bytes(e->raw_addr, 20, a);
+    evmsail_address_to_be_bytes(e->raw_addr, a);
     memcpy(e->original, o, sizeof(e->original));
   }
   memcpy(e->current, w, sizeof(e->current));
@@ -672,9 +686,9 @@ static void storage_table_remove_account(storage_state_table *t, const uint64_t 
 
 /* Clear the generation-free block storage for an account. Transaction
    generations are retained until transaction reset for checkpoint reverts. */
-unit storage_block_clear(const lbits a) {
+unit storage_block_clear(sail_address a) {
   uint64_t h[4];
-  secure_keccak(20, a, h);
+  secure_keccak_address(a, h);
   storage_table_remove_account(&storage_block_table, h);
   storage_dump_invalidate();
   return UNIT;
@@ -695,10 +709,10 @@ static void storage_block_account_range(const uint64_t ak[4], uint32_t *start, u
 /* EELS account_has_storage: a nonempty write map in either the surviving
    transaction generation or the cumulative block overlay counts as storage.
    The authenticated pre-state root is checked in Sail. */
-bool storage_has_writes(const lbits a) {
+bool storage_has_writes(sail_address a) {
   uint64_t ah[4];
   uint32_t start, end;
-  secure_keccak(20, a, ah);
+  secure_keccak_address(a, ah);
 
   storage_table_account_range(&storage_tx_table, ah, &start, &end);
   const uint64_t generation = storage_active_generation(ah);
@@ -732,27 +746,28 @@ static void storage_dump_push(storage_dump_entry **rows, uint32_t *n, uint32_t *
 }
 
 /* Direct iteration over an account's cumulative storage map. */
-uint64_t storage_block_count(const lbits a) {
+uint64_t storage_block_count(sail_address a) {
   uint64_t k[4]; uint32_t bs, be;
-  secure_keccak(20, a, k);
+  secure_keccak_address(a, k);
   storage_block_account_range(k, &bs, &be);
   return be - bs;
 }
 
-static const storage_state_row *storage_block_at(const lbits a, uint64_t i) {
+static const storage_state_row *storage_block_at(sail_address a, uint64_t i) {
   uint64_t k[4]; uint32_t bs, be;
-  secure_keccak(20, a, k);
+  secure_keccak_address(a, k);
   storage_block_account_range(k, &bs, &be);
   return bs + i < be ? &storage_block_table.rows[bs + i] : NULL;
 }
 
-uint64_t storage_block_row_probe(const lbits a, uint64_t i,
-                                 lbits *slot, lbits *curr, lbits *orig) {
+uint64_t storage_block_row_probe(sail_address a, uint64_t i,
+                                 sail_word *slot, sail_word *curr,
+                                 sail_word *orig) {
   const storage_state_row *entry = storage_block_at(a, i);
   if (!entry) return 0;
-  be_words4_to_lbits(slot, entry->slot);
-  be_words4_to_lbits(curr, entry->current);
-  be_words4_to_lbits(orig, entry->original);
+  *slot = be_words4_to_sail_word(entry->slot);
+  *curr = be_words4_to_sail_word(entry->current);
+  *orig = be_words4_to_sail_word(entry->original);
   return 1;
 }
 
@@ -923,7 +938,7 @@ static void acct_tx_prepare_pop_order(void) {
           sizeof(*acct_tx_pop_order), acct_raw_address_cmp);
 }
 
-static acct_state_row *acct_tx_bind_write(const lbits a,
+static acct_state_row *acct_tx_bind_write(sail_address a,
                                           const uint64_t h[4], int *fresh) {
   acct_state_row *row = acct_table_get(&acct_tx_table, h);
   *fresh = (row == NULL);
@@ -933,7 +948,7 @@ static acct_state_row *acct_tx_bind_write(const lbits a,
   if (!base) return NULL;
   row = acct_table_intern(&acct_tx_table, h);
   if (!row) return NULL;
-  lbits_to_be_bytes(row->raw_addr, 20, a);
+  evmsail_address_to_be_bytes(row->raw_addr, a);
   row->cur_nonce = row->orig_nonce = base->cur_nonce;
   memcpy(row->cur_bal, base->cur_bal, sizeof(row->cur_bal));
   memcpy(row->orig_bal, base->cur_bal, sizeof(row->orig_bal));
@@ -1058,10 +1073,12 @@ unit acct_tx_revert(uint64_t checkpoint) {
    of tx account row [cursor] incl. the address preimage (the block row's BAL
    serialization key); on drain the tx table resets and 0 returns (else
    1). Sail decides records + propagation per row. */
-uint64_t acct_tx_pop_probe(lbits *addr,
-                           uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
+uint64_t acct_tx_pop_probe(sail_address *addr,
+                           uint64_t *cn, sail_word *cb,
+                           sail_hash *cs, sail_hash *cc,
                            bool *ce, bool *csc, bool *ccr, bool *csd,
-                           uint64_t *on, lbits *ob, lbits *os, lbits *oc,
+                           uint64_t *on, sail_word *ob,
+                           sail_hash *os, sail_hash *oc,
                            bool *oe, bool *osc, bool *ocr, bool *osd) {
   if (acct_tx_pop_cursor == 0) acct_tx_prepare_pop_order();
   if (acct_tx_pop_cursor >= acct_tx_table.n) {
@@ -1069,19 +1086,19 @@ uint64_t acct_tx_pop_probe(lbits *addr,
   }
   const acct_state_row *e =
       &acct_tx_table.rows[acct_tx_pop_order[acct_tx_pop_cursor++]];
-  addr20_to_lbits(addr, e->raw_addr);
+  *addr = be_bytes_to_sail_address(e->raw_addr);
   *cn = e->cur_nonce;
-  le_words4_to_lbits(cb, e->cur_bal);
-  le_words4_to_lbits(cs, e->cur_sroot);
-  le_words4_to_lbits(cc, e->cur_chash);
+  *cb = le_words4_to_sail_word(e->cur_bal);
+  *cs = le_words4_to_sail_hash(e->cur_sroot);
+  *cc = le_words4_to_sail_hash(e->cur_chash);
   *ce = e->cur_exists;
   *csc = e->cur_storage_cleared;
   *ccr = e->cur_created;
   *csd = e->cur_selfdestructed;
   *on = e->orig_nonce;
-  le_words4_to_lbits(ob, e->orig_bal);
-  le_words4_to_lbits(os, e->orig_sroot);
-  le_words4_to_lbits(oc, e->orig_chash);
+  *ob = le_words4_to_sail_word(e->orig_bal);
+  *os = le_words4_to_sail_hash(e->orig_sroot);
+  *oc = le_words4_to_sail_hash(e->orig_chash);
   *oe = e->orig_exists;
   *osc = e->orig_storage_cleared;
   *ocr = e->orig_created;
@@ -1091,38 +1108,38 @@ uint64_t acct_tx_pop_probe(lbits *addr,
 
 /* block-layer propagation hooks (pure mechanism; Sail chose the action).
    Keyed by the address preimage: the row keeps it for BAL serialization. */
-static acct_state_row *acct_block_bind(const lbits a, int *fresh) {
+static acct_state_row *acct_block_bind(sail_address a, int *fresh) {
   uint64_t h[4];
   acct_secure_key(a, h);
   acct_state_row *b = acct_table_get(&acct_block_table, h);
   *fresh = (b == NULL);
   if (*fresh) b = acct_table_intern(&acct_block_table, h);
-  if (b) lbits_to_be_bytes(b->raw_addr, 20, a);
+  if (b) evmsail_address_to_be_bytes(b->raw_addr, a);
   return b;
 }
 
 /* changed account: fresh freezes orig; curr always lands */
-unit acct_block_write_raw(const lbits a, uint64_t nonce, const lbits bal,
-                          const lbits sroot, const lbits chash,
+unit acct_block_write_raw(sail_address a, uint64_t nonce, sail_word bal,
+                          sail_hash sroot, sail_hash chash,
                           bool exists, bool storage_cleared,
-                          uint64_t ononce, const lbits obal,
-                          const lbits osroot, const lbits ochash,
+                          uint64_t ononce, sail_word obal,
+                          sail_hash osroot, sail_hash ochash,
                           bool oexists, bool ostorage_cleared) {
   int fresh = 0;
   acct_state_row *b = acct_block_bind(a, &fresh);
   if (!b) return UNIT;
   if (fresh) {
     b->orig_nonce = ononce;
-    lbits_to_le_words4(b->orig_bal, obal);
-    lbits_to_le_words4(b->orig_sroot, osroot);
-    lbits_to_le_words4(b->orig_chash, ochash);
+    sail_word_to_le_words4(b->orig_bal, obal);
+    sail_hash_to_le_words4(b->orig_sroot, osroot);
+    sail_hash_to_le_words4(b->orig_chash, ochash);
     b->orig_exists = oexists;
     b->orig_storage_cleared = ostorage_cleared;
   }
   b->cur_nonce = nonce;
-  lbits_to_le_words4(b->cur_bal, bal);
-  lbits_to_le_words4(b->cur_sroot, sroot);
-  lbits_to_le_words4(b->cur_chash, chash);
+  sail_word_to_le_words4(b->cur_bal, bal);
+  sail_hash_to_le_words4(b->cur_sroot, sroot);
+  sail_hash_to_le_words4(b->cur_chash, chash);
   b->cur_exists = exists;
   b->cur_storage_cleared = storage_cleared;
   acct_dump_invalidate();
@@ -1130,17 +1147,20 @@ unit acct_block_write_raw(const lbits a, uint64_t nonce, const lbits bal,
 }
 
 /* read member: fresh binds curr == orig; an existing row is untouched */
-unit acct_block_cache_raw(const lbits a, uint64_t nonce, const lbits bal,
-                          const lbits sroot, const lbits chash,
+unit acct_block_cache_raw(sail_address a, uint64_t nonce, sail_word bal,
+                          sail_hash sroot, sail_hash chash,
                           bool exists, bool storage_cleared) {
   int fresh = 0;
   acct_state_row *b = acct_block_bind(a, &fresh);
   if (!b) return UNIT;
   if (fresh) {
     b->cur_nonce = nonce;  b->orig_nonce = nonce;
-    lbits_to_le_words4(b->cur_bal, bal);    lbits_to_le_words4(b->orig_bal, bal);
-    lbits_to_le_words4(b->cur_sroot, sroot); lbits_to_le_words4(b->orig_sroot, sroot);
-    lbits_to_le_words4(b->cur_chash, chash); lbits_to_le_words4(b->orig_chash, chash);
+    sail_word_to_le_words4(b->cur_bal, bal);
+    sail_word_to_le_words4(b->orig_bal, bal);
+    sail_hash_to_le_words4(b->cur_sroot, sroot);
+    sail_hash_to_le_words4(b->orig_sroot, sroot);
+    sail_hash_to_le_words4(b->cur_chash, chash);
+    sail_hash_to_le_words4(b->orig_chash, chash);
     b->cur_exists = exists; b->orig_exists = exists;
     b->cur_storage_cleared = storage_cleared;
     b->orig_storage_cleared = storage_cleared;
@@ -1154,8 +1174,8 @@ unit acct_block_cache_raw(const lbits a, uint64_t nonce, const lbits bal,
    option(Account) glue (journal_glue.c): returns presence; the field words
    land in the out params (untouched when absent). The tx-over-block
    precedence lives in Sail (account_lookup). */
-uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
-                        lbits *bal, lbits *sroot, lbits *chash,
+uint64_t acct_row_probe(uint64_t layer, sail_address a, uint64_t *nonce,
+                        sail_word *bal, sail_hash *sroot, sail_hash *chash,
                         bool *exists, bool *storage_cleared,
                         bool *created, bool *selfdestructed) {
   uint64_t h[4];
@@ -1163,9 +1183,9 @@ uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
   acct_state_row *e = acct_table_get(layer == 0 ? &acct_tx_table : &acct_block_table, h);
   if (!e) return 0;
   *nonce = e->cur_nonce;
-  le_words4_to_lbits(bal, e->cur_bal);
-  le_words4_to_lbits(sroot, e->cur_sroot);
-  le_words4_to_lbits(chash, e->cur_chash);
+  *bal = le_words4_to_sail_word(e->cur_bal);
+  *sroot = le_words4_to_sail_hash(e->cur_sroot);
+  *chash = le_words4_to_sail_hash(e->cur_chash);
   *exists = e->cur_exists;
   *storage_cleared = e->cur_storage_cleared;
   *created = e->cur_created;
@@ -1179,26 +1199,28 @@ uint64_t acct_block_count(const unit u) {
   return acct_block_table.n;
 }
 
-uint64_t acct_block_row_probe(uint64_t i, lbits *addr,
-                              uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
+uint64_t acct_block_row_probe(uint64_t i, sail_address *addr,
+                              uint64_t *cn, sail_word *cb,
+                              sail_hash *cs, sail_hash *cc,
                               bool *ce, bool *csc, bool *ccr, bool *csd,
-                              uint64_t *on, lbits *ob, lbits *os, lbits *oc,
+                              uint64_t *on, sail_word *ob,
+                              sail_hash *os, sail_hash *oc,
                               bool *oe, bool *osc, bool *ocr, bool *osd) {
   if (i >= acct_block_table.n) return 0;
   const acct_state_row *entry = &acct_block_table.rows[i];
-  addr20_to_lbits(addr, entry->raw_addr);
+  *addr = be_bytes_to_sail_address(entry->raw_addr);
   *cn = entry->cur_nonce;
-  le_words4_to_lbits(cb, entry->cur_bal);
-  le_words4_to_lbits(cs, entry->cur_sroot);
-  le_words4_to_lbits(cc, entry->cur_chash);
+  *cb = le_words4_to_sail_word(entry->cur_bal);
+  *cs = le_words4_to_sail_hash(entry->cur_sroot);
+  *cc = le_words4_to_sail_hash(entry->cur_chash);
   *ce = entry->cur_exists;
   *csc = entry->cur_storage_cleared;
   *ccr = entry->cur_created;
   *csd = entry->cur_selfdestructed;
   *on = entry->orig_nonce;
-  le_words4_to_lbits(ob, entry->orig_bal);
-  le_words4_to_lbits(os, entry->orig_sroot);
-  le_words4_to_lbits(oc, entry->orig_chash);
+  *ob = le_words4_to_sail_word(entry->orig_bal);
+  *os = le_words4_to_sail_hash(entry->orig_sroot);
+  *oc = le_words4_to_sail_hash(entry->orig_chash);
   *oe = entry->orig_exists;
   *osc = entry->orig_storage_cleared;
   *ocr = entry->orig_created;
@@ -1208,8 +1230,8 @@ uint64_t acct_block_row_probe(uint64_t i, lbits *addr,
 
 /* Transaction rows are allocated lazily on the first write by cloning the
    cumulative block value established by k_aload. */
-unit acct_tx_update_raw(const lbits a, uint64_t nonce,
-                        const lbits bal, const lbits sroot, const lbits chash,
+unit acct_tx_update_raw(sail_address a, uint64_t nonce,
+                        sail_word bal, sail_hash sroot, sail_hash chash,
                         bool exists, bool storage_cleared, bool created,
                         bool selfdestructed) {
   uint64_t h[4];
@@ -1222,9 +1244,9 @@ unit acct_tx_update_raw(const lbits a, uint64_t nonce,
     return UNIT;
   }
   uint64_t b4[4], sr[4], ch[4];
-  lbits_to_le_words4(b4, bal);
-  lbits_to_le_words4(sr, sroot);
-  lbits_to_le_words4(ch, chash);
+  sail_word_to_le_words4(b4, bal);
+  sail_hash_to_le_words4(sr, sroot);
+  sail_hash_to_le_words4(ch, chash);
   e->cur_nonce = nonce;
   memcpy(e->cur_bal, b4, sizeof(e->cur_bal));
   memcpy(e->cur_sroot, sr, sizeof(e->cur_sroot));
@@ -1236,11 +1258,11 @@ unit acct_tx_update_raw(const lbits a, uint64_t nonce,
   return UNIT;
 }
 
-unit acct_tx_set_balance(const lbits a, const lbits balance) {
+unit acct_tx_set_balance(sail_address a, sail_word balance) {
   uint64_t h[4], value[4];
   int fresh = 0;
   acct_secure_key(a, h);
-  lbits_to_le_words4(value, balance);
+  sail_word_to_le_words4(value, balance);
   acct_state_row *e = acct_tx_bind_write(a, h, &fresh);
   if (!e) return UNIT;
   if (compare_u64x4(e->cur_bal, value) == 0) {
@@ -1255,7 +1277,7 @@ unit acct_tx_set_balance(const lbits a, const lbits balance) {
   return UNIT;
 }
 
-unit acct_tx_set_nonce(const lbits a, uint64_t nonce) {
+unit acct_tx_set_nonce(sail_address a, uint64_t nonce) {
   uint64_t h[4];
   int fresh = 0;
   acct_secure_key(a, h);
@@ -1273,11 +1295,11 @@ unit acct_tx_set_nonce(const lbits a, uint64_t nonce) {
   return UNIT;
 }
 
-unit acct_tx_set_code_hash(const lbits a, const lbits code_hash) {
+unit acct_tx_set_code_hash(sail_address a, sail_hash code_hash) {
   uint64_t h[4], value[4];
   int fresh = 0;
   acct_secure_key(a, h);
-  lbits_to_le_words4(value, code_hash);
+  sail_hash_to_le_words4(value, code_hash);
   acct_state_row *e = acct_tx_bind_write(a, h, &fresh);
   if (!e) return UNIT;
   if (compare_u64x4(e->cur_chash, value) == 0) {
@@ -1503,10 +1525,11 @@ uint64_t bal_account_count(const unit u) {
   return bal_prepared ? bal_acc.n : 0;
 }
 
-void bal_account_address(lbits *rop, uint64_t account) {
+EVMSAIL_ADDRESS_RETURN bal_account_address(
+    EVMSAIL_ADDRESS_RESULT(rop) uint64_t account) {
   static const uint8_t zero_address[20] = {0};
   const bal_acc_rec *a = bal_account_at(account);
-  addr20_to_lbits(rop, a ? a->raw_addr : zero_address);
+  EVMSAIL_RETURN_ADDRESS_BE_BYTES(rop, a ? a->raw_addr : zero_address);
 }
 
 uint64_t bal_storage_change_count(uint64_t account) {
@@ -1515,9 +1538,11 @@ uint64_t bal_storage_change_count(uint64_t account) {
   return bal_range(bal_sto.d, sizeof(bal_sto_rec), bal_sto.n, a, &begin);
 }
 
-void bal_storage_change_slot(lbits *rop, uint64_t account, uint64_t record) {
+EVMSAIL_WORD_RETURN bal_storage_change_slot(
+    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record) {
   const bal_sto_rec *r = bal_storage_change_at(account, record);
-  be_words4_to_lbits(rop, r ? r->slot : account_zero_val);
+  EVMSAIL_RETURN_WORD(
+      rop, be_words4_to_sail_word(r ? r->slot : account_zero_val));
 }
 
 uint64_t bal_storage_change_index(uint64_t account, uint64_t record) {
@@ -1525,9 +1550,11 @@ uint64_t bal_storage_change_index(uint64_t account, uint64_t record) {
   return r ? r->idx : 0;
 }
 
-void bal_storage_change_value(lbits *rop, uint64_t account, uint64_t record) {
+EVMSAIL_WORD_RETURN bal_storage_change_value(
+    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record) {
   const bal_sto_rec *r = bal_storage_change_at(account, record);
-  be_words4_to_lbits(rop, r ? r->val : account_zero_val);
+  EVMSAIL_RETURN_WORD(
+      rop, be_words4_to_sail_word(r ? r->val : account_zero_val));
 }
 
 uint64_t bal_storage_read_count(uint64_t account) {
@@ -1536,9 +1563,11 @@ uint64_t bal_storage_read_count(uint64_t account) {
   return bal_range(bal_rds.d, sizeof(bal_read_rec), bal_rds.n, a, &begin);
 }
 
-void bal_storage_read_slot(lbits *rop, uint64_t account, uint64_t record) {
+EVMSAIL_WORD_RETURN bal_storage_read_slot(
+    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record) {
   const bal_read_rec *r = bal_storage_read_at(account, record);
-  be_words4_to_lbits(rop, r ? r->slot : account_zero_val);
+  EVMSAIL_RETURN_WORD(
+      rop, be_words4_to_sail_word(r ? r->slot : account_zero_val));
 }
 
 uint64_t bal_balance_change_count(uint64_t account) {
@@ -1552,9 +1581,11 @@ uint64_t bal_balance_change_index(uint64_t account, uint64_t record) {
   return r ? r->idx : 0;
 }
 
-void bal_balance_change_value(lbits *rop, uint64_t account, uint64_t record) {
+EVMSAIL_WORD_RETURN bal_balance_change_value(
+    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record) {
   const bal_bal_rec *r = bal_balance_change_at(account, record);
-  le_words4_to_lbits(rop, r ? r->val : account_zero_val);
+  EVMSAIL_RETURN_WORD(
+      rop, le_words4_to_sail_word(r ? r->val : account_zero_val));
 }
 
 uint64_t bal_nonce_change_count(uint64_t account) {
@@ -1584,7 +1615,12 @@ uint64_t bal_code_change_index(uint64_t account, uint64_t record) {
   return r ? r->idx : 0;
 }
 
-void bal_code_change_hash(lbits *rop, uint64_t account, uint64_t record) {
+EVMSAIL_HASH_RETURN bal_code_change_hash(
+    EVMSAIL_HASH_RESULT(rop) uint64_t account, uint64_t record) {
   const bal_cod_rec *r = bal_code_change_at(account, record);
-  le_words4_to_lbits(rop, r ? r->chash : account_zero_val);
+  const uint64_t *le = r ? r->chash : account_zero_val;
+  const uint64_t be[4] = {le[3], le[2], le[1], le[0]};
+  uint8_t bytes[32];
+  be_words4_to_be_bytes(bytes, be);
+  EVMSAIL_RETURN_HASH_BE_BYTES(rop, bytes);
 }

@@ -21,8 +21,8 @@ enum TxType = {
     SetCodeTx,
 }
 
-let OSAKA_TRANSACTION_GAS_LIMIT_VALUE : nat = 2 ^ 24
-let OSAKA_TRANSACTION_GAS_LIMIT : gas = Gas(2 ^ 24)
+let OSAKA_TRANSACTION_GAS_LIMIT_VALUE : protocol_quantity = 16777216
+let OSAKA_TRANSACTION_GAS_LIMIT : gas = Gas(16777216)
 
 /*! An EIP-7702 set-code authorization tuple. RLP decoding recovers the
     authority and validates the signature (`s <= n/2`, `y_parity`, `r`);
@@ -75,8 +75,8 @@ struct Transaction = {
   authorization_count : item_count,
   /* source-backed EIP-4844 BLOBHASH operands */
   blob_hashes : BlobHashes,
-  /* witnessed sender public key (0x04 ++ X ++ Y span); NOT trusted --
-     verified against the signature at execution against the signing hash */
+  /* witnessed sender public key (0x04 ++ X ++ Y span); NOT trusted -- its
+     derived address must equal the signer recovered at execution */
   pubkey : ByteSlice,
   /* keccak of the signing preimage (EIP-155 / EIP-2718 domain applied),
      computed structurally at decode */

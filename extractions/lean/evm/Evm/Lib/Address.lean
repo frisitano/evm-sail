@@ -22,6 +22,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -29,7 +30,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -41,6 +44,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -49,7 +53,13 @@ open Bytes
 open ByteSource
 open BlockError
 
-/-- Type quantifiers: k_ex160826_ : Nat, 0 ≤ k_ex160826_ ∧ k_ex160826_ ≤ (2 ^ 64 - 1) -/
+/-! # Contract address derivation
+
+The `CREATE` and `CREATE2` address rules (YP §7, EIP-1014). -/
+
+/-- The `CREATE` address (YP §7): the low 20 bytes of
+`keccak256(rlp([sender, nonce]))`. -/
+/- Type quantifiers: k_ex161224_ : Nat, 0 ≤ k_ex161224_ ∧ k_ex161224_ ≤ (2 ^ 64 - 1) -/
 def create_address (sender : address) (nonce : account_nonce) : SailM address := do
   let nonce := (nonce).value
   let content_len ← do
@@ -60,14 +70,17 @@ def create_address (sender : address) (nonce : account_nonce) : SailM address :=
   (rlp_write_addr sender)
   (rlp_write_protocol_quantity ⟨nonce⟩)
   let encoded ← do (rlp_finish mark encoded_len)
-  let address ← do (pure (word_to_address (← (keccak256_slice encoded))))
+  let address ← do (pure (word_to_address (hash_to_word (← (keccak256_slice encoded)))))
   (scratch_rewind mark)
   (pure address)
 
+/-- The `CREATE2` address (EIP-1014): the low 20 bytes of
+`keccak256(0xff ++ sender ++ salt ++ keccak256(initcode))`. -/
 def create2_address (sender : address) (salt : word) (init_hash : hash) : SailM address := do
   (pure (word_to_address
-      (← (keccak256_segments
-          [(bytes_list [0xFF#8] BYTE_ONE), (bytes_list (address_to_bytes sender) ADDRESS_BYTE_LENGTH), (bytes_list
-            (word_to_bytes32 salt) WORD_BYTE_LENGTH), (bytes_list (word_to_bytes32 init_hash)
-            WORD_BYTE_LENGTH)]))))
+      (hash_to_word
+        (← (keccak256_segments
+            [(bytes_list [0xFF#8] BYTE_ONE), (bytes_list (address_to_bytes sender)
+              ADDRESS_BYTE_LENGTH), (bytes_list (word_to_bytes32 salt) WORD_BYTE_LENGTH), (bytes_list
+              (hash_to_bytes32 init_hash) WORD_BYTE_LENGTH)])))))
 

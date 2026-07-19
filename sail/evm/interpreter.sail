@@ -7,20 +7,24 @@
 # The interpreter
 
 The user-space EVM: it fetches and decodes bytecode (Yellow Paper §9),
-drives the step loop, and spawns sub-frames for the call and create
+drives the step loop, and enters sub-frames for the call and create
 opcodes. This module specifies that machinery in three layers:
 
 1. **Fetch/decode** — read the opcode at `pc`, decode PUSH immediates
    inline, and map every other byte to its AST node (an undefined byte
    decodes to `INVALID`). Reading past the end of code yields `STOP`
    (YP: implicit halt).
-2. **Run loop** — [interpret][] steps fetch-then-execute until the frame
-   stops running (normal halt, `REVERT`, or exceptional halt).
+2. **Run loop** — [interpret][] steps fetch-then-execute until the active
+   frame stops. A completed child is resumed through its explicit
+   [FrameContinuation][type-FrameContinuation]; a completed top-level
+   frame ends interpretation.
 3. **Message calls** — [run_call][] handles
    `CALL`/`CALLCODE`/`DELEGATECALL`/`STATICCALL` (multiplexed on `mode`)
    and [run_create][] handles `CREATE`/`CREATE2`. A sub-call saves the
-   parent's user-space frame registers, runs the child to a halt, then
-   restores them. All world effects go through kernel syscalls:
+   parent's user-space frame registers in [frame_stack][], installs the
+   child as the active frame, and returns to the single run loop. When the
+   child halts, that loop restores and resumes the parent. There is no
+   recursive interpreter invocation. All world effects go through kernel syscalls:
    [k_state_checkpoint][] on entry, [k_transfer][] for value, and [k_revert][] on
    failure — the kernel rolls the world back atomically on a reverting
    child. The applicable rules are EIP-150 (63/64ths gas cap + stipend),
@@ -204,21 +208,42 @@ function fetch() -> ast = {
 /*md
 ## The run loop
 */
-/*! The step loop; returns the frame's own output. `STOP`,
-    `SELFDESTRUCT`, and exceptional halts return the empty slice;
-    `RETURN` and `REVERT` carry their frozen memory slice in the halt
-    value. */
-function interpret() -> ByteSlice = {
-    /* A running iteration either halts or consumes at least one unit of gas. */
-    while is_running() termination_measure(GAS_MAX_VALUE + 1) do {
-        let op = fetch();
-        execute(op)
-    };
+val resume_frame : (FrameContinuation, ByteSlice) -> unit
+
+/*! Returns the active frame's halt output. */
+function frame_output() -> ByteSlice =
     match frame_status {
         Halted(HaltReturn(output)) => output,
         Halted(HaltRevert(output)) => output,
         _ => EMPTY_SLICE,
     }
+
+/*! The non-recursive step loop for one complete call tree. It executes the
+    active frame, resumes suspended parents from [frame_stack][] as children
+    halt, and returns the top-level frame's output. `STOP`, `SELFDESTRUCT`,
+    and exceptional halts return the empty slice; `RETURN` and `REVERT` carry
+    their frozen memory slice in the halt value. */
+function interpret() -> ByteSlice = {
+    frame_stack_reset();
+    var interpreting : bool = true;
+    var result : ByteSlice = EMPTY_SLICE;
+
+    /* Each opcode step consumes gas; every child completion corresponds to an
+     * earlier gas-consuming CALL or CREATE step. */
+    while interpreting termination_measure(2 * (GAS_MAX_VALUE + 1)) do {
+        if is_running() then {
+            execute(fetch())
+        } else {
+            let output = frame_output();
+            if frame_stack_is_empty() then {
+                result = output;
+                interpreting = false
+            } else {
+                resume_frame(frame_stack_pop(), output)
+            }
+        }
+    };
+    result
 }
 
 /*! Whether the just-finished frame ended successfully: a normal halt
@@ -428,10 +453,16 @@ function run_call(kind : CallKind) -> unit = {
     if not_bool(is_running()) then {
         return ()
     };
-    let Gas(base_child_amount) = base_child;
-    let Gas(stipend_amount) = stipend;
-    let child_gas : gas = if stipend_amount <= (2 ^ 63 - 1) - base_child_amount then {
-            Gas(base_child_amount + stipend_amount)
+    let (args_offset, args_length) = word_byte_range_or_oog(args_off_word, args_len_word);
+    if not_bool(is_running()) then {
+        return ()
+    };
+    let (ret_offset, ret_length) = word_byte_range_or_oog(ret_off_word, ret_len_word);
+    if not_bool(is_running()) then {
+        return ()
+    };
+    let child_gas : gas = if gas_sum_supported(base_child, stipend) then {
+            base_child + stipend
         } else {
             throw InvalidBlock(ExecutionInvalid)
         };
@@ -469,10 +500,7 @@ function run_call(kind : CallKind) -> unit = {
                    set is an ordinary code call. The precompile's input is the
                    child message's calldata: mem[args_off .. args_off+args_len).
                    Gas inspects the same memory source before execution. */
-                let input = memory_byte_slice(
-                    ByteQuantity(unsigned(args_off_word)),
-                    ByteQuantity(unsigned(args_len_word)),
-                );
+                let input = memory_byte_slice(args_offset, args_length);
 
                 /* Gas is checked before execution: an unpayable/OOG precompile call
                  * must not execute (a BLAKE2F request may carry an enormous round
@@ -487,10 +515,7 @@ function run_call(kind : CallKind) -> unit = {
                             if call_transfers_value(kind) & word_nonzero(value) then {
                                 k_transfer(caller, target, value)
                             };
-                            returndata_copy_prefix(
-                                ByteQuantity(unsigned(ret_off_word)),
-                                ByteQuantity(unsigned(ret_len_word)),
-                            );
+                            returndata_copy_prefix(ret_offset, ret_length);
                             let unused = gas_sub_or_oog(child_gas, used);
                             if is_running() then {
                                 refund_gas(unused);
@@ -536,11 +561,16 @@ function run_call(kind : CallKind) -> unit = {
                         message.is_static
                     };
                 let child_calldata = if is_running() then {
-                        memory_byte_slice(ByteQuantity(unsigned(args_off_word)), ByteQuantity(unsigned(args_len_word)))
+                        memory_byte_slice(args_offset, args_length)
                     } else {
                         EMPTY_SLICE
                     };
                 let checkpoint = suspend_frame();
+                frame_stack_push(
+                    ResumeCall(
+                        struct { checkpoint = checkpoint, return_offset = ret_offset, return_length = ret_length },
+                    ),
+                );
                 if call_transfers_value(kind) & word_nonzero(value) then {
                     k_transfer(caller, target, value)
                 };
@@ -563,33 +593,7 @@ function run_call(kind : CallKind) -> unit = {
                 returndata_clear();
                 frame_code = child_code;
                 call_depth = frame_depth_increment(checkpoint.call_depth);
-                frame_refund = GAS_REFUND_ZERO;
-
-                returndata = interpret();
-
-                let succeeded = frame_succeeded();
-                let child_left = gas_remaining;
-                let child_refund = frame_refund;
-
-                /* leave the child: restore every saved parent register, then credit
-                   the parent with the child's unspent gas. */
-                restore_frame(checkpoint);
-                refund_gas(child_left);
-
-                /* copy returndata into the caller's output region on both success
-                AND revert, writing only
-                min(ret_len, |output|) bytes and leaving the rest untouched. An
-                exceptionally-halted child has empty output, so nothing is
-                written. The child's world effects remain on success and are
-                rolled back on failure. */
-                returndata_copy_prefix(ByteQuantity(unsigned(ret_off_word)), ByteQuantity(unsigned(ret_len_word)));
-                if succeeded then {
-                    record_refund(child_refund);
-                    push(WORD_ONE)
-                } else {
-                    k_revert(checkpoint.state);
-                    push(WORD_ZERO)
-                }
+                frame_refund = GAS_REFUND_ZERO
             },
         }
     }
@@ -618,12 +622,14 @@ function run_create(is2 : bool) -> unit = {
         return ()
     };
 
-    let initcode_size : nat = unsigned(len_word);
-
     /* EIP-214: CREATE/CREATE2 modifies state and is forbidden in a static
        context -- it raises WriteProtection (an exceptional halt consuming all
        remaining gas), checked before any charge or child frame. */
     if guard_static() then {
+        return ()
+    };
+    let initcode_size = word_to_byte_quantity_or_oog(len_word);
+    if not_bool(is_running()) then {
         return ()
     };
 
@@ -642,6 +648,10 @@ function run_create(is2 : bool) -> unit = {
     if not_bool(is_running()) then {
         return ()
     };
+    let (initcode_offset, initcode_length) = word_byte_range_or_oog(off_word, len_word);
+    if not_bool(is_running()) then {
+        return ()
+    };
 
     /* EIP-3860: initcode longer than MAX_INITCODE_SIZE is rejected outright as
        an exceptional halt. */
@@ -652,7 +662,7 @@ function run_create(is2 : bool) -> unit = {
            keccak(initcode)) for CREATE2 (EIP-1014), else rlp(creator, nonce). */
         let nonce = k_get_nonce(creator);
         let new_addr : address = if is2 & is_running() then {
-                k_create2_addr(creator, salt, mem_keccak(ByteQuantity(unsigned(off_word)), ByteQuantity(initcode_size)))
+                k_create2_addr(creator, salt, word_to_hash(mem_keccak(initcode_offset, initcode_length)))
             } else {
                 k_create_addr(creator, nonce)
             };
@@ -683,7 +693,7 @@ function run_create(is2 : bool) -> unit = {
            incrementable). */
         let depth_ok = call_depth < DEPTH_LIMIT;
         let balance_ok : bool = word_ule(value, k_get_balance(creator));
-        let nonce_ok : bool = nonce != 2 ^ 64 - 1; /* EIP-2681 */
+        let nonce_ok : bool = nonce != BYTE_QUANTITY_MAX; /* EIP-2681 */
 
         if not_bool(depth_ok) | not_bool(balance_ok) | not_bool(nonce_ok) then {
             returndata_clear();
@@ -708,12 +718,13 @@ function run_create(is2 : bool) -> unit = {
                    suspend the complete parent before mutating the new account.
                    The child frame has no calldata. */
                 let initcode = if is_running() then {
-                        memory_byte_slice(ByteQuantity(unsigned(off_word)), ByteQuantity(initcode_size))
+                        memory_byte_slice(initcode_offset, initcode_length)
                     } else {
                         EMPTY_SLICE
                     };
                 let child_code = code_db_resolve(code_db_insert(initcode));
                 let checkpoint = suspend_frame();
+                frame_stack_push(ResumeCreate(struct { checkpoint = checkpoint, address = new_addr }));
                 k_mark_created(new_addr); /* EIP-6780: created this tx */
                 k_clear_storage(new_addr);
                 k_bump_nonce(new_addr); /* EIP-161: a created contract starts at nonce 1 */
@@ -734,71 +745,79 @@ function run_create(is2 : bool) -> unit = {
                 returndata_clear();
                 frame_code = child_code;
                 call_depth = frame_depth_increment(checkpoint.call_depth);
-                frame_refund = GAS_REFUND_ZERO;
-
-                returndata = interpret();
-
-                /* the initcode's RETURN value is the deployed code; its length
-                   sets the EIP-170 size check and the per-byte deposit cost. */
-                let succeeded = frame_succeeded();
-                let child_left = gas_remaining;
-                let child_refund = frame_refund;
-                let dep_len = returndata_size();
-
-                /* deployed-code validity: within the EIP-170 size limit and,
-                   from London onward, not beginning with 0xEF (EIP-3541, the
-                   reserved EOF prefix). */
-                let code_ok =    dep_len
-                              <= max_code_size()
-                              &  (  (k_fork < London)
-                                 | (dep_len == BYTE_ZERO)
-                                 | (slice_byte(returndata, BYTE_ZERO) != 0xef));
-                let deposit = G_codedeposit * dep_len;
-
-                /* leave the initcode frame: restore the parent's registers. */
-                restore_frame(checkpoint);
-                refund_gas(child_left);
-
-                /* finalize: an initcode that succeeded AND whose code is valid
-                   AND can pay its G_codedeposit cost deploys the code; the new
-                   address is pushed. */
-                if succeeded & code_ok & deposit <= child_left then {
-                    gas_remaining = gas_sub_or_oog(gas_remaining, deposit);
-                    if is_running() then {
-                        record_refund(child_refund);
-                        k_deploy_code(new_addr, returndata);
-                        push(address_to_word(new_addr))
-                    }
-                } else {
-                    /* otherwise the create fails and is rolled back, pushing 0.
-                     * A deposit-stage failure (0xEF prefix, oversize code, or
-                     * deposit OOG) is an exceptional halt that consumes ALL the
-                     * child gas (process_create_message sets gas_left = 0), so
-                     * the parent's gas is reset to its pre-reservation value; a
-                     * reverting/failing initcode instead keeps child_left as
-                     * already folded in above. */
-                    if succeeded then {
-                        gas_remaining = checkpoint.gas_remaining
-                    };
-                    k_revert(checkpoint.state);
-                    push(WORD_ZERO)
-                };
-
-                /* CREATE exposes REVERT output, but clears successful initcode
-                 * output after it has been consumed as deployed code. */
-                if succeeded then {
-                    returndata_clear()
-                }
+                frame_refund = GAS_REFUND_ZERO
             }
         }
     }
 }
 
-/* The only recursive cycle is interpret -> execute -> run_call/run_create ->
- * interpret. Each edge consumes one phase, and entering a child decreases the
- * remaining protocol call depth. These measures are proof-only and do not
- * add runtime fuel to executable backends. */
-termination_measure interpret() = 3 * (DEPTH_LIMIT - call_depth) + 2
-termination_measure execute(_) = 3 * (DEPTH_LIMIT - call_depth) + 1
-termination_measure run_call(_) = 3 * (DEPTH_LIMIT - call_depth)
-termination_measure run_create(_) = 3 * (DEPTH_LIMIT - call_depth)
+/*! Restores a message-call parent and applies the child's outcome. */
+function resume_call(continuation : CallContinuation, output : ByteSlice) -> unit = {
+    returndata = output;
+    let checkpoint = continuation.checkpoint;
+    let succeeded = frame_succeeded();
+    let child_left = gas_remaining;
+    let child_refund = frame_refund;
+
+    restore_frame(checkpoint);
+    refund_gas(child_left);
+
+    /* Both RETURN and REVERT copy their output; exceptional halts carry the
+     * empty slice. Successful effects remain, while every failure reverts to
+     * the saved kernel checkpoint. */
+    returndata_copy_prefix(continuation.return_offset, continuation.return_length);
+    if succeeded then {
+        record_refund(child_refund);
+        push(WORD_ONE)
+    } else {
+        k_revert(checkpoint.state);
+        push(WORD_ZERO)
+    }
+}
+
+/*! Restores a create parent and either deploys or rolls back the child. */
+function resume_create(continuation : CreateContinuation, output : ByteSlice) -> unit = {
+    returndata = output;
+    let checkpoint = continuation.checkpoint;
+    let succeeded = frame_succeeded();
+    let child_left = gas_remaining;
+    let child_refund = frame_refund;
+    let deployed_length = returndata_size();
+    let code_ok =    deployed_length
+                  <= max_code_size()
+                  &  ((k_fork < London) | (deployed_length == BYTE_ZERO) | (slice_byte(returndata, BYTE_ZERO) != 0xef));
+    let deposit = G_codedeposit * deployed_length;
+
+    restore_frame(checkpoint);
+    refund_gas(child_left);
+
+    if succeeded & code_ok & deposit <= child_left then {
+        gas_remaining = gas_sub_or_oog(gas_remaining, deposit);
+        if is_running() then {
+            record_refund(child_refund);
+            k_deploy_code(continuation.address, returndata);
+            push(address_to_word(continuation.address))
+        }
+    } else {
+        /* A successful initcode whose deposit stage fails consumes all child
+         * gas; a reverting or exceptional initcode keeps its remaining gas. */
+        if succeeded then {
+            gas_remaining = checkpoint.gas_remaining
+        };
+        k_revert(checkpoint.state);
+        push(WORD_ZERO)
+    };
+
+    /* Successful initcode output has become deployed code. REVERT output
+     * remains visible to RETURNDATA opcodes in the parent. */
+    if succeeded then {
+        returndata_clear()
+    }
+}
+
+/*! Applies the pending operation for one completed child frame. */
+function resume_frame(continuation : FrameContinuation, output : ByteSlice) -> unit =
+    match continuation {
+        ResumeCall(call) => resume_call(call, output),
+        ResumeCreate(create) => resume_create(create, output),
+    }

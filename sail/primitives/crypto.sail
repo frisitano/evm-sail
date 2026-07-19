@@ -1,4 +1,3 @@
-
 /*md
 # Cryptographic primitives
 
@@ -20,14 +19,15 @@ Proof targets see them as bodyless axioms.
 | `EMPTY_TRIE_ROOT` | `keccak256(rlp(""))` | The empty trie's root |
 | `SECP_N_FULL` / `SECP_N_HALF` | `n`, `n/2` | The secp256k1 group order bounds (EIP-2) |
 */
+
 /*! keccak256 of the empty string: the `codeHash` of every codeless
     account. */
-let KECCAK_EMPTY : hash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
+let KECCAK_EMPTY : hash = word_to_hash(U256(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470))
 
 /*! `keccak256(rlp(""))` — the root of an empty Merkle-Patricia trie: the
     storage root of every account with no storage (`EMPTY_ACCOUNT`, freshly
     created). */
-let EMPTY_TRIE_ROOT : hash = 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
+let EMPTY_TRIE_ROOT : hash = word_to_hash(U256(0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421))
 
 /* ---- Crypto core. The `c:`-bound vals below are the axiomatic boundary:
  * hash/signature primitives with NO pure Sail body (ffi/host_crypto.c,
@@ -58,13 +58,13 @@ payload as separate segments of the same preimage.
 */
 /*! The KECCAK-256 axiom: the digest of a segment list's concatenation
     (bodyless; bound to `host_keccak_segments` in C). */
-val keccak256_segments = impure { c: "host_keccak_segments" } : list(Bytes) -> bits(256)
+val keccak256_segments = impure { c: "host_keccak_segments" } : list(Bytes) -> hash
 /*! The SHA-256 axiom: the digest of a segment list's concatenation
     (bodyless; bound to `host_sha256_segments` in C). */
-val sha256_segments = impure { c: "host_sha256_segments" } : list(Bytes) -> bits(256)
+val sha256_segments = impure { c: "host_sha256_segments" } : list(Bytes) -> hash
 
 /*! KECCAK-256 of a source-tagged slice, without materializing it. */
-function keccak256_slice(s : ByteSlice) -> bits(256) = keccak256_segments([|BytesSlice(s)|])
+function keccak256_slice(s : ByteSlice) -> hash = keccak256_segments([|BytesSlice(s)|])
 
 /* Materialized fragments always enter through Bytes with an explicit length;
  * source-backed payloads can use the single-slice overload directly. */
@@ -76,17 +76,17 @@ overload sha256 = { sha256_segments }
     [keccak256_segments][]; implementations may override
     it with a one-call accelerator (`host_keccak_word`) — secure-trie keys
     hash on every state access. */
-function keccak256_word(w : word) -> bits(256) =
+function keccak256_word(w : word) -> hash =
     keccak256([|bytes_list(word_to_bytes32(w), WORD_BYTE_LENGTH)|])
 
 /*! KECCAK-256 of a 20-byte address (secure-trie account keys). */
-function keccak256_address(a : address) -> bits(256) =
+function keccak256_address(a : address) -> hash =
     keccak256([|bytes_list(address_to_bytes(a), ADDRESS_BYTE_LENGTH)|])
 
 /*! The SSZ Merkle parent: `SHA-256(left ++ right)` over two 32-byte
     chunks. */
-function sha256_pair(a : bits(256), b : bits(256)) -> bits(256) =
-    sha256([|bytes_list(word_to_bytes32(a), WORD_BYTE_LENGTH), bytes_list(word_to_bytes32(b), WORD_BYTE_LENGTH)|])
+function sha256_pair(a : hash, b : hash) -> hash =
+    sha256([|bytes_list(hash_to_bytes32(a), WORD_BYTE_LENGTH), bytes_list(hash_to_bytes32(b), WORD_BYTE_LENGTH)|])
 
 /*md
 ## The signature core
@@ -95,15 +95,14 @@ The `host/accelerators.sail` k256 axioms, plus the curve-order constants
 that signature validity rules bound `r`/`s` against.
 */
 /*! `n` of the secp256k1 group order. */
-let SECP_N_FULL : bits(256) = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
+let SECP_N_FULL : word = U256(0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141)
 /*! `n/2` of the secp256k1 group order — the EIP-2 low-`s` malleability
     bound. */
-let SECP_N_HALF : bits(256) = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0
+let SECP_N_HALF : word = U256(0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0)
 
-/*! Recovers the signer address from `(h, y_parity, r, s)`; the leading
-    bit of the recovery result flags success (used by EIP-7702 authority
-    recovery). */
-function ecrecover_addr(h : bits(256), yparity : y_parity, r : word, s : word) -> (bool, address) = {
+/*! Recovers the signer address from `(h, y_parity, r, s)`, returning
+    recovery success and the recovered address (used by EIP-7702). */
+function ecrecover_addr(h : hash, yparity : y_parity, r : word, s : word) -> (bool, address) = {
     let recovered = host_ecrecover(h, yparity, r, s);
-    (recovered[160] == bitone, recovered[159 .. 0])
+    (recovered.success, recovered.address)
 }

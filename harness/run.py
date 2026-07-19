@@ -12,14 +12,15 @@ sources, auto-detected per fixture file:
     reference guest's expected SszStatelessValidationResult bytes;
   - blockchain/stateless fixtures already carrying statelessInputBytes /
     statelessOutputBytes (e.g. corpora under zkvm/.fixtures/): fed directly.
-Two execution vehicles: the native in-process ctypes lib (default), or the
-REAL RISC-V guest ELF on spike (--spike; full build once, then each case is
-provided through the runtime read_input ABI to the unchanged ELF). This subsumes the old
+Three execution vehicles: the native in-process ctypes lib (default), the REAL
+RISC-V guest ELF on Spike (--spike), or the production ZisK ELF on ziskemu
+(--zisk). Both ELF vehicles build once and then provide each case through the
+runtime read_input ABI to the unchanged ELF. This subsumes the old
 zkvm/native-runner/run_fixtures*.py and zkvm/run_guest_smoke.py runners.
 
 Usage:
     python3 harness/run.py <test.json|dir> [...] [--fork F] [--limit N]
-            [--build standard|optimized] [--spike] [--rebuild]
+            [--build standard|optimized] [--spike|--zisk] [--rebuild]
             [--verbose] [--debug]
 Requires `sail` on PATH and a C compiler; ssz_builder.py runs under the
 execution-specs venv (EXECSPECS_PY).
@@ -29,6 +30,8 @@ import dump_state
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ELDIR = os.path.abspath(os.path.join(HERE, ".."))
+TMP_ROOT = os.environ.get("AGENT_TMPDIR", os.path.join(ELDIR, ".agent-tmp"))
+os.makedirs(TMP_ROOT, exist_ok=True)
 
 def h2i(x):
     if isinstance(x, int): return x
@@ -140,13 +143,15 @@ class SpikeGuest:
 
     def __init__(self, timeout, profile=False):
         self.zkvm = os.path.join(ELDIR, "zkvm")
-        self.build_dir = tempfile.mkdtemp(prefix="zkvm-spike-")
+        self.build_dir = tempfile.mkdtemp(prefix="zkvm-spike-", dir=TMP_ROOT)
         self.built = False
         self.timeout = timeout
         self.profile = profile
 
     def run_once(self, inp):
-        with tempfile.NamedTemporaryFile(suffix=".ssz", delete=False) as tf:
+        with tempfile.NamedTemporaryFile(
+            suffix=".ssz", delete=False, dir=TMP_ROOT
+        ) as tf:
             tf.write(inp)
             vec = tf.name
         env = dict(os.environ, VEC=vec, ZKVM_BUILD=self.build_dir)
@@ -168,15 +173,147 @@ class SpikeGuest:
         return bytes.fromhex(m.group(1).decode())
 
 
+class ZiskGuest:
+    """Drive the production ZisK ELF on ziskemu through zkvm_io.h.
+
+    ZisK stdin is an eight-byte little-endian payload length followed by the
+    payload and zero padding to an eight-byte boundary. Public output is a
+    fixed array of 64 little-endian u32 slots; run_fixtures compares only the
+    reference-length prefix and separately requires the unused suffix to be
+    zero.
+    """
+
+    def __init__(self, timeout, profile=False):
+        self.build_script = os.path.join(ELDIR, "zkvm", "zisk", "build.sh")
+        self.build_dir = tempfile.mkdtemp(prefix="zkvm-zisk-", dir=TMP_ROOT)
+        self.ziskemu = os.environ.get(
+            "ZISKEMU", os.path.expanduser("~/.zisk/bin/ziskemu")
+        )
+        self._check_emulator_version()
+        self.built = False
+        self.timeout = timeout
+        self.profile = profile
+
+    @staticmethod
+    def _locked_zisk_version():
+        lock_path = os.path.join(ELDIR, "zkvm", "zisk", "Cargo.lock")
+        with open(lock_path) as f:
+            lock = f.read()
+        match = re.search(
+            r'\[\[package\]\]\s+name = "ziskos"\s+version = "([^"]+)"',
+            lock,
+        )
+        if not match:
+            raise RuntimeError(f"cannot find the locked ziskos version in {lock_path}")
+        return match.group(1)
+
+    def _check_emulator_version(self):
+        required = self._locked_zisk_version()
+        try:
+            result = subprocess.run(
+                [self.ziskemu, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except OSError as exc:
+            raise RuntimeError(
+                f"cannot execute ZisK emulator {self.ziskemu!r}: {exc}"
+            ) from exc
+        output = (result.stdout + result.stderr).strip()
+        match = re.search(r"\bziskemu\s+([^\s]+)", output)
+        if result.returncode != 0 or not match:
+            raise RuntimeError(
+                f"cannot determine the version of ZisK emulator "
+                f"{self.ziskemu!r}: {output}"
+            )
+        if match.group(1) != required:
+            raise RuntimeError(
+                f"ZisK emulator {match.group(1)} is incompatible with the "
+                f"guest's locked ziskos {required}; set ZISKEMU to a "
+                f"matching ziskemu binary"
+            )
+
+    @staticmethod
+    def _frame_input(inp):
+        framed = len(inp).to_bytes(8, "little") + inp
+        return framed + bytes((-len(framed)) % 8)
+
+    def _build(self):
+        env = dict(os.environ, ZKVM_BUILD=self.build_dir)
+        env["EVM_PROFILE"] = "on" if self.profile else "off"
+        r = subprocess.run(
+            [self.build_script, "guest"],
+            capture_output=True,
+            env=env,
+            timeout=self.timeout,
+            cwd=ELDIR,
+        )
+        if r.returncode != 0:
+            tail = (r.stdout + r.stderr).decode(errors="replace")[-1000:].strip()
+            raise RuntimeError(f"ZisK guest build failed rc={r.returncode}: {tail}")
+        self.built = True
+
+    def run_once(self, inp):
+        if not self.built:
+            self._build()
+        elf = os.path.join(
+            self.build_dir, "stateless-validator-evm-sail-zisk.elf"
+        )
+        with tempfile.TemporaryDirectory(
+            prefix="case-", dir=self.build_dir
+        ) as case_dir:
+            input_path = os.path.join(case_dir, "input.bin")
+            output_path = os.path.join(case_dir, "output.bin")
+            with open(input_path, "wb") as f:
+                f.write(self._frame_input(inp))
+            r = subprocess.run(
+                [
+                    self.ziskemu,
+                    "--elf", elf,
+                    "--inputs", input_path,
+                    "--output", output_path,
+                    "--steps",
+                ],
+                capture_output=True,
+                timeout=self.timeout,
+                cwd=ELDIR,
+            )
+            if os.environ.get("EVM_DEBUG") == "on":
+                # ziskemu currently forwards guest fd 2 through its stdout while
+                # keeping emulator diagnostics on stderr. Preserve both streams in
+                # debug builds without making production fixture output noisy.
+                for stream in (r.stdout, r.stderr):
+                    if stream:
+                        sys.stderr.buffer.write(stream)
+                sys.stderr.buffer.flush()
+            if r.returncode != 0 or not os.path.exists(output_path):
+                tail = (r.stdout + r.stderr).decode(errors="replace")[-1000:].strip()
+                raise RuntimeError(f"ziskemu run failed rc={r.returncode}: {tail}")
+            with open(output_path, "rb") as f:
+                return f.read()
+
+
+def output_matches(got, expected, zisk=False):
+    """Compare one public result without discarding meaningful zero bytes."""
+    if expected is None:
+        return False
+    if not zisk:
+        return got == expected
+    return got[:len(expected)] == expected and not any(got[len(expected):])
+
+
 def run_fixtures(files, args):
     """Drive main.sail over every fixture: embedded statelessInputBytes
     blocks run directly against their statelessOutputBytes; state-test cases are
     built into valid Amsterdam blocks + reference outputs by ssz_builder's t8n
     mode. Pass criterion: the guest's output bytes EQUAL the reference's.
-    Backend: the native in-process ctypes lib, or the real RISC-V ELF on spike
-    (--spike)."""
+    Backend: native in-process ctypes, the real RISC-V ELF on Spike, or the
+    production ZisK ELF on ziskemu."""
     if args.spike:
         run_once = SpikeGuest(args.timeout or 900.0, profile=args.profile).run_once
+    elif args.zisk:
+        run_once = ZiskGuest(args.timeout or 900.0, profile=args.profile).run_once
     else:
         dump_state.load_guest(
             rebuild=args.rebuild,
@@ -222,7 +359,7 @@ def run_fixtures(files, args):
                 else:
                     suppressed_fails += 1
                 continue
-            if exp is not None and got == exp:
+            if output_matches(got, exp, zisk=args.zisk):
                 npass += 1
                 if not args.quiet: print(f"PASS {cid}")
             else:
@@ -236,13 +373,18 @@ def run_fixtures(files, args):
                         ev = exp[32:33].hex() if len(exp) > 32 else "??"
                         print(f"      got_len={len(got)} exp_len={len(exp)} "
                               f"valid_byte got={gv} exp={ev}")
-                    if args.debug and not args.spike:
+                    if args.debug and not (args.spike or args.zisk):
                         snap = dump_state.format_snapshot(
                             dump_state.snapshot(), limit=0 if args.verbose else 12)
                         print("\n".join("      " + ln for ln in snap.splitlines()))
                 else:
                     suppressed_fails += 1
-    vehicle = "spike guest" if args.spike else f"{args.build_mode} guest"
+    if args.spike:
+        vehicle = "spike guest"
+    elif args.zisk:
+        vehicle = "ZisK guest"
+    else:
+        vehicle = f"{args.build_mode} guest"
     print(f"\n=== {npass}/{ntotal} passed ({vehicle}, byte-exact) ===")
     if suppressed_fails:
         print(f"=== suppressed FAIL lines: {suppressed_fails} ===")
@@ -331,12 +473,16 @@ def main():
              "c_optimized.sail splice",
     )
     ap.add_argument("--timeout", type=float, default=None,
-                    help="per-case wall-clock budget; only meaningful with --spike "
-                         "(default 900s there) -- the warm in-process libs cannot "
+                    help="per-case wall-clock budget; only meaningful with --spike/--zisk "
+                         "(default 900s there) -- warm in-process libs cannot "
                          "interrupt a C call and the model is gas-bounded")
     ap.add_argument("--quiet", action="store_true", help="only print failures + summary")
     ap.add_argument("--spike", action="store_true",
                     help="run the REAL RISC-V guest ELF on spike "
+                         "(full build once, runtime input per case) instead of "
+                         "the native in-process lib")
+    ap.add_argument("--zisk", action="store_true",
+                    help="run the production ZisK guest ELF on ziskemu "
                          "(full build once, runtime input per case) instead of "
                          "the native in-process lib")
     ap.add_argument("--profile", action="store_true",
@@ -348,13 +494,17 @@ def main():
     ap.add_argument("--jobs", type=int, default=1,
                     help="shard fixture FILES across N worker processes (each worker "
                          "loads its own library instance, so the process-global C "
-                         "world state stays isolated); incompatible with --spike, "
+                         "world state stays isolated); incompatible with --spike/--zisk, "
                          "--debug and --rebuild (rebuild once with --jobs 1 first)")
     ap.add_argument("--_trace-files", dest="_trace_files", action="store_true",
                     help=argparse.SUPPRESS)
     args = ap.parse_args()
-    if args.spike and args.build_mode != "optimized":
-        ap.error("--spike currently supports only --build optimized")
+    if args.spike and args.zisk:
+        ap.error("--spike and --zisk are mutually exclusive")
+    if (args.spike or args.zisk) and args.build_mode != "optimized":
+        ap.error("--spike and --zisk support only --build optimized")
+    if args.debug and (args.spike or args.zisk):
+        ap.error("--debug is available only for native runs")
 
     # Expand regular fixtures and EEST worker-shard JSONL files recursively.
     import glob as _glob
@@ -367,8 +517,8 @@ def main():
             files.append(p)
 
     if args.jobs > 1:
-        if args.spike or args.debug or args.rebuild:
-            ap.error("--jobs is incompatible with --spike/--debug/--rebuild")
+        if args.spike or args.zisk or args.debug or args.rebuild:
+            ap.error("--jobs is incompatible with --spike/--zisk/--debug/--rebuild")
         if len(files) > 1:
             dump_state.load_guest(profile=args.profile, build_mode=args.build_mode)
             sys.exit(run_sharded(files, args))

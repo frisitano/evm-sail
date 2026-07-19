@@ -6,7 +6,7 @@
  * memoized C-side. Both stores are cache/update backed. */
 #ifndef STATE_DB_H
 #define STATE_DB_H
-#include "sail.h"
+#include "sail_abi.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -22,21 +22,21 @@ void storage_tx_get(struct zoptionzIRStorageValuezK *result,
 void storage_block_get(struct zoptionzIRStorageValuezK *result,
                        struct zStorageKey key);
 void storage_block_row(struct zoptionzIRStorageEntryzK *result,
-                       const lbits address, uint64_t index);
+                       sail_address address, uint64_t index);
 unit storage_tx_update(struct zStorageEntry entry);
 unit storage_block_put(struct zStorageEntry entry);
-unit storage_block_cache(struct zStorageKey key, const lbits value);
+unit storage_block_cache(struct zStorageKey key, sail_word value);
 
 struct zoptionzIRAccountzK;
 struct zoptionzIRAcctEntryzK;
 struct zAccount;
 struct zAcctEntry;
-void acct_tx_get(struct zoptionzIRAccountzK *result, const lbits address);
-void acct_block_get(struct zoptionzIRAccountzK *result, const lbits address);
+void acct_tx_get(struct zoptionzIRAccountzK *result, sail_address address);
+void acct_block_get(struct zoptionzIRAccountzK *result, sail_address address);
 void acct_block_row(struct zoptionzIRAcctEntryzK *result, uint64_t index);
-unit acct_tx_update(const lbits address, struct zAccount account);
+unit acct_tx_update(sail_address address, struct zAccount account);
 unit acct_block_write(struct zAcctEntry entry);
-unit acct_block_cache(const lbits address, struct zAccount account);
+unit acct_block_cache(sail_address address, struct zAccount account);
 
 void storage_tx_pop(struct zoptionzIRStorageEntryzK *result, unit u);
 void acct_tx_pop_ascending(struct zoptionzIRAcctEntryzK *result, unit u);
@@ -44,16 +44,16 @@ void acct_tx_pop_ascending(struct zoptionzIRAcctEntryzK *result, unit u);
 /* Persistent storage transaction state and cumulative block state. */
 unit storage_db_reset(const unit u);
 /* Per-layer row probe (layer 0 = tx writes, 1 = block cache/update map). */
-uint64_t storage_row_probe(uint64_t layer, const lbits a, const lbits s,
-                           lbits *cur, lbits *orig);
-unit storage_tx_update_raw(const lbits a, const lbits s, const lbits v,
-                           const lbits orig);
+uint64_t storage_row_probe(uint64_t layer, sail_address a, sail_word s,
+                           sail_word *cur, sail_word *orig);
+unit storage_tx_update_raw(sail_address a, sail_word s, sail_word v,
+                           sail_word orig);
 uint64_t storage_tx_checkpoint(const unit u);
 unit storage_tx_revert(uint64_t checkpoint);
-unit storage_tx_clear(const lbits a);
+unit storage_tx_clear(sail_address a);
 unit storage_tx_reset(const unit u);
-bool storage_has_writes(const lbits a);
-unit storage_block_clear(const lbits a);
+bool storage_has_writes(sail_address a);
+unit storage_block_clear(sail_address a);
 
 /* Debug snapshot enumeration over the cumulative storage table, grouped by
    keccak(address). This is not part of the Sail state-root interface. */
@@ -65,17 +65,17 @@ void storage_dump_value(lbits *rop, const lbits ak, uint64_t j);
 unit acct_db_reset(const unit u);
 /* per-layer account probe (layer 0 = tx, 1 = block): 0 = absent, 1 = present.
    Transaction-only fields are zero for block rows. */
-uint64_t acct_row_probe(uint64_t layer, const lbits a, uint64_t *nonce,
-                        lbits *bal, lbits *sroot, lbits *chash,
+uint64_t acct_row_probe(uint64_t layer, sail_address a, uint64_t *nonce,
+                        sail_word *bal, sail_hash *sroot, sail_hash *chash,
                         bool *exists, bool *storage_cleared,
                         bool *created, bool *selfdestructed);
-unit acct_tx_update_raw(const lbits a, uint64_t nonce,
-                        const lbits bal, const lbits sroot, const lbits chash,
+unit acct_tx_update_raw(sail_address a, uint64_t nonce,
+                        sail_word bal, sail_hash sroot, sail_hash chash,
                         bool exists, bool storage_cleared, bool created,
                         bool selfdestructed);
-unit acct_tx_set_balance(const lbits a, const lbits balance);
-unit acct_tx_set_nonce(const lbits a, uint64_t nonce);
-unit acct_tx_set_code_hash(const lbits a, const lbits code_hash);
+unit acct_tx_set_balance(sail_address a, sail_word balance);
+unit acct_tx_set_nonce(sail_address a, uint64_t nonce);
+unit acct_tx_set_code_hash(sail_address a, sail_hash code_hash);
 uint64_t acct_tx_checkpoint(const unit u);
 unit acct_tx_revert(uint64_t checkpoint);
 unit acct_tx_reset(const unit u);
@@ -94,60 +94,71 @@ unit bal_reset(const unit u);
 unit bal_set_index(uint64_t n);
 unit bal_prepare(const unit u);
 uint64_t bal_account_count(const unit u);
-void bal_account_address(lbits *rop, uint64_t account);
+EVMSAIL_ADDRESS_RETURN bal_account_address(
+    EVMSAIL_ADDRESS_RESULT(rop) uint64_t account);
 
 uint64_t bal_storage_change_count(uint64_t account);
-void bal_storage_change_slot(lbits *rop, uint64_t account, uint64_t record);
+EVMSAIL_WORD_RETURN bal_storage_change_slot(
+    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record);
 uint64_t bal_storage_change_index(uint64_t account, uint64_t record);
-void bal_storage_change_value(lbits *rop, uint64_t account, uint64_t record);
+EVMSAIL_WORD_RETURN bal_storage_change_value(
+    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record);
 uint64_t bal_storage_read_count(uint64_t account);
-void bal_storage_read_slot(lbits *rop, uint64_t account, uint64_t record);
+EVMSAIL_WORD_RETURN bal_storage_read_slot(
+    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record);
 
 uint64_t bal_balance_change_count(uint64_t account);
 uint64_t bal_balance_change_index(uint64_t account, uint64_t record);
-void bal_balance_change_value(lbits *rop, uint64_t account, uint64_t record);
+EVMSAIL_WORD_RETURN bal_balance_change_value(
+    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record);
 uint64_t bal_nonce_change_count(uint64_t account);
 uint64_t bal_nonce_change_index(uint64_t account, uint64_t record);
 uint64_t bal_nonce_change_value(uint64_t account, uint64_t record);
 uint64_t bal_code_change_count(uint64_t account);
 uint64_t bal_code_change_index(uint64_t account, uint64_t record);
-void bal_code_change_hash(lbits *rop, uint64_t account, uint64_t record);
+EVMSAIL_HASH_RETURN bal_code_change_hash(
+    EVMSAIL_HASH_RESULT(rop) uint64_t account, uint64_t record);
 
 /* EIP-7928 record sinks + tx-row enumeration (harvest logic is Sail-side) */
-unit bal_note_storage_change(const lbits a, const lbits slot, const lbits val);
-unit bal_note_account_touch(const lbits a);
-unit bal_note_storage_read(const lbits a, const lbits slot);
-unit bal_note_balance_change(const lbits a, const lbits val);
-unit bal_note_nonce_change(const lbits a, uint64_t nonce);
-unit bal_note_code_change(const lbits a, const lbits chash);
+unit bal_note_storage_change(sail_address a, sail_word slot, sail_word val);
+unit bal_note_account_touch(sail_address a);
+unit bal_note_storage_read(sail_address a, sail_word slot);
+unit bal_note_balance_change(sail_address a, sail_word val);
+unit bal_note_nonce_change(sail_address a, uint64_t nonce);
+unit bal_note_code_change(sail_address a, sail_hash chash);
 /* State-root enumeration over the cumulative maps. */
-uint64_t storage_block_count(const lbits a);
-uint64_t storage_block_row_probe(const lbits a, uint64_t i,
-                                 lbits *slot, lbits *curr, lbits *orig);
+uint64_t storage_block_count(sail_address a);
+uint64_t storage_block_row_probe(sail_address a, uint64_t i,
+                                 sail_word *slot, sail_word *curr,
+                                 sail_word *orig);
 uint64_t acct_block_count(const unit u);
-uint64_t acct_block_row_probe(uint64_t i, lbits *addr,
-                              uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
+uint64_t acct_block_row_probe(uint64_t i, sail_address *addr,
+                              uint64_t *cn, sail_word *cb,
+                              sail_hash *cs, sail_hash *cc,
                               bool *ce, bool *csc, bool *ccr, bool *csd,
-                              uint64_t *on, lbits *ob, lbits *os, lbits *oc,
+                              uint64_t *on, sail_word *ob,
+                              sail_hash *os, sail_hash *oc,
                               bool *oe, bool *osc, bool *ocr, bool *osd);
 /* k_tx_merge drain pops (side-effect-free) + block propagation hooks */
-uint64_t storage_tx_pop_probe(lbits *addr, lbits *slot, lbits *curr,
-                              lbits *orig);
-unit storage_block_put_raw(const lbits a, const lbits s_, const lbits curr,
-                           const lbits orig);
-unit storage_block_cache_raw(const lbits a, const lbits s_, const lbits v);
-uint64_t acct_tx_pop_probe(lbits *addr,
-                           uint64_t *cn, lbits *cb, lbits *cs, lbits *cc,
+uint64_t storage_tx_pop_probe(sail_address *addr, sail_word *slot,
+                              sail_word *curr, sail_word *orig);
+unit storage_block_put_raw(sail_address a, sail_word s_, sail_word curr,
+                           sail_word orig);
+unit storage_block_cache_raw(sail_address a, sail_word s_, sail_word v);
+uint64_t acct_tx_pop_probe(sail_address *addr,
+                           uint64_t *cn, sail_word *cb,
+                           sail_hash *cs, sail_hash *cc,
                            bool *ce, bool *csc, bool *ccr, bool *csd,
-                           uint64_t *on, lbits *ob, lbits *os, lbits *oc,
+                           uint64_t *on, sail_word *ob,
+                           sail_hash *os, sail_hash *oc,
                            bool *oe, bool *osc, bool *ocr, bool *osd);
-unit acct_block_write_raw(const lbits a, uint64_t nonce, const lbits bal,
-                          const lbits sroot, const lbits chash,
+unit acct_block_write_raw(sail_address a, uint64_t nonce, sail_word bal,
+                          sail_hash sroot, sail_hash chash,
                           bool exists, bool storage_cleared,
-                          uint64_t ononce, const lbits obal,
-                          const lbits osroot, const lbits ochash,
+                          uint64_t ononce, sail_word obal,
+                          sail_hash osroot, sail_hash ochash,
                           bool oexists, bool ostorage_cleared);
-unit acct_block_cache_raw(const lbits a, uint64_t nonce, const lbits bal,
-                          const lbits sroot, const lbits chash,
+unit acct_block_cache_raw(sail_address a, uint64_t nonce, sail_word bal,
+                          sail_hash sroot, sail_hash chash,
                           bool exists, bool storage_cleared);
 #endif

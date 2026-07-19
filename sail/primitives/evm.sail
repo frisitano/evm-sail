@@ -76,6 +76,30 @@ struct FrameCheckpoint = {
     memory : ByteSlice,
 }
 
+/*! The suspended parent information needed after a message call returns. */
+struct CallContinuation = {
+    checkpoint : FrameCheckpoint,
+    return_offset : memory_pointer,
+    return_length : memory_length,
+}
+
+/*! The suspended parent information needed after initcode returns. */
+struct CreateContinuation = {
+    checkpoint : FrameCheckpoint,
+    address : address,
+}
+
+/*! The pending action performed when a child frame finishes. */
+union FrameContinuation = {
+    /*! Resume a suspended message-call parent. */
+    ResumeCall : CallContinuation,
+    /*! Resume a suspended contract-creation parent. */
+    ResumeCreate : CreateContinuation
+}
+
+/*! The protocol-bounded stack of suspended parent continuations. */
+type FrameStack = vector(1024, dec, FrameContinuation)
+
 /*! The zero message; frame registers reset to it between transactions. */
 let DEFAULT_MESSAGE : Message = struct {
         caller = ZERO_ADDR,
@@ -85,3 +109,20 @@ let DEFAULT_MESSAGE : Message = struct {
         is_static = false,
         depth = 0,
     }
+
+let DEFAULT_FRAME_CHECKPOINT : FrameCheckpoint = struct {
+        state = StateCheckpoint(0),
+        pc = BYTE_ZERO,
+        gas_remaining = GAS_ZERO,
+        refund = GAS_REFUND_ZERO,
+        status = Running(),
+        message = DEFAULT_MESSAGE,
+        call_depth = 0,
+        code = EMPTY_CODE,
+        calldata = EMPTY_SLICE,
+        memory = EMPTY_SLICE,
+    }
+
+let DEFAULT_FRAME_CONTINUATION : FrameContinuation = ResumeCall(
+    struct { checkpoint = DEFAULT_FRAME_CHECKPOINT, return_offset = BYTE_ZERO, return_length = BYTE_ZERO },
+)

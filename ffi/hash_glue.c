@@ -63,11 +63,10 @@ static void seg_accumulate(zz5listz8z5unionz0zzBytesz9 segs) {
     if (n->hd.kind == Kind_zBytesList) {
       const struct zMaterializzedBytes *materialized =
           &n->hd.variants.zBytesList;
-      const struct node_zz5listz8z5bvz9 *b = materialized->zdata;
+      evmsail_byte_list b = materialized->zdata;
       uint64_t remaining = materialized_bytes_len(materialized);
       while (remaining && b) {
-        uint8_t v;
-        lbits_to_be_bytes(&v, 1, b->hd);
+        uint8_t v = evmsail_byte_value(b->hd);
         seg_put(&v, 1);
         b = b->tl;
         remaining--;
@@ -129,12 +128,11 @@ bool host_bytes_segments_equal_slice(zz5listz8z5unionz0zzBytesz9 segs,
     if (n->hd.kind == Kind_zBytesList) {
       const struct zMaterializzedBytes *materialized =
           &n->hd.variants.zBytesList;
-      const struct node_zz5listz8z5bvz9 *b = materialized->zdata;
+      evmsail_byte_list b = materialized->zdata;
       uint64_t remaining = materialized_bytes_len(materialized);
       while (remaining && b) {
         if (offset >= expected_len) return false;
-        uint8_t v;
-        lbits_to_be_bytes(&v, 1, b->hd);
+        uint8_t v = evmsail_byte_value(b->hd);
         if (v != want[offset]) return false;
         offset++;
         b = b->tl;
@@ -161,28 +159,36 @@ bool host_bytes_segments_equal_slice(zz5listz8z5unionz0zzBytesz9 segs,
   return offset == expected_len;
 }
 
-void host_keccak_segments(lbits *rop, zz5listz8z5unionz0zzBytesz9 segs) {
+EVMSAIL_HASH_RETURN host_keccak_segments(
+    EVMSAIL_HASH_RESULT(result) zz5listz8z5unionz0zzBytesz9 segs) {
   const uint8_t *p = NULL;
   uint64_t len = 0;
-  if (seg_single_slice(segs, &p, &len)) {
-    host_keccak256_lbits(rop, p, len);
-    return;
+  uint64_t digest[4];
+  uint8_t bytes[32];
+  if (!seg_single_slice(segs, &p, &len)) {
+    seg_accumulate(segs);
+    p = seg_ok ? seg_buf : NULL;
+    len = seg_ok ? seg_len : UINT64_MAX;
   }
-  seg_accumulate(segs);
-  if (seg_ok) host_keccak256_lbits(rop, seg_buf, seg_len);
-  else host_keccak256_lbits(rop, NULL, UINT64_MAX);
+  host_keccak256_bytes(digest, p, len);
+  be_words4_to_be_bytes(bytes, digest);
+  EVMSAIL_RETURN_HASH_BE_BYTES(result, bytes);
 }
 
-void host_sha256_segments(lbits *rop, zz5listz8z5unionz0zzBytesz9 segs) {
+EVMSAIL_HASH_RETURN host_sha256_segments(
+    EVMSAIL_HASH_RESULT(result) zz5listz8z5unionz0zzBytesz9 segs) {
   const uint8_t *p = NULL;
   uint64_t len = 0;
-  if (seg_single_slice(segs, &p, &len)) {
-    host_sha256_lbits(rop, p, len);
-    return;
+  uint64_t digest[4];
+  uint8_t bytes[32];
+  if (!seg_single_slice(segs, &p, &len)) {
+    seg_accumulate(segs);
+    p = seg_ok ? seg_buf : NULL;
+    len = seg_ok ? seg_len : UINT64_MAX;
   }
-  seg_accumulate(segs);
-  if (seg_ok) host_sha256_lbits(rop, seg_buf, seg_len);
-  else host_sha256_lbits(rop, NULL, UINT64_MAX);
+  host_sha256_bytes(digest, p, len);
+  be_words4_to_be_bytes(bytes, digest);
+  EVMSAIL_RETURN_HASH_BE_BYTES(result, bytes);
 }
 
 /* ---- log records (host/state.sail log_append / read_logs) --------------- */
@@ -190,17 +196,23 @@ void host_sha256_segments(lbits *rop, zz5listz8z5unionz0zzBytesz9 segs) {
  * (the LOG0..4 memory span resolves + memcpies straight from the memory
  * store; EIP-7708 system logs pass materialized words) and is snapshotted
  * into kernel_state.c's arenas. */
-unit log_append_record(const lbits a, zz5listz8z5bvz9 topics, struct zBytes data) {
+unit log_append_record(sail_address a, evmsail_word_list topics,
+                       struct zBytes data) {
   log_begin(a);
+#ifdef EVMSAIL_STANDARD_ABI
   for (const struct node_zz5listz8z5bvz9 *t = topics; t; t = t->tl)
     log_add_topic(t->hd);
+#else
+  for (const struct node_zz5listz8z5structz0zz__sail_c_repr_u256z9 *t = topics;
+       t; t = t->tl)
+    log_add_topic(t->hd);
+#endif
   if (data.kind == Kind_zBytesList) {
     const struct zMaterializzedBytes *materialized = &data.variants.zBytesList;
-    const struct node_zz5listz8z5bvz9 *b = materialized->zdata;
+    evmsail_byte_list b = materialized->zdata;
     uint64_t remaining = materialized_bytes_len(materialized);
     while (remaining && b) {
-      uint8_t v;
-      lbits_to_be_bytes(&v, 1, b->hd);
+      uint8_t v = evmsail_byte_value(b->hd);
       log_add_data_bulk(&v, 1);
       b = b->tl;
       remaining--;
@@ -230,13 +242,10 @@ void logs_read_all(zz5listz8z5structz0zzLogEntryz9 *rop, unit u) {
     node->rc = 1;
     node->tl = out;
 
-    /* address: the low 160 bits of the stored word */
-    lbits a256;
-    uint8_t ab[32];
-    log_addr(&a256, i);
-    lbits_to_be_bytes(ab, 32, a256);
-    be_bytes_to_lbits(&node->hd.zaddress, 160, ab + 12, 20);
-
+    /* Address and topics use the active standard/optimized nominal ABI. */
+#ifdef EVMSAIL_STANDARD_ABI
+    node->hd.zaddress = (sail_address){0, NULL};
+    log_addr(&node->hd.zaddress, i);
     zz5listz8z5bvz9 ts = NULL;
     for (uint64_t j = log_topic_count(i); j-- > 0;) {
       struct node_zz5listz8z5bvz9 *tn = sail_new(struct node_zz5listz8z5bvz9);
@@ -246,6 +255,19 @@ void logs_read_all(zz5listz8z5structz0zzLogEntryz9 *rop, unit u) {
       ts = tn;
     }
     node->hd.ztopics = ts;
+#else
+    node->hd.zaddress = log_addr(i);
+    zz5listz8z5structz0zz__sail_c_repr_u256z9 ts = NULL;
+    for (uint64_t j = log_topic_count(i); j-- > 0;) {
+      struct node_zz5listz8z5structz0zz__sail_c_repr_u256z9 *tn =
+          sail_new(struct node_zz5listz8z5structz0zz__sail_c_repr_u256z9);
+      tn->rc = 1;
+      tn->tl = ts;
+      tn->hd = log_topic(i, j);
+      ts = tn;
+    }
+    node->hd.ztopics = ts;
+#endif
 
     /* data stays a REFERENCE into the block-lifetime log arena */
     node->hd.zdata.zsource = zLogDataSource;

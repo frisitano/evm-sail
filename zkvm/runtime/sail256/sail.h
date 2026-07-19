@@ -299,6 +299,14 @@ typedef struct {
   uint64_t d[4];   /* inline 256-bit magnitude, no GMP pointer; d[0] = LSBs */
 } lbits;
 
+/* Native representation selected by $[c_repr u256].  Defining it in the
+ * runtime makes the same ABI available to injected FFI headers before the
+ * generated model header is included. */
+#ifndef SAIL_U256_DEFINED
+#define SAIL_U256_DEFINED
+typedef struct { uint64_t limbs[4]; } sail_u256;
+#endif
+
 // For backwards compatibility
 typedef uint64_t mach_bits;
 typedef lbits sail_bits;
@@ -337,6 +345,11 @@ void CONVERT_OF(lbits, sbits)(lbits *, const sbits, const bool);
 
 sbits CONVERT_OF(sbits, fbits)(const fbits, const uint64_t, const bool);
 sbits CONVERT_OF(sbits, lbits)(const lbits, const bool);
+
+/* Portable fixed-limb bridge used by native representations such as u256.
+ * Limbs are little-endian: limbs[0] contains the least-significant 64 bits. */
+void sail_lbits_to_u64_array(uint64_t *, size_t, const lbits);
+void sail_lbits_from_u64_array(lbits *, const uint64_t *, size_t, uint64_t);
 
 void sail_unsigned(sail_int *rop, const lbits op);
 void sail_signed(sail_int *rop, const lbits op);

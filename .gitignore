@@ -9,6 +9,7 @@ sail_smt_cache
 
 # zkVM RISC-V guest build artifacts
 zkvm/build/
+zkvm/build-zisk/
 
 # harness caches
 harness/.rtcache/
@@ -42,6 +43,7 @@ zkvm/native-runner/.build*/
 # local editor, agent, and worktree state
 .DS_Store
 /.agent-deck/
+/.agent-tmp/
 /.agents/
 /.claude/
 /.mcp.json

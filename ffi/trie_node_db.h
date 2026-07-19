@@ -1,7 +1,7 @@
 #ifndef TRIE_NODE_DB_H
 #define TRIE_NODE_DB_H
 #include "quantity_abi.h"
-#include "sail.h"
+#include "sail_abi.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -19,14 +19,14 @@
  * key is absent (nodes are never empty), and a memoized last-key probe
  * serves the off/len pair with one table walk. */
 unit nodedb_reset(const unit u);
-unit nodedb_insert(const lbits kh, EVMSAIL_BYTE_QUANTITY_PARAM(off),
+unit nodedb_insert(sail_hash kh, EVMSAIL_BYTE_QUANTITY_PARAM(off),
                    EVMSAIL_BYTE_QUANTITY_PARAM(len));
 #ifdef EVMSAIL_STANDARD_ABI
-void nodedb_off(sail_int *out, const lbits kh);
-void nodedb_len(sail_int *out, const lbits kh);
+void nodedb_off(sail_int *out, sail_hash kh);
+void nodedb_len(sail_int *out, sail_hash kh);
 #else
-uint64_t nodedb_off(const lbits kh);
-uint64_t nodedb_len(const lbits kh);
+uint64_t nodedb_off(sail_hash kh);
+uint64_t nodedb_len(sail_hash kh);
 #endif
 
 #endif

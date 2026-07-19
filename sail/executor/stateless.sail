@@ -40,8 +40,7 @@ function validate_executed_block(
     };
     if k_fork >= Amsterdam then {
         let block_access_list = encode_block_access_list();
-        let Gas(gas_limit) = header.gas_limit;
-        let maximum_items = exact_quotient(gas_limit, 2000);
+        let Gas(maximum_items) = gas_quotient(header.gas_limit, 2000);
         block_access_list_size_ok = block_access_list.item_count <= maximum_items;
         block_access_list_ok = bytes_segments_equal_slice(
             [|BytesSlice(block_access_list.bytes)|],
@@ -51,9 +50,6 @@ function validate_executed_block(
 
     if result.block_gas_overflow then {
         throw InvalidBlock(GasUsedExceedsLimit)
-    };
-    if result.blob_gas_overflow then {
-        throw InvalidBlock(BlobGasLimitExceeded)
     };
     if not_bool(exec_ok) then {
         throw InvalidBlock(ExecutionInvalid)

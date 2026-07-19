@@ -20,6 +20,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -27,7 +28,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -39,6 +42,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -47,6 +51,15 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # Code storage
+
+Content-addressed code storage and the Sail-side `JUMPDEST` analysis.
+
+!!! note "Non-normative"
+    This page documents the model's host interface — internal contracts
+    of the executable specification, not protocol rules. -/
+
+/-- Commits a completed nonempty bitmap chunk to its allocated table. -/
 def store_jumpdest_chunk (table : JumpdestRef) (code_len : byte_length) (analysis : CodeAnalysis) : SailM Unit := do
   if ((analysis.chunk != EMPTY_JUMPDEST_CHUNK) : Bool)
   then
@@ -56,12 +69,15 @@ def store_jumpdest_chunk (table : JumpdestRef) (code_len : byte_length) (analysi
       assert stored "JUMPDEST chunk store")
   else (pure ())
 
-/-- Type quantifiers: index : Nat, 0 ≤ index ∧ index ≤ 255 -/
+/-- Returns the one-hot bitmap value for an offset within a 256-byte chunk. -/
+/- Type quantifiers: index : Nat, 0 ≤ index ∧ index ≤ 255 -/
 def jumpdest_bit (index : Nat) : JumpdestChunk :=
   let chunk : (BitVec 256) := EMPTY_JUMPDEST_CHUNK
   (BitVec.update chunk index 1#1)
 
-/-- Type quantifiers: _reclimit : Nat, 0 ≤ _reclimit -/
+/-- Scans the remaining code, records opcode-aligned JUMPDEST positions, and
+skips immediate bytes belonging to PUSH instructions. -/
+/- Type quantifiers: _reclimit : Nat, 0 ≤ _reclimit -/
 def _rec_analyze_code_from (code : EvmByteSlice) (table : JumpdestRef) (pc : code_pointer) (analysis : CodeAnalysis) (_reclimit : Nat) : SailM Unit := do
   match _reclimit with
   | 0 =>
@@ -117,6 +133,8 @@ def _rec_analyze_code_from (code : EvmByteSlice) (table : JumpdestRef) (pc : cod
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
+/-- Scans the remaining code, records opcode-aligned JUMPDEST positions, and
+skips immediate bytes belonging to PUSH instructions. -/
 def analyze_code_from (code : EvmByteSlice) (table : JumpdestRef) (pc : code_pointer) (analysis : CodeAnalysis) : SailM Unit := do
   let _measure :=
     (let .ByteQuantity code_len := code.len
@@ -126,8 +144,11 @@ def analyze_code_from (code : EvmByteSlice) (table : JumpdestRef) (pc : code_poi
   then throw Error.Exit
   else (_rec_analyze_code_from code table pc analysis (_measure + 1))
 
+/-- The PUSH-aware `JUMPDEST` analysis (YP §9.4.3): PUSH immediate bytes
+are data even when they contain `0x5b`. The completed bitmap remains a
+first-class Sail value; the host never scans opcodes. -/
 def analyze_code (code : EvmByteSlice) : SailM JumpdestRef := do
-  if ((byte_quantity_equal code.len BYTE_ZERO) : Bool)
+  if ((code.len == BYTE_ZERO) : Bool)
   then (pure EMPTY_JUMPDEST_REF)
   else
     (do
@@ -139,9 +160,12 @@ def analyze_code (code : EvmByteSlice) : SailM JumpdestRef := do
           chunk_offset := 0 })
       (pure table))
 
+/-- Analyzes and stores code, returning its content hash. -/
 def code_db_insert (code : EvmByteSlice) : SailM hash := do
   (code_db_store code (← (analyze_code code)))
 
+/-- The code for a code hash; `KECCAK_EMPTY` resolves to empty code, and
+an unwitnessed hash is a deficient witness. -/
 def code_db_resolve (code_hash : hash) : SailM Code := do
   if ((code_hash == KECCAK_EMPTY) : Bool)
   then (pure EMPTY_CODE)

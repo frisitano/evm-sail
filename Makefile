@@ -18,7 +18,7 @@
 
 SAIL ?= $(shell bash zkvm/resolve_optimized_sail.sh)
 LAKE ?= lake
-COQC ?= coqc
+COQC ?= opam exec -- rocq c
 PYTHON ?= python3
 UV ?= uv
 
@@ -40,7 +40,7 @@ EXTERN_CONTRACT     := $(CONTRACTS_DIR)/ExternBoundary.v
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail extractions/contracts -name '*.sail' | sort)
 
-.PHONY: all check check-contracts clean docs-site eest-smoke extract extract-coq extract-lean fmt fmt-check help lean-extract lint runtime-test
+.PHONY: all check check-contracts clean docs-site eest-smoke extract extract-coq extract-lean fmt fmt-check help lean-extract lint runtime-test zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -53,6 +53,7 @@ help:
 	@echo "  make extract-coq    - generate and validate the complete Coq model"
 	@echo "  make extract-lean   - generate and compile the complete Lean model"
 	@echo "  make docs-site      - build the literate specification book"
+	@echo "  make zisk-guest     - build the production ZisK guest ELF"
 	@echo "  make extract        - run both theorem-prover extractions"
 	@echo "  make all            - check + lint + fmt-check"
 
@@ -80,6 +81,9 @@ fmt-check:
 
 runtime-test:
 	$(PYTHON) zkvm/runtime/sail256/test_runtime.py
+
+zisk-guest:
+	bash zkvm/zisk/build.sh guest
 
 eest-smoke:
 	@cd harness && $(PYTHON) run.py fixtures/smoke/state_root_transfer.json --fork Cancun --limit 1 --quiet

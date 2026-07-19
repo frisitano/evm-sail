@@ -74,33 +74,152 @@ Definition undefined_LimbDivMod '(tt : unit) : M (LimbDivMod) :=
    (undefined_bitvector (64)) >>= fun (w__1 : mword 64) =>
    returnM (({| LimbDivMod_quotient := w__0;  LimbDivMod_remainder := w__1 |})).
 
-Definition undefined_WordDivMod '(tt : unit) : M (WordDivMod) :=
-   (undefined_bitvector (256)) >>= fun (w__0 : mword 256) =>
-   (undefined_bitvector (256)) >>= fun (w__1 : mword 256) =>
-   returnM (({| WordDivMod_quotient := w__0;  WordDivMod_remainder := w__1 |})).
+Definition address_from_bits (value : mword 160) : address_typ :=
+   let bytes : vec byte 20 := vector_init (20) ((Ox"00")) in
+   let bytes : vec (mword 8) 20 :=
+     let '(loop_k_lower) := 0 in
+     let '(loop_k_upper) := 19 in
+     (foreach_Z_up loop_k_lower loop_k_upper 1 bytes
+       (fun k bytes =>
+         vec_update_dec (bytes) (k)
+           ((subrange_vec_dec ((shiftr (value) ((Z.mul (8) (k))))) (7) (0))))) in
+   Address (bytes).
+
+Definition address_to_bits '((Address bytes) : address_typ) : mword 160 :=
+   let value : bits 160 := zeros (160) in
+   let '(loop_k_lower) := 0 in
+   let '(loop_k_upper) := 19 in
+   (foreach_Z_up loop_k_lower loop_k_upper 1 value
+     (fun k value =>
+       or_vec (value)
+         ((shiftl ((zero_extend ((vec_access_dec (bytes) (k))) (160))) ((Z.mul (8) (k))))))).
+
+Definition b256_from_bits (value : mword 256) : b256 :=
+   let bytes : vec byte 32 := vector_init (32) ((Ox"00")) in
+   let bytes : vec (mword 8) 32 :=
+     let '(loop_k_lower) := 0 in
+     let '(loop_k_upper) := 31 in
+     (foreach_Z_up loop_k_lower loop_k_upper 1 bytes
+       (fun k bytes =>
+         vec_update_dec (bytes) (k)
+           ((subrange_vec_dec ((shiftr (value) ((Z.mul (8) (k))))) (7) (0))))) in
+   B256 (bytes).
+
+Definition b256_to_bits '((B256 bytes) : b256) : mword 256 :=
+   let value : bits 256 := zeros (256) in
+   let '(loop_k_lower) := 0 in
+   let '(loop_k_upper) := 31 in
+   (foreach_Z_up loop_k_lower loop_k_upper 1 value
+     (fun k value =>
+       or_vec (value)
+         ((shiftl ((zero_extend ((vec_access_dec (bytes) (k))) (256))) ((Z.mul (8) (k))))))).
+
+Definition hash_from_bits (value : mword 256) : b256 := b256_from_bits (value).
+
+Definition hash_to_bits (value : b256) : mword 256 := b256_to_bits (value).
+
+Definition b256_zero '(tt : unit) : b256 := B256 ((vector_init (32) ((Ox"00")))).
+
+Definition b256_lt '((B256 left') : b256) '((B256 right') : b256) : bool :=
+   let less : bool := false in
+   let equal : bool := true in
+   let '((equal, less)) :=
+     (let '(loop_offset_lower) := 0 in
+     let '(loop_offset_upper) := 31 in
+     (foreach_Z_up loop_offset_lower loop_offset_upper 1 (equal, less)
+       (fun offset '(equal, less) =>
+         let index := Z.sub (31) (offset) in
+         let '((equal, less)) :=
+           (if andb (equal)
+                 ((neq_vec ((vec_access_dec (left') (index))) ((vec_access_dec (right') (index)))))
+            then
+              let less : bool :=
+                Z.ltb ((uint ((vec_access_dec (left') (index)))))
+                  ((uint ((vec_access_dec (right') (index))))) in
+              let equal : bool := false in
+              (equal, less)
+            else (equal, less))
+            : (bool * bool) in
+         (equal, less))))
+      : (bool * bool) in
+   less.
+
+Definition hash_to_word (value : b256) : word := U256 ((hash_to_bits (value))).
+
+Definition word_to_hash '((U256 value) : word) : b256 := hash_from_bits (value).
+
+Definition word_to_address '((U256 w) : word) : address_typ :=
+   address_from_bits ((subrange_vec_dec (w) (159) (0))).
+
+Definition address_to_word (a : address_typ) : word :=
+   U256 ((zero_extend ((address_to_bits (a))) (256))).
 
 Definition ZERO_WORD : word :=
-(Ox"0000000000000000000000000000000000000000000000000000000000000000").
+U256 ((Ox"0000000000000000000000000000000000000000000000000000000000000000")).
 #[export] Hint Unfold ZERO_WORD : sail.
-Definition ZERO_ADDR : address := (Ox"0000000000000000000000000000000000000000").
+Definition ZERO_ADDR : address_typ := word_to_address (ZERO_WORD).
 #[export] Hint Unfold ZERO_ADDR : sail.
+Definition ZERO_HASH : hash := word_to_hash (ZERO_WORD).
+#[export] Hint Unfold ZERO_HASH : sail.
 Definition WORD_ZERO : word :=
-(Ox"0000000000000000000000000000000000000000000000000000000000000000").
+U256 ((Ox"0000000000000000000000000000000000000000000000000000000000000000")).
 #[export] Hint Unfold WORD_ZERO : sail.
 Definition WORD_ONE : word :=
-(Ox"0000000000000000000000000000000000000000000000000000000000000001").
+U256 ((Ox"0000000000000000000000000000000000000000000000000000000000000001")).
 #[export] Hint Unfold WORD_ONE : sail.
 Definition WORD_ALL_ONES : word :=
-(Ox"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF").
+U256 ((Ox"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")).
 #[export] Hint Unfold WORD_ALL_ONES : sail.
 Definition WORD_SIGN_BIT : word :=
-(Ox"8000000000000000000000000000000000000000000000000000000000000000").
+U256 ((Ox"8000000000000000000000000000000000000000000000000000000000000000")).
 #[export] Hint Unfold WORD_SIGN_BIT : sail.
-Definition word_of_bool (b : bool) : mword 256 := if b then WORD_ONE else WORD_ZERO.
+Definition word_to_bits '((U256 value) : word) : mword 256 := value.
 
-Definition word_is_zero (w : mword 256) : bool := eq_vec (w) (WORD_ZERO).
+Definition word_add '((U256 left') : word) '((U256 right') : word) : word :=
+   U256 ((add_vec (left') (right'))).
 
-Definition word_nonzero (w : mword 256) : bool := negb ((word_is_zero (w))).
+Definition word_sub '((U256 left') : word) '((U256 right') : word) : word :=
+   U256 ((sub_vec (left') (right'))).
+
+Definition word_and '((U256 left') : word) '((U256 right') : word) : word :=
+   U256 ((and_vec (left') (right'))).
+
+Definition word_or '((U256 left') : word) '((U256 right') : word) : word :=
+   U256 ((or_vec (left') (right'))).
+
+Definition word_xor '((U256 left') : word) '((U256 right') : word) : word :=
+   U256 ((xor_vec (left') (right'))).
+
+Definition word_not '((U256 value) : word) : word := U256 ((not_vec (value))).
+
+Definition word_bit '((U256 value) : word) (index : Z) (*(0 <=? index) && (index <=? 255)*)
+: mword 1 :=
+   access_vec_dec (value) (index).
+
+Definition word_low_byte '((U256 value) : word) : mword 8 := subrange_vec_dec (value) (7) (0).
+
+Definition word_limb_0 '((U256 value) : word) : mword 64 := subrange_vec_dec (value) (63) (0).
+
+Definition word_limb_1 '((U256 value) : word) : mword 64 := subrange_vec_dec (value) (127) (64).
+
+Definition word_limb_2 '((U256 value) : word) : mword 64 := subrange_vec_dec (value) (191) (128).
+
+Definition word_limb_3 '((U256 value) : word) : mword 64 := subrange_vec_dec (value) (255) (192).
+
+Definition word_from_limbs
+(limb_0 : mword 64) (limb_1 : mword 64) (limb_2 : mword 64) (limb_3 : mword 64)
+: word :=
+   U256 ((concat_vec (limb_3) ((concat_vec (limb_2) ((concat_vec (limb_1) (limb_0))))))).
+
+Definition word_shift_left_one '((U256 value) : word) : word := U256 ((shiftl (value) (1))).
+
+Definition word_shift_right_one '((U256 value) : word) : word := U256 ((shiftr (value) (1))).
+
+Definition word_of_bool (b : bool) : word := if b then WORD_ONE else WORD_ZERO.
+
+Definition word_is_zero (w : word) : bool := generic_eq (w) (WORD_ZERO).
+
+Definition word_nonzero (w : word) : bool := negb ((word_is_zero (w))).
 
 Definition LIMB_ZERO : limb := (Ox"0000000000000000").
 #[export] Hint Unfold LIMB_ZERO : sail.
@@ -207,7 +326,7 @@ Definition limb_divmod (dividend : mword 64) (divisor : mword 64) : LimbDivMod :
 Definition word_bit_count_increment (value : Z) (*(0 <=? value) && (value <=? 256)*) : M (Z) :=
    (if Z.ltb (value) (256) then returnM ((Z.add (value) (1)))
     else
-      assert_exp' false "extractions/contracts/../../sail/prelude.sail:188.20-188.21" >>= fun _ =>
+      assert_exp' false "extractions/contracts/../../sail/prelude.sail:293.20-293.21" >>= fun _ =>
       exit tt)
     : M (Z).
 
@@ -230,18 +349,18 @@ Definition limb_bit_length (value : mword 64) : Z :=
       : (Z * mword 64) in
    length.
 
-Definition word_to_limb (w : mword 256) : option (mword 64) :=
+Definition word_to_limb '((U256 w) : word) : option (mword 64) :=
    if eq_vec ((subrange_vec_dec (w) (255) (64))) ((zeros (192))) then
      Some ((subrange_vec_dec (w) (63) (0)))
    else None.
 
-Definition limb_to_word (value : mword 64) : mword 256 := zero_extend (value) (256).
+Definition limb_to_word (value : mword 64) : word := U256 ((zero_extend (value) (256))).
 
-Definition word_of_nat (value : Z) (*0 <=? value*) : M (mword 256) :=
-   assert_exp' (Z.ltb (value) ((pow2 (256)))) "extractions/contracts/../../sail/prelude.sail:222.26-222.27" >>= fun _ =>
-   returnM ((get_slice_int (256) (value) (0))).
+Definition word_of_nat (value : Z) (*0 <=? value*) : M (word) :=
+   assert_exp' (Z.ltb (value) ((pow2 (256)))) "extractions/contracts/../../sail/prelude.sail:327.26-327.27" >>= fun _ =>
+   returnM ((U256 ((get_slice_int (256) (value) (0))))).
 
-Definition word_ult (a : mword 256) (b : mword 256) : bool :=
+Definition word_ult '((U256 a) : word) '((U256 b) : word) : bool :=
    if neq_vec ((subrange_vec_dec (a) (255) (192))) ((subrange_vec_dec (b) (255) (192))) then
      limb_ult ((subrange_vec_dec (a) (255) (192))) ((subrange_vec_dec (b) (255) (192)))
    else if neq_vec ((subrange_vec_dec (a) (191) (128))) ((subrange_vec_dec (b) (191) (128))) then
@@ -250,9 +369,9 @@ Definition word_ult (a : mword 256) (b : mword 256) : bool :=
      limb_ult ((subrange_vec_dec (a) (127) (64))) ((subrange_vec_dec (b) (127) (64)))
    else limb_ult ((subrange_vec_dec (a) (63) (0))) ((subrange_vec_dec (b) (63) (0))).
 
-Definition word_ule (a : mword 256) (b : mword 256) : bool := negb ((word_ult (b) (a))).
+Definition word_ule (a : word) (b : word) : bool := negb ((word_ult (b) (a))).
 
-Definition word_bit_length (value : mword 256) : Z :=
+Definition word_bit_length '((U256 value) : word) : Z :=
    if neq_vec ((subrange_vec_dec (value) (255) (192))) (LIMB_ZERO) then
      Z.add (192) ((limb_bit_length ((subrange_vec_dec (value) (255) (192)))))
    else if neq_vec ((subrange_vec_dec (value) (191) (128))) (LIMB_ZERO) then
@@ -261,12 +380,12 @@ Definition word_bit_length (value : mword 256) : Z :=
      Z.add (64) ((limb_bit_length ((subrange_vec_dec (value) (127) (64)))))
    else limb_bit_length ((subrange_vec_dec (value) (63) (0))).
 
-Definition word_checked_add (a : mword 256) (b : mword 256) : option (mword 256) :=
-   let result := add_vec (a) (b) in
+Definition word_checked_add (a : word) (b : word) : option word :=
+   let result := word_add (a) (b) in
    if word_ult (result) (a) then None
    else Some (result).
 
-Definition word_checked_mul_limb (value : mword 256) (factor : mword 64) : option (mword 256) :=
+Definition word_checked_mul_limb (value : word) (factor : mword 64) : option word :=
    let result : word := ZERO_WORD in
    let addend : word := value in
    let remaining : limb := factor in
@@ -288,10 +407,10 @@ Definition word_checked_mul_limb (value : mword 256) (factor : mword 64) : optio
                    let valid : bool := false in
                    (result, valid)
                 end
-                 : (mword 256 * bool) in
+                 : (word * bool) in
               (result, valid)
             else (result, valid))
-            : (mword 256 * bool) in
+            : (word * bool) in
          let remaining : limb := shiftr (remaining) (1) in
          let '((addend, valid)) :=
            (if andb (valid) ((andb ((Z.ltb (i) (63))) ((neq_vec (remaining) (LIMB_ZERO))))) then
@@ -305,16 +424,16 @@ Definition word_checked_mul_limb (value : mword 256) (factor : mword 64) : optio
                    let valid : bool := false in
                    (addend, valid)
                 end
-                 : (mword 256 * bool) in
+                 : (word * bool) in
               (addend, valid)
             else (addend, valid))
-            : (mword 256 * bool) in
+            : (word * bool) in
          (addend, remaining, result, valid))))
-      : (mword 256 * mword 64 * mword 256 * bool) in
+      : (word * mword 64 * word * bool) in
    if valid then Some (result)
    else None.
 
-Definition word_mul (a : mword 256) (b : mword 256) : mword 256 :=
+Definition word_mul (a : word) (b : word) : word :=
    let result : word := WORD_ZERO in
    let addend : word := a in
    let remaining : word := b in
@@ -323,16 +442,16 @@ Definition word_mul (a : mword 256) (b : mword 256) : mword 256 :=
      let '(loop__step_upper) := 255 in
      (foreach_Z_up loop__step_lower loop__step_upper 1 (addend, remaining, result)
        (fun _step '(addend, remaining, result) =>
-         let result : mword 256 :=
-           if eq_vec ((access_vec_dec (remaining) (0))) (('b"1")) then add_vec (result) (addend)
+         let result : word :=
+           if eq_vec ((word_bit (remaining) (0))) (('b"1")) then word_add (result) (addend)
            else result in
-         let addend : word := shiftl (addend) (1) in
-         let remaining : word := shiftr (remaining) (1) in
+         let addend : word := word_shift_left_one (addend) in
+         let remaining : word := word_shift_right_one (remaining) in
          (addend, remaining, result))))
-      : (mword 256 * mword 256 * mword 256) in
+      : (word * word * word) in
    result.
 
-Definition word_divmod (dividend : mword 256) (divisor : mword 256) : WordDivMod :=
+Definition word_divmod (dividend : word) (divisor : word) : WordDivMod :=
    if word_is_zero (divisor) then
      {| WordDivMod_quotient := WORD_ZERO;
         WordDivMod_remainder := WORD_ZERO |}
@@ -346,30 +465,30 @@ Definition word_divmod (dividend : mword 256) (divisor : mword 256) : WordDivMod
        (foreach_Z_up loop__step_lower loop__step_upper 1 (quotient, remainder, remaining)
          (fun _step '(quotient, remainder, remaining) =>
            let incoming :=
-             if eq_vec ((access_vec_dec (remaining) (255))) (('b"1")) then WORD_ONE
+             if eq_vec ((word_bit (remaining) (255))) (('b"1")) then WORD_ONE
              else WORD_ZERO in
-           let overflow := eq_vec ((access_vec_dec (remainder) (255))) (('b"1")) in
-           let remainder : word := or_vec ((shiftl (remainder) (1))) (incoming) in
-           let remaining : word := shiftl (remaining) (1) in
-           let quotient : word := shiftl (quotient) (1) in
+           let overflow := eq_vec ((word_bit (remainder) (255))) (('b"1")) in
+           let remainder : word := word_or ((word_shift_left_one (remainder))) (incoming) in
+           let remaining : word := word_shift_left_one (remaining) in
+           let quotient : word := word_shift_left_one (quotient) in
            let '((quotient, remainder)) :=
              (if orb (overflow) ((word_ule (divisor) (remainder))) then
-                let remainder : word := sub_vec (remainder) (divisor) in
-                let quotient : word := or_vec (quotient) (WORD_ONE) in
+                let remainder : word := word_sub (remainder) (divisor) in
+                let quotient : word := word_or (quotient) (WORD_ONE) in
                 (quotient, remainder)
               else (quotient, remainder))
-              : (mword 256 * mword 256) in
+              : (word * word) in
            (quotient, remainder, remaining))))
-        : (mword 256 * mword 256 * mword 256) in
+        : (word * word * word) in
      {| WordDivMod_quotient := quotient;
         WordDivMod_remainder := remainder |}.
 
-Definition word_mod_add_reduced (a : mword 256) (b : mword 256) (modulus : mword 256) : mword 256 :=
-   let threshold := sub_vec (modulus) (b) in
-   if word_ule (threshold) (a) then sub_vec (a) (threshold)
-   else add_vec (a) (b).
+Definition word_mod_add_reduced (a : word) (b : word) (modulus : word) : word :=
+   let threshold := word_sub (modulus) (b) in
+   if word_ule (threshold) (a) then word_sub (a) (threshold)
+   else word_add (a) (b).
 
-Definition word_shift_left_limb (value : mword 256) (amount : mword 64) : mword 256 :=
+Definition word_shift_left_limb (value : word) (amount : mword 64) : word :=
    let result : word := value in
    let remaining : limb := amount in
    let '((remaining, result)) :=
@@ -379,16 +498,16 @@ Definition word_shift_left_limb (value : mword 256) (amount : mword 64) : mword 
        (fun _step '(remaining, result) =>
          let '((remaining, result)) :=
            (if neq_vec (remaining) (LIMB_ZERO) then
-              let result : word := shiftl (result) (1) in
+              let result : word := word_shift_left_one (result) in
               let remaining : limb := sub_vec (remaining) (LIMB_ONE) in
               (remaining, result)
             else (remaining, result))
-            : (mword 64 * mword 256) in
+            : (mword 64 * word) in
          (remaining, result))))
-      : (mword 64 * mword 256) in
+      : (mword 64 * word) in
    result.
 
-Definition word_shift_right_limb (value : mword 256) (amount : mword 64) : mword 256 :=
+Definition word_shift_right_limb (value : word) (amount : mword 64) : word :=
    let result : word := value in
    let remaining : limb := amount in
    let '((remaining, result)) :=
@@ -398,19 +517,19 @@ Definition word_shift_right_limb (value : mword 256) (amount : mword 64) : mword
        (fun _step '(remaining, result) =>
          let '((remaining, result)) :=
            (if neq_vec (remaining) (LIMB_ZERO) then
-              let result : word := shiftr (result) (1) in
+              let result : word := word_shift_right_one (result) in
               let remaining : limb := sub_vec (remaining) (LIMB_ONE) in
               (remaining, result)
             else (remaining, result))
-            : (mword 64 * mword 256) in
+            : (mword 64 * word) in
          (remaining, result))))
-      : (mword 64 * mword 256) in
+      : (mword 64 * word) in
    result.
 
-Definition word_arithmetic_shift_right_limb (value : mword 256) (amount : mword 64) : mword 256 :=
+Definition word_arithmetic_shift_right_limb (value : word) (amount : mword 64) : word :=
    let result : word := value in
    let remaining : limb := amount in
-   let negative := eq_vec ((access_vec_dec (value) (255))) (('b"1")) in
+   let negative := eq_vec ((word_bit (value) (255))) (('b"1")) in
    let '((remaining, result)) :=
      (let '(loop__step_lower) := 0 in
      let '(loop__step_upper) := 255 in
@@ -418,68 +537,64 @@ Definition word_arithmetic_shift_right_limb (value : mword 256) (amount : mword 
        (fun _step '(remaining, result) =>
          let '((remaining, result)) :=
            (if neq_vec (remaining) (LIMB_ZERO) then
-              let result : word := shiftr (result) (1) in
-              let result : mword 256 := if negative then or_vec (result) (WORD_SIGN_BIT) else result in
+              let result : word := word_shift_right_one (result) in
+              let result : word := if negative then word_or (result) (WORD_SIGN_BIT) else result in
               let remaining : limb := sub_vec (remaining) (LIMB_ONE) in
               (remaining, result)
             else (remaining, result))
-            : (mword 64 * mword 256) in
+            : (mword 64 * word) in
          (remaining, result))))
-      : (mword 64 * mword 256) in
+      : (mword 64 * word) in
    result.
 
-Definition word_negate (value : mword 256) : mword 256 := sub_vec (WORD_ZERO) (value).
+Definition word_negate (value : word) : word := word_sub (WORD_ZERO) (value).
 
-Definition word_abs (value : mword 256) : mword 256 :=
-   if eq_vec ((access_vec_dec (value) (255))) (('b"1")) then word_negate (value) else value.
+Definition word_abs (value : word) : word :=
+   if eq_vec ((word_bit (value) (255))) (('b"1")) then word_negate (value) else value.
 
-Definition word_slt (a : mword 256) (b : mword 256) : bool :=
-   let a_neg := eq_vec ((access_vec_dec (a) (255))) (('b"1")) in
-   let b_neg := eq_vec ((access_vec_dec (b) (255))) (('b"1")) in
+Definition word_slt (a : word) (b : word) : bool :=
+   let a_neg := eq_vec ((word_bit (a) (255))) (('b"1")) in
+   let b_neg := eq_vec ((word_bit (b) (255))) (('b"1")) in
    if a_neg then if b_neg then word_ult (a) (b) else true
    else if b_neg then false
    else word_ult (a) (b).
 
-Definition word_to_address (w : mword 256) : mword 160 := subrange_vec_dec (w) (159) (0).
+Definition alu_add (a : word) (b : word) : word := word_add (a) (b).
 
-Definition address_to_word (a : mword 160) : mword 256 := zero_extend (a) (256).
+Definition alu_sub (a : word) (b : word) : word := word_sub (a) (b).
 
-Definition alu_add (a : mword 256) (b : mword 256) : mword 256 := add_vec (a) (b).
+Definition alu_mul (a : word) (b : word) : word := word_mul (a) (b).
 
-Definition alu_sub (a : mword 256) (b : mword 256) : mword 256 := sub_vec (a) (b).
-
-Definition alu_mul (a : mword 256) (b : mword 256) : mword 256 := word_mul (a) (b).
-
-Definition alu_div (a : mword 256) (b : mword 256) : mword 256 :=
+Definition alu_div (a : word) (b : word) : word :=
    if word_is_zero (b) then WORD_ZERO else (word_divmod (a) (b)).(WordDivMod_quotient).
 
-Definition alu_mod (a : mword 256) (b : mword 256) : mword 256 :=
+Definition alu_mod (a : word) (b : word) : word :=
    if word_is_zero (b) then WORD_ZERO else (word_divmod (a) (b)).(WordDivMod_remainder).
 
-Definition alu_sdiv (a : mword 256) (b : mword 256) : mword 256 :=
+Definition alu_sdiv (a : word) (b : word) : word :=
    if word_is_zero (b) then WORD_ZERO
    else
      let quotient := (word_divmod ((word_abs (a))) ((word_abs (b)))).(WordDivMod_quotient) in
-     if neq_bool ((eq_vec ((access_vec_dec (a) (255))) (('b"1"))))
-          ((eq_vec ((access_vec_dec (b) (255))) (('b"1")))) then
+     if neq_bool ((eq_vec ((word_bit (a) (255))) (('b"1"))))
+          ((eq_vec ((word_bit (b) (255))) (('b"1")))) then
        word_negate (quotient)
      else quotient.
 
-Definition alu_smod (a : mword 256) (b : mword 256) : mword 256 :=
+Definition alu_smod (a : word) (b : word) : word :=
    if word_is_zero (b) then WORD_ZERO
    else
      let remainder := (word_divmod ((word_abs (a))) ((word_abs (b)))).(WordDivMod_remainder) in
-     if eq_vec ((access_vec_dec (a) (255))) (('b"1")) then word_negate (remainder)
+     if eq_vec ((word_bit (a) (255))) (('b"1")) then word_negate (remainder)
      else remainder.
 
-Definition alu_addmod (a : mword 256) (b : mword 256) (n : mword 256) : mword 256 :=
+Definition alu_addmod (a : word) (b : word) (n : word) : word :=
    if word_is_zero (n) then WORD_ZERO
    else
      let a_reduced := (word_divmod (a) (n)).(WordDivMod_remainder) in
      let b_reduced := (word_divmod (b) (n)).(WordDivMod_remainder) in
      word_mod_add_reduced (a_reduced) (b_reduced) (n).
 
-Definition alu_mulmod (a : mword 256) (b : mword 256) (n : mword 256) : mword 256 :=
+Definition alu_mulmod (a : word) (b : word) (n : word) : word :=
    if word_is_zero (n) then WORD_ZERO
    else
      let result : word := WORD_ZERO in
@@ -490,17 +605,17 @@ Definition alu_mulmod (a : mword 256) (b : mword 256) (n : mword 256) : mword 25
        let '(loop__step_upper) := 255 in
        (foreach_Z_up loop__step_lower loop__step_upper 1 (addend, remaining, result)
          (fun _step '(addend, remaining, result) =>
-           let result : mword 256 :=
-             if eq_vec ((access_vec_dec (remaining) (0))) (('b"1")) then
+           let result : word :=
+             if eq_vec ((word_bit (remaining) (0))) (('b"1")) then
                word_mod_add_reduced (result) (addend) (n)
              else result in
            let addend : word := word_mod_add_reduced (addend) (addend) (n) in
-           let remaining : word := shiftr (remaining) (1) in
+           let remaining : word := word_shift_right_one (remaining) in
            (addend, remaining, result))))
-        : (mword 256 * mword 256 * mword 256) in
+        : (word * word * word) in
      result.
 
-Definition alu_exp (base : mword 256) (exponent : mword 256) : mword 256 :=
+Definition alu_exp (base : word) (exponent : word) : word :=
    let result : word := WORD_ONE in
    let b : word := base in
    let e : word := exponent in
@@ -509,84 +624,77 @@ Definition alu_exp (base : mword 256) (exponent : mword 256) : mword 256 :=
      let '(loop__step_upper) := 255 in
      (foreach_Z_up loop__step_lower loop__step_upper 1 (b, e, result)
        (fun _step '(b, e, result) =>
-         let result : mword 256 :=
-           if eq_vec ((access_vec_dec (e) (0))) (('b"1")) then word_mul (result) (b)
+         let result : word :=
+           if eq_vec ((word_bit (e) (0))) (('b"1")) then word_mul (result) (b)
            else result in
          let b : word := word_mul (b) (b) in
-         let e : word := shiftr (e) (1) in
+         let e : word := word_shift_right_one (e) in
          (b, e, result))))
-      : (mword 256 * mword 256 * mword 256) in
+      : (word * word * word) in
    result.
 
-Definition alu_signextend (byte_index : mword 256) (value : mword 256) : mword 256 :=
+Definition alu_signextend (byte_index : word) (value : word) : word :=
    match word_to_limb (byte_index) with
    | Some index =>
       if limb_ult (index) ((Ox"0000000000000020")) then
         let width := shiftl ((add_vec (index) (LIMB_ONE))) (3) in
         let sign_shift := sub_vec (width) (LIMB_ONE) in
         let sign_set :=
-          eq_vec ((and_vec ((word_shift_right_limb (value) (sign_shift))) (WORD_ONE))) (WORD_ONE) in
-        let low_mask := sub_vec ((word_shift_left_limb (WORD_ONE) (width))) (WORD_ONE) in
-        if sign_set then or_vec ((and_vec (value) (low_mask))) ((not_vec (low_mask)))
-        else and_vec (value) (low_mask)
+          generic_eq ((word_and ((word_shift_right_limb (value) (sign_shift))) (WORD_ONE)))
+            (WORD_ONE) in
+        let low_mask := word_sub ((word_shift_left_limb (WORD_ONE) (width))) (WORD_ONE) in
+        if sign_set then word_or ((word_and (value) (low_mask))) ((word_not (low_mask)))
+        else word_and (value) (low_mask)
       else value
    | _ => value
    end.
 
-Definition alu_lt (a : mword 256) (b : mword 256) : mword 256 := word_of_bool ((word_ult (a) (b))).
+Definition alu_lt (a : word) (b : word) : word := word_of_bool ((word_ult (a) (b))).
 
-Definition alu_gt (a : mword 256) (b : mword 256) : mword 256 := word_of_bool ((word_ult (b) (a))).
+Definition alu_gt (a : word) (b : word) : word := word_of_bool ((word_ult (b) (a))).
 
-Definition alu_slt (a : mword 256) (b : mword 256) : mword 256 := word_of_bool ((word_slt (a) (b))).
+Definition alu_slt (a : word) (b : word) : word := word_of_bool ((word_slt (a) (b))).
 
-Definition alu_sgt (a : mword 256) (b : mword 256) : mword 256 := word_of_bool ((word_slt (b) (a))).
+Definition alu_sgt (a : word) (b : word) : word := word_of_bool ((word_slt (b) (a))).
 
-Definition alu_eq (a : mword 256) (b : mword 256) : mword 256 := word_of_bool ((eq_vec (a) (b))).
+Definition alu_eq (a : word) (b : word) : word := word_of_bool ((generic_eq (a) (b))).
 
-Definition alu_iszero (a : mword 256) : mword 256 := word_of_bool ((word_is_zero (a))).
+Definition alu_iszero (a : word) : word := word_of_bool ((word_is_zero (a))).
 
-Definition alu_and (a : mword 256) (b : mword 256) : mword 256 := and_vec (a) (b).
+Definition alu_and (a : word) (b : word) : word := word_and (a) (b).
 
-Definition alu_or (a : mword 256) (b : mword 256) : mword 256 := or_vec (a) (b).
+Definition alu_or (a : word) (b : word) : word := word_or (a) (b).
 
-Definition alu_xor (a : mword 256) (b : mword 256) : mword 256 := xor_vec (a) (b).
+Definition alu_xor (a : word) (b : word) : word := word_xor (a) (b).
 
-Definition alu_not (a : mword 256) : mword 256 := not_vec (a).
+Definition alu_not (a : word) : word := word_not (a).
 
-Definition alu_byte (i : mword 256) (x : mword 256) : mword 256 :=
+Definition alu_byte (i : word) (x : word) : word :=
    match word_to_limb (i) with
    | Some index =>
       if limb_ult (index) ((Ox"0000000000000020")) then
         let byte_offset := sub_vec ((Ox"000000000000001F")) (index) in
         let shift := shiftl (byte_offset) (3) in
-        zero_extend ((subrange_vec_dec ((word_shift_right_limb (x) (shift))) (7) (0))) (256)
+        U256 ((zero_extend ((word_low_byte ((word_shift_right_limb (x) (shift))))) (256)))
       else WORD_ZERO
    | _ => WORD_ZERO
    end.
 
-Definition alu_shl (shift_amt : mword 256) (v : mword 256) : mword 256 :=
-   if negb
-        ((word_ult (shift_amt)
-            ((Ox"0000000000000000000000000000000000000000000000000000000000000100")))) then
-     WORD_ZERO
-   else word_shift_left_limb (v) ((subrange_vec_dec (shift_amt) (63) (0))).
+Definition alu_shl (shift_amt : word) (v : word) : word :=
+   if negb ((word_ult (shift_amt) ((limb_to_word ((Ox"0000000000000100")))))) then WORD_ZERO
+   else word_shift_left_limb (v) ((word_limb_0 (shift_amt))).
 
-Definition alu_shr (shift_amt : mword 256) (v : mword 256) : mword 256 :=
-   if negb
-        ((word_ult (shift_amt)
-            ((Ox"0000000000000000000000000000000000000000000000000000000000000100")))) then
-     WORD_ZERO
-   else word_shift_right_limb (v) ((subrange_vec_dec (shift_amt) (63) (0))).
+Definition alu_shr (shift_amt : word) (v : word) : word :=
+   if negb ((word_ult (shift_amt) ((limb_to_word ((Ox"0000000000000100")))))) then WORD_ZERO
+   else word_shift_right_limb (v) ((word_limb_0 (shift_amt))).
 
-Definition alu_sar (shift_amt : mword 256) (v : mword 256) : mword 256 :=
-   if negb
-        ((word_ult (shift_amt)
-            ((Ox"0000000000000000000000000000000000000000000000000000000000000100")))) then
-     if eq_vec ((access_vec_dec (v) (255))) (('b"1")) then WORD_ALL_ONES
+Definition alu_sar (shift_amt : word) (v : word) : word :=
+   if negb ((word_ult (shift_amt) ((limb_to_word ((Ox"0000000000000100")))))) then
+     if eq_vec ((word_bit (v) (255))) (('b"1")) then WORD_ALL_ONES
      else WORD_ZERO
-   else word_arithmetic_shift_right_limb (v) ((subrange_vec_dec (shift_amt) (63) (0))).
+   else word_arithmetic_shift_right_limb (v) ((word_limb_0 (shift_amt))).
 
-Definition alu_clz (x : mword 256) : M (mword 256) :=
+Definition alu_clz (x : word) : M (word) :=
    let count : word_bit_count := 0 in
    let found : bool := false in
    (let '(loop_i_lower) := 0 in
@@ -595,7 +703,7 @@ Definition alu_clz (x : mword 256) : M (mword 256) :=
      (fun i '(count, found) =>
        let biinput_index := Z.sub (255) (i) in
        (if negb (found) return M ((Z * bool)) then
-          (if eq_vec ((access_vec_dec (x) (biinput_index))) (('b"0")) return M ((Z * bool)) then
+          (if eq_vec ((word_bit (x) (biinput_index))) (('b"0")) return M ((Z * bool)) then
              (word_bit_count_increment (count)) >>= fun (w__0 : Z) =>
              let count := w__0  : Z in
              returnM ((count, found))
@@ -606,8 +714,7 @@ Definition alu_clz (x : mword 256) : M (mword 256) :=
         else returnM ((count, found)))
         : M ((Z * bool))))) >>= fun '((count, found)
    : (Z * bool)) =>
-   (word_of_nat (count))
-    : M (mword 256).
+   returnM ((limb_to_word ((get_slice_int (64) (count) (0))))).
 
 Definition SCHEMA_PREFIX_LEN : limb := (Ox"0000000000000002").
 #[export] Hint Unfold SCHEMA_PREFIX_LEN : sail.

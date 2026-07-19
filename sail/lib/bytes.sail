@@ -6,7 +6,7 @@ Big-endian conversions between words, addresses, and materialized byte
 lists.
 */
 /*! The 32-byte big-endian encoding of a word. */
-function word_to_bytes32(w : word) -> list(byte) = {
+function word_to_bytes32(U256(w) : word) -> list(byte) = {
     var out : list(byte) = [||];
     foreach (k from 0 to 31) {
         out = sail_shiftright(w, 8 * k)[7 .. 0] :: out
@@ -14,11 +14,20 @@ function word_to_bytes32(w : word) -> list(byte) = {
     out
 }
 
+/*! The 32-byte big-endian encoding of a hash. */
+function hash_to_bytes32(B256(bytes) : hash) -> list(byte) = {
+    var out : list(byte) = [||];
+    foreach (k from 0 to 31) {
+        out = bytes[k] :: out
+    };
+    out
+}
+
 /*! The 20-byte big-endian encoding of an address. */
-function address_to_bytes(a : address) -> list(byte) = {
+function address_to_bytes(Address(bytes) : address) -> list(byte) = {
     var out : list(byte) = [||];
     foreach (k from 0 to 19) {
-        out = sail_shiftright(a, 8 * k)[7 .. 0] :: out
+        out = bytes[k] :: out
     };
     out
 }

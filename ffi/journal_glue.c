@@ -9,9 +9,9 @@
 #include <stdlib.h>
 
 static void storage_value_out(struct zoptionzIRStorageValuezK *out,
-                              uint64_t layer, const lbits addr,
-                              const lbits slot) {
-  lbits curr, orig;
+                              uint64_t layer, sail_address addr,
+                              sail_word slot) {
+  sail_word curr, orig;
   if (storage_row_probe(layer, addr, slot, &curr, &orig)) {
     out->kind = Kind_zSomezIRStorageValuezK;
     out->variants.zSomezIRStorageValuezK.zcurr = curr;
@@ -24,22 +24,26 @@ static void storage_value_out(struct zoptionzIRStorageValuezK *out,
 
 void storage_tx_get(struct zoptionzIRStorageValuezK *out,
                     struct zStorageKey key) {
-  sail_expect_len(key.zaddr, 160);
   storage_value_out(out, 0, key.zaddr, key.zslot);
 }
 
 void storage_block_get(struct zoptionzIRStorageValuezK *out,
                        struct zStorageKey key) {
-  sail_expect_len(key.zaddr, 160);
   storage_value_out(out, 1, key.zaddr, key.zslot);
 }
 
 void storage_block_row(struct zoptionzIRStorageEntryzK *out,
                        const sail_address addr, uint64_t index) {
   struct zStorageEntry *entry = &out->variants.zSomezIRStorageEntryzK;
-  entry->zkey.zaddr = addr;
   if (storage_block_row_probe(addr, index, &entry->zkey.zslot,
                               &entry->zvalue.zcurr, &entry->zvalue.zorig)) {
+    /* The option's inactive union arm is not initialized by generated Sail.
+     * Construct an empty destination before assigning a heap-backed standard
+     * address. The optimized fixed-bytes ABI reduces this to an inline copy. */
+#ifdef EVMSAIL_STANDARD_ABI
+    entry->zkey.zaddr = (sail_address){0, NULL};
+#endif
+    evmsail_address_assign(&entry->zkey.zaddr, addr);
     out->kind = Kind_zSomezIRStorageEntryzK;
   } else {
     out->kind = Kind_zNonezIRStorageEntryzK;
@@ -48,7 +52,6 @@ void storage_block_row(struct zoptionzIRStorageEntryzK *out,
 }
 
 unit storage_tx_update(struct zStorageEntry entry) {
-  sail_expect_len(entry.zkey.zaddr, 160);
   return storage_tx_update_raw(entry.zkey.zaddr, entry.zkey.zslot,
                                entry.zvalue.zcurr, entry.zvalue.zorig);
 }

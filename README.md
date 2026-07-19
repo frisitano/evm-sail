@@ -146,7 +146,8 @@ harness/     the EEST harness: run.py drives main.sail in-process and gates its
              canonical output byte-exactly against EELS; state tests are first
              materialized as valid stateless blocks by the in-process t8n
 extractions/ maintained Coq and Lean model generation plus extern contracts
-zkvm/        RISC-V zkVM guest target (riscv64im, stateless block validation)
+zkvm/        RISC-V zkVM guest targets (Spike and production ZisK stateless
+             block validation)
   runtime/sail256     shared GMP-free runtime (bounded integers, inline lbits)
   accel-host/         host crypto cdylib (blst, k256, c-kzg, aurora-modexp, p256)
 ```
@@ -158,8 +159,12 @@ an unrelated tool):
 
 ```sh
 opam init --bare -y && opam switch create sail 5.2.0 && eval "$(opam env --switch=sail)"
-opam install -y sail && sail --version
+opam install -y rocq-sail-stdpp.0.20.2
+# Build Sail 0.20.2 from source, put its `sail` binary on PATH, then:
+sail --version
 ```
+
+The compiler and `rocq-sail-stdpp` package must have the same Sail release.
 
 The pure model and extraction targets work with upstream Sail. Optimized C builds
 also require spliceable type definitions and the `$[c_repr uint64]` newtype
@@ -199,7 +204,17 @@ python3 run.py --jobs 12 --quiet <fixtures>/blockchain_tests
 The sole pass criterion is byte-exact output agreement with the EELS reference
 guest. `--debug` prints an on-demand native post-run state dump on failure;
 `--profile` enables optional zkVM cycle scopes without embedding them in normal
-builds. The crypto
+builds. `--zisk` builds the production, input-agnostic ZisK ELF and runs the
+same fixtures through `ziskemu`. The emulator version must match the `ziskos`
+version locked in `zkvm/zisk/Cargo.lock`; set `ZISKEMU` when the matching
+binary is not at `~/.zisk/bin/ziskemu`:
+
+```sh
+ZISKEMU=/path/to/ziskemu python3 run.py --zisk --fork Cancun \
+  fixtures/smoke/state_root_transfer.json
+```
+
+The crypto
 (keccak/secp256k1/bn254/BLS12-381/KZG/modexp/blake2f/P-256) runs through the
 eth-act zkvm-standards accelerator boundary, backed by the industry libraries
 in `zkvm/accel-host` (blst, k256, c-kzg, aurora-engine-modexp, p256).

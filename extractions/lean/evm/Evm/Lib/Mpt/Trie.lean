@@ -21,6 +21,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -28,7 +29,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -40,6 +43,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -48,12 +52,39 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # The witness-native trie
+
+The witness-native Ethereum Merkle-Patricia trie. [trie_root][] merges
+ordered updates into an authenticated base trie and fails closed when a
+touched hash is absent from the witness. With an empty base the same
+builder computes the Yellow Paper `TRIE(I)` directly.
+
+## The witness walker
+
+`witness_emit(node, evm_prefix, updates, sink, cursor)` emits the sorted
+post-state items of the subtree rooted at `node` (whose position is
+`evm_prefix`) and returns the updated sink together with the first update
+after that subtree. `updates` is a cursor into the one globally sorted
+update stream; each call consumes its contiguous evm_prefix range and returns
+the cursor to its parent.
+
+The walker descends only along touched paths; untouched children pass
+through as single reference items with zero node-db work. Deletes are
+consumed here and only here: a delete suppresses its base leaf, and a
+delete with no base leaf (the walk proves absence) emits nothing. Whatever
+survives is streamed through [trie_sink_emit][] and finalized by
+[trie_sink_finish][], so a branch losing children to deletes collapses in
+the builder with no walker involvement. RLP fields retain their source and
+spans, so embedded nodes and leaf values remain witness slices. -/
+
+/-- Emits all live put updates beneath a evm_prefix and consumes that contiguous
+range from the ordered update stream. -/
 def emit_live_updates_under (sink : TrieItemSink) (updates : (List TrieUpdate)) (evm_prefix' : TriePath) : SailM (TrieItemSink × (List TrieUpdate)) := do
   match updates with
   | [] => (pure (sink, []))
   | (update :: rest) =>
     (do
-      if ((path_prefix_of evm_prefix' update.key) : Bool)
+      if ((← (path_prefix_of evm_prefix' update.key)) : Bool)
       then
         (do
           let next_sink ← (( do
@@ -64,12 +95,14 @@ def emit_live_updates_under (sink : TrieItemSink) (updates : (List TrieUpdate)) 
           (emit_live_updates_under next_sink rest evm_prefix'))
       else (pure (sink, updates)))
 
+/-- Emits live updates preceding a witness child while retaining the first
+update at or after that child. -/
 def emit_updates_before_child (sink : TrieItemSink) (updates : (List TrieUpdate)) (evm_prefix' : TriePath) (child : TriePath) : SailM (TrieItemSink × (List TrieUpdate)) := do
   match updates with
   | [] => (pure (sink, []))
   | (update :: rest) =>
     (do
-      if (((! (path_prefix_of evm_prefix' update.key)) || ((path_prefix_of child update.key) || (! (path_lt
+      if (((! (← (path_prefix_of evm_prefix' update.key))) || ((← (path_prefix_of child update.key)) || (! (path_lt
                  update.key child)))) : Bool)
       then (pure (sink, updates))
       else
@@ -81,12 +114,13 @@ def emit_updates_before_child (sink : TrieItemSink) (updates : (List TrieUpdate)
             TrieItemSink )
           (emit_updates_before_child next_sink rest evm_prefix' child)))
 
+/-- Merges one witness leaf with all ordered updates in the same subtree. -/
 def emit_leaf_overlay (sink : TrieItemSink) (updates : (List TrieUpdate)) (evm_prefix' : TriePath) (key : TriePath) (value : EvmByteSlice) : SailM (TrieItemSink × (List TrieUpdate)) := do
   match updates with
   | [] => (pure ((← (trie_sink_emit sink (item_leaf key value))), []))
   | (update :: rest) =>
     (do
-      if ((! (path_prefix_of evm_prefix' update.key)) : Bool)
+      if ((! (← (path_prefix_of evm_prefix' update.key))) : Bool)
       then (pure ((← (trie_sink_emit sink (item_leaf key value))), updates))
       else
         (do
@@ -114,7 +148,9 @@ def emit_leaf_overlay (sink : TrieItemSink) (updates : (List TrieUpdate)) (evm_p
                     SailM TrieItemSink )
                   (emit_leaf_overlay updated_sink rest evm_prefix' key value)))))
 
-/-- Type quantifiers: _reclimit : Nat, k_ex161330_ : Nat, 0 ≤ k_ex161330_ ∧ k_ex161330_ ≤ 64, 0
+/-- Walks a touched witness subtree and streams its post-update items into the
+canonical trie builder. -/
+/- Type quantifiers: _reclimit : Nat, k_ex161383_ : Nat, 0 ≤ k_ex161383_ ∧ k_ex161383_ ≤ 64, 0
   ≤ _reclimit -/
 def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : (List TrieUpdate)) (sink : TrieItemSink) (cursor : trie_path_cursor) (_reclimit : Nat) : SailM (TrieItemSink × (List TrieUpdate)) := do
   let cursor := (cursor).value
@@ -125,7 +161,7 @@ def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : 
       throw Error.Exit)
   | _reclimit_pred + 1 =>
     (do
-      if ((byte_quantity_equal node.len BYTE_ZERO) : Bool)
+      if ((node.len == BYTE_ZERO) : Bool)
       then (emit_live_updates_under sink updates evm_prefix')
       else
         (do
@@ -146,11 +182,11 @@ def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : 
                   let (before_sink, child_updates) ← do
                     (emit_updates_before_child sink updates evm_prefix' child_prefix)
                   let (child_sink, later_updates) ← do
-                    if ((next_update_under child_updates child_prefix) : Bool)
+                    if ((← (next_update_under child_updates child_prefix)) : Bool)
                     then
                       (do
                         let child ← do (resolve_ref (← (field_to_ref extension.child)))
-                        if ((byte_quantity_equal child.len BYTE_ZERO) : Bool)
+                        if ((child.len == BYTE_ZERO) : Bool)
                         then (emit_live_updates_under before_sink child_updates child_prefix)
                         else
                           (_rec_witness_emit child child_prefix child_updates before_sink
@@ -161,7 +197,7 @@ def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : 
                   (emit_live_updates_under child_sink later_updates evm_prefix')))
           | .BranchNode branch =>
             (do
-              if (((byte_quantity_not_equal branch.value.content_len BYTE_ZERO) || (64 ≤b cursor)) : Bool)
+              if (((bne branch.value.content_len BYTE_ZERO) || (64 ≤b cursor)) : Bool)
               then sailThrow ((InvalidBlock WitnessDeficient))
               else
                 (do
@@ -177,14 +213,14 @@ def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : 
                       let (current_sink, nib, remaining) := loop_vars
                       loop_vars ← do
                         let field := (GetElem?.getElem! branch.children i)
-                        let child_prefix ← do (path_concat evm_prefix' (path_single nib))
+                        let child_prefix ← do (path_concat evm_prefix' (← (path_single nib)))
                         let childref ← do (field_to_ref field)
                         let present : Bool :=
                           match childref with
                           | .EmptyRef () => false
                           | _ => true
                         let (current_sink, remaining) ← (( do
-                          if ((next_update_under remaining child_prefix) : Bool)
+                          if ((← (next_update_under remaining child_prefix)) : Bool)
                           then
                             (do
                               let (next_sink, next_updates) ← do
@@ -215,7 +251,9 @@ def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : 
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
-/-- Type quantifiers: cursor : Nat, 0 ≤ cursor ∧ cursor ≤ 64 -/
+/-- Walks a touched witness subtree and streams its post-update items into the
+canonical trie builder. -/
+/- Type quantifiers: cursor : Nat, 0 ≤ cursor ∧ cursor ≤ 64 -/
 def witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : (List TrieUpdate)) (sink : TrieItemSink) (cursor : trie_path_cursor) : SailM (TrieItemSink × (List TrieUpdate)) := do
   let cursor := (cursor).value
   let _measure := ((64 -i cursor) : Int)
@@ -223,7 +261,21 @@ def witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : (List
   then throw Error.Exit
   else (_rec_witness_emit node evm_prefix' updates sink ⟨cursor⟩ (_measure + 1))
 
-def trie_root (base_root : (BitVec 256)) (updates : (List TrieUpdate)) : SailM (BitVec 256) := do
+/-- The root of the trie anchored at `base_root` after applying the
+ordered update list. This is the only public root computation:
+witness-native and fail-closed — the walker resolves every touched
+hash reference in the witness node-db and any missing node throws
+`InvalidBlock(WitnessDeficient)`; otherwise the builder recomposes the
+emitted stream canonically.
+
+Theorem-shaped remark: restricted to an empty base
+(`base_root = EMPTY_TRIE_ROOT`), the walker is the identity on the
+live update leaves and `trie_root` computes `TRIE(I)` of Appendix D
+directly — an empty base contains no hash references, so the node-db
+is never consulted and no failure path can fire. The native
+(full-state) backend exercises exactly this restriction: same
+implementation, different input. -/
+def trie_root (base_root : hash) (updates : (List TrieUpdate)) : SailM hash := do
   if ((updates_empty updates) : Bool)
   then (pure base_root)
   else
@@ -235,7 +287,7 @@ def trie_root (base_root : (BitVec 256)) (updates : (List TrieUpdate)) : SailM (
         else
           (do
             let node ← do (node_db_lookup base_root)
-            if ((byte_quantity_equal node.len BYTE_ZERO) : Bool)
+            if ((node.len == BYTE_ZERO) : Bool)
             then sailThrow ((InvalidBlock WitnessDeficient))
             else (witness_emit node (path_empty ()) updates sink ⟨0⟩))
       if ((updates_empty remaining) : Bool)

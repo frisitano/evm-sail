@@ -24,6 +24,10 @@ domain used by source-backed slices and memory regions.
 /*! An unsigned quantity carried by an Ethereum protocol field. */
 type protocol_quantity = range(0, 2 ^ 64 - 1)
 
+/* Spell the value directly so native backends can materialize it as one
+ * machine constant. The range declaration above remains the semantic bound. */
+let BYTE_QUANTITY_MAX : protocol_quantity = 18446744073709551615
+
 /*! An account transaction-count nonce. */
 type account_nonce = protocol_quantity
 /*! An execution block number. */
@@ -96,39 +100,54 @@ type ancestor_index = range(0, 255)
 /*! A small positive divisor used for exact protocol arithmetic. */
 type protocol_divisor = range(1, 256)
 
+/*! Embeds a bounded protocol quantity in an EVM word. */
+function word_of_protocol_quantity(value : protocol_quantity) -> word =
+    word_of_nat(value)
+
 /*! Converts a word to an account nonce when it fits the protocol field. */
 function word_to_account_nonce(value : word) -> option(account_nonce) = {
-    let amount = unsigned(value);
-    if amount <= 2 ^ 64 - 1 then {
-        Some(amount)
-    } else {
-        None()
+    match word_to_limb(value) {
+        Some(amount) => Some(unsigned(amount)),
+        None() => None(),
+    }
+}
+
+/*! Narrows a word losslessly to the bounded protocol-quantity domain. */
+function word_to_protocol_quantity(value : word) -> option(protocol_quantity) = {
+    match word_to_limb(value) {
+        Some(amount) => Some(unsigned(amount)),
+        None() => None(),
     }
 }
 
 /*! Recognizes a word as a valid precompiled-contract identifier. */
 function word_to_precompile_id(value : word) -> option(precompile_id) = {
-    let candidate = unsigned(value[8 .. 0]);
-    if (value[255 .. 9] == sail_zeros(247)) & (1 <= candidate) & (candidate <= 256) then {
-        Some(candidate)
-    } else {
-        None()
+    match word_to_limb(value) {
+        Some(limb_value) => {
+            let candidate = unsigned(limb_value[8 .. 0]);
+            if (limb_value[63 .. 9] == sail_zeros(55)) & (1 <= candidate) & (candidate <= 256) then {
+                Some(candidate)
+            } else {
+                None()
+            }
+        },
+        None() => None(),
     }
 }
 
 /*! Embeds a precompiled-contract identifier in an EVM word. */
 function word_of_precompile_id(value : precompile_id) -> word =
-    word_of_nat(value)
+    word_of_protocol_quantity(value)
 
 /*! Increments an account nonce after establishing that it is not maximal. */
 function account_nonce_increment(value : account_nonce) -> account_nonce = {
-    assert(value < 2 ^ 64 - 1);
+    assert(value < BYTE_QUANTITY_MAX);
     value + 1
 }
 
 /*! Increments a bounded protocol quantity. */
 function protocol_quantity_increment(value : protocol_quantity) -> protocol_quantity = {
-    assert(value < 2 ^ 64 - 1);
+    assert(value < BYTE_QUANTITY_MAX);
     value + 1
 }
 
@@ -136,6 +155,18 @@ function protocol_quantity_increment(value : protocol_quantity) -> protocol_quan
 function protocol_quantity_decrement(value : protocol_quantity) -> protocol_quantity = {
     assert(0 < value);
     value - 1
+}
+
+/*! Subtracts bounded protocol quantities without underflow. */
+function protocol_quantity_sub(left : protocol_quantity, right : protocol_quantity) -> protocol_quantity = {
+    assert(right <= left);
+    left - right
+}
+
+/*! Adds bounded protocol quantities without overflow. */
+function protocol_quantity_add(left : protocol_quantity, right : protocol_quantity) -> protocol_quantity = {
+    assert(right <= BYTE_QUANTITY_MAX - left);
+    left + right
 }
 
 /*! Advances the call depth and rejects an attempt to exceed its bound. */
@@ -179,7 +210,6 @@ newtype byte_quantity = ByteQuantity : nat
 
 let BYTE_ZERO : byte_quantity = ByteQuantity(0)
 let BYTE_ONE : byte_quantity = ByteQuantity(1)
-let BYTE_QUANTITY_MAX : nat = 2 ^ 64 - 1
 let MAX_BYTE_QUANTITY : byte_quantity = ByteQuantity(BYTE_QUANTITY_MAX)
 
 /* Source, memory, and code positions are transparent mathematical naturals in
@@ -234,9 +264,14 @@ overload to_limb = {
 function word_of_byte_quantity(ByteQuantity(value) : byte_quantity) -> word =
     word_of_nat(value)
 
+/*! Interprets an EVM word as an exact mathematical byte quantity. */
+function word_to_byte_quantity(value : word) -> byte_quantity =
+    ByteQuantity(unsigned(word_to_bits(value)))
+
 overload word_of_quantity = {
     word_of_nat,
-    word_of_byte_quantity
+    word_of_byte_quantity,
+    word_of_protocol_quantity
 }
 
 /*! Computes the non-negative integer quotient for a nonzero divisor. */

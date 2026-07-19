@@ -19,6 +19,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -26,7 +27,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -38,6 +41,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -45,6 +49,14 @@ open CallKind
 open Bytes
 open ByteSource
 open BlockError
+
+/-! # Cycle scopes (optional)
+
+Default build variant stubbing the optional instrumentation scopes.
+
+!!! note "Non-normative"
+    This page documents the model's host interface — internal contracts
+    of the executable specification, not protocol rules. -/
 
 def cycle_scope_start (_scope : (BitVec 8)) : Unit :=
   ()

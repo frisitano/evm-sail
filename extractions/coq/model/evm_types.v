@@ -284,15 +284,130 @@ Definition protocol_quantity_valid (x : protocol_quantity) : Prop :=
 
 Definition protocol_fork_index : Type := protocol_quantity.
 
-Definition word : Type := bits 256.
-
-Definition address_typ : Type := bits 160.
-
-Definition hash : Type := bits 256.
-
 Definition byte : Type := bits 8.
 
+Inductive word :=
+| U256 : bits 256 -> word.
+Arguments word : clear implicits.
+
+Definition sail_word_encode (x : word) := match x with U256 x' => encode (0, encode x') end.
+Definition sail_word_decode x : option word := match decode x with
+  | Some (0, x') => U256 <$> decode x'
+  | _ => None end.
+Lemma sail_word_decode_encode : forall (x : word), sail_word_decode (sail_word_encode x)  = Some x.
+Proof.
+  unfold sail_word_decode, sail_word_encode;
+  intros [x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_word : EqDecision word := decode_encode_eq_dec sail_word_encode
+  sail_word_decode sail_word_decode_encode .
+
+#[export]
+Instance Countable_word : Countable word := {|
+  encode := sail_word_encode;
+  decode := sail_word_decode;
+  decode_encode := sail_word_decode_encode
+|}.
+#[export]
+Instance dummy_word : Inhabited (word) := { inhabitant := U256 inhabitant }.
+
+Inductive address_typ :=
+| Address : vec byte 20 -> address_typ.
+Arguments address_typ : clear implicits.
+
+Definition sail_address_typ_encode (x : address_typ) := match x with
+  | Address x' => encode (0, encode x') end.
+Definition sail_address_typ_decode x : option address_typ := match decode x with
+  | Some (0, x') => Address <$> decode x'
+  | _ => None end.
+Lemma sail_address_typ_decode_encode : forall (x : address_typ), sail_address_typ_decode
+  (sail_address_typ_encode x)  = Some x.
+Proof.
+  unfold sail_address_typ_decode, sail_address_typ_encode;
+  intros [x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_address_typ : EqDecision address_typ := decode_encode_eq_dec
+  sail_address_typ_encode sail_address_typ_decode sail_address_typ_decode_encode .
+
+#[export]
+Instance Countable_address_typ : Countable address_typ := {|
+  encode := sail_address_typ_encode;
+  decode := sail_address_typ_decode;
+  decode_encode := sail_address_typ_decode_encode
+|}.
+#[export]
+Instance dummy_address_typ : Inhabited (address_typ) := { inhabitant := Address inhabitant }.
+
+Inductive b256 :=
+| B256 : vec byte 32 -> b256.
+Arguments b256 : clear implicits.
+
+Definition sail_b256_encode (x : b256) := match x with B256 x' => encode (0, encode x') end.
+Definition sail_b256_decode x : option b256 := match decode x with
+  | Some (0, x') => B256 <$> decode x'
+  | _ => None end.
+Lemma sail_b256_decode_encode : forall (x : b256), sail_b256_decode (sail_b256_encode x)  = Some x.
+Proof.
+  unfold sail_b256_decode, sail_b256_encode;
+  intros [x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_b256 : EqDecision b256 := decode_encode_eq_dec sail_b256_encode
+  sail_b256_decode sail_b256_decode_encode .
+
+#[export]
+Instance Countable_b256 : Countable b256 := {|
+  encode := sail_b256_encode;
+  decode := sail_b256_decode;
+  decode_encode := sail_b256_decode_encode
+|}.
+#[export]
+Instance dummy_b256 : Inhabited (b256) := { inhabitant := B256 inhabitant }.
+
+Definition hash : Type := b256.
+
 Definition limb : Type := bits 64.
+
+Record AddressResult := {
+  AddressResult_success : bool;
+  AddressResult_address : address_typ;
+}.
+Arguments AddressResult : clear implicits.
+#[export]
+Instance Decidable_eq_AddressResult : EqDecision AddressResult.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_AddressResult : Countable AddressResult.
+refine {|
+  encode x := encode (AddressResult_success x, AddressResult_address x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_AddressResult x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'AddressResult_success' := e ]}" :=
+  match r with Build_AddressResult _ (_ as f1) => Build_AddressResult e f1 end (at level 1).
+Notation "{[ r 'with' 'AddressResult_address' := e ]}" :=
+  match r with Build_AddressResult (_ as f0) _ => Build_AddressResult f0 e end (at level 1).
+#[export]
+Instance dummy_AddressResult : Inhabited (AddressResult) := {
+  inhabitant := {| AddressResult_success := inhabitant; AddressResult_address := inhabitant
+|} }.
+
 
 Record LimbDivMod := {
   LimbDivMod_quotient : limb;
@@ -1058,7 +1173,7 @@ Instance dummy_gas_divisor : Inhabited (gas_divisor) := {
 
 
 Definition gas_divisor_valid (x : gas_divisor) : Prop :=
-1 <= x.(gas_divisor_value) /\ x.(gas_divisor_value) <= 1000.
+1 <= x.(gas_divisor_value) /\ x.(gas_divisor_value) <= 2000.
 
 Inductive ByteSource :=
   | StatelessInputSource
@@ -2690,12 +2805,12 @@ Record BlockHeader := {
   BlockHeader_base_fee : word;
   BlockHeader_blob_gas_used : blob_gas_typ;
   BlockHeader_excess_blob_gas : blob_gas_typ;
-  BlockHeader_state_root : bits 256;
-  BlockHeader_receipts_root : bits 256;
+  BlockHeader_state_root : hash;
+  BlockHeader_receipts_root : hash;
   BlockHeader_logs_bloom : LogsBloom;
   BlockHeader_fee_recipient : address_typ;
-  BlockHeader_parent_hash : bits 256;
-  BlockHeader_parent_beacon_block_root : bits 256;
+  BlockHeader_parent_hash : hash;
+  BlockHeader_parent_beacon_block_root : hash;
   BlockHeader_slot_number : slot_number_typ;
   BlockHeader_extra_data : ByteSlice;
 }.
@@ -3392,6 +3507,128 @@ Instance dummy_FrameCheckpoint : Inhabited (FrameCheckpoint) := {
 |} }.
 
 
+Record CallContinuation := {
+  CallContinuation_checkpoint : FrameCheckpoint;
+  CallContinuation_return_offset : memory_pointer;
+  CallContinuation_return_length : memory_length;
+}.
+Arguments CallContinuation : clear implicits.
+#[export]
+Instance Decidable_eq_CallContinuation : EqDecision CallContinuation.
+   intros [x0 x1 x2].
+   intros [y0 y1 y2].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+  cmp_record_field x2 y2.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_CallContinuation : Countable CallContinuation.
+refine {|
+  encode x := encode (CallContinuation_checkpoint x, CallContinuation_return_offset x, CallContinuation_return_length x);
+  decode x := '(x0, x1, x2) ← decode x;
+              mret (Build_CallContinuation x0 x1 x2)
+|}.
+abstract (
+  intros [x0 x1 x2];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'CallContinuation_checkpoint' := e ]}" :=
+  match r with Build_CallContinuation _ (_ as f1) (_ as f2) =>
+    Build_CallContinuation e f1 f2 end (at level 1).
+Notation "{[ r 'with' 'CallContinuation_return_offset' := e ]}" :=
+  match r with Build_CallContinuation (_ as f0) _ (_ as f2) =>
+    Build_CallContinuation f0 e f2 end (at level 1).
+Notation "{[ r 'with' 'CallContinuation_return_length' := e ]}" :=
+  match r with Build_CallContinuation (_ as f0) (_ as f1) _ =>
+    Build_CallContinuation f0 f1 e end (at level 1).
+#[export]
+Instance dummy_CallContinuation : Inhabited (CallContinuation) := {
+  inhabitant := {|
+    CallContinuation_checkpoint := inhabitant;
+    CallContinuation_return_offset := inhabitant;
+    CallContinuation_return_length := inhabitant
+|} }.
+
+
+Record CreateContinuation := {
+  CreateContinuation_checkpoint : FrameCheckpoint;
+  CreateContinuation_address : address_typ;
+}.
+Arguments CreateContinuation : clear implicits.
+#[export]
+Instance Decidable_eq_CreateContinuation : EqDecision CreateContinuation.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_CreateContinuation : Countable CreateContinuation.
+refine {|
+  encode x := encode (CreateContinuation_checkpoint x, CreateContinuation_address x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_CreateContinuation x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'CreateContinuation_checkpoint' := e ]}" :=
+  match r with Build_CreateContinuation _ (_ as f1) =>
+    Build_CreateContinuation e f1 end (at level 1).
+Notation "{[ r 'with' 'CreateContinuation_address' := e ]}" :=
+  match r with Build_CreateContinuation (_ as f0) _ =>
+    Build_CreateContinuation f0 e end (at level 1).
+#[export]
+Instance dummy_CreateContinuation : Inhabited (CreateContinuation) := {
+  inhabitant := {|
+    CreateContinuation_checkpoint := inhabitant;
+    CreateContinuation_address := inhabitant
+|} }.
+
+
+Inductive FrameContinuation :=
+| ResumeCall : CallContinuation -> FrameContinuation
+| ResumeCreate : CreateContinuation -> FrameContinuation.
+Arguments FrameContinuation : clear implicits.
+
+Definition sail_FrameContinuation_encode (x : FrameContinuation) := match x with
+  | ResumeCall x' => encode (0, encode x')
+  | ResumeCreate x' => encode (1, encode x') end.
+Definition sail_FrameContinuation_decode x : option FrameContinuation := match decode x with
+  | Some (0, x') => ResumeCall <$> decode x'
+  | Some (1, x') => ResumeCreate <$> decode x'
+  | _ => None end.
+Lemma sail_FrameContinuation_decode_encode : forall (x : FrameContinuation),
+  sail_FrameContinuation_decode (sail_FrameContinuation_encode x)  = Some x.
+Proof.
+  unfold sail_FrameContinuation_decode, sail_FrameContinuation_encode;
+  intros [x|x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_FrameContinuation : EqDecision FrameContinuation := decode_encode_eq_dec
+  sail_FrameContinuation_encode sail_FrameContinuation_decode sail_FrameContinuation_decode_encode .
+
+#[export]
+Instance Countable_FrameContinuation : Countable FrameContinuation := {|
+  encode := sail_FrameContinuation_encode;
+  decode := sail_FrameContinuation_decode;
+  decode_encode := sail_FrameContinuation_decode_encode
+|}.
+#[export]
+Instance dummy_FrameContinuation : Inhabited (FrameContinuation) := {
+  inhabitant := ResumeCall inhabitant
+}.
+
+Definition FrameStack : Type := vec FrameContinuation 1024.
+
 Record StatelessInput := {
   StatelessInput_payload : ExecutionPayload;
   StatelessInput_chain_config : ChainConfig;
@@ -3740,7 +3977,7 @@ Definition trie_path_len_valid (x : trie_path_len) : Prop :=
 0 <= x.(trie_path_len_value) /\ x.(trie_path_len_value) <= 64.
 
 Record TriePath := {
-  TriePath_data : bits 256;
+  TriePath_data : b256;
   TriePath_len : trie_path_len;
 }.
 Arguments TriePath : clear implicits.
@@ -3778,6 +4015,72 @@ Instance dummy_TriePath : Inhabited (TriePath) := {
 Definition BranchChildren : Type := vec RlpFieldRef 16.
 
 Definition nibble : Type := bits 4.
+
+Record b256_index := { b256_index_value : Z; }.
+Arguments b256_index : clear implicits.
+#[export]
+Instance Decidable_eq_b256_index : EqDecision b256_index.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_b256_index : Countable b256_index.
+refine {|
+  encode x := encode (b256_index_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_b256_index x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'b256_index_value' := e ]}" :=
+  {| b256_index_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_b256_index : Inhabited (b256_index) := {
+  inhabitant := {| b256_index_value := inhabitant
+|} }.
+
+
+Definition b256_index_valid (x : b256_index) : Prop :=
+0 <= x.(b256_index_value) /\ x.(b256_index_value) <= 31.
+
+Record trie_path_cursor := { trie_path_cursor_value : Z; }.
+Arguments trie_path_cursor : clear implicits.
+#[export]
+Instance Decidable_eq_trie_path_cursor : EqDecision trie_path_cursor.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_trie_path_cursor : Countable trie_path_cursor.
+refine {|
+  encode x := encode (trie_path_cursor_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_trie_path_cursor x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'trie_path_cursor_value' := e ]}" :=
+  {| trie_path_cursor_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_trie_path_cursor : Inhabited (trie_path_cursor) := {
+  inhabitant := {| trie_path_cursor_value := inhabitant
+|} }.
+
+
+Definition trie_path_cursor_valid (x : trie_path_cursor) : Prop :=
+0 <= x.(trie_path_cursor_value) /\ x.(trie_path_cursor_value) <= 64.
 
 Record BranchNodeData := {
   BranchNodeData_children : BranchChildren;
@@ -3995,39 +4298,6 @@ Instance Countable_NodeRef : Countable NodeRef := {|
 |}.
 #[export]
 Instance dummy_NodeRef : Inhabited (NodeRef) := { inhabitant := EmptyRef inhabitant }.
-
-Record trie_path_cursor := { trie_path_cursor_value : Z; }.
-Arguments trie_path_cursor : clear implicits.
-#[export]
-Instance Decidable_eq_trie_path_cursor : EqDecision trie_path_cursor.
-   intros [x0].
-   intros [y0].
-  cmp_record_field x0 y0.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_trie_path_cursor : Countable trie_path_cursor.
-refine {|
-  encode x := encode (trie_path_cursor_value x);
-  decode x := '(x0) ← decode x;
-              mret (Build_trie_path_cursor x0)
-|}.
-abstract (
-  intros [x0];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'trie_path_cursor_value' := e ]}" :=
-  {| trie_path_cursor_value := e |} (at level 1, only parsing).
-#[export]
-Instance dummy_trie_path_cursor : Inhabited (trie_path_cursor) := {
-  inhabitant := {| trie_path_cursor_value := inhabitant
-|} }.
-
-
-Definition trie_path_cursor_valid (x : trie_path_cursor) : Prop :=
-0 <= x.(trie_path_cursor_value) /\ x.(trie_path_cursor_value) <= 64.
 
 Record ScaledBlobValue := {
   ScaledBlobValue_whole : word;
@@ -5471,7 +5741,6 @@ Record BlockExecutionResult := {
   BlockExecutionResult_blob_gas_acc : blob_gas_typ;
   BlockExecutionResult_first_tx_recipient : address_typ;
   BlockExecutionResult_block_gas_overflow : bool;
-  BlockExecutionResult_blob_gas_overflow : bool;
   BlockExecutionResult_receipts_root : hash;
   BlockExecutionResult_logs_bloom : LogsBloom;
   BlockExecutionResult_deposits : ByteSlice;
@@ -5480,8 +5749,8 @@ Record BlockExecutionResult := {
 Arguments BlockExecutionResult : clear implicits.
 #[export]
 Instance Decidable_eq_BlockExecutionResult : EqDecision BlockExecutionResult.
-   intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9].
-   intros [y0 y1 y2 y3 y4 y5 y6 y7 y8 y9].
+   intros [x0 x1 x2 x3 x4 x5 x6 x7 x8].
+   intros [y0 y1 y2 y3 y4 y5 y6 y7 y8].
   cmp_record_field x0 y0.
   cmp_record_field x1 y1.
   cmp_record_field x2 y2.
@@ -5491,52 +5760,48 @@ Instance Decidable_eq_BlockExecutionResult : EqDecision BlockExecutionResult.
   cmp_record_field x6 y6.
   cmp_record_field x7 y7.
   cmp_record_field x8 y8.
-  cmp_record_field x9 y9.
 left; subst; reflexivity.
 Defined.
 #[export]
 Instance Countable_BlockExecutionResult : Countable BlockExecutionResult.
 refine {|
-  encode x := encode (BlockExecutionResult_all_ok x, BlockExecutionResult_gas_acc x, BlockExecutionResult_blob_gas_acc x, BlockExecutionResult_first_tx_recipient x, BlockExecutionResult_block_gas_overflow x, BlockExecutionResult_blob_gas_overflow x, BlockExecutionResult_receipts_root x, BlockExecutionResult_logs_bloom x, BlockExecutionResult_deposits x, BlockExecutionResult_requests x);
-  decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9) ← decode x;
-              mret (Build_BlockExecutionResult x0 x1 x2 x3 x4 x5 x6 x7 x8 x9)
+  encode x := encode (BlockExecutionResult_all_ok x, BlockExecutionResult_gas_acc x, BlockExecutionResult_blob_gas_acc x, BlockExecutionResult_first_tx_recipient x, BlockExecutionResult_block_gas_overflow x, BlockExecutionResult_receipts_root x, BlockExecutionResult_logs_bloom x, BlockExecutionResult_deposits x, BlockExecutionResult_requests x);
+  decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8) ← decode x;
+              mret (Build_BlockExecutionResult x0 x1 x2 x3 x4 x5 x6 x7 x8)
 |}.
 abstract (
-  intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9];
+  intros [x0 x1 x2 x3 x4 x5 x6 x7 x8];
   rewrite decode_encode;
   reflexivity).
 Defined.
 
 Notation "{[ r 'with' 'BlockExecutionResult_all_ok' := e ]}" :=
-  match r with Build_BlockExecutionResult _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) =>
-    Build_BlockExecutionResult e f1 f2 f3 f4 f5 f6 f7 f8 f9 end (at level 1).
+  match r with Build_BlockExecutionResult _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
+    Build_BlockExecutionResult e f1 f2 f3 f4 f5 f6 f7 f8 end (at level 1).
 Notation "{[ r 'with' 'BlockExecutionResult_gas_acc' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) =>
-    Build_BlockExecutionResult f0 e f2 f3 f4 f5 f6 f7 f8 f9 end (at level 1).
+  match r with Build_BlockExecutionResult (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
+    Build_BlockExecutionResult f0 e f2 f3 f4 f5 f6 f7 f8 end (at level 1).
 Notation "{[ r 'with' 'BlockExecutionResult_blob_gas_acc' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) =>
-    Build_BlockExecutionResult f0 f1 e f3 f4 f5 f6 f7 f8 f9 end (at level 1).
+  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
+    Build_BlockExecutionResult f0 f1 e f3 f4 f5 f6 f7 f8 end (at level 1).
 Notation "{[ r 'with' 'BlockExecutionResult_first_tx_recipient' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) =>
-    Build_BlockExecutionResult f0 f1 f2 e f4 f5 f6 f7 f8 f9 end (at level 1).
+  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
+    Build_BlockExecutionResult f0 f1 f2 e f4 f5 f6 f7 f8 end (at level 1).
 Notation "{[ r 'with' 'BlockExecutionResult_block_gas_overflow' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) =>
-    Build_BlockExecutionResult f0 f1 f2 f3 e f5 f6 f7 f8 f9 end (at level 1).
-Notation "{[ r 'with' 'BlockExecutionResult_blob_gas_overflow' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) =>
-    Build_BlockExecutionResult f0 f1 f2 f3 f4 e f6 f7 f8 f9 end (at level 1).
+  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
+    Build_BlockExecutionResult f0 f1 f2 f3 e f5 f6 f7 f8 end (at level 1).
 Notation "{[ r 'with' 'BlockExecutionResult_receipts_root' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) =>
-    Build_BlockExecutionResult f0 f1 f2 f3 f4 f5 e f7 f8 f9 end (at level 1).
+  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) =>
+    Build_BlockExecutionResult f0 f1 f2 f3 f4 e f6 f7 f8 end (at level 1).
 Notation "{[ r 'with' 'BlockExecutionResult_logs_bloom' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) =>
-    Build_BlockExecutionResult f0 f1 f2 f3 f4 f5 f6 e f8 f9 end (at level 1).
+  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) =>
+    Build_BlockExecutionResult f0 f1 f2 f3 f4 f5 e f7 f8 end (at level 1).
 Notation "{[ r 'with' 'BlockExecutionResult_deposits' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) =>
-    Build_BlockExecutionResult f0 f1 f2 f3 f4 f5 f6 f7 e f9 end (at level 1).
+  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) =>
+    Build_BlockExecutionResult f0 f1 f2 f3 f4 f5 f6 e f8 end (at level 1).
 Notation "{[ r 'with' 'BlockExecutionResult_requests' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ =>
-    Build_BlockExecutionResult f0 f1 f2 f3 f4 f5 f6 f7 f8 e end (at level 1).
+  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ =>
+    Build_BlockExecutionResult f0 f1 f2 f3 f4 f5 f6 f7 e end (at level 1).
 #[export]
 Instance dummy_BlockExecutionResult : Inhabited (BlockExecutionResult) := {
   inhabitant := {|
@@ -5545,7 +5810,6 @@ Instance dummy_BlockExecutionResult : Inhabited (BlockExecutionResult) := {
     BlockExecutionResult_blob_gas_acc := inhabitant;
     BlockExecutionResult_first_tx_recipient := inhabitant;
     BlockExecutionResult_block_gas_overflow := inhabitant;
-    BlockExecutionResult_blob_gas_overflow := inhabitant;
     BlockExecutionResult_receipts_root := inhabitant;
     BlockExecutionResult_logs_bloom := inhabitant;
     BlockExecutionResult_deposits := inhabitant;
@@ -6185,58 +6449,58 @@ Instance Countable_register_TxEnv : Countable register_TxEnv. refine {|
   reflexivity.
 Defined.
 
-Variant register_bitvector_256 :=
+Variant register_b256 :=
   | k_parent_state_root
 .
 
-Definition num_of_register_bitvector_256 (r : register_bitvector_256) : Z :=
+Definition num_of_register_b256 (r : register_b256) : Z :=
   match r with
   | k_parent_state_root => 0
   end.
-Definition register_bitvector_256_of_num (i : Z) : register_bitvector_256 :=
+Definition register_b256_of_num (i : Z) : register_b256 :=
   match i with
   | 0 => k_parent_state_root
   | _ => k_parent_state_root
   end.
-Lemma register_bitvector_256_num_of_roundtrip (x : register_bitvector_256) : register_bitvector_256_of_num (num_of_register_bitvector_256 x) = x.
+Lemma register_b256_num_of_roundtrip (x : register_b256) : register_b256_of_num (num_of_register_b256 x) = x.
   destruct x; reflexivity.
 Qed.
-Lemma num_of_register_bitvector_256_injective (x y : register_bitvector_256) : num_of_register_bitvector_256 x = num_of_register_bitvector_256 y -> x = y.
+Lemma num_of_register_b256_injective (x y : register_b256) : num_of_register_b256 x = num_of_register_b256 y -> x = y.
   intro.
-  rewrite <- (register_bitvector_256_num_of_roundtrip x).
-  rewrite <- (register_bitvector_256_num_of_roundtrip y).
+  rewrite <- (register_b256_num_of_roundtrip x).
+  rewrite <- (register_b256_num_of_roundtrip y).
   congruence.
 Qed.
-Definition register_bitvector_256_eq_dec (x y : register_bitvector_256) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_bitvector_256 x) (num_of_register_bitvector_256 y) with
-  | left e => left (num_of_register_bitvector_256_injective x y e)
+Definition register_b256_eq_dec (x y : register_b256) : {x = y} + {x <> y}.
+  refine (match Z.eq_dec (num_of_register_b256 x) (num_of_register_b256 y) with
+  | left e => left (num_of_register_b256_injective x y e)
   | right ne => right _
   end).
   congruence.
 Defined.
-Definition register_bitvector_256_beq (x y : register_bitvector_256) : bool :=
-  Z.eqb (num_of_register_bitvector_256 x) (num_of_register_bitvector_256 y).
-Lemma register_bitvector_256_beq_iff x y : register_bitvector_256_beq x y = true <-> x = y.
-  unfold register_bitvector_256_beq.
+Definition register_b256_beq (x y : register_b256) : bool :=
+  Z.eqb (num_of_register_b256 x) (num_of_register_b256 y).
+Lemma register_b256_beq_iff x y : register_b256_beq x y = true <-> x = y.
+  unfold register_b256_beq.
   rewrite Z.eqb_eq.
-  split; [apply num_of_register_bitvector_256_injective | congruence].
+  split; [apply num_of_register_b256_injective | congruence].
 Qed.
-Lemma register_bitvector_256_beq_refl x : register_bitvector_256_beq x x = true.
-apply register_bitvector_256_beq_iff; reflexivity.
+Lemma register_b256_beq_refl x : register_b256_beq x x = true.
+apply register_b256_beq_iff; reflexivity.
 Qed.
-Hint Rewrite register_bitvector_256_beq_iff : register_beq_iffs.
-Hint Rewrite register_bitvector_256_beq_refl : register_beq_refls.
-Definition register_bitvector_256_list : list (string * register_bitvector_256) := [
+Hint Rewrite register_b256_beq_iff : register_beq_iffs.
+Hint Rewrite register_b256_beq_refl : register_beq_refls.
+Definition register_b256_list : list (string * register_b256) := [
   ("k_parent_state_root", k_parent_state_root)
 ].
 
-Instance Decidable_eq_register_bitvector_256 : EqDecision register_bitvector_256 := register_bitvector_256_eq_dec.
-Instance Countable_register_bitvector_256 : Countable register_bitvector_256. refine {|
-  encode x := encode (num_of_register_bitvector_256 x);
-  decode x := register_bitvector_256_of_num <$> decode x
+Instance Decidable_eq_register_b256 : EqDecision register_b256 := register_b256_eq_dec.
+Instance Countable_register_b256 : Countable register_b256. refine {|
+  encode x := encode (num_of_register_b256 x);
+  decode x := register_b256_of_num <$> decode x
 |}.
   intro s; rewrite decode_encode; simpl.
-  rewrite register_bitvector_256_num_of_roundtrip.
+  rewrite register_b256_num_of_roundtrip.
   reflexivity.
 Defined.
 
@@ -6411,15 +6675,18 @@ Defined.
 
 Variant register_range_0_1024 :=
   | call_depth
+  | frame_stack_top
 .
 
 Definition num_of_register_range_0_1024 (r : register_range_0_1024) : Z :=
   match r with
   | call_depth => 0
+  | frame_stack_top => 1
   end.
 Definition register_range_0_1024_of_num (i : Z) : register_range_0_1024 :=
   match i with
   | 0 => call_depth
+  | 1 => frame_stack_top
   | _ => call_depth
   end.
 Lemma register_range_0_1024_num_of_roundtrip (x : register_range_0_1024) : register_range_0_1024_of_num (num_of_register_range_0_1024 x) = x.
@@ -6451,7 +6718,8 @@ Qed.
 Hint Rewrite register_range_0_1024_beq_iff : register_beq_iffs.
 Hint Rewrite register_range_0_1024_beq_refl : register_beq_refls.
 Definition register_range_0_1024_list : list (string * register_range_0_1024) := [
-  ("call_depth", call_depth)
+  ("call_depth", call_depth);
+  ("frame_stack_top", frame_stack_top)
 ].
 
 Instance Decidable_eq_register_range_0_1024 : EqDecision register_range_0_1024 := register_range_0_1024_eq_dec.
@@ -6523,6 +6791,61 @@ Instance Countable_register_range_0_exp_64_minus_1 : Countable register_range_0_
   reflexivity.
 Defined.
 
+Variant register_vector_1024_FrameContinuation :=
+  | frame_stack
+.
+
+Definition num_of_register_vector_1024_FrameContinuation (r : register_vector_1024_FrameContinuation) : Z :=
+  match r with
+  | frame_stack => 0
+  end.
+Definition register_vector_1024_FrameContinuation_of_num (i : Z) : register_vector_1024_FrameContinuation :=
+  match i with
+  | 0 => frame_stack
+  | _ => frame_stack
+  end.
+Lemma register_vector_1024_FrameContinuation_num_of_roundtrip (x : register_vector_1024_FrameContinuation) : register_vector_1024_FrameContinuation_of_num (num_of_register_vector_1024_FrameContinuation x) = x.
+  destruct x; reflexivity.
+Qed.
+Lemma num_of_register_vector_1024_FrameContinuation_injective (x y : register_vector_1024_FrameContinuation) : num_of_register_vector_1024_FrameContinuation x = num_of_register_vector_1024_FrameContinuation y -> x = y.
+  intro.
+  rewrite <- (register_vector_1024_FrameContinuation_num_of_roundtrip x).
+  rewrite <- (register_vector_1024_FrameContinuation_num_of_roundtrip y).
+  congruence.
+Qed.
+Definition register_vector_1024_FrameContinuation_eq_dec (x y : register_vector_1024_FrameContinuation) : {x = y} + {x <> y}.
+  refine (match Z.eq_dec (num_of_register_vector_1024_FrameContinuation x) (num_of_register_vector_1024_FrameContinuation y) with
+  | left e => left (num_of_register_vector_1024_FrameContinuation_injective x y e)
+  | right ne => right _
+  end).
+  congruence.
+Defined.
+Definition register_vector_1024_FrameContinuation_beq (x y : register_vector_1024_FrameContinuation) : bool :=
+  Z.eqb (num_of_register_vector_1024_FrameContinuation x) (num_of_register_vector_1024_FrameContinuation y).
+Lemma register_vector_1024_FrameContinuation_beq_iff x y : register_vector_1024_FrameContinuation_beq x y = true <-> x = y.
+  unfold register_vector_1024_FrameContinuation_beq.
+  rewrite Z.eqb_eq.
+  split; [apply num_of_register_vector_1024_FrameContinuation_injective | congruence].
+Qed.
+Lemma register_vector_1024_FrameContinuation_beq_refl x : register_vector_1024_FrameContinuation_beq x x = true.
+apply register_vector_1024_FrameContinuation_beq_iff; reflexivity.
+Qed.
+Hint Rewrite register_vector_1024_FrameContinuation_beq_iff : register_beq_iffs.
+Hint Rewrite register_vector_1024_FrameContinuation_beq_refl : register_beq_refls.
+Definition register_vector_1024_FrameContinuation_list : list (string * register_vector_1024_FrameContinuation) := [
+  ("frame_stack", frame_stack)
+].
+
+Instance Decidable_eq_register_vector_1024_FrameContinuation : EqDecision register_vector_1024_FrameContinuation := register_vector_1024_FrameContinuation_eq_dec.
+Instance Countable_register_vector_1024_FrameContinuation : Countable register_vector_1024_FrameContinuation. refine {|
+  encode x := encode (num_of_register_vector_1024_FrameContinuation x);
+  decode x := register_vector_1024_FrameContinuation_of_num <$> decode x
+|}.
+  intro s; rewrite decode_encode; simpl.
+  rewrite register_vector_1024_FrameContinuation_num_of_roundtrip.
+  reflexivity.
+Defined.
+
 
 Variant register : Type :=
   | R_BlobSchedule :> register_BlobSchedule -> register
@@ -6533,12 +6856,13 @@ Variant register : Type :=
   | R_FrameStatus :> register_FrameStatus -> register
   | R_Message :> register_Message -> register
   | R_TxEnv :> register_TxEnv -> register
-  | R_bitvector_256 :> register_bitvector_256 -> register
+  | R_b256 :> register_b256 -> register
   | R_byte_quantity :> register_byte_quantity -> register
   | R_gas :> register_gas -> register
   | R_gas_refund :> register_gas_refund -> register
   | R_range_0_1024 :> register_range_0_1024 -> register
   | R_range_0_exp_64_minus_1 :> register_range_0_exp_64_minus_1 -> register
+  | R_vector_1024_FrameContinuation :> register_vector_1024_FrameContinuation -> register
 .
 
 Definition type_of_register (r : register) : Type :=
@@ -6551,12 +6875,13 @@ Definition type_of_register (r : register) : Type :=
   | R_FrameStatus _ => FrameStatus
   | R_Message _ => Message
   | R_TxEnv _ => TxEnv
-  | R_bitvector_256 _ => ((mword 256))
+  | R_b256 _ => b256
   | R_byte_quantity _ => byte_quantity
   | R_gas _ => gas
   | R_gas_refund _ => gas_refund
   | R_range_0_1024 _ => (Z)
   | R_range_0_exp_64_minus_1 _ => (Z)
+  | R_vector_1024_FrameContinuation _ => ((vec FrameContinuation 1024))
   end.
 
   Definition register_encode (r : register) : positive :=
@@ -6569,12 +6894,13 @@ Definition type_of_register (r : register) : Type :=
     | R_FrameStatus r => encode (5, encode r)
     | R_Message r => encode (6, encode r)
     | R_TxEnv r => encode (7, encode r)
-    | R_bitvector_256 r => encode (8, encode r)
+    | R_b256 r => encode (8, encode r)
     | R_byte_quantity r => encode (9, encode r)
     | R_gas r => encode (10, encode r)
     | R_gas_refund r => encode (11, encode r)
     | R_range_0_1024 r => encode (12, encode r)
     | R_range_0_exp_64_minus_1 r => encode (13, encode r)
+    | R_vector_1024_FrameContinuation r => encode (14, encode r)
     end.
   Definition register_decode (x : positive) : option register :=
     match decode x with
@@ -6586,12 +6912,13 @@ Definition type_of_register (r : register) : Type :=
     | Some (5, y) => r ← decode y; mret (R_FrameStatus r)
     | Some (6, y) => r ← decode y; mret (R_Message r)
     | Some (7, y) => r ← decode y; mret (R_TxEnv r)
-    | Some (8, y) => r ← decode y; mret (R_bitvector_256 r)
+    | Some (8, y) => r ← decode y; mret (R_b256 r)
     | Some (9, y) => r ← decode y; mret (R_byte_quantity r)
     | Some (10, y) => r ← decode y; mret (R_gas r)
     | Some (11, y) => r ← decode y; mret (R_gas_refund r)
     | Some (12, y) => r ← decode y; mret (R_range_0_1024 r)
     | Some (13, y) => r ← decode y; mret (R_range_0_exp_64_minus_1 r)
+    | Some (14, y) => r ← decode y; mret (R_vector_1024_FrameContinuation r)
     | _ => None
     end.
   Lemma register_decode_encode r : register_decode (register_encode r) = Some r.
@@ -6633,12 +6960,13 @@ refine (
   | R_FrameStatus r, R_FrameStatus r' => fun _ x => x
   | R_Message r, R_Message r' => fun _ x => x
   | R_TxEnv r, R_TxEnv r' => fun _ x => x
-  | R_bitvector_256 r, R_bitvector_256 r' => fun _ x => x
+  | R_b256 r, R_b256 r' => fun _ x => x
   | R_byte_quantity r, R_byte_quantity r' => fun _ x => x
   | R_gas r, R_gas r' => fun _ x => x
   | R_gas_refund r, R_gas_refund r' => fun _ x => x
   | R_range_0_1024 r, R_range_0_1024 r' => fun _ x => x
   | R_range_0_exp_64_minus_1 r, R_range_0_exp_64_minus_1 r' => fun _ x => x
+  | R_vector_1024_FrameContinuation r, R_vector_1024_FrameContinuation r' => fun _ x => x
   | _, _ => fun e _ => _
   end
 ).
@@ -6664,12 +6992,13 @@ Definition register_beq (r r' : register) : bool :=
   | R_FrameStatus r, R_FrameStatus r' => register_FrameStatus_beq r r'
   | R_Message r, R_Message r' => register_Message_beq r r'
   | R_TxEnv r, R_TxEnv r' => register_TxEnv_beq r r'
-  | R_bitvector_256 r, R_bitvector_256 r' => register_bitvector_256_beq r r'
+  | R_b256 r, R_b256 r' => register_b256_beq r r'
   | R_byte_quantity r, R_byte_quantity r' => register_byte_quantity_beq r r'
   | R_gas r, R_gas r' => register_gas_beq r r'
   | R_gas_refund r, R_gas_refund r' => register_gas_refund_beq r r'
   | R_range_0_1024 r, R_range_0_1024 r' => register_range_0_1024_beq r r'
   | R_range_0_exp_64_minus_1 r, R_range_0_exp_64_minus_1 r' => register_range_0_exp_64_minus_1_beq r r'
+  | R_vector_1024_FrameContinuation r, R_vector_1024_FrameContinuation r' => register_vector_1024_FrameContinuation_beq r r'
   | _, _ => false
   end.
 
@@ -6687,12 +7016,13 @@ Definition register_eq_cast (P : Type -> Type) (r r' : register) : P (type_of_re
   | R_FrameStatus r, R_FrameStatus r' => fun p => if register_FrameStatus_beq r r' then Some p else None
   | R_Message r, R_Message r' => fun p => if register_Message_beq r r' then Some p else None
   | R_TxEnv r, R_TxEnv r' => fun p => if register_TxEnv_beq r r' then Some p else None
-  | R_bitvector_256 r, R_bitvector_256 r' => fun p => if register_bitvector_256_beq r r' then Some p else None
+  | R_b256 r, R_b256 r' => fun p => if register_b256_beq r r' then Some p else None
   | R_byte_quantity r, R_byte_quantity r' => fun p => if register_byte_quantity_beq r r' then Some p else None
   | R_gas r, R_gas r' => fun p => if register_gas_beq r r' then Some p else None
   | R_gas_refund r, R_gas_refund r' => fun p => if register_gas_refund_beq r r' then Some p else None
   | R_range_0_1024 r, R_range_0_1024 r' => fun p => if register_range_0_1024_beq r r' then Some p else None
   | R_range_0_exp_64_minus_1 r, R_range_0_exp_64_minus_1 r' => fun p => if register_range_0_exp_64_minus_1_beq r r' then Some p else None
+  | R_vector_1024_FrameContinuation r, R_vector_1024_FrameContinuation r' => fun p => if register_vector_1024_FrameContinuation_beq r r' then Some p else None
   | _, _ => fun _ => None
   end.
 
@@ -6705,12 +7035,13 @@ Definition register_list : list (string * register) := List.concat [
   List.map (fun '(s, r) => (s, R_FrameStatus r)) register_FrameStatus_list;
   List.map (fun '(s, r) => (s, R_Message r)) register_Message_list;
   List.map (fun '(s, r) => (s, R_TxEnv r)) register_TxEnv_list;
-  List.map (fun '(s, r) => (s, R_bitvector_256 r)) register_bitvector_256_list;
+  List.map (fun '(s, r) => (s, R_b256 r)) register_b256_list;
   List.map (fun '(s, r) => (s, R_byte_quantity r)) register_byte_quantity_list;
   List.map (fun '(s, r) => (s, R_gas r)) register_gas_list;
   List.map (fun '(s, r) => (s, R_gas_refund r)) register_gas_refund_list;
   List.map (fun '(s, r) => (s, R_range_0_1024 r)) register_range_0_1024_list;
-  List.map (fun '(s, r) => (s, R_range_0_exp_64_minus_1 r)) register_range_0_exp_64_minus_1_list
+  List.map (fun '(s, r) => (s, R_range_0_exp_64_minus_1 r)) register_range_0_exp_64_minus_1_list;
+  List.map (fun '(s, r) => (s, R_vector_1024_FrameContinuation r)) register_vector_1024_FrameContinuation_list
 ].
 
 Definition string_of_register (r : register) : string :=
@@ -6753,12 +7084,13 @@ match r with
   | R_FrameStatus _ => _
   | R_Message _ => _
   | R_TxEnv _ => _
-  | R_bitvector_256 _ => _
+  | R_b256 _ => _
   | R_byte_quantity _ => _
   | R_gas _ => _
   | R_gas_refund _ => _
   | R_range_0_1024 _ => _
   | R_range_0_exp_64_minus_1 _ => _
+  | R_vector_1024_FrameContinuation _ => _
 end.
 #[export] Instance Inhabited_register_values `(r : register) : Inhabited (type_of_register r) | 100 :=
   match r with
@@ -6770,12 +7102,13 @@ end.
   | R_FrameStatus _ => _
   | R_Message _ => _
   | R_TxEnv _ => _
-  | R_bitvector_256 _ => _
+  | R_b256 _ => _
   | R_byte_quantity _ => _
   | R_gas _ => _
   | R_gas_refund _ => _
   | R_range_0_1024 _ => _
   | R_range_0_exp_64_minus_1 _ => _
+  | R_vector_1024_FrameContinuation _ => _
 end.
 #[export] Instance Countable_register_values `(r : register) : Countable (type_of_register r) | 100.
 refine {|
@@ -6788,12 +7121,13 @@ refine {|
   | R_FrameStatus _ => encode
   | R_Message _ => encode
   | R_TxEnv _ => encode
-  | R_bitvector_256 _ => encode
+  | R_b256 _ => encode
   | R_byte_quantity _ => encode
   | R_gas _ => encode
   | R_gas_refund _ => encode
   | R_range_0_1024 _ => encode
   | R_range_0_exp_64_minus_1 _ => encode
+  | R_vector_1024_FrameContinuation _ => encode
   end;
   decode := match r with
   | R_BlobSchedule _ => decode
@@ -6804,12 +7138,13 @@ refine {|
   | R_FrameStatus _ => decode
   | R_Message _ => decode
   | R_TxEnv _ => decode
-  | R_bitvector_256 _ => decode
+  | R_b256 _ => decode
   | R_byte_quantity _ => decode
   | R_gas _ => decode
   | R_gas_refund _ => decode
   | R_range_0_1024 _ => decode
   | R_range_0_exp_64_minus_1 _ => decode
+  | R_vector_1024_FrameContinuation _ => decode
   end;
 |}.
 abstract (destruct r; apply decode_encode).
@@ -6853,7 +7188,7 @@ Instance dummy_register_TxEnv : Inhabited (register_ref _) := populate k_tx_ref.
 
 Definition k_parent_state_root_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_parent_state_root" k_parent_state_root (fun x => x) (fun x => x).
-Instance dummy_register_bitvector_256 : Inhabited (register_ref _) := populate k_parent_state_root_ref.
+Instance dummy_register_b256 : Inhabited (register_ref _) := populate k_parent_state_root_ref.
 
 Definition scratch_cursor_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "scratch_cursor" scratch_cursor (fun x => x) (fun x => x).
@@ -6871,6 +7206,8 @@ Instance dummy_register_gas_refund : Inhabited (register_ref _) := populate fram
 
 Definition call_depth_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "call_depth" call_depth (fun x => x) (fun x => x).
+Definition frame_stack_top_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "frame_stack_top" frame_stack_top (fun x => x) (fun x => x).
 Instance dummy_register_range_0_1024 : Inhabited (register_ref _) := populate call_depth_ref.
 
 Definition k_n_headers_ref : register_ref _ :=
@@ -6878,6 +7215,10 @@ Definition k_n_headers_ref : register_ref _ :=
 Definition k_chain_id_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_chain_id" k_chain_id (fun x => x) (fun x => x).
 Instance dummy_register_range_0_exp_64_minus_1 : Inhabited (register_ref _) := populate k_n_headers_ref.
+
+Definition frame_stack_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "frame_stack" frame_stack (fun x => x) (fun x => x).
+Instance dummy_register_vector_1024_FrameContinuation : Inhabited (register_ref _) := populate frame_stack_ref.
 
 
 (* Definitions to support the lifting to the sequential monad *)
@@ -6890,57 +7231,62 @@ Record regstate := {
   FrameStatus_s : register_FrameStatus -> FrameStatus;
   Message_s : register_Message -> Message;
   TxEnv_s : register_TxEnv -> TxEnv;
-  bitvector_256_s : register_bitvector_256 -> mword 256;
+  b256_s : register_b256 -> b256;
   byte_quantity_s : register_byte_quantity -> byte_quantity;
   gas_s : register_gas -> gas;
   gas_refund_s : register_gas_refund -> gas_refund;
   range_0_1024_s : register_range_0_1024 -> Z;
   range_0_exp_64_minus_1_s : register_range_0_exp_64_minus_1 -> Z;
+  vector_1024_FrameContinuation_s : register_vector_1024_FrameContinuation -> vec FrameContinuation 1024;
 }.
 Notation "{[ r 'with' 'BlobSchedule_s' := e ]}" :=
-  match r with Build_regstate _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) =>
-    Build_regstate e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 end (at level 1).
+  match r with Build_regstate _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) =>
+    Build_regstate e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 end (at level 1).
 Notation "{[ r 'with' 'BlockHeader_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) =>
-    Build_regstate f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 end (at level 1).
+  match r with Build_regstate (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) =>
+    Build_regstate f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 end (at level 1).
 Notation "{[ r 'with' 'ByteSlice_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) =>
-    Build_regstate f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) =>
+    Build_regstate f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 end (at level 1).
 Notation "{[ r 'with' 'Code_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) =>
-    Build_regstate f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) =>
+    Build_regstate f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 end (at level 1).
 Notation "{[ r 'with' 'Fork_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) =>
-    Build_regstate f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 f12 f13 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) =>
+    Build_regstate f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 end (at level 1).
 Notation "{[ r 'with' 'FrameStatus_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) =>
-    Build_regstate f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 f12 f13 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) =>
+    Build_regstate f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 f12 f13 f14 end (at level 1).
 Notation "{[ r 'with' 'Message_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 f12 f13 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 f12 f13 f14 end (at level 1).
 Notation "{[ r 'with' 'TxEnv_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 f12 f13 end (at level 1).
-Notation "{[ r 'with' 'bitvector_256_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 f12 f13 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 f12 f13 f14 end (at level 1).
+Notation "{[ r 'with' 'b256_s' := e ]}" :=
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 f12 f13 f14 end (at level 1).
 Notation "{[ r 'with' 'byte_quantity_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) (_ as f12) (_ as f13) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 f12 f13 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 f12 f13 f14 end (at level 1).
 Notation "{[ r 'with' 'gas_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) (_ as f12) (_ as f13) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 f12 f13 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) (_ as f12) (_ as f13) (_ as f14) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 f12 f13 f14 end (at level 1).
 Notation "{[ r 'with' 'gas_refund_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ (_ as f12) (_ as f13) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e f12 f13 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ (_ as f12) (_ as f13) (_ as f14) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e f12 f13 f14 end (at level 1).
 Notation "{[ r 'with' 'range_0_1024_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) _ (_ as f13) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 e f13 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) _ (_ as f13) (_ as f14) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 e f13 f14 end (at level 1).
 Notation "{[ r 'with' 'range_0_exp_64_minus_1_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) _ =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 e end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) _ (_ as f14) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 e f14 end (at level 1).
+Notation "{[ r 'with' 'vector_1024_FrameContinuation_s' := e ]}" :=
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) _ =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e end (at level 1).
 
 Definition init_regstate : regstate := Build_regstate
+  inhabitant
   inhabitant
   inhabitant
   inhabitant
@@ -6967,12 +7313,13 @@ Definition register_lookup (reg : register) (rs : regstate) : type_of_register r
   | R_FrameStatus r => rs.(FrameStatus_s) r
   | R_Message r => rs.(Message_s) r
   | R_TxEnv r => rs.(TxEnv_s) r
-  | R_bitvector_256 r => rs.(bitvector_256_s) r
+  | R_b256 r => rs.(b256_s) r
   | R_byte_quantity r => rs.(byte_quantity_s) r
   | R_gas r => rs.(gas_s) r
   | R_gas_refund r => rs.(gas_refund_s) r
   | R_range_0_1024 r => rs.(range_0_1024_s) r
   | R_range_0_exp_64_minus_1 r => rs.(range_0_exp_64_minus_1_s) r
+  | R_vector_1024_FrameContinuation r => rs.(vector_1024_FrameContinuation_s) r
   end.
 
 Definition register_set (reg : register) : type_of_register reg -> regstate -> regstate :=
@@ -6985,12 +7332,13 @@ Definition register_set (reg : register) : type_of_register reg -> regstate -> r
   | R_FrameStatus r => fun v rs => {[ rs with FrameStatus_s := fun r' => if register_FrameStatus_beq r' r then v else rs.(FrameStatus_s) r' ]}
   | R_Message r => fun v rs => {[ rs with Message_s := fun r' => if register_Message_beq r' r then v else rs.(Message_s) r' ]}
   | R_TxEnv r => fun v rs => {[ rs with TxEnv_s := fun r' => if register_TxEnv_beq r' r then v else rs.(TxEnv_s) r' ]}
-  | R_bitvector_256 r => fun v rs => {[ rs with bitvector_256_s := fun r' => if register_bitvector_256_beq r' r then v else rs.(bitvector_256_s) r' ]}
+  | R_b256 r => fun v rs => {[ rs with b256_s := fun r' => if register_b256_beq r' r then v else rs.(b256_s) r' ]}
   | R_byte_quantity r => fun v rs => {[ rs with byte_quantity_s := fun r' => if register_byte_quantity_beq r' r then v else rs.(byte_quantity_s) r' ]}
   | R_gas r => fun v rs => {[ rs with gas_s := fun r' => if register_gas_beq r' r then v else rs.(gas_s) r' ]}
   | R_gas_refund r => fun v rs => {[ rs with gas_refund_s := fun r' => if register_gas_refund_beq r' r then v else rs.(gas_refund_s) r' ]}
   | R_range_0_1024 r => fun v rs => {[ rs with range_0_1024_s := fun r' => if register_range_0_1024_beq r' r then v else rs.(range_0_1024_s) r' ]}
   | R_range_0_exp_64_minus_1 r => fun v rs => {[ rs with range_0_exp_64_minus_1_s := fun r' => if register_range_0_exp_64_minus_1_beq r' r then v else rs.(range_0_exp_64_minus_1_s) r' ]}
+  | R_vector_1024_FrameContinuation r => fun v rs => {[ rs with vector_1024_FrameContinuation_s := fun r' => if register_vector_1024_FrameContinuation_beq r' r then v else rs.(vector_1024_FrameContinuation_s) r' ]}
   end.
 
 Lemma register_lookup_set (r : register) regs v: register_lookup r (register_set r v regs) = v.

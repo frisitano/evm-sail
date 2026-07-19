@@ -18,6 +18,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -25,7 +26,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -37,6 +40,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -45,9 +49,20 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # Kernel scratch allocation
+
+A bump cursor makes construction order and lifetime visible in the Sail
+semantics while the bytes themselves remain in host-backed memory.
+
+!!! note "Non-normative"
+    This page documents the model's host interface — internal contracts
+    of the executable specification, not protocol rules. -/
+
+/-- Marks the start of a scratch construction. -/
 def scratch_begin (_ : Unit) : SailM source_pointer := do
   readReg scratch_cursor
 
+/-- Advances the scratch bump cursor by `width` bytes within the byte domain. -/
 def scratch_advance (width : byte_length) : SailM Unit := do
   let cursor ← (( do readReg scratch_cursor ) : SailM byte_quantity )
   if ((byte_quantity_le cursor MAX_BYTE_QUANTITY) : Bool)
@@ -58,22 +73,25 @@ def scratch_advance (width : byte_length) : SailM Unit := do
       else assert false "scratch cursor overflow")
   else assert false "scratch cursor overflow"
 
+/-- Appends materialized bytes at the cursor. -/
 def scratch_push_bytes (data : (List byte)) (len : byte_length) : SailM Unit := do
-  if ((byte_quantity_not_equal len BYTE_ZERO) : Bool)
+  if ((bne len BYTE_ZERO) : Bool)
   then
     (do
       assert (← (host_scratch_store_bytes (← readReg scratch_cursor) data len)) "scratch byte append"
       (scratch_advance len))
   else (pure ())
 
+/-- Appends a source-backed slice at the cursor. -/
 def scratch_push_slice (data : EvmByteSlice) : SailM Unit := do
-  if ((byte_quantity_not_equal data.len BYTE_ZERO) : Bool)
+  if ((bne data.len BYTE_ZERO) : Bool)
   then
     (do
       assert (← (host_scratch_store_slice (← readReg scratch_cursor) data)) "scratch slice append"
       (scratch_advance data.len))
   else (pure ())
 
+/-- The slice covering everything pushed since `start`. -/
 def scratch_finish (start : source_pointer) : SailM EvmByteSlice := do
   let stop ← (( do readReg scratch_cursor ) : SailM byte_quantity )
   if ((byte_quantity_le start stop) : Bool)
@@ -86,6 +104,7 @@ def scratch_finish (start : source_pointer) : SailM EvmByteSlice := do
       assert false "scratch finish mark"
       throw Error.Exit)
 
+/-- Discards everything pushed since `mark`. -/
 def scratch_rewind (mark : source_pointer) : SailM Unit := do
   let cursor ← (( do readReg scratch_cursor ) : SailM byte_quantity )
   if ((byte_quantity_le mark cursor) : Bool)
@@ -95,6 +114,7 @@ def scratch_rewind (mark : source_pointer) : SailM Unit := do
       (host_scratch_truncate (← readReg scratch_cursor)))
   else assert false "scratch rewind mark"
 
+/-- Empties the arena (per-block lifetime). -/
 def scratch_reset (_ : Unit) : SailM Unit := do
   writeReg scratch_cursor BYTE_ZERO
   (host_scratch_truncate (← readReg scratch_cursor))

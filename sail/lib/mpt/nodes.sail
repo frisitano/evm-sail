@@ -22,7 +22,7 @@ function inline_node_from_slice(bytes : ByteSlice) -> InlineNode = {
     if MPT_HASH_LENGTH <= length then {
         throw InvalidBlock(WitnessDeficient)
     };
-    var data : bits(256) = ZERO_WORD;
+    var data : bits(256) = sail_zeros(256);
     foreach (offset from 0 to 30) {
         let byte_offset = ByteQuantity(offset);
         if byte_offset < length then {
@@ -35,7 +35,7 @@ function inline_node_from_slice(bytes : ByteSlice) -> InlineNode = {
 /*! Expands an inline node into its wire-order byte sequence. */
 function inline_node_to_list(node : InlineNode) -> list(byte) = {
     var bytes : list(byte) = [||];
-    var data : word = node.data;
+    var data : bits(256) = node.data;
     foreach (index from 0 to 30) {
         if ByteQuantity(index) < node.len then {
             bytes = data[7 .. 0] :: bytes;
@@ -126,7 +126,7 @@ function rlp_write_node_ref(r : NodeRef) -> unit =
     match r {
         EmptyRef() => scratch_push_bytes([|0x80|], BYTE_ONE),
         InlineRef(node) => rlp_write_raw_bytes(inline_node_to_list(node), node.len),
-        HashRef(h) => rlp_write_word(h),
+        HashRef(h) => rlp_write_word(hash_to_word(h)),
     }
 
 /*! The canonical child reference for an encoded node: inline under 32
@@ -229,7 +229,7 @@ function branch_child_ref(mask : bits(16), children : BranchRefs) -> NodeRef = {
 
 /*! The root hash a node reference commits to; the empty reference is the
     empty-trie root. */
-function trie_ref_to_root(r : NodeRef) -> bits(256) =
+function trie_ref_to_root(r : NodeRef) -> hash =
     match r {
         EmptyRef() => EMPTY_TRIE_ROOT,
         InlineRef(node) => keccak256([|inline_node_segment(node)|]),
@@ -251,7 +251,7 @@ function node_to_ref(node : ByteSlice) -> NodeRef =
 
 /*! The witness node bytes whose KECCAK-256 digest is `h`, retained as a
     slice into the stateless input; empty if unwitnessed. */
-function node_db_lookup(h : bits(256)) -> ByteSlice = {
+function node_db_lookup(h : hash) -> ByteSlice = {
     let len = nodedb_len(h);
     if len == BYTE_ZERO then {
         EMPTY_SLICE
@@ -364,7 +364,7 @@ function field_to_ref(f : RlpFieldRef) -> NodeRef =
         InlineRef(inline_node_from_slice(rlp_ref_full(f)))
     } else {
         if f.content_len == MPT_HASH_LENGTH then {
-            HashRef(rlp_ref_word(f))
+            HashRef(word_to_hash(rlp_ref_word(f)))
         } else {
             EmptyRef()
         }

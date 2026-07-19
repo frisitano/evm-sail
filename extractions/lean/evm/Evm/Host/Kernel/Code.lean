@@ -23,6 +23,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -30,7 +31,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -42,6 +45,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -50,20 +54,31 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # State: account code
+
+Account code operations over the content-addressed code store, including
+EIP-7702 delegation designators. -/
+
+/-- The account's code hash — the code-store key. -/
 def k_code_key (a : address) : SailM hash := do
   (pure (← (k_aload a)).info.code_hash)
 
+/-- `EXTCODEHASH` (EIP-1052): a truly non-existent account reads as `0`,
+not `KECCAK_EMPTY`. -/
 def k_get_codehash (a : address) : SailM hash := do
   let acc ← do (k_aload a)
   if ((! acc.present) : Bool)
-  then (pure WORD_ZERO)
+  then (pure ZERO_HASH)
   else (pure acc.info.code_hash)
 
+/-- Deploys code to an account: analyzes, stores, and binds its hash. -/
 def k_deploy_code (a : address) (code : EvmByteSlice) : SailM Unit := do
   let cur ← do (k_aload a)
-  let h ← (( do (code_db_insert code) ) : SailM (BitVec 256) )
+  let h ← (( do (code_db_insert code) ) : SailM b256 )
   (store_account_info a cur { cur.info with code_hash := h })
 
+/-- Computes the PUSH-aware JUMPDEST bitmap of an EIP-7702 delegation
+designator. -/
 def delegation_jumpdest_chunk (target : address) : JumpdestChunk := Id.run do
   let w := (address_to_word target)
   let bits := EMPTY_JUMPDEST_CHUNK
@@ -73,12 +88,14 @@ def delegation_jumpdest_chunk (target : address) : JumpdestChunk := Id.run do
   for k in [loop_k_lower:loop_k_upper:1]i do
     let bits := loop_vars
     loop_vars :=
-      let b := (Sail.BitVec.extractLsb (w >>> (8 *i (19 -i k))) 7 0)
+      let b := (word_low_byte (word_shift_right_limb w (get_slice_int 64 (8 *i (19 -i k)) 0)))
       if ((b == 0x5B#8) : Bool)
-      then (bits ||| (WORD_ONE <<< (3 + k)))
+      then (bits ||| ((Sail.BitVec.zeroExtend 0x01#8 256) <<< (3 + k)))
       else bits
   (pure loop_vars)
 
+/-- Installs an EIP-7702 delegation designator
+(`0xef0100 ‖ target`) as the account's code. -/
 def k_set_delegation (a : address) (target : address) : SailM Unit := do
   let cur ← do (k_aload a)
   let code_len : byte_quantity := (ByteQuantity 23)
@@ -91,13 +108,15 @@ def k_set_delegation (a : address) (target : address) : SailM Unit := do
       let stored ← do (jumpdest_table_store_chunk table code_len BYTE_ZERO chunk)
       assert stored "delegation JUMPDEST chunk store")
   else (pure ())
-  let h ← (( do (code_intern_delegation target table) ) : SailM (BitVec 256) )
+  let h ← (( do (code_intern_delegation target table) ) : SailM b256 )
   (store_account_info a cur { cur.info with code_hash := h })
 
+/-- Resets an account's code to empty (EIP-7702 clearing). -/
 def k_clear_code (a : address) : SailM Unit := do
   let cur ← do (k_aload a)
   (store_account_info a cur { cur.info with code_hash := KECCAK_EMPTY })
 
+/-- An address as 20 big-endian bytes. -/
 def addr_bytes (a : address) : (List byte) := Id.run do
   let w := (address_to_word a)
   let out : (List (BitVec 8)) := []
@@ -106,21 +125,27 @@ def addr_bytes (a : address) : (List byte) := Id.run do
   let mut loop_vars := out
   for k in [loop_k_lower:loop_k_upper:1]i do
     let out := loop_vars
-    loop_vars := ((Sail.BitVec.extractLsb (w >>> (8 *i k)) 7 0) :: out)
+    loop_vars := ((word_low_byte (word_shift_right_limb w (get_slice_int 64 (8 *i k) 0))) :: out)
   (pure loop_vars)
 
+/-- The EIP-7702 delegation designator bytes: `0xef0100 ‖ address`. -/
 def delegation_code (a : address) : (List byte) :=
   (0xEF#8 :: (0x01#8 :: (0x00#8 :: (addr_bytes a))))
 
+/-- The delegation target of an account's code, with a validity flag —
+false when the code is not a designator. -/
 def k_deleg_target (a : address) : SailM (Bool × address) := do
-  let h ← (( do (k_code_key a) ) : SailM (BitVec 256) )
-  let r ← (( do (code_db_read_delegation h) ) : SailM (BitVec 168) )
-  (pure (((BitVec.access r 160) == 1#1), (Sail.BitVec.extractLsb r 159 0)))
+  let h ← (( do (k_code_key a) ) : SailM b256 )
+  let r ← (( do (code_db_read_delegation h) ) : SailM AddressResult )
+  (pure (r.success, r.address))
 
+/-- `EXTCODESIZE`: the account's code length in bytes. -/
 def k_get_code_size (a : address) : SailM byte_length := do
   let code ← do (code_db_resolve (← (k_code_key a)))
   (pure code.bytes.len)
 
+/-- `EXTCODECOPY`: copies account code into frame memory, zero-padded
+past the end. -/
 def k_code_copy (a : address) (dst : memory_pointer) (off : word) (len : memory_length) : SailM Unit := do
   let code ← do (code_db_resolve (← (k_code_key a)))
   (slice_copy_word_offset code.bytes dst off len)

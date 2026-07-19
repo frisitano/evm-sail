@@ -115,14 +115,18 @@ unit transient_storage_reset(const unit u) {
 }
 
 /* build the 7-word (address, slot) key */
-static void transient_key(const lbits addr, const lbits slot,
+static void transient_key(sail_address addr, sail_word slot,
                           uint64_t key[7], uint64_t *hash) {
-  uint64_t a[4], sw[4];
-  lbits_to_be_words4(a, addr);   /* a[0] = 0 (160-bit value), a[1..3] = address */
-  lbits_to_be_words4(sw, slot);
-  key[0] = a[1];
-  key[1] = a[2];
-  key[2] = a[3];
+  uint8_t a[20];
+  uint64_t sw[4];
+  evmsail_address_to_be_bytes(a, addr);
+  sail_word_to_be_words4(sw, slot);
+  key[0] = ((uint64_t)a[0] << 24) | ((uint64_t)a[1] << 16) |
+           ((uint64_t)a[2] << 8) | (uint64_t)a[3];
+  key[1] = 0;
+  key[2] = 0;
+  for (size_t i = 0; i < 8; i++) key[1] = (key[1] << 8) | a[4 + i];
+  for (size_t i = 0; i < 8; i++) key[2] = (key[2] << 8) | a[12 + i];
   key[3] = sw[0];
   key[4] = sw[1];
   key[5] = sw[2];
@@ -130,12 +134,18 @@ static void transient_key(const lbits addr, const lbits slot,
   *hash = h_hash(key);
 }
 
-static unit transient_storage_write_raw(const lbits addr, const lbits slot,
-                                        const lbits v) {
+static h_entry *transient_storage_lookup(sail_address addr, sail_word slot) {
+  uint64_t key[7], h;
+  transient_key(addr, slot, key, &h);
+  return h_get(&h_transient, key, h);
+}
+
+static unit transient_storage_write_raw(sail_address addr, sail_word slot,
+                                        sail_word v) {
   uint64_t key[7], h;
   transient_key(addr, slot, key, &h);
   uint64_t w[4];
-  lbits_to_be_words4(w, v);
+  sail_word_to_be_words4(w, v);
   if (!h_put(&h_transient, key, h, w)) abort();
   return UNIT;
 }
@@ -143,23 +153,23 @@ static unit transient_storage_write_raw(const lbits addr, const lbits slot,
 /* Store a value and make the update part of the current semantic checkpoint.
  * Transient storage is a total map with default zero, so restoring an absent
  * key as an explicit zero is observationally identical. */
-unit transient_storage_write(const lbits addr, const lbits slot, const lbits v) {
-  lbits prior;
-  transient_storage_read(&prior, addr, slot);
+unit transient_storage_write(sail_address addr, sail_word slot, sail_word v) {
+  static const uint64_t zero[4] = {0, 0, 0, 0};
+  h_entry *entry = transient_storage_lookup(addr, slot);
+  sail_word prior = be_words4_to_sail_word(entry ? entry->val : zero);
   state_journal_push_transient(addr, slot, prior);
   return transient_storage_write_raw(addr, slot, v);
 }
 
-unit transient_storage_restore(const lbits addr, const lbits slot,
-                               const lbits v) {
+unit transient_storage_restore(sail_address addr, sail_word slot, sail_word v) {
   return transient_storage_write_raw(addr, slot, v);
 }
 
 /* the 256-bit value at (address, slot); 0 if absent */
-void transient_storage_read(lbits *rop, const lbits addr, const lbits slot) {
+EVMSAIL_WORD_RETURN transient_storage_read(
+    EVMSAIL_WORD_RESULT(result) sail_address addr, sail_word slot) {
   static const uint64_t zero[4] = {0, 0, 0, 0};
-  uint64_t key[7], h;
-  transient_key(addr, slot, key, &h);
-  h_entry *e = h_get(&h_transient, key, h);
-  be_words4_to_lbits(rop, e ? e->val : zero);
+  h_entry *entry = transient_storage_lookup(addr, slot);
+  EVMSAIL_RETURN_WORD(result,
+                      be_words4_to_sail_word(entry ? entry->val : zero));
 }

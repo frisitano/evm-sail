@@ -48,14 +48,15 @@ struct TransactionCosts = {
     native pass counts the nonzero bytes; zero bytes are the
     remainder. */
 function calldata_cost(input : ByteSlice) -> gas_cost = {
-    let ByteQuantity(nonzeroes) = slice_count_nonzero(input);
-    let ByteQuantity(input_len) = input.len;
-    let zeroes : nat = if nonzeroes <= input_len then {
+    let nonzeroes = slice_count_nonzero(input);
+    let input_len = input.len;
+    let zeroes : byte_quantity = if nonzeroes <= input_len then {
             input_len - nonzeroes
         } else {
             throw InvalidBlock(ExecutionInvalid)
         };
-    G_txdatazero * zeroes + G_txdatanonzero * nonzeroes
+    gas_constant_scale_byte_quantity(G_txdatazero, zeroes) +
+        gas_constant_scale_byte_quantity(G_txdatanonzero, nonzeroes)
 }
 
 /*! EIP-7623 calldata tokens: each zero byte counts 1, each nonzero
@@ -99,10 +100,10 @@ function blob_hashes_versioned(hashes : BlobHashes) -> bool = {
     initcode words. */
 function intrinsic_gas(tx : Transaction) -> gas_cost = {
     let data_cost = calldata_cost(tx.input_src);
-    let ByteQuantity(input_len) = tx.input_src.len;
-    let address_cost = G_access_list_address * tx.access_list_address_count;
-    let slot_cost = G_access_list_storage_key * tx.access_list_slot_count;
-    let auth_cost = PER_EMPTY_ACCOUNT * tx.authorization_count;
+    let input_len = tx.input_src.len;
+    let address_cost = gas_constant_scale_protocol_quantity(G_access_list_address, tx.access_list_address_count);
+    let slot_cost = gas_constant_scale_protocol_quantity(G_access_list_storage_key, tx.access_list_slot_count);
+    let auth_cost = gas_constant_scale_protocol_quantity(PER_EMPTY_ACCOUNT, tx.authorization_count);
     var total : gas_cost = data_cost + G_transaction;
     total = total + address_cost;
     total = total + slot_cost;
@@ -114,19 +115,44 @@ function intrinsic_gas(tx : Transaction) -> gas_cost = {
     total
 }
 
-function calldata_floor(input : ByteSlice) -> gas_cost =
-    GasConstant(10) * calldata_tokens(input) + G_transaction
+/*! Computes the EIP-7623 calldata floor cost. */
+function calldata_floor(input : ByteSlice) -> gas_cost = {
+    let nonzeroes = slice_count_nonzero(input);
+    let input_len = input.len;
+    let zeroes : byte_quantity = if nonzeroes <= input_len then {
+            input_len - nonzeroes
+        } else {
+            throw InvalidBlock(ExecutionInvalid)
+        };
+      gas_constant_scale_byte_quantity(GasConstant(10), zeroes)
+    + gas_constant_scale_byte_quantity(GasConstant(40), nonzeroes)
+    + G_transaction
+}
+
+/* EIP-4844 / EIP-7691 / EIP-7594 bound blob hashes per transaction
+ * independently of the active block-wide blob schedule. */
+/*! Returns the active fork's maximum blob count per transaction. */
+function max_blobs_per_transaction() -> blob_count =
+    if k_fork >= Osaka then { 6 } else { if k_fork >= Prague then { 9 } else { 6 } }
+
+/* The active transaction limit is at most nine in every supported fork.  The
+ * explicit static ceiling lets the optimized C representation form the gas
+ * product in uint64_t while the fork-dependent check remains authoritative. */
+/*! Converts a validated transaction blob count to blob gas. */
+function transaction_blob_gas(count : blob_count) -> blob_gas = {
+    let active_maximum = max_blobs_per_transaction();
+    if (active_maximum <= 9) & (count <= active_maximum) then {
+        131072 * count
+    } else {
+        throw InvalidBlock(ExecutionInvalid)
+    }
+}
 
 /*! Computes all transaction costs, rejecting arithmetic beyond word bounds. */
 function transaction_costs(tx : Transaction, blob_price : word) -> option(TransactionCosts) = {
     let intrinsic = intrinsic_gas(tx);
     let floor = calldata_floor(tx.input_src);
-    let blob_gas_value = tx.blob_hashes.count * GAS_PER_BLOB;
-    let blob_gas : blob_gas = if blob_gas_value <= 2 ^ 64 - 1 then {
-            blob_gas_value
-        } else {
-            return None()
-        };
+    let blob_gas = transaction_blob_gas(tx.blob_hashes.count);
     let blob_fee : word = if blob_gas == 0 then {
             ZERO_WORD
         } else {
@@ -174,12 +200,13 @@ function validated_word_product(value : word, factor : gas) -> word =
     }
 
 /*! Adds gas quantities whose sum was established to remain valid. */
-function validated_gas_add(Gas(left) : gas, Gas(right) : gas) -> gas =
-    if right <= (2 ^ 63 - 1) - left then {
-        Gas(left + right)
+function validated_gas_add(left_gas : gas, right_gas : gas) -> gas = {
+    if gas_sum_supported(left_gas, right_gas) then {
+        left_gas + right_gas
     } else {
         throw InvalidBlock(ExecutionInvalid)
     }
+}
 
 /*! Subtracts gas whose affordability was established by validation. */
 function validated_gas_sub_gas(Gas(left) : gas, Gas(right) : gas) -> gas =
@@ -210,7 +237,7 @@ overload validated_gas_sub = {validated_gas_sub_gas, validated_gas_sub_cost}
 function process_auth(au : Authorization) -> gas_refund = {
     var refund = GAS_REFUND_ZERO;
     let authority = au.authority;
-    let chain_ok = word_is_zero(au.chain_id) | (au.chain_id == word_of_nat(k_chain_id));
+    let chain_ok = word_is_zero(au.chain_id) | (au.chain_id == word_of_protocol_quantity(k_chain_id));
 
     /* Sig + chain id are validated from the tuple ALONE before reading the
      * authority's account; a tuple rejected there (e.g. wrong chain id) touches
@@ -325,7 +352,7 @@ function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : w
         None() => max_fee,
     };
     let priority = if word_ule(base_fee, price) then {
-            sub_bits(price, base_fee)
+            word_sub(price, base_fee)
         } else {
             ZERO_WORD
         };
@@ -339,20 +366,22 @@ function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : w
     validity rules (nonce, balance, intrinsic gas, fee caps, blob rules,
     EIP-3607, EIP-7825) and derives the effective prices. */
 function check_transaction_validity(tx : Transaction) -> TxValidity = {
-    /* Sender authentication: the witnessed public key must verify this tx's
-       signature over the signing hash (recover_sender_from_public_key) -- a
-       forged key or bad v/r/s makes the whole BLOCK invalid, regardless of the
-       validity verdict below. */
-    if not_bool(
-        tx_sig_v_ok(k_chain_id, tx.tx_type, tx.sig_v) & tx_auth_ok(tx.pubkey, tx.signing_hash, tx.sig_r, tx.sig_s),
-    ) then {
+    /* Sender authentication: `v` selects the recovered signer, which must be
+       the address derived from the witnessed public key. A forged key or bad
+       v/r/s makes the whole BLOCK invalid, regardless of the validity verdict
+       below. */
+    if not_bool(tx_sig_v_ok(k_chain_id, tx.tx_type, tx.sig_v)) then {
+        throw InvalidBlock(InvalidSignature)
+    };
+    let parity = tx_y_parity(tx.tx_type, tx.sig_v);
+    if not_bool(tx_auth_ok(tx.sender, tx.signing_hash, parity, tx.sig_r, tx.sig_s)) then {
         throw InvalidBlock(InvalidSignature)
     };
 
     /* effective gas price (EIP-1559) */
     let (eff_gas_price, eff_priority_fee) = eff_gas_price_for(k_header.base_fee, tx.max_fee, tx.max_priority_fee);
     let sender = tx.sender;
-    let ByteQuantity(input_len) = tx.input_src.len;
+    let input_len = tx.input_src.len;
     let nonce_before = k_get_nonce(sender);
     let blob_price = blob_base_fee(k_header.excess_blob_gas);
     let checked_costs = transaction_costs(tx, blob_price);
@@ -380,10 +409,10 @@ function check_transaction_validity(tx : Transaction) -> TxValidity = {
        (max_fee_per_gas, max_fee_per_blob_gas), not the effective prices. */
     let (sender_deleg, _) = k_deleg_target(sender);
 
-    /* EIP-4844 / EIP-7691 / EIP-7594 blob-count bounds: Cancun max 6 per block,
-       Prague max 9 per block, Osaka adds MAX_BLOBS_PER_TX = 6. A type-3 tx must
+    /* EIP-4844 / EIP-7691 / EIP-7594 blob-count bounds: Cancun permits 6 per
+       transaction, Prague 9, and Osaka adds MAX_BLOBS_PER_TX = 6. A type-3 tx must
        carry >= 1 blob, must not create, and every versioned hash must be 0x01-tagged. */
-    let max_blobs : blob_count = if k_fork >= Osaka then { 6 } else { if k_fork >= Prague then { 9 } else { 6 } };
+    let max_blobs = max_blobs_per_transaction();
     let blob_ok : bool = if tx_is_blob(tx.tx_type) then {
               (k_fork >= Cancun)
             & (tx.blob_hashes.count != 0)
@@ -413,7 +442,7 @@ function check_transaction_validity(tx : Transaction) -> TxValidity = {
     let set_code_target_ok : bool = not_bool(tx_is_set_code(tx.tx_type)) | not_bool(tx.is_create);
     let set_code_authorizations_ok : bool = not_bool(tx_is_set_code(tx.tx_type)) | (tx.authorization_count != 0);
     let set_code_fork_ok : bool = not_bool(tx_is_set_code(tx.tx_type)) | (k_fork >= Prague);
-    let nonce_incrementable : bool = nonce_before != 2 ^ 64 - 1;
+    let nonce_incrementable : bool = nonce_before != BYTE_QUANTITY_MAX;
     let block_gas_ok : bool = tx.gas_limit <= k_header.gas_limit;
     let valid =   costs_valid
                 & balance_ok

@@ -36,7 +36,7 @@ function decode_access_list_keys(cursor : RlpCursor, addr : address, tail : Acce
         let (key, next) = rlp_cursor_pop(cursor);
         let storage_key : StorageKey = struct { addr = addr, slot = rlp_ref_word(key) };
         let result = decode_access_list_keys(next, addr, tail);
-        if result.slot_count == 2 ^ 64 - 1 then {
+        if result.slot_count == BYTE_QUANTITY_MAX then {
             throw InvalidBlock(RlpDecode)
         } else {
             struct {
@@ -66,7 +66,7 @@ function decode_access_list_entries(cursor : RlpCursor) -> AccessListDecode =
         let addr = word_to_address(rlp_ref_word(addr_f));
         let tail = decode_access_list_entries(next);
         let result = decode_access_list_keys(rlp_ref_cursor(keys_f), addr, tail);
-        if result.address_count == 2 ^ 64 - 1 then {
+        if result.address_count == BYTE_QUANTITY_MAX then {
             throw InvalidBlock(RlpDecode)
         } else {
             struct {
@@ -119,7 +119,7 @@ function decode_blob_hash_items(cursor : RlpCursor, count : blob_count) -> blob_
            != 0xa0 then {
             throw InvalidBlock(RlpDecode)
         };
-        if count == 2 ^ 64 - 1 then {
+        if count == BYTE_QUANTITY_MAX then {
             throw InvalidBlock(RlpDecode)
         };
         decode_blob_hash_items(next, protocol_quantity_increment(count))
@@ -181,7 +181,7 @@ function decode_auth_tuples(cursor : RlpCursor) -> AuthorizationDecode =
             } else {
                 (false, ZERO_ADDR)
             };
-        let nonce_valid = auth_nonce != 2 ^ 64 - 1;
+        let nonce_valid = auth_nonce != BYTE_QUANTITY_MAX;
         let authorization : Authorization = struct {
                 valid_sig =
                       ok
@@ -197,7 +197,7 @@ function decode_auth_tuples(cursor : RlpCursor) -> AuthorizationDecode =
                 chain_id = chain_id,
             };
         let tail = decode_auth_tuples(next);
-        if tail.count == 2 ^ 64 - 1 then {
+        if tail.count == BYTE_QUANTITY_MAX then {
             throw InvalidBlock(RlpDecode)
         } else {
             struct {
@@ -245,7 +245,7 @@ function tx_sig_span(payload : ByteSlice, first : RlpFieldRef, signature : RlpFi
     transaction bounds. */
 function rlp_ref_gas(f : RlpFieldRef, fork : Fork) -> gas = {
     let value = rlp_ref_uint(f);
-    if GAS_MAX_VALUE < value then {
+    if not_bool(gas_value_supported(value)) then {
         throw InvalidBlock(GasUsedExceedsLimit)
     };
     if (fork >= Osaka) & (OSAKA_TRANSACTION_GAS_LIMIT_VALUE < value) then {
@@ -272,7 +272,7 @@ function rlp_ref_gas(f : RlpFieldRef, fork : Fork) -> gas = {
     never materialized: `input_src` carries its (source, offset, length)
     span, bound as the transaction input only when the tx runs. */
 function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, fork : Fork) -> Transaction = {
-    let sender = word_to_address(keccak256(sub_slice(pubkey, BYTE_ONE, PUBLIC_KEY_BODY_LENGTH)));
+    let sender = word_to_address(hash_to_word(keccak256(sub_slice(pubkey, BYTE_ONE, PUBLIC_KEY_BODY_LENGTH))));
     let tx_len : byte_length = tx.len;
     let b0 : byte = if tx_len == BYTE_ZERO then {
             throw InvalidBlock(RlpDecode)
@@ -491,7 +491,7 @@ function rlp_decode_tx(tx : ByteSlice, pubkey : ByteSlice, fork : Fork) -> Trans
                 tx_type = SetCodeTx,
                 sender = sender,
                 raw = tx,
-                nonce = word_of_nat(rlp_ref_uint(nonce_f)),
+                nonce = word_of_protocol_quantity(rlp_ref_uint(nonce_f)),
                 chain_id = rlp_ref_uint(chain_f),
                 gas_limit = rlp_ref_gas(gas_f, fork),
                 is_create = to_f.content_len == BYTE_ZERO,

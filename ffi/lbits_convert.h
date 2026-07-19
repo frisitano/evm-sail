@@ -10,23 +10,11 @@
 #ifndef LBITS_CONVERT_H
 #define LBITS_CONVERT_H
 
-#include "sail.h"
+#include "sail_abi.h"
 #include <stdint.h>
 
-/* Domain-typed views of lbits, mirroring the Sail aliases (word/address/
-   hash). Transparent typedefs: same ABI as the generated callers, but the C
-   signatures read one-for-one against the Sail val declarations. The runtime
-   width in .len is the one piece of type information that survives to C --
-   sail_expect_len makes it a debug-build assertion (compiled out under
-   NDEBUG, e.g. the zkVM guest). */
-typedef lbits sail_word;    /* bits(256): word            */
-typedef lbits sail_address; /* bits(160): address         */
-typedef lbits sail_hash;    /* bits(256): hash / trie key */
-
-#include <assert.h>
 static inline void sail_expect_len(const lbits v, uint64_t n) {
-  (void)v; (void)n;
-  assert(v.len == n);
+  evmsail_expect_lbits_len(v, n);
 }
 
 /* extract a 256-bit lbits into 4 big-endian-ordered 64-bit words */
@@ -35,6 +23,143 @@ static inline void lbits_to_be_words4(uint64_t w[4], const lbits v) {
   w[1] = v.d[2];
   w[2] = v.d[1];
   w[3] = v.d[0];
+}
+
+/* Native word conversions.  These are deliberately separate from the lbits
+   helpers so word-valued FFI code cannot accidentally re-introduce the Sail
+   runtime representation. */
+static inline void sail_word_to_be_words4(uint64_t w[4], const sail_word v) {
+#ifdef EVMSAIL_STANDARD_ABI
+  sail_expect_len(v, 256);
+  w[0] = v.d[3];
+  w[1] = v.d[2];
+  w[2] = v.d[1];
+  w[3] = v.d[0];
+#else
+  w[0] = v.limbs[3];
+  w[1] = v.limbs[2];
+  w[2] = v.limbs[1];
+  w[3] = v.limbs[0];
+#endif
+}
+
+static inline void be_words4_to_be_bytes(uint8_t out[32],
+                                         const uint64_t w[4]) {
+  for (size_t word = 0; word < 4; word++)
+    for (size_t byte = 0; byte < 8; byte++)
+      out[word * 8 + byte] =
+          (uint8_t)(w[word] >> (56 - (byte * 8)));
+}
+
+static inline void sail_hash_to_be_words4(uint64_t w[4], sail_hash value) {
+  uint8_t bytes[32];
+  evmsail_hash_to_be_bytes(bytes, value);
+  for (size_t word = 0; word < 4; word++) {
+    w[word] = 0;
+    for (size_t byte = 0; byte < 8; byte++)
+      w[word] = (w[word] << 8) | bytes[word * 8 + byte];
+  }
+}
+
+static inline void sail_hash_to_le_words4(uint64_t w[4], sail_hash value) {
+  uint64_t be[4];
+  sail_hash_to_be_words4(be, value);
+  w[0] = be[3];
+  w[1] = be[2];
+  w[2] = be[1];
+  w[3] = be[0];
+}
+
+static inline sail_hash be_words4_to_sail_hash(const uint64_t w[4]) {
+  uint8_t bytes[32];
+#ifdef EVMSAIL_STANDARD_ABI
+  sail_hash result = {0, NULL};
+#else
+  sail_hash result;
+#endif
+  be_words4_to_be_bytes(bytes, w);
+  evmsail_hash_set_be_bytes(&result, bytes);
+  return result;
+}
+
+static inline sail_hash le_words4_to_sail_hash(const uint64_t w[4]) {
+  const uint64_t be[4] = {w[3], w[2], w[1], w[0]};
+  return be_words4_to_sail_hash(be);
+}
+
+static inline sail_address be_bytes_to_sail_address(const uint8_t in[20]) {
+#ifdef EVMSAIL_STANDARD_ABI
+  sail_address result = {0, NULL};
+#else
+  sail_address result;
+#endif
+  evmsail_address_set_be_bytes(&result, in);
+  return result;
+}
+
+static inline sail_word be_words4_to_sail_word(const uint64_t w[4]) {
+#ifdef EVMSAIL_STANDARD_ABI
+  sail_word result = {.len = 256, .d = {w[3], w[2], w[1], w[0]}};
+#else
+  sail_word result = {{w[3], w[2], w[1], w[0]}};
+#endif
+  return result;
+}
+
+static inline void sail_word_to_le_words4(uint64_t w[4], const sail_word v) {
+#ifdef EVMSAIL_STANDARD_ABI
+  sail_expect_len(v, 256);
+  w[0] = v.d[0];
+  w[1] = v.d[1];
+  w[2] = v.d[2];
+  w[3] = v.d[3];
+#else
+  w[0] = v.limbs[0];
+  w[1] = v.limbs[1];
+  w[2] = v.limbs[2];
+  w[3] = v.limbs[3];
+#endif
+}
+
+static inline sail_word le_words4_to_sail_word(const uint64_t w[4]) {
+#ifdef EVMSAIL_STANDARD_ABI
+  sail_word result = {.len = 256, .d = {w[0], w[1], w[2], w[3]}};
+#else
+  sail_word result = {{w[0], w[1], w[2], w[3]}};
+#endif
+  return result;
+}
+
+static inline void sail_word_to_be_bytes(uint8_t out[32], const sail_word v) {
+#ifdef EVMSAIL_STANDARD_ABI
+  sail_expect_len(v, 256);
+  for (size_t i = 0; i < 32; i++) {
+    size_t bit = 8 * (31 - i);
+    out[i] = (uint8_t)(v.d[bit / 64] >> (bit % 64));
+  }
+#else
+  for (size_t i = 0; i < 32; i++) {
+    size_t bit = 8 * (31 - i);
+    out[i] = (uint8_t)(v.limbs[bit / 64] >> (bit % 64));
+  }
+#endif
+}
+
+static inline sail_word be_bytes_to_sail_word(const uint8_t in[32]) {
+#ifdef EVMSAIL_STANDARD_ABI
+  sail_word result = {.len = 256, .d = {0, 0, 0, 0}};
+  for (size_t i = 0; i < 32; i++) {
+    size_t bit = 8 * (31 - i);
+    result.d[bit / 64] |= (uint64_t)in[i] << (bit % 64);
+  }
+#else
+  sail_word result = {{0}};
+  for (size_t i = 0; i < 32; i++) {
+    size_t bit = 8 * (31 - i);
+    result.limbs[bit / 64] |= (uint64_t)in[i] << (bit % 64);
+  }
+#endif
+  return result;
 }
 
 /* build a 256-bit lbits from 4 big-endian-ordered 64-bit words */

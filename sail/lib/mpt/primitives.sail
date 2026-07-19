@@ -15,10 +15,12 @@ type trie_depth = range(0, 63)
 type trie_path_cursor = range(0, 64)
 /*! A cursor through the at-most-65 positions used by hex-prefix decoding. */
 type hex_prefix_cursor = range(0, 65)
+/*! A byte position in a 32-byte secure key. */
+type b256_index = range(0, 31)
 /*! A trie path of at most 64 nibbles — secure state and storage keys are
     32-byte hashes, and list tries use short RLP indices. `data` is
     high-aligned; `len` preserves leading zeroes and prefixes. */
-struct TriePath = { data : bits(256), len : trie_path_len }
+struct TriePath = { data : b256, len : trie_path_len }
 
 let HEX_PREFIX_MAX_LENGTH : byte_length = ByteQuantity(33)
 
@@ -34,7 +36,7 @@ function trie_path_len_increment(value : trie_path_len) -> trie_path_len =
     }
 
 /*! Constructs a path from high-aligned data and a nibble length. */
-function path_new(data : bits(256), len : trie_path_len) -> TriePath =
+function path_new(data : b256, len : trie_path_len) -> TriePath =
     struct { data = data, len = len }
 
 /*! Narrows a nonterminal path position to a branch depth. */
@@ -47,24 +49,61 @@ function to_trie_depth(value : trie_path_len) -> trie_depth =
 
 /*! The empty path. */
 function path_empty() -> TriePath =
-    path_new(ZERO_WORD, 0)
+    path_new(b256_zero(), 0)
 
 /*! The 64-nibble path of a 32-byte hash — the secure-trie key form. */
-function path_from_hash(h : bits(256)) -> TriePath =
+function path_from_hash(h : hash) -> TriePath =
     path_new(h, 64)
+
+/*! Maps a nibble cursor to the corresponding byte in decreasing vector order. */
+function path_byte_index(i : trie_path_cursor) -> b256_index = {
+    let quotient = tdiv_int(i, 2);
+    let natural_index : b256_index = if (0 <= quotient) & (quotient <= 31) then {
+            quotient
+        } else {
+            assert(false);
+            0
+        };
+    31 - natural_index
+}
 
 /*! The `i`-th nibble, most significant first; out of range yields `0`. */
 function path_nibble(path : TriePath, i : trie_path_cursor) -> nibble =
     if path_len(path) <= i then {
         0x0
     } else {
-        let distance = 63 - i;
-        sail_shiftright(path.data, distance * 4)[3 .. 0]
+        let B256(bytes) = path.data;
+        let byte_index = path_byte_index(i);
+        if tmod_int(i, 2) == 0 then {
+            bytes[byte_index][7 .. 4]
+        } else {
+            bytes[byte_index][3 .. 0]
+        }
     }
+
+/*! Appends one nibble to a path, rejecting paths already at the key bound. */
+function path_append_nibble(path : TriePath, value : nibble) -> TriePath = {
+    let length = path_len(path);
+    if 64 <= length then {
+        throw InvalidBlock(WitnessDeficient)
+    };
+    let B256(original) = path.data;
+    var bytes = original;
+    let byte_index = path_byte_index(length);
+    if tmod_int(length, 2) == 0 then {
+        bytes[byte_index] = append(value, 0x0)
+    } else {
+        bytes[byte_index] = append(bytes[byte_index][7 .. 4], value)
+    };
+    path_new(B256(bytes), trie_path_len_increment(length))
+}
+
+function path_append_byte(path : TriePath, value : byte) -> TriePath =
+    path_append_nibble(path_append_nibble(path, value[7 .. 4]), value[3 .. 0])
 
 /*! A one-nibble path. */
 function path_single(n : nibble) -> TriePath =
-    path_new(sail_shiftleft(sail_zero_extend(n, 256), 252), 1)
+    path_append_nibble(path_empty(), n)
 
 /*! Path concatenation; over 64 nibbles is a witness fault. */
 function path_concat(a : TriePath, b : TriePath) -> TriePath = {
@@ -72,7 +111,15 @@ function path_concat(a : TriePath, b : TriePath) -> TriePath = {
     let blen = path_len(b);
     let combined = alen + blen;
     if combined <= 64 then {
-        path_new(or_vec(a.data, sail_shiftright(b.data, alen * 4)), combined)
+        var result = a;
+        var index : trie_path_len = 0;
+        foreach (_step from 0 to 63) {
+            if index < blen then {
+                result = path_append_nibble(result, path_nibble(b, index));
+                index = trie_path_len_increment(index)
+            }
+        };
+        result
     } else {
         throw InvalidBlock(WitnessDeficient)
     }
@@ -86,8 +133,15 @@ function path_take(path : TriePath, n : trie_path_len) -> TriePath =
         if path_len(path) <= n then {
             path
         } else {
-            let shift = 256 - n * 4;
-            path_new(sail_shiftleft(sail_shiftright(path.data, shift), shift), n)
+            var result = path_empty();
+            var index : trie_path_len = 0;
+            foreach (_step from 0 to 63) {
+                if index < n then {
+                    result = path_append_nibble(result, path_nibble(path, index));
+                    index = trie_path_len_increment(index)
+                }
+            };
+            result
         }
     }
 
@@ -101,7 +155,22 @@ function path_drop(path : TriePath, n : trie_path_len) -> TriePath = {
             path
         } else {
             let remain : trie_path_len = length - n;
-            path_new(sail_shiftleft(path.data, n * 4), remain)
+            var result = path_empty();
+            var offset : trie_path_len = 0;
+            foreach (_step from 0 to 63) {
+                if offset < remain then {
+                    let candidate = n + offset;
+                    let source_index : trie_path_cursor = if (0 <= candidate) & (candidate <= 64) then {
+                            candidate
+                        } else {
+                            assert(false);
+                            0
+                        };
+                    result = path_append_nibble(result, path_nibble(path, source_index));
+                    offset = trie_path_len_increment(offset)
+                }
+            };
+            result
         }
     }
 }
@@ -115,7 +184,7 @@ function path_lt(a : TriePath, b : TriePath) -> bool =
     if a.data == b.data then {
         path_len(a) < path_len(b)
     } else {
-        word_ult(a.data, b.data)
+        b256_lt(a.data, b.data)
     }
 
 /*! Whether `prefix` is a prefix of `path`. */
@@ -167,7 +236,9 @@ termination_measure hex_prefix_pairs(path, index) = path_len(path) - index
 /*! The hex-prefix (compact) encoding of a nibble path with its
     leaf/extension flag (YP Appendix C.1, the HP function). */
 function hex_prefix_compact(path : TriePath, is_leaf : bool) -> (list(byte), byte_length) = {
-    let odd = tmod_int(path_len(path), 2) == 1;
+    let length : protocol_quantity = path_len(path);
+    let pair_count = protocol_quantity_quotient(length, 2);
+    let odd = length != pair_count * 2;
     let flag : nibble = if is_leaf then { 0x2 } else { 0x0 };
     let first = if odd then {
             append(flag | 0x1, path_nibble(path, 0))
@@ -175,7 +246,7 @@ function hex_prefix_compact(path : TriePath, is_leaf : bool) -> (list(byte), byt
             append(flag, 0x0)
         };
     let first_path_index : hex_prefix_cursor = if odd then { 1 } else { 0 };
-    let encoded_len : byte_length = ByteQuantity(1 + exact_quotient(path_len(path), 2));
+    let encoded_len : byte_length = ByteQuantity(1 + pair_count);
     (first :: hex_prefix_pairs(path, first_path_index), encoded_len)
 }
 

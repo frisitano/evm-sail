@@ -18,6 +18,11 @@ refinement from a backend state to the total maps and logical snapshots below.
 -/
 namespace Evm.Contracts
 
+deriving instance DecidableEq for word
+deriving instance DecidableEq for address
+
+def zeroWord : word := .U256 (BitVec.zero 256)
+
 structure PersistentWorld where
   accountAt : address → Account
   storageAt : address → word → word
@@ -29,14 +34,14 @@ def accountWithoutTransactionFlags (account : Account) : Account :=
   { account with created := false, selfdestructed := false }
 
 def zeroAccountNonce : account_nonce :=
-  { value := 0 }
+  ⟨0⟩
 
-def deletedAccount (emptyCodeHash : word) (account : Account) : Account :=
+def deletedAccount (emptyCodeHash : hash) (account : Account) : Account :=
   { account with
     info :=
       { account.info with
         nonce := zeroAccountNonce
-        balance := BitVec.zero 256
+        balance := zeroWord
         code_hash := emptyCodeHash }
     present := false
     storage_cleared := true }
@@ -66,11 +71,11 @@ def worldClearStorage
       else
         world.accountAt candidate
     storageAt := fun candidate candidateSlot =>
-      if candidate = target then BitVec.zero 256
+      if candidate = target then zeroWord
       else world.storageAt candidate candidateSlot }
 
 def worldDeleteAccount
-    (emptyCodeHash : word) (world : PersistentWorld) (target : address) :
+    (emptyCodeHash : hash) (world : PersistentWorld) (target : address) :
     PersistentWorld :=
   { accountAt := fun candidate =>
       if candidate = target then
@@ -78,7 +83,7 @@ def worldDeleteAccount
       else
         world.accountAt candidate
     storageAt := fun candidate candidateSlot =>
-      if candidate = target then BitVec.zero 256
+      if candidate = target then zeroWord
       else world.storageAt candidate candidateSlot }
 
 abbrev TransientState := address → word → word
@@ -86,7 +91,7 @@ abbrev WarmAddressState := address → Bool
 abbrev WarmSlotState := address → word → Bool
 
 def emptyTransientState : TransientState :=
-  fun _ _ => BitVec.zero 256
+  fun _ _ => zeroWord
 
 def emptyWarmAddressState : WarmAddressState := fun _ => false
 def emptyWarmSlotState : WarmSlotState := fun _ _ => false
@@ -213,7 +218,7 @@ def referenceClearStorage
   { state with txCurrent := worldClearStorage state.txCurrent account }
 
 def referenceDeleteAccount
-    (emptyCodeHash : word) (state : ReferenceWorldState) (account : address) :
+    (emptyCodeHash : hash) (state : ReferenceWorldState) (account : address) :
     ReferenceWorldState :=
   { state with
     txCurrent := worldDeleteAccount emptyCodeHash state.txCurrent account }
@@ -261,7 +266,7 @@ def referenceRevert
     logs := snapshot.logs }
 
 def finalizedWorld
-    (emptyCodeHash : word) (deleteAtEnd : address → Bool)
+    (emptyCodeHash : hash) (deleteAtEnd : address → Bool)
     (world : PersistentWorld) : PersistentWorld :=
   { accountAt := fun account =>
       accountWithoutTransactionFlags
@@ -270,13 +275,13 @@ def finalizedWorld
         else
           world.accountAt account)
     storageAt := fun account slot =>
-      if deleteAtEnd account then BitVec.zero 256
+      if deleteAtEnd account then zeroWord
       else world.storageAt account slot }
 
 /- `deleteAtEnd` is computed by the pure Sail fork policy.  The host transition
 only applies that semantic decision and clears transaction-local flags. -/
 def referenceCommitTransaction
-    (emptyCodeHash : word) (deleteAtEnd : address → Bool)
+    (emptyCodeHash : hash) (deleteAtEnd : address → Bool)
     (state : ReferenceWorldState) : ReferenceWorldState :=
   let committed := finalizedWorld emptyCodeHash deleteAtEnd state.txCurrent
   { blockStart := state.blockStart
@@ -320,20 +325,32 @@ def fixedBEBytes (width value : Nat) : List byte :=
   (List.range width).map fun index =>
     BitVec.ofNat 8 ((value / (256 ^ (width - 1 - index))) % 256)
 
-abbrev PureKeccak := List byte → word
+def wordToNat : word → Nat
+  | .U256 value => value.toNat
 
-def accountSecureKey (keccak : PureKeccak) (account : address) : word :=
-  keccak (fixedBEBytes 20 account.toNat)
+def addressBytesBE : address → List byte
+  | .Address bytes => bytes.toList.reverse
 
-def storageSecureKey (keccak : PureKeccak) (slot : word) : word :=
-  keccak (fixedBEBytes 32 slot.toNat)
+def bytesBEToNat (bytes : List byte) : Nat :=
+  bytes.foldl (fun value byte => value * 256 + byte.toNat) 0
+
+def b256ToNat : b256 → Nat
+  | .B256 bytes => bytesBEToNat bytes.toList.reverse
+
+abbrev PureKeccak := List byte → hash
+
+def accountSecureKey (keccak : PureKeccak) (account : address) : hash :=
+  keccak (addressBytesBE account)
+
+def storageSecureKey (keccak : PureKeccak) (slot : word) : hash :=
+  keccak (fixedBEBytes 32 (wordToNat slot))
 
 def worldDeltaSecurelyOrdered
     (keccak : PureKeccak) (delta : WorldDelta) : Prop :=
-  strictlySortedBy (fun account => (accountSecureKey keccak account).toNat)
+  strictlySortedBy (fun account => b256ToNat (accountSecureKey keccak account))
     delta.accounts ∧
   ∀ account,
-    strictlySortedBy (fun slot => (storageSecureKey keccak slot).toNat)
+    strictlySortedBy (fun slot => b256ToNat (storageSecureKey keccak slot))
       (delta.storage account)
 
 /- The raw account/storage/transient/warm/log externs collectively implement
@@ -353,11 +370,11 @@ structure WorldStateContract where
   writeAccount : BackendState → address → Account → BackendState
   writeStorage : BackendState → address → word → word → BackendState
   clearStorage : BackendState → address → BackendState
-  deleteAccount : word → BackendState → address → BackendState
+  deleteAccount : hash → BackendState → address → BackendState
   checkpoint : BackendState → CheckpointHandle × BackendState
   checkpointDenotes : BackendState → CheckpointHandle → TransactionSnapshot → Prop
   revert : BackendState → CheckpointHandle → Option BackendState
-  commitTransaction : word → (address → Bool) → BackendState → BackendState
+  commitTransaction : hash → (address → Bool) → BackendState → BackendState
   cacheAccount : BackendState → address → Account → BackendState
   cacheStorage : BackendState → address → word → word → BackendState
   readTransient : BackendState → address → word → word
@@ -535,9 +552,9 @@ axiom ancestor_hash_write : ancestor_index → hash → SailM Unit
 axiom ancestor_hash_read : ancestor_index → SailM hash
 
 @[extern "lean_evmsail_keccak256_segments"]
-axiom keccak256_segments : List Bytes → SailM (BitVec 256)
+axiom keccak256_segments : List Bytes → SailM hash
 @[extern "lean_evmsail_sha256_segments"]
-axiom sha256_segments : List Bytes → SailM (BitVec 256)
+axiom sha256_segments : List Bytes → SailM hash
 
 @[extern "lean_evmsail_mem_read_byte"]
 axiom mem_read_byte : byte_quantity → SailM (BitVec 8)
@@ -596,9 +613,9 @@ axiom accelerator_bls_map_fp2_to_g2 : ByteSlice → SailM Bool
 @[extern "lean_evmsail_accelerator_p256_verify"]
 axiom accelerator_p256_verify : ByteSlice → SailM Bool
 @[extern "lean_evmsail_secp256k1_verify"]
-axiom secp256k1_verify : BitVec 256 → word → word → BitVec 256 → BitVec 256 → SailM Bool
+axiom secp256k1_verify : hash → word → word → word → word → SailM Bool
 @[extern "lean_evmsail_host_ecrecover"]
-axiom host_ecrecover : BitVec 256 → y_parity → word → word → SailM (BitVec 168)
+axiom host_ecrecover : hash → y_parity → word → word → SailM AddressResult
 
 @[extern "lean_evmsail_stack_reset"]
 axiom stack_reset : Unit → SailM Unit
@@ -659,7 +676,7 @@ axiom jumpdest_ref_contains : JumpdestRef → byte_quantity → byte_quantity �
 @[extern "lean_evmsail_code_intern_delegation"]
 axiom code_intern_delegation : address → JumpdestRef → SailM hash
 @[extern "lean_evmsail_code_db_read_delegation"]
-axiom code_db_read_delegation : hash → SailM (BitVec 168)
+axiom code_db_read_delegation : hash → SailM AddressResult
 
 @[extern "lean_evmsail_transient_reset"]
 axiom transient_reset : Unit → SailM Unit

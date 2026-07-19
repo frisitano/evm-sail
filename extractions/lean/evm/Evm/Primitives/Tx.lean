@@ -15,6 +15,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -22,7 +23,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -34,6 +37,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -42,10 +46,15 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # Transactions, logs, and receipts
+
+The decoded transaction and its EIP-7702 authorization tuple, the log
+record, and the receipt. Pure data — no registers, no externs. -/
+
 def undefined_TxType (_ : Unit) : SailM TxType := do
   (internal_pick [LegacyTx, AccessListTx, FeeMarketTx, BlobTx, SetCodeTx])
 
-/-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 4 -/
+/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 4 -/
 def TxType_of_num (arg_ : Nat) : TxType :=
   match arg_ with
   | 0 => LegacyTx
@@ -62,23 +71,15 @@ def num_of_TxType (arg_ : TxType) : Int :=
   | .BlobTx => 3
   | .SetCodeTx => 4
 
-def OSAKA_TRANSACTION_GAS_LIMIT_VALUE : Nat := (2 ^i 24)
+def OSAKA_TRANSACTION_GAS_LIMIT_VALUE : protocol_quantity := ⟨16777216⟩
 
-def OSAKA_TRANSACTION_GAS_LIMIT : gas := (Gas (2 ^i 24))
-
-def undefined_Authorization (_ : Unit) : SailM Authorization := do
-  (pure { valid_sig := ← (undefined_bool ()),
-          authority := ← (undefined_bitvector 160),
-          address := ← (undefined_bitvector 160),
-          nonce := ← do
-              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
-              pure (⟨semanticField⟩),
-          chain_id := ← (undefined_bitvector 256) })
+def OSAKA_TRANSACTION_GAS_LIMIT : gas := (Gas 16777216)
 
 def EMPTY_BLOB_HASHES : BlobHashes :=
   { bytes := EMPTY_SLICE,
     count := ⟨0⟩ }
 
+/-- The envelope type byte, as it appears in tx and receipt encodings. -/
 def tx_type_byte (t : TxType) : byte :=
   match t with
   | .LegacyTx => 0x00#8
@@ -87,11 +88,14 @@ def tx_type_byte (t : TxType) : byte :=
   | .BlobTx => 0x03#8
   | .SetCodeTx => 0x04#8
 
+/-- Whether the type carries an EIP-2930 access list envelope (type 1). -/
 def tx_is_access_list (t : TxType) : Bool :=
   match t with
   | .AccessListTx => true
   | _ => false
 
+/-- Whether the type is an EIP-1559-style fee-market envelope (types
+2/3/4). -/
 def tx_is_dynamic_fee (t : TxType) : Bool :=
   match t with
   | .FeeMarketTx => true
@@ -99,11 +103,13 @@ def tx_is_dynamic_fee (t : TxType) : Bool :=
   | .SetCodeTx => true
   | _ => false
 
+/-- Whether the type is an EIP-4844 blob transaction (type 3). -/
 def tx_is_blob (t : TxType) : Bool :=
   match t with
   | .BlobTx => true
   | _ => false
 
+/-- Whether the type is an EIP-7702 set-code transaction (type 4). -/
 def tx_is_set_code (t : TxType) : Bool :=
   match t with
   | .SetCodeTx => true

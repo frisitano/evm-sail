@@ -25,9 +25,9 @@ quantity admitted by transaction and block validation.
 
 newtype gas = Gas : range(0, 2 ^ 63 - 1)
 
-let GAS_MAX_VALUE : nat = 2 ^ 63 - 1
+let GAS_MAX_VALUE : protocol_quantity = 9223372036854775807
 let GAS_ZERO : gas = Gas(0)
-let GAS_MAX : gas = Gas(2 ^ 63 - 1)
+let GAS_MAX : gas = Gas(9223372036854775807)
 
 /* Schedule constants are bounded independently from live gas. Arithmetic on
  * them promotes to gas_cost, so a transaction-controlled multiplier never
@@ -54,11 +54,15 @@ let GAS_REFUND_ZERO : gas_refund = GasRefund(0)
 
 /* Every protocol gas quotient uses a small positive schedule divisor. */
 /*! A small positive divisor used by the gas schedule. */
-type gas_divisor = range(1, 1000)
+type gas_divisor = range(1, 2000)
 
-/*! Constructs bounded gas from a natural number. */
-function nat_to_gas(value : nat) -> gas = {
-    if value <= 2 ^ 63 - 1 then {
+/*! Tests whether a decoded protocol quantity fits the live-gas domain. */
+function gas_value_supported(value : protocol_quantity) -> bool =
+    value <= GAS_MAX_VALUE
+
+/*! Constructs bounded gas from a decoded protocol quantity. */
+function nat_to_gas(value : protocol_quantity) -> gas = {
+    if value <= 9223372036854775807 then {
         Gas(value)
     } else {
         assert(false);
@@ -68,8 +72,9 @@ function nat_to_gas(value : nat) -> gas = {
 
 /*! Narrows a word to gas when it satisfies the protocol bound. */
 function word_to_gas(value : word) -> option(gas) =
-    if value[255 .. 63] == sail_zeros(193) then {
-        Some(Gas(unsigned(value[62 .. 0])))
+    let bits = word_to_bits(value) in
+    if bits[255 .. 63] == sail_zeros(193) then {
+        Some(Gas(unsigned(bits[62 .. 0])))
     } else {
         None()
     }
@@ -134,6 +139,16 @@ function gas_cost_le_gas(GasCost(cost) : gas_cost, Gas(limit) : gas) -> bool =
 function gas_lt_cost(Gas(limit) : gas, GasCost(cost) : gas_cost) -> bool =
     limit < cost
 
+/*! Tests whether adding two live-gas quantities remains in range. */
+function gas_sum_supported(Gas(left) : gas, Gas(right) : gas) -> bool =
+    right <= GAS_MAX_VALUE - left
+
+/*! Adds live gas after establishing that the sum remains in range. */
+function gas_add(Gas(left) : gas, Gas(right) : gas) -> gas = {
+    assert(right <= 9223372036854775807 - left);
+    Gas(left + right)
+}
+
 /*! Subtracts bounded gas after the caller proves the right operand does
     not exceed the left; the assertion preserves the [gas][] range. */
 function gas_sub(Gas(left) : gas, Gas(right) : gas) -> gas = {
@@ -173,6 +188,23 @@ function gas_cost_scale(GasCost(value) : gas_cost, factor : nat) -> gas_cost =
     GasCost(value * factor)
 
 function gas_constant_scale(GasConstant(value) : gas_constant, factor : nat) -> gas_cost =
+    GasCost(value * factor)
+
+/*! Scales an exact gas cost by an exact byte quantity. */
+function gas_cost_scale_byte_quantity(GasCost(value) : gas_cost, ByteQuantity(factor) : byte_quantity) -> gas_cost =
+    GasCost(value * factor)
+
+/*! Scales an exact gas cost by a decoded protocol quantity. */
+function gas_cost_scale_protocol_quantity(GasCost(value) : gas_cost, factor : protocol_quantity) -> gas_cost =
+    GasCost(value * factor)
+
+/*! Scales a schedule constant by a decoded protocol quantity. */
+function gas_constant_scale_protocol_quantity(
+    GasConstant(value) : gas_constant,
+    factor : protocol_quantity,
+) -> (
+    gas_cost
+) =
     GasCost(value * factor)
 
 /*! Scales a schedule constant by an exact byte quantity. */
@@ -227,6 +259,7 @@ overload operator == = {gas_equal, gas_constant_equal, gas_cost_equal}
 overload operator < = {gas_lt, gas_cost_lt, gas_lt_cost}
 overload operator <= = {gas_le, gas_cost_le, gas_cost_le_gas}
 overload operator + = {
+    gas_add,
     gas_cost_add,
     gas_cost_add_constant,
     gas_constant_add
@@ -234,7 +267,10 @@ overload operator + = {
 overload operator - = {gas_sub, gas_cost_sub, gas_constant_sub}
 overload operator * = {
     gas_cost_scale,
+    gas_cost_scale_byte_quantity,
+    gas_cost_scale_protocol_quantity,
     gas_constant_scale,
+    gas_constant_scale_protocol_quantity,
     gas_constant_scale_byte_quantity
 }
 overload operator / = {gas_quotient, gas_cost_quotient}

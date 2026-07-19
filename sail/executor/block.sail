@@ -14,7 +14,6 @@ struct BlockExecutionResult = {
     blob_gas_acc : blob_gas,
     first_tx_recipient : address,
     block_gas_overflow : bool,
-    blob_gas_overflow : bool,
     receipts_root : hash,
     logs_bloom : LogsBloom,
     deposits : ByteSlice,
@@ -53,7 +52,6 @@ function execute_block_transactions(
     var blob_gas_acc : blob_gas = 0;
     var tx0_to : address = ZERO_ADDR;
     var block_gas_overflow : bool = false;
-    var blob_gas_overflow : bool = false;
     var receipts = receipt_accumulator_empty();
     let deposits_start = scratch_begin();
     var cursor = ssz_list_cursor(transactions);
@@ -66,7 +64,7 @@ function execute_block_transactions(
         keys = sub_slice(keys, PUBLIC_KEY_LENGTH, keys.len - PUBLIC_KEY_LENGTH);
         let tx = decode_transaction(transaction, public_key);
         bal_set_index(protocol_quantity_increment(i));
-        if not_bool(block_gas_overflow | blob_gas_overflow) then {
+        if not_bool(block_gas_overflow) then {
             if i == 0 then {
                 tx0_to = tx.recipient
             };
@@ -77,57 +75,35 @@ function execute_block_transactions(
                 if available_gas < tx.gas_limit then {
                     block_gas_overflow = true
                 } else {
-                    let tx_blob_gas_value = tx.blob_hashes.count * GAS_PER_BLOB;
-                    if tx_blob_gas_value > 2 ^ 64 - 1 then {
-                        blob_gas_overflow = true
-                    } else {
-                        let tx_blob_gas : blob_gas = tx_blob_gas_value;
-                        let blob_capacity_ok : bool = if k_fork < Cancun then {
-                                true
-                            } else {
-                                let maximum = blob_max_gas_per_block();
-                                if blob_gas_acc <= maximum then {
-                                    tx_blob_gas <= maximum - blob_gas_acc
-                                } else {
-                                    false
-                                }
-                            };
-                        if not_bool(blob_capacity_ok) then {
-                            blob_gas_overflow = true
+                    let tx_blob_gas = transaction_blob_gas(tx.blob_hashes.count);
+                    let next_blob_gas : blob_gas = if k_fork < Cancun then {
+                            blob_gas_acc
                         } else {
-                            let receipt = process_transaction(tx);
-                            all_ok = all_ok & receipt.valid;
-                            let Gas(accumulated) = gas_acc;
-                            let Gas(used) = receipt.block_gas;
-                            if used <= (2 ^ 63 - 1) - accumulated then {
-                                gas_acc = Gas(accumulated + used);
-                                block_gas_overflow = gas_limit < gas_acc
-                            } else {
-                                block_gas_overflow = true
-                            };
-                            if receipt.valid then {
-                                receipts = receipt_accumulator_push(receipts, receipt);
-                                append_deposit_logs(receipt.logs);
-                                let next_blob_gas = blob_gas_acc + tx_blob_gas;
-                                if next_blob_gas <= 2 ^ 64 - 1 then {
-                                    blob_gas_acc = next_blob_gas
-                                } else {
-                                    blob_gas_overflow = true
-                                }
-                            }
-                        }
+                            checked_block_blob_gas_add(blob_gas_acc, tx_blob_gas)
+                        };
+                    let receipt = process_transaction(tx);
+                    all_ok = all_ok & receipt.valid;
+                    if gas_sum_supported(gas_acc, receipt.block_gas) then {
+                        gas_acc = gas_acc + receipt.block_gas;
+                        block_gas_overflow = gas_limit < gas_acc
+                    } else {
+                        block_gas_overflow = true
+                    };
+                    if receipt.valid then {
+                        receipts = receipt_accumulator_push(receipts, receipt);
+                        append_deposit_logs(receipt.logs);
+                        blob_gas_acc = next_blob_gas
                     }
                 }
             }
         }
     };
     struct {
-        all_ok = all_ok & not_bool(block_gas_overflow) & not_bool(blob_gas_overflow),
+        all_ok = all_ok & not_bool(block_gas_overflow),
         gas_acc = gas_acc,
         blob_gas_acc = blob_gas_acc,
         first_tx_recipient = tx0_to,
         block_gas_overflow = block_gas_overflow,
-        blob_gas_overflow = blob_gas_overflow,
         receipts_root = receipt_accumulator_root(receipts),
         logs_bloom = receipts.bloom,
         deposits = scratch_finish(deposits_start),
@@ -143,7 +119,10 @@ function apply_withdrawals(withdrawals : SszListRef) -> unit = {
         let (withdrawal_ref, tail) = ssz_fixed_list_pop(rest, WD_SIZE);
         rest = tail;
         let withdrawal = decode_withdrawal(withdrawal_ref);
-        k_add_balance(withdrawal.address, alu_mul(word_of_nat(withdrawal.amount), word_of_nat(1000000000)))
+        k_add_balance(
+            withdrawal.address,
+            alu_mul(word_of_protocol_quantity(withdrawal.amount), word_of_protocol_quantity(1000000000)),
+        )
     }
 }
 
@@ -169,7 +148,7 @@ function apply_block_end_state(body : BlockBody) -> unit = {
         apply_withdrawals(body.withdrawals)
     };
     if k_fork < Paris then {
-        k_add_balance(k_coinbase(), word_of_nat(2000000000000000000))
+        k_add_balance(k_coinbase(), word_of_protocol_quantity(2000000000000000000))
     };
     k_tx_merge()
 }
@@ -189,7 +168,7 @@ function execute_block_body(
     bal_set_index(0);
     run_block_start_system_calls();
     let result = execute_block_transactions(body.transactions, public_keys, block_gas_limit);
-    let post_tx_index : item_index = if body.transactions.count < 2 ^ 64 - 1 then {
+    let post_tx_index : item_index = if body.transactions.count < BYTE_QUANTITY_MAX then {
             protocol_quantity_increment(body.transactions.count)
         } else {
             throw InvalidBlock(WitnessDeficient)

@@ -21,6 +21,7 @@ import Evm.Evm.Machine
 import Evm.Evm.Gas
 import Evm.Evm.Precompiles
 import Evm.Evm.Execute
+import Evm.Evm.Interpreter
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -37,6 +38,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -44,7 +46,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -56,6 +60,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -63,6 +68,33 @@ open CallKind
 open Bytes
 open ByteSource
 open BlockError
+
+/-! # The transaction state transition
+
+The per-transaction step of the Ethereum state transition (Yellow Paper
+§6): validate the transaction, charge upfront gas, run it as the
+top-level message call, then settle gas, refunds, and the coinbase fee.
+
+Validity and intrinsic gas are user-space policy; every world effect is a
+kernel syscall, and a transaction-level snapshot/commit/revert bounds the
+whole transaction's world state. The typed-envelope rules covered here:
+EIP-2718 (typed transactions), EIP-1559 (fee market: base fee + priority
+tip caps), EIP-2930 (access lists), EIP-3860 (initcode size/gas),
+EIP-4844 (blob transactions + blob-gas burn), EIP-7702 (set-code
+authorizations), EIP-7623 (calldata floor), EIP-3607 (no transactions
+from an account with code), EIP-7825 (gas cap). Gas refunds (`SSTORE`
+clears) are capped per EIP-3529.
+
+| Name | Value | Description |
+| ---- | ----- | ----------- |
+| `G_transaction` | `21000` | Per-transaction base cost |
+| `G_txcreate` | `32000` | Create-transaction surcharge |
+| `G_txdatazero` | `4` | Per zero calldata byte (EIP-2028) |
+| `G_txdatanonzero` | `16` | Per nonzero calldata byte (EIP-2028) |
+| `G_access_list_address` | `2400` | Per access-list address (EIP-2930) |
+| `G_access_list_storage_key` | `1900` | Per access-list storage key (EIP-2930) |
+| `PER_AUTH_BASE` | `12500` | Per authorization (EIP-7702) |
+| `PER_EMPTY_ACCOUNT` | `25000` | Per authorization of a new account (EIP-7702) | -/
 
 def G_transaction : gas_constant := (GasConstant 21000)
 
@@ -80,16 +112,21 @@ def PER_AUTH_BASE : gas_constant := (GasConstant 12500)
 
 def PER_EMPTY_ACCOUNT : gas_constant := (GasConstant 25000)
 
+/-- The EIP-2028 calldata cost: 4 gas per zero byte, 16 per nonzero. One
+native pass counts the nonzero bytes; zero bytes are the
+remainder. -/
 def calldata_cost (input : EvmByteSlice) : SailM gas_cost := do
-  let .ByteQuantity nonzeroes ← do (slice_count_nonzero input)
-  let .ByteQuantity input_len := input.len
+  let nonzeroes ← do (slice_count_nonzero input)
+  let input_len := input.len
   let zeroes ← (( do
-    if ((nonzeroes ≤b input_len) : Bool)
-    then (pure (input_len -i nonzeroes))
-    else sailThrow ((InvalidBlock ExecutionInvalid)) ) : SailM Nat )
-  (pure (gas_cost_add (gas_constant_scale G_txdatazero zeroes)
-      (gas_constant_scale G_txdatanonzero nonzeroes)))
+    if ((byte_quantity_le nonzeroes input_len) : Bool)
+    then (byte_quantity_sub input_len nonzeroes)
+    else sailThrow ((InvalidBlock ExecutionInvalid)) ) : SailM byte_quantity )
+  (pure (gas_cost_add (gas_constant_scale_byte_quantity G_txdatazero zeroes)
+      (gas_constant_scale_byte_quantity G_txdatanonzero nonzeroes)))
 
+/-- EIP-7623 calldata tokens: each zero byte counts 1, each nonzero
+byte 4. -/
 def calldata_tokens (input : EvmByteSlice) : SailM Nat := do
   let .ByteQuantity nonzeroes ← do (slice_count_nonzero input)
   let .ByteQuantity input_len := input.len
@@ -99,6 +136,8 @@ def calldata_tokens (input : EvmByteSlice) : SailM Nat := do
     else sailThrow ((InvalidBlock ExecutionInvalid)) ) : SailM Nat )
   (pure (zeroes + (4 *i nonzeroes)))
 
+/-- EIP-4844: every blob versioned hash must carry
+`VERSIONED_HASH_VERSION_KZG` (`0x01`). -/
 def blob_hashes_versioned (hashes : BlobHashes) : SailM Bool := do
   let valid : Bool := true
   let remaining : Nat := (hashes.count).value
@@ -131,13 +170,21 @@ def blob_hashes_versioned (hashes : BlobHashes) : SailM Bool := do
     (pure loop_vars) ) : SailM (byte_quantity × Nat × Bool) )
   (pure (valid && ((remaining == 0) : Bool)))
 
+/-- The intrinsic gas of a transaction (YP §6.2, g_0): the 21000 base,
+calldata cost, access-list cost (EIP-2930), authorization cost
+(EIP-7702), and for creates the `G_txcreate` base plus EIP-3860
+initcode words. -/
 def intrinsic_gas (tx : Transaction) : SailM gas_cost := do
   let data_cost ← do (calldata_cost tx.input_src)
-  let .ByteQuantity input_len := tx.input_src.len
+  let input_len := tx.input_src.len
   let address_cost :=
-    (gas_constant_scale G_access_list_address (tx.access_list_address_count).value)
-  let slot_cost := (gas_constant_scale G_access_list_storage_key (tx.access_list_slot_count).value)
-  let auth_cost := (gas_constant_scale PER_EMPTY_ACCOUNT (tx.authorization_count).value)
+    (gas_constant_scale_protocol_quantity G_access_list_address
+      ⟨(tx.access_list_address_count).value⟩)
+  let slot_cost :=
+    (gas_constant_scale_protocol_quantity G_access_list_storage_key
+      ⟨(tx.access_list_slot_count).value⟩)
+  let auth_cost :=
+    (gas_constant_scale_protocol_quantity PER_EMPTY_ACCOUNT ⟨(tx.authorization_count).value⟩)
   let total : gas_cost := (gas_cost_add_constant data_cost G_transaction)
   let total : gas_cost := (gas_cost_add total address_cost)
   let total : gas_cost := (gas_cost_add total slot_cost)
@@ -149,18 +196,52 @@ def intrinsic_gas (tx : Transaction) : SailM gas_cost := do
       (pure (gas_cost_add total (← (initcode_gas input_len)))))
   else (pure total)
 
+/-- Computes the EIP-7623 calldata floor cost. -/
 def calldata_floor (input : EvmByteSlice) : SailM gas_cost := do
-  (pure (gas_cost_add_constant (gas_constant_scale (GasConstant 10) (← (calldata_tokens input)))
-      G_transaction))
+  let nonzeroes ← do (slice_count_nonzero input)
+  let input_len := input.len
+  let zeroes ← (( do
+    if ((byte_quantity_le nonzeroes input_len) : Bool)
+    then (byte_quantity_sub input_len nonzeroes)
+    else sailThrow ((InvalidBlock ExecutionInvalid)) ) : SailM byte_quantity )
+  (pure (gas_cost_add_constant
+      (gas_cost_add (gas_constant_scale_byte_quantity (GasConstant 10) zeroes)
+        (gas_constant_scale_byte_quantity (GasConstant 40) nonzeroes)) G_transaction))
 
+/-- Returns the active fork's maximum blob count per transaction. -/
+def max_blobs_per_transaction (_ : Unit) : SailM blob_count := do
+  let semanticResult ← do
+    if ((fork_gteq (← readReg k_fork) Osaka) : Bool)
+    then (pure 6)
+    else
+      (do
+        if ((fork_gteq (← readReg k_fork) Prague) : Bool)
+        then (pure 9)
+        else (pure 6))
+  pure (⟨semanticResult⟩)
+
+/-- Converts a validated transaction blob count to blob gas. -/
+/- Type quantifiers: count : Nat, 0 ≤ count ∧ count ≤ (2 ^ 64 - 1) -/
+def transaction_blob_gas (count : blob_count) : SailM blob_gas := do
+  let count := (count).value
+  let semanticResult ← do
+    let active_maximum ← do
+      (do
+          let semanticResult ← (max_blobs_per_transaction ())
+          pure ((semanticResult).value))
+    if (((active_maximum ≤b 9) && (count ≤b active_maximum)) : Bool)
+    then (pure (131072 *i count))
+    else sailThrow ((InvalidBlock ExecutionInvalid))
+  pure (⟨semanticResult⟩)
+
+/-- Computes all transaction costs, rejecting arithmetic beyond word bounds. -/
 def transaction_costs (tx : Transaction) (blob_price : word) : SailM (Option TransactionCosts) := SailME.run do
   let intrinsic ← do (intrinsic_gas tx)
   let floor ← do (calldata_floor tx.input_src)
-  let blob_gas_value := ((tx.blob_hashes.count).value *i (GAS_PER_BLOB).value)
-  let blob_gas ← (( do
-    if ((blob_gas_value ≤b ((2 ^i 64) -i 1)) : Bool)
-    then (pure blob_gas_value)
-    else SailME.throw (none : (Option TransactionCosts)) ) : SailME (Option TransactionCosts) Nat )
+  let blob_gas ← do
+    (do
+        let semanticResult ← (transaction_blob_gas ⟨(tx.blob_hashes.count).value⟩)
+        pure ((semanticResult).value))
   let blob_fee ← (( do
     if ((blob_gas == 0) : Bool)
     then (pure ZERO_WORD)
@@ -169,27 +250,27 @@ def transaction_costs (tx : Transaction) (blob_price : word) : SailM (Option Tra
         match (← (word_checked_mul_protocol_quantity blob_price ⟨blob_gas⟩)) with
         | .some amount => (pure amount)
         | none => SailME.throw (none : (Option TransactionCosts))) ) : SailME
-    (Option TransactionCosts) (BitVec 256) )
+    (Option TransactionCosts) word )
   let gas_cap ← (( do
     match (← (word_checked_mul_gas tx.max_fee tx.gas_limit)) with
     | .some amount => (pure amount)
     | none => SailME.throw (none : (Option TransactionCosts)) ) : SailME (Option TransactionCosts)
-    (BitVec 256) )
+    word )
   let blob_cap ← (( do
     match (← (word_checked_mul_protocol_quantity tx.max_blob_fee ⟨blob_gas⟩)) with
     | .some amount => (pure amount)
     | none => SailME.throw (none : (Option TransactionCosts)) ) : SailME (Option TransactionCosts)
-    (BitVec 256) )
+    word )
   let gas_and_value ← (( do
     match (word_checked_add gas_cap tx.value) with
     | .some amount => (pure amount)
     | none => SailME.throw (none : (Option TransactionCosts)) ) : SailME (Option TransactionCosts)
-    (BitVec 256) )
+    word )
   let upfront ← (( do
     match (word_checked_add gas_and_value blob_cap) with
     | .some amount => (pure amount)
     | none => SailME.throw (none : (Option TransactionCosts)) ) : SailME (Option TransactionCosts)
-    (BitVec 256) )
+    word )
   (pure (some
       { intrinsic := intrinsic,
         calldata_floor := floor,
@@ -197,18 +278,19 @@ def transaction_costs (tx : Transaction) (blob_price : word) : SailM (Option Tra
         blob_fee := blob_fee,
         upfront := upfront }))
 
+/-- Reifies a word product whose validity was established by transaction checks. -/
 def validated_word_product (value : word) (factor : gas) : SailM word := do
   match (← (word_checked_mul_gas value factor)) with
   | .some product => (pure product)
   | none => sailThrow ((InvalidBlock ExecutionInvalid))
 
-def validated_gas_add (typ_0 : gas) (typ_1 : gas) : SailM gas := do
-  let .Gas left : gas := typ_0
-  let .Gas right : gas := typ_1
-  if ((right ≤b (((2 ^i 63) -i 1) -i left)) : Bool)
-  then (pure (Gas (left + right)))
+/-- Adds gas quantities whose sum was established to remain valid. -/
+def validated_gas_add (left_gas : gas) (right_gas : gas) : SailM gas := do
+  if ((gas_sum_supported left_gas right_gas) : Bool)
+  then (gas_add left_gas right_gas)
   else sailThrow ((InvalidBlock ExecutionInvalid))
 
+/-- Subtracts gas whose affordability was established by validation. -/
 def validated_gas_sub_gas (typ_0 : gas) (typ_1 : gas) : SailM gas := do
   let .Gas left : gas := typ_0
   let .Gas right : gas := typ_1
@@ -216,6 +298,7 @@ def validated_gas_sub_gas (typ_0 : gas) (typ_1 : gas) : SailM gas := do
   then (pure (Gas (left -i right)))
   else sailThrow ((InvalidBlock ExecutionInvalid))
 
+/-- Subtracts an exact cost whose affordability was established by validation. -/
 def validated_gas_sub_cost (typ_0 : gas) (typ_1 : gas_cost) : SailM gas := do
   let .Gas left : gas := typ_0
   let .GasCost right : gas_cost := typ_1
@@ -223,11 +306,20 @@ def validated_gas_sub_cost (typ_0 : gas) (typ_1 : gas_cost) : SailM gas := do
   then (pure (Gas (left -i right)))
   else sailThrow ((InvalidBlock ExecutionInvalid))
 
+/-- Applies one EIP-7702 authorization: validates it against current
+state, sets or clears the delegation, bumps the authority nonce, and
+refunds if the authority already existed. The signature and chain id
+are validated from the tuple alone before the authority's account is
+read — a tuple rejected there touches no state, so its authority need
+not be witnessed; every authority-state read is gated on those
+checks. The authority is warmed before the code/nonce
+checks, so a tuple later skipped still warms it. -/
 def process_auth (au : Authorization) : SailM gas_refund := do
   let refund := GAS_REFUND_ZERO
   let authority := au.authority
   let chain_ok ← do
-    (pure ((word_is_zero au.chain_id) || (au.chain_id == (← (word_of_nat (← readReg k_chain_id))))))
+    (pure ((word_is_zero au.chain_id) || (au.chain_id == (← (word_of_protocol_quantity
+              ⟨(← readReg k_chain_id)⟩)))))
   if ((au.valid_sig && chain_ok) : Bool)
   then
     (do
@@ -251,11 +343,13 @@ def process_auth (au : Authorization) : SailM gas_refund := do
       else (pure refund))
   else (pure refund)
 
+/-- Applies an authorization list in order. -/
 def process_auth_list (xs : (List Authorization)) : SailM gas_refund := do
   match xs with
   | [] => (pure GAS_REFUND_ZERO)
   | (a :: r) => (pure (gas_refund_add (← (process_auth a)) (← (process_auth_list r))))
 
+/-- Warms every access-list address (EIP-2930/EIP-2929 prewarming). -/
 def warm_access_list_addresses (xs : (List address)) : SailM Unit := do
   match xs with
   | [] => (pure ())
@@ -264,6 +358,8 @@ def warm_access_list_addresses (xs : (List address)) : SailM Unit := do
       let _ ← do (k_access_account a)
       (warm_access_list_addresses r))
 
+/-- Warms every access-list storage slot (EIP-2930/EIP-2929
+prewarming). -/
 def warm_access_list_slots (xs : (List StorageKey)) : SailM Unit := do
   match xs with
   | [] => (pure ())
@@ -272,6 +368,10 @@ def warm_access_list_slots (xs : (List StorageKey)) : SailM Unit := do
       let _ ← do (k_slot_is_warm k.addr k.slot)
       (warm_access_list_slots r))
 
+/-- Pre-warms the accessed-address set (EIP-2929): the sender, the call
+target, the active fork's precompiles, and the access list
+(EIP-2930); EIP-3651 additionally warms the coinbase from Shanghai
+onward. -/
 def prewarm (tx : Transaction) : SailM Unit := do
   let _ ← do (k_access_account tx.sender)
   let _ ← do
@@ -309,6 +409,7 @@ def prewarm (tx : Transaction) : SailM Unit := do
   (warm_access_list_addresses tx.access_list_addresses)
   (warm_access_list_slots tx.access_list_slots)
 
+/-- The receipt of an invalid (inapplicable) transaction. -/
 def invalid_receipt (_ : Unit) : Receipt :=
   { tx_type := LegacyTx,
     success := false,
@@ -317,8 +418,16 @@ def invalid_receipt (_ : Unit) : Receipt :=
     block_gas := GAS_ZERO,
     logs := [] }
 
+/-- The EIP-1559 effective fee: the gas price actually paid is
+`min(max_fee, base_fee + max_priority_fee)`, and the priority tip
+paid to the coinbase is that price minus the base fee. Legacy and
+EIP-2930 transactions carry a single `gas_price`, passed as
+`max_fee = max_priority = gas_price`, so this recovers
+`(gas_price, gas_price − base_fee)`. The priority is clamped at 0 so
+an invalid sub-base-fee price (rejected later by validity) never
+underflows. -/
 def eff_gas_price_for (base_fee : word) (max_fee : word) (max_priority_fee : word) : (word × word) :=
-  let price : (BitVec 256) :=
+  let price : word :=
     match (word_checked_add base_fee max_priority_fee) with
     | .some uncapped =>
       (if ((word_ult max_fee uncapped) : Bool)
@@ -327,19 +436,28 @@ def eff_gas_price_for (base_fee : word) (max_fee : word) (max_priority_fee : wor
     | none => max_fee
   let priority :=
     if ((word_ule base_fee price) : Bool)
-    then (price - base_fee)
+    then (word_sub price base_fee)
     else ZERO_WORD
   (price, priority)
 
+/-- Transaction validity (YP §6.2). First
+authenticates the witnessed public key against the signature over the
+signing hash — a forged key or bad `v`/`r`/`s` makes the whole block
+invalid regardless of the verdict — then applies the per-envelope
+validity rules (nonce, balance, intrinsic gas, fee caps, blob rules,
+EIP-3607, EIP-7825) and derives the effective prices. -/
 def check_transaction_validity (tx : Transaction) : SailM TxValidity := do
-  if ((! ((← (tx_sig_v_ok ⟨(← readReg k_chain_id)⟩ tx.tx_type tx.sig_v)) && (← (tx_auth_ok
-             tx.pubkey tx.signing_hash tx.sig_r tx.sig_s)))) : Bool)
+  if ((! (← (tx_sig_v_ok ⟨(← readReg k_chain_id)⟩ tx.tx_type tx.sig_v))) : Bool)
+  then sailThrow ((InvalidBlock InvalidSignature))
+  else (pure ())
+  let parity := ((tx_y_parity tx.tx_type tx.sig_v)).value
+  if ((! (← (tx_auth_ok tx.sender tx.signing_hash ⟨parity⟩ tx.sig_r tx.sig_s))) : Bool)
   then sailThrow ((InvalidBlock InvalidSignature))
   else (pure ())
   let (eff_gas_price, eff_priority_fee) ← do
     (pure (eff_gas_price_for (← readReg k_header).base_fee tx.max_fee tx.max_priority_fee))
   let sender := tx.sender
-  let .ByteQuantity input_len := tx.input_src.len
+  let input_len := tx.input_src.len
   let nonce_before ← do
     (do
         let semanticResult ← (k_get_nonce sender)
@@ -364,14 +482,10 @@ def check_transaction_validity (tx : Transaction) : SailM TxValidity := do
     | .some nonce => (nonce == nonce_before)
     | none => false
   let (sender_deleg, _) ← do (k_deleg_target sender)
-  let max_blobs ← (( do
-    if ((fork_gteq (← readReg k_fork) Osaka) : Bool)
-    then (pure 6)
-    else
-      (do
-        if ((fork_gteq (← readReg k_fork) Prague) : Bool)
-        then (pure 9)
-        else (pure 6)) ) : SailM Nat )
+  let max_blobs ← do
+    (do
+        let semanticResult ← (max_blobs_per_transaction ())
+        pure ((semanticResult).value))
   let blob_ok ← (( do
     if ((tx_is_blob tx.tx_type) : Bool)
     then
@@ -411,7 +525,7 @@ def check_transaction_validity (tx : Transaction) : SailM TxValidity := do
   let set_code_fork_ok ← (( do
     (pure ((! (tx_is_set_code tx.tx_type)) || (fork_gteq (← readReg k_fork) Prague))) ) : SailM
     Bool )
-  let nonce_incrementable : Bool := (nonce_before != ((2 ^i 64) -i 1))
+  let nonce_incrementable : Bool := (nonce_before != (BYTE_QUANTITY_MAX).value)
   let block_gas_ok ← (( do (pure (gas_le tx.gas_limit (← readReg k_header).gas_limit)) ) : SailM
     Bool )
   let valid :=
@@ -425,6 +539,10 @@ def check_transaction_validity (tx : Transaction) : SailM TxValidity := do
           gas_price := eff_gas_price,
           priority_fee := eff_priority_fee })
 
+/-- The upfront effects, taken before the execution snapshot so they
+persist across a revert: charge the full gas limit and the EIP-4844
+blob fee (burned, no refund), bump the sender nonce, prewarm
+(EIP-2929/EIP-3651), and apply EIP-7702 authorizations. -/
 def apply_transaction_upfront_effects (tx : Transaction) (v : TxValidity) : SailM gas_refund := do
   (k_sub_balance v.sender (← (validated_word_product v.gas_price tx.gas_limit)))
   if ((word_nonzero v.blob_fee) : Bool)
@@ -434,6 +552,8 @@ def apply_transaction_upfront_effects (tx : Transaction) (v : TxValidity) : Sail
   (prewarm tx)
   (process_auth_list tx.authorizations)
 
+/-- Resets the user-space machine for the transaction's top-level frame,
+funding it with `gas_limit − intrinsic`. -/
 def enter_transaction_frame (tx : Transaction) (intrinsic : gas_cost) : SailM Unit := do
   writeReg pc BYTE_ZERO
   writeReg call_depth 0
@@ -446,7 +566,11 @@ def enter_transaction_frame (tx : Transaction) (intrinsic : gas_cost) : SailM Un
   writeReg frame_refund GAS_REFUND_ZERO
   writeReg frame_status (Running ())
 
-/-- Type quantifiers: k_ex161300_ : Nat, 0 ≤ k_ex161300_ ∧ k_ex161300_ ≤ (2 ^ 64 - 1) -/
+/-- Runs a create transaction's top-level frame: derives the new address
+from `(sender, nonce_before)`, fails outright on an address collision
+(all gas consumed, no initcode runs — EIP-684/EIP-7610), and
+otherwise deploys via the initcode path. -/
+/- Type quantifiers: k_ex161353_ : Nat, 0 ≤ k_ex161353_ ∧ k_ex161353_ ≤ (2 ^ 64 - 1) -/
 def run_create_transaction_frame (tx : Transaction) (sender : address) (nonce_before : account_nonce) : SailM Unit := do
   let nonce_before := (nonce_before).value
   let new_addr ← do (k_create_addr sender ⟨nonce_before⟩)
@@ -474,8 +598,8 @@ def run_create_transaction_frame (tx : Transaction) (sender : address) (nonce_be
         (do
           let dep_len := deployed_code.len
           let code_ok ← do
-            (pure ((byte_quantity_le dep_len (← (max_code_size ()))) && ((byte_quantity_equal
-                    dep_len BYTE_ZERO) || ((← (slice_byte deployed_code BYTE_ZERO)) != 0xEF#8))))
+            (pure ((byte_quantity_le dep_len (← (max_code_size ()))) && ((dep_len == BYTE_ZERO) || ((← (slice_byte
+                        deployed_code BYTE_ZERO)) != 0xEF#8))))
           if (code_ok : Bool)
           then
             (do
@@ -490,6 +614,12 @@ def run_create_transaction_frame (tx : Transaction) (sender : address) (nonce_be
           else (exc_halt OutOfGas))
       else (pure ()))
 
+/-- Runs a call transaction's top-level frame: transfers value, then
+either runs the recipient precompile as the top-level frame
+(gas-checked first — an out-of-gas precompile must not execute) or
+installs the message and interprets the recipient's code, resolving
+EIP-7702 delegation at the transaction level (delegate warmed, not
+separately charged). -/
 def run_call_transaction_frame (tx : Transaction) (sender : address) : SailM Unit := do
   let _ ← do (k_aload tx.recipient)
   if ((word_nonzero tx.value) : Bool)
@@ -545,6 +675,8 @@ def run_call_transaction_frame (tx : Transaction) (sender : address) : SailM Uni
       let _ ← do (interpret ())
       (pure ()))
 
+/-- Runs the top-level frame under a snapshot, reverting the world on
+failure; returns success and remaining gas. -/
 def run_transaction_frame (tx : Transaction) (v : TxValidity) : SailM TxFrameResult := do
   let checkpoint ← do (k_state_checkpoint ())
   (enter_transaction_frame tx v.intrinsic_gas)
@@ -561,6 +693,12 @@ def run_transaction_frame (tx : Transaction) (v : TxValidity) : SailM TxFrameRes
             then readReg frame_refund
             else (pure GAS_REFUND_ZERO) })
 
+/-- Settlement (YP §6.2 g*, A_r): applies the capped refund
+(`gas_used/5` from London, `gas_used/2` before), the EIP-7623
+calldata floor (Prague+), and the EIP-7778 block-gas rule (Amsterdam+:
+the block charges the unrefunded, floored gas); returns unused gas to
+the sender, pays the coinbase the priority fee, merges the
+transaction into the block layer, and emits the receipt. -/
 def settle_transaction (tx : Transaction) (v : TxValidity) (authorization_refund : gas_refund) (fr : TxFrameResult) : SailM Receipt := do
   let gas_left0 := fr.gas_remaining
   let gas_used0 ← do (validated_gas_sub_gas tx.gas_limit gas_left0)
@@ -604,6 +742,9 @@ def settle_transaction (tx : Transaction) (v : TxValidity) (authorization_refund
           block_gas := block_gas,
           logs := ← (read_logs ()) })
 
+/-- The complete per-transaction step: reset, validate (an invalid
+transaction yields an invalid receipt and no state change), apply
+upfront effects, run the frame, and settle. -/
 def process_transaction (tx : Transaction) : SailM Receipt := do
   (k_tx_reset ())
   let validity ← do (check_transaction_validity tx)

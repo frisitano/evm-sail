@@ -7,8 +7,8 @@
  * execution performs no allocation. Frames form a stack: stack_enter_frame on call,
  * stack_leave_frame on return, stack_reset per transaction.
  *
- * Words cross the FFI as WHOLE lbits values (one struct copy each way); both
- * runtime representations are handled by ffi/lbits_convert.h.
+ * Words cross the standard FFI as lbits and the optimized FFI as inline
+ * sail_u256 values. Both map directly to the cached four-limb rows here.
  *
  * Bounds policy: the EVM's 1024-word stack limit is enforced by the Sail side
  * (push checks the height and raises StackOverflow); the C side only guards
@@ -66,30 +66,36 @@ uint64_t stack_depth(const unit u) { (void)u; return hs_stk[hs_top].n; }
 
 /* pop AND return the top word (zero when empty; the Sail side guards
    underflow before calling) -- one crossing per POP instead of peek+drop */
-void stack_pop_word(lbits *rop, const unit u) {
+EVMSAIL_WORD_RETURN stack_pop_word(EVMSAIL_WORD_RESULT(result) const unit u) {
   (void)u;
   static const uint64_t zero[4] = {0, 0, 0, 0};
   hs_frame *f = &hs_stk[hs_top];
-  if (f->w && f->n) { f->n--; le_words4_to_lbits(rop, f->w[f->n]); }
-  else le_words4_to_lbits(rop, zero);
+  if (f->w && f->n) {
+    f->n--;
+    EVMSAIL_RETURN_WORD(result, le_words4_to_sail_word(f->w[f->n]));
+  }
+  EVMSAIL_RETURN_WORD(result, le_words4_to_sail_word(zero));
 }
 
-unit stack_push_word(const lbits w) {
+unit stack_push_word(const sail_word w) {
   hs_frame *f = &hs_stk[hs_top];
-  if (f->w && f->n < HS_CAP) lbits_to_le_words4(f->w[f->n++], w);
+  if (f->w && f->n < HS_CAP) sail_word_to_le_words4(f->w[f->n++], w);
   return UNIT;
 }
 
 /* the nth-from-top word (n = 0 is the top); zero if out of range */
-void stack_peek_word(lbits *rop, uint64_t n) {
+EVMSAIL_WORD_RETURN stack_peek_word(EVMSAIL_WORD_RESULT(result) uint64_t n) {
   static const uint64_t zero[4] = {0, 0, 0, 0};
   hs_frame *f = &hs_stk[hs_top];
-  le_words4_to_lbits(rop, (!f->w || n >= f->n) ? zero : f->w[f->n - 1 - n]);
+  EVMSAIL_RETURN_WORD(
+      result,
+      le_words4_to_sail_word((!f->w || n >= f->n) ? zero
+                                                   : f->w[f->n - 1 - n]));
 }
 
 /* overwrite the nth-from-top word (SWAP) */
-unit stack_set_word(uint64_t n, const lbits w) {
+unit stack_set_word(uint64_t n, const sail_word w) {
   hs_frame *f = &hs_stk[hs_top];
-  if (f->w && n < f->n) lbits_to_le_words4(f->w[f->n - 1 - n], w);
+  if (f->w && n < f->n) sail_word_to_le_words4(f->w[f->n - 1 - n], w);
   return UNIT;
 }

@@ -30,9 +30,8 @@ val jumpdest_ref_contains = impure { c: "jumpdest_ref_contains" } : (JumpdestRef
     code hash. */
 val code_intern_delegation = impure { c: "code_intern_indexed_delegation" } : (address, JumpdestRef) -> hash
 /*! Reads a stored delegation designator: the leading bit of the 168-bit
-    result flags a well-formed designator, the low 160 bits are the
-    delegate address. */
-val code_db_read_delegation = impure { c: "code_db_read_delegation" } : hash -> bits(168)
+    result flags a well-formed designator and carries the delegate address. */
+val code_db_read_delegation = impure { c: "code_db_read_delegation" } : hash -> AddressResult
 
 /* PUSH immediate bytes are data even when they contain 0x5b. Sail constructs
  * each 256-byte bitmap chunk; the host only allocates and stores the table. */

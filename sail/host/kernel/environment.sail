@@ -7,7 +7,7 @@ environment reads the `evm` layer serves opcodes from.
 
 /*! The authenticated parent state root, the anchor of every stateless
     read. */
-register k_parent_state_root : hash = sail_zeros(256)
+register k_parent_state_root : hash = ZERO_HASH
 /*! The number of witnessed ancestor headers ([k_blockhash][] range). */
 register k_n_headers : item_count = 0
 /*! The chain id (`CHAINID`, EIP-155 domains). */
@@ -29,12 +29,12 @@ register k_header : BlockHeader =
         base_fee = ZERO_WORD,
         blob_gas_used = 0,
         excess_blob_gas = 0,
-        state_root = ZERO_WORD,
-        receipts_root = ZERO_WORD,
+        state_root = ZERO_HASH,
+        receipts_root = ZERO_HASH,
         logs_bloom = EMPTY_LOGS_BLOOM,
         fee_recipient = ZERO_ADDR,
-        parent_hash = ZERO_WORD,
-        parent_beacon_block_root = ZERO_WORD,
+        parent_hash = ZERO_HASH,
+        parent_beacon_block_root = ZERO_HASH,
         slot_number = 0,
     }
 
@@ -69,16 +69,16 @@ enum EnvField = {
 /*! An environment field as the word its opcode pushes. */
 function k_env(f : EnvField) -> word = {
     match f {
-        F_Number => word_of_nat(k_header.number),
-        F_Timestamp => word_of_nat(k_header.timestamp),
+        F_Number => word_of_protocol_quantity(k_header.number),
+        F_Timestamp => word_of_protocol_quantity(k_header.timestamp),
         F_Coinbase => address_to_word(k_header.fee_recipient),
         F_BaseFee => k_header.base_fee,
-        F_ChainId => word_of_nat(k_chain_id),
+        F_ChainId => word_of_protocol_quantity(k_chain_id),
         F_GasLimit => word_of_gas(k_header.gas_limit),
         F_PrevRandao => k_header.prev_randao,
         F_Origin => address_to_word(k_tx.origin),
         F_GasPrice => k_tx.gas_price,
-        F_SlotNumber => word_of_nat(k_header.slot_number),
+        F_SlotNumber => word_of_protocol_quantity(k_header.slot_number),
     }
 }
 
@@ -89,39 +89,48 @@ function k_coinbase() -> address = k_header.fee_recipient
     window; an in-window ancestor missing from the witness is a deficient
     witness. */
 function k_blockhash(number_word : word) -> hash = {
-    let current = k_header.number;
-    let number = unsigned(number_word);
-    if number < current then {
-        let distance = current - number;
-        if distance <= 256 then {
-            if k_n_headers < distance then {
-                throw InvalidBlock(WitnessDeficient)
+    match word_to_limb(number_word) {
+        Some(number_bits) => {
+            let current = k_header.number;
+            let number = unsigned(number_bits);
+            if number < current then {
+                let distance = current - number;
+                if distance <= 256 then {
+                    if k_n_headers < distance then {
+                        throw InvalidBlock(WitnessDeficient)
+                    } else {
+                        let index : ancestor_index = distance - 1;
+                        ancestor_hash_read(index)
+                    }
+                } else {
+                    ZERO_HASH
+                }
             } else {
-                let index : ancestor_index = distance - 1;
-                ancestor_hash_read(index)
+                ZERO_HASH
             }
-        } else {
-            ZERO_WORD
-        }
-    } else {
-        ZERO_WORD
+        },
+        None() => ZERO_HASH,
     }
 }
 
 /*! `BLOBHASH` (EIP-4844): the `i`-th versioned hash, zero out of
     range. */
 function k_blobhash(index_word : word) -> word = {
-    let count = k_tx.blob_hashes.count;
-    let index = unsigned(index_word);
-    if index < count then {
-        let offset = 33 * index + 1;
-        if offset <= BYTE_QUANTITY_MAX then {
-            slice_load_n(k_tx.blob_hashes.bytes, ByteQuantity(offset), WORD_BYTE_LENGTH)
-        } else {
-            ZERO_WORD
-        }
-    } else {
-        ZERO_WORD
+    match word_to_protocol_quantity(index_word) {
+        Some(index) => {
+            let count = k_tx.blob_hashes.count;
+            if index < count then {
+                if index <= 558992244657865200 then {
+                    let offset : protocol_quantity = 33 * index + 1;
+                    slice_load_n(k_tx.blob_hashes.bytes, ByteQuantity(offset), WORD_BYTE_LENGTH)
+                } else {
+                    ZERO_WORD
+                }
+            } else {
+                ZERO_WORD
+            }
+        },
+        None() => ZERO_WORD,
     }
 }
 

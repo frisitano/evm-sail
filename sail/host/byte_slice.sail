@@ -90,12 +90,17 @@ function slice_load(s : ByteSlice, off : source_pointer) -> word =
 /*! The word at a transaction-controlled 256-bit source offset, returning zero
     when the offset cannot designate a byte in the slice. */
 function slice_load_word_offset(s : ByteSlice, off : word) -> word = {
-    let offset = unsigned(off);
-    let ByteQuantity(slice_len) = s.len;
-    if offset < slice_len then {
-        slice_load(s, ByteQuantity(offset))
-    } else {
-        ZERO_WORD
+    match word_to_limb(off) {
+        Some(offset_bits) => {
+            let offset = unsigned(offset_bits);
+            let ByteQuantity(slice_len) = s.len;
+            if offset < slice_len then {
+                slice_load(s, ByteQuantity(offset))
+            } else {
+                ZERO_WORD
+            }
+        },
+        None() => ZERO_WORD,
     }
 }
 
@@ -123,11 +128,16 @@ function slice_copy(s : ByteSlice, dst : memory_pointer, off : source_pointer, l
 /*! Copies from a transaction-controlled 256-bit source offset into EVM
     memory, applying the source operation's empty-read and zero-padding rules. */
 function slice_copy_word_offset(s : ByteSlice, dst : memory_pointer, off : word, len : memory_length) -> unit = {
-    let offset = unsigned(off);
-    let ByteQuantity(slice_len) = s.len;
-    if offset < slice_len then {
-        slice_copy(s, dst, ByteQuantity(offset), len)
-    } else {
-        slice_copy(EMPTY_SLICE, dst, BYTE_ZERO, len)
+    match word_to_limb(off) {
+        Some(offset_bits) => {
+            let offset = unsigned(offset_bits);
+            let ByteQuantity(slice_len) = s.len;
+            if offset < slice_len then {
+                slice_copy(s, dst, ByteQuantity(offset), len)
+            } else {
+                slice_copy(EMPTY_SLICE, dst, BYTE_ZERO, len)
+            }
+        },
+        None() => slice_copy(EMPTY_SLICE, dst, BYTE_ZERO, len),
     }
 }

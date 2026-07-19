@@ -270,7 +270,7 @@ function ssz_fixed_list_ref(
         throw InvalidBlock(InvalidConfig)
     };
     let ByteQuantity(count_value) = count;
-    if 2 ^ 64 - 1 < count_value then {
+    if BYTE_QUANTITY_MAX < count_value then {
         throw InvalidBlock(InvalidConfig)
     };
     struct { bytes = bytes, count = count_value }
@@ -369,7 +369,7 @@ function decode_stateless_input_ref(input : ByteSlice) -> StatelessInputRef = {
 
 /*! The EIP-7685 per-type request digest:
     `sha256(request_type ‖ request_data)`. */
-function sha256_request_digest(request_type : byte, s : ByteSlice) -> bits(256) =
+function sha256_request_digest(request_type : byte, s : ByteSlice) -> hash =
     sha256([|bytes_list([|request_type|], BYTE_ONE), BytesSlice(s)|])
 
 /* Index every witness node/code directly from its SSZ list reference. */
@@ -428,8 +428,8 @@ struct ParentHeaderFields = {
 }
 
 let EMPTY_PARENT_HEADER_FIELDS : ParentHeaderFields = struct {
-        parent_hash = ZERO_WORD,
-        state_root = ZERO_WORD,
+        parent_hash = ZERO_HASH,
+        state_root = ZERO_HASH,
         base_fee = ZERO_WORD,
         blob_gas_used = 0,
         excess_blob_gas = 0,
@@ -455,11 +455,11 @@ function decode_parent_header_fields(
         let (field, next) = rlp_cursor_pop(cursor);
         var decoded = fields;
         if field_index == 0 then {
-            decoded.parent_hash = rlp_ref_word(field);
+            decoded.parent_hash = word_to_hash(rlp_ref_word(field));
             decoded.have_parent = true
         } else {
             if field_index == 3 then {
-                decoded.state_root = rlp_ref_word(field);
+                decoded.state_root = word_to_hash(rlp_ref_word(field));
                 decoded.have_state = true
             } else {
                 if field_index == 15 then {
@@ -535,7 +535,11 @@ function index_witness_header_cursor(state : WitnessHeaderIndex) -> WitnessHeade
         };
         let current_hash = keccak256(header);
         result.previous_hash = current_hash;
-        let distance = sub_nat(state.cursor.items.count, next.index);
+        let distance : item_count = if next.index <= state.cursor.items.count then {
+                protocol_quantity_sub(state.cursor.items.count, next.index)
+            } else {
+                throw InvalidBlock(WitnessDeficient)
+            };
         if distance < 256 then {
             let ancestor : ancestor_index = distance;
             ancestor_hash_write(ancestor, current_hash)
@@ -556,9 +560,9 @@ function index_witness_headers(headers : SszListRef) -> WitnessContext = {
     let indexed = index_witness_header_cursor(
         struct {
             cursor = ssz_list_cursor(headers),
-            previous_hash = ZERO_WORD,
+            previous_hash = ZERO_HASH,
             valid = headers.count != 0,
-            parent_state_root = ZERO_WORD,
+            parent_state_root = ZERO_HASH,
             parent_base_fee_per_gas = ZERO_WORD,
             parent_blob_gas_used = 0,
             parent_excess_blob_gas = 0,
@@ -587,10 +591,10 @@ function decode_block_header_ssz(input_ref : StatelessInputRef) -> BlockHeader =
     let payload = input_ref.execution_payload;
     let gas_limit_value = ssz_uint(payload, PL_GAS_LIMIT);
     let gas_used_value = ssz_uint(payload, PL_GAS_USED);
-    if GAS_MAX_VALUE < gas_limit_value then {
+    if not_bool(gas_value_supported(gas_limit_value)) then {
         throw InvalidBlock(InvalidGasLimit)
     };
-    if GAS_MAX_VALUE < gas_used_value then {
+    if not_bool(gas_value_supported(gas_used_value)) then {
         throw InvalidBlock(InvalidGasUsed)
     };
     struct {
@@ -598,7 +602,7 @@ function decode_block_header_ssz(input_ref : StatelessInputRef) -> BlockHeader =
         timestamp = ssz_uint(payload, PL_TIMESTAMP),
         gas_limit = nat_to_gas(gas_limit_value),
         gas_used = nat_to_gas(gas_used_value),
-        prev_randao = ssz_bytes32(payload, PL_PREV_RANDAO),
+        prev_randao = hash_to_word(ssz_bytes32(payload, PL_PREV_RANDAO)),
         base_fee = ssz_u256(payload, PL_BASE_FEE),
         blob_gas_used = ssz_uint(payload, PL_BLOB_GAS_USED),
         excess_blob_gas = ssz_uint(payload, PL_EXCESS_BLOB_GAS),

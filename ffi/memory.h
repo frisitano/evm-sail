@@ -3,7 +3,7 @@
 #ifndef MEMORY_H
 #define MEMORY_H
 #include "quantity_abi.h"
-#include "sail.h"
+#include "sail_abi.h"
 #include <stdbool.h>
 #include <stdint.h>
 unit     mem_clear(const unit u);        /* clear to one empty frame (per tx)   */
@@ -24,15 +24,16 @@ uint64_t slice_count_nonzero_source(uint64_t kind, uint64_t off, uint64_t len);
 bool slice_strided_zero_source(uint64_t kind, uint64_t off, uint64_t len,
                                uint64_t start, uint64_t stride, uint64_t width,
                                uint64_t count);
-void slice_load_word_source(lbits *rop, uint64_t kind, uint64_t off,
-                            uint64_t len, uint64_t i);
-void slice_load_n_word_source(lbits *rop, uint64_t kind, uint64_t off,
-                              uint64_t len, uint64_t i, uint64_t n);
+sail_word slice_load_word_source(uint64_t kind, uint64_t off, uint64_t len,
+                                 uint64_t i);
+sail_word slice_load_n_word_source(uint64_t kind, uint64_t off, uint64_t len,
+                                   uint64_t i, uint64_t n);
 unit slice_copy_to_memory_source(uint64_t kind, uint64_t off, uint64_t len,
                                  uint64_t dst, uint64_t i, uint64_t n);
 unit mem_move(EVMSAIL_BYTE_QUANTITY_PARAM(dst),
               EVMSAIL_BYTE_QUANTITY_PARAM(src),
               EVMSAIL_BYTE_QUANTITY_PARAM(len));
-void mem_load_word(lbits *rop, EVMSAIL_BYTE_QUANTITY_PARAM(off));
-unit mem_store_word(EVMSAIL_BYTE_QUANTITY_PARAM(off), const lbits w);
+EVMSAIL_WORD_RETURN mem_load_word(EVMSAIL_WORD_RESULT(result)
+                                  EVMSAIL_BYTE_QUANTITY_PARAM(off));
+unit mem_store_word(EVMSAIL_BYTE_QUANTITY_PARAM(off), const sail_word w);
 #endif

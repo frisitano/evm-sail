@@ -25,6 +25,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -32,7 +33,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -44,6 +47,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -52,13 +56,25 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # Transaction decoding
+
+The EIP-2718 transaction envelope decoder: per-envelope destructuring into
+the [Transaction][type-Transaction] type (one walk, against each
+envelope's exact field shape), plus the EIP-2930 access-list
+and EIP-7702 authorization-tuple decoders. Standalone and purely
+structural: input is a `EvmByteSlice` envelope and a `EvmByteSlice` public key
+of any source; the signature rules and the cryptography live in their own
+modules. -/
+
 def EMPTY_ACCESS_LIST_DECODE : AccessListDecode :=
   { addresses := [],
     storage_slots := [],
     address_count := ⟨0⟩,
     slot_count := ⟨0⟩ }
 
-/-- Type quantifiers: _reclimit : Nat, 0 ≤ _reclimit -/
+/-- Decodes the storage keys of one access-list entry while preserving wire
+order during recursive unwind. -/
+/- Type quantifiers: _reclimit : Nat, 0 ≤ _reclimit -/
 def _rec_decode_access_list_keys (cursor : RlpCursor) (addr : address) (tail : AccessListDecode) (_reclimit : Nat) : SailM AccessListDecode := do
   match _reclimit with
   | 0 =>
@@ -76,7 +92,7 @@ def _rec_decode_access_list_keys (cursor : RlpCursor) (addr : address) (tail : A
             (pure { addr := addr,
                     slot := ← (rlp_ref_word key) }) ) : SailM StorageKey )
           let result ← do (_rec_decode_access_list_keys next addr tail _reclimit_pred)
-          if (((result.slot_count).value == ((2 ^i 64) -i 1)) : Bool)
+          if (((result.slot_count).value == (BYTE_QUANTITY_MAX).value) : Bool)
           then sailThrow ((InvalidBlock RlpDecode))
           else
             (pure { addresses := result.addresses,
@@ -91,6 +107,8 @@ def _rec_decode_access_list_keys (cursor : RlpCursor) (addr : address) (tail : A
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
+/-- Decodes the storage keys of one access-list entry while preserving wire
+order during recursive unwind. -/
 def decode_access_list_keys (cursor : RlpCursor) (addr : address) (tail : AccessListDecode) : SailM AccessListDecode := do
   let _measure :=
     (let .ByteQuantity stop := cursor.stop
@@ -100,7 +118,8 @@ def decode_access_list_keys (cursor : RlpCursor) (addr : address) (tail : Access
   then throw Error.Exit
   else (_rec_decode_access_list_keys cursor addr tail (_measure + 1))
 
-/-- Type quantifiers: _reclimit : Nat, 0 ≤ _reclimit -/
+/-- Decodes the remaining access-list entries into a flat execution view. -/
+/- Type quantifiers: _reclimit : Nat, 0 ≤ _reclimit -/
 def _rec_decode_access_list_entries (cursor : RlpCursor) (_reclimit : Nat) : SailM AccessListDecode := do
   match _reclimit with
   | 0 =>
@@ -120,7 +139,7 @@ def _rec_decode_access_list_entries (cursor : RlpCursor) (_reclimit : Nat) : Sai
           let addr ← do (pure (word_to_address (← (rlp_ref_word addr_f))))
           let tail ← do (_rec_decode_access_list_entries next _reclimit_pred)
           let result ← do (decode_access_list_keys (← (rlp_ref_cursor keys_f)) addr tail)
-          if (((result.address_count).value == ((2 ^i 64) -i 1)) : Bool)
+          if (((result.address_count).value == (BYTE_QUANTITY_MAX).value) : Bool)
           then sailThrow ((InvalidBlock RlpDecode))
           else
             (pure { addresses := (addr :: result.addresses),
@@ -135,6 +154,7 @@ def _rec_decode_access_list_entries (cursor : RlpCursor) (_reclimit : Nat) : Sai
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
+/-- Decodes the remaining access-list entries into a flat execution view. -/
 def decode_access_list_entries (cursor : RlpCursor) : SailM AccessListDecode := do
   let _measure :=
     (let .ByteQuantity stop := cursor.stop
@@ -144,6 +164,10 @@ def decode_access_list_entries (cursor : RlpCursor) : SailM AccessListDecode := 
   then throw Error.Exit
   else (_rec_decode_access_list_entries cursor (_measure + 1))
 
+/-- Decodes an EIP-2930 access list — RLP `[[address, [slot, …]], …]` —
+into the flat representation the transaction and intrinsic-gas
+accounting use: the addresses (one per entry) and the
+`(address, slot)` pairs. -/
 def decode_access_list (f : RlpFieldRef) : SailM ((List address) × (List StorageKey) × item_count × item_count) := do
   let semanticResult ← do
     let decoded ← do (decode_access_list_entries (← (rlp_ref_cursor f)))
@@ -154,8 +178,9 @@ def BLOB_HASH_RLP_LENGTH : byte_length := (ByteQuantity 33)
 
 def BLOB_HASH_LENGTH : byte_length := WORD_BYTE_LENGTH
 
-/-- Type quantifiers: _reclimit : Nat, k_ex160836_ : Nat, 0 ≤ k_ex160836_ ∧
-  k_ex160836_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/-- Validates every fixed-width versioned-hash item and returns their count. -/
+/- Type quantifiers: _reclimit : Nat, k_ex161234_ : Nat, 0 ≤ k_ex161234_ ∧
+  k_ex161234_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_decode_blob_hash_items (cursor : RlpCursor) (count : blob_count) (_reclimit : Nat) : SailM blob_count := do
   let count := (count).value
   let semanticResult ← do
@@ -171,12 +196,11 @@ def _rec_decode_blob_hash_items (cursor : RlpCursor) (count : blob_count) (_recl
         else
           (do
             let (item, next) ← do (rlp_cursor_pop cursor)
-            if ((item.is_list || ((byte_quantity_not_equal item.full_len BLOB_HASH_RLP_LENGTH) || ((byte_quantity_not_equal
-                       item.content_len BLOB_HASH_LENGTH) || ((← (slice_byte item.source
-                           item.full_off)) != 0xA0#8)))) : Bool)
+            if ((item.is_list || ((bne item.full_len BLOB_HASH_RLP_LENGTH) || ((bne item.content_len
+                       BLOB_HASH_LENGTH) || ((← (slice_byte item.source item.full_off)) != 0xA0#8)))) : Bool)
             then sailThrow ((InvalidBlock RlpDecode))
             else (pure ())
-            if ((count == ((2 ^i 64) -i 1)) : Bool)
+            if ((count == (BYTE_QUANTITY_MAX).value) : Bool)
             then sailThrow ((InvalidBlock RlpDecode))
             else (pure ())
             (do
@@ -187,7 +211,8 @@ def _rec_decode_blob_hash_items (cursor : RlpCursor) (count : blob_count) (_recl
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
-/-- Type quantifiers: count : Nat, 0 ≤ count ∧ count ≤ (2 ^ 64 - 1) -/
+/-- Validates every fixed-width versioned-hash item and returns their count. -/
+/- Type quantifiers: count : Nat, 0 ≤ count ∧ count ≤ (2 ^ 64 - 1) -/
 def decode_blob_hash_items (cursor : RlpCursor) (count : blob_count) : SailM blob_count := do
   let count := (count).value
   let semanticResult ← do
@@ -203,6 +228,10 @@ def decode_blob_hash_items (cursor : RlpCursor) (count : blob_count) : SailM blo
           pure ((semanticResult).value))
   pure (⟨semanticResult⟩)
 
+/-- Validates the canonical RLP list of `bytes32` blob versioned hashes
+once, then retains its encoded content as a fixed-stride source view:
+each element is exactly `0xa0` followed by 32 bytes, so `BLOBHASH` can
+load item `i` at `33·i + 1`. -/
 def decode_blob_hashes (f : RlpFieldRef) : SailM BlobHashes := do
   let bytes ← do (sub_slice f.source f.content_off f.content_len)
   (pure { bytes := bytes,
@@ -216,7 +245,9 @@ def EMPTY_AUTHORIZATION_DECODE : AuthorizationDecode :=
   { authorizations := [],
     count := ⟨0⟩ }
 
-/-- Type quantifiers: _reclimit : Nat, 0 ≤ _reclimit -/
+/-- Decodes and signature-recovers the remaining EIP-7702 authorization
+tuples in wire order. -/
+/- Type quantifiers: _reclimit : Nat, 0 ≤ _reclimit -/
 def _rec_decode_auth_tuples (cursor : RlpCursor) (_reclimit : Nat) : SailM AuthorizationDecode := do
   match _reclimit with
   | 0 =>
@@ -260,7 +291,7 @@ def _rec_decode_auth_tuples (cursor : RlpCursor) (_reclimit : Nat) : SailM Autho
               (ecrecover_addr (← (auth_signing_hash chain_id auth_addr ⟨auth_nonce⟩)) ⟨y⟩
                 r s)
             else (pure (false, ZERO_ADDR))
-          let nonce_valid := (auth_nonce != ((2 ^i 64) -i 1))
+          let nonce_valid := (auth_nonce != (BYTE_QUANTITY_MAX).value)
           let authorization : Authorization :=
             { valid_sig := (ok && (y_valid && ((word_ult ZERO_WORD r) && ((word_ult r SECP_N_FULL) && ((word_ult
                             ZERO_WORD s) && ((word_ule s SECP_N_HALF) && nonce_valid)))))),
@@ -269,7 +300,7 @@ def _rec_decode_auth_tuples (cursor : RlpCursor) (_reclimit : Nat) : SailM Autho
               nonce := ⟨auth_nonce⟩,
               chain_id := chain_id }
           let tail ← do (_rec_decode_auth_tuples next _reclimit_pred)
-          if (((tail.count).value == ((2 ^i 64) -i 1)) : Bool)
+          if (((tail.count).value == (BYTE_QUANTITY_MAX).value) : Bool)
           then sailThrow ((InvalidBlock RlpDecode))
           else
             (pure { authorizations := (authorization :: tail.authorizations),
@@ -282,6 +313,8 @@ def _rec_decode_auth_tuples (cursor : RlpCursor) (_reclimit : Nat) : SailM Autho
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
+/-- Decodes and signature-recovers the remaining EIP-7702 authorization
+tuples in wire order. -/
 def decode_auth_tuples (cursor : RlpCursor) : SailM AuthorizationDecode := do
   let _measure :=
     (let .ByteQuantity stop := cursor.stop
@@ -291,15 +324,27 @@ def decode_auth_tuples (cursor : RlpCursor) : SailM AuthorizationDecode := do
   then throw Error.Exit
   else (_rec_decode_auth_tuples cursor (_measure + 1))
 
+/-- Decodes an EIP-7702 authorization list into
+[Authorization][type-Authorization] tuples, recovering each authority.
+Each set-code tuple `[chainId, address, nonce, yParity, r, s]` is
+signed by the authority, whose address is recovered (not witnessed)
+via `ecrecover` over `keccak256(0x05 ++ rlp([chainId, address,
+nonce]))`. `valid_sig` records tuple-local signature validity
+(recoverable, low-`s`, `r`/`y_parity` ranges, incrementable nonce);
+[process_auth][] then applies the chain-id / account nonce / code
+checks. -/
 def decode_auth_list (f : RlpFieldRef) : SailM ((List Authorization) × item_count) := do
   let semanticResult ← do
     let decoded ← do (decode_auth_tuples (← (rlp_ref_cursor f)))
     (pure (decoded.authorizations, (decoded.count).value))
   pure (((fun (semanticValue0, semanticValue1) => (semanticValue0, ⟨semanticValue1⟩)) (semanticResult)))
 
+/-- The calldata/initcode span of the data field within the envelope. -/
 def tx_input_span (payload : EvmByteSlice) (data : RlpFieldRef) : SailM EvmByteSlice := do
   (sub_slice payload data.content_off data.content_len)
 
+/-- The span of the pre-signature fields — from the first field to the
+start of the signature — hashed by [tx_signing_hash][]. -/
 def tx_sig_span (payload : EvmByteSlice) (first : RlpFieldRef) (signature : RlpFieldRef) : SailM EvmByteSlice := do
   let start := first.full_off
   let stop := signature.full_off
@@ -307,25 +352,44 @@ def tx_sig_span (payload : EvmByteSlice) (first : RlpFieldRef) (signature : RlpF
   then sailThrow ((InvalidBlock RlpDecode))
   else (sub_slice payload start (← (byte_quantity_sub stop start)))
 
+/-- Decodes transaction gas and enforces the protocol and fork-specific
+transaction bounds. -/
 def rlp_ref_gas (f : RlpFieldRef) (fork : Fork) : SailM gas := do
   let value ← do
     (do
         let semanticResult ← (rlp_ref_uint f)
         pure ((semanticResult).value))
-  if ((GAS_MAX_VALUE <b value) : Bool)
+  if ((! (gas_value_supported ⟨value⟩)) : Bool)
   then sailThrow ((InvalidBlock GasUsedExceedsLimit))
   else (pure ())
-  if (((fork_gteq fork Osaka) && (OSAKA_TRANSACTION_GAS_LIMIT_VALUE <b value)) : Bool)
+  if (((fork_gteq fork Osaka) && ((OSAKA_TRANSACTION_GAS_LIMIT_VALUE).value <b value)) : Bool)
   then sailThrow ((InvalidBlock GasUsedExceedsLimit))
-  else (nat_to_gas value)
+  else (nat_to_gas ⟨value⟩)
 
+/-- Decodes one transaction from its raw envelope bytes — standalone and
+purely structural. `tx` is the EIP-2718 envelope as a byte slice (any
+source); `pubkey` the 65-byte witness public key (`0x04 ++ X ++ Y`)
+claimed for its sender. The sender derives from the key
+(`keccak256(X ‖ Y)[12:]`) and the signature material (signing hash,
+`v`/`r`/`s`, the key itself) is captured on the transaction;
+authentication happens at execution ([tx_auth_ok][]). No trust
+decision and no fee derivation happens here.
+
+A leading byte `≥ 0xc0` is a legacy (type-0) RLP list; otherwise it is
+the type byte (`0x01` EIP-2930, `0x02` EIP-1559, `0x03` EIP-4844,
+`0x04` EIP-7702) and the RLP payload starts right after it. Each
+envelope is destructured in one walk against its exact field shape; an
+unknown type byte or wrong arity is undecodable. The data field is
+never materialized: `input_src` carries its (source, offset, length)
+span, bound as the transaction input only when the tx runs. -/
 def rlp_decode_tx (tx : EvmByteSlice) (pubkey : EvmByteSlice) (fork : Fork) : SailM Transaction := do
   let sender ← do
     (pure (word_to_address
-        (← (keccak256_slice (← (sub_slice pubkey BYTE_ONE PUBLIC_KEY_BODY_LENGTH))))))
+        (hash_to_word
+          (← (keccak256_slice (← (sub_slice pubkey BYTE_ONE PUBLIC_KEY_BODY_LENGTH)))))))
   let tx_len : byte_quantity := tx.len
   let b0 ← (( do
-    if ((byte_quantity_equal tx_len BYTE_ZERO) : Bool)
+    if ((tx_len == BYTE_ZERO) : Bool)
     then sailThrow ((InvalidBlock RlpDecode))
     else (slice_byte tx BYTE_ZERO) ) : SailM (BitVec 8) )
   let ttype : (BitVec 8) :=
@@ -363,7 +427,7 @@ def rlp_decode_tx (tx : EvmByteSlice) (pubkey : EvmByteSlice) (fork : Fork) : Sa
               nonce := ← (rlp_ref_uint_word nonce_f),
               chain_id := ⟨0⟩,
               gas_limit := ← (rlp_ref_gas gas_f fork),
-              is_create := (byte_quantity_equal to_f.content_len BYTE_ZERO),
+              is_create := (to_f.content_len == BYTE_ZERO),
               recipient := ← (pure (word_to_address (← (rlp_ref_word to_f)))),
               value := ← (rlp_ref_uint_word value_f),
               input_src := ← (tx_input_span payload data_f),
@@ -413,7 +477,7 @@ def rlp_decode_tx (tx : EvmByteSlice) (pubkey : EvmByteSlice) (fork : Fork) : Sa
                       pure ((semanticResult).value))
                   pure (⟨semanticField⟩),
               gas_limit := ← (rlp_ref_gas gas_f fork),
-              is_create := (byte_quantity_equal to_f.content_len BYTE_ZERO),
+              is_create := (to_f.content_len == BYTE_ZERO),
               recipient := ← (pure (word_to_address (← (rlp_ref_word to_f)))),
               value := ← (rlp_ref_uint_word value_f),
               input_src := ← (tx_input_span payload data_f),
@@ -463,7 +527,7 @@ def rlp_decode_tx (tx : EvmByteSlice) (pubkey : EvmByteSlice) (fork : Fork) : Sa
                       pure ((semanticResult).value))
                   pure (⟨semanticField⟩),
               gas_limit := ← (rlp_ref_gas gas_f fork),
-              is_create := (byte_quantity_equal to_f.content_len BYTE_ZERO),
+              is_create := (to_f.content_len == BYTE_ZERO),
               recipient := ← (pure (word_to_address (← (rlp_ref_word to_f)))),
               value := ← (rlp_ref_uint_word value_f),
               input_src := ← (tx_input_span payload data_f),
@@ -516,7 +580,7 @@ def rlp_decode_tx (tx : EvmByteSlice) (pubkey : EvmByteSlice) (fork : Fork) : Sa
                       pure ((semanticResult).value))
                   pure (⟨semanticField⟩),
               gas_limit := ← (rlp_ref_gas gas_f fork),
-              is_create := (byte_quantity_equal to_f.content_len BYTE_ZERO),
+              is_create := (to_f.content_len == BYTE_ZERO),
               recipient := ← (pure (word_to_address (← (rlp_ref_word to_f)))),
               value := ← (rlp_ref_uint_word value_f),
               input_src := ← (tx_input_span payload data_f),
@@ -563,14 +627,14 @@ def rlp_decode_tx (tx : EvmByteSlice) (pubkey : EvmByteSlice) (fork : Fork) : Sa
       (pure { tx_type := SetCodeTx,
               sender := sender,
               raw := tx,
-              nonce := ← (word_of_nat ((← (rlp_ref_uint nonce_f))).value),
+              nonce := ← (word_of_protocol_quantity ⟨((← (rlp_ref_uint nonce_f))).value⟩),
               chain_id := ← do
                   let semanticField ← (do
                       let semanticResult ← (rlp_ref_uint chain_f)
                       pure ((semanticResult).value))
                   pure (⟨semanticField⟩),
               gas_limit := ← (rlp_ref_gas gas_f fork),
-              is_create := (byte_quantity_equal to_f.content_len BYTE_ZERO),
+              is_create := (to_f.content_len == BYTE_ZERO),
               recipient := ← (pure (word_to_address (← (rlp_ref_word to_f)))),
               value := ← (rlp_ref_uint_word value_f),
               input_src := ← (tx_input_span payload data_f),

@@ -217,7 +217,7 @@ termination_measure witness_emit(node, prefix, updates, sink, cursor) = 64 - cur
     is never consulted and no failure path can fire. The native
     (full-state) backend exercises exactly this restriction: same
     implementation, different input. */
-function trie_root(base_root : bits(256), updates : list(TrieUpdate)) -> bits(256) = {
+function trie_root(base_root : hash, updates : list(TrieUpdate)) -> hash = {
     if updates_empty(updates) then {
         base_root
     } else {

@@ -1,7 +1,7 @@
 #ifndef PRECOMPILES_H
 #define PRECOMPILES_H
 
-#include "sail.h"
+#include "sail_abi.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -34,12 +34,12 @@ bool accelerator_bls_map_fp2_to_g2_source(uint64_t kind, uint64_t off,
 bool accelerator_p256_verify_source(uint64_t kind, uint64_t off,
                                     uint64_t len);
 
-/* Fixed-width signature primitives shared by transaction decoding. */
-bool precompile_secp256k1_verify_hash_sig_pub(const lbits h, const lbits r,
-                                              const lbits s, const lbits x,
-                                              const lbits y);
-void precompile_ecrecover_hash_sig(lbits *result, const lbits h,
-                                   uint64_t yparity, const lbits r,
-                                   const lbits s);
+/* Fixed-width signature primitive shared by transaction execution. */
+EVMSAIL_ADDRESS_RESULT_RECORD_RETURN precompile_ecrecover_hash_sig(
+    EVMSAIL_ADDRESS_RESULT_RECORD_RESULT(result) sail_hash h,
+    uint64_t yparity, sail_word r, sail_word s);
+bool precompile_ecrecover_hash_sig_address(uint8_t address[20], sail_hash h,
+                                           uint64_t yparity, sail_word r,
+                                           sail_word s);
 
 #endif

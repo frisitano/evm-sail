@@ -380,53 +380,47 @@ bool accelerator_p256_verify_source(uint64_t kind, uint64_t off,
                               &verified) == ZKVM_EOK && verified;
 }
 
-bool precompile_secp256k1_verify_hash_sig_pub(const lbits hash, const lbits r,
-                                              const lbits s, const lbits x,
-                                              const lbits y) {
-  uint8_t encoded_hash[32], signature[64], public_key[64];
-  bool verified = false;
-  lbits_to_be_bytes(encoded_hash, 32, hash);
-  lbits_to_be_bytes(signature, 32, r);
-  lbits_to_be_bytes(signature + 32, 32, s);
-  lbits_to_be_bytes(public_key, 32, x);
-  lbits_to_be_bytes(public_key + 32, 32, y);
-  return zkvm_secp256k1_verify((const zkvm_secp256k1_hash *)encoded_hash,
-                               (const zkvm_secp256k1_signature *)signature,
-                               (const zkvm_secp256k1_pubkey *)public_key,
-                               &verified) == ZKVM_EOK && verified;
-}
+#ifdef EVMSAIL_DEBUG
+int evmsail_debug_ecrecover_status = ZKVM_EFAIL;
+uint64_t evmsail_debug_ecrecover_parity;
+uint8_t evmsail_debug_ecrecover_pubkey[64];
+uint8_t evmsail_debug_ecrecover_address[20];
+#endif
 
-static void recovered_address_result(lbits *result, bool ok,
-                                     const uint8_t address[20]) {
-  uint8_t encoded[21] = {0};
-  if (ok) {
-    encoded[0] = 1;
-    memcpy(encoded + 1, address, 20);
-  }
-  be_bytes_to_lbits(result, 168, encoded, sizeof encoded);
-}
-
-void precompile_ecrecover_hash_sig(lbits *result, const lbits hash,
-                                   uint64_t yparity, const lbits r,
-                                   const lbits s) {
-  uint8_t encoded_hash[32], signature[64], public_key[64], address_hash[32];
-  uint8_t address[20] = {0};
+bool precompile_ecrecover_hash_sig_address(uint8_t address[20], sail_hash hash,
+                                           uint64_t yparity, sail_word r,
+                                           sail_word s) {
+  zkvm_secp256k1_hash encoded_hash;
+  zkvm_secp256k1_signature signature;
+  zkvm_secp256k1_pubkey public_key;
+  uint8_t address_hash[32];
   uint64_t hash_words[4] = {0, 0, 0, 0};
   bool ok = yparity <= 1;
-  lbits_to_be_bytes(encoded_hash, 32, hash);
-  lbits_to_be_bytes(signature, 32, r);
-  lbits_to_be_bytes(signature + 32, 32, s);
-  if (ok)
-    ok = zkvm_secp256k1_ecrecover(
-             (const zkvm_secp256k1_hash *)encoded_hash,
-             (const zkvm_secp256k1_signature *)signature, (uint8_t)yparity,
-             (zkvm_secp256k1_pubkey *)public_key) == ZKVM_EOK;
+  int status = ZKVM_EFAIL;
+  memset(address, 0, 20);
+  memset(&public_key, 0, sizeof public_key);
+  evmsail_hash_to_be_bytes(encoded_hash.data, hash);
+  sail_word_to_be_bytes(signature.data, r);
+  sail_word_to_be_bytes(signature.data + 32, s);
   if (ok) {
-    host_keccak256_bytes(hash_words, public_key, sizeof public_key);
+    status = zkvm_secp256k1_ecrecover(&encoded_hash, &signature,
+                                      (uint8_t)yparity, &public_key);
+    ok = status == ZKVM_EOK;
+  }
+  if (ok) {
+    host_keccak256_bytes(hash_words, public_key.data, sizeof public_key.data);
     for (int i = 0; i < 4; i++)
       for (int j = 0; j < 8; j++)
         address_hash[i * 8 + j] = (uint8_t)(hash_words[i] >> (56 - 8 * j));
     memcpy(address, address_hash + 12, 20);
   }
-  recovered_address_result(result, ok, address);
+#ifdef EVMSAIL_DEBUG
+  evmsail_debug_ecrecover_status = status;
+  evmsail_debug_ecrecover_parity = yparity;
+  memcpy(evmsail_debug_ecrecover_pubkey, public_key.data,
+         sizeof evmsail_debug_ecrecover_pubkey);
+  memcpy(evmsail_debug_ecrecover_address, address,
+         sizeof evmsail_debug_ecrecover_address);
+#endif
+  return ok;
 }

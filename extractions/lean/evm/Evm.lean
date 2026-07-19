@@ -26,6 +26,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -33,7 +34,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -45,6 +48,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -58,7 +62,7 @@ def initialize_registers (_ : Unit) : Unit :=
 
 def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg scratch_cursor BYTE_ZERO
-  writeReg k_parent_state_root (BitVec.zero 256)
+  writeReg k_parent_state_root ZERO_HASH
   writeReg k_n_headers 0
   writeReg k_chain_id 1
   writeReg k_fork Amsterdam
@@ -74,12 +78,12 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
                       base_fee := ZERO_WORD,
                       blob_gas_used := ⟨0⟩,
                       excess_blob_gas := ⟨0⟩,
-                      state_root := ZERO_WORD,
-                      receipts_root := ZERO_WORD,
+                      state_root := ZERO_HASH,
+                      receipts_root := ZERO_HASH,
                       logs_bloom := EMPTY_LOGS_BLOOM,
                       fee_recipient := ZERO_ADDR,
-                      parent_hash := ZERO_WORD,
-                      parent_beacon_block_root := ZERO_WORD,
+                      parent_hash := ZERO_HASH,
+                      parent_beacon_block_root := ZERO_HASH,
                       slot_number := ⟨0⟩ }
   writeReg k_tx { origin := ZERO_ADDR,
                   gas_price := ZERO_WORD,
@@ -90,6 +94,8 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg frame_status (Running ())
   writeReg message DEFAULT_MESSAGE
   writeReg call_depth 0
+  writeReg frame_stack (vectorInit DEFAULT_FRAME_CONTINUATION)
+  writeReg frame_stack_top 0
   writeReg frame_code EMPTY_CODE
   writeReg calldata EMPTY_SLICE
   writeReg returndata EMPTY_SLICE

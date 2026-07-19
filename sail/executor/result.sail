@@ -9,7 +9,7 @@ let RESULT_METADATA_LENGTH : byte_length = ByteQuantity(5)
 
 /*! Writes the request root and validation metadata prefix. */
 function result_prefix(root : hash, success : bool) -> unit = {
-    scratch_push_bytes(word_to_bytes32(root), WORD_BYTE_LENGTH);
+    scratch_push_bytes(hash_to_bytes32(root), WORD_BYTE_LENGTH);
     scratch_push_bytes([|if success then { 0x01 } else { 0x00 }, 0x25, 0x00, 0x00, 0x00|], RESULT_METADATA_LENGTH)
 }
 
@@ -51,6 +51,6 @@ function write_invalid_result() -> unit = {
         scratch_push_bytes([|b|], BYTE_ONE)
     };
     let chain_config = scratch_finish(start);
-    commit_validation_result(0x0000000000000000000000000000000000000000000000000000000000000000, false, chain_config);
+    commit_validation_result(ZERO_HASH, false, chain_config);
     cycle_scope_end(SCOPE_SERIALIZE_OUTPUT)
 }

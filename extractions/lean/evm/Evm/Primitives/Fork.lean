@@ -19,6 +19,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -26,7 +27,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -38,6 +41,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -46,11 +50,18 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # Protocol forks
+
+The protocol forks the model executes, oldest to newest. Declaration order
+is the activation order, and every fork-gated rule in the specification
+compares on it via [fork_gteq][] / [fork_lt][]. Pure data — no registers,
+no externs. -/
+
 def undefined_Fork (_ : Unit) : SailM Fork := do
   (internal_pick
     [Frontier, Homestead, Byzantium, Constantinople, Istanbul, Berlin, London, Paris, Shanghai, Cancun, Prague, Osaka, Amsterdam])
 
-/-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 12 -/
+/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 12 -/
 def Fork_of_num (arg_ : Nat) : Fork :=
   match arg_ with
   | 0 => Frontier
@@ -83,7 +94,13 @@ def num_of_Fork (arg_ : Fork) : Int :=
   | .Osaka => 11
   | .Amsterdam => 12
 
-/-- Type quantifiers: idx : Nat, 0 ≤ idx ∧ idx ≤ (2 ^ 64 - 1) -/
+/-- Deserializes an SSZ `ProtocolFork` index (the consensus
+`ProtocolFork` order: … Shanghai=14, Cancun=15, Prague=16,
+Osaka=17, BPO1=18, BPO2=19, Amsterdam=20) into the [Fork][type-Fork]
+whose execution rules apply: blob-parameter-only forks collapse to
+their base fork, unknown future indices to the newest. The raw index
+is preserved separately (`ChainConfig.fork_index`) for exact checks. -/
+/- Type quantifiers: idx : Nat, 0 ≤ idx ∧ idx ≤ (2 ^ 64 - 1) -/
 def fork_of_protocol_index (idx : protocol_fork_index) : Fork :=
   let idx := (idx).value
   if ((20 ≤b idx) : Bool)

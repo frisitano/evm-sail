@@ -15,9 +15,15 @@
 #ifndef EVMSAIL_TEST_UTILS_H
 #define EVMSAIL_TEST_UTILS_H
 
+#if defined(__GNUC__) || defined(__clang__)
+#define EVMSAIL_GUEST_API __attribute__((visibility("default")))
+#else
+#define EVMSAIL_GUEST_API
+#endif
+
 /* model_init / model_fini around the whole session (once per process). */
-void evmsail_lib_init(void);
-void evmsail_lib_fini(void);
+EVMSAIL_GUEST_API void evmsail_lib_init(void);
+EVMSAIL_GUEST_API void evmsail_lib_fini(void);
 
 /* FULL wipe back to the post-model_init "fresh block" state: world overlay +
  * warm/journal/logs/refund/selfdestruct/created/bal/transient (k_world_reset),
@@ -25,23 +31,25 @@ void evmsail_lib_fini(void);
  * (set true on a deficient witness and NEVER self-reset -- the one leak an
  * FFI-only reset would miss), and the buffered output. Call between fixtures
  * ONLY in a reused (warm-worker) process; a forked child does not need it. */
-void evmsail_test_reset(void);
+EVMSAIL_GUEST_API void evmsail_test_reset(void);
 
 /* The world wipe alone (no output-buffer reset). Calls the FFI resets directly;
  * needs no Sail-level k_world_reset. */
-void evmsail_clear_memory(void);
+EVMSAIL_GUEST_API void evmsail_clear_memory(void);
 
 /* Run the guest once over `in`[0..n) on a large-stack thread (the guest needs
  * a big stack for deep SSZ-list recursion). Resets the output buffers first,
  * so it is correct in BOTH the fork and warm-worker modes. On return, *out
  * points into the static output buffer (valid until the next run); the return
  * value is the output length in bytes. */
-unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
-                               const unsigned char **out);
+EVMSAIL_GUEST_API unsigned long
+evmsail_run_once(const unsigned char *in, unsigned long n,
+                 const unsigned char **out);
 
 /* On-demand post-run debug dump of the live FFI state and canonical main.sail
  * output as a self-describing big-endian blob; *out points into a static buffer
  * valid until the next dump. This function is native-test-only. */
-unsigned long evmsail_debug_dump(const unsigned char **out);
+EVMSAIL_GUEST_API unsigned long
+evmsail_debug_dump(const unsigned char **out);
 
 #endif /* EVMSAIL_TEST_UTILS_H */

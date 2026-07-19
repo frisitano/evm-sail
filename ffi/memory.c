@@ -128,7 +128,8 @@ static uint8_t *frame_write_region(uint64_t off, uint64_t len) {
 /* MLOAD: the 32-byte big-endian word at off. No establishment -- reads past
  * the extent are zeros, and charge_expansion precedes every MLOAD so the
  * gas-side watermark already covers the range. */
-void mem_load_word(lbits *rop, EVMSAIL_BYTE_QUANTITY_PARAM(off)) {
+EVMSAIL_WORD_RETURN mem_load_word(EVMSAIL_WORD_RESULT(result)
+                                  EVMSAIL_BYTE_QUANTITY_PARAM(off)) {
   uint64_t offset = evmsail_byte_quantity_value(off);
   uint8_t buf[32];
   for (int i = 0; i < 32; i++) {
@@ -137,13 +138,13 @@ void mem_load_word(lbits *rop, EVMSAIL_BYTE_QUANTITY_PARAM(off)) {
                  ? arena[f_base[h_top] + o]
                  : 0;
   }
-  be_bytes_to_lbits(rop, 256, buf, 32);
+  EVMSAIL_RETURN_WORD(result, be_bytes_to_sail_word(buf));
 }
 
 /* MSTORE: the 32-byte big-endian word at off (establish + one memcpy) */
-unit mem_store_word(EVMSAIL_BYTE_QUANTITY_PARAM(off), const lbits w) {
+unit mem_store_word(EVMSAIL_BYTE_QUANTITY_PARAM(off), const sail_word w) {
   uint8_t buf[32];
-  lbits_to_be_bytes(buf, 32, w);
+  sail_word_to_be_bytes(buf, w);
   uint8_t *d = frame_write_region(evmsail_byte_quantity_value(off), 32);
   if (d) memcpy(d, buf, 32);
   return UNIT;
@@ -238,8 +239,8 @@ bool slice_strided_zero_source(uint64_t kind, uint64_t off, uint64_t len,
 }
 
 /* the 32-byte word at slice offset i, zero-padded past the slice's end */
-void slice_load_word_source(lbits *rop, uint64_t kind, uint64_t off,
-                            uint64_t len, uint64_t i) {
+sail_word slice_load_word_source(uint64_t kind, uint64_t off, uint64_t len,
+                                 uint64_t i) {
   uint8_t b[32] = {0};
   if (i < len) {
     uint64_t n = len - i;
@@ -248,13 +249,13 @@ void slice_load_word_source(lbits *rop, uint64_t kind, uint64_t off,
     uint64_t rl = 0;
     if (evmsail_resolve_byte_source(kind, off + i, n, &p, &rl) && rl == n) memcpy(b, p, n);
   }
-  be_bytes_to_lbits(rop, 256, b, 32);
+  return be_bytes_to_sail_word(b);
 }
 
 /* the n-byte big-endian word at slice offset i, right-aligned and zero-padded
  * past the slice's end (PUSH0..PUSH32) */
-void slice_load_n_word_source(lbits *rop, uint64_t kind, uint64_t off,
-                              uint64_t len, uint64_t i, uint64_t n) {
+sail_word slice_load_n_word_source(uint64_t kind, uint64_t off, uint64_t len,
+                                   uint64_t i, uint64_t n) {
   uint8_t b[32] = {0};
   uint64_t cnt = n < 32 ? n : 32;
   if (i < len) {
@@ -263,9 +264,10 @@ void slice_load_n_word_source(lbits *rop, uint64_t kind, uint64_t off,
     const uint8_t *p = NULL;
     uint64_t resolved_len = 0;
     if (evmsail_resolve_byte_source(kind, off + i, m, &p, &resolved_len) &&
-        p && resolved_len == m) memcpy(b, p, m);
+        p && resolved_len == m)
+      memcpy(b + 32 - cnt, p, m);
   }
-  be_bytes_to_lbits(rop, 256, b, (size_t)cnt);
+  return be_bytes_to_sail_word(b);
 }
 
 /* slice[i, i+n) into memory at dst, zero-filling past the slice's end. The

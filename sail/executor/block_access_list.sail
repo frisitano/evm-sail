@@ -45,7 +45,7 @@ struct BalNonceRun = {
 
 /*! Adds logical BAL item counts and rejects protocol-quantity overflow. */
 function bal_count_add(a : item_count, b : item_count) -> item_count =
-    if b <= 2 ^ 64 - 1 - a then {
+    if b <= BYTE_QUANTITY_MAX - a then {
         a + b
     } else {
         throw InvalidBlock(ExecutionInvalid)

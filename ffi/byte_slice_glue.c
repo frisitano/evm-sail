@@ -132,17 +132,17 @@ int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
 }
 
 bool scratch_store_bytes(EVMSAIL_BYTE_QUANTITY_PARAM(off),
-                         struct node_zz5listz8z5bvz9 *bytes,
+                         evmsail_byte_list bytes,
                          EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
   uint64_t off_value = evmsail_byte_quantity_value(off);
   uint64_t len_value = evmsail_byte_quantity_value(len);
   uint8_t *out = scratch_prepare(off_value, len_value);
   if (len_value != 0 && !out) return false;
 
-  struct node_zz5listz8z5bvz9 *byte = bytes;
+  evmsail_byte_list byte = bytes;
   for (uint64_t i = 0; i < len_value; i++) {
     if (!byte) return false;
-    lbits_to_be_bytes(out + i, 1, byte->hd);
+    out[i] = evmsail_byte_value(byte->hd);
     byte = byte->tl;
   }
   if (byte) return false;
@@ -202,20 +202,26 @@ bool slice_strided_zero(struct zByteSlice slice,
       evmsail_byte_quantity_value(count));
 }
 
-void slice_load_word(lbits *result, struct zByteSlice slice,
-                     EVMSAIL_BYTE_QUANTITY_PARAM(index)) {
-  slice_load_word_source(
-      result, evmsail_source_kind(slice.zsource), byte_slice_off(&slice),
-      byte_slice_len(&slice), evmsail_byte_quantity_value(index));
+EVMSAIL_WORD_RETURN slice_load_word(EVMSAIL_WORD_RESULT(result)
+                                    struct zByteSlice slice,
+                                    EVMSAIL_BYTE_QUANTITY_PARAM(index)) {
+  EVMSAIL_RETURN_WORD(
+      result, slice_load_word_source(evmsail_source_kind(slice.zsource),
+                                     byte_slice_off(&slice),
+                                     byte_slice_len(&slice),
+                                     evmsail_byte_quantity_value(index)));
 }
 
-void slice_load_n_word(lbits *result, struct zByteSlice slice,
-                       EVMSAIL_BYTE_QUANTITY_PARAM(index),
-                       EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
-  slice_load_n_word_source(
-      result, evmsail_source_kind(slice.zsource), byte_slice_off(&slice),
-      byte_slice_len(&slice), evmsail_byte_quantity_value(index),
-      evmsail_byte_quantity_value(len));
+EVMSAIL_WORD_RETURN slice_load_n_word(EVMSAIL_WORD_RESULT(result)
+                                      struct zByteSlice slice,
+                                      EVMSAIL_BYTE_QUANTITY_PARAM(index),
+                                      EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
+  EVMSAIL_RETURN_WORD(
+      result, slice_load_n_word_source(evmsail_source_kind(slice.zsource),
+                                       byte_slice_off(&slice),
+                                       byte_slice_len(&slice),
+                                       evmsail_byte_quantity_value(index),
+                                       evmsail_byte_quantity_value(len)));
 }
 
 unit slice_copy_to_memory(struct zByteSlice slice,
@@ -234,11 +240,19 @@ bool output_buffer_store(struct zByteSlice slice) {
                                     byte_slice_len(&slice));
 }
 
-void code_db_store_indexed(lbits *result, struct zByteSlice code,
-                           uint64_t jumpdest_ref) {
+EVMSAIL_HASH_RETURN code_db_store_indexed(EVMSAIL_HASH_RESULT(result)
+                                          struct zByteSlice code,
+                                          uint64_t jumpdest_ref) {
+#ifdef EVMSAIL_STANDARD_ABI
   code_db_store_indexed_source(result, evmsail_source_kind(code.zsource),
                                byte_slice_off(&code), byte_slice_len(&code),
                                jumpdest_ref);
+  return;
+#else
+  return code_db_store_indexed_source(evmsail_source_kind(code.zsource),
+                                      byte_slice_off(&code),
+                                      byte_slice_len(&code), jumpdest_ref);
+#endif
 }
 
 bool accelerator_ripemd160(struct zByteSlice input) {

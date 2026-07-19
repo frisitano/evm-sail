@@ -12,6 +12,7 @@
 #   export PATH="$HOME/.opam/sail/bin:$PATH"
 #   eval "$(opam env --root=/Users/f/.opam --switch=sail)"
 #   ./build_lib.sh
+#   EVM_OPT_LEVEL=3 EVM_LTO=on ./build_lib.sh  # heavier release experiment
 # ===========================================================================
 set -euo pipefail
 
@@ -28,7 +29,11 @@ CC="${CC:-cc}"
 SF="${SF_RUNTIME:-$ROOT/zkvm/runtime/sail256}"
 ZKVM="$ROOT/zkvm"; RT="$ROOT/zkvm/runtime"; FFI="$ROOT/ffi"
 ACCEL_LIB="$ROOT/zkvm/accel-host/target/release"
-CFLAGS=(-O2 -Wno-error=implicit-function-declaration)
+EVM_OPT_LEVEL="${EVM_OPT_LEVEL:-2}"
+EVM_LTO="${EVM_LTO:-off}"
+OPT_FLAGS=(-O"$EVM_OPT_LEVEL")
+if [ "$EVM_LTO" = on ]; then OPT_FLAGS+=(-flto); fi
+CFLAGS=("${OPT_FLAGS[@]}" -Wno-error=implicit-function-declaration)
 if [ -n "${SANITIZE:-}" ]; then CFLAGS+=(-g -fsanitize=address,undefined -fno-omit-frame-pointer); fi
 
 # 2. link a shared library: build.sh's objects (incl. test_utils.o), minus main.o
@@ -46,11 +51,17 @@ OUT="$BUILD/libevmsail_guest.$EXT"
 # read_input, write_output, the output buffer, and run_once. The real guest's
 # Spike I/O device adapter is never linked into host builds.
 LINK_CMD=("$CC" "${CFLAGS[@]}" "${SHFLAG[@]}"
-    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/test_utils.o"
+    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/address_result_glue.o" "$BUILD/test_utils.o"
     "${HOST_OBJS[@]}"
     "$BUILD/sf_sail.o" "$BUILD/sf_sail_native.o" "$BUILD/sf_sail_failure.o"
-    -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB"
-    -o "$OUT")
+    -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB")
+if [ "${EVM_BUILD_MODE:-optimized}" = optimized ]; then
+  case "$(uname -s)" in
+    Darwin) LINK_CMD+=(-Wl,-dead_strip) ;;
+    *)      LINK_CMD+=(-Wl,--gc-sections) ;;
+  esac
+fi
+LINK_CMD+=(-o "$OUT")
 echo "# link lib:"
 printf '  %q' "${LINK_CMD[@]}"; echo
 "${LINK_CMD[@]}"

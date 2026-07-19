@@ -15,6 +15,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -22,7 +23,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -34,6 +37,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -41,6 +45,10 @@ open CallKind
 open Bytes
 open ByteSource
 open BlockError
+
+/-! # Code
+
+Executable code and its PUSH-aware `JUMPDEST` analysis (YP §9.4.3). -/
 
 def EMPTY_JUMPDEST_CHUNK : JumpdestChunk :=
   0x0000000000000000000000000000000000000000000000000000000000000000#256

@@ -19,6 +19,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -26,7 +27,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -38,6 +41,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -46,11 +50,19 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # Exceptions
+
+The failures that interrupt EVM execution or invalidate a block. An
+[ExceptionKind][type-ExceptionKind] exceptionally halts the current frame,
+consumes its remaining gas, and reverts its state changes. A
+[BlockError][type-BlockError] rejects the entire payload and is carried by
+the model's single `exception` type. -/
+
 def undefined_ExceptionKind (_ : Unit) : SailM ExceptionKind := do
   (internal_pick
     [StackUnderflow, StackOverflow, OutOfGas, InvalidOpcode, InvalidJump, StaticViolation, CallDepthExceeded, InsufficientBalance, WriteProtection, InitCodeTooLarge, NonceOverflow, AddressCollision])
 
-/-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 11 -/
+/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 11 -/
 def ExceptionKind_of_num (arg_ : Nat) : ExceptionKind :=
   match arg_ with
   | 0 => StackUnderflow
@@ -85,7 +97,7 @@ def undefined_BlockError (_ : Unit) : SailM BlockError := do
   (internal_pick
     [InvalidConfig, HeaderChainBroken, RlpDecode, InvalidSignature, InvalidGasLimit, GasUsedExceedsLimit, BlobGasLimitExceeded, ExecutionInvalid, InvalidGasUsed, InvalidBlobGasUsed, InvalidExcessBlobGas, InvalidStateRoot, InvalidReceiptsRoot, InvalidLogsBloom, InvalidBlockHash, InvalidParentHash, BlockAccessListTooLarge, InvalidBlockAccessList, InvalidExecutionRequests, WitnessDeficient])
 
-/-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 19 -/
+/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 19 -/
 def BlockError_of_num (arg_ : Nat) : BlockError :=
   match arg_ with
   | 0 => InvalidConfig

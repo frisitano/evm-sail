@@ -81,7 +81,7 @@ function enter_system_call_frame(tgt : address, input : ByteSlice) -> StateCheck
 /*! Issues one unchecked block-start system call: a 30M-gas frame from
     `SYSTEM_ADDRESS` with a 32-byte input; skipped when the target has no
     code, and its output is discarded. */
-function system_call(tgt : address, input : bits(256)) -> unit = {
+function system_call(tgt : address, input : hash) -> unit = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         () /* system contract absent -> skip (EIP-4788 / EIP-2935) */
     } else {
@@ -89,7 +89,7 @@ function system_call(tgt : address, input : bits(256)) -> unit = {
          * above that frame, so its own memory writes cannot mutate calldata. */
         memory_reset();
         memory_expand_to(SYSTEM_CALL_INPUT_LENGTH);
-        mem_store_word(BYTE_ZERO, input);
+        mem_store_word(BYTE_ZERO, hash_to_word(input));
         let input_slice = memory_byte_slice(BYTE_ZERO, SYSTEM_CALL_INPUT_LENGTH);
         let parent_memory = memory_frame_enter();
         let checkpoint = enter_system_call_frame(tgt, input_slice);
@@ -156,16 +156,16 @@ function deposit_log_matches(log : LogEntry) -> bool =
     scratch (EIP-6110). */
 function append_deposit_request(data : ByteSlice) -> unit = {
     if   (data.len != DEPOSIT_EVENT_DATA_LENGTH)
-       | (slice_load(data, DEPOSIT_PUBKEY_HEAD) != word_of_nat(160))
-       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD) != word_of_nat(256))
-       | (slice_load(data, DEPOSIT_AMOUNT_HEAD) != word_of_nat(320))
-       | (slice_load(data, DEPOSIT_SIGNATURE_HEAD) != word_of_nat(384))
-       | (slice_load(data, DEPOSIT_INDEX_HEAD) != word_of_nat(512))
-       | (slice_load(data, DEPOSIT_PUBKEY_LENGTH_WORD) != word_of_nat(48))
-       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD) != word_of_nat(32))
-       | (slice_load(data, DEPOSIT_AMOUNT_LENGTH_WORD) != word_of_nat(8))
-       | (slice_load(data, DEPOSIT_SIGNATURE_LENGTH_WORD) != word_of_nat(96))
-       | (slice_load(data, DEPOSIT_INDEX_LENGTH_WORD) != word_of_nat(8)) then {
+       | (slice_load(data, DEPOSIT_PUBKEY_HEAD) != word_of_protocol_quantity(160))
+       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD) != word_of_protocol_quantity(256))
+       | (slice_load(data, DEPOSIT_AMOUNT_HEAD) != word_of_protocol_quantity(320))
+       | (slice_load(data, DEPOSIT_SIGNATURE_HEAD) != word_of_protocol_quantity(384))
+       | (slice_load(data, DEPOSIT_INDEX_HEAD) != word_of_protocol_quantity(512))
+       | (slice_load(data, DEPOSIT_PUBKEY_LENGTH_WORD) != word_of_protocol_quantity(48))
+       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD) != word_of_protocol_quantity(32))
+       | (slice_load(data, DEPOSIT_AMOUNT_LENGTH_WORD) != word_of_protocol_quantity(8))
+       | (slice_load(data, DEPOSIT_SIGNATURE_LENGTH_WORD) != word_of_protocol_quantity(96))
+       | (slice_load(data, DEPOSIT_INDEX_LENGTH_WORD) != word_of_protocol_quantity(8)) then {
         throw InvalidBlock(InvalidExecutionRequests)
     };
     scratch_push_slice(sub_slice(data, DEPOSIT_PUBKEY_DATA, DEPOSIT_PUBKEY_LENGTH));

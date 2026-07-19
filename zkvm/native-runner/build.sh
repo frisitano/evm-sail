@@ -110,12 +110,12 @@ PRESERVE_FLAGS=(
 )
 for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
 SAIL_CMD=(
-  "$SAIL" -c -O --c-specialize --c-no-main --c-no-rts
+  "$SAIL" -c -O --c-no-main --c-no-rts
   "${PRESERVE_FLAGS[@]}"
   "${MODEL_INCLUDE_FLAGS[@]}"
 )
 if [ "$EVM_BUILD_MODE" = optimized ]; then
-  SAIL_CMD+=(--splice "$C_OPTIMIZED_SPLICE")
+  SAIL_CMD+=(--c-specialize --splice "$C_OPTIMIZED_SPLICE")
 fi
 SAIL_CMD+=(
   sail/evm.sail_project evm
@@ -151,6 +151,10 @@ SAIL_CMD+=(
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/byte_slice_glue.c" -o "$BUILD/byte_slice_glue.o"
 
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+    -c "$FFI/address_result_glue.c" -o "$BUILD/address_result_glue.o"
+
 # --- 5. shared harness I/O + CLI main ---------------------------------------
 #   test_utils.c supplies the native standard I/O implementation, large-stack
 #   run, and clear-memory hooks shared by this executable and build_lib.sh.
@@ -174,7 +178,7 @@ fi
 # --- 7. link ----------------------------------------------------------------
 OUT="$BUILD/zkvm_native"
 LINK_CMD=("$CC" "${CFLAGS[@]}"
-    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/test_utils.o" "$BUILD/main.o"
+    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/address_result_glue.o" "$BUILD/test_utils.o" "$BUILD/main.o"
     "${HOST_OBJS[@]}" "${SF_OBJS[@]}"
     "${ACCEL_FLAGS[@]}" "${STACK_FLAGS[@]}"
     -o "$OUT")

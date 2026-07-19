@@ -2,7 +2,7 @@
 #define BYTE_SLICE_GLUE_H
 
 #include "quantity_abi.h"
-#include "sail.h"
+#include "sail_abi.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,7 +20,6 @@ enum evmsail_byte_source_kind {
  * declarations use incomplete generated types. The matching translation unit
  * is compiled against EVMSAIL_MODEL_H. */
 struct zByteSlice;
-struct node_zz5listz8z5bvz9;
 
 uint64_t evmsail_source_kind(int generated_source);
 int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
@@ -46,18 +45,20 @@ bool slice_strided_zero(struct zByteSlice slice,
                         EVMSAIL_BYTE_QUANTITY_PARAM(stride),
                         EVMSAIL_BYTE_QUANTITY_PARAM(width),
                         EVMSAIL_BYTE_QUANTITY_PARAM(count));
-void slice_load_word(lbits *result, struct zByteSlice slice,
-                     EVMSAIL_BYTE_QUANTITY_PARAM(index));
-void slice_load_n_word(lbits *result, struct zByteSlice slice,
-                       EVMSAIL_BYTE_QUANTITY_PARAM(index),
-                       EVMSAIL_BYTE_QUANTITY_PARAM(len));
+EVMSAIL_WORD_RETURN slice_load_word(EVMSAIL_WORD_RESULT(result)
+                                    struct zByteSlice slice,
+                                    EVMSAIL_BYTE_QUANTITY_PARAM(index));
+EVMSAIL_WORD_RETURN slice_load_n_word(EVMSAIL_WORD_RESULT(result)
+                                      struct zByteSlice slice,
+                                      EVMSAIL_BYTE_QUANTITY_PARAM(index),
+                                      EVMSAIL_BYTE_QUANTITY_PARAM(len));
 unit slice_copy_to_memory(struct zByteSlice slice,
                           EVMSAIL_BYTE_QUANTITY_PARAM(dst),
                           EVMSAIL_BYTE_QUANTITY_PARAM(index),
                           EVMSAIL_BYTE_QUANTITY_PARAM(len));
 
 bool scratch_store_bytes(EVMSAIL_BYTE_QUANTITY_PARAM(off),
-                         struct node_zz5listz8z5bvz9 *bytes,
+                         evmsail_byte_list bytes,
                          EVMSAIL_BYTE_QUANTITY_PARAM(len));
 bool scratch_store_slice(EVMSAIL_BYTE_QUANTITY_PARAM(off),
                          struct zByteSlice slice);
@@ -65,8 +66,9 @@ bool public_output_write(struct zByteSlice output);
 
 bool output_buffer_store(struct zByteSlice slice);
 
-void code_db_store_indexed(lbits *result, struct zByteSlice code,
-                           uint64_t jumpdest_ref);
+EVMSAIL_HASH_RETURN code_db_store_indexed(EVMSAIL_HASH_RESULT(result)
+                                          struct zByteSlice code,
+                                          uint64_t jumpdest_ref);
 
 bool accelerator_ripemd160(struct zByteSlice input);
 bool accelerator_modexp(struct zByteSlice input,

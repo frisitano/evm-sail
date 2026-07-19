@@ -32,6 +32,43 @@ register call_depth : frame_depth = 0
 /*! A message call may nest at most 1024 frames deep (EIP-150 / YP). */
 let DEPTH_LIMIT : frame_depth = 1024
 
+/* Suspended parents occupy a fixed protocol-sized arena. Popping or resetting
+ * changes only the top pointer; stale entries are overwritten by later calls. */
+/*! The continuation arena for nested calls and creates. */
+register frame_stack : FrameStack = vector_init(DEFAULT_FRAME_CONTINUATION)
+/*! The number of live continuations in [frame_stack][]. */
+register frame_stack_top : frame_depth = 0
+
+/*! Starts a top-level interpretation with no suspended parent. */
+function frame_stack_reset() -> unit = frame_stack_top = 0
+
+/*! Whether the active frame is the top-level frame. */
+function frame_stack_is_empty() -> bool = frame_stack_top == 0
+
+/*! Saves the action to perform when the newly-entered child finishes. */
+function frame_stack_push(continuation : FrameContinuation) -> unit = {
+    let top = frame_stack_top;
+    if top < DEPTH_LIMIT then {
+        frame_stack[top] = continuation;
+        frame_stack_top = top + 1
+    } else {
+        assert(false)
+    }
+}
+
+/*! Removes and returns the current child frame's parent continuation. */
+function frame_stack_pop() -> FrameContinuation = {
+    let top = frame_stack_top;
+    if 0 < top then {
+        let parent_top = top - 1;
+        frame_stack_top = parent_top;
+        frame_stack[parent_top]
+    } else {
+        assert(false);
+        DEFAULT_FRAME_CONTINUATION
+    }
+}
+
 function record_refund(delta : gas_refund) -> unit =
     frame_refund = frame_refund + delta
 
@@ -63,6 +100,26 @@ function exc_halt(k : ExceptionKind) -> unit = {
     gas_remaining = GAS_ZERO;
     frame_status = Exceptional(k)
 }
+
+/* In the canonical model this conversion is exact.  The optimized splice
+ * checks that the word fits its uint64_t byte_quantity representation and
+ * raises the EVM OutOfGas exception otherwise.  Keeping the exceptional
+ * conversion behind this nominal boundary prevents opcode code from
+ * round-tripping U256 through lbits/sail_int. */
+function word_to_byte_quantity_or_oog(value : word) -> byte_quantity =
+    word_to_byte_quantity(value)
+
+/* A zero-length EVM memory range never observes its offset.  Normalize both
+ * fields to zero before the optimized build attempts to narrow the offset;
+ * this preserves the specified behaviour for (offset >= 2^64, length = 0). */
+/*! Converts an EVM memory range to byte quantities, preserving the
+    zero-length rule and halting when a live endpoint cannot be represented. */
+function word_byte_range_or_oog(offset : word, length : word) -> (byte_quantity, byte_quantity) =
+    if word_is_zero(length) then {
+        (BYTE_ZERO, BYTE_ZERO)
+    } else {
+        (word_to_byte_quantity_or_oog(offset), word_to_byte_quantity_or_oog(length))
+    }
 
 /*! The stack height as a Sail integer. */
 function stack_height() -> operand_stack_height = {
@@ -157,10 +214,18 @@ high-water mark that `MSIZE` and memory-expansion gas read.
 /*! Validates word-sized returndata bounds and copies the requested range. */
 function returndata_copy_words(dst : memory_pointer, source_offset : word, length : word) -> unit = {
     let available = word_of_quantity(returndata_size());
-    if word_ule(source_offset, available) & word_ule(length, sub_bits(available, source_offset)) then {
-        returndata_copy(dst, ByteQuantity(unsigned(source_offset)), ByteQuantity(unsigned(length)))
-    } else {
-        exc_halt(InvalidOpcode)
+    match word_to_limb(source_offset) {
+        Some(source_bits) => match word_to_limb(length) {
+            Some(length_bits) => {
+                if word_ule(source_offset, available) & word_ule(length, word_sub(available, source_offset)) then {
+                    returndata_copy(dst, ByteQuantity(unsigned(source_bits)), ByteQuantity(unsigned(length_bits)))
+                } else {
+                    exc_halt(InvalidOpcode)
+                }
+            },
+            None() => exc_halt(InvalidOpcode),
+        },
+        None() => exc_halt(InvalidOpcode),
     }
 }
 
@@ -292,7 +357,7 @@ function mem_store(off : memory_pointer, w : word) -> unit =
 
 /*! `MSTORE8`: writes the low byte of `w`. */
 function mem_store_byte(off : memory_pointer, w : word) -> unit =
-    mem_set_byte(off, w[7 .. 0])
+    mem_set_byte(off, word_low_byte(w))
 
 /*! `MCOPY` (EIP-5656): overlapping-safe memory-to-memory copy. */
 function mem_mcopy(dst : memory_pointer, src : memory_pointer, len : memory_length) -> unit =
@@ -308,4 +373,4 @@ function mem_codecopy(dst : memory_pointer, off : source_pointer, len : memory_l
 /*! `KECCAK256` over the memory range `[off, off+len)`: semantically, the
     caller reads the addressed bytes and hashes that byte list. */
 function mem_keccak(off : memory_pointer, len : memory_length) -> word =
-    keccak256(memory_byte_slice(off, len))
+    hash_to_word(keccak256(memory_byte_slice(off, len)))

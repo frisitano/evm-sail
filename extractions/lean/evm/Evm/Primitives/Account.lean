@@ -16,6 +16,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -23,7 +24,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -35,6 +38,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -43,47 +47,22 @@ open Bytes
 open ByteSource
 open BlockError
 
-def undefined_AccountInfo (_ : Unit) : SailM AccountInfo := do
-  (pure { nonce := ← do
-              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
-              pure (⟨semanticField⟩),
-          balance := ← (undefined_bitvector 256),
-          code_hash := ← (undefined_bitvector 256),
-          storage_root := ← (undefined_bitvector 256) })
+/-! # Accounts and storage
 
-def undefined_Account (_ : Unit) : SailM Account := do
-  (pure { info := ← (undefined_AccountInfo ()),
-          present := ← (undefined_bool ()),
-          storage_cleared := ← (undefined_bool ()),
-          created := ← (undefined_bool ()),
-          selfdestructed := ← (undefined_bool ()) })
+The account tuple and its sentinels, and the per-layer account/storage
+entry types that cross the host interface (overlay rows, merge
+enumeration). Pure
+data — no registers, no externs. -/
 
-def undefined_StorageValue (_ : Unit) : SailM StorageValue := do
-  (pure { curr := ← (undefined_bitvector 256),
-          orig := ← (undefined_bitvector 256) })
-
-def undefined_StorageKey (_ : Unit) : SailM StorageKey := do
-  (pure { addr := ← (undefined_bitvector 160),
-          slot := ← (undefined_bitvector 256) })
-
-def undefined_StorageEntry (_ : Unit) : SailM StorageEntry := do
-  (pure { key := ← (undefined_StorageKey ()),
-          value := ← (undefined_StorageValue ()) })
-
-def undefined_AcctValue (_ : Unit) : SailM AcctValue := do
-  (pure { curr := ← (undefined_Account ()),
-          orig := ← (undefined_Account ()) })
-
-def undefined_AcctEntry (_ : Unit) : SailM AcctEntry := do
-  (pure { addr := ← (undefined_bitvector 160),
-          value := ← (undefined_AcctValue ()) })
-
+/-- The empty account tuple: zero nonce and balance, `KECCAK_EMPTY` code
+hash, empty-trie storage root (YP §4.1). -/
 def EMPTY_ACCOUNT_INFO : AccountInfo :=
   { nonce := ⟨0⟩,
     balance := ZERO_WORD,
     code_hash := KECCAK_EMPTY,
     storage_root := EMPTY_TRIE_ROOT }
 
+/-- The non-existent account sentinel (EIP-161 "empty"). -/
 def EMPTY_ACCOUNT : Account :=
   { info := EMPTY_ACCOUNT_INFO,
     present := false,
@@ -91,6 +70,7 @@ def EMPTY_ACCOUNT : Account :=
     created := false,
     selfdestructed := false }
 
+/-- Wraps a witnessed account tuple as an existing, unmodified account. -/
 def account_from_info (info : AccountInfo) : Account :=
   { info := info,
     present := true,

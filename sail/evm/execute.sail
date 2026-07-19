@@ -14,7 +14,9 @@ via the kernel's returned warm bit (EIP-2929), decides whether an effect
 happens, and issues the syscall only for real effects (a no-op `SSTORE`
 charges gas but issues no host write). Memory-touching opcodes pay the
 quadratic expansion cost via [charge_memory_expansion][] before acting.
-Sub-calls and creates delegate to [run_call][] / [run_create][].
+Sub-calls and creates delegate to [run_call][] / [run_create][], which
+install a child frame and save its parent continuation. The non-recursive
+opcode bodies live in [execute_opcode][].
 */
 /*! The call-family runner (0 = `CALL`, 1 = `CALLCODE`,
     2 = `DELEGATECALL`, 3 = `STATICCALL`); defined with the
@@ -48,11 +50,16 @@ function guard_static() -> bool =
     bytes that happen to equal `0x5b` are not valid. */
 function do_jump(dest_word : word) -> unit = {
     if word_ult(dest_word, word_of_quantity(frame_code_len())) then {
-        let destination = ByteQuantity(unsigned(dest_word));
-        if frame_jumpdest_valid(destination) then {
-            pc = destination
-        } else {
-            exc_halt(InvalidJump)
+        match word_to_limb(dest_word) {
+            Some(destination_bits) => {
+                let destination = ByteQuantity(unsigned(destination_bits));
+                if frame_jumpdest_valid(destination) then {
+                    pc = destination
+                } else {
+                    exc_halt(InvalidJump)
+                }
+            },
+            None() => exc_halt(InvalidJump),
         }
     } else {
         exc_halt(InvalidJump)
@@ -88,11 +95,8 @@ function pop_log_topics(count : log_topic_count) -> list(word) =
 /*md
 ## The dispatch
 */
-/*! The single-step transition function: one arm per opcode, in opcode
-    order, with the family structure annotated inline. */
-function execute(op : ast) -> unit = match op {
-    STOP() => frame_status = Halted(HaltStop()),
-    /* ---- arithmetic (pure) ---- */
+/*! Executes the arithmetic, comparison, and bitwise opcode families. */
+function execute_arithmetic(op : ast) -> unit = match op {
     ADD() => {
         charge(G_verylow);
         let a = pop();
@@ -161,7 +165,6 @@ function execute(op : ast) -> unit = match op {
         let v = pop();
         push(alu_signextend(bi, v))
     },
-    /* ---- comparison / bitwise (pure) ---- */
     LT() => {
         charge(G_verylow);
         let a = pop();
@@ -253,17 +256,25 @@ function execute(op : ast) -> unit = match op {
         let x = pop();
         push(alu_clz(x))
     },
-    /* ---- keccak: hash via kernel primitive ---- */
+    _ => assert(false),
+}
+
+/*! Executes hashing and transaction/environment data access opcodes. */
+function execute_environment(op : ast) -> unit = match op {
     KECCAK256() => {
         let offset_word = pop();
         let length_word = pop();
-        charge_keccak_gas(unsigned(length_word));
-        charge_memory_expansion(offset_word, length_word);
         if is_running() then {
-            push(mem_keccak(ByteQuantity(unsigned(offset_word)), ByteQuantity(unsigned(length_word))))
+            let (offset, length) = word_byte_range_or_oog(offset_word, length_word);
+            if is_running() then {
+                charge_keccak_gas(length);
+                charge_memory_expansion(offset_word, length_word)
+            };
+            if is_running() then {
+                push(mem_keccak(offset, length))
+            }
         }
     },
-    /* ---- environment / account (kernel reads, EVM prices them) ---- */
     ADDRESS() => {
         charge(G_base);
         push(address_to_word(self_addr()))
@@ -300,15 +311,15 @@ function execute(op : ast) -> unit = match op {
         let destination_word = pop();
         let source_word = pop();
         let length_word = pop();
-        charge_copy_gas(unsigned(length_word));
-        charge_memory_expansion(destination_word, length_word);
         if is_running() then {
-            slice_copy_word_offset(
-                calldata,
-                ByteQuantity(unsigned(destination_word)),
-                source_word,
-                ByteQuantity(unsigned(length_word)),
-            )
+            let (destination, length) = word_byte_range_or_oog(destination_word, length_word);
+            if is_running() then {
+                charge_copy_gas(length);
+                charge_memory_expansion(destination_word, length_word)
+            };
+            if is_running() then {
+                slice_copy_word_offset(calldata, destination, source_word, length)
+            }
         }
     },
     CODESIZE() => {
@@ -320,32 +331,26 @@ function execute(op : ast) -> unit = match op {
         let destination_word = pop();
         let source_word = pop();
         let length_word = pop();
-        charge_copy_gas(unsigned(length_word));
-        charge_memory_expansion(destination_word, length_word);
         if is_running() then {
-            slice_copy_word_offset(
-                frame_code.bytes,
-                ByteQuantity(unsigned(destination_word)),
-                source_word,
-                ByteQuantity(unsigned(length_word)),
-            )
+            let (destination, length) = word_byte_range_or_oog(destination_word, length_word);
+            if is_running() then {
+                charge_copy_gas(length);
+                charge_memory_expansion(destination_word, length_word)
+            };
+            if is_running() then {
+                slice_copy_word_offset(frame_code.bytes, destination, source_word, length)
+            }
         }
     },
     BALANCE() => {
         let a = word_to_address(pop());
         let warm = k_access_account(a);
         charge(account_cost(warm));
-
-        /* read the account ONLY if the access charge was covered: an OOG'd
-           BALANCE must touch no state (charge sets status but does not abort
-           the handler), else the stateless witness would need to prove an
-           account the protocol never read. */
         if is_running() then {
             push(k_get_balance(a))
         }
     },
     SELFBALANCE() => {
-        /* EIP-1884 */
         charge(G_low);
         push(k_get_balance(self_addr()))
     },
@@ -364,45 +369,53 @@ function execute(op : ast) -> unit = match op {
         let length_word = pop();
         let warm = k_access_account(a);
         charge(account_cost(warm));
-        charge_copy_gas(unsigned(length_word));
-        charge_memory_expansion(destination_word, length_word);
         if is_running() then {
-            k_code_copy(a, ByteQuantity(unsigned(destination_word)), source_word, ByteQuantity(unsigned(length_word)))
+            let (destination, length) = word_byte_range_or_oog(destination_word, length_word);
+            if is_running() then {
+                charge_copy_gas(length);
+                charge_memory_expansion(destination_word, length_word)
+            };
+            if is_running() then {
+                k_code_copy(a, destination, source_word, length)
+            }
         }
     },
     EXTCODEHASH() => {
-        /* EIP-1052 */
         let a = word_to_address(pop());
         let warm = k_access_account(a);
         charge(account_cost(warm));
         if is_running() then {
-            push(k_get_codehash(a))
+            push(hash_to_word(k_get_codehash(a)))
         }
     },
     RETURNDATASIZE() => {
-        /* EIP-211 */
         charge(G_base);
         push(word_of_quantity(returndata_size()))
     },
     RETURNDATACOPY() => {
-        /* EIP-211 */
         charge(G_verylow);
         let destination_word = pop();
         let source_word = pop();
         let length_word = pop();
-        charge_copy_gas(unsigned(length_word));
-        charge_memory_expansion(destination_word, length_word);
-
-        /* EIP-211: a read past the end of the return-data buffer is an
-           exceptional halt (cannot read beyond the last sub-call's output). */
         if is_running() then {
-            returndata_copy_words(ByteQuantity(unsigned(destination_word)), source_word, length_word)
+            let (destination, length) = word_byte_range_or_oog(destination_word, length_word);
+            if is_running() then {
+                charge_copy_gas(length);
+                charge_memory_expansion(destination_word, length_word)
+            };
+            if is_running() then {
+                returndata_copy_words(destination, source_word, length_word)
+            }
         }
     },
-    /* ---- block (kernel reads) ---- */
+    _ => assert(false),
+}
+
+/*! Executes block-context opcodes. */
+function execute_block(op : ast) -> unit = match op {
     BLOCKHASH() => {
         charge(GasConstant(20));
-        push(k_blockhash(pop()))
+        push(hash_to_word(k_blockhash(pop())))
     },
     COINBASE() => {
         charge(G_base);
@@ -417,7 +430,6 @@ function execute(op : ast) -> unit = match op {
         push(k_env(F_Number))
     },
     SLOTNUM() => {
-        /* EIP-7843: push the block's slot number (BASE gas) */
         charge(G_base);
         push(k_env(F_SlotNumber))
     },
@@ -430,26 +442,26 @@ function execute(op : ast) -> unit = match op {
         push(k_env(F_GasLimit))
     },
     CHAINID() => {
-        /* EIP-1344 */
         charge(G_base);
         push(k_env(F_ChainId))
     },
     BASEFEE() => {
-        /* EIP-3198 */
         charge(G_base);
         push(k_env(F_BaseFee))
     },
     BLOBBASEFEE() => {
-        /* EIP-7516 */
         charge(G_base);
         push(blob_base_fee(k_header.excess_blob_gas))
     },
     BLOBHASH() => {
-        /* EIP-4844 */
         charge(G_verylow);
         push(k_blobhash(pop()))
     },
-    /* ---- stack / memory (pure, user-space) ---- */
+    _ => assert(false),
+}
+
+/*! Executes stack and linear-memory opcodes. */
+function execute_memory(op : ast) -> unit = match op {
     POP() => {
         charge(G_base);
         let _ = pop()
@@ -457,20 +469,24 @@ function execute(op : ast) -> unit = match op {
     MLOAD() => {
         charge(G_verylow);
         let offset_word = pop();
-        charge_memory_expansion(offset_word, word_of_nat(32));
+        charge_memory_expansion(offset_word, word_of_protocol_quantity(32));
         if is_running() then {
-            let offset = ByteQuantity(unsigned(offset_word));
-            push(mem_load(offset))
+            let offset = word_to_byte_quantity_or_oog(offset_word);
+            if is_running() then {
+                push(mem_load(offset))
+            }
         }
     },
     MSTORE() => {
         charge(G_verylow);
         let offset_word = pop();
         let v = pop();
-        charge_memory_expansion(offset_word, word_of_nat(32));
+        charge_memory_expansion(offset_word, word_of_protocol_quantity(32));
         if is_running() then {
-            let offset = ByteQuantity(unsigned(offset_word));
-            mem_store(offset, v)
+            let offset = word_to_byte_quantity_or_oog(offset_word);
+            if is_running() then {
+                mem_store(offset, v)
+            }
         }
     },
     MSTORE8() => {
@@ -479,8 +495,10 @@ function execute(op : ast) -> unit = match op {
         let v = pop();
         charge_memory_expansion(offset_word, WORD_ONE);
         if is_running() then {
-            let offset = ByteQuantity(unsigned(offset_word));
-            mem_store_byte(offset, v)
+            let offset = word_to_byte_quantity_or_oog(offset_word);
+            if is_running() then {
+                mem_store_byte(offset, v)
+            }
         }
     },
     MSIZE() => {
@@ -494,60 +512,55 @@ function execute(op : ast) -> unit = match op {
         let source_word = pop();
         let length_word = pop();
         let required_size = maximum_memory_required_size(destination_word, length_word, source_word, length_word);
-        charge_copy_gas(unsigned(length_word));
-        charge(memory_expansion_gas(required_size));
         if is_running() then {
-            expand_memory(required_size)
-        };
-        if is_running() then {
-            mem_mcopy(
-                ByteQuantity(unsigned(destination_word)),
-                ByteQuantity(unsigned(source_word)),
-                ByteQuantity(unsigned(length_word)),
-            )
+            let (destination, length) = word_byte_range_or_oog(destination_word, length_word);
+            let (source, _) = word_byte_range_or_oog(source_word, length_word);
+            if is_running() then {
+                charge_copy_gas(length);
+                charge(memory_expansion_gas(required_size))
+            };
+            if is_running() then {
+                expand_memory(required_size)
+            };
+            if is_running() then {
+                mem_mcopy(destination, source, length)
+            }
         }
     },
-    /* ---- storage: gas/decision in EVM, effect in kernel ---- */
+    _ => assert(false),
+}
+
+/*! Executes persistent and transient storage opcodes. */
+function execute_storage(op : ast) -> unit = match op {
     SLOAD() => {
         /* EIP-2929: cold (2100) vs warm (100) by the slot's accessed-set bit */
         let s = pop();
         let warm = k_slot_is_warm(self_addr(), s);
         charge(sload_cost(warm));
-
-        /* read the slot ONLY if the access charge was covered (OOG must touch no
-           state, so the stateless witness need not prove an unread slot). */
         if is_running() then {
             push(k_sload(self_addr(), s).curr)
         }
     },
     SSTORE() => {
-        /* EIP-2200 net-metered store + EIP-2929 cold surcharge + EIP-1706 stipend
-           guard; the effect is issued only when the value actually changes. */
         if guard_static() then {
             ()
         } else {
             if gas_remaining <= G_callstipend then {
                 exc_halt(OutOfGas)
-                /* EIP-1706: forbid SSTORE with <= 2300 gas left */
             } else {
                 let s = pop();
                 let v = pop();
-
-                /* a stack underflow in the pops above exceptionally halts the
-                   frame (pop returns 0 but sets the halt); the underflow precedes any
-                   state access, so guard the storage read/write on is_running so
-                   an underflowing SSTORE records no EIP-7928 storage access. */
                 if is_running() then {
-                    let warm = k_slot_is_warm(self_addr(), s); /* kernel: access accounting */
-                    let entry = k_sload(self_addr(), s); /* kernel: live + tx-start values */
-                    let (cost, refund) = sstore_gas(entry.orig, entry.curr, v, not_bool(warm)); /* USER policy */
+                    let warm = k_slot_is_warm(self_addr(), s);
+                    let entry = k_sload(self_addr(), s);
+                    let (cost, refund) = sstore_gas(entry.orig, entry.curr, v, not_bool(warm));
                     charge(cost);
                     if not_bool(refund == GAS_REFUND_ZERO) then {
                         record_refund(refund)
                     };
                     if entry.curr != v then {
                         k_sstore(self_addr(), s, struct { curr = v, orig = entry.orig })
-                    } /* effect ONLY if it changes */
+                    }
                 }
             }
         }
@@ -569,7 +582,11 @@ function execute(op : ast) -> unit = match op {
             k_tstore(self_addr(), s, v)
         }
     },
-    /* ---- flow (pure over own code) ---- */
+    _ => assert(false),
+}
+
+/*! Executes control-flow and stack-shuffling opcodes. */
+function execute_control(op : ast) -> unit = match op {
     JUMP() => {
         charge(G_mid);
         let dest = pop();
@@ -594,9 +611,7 @@ function execute(op : ast) -> unit = match op {
         push(word_of_gas(gas_remaining))
     },
     JUMPDEST() => charge(G_jumpdest),
-    /* ---- push / dup / swap (pure) ---- */
     PUSH(n, v) => {
-        /* PUSH0 (n=0): EIP-3855 */
         if n == 0 then {
             charge(G_base)
         } else {
@@ -606,9 +621,6 @@ function execute(op : ast) -> unit = match op {
     },
     DUP(n) => {
         charge(G_verylow);
-
-        /* DUP_n duplicates the n-th item (1-indexed): needs height >= n.
-           DUPn underflows when fewer than n items are on the stack. */
         if stack_height() < n then {
             exc_halt(StackUnderflow)
         } else {
@@ -617,9 +629,6 @@ function execute(op : ast) -> unit = match op {
     },
     SWAP(n) => {
         charge(G_verylow);
-
-        /* SWAP_n swaps the top with the n-th-below item: needs height >= n+1.
-           SWAPn underflows when fewer than n+1 items are on the stack. */
         if stack_height() < n + 1 then {
             exc_halt(StackUnderflow)
         } else {
@@ -629,7 +638,11 @@ function execute(op : ast) -> unit = match op {
             stack_set(n, top)
         }
     },
-    /* ---- log: EVM checks/prices, kernel records ---- */
+    _ => assert(false),
+}
+
+/*! Executes the LOG family. */
+function execute_log(op : ast) -> unit = match op {
     LOG(n) => {
         if guard_static() then {
             ()
@@ -637,38 +650,33 @@ function execute(op : ast) -> unit = match op {
             let offset_word = pop();
             let length_word = pop();
             let topics = pop_log_topics(n);
-            charge_log_gas(n, unsigned(length_word));
-            charge_memory_expansion(offset_word, length_word);
             if is_running() then {
-                k_log(
-                    self_addr(),
-                    topics,
-                    BytesSlice(
-                        memory_byte_slice(ByteQuantity(unsigned(offset_word)), ByteQuantity(unsigned(length_word))),
-                    ),
-                )
+                let (offset, length) = word_byte_range_or_oog(offset_word, length_word);
+                if is_running() then {
+                    charge_log_gas(n, length);
+                    charge_memory_expansion(offset_word, length_word)
+                };
+                if is_running() then {
+                    k_log(self_addr(), topics, BytesSlice(memory_byte_slice(offset, length)))
+                }
             }
         }
     },
-    /* ---- system ---- */
-    CREATE() => run_create(false),
-    CREATE2() => /* EIP-1014 */ run_create(true),
-    CALL() => run_call(Call),
-    CALLCODE() => run_call(CallCode),
-    DELEGATECALL() => /* EIP-7 */ run_call(DelegateCall),
-    STATICCALL() => /* EIP-214 */ run_call(StaticCall),
+    _ => assert(false),
+}
+
+/*! Executes frame-halting opcodes other than call and create. */
+function execute_halt(op : ast) -> unit = match op {
+    STOP() => frame_status = Halted(HaltStop()),
     RETURN() => {
         let offset_word = pop();
         let length_word = pop();
         charge_memory_expansion(offset_word, length_word);
         if is_running() then {
-            frame_status = Halted(
-                HaltReturn(
-                    freeze_output(
-                        memory_byte_slice(ByteQuantity(unsigned(offset_word)), ByteQuantity(unsigned(length_word))),
-                    ),
-                ),
-            )
+            let (offset, length) = word_byte_range_or_oog(offset_word, length_word);
+            if is_running() then {
+                frame_status = Halted(HaltReturn(freeze_output(memory_byte_slice(offset, length))))
+            }
         }
     },
     REVERT() => {
@@ -677,13 +685,10 @@ function execute(op : ast) -> unit = match op {
         let length_word = pop();
         charge_memory_expansion(offset_word, length_word);
         if is_running() then {
-            frame_status = Halted(
-                HaltRevert(
-                    freeze_output(
-                        memory_byte_slice(ByteQuantity(unsigned(offset_word)), ByteQuantity(unsigned(length_word))),
-                    ),
-                ),
-            )
+            let (offset, length) = word_byte_range_or_oog(offset_word, length_word);
+            if is_running() then {
+                frame_status = Halted(HaltRevert(freeze_output(memory_byte_slice(offset, length))))
+            }
         }
     },
     INVALID() => {
@@ -700,36 +705,20 @@ function execute(op : ast) -> unit = match op {
             charge(G_selfdestruct);
             if not_bool(warm) then {
                 charge(G_cold_account)
-            }; /* EIP-2929 */
+            };
             if is_running() & word_nonzero(bal) & k_account_is_empty(beneficiary) then {
-                /* new account; the beneficiary is always touched via k_transfer's
-                 * unconditional balance-move read below. */
                 charge(G_newaccount)
             };
-
-            /* a charge above may have run the frame out of gas (exc_halt sets the
-             * status but does not abort this handler): only move the balance and
-             * register the deletion when the frame is still running, else the
-             * out-of-gas SELFDESTRUCT must have no effect. */
             if is_running() then {
                 let first_selfdestruct = not_bool(k_is_selfdestructed(self_addr()));
                 if (k_fork < London) & first_selfdestruct then {
                     record_refund(gas_constant_to_refund(R_selfdestruct_pre_london))
                 };
                 k_transfer(self_addr(), beneficiary, bal);
-
                 if k_fork < Cancun then {
-                    /* Before EIP-6780, every successful SELFDESTRUCT deletes the
-                     * originator at tx end. Its balance is also zeroed
-                     * immediately after the transfer, including the
-                     * self-beneficiary case. */
                     k_zero_balance(self_addr());
                     k_selfdestruct(self_addr())
                 } else {
-                    /* EIP-6780: only a created-this-tx originator is registered
-                     * for deletion, and its balance is forced to 0 after the
-                     * transfer (burning a self-beneficiary transfer). A
-                     * pre-existing account just moves its balance and persists. */
                     if k_was_created(self_addr()) then {
                         if beneficiary == self_addr() then {
                             k_emit_burn_log(self_addr(), bal)
@@ -742,4 +731,119 @@ function execute(op : ast) -> unit = match op {
             }
         }
     },
+    _ => assert(false),
+}
+
+/*! Executes every opcode except the call and create families. The public
+    [execute][] dispatcher handles those six frame-entering cases directly
+    and only calls this function for the remaining constructors. */
+function execute_opcode(op : ast) -> unit = match op {
+    STOP() => execute_halt(op),
+    /* ---- arithmetic (pure) ---- */
+    ADD() => execute_arithmetic(op),
+    MUL() => execute_arithmetic(op),
+    SUB() => execute_arithmetic(op),
+    DIV() => execute_arithmetic(op),
+    SDIV() => execute_arithmetic(op),
+    MOD() => execute_arithmetic(op),
+    SMOD() => execute_arithmetic(op),
+    ADDMOD() => execute_arithmetic(op),
+    MULMOD() => execute_arithmetic(op),
+    EXP() => execute_arithmetic(op),
+    SIGNEXTEND() => execute_arithmetic(op),
+    /* ---- comparison / bitwise (pure) ---- */
+    LT() => execute_arithmetic(op),
+    GT() => execute_arithmetic(op),
+    SLT() => execute_arithmetic(op),
+    SGT() => execute_arithmetic(op),
+    EQ() => execute_arithmetic(op),
+    ISZERO() => execute_arithmetic(op),
+    AND() => execute_arithmetic(op),
+    OR() => execute_arithmetic(op),
+    XOR() => execute_arithmetic(op),
+    NOT() => execute_arithmetic(op),
+    BYTE() => execute_arithmetic(op),
+    SHL() => execute_arithmetic(op),
+    SHR() => execute_arithmetic(op),
+    SAR() => execute_arithmetic(op),
+    CLZ() => execute_arithmetic(op),
+    /* ---- keccak: hash via kernel primitive ---- */
+    KECCAK256() => execute_environment(op),
+    /* ---- environment / account (kernel reads, EVM prices them) ---- */
+    ADDRESS() => execute_environment(op),
+    ORIGIN() => execute_environment(op),
+    CALLER() => execute_environment(op),
+    CALLVALUE() => execute_environment(op),
+    GASPRICE() => execute_environment(op),
+    CALLDATASIZE() => execute_environment(op),
+    CALLDATALOAD() => execute_environment(op),
+    CALLDATACOPY() => execute_environment(op),
+    CODESIZE() => execute_environment(op),
+    CODECOPY() => execute_environment(op),
+    BALANCE() => execute_environment(op),
+    SELFBALANCE() => execute_environment(op),
+    EXTCODESIZE() => execute_environment(op),
+    EXTCODECOPY() => execute_environment(op),
+    EXTCODEHASH() => execute_environment(op),
+    RETURNDATASIZE() => execute_environment(op),
+    RETURNDATACOPY() => execute_environment(op),
+    /* ---- block (kernel reads) ---- */
+    BLOCKHASH() => execute_block(op),
+    COINBASE() => execute_block(op),
+    TIMESTAMP() => execute_block(op),
+    NUMBER() => execute_block(op),
+    SLOTNUM() => execute_block(op),
+    PREVRANDAO() => execute_block(op),
+    GASLIMIT() => execute_block(op),
+    CHAINID() => execute_block(op),
+    BASEFEE() => execute_block(op),
+    BLOBBASEFEE() => execute_block(op),
+    BLOBHASH() => execute_block(op),
+    /* ---- stack / memory (pure, user-space) ---- */
+    POP() => execute_memory(op),
+    MLOAD() => execute_memory(op),
+    MSTORE() => execute_memory(op),
+    MSTORE8() => execute_memory(op),
+    MSIZE() => execute_memory(op),
+    MCOPY() => execute_memory(op),
+    /* ---- storage: gas/decision in EVM, effect in kernel ---- */
+    SLOAD() => execute_storage(op),
+    SSTORE() => execute_storage(op),
+    TLOAD() => execute_storage(op),
+    TSTORE() => execute_storage(op),
+    /* ---- flow (pure over own code) ---- */
+    JUMP() => execute_control(op),
+    JUMPI() => execute_control(op),
+    PC() => execute_control(op),
+    GAS() => execute_control(op),
+    JUMPDEST() => execute_control(op),
+    /* ---- push / dup / swap (pure) ---- */
+    PUSH(_, _) => execute_control(op),
+    DUP(_) => execute_control(op),
+    SWAP(_) => execute_control(op),
+    /* ---- log: EVM checks/prices, kernel records ---- */
+    LOG(_) => execute_log(op),
+    /* ---- system ---- */
+    CREATE() => assert(false),
+    CREATE2() => assert(false),
+    CALL() => assert(false),
+    CALLCODE() => assert(false),
+    DELEGATECALL() => assert(false),
+    STATICCALL() => assert(false),
+    RETURN() => execute_halt(op),
+    REVERT() => execute_halt(op),
+    INVALID() => execute_halt(op),
+    SELFDESTRUCT() => execute_halt(op),
+}
+
+/*! The single-step transition function: call/create opcodes install a child
+    frame; every other opcode executes in [execute_opcode][]. */
+function execute(op : ast) -> unit = match op {
+    CREATE() => run_create(false),
+    CREATE2() => /* EIP-1014 */ run_create(true),
+    CALL() => run_call(Call),
+    CALLCODE() => run_call(CallCode),
+    DELEGATECALL() => /* EIP-7 */ run_call(DelegateCall),
+    STATICCALL() => /* EIP-214 */ run_call(StaticCall),
+    _ => execute_opcode(op),
 }

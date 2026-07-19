@@ -88,7 +88,7 @@ uint64_t jumpdest_table_alloc(EVMSAIL_BYTE_QUANTITY_PARAM(code_len)) {
 bool jumpdest_table_store_chunk(uint64_t ref,
                                 EVMSAIL_BYTE_QUANTITY_PARAM(code_len),
                                 EVMSAIL_BYTE_QUANTITY_PARAM(chunk_index),
-                                const lbits chunk) {
+                                const sail_bits256 chunk) {
   uint64_t code_len_value = evmsail_byte_quantity_value(code_len);
   uint64_t chunk_index_value = evmsail_byte_quantity_value(chunk_index);
   size_t base = 0;
@@ -100,7 +100,11 @@ bool jumpdest_table_store_chunk(uint64_t ref,
   if (first >= nwords) return false;
 
   uint64_t words[4];
+#ifdef EVMSAIL_STANDARD_ABI
   lbits_to_le_words4(words, chunk);
+#else
+  memcpy(words, chunk.limbs, sizeof(words));
+#endif
   uint64_t count = nwords - first;
   if (count > 4) count = 4;
   for (uint64_t i = count; i < 4; i++)
@@ -247,55 +251,59 @@ static int code_db_intern(const uint64_t key[4], const uint8_t *src,
   return 1;
 }
 
-void code_db_store_indexed_source(lbits *rop, uint64_t source_kind,
-                                  uint64_t off, uint64_t len,
-                                  uint64_t jumpdest_ref) {
+EVMSAIL_HASH_RETURN code_db_store_indexed_source(
+    EVMSAIL_HASH_RESULT(result) uint64_t source_kind, uint64_t off,
+    uint64_t len, uint64_t jumpdest_ref) {
   uint64_t key[4] = {0, 0, 0, 0};
+  uint8_t key_bytes[32];
   if (len > UINT32_MAX ||
       !jumpdest_table_matches(jumpdest_ref, (uint32_t)len)) {
-    be_words4_to_lbits(rop, key);
-    return;
+    be_words4_to_be_bytes(key_bytes, key);
+    EVMSAIL_RETURN_HASH_BE_BYTES(result, key_bytes);
   }
   const uint8_t *src = NULL;
   uint64_t source_len = 0;
   if (!evmsail_resolve_byte_source(source_kind, off, len, &src, &source_len) ||
       !src || source_len != len) {
-    be_words4_to_lbits(rop, key);
-    return;
+    be_words4_to_be_bytes(key_bytes, key);
+    EVMSAIL_RETURN_HASH_BE_BYTES(result, key_bytes);
   }
   host_keccak256_bytes(key, src, len);
   if (!code_db_intern(key, src, (uint32_t)len, jumpdest_ref))
     memset(key, 0, sizeof key);
-  be_words4_to_lbits(rop, key);
+  be_words4_to_be_bytes(key_bytes, key);
+  EVMSAIL_RETURN_HASH_BE_BYTES(result, key_bytes);
 }
 
 /* Intern the 23-byte EIP-7702 delegation designation 0xef0100 ++ addr under its
  * keccak hash with the explicit Sail analysis; return the codeHash. */
-void code_intern_indexed_delegation(lbits *rop, const lbits addr,
-                                    uint64_t jumpdest_ref) {
+EVMSAIL_HASH_RETURN code_intern_indexed_delegation(
+    EVMSAIL_HASH_RESULT(result) sail_address addr, uint64_t jumpdest_ref) {
   uint8_t b[23];
   b[0] = 0xef; b[1] = 0x01; b[2] = 0x00;
-  lbits_to_be_bytes(b + 3, 20, addr);
+  evmsail_address_to_be_bytes(b + 3, addr);
   uint64_t key[4] = {0, 0, 0, 0};
+  uint8_t key_bytes[32];
   host_keccak256_bytes(key, b, sizeof b);
   if (!code_db_intern(key, b, (uint32_t)sizeof b, jumpdest_ref))
     memset(key, 0, sizeof key);
-  be_words4_to_lbits(rop, key);
+  be_words4_to_be_bytes(key_bytes, key);
+  EVMSAIL_RETURN_HASH_BE_BYTES(result, key_bytes);
 }
 
 /* ----------------------- code-hash lookup ------------------------------- */
 /* Return the code span and its associated JUMPDEST table as one invariant.
  * code_glue.c assembles the generated Code result. */
 
-static const code_db_ent *code_db_get(const lbits h) {
+static const code_db_ent *code_db_get(sail_hash h) {
   if (!code_db) return NULL;
   uint64_t key[4];
-  lbits_to_be_words4(key, h);
+  sail_hash_to_be_words4(key, h);
   const code_db_ent *e = code_db_find(key);
   return (e->used && e->len) ? e : NULL;
 }
 
-bool code_db_lookup_indexed(const lbits h, uint64_t *off, uint64_t *len,
+bool code_db_lookup_indexed(sail_hash h, uint64_t *off, uint64_t *len,
                             uint64_t *jumpdest_ref) {
   const code_db_ent *e = code_db_get(h);
   if (!e) return false;
@@ -331,17 +339,14 @@ const uint8_t *code_db_code_by_words(const uint64_t key_be[4], uint64_t *len_out
   return code_arena + e->off;
 }
 
-/* EIP-7702 delegation probe: (is_designation << 160) | target, in one call
- * (this runs on every CALL-family target; reading the code any other way
- * would be O(|code|) or a code-db walk) */
-void code_db_read_delegation(lbits *rop, const lbits h) {
+/* EIP-7702 delegation probe in one call (this runs on every CALL-family
+ * target; reading the code any other way would be O(|code|) or a code-db
+ * walk).  The generated-model glue pairs this flag with the nominal address. */
+bool code_db_read_delegation_address(uint8_t address[20], sail_hash h) {
   const code_db_ent *e = code_db_get(h);
   const uint8_t *p = e ? code_arena + e->off : NULL;
-  int deleg = e && e->len == 23 && p[0] == 0xef && p[1] == 0x01 && p[2] == 0x00;
-  uint8_t b[21] = {0};
-  if (deleg) {
-    b[0] = 0x01;                    /* is_designation flag: bit 160 */
-    memcpy(b + 1, p + 3, 20);       /* target address              */
-  }
-  be_bytes_to_lbits(rop, 168, b, sizeof b);
+  bool deleg = e && e->len == 23 && p[0] == 0xef && p[1] == 0x01 && p[2] == 0x00;
+  memset(address, 0, 20);
+  if (deleg) memcpy(address, p + 3, 20);
+  return deleg;
 }

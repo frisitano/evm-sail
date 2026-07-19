@@ -85,10 +85,10 @@ unit nodedb_reset(const unit u) {
   return UNIT;
 }
 
-unit nodedb_insert(const lbits kh, EVMSAIL_BYTE_QUANTITY_PARAM(off),
+unit nodedb_insert(sail_hash kh, EVMSAIL_BYTE_QUANTITY_PARAM(off),
                    EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
   uint64_t k[4];
-  lbits_to_le_words4(k, kh);
+  sail_hash_to_le_words4(k, kh);
   if (!nd_tab)
     nodedb_reset(UNIT);
   nd_put(k, evmsail_byte_quantity_value(off),
@@ -98,9 +98,9 @@ unit nodedb_insert(const lbits kh, EVMSAIL_BYTE_QUANTITY_PARAM(off),
 }
 
 /* memoized point lookup: one probe serves the off/len getter pair */
-static void nd_find(const lbits kh) {
+static void nd_find(sail_hash kh) {
   uint64_t k[4];
-  lbits_to_le_words4(k, kh);
+  sail_hash_to_le_words4(k, kh);
   if (nd_memo_valid && memcmp(nd_memo_key, k, 32) == 0)
     return;
   memcpy(nd_memo_key, k, 32);
@@ -123,12 +123,12 @@ static void nd_find(const lbits kh) {
 
 /* span length of keccak key `kh`; 0 when absent (nodes are never empty) */
 #ifdef EVMSAIL_STANDARD_ABI
-void nodedb_len(sail_int *out, const lbits kh) {
+void nodedb_len(sail_int *out, sail_hash kh) {
   nd_find(kh);
   evmsail_byte_quantity_set(out, nd_memo_len);
 }
 #else
-uint64_t nodedb_len(const lbits kh) {
+uint64_t nodedb_len(sail_hash kh) {
   nd_find(kh);
   return nd_memo_len;
 }
@@ -136,12 +136,12 @@ uint64_t nodedb_len(const lbits kh) {
 
 /* span offset of keccak key `kh`; 0 when absent (guard on nodedb_len) */
 #ifdef EVMSAIL_STANDARD_ABI
-void nodedb_off(sail_int *out, const lbits kh) {
+void nodedb_off(sail_int *out, sail_hash kh) {
   nd_find(kh);
   evmsail_byte_quantity_set(out, nd_memo_off);
 }
 #else
-uint64_t nodedb_off(const lbits kh) {
+uint64_t nodedb_off(sail_hash kh) {
   nd_find(kh);
   return nd_memo_off;
 }

@@ -51,12 +51,12 @@ struct BlockHeader = {
     blob_gas_used : blob_gas,
     /* uint64 */
     excess_blob_gas : blob_gas,
-    state_root : bits(256),
-    receipts_root : bits(256),
+    state_root : hash,
+    receipts_root : hash,
     logs_bloom : LogsBloom,
     fee_recipient : address,
-    parent_hash : bits(256),
-    parent_beacon_block_root : bits(256),
+    parent_hash : hash,
+    parent_beacon_block_root : hash,
     /* uint64 (EIP-7843) */
     slot_number : slot_number,
     extra_data : ByteSlice,
@@ -64,7 +64,7 @@ struct BlockHeader = {
 
 /*! `keccak256(rlp([]))` — the ommers hash of every post-merge block
     (EIP-3675 requires an empty ommers list). */
-let EMPTY_OMMER_HASH : hash = 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347
+let EMPTY_OMMER_HASH : hash = word_to_hash(U256(0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347))
 
 /*! An EIP-4895 beacon-chain withdrawal: index, validator, recipient,
     and amount in gwei. */

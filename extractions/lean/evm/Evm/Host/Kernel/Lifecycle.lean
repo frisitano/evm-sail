@@ -18,6 +18,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -25,7 +26,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -37,6 +40,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -45,15 +49,25 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # State: the transaction lifecycle
+
+Snapshot, revert, per-transaction reset, and the transaction-end merge
+into the block layer. -/
+
+/-- Captures all frame-revertible transaction state. The frame checkpoint
+stores its refund counter separately. -/
 def k_state_checkpoint (_ : Unit) : SailM StateCheckpoint := do
   (state_checkpoint ())
 
+/-- Installs the block header. -/
 def k_set_header (h : BlockHeader) : SailM Unit := do
   writeReg k_header h
 
+/-- Installs the per-transaction environment. -/
 def k_set_tx (env : TxEnv) : SailM Unit := do
   writeReg k_tx env
 
+/-- Resets every per-transaction store and the private checkpoint history. -/
 def k_tx_reset (_ : Unit) : SailM Unit := do
   (acct_tx_reset ())
   (storage_tx_reset ())
@@ -62,9 +76,17 @@ def k_tx_reset (_ : Unit) : SailM Unit := do
   (logs_tx_reset ())
   (state_checkpoint_reset ())
 
+/-- Whether a selfdestructed account is actually deleted at transaction
+end: always before Cancun; only if created in the same transaction
+from Cancun on (EIP-6780). -/
 def account_deleted_at_tx_end (acc : Account) : SailM Bool := do
   (pure (acc.selfdestructed && ((fork_lt (← readReg k_fork) Cancun) || acc.created)))
 
+/-- The transaction-end merge: drains the transaction overlays into the
+block layer, applying EIP-6780 deletion (with the EIP-7708 burn log),
+storage-clear generations, and recording nonce/balance/code/storage
+changes for the EIP-7928 block access list. Lifecycle flags reset as
+rows merge. -/
 def k_tx_merge (_ : Unit) : SailM Unit := do
   let more : Bool := true
   let more ← (( do
@@ -89,10 +111,10 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
             if (((curr.info.nonce).value != (e.value.orig.info.nonce).value) : Bool)
             then (bal_nonce_change e.addr ⟨(curr.info.nonce).value⟩)
             else (pure ())
-            if ((curr.info.balance != e.value.orig.info.balance) : Bool)
+            if ((bne curr.info.balance e.value.orig.info.balance) : Bool)
             then (bal_balance_change e.addr curr.info.balance)
             else (pure ())
-            if ((curr.info.code_hash != e.value.orig.info.code_hash) : Bool)
+            if ((bne curr.info.code_hash e.value.orig.info.code_hash) : Bool)
             then (bal_code_change e.addr curr.info.code_hash)
             else (pure ())
             let curr : Account := { curr with created := false, selfdestructed := false }
@@ -117,7 +139,7 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
             match (← (acct_block_get e.key.addr)) with
             | .some acc =>
               (do
-                if ((acc.present && (e.value.curr != e.value.orig)) : Bool)
+                if ((acc.present && (bne e.value.curr e.value.orig)) : Bool)
                 then
                   (do
                     (bal_storage_change e.key.addr e.key.slot e.value.curr)
@@ -130,6 +152,7 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
   (acct_tx_reset ())
   (storage_tx_reset ())
 
+/-- Atomically restores the transaction state captured at a frame boundary. -/
 def k_revert (checkpoint : StateCheckpoint) : SailM Unit := do
   (state_revert checkpoint)
 

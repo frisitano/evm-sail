@@ -26,6 +26,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -33,7 +34,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -45,6 +48,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -53,15 +57,22 @@ open Bytes
 open ByteSource
 open BlockError
 
+/-! # Receipts, blooms, and the receipts trie
+
+The logs-bloom construction (YP §4.4.1) and the receipts trie
+(EIP-2718 typed receipt encoding). -/
+
 def LOGS_BLOOM_BYTE_LENGTH : byte_length := (ByteQuantity 256)
 
-/-- Type quantifiers: bit_to_set : Nat, 0 ≤ bit_to_set ∧ bit_to_set ≤ 63 -/
+/-- Constructs a one-hot mask for a bit within a bloom limb. -/
+/- Type quantifiers: bit_to_set : Nat, 0 ≤ bit_to_set ∧ bit_to_set ≤ 63 -/
 def bloom_bit_mask (bit_to_set : bloom_limb_bit) : limb :=
   let bit_to_set := (bit_to_set).value
   let mask : (BitVec 64) := LIMB_ZERO
   (BitVec.update mask bit_to_set 1#1)
 
-/-- Type quantifiers: k_ex161407_ : Nat, 0 ≤ k_ex161407_ ∧ k_ex161407_ ≤ 2047 -/
+/-- Sets one bit (0–2047) in the bloom, most-significant-byte first. -/
+/- Type quantifiers: k_ex161457_ : Nat, 0 ≤ k_ex161457_ ∧ k_ex161457_ ≤ 2047 -/
 def bloom_set_bit (bloom : LogsBloom) (bit_to_set : bloom_bit_index) : SailM LogsBloom := do
   let bit_to_set := (bit_to_set).value
   let out := bloom
@@ -85,29 +96,37 @@ def bloom_set_bit (bloom : LogsBloom) (bit_to_set : bloom_bit_index) : SailM Log
   (pure (vectorUpdate out limb_index
       ((GetElem?.getElem! out limb_index) ||| (bloom_bit_mask ⟨bit_in_limb⟩))))
 
-def bloom_add_entry_hash (bloom : LogsBloom) (h : (BitVec 256)) : SailM LogsBloom := do
-  let out ← do (bloom_set_bit bloom ⟨(BitVec.toNatInt (Sail.BitVec.extractLsb h 250 240))⟩)
-  let out ← (bloom_set_bit out ⟨(BitVec.toNatInt (Sail.BitVec.extractLsb h 234 224))⟩)
-  (bloom_set_bit out ⟨(BitVec.toNatInt (Sail.BitVec.extractLsb h 218 208))⟩)
+/-- Adds a hashed bloom entry: three bits from its KECCAK-256. -/
+def bloom_add_entry_hash (bloom : LogsBloom) (h : hash) : SailM LogsBloom := do
+  let bits := (hash_to_bits h)
+  let out ← do (bloom_set_bit bloom ⟨(BitVec.toNatInt (Sail.BitVec.extractLsb bits 250 240))⟩)
+  let out ← (bloom_set_bit out ⟨(BitVec.toNatInt (Sail.BitVec.extractLsb bits 234 224))⟩)
+  (bloom_set_bit out ⟨(BitVec.toNatInt (Sail.BitVec.extractLsb bits 218 208))⟩)
 
+/-- Adds every topic of a log record to the bloom. -/
 def bloom_add_topics (bloom : LogsBloom) (topics : (List word)) : SailM LogsBloom := do
   match topics with
   | [] => (pure bloom)
   | (topic :: rest) =>
     (bloom_add_topics (← (bloom_add_entry_hash bloom (← (keccak256_word topic)))) rest)
 
+/-- Adds a log record to the bloom: its address and every topic
+(YP §4.4.1, the M function). -/
 def bloom_add_log (bloom : LogsBloom) (log : LogEntry) : SailM LogsBloom := do
   let with_address ← do (bloom_add_entry_hash bloom (← (keccak256_address log.address)))
   (bloom_add_topics with_address log.topics)
 
+/-- Adds a sequence of log records to a bloom. -/
 def bloom_add_logs (bloom : LogsBloom) (logs : (List LogEntry)) : SailM LogsBloom := do
   match logs with
   | [] => (pure bloom)
   | (log :: rest) => (bloom_add_logs (← (bloom_add_log bloom log)) rest)
 
+/-- The bloom of one receipt's log series. -/
 def logs_bloom_for_logs (logs : (List LogEntry)) : SailM LogsBloom := do
   (bloom_add_logs EMPTY_LOGS_BLOOM logs)
 
+/-- Sizes the RLP content of a topic list. -/
 def topics_rlp_content_size (topics : (List word)) : SailM byte_length := do
   match topics with
   | [] => (pure BYTE_ZERO)
@@ -116,6 +135,7 @@ def topics_rlp_content_size (topics : (List word)) : SailM byte_length := do
 def topics_rlp_size (topics : (List word)) : SailM byte_length := do
   (rlp_list_size (← (topics_rlp_content_size topics)))
 
+/-- Sizes the RLP content of one log entry. -/
 def log_entry_rlp_content_size (log : LogEntry) : SailM byte_length := do
   let content_len := (rlp_addr_size ())
   let content_len ← (byte_quantity_add content_len (← (topics_rlp_size log.topics)))
@@ -124,6 +144,7 @@ def log_entry_rlp_content_size (log : LogEntry) : SailM byte_length := do
 def log_entry_rlp_size (log : LogEntry) : SailM byte_length := do
   (rlp_list_size (← (log_entry_rlp_content_size log)))
 
+/-- Sizes the RLP content of a log-entry list. -/
 def logs_rlp_content_size (logs : (List LogEntry)) : SailM byte_length := do
   match logs with
   | [] => (pure BYTE_ZERO)
@@ -133,6 +154,7 @@ def logs_rlp_content_size (logs : (List LogEntry)) : SailM byte_length := do
 def logs_rlp_size (logs : (List LogEntry)) : SailM byte_length := do
   (rlp_list_size (← (logs_rlp_content_size logs)))
 
+/-- Writes topic words as the content of an RLP list. -/
 def rlp_write_topics_content (topics : (List word)) : SailM Unit := do
   match topics with
   | [] => (pure ())
@@ -141,16 +163,19 @@ def rlp_write_topics_content (topics : (List word)) : SailM Unit := do
       (rlp_write_word topic)
       (rlp_write_topics_content rest))
 
+/-- Writes an RLP list of topic words. -/
 def rlp_write_topics (topics : (List word)) : SailM Unit := do
   (rlp_write_list_prefix (← (topics_rlp_content_size topics)))
   (rlp_write_topics_content topics)
 
+/-- Writes one canonical receipt log entry. -/
 def rlp_write_log_entry (log : LogEntry) : SailM Unit := do
   (rlp_write_list_prefix (← (log_entry_rlp_content_size log)))
   (rlp_write_addr log.address)
   (rlp_write_topics log.topics)
   (rlp_write_slice log.data)
 
+/-- Writes log entries as the content of an RLP list. -/
 def rlp_write_logs_content (logs : (List LogEntry)) : SailM Unit := do
   match logs with
   | [] => (pure ())
@@ -159,10 +184,12 @@ def rlp_write_logs_content (logs : (List LogEntry)) : SailM Unit := do
       (rlp_write_log_entry log)
       (rlp_write_logs_content rest))
 
+/-- Writes the RLP list of receipt logs. -/
 def rlp_write_logs (logs : (List LogEntry)) : SailM Unit := do
   (rlp_write_list_prefix (← (logs_rlp_content_size logs)))
   (rlp_write_logs_content logs)
 
+/-- Sizes a receipt payload from status, gas, bloom, and logs. -/
 def receipt_payload_content_size (r : Receipt) (cumulative_gas_used : gas) : SailM byte_length := do
   let status : Nat :=
     if (r.success : Bool)
@@ -174,6 +201,9 @@ def receipt_payload_content_size (r : Receipt) (cumulative_gas_used : gas) : Sai
     (byte_quantity_add content_len (← (rlp_string_size LOGS_BLOOM_BYTE_LENGTH 0x00#8)))
   (byte_quantity_add content_len (← (logs_rlp_size r.logs)))
 
+/-- The receipt as stored in the receipts trie: the RLP payload,
+prefixed by the envelope type byte for typed transactions
+(EIP-2718). -/
 def receipt_encoded (r : Receipt) (cumulative_gas_used : gas) : SailM EvmByteSlice := do
   let status : Nat :=
     if (r.success : Bool)
@@ -198,6 +228,7 @@ def receipt_encoded (r : Receipt) (cumulative_gas_used : gas) : SailM EvmByteSli
   (rlp_write_logs r.logs)
   (rlp_finish start encoded_len)
 
+/-- Constructs an empty receipts-trie accumulator. -/
 def receipt_accumulator_empty (_ : Unit) : ReceiptAccumulator :=
   { builder := (trie_builder_empty ()),
     first := none,
@@ -206,6 +237,7 @@ def receipt_accumulator_empty (_ : Unit) : ReceiptAccumulator :=
     cumulative_gas_used := GAS_ZERO,
     bloom := EMPTY_LOGS_BLOOM }
 
+/-- Encodes and inserts one pending receipt with its next lexical key. -/
 def receipt_insert (builder : TrieBuilder) (pending : PendingReceipt) (next_key : (Option TriePath)) : SailM TrieBuilder := do
   let mark ← do (scratch_begin ())
   let value ← do (receipt_encoded pending.receipt pending.cumulative_gas_used)
@@ -215,22 +247,21 @@ def receipt_insert (builder : TrieBuilder) (pending : PendingReceipt) (next_key 
   (scratch_rewind mark)
   (pure inserted)
 
+/-- Adds the next numeric receipt while respecting trie-key lexical order. -/
 def receipt_accumulator_push (acc : ReceiptAccumulator) (receipt : Receipt) : SailM ReceiptAccumulator := do
   if ((! receipt.valid) : Bool)
   then sailThrow ((InvalidBlock ExecutionInvalid))
   else (pure ())
   let next_count ← (( do
-    if (((acc.count).value <b ((2 ^i 64) -i 1)) : Bool)
+    if (((acc.count).value <b (BYTE_QUANTITY_MAX).value) : Bool)
     then
       (do
           let semanticResult ← (protocol_quantity_increment ⟨(acc.count).value⟩)
           pure ((semanticResult).value))
     else sailThrow ((InvalidBlock WitnessDeficient)) ) : SailM Nat )
-  let .Gas cumulative_before := acc.cumulative_gas_used
-  let .Gas receipt_gas := receipt.gas_used
   let cumulative ← (( do
-    if ((receipt_gas ≤b (((2 ^i 63) -i 1) -i cumulative_before)) : Bool)
-    then (pure (Gas (cumulative_before + receipt_gas)))
+    if ((gas_sum_supported acc.cumulative_gas_used receipt.gas_used) : Bool)
+    then (gas_add acc.cumulative_gas_used receipt.gas_used)
     else sailThrow ((InvalidBlock ExecutionInvalid)) ) : SailM gas )
   let current : PendingReceipt :=
     { index := ⟨(acc.count).value⟩,
@@ -296,6 +327,7 @@ def receipt_accumulator_push (acc : ReceiptAccumulator) (receipt : Receipt) : Sa
           cumulative_gas_used := cumulative,
           bloom := ← (bloom_add_logs acc.bloom receipt.logs) })
 
+/-- Flushes retained receipts and returns the canonical receipts root. -/
 def receipt_accumulator_root (acc : ReceiptAccumulator) : SailM hash := do
   let builder := acc.builder
   let builder ← (( do

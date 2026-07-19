@@ -87,6 +87,7 @@ __attribute__((noreturn)) void zkvm_trap(uint64_t mcause, uint64_t mepc, uint64_
  * gcc lowers struct copies / memcpy idioms to calls to these even under
  * -ffreestanding, so they must exist as real symbols; strlen backs fprintf. */
 
+#ifndef EVMSAIL_PLATFORM_LIBC_MEMORY
 void *memcpy(void *dst, const void *src, size_t n)
 {
     unsigned char *d = dst;
@@ -139,6 +140,7 @@ int memcmp(const void *a, const void *b, size_t n)
     }
     return 0;
 }
+#endif
 
 size_t strlen(const char *s)
 {
@@ -155,8 +157,12 @@ size_t strlen(const char *s)
  * many short-lived objects during a block run, so reclaiming freed memory
  * (rather than a pure bump allocator) keeps the working set bounded. */
 
+#ifdef EVMSAIL_EXTERNAL_HEAP
+extern void evmsail_heap_region(char **start, char **end);
+#else
 extern char __heap_start[];
 extern char __heap_end[];
+#endif
 
 #define ALIGN_UP(x, a) (((x) + ((a) - 1)) & ~((uintptr_t)(a) - 1))
 #define HEAP_ALIGN 16u
@@ -178,8 +184,16 @@ static int        heap_ready = 0;
 
 static void heap_init(void)
 {
-    brk_ptr   = (char *)ALIGN_UP((uintptr_t)__heap_start, HEAP_ALIGN);
-    brk_end   = __heap_end;
+    char *heap_start;
+    char *heap_end;
+#ifdef EVMSAIL_EXTERNAL_HEAP
+    evmsail_heap_region(&heap_start, &heap_end);
+#else
+    heap_start = __heap_start;
+    heap_end = __heap_end;
+#endif
+    brk_ptr   = (char *)ALIGN_UP((uintptr_t)heap_start, HEAP_ALIGN);
+    brk_end   = heap_end;
     free_list = NULL;
     heap_ready = 1;
 }

@@ -70,7 +70,7 @@ function merkle_push(frontier : list(MerkleSlot), count : item_count, leaf : has
 
 /*! Adds one leaf to a streaming Merkle accumulator. */
 function merkle_accumulator_push(accumulator : MerkleAccumulator, leaf : hash) -> MerkleAccumulator =
-    if accumulator.count < 2 ^ 64 - 1 then {
+    if accumulator.count < BYTE_QUANTITY_MAX then {
         struct {
             frontier = merkle_push(accumulator.frontier, accumulator.count, leaf),
             count = item_count_increment(accumulator.count),
@@ -128,7 +128,7 @@ function merkle_root_levels(
 termination_measure merkle_root_levels(slots, n, zero, acc, remaining) = remaining
 
 function merkle_accumulator_root(accumulator : MerkleAccumulator, depth : merkle_depth) -> hash =
-    merkle_root_levels(accumulator.frontier, accumulator.count, sail_zeros(256), sail_zeros(256), depth)
+    merkle_root_levels(accumulator.frontier, accumulator.count, ZERO_HASH, ZERO_HASH, depth)
 
 /*! Folds a leaf list into an existing Merkle accumulator in source order. */
 function merkle_accumulate(leaves : list(hash), accumulator : MerkleAccumulator) -> MerkleAccumulator =
@@ -146,29 +146,30 @@ function merkleize(leaves : list(hash), depth : merkle_depth) -> hash =
 /* SSZ 64-bit unsigned integer -> 32-byte chunk (little-endian in low 8 bytes) */
 /*! Encodes a protocol quantity as an SSZ little-endian basic-value chunk. */
 function htr_uint(v : protocol_quantity) -> hash = {
-    let value = word_of_nat(v);
-    var acc : hash = sail_zeros(256);
+    let value = word_to_bits(word_of_protocol_quantity(v));
+    var acc : bits(256) = sail_zeros(256);
     foreach (k from 0 to 7) {
         let byte = sail_shiftright(value, 8 * k)[7 .. 0];
         acc = or_vec(acc, sail_shiftleft(sail_zero_extend(byte, 256), 8 * (31 - k)))
     };
-    acc
+    hash_from_bits(acc)
 }
 
 /*! `uint256` as a 32-byte little-endian chunk. */
-function htr_u256(w : word) -> hash = {
-    var acc : hash = sail_zeros(256);
+function htr_u256(U256(w) : word) -> hash = {
+    var acc : bits(256) = sail_zeros(256);
     foreach (k from 0 to 31) {
         let byte = sail_shiftright(w, 8 * k)[7 .. 0];
         acc = or_vec(acc, sail_shiftleft(sail_zero_extend(byte, 256), 8 * (31 - k)))
     };
-    acc
+    hash_from_bits(acc)
 }
 
 /*! `Bytes32` chunks are themselves. */
-function htr_bytes32(b : bits(256)) -> hash = b
+function htr_bytes32(b : hash) -> hash = b
 /*! A 20-byte address, left-aligned in its chunk. */
-function htr_addr(a : address) -> hash = sail_shiftleft(sail_zero_extend(a, 256), 96)
+function htr_addr(a : address) -> hash =
+    hash_from_bits(sail_shiftleft(sail_zero_extend(address_to_bits(a), 256), 96))
 
 /*! `mix_in_length`: hashes the list root with its length chunk. */
 function mix_in_length(root : hash, len : item_count) -> hash = sha256_pair(root, htr_uint(len))
@@ -192,7 +193,7 @@ function clog2(n : item_count) -> merkle_depth = {
 
 /*! The `chunk_index`-th 32-byte chunk of a byte span, zero-padded. */
 function htr_chunk(bytes : ByteSlice, chunk_index : item_index) -> hash = {
-    var acc : hash = sail_zeros(256);
+    var acc : bits(256) = sail_zeros(256);
     let start : source_pointer = ByteQuantity(chunk_index) * WORD_BYTE_LENGTH;
     var cursor : source_pointer = start;
     foreach (byte_index from 0 to 31) {
@@ -206,13 +207,13 @@ function htr_chunk(bytes : ByteSlice, chunk_index : item_index) -> hash = {
             cursor = cursor + BYTE_ONE
         }
     };
-    acc
+    hash_from_bits(acc)
 }
 
 /*! Returns the number of 32-byte chunks needed to contain `byte_len` bytes. */
 function htr_chunk_count(ByteQuantity(byte_len) : byte_length) -> item_count = {
     let count = exact_quotient(byte_len + 31, 32);
-    if count <= 2 ^ 64 - 1 then {
+    if count <= BYTE_QUANTITY_MAX then {
         count
     } else {
         throw InvalidBlock(InvalidConfig)
@@ -222,7 +223,7 @@ function htr_chunk_count(ByteQuantity(byte_len) : byte_length) -> item_count = {
 /*! Returns the number of fixed-width items in an exactly divisible byte span. */
 function htr_fixed_count(ByteQuantity(byte_len) : byte_length, ByteQuantity(item_len) : byte_length) -> item_count = {
     let count = exact_quotient(byte_len, item_len);
-    if count <= 2 ^ 64 - 1 then {
+    if count <= BYTE_QUANTITY_MAX then {
         count
     } else {
         throw InvalidBlock(InvalidConfig)
@@ -255,7 +256,7 @@ function htr_bytevector(bytes : ByteSlice) -> hash = {
 function htr_bytelist(bytes : ByteSlice, limit_bytes : byte_length) -> hash = {
     let capacity = htr_chunk_count(limit_bytes);
     let ByteQuantity(byte_len) = bytes.len;
-    if byte_len <= 2 ^ 64 - 1 then {
+    if byte_len <= BYTE_QUANTITY_MAX then {
         mix_in_length(htr_bytes_root(bytes, clog2(capacity)), byte_len)
     } else {
         throw InvalidBlock(InvalidConfig)
@@ -340,7 +341,7 @@ function htr_versioned_hashes(versioned_hashes : ByteSlice) -> hash = {
     while rest.count != 0 termination_measure(rest.count) do {
         let (versioned_hash, tail) = ssz_fixed_list_pop(rest, WORD_BYTE_LENGTH);
         rest = tail;
-        accumulator = merkle_accumulator_push(accumulator, slice_load(versioned_hash, BYTE_ZERO))
+        accumulator = merkle_accumulator_push(accumulator, word_to_hash(slice_load(versioned_hash, BYTE_ZERO)))
     };
     mix_in_length(merkle_accumulator_root(accumulator, 12), accumulator.count)
 }

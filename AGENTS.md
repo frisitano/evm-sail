@@ -91,6 +91,10 @@ duplicating instructions elsewhere.
   swaps the execution vehicle for the REAL RISC-V guest ELF on spike
   (`zkvm/build.sh`); the ELF is built once without input, and each fixture is
   supplied at runtime through the standard `ffi/zkvm_io.h` `read_input` ABI.
+  `--zisk` similarly builds the production input-agnostic ZisK ELF and drives
+  it with `ziskemu`. The harness requires the emulator version to equal the
+  `ziskos` version in `zkvm/zisk/Cargo.lock`; set `ZISKEMU` to select a
+  compatible binary.
   `--debug` invokes the
   native-only `evmsail_debug_dump` after a failure; it is not linked into the
   real guest. `--profile` enables optional cycle-scope markers.
@@ -188,6 +192,12 @@ file for the smoke gate):
 
 ```sh
 rtk python3 harness/run.py --spike harness/fixtures/eels/shanghai_push0/state_tests/for_shanghai/shanghai/eip3855_push0/push0/push0_contracts.json --fork Shanghai --quiet
+```
+
+The equivalent production ZisK gate uses the same runner and fixture:
+
+```sh
+rtk env ZISKEMU=/path/to/matching/ziskemu python3 harness/run.py --zisk harness/fixtures/eels/shanghai_push0/state_tests/for_shanghai/shanghai/eip3855_push0/push0/push0_contracts.json --fork Shanghai --quiet
 ```
 
 The guest inputs + expected outputs are built per case by the in-process EELS

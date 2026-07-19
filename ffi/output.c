@@ -47,23 +47,23 @@ bool output_buffer_store_source(uint64_t kind, uint64_t off, uint64_t len) {
   return true;
 }
 
-bool output_buffer_store_word(const lbits word) {
+bool output_buffer_store_word(const sail_word word) {
   if (!reserve(32)) {
     buffer.length = 0;
     return false;
   }
-  lbits_to_be_bytes(buffer.bytes, 32, word);
+  sail_word_to_be_bytes(buffer.bytes, word);
   buffer.length = 32;
   return true;
 }
 
-bool output_buffer_store_words(const lbits first, const lbits second) {
+bool output_buffer_store_words(const sail_word first, const sail_word second) {
   if (!reserve(64)) {
     buffer.length = 0;
     return false;
   }
-  lbits_to_be_bytes(buffer.bytes, 32, first);
-  lbits_to_be_bytes(buffer.bytes + 32, 32, second);
+  sail_word_to_be_bytes(buffer.bytes, first);
+  sail_word_to_be_bytes(buffer.bytes + 32, second);
   buffer.length = 64;
   return true;
 }

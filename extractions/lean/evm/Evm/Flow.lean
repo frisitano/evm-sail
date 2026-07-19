@@ -19,6 +19,7 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+open word
 open option
 open gas_refund
 open gas_cost
@@ -26,7 +27,9 @@ open gas_constant
 open gas
 open exception
 open byte_quantity
+open b256
 open ast
+open address
 open TxType
 open TrieNode
 open TrieItemValue
@@ -38,6 +41,7 @@ open NodeRef
 open MerkleSlot
 open HaltKind
 open FrameStatus
+open FrameContinuation
 open Fork
 open ExceptionKind
 open EnvField
@@ -46,7 +50,7 @@ open Bytes
 open ByteSource
 open BlockError
 
-/-- Type quantifiers: k_ex160612_ : Bool, k_ex160611_ : Bool -/
+/- Type quantifiers: k_ex161026_ : Bool, k_ex161025_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -105,6 +109,7 @@ def byte_quantity_lt (typ_0 : byte_quantity) (typ_1 : byte_quantity) : Bool :=
   let .ByteQuantity right : byte_quantity := typ_1
   (left <b right)
 
+/-- The activation index of a fork: its declaration position. -/
 def fork_index (f : Fork) : protocol_fork_index :=
   ⟨match f with
   | .Frontier => 0
@@ -121,6 +126,7 @@ def fork_index (f : Fork) : protocol_fork_index :=
   | .Osaka => 11
   | .Amsterdam => 12⟩
 
+/-- Fork `a` activates strictly before fork `b`; overloaded onto `<`. -/
 def fork_lt (a : Fork) (b : Fork) : Bool :=
   (((fork_index a)).value <b ((fork_index b)).value)
 
@@ -144,6 +150,8 @@ def byte_quantity_ge (typ_0 : byte_quantity) (typ_1 : byte_quantity) : Bool :=
   let .ByteQuantity right : byte_quantity := typ_1
   (left ≥b right)
 
+/-- Fork `a` activates no earlier than fork `b`. Overloaded onto `>=` so
+fork gates read `k_fork >= Berlin`. -/
 def fork_gteq (a : Fork) (b : Fork) : Bool :=
   (((fork_index b)).value ≤b ((fork_index a)).value)
 
@@ -152,7 +160,7 @@ def byte_quantity_gt (typ_0 : byte_quantity) (typ_1 : byte_quantity) : Bool :=
   let .ByteQuantity right : byte_quantity := typ_1
   (left >b right)
 
-/-- Type quantifiers: x : Int -/
+/- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
 
