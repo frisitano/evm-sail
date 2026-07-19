@@ -104,10 +104,14 @@ struct ExecutionRequests = {
     deposits : ByteSlice,
     withdrawals : ByteSlice,
     consolidations : ByteSlice,
+    builder_deposits : ByteSlice,
+    builder_exits : ByteSlice,
 }
 
 let EMPTY_EXECUTION_REQUESTS : ExecutionRequests = struct {
         deposits = EMPTY_SLICE,
         withdrawals = EMPTY_SLICE,
         consolidations = EMPTY_SLICE,
+        builder_deposits = EMPTY_SLICE,
+        builder_exits = EMPTY_SLICE,
     }

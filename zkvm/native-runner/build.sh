@@ -158,7 +158,8 @@ SAIL_CMD+=(
 # --- 5. shared harness I/O + CLI main ---------------------------------------
 #   test_utils.c supplies the native standard I/O implementation, large-stack
 #   run, and clear-memory hooks shared by this executable and build_lib.sh.
-"$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$HERE/test_utils.c" -o "$BUILD/test_utils.o"
 "$CC" "${CFLAGS[@]}" -c "$HERE/main.c" -o "$BUILD/main.o"
 

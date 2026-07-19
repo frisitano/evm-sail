@@ -181,7 +181,8 @@ function decode_simple(opcode : opcode) -> ast =
 /*! Fetches and decodes the opcode at `pc`, advancing `pc` past the
     opcode and any immediate. Past the end of code the frame implicitly
     executes `STOP` (YP). `PUSH0`–`PUSH32` (0x5f–0x7f) carry an `n`-byte
-    immediate consumed here; every other byte decodes via
+    immediate; Amsterdam's `DUPN`/`SWAPN`/`EXCHANGE` carry one byte,
+    zero-padded at end of code. Every other byte decodes via
     [decode_simple][]. */
 function fetch() -> ast = {
     if not_bool(pc < frame_code_len()) then {
@@ -199,7 +200,18 @@ function fetch() -> ast = {
                 advance_pc(size);
                 PUSH(encoded_size, value)
             } else {
-                decode_simple(opcode)
+                if (k_fork >= Amsterdam) & (230 <= opcode) & (opcode <= 232) then {
+                    let immediate = slice_byte(frame_code.bytes, pc);
+                    advance_pc(BYTE_ONE);
+                    match opcode {
+                        230 => DUPN(immediate),
+                        231 => SWAPN(immediate),
+                        232 => EXCHANGE(immediate),
+                        _ => INVALID(),
+                    }
+                } else {
+                    decode_simple(opcode)
+                }
             }
         }
     }
@@ -263,9 +275,10 @@ function frame_succeeded() -> bool =
     executes as empty code. An undelegated account runs its own code. */
 function executable_code(target : address, dele : bool, dtgt : address) -> Code =
     if dele then {
+        let delegate_code = code_db_resolve(k_code_key(dtgt));
         match word_to_precompile_id(address_to_word(dtgt)) {
             Some(number) if is_precompile(number) => EMPTY_CODE,
-            _ => code_db_resolve(k_code_key(dtgt)),
+            _ => delegate_code,
         }
     } else {
         code_db_resolve(k_code_key(target))
@@ -376,7 +389,11 @@ function run_call(kind : CallKind) -> unit = {
        its cold/warm cost. */
     let warm = k_access_account(target);
     let target_cost : gas_constant = account_cost(warm);
-    let transfer_cost : gas_constant = if word_nonzero(value) then { G_callvalue } else { GAS_CONSTANT_ZERO };
+    let transfer_cost : gas_constant = if word_nonzero(value) then {
+            call_value_cost()
+        } else {
+            GAS_CONSTANT_ZERO
+        };
 
     /* Static gas is checked before any state access: the
        target's access + value-transfer + memory cost is checked BEFORE reading
@@ -401,7 +418,16 @@ function run_call(kind : CallKind) -> unit = {
             GAS_CONSTANT_ZERO
         };
     let access_cost = target_cost + delegation_cost;
-    let create_cost : gas_constant = if word_nonzero(value) & call_transfers_value(kind) & k_account_is_empty(target) then {
+    let new_account_charged =    k_fork
+                              >= Amsterdam
+                              &  word_nonzero(value)
+                              &  call_transfers_value(kind)
+                              &  k_account_is_empty(target);
+    let create_cost : gas_constant = if   k_fork
+                                        < Amsterdam
+                                        & word_nonzero(value)
+                                        & call_transfers_value(kind)
+                                        & k_account_is_empty(target) then {
             G_newaccount
         } else {
             GAS_CONSTANT_ZERO
@@ -420,19 +446,32 @@ function run_call(kind : CallKind) -> unit = {
        63/64-capped value), which forces the out-of-gas exceptional halt below.
        Otherwise the EIP-150 63/64ths cap applies to the gas left after
        subtracting mem_gas and extra_gas. */
-    let avail = gas_remaining;
-    let base_child : gas = if avail < required then {
-            GAS_ZERO
-        } else {
-            let available_after_cost = gas_sub_or_oog(avail, required);
-            call_gas_cap_word(available_after_cost, gas_request)
+    var base_child : gas = GAS_ZERO;
+    if k_fork >= Amsterdam then {
+        /* Amsterdam charges execution work, then state growth, before
+           applying EIP-150 to the execution gas left for the child. */
+        charge(required);
+        if new_account_charged then {
+            charge_state_gas(G_amsterdam_state_new_account)
         };
+        if is_running() then {
+            base_child = call_gas_cap_word(gas_remaining, gas_request);
+            charge(gas_to_cost(base_child))
+        }
+    } else {
+        let avail = gas_remaining;
+        base_child =
+            if avail < required then {
+                GAS_ZERO
+            } else {
+                let available_after_cost = gas_sub_or_oog(avail, required);
+                call_gas_cap_word(available_after_cost, gas_request)
+            };
 
-    /* one combined charge: cost (= base_child + extra_gas) + mem_gas. A frame
-       that cannot cover this exceptionally halts (all gas consumed) BEFORE the
-       child runs and BEFORE the stipend is granted. */
-    let total_charge = gas_to_cost(base_child) + required;
-    charge(total_charge);
+        /* Legacy message-call charging combines the child allocation with
+           access, value-transfer, new-account, and memory costs. */
+        charge(gas_to_cost(base_child) + required)
+    };
     if not_bool(is_running()) then {
         return ()
     };
@@ -491,6 +530,9 @@ function run_call(kind : CallKind) -> unit = {
            refunded to the caller and CALL pushes 0. */
         returndata_clear();
         refund_gas(child_gas);
+        if new_account_charged then {
+            credit_state_gas_refund(G_amsterdam_state_new_account)
+        };
         push(WORD_ZERO)
     } else {
         match word_to_precompile_id(address_to_word(target)) {
@@ -523,11 +565,17 @@ function run_call(kind : CallKind) -> unit = {
                             }
                         } else {
                             returndata_clear();
+                            if new_account_charged then {
+                                credit_state_gas_refund(G_amsterdam_state_new_account)
+                            };
                             push(WORD_ZERO)
                         }
                     },
                     _ => {
                         returndata_clear();
+                        if new_account_charged then {
+                            credit_state_gas_refund(G_amsterdam_state_new_account)
+                        };
                         push(WORD_ZERO)
                     },
                 }
@@ -565,10 +613,16 @@ function run_call(kind : CallKind) -> unit = {
                     } else {
                         EMPTY_SLICE
                     };
-                let checkpoint = suspend_frame();
+                let child_state_gas = state_gas_remaining;
+                let checkpoint = { suspend_frame() with state_gas_remaining = GAS_ZERO };
                 frame_stack_push(
                     ResumeCall(
-                        struct { checkpoint = checkpoint, return_offset = ret_offset, return_length = ret_length },
+                        struct {
+                            checkpoint = checkpoint,
+                            return_offset = ret_offset,
+                            return_length = ret_length,
+                            new_account_charged = new_account_charged,
+                        },
                     ),
                 );
                 if call_transfers_value(kind) & word_nonzero(value) then {
@@ -583,12 +637,15 @@ function run_call(kind : CallKind) -> unit = {
                         address = child_addr,
                         code_address = target,
                         value = child_value,
+                        state_gas_reservoir = child_state_gas,
                         is_static = child_static,
                         depth = frame_depth_increment(checkpoint.call_depth),
                     };
                 calldata_install(child_calldata);
                 pc = BYTE_ZERO;
                 gas_remaining = child_gas;
+                state_gas_remaining = child_state_gas;
+                state_gas_spilled = GAS_ZERO;
                 frame_status = Running();
                 returndata_clear();
                 frame_code = child_code;
@@ -637,7 +694,7 @@ function run_create(is2 : bool) -> unit = {
        cost (G_create), the EIP-3860 per-initcode-word cost, and -- for CREATE2
        only -- the keccak word cost of hashing the initcode for the address. */
     charge_memory_expansion(off_word, len_word);
-    charge(G_create);
+    charge(create_access_cost());
     charge(initcode_gas(initcode_size));
     if is2 then {
         charge(G_keccak_word * memory_word_count(initcode_size))
@@ -667,15 +724,20 @@ function run_create(is2 : bool) -> unit = {
                 k_create_addr(creator, nonce)
             };
 
-        /* reserve all-but-one-64th of the remaining gas for the initcode frame
-           (EIP-150); the retained 1/64th stays with the creating frame. */
-        let avail = gas_remaining;
-        let retained_gas = gas_quotient(avail, 64);
-        let child_gas = gas_sub_or_oog(avail, retained_gas);
+        /* Before Amsterdam the child allocation is computed before the
+           early guards (and returned if they fail). Amsterdam first charges
+           any account-growth state gas, because a spill reduces the execution
+           gas to which the EIP-150 cap applies. */
+        var child_gas : gas = GAS_ZERO;
+        if k_fork < Amsterdam then {
+            let avail = gas_remaining;
+            let retained_gas = gas_quotient(avail, 64);
+            child_gas = gas_sub_or_oog(avail, retained_gas);
+            gas_remaining = retained_gas
+        };
         if not_bool(is_running()) then {
             return ()
         };
-        gas_remaining = retained_gas;
 
         /* EIP-214: a CREATE in a static
          * context (e.g. inside a STATICCALL frame) is a write and raises
@@ -697,7 +759,9 @@ function run_create(is2 : bool) -> unit = {
 
         if not_bool(depth_ok) | not_bool(balance_ok) | not_bool(nonce_ok) then {
             returndata_clear();
-            refund_gas(child_gas);
+            if k_fork < Amsterdam then {
+                refund_gas(child_gas)
+            };
             push(WORD_ZERO)
         } else {
             /* warm the new address and bump the creator nonce BEFORE the child
@@ -705,6 +769,22 @@ function run_create(is2 : bool) -> unit = {
              * the protocol runs them in the parent, before
              * process_create_message). */
             let _ = k_access_account(new_addr);
+            let new_account_charged = (k_fork >= Amsterdam) & k_account_is_empty(new_addr);
+            if new_account_charged then {
+                charge_state_gas(G_amsterdam_state_new_account)
+            };
+            if not_bool(is_running()) then {
+                return ()
+            };
+            if k_fork >= Amsterdam then {
+                let avail = gas_remaining;
+                let retained_gas = gas_quotient(avail, 64);
+                child_gas = gas_sub_or_oog(avail, retained_gas);
+                gas_remaining = retained_gas
+            };
+            if not_bool(is_running()) then {
+                return ()
+            };
             let occupied : bool = k_account_occupied(new_addr);
             returndata_clear();
             k_bump_nonce(creator);
@@ -712,6 +792,9 @@ function run_create(is2 : bool) -> unit = {
                 /* address collision (the target already has code, a nonzero
                  * nonce, or storage): no initcode runs, 0 is pushed, and the
                  * reserved child gas is NOT refunded (it stays deducted). */
+                if new_account_charged then {
+                    credit_state_gas_refund(G_amsterdam_state_new_account)
+                };
                 push(WORD_ZERO)
             } else {
                 /* Freeze the initcode while parent memory is active, then
@@ -722,9 +805,18 @@ function run_create(is2 : bool) -> unit = {
                     } else {
                         EMPTY_SLICE
                     };
-                let child_code = code_db_resolve(code_db_insert(initcode));
-                let checkpoint = suspend_frame();
-                frame_stack_push(ResumeCreate(struct { checkpoint = checkpoint, address = new_addr }));
+                let child_code = code_db_resolve(code_db_insert(initcode, k_fork));
+                let child_state_gas = state_gas_remaining;
+                let checkpoint = { suspend_frame() with state_gas_remaining = GAS_ZERO };
+                frame_stack_push(
+                    ResumeCreate(
+                        struct {
+                            checkpoint = checkpoint,
+                            address = new_addr,
+                            new_account_charged = new_account_charged,
+                        },
+                    ),
+                );
                 k_mark_created(new_addr); /* EIP-6780: created this tx */
                 k_clear_storage(new_addr);
                 k_bump_nonce(new_addr); /* EIP-161: a created contract starts at nonce 1 */
@@ -735,12 +827,15 @@ function run_create(is2 : bool) -> unit = {
                         address = new_addr,
                         code_address = new_addr,
                         value = value,
+                        state_gas_reservoir = child_state_gas,
                         is_static = checkpoint.message.is_static,
                         depth = frame_depth_increment(checkpoint.call_depth),
                     };
                 calldata_install(EMPTY_SLICE);
                 pc = BYTE_ZERO;
                 gas_remaining = child_gas;
+                state_gas_remaining = child_state_gas;
+                state_gas_spilled = GAS_ZERO;
                 frame_status = Running();
                 returndata_clear();
                 frame_code = child_code;
@@ -757,10 +852,13 @@ function resume_call(continuation : CallContinuation, output : ByteSlice) -> uni
     let checkpoint = continuation.checkpoint;
     let succeeded = frame_succeeded();
     let child_left = gas_remaining;
+    let child_state_left = state_gas_remaining;
+    let child_state_spill = state_gas_spilled;
     let child_refund = frame_refund;
 
     restore_frame(checkpoint);
     refund_gas(child_left);
+    return_child_state_gas(child_state_left, child_state_spill);
 
     /* Both RETURN and REVERT copy their output; exceptional halts carry the
      * empty slice. Successful effects remain, while every failure reverts to
@@ -771,6 +869,9 @@ function resume_call(continuation : CallContinuation, output : ByteSlice) -> uni
         push(WORD_ONE)
     } else {
         k_revert(checkpoint.state);
+        if continuation.new_account_charged then {
+            credit_state_gas_refund(G_amsterdam_state_new_account)
+        };
         push(WORD_ZERO)
     }
 }
@@ -779,38 +880,47 @@ function resume_call(continuation : CallContinuation, output : ByteSlice) -> uni
 function resume_create(continuation : CreateContinuation, output : ByteSlice) -> unit = {
     returndata = output;
     let checkpoint = continuation.checkpoint;
-    let succeeded = frame_succeeded();
-    let child_left = gas_remaining;
-    let child_refund = frame_refund;
+    let initcode_succeeded = frame_succeeded();
     let deployed_length = returndata_size();
     let code_ok =    deployed_length
                   <= max_code_size()
                   &  ((k_fork < London) | (deployed_length == BYTE_ZERO) | (slice_byte(returndata, BYTE_ZERO) != 0xef));
-    let deposit = G_codedeposit * deployed_length;
+    let execution_deposit = code_deployment_execution_cost(deployed_length);
+    let state_deposit = code_deployment_state_cost(deployed_length);
+
+    if initcode_succeeded then {
+        if code_ok & (execution_deposit <= gas_remaining) then {
+            gas_remaining = gas_sub_or_oog(gas_remaining, execution_deposit);
+            charge_deployment_state_gas(state_deposit)
+        } else {
+            exc_halt(OutOfGas)
+        }
+    };
+    let deploy_succeeds = initcode_succeeded & frame_succeeded();
+    let child_left = gas_remaining;
+    let child_state_left = state_gas_remaining;
+    let child_state_spill = state_gas_spilled;
+    let child_refund = frame_refund;
 
     restore_frame(checkpoint);
     refund_gas(child_left);
+    return_child_state_gas(child_state_left, child_state_spill);
 
-    if succeeded & code_ok & deposit <= child_left then {
-        gas_remaining = gas_sub_or_oog(gas_remaining, deposit);
-        if is_running() then {
-            record_refund(child_refund);
-            k_deploy_code(continuation.address, returndata);
-            push(address_to_word(continuation.address))
-        }
+    if deploy_succeeds then {
+        record_refund(child_refund);
+        k_deploy_code(continuation.address, returndata);
+        push(address_to_word(continuation.address))
     } else {
-        /* A successful initcode whose deposit stage fails consumes all child
-         * gas; a reverting or exceptional initcode keeps its remaining gas. */
-        if succeeded then {
-            gas_remaining = checkpoint.gas_remaining
-        };
         k_revert(checkpoint.state);
+        if continuation.new_account_charged then {
+            credit_state_gas_refund(G_amsterdam_state_new_account)
+        };
         push(WORD_ZERO)
     };
 
     /* Successful initcode output has become deployed code. REVERT output
      * remains visible to RETURNDATA opcodes in the parent. */
-    if succeeded then {
+    if initcode_succeeded then {
         returndata_clear()
     }
 }

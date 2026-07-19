@@ -2,11 +2,10 @@
 /*md
 # Chain configuration
 
-The decoded `SszChainConfig`: the chain id and the active fork — both as
-the raw SSZ `ProtocolFork` index and as the [Fork][type-Fork] whose
-execution rules apply (blob-parameter-only forks collapse to their base) —
-plus whether the fork's activation point has been reached. Pure data — no
-registers, no externs.
+The decoded `SszChainConfig`: the chain id and whether the schema-selected
+fork's configured activation point has been reached. The schema prefix selects
+the protocol profile, so neither the fork identifier nor its blob schedule is
+repeated inside the SSZ body. Pure data — no registers, no externs.
 */
 /*! A fork's blob parameters (EIP-4844/EIP-7691): target and maximum blob
     counts per block, and the base-fee update fraction. */
@@ -16,55 +15,78 @@ struct BlobSchedule = {
     base_fee_update_fraction : blob_fee_update_fraction,
 }
 
-/*! The decoded chain configuration for the executing payload. */
-struct ChainConfig = {
-    chain_id : chain_identifier,
-    /* raw SSZ ProtocolFork index */
-    fork_index : protocol_fork_index,
-    /* execution rules for that index */
+/*! Execution rules and protocol constants selected by the stable fork byte
+    in the stateless-input schema identifier. */
+struct ProtocolProfile = {
     fork : Fork,
-    /* the fork's activation point is reached */
-    activation_active : bool,
-    blob_schedule : option(BlobSchedule),
-    blob_schedule_shape_valid : bool,
+    blob_schedule : BlobSchedule,
 }
 
-/*! Structural equality of blob schedules. */
-function blob_schedule_equal(a : BlobSchedule, b : BlobSchedule) -> bool =
-    (a.target == b.target) & (a.max == b.max) & (a.base_fee_update_fraction == b.base_fee_update_fraction)
+/*! The inactive blob schedule used before EIP-4844. */
+let NO_BLOB_SCHEDULE : BlobSchedule = struct { target = 0, max = 0, base_fee_update_fraction = 1 }
 
-/*! The protocol-defined blob schedule for an SSZ `ProtocolFork` index:
-    Cancun 3/6, Prague/Osaka 6/9, BPO1 10/15, BPO2+ 14/21; forks before
-    Cancun have none. */
-function expected_blob_schedule(idx : protocol_fork_index) -> option(BlobSchedule) =
-    if idx < 15 then {
-        None()
+/*! Resolves the schema's stable `ProtocolFork` byte to the execution-rule
+    family and its protocol-defined blob schedule. BPO forks share Osaka
+    execution rules but retain their distinct blob parameters. */
+function protocol_profile(schema_fork : byte) -> ProtocolProfile =
+    if schema_fork == 0x0a then {
+        struct { fork = Berlin, blob_schedule = NO_BLOB_SCHEDULE }
     } else {
-        if idx == 15 then {
-            Some(struct { target = 3, max = 6, base_fee_update_fraction = 3338477 })
+        if (schema_fork == 0x0b) | (schema_fork == 0x0c) | (schema_fork == 0x0d) then {
+            struct { fork = London, blob_schedule = NO_BLOB_SCHEDULE }
         } else {
-            if idx <= 17 then {
-                Some(struct { target = 6, max = 9, base_fee_update_fraction = 5007716 })
+            if schema_fork == 0x0e then {
+                struct { fork = Paris, blob_schedule = NO_BLOB_SCHEDULE }
             } else {
-                if idx == 18 then {
-                    Some(struct { target = 10, max = 15, base_fee_update_fraction = 8346193 })
+                if schema_fork == 0x0f then {
+                    struct { fork = Shanghai, blob_schedule = NO_BLOB_SCHEDULE }
                 } else {
-                    Some(struct { target = 14, max = 21, base_fee_update_fraction = 11684671 })
+                    if schema_fork == 0x10 then {
+                        struct {
+                            fork = Cancun,
+                            blob_schedule = struct { target = 3, max = 6, base_fee_update_fraction = 3338477 },
+                        }
+                    } else {
+                        if (schema_fork == 0x11) | (schema_fork == 0x12) then {
+                            struct {
+                                fork = if schema_fork == 0x11 then { Prague } else { Osaka },
+                                blob_schedule = struct { target = 6, max = 9, base_fee_update_fraction = 5007716 },
+                            }
+                        } else {
+                            if schema_fork == 0x13 then {
+                                struct {
+                                    fork = Osaka,
+                                    blob_schedule = struct { target = 10, max = 15, base_fee_update_fraction = 8346193 },
+                                }
+                            } else {
+                                if schema_fork == 0x14 then {
+                                    struct {
+                                        fork = Osaka,
+                                        blob_schedule =
+                                            struct { target = 14, max = 21, base_fee_update_fraction = 11684671 },
+                                    }
+                                } else {
+                                    if schema_fork == 0x15 then {
+                                        struct {
+                                            fork = Amsterdam,
+                                            blob_schedule =
+                                                struct { target = 14, max = 21, base_fee_update_fraction = 11684671 },
+                                        }
+                                    } else {
+                                        throw InvalidBlock(InvalidConfig)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-/*! Whether the config's blob schedule is well-shaped and equals the
-    protocol-defined schedule for its fork index. */
-function chain_config_blob_schedule_valid(cc : ChainConfig) -> bool = {
-    if not_bool(cc.blob_schedule_shape_valid) then {
-        false
-    } else {
-        match (expected_blob_schedule(cc.fork_index), cc.blob_schedule) {
-            (None(), None()) => true,
-            (Some(expected), Some(actual)) => blob_schedule_equal(expected, actual),
-            _ => false,
-        }
-    }
+/*! The decoded chain configuration for the executing payload. */
+struct ChainConfig = {
+    chain_id : chain_identifier,
+    /* the fork's activation point is reached */
+    activation_active : bool,
 }

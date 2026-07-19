@@ -22,7 +22,7 @@ function k_get_codehash(a : address) -> hash = {
 /*! Deploys code to an account: analyzes, stores, and binds its hash. */
 function k_deploy_code(a : address, code : ByteSlice) -> unit = {
     let cur = k_aload(a);
-    let h : hash = code_db_insert(code);
+    let h : hash = code_db_insert(code, k_fork);
     store_account_info(a, cur, { cur.info with code_hash = h })
 }
 

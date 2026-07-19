@@ -39,17 +39,35 @@ function write_validation_result(input_ref : StatelessInputRef, success : bool) 
 function write_invalid_result() -> unit = {
     cycle_scope_start(SCOPE_SERIALIZE_OUTPUT);
     let start = scratch_begin();
-    foreach (i from 0 to 35) {
-        let b : byte = match i {
-            8 => 0x0c,
-            20 => 0x10,
-            24 => 0x18,
-            28 => 0x08,
-            32 => 0x08,
-            _ => 0x00,
-        };
-        scratch_push_bytes([|b|], BYTE_ONE)
-    };
+    scratch_push_bytes(
+        [|
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x0c,
+            0x00,
+            0x00,
+            0x00,
+            0x04,
+            0x00,
+            0x00,
+            0x00,
+            0x08,
+            0x00,
+            0x00,
+            0x00,
+            0x08,
+            0x00,
+            0x00,
+            0x00,
+        |],
+        ByteQuantity(24),
+    );
     let chain_config = scratch_finish(start);
     commit_validation_result(ZERO_HASH, false, chain_config);
     cycle_scope_end(SCOPE_SERIALIZE_OUTPUT)

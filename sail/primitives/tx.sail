@@ -106,16 +106,18 @@ struct LogEntry = {
     out of gas still has `valid = true`; it is a legitimate block member
     (gas charged, nonce bumped). Block validity folds `valid`, not
     `success`: only an invalid, inapplicable tx makes the containing block
-    invalid. `block_gas` is EIP-7778 block-gas accounting *without* the
-    EIP-3529 refund (`max(gas_used_before_refund, calldata_floor)`); it
+    invalid. `execution_gas` is the execution-gas contribution to Amsterdam
+    block accounting *without* the EIP-3529 refund
+    (`max(execution_gas_before_refund, calldata_floor)`); it
     differs from `gas_used` (the receipt's refunded gas) precisely by the
-    refund. */
+    refund and excludes `state_gas`. */
 struct Receipt = {
     tx_type : TxType,
     success : bool,
     valid : bool,
     gas_used : gas,
-    block_gas : gas,
+    execution_gas : gas,
+    state_gas : gas,
     logs : list(LogEntry),
 }
 

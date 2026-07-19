@@ -7,7 +7,7 @@ edition = "2024"
 build = "build.rs"
 
 [dependencies]
-ere-platform-zisk = { git = "https://github.com/eth-act/ere", tag = "v0.12.2", default-features = false, features = [
+ere-platform-zisk = { git = "https://github.com/eth-act/ere", tag = "v0.13.0", default-features = false, features = [
     "inputcpy",
 ] }
 

@@ -357,7 +357,7 @@ function execute_environment(op : ast) -> unit = match op {
     EXTCODESIZE() => {
         let a = word_to_address(pop());
         let warm = k_access_account(a);
-        charge(account_cost(warm));
+        charge(account_cost(warm) + external_code_read_cost());
         if is_running() then {
             push(word_of_quantity(k_get_code_size(a)))
         }
@@ -368,7 +368,7 @@ function execute_environment(op : ast) -> unit = match op {
         let source_word = pop();
         let length_word = pop();
         let warm = k_access_account(a);
-        charge(account_cost(warm));
+        charge(account_cost(warm) + external_code_read_cost());
         if is_running() then {
             let (destination, length) = word_byte_range_or_oog(destination_word, length_word);
             if is_running() then {
@@ -545,20 +545,33 @@ function execute_storage(op : ast) -> unit = match op {
         if guard_static() then {
             ()
         } else {
-            if gas_remaining <= G_callstipend then {
+            if (k_fork < Amsterdam) & (gas_remaining <= G_callstipend) then {
                 exc_halt(OutOfGas)
             } else {
                 let s = pop();
                 let v = pop();
                 if is_running() then {
                     let warm = k_slot_is_warm(self_addr(), s);
-                    let entry = k_sload(self_addr(), s);
-                    let (cost, refund) = sstore_gas(entry.orig, entry.curr, v, not_bool(warm));
-                    charge(cost);
-                    if not_bool(refund == GAS_REFUND_ZERO) then {
-                        record_refund(refund)
+                    let cold = not_bool(warm);
+                    if k_fork >= Amsterdam then {
+                        let access_cost = amsterdam_storage_access_cost(cold);
+                        let sentry_cost = if access_cost < G_sstore_sentry then { G_sstore_sentry } else { access_cost };
+                        check_execution_gas(sentry_cost)
                     };
-                    if entry.curr != v then {
+                    if not_bool(is_running()) then {
+                        return ()
+                    };
+                    let entry = k_sload(self_addr(), s);
+                    let costs = sstore_costs(entry.orig, entry.curr, v, cold);
+                    if costs.state_credit != GAS_COST_ZERO then {
+                        credit_state_gas_refund(costs.state_credit)
+                    };
+                    charge(costs.execution);
+                    charge_state_gas(costs.state_charge);
+                    if not_bool(costs.refund == GAS_REFUND_ZERO) then {
+                        record_refund(costs.refund)
+                    };
+                    if is_running() & (entry.curr != v) then {
                         k_sstore(self_addr(), s, struct { curr = v, orig = entry.orig })
                     }
                 }
@@ -638,6 +651,57 @@ function execute_control(op : ast) -> unit = match op {
             stack_set(n, top)
         }
     },
+    DUPN(immediate) => {
+        charge(G_verylow);
+        if is_running() then {
+            if not_bool(deep_stack_immediate_valid(immediate)) then {
+                exc_halt(InvalidOpcode)
+            } else {
+                let n = decode_single_stack_index(immediate);
+                if stack_height() < n then {
+                    exc_halt(StackUnderflow)
+                } else {
+                    push(peek(n - 1))
+                }
+            }
+        }
+    },
+    SWAPN(immediate) => {
+        charge(G_verylow);
+        if is_running() then {
+            if not_bool(deep_stack_immediate_valid(immediate)) then {
+                exc_halt(InvalidOpcode)
+            } else {
+                let n = decode_single_stack_index(immediate);
+                if stack_height() < n + 1 then {
+                    exc_halt(StackUnderflow)
+                } else {
+                    let top = peek(0);
+                    let other = peek(n);
+                    stack_set(0, other);
+                    stack_set(n, top)
+                }
+            }
+        }
+    },
+    EXCHANGE(immediate) => {
+        charge(G_verylow);
+        if is_running() then {
+            if not_bool(exchange_immediate_valid(immediate)) then {
+                exc_halt(InvalidOpcode)
+            } else {
+                let (n, m) = decode_exchange_stack_indices(immediate);
+                if stack_height() < m + 1 then {
+                    exc_halt(StackUnderflow)
+                } else {
+                    let first = peek(n);
+                    let second = peek(m);
+                    stack_set(n, second);
+                    stack_set(m, first)
+                }
+            }
+        }
+    },
     _ => assert(false),
 }
 
@@ -687,6 +751,7 @@ function execute_halt(op : ast) -> unit = match op {
         if is_running() then {
             let (offset, length) = word_byte_range_or_oog(offset_word, length_word);
             if is_running() then {
+                refill_frame_state_gas();
                 frame_status = Halted(HaltRevert(freeze_output(memory_byte_slice(offset, length))))
             }
         }
@@ -700,34 +765,59 @@ function execute_halt(op : ast) -> unit = match op {
             ()
         } else {
             let beneficiary = word_to_address(pop());
-            let bal = k_get_balance(self_addr());
-            let warm = k_access_account(beneficiary);
-            charge(G_selfdestruct);
-            if not_bool(warm) then {
-                charge(G_cold_account)
-            };
-            if is_running() & word_nonzero(bal) & k_account_is_empty(beneficiary) then {
-                charge(G_newaccount)
-            };
-            if is_running() then {
-                let first_selfdestruct = not_bool(k_is_selfdestructed(self_addr()));
-                if (k_fork < London) & first_selfdestruct then {
-                    record_refund(gas_constant_to_refund(R_selfdestruct_pre_london))
-                };
-                k_transfer(self_addr(), beneficiary, bal);
-                if k_fork < Cancun then {
-                    k_zero_balance(self_addr());
-                    k_selfdestruct(self_addr())
-                } else {
-                    if k_was_created(self_addr()) then {
-                        if beneficiary == self_addr() then {
-                            k_emit_burn_log(self_addr(), bal)
+            if k_fork >= Amsterdam then {
+                let warm = k_access_account(beneficiary);
+                let access_cost =   GAS_COST_ZERO
+                                  + G_selfdestruct
+                                  + (if warm then { G_zero } else { G_amsterdam_cold_account_access });
+                check_execution_gas(access_cost);
+                if is_running() then {
+                    let bal = k_get_balance(self_addr());
+                    let creates_account = word_nonzero(bal) & k_account_is_empty(beneficiary);
+                    let execution_cost = if creates_account then {
+                            access_cost + G_amsterdam_account_write
+                        } else {
+                            access_cost
                         };
+                    charge(execution_cost);
+                    if is_running() & creates_account then {
+                        charge_state_gas(G_amsterdam_state_new_account)
+                    };
+                    if is_running() then {
+                        k_transfer(self_addr(), beneficiary, bal);
+                        if k_was_created(self_addr()) then {
+                            k_selfdestruct(self_addr())
+                        };
+                        frame_status = Halted(HaltSelfDestruct())
+                    }
+                }
+            } else {
+                let bal = k_get_balance(self_addr());
+                let warm = k_access_account(beneficiary);
+                charge(G_selfdestruct);
+                if not_bool(warm) then {
+                    charge(G_cold_account)
+                };
+                if is_running() & word_nonzero(bal) & k_account_is_empty(beneficiary) then {
+                    charge(G_newaccount)
+                };
+                if is_running() then {
+                    let first_selfdestruct = not_bool(k_is_selfdestructed(self_addr()));
+                    if (k_fork < London) & first_selfdestruct then {
+                        record_refund(gas_constant_to_refund(R_selfdestruct_pre_london))
+                    };
+                    k_transfer(self_addr(), beneficiary, bal);
+                    if k_fork < Cancun then {
                         k_zero_balance(self_addr());
                         k_selfdestruct(self_addr())
-                    }
-                };
-                frame_status = Halted(HaltSelfDestruct())
+                    } else {
+                        if k_was_created(self_addr()) then {
+                            k_zero_balance(self_addr());
+                            k_selfdestruct(self_addr())
+                        }
+                    };
+                    frame_status = Halted(HaltSelfDestruct())
+                }
             }
         }
     },
@@ -821,6 +911,9 @@ function execute_opcode(op : ast) -> unit = match op {
     PUSH(_, _) => execute_control(op),
     DUP(_) => execute_control(op),
     SWAP(_) => execute_control(op),
+    DUPN(_) => execute_control(op),
+    SWAPN(_) => execute_control(op),
+    EXCHANGE(_) => execute_control(op),
     /* ---- log: EVM checks/prices, kernel records ---- */
     LOG(_) => execute_log(op),
     /* ---- system ---- */

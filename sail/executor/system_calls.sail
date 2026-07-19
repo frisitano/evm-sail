@@ -4,8 +4,8 @@
 
 The block-level system calls the protocol issues around the transactions:
 the EIP-4788 / EIP-2935 block-start writes (unchecked — skipped if the
-contract is absent) and the EIP-7002 / EIP-7251 block-end request
-dequeues (checked — absence or failure invalidates the block). Each is a
+contract is absent) and the EIP-7002 / EIP-7251 / EIP-8282 block-end
+request dequeues (checked — absence or failure invalidates the block). Each is a
 30M-gas frame from `SYSTEM_ADDRESS` whose committed storage writes shape
 the post-state root.
 
@@ -60,6 +60,8 @@ function enter_system_call_frame(tgt : address, input : ByteSlice) -> StateCheck
     pc = BYTE_ZERO;
     call_depth = 0;
     gas_remaining = Gas(30000000);
+    state_gas_remaining = GAS_ZERO;
+    state_gas_spilled = GAS_ZERO;
     frame_refund = GAS_REFUND_ZERO;
     stack_reset();
     returndata_clear();
@@ -71,6 +73,7 @@ function enter_system_call_frame(tgt : address, input : ByteSlice) -> StateCheck
             address = tgt,
             code_address = tgt,
             value = ZERO_WORD,
+            state_gas_reservoir = GAS_ZERO,
             is_static = false,
             depth = 0,
         };
@@ -102,16 +105,17 @@ function system_call(tgt : address, input : hash) -> unit = {
     }
 }
 
-/* ---- EIP-7002 / EIP-7251 block-END system calls (general-purpose requests) ---
+/* ---- EIP-7002 / EIP-7251 / EIP-8282 block-END system calls ---
  * After the transactions and withdrawals, the protocol dequeues the queued
- * withdrawal (EIP-7002) and consolidation (EIP-7251) requests by a CHECKED
- * system call (SYSTEM_ADDRESS, EMPTY calldata, 30M gas) to each predeploy. The
+ * withdrawal (EIP-7002), consolidation (EIP-7251), and builder (EIP-8282)
+ * requests by a CHECKED system call (SYSTEM_ADDRESS, EMPTY calldata, 30M gas)
+ * to each predeploy. The
  * dequeue clears the request queue in the contract's storage, shaping the
  * post-state root. "Checked" means: a missing contract (no code) OR a failed
  * call makes the whole block INVALID (returns false here). */
 
 
-/*! Issues one checked block-end system call (EIP-7002/EIP-7251): the
+/*! Issues one checked block-end system call (EIP-7002/EIP-7251/EIP-8282): the
     target must exist and the call must succeed — otherwise the block is
     invalid — and the returned dequeued requests are the call's output. */
 function system_call_checked(tgt : address) -> option(ByteSlice) = {
@@ -189,18 +193,46 @@ function append_deposit_logs(logs : list(LogEntry)) -> unit =
 
 /* Request types are processed in ascending order, stopping immediately when
  * a checked system call is missing or fails. */
-/*! Collects the EIP-7685 execution requests at block end: deposits from
-    logs (EIP-6110), then the withdrawal (EIP-7002) and consolidation
-    (EIP-7251) queue dequeues. */
+/*! Collects the EIP-7685 execution requests at block end in request-type
+    order: deposits from logs (EIP-6110), withdrawal (EIP-7002),
+    consolidation (EIP-7251), and, from Amsterdam, builder deposit and
+    builder exit (EIP-8282). */
 function collect_execution_requests(deposits : ByteSlice) -> (bool, ExecutionRequests) = {
+    var valid : bool = true;
+    var withdrawals : ByteSlice = EMPTY_SLICE;
+    var consolidations : ByteSlice = EMPTY_SLICE;
+    var builder_deposits : ByteSlice = EMPTY_SLICE;
+    var builder_exits : ByteSlice = EMPTY_SLICE;
     match system_call_checked(WITHDRAWAL_REQUEST_ADDR) {
-        None() => (false, struct { deposits = deposits, withdrawals = EMPTY_SLICE, consolidations = EMPTY_SLICE }),
-        Some(withdrawals) => match system_call_checked(CONSOLIDATION_REQUEST_ADDR) {
-            None() => (false, struct { deposits = deposits, withdrawals = withdrawals, consolidations = EMPTY_SLICE }),
-            Some(consolidations) => (
-                true,
-                struct { deposits = deposits, withdrawals = withdrawals, consolidations = consolidations },
-            ),
+        Some(requests) => withdrawals = requests,
+        None() => valid = false,
+    };
+    if valid then {
+        match system_call_checked(CONSOLIDATION_REQUEST_ADDR) {
+            Some(requests) => consolidations = requests,
+            None() => valid = false,
+        }
+    };
+    if valid & (k_fork >= Amsterdam) then {
+        match system_call_checked(BUILDER_DEPOSIT_REQUEST_ADDR) {
+            Some(requests) => builder_deposits = requests,
+            None() => valid = false,
+        }
+    };
+    if valid & (k_fork >= Amsterdam) then {
+        match system_call_checked(BUILDER_EXIT_REQUEST_ADDR) {
+            Some(requests) => builder_exits = requests,
+            None() => valid = false,
+        }
+    };
+    (
+        valid,
+        struct {
+            deposits = deposits,
+            withdrawals = withdrawals,
+            consolidations = consolidations,
+            builder_deposits = builder_deposits,
+            builder_exits = builder_exits,
         },
-    }
+    )
 }

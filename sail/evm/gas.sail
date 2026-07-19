@@ -346,15 +346,31 @@ let G_newaccount : gas_constant = GasConstant(25000) /* YP G_newaccount (CALL/SE
 let G_selfdestruct : gas_constant = GasConstant(5000) /* EIP-150 R_selfdestruct base                */
 let G_initcode_word : gas_constant = GasConstant(2) /* EIP-3860 (per word of initcode)            */
 
+/* Amsterdam separates execution work from persistent-state growth. These
+ * constants retain their unit in the name: execution costs debit
+ * `gas_remaining`; state costs debit the frame's state-gas reservoir. */
+let G_amsterdam_cold_account_access : gas_constant = GasConstant(3000)
+let G_amsterdam_cold_storage_access : gas_constant = GasConstant(3000)
+let G_amsterdam_storage_write : gas_constant = GasConstant(10000)
+let G_amsterdam_account_write : gas_constant = GasConstant(8000)
+let G_amsterdam_call_value : gas_constant = GasConstant(10300)
+let G_amsterdam_create_access : gas_constant = GasConstant(11000)
+let G_amsterdam_state_byte : gas_constant = GasConstant(1530)
+let G_amsterdam_state_storage_set : gas_cost = GasCost(97920)
+let G_amsterdam_state_new_account : gas_cost = GasCost(183600)
+let G_amsterdam_state_auth_base : gas_cost = GasCost(35190)
+let R_amsterdam_storage_clear : gas_refund = GasRefund(12480)
+let G_sstore_sentry : gas_cost = GasCost(2301)
+
 /*md
 ## The code-size limits
 */
-/*! The deployed-code size limit: 24576 (EIP-170), raised to 32768 by
+/*! The deployed-code size limit: 24576 (EIP-170), raised to 65536 by
     EIP-7954 at Amsterdam; the shared interpreter serves both the
     pre-Amsterdam state tests and the guest. */
 function max_code_size() -> code_length =
     if k_fork >= Amsterdam then {
-        ByteQuantity(32768)
+        ByteQuantity(65536)
     } else {
         ByteQuantity(24576)
     }
@@ -407,6 +423,101 @@ function charge_constant(GasConstant(amount) : gas_constant) -> unit =
     charge_cost(GasCost(amount))
 
 overload charge = {charge_cost, charge_constant}
+
+/*! Checks that the frame can pay an execution-gas cost without debiting it.
+    State reads that affect the block access list call this before touching
+    authenticated state. */
+function check_execution_gas(GasCost(amount) : gas_cost) -> unit = {
+    let Gas(remaining) = gas_remaining;
+    if is_running() & remaining < amount then {
+        exc_halt(OutOfGas)
+    }
+}
+
+/*! Debits Amsterdam state gas from the frame reservoir first and spills the
+    remainder into execution gas. Returns false when the two pools cannot
+    cover the charge. */
+function debit_state_gas(GasCost(amount) : gas_cost) -> bool = {
+    if amount == 0 then {
+        return true
+    };
+    let Gas(state_left) = state_gas_remaining;
+    let Gas(execution_left) = gas_remaining;
+    if amount <= state_left then {
+        state_gas_remaining = Gas(state_left - amount);
+        true
+    } else {
+        let remainder = amount - state_left;
+        if remainder <= execution_left then {
+            let Gas(spilled) = state_gas_spilled;
+            if remainder <= 9223372036854775807 - spilled then {
+                state_gas_remaining = GAS_ZERO;
+                gas_remaining = Gas(execution_left - remainder);
+                state_gas_spilled = Gas(spilled + remainder);
+                true
+            } else {
+                throw InvalidBlock(ExecutionInvalid)
+            }
+        } else {
+            false
+        }
+    }
+}
+
+/*! Charges state gas while an opcode frame is running. */
+function charge_state_gas(amount : gas_cost) -> unit = {
+    if is_running() & not_bool(debit_state_gas(amount)) then {
+        exc_halt(OutOfGas)
+    }
+}
+
+/*! Charges state gas for code returned by already-halted successful initcode.
+    This is the create-message post-execution hook, not another opcode step. */
+function charge_deployment_state_gas(amount : gas_cost) -> unit = {
+    if not_bool(debit_state_gas(amount)) then {
+        exc_halt(OutOfGas)
+    }
+}
+
+/*! Credits a state-gas charge in exact reverse order: execution spill first,
+    then the state reservoir. */
+function credit_state_gas_refund(GasCost(amount) : gas_cost) -> unit = {
+    let Gas(spilled) = state_gas_spilled;
+    let from_execution = if amount < spilled then { amount } else { spilled };
+    let to_state = amount - from_execution;
+    if from_execution != 0 then {
+        if from_execution <= 9223372036854775807 then {
+            let returned = Gas(from_execution);
+            if gas_sum_supported(gas_remaining, returned) then {
+                gas_remaining = gas_remaining + returned
+            } else {
+                throw InvalidBlock(ExecutionInvalid)
+            };
+            state_gas_spilled = Gas(spilled - from_execution)
+        } else {
+            throw InvalidBlock(ExecutionInvalid)
+        }
+    };
+    if to_state != 0 then {
+        let Gas(state_left) = state_gas_remaining;
+        if to_state <= 9223372036854775807 - state_left then {
+            state_gas_remaining = Gas(state_left + to_state)
+        } else {
+            throw InvalidBlock(ExecutionInvalid)
+        }
+    }
+}
+
+/*! Returns a completed child's remaining state reservoir to its parent and
+    carries forward any state gas that the child drew from execution gas. */
+function return_child_state_gas(child_remaining : gas, child_spilled : gas) -> unit = {
+    if gas_sum_supported(state_gas_remaining, child_remaining) & gas_sum_supported(state_gas_spilled, child_spilled) then {
+        state_gas_remaining = state_gas_remaining + child_remaining;
+        state_gas_spilled = state_gas_spilled + child_spilled
+    } else {
+        throw InvalidBlock(ExecutionInvalid)
+    }
+}
 
 /* Subtraction is the one gas arithmetic operation whose invalid case is
  * observable: attempting to spend more than remains exceptionally halts. The
@@ -533,11 +644,51 @@ cost policy, no state mutation.
 */
 /*! The account-access cost for a prior warm bit. */
 function account_cost(warm : bool) -> gas_constant =
-    if warm then { G_warm_access } else { G_cold_account }
+    if warm then {
+        G_warm_access
+    } else {
+        if k_fork >= Amsterdam then { G_amsterdam_cold_account_access } else { G_cold_account }
+    }
+
+/*! The second database read performed by `EXTCODESIZE` and `EXTCODECOPY`.
+    EIP-8038 prices the code-store read as one warm access at Amsterdam. */
+function external_code_read_cost() -> gas_constant =
+    if k_fork >= Amsterdam then { G_warm_access } else { G_zero }
 
 /*! The `SLOAD` cost for a prior warm bit (cold = 2100, EIP-2929). */
 function sload_cost(warm : bool) -> gas_constant =
-    if warm then { G_warm_access } else { G_cold_sload } /* EIP-2929: cold SLOAD = 2100 */
+    if warm then {
+        G_warm_access
+    } else {
+        if k_fork >= Amsterdam then { G_amsterdam_cold_storage_access } else { G_cold_sload }
+    }
+
+/*! The execution-gas component of a value-bearing CALL/CALLCODE. Amsterdam
+    reprices the account write while retaining the 2300 child stipend. */
+function call_value_cost() -> gas_constant =
+    if k_fork >= Amsterdam then { G_amsterdam_call_value } else { G_callvalue }
+
+/*! The CREATE/CREATE2 execution-access charge. Persistent account growth is
+    charged separately as state gas at Amsterdam. */
+function create_access_cost() -> gas_constant =
+    if k_fork >= Amsterdam then { G_amsterdam_create_access } else { G_create }
+
+/*! Execution gas charged after successful initcode: legacy code deposit is
+    per byte; Amsterdam charges only the keccak word cost. */
+function code_deployment_execution_cost(byte_len : byte_quantity) -> gas_cost =
+    if k_fork >= Amsterdam then {
+        G_keccak_word * memory_word_count(byte_len)
+    } else {
+        G_codedeposit * byte_len
+    }
+
+/*! Amsterdam state gas charged for each byte of newly deployed code. */
+function code_deployment_state_cost(byte_len : byte_quantity) -> gas_cost =
+    if k_fork >= Amsterdam then {
+        G_amsterdam_state_byte * byte_len
+    } else {
+        GAS_COST_ZERO
+    }
 
 /* At most 32 big-endian bytes from precompile input. The bounded construction
  * stays in the EVM word algebra; out-of-range input bytes are zero. */
@@ -979,17 +1130,26 @@ function precompile_gas(num : precompile_id, input : ByteSlice) -> option(gas_co
 /*md
 ## The SSTORE cost and refund
 */
-/*! `SSTORE` pricing: a three-way comparison (EIP-2200) of *original*
-    (the slot's transaction-start value), *current*, and *new*. Writing
-    the same value, or dirtying an already-dirty slot, costs warm access
-    only; a clean slot going zero↔nonzero pays `G_sset` / `G_sreset`.
-    Returns `(gas_cost, refund_delta)`; refunds track
-    clearing/un-clearing and resetting a slot to its original value
-    (EIP-3529 rates). The EIP-2929 cold surcharge is added when the
-    caller reports the slot was not yet warm. The refund delta is summed
-    and capped at transaction scope (EIP-3529, `gas_used/5`), not
-    here. */
-function sstore_gas(original : word, current : word, new : word, cold : bool) -> (gas_cost, gas_refund) = {
+/*! The independent effects of one `SSTORE`: execution gas, the signed
+    transaction refund, state gas charged, and state gas returned. */
+struct SstoreCosts = {
+    execution : gas_cost,
+    refund : gas_refund,
+    state_charge : gas_cost,
+    state_credit : gas_cost,
+}
+
+/*! Returns the Amsterdam execution-gas cost of accessing a storage slot. */
+function amsterdam_storage_access_cost(cold : bool) -> gas_cost =
+    GAS_COST_ZERO + (if cold then { G_amsterdam_cold_storage_access } else { G_warm_access })
+
+/*! Legacy `SSTORE` pricing: a three-way comparison (EIP-2200) of
+    *original* (the slot's transaction-start value), *current*, and *new*.
+    Writing the same value, or dirtying an already-dirty slot, costs warm
+    access only; a clean slot going zero↔nonzero pays `G_sset` /
+    `G_sreset`. Refunds track clearing/un-clearing and restoring the original
+    value. The EIP-2929 cold surcharge is added when the slot was not warm. */
+function legacy_sstore_costs(original : word, current : word, new : word, cold : bool) -> SstoreCosts = {
     let cold_cost : gas_constant = if cold then { G_cold_sload } else { GAS_CONSTANT_ZERO };
     let clear_refund : gas_refund = gas_constant_to_refund(sstore_clear_refund());
     let base : gas_constant = if current == new then {
@@ -1029,8 +1189,53 @@ function sstore_gas(original : word, current : word, new : word, cold : bool) ->
             }
         }
     };
-    let cost = base + cold_cost;
-    (cost, refund)
+    struct { execution = base + cold_cost, refund = refund, state_charge = GAS_COST_ZERO, state_credit = GAS_COST_ZERO }
+}
+
+/*! Amsterdam `SSTORE` pricing (EIP-8037). Access and first-write work debit
+    execution gas. Introducing a new non-zero slot debits state gas; restoring
+    that slot to its transaction-start zero value returns the state charge. */
+function amsterdam_sstore_costs(original : word, current : word, new : word, cold : bool) -> SstoreCosts = {
+    let changed = current != new;
+    let clean_change = (original == current) & changed;
+    var execution : gas_cost = amsterdam_storage_access_cost(cold);
+    var refund : gas_refund = GAS_REFUND_ZERO;
+    var state_charge : gas_cost = GAS_COST_ZERO;
+    var state_credit : gas_cost = GAS_COST_ZERO;
+
+    if clean_change then {
+        execution = execution + G_amsterdam_storage_write;
+        if word_is_zero(original) then {
+            state_charge = G_amsterdam_state_storage_set
+        }
+    };
+
+    if changed then {
+        if not_bool(word_is_zero(original)) & not_bool(word_is_zero(current)) & word_is_zero(new) then {
+            refund = refund + R_amsterdam_storage_clear
+        };
+        if not_bool(word_is_zero(original)) & word_is_zero(current) then {
+            refund = refund - R_amsterdam_storage_clear
+        };
+        if original == new then {
+            refund = refund + gas_constant_to_refund(G_amsterdam_storage_write);
+            if word_is_zero(original) then {
+                state_credit = G_amsterdam_state_storage_set
+            }
+        }
+    };
+
+    struct { execution = execution, refund = refund, state_charge = state_charge, state_credit = state_credit }
+}
+
+/*! Computes the fork-specific effects of one `SSTORE`. The refund delta is
+    accumulated and capped at transaction settlement, not here. */
+function sstore_costs(original : word, current : word, new : word, cold : bool) -> SstoreCosts = {
+    if k_fork >= Amsterdam then {
+        amsterdam_sstore_costs(original, current, new, cold)
+    } else {
+        legacy_sstore_costs(original, current, new, cold)
+    }
 }
 
 /* Per-word memory cost for an operand. Empty operands retain the opcode base. */

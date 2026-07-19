@@ -397,7 +397,7 @@ function word_of_protocol_quantity(value : protocol_quantity) -> word =
     optimized_protocol_quantity_to_word(value)
 
 /* k_blob_schedule.max is the active block limit.  Every schedule currently
- * accepted by expected_blob_schedule has max <= 21 (Osaka/BPO2), which is the
+ * accepted by protocol_profile has max <= 21 (Osaka/BPO2), which is the
  * separate compile-time ceiling that proves this multiplication fits the
  * optimized uint64_t representation.  A future larger accepted schedule must
  * deliberately raise this ceiling rather than silently changing semantics. */
@@ -468,6 +468,24 @@ newtype gas_cost = GasCost : range(0, 2 ^ 63)
 
 $[c_repr int64]
 newtype gas_refund = GasRefund : int
+
+$[c_repr int64]
+newtype state_gas_delta = StateGasDelta : int
+
+/* The canonical implementation follows EELS and widens the three unsigned
+ * pools to mathematical integers in one helper.  The optimized implementation
+ * instead crosses the represented-newtype boundary first, then uses its native
+ * signed operators.  Each conversion is exact, and frame gas conservation
+ * keeps the net delta within the signed live-gas range. */
+function frame_state_gas_used() -> state_gas_delta = {
+    let Gas(entry) = message.state_gas_reservoir;
+    let Gas(remaining) = state_gas_remaining;
+    let Gas(spilled) = state_gas_spilled;
+    let signed_entry : state_gas_delta = StateGasDelta(entry);
+    let signed_remaining : state_gas_delta = StateGasDelta(remaining);
+    let signed_spilled : state_gas_delta = StateGasDelta(spilled);
+    signed_entry - signed_remaining + signed_spilled
+}
 
 function gas_value_supported(value : protocol_quantity) -> bool =
     value <= 9223372036854775807

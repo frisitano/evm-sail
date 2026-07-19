@@ -21,8 +21,8 @@ function validate_executed_block(
     unit
 ) = {
     let header = block.header;
-    let gas_used_ok = result.gas_acc == header.gas_used;
-    let blob_gas_used_ok = (k_fork < Cancun) | (result.blob_gas_acc == header.blob_gas_used);
+    let gas_used_ok = result.header_gas_used == header.gas_used;
+    let blob_gas_used_ok = (k_fork < Cancun) | (result.blob_gas_used == header.blob_gas_used);
     let poststate_ok = compute_state_root() == header.state_root;
     let receipts_root_ok = result.receipts_root == header.receipts_root;
     let logs_bloom_ok = logs_bloom_equal(result.logs_bloom, header.logs_bloom);
@@ -37,6 +37,11 @@ function validate_executed_block(
                   [|BytesSlice(result.requests.consolidations)|],
                   input_ref.consolidation_requests,
               )
+            & bytes_segments_equal_slice(
+                  [|BytesSlice(result.requests.builder_deposits)|],
+                  input_ref.builder_deposit_requests,
+              )
+            & bytes_segments_equal_slice([|BytesSlice(result.requests.builder_exits)|], input_ref.builder_exit_requests)
     };
     if k_fork >= Amsterdam then {
         let block_access_list = encode_block_access_list();
@@ -48,7 +53,7 @@ function validate_executed_block(
         )
     };
 
-    if result.block_gas_overflow then {
+    if result.gas_limit_exceeded then {
         throw InvalidBlock(GasUsedExceedsLimit)
     };
     if not_bool(exec_ok) then {
@@ -105,7 +110,7 @@ function verify_stateless_payload(input_ref : StatelessInputRef) -> StatelessVal
         cycle_scope_start(active_scope);
         scratch_reset();
         let input = decode_stateless_input(input_ref);
-        k_fork = input.chain_config.fork;
+        k_fork = input_ref.protocol.fork;
 
         cycle_scope_end(active_scope);
         active_scope = SCOPE_INDEX_WITNESS;

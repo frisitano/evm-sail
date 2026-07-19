@@ -160,6 +160,8 @@ function execution_requests_hash(input_ref : StatelessInputRef) -> hash = {
     let l0 = input_ref.deposits.len;
     let l1 = input_ref.withdrawal_requests.len;
     let l2 = input_ref.consolidation_requests.len;
+    let l3 = input_ref.builder_deposit_requests.len;
+    let l4 = input_ref.builder_exit_requests.len;
     let d0 : hash = if l0 != BYTE_ZERO then {
             sha256_request_digest(0x00, input_ref.deposits)
         } else {
@@ -175,7 +177,23 @@ function execution_requests_hash(input_ref : StatelessInputRef) -> hash = {
         } else {
             ZERO_HASH
         };
+    let d3 : hash = if l3 != BYTE_ZERO then {
+            sha256_request_digest(0x03, input_ref.builder_deposit_requests)
+        } else {
+            ZERO_HASH
+        };
+    let d4 : hash = if l4 != BYTE_ZERO then {
+            sha256_request_digest(0x04, input_ref.builder_exit_requests)
+        } else {
+            ZERO_HASH
+        };
     var segs : list(Bytes) = [||];
+    if l4 != BYTE_ZERO then {
+        segs = bytes_list(hash_to_bytes32(d4), WORD_BYTE_LENGTH) :: segs
+    };
+    if l3 != BYTE_ZERO then {
+        segs = bytes_list(hash_to_bytes32(d3), WORD_BYTE_LENGTH) :: segs
+    };
     if l2 != BYTE_ZERO then {
         segs = bytes_list(hash_to_bytes32(d2), WORD_BYTE_LENGTH) :: segs
     };
@@ -205,12 +223,7 @@ function validate_execution_payload(
     let block = payload.block;
     let header = block.header;
     let body = block.body;
-    if not_bool(
-          (9 <= input.chain_config.fork_index)
-        & (input.chain_config.fork_index <= 20)
-        & input.chain_config.activation_active
-        & chain_config_blob_schedule_valid(input.chain_config),
-    ) then {
+    if not_bool(input.chain_config.activation_active) then {
         throw InvalidBlock(InvalidConfig)
     };
     if header.gas_limit < header.gas_used then {

@@ -19,6 +19,10 @@ the interpreter.
 register pc : code_pointer = BYTE_ZERO
 /*! The frame's remaining gas (YP μ_g) — the one gas counter. */
 register gas_remaining : gas = GAS_ZERO /* THE gas counter (user-space) */
+/*! The Amsterdam state-gas reservoir owned by the active frame. */
+register state_gas_remaining : gas = GAS_ZERO
+/*! State gas drawn from execution gas after the reservoir was exhausted. */
+register state_gas_spilled : gas = GAS_ZERO
 /*! The frame-local signed gas refund accumulated by state changes. */
 register frame_refund : gas_refund = GAS_REFUND_ZERO
 /*! The frame's running/halted/exceptional status. */
@@ -93,10 +97,32 @@ function frame_jumpdest_valid(dest : code_pointer) -> bool =
 /*! The 1024-element operand-stack limit (YP §9.1). */
 let STACK_LIMIT : operand_stack_height = 1024
 
+/*! Returns any Amsterdam state-gas spill to the execution-gas pool and
+    restores the frame's state-gas reservoir. */
+function refill_frame_state_gas() -> unit = {
+    if k_fork >= Amsterdam then {
+        if gas_sum_supported(gas_remaining, state_gas_spilled) then {
+            gas_remaining = gas_remaining + state_gas_spilled
+        } else {
+            throw InvalidBlock(ExecutionInvalid)
+        };
+        state_gas_remaining = message.state_gas_reservoir;
+        state_gas_spilled = GAS_ZERO
+    }
+}
+
+/*! Computes the signed state gas consumed by the current frame. */
+function frame_state_gas_used() -> state_gas_delta = {
+    let Gas(entry) = message.state_gas_reservoir;
+    let Gas(remaining) = state_gas_remaining;
+    let Gas(spilled) = state_gas_spilled;
+    state_gas_delta_from_pools(StateGasDelta(entry), StateGasDelta(remaining), StateGasDelta(spilled))
+}
+
 /*! Enters the exceptional halting state (YP §9.4.2), consuming all
-    remaining gas — unlike `REVERT`, which refunds it. Every exceptional
-    halt routes through here so the gas is always zeroed. */
+    remaining execution gas after consolidating the frame's state gas. */
 function exc_halt(k : ExceptionKind) -> unit = {
+    refill_frame_state_gas();
     gas_remaining = GAS_ZERO;
     frame_status = Exceptional(k)
 }
@@ -289,6 +315,8 @@ function suspend_frame() -> FrameCheckpoint = {
     let state = k_state_checkpoint();
     let saved_pc = pc;
     let saved_gas = gas_remaining;
+    let saved_state_gas = state_gas_remaining;
+    let saved_state_spill = state_gas_spilled;
     let saved_refund = frame_refund;
     let saved_status = frame_status;
     let saved_message = message;
@@ -301,6 +329,8 @@ function suspend_frame() -> FrameCheckpoint = {
         state = state,
         pc = saved_pc,
         gas_remaining = saved_gas,
+        state_gas_remaining = saved_state_gas,
+        state_gas_spilled = saved_state_spill,
         refund = saved_refund,
         status = saved_status,
         message = saved_message,
@@ -317,6 +347,8 @@ function restore_frame(checkpoint : FrameCheckpoint) -> unit = {
     memory_frame_leave(checkpoint.memory);
     pc = checkpoint.pc;
     gas_remaining = checkpoint.gas_remaining;
+    state_gas_remaining = checkpoint.state_gas_remaining;
+    state_gas_spilled = checkpoint.state_gas_spilled;
     frame_refund = checkpoint.refund;
     frame_status = checkpoint.status;
     message = checkpoint.message;

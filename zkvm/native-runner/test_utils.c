@@ -1,7 +1,8 @@
 /* Native implementation of the same standard read_input/write_output ABI used
  * by the zkVM guest, plus the reusable test-process lifecycle and dump hooks. */
 #include "byte_slice_glue.h"
-#include "sail.h" /* unit / UNIT / bool */
+#include EVMSAIL_MODEL_H
+#include "lbits_convert.h"
 #include "test_utils.h"
 #include "zkvm_io.h"
 
@@ -52,7 +53,6 @@ extern unit logs_reset(unit);
 extern unit host_state_checkpoint_reset(unit);
 extern unit nodedb_reset(unit);              /* hash-keyed witness node store */
 extern unit code_db_reset(unit);             /* content-addressed code store (missing-code tests) */
-extern bool have_exception;                  /* generated: a Sail throw escaped the run */
 
 /* clear_memory: the C-side full world wipe that replaces k_world_reset. Zeroes
  * every piece of guest state that persists across in-process runs. */
@@ -87,7 +87,6 @@ void evmsail_test_reset(void)
 }
 
 /* --------------------------- lifecycle + run ---------------------------- */
-extern unit zmain(unit); /* model entry (Sail-generated) */
 extern void model_init(void);
 extern void model_fini(void);
 
@@ -140,7 +139,8 @@ unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
  *   'G' ok[1] root[32] rebuilt[32]   (root = compute_state_root() over the live
  *                                     post-run state; rebuilt recomputes the
  *                                     same materialized state from an empty
- *                                     trie; both are zero when ok=0)
+ *                                     trie; both are zero after an uncaught
+ *                                     Sail exception)
  *       when ok=0, followed by the CAPTURED exception:
  *       err[1] loc_len[2] loc[loc_len]   (err = the BlockError enum value of
  *                                     the InvalidBlock that escaped, 0xff if
@@ -174,22 +174,6 @@ extern uint64_t stack_depth(unit);
 extern void     stack_peek_word(lbits *, uint64_t);
 extern uint64_t hm_depth(unit);
 
-/* The model's own root computation and generated exception state. */
-extern void     zcompute_state_root(lbits *, unit);
-extern void     zdebug_account_storage_root(lbits *, lbits);
-extern void     zdebug_rebuild_state_root(lbits *, unit);
-/* Mirror of the GENERATED exception representation (.build/zkvm_*.h): the
- * model's single constructor InvalidBlock(BlockError). The BlockError enum
- * values are fixed by declaration order in sail/exceptions.sail;
- * dump_state.py maps them back to names. throw_location carries the Sail
- * source position of the throw site. */
-struct evmsail_exception { int kind; union { int block_error; } variants; };
-extern struct evmsail_exception *current_exception;
-extern char **throw_location;
-extern bool zvalidation_failure_present;
-extern uint64_t zvalidation_failure_scope;
-extern int zvalidation_failure_reason;
-
 static unsigned char g_dump[1u << 22];
 static size_t g_dump_len;
 
@@ -204,37 +188,101 @@ static void d_word(const lbits *v) {
     }
 }
 
+static void d_hash(sail_hash value)
+{
+    uint8_t bytes[32];
+    evmsail_hash_to_be_bytes(bytes, value);
+    for (size_t i = 0; i < sizeof bytes; i++) d_byte(bytes[i]);
+}
+
+static sail_hash model_state_root(void)
+{
+#ifdef EVMSAIL_STANDARD_ABI
+    sail_hash value = {0, NULL};
+    zcompute_state_root(&value, UNIT);
+    return value;
+#else
+    return zcompute_state_root(UNIT);
+#endif
+}
+
+static sail_hash model_rebuilt_state_root(void)
+{
+#ifdef EVMSAIL_STANDARD_ABI
+    sail_hash value = {0, NULL};
+    zdebug_rebuild_state_root(&value, UNIT);
+    return value;
+#else
+    return zdebug_rebuild_state_root(UNIT);
+#endif
+}
+
+static sail_hash model_account_storage_root(lbits address)
+{
+    sail_address model_address = evmsail_address_from_lbits(address);
+#ifdef EVMSAIL_STANDARD_ABI
+    sail_hash value = {0, NULL};
+    zdebug_account_storage_root(&value, model_address);
+    sail_free(model_address.data);
+    return value;
+#else
+    return zdebug_account_storage_root(model_address);
+#endif
+}
+
+static void dispose_hash(sail_hash *value)
+{
+#ifdef EVMSAIL_STANDARD_ABI
+    sail_free(value->data);
+    value->data = NULL;
+    value->len = 0;
+#else
+    (void)value;
+#endif
+}
+
 unsigned long evmsail_debug_dump(const unsigned char **out)
 {
     g_dump_len = 0;
-    lbits w, rebuilt;
+    lbits w;
+    sail_hash root = {0};
+    sail_hash rebuilt = {0};
+    bool validation_failed = zvalidation_failure_present;
+    bool state_available = !have_exception;
 
-    if (!have_exception) {
-        zcompute_state_root(&w, UNIT);
-        zdebug_rebuild_state_root(&rebuilt, UNIT);
+    if (state_available) {
+        root = model_state_root();
+        if (!have_exception) rebuilt = model_rebuilt_state_root();
+        state_available = !have_exception;
     }
     d_byte('G');
-    d_byte(have_exception ? 0 : 1);
-    if (have_exception) {
+    d_byte(state_available ? 1 : 0);
+    if (!state_available) {
         for (int i = 0; i < 32; i++) d_byte(0);
-        d_byte(current_exception
-                   ? (unsigned char)current_exception->variants.block_error
-                   : 0xff);
+        d_byte(have_exception && current_exception
+                   ? (unsigned char)current_exception->variants.zInvalidBlock
+                   : validation_failed
+                         ? (unsigned char)zvalidation_failure_reason
+                         : 0xff);
         const char *loc =
-            (throw_location && *throw_location) ? *throw_location : "";
+            (have_exception && throw_location && *throw_location)
+                ? *throw_location
+                : "";
         size_t ln = 0;
         while (loc[ln] && ln < 512) ln++;
         d_byte((unsigned char)(ln >> 8));
         d_byte((unsigned char)(ln & 0xff));
         for (size_t i = 0; i < ln; i++) d_byte((unsigned char)loc[i]);
     } else {
-        d_word(&w);
+        d_hash(root);
     }
-    if (have_exception) {
+    if (!state_available) {
         for (int i = 0; i < 32; i++) d_byte(0);
     } else {
-        d_word(&rebuilt);
+        d_hash(rebuilt);
     }
+    dispose_hash(&root);
+    dispose_hash(&rebuilt);
 
     d_byte('O');
     d_u32((uint32_t)g_out_len);
@@ -248,7 +296,7 @@ unsigned long evmsail_debug_dump(const unsigned char **out)
     }
 
     d_byte('A');
-    uint64_t na = acct_dump_count(UNIT);
+    uint64_t na = state_available ? acct_dump_count(UNIT) : 0;
     d_u32((uint32_t)na);
     for (uint64_t i = 0; i < na; i++) {
         acct_dump_hkey(&w, i); d_word(&w);       /* keccak(address) */
@@ -262,7 +310,13 @@ unsigned long evmsail_debug_dump(const unsigned char **out)
         d_u64(acct_dump_nonce(i));
         acct_dump_balance(&w, i);   d_word(&w);
         acct_dump_storage_root(&w, i); d_word(&w);
-        zdebug_account_storage_root(&w, addr); d_word(&w);
+        sail_hash storage_root = model_account_storage_root(addr);
+        if (have_exception) {
+            for (int j = 0; j < 32; j++) d_byte(0);
+        } else {
+            d_hash(storage_root);
+        }
+        dispose_hash(&storage_root);
         acct_dump_code_hash(&w, i); d_word(&w);
         uint64_t ns = storage_dump_count(hk);
         d_u32((uint32_t)ns);
@@ -273,12 +327,12 @@ unsigned long evmsail_debug_dump(const unsigned char **out)
     }
 
     d_byte('S');
-    uint64_t sd = stack_depth(UNIT);
+    uint64_t sd = state_available ? stack_depth(UNIT) : 0;
     d_u32((uint32_t)sd);
     for (uint64_t n = 0; n < sd; n++) { stack_peek_word(&w, n); d_word(&w); }
 
     d_byte('M');
-    d_u32((uint32_t)hm_depth(UNIT));
+    d_u32(state_available ? (uint32_t)hm_depth(UNIT) : 0);
 
     d_byte('E');
     *out = g_dump;

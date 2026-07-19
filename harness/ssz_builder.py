@@ -18,7 +18,7 @@ so a builder bug cannot silently produce an invalid-but-agreeing pair. Two
 things make validity achievable from a bare state test:
   - the canonical system-contract predeploys are injected into the alloc
     (_PREDEPLOYS): Amsterdam's CHECKED block-end system calls reject any block
-    whose 7002/7251 predeploys are absent, which would silently collapse the
+    whose 7002/7251/8282 predeploys are absent, which would silently collapse the
     gate to agreeing-on-invalid (only the request-root echo + the validity bit
     would be compared, not execution);
   - the synthesized parent header is economically consistent with the block
@@ -172,7 +172,7 @@ def _t8n_rlp_transactions(tx_hex):
 
 # Canonical system-contract predeploys (extracted from the aligned Amsterdam
 # corpus fill; consensus constants). A state-test alloc lacks them, but the
-# Amsterdam block-end system calls are CHECKED: without the 7002/7251 code the
+# Amsterdam block-end system calls are CHECKED: without the 7002/7251/8282 code the
 # reference rejects EVERY block (block_exception), collapsing the byte-exact
 # gate to agreeing-on-invalid. build_guest injects any that are absent so the
 # built block is genuinely VALID end-to-end.
@@ -197,47 +197,47 @@ _PREDEPLOYS = {
         "nonce": "0x01", "balance": "0x00", "storage": {},
         "code": "0x3373fffffffffffffffffffffffffffffffffffffffe1460d35760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1461019a57600182026001905f5b5f82111560685781019083028483029004916001019190604d565b9093900492505050366060146088573661019a573461019a575f5260205ff35b341061019a57600154600101600155600354806004026004013381556001015f358155600101602035815560010160403590553360601b5f5260605f60143760745fa0600101600355005b6003546002548082038060021160e7575060025b5f5b8181146101295782810160040260040181607402815460601b815260140181600101548152602001816002015481526020019060030154905260010160e9565b910180921461013b5790600255610146565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff141561017357505f5b6001546001828201116101885750505f61018e565b01600190035b5f555f6001556074025ff35b5f5ffd",
     },
+    # EIP-8282 builder deposit requests
+    "0x0000bff46984e3725691fa540a8c7589300d8282": {
+        "nonce": "0x01", "balance": "0x00", "storage": {},
+        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe1461011c575f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff146102705760015460088111605257506058565b60089003015b601190600182026001905f5b5f821115607f57810190830284830290049160010191906064565b90939004925050503660b814609f57366102705734610270575f5260205ff35b8034106102705760383567ffffffffffffffff1680633b9aca001161027057633b9aca00029034031061027057600154600101600155600354806006026004015f358155600101602035815560010160403581556001016060358155600101608035815560010160a035905560b85f5f3760b85fa0600101600355005b60035460025480820380604011610131575060405b5f5b8181146101d7578281016006026004018160b8028154815260200181600101548152602001816002015480825260401c67ffffffffffffffff16816010018160381c81600701538160301c81600601538160281c81600501538160201c81600401538160181c81600301538160101c81600201538160081c816001015353602001816003015481526020018160040154815260200190600501549052600101610133565b91018092146101e957906002556101f4565b90505f6002555f6003555b36610242575f54600154817fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1461023057600882820111610238575b50505f610264565b0160089003610264565b7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5b5f555f60015560b8025ff35b5f5ffd",
+    },
+    # EIP-8282 builder exit requests
+    "0x000064d678505ad48f8ccb093bc65613800e8282": {
+        "nonce": "0x01", "balance": "0x00", "storage": {},
+        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe1460e1575f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff146101c65760015460028111605157506057565b60029003015b601190600182026001905f5b5f821115607e57810190830284830290049160010191906063565b909390049250505036603014609e57366101c657346101c6575f5260205ff35b34106101c657600154600101600155600354806003026004013381556001015f35815560010160203590553360601b5f5260305f60143760445fa0600101600355005b6003546002548082038060101160f5575060105b5f5b81811461012d5782810160030260040181604402815460601b8152601401816001015481526020019060020154905260010160f7565b910180921461013f579060025561014a565b90505f6002555f6003555b36610198575f54600154817fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff146101865760028282011161018e575b50505f6101ba565b01600290036101ba565b7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5b5f555f6001556044025ff35b5f5ffd",
+    },
 }
+
+
+def _fixture_protocol_fork(fork_name):
+    """Resolve the stable v0.6.2 schema byte for a fixture fork."""
+    from ethereum.forks.amsterdam.stateless import ProtocolFork
+
+    try:
+        return ProtocolFork[fork_name]
+    except KeyError as exc:
+        raise ValueError(f"unsupported stateless fixture fork: {fork_name}") from exc
 
 
 def _fixture_chain_config(fork_name, chain_id):
     """Build the shared stateless-input chain config for one active fork."""
     from ethereum.forks.amsterdam.stateless import (
-        BlobSchedule,
         ChainConfig,
         ForkActivation,
         ForkConfig,
         ProtocolFork,
     )
 
-    protocol_fork = ProtocolFork(fork_name)
-    blob_values = {
-        ProtocolFork.Cancun: (3, 6, 3338477),
-        ProtocolFork.Prague: (6, 9, 5007716),
-        ProtocolFork.Osaka: (6, 9, 5007716),
-        ProtocolFork.Amsterdam: (14, 21, 11684671),
-    }.get(protocol_fork)
-    blob_schedule = (
-        None
-        if blob_values is None
-        else BlobSchedule(
-            target=U64(blob_values[0]),
-            max=U64(blob_values[1]),
-            base_fee_update_fraction=U64(blob_values[2]),
-        )
-    )
-    timestamp_fork = tuple(ProtocolFork).index(protocol_fork) >= tuple(
-        ProtocolFork
-    ).index(ProtocolFork.Shanghai)
+    protocol_fork = _fixture_protocol_fork(fork_name)
+    timestamp_fork = protocol_fork >= ProtocolFork.Shanghai
     return ChainConfig(
         chain_id=U64(chain_id),
         active_fork=ForkConfig(
-            fork=protocol_fork,
             activation=ForkActivation(
                 block_number=None if timestamp_fork else U64(0),
                 timestamp=U64(0) if timestamp_fork else None,
             ),
-            blob_schedule=blob_schedule,
         ),
     )
 
@@ -488,10 +488,9 @@ def _build_historical_guest(case):
         ),
         chain_config=stateless_input.chain_config,
     )
-    return (
-        bytes(serialize_stateless_input(stateless_input)),
-        bytes(serialize_stateless_output(expected)),
-    )
+    encoded_input = bytearray(serialize_stateless_input(stateless_input))
+    encoded_input[0] = int(_fixture_protocol_fork(fork_name))
+    return bytes(encoded_input), bytes(serialize_stateless_output(expected))
 
 
 def build_guest(case):

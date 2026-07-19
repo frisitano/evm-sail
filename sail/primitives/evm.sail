@@ -17,7 +17,8 @@ struct TxValidity = {
     valid : bool,
     sender : address,
     nonce_before : account_nonce,
-    intrinsic_gas : gas_cost,
+    intrinsic_execution_gas : gas_cost,
+    intrinsic_state_gas : gas_cost,
     calldata_floor : gas_cost,
     blob_fee : word,
     /* effective gas price (EIP-1559, from the caps + base fee) */
@@ -30,7 +31,9 @@ struct TxValidity = {
     gas. */
 struct TxFrameResult = {
     success : bool,
-    gas_remaining : gas,
+    execution_gas_remaining : gas,
+    state_gas_remaining : gas,
+    state_gas_used : state_gas_delta,
     refund : gas_refund,
 }
 
@@ -53,6 +56,8 @@ struct Message = {
     address : address,
     /* CALLVALUE (I_v) */
     value : word,
+    /* State-gas reservoir available when the frame was entered. */
+    state_gas_reservoir : gas,
     /* inside a STATICCALL frame (EIP-214) */
     is_static : bool,
     /* call depth (YP I_e), bounded by DEPTH_LIMIT */
@@ -67,6 +72,8 @@ struct FrameCheckpoint = {
     state : StateCheckpoint,
     pc : code_pointer,
     gas_remaining : gas,
+    state_gas_remaining : gas,
+    state_gas_spilled : gas,
     refund : gas_refund,
     status : FrameStatus,
     message : Message,
@@ -81,12 +88,16 @@ struct CallContinuation = {
     checkpoint : FrameCheckpoint,
     return_offset : memory_pointer,
     return_length : memory_length,
+    /* Amsterdam NEW_ACCOUNT state gas paid for the child target. */
+    new_account_charged : bool,
 }
 
 /*! The suspended parent information needed after initcode returns. */
 struct CreateContinuation = {
     checkpoint : FrameCheckpoint,
     address : address,
+    /* Amsterdam NEW_ACCOUNT state gas paid for the created address. */
+    new_account_charged : bool,
 }
 
 /*! The pending action performed when a child frame finishes. */
@@ -106,6 +117,7 @@ let DEFAULT_MESSAGE : Message = struct {
         address = ZERO_ADDR,
         code_address = ZERO_ADDR,
         value = ZERO_WORD,
+        state_gas_reservoir = GAS_ZERO,
         is_static = false,
         depth = 0,
     }
@@ -114,6 +126,8 @@ let DEFAULT_FRAME_CHECKPOINT : FrameCheckpoint = struct {
         state = StateCheckpoint(0),
         pc = BYTE_ZERO,
         gas_remaining = GAS_ZERO,
+        state_gas_remaining = GAS_ZERO,
+        state_gas_spilled = GAS_ZERO,
         refund = GAS_REFUND_ZERO,
         status = Running(),
         message = DEFAULT_MESSAGE,
@@ -124,5 +138,10 @@ let DEFAULT_FRAME_CHECKPOINT : FrameCheckpoint = struct {
     }
 
 let DEFAULT_FRAME_CONTINUATION : FrameContinuation = ResumeCall(
-    struct { checkpoint = DEFAULT_FRAME_CHECKPOINT, return_offset = BYTE_ZERO, return_length = BYTE_ZERO },
+    struct {
+        checkpoint = DEFAULT_FRAME_CHECKPOINT,
+        return_offset = BYTE_ZERO,
+        return_length = BYTE_ZERO,
+        new_account_charged = false,
+    },
 )

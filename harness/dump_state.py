@@ -187,9 +187,9 @@ def decode_snapshot(b):
 
 def format_snapshot(snap, limit=0):
     """Human-readable summary of a decoded snapshot (for FAIL analysis)."""
-    exc = "" if snap["ok"] else f"  [ESCAPED: {snap['exc']}]"
     valid = snap["output"][32] if len(snap["output"]) > 32 else None
     rejected = snap["validation_failure"]
+    exc = "" if snap["ok"] or rejected is not None else f"  [ESCAPED: {snap['exc']}]"
     failure = "" if rejected is None else (
         f"  [REJECTED: {rejected['reason']} during {rejected['scope']}]"
     )

@@ -248,7 +248,7 @@ function rlp_ref_gas(f : RlpFieldRef, fork : Fork) -> gas = {
     if not_bool(gas_value_supported(value)) then {
         throw InvalidBlock(GasUsedExceedsLimit)
     };
-    if (fork >= Osaka) & (OSAKA_TRANSACTION_GAS_LIMIT_VALUE < value) then {
+    if (fork >= Osaka) & (fork < Amsterdam) & (OSAKA_TRANSACTION_GAS_LIMIT_VALUE < value) then {
         throw InvalidBlock(GasUsedExceedsLimit)
     } else {
         nat_to_gas(value)

@@ -68,10 +68,12 @@ type frame_depth = range(0, 1024)
 type push_width = range(0, 32)
 /*! The number of words on an operand stack. */
 type operand_stack_height = range(0, 1024)
-/*! An index into the top sixteen operand-stack entries. */
-type stack_index = range(0, 16)
+/*! A zero-based index from the top of the operand stack. */
+type stack_index = range(0, 1023)
 /*! A nonzero operand-stack position used by DUP and SWAP. */
 type stack_operation_index = range(1, 16)
+/*! The one-based deep-stack index decoded by EIP-8024 DUPN and SWAPN. */
+type deep_stack_index = range(17, 235)
 /*! The number of indexed topics attached to one log. */
 type log_topic_count = range(0, 4)
 /*! The parity bit used by transaction signatures. */

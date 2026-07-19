@@ -33,6 +33,8 @@ let NPR_REQUESTS_OFF : source_pointer = ByteQuantity(40)
 let REQ_DEPOSITS_OFF : source_pointer = BYTE_ZERO
 let REQ_WITHDRAWALS_OFF : source_pointer = ByteQuantity(4)
 let REQ_CONSOLIDATIONS_OFF : source_pointer = ByteQuantity(8)
+let REQ_BUILDER_DEPOSITS_OFF : source_pointer = ByteQuantity(12)
+let REQ_BUILDER_EXITS_OFF : source_pointer = ByteQuantity(16)
 
 /* SszExecutionPayload fixed-region field offsets. */
 let PL_FEE_RECIPIENT : source_pointer = ByteQuantity(32)
@@ -64,9 +66,7 @@ let WD_AMOUNT : source_pointer = ByteQuantity(36)
 /* SszChainConfig and nested fork activation layouts. */
 let CC_CHAIN_ID : source_pointer = BYTE_ZERO
 let CC_ACTIVE_FORK_OFF : source_pointer = ByteQuantity(8)
-let FC_FORK : source_pointer = BYTE_ZERO
-let FC_ACTIVATION_OFF : source_pointer = ByteQuantity(8)
-let FC_BLOBSCHED_OFF : source_pointer = ByteQuantity(12)
+let FC_ACTIVATION_OFF : source_pointer = BYTE_ZERO
 let FA_BLOCK_NUMBER_OFF : source_pointer = BYTE_ZERO
 let FA_TIMESTAMP_OFF : source_pointer = ByteQuantity(4)
 
@@ -78,8 +78,7 @@ let WIT_HEADERS_OFF : source_pointer = ByteQuantity(8)
 let STATELESS_INPUT_FIXED_LENGTH : byte_length = ByteQuantity(18)
 let PUBLIC_KEY_LENGTH : byte_length = ByteQuantity(65)
 let CHAIN_CONFIG_HEADER_LENGTH : byte_length = ByteQuantity(12)
-let CHAIN_CONFIG_MIN_LENGTH : byte_length = ByteQuantity(28)
-let BLOB_SCHEDULE_LENGTH : byte_length = ByteQuantity(24)
+let CHAIN_CONFIG_MIN_LENGTH : byte_length = ByteQuantity(24)
 
 /*! Returns the byte position of an entry in a `uint32` SSZ offset table. */
 function ssz_offset_table_position(index : item_index) -> source_pointer = {
@@ -183,12 +182,15 @@ function ssz_fixed_list_pop(items : SszListRef, item_size : byte_length) -> (Byt
     Consumers receive explicit source spans instead of re-reading nested
     SSZ offset tables. */
 struct StatelessInputRef = {
+    protocol : ProtocolProfile,
     new_payload_request : ByteSlice,
     execution_payload : ByteSlice,
     versioned_hashes : ByteSlice,
     deposits : ByteSlice,
     withdrawal_requests : ByteSlice,
     consolidation_requests : ByteSlice,
+    builder_deposit_requests : ByteSlice,
+    builder_exit_requests : ByteSlice,
     extra_data : ByteSlice,
     transactions : SszListRef,
     withdrawals : SszListRef,
@@ -284,9 +286,10 @@ function decode_stateless_input_ref(input : ByteSlice) -> StatelessInputRef = {
     if input_end < STATELESS_INPUT_FIXED_LENGTH then {
         throw InvalidBlock(InvalidConfig)
     };
-    if (slice_byte(input, BYTE_ZERO) != 0x00) | (slice_byte(input, BYTE_ONE) != 0x01) then {
+    if slice_byte(input, BYTE_ONE) != 0x01 then {
         throw InvalidBlock(InvalidConfig)
     };
+    let protocol = protocol_profile(slice_byte(input, BYTE_ZERO));
 
     let npr_off = ssz_u32(input, SSZ_BODY + IN_NPR_OFF);
     let witness_off = ssz_u32(input, SSZ_BODY + IN_WITNESS_OFF);
@@ -314,7 +317,7 @@ function decode_stateless_input_ref(input : ByteSlice) -> StatelessInputRef = {
         throw InvalidBlock(InvalidConfig)
     };
 
-    let requests_fixed_end = ssz_checked_offset(requests, 12, witness);
+    let requests_fixed_end = ssz_checked_offset(requests, 20, witness);
     let deposits = ssz_checked_offset(requests, ssz_u32(input, requests + REQ_DEPOSITS_OFF), witness);
     let withdrawal_requests = ssz_checked_offset(requests, ssz_u32(input, requests + REQ_WITHDRAWALS_OFF), witness);
     let consolidation_requests = ssz_checked_offset(
@@ -322,9 +325,17 @@ function decode_stateless_input_ref(input : ByteSlice) -> StatelessInputRef = {
         ssz_u32(input, requests + REQ_CONSOLIDATIONS_OFF),
         witness,
     );
+    let builder_deposit_requests = ssz_checked_offset(
+        requests,
+        ssz_u32(input, requests + REQ_BUILDER_DEPOSITS_OFF),
+        witness,
+    );
+    let builder_exit_requests = ssz_checked_offset(requests, ssz_u32(input, requests + REQ_BUILDER_EXITS_OFF), witness);
     if   (requests_fixed_end != deposits)
        | (deposits > withdrawal_requests)
-       | (withdrawal_requests > consolidation_requests) then {
+       | (withdrawal_requests > consolidation_requests)
+       | (consolidation_requests > builder_deposit_requests)
+       | (builder_deposit_requests > builder_exit_requests) then {
         throw InvalidBlock(InvalidConfig)
     };
 
@@ -349,12 +360,15 @@ function decode_stateless_input_ref(input : ByteSlice) -> StatelessInputRef = {
     };
 
     struct {
+        protocol = protocol,
         new_payload_request = ssz_span(input, npr, witness),
         execution_payload = ssz_span(input, payload, versioned_hashes),
         versioned_hashes = ssz_span(input, versioned_hashes, requests),
         deposits = ssz_span(input, deposits, withdrawal_requests),
         withdrawal_requests = ssz_span(input, withdrawal_requests, consolidation_requests),
-        consolidation_requests = ssz_span(input, consolidation_requests, witness),
+        consolidation_requests = ssz_span(input, consolidation_requests, builder_deposit_requests),
+        builder_deposit_requests = ssz_span(input, builder_deposit_requests, builder_exit_requests),
+        builder_exit_requests = ssz_span(input, builder_exit_requests, witness),
         extra_data = ssz_span(input, extra_data, transactions),
         transactions = ssz_variable_list_ref(input, transactions, withdrawals),
         withdrawals = ssz_fixed_list_ref(input, withdrawals, block_access_list, WD_SIZE),
@@ -400,7 +414,7 @@ function index_witness_codes_cursor(cursor : SszListCursor) -> unit =
         ()
     } else {
         let (code, next) = ssz_list_pop(cursor);
-        let _ = code_db_insert(code);
+        let _ = code_db_insert(code, k_fork);
         index_witness_codes_cursor(next)
     }
 
@@ -628,11 +642,10 @@ function decode_withdrawal(withdrawal : ByteSlice) -> Withdrawal = {
 }
 
 /*! Decodes the `SszChainConfig` at `cc`: the chain id (`u64` at 0) and
-    the active `SszForkConfig` (fork index, activation, blob schedule).
+    the active Amsterdam `SszForkConfig` activation.
     The activation point (optional block number / timestamp, `List[u64,1]`
     each) must be reached by this payload: at least one bound set, none
-    exceeding the
-    payload's — a future activation invalidates the block. */
+    exceeding the payload's — a future activation invalidates the block. */
 function decode_chain_config(cc : ByteSlice, number : block_number, timestamp : block_timestamp) -> ChainConfig = {
     let cc_end = cc.len;
     if cc_end < CHAIN_CONFIG_HEADER_LENGTH then {
@@ -643,43 +656,37 @@ function decode_chain_config(cc : ByteSlice, number : block_number, timestamp : 
         throw InvalidBlock(InvalidConfig)
     };
     let f : source_pointer = ByteQuantity(f_offset);
-    let fidx = ssz_uint(cc, f + FC_FORK);
-    let a = ssz_checked_offset(f, ssz_u32(cc, f + FC_ACTIVATION_OFF), cc_end);
-    let bs_start = ssz_checked_offset(f, ssz_u32(cc, f + FC_BLOBSCHED_OFF), cc_end);
-    if a > bs_start then {
+    let activation_offset = ssz_u32(cc, f + FC_ACTIVATION_OFF);
+    if activation_offset != 4 then {
         throw InvalidBlock(InvalidConfig)
     };
-    let activation_fixed_end = ssz_checked_offset(a, 8, bs_start);
-    let bn_start = ssz_checked_offset(a, ssz_u32(cc, a + FA_BLOCK_NUMBER_OFF), bs_start);
-    let ts_start = ssz_checked_offset(a, ssz_u32(cc, a + FA_TIMESTAMP_OFF), bs_start);
+    let a = ssz_checked_offset(f, activation_offset, cc_end);
+    let activation_fixed_end = ssz_checked_offset(a, 8, cc_end);
+    let bn_start = ssz_checked_offset(a, ssz_u32(cc, a + FA_BLOCK_NUMBER_OFF), cc_end);
+    let ts_start = ssz_checked_offset(a, ssz_u32(cc, a + FA_TIMESTAMP_OFF), cc_end);
     if (activation_fixed_end != bn_start) | (bn_start > ts_start) then {
         throw InvalidBlock(InvalidConfig)
     };
-    let bn_present = SSZ_UINT_BYTES <= ts_start - bn_start;
-    let ts_present = SSZ_UINT_BYTES <= bs_start - ts_start;
-    let bn_ok = not_bool(bn_present) | (ssz_uint(cc, bn_start) <= number);
-    let ts_ok = not_bool(ts_present) | (ssz_uint(cc, ts_start) <= timestamp);
-    let have_schedule = bs_start + BLOB_SCHEDULE_LENGTH == cc_end;
-    let blob_schedule_shape_valid = (bs_start == cc_end) | have_schedule;
-    let blob_schedule : option(BlobSchedule) = if have_schedule then {
-            Some(
-                struct {
-                    target = ssz_uint(cc, bs_start),
-                    max = ssz_uint(cc, bs_start + SSZ_UINT_BYTES),
-                    base_fee_update_fraction = ssz_uint(cc, bs_start + SSZ_UINT_BYTES + SSZ_UINT_BYTES),
-                },
-            )
+    let bn_length = ts_start - bn_start;
+    let ts_length = cc_end - ts_start;
+    let bn_present = bn_length == SSZ_UINT_BYTES;
+    let ts_present = ts_length == SSZ_UINT_BYTES;
+    if ((bn_length != BYTE_ZERO) & not_bool(bn_present)) | ((ts_length != BYTE_ZERO) & not_bool(ts_present)) then {
+        throw InvalidBlock(InvalidConfig)
+    };
+    let bn_ok : bool = if bn_present then {
+            let activation_block : protocol_quantity = ssz_uint(cc, bn_start);
+            activation_block <= number
         } else {
-            None()
+            true
         };
-    struct {
-        chain_id = ssz_uint(cc, CC_CHAIN_ID),
-        fork_index = fidx,
-        fork = fork_of_protocol_index(fidx),
-        activation_active = (bn_present | ts_present) & bn_ok & ts_ok,
-        blob_schedule = blob_schedule,
-        blob_schedule_shape_valid = blob_schedule_shape_valid,
-    }
+    let ts_ok : bool = if ts_present then {
+            let activation_timestamp : protocol_quantity = ssz_uint(cc, ts_start);
+            activation_timestamp <= timestamp
+        } else {
+            true
+        };
+    struct { chain_id = ssz_uint(cc, CC_CHAIN_ID), activation_active = (bn_present | ts_present) & bn_ok & ts_ok }
 }
 
 /*! Decodes the semantic payload structure — header, chain config, body
@@ -691,10 +698,7 @@ function decode_stateless_input(input_ref : StatelessInputRef) -> StatelessInput
     let chain_config = decode_chain_config(input_ref.chain_config, header.number, header.timestamp);
     k_set_header(header);
     k_chain_id = chain_config.chain_id;
-    k_blob_schedule = match chain_config.blob_schedule {
-        Some(schedule) => schedule,
-        None() => struct { target = 0, max = 0, base_fee_update_fraction = 1 },
-    };
+    k_blob_schedule = input_ref.protocol.blob_schedule;
     struct {
         payload =
             struct {

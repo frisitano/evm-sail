@@ -52,6 +52,12 @@ newtype gas_refund = GasRefund : int
 
 let GAS_REFUND_ZERO : gas_refund = GasRefund(0)
 
+/*! Net state gas consumed by a frame. A credit can make this negative until
+    transaction settlement clamps the block-level value at zero. */
+newtype state_gas_delta = StateGasDelta : int
+
+let STATE_GAS_DELTA_ZERO : state_gas_delta = StateGasDelta(0)
+
 /* Every protocol gas quotient uses a small positive schedule divisor. */
 /*! A small positive divisor used by the gas schedule. */
 type gas_divisor = range(1, 2000)
@@ -102,6 +108,54 @@ function gas_refund_add(GasRefund(left) : gas_refund, GasRefund(right) : gas_ref
 
 function gas_refund_sub(GasRefund(left) : gas_refund, GasRefund(right) : gas_refund) -> gas_refund =
     GasRefund(left - right)
+
+/*! Tests two signed state-gas deltas for equality. */
+function state_gas_delta_equal(StateGasDelta(left) : state_gas_delta, StateGasDelta(right) : state_gas_delta) -> bool =
+    left == right
+
+/*! Adds two signed state-gas deltas. */
+function state_gas_delta_add(
+    StateGasDelta(left) : state_gas_delta,
+    StateGasDelta(right) : state_gas_delta,
+) -> (
+    state_gas_delta
+) =
+    StateGasDelta(left + right)
+
+/*! Subtracts one signed state-gas delta from another. */
+function state_gas_delta_sub(
+    StateGasDelta(left) : state_gas_delta,
+    StateGasDelta(right) : state_gas_delta,
+) -> (
+    state_gas_delta
+) =
+    StateGasDelta(left - right)
+
+/*! Adds a nonnegative gas cost to a signed state-gas delta. */
+function state_gas_delta_add_cost(StateGasDelta(left) : state_gas_delta, GasCost(right) : gas_cost) -> state_gas_delta =
+    StateGasDelta(left + right)
+
+/*! Computes the signed difference between the unsigned state-gas pools owned
+    by a frame.  The newtype boundary deliberately widens each pool before the
+    subtraction so that it is performed over mathematical integers. */
+function state_gas_delta_from_pools(
+    StateGasDelta(entry) : state_gas_delta,
+    StateGasDelta(remaining) : state_gas_delta,
+    StateGasDelta(spilled) : state_gas_delta,
+) -> (
+    state_gas_delta
+) =
+    StateGasDelta(entry - remaining + spilled)
+
+/*! Converts a signed state-gas delta to consumed gas, clamping negative
+    values to zero. */
+function state_gas_delta_nonnegative(StateGasDelta(value) : state_gas_delta) -> gas =
+    if value <= 0 then {
+        GAS_ZERO
+    } else {
+        assert(value <= 9223372036854775807);
+        Gas(value)
+    }
 
 /*! Clamps a signed refund to the interval from zero through the supplied cap. */
 function capped_gas_refund(GasRefund(refund) : gas_refund, Gas(limit) : gas) -> gas =
@@ -278,3 +332,6 @@ overload operator / = {gas_quotient, gas_cost_quotient}
 overload operator == = {gas_refund_equal}
 overload operator + = {gas_refund_add}
 overload operator - = {gas_refund_sub}
+overload operator == = {state_gas_delta_equal}
+overload operator + = {state_gas_delta_add, state_gas_delta_add_cost}
+overload operator - = {state_gas_delta_sub}

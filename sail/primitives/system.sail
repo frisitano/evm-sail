@@ -13,11 +13,13 @@ transfer-log identity. Pure data — no registers, no externs.
 | `HISTORY_STORAGE_ADDR` | `0x0000…2935` | EIP-2935 |
 | `WITHDRAWAL_REQUEST_ADDR` | `0x0000…7002` | EIP-7002 |
 | `CONSOLIDATION_REQUEST_ADDR` | `0x0000…7251` | EIP-7251 |
+| `BUILDER_DEPOSIT_REQUEST_ADDR` | `0x0000…8282` | EIP-8282 |
+| `BUILDER_EXIT_REQUEST_ADDR` | `0x0000…8282` | EIP-8282 |
 | `DEPOSIT_CONTRACT_ADDR` | `0x0000…05fa` | EIP-6110 |
 | `EIP7708_TRANSFER_TOPIC` | `keccak256("Transfer(…)")` | EIP-7708 |
 */
 /*! The pseudo-caller of protocol system calls (EIP-4788, EIP-2935,
-    EIP-7002, EIP-7251). */
+    EIP-7002, EIP-7251, EIP-8282). */
 let SYSTEM_ADDRESS : address = word_to_address(U256(0x000000000000000000000000fffffffffffffffffffffffffffffffffffffffe))
 
 /* system predeploys */
@@ -33,6 +35,12 @@ let WITHDRAWAL_REQUEST_ADDR : address = word_to_address(
 let CONSOLIDATION_REQUEST_ADDR : address = word_to_address(
     U256(0x0000000000000000000000000000bbddc7ce488642fb579f8b00f3a590007251),
 ) /* EIP-7251 */
+let BUILDER_DEPOSIT_REQUEST_ADDR : address = word_to_address(
+    U256(0x0000000000000000000000000000bff46984e3725691fa540a8c7589300d8282),
+) /* EIP-8282 */
+let BUILDER_EXIT_REQUEST_ADDR : address = word_to_address(
+    U256(0x000000000000000000000000000064d678505ad48f8ccb093bc65613800e8282),
+) /* EIP-8282 */
 
 /* EIP-6110 deposit requests are reconstructed from DepositEvent logs. */
 let DEPOSIT_CONTRACT_ADDR : address = word_to_address(

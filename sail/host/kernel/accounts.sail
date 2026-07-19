@@ -52,6 +52,12 @@ function account_delete(acc : Account) -> Account =
         storage_cleared = true,
     }
 
+/*! Clears nonce, code, and storage while preserving a nonzero balance.
+    Amsterdam applies this form to an account created and selfdestructed in
+    the same transaction (EIP-8246). */
+function account_clear_preserving_balance(acc : Account) -> Account =
+    account_set_info(account_clear_storage(acc), { acc.info with nonce = 0,  code_hash = KECCAK_EMPTY })
+
 /*! Writes a whole-account row to the transaction overlay. */
 function store_account(a : address, v : Account) -> unit =
     acct_tx_update(a, v)

@@ -60,7 +60,15 @@ function jumpdest_bit(index : range(0, 255)) -> JumpdestChunk = {
 /* The unexamined code suffix strictly decreases; PUSH data is skipped in one step. */
 /*! Scans the remaining code, records opcode-aligned JUMPDEST positions, and
     skips immediate bytes belonging to PUSH instructions. */
-function analyze_code_from(code : ByteSlice, table : JumpdestRef, pc : code_pointer, analysis : CodeAnalysis) -> unit =
+function analyze_code_from(
+    code : ByteSlice,
+    fork : Fork,
+    table : JumpdestRef,
+    pc : code_pointer,
+    analysis : CodeAnalysis,
+) -> (
+    unit
+) =
     if pc < code.len then {
         var chunk = analysis.chunk;
         let chunk_index : code_pointer = analysis.chunk_index;
@@ -73,7 +81,15 @@ function analyze_code_from(code : ByteSlice, table : JumpdestRef, pc : code_poin
         let step : range(1, 33) = if (96 <= opcode_value) & (opcode_value <= 127) then {
                 opcode_value - 94
             } else {
-                1
+                if (fork >= Amsterdam) & (opcode_value == 230 | opcode_value == 231) then {
+                    if deep_stack_immediate_valid(slice_byte(code, pc + BYTE_ONE)) then { 2 } else { 1 }
+                } else {
+                    if (fork >= Amsterdam) & (opcode_value == 232) then {
+                        if exchange_immediate_valid(slice_byte(code, pc + BYTE_ONE)) then { 2 } else { 1 }
+                    } else {
+                        1
+                    }
+                }
             };
         let step_quantity = ByteQuantity(step);
         if step_quantity < code.len - pc then {
@@ -82,6 +98,7 @@ function analyze_code_from(code : ByteSlice, table : JumpdestRef, pc : code_poin
             if progressed < 256 then {
                 analyze_code_from(
                     code,
+                    fork,
                     table,
                     added,
                     struct { chunk = chunk, chunk_index = chunk_index, chunk_offset = progressed },
@@ -94,6 +111,7 @@ function analyze_code_from(code : ByteSlice, table : JumpdestRef, pc : code_poin
                 );
                 analyze_code_from(
                     code,
+                    fork,
                     table,
                     added,
                     struct {
@@ -113,7 +131,7 @@ function analyze_code_from(code : ByteSlice, table : JumpdestRef, pc : code_poin
     } else {
         store_jumpdest_chunk(table, code.len, analysis)
     }
-termination_measure analyze_code_from(code, table, pc, analysis) =
+termination_measure analyze_code_from(code, fork, table, pc, analysis) =
     let ByteQuantity(code_len) = code.len in
     let ByteQuantity(position) = pc in
     code_len - position
@@ -121,7 +139,7 @@ termination_measure analyze_code_from(code, table, pc, analysis) =
 /*! The PUSH-aware `JUMPDEST` analysis (YP §9.4.3): PUSH immediate bytes
     are data even when they contain `0x5b`. The completed bitmap remains a
     first-class Sail value; the host never scans opcodes. */
-function analyze_code(code : ByteSlice) -> JumpdestRef =
+function analyze_code(code : ByteSlice, fork : Fork) -> JumpdestRef =
     if code.len == BYTE_ZERO then {
         EMPTY_JUMPDEST_REF
     } else {
@@ -129,6 +147,7 @@ function analyze_code(code : ByteSlice) -> JumpdestRef =
         assert(table != EMPTY_JUMPDEST_REF, "JUMPDEST table allocation");
         analyze_code_from(
             code,
+            fork,
             table,
             BYTE_ZERO,
             struct { chunk = EMPTY_JUMPDEST_CHUNK, chunk_index = BYTE_ZERO, chunk_offset = 0 },
@@ -137,8 +156,8 @@ function analyze_code(code : ByteSlice) -> JumpdestRef =
     }
 
 /*! Analyzes and stores code, returning its content hash. */
-function code_db_insert(code : ByteSlice) -> hash =
-    code_db_store(code, analyze_code(code))
+function code_db_insert(code : ByteSlice, fork : Fork) -> hash =
+    code_db_store(code, analyze_code(code, fork))
 
 /*! The code for a code hash; `KECCAK_EMPTY` resolves to empty code, and
     an unwitnessed hash is a deficient witness. */

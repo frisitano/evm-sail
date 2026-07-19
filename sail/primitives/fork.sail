@@ -8,8 +8,8 @@ compares on it via [fork_gteq][] / [fork_lt][]. Pure data — no registers,
 no externs.
 */
 /*! The supported protocol forks, in activation order. Blob-parameter-only
-    forks are not distinct members; they collapse to their base fork (see
-    [fork_of_protocol_index][]). */
+    schema forks collapse to their base execution fork in
+    [protocol_profile][]. */
 enum Fork = {
     /* launch protocol */
     Frontier,
@@ -35,7 +35,7 @@ enum Fork = {
     Prague,
     /* EIP-7883 modexp gas, EIP-7825 cap; +0x100 */
     Osaka,
-    /* EIP-7954 code/initcode size bump (32768/65536) */
+    /* EIP-7954 code/initcode size bump (65536/131072) */
     Amsterdam,
 }
 
@@ -66,52 +66,3 @@ function fork_lt(a : Fork, b : Fork) -> bool = fork_index(a) < fork_index(b)
 overload operator >= = { fork_gteq }
 
 overload operator < = { fork_lt }
-
-/*! Deserializes an SSZ `ProtocolFork` index (the consensus
-    `ProtocolFork` order: … Shanghai=14, Cancun=15, Prague=16,
-    Osaka=17, BPO1=18, BPO2=19, Amsterdam=20) into the [Fork][type-Fork]
-    whose execution rules apply: blob-parameter-only forks collapse to
-    their base fork, unknown future indices to the newest. The raw index
-    is preserved separately (`ChainConfig.fork_index`) for exact checks. */
-function fork_of_protocol_index(idx : protocol_fork_index) -> Fork =
-    if 20 <= idx then {
-        Amsterdam
-    } else {
-        if 17 <= idx then {
-            Osaka /* Osaka(17), BPO1(18), BPO2(19) */
-        } else {
-            if idx == 16 then {
-                Prague
-            } else {
-                if idx == 15 then {
-                    Cancun
-                } else {
-                    if idx == 14 then {
-                        Shanghai
-                    } else {
-                        if idx == 13 then {
-                            Paris
-                        } else {
-                            if (10 <= idx) & (idx <= 12) then {
-                                London
-                            } else {
-                                if idx == 9 then {
-                                    Berlin
-                                } else {
-                                    if idx == 7 then {
-                                        Istanbul
-                                    } else {
-                                        if idx == 5 then {
-                                            Byzantium
-                                        } else {
-                                            if idx == 1 then { Homestead } else { Frontier }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }

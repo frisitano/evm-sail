@@ -47,6 +47,14 @@ let HTR_REQUEST_PUBKEY_LENGTH : byte_length = ByteQuantity(48)
 let HTR_WITHDRAWAL_REQUEST_AMOUNT : source_pointer = ByteQuantity(68)
 let HTR_CONSOLIDATION_REQUEST_LENGTH : byte_length = ByteQuantity(116)
 let HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY : source_pointer = ByteQuantity(68)
+let HTR_BUILDER_DEPOSIT_LENGTH : byte_length = ByteQuantity(184)
+let HTR_BUILDER_DEPOSIT_PUBKEY : source_pointer = BYTE_ZERO
+let HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS : source_pointer = ByteQuantity(48)
+let HTR_BUILDER_DEPOSIT_AMOUNT : source_pointer = ByteQuantity(80)
+let HTR_BUILDER_DEPOSIT_SIGNATURE : source_pointer = ByteQuantity(88)
+let HTR_BUILDER_EXIT_LENGTH : byte_length = ByteQuantity(68)
+let HTR_BUILDER_EXIT_SOURCE_ADDRESS : source_pointer = BYTE_ZERO
+let HTR_BUILDER_EXIT_PUBKEY : source_pointer = ByteQuantity(20)
 
 /* Add leaf number `count` to a low-to-high frontier. A set bit in count has
  * one occupied slot at that level; carries consume those slots head-first. */
@@ -388,6 +396,28 @@ function htr_consolidation_request(request : ByteSlice) -> hash =
         2,
     )
 
+/*! `hash_tree_root` of one builder deposit request (4 fields, depth 2). */
+function htr_builder_deposit_request(request : ByteSlice) -> hash =
+    merkleize(
+        [|
+            htr_bytevector(sub_slice(request, HTR_BUILDER_DEPOSIT_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH)),
+            htr_bytes32(ssz_bytes32(request, HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS)),
+            htr_uint(ssz_uint(request, HTR_BUILDER_DEPOSIT_AMOUNT)),
+            htr_bytevector(sub_slice(request, HTR_BUILDER_DEPOSIT_SIGNATURE, HTR_DEPOSIT_SIGNATURE_LENGTH)),
+        |],
+        2,
+    )
+
+/*! `hash_tree_root` of one builder exit request (2 fields, depth 1). */
+function htr_builder_exit_request(request : ByteSlice) -> hash =
+    merkleize(
+        [|
+            htr_bytevector(sub_slice(request, HTR_BUILDER_EXIT_SOURCE_ADDRESS, ADDRESS_BYTE_LENGTH)),
+            htr_bytevector(sub_slice(request, HTR_BUILDER_EXIT_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH)),
+        |],
+        1,
+    )
+
 /*! `hash_tree_root` of the deposit-request list (depth 13). */
 function htr_deposits(deposits : ByteSlice) -> hash = {
     let count = htr_fixed_count(deposits.len, HTR_DEPOSIT_LENGTH);
@@ -427,6 +457,32 @@ function htr_consolidation_requests(requests : ByteSlice) -> hash = {
     mix_in_length(merkle_accumulator_root(accumulator, 1), accumulator.count)
 }
 
+/*! `hash_tree_root` of the builder-deposit-request list (depth 6). */
+function htr_builder_deposit_requests(requests : ByteSlice) -> hash = {
+    let count = htr_fixed_count(requests.len, HTR_BUILDER_DEPOSIT_LENGTH);
+    var rest : SszListRef = struct { bytes = requests, count = count };
+    var accumulator = EMPTY_MERKLE_ACCUMULATOR;
+    while rest.count != 0 termination_measure(rest.count) do {
+        let (request, tail) = ssz_fixed_list_pop(rest, HTR_BUILDER_DEPOSIT_LENGTH);
+        rest = tail;
+        accumulator = merkle_accumulator_push(accumulator, htr_builder_deposit_request(request))
+    };
+    mix_in_length(merkle_accumulator_root(accumulator, 6), accumulator.count)
+}
+
+/*! `hash_tree_root` of the builder-exit-request list (depth 4). */
+function htr_builder_exit_requests(requests : ByteSlice) -> hash = {
+    let count = htr_fixed_count(requests.len, HTR_BUILDER_EXIT_LENGTH);
+    var rest : SszListRef = struct { bytes = requests, count = count };
+    var accumulator = EMPTY_MERKLE_ACCUMULATOR;
+    while rest.count != 0 termination_measure(rest.count) do {
+        let (request, tail) = ssz_fixed_list_pop(rest, HTR_BUILDER_EXIT_LENGTH);
+        rest = tail;
+        accumulator = merkle_accumulator_push(accumulator, htr_builder_exit_request(request))
+    };
+    mix_in_length(merkle_accumulator_root(accumulator, 4), accumulator.count)
+}
+
 /*! `hash_tree_root` of the `SszExecutionRequests` container. */
 function htr_execution_requests(input_ref : StatelessInputRef) -> hash =
     merkleize(
@@ -434,8 +490,10 @@ function htr_execution_requests(input_ref : StatelessInputRef) -> hash =
             htr_deposits(input_ref.deposits),
             htr_withdrawal_requests(input_ref.withdrawal_requests),
             htr_consolidation_requests(input_ref.consolidation_requests),
+            htr_builder_deposit_requests(input_ref.builder_deposit_requests),
+            htr_builder_exit_requests(input_ref.builder_exit_requests),
         |],
-        2,
+        3,
     )
 
 /*! `hash_tree_root` of the `SszNewPayloadRequest` (4 fields, depth 2) —
