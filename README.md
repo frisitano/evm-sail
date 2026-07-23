@@ -145,10 +145,10 @@ ffi/         C backends: memory.c (memory/generic byte slices), scratch.c
 harness/     the EEST harness: run.py drives main.sail in-process and gates its
              canonical output byte-exactly against EELS; state tests are first
              materialized as valid stateless blocks by the in-process t8n
-extractions/ maintained Coq and Lean model generation plus extern contracts
+extractions/ maintained C, Coq, and Lean model generation plus extern contracts
 zkvm/        RISC-V zkVM guest targets (Spike and production ZisK stateless
              block validation)
-  runtime/sail256     shared GMP-free runtime (bounded integers, inline lbits)
+  runtime/sail256     shared GMP-free runtime for bounded integers
   accel-host/         host crypto cdylib (blst, k256, c-kzg, aurora-modexp, p256)
 ```
 
@@ -166,8 +166,9 @@ sail --version
 
 The compiler and `rocq-sail-stdpp` package must have the same Sail release.
 
-The pure model and extraction targets work with upstream Sail. Optimized C builds
-also require spliceable type definitions and the `$[c_repr uint64]` newtype
+The pure model and proof extraction targets work with upstream Sail. The C
+extraction and optimized executable builds require spliceable type definitions
+and bound-driven native C representation
 representation extension. `zkvm/resolve_optimized_sail.sh` checks this by
 compiling a small representation probe: it respects an explicit `SAIL`,
 otherwise uses the local feature worktree when present, and fails before the
@@ -180,9 +181,20 @@ and the zkVM guest, below):
 make check                                  # type-check sail/evm.sail_project
 make lint                                   # sail --all-warnings + source hygiene
 make fmt-check                              # verify sail --fmt formatting
+make extract-c                              # generate + compile-check optimized C
 make extract-coq                            # generate the complete Coq model
 make extract-lean                           # generate and compile the Lean model
+make extract                                # run all maintained extractions
 ```
+
+`make extract-c` owns the tracked source-aligned model under
+`extractions/c/evm/`. Every active file below `sail/` has a corresponding C
+unity fragment, while `evm.c` remains the compilation entry point and `evm.h`
+the complete generated interface. The extraction retains Sail's default C
+name mangling and uses the same specialization and `c_optimized.sail` splice as
+the optimized native and zkVM builds. Machine-local generator scratch, editor
+metadata, and object files remain untracked. See
+[`extractions/README.md`](extractions/README.md) for the ownership contract.
 
 `make all` runs `check` + `lint` + `fmt-check`. `make lint`
 enforces a warning-clean model and basic `*.sail` hygiene (no trailing
@@ -190,15 +202,14 @@ whitespace, no tabs, final newline); `make fmt-check` enforces that every
 `*.sail` is formatted with the official `sail --fmt` (canonical 4-space style).
 `make fmt` reformats in place.
 
-Run the conformance suite against a local
-[execution-spec-tests](https://github.com/ethereum/execution-spec-tests)
-state-fixtures checkout:
+Run the conformance suite against the workspace-local
+`tests-zkevm@v0.6.2` corpus:
 
 ```sh
 cd harness
-python3 run.py --rebuild --fork Cancun <fixtures>/state_tests/cancun
-python3 run.py --fork Cancun fixtures/eels/cancun_selfdestruct/state_tests/for_cancun
-python3 run.py --jobs 12 --quiet <fixtures>/blockchain_tests
+python3 run.py --rebuild --limit 1 --quiet \
+  ../zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+python3 run.py --jobs 12 --quiet ../zkvm/.fixtures/current-v062-full
 ```
 
 The sole pass criterion is byte-exact output agreement with the EELS reference
@@ -210,8 +221,8 @@ version locked in `zkvm/zisk/Cargo.lock`; set `ZISKEMU` when the matching
 binary is not at `~/.zisk/bin/ziskemu`:
 
 ```sh
-ZISKEMU=/path/to/ziskemu python3 run.py --zisk --fork Cancun \
-  fixtures/smoke/state_root_transfer.json
+ZISKEMU=/path/to/ziskemu python3 run.py --zisk --limit 1 --quiet \
+  ../zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
 The crypto

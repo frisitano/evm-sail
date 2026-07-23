@@ -14,6 +14,10 @@ zkvm/build-zisk/
 # harness caches
 harness/.rtcache/
 
+# Maintained C extraction scratch and machine-local editor metadata
+/build/extract-c/
+/extractions/c/evm/compile_commands.json
+
 # theorem-prover build artifacts (generated sources and manifests are tracked)
 **/.lake/
 /extractions/coq/**/*.aux
@@ -25,7 +29,7 @@ harness/.rtcache/
 # python
 **/__pycache__/
 
-# canonical zkevm conformance fixtures (tests-zkevm@v0.4.1, ~360MB)
+# Workspace-local tests-zkevm@v0.6.2 conformance corpus.
 zkvm/.fixtures/
 
 # native conformance runner build artifacts

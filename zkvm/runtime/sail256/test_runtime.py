@@ -28,10 +28,6 @@ class SailInt(ctypes.Structure):
     ]
 
 
-class Lbits(ctypes.Structure):
-    _fields_ = [("len", ctypes.c_uint64), ("d", ctypes.c_uint64 * 4)]
-
-
 INT_PTR = ctypes.POINTER(SailInt)
 
 
@@ -118,26 +114,6 @@ def load_runtime(path: Path) -> ctypes.CDLL:
         function = getattr(runtime, name)
         function.argtypes = [INT_PTR, INT_PTR]
         function.restype = ctypes.c_bool
-    runtime.get_slice_int.argtypes = [
-        ctypes.POINTER(Lbits),
-        INT_PTR,
-        INT_PTR,
-        INT_PTR,
-    ]
-    runtime.get_slice_int.restype = None
-    for name in ("update_lbits", "update_lbits_inc"):
-        function = getattr(runtime, name)
-        function.argtypes = [
-            ctypes.POINTER(Lbits),
-            Lbits,
-            INT_PTR,
-            ctypes.c_uint64,
-        ]
-        function.restype = None
-    runtime.sail_unsigned.argtypes = [INT_PTR, Lbits]
-    runtime.sail_unsigned.restype = None
-    runtime.sail_signed.argtypes = [INT_PTR, Lbits]
-    runtime.sail_signed.restype = None
     runtime.convert_mach_uint_of_sail_int.argtypes = [INT_PTR]
     runtime.convert_mach_uint_of_sail_int.restype = ctypes.c_uint64
     runtime.convert_sail_int_of_mach_uint.argtypes = [INT_PTR, ctypes.c_uint64]
@@ -281,104 +257,12 @@ def check_strings_and_bitvectors(runtime: ctypes.CDLL) -> None:
         )
         assert decode(result) == value
 
-    for _ in range(300):
-        width = RANDOM.randrange(257)
-        unsigned = RANDOM.getrandbits(width)
-        bits = Lbits(width, (ctypes.c_uint64 * 4)(
-            *(unsigned >> (64 * index) & MASK64 for index in range(4))
-        ))
-        result = encode(0)
-        runtime.sail_unsigned(ctypes.byref(result), bits)
-        assert decode(result) == unsigned
-        runtime.sail_signed(ctypes.byref(result), bits)
-        expected = unsigned
-        if width != 0 and unsigned & (1 << (width - 1)):
-            expected -= 1 << width
-        assert decode(result) == expected
-
-        value = signed_random(700)
-        start = RANDOM.randrange(700)
-        length = RANDOM.randrange(257)
-        output = Lbits()
-        runtime.get_slice_int(
-            ctypes.byref(output),
-            ctypes.byref(encode(length)),
-            ctypes.byref(encode(value)),
-            ctypes.byref(encode(start)),
-        )
-        actual = sum(int(output.d[index]) << (64 * index) for index in range(4))
-        mask = (1 << length) - 1
-        assert output.len == length
-        assert actual == (value >> start) & mask
-
     for value in (0, 1, (1 << 63) - 1, 1 << 63, (1 << 64) - 1):
         encoded = encode(value)
         assert runtime.convert_mach_uint_of_sail_int(ctypes.byref(encoded)) == value
         result = encode(0)
         runtime.convert_sail_int_of_mach_uint(ctypes.byref(result), value)
         assert decode(result) == value
-
-    for value in (0, 1, -1, (1 << 255) - 1):
-        output = Lbits()
-        runtime.get_slice_int(
-            ctypes.byref(output),
-            ctypes.byref(encode(8)),
-            ctypes.byref(encode(value)),
-            ctypes.byref(encode((1 << 64) - 1)),
-        )
-        expected = 0xFF if value < 0 else 0
-        assert output.len == 8
-        assert output.d[0] == expected
-
-    for width in (1, 63, 64, 65, 255, 256):
-        for index in range(width):
-            initial = RANDOM.getrandbits(width)
-            for bit in (0, 1):
-                source = Lbits(width, (ctypes.c_uint64 * 4)(
-                    *(initial >> (64 * limb) & MASK64 for limb in range(4))
-                ))
-                expected = (initial & ~(1 << index)) | (bit << index)
-
-                result = Lbits()
-                encoded_index = encode(index)
-                runtime.update_lbits(
-                    ctypes.byref(result), source,
-                    ctypes.byref(encoded_index), bit,
-                )
-                actual = sum(
-                    int(result.d[limb]) << (64 * limb) for limb in range(4)
-                )
-                assert result.len == width
-                assert actual == expected
-
-                alias = Lbits(width, (ctypes.c_uint64 * 4)(
-                    *(initial >> (64 * limb) & MASK64 for limb in range(4))
-                ))
-                runtime.update_lbits(
-                    ctypes.byref(alias), alias,
-                    ctypes.byref(encoded_index), bit,
-                )
-                aliased = sum(
-                    int(alias.d[limb]) << (64 * limb) for limb in range(4)
-                )
-                assert aliased == expected
-
-                reverse_result = Lbits()
-                runtime.update_lbits_inc(
-                    ctypes.byref(reverse_result), source,
-                    ctypes.byref(encoded_index), bit,
-                )
-                reverse_index = width - 1 - index
-                reverse_expected = (
-                    (initial & ~(1 << reverse_index)) | (bit << reverse_index)
-                )
-                reverse_actual = sum(
-                    int(reverse_result.d[limb]) << (64 * limb)
-                    for limb in range(4)
-                )
-                assert reverse_result.len == width
-                assert reverse_actual == reverse_expected
-
 
 def main() -> None:
     suffix = ".dylib" if sys.platform == "darwin" else ".so"

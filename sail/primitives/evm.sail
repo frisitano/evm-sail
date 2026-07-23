@@ -10,13 +10,14 @@ registers, no externs.
     plus the EIP-4844 blob versioned hashes the `BLOBHASH` opcode reads. */
 struct TxEnv = { origin : address, gas_price : word, blob_hashes : BlobHashes }
 
-/*! The outcome of up-front transaction validation (YP §6.2): validity,
-    recovered sender, pre-state nonce, intrinsic gas, blob fee, and the
-    EIP-1559 effective gas and priority prices. */
+/*! The values established by successful up-front transaction validation
+    (YP §6.2): sender, pre-state nonce, intrinsic gas, blob fee, and the
+    EIP-1559 effective gas and priority prices. Invalid transactions throw
+    before this value is constructed. */
 struct TxValidity = {
-    valid : bool,
     sender : address,
     nonce_before : account_nonce,
+    gas_limit : block_gas_limit,
     intrinsic_execution_gas : gas_cost,
     intrinsic_state_gas : gas_cost,
     calldata_floor : gas_cost,
@@ -69,11 +70,11 @@ struct Message = {
  * host's stack-of-stacks; returndata intentionally becomes the child output. */
 /*! The suspended parent-frame state restored after nested execution. */
 struct FrameCheckpoint = {
-    state : StateCheckpoint,
+    state : journal_checkpoint,
     pc : code_pointer,
     gas_remaining : gas,
     state_gas_remaining : gas,
-    state_gas_spilled : gas,
+    state_gas_spilled : state_gas_spill,
     refund : gas_refund,
     status : FrameStatus,
     message : Message,
@@ -113,9 +114,9 @@ type FrameStack = vector(1024, dec, FrameContinuation)
 
 /*! The zero message; frame registers reset to it between transactions. */
 let DEFAULT_MESSAGE : Message = struct {
-        caller = ZERO_ADDR,
-        address = ZERO_ADDR,
-        code_address = ZERO_ADDR,
+        caller = ZERO_ADDRESS,
+        address = ZERO_ADDRESS,
+        code_address = ZERO_ADDRESS,
         value = ZERO_WORD,
         state_gas_reservoir = GAS_ZERO,
         is_static = false,
@@ -123,11 +124,11 @@ let DEFAULT_MESSAGE : Message = struct {
     }
 
 let DEFAULT_FRAME_CHECKPOINT : FrameCheckpoint = struct {
-        state = StateCheckpoint(0),
-        pc = BYTE_ZERO,
+        state = 0,
+        pc = 0,
         gas_remaining = GAS_ZERO,
         state_gas_remaining = GAS_ZERO,
-        state_gas_spilled = GAS_ZERO,
+        state_gas_spilled = STATE_GAS_SPILL_ZERO,
         refund = GAS_REFUND_ZERO,
         status = Running(),
         message = DEFAULT_MESSAGE,
@@ -138,10 +139,5 @@ let DEFAULT_FRAME_CHECKPOINT : FrameCheckpoint = struct {
     }
 
 let DEFAULT_FRAME_CONTINUATION : FrameContinuation = ResumeCall(
-    struct {
-        checkpoint = DEFAULT_FRAME_CHECKPOINT,
-        return_offset = BYTE_ZERO,
-        return_length = BYTE_ZERO,
-        new_account_charged = false,
-    },
+    struct { checkpoint = DEFAULT_FRAME_CHECKPOINT, return_offset = 0, return_length = 0, new_account_charged = false },
 )

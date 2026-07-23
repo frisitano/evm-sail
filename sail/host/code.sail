@@ -11,20 +11,20 @@ Content-addressed code storage and the Sail-side `JUMPDEST` analysis.
 /*! The stored code for a content hash, or `None` when not witnessed. */
 val code_db_lookup = impure { c: "code_db_lookup" } : hash -> option(Code)
 /*! Allocates a JUMPDEST bitmap large enough for a code body. */
-val jumpdest_table_alloc = impure { c: "jumpdest_table_alloc" } : byte_quantity -> JumpdestRef
+val jumpdest_table_alloc = impure { c: "jumpdest_table_alloc" } : code_length -> JumpdestRef
 /*! Stores one 256-position chunk in an allocated JUMPDEST bitmap. */
 val jumpdest_table_store_chunk = impure { c: "jumpdest_table_store_chunk" } : (
         JumpdestRef,
-        byte_quantity,
-        byte_quantity,
+        code_length,
+        code_chunk_index,
         JumpdestChunk,
     ) -> bool
 /*! Stores code with its precomputed `JUMPDEST` bitmap under its
     KECCAK-256 hash and returns that hash. */
-val code_db_store = impure { c: "code_db_store_indexed" } : (ByteSlice, JumpdestRef) -> hash
+val code_db_store = impure { c: "code_db_store_indexed" } : (CodeSlice, JumpdestRef) -> hash
 /*! Whether the referenced bitmap marks the given program counter as a
     valid `JUMPDEST`. */
-val jumpdest_ref_contains = impure { c: "jumpdest_ref_contains" } : (JumpdestRef, byte_quantity, byte_quantity) -> bool
+val jumpdest_ref_contains = impure { c: "jumpdest_ref_contains" } : (JumpdestRef, code_length, code_pointer) -> bool
 /*! Constructs and stores the EIP-7702 delegation designator
     (`0xef0100` followed by the address) with its bitmap, returning its
     code hash. */
@@ -38,12 +38,12 @@ val code_db_read_delegation = impure { c: "code_db_read_delegation" } : hash -> 
 /*! The partial JUMPDEST bitmap and its location while code is scanned. */
 struct CodeAnalysis = {
     chunk : JumpdestChunk,
-    chunk_index : code_pointer,
+    chunk_index : code_chunk_index,
     chunk_offset : range(0, 255),
 }
 
 /*! Commits a completed nonempty bitmap chunk to its allocated table. */
-function store_jumpdest_chunk(table : JumpdestRef, code_len : byte_length, analysis : CodeAnalysis) -> unit = {
+function store_jumpdest_chunk(table : JumpdestRef, code_len : code_length, analysis : CodeAnalysis) -> unit = {
     if analysis.chunk != EMPTY_JUMPDEST_CHUNK then {
         let stored = jumpdest_table_store_chunk(table, code_len, analysis.chunk_index, analysis.chunk);
         assert(stored, "JUMPDEST chunk store")
@@ -60,20 +60,15 @@ function jumpdest_bit(index : range(0, 255)) -> JumpdestChunk = {
 /* The unexamined code suffix strictly decreases; PUSH data is skipped in one step. */
 /*! Scans the remaining code, records opcode-aligned JUMPDEST positions, and
     skips immediate bytes belonging to PUSH instructions. */
-function analyze_code_from(
-    code : ByteSlice,
-    fork : Fork,
-    table : JumpdestRef,
-    pc : code_pointer,
-    analysis : CodeAnalysis,
-) -> (
-    unit
-) =
-    if pc < code.len then {
+val analyze_code_from : forall 'pc, code_valid_length('pc). (CodeSlice, Fork, JumpdestRef, int('pc), CodeAnalysis) -> unit
+function analyze_code_from(code, fork, table, pc, analysis) = {
+    let position = pc;
+    let code_len = code.len;
+    if position < code_len then {
         var chunk = analysis.chunk;
-        let chunk_index : code_pointer = analysis.chunk_index;
+        let chunk_index = analysis.chunk_index;
         let chunk_offset : range(0, 255) = analysis.chunk_offset;
-        let opcode = slice_byte(code, pc);
+        let opcode = slice_byte(code, position);
         if opcode == 0x5b then {
             chunk = or_vec(chunk, jumpdest_bit(chunk_offset))
         };
@@ -82,18 +77,17 @@ function analyze_code_from(
                 opcode_value - 94
             } else {
                 if (fork >= Amsterdam) & (opcode_value == 230 | opcode_value == 231) then {
-                    if deep_stack_immediate_valid(slice_byte(code, pc + BYTE_ONE)) then { 2 } else { 1 }
+                    if deep_stack_immediate_valid(slice_byte(code, position + 1)) then { 2 } else { 1 }
                 } else {
                     if (fork >= Amsterdam) & (opcode_value == 232) then {
-                        if exchange_immediate_valid(slice_byte(code, pc + BYTE_ONE)) then { 2 } else { 1 }
+                        if exchange_immediate_valid(slice_byte(code, position + 1)) then { 2 } else { 1 }
                     } else {
                         1
                     }
                 }
             };
-        let step_quantity = ByteQuantity(step);
-        if step_quantity < code.len - pc then {
-            let added : code_pointer = pc + step_quantity;
+        if step < code_len - position then {
+            let added = position + step;
             let progressed : range(1, 288) = chunk_offset + step;
             if progressed < 256 then {
                 analyze_code_from(
@@ -114,11 +108,7 @@ function analyze_code_from(
                     fork,
                     table,
                     added,
-                    struct {
-                        chunk = EMPTY_JUMPDEST_CHUNK,
-                        chunk_index = chunk_index + BYTE_ONE,
-                        chunk_offset = progressed - 256,
-                    },
+                    struct { chunk = EMPTY_JUMPDEST_CHUNK, chunk_index = added / 256, chunk_offset = progressed - 256 },
                 )
             }
         } else {
@@ -131,32 +121,34 @@ function analyze_code_from(
     } else {
         store_jumpdest_chunk(table, code.len, analysis)
     }
+}
 termination_measure analyze_code_from(code, fork, table, pc, analysis) =
-    let ByteQuantity(code_len) = code.len in
-    let ByteQuantity(position) = pc in
+    let code_len = code.len in
+    let position = pc in
     code_len - position
 
 /*! The PUSH-aware `JUMPDEST` analysis (YP §9.4.3): PUSH immediate bytes
     are data even when they contain `0x5b`. The completed bitmap remains a
     first-class Sail value; the host never scans opcodes. */
-function analyze_code(code : ByteSlice, fork : Fork) -> JumpdestRef =
-    if code.len == BYTE_ZERO then {
+function analyze_code(code : CodeSlice, fork : Fork) -> JumpdestRef =
+    if code.len == 0 then {
         EMPTY_JUMPDEST_REF
     } else {
-        let table = jumpdest_table_alloc(code.len);
+        let length = code.len;
+        let table = jumpdest_table_alloc(length);
         assert(table != EMPTY_JUMPDEST_REF, "JUMPDEST table allocation");
         analyze_code_from(
             code,
             fork,
             table,
-            BYTE_ZERO,
-            struct { chunk = EMPTY_JUMPDEST_CHUNK, chunk_index = BYTE_ZERO, chunk_offset = 0 },
+            0,
+            struct { chunk = EMPTY_JUMPDEST_CHUNK, chunk_index = 0, chunk_offset = 0 },
         );
         table
     }
 
 /*! Analyzes and stores code, returning its content hash. */
-function code_db_insert(code : ByteSlice, fork : Fork) -> hash =
+function code_db_insert(code : CodeSlice, fork : Fork) -> hash =
     code_db_store(code, analyze_code(code, fork))
 
 /*! The code for a code hash; `KECCAK_EMPTY` resolves to empty code, and

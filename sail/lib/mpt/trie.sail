@@ -33,62 +33,66 @@ spans, so embedded nodes and leaf values remain witness slices.
     range from the ordered update stream. */
 function emit_live_updates_under(
     sink : TrieItemSink,
-    updates : list(TrieUpdate),
+    updates : TrieUpdateCursor,
     prefix : TriePath,
 ) -> (
-    (TrieItemSink, list(TrieUpdate))
+    (TrieItemSink, TrieUpdateCursor)
 ) =
-    match updates {
-        [||] => (sink, [||]),
-        update :: rest => if path_prefix_of(prefix, update.key) then {
+    match updates.pending {
+        None() => (sink, updates),
+        Some(update) => if path_prefix_of(prefix, update.key) then {
             let next_sink : TrieItemSink = match update.change {
                 TrieDelete() => sink,
                 TriePut(value) => trie_sink_emit(sink, item_leaf(update.key, value)),
             };
-            emit_live_updates_under(next_sink, rest, prefix)
+            emit_live_updates_under(next_sink, trie_updates_advance(updates), prefix)
         } else {
             (sink, updates)
         },
     }
+
+termination_measure emit_live_updates_under(sink, updates, prefix) = 2 ^ 64
 
 /*! Emits live updates preceding a witness child while retaining the first
     update at or after that child. */
 function emit_updates_before_child(
     sink : TrieItemSink,
-    updates : list(TrieUpdate),
+    updates : TrieUpdateCursor,
     prefix : TriePath,
     child : TriePath,
 ) -> (
-    (TrieItemSink, list(TrieUpdate))
+    (TrieItemSink, TrieUpdateCursor)
 ) =
-    match updates {
-        [||] => (sink, [||]),
-        update :: rest => if   not_bool(path_prefix_of(prefix, update.key))
-                             | path_prefix_of(child, update.key)
-                             | not_bool(path_lt(update.key, child)) then {
+    match updates.pending {
+        None() => (sink, updates),
+        Some(update) => if   not_bool(path_prefix_of(prefix, update.key))
+                           | path_prefix_of(child, update.key)
+                           | not_bool(path_lt(update.key, child)) then {
             (sink, updates)
         } else {
             let next_sink : TrieItemSink = match update.change {
                 TrieDelete() => sink,
                 TriePut(value) => trie_sink_emit(sink, item_leaf(update.key, value)),
             };
-            emit_updates_before_child(next_sink, rest, prefix, child)
+            emit_updates_before_child(next_sink, trie_updates_advance(updates), prefix, child)
         },
     }
+
+termination_measure emit_updates_before_child(sink, updates, prefix, child) = 2 ^ 64
 
 /*! Merges one witness leaf with all ordered updates in the same subtree. */
 function emit_leaf_overlay(
     sink : TrieItemSink,
-    updates : list(TrieUpdate),
+    updates : TrieUpdateCursor,
     prefix : TriePath,
     key : TriePath,
     value : ByteSlice,
 ) -> (
-    (TrieItemSink, list(TrieUpdate))
+    (TrieItemSink, TrieUpdateCursor)
 ) =
-    match updates {
-        [||] => (trie_sink_emit(sink, item_leaf(key, value)), [||]),
-        update :: rest => if not_bool(path_prefix_of(prefix, update.key)) then {
+    match updates.pending {
+        None() => (trie_sink_emit(sink, item_leaf(key, value)), updates),
+        Some(update) => if not_bool(path_prefix_of(prefix, update.key)) then {
             (trie_sink_emit(sink, item_leaf(key, value)), updates)
         } else {
             if path_eq(update.key, key) then {
@@ -96,7 +100,7 @@ function emit_leaf_overlay(
                     TrieDelete() => sink,
                     TriePut(updated) => trie_sink_emit(sink, item_leaf(key, updated)),
                 };
-                emit_live_updates_under(updated_sink, rest, prefix)
+                emit_live_updates_under(updated_sink, trie_updates_advance(updates), prefix)
             } else {
                 if path_lt(key, update.key) then {
                     emit_live_updates_under(trie_sink_emit(sink, item_leaf(key, value)), updates, prefix)
@@ -105,24 +109,26 @@ function emit_leaf_overlay(
                         TrieDelete() => sink,
                         TriePut(updated) => trie_sink_emit(sink, item_leaf(update.key, updated)),
                     };
-                    emit_leaf_overlay(updated_sink, rest, prefix, key, value)
+                    emit_leaf_overlay(updated_sink, trie_updates_advance(updates), prefix, key, value)
                 }
             }
         },
     }
+
+termination_measure emit_leaf_overlay(sink, updates, prefix, key, value) = 2 ^ 64
 
 /*! Walks a touched witness subtree and streams its post-update items into the
     canonical trie builder. */
 function witness_emit(
     node : ByteSlice,
     prefix : TriePath,
-    updates : list(TrieUpdate),
+    updates : TrieUpdateCursor,
     sink : TrieItemSink,
     cursor : trie_path_cursor,
 ) -> (
-    (TrieItemSink, list(TrieUpdate))
+    (TrieItemSink, TrieUpdateCursor)
 ) = {
-    if node.len == BYTE_ZERO then {
+    if node.len == 0 then {
         emit_live_updates_under(sink, updates, prefix)
     } else {
         match decode_trie_node(node) {
@@ -140,7 +146,7 @@ function witness_emit(
                     let (before_sink, child_updates) = emit_updates_before_child(sink, updates, prefix, child_prefix);
                     let (child_sink, later_updates) = if next_update_under(child_updates, child_prefix) then {
                             let child = resolve_ref(field_to_ref(extension.child));
-                            if child.len == BYTE_ZERO then {
+                            if child.len == 0 then {
                                 emit_live_updates_under(before_sink, child_updates, child_prefix)
                             } else {
                                 witness_emit(child, child_prefix, child_updates, before_sink, next_cursor)
@@ -155,7 +161,8 @@ function witness_emit(
                 }
             },
             BranchNode(branch) => {
-                if branch.value.content_len != BYTE_ZERO | 64 <= cursor then {
+                let branch_value = branch.value;
+                if branch_value.content_len != 0 | 64 <= cursor then {
                     throw InvalidBlock(WitnessDeficient)
                 } else {
                     let next_cursor = cursor + 1;
@@ -204,7 +211,7 @@ termination_measure witness_emit(node, prefix, updates, sink, cursor) = 64 - cur
 ## The trie entry point
 */
 /*! The root of the trie anchored at `base_root` after applying the
-    ordered update list. This is the only public root computation:
+    ordered update stream. This is the only public root computation:
     witness-native and fail-closed — the walker resolves every touched
     hash reference in the witness node-db and any missing node throws
     `InvalidBlock(WitnessDeficient)`; otherwise the builder recomposes the
@@ -217,33 +224,42 @@ termination_measure witness_emit(node, prefix, updates, sink, cursor) = 64 - cur
     is never consulted and no failure path can fire. The native
     (full-state) backend exercises exactly this restriction: same
     implementation, different input. */
-function trie_root(base_root : hash, updates : list(TrieUpdate)) -> hash = {
+struct TrieRootResult = { root : hash, changed : bool }
+
+/*! Applies an already-open update cursor. The `changed` result records
+    whether the source contained at least one update. */
+function trie_root_cursor(base_root : hash, updates : TrieUpdateCursor) -> TrieRootResult = {
     if updates_empty(updates) then {
-        base_root
+        struct { root = base_root, changed = false }
     } else {
         let sink = trie_sink_empty();
         let (updated_sink, remaining) = if base_root == EMPTY_TRIE_ROOT then {
                 emit_live_updates_under(sink, updates, path_empty())
             } else {
                 let node = node_db_lookup(base_root);
-                if node.len == BYTE_ZERO then {
+                if node.len == 0 then {
                     throw InvalidBlock(WitnessDeficient)
                 } else {
                     witness_emit(node, path_empty(), updates, sink, 0)
                 }
             };
         if updates_empty(remaining) then {
-            trie_sink_root(trie_sink_finish(updated_sink))
+            struct { root = trie_sink_root(trie_sink_finish(updated_sink)), changed = true }
         } else {
             throw InvalidBlock(WitnessDeficient)
         }
     }
 }
 
+/*! The root of the trie after pulling and applying the source's ordered
+    updates. The source's host iterator must be opened by its owner first. */
+function trie_root(base_root : hash, source : TrieUpdateSource) -> TrieRootResult =
+    trie_root_cursor(base_root, trie_updates_begin(source))
+
 /*! Walks the trie toward `key` from `pos`, returning the leaf value
     without copying it; absent paths yield empty bytes. */
 function trie_walk(node : ByteSlice, key : TriePath, pos : trie_path_cursor) -> ByteSlice = {
-    if node.len == BYTE_ZERO then {
+    if node.len == 0 then {
         EMPTY_SLICE
     } else {
         match decode_trie_node(node) {
@@ -300,7 +316,7 @@ function trie_lookup(root : hash, key : TriePath) -> ByteSlice = {
         EMPTY_SLICE
     } else {
         let node = node_db_lookup(root);
-        if node.len == BYTE_ZERO then {
+        if node.len == 0 then {
             throw InvalidBlock(WitnessDeficient)
         } else {
             trie_walk(node, key, 0)

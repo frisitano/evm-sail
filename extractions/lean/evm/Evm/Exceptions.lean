@@ -19,23 +19,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -48,6 +40,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # Exceptions
@@ -78,7 +71,7 @@ def ExceptionKind_of_num (arg_ : Nat) : ExceptionKind :=
   | 10 => NonceOverflow
   | _ => AddressCollision
 
-def num_of_ExceptionKind (arg_ : ExceptionKind) : Int :=
+def num_of_ExceptionKind (arg_ : ExceptionKind) : Nat :=
   match arg_ with
   | .StackUnderflow => 0
   | .StackOverflow => 1
@@ -121,7 +114,7 @@ def BlockError_of_num (arg_ : Nat) : BlockError :=
   | 18 => InvalidExecutionRequests
   | _ => WitnessDeficient
 
-def num_of_BlockError (arg_ : BlockError) : Int :=
+def num_of_BlockError (arg_ : BlockError) : Nat :=
   match arg_ with
   | .InvalidConfig => 0
   | .HeaderChainBroken => 1

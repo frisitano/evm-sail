@@ -16,13 +16,13 @@ One [Message][type-Message] per active frame (YP "message call"
 the interpreter.
 */
 /*! The program counter (YP μ_pc). */
-register pc : code_pointer = BYTE_ZERO
+register pc : code_pointer = 0
 /*! The frame's remaining gas (YP μ_g) — the one gas counter. */
 register gas_remaining : gas = GAS_ZERO /* THE gas counter (user-space) */
 /*! The Amsterdam state-gas reservoir owned by the active frame. */
 register state_gas_remaining : gas = GAS_ZERO
 /*! State gas drawn from execution gas after the reservoir was exhausted. */
-register state_gas_spilled : gas = GAS_ZERO
+register state_gas_spilled : state_gas_spill = STATE_GAS_SPILL_ZERO
 /*! The frame-local signed gas refund accumulated by state changes. */
 register frame_refund : gas_refund = GAS_REFUND_ZERO
 /*! The frame's running/halted/exceptional status. */
@@ -73,8 +73,32 @@ function frame_stack_pop() -> FrameContinuation = {
     }
 }
 
-function record_refund(delta : gas_refund) -> unit =
-    frame_refund = frame_refund + delta
+/*! Adds two semantically bounded refund quantities and narrows their exact sum
+    back to the accumulator range. The dependent signature preserves the input
+    values and their bounds for proof extraction; optimized C specializes the
+    same source body to the representations demanded by each caller. */
+val validated_refund_add : forall 'left 'right,
+                                -gas_refund_bound
+                             <= 'left
+                             &  'left
+                             <= gas_refund_bound
+                             &  -gas_refund_bound
+                             <= 'right
+                             &  'right
+                             <= gas_refund_bound. (int('left), int('right)) -> gas_refund
+
+function validated_refund_add(left, right) = {
+    let total = left + right;
+    if (-sizeof(gas_refund_bound) <= total) & (total <= sizeof(gas_refund_bound)) then {
+        total
+    } else {
+        throw InvalidBlock(ExecutionInvalid)
+    }
+}
+
+val record_refund : forall 'delta, -gas_refund_bound <= 'delta & 'delta <= gas_refund_bound. int('delta) -> unit
+function record_refund(delta) =
+    frame_refund = validated_refund_add(frame_refund, delta)
 
 /*! The frame's executable code as one indivisible value: its byte slice
     plus the resolved `JUMPDEST` table produced when that byte sequence
@@ -84,12 +108,20 @@ function record_refund(delta : gas_refund) -> unit =
 register frame_code : Code = EMPTY_CODE
 
 /*! The frame code length in bytes (`CODESIZE`). */
-function frame_code_len() -> code_length = frame_code.bytes.len
+function frame_code_len() -> code_length = {
+    let code = frame_code.bytes;
+    let length = code.len;
+    length
+}
 
 /*! Whether `dest` is a valid `JUMPDEST` in the frame's code
     (YP §9.4.3). */
-function frame_jumpdest_valid(dest : code_pointer) -> bool =
-    jumpdest_ref_contains(frame_code.jumpdests, frame_code.bytes.len, dest)
+val frame_jumpdest_valid : forall 'dest, source_valid_length('dest). int('dest) -> bool
+function frame_jumpdest_valid(dest) = {
+    let code = frame_code.bytes;
+    let length = code.len;
+    jumpdest_ref_contains(frame_code.jumpdests, length, dest)
+}
 
 /*md
 ## The operand stack
@@ -97,26 +129,29 @@ function frame_jumpdest_valid(dest : code_pointer) -> bool =
 /*! The 1024-element operand-stack limit (YP §9.1). */
 let STACK_LIMIT : operand_stack_height = 1024
 
+/* Every caller establishes that both operands belong to one admitted gas
+ * budget. The canonical model records the exact arithmetic; the production C
+ * splice checks its fixed-width representation only at these credit points. */
+/*! Adds gas whose shared-budget conservation invariant is already known. */
+val conserved_gas_add : forall 'left 'right, live_gas_valid('left) & live_gas_valid('right). (int('left), int('right)) -> gas
+function conserved_gas_add(left, right) = left + right
+
 /*! Returns any Amsterdam state-gas spill to the execution-gas pool and
     restores the frame's state-gas reservoir. */
 function refill_frame_state_gas() -> unit = {
     if k_fork >= Amsterdam then {
-        if gas_sum_supported(gas_remaining, state_gas_spilled) then {
-            gas_remaining = gas_remaining + state_gas_spilled
-        } else {
-            throw InvalidBlock(ExecutionInvalid)
-        };
+        gas_remaining = conserved_gas_add(gas_remaining, state_gas_spilled);
         state_gas_remaining = message.state_gas_reservoir;
-        state_gas_spilled = GAS_ZERO
+        state_gas_spilled = STATE_GAS_SPILL_ZERO
     }
 }
 
 /*! Computes the signed state gas consumed by the current frame. */
-function frame_state_gas_used() -> state_gas_delta = {
-    let Gas(entry) = message.state_gas_reservoir;
-    let Gas(remaining) = state_gas_remaining;
-    let Gas(spilled) = state_gas_spilled;
-    state_gas_delta_from_pools(StateGasDelta(entry), StateGasDelta(remaining), StateGasDelta(spilled))
+function frame_state_gas_used() -> frame_state_gas_delta = {
+    let entry = message.state_gas_reservoir;
+    let remaining = state_gas_remaining;
+    let spilled = state_gas_spilled;
+    entry - remaining + spilled
 }
 
 /*! Enters the exceptional halting state (YP §9.4.2), consuming all
@@ -126,26 +161,6 @@ function exc_halt(k : ExceptionKind) -> unit = {
     gas_remaining = GAS_ZERO;
     frame_status = Exceptional(k)
 }
-
-/* In the canonical model this conversion is exact.  The optimized splice
- * checks that the word fits its uint64_t byte_quantity representation and
- * raises the EVM OutOfGas exception otherwise.  Keeping the exceptional
- * conversion behind this nominal boundary prevents opcode code from
- * round-tripping U256 through lbits/sail_int. */
-function word_to_byte_quantity_or_oog(value : word) -> byte_quantity =
-    word_to_byte_quantity(value)
-
-/* A zero-length EVM memory range never observes its offset.  Normalize both
- * fields to zero before the optimized build attempts to narrow the offset;
- * this preserves the specified behaviour for (offset >= 2^64, length = 0). */
-/*! Converts an EVM memory range to byte quantities, preserving the
-    zero-length rule and halting when a live endpoint cannot be represented. */
-function word_byte_range_or_oog(offset : word, length : word) -> (byte_quantity, byte_quantity) =
-    if word_is_zero(length) then {
-        (BYTE_ZERO, BYTE_ZERO)
-    } else {
-        (word_to_byte_quantity_or_oog(offset), word_to_byte_quantity_or_oog(length))
-    }
 
 /*! The stack height as a Sail integer. */
 function stack_height() -> operand_stack_height = {
@@ -159,12 +174,21 @@ function stack_height() -> operand_stack_height = {
 function peek(n : stack_index) -> word = stack_peek_word(n)
 
 /*! Pushes a word, entering `StackOverflow` at the 1024 limit. */
-function push(w : word) -> unit =
+function push_word(w : word) -> unit =
     if STACK_LIMIT <= stack_height() then {
         exc_halt(StackOverflow)
     } else {
         stack_push_word(w)
     }
+
+/*! Pushes the mathematical live-gas quantity as an EVM word. Transaction
+    validation establishes that every reachable value is below the word
+    modulus; the total canonical definition retains modular behavior outside
+    that invariant. */
+function push_gas(value : gas) -> unit =
+    push_word(U256(tmod_nat(value, sizeof(word_modulus))))
+
+overload push = {push_word, push_gas}
 
 /*! Pops the top word, entering `StackUnderflow` (and yielding zero) on
     an empty stack. */
@@ -205,7 +229,10 @@ register returndata : ByteSlice = EMPTY_SLICE
 function returndata_clear() -> unit = returndata = EMPTY_SLICE
 
 /*! `RETURNDATASIZE`. */
-function returndata_size() -> byte_length = returndata.len
+function returndata_size() -> source_pointer = {
+    let data = returndata;
+    data.len
+}
 
 /*! One returndata byte. */
 function returndata_byte(index : source_pointer) -> byte =
@@ -213,14 +240,22 @@ function returndata_byte(index : source_pointer) -> byte =
 
 /*! `RETURNDATACOPY` into frame memory (bounds pre-checked by the
     opcode). */
-function returndata_copy(dst : memory_pointer, off : source_pointer, len : memory_length) -> unit =
+val returndata_copy : forall 'dst 'off 'len,
+                        host_valid_access('dst) & source_valid_length('off) & host_valid_access('len). (
+        int('dst),
+        int('off),
+        int('len),
+    ) -> unit
+function returndata_copy(dst, off, len) =
     slice_copy(returndata, dst, off, len)
 
 /*! Copies `min(want, size)` returndata bytes — the `CALL`-family output
     write-back. */
 function returndata_copy_prefix(dst : memory_pointer, want : memory_length) -> unit = {
-    let have = returndata_size();
-    slice_copy(returndata, dst, BYTE_ZERO, if want < have then { want } else { have })
+    let wanted = want;
+    let available = returndata_size();
+    let copy_length : memory_length = if wanted < available then { wanted } else { available };
+    slice_copy(returndata, dst, 0, copy_length)
 }
 
 /* EIP-211 validates the source range even when its length is zero. This
@@ -230,63 +265,104 @@ function returndata_copy_prefix(dst : memory_pointer, want : memory_length) -> u
 ## The frame memory
 
 The EVM's view over frame memory, a region of the host interface. Every
-access is guarded by
-[is_running][] — a failed expansion charge sets the halt status without
-aborting the opcode handler, and a post-out-of-gas write to a huge offset
-(e.g. `MSTORE` at 2^32) must not grow the backing buffer — and writes
-raise the
-high-water mark that `MSIZE` and memory-expansion gas read.
+access is guarded by [is_running][]: an unaffordable expansion sets the halt
+status before [memory_expand_to][] is reached, so a post-out-of-gas write to a
+huge offset (for example, `MSTORE` at 2^32) cannot grow the backing buffer.
+Successful writes raise the high-water mark that `MSIZE` and
+memory-expansion gas read.
 */
 /*! Validates word-sized returndata bounds and copies the requested range. */
-function returndata_copy_words(dst : memory_pointer, source_offset : word, length : word) -> unit = {
-    let available = word_of_quantity(returndata_size());
-    match word_to_limb(source_offset) {
-        Some(source_bits) => match word_to_limb(length) {
-            Some(length_bits) => {
-                if word_ule(source_offset, available) & word_ule(length, word_sub(available, source_offset)) then {
-                    returndata_copy(dst, ByteQuantity(unsigned(source_bits)), ByteQuantity(unsigned(length_bits)))
-                } else {
-                    exc_halt(InvalidOpcode)
-                }
-            },
-            None() => exc_halt(InvalidOpcode),
-        },
-        None() => exc_halt(InvalidOpcode),
+val returndata_remaining : forall 'available 'offset,
+                             source_valid_length('available) & 0 <= 'offset & 'offset <= 'available. (
+        int('available),
+        int('offset),
+    ) -> range(0, 'available)
+function returndata_remaining(available, offset) = available - offset
+
+val validated_returndata_copy : forall 'source_offset 'length,
+                                  0 <= 'source_offset & 'source_offset < 2 ^ 256 & 0 <= 'length & 'length < 2 ^ 256. (
+        memory_pointer,
+        int('source_offset),
+        int('length),
+    ) -> unit
+/*! Copies a returndata range after validating its word-sized offset and length. */
+function validated_returndata_copy(dst, source_offset, length) = {
+    let (available as 'available) = returndata_size();
+    if source_offset <= available then {
+        let remaining = returndata_remaining(available, source_offset);
+        let bounded_source_offset : source_pointer = source_offset;
+        if length <= remaining then {
+            let bounded_length : memory_length = length;
+            returndata_copy(dst, bounded_source_offset, bounded_length)
+        } else {
+            exc_halt(InvalidOpcode)
+        }
+    } else {
+        exc_halt(InvalidOpcode)
     }
 }
+
+function returndata_copy_words(dst : memory_pointer, source_offset : word, length : word) -> unit =
+    validated_returndata_copy(dst, source_offset, length)
 
 /* ----------------------- frame memory (EVM view) ------------------------ */
 /* Each frame owns one absolute slice of the shared host arena. Relative EVM
  * offsets are represented by subslicing this value, so calldata captured
  * from a suspended parent and an immediate memory read have the same source
- * representation. The slice length is the word-aligned MSIZE watermark. */
-/*! The active frame's word-aligned memory range in the shared memory arena. */
-register evm_memory : ByteSlice = byte_slice(EvmMemorySource, BYTE_ZERO, BYTE_ZERO)
+ * representation. The slice length is the exact highest accessed byte; gas
+ * and `MSIZE` round that watermark to EVM words when required. */
+/*! The active frame's established memory range in the shared memory arena. */
+register evm_memory : ByteSlice = byte_slice(EvmMemorySource, 0, 0)
 
-function evm_memory_size() -> memory_length = evm_memory.len
-
-/*! A slice into frame memory. */
-function memory_byte_slice(off : memory_pointer, len : memory_length) -> ByteSlice =
-    if len == BYTE_ZERO then {
-        EMPTY_SLICE
-    } else {
-        sub_slice(evm_memory, off, len)
-    }
+/*! Returns the active frame's exact byte high-water mark. */
+function evm_memory_high_water() -> memory_length = {
+    let memory = evm_memory;
+    let length = memory.len;
+    length
+}
 
 /*! Clears all frame-memory storage and resets the active range. */
 function memory_reset() -> unit = {
     mem_clear();
-    evm_memory = byte_slice(EvmMemorySource, BYTE_ZERO, BYTE_ZERO)
+    evm_memory = byte_slice(EvmMemorySource, 0, 0)
 }
 
-/*! Expands the active frame memory to an already-charged size. */
-function memory_expand_to(new_size : memory_length) -> unit =
-    if evm_memory_size() < new_size then {
-        if mem_expand(new_size) then {
-            evm_memory = byte_slice(EvmMemorySource, evm_memory.off, new_size)
-        } else {
-            exc_halt(OutOfGas)
-        }
+/*! Expands the active frame memory to an already-charged size and returns the
+    resulting high-water-mark witness. */
+val memory_expand_to : forall 'required, source_valid_range(0, 'required). int('required) -> ByteSliceLength('required)
+
+function memory_expand_to(new_size) = {
+    let memory = evm_memory;
+    if memory.len < new_size then {
+        let expanded = mem_expand(new_size);
+        evm_memory = expanded;
+        expanded
+    } else {
+        sub_slice(memory, 0, new_size)
+    }
+}
+
+/*! Returns an already-expanded memory range. The successful expansion value
+    retains the high-water containment fact that would be lost by reading the
+    existential [evm_memory][] register again. */
+val memory_byte_slice : forall 'off 'len, memory_valid_range('off, 'len). (int('off), int('len)) -> ByteSlice
+
+function memory_byte_slice(off, len) =
+    if len == 0 then {
+        EMPTY_SLICE
+    } else {
+        sub_slice(memory_expand_to(off + len), off, len)
+    }
+
+/*! Returns expanded memory as executable initcode, retaining the cursor
+    headroom established by the successful memory-expansion range. */
+val memory_code_slice : forall 'off 'len, memory_valid_range('off, 'len). (int('off), int('len)) -> CodeSlice
+
+function memory_code_slice(off, len) =
+    if len == 0 then {
+        EMPTY_CODE_SLICE
+    } else {
+        code_slice(sub_slice(memory_expand_to(off + len), off, len))
     }
 
 /* Entering a child returns the saved parent pointer. Restoring that value is
@@ -294,13 +370,8 @@ function memory_expand_to(new_size : memory_length) -> unit =
 /*! Saves the parent range and enters an empty child-memory frame. */
 function memory_frame_enter() -> ByteSlice = {
     let parent = evm_memory;
-    let base = mem_frame_enter();
-    if base == MAX_BYTE_QUANTITY then {
-        exc_halt(OutOfGas);
-        evm_memory = byte_slice(EvmMemorySource, BYTE_ZERO, BYTE_ZERO)
-    } else {
-        evm_memory = byte_slice(EvmMemorySource, base, BYTE_ZERO)
-    };
+    let base : source_pointer = mem_frame_enter();
+    evm_memory = byte_slice(EvmMemorySource, base, 0);
     parent
 }
 
@@ -393,7 +464,7 @@ function mem_store_byte(off : memory_pointer, w : word) -> unit =
 
 /*! `MCOPY` (EIP-5656): overlapping-safe memory-to-memory copy. */
 function mem_mcopy(dst : memory_pointer, src : memory_pointer, len : memory_length) -> unit =
-    if len != BYTE_ZERO then {
+    if len != 0 then {
         mem_move(dst, src, len)
     }
 
@@ -404,5 +475,5 @@ function mem_codecopy(dst : memory_pointer, off : source_pointer, len : memory_l
 
 /*! `KECCAK256` over the memory range `[off, off+len)`: semantically, the
     caller reads the addressed bytes and hashes that byte list. */
-function mem_keccak(off : memory_pointer, len : memory_length) -> word =
-    hash_to_word(keccak256(memory_byte_slice(off, len)))
+function mem_keccak(range : MemoryRange) -> word =
+    hash_to_word(keccak256(memory_byte_slice(range.off, range.len)))

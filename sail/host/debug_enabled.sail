@@ -8,6 +8,31 @@ Build variant recording the failing validation stage and reason.
     of the executable specification, not protocol rules.
 */
 
+/*! Debug-only traversal of every cached block-layer account row. */
+val acct_debug_iter_begin = impure { c: "acct_debug_iter_begin" } : unit -> unit
+/*! Returns the next cached account row from the debug-only traversal. */
+val acct_debug_iter_next = impure { c: "acct_debug_iter_next" } : unit -> option(AcctEntry)
+
+/*! Pulls one all-cached account update for the debug empty-base rebuild. */
+function cached_account_trie_update_next() -> option(TrieUpdate) =
+    match acct_debug_iter_next() {
+        Some(entry) => {
+            Some(account_update(entry, acct_post_storage_root_read(entry.addr)))
+        },
+        None() => None(),
+    }
+
+/*! Prepares post-state storage roots for the debug-only all-cached traversal. */
+function debug_prepare_account_post_storage_roots() -> unit = {
+    var preparing : bool = true;
+    while preparing termination_measure(2 ^ 64) do {
+        match acct_debug_iter_next() {
+            Some(entry) => prepare_account_post_storage_root(entry),
+            None() => preparing = false,
+        }
+    }
+}
+
 /*! Whether a validation failure has been recorded for the current
     block. */
 register validation_failure_present : bool = false
@@ -31,7 +56,8 @@ function validation_debug_record(scope : bits(8), reason : BlockError) -> unit =
 }
 
 /*! Rebuilds the storage root represented by the cached storage of `a`. */
-function debug_account_storage_root(a : address) -> hash =
+function debug_account_storage_root(a : address) -> hash = {
+    storage_block_iter_begin(a);
     match acct_block_get(a) {
         None() => EMPTY_TRIE_ROOT,
         Some(account) => trie_root(
@@ -40,20 +66,15 @@ function debug_account_storage_root(a : address) -> hash =
             } else {
                 account.info.storage_root
             },
-            storage_updates(a),
-        ),
+            StorageTrieUpdates(a),
+        ).root,
     }
+}
 
 /*! Rebuilds the state root represented by all materialized block-layer rows. */
 function debug_rebuild_state_root() -> hash = {
-    var remaining : item_count = acct_block_count();
-    var accounts : list(TrieUpdate) = [||];
-    while remaining != 0 termination_measure(remaining) do {
-        remaining = protocol_quantity_decrement(remaining);
-        match acct_block_row(remaining) {
-            Some(entry) => accounts = account_update(entry, storage_updates(entry.addr)) :: accounts,
-            None() => throw InvalidBlock(WitnessDeficient),
-        }
-    };
-    trie_root(EMPTY_TRIE_ROOT, accounts)
+    acct_debug_iter_begin();
+    debug_prepare_account_post_storage_roots();
+    acct_debug_iter_begin();
+    trie_root(EMPTY_TRIE_ROOT, CachedAccountTrieUpdates()).root
 }

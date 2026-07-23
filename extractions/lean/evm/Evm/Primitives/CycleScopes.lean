@@ -19,23 +19,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -48,6 +40,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # Instrumentation scopes
@@ -84,7 +77,6 @@ let SCOPE_VALIDATE_RESULT : bits(8) = 0x05
 let SCOPE_COMPUTE_OUTPUT_ROOT : bits(8) = 0x06
 let SCOPE_SERIALIZE_OUTPUT : bits(8) = 0x07
 
-
 !!! note "Implementation"
     Instrumentation only: the scope markers carry no protocol meaning and
     do not affect execution.
@@ -115,4 +107,46 @@ def SCOPE_VALIDATE_RESULT : (BitVec 8) := 0x05#8
 def SCOPE_COMPUTE_OUTPUT_ROOT : (BitVec 8) := 0x06#8
 
 def SCOPE_SERIALIZE_OUTPUT : (BitVec 8) := 0x07#8
+
+/-- Profiling-only subdivisions used to attribute the dominant pipeline
+stages without changing the unprofiled model. -/
+def SCOPE_BLOCK_START : (BitVec 8) := 0x08#8
+
+def SCOPE_BLOCK_TRANSACTIONS : (BitVec 8) := 0x09#8
+
+def SCOPE_TX_DECODE : (BitVec 8) := 0x0A#8
+
+def SCOPE_TX_RESET : (BitVec 8) := 0x0B#8
+
+def SCOPE_TX_VALIDATE : (BitVec 8) := 0x0C#8
+
+def SCOPE_TX_UPFRONT : (BitVec 8) := 0x0D#8
+
+def SCOPE_TX_FRAME : (BitVec 8) := 0x0E#8
+
+def SCOPE_TX_SETTLE : (BitVec 8) := 0x0F#8
+
+def SCOPE_RECEIPTS_ROOT : (BitVec 8) := 0x10#8
+
+def SCOPE_BLOCK_END_STATE : (BitVec 8) := 0x11#8
+
+def SCOPE_BLOCK_END_REQUESTS : (BitVec 8) := 0x12#8
+
+def SCOPE_STATE_ROOT : (BitVec 8) := 0x13#8
+
+def SCOPE_BLOCK_ACCESS_LIST : (BitVec 8) := 0x14#8
+
+def SCOPE_HTR_EXECUTION_PAYLOAD : (BitVec 8) := 0x15#8
+
+def SCOPE_HTR_TRANSACTIONS : (BitVec 8) := 0x16#8
+
+def SCOPE_HTR_WITHDRAWALS : (BitVec 8) := 0x17#8
+
+def SCOPE_HTR_VERSIONED_HASHES : (BitVec 8) := 0x18#8
+
+def SCOPE_HTR_EXECUTION_REQUESTS : (BitVec 8) := 0x19#8
+
+def SCOPE_HTR_BYTES_ROOT : (BitVec 8) := 0x1A#8
+
+def SCOPE_HTR_MERKLE_PADDING : (BitVec 8) := 0x1B#8
 

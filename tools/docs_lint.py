@@ -140,6 +140,13 @@ def coverage(text: str, rel: str) -> list[str]:
     for n, (i, kw, name) in enumerate(defs):
         next_i = defs[n + 1][0] if n + 1 < len(defs) else len(lines)
         doc = has_doc(i)
+        if not doc and kw == "function " and n > 0:
+            previous_i, previous_kw, previous_name = defs[n - 1]
+            doc = (
+                previous_kw == "val "
+                and previous_name == name
+                and has_doc(previous_i)
+            )
         if kw == "function " and doc:
             documented_functions.add(name)
         if kw in ALWAYS_DOCUMENTED and not doc:

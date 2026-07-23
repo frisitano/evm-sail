@@ -14,22 +14,52 @@ union TrieChange = {
     TrieDelete : unit,
 }
 
-/*! An update: a full-path key and its change. Update lists are kept
-    sorted by key. */
+/*! An update: a full-path key and its change. Sources yield updates in
+    ascending key order. */
 struct TrieUpdate = { key : TriePath, change : TrieChange }
 
-/*! Whether the update list is empty. */
-function updates_empty(updates : list(TrieUpdate)) -> bool =
-    match updates {
-        [||] => true,
-        _ => false,
+/*! A pull source for ordered trie updates. Each variant owns an independently
+    opened host iterator. */
+union TrieUpdateSource = {
+    /* changed storage rows for one account */
+    StorageTrieUpdates : address,
+    /* block-final account update candidates, net-filtered in Sail */
+    ChangedAccountTrieUpdates : unit,
+    /* all cached accounts, used only by debug reconstruction */
+    CachedAccountTrieUpdates : unit,
+}
+
+/*! Pulls the next update from a source's non-destructive host iterator. */
+val trie_update_source_next : TrieUpdateSource -> option(TrieUpdate)
+/*! Debug-build producer for the all-cached-account source. */
+val cached_account_trie_update_next : unit -> option(TrieUpdate)
+
+/*! One-item lookahead over an ordered update source. */
+struct TrieUpdateCursor = {
+    source : TrieUpdateSource,
+    pending : option(TrieUpdate),
+}
+
+/*! Opens a pull cursor by fetching only its first update. */
+function trie_updates_begin(source : TrieUpdateSource) -> TrieUpdateCursor =
+    struct { source = source, pending = trie_update_source_next(source) }
+
+/*! Whether the pull cursor has reached the end of its source. */
+function updates_empty(updates : TrieUpdateCursor) -> bool =
+    match updates.pending {
+        None() => true,
+        Some(_) => false,
     }
 
+/*! Consumes the pending update and pulls one replacement. */
+function trie_updates_advance(updates : TrieUpdateCursor) -> TrieUpdateCursor =
+    struct { source = updates.source, pending = trie_update_source_next(updates.source) }
+
 /*! Whether the cursor's next update falls under `prefix`. */
-function next_update_under(updates : list(TrieUpdate), prefix : TriePath) -> bool =
-    match updates {
-        update :: _ => path_prefix_of(prefix, update.key),
-        [||] => false,
+function next_update_under(updates : TrieUpdateCursor, prefix : TriePath) -> bool =
+    match updates.pending {
+        Some(update) => path_prefix_of(prefix, update.key),
+        None() => false,
     }
 
 /*md
@@ -83,7 +113,7 @@ function item_ref(it : TrieItem, depth : trie_path_len) -> NodeRef = {
             match subref {
                 HashRef(h) => {
                     let node = node_db_lookup(h);
-                    if node.len == BYTE_ZERO then {
+                    if node.len == 0 then {
                         throw InvalidBlock(WitnessDeficient)
                     } else {
                         merge_ext_node(suffix, node)
@@ -160,7 +190,7 @@ function trie_builder_attach(builder : TrieBuilder, path : TriePath, child : Nod
                 throw InvalidBlock(WitnessDeficient)
             };
             frame.mask = branch_mask_set(frame.mask, child_index);
-            frame.children = branch_refs_set(frame.children, child_index, child);
+            frame.children[unsigned(child_index)] = child;
             struct { frames = frame :: rest, root = builder.root, complete = builder.complete }
         },
     }

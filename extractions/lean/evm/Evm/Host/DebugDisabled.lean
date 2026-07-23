@@ -15,23 +15,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -44,6 +36,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # Validation debug (optional)

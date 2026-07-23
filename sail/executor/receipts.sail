@@ -5,43 +5,39 @@ The logs-bloom construction (YP §4.4.1) and the receipts trie
 (EIP-2718 typed receipt encoding).
 */
 
-let LOGS_BLOOM_BYTE_LENGTH : byte_length = ByteQuantity(256)
+let LOGS_BLOOM_BYTE_LENGTH : int(256) = 256
 
-/*! Constructs a one-hot mask for a bit within a bloom limb. */
-function bloom_bit_mask(bit_to_set : bloom_limb_bit) -> limb = {
-    var mask : limb = LIMB_ZERO;
-    mask[bit_to_set] = bitone;
-    mask
-}
+/*! Constructs a one-hot mask for a bit within a bloom byte. */
+function bloom_bit_mask(bit_to_set : range(0, 7)) -> byte =
+    sail_shiftleft(0x01, bit_to_set)
 
 /*! Sets one bit (0–2047) in the bloom, most-significant-byte first. */
 function bloom_set_bit(bloom : LogsBloom, bit_to_set : bloom_bit_index) -> LogsBloom = {
     var out = bloom;
-    let quotient = exact_quotient(bit_to_set, 64);
-    let natural_limb : bloom_limb_index = if quotient <= 31 then {
+    let quotient = bit_to_set / 8;
+    let natural_byte : range(0, 255) = if quotient <= 255 then {
             quotient
         } else {
             assert(false);
             0
         };
-    let limb_index : bloom_limb_index = 31 - natural_limb;
-    let remainder = tmod_int(bit_to_set, 64);
-    let bit_in_limb : bloom_limb_bit = if remainder <= 63 then {
+    let remainder = tmod_int(bit_to_set, 8);
+    let bit_in_byte : range(0, 7) = if remainder <= 7 then {
             remainder
         } else {
             assert(false);
             0
         };
-    out[limb_index] = or_vec(out[limb_index], bloom_bit_mask(bit_in_limb));
+    out[natural_byte] = or_vec(out[natural_byte], bloom_bit_mask(bit_in_byte));
     out
 }
 
 /*! Adds a hashed bloom entry: three bits from its KECCAK-256. */
 function bloom_add_entry_hash(bloom : LogsBloom, h : hash) -> LogsBloom = {
-    let bits = hash_to_bits(h);
-    var out = bloom_set_bit(bloom, unsigned(bits[250 .. 240]));
-    out = bloom_set_bit(out, unsigned(bits[234 .. 224]));
-    out = bloom_set_bit(out, unsigned(bits[218 .. 208]));
+    let bytes = h;
+    var out = bloom_set_bit(bloom, unsigned(append(bytes[31][2 .. 0], bytes[30])));
+    out = bloom_set_bit(out, unsigned(append(bytes[29][2 .. 0], bytes[28])));
+    out = bloom_set_bit(out, unsigned(append(bytes[27][2 .. 0], bytes[26])));
     out
 }
 
@@ -51,6 +47,8 @@ function bloom_add_topics(bloom : LogsBloom, topics : list(word)) -> LogsBloom =
         [||] => bloom,
         topic :: rest => bloom_add_topics(bloom_add_entry_hash(bloom, keccak256_word(topic)), rest),
     }
+
+termination_measure bloom_add_topics(bloom, topics) = 2 ^ 64
 
 /*! Adds a log record to the bloom: its address and every topic
     (YP §4.4.1, the M function). */
@@ -70,35 +68,45 @@ function bloom_add_logs(bloom : LogsBloom, logs : list(LogEntry)) -> LogsBloom =
 function logs_bloom_for_logs(logs : list(LogEntry)) -> LogsBloom = bloom_add_logs(EMPTY_LOGS_BLOOM, logs)
 
 /*! Sizes the RLP content of a topic list. */
-function topics_rlp_content_size(topics : list(word)) -> byte_length =
+function topics_rlp_content_size(topics : list(word)) -> rlp_scratch_length =
     match topics {
-        [||] => BYTE_ZERO,
-        _ :: rest => rlp_word_size() + topics_rlp_content_size(rest),
+        [||] => 0,
+        _ :: rest => {
+            let topic_length = rlp_scratch_small_length(rlp_word_size());
+            let rest_length = topics_rlp_content_size(rest);
+            rlp_scratch_length_add(topic_length, rest_length)
+        },
     }
 
-function topics_rlp_size(topics : list(word)) -> byte_length =
-    rlp_list_size(topics_rlp_content_size(topics))
+termination_measure topics_rlp_content_size(topics) = 2 ^ 64
+
+function topics_rlp_size(topics : list(word)) -> rlp_scratch_length =
+    rlp_scratch_list_size(topics_rlp_content_size(topics))
 
 /*! Sizes the RLP content of one log entry. */
-function log_entry_rlp_content_size(log : LogEntry) -> byte_length = {
-    var content_len = rlp_addr_size();
-    content_len = content_len + topics_rlp_size(log.topics);
-    content_len = content_len + rlp_slice_size(log.data);
-    content_len
+function log_entry_rlp_content_size(log : LogEntry) -> rlp_scratch_length = {
+    let address_length = rlp_scratch_small_length(rlp_addr_size());
+    let topics_length = topics_rlp_size(log.topics);
+    let data_length = rlp_scratch_slice_size(log.data);
+    rlp_scratch_length_add(rlp_scratch_length_add(address_length, topics_length), data_length)
 }
 
-function log_entry_rlp_size(log : LogEntry) -> byte_length =
-    rlp_list_size(log_entry_rlp_content_size(log))
+function log_entry_rlp_size(log : LogEntry) -> rlp_scratch_length =
+    rlp_scratch_list_size(log_entry_rlp_content_size(log))
 
 /*! Sizes the RLP content of a log-entry list. */
-function logs_rlp_content_size(logs : list(LogEntry)) -> byte_length =
+function logs_rlp_content_size(logs : list(LogEntry)) -> rlp_scratch_length =
     match logs {
-        [||] => BYTE_ZERO,
-        log :: rest => log_entry_rlp_size(log) + logs_rlp_content_size(rest),
+        [||] => 0,
+        log :: rest => {
+            let log_length = log_entry_rlp_size(log);
+            let rest_length = logs_rlp_content_size(rest);
+            rlp_scratch_length_add(log_length, rest_length)
+        },
     }
 
-function logs_rlp_size(logs : list(LogEntry)) -> byte_length =
-    rlp_list_size(logs_rlp_content_size(logs))
+function logs_rlp_size(logs : list(LogEntry)) -> rlp_scratch_length =
+    rlp_scratch_list_size(logs_rlp_content_size(logs))
 
 /*! Writes topic words as the content of an RLP list. */
 function rlp_write_topics_content(topics : list(word)) -> unit =
@@ -109,6 +117,8 @@ function rlp_write_topics_content(topics : list(word)) -> unit =
             rlp_write_topics_content(rest)
         },
     }
+
+termination_measure rlp_write_topics_content(topics) = 2 ^ 64
 
 /*! Writes an RLP list of topic words. */
 function rlp_write_topics(topics : list(word)) -> unit = {
@@ -141,39 +151,38 @@ function rlp_write_logs(logs : list(LogEntry)) -> unit = {
 }
 
 /*! Sizes a receipt payload from status, gas, bloom, and logs. */
-function receipt_payload_content_size(r : Receipt, cumulative_gas_used : gas) -> byte_length = {
-    let status : protocol_quantity = if r.success then { 1 } else { 0 };
-    var content_len = rlp_uint_size(status);
-    content_len = content_len + rlp_uint_size(cumulative_gas_used);
-    content_len = content_len + rlp_string_size(LOGS_BLOOM_BYTE_LENGTH, 0x00);
-    content_len = content_len + logs_rlp_size(r.logs);
-    content_len
+function receipt_payload_content_size(r : Receipt, cumulative_gas_used : block_gas) -> rlp_scratch_length = {
+    let status : range(0, 1) = if r.success then { 1 } else { 0 };
+    let status_length = rlp_scratch_small_length(rlp_uint_size(status));
+    let gas_word = word_of_nat_byte_count(cumulative_gas_used);
+    let gas_length = rlp_scratch_small_length(rlp_uint_word_size(gas_word));
+    let bloom_length = rlp_scratch_length_add(
+        LOGS_BLOOM_BYTE_LENGTH,
+        rlp_scratch_small_length(rlp_length_prefix_len(LOGS_BLOOM_BYTE_LENGTH)),
+    );
+    let logs_length = logs_rlp_size(r.logs);
+    let fixed_length = rlp_scratch_length_add(status_length, gas_length);
+    rlp_scratch_length_add(rlp_scratch_length_add(fixed_length, bloom_length), logs_length)
 }
 
 /*! The receipt as stored in the receipts trie: the RLP payload,
     prefixed by the envelope type byte for typed transactions
     (EIP-2718). */
-function receipt_encoded(r : Receipt, cumulative_gas_used : gas) -> ByteSlice = {
-    let status : protocol_quantity = if r.success then { 1 } else { 0 };
+function receipt_encoded(r : Receipt, cumulative_gas_used : block_gas) -> ByteSlice = {
+    let status : range(0, 1) = if r.success then { 1 } else { 0 };
     let bloom = logs_bloom_bytes(logs_bloom_for_logs(r.logs));
     let content_len = receipt_payload_content_size(r, cumulative_gas_used);
-    let payload_len = rlp_list_size(content_len);
     let typed = tx_type_byte(r.tx_type) != 0x00;
-    let encoded_len = if typed then {
-            BYTE_ONE + payload_len
-        } else {
-            payload_len
-        };
     let start = scratch_begin();
     if typed then {
-        scratch_push_bytes([|tx_type_byte(r.tx_type)|], BYTE_ONE)
+        scratch_push_bytes([|tx_type_byte(r.tx_type)|], 1)
     };
     rlp_write_list_prefix(content_len);
     rlp_write_uint(status);
     rlp_write_uint(cumulative_gas_used);
     rlp_write_bytes(bloom, LOGS_BLOOM_BYTE_LENGTH);
     rlp_write_logs(r.logs);
-    rlp_finish(start, encoded_len)
+    rlp_finish(start)
 }
 
 /* Receipt trie keys are RLP(transaction_index), whose lexical order is
@@ -183,8 +192,8 @@ function receipt_encoded(r : Receipt, cumulative_gas_used : gas) -> ByteSlice = 
  * when its successor arrives. */
 /*! A receipt retained until its lexicographic trie successor is known. */
 struct PendingReceipt = {
-    index : item_index,
-    cumulative_gas_used : gas,
+    index : transaction_count,
+    cumulative_gas_used : block_gas,
     receipt : Receipt,
 }
 
@@ -193,8 +202,8 @@ struct ReceiptAccumulator = {
     builder : TrieBuilder,
     first : option(PendingReceipt),
     pending : option(PendingReceipt),
-    count : item_count,
-    cumulative_gas_used : gas,
+    count : transaction_count,
+    cumulative_gas_used : block_gas,
     bloom : LogsBloom,
 }
 
@@ -205,7 +214,7 @@ function receipt_accumulator_empty() -> ReceiptAccumulator =
         first = None(),
         pending = None(),
         count = 0,
-        cumulative_gas_used = GAS_ZERO,
+        cumulative_gas_used = 0,
         bloom = EMPTY_LOGS_BLOOM,
     }
 
@@ -219,20 +228,14 @@ function receipt_insert(builder : TrieBuilder, pending : PendingReceipt, next_ke
 }
 
 /*! Adds the next numeric receipt while respecting trie-key lexical order. */
-function receipt_accumulator_push(acc : ReceiptAccumulator, receipt : Receipt) -> ReceiptAccumulator = {
-    if not_bool(receipt.valid) then {
-        throw InvalidBlock(ExecutionInvalid)
-    };
-    let next_count : item_count = if acc.count < BYTE_QUANTITY_MAX then {
-            protocol_quantity_increment(acc.count)
-        } else {
-            throw InvalidBlock(WitnessDeficient)
-        };
-    let cumulative : gas = if gas_sum_supported(acc.cumulative_gas_used, receipt.gas_used) then {
-            acc.cumulative_gas_used + receipt.gas_used
-        } else {
-            throw InvalidBlock(ExecutionInvalid)
-        };
+function receipt_accumulator_push(
+    acc : ReceiptAccumulator,
+    receipt : Receipt,
+    next_count : transaction_count,
+) -> (
+    ReceiptAccumulator
+) = {
+    let cumulative : block_gas = conserved_gas_add(acc.cumulative_gas_used, receipt.gas_used);
     let current : PendingReceipt = struct { index = acc.count, cumulative_gas_used = cumulative, receipt = receipt };
     var builder = acc.builder;
     var first = acc.first;

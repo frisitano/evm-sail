@@ -64,7 +64,11 @@ if [ "$PLATFORM" = zisk ]; then
   # emission disabled ensures every C section lands in a linker-owned output
   # section that the emulator can load without overlapping orphan sections.
   ARCH=(-march=rv64ima -mabi=lp64 -mcmodel=medany -msmall-data-limit=0)
-  PLATFORM_CFLAGS=(-DEVMSAIL_EXTERNAL_HEAP -DEVMSAIL_PLATFORM_LIBC_MEMORY)
+  PLATFORM_CFLAGS=(
+    -DEVMSAIL_EXTERNAL_HEAP
+    -DEVMSAIL_PLATFORM_LIBC_MEMORY
+    -DEVMSAIL_PLATFORM_ZISK
+  )
   if [ "$EVM_DEBUG" = on ]; then
     PLATFORM_CFLAGS+=(-DEVMSAIL_DEBUG)
   fi
@@ -140,8 +144,8 @@ compile_common() {
         "${MODEL_INCLUDE_FLAGS[@]}" \
         "$GUEST" -o "$BUILD/zkvm_block"
   else
-    ( cd "$ROOT" && "$SAIL" -c -O --c-no-main --c-no-rts --c-preserve main \
-        --c-specialize \
+    ( cd "$ROOT" && "$SAIL" -c -O --Oconstant-fold --c-no-main --c-no-rts --c-preserve main \
+        --c-specialize --c-require-bounded-int \
         "${MODEL_INCLUDE_FLAGS[@]}" \
         --splice "$C_SPLICE" \
         sail/evm.sail_project evm \
@@ -195,7 +199,11 @@ compile_common() {
 compile_profile_scope() {
   local lib; lib="$(sail_lib)"
   if [ "$EVM_PROFILE" = on ]; then
-    "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra \
+    local profile_arch=()
+    if [ "$PLATFORM" = zisk ]; then
+      profile_arch=(-march=rv64ima_zicsr)
+    fi
+    "$GCC" "${CFLAGS[@]}" "${profile_arch[@]}" -I"$lib" -Wall -Wextra \
         -c "$RT/cycle_scopes.c" -o "$BUILD/cycle_scopes.o"
     PROFILE_OBJ="$BUILD/cycle_scopes.o"
   fi

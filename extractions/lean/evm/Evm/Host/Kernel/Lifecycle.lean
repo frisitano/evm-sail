@@ -1,6 +1,5 @@
 import Evm.Flow
 import Evm.Host.Kernel.Environment
-import Evm.Host.Kernel.Logs
 import Evm.Host.Kernel.Accounts
 
 set_option maxHeartbeats 1_000_000_000
@@ -18,23 +17,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -47,6 +38,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # State: the transaction lifecycle
@@ -56,7 +48,7 @@ into the block layer. -/
 
 /-- Captures all frame-revertible transaction state. The frame checkpoint
 stores its refund counter separately. -/
-def k_state_checkpoint (_ : Unit) : SailM StateCheckpoint := do
+def k_state_checkpoint (_ : Unit) : SailM journal_checkpoint := do
   (state_checkpoint ())
 
 /-- Installs the block header. -/
@@ -76,14 +68,15 @@ def k_tx_reset (_ : Unit) : SailM Unit := do
   (logs_tx_reset ())
   (state_checkpoint_reset ())
 
-/-- Whether a selfdestructed account is actually deleted at transaction
-end: always before Cancun; only if created in the same transaction
-from Cancun on (EIP-6780). -/
+/-- Whether a selfdestructed account is cleared at transaction end: always
+before Cancun; only if created in the same transaction from Cancun on
+(EIP-6780). Amsterdam preserves any balance left by a self-beneficiary
+`SELFDESTRUCT` (EIP-8246). -/
 def account_deleted_at_tx_end (acc : Account) : SailM Bool := do
   (pure (acc.selfdestructed && ((fork_lt (← readReg k_fork) Cancun) || acc.created)))
 
 /-- The transaction-end merge: drains the transaction overlays into the
-block layer, applying EIP-6780 deletion (with the EIP-7708 burn log),
+block layer, applying the fork-specific selfdestruct clearing rule,
 storage-clear generations, and recording nonce/balance/code/storage
 changes for the EIP-7928 block access list. Lifecycle flags reset as
 rows merge. -/
@@ -102,8 +95,12 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
               if (deleted : Bool)
               then
                 (do
-                  (k_emit_burn_log e.addr curr.info.balance)
-                  (pure (account_delete curr)))
+                  let curr ← (( do
+                    if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
+                    then (pure (account_clear_preserving_balance curr))
+                    else (pure (account_delete curr)) ) : SailM Account )
+                  (storage_tx_clear e.addr)
+                  (pure curr))
               else (pure curr) ) : SailM Account )
             if ((deleted || (curr.storage_cleared && (! e.value.orig.storage_cleared))) : Bool)
             then (storage_block_clear e.addr)
@@ -111,8 +108,8 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
             if (((curr.info.nonce).value != (e.value.orig.info.nonce).value) : Bool)
             then (bal_nonce_change e.addr ⟨(curr.info.nonce).value⟩)
             else (pure ())
-            if ((bne curr.info.balance e.value.orig.info.balance) : Bool)
-            then (bal_balance_change e.addr curr.info.balance)
+            if (((curr.info.balance).value != (e.value.orig.info.balance).value) : Bool)
+            then (bal_balance_change e.addr ⟨(curr.info.balance).value⟩)
             else (pure ())
             if ((bne curr.info.code_hash e.value.orig.info.code_hash) : Bool)
             then (bal_code_change e.addr curr.info.code_hash)
@@ -126,11 +123,13 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
                              orig := e.value.orig } })
             else (pure ())
             (pure more))
-        | none => (pure false)
+        | none =>
+          (let more : Bool := false
+          (pure more))
     (pure loop_vars) ) : SailM Bool )
   let more : Bool := true
   let more ← (( do
-    let loop_vars_1 ← whileFuelM (fuel :=(2 ^i 64)) (fun more => (pure more)) more
+    let loop_vars ← whileFuelM (fuel :=(2 ^i 64)) (fun more => (pure more)) more
       fun more => do
         assert true "loop dummy assert"
         match (← (storage_tx_pop ())) with
@@ -139,20 +138,24 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
             match (← (acct_block_get e.key.addr)) with
             | .some acc =>
               (do
-                if ((acc.present && (bne e.value.curr e.value.orig)) : Bool)
+                if ((acc.present && (((e.value.curr).value != (e.value.orig).value) : Bool)) : Bool)
                 then
                   (do
-                    (bal_storage_change e.key.addr e.key.slot e.value.curr)
+                    (bal_storage_change e.key.addr ⟨(e.key.slot).value⟩
+                      ⟨(e.value.curr).value⟩)
                     (storage_block_put e))
                 else (pure ()))
             | none => (pure ())
             (pure more))
-        | none => (pure false)
-    (pure loop_vars_1) ) : SailM Bool )
+        | none =>
+          (let more : Bool := false
+          (pure more))
+    (pure loop_vars) ) : SailM Bool )
   (acct_tx_reset ())
   (storage_tx_reset ())
 
 /-- Atomically restores the transaction state captured at a frame boundary. -/
-def k_revert (checkpoint : StateCheckpoint) : SailM Unit := do
+/- Type quantifiers: checkpoint : Nat, 0 ≤ checkpoint -/
+def k_revert (checkpoint : journal_checkpoint) : SailM Unit := do
   (state_revert checkpoint)
 

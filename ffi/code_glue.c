@@ -14,6 +14,12 @@ void code_db_lookup(struct zoptionzIRCodezK *out, sail_hash h) {
   }
   out->kind = Kind_zSomezIRCodezK;
   struct zCode *code = &out->variants.zSomezIRCodezK;
+#ifdef EVMSAIL_STANDARD_ABI
+  /* The generated option starts in None, so selecting Some must construct the
+     GMP-backed fields of Code before they are assigned. */
+  CREATE(sail_int)(&code->zbytes.zoff);
+  CREATE(sail_int)(&code->zbytes.zlen);
+#endif
   code->zbytes.zsource = zCodeSource;
   evmsail_byte_quantity_set(&code->zbytes.zoff, off);
   evmsail_byte_quantity_set(&code->zbytes.zlen, len);

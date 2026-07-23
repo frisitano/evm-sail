@@ -37,7 +37,7 @@ bool accelerator_p256_verify_source(uint64_t kind, uint64_t off,
 /* Fixed-width signature primitive shared by transaction execution. */
 EVMSAIL_ADDRESS_RESULT_RECORD_RETURN precompile_ecrecover_hash_sig(
     EVMSAIL_ADDRESS_RESULT_RECORD_RESULT(result) sail_hash h,
-    uint64_t yparity, sail_word r, sail_word s);
+    uint64_t yparity, EVMSAIL_WORD_PARAM(r), EVMSAIL_WORD_PARAM(s));
 bool precompile_ecrecover_hash_sig_address(uint8_t address[20], sail_hash h,
                                            uint64_t yparity, sail_word r,
                                            sail_word s);

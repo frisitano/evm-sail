@@ -1,4 +1,5 @@
 import Evm.Flow
+import Evm.Vector
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -15,23 +16,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -44,618 +37,294 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
-def undefined_LimbDivMod (_ : Unit) : SailM LimbDivMod := do
-  (pure { quotient := ← (undefined_bitvector 64),
-          remainder := ← (undefined_bitvector 64) })
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value < (2 ^ 256) -/
+def U256 (value : Nat) : word :=
+  ⟨value⟩
 
-/-- Constructs an address from its 160-bit numerical representation. -/
-def address_from_bits (value : (BitVec 160)) : address := Id.run do
-  let bytes : (Vector (BitVec 8) 20) := (vectorInit 0x00#8)
-  let bytes ← (( do
-    let loop_k_lower := 0
-    let loop_k_upper := 19
-    let mut loop_vars := bytes
-    for k in [loop_k_lower:loop_k_upper:1]i do
-      let bytes := loop_vars
-      loop_vars := (vectorUpdate bytes k (Sail.BitVec.extractLsb (value >>> (8 *i k)) 7 0))
-    (pure loop_vars) ) : Id (Vector (BitVec 8) 20) )
-  (pure (Address bytes))
+def Address (bytes : (Vector byte 20)) : address :=
+  bytes
 
-/-- Returns an address's 160-bit numerical representation. -/
-def address_to_bits (app_0 : address) : (BitVec 160) := Id.run do
-  let .Address bytes := app_0
-  let value : (BitVec 160) := (BitVec.zero 160)
-  let loop_k_lower := 0
-  let loop_k_upper := 19
-  let mut loop_vars := value
-  for k in [loop_k_lower:loop_k_upper:1]i do
-    let value := loop_vars
-    loop_vars := (value ||| ((Sail.BitVec.zeroExtend (GetElem?.getElem! bytes k) 160) <<< (8 *i k)))
-  (pure loop_vars)
+def B256 (bytes : (Vector byte 32)) : b256 :=
+  bytes
 
-/-- Constructs a digest from its 256-bit numerical representation. -/
-def b256_from_bits (value : (BitVec 256)) : b256 := Id.run do
-  let bytes : (Vector (BitVec 8) 32) := (vectorInit 0x00#8)
-  let bytes ← (( do
-    let loop_k_lower := 0
-    let loop_k_upper := 31
-    let mut loop_vars := bytes
-    for k in [loop_k_lower:loop_k_upper:1]i do
-      let bytes := loop_vars
-      loop_vars := (vectorUpdate bytes k (Sail.BitVec.extractLsb (value >>> (8 *i k)) 7 0))
-    (pure loop_vars) ) : Id (Vector (BitVec 8) 32) )
-  (pure (B256 bytes))
+def undefined_AddressResult (_ : Unit) : SailM AddressResult := do
+  (pure { success := ← (undefined_bool ()),
+          address := ← (undefined_vector 20 (← (undefined_bitvector 8))) })
 
-/-- Returns a digest's 256-bit numerical representation. -/
-def b256_to_bits (app_0 : b256) : (BitVec 256) := Id.run do
-  let .B256 bytes := app_0
-  let value : (BitVec 256) := (BitVec.zero 256)
-  let loop_k_lower := 0
-  let loop_k_upper := 31
-  let mut loop_vars := value
-  for k in [loop_k_lower:loop_k_upper:1]i do
-    let value := loop_vars
-    loop_vars := (value ||| ((Sail.BitVec.zeroExtend (GetElem?.getElem! bytes k) 256) <<< (8 *i k)))
-  (pure loop_vars)
+/-- Interprets a digest as the corresponding big-endian EVM word. -/
+def hash_to_word (bytes : hash) : word :=
+  ⟨(BitVec.toNatInt (from_bytes_le (n := 32) bytes))⟩
 
-def hash_from_bits (value : (BitVec 256)) : hash :=
-  (b256_from_bits value)
-
-def hash_to_bits (value : hash) : (BitVec 256) :=
-  (b256_to_bits value)
-
-def b256_zero (_ : Unit) : b256 :=
-  (B256 (vectorInit 0x00#8))
+/-- Serializes an EVM word as a 32-byte big-endian digest. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
+def word_to_hash (value : word) : hash :=
+  let value := (value).value
+  (B256 (to_bytes_le (n := 32) (get_slice_int 256 value 0)))
 
 /-- Compares two digests as unsigned big-endian integers. -/
-def b256_lt (typ_0 : b256) (typ_1 : b256) : Bool := Id.run do
-  let .B256 left : b256 := typ_0
-  let .B256 right : b256 := typ_1
-  let less : Bool := false
-  let equal : Bool := true
-  let (equal, less) ← (( do
-    let loop_offset_lower := 0
-    let loop_offset_upper := 31
-    let mut loop_vars := (equal, less)
-    for offset in [loop_offset_lower:loop_offset_upper:1]i do
-      let (equal, less) := loop_vars
-      loop_vars :=
-        let index := (31 -i offset)
-        let (equal, less) : (Bool × Bool) :=
-          if ((equal && ((GetElem?.getElem! left index) != (GetElem?.getElem! right index))) : Bool)
-          then
-            (let less : Bool :=
-              ((BitVec.toNatInt (GetElem?.getElem! left index)) <b (BitVec.toNatInt
-                  (GetElem?.getElem! right index)))
-            let equal : Bool := false
-            (equal, less))
-          else (equal, less)
-        (equal, less)
-    (pure loop_vars) ) : Id (Bool × Bool) )
-  (pure less)
+def hash_lt (left : hash) (right : hash) : Bool :=
+  (((hash_to_word left)).value <b ((hash_to_word right)).value)
 
-def hash_to_word (value : hash) : word :=
-  (U256 (hash_to_bits value))
-
-def word_to_hash (app_0 : word) : hash :=
-  let .U256 value := app_0
-  (hash_from_bits value)
-
-def word_to_address (app_0 : word) : address :=
-  let .U256 w := app_0
-  (address_from_bits (Sail.BitVec.extractLsb w 159 0))
-
-def address_to_word (a : address) : word :=
-  (U256 (Sail.BitVec.zeroExtend (address_to_bits a) 256))
+/-- Converts a word to its low 160-bit address. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
+def word_to_address (value : word) : address :=
+  let value := (value).value
+  (Address (to_bytes_le (n := 20) (get_slice_int 160 value 0)))
 
 def ZERO_WORD : word :=
-  (U256 0x0000000000000000000000000000000000000000000000000000000000000000#256)
+  ⟨((U256 (BitVec.toNatInt 0x0000000000000000000000000000000000000000000000000000000000000000#256))).value⟩
 
-def ZERO_ADDR : address := (word_to_address ZERO_WORD)
+def ZERO_ADDRESS : address := (Address (vectorInit 0x00#8))
 
-def ZERO_HASH : hash := (word_to_hash ZERO_WORD)
+def ZERO_HASH : hash := (B256 (vectorInit 0x00#8))
 
 def WORD_ZERO : word :=
-  (U256 0x0000000000000000000000000000000000000000000000000000000000000000#256)
+  ⟨((U256 (BitVec.toNatInt 0x0000000000000000000000000000000000000000000000000000000000000000#256))).value⟩
 
-def WORD_ONE : word := (U256 0x0000000000000000000000000000000000000000000000000000000000000001#256)
+def WORD_ONE : word :=
+  ⟨((U256 (BitVec.toNatInt 0x0000000000000000000000000000000000000000000000000000000000000001#256))).value⟩
 
 def WORD_ALL_ONES : word :=
-  (U256 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF#256)
+  ⟨((U256 (BitVec.toNatInt 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF#256))).value⟩
 
 def WORD_SIGN_BIT : word :=
-  (U256 0x8000000000000000000000000000000000000000000000000000000000000000#256)
+  ⟨((U256 (BitVec.toNatInt 0x8000000000000000000000000000000000000000000000000000000000000000#256))).value⟩
 
-def word_to_bits (app_0 : word) : (BitVec 256) :=
-  let .U256 value := app_0
-  value
+/- Type quantifiers: left : Nat, right : Nat, 0 ≤ left ∧
+  left < (2 ^ 256) ∧ 0 ≤ right ∧ right < (2 ^ 256) -/
+def word_add_word (left : Nat) (right : Nat) : word :=
+  ⟨((U256 (Nat.mod (left + right) (2 ^i 256)))).value⟩
 
-def word_add (typ_0 : word) (typ_1 : word) : word :=
-  let .U256 left : word := typ_0
-  let .U256 right : word := typ_1
-  (U256 (left + right))
+/- Type quantifiers: left : Nat, right : Nat, 0 ≤ left ∧
+  left < (2 ^ 256) ∧ 0 ≤ right ∧ right < (2 ^ 256) -/
+def word_sub_word (left : Nat) (right : Nat) : word :=
+  ⟨((U256 (Int.emod (left -i right) (2 ^i 256)))).value⟩
 
-def word_sub (typ_0 : word) (typ_1 : word) : word :=
-  let .U256 left : word := typ_0
-  let .U256 right : word := typ_1
-  (U256 (left - right))
+/- Type quantifiers: k_ex406293_ : Nat, k_ex406292_ : Nat, 0 ≤ k_ex406292_ ∧
+  k_ex406292_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406293_ ∧ k_ex406293_ ≤ (2 ^ 256 - 1) -/
+def word_and (left : word) (right : word) : word :=
+  let left := (left).value
+  let right := (right).value
+  ⟨((U256 (BitVec.toNatInt ((get_slice_int 256 left 0) &&& (get_slice_int 256 right 0))))).value⟩
 
-def word_and (typ_0 : word) (typ_1 : word) : word :=
-  let .U256 left : word := typ_0
-  let .U256 right : word := typ_1
-  (U256 (left &&& right))
+/- Type quantifiers: k_ex406295_ : Nat, k_ex406294_ : Nat, 0 ≤ k_ex406294_ ∧
+  k_ex406294_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406295_ ∧ k_ex406295_ ≤ (2 ^ 256 - 1) -/
+def word_or (left : word) (right : word) : word :=
+  let left := (left).value
+  let right := (right).value
+  ⟨((U256 (BitVec.toNatInt ((get_slice_int 256 left 0) ||| (get_slice_int 256 right 0))))).value⟩
 
-def word_or (typ_0 : word) (typ_1 : word) : word :=
-  let .U256 left : word := typ_0
-  let .U256 right : word := typ_1
-  (U256 (left ||| right))
+/- Type quantifiers: k_ex406297_ : Nat, k_ex406296_ : Nat, 0 ≤ k_ex406296_ ∧
+  k_ex406296_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406297_ ∧ k_ex406297_ ≤ (2 ^ 256 - 1) -/
+def word_xor (left : word) (right : word) : word :=
+  let left := (left).value
+  let right := (right).value
+  ⟨((U256 (BitVec.toNatInt ((get_slice_int 256 left 0) ^^^ (get_slice_int 256 right 0))))).value⟩
 
-def word_xor (typ_0 : word) (typ_1 : word) : word :=
-  let .U256 left : word := typ_0
-  let .U256 right : word := typ_1
-  (U256 (left ^^^ right))
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
+def word_not (value : word) : word :=
+  let value := (value).value
+  ⟨((U256 (BitVec.toNatInt (Complement.complement (get_slice_int 256 value 0))))).value⟩
 
-def word_not (app_0 : word) : word :=
-  let .U256 value := app_0
-  (U256 (Complement.complement value))
+/- Type quantifiers: k_ex406300_ : Nat, k_ex406299_ : Nat, 0 ≤ k_ex406299_ ∧
+  k_ex406299_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406300_ ∧ k_ex406300_ ≤ 255 -/
+def word_bit (value : word) (index : Nat) : (BitVec 1) :=
+  let value := (value).value
+  (BitVec.access (get_slice_int 256 value 0) index)
 
-/- Type quantifiers: k_ex161164_ : Nat, 0 ≤ k_ex161164_ ∧ k_ex161164_ ≤ 255 -/
-def word_bit (typ_0 : word) (index : Nat) : (BitVec 1) :=
-  let .U256 value : word := typ_0
-  (BitVec.access value index)
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value < (2 ^ 256) -/
+def word_low_byte (value : Nat) : byte :=
+  (get_slice_int 8 value 0)
 
-def word_low_byte (app_0 : word) : byte :=
-  let .U256 value := app_0
-  (Sail.BitVec.extractLsb value 7 0)
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
+def word_shift_left_one (value : word) : word :=
+  let value := (value).value
+  ⟨((U256 (Nat.mod (value *i 2) (2 ^i 256)))).value⟩
 
-def word_limb_0 (app_0 : word) : limb :=
-  let .U256 value := app_0
-  (Sail.BitVec.extractLsb value 63 0)
-
-def word_limb_1 (app_0 : word) : limb :=
-  let .U256 value := app_0
-  (Sail.BitVec.extractLsb value 127 64)
-
-def word_limb_2 (app_0 : word) : limb :=
-  let .U256 value := app_0
-  (Sail.BitVec.extractLsb value 191 128)
-
-def word_limb_3 (app_0 : word) : limb :=
-  let .U256 value := app_0
-  (Sail.BitVec.extractLsb value 255 192)
-
-def word_from_limbs (limb_0 : limb) (limb_1 : limb) (limb_2 : limb) (limb_3 : limb) : word :=
-  (U256 (limb_3 +++ (limb_2 +++ (limb_1 +++ limb_0))))
-
-def word_shift_left_one (app_0 : word) : word :=
-  let .U256 value := app_0
-  (U256 (value <<< 1))
-
-def word_shift_right_one (app_0 : word) : word :=
-  let .U256 value := app_0
-  (U256 (value >>> 1))
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
+def word_shift_right_one (value : word) : word :=
+  let value := (value).value
+  ⟨((U256 (Nat.div value 2))).value⟩
 
 /-- `1` if the condition holds, else `0` — the EVM boolean convention. -/
-/- Type quantifiers: k_ex161165_ : Bool -/
+/- Type quantifiers: k_ex406303_ : Bool -/
 def word_of_bool (b : Bool) : word :=
-  if (b : Bool)
-  then WORD_ONE
-  else WORD_ZERO
+  ⟨if (b : Bool)
+  then (WORD_ONE).value
+  else (WORD_ZERO).value⟩
 
-def word_is_zero (w : word) : Bool :=
-  (w == WORD_ZERO)
+/- Type quantifiers: w : Nat, 0 ≤ w ∧ w < (2 ^ 256) -/
+def word_is_zero (w : Nat) : Bool :=
+  (w == (WORD_ZERO).value)
 
-def word_nonzero (w : word) : Bool :=
+/- Type quantifiers: w : Nat, 0 ≤ w ∧ w < (2 ^ 256) -/
+def word_nonzero (w : Nat) : Bool :=
   (! (word_is_zero w))
 
-def LIMB_ZERO : limb := 0x0000000000000000#64
+/- Type quantifiers: a : Nat, b : Nat, 0 ≤ a ∧ a < (2 ^ 256) ∧ 0 ≤ b ∧ b < (2 ^ 256) -/
+def word_ult (a : Nat) (b : Nat) : Bool :=
+  (a <b b)
 
-def LIMB_ONE : limb := 0x0000000000000001#64
-
-def LIMB_MAX : limb := 0xFFFFFFFFFFFFFFFF#64
-
-/-- Compares two limbs as unsigned values. -/
-def limb_ult (a : limb) (b : limb) : Bool :=
-  let difference := (a - b)
-  let borrow :=
-    (((Complement.complement a) &&& b) ||| ((Complement.complement (a ^^^ b)) &&& difference))
-  ((borrow &&& 0x8000000000000000#64) != LIMB_ZERO)
-
-def limb_ule (a : limb) (b : limb) : Bool :=
-  (! (limb_ult b a))
-
-/-- Adds limbs and reports fixed-width overflow. -/
-def limb_checked_add (a : limb) (b : limb) : (Option limb) :=
-  let result := (a + b)
-  if ((limb_ult result a) : Bool)
-  then none
-  else (some result)
-
-/-- Subtracts limbs and reports fixed-width underflow. -/
-def limb_checked_sub (a : limb) (b : limb) : (Option limb) :=
-  if ((limb_ult a b) : Bool)
-  then none
-  else (some (a - b))
-
-/-- Multiplies limbs and reports fixed-width overflow. -/
-def limb_checked_mul (value : limb) (factor : limb) : (Option limb) := Id.run do
-  let result : (BitVec 64) := LIMB_ZERO
-  let addend : (BitVec 64) := value
-  let remaining : (BitVec 64) := factor
-  let valid : Bool := true
-  let (addend, remaining, result, valid) ← (( do
-    let loop_i_lower := 0
-    let loop_i_upper := 63
-    let mut loop_vars := (addend, remaining, result, valid)
-    for i in [loop_i_lower:loop_i_upper:1]i do
-      let (addend, remaining, result, valid) := loop_vars
-      loop_vars :=
-        let (result, valid) : ((BitVec 64) × Bool) :=
-          if ((valid && ((remaining &&& LIMB_ONE) == LIMB_ONE)) : Bool)
-          then
-            (let added := (limb_checked_add result addend)
-            let (result, valid) : ((BitVec 64) × Bool) :=
-              match added with
-              | .some value =>
-                (let result : (BitVec 64) := value
-                (result, valid))
-              | none =>
-                (let valid : Bool := false
-                (result, valid))
-            (result, valid))
-          else (result, valid)
-        let remaining : (BitVec 64) := (remaining >>> 1)
-        let (addend, valid) : ((BitVec 64) × Bool) :=
-          if ((valid && ((i <b 63) && (remaining != LIMB_ZERO))) : Bool)
-          then
-            (let doubled := (limb_checked_add addend addend)
-            let (addend, valid) : ((BitVec 64) × Bool) :=
-              match doubled with
-              | .some value =>
-                (let addend : (BitVec 64) := value
-                (addend, valid))
-              | none =>
-                (let valid : Bool := false
-                (addend, valid))
-            (addend, valid))
-          else (addend, valid)
-        (addend, remaining, result, valid)
-    (pure loop_vars) ) : Id ((BitVec 64) × (BitVec 64) × (BitVec 64) × Bool) )
-  if (valid : Bool)
-  then (pure (some result))
-  else (pure none)
-
-/-- Computes unsigned limb quotient and remainder by bounded long division. -/
-def limb_divmod (dividend : limb) (divisor : limb) : LimbDivMod := Id.run do
-  if ((divisor == LIMB_ZERO) : Bool)
-  then
-    (pure { quotient := LIMB_ZERO,
-            remainder := LIMB_ZERO })
-  else
-    (do
-      let quotient : (BitVec 64) := LIMB_ZERO
-      let remainder : (BitVec 64) := LIMB_ZERO
-      let remaining : (BitVec 64) := dividend
-      let (quotient, remainder, remaining) ← (( do
-        let loop__step_lower := 0
-        let loop__step_upper := 63
-        let mut loop_vars := (quotient, remainder, remaining)
-        for _step in [loop__step_lower:loop__step_upper:1]i do
-          let (quotient, remainder, remaining) := loop_vars
-          loop_vars :=
-            let incoming :=
-              if (((BitVec.access remaining 63) == 1#1) : Bool)
-              then LIMB_ONE
-              else LIMB_ZERO
-            let overflow := ((BitVec.access remainder 63) == 1#1)
-            let remainder : (BitVec 64) := ((remainder <<< 1) ||| incoming)
-            let remaining : (BitVec 64) := (remaining <<< 1)
-            let quotient : (BitVec 64) := (quotient <<< 1)
-            let (quotient, remainder) : ((BitVec 64) × (BitVec 64)) :=
-              if ((overflow || (limb_ule divisor remainder)) : Bool)
-              then
-                (let remainder : (BitVec 64) := (remainder - divisor)
-                let quotient : (BitVec 64) := (quotient ||| LIMB_ONE)
-                (quotient, remainder))
-              else (quotient, remainder)
-            (quotient, remainder, remaining)
-        (pure loop_vars) ) : Id ((BitVec 64) × (BitVec 64) × (BitVec 64)) )
-      (pure { quotient := quotient,
-              remainder := remainder }))
-
-/-- Increments a word bit count without exceeding the word width. -/
-/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 256 -/
-def word_bit_count_increment (value : word_bit_count) : SailM word_bit_count := do
-  let value := (value).value
-  let semanticResult ← do
-    if ((value <b 256) : Bool)
-    then (pure (value + 1))
-    else
-      (do
-        assert false "sail/prelude.sail:293.20-293.21"
-        throw Error.Exit)
-  pure (⟨semanticResult⟩)
-
-/-- Returns the position above a limb's most significant set bit. -/
-def limb_bit_length (value : limb) : limb_bit_count := Id.run do
-  let semanticResult ← do
-    let remaining : (BitVec 64) := value
-    let length : Nat := 0
-    let (length, remaining) ← (( do
-      let loop_step_lower := 0
-      let loop_step_upper := 63
-      let mut loop_vars := (length, remaining)
-      for step in [loop_step_lower:loop_step_upper:1]i do
-        let (length, remaining) := loop_vars
-        loop_vars :=
-          let (length, remaining) : (Nat × (BitVec 64)) :=
-            if ((remaining != LIMB_ZERO) : Bool)
-            then
-              (let length : Nat := (step + 1)
-              let remaining : (BitVec 64) := (remaining >>> 1)
-              (length, remaining))
-            else (length, remaining)
-          (length, remaining)
-      (pure loop_vars) ) : Id (Nat × (BitVec 64)) )
-    (pure length)
-  pure (⟨semanticResult⟩)
-
-/-- Narrows a word to one limb when all higher bits are zero. -/
-def word_to_limb (app_0 : word) : (Option limb) :=
-  let .U256 w := app_0
-  if (((Sail.BitVec.extractLsb w 255 64) == (BitVec.zero 192)) : Bool)
-  then (some (Sail.BitVec.extractLsb w 63 0))
-  else none
-
-def limb_to_word (value : limb) : word :=
-  (U256 (Sail.BitVec.zeroExtend value 256))
-
-/-- Embeds a natural number smaller than the word modulus. -/
-/- Type quantifiers: value : Nat, 0 ≤ value -/
-def word_of_nat (value : Nat) : SailM word := do
-  assert (value <b (2 ^i 256)) "sail/prelude.sail:327.26-327.27"
-  (pure (U256 (get_slice_int 256 value 0)))
-
-/-- Unsigned 256-bit less-than, defined by comparing the four 64-bit limbs
-from most significant down. -/
-def word_ult (typ_0 : word) (typ_1 : word) : Bool :=
-  let .U256 a : word := typ_0
-  let .U256 b : word := typ_1
-  if (((Sail.BitVec.extractLsb a 255 192) != (Sail.BitVec.extractLsb b 255 192)) : Bool)
-  then (limb_ult (Sail.BitVec.extractLsb a 255 192) (Sail.BitVec.extractLsb b 255 192))
-  else
-    (if (((Sail.BitVec.extractLsb a 191 128) != (Sail.BitVec.extractLsb b 191 128)) : Bool)
-    then (limb_ult (Sail.BitVec.extractLsb a 191 128) (Sail.BitVec.extractLsb b 191 128))
-    else
-      (if (((Sail.BitVec.extractLsb a 127 64) != (Sail.BitVec.extractLsb b 127 64)) : Bool)
-      then (limb_ult (Sail.BitVec.extractLsb a 127 64) (Sail.BitVec.extractLsb b 127 64))
-      else (limb_ult (Sail.BitVec.extractLsb a 63 0) (Sail.BitVec.extractLsb b 63 0))))
-
-def word_ule (a : word) (b : word) : Bool :=
+/- Type quantifiers: a : Nat, b : Nat, 0 ≤ a ∧ a < (2 ^ 256) ∧ 0 ≤ b ∧ b < (2 ^ 256) -/
+def word_ule (a : Nat) (b : Nat) : Bool :=
   (! (word_ult b a))
 
-/-- Returns the position above a word's most significant set bit. -/
-def word_bit_length (app_0 : word) : word_bit_count :=
-  ⟨let .U256 value := app_0
-  if (((Sail.BitVec.extractLsb value 255 192) != LIMB_ZERO) : Bool)
-  then (192 + ((limb_bit_length (Sail.BitVec.extractLsb value 255 192))).value)
-  else
-    (if (((Sail.BitVec.extractLsb value 191 128) != LIMB_ZERO) : Bool)
-    then (128 + ((limb_bit_length (Sail.BitVec.extractLsb value 191 128))).value)
-    else
-      (if (((Sail.BitVec.extractLsb value 127 64) != LIMB_ZERO) : Bool)
-      then (64 + ((limb_bit_length (Sail.BitVec.extractLsb value 127 64))).value)
-      else ((limb_bit_length (Sail.BitVec.extractLsb value 63 0))).value))⟩
-
-/-- Adds words and reports unsigned overflow beyond 256 bits. -/
-def word_checked_add (a : word) (b : word) : (Option word) :=
-  let result := (word_add a b)
-  if ((word_ult result a) : Bool)
-  then none
-  else (some result)
-
-/-- Multiplies a word by one limb and reports overflow beyond 256 bits. -/
-def word_checked_mul_limb (value : word) (factor : limb) : (Option word) := Id.run do
-  let result : word := ZERO_WORD
-  let addend : word := value
-  let remaining : (BitVec 64) := factor
-  let valid : Bool := true
-  let (addend, remaining, result, valid) ← (( do
-    let loop_i_lower := 0
-    let loop_i_upper := 63
-    let mut loop_vars := (addend, remaining, result, valid)
-    for i in [loop_i_lower:loop_i_upper:1]i do
-      let (addend, remaining, result, valid) := loop_vars
-      loop_vars :=
-        let (result, valid) : (word × Bool) :=
-          if ((valid && ((remaining &&& LIMB_ONE) == LIMB_ONE)) : Bool)
-          then
-            (let added := (word_checked_add result addend)
-            let (result, valid) : (word × Bool) :=
-              match added with
-              | .some value =>
-                (let result : word := value
-                (result, valid))
-              | none =>
-                (let valid : Bool := false
-                (result, valid))
-            (result, valid))
-          else (result, valid)
-        let remaining : (BitVec 64) := (remaining >>> 1)
-        let (addend, valid) : (word × Bool) :=
-          if ((valid && ((i <b 63) && (remaining != LIMB_ZERO))) : Bool)
-          then
-            (let doubled := (word_checked_add addend addend)
-            let (addend, valid) : (word × Bool) :=
-              match doubled with
-              | .some value =>
-                (let addend : word := value
-                (addend, valid))
-              | none =>
-                (let valid : Bool := false
-                (addend, valid))
-            (addend, valid))
-          else (addend, valid)
-        (addend, remaining, result, valid)
-    (pure loop_vars) ) : Id (word × (BitVec 64) × word × Bool) )
-  if (valid : Bool)
-  then (pure (some result))
-  else (pure none)
-
-/-- Multiplies words modulo the 256-bit word modulus. -/
-def word_mul (a : word) (b : word) : word := Id.run do
-  let result : word := WORD_ZERO
-  let addend : word := a
-  let remaining : word := b
-  let (addend, remaining, result) ← (( do
-    let loop__step_lower := 0
-    let loop__step_upper := 255
-    let mut loop_vars := (addend, remaining, result)
-    for _step in [loop__step_lower:loop__step_upper:1]i do
-      let (addend, remaining, result) := loop_vars
-      loop_vars :=
-        let result : word :=
-          if (((word_bit remaining 0) == 1#1) : Bool)
-          then (word_add result addend)
-          else result
-        let addend : word := (word_shift_left_one addend)
-        let remaining : word := (word_shift_right_one remaining)
-        (addend, remaining, result)
-    (pure loop_vars) ) : Id (word × word × word) )
-  (pure result)
-
-/-- Computes unsigned word quotient and remainder by bounded long division. -/
-def word_divmod (dividend : word) (divisor : word) : WordDivMod := Id.run do
-  if ((word_is_zero divisor) : Bool)
+/-- Returns the position above an 8-bit value's most significant set bit. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 8 - 1) -/
+def byte_bit_length (value : Nat) : Nat :=
+  if ((value <b (2 ^i 4)) : Bool)
   then
-    (pure { quotient := WORD_ZERO,
-            remainder := WORD_ZERO })
+    (if ((value <b (2 ^i 2)) : Bool)
+    then
+      (if ((value <b (2 ^i 1)) : Bool)
+      then value
+      else 2)
+    else
+      (if ((value <b (2 ^i 3)) : Bool)
+      then 3
+      else 4))
   else
-    (do
-      let quotient : word := WORD_ZERO
-      let remainder : word := WORD_ZERO
-      let remaining : word := dividend
-      let (quotient, remainder, remaining) ← (( do
-        let loop__step_lower := 0
-        let loop__step_upper := 255
-        let mut loop_vars := (quotient, remainder, remaining)
-        for _step in [loop__step_lower:loop__step_upper:1]i do
-          let (quotient, remainder, remaining) := loop_vars
-          loop_vars :=
-            let incoming :=
-              if (((word_bit remaining 255) == 1#1) : Bool)
-              then WORD_ONE
-              else WORD_ZERO
-            let overflow := ((word_bit remainder 255) == 1#1)
-            let remainder : word := (word_or (word_shift_left_one remainder) incoming)
-            let remaining : word := (word_shift_left_one remaining)
-            let quotient : word := (word_shift_left_one quotient)
-            let (quotient, remainder) : (word × word) :=
-              if ((overflow || (word_ule divisor remainder)) : Bool)
-              then
-                (let remainder : word := (word_sub remainder divisor)
-                let quotient : word := (word_or quotient WORD_ONE)
-                (quotient, remainder))
-              else (quotient, remainder)
-            (quotient, remainder, remaining)
-        (pure loop_vars) ) : Id (word × word × word) )
-      (pure { quotient := quotient,
-              remainder := remainder }))
+    (if ((value <b (2 ^i 6)) : Bool)
+    then
+      (if ((value <b (2 ^i 5)) : Bool)
+      then 5
+      else 6)
+    else
+      (if ((value <b (2 ^i 7)) : Bool)
+      then 7
+      else 8))
 
-/-- Adds reduced residues modulo a nonzero word modulus without overflow. -/
-def word_mod_add_reduced (a : word) (b : word) (modulus : word) : word :=
-  let threshold := (word_sub modulus b)
-  if ((word_ule threshold a) : Bool)
-  then (word_sub a threshold)
-  else (word_add a b)
+/-- Returns the position above a 16-bit value's most significant set bit. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 16 - 1) -/
+def u16_bit_length (value : Nat) : Nat :=
+  if ((value <b (2 ^i 8)) : Bool)
+  then (byte_bit_length value)
+  else (8 + (byte_bit_length (Nat.div value (2 ^i 8))))
 
-/-- Shifts a word left by a limb-sized amount, yielding zero past the width. -/
-def word_shift_left_limb (value : word) (amount : limb) : word := Id.run do
-  let result : word := value
-  let remaining : (BitVec 64) := amount
-  let (remaining, result) ← (( do
-    let loop__step_lower := 0
-    let loop__step_upper := 255
-    let mut loop_vars := (remaining, result)
-    for _step in [loop__step_lower:loop__step_upper:1]i do
-      let (remaining, result) := loop_vars
-      loop_vars :=
-        let (remaining, result) : ((BitVec 64) × word) :=
-          if ((remaining != LIMB_ZERO) : Bool)
-          then
-            (let result : word := (word_shift_left_one result)
-            let remaining : (BitVec 64) := (remaining - LIMB_ONE)
-            (remaining, result))
-          else (remaining, result)
-        (remaining, result)
-    (pure loop_vars) ) : Id ((BitVec 64) × word) )
-  (pure result)
+/-- Returns the position above a 32-bit value's most significant set bit. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 32 - 1) -/
+def u32_bit_length (value : Nat) : Nat :=
+  if ((value <b (2 ^i 16)) : Bool)
+  then (u16_bit_length value)
+  else (16 + (u16_bit_length (Nat.div value (2 ^i 16))))
 
-/-- Shifts a word right logically by a limb-sized amount. -/
-def word_shift_right_limb (value : word) (amount : limb) : word := Id.run do
-  let result : word := value
-  let remaining : (BitVec 64) := amount
-  let (remaining, result) ← (( do
-    let loop__step_lower := 0
-    let loop__step_upper := 255
-    let mut loop_vars := (remaining, result)
-    for _step in [loop__step_lower:loop__step_upper:1]i do
-      let (remaining, result) := loop_vars
-      loop_vars :=
-        let (remaining, result) : ((BitVec 64) × word) :=
-          if ((remaining != LIMB_ZERO) : Bool)
-          then
-            (let result : word := (word_shift_right_one result)
-            let remaining : (BitVec 64) := (remaining - LIMB_ONE)
-            (remaining, result))
-          else (remaining, result)
-        (remaining, result)
-    (pure loop_vars) ) : Id ((BitVec 64) × word) )
-  (pure result)
+/-- Returns the position above a 64-bit value's most significant set bit. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
+def u64_bit_length (value : Nat) : Nat :=
+  if ((value <b (2 ^i 32)) : Bool)
+  then (u32_bit_length value)
+  else (32 + (u32_bit_length (Nat.div value (2 ^i 32))))
+
+/-- Returns the position above a 128-bit value's most significant set bit. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 128 - 1) -/
+def u128_bit_length (value : Nat) : Nat :=
+  if ((value <b (2 ^i 64)) : Bool)
+  then (u64_bit_length value)
+  else (64 + (u64_bit_length (Nat.div value (2 ^i 64))))
+
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value < (2 ^ 256) -/
+def word_bit_length (value : Nat) : word_bit_count :=
+  ⟨let limb3 := (BitVec.toNatInt (get_slice_int 64 value 192))
+  if ((limb3 != 0) : Bool)
+  then (192 + (u64_bit_length limb3))
+  else
+    (let limb2 := (BitVec.toNatInt (get_slice_int 64 value 128))
+    if ((limb2 != 0) : Bool)
+    then (128 + (u64_bit_length limb2))
+    else
+      (let limb1 := (BitVec.toNatInt (get_slice_int 64 value 64))
+      if ((limb1 != 0) : Bool)
+      then (64 + (u64_bit_length limb1))
+      else (u64_bit_length (BitVec.toNatInt (get_slice_int 64 value 0)))))⟩
+
+/- Type quantifiers: a : Nat, b : Nat, 0 ≤ a ∧ a < (2 ^ 256) ∧ 0 ≤ b ∧ b < (2 ^ 256) -/
+def word_mul_word (a : Nat) (b : Nat) : Nat :=
+  (Nat.mod (a *i b) (2 ^i 256))
+
+/- Type quantifiers: dividend : Nat, divisor : Nat, 0 ≤ dividend ∧
+  dividend < (2 ^ 256) ∧ 0 ≤ divisor ∧ divisor < (2 ^ 256) -/
+def word_div_word (dividend : Nat) (divisor : Nat) : word :=
+  ⟨if ((divisor == 0) : Bool)
+  then (WORD_ZERO).value
+  else ((U256 (Nat.div dividend divisor))).value⟩
+
+/- Type quantifiers: dividend : Nat, divisor : Nat, 0 ≤ dividend ∧
+  dividend < (2 ^ 256) ∧ 0 ≤ divisor ∧ divisor < (2 ^ 256) -/
+def word_mod_word (dividend : Nat) (divisor : Nat) : word :=
+  ⟨if ((divisor == 0) : Bool)
+  then (WORD_ZERO).value
+  else ((U256 (Nat.mod dividend divisor))).value⟩
+
+/- Type quantifiers: left : Nat, right : Nat, 0 ≤ left ∧
+  left < (2 ^ 256) ∧ 0 ≤ right ∧ right < (2 ^ 256) -/
+def word_greater_than_word (left : Nat) (right : Nat) : Bool :=
+  (left >b right)
+
+/-- Shifts a word left by a bounded count, yielding zero at the width. -/
+/- Type quantifiers: k_ex406310_ : Nat, k_ex406309_ : Nat, 0 ≤ k_ex406309_ ∧
+  k_ex406309_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406310_ ∧ k_ex406310_ ≤ 256 -/
+def word_shift_left (value : word) (amount : word_bit_count) : word :=
+  let value := (value).value
+  let amount := (amount).value
+  ⟨((U256 (BitVec.toNatInt ((get_slice_int 256 value 0) <<< amount)))).value⟩
+
+/-- Shifts a word right logically by a bounded count. -/
+/- Type quantifiers: k_ex406312_ : Nat, k_ex406311_ : Nat, 0 ≤ k_ex406311_ ∧
+  k_ex406311_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406312_ ∧ k_ex406312_ ≤ 256 -/
+def word_shift_right (value : word) (amount : word_bit_count) : word :=
+  let value := (value).value
+  let amount := (amount).value
+  ⟨(BitVec.toNatInt ((get_slice_int 256 value 0) >>> amount))⟩
+
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value < (2 ^ 256) -/
+def word_byte_length (value : Nat) : Nat :=
+  let bit_length := ((word_bit_length value)).value
+  if ((bit_length == 0) : Bool)
+  then 0
+  else (Nat.div (bit_length + 7) 8)
 
 /-- Shifts a two's-complement word right while extending its sign bit. -/
-def word_arithmetic_shift_right_limb (value : word) (amount : limb) : word := Id.run do
-  let result : word := value
-  let remaining : (BitVec 64) := amount
-  let negative := ((word_bit value 255) == 1#1)
-  let (remaining, result) ← (( do
-    let loop__step_lower := 0
-    let loop__step_upper := 255
-    let mut loop_vars := (remaining, result)
-    for _step in [loop__step_lower:loop__step_upper:1]i do
-      let (remaining, result) := loop_vars
-      loop_vars :=
-        let (remaining, result) : ((BitVec 64) × word) :=
-          if ((remaining != LIMB_ZERO) : Bool)
-          then
-            (let result : word := (word_shift_right_one result)
-            let result : word :=
-              if (negative : Bool)
-              then (word_or result WORD_SIGN_BIT)
-              else result
-            let remaining : (BitVec 64) := (remaining - LIMB_ONE)
-            (remaining, result))
-          else (remaining, result)
-        (remaining, result)
-    (pure loop_vars) ) : Id ((BitVec 64) × word) )
-  (pure result)
+/- Type quantifiers: k_ex406314_ : Nat, k_ex406313_ : Nat, 0 ≤ k_ex406313_ ∧
+  k_ex406313_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406314_ ∧ k_ex406314_ ≤ 256 -/
+def word_arithmetic_shift_right (value : word) (amount : word_bit_count) : word :=
+  let value := (value).value
+  let amount := (amount).value
+  ⟨let shifted := ((word_shift_right ⟨value⟩ ⟨amount⟩)).value
+  if (((word_bit ⟨value⟩ 255) == 1#1) : Bool)
+  then
+    (let sign_fill := ((word_shift_left ⟨(WORD_ALL_ONES).value⟩ ⟨(256 - amount)⟩)).value
+    ((word_or ⟨shifted⟩ ⟨sign_fill⟩)).value)
+  else shifted⟩
 
+/-- Embeds an address's bytes into the low 160 bits of an EVM word. -/
+def address_to_word (bytes : address) : word :=
+  ⟨(BitVec.toNatInt (from_bytes_le (n := 20) bytes))⟩
+
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
 def word_negate (value : word) : word :=
-  (word_sub WORD_ZERO value)
+  let value := (value).value
+  ⟨((word_sub_word (WORD_ZERO).value value)).value⟩
 
 /-- Returns the unsigned magnitude of a two's-complement word. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
 def word_abs (value : word) : word :=
-  if (((word_bit value 255) == 1#1) : Bool)
-  then (word_negate value)
-  else value
+  let value := (value).value
+  ⟨if (((word_bit ⟨value⟩ 255) == 1#1) : Bool)
+  then ((word_negate ⟨value⟩)).value
+  else value⟩
 
 /-- Signed (two's-complement) 256-bit less-than: sign bits decide when they
 differ, otherwise the unsigned order applies. -/
+/- Type quantifiers: k_ex406318_ : Nat, k_ex406317_ : Nat, 0 ≤ k_ex406317_ ∧
+  k_ex406317_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406318_ ∧ k_ex406318_ ≤ (2 ^ 256 - 1) -/
 def word_slt (a : word) (b : word) : Bool :=
-  let a_neg := ((word_bit a 255) == 1#1)
-  let b_neg := ((word_bit b 255) == 1#1)
+  let a := (a).value
+  let b := (b).value
+  let a_neg := ((word_bit ⟨a⟩ 255) == 1#1)
+  let b_neg := ((word_bit ⟨b⟩ 255) == 1#1)
   if (a_neg : Bool)
   then
     (if (b_neg : Bool)
@@ -666,224 +335,255 @@ def word_slt (a : word) (b : word) : Bool :=
     then false
     else (word_ult a b))
 
-def alu_add (a : word) (b : word) : word :=
-  (word_add a b)
+/- Type quantifiers: a : Nat, b : Nat, 0 ≤ b ∧ b < (2 ^ 256), 0 ≤ a ∧ a ≤ (2 ^ 256 - 1) -/
+def alu_add (a : word) (b : Nat) : word :=
+  let a := (a).value
+  ⟨((word_add_word a b)).value⟩
 
+/- Type quantifiers: k_ex406321_ : Nat, k_ex406320_ : Nat, 0 ≤ k_ex406320_ ∧
+  k_ex406320_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406321_ ∧ k_ex406321_ ≤ (2 ^ 256 - 1) -/
 def alu_sub (a : word) (b : word) : word :=
-  (word_sub a b)
+  let a := (a).value
+  let b := (b).value
+  ⟨((word_sub_word a b)).value⟩
 
-def alu_mul (a : word) (b : word) : word :=
-  (word_mul a b)
+/- Type quantifiers: a : Nat, b : Nat, 0 ≤ a ∧ a < (2 ^ 256) ∧ 0 ≤ b ∧ b < (2 ^ 256) -/
+def alu_mul (a : Nat) (b : Nat) : Nat :=
+  (word_mul_word a b)
 
 /-- `DIV`: unsigned Euclidean division; division by zero yields `0`
 (YP Appendix H). -/
+/- Type quantifiers: k_ex406323_ : Nat, k_ex406322_ : Nat, 0 ≤ k_ex406322_ ∧
+  k_ex406322_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406323_ ∧ k_ex406323_ ≤ (2 ^ 256 - 1) -/
 def alu_div (a : word) (b : word) : word :=
-  if ((word_is_zero b) : Bool)
-  then WORD_ZERO
-  else (word_divmod a b).quotient
+  let a := (a).value
+  let b := (b).value
+  ⟨((word_div_word a b)).value⟩
 
 /-- `MOD`: unsigned modulus; a zero modulus yields `0`. -/
+/- Type quantifiers: k_ex406325_ : Nat, k_ex406324_ : Nat, 0 ≤ k_ex406324_ ∧
+  k_ex406324_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406325_ ∧ k_ex406325_ ≤ (2 ^ 256 - 1) -/
 def alu_mod (a : word) (b : word) : word :=
-  if ((word_is_zero b) : Bool)
-  then WORD_ZERO
-  else (word_divmod a b).remainder
+  let a := (a).value
+  let b := (b).value
+  ⟨((word_mod_word a b)).value⟩
 
 /-- `SDIV`: signed division, truncating toward zero; division by zero
 yields `0`. -/
+/- Type quantifiers: k_ex406327_ : Nat, k_ex406326_ : Nat, 0 ≤ k_ex406326_ ∧
+  k_ex406326_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406327_ ∧ k_ex406327_ ≤ (2 ^ 256 - 1) -/
 def alu_sdiv (a : word) (b : word) : word :=
-  if ((word_is_zero b) : Bool)
-  then WORD_ZERO
+  let a := (a).value
+  let b := (b).value
+  ⟨if ((word_is_zero b) : Bool)
+  then (WORD_ZERO).value
   else
-    (let quotient := (word_divmod (word_abs a) (word_abs b)).quotient
-    if ((neq_bool ((word_bit a 255) == 1#1) ((word_bit b 255) == 1#1)) : Bool)
-    then (word_negate quotient)
-    else quotient)
+    (let quotient := ((word_div_word ((word_abs ⟨a⟩)).value ((word_abs ⟨b⟩)).value)).value
+    if ((neq_bool ((word_bit ⟨a⟩ 255) == 1#1) ((word_bit ⟨b⟩ 255) == 1#1)) : Bool)
+    then ((word_negate ⟨quotient⟩)).value
+    else quotient)⟩
 
 /-- `SMOD`: signed remainder, with the sign of the dividend; a zero modulus
 yields `0`. -/
+/- Type quantifiers: k_ex406329_ : Nat, k_ex406328_ : Nat, 0 ≤ k_ex406328_ ∧
+  k_ex406328_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406329_ ∧ k_ex406329_ ≤ (2 ^ 256 - 1) -/
 def alu_smod (a : word) (b : word) : word :=
-  if ((word_is_zero b) : Bool)
-  then WORD_ZERO
+  let a := (a).value
+  let b := (b).value
+  ⟨if ((word_is_zero b) : Bool)
+  then (WORD_ZERO).value
   else
-    (let remainder := (word_divmod (word_abs a) (word_abs b)).remainder
-    if (((word_bit a 255) == 1#1) : Bool)
-    then (word_negate remainder)
-    else remainder)
+    (let remainder := ((word_mod_word ((word_abs ⟨a⟩)).value ((word_abs ⟨b⟩)).value)).value
+    if (((word_bit ⟨a⟩ 255) == 1#1) : Bool)
+    then ((word_negate ⟨remainder⟩)).value
+    else remainder)⟩
 
-/-- `ADDMOD`: `(a + b) mod n` over the unbounded integers (no intermediate
-2^256 reduction); a zero modulus yields `0`. -/
-def alu_addmod (a : word) (b : word) (n : word) : word :=
-  if ((word_is_zero n) : Bool)
-  then WORD_ZERO
-  else
-    (let a_reduced := (word_divmod a n).remainder
-    let b_reduced := (word_divmod b n).remainder
-    (word_mod_add_reduced a_reduced b_reduced n))
+/- Type quantifiers: a : Nat, b : Nat, n : Nat, 0 ≤ a ∧
+  a < (2 ^ 256) ∧ 0 ≤ b ∧ b < (2 ^ 256) ∧ 0 ≤ n ∧ n < (2 ^ 256) -/
+def alu_addmod (a : Nat) (b : Nat) (n : Nat) : word :=
+  ⟨if ((n == 0) : Bool)
+  then (WORD_ZERO).value
+  else ((U256 (Nat.mod (a + b) n))).value⟩
 
-/-- `MULMOD`: `(a * b) mod n` over the unbounded integers; a zero modulus
-yields `0`. -/
-def alu_mulmod (a : word) (b : word) (n : word) : word := Id.run do
-  if ((word_is_zero n) : Bool)
-  then (pure WORD_ZERO)
-  else
-    (do
-      let result : word := WORD_ZERO
-      let addend : word := (word_divmod a n).remainder
-      let remaining : word := b
-      let (addend, remaining, result) ← (( do
-        let loop__step_lower := 0
-        let loop__step_upper := 255
-        let mut loop_vars := (addend, remaining, result)
-        for _step in [loop__step_lower:loop__step_upper:1]i do
-          let (addend, remaining, result) := loop_vars
-          loop_vars :=
-            let result : word :=
-              if (((word_bit remaining 0) == 1#1) : Bool)
-              then (word_mod_add_reduced result addend n)
-              else result
-            let addend : word := (word_mod_add_reduced addend addend n)
-            let remaining : word := (word_shift_right_one remaining)
-            (addend, remaining, result)
-        (pure loop_vars) ) : Id (word × word × word) )
-      (pure result))
+/- Type quantifiers: a : Nat, b : Nat, n : Nat, 0 ≤ a ∧
+  a < (2 ^ 256) ∧ 0 ≤ b ∧ b < (2 ^ 256) ∧ 0 ≤ n ∧ n < (2 ^ 256) -/
+def alu_mulmod (a : Nat) (b : Nat) (n : Nat) : word :=
+  ⟨if ((n == 0) : Bool)
+  then (WORD_ZERO).value
+  else ((U256 (Nat.mod (a *i b) n))).value⟩
 
 /-- `EXP` via square-and-multiply over the 256 exponent bits, reduced
 modulo 2^256 at every step. -/
+/- Type quantifiers: k_ex406331_ : Nat, k_ex406330_ : Nat, 0 ≤ k_ex406330_ ∧
+  k_ex406330_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406331_ ∧ k_ex406331_ ≤ (2 ^ 256 - 1) -/
 def alu_exp (base : word) (exponent : word) : word := Id.run do
-  let result : word := WORD_ONE
-  let b : word := base
-  let e : word := exponent
-  let (b, e, result) ← (( do
-    let loop__step_lower := 0
-    let loop__step_upper := 255
-    let mut loop_vars := (b, e, result)
-    for _step in [loop__step_lower:loop__step_upper:1]i do
-      let (b, e, result) := loop_vars
-      loop_vars :=
-        let result : word :=
-          if (((word_bit e 0) == 1#1) : Bool)
-          then (word_mul result b)
-          else result
-        let b : word := (word_mul b b)
-        let e : word := (word_shift_right_one e)
-        (b, e, result)
-    (pure loop_vars) ) : Id (word × word × word) )
-  (pure result)
+  let base := (base).value
+  let exponent := (exponent).value
+  let publicResult ← do
+    let result : Nat := (WORD_ONE).value
+    let b : Nat := base
+    let e : Nat := exponent
+    let (b, e, result) ← (( do
+      let loop__step_lower := 0
+      let loop__step_upper := 255
+      let mut loop_vars := (b, e, result)
+      for _step in [loop__step_lower:loop__step_upper:1]i do
+        let (b, e, result) := loop_vars
+        loop_vars :=
+          let result : Nat :=
+            if (((word_bit ⟨e⟩ 0) == 1#1) : Bool)
+            then
+              (let result : Nat := (word_mul_word result b)
+              result)
+            else result
+          let b : Nat := (word_mul_word b b)
+          let e : Nat := ((word_shift_right_one ⟨e⟩)).value
+          (b, e, result)
+      (pure loop_vars) ) : Id (Nat × Nat × Nat) )
+    (pure result)
+  pure (⟨publicResult⟩)
 
 /-- `SIGNEXTEND(byte_index, value)`: sign-extends `value` from byte
 `byte_index` (0 = least significant); indices ≥ 31 leave the value
 unchanged. -/
+/- Type quantifiers: k_ex406333_ : Nat, k_ex406332_ : Nat, 0 ≤ k_ex406332_ ∧
+  k_ex406332_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406333_ ∧ k_ex406333_ ≤ (2 ^ 256 - 1) -/
 def alu_signextend (byte_index : word) (value : word) : word :=
-  match (word_to_limb byte_index) with
-  | .some index =>
-    (if ((limb_ult index 0x0000000000000020#64) : Bool)
+  let byte_index := (byte_index).value
+  let value := (value).value
+  ⟨if ((byte_index <b 32) : Bool)
+  then
+    (let index : Nat := byte_index
+    let width : Nat := ((index *i 8) + 8)
+    let sign_shift : Nat := ((index *i 8) + 7)
+    let sign_set :=
+      (((word_and ⟨((word_shift_right ⟨value⟩ ⟨sign_shift⟩)).value⟩
+          ⟨(WORD_ONE).value⟩)).value == (WORD_ONE).value)
+    let low_mask :=
+      ((word_sub_word ((word_shift_left ⟨(WORD_ONE).value⟩ ⟨width⟩)).value (WORD_ONE).value)).value
+    if (sign_set : Bool)
     then
-      (let width := ((index + LIMB_ONE) <<< 3)
-      let sign_shift := (width - LIMB_ONE)
-      let sign_set := ((word_and (word_shift_right_limb value sign_shift) WORD_ONE) == WORD_ONE)
-      let low_mask := (word_sub (word_shift_left_limb WORD_ONE width) WORD_ONE)
-      if (sign_set : Bool)
-      then (word_or (word_and value low_mask) (word_not low_mask))
-      else (word_and value low_mask))
-    else value)
-  | _ => value
+      ((word_or ⟨((word_and ⟨value⟩ ⟨low_mask⟩)).value⟩
+        ⟨((word_not ⟨low_mask⟩)).value⟩)).value
+    else ((word_and ⟨value⟩ ⟨low_mask⟩)).value)
+  else value⟩
 
+/- Type quantifiers: k_ex406335_ : Nat, k_ex406334_ : Nat, 0 ≤ k_ex406334_ ∧
+  k_ex406334_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406335_ ∧ k_ex406335_ ≤ (2 ^ 256 - 1) -/
 def alu_lt (a : word) (b : word) : word :=
-  (word_of_bool (word_ult a b))
+  let a := (a).value
+  let b := (b).value
+  ⟨((word_of_bool (word_ult a b))).value⟩
 
+/- Type quantifiers: k_ex406337_ : Nat, k_ex406336_ : Nat, 0 ≤ k_ex406336_ ∧
+  k_ex406336_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406337_ ∧ k_ex406337_ ≤ (2 ^ 256 - 1) -/
 def alu_gt (a : word) (b : word) : word :=
-  (word_of_bool (word_ult b a))
+  let a := (a).value
+  let b := (b).value
+  ⟨((word_of_bool (word_ult b a))).value⟩
 
+/- Type quantifiers: k_ex406339_ : Nat, k_ex406338_ : Nat, 0 ≤ k_ex406338_ ∧
+  k_ex406338_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406339_ ∧ k_ex406339_ ≤ (2 ^ 256 - 1) -/
 def alu_slt (a : word) (b : word) : word :=
-  (word_of_bool (word_slt a b))
+  let a := (a).value
+  let b := (b).value
+  ⟨((word_of_bool (word_slt ⟨a⟩ ⟨b⟩))).value⟩
 
+/- Type quantifiers: k_ex406341_ : Nat, k_ex406340_ : Nat, 0 ≤ k_ex406340_ ∧
+  k_ex406340_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406341_ ∧ k_ex406341_ ≤ (2 ^ 256 - 1) -/
 def alu_sgt (a : word) (b : word) : word :=
-  (word_of_bool (word_slt b a))
+  let a := (a).value
+  let b := (b).value
+  ⟨((word_of_bool (word_slt ⟨b⟩ ⟨a⟩))).value⟩
 
+/- Type quantifiers: k_ex406343_ : Nat, k_ex406342_ : Nat, 0 ≤ k_ex406342_ ∧
+  k_ex406342_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406343_ ∧ k_ex406343_ ≤ (2 ^ 256 - 1) -/
 def alu_eq (a : word) (b : word) : word :=
-  (word_of_bool (a == b))
+  let a := (a).value
+  let b := (b).value
+  ⟨((word_of_bool (a == b))).value⟩
 
+/- Type quantifiers: a : Nat, 0 ≤ a ∧ a ≤ (2 ^ 256 - 1) -/
 def alu_iszero (a : word) : word :=
-  (word_of_bool (word_is_zero a))
+  let a := (a).value
+  ⟨((word_of_bool (word_is_zero a))).value⟩
 
+/- Type quantifiers: k_ex406346_ : Nat, k_ex406345_ : Nat, 0 ≤ k_ex406345_ ∧
+  k_ex406345_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406346_ ∧ k_ex406346_ ≤ (2 ^ 256 - 1) -/
 def alu_and (a : word) (b : word) : word :=
-  (word_and a b)
+  let a := (a).value
+  let b := (b).value
+  ⟨((word_and ⟨a⟩ ⟨b⟩)).value⟩
 
+/- Type quantifiers: k_ex406348_ : Nat, k_ex406347_ : Nat, 0 ≤ k_ex406347_ ∧
+  k_ex406347_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406348_ ∧ k_ex406348_ ≤ (2 ^ 256 - 1) -/
 def alu_or (a : word) (b : word) : word :=
-  (word_or a b)
+  let a := (a).value
+  let b := (b).value
+  ⟨((word_or ⟨a⟩ ⟨b⟩)).value⟩
 
+/- Type quantifiers: k_ex406350_ : Nat, k_ex406349_ : Nat, 0 ≤ k_ex406349_ ∧
+  k_ex406349_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406350_ ∧ k_ex406350_ ≤ (2 ^ 256 - 1) -/
 def alu_xor (a : word) (b : word) : word :=
-  (word_xor a b)
+  let a := (a).value
+  let b := (b).value
+  ⟨((word_xor ⟨a⟩ ⟨b⟩)).value⟩
 
+/- Type quantifiers: a : Nat, 0 ≤ a ∧ a ≤ (2 ^ 256 - 1) -/
 def alu_not (a : word) : word :=
-  (word_not a)
+  let a := (a).value
+  ⟨((word_not ⟨a⟩)).value⟩
 
 /-- `BYTE(i, x)`: the `i`-th most-significant byte of `x` (0 = MSB);
 indices ≥ 32 yield `0`. -/
+/- Type quantifiers: k_ex406353_ : Nat, k_ex406352_ : Nat, 0 ≤ k_ex406352_ ∧
+  k_ex406352_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406353_ ∧ k_ex406353_ ≤ (2 ^ 256 - 1) -/
 def alu_byte (i : word) (x : word) : word :=
-  match (word_to_limb i) with
-  | .some index =>
-    (if ((limb_ult index 0x0000000000000020#64) : Bool)
-    then
-      (let byte_offset := (0x000000000000001F#64 - index)
-      let shift := (byte_offset <<< 3)
-      (U256 (Sail.BitVec.zeroExtend (word_low_byte (word_shift_right_limb x shift)) 256)))
-    else WORD_ZERO)
-  | _ => WORD_ZERO
+  let i := (i).value
+  let x := (x).value
+  ⟨if ((i <b 32) : Bool)
+  then
+    (let index : Nat := i
+    let shift : Nat := ((31 - index) *i 8)
+    (BitVec.toNatInt (word_low_byte ((word_shift_right ⟨x⟩ ⟨shift⟩)).value)))
+  else (WORD_ZERO).value⟩
 
 /-- `SHL`: logical left shift; amounts ≥ 256 yield `0`. -/
+/- Type quantifiers: k_ex406355_ : Nat, k_ex406354_ : Nat, 0 ≤ k_ex406354_ ∧
+  k_ex406354_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406355_ ∧ k_ex406355_ ≤ (2 ^ 256 - 1) -/
 def alu_shl (shift_amt : word) (v : word) : word :=
-  if ((! (word_ult shift_amt (limb_to_word 0x0000000000000100#64))) : Bool)
-  then WORD_ZERO
-  else (word_shift_left_limb v (word_limb_0 shift_amt))
+  let shift_amt := (shift_amt).value
+  let v := (v).value
+  ⟨if ((shift_amt <b 256) : Bool)
+  then ((word_shift_left ⟨v⟩ ⟨shift_amt⟩)).value
+  else (WORD_ZERO).value⟩
 
 /-- `SHR`: logical right shift; amounts ≥ 256 yield `0`. -/
+/- Type quantifiers: k_ex406357_ : Nat, k_ex406356_ : Nat, 0 ≤ k_ex406356_ ∧
+  k_ex406356_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406357_ ∧ k_ex406357_ ≤ (2 ^ 256 - 1) -/
 def alu_shr (shift_amt : word) (v : word) : word :=
-  if ((! (word_ult shift_amt (limb_to_word 0x0000000000000100#64))) : Bool)
-  then WORD_ZERO
-  else (word_shift_right_limb v (word_limb_0 shift_amt))
+  let shift_amt := (shift_amt).value
+  let v := (v).value
+  ⟨if ((shift_amt <b 256) : Bool)
+  then ((word_shift_right ⟨v⟩ ⟨shift_amt⟩)).value
+  else (WORD_ZERO).value⟩
 
-/-- `SAR`: arithmetic (sign-propagating) right shift, via floored signed
-division. -/
+/-- `SAR`: arithmetic (sign-propagating) right shift. -/
+/- Type quantifiers: k_ex406359_ : Nat, k_ex406358_ : Nat, 0 ≤ k_ex406358_ ∧
+  k_ex406358_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406359_ ∧ k_ex406359_ ≤ (2 ^ 256 - 1) -/
 def alu_sar (shift_amt : word) (v : word) : word :=
-  if ((! (word_ult shift_amt (limb_to_word 0x0000000000000100#64))) : Bool)
-  then
-    (if (((word_bit v 255) == 1#1) : Bool)
-    then WORD_ALL_ONES
-    else WORD_ZERO)
-  else (word_arithmetic_shift_right_limb v (word_limb_0 shift_amt))
+  let shift_amt := (shift_amt).value
+  let v := (v).value
+  ⟨if ((shift_amt <b 256) : Bool)
+  then ((word_arithmetic_shift_right ⟨v⟩ ⟨shift_amt⟩)).value
+  else
+    (if (((word_bit ⟨v⟩ 255) == 1#1) : Bool)
+    then (WORD_ALL_ONES).value
+    else (WORD_ZERO).value)⟩
 
 /-- `CLZ`: the count of leading zero bits of a 256-bit word (EIP-7939). -/
-def alu_clz (x : word) : SailM word := do
-  let count : Nat := 0
-  let found : Bool := false
-  let (count, found) ← (( do
-    let loop_i_lower := 0
-    let loop_i_upper := 255
-    let mut loop_vars := (count, found)
-    for i in [loop_i_lower:loop_i_upper:1]i do
-      let (count, found) := loop_vars
-      loop_vars ← do
-        let biinput_index := (255 -i i)
-        let (count, found) ← (( do
-          if ((! found) : Bool)
-          then
-            (do
-              let (count, found) ← (( do
-                if (((word_bit x biinput_index) == 0#1) : Bool)
-                then
-                  (do
-                    let count ←
-                      (do
-                          let semanticResult ← (word_bit_count_increment ⟨count⟩)
-                          pure ((semanticResult).value))
-                    (pure (count, found)))
-                else
-                  (let found : Bool := true
-                  (pure (count, found))) ) : SailM (Nat × Bool) )
-              (pure (count, found)))
-          else (pure (count, found)) ) : SailM (Nat × Bool) )
-        (pure (count, found))
-    (pure loop_vars) ) : SailM (Nat × Bool) )
-  (pure (limb_to_word (get_slice_int 64 count 0)))
+/- Type quantifiers: x : Nat, 0 ≤ x ∧ x ≤ (2 ^ 256 - 1) -/
+def alu_clz (x : word) : word :=
+  let x := (x).value
+  ⟨((U256 (256 - ((word_bit_length x)).value))).value⟩
 

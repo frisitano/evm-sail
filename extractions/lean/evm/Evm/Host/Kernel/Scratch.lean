@@ -1,6 +1,4 @@
 import Evm.Flow
-import Evm.Arith
-import Evm.Primitives.Quantities
 import Evm.Primitives.Bytes
 
 set_option maxHeartbeats 1_000_000_000
@@ -18,23 +16,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -47,6 +37,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # Kernel scratch allocation
@@ -60,62 +51,79 @@ semantics while the bytes themselves remain in host-backed memory.
 
 /-- Marks the start of a scratch construction. -/
 def scratch_begin (_ : Unit) : SailM source_pointer := do
-  readReg scratch_cursor
+  let ⟨_, ⟨_, arena⟩⟩ ← do pure ((← readReg scratch_arena))
+  (pure arena.len)
 
-/-- Advances the scratch bump cursor by `width` bytes within the byte domain. -/
-def scratch_advance (width : byte_length) : SailM Unit := do
-  let cursor ← (( do readReg scratch_cursor ) : SailM byte_quantity )
-  if ((byte_quantity_le cursor MAX_BYTE_QUANTITY) : Bool)
+/- Type quantifiers: len : Nat, source_valid_length(len) -/
+def scratch_push_bytes (data : (List byte)) (len : Nat) : SailM Unit := do
+  if ((len != 0) : Bool)
   then
     (do
-      if ((byte_quantity_le width (← (byte_quantity_sub MAX_BYTE_QUANTITY cursor))) : Bool)
-      then writeReg scratch_cursor (← (byte_quantity_add cursor width))
-      else assert false "scratch cursor overflow")
-  else assert false "scratch cursor overflow"
-
-/-- Appends materialized bytes at the cursor. -/
-def scratch_push_bytes (data : (List byte)) (len : byte_length) : SailM Unit := do
-  if ((bne len BYTE_ZERO) : Bool)
-  then
-    (do
-      assert (← (host_scratch_store_bytes (← readReg scratch_cursor) data len)) "scratch byte append"
-      (scratch_advance len))
+      let ⟨_, ⟨_, arena⟩⟩ ← do pure ((← readReg scratch_arena))
+      match (← (host_scratch_store_bytes arena.len data len)) with
+      | .ByteRegionReady ⟨_, ⟨_, expanded⟩⟩ =>
+        writeReg scratch_arena ⟨_, ⟨_, expanded⟩⟩
+      | .ByteRegionFailed () => assert false "scratch byte append")
   else (pure ())
 
 /-- Appends a source-backed slice at the cursor. -/
+/- Type quantifiers: k_ex407226_ : Nat, k_ex407225_ : Nat, 0 ≤ k_ex407225_ ∧ 0 ≤ k_ex407226_ -/
 def scratch_push_slice (data : EvmByteSlice) : SailM Unit := do
-  if ((bne data.len BYTE_ZERO) : Bool)
+  let data := ((data).2).2
+  if ((data.len != 0) : Bool)
   then
     (do
-      assert (← (host_scratch_store_slice (← readReg scratch_cursor) data)) "scratch slice append"
-      (scratch_advance data.len))
+      let ⟨_, ⟨_, arena⟩⟩ ← do pure ((← readReg scratch_arena))
+      match (← (host_scratch_store_slice arena.len data)) with
+      | .ByteRegionReady ⟨_, ⟨_, expanded⟩⟩ =>
+        writeReg scratch_arena ⟨_, ⟨_, expanded⟩⟩
+      | .ByteRegionFailed () => assert false "scratch slice append")
+  else (pure ())
+
+/-- Appends a evm_prefix of a fixed 32-byte value at the cursor. -/
+/- Type quantifiers: k_ex407227_ : Nat, 0 ≤ k_ex407227_ ∧ k_ex407227_ ≤ 32 -/
+def scratch_push_b256 (data : b256) (len : Nat) : SailM Unit := do
+  if ((len != 0) : Bool)
+  then
+    (do
+      let ⟨_, ⟨_, arena⟩⟩ ← do pure ((← readReg scratch_arena))
+      match (← (host_scratch_store_b256 arena.len data len)) with
+      | .ByteRegionReady ⟨_, ⟨_, expanded⟩⟩ =>
+        writeReg scratch_arena ⟨_, ⟨_, expanded⟩⟩
+      | .ByteRegionFailed () => assert false "scratch fixed-byte append")
   else (pure ())
 
 /-- The slice covering everything pushed since `start`. -/
+/- Type quantifiers: start : Nat, 0 ≤ start -/
 def scratch_finish (start : source_pointer) : SailM EvmByteSlice := do
-  let stop ← (( do readReg scratch_cursor ) : SailM byte_quantity )
-  if ((byte_quantity_le start stop) : Bool)
+  let start_offset := start
+  let ⟨_, ⟨_, arena⟩⟩ ← do pure ((← readReg scratch_arena))
+  let stop_offset := arena.len
+  if ((start_offset ≤b stop_offset) : Bool)
   then
-    (do
-      let len ← (( do (byte_quantity_sub stop start) ) : SailM byte_quantity )
-      (pure (byte_slice ScratchSource start len)))
+    (pure ((⟨_, ⟨_, (sub_slice arena start (stop_offset - start_offset))⟩⟩ : (Sigma fun
+      (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
+      (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
   else
     (do
       assert false "scratch finish mark"
       throw Error.Exit)
 
 /-- Discards everything pushed since `mark`. -/
+/- Type quantifiers: mark : Nat, 0 ≤ mark -/
 def scratch_rewind (mark : source_pointer) : SailM Unit := do
-  let cursor ← (( do readReg scratch_cursor ) : SailM byte_quantity )
-  if ((byte_quantity_le mark cursor) : Bool)
+  let mark_offset := mark
+  let ⟨_, ⟨_, arena⟩⟩ ← do pure ((← readReg scratch_arena))
+  let cursor_offset := arena.len
+  if ((mark_offset ≤b cursor_offset) : Bool)
   then
     (do
-      writeReg scratch_cursor mark
-      (host_scratch_truncate (← readReg scratch_cursor)))
+      writeReg scratch_arena ⟨_, ⟨_, (sub_slice arena 0 mark)⟩⟩
+      (host_scratch_truncate mark))
   else assert false "scratch rewind mark"
 
 /-- Empties the arena (per-block lifetime). -/
 def scratch_reset (_ : Unit) : SailM Unit := do
-  writeReg scratch_cursor BYTE_ZERO
-  (host_scratch_truncate (← readReg scratch_cursor))
+  writeReg scratch_arena ⟨_, ⟨_, (byte_slice ScratchSource 0 0)⟩⟩
+  (host_scratch_truncate 0)
 

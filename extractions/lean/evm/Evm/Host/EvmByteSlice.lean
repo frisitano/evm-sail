@@ -1,5 +1,4 @@
 import Evm.Flow
-import Evm.Arith
 import Evm.Prelude
 import Evm.Primitives.Bytes
 
@@ -18,23 +17,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -47,6 +38,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # Byte-slice access
@@ -61,70 +53,102 @@ abstract byte lists.
     This page documents the model's host interface — internal contracts
     of the executable specification, not protocol rules. -/
 
-/-- The byte at slice offset `off`; zero past the end. -/
-def slice_byte (s : EvmByteSlice) (off : source_pointer) : SailM byte := do
-  if ((byte_quantity_lt off s.len) : Bool)
-  then (host_slice_byte s off)
+/- Type quantifiers: k_ex407106_ : Nat, k_ex407105_ : Nat, off : Nat, source_valid_length(off), 0
+  ≤ k_ex407105_ ∧ 0 ≤ k_ex407106_ -/
+def slice_byte (s : EvmByteSlice) (off : Nat) : SailM byte := do
+  let s := ((s).2).2
+  let offset := off
+  let length := s.len
+  if ((offset <b length) : Bool)
+  then (host_slice_byte ⟨_, ⟨_, s⟩⟩ off)
   else (pure 0x00#8)
 
 /-- The number of nonzero bytes in the slice (EIP-2028 / EIP-7623
 calldata gas). -/
-def slice_count_nonzero (s : EvmByteSlice) : SailM byte_length := do
-  (host_slice_count_nonzero s)
+/- Type quantifiers: k_ex407112_ : Nat, k_ex407111_ : Nat, 0 ≤ k_ex407111_ ∧ 0 ≤ k_ex407112_ -/
+def slice_count_nonzero (s : EvmByteSlice) : SailM source_length := do
+  let s := ((s).2).2
+  (host_slice_count_nonzero ⟨_, ⟨_, s⟩⟩)
 
-/-- Whether `count` fixed-width regions in a regular source layout contain
-only zero bytes — a bulk slice predicate, not a format-specific
-rule. -/
-def slice_strided_zero (s : EvmByteSlice) (start : source_pointer) (stride : byte_length) (width : byte_length) (count : byte_length) : SailM Bool := do
-  (host_slice_strided_zero s start stride width count)
+/- Type quantifiers: k_ex407128_ : Nat, k_ex407127_ : Nat, start : Nat, stride : Nat, width : Nat, count
+  : Nat, source_valid_length(start) ∧
+  source_valid_length(stride) ∧ source_valid_length(width) ∧ source_valid_length(count), 0 ≤
+  k_ex407127_ ∧ 0 ≤ k_ex407128_ -/
+def slice_strided_zero (s : EvmByteSlice) (start : Nat) (stride : Nat) (width : Nat) (count : Nat) : SailM Bool := do
+  let s := ((s).2).2
+  (host_slice_strided_zero ⟨_, ⟨_, s⟩⟩ start stride width count)
 
-/-- The 32-byte word at slice offset `off`, zero-padded past the end. -/
-def slice_load (s : EvmByteSlice) (off : source_pointer) : SailM word := do
-  if ((byte_quantity_lt off s.len) : Bool)
-  then (host_slice_load_word s off)
-  else (pure ZERO_WORD)
+/- Type quantifiers: k_ex407143_ : Nat, k_ex407142_ : Nat, off : Nat, source_valid_length(off), 0
+  ≤ k_ex407142_ ∧ 0 ≤ k_ex407143_ -/
+def slice_load (s : EvmByteSlice) (off : Nat) : SailM word := do
+  let s := ((s).2).2
+  let publicResult ← do
+    let offset := off
+    let length := s.len
+    if ((offset <b length) : Bool)
+    then
+      (do
+          let publicResult ← (host_slice_load_word ⟨_, ⟨_, s⟩⟩ off)
+          pure ((publicResult).value))
+    else (pure (ZERO_WORD).value)
+  pure (⟨publicResult⟩)
 
 /-- The word at a transaction-controlled 256-bit source offset, returning zero
 when the offset cannot designate a byte in the slice. -/
+/- Type quantifiers: k_ex407150_ : Nat, k_ex407149_ : Nat, k_ex407148_ : Nat, 0 ≤ k_ex407148_ ∧
+  0 ≤ k_ex407149_, 0 ≤ k_ex407150_ ∧ k_ex407150_ ≤ (2 ^ 256 - 1) -/
 def slice_load_word_offset (s : EvmByteSlice) (off : word) : SailM word := do
-  match (word_to_limb off) with
-  | .some offset_bits =>
-    (do
-      let offset := (BitVec.toNatInt offset_bits)
-      let .ByteQuantity slice_len := s.len
-      if ((offset <b slice_len) : Bool)
-      then (slice_load s (ByteQuantity offset))
-      else (pure ZERO_WORD))
-  | none => (pure ZERO_WORD)
+  let s := ((s).2).2
+  let off := (off).value
+  let publicResult ← do
+    let slice_len := s.len
+    if ((off <b slice_len) : Bool)
+    then
+      (do
+          let publicResult ← (slice_load ⟨_, ⟨_, s⟩⟩ off)
+          pure ((publicResult).value))
+    else (pure (ZERO_WORD).value)
+  pure (⟨publicResult⟩)
 
-/-- An `n`-byte big-endian word at slice offset `off`, right-aligned and
-zero-padded past the end; used by `PUSH0`–`PUSH32`. -/
-def slice_load_n (s : EvmByteSlice) (off : source_pointer) (n : byte_length) : SailM word := do
-  if ((byte_quantity_lt off s.len) : Bool)
-  then (host_slice_load_n_word s off n)
-  else (pure ZERO_WORD)
+/- Type quantifiers: k_ex407160_ : Nat, k_ex407159_ : Nat, off : Nat, n : Nat, source_valid_length(off)
+  ∧ source_valid_length(n), 0 ≤ k_ex407159_ ∧ 0 ≤ k_ex407160_ -/
+def slice_load_n (s : EvmByteSlice) (off : Nat) (n : Nat) : SailM word := do
+  let s := ((s).2).2
+  let publicResult ← do
+    let offset := off
+    let length := s.len
+    if ((offset <b length) : Bool)
+    then
+      (do
+          let publicResult ← (host_slice_load_n_word ⟨_, ⟨_, s⟩⟩ off n)
+          pure ((publicResult).value))
+    else (pure (ZERO_WORD).value)
+  pure (⟨publicResult⟩)
 
-/-- Copies slice range `[off, off+len)` into frame memory at `dst`,
-zero-filling past the end. -/
-def slice_copy (s : EvmByteSlice) (dst : memory_pointer) (off : source_pointer) (len : memory_length) : SailM Unit := do
-  if ((bne len BYTE_ZERO) : Bool)
+/- Type quantifiers: k_ex407177_ : Nat, k_ex407176_ : Nat, dst : Nat, off : Nat, len : Nat, host_valid_access(dst)
+  ∧ source_valid_length(off) ∧ host_valid_access(len), 0 ≤ k_ex407176_ ∧ 0 ≤ k_ex407177_ -/
+def slice_copy (s : EvmByteSlice) (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
+  let s := ((s).2).2
+  if ((len != 0) : Bool)
   then
     (do
-      if ((byte_quantity_lt off s.len) : Bool)
-      then (host_slice_copy_to_memory s dst off len)
-      else (host_slice_copy_to_memory EMPTY_SLICE dst BYTE_ZERO len))
+      let offset := off
+      let source_length := s.len
+      if ((offset <b source_length) : Bool)
+      then (host_slice_copy_to_memory ⟨_, ⟨_, s⟩⟩ dst off len)
+      else (host_slice_copy_to_memory ⟨_, ⟨_, EMPTY_SLICE⟩⟩ dst 0 len))
   else (pure ())
 
 /-- Copies from a transaction-controlled 256-bit source offset into EVM
 memory, applying the source operation's empty-read and zero-padding rules. -/
+/- Type quantifiers: k_ex407190_ : Nat, k_ex407189_ : Nat, k_ex407188_ : Nat, k_ex407187_ : Nat, k_ex407186_
+  : Nat, 0 ≤ k_ex407186_ ∧ 0 ≤ k_ex407187_, 0 ≤ k_ex407188_, 0 ≤ k_ex407189_ ∧
+  k_ex407189_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex407190_ -/
 def slice_copy_word_offset (s : EvmByteSlice) (dst : memory_pointer) (off : word) (len : memory_length) : SailM Unit := do
-  match (word_to_limb off) with
-  | .some offset_bits =>
-    (do
-      let offset := (BitVec.toNatInt offset_bits)
-      let .ByteQuantity slice_len := s.len
-      if ((offset <b slice_len) : Bool)
-      then (slice_copy s dst (ByteQuantity offset) len)
-      else (slice_copy EMPTY_SLICE dst BYTE_ZERO len))
-  | none => (slice_copy EMPTY_SLICE dst BYTE_ZERO len)
+  let s := ((s).2).2
+  let off := (off).value
+  let slice_len := s.len
+  if ((off <b slice_len) : Bool)
+  then (slice_copy ⟨_, ⟨_, s⟩⟩ dst off len)
+  else (slice_copy ⟨_, ⟨_, EMPTY_SLICE⟩⟩ dst 0 len)
 

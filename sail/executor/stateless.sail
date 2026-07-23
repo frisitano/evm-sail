@@ -12,76 +12,63 @@ list.
     gas/blob-gas totals, post-state root, receipts root, logs bloom,
     execution-request bytes (Prague+), and block-access-list bytes and
     size (Amsterdam+). */
-function validate_executed_block(
-    block : Block,
-    input_ref : StatelessInputRef,
-    exec_ok : bool,
-    result : BlockExecutionResult,
-) -> (
-    unit
-) = {
+function validate_executed_block(block : Block, input_ref : StatelessInputRef, result : BlockExecutionResult) -> unit = {
     let header = block.header;
-    let gas_used_ok = result.header_gas_used == header.gas_used;
-    let blob_gas_used_ok = (k_fork < Cancun) | (result.blob_gas_used == header.blob_gas_used);
-    let poststate_ok = compute_state_root() == header.state_root;
-    let receipts_root_ok = result.receipts_root == header.receipts_root;
-    let logs_bloom_ok = logs_bloom_equal(result.logs_bloom, header.logs_bloom);
-    var block_access_list_size_ok : bool = true;
-    var block_access_list_ok : bool = true;
-    var execution_requests_ok : bool = true;
     if k_fork >= Prague then {
-        execution_requests_ok =
-              bytes_segments_equal_slice([|BytesSlice(result.requests.deposits)|], input_ref.deposits)
-            & bytes_segments_equal_slice([|BytesSlice(result.requests.withdrawals)|], input_ref.withdrawal_requests)
-            & bytes_segments_equal_slice(
-                  [|BytesSlice(result.requests.consolidations)|],
-                  input_ref.consolidation_requests,
-              )
-            & bytes_segments_equal_slice(
-                  [|BytesSlice(result.requests.builder_deposits)|],
-                  input_ref.builder_deposit_requests,
-              )
-            & bytes_segments_equal_slice([|BytesSlice(result.requests.builder_exits)|], input_ref.builder_exit_requests)
+        if   not_bool(bytes_segments_equal_slice([|BytesSlice(result.requests.deposits)|], input_ref.deposits))
+           | not_bool(
+                 bytes_segments_equal_slice([|BytesSlice(result.requests.withdrawals)|], input_ref.withdrawal_requests),
+             )
+           | not_bool(
+                 bytes_segments_equal_slice(
+                     [|BytesSlice(result.requests.consolidations)|],
+                     input_ref.consolidation_requests,
+                 ),
+             )
+           | not_bool(
+                 bytes_segments_equal_slice(
+                     [|BytesSlice(result.requests.builder_deposits)|],
+                     input_ref.builder_deposit_requests,
+                 ),
+             )
+           | not_bool(
+                 bytes_segments_equal_slice(
+                     [|BytesSlice(result.requests.builder_exits)|],
+                     input_ref.builder_exit_requests,
+                 ),
+             ) then {
+            throw InvalidBlock(InvalidExecutionRequests)
+        }
     };
-    if k_fork >= Amsterdam then {
-        let block_access_list = encode_block_access_list();
-        let Gas(maximum_items) = gas_quotient(header.gas_limit, 2000);
-        block_access_list_size_ok = block_access_list.item_count <= maximum_items;
-        block_access_list_ok = bytes_segments_equal_slice(
-            [|BytesSlice(block_access_list.bytes)|],
-            block.body.block_access_list,
-        )
-    };
-
-    if result.gas_limit_exceeded then {
-        throw InvalidBlock(GasUsedExceedsLimit)
-    };
-    if not_bool(exec_ok) then {
-        throw InvalidBlock(ExecutionInvalid)
-    };
-    if not_bool(execution_requests_ok) then {
-        throw InvalidBlock(InvalidExecutionRequests)
-    };
-    if not_bool(block_access_list_size_ok) then {
-        throw InvalidBlock(BlockAccessListTooLarge)
-    };
-    if not_bool(gas_used_ok) then {
+    if result.header_gas_used != header.gas_used then {
         throw InvalidBlock(InvalidGasUsed)
     };
-    if not_bool(blob_gas_used_ok) then {
+    if (k_fork >= Cancun) & (result.blob_gas_used != header.blob_gas_used) then {
         throw InvalidBlock(InvalidBlobGasUsed)
     };
-    if not_bool(poststate_ok) then {
+    cycle_scope_start(SCOPE_STATE_ROOT);
+    let poststate = compute_state_root();
+    cycle_scope_end(SCOPE_STATE_ROOT);
+    if poststate != header.state_root then {
         throw InvalidBlock(InvalidStateRoot)
     };
-    if not_bool(receipts_root_ok) then {
+    if result.receipts_root != header.receipts_root then {
         throw InvalidBlock(InvalidReceiptsRoot)
     };
-    if not_bool(logs_bloom_ok) then {
+    if not_bool(logs_bloom_equal(result.logs_bloom, header.logs_bloom)) then {
         throw InvalidBlock(InvalidLogsBloom)
     };
-    if not_bool(block_access_list_ok) then {
-        throw InvalidBlock(InvalidBlockAccessList)
+    if k_fork >= Amsterdam then {
+        cycle_scope_start(SCOPE_BLOCK_ACCESS_LIST);
+        let block_access_list = encode_block_access_list();
+        cycle_scope_end(SCOPE_BLOCK_ACCESS_LIST);
+        let maximum_items = header.gas_limit / 2000;
+        if block_access_list.item_count > maximum_items then {
+            throw InvalidBlock(BlockAccessListTooLarge)
+        };
+        if not_bool(bytes_segments_equal_slice([|BytesSlice(block_access_list.bytes)|], block.body.block_access_list)) then {
+            throw InvalidBlock(InvalidBlockAccessList)
+        }
     }
 }
 
@@ -126,12 +113,12 @@ function verify_stateless_payload(input_ref : StatelessInputRef) -> StatelessVal
         active_scope = SCOPE_EXECUTE_BLOCK;
         cycle_scope_start(active_scope);
         let block = input.payload.block;
-        let (exec_ok, result) = execute_block_body(block.body, input_ref.public_keys, block.header.gas_limit);
+        let result = execute_block_body(block.body, input_ref.public_keys, block.header.gas_limit);
 
         cycle_scope_end(active_scope);
         active_scope = SCOPE_VALIDATE_RESULT;
         cycle_scope_start(active_scope);
-        validate_executed_block(block, input_ref, exec_ok, result);
+        validate_executed_block(block, input_ref, result);
         cycle_scope_end(active_scope);
         StatelessPayloadValid()
     } catch {

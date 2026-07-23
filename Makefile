@@ -5,7 +5,8 @@
 #   make lint           sail --all-warnings on the program roots
 #   make fmt            format every *.sail in place with `sail --fmt`
 #   make fmt-check      verify every *.sail matches `sail --fmt`
-#   make eest-smoke     run a tiny EEST state fixture (root-checked)
+#   make extract-c      generate and compile-check the optimized C model
+#   make eest-smoke     run one embedded v0.6.2 stateless fixture
 #   make all            check + lint + fmt-check
 #   make clean          remove build artifacts
 #
@@ -24,23 +25,45 @@ UV ?= uv
 
 PROJECT             := sail/evm.sail_project
 MODEL               := $(PROJECT) evm
-EEST_SMOKE          := harness/fixtures/smoke/state_root_transfer.json
+EEST_CORPUS         ?= zkvm/.fixtures/current-v062-full
+EEST_SMOKE          := $(EEST_CORPUS)/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 CONTRACTS_DIR       := extractions/contracts
+C_DIR               := extractions/c
+C_MODEL_DIR         := $(C_DIR)/evm
+C_MODEL             := $(C_MODEL_DIR)/evm
+C_BUILD_DIR         := build/extract-c
+C_EXTRACTOR         := tools/extract_c.py
+C_GENERATOR_DIR     := $(C_BUILD_DIR)/generate
+C_OPTIMIZED_SPLICE  := sail/splices/c_optimized.sail
 COQ_DIR             := extractions/coq
 COQ_CONTRACTS_DIR   := $(COQ_DIR)/contracts
 COQ_MODEL_DIR       := $(COQ_DIR)/model
 LEAN_DIR            := extractions/lean
 LEAN_MODEL_DIR      := $(LEAN_DIR)/evm
 LEAN_HOST_AXIOMS    := $(CONTRACTS_DIR)/HostAxioms.lean
+LEAN_SAIL_LIB       ?= $(abspath $(LEAN_MODEL_DIR)/.lake/packages/Sail)
 COQ_SEMANTIC_FLAGS  := --coq-semantic-range-types --coq-undef-axioms
 LEAN_SEMANTIC_FLAGS := --lean-semantic-range-types
-SAIL_CONTRACTS      := $(CONTRACTS_DIR)/schema_prefix.sail $(CONTRACTS_DIR)/io_contracts.sail
+C_MODEL_HEADERS     := sail_failure.h byte_slice_glue.h host_crypto.h precompiles.h output.h \
+                       scratch.h memory.h transient_storage.h stack.h \
+                       code_db.h kernel_state.h trie_node_db.h state_db.h \
+                       cycle_scopes.h
+C_MODEL_INCLUDES    := $(foreach header,$(C_MODEL_HEADERS),--c-include $(header))
+C_PRESERVE_FLAGS    := --c-preserve main \
+                       --c-preserve process_transaction \
+                       --c-preserve compute_state_root \
+                       --c-preserve trie_root \
+                       --c-preserve decode_stateless_input_ref
+C_EDITOR_FLAGS      := -w -I$(C_MODEL_DIR) \
+                       -Izkvm/runtime/sail256 -Izkvm/runtime -Iffi
+C_EDITOR_ARGS       := $(foreach flag,$(C_EDITOR_FLAGS),--compile-flag=$(flag))
+SAIL_CONTRACTS      :=
 EXTERN_CONTRACT     := $(CONTRACTS_DIR)/ExternBoundary.v
 # Every Sail source owned by this repository, discovered rather than listed by
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail extractions/contracts -name '*.sail' | sort)
 
-.PHONY: all check check-contracts clean docs-site eest-smoke extract extract-coq extract-lean fmt fmt-check help lean-extract lint runtime-test zisk-guest
+.PHONY: all check check-contracts clean docs-site eest-smoke extract extract-c extract-coq extract-lean fmt fmt-check help lean-extract lint runtime-test zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -49,12 +72,13 @@ help:
 	@echo "  make fmt            - format every *.sail with sail --fmt"
 	@echo "  make fmt-check      - verify *.sail match sail --fmt"
 	@echo "  make runtime-test   - differential-test the bounded Sail C runtime"
-	@echo "  make eest-smoke     - run a tiny EEST fixture (root-checked)"
+	@echo "  make eest-smoke     - run one embedded tests-zkevm@v0.6.2 fixture"
+	@echo "  make extract-c      - generate source-aligned optimized C and compile-check it"
 	@echo "  make extract-coq    - generate and validate the complete Coq model"
 	@echo "  make extract-lean   - generate and compile the complete Lean model"
 	@echo "  make docs-site      - build the literate specification book"
 	@echo "  make zisk-guest     - build the production ZisK guest ELF"
-	@echo "  make extract        - run both theorem-prover extractions"
+	@echo "  make extract        - run all maintained model extractions"
 	@echo "  make all            - check + lint + fmt-check"
 
 check:
@@ -86,7 +110,7 @@ zisk-guest:
 	bash zkvm/zisk/build.sh guest
 
 eest-smoke:
-	@cd harness && $(PYTHON) run.py fixtures/smoke/state_root_transfer.json --fork Cancun --limit 1 --quiet
+	@$(PYTHON) harness/run.py $(EEST_SMOKE) --limit 1 --quiet
 
 check-contracts:
 	@for f in $(SAIL_CONTRACTS); do $(SAIL) "$$f"; done
@@ -117,15 +141,7 @@ check-contracts:
 extract-coq: check-contracts
 	mkdir -p $(COQ_CONTRACTS_DIR) $(COQ_MODEL_DIR)
 	$(COQC) -q -noglob -o $(abspath $(COQ_CONTRACTS_DIR))/ExternBoundary.vo $(EXTERN_CONTRACT)
-	$(SAIL) --coq --coq-output-dir $(COQ_CONTRACTS_DIR) -o schema_prefix $(CONTRACTS_DIR)/schema_prefix.sail
-	$(SAIL) --coq --coq-output-dir $(COQ_CONTRACTS_DIR) -o io_contracts $(CONTRACTS_DIR)/io_contracts.sail
 	$(SAIL) --coq $(COQ_SEMANTIC_FLAGS) --coq-output-dir $(COQ_MODEL_DIR) -o evm $(MODEL)
-	test -s $(COQ_CONTRACTS_DIR)/schema_prefix.v
-	test -s $(COQ_CONTRACTS_DIR)/schema_prefix_types.v
-	test -s $(COQ_CONTRACTS_DIR)/io_contracts.v
-	test -s $(COQ_CONTRACTS_DIR)/io_contracts_types.v
-	grep -q "Definition schema_prefix_ok" $(COQ_CONTRACTS_DIR)/schema_prefix.v
-	grep -q "Definition input_header_well_formed" $(COQ_CONTRACTS_DIR)/io_contracts.v
 	test -s $(COQ_MODEL_DIR)/evm.v
 	test -s $(COQ_MODEL_DIR)/evm_types.v
 	grep -q "Definition process_transaction" $(COQ_MODEL_DIR)/evm.v
@@ -133,21 +149,62 @@ extract-coq: check-contracts
 	grep -q "Definition trie_root " $(COQ_MODEL_DIR)/evm.v
 	grep -q "Definition decode_stateless_input_ref" $(COQ_MODEL_DIR)/evm.v
 	grep -q "Definition main" $(COQ_MODEL_DIR)/evm.v
-	cd $(COQ_CONTRACTS_DIR) && $(COQC) schema_prefix_types.v
-	cd $(COQ_CONTRACTS_DIR) && $(COQC) schema_prefix.v
-	cd $(COQ_CONTRACTS_DIR) && $(COQC) io_contracts_types.v
-	cd $(COQ_CONTRACTS_DIR) && $(COQC) io_contracts.v
 	cd $(COQ_MODEL_DIR) && $(COQC) evm_types.v
 	cd $(COQ_MODEL_DIR) && $(COQC) evm.v
 
+# Sail emits one C translation unit. The extraction generator uses temporary
+# marker builds to identify source boundaries, mirrors each active sail/ source
+# as a unity fragment, and verifies that recombining the fragments reconstructs
+# the unmodified optimized C output byte-for-byte. Default Sail name mangling is
+# retained. Compile the unity source into the ignored build directory; the
+# tracked extraction contains sources only.
+extract-c:
+	mkdir -p $(C_BUILD_DIR)
+	$(PYTHON) $(C_EXTRACTOR) \
+		--sail-command "$(SAIL)" \
+		--cc "$(CC)" $(C_EDITOR_ARGS) \
+		--project $(PROJECT) --module evm --source-root sail \
+		--output-dir $(C_MODEL_DIR) --work-dir $(C_GENERATOR_DIR) \
+		--variable EVM_PROFILE=off --variable EVM_DEBUG=off -- \
+		-c -O --Oconstant-fold --c-no-main --c-no-rts \
+		$(C_PRESERVE_FLAGS) $(C_MODEL_INCLUDES) \
+		--c-specialize --c-require-bounded-int --splice $(C_OPTIMIZED_SPLICE)
+	test -s $(C_MODEL).c
+	test -s $(C_MODEL).h
+	test -s $(C_MODEL_DIR)/evm_internal.h
+	test -s $(C_MODEL_DIR)/compile_commands.json
+	test -s $(C_MODEL_DIR)/prelude.c
+	test -s $(C_MODEL_DIR)/primitives/quantities.c
+	test -s $(C_MODEL_DIR)/main.c
+	@source_count="$$($(SAIL) --list-files $(MODEL) --variable EVM_PROFILE=off --variable EVM_DEBUG=off | wc -w | tr -d ' ')"; \
+		c_count="$$(find $(C_MODEL_DIR) -name '*.c' | wc -l | tr -d ' ')"; \
+		h_count="$$(find $(C_MODEL_DIR) -name '*.h' | wc -l | tr -d ' ')"; \
+		expected_count="$$((source_count + 1))"; \
+		test "$$c_count" = "$$expected_count" || { echo "extract-c: expected $$expected_count C files, found $$c_count"; exit 1; }; \
+		test "$$h_count" = "2" || { echo "extract-c: expected public and internal headers, found $$h_count"; exit 1; }
+	grep -Fq "zprocess_transaction(" $(C_MODEL).h
+	grep -Fq "zcompute_state_root(" $(C_MODEL).h
+	grep -Fq "ztrie_root(" $(C_MODEL).h
+	grep -Fq "zdecode_stateless_input_ref(" $(C_MODEL).h
+	grep -Fq "zmain(" $(C_MODEL).h
+	grep -Fq "typedef struct { uint64_t limbs[4]; } sail_u256;" $(C_MODEL).h
+	grep -Fq "typedef struct { uint8_t bytes[20]; } sail_fixed_bytes_20;" $(C_MODEL).h
+	grep -Fq "typedef struct { uint8_t bytes[32]; } sail_fixed_bytes_32;" $(C_MODEL).h
+	@sail_lib="$$($(SAIL) --dir)/lib"; \
+		test -f "$$sail_lib/sail.h" || { echo "missing Sail C runtime headers under $$sail_lib"; exit 1; }; \
+		fragment_sources="$$(find $(C_MODEL_DIR) -name '*.c' ! -name 'evm.c' | sort)"; \
+		test -n "$$fragment_sources" || { echo "extract-c: no source fragments found"; exit 1; }; \
+		$(CC) $(C_EDITOR_FLAGS) -I"$$sail_lib" -fsyntax-only $$fragment_sources; \
+		$(CC) -O2 $(C_EDITOR_FLAGS) -I"$$sail_lib" \
+			-c $(C_MODEL).c -o $(C_BUILD_DIR)/evm.o
+	test -s $(C_BUILD_DIR)/evm.o
+
 extract-lean:
 	mkdir -p $(LEAN_MODEL_DIR)
-	mkdir -p $(LEAN_MODEL_DIR)/.lake
-	@test ! -f $(LEAN_MODEL_DIR)/lake-manifest.json || cp $(LEAN_MODEL_DIR)/lake-manifest.json $(LEAN_MODEL_DIR)/.lake/lake-manifest.saved.json
+	test -s $(LEAN_SAIL_LIB)/lakefile.toml
 	rm -rf $(LEAN_MODEL_DIR)/Evm
 	rm -f $(LEAN_MODEL_DIR)/Evm.lean $(LEAN_MODEL_DIR)/lakefile.toml $(LEAN_MODEL_DIR)/lean-toolchain $(LEAN_MODEL_DIR)/.gitignore
-	$(SAIL) --lean --lean-force-output --lean-source-root sail $(LEAN_SEMANTIC_FLAGS) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
-	@test ! -f $(LEAN_MODEL_DIR)/.lake/lake-manifest.saved.json || mv $(LEAN_MODEL_DIR)/.lake/lake-manifest.saved.json $(LEAN_MODEL_DIR)/lake-manifest.json
+	$(SAIL) --lean --lean-force-output --lean-source-root sail $(LEAN_SEMANTIC_FLAGS) --lean-lib-path $(LEAN_SAIL_LIB) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
 	find $(LEAN_MODEL_DIR) -name '*.lean' -exec sed -i.bak 's/ByteSlice/EvmByteSlice/g' {} +
 	find $(LEAN_MODEL_DIR)/Evm -name '*.lean' -exec sed -E -i.bak 's/(^|[^[:alnum:]_])prefix([^[:alnum:]_]|$$)/\1evm_prefix\2/g' {} +
 	find $(LEAN_MODEL_DIR) -name '*.bak' -exec rm -f {} +
@@ -164,10 +221,10 @@ extract-lean:
 	grep -q "^def referenceWorldStateContract" $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
 	grep -q "^def worldStateBoundary" $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
 	! grep -R -E -q "noncomputable (section|def)|^[[:space:]]*partial def" $(LEAN_MODEL_DIR)/Evm $(LEAN_MODEL_DIR)/Evm.lean
-	cd $(LEAN_MODEL_DIR) && { test -f lake-manifest.json || $(LAKE) update; }
+	cd $(LEAN_MODEL_DIR) && $(LAKE) update Sail
 	cd $(LEAN_MODEL_DIR) && $(LAKE) build
 
-extract: extract-coq extract-lean
+extract: extract-coq extract-lean extract-c
 
 all: check lint fmt-check
 
@@ -191,4 +248,4 @@ docs-site:
 lean-extract: extract-lean
 
 clean:
-	rm -rf sail_smt_cache sail/sail_smt_cache $(LEAN_MODEL_DIR)/.lake/build $(BOOK)/site $(BOOK)/doc $(BOOK)/docs/reference $(BOOK)/docs/extraction $(BOOK)/docs/assets $(BOOK)/mkdocs.yml
+	rm -rf sail_smt_cache sail/sail_smt_cache $(C_BUILD_DIR) $(C_MODEL_DIR)/compile_commands.json $(LEAN_MODEL_DIR)/.lake/build $(BOOK)/site $(BOOK)/doc $(BOOK)/docs/reference $(BOOK)/docs/extraction $(BOOK)/docs/assets $(BOOK)/mkdocs.yml

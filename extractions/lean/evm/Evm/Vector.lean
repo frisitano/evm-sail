@@ -15,23 +15,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -44,6 +36,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
@@ -68,7 +61,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
 def to_bytes_le {n : _} (b : (BitVec (8 * n))) : (Vector (BitVec 8) n) := Id.run do
   let res := (vectorInit (BitVec.zero 8))
   let loop_i_lower := 0
-  let loop_i_upper := (n -i 1)
+  let loop_i_upper := (n - 1)
   let mut loop_vars := res
   for i in [loop_i_lower:loop_i_upper:1]i do
     let res := loop_vars
@@ -79,7 +72,7 @@ def to_bytes_le {n : _} (b : (BitVec (8 * n))) : (Vector (BitVec 8) n) := Id.run
 def from_bytes_le {n : _} (v : (Vector (BitVec 8) n)) : (BitVec (8 * n)) := Id.run do
   let res := (BitVec.zero (8 *i n))
   let loop_i_lower := 0
-  let loop_i_upper := (n -i 1)
+  let loop_i_upper := (n - 1)
   let mut loop_vars := res
   for i in [loop_i_lower:loop_i_upper:1]i do
     let res := loop_vars

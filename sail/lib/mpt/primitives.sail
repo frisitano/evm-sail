@@ -22,7 +22,7 @@ type b256_index = range(0, 31)
     high-aligned; `len` preserves leading zeroes and prefixes. */
 struct TriePath = { data : b256, len : trie_path_len }
 
-let HEX_PREFIX_MAX_LENGTH : byte_length = ByteQuantity(33)
+let HEX_PREFIX_MAX_LENGTH : int(33) = 33
 
 /*! The path length in nibbles. */
 function path_len(path : TriePath) -> trie_path_len = path.len
@@ -49,7 +49,7 @@ function to_trie_depth(value : trie_path_len) -> trie_depth =
 
 /*! The empty path. */
 function path_empty() -> TriePath =
-    path_new(b256_zero(), 0)
+    path_new(ZERO_HASH, 0)
 
 /*! The 64-nibble path of a 32-byte hash — the secure-trie key form. */
 function path_from_hash(h : hash) -> TriePath =
@@ -57,7 +57,7 @@ function path_from_hash(h : hash) -> TriePath =
 
 /*! Maps a nibble cursor to the corresponding byte in decreasing vector order. */
 function path_byte_index(i : trie_path_cursor) -> b256_index = {
-    let quotient = tdiv_int(i, 2);
+    let quotient = tdiv_nat(i, 2);
     let natural_index : b256_index = if (0 <= quotient) & (quotient <= 31) then {
             quotient
         } else {
@@ -72,7 +72,7 @@ function path_nibble(path : TriePath, i : trie_path_cursor) -> nibble =
     if path_len(path) <= i then {
         0x0
     } else {
-        let B256(bytes) = path.data;
+        let bytes = path.data;
         let byte_index = path_byte_index(i);
         if tmod_int(i, 2) == 0 then {
             bytes[byte_index][7 .. 4]
@@ -87,7 +87,7 @@ function path_append_nibble(path : TriePath, value : nibble) -> TriePath = {
     if 64 <= length then {
         throw InvalidBlock(WitnessDeficient)
     };
-    let B256(original) = path.data;
+    let original = path.data;
     var bytes = original;
     let byte_index = path_byte_index(length);
     if tmod_int(length, 2) == 0 then {
@@ -184,7 +184,7 @@ function path_lt(a : TriePath, b : TriePath) -> bool =
     if a.data == b.data then {
         path_len(a) < path_len(b)
     } else {
-        b256_lt(a.data, b.data)
+        hash_lt(a.data, b.data)
     }
 
 /*! Whether `prefix` is a prefix of `path`. */
@@ -235,10 +235,10 @@ termination_measure hex_prefix_pairs(path, index) = path_len(path) - index
  * path length, so callers never walk the resulting byte list to measure it. */
 /*! The hex-prefix (compact) encoding of a nibble path with its
     leaf/extension flag (YP Appendix C.1, the HP function). */
-function hex_prefix_compact(path : TriePath, is_leaf : bool) -> (list(byte), byte_length) = {
-    let length : protocol_quantity = path_len(path);
-    let pair_count = protocol_quantity_quotient(length, 2);
-    let odd = length != pair_count * 2;
+function hex_prefix_compact(path : TriePath, is_leaf : bool) -> (list(byte), range(1, 33)) = {
+    let length : trie_path_len = path_len(path);
+    let packed_pair_count : range(0, 32) = tdiv_nat(length, 2);
+    let odd = tmod_nat(length, 2) != 0;
     let flag : nibble = if is_leaf then { 0x2 } else { 0x0 };
     let first = if odd then {
             append(flag | 0x1, path_nibble(path, 0))
@@ -246,7 +246,7 @@ function hex_prefix_compact(path : TriePath, is_leaf : bool) -> (list(byte), byt
             append(flag, 0x0)
         };
     let first_path_index : hex_prefix_cursor = if odd then { 1 } else { 0 };
-    let encoded_len : byte_length = ByteQuantity(1 + pair_count);
+    let encoded_len : range(1, 33) = 1 + packed_pair_count;
     (first :: hex_prefix_pairs(path, first_path_index), encoded_len)
 }
 
@@ -257,31 +257,34 @@ function hex_prefix_decode_ref(f : RlpFieldRef) -> (bool, TriePath) = {
         throw InvalidBlock(RlpDecode)
     };
     let n = f.content_len;
-    let off = f.content_off;
-    if n == BYTE_ZERO then {
+    if n == 0 then {
         (false, path_empty())
     } else {
-        if HEX_PREFIX_MAX_LENGTH < n then {
+        let maximum_length = HEX_PREFIX_MAX_LENGTH;
+        if maximum_length < n then {
             throw InvalidBlock(RlpDecode)
-        };
-        let fb = slice_byte(f.source, off);
-        let flag : nibble = fb[7 .. 4];
-        let is_leaf : bool = flag[1] == bitone;
-        let odd : bool = flag[0] == bitone;
-        var path = path_empty();
-        if odd then {
-            path = path_concat(path, path_single(fb[3 .. 0]))
-        };
-        var cursor : byte_length = BYTE_ONE;
-        foreach (_step from 0 to 31) {
-            if cursor < n then {
-                let b = slice_byte(f.source, off + cursor);
-                path = path_concat(path, path_single(b[7 .. 4]));
-                path = path_concat(path, path_single(b[3 .. 0]));
-                cursor = cursor + BYTE_ONE
+        } else {
+            let content = rlp_ref_content(f);
+            let fb = slice_byte(content, 0);
+            let flag : nibble = fb[7 .. 4];
+            let is_leaf : bool = flag[1] == bitone;
+            let odd : bool = flag[0] == bitone;
+            let tail_length : range(0, 32) = n - 1;
+            let tail = slice_suffix(content, 1);
+            let packed = slice_load(tail, 0);
+            let paired_nibbles : range(0, 64) = tail_length * 2;
+            if odd then {
+                if paired_nibbles < 64 then {
+                    var bytes = word_to_hash(word_shift_right(packed, 4));
+                    bytes[31] = append(fb[3 .. 0], bytes[31][3 .. 0]);
+                    (is_leaf, path_new(B256(bytes), paired_nibbles + 1))
+                } else {
+                    throw InvalidBlock(WitnessDeficient)
+                }
+            } else {
+                (is_leaf, path_new(word_to_hash(packed), paired_nibbles))
             }
-        };
-        (is_leaf, path)
+        }
     }
 }
 

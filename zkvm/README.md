@@ -9,12 +9,11 @@ EVM). Here it is lowered Sail → C → `riscv64im_zicclsm-unknown-none-elf` and
 bare ISA simulator, with the standard IO interface, guard regions, and termination
 semantics wired up.
 
-## Result (validated)
+## Fixture gate
 
 ```
-$ python3 ../harness/run.py --spike --fork Shanghai --quiet \
-    ../harness/fixtures/eels/shanghai_push0/state_tests/for_shanghai/shanghai/eip3855_push0/push0/push0_contracts.json
-=== 2/2 passed (spike guest, byte-exact) ===
+$ python3 ../harness/run.py --spike --limit 1 --quiet \
+    .fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
 The gate diffs the guest's canonical SSZ `SszStatelessValidationResult` BYTE-EXACT
@@ -68,7 +67,7 @@ Verified on the built ELF (`riscv64-unknown-elf-{readelf,objdump}`):
 | Soft-float (F/D excluded), LP64 ABI | 0 floating-point instructions |
 | No syscalls / environment calls | 0 `ecall`/`ebreak`/`mret`/`sret` in reachable text |
 | Statically linked ELF | single PT_LOAD, no `INTERP`/`DYNAMIC`, no `NEEDED` libs |
-| **GMP-free** | no `libgmp`/`mini-gmp`; exact 768-bit bounded `sail_int` and inline 256-bit `lbits` |
+| **GMP-free** | no `libgmp`/`mini-gmp`; exact bounded integers and inferred fixed-width values |
 | Zicclsm (transparent misaligned data accesses) | run config `spike --misaligned` (see below) |
 
 `spike`'s `--isa` string does not name `Zicclsm`; that extension only mandates transparent
@@ -170,7 +169,7 @@ zkvm/
     harness.c           drives model init → guest main → write_output → terminate
     accel_guest.c       guest half of the accelerator API (MMIO marshalling)
     freestanding/       minimal hosted-header shims (decouple from newlib)
-    sail256/            exact bounded integers + inline 256-bit lbits
+    sail256/            exact bounded-integer runtime
   io-device/
     guest.c             Spike implementation of standard read_input/write_output
 ```
@@ -179,7 +178,7 @@ zkvm/
 
 Requires `riscv64-unknown-elf-gcc` and `spike` on `PATH`. The optimized C
 lowering also requires a Sail compiler with spliceable type definitions and
-the `$[c_repr uint64]` newtype extension. The build's
+bound-driven native C representation. The build's
 `resolve_optimized_sail.sh` uses `SAIL` when set, auto-detects the local feature
 worktree used by this repository, and otherwise uses the compiler on `PATH`.
 The real optimized model build is the capability check.

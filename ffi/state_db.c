@@ -13,7 +13,7 @@
  * (keccak256(address), keccak256(slot)), with frame overlays for revert. */
 #include "state_db.h"
 #include "host_crypto.h"
-#include "lbits_convert.h"
+#include "value_convert.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,8 +54,6 @@ static int compare_u64x4(const uint64_t *a, const uint64_t *b) {
 
 /* zeroed account fields, returned by the overlay getters on an absent row */
 static const uint64_t account_zero_val[4] = {0, 0, 0, 0};
-
-static void addr20_to_lbits(lbits *rop, const uint8_t a[20]);
 
 /* ======================================================================== */
 /* EIP-7928 block access list accumulator.                                  */
@@ -142,7 +140,10 @@ unit bal_reset(const unit u) {
   bal_prepared = 0;
   return UNIT;
 }
-unit bal_set_index(uint64_t n) { bal_index = (uint32_t)n; return UNIT; }
+unit bal_set_index(uint64_t n) {
+  bal_index = (uint32_t)n;
+  return UNIT;
+}
 
 /* harvest helpers -- called from the overlay merges (state_db-internal) */
 static void bal_add_storage_change(const uint64_t ah[4], const uint64_t slot[4], const uint64_t val[4]) {
@@ -184,27 +185,28 @@ unit bal_note_account_touch(sail_address a) {
   bal_touch_account_key(a, a4);
   return UNIT;
 }
-unit bal_note_storage_change(sail_address a, sail_word slot, sail_word val) {
+unit bal_note_storage_change(sail_address a, EVMSAIL_WORD_PARAM(slot),
+                             EVMSAIL_WORD_PARAM(val)) {
   uint64_t a4[4], s4[4], v4[4];
   secure_keccak_address(a, a4);
-  sail_word_to_be_words4(s4, slot);
-  sail_word_to_be_words4(v4, val);
+  sail_word_to_be_words4(s4, EVMSAIL_WORD_VALUE(slot));
+  sail_word_to_be_words4(v4, EVMSAIL_WORD_VALUE(val));
   bal_touch_account_key(a, a4);
   bal_add_storage_change(a4, s4, v4);
   return UNIT;
 }
-unit bal_note_storage_read(sail_address a, sail_word slot) {
+unit bal_note_storage_read(sail_address a, EVMSAIL_WORD_PARAM(slot)) {
   uint64_t a4[4], s4[4];
   secure_keccak_address(a, a4);
-  sail_word_to_be_words4(s4, slot);
+  sail_word_to_be_words4(s4, EVMSAIL_WORD_VALUE(slot));
   bal_touch_account_key(a, a4);
   bal_add_storage_read(a4, s4);
   return UNIT;
 }
-unit bal_note_balance_change(sail_address a, sail_word val) {
+unit bal_note_balance_change(sail_address a, EVMSAIL_WORD_PARAM(val)) {
   uint64_t a4[4], v4[4];
   secure_keccak_address(a, a4);
-  sail_word_to_le_words4(v4, val);
+  sail_word_to_le_words4(v4, EVMSAIL_WORD_VALUE(val));
   bal_touch_account_key(a, a4);
   bal_add_balance_change(a4, v4);
   return UNIT;
@@ -254,16 +256,6 @@ static void storage_secure_key(sail_address a, sail_word s,
   secure_keccak_word(s, sh);
 }
 
-/* 20 raw address bytes -> lbits of length 160 */
-static void addr20_to_lbits(lbits *rop, const uint8_t a[20]) {
-  uint64_t be[4] = {0, 0, 0, 0};
-  for (int i = 0; i < 4; i++)  be[1] = (be[1] << 8) | a[i];
-  for (int i = 4; i < 12; i++) be[2] = (be[2] << 8) | a[i];
-  for (int i = 12; i < 20; i++) be[3] = (be[3] << 8) | a[i];
-  be_words4_to_lbits(rop, be);
-  rop->len = 160;
-}
-
 static const uint64_t storage_zero_val[4] = {0, 0, 0, 0};
 
 /* ======================================================================== */
@@ -284,6 +276,7 @@ typedef struct {
   uint8_t  raw_addr[20];
   uint64_t current[4];
   uint64_t original[4];
+  uint8_t written;
 } storage_state_row;
 
 typedef struct { storage_state_row *rows; uint32_t n, cap; } storage_state_table;
@@ -586,6 +579,7 @@ unit storage_block_put_raw(sail_address a, sail_word s_, sail_word curr,
     memcpy(b->original, o4, sizeof(b->original));
   }
   memcpy(b->current, c4, sizeof(b->current));
+  b->written = 1;
   storage_dump_invalidate();
   return UNIT;
 }
@@ -745,26 +739,33 @@ static void storage_dump_push(storage_dump_entry **rows, uint32_t *n, uint32_t *
   (*n)++;
 }
 
-/* Direct iteration over an account's cumulative storage map. */
-uint64_t storage_block_count(sail_address a) {
-  uint64_t k[4]; uint32_t bs, be;
-  secure_keccak_address(a, k);
-  storage_block_account_range(k, &bs, &be);
-  return be - bs;
+/* Non-destructive ascending iteration over one account's cumulative storage
+   rows. Keeping the cursor private avoids exporting a host-sized index into
+   the Sail model while leaving the underlying table available for debug. */
+static uint64_t storage_block_iter_key[4];
+static uint32_t storage_block_iter_position = 0;
+static uint32_t storage_block_iter_end = 0;
+static bool storage_block_iter_active = false;
+
+unit storage_block_iter_begin(sail_address a) {
+  secure_keccak_address(a, storage_block_iter_key);
+  storage_block_account_range(storage_block_iter_key,
+                              &storage_block_iter_position,
+                              &storage_block_iter_end);
+  storage_block_iter_active = true;
+  return UNIT;
 }
 
-static const storage_state_row *storage_block_at(sail_address a, uint64_t i) {
-  uint64_t k[4]; uint32_t bs, be;
-  secure_keccak_address(a, k);
-  storage_block_account_range(k, &bs, &be);
-  return bs + i < be ? &storage_block_table.rows[bs + i] : NULL;
-}
-
-uint64_t storage_block_row_probe(sail_address a, uint64_t i,
-                                 sail_word *slot, sail_word *curr,
-                                 sail_word *orig) {
-  const storage_state_row *entry = storage_block_at(a, i);
-  if (!entry) return 0;
+uint64_t storage_block_iter_next_probe(sail_address a, sail_word *slot,
+                                       sail_word *curr, sail_word *orig) {
+  uint64_t key[4];
+  secure_keccak_address(a, key);
+  if (!storage_block_iter_active ||
+      compare_words(key, storage_block_iter_key, 4) != 0 ||
+      storage_block_iter_end <= storage_block_iter_position)
+    return 0;
+  const storage_state_row *entry =
+      &storage_block_table.rows[storage_block_iter_position++];
   *slot = be_words4_to_sail_word(entry->slot);
   *curr = be_words4_to_sail_word(entry->current);
   *orig = be_words4_to_sail_word(entry->original);
@@ -796,16 +797,16 @@ static void storage_dump_invalidate(void) {
   storage_dump_valid = 0;
 }
 
-uint64_t storage_dump_count(const lbits ak) {
-  uint64_t k[4]; lbits_to_be_words4(k, ak); storage_dump_build(k); return storage_dump_len;
+uint64_t storage_dump_count(sail_word ak) {
+  uint64_t k[4]; sail_word_to_be_words4(k, ak); storage_dump_build(k); return storage_dump_len;
 }
-void storage_dump_slot(lbits *rop, const lbits ak, uint64_t j) {
-  uint64_t k[4]; lbits_to_be_words4(k, ak); storage_dump_build(k);
-  be_words4_to_lbits(rop, j < storage_dump_len ? storage_dump_entries[j].slot : storage_zero_val);
+sail_word storage_dump_slot(sail_word ak, uint64_t j) {
+  uint64_t k[4]; sail_word_to_be_words4(k, ak); storage_dump_build(k);
+  return be_words4_to_sail_word(j < storage_dump_len ? storage_dump_entries[j].slot : storage_zero_val);
 }
-void storage_dump_value(lbits *rop, const lbits ak, uint64_t j) {
-  uint64_t k[4]; lbits_to_be_words4(k, ak); storage_dump_build(k);
-  be_words4_to_lbits(rop, j < storage_dump_len ? storage_dump_entries[j].val : storage_zero_val);
+sail_word storage_dump_value(sail_word ak, uint64_t j) {
+  uint64_t k[4]; sail_word_to_be_words4(k, ak); storage_dump_build(k);
+  return be_words4_to_sail_word(j < storage_dump_len ? storage_dump_entries[j].val : storage_zero_val);
 }
 
 /* ======================================================================== */
@@ -828,7 +829,10 @@ typedef struct {
   uint64_t orig_nonce; uint64_t orig_bal[4]; uint64_t orig_sroot[4]; uint64_t orig_chash[4];
   uint8_t orig_exists, orig_storage_cleared, orig_created, orig_selfdestructed;
   uint8_t raw_addr[20];  /* EIP-7928 BAL account key/order (set on seed/first write) */
+  /* Derived traversal cache; never exposed as semantic account state. */
+  uint64_t post_sroot[4];
   uint32_t snapshot_cursor;
+  uint8_t written;
 } acct_state_row;
 
 typedef struct { acct_state_row *rows; uint32_t n, cap; } acct_state_table;
@@ -1142,6 +1146,7 @@ unit acct_block_write_raw(sail_address a, uint64_t nonce, sail_word bal,
   sail_hash_to_le_words4(b->cur_chash, chash);
   b->cur_exists = exists;
   b->cur_storage_cleared = storage_cleared;
+  b->written = 1;
   acct_dump_invalidate();
   return UNIT;
 }
@@ -1193,21 +1198,85 @@ uint64_t acct_row_probe(uint64_t layer, sail_address a, uint64_t *nonce,
   return 1;
 }
 
-/* Direct iteration over the cumulative account map. */
-uint64_t acct_block_count(const unit u) {
-  (void)u;
-  return acct_block_table.n;
+/* Selects rows that may have a net protocol change without deciding whether
+   they actually do. Sail owns the current/original equality check. */
+static bool acct_block_row_is_update_candidate(const acct_state_row *entry) {
+  if (entry->written)
+    return true;
+
+  uint32_t start, end;
+  storage_block_account_range(entry->hkey, &start, &end);
+  for (uint32_t i = start; i < end; i++) {
+    const storage_state_row *storage = &storage_block_table.rows[i];
+    if (storage->written)
+      return true;
+  }
+  return false;
 }
 
-uint64_t acct_block_row_probe(uint64_t i, sail_address *addr,
-                              uint64_t *cn, sail_word *cb,
-                              sail_hash *cs, sail_hash *cc,
-                              bool *ce, bool *csc, bool *ccr, bool *csd,
-                              uint64_t *on, sail_word *ob,
-                              sail_hash *os, sail_hash *oc,
-                              bool *oe, bool *osc, bool *ocr, bool *osd) {
-  if (i >= acct_block_table.n) return 0;
-  const acct_state_row *entry = &acct_block_table.rows[i];
+/* Non-destructive ascending iteration over account update candidates. */
+static uint32_t acct_block_iter_position = 0;
+static bool acct_block_iter_active = false;
+
+/* The debug iterator deliberately has independent state and includes cached,
+   read-only rows. It is never used by the protocol state-root path. */
+static uint32_t acct_debug_iter_position = 0;
+static bool acct_debug_iter_active = false;
+
+unit acct_block_iter_begin(const unit u) {
+  (void)u;
+  acct_block_iter_position = 0;
+  acct_block_iter_active = true;
+  return UNIT;
+}
+
+unit acct_debug_iter_begin(const unit u) {
+  (void)u;
+  acct_debug_iter_position = 0;
+  acct_debug_iter_active = true;
+  return UNIT;
+}
+
+unit acct_post_storage_root_store(sail_address a, sail_hash root) {
+  uint64_t h[4];
+  acct_secure_key(a, h);
+  acct_state_row *entry = acct_table_get(&acct_block_table, h);
+  if (entry) sail_hash_to_le_words4(entry->post_sroot, root);
+  return UNIT;
+}
+
+EVMSAIL_HASH_RETURN acct_post_storage_root_read(
+    EVMSAIL_HASH_RESULT(result) sail_address a) {
+  uint64_t h[4];
+  acct_secure_key(a, h);
+  const acct_state_row *entry = acct_table_get(&acct_block_table, h);
+  const uint64_t *le = entry ? entry->post_sroot : account_zero_val;
+  const uint64_t be[4] = {le[3], le[2], le[1], le[0]};
+  uint8_t bytes[32];
+  be_words4_to_be_bytes(bytes, be);
+  EVMSAIL_RETURN_HASH_BE_BYTES(result, bytes);
+}
+
+static uint64_t acct_iter_next_probe(uint32_t *position, bool *active,
+                                     const bool candidates_only,
+                                     sail_address *addr, uint64_t *cn,
+                                     sail_word *cb, sail_hash *cs,
+                                     sail_hash *cc, bool *ce, bool *csc,
+                                     bool *ccr, bool *csd, uint64_t *on,
+                                     sail_word *ob, sail_hash *os,
+                                     sail_hash *oc, bool *oe, bool *osc,
+                                     bool *ocr, bool *osd) {
+  if (!*active)
+    return 0;
+  const acct_state_row *entry = NULL;
+  while (*position < acct_block_table.n) {
+    const acct_state_row *candidate = &acct_block_table.rows[(*position)++];
+    if (!candidates_only || acct_block_row_is_update_candidate(candidate)) {
+      entry = candidate;
+      break;
+    }
+  }
+  if (!entry) return 0;
   *addr = be_bytes_to_sail_address(entry->raw_addr);
   *cn = entry->cur_nonce;
   *cb = le_words4_to_sail_word(entry->cur_bal);
@@ -1226,6 +1295,30 @@ uint64_t acct_block_row_probe(uint64_t i, sail_address *addr,
   *ocr = entry->orig_created;
   *osd = entry->orig_selfdestructed;
   return 1;
+}
+
+uint64_t acct_block_iter_next_probe(sail_address *addr, uint64_t *cn,
+                                    sail_word *cb, sail_hash *cs,
+                                    sail_hash *cc, bool *ce, bool *csc,
+                                    bool *ccr, bool *csd, uint64_t *on,
+                                    sail_word *ob, sail_hash *os,
+                                    sail_hash *oc, bool *oe, bool *osc,
+                                    bool *ocr, bool *osd) {
+  return acct_iter_next_probe(
+      &acct_block_iter_position, &acct_block_iter_active, true, addr, cn, cb,
+      cs, cc, ce, csc, ccr, csd, on, ob, os, oc, oe, osc, ocr, osd);
+}
+
+uint64_t acct_debug_iter_next_probe(sail_address *addr, uint64_t *cn,
+                                    sail_word *cb, sail_hash *cs,
+                                    sail_hash *cc, bool *ce, bool *csc,
+                                    bool *ccr, bool *csd, uint64_t *on,
+                                    sail_word *ob, sail_hash *os,
+                                    sail_hash *oc, bool *oe, bool *osc,
+                                    bool *ocr, bool *osd) {
+  return acct_iter_next_probe(
+      &acct_debug_iter_position, &acct_debug_iter_active, false, addr, cn, cb,
+      cs, cc, ce, csc, ccr, csd, on, ob, os, oc, oe, osc, ocr, osd);
 }
 
 /* Transaction rows are allocated lazily on the first write by cloning the
@@ -1258,11 +1351,11 @@ unit acct_tx_update_raw(sail_address a, uint64_t nonce,
   return UNIT;
 }
 
-unit acct_tx_set_balance(sail_address a, sail_word balance) {
+unit acct_tx_set_balance(sail_address a, EVMSAIL_WORD_PARAM(balance)) {
   uint64_t h[4], value[4];
   int fresh = 0;
   acct_secure_key(a, h);
-  sail_word_to_le_words4(value, balance);
+  sail_word_to_le_words4(value, EVMSAIL_WORD_VALUE(balance));
   acct_state_row *e = acct_tx_bind_write(a, h, &fresh);
   if (!e) return UNIT;
   if (compare_u64x4(e->cur_bal, value) == 0) {
@@ -1361,23 +1454,25 @@ static void acct_dump_build(void) {
 }
 
 uint64_t acct_dump_count(const unit u) { (void)u; acct_dump_build(); return acct_dump_len; }
-void acct_dump_hkey(lbits *rop, uint64_t i) {
-  acct_dump_build(); be_words4_to_lbits(rop, i < acct_dump_len ? acct_dump_entries[i].hkey : account_zero_val);
-}
-void acct_dump_address(lbits *rop, uint64_t i) {
+sail_word acct_dump_hkey(uint64_t i) {
   acct_dump_build();
-  if (i < acct_dump_len) addr20_to_lbits(rop, acct_dump_entries[i].raw_addr);
-  else addr20_to_lbits(rop, (const uint8_t[20]){0});
+  return be_words4_to_sail_word(i < acct_dump_len ? acct_dump_entries[i].hkey : account_zero_val);
+}
+sail_address acct_dump_address(uint64_t i) {
+  acct_dump_build();
+  return be_bytes_to_sail_address(i < acct_dump_len
+                                      ? acct_dump_entries[i].raw_addr
+                                      : (const uint8_t[20]){0});
 }
 uint64_t acct_dump_nonce(uint64_t i) { acct_dump_build(); return i < acct_dump_len ? acct_dump_entries[i].nonce : 0; }
-void acct_dump_balance(lbits *rop, uint64_t i) {
-  acct_dump_build(); le_words4_to_lbits(rop, i < acct_dump_len ? acct_dump_entries[i].bal : account_zero_val);
+sail_word acct_dump_balance(uint64_t i) {
+  acct_dump_build(); return le_words4_to_sail_word(i < acct_dump_len ? acct_dump_entries[i].bal : account_zero_val);
 }
-void acct_dump_storage_root(lbits *rop, uint64_t i) {
-  acct_dump_build(); le_words4_to_lbits(rop, i < acct_dump_len ? acct_dump_entries[i].sroot : account_zero_val);
+sail_word acct_dump_storage_root(uint64_t i) {
+  acct_dump_build(); return le_words4_to_sail_word(i < acct_dump_len ? acct_dump_entries[i].sroot : account_zero_val);
 }
-void acct_dump_code_hash(lbits *rop, uint64_t i) {
-  acct_dump_build(); le_words4_to_lbits(rop, i < acct_dump_len ? acct_dump_entries[i].chash : account_zero_val);
+sail_word acct_dump_code_hash(uint64_t i) {
+  acct_dump_build(); return le_words4_to_sail_word(i < acct_dump_len ? acct_dump_entries[i].chash : account_zero_val);
 }
 
 static void acct_dump_invalidate(void) {
@@ -1519,105 +1614,139 @@ static const bal_cod_rec *bal_code_change_at(uint64_t account,
                         : NULL;
 }
 
-uint64_t bal_account_count(const unit u) {
+EVMSAIL_ITEM_RETURN bal_account_count(EVMSAIL_ITEM_RESULT(rop) const unit u) {
   (void)u;
   bal_ensure_prepared();
-  return bal_prepared ? bal_acc.n : 0;
+  EVMSAIL_RETURN_ITEM(rop, bal_prepared ? bal_acc.n : 0);
 }
 
 EVMSAIL_ADDRESS_RETURN bal_account_address(
-    EVMSAIL_ADDRESS_RESULT(rop) uint64_t account) {
+    EVMSAIL_ADDRESS_RESULT(rop) EVMSAIL_ITEM_PARAM(account)) {
   static const uint8_t zero_address[20] = {0};
-  const bal_acc_rec *a = bal_account_at(account);
+  const bal_acc_rec *a = bal_account_at(evmsail_item_value(account));
   EVMSAIL_RETURN_ADDRESS_BE_BYTES(rop, a ? a->raw_addr : zero_address);
 }
 
-uint64_t bal_storage_change_count(uint64_t account) {
-  const bal_acc_rec *a = bal_account_at(account);
+EVMSAIL_ITEM_RETURN bal_storage_change_count(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account)) {
+  const bal_acc_rec *a = bal_account_at(evmsail_item_value(account));
   uint32_t begin;
-  return bal_range(bal_sto.d, sizeof(bal_sto_rec), bal_sto.n, a, &begin);
+  EVMSAIL_RETURN_ITEM(
+      rop, bal_range(bal_sto.d, sizeof(bal_sto_rec), bal_sto.n, a, &begin));
 }
 
 EVMSAIL_WORD_RETURN bal_storage_change_slot(
-    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record) {
-  const bal_sto_rec *r = bal_storage_change_at(account, record);
+    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record)) {
+  const bal_sto_rec *r = bal_storage_change_at(evmsail_item_value(account),
+                                                evmsail_item_value(record));
   EVMSAIL_RETURN_WORD(
       rop, be_words4_to_sail_word(r ? r->slot : account_zero_val));
 }
 
-uint64_t bal_storage_change_index(uint64_t account, uint64_t record) {
-  const bal_sto_rec *r = bal_storage_change_at(account, record);
-  return r ? r->idx : 0;
+EVMSAIL_ITEM_RETURN bal_storage_change_index(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record)) {
+  const bal_sto_rec *r = bal_storage_change_at(evmsail_item_value(account),
+                                                evmsail_item_value(record));
+  EVMSAIL_RETURN_ITEM(rop, r ? r->idx : 0);
 }
 
 EVMSAIL_WORD_RETURN bal_storage_change_value(
-    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record) {
-  const bal_sto_rec *r = bal_storage_change_at(account, record);
+    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record)) {
+  const bal_sto_rec *r = bal_storage_change_at(evmsail_item_value(account),
+                                                evmsail_item_value(record));
   EVMSAIL_RETURN_WORD(
       rop, be_words4_to_sail_word(r ? r->val : account_zero_val));
 }
 
-uint64_t bal_storage_read_count(uint64_t account) {
-  const bal_acc_rec *a = bal_account_at(account);
+EVMSAIL_ITEM_RETURN bal_storage_read_count(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account)) {
+  const bal_acc_rec *a = bal_account_at(evmsail_item_value(account));
   uint32_t begin;
-  return bal_range(bal_rds.d, sizeof(bal_read_rec), bal_rds.n, a, &begin);
+  EVMSAIL_RETURN_ITEM(
+      rop, bal_range(bal_rds.d, sizeof(bal_read_rec), bal_rds.n, a, &begin));
 }
 
 EVMSAIL_WORD_RETURN bal_storage_read_slot(
-    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record) {
-  const bal_read_rec *r = bal_storage_read_at(account, record);
+    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record)) {
+  const bal_read_rec *r = bal_storage_read_at(evmsail_item_value(account),
+                                               evmsail_item_value(record));
   EVMSAIL_RETURN_WORD(
       rop, be_words4_to_sail_word(r ? r->slot : account_zero_val));
 }
 
-uint64_t bal_balance_change_count(uint64_t account) {
-  const bal_acc_rec *a = bal_account_at(account);
+EVMSAIL_ITEM_RETURN bal_balance_change_count(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account)) {
+  const bal_acc_rec *a = bal_account_at(evmsail_item_value(account));
   uint32_t begin;
-  return bal_range(bal_balc.d, sizeof(bal_bal_rec), bal_balc.n, a, &begin);
+  EVMSAIL_RETURN_ITEM(
+      rop, bal_range(bal_balc.d, sizeof(bal_bal_rec), bal_balc.n, a, &begin));
 }
 
-uint64_t bal_balance_change_index(uint64_t account, uint64_t record) {
-  const bal_bal_rec *r = bal_balance_change_at(account, record);
-  return r ? r->idx : 0;
+EVMSAIL_ITEM_RETURN bal_balance_change_index(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record)) {
+  const bal_bal_rec *r = bal_balance_change_at(evmsail_item_value(account),
+                                                evmsail_item_value(record));
+  EVMSAIL_RETURN_ITEM(rop, r ? r->idx : 0);
 }
 
 EVMSAIL_WORD_RETURN bal_balance_change_value(
-    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record) {
-  const bal_bal_rec *r = bal_balance_change_at(account, record);
+    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record)) {
+  const bal_bal_rec *r = bal_balance_change_at(evmsail_item_value(account),
+                                                evmsail_item_value(record));
   EVMSAIL_RETURN_WORD(
       rop, le_words4_to_sail_word(r ? r->val : account_zero_val));
 }
 
-uint64_t bal_nonce_change_count(uint64_t account) {
-  const bal_acc_rec *a = bal_account_at(account);
+EVMSAIL_ITEM_RETURN bal_nonce_change_count(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account)) {
+  const bal_acc_rec *a = bal_account_at(evmsail_item_value(account));
   uint32_t begin;
-  return bal_range(bal_nonc.d, sizeof(bal_non_rec), bal_nonc.n, a, &begin);
+  EVMSAIL_RETURN_ITEM(
+      rop, bal_range(bal_nonc.d, sizeof(bal_non_rec), bal_nonc.n, a, &begin));
 }
 
-uint64_t bal_nonce_change_index(uint64_t account, uint64_t record) {
-  const bal_non_rec *r = bal_nonce_change_at(account, record);
-  return r ? r->idx : 0;
+EVMSAIL_ITEM_RETURN bal_nonce_change_index(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record)) {
+  const bal_non_rec *r = bal_nonce_change_at(evmsail_item_value(account),
+                                              evmsail_item_value(record));
+  EVMSAIL_RETURN_ITEM(rop, r ? r->idx : 0);
 }
 
-uint64_t bal_nonce_change_value(uint64_t account, uint64_t record) {
-  const bal_non_rec *r = bal_nonce_change_at(account, record);
+uint64_t bal_nonce_change_value(EVMSAIL_ITEM_PARAM(account),
+                                EVMSAIL_ITEM_PARAM(record)) {
+  const bal_non_rec *r = bal_nonce_change_at(evmsail_item_value(account),
+                                              evmsail_item_value(record));
   return r ? r->val : 0;
 }
 
-uint64_t bal_code_change_count(uint64_t account) {
-  const bal_acc_rec *a = bal_account_at(account);
+EVMSAIL_ITEM_RETURN bal_code_change_count(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account)) {
+  const bal_acc_rec *a = bal_account_at(evmsail_item_value(account));
   uint32_t begin;
-  return bal_range(bal_codc.d, sizeof(bal_cod_rec), bal_codc.n, a, &begin);
+  EVMSAIL_RETURN_ITEM(
+      rop, bal_range(bal_codc.d, sizeof(bal_cod_rec), bal_codc.n, a, &begin));
 }
 
-uint64_t bal_code_change_index(uint64_t account, uint64_t record) {
-  const bal_cod_rec *r = bal_code_change_at(account, record);
-  return r ? r->idx : 0;
+EVMSAIL_ITEM_RETURN bal_code_change_index(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record)) {
+  const bal_cod_rec *r = bal_code_change_at(evmsail_item_value(account),
+                                             evmsail_item_value(record));
+  EVMSAIL_RETURN_ITEM(rop, r ? r->idx : 0);
 }
 
 EVMSAIL_HASH_RETURN bal_code_change_hash(
-    EVMSAIL_HASH_RESULT(rop) uint64_t account, uint64_t record) {
-  const bal_cod_rec *r = bal_code_change_at(account, record);
+    EVMSAIL_HASH_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record)) {
+  const bal_cod_rec *r = bal_code_change_at(evmsail_item_value(account),
+                                             evmsail_item_value(record));
   const uint64_t *le = r ? r->chash : account_zero_val;
   const uint64_t be[4] = {le[3], le[2], le[1], le[0]};
   uint8_t bytes[32];

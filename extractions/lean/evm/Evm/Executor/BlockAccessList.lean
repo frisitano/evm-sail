@@ -1,6 +1,5 @@
-import Evm.Arith
+import Evm.Flow
 import Evm.Prelude
-import Evm.Primitives.Quantities
 import Evm.Host.Kernel.Scratch
 import Evm.Host.Code
 import Evm.Lib.Rlp.Rlp
@@ -20,23 +19,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -49,6 +40,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # The block access list
@@ -63,104 +55,204 @@ The cursor records pair an encoded-content length with the ordered-table
 position reached by a sizing pass, so the subsequent writer follows exactly
 the same grouping boundaries. -/
 
+def BAL_RLP_ZERO : bal_rlp_length := ⟨0⟩
+
+/- Type quantifiers: value : Nat, 0 ≤ value -/
+def bal_rlp_length_from_byte_length (value : Nat) : SailM bal_rlp_length := do
+  let publicResult ← do
+    if ((value ≤b (2 ^i 30)) : Bool)
+    then (pure value)
+    else sailThrow ((InvalidBlock ExecutionInvalid))
+  pure (⟨publicResult⟩)
+
+/-- Exposes a schema-bounded BAL RLP length as a byte length. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 30) -/
+def bal_rlp_length_to_byte_length (value : bal_rlp_length) : Nat :=
+  let value := (value).value
+  value
+
+/- Type quantifiers: current : Nat, addition : Nat, 0 ≤ addition, 0 ≤ current ∧
+  current ≤ (2 ^ 30) -/
+def bal_rlp_length_add (current : bal_rlp_length) (addition : Nat) : SailM bal_rlp_length := do
+  let current := (current).value
+  let publicResult ← do
+    let bounded_addition ← do
+      (do
+          let publicResult ← (bal_rlp_length_from_byte_length addition)
+          pure ((publicResult).value))
+    if ((bounded_addition ≤b ((2 ^i 30) - current)) : Bool)
+    then (pure (current + bounded_addition))
+    else sailThrow ((InvalidBlock ExecutionInvalid))
+  pure (⟨publicResult⟩)
+
+/- Type quantifiers: left : Nat, right : Nat, 0 ≤ left ∧ 0 ≤ right -/
+def bal_bounded_byte_length_add (left : Nat) (right : Nat) : SailM Nat := do
+  (pure (bal_rlp_length_to_byte_length
+      ⟨((← (bal_rlp_length_add ⟨((← (bal_rlp_length_from_byte_length left))).value⟩ right))).value⟩))
+
+/-- Adds the canonical RLP list evm_prefix to a bounded BAL content length. -/
+/- Type quantifiers: content_len : Nat, 0 ≤ content_len ∧ content_len ≤ (2 ^ 30) -/
+def bal_rlp_list_size (content_len : bal_rlp_length) : SailM bal_rlp_length := do
+  let content_len := (content_len).value
+  let publicResult ← do
+    let content_length := (bal_rlp_length_to_byte_length ⟨content_len⟩)
+    let encoded_length ← do (rlp_list_size content_length)
+    (do
+        let publicResult ← (bal_rlp_length_from_byte_length encoded_length)
+        pure ((publicResult).value))
+  pure (⟨publicResult⟩)
+
+/- Type quantifiers: content_len : Nat, 0 ≤ content_len -/
+def bal_bounded_list_size (content_len : Nat) : SailM Nat := do
+  (pure (bal_rlp_length_to_byte_length
+      ⟨((← (bal_rlp_list_size ⟨((← (bal_rlp_length_from_byte_length content_len))).value⟩))).value⟩))
+
+def undefined_BalContentCursor (_ : Unit) : SailM BalContentCursor := do
+  (pure { content_len := ← do
+              let publicField ← (undefined_range 0 (2 ^i 30))
+              pure (⟨publicField⟩),
+          cursor := ← do
+              let publicField ← (undefined_range 0 ((2 ^i 64) - 1))
+              pure (⟨publicField⟩) })
+
+def undefined_BalContentCount (_ : Unit) : SailM BalContentCount := do
+  (pure { content_len := ← do
+              let publicField ← (undefined_range 0 (2 ^i 30))
+              pure (⟨publicField⟩),
+          count := ← do
+              let publicField ← (undefined_range 0 ((2 ^i 64) - 1))
+              pure (⟨publicField⟩) })
+
+def undefined_BalAccountSize (_ : Unit) : SailM BalAccountSize := do
+  (pure { encoded_len := ← do
+              let publicField ← (undefined_range 0 (2 ^i 30))
+              pure (⟨publicField⟩),
+          item_count := ← do
+              let publicField ← (undefined_range 0 ((2 ^i 64) - 1))
+              pure (⟨publicField⟩) })
+
 def undefined_BalNonceRun (_ : Unit) : SailM BalNonceRun := do
   (pure { cursor := ← do
-              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
-              pure (⟨semanticField⟩),
+              let publicField ← (undefined_range 0 ((2 ^i 64) - 1))
+              pure (⟨publicField⟩),
           maximum := ← do
-              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
-              pure (⟨semanticField⟩) })
+              let publicField ← (undefined_range 0 ((2 ^i 64) - 1))
+              pure (⟨publicField⟩) })
 
-/-- Adds logical BAL item counts and rejects protocol-quantity overflow. -/
-/- Type quantifiers: k_ex161459_ : Nat, k_ex161458_ : Nat, 0 ≤ k_ex161458_ ∧
-  k_ex161458_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161459_ ∧ k_ex161459_ ≤ (2 ^ 64 - 1) -/
-def bal_count_add (a : item_count) (b : item_count) : SailM item_count := do
-  let a := (a).value
-  let b := (b).value
-  let semanticResult ← do
-    if ((b ≤b ((BYTE_QUANTITY_MAX).value -i a)) : Bool)
-    then (pure (a + b))
+/- Type quantifiers: a : Nat, b : Nat, 0 ≤ a ∧ 0 ≤ b -/
+def bal_count_add (a : Nat) (b : Nat) : SailM Nat := do
+  if (((a ≤b (2 ^i 30)) && (b ≤b ((2 ^i 30) -i a))) : Bool)
+  then (pure (a + b))
+  else sailThrow ((InvalidBlock BlockAccessListTooLarge))
+
+/-- Returns the final row of a non-empty BAL run. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
+def bal_previous_index (value : item_index) : SailM item_index := do
+  let value := (value).value
+  let publicResult ← do
+    if ((value != 0) : Bool)
+    then (pure (value - 1))
     else sailThrow ((InvalidBlock ExecutionInvalid))
-  pure (⟨semanticResult⟩)
+  pure (⟨publicResult⟩)
 
-/- Type quantifiers: k_ex161460_ : Nat, 0 ≤ k_ex161460_ ∧ k_ex161460_ ≤ (2 ^ 64 - 1) -/
-def bal_index_word_content_size (index : item_index) (value : word) : SailM byte_length := do
+/- Type quantifiers: k_ex409151_ : Nat, k_ex409150_ : Nat, 0 ≤ k_ex409150_ ∧
+  k_ex409150_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409151_ ∧ k_ex409151_ ≤ (2 ^ 256 - 1) -/
+def bal_index_word_content_size (index : item_index) (value : word) : SailM bal_rlp_length := do
   let index := (index).value
-  (byte_quantity_add (← (rlp_protocol_quantity_size ⟨index⟩)) (← (rlp_uint_word_size value)))
+  let value := (value).value
+  let publicResult ← do
+    (bal_bounded_byte_length_add (rlp_uint_word_size index) (rlp_uint_word_size value))
+  pure (⟨publicResult⟩)
 
-/- Type quantifiers: k_ex161461_ : Nat, 0 ≤ k_ex161461_ ∧ k_ex161461_ ≤ (2 ^ 64 - 1) -/
-def bal_index_word_size (index : item_index) (value : word) : SailM byte_length := do
+/- Type quantifiers: k_ex409153_ : Nat, k_ex409152_ : Nat, 0 ≤ k_ex409152_ ∧
+  k_ex409152_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409153_ ∧ k_ex409153_ ≤ (2 ^ 256 - 1) -/
+def bal_index_word_size (index : item_index) (value : word) : SailM bal_rlp_length := do
   let index := (index).value
-  (rlp_list_size (← (bal_index_word_content_size ⟨index⟩ value)))
+  let value := (value).value
+  let publicResult ← do
+    (bal_bounded_list_size ((← (bal_index_word_content_size ⟨index⟩ ⟨value⟩))).value)
+  pure (⟨publicResult⟩)
 
 /-- Writes one `[index, word]` BAL pair. -/
-/- Type quantifiers: k_ex161462_ : Nat, 0 ≤ k_ex161462_ ∧ k_ex161462_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex409155_ : Nat, k_ex409154_ : Nat, 0 ≤ k_ex409154_ ∧
+  k_ex409154_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409155_ ∧ k_ex409155_ ≤ (2 ^ 256 - 1) -/
 def bal_write_index_word (index : item_index) (value : word) : SailM Unit := do
   let index := (index).value
-  (rlp_write_list_prefix (← (bal_index_word_content_size ⟨index⟩ value)))
-  (rlp_write_protocol_quantity ⟨index⟩)
+  let value := (value).value
+  (rlp_write_list_prefix ((← (bal_index_word_content_size ⟨index⟩ ⟨value⟩))).value)
+  (rlp_write_uint_word index)
   (rlp_write_uint_word value)
 
-/- Type quantifiers: k_ex161464_ : Nat, k_ex161463_ : Nat, 0 ≤ k_ex161463_ ∧
-  k_ex161463_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161464_ ∧ k_ex161464_ ≤ (2 ^ 64 - 1) -/
-def bal_index_nonce_content_size (index : item_index) (value : account_nonce) : SailM byte_length := do
+/- Type quantifiers: k_ex409157_ : Nat, k_ex409156_ : Nat, 0 ≤ k_ex409156_ ∧
+  k_ex409156_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409157_ ∧ k_ex409157_ ≤ (2 ^ 64 - 1) -/
+def bal_index_nonce_content_size (index : item_index) (value : account_nonce) : SailM bal_rlp_length := do
   let index := (index).value
   let value := (value).value
-  (byte_quantity_add (← (rlp_protocol_quantity_size ⟨index⟩))
-    (← (rlp_protocol_quantity_size ⟨value⟩)))
+  let publicResult ← do
+    (bal_bounded_byte_length_add (rlp_uint_word_size index) (rlp_uint_word_size value))
+  pure (⟨publicResult⟩)
 
-/- Type quantifiers: k_ex161466_ : Nat, k_ex161465_ : Nat, 0 ≤ k_ex161465_ ∧
-  k_ex161465_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161466_ ∧ k_ex161466_ ≤ (2 ^ 64 - 1) -/
-def bal_index_nonce_size (index : item_index) (value : account_nonce) : SailM byte_length := do
+/- Type quantifiers: k_ex409159_ : Nat, k_ex409158_ : Nat, 0 ≤ k_ex409158_ ∧
+  k_ex409158_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409159_ ∧ k_ex409159_ ≤ (2 ^ 64 - 1) -/
+def bal_index_nonce_size (index : item_index) (value : account_nonce) : SailM bal_rlp_length := do
   let index := (index).value
   let value := (value).value
-  (rlp_list_size (← (bal_index_nonce_content_size ⟨index⟩ ⟨value⟩)))
+  let publicResult ← do
+    (bal_bounded_list_size ((← (bal_index_nonce_content_size ⟨index⟩ ⟨value⟩))).value)
+  pure (⟨publicResult⟩)
 
 /-- Writes one `[index, nonce]` BAL pair. -/
-/- Type quantifiers: k_ex161468_ : Nat, k_ex161467_ : Nat, 0 ≤ k_ex161467_ ∧
-  k_ex161467_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161468_ ∧ k_ex161468_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex409161_ : Nat, k_ex409160_ : Nat, 0 ≤ k_ex409160_ ∧
+  k_ex409160_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409161_ ∧ k_ex409161_ ≤ (2 ^ 64 - 1) -/
 def bal_write_index_nonce (index : item_index) (value : account_nonce) : SailM Unit := do
   let index := (index).value
   let value := (value).value
-  (rlp_write_list_prefix (← (bal_index_nonce_content_size ⟨index⟩ ⟨value⟩)))
-  (rlp_write_protocol_quantity ⟨index⟩)
-  (rlp_write_protocol_quantity ⟨value⟩)
+  (rlp_write_list_prefix ((← (bal_index_nonce_content_size ⟨index⟩ ⟨value⟩))).value)
+  (rlp_write_uint_word index)
+  (rlp_write_uint_word value)
 
 /-- Sizes the content of an index-and-code pair. -/
-/- Type quantifiers: k_ex161469_ : Nat, 0 ≤ k_ex161469_ ∧ k_ex161469_ ≤ (2 ^ 64 - 1) -/
-def bal_index_code_content_size (index : item_index) (code_hash : hash) : SailM byte_length := do
+/- Type quantifiers: k_ex409162_ : Nat, 0 ≤ k_ex409162_ ∧ k_ex409162_ ≤ (2 ^ 64 - 1) -/
+def bal_index_code_content_size (index : item_index) (code_hash : hash) : SailM bal_rlp_length := do
   let index := (index).value
-  let code ← do (code_db_resolve code_hash)
-  (byte_quantity_add (← (rlp_protocol_quantity_size ⟨index⟩))
-    (← (rlp_slice_size code.bytes)))
+  let publicResult ← do
+    let code ← do (code_db_resolve code_hash)
+    let index_length := (rlp_uint_word_size index)
+    let code_length ← do (rlp_slice_size ((code.bytes).2).2)
+    (bal_bounded_byte_length_add index_length code_length)
+  pure (⟨publicResult⟩)
 
-/- Type quantifiers: k_ex161470_ : Nat, 0 ≤ k_ex161470_ ∧ k_ex161470_ ≤ (2 ^ 64 - 1) -/
-def bal_index_code_size (index : item_index) (code_hash : hash) : SailM byte_length := do
+/- Type quantifiers: k_ex409163_ : Nat, 0 ≤ k_ex409163_ ∧ k_ex409163_ ≤ (2 ^ 64 - 1) -/
+def bal_index_code_size (index : item_index) (code_hash : hash) : SailM bal_rlp_length := do
   let index := (index).value
-  (rlp_list_size (← (bal_index_code_content_size ⟨index⟩ code_hash)))
+  let publicResult ← do
+    (bal_bounded_list_size ((← (bal_index_code_content_size ⟨index⟩ code_hash))).value)
+  pure (⟨publicResult⟩)
 
 /-- Writes one `[index, code]` BAL pair after resolving the code hash. -/
-/- Type quantifiers: k_ex161471_ : Nat, 0 ≤ k_ex161471_ ∧ k_ex161471_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex409164_ : Nat, 0 ≤ k_ex409164_ ∧ k_ex409164_ ≤ (2 ^ 64 - 1) -/
 def bal_write_index_code (index : item_index) (code_hash : hash) : SailM Unit := do
   let index := (index).value
   let code ← do (code_db_resolve code_hash)
-  (rlp_write_list_prefix
-    (← (byte_quantity_add (← (rlp_protocol_quantity_size ⟨index⟩))
-        (← (rlp_slice_size code.bytes)))))
-  (rlp_write_protocol_quantity ⟨index⟩)
-  (rlp_write_slice code.bytes)
+  (rlp_write_list_prefix ((← (bal_index_code_content_size ⟨index⟩ code_hash))).value)
+  (rlp_write_uint_word index)
+  (rlp_write_slice
+    (⟨_, ⟨_, ((code.bytes).2).2⟩⟩ : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
 
 /-- Finds the end of an equal-slot, equal-index storage-change run. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161475_ : Nat, k_ex161474_ : Nat, k_ex161473_ : Nat, k_ex161472_
-  : Nat, 0 ≤ k_ex161472_ ∧ k_ex161472_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161473_ ∧
-  k_ex161473_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161474_ ∧ k_ex161474_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex161475_ ∧ k_ex161475_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex409169_ : Nat, k_ex409168_ : Nat, k_ex409167_ : Nat, k_ex409166_
+  : Nat, k_ex409165_ : Nat, 0 ≤ k_ex409165_ ∧ k_ex409165_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409166_
+  ∧ k_ex409166_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409167_ ∧ k_ex409167_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex409168_ ∧ k_ex409168_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409169_ ∧ k_ex409169_ ≤ (2 ^ 64 - 1), 0
+  ≤ _reclimit -/
 def _rec_bal_storage_change_run_end (account : item_index) (count : item_count) (slot : word) (index : item_index) (cursor : item_index) (_reclimit : Nat) : SailM item_index := do
   let account := (account).value
   let count := (count).value
+  let slot := (slot).value
   let index := (index).value
   let cursor := (cursor).value
-  let semanticResult ← do
+  let publicResult ← do
     match _reclimit with
     | 0 =>
       (do
@@ -171,48 +263,53 @@ def _rec_bal_storage_change_run_end (account : item_index) (count : item_count) 
         if ((cursor <b count) : Bool)
         then
           (do
-            if ((((← (bal_storage_change_slot ⟨account⟩ ⟨cursor⟩)) == slot) && (← do
+            if (((((← (bal_storage_change_slot ⟨account⟩ ⟨cursor⟩))).value == slot) && (← do
                    (pure (((← (bal_storage_change_index ⟨account⟩ ⟨cursor⟩))).value == index)))) : Bool)
             then
               (do
-                  let semanticResult ← (_rec_bal_storage_change_run_end ⟨account⟩ ⟨count⟩
-                  slot ⟨index⟩ ⟨((← (item_index_increment ⟨cursor⟩))).value⟩
-                  _reclimit_pred)
-                  pure ((semanticResult).value))
+                  let publicResult ← (_rec_bal_storage_change_run_end ⟨account⟩ ⟨count⟩
+                  ⟨slot⟩ ⟨index⟩ ⟨(cursor + 1)⟩ _reclimit_pred)
+                  pure ((publicResult).value))
             else (pure cursor))
         else (pure cursor))
-  pure (⟨semanticResult⟩)
+  pure (⟨publicResult⟩)
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Finds the end of an equal-slot, equal-index storage-change run. -/
-/- Type quantifiers: cursor : Nat, index : Nat, count : Nat, account : Nat, 0 ≤ account ∧
-  account ≤ (2 ^ 64 - 1), 0 ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ index ∧
-  index ≤ (2 ^ 64 - 1), 0 ≤ cursor ∧ cursor ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: cursor : Nat, index : Nat, slot : Nat, count : Nat, account : Nat, 0 ≤
+  account ∧ account ≤ (2 ^ 64 - 1), 0 ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ slot ∧
+  slot ≤ (2 ^ 256 - 1), 0 ≤ index ∧ index ≤ (2 ^ 64 - 1), 0 ≤ cursor ∧
+  cursor ≤ (2 ^ 64 - 1) -/
 def bal_storage_change_run_end (account : item_index) (count : item_count) (slot : word) (index : item_index) (cursor : item_index) : SailM item_index := do
   let account := (account).value
   let count := (count).value
+  let slot := (slot).value
   let index := (index).value
   let cursor := (cursor).value
-  let semanticResult ← do
+  let publicResult ← do
     let _measure := ((count -i cursor) : Int)
     if ((_measure <b 0) : Bool)
     then throw Error.Exit
     else
       (do
-          let semanticResult ← (_rec_bal_storage_change_run_end ⟨account⟩ ⟨count⟩ slot
+          let publicResult ← (_rec_bal_storage_change_run_end ⟨account⟩ ⟨count⟩ ⟨slot⟩
           ⟨index⟩ ⟨cursor⟩ (_measure + 1))
-          pure ((semanticResult).value))
-  pure (⟨semanticResult⟩)
+          pure ((publicResult).value))
+  pure (⟨publicResult⟩)
 
 /-- Sizes the final values for all change indices of one storage slot. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161484_ : Nat, k_ex161483_ : Nat, k_ex161482_ : Nat, 0 ≤
-  k_ex161482_ ∧ k_ex161482_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161483_ ∧ k_ex161483_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex161484_ ∧ k_ex161484_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
-def _rec_bal_storage_slot_changes_size (account : item_index) (count : item_count) (slot : word) (cursor : item_index) (content_len : byte_length) (_reclimit : Nat) : SailM BalContentCursor := do
+/- Type quantifiers: _reclimit : Nat, k_ex409181_ : Nat, k_ex409180_ : Nat, k_ex409179_ : Nat, k_ex409178_
+  : Nat, k_ex409177_ : Nat, 0 ≤ k_ex409177_ ∧ k_ex409177_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409178_
+  ∧ k_ex409178_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409179_ ∧ k_ex409179_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex409180_ ∧ k_ex409180_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409181_ ∧ k_ex409181_ ≤ (2 ^ 30), 0
+  ≤ _reclimit -/
+def _rec_bal_storage_slot_changes_size (account : item_index) (count : item_count) (slot : word) (cursor : item_index) (content_len : bal_rlp_length) (_reclimit : Nat) : SailM BalContentCursor := do
   let account := (account).value
   let count := (count).value
+  let slot := (slot).value
   let cursor := (cursor).value
+  let content_len := (content_len).value
   match _reclimit with
   | 0 =>
     (do
@@ -223,61 +320,68 @@ def _rec_bal_storage_slot_changes_size (account : item_index) (count : item_coun
       if ((cursor <b count) : Bool)
       then
         (do
-          if (((← (bal_storage_change_slot ⟨account⟩ ⟨cursor⟩)) == slot) : Bool)
+          if ((((← (bal_storage_change_slot ⟨account⟩ ⟨cursor⟩))).value == slot) : Bool)
           then
             (do
               let index ← do
                 (do
-                    let semanticResult ← (bal_storage_change_index ⟨account⟩ ⟨cursor⟩)
-                    pure ((semanticResult).value))
+                    let publicResult ← (bal_storage_change_index ⟨account⟩ ⟨cursor⟩)
+                    pure ((publicResult).value))
               let next ← do
                 (do
-                    let semanticResult ← (bal_storage_change_run_end ⟨account⟩ ⟨count⟩
-                    slot ⟨index⟩ ⟨cursor⟩)
-                    pure ((semanticResult).value))
+                    let publicResult ← (bal_storage_change_run_end ⟨account⟩ ⟨count⟩
+                    ⟨slot⟩ ⟨index⟩ ⟨cursor⟩)
+                    pure ((publicResult).value))
               let last ← do
                 (do
-                    let semanticResult ← (protocol_quantity_decrement ⟨next⟩)
-                    pure ((semanticResult).value))
+                    let publicResult ← (bal_previous_index ⟨next⟩)
+                    pure ((publicResult).value))
               let next_len ← do
-                (byte_quantity_add content_len
-                  (← (bal_index_word_size ⟨index⟩
-                      (← (bal_storage_change_value ⟨account⟩ ⟨last⟩)))))
-              (_rec_bal_storage_slot_changes_size ⟨account⟩ ⟨count⟩ slot ⟨next⟩ next_len
-                _reclimit_pred))
+                (do
+                    let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+                    ((← (bal_index_word_size ⟨index⟩
+                      ⟨((← (bal_storage_change_value ⟨account⟩ ⟨last⟩))).value⟩))).value)
+                    pure ((publicResult).value))
+              (_rec_bal_storage_slot_changes_size ⟨account⟩ ⟨count⟩ ⟨slot⟩ ⟨next⟩
+                ⟨next_len⟩ _reclimit_pred))
           else
-            (pure { content_len := content_len,
+            (pure { content_len := ⟨content_len⟩,
                     cursor := ⟨cursor⟩ }))
       else
-        (pure { content_len := content_len,
+        (pure { content_len := ⟨content_len⟩,
                 cursor := ⟨cursor⟩ }))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Sizes the final values for all change indices of one storage slot. -/
-/- Type quantifiers: cursor : Nat, count : Nat, account : Nat, 0 ≤ account ∧
-  account ≤ (2 ^ 64 - 1), 0 ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ cursor ∧
-  cursor ≤ (2 ^ 64 - 1) -/
-def bal_storage_slot_changes_size (account : item_index) (count : item_count) (slot : word) (cursor : item_index) (content_len : byte_length) : SailM BalContentCursor := do
+/- Type quantifiers: content_len : Nat, cursor : Nat, slot : Nat, count : Nat, account : Nat, 0 ≤
+  account ∧ account ≤ (2 ^ 64 - 1), 0 ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ slot ∧
+  slot ≤ (2 ^ 256 - 1), 0 ≤ cursor ∧ cursor ≤ (2 ^ 64 - 1), 0 ≤ content_len ∧
+  content_len ≤ (2 ^ 30) -/
+def bal_storage_slot_changes_size (account : item_index) (count : item_count) (slot : word) (cursor : item_index) (content_len : bal_rlp_length) : SailM BalContentCursor := do
   let account := (account).value
   let count := (count).value
+  let slot := (slot).value
   let cursor := (cursor).value
+  let content_len := (content_len).value
   let _measure := ((count -i cursor) : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
   else
-    (_rec_bal_storage_slot_changes_size ⟨account⟩ ⟨count⟩ slot ⟨cursor⟩ content_len
-      (_measure + 1))
+    (_rec_bal_storage_slot_changes_size ⟨account⟩ ⟨count⟩ ⟨slot⟩ ⟨cursor⟩
+      ⟨content_len⟩ (_measure + 1))
 
 /-- Writes the final value for each change index of one storage slot. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161492_ : Nat, k_ex161491_ : Nat, k_ex161490_ : Nat, 0 ≤
-  k_ex161490_ ∧ k_ex161490_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161491_ ∧ k_ex161491_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex161492_ ∧ k_ex161492_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex409192_ : Nat, k_ex409191_ : Nat, k_ex409190_ : Nat, k_ex409189_
+  : Nat, 0 ≤ k_ex409189_ ∧ k_ex409189_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409190_ ∧
+  k_ex409190_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409191_ ∧ k_ex409191_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex409192_ ∧ k_ex409192_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_write_storage_slot_changes (account : item_index) (count : item_count) (slot : word) (cursor : item_index) (_reclimit : Nat) : SailM item_index := do
   let account := (account).value
   let count := (count).value
+  let slot := (slot).value
   let cursor := (cursor).value
-  let semanticResult ← do
+  let publicResult ← do
     match _reclimit with
     | 0 =>
       (do
@@ -288,57 +392,58 @@ def _rec_bal_write_storage_slot_changes (account : item_index) (count : item_cou
         if ((cursor <b count) : Bool)
         then
           (do
-            if (((← (bal_storage_change_slot ⟨account⟩ ⟨cursor⟩)) == slot) : Bool)
+            if ((((← (bal_storage_change_slot ⟨account⟩ ⟨cursor⟩))).value == slot) : Bool)
             then
               (do
                 let index ← do
                   (do
-                      let semanticResult ← (bal_storage_change_index ⟨account⟩ ⟨cursor⟩)
-                      pure ((semanticResult).value))
+                      let publicResult ← (bal_storage_change_index ⟨account⟩ ⟨cursor⟩)
+                      pure ((publicResult).value))
                 let next ← do
                   (do
-                      let semanticResult ← (bal_storage_change_run_end ⟨account⟩ ⟨count⟩
-                      slot ⟨index⟩ ⟨cursor⟩)
-                      pure ((semanticResult).value))
+                      let publicResult ← (bal_storage_change_run_end ⟨account⟩ ⟨count⟩
+                      ⟨slot⟩ ⟨index⟩ ⟨cursor⟩)
+                      pure ((publicResult).value))
                 let last ← do
                   (do
-                      let semanticResult ← (protocol_quantity_decrement ⟨next⟩)
-                      pure ((semanticResult).value))
+                      let publicResult ← (bal_previous_index ⟨next⟩)
+                      pure ((publicResult).value))
                 (bal_write_index_word ⟨index⟩
-                  (← (bal_storage_change_value ⟨account⟩ ⟨last⟩)))
+                  ⟨((← (bal_storage_change_value ⟨account⟩ ⟨last⟩))).value⟩)
                 (do
-                    let semanticResult ← (_rec_bal_write_storage_slot_changes ⟨account⟩
-                    ⟨count⟩ slot ⟨next⟩ _reclimit_pred)
-                    pure ((semanticResult).value)))
+                    let publicResult ← (_rec_bal_write_storage_slot_changes ⟨account⟩
+                    ⟨count⟩ ⟨slot⟩ ⟨next⟩ _reclimit_pred)
+                    pure ((publicResult).value)))
             else (pure cursor))
         else (pure cursor))
-  pure (⟨semanticResult⟩)
+  pure (⟨publicResult⟩)
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Writes the final value for each change index of one storage slot. -/
-/- Type quantifiers: cursor : Nat, count : Nat, account : Nat, 0 ≤ account ∧
-  account ≤ (2 ^ 64 - 1), 0 ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ cursor ∧
-  cursor ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: cursor : Nat, slot : Nat, count : Nat, account : Nat, 0 ≤ account ∧
+  account ≤ (2 ^ 64 - 1), 0 ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ slot ∧
+  slot ≤ (2 ^ 256 - 1), 0 ≤ cursor ∧ cursor ≤ (2 ^ 64 - 1) -/
 def bal_write_storage_slot_changes (account : item_index) (count : item_count) (slot : word) (cursor : item_index) : SailM item_index := do
   let account := (account).value
   let count := (count).value
+  let slot := (slot).value
   let cursor := (cursor).value
-  let semanticResult ← do
+  let publicResult ← do
     let _measure := ((count -i cursor) : Int)
     if ((_measure <b 0) : Bool)
     then throw Error.Exit
     else
       (do
-          let semanticResult ← (_rec_bal_write_storage_slot_changes ⟨account⟩ ⟨count⟩ slot
-          ⟨cursor⟩ (_measure + 1))
-          pure ((semanticResult).value))
-  pure (⟨semanticResult⟩)
+          let publicResult ← (_rec_bal_write_storage_slot_changes ⟨account⟩ ⟨count⟩
+          ⟨slot⟩ ⟨cursor⟩ (_measure + 1))
+          pure ((publicResult).value))
+  pure (⟨publicResult⟩)
 
 /-- Sizes storage changes grouped by slot and counts the groups. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161500_ : Nat, k_ex161499_ : Nat, k_ex161498_ : Nat, 0 ≤
-  k_ex161498_ ∧ k_ex161498_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161499_ ∧ k_ex161499_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex161500_ ∧ k_ex161500_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex409201_ : Nat, k_ex409200_ : Nat, k_ex409199_ : Nat, 0 ≤
+  k_ex409199_ ∧ k_ex409199_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409200_ ∧ k_ex409200_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex409201_ ∧ k_ex409201_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_storage_change_groups_size (account : item_index) (count : item_count) (cursor : item_index) (result : BalContentCount) (_reclimit : Nat) : SailM BalContentCount := do
   let account := (account).value
   let count := (count).value
@@ -353,21 +458,32 @@ def _rec_bal_storage_change_groups_size (account : item_index) (count : item_cou
       if ((cursor <b count) : Bool)
       then
         (do
-          let slot ← do (bal_storage_change_slot ⟨account⟩ ⟨cursor⟩)
+          let slot ← do
+            (do
+                let publicResult ← (bal_storage_change_slot ⟨account⟩ ⟨cursor⟩)
+                pure ((publicResult).value))
           let changes ← do
-            (bal_storage_slot_changes_size ⟨account⟩ ⟨count⟩ slot ⟨cursor⟩ BYTE_ZERO)
+            (bal_storage_slot_changes_size ⟨account⟩ ⟨count⟩ ⟨slot⟩ ⟨cursor⟩
+              ⟨(BAL_RLP_ZERO).value⟩)
           let slot_content_len ← do
-            (byte_quantity_add (← (rlp_uint_word_size slot))
-              (← (rlp_list_size changes.content_len)))
+            (do
+                let publicResult ← (bal_rlp_length_add
+                ⟨((← (bal_rlp_length_from_byte_length (rlp_uint_word_size slot)))).value⟩
+                (bal_rlp_length_to_byte_length
+                  ⟨((← (bal_rlp_list_size ⟨(changes.content_len).value⟩))).value⟩))
+                pure ((publicResult).value))
+          let next_content_len ← do
+            (do
+                let publicResult ← (bal_rlp_length_add ⟨(result.content_len).value⟩
+                (bal_rlp_length_to_byte_length
+                  ⟨((← (bal_rlp_list_size ⟨slot_content_len⟩))).value⟩))
+                pure ((publicResult).value))
           (_rec_bal_storage_change_groups_size ⟨account⟩ ⟨count⟩
             ⟨(changes.cursor).value⟩
-            { content_len := ← (byte_quantity_add result.content_len
-                  (← (rlp_list_size slot_content_len))),
+            { content_len := ⟨next_content_len⟩,
               count := ← do
-                  let semanticField ← (do
-                      let semanticResult ← (bal_count_add ⟨(result.count).value⟩ ⟨1⟩)
-                      pure ((semanticResult).value))
-                  pure (⟨semanticField⟩) } _reclimit_pred))
+                  let publicField ← (bal_count_add (result.count).value 1)
+                  pure (⟨publicField⟩) } _reclimit_pred))
       else (pure result))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
@@ -388,9 +504,9 @@ def bal_storage_change_groups_size (account : item_index) (count : item_count) (
       (_measure + 1))
 
 /-- Writes storage changes grouped by slot. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161508_ : Nat, k_ex161507_ : Nat, k_ex161506_ : Nat, 0 ≤
-  k_ex161506_ ∧ k_ex161506_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161507_ ∧ k_ex161507_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex161508_ ∧ k_ex161508_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex409209_ : Nat, k_ex409208_ : Nat, k_ex409207_ : Nat, 0 ≤
+  k_ex409207_ ∧ k_ex409207_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409208_ ∧ k_ex409208_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex409209_ ∧ k_ex409209_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_write_storage_change_groups (account : item_index) (count : item_count) (cursor : item_index) (_reclimit : Nat) : SailM Unit := do
   let account := (account).value
   let count := (count).value
@@ -405,20 +521,28 @@ def _rec_bal_write_storage_change_groups (account : item_index) (count : item_co
       if ((cursor <b count) : Bool)
       then
         (do
-          let slot ← do (bal_storage_change_slot ⟨account⟩ ⟨cursor⟩)
+          let slot ← do
+            (do
+                let publicResult ← (bal_storage_change_slot ⟨account⟩ ⟨cursor⟩)
+                pure ((publicResult).value))
           let changes ← do
-            (bal_storage_slot_changes_size ⟨account⟩ ⟨count⟩ slot ⟨cursor⟩ BYTE_ZERO)
+            (bal_storage_slot_changes_size ⟨account⟩ ⟨count⟩ ⟨slot⟩ ⟨cursor⟩
+              ⟨(BAL_RLP_ZERO).value⟩)
           let slot_content_len ← do
-            (byte_quantity_add (← (rlp_uint_word_size slot))
-              (← (rlp_list_size changes.content_len)))
-          (rlp_write_list_prefix slot_content_len)
+            (do
+                let publicResult ← (bal_rlp_length_add
+                ⟨((← (bal_rlp_length_from_byte_length (rlp_uint_word_size slot)))).value⟩
+                (bal_rlp_length_to_byte_length
+                  ⟨((← (bal_rlp_list_size ⟨(changes.content_len).value⟩))).value⟩))
+                pure ((publicResult).value))
+          (rlp_write_list_prefix (bal_rlp_length_to_byte_length ⟨slot_content_len⟩))
           (rlp_write_uint_word slot)
-          (rlp_write_list_prefix changes.content_len)
+          (rlp_write_list_prefix (bal_rlp_length_to_byte_length ⟨(changes.content_len).value⟩))
           let next ← do
             (do
-                let semanticResult ← (bal_write_storage_slot_changes ⟨account⟩ ⟨count⟩
-                slot ⟨cursor⟩)
-                pure ((semanticResult).value))
+                let publicResult ← (bal_write_storage_slot_changes ⟨account⟩ ⟨count⟩
+                ⟨slot⟩ ⟨cursor⟩)
+                pure ((publicResult).value))
           assert (next == (changes.cursor).value) "BAL storage-change sizing cursor"
           (_rec_bal_write_storage_change_groups ⟨account⟩ ⟨count⟩ ⟨next⟩ _reclimit_pred))
       else (pure ()))
@@ -444,26 +568,28 @@ def bal_storage_changes_size (account : item_index) : SailM BalContentCount := d
   let account := (account).value
   (bal_storage_change_groups_size ⟨account⟩
     ⟨((← (bal_storage_change_count ⟨account⟩))).value⟩ ⟨0⟩
-    { content_len := BYTE_ZERO,
+    { content_len := ⟨(BAL_RLP_ZERO).value⟩,
       count := ⟨0⟩ })
 
 /-- Writes the storage-change list for one account. -/
-/- Type quantifiers: k_ex161515_ : Nat, 0 ≤ k_ex161515_ ∧ k_ex161515_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex409216_ : Nat, 0 ≤ k_ex409216_ ∧ k_ex409216_ ≤ (2 ^ 64 - 1) -/
 def bal_write_storage_changes (account : item_index) (size : BalContentCount) : SailM Unit := do
   let account := (account).value
-  (rlp_write_list_prefix size.content_len)
+  (rlp_write_list_prefix (bal_rlp_length_to_byte_length ⟨(size.content_len).value⟩))
   (bal_write_storage_change_groups ⟨account⟩
     ⟨((← (bal_storage_change_count ⟨account⟩))).value⟩ ⟨0⟩)
 
 /-- Finds the end of a run of equal storage-read slots. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161518_ : Nat, k_ex161517_ : Nat, k_ex161516_ : Nat, 0 ≤
-  k_ex161516_ ∧ k_ex161516_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161517_ ∧ k_ex161517_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex161518_ ∧ k_ex161518_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex409220_ : Nat, k_ex409219_ : Nat, k_ex409218_ : Nat, k_ex409217_
+  : Nat, 0 ≤ k_ex409217_ ∧ k_ex409217_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409218_ ∧
+  k_ex409218_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409219_ ∧ k_ex409219_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex409220_ ∧ k_ex409220_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_storage_read_run_end (account : item_index) (count : item_count) (slot : word) (cursor : item_index) (_reclimit : Nat) : SailM item_index := do
   let account := (account).value
   let count := (count).value
+  let slot := (slot).value
   let cursor := (cursor).value
-  let semanticResult ← do
+  let publicResult ← do
     match _reclimit with
     | 0 =>
       (do
@@ -474,46 +600,49 @@ def _rec_bal_storage_read_run_end (account : item_index) (count : item_count) (s
         if ((cursor <b count) : Bool)
         then
           (do
-            if (((← (bal_storage_read_slot ⟨account⟩ ⟨cursor⟩)) == slot) : Bool)
+            if ((((← (bal_storage_read_slot ⟨account⟩ ⟨cursor⟩))).value == slot) : Bool)
             then
               (do
-                  let semanticResult ← (_rec_bal_storage_read_run_end ⟨account⟩ ⟨count⟩
-                  slot ⟨((← (item_index_increment ⟨cursor⟩))).value⟩ _reclimit_pred)
-                  pure ((semanticResult).value))
+                  let publicResult ← (_rec_bal_storage_read_run_end ⟨account⟩ ⟨count⟩
+                  ⟨slot⟩ ⟨(cursor + 1)⟩ _reclimit_pred)
+                  pure ((publicResult).value))
             else (pure cursor))
         else (pure cursor))
-  pure (⟨semanticResult⟩)
+  pure (⟨publicResult⟩)
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Finds the end of a run of equal storage-read slots. -/
-/- Type quantifiers: cursor : Nat, count : Nat, account : Nat, 0 ≤ account ∧
-  account ≤ (2 ^ 64 - 1), 0 ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ cursor ∧
-  cursor ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: cursor : Nat, slot : Nat, count : Nat, account : Nat, 0 ≤ account ∧
+  account ≤ (2 ^ 64 - 1), 0 ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ slot ∧
+  slot ≤ (2 ^ 256 - 1), 0 ≤ cursor ∧ cursor ≤ (2 ^ 64 - 1) -/
 def bal_storage_read_run_end (account : item_index) (count : item_count) (slot : word) (cursor : item_index) : SailM item_index := do
   let account := (account).value
   let count := (count).value
+  let slot := (slot).value
   let cursor := (cursor).value
-  let semanticResult ← do
+  let publicResult ← do
     let _measure := ((count -i cursor) : Int)
     if ((_measure <b 0) : Bool)
     then throw Error.Exit
     else
       (do
-          let semanticResult ← (_rec_bal_storage_read_run_end ⟨account⟩ ⟨count⟩ slot
+          let publicResult ← (_rec_bal_storage_read_run_end ⟨account⟩ ⟨count⟩ ⟨slot⟩
           ⟨cursor⟩ (_measure + 1))
-          pure ((semanticResult).value))
-  pure (⟨semanticResult⟩)
+          pure ((publicResult).value))
+  pure (⟨publicResult⟩)
 
 /-- Advances the ordered change cursor to the first slot not below a read. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161526_ : Nat, k_ex161525_ : Nat, k_ex161524_ : Nat, 0 ≤
-  k_ex161524_ ∧ k_ex161524_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161525_ ∧ k_ex161525_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex161526_ ∧ k_ex161526_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex409230_ : Nat, k_ex409229_ : Nat, k_ex409228_ : Nat, k_ex409227_
+  : Nat, 0 ≤ k_ex409227_ ∧ k_ex409227_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409228_ ∧
+  k_ex409228_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409229_ ∧ k_ex409229_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex409230_ ∧ k_ex409230_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_storage_change_seek (account : item_index) (count : item_count) (slot : word) (cursor : item_index) (_reclimit : Nat) : SailM item_index := do
   let account := (account).value
   let count := (count).value
+  let slot := (slot).value
   let cursor := (cursor).value
-  let semanticResult ← do
+  let publicResult ← do
     match _reclimit with
     | 0 =>
       (do
@@ -524,42 +653,43 @@ def _rec_bal_storage_change_seek (account : item_index) (count : item_count) (sl
         if ((cursor <b count) : Bool)
         then
           (do
-            if ((word_ult (← (bal_storage_change_slot ⟨account⟩ ⟨cursor⟩)) slot) : Bool)
+            if ((word_ult ((← (bal_storage_change_slot ⟨account⟩ ⟨cursor⟩))).value slot) : Bool)
             then
               (do
-                  let semanticResult ← (_rec_bal_storage_change_seek ⟨account⟩ ⟨count⟩
-                  slot ⟨((← (item_index_increment ⟨cursor⟩))).value⟩ _reclimit_pred)
-                  pure ((semanticResult).value))
+                  let publicResult ← (_rec_bal_storage_change_seek ⟨account⟩ ⟨count⟩
+                  ⟨slot⟩ ⟨(cursor + 1)⟩ _reclimit_pred)
+                  pure ((publicResult).value))
             else (pure cursor))
         else (pure cursor))
-  pure (⟨semanticResult⟩)
+  pure (⟨publicResult⟩)
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Advances the ordered change cursor to the first slot not below a read. -/
-/- Type quantifiers: cursor : Nat, count : Nat, account : Nat, 0 ≤ account ∧
-  account ≤ (2 ^ 64 - 1), 0 ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ cursor ∧
-  cursor ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: cursor : Nat, slot : Nat, count : Nat, account : Nat, 0 ≤ account ∧
+  account ≤ (2 ^ 64 - 1), 0 ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ slot ∧
+  slot ≤ (2 ^ 256 - 1), 0 ≤ cursor ∧ cursor ≤ (2 ^ 64 - 1) -/
 def bal_storage_change_seek (account : item_index) (count : item_count) (slot : word) (cursor : item_index) : SailM item_index := do
   let account := (account).value
   let count := (count).value
+  let slot := (slot).value
   let cursor := (cursor).value
-  let semanticResult ← do
+  let publicResult ← do
     let _measure := ((count -i cursor) : Int)
     if ((_measure <b 0) : Bool)
     then throw Error.Exit
     else
       (do
-          let semanticResult ← (_rec_bal_storage_change_seek ⟨account⟩ ⟨count⟩ slot
+          let publicResult ← (_rec_bal_storage_change_seek ⟨account⟩ ⟨count⟩ ⟨slot⟩
           ⟨cursor⟩ (_measure + 1))
-          pure ((semanticResult).value))
-  pure (⟨semanticResult⟩)
+          pure ((publicResult).value))
+  pure (⟨publicResult⟩)
 
 /-- Sizes read slots that are not also represented by a storage change. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161536_ : Nat, k_ex161535_ : Nat, k_ex161534_ : Nat, k_ex161533_
-  : Nat, k_ex161532_ : Nat, 0 ≤ k_ex161532_ ∧ k_ex161532_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161533_
-  ∧ k_ex161533_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161534_ ∧ k_ex161534_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex161535_ ∧ k_ex161535_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161536_ ∧ k_ex161536_ ≤ (2 ^ 64 - 1), 0
+/- Type quantifiers: _reclimit : Nat, k_ex409241_ : Nat, k_ex409240_ : Nat, k_ex409239_ : Nat, k_ex409238_
+  : Nat, k_ex409237_ : Nat, 0 ≤ k_ex409237_ ∧ k_ex409237_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409238_
+  ∧ k_ex409238_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409239_ ∧ k_ex409239_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex409240_ ∧ k_ex409240_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409241_ ∧ k_ex409241_ ≤ (2 ^ 64 - 1), 0
   ≤ _reclimit -/
 def _rec_bal_storage_read_groups_size (account : item_index) (read_count : item_count) (change_count : item_count) (read : item_index) (change : item_index) (result : BalContentCount) (_reclimit : Nat) : SailM BalContentCount := do
   let account := (account).value
@@ -577,33 +707,38 @@ def _rec_bal_storage_read_groups_size (account : item_index) (read_count : item_
       if ((read <b read_count) : Bool)
       then
         (do
-          let slot ← do (bal_storage_read_slot ⟨account⟩ ⟨read⟩)
+          let slot ← do
+            (do
+                let publicResult ← (bal_storage_read_slot ⟨account⟩ ⟨read⟩)
+                pure ((publicResult).value))
           let next_read ← do
             (do
-                let semanticResult ← (bal_storage_read_run_end ⟨account⟩ ⟨read_count⟩ slot
-                ⟨read⟩)
-                pure ((semanticResult).value))
+                let publicResult ← (bal_storage_read_run_end ⟨account⟩ ⟨read_count⟩
+                ⟨slot⟩ ⟨read⟩)
+                pure ((publicResult).value))
           let next_change ← do
             (do
-                let semanticResult ← (bal_storage_change_seek ⟨account⟩ ⟨change_count⟩
-                slot ⟨change⟩)
-                pure ((semanticResult).value))
-          let changed ← do
+                let publicResult ← (bal_storage_change_seek ⟨account⟩ ⟨change_count⟩
+                ⟨slot⟩ ⟨change⟩)
+                pure ((publicResult).value))
+          let changed ← (( do
             if ((next_change <b change_count) : Bool)
-            then (pure ((← (bal_storage_change_slot ⟨account⟩ ⟨next_change⟩)) == slot))
-            else (pure false)
+            then
+              (pure (((← (bal_storage_change_slot ⟨account⟩ ⟨next_change⟩))).value == slot))
+            else (pure false) ) : SailM Bool )
           let updated ← do
             if (changed : Bool)
             then (pure result)
             else
-              (pure { content_len := ← (byte_quantity_add result.content_len
-                          (← (rlp_uint_word_size slot))),
+              (pure { content_len := ← do
+                          let publicField ← (do
+                              let publicResult ← (bal_rlp_length_add
+                              ⟨(result.content_len).value⟩ (rlp_uint_word_size slot))
+                              pure ((publicResult).value))
+                          pure (⟨publicField⟩),
                       count := ← do
-                          let semanticField ← (do
-                              let semanticResult ← (bal_count_add ⟨(result.count).value⟩
-                              ⟨1⟩)
-                              pure ((semanticResult).value))
-                          pure (⟨semanticField⟩) })
+                          let publicField ← (bal_count_add (result.count).value 1)
+                          pure (⟨publicField⟩) })
           (_rec_bal_storage_read_groups_size ⟨account⟩ ⟨read_count⟩ ⟨change_count⟩
             ⟨next_read⟩ ⟨next_change⟩ updated _reclimit_pred))
       else (pure result))
@@ -629,10 +764,10 @@ def bal_storage_read_groups_size (account : item_index) (read_count : item_count
       ⟨change⟩ result (_measure + 1))
 
 /-- Writes read slots that are not also represented by a storage change. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161548_ : Nat, k_ex161547_ : Nat, k_ex161546_ : Nat, k_ex161545_
-  : Nat, k_ex161544_ : Nat, 0 ≤ k_ex161544_ ∧ k_ex161544_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161545_
-  ∧ k_ex161545_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161546_ ∧ k_ex161546_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex161547_ ∧ k_ex161547_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161548_ ∧ k_ex161548_ ≤ (2 ^ 64 - 1), 0
+/- Type quantifiers: _reclimit : Nat, k_ex409253_ : Nat, k_ex409252_ : Nat, k_ex409251_ : Nat, k_ex409250_
+  : Nat, k_ex409249_ : Nat, 0 ≤ k_ex409249_ ∧ k_ex409249_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409250_
+  ∧ k_ex409250_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409251_ ∧ k_ex409251_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex409252_ ∧ k_ex409252_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409253_ ∧ k_ex409253_ ≤ (2 ^ 64 - 1), 0
   ≤ _reclimit -/
 def _rec_bal_write_storage_read_groups (account : item_index) (read_count : item_count) (change_count : item_count) (read : item_index) (change : item_index) (_reclimit : Nat) : SailM Unit := do
   let account := (account).value
@@ -650,21 +785,25 @@ def _rec_bal_write_storage_read_groups (account : item_index) (read_count : item
       if ((read <b read_count) : Bool)
       then
         (do
-          let slot ← do (bal_storage_read_slot ⟨account⟩ ⟨read⟩)
+          let slot ← do
+            (do
+                let publicResult ← (bal_storage_read_slot ⟨account⟩ ⟨read⟩)
+                pure ((publicResult).value))
           let next_read ← do
             (do
-                let semanticResult ← (bal_storage_read_run_end ⟨account⟩ ⟨read_count⟩ slot
-                ⟨read⟩)
-                pure ((semanticResult).value))
+                let publicResult ← (bal_storage_read_run_end ⟨account⟩ ⟨read_count⟩
+                ⟨slot⟩ ⟨read⟩)
+                pure ((publicResult).value))
           let next_change ← do
             (do
-                let semanticResult ← (bal_storage_change_seek ⟨account⟩ ⟨change_count⟩
-                slot ⟨change⟩)
-                pure ((semanticResult).value))
-          let changed ← do
+                let publicResult ← (bal_storage_change_seek ⟨account⟩ ⟨change_count⟩
+                ⟨slot⟩ ⟨change⟩)
+                pure ((publicResult).value))
+          let changed ← (( do
             if ((next_change <b change_count) : Bool)
-            then (pure ((← (bal_storage_change_slot ⟨account⟩ ⟨next_change⟩)) == slot))
-            else (pure false)
+            then
+              (pure (((← (bal_storage_change_slot ⟨account⟩ ⟨next_change⟩))).value == slot))
+            else (pure false) ) : SailM Bool )
           if ((! changed) : Bool)
           then (rlp_write_uint_word slot)
           else (pure ())
@@ -699,29 +838,29 @@ def bal_storage_reads_size (account : item_index) : SailM BalContentCount := do
   (bal_storage_read_groups_size ⟨account⟩
     ⟨((← (bal_storage_read_count ⟨account⟩))).value⟩
     ⟨((← (bal_storage_change_count ⟨account⟩))).value⟩ ⟨0⟩ ⟨0⟩
-    { content_len := BYTE_ZERO,
+    { content_len := ⟨(BAL_RLP_ZERO).value⟩,
       count := ⟨0⟩ })
 
 /-- Writes the storage-read list for one account. -/
-/- Type quantifiers: k_ex161557_ : Nat, 0 ≤ k_ex161557_ ∧ k_ex161557_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex409262_ : Nat, 0 ≤ k_ex409262_ ∧ k_ex409262_ ≤ (2 ^ 64 - 1) -/
 def bal_write_storage_reads (account : item_index) (size : BalContentCount) : SailM Unit := do
   let account := (account).value
-  (rlp_write_list_prefix size.content_len)
+  (rlp_write_list_prefix (bal_rlp_length_to_byte_length ⟨(size.content_len).value⟩))
   (bal_write_storage_read_groups ⟨account⟩
     ⟨((← (bal_storage_read_count ⟨account⟩))).value⟩
     ⟨((← (bal_storage_change_count ⟨account⟩))).value⟩ ⟨0⟩ ⟨0⟩)
 
 /-- Finds the end of a run of equal balance-change indices. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161561_ : Nat, k_ex161560_ : Nat, k_ex161559_ : Nat, k_ex161558_
-  : Nat, 0 ≤ k_ex161558_ ∧ k_ex161558_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161559_ ∧
-  k_ex161559_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161560_ ∧ k_ex161560_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex161561_ ∧ k_ex161561_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex409266_ : Nat, k_ex409265_ : Nat, k_ex409264_ : Nat, k_ex409263_
+  : Nat, 0 ≤ k_ex409263_ ∧ k_ex409263_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409264_ ∧
+  k_ex409264_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409265_ ∧ k_ex409265_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex409266_ ∧ k_ex409266_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_balance_run_end (account : item_index) (count : item_count) (index : item_index) (cursor : item_index) (_reclimit : Nat) : SailM item_index := do
   let account := (account).value
   let count := (count).value
   let index := (index).value
   let cursor := (cursor).value
-  let semanticResult ← do
+  let publicResult ← do
     match _reclimit with
     | 0 =>
       (do
@@ -735,12 +874,12 @@ def _rec_bal_balance_run_end (account : item_index) (count : item_count) (index 
             if ((((← (bal_balance_change_index ⟨account⟩ ⟨cursor⟩))).value == index) : Bool)
             then
               (do
-                  let semanticResult ← (_rec_bal_balance_run_end ⟨account⟩ ⟨count⟩
-                  ⟨index⟩ ⟨((← (item_index_increment ⟨cursor⟩))).value⟩ _reclimit_pred)
-                  pure ((semanticResult).value))
+                  let publicResult ← (_rec_bal_balance_run_end ⟨account⟩ ⟨count⟩
+                  ⟨index⟩ ⟨(cursor + 1)⟩ _reclimit_pred)
+                  pure ((publicResult).value))
             else (pure cursor))
         else (pure cursor))
-  pure (⟨semanticResult⟩)
+  pure (⟨publicResult⟩)
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
@@ -753,74 +892,90 @@ def bal_balance_run_end (account : item_index) (count : item_count) (index : ite
   let count := (count).value
   let index := (index).value
   let cursor := (cursor).value
-  let semanticResult ← do
+  let publicResult ← do
     let _measure := ((count -i cursor) : Int)
     if ((_measure <b 0) : Bool)
     then throw Error.Exit
     else
       (do
-          let semanticResult ← (_rec_bal_balance_run_end ⟨account⟩ ⟨count⟩ ⟨index⟩
+          let publicResult ← (_rec_bal_balance_run_end ⟨account⟩ ⟨count⟩ ⟨index⟩
           ⟨cursor⟩ (_measure + 1))
-          pure ((semanticResult).value))
-  pure (⟨semanticResult⟩)
+          pure ((publicResult).value))
+  pure (⟨publicResult⟩)
 
 /-- Sizes the final balance value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161570_ : Nat, k_ex161569_ : Nat, k_ex161568_ : Nat, 0 ≤
-  k_ex161568_ ∧ k_ex161568_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161569_ ∧ k_ex161569_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex161570_ ∧ k_ex161570_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
-def _rec_bal_balance_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : byte_length) (_reclimit : Nat) : SailM byte_length := do
+/- Type quantifiers: _reclimit : Nat, k_ex409276_ : Nat, k_ex409275_ : Nat, k_ex409274_ : Nat, k_ex409273_
+  : Nat, 0 ≤ k_ex409273_ ∧ k_ex409273_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409274_ ∧
+  k_ex409274_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409275_ ∧ k_ex409275_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex409276_ ∧ k_ex409276_ ≤ (2 ^ 30), 0 ≤ _reclimit -/
+def _rec_bal_balance_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : bal_rlp_length) (_reclimit : Nat) : SailM bal_rlp_length := do
   let account := (account).value
   let count := (count).value
   let cursor := (cursor).value
-  match _reclimit with
-  | 0 =>
-    (do
-      assert false "recursion limit reached"
-      throw Error.Exit)
-  | _reclimit_pred + 1 =>
-    (do
-      if ((cursor <b count) : Bool)
-      then
-        (do
-          let index ← do
+  let content_len := (content_len).value
+  let publicResult ← do
+    match _reclimit with
+    | 0 =>
+      (do
+        assert false "recursion limit reached"
+        throw Error.Exit)
+    | _reclimit_pred + 1 =>
+      (do
+        if ((cursor <b count) : Bool)
+        then
+          (do
+            let index ← do
+              (do
+                  let publicResult ← (bal_balance_change_index ⟨account⟩ ⟨cursor⟩)
+                  pure ((publicResult).value))
+            let next ← do
+              (do
+                  let publicResult ← (bal_balance_run_end ⟨account⟩ ⟨count⟩ ⟨index⟩
+                  ⟨cursor⟩)
+                  pure ((publicResult).value))
+            let last ← do
+              (do
+                  let publicResult ← (bal_previous_index ⟨next⟩)
+                  pure ((publicResult).value))
+            let next_length ← do
+              (do
+                  let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+                  ((← (bal_index_word_size ⟨index⟩
+                    ⟨((← (bal_balance_change_value ⟨account⟩ ⟨last⟩))).value⟩))).value)
+                  pure ((publicResult).value))
             (do
-                let semanticResult ← (bal_balance_change_index ⟨account⟩ ⟨cursor⟩)
-                pure ((semanticResult).value))
-          let next ← do
-            (do
-                let semanticResult ← (bal_balance_run_end ⟨account⟩ ⟨count⟩ ⟨index⟩
-                ⟨cursor⟩)
-                pure ((semanticResult).value))
-          let last ← do
-            (do
-                let semanticResult ← (protocol_quantity_decrement ⟨next⟩)
-                pure ((semanticResult).value))
-          (_rec_bal_balance_groups_size ⟨account⟩ ⟨count⟩ ⟨next⟩
-            (← (byte_quantity_add content_len
-                (← (bal_index_word_size ⟨index⟩
-                    (← (bal_balance_change_value ⟨account⟩ ⟨last⟩)))))) _reclimit_pred))
-      else (pure content_len))
+                let publicResult ← (_rec_bal_balance_groups_size ⟨account⟩ ⟨count⟩
+                ⟨next⟩ ⟨next_length⟩ _reclimit_pred)
+                pure ((publicResult).value)))
+        else (pure content_len))
+  pure (⟨publicResult⟩)
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Sizes the final balance value for each change index. -/
-/- Type quantifiers: cursor : Nat, count : Nat, account : Nat, 0 ≤ account ∧
+/- Type quantifiers: content_len : Nat, cursor : Nat, count : Nat, account : Nat, 0 ≤ account ∧
   account ≤ (2 ^ 64 - 1), 0 ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ cursor ∧
-  cursor ≤ (2 ^ 64 - 1) -/
-def bal_balance_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : byte_length) : SailM byte_length := do
+  cursor ≤ (2 ^ 64 - 1), 0 ≤ content_len ∧ content_len ≤ (2 ^ 30) -/
+def bal_balance_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : bal_rlp_length) : SailM bal_rlp_length := do
   let account := (account).value
   let count := (count).value
   let cursor := (cursor).value
-  let _measure := ((count -i cursor) : Int)
-  if ((_measure <b 0) : Bool)
-  then throw Error.Exit
-  else
-    (_rec_bal_balance_groups_size ⟨account⟩ ⟨count⟩ ⟨cursor⟩ content_len (_measure + 1))
+  let content_len := (content_len).value
+  let publicResult ← do
+    let _measure := ((count -i cursor) : Int)
+    if ((_measure <b 0) : Bool)
+    then throw Error.Exit
+    else
+      (do
+          let publicResult ← (_rec_bal_balance_groups_size ⟨account⟩ ⟨count⟩ ⟨cursor⟩
+          ⟨content_len⟩ (_measure + 1))
+          pure ((publicResult).value))
+  pure (⟨publicResult⟩)
 
 /-- Writes the final balance value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161578_ : Nat, k_ex161577_ : Nat, k_ex161576_ : Nat, 0 ≤
-  k_ex161576_ ∧ k_ex161576_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161577_ ∧ k_ex161577_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex161578_ ∧ k_ex161578_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex409285_ : Nat, k_ex409284_ : Nat, k_ex409283_ : Nat, 0 ≤
+  k_ex409283_ ∧ k_ex409283_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409284_ ∧ k_ex409284_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex409285_ ∧ k_ex409285_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_write_balance_groups (account : item_index) (count : item_count) (cursor : item_index) (_reclimit : Nat) : SailM Unit := do
   let account := (account).value
   let count := (count).value
@@ -837,19 +992,19 @@ def _rec_bal_write_balance_groups (account : item_index) (count : item_count) (c
         (do
           let index ← do
             (do
-                let semanticResult ← (bal_balance_change_index ⟨account⟩ ⟨cursor⟩)
-                pure ((semanticResult).value))
+                let publicResult ← (bal_balance_change_index ⟨account⟩ ⟨cursor⟩)
+                pure ((publicResult).value))
           let next ← do
             (do
-                let semanticResult ← (bal_balance_run_end ⟨account⟩ ⟨count⟩ ⟨index⟩
+                let publicResult ← (bal_balance_run_end ⟨account⟩ ⟨count⟩ ⟨index⟩
                 ⟨cursor⟩)
-                pure ((semanticResult).value))
+                pure ((publicResult).value))
           let last ← do
             (do
-                let semanticResult ← (protocol_quantity_decrement ⟨next⟩)
-                pure ((semanticResult).value))
+                let publicResult ← (bal_previous_index ⟨next⟩)
+                pure ((publicResult).value))
           (bal_write_index_word ⟨index⟩
-            (← (bal_balance_change_value ⟨account⟩ ⟨last⟩)))
+            ⟨((← (bal_balance_change_value ⟨account⟩ ⟨last⟩))).value⟩)
           (_rec_bal_write_balance_groups ⟨account⟩ ⟨count⟩ ⟨next⟩ _reclimit_pred))
       else (pure ()))
 termination_by _reclimit
@@ -869,24 +1024,31 @@ def bal_write_balance_groups (account : item_index) (count : item_count) (cursor
   else (_rec_bal_write_balance_groups ⟨account⟩ ⟨count⟩ ⟨cursor⟩ (_measure + 1))
 
 /- Type quantifiers: account : Nat, 0 ≤ account ∧ account ≤ (2 ^ 64 - 1) -/
-def bal_balance_changes_size (account : item_index) : SailM byte_length := do
+def bal_balance_changes_size (account : item_index) : SailM bal_rlp_length := do
   let account := (account).value
-  (bal_balance_groups_size ⟨account⟩
-    ⟨((← (bal_balance_change_count ⟨account⟩))).value⟩ ⟨0⟩ BYTE_ZERO)
+  let publicResult ← do
+    (do
+        let publicResult ← (bal_balance_groups_size ⟨account⟩
+        ⟨((← (bal_balance_change_count ⟨account⟩))).value⟩ ⟨0⟩
+        ⟨(BAL_RLP_ZERO).value⟩)
+        pure ((publicResult).value))
+  pure (⟨publicResult⟩)
 
 /-- Writes the balance-change list for one account. -/
-/- Type quantifiers: k_ex161585_ : Nat, 0 ≤ k_ex161585_ ∧ k_ex161585_ ≤ (2 ^ 64 - 1) -/
-def bal_write_balance_changes (account : item_index) (content_len : byte_length) : SailM Unit := do
+/- Type quantifiers: k_ex409293_ : Nat, k_ex409292_ : Nat, 0 ≤ k_ex409292_ ∧
+  k_ex409292_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409293_ ∧ k_ex409293_ ≤ (2 ^ 30) -/
+def bal_write_balance_changes (account : item_index) (content_len : bal_rlp_length) : SailM Unit := do
   let account := (account).value
-  (rlp_write_list_prefix content_len)
+  let content_len := (content_len).value
+  (rlp_write_list_prefix (bal_rlp_length_to_byte_length ⟨content_len⟩))
   (bal_write_balance_groups ⟨account⟩
     ⟨((← (bal_balance_change_count ⟨account⟩))).value⟩ ⟨0⟩)
 
 /-- Finds one nonce-change run and its greatest observed nonce. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161590_ : Nat, k_ex161589_ : Nat, k_ex161588_ : Nat, k_ex161587_
-  : Nat, k_ex161586_ : Nat, 0 ≤ k_ex161586_ ∧ k_ex161586_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161587_
-  ∧ k_ex161587_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161588_ ∧ k_ex161588_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex161589_ ∧ k_ex161589_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161590_ ∧ k_ex161590_ ≤ (2 ^ 64 - 1), 0
+/- Type quantifiers: _reclimit : Nat, k_ex409298_ : Nat, k_ex409297_ : Nat, k_ex409296_ : Nat, k_ex409295_
+  : Nat, k_ex409294_ : Nat, 0 ≤ k_ex409294_ ∧ k_ex409294_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409295_
+  ∧ k_ex409295_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409296_ ∧ k_ex409296_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex409297_ ∧ k_ex409297_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409298_ ∧ k_ex409298_ ≤ (2 ^ 64 - 1), 0
   ≤ _reclimit -/
 def _rec_bal_nonce_run (account : item_index) (count : item_count) (index : item_index) (cursor : item_index) (maximum : account_nonce) (_reclimit : Nat) : SailM BalNonceRun := do
   let account := (account).value
@@ -909,15 +1071,14 @@ def _rec_bal_nonce_run (account : item_index) (count : item_count) (index : item
             (do
               let value ← do
                 (do
-                    let semanticResult ← (bal_nonce_change_value ⟨account⟩ ⟨cursor⟩)
-                    pure ((semanticResult).value))
+                    let publicResult ← (bal_nonce_change_value ⟨account⟩ ⟨cursor⟩)
+                    pure ((publicResult).value))
               let next_maximum :=
                 if ((maximum <b value) : Bool)
                 then value
                 else maximum
-              (_rec_bal_nonce_run ⟨account⟩ ⟨count⟩ ⟨index⟩
-                ⟨((← (item_index_increment ⟨cursor⟩))).value⟩ ⟨next_maximum⟩
-                _reclimit_pred))
+              (_rec_bal_nonce_run ⟨account⟩ ⟨count⟩ ⟨index⟩ ⟨(cursor + 1)⟩
+                ⟨next_maximum⟩ _reclimit_pred))
           else
             (pure { cursor := ⟨cursor⟩,
                     maximum := ⟨maximum⟩ }))
@@ -946,59 +1107,74 @@ def bal_nonce_run (account : item_index) (count : item_count) (index : item_inde
       (_measure + 1))
 
 /-- Sizes the maximum nonce value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161600_ : Nat, k_ex161599_ : Nat, k_ex161598_ : Nat, 0 ≤
-  k_ex161598_ ∧ k_ex161598_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161599_ ∧ k_ex161599_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex161600_ ∧ k_ex161600_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
-def _rec_bal_nonce_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : byte_length) (_reclimit : Nat) : SailM byte_length := do
+/- Type quantifiers: _reclimit : Nat, k_ex409309_ : Nat, k_ex409308_ : Nat, k_ex409307_ : Nat, k_ex409306_
+  : Nat, 0 ≤ k_ex409306_ ∧ k_ex409306_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409307_ ∧
+  k_ex409307_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409308_ ∧ k_ex409308_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex409309_ ∧ k_ex409309_ ≤ (2 ^ 30), 0 ≤ _reclimit -/
+def _rec_bal_nonce_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : bal_rlp_length) (_reclimit : Nat) : SailM bal_rlp_length := do
   let account := (account).value
   let count := (count).value
   let cursor := (cursor).value
-  match _reclimit with
-  | 0 =>
-    (do
-      assert false "recursion limit reached"
-      throw Error.Exit)
-  | _reclimit_pred + 1 =>
-    (do
-      if ((cursor <b count) : Bool)
-      then
-        (do
-          let index ← do
+  let content_len := (content_len).value
+  let publicResult ← do
+    match _reclimit with
+    | 0 =>
+      (do
+        assert false "recursion limit reached"
+        throw Error.Exit)
+    | _reclimit_pred + 1 =>
+      (do
+        if ((cursor <b count) : Bool)
+        then
+          (do
+            let index ← do
+              (do
+                  let publicResult ← (bal_nonce_change_index ⟨account⟩ ⟨cursor⟩)
+                  pure ((publicResult).value))
+            let first ← do
+              (do
+                  let publicResult ← (bal_nonce_change_value ⟨account⟩ ⟨cursor⟩)
+                  pure ((publicResult).value))
+            let run ← do
+              (bal_nonce_run ⟨account⟩ ⟨count⟩ ⟨index⟩ ⟨(cursor + 1)⟩ ⟨first⟩)
+            let next_length ← do
+              (do
+                  let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+                  ((← (bal_index_nonce_size ⟨index⟩ ⟨(run.maximum).value⟩))).value)
+                  pure ((publicResult).value))
             (do
-                let semanticResult ← (bal_nonce_change_index ⟨account⟩ ⟨cursor⟩)
-                pure ((semanticResult).value))
-          let first ← do
-            (do
-                let semanticResult ← (bal_nonce_change_value ⟨account⟩ ⟨cursor⟩)
-                pure ((semanticResult).value))
-          let run ← do
-            (bal_nonce_run ⟨account⟩ ⟨count⟩ ⟨index⟩
-              ⟨((← (item_index_increment ⟨cursor⟩))).value⟩ ⟨first⟩)
-          (_rec_bal_nonce_groups_size ⟨account⟩ ⟨count⟩ ⟨(run.cursor).value⟩
-            (← (byte_quantity_add content_len
-                (← (bal_index_nonce_size ⟨index⟩ ⟨(run.maximum).value⟩)))) _reclimit_pred))
-      else (pure content_len))
+                let publicResult ← (_rec_bal_nonce_groups_size ⟨account⟩ ⟨count⟩
+                ⟨(run.cursor).value⟩ ⟨next_length⟩ _reclimit_pred)
+                pure ((publicResult).value)))
+        else (pure content_len))
+  pure (⟨publicResult⟩)
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Sizes the maximum nonce value for each change index. -/
-/- Type quantifiers: cursor : Nat, count : Nat, account : Nat, 0 ≤ account ∧
+/- Type quantifiers: content_len : Nat, cursor : Nat, count : Nat, account : Nat, 0 ≤ account ∧
   account ≤ (2 ^ 64 - 1), 0 ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ cursor ∧
-  cursor ≤ (2 ^ 64 - 1) -/
-def bal_nonce_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : byte_length) : SailM byte_length := do
+  cursor ≤ (2 ^ 64 - 1), 0 ≤ content_len ∧ content_len ≤ (2 ^ 30) -/
+def bal_nonce_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : bal_rlp_length) : SailM bal_rlp_length := do
   let account := (account).value
   let count := (count).value
   let cursor := (cursor).value
-  let _measure := ((count -i cursor) : Int)
-  if ((_measure <b 0) : Bool)
-  then throw Error.Exit
-  else
-    (_rec_bal_nonce_groups_size ⟨account⟩ ⟨count⟩ ⟨cursor⟩ content_len (_measure + 1))
+  let content_len := (content_len).value
+  let publicResult ← do
+    let _measure := ((count -i cursor) : Int)
+    if ((_measure <b 0) : Bool)
+    then throw Error.Exit
+    else
+      (do
+          let publicResult ← (_rec_bal_nonce_groups_size ⟨account⟩ ⟨count⟩ ⟨cursor⟩
+          ⟨content_len⟩ (_measure + 1))
+          pure ((publicResult).value))
+  pure (⟨publicResult⟩)
 
 /-- Writes the maximum nonce value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161608_ : Nat, k_ex161607_ : Nat, k_ex161606_ : Nat, 0 ≤
-  k_ex161606_ ∧ k_ex161606_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161607_ ∧ k_ex161607_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex161608_ ∧ k_ex161608_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex409318_ : Nat, k_ex409317_ : Nat, k_ex409316_ : Nat, 0 ≤
+  k_ex409316_ ∧ k_ex409316_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409317_ ∧ k_ex409317_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex409318_ ∧ k_ex409318_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_write_nonce_groups (account : item_index) (count : item_count) (cursor : item_index) (_reclimit : Nat) : SailM Unit := do
   let account := (account).value
   let count := (count).value
@@ -1015,15 +1191,14 @@ def _rec_bal_write_nonce_groups (account : item_index) (count : item_count) (cur
         (do
           let index ← do
             (do
-                let semanticResult ← (bal_nonce_change_index ⟨account⟩ ⟨cursor⟩)
-                pure ((semanticResult).value))
+                let publicResult ← (bal_nonce_change_index ⟨account⟩ ⟨cursor⟩)
+                pure ((publicResult).value))
           let first ← do
             (do
-                let semanticResult ← (bal_nonce_change_value ⟨account⟩ ⟨cursor⟩)
-                pure ((semanticResult).value))
+                let publicResult ← (bal_nonce_change_value ⟨account⟩ ⟨cursor⟩)
+                pure ((publicResult).value))
           let run ← do
-            (bal_nonce_run ⟨account⟩ ⟨count⟩ ⟨index⟩
-              ⟨((← (item_index_increment ⟨cursor⟩))).value⟩ ⟨first⟩)
+            (bal_nonce_run ⟨account⟩ ⟨count⟩ ⟨index⟩ ⟨(cursor + 1)⟩ ⟨first⟩)
           (bal_write_index_nonce ⟨index⟩ ⟨(run.maximum).value⟩)
           (_rec_bal_write_nonce_groups ⟨account⟩ ⟨count⟩ ⟨(run.cursor).value⟩
             _reclimit_pred))
@@ -1045,30 +1220,37 @@ def bal_write_nonce_groups (account : item_index) (count : item_count) (cursor :
   else (_rec_bal_write_nonce_groups ⟨account⟩ ⟨count⟩ ⟨cursor⟩ (_measure + 1))
 
 /- Type quantifiers: account : Nat, 0 ≤ account ∧ account ≤ (2 ^ 64 - 1) -/
-def bal_nonce_changes_size (account : item_index) : SailM byte_length := do
+def bal_nonce_changes_size (account : item_index) : SailM bal_rlp_length := do
   let account := (account).value
-  (bal_nonce_groups_size ⟨account⟩ ⟨((← (bal_nonce_change_count ⟨account⟩))).value⟩
-    ⟨0⟩ BYTE_ZERO)
+  let publicResult ← do
+    (do
+        let publicResult ← (bal_nonce_groups_size ⟨account⟩
+        ⟨((← (bal_nonce_change_count ⟨account⟩))).value⟩ ⟨0⟩
+        ⟨(BAL_RLP_ZERO).value⟩)
+        pure ((publicResult).value))
+  pure (⟨publicResult⟩)
 
 /-- Writes the nonce-change list for one account. -/
-/- Type quantifiers: k_ex161615_ : Nat, 0 ≤ k_ex161615_ ∧ k_ex161615_ ≤ (2 ^ 64 - 1) -/
-def bal_write_nonce_changes (account : item_index) (content_len : byte_length) : SailM Unit := do
+/- Type quantifiers: k_ex409326_ : Nat, k_ex409325_ : Nat, 0 ≤ k_ex409325_ ∧
+  k_ex409325_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409326_ ∧ k_ex409326_ ≤ (2 ^ 30) -/
+def bal_write_nonce_changes (account : item_index) (content_len : bal_rlp_length) : SailM Unit := do
   let account := (account).value
-  (rlp_write_list_prefix content_len)
+  let content_len := (content_len).value
+  (rlp_write_list_prefix (bal_rlp_length_to_byte_length ⟨content_len⟩))
   (bal_write_nonce_groups ⟨account⟩ ⟨((← (bal_nonce_change_count ⟨account⟩))).value⟩
     ⟨0⟩)
 
 /-- Finds the end of a run of equal code-change indices. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161619_ : Nat, k_ex161618_ : Nat, k_ex161617_ : Nat, k_ex161616_
-  : Nat, 0 ≤ k_ex161616_ ∧ k_ex161616_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161617_ ∧
-  k_ex161617_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161618_ ∧ k_ex161618_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex161619_ ∧ k_ex161619_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex409330_ : Nat, k_ex409329_ : Nat, k_ex409328_ : Nat, k_ex409327_
+  : Nat, 0 ≤ k_ex409327_ ∧ k_ex409327_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409328_ ∧
+  k_ex409328_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409329_ ∧ k_ex409329_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex409330_ ∧ k_ex409330_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_code_run_end (account : item_index) (count : item_count) (index : item_index) (cursor : item_index) (_reclimit : Nat) : SailM item_index := do
   let account := (account).value
   let count := (count).value
   let index := (index).value
   let cursor := (cursor).value
-  let semanticResult ← do
+  let publicResult ← do
     match _reclimit with
     | 0 =>
       (do
@@ -1082,12 +1264,12 @@ def _rec_bal_code_run_end (account : item_index) (count : item_count) (index : i
             if ((((← (bal_code_change_index ⟨account⟩ ⟨cursor⟩))).value == index) : Bool)
             then
               (do
-                  let semanticResult ← (_rec_bal_code_run_end ⟨account⟩ ⟨count⟩
-                  ⟨index⟩ ⟨((← (item_index_increment ⟨cursor⟩))).value⟩ _reclimit_pred)
-                  pure ((semanticResult).value))
+                  let publicResult ← (_rec_bal_code_run_end ⟨account⟩ ⟨count⟩ ⟨index⟩
+                  ⟨(cursor + 1)⟩ _reclimit_pred)
+                  pure ((publicResult).value))
             else (pure cursor))
         else (pure cursor))
-  pure (⟨semanticResult⟩)
+  pure (⟨publicResult⟩)
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
@@ -1100,73 +1282,90 @@ def bal_code_run_end (account : item_index) (count : item_count) (index : item_i
   let count := (count).value
   let index := (index).value
   let cursor := (cursor).value
-  let semanticResult ← do
+  let publicResult ← do
     let _measure := ((count -i cursor) : Int)
     if ((_measure <b 0) : Bool)
     then throw Error.Exit
     else
       (do
-          let semanticResult ← (_rec_bal_code_run_end ⟨account⟩ ⟨count⟩ ⟨index⟩
+          let publicResult ← (_rec_bal_code_run_end ⟨account⟩ ⟨count⟩ ⟨index⟩
           ⟨cursor⟩ (_measure + 1))
-          pure ((semanticResult).value))
-  pure (⟨semanticResult⟩)
+          pure ((publicResult).value))
+  pure (⟨publicResult⟩)
 
 /-- Sizes the final code value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161628_ : Nat, k_ex161627_ : Nat, k_ex161626_ : Nat, 0 ≤
-  k_ex161626_ ∧ k_ex161626_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161627_ ∧ k_ex161627_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex161628_ ∧ k_ex161628_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
-def _rec_bal_code_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : byte_length) (_reclimit : Nat) : SailM byte_length := do
+/- Type quantifiers: _reclimit : Nat, k_ex409340_ : Nat, k_ex409339_ : Nat, k_ex409338_ : Nat, k_ex409337_
+  : Nat, 0 ≤ k_ex409337_ ∧ k_ex409337_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409338_ ∧
+  k_ex409338_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409339_ ∧ k_ex409339_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex409340_ ∧ k_ex409340_ ≤ (2 ^ 30), 0 ≤ _reclimit -/
+def _rec_bal_code_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : bal_rlp_length) (_reclimit : Nat) : SailM bal_rlp_length := do
   let account := (account).value
   let count := (count).value
   let cursor := (cursor).value
-  match _reclimit with
-  | 0 =>
-    (do
-      assert false "recursion limit reached"
-      throw Error.Exit)
-  | _reclimit_pred + 1 =>
-    (do
-      if ((cursor <b count) : Bool)
-      then
-        (do
-          let index ← do
+  let content_len := (content_len).value
+  let publicResult ← do
+    match _reclimit with
+    | 0 =>
+      (do
+        assert false "recursion limit reached"
+        throw Error.Exit)
+    | _reclimit_pred + 1 =>
+      (do
+        if ((cursor <b count) : Bool)
+        then
+          (do
+            let index ← do
+              (do
+                  let publicResult ← (bal_code_change_index ⟨account⟩ ⟨cursor⟩)
+                  pure ((publicResult).value))
+            let next ← do
+              (do
+                  let publicResult ← (bal_code_run_end ⟨account⟩ ⟨count⟩ ⟨index⟩
+                  ⟨cursor⟩)
+                  pure ((publicResult).value))
+            let last ← do
+              (do
+                  let publicResult ← (bal_previous_index ⟨next⟩)
+                  pure ((publicResult).value))
+            let next_length ← do
+              (do
+                  let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+                  ((← (bal_index_code_size ⟨index⟩
+                    (← (bal_code_change_hash ⟨account⟩ ⟨last⟩))))).value)
+                  pure ((publicResult).value))
             (do
-                let semanticResult ← (bal_code_change_index ⟨account⟩ ⟨cursor⟩)
-                pure ((semanticResult).value))
-          let next ← do
-            (do
-                let semanticResult ← (bal_code_run_end ⟨account⟩ ⟨count⟩ ⟨index⟩
-                ⟨cursor⟩)
-                pure ((semanticResult).value))
-          let last ← do
-            (do
-                let semanticResult ← (protocol_quantity_decrement ⟨next⟩)
-                pure ((semanticResult).value))
-          (_rec_bal_code_groups_size ⟨account⟩ ⟨count⟩ ⟨next⟩
-            (← (byte_quantity_add content_len
-                (← (bal_index_code_size ⟨index⟩
-                    (← (bal_code_change_hash ⟨account⟩ ⟨last⟩)))))) _reclimit_pred))
-      else (pure content_len))
+                let publicResult ← (_rec_bal_code_groups_size ⟨account⟩ ⟨count⟩ ⟨next⟩
+                ⟨next_length⟩ _reclimit_pred)
+                pure ((publicResult).value)))
+        else (pure content_len))
+  pure (⟨publicResult⟩)
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Sizes the final code value for each change index. -/
-/- Type quantifiers: cursor : Nat, count : Nat, account : Nat, 0 ≤ account ∧
+/- Type quantifiers: content_len : Nat, cursor : Nat, count : Nat, account : Nat, 0 ≤ account ∧
   account ≤ (2 ^ 64 - 1), 0 ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ cursor ∧
-  cursor ≤ (2 ^ 64 - 1) -/
-def bal_code_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : byte_length) : SailM byte_length := do
+  cursor ≤ (2 ^ 64 - 1), 0 ≤ content_len ∧ content_len ≤ (2 ^ 30) -/
+def bal_code_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : bal_rlp_length) : SailM bal_rlp_length := do
   let account := (account).value
   let count := (count).value
   let cursor := (cursor).value
-  let _measure := ((count -i cursor) : Int)
-  if ((_measure <b 0) : Bool)
-  then throw Error.Exit
-  else (_rec_bal_code_groups_size ⟨account⟩ ⟨count⟩ ⟨cursor⟩ content_len (_measure + 1))
+  let content_len := (content_len).value
+  let publicResult ← do
+    let _measure := ((count -i cursor) : Int)
+    if ((_measure <b 0) : Bool)
+    then throw Error.Exit
+    else
+      (do
+          let publicResult ← (_rec_bal_code_groups_size ⟨account⟩ ⟨count⟩ ⟨cursor⟩
+          ⟨content_len⟩ (_measure + 1))
+          pure ((publicResult).value))
+  pure (⟨publicResult⟩)
 
 /-- Writes the final code value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161636_ : Nat, k_ex161635_ : Nat, k_ex161634_ : Nat, 0 ≤
-  k_ex161634_ ∧ k_ex161634_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161635_ ∧ k_ex161635_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex161636_ ∧ k_ex161636_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex409349_ : Nat, k_ex409348_ : Nat, k_ex409347_ : Nat, 0 ≤
+  k_ex409347_ ∧ k_ex409347_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409348_ ∧ k_ex409348_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex409349_ ∧ k_ex409349_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_write_code_groups (account : item_index) (count : item_count) (cursor : item_index) (_reclimit : Nat) : SailM Unit := do
   let account := (account).value
   let count := (count).value
@@ -1183,17 +1382,17 @@ def _rec_bal_write_code_groups (account : item_index) (count : item_count) (curs
         (do
           let index ← do
             (do
-                let semanticResult ← (bal_code_change_index ⟨account⟩ ⟨cursor⟩)
-                pure ((semanticResult).value))
+                let publicResult ← (bal_code_change_index ⟨account⟩ ⟨cursor⟩)
+                pure ((publicResult).value))
           let next ← do
             (do
-                let semanticResult ← (bal_code_run_end ⟨account⟩ ⟨count⟩ ⟨index⟩
+                let publicResult ← (bal_code_run_end ⟨account⟩ ⟨count⟩ ⟨index⟩
                 ⟨cursor⟩)
-                pure ((semanticResult).value))
+                pure ((publicResult).value))
           let last ← do
             (do
-                let semanticResult ← (protocol_quantity_decrement ⟨next⟩)
-                pure ((semanticResult).value))
+                let publicResult ← (bal_previous_index ⟨next⟩)
+                pure ((publicResult).value))
           (bal_write_index_code ⟨index⟩ (← (bal_code_change_hash ⟨account⟩ ⟨last⟩)))
           (_rec_bal_write_code_groups ⟨account⟩ ⟨count⟩ ⟨next⟩ _reclimit_pred))
       else (pure ()))
@@ -1214,16 +1413,22 @@ def bal_write_code_groups (account : item_index) (count : item_count) (cursor : 
   else (_rec_bal_write_code_groups ⟨account⟩ ⟨count⟩ ⟨cursor⟩ (_measure + 1))
 
 /- Type quantifiers: account : Nat, 0 ≤ account ∧ account ≤ (2 ^ 64 - 1) -/
-def bal_code_changes_size (account : item_index) : SailM byte_length := do
+def bal_code_changes_size (account : item_index) : SailM bal_rlp_length := do
   let account := (account).value
-  (bal_code_groups_size ⟨account⟩ ⟨((← (bal_code_change_count ⟨account⟩))).value⟩
-    ⟨0⟩ BYTE_ZERO)
+  let publicResult ← do
+    (do
+        let publicResult ← (bal_code_groups_size ⟨account⟩
+        ⟨((← (bal_code_change_count ⟨account⟩))).value⟩ ⟨0⟩ ⟨(BAL_RLP_ZERO).value⟩)
+        pure ((publicResult).value))
+  pure (⟨publicResult⟩)
 
 /-- Writes the code-change list for one account. -/
-/- Type quantifiers: k_ex161643_ : Nat, 0 ≤ k_ex161643_ ∧ k_ex161643_ ≤ (2 ^ 64 - 1) -/
-def bal_write_code_changes (account : item_index) (content_len : byte_length) : SailM Unit := do
+/- Type quantifiers: k_ex409357_ : Nat, k_ex409356_ : Nat, 0 ≤ k_ex409356_ ∧
+  k_ex409356_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409357_ ∧ k_ex409357_ ≤ (2 ^ 30) -/
+def bal_write_code_changes (account : item_index) (content_len : bal_rlp_length) : SailM Unit := do
   let account := (account).value
-  (rlp_write_list_prefix content_len)
+  let content_len := (content_len).value
+  (rlp_write_list_prefix (bal_rlp_length_to_byte_length ⟨content_len⟩))
   (bal_write_code_groups ⟨account⟩ ⟨((← (bal_code_change_count ⟨account⟩))).value⟩
     ⟨0⟩)
 
@@ -1233,25 +1438,61 @@ def bal_account_size (account : item_index) : SailM BalAccountSize := do
   let account := (account).value
   let storage_changes ← do (bal_storage_changes_size ⟨account⟩)
   let storage_reads ← do (bal_storage_reads_size ⟨account⟩)
-  let balance_changes_len ← do (bal_balance_changes_size ⟨account⟩)
-  let nonce_changes_len ← do (bal_nonce_changes_size ⟨account⟩)
-  let code_changes_len ← do (bal_code_changes_size ⟨account⟩)
-  let content_len := (rlp_addr_size ())
+  let balance_changes_len ← do
+    (do
+        let publicResult ← (bal_balance_changes_size ⟨account⟩)
+        pure ((publicResult).value))
+  let nonce_changes_len ← do
+    (do
+        let publicResult ← (bal_nonce_changes_size ⟨account⟩)
+        pure ((publicResult).value))
+  let code_changes_len ← do
+    (do
+        let publicResult ← (bal_code_changes_size ⟨account⟩)
+        pure ((publicResult).value))
+  let content_len ← do
+    (do
+        let publicResult ← (bal_rlp_length_from_byte_length (rlp_addr_size ()))
+        pure ((publicResult).value))
   let content_len ←
-    (byte_quantity_add content_len (← (rlp_list_size storage_changes.content_len)))
+    (do
+        let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+        (bal_rlp_length_to_byte_length
+          ⟨((← (bal_rlp_list_size ⟨(storage_changes.content_len).value⟩))).value⟩))
+        pure ((publicResult).value))
   let content_len ←
-    (byte_quantity_add content_len (← (rlp_list_size storage_reads.content_len)))
-  let content_len ← (byte_quantity_add content_len (← (rlp_list_size balance_changes_len)))
-  let content_len ← (byte_quantity_add content_len (← (rlp_list_size nonce_changes_len)))
-  let content_len ← (byte_quantity_add content_len (← (rlp_list_size code_changes_len)))
-  (pure { encoded_len := ← (rlp_list_size content_len),
+    (do
+        let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+        (bal_rlp_length_to_byte_length
+          ⟨((← (bal_rlp_list_size ⟨(storage_reads.content_len).value⟩))).value⟩))
+        pure ((publicResult).value))
+  let content_len ←
+    (do
+        let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+        (bal_rlp_length_to_byte_length
+          ⟨((← (bal_rlp_list_size ⟨balance_changes_len⟩))).value⟩))
+        pure ((publicResult).value))
+  let content_len ←
+    (do
+        let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+        (bal_rlp_length_to_byte_length
+          ⟨((← (bal_rlp_list_size ⟨nonce_changes_len⟩))).value⟩))
+        pure ((publicResult).value))
+  let content_len ←
+    (do
+        let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+        (bal_rlp_length_to_byte_length
+          ⟨((← (bal_rlp_list_size ⟨code_changes_len⟩))).value⟩))
+        pure ((publicResult).value))
+  (pure { encoded_len := ← do
+              let publicField ← (do
+                  let publicResult ← (bal_rlp_list_size ⟨content_len⟩)
+                  pure ((publicResult).value))
+              pure (⟨publicField⟩),
           item_count := ← do
-              let semanticField ← (do
-                  let semanticResult ← (bal_count_add
-                  ⟨((← (bal_count_add ⟨1⟩ ⟨(storage_changes.count).value⟩))).value⟩
-                  ⟨(storage_reads.count).value⟩)
-                  pure ((semanticResult).value))
-              pure (⟨semanticField⟩) })
+              let publicField ← (bal_count_add
+                (← (bal_count_add 1 (storage_changes.count).value)) (storage_reads.count).value)
+              pure (⟨publicField⟩) })
 
 /-- Writes one account and all of its ordered BAL change lists. -/
 /- Type quantifiers: account : Nat, 0 ≤ account ∧ account ≤ (2 ^ 64 - 1) -/
@@ -1259,31 +1500,64 @@ def bal_write_account (account : item_index) : SailM Unit := do
   let account := (account).value
   let storage_changes ← do (bal_storage_changes_size ⟨account⟩)
   let storage_reads ← do (bal_storage_reads_size ⟨account⟩)
-  let balance_changes_len ← do (bal_balance_changes_size ⟨account⟩)
-  let nonce_changes_len ← do (bal_nonce_changes_size ⟨account⟩)
-  let code_changes_len ← do (bal_code_changes_size ⟨account⟩)
-  let content_len := (rlp_addr_size ())
+  let balance_changes_len ← do
+    (do
+        let publicResult ← (bal_balance_changes_size ⟨account⟩)
+        pure ((publicResult).value))
+  let nonce_changes_len ← do
+    (do
+        let publicResult ← (bal_nonce_changes_size ⟨account⟩)
+        pure ((publicResult).value))
+  let code_changes_len ← do
+    (do
+        let publicResult ← (bal_code_changes_size ⟨account⟩)
+        pure ((publicResult).value))
+  let content_len ← do
+    (do
+        let publicResult ← (bal_rlp_length_from_byte_length (rlp_addr_size ()))
+        pure ((publicResult).value))
   let content_len ←
-    (byte_quantity_add content_len (← (rlp_list_size storage_changes.content_len)))
+    (do
+        let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+        (bal_rlp_length_to_byte_length
+          ⟨((← (bal_rlp_list_size ⟨(storage_changes.content_len).value⟩))).value⟩))
+        pure ((publicResult).value))
   let content_len ←
-    (byte_quantity_add content_len (← (rlp_list_size storage_reads.content_len)))
-  let content_len ← (byte_quantity_add content_len (← (rlp_list_size balance_changes_len)))
-  let content_len ← (byte_quantity_add content_len (← (rlp_list_size nonce_changes_len)))
-  let content_len ← (byte_quantity_add content_len (← (rlp_list_size code_changes_len)))
-  (rlp_write_list_prefix content_len)
+    (do
+        let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+        (bal_rlp_length_to_byte_length
+          ⟨((← (bal_rlp_list_size ⟨(storage_reads.content_len).value⟩))).value⟩))
+        pure ((publicResult).value))
+  let content_len ←
+    (do
+        let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+        (bal_rlp_length_to_byte_length
+          ⟨((← (bal_rlp_list_size ⟨balance_changes_len⟩))).value⟩))
+        pure ((publicResult).value))
+  let content_len ←
+    (do
+        let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+        (bal_rlp_length_to_byte_length
+          ⟨((← (bal_rlp_list_size ⟨nonce_changes_len⟩))).value⟩))
+        pure ((publicResult).value))
+  let content_len ←
+    (do
+        let publicResult ← (bal_rlp_length_add ⟨content_len⟩
+        (bal_rlp_length_to_byte_length
+          ⟨((← (bal_rlp_list_size ⟨code_changes_len⟩))).value⟩))
+        pure ((publicResult).value))
+  (rlp_write_list_prefix (bal_rlp_length_to_byte_length ⟨content_len⟩))
   (rlp_write_addr (← (bal_account_address ⟨account⟩)))
   (bal_write_storage_changes ⟨account⟩ storage_changes)
   (bal_write_storage_reads ⟨account⟩ storage_reads)
-  (bal_write_balance_changes ⟨account⟩ balance_changes_len)
-  (bal_write_nonce_changes ⟨account⟩ nonce_changes_len)
-  (bal_write_code_changes ⟨account⟩ code_changes_len)
+  (bal_write_balance_changes ⟨account⟩ ⟨balance_changes_len⟩)
+  (bal_write_nonce_changes ⟨account⟩ ⟨nonce_changes_len⟩)
+  (bal_write_code_changes ⟨account⟩ ⟨code_changes_len⟩)
 
-/-- Sizes all ordered BAL accounts and counts their logical items. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161647_ : Nat, k_ex161646_ : Nat, 0 ≤ k_ex161646_ ∧
-  k_ex161646_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161647_ ∧ k_ex161647_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
-def _rec_bal_accounts_size (account_count : item_count) (account : item_index) (result : BalContentCount) (_reclimit : Nat) : SailM BalContentCount := do
+/- Type quantifiers: _reclimit : Nat, account_count : Nat, account : Nat, 0 ≤ account, 0 ≤
+  account_count ∧ account_count ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+def _rec_bal_accounts_size (account_count : item_count) (account : Nat) (result : BalContentCount) (_reclimit : Nat) : SailM BalContentCount := do
   let account_count := (account_count).value
-  let account := (account).value
   match _reclimit with
   | 0 =>
     (do
@@ -1295,36 +1569,34 @@ def _rec_bal_accounts_size (account_count : item_count) (account : item_index) (
       then
         (do
           let account_size ← do (bal_account_size ⟨account⟩)
-          (_rec_bal_accounts_size ⟨account_count⟩
-            ⟨((← (item_index_increment ⟨account⟩))).value⟩
-            { content_len := ← (byte_quantity_add result.content_len account_size.encoded_len),
+          let next_length ← do
+            (do
+                let publicResult ← (bal_rlp_length_add ⟨(result.content_len).value⟩
+                (bal_rlp_length_to_byte_length ⟨(account_size.encoded_len).value⟩))
+                pure ((publicResult).value))
+          (_rec_bal_accounts_size ⟨account_count⟩ (account + 1)
+            { content_len := ⟨next_length⟩,
               count := ← do
-                  let semanticField ← (do
-                      let semanticResult ← (bal_count_add ⟨(result.count).value⟩
-                      ⟨(account_size.item_count).value⟩)
-                      pure ((semanticResult).value))
-                  pure (⟨semanticField⟩) } _reclimit_pred))
+                  let publicField ← (bal_count_add (result.count).value
+                    (account_size.item_count).value)
+                  pure (⟨publicField⟩) } _reclimit_pred))
       else (pure result))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
-/-- Sizes all ordered BAL accounts and counts their logical items. -/
-/- Type quantifiers: account : Nat, account_count : Nat, 0 ≤ account_count ∧
-  account_count ≤ (2 ^ 64 - 1), 0 ≤ account ∧ account ≤ (2 ^ 64 - 1) -/
-def bal_accounts_size (account_count : item_count) (account : item_index) (result : BalContentCount) : SailM BalContentCount := do
+/- Type quantifiers: account_count : Nat, account : Nat, 0 ≤ account, 0 ≤ account_count ∧
+  account_count ≤ (2 ^ 64 - 1) -/
+def bal_accounts_size (account_count : item_count) (account : Nat) (result : BalContentCount) : SailM BalContentCount := do
   let account_count := (account_count).value
-  let account := (account).value
   let _measure := ((account_count -i account) : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
-  else (_rec_bal_accounts_size ⟨account_count⟩ ⟨account⟩ result (_measure + 1))
+  else (_rec_bal_accounts_size ⟨account_count⟩ account result (_measure + 1))
 
-/-- Writes all BAL accounts in recorder order. -/
-/- Type quantifiers: _reclimit : Nat, k_ex161653_ : Nat, k_ex161652_ : Nat, 0 ≤ k_ex161652_ ∧
-  k_ex161652_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex161653_ ∧ k_ex161653_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
-def _rec_bal_write_accounts (account_count : item_count) (account : item_index) (_reclimit : Nat) : SailM Unit := do
+/- Type quantifiers: _reclimit : Nat, account_count : Nat, account : Nat, 0 ≤ account, 0 ≤
+  account_count ∧ account_count ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+def _rec_bal_write_accounts (account_count : item_count) (account : Nat) (_reclimit : Nat) : SailM Unit := do
   let account_count := (account_count).value
-  let account := (account).value
   match _reclimit with
   | 0 =>
     (do
@@ -1336,22 +1608,19 @@ def _rec_bal_write_accounts (account_count : item_count) (account : item_index) 
       then
         (do
           (bal_write_account ⟨account⟩)
-          (_rec_bal_write_accounts ⟨account_count⟩
-            ⟨((← (item_index_increment ⟨account⟩))).value⟩ _reclimit_pred))
+          (_rec_bal_write_accounts ⟨account_count⟩ (account + 1) _reclimit_pred))
       else (pure ()))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
-/-- Writes all BAL accounts in recorder order. -/
-/- Type quantifiers: account : Nat, account_count : Nat, 0 ≤ account_count ∧
-  account_count ≤ (2 ^ 64 - 1), 0 ≤ account ∧ account ≤ (2 ^ 64 - 1) -/
-def bal_write_accounts (account_count : item_count) (account : item_index) : SailM Unit := do
+/- Type quantifiers: account_count : Nat, account : Nat, 0 ≤ account, 0 ≤ account_count ∧
+  account_count ≤ (2 ^ 64 - 1) -/
+def bal_write_accounts (account_count : item_count) (account : Nat) : SailM Unit := do
   let account_count := (account_count).value
-  let account := (account).value
   let _measure := ((account_count -i account) : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
-  else (_rec_bal_write_accounts ⟨account_count⟩ ⟨account⟩ (_measure + 1))
+  else (_rec_bal_write_accounts ⟨account_count⟩ account (_measure + 1))
 
 /-- Reconstructs the canonical EIP-7928 block access list from the
 recorder: per account (address order) — storage changes, storage
@@ -1361,16 +1630,17 @@ def encode_block_access_list (_ : Unit) : SailM EncodedBlockAccessList := do
   (bal_prepare ())
   let account_count ← do
     (do
-        let semanticResult ← (bal_account_count ())
-        pure ((semanticResult).value))
+        let publicResult ← (bal_account_count ())
+        pure ((publicResult).value))
   let size ← do
-    (bal_accounts_size ⟨account_count⟩ ⟨0⟩
-      { content_len := BYTE_ZERO,
+    (bal_accounts_size ⟨account_count⟩ 0
+      { content_len := ⟨(BAL_RLP_ZERO).value⟩,
         count := ⟨0⟩ })
-  let encoded_len ← do (rlp_list_size size.content_len)
   let start ← do (scratch_begin ())
-  (rlp_write_list_prefix size.content_len)
-  (bal_write_accounts ⟨account_count⟩ ⟨0⟩)
-  (pure { bytes := ← (rlp_finish start encoded_len),
+  (rlp_write_list_prefix (bal_rlp_length_to_byte_length ⟨(size.content_len).value⟩))
+  (bal_write_accounts ⟨account_count⟩ 0)
+  (pure { bytes := ← do
+              let publicField ← (rlp_finish start)
+              pure (publicField),
           item_count := ⟨(size.count).value⟩ })
 

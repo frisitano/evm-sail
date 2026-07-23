@@ -1,6 +1,8 @@
-import Evm.Flow
-import Evm.Arith
-import Evm.Primitives.Quantities
+import Sail
+import Evm.Defs
+import Evm.Specialization
+import Evm.FakeReal
+import Evm.HostAxioms
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -17,23 +19,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -46,6 +40,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # Regions and byte slices
@@ -76,7 +71,7 @@ def ByteSource_of_num (arg_ : Nat) : ByteSource :=
   | 4 => OutputSource
   | _ => ScratchSource
 
-def num_of_ByteSource (arg_ : ByteSource) : Int :=
+def num_of_ByteSource (arg_ : ByteSource) : Nat :=
   match arg_ with
   | .StatelessInputSource => 0
   | .EvmMemorySource => 1
@@ -85,49 +80,50 @@ def num_of_ByteSource (arg_ : ByteSource) : Int :=
   | .OutputSource => 4
   | .ScratchSource => 5
 
-def ADDRESS_BYTE_LENGTH : byte_length := (ByteQuantity 20)
+def ADDRESS_BYTE_LENGTH : Nat := 20
 
-def WORD_BYTE_LENGTH : byte_length := (ByteQuantity 32)
+def WORD_BYTE_LENGTH : Nat := 32
 
-def EIGHT_BYTE_LENGTH : byte_length := (ByteQuantity 8)
+def EIGHT_BYTE_LENGTH : Nat := 8
 
-def DOUBLE_WORD_BYTE_LENGTH : byte_length := (ByteQuantity 64)
+def DOUBLE_WORD_BYTE_LENGTH : Nat := 64
 
-/-- Constructs a [EvmByteSlice][type-EvmByteSlice] from integer offset and
-length. -/
-def byte_slice (src : ByteSource) (off : source_pointer) (len : byte_length) : EvmByteSlice :=
+/- Type quantifiers: off : Nat, len : Nat, source_valid_range(off, len) -/
+def byte_slice (src : ByteSource) (off : Nat) (len : Nat) : (EvmByteSliceFields off len) :=
   { source := src,
     off := off,
     len := len }
 
 /-- The zero-length placeholder slice, for unused value roles (subtree
 references, deletes). -/
-def EMPTY_SLICE : EvmByteSlice :=
-  { source := StatelessInputSource,
-    off := BYTE_ZERO,
-    len := BYTE_ZERO }
+def EMPTY_SLICE : (EvmByteSliceFields 0 0) := (byte_slice StatelessInputSource 0 0)
 
-/-- A slice into the stateless input (witness) store. -/
-def stateless_input_byte_slice (off : source_pointer) (len : byte_length) : EvmByteSlice :=
-  (byte_slice StatelessInputSource off len)
+/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, len : Nat, source_valid_range(k_base, k_source_len)
+  ∧ 0 ≤ off ∧ 0 ≤ len ∧ (off + len) ≤ k_source_len -/
+def sub_slice (s : (EvmByteSliceFields k_base k_source_len)) (off : Nat) (len : Nat) : (EvmByteSliceFields (k_base + off) len) :=
+  (byte_slice s.source (k_base + off) len)
 
-/-- A relative sub-range of a slice, within the same source. -/
-def sub_slice (s : EvmByteSlice) (off : source_pointer) (len : byte_length) : SailM EvmByteSlice := do
-  assert (byte_quantity_le off s.len) "sail/primitives/bytes.sail:54.23-54.24"
-  assert (byte_quantity_le len (← (byte_quantity_sub s.len off))) "sail/primitives/bytes.sail:55.29-55.30"
-  assert (byte_quantity_le s.off MAX_BYTE_QUANTITY) "sail/primitives/bytes.sail:56.37-56.38"
-  assert (byte_quantity_le off (← (byte_quantity_sub MAX_BYTE_QUANTITY s.off))) "sail/primitives/bytes.sail:57.43-57.44"
-  let absolute_off ← do (byte_quantity_add s.off off)
-  (pure (byte_slice s.source absolute_off len))
+/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, source_valid_range(k_base, k_source_len)
+  ∧ 0 ≤ off ∧ off ≤ k_source_len -/
+def slice_suffix (s : (EvmByteSliceFields k_base k_source_len)) (off : Nat) : (EvmByteSliceFields (k_base + off) (k_source_len - off)) :=
+  (byte_slice s.source (k_base + off) (k_source_len - off))
 
-/-- An absolute span in the append-only content-addressed code arena. -/
-def code_byte_slice (off : source_pointer) (len : byte_length) : EvmByteSlice :=
-  (byte_slice CodeSource off len)
-
-def materialized_bytes (data : (List byte)) (len : byte_length) : MaterializedBytes :=
+/- Type quantifiers: len : Nat, source_valid_length(len) -/
+def materialized_bytes (data : (List byte)) (len : Nat) : MaterializedBytes :=
   { data := data,
     len := len }
 
-def bytes_list (data : (List byte)) (len : byte_length) : Bytes :=
+def undefined_FixedBytes32 (_ : Unit) : SailM FixedBytes32 := do
+  (pure { data := ← (undefined_vector 32 (← (undefined_bitvector 8))),
+          len := ← (undefined_range 0 32) })
+
+/- Type quantifiers: len : Nat, source_valid_length(len) -/
+def bytes_list (data : (List byte)) (len : Nat) : Bytes :=
   (BytesList (materialized_bytes data len))
+
+/- Type quantifiers: k_ex406700_ : Nat, 0 ≤ k_ex406700_ ∧ k_ex406700_ ≤ 32 -/
+def bytes_fixed32 (data : b256) (len : Nat) : Bytes :=
+  (BytesFixed32
+    { data := data,
+      len := len })
 

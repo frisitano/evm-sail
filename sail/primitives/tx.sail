@@ -21,8 +21,8 @@ enum TxType = {
     SetCodeTx,
 }
 
-let OSAKA_TRANSACTION_GAS_LIMIT_VALUE : protocol_quantity = 16777216
-let OSAKA_TRANSACTION_GAS_LIMIT : gas = Gas(16777216)
+let OSAKA_TRANSACTION_GAS_LIMIT_VALUE : transaction_gas = TRANSACTION_EXECUTION_GAS_LIMIT
+let OSAKA_TRANSACTION_GAS_LIMIT : transaction_gas = TRANSACTION_EXECUTION_GAS_LIMIT
 
 /*! An EIP-7702 set-code authorization tuple. RLP decoding recovers the
     authority and validates the signature (`s <= n/2`, `y_parity`, `r`);
@@ -36,10 +36,33 @@ struct Authorization = {
 /*! The source-backed EIP-4844 versioned blob hashes of a transaction. */
 struct BlobHashes = {
     bytes : ByteSlice,
-    count : blob_count,
+    count : transaction_blob_count,
 }
 
 let EMPTY_BLOB_HASHES : BlobHashes = struct { bytes = EMPTY_SLICE, count = 0 }
+
+/*! A byte span contained by one SSZ transaction envelope. This structural
+    bound is independent of fork-specific calldata and initcode limits. */
+type TransactionByteSlice = {
+    'off 'len,
+    source_valid_range('off, 'len) & 0 <= 'len & 'len <= transaction_length_bound.
+    ByteSliceFields('off, 'len)
+}
+
+/*! A collection count whose entries are encoded inside one transaction. */
+type transaction_item_count = range(0, transaction_length_bound)
+
+/*! A byte length contained by one SSZ transaction envelope. */
+type transaction_byte_length = range(0, transaction_length_bound)
+
+/*! The greatest EIP-2028 calldata charge admitted by an SSZ transaction. */
+type transaction_calldata_cost = range(0, 16 * transaction_length_bound)
+
+/*! The greatest EIP-7623 calldata floor admitted by an SSZ transaction. */
+type transaction_calldata_floor_cost = range(0, 40 * transaction_length_bound + 21000)
+
+/*! The greatest EIP-3860 initcode charge admitted by an SSZ transaction. */
+type transaction_initcode_cost = range(0, 2 * div(transaction_length_bound + 31, 32))
 
 /*! A decoded transaction. Covers the EIP-2718 typed envelopes 0–4:
     legacy, EIP-2930 (access list), EIP-1559 (fee market), EIP-4844
@@ -51,19 +74,19 @@ struct Transaction = {
   sender : address, nonce : word,
   /* typed-envelope chain id; 0 for legacy txs */
   chain_id : chain_identifier,
-  gas_limit : gas, is_create : bool, recipient : address, value : word,
+  gas_limit : transaction_gas, is_create : bool, recipient : address, value : word,
   /* the EIP-2718 envelope span this tx decoded from
      (the transactions-trie leaf value) */
   raw : ByteSlice,
   /* calldata / creation initcode as a host byte source
      (normally a span of the stateless input) */
-  input_src : ByteSlice,
+  input_src : TransactionByteSlice,
   /* EIP-2930 access-list addresses (one per entry) */
   access_list_addresses : list(address),
-  access_list_address_count : item_count,
+  access_list_address_count : transaction_item_count,
   /* EIP-2930 access-list (address, slot) pairs */
   access_list_slots : list(StorageKey),
-  access_list_slot_count : item_count,
+  access_list_slot_count : transaction_item_count,
   /* EIP-1559 max_fee_per_gas (cap, for validity) */
   max_fee : word,
   /* EIP-4844 max_fee_per_blob_gas (cap, for validity) */
@@ -72,7 +95,7 @@ struct Transaction = {
   max_priority_fee : word,
   /* EIP-7702 set-code authorization tuples */
   authorizations : list(Authorization),
-  authorization_count : item_count,
+  authorization_count : transaction_item_count,
   /* source-backed EIP-4844 BLOBHASH operands */
   blob_hashes : BlobHashes,
   /* witnessed sender public key (0x04 ++ X ++ Y span); NOT trusted -- its
@@ -100,13 +123,11 @@ struct LogEntry = {
 
 /*! A transaction receipt. `success` means the top-level frame
     returned/stopped without reverting or exceptionally halting (used for
-    create-tx code deposit and log inclusion). `valid` means the tx passed
-    transaction validity (nonce/balance/intrinsic/floor/fee/blob/EIP-7702
-    rules) and was applied to the block — a valid tx that reverts or runs
-    out of gas still has `valid = true`; it is a legitimate block member
-    (gas charged, nonce bumped). Block validity folds `valid`, not
-    `success`: only an invalid, inapplicable tx makes the containing block
-    invalid. `execution_gas` is the execution-gas contribution to Amsterdam
+    create-tx code deposit and log inclusion). Transaction-invalidity is an
+    invalid-block exception and therefore never produces a receipt. A valid
+    transaction that reverts or runs out of gas still has `success = false`
+    and produces a legitimate receipt. `execution_gas` is the execution-gas
+    contribution to Amsterdam
     block accounting *without* the EIP-3529 refund
     (`max(execution_gas_before_refund, calldata_floor)`); it
     differs from `gas_used` (the receipt's refunded gas) precisely by the
@@ -114,7 +135,6 @@ struct LogEntry = {
 struct Receipt = {
     tx_type : TxType,
     success : bool,
-    valid : bool,
     gas_used : gas,
     execution_gas : gas,
     state_gas : gas,

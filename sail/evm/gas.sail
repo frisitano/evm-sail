@@ -33,194 +33,192 @@ BLOB_BASE_FEE_UPDATE_FRACTION)`. The active target, maximum, and update
 fraction come from the validated SSZ chain config, including BPO1/BPO2.
 */
 let MIN_BLOB_BASE_FEE : word = WORD_ONE
-let GAS_PER_BLOB : blob_gas = 131072
+let GAS_PER_BLOB : range(gas_per_blob_value, gas_per_blob_value) = sizeof(gas_per_blob_value)
+let BLOB_RESERVE_PRICE_SHIFT_LIMIT : word = U256(2 ^ 252)
 
-/* The Taylor series is defined over exact non-negative integers, not the
- * EVM's modulo-2^256 word algebra. A valid header chain cannot reach a blob
- * price above an EVM word: long before that point, the fee for one blob would
- * exceed every word-sized sender balance, so no block could sustain the
- * excess needed to raise the price. The checked implementation below fails
- * closed if an unauthenticated or otherwise unreachable header violates that
- * invariant.
- *
- * Taylor terms and their running sum are scaled by `denominator`. Keeping the
- * quotient and remainder separately computes the exact word-sized result
- * without either modular intermediate arithmetic or a Sail bigint. */
-/*! A non-negative blob-fee Taylor term scaled by a protocol denominator. */
+/*! A strictly positive Taylor-series index in the fake-exponential equation. */
+type fake_exponential_index = range(1, 2 ^ 64 - 1)
+
+/*! The fractional numerator of a denominator-scaled blob-fee value. */
+type blob_fee_remainder = range(0, blob_fee_update_fraction_bound - 1)
+
+/* Taylor terms and their running sum are represented as
+ * `whole * denominator + remainder`.  This is the exact integer value, not
+ * fixed-point approximation: retaining the remainder lets each recurrence
+ * divide before multiplying values that could otherwise require more than
+ * 256 bits. */
+/*! An exact denominator-scaled blob-fee value split into whole and remainder. */
 struct ScaledBlobValue = {
     whole : word,
-    remainder : protocol_quantity,
+    remainder : blob_fee_remainder,
 }
 
-/*! Adds two scaled blob-fee values without losing their fractional parts. */
+/*! An exact quotient and remainder in the EVM-word domain. */
+struct BlobProductDivMod = {
+    quotient : word,
+    remainder : word,
+}
+
+/*! Advances the fake-exponential series index without exceeding `uint64`. */
+function fake_exponential_index_increment(value : fake_exponential_index) -> fake_exponential_index =
+    if value < 2 ^ 64 - 1 then {
+        value + 1
+    } else {
+        throw InvalidBlock(ExecutionInvalid)
+    }
+
+/*! Adds two EVM words, failing instead of applying EVM modular overflow. */
+val blob_word_add : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
+        int('left),
+        int('right),
+    ) -> word
+function blob_word_add(left, right) =
+    if word_ule(right, word_sub(WORD_ALL_ONES, left)) then {
+        word_add(left, right)
+    } else {
+        throw InvalidBlock(ExecutionInvalid)
+    }
+
+/*! Multiplies two EVM words, failing instead of applying EVM modular overflow. */
+val blob_word_mul : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
+        int('left),
+        int('right),
+    ) -> word
+function blob_word_mul(left, right) =
+    if word_is_zero(left) then {
+        WORD_ZERO
+    } else {
+        if word_ule(right, word_div(WORD_ALL_ONES, left)) then {
+            word_mul(left, right)
+        } else {
+            throw InvalidBlock(ExecutionInvalid)
+        }
+    }
+
+/*! Adds two exact denominator-scaled blob-fee values. */
 function scaled_blob_add(
     left : ScaledBlobValue,
     right : ScaledBlobValue,
     denominator : blob_fee_update_fraction,
 ) -> (
-    option(ScaledBlobValue)
+    ScaledBlobValue
 ) = {
-    if denominator == 0 then {
-        return None()
-    };
     let combined = left.remainder + right.remainder;
     let carry = denominator <= combined;
-    let remainder = if carry then {
+    let remainder_value = if carry then {
             combined - denominator
         } else {
             combined
         };
-    if BYTE_QUANTITY_MAX < remainder then {
-        return None()
-    };
-    let whole : word = match word_checked_add(left.whole, right.whole) {
-        Some(value) => value,
-        None() => return None(),
-    };
-    if carry then {
-        match word_checked_add(whole, WORD_ONE) {
-            Some(value) => Some(struct { whole = value, remainder = remainder }),
-            None() => None(),
-        }
+    if remainder_value < denominator then {
+        let remainder : blob_fee_remainder = remainder_value;
+        let whole = blob_word_add(left.whole, right.whole);
+        let carried_whole = if carry then {
+                blob_word_add(whole, WORD_ONE)
+            } else {
+                whole
+            };
+        struct { whole = carried_whole, remainder = remainder }
     } else {
-        Some(struct { whole = whole, remainder = remainder })
+        throw InvalidBlock(ExecutionInvalid)
     }
 }
 
 /* Exact divmod of `value * factor + addend` by
- * `denominator * iteration`. Both divisor factors fit one fixed-width limb, so after first
- * dividing `value`, the residual product is below 2^192 and cannot wrap a
- * word. None means that the exact quotient is larger than WORD_ALL_ONES. */
+ * `denominator * iteration`.  Dividing `value` first bounds the residual
+ * product below 2^152 for the uint64 protocol inputs. */
 /*! Divides an exact blob-fee product while detecting word overflow. */
 function blob_product_divmod(
     value : word,
-    factor : blob_gas,
-    addend : protocol_quantity,
+    factor : excess_blob_gas,
+    addend : word,
     denominator : blob_fee_update_fraction,
-    iteration : item_index,
+    iteration : fake_exponential_index,
 ) -> (
-    option(WordDivMod)
+    BlobProductDivMod
 ) = {
-    let divisor = word_mul(word_of_protocol_quantity(denominator), word_of_protocol_quantity(iteration));
+    let divisor = word_mul(denominator, iteration);
     if word_is_zero(divisor) then {
-        return None()
+        throw InvalidBlock(ExecutionInvalid)
     };
-    let value_parts = word_divmod(value, divisor);
-    let whole : word = match word_checked_mul(value_parts.quotient, factor) {
-        Some(product) => product,
-        None() => return None(),
-    };
-    let residual_product = word_mul(value_parts.remainder, word_of_protocol_quantity(factor));
-    let residual_sum : word = match word_checked_add(residual_product, word_of_protocol_quantity(addend)) {
-        Some(sum) => sum,
-        None() => return None(),
-    };
-    let residual_parts = word_divmod(residual_sum, divisor);
-    let quotient : word = match word_checked_add(whole, residual_parts.quotient) {
-        Some(sum) => sum,
-        None() => return None(),
-    };
-    Some(struct { quotient = quotient, remainder = residual_parts.remainder })
+    let value_quotient = word_div(value, divisor);
+    let value_remainder = word_mod(value, divisor);
+    let whole = blob_word_mul(value_quotient, factor);
+    let residual_product = word_mul(value_remainder, factor);
+    let residual_sum = blob_word_add(residual_product, addend);
+    let residual_quotient = word_div(residual_sum, divisor);
+    struct { quotient = blob_word_add(whole, residual_quotient), remainder = word_mod(residual_sum, divisor) }
 }
 
-/*! Computes the next scaled term of the blob-fee Taylor series. */
+/*! Computes the next exact denominator-scaled Taylor term. */
 function scaled_blob_next(
     term : ScaledBlobValue,
-    numerator : blob_gas,
+    numerator : excess_blob_gas,
     denominator : blob_fee_update_fraction,
-    iteration : item_index,
+    iteration : fake_exponential_index,
 ) -> (
-    option(ScaledBlobValue)
+    ScaledBlobValue
 ) = {
-    /* term = whole*denominator + remainder. Cancelling the common
-     * denominator leaves an exact integer addend floor(remainder*n/d). */
-    let remainder_product = word_mul(word_of_protocol_quantity(term.remainder), word_of_protocol_quantity(numerator));
-    let addend_word = word_divmod(remainder_product, word_of_protocol_quantity(denominator)).quotient;
-    let addend : protocol_quantity = match word_to_limb(addend_word) {
-        Some(value) => unsigned(value),
-        None() => return None(),
-    };
-    let divided : WordDivMod = match blob_product_divmod(term.whole, numerator, addend, denominator, iteration) {
-        Some(result) => result,
-        None() => return None(),
-    };
-    let remainder_word = word_divmod(divided.remainder, word_of_protocol_quantity(iteration)).quotient;
-    let remainder : protocol_quantity = match word_to_limb(remainder_word) {
-        Some(value) => unsigned(value),
-        None() => return None(),
-    };
-    Some(struct { whole = divided.quotient, remainder = remainder })
+    let remainder_product = word_mul(term.remainder, numerator);
+    let addend = word_div(remainder_product, denominator);
+    let divided = blob_product_divmod(term.whole, numerator, addend, denominator, iteration);
+    let remainder_word = word_div(divided.remainder, iteration);
+    if remainder_word < denominator then {
+        let remainder : blob_fee_remainder = remainder_word;
+        struct { whole = divided.quotient, remainder = remainder }
+    } else {
+        throw InvalidBlock(ExecutionInvalid)
+    }
 }
 
 /*! The EIP-4844 `fake_exponential`: an integer approximation of
     `factor · e^(numerator/denominator)` by Taylor expansion. */
-function fake_exponential(factor : word, numerator : blob_gas, denominator : blob_fee_update_fraction) -> word = {
-    if denominator == 0 then {
-        throw InvalidBlock(InvalidConfig)
-    };
-    var i : item_index = 1;
-    var output : ScaledBlobValue = struct { whole = ZERO_WORD, remainder = 0 };
+function fake_exponential(factor : word, numerator : excess_blob_gas, denominator : blob_fee_update_fraction) -> word = {
+    var i : fake_exponential_index = 1;
+    var output : ScaledBlobValue = struct { whole = WORD_ZERO, remainder = 0 };
     var term : ScaledBlobValue = struct { whole = factor, remainder = 0 };
     while word_nonzero(term.whole) | (term.remainder != 0) termination_measure(2 ^ 64 - i) do {
-        output = match scaled_blob_add(output, term, denominator) {
-            Some(sum) => sum,
-            None() => throw InvalidBlock(ExecutionInvalid),
-        };
-        term = match scaled_blob_next(term, numerator, denominator, i) {
-            Some(next) => next,
-            None() => throw InvalidBlock(ExecutionInvalid),
-        };
-        if i == BYTE_QUANTITY_MAX then {
-            throw InvalidBlock(ExecutionInvalid)
-        };
-        i = item_count_increment(i)
+        output = scaled_blob_add(output, term, denominator);
+        term = scaled_blob_next(term, numerator, denominator, i);
+        i = fake_exponential_index_increment(i)
     };
     output.whole
 }
 
-function blob_base_fee_update_fraction() -> blob_fee_update_fraction =
-    k_blob_schedule.base_fee_update_fraction
-
 /*! The blob base fee for a given excess blob gas. */
-function blob_base_fee(excess_blob_gas : blob_gas) -> word =
-    fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas, blob_base_fee_update_fraction())
+function blob_base_fee(excess_blob_gas : excess_blob_gas) -> word =
+    fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas, k_blob_schedule.base_fee_update_fraction)
 
 /* EIP-7918 compares BLOB_BASE_COST*base_fee with GAS_PER_BLOB*blob_fee.
  * Their ratio is exactly 16, so compare base_fee with 16*blob_fee instead of
  * forming either potentially 257+-bit product. */
 /*! Tests the EIP-7918 reserve-price condition without overflowing a word. */
 function blob_reserve_price_active(base_fee : word, price : word) -> bool =
-    if and_vec(word_limb_3(price), 0xF000000000000000) == LIMB_ZERO then {
-        word_ult(word_shift_left_limb(price, 0x0000000000000004), base_fee)
+    if word_ult(price, BLOB_RESERVE_PRICE_SHIFT_LIMIT) then {
+        word_ult(word_shift_left(price, 4), base_fee)
     } else {
         false
     }
 
-function blob_schedule_target() -> blob_count = k_blob_schedule.target
+function blob_schedule_target() -> blob_target_count = k_blob_schedule.target
 
 function blob_schedule_max() -> blob_count = k_blob_schedule.max
 
 /*! Converts a blob count to blob gas and rejects an invalid schedule. */
-function blob_gas_for_count(count : blob_count) -> blob_gas = {
-    let product = GAS_PER_BLOB * count;
-    if product <= BYTE_QUANTITY_MAX then {
-        product
-    } else {
-        throw InvalidBlock(InvalidConfig)
-    }
-}
+function blob_gas_for_count(count : blob_count) -> blob_gas_used =
+    GAS_PER_BLOB * count
 
-function blob_target_gas_per_block() -> blob_gas =
+function blob_target_gas_per_block() -> blob_gas_used =
     blob_gas_for_count(blob_schedule_target())
 
-function blob_max_gas_per_block() -> blob_gas =
+function blob_max_gas_per_block() -> blob_gas_used =
     blob_gas_for_count(blob_schedule_max())
 
 /* Add transaction blob gas under the active block-wide schedule bound.  The
  * nested guards make the range proof available at the addition itself. */
 /*! Adds transaction blob gas to the block total, rejecting the active
     schedule limit. */
-function checked_block_blob_gas_add(accumulated : blob_gas, transaction : blob_gas) -> blob_gas = {
+function checked_block_blob_gas_add(accumulated : blob_gas_used, transaction : transaction_blob_gas) -> blob_gas_used = {
     let maximum = blob_max_gas_per_block();
     if accumulated <= maximum then {
         if transaction <= maximum - accumulated then {
@@ -238,11 +236,11 @@ function checked_block_blob_gas_add(accumulated : blob_gas, transaction : blob_g
     substitutes the reserve-price form when the execution base fee
     dominates. */
 function next_excess_blob_gas(
-    parent_excess_blob_gas : blob_gas,
-    parent_blob_gas_used : blob_gas,
+    parent_excess_blob_gas : excess_blob_gas,
+    parent_blob_gas_used : blob_gas_used,
     parent_base_fee_per_gas : word,
 ) -> (
-    blob_gas
+    excess_blob_gas
 ) = {
     let parent_blob_gas = parent_excess_blob_gas + parent_blob_gas_used;
     let target_blob_gas = blob_target_gas_per_block();
@@ -258,16 +256,16 @@ function next_excess_blob_gas(
             };
             let schedule_delta = maximum - target;
             let scaled = parent_blob_gas_used * schedule_delta;
-            let share = exact_quotient(scaled, maximum);
+            let share = scaled / maximum;
             let next = parent_excess_blob_gas + share;
-            if next <= BYTE_QUANTITY_MAX then {
+            if next <= sizeof(excess_blob_gas_bound) then {
                 next
             } else {
                 throw InvalidBlock(InvalidConfig)
             }
         } else {
             let next = parent_blob_gas - target_blob_gas;
-            if next <= BYTE_QUANTITY_MAX then {
+            if next <= sizeof(excess_blob_gas_bound) then {
                 next
             } else {
                 throw InvalidBlock(InvalidConfig)
@@ -314,91 +312,102 @@ EIP-2929. The definitions below are normative; this table summarizes them.
 | `G_selfdestruct` | `5000` | `SELFDESTRUCT` base (EIP-150) |
 | `G_initcode_word` | `2` | Per initcode word (EIP-3860) |
 */
-let G_zero : gas_constant = GasConstant(0) /* YP G_zero                                  */
-let G_jumpdest : gas_constant = GasConstant(1) /* YP G_jumpdest                              */
-let G_base : gas_constant = GasConstant(2) /* YP G_base                                  */
-let G_verylow : gas_constant = GasConstant(3) /* YP G_verylow                               */
-let G_low : gas_constant = GasConstant(5) /* YP G_low                                   */
-let G_mid : gas_constant = GasConstant(8) /* YP G_mid                                   */
-let G_high : gas_constant = GasConstant(10) /* YP G_high                                  */
-let G_warm_access : gas_constant = GasConstant(100) /* EIP-2929 G_warmaccess (warm SLOAD/access)  */
-let G_cold_sload : gas_constant = GasConstant(2100) /* EIP-2929 G_coldsload surcharge             */
-let G_cold_account : gas_constant = GasConstant(2600) /* EIP-2929 G_coldaccountaccess surcharge     */
-let G_keccak : gas_constant = GasConstant(30) /* YP G_keccak256 (KECCAK256 base)            */
-let G_keccak_word : gas_constant = GasConstant(6) /* YP G_keccak256word (per 32-byte word)      */
-let G_copy_word : gas_constant = GasConstant(3) /* YP G_copy (*COPY per word)                 */
-let G_memory : gas_constant = GasConstant(3) /* YP G_memory (per word of expansion)        */
-let G_log : gas_constant = GasConstant(375) /* YP G_log (LOG base)                        */
-let G_logtopic : gas_constant = GasConstant(375) /* YP G_logtopic (per topic)                  */
-let G_logdata : gas_constant = GasConstant(8) /* YP G_logdata (per byte)                    */
-let G_exp : gas_constant = GasConstant(10) /* YP G_exp (EXP base)                        */
-let G_expbyte : gas_constant = GasConstant(50) /* YP G_expbyte; raised 10->50 by EIP-160     */
-let G_sset : gas_constant = GasConstant(20000) /* EIP-2200 G_sset (zero -> nonzero SSTORE)   */
-let G_sreset : gas_constant = GasConstant(2900) /* EIP-2200/2929 G_sreset (5000 - 2100 cold)  */
-let R_sclear_pre_london : gas_constant = GasConstant(15000) /* EIP-2200 SSTORE-clears refund before EIP-3529 */
-let R_sclear_london : gas_constant = GasConstant(4800) /* EIP-3529 SSTORE-clears refund                  */
-let R_selfdestruct_pre_london : gas_constant = GasConstant(24000) /* SELFDESTRUCT refund removed by EIP-3529 */
-let G_create : gas_constant = GasConstant(32000) /* YP G_create (CREATE/CREATE2 base)          */
-let G_codedeposit : gas_constant = GasConstant(200) /* YP G_codedeposit (per deployed code byte)  */
-let G_callvalue : gas_constant = GasConstant(9000) /* YP G_callvalue (CALL value-transfer)       */
-let G_callstipend : gas = Gas(2300) /* YP G_callstipend (free gas to a value call) */
-let G_newaccount : gas_constant = GasConstant(25000) /* YP G_newaccount (CALL/SELFDESTRUCT to new) */
-let G_selfdestruct : gas_constant = GasConstant(5000) /* EIP-150 R_selfdestruct base                */
-let G_initcode_word : gas_constant = GasConstant(2) /* EIP-3860 (per word of initcode)            */
+let G_zero : gas_constant = 0 /* YP G_zero                                  */
+let G_jumpdest : gas_constant = 1 /* YP G_jumpdest                              */
+let G_base : gas_constant = 2 /* YP G_base                                  */
+let G_verylow : gas_constant = 3 /* YP G_verylow                               */
+let G_low : gas_constant = 5 /* YP G_low                                   */
+let G_mid : gas_constant = 8 /* YP G_mid                                   */
+let G_high : gas_constant = 10 /* YP G_high                                  */
+let G_warm_access : gas_constant = 100 /* EIP-2929 G_warmaccess (warm SLOAD/access)  */
+let G_cold_sload : gas_constant = 2100 /* EIP-2929 G_coldsload surcharge             */
+let G_cold_account : gas_constant = 2600 /* EIP-2929 G_coldaccountaccess surcharge     */
+let G_keccak : gas_constant = 30 /* YP G_keccak256 (KECCAK256 base)            */
+let G_keccak_word : int(6) = 6 /* YP G_keccak256word (per 32-byte word)      */
+let G_copy_word : gas_constant = 3 /* YP G_copy (*COPY per word)                 */
+
+/* Its singleton type records the Yellow Paper's strictly-positive divisor,
+ * allowing the type checker to preserve natural-number division. */
+let G_memory : int(3) = 3 /* YP G_memory (per word of expansion)        */
+let G_log : gas_constant = 375 /* YP G_log (LOG base)                        */
+let G_logtopic : gas_constant = 375 /* YP G_logtopic (per topic)                  */
+let G_logdata : gas_constant = 8 /* YP G_logdata (per byte)                    */
+let G_exp : gas_constant = 10 /* YP G_exp (EXP base)                        */
+let G_expbyte : gas_constant = 50 /* YP G_expbyte; raised 10->50 by EIP-160     */
+let G_sset : gas_constant = 20000 /* EIP-2200 G_sset (zero -> nonzero SSTORE)   */
+let G_sreset : gas_constant = 2900 /* EIP-2200/2929 G_sreset (5000 - 2100 cold)  */
+let R_sclear_pre_london : gas_constant = 15000 /* EIP-2200 SSTORE-clears refund before EIP-3529 */
+let R_sclear_london : gas_constant = 4800 /* EIP-3529 SSTORE-clears refund                  */
+let R_selfdestruct_pre_london : gas_constant = 24000 /* SELFDESTRUCT refund removed by EIP-3529 */
+let G_create : gas_constant = 32000 /* YP G_create (CREATE/CREATE2 base)          */
+let G_codedeposit : int(200) = 200 /* YP G_codedeposit (per deployed code byte)  */
+let G_callvalue : gas_constant = 9000 /* YP G_callvalue (CALL value-transfer)       */
+let G_callstipend : gas = 2300 /* YP G_callstipend (free gas to a value call) */
+let G_newaccount : gas_constant = 25000 /* YP G_newaccount (CALL/SELFDESTRUCT to new) */
+let G_selfdestruct : gas_constant = 5000 /* EIP-150 R_selfdestruct base                */
+let G_initcode_word : int(2) = 2 /* EIP-3860 (per word of initcode)            */
 
 /* Amsterdam separates execution work from persistent-state growth. These
  * constants retain their unit in the name: execution costs debit
  * `gas_remaining`; state costs debit the frame's state-gas reservoir. */
-let G_amsterdam_cold_account_access : gas_constant = GasConstant(3000)
-let G_amsterdam_cold_storage_access : gas_constant = GasConstant(3000)
-let G_amsterdam_storage_write : gas_constant = GasConstant(10000)
-let G_amsterdam_account_write : gas_constant = GasConstant(8000)
-let G_amsterdam_call_value : gas_constant = GasConstant(10300)
-let G_amsterdam_create_access : gas_constant = GasConstant(11000)
-let G_amsterdam_state_byte : gas_constant = GasConstant(1530)
-let G_amsterdam_state_storage_set : gas_cost = GasCost(97920)
-let G_amsterdam_state_new_account : gas_cost = GasCost(183600)
-let G_amsterdam_state_auth_base : gas_cost = GasCost(35190)
-let R_amsterdam_storage_clear : gas_refund = GasRefund(12480)
-let G_sstore_sentry : gas_cost = GasCost(2301)
+let G_amsterdam_cold_account_access : gas_constant = 3000
+let G_amsterdam_cold_storage_access : gas_constant = 3000
+let G_amsterdam_storage_write : gas_constant = 10000
+let G_amsterdam_account_write : gas_constant = 8000
+let G_amsterdam_call_value : gas_constant = 10300
+let G_amsterdam_create_access : gas_constant = 11000
+let G_amsterdam_state_byte : gas_constant = 1530
+let G_amsterdam_state_storage_set : state_gas_spill = 97920
+let G_amsterdam_state_new_account : state_gas_spill = 183600
+let G_amsterdam_state_auth_base : state_gas_spill = 35190
+let R_amsterdam_storage_clear : gas_constant = 12480
+let G_sstore_sentry : gas_cost = 2301
 
 /*md
 ## The code-size limits
 */
-/*! The deployed-code size limit: 24576 (EIP-170), raised to 65536 by
-    EIP-7954 at Amsterdam; the shared interpreter serves both the
-    pre-Amsterdam state tests and the guest. */
-function max_code_size() -> code_length =
-    if k_fork >= Amsterdam then {
-        ByteQuantity(65536)
+/*! EIP-170's deployed-code limit, active from Spurious Dragon. Byzantium is
+    the first post-Spurious-Dragon fork represented by this model. */
+let EIP170_DEPLOYED_CODE_SIZE_LIMIT : int(24576) = 24576
+/*! EIP-3860's initcode limit, active from Shanghai. */
+let EIP3860_INITCODE_SIZE_LIMIT : int(49152) = 49152
+/*! EIP-7954's Amsterdam deployed-code limit. */
+let EIP7954_DEPLOYED_CODE_SIZE_LIMIT : int(65536) = 65536
+/*! EIP-7954's Amsterdam initcode limit. */
+let EIP7954_INITCODE_SIZE_LIMIT : int(131072) = 131072
+
+/*! Whether returned runtime code may be deployed at the active fork.
+    Frontier and Homestead have no fixed deployed-code limit. */
+val deployed_code_size_allowed : forall 'size, 0 <= 'size. int('size) -> bool
+function deployed_code_size_allowed(size) =
+    if k_fork < Byzantium then {
+        true
     } else {
-        ByteQuantity(24576)
+        if k_fork < Amsterdam then {
+            size <= EIP170_DEPLOYED_CODE_SIZE_LIMIT
+        } else {
+            size <= EIP7954_DEPLOYED_CODE_SIZE_LIMIT
+        }
     }
+
+/*! Whether creation initcode may enter a frame at the active fork. EIP-3860
+    activates at Shanghai and EIP-7954 raises its limit at Amsterdam. */
+val initcode_size_allowed : forall 'size, 0 <= 'size. int('size) -> bool
+function initcode_size_allowed(size) =
+    if k_fork < Shanghai then {
+        true
+    } else {
+        if k_fork < Amsterdam then {
+            size <= EIP3860_INITCODE_SIZE_LIMIT
+        } else {
+            size <= EIP7954_INITCODE_SIZE_LIMIT
+        }
+    }
+
 /*! The `SSTORE`-clears refund: 4800 from London (EIP-3529), 15000
     before. */
-function initcode_size_allowed(size : byte_quantity) -> bool =
-    (k_fork < Shanghai) | size <= ByteQuantity(2) * max_code_size()
 function sstore_clear_refund() -> gas_constant =
     if k_fork >= London then { R_sclear_london } else { R_sclear_pre_london }
-
-/* Intermediate costs remain exact in the canonical model. Optimized C builds
- * splice the complete cost calculators that can exceed the live-gas range;
- * affordability is still decided only by charge or an explicit comparison. */
-/*md
-## The charging hook
-*/
-function gas_product_quotient(left : nat, right : nat, divisor : gas_divisor) -> gas_cost =
-    GasCost(exact_quotient(left * right, divisor))
-
-/*! Computes an exact product-quotient cost from byte quantities. */
-function gas_product_quotient_bytes(
-    ByteQuantity(left) : byte_quantity,
-    ByteQuantity(right) : byte_quantity,
-    divisor : gas_divisor,
-) -> (
-    gas_cost
-) =
-    GasCost(exact_quotient(left * right, divisor))
 
 /* --------------------------- charging hook ------------------------------ */
 /* Debit `amount` from the frame's gas counter. A debit that cannot be       */
@@ -406,58 +415,66 @@ function gas_product_quotient_bytes(
 /* all remaining gas is consumed). A non-positive amount is a no-op.         */
 
 /*! Debits an exact cost from the running frame or halts out of gas. */
-function charge_cost(GasCost(amount) : gas_cost) -> unit =
+val charge : forall 'amount, 0 <= 'amount. int('amount) -> unit
+function charge(amount) =
     if not_bool(is_running()) | amount == 0 then {
         ()
     } else {
-        let Gas(remaining) = gas_remaining;
+        let remaining = gas_remaining;
         if amount <= remaining then {
-            gas_remaining = Gas(remaining - amount)
+            gas_remaining = remaining - amount
         } else {
             exc_halt(OutOfGas)
         }
     }
 
-/*! Debits a fixed schedule cost from the running frame. */
-function charge_constant(GasConstant(amount) : gas_constant) -> unit =
-    charge_cost(GasCost(amount))
-
-overload charge = {charge_cost, charge_constant}
-
 /*! Checks that the frame can pay an execution-gas cost without debiting it.
     State reads that affect the block access list call this before touching
     authenticated state. */
-function check_execution_gas(GasCost(amount) : gas_cost) -> unit = {
-    let Gas(remaining) = gas_remaining;
+val check_execution_gas : forall 'amount, 0 <= 'amount. int('amount) -> unit
+function check_execution_gas(amount) = {
+    let remaining = gas_remaining;
     if is_running() & remaining < amount then {
         exc_halt(OutOfGas)
     }
 }
 
+/*! Adds state-gas spill while preserving EIP-8037's regular-gas cap. */
+val state_gas_spill_room : forall 'left, 0 <= 'left & 'left <= transaction_execution_gas_limit_value. int('left) -> int(
+        transaction_execution_gas_limit_value - 'left,
+    )
+function state_gas_spill_room(left) = sizeof(transaction_execution_gas_limit_value) - left
+
+val state_gas_spill_add : forall 'right, 0 <= 'right. (state_gas_spill, int('right)) -> state_gas_spill
+/*! Adds a nonnegative spill amount or rejects a value beyond the transaction cap. */
+function state_gas_spill_add(left, right) =
+    if right <= state_gas_spill_room(left) then {
+        left + right
+    } else {
+        throw InvalidBlock(ExecutionInvalid)
+    }
+
 /*! Debits Amsterdam state gas from the frame reservoir first and spills the
     remainder into execution gas. Returns false when the two pools cannot
     cover the charge. */
-function debit_state_gas(GasCost(amount) : gas_cost) -> bool = {
+val debit_state_gas : forall 'amount, 0 <= 'amount. int('amount) -> bool
+function debit_state_gas(amount) = {
     if amount == 0 then {
         return true
     };
-    let Gas(state_left) = state_gas_remaining;
-    let Gas(execution_left) = gas_remaining;
+    let state_left = state_gas_remaining;
+    let execution_left = gas_remaining;
     if amount <= state_left then {
-        state_gas_remaining = Gas(state_left - amount);
+        state_gas_remaining = state_left - amount;
         true
     } else {
         let remainder = amount - state_left;
         if remainder <= execution_left then {
-            let Gas(spilled) = state_gas_spilled;
-            if remainder <= 9223372036854775807 - spilled then {
-                state_gas_remaining = GAS_ZERO;
-                gas_remaining = Gas(execution_left - remainder);
-                state_gas_spilled = Gas(spilled + remainder);
-                true
-            } else {
-                throw InvalidBlock(ExecutionInvalid)
-            }
+            let spilled = state_gas_spilled;
+            state_gas_remaining = GAS_ZERO;
+            gas_remaining = execution_left - remainder;
+            state_gas_spilled = state_gas_spill_add(spilled, remainder);
+            true
         } else {
             false
         }
@@ -465,7 +482,8 @@ function debit_state_gas(GasCost(amount) : gas_cost) -> bool = {
 }
 
 /*! Charges state gas while an opcode frame is running. */
-function charge_state_gas(amount : gas_cost) -> unit = {
+val charge_state_gas : forall 'amount, 0 <= 'amount. int('amount) -> unit
+function charge_state_gas(amount) = {
     if is_running() & not_bool(debit_state_gas(amount)) then {
         exc_halt(OutOfGas)
     }
@@ -473,7 +491,8 @@ function charge_state_gas(amount : gas_cost) -> unit = {
 
 /*! Charges state gas for code returned by already-halted successful initcode.
     This is the create-message post-execution hook, not another opcode step. */
-function charge_deployment_state_gas(amount : gas_cost) -> unit = {
+val charge_deployment_state_gas : forall 'amount, 0 <= 'amount. int('amount) -> unit
+function charge_deployment_state_gas(amount) = {
     if not_bool(debit_state_gas(amount)) then {
         exc_halt(OutOfGas)
     }
@@ -481,83 +500,75 @@ function charge_deployment_state_gas(amount : gas_cost) -> unit = {
 
 /*! Credits a state-gas charge in exact reverse order: execution spill first,
     then the state reservoir. */
-function credit_state_gas_refund(GasCost(amount) : gas_cost) -> unit = {
-    let Gas(spilled) = state_gas_spilled;
-    let from_execution = if amount < spilled then { amount } else { spilled };
-    let to_state = amount - from_execution;
-    if from_execution != 0 then {
-        if from_execution <= 9223372036854775807 then {
-            let returned = Gas(from_execution);
-            if gas_sum_supported(gas_remaining, returned) then {
-                gas_remaining = gas_remaining + returned
-            } else {
-                throw InvalidBlock(ExecutionInvalid)
-            };
-            state_gas_spilled = Gas(spilled - from_execution)
-        } else {
-            throw InvalidBlock(ExecutionInvalid)
+function credit_state_gas_refund(amount : state_gas_spill) -> unit = {
+    let spilled = state_gas_spilled;
+    if amount <= spilled then {
+        if amount != 0 then {
+            gas_remaining = conserved_gas_add(gas_remaining, amount);
+            state_gas_spilled = spilled - amount
         }
-    };
-    if to_state != 0 then {
-        let Gas(state_left) = state_gas_remaining;
-        if to_state <= 9223372036854775807 - state_left then {
-            state_gas_remaining = Gas(state_left + to_state)
-        } else {
-            throw InvalidBlock(ExecutionInvalid)
-        }
+    } else {
+        if spilled != 0 then {
+            gas_remaining = conserved_gas_add(gas_remaining, spilled);
+            state_gas_spilled = STATE_GAS_SPILL_ZERO
+        };
+        let to_state : state_gas_spill = amount - spilled;
+        state_gas_remaining = conserved_gas_add(state_gas_remaining, to_state)
     }
 }
 
 /*! Returns a completed child's remaining state reservoir to its parent and
     carries forward any state gas that the child drew from execution gas. */
-function return_child_state_gas(child_remaining : gas, child_spilled : gas) -> unit = {
-    if gas_sum_supported(state_gas_remaining, child_remaining) & gas_sum_supported(state_gas_spilled, child_spilled) then {
-        state_gas_remaining = state_gas_remaining + child_remaining;
-        state_gas_spilled = state_gas_spilled + child_spilled
-    } else {
-        throw InvalidBlock(ExecutionInvalid)
-    }
+function return_child_state_gas(child_remaining : gas, child_spilled : state_gas_spill) -> unit = {
+    state_gas_remaining = conserved_gas_add(state_gas_remaining, child_remaining);
+    state_gas_spilled = state_gas_spill_add(state_gas_spilled, child_spilled)
 }
 
 /* Subtraction is the one gas arithmetic operation whose invalid case is
  * observable: attempting to spend more than remains exceptionally halts. The
  * inert zero mirrors pop() after stack underflow and is ignored once halted. */
 /*! Subtracts an exact cost from gas or records an out-of-gas halt. */
-function gas_sub_cost_or_oog(Gas(left) : gas, GasCost(right) : gas_cost) -> gas =
+function gas_sub_or_oog(left : gas, right : gas_cost) -> gas =
     if right <= left then {
-        Gas(left - right)
+        left - right
     } else {
         exc_halt(OutOfGas);
         GAS_ZERO
     }
-
-/*! Subtracts bounded gas or records an out-of-gas halt. */
-function gas_sub_gas_or_oog(Gas(left) : gas, Gas(right) : gas) -> gas =
-    if right <= left then {
-        Gas(left - right)
-    } else {
-        exc_halt(OutOfGas);
-        GAS_ZERO
-    }
-
-overload gas_sub_or_oog = {gas_sub_cost_or_oog, gas_sub_gas_or_oog}
 
 /*! Returns unused child gas to the parent frame. */
-function refund_gas(Gas(amount) : gas) -> unit = {
-    if gas_sum_supported(gas_remaining, Gas(amount)) then {
-        gas_remaining = gas_remaining + Gas(amount)
-    } else {
-        throw InvalidBlock(ExecutionInvalid)
-    }
+function refund_gas(amount : gas) -> unit = {
+    gas_remaining = conserved_gas_add(gas_remaining, amount)
 }
 
-function memory_word_count_nat(byte_len : nat) -> nat = exact_quotient(byte_len + 31, 32)
+/*! Returns the number of 32-byte words covering a byte length. Besides the
+    exact ceiling division, the result exposes its enclosing byte interval so
+    affordability proofs can establish host-range bounds without a second
+    runtime size check. */
+val memory_word_count : forall 'byte_len, 0 <= 'byte_len. int('byte_len) -> {'words,
+                                                                                'words
+                                                                             == div('byte_len + 31, 32)
+                                                                             &  'byte_len
+                                                                             <= 32
+                                                                             *  'words
+                                                                             &  32
+                                                                             *  'words
+                                                                             <= 'byte_len
+                                                                             +  31.
+                                                                             int('words)}
+function memory_word_count(byte_len) = tdiv_nat(byte_len + 31, 32)
 
-/*! Returns the number of 32-byte words covering a byte length. */
-function memory_word_count_bytes(ByteQuantity(byte_len) : byte_quantity) -> byte_quantity =
-    ByteQuantity(exact_quotient(byte_len + 31, 32))
-
-overload memory_word_count = {memory_word_count_nat, memory_word_count_bytes}
+/*! Returns the number of words covering a word-sized byte length without
+    forming `byte_len + 31`, whose mathematical intermediate can require 257
+    bits even though the final quotient remains an EVM word. */
+function memory_word_count_word(byte_len : word) -> word = {
+    let quotient = word_div(byte_len, U256(32));
+    if word_mod(byte_len, U256(32)) == WORD_ZERO then {
+        quotient
+    } else {
+        word_add(quotient, WORD_ONE)
+    }
+}
 
 /*md
 ## The memory-expansion cost
@@ -567,71 +578,163 @@ Memory is charged by its high-water mark in 32-byte words (YP C_mem):
 allocations progressively dearer. Expansion gas is the difference
 `C_mem(new) − C_mem(old)` — only newly reached words are paid for.
 */
-/*! `C_mem` (YP §9.4.1): the cumulative memory cost of `words` words. */
-function mem_cost(words : byte_quantity) -> gas_cost =
-    G_memory * words + gas_product_quotient_bytes(words, words, 512)
+/*! `C_mem` (YP §9.4.1): the cumulative memory cost of `words` words. Its
+    singleton result makes the gas-derived memory bound available to the type
+    checker without introducing a separate memory-size constant. */
+val mem_cost : forall 'words, 0 <= 'words. int('words) -> int(3 * 'words + div('words * 'words, 512))
+function mem_cost(words) = G_memory * words + (words * words) / 512
+
+/* Any word count above the maximum admitted block gas is unaffordable from
+ * the linear term alone.  Optimized memory planning narrows at that semantic
+ * guard and evaluates this same Yellow Paper equation in a bounded domain. */
+val bounded_mem_cost : forall 'words, 0 <= 'words & 'words <= block_gas_limit_bound. int('words) -> int(
+        3 * 'words + div('words * 'words, 512),
+    )
+function bounded_mem_cost(words) = G_memory * words + (words * words) / 512
 
 /* A zero-sized operand does not access memory, irrespective of its offset. */
 /*! Computes the exclusive end of an addressed memory range. */
-function memory_required_size(start : word, size : word) -> byte_quantity =
-    if word_is_zero(size) then {
-        BYTE_ZERO
+val memory_required_size : forall 'size, 0 <= 'size & 'size < 2 ^ 256. (word, int('size)) -> nat
+function memory_required_size(start, size) =
+    if size == 0 then {
+        0
     } else {
-        ByteQuantity(unsigned(word_to_bits(start)) + unsigned(word_to_bits(size)))
+        start + size
     }
 
-/*! Computes the larger exclusive end of two addressed memory ranges. */
-function maximum_memory_required_size(
-    left_start : word,
-    left_size : word,
-    right_start : word,
-    right_size : word,
-) -> (
-    byte_quantity
-) = {
-    let left = memory_required_size(left_start, left_size);
-    let right = memory_required_size(right_start, right_size);
-    if left < right then { right } else { left }
-}
+/*! Computes an affordable incremental cost for reaching a memory size.
+    The result type records that the exact `C_mem` delta fits the live gas
+    supplied by the caller. An unaffordable expansion halts before any host
+    memory is materialized. */
+val memory_expansion_cost : forall 'required 'available, 0 <= 'required & live_gas_valid('available). (
+        int('required),
+        int('available),
+    ) -> range(0, 'available)
 
-/*! Computes the incremental gas needed to reach a memory size. */
-function memory_expansion_gas(required_size : byte_quantity) -> gas_cost = {
+function memory_expansion_cost(required_size, available) = {
     let new_words = memory_word_count(required_size);
-    let old_words = memory_word_count(evm_memory_size());
+    let old_words = memory_word_count(evm_memory_high_water());
     if new_words <= old_words then {
-        GAS_COST_ZERO
+        0
     } else {
-        mem_cost(new_words) - mem_cost(old_words)
+        let old_cost = mem_cost(old_words);
+        let new_cost = mem_cost(new_words);
+        if old_cost <= new_cost & new_cost <= old_cost + available then {
+            let cost : range(0, 'available) = new_cost - old_cost;
+            cost
+        } else {
+            exc_halt(OutOfGas);
+            0
+        }
     }
 }
 
-/*! Materializes the word-aligned memory size after gas has been charged. */
-function expand_memory(required_size : byte_quantity) -> unit = {
-    let expanded_size = memory_word_count(required_size) * ByteQuantity(32);
-    assert(byte_quantity_fits_limb(expanded_size));
-    memory_expand_to(expanded_size)
+/*! A single memory operand coupled to the high-water mark and gas cost that
+    make the range materializable. */
+struct MemoryExpansion('available : Int), live_gas_valid('available) = {
+    range : MemoryRange,
+    required_size : memory_length,
+    cost : range(0, 'available),
+}
+
+/*! Two memory operands sharing one expansion high-water mark and gas cost. */
+struct MemoryPairExpansion('available : Int), live_gas_valid('available) = {
+    left : MemoryRange,
+    right : MemoryRange,
+    required_size : memory_length,
+    cost : range(0, 'available),
+}
+
+/*! Plans the exact expansion required by one memory operand. */
+val memory_expansion : forall 'size 'available, 0 <= 'size & 'size < 2 ^ 256 & live_gas_valid('available). (
+        word,
+        int('size),
+        int('available),
+    ) -> MemoryExpansion('available)
+
+function memory_expansion(start, size, available) = {
+    let required_size = memory_required_size(start, size);
+    let range : MemoryRange = if size == 0 then {
+            EMPTY_MEMORY_RANGE
+        } else {
+            memory_range(start, size)
+        };
+    struct { range = range, required_size = required_size, cost = memory_expansion_cost(required_size, available) }
+}
+
+/*! Plans the exact shared expansion required by two memory operands. */
+val memory_pair_expansion : forall 'available, live_gas_valid('available). (word, word, word, word, int('available)) -> MemoryPairExpansion(
+        'available,
+    )
+
+function memory_pair_expansion(left_start : word, left_size : word, right_start : word, right_size : word, available) = {
+    let left_required = memory_required_size(left_start, left_size);
+    let right_required = memory_required_size(right_start, right_size);
+    let required_size = if left_required < right_required then { right_required } else { left_required };
+    let left : MemoryRange = if left_size == 0 then {
+            EMPTY_MEMORY_RANGE
+        } else {
+            memory_range(left_start, left_size)
+        };
+    let right : MemoryRange = if right_size == 0 then {
+            EMPTY_MEMORY_RANGE
+        } else {
+            memory_range(right_start, right_size)
+        };
+    struct {
+        left = left,
+        right = right,
+        required_size = required_size,
+        cost = memory_expansion_cost(required_size, available),
+    }
+}
+
+/*! Materializes the exact byte high-water mark after gas has been charged. */
+function expand_memory(required_size : memory_length) -> unit = {
+    let _ = memory_expand_to(required_size);
+    ()
 }
 
 /* Charge before materializing the range. Exact arithmetic makes an
  * unaffordable transaction-controlled range out-of-gas before it reaches the
  * host memory boundary. */
-/*! Charges and applies the expansion implied by one memory range. */
-function charge_memory_expansion(start : word, size : word) -> unit =
+/*! Materializes an already-charged expansion plan. */
+val apply_memory_expansion : forall 'available, live_gas_valid('available). MemoryExpansion('available) -> MemoryRange
+
+function apply_memory_expansion(plan : MemoryExpansion('available)) -> MemoryRange = {
+    expand_memory(plan.required_size);
+    plan.range
+}
+
+/*! Charges and materializes the expansion implied by one memory range. */
+val charge_memory_range : forall 'size, 0 <= 'size & 'size < 2 ^ 256. (word, int('size)) -> MemoryRange
+function charge_memory_range(start, size) =
     if is_running() then {
-        let required_size = memory_required_size(start, size);
-        charge(memory_expansion_gas(required_size));
+        let available = gas_remaining;
+        let plan = memory_expansion(start, size, available);
+        charge(plan.cost);
         if is_running() then {
-            expand_memory(required_size)
+            apply_memory_expansion(plan)
+        } else {
+            EMPTY_MEMORY_RANGE
         }
+    } else {
+        EMPTY_MEMORY_RANGE
     }
 
-/* Apply an already-charged range, used by CALL where memory gas is included
- * in the single EIP-150 message-call charge. */
-/*! Applies a memory expansion whose gas was included in an earlier charge. */
-function expand_charged_memory(required_size : byte_quantity) -> unit =
-    if is_running() then {
-        expand_memory(required_size)
-    }
+/* Apply two already-charged ranges together, used by CALL and MCOPY where the
+ * expansion cost is charged against their larger exclusive endpoint. */
+/*! Materializes two memory ranges after gas for their shared high-water mark
+    has been charged, expanding memory only once. */
+val apply_memory_pair_expansion : forall 'available, live_gas_valid('available). MemoryPairExpansion('available) -> (
+        MemoryRange,
+        MemoryRange,
+    )
+
+function apply_memory_pair_expansion(plan : MemoryPairExpansion('available)) -> (MemoryRange, MemoryRange) = {
+    expand_memory(plan.required_size);
+    (plan.left, plan.right)
+}
 
 /*md
 ## The access costs
@@ -673,19 +776,40 @@ function call_value_cost() -> gas_constant =
 function create_access_cost() -> gas_constant =
     if k_fork >= Amsterdam then { G_amsterdam_create_access } else { G_create }
 
-/*! Execution gas charged after successful initcode: legacy code deposit is
-    per byte; Amsterdam charges only the keccak word cost. */
-function code_deployment_execution_cost(byte_len : byte_quantity) -> gas_cost =
+/*! Returns the affordable execution-gas charge after successful initcode.
+    Legacy forks charge per byte; Amsterdam charges the keccak word cost. The
+    affordability guard bounds the native product without imposing a protocol
+    code-size limit on Frontier or Homestead. */
+function code_deployment_execution_cost(byte_len : code_length, available : gas) -> option(gas_cost) =
     if k_fork >= Amsterdam then {
-        G_keccak_word * memory_word_count(byte_len)
+        if byte_len <= EIP7954_DEPLOYED_CODE_SIZE_LIMIT then {
+            let words = memory_word_count(byte_len);
+            if words <= available / G_keccak_word then {
+                let cost : gas_cost = G_keccak_word * words;
+                Some(cost)
+            } else {
+                None()
+            }
+        } else {
+            None()
+        }
     } else {
-        G_codedeposit * byte_len
+        if byte_len <= available / G_codedeposit then {
+            let cost : gas_cost = G_codedeposit * byte_len;
+            Some(cost)
+        } else {
+            None()
+        }
     }
 
 /*! Amsterdam state gas charged for each byte of newly deployed code. */
-function code_deployment_state_cost(byte_len : byte_quantity) -> gas_cost =
+function code_deployment_state_cost(byte_len : code_length) -> gas_cost =
     if k_fork >= Amsterdam then {
-        G_amsterdam_state_byte * byte_len
+        if byte_len <= EIP7954_DEPLOYED_CODE_SIZE_LIMIT then {
+            G_amsterdam_state_byte * byte_len
+        } else {
+            throw InvalidBlock(ExecutionInvalid)
+        }
     } else {
         GAS_COST_ZERO
     }
@@ -700,39 +824,86 @@ bytes past its declared length read as zero, matching [slice_byte][]
 semantics.
 */
 /*! Reads up to 32 big-endian precompile input bytes with zero padding. */
-function pc_word(input : ByteSlice, start : source_pointer, byte_count : byte_length) -> word = {
+val pc_word : forall 'start 'byte_count, source_valid_length('start) & 0 <= 'byte_count & 'byte_count <= 32. (
+        ByteSlice,
+        int('start),
+        int('byte_count),
+    ) -> word
+function pc_word(input, start, byte_count) = {
     var value : word = ZERO_WORD;
+    let start_offset = start;
+    let count = byte_count;
+    let input_length = input.len;
     foreach (byte_index from 0 to 31) {
-        let offset : source_pointer = ByteQuantity(byte_index);
-        if offset < byte_count then {
-            let cursor = start + offset;
-            let next_byte = if cursor < input.len then {
-                    slice_byte(input, cursor)
+        let offset : range(0, 31) = byte_index;
+        if offset < count then {
+            let next_byte = if start_offset < input_length then {
+                    let remaining = input_length - start_offset;
+                    if offset < remaining then {
+                        let cursor = start_offset + offset;
+                        slice_byte(input, cursor)
+                    } else {
+                        0x00
+                    }
                 } else {
                     0x00
                 };
-            value = word_or(word_shift_left_limb(value, 0x0000000000000008), U256(sail_zero_extend(next_byte, 256)))
+            value = word_add(word_shift_left(value, 8), unsigned(next_byte))
         }
     };
     value
 }
 
+/*! Reads a precompile word after a fixed header and a 256-bit declared field.
+    The declared length remains in the EVM word domain until the resulting
+    position is known to lie inside `input`; an out-of-range position has the
+    same all-zero result as an ordinary padded read. */
+val pc_word_after_declared_field : forall 'prefix 'byte_count,
+                                     source_valid_length('prefix) & 0 <= 'byte_count & 'byte_count <= 32. (
+        ByteSlice,
+        int('prefix),
+        word,
+        int('byte_count),
+    ) -> word
+function pc_word_after_declared_field(input, prefix, declared_length, byte_count) = {
+    let input_length = input.len;
+    let (prefix_offset as 'prefix_offset) = prefix;
+    if prefix_offset < input_length then {
+        let (suffix_length as 'suffix_length) = input_length - prefix_offset;
+        if declared_length < suffix_length then {
+            let (field_length as 'field_length) :
+                    {'field_length,
+                     0 <= 'field_length & 'field_length < 'suffix_length.
+                     int('field_length)} = declared_length;
+            let start : int('prefix_offset + 'field_length) = prefix_offset + field_length;
+            pc_word(input, start, byte_count)
+        } else {
+            ZERO_WORD
+        }
+    } else {
+        ZERO_WORD
+    }
+}
+
 function pc_blake2_rounds(input : ByteSlice) -> blake2_rounds =
-    unsigned(word_limb_0(pc_word(input, ByteQuantity(0), ByteQuantity(4)))[31 .. 0])
+    tmod_nat(pc_word(input, 0, 4), 2 ^ 32)
 
 /*! `MODEXP` (precompile `0x05`) gas: EIP-2565 as amended by EIP-7883
     (Osaka). Input layout: `bsize[32] esize[32] msize[32] base exp mod`.
     Gas grows with the multiplication complexity of the larger of base
     and modulus, and with an iteration count derived from the exponent's
     bit length; EIP-7823 (Osaka) caps each field at 1024 bytes, modeled
-    as an unforwardable cost. */
-function modexp_gas(input : ByteSlice) -> option(gas_cost) = {
-    let bl_word = pc_word(input, ByteQuantity(0), ByteQuantity(32));
-    let el_word = pc_word(input, ByteQuantity(32), ByteQuantity(32));
-    let ml_word = pc_word(input, ByteQuantity(64), ByteQuantity(32));
-    let bl : nat = unsigned(word_to_bits(bl_word));
-    let el : nat = unsigned(word_to_bits(el_word));
-    let ml : nat = unsigned(word_to_bits(ml_word));
+    as an unforwardable cost. Before Osaka the exact expression is below
+    `2^768`, but an EVM caller can observe only whether that expression fits
+    its available gas. The staged affordability checks below therefore keep
+    every materialized intermediate at most 256 bits in optimized builds. */
+function modexp_gas(input : ByteSlice, available : gas) -> option(gas_cost) = {
+    let bl_word = pc_word(input, 0, 32);
+    let el_word = pc_word(input, 32, 32);
+    let ml_word = pc_word(input, 64, 32);
+    let bl : word = bl_word;
+    let el : word = el_word;
+    let ml : word = ml_word;
     let osaka = k_fork >= Osaka;
 
     /* EIP-7823 rejects the call before charging or executing MODEXP when any
@@ -742,36 +913,77 @@ function modexp_gas(input : ByteSlice) -> option(gas_cost) = {
         return None()
     };
 
+    let minimum : gas_constant = if osaka then { 500 } else { 200 };
+    if available < minimum then {
+        return None()
+    };
+
     /* Before Osaka the multiplication complexity is zero when both base and
      * modulus lengths are zero. The minimum cost is then exact even if the
      * unused exponent length does not fit a host quantity. */
     if not_bool(osaka) & word_is_zero(bl_word) & word_is_zero(ml_word) then {
-        return Some(GasCost(200))
+        return Some(200)
     };
 
     let maxlen = if ml < bl then { bl } else { ml };
-    let words = exact_quotient(maxlen + 7, 8); /* length of base/mod in 8-byte words */
+    let whole_words = maxlen / 8;
+    let words = whole_words + (if tmod_nat(maxlen, 8) == 0 then { 0 } else { 1 });
+
+    /* For EIP-2565, floor(product / 3) is affordable exactly when product is
+     * at most 3*available+2. Bounding each factor by this threshold before
+     * multiplication avoids constructing the protocol's enormous exact cost. */
+    let product_limit_value : modexp_factor = if osaka then {
+            available
+        } else {
+            3 * available + 2
+        };
+    let (product_limit as 'product_limit) = product_limit_value;
+    let words_unaffordable = product_limit < words;
+    let bounded_words : modexp_factor = if words_unaffordable then { product_limit } else { words };
+    if words_unaffordable then {
+        return None()
+    };
+
+    /* The clamped factors are at most 66 bits, so their exact square remains
+       a bounded native value.  Narrow only after comparing it with the
+       affordability limit. */
+    let words_squared : modexp_product = bounded_words * bounded_words;
+    let wide_product_limit : int('product_limit) = product_limit;
+    let square_unaffordable = wide_product_limit < words_squared;
+    let affordable_square : modexp_factor = if square_unaffordable then { product_limit } else { words_squared };
+    if square_unaffordable then {
+        return None()
+    };
 
     /* multiplication complexity: EIP-2565 uses words^2; EIP-7883 (Osaka)
        uses a flat 16 for inputs <= 32 bytes, else 2*words^2. */
-    let words_squared = words * words;
-    let mult : nat = if osaka & maxlen <= 32 then {
+    let mult_value : modexp_factor = if osaka & maxlen <= 32 then {
             16
         } else {
             if osaka then {
-                2 * words_squared
+                let doubled_limit_value : gas_cost = available / 2;
+                let (doubled_limit as 'doubled_limit) = doubled_limit_value;
+                let wide_doubled_limit : int('doubled_limit) = doubled_limit;
+                let doubled_unaffordable = words_squared > wide_doubled_limit;
+                let bounded_square : gas_cost = if doubled_unaffordable then { 0 } else { words_squared };
+                if doubled_unaffordable then {
+                    return None()
+                };
+                2 * bounded_square
             } else {
-                words_squared
+                affordable_square
             }
         };
-    let big_mul : nat = if osaka then { 16 } else { 8 };
-    let exp_off = 96 + bl; /* exponent begins after lengths + base */
+    let (mult as 'mult) = mult_value;
+    if product_limit < mult then {
+        return None()
+    };
 
     /* iteration count: for a short exponent, its bit length minus one; for a
        long exponent, big_mul per extra word past the first 32 bytes plus the
        leading word's bit length. */
-    let iterations : nat = if el <= 32 then {
-            let exponent_bits = word_bit_length(pc_word(input, ByteQuantity(exp_off), ByteQuantity(el)));
+    let iterations : modexp_factor = if el <= 32 then {
+            let exponent_bits = word_bit_length(pc_word_after_declared_field(input, 96, bl, el));
             if exponent_bits == 0 then {
                 1
             } else {
@@ -779,24 +991,75 @@ function modexp_gas(input : ByteSlice) -> option(gas_cost) = {
                 if count == 0 then { 1 } else { count }
             }
         } else {
-            let head_bits = word_bit_length(pc_word(input, ByteQuantity(exp_off), ByteQuantity(32)));
+            let head_bits = word_bit_length(pc_word_after_declared_field(input, 96, bl, 32));
             let high_bits = if head_bits != 0 then {
                     head_bits - 1
                 } else {
                     0
                 };
-            let count = big_mul * (el - 32) + high_bits;
+            let extra = el - 32;
+            let count : modexp_factor = if osaka then {
+                    let extra_limit : modexp_osaka_extra = available / 16;
+
+                    /* The Osaka structural check above has already rejected
+                       an exponent length above 1024.  Keep the successful
+                       subtraction in its exact 992-byte host domain. */
+                    let osaka_extra : range(0, 992) = if word_greater_than_word(extra, U256(992)) then {
+                            992
+                        } else {
+                            extra
+                        };
+                    let extra_unaffordable = osaka_extra > extra_limit;
+                    let bounded_extra : modexp_osaka_extra = if extra_unaffordable then {
+                            extra_limit
+                        } else {
+                            osaka_extra
+                        };
+                    if extra_unaffordable then {
+                        return None()
+                    };
+                    16 * bounded_extra + high_bits
+                } else {
+                    let pre_osaka_limit = 3 * available + 2;
+                    let extra_limit : modexp_pre_osaka_extra = pre_osaka_limit / 8;
+                    let extra_unaffordable = extra > extra_limit;
+                    let bounded_extra : modexp_pre_osaka_extra = if extra_unaffordable then {
+                            extra_limit
+                        } else {
+                            extra
+                        };
+                    if extra_unaffordable then {
+                        return None()
+                    };
+                    8 * bounded_extra + high_bits
+                };
             if count == 0 then { 1 } else { count }
         };
 
     /* EIP-7883: gas = max(500, mult*it) (no /3); EIP-2565: max(200, mult*it/3) */
-    let calculated : nat = if osaka then {
-            mult * iterations
+    if iterations == 0 then {
+        None()
+    } else {
+        let product : modexp_product = mult * iterations;
+        let product_unaffordable = wide_product_limit < product;
+        let affordable_product : modexp_factor = if product_unaffordable then { product_limit } else { product };
+        if product_unaffordable then {
+            None()
         } else {
-            exact_quotient(mult * iterations, 3)
-        };
-    let minimum : nat = if osaka then { 500 } else { 200 };
-    Some(GasCost(if calculated < minimum then { minimum } else { calculated }))
+            let calculated = if osaka then {
+                    affordable_product
+                } else {
+                    affordable_product / 3
+                };
+            let cost = if calculated < minimum then { minimum } else { calculated };
+            if cost <= available then {
+                let affordable : gas_cost = cost;
+                Some(affordable)
+            } else {
+                None()
+            }
+        }
+    }
 }
 
 /*! The EIP-2537 BLS12-381 G1 MSM discount table: entry `k−1` is the
@@ -1069,30 +1332,72 @@ function bls_msm_gas(
     table : vector(128, inc, bits(16)),
     base : gas_constant,
     maxd : bls_discount,
-    k : byte_quantity,
+    k : source_length,
+    available : gas,
 ) -> (
-    gas_cost
+    option(gas_cost)
 ) = {
-    if k == BYTE_ZERO then {
-        GAS_COST_ZERO
+    if k == 0 then {
+        Some(GAS_COST_ZERO)
     } else {
         var discount : bls_discount = maxd;
-        if k < ByteQuantity(128) then {
-            let target = ByteQuantity(128) - k;
-            var cursor : byte_quantity = BYTE_ZERO;
-            foreach (index from 0 to 127) {
-                if cursor == target then {
-                    discount = unsigned(table[index])
-                };
-                cursor = cursor + BYTE_ONE
-            }
+        if k < 128 then {
+            /* Sail vector literals place the first table entry at index 127;
+             * the clamped k = 128 entry is supplied by maxd (index 0). */
+            let index : range(1, 127) = 128 - k;
+            discount = unsigned(table[index])
         };
-        ((base * discount) * k) / 1000
+        let coefficient : bls_msm_coefficient = base * discount;
+        let whole = k / 1000;
+        let remainder = tmod_nat(k, 1000);
+        let whole_product : bls_msm_product = coefficient * whole;
+        if whole_product > available then {
+            None()
+        } else {
+            let major : gas_cost = whole_product;
+            let tail_product : bls_msm_tail_product = coefficient * remainder;
+            let tail : gas_cost = tail_product / 1000;
+            let total : bls_msm_product = major + tail;
+            if total <= available then {
+                let affordable : gas_cost = total;
+                Some(affordable)
+            } else {
+                None()
+            }
+        }
     }
 }
 
-function linear_gas(base : gas_constant, per_unit : gas_constant, units : byte_quantity) -> gas_cost =
-    per_unit * units + base
+/*! Returns a linear precompile cost only after the caller can afford its
+    transaction-controlled multiplier. */
+function linear_gas(
+    base : gas_constant,
+    per_unit : gas_constant,
+    units : source_length,
+    available : gas,
+) -> (
+    option(gas_cost)
+) = {
+    let variable_cost : linear_gas_variable_product = per_unit * units;
+    let exact_cost : linear_gas_product = variable_cost + base;
+    if exact_cost > available then {
+        None()
+    } else {
+        let affordable : gas_cost = exact_cost;
+        Some(affordable)
+    }
+}
+
+/*! Narrows a structurally bounded precompile charge to the caller's live gas
+    domain. */
+val fixed_precompile_gas : forall 'cost, 0 <= 'cost. (int('cost), gas) -> option(gas_cost)
+function fixed_precompile_gas(cost, available) =
+    if cost <= available then {
+        let affordable : gas_cost = cost;
+        Some(affordable)
+    } else {
+        None()
+    }
 
 /*! The gas of the precompile at address `num` for a given input. Gas is
     protocol policy defined entirely here; implementations return only
@@ -1100,29 +1405,30 @@ function linear_gas(base : gas_constant, per_unit : gas_constant, units : byte_q
     derive from the word count; the two input-dependent curves (`MODEXP`,
     `BLAKE2F` rounds) read the input in place. The match arms are the
     precompile catalog with their addresses and pricing EIPs. */
-function precompile_gas(num : precompile_id, input : ByteSlice) -> option(gas_cost) = {
+function precompile_gas(num : precompile_id, input : ByteSlice, available : gas) -> option(gas_cost) = {
     let input_len = input.len;
+    let input_length = input_len;
     let words = memory_word_count(input_len);
     match num {
-        1 => Some(GasCost(3000)), /* ECRECOVER (0x01) */
-        2 => Some(linear_gas(GasConstant(60), GasConstant(12), words)),
-        3 => Some(linear_gas(GasConstant(600), GasConstant(120), words)),
-        4 => Some(linear_gas(GasConstant(15), GasConstant(3), words)),
-        5 => modexp_gas(input), /* MODEXP (0x05), EIP-2565/7883 */
-        6 => Some(GasCost(150)), /* BN_ADD (0x06), EIP-1108 */
-        7 => Some(GasCost(6000)), /* BN_MUL (0x07), EIP-1108 */
-        8 => Some(linear_gas(GasConstant(45000), GasConstant(34000), input_len / ByteQuantity(192))), /* BN_PAIRING (0x08), EIP-1108 */
-        9 => Some(GasCost(pc_blake2_rounds(input))), /* BLAKE2F */
-        10 => Some(GasCost(50000)), /* POINT_EVALUATION */
+        1 => fixed_precompile_gas(3000, available), /* ECRECOVER (0x01) */
+        2 => linear_gas(60, 12, words, available),
+        3 => linear_gas(600, 120, words, available),
+        4 => linear_gas(15, 3, words, available),
+        5 => modexp_gas(input, available), /* MODEXP (0x05), EIP-2565/7883 */
+        6 => fixed_precompile_gas(150, available), /* BN_ADD (0x06), EIP-1108 */
+        7 => fixed_precompile_gas(6000, available), /* BN_MUL (0x07), EIP-1108 */
+        8 => linear_gas(45000, 34000, input_length / 192, available), /* BN_PAIRING (0x08), EIP-1108 */
+        9 => fixed_precompile_gas(pc_blake2_rounds(input), available), /* BLAKE2F */
+        10 => fixed_precompile_gas(50000, available), /* POINT_EVALUATION */
         /* EIP-2537 BLS12-381 */
-        11 => Some(GasCost(375)), /* G1ADD */
-        12 => Some(bls_msm_gas(BLS_G1_DISCOUNT, GasConstant(12000), 519, input_len / ByteQuantity(160))),
-        13 => Some(GasCost(600)), /* G2ADD */
-        14 => Some(bls_msm_gas(BLS_G2_DISCOUNT, GasConstant(22500), 524, input_len / ByteQuantity(288))),
-        15 => Some(linear_gas(GasConstant(37700), GasConstant(32600), input_len / ByteQuantity(384))), /* PAIRING_CHECK */
-        16 => Some(GasCost(5500)), /* MAP_FP_TO_G1 */
-        17 => Some(GasCost(23800)), /* MAP_FP2_TO_G2 */
-        256 => Some(GasCost(6900)), /* P256VERIFY */
+        11 => fixed_precompile_gas(375, available), /* G1ADD */
+        12 => bls_msm_gas(BLS_G1_DISCOUNT, 12000, 519, input_length / 160, available),
+        13 => fixed_precompile_gas(600, available), /* G2ADD */
+        14 => bls_msm_gas(BLS_G2_DISCOUNT, 22500, 524, input_length / 288, available),
+        15 => linear_gas(37700, 32600, input_length / 384, available), /* PAIRING_CHECK */
+        16 => fixed_precompile_gas(5500, available), /* MAP_FP_TO_G1 */
+        17 => fixed_precompile_gas(23800, available), /* MAP_FP2_TO_G2 */
+        256 => fixed_precompile_gas(6900, available), /* P256VERIFY */
         _ => Some(GAS_COST_ZERO),
     }
 }
@@ -1136,12 +1442,12 @@ struct SstoreCosts = {
     execution : gas_cost,
     refund : gas_refund,
     state_charge : gas_cost,
-    state_credit : gas_cost,
+    state_credit : state_gas_spill,
 }
 
 /*! Returns the Amsterdam execution-gas cost of accessing a storage slot. */
-function amsterdam_storage_access_cost(cold : bool) -> gas_cost =
-    GAS_COST_ZERO + (if cold then { G_amsterdam_cold_storage_access } else { G_warm_access })
+function amsterdam_storage_access_cost(cold : bool) -> gas_constant =
+    if cold then { G_amsterdam_cold_storage_access } else { G_warm_access }
 
 /*! Legacy `SSTORE` pricing: a three-way comparison (EIP-2200) of
     *original* (the slot's transaction-start value), *current*, and *new*.
@@ -1151,7 +1457,7 @@ function amsterdam_storage_access_cost(cold : bool) -> gas_cost =
     value. The EIP-2929 cold surcharge is added when the slot was not warm. */
 function legacy_sstore_costs(original : word, current : word, new : word, cold : bool) -> SstoreCosts = {
     let cold_cost : gas_constant = if cold then { G_cold_sload } else { GAS_CONSTANT_ZERO };
-    let clear_refund : gas_refund = gas_constant_to_refund(sstore_clear_refund());
+    let clear_refund : gas_constant = sstore_clear_refund();
     let base : gas_constant = if current == new then {
             G_warm_access
         } else {
@@ -1166,30 +1472,30 @@ function legacy_sstore_costs(original : word, current : word, new : word, cold :
         if original == current then {
             /* clean slot being changed: refund only when clearing a non-zero slot */
             if not_bool(word_is_zero(original)) & word_is_zero(new) then {
-                refund = refund + clear_refund
+                refund = validated_refund_add(refund, clear_refund)
             }
         } else {
             /* dirty slot */
             if not_bool(word_is_zero(original)) then {
                 if word_is_zero(current) then {
-                    refund = refund - clear_refund
+                    refund = validated_refund_add(refund, GAS_CONSTANT_ZERO - clear_refund)
                 }; /* un-clear */
                 if word_is_zero(new) then {
-                    refund = refund + clear_refund
+                    refund = validated_refund_add(refund, clear_refund)
                 } /* re-clear */
             };
             if original == new then {
                 /* reset to original */
                 if word_is_zero(original) then {
-                    refund = refund + gas_constant_to_refund(G_sset) - gas_constant_to_refund(G_warm_access)
+                    refund = validated_refund_add(refund, G_sset - G_warm_access)
                     /* 19900 */
                 } else {
-                    refund = refund + gas_constant_to_refund(G_sreset) - gas_constant_to_refund(G_warm_access)
+                    refund = validated_refund_add(refund, G_sreset - G_warm_access)
                 } /* 2800 */
             }
         }
     };
-    struct { execution = base + cold_cost, refund = refund, state_charge = GAS_COST_ZERO, state_credit = GAS_COST_ZERO }
+    struct { execution = base + cold_cost, refund = refund, state_charge = 0, state_credit = 0 }
 }
 
 /*! Amsterdam `SSTORE` pricing (EIP-8037). Access and first-write work debit
@@ -1198,27 +1504,29 @@ function legacy_sstore_costs(original : word, current : word, new : word, cold :
 function amsterdam_sstore_costs(original : word, current : word, new : word, cold : bool) -> SstoreCosts = {
     let changed = current != new;
     let clean_change = (original == current) & changed;
-    var execution : gas_cost = amsterdam_storage_access_cost(cold);
+    let access = amsterdam_storage_access_cost(cold);
+    let execution : gas_cost = if clean_change then {
+            access + G_amsterdam_storage_write
+        } else {
+            access
+        };
     var refund : gas_refund = GAS_REFUND_ZERO;
-    var state_charge : gas_cost = GAS_COST_ZERO;
-    var state_credit : gas_cost = GAS_COST_ZERO;
-
-    if clean_change then {
-        execution = execution + G_amsterdam_storage_write;
-        if word_is_zero(original) then {
-            state_charge = G_amsterdam_state_storage_set
-        }
-    };
+    let state_charge : gas_cost = if clean_change & word_is_zero(original) then {
+            G_amsterdam_state_storage_set
+        } else {
+            GAS_COST_ZERO
+        };
+    var state_credit : state_gas_spill = 0;
 
     if changed then {
         if not_bool(word_is_zero(original)) & not_bool(word_is_zero(current)) & word_is_zero(new) then {
-            refund = refund + R_amsterdam_storage_clear
+            refund = validated_refund_add(refund, R_amsterdam_storage_clear)
         };
         if not_bool(word_is_zero(original)) & word_is_zero(current) then {
-            refund = refund - R_amsterdam_storage_clear
+            refund = validated_refund_add(refund, GAS_CONSTANT_ZERO - R_amsterdam_storage_clear)
         };
         if original == new then {
-            refund = refund + gas_constant_to_refund(G_amsterdam_storage_write);
+            refund = validated_refund_add(refund, G_amsterdam_storage_write);
             if word_is_zero(original) then {
                 state_credit = G_amsterdam_state_storage_set
             }
@@ -1246,48 +1554,74 @@ Operand-sized costs that ride on top of an opcode's static cost,
 word-counted via `⌈byte_len / 32⌉` where the spec charges per 32-byte
 word (YP Appendix G).
 */
-function charge_memory_word_gas(base : gas_constant, per_word : gas_constant, size : byte_quantity) -> unit =
-    charge(per_word * memory_word_count(size) + base)
+/*! Charges a word-sized unit count only after proving the product affordable,
+    so optimized builds never materialize an overflowing native gas cost. */
+function charge_word_scaled_gas(per_unit : gas_constant, units : word) -> unit = {
+    if not_bool(is_running()) | per_unit == 0 | units == 0 then {
+        return ()
+    };
+    let remaining = gas_remaining;
+    if units <= remaining then {
+        let affordable_units : gas_cost = units;
+        let exact_cost : linear_gas_variable_product = per_unit * affordable_units;
+        if exact_cost <= remaining then {
+            let cost : gas_cost = exact_cost;
+            charge(cost)
+        } else {
+            exc_halt(OutOfGas)
+        }
+    } else {
+        exc_halt(OutOfGas)
+    }
+}
+
+/*! Charges an opcode base cost and its per-memory-word component. */
+function charge_memory_word_gas(base : gas_constant, per_word : gas_constant, size : word) -> unit = {
+    charge(base);
+    charge_word_scaled_gas(per_word, memory_word_count_word(size))
+}
 
 /* KECCAK256: base + per-word hashing cost. */
-function charge_keccak_gas(size : byte_quantity) -> unit =
+function charge_keccak_gas(size : word) -> unit =
     charge_memory_word_gas(G_keccak, G_keccak_word, size)
 
 /* *COPY (CALLDATA/CODE/RETURNDATA/EXTCODECOPY, MCOPY): per-word copy cost. */
-function charge_copy_gas(size : byte_quantity) -> unit =
+function charge_copy_gas(size : word) -> unit =
     charge_memory_word_gas(GAS_CONSTANT_ZERO, G_copy_word, size)
 
 /* LOG0..LOG4: base + per-topic + per-data-byte. */
 /*! Charges the base, topic, and data-byte components of a log operation. */
-function charge_log_gas(num_topics : log_topic_count, size : byte_quantity) -> unit =
-    charge(
-          gas_constant_scale_protocol_quantity(G_logtopic, num_topics)
-        + gas_constant_scale_byte_quantity(G_logdata, size)
-        + G_log,
-    )
+function charge_log_gas(num_topics : log_topic_count, size : word) -> unit = {
+    charge(G_log);
+    let topic_cost : gas_cost = G_logtopic * num_topics;
+    charge(topic_cost);
+    charge_word_scaled_gas(G_logdata, size)
+}
 
 /*! `EXP`: base plus `G_expbyte` per significant exponent byte
     (EIP-160). */
 function exp_gas(exponent : word) -> gas_cost = {
-    let significant_bits = word_bit_length(exponent);
-    let rounded_bits : protocol_quantity = significant_bits + 7;
-    let byte_count = protocol_quantity_quotient(rounded_bits, 8);
-    let significant_bytes : range(0, 32) = if byte_count <= 32 then {
-            byte_count
-        } else {
-            assert(false);
-            0
-        };
-    gas_constant_scale_protocol_quantity(G_expbyte, significant_bytes) + G_exp
+    G_expbyte * word_byte_length(exponent) + G_exp
 }
 
 /*! The EIP-3860 per-word initcode cost, charged by `CREATE`/`CREATE2`
     and create transactions from Shanghai. */
-function initcode_gas(byte_len : byte_quantity) -> gas_cost =
+function initcode_gas(byte_len : nat) -> nat =
     if k_fork >= Shanghai then {
-        G_initcode_word * memory_word_count(byte_len)
+        let words = memory_word_count(byte_len);
+        words + words
     } else {
-        GAS_COST_ZERO
+        0
+    }
+
+/*! The EIP-3860 charge for transaction-backed initcode, retaining the SSZ
+    transaction-envelope ceiling for native cost aggregation. */
+function transaction_initcode_gas(byte_len : transaction_byte_length) -> transaction_initcode_cost =
+    if k_fork >= Shanghai then {
+        let words = memory_word_count(byte_len);
+        words + words
+    } else {
+        0
     }
 
 /*md
@@ -1295,12 +1629,7 @@ function initcode_gas(byte_len : byte_quantity) -> gas_cost =
 */
 /*! Applies the EIP-150 forwarding cap to a word-sized gas request. */
 function call_gas_cap_word(available : gas, requested : word) -> gas = {
-    let retained = gas_quotient(available, 64);
+    let retained : gas = available / 64;
     let all_but_64th = gas_sub_or_oog(available, retained);
-    match word_to_gas(requested) {
-        Some(requested_gas) => {
-            if requested_gas < all_but_64th then { requested_gas } else { all_but_64th }
-        },
-        _ => all_but_64th,
-    }
+    if requested < all_but_64th then { requested } else { all_but_64th }
 }

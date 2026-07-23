@@ -2,15 +2,15 @@
 /*md
 # Chain configuration
 
-The decoded `SszChainConfig`: the chain id and whether the schema-selected
-fork's configured activation point has been reached. The schema prefix selects
-the protocol profile, so neither the fork identifier nor its blob schedule is
+The decoded `SszChainConfig`. Its activation point is validated while decoding,
+so the resulting value only carries the chain id. The schema prefix selects the
+protocol profile, so neither the fork identifier nor its blob schedule is
 repeated inside the SSZ body. Pure data — no registers, no externs.
 */
 /*! A fork's blob parameters (EIP-4844/EIP-7691): target and maximum blob
     counts per block, and the base-fee update fraction. */
 struct BlobSchedule = {
-    target : blob_count,
+    target : blob_target_count,
     max : blob_count,
     base_fee_update_fraction : blob_fee_update_fraction,
 }
@@ -27,7 +27,9 @@ let NO_BLOB_SCHEDULE : BlobSchedule = struct { target = 0, max = 0, base_fee_upd
 
 /*! Resolves the schema's stable `ProtocolFork` byte to the execution-rule
     family and its protocol-defined blob schedule. BPO forks share Osaka
-    execution rules but retain their distinct blob parameters. */
+    execution rules but retain their distinct blob parameters. An unknown
+    input byte is rejected before any profile field reaches a kernel
+    register. */
 function protocol_profile(schema_fork : byte) -> ProtocolProfile =
     if schema_fork == 0x0a then {
         struct { fork = Berlin, blob_schedule = NO_BLOB_SCHEDULE }
@@ -87,6 +89,4 @@ function protocol_profile(schema_fork : byte) -> ProtocolProfile =
 /*! The decoded chain configuration for the executing payload. */
 struct ChainConfig = {
     chain_id : chain_identifier,
-    /* the fork's activation point is reached */
-    activation_active : bool,
 }

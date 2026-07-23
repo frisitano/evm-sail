@@ -10,8 +10,8 @@ unit stack_reset(const unit u);                    /* one empty base frame (per 
 unit stack_enter_frame(const unit u);                    /* call: fresh empty frame       */
 unit stack_leave_frame(const unit u);                    /* return: restore parent        */
 uint64_t stack_depth(const unit u);                /* current frame height          */
-unit stack_push_word(const sail_word w);              /* push a whole 256-bit word     */
+unit stack_push_word(EVMSAIL_WORD_PARAM(w));           /* push a whole 256-bit word     */
 EVMSAIL_WORD_RETURN stack_pop_word(EVMSAIL_WORD_RESULT(result) const unit u);
 EVMSAIL_WORD_RETURN stack_peek_word(EVMSAIL_WORD_RESULT(result) uint64_t n);
-unit stack_set_word(uint64_t n, const sail_word w);   /* overwrite nth-from-top (SWAP) */
+unit stack_set_word(uint64_t n, EVMSAIL_WORD_PARAM(w)); /* overwrite nth-from-top (SWAP) */
 #endif

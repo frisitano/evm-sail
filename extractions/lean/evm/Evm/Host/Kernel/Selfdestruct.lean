@@ -17,23 +17,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -46,6 +38,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # State: selfdestruct and creation flags
@@ -79,7 +72,7 @@ def k_was_created (a : address) : SailM Bool := do
 self-beneficiary). -/
 def k_zero_balance (a : address) : SailM Unit := do
   let cur ← do (k_aload a)
-  if ((word_is_zero cur.info.balance) : Bool)
+  if ((word_is_zero (cur.info.balance).value) : Bool)
   then (pure ())
-  else (store_account_info a cur { cur.info with balance := ZERO_WORD })
+  else (store_account_info a cur { cur.info with balance := ⟨(ZERO_WORD).value⟩ })
 

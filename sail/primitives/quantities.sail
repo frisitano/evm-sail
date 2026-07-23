@@ -8,58 +8,109 @@ non-negative quantities after operand validation.
 
 ## Types
 
-The aliases below prevent unrelated protocol and structural quantities from
-being interchanged accidentally while preserving their mathematical values.
+The aliases below name the semantic role of protocol and structural
+quantities while preserving their mathematical values. Where the protocol or
+data structure supplies a bound, the alias records it explicitly.
 
-## Constants
-
-`BYTE_ZERO`, `BYTE_ONE`, and `MAX_BYTE_QUANTITY` delimit the byte-addressable
-domain used by source-backed slices and memory regions.
 */
 
 /* Protocol quantities are mathematical naturals with semantic bounds. The
  * canonical model never uses a fixed-width bitvector merely because a wire
  * encoding or host implementation happens to use 64 bits. */
 
-/*! An unsigned quantity carried by an Ethereum protocol field. */
-type protocol_quantity = range(0, 2 ^ 64 - 1)
+/* Type-level bounds have kind Int because Sail has one kind for numeric type
+ * expressions. Runtime values below remain non-negative ranges or naturals.
+ * `sizeof(bound_name)` is used only when code needs the bound as a value. */
 
-/* Spell the value directly so native backends can materialize it as one
- * machine constant. The range declaration above remains the semantic bound. */
-let BYTE_QUANTITY_MAX : protocol_quantity = 18446744073709551615
+/*! The largest account nonce admitted by EIP-2681. */
+type account_nonce_bound : Int = 2 ^ 64 - 1
+/*! An account transaction-count nonce (EIP-2681). */
+type account_nonce = range(0, account_nonce_bound)
 
-/*! An account transaction-count nonce. */
-type account_nonce = protocol_quantity
-/*! An execution block number. */
-type block_number = protocol_quantity
-/*! An execution block timestamp in seconds. */
-type block_timestamp = protocol_quantity
-/*! A quantity of blob gas. */
-type blob_gas = protocol_quantity
-/*! A number of blobs. */
-type blob_count = protocol_quantity
-/*! The denominator governing excess-blob-gas fee adjustment. */
-type blob_fee_update_fraction = protocol_quantity
-/*! An EIP-155 chain identifier. */
-type chain_identifier = protocol_quantity
-/*! The ordinal assigned to a supported protocol fork. */
-type protocol_fork_index = protocol_quantity
-/*! A beacon-chain slot number. */
-type slot_number = protocol_quantity
-/*! An index in the withdrawal sequence. */
-type withdrawal_index = protocol_quantity
-/*! A consensus-layer validator index. */
-type validator_index = protocol_quantity
-/*! A withdrawal amount denominated in gwei. */
-type withdrawal_amount = protocol_quantity
+/*! An execution block number. The Yellow Paper header scalar and EIP-1559
+    arithmetic impose no fixed-width semantic bound; the stateless-input SSZ
+    transport performs its own `uint64` decoding. */
+type block_number = nat
+/*! An execution block timestamp in seconds. As with the Yellow Paper header
+    scalar, the canonical semantic value is a natural; SSZ width is checked at
+    the input boundary rather than becoming the protocol type. */
+type block_timestamp = nat
 
-/* Source-backed collections cannot contain more entries than their encoded
- * byte source. Keeping their counters bounded gives optimized backends a
- * native representation without leaking that representation into the model. */
-/*! The number of entries in a source-backed collection. */
-type item_count = protocol_quantity
-/*! An index into a source-backed collection. */
-type item_index = protocol_quantity
+/*! Largest per-block blob count among the supported schedules: BPO2's
+    `MAX_BLOBS_PER_BLOCK = 21` (EIP-8135). */
+type blob_count_bound : Int = 21
+/*! Largest per-transaction blob count among supported forks: Prague's
+    `MAX_BLOB_GAS_PER_BLOCK / GAS_PER_BLOB = 9` (EIP-7691). */
+type transaction_blob_count_bound : Int = 9
+/*! Largest target blob count among supported schedules: BPO2's target of 14
+    blobs (EIP-8135). */
+type blob_target_count_bound : Int = 14
+/*! Blob gas charged per blob, `2^17` (EIP-4844). */
+type gas_per_blob_value : Int = 2 ^ 17
+
+/*! A blob count in any block schedule supported by this model. */
+type blob_count = range(0, blob_count_bound)
+/*! A target blob count in a supported block schedule. */
+type blob_target_count = range(0, blob_target_count_bound)
+/*! A blob count carried by one EIP-4844 transaction. */
+type transaction_blob_count = range(0, transaction_blob_count_bound)
+/*! Blob gas used by one supported block. EIP-4844 requires this to be a
+    multiple of `GAS_PER_BLOB`; the fork-specific maximum is checked against
+    the active schedule. */
+type blob_gas_used = range(0, blob_count_bound * gas_per_blob_value)
+/*! Blob gas contributed by one transaction. */
+type transaction_blob_gas = range(0, transaction_blob_count_bound * gas_per_blob_value)
+/*! The accumulating EIP-4844 `excess_blob_gas` header field, encoded as
+    `uint64` and not bounded by a single block's blob count. */
+type excess_blob_gas_bound : Int = 2 ^ 64 - 1
+/*! An accumulated excess-blob-gas value carried by a block header. */
+type excess_blob_gas = range(0, excess_blob_gas_bound)
+
+/*! Largest fee-update fraction in the supported blob schedules: BPO2's
+    `BLOB_BASE_FEE_UPDATE_FRACTION = 11684671` (EIP-8135). */
+type blob_fee_update_fraction_bound : Int = 11684671
+/*! The positive denominator governing excess-blob-gas fee adjustment. */
+type blob_fee_update_fraction = range(1, blob_fee_update_fraction_bound)
+
+/*! An EIP-155 chain identifier. EIP-155 defines an integer domain without a
+    fixed-width consensus bound; the stateless-input ABI independently uses
+    an SSZ `uint64`. */
+type chain_identifier = nat
+
+/*! The ordinal of a fork in this model's thirteen-member [Fork][type-Fork]
+    enumeration. This is a model structural bound, not a wire constraint. */
+type protocol_fork_index = range(0, 12)
+
+/*! A beacon-chain slot number, explicitly a `uint64` in EIP-7843. */
+type slot_number = range(0, 2 ^ 64 - 1)
+/*! An EIP-4895 withdrawal index, encoded as SSZ `uint64`. */
+type withdrawal_index = range(0, 2 ^ 64 - 1)
+/*! An EIP-4895 validator index, encoded as SSZ `uint64`. */
+type validator_index = range(0, 2 ^ 64 - 1)
+/*! An EIP-4895 withdrawal amount in gwei, encoded as SSZ `uint64`. */
+type withdrawal_amount = range(0, 2 ^ 64 - 1)
+
+/*! An eight-byte unsigned integer read from the stateless-input SSZ schema.
+    This is a transport type; decoders widen or validate it into the semantic
+    field type at the container boundary. */
+type ssz_uint = range(0, 2 ^ 64 - 1)
+
+/* SSZ offsets are relative positions encoded as little-endian uint32 values.
+ * They are not general protocol quantities: keeping the wire bound in the
+ * type lets optimized builds retain 32-bit arithmetic until an offset is
+ * resolved against an absolute source position. */
+/*! A container-relative offset carried by an SSZ `uint32`. */
+type ssz_offset = range(0, 2 ^ 32 - 1)
+/*! An index into a table of four-byte SSZ offsets. */
+type ssz_offset_index = range(0, 2 ^ 30 - 1)
+
+/*! The number of entries in a host-backed collection without a tighter
+    schema-specific bound. Host tables are addressed by 64-bit ordinals in
+    every executable build; protocol and structural counts use their own
+    tighter singleton/range types instead. */
+type item_count = range(0, 2 ^ 64 - 1)
+/*! An index into a host-backed collection without a tighter schema bound. */
+type item_index = range(0, 2 ^ 64 - 1)
 
 /* Small structural domains carry their protocol bounds directly. */
 /*! The nesting depth of an execution frame. */
@@ -82,18 +133,22 @@ type y_parity = range(0, 1)
 type merkle_depth = range(0, 64)
 /*! An EVM instruction byte. */
 type opcode = range(0, 255)
+/*! The largest one-based precompile identifier admitted by the model. */
+type precompile_id_bound : Int = 256
 /*! The one-based identifier of a precompiled contract. */
-type precompile_id = range(1, 256)
+type precompile_id = range(1, precompile_id_bound)
+/*! An active precompile identifier, or zero for an ordinary address. */
+type precompile_selector = range(0, precompile_id_bound)
 /*! The round count supplied to the BLAKE2 compression precompile. */
 type blake2_rounds = range(0, 2 ^ 32 - 1)
 /*! A fixed-point discount factor used by BLS precompile pricing. */
 type bls_discount = range(0, 2 ^ 16 - 1)
 /*! A bit position in the 2048-bit log bloom. */
 type bloom_bit_index = range(0, 2047)
-/*! A 64-bit limb position in the log bloom. */
-type bloom_limb_index = range(0, 31)
-/*! A bit position within a log-bloom limb. */
-type bloom_limb_bit = range(0, 63)
+/*! A 64-bit word position in the log bloom. */
+type bloom_u64_index = range(0, 31)
+/*! A bit position within a log-bloom u64. */
+type bloom_u64_bit = range(0, 63)
 /*! An index into the 256 most recent ancestor block hashes. */
 type ancestor_index = range(0, 255)
 
@@ -102,73 +157,89 @@ type ancestor_index = range(0, 255)
 /*! A small positive divisor used for exact protocol arithmetic. */
 type protocol_divisor = range(1, 256)
 
-/*! Embeds a bounded protocol quantity in an EVM word. */
-function word_of_protocol_quantity(value : protocol_quantity) -> word =
-    word_of_nat(value)
-
 /*! Converts a word to an account nonce when it fits the protocol field. */
 function word_to_account_nonce(value : word) -> option(account_nonce) = {
-    match word_to_limb(value) {
-        Some(amount) => Some(unsigned(amount)),
-        None() => None(),
+    if value <= sizeof(account_nonce_bound) then {
+        Some(value)
+    } else {
+        None()
     }
 }
 
-/*! Narrows a word losslessly to the bounded protocol-quantity domain. */
-function word_to_protocol_quantity(value : word) -> option(protocol_quantity) = {
-    match word_to_limb(value) {
-        Some(amount) => Some(unsigned(amount)),
-        None() => None(),
-    }
-}
+/*! Embeds an EIP-2681 account nonce in the EVM word domain. */
+function word_of_account_nonce(value : account_nonce) -> account_nonce = value
 
-/*! Recognizes a word as a valid precompiled-contract identifier. */
-function word_to_precompile_id(value : word) -> option(precompile_id) = {
-    match word_to_limb(value) {
-        Some(limb_value) => {
-            let candidate = unsigned(limb_value[8 .. 0]);
-            if (limb_value[63 .. 9] == sail_zeros(55)) & (1 <= candidate) & (candidate <= 256) then {
-                Some(candidate)
-            } else {
-                None()
-            }
-        },
-        None() => None(),
-    }
-}
+/*! Embeds an EIP-4895 withdrawal amount in the EVM word domain. */
+function word_of_withdrawal_amount(value : withdrawal_amount) -> withdrawal_amount = value
 
-/*! Embeds a precompiled-contract identifier in an EVM word. */
-function word_of_precompile_id(value : precompile_id) -> word =
-    word_of_protocol_quantity(value)
+/*! Embeds an EIP-7843 slot number in the EVM word domain. */
+function word_of_slot_number(value : slot_number) -> slot_number = value
+
+/*! Converts a semantic block number to the 256-bit value exposed by NUMBER. */
+val word_of_block_number : forall 'value, 0 <= 'value. int('value) -> {'result,
+                                                                          0
+                                                                       <= 'result
+                                                                       &  'result
+                                                                       <= 'value
+                                                                       &  'result
+                                                                       <  2 ^ 256.
+                                                                       int('result)}
+function word_of_block_number(value) =
+    if value < sizeof(word_modulus) then {
+        value
+    } else {
+        assert(false);
+        WORD_ZERO
+    }
+
+/*! Converts a semantic timestamp to the 256-bit value exposed by TIMESTAMP. */
+val word_of_block_timestamp : forall 'value, 0 <= 'value. int('value) -> {'result,
+                                                                             0
+                                                                          <= 'result
+                                                                          &  'result
+                                                                          <= 'value
+                                                                          &  'result
+                                                                          <  2 ^ 256.
+                                                                          int('result)}
+function word_of_block_timestamp(value) =
+    if value < sizeof(word_modulus) then {
+        value
+    } else {
+        assert(false);
+        WORD_ZERO
+    }
+
+/*! Converts an EIP-155 chain identifier to the value exposed by CHAINID. */
+val word_of_chain_identifier : forall 'value, 0 <= 'value. int('value) -> {'result,
+                                                                              0
+                                                                           <= 'result
+                                                                           &  'result
+                                                                           <= 'value
+                                                                           &  'result
+                                                                           <  2 ^ 256.
+                                                                           int('result)}
+function word_of_chain_identifier(value) =
+    if value < sizeof(word_modulus) then {
+        value
+    } else {
+        assert(false);
+        WORD_ZERO
+    }
+
+/*! Encodes a precompiled-contract identifier directly as its 20-byte
+    address.  Identifiers currently occupy only the two least-significant
+    bytes, including Osaka's `0x0100` P256VERIFY address. */
+function precompile_id_to_address(value : precompile_id) -> address = {
+    var result : address = ZERO_ADDRESS;
+    result[0] = get_slice_int(8, value, 0);
+    result[1] = get_slice_int(8, value, 8);
+    result
+}
 
 /*! Increments an account nonce after establishing that it is not maximal. */
 function account_nonce_increment(value : account_nonce) -> account_nonce = {
-    assert(value < BYTE_QUANTITY_MAX);
+    assert(value < sizeof(account_nonce_bound));
     value + 1
-}
-
-/*! Increments a bounded protocol quantity. */
-function protocol_quantity_increment(value : protocol_quantity) -> protocol_quantity = {
-    assert(value < BYTE_QUANTITY_MAX);
-    value + 1
-}
-
-/*! Decrements a positive protocol quantity. */
-function protocol_quantity_decrement(value : protocol_quantity) -> protocol_quantity = {
-    assert(0 < value);
-    value - 1
-}
-
-/*! Subtracts bounded protocol quantities without underflow. */
-function protocol_quantity_sub(left : protocol_quantity, right : protocol_quantity) -> protocol_quantity = {
-    assert(right <= left);
-    left - right
-}
-
-/*! Adds bounded protocol quantities without overflow. */
-function protocol_quantity_add(left : protocol_quantity, right : protocol_quantity) -> protocol_quantity = {
-    assert(right <= BYTE_QUANTITY_MAX - left);
-    left + right
 }
 
 /*! Advances the call depth and rejects an attempt to exceed its bound. */
@@ -180,15 +251,13 @@ function frame_depth_increment(value : frame_depth) -> frame_depth =
         0
     }
 
-/*! Advances a source-backed collection count. */
-function item_count_increment(value : item_count) -> item_count = {
-    protocol_quantity_increment(value)
-}
-
-/*! Advances a source-backed collection index. */
-function item_index_increment(value : item_index) -> item_index = {
-    protocol_quantity_increment(value)
-}
+/*! Consumes one validated EIP-4844 transaction blob hash. */
+function transaction_blob_count_decrement(value : transaction_blob_count) -> transaction_blob_count =
+    if value != 0 then {
+        value - 1
+    } else {
+        0
+    }
 
 /*! Descends by one level in a bounded Merkle tree. */
 function merkle_depth_increment(value : merkle_depth) -> merkle_depth = {
@@ -202,189 +271,104 @@ function merkle_depth_decrement(value : merkle_depth) -> merkle_depth = {
     value - 1
 }
 
-/* Host-backed byte arenas are mathematical naturals in the canonical
- * specification. The constructor marks the point at which an exact protocol
- * quantity has been shown to fit the host byte domain; the optimized C build
- * gives this nominal type a fixed-width representation. */
-
-/*! An exact byte offset, length, or size after representability checks. */
-newtype byte_quantity = ByteQuantity : nat
-
-let BYTE_ZERO : byte_quantity = ByteQuantity(0)
-let BYTE_ONE : byte_quantity = ByteQuantity(1)
-let MAX_BYTE_QUANTITY : byte_quantity = ByteQuantity(BYTE_QUANTITY_MAX)
-
 /* Source, memory, and code positions are transparent mathematical naturals in
- * the specification. The optimized backend gives byte_quantity a native
- * fixed-width representation; raw EVM operands stay words or plain nat until the opcode has
- * established its specified overflow behaviour. */
+ * the canonical specification. Their names document the byte domain expected
+ * by each interface. The optimized splice supplies finite bounds from which
+ * the C backend selects native representations. Raw EVM operands remain words
+ * until the opcode has established its specified overflow behaviour. */
+/*! Whether an offset/length pair is representable by the host. This is
+    vacuous for the canonical natural-number model; optimized builds strengthen
+    it with their concrete address-space bound. */
+type host_valid_range('off : Int, 'len : Int) -> Bool =
+    0 <= 'off & 0 <= 'len
+/*! Whether a source-backed byte range is representable by the selected
+    model. This is a semantic representation invariant, not an FFI type. */
+type source_valid_range('off : Int, 'len : Int) -> Bool =
+    0 <= 'off & 0 <= 'len
+/*! Whether one host byte quantity is representable. Unlike
+    `host_valid_range`, this does not assert that two quantities can be added
+    without overflow. */
+type host_valid_access('value : Int) -> Bool =
+    0 <= 'value
+/*! Whether a semantic source length is representable by the selected model.
+    The canonical specification is unbounded; optimized builds strengthen
+    this representation invariant independently of protocol limits. */
+type source_valid_length('value : Int) -> Bool =
+    0 <= 'value
+/*! A position representable by the host byte-store interface. The canonical
+    model is unbounded; production builds refine this representation. */
+type host_access = nat
 /*! An absolute byte position in a named source region. */
-type source_pointer = byte_quantity
-/*! A byte-sequence length. */
-type byte_length = byte_quantity
+type source_pointer = nat
+/*! A byte length or regular-layout count derived from a source region. */
+type source_length = nat
+/*! An opaque ordinal issued by the host rollback journal. The model may store
+    and return this complete transaction-state snapshot cursor, but cannot
+    inspect subsystem journals or replay the host's rollback mechanism. */
+type journal_checkpoint = nat
 
 /*! An absolute byte position in the current EVM memory frame. */
-type memory_pointer = byte_quantity
+type memory_pointer = nat
 /*! A length or allocated size in EVM memory. */
-type memory_length = byte_quantity
+type memory_length = nat
+
+/* A range describes the mathematical EVM address selected by an opcode.  Its
+ * materializability is established separately by the memory-expansion cost:
+ * an unaffordable range halts before it reaches the host byte store. */
+/*! The invariant carried by every canonical EVM memory range. */
+type memory_valid_range('off : Int, 'len : Int) -> Bool =
+    0 <= 'off & 0 <= 'len
+
+/*! The indexed fields of an EVM memory range. */
+struct MemoryRangeFields('off : Int, 'len : Int), memory_valid_range('off, 'len) = {
+    off : int('off),
+    len : int('len),
+}
+
+/*! A memory range retaining its offset, length, and containment proof. */
+type MemoryRange = {
+    'off 'len,
+    memory_valid_range('off, 'len). MemoryRangeFields('off, 'len)
+}
+
+/*! Constructs a memory range whose validity is established by its caller. */
+val memory_range : forall 'off 'len, memory_valid_range('off, 'len). (int('off), int('len)) -> MemoryRangeFields(
+        'off,
+        'len,
+    )
+function memory_range(off, len) = struct { off = off, len = len }
+
+/*! The canonical inactive range used for a zero-sized operand or halt. */
+let EMPTY_MEMORY_RANGE : MemoryRangeFields(0, 0) = memory_range(0, 0)
 
 /*! An absolute byte position in the code arena. */
-type code_pointer = byte_quantity
+type code_pointer = nat
 /*! A contract-code length. */
-type code_length = byte_quantity
+type code_length = nat
+/*! The representation invariant required of executable code. The canonical
+    model is mathematically unbounded; optimized builds strengthen this with
+    enough cursor headroom for a complete PUSH32 immediate. */
+type code_valid_length('len : Int) -> Bool =
+    0 <= 'len
+/*! An index into the 256-byte chunks of a JUMPDEST bitmap. */
+type code_chunk_index = nat
 
-/*! Tests whether a natural number fits the byte-addressable domain. */
-function nat_fits_limb(value : nat) -> bool = value <= BYTE_QUANTITY_MAX
-
-/*! Tests whether a byte quantity fits the byte-addressable domain. */
-function byte_quantity_fits_limb(ByteQuantity(value) : byte_quantity) -> bool =
-    nat_fits_limb(value)
-
-overload fits_limb = {
-    nat_fits_limb,
-    byte_quantity_fits_limb
-}
-
-/* Fixed-width host ABIs use this after the semantic caller has established
- * that its exact quantity is representable. */
-/*! Converts a representable natural number to a 64-bit limb. */
-function nat_to_limb(value : nat) -> limb = {
-    assert(nat_fits_limb(value));
-    get_slice_int(64, value, 0)
-}
-
-/*! Converts a representable byte quantity to a 64-bit limb. */
-function byte_quantity_to_limb(ByteQuantity(value) : byte_quantity) -> limb =
-    nat_to_limb(value)
-
-overload to_limb = {
-    nat_to_limb,
-    byte_quantity_to_limb
-}
-
-/*! Embeds a byte quantity in an EVM word. */
-function word_of_byte_quantity(ByteQuantity(value) : byte_quantity) -> word =
-    word_of_nat(value)
-
-/*! Interprets an EVM word as an exact mathematical byte quantity. */
-function word_to_byte_quantity(value : word) -> byte_quantity =
-    ByteQuantity(unsigned(word_to_bits(value)))
-
-overload word_of_quantity = {
-    word_of_nat,
-    word_of_byte_quantity,
-    word_of_protocol_quantity
-}
-
-/*! Computes the non-negative integer quotient for a nonzero divisor. */
-function exact_quotient(dividend : nat, divisor : nat) -> nat = {
-    assert(divisor != 0);
-    let quotient = tdiv_int(dividend, divisor);
-    assert(quotient >= 0);
-    quotient
-}
-
-/*! Divides a protocol quantity by a small positive divisor. */
-function protocol_quantity_quotient(value : protocol_quantity, divisor : protocol_divisor) -> protocol_quantity = {
-    let quotient = exact_quotient(value, divisor);
-    assert(quotient <= value);
-    quotient
-}
-
-function byte_quantity_equal(ByteQuantity(left) : byte_quantity, ByteQuantity(right) : byte_quantity) -> bool =
-    left == right
-
-function byte_quantity_not_equal(ByteQuantity(left) : byte_quantity, ByteQuantity(right) : byte_quantity) -> bool =
-    left != right
-
-function byte_quantity_lt(ByteQuantity(left) : byte_quantity, ByteQuantity(right) : byte_quantity) -> bool =
-    left < right
-
-function byte_quantity_le(ByteQuantity(left) : byte_quantity, ByteQuantity(right) : byte_quantity) -> bool =
-    left <= right
-
-function byte_quantity_gt(ByteQuantity(left) : byte_quantity, ByteQuantity(right) : byte_quantity) -> bool =
-    left > right
-
-function byte_quantity_ge(ByteQuantity(left) : byte_quantity, ByteQuantity(right) : byte_quantity) -> bool =
-    left >= right
-
-/*! Adds two byte quantities after checking the addressable bound. */
-function byte_quantity_add(ByteQuantity(left) : byte_quantity, ByteQuantity(right) : byte_quantity) -> byte_quantity = {
-    assert(left <= BYTE_QUANTITY_MAX);
-    assert(right <= BYTE_QUANTITY_MAX - left);
-    ByteQuantity(left + right)
-}
-
-/*! Subtracts a byte quantity without permitting underflow. */
-function byte_quantity_sub(ByteQuantity(left) : byte_quantity, ByteQuantity(right) : byte_quantity) -> byte_quantity = {
-    assert(left <= BYTE_QUANTITY_MAX);
-    assert(right <= left);
-    ByteQuantity(left - right)
-}
-
-/*! Multiplies byte quantities after checking the addressable bound. */
-function byte_quantity_mul(ByteQuantity(left) : byte_quantity, ByteQuantity(right) : byte_quantity) -> byte_quantity = {
-    assert(left <= BYTE_QUANTITY_MAX);
-    if left == 0 then {
-        BYTE_ZERO
+/*! Embeds an arbitrary mathematical byte count in an EVM word after checking
+    the EVM-word boundary. */
+val word_of_nat_byte_count : forall 'value, 0 <= 'value. int('value) -> word
+function word_of_nat_byte_count(value) =
+    if value < 2 ^ 256 then {
+        U256(value)
     } else {
-        assert(right <= exact_quotient(BYTE_QUANTITY_MAX, left));
-        ByteQuantity(left * right)
+        assert(false);
+        WORD_ZERO
     }
-}
 
-function nat_scale_byte_quantity(left : nat, ByteQuantity(right) : byte_quantity) -> nat =
-    left * right
+/*! Embeds a representable source byte count in an EVM word. Optimized models
+    use the source-length invariant to select their native-width instance. */
+val word_of_source_byte_count : forall 'value, source_valid_length('value). int('value) -> word
+function word_of_source_byte_count(value) = word_of_nat_byte_count(value)
 
-/*! Divides a byte quantity by a nonzero byte quantity. */
-function byte_quantity_quotient(
-    ByteQuantity(dividend) : byte_quantity,
-    ByteQuantity(divisor) : byte_quantity,
-) -> (
-    byte_quantity
-) = {
-    assert(dividend <= BYTE_QUANTITY_MAX);
-    ByteQuantity(exact_quotient(dividend, divisor))
-}
-
-overload operator == = {
-    byte_quantity_equal
-}
-
-overload operator != = {
-    byte_quantity_not_equal
-}
-
-overload operator < = {
-    byte_quantity_lt
-}
-
-overload operator <= = {
-    byte_quantity_le
-}
-
-overload operator > = {
-    byte_quantity_gt
-}
-
-overload operator >= = {
-    byte_quantity_ge
-}
-
-overload operator + = {
-    byte_quantity_add
-}
-
-overload operator - = {
-    byte_quantity_sub
-}
-
-overload operator * = {
-    byte_quantity_mul,
-    nat_scale_byte_quantity
-}
-
-overload operator / = {
-    byte_quantity_quotient
-}
+/* Rounded quantities such as MSIZE retain the guarded mathematical arm;
+ * source/code cursors select the representation-bounded arm. */
+overload word_of_byte_count = {word_of_source_byte_count, word_of_nat_byte_count}

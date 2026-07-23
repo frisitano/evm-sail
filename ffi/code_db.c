@@ -13,7 +13,7 @@
  * this is the execution mirror. */
 #include "sail.h"
 #include "byte_slice_glue.h"
-#include "lbits_convert.h"
+#include "value_convert.h"
 #include "host_crypto.h"
 #include <stdint.h>
 #include <stdbool.h>
@@ -100,11 +100,7 @@ bool jumpdest_table_store_chunk(uint64_t ref,
   if (first >= nwords) return false;
 
   uint64_t words[4];
-#ifdef EVMSAIL_STANDARD_ABI
-  lbits_to_le_words4(words, chunk);
-#else
-  memcpy(words, chunk.limbs, sizeof(words));
-#endif
+  sail_word_to_le_words4(words, chunk);
   uint64_t count = nwords - first;
   if (count > 4) count = 4;
   for (uint64_t i = count; i < 4; i++)
@@ -328,8 +324,8 @@ int code_db_resolve_code(uint64_t off, uint64_t len,
   return 1;
 }
 
-/* EIP-7928 BAL code_changes: raw deployed code bytes for a code hash given as BE
-   64-bit limbs (avoids constructing an lbits). NULL/0 for KECCAK_EMPTY / missing. */
+/* EIP-7928 BAL code_changes: raw deployed code bytes for a code hash given as
+   big-endian 64-bit limbs. NULL/0 for KECCAK_EMPTY / missing. */
 const uint8_t *code_db_code_by_words(const uint64_t key_be[4], uint64_t *len_out) {
   *len_out = 0;
   if (!code_db) return NULL;

@@ -1,3 +1,4 @@
+import Evm.Primitives.Gas
 import Evm.Primitives.Bytes
 
 set_option maxHeartbeats 1_000_000_000
@@ -15,23 +16,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -44,6 +37,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # Transactions, logs, and receipts
@@ -63,7 +57,7 @@ def TxType_of_num (arg_ : Nat) : TxType :=
   | 3 => BlobTx
   | _ => SetCodeTx
 
-def num_of_TxType (arg_ : TxType) : Int :=
+def num_of_TxType (arg_ : TxType) : Nat :=
   match arg_ with
   | .LegacyTx => 0
   | .AccessListTx => 1
@@ -71,12 +65,23 @@ def num_of_TxType (arg_ : TxType) : Int :=
   | .BlobTx => 3
   | .SetCodeTx => 4
 
-def OSAKA_TRANSACTION_GAS_LIMIT_VALUE : protocol_quantity := ⟨16777216⟩
+def OSAKA_TRANSACTION_GAS_LIMIT_VALUE : transaction_gas := TRANSACTION_EXECUTION_GAS_LIMIT
 
-def OSAKA_TRANSACTION_GAS_LIMIT : gas := (Gas 16777216)
+def OSAKA_TRANSACTION_GAS_LIMIT : transaction_gas := TRANSACTION_EXECUTION_GAS_LIMIT
+
+def undefined_Authorization (_ : Unit) : SailM Authorization := do
+  (pure { valid_sig := ← (undefined_bool ()),
+          authority := ← (undefined_vector 20 (← (undefined_bitvector 8))),
+          address := ← (undefined_vector 20 (← (undefined_bitvector 8))),
+          nonce := ← do
+              let publicField ← (undefined_range 0 ((2 ^i 64) - 1))
+              pure (⟨publicField⟩),
+          chain_id := ← do
+              let publicField ← (undefined_range 0 ((2 ^i 256) - 1))
+              pure (⟨publicField⟩) })
 
 def EMPTY_BLOB_HASHES : BlobHashes :=
-  { bytes := EMPTY_SLICE,
+  { bytes := ⟨_, ⟨_, EMPTY_SLICE⟩⟩,
     count := ⟨0⟩ }
 
 /-- The envelope type byte, as it appears in tx and receipt encodings. -/

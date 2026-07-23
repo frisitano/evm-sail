@@ -2,7 +2,7 @@
  * by the zkVM guest, plus the reusable test-process lifecycle and dump hooks. */
 #include "byte_slice_glue.h"
 #include EVMSAIL_MODEL_H
-#include "lbits_convert.h"
+#include "value_convert.h"
 #include "test_utils.h"
 #include "zkvm_io.h"
 
@@ -10,6 +10,14 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+
+/* The standard Sail RTS refers to these hooks, which a standalone generated
+ * main normally owns.  Native model builds deliberately use --c-no-main and
+ * provide their lifecycle here instead. */
+#ifdef EVMSAIL_STANDARD_ABI
+void (*sail_rts_set_coverage_file)(const char *) = NULL;
+void model_pre_exit(void) {}
+#endif
 
 /* --------------------------- standard I/O ------------------------------- */
 static const uint8_t *g_in = NULL;
@@ -161,17 +169,17 @@ unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
  * The account/storage entries are the cumulative state touched by execution;
  * unchanged authenticated-base values are not enumerable here. */
 extern uint64_t acct_dump_count(unit);
-extern void     acct_dump_hkey(lbits *, uint64_t);
-extern void     acct_dump_address(lbits *, uint64_t);
+extern sail_word acct_dump_hkey(uint64_t);
+extern sail_address acct_dump_address(uint64_t);
 extern uint64_t acct_dump_nonce(uint64_t);
-extern void     acct_dump_balance(lbits *, uint64_t);
-extern void     acct_dump_storage_root(lbits *, uint64_t);
-extern void     acct_dump_code_hash(lbits *, uint64_t);
-extern uint64_t storage_dump_count(lbits);
-extern void     storage_dump_slot(lbits *, lbits, uint64_t);
-extern void     storage_dump_value(lbits *, lbits, uint64_t);
+extern sail_word acct_dump_balance(uint64_t);
+extern sail_word acct_dump_storage_root(uint64_t);
+extern sail_word acct_dump_code_hash(uint64_t);
+extern uint64_t storage_dump_count(sail_word);
+extern sail_word storage_dump_slot(sail_word, uint64_t);
+extern sail_word storage_dump_value(sail_word, uint64_t);
 extern uint64_t stack_depth(unit);
-extern void     stack_peek_word(lbits *, uint64_t);
+extern sail_word stack_peek_word(uint64_t);
 extern uint64_t hm_depth(unit);
 
 static unsigned char g_dump[1u << 22];
@@ -180,12 +188,19 @@ static size_t g_dump_len;
 static void d_byte(unsigned char b) { if (g_dump_len < sizeof g_dump) g_dump[g_dump_len++] = b; }
 static void d_u32(uint32_t v) { for (int i = 3; i >= 0; i--) d_byte((unsigned char)(v >> (8 * i))); }
 static void d_u64(uint64_t v) { for (int i = 7; i >= 0; i--) d_byte((unsigned char)(v >> (8 * i))); }
-/* a 256-bit lbits (d[0]=LSBs, d[3]=MSBs) as 32 big-endian bytes */
-static void d_word(const lbits *v) {
+static void d_word(sail_word value) {
+    uint64_t words[4];
+    sail_word_to_be_words4(words, value);
     for (int i = 0; i < 4; i++) {
-        uint64_t limb = v->d[3 - i];
+        uint64_t limb = words[i];
         for (int j = 0; j < 8; j++) d_byte((unsigned char)(limb >> (56 - 8 * j)));
     }
+}
+
+static void d_address(sail_address value) {
+    uint8_t bytes[20];
+    evmsail_address_to_be_bytes(bytes, value);
+    for (size_t i = 0; i < sizeof bytes; i++) d_byte(bytes[i]);
 }
 
 static void d_hash(sail_hash value)
@@ -197,54 +212,27 @@ static void d_hash(sail_hash value)
 
 static sail_hash model_state_root(void)
 {
-#ifdef EVMSAIL_STANDARD_ABI
-    sail_hash value = {0, NULL};
-    zcompute_state_root(&value, UNIT);
-    return value;
-#else
     return zcompute_state_root(UNIT);
-#endif
 }
 
 static sail_hash model_rebuilt_state_root(void)
 {
-#ifdef EVMSAIL_STANDARD_ABI
-    sail_hash value = {0, NULL};
-    zdebug_rebuild_state_root(&value, UNIT);
-    return value;
-#else
     return zdebug_rebuild_state_root(UNIT);
-#endif
 }
 
-static sail_hash model_account_storage_root(lbits address)
+static sail_hash model_account_storage_root(sail_address address)
 {
-    sail_address model_address = evmsail_address_from_lbits(address);
-#ifdef EVMSAIL_STANDARD_ABI
-    sail_hash value = {0, NULL};
-    zdebug_account_storage_root(&value, model_address);
-    sail_free(model_address.data);
-    return value;
-#else
-    return zdebug_account_storage_root(model_address);
-#endif
+    return zdebug_account_storage_root(address);
 }
 
 static void dispose_hash(sail_hash *value)
 {
-#ifdef EVMSAIL_STANDARD_ABI
-    sail_free(value->data);
-    value->data = NULL;
-    value->len = 0;
-#else
     (void)value;
-#endif
 }
 
 unsigned long evmsail_debug_dump(const unsigned char **out)
 {
     g_dump_len = 0;
-    lbits w;
     sail_hash root = {0};
     sail_hash rebuilt = {0};
     bool validation_failed = zvalidation_failure_present;
@@ -299,17 +287,13 @@ unsigned long evmsail_debug_dump(const unsigned char **out)
     uint64_t na = state_available ? acct_dump_count(UNIT) : 0;
     d_u32((uint32_t)na);
     for (uint64_t i = 0; i < na; i++) {
-        acct_dump_hkey(&w, i); d_word(&w);       /* keccak(address) */
-        lbits hk = w;                                   /* reuse as the storage account key */
-        lbits addr;
-        acct_dump_address(&addr, i);
-        for (int j = 0; j < 20; j++) {
-            unsigned shift = (unsigned)(19 - j) * 8u;
-            d_byte((unsigned char)(addr.d[shift / 64u] >> (shift % 64u)));
-        }
+        sail_word hk = acct_dump_hkey(i);
+        d_word(hk);                              /* keccak(address) */
+        sail_address addr = acct_dump_address(i);
+        d_address(addr);
         d_u64(acct_dump_nonce(i));
-        acct_dump_balance(&w, i);   d_word(&w);
-        acct_dump_storage_root(&w, i); d_word(&w);
+        d_word(acct_dump_balance(i));
+        d_word(acct_dump_storage_root(i));
         sail_hash storage_root = model_account_storage_root(addr);
         if (have_exception) {
             for (int j = 0; j < 32; j++) d_byte(0);
@@ -317,19 +301,19 @@ unsigned long evmsail_debug_dump(const unsigned char **out)
             d_hash(storage_root);
         }
         dispose_hash(&storage_root);
-        acct_dump_code_hash(&w, i); d_word(&w);
+        d_word(acct_dump_code_hash(i));
         uint64_t ns = storage_dump_count(hk);
         d_u32((uint32_t)ns);
         for (uint64_t j = 0; j < ns; j++) {
-            storage_dump_slot(&w, hk, j); d_word(&w);
-            storage_dump_value(&w, hk, j);  d_word(&w);
+            d_word(storage_dump_slot(hk, j));
+            d_word(storage_dump_value(hk, j));
         }
     }
 
     d_byte('S');
     uint64_t sd = state_available ? stack_depth(UNIT) : 0;
     d_u32((uint32_t)sd);
-    for (uint64_t n = 0; n < sd; n++) { stack_peek_word(&w, n); d_word(&w); }
+    for (uint64_t n = 0; n < sd; n++) d_word(stack_peek_word(n));
 
     d_byte('M');
     d_u32(state_available ? (uint32_t)hm_depth(UNIT) : 0);

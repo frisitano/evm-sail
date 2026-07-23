@@ -14,7 +14,7 @@
  * (count reset, allocation retained) at tx/world reset, matching the cached
  * per-frame arrays used elsewhere in the FFI. */
 #include "kernel_state.h"
-#include "lbits_convert.h"
+#include "value_convert.h"
 #include "state_db.h"
 #include "transient_storage.h"
 #include <stdint.h>
@@ -121,9 +121,9 @@ bool warm_addr_touch(sail_address a) {
   warm_addr.v[warm_addr.n++] = k;
   return false;
 }
-bool warm_slot_touch(sail_address a, sail_word s) {
+bool warm_slot_touch(sail_address a, EVMSAIL_WORD_PARAM(s)) {
   address160 ka = sail_address160(a);
-  word256 ks = sail_word256(s);
+  word256 ks = sail_word256(EVMSAIL_WORD_VALUE(s));
   if (sv_find(&warm_slot, &ka, &ks) >= 0) return true;
   if (!sv_reserve(&warm_slot, warm_slot.n + 1)) abort();
   journal_push_warm_slot(&ka, &ks);
@@ -334,9 +334,6 @@ static void journal_revert(uint32_t checkpoint) {
       sail_word slot = be_words4_to_sail_word(e->w0.w);
       sail_word prior = be_words4_to_sail_word(e->w1.w);
       transient_storage_restore(address, slot, prior);
-#ifdef EVMSAIL_STANDARD_ABI
-      sail_free(address.data);
-#endif
     } else if (e->tag == JT_WARMA) {
       av_remove_once(&warm_addr, &e->a);
     } else if (e->tag == JT_WARMS) {
@@ -379,7 +376,7 @@ unit host_state_checkpoint_reset(const unit u) {
   return UNIT;
 }
 
-uint64_t host_state_checkpoint(const unit u) {
+static uint64_t state_checkpoint_take(const unit u) {
   (void)u;
   if (state_checkpoints_n == UINT64_MAX) abort();
   state_checkpoint_reserve(state_checkpoints_n + 1);
@@ -392,7 +389,7 @@ uint64_t host_state_checkpoint(const unit u) {
   return (uint64_t)state_checkpoints_n;
 }
 
-unit host_state_revert(uint64_t checkpoint) {
+static unit state_checkpoint_revert(uint64_t checkpoint) {
   if (checkpoint == 0 || checkpoint > state_checkpoints_n) abort();
   state_checkpoint_record record = state_checkpoints[checkpoint - 1];
 
@@ -407,3 +404,21 @@ unit host_state_revert(uint64_t checkpoint) {
   state_checkpoints_n = (size_t)(checkpoint - 1);
   return UNIT;
 }
+
+#ifdef EVMSAIL_STANDARD_ABI
+void host_state_checkpoint(sail_int *result, const unit u) {
+  convert_sail_int_of_mach_uint(result, state_checkpoint_take(u));
+}
+
+unit host_state_revert(const sail_int checkpoint) {
+  return state_checkpoint_revert(convert_mach_uint_of_sail_int(checkpoint));
+}
+#else
+uint64_t host_state_checkpoint(const unit u) {
+  return state_checkpoint_take(u);
+}
+
+unit host_state_revert(uint64_t checkpoint) {
+  return state_checkpoint_revert(checkpoint);
+}
+#endif

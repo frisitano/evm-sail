@@ -21,7 +21,7 @@ namespace Evm.Contracts
 deriving instance DecidableEq for word
 deriving instance DecidableEq for address
 
-def zeroWord : word := .U256 (BitVec.zero 256)
+def zeroWord : word := ⟨0⟩
 
 structure PersistentWorld where
   accountAt : address → Account
@@ -325,17 +325,17 @@ def fixedBEBytes (width value : Nat) : List byte :=
   (List.range width).map fun index =>
     BitVec.ofNat 8 ((value / (256 ^ (width - 1 - index))) % 256)
 
-def wordToNat : word → Nat
-  | .U256 value => value.toNat
+def wordToNat (value : word) : Nat :=
+  value.value
 
-def addressBytesBE : address → List byte
-  | .Address bytes => bytes.toList.reverse
+def addressBytesBE (bytes : address) : List byte :=
+  bytes.toList.reverse
 
 def bytesBEToNat (bytes : List byte) : Nat :=
   bytes.foldl (fun value byte => value * 256 + byte.toNat) 0
 
-def b256ToNat : b256 → Nat
-  | .B256 bytes => bytesBEToNat bytes.toList.reverse
+def b256ToNat (bytes : b256) : Nat :=
+  bytesBEToNat bytes.toList.reverse
 
 abbrev PureKeccak := List byte → hash
 
@@ -542,6 +542,26 @@ structure ValidWorldStateContract where
   operations : WorldStateContract
   valid : worldStateBoundary keccak operations
 
+/- The extracted model sees the exact EVM host-memory interface declared in
+`sail/host/memory.sail`.  Keeping these operations in one concrete contract
+prevents proofs from silently substituting an unrelated generic memory model.
+The `Evm.Functions` declarations below are only the generated-name/extern
+adapters for this contract. -/
+structure HostMemoryContract where
+  readByte : memory_pointer → SailM (BitVec 8)
+  writeByte : memory_pointer → BitVec 8 → SailM Unit
+  clear : Unit → SailM Unit
+  frameEnter : Unit → SailM source_pointer
+  frameLeave : Unit → SailM Unit
+  expand : (required : source_length) → SailM (EvmByteSliceLength required)
+  move : memory_pointer → memory_pointer → memory_length → SailM Unit
+  loadWord : memory_pointer → SailM word
+  storeWord : memory_pointer → word → SailM Unit
+  copySlice :
+    EvmByteSlice → memory_pointer → source_pointer → memory_length → SailM Unit
+
+axiom hostMemoryContract : HostMemoryContract
+
 end Evm.Contracts
 
 namespace Evm.Functions
@@ -557,30 +577,48 @@ axiom keccak256_segments : List Bytes → SailM hash
 axiom sha256_segments : List Bytes → SailM hash
 
 @[extern "lean_evmsail_mem_read_byte"]
-axiom mem_read_byte : byte_quantity → SailM (BitVec 8)
+def mem_read_byte : memory_pointer → SailM (BitVec 8) :=
+  Evm.Contracts.hostMemoryContract.readByte
 @[extern "lean_evmsail_mem_write_byte"]
-axiom mem_write_byte : byte_quantity → BitVec 8 → SailM Unit
+def mem_write_byte : memory_pointer → BitVec 8 → SailM Unit :=
+  Evm.Contracts.hostMemoryContract.writeByte
 @[extern "lean_evmsail_mem_clear"]
-axiom mem_clear : Unit → SailM Unit
+def mem_clear : Unit → SailM Unit :=
+  Evm.Contracts.hostMemoryContract.clear
 @[extern "lean_evmsail_mem_frame_enter"]
-axiom mem_frame_enter : Unit → SailM byte_quantity
+def mem_frame_enter : Unit → SailM source_pointer :=
+  Evm.Contracts.hostMemoryContract.frameEnter
 @[extern "lean_evmsail_mem_frame_leave"]
-axiom mem_frame_leave : Unit → SailM Unit
+def mem_frame_leave : Unit → SailM Unit :=
+  Evm.Contracts.hostMemoryContract.frameLeave
 @[extern "lean_evmsail_mem_expand"]
-axiom mem_expand : byte_quantity → SailM Bool
+def mem_expand (required : source_length) : SailM (EvmByteSliceLength required) :=
+  Evm.Contracts.hostMemoryContract.expand required
 @[extern "lean_evmsail_mem_move"]
-axiom mem_move : byte_quantity → byte_quantity → byte_quantity → SailM Unit
+def mem_move : memory_pointer → memory_pointer → memory_length → SailM Unit :=
+  Evm.Contracts.hostMemoryContract.move
 @[extern "lean_evmsail_mem_load_word"]
-axiom mem_load_word : byte_quantity → SailM word
+def mem_load_word : memory_pointer → SailM word :=
+  Evm.Contracts.hostMemoryContract.loadWord
 @[extern "lean_evmsail_mem_store_word"]
-axiom mem_store_word : byte_quantity → word → SailM Unit
+def mem_store_word : memory_pointer → word → SailM Unit :=
+  Evm.Contracts.hostMemoryContract.storeWord
 
 @[extern "lean_evmsail_host_scratch_store_bytes"]
-axiom host_scratch_store_bytes : byte_quantity → List (BitVec 8) → byte_quantity → SailM Bool
+axiom host_scratch_store_bytes
+    (off : source_pointer) (bytes : List (BitVec 8)) (len : source_length) :
+    SailM (ByteRegionResult (off + len))
 @[extern "lean_evmsail_host_scratch_store_slice"]
-axiom host_scratch_store_slice : byte_quantity → EvmByteSlice → SailM Bool
+axiom host_scratch_store_slice
+    {sliceOff sliceLen : Nat}
+    (off : source_pointer) (slice : EvmByteSliceFields sliceOff sliceLen) :
+    SailM (ByteRegionResult (off + slice.len))
+@[extern "lean_evmsail_host_scratch_store_b256"]
+axiom host_scratch_store_b256
+    (off : source_pointer) (bytes : b256) (len : source_length) :
+    SailM (ByteRegionResult (off + len))
 @[extern "lean_evmsail_host_scratch_truncate"]
-axiom host_scratch_truncate : byte_quantity → SailM Unit
+axiom host_scratch_truncate : source_pointer → SailM Unit
 
 @[extern "lean_evmsail_accelerator_ripemd160"]
 axiom accelerator_ripemd160 : EvmByteSlice → SailM Bool
@@ -637,19 +675,20 @@ axiom stack_set_word : stack_index → word → SailM Unit
 @[extern "lean_evmsail_stateless_input"]
 axiom stateless_input : Unit → SailM EvmByteSlice
 @[extern "lean_evmsail_host_slice_byte"]
-axiom host_slice_byte : EvmByteSlice → byte_quantity → SailM (BitVec 8)
+axiom host_slice_byte : EvmByteSlice → source_pointer → SailM (BitVec 8)
 @[extern "lean_evmsail_host_slice_count_nonzero"]
-axiom host_slice_count_nonzero : EvmByteSlice → SailM byte_quantity
+axiom host_slice_count_nonzero : EvmByteSlice → SailM host_access
 @[extern "lean_evmsail_host_slice_strided_zero"]
 axiom host_slice_strided_zero :
-  EvmByteSlice → byte_quantity → byte_quantity → byte_quantity → byte_quantity → SailM Bool
+  EvmByteSlice → source_pointer → host_access → host_access → host_access → SailM Bool
 @[extern "lean_evmsail_host_slice_load_word"]
-axiom host_slice_load_word : EvmByteSlice → byte_quantity → SailM word
+axiom host_slice_load_word : EvmByteSlice → source_pointer → SailM word
 @[extern "lean_evmsail_host_slice_load_n_word"]
-axiom host_slice_load_n_word : EvmByteSlice → byte_quantity → byte_quantity → SailM word
+axiom host_slice_load_n_word : EvmByteSlice → source_pointer → host_access → SailM word
 @[extern "lean_evmsail_host_slice_copy_to_memory"]
-axiom host_slice_copy_to_memory :
-  EvmByteSlice → byte_quantity → byte_quantity → byte_quantity → SailM Unit
+def host_slice_copy_to_memory :
+    EvmByteSlice → memory_pointer → source_pointer → memory_length → SailM Unit :=
+  Evm.Contracts.hostMemoryContract.copySlice
 @[extern "lean_evmsail_bytes_segments_equal_slice"]
 axiom bytes_segments_equal_slice : List Bytes → EvmByteSlice → SailM Bool
 
@@ -665,14 +704,14 @@ axiom public_output_write : EvmByteSlice → SailM Bool
 @[extern "lean_evmsail_code_db_lookup"]
 axiom code_db_lookup : hash → SailM (Option Code)
 @[extern "lean_evmsail_jumpdest_table_alloc"]
-axiom jumpdest_table_alloc : byte_quantity → SailM JumpdestRef
+axiom jumpdest_table_alloc : code_length → SailM JumpdestRef
 @[extern "lean_evmsail_jumpdest_table_store_chunk"]
 axiom jumpdest_table_store_chunk :
-  JumpdestRef → byte_quantity → byte_quantity → JumpdestChunk → SailM Bool
+  JumpdestRef → code_length → code_chunk_index → JumpdestChunk → SailM Bool
 @[extern "lean_evmsail_code_db_store"]
-axiom code_db_store : EvmByteSlice → JumpdestRef → SailM hash
+axiom code_db_store : CodeSlice → JumpdestRef → SailM hash
 @[extern "lean_evmsail_jumpdest_ref_contains"]
-axiom jumpdest_ref_contains : JumpdestRef → byte_quantity → byte_quantity → SailM Bool
+axiom jumpdest_ref_contains : JumpdestRef → code_length → code_pointer → SailM Bool
 @[extern "lean_evmsail_code_intern_delegation"]
 axiom code_intern_delegation : address → JumpdestRef → SailM hash
 @[extern "lean_evmsail_code_db_read_delegation"]
@@ -712,10 +751,10 @@ axiom storage_block_put : StorageEntry → SailM Unit
 axiom storage_block_cache : StorageKey → word → SailM Unit
 @[extern "lean_evmsail_storage_block_clear"]
 axiom storage_block_clear : address → SailM Unit
-@[extern "lean_evmsail_storage_block_count"]
-axiom storage_block_count : address → SailM item_count
-@[extern "lean_evmsail_storage_block_row"]
-axiom storage_block_row : address → item_index → SailM (Option StorageEntry)
+@[extern "lean_evmsail_storage_block_iter_begin"]
+axiom storage_block_iter_begin : address → SailM Unit
+@[extern "lean_evmsail_storage_block_iter_next"]
+axiom storage_block_iter_next : address → SailM (Option StorageEntry)
 
 @[extern "lean_evmsail_acct_tx_get"]
 axiom acct_tx_get : address → SailM (Option Account)
@@ -737,15 +776,19 @@ axiom acct_block_get : address → SailM (Option Account)
 axiom acct_block_write : AcctEntry → SailM Unit
 @[extern "lean_evmsail_acct_block_cache"]
 axiom acct_block_cache : address → Account → SailM Unit
-@[extern "lean_evmsail_acct_block_count"]
-axiom acct_block_count : Unit → SailM item_count
-@[extern "lean_evmsail_acct_block_row"]
-axiom acct_block_row : item_index → SailM (Option AcctEntry)
+@[extern "lean_evmsail_acct_block_iter_begin"]
+axiom acct_block_iter_begin : Unit → SailM Unit
+@[extern "lean_evmsail_acct_block_iter_next"]
+axiom acct_block_iter_next : Unit → SailM (Option AcctEntry)
+@[extern "lean_evmsail_acct_post_storage_root_store"]
+axiom acct_post_storage_root_store : address → hash → SailM Unit
+@[extern "lean_evmsail_acct_post_storage_root_read"]
+axiom acct_post_storage_root_read : address → SailM hash
 
 @[extern "lean_evmsail_bal_reset"]
 axiom bal_reset : Unit → SailM Unit
 @[extern "lean_evmsail_bal_set_index"]
-axiom bal_set_index : item_index → SailM Unit
+axiom bal_set_index : Nat → SailM Unit
 @[extern "lean_evmsail_bal_account_touch"]
 axiom bal_account_touch : address → SailM Unit
 @[extern "lean_evmsail_bal_storage_change"]
@@ -813,9 +856,7 @@ axiom read_logs : Unit → SailM (List LogEntry)
 axiom nodedb_reset : Unit → SailM Unit
 @[extern "lean_evmsail_nodedb_insert"]
 axiom nodedb_insert : hash → source_pointer → byte_length → SailM Unit
-@[extern "lean_evmsail_nodedb_off"]
-axiom nodedb_off : hash → SailM source_pointer
-@[extern "lean_evmsail_nodedb_len"]
-axiom nodedb_len : hash → SailM byte_length
+@[extern "lean_evmsail_nodedb_lookup"]
+axiom nodedb_lookup : hash → SailM EvmByteSlice
 
 end Evm.Functions

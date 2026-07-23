@@ -5,10 +5,10 @@
  * keccak is computed Sail-side (over the materialized node) and the resulting
  * span is recorded here; lookups are O(1)-amortized open addressing. Mirrors the
  * conventions of the other C hash tables: keys/values cross the FFI as whole
- * lbits values, FNV-1a over the key words, power-of-two capacity. Internal key
+ * fixed hash values, FNV-1a over the key words, power-of-two capacity. Internal key
  * arrays are little-endian word order (index 0 = least significant). */
 #include "trie_node_db.h"
-#include "lbits_convert.h"
+#include "value_convert.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -25,7 +25,7 @@ static nd_entry *nd_tab = NULL;
 static uint32_t nd_cap = 0;
 static uint32_t nd_n = 0;
 
-/* memoized last lookup (off/len getters share one probe per key) */
+/* Memoized last lookup. */
 static uint64_t nd_memo_key[4];
 static uint64_t nd_memo_off;
 static uint64_t nd_memo_len; /* 0 = absent (witness nodes are never empty) */
@@ -97,7 +97,7 @@ unit nodedb_insert(sail_hash kh, EVMSAIL_BYTE_QUANTITY_PARAM(off),
   return UNIT;
 }
 
-/* memoized point lookup: one probe serves the off/len getter pair */
+/* Memoized point lookup. */
 static void nd_find(sail_hash kh) {
   uint64_t k[4];
   sail_hash_to_le_words4(k, kh);
@@ -121,28 +121,11 @@ static void nd_find(sail_hash kh) {
   }
 }
 
-/* span length of keccak key `kh`; 0 when absent (nodes are never empty) */
-#ifdef EVMSAIL_STANDARD_ABI
-void nodedb_len(sail_int *out, sail_hash kh) {
+bool nodedb_lookup_span(sail_hash kh, uint64_t *off, uint64_t *len) {
   nd_find(kh);
-  evmsail_byte_quantity_set(out, nd_memo_len);
+  if (off)
+    *off = nd_memo_off;
+  if (len)
+    *len = nd_memo_len;
+  return nd_memo_len != 0;
 }
-#else
-uint64_t nodedb_len(sail_hash kh) {
-  nd_find(kh);
-  return nd_memo_len;
-}
-#endif
-
-/* span offset of keccak key `kh`; 0 when absent (guard on nodedb_len) */
-#ifdef EVMSAIL_STANDARD_ABI
-void nodedb_off(sail_int *out, sail_hash kh) {
-  nd_find(kh);
-  evmsail_byte_quantity_set(out, nd_memo_off);
-}
-#else
-uint64_t nodedb_off(sail_hash kh) {
-  nd_find(kh);
-  return nd_memo_off;
-}
-#endif

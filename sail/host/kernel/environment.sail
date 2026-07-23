@@ -23,8 +23,8 @@ register k_header : BlockHeader =
         number = 0,
         timestamp = 0,
         extra_data = EMPTY_SLICE,
-        gas_limit = GAS_ZERO,
-        gas_used = GAS_ZERO,
+        gas_limit = 0,
+        gas_used = 0,
         prev_randao = ZERO_WORD,
         base_fee = ZERO_WORD,
         blob_gas_used = 0,
@@ -32,7 +32,7 @@ register k_header : BlockHeader =
         state_root = ZERO_HASH,
         receipts_root = ZERO_HASH,
         logs_bloom = EMPTY_LOGS_BLOOM,
-        fee_recipient = ZERO_ADDR,
+        fee_recipient = ZERO_ADDRESS,
         parent_hash = ZERO_HASH,
         parent_beacon_block_root = ZERO_HASH,
         slot_number = 0,
@@ -40,7 +40,7 @@ register k_header : BlockHeader =
 
 /*! The per-transaction environment (`ORIGIN`, `GASPRICE`,
     `BLOBHASH`). */
-register k_tx : TxEnv = struct { origin = ZERO_ADDR, gas_price = ZERO_WORD, blob_hashes = EMPTY_BLOB_HASHES }
+register k_tx : TxEnv = struct { origin = ZERO_ADDRESS, gas_price = ZERO_WORD, blob_hashes = EMPTY_BLOB_HASHES }
 
 /*! The environment fields opcodes read through [k_env][]. */
 enum EnvField = {
@@ -69,68 +69,63 @@ enum EnvField = {
 /*! An environment field as the word its opcode pushes. */
 function k_env(f : EnvField) -> word = {
     match f {
-        F_Number => word_of_protocol_quantity(k_header.number),
-        F_Timestamp => word_of_protocol_quantity(k_header.timestamp),
+        F_Number => U256(word_of_block_number(k_header.number)),
+        F_Timestamp => U256(word_of_block_timestamp(k_header.timestamp)),
         F_Coinbase => address_to_word(k_header.fee_recipient),
         F_BaseFee => k_header.base_fee,
-        F_ChainId => word_of_protocol_quantity(k_chain_id),
-        F_GasLimit => word_of_gas(k_header.gas_limit),
+        F_ChainId => U256(word_of_chain_identifier(k_chain_id)),
+        F_GasLimit => U256(k_header.gas_limit),
         F_PrevRandao => k_header.prev_randao,
         F_Origin => address_to_word(k_tx.origin),
         F_GasPrice => k_tx.gas_price,
-        F_SlotNumber => word_of_protocol_quantity(k_header.slot_number),
+        F_SlotNumber => U256(word_of_slot_number(k_header.slot_number)),
     }
 }
 
 /*! The block's fee recipient (`COINBASE`). */
 function k_coinbase() -> address = k_header.fee_recipient
 
+/*! Subtracts ordered EVM words without modular wraparound. */
+val blockhash_word_distance : forall 'number 'current, 0 <= 'number & 'number < 'current & 'current < 2 ^ 256. (
+        int('current),
+        int('number),
+    ) -> range(1, 2 ^ 256 - 1)
+function blockhash_word_distance(current, number) = current - number
+
 /*! `BLOCKHASH`: the hash of ancestor `number`, zero outside the 256-block
     window; an in-window ancestor missing from the witness is a deficient
     witness. */
 function k_blockhash(number_word : word) -> hash = {
-    match word_to_limb(number_word) {
-        Some(number_bits) => {
-            let current = k_header.number;
-            let number = unsigned(number_bits);
-            if number < current then {
-                let distance = current - number;
-                if distance <= 256 then {
-                    if k_n_headers < distance then {
-                        throw InvalidBlock(WitnessDeficient)
-                    } else {
-                        let index : ancestor_index = distance - 1;
-                        ancestor_hash_read(index)
-                    }
-                } else {
-                    ZERO_HASH
-                }
+    let current = k_header.number;
+    let current_word : word = U256(word_of_block_number(current));
+    if number_word < current_word then {
+        let (distance_word as 'distance) = blockhash_word_distance(current_word, number_word);
+        if distance_word <= 256 then {
+            let distance : range(1, 256) = distance_word;
+            if k_n_headers < distance then {
+                throw InvalidBlock(WitnessDeficient)
             } else {
-                ZERO_HASH
+                let index : ancestor_index = distance - 1;
+                ancestor_hash_read(index)
             }
-        },
-        None() => ZERO_HASH,
+        } else {
+            ZERO_HASH
+        }
+    } else {
+        ZERO_HASH
     }
 }
 
 /*! `BLOBHASH` (EIP-4844): the `i`-th versioned hash, zero out of
     range. */
 function k_blobhash(index_word : word) -> word = {
-    match word_to_protocol_quantity(index_word) {
-        Some(index) => {
-            let count = k_tx.blob_hashes.count;
-            if index < count then {
-                if index <= 558992244657865200 then {
-                    let offset : protocol_quantity = 33 * index + 1;
-                    slice_load_n(k_tx.blob_hashes.bytes, ByteQuantity(offset), WORD_BYTE_LENGTH)
-                } else {
-                    ZERO_WORD
-                }
-            } else {
-                ZERO_WORD
-            }
-        },
-        None() => ZERO_WORD,
+    let count = k_tx.blob_hashes.count;
+    if index_word < count then {
+        let index : transaction_blob_count = index_word;
+        let offset : source_pointer = 33 * index + 1;
+        slice_load_n(k_tx.blob_hashes.bytes, offset, WORD_BYTE_LENGTH)
+    } else {
+        ZERO_WORD
     }
 }
 

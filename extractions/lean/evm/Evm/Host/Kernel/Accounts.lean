@@ -21,23 +21,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -50,6 +42,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # State: accounts
@@ -60,12 +53,13 @@ value transfer. -/
 
 /-- Field-wise inequality of account tuples. -/
 def account_info_changed (c : AccountInfo) (o : AccountInfo) : Bool :=
-  (((c.nonce).value != (o.nonce).value) || ((bne c.balance o.balance) || ((bne c.code_hash
-          o.code_hash) || (bne c.storage_root o.storage_root))))
+  (((c.nonce).value != (o.nonce).value) || ((((c.balance).value != (o.balance).value) || ((bne
+          c.code_hash o.code_hash) || (bne c.storage_root o.storage_root))) : Bool))
 
 /-- The EIP-161 emptiness test: no code, zero nonce, zero balance. -/
 def account_info_empty (info : AccountInfo) : Bool :=
-  ((info.code_hash == KECCAK_EMPTY) && ((((info.nonce).value == 0) && (word_is_zero info.balance)) : Bool))
+  ((info.code_hash == KECCAK_EMPTY) && ((((info.nonce).value == 0) && (word_is_zero
+        (info.balance).value)) : Bool))
 
 /-- Whether an account differs from its original in any
 trie-observable way. -/
@@ -90,6 +84,13 @@ cleared. -/
 def account_delete (acc : Account) : Account :=
   { acc with info := { EMPTY_ACCOUNT_INFO with storage_root := acc.info.storage_root }, present := false, storage_cleared := true }
 
+/-- Clears nonce, code, and storage while preserving a nonzero balance.
+Amsterdam applies this form to an account created and selfdestructed in
+the same transaction (EIP-8246). -/
+def account_clear_preserving_balance (acc : Account) : Account :=
+  (account_set_info (account_clear_storage acc)
+    { acc.info with nonce := ⟨0⟩, code_hash := KECCAK_EMPTY })
+
 /-- Writes a whole-account row to the transaction overlay. -/
 def store_account (a : address) (v : Account) : SailM Unit := do
   (acct_tx_update a v)
@@ -107,8 +108,8 @@ def store_account_info (a : address) (acc : Account) (info : AccountInfo) : Sail
   then (store_account a next)
   else
     (do
-      if ((bne next.info.balance acc.info.balance) : Bool)
-      then (acct_tx_set_balance a next.info.balance)
+      if (((next.info.balance).value != (acc.info.balance).value) : Bool)
+      then (acct_tx_set_balance a ⟨(next.info.balance).value⟩)
       else (pure ())
       if (((next.info.nonce).value != (acc.info.nonce).value) : Bool)
       then (acct_tx_set_nonce a ⟨(next.info.nonce).value⟩)
@@ -119,12 +120,13 @@ def store_account_info (a : address) (acc : Account) (info : AccountInfo) : Sail
 
 /-- The account balance (`BALANCE`, `SELFBALANCE`). -/
 def k_get_balance (a : address) : SailM word := do
-  (pure (← (k_aload a)).info.balance)
+  let publicResult ← do (pure ((← (k_aload a)).info.balance).value)
+  pure (⟨publicResult⟩)
 
 /-- The account nonce. -/
 def k_get_nonce (a : address) : SailM account_nonce := do
-  let semanticResult ← do (pure ((← (k_aload a)).info.nonce).value)
-  pure (⟨semanticResult⟩)
+  let publicResult ← do (pure ((← (k_aload a)).info.nonce).value)
+  pure (⟨publicResult⟩)
 
 /-- Whether the account exists (post-EIP-161 sense). -/
 def k_account_exists (a : address) : SailM Bool := do
@@ -149,7 +151,9 @@ def k_account_occupied (a : address) : SailM Bool := do
 /-- Moves `v` wei from `src` to `dst` (both updates recorded for frame
 rollback; the EVM checks sufficiency before calling) and emits the
 EIP-7708 transfer log. -/
+/- Type quantifiers: k_ex408219_ : Nat, 0 ≤ k_ex408219_ ∧ k_ex408219_ ≤ (2 ^ 256 - 1) -/
 def k_transfer (src : address) (dst : address) (v : word) : SailM Unit := do
+  let v := (v).value
   let src_acc ← do (k_aload src)
   let dst_acc ← do (k_aload dst)
   if (((word_is_zero v) || (src == dst)) : Bool)
@@ -157,10 +161,10 @@ def k_transfer (src : address) (dst : address) (v : word) : SailM Unit := do
   else
     (do
       (store_account_info src src_acc
-        { src_acc.info with balance := (alu_sub src_acc.info.balance v) })
+        { src_acc.info with balance := ⟨((alu_sub ⟨(src_acc.info.balance).value⟩ ⟨v⟩)).value⟩ })
       (store_account_info dst dst_acc
-        { dst_acc.info with balance := (alu_add dst_acc.info.balance v) })
-      (k_emit_transfer_log src dst v))
+        { dst_acc.info with balance := ⟨((alu_add ⟨(dst_acc.info.balance).value⟩ v)).value⟩ })
+      (k_emit_transfer_log src dst ⟨v⟩))
 
 /-- Increments the account nonce. The `u64` increment cannot wrap:
 EIP-2681 guards every path that reaches a bump. -/
@@ -168,23 +172,29 @@ def k_bump_nonce (a : address) : SailM Unit := do
   let cur ← do (k_aload a)
   (store_account_info a cur
     { cur.info with nonce := ← do
-        let semanticField ← (do
-            let semanticResult ← (account_nonce_increment ⟨(cur.info.nonce).value⟩)
-            pure ((semanticResult).value))
-        pure (⟨semanticField⟩) })
+        let publicField ← (do
+            let publicResult ← (account_nonce_increment ⟨(cur.info.nonce).value⟩)
+            pure ((publicResult).value))
+        pure (⟨publicField⟩) })
 
-/-- Credits `v` wei (no-op when zero). -/
-def k_add_balance (a : address) (v : word) : SailM Unit := do
+/- Type quantifiers: v : Nat, 0 ≤ v ∧ v < (2 ^ 256) -/
+def k_add_balance (a : address) (v : Nat) : SailM Unit := do
   let cur ← do (k_aload a)
   if ((! (word_is_zero v)) : Bool)
-  then (store_account_info a cur { cur.info with balance := (alu_add cur.info.balance v) })
+  then
+    (store_account_info a cur
+      { cur.info with balance := ⟨((alu_add ⟨(cur.info.balance).value⟩ v)).value⟩ })
   else (pure ())
 
 /-- Debits `v` wei (no-op when zero; caller guarantees sufficiency). -/
+/- Type quantifiers: k_ex408220_ : Nat, 0 ≤ k_ex408220_ ∧ k_ex408220_ ≤ (2 ^ 256 - 1) -/
 def k_sub_balance (a : address) (v : word) : SailM Unit := do
+  let v := (v).value
   let cur ← do (k_aload a)
   if ((! (word_is_zero v)) : Bool)
-  then (store_account_info a cur { cur.info with balance := (alu_sub cur.info.balance v) })
+  then
+    (store_account_info a cur
+      { cur.info with balance := ⟨((alu_sub ⟨(cur.info.balance).value⟩ ⟨v⟩)).value⟩ })
   else (pure ())
 
 /-- Clears the account's storage (create-time collision cleanup). -/

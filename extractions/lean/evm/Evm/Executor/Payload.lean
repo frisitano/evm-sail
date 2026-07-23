@@ -1,10 +1,8 @@
 import Evm.Flow
-import Evm.Arith
 import Evm.Prelude
 import Evm.Primitives.Bytes
 import Evm.Lib.Bytes
 import Evm.Primitives.Crypto
-import Evm.Primitives.ChainConfig
 import Evm.Primitives.Block
 import Evm.Host.Kernel.Scratch
 import Evm.Lib.Ssz.Ssz
@@ -31,23 +29,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -60,6 +50,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # Payload commitments
@@ -70,34 +61,40 @@ block header hash itself. -/
 
 /-- The RLP of one withdrawal (EIP-4895), assembled in the scratch
 arena. -/
-def withdrawal_rlp (withdrawal : EvmByteSlice) : SailM EvmByteSlice := do
+/- Type quantifiers: k_ex409384_ : Nat, k_ex409383_ : Nat, 0 ≤ k_ex409383_ ∧ 0 ≤ k_ex409384_
+  ∧ k_ex409384_ = 44 -/
+def withdrawal_rlp (withdrawal : (EvmByteSliceLength 44)) : SailM EvmByteSlice := do
+  let withdrawal := ((withdrawal).2).2
   let index ← do
     (do
-        let semanticResult ← (ssz_uint withdrawal WD_INDEX)
-        pure ((semanticResult).value))
+        let publicResult ← (decode_ssz_uint ⟨_, ⟨_, withdrawal⟩⟩ WD_INDEX)
+        pure ((publicResult).value))
   let validator_index ← do
     (do
-        let semanticResult ← (ssz_uint withdrawal WD_VALIDATOR_INDEX)
-        pure ((semanticResult).value))
-  let address ← do (sub_slice withdrawal WD_ADDRESS ADDRESS_BYTE_LENGTH)
+        let publicResult ← (decode_ssz_uint ⟨_, ⟨_, withdrawal⟩⟩ WD_VALIDATOR_INDEX)
+        pure ((publicResult).value))
+  let address := (sub_slice withdrawal WD_ADDRESS ADDRESS_BYTE_LENGTH)
   let amount ← do
     (do
-        let semanticResult ← (ssz_uint withdrawal WD_AMOUNT)
-        pure ((semanticResult).value))
-  let content_len ← do (rlp_protocol_quantity_size ⟨index⟩)
-  let content_len ←
-    (byte_quantity_add content_len (← (rlp_protocol_quantity_size ⟨validator_index⟩)))
-  let content_len ← (byte_quantity_add content_len (← (rlp_slice_size address)))
-  let content_len ←
-    (byte_quantity_add content_len (← (rlp_protocol_quantity_size ⟨amount⟩)))
-  let encoded_len ← do (rlp_list_size content_len)
+        let publicResult ← (decode_ssz_uint ⟨_, ⟨_, withdrawal⟩⟩ WD_AMOUNT)
+        pure ((publicResult).value))
+  let index_length := (rlp_uint_word_size index)
+  let validator_index_length := (rlp_uint_word_size validator_index)
+  let address_length ← do (rlp_slice_size address)
+  let amount_length := (rlp_uint_word_size amount)
+  let content_length := (((index_length + validator_index_length) + address_length) + amount_length)
+  if ((48 <b content_length) : Bool)
+  then sailThrow ((InvalidBlock RlpDecode))
+  else (pure ())
+  let bounded_content_length : Nat := (Nat.mod content_length 49)
+  let content_len := bounded_content_length
   let start ← do (scratch_begin ())
   (rlp_write_list_prefix content_len)
-  (rlp_write_protocol_quantity ⟨index⟩)
-  (rlp_write_protocol_quantity ⟨validator_index⟩)
-  (rlp_write_slice address)
-  (rlp_write_protocol_quantity ⟨amount⟩)
-  (rlp_finish start encoded_len)
+  (rlp_write_uint_word index)
+  (rlp_write_uint_word validator_index)
+  (rlp_write_slice ⟨_, ⟨_, address⟩⟩)
+  (rlp_write_uint_word amount)
+  (rlp_finish start)
 
 /-- The block header hash: `keccak256(rlp(header))` with the recomputed
 body roots spliced in (YP §4.4; post-merge constants for ommers,
@@ -105,186 +102,203 @@ difficulty, and nonce). -/
 def block_header_hash (header : BlockHeader) (transactions_root : hash) (withdrawals_root : hash) (requests_hash : hash) (block_access_list_hash : hash) : SailM hash := do
   let bloom := (logs_bloom_bytes header.logs_bloom)
   let nonce : (List (BitVec 8)) := [0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8]
-  let content_len := (rlp_word_size ())
-  let content_len ← (byte_quantity_add content_len (rlp_word_size ()))
-  let content_len ← (byte_quantity_add content_len (rlp_addr_size ()))
-  let content_len ← (byte_quantity_add content_len (rlp_word_size ()))
-  let content_len ← (byte_quantity_add content_len (rlp_word_size ()))
-  let content_len ← (byte_quantity_add content_len (rlp_word_size ()))
-  let content_len ←
-    (byte_quantity_add content_len (← (rlp_bytes_size bloom LOGS_BLOOM_BYTE_LENGTH)))
-  let content_len ← (byte_quantity_add content_len (← (rlp_protocol_quantity_size ⟨0⟩)))
-  let content_len ←
-    (byte_quantity_add content_len (← (rlp_protocol_quantity_size ⟨(header.number).value⟩)))
-  let content_len ← (byte_quantity_add content_len (← (rlp_gas_size header.gas_limit)))
-  let content_len ← (byte_quantity_add content_len (← (rlp_gas_size header.gas_used)))
-  let content_len ←
-    (byte_quantity_add content_len (← (rlp_protocol_quantity_size ⟨(header.timestamp).value⟩)))
-  let content_len ← (byte_quantity_add content_len (← (rlp_slice_size header.extra_data)))
-  let content_len ← (byte_quantity_add content_len (rlp_word_size ()))
-  let content_len ← (byte_quantity_add content_len (← (rlp_bytes_size nonce EIGHT_BYTE_LENGTH)))
-  let content_len ← (( do
+  let word_length := (rlp_word_size ())
+  let address_length := (rlp_addr_size ())
+  let bloom_length ← do (rlp_scratch_bytes_size bloom LOGS_BLOOM_BYTE_LENGTH)
+  let difficulty_length := (rlp_uint_word_size 0)
+  let number_length ← do (rlp_uint_nat_size header.number)
+  let gas_limit_length := (rlp_uint_word_size (header.gas_limit).value)
+  let gas_used_length ← do (rlp_uint_nat_size header.gas_used)
+  let timestamp_length ← do (rlp_uint_nat_size header.timestamp)
+  let extra_data_length ← do (rlp_scratch_slice_size header.extra_data)
+  let nonce_length ← do (rlp_scratch_bytes_size nonce EIGHT_BYTE_LENGTH)
+  let content_length : Nat := (rlp_scratch_length_add (6 *i word_length) address_length)
+  let content_length : Nat := (rlp_scratch_length_add content_length bloom_length)
+  let content_length : Nat := (rlp_scratch_length_add content_length difficulty_length)
+  let content_length : Nat := (rlp_scratch_length_add content_length number_length)
+  let content_length : Nat := (rlp_scratch_length_add content_length gas_limit_length)
+  let content_length : Nat := (rlp_scratch_length_add content_length gas_used_length)
+  let content_length : Nat := (rlp_scratch_length_add content_length timestamp_length)
+  let content_length : Nat := (rlp_scratch_length_add content_length extra_data_length)
+  let content_length : Nat := (rlp_scratch_length_add content_length nonce_length)
+  let content_length ← (( do
     if ((fork_gteq (← readReg k_fork) London) : Bool)
     then
-      (do
-        (byte_quantity_add content_len (← (rlp_uint_word_size header.base_fee))))
-    else (pure content_len) ) : SailM byte_quantity )
-  let content_len ← (( do
+      (let field_length := (rlp_uint_word_size (header.base_fee).value)
+      (pure (rlp_scratch_length_add content_length field_length)))
+    else (pure content_length) ) : SailM Nat )
+  let content_length ← (( do
     if ((fork_gteq (← readReg k_fork) Shanghai) : Bool)
-    then
-      (do
-        (byte_quantity_add content_len (rlp_word_size ())))
-    else (pure content_len) ) : SailM byte_quantity )
-  let content_len ← (( do
+    then (pure (rlp_scratch_length_add content_length word_length))
+    else (pure content_length) ) : SailM Nat )
+  let content_length ← (( do
     if ((fork_gteq (← readReg k_fork) Cancun) : Bool)
     then
-      (do
-        let content_len ←
-          (byte_quantity_add content_len
-            (← (rlp_protocol_quantity_size ⟨(header.blob_gas_used).value⟩)))
-        let content_len ←
-          (byte_quantity_add content_len
-            (← (rlp_protocol_quantity_size ⟨(header.excess_blob_gas).value⟩)))
-        (byte_quantity_add content_len (rlp_word_size ())))
-    else (pure content_len) ) : SailM byte_quantity )
-  let content_len ← (( do
+      (let blob_gas_used_length := (rlp_uint_word_size (header.blob_gas_used).value)
+      let excess_blob_gas_length := (rlp_uint_word_size (header.excess_blob_gas).value)
+      let content_length : Nat := (rlp_scratch_length_add content_length blob_gas_used_length)
+      let content_length : Nat := (rlp_scratch_length_add content_length excess_blob_gas_length)
+      (pure (rlp_scratch_length_add content_length word_length)))
+    else (pure content_length) ) : SailM Nat )
+  let content_length ← (( do
     if ((fork_gteq (← readReg k_fork) Prague) : Bool)
-    then
-      (do
-        (byte_quantity_add content_len (rlp_word_size ())))
-    else (pure content_len) ) : SailM byte_quantity )
-  let content_len ← (( do
+    then (pure (rlp_scratch_length_add content_length word_length))
+    else (pure content_length) ) : SailM Nat )
+  let content_length ← (( do
     if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
     then
-      (do
-        let content_len ← (byte_quantity_add content_len (rlp_word_size ()))
-        (byte_quantity_add content_len
-          (← (rlp_protocol_quantity_size ⟨(header.slot_number).value⟩))))
-    else (pure content_len) ) : SailM byte_quantity )
-  let encoded_len ← do (rlp_list_size content_len)
+      (let slot_number_length := (rlp_uint_word_size (header.slot_number).value)
+      let content_length : Nat := (rlp_scratch_length_add content_length word_length)
+      (pure (rlp_scratch_length_add content_length slot_number_length)))
+    else (pure content_length) ) : SailM Nat )
+  if ((749 <b content_length) : Bool)
+  then sailThrow ((InvalidBlock RlpDecode))
+  else (pure ())
+  let bounded_content_length : Nat := (Nat.mod content_length 750)
+  let content_len := bounded_content_length
   let mark ← do (scratch_begin ())
   (rlp_write_list_prefix content_len)
-  (rlp_write_word (hash_to_word header.parent_hash))
-  (rlp_write_word (hash_to_word EMPTY_OMMER_HASH))
+  (rlp_write_word ⟨((hash_to_word header.parent_hash)).value⟩)
+  (rlp_write_word ⟨((hash_to_word EMPTY_OMMER_HASH)).value⟩)
   (rlp_write_addr header.fee_recipient)
-  (rlp_write_word (hash_to_word header.state_root))
-  (rlp_write_word (hash_to_word transactions_root))
-  (rlp_write_word (hash_to_word header.receipts_root))
+  (rlp_write_word ⟨((hash_to_word header.state_root)).value⟩)
+  (rlp_write_word ⟨((hash_to_word transactions_root)).value⟩)
+  (rlp_write_word ⟨((hash_to_word header.receipts_root)).value⟩)
   (rlp_write_bytes bloom LOGS_BLOOM_BYTE_LENGTH)
-  (rlp_write_protocol_quantity ⟨0⟩)
-  (rlp_write_protocol_quantity ⟨(header.number).value⟩)
-  (rlp_write_gas header.gas_limit)
-  (rlp_write_gas header.gas_used)
-  (rlp_write_protocol_quantity ⟨(header.timestamp).value⟩)
+  (rlp_write_uint_word 0)
+  (rlp_write_uint_nat header.number)
+  (rlp_write_uint_word (header.gas_limit).value)
+  (rlp_write_uint_nat header.gas_used)
+  (rlp_write_uint_nat header.timestamp)
   (rlp_write_slice header.extra_data)
-  (rlp_write_word header.prev_randao)
+  (rlp_write_word ⟨(header.prev_randao).value⟩)
   (rlp_write_bytes nonce EIGHT_BYTE_LENGTH)
   if ((fork_gteq (← readReg k_fork) London) : Bool)
-  then (rlp_write_uint_word header.base_fee)
+  then (rlp_write_uint_word (header.base_fee).value)
   else (pure ())
   if ((fork_gteq (← readReg k_fork) Shanghai) : Bool)
-  then (rlp_write_word (hash_to_word withdrawals_root))
+  then (rlp_write_word ⟨((hash_to_word withdrawals_root)).value⟩)
   else (pure ())
   if ((fork_gteq (← readReg k_fork) Cancun) : Bool)
   then
     (do
-      (rlp_write_protocol_quantity ⟨(header.blob_gas_used).value⟩)
-      (rlp_write_protocol_quantity ⟨(header.excess_blob_gas).value⟩)
-      (rlp_write_word (hash_to_word header.parent_beacon_block_root)))
+      (rlp_write_uint_word (header.blob_gas_used).value)
+      (rlp_write_uint_word (header.excess_blob_gas).value)
+      (rlp_write_word ⟨((hash_to_word header.parent_beacon_block_root)).value⟩))
   else (pure ())
   if ((fork_gteq (← readReg k_fork) Prague) : Bool)
-  then (rlp_write_word (hash_to_word requests_hash))
+  then (rlp_write_word ⟨((hash_to_word requests_hash)).value⟩)
   else (pure ())
   if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
   then
     (do
-      (rlp_write_word (hash_to_word block_access_list_hash))
-      (rlp_write_protocol_quantity ⟨(header.slot_number).value⟩))
+      (rlp_write_word ⟨((hash_to_word block_access_list_hash)).value⟩)
+      (rlp_write_uint_word (header.slot_number).value))
   else (pure ())
-  let encoded ← do (rlp_finish mark encoded_len)
-  let block_hash ← do (keccak256_slice encoded)
+  let ⟨_, ⟨_, encoded⟩⟩ ← do (rlp_finish mark)
+  let block_hash ← do (keccak256_slice ⟨_, ⟨_, encoded⟩⟩)
   (scratch_rewind mark)
   (pure block_hash)
 
 /-- The transactions-trie root (YP §4.4.2): leaf `i` holds the raw
 EIP-2718 envelope of transaction `i`, keyed by `rlp(i)`. -/
-def transaction_trie_root (txs : SszListRef) : SailM hash := do
+def transaction_trie_root (txs : TransactionListRef) : SailM hash := do
   let builder := (trie_builder_empty ())
-  let cursor := (rlp_index_cursor ⟨(txs.count).value⟩)
+  let cursor : (RlpIndexCursor (2 ^ 20)) := (rlp_index_cursor (k_maximum := (2 ^ 20)) txs.count)
   let (builder, cursor) ← (( do
-    let loop_vars ← whileFuelM (fuel :=((cursor.count).value -i (cursor.position).value)) (fun (builder, cursor) => (pure (! (rlp_index_cursor_empty
+    let loop_vars ← whileFuelM (fuel :=(cursor.count -i cursor.position)) (fun (builder, cursor) => (pure (! (rlp_index_cursor_empty
           cursor)))) (builder, cursor)
       fun (builder, cursor) => do
         assert true "loop dummy assert"
         let (item, next) ← do (rlp_index_cursor_pop cursor)
-        let cursor : RlpIndexCursor := next
-        let tx ← do (ssz_list_at txs ⟨(item.index).value⟩)
-        let builder ← (trie_insert_item builder (item_leaf item.key tx) item.next_key)
+        let cursor : (RlpIndexCursor (2 ^ 20)) := next
+        let ⟨_, ⟨_, tx⟩⟩ ← do (ssz_list_at txs item.index)
+        let builder ←
+          (trie_insert_item builder (item_leaf item.key ⟨_, ⟨_, tx⟩⟩) item.next_key)
         (pure (builder, cursor))
-    (pure loop_vars) ) : SailM (TrieBuilder × RlpIndexCursor) )
+    (pure loop_vars) ) : SailM (TrieBuilder × (RlpIndexCursor (2 ^ 20))) )
   (trie_builder_root builder)
 
 /-- The withdrawals-trie root (EIP-4895): leaf `i` holds
 `rlp(withdrawal_i)`, keyed by `rlp(i)`. -/
-def withdrawals_trie_root (wds : SszListRef) : SailM hash := do
+def withdrawals_trie_root (wds : WithdrawalListRef) : SailM hash := do
   let builder := (trie_builder_empty ())
-  let cursor := (rlp_index_cursor ⟨(wds.count).value⟩)
+  let cursor : (RlpIndexCursor (2 ^ 4)) := (rlp_index_cursor (k_maximum := (2 ^ 4)) wds.count)
   let (builder, cursor) ← (( do
-    let loop_vars ← whileFuelM (fuel :=((cursor.count).value -i (cursor.position).value)) (fun (builder, cursor) => (pure (! (rlp_index_cursor_empty
+    let loop_vars ← whileFuelM (fuel :=(cursor.count -i cursor.position)) (fun (builder, cursor) => (pure (! (rlp_index_cursor_empty
           cursor)))) (builder, cursor)
       fun (builder, cursor) => do
         assert true "loop dummy assert"
         let (item, next) ← do (rlp_index_cursor_pop cursor)
-        let cursor : RlpIndexCursor := next
+        let cursor : (RlpIndexCursor (2 ^ 4)) := next
         let scratch_mark ← do (scratch_begin ())
-        let withdrawal ← do (ssz_fixed_list_at wds ⟨(item.index).value⟩ WD_SIZE)
-        let value ← do (withdrawal_rlp withdrawal)
-        let builder ← (trie_insert_item builder (item_leaf item.key value) item.next_key)
+        let ⟨_, ⟨_, withdrawal⟩⟩ ← do (ssz_fixed_list_at wds item.index WD_SIZE)
+        let ⟨_, ⟨_, value⟩⟩ ← do (withdrawal_rlp ⟨_, ⟨_, withdrawal⟩⟩)
+        let builder ←
+          (trie_insert_item builder (item_leaf item.key ⟨_, ⟨_, value⟩⟩) item.next_key)
         (scratch_rewind scratch_mark)
         (pure (builder, cursor))
-    (pure loop_vars) ) : SailM (TrieBuilder × RlpIndexCursor) )
+    (pure loop_vars) ) : SailM (TrieBuilder × (RlpIndexCursor (2 ^ 4))) )
   (trie_builder_root builder)
 
 /-- The `excess_blob_gas` the header must carry, derived from the
 authenticated parent (EIP-4844). -/
-def expected_payload_excess_blob_gas (witness : WitnessContext) : SailM blob_gas := do
-  let semanticResult ← do
+def expected_payload_excess_blob_gas (witness : WitnessContext) : SailM excess_blob_gas := do
+  let publicResult ← do
     (do
-        let semanticResult ← (next_excess_blob_gas ⟨(witness.parent_excess_blob_gas).value⟩
-        ⟨(witness.parent_blob_gas_used).value⟩ witness.parent_base_fee_per_gas)
-        pure ((semanticResult).value))
-  pure (⟨semanticResult⟩)
+        let publicResult ← (next_excess_blob_gas ⟨(witness.parent_excess_blob_gas).value⟩
+        ⟨(witness.parent_blob_gas_used).value⟩ ⟨(witness.parent_base_fee_per_gas).value⟩)
+        pure ((publicResult).value))
+  pure (⟨publicResult⟩)
 
 /-- The EIP-7685 requests hash: `sha256` over the present request-type
 digests in request-type order; the request bodies remain
 region-backed through the hash calls. -/
 def execution_requests_hash (input_ref : StatelessInputRef) : SailM hash := do
-  let l0 := input_ref.deposits.len
-  let l1 := input_ref.withdrawal_requests.len
-  let l2 := input_ref.consolidation_requests.len
+  let ⟨_, ⟨_, deposits⟩⟩ := input_ref.deposits
+  let ⟨_, ⟨_, withdrawal_requests⟩⟩ := input_ref.withdrawal_requests
+  let ⟨_, ⟨_, consolidation_requests⟩⟩ := input_ref.consolidation_requests
+  let ⟨_, ⟨_, builder_deposit_requests⟩⟩ := input_ref.builder_deposit_requests
+  let ⟨_, ⟨_, builder_exit_requests⟩⟩ := input_ref.builder_exit_requests
   let d0 ← (( do
-    if ((bne l0 BYTE_ZERO) : Bool)
-    then (sha256_request_digest 0x00#8 input_ref.deposits)
-    else (pure ZERO_HASH) ) : SailM b256 )
+    if ((deposits.len != 0) : Bool)
+    then (sha256_request_digest 0x00#8 ⟨_, ⟨_, deposits⟩⟩)
+    else (pure ZERO_HASH) ) : SailM (Vector (BitVec 8) 32) )
   let d1 ← (( do
-    if ((bne l1 BYTE_ZERO) : Bool)
-    then (sha256_request_digest 0x01#8 input_ref.withdrawal_requests)
-    else (pure ZERO_HASH) ) : SailM b256 )
+    if ((withdrawal_requests.len != 0) : Bool)
+    then (sha256_request_digest 0x01#8 ⟨_, ⟨_, withdrawal_requests⟩⟩)
+    else (pure ZERO_HASH) ) : SailM (Vector (BitVec 8) 32) )
   let d2 ← (( do
-    if ((bne l2 BYTE_ZERO) : Bool)
-    then (sha256_request_digest 0x02#8 input_ref.consolidation_requests)
-    else (pure ZERO_HASH) ) : SailM b256 )
+    if ((consolidation_requests.len != 0) : Bool)
+    then (sha256_request_digest 0x02#8 ⟨_, ⟨_, consolidation_requests⟩⟩)
+    else (pure ZERO_HASH) ) : SailM (Vector (BitVec 8) 32) )
+  let d3 ← (( do
+    if ((builder_deposit_requests.len != 0) : Bool)
+    then (sha256_request_digest 0x03#8 ⟨_, ⟨_, builder_deposit_requests⟩⟩)
+    else (pure ZERO_HASH) ) : SailM (Vector (BitVec 8) 32) )
+  let d4 ← (( do
+    if ((builder_exit_requests.len != 0) : Bool)
+    then (sha256_request_digest 0x04#8 ⟨_, ⟨_, builder_exit_requests⟩⟩)
+    else (pure ZERO_HASH) ) : SailM (Vector (BitVec 8) 32) )
   let segs : (List Bytes) := []
   let segs : (List Bytes) :=
-    if ((bne l2 BYTE_ZERO) : Bool)
+    if ((builder_exit_requests.len != 0) : Bool)
+    then ((bytes_list (hash_to_bytes32 d4) WORD_BYTE_LENGTH) :: segs)
+    else segs
+  let segs : (List Bytes) :=
+    if ((builder_deposit_requests.len != 0) : Bool)
+    then ((bytes_list (hash_to_bytes32 d3) WORD_BYTE_LENGTH) :: segs)
+    else segs
+  let segs : (List Bytes) :=
+    if ((consolidation_requests.len != 0) : Bool)
     then ((bytes_list (hash_to_bytes32 d2) WORD_BYTE_LENGTH) :: segs)
     else segs
   let segs : (List Bytes) :=
-    if ((bne l1 BYTE_ZERO) : Bool)
+    if ((withdrawal_requests.len != 0) : Bool)
     then ((bytes_list (hash_to_bytes32 d1) WORD_BYTE_LENGTH) :: segs)
     else segs
   let segs : (List Bytes) :=
-    if ((bne l0 BYTE_ZERO) : Bool)
+    if ((deposits.len != 0) : Bool)
     then ((bytes_list (hash_to_bytes32 d0) WORD_BYTE_LENGTH) :: segs)
     else segs
   (sha256_segments segs)
@@ -300,11 +314,7 @@ def validate_execution_payload (input : StatelessInput) (input_ref : StatelessIn
   let block' := payload.block'
   let header := block'.header
   let body := block'.body
-  if ((! ((9 ≤b (input.chain_config.fork_index).value) && ((((input.chain_config.fork_index).value ≤b 20) && (input.chain_config.activation_active && (chain_config_blob_schedule_valid
-               input.chain_config))) : Bool))) : Bool)
-  then sailThrow ((InvalidBlock InvalidConfig))
-  else (pure ())
-  if ((gas_lt header.gas_limit header.gas_used) : Bool)
+  if (((header.gas_limit).value <b header.gas_used) : Bool)
   then sailThrow ((InvalidBlock InvalidGasUsed))
   else (pure ())
   if ((bne witness.parent_hash header.parent_hash) : Bool)

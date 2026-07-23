@@ -7,7 +7,7 @@ into the block layer.
 
 /*! Captures all frame-revertible transaction state. The frame checkpoint
     stores its refund counter separately. */
-function k_state_checkpoint() -> StateCheckpoint = state_checkpoint()
+function k_state_checkpoint() -> journal_checkpoint = state_checkpoint()
 
 /*! Installs the block header. */
 function k_set_header(h : BlockHeader) -> unit = k_header = h
@@ -101,4 +101,4 @@ function k_tx_merge() -> unit = {
 }
 
 /*! Atomically restores the transaction state captured at a frame boundary. */
-function k_revert(checkpoint : StateCheckpoint) -> unit = state_revert(checkpoint)
+function k_revert(checkpoint : journal_checkpoint) -> unit = state_revert(checkpoint)

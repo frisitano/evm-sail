@@ -13,7 +13,7 @@ elif [ -x "$LOCAL_FEATURE_SAIL" ]; then
 elif command -v sail >/dev/null 2>&1; then
     candidate="$(command -v sail)"
 else
-    echo "error: Sail was not found; set SAIL to a compiler with c_repr newtype splicing support" >&2
+    echo "error: Sail was not found; set SAIL to a compiler with bound-driven C specialization support" >&2
     exit 1
 fi
 

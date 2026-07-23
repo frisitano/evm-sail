@@ -127,10 +127,11 @@ recursive and trie-shaped:
 ## Build And Lint
 
 Optimized native and RISC-V C builds run `zkvm/resolve_optimized_sail.sh` and
-require spliceable type definitions plus the `$[c_repr uint64]` newtype
-extension. Set `SAIL` explicitly to test another compiler; the resolver probes
-the generated representation before starting the full build. Pure model and
-extraction targets continue to use upstream Sail.
+require spliceable type definitions plus bound-driven C specialization. The
+model never carries C-representation annotations: the backend selects native
+representations from the semantic type bounds. Set `SAIL` explicitly to test
+another compiler. Pure model and extraction targets continue to use upstream
+Sail.
 
 Run from repo root unless noted:
 
@@ -143,145 +144,49 @@ rtk make fmt-check
 `make fmt-check` may surface pre-existing formatting drift. Do not format
 unrelated files unless that is part of the requested task.
 
-## Stable EEST Fixtures
+## tests-zkevm v0.6.2 Fixture Corpus
 
-Small, checked-in fixture anchors live under `harness/fixtures/`:
+The only retained fixture corpus is
+`zkvm/.fixtures/current-v062-full/`. It is ignored by git and workspace-local;
+do not assume it exists in a fresh checkout.
 
-- `harness/fixtures/smoke/`
-  - `state_root_transfer.json`
-  - `state_root_precompile.json`
-- `harness/fixtures/eels/shanghai_push0/`
-  - Generated from EELS `tests/shanghai/eip3855_push0`.
-  - Expected Sail run: `10/10` byte-exact passes.
-- `harness/fixtures/eels/cancun_selfdestruct/`
-  - Generated from EELS `tests/cancun/eip6780_selfdestruct/test_selfdestruct.py`.
-  - Expected Sail run: `114/114` byte-exact passes.
+- Source: `tests-zkevm@v0.6.2`, commit
+  `e5a8caf1b8055e4d805c7fb169edfa710914b7da`.
+- Generated 2026-07-19 with `t8n = 2.19.0` using
+  `fill -m "blockchain_test or blockchain_test_engine" --fork Amsterdam -n 8`.
+- Layout: `blockchain_tests/` and `blockchain_tests_engine/`, each containing
+  Amsterdam and BPO2-to-Amsterdam transition fixtures.
+- Inventory: 6,333 JSON files containing 26,104 embedded
+  `statelessInputBytes`/`statelessOutputBytes` pairs.
 
-The `eels/*` directories preserve generated `state_tests/`,
-`blockchain_tests/`, `blockchain_tests_engine/`, and `.meta/` content. The
-generated blockchain fixtures in these two subsets do not carry
-`statelessInputBytes`; `run.py` runs embedded
-`statelessInputBytes` blocks directly when a fixture has them, and otherwise
-builds guest inputs from the state-test cases via t8n.
+There are no checked-in smoke, EELS subset, historical state-test, or older
+zkevm fixture sets. Do not recreate or use pre-v0.6.2 corpora as aligned
+evidence.
 
-The `smoke/` fixtures are hand-maintained: their tx is signed from the
-canonical EEST secret key (sender `0xa94f...bf0b`) because the SSZ input path
-derives the sender from the recovered public key -- a fixture with an
-unsignable placeholder sender cannot run. Their post `hash` values were
-computed with EELS t8n (`state_test` mode).
-
-## EEST Commands
-
-Run from `harness/`:
+Run one native embedded fixture from the repository root:
 
 ```sh
-rtk python3 run.py fixtures/smoke/state_root_transfer.json fixtures/smoke/state_root_precompile.json --fork Cancun --quiet --timeout 30
-rtk python3 run.py fixtures/eels/shanghai_push0/state_tests/for_shanghai --fork Shanghai --quiet --timeout 30
-rtk python3 run.py fixtures/eels/cancun_selfdestruct/state_tests/for_cancun --fork Cancun --quiet --timeout 30
+rtk python3 harness/run.py --limit 1 --quiet \
+  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
-All runs are byte-exact vs the EELS reference; state tests are materialized as
-Amsterdam blocks regardless of the fixture's fill fork. Use `--rebuild` when
-generated C or FFI changes need a fresh guest
-library.
-
-## zkVM Guest Smoke Gate
-
-Same harness, real RISC-V ELF on spike (`--spike`; run one small state-test
-file for the smoke gate):
+Run the complete retained corpus with parallel native workers:
 
 ```sh
-rtk python3 harness/run.py --spike harness/fixtures/eels/shanghai_push0/state_tests/for_shanghai/shanghai/eip3855_push0/push0/push0_contracts.json --fork Shanghai --quiet
+rtk python3 harness/run.py --jobs 8 --quiet zkvm/.fixtures/current-v062-full
 ```
 
-The equivalent production ZisK gate uses the same runner and fixture:
+The same fixture can drive the real RISC-V guest on Spike or the production
+ZisK guest:
 
 ```sh
-rtk env ZISKEMU=/path/to/matching/ziskemu python3 harness/run.py --zisk harness/fixtures/eels/shanghai_push0/state_tests/for_shanghai/shanghai/eip3855_push0/push0/push0_contracts.json --fork Shanghai --quiet
+rtk python3 harness/run.py --spike --limit 1 --quiet \
+  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+rtk env ZISKEMU=/path/to/matching/ziskemu python3 harness/run.py --zisk --limit 1 --quiet \
+  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
-The guest inputs + expected outputs are built per case by the in-process EELS
-t8n (`ssz_builder.py` guest mode) -- there is NO checked-in stateless fixture
-corpus anymore (`zkvm/fixtures/` deleted; fixtures carrying
-`statelessInputBytes`/`statelessOutputBytes` still run directly if pointed at,
-e.g. under `zkvm/.fixtures/`). The Spike vehicle pays the full RISC-V model
-build on the first case, then runs the unchanged ELF with a new runtime input
-for each remaining case. It uses an isolated per-invocation `ZKVM_BUILD`
-directory because concurrent compiles sharing `zkvm/build/` race on generated
-objects.
-
-Deleted (recover from git history if needed): `sail/bin/runner.sail`,
-`zkvm/native-runner/build_runner_lib.sh`, `zkvm/run_guest_smoke.py`, and
-`zkvm/native-runner/run_fixtures*.py` (superseded by `run.py`),
-`zkvm/vectors/` + `gen_vector.py` (dev probes), `zkvm/ere-guest/` (unbuilt ere
-SDK template), `runtime/derisk_main.c` + `runtime/traptest_main.c` (platform
-bring-up probes). `build.sh guest` produces an input-agnostic ELF; `VEC` is
-accepted only by `build.sh run` and is passed to Spike at runtime.
-
-Full post-Berlin EEST state and EELS/stateless blockchain sweeps require an
-external generated fixture corpus; do not claim the full suite has been rerun
-unless the external state/blockchain fixture directories were actually run.
-
-## Aligned Full Fixture Corpora
-
-Large unpacked fixture corpora may live under `zkvm/.fixtures/`. This directory
-is ignored by git and is workspace-local; do not assume its contents are present
-in a fresh checkout.
-
-Current aligned corpora in this worktree were generated from
-`/Users/f/dev/ethereum/execution-specs` on branch `projects/zkevm` at commit
-`02c6c2510916e470f2c1e5191589212ca75d4948` with `t8n = 2.19.0`:
-
-- `zkvm/.fixtures/current-02c6-full/`
-  - Amsterdam blockchain/stateless corpus.
-  - Generated 2026-07-01 with `fill -m "blockchain_test or blockchain_test_engine" --fork Amsterdam ./tests/`.
-  - Fixture generation result: `43111 passed, 14 skipped`.
-  - `evm_sail_consumer` validation result: `20442 passed, 1104 skipped`.
-  - Current native `harness/run.py` result over the 23,266 blocks carrying
-    embedded `statelessInputBytes`/`statelessOutputBytes`: `23266/23266`
-    byte-exact in both standard and optimized builds (8 jobs). This count does
-    not include generated blocks without an embedded stateless pair.
-- `zkvm/.fixtures/current-state-02c6-full/`
-  - Amsterdam state-test corpus.
-  - Generated 2026-07-02 with `fill -m state_test --fork Amsterdam ./tests/`.
-  - Fixture generation result: `13917 passed, 6 skipped`.
-  - The current unpack at this path contains only 14 selected fixture shards
-    yielding 964 executable cases; despite the directory name, do not report it
-    as the original full 13917-case state corpus.
-- `zkvm/.fixtures/current-state-02c6-berlin-amsterdam/`
-  - Historical state-test corpus covering the mainline forks from Berlin
-    through Amsterdam.
-  - The generated tests are stored as pytest-worker shards named
-    `*.partial.gwN.jsonl`. Here `partial` means that the file contains one
-    partition of the full fixture output, not that its fixtures are incomplete:
-    every JSONL record contains one complete generated state-test fixture
-    (`k` is the pytest node ID and `v` is the fixture JSON).
-  - Reuse these shards for historical `harness/run.py` sweeps. Do not regenerate
-    or discard them merely because their names contain `partial`.
-  - Current native result across the eight mainline fork directories:
-    `6422/6422` byte-exact in both standard and optimized builds (8 jobs).
-
-Do not use `zkvm/.fixtures/fixtures/` as aligned proof unless explicitly
-requested. That unpack is older metadata:
-`refs/tags/tests-zkevm@v0.4.1`, commit
-`b6b764ff21bb754b79e11ef5dc7ad1f79996e923`, generated 2026-05-18.
-
-## Regenerating The Checked-In EELS Subsets
-
-The local EELS checkout used in this environment is
-`/Users/f/dev/ethereum/execution-specs`. From that repo:
-
-```sh
-rtk uv run fill --output /private/tmp/evm-sail-eest-push0-fixtures --clean --no-html --skip-index --fork Shanghai tests/shanghai/eip3855_push0
-rtk uv run fill --output /private/tmp/evm-sail-eest-selfdestruct-fixtures --clean --no-html --skip-index --fork Cancun tests/cancun/eip6780_selfdestruct/test_selfdestruct.py
-```
-
-After regeneration, copy the outputs back to:
-
-```text
-harness/fixtures/eels/shanghai_push0/
-harness/fixtures/eels/cancun_selfdestruct/
-```
-
-Then rerun the EEST commands above and update this file if the expected counts
-change.
+The ELF is built once without fixture input; each embedded
+`statelessInputBytes` value is supplied at runtime through `ffi/zkvm_io.h`.
+Use `--rebuild` after generated C or FFI changes. A complete v0.6.2 result has
+not yet been recorded here; do not reuse pass counts from deleted corpora.

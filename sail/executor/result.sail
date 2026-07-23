@@ -5,7 +5,7 @@ The guest's public output: the `hash_tree_root` of the new-payload
 request, the validation verdict, and the echoed chain configuration.
 */
 
-let RESULT_METADATA_LENGTH : byte_length = ByteQuantity(5)
+let RESULT_METADATA_LENGTH : int(5) = 5
 
 /*! Writes the request root and validation metadata prefix. */
 function result_prefix(root : hash, success : bool) -> unit = {
@@ -66,7 +66,7 @@ function write_invalid_result() -> unit = {
             0x00,
             0x00,
         |],
-        ByteQuantity(24),
+        24,
     );
     let chain_config = scratch_finish(start);
     commit_validation_result(ZERO_HASH, false, chain_config);

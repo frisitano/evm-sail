@@ -5,7 +5,7 @@
 #include EVMSAIL_MODEL_H
 #include "kernel_state.h"
 #include "state_db.h"
-#include "lbits_convert.h"
+#include "value_convert.h"
 #include <stdlib.h>
 
 static void storage_value_out(struct zoptionzIRStorageValuezK *out,
@@ -32,17 +32,12 @@ void storage_block_get(struct zoptionzIRStorageValuezK *out,
   storage_value_out(out, 1, key.zaddr, key.zslot);
 }
 
-void storage_block_row(struct zoptionzIRStorageEntryzK *out,
-                       const sail_address addr, uint64_t index) {
+void storage_block_iter_next(struct zoptionzIRStorageEntryzK *out,
+                             const sail_address addr) {
   struct zStorageEntry *entry = &out->variants.zSomezIRStorageEntryzK;
-  if (storage_block_row_probe(addr, index, &entry->zkey.zslot,
-                              &entry->zvalue.zcurr, &entry->zvalue.zorig)) {
-    /* The option's inactive union arm is not initialized by generated Sail.
-     * Construct an empty destination before assigning a heap-backed standard
-     * address. The optimized fixed-bytes ABI reduces this to an inline copy. */
-#ifdef EVMSAIL_STANDARD_ABI
-    entry->zkey.zaddr = (sail_address){0, NULL};
-#endif
+  if (storage_block_iter_next_probe(addr, &entry->zkey.zslot,
+                                    &entry->zvalue.zcurr,
+                                    &entry->zvalue.zorig)) {
     evmsail_address_assign(&entry->zkey.zaddr, addr);
     out->kind = Kind_zSomezIRStorageEntryzK;
   } else {
@@ -89,12 +84,35 @@ void acct_block_get(struct zoptionzIRAccountzK *out,
   account_out(out, 1, addr);
 }
 
-void acct_block_row(struct zoptionzIRAcctEntryzK *out, uint64_t index) {
+void acct_block_iter_next(struct zoptionzIRAcctEntryzK *out, const unit u) {
+  (void)u;
   struct zAcctEntry *entry = &out->variants.zSomezIRAcctEntryzK;
   struct zAccount *curr = &entry->zvalue.zcurr;
   struct zAccount *orig = &entry->zvalue.zorig;
-  if (acct_block_row_probe(
-          index, &entry->zaddr, &curr->zinfo.znonce, &curr->zinfo.zbalance,
+  if (acct_block_iter_next_probe(
+          &entry->zaddr, &curr->zinfo.znonce,
+          &curr->zinfo.zbalance,
+          &curr->zinfo.zstorage_root, &curr->zinfo.zcode_hash, &curr->zpresent,
+          &curr->zstorage_cleared, &curr->zcreated, &curr->zselfdestructed,
+          &orig->zinfo.znonce, &orig->zinfo.zbalance,
+          &orig->zinfo.zstorage_root, &orig->zinfo.zcode_hash, &orig->zpresent,
+          &orig->zstorage_cleared, &orig->zcreated,
+          &orig->zselfdestructed)) {
+    out->kind = Kind_zSomezIRAcctEntryzK;
+  } else {
+    out->kind = Kind_zNonezIRAcctEntryzK;
+    out->variants.zNonezIRAcctEntryzK = UNIT;
+  }
+}
+
+void acct_debug_iter_next(struct zoptionzIRAcctEntryzK *out, const unit u) {
+  (void)u;
+  struct zAcctEntry *entry = &out->variants.zSomezIRAcctEntryzK;
+  struct zAccount *curr = &entry->zvalue.zcurr;
+  struct zAccount *orig = &entry->zvalue.zorig;
+  if (acct_debug_iter_next_probe(
+          &entry->zaddr, &curr->zinfo.znonce,
+          &curr->zinfo.zbalance,
           &curr->zinfo.zstorage_root, &curr->zinfo.zcode_hash, &curr->zpresent,
           &curr->zstorage_cleared, &curr->zcreated, &curr->zselfdestructed,
           &orig->zinfo.znonce, &orig->zinfo.zbalance,

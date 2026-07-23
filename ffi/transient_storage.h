@@ -13,10 +13,11 @@
 #include <stdint.h>
 
 unit transient_storage_reset(const unit u);
-unit transient_storage_write(sail_address addr, sail_word slot, sail_word v);
+unit transient_storage_write(sail_address addr, EVMSAIL_WORD_PARAM(slot),
+                             EVMSAIL_WORD_PARAM(v));
 /* Private rollback write: does not append another undo entry. */
 unit transient_storage_restore(sail_address addr, sail_word slot, sail_word v);
 EVMSAIL_WORD_RETURN transient_storage_read(
-    EVMSAIL_WORD_RESULT(result) sail_address addr, sail_word slot);
+    EVMSAIL_WORD_RESULT(result) sail_address addr, EVMSAIL_WORD_PARAM(slot));
 
 #endif

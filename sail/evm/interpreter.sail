@@ -34,11 +34,10 @@ opcodes. This module specifies that machinery in three layers:
 /*md
 ## The decoder
 */
-/*! Assembles the `n`-byte big-endian immediate following a `PUSHn`
-    opcode into a word; bytes past the end of code read as zero. */
-function read_push(n : code_length) -> word = slice_load_n(frame_code.bytes, pc, n)
-
-function advance_pc(delta : code_length) -> unit = pc = pc + delta
+/*! Assembles an `n`-byte big-endian PUSH immediate from a local code cursor;
+    bytes past the end of code read as zero. */
+function read_push(code : CodeSlice, offset : code_pointer, n : push_width) -> word =
+    slice_load_n(code, offset, n)
 
 /* Decode one non-PUSH opcode byte to its AST node. The three contiguous
  * families fold to an arity argument -- DUP1..16 (0x80..0x8f), SWAP1..16
@@ -185,35 +184,51 @@ function decode_simple(opcode : opcode) -> ast =
     zero-padded at end of code. Every other byte decodes via
     [decode_simple][]. */
 function fetch() -> ast = {
-    if not_bool(pc < frame_code_len()) then {
+    let current = pc;
+    let code = frame_code.bytes;
+    let code_length = code.len;
+    if not_bool(current < code_length) then {
         STOP()
     } else {
-        let opcode : opcode = unsigned(slice_byte(frame_code.bytes, pc));
-        advance_pc(BYTE_ONE);
-        if (opcode == 95) & (k_fork < Shanghai) then {
-            INVALID()
-        } else {
-            if 95 <= opcode & opcode <= 127 then {
-                let encoded_size : push_width = opcode - 95;
-                let size : code_length = ByteQuantity(encoded_size);
-                let value = read_push(size);
-                advance_pc(size);
-                PUSH(encoded_size, value)
+        let opcode : opcode = unsigned(slice_byte(code, current));
+        let immediate_offset = current + 1;
+        let decoded : (code_pointer, ast) = if (opcode == 95) & (k_fork < Shanghai) then {
+                (immediate_offset, INVALID())
             } else {
-                if (k_fork >= Amsterdam) & (230 <= opcode) & (opcode <= 232) then {
-                    let immediate = slice_byte(frame_code.bytes, pc);
-                    advance_pc(BYTE_ONE);
-                    match opcode {
-                        230 => DUPN(immediate),
-                        231 => SWAPN(immediate),
-                        232 => EXCHANGE(immediate),
-                        _ => INVALID(),
-                    }
+                if 95 <= opcode & opcode <= 127 then {
+                    let size : push_width = opcode - 95;
+                    let value = read_push(code, immediate_offset, size);
+                    let after_immediate : code_pointer = current + 1 + size;
+                    (after_immediate, PUSH(size, value))
                 } else {
-                    decode_simple(opcode)
+                    if (k_fork >= Amsterdam) & (230 <= opcode) & (opcode <= 232) then {
+                        let immediate = slice_byte(code, immediate_offset);
+                        let immediate_valid : bool = match opcode {
+                            230 => deep_stack_immediate_valid(immediate),
+                            231 => deep_stack_immediate_valid(immediate),
+                            232 => exchange_immediate_valid(immediate),
+                            _ => false,
+                        };
+                        let after_instruction : code_pointer = if immediate_valid then {
+                                current + 2
+                            } else {
+                                current + 1
+                            };
+                        let instruction : ast = match opcode {
+                            230 => DUPN(immediate),
+                            231 => SWAPN(immediate),
+                            232 => EXCHANGE(immediate),
+                            _ => INVALID(),
+                        };
+                        (after_instruction, instruction)
+                    } else {
+                        (immediate_offset, decode_simple(opcode))
+                    }
                 }
-            }
-        }
+            };
+        let (next_pc, instruction) = decoded;
+        pc = next_pc;
+        instruction
     }
 }
 
@@ -242,7 +257,7 @@ function interpret() -> ByteSlice = {
 
     /* Each opcode step consumes gas; every child completion corresponds to an
      * earlier gas-consuming CALL or CREATE step. */
-    while interpreting termination_measure(2 * (GAS_MAX_VALUE + 1)) do {
+    while interpreting termination_measure(2 ^ 64) do {
         if is_running() then {
             execute(fetch())
         } else {
@@ -276,10 +291,7 @@ function frame_succeeded() -> bool =
 function executable_code(target : address, dele : bool, dtgt : address) -> Code =
     if dele then {
         let delegate_code = code_db_resolve(k_code_key(dtgt));
-        match word_to_precompile_id(address_to_word(dtgt)) {
-            Some(number) if is_precompile(number) => EMPTY_CODE,
-            _ => delegate_code,
-        }
+        if precompile_number(dtgt) != 0 then { EMPTY_CODE } else { delegate_code }
     } else {
         code_db_resolve(k_code_key(target))
     }
@@ -347,7 +359,8 @@ function call_is_static(kind : CallKind) -> bool =
 function run_call(kind : CallKind) -> unit = {
     let caller = self_addr();
     let gas_request = pop();
-    let target = word_to_address(pop());
+    let target_word = pop();
+    let target = word_to_address(target_word);
     let value = if call_takes_value(kind) then {
             pop()
         } else {
@@ -365,16 +378,6 @@ function run_call(kind : CallKind) -> unit = {
     if not_bool(is_running()) then {
         return ()
     };
-
-    /* Memory is expanded once to cover the larger input/output extent. A
-       zero-sized operand requires no memory, irrespective of its offset. */
-    let required_memory_size = maximum_memory_required_size(args_off_word, args_len_word, ret_off_word, ret_len_word);
-
-    /* memory-expansion cost is folded into the single message-call charge
-       below: the call's transfer cost is charged together with
-       extend_memory.cost, then grow memory only if the frame did not run out
-       of gas. */
-    let mem_gas = memory_expansion_gas(required_memory_size);
 
     /* EIP-214: a value-bearing CALL inside a static context is a write and
        raises WriteInStaticContext -- an exceptional halt that consumes all the
@@ -395,15 +398,30 @@ function run_call(kind : CallKind) -> unit = {
             GAS_CONSTANT_ZERO
         };
 
+    /* Narrow the two word-addressed ranges at the point where memory OOG is
+       sequenced. The planner itself halts if the requested high-water mark is
+       outside the executable memory domain. */
+    let available = gas_remaining;
+    let memory = memory_pair_expansion(args_off_word, args_len_word, ret_off_word, ret_len_word, available);
+    if not_bool(is_running()) then {
+        return ()
+    };
+    let memory_cost = memory.cost;
+
     /* Static gas is checked before any state access: the
        target's access + value-transfer + memory cost is checked BEFORE reading
        any of the target's state. A frame that cannot afford it halts here, having
        touched no account -- so the stateless witness need not prove the target.
        (Resolving the EIP-7702 delegation or the empty-account check below reads
        the target's account, which an OOG-before-access tx must never do.) */
-    let static_cost = target_cost + transfer_cost + mem_gas;
-
-    if not_bool(is_running()) | gas_remaining < static_cost then {
+    let static_base : gas_cost = target_cost + transfer_cost;
+    let before_static = gas_remaining;
+    if before_static < static_base then {
+        exc_halt(OutOfGas);
+        return ()
+    };
+    let after_static_base : gas = before_static - static_base;
+    if after_static_base < memory_cost then {
         exc_halt(OutOfGas);
         return ()
     };
@@ -417,7 +435,6 @@ function run_call(kind : CallKind) -> unit = {
         } else {
             GAS_CONSTANT_ZERO
         };
-    let access_cost = target_cost + delegation_cost;
     let new_account_charged =    k_fork
                               >= Amsterdam
                               &  word_nonzero(value)
@@ -432,20 +449,36 @@ function run_call(kind : CallKind) -> unit = {
         } else {
             GAS_CONSTANT_ZERO
         };
-    let extra_gas = access_cost + transfer_cost + create_cost;
-    let required = extra_gas + mem_gas;
-    let stipend : gas = if word_nonzero(value) then { G_callstipend } else { GAS_ZERO };
-
-    if not_bool(is_running()) then {
+    let additional_cost : gas_cost = delegation_cost + create_cost;
+    let before_required = gas_remaining;
+    if before_required < static_base then {
+        exc_halt(OutOfGas);
         return ()
     };
+    let after_required_base : gas = before_required - static_base;
+    if after_required_base < memory_cost then {
+        exc_halt(OutOfGas);
+        return ()
+    };
+    let after_static_cost : gas = after_required_base - memory_cost;
+    if after_static_cost < additional_cost then {
+        exc_halt(OutOfGas);
+        return ()
+    };
+    let after_required : gas = after_static_cost - additional_cost;
+    let required : gas_cost = if after_required <= before_required then {
+            before_required - after_required
+        } else {
+            throw InvalidBlock(ExecutionInvalid)
+        };
+    let stipend : gas = if word_nonzero(value) then { G_callstipend } else { GAS_ZERO };
 
     /* Forwarded child gas, per the EIP-150
        calculate_message_call_gas. If the frame cannot even afford
-       extra_gas + mem_gas, the call is charged the FULL requested gas (not the
+       extra gas plus memory expansion, the call is charged the FULL requested gas (not the
        63/64-capped value), which forces the out-of-gas exceptional halt below.
        Otherwise the EIP-150 63/64ths cap applies to the gas left after
-       subtracting mem_gas and extra_gas. */
+       subtracting the memory and extra costs. */
     var base_child : gas = GAS_ZERO;
     if k_fork >= Amsterdam then {
         /* Amsterdam charges execution work, then state growth, before
@@ -456,7 +489,7 @@ function run_call(kind : CallKind) -> unit = {
         };
         if is_running() then {
             base_child = call_gas_cap_word(gas_remaining, gas_request);
-            charge(gas_to_cost(base_child))
+            charge(base_child)
         }
     } else {
         let avail = gas_remaining;
@@ -470,7 +503,10 @@ function run_call(kind : CallKind) -> unit = {
 
         /* Legacy message-call charging combines the child allocation with
            access, value-transfer, new-account, and memory costs. */
-        charge(gas_to_cost(base_child) + required)
+        charge(required);
+        if is_running() then {
+            charge(base_child)
+        }
     };
     if not_bool(is_running()) then {
         return ()
@@ -488,26 +524,8 @@ function run_call(kind : CallKind) -> unit = {
            delegate is touched (kept in the BAL account set). */
         let _ = k_aload(tg_target)
     };
-    expand_charged_memory(required_memory_size);
-    if not_bool(is_running()) then {
-        return ()
-    };
-    let (args_offset, args_length) = word_byte_range_or_oog(args_off_word, args_len_word);
-    if not_bool(is_running()) then {
-        return ()
-    };
-    let (ret_offset, ret_length) = word_byte_range_or_oog(ret_off_word, ret_len_word);
-    if not_bool(is_running()) then {
-        return ()
-    };
-    let child_gas : gas = if gas_sum_supported(base_child, stipend) then {
-            base_child + stipend
-        } else {
-            throw InvalidBlock(ExecutionInvalid)
-        };
-    if not_bool(is_running()) then {
-        return ()
-    };
+    let (args, ret) = apply_memory_pair_expansion(memory);
+    let child_gas : gas = conserved_gas_add(base_child, stipend);
 
     /* The target's code hash is read for every call once gas is
      * charged, before the depth/balance guards -- so the call target is always a
@@ -518,14 +536,8 @@ function run_call(kind : CallKind) -> unit = {
     /* call-failure guards (checked AFTER gas is charged): the depth ceiling
        (EIP-150, 1024 frames) and, for a value-bearing CALL/CALLCODE, the
        caller's balance covering the transfer. */
-    let depth_ok = call_depth < DEPTH_LIMIT;
-    let balance_ok : bool = if call_takes_value(kind) & word_nonzero(value) then {
-            word_ule(value, k_get_balance(caller))
-        } else {
-            true
-        };
-
-    if not_bool(depth_ok) | not_bool(balance_ok) then {
+    if (call_depth >= DEPTH_LIMIT) |
+        (call_takes_value(kind) & word_nonzero(value) & not_bool(word_ule(value, k_get_balance(caller)))) then {
         /* the call does not happen: the child gas (including stipend) is
            refunded to the caller and CALL pushes 0. */
         returndata_clear();
@@ -535,123 +547,123 @@ function run_call(kind : CallKind) -> unit = {
         };
         push(WORD_ZERO)
     } else {
-        match word_to_precompile_id(address_to_word(target)) {
-            Some(precompile_number) if is_precompile(precompile_number) => {
-                /* PRECOMPILE call. The precompile set is fork-gated (the highest is
-                   0x100 P256VERIFY, EIP-7951/Osaka); an address outside the active
-                   set is an ordinary code call. The precompile's input is the
-                   child message's calldata: mem[args_off .. args_off+args_len).
-                   Gas inspects the same memory source before execution. */
-                let input = memory_byte_slice(args_offset, args_length);
+        let selected_precompile = precompile_number(target);
+        if selected_precompile != 0 then {
+            let number : precompile_id = selected_precompile;
 
-                /* Gas is checked before execution: an unpayable/OOG precompile call
-                 * must not execute (a BLAKE2F request may carry an enormous round
-                 * count). Failure consumes all child gas and exposes no returndata. */
-                match precompile_gas(precompile_number, input) {
-                    Some(used) if used <= child_gas => {
-                        let result = run_precompile_slice(precompile_number, input);
-                        if result.success then {
-                            returndata = result.output;
+            /* PRECOMPILE call. The precompile set is fork-gated (the highest is
+               0x100 P256VERIFY, EIP-7951/Osaka); an address outside the active
+               set is an ordinary code call. The precompile's input is the
+               child message's calldata: mem[args_off .. args_off+args_len).
+               Gas inspects the same memory source before execution. */
+            let input = memory_byte_slice(args.off, args.len);
 
-                            /* the value transfer is part of the successful call */
-                            if call_transfers_value(kind) & word_nonzero(value) then {
-                                k_transfer(caller, target, value)
-                            };
-                            returndata_copy_prefix(ret_offset, ret_length);
-                            let unused = gas_sub_or_oog(child_gas, used);
-                            if is_running() then {
-                                refund_gas(unused);
-                                push(WORD_ONE)
-                            }
-                        } else {
-                            returndata_clear();
-                            if new_account_charged then {
-                                credit_state_gas_refund(G_amsterdam_state_new_account)
-                            };
-                            push(WORD_ZERO)
+            /* Gas is checked before execution: an unpayable/OOG precompile call
+             * must not execute (a BLAKE2F request may carry an enormous round
+             * count). Failure consumes all child gas and exposes no returndata. */
+            match precompile_gas(number, input, child_gas) {
+                Some(used) => {
+                    let result = run_precompile_slice(number, input);
+                    if result.success then {
+                        returndata = result.output;
+
+                        /* the value transfer is part of the successful call */
+                        if call_transfers_value(kind) & word_nonzero(value) then {
+                            k_transfer(caller, target, value)
+                        };
+                        returndata_copy_prefix(ret.off, ret.len);
+                        let unused = gas_sub_or_oog(child_gas, used);
+                        if is_running() then {
+                            refund_gas(unused);
+                            push(WORD_ONE)
                         }
-                    },
-                    _ => {
+                    } else {
                         returndata_clear();
                         if new_account_charged then {
                             credit_state_gas_refund(G_amsterdam_state_new_account)
                         };
                         push(WORD_ZERO)
-                    },
-                }
-            },
-            _ => {
-                /* CODE call. Snapshot the world (so a reverting child can be rolled
-                   back), then perform the CALL value transfer up front. */
-                let child_code = executable_code(target, tg_deleg, tg_target);
+                    }
+                },
+                _ => {
+                    returndata_clear();
+                    if new_account_charged then {
+                        credit_state_gas_refund(G_amsterdam_state_new_account)
+                    };
+                    push(WORD_ZERO)
+                },
+            }
+        } else {
+            /* CODE call. Snapshot the world (so a reverting child can be rolled
+               back), then perform the CALL value transfer up front. */
+            let child_code = executable_code(target, tg_deleg, tg_target);
 
-                /* the child message context, by call mode:
-                   - address: target for CALL/STATICCALL; the CALLER's own address
-                     for CALLCODE/DELEGATECALL (they run target's code in place);
-                   - caller/value: inherited from the parent for DELEGATECALL,
-                     else the immediate caller and the call's value;
-                   - static: forced for STATICCALL, else inherited (a static frame
-                     stays static for all of its sub-calls). */
-                let child_addr : address = if call_uses_target_address(kind) then { target } else { caller };
-                let child_caller : address = if call_is_delegate(kind) then {
-                        message.caller
-                    } else {
-                        caller
-                    };
-                let child_value : word = if call_is_delegate(kind) then {
-                        message.value
-                    } else {
-                        value
-                    };
-                let child_static : bool = if call_is_static(kind) then {
-                        true
-                    } else {
-                        message.is_static
-                    };
-                let child_calldata = if is_running() then {
-                        memory_byte_slice(args_offset, args_length)
-                    } else {
-                        EMPTY_SLICE
-                    };
-                let child_state_gas = state_gas_remaining;
-                let checkpoint = { suspend_frame() with state_gas_remaining = GAS_ZERO };
-                frame_stack_push(
-                    ResumeCall(
-                        struct {
-                            checkpoint = checkpoint,
-                            return_offset = ret_offset,
-                            return_length = ret_length,
-                            new_account_charged = new_account_charged,
-                        },
-                    ),
-                );
-                if call_transfers_value(kind) & word_nonzero(value) then {
-                    k_transfer(caller, target, value)
+            /* the child message context, by call mode:
+               - address: target for CALL/STATICCALL; the CALLER's own address
+                 for CALLCODE/DELEGATECALL (they run target's code in place);
+               - caller/value: inherited from the parent for DELEGATECALL,
+                 else the immediate caller and the call's value;
+               - static: forced for STATICCALL, else inherited (a static frame
+                 stays static for all of its sub-calls). */
+            let child_addr : address = if call_uses_target_address(kind) then { target } else { caller };
+            let child_caller : address = if call_is_delegate(kind) then {
+                    message.caller
+                } else {
+                    caller
                 };
-
-                /* enter the child frame: pc at 0, its own gas/stack/memory, code
-                   selected by the EIP-7702 delegation rule, depth bumped. */
-                message =
+            let child_value : word = if call_is_delegate(kind) then {
+                    message.value
+                } else {
+                    value
+                };
+            let child_static : bool = if call_is_static(kind) then {
+                    true
+                } else {
+                    message.is_static
+                };
+            let child_calldata = if is_running() then {
+                    memory_byte_slice(args.off, args.len)
+                } else {
+                    EMPTY_SLICE
+                };
+            let child_state_gas = state_gas_remaining;
+            let checkpoint = { suspend_frame() with state_gas_remaining = GAS_ZERO };
+            frame_stack_push(
+                ResumeCall(
                     struct {
-                        caller = child_caller,
-                        address = child_addr,
-                        code_address = target,
-                        value = child_value,
-                        state_gas_reservoir = child_state_gas,
-                        is_static = child_static,
-                        depth = frame_depth_increment(checkpoint.call_depth),
-                    };
-                calldata_install(child_calldata);
-                pc = BYTE_ZERO;
-                gas_remaining = child_gas;
-                state_gas_remaining = child_state_gas;
-                state_gas_spilled = GAS_ZERO;
-                frame_status = Running();
-                returndata_clear();
-                frame_code = child_code;
-                call_depth = frame_depth_increment(checkpoint.call_depth);
-                frame_refund = GAS_REFUND_ZERO
-            },
+                        checkpoint = checkpoint,
+                        return_offset = ret.off,
+                        return_length = ret.len,
+                        new_account_charged = new_account_charged,
+                    },
+                ),
+            );
+            if call_transfers_value(kind) & word_nonzero(value) then {
+                k_transfer(caller, target, value)
+            };
+
+            /* enter the child frame: pc at 0, its own gas/stack/memory, code
+               selected by the EIP-7702 delegation rule, depth bumped. */
+            message =
+                struct {
+                    caller = child_caller,
+                    address = child_addr,
+                    code_address = target,
+                    value = child_value,
+                    state_gas_reservoir = child_state_gas,
+                    is_static = child_static,
+                    depth = frame_depth_increment(checkpoint.call_depth),
+                };
+            calldata_install(child_calldata);
+            pc = 0;
+            gas_remaining = child_gas;
+            state_gas_remaining = child_state_gas;
+            state_gas_spilled = STATE_GAS_SPILL_ZERO;
+            frame_status = Running();
+            returndata_clear();
+            frame_code = child_code;
+            call_depth = frame_depth_increment(checkpoint.call_depth);
+            frame_refund = GAS_REFUND_ZERO
         }
     }
 }
@@ -685,7 +697,7 @@ function run_create(is2 : bool) -> unit = {
     if guard_static() then {
         return ()
     };
-    let initcode_size = word_to_byte_quantity_or_oog(len_word);
+    let initcode = charge_memory_range(off_word, len_word);
     if not_bool(is_running()) then {
         return ()
     };
@@ -693,11 +705,12 @@ function run_create(is2 : bool) -> unit = {
     /* up-front charges: memory expansion over the initcode, the CREATE base
        cost (G_create), the EIP-3860 per-initcode-word cost, and -- for CREATE2
        only -- the keccak word cost of hashing the initcode for the address. */
-    charge_memory_expansion(off_word, len_word);
     charge(create_access_cost());
-    charge(initcode_gas(initcode_size));
+    if k_fork >= Shanghai then {
+        charge_word_scaled_gas(G_initcode_word, memory_word_count_word(len_word))
+    };
     if is2 then {
-        charge(G_keccak_word * memory_word_count(initcode_size))
+        charge_word_scaled_gas(G_keccak_word, memory_word_count_word(len_word))
     };
 
     /* an out-of-gas during those charges is an exceptional halt (all gas
@@ -705,21 +718,17 @@ function run_create(is2 : bool) -> unit = {
     if not_bool(is_running()) then {
         return ()
     };
-    let (initcode_offset, initcode_length) = word_byte_range_or_oog(off_word, len_word);
-    if not_bool(is_running()) then {
-        return ()
-    };
 
     /* EIP-3860: initcode longer than MAX_INITCODE_SIZE is rejected outright as
        an exceptional halt. */
-    if not_bool(initcode_size_allowed(initcode_size)) then {
+    if not_bool(initcode_size_allowed(initcode.len)) then {
         exc_halt(InitCodeTooLarge)
     } else {
         /* derive the new contract address: keccak(0xff, creator, salt,
            keccak(initcode)) for CREATE2 (EIP-1014), else rlp(creator, nonce). */
         let nonce = k_get_nonce(creator);
         let new_addr : address = if is2 & is_running() then {
-                k_create2_addr(creator, salt, word_to_hash(mem_keccak(initcode_offset, initcode_length)))
+                k_create2_addr(creator, salt, word_to_hash(mem_keccak(initcode)))
             } else {
                 k_create_addr(creator, nonce)
             };
@@ -731,7 +740,7 @@ function run_create(is2 : bool) -> unit = {
         var child_gas : gas = GAS_ZERO;
         if k_fork < Amsterdam then {
             let avail = gas_remaining;
-            let retained_gas = gas_quotient(avail, 64);
+            let retained_gas : gas = avail / 64;
             child_gas = gas_sub_or_oog(avail, retained_gas);
             gas_remaining = retained_gas
         };
@@ -753,11 +762,10 @@ function run_create(is2 : bool) -> unit = {
            depth ceiling, the creator's balance covering the endowment, and the
            creator nonce not already at the 2^64-1 ceiling (it must be
            incrementable). */
-        let depth_ok = call_depth < DEPTH_LIMIT;
-        let balance_ok : bool = word_ule(value, k_get_balance(creator));
-        let nonce_ok : bool = nonce != BYTE_QUANTITY_MAX; /* EIP-2681 */
-
-        if not_bool(depth_ok) | not_bool(balance_ok) | not_bool(nonce_ok) then {
+        if   (call_depth >= DEPTH_LIMIT)
+           | not_bool(word_ule(value, k_get_balance(creator)))
+           | (nonce == sizeof(account_nonce_bound)) /* EIP-2681 */
+        then {
             returndata_clear();
             if k_fork < Amsterdam then {
                 refund_gas(child_gas)
@@ -778,7 +786,7 @@ function run_create(is2 : bool) -> unit = {
             };
             if k_fork >= Amsterdam then {
                 let avail = gas_remaining;
-                let retained_gas = gas_quotient(avail, 64);
+                let retained_gas : gas = avail / 64;
                 child_gas = gas_sub_or_oog(avail, retained_gas);
                 gas_remaining = retained_gas
             };
@@ -801,9 +809,9 @@ function run_create(is2 : bool) -> unit = {
                    suspend the complete parent before mutating the new account.
                    The child frame has no calldata. */
                 let initcode = if is_running() then {
-                        memory_byte_slice(initcode_offset, initcode_length)
+                        memory_code_slice(initcode.off, initcode.len)
                     } else {
-                        EMPTY_SLICE
+                        EMPTY_CODE_SLICE
                     };
                 let child_code = code_db_resolve(code_db_insert(initcode, k_fork));
                 let child_state_gas = state_gas_remaining;
@@ -832,10 +840,10 @@ function run_create(is2 : bool) -> unit = {
                         depth = frame_depth_increment(checkpoint.call_depth),
                     };
                 calldata_install(EMPTY_SLICE);
-                pc = BYTE_ZERO;
+                pc = 0;
                 gas_remaining = child_gas;
                 state_gas_remaining = child_state_gas;
-                state_gas_spilled = GAS_ZERO;
+                state_gas_spilled = STATE_GAS_SPILL_ZERO;
                 frame_status = Running();
                 returndata_clear();
                 frame_code = child_code;
@@ -882,18 +890,34 @@ function resume_create(continuation : CreateContinuation, output : ByteSlice) ->
     let checkpoint = continuation.checkpoint;
     let initcode_succeeded = frame_succeeded();
     let deployed_length = returndata_size();
-    let code_ok =    deployed_length
-                  <= max_code_size()
-                  &  ((k_fork < London) | (deployed_length == BYTE_ZERO) | (slice_byte(returndata, BYTE_ZERO) != 0xef));
-    let execution_deposit = code_deployment_execution_cost(deployed_length);
-    let state_deposit = code_deployment_state_cost(deployed_length);
+    let deployed_size = deployed_length;
+    var frontier_empty_deposit : bool = false;
 
     if initcode_succeeded then {
-        if code_ok & (execution_deposit <= gas_remaining) then {
-            gas_remaining = gas_sub_or_oog(gas_remaining, execution_deposit);
-            charge_deployment_state_gas(state_deposit)
-        } else {
+        if not_bool(deployed_code_size_allowed(deployed_size)) |
+            ((k_fork >= London) & (deployed_size != 0) & (slice_byte(returndata, 0) == 0xef)) then {
+            /* EIP-170 and EIP-3541 failures use the post-Homestead
+             * exceptional creation path. Neither rule is active on
+             * Frontier/Homestead in a way that reaches this branch. */
             exc_halt(OutOfGas)
+        } else {
+            match code_deployment_execution_cost(deployed_length, gas_remaining) {
+                Some(execution_deposit) => {
+                    gas_remaining = gas_sub_or_oog(gas_remaining, execution_deposit);
+                    charge_deployment_state_gas(code_deployment_state_cost(deployed_length))
+                },
+                None() => {
+                    if k_fork < Homestead then {
+                        /* Frontier consumed the remaining child gas but kept the
+                         * creation successful with empty deployed code. EIP-2
+                         * changed this to exceptional failure at Homestead. */
+                        gas_remaining = GAS_ZERO;
+                        frontier_empty_deposit = true
+                    } else {
+                        exc_halt(OutOfGas)
+                    }
+                },
+            }
         }
     };
     let deploy_succeeds = initcode_succeeded & frame_succeeded();
@@ -908,7 +932,9 @@ function resume_create(continuation : CreateContinuation, output : ByteSlice) ->
 
     if deploy_succeeds then {
         record_refund(child_refund);
-        k_deploy_code(continuation.address, returndata);
+        let deployed_bytes : ByteSlice = if frontier_empty_deposit then { EMPTY_SLICE } else { returndata };
+        let deployed_code = validated_code_slice(deployed_bytes);
+        k_deploy_code(continuation.address, deployed_code);
         push(address_to_word(continuation.address))
     } else {
         k_revert(checkpoint.state);

@@ -7,14 +7,14 @@
  * execution performs no allocation. Frames form a stack: stack_enter_frame on call,
  * stack_leave_frame on return, stack_reset per transaction.
  *
- * Words cross the standard FFI as lbits and the optimized FFI as inline
- * sail_u256 values. Both map directly to the cached four-limb rows here.
+ * Words cross both FFIs as inferred inline sail_u256 values and map directly
+ * to the cached four-limb rows here.
  *
  * Bounds policy: the EVM's 1024-word stack limit is enforced by the Sail side
  * (push checks the height and raises StackOverflow); the C side only guards
  * its own capacity. */
 #include "sail.h"
-#include "lbits_convert.h"
+#include "value_convert.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -77,9 +77,10 @@ EVMSAIL_WORD_RETURN stack_pop_word(EVMSAIL_WORD_RESULT(result) const unit u) {
   EVMSAIL_RETURN_WORD(result, le_words4_to_sail_word(zero));
 }
 
-unit stack_push_word(const sail_word w) {
+unit stack_push_word(EVMSAIL_WORD_PARAM(w)) {
   hs_frame *f = &hs_stk[hs_top];
-  if (f->w && f->n < HS_CAP) sail_word_to_le_words4(f->w[f->n++], w);
+  if (f->w && f->n < HS_CAP)
+    sail_word_to_le_words4(f->w[f->n++], EVMSAIL_WORD_VALUE(w));
   return UNIT;
 }
 
@@ -94,8 +95,9 @@ EVMSAIL_WORD_RETURN stack_peek_word(EVMSAIL_WORD_RESULT(result) uint64_t n) {
 }
 
 /* overwrite the nth-from-top word (SWAP) */
-unit stack_set_word(uint64_t n, const sail_word w) {
+unit stack_set_word(uint64_t n, EVMSAIL_WORD_PARAM(w)) {
   hs_frame *f = &hs_stk[hs_top];
-  if (f->w && n < f->n) sail_word_to_le_words4(f->w[f->n - 1 - n], w);
+  if (f->w && n < f->n)
+    sail_word_to_le_words4(f->w[f->n - 1 - n], EVMSAIL_WORD_VALUE(w));
   return UNIT;
 }

@@ -6,7 +6,7 @@
  * storage lives in state_db.c keyed by secure trie keys. */
 #include "transient_storage.h"
 #include "kernel_state.h"
-#include "lbits_convert.h"
+#include "value_convert.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -153,12 +153,15 @@ static unit transient_storage_write_raw(sail_address addr, sail_word slot,
 /* Store a value and make the update part of the current semantic checkpoint.
  * Transient storage is a total map with default zero, so restoring an absent
  * key as an explicit zero is observationally identical. */
-unit transient_storage_write(sail_address addr, sail_word slot, sail_word v) {
+unit transient_storage_write(sail_address addr, EVMSAIL_WORD_PARAM(slot),
+                             EVMSAIL_WORD_PARAM(v)) {
   static const uint64_t zero[4] = {0, 0, 0, 0};
-  h_entry *entry = transient_storage_lookup(addr, slot);
+  sail_word slot_value = EVMSAIL_WORD_VALUE(slot);
+  sail_word value = EVMSAIL_WORD_VALUE(v);
+  h_entry *entry = transient_storage_lookup(addr, slot_value);
   sail_word prior = be_words4_to_sail_word(entry ? entry->val : zero);
-  state_journal_push_transient(addr, slot, prior);
-  return transient_storage_write_raw(addr, slot, v);
+  state_journal_push_transient(addr, slot_value, prior);
+  return transient_storage_write_raw(addr, slot_value, value);
 }
 
 unit transient_storage_restore(sail_address addr, sail_word slot, sail_word v) {
@@ -167,9 +170,9 @@ unit transient_storage_restore(sail_address addr, sail_word slot, sail_word v) {
 
 /* the 256-bit value at (address, slot); 0 if absent */
 EVMSAIL_WORD_RETURN transient_storage_read(
-    EVMSAIL_WORD_RESULT(result) sail_address addr, sail_word slot) {
+    EVMSAIL_WORD_RESULT(result) sail_address addr, EVMSAIL_WORD_PARAM(slot)) {
   static const uint64_t zero[4] = {0, 0, 0, 0};
-  h_entry *entry = transient_storage_lookup(addr, slot);
+  h_entry *entry = transient_storage_lookup(addr, EVMSAIL_WORD_VALUE(slot));
   EVMSAIL_RETURN_WORD(result,
                       be_words4_to_sail_word(entry ? entry->val : zero));
 }

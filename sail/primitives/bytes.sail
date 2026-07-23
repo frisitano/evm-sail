@@ -22,46 +22,81 @@ The fixed lengths identify addresses, words, limbs, and double words;
     the executor's scratch arena. */
 enum ByteSource = { StatelessInputSource, EvmMemorySource, CodeSource, LogDataSource, OutputSource, ScratchSource }
 
+/*! The witness-carrying fields of an unmaterialized byte range. */
+struct ByteSliceFields('off : Int, 'len : Int), source_valid_range('off, 'len) = {
+    source : ByteSource,
+    off    : int('off),
+    len    : int('len),
+}
+
 /*! An unmaterialized byte range: a region, an offset, and a length. A
     slice denotes the byte sequence it references; reads resolve in O(1)
     without copying. */
-struct ByteSlice = {
-    source : ByteSource,
-    off    : byte_quantity,
-    len    : byte_quantity,
+type ByteSlice = {'off 'len, source_valid_range('off, 'len). ByteSliceFields('off, 'len)}
+
+/*! A source-backed byte range whose length is known statically. */
+type ByteSliceLength('required : Int) = {
+    'off 'len,
+    source_valid_range('off, 'len) & 'len == 'required.
+    ByteSliceFields('off, 'len)
 }
 
-let ADDRESS_BYTE_LENGTH : byte_length = ByteQuantity(20)
-let WORD_BYTE_LENGTH : byte_length = ByteQuantity(32)
-let EIGHT_BYTE_LENGTH : byte_length = ByteQuantity(8)
-let DOUBLE_WORD_BYTE_LENGTH : byte_length = ByteQuantity(64)
+/*! A source-backed byte range whose validated length is at least `minimum`. */
+type ByteSliceAtLeast('minimum : Int) = {
+    'off 'len,
+    source_valid_range('off, 'len) & 0 <= 'minimum & 'minimum <= 'len.
+    ByteSliceFields('off, 'len)
+}
+
+/*! The result of making a requested prefix of a byte region available.
+    Success carries a slice of exactly the requested length. This shared type
+    deliberately imposes no global region maximum: each region-specific
+    producer may refine the admissible length independently. */
+union ByteRegionResult('required : Int), 0 <= 'required = {
+    ByteRegionReady : ByteSliceLength('required),
+    ByteRegionFailed : unit,
+}
+
+let ADDRESS_BYTE_LENGTH : int(20) = 20
+let WORD_BYTE_LENGTH : int(32) = 32
+let EIGHT_BYTE_LENGTH : int(8) = 8
+let DOUBLE_WORD_BYTE_LENGTH : int(64) = 64
 
 /*! Constructs a [ByteSlice][type-ByteSlice] from integer offset and
     length. */
-function byte_slice(src : ByteSource, off : source_pointer, len : byte_length) -> ByteSlice =
-    struct { source = src, off = off, len = len }
+val byte_slice : forall 'off 'len, source_valid_range('off, 'len). (ByteSource, int('off), int('len)) -> ByteSliceFields(
+        'off,
+        'len,
+    )
+function byte_slice(src, off, len) = {
+    let fields : ByteSliceFields('off, 'len) = struct { source = src, off = off, len = len };
+    fields
+}
 
 /*! The zero-length placeholder slice, for unused value roles (subtree
     references, deletes). */
-let EMPTY_SLICE : ByteSlice = struct { source = StatelessInputSource, off = BYTE_ZERO, len = BYTE_ZERO }
-
-/*! A slice into the stateless input (witness) store. */
-function stateless_input_byte_slice(off : source_pointer, len : byte_length) -> ByteSlice =
-    byte_slice(StatelessInputSource, off, len)
+let EMPTY_SLICE : ByteSliceFields(0, 0) = byte_slice(StatelessInputSource, 0, 0)
 
 /*! A relative sub-range of a slice, within the same source. */
-function sub_slice(s : ByteSlice, off : source_pointer, len : byte_length) -> ByteSlice = {
-    assert(off <= s.len);
-    assert(len <= s.len - off);
-    assert(s.off <= MAX_BYTE_QUANTITY);
-    assert(off <= MAX_BYTE_QUANTITY - s.off);
-    let absolute_off = s.off + off;
-    byte_slice(s.source, absolute_off, len)
+val sub_slice : forall 'base 'source_len 'off 'len,
+                  source_valid_range('base, 'source_len) & 0 <= 'off & 0 <= 'len & 'off + 'len <= 'source_len. (
+        ByteSliceFields('base, 'source_len),
+        int('off),
+        int('len),
+    ) -> ByteSliceFields('base + 'off, 'len)
+function sub_slice(s, off, len) = {
+    byte_slice(s.source, s.off + off, len)
 }
 
-/*! An absolute span in the append-only content-addressed code arena. */
-function code_byte_slice(off : source_pointer, len : byte_length) -> ByteSlice =
-    byte_slice(CodeSource, off, len)
+/*! The suffix of a slice beginning at a contained relative offset. */
+val slice_suffix : forall 'base 'source_len 'relative,
+                     source_valid_range('base, 'source_len) & 0 <= 'relative & 'relative <= 'source_len. (
+        ByteSliceFields('base, 'source_len),
+        int('relative),
+    ) -> ByteSliceFields('base + 'relative, 'source_len - 'relative)
+function slice_suffix(s, off) = {
+    byte_slice(s.source, s.off + off, s.len - off)
+}
 
 /* Materialized fragments carry their length at construction time. This keeps
  * every generic Bytes operation O(1) without rediscovering a linked-list
@@ -69,11 +104,18 @@ function code_byte_slice(off : source_pointer, len : byte_length) -> ByteSlice =
 /*! A finite list of bytes paired with its construction-time length. */
 struct MaterializedBytes = {
     data : list(byte),
-    len : byte_length,
+    len : source_length,
 }
 
-function materialized_bytes(data : list(byte), len : byte_length) -> MaterializedBytes =
+val materialized_bytes : forall 'len, source_valid_length('len). (list(byte), int('len)) -> MaterializedBytes
+function materialized_bytes(data, len) =
     struct { data = data, len = len }
+
+/*! A prefix of a fixed 32-byte vector, in wire order. */
+struct FixedBytes32 = {
+    data : b256,
+    len : range(0, 32),
+}
 
 /*! A byte-sequence segment: materialized bytes or a region-backed span.
     A `list(Bytes)` denotes the concatenation of its segments.
@@ -86,7 +128,13 @@ union Bytes = {
     BytesList : MaterializedBytes,
     /* a region-backed reference */
     BytesSlice : ByteSlice,
+    /* a prefix of an inline fixed-width vector */
+    BytesFixed32 : FixedBytes32,
 }
 
-function bytes_list(data : list(byte), len : byte_length) -> Bytes =
+val bytes_list : forall 'len, source_valid_length('len). (list(byte), int('len)) -> Bytes
+function bytes_list(data, len) =
     BytesList(materialized_bytes(data, len))
+
+function bytes_fixed32(data : b256, len : range(0, 32)) -> Bytes =
+    BytesFixed32(struct { data = data, len = len })

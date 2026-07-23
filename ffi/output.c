@@ -1,7 +1,7 @@
 #include "output.h"
 
 #include "byte_slice_glue.h"
-#include "lbits_convert.h"
+#include "value_convert.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -47,23 +47,24 @@ bool output_buffer_store_source(uint64_t kind, uint64_t off, uint64_t len) {
   return true;
 }
 
-bool output_buffer_store_word(const sail_word word) {
+bool output_buffer_store_word(EVMSAIL_WORD_PARAM(word)) {
   if (!reserve(32)) {
     buffer.length = 0;
     return false;
   }
-  sail_word_to_be_bytes(buffer.bytes, word);
+  sail_word_to_be_bytes(buffer.bytes, EVMSAIL_WORD_VALUE(word));
   buffer.length = 32;
   return true;
 }
 
-bool output_buffer_store_words(const sail_word first, const sail_word second) {
+bool output_buffer_store_words(EVMSAIL_WORD_PARAM(first),
+                               EVMSAIL_WORD_PARAM(second)) {
   if (!reserve(64)) {
     buffer.length = 0;
     return false;
   }
-  sail_word_to_be_bytes(buffer.bytes, first);
-  sail_word_to_be_bytes(buffer.bytes + 32, second);
+  sail_word_to_be_bytes(buffer.bytes, EVMSAIL_WORD_VALUE(first));
+  sail_word_to_be_bytes(buffer.bytes + 32, EVMSAIL_WORD_VALUE(second));
   buffer.length = 64;
   return true;
 }

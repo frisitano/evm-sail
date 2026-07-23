@@ -1,6 +1,5 @@
 import Evm.Prelude
 import Evm.Primitives.Quantities
-import Evm.Primitives.Gas
 import Evm.Primitives.Bytes
 import Evm.Primitives.Fork
 import Evm.Primitives.ChainConfig
@@ -22,23 +21,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -51,6 +42,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # The execution environment
@@ -76,7 +68,7 @@ def EnvField_of_num (arg_ : Nat) : EnvField :=
   | 8 => F_GasPrice
   | _ => F_SlotNumber
 
-def num_of_EnvField (arg_ : EnvField) : Int :=
+def num_of_EnvField (arg_ : EnvField) : Nat :=
   match arg_ with
   | .F_Number => 0
   | .F_Timestamp => 1
@@ -91,76 +83,85 @@ def num_of_EnvField (arg_ : EnvField) : Int :=
 
 /-- An environment field as the word its opcode pushes. -/
 def k_env (f : EnvField) : SailM word := do
-  match f with
-  | .F_Number => (word_of_protocol_quantity ⟨((← readReg k_header).number).value⟩)
-  | .F_Timestamp => (word_of_protocol_quantity ⟨((← readReg k_header).timestamp).value⟩)
-  | .F_Coinbase => (pure (address_to_word (← readReg k_header).fee_recipient))
-  | .F_BaseFee => (pure (← readReg k_header).base_fee)
-  | .F_ChainId => (word_of_protocol_quantity ⟨(← readReg k_chain_id)⟩)
-  | .F_GasLimit => (word_of_gas (← readReg k_header).gas_limit)
-  | .F_PrevRandao => (pure (← readReg k_header).prev_randao)
-  | .F_Origin => (pure (address_to_word (← readReg k_tx).origin))
-  | .F_GasPrice => (pure (← readReg k_tx).gas_price)
-  | .F_SlotNumber => (word_of_protocol_quantity ⟨((← readReg k_header).slot_number).value⟩)
+  let publicResult ← do
+    match f with
+    | .F_Number => (pure ((U256 (← (word_of_block_number (← readReg k_header).number)))).value)
+    | .F_Timestamp =>
+      (pure ((U256 (← (word_of_block_timestamp (← readReg k_header).timestamp)))).value)
+    | .F_Coinbase => (pure ((address_to_word (← readReg k_header).fee_recipient)).value)
+    | .F_BaseFee => (pure ((← readReg k_header).base_fee).value)
+    | .F_ChainId => (pure ((U256 (← (word_of_chain_identifier (← readReg k_chain_id))))).value)
+    | .F_GasLimit => (pure ((U256 ((← readReg k_header).gas_limit).value)).value)
+    | .F_PrevRandao => (pure ((← readReg k_header).prev_randao).value)
+    | .F_Origin => (pure ((address_to_word (← readReg k_tx).origin)).value)
+    | .F_GasPrice => (pure ((← readReg k_tx).gas_price).value)
+    | .F_SlotNumber =>
+      (pure ((U256 ((word_of_slot_number ⟨((← readReg k_header).slot_number).value⟩)).value)).value)
+  pure (⟨publicResult⟩)
 
 /-- The block's fee recipient (`COINBASE`). -/
 def k_coinbase (_ : Unit) : SailM address := do
   (pure (← readReg k_header).fee_recipient)
 
+/- Type quantifiers: number : Nat, current : Nat, 0 ≤ number ∧
+  number < current ∧ current < (2 ^ 256) -/
+def blockhash_word_distance (current : Nat) (number : Nat) : Nat :=
+  (current - number)
+
 /-- `BLOCKHASH`: the hash of ancestor `number`, zero outside the 256-block
 window; an in-window ancestor missing from the witness is a deficient
 witness. -/
+/- Type quantifiers: number_word : Nat, 0 ≤ number_word ∧ number_word ≤ (2 ^ 256 - 1) -/
 def k_blockhash (number_word : word) : SailM hash := do
-  match (word_to_limb number_word) with
-  | .some number_bits =>
+  let number_word := (number_word).value
+  let current ← do (pure (← readReg k_header).number)
+  let current_word ← (( do (pure ((U256 (← (word_of_block_number current)))).value) ) : SailM
+    Nat )
+  if ((number_word <b current_word) : Bool)
+  then
     (do
-      let current ← do (pure ((← readReg k_header).number).value)
-      let number := (BitVec.toNatInt number_bits)
-      if ((number <b current) : Bool)
+      let distance_word := (blockhash_word_distance current_word number_word)
+      if ((distance_word ≤b 256) : Bool)
       then
         (do
-          let distance := (current -i number)
-          if ((distance ≤b 256) : Bool)
-          then
+          let distance : Nat := distance_word
+          if ((((← readReg k_n_headers)).value <b distance) : Bool)
+          then sailThrow ((InvalidBlock WitnessDeficient))
+          else
             (do
-              if (((← readReg k_n_headers) <b distance) : Bool)
-              then sailThrow ((InvalidBlock WitnessDeficient))
-              else
-                (do
-                  let index : Nat := (distance -i 1)
-                  (ancestor_hash_read ⟨index⟩)))
-          else (pure ZERO_HASH))
+              let index : Nat := (distance - 1)
+              (ancestor_hash_read ⟨index⟩)))
       else (pure ZERO_HASH))
-  | none => (pure ZERO_HASH)
+  else (pure ZERO_HASH)
 
 /-- `BLOBHASH` (EIP-4844): the `i`-th versioned hash, zero out of
 range. -/
+/- Type quantifiers: index_word : Nat, 0 ≤ index_word ∧ index_word ≤ (2 ^ 256 - 1) -/
 def k_blobhash (index_word : word) : SailM word := do
-  match (Option.map (fun semanticValue => (semanticValue).value) ((word_to_protocol_quantity
-    index_word))) with
-  | .some index =>
-    (do
-      let count ← do (pure ((← readReg k_tx).blob_hashes.count).value)
-      if ((index <b count) : Bool)
-      then
+  let index_word := (index_word).value
+  let publicResult ← do
+    let count ← do (pure ((← readReg k_tx).blob_hashes.count).value)
+    if ((index_word <b count) : Bool)
+    then
+      (do
+        let index : Nat := index_word
+        let offset : Nat := ((33 *i index) + 1)
         (do
-          if ((index ≤b 558992244657865200) : Bool)
-          then
-            (do
-              let offset : Nat := ((33 *i index) + 1)
-              (slice_load_n (← readReg k_tx).blob_hashes.bytes (ByteQuantity offset)
-                WORD_BYTE_LENGTH))
-          else (pure ZERO_WORD))
-      else (pure ZERO_WORD))
-  | none => (pure ZERO_WORD)
+            let publicResult ← (slice_load_n (← readReg k_tx).blob_hashes.bytes offset
+            WORD_BYTE_LENGTH)
+            pure ((publicResult).value)))
+    else (pure (ZERO_WORD).value)
+  pure (⟨publicResult⟩)
 
 /-- The `CREATE` address rule, in kernel form. -/
-/- Type quantifiers: k_ex161278_ : Nat, 0 ≤ k_ex161278_ ∧ k_ex161278_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex408153_ : Nat, 0 ≤ k_ex408153_ ∧ k_ex408153_ ≤ (2 ^ 64 - 1) -/
 def k_create_addr (a : address) (nonce : account_nonce) : SailM address := do
   let nonce := (nonce).value
   (create_address a ⟨nonce⟩)
 
 /-- The `CREATE2` address rule, in kernel form. -/
+/- Type quantifiers: k_ex408154_ : Nat, 0 ≤ k_ex408154_ ∧ k_ex408154_ ≤ (2 ^ 256 - 1) -/
 def k_create2_addr (a : address) (salt : word) (inithash : hash) : SailM address := do
-  (create2_address a salt inithash)
+  let salt := (salt).value
+  (create2_address a ⟨salt⟩ inithash)
 

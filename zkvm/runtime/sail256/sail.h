@@ -59,7 +59,6 @@
  * matches mpz_t, so ordinary C generated without --Ofixed-int needs no
  * rewrite. */
 #define SAIL_INT_LIMBS 12
-#define SAIL_LBITS_256 1
 typedef struct {
   uint8_t negative;
   uint8_t length;
@@ -198,6 +197,11 @@ void setup_rts(void);
 void cleanup_rts(void);
 
 uint64_t sail_int_get_ui(const sail_int op);
+/* Portable fixed-limb bridges used by native backend representations.
+ * Limbs are little-endian: limbs[0] contains the least-significant 64 bits. */
+void sail_int_to_u64_array(uint64_t *, size_t, const sail_int);
+void sail_int_from_u64_array(sail_int *, const uint64_t *, size_t);
+void sail_int_from_twos_complement_u64_array(sail_int *, const uint64_t *, size_t);
 static inline uint64_t mpz_get_ui(const sail_int op) {
   return op->length == 0 ? UINT64_C(0) : op->limbs[0];
 }
@@ -294,12 +298,7 @@ typedef struct {
   uint64_t bits;
 } sbits;
 
-typedef struct {
-  uint64_t len;    /* bit width, <= 256 */
-  uint64_t d[4];   /* inline 256-bit magnitude, no GMP pointer; d[0] = LSBs */
-} lbits;
-
-/* Native representation selected by $[c_repr u256].  Defining it in the
+/* Native representation selected from a proven 256-bit unsigned bound. Defining it in the
  * runtime makes the same ABI available to injected FFI headers before the
  * generated model header is included. */
 #ifndef SAIL_U256_DEFINED
@@ -309,52 +308,12 @@ typedef struct { uint64_t limbs[4]; } sail_u256;
 
 // For backwards compatibility
 typedef uint64_t mach_bits;
-typedef lbits sail_bits;
-
-SAIL_BUILTIN_TYPE(lbits)
-
-void CREATE_OF(lbits, fbits)(lbits *,
-			     const fbits op,
-			     const uint64_t len,
-			     const bool direction);
-
-void RECREATE_OF(lbits, fbits)(lbits *,
-			       const fbits op,
-			       const uint64_t len,
-			       const bool direction);
-
-void CREATE_OF(lbits, sbits)(lbits *,
-			     const sbits op,
-			     const bool direction);
-
-void RECREATE_OF(lbits, sbits)(lbits *,
-			       const sbits op,
-			       const bool direction);
-
-sbits CREATE_OF(sbits, lbits)(const lbits op, const bool direction);
-fbits CREATE_OF(fbits, lbits)(const lbits op, const bool direction);
 sbits CREATE_OF(sbits, fbits)(const fbits op, const uint64_t len, const bool direction);
 
 /* Bitvector conversions */
 
-fbits CONVERT_OF(fbits, lbits)(const lbits, const bool);
 fbits CONVERT_OF(fbits, sbits)(const sbits, const bool);
-
-void CONVERT_OF(lbits, fbits)(lbits *, const fbits, const uint64_t, const bool);
-void CONVERT_OF(lbits, sbits)(lbits *, const sbits, const bool);
-
 sbits CONVERT_OF(sbits, fbits)(const fbits, const uint64_t, const bool);
-sbits CONVERT_OF(sbits, lbits)(const lbits, const bool);
-
-/* Portable fixed-limb bridge used by native representations such as u256.
- * Limbs are little-endian: limbs[0] contains the least-significant 64 bits. */
-void sail_lbits_to_u64_array(uint64_t *, size_t, const lbits);
-void sail_lbits_from_u64_array(lbits *, const uint64_t *, size_t, uint64_t);
-
-void sail_unsigned(sail_int *rop, const lbits op);
-void sail_signed(sail_int *rop, const lbits op);
-
-void UNDEFINED(lbits)(lbits *, const sail_int len);
 fbits UNDEFINED(fbits)(const unit);
 
 sbits undefined_sbits(void);
@@ -365,117 +324,26 @@ sbits undefined_sbits(void);
  */
 fbits safe_rshift(const fbits, const fbits);
 
-/*
- * Used internally to construct large bitvector literals.
- */
-void append_64(lbits *rop, const lbits op, const fbits chunk);
-
-void add_bits(lbits *rop, const lbits op1, const lbits op2);
-void sub_bits(lbits *rop, const lbits op1, const lbits op2);
-
-void add_bits_int(lbits *rop, const lbits op1, const sail_int op2);
-void sub_bits_int(lbits *rop, const lbits op1, const sail_int op2);
-
-void and_bits(lbits *rop, const lbits op1, const lbits op2);
-void or_bits(lbits *rop, const lbits op1, const lbits op2);
-void xor_bits(lbits *rop, const lbits op1, const lbits op2);
-void not_bits(lbits *rop, const lbits op);
-
-void mults_vec(lbits *rop, const lbits op1, const lbits op2);
-void mult_vec(lbits *rop, const lbits op1, const lbits op2);
-
-void zeros(lbits *rop, const sail_int op);
-
-void zero_extend(lbits *rop, const lbits op, const sail_int len);
 fbits fast_zero_extend(const sbits op, const uint64_t n);
-void sign_extend(lbits *rop, const lbits op, const sail_int len);
 fbits fast_sign_extend(const fbits op, const uint64_t n, const uint64_t m);
 fbits fast_sign_extend2(const sbits op, const uint64_t m);
-
-SAIL_INT_FUNCTION(length_lbits, sail_int, const lbits op);
-SAIL_INT_FUNCTION(count_leading_zeros, sail_int, const lbits op);
-SAIL_INT_FUNCTION(count_trailing_zeros, sail_int, const lbits op);
-
-bool eq_bits(const lbits op1, const lbits op2);
-bool EQUAL(lbits)(const lbits op1, const lbits op2);
-bool EQUAL(ref_lbits)(const lbits *op1, const lbits *op2);
-bool neq_bits(const lbits op1, const lbits op2);
-
-void vector_subrange_lbits(lbits *rop,
-                           const lbits op,
-                           const sail_int n_mpz,
-                           const sail_int m_mpz);
-
-void vector_subrange_inc_lbits(lbits *rop,
-			       const lbits op,
-			       const sail_int n_mpz,
-			       const sail_int m_mpz);
-
-void sail_truncate(lbits *rop, const lbits op, const sail_int len);
-void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len);
-
-fbits bitvector_access(const lbits op, const sail_int n_mpz);
-fbits bitvector_access_inc(const lbits op, const sail_int n_mpz);
 
 fbits update_fbits(const fbits op, const uint64_t n, const fbits bit);
 
 mach_int fast_signed(const fbits, const uint64_t);
 mach_int fast_unsigned(const fbits);
 
-void append(lbits *rop, const lbits op1, const lbits op2);
-
 sbits append_sf(const sbits, const fbits, const uint64_t);
 sbits append_fs(const fbits, const uint64_t, const sbits);
 sbits append_ss(const sbits, const sbits);
-
-void replicate_bits(lbits *rop, const lbits op1, const sail_int op2);
 fbits fast_replicate_bits(const fbits shift, const fbits v, const mach_int times);
-
-void update_lbits(lbits *rop, const lbits op, const sail_int n_mpz, const uint64_t bit);
-void update_lbits_inc(lbits *rop, const lbits op, const sail_int n_mpz, const uint64_t bit);
-
-void vector_update_subrange_lbits(lbits *rop,
-                                  const lbits op,
-                                  const sail_int n_mpz,
-                                  const sail_int m_mpz,
-                                  const lbits slice);
-
-void vector_update_subrange_inc_lbits(lbits *rop,
-				      const lbits op,
-				      const sail_int n_mpz,
-				      const sail_int m_mpz,
-				      const lbits slice);
 
 fbits fast_update_subrange(const fbits op,
 			   const mach_int n,
 			   const mach_int m,
 			   const fbits slice);
 
-void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz);
-void slice_inc(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz);
-void get_slice_int(lbits *rop,
-                   const sail_int len_mpz,
-                   const sail_int n,
-                   const sail_int start_mpz);
-
 sbits sslice(const fbits op, const mach_int start, const mach_int len);
-
-void set_slice(lbits *rop,
-	       const sail_int len_mpz,
-	       const sail_int slen_mpz,
-	       const lbits op,
-	       const sail_int start_mpz,
-	       const lbits slice);
-
-void shift_bits_left(lbits *rop, const lbits op1, const lbits op2);
-void shift_bits_right(lbits *rop, const lbits op1, const lbits op2);
-void shift_bits_right_arith(lbits *rop, const lbits op1, const lbits op2);
-
-void shiftl(lbits *rop, const lbits op1, const sail_int op2);
-void shiftr(lbits *rop, const lbits op1, const sail_int op2);
-void arith_shiftr(lbits *rop, const lbits op1, const sail_int op2);
-
-void reverse_endianness(lbits*, lbits);
 
 bool eq_sbits(const sbits op1, const sbits op2);
 bool neq_sbits(const sbits op1, const sbits op2);
@@ -536,31 +404,13 @@ void string_take(sail_string *dst, const_sail_string s, sail_int len);
 /* ***** Printing ***** */
 
 void string_of_int(sail_string *str, const sail_int i);
-void string_of_lbits(sail_string *str, const lbits op);
 void string_of_fbits(sail_string *str, const fbits op);
-void decimal_string_of_lbits(sail_string *str, const lbits op);
 void decimal_string_of_fbits(sail_string *str, const fbits op);
 
 /* ***** Mapping support ***** */
 
-void parse_dec_bits(lbits *res, const sail_int n, const char *dec);
-
 bool valid_dec_bits(const sail_int n, const char *dec);
-
-void parse_hex_bits(lbits *stro, const sail_int n, const_sail_string str);
-
 bool valid_hex_bits(const sail_int n, const_sail_string str);
-
-/*
- * Utility function not callable from Sail!
- */
-void fprint_bits(const_sail_string pre,
-		 const lbits op,
-		 const_sail_string post,
-		 FILE *stream);
-
-unit print_bits(const_sail_string str, const lbits op);
-unit prerr_bits(const_sail_string str, const lbits op);
 
 unit print(const_sail_string str);
 unit print_endline(const_sail_string str);
@@ -577,10 +427,6 @@ unit sail_putchar(const sail_int op);
 /* ***** Misc ***** */
 
 SAIL_INT_FUNCTION(get_time_ns, sail_int, const unit);
-
-/* ***** ARM optimisations ***** */
-
-void arm_align(lbits *, const lbits, const sail_int);
 
 #ifdef __cplusplus
 }

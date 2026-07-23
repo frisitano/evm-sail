@@ -25,29 +25,29 @@ block hash into their ring buffers. Each takes a 32-byte input and 30M
 gas, and bumps no nonce, charges no fee, and counts toward no block gas;
 it is skipped if the contract has no code.
 */
-let SYSTEM_CALL_INPUT_LENGTH : byte_length = WORD_BYTE_LENGTH
+let SYSTEM_CALL_INPUT_LENGTH : int(32) = WORD_BYTE_LENGTH
 
-let DEPOSIT_EVENT_DATA_LENGTH : byte_length = ByteQuantity(576)
-let DEPOSIT_PUBKEY_HEAD : source_pointer = BYTE_ZERO
-let DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD : source_pointer = ByteQuantity(32)
-let DEPOSIT_AMOUNT_HEAD : source_pointer = ByteQuantity(64)
-let DEPOSIT_SIGNATURE_HEAD : source_pointer = ByteQuantity(96)
-let DEPOSIT_INDEX_HEAD : source_pointer = ByteQuantity(128)
-let DEPOSIT_PUBKEY_LENGTH_WORD : source_pointer = ByteQuantity(160)
-let DEPOSIT_PUBKEY_DATA : source_pointer = ByteQuantity(192)
-let DEPOSIT_PUBKEY_LENGTH : byte_length = ByteQuantity(48)
-let DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD : source_pointer = ByteQuantity(256)
-let DEPOSIT_WITHDRAWAL_CREDENTIALS_DATA : source_pointer = ByteQuantity(288)
-let DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH : byte_length = WORD_BYTE_LENGTH
-let DEPOSIT_AMOUNT_LENGTH_WORD : source_pointer = ByteQuantity(320)
-let DEPOSIT_AMOUNT_DATA : source_pointer = ByteQuantity(352)
-let DEPOSIT_AMOUNT_LENGTH : byte_length = EIGHT_BYTE_LENGTH
-let DEPOSIT_SIGNATURE_LENGTH_WORD : source_pointer = ByteQuantity(384)
-let DEPOSIT_SIGNATURE_DATA : source_pointer = ByteQuantity(416)
-let DEPOSIT_SIGNATURE_LENGTH : byte_length = ByteQuantity(96)
-let DEPOSIT_INDEX_LENGTH_WORD : source_pointer = ByteQuantity(512)
-let DEPOSIT_INDEX_DATA : source_pointer = ByteQuantity(544)
-let DEPOSIT_INDEX_LENGTH : byte_length = EIGHT_BYTE_LENGTH
+let DEPOSIT_EVENT_DATA_LENGTH : int(576) = 576
+let DEPOSIT_PUBKEY_HEAD : int(0) = 0
+let DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD : int(32) = 32
+let DEPOSIT_AMOUNT_HEAD : int(64) = 64
+let DEPOSIT_SIGNATURE_HEAD : int(96) = 96
+let DEPOSIT_INDEX_HEAD : int(128) = 128
+let DEPOSIT_PUBKEY_LENGTH_WORD : int(160) = 160
+let DEPOSIT_PUBKEY_DATA : int(192) = 192
+let DEPOSIT_PUBKEY_LENGTH : int(48) = 48
+let DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD : int(256) = 256
+let DEPOSIT_WITHDRAWAL_CREDENTIALS_DATA : int(288) = 288
+let DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH : int(32) = WORD_BYTE_LENGTH
+let DEPOSIT_AMOUNT_LENGTH_WORD : int(320) = 320
+let DEPOSIT_AMOUNT_DATA : int(352) = 352
+let DEPOSIT_AMOUNT_LENGTH : int(8) = EIGHT_BYTE_LENGTH
+let DEPOSIT_SIGNATURE_LENGTH_WORD : int(384) = 384
+let DEPOSIT_SIGNATURE_DATA : int(416) = 416
+let DEPOSIT_SIGNATURE_LENGTH : int(96) = 96
+let DEPOSIT_INDEX_LENGTH_WORD : int(512) = 512
+let DEPOSIT_INDEX_DATA : int(544) = 544
+let DEPOSIT_INDEX_LENGTH : int(8) = EIGHT_BYTE_LENGTH
 
 /* Enter a top-level protocol system-call frame. The caller has already made a
  * fresh memory frame and, for a word input, frozen the parent-memory span that
@@ -55,13 +55,13 @@ let DEPOSIT_INDEX_LENGTH : byte_length = EIGHT_BYTE_LENGTH
 /*! Enters a top-level protocol system-call frame. The caller has already
     made a fresh memory frame and, for a word input, frozen the
     parent-memory span that `input` references. */
-function enter_system_call_frame(tgt : address, input : ByteSlice) -> StateCheckpoint = {
+function enter_system_call_frame(tgt : address, input : ByteSlice) -> journal_checkpoint = {
     let checkpoint = k_state_checkpoint();
-    pc = BYTE_ZERO;
+    pc = 0;
     call_depth = 0;
-    gas_remaining = Gas(30000000);
+    gas_remaining = SYSTEM_CALL_GAS_LIMIT;
     state_gas_remaining = GAS_ZERO;
-    state_gas_spilled = GAS_ZERO;
+    state_gas_spilled = STATE_GAS_SPILL_ZERO;
     frame_refund = GAS_REFUND_ZERO;
     stack_reset();
     returndata_clear();
@@ -91,9 +91,10 @@ function system_call(tgt : address, input : hash) -> unit = {
         /* Freeze the word in a parent memory frame. The system call executes
          * above that frame, so its own memory writes cannot mutate calldata. */
         memory_reset();
-        memory_expand_to(SYSTEM_CALL_INPUT_LENGTH);
-        mem_store_word(BYTE_ZERO, hash_to_word(input));
-        let input_slice = memory_byte_slice(BYTE_ZERO, SYSTEM_CALL_INPUT_LENGTH);
+        let input_range : MemoryRange = memory_range(0, SYSTEM_CALL_INPUT_LENGTH);
+        let _ = memory_expand_to(input_range.len);
+        mem_store_word(input_range.off, hash_to_word(input));
+        let input_slice = memory_byte_slice(input_range.off, input_range.len);
         let parent_memory = memory_frame_enter();
         let checkpoint = enter_system_call_frame(tgt, input_slice);
         let _ = interpret();
@@ -116,30 +117,29 @@ function system_call(tgt : address, input : hash) -> unit = {
 
 
 /*! Issues one checked block-end system call (EIP-7002/EIP-7251/EIP-8282): the
-    target must exist and the call must succeed — otherwise the block is
-    invalid — and the returned dequeued requests are the call's output. */
-function system_call_checked(tgt : address) -> option(ByteSlice) = {
+    target must exist and the call must succeed. Missing code or frame failure
+    throws immediately; a successful call returns the dequeued requests. */
+function system_call_checked(tgt : address) -> ByteSlice = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
-        None() /* checked: a missing system predeploy invalidates the block */
+        throw InvalidBlock(ExecutionInvalid)
     } else {
         memory_reset();
         let parent_memory = memory_frame_enter();
         let checkpoint = enter_system_call_frame(tgt, EMPTY_SLICE);
         let output = interpret();
-        let ok = frame_succeeded();
-        let result : option(ByteSlice) = if ok then {
-                let start = scratch_begin();
-                scratch_push_slice(output);
-                Some(scratch_finish(start))
-            } else {
-                None()
-            };
-        memory_frame_leave(parent_memory);
-        if not_bool(ok) then {
-            k_revert(checkpoint) /* checked: a reverting/erroring system call invalidates the block */
-        };
-        k_tx_merge(); /* system call is a top-level boundary: merge its storage */
-        result
+        if frame_succeeded() then {
+            let start = scratch_begin();
+            scratch_push_slice(output);
+            let result = scratch_finish(start);
+            memory_frame_leave(parent_memory);
+            k_tx_merge(); /* system call is a top-level boundary: merge its storage */
+            result
+        } else {
+            memory_frame_leave(parent_memory);
+            k_revert(checkpoint);
+            k_tx_merge();
+            throw InvalidBlock(ExecutionInvalid)
+        }
     }
 }
 
@@ -159,17 +159,19 @@ function deposit_log_matches(log : LogEntry) -> bool =
     consensus-layer deposit record's fields directly to the requests
     scratch (EIP-6110). */
 function append_deposit_request(data : ByteSlice) -> unit = {
-    if   (data.len != DEPOSIT_EVENT_DATA_LENGTH)
-       | (slice_load(data, DEPOSIT_PUBKEY_HEAD) != word_of_protocol_quantity(160))
-       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD) != word_of_protocol_quantity(256))
-       | (slice_load(data, DEPOSIT_AMOUNT_HEAD) != word_of_protocol_quantity(320))
-       | (slice_load(data, DEPOSIT_SIGNATURE_HEAD) != word_of_protocol_quantity(384))
-       | (slice_load(data, DEPOSIT_INDEX_HEAD) != word_of_protocol_quantity(512))
-       | (slice_load(data, DEPOSIT_PUBKEY_LENGTH_WORD) != word_of_protocol_quantity(48))
-       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD) != word_of_protocol_quantity(32))
-       | (slice_load(data, DEPOSIT_AMOUNT_LENGTH_WORD) != word_of_protocol_quantity(8))
-       | (slice_load(data, DEPOSIT_SIGNATURE_LENGTH_WORD) != word_of_protocol_quantity(96))
-       | (slice_load(data, DEPOSIT_INDEX_LENGTH_WORD) != word_of_protocol_quantity(8)) then {
+    if data.len != DEPOSIT_EVENT_DATA_LENGTH then {
+        throw InvalidBlock(InvalidExecutionRequests)
+    };
+    if   (slice_load(data, DEPOSIT_PUBKEY_HEAD) != U256(160))
+       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD) != U256(256))
+       | (slice_load(data, DEPOSIT_AMOUNT_HEAD) != U256(320))
+       | (slice_load(data, DEPOSIT_SIGNATURE_HEAD) != U256(384))
+       | (slice_load(data, DEPOSIT_INDEX_HEAD) != U256(512))
+       | (slice_load(data, DEPOSIT_PUBKEY_LENGTH_WORD) != U256(48))
+       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD) != U256(32))
+       | (slice_load(data, DEPOSIT_AMOUNT_LENGTH_WORD) != U256(8))
+       | (slice_load(data, DEPOSIT_SIGNATURE_LENGTH_WORD) != U256(96))
+       | (slice_load(data, DEPOSIT_INDEX_LENGTH_WORD) != U256(8)) then {
         throw InvalidBlock(InvalidExecutionRequests)
     };
     scratch_push_slice(sub_slice(data, DEPOSIT_PUBKEY_DATA, DEPOSIT_PUBKEY_LENGTH));
@@ -197,42 +199,24 @@ function append_deposit_logs(logs : list(LogEntry)) -> unit =
     order: deposits from logs (EIP-6110), withdrawal (EIP-7002),
     consolidation (EIP-7251), and, from Amsterdam, builder deposit and
     builder exit (EIP-8282). */
-function collect_execution_requests(deposits : ByteSlice) -> (bool, ExecutionRequests) = {
-    var valid : bool = true;
-    var withdrawals : ByteSlice = EMPTY_SLICE;
-    var consolidations : ByteSlice = EMPTY_SLICE;
-    var builder_deposits : ByteSlice = EMPTY_SLICE;
-    var builder_exits : ByteSlice = EMPTY_SLICE;
-    match system_call_checked(WITHDRAWAL_REQUEST_ADDR) {
-        Some(requests) => withdrawals = requests,
-        None() => valid = false,
-    };
-    if valid then {
-        match system_call_checked(CONSOLIDATION_REQUEST_ADDR) {
-            Some(requests) => consolidations = requests,
-            None() => valid = false,
-        }
-    };
-    if valid & (k_fork >= Amsterdam) then {
-        match system_call_checked(BUILDER_DEPOSIT_REQUEST_ADDR) {
-            Some(requests) => builder_deposits = requests,
-            None() => valid = false,
-        }
-    };
-    if valid & (k_fork >= Amsterdam) then {
-        match system_call_checked(BUILDER_EXIT_REQUEST_ADDR) {
-            Some(requests) => builder_exits = requests,
-            None() => valid = false,
-        }
-    };
-    (
-        valid,
-        struct {
-            deposits = deposits,
-            withdrawals = withdrawals,
-            consolidations = consolidations,
-            builder_deposits = builder_deposits,
-            builder_exits = builder_exits,
-        },
-    )
+function collect_execution_requests(deposits : ByteSlice) -> ExecutionRequests = {
+    let withdrawals = system_call_checked(WITHDRAWAL_REQUEST_ADDR);
+    let consolidations = system_call_checked(CONSOLIDATION_REQUEST_ADDR);
+    let builder_deposits : ByteSlice = if k_fork >= Amsterdam then {
+            system_call_checked(BUILDER_DEPOSIT_REQUEST_ADDR)
+        } else {
+            EMPTY_SLICE
+        };
+    let builder_exits : ByteSlice = if k_fork >= Amsterdam then {
+            system_call_checked(BUILDER_EXIT_REQUEST_ADDR)
+        } else {
+            EMPTY_SLICE
+        };
+    struct {
+        deposits = deposits,
+        withdrawals = withdrawals,
+        consolidations = consolidations,
+        builder_deposits = builder_deposits,
+        builder_exits = builder_exits,
+    }
 }

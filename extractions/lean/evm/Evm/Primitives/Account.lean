@@ -16,23 +16,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -45,6 +37,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # Accounts and storage
@@ -54,11 +47,54 @@ entry types that cross the host interface (overlay rows, merge
 enumeration). Pure
 data — no registers, no externs. -/
 
+def undefined_AccountInfo (_ : Unit) : SailM AccountInfo := do
+  (pure { nonce := ← do
+              let publicField ← (undefined_range 0 ((2 ^i 64) - 1))
+              pure (⟨publicField⟩),
+          balance := ← do
+              let publicField ← (undefined_range 0 ((2 ^i 256) - 1))
+              pure (⟨publicField⟩),
+          code_hash := ← (undefined_vector 32 (← (undefined_bitvector 8))),
+          storage_root := ← (undefined_vector 32 (← (undefined_bitvector 8))) })
+
+def undefined_Account (_ : Unit) : SailM Account := do
+  (pure { info := ← (undefined_AccountInfo ()),
+          present := ← (undefined_bool ()),
+          storage_cleared := ← (undefined_bool ()),
+          created := ← (undefined_bool ()),
+          selfdestructed := ← (undefined_bool ()) })
+
+def undefined_StorageValue (_ : Unit) : SailM StorageValue := do
+  (pure { curr := ← do
+              let publicField ← (undefined_range 0 ((2 ^i 256) - 1))
+              pure (⟨publicField⟩),
+          orig := ← do
+              let publicField ← (undefined_range 0 ((2 ^i 256) - 1))
+              pure (⟨publicField⟩) })
+
+def undefined_StorageKey (_ : Unit) : SailM StorageKey := do
+  (pure { addr := ← (undefined_vector 20 (← (undefined_bitvector 8))),
+          slot := ← do
+              let publicField ← (undefined_range 0 ((2 ^i 256) - 1))
+              pure (⟨publicField⟩) })
+
+def undefined_StorageEntry (_ : Unit) : SailM StorageEntry := do
+  (pure { key := ← (undefined_StorageKey ()),
+          value := ← (undefined_StorageValue ()) })
+
+def undefined_AcctValue (_ : Unit) : SailM AcctValue := do
+  (pure { curr := ← (undefined_Account ()),
+          orig := ← (undefined_Account ()) })
+
+def undefined_AcctEntry (_ : Unit) : SailM AcctEntry := do
+  (pure { addr := ← (undefined_vector 20 (← (undefined_bitvector 8))),
+          value := ← (undefined_AcctValue ()) })
+
 /-- The empty account tuple: zero nonce and balance, `KECCAK_EMPTY` code
 hash, empty-trie storage root (YP §4.1). -/
 def EMPTY_ACCOUNT_INFO : AccountInfo :=
   { nonce := ⟨0⟩,
-    balance := ZERO_WORD,
+    balance := ⟨(ZERO_WORD).value⟩,
     code_hash := KECCAK_EMPTY,
     storage_root := EMPTY_TRIE_ROOT }
 

@@ -6,15 +6,21 @@ keys. Their bytewise trie order differs from numeric order, so this cursor
 emits indices directly in canonical key order.
 */
 
-/*! The item count and next canonical-key position of an indexed trie. */
-struct RlpIndexCursor = {
-    count : item_count,
-    position : item_index,
+/*! A supported indexed-trie collection maximum. Transaction lists provide the
+    largest schema bound among transactions, receipts, and withdrawals. */
+type rlp_index_valid_maximum('maximum : Int) -> Bool =
+    0 < 'maximum & 'maximum <= transaction_count_bound
+
+/*! The item count and next canonical-key position of a schema-bounded indexed
+    trie. Both retain the enclosing collection's semantic maximum. */
+struct RlpIndexCursor('maximum : Int), rlp_index_valid_maximum('maximum) = {
+    count : range(0, 'maximum),
+    position : range(0, 'maximum),
 }
 
 /*! One numeric index, its trie key, and the following key when present. */
-struct RlpIndexItem = {
-    index : item_index,
+struct RlpIndexItem('maximum : Int), rlp_index_valid_maximum('maximum) = {
+    index : range(0, 'maximum - 1),
     key : TriePath,
     next_key : option(TriePath),
 }
@@ -80,49 +86,56 @@ function trie_index_key(index : item_index) -> TriePath =
         }
     }
 
-function rlp_index_cursor(count : item_count) -> RlpIndexCursor =
+/*! Starts canonical RLP-index traversal for a bounded collection. */
+function rlp_index_cursor forall ('maximum : Int), rlp_index_valid_maximum('maximum). (count : range(0, 'maximum)) -> (
+    RlpIndexCursor('maximum)
+) =
     struct { count = count, position = 0 }
 
-function rlp_index_cursor_empty(cursor : RlpIndexCursor) -> bool =
+/*! Whether canonical RLP-index traversal has consumed every index. */
+function rlp_index_cursor_empty forall ('maximum : Int), rlp_index_valid_maximum('maximum). (cursor :
+    RlpIndexCursor('maximum)) -> (
+    bool
+) =
     cursor.count <= cursor.position
 
-/*! Counts the one-byte keys that sort before RLP index zero. */
-function rlp_index_single_count(count : item_count) -> item_count =
-    if count == 0 then {
-        0
-    } else {
-        let rest = protocol_quantity_decrement(count);
-        if rest < 127 then { rest } else { 127 }
-    }
-
 /*! Maps a canonical-key cursor position back to its numeric list index. */
-function rlp_index_at_position(cursor : RlpIndexCursor) -> item_index = {
-    if rlp_index_cursor_empty(cursor) then {
-        throw InvalidBlock(WitnessDeficient)
-    };
-    let single_count = rlp_index_single_count(cursor.count);
-    if cursor.position < single_count then {
-        protocol_quantity_increment(cursor.position)
-    } else {
-        if cursor.position == single_count then {
-            0
+function rlp_index_at_position forall ('maximum : Int), rlp_index_valid_maximum('maximum). (cursor :
+    RlpIndexCursor('maximum)) -> (
+    range(0, 'maximum - 1)
+) = {
+    let count = cursor.count;
+    let position = cursor.position;
+    if position < count then {
+        let rest : range(0, 'maximum - 1) = count - 1;
+        let single_count : range(0, 'maximum - 1) = if rest < 127 then { rest } else { 127 };
+        if position < single_count then {
+            position + 1
         } else {
-            cursor.position
+            if position == single_count then { 0 } else { position }
         }
+    } else {
+        throw InvalidBlock(WitnessDeficient)
     }
 }
 
 /*! Removes the next canonical-key item and advances the cursor. */
-function rlp_index_cursor_pop(cursor : RlpIndexCursor) -> (RlpIndexItem, RlpIndexCursor) = {
-    let index = rlp_index_at_position(cursor);
-    let next_cursor : RlpIndexCursor = struct {
-            count = cursor.count,
-            position = protocol_quantity_increment(cursor.position),
-        };
-    let next_key = if rlp_index_cursor_empty(next_cursor) then {
-            None()
-        } else {
-            Some(trie_index_key(rlp_index_at_position(next_cursor)))
-        };
-    (struct { index = index, key = trie_index_key(index), next_key = next_key }, next_cursor)
+function rlp_index_cursor_pop forall ('maximum : Int), rlp_index_valid_maximum('maximum). (cursor :
+    RlpIndexCursor('maximum)) -> (
+    (RlpIndexItem('maximum), RlpIndexCursor('maximum))
+) = {
+    let count = cursor.count;
+    let position = cursor.position;
+    if position < count then {
+        let index = rlp_index_at_position(cursor);
+        let next_cursor : RlpIndexCursor('maximum) = struct { count = count, position = position + 1 };
+        let next_key = if rlp_index_cursor_empty(next_cursor) then {
+                None()
+            } else {
+                Some(trie_index_key(rlp_index_at_position(next_cursor)))
+            };
+        (struct { index = index, key = trie_index_key(index), next_key = next_key }, next_cursor)
+    } else {
+        throw InvalidBlock(WitnessDeficient)
+    }
 }

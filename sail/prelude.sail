@@ -1,6 +1,6 @@
-/* EVM words stay in fixed-width bits. Runtime quantities use mathematical  */
-/* integers; conversion to a word occurs only where the EVM exposes such a  */
-/* quantity on its 256-bit operand stack.                                   */
+/* EVM words are bounded mathematical naturals. Runtime quantities use their */
+/* own semantic domains; conversion to a word occurs only where the EVM      */
+/* exposes such a quantity on its 256-bit operand stack.                     */
 
 /*md
 # The prelude
@@ -8,8 +8,8 @@
 The value model and the 256-bit word ALU — the arithmetic foundation of
 the specification. The EVM operates on 256-bit
 words (Yellow Paper §9.1); this module defines that word type and gives
-every word operation its full two's-complement / unsigned semantics over
-`bits(256)`. Only KECCAK-256 and the precompile cryptography at the host
+every word operation its full two's-complement / unsigned semantics modulo
+`2^256`. Only KECCAK-256 and the precompile cryptography at the host
 boundary are opaque primitives; everything else is fully defined here.
 
 Operator grounding: `int → bits` is `get_slice_int`; integer division and
@@ -25,12 +25,17 @@ predicates.
 | `TWO_256` | `2^256` | The word modulus |
 | `ZERO_WORD` / `WORD_ZERO` | `0` | The zero word |
 | `WORD_ONE` | `1` | The unit word |
-| `ZERO_ADDR` | `0` | The zero address |
+| `ZERO_ADDRESS` | `0` | The zero address |
 */
 default Order dec
 
 $include <prelude.sail>
+$include <smt.sail>
 $include <generic_equality.sail>
+
+/* EVM arithmetic quantities are non-negative, so Euclidean division is the
+ * specification's ordinary integer division. */
+overload operator / = {ediv_int}
 
 /*md
 ## Types
@@ -38,142 +43,104 @@ $include <generic_equality.sail>
 /*! An 8-bit byte. */
 type byte = bits(8)
 
-/*! The EVM 256-bit machine word (YP §9.1), nominally separated from
-    other 256-bit protocol values. */
-newtype word = U256 : bits(256)
+/*! The EVM 256-bit machine word (YP §9.1).  A transparent range keeps the
+    mathematical subtype relation visible: narrower non-negative ranges can
+    be passed as words without a model-level conversion. */
+type word = range(0, 2 ^ 256 - 1)
+
+/* Transitional constructor spelling for value-producing sites.  Unlike the
+ * former newtype constructor this is the identity and introduces no nominal
+ * wrapper; construction sites are removed as their bounds become explicit. */
+val U256 : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> word
+function U256(value) = value
 
 /*! A 20-byte account address (YP §4.1). */
-newtype address = Address : vector(20, dec, byte)
+type address = vector(20, dec, byte)
+
+/* Transitional constructor spelling for address-producing sites. */
+function Address(bytes : vector(20, dec, byte)) -> address = bytes
 
 /*! A KECCAK-256 / storage-key sized digest. */
-newtype b256 = B256 : vector(32, dec, byte)
+type b256 = vector(32, dec, byte)
+
+/* Transitional constructor spelling for digest-producing sites. */
+function B256(bytes : vector(32, dec, byte)) -> b256 = bytes
 /*! The common digest type used by trie, code, and block hashes. */
 type hash = b256
 
-/*! A fixed-width 64-bit limb used to define word arithmetic. */
-type limb    = bits(64)
-
-/*! A host address operation's success flag and nominal address result. */
+/*! A host address operation's success flag and address result. */
 struct AddressResult = {
     success : bool,
     address : address,
 }
 
-/*! The quotient and remainder of one limb division. */
-struct LimbDivMod = {
-    quotient : limb,
-    remainder : limb,
-}
+/* The word modulus is a type-level singleton because its exact value needs
+ * 257 bits.  Code that needs the mathematical value uses `sizeof` without
+ * materializing an unsupported runtime integer in optimized builds. */
+/*! The type-level modulus of EVM-word arithmetic. */
+type word_modulus : Int = 2 ^ 256
 
-/*! The quotient and remainder of one unsigned word division. */
-struct WordDivMod = {
-    quotient : word,
-    remainder : word,
-}
+/*! A bit count within one EVM word. */
+type word_bit_count = range(0, 256)
 
-/* The byte vectors use Sail's conventional decreasing order: index zero is
- * the least-significant byte. These explicit bridges keep bitvector-specific
- * operations at the edge of the nominal address/hash domains. */
-/*! Constructs an address from its 160-bit numerical representation. */
-function address_from_bits(value : bits(160)) -> address = {
-    var bytes : vector(20, dec, byte) = vector_init(20, 0x00);
-    foreach (k from 0 to 19) {
-        bytes[k] = sail_shiftright(value, 8 * k)[7 .. 0]
-    };
-    Address(bytes)
-}
+/*! Interprets a digest as the corresponding big-endian EVM word. */
+function hash_to_word(bytes : hash) -> word =
+    unsigned(from_bytes_le(32, bytes))
 
-/*! Returns an address's 160-bit numerical representation. */
-function address_to_bits(Address(bytes) : address) -> bits(160) = {
-    var value : bits(160) = sail_zeros(160);
-    foreach (k from 0 to 19) {
-        value = or_vec(value, sail_shiftleft(sail_zero_extend(bytes[k], 160), 8 * k))
-    };
-    value
-}
+/*! Serializes an EVM word as a 32-byte big-endian digest. */
+function word_to_hash(value : word) -> hash =
+    B256(to_bytes_le(32, get_slice_int(256, value, 0)))
 
-/*! Constructs a digest from its 256-bit numerical representation. */
-function b256_from_bits(value : bits(256)) -> b256 = {
-    var bytes : vector(32, dec, byte) = vector_init(32, 0x00);
-    foreach (k from 0 to 31) {
-        bytes[k] = sail_shiftright(value, 8 * k)[7 .. 0]
-    };
-    B256(bytes)
-}
-
-/*! Returns a digest's 256-bit numerical representation. */
-function b256_to_bits(B256(bytes) : b256) -> bits(256) = {
-    var value : bits(256) = sail_zeros(256);
-    foreach (k from 0 to 31) {
-        value = or_vec(value, sail_shiftleft(sail_zero_extend(bytes[k], 256), 8 * k))
-    };
-    value
-}
-
-function hash_from_bits(value : bits(256)) -> hash = b256_from_bits(value)
-function hash_to_bits(value : hash) -> bits(256) = b256_to_bits(value)
-
-function b256_zero() -> b256 = B256(vector_init(32, 0x00))
-
-/* Compare fixed bytes in wire order. The decreasing vector order keeps the
- * most-significant/wire-first byte at index 31. */
 /*! Compares two digests as unsigned big-endian integers. */
-function b256_lt(B256(left) : b256, B256(right) : b256) -> bool = {
-    var less : bool = false;
-    var equal : bool = true;
-    foreach (offset from 0 to 31) {
-        let index = 31 - offset;
-        if equal & (left[index] != right[index]) then {
-            less = unsigned(left[index]) < unsigned(right[index]);
-            equal = false
-        }
-    };
-    less
-}
+function hash_lt(left : hash, right : hash) -> bool =
+    hash_to_word(left) < hash_to_word(right)
 
-/* Nominal container bridges are defined before the constants that use them.
- * Optimized extraction replaces these bodies with direct fixed-container /
- * four-limb operations. */
-function hash_to_word(value : hash) -> word = U256(hash_to_bits(value))
-function word_to_hash(U256(value) : word) -> hash = hash_from_bits(value)
-function word_to_address(U256(w) : word) -> address = address_from_bits(w[159 .. 0])
-function address_to_word(a : address) -> word = U256(sail_zero_extend(address_to_bits(a), 256))
+/*! Converts a word to its low 160-bit address. */
+function word_to_address(value : word) -> address =
+    Address(to_bytes_le(20, get_slice_int(160, value, 0)))
 
 /* the all-zero word / address constants */
-let ZERO_WORD : word = U256(0x0000000000000000000000000000000000000000000000000000000000000000)
-let ZERO_ADDR : address = word_to_address(ZERO_WORD)
-let ZERO_HASH : hash = word_to_hash(ZERO_WORD)
+let ZERO_WORD : word = U256(unsigned(0x0000000000000000000000000000000000000000000000000000000000000000))
+let ZERO_ADDRESS : address = Address(vector_init(20, 0x00))
+let ZERO_HASH : hash = B256(vector_init(32, 0x00))
 
-let WORD_ZERO : word = U256(0x0000000000000000000000000000000000000000000000000000000000000000)
-let WORD_ONE : word = U256(0x0000000000000000000000000000000000000000000000000000000000000001)
-let WORD_ALL_ONES : word = U256(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
-let WORD_SIGN_BIT : word = U256(0x8000000000000000000000000000000000000000000000000000000000000000)
+let WORD_ZERO : word = U256(unsigned(0x0000000000000000000000000000000000000000000000000000000000000000))
+let WORD_ONE : word = U256(unsigned(0x0000000000000000000000000000000000000000000000000000000000000001))
+let WORD_ALL_ONES : word = U256(unsigned(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff))
+let WORD_SIGN_BIT : word = U256(unsigned(0x8000000000000000000000000000000000000000000000000000000000000000))
 
 /* Keep every operation on the nominal EVM word inside this small algebra.
- * The canonical model still computes over bits(256); the optimized C splice
- * gives the nominal carrier its four-limb representation without exposing a
- * generic Sail bitvector at call sites. */
-function word_to_bits(U256(value) : word) -> bits(256) = value
-function word_add(U256(left) : word, U256(right) : word) -> word = U256(add_bits(left, right))
-function word_sub(U256(left) : word, U256(right) : word) -> word = U256(sub_bits(left, right))
-function word_and(U256(left) : word, U256(right) : word) -> word = U256(and_vec(left, right))
-function word_or(U256(left) : word, U256(right) : word) -> word = U256(or_vec(left, right))
-function word_xor(U256(left) : word, U256(right) : word) -> word = U256(xor_vec(left, right))
-function word_not(U256(value) : word) -> word = U256(not_vec(value))
-function word_bit(U256(value) : word, index : range(0, 255)) -> bit = value[index]
-function word_low_byte(U256(value) : word) -> byte = value[7 .. 0]
-function word_limb_0(U256(value) : word) -> limb = value[63 .. 0]
-function word_limb_1(U256(value) : word) -> limb = value[127 .. 64]
-function word_limb_2(U256(value) : word) -> limb = value[191 .. 128]
-function word_limb_3(U256(value) : word) -> limb = value[255 .. 192]
+ * Arithmetic is stated over mathematical integers and reduced exactly once
+ * at the EVM word boundary. */
+val word_add_word : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
+        int('left),
+        int('right),
+    ) -> word
+function word_add_word(left, right) =
+    U256(tmod_nat(left + right, sizeof(word_modulus)))
 
-/* Construct a word from little-endian 64-bit limbs.  Keeping this bridge in
- * the nominal word algebra lets optimized backends build their native U256
- * representation directly instead of materialising intermediate lbits. */
-function word_from_limbs(limb_0 : limb, limb_1 : limb, limb_2 : limb, limb_3 : limb) -> word =
-    U256(append(limb_3, append(limb_2, append(limb_1, limb_0))))
-function word_shift_left_one(U256(value) : word) -> word = U256(sail_shiftleft(value, 1))
-function word_shift_right_one(U256(value) : word) -> word = U256(sail_shiftright(value, 1))
+val word_sub_word : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
+        int('left),
+        int('right),
+    ) -> word
+function word_sub_word(left, right) =
+    U256(emod_positive(left - right, sizeof(word_modulus)))
+
+function word_and(left : word, right : word) -> word =
+    U256(unsigned(and_vec(get_slice_int(256, left, 0), get_slice_int(256, right, 0))))
+function word_or(left : word, right : word) -> word =
+    U256(unsigned(or_vec(get_slice_int(256, left, 0), get_slice_int(256, right, 0))))
+function word_xor(left : word, right : word) -> word =
+    U256(unsigned(xor_vec(get_slice_int(256, left, 0), get_slice_int(256, right, 0))))
+function word_not(value : word) -> word = U256(unsigned(not_vec(get_slice_int(256, value, 0))))
+function word_bit(value : word, index : range(0, 255)) -> bit = get_slice_int(256, value, 0)[index]
+val word_low_byte : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> byte
+function word_low_byte(value) = get_slice_int(8, value, 0)
+
+function word_shift_left_one(value : word) -> word =
+    U256(tmod_nat(value * 2, sizeof(word_modulus)))
+function word_shift_right_one(value : word) -> word =
+    U256(tdiv_nat(value, 2))
 
 /*md
 ## Helpers
@@ -182,326 +149,180 @@ function word_shift_right_one(U256(value) : word) -> word = U256(sail_shiftright
 */
 /*! `1` if the condition holds, else `0` — the EVM boolean convention. */
 function word_of_bool(b : bool) -> word = if b then { WORD_ONE } else { WORD_ZERO }
-function word_is_zero(w : word) -> bool = w == WORD_ZERO
-function word_nonzero(w : word) -> bool = not_bool(word_is_zero(w))
+val word_is_zero : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> bool
+function word_is_zero(w) = w == WORD_ZERO
 
-let LIMB_ZERO : limb = 0x0000000000000000
-let LIMB_ONE : limb = 0x0000000000000001
-let LIMB_MAX : limb = 0xFFFFFFFFFFFFFFFF
+val word_nonzero : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> bool
+function word_nonzero(w) = not_bool(word_is_zero(w))
 
-/* Unsigned comparison via the borrow bit of a - b. This stays entirely in the
- * fixed-width algebra: unlike unsigned(bits(64)), the C backend emits native
- * uint64_t operations and never constructs a sail_int. */
-/*! Compares two limbs as unsigned values. */
-function limb_ult(a : limb, b : limb) -> bool = {
-    let difference = sub_bits(a, b);
+/*! Unsigned word order.  Narrower natural ranges are word subtypes, so the
+    same functions also accept statically bounded operands. */
+val word_ult : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
+        int('left),
+        int('right),
+    ) -> bool
+function word_ult(a, b) = a < b
 
-    let borrow = or_vec(and_vec(not_vec(a), b), and_vec(not_vec(xor_vec(a, b)), difference));
-    and_vec(borrow, 0x8000000000000000) != LIMB_ZERO
-}
+val word_ule : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
+        int('left),
+        int('right),
+    ) -> bool
+function word_ule(a, b) = not_bool(word_ult(b, a))
 
-function limb_ule(a : limb, b : limb) -> bool = not_bool(limb_ult(b, a))
-
-/* Fixed-width checked arithmetic. Plain bits(64) addition and subtraction are
- * modular; callers that model quantities use these operations so wraparound
- * is represented explicitly and mapped to the operation's EVM behaviour. */
-/*! Adds limbs and reports fixed-width overflow. */
-function limb_checked_add(a : limb, b : limb) -> option(limb) = {
-    let result = add_bits(a, b);
-    if limb_ult(result, a) then {
-        None()
-    } else {
-        Some(result)
-    }
-}
-
-/*! Subtracts limbs and reports fixed-width underflow. */
-function limb_checked_sub(a : limb, b : limb) -> option(limb) =
-    if limb_ult(a, b) then {
-        None()
-    } else {
-        Some(sub_bits(a, b))
-    }
-
-/* Fixed-width checked multiplication. */
-/*! Multiplies limbs and reports fixed-width overflow. */
-function limb_checked_mul(value : limb, factor : limb) -> option(limb) = {
-    var result : limb = LIMB_ZERO;
-    var addend : limb = value;
-    var remaining : limb = factor;
-    var valid : bool = true;
-    foreach (i from 0 to 63) {
-        if valid & ((remaining & LIMB_ONE) == LIMB_ONE) then {
-            let added = limb_checked_add(result, addend);
-            match added {
-                Some(value) => result = value,
-                None() => valid = false,
-            }
-        };
-        remaining = sail_shiftright(remaining, 1);
-        if valid & (i < 63) & (remaining != LIMB_ZERO) then {
-            let doubled = limb_checked_add(addend, addend);
-            match doubled {
-                Some(value) => addend = value,
-                None() => valid = false,
-            }
-        }
-    };
-    if valid then {
-        Some(result)
-    } else {
-        None()
-    }
-}
-
-/* Unsigned fixed-width long division. The loop consumes one dividend bit per
- * iteration, so neither the model nor generated code crosses through Sail's
- * arbitrary-precision integer representation. */
-/*! Computes unsigned limb quotient and remainder by bounded long division. */
-function limb_divmod(dividend : limb, divisor : limb) -> LimbDivMod = {
-    if divisor == LIMB_ZERO then {
-        struct { quotient = LIMB_ZERO, remainder = LIMB_ZERO }
-    } else {
-        var quotient : limb = LIMB_ZERO;
-        var remainder : limb = LIMB_ZERO;
-        var remaining : limb = dividend;
-        foreach (_step from 0 to 63) {
-            let incoming = if remaining[63] == bitone then { LIMB_ONE } else { LIMB_ZERO };
-            let overflow = remainder[63] == bitone;
-            remainder = or_vec(sail_shiftleft(remainder, 1), incoming);
-            remaining = sail_shiftleft(remaining, 1);
-            quotient = sail_shiftleft(quotient, 1);
-            if overflow | limb_ule(divisor, remainder) then {
-                remainder = sub_bits(remainder, divisor);
-                quotient = or_vec(quotient, LIMB_ONE)
-            }
-        };
-        struct { quotient = quotient, remainder = remainder }
-    }
-}
-
-/*! A bit count within one limb. */
-type limb_bit_count = range(0, 64)
-/*! A bit count within one EVM word. */
-type word_bit_count = range(0, 256)
-
-/*! Increments a word bit count without exceeding the word width. */
-function word_bit_count_increment(value : word_bit_count) -> word_bit_count =
-    if value < 256 then {
-        value + 1
-    } else {
-        assert(false);
-        0
-    }
-
-/*! Returns the position above a limb's most significant set bit. */
-function limb_bit_length(value : limb) -> limb_bit_count = {
-    var remaining : limb = value;
-    var length : limb_bit_count = 0;
-    foreach (step from 0 to 63) {
-        if remaining != LIMB_ZERO then {
-            length = step + 1;
-            remaining = sail_shiftright(remaining, 1)
-        }
-    };
-    length
-}
-
-/* Lossless word narrowing. The caller, not this helper, chooses what a value
- * wider than the host quantity domain means for its opcode. */
-/*! Narrows a word to one limb when all higher bits are zero. */
-function word_to_limb(U256(w) : word) -> option(limb) =
-    if w[255 .. 64] == sail_zeros(192) then {
-        Some(w[63 .. 0])
-    } else {
-        None()
-    }
-
-function limb_to_word(value : limb) -> word = U256(sail_zero_extend(value, 256))
-
-/* Embed an exact non-negative quantity in an EVM word. Callers establish the
- * protocol bound; the conversion itself does not narrow through a host-sized
- * integer first. */
-/*! Embeds a natural number smaller than the word modulus. */
-function word_of_nat(value : nat) -> word = {
-    assert(value < 2 ^ 256);
-    U256(get_slice_int(256, value, 0))
-}
-
-/*! Unsigned 256-bit less-than, defined by comparing the four 64-bit limbs
-    from most significant down. */
-function word_ult(U256(a) : word, U256(b) : word) -> bool =
-    if a[255 .. 192] != b[255 .. 192] then {
-        limb_ult(a[255 .. 192], b[255 .. 192])
-    } else {
-        if a[191 .. 128] != b[191 .. 128] then {
-            limb_ult(a[191 .. 128], b[191 .. 128])
+/*! Returns the position above an 8-bit value's most significant set bit. */
+function byte_bit_length(value : range(0, 2 ^ 8 - 1)) -> range(0, 8) =
+    if value < 2 ^ 4 then {
+        if value < 2 ^ 2 then {
+            if value < 2 ^ 1 then { value } else { 2 }
         } else {
-            if a[127 .. 64] != b[127 .. 64] then {
-                limb_ult(a[127 .. 64], b[127 .. 64])
-            } else {
-                limb_ult(a[63 .. 0], b[63 .. 0])
-            }
+            if value < 2 ^ 3 then { 3 } else { 4 }
         }
+    } else {
+        if value < 2 ^ 6 then { if value < 2 ^ 5 then { 5 } else { 6 } } else { if value < 2 ^ 7 then { 7 } else { 8 } }
     }
 
-function word_ule(a : word, b : word) -> bool = not_bool(word_ult(b, a))
-
-/*! Returns the position above a word's most significant set bit. */
-function word_bit_length(U256(value) : word) -> word_bit_count =
-    if value[255 .. 192] != LIMB_ZERO then {
-        192 + limb_bit_length(value[255 .. 192])
+/*! Returns the position above a 16-bit value's most significant set bit. */
+function u16_bit_length(value : range(0, 2 ^ 16 - 1)) -> range(0, 16) =
+    if value < 2 ^ 8 then {
+        byte_bit_length(value)
     } else {
-        if value[191 .. 128] != LIMB_ZERO then {
-            128 + limb_bit_length(value[191 .. 128])
+        8 + byte_bit_length(tdiv_nat(value, 2 ^ 8))
+    }
+
+/*! Returns the position above a 32-bit value's most significant set bit. */
+function u32_bit_length(value : range(0, 2 ^ 32 - 1)) -> range(0, 32) =
+    if value < 2 ^ 16 then {
+        u16_bit_length(value)
+    } else {
+        16 + u16_bit_length(tdiv_nat(value, 2 ^ 16))
+    }
+
+/*! Returns the position above a 64-bit value's most significant set bit. */
+function u64_bit_length(value : range(0, 2 ^ 64 - 1)) -> range(0, 64) =
+    if value < 2 ^ 32 then {
+        u32_bit_length(value)
+    } else {
+        32 + u32_bit_length(tdiv_nat(value, 2 ^ 32))
+    }
+
+/*! Returns the position above a 128-bit value's most significant set bit. */
+function u128_bit_length(value : range(0, 2 ^ 128 - 1)) -> range(0, 128) =
+    if value < 2 ^ 64 then {
+        u64_bit_length(value)
+    } else {
+        64 + u64_bit_length(tdiv_nat(value, 2 ^ 64))
+    }
+
+/*! Returns the position above a word's most significant set bit.  The
+    logarithmic decomposition keeps both the mathematical specification and
+    native execution bounded without scanning all 256 bit positions. */
+val word_bit_length : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> word_bit_count
+function word_bit_length(value) = {
+    let limb3 = unsigned(get_slice_int(64, value, 192));
+    if limb3 != 0 then {
+        192 + u64_bit_length(limb3)
+    } else {
+        let limb2 = unsigned(get_slice_int(64, value, 128));
+        if limb2 != 0 then {
+            128 + u64_bit_length(limb2)
         } else {
-            if value[127 .. 64] != LIMB_ZERO then {
-                64 + limb_bit_length(value[127 .. 64])
+            let limb1 = unsigned(get_slice_int(64, value, 64));
+            if limb1 != 0 then {
+                64 + u64_bit_length(limb1)
             } else {
-                limb_bit_length(value[63 .. 0])
+                u64_bit_length(unsigned(get_slice_int(64, value, 0)))
             }
         }
     }
-
-/*! Adds words and reports unsigned overflow beyond 256 bits. */
-function word_checked_add(a : word, b : word) -> option(word) = {
-    let result = word_add(a, b);
-    if word_ult(result, a) then {
-        None()
-    } else {
-        Some(result)
-    }
 }
 
-/* Checked multiplication by a host-sized quantity. Transaction gas and blob
- * counts use this rather than widening through Sail's mathematical integer. */
-/*! Multiplies a word by one limb and reports overflow beyond 256 bits. */
-function word_checked_mul_limb(value : word, factor : limb) -> option(word) = {
-    var result : word = ZERO_WORD;
-    var addend : word = value;
-    var remaining : limb = factor;
-    var valid : bool = true;
-    foreach (i from 0 to 63) {
-        if valid & ((remaining & LIMB_ONE) == LIMB_ONE) then {
-            let added = word_checked_add(result, addend);
-            match added {
-                Some(value) => result = value,
-                None() => valid = false,
-            }
-        };
-        remaining = sail_shiftright(remaining, 1);
-        if valid & (i < 63) & (remaining != LIMB_ZERO) then {
-            let doubled = word_checked_add(addend, addend);
-            match doubled {
-                Some(value) => addend = value,
-                None() => valid = false,
-            }
-        }
-    };
-    if valid then {
-        Some(result)
-    } else {
-        None()
-    }
-}
+overload word_add = {word_add_word}
+overload word_sub = {word_sub_word}
 
-/* Multiplication modulo 2^256. Each step consumes one multiplier bit and all
- * intermediate values remain fixed-width words, which is exactly the EVM's
- * wrapping multiplication algebra. */
+/* Multiplication is exact in the canonical model and reduced only at the word
+ * boundary.  The optimized splice lowers the equation to native U256
+ * multiplication, whose low half is the same result. */
 /*! Multiplies words modulo the 256-bit word modulus. */
-function word_mul(a : word, b : word) -> word = {
-    var result : word = WORD_ZERO;
-    var addend : word = a;
-    var remaining : word = b;
-    foreach (_step from 0 to 255) {
-        if word_bit(remaining, 0) == bitone then {
-            result = word_add(result, addend)
-        };
-        addend = word_shift_left_one(addend);
-        remaining = word_shift_right_one(remaining)
-    };
-    result
-}
+val word_mul_word : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
+        int('left),
+        int('right),
+    ) -> int(mod('left * 'right, 2 ^ 256))
+function word_mul_word(a, b) = tmod_nat(a * b, sizeof(word_modulus))
+overload word_mul = {word_mul_word}
 
-/* Unsigned fixed-width long division. The overflow bit records the 257th bit
- * of the trial remainder, avoiding any widening through Sail int. */
-/*! Computes unsigned word quotient and remainder by bounded long division. */
-function word_divmod(dividend : word, divisor : word) -> WordDivMod = {
-    if word_is_zero(divisor) then {
-        struct { quotient = WORD_ZERO, remainder = WORD_ZERO }
+/* Unsigned Euclidean division over the canonical mathematical carrier. */
+/*! Computes an unsigned word quotient, yielding zero for a zero divisor. */
+val word_div_word : forall 'dividend 'divisor,
+                      0 <= 'dividend & 'dividend < 2 ^ 256 & 0 <= 'divisor & 'divisor < 2 ^ 256. (
+        int('dividend),
+        int('divisor),
+    ) -> word
+function word_div_word(dividend, divisor) = {
+    if divisor == 0 then {
+        WORD_ZERO
     } else {
-        var quotient : word = WORD_ZERO;
-        var remainder : word = WORD_ZERO;
-        var remaining : word = dividend;
-        foreach (_step from 0 to 255) {
-            let incoming = if word_bit(remaining, 255) == bitone then { WORD_ONE } else { WORD_ZERO };
-            let overflow = word_bit(remainder, 255) == bitone;
-            remainder = word_or(word_shift_left_one(remainder), incoming);
-            remaining = word_shift_left_one(remaining);
-            quotient = word_shift_left_one(quotient);
-            if overflow | word_ule(divisor, remainder) then {
-                remainder = word_sub(remainder, divisor);
-                quotient = word_or(quotient, WORD_ONE)
-            }
-        };
-        struct { quotient = quotient, remainder = remainder }
+        U256(tdiv_nat(dividend, divisor))
     }
 }
 
-/* Modular addition for operands already reduced below modulus. The
- * subtraction form avoids overflowing a+b. */
-/*! Adds reduced residues modulo a nonzero word modulus without overflow. */
-function word_mod_add_reduced(a : word, b : word, modulus : word) -> word = {
-    let threshold = word_sub(modulus, b);
-    if word_ule(threshold, a) then {
-        word_sub(a, threshold)
+overload word_div = {word_div_word}
+
+/*! Computes an unsigned word remainder, yielding zero for a zero divisor. */
+val word_mod_word : forall 'dividend 'divisor,
+                      0 <= 'dividend & 'dividend < 2 ^ 256 & 0 <= 'divisor & 'divisor < 2 ^ 256. (
+        int('dividend),
+        int('divisor),
+    ) -> word
+function word_mod_word(dividend, divisor) = {
+    if divisor == 0 then {
+        WORD_ZERO
     } else {
-        word_add(a, b)
+        U256(tmod_nat(dividend, divisor))
     }
 }
+overload word_mod = {word_mod_word}
 
-/*! Shifts a word left by a limb-sized amount, yielding zero past the width. */
-function word_shift_left_limb(value : word, amount : limb) -> word = {
-    var result : word = value;
-    var remaining : limb = amount;
-    foreach (_step from 0 to 255) {
-        if remaining != LIMB_ZERO then {
-            result = word_shift_left_one(result);
-            remaining = sub_bits(remaining, LIMB_ONE)
-        }
-    };
-    result
+/*! Compares two EVM-word-domain values without widening the narrower operand. */
+val word_greater_than_word : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
+        int('left),
+        int('right),
+    ) -> bool
+function word_greater_than_word(left, right) = left > right
+
+/*! Shifts a word left by a bounded count, yielding zero at the width. */
+function word_shift_left(value : word, amount : word_bit_count) -> word = {
+    U256(unsigned(sail_shiftleft(get_slice_int(256, value, 0), amount)))
 }
 
-/*! Shifts a word right logically by a limb-sized amount. */
-function word_shift_right_limb(value : word, amount : limb) -> word = {
-    var result : word = value;
-    var remaining : limb = amount;
-    foreach (_step from 0 to 255) {
-        if remaining != LIMB_ZERO then {
-            result = word_shift_right_one(result);
-            remaining = sub_bits(remaining, LIMB_ONE)
-        }
-    };
-    result
+/*! Shifts a word right logically by a bounded count. */
+function word_shift_right(value : word, amount : word_bit_count) -> word =
+    unsigned(sail_shiftright(get_slice_int(256, value, 0), amount))
+
+/*! Returns the number of significant bytes in a word. */
+val word_byte_length : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> range(0, 32)
+function word_byte_length(value) = {
+    let bit_length = word_bit_length(value);
+    if bit_length == 0 then {
+        0
+    } else {
+        tdiv_nat(bit_length + 7, 8)
+    }
 }
 
 /*! Shifts a two's-complement word right while extending its sign bit. */
-function word_arithmetic_shift_right_limb(value : word, amount : limb) -> word = {
-    var result : word = value;
-    var remaining : limb = amount;
-    let negative = word_bit(value, 255) == bitone;
-    foreach (_step from 0 to 255) {
-        if remaining != LIMB_ZERO then {
-            result = word_shift_right_one(result);
-            if negative then {
-                result = word_or(result, WORD_SIGN_BIT)
-            };
-            remaining = sub_bits(remaining, LIMB_ONE)
-        }
-    };
-    result
+function word_arithmetic_shift_right(value : word, amount : word_bit_count) -> word = {
+    let shifted = word_shift_right(value, amount);
+    if word_bit(value, 255) == bitone then {
+        let sign_fill = word_shift_left(WORD_ALL_ONES, 256 - amount);
+        word_or(shifted, sign_fill)
+    } else {
+        shifted
+    }
 }
+
+/*! Embeds an address's bytes into the low 160 bits of an EVM word. */
+function address_to_word(bytes : address) -> word =
+    unsigned(from_bytes_le(20, bytes))
 
 function word_negate(value : word) -> word = word_sub(WORD_ZERO, value)
 
@@ -542,28 +363,23 @@ reduced modulo 2^256.
 
 ### Arithmetic
 */
-function alu_add(a : word, b : word) -> word = word_add(a, b) /* ADD */
+val alu_add : forall 'right, 0 <= 'right & 'right < 2 ^ 256. (word, int('right)) -> word
+function alu_add(a, b) = word_add(a, b) /* ADD */
 function alu_sub(a : word, b : word) -> word = word_sub(a, b) /* SUB */
-function alu_mul(a : word, b : word) -> word = word_mul(a, b) /* MUL */
+val alu_mul : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
+        int('left),
+        int('right),
+    ) -> int(mod('left * 'right, 2 ^ 256))
+function alu_mul(a, b) = word_mul(a, b) /* MUL */
 
 /*! `DIV`: unsigned Euclidean division; division by zero yields `0`
     (YP Appendix H). */
 function alu_div(a : word, b : word) -> word =
-    /* DIV */
-    if word_is_zero(b) then {
-        WORD_ZERO
-    } else {
-        word_divmod(a, b).quotient
-    }
+    word_div(a, b) /* DIV */
 
 /*! `MOD`: unsigned modulus; a zero modulus yields `0`. */
 function alu_mod(a : word, b : word) -> word =
-    /* MOD */
-    if word_is_zero(b) then {
-        WORD_ZERO
-    } else {
-        word_divmod(a, b).remainder
-    }
+    word_mod(a, b) /* MOD */
 
 /*! `SDIV`: signed division, truncating toward zero; division by zero
     yields `0`. */
@@ -572,7 +388,7 @@ function alu_sdiv(a : word, b : word) -> word = {
     if word_is_zero(b) then {
         WORD_ZERO
     } else {
-        let quotient = word_divmod(word_abs(a), word_abs(b)).quotient;
+        let quotient = word_div(word_abs(a), word_abs(b));
         if (word_bit(a, 255) == bitone) != (word_bit(b, 255) == bitone) then {
             word_negate(quotient)
         } else {
@@ -588,7 +404,7 @@ function alu_smod(a : word, b : word) -> word = {
     if word_is_zero(b) then {
         WORD_ZERO
     } else {
-        let remainder = word_divmod(word_abs(a), word_abs(b)).remainder;
+        let remainder = word_mod(word_abs(a), word_abs(b));
         if word_bit(a, 255) == bitone then {
             word_negate(remainder)
         } else {
@@ -599,35 +415,33 @@ function alu_smod(a : word, b : word) -> word = {
 
 /*! `ADDMOD`: `(a + b) mod n` over the unbounded integers (no intermediate
     2^256 reduction); a zero modulus yields `0`. */
-function alu_addmod(a : word, b : word, n : word) -> word = {
+val alu_addmod : forall 'a 'b 'n, 0 <= 'a & 'a < 2 ^ 256 & 0 <= 'b & 'b < 2 ^ 256 & 0 <= 'n & 'n < 2 ^ 256. (
+        int('a),
+        int('b),
+        int('n),
+    ) -> word
+function alu_addmod(a, b, n) = {
     /* ADDMOD */
-    if word_is_zero(n) then {
+    if n == 0 then {
         WORD_ZERO
     } else {
-        let a_reduced = word_divmod(a, n).remainder;
-        let b_reduced = word_divmod(b, n).remainder;
-        word_mod_add_reduced(a_reduced, b_reduced, n)
+        U256(tmod_nat(a + b, n))
     }
 }
 
 /*! `MULMOD`: `(a * b) mod n` over the unbounded integers; a zero modulus
     yields `0`. */
-function alu_mulmod(a : word, b : word, n : word) -> word = {
+val alu_mulmod : forall 'a 'b 'n, 0 <= 'a & 'a < 2 ^ 256 & 0 <= 'b & 'b < 2 ^ 256 & 0 <= 'n & 'n < 2 ^ 256. (
+        int('a),
+        int('b),
+        int('n),
+    ) -> word
+function alu_mulmod(a, b, n) = {
     /* MULMOD */
-    if word_is_zero(n) then {
+    if n == 0 then {
         WORD_ZERO
     } else {
-        var result : word = WORD_ZERO;
-        var addend : word = word_divmod(a, n).remainder;
-        var remaining : word = b;
-        foreach (_step from 0 to 255) {
-            if word_bit(remaining, 0) == bitone then {
-                result = word_mod_add_reduced(result, addend, n)
-            };
-            addend = word_mod_add_reduced(addend, addend, n);
-            remaining = word_shift_right_one(remaining)
-        };
-        result
+        U256(tmod_nat(a * b, n))
     }
 }
 
@@ -651,19 +465,19 @@ function alu_exp(base : word, exponent : word) -> word = {
     `byte_index` (0 = least significant); indices ≥ 31 leave the value
     unchanged. */
 function alu_signextend(byte_index : word, value : word) -> word = {
-    match word_to_limb(byte_index) {
-        Some(index) if limb_ult(index, 0x0000000000000020) => {
-            let width = sail_shiftleft(add_bits(index, LIMB_ONE), 3);
-            let sign_shift = sub_bits(width, LIMB_ONE);
-            let sign_set = word_and(word_shift_right_limb(value, sign_shift), WORD_ONE) == WORD_ONE;
-            let low_mask = word_sub(word_shift_left_limb(WORD_ONE, width), WORD_ONE);
-            if sign_set then {
-                word_or(word_and(value, low_mask), word_not(low_mask))
-            } else {
-                word_and(value, low_mask)
-            }
-        },
-        _ => value,
+    if byte_index < 32 then {
+        let index : range(0, 31) = byte_index;
+        let width : word_bit_count = index * 8 + 8;
+        let sign_shift : word_bit_count = index * 8 + 7;
+        let sign_set = word_and(word_shift_right(value, sign_shift), WORD_ONE) == WORD_ONE;
+        let low_mask = word_sub(word_shift_left(WORD_ONE, width), WORD_ONE);
+        if sign_set then {
+            word_or(word_and(value, low_mask), word_not(low_mask))
+        } else {
+            word_and(value, low_mask)
+        }
+    } else {
+        value
     }
 }
 
@@ -690,13 +504,12 @@ function alu_not(a : word) -> word = word_not(a)
 /*! `BYTE(i, x)`: the `i`-th most-significant byte of `x` (0 = MSB);
     indices ≥ 32 yield `0`. */
 function alu_byte(i : word, x : word) -> word = {
-    match word_to_limb(i) {
-        Some(index) if limb_ult(index, 0x0000000000000020) => {
-            let byte_offset = sub_bits(0x000000000000001f, index);
-            let shift = sail_shiftleft(byte_offset, 3);
-            U256(sail_zero_extend(word_low_byte(word_shift_right_limb(x, shift)), 256))
-        },
-        _ => WORD_ZERO,
+    if i < 32 then {
+        let index : range(0, 31) = i;
+        let shift : word_bit_count = (31 - index) * 8;
+        unsigned(word_low_byte(word_shift_right(x, shift)))
+    } else {
+        WORD_ZERO
     }
 }
 
@@ -709,46 +522,31 @@ The shift amount is the top stack item, per EVM `SHL`/`SHR`/`SAR`
 /*! `SHL`: logical left shift; amounts ≥ 256 yield `0`. */
 function alu_shl(shift_amt : word, v : word) -> word =
     /* SHL */
-    if not_bool(word_ult(shift_amt, limb_to_word(0x0000000000000100))) then {
-        WORD_ZERO
+    if shift_amt < 256 then {
+        word_shift_left(v, shift_amt)
     } else {
-        word_shift_left_limb(v, word_limb_0(shift_amt))
+        WORD_ZERO
     }
 
 /*! `SHR`: logical right shift; amounts ≥ 256 yield `0`. */
 function alu_shr(shift_amt : word, v : word) -> word =
     /* SHR */
-    if not_bool(word_ult(shift_amt, limb_to_word(0x0000000000000100))) then {
-        WORD_ZERO
+    if shift_amt < 256 then {
+        word_shift_right(v, shift_amt)
     } else {
-        word_shift_right_limb(v, word_limb_0(shift_amt))
+        WORD_ZERO
     }
 
 /* SAR: arithmetic (sign-propagating) right shift. */
-/*! `SAR`: arithmetic (sign-propagating) right shift, via floored signed
-    division. */
+/*! `SAR`: arithmetic (sign-propagating) right shift. */
 function alu_sar(shift_amt : word, v : word) -> word = {
     /* SAR */
-    if not_bool(word_ult(shift_amt, limb_to_word(0x0000000000000100))) then {
-        if word_bit(v, 255) == bitone then { WORD_ALL_ONES } else { WORD_ZERO }
+    if shift_amt < 256 then {
+        word_arithmetic_shift_right(v, shift_amt)
     } else {
-        word_arithmetic_shift_right_limb(v, word_limb_0(shift_amt))
+        if word_bit(v, 255) == bitone then { WORD_ALL_ONES } else { WORD_ZERO }
     }
 }
 
 /*! `CLZ`: the count of leading zero bits of a 256-bit word (EIP-7939). */
-function alu_clz(x : word) -> word = {
-    var count : word_bit_count = 0;
-    var found : bool = false;
-    foreach (i from 0 to 255) {
-        let biinput_index = 255 - i; /* scan from MSB down */
-        if not_bool(found) then {
-            if word_bit(x, biinput_index) == bitzero then {
-                count = word_bit_count_increment(count)
-            } else {
-                found = true
-            }
-        }
-    };
-    limb_to_word(get_slice_int(64, count, 0))
-}
+function alu_clz(x : word) -> word = U256(256 - word_bit_length(x))

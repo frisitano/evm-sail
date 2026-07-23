@@ -1,8 +1,4 @@
-import Sail
-import Evm.Defs
-import Evm.Specialization
-import Evm.FakeReal
-import Evm.HostAxioms
+import Evm.Primitives.Fork
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -19,23 +15,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -48,74 +36,109 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # Chain configuration
 
-The decoded `SszChainConfig`: the chain id and the active fork — both as
-the raw SSZ `ProtocolFork` index and as the [Fork][type-Fork] whose
-execution rules apply (blob-parameter-only forks collapse to their base) —
-plus whether the fork's activation point has been reached. Pure data — no
-registers, no externs. -/
+The decoded `SszChainConfig`. Its activation point is validated while decoding,
+so the resulting value only carries the chain id. The schema evm_prefix selects the
+protocol profile, so neither the fork identifier nor its blob schedule is
+repeated inside the SSZ body. Pure data — no registers, no externs. -/
 
 def undefined_BlobSchedule (_ : Unit) : SailM BlobSchedule := do
   (pure { target := ← do
-              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
-              pure (⟨semanticField⟩),
+              let publicField ← (undefined_range 0 14)
+              pure (⟨publicField⟩),
           max := ← do
-              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
-              pure (⟨semanticField⟩),
+              let publicField ← (undefined_range 0 21)
+              pure (⟨publicField⟩),
           base_fee_update_fraction := ← do
-              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
-              pure (⟨semanticField⟩) })
+              let publicField ← (undefined_range 1 11684671)
+              pure (⟨publicField⟩) })
 
-/-- Structural equality of blob schedules. -/
-def blob_schedule_equal (a : BlobSchedule) (b : BlobSchedule) : Bool :=
-  (((a.target).value == (b.target).value) && ((((a.max).value == (b.max).value) && (((a.base_fee_update_fraction).value == (b.base_fee_update_fraction).value) : Bool)) : Bool))
+def undefined_ProtocolProfile (_ : Unit) : SailM ProtocolProfile := do
+  (pure { fork := ← (undefined_Fork ()),
+          blob_schedule := ← (undefined_BlobSchedule ()) })
 
-/-- The protocol-defined blob schedule for an SSZ `ProtocolFork` index:
-Cancun 3/6, Prague/Osaka 6/9, BPO1 10/15, BPO2+ 14/21; forks before
-Cancun have none. -/
-/- Type quantifiers: idx : Nat, 0 ≤ idx ∧ idx ≤ (2 ^ 64 - 1) -/
-def expected_blob_schedule (idx : protocol_fork_index) : (Option BlobSchedule) :=
-  let idx := (idx).value
-  if ((idx <b 15) : Bool)
-  then none
+/-- The inactive blob schedule used before EIP-4844. -/
+def NO_BLOB_SCHEDULE : BlobSchedule :=
+  { target := ⟨0⟩,
+    max := ⟨0⟩,
+    base_fee_update_fraction := ⟨1⟩ }
+
+/-- Resolves the schema's stable `ProtocolFork` byte to the execution-rule
+family and its protocol-defined blob schedule. BPO forks share Osaka
+execution rules but retain their distinct blob parameters. An unknown
+input byte is rejected before any profile field reaches a kernel
+register. -/
+def protocol_profile (schema_fork : byte) : SailM ProtocolProfile := do
+  if ((schema_fork == 0x0A#8) : Bool)
+  then
+    (pure { fork := Berlin,
+            blob_schedule := NO_BLOB_SCHEDULE })
   else
-    (if ((idx == 15) : Bool)
-    then
-      (some
-        { target := ⟨3⟩,
-          max := ⟨6⟩,
-          base_fee_update_fraction := ⟨3338477⟩ })
-    else
-      (if ((idx ≤b 17) : Bool)
+    (do
+      if (((schema_fork == 0x0B#8) || ((schema_fork == 0x0C#8) || (schema_fork == 0x0D#8))) : Bool)
       then
-        (some
-          { target := ⟨6⟩,
-            max := ⟨9⟩,
-            base_fee_update_fraction := ⟨5007716⟩ })
+        (pure { fork := London,
+                blob_schedule := NO_BLOB_SCHEDULE })
       else
-        (if ((idx == 18) : Bool)
-        then
-          (some
-            { target := ⟨10⟩,
-              max := ⟨15⟩,
-              base_fee_update_fraction := ⟨8346193⟩ })
-        else
-          (some
-            { target := ⟨14⟩,
-              max := ⟨21⟩,
-              base_fee_update_fraction := ⟨11684671⟩ }))))
+        (do
+          if ((schema_fork == 0x0E#8) : Bool)
+          then
+            (pure { fork := Paris,
+                    blob_schedule := NO_BLOB_SCHEDULE })
+          else
+            (do
+              if ((schema_fork == 0x0F#8) : Bool)
+              then
+                (pure { fork := Shanghai,
+                        blob_schedule := NO_BLOB_SCHEDULE })
+              else
+                (do
+                  if ((schema_fork == 0x10#8) : Bool)
+                  then
+                    (pure { fork := Cancun,
+                            blob_schedule := { target := ⟨3⟩,
+                                               max := ⟨6⟩,
+                                               base_fee_update_fraction := ⟨3338477⟩ } })
+                  else
+                    (do
+                      if (((schema_fork == 0x11#8) || (schema_fork == 0x12#8)) : Bool)
+                      then
+                        (pure { fork := if ((schema_fork == 0x11#8) : Bool)
+                                  then Prague
+                                  else Osaka,
+                                blob_schedule := { target := ⟨6⟩,
+                                                   max := ⟨9⟩,
+                                                   base_fee_update_fraction := ⟨5007716⟩ } })
+                      else
+                        (do
+                          if ((schema_fork == 0x13#8) : Bool)
+                          then
+                            (pure { fork := Osaka,
+                                    blob_schedule := { target := ⟨10⟩,
+                                                       max := ⟨15⟩,
+                                                       base_fee_update_fraction := ⟨8346193⟩ } })
+                          else
+                            (do
+                              if ((schema_fork == 0x14#8) : Bool)
+                              then
+                                (pure { fork := Osaka,
+                                        blob_schedule := { target := ⟨14⟩,
+                                                           max := ⟨21⟩,
+                                                           base_fee_update_fraction := ⟨11684671⟩ } })
+                              else
+                                (do
+                                  if ((schema_fork == 0x15#8) : Bool)
+                                  then
+                                    (pure { fork := Amsterdam,
+                                            blob_schedule := { target := ⟨14⟩,
+                                                               max := ⟨21⟩,
+                                                               base_fee_update_fraction := ⟨11684671⟩ } })
+                                  else sailThrow ((InvalidBlock InvalidConfig))))))))))
 
-/-- Whether the config's blob schedule is well-shaped and equals the
-protocol-defined schedule for its fork index. -/
-def chain_config_blob_schedule_valid (cc : ChainConfig) : Bool :=
-  if ((! cc.blob_schedule_shape_valid) : Bool)
-  then false
-  else
-    (match ((expected_blob_schedule ⟨(cc.fork_index).value⟩), cc.blob_schedule) with
-    | (none, none) => true
-    | (.some expected, .some actual) => (blob_schedule_equal expected actual)
-    | _ => false)
+def undefined_ChainConfig (_ : Unit) : SailM ChainConfig := do
+  (pure { chain_id := ← (undefined_nat ()) })
 

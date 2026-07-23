@@ -1,4 +1,3 @@
-import Evm.Arith
 import Evm.Primitives.Bytes
 
 set_option maxHeartbeats 1_000_000_000
@@ -16,23 +15,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -45,6 +36,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # The output buffer
@@ -57,34 +49,69 @@ frame transitions remain entirely in Sail.
     This page documents the model's host interface — internal contracts
     of the executable specification, not protocol rules. -/
 
-/-- A slice over the first `len` bytes of the output buffer. -/
-def output_buffer_slice (len : byte_length) : EvmByteSlice :=
-  if ((len == BYTE_ZERO) : Bool)
-  then EMPTY_SLICE
-  else (byte_slice OutputSource BYTE_ZERO len)
+/- Type quantifiers: len : Nat, source_valid_length(len) -/
+def output_buffer_slice (len : Nat) : EvmByteSlice :=
+  if ((len == 0) : Bool)
+  then
+    ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_syn_len : Nat) => (EvmByteSliceFields k_off k_syn_len)))) : (Sigma fun (k_off : Nat)
+    => (Sigma fun (k_syn_len : Nat) => (EvmByteSliceFields k_off k_syn_len))))
+  else
+    ((⟨_, ⟨_, (byte_slice OutputSource 0 len)⟩⟩ : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_syn_len : Nat) => (EvmByteSliceFields k_off k_syn_len)))) : (Sigma fun (k_off : Nat)
+    => (Sigma fun (k_syn_len : Nat) => (EvmByteSliceFields k_off k_syn_len))))
 
 /-- Copies frame output into the host buffer so it survives frame
 teardown; the canonical returndata source. -/
+/- Type quantifiers: k_ex408147_ : Nat, k_ex408146_ : Nat, 0 ≤ k_ex408146_ ∧ 0 ≤ k_ex408147_ -/
 def freeze_output (data : EvmByteSlice) : SailM EvmByteSlice := do
+  let data := ((data).2).2
   let len := data.len
-  if ((len == BYTE_ZERO) : Bool)
-  then (pure EMPTY_SLICE)
+  if ((len == 0) : Bool)
+  then
+    (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
+      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
+      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
   else
     (do
-      if ((← (output_buffer_store data)) : Bool)
-      then (pure (output_buffer_slice len))
-      else (pure EMPTY_SLICE))
+      if ((← (output_buffer_store ⟨_, ⟨_, data⟩⟩)) : Bool)
+      then
+        (pure ((⟨_, ⟨_, (((output_buffer_slice len)).2).2⟩⟩ : (Sigma fun (k_off : Nat) =>
+          (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
+          (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
+      else
+        (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
+          (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
+          (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))))
 
 /-- Stores one word as the output (32-byte precompile results). -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
 def output_buffer_word (value : word) : SailM EvmByteSlice := do
-  if ((← (output_buffer_store_word value)) : Bool)
-  then (pure (output_buffer_slice WORD_BYTE_LENGTH))
-  else (pure EMPTY_SLICE)
+  let value := (value).value
+  if ((← (output_buffer_store_word ⟨value⟩)) : Bool)
+  then
+    (pure ((⟨_, ⟨_, (((output_buffer_slice WORD_BYTE_LENGTH)).2).2⟩⟩ : (Sigma fun
+      (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
+      (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
+  else
+    (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
+      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
+      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
 
 /-- Stores two words as the output (64-byte precompile results, e.g.
 `ecrecover`-style pairs). -/
+/- Type quantifiers: k_ex408150_ : Nat, k_ex408149_ : Nat, 0 ≤ k_ex408149_ ∧
+  k_ex408149_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex408150_ ∧ k_ex408150_ ≤ (2 ^ 256 - 1) -/
 def output_buffer_words (first : word) (second : word) : SailM EvmByteSlice := do
-  if ((← (output_buffer_store_words first second)) : Bool)
-  then (pure (output_buffer_slice DOUBLE_WORD_BYTE_LENGTH))
-  else (pure EMPTY_SLICE)
+  let first := (first).value
+  let second := (second).value
+  if ((← (output_buffer_store_words ⟨first⟩ ⟨second⟩)) : Bool)
+  then
+    (pure ((⟨_, ⟨_, (((output_buffer_slice DOUBLE_WORD_BYTE_LENGTH)).2).2⟩⟩ : (Sigma fun
+      (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
+      (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
+  else
+    (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
+      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
+      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
 

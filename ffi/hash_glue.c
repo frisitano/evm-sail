@@ -9,14 +9,15 @@
  * of the segments. One FFI call performs each complete operation; the walk
  * over the generated cons cells is native pointer chasing.
  * A BytesList segment contributes its materialized Sail bytes; a BytesSlice
- * segment resolves through the central ByteSlice source resolver --
+ * segment resolves through the central ByteSlice source resolver; and a
+ * BytesFixed32 segment contributes the selected prefix of its fixed vector --
  * an unresolvable slice poisons the preimage, yielding the same sentinel
  * digest path the old source hashers used. */
 #include EVMSAIL_MODEL_H
 #include "byte_slice_glue.h"
 #include "host_crypto.h"
 #include "kernel_state.h"
-#include "lbits_convert.h"
+#include "value_convert.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,12 +32,26 @@ static uint64_t materialized_bytes_len(
   return evmsail_byte_quantity_value(bytes->zlen);
 }
 
-static uint64_t byte_slice_off(const struct zByteSlice *slice) {
+static uint64_t byte_slice_off(const struct zByteSliceFields *slice) {
   return evmsail_byte_quantity_value(slice->zoff);
 }
 
-static uint64_t byte_slice_len(const struct zByteSlice *slice) {
+static uint64_t byte_slice_len(const struct zByteSliceFields *slice) {
   return evmsail_byte_quantity_value(slice->zlen);
+}
+
+static uint64_t fixed_bytes32_len(const struct zFixedBytes32 *bytes) {
+  /* range(0, 32) is native-width in both generated ABIs.  It is deliberately
+     narrower than the host_access fields handled by quantity_abi.h. */
+  return bytes->zlen;
+}
+
+static int fixed_bytes32_value(const struct zFixedBytes32 *fixed,
+                               uint8_t bytes[32], uint64_t *len) {
+  *len = fixed_bytes32_len(fixed);
+  if (*len > 32) return 0;
+  evmsail_hash_to_be_bytes(bytes, fixed->zdata);
+  return 1;
 }
 
 static void seg_put(const uint8_t *p, uint64_t n) {
@@ -75,8 +90,8 @@ static void seg_accumulate(zz5listz8z5unionz0zzBytesz9 segs) {
         seg_ok = 0;
         return;
       }
-    } else { /* Kind_zBytesSlice */
-      const struct zByteSlice *s = &n->hd.variants.zBytesSlice;
+    } else if (n->hd.kind == Kind_zBytesSlice) {
+      const struct zByteSliceFields *s = &n->hd.variants.zBytesSlice;
       const uint8_t *p = NULL;
       uint64_t off = byte_slice_off(s);
       uint64_t len = byte_slice_len(s);
@@ -88,6 +103,15 @@ static void seg_accumulate(zz5listz8z5unionz0zzBytesz9 segs) {
         return;
       }
       seg_put(p, len);
+    } else { /* Kind_zBytesFixed32 */
+      const struct zFixedBytes32 *fixed = &n->hd.variants.zBytesFixed32;
+      uint8_t bytes[32];
+      uint64_t len = 0;
+      if (!fixed_bytes32_value(fixed, bytes, &len)) {
+        seg_ok = 0;
+        return;
+      }
+      seg_put(bytes, len);
     }
   }
 }
@@ -98,7 +122,7 @@ static void seg_accumulate(zz5listz8z5unionz0zzBytesz9 segs) {
 static int seg_single_slice(zz5listz8z5unionz0zzBytesz9 segs, const uint8_t **p,
                             uint64_t *len) {
   if (!segs || segs->tl || segs->hd.kind != Kind_zBytesSlice) return 0;
-  const struct zByteSlice *s = &segs->hd.variants.zBytesSlice;
+  const struct zByteSliceFields *s = &segs->hd.variants.zBytesSlice;
   uint64_t off = byte_slice_off(s);
   uint64_t slice_len = byte_slice_len(s);
   uint64_t rlen = 0;
@@ -111,7 +135,7 @@ static int seg_single_slice(zz5listz8z5unionz0zzBytesz9 segs, const uint8_t **p,
 }
 
 bool host_bytes_segments_equal_slice(zz5listz8z5unionz0zzBytesz9 segs,
-                                     struct zByteSlice expected) {
+                                     struct zByteSliceFields expected) {
   const uint8_t *want = NULL;
   uint64_t expected_off = byte_slice_off(&expected);
   uint64_t expected_len = byte_slice_len(&expected);
@@ -139,8 +163,8 @@ bool host_bytes_segments_equal_slice(zz5listz8z5unionz0zzBytesz9 segs,
         remaining--;
       }
       if (remaining || b) return false;
-    } else { /* Kind_zBytesSlice */
-      const struct zByteSlice *s = &n->hd.variants.zBytesSlice;
+    } else if (n->hd.kind == Kind_zBytesSlice) {
+      const struct zByteSliceFields *s = &n->hd.variants.zBytesSlice;
       uint64_t slice_off = byte_slice_off(s);
       uint64_t slice_len = byte_slice_len(s);
       if (offset > expected_len || slice_len > expected_len - offset)
@@ -154,6 +178,15 @@ bool host_bytes_segments_equal_slice(zz5listz8z5unionz0zzBytesz9 segs,
           memcmp(actual, want + offset, (size_t)slice_len) != 0)
         return false;
       offset += slice_len;
+    } else { /* Kind_zBytesFixed32 */
+      const struct zFixedBytes32 *fixed = &n->hd.variants.zBytesFixed32;
+      uint8_t bytes[32];
+      uint64_t len = 0;
+      if (!fixed_bytes32_value(fixed, bytes, &len) ||
+          offset > expected_len || len > expected_len - offset ||
+          memcmp(bytes, want + offset, (size_t)len) != 0)
+        return false;
+      offset += len;
     }
   }
   return offset == expected_len;
@@ -199,14 +232,9 @@ EVMSAIL_HASH_RETURN host_sha256_segments(
 unit log_append_record(sail_address a, evmsail_word_list topics,
                        struct zBytes data) {
   log_begin(a);
-#ifdef EVMSAIL_STANDARD_ABI
-  for (const struct node_zz5listz8z5bvz9 *t = topics; t; t = t->tl)
-    log_add_topic(t->hd);
-#else
   for (const struct node_zz5listz8z5structz0zz__sail_c_repr_u256z9 *t = topics;
        t; t = t->tl)
     log_add_topic(t->hd);
-#endif
   if (data.kind == Kind_zBytesList) {
     const struct zMaterializzedBytes *materialized = &data.variants.zBytesList;
     evmsail_byte_list b = materialized->zdata;
@@ -217,8 +245,8 @@ unit log_append_record(sail_address a, evmsail_word_list topics,
       b = b->tl;
       remaining--;
     }
-  } else {
-    const struct zByteSlice *s = &data.variants.zBytesSlice;
+  } else if (data.kind == Kind_zBytesSlice) {
+    const struct zByteSliceFields *s = &data.variants.zBytesSlice;
     const uint8_t *p = NULL;
     uint64_t off = byte_slice_off(s);
     uint64_t len = byte_slice_len(s);
@@ -227,6 +255,12 @@ unit log_append_record(sail_address a, evmsail_word_list topics,
                                     &p, &rlen) &&
         rlen == len)
       log_add_data_bulk(p, len);
+  } else {
+    const struct zFixedBytes32 *fixed = &data.variants.zBytesFixed32;
+    uint8_t bytes[32];
+    uint64_t len = 0;
+    if (fixed_bytes32_value(fixed, bytes, &len))
+      log_add_data_bulk(bytes, len);
   }
   return UNIT;
 }
@@ -242,20 +276,8 @@ void logs_read_all(zz5listz8z5structz0zzLogEntryz9 *rop, unit u) {
     node->rc = 1;
     node->tl = out;
 
-    /* Address and topics use the active standard/optimized nominal ABI. */
-#ifdef EVMSAIL_STANDARD_ABI
-    node->hd.zaddress = (sail_address){0, NULL};
-    log_addr(&node->hd.zaddress, i);
-    zz5listz8z5bvz9 ts = NULL;
-    for (uint64_t j = log_topic_count(i); j-- > 0;) {
-      struct node_zz5listz8z5bvz9 *tn = sail_new(struct node_zz5listz8z5bvz9);
-      tn->rc = 1;
-      tn->tl = ts;
-      log_topic(&tn->hd, i, j);
-      ts = tn;
-    }
-    node->hd.ztopics = ts;
-#else
+    /* Address and word-list elements have the same specialized ABI in both
+     * build modes; only otherwise-unbounded protocol quantities differ. */
     node->hd.zaddress = log_addr(i);
     zz5listz8z5structz0zz__sail_c_repr_u256z9 ts = NULL;
     for (uint64_t j = log_topic_count(i); j-- > 0;) {
@@ -267,7 +289,6 @@ void logs_read_all(zz5listz8z5structz0zzLogEntryz9 *rop, unit u) {
       ts = tn;
     }
     node->hd.ztopics = ts;
-#endif
 
     /* data stays a REFERENCE into the block-lifetime log arena */
     node->hd.zdata.zsource = zLogDataSource;

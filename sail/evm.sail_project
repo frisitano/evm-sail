@@ -4,6 +4,10 @@ variable EVM_DEBUG = off
 evm {
   files
     prelude.sail,
+    primitives/cycle_scopes.sail,
+    if $EVM_PROFILE == off then host/cycle_scopes_disabled.sail
+    else if $EVM_PROFILE == on then host/cycle_scopes_enabled.sail
+    else error("EVM_PROFILE must be off or on"),
     primitives/quantities.sail,
     primitives/gas.sail,
     primitives/bytes.sail,
@@ -19,7 +23,6 @@ evm {
     primitives/chain_config.sail,
     primitives/system.sail,
     primitives/account.sail,
-    primitives/journal.sail,
     primitives/tx.sail,
     primitives/block.sail,
     primitives/evm.sail,
@@ -59,10 +62,6 @@ evm {
     lib/mpt/indexed.sail,
     lib/mpt/trie.sail,
     lib/state_trie.sail,
-    primitives/cycle_scopes.sail,
-    if $EVM_PROFILE == off then host/cycle_scopes_disabled.sail
-    else if $EVM_PROFILE == on then host/cycle_scopes_enabled.sail
-    else error("EVM_PROFILE must be off or on"),
     if $EVM_DEBUG == off then host/debug_disabled.sail
     else if $EVM_DEBUG == on then host/debug_enabled.sail
     else error("EVM_DEBUG must be off or on"),

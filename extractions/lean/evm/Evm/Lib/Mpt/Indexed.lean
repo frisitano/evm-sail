@@ -1,5 +1,4 @@
 import Evm.Flow
-import Evm.Primitives.Quantities
 import Evm.Host.Kernel.Storage
 import Evm.Lib.Mpt.Primitives
 
@@ -18,23 +17,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -47,6 +38,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # Ordered trie indices
@@ -55,19 +47,16 @@ Transaction, withdrawal, and receipt tries use RLP-encoded list indices as
 keys. Their bytewise trie order differs from numeric order, so this cursor
 emits indices directly in canonical key order. -/
 
-def undefined_RlpIndexCursor (_ : Unit) : SailM RlpIndexCursor := do
-  (pure { count := ← do
-              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
-              pure (⟨semanticField⟩),
-          position := ← do
-              let semanticField ← (undefined_range 0 ((2 ^i 64) -i 1))
-              pure (⟨semanticField⟩) })
+/- Type quantifiers: atom_maximum : Nat, rlp_index_valid_maximum(atom_maximum) -/
+def undefined_RlpIndexCursor (atom_maximum : Nat) : SailM (RlpIndexCursor atom_maximum) := do
+  (pure { count := ← (undefined_range 0 atom_maximum),
+          position := ← (undefined_range 0 atom_maximum) })
 
 /-- Decrements a positive RLP index byte width. -/
 /- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 8 -/
 def rlp_index_byte_width_decrement (value : Nat) : SailM Nat := do
-  assert (0 <b value) "sail/lib/mpt/indexed.sail:27.20-27.21"
-  (pure (value -i 1))
+  assert (0 <b value) "sail/lib/mpt/indexed.sail:33.20-33.21"
+  (pure (value - 1))
 
 /-- Returns the minimal byte width of an indexed-trie position. -/
 /- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
@@ -132,74 +121,56 @@ def trie_index_key (index : item_index) : SailM TriePath := do
             (pure loop_vars) ) : SailM (TriePath × Nat) )
           (pure path)))
 
-/- Type quantifiers: count : Nat, 0 ≤ count ∧ count ≤ (2 ^ 64 - 1) -/
-def rlp_index_cursor (count : item_count) : RlpIndexCursor :=
-  let count := (count).value
-  { count := ⟨count⟩,
-    position := ⟨0⟩ }
+/-- Starts canonical RLP-index traversal for a bounded collection. -/
+/- Type quantifiers: count : Nat, k_maximum : Nat, rlp_index_valid_maximum(k_maximum), 0 ≤ count
+  ∧ count ≤ k_maximum -/
+def rlp_index_cursor (count : Nat) : (RlpIndexCursor k_maximum) :=
+  { count := count,
+    position := 0 }
 
-def rlp_index_cursor_empty (cursor : RlpIndexCursor) : Bool :=
-  ((cursor.count).value ≤b (cursor.position).value)
-
-/-- Counts the one-byte keys that sort before RLP index zero. -/
-/- Type quantifiers: count : Nat, 0 ≤ count ∧ count ≤ (2 ^ 64 - 1) -/
-def rlp_index_single_count (count : item_count) : SailM item_count := do
-  let count := (count).value
-  let semanticResult ← do
-    if ((count == 0) : Bool)
-    then (pure 0)
-    else
-      (do
-        let rest ← do
-          (do
-              let semanticResult ← (protocol_quantity_decrement ⟨count⟩)
-              pure ((semanticResult).value))
-        if ((rest <b 127) : Bool)
-        then (pure rest)
-        else (pure 127))
-  pure (⟨semanticResult⟩)
+/-- Whether canonical RLP-index traversal has consumed every index. -/
+/- Type quantifiers: k_maximum : Nat, rlp_index_valid_maximum(k_maximum) -/
+def rlp_index_cursor_empty (cursor : (RlpIndexCursor k_maximum)) : Bool :=
+  (cursor.count ≤b cursor.position)
 
 /-- Maps a canonical-key cursor position back to its numeric list index. -/
-def rlp_index_at_position (cursor : RlpIndexCursor) : SailM item_index := do
-  let semanticResult ← do
-    if ((rlp_index_cursor_empty cursor) : Bool)
-    then sailThrow ((InvalidBlock WitnessDeficient))
-    else (pure ())
-    let single_count ← do
-      (do
-          let semanticResult ← (rlp_index_single_count ⟨(cursor.count).value⟩)
-          pure ((semanticResult).value))
-    if (((cursor.position).value <b single_count) : Bool)
-    then
-      (do
-          let semanticResult ← (protocol_quantity_increment ⟨(cursor.position).value⟩)
-          pure ((semanticResult).value))
+/- Type quantifiers: k_maximum : Nat, rlp_index_valid_maximum(k_maximum) -/
+def rlp_index_at_position (cursor : (RlpIndexCursor k_maximum)) : SailM Nat := do
+  let count := cursor.count
+  let position := cursor.position
+  if ((position <b count) : Bool)
+  then
+    (let rest : Nat := (count - 1)
+    let single_count : Nat :=
+      if ((rest <b 127) : Bool)
+      then rest
+      else 127
+    if ((position <b single_count) : Bool)
+    then (pure (position + 1))
     else
-      (if (((cursor.position).value == single_count) : Bool)
+      (if ((position == single_count) : Bool)
       then (pure 0)
-      else (pure (cursor.position).value))
-  pure (⟨semanticResult⟩)
+      else (pure position)))
+  else sailThrow ((InvalidBlock WitnessDeficient))
 
 /-- Removes the next canonical-key item and advances the cursor. -/
-def rlp_index_cursor_pop (cursor : RlpIndexCursor) : SailM (RlpIndexItem × RlpIndexCursor) := do
-  let index ← do
+/- Type quantifiers: k_maximum : Nat, rlp_index_valid_maximum(k_maximum) -/
+def rlp_index_cursor_pop (cursor : (RlpIndexCursor k_maximum)) : SailM ((RlpIndexItem k_maximum) × (RlpIndexCursor k_maximum)) := do
+  let count := cursor.count
+  let position := cursor.position
+  if ((position <b count) : Bool)
+  then
     (do
-        let semanticResult ← (rlp_index_at_position cursor)
-        pure ((semanticResult).value))
-  let next_cursor ← (( do
-    (pure { count := ⟨(cursor.count).value⟩,
-            position := ← do
-                let semanticField ← (do
-                    let semanticResult ← (protocol_quantity_increment
-                    ⟨(cursor.position).value⟩)
-                    pure ((semanticResult).value))
-                pure (⟨semanticField⟩) }) ) : SailM RlpIndexCursor )
-  let next_key ← do
-    if ((rlp_index_cursor_empty next_cursor) : Bool)
-    then (pure none)
-    else
-      (pure (some (← (trie_index_key ⟨((← (rlp_index_at_position next_cursor))).value⟩))))
-  (pure ({ index := ⟨index⟩,
-           key := ← (trie_index_key ⟨index⟩),
-           next_key := next_key }, next_cursor))
+      let index ← do (rlp_index_at_position cursor)
+      let next_cursor : (RlpIndexCursor k_maximum) :=
+        { count := count,
+          position := (position + 1) }
+      let next_key ← do
+        if ((rlp_index_cursor_empty next_cursor) : Bool)
+        then (pure none)
+        else (pure (some (← (trie_index_key ⟨(← (rlp_index_at_position next_cursor))⟩))))
+      (pure ({ index := index,
+               key := ← (trie_index_key ⟨index⟩),
+               next_key := next_key }, next_cursor)))
+  else sailThrow ((InvalidBlock WitnessDeficient))
 

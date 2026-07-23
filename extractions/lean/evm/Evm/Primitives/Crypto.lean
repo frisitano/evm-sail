@@ -1,3 +1,4 @@
+import Evm.Vector
 import Evm.Prelude
 import Evm.Primitives.Bytes
 import Evm.Lib.Bytes
@@ -17,23 +18,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -46,6 +39,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # Cryptographic primitives
@@ -71,24 +65,36 @@ Proof targets see them as bodyless axioms.
 /-- keccak256 of the empty string: the `codeHash` of every codeless
 account. -/
 def KECCAK_EMPTY : hash :=
-  (word_to_hash (U256 0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470#256))
+  (B256
+    (to_bytes_le (n := 32) 0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470#256))
 
 /-- `keccak256(rlp(""))` — the root of an empty Merkle-Patricia trie: the
 storage root of every account with no storage (`EMPTY_ACCOUNT`, freshly
 created). -/
 def EMPTY_TRIE_ROOT : hash :=
-  (word_to_hash (U256 0x56E81F171BCC55A6FF8345E692C0F86E5B48E01B996CADC001622FB5E363B421#256))
+  (B256
+    (to_bytes_le (n := 32) 0x56E81F171BCC55A6FF8345E692C0F86E5B48E01B996CADC001622FB5E363B421#256))
 
 /-- KECCAK-256 of a source-tagged slice, without materializing it. -/
+/- Type quantifiers: k_ex406905_ : Nat, k_ex406904_ : Nat, 0 ≤ k_ex406904_ ∧ 0 ≤ k_ex406905_ -/
 def keccak256_slice (s : EvmByteSlice) : SailM hash := do
-  (keccak256_segments [(BytesSlice s)])
+  let s := ((s).2).2
+  (keccak256_segments [(BytesSlice ⟨_, ⟨_, s⟩⟩)])
+
+/-- SHA-256 of a source-tagged slice, without materializing it. -/
+/- Type quantifiers: k_ex406909_ : Nat, k_ex406908_ : Nat, 0 ≤ k_ex406908_ ∧ 0 ≤ k_ex406909_ -/
+def sha256_slice (s : EvmByteSlice) : SailM hash := do
+  let s := ((s).2).2
+  (sha256_segments [(BytesSlice ⟨_, ⟨_, s⟩⟩)])
 
 /-- KECCAK-256 of a single word. Fixed-width helper with pure meaning over
 [keccak256_segments][]; implementations may override
 it with a one-call accelerator (`host_keccak_word`) — secure-trie keys
 hash on every state access. -/
+/- Type quantifiers: w : Nat, 0 ≤ w ∧ w ≤ (2 ^ 256 - 1) -/
 def keccak256_word (w : word) : SailM hash := do
-  (keccak256_segments [(bytes_list (word_to_bytes32 w) WORD_BYTE_LENGTH)])
+  let w := (w).value
+  (keccak256_segments [(bytes_list (word_to_bytes32 ⟨w⟩) WORD_BYTE_LENGTH)])
 
 /-- KECCAK-256 of a 20-byte address (secure-trie account keys). -/
 def keccak256_address (a : address) : SailM hash := do
@@ -103,18 +109,22 @@ def sha256_pair (a : hash) (b : hash) : SailM hash := do
 
 /-- `n` of the secp256k1 group order. -/
 def SECP_N_FULL : word :=
-  (U256 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141#256)
+  ⟨((U256 (BitVec.toNatInt 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141#256))).value⟩
 
 /-- `n/2` of the secp256k1 group order — the EIP-2 low-`s` malleability
 bound. -/
 def SECP_N_HALF : word :=
-  (U256 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0#256)
+  ⟨((U256 (BitVec.toNatInt 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0#256))).value⟩
 
 /-- Recovers the signer address from `(h, y_parity, r, s)`, returning
 recovery success and the recovered address (used by EIP-7702). -/
-/- Type quantifiers: k_ex161201_ : Nat, 0 ≤ k_ex161201_ ∧ k_ex161201_ ≤ 1 -/
+/- Type quantifiers: k_ex406921_ : Nat, k_ex406920_ : Nat, k_ex406919_ : Nat, 0 ≤ k_ex406919_ ∧
+  k_ex406919_ ≤ 1, 0 ≤ k_ex406920_ ∧ k_ex406920_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406921_ ∧
+  k_ex406921_ ≤ (2 ^ 256 - 1) -/
 def ecrecover_addr (h : hash) (yparity : y_parity) (r : word) (s : word) : SailM (Bool × address) := do
   let yparity := (yparity).value
-  let recovered ← do (host_ecrecover h ⟨yparity⟩ r s)
+  let r := (r).value
+  let s := (s).value
+  let recovered ← do (host_ecrecover h ⟨yparity⟩ ⟨r⟩ ⟨s⟩)
   (pure (recovered.success, recovered.address))
 

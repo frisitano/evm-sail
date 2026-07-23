@@ -6,6 +6,7 @@
  * memoized C-side. Both stores are cache/update backed. */
 #ifndef STATE_DB_H
 #define STATE_DB_H
+#include "quantity_abi.h"
 #include "sail_abi.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -21,11 +22,11 @@ void storage_tx_get(struct zoptionzIRStorageValuezK *result,
                     struct zStorageKey key);
 void storage_block_get(struct zoptionzIRStorageValuezK *result,
                        struct zStorageKey key);
-void storage_block_row(struct zoptionzIRStorageEntryzK *result,
-                       sail_address address, uint64_t index);
+void storage_block_iter_next(struct zoptionzIRStorageEntryzK *result,
+                             sail_address address);
 unit storage_tx_update(struct zStorageEntry entry);
 unit storage_block_put(struct zStorageEntry entry);
-unit storage_block_cache(struct zStorageKey key, sail_word value);
+unit storage_block_cache(struct zStorageKey key, EVMSAIL_WORD_PARAM(value));
 
 struct zoptionzIRAccountzK;
 struct zoptionzIRAcctEntryzK;
@@ -33,7 +34,8 @@ struct zAccount;
 struct zAcctEntry;
 void acct_tx_get(struct zoptionzIRAccountzK *result, sail_address address);
 void acct_block_get(struct zoptionzIRAccountzK *result, sail_address address);
-void acct_block_row(struct zoptionzIRAcctEntryzK *result, uint64_t index);
+void acct_block_iter_next(struct zoptionzIRAcctEntryzK *result, unit u);
+void acct_debug_iter_next(struct zoptionzIRAcctEntryzK *result, unit u);
 unit acct_tx_update(sail_address address, struct zAccount account);
 unit acct_block_write(struct zAcctEntry entry);
 unit acct_block_cache(sail_address address, struct zAccount account);
@@ -57,9 +59,9 @@ unit storage_block_clear(sail_address a);
 
 /* Debug snapshot enumeration over the cumulative storage table, grouped by
    keccak(address). This is not part of the Sail state-root interface. */
-uint64_t storage_dump_count(const lbits ak);
-void storage_dump_slot(lbits *rop, const lbits ak, uint64_t j);
-void storage_dump_value(lbits *rop, const lbits ak, uint64_t j);
+uint64_t storage_dump_count(sail_word ak);
+sail_word storage_dump_slot(sail_word ak, uint64_t j);
+sail_word storage_dump_value(sail_word ak, uint64_t j);
 
 /* Account transaction state and cumulative block state. */
 unit acct_db_reset(const unit u);
@@ -73,7 +75,7 @@ unit acct_tx_update_raw(sail_address a, uint64_t nonce,
                         sail_word bal, sail_hash sroot, sail_hash chash,
                         bool exists, bool storage_cleared, bool created,
                         bool selfdestructed);
-unit acct_tx_set_balance(sail_address a, sail_word balance);
+unit acct_tx_set_balance(sail_address a, EVMSAIL_WORD_PARAM(balance));
 unit acct_tx_set_nonce(sail_address a, uint64_t nonce);
 unit acct_tx_set_code_hash(sail_address a, sail_hash code_hash);
 uint64_t acct_tx_checkpoint(const unit u);
@@ -82,63 +84,93 @@ unit acct_tx_reset(const unit u);
 
 /* Debug snapshot enumeration over cumulative account state. */
 uint64_t acct_dump_count(const unit u);
-void acct_dump_hkey(lbits *rop, uint64_t i);
-void acct_dump_address(lbits *rop, uint64_t i);
+sail_word acct_dump_hkey(uint64_t i);
+sail_address acct_dump_address(uint64_t i);
 uint64_t acct_dump_nonce(uint64_t i);
-void acct_dump_balance(lbits *rop, uint64_t i);
-void acct_dump_storage_root(lbits *rop, uint64_t i);
-void acct_dump_code_hash(lbits *rop, uint64_t i);
+sail_word acct_dump_balance(uint64_t i);
+sail_word acct_dump_storage_root(uint64_t i);
+sail_word acct_dump_code_hash(uint64_t i);
 
 /* EIP-7928 record store. Sail owns construction and canonical encoding. */
 unit bal_reset(const unit u);
 unit bal_set_index(uint64_t n);
 unit bal_prepare(const unit u);
-uint64_t bal_account_count(const unit u);
+EVMSAIL_ITEM_RETURN bal_account_count(EVMSAIL_ITEM_RESULT(rop) const unit u);
 EVMSAIL_ADDRESS_RETURN bal_account_address(
-    EVMSAIL_ADDRESS_RESULT(rop) uint64_t account);
+    EVMSAIL_ADDRESS_RESULT(rop) EVMSAIL_ITEM_PARAM(account));
 
-uint64_t bal_storage_change_count(uint64_t account);
+EVMSAIL_ITEM_RETURN bal_storage_change_count(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account));
 EVMSAIL_WORD_RETURN bal_storage_change_slot(
-    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record);
-uint64_t bal_storage_change_index(uint64_t account, uint64_t record);
+    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record));
+EVMSAIL_ITEM_RETURN bal_storage_change_index(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record));
 EVMSAIL_WORD_RETURN bal_storage_change_value(
-    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record);
-uint64_t bal_storage_read_count(uint64_t account);
+    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record));
+EVMSAIL_ITEM_RETURN bal_storage_read_count(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account));
 EVMSAIL_WORD_RETURN bal_storage_read_slot(
-    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record);
+    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record));
 
-uint64_t bal_balance_change_count(uint64_t account);
-uint64_t bal_balance_change_index(uint64_t account, uint64_t record);
+EVMSAIL_ITEM_RETURN bal_balance_change_count(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account));
+EVMSAIL_ITEM_RETURN bal_balance_change_index(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record));
 EVMSAIL_WORD_RETURN bal_balance_change_value(
-    EVMSAIL_WORD_RESULT(rop) uint64_t account, uint64_t record);
-uint64_t bal_nonce_change_count(uint64_t account);
-uint64_t bal_nonce_change_index(uint64_t account, uint64_t record);
-uint64_t bal_nonce_change_value(uint64_t account, uint64_t record);
-uint64_t bal_code_change_count(uint64_t account);
-uint64_t bal_code_change_index(uint64_t account, uint64_t record);
+    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record));
+EVMSAIL_ITEM_RETURN bal_nonce_change_count(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account));
+EVMSAIL_ITEM_RETURN bal_nonce_change_index(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record));
+uint64_t bal_nonce_change_value(EVMSAIL_ITEM_PARAM(account),
+                                EVMSAIL_ITEM_PARAM(record));
+EVMSAIL_ITEM_RETURN bal_code_change_count(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account));
+EVMSAIL_ITEM_RETURN bal_code_change_index(
+    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record));
 EVMSAIL_HASH_RETURN bal_code_change_hash(
-    EVMSAIL_HASH_RESULT(rop) uint64_t account, uint64_t record);
+    EVMSAIL_HASH_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
+    EVMSAIL_ITEM_PARAM(record));
 
 /* EIP-7928 record sinks + tx-row enumeration (harvest logic is Sail-side) */
-unit bal_note_storage_change(sail_address a, sail_word slot, sail_word val);
+unit bal_note_storage_change(sail_address a, EVMSAIL_WORD_PARAM(slot),
+                             EVMSAIL_WORD_PARAM(val));
 unit bal_note_account_touch(sail_address a);
-unit bal_note_storage_read(sail_address a, sail_word slot);
-unit bal_note_balance_change(sail_address a, sail_word val);
+unit bal_note_storage_read(sail_address a, EVMSAIL_WORD_PARAM(slot));
+unit bal_note_balance_change(sail_address a, EVMSAIL_WORD_PARAM(val));
 unit bal_note_nonce_change(sail_address a, uint64_t nonce);
 unit bal_note_code_change(sail_address a, sail_hash chash);
-/* State-root enumeration over the cumulative maps. */
-uint64_t storage_block_count(sail_address a);
-uint64_t storage_block_row_probe(sail_address a, uint64_t i,
-                                 sail_word *slot, sail_word *curr,
-                                 sail_word *orig);
-uint64_t acct_block_count(const unit u);
-uint64_t acct_block_row_probe(uint64_t i, sail_address *addr,
-                              uint64_t *cn, sail_word *cb,
-                              sail_hash *cs, sail_hash *cc,
-                              bool *ce, bool *csc, bool *ccr, bool *csd,
-                              uint64_t *on, sail_word *ob,
-                              sail_hash *os, sail_hash *oc,
-                              bool *oe, bool *osc, bool *ocr, bool *osd);
+/* Non-destructive ascending state-root iterators over the cumulative maps. */
+unit storage_block_iter_begin(sail_address a);
+uint64_t storage_block_iter_next_probe(sail_address a, sail_word *slot,
+                                       sail_word *curr, sail_word *orig);
+unit acct_block_iter_begin(const unit u);
+uint64_t acct_block_iter_next_probe(sail_address *addr, uint64_t *cn,
+                                    sail_word *cb, sail_hash *cs,
+                                    sail_hash *cc, bool *ce, bool *csc,
+                                    bool *ccr, bool *csd, uint64_t *on,
+                                    sail_word *ob, sail_hash *os,
+                                    sail_hash *oc, bool *oe, bool *osc,
+                                    bool *ocr, bool *osd);
+unit acct_debug_iter_begin(const unit u);
+uint64_t acct_debug_iter_next_probe(sail_address *addr, uint64_t *cn,
+                                    sail_word *cb, sail_hash *cs,
+                                    sail_hash *cc, bool *ce, bool *csc,
+                                    bool *ccr, bool *csd, uint64_t *on,
+                                    sail_word *ob, sail_hash *os,
+                                    sail_hash *oc, bool *oe, bool *osc,
+                                    bool *ocr, bool *osd);
+unit acct_post_storage_root_store(sail_address a, sail_hash root);
+EVMSAIL_HASH_RETURN acct_post_storage_root_read(
+    EVMSAIL_HASH_RESULT(result) sail_address a);
 /* k_tx_merge drain pops (side-effect-free) + block propagation hooks */
 uint64_t storage_tx_pop_probe(sail_address *addr, sail_word *slot,
                               sail_word *curr, sail_word *orig);

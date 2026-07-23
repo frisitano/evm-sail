@@ -1,10 +1,11 @@
 import Evm.Flow
-import Evm.Arith
 import Evm.Prelude
 import Evm.Primitives.Code
+import Evm.Lib.Bytes
 import Evm.Primitives.Crypto
 import Evm.Host.EvmByteSlice
 import Evm.Host.Code
+import Evm.Host.Kernel.Environment
 import Evm.Host.Kernel.Storage
 import Evm.Host.Kernel.Accounts
 
@@ -23,23 +24,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -52,6 +45,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # State: account code
@@ -72,15 +66,25 @@ def k_get_codehash (a : address) : SailM hash := do
   else (pure acc.info.code_hash)
 
 /-- Deploys code to an account: analyzes, stores, and binds its hash. -/
-def k_deploy_code (a : address) (code : EvmByteSlice) : SailM Unit := do
+/- Type quantifiers: k_ex408224_ : Nat, k_ex408223_ : Nat, 0 ≤ k_ex408223_ ∧ 0 ≤ k_ex408224_
+  ∧ 0 ≤ k_ex408224_ -/
+def k_deploy_code (a : address) (code : CodeSlice) : SailM Unit := do
+  let code := ((code).2).2
   let cur ← do (k_aload a)
-  let h ← (( do (code_db_insert code) ) : SailM b256 )
+  let h ← (( do (code_db_insert ⟨_, ⟨_, code⟩⟩ (← readReg k_fork)) ) : SailM
+    (Vector (BitVec 8) 32) )
   (store_account_info a cur { cur.info with code_hash := h })
 
-/-- Computes the PUSH-aware JUMPDEST bitmap of an EIP-7702 delegation
-designator. -/
+/- Type quantifiers: index : Nat, 0 ≤ index ∧ index ≤ 19 -/
+def delegation_address_index (index : Nat) : Nat :=
+  (19 - index)
+
+/- Type quantifiers: index : Nat, 0 ≤ index ∧ index ≤ 19 -/
+def delegation_code_index (index : Nat) : Nat :=
+  (3 + index)
+
+/-- Marks address bytes that decode as `JUMPDEST` in a delegation designator. -/
 def delegation_jumpdest_chunk (target : address) : JumpdestChunk := Id.run do
-  let w := (address_to_word target)
   let bits := EMPTY_JUMPDEST_CHUNK
   let loop_k_lower := 0
   let loop_k_upper := 19
@@ -88,9 +92,9 @@ def delegation_jumpdest_chunk (target : address) : JumpdestChunk := Id.run do
   for k in [loop_k_lower:loop_k_upper:1]i do
     let bits := loop_vars
     loop_vars :=
-      let b := (word_low_byte (word_shift_right_limb w (get_slice_int 64 (8 *i (19 -i k)) 0)))
+      let b := (GetElem?.getElem! target (delegation_address_index k))
       if ((b == 0x5B#8) : Bool)
-      then (bits ||| ((Sail.BitVec.zeroExtend 0x01#8 256) <<< (3 + k)))
+      then (bits ||| ((Sail.BitVec.zeroExtend 0x01#8 256) <<< (delegation_code_index k)))
       else bits
   (pure loop_vars)
 
@@ -98,17 +102,19 @@ def delegation_jumpdest_chunk (target : address) : JumpdestChunk := Id.run do
 (`0xef0100 ‖ target`) as the account's code. -/
 def k_set_delegation (a : address) (target : address) : SailM Unit := do
   let cur ← do (k_aload a)
-  let code_len : byte_quantity := (ByteQuantity 23)
-  let table ← do (jumpdest_table_alloc code_len)
+  let code_len : Nat := 23
+  let code_length := code_len
+  let model_code_length : Nat := code_length
+  let table ← do (jumpdest_table_alloc model_code_length)
   assert (table != EMPTY_JUMPDEST_REF) "delegation JUMPDEST table allocation"
   let chunk := (delegation_jumpdest_chunk target)
   if ((chunk != EMPTY_JUMPDEST_CHUNK) : Bool)
   then
     (do
-      let stored ← do (jumpdest_table_store_chunk table code_len BYTE_ZERO chunk)
+      let stored ← do (jumpdest_table_store_chunk table model_code_length 0 chunk)
       assert stored "delegation JUMPDEST chunk store")
   else (pure ())
-  let h ← (( do (code_intern_delegation target table) ) : SailM b256 )
+  let h ← (( do (code_intern_delegation target table) ) : SailM (Vector (BitVec 8) 32) )
   (store_account_info a cur { cur.info with code_hash := h })
 
 /-- Resets an account's code to empty (EIP-7702 clearing). -/
@@ -116,37 +122,31 @@ def k_clear_code (a : address) : SailM Unit := do
   let cur ← do (k_aload a)
   (store_account_info a cur { cur.info with code_hash := KECCAK_EMPTY })
 
-/-- An address as 20 big-endian bytes. -/
-def addr_bytes (a : address) : (List byte) := Id.run do
-  let w := (address_to_word a)
-  let out : (List (BitVec 8)) := []
-  let loop_k_lower := 0
-  let loop_k_upper := 19
-  let mut loop_vars := out
-  for k in [loop_k_lower:loop_k_upper:1]i do
-    let out := loop_vars
-    loop_vars := ((word_low_byte (word_shift_right_limb w (get_slice_int 64 (8 *i k) 0))) :: out)
-  (pure loop_vars)
-
 /-- The EIP-7702 delegation designator bytes: `0xef0100 ‖ address`. -/
 def delegation_code (a : address) : (List byte) :=
-  (0xEF#8 :: (0x01#8 :: (0x00#8 :: (addr_bytes a))))
+  (0xEF#8 :: (0x01#8 :: (0x00#8 :: (address_to_bytes a))))
 
 /-- The delegation target of an account's code, with a validity flag —
 false when the code is not a designator. -/
 def k_deleg_target (a : address) : SailM (Bool × address) := do
-  let h ← (( do (k_code_key a) ) : SailM b256 )
+  let h ← (( do (k_code_key a) ) : SailM (Vector (BitVec 8) 32) )
   let r ← (( do (code_db_read_delegation h) ) : SailM AddressResult )
   (pure (r.success, r.address))
 
 /-- `EXTCODESIZE`: the account's code length in bytes. -/
-def k_get_code_size (a : address) : SailM byte_length := do
+def k_get_code_size (a : address) : SailM code_length := do
   let code ← do (code_db_resolve (← (k_code_key a)))
-  (pure code.bytes.len)
+  let ⟨_, ⟨_, bytes⟩⟩ := code.bytes
+  (pure bytes.len)
 
 /-- `EXTCODECOPY`: copies account code into frame memory, zero-padded
 past the end. -/
+/- Type quantifiers: k_ex408227_ : Nat, k_ex408226_ : Nat, k_ex408225_ : Nat, 0 ≤ k_ex408225_, 0
+  ≤ k_ex408226_ ∧ k_ex408226_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex408227_ -/
 def k_code_copy (a : address) (dst : memory_pointer) (off : word) (len : memory_length) : SailM Unit := do
+  let off := (off).value
   let code ← do (code_db_resolve (← (k_code_key a)))
-  (slice_copy_word_offset code.bytes dst off len)
+  (slice_copy_word_offset
+    (⟨_, ⟨_, ((code.bytes).2).2⟩⟩ : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) dst ⟨off⟩ len)
 

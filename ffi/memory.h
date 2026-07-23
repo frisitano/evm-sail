@@ -13,7 +13,7 @@ void mem_frame_enter(sail_int *out, const unit u);
 uint64_t mem_frame_enter(const unit u);         /* enter frame; return absolute base   */
 #endif
 unit     mem_frame_leave(const unit u);          /* leave sub-call: restore parent      */
-bool mem_expand(EVMSAIL_BYTE_QUANTITY_PARAM(len));
+uint64_t evm_memory_expand(uint64_t len);
 uint64_t mem_read_byte(EVMSAIL_BYTE_QUANTITY_PARAM(off));
 unit mem_write_byte(EVMSAIL_BYTE_QUANTITY_PARAM(off), uint64_t v);
 uint64_t hm_depth(const unit u);                    /* call-frame depth   */
@@ -35,5 +35,5 @@ unit mem_move(EVMSAIL_BYTE_QUANTITY_PARAM(dst),
               EVMSAIL_BYTE_QUANTITY_PARAM(len));
 EVMSAIL_WORD_RETURN mem_load_word(EVMSAIL_WORD_RESULT(result)
                                   EVMSAIL_BYTE_QUANTITY_PARAM(off));
-unit mem_store_word(EVMSAIL_BYTE_QUANTITY_PARAM(off), const sail_word w);
+unit mem_store_word(EVMSAIL_BYTE_QUANTITY_PARAM(off), EVMSAIL_WORD_PARAM(w));
 #endif

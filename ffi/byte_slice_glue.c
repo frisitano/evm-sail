@@ -6,11 +6,12 @@
 #include "byte_slice_glue.h"
 #include "code_db.h"
 #include "kernel_state.h"
-#include "lbits_convert.h"
+#include "value_convert.h"
 #include "memory.h"
 #include "output.h"
 #include "precompiles.h"
 #include "scratch.h"
+#include "trie_node_db.h"
 #include "zkvm_io.h"
 
 #include <stddef.h>
@@ -49,11 +50,28 @@ const uint8_t *evmsail_stateless_input_ptr(uint64_t off, uint64_t len) {
   return private_input ? private_input + off : NULL;
 }
 
+static void byte_slice_value(struct zByteSlice *out, enum zByteSource source,
+                             uint64_t off, uint64_t len) {
+  out->zsource = source;
+  evmsail_byte_quantity_set(&out->zoff, off);
+  evmsail_byte_quantity_set(&out->zlen, len);
+}
+
 static void stateless_input_value(struct zByteSlice *out) {
   acquire_private_input();
-  out->zsource = zStatelessInputSource;
-  evmsail_byte_quantity_set(&out->zoff, 0);
-  evmsail_byte_quantity_set(&out->zlen, (uint64_t)private_input_size);
+  byte_slice_value(out, zStatelessInputSource, 0,
+                   (uint64_t)private_input_size);
+}
+
+static void mem_expand_value(struct zByteSlice *out, uint64_t len) {
+  byte_slice_value(out, zEvmMemorySource, evm_memory_expand(len), len);
+}
+
+static void nodedb_lookup_value(struct zByteSlice *out, sail_hash hash) {
+  uint64_t off = 0;
+  uint64_t len = 0;
+  nodedb_lookup_span(hash, &off, &len);
+  byte_slice_value(out, zStatelessInputSource, off, len);
 }
 
 #ifdef EVMSAIL_STANDARD_ABI
@@ -66,6 +84,31 @@ struct zByteSlice stateless_input(unit u) {
   struct zByteSlice out;
   (void)u;
   stateless_input_value(&out);
+  return out;
+}
+#endif
+
+#ifdef EVMSAIL_STANDARD_ABI
+void mem_expand(struct zByteSlice *out,
+                EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
+  mem_expand_value(out, evmsail_byte_quantity_value(len));
+}
+#else
+struct zByteSlice mem_expand(EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
+  struct zByteSlice out;
+  mem_expand_value(&out, evmsail_byte_quantity_value(len));
+  return out;
+}
+#endif
+
+#ifdef EVMSAIL_STANDARD_ABI
+void nodedb_lookup(struct zByteSlice *out, sail_hash hash) {
+  nodedb_lookup_value(out, hash);
+}
+#else
+struct zByteSlice nodedb_lookup(sail_hash hash) {
+  struct zByteSlice out;
+  nodedb_lookup_value(&out, hash);
   return out;
 }
 #endif
@@ -131,29 +174,84 @@ int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
   return 1;
 }
 
-bool scratch_store_bytes(EVMSAIL_BYTE_QUANTITY_PARAM(off),
+static void scratch_result_value(struct zByteRegionResult *result,
+                                 bool accepted, uint64_t end) {
+  if (!accepted) {
+    result->kind = Kind_zByteRegionFailed;
+    result->variants.zByteRegionFailed = UNIT;
+    return;
+  }
+  result->kind = Kind_zByteRegionReady;
+#ifdef EVMSAIL_STANDARD_ABI
+  /* The generated caller initializes ByteRegionResult in its inactive
+     ByteRegionFailed arm.  Construct the newly selected aggregate arm before
+     assigning its GMP-backed byte quantities.  The optimized ABI stores the
+     same fields inline as uint64_t and requires no construction. */
+  CREATE(sail_int)(&result->variants.zByteRegionReady.zoff);
+  CREATE(sail_int)(&result->variants.zByteRegionReady.zlen);
+#endif
+  byte_slice_value(&result->variants.zByteRegionReady, zScratchSource, 0, end);
+}
+
+void scratch_store_bytes(struct zByteRegionResult *result,
+                         EVMSAIL_BYTE_QUANTITY_PARAM(off),
                          evmsail_byte_list bytes,
                          EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
   uint64_t off_value = evmsail_byte_quantity_value(off);
   uint64_t len_value = evmsail_byte_quantity_value(len);
   uint8_t *out = scratch_prepare(off_value, len_value);
-  if (len_value != 0 && !out) return false;
+  if (len_value != 0 && !out) {
+    scratch_result_value(result, false, 0);
+    return;
+  }
 
   evmsail_byte_list byte = bytes;
   for (uint64_t i = 0; i < len_value; i++) {
-    if (!byte) return false;
+    if (!byte) {
+      scratch_result_value(result, false, 0);
+      return;
+    }
     out[i] = evmsail_byte_value(byte->hd);
     byte = byte->tl;
   }
-  if (byte) return false;
-  return scratch_commit(off_value, len_value);
+  if (byte) {
+    scratch_result_value(result, false, 0);
+    return;
+  }
+  bool accepted = scratch_commit(off_value, len_value);
+  scratch_result_value(result, accepted,
+                       accepted ? off_value + len_value : 0);
 }
 
-bool scratch_store_slice(EVMSAIL_BYTE_QUANTITY_PARAM(off),
+void scratch_store_slice(struct zByteRegionResult *result,
+                         EVMSAIL_BYTE_QUANTITY_PARAM(off),
                          struct zByteSlice slice) {
-  return scratch_append_source(
-      evmsail_byte_quantity_value(off), evmsail_source_kind(slice.zsource),
+  uint64_t off_value = evmsail_byte_quantity_value(off);
+  bool accepted = scratch_append_source(
+      off_value, evmsail_source_kind(slice.zsource),
       byte_slice_off(&slice), byte_slice_len(&slice));
+  scratch_result_value(result, accepted,
+                       accepted ? off_value + byte_slice_len(&slice) : 0);
+}
+
+void scratch_store_b256(struct zByteRegionResult *result,
+                        EVMSAIL_BYTE_QUANTITY_PARAM(off), sail_b256 data,
+                        uint64_t len) {
+  uint64_t off_value = evmsail_byte_quantity_value(off);
+  if (len > 32) {
+    scratch_result_value(result, false, 0);
+    return;
+  }
+  uint8_t bytes[32];
+  evmsail_hash_to_be_bytes(bytes, data);
+  uint8_t *out = scratch_prepare(off_value, len);
+  if (len != 0 && !out) {
+    scratch_result_value(result, false, 0);
+    return;
+  }
+  if (len != 0) memcpy(out, bytes, (size_t)len);
+  bool accepted = scratch_commit(off_value, len);
+  scratch_result_value(result, accepted, accepted ? off_value + len : 0);
 }
 
 bool public_output_write(struct zByteSlice output) {
@@ -243,16 +341,9 @@ bool output_buffer_store(struct zByteSlice slice) {
 EVMSAIL_HASH_RETURN code_db_store_indexed(EVMSAIL_HASH_RESULT(result)
                                           struct zByteSlice code,
                                           uint64_t jumpdest_ref) {
-#ifdef EVMSAIL_STANDARD_ABI
-  code_db_store_indexed_source(result, evmsail_source_kind(code.zsource),
-                               byte_slice_off(&code), byte_slice_len(&code),
-                               jumpdest_ref);
-  return;
-#else
   return code_db_store_indexed_source(evmsail_source_kind(code.zsource),
                                       byte_slice_off(&code),
                                       byte_slice_len(&code), jumpdest_ref);
-#endif
 }
 
 bool accelerator_ripemd160(struct zByteSlice input) {

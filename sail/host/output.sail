@@ -24,18 +24,19 @@ val output_buffer_store_words = impure { c: "output_buffer_store_words" } : (wor
 val public_output_write = impure { c: "public_output_write" } : ByteSlice -> bool
 
 /*! A slice over the first `len` bytes of the output buffer. */
-function output_buffer_slice(len : byte_length) -> ByteSlice =
-    if len == BYTE_ZERO then {
+val output_buffer_slice : forall 'len, source_valid_length('len). int('len) -> ByteSlice
+function output_buffer_slice(len) =
+    if len == 0 then {
         EMPTY_SLICE
     } else {
-        byte_slice(OutputSource, BYTE_ZERO, len)
+        byte_slice(OutputSource, 0, len)
     }
 
 /*! Copies frame output into the host buffer so it survives frame
     teardown; the canonical returndata source. */
 function freeze_output(data : ByteSlice) -> ByteSlice = {
     let len = data.len;
-    if len == BYTE_ZERO then {
+    if len == 0 then {
         EMPTY_SLICE
     } else {
         if output_buffer_store(data) then {

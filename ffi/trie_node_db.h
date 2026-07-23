@@ -14,19 +14,13 @@
  *
  * The map stores spans, not bytes: node bytes stay in the witness buffer and
  * are materialized by offset only when a node is actually visited. The 256-bit
- * keccak key crosses the FFI as a whole lbits value. Lookups are
- * argument-keyed getters (no cursor): nodedb_len(kh) is 0 exactly when the
- * key is absent (nodes are never empty), and a memoized last-key probe
- * serves the off/len pair with one table walk. */
+ * keccak key crosses the FFI as one fixed 32-byte value. Lookups are
+ * argument-keyed span lookup (no cursor). The model-aware byte-slice glue
+ * packages a successful span with its source tag; this table stays unaware of
+ * generated aggregate layouts. */
 unit nodedb_reset(const unit u);
 unit nodedb_insert(sail_hash kh, EVMSAIL_BYTE_QUANTITY_PARAM(off),
                    EVMSAIL_BYTE_QUANTITY_PARAM(len));
-#ifdef EVMSAIL_STANDARD_ABI
-void nodedb_off(sail_int *out, sail_hash kh);
-void nodedb_len(sail_int *out, sail_hash kh);
-#else
-uint64_t nodedb_off(sail_hash kh);
-uint64_t nodedb_len(sail_hash kh);
-#endif
+bool nodedb_lookup_span(sail_hash kh, uint64_t *off, uint64_t *len);
 
 #endif

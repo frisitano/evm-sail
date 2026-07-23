@@ -27,26 +27,26 @@ clears) are capped per EIP-3529.
 | `PER_AUTH_BASE` | `12500` | Per authorization (EIP-7702) |
 | `PER_EMPTY_ACCOUNT` | `25000` | Per authorization of a new account (EIP-7702) |
 */
-let G_transaction : gas_constant = GasConstant(21000)
-let G_txcreate : gas_constant = GasConstant(32000)
-let G_txdatazero : gas_constant = GasConstant(4)
-let G_txdatanonzero : gas_constant = GasConstant(16)
-let G_access_list_address : gas_constant = GasConstant(2400) /* EIP-2930 ACCESS_LIST_ADDRESS_COST     */
-let G_access_list_storage_key : gas_constant = GasConstant(1900) /* EIP-2930 ACCESS_LIST_STORAGE_KEY_COST */
-let PER_AUTH_BASE : gas_constant = GasConstant(12500) /* EIP-7702 PER_AUTH_BASE_COST          */
-let PER_EMPTY_ACCOUNT : gas_constant = GasConstant(25000) /* EIP-7702 PER_EMPTY_ACCOUNT_COST      */
-let AMSTERDAM_TX_BASE : gas_constant = GasConstant(12000)
-let AMSTERDAM_CREATE_ACCESS : gas_constant = GasConstant(11000)
-let AMSTERDAM_COLD_ACCOUNT_ACCESS : gas_constant = GasConstant(3000)
-let AMSTERDAM_TX_VALUE_COST : gas_constant = GasConstant(4244)
-let AMSTERDAM_TRANSFER_LOG_COST : gas_constant = GasConstant(1756)
-let AMSTERDAM_ACCESS_LIST_ADDRESS : gas_constant = GasConstant(3000)
-let AMSTERDAM_ACCESS_LIST_SLOT : gas_constant = GasConstant(3000)
-let AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR : gas_constant = GasConstant(1280)
-let AMSTERDAM_ACCESS_LIST_SLOT_FLOOR : gas_constant = GasConstant(2048)
-let AMSTERDAM_AUTH_BASE : gas_constant = GasConstant(7816)
-let AMSTERDAM_CALLDATA_FLOOR_BYTE : gas_constant = GasConstant(64)
-let AMSTERDAM_TX_MAX_GAS : gas = Gas(16777216)
+let G_transaction : int(21000) = 21000
+let G_txcreate : int(32000) = 32000
+let G_txdatazero : int(4) = 4
+let G_txdatanonzero : int(16) = 16
+let G_access_list_address : int(2400) = 2400 /* EIP-2930 ACCESS_LIST_ADDRESS_COST     */
+let G_access_list_storage_key : int(1900) = 1900 /* EIP-2930 ACCESS_LIST_STORAGE_KEY_COST */
+let PER_AUTH_BASE : int(12500) = 12500 /* EIP-7702 PER_AUTH_BASE_COST          */
+let PER_EMPTY_ACCOUNT : int(25000) = 25000 /* EIP-7702 PER_EMPTY_ACCOUNT_COST      */
+let AMSTERDAM_TX_BASE : int(12000) = 12000
+let AMSTERDAM_CREATE_ACCESS : int(11000) = 11000
+let AMSTERDAM_COLD_ACCOUNT_ACCESS : int(3000) = 3000
+let AMSTERDAM_TX_VALUE_COST : int(4244) = 4244
+let AMSTERDAM_TRANSFER_LOG_COST : int(1756) = 1756
+let AMSTERDAM_ACCESS_LIST_ADDRESS : int(3000) = 3000
+let AMSTERDAM_ACCESS_LIST_SLOT : int(3000) = 3000
+let AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR : int(1280) = 1280
+let AMSTERDAM_ACCESS_LIST_SLOT_FLOOR : int(2048) = 2048
+let AMSTERDAM_AUTH_BASE : int(7816) = 7816
+let AMSTERDAM_CALLDATA_FLOOR_BYTE : int(64) = 64
+let AMSTERDAM_TX_MAX_GAS : transaction_gas = TRANSACTION_EXECUTION_GAS_LIMIT
 
 /*! Intrinsic transaction charges split into Amsterdam execution gas, state
     gas, and the calldata floor. */
@@ -61,10 +61,16 @@ struct TransactionCosts = {
     intrinsic_execution : gas_cost,
     intrinsic_state : gas_cost,
     calldata_floor : gas_cost,
-    blob_gas : blob_gas,
+    blob_gas : transaction_blob_gas,
     blob_fee : word,
     upfront : word,
 }
+
+/*! Reclassifies transaction initcode as executable after re-establishing the
+    enclosing SSZ transaction-envelope bound. This bound is structural and is
+    deliberately independent of the active protocol deployment limit. */
+function transaction_initcode_slice(input : TransactionByteSlice) -> CodeSlice =
+    code_slice(input)
 
 /*! Values established before entering the top-level transaction frame. */
 struct TxUpfrontResult = {
@@ -89,23 +95,22 @@ let EMPTY_AMSTERDAM_AUTHORIZATION_STATE : AmsterdamAuthorizationState = struct {
 /*! The EIP-2028 calldata cost: 4 gas per zero byte, 16 per nonzero. One
     native pass counts the nonzero bytes; zero bytes are the
     remainder. */
-function calldata_cost(input : ByteSlice) -> gas_cost = {
+function calldata_cost(input : TransactionByteSlice) -> transaction_calldata_cost = {
     let nonzeroes = slice_count_nonzero(input);
     let input_len = input.len;
-    let zeroes : byte_quantity = if nonzeroes <= input_len then {
-            input_len - nonzeroes
-        } else {
-            throw InvalidBlock(ExecutionInvalid)
-        };
-    gas_constant_scale_byte_quantity(G_txdatazero, zeroes) +
-        gas_constant_scale_byte_quantity(G_txdatanonzero, nonzeroes)
+    if nonzeroes <= input_len then {
+        let zeroes = input_len - nonzeroes;
+        G_txdatazero * zeroes + G_txdatanonzero * nonzeroes
+    } else {
+        throw InvalidBlock(ExecutionInvalid)
+    }
 }
 
 /*! EIP-7623 calldata tokens: each zero byte counts 1, each nonzero
     byte 4. */
-function calldata_tokens(input : ByteSlice) -> nat = {
-    let ByteQuantity(nonzeroes) = slice_count_nonzero(input);
-    let ByteQuantity(input_len) = input.len;
+function calldata_tokens(input : TransactionByteSlice) -> nat = {
+    let nonzeroes = slice_count_nonzero(input);
+    let input_len = input.len;
     let zeroes : nat = if nonzeroes <= input_len then {
             input_len - nonzeroes
         } else {
@@ -116,24 +121,40 @@ function calldata_tokens(input : ByteSlice) -> nat = {
 
 /*! EIP-4844: every blob versioned hash must carry
     `VERSIONED_HASH_VERSION_KZG` (`0x01`). */
-function blob_hashes_versioned(hashes : BlobHashes) -> bool = {
-    var valid : bool = true;
-    var remaining : blob_count = hashes.count;
-    var offset : source_pointer = BYTE_ONE;
+function validate_blob_hash_version_at(
+    hashes : BlobHashes,
+    remaining : transaction_blob_count,
+    offset : range(1, 265),
+) -> (
+    transaction_blob_count
+) =
+    if remaining == 0 then {
+        0
+    } else {
+        if slice_byte(hashes.bytes, offset) != 0x01 then {
+            throw InvalidBlock(ExecutionInvalid)
+        };
+        transaction_blob_count_decrement(remaining)
+    }
 
-    /* Every supported fork admits at most nine blobs in one transaction. The
-     * caller independently rejects a larger count, so this bounded scan never
-     * needs a data-dependent loop. */
-    foreach (i from 0 to 8) {
-        if valid & (remaining != 0) then {
-            valid = slice_byte(hashes.bytes, offset) == 0x01;
-            remaining = protocol_quantity_decrement(remaining);
-            if i < 8 then {
-                offset = offset + BLOB_HASH_RLP_LENGTH
-            }
-        }
-    };
-    valid & (remaining == 0)
+/*! Rejects any transaction blob hash whose version byte is not `0x01`. */
+function validate_blob_hash_versions(hashes : BlobHashes) -> unit = {
+    var remaining : transaction_blob_count = hashes.count;
+
+    /* Every supported fork admits at most nine blobs in one transaction.
+     * Canonical RLP fixes each bytes32 item at 33 bytes including its prefix. */
+    remaining = validate_blob_hash_version_at(hashes, remaining, 1);
+    remaining = validate_blob_hash_version_at(hashes, remaining, 34);
+    remaining = validate_blob_hash_version_at(hashes, remaining, 67);
+    remaining = validate_blob_hash_version_at(hashes, remaining, 100);
+    remaining = validate_blob_hash_version_at(hashes, remaining, 133);
+    remaining = validate_blob_hash_version_at(hashes, remaining, 166);
+    remaining = validate_blob_hash_version_at(hashes, remaining, 199);
+    remaining = validate_blob_hash_version_at(hashes, remaining, 232);
+    remaining = validate_blob_hash_version_at(hashes, remaining, 265);
+    if remaining != 0 then {
+        throw InvalidBlock(ExecutionInvalid)
+    }
 }
 
 /*! The intrinsic gas of a transaction (YP §6.2, g_0): the 21000 base,
@@ -142,54 +163,54 @@ function blob_hashes_versioned(hashes : BlobHashes) -> bool = {
     initcode words. */
 function legacy_intrinsic_gas(tx : Transaction) -> gas_cost = {
     let data_cost = calldata_cost(tx.input_src);
-    let input_len = tx.input_src.len;
-    let address_cost = gas_constant_scale_protocol_quantity(G_access_list_address, tx.access_list_address_count);
-    let slot_cost = gas_constant_scale_protocol_quantity(G_access_list_storage_key, tx.access_list_slot_count);
-    let auth_cost = gas_constant_scale_protocol_quantity(PER_EMPTY_ACCOUNT, tx.authorization_count);
-    var total : gas_cost = data_cost + G_transaction;
-    total = total + address_cost;
-    total = total + slot_cost;
-    total = total + auth_cost;
+    let input = tx.input_src;
+    let input_len = input.len;
+    let address_cost = G_access_list_address * tx.access_list_address_count;
+    let slot_cost = G_access_list_storage_key * tx.access_list_slot_count;
+    let auth_cost = PER_EMPTY_ACCOUNT * tx.authorization_count;
+    let common = data_cost + G_transaction + address_cost + slot_cost + auth_cost;
     if tx.is_create then {
-        total = total + G_txcreate;
-        total = total + initcode_gas(input_len)
-    };
-    total
+        common + G_txcreate + transaction_initcode_gas(input_len)
+    } else {
+        common
+    }
 }
 
 /*! Computes the pre-Amsterdam EIP-7623 calldata floor cost. */
-function legacy_calldata_floor(input : ByteSlice) -> gas_cost = {
+function legacy_calldata_floor(input : TransactionByteSlice) -> transaction_calldata_floor_cost = {
     let nonzeroes = slice_count_nonzero(input);
     let input_len = input.len;
-    let zeroes : byte_quantity = if nonzeroes <= input_len then {
-            input_len - nonzeroes
-        } else {
-            throw InvalidBlock(ExecutionInvalid)
-        };
-      gas_constant_scale_byte_quantity(GasConstant(10), zeroes)
-    + gas_constant_scale_byte_quantity(GasConstant(40), nonzeroes)
-    + G_transaction
+    if nonzeroes <= input_len then {
+        let zeroes = input_len - nonzeroes;
+        10 * zeroes + 40 * nonzeroes + G_transaction
+    } else {
+        throw InvalidBlock(ExecutionInvalid)
+    }
 }
+
+/*! The maximum Amsterdam recipient-side intrinsic execution charge. */
+type amsterdam_recipient_cost = range(0, 12756)
 
 /*! Computes Amsterdam execution-gas charges for recipient access, value
     transfer, and contract creation. */
-function amsterdam_recipient_execution_cost(tx : Transaction) -> gas_cost = {
-    var cost : gas_cost = GAS_COST_ZERO;
+function amsterdam_recipient_execution_cost(tx : Transaction) -> amsterdam_recipient_cost = {
     if tx.is_create then {
-        cost = cost + AMSTERDAM_CREATE_ACCESS;
         if word_nonzero(tx.value) then {
-            cost = cost + AMSTERDAM_TRANSFER_LOG_COST
+            AMSTERDAM_CREATE_ACCESS + AMSTERDAM_TRANSFER_LOG_COST
+        } else {
+            AMSTERDAM_CREATE_ACCESS
         }
     } else {
         if tx.recipient != tx.sender then {
-            cost = cost + AMSTERDAM_COLD_ACCOUNT_ACCESS;
             if word_nonzero(tx.value) then {
-                cost = cost + AMSTERDAM_TX_VALUE_COST;
-                cost = cost + AMSTERDAM_TRANSFER_LOG_COST
+                AMSTERDAM_COLD_ACCOUNT_ACCESS + AMSTERDAM_TX_VALUE_COST + AMSTERDAM_TRANSFER_LOG_COST
+            } else {
+                AMSTERDAM_COLD_ACCOUNT_ACCESS
             }
+        } else {
+            0
         }
-    };
-    cost
+    }
 }
 
 /*! Computes the fork-specific execution/state intrinsic costs and calldata
@@ -197,50 +218,56 @@ function amsterdam_recipient_execution_cost(tx : Transaction) -> gas_cost = {
     dimensions introduced by EIP-2780. */
 function intrinsic_gas(tx : Transaction) -> IntrinsicGasCost = {
     if k_fork < Amsterdam then {
-        struct {
-            execution = legacy_intrinsic_gas(tx),
-            state = GAS_COST_ZERO,
-            calldata_floor = legacy_calldata_floor(tx.input_src),
-        }
+        struct { execution = legacy_intrinsic_gas(tx), state = 0, calldata_floor = legacy_calldata_floor(tx.input_src) }
     } else {
+        let input = tx.input_src;
         let recipient = amsterdam_recipient_execution_cost(tx);
         let address_count = tx.access_list_address_count;
         let slot_count = tx.access_list_slot_count;
-        let access_execution =   gas_constant_scale_protocol_quantity(AMSTERDAM_ACCESS_LIST_ADDRESS, address_count)
-                               + gas_constant_scale_protocol_quantity(AMSTERDAM_ACCESS_LIST_SLOT, slot_count)
-                               + gas_constant_scale_protocol_quantity(
-                                     AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR,
-                                     address_count,
-                                 )
-                               + gas_constant_scale_protocol_quantity(AMSTERDAM_ACCESS_LIST_SLOT_FLOOR, slot_count);
-        let authorization_execution = gas_constant_scale_protocol_quantity(AMSTERDAM_AUTH_BASE, tx.authorization_count);
-        var execution = calldata_cost(tx.input_src) + AMSTERDAM_TX_BASE;
-        execution = execution + recipient;
-        execution = execution + access_execution;
-        execution = execution + authorization_execution;
-        if tx.is_create then {
-            execution = execution + initcode_gas(tx.input_src.len)
-        };
-        let floor =   gas_constant_scale_byte_quantity(AMSTERDAM_CALLDATA_FLOOR_BYTE, tx.input_src.len)
+        let access_execution =   AMSTERDAM_ACCESS_LIST_ADDRESS
+                               * address_count
+                               + AMSTERDAM_ACCESS_LIST_SLOT
+                               * slot_count
+                               + AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR
+                               * address_count
+                               + AMSTERDAM_ACCESS_LIST_SLOT_FLOOR
+                               * slot_count;
+        let authorization_execution = AMSTERDAM_AUTH_BASE * tx.authorization_count;
+        let create_execution = if tx.is_create then {
+                transaction_initcode_gas(input.len)
+            } else {
+                0
+            };
+        let execution =   calldata_cost(tx.input_src)
+                        + AMSTERDAM_TX_BASE
+                        + recipient
+                        + access_execution
+                        + authorization_execution
+                        + create_execution;
+        let input_length = input.len;
+        let floor =   AMSTERDAM_CALLDATA_FLOOR_BYTE
+                    * input_length
                     + AMSTERDAM_TX_BASE
                     + recipient
-                    + gas_constant_scale_protocol_quantity(AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR, address_count)
-                    + gas_constant_scale_protocol_quantity(AMSTERDAM_ACCESS_LIST_SLOT_FLOOR, slot_count);
-        struct { execution = execution, state = GAS_COST_ZERO, calldata_floor = floor }
+                    + AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR
+                    * address_count
+                    + AMSTERDAM_ACCESS_LIST_SLOT_FLOOR
+                    * slot_count;
+        struct { execution = execution, state = 0, calldata_floor = floor }
     }
 }
 
 /* EIP-4844 / EIP-7691 / EIP-7594 bound blob hashes per transaction
  * independently of the active block-wide blob schedule. */
 /*! Returns the active fork's maximum blob count per transaction. */
-function max_blobs_per_transaction() -> blob_count =
+function max_blobs_per_transaction() -> transaction_blob_count =
     if k_fork >= Osaka then { 6 } else { if k_fork >= Prague then { 9 } else { 6 } }
 
 /* The active transaction limit is at most nine in every supported fork.  The
  * explicit static ceiling lets the optimized C representation form the gas
  * product in uint64_t while the fork-dependent check remains authoritative. */
 /*! Converts a validated transaction blob count to blob gas. */
-function transaction_blob_gas(count : blob_count) -> blob_gas = {
+function transaction_blob_gas_for_count(count : transaction_blob_count) -> transaction_blob_gas = {
     let active_maximum = max_blobs_per_transaction();
     if (active_maximum <= 9) & (count <= active_maximum) then {
         131072 * count
@@ -250,43 +277,21 @@ function transaction_blob_gas(count : blob_count) -> blob_gas = {
 }
 
 /*! Computes all transaction costs, rejecting arithmetic beyond word bounds. */
-function transaction_costs(tx : Transaction, blob_price : word) -> option(TransactionCosts) = {
+function transaction_costs(tx : Transaction, gas_limit : block_gas_limit, blob_price : word) -> TransactionCosts = {
     let intrinsic = intrinsic_gas(tx);
-    let blob_gas = transaction_blob_gas(tx.blob_hashes.count);
-    let blob_fee : word = if blob_gas == 0 then {
-            ZERO_WORD
-        } else {
-            match word_checked_mul(blob_price, blob_gas) {
-                Some(amount) => amount,
-                None() => return None(),
-            }
-        };
-    let gas_cap : word = match word_checked_mul(tx.max_fee, tx.gas_limit) {
-        Some(amount) => amount,
-        None() => return None(),
-    };
-    let blob_cap : word = match word_checked_mul(tx.max_blob_fee, blob_gas) {
-        Some(amount) => amount,
-        None() => return None(),
-    };
-    let gas_and_value : word = match word_checked_add(gas_cap, tx.value) {
-        Some(amount) => amount,
-        None() => return None(),
-    };
-    let upfront : word = match word_checked_add(gas_and_value, blob_cap) {
-        Some(amount) => amount,
-        None() => return None(),
-    };
-    Some(
-        struct {
-            intrinsic_execution = intrinsic.execution,
-            intrinsic_state = intrinsic.state,
-            calldata_floor = intrinsic.calldata_floor,
-            blob_gas = blob_gas,
-            blob_fee = blob_fee,
-            upfront = upfront,
-        },
-    )
+    let blob_gas = transaction_blob_gas_for_count(tx.blob_hashes.count);
+    let blob_fee = blob_word_mul(blob_price, blob_gas);
+    let execution_cap = blob_word_mul(tx.max_fee, gas_limit);
+    let blob_cap = blob_word_mul(tx.max_blob_fee, blob_gas);
+    let upfront = blob_word_add(blob_word_add(execution_cap, tx.value), blob_cap);
+    struct {
+        intrinsic_execution = intrinsic.execution,
+        intrinsic_state = intrinsic.state,
+        calldata_floor = intrinsic.calldata_floor,
+        blob_gas = blob_gas,
+        blob_fee = blob_fee,
+        upfront = upfront,
+    }
 }
 
 /* These arithmetic relations were established by transaction validation or
@@ -294,38 +299,31 @@ function transaction_costs(tx : Transaction, blob_price : word) -> option(Transa
  * boundary total and turns an internal invariant violation into an invalid
  * block instead of silently substituting a value. */
 /*! Reifies a word product whose validity was established by transaction checks. */
-function validated_word_product(value : word, factor : gas) -> word =
-    match word_checked_mul(value, factor) {
-        Some(product) => product,
-        None() => throw InvalidBlock(ExecutionInvalid),
-    }
+val validated_word_product : forall 'factor, 0 <= 'factor & 'factor < 2 ^ 256. (word, int('factor)) -> word
+function validated_word_product(value, factor) = blob_word_mul(value, factor)
 
 /*! Adds gas quantities whose sum was established to remain valid. */
 function validated_gas_add(left_gas : gas, right_gas : gas) -> gas = {
-    if gas_sum_supported(left_gas, right_gas) then {
-        left_gas + right_gas
-    } else {
-        throw InvalidBlock(ExecutionInvalid)
-    }
+    conserved_gas_add(left_gas, right_gas)
 }
 
 /*! Subtracts gas whose affordability was established by validation. */
-function validated_gas_sub_gas(Gas(left) : gas, Gas(right) : gas) -> gas =
+val validated_gas_sub : forall 'left 'right, 0 <= 'left & 0 <= 'right. (int('left), int('right)) -> range(0, 'left)
+function validated_gas_sub(left, right) =
     if right <= left then {
-        Gas(left - right)
+        left - right
     } else {
         throw InvalidBlock(ExecutionInvalid)
     }
 
-/*! Subtracts an exact cost whose affordability was established by validation. */
-function validated_gas_sub_cost(Gas(left) : gas, GasCost(right) : gas_cost) -> gas =
-    if right <= left then {
-        Gas(left - right)
-    } else {
+/*! Validates the transaction gas limit against the SSZ-backed block limit and
+    exposes that bound to the remainder of the transaction lifecycle. */
+function admitted_transaction_gas_limit(value : transaction_gas, block_limit : block_gas_limit) -> block_gas_limit =
+    if block_limit < value then {
         throw InvalidBlock(ExecutionInvalid)
+    } else {
+        value
     }
-
-overload validated_gas_sub = {validated_gas_sub_gas, validated_gas_sub_cost}
 
 /*! Applies one EIP-7702 authorization: validates it against current
     state, sets or clears the delegation, bumps the authority nonce, and
@@ -336,25 +334,22 @@ overload validated_gas_sub = {validated_gas_sub_gas, validated_gas_sub_cost}
     checks. The authority is warmed before the code/nonce
     checks, so a tuple later skipped still warms it. */
 function process_auth(au : Authorization) -> gas_refund = {
-    var refund = GAS_REFUND_ZERO;
+    var refund : gas_refund = GAS_REFUND_ZERO;
     let authority = au.authority;
-    let chain_ok = word_is_zero(au.chain_id) | (au.chain_id == word_of_protocol_quantity(k_chain_id));
 
     /* Sig + chain id are validated from the tuple ALONE before reading the
      * authority's account; a tuple rejected there (e.g. wrong chain id) touches
      * NO state, so its authority need not be witnessed -- reading it eagerly would
-     * over-access the witness. Gate every authority-state read on sig & chain_ok. */
-    if au.valid_sig & chain_ok then {
+     * over-access the witness. Gate every authority-state read on signature and
+     * chain-id acceptance. */
+    if au.valid_sig & (word_is_zero(au.chain_id) | (au.chain_id == word_of_chain_identifier(k_chain_id))) then {
         /* step 5: warm the authority BEFORE the code/nonce checks -- a tuple later
          * skipped for code/nonce still warms its authority. */
         let _ = k_access_account(authority);
         let (is_deleg, _) = k_deleg_target(authority);
-        let code_ok = (k_code_key(authority) == KECCAK_EMPTY) | is_deleg;
-
-        let nonce_ok = k_get_nonce(authority) == au.nonce;
-        if code_ok & nonce_ok then {
+        if ((k_code_key(authority) == KECCAK_EMPTY) | is_deleg) & (k_get_nonce(authority) == au.nonce) then {
             let existed = k_account_exists(authority);
-            if au.address == ZERO_ADDR then {
+            if au.address == ZERO_ADDRESS then {
                 k_clear_code(authority)
                 /* clear delegation */
             } else {
@@ -362,7 +357,7 @@ function process_auth(au : Authorization) -> gas_refund = {
             };
             k_bump_nonce(authority);
             if existed then {
-                refund = gas_cost_to_refund(PER_EMPTY_ACCOUNT - PER_AUTH_BASE)
+                refund = PER_EMPTY_ACCOUNT - PER_AUTH_BASE
             }
         }
     };
@@ -373,7 +368,7 @@ function process_auth(au : Authorization) -> gas_refund = {
 function process_auth_list(xs : list(Authorization)) -> gas_refund =
     match xs {
         [||] => GAS_REFUND_ZERO,
-        a :: r => process_auth(a) + process_auth_list(r),
+        a :: r => validated_refund_add(process_auth(a), process_auth_list(r)),
     }
 
 /*! Whether an Amsterdam authorization address has already appeared in a
@@ -399,15 +394,12 @@ function process_amsterdam_auth(
 ) = {
     var next = auth_state;
     let authority = au.authority;
-    let chain_ok = word_is_zero(au.chain_id) | (au.chain_id == word_of_protocol_quantity(k_chain_id));
 
-    if au.valid_sig & chain_ok then {
+    if au.valid_sig & (word_is_zero(au.chain_id) | (au.chain_id == word_of_chain_identifier(k_chain_id))) then {
         let _ = k_access_account(authority);
         let (currently_delegated, _) = k_deleg_target(authority);
-        let code_ok = (k_code_key(authority) == KECCAK_EMPTY) | currently_delegated;
-        let nonce_ok = k_get_nonce(authority) == au.nonce;
 
-        if code_ok & nonce_ok then {
+        if ((k_code_key(authority) == KECCAK_EMPTY) | currently_delegated) & (k_get_nonce(authority) == au.nonce) then {
             let seen = authorization_address_seen(authority, auth_state.seen_valid_authorities);
             let delegated_before_tx = if seen then {
                     authorization_address_seen(authority, auth_state.originally_delegated)
@@ -423,14 +415,14 @@ function process_amsterdam_auth(
                 charge(G_amsterdam_account_write)
             };
             if   is_running()
-               & (au.address != ZERO_ADDR)
+               & (au.address != ZERO_ADDRESS)
                & not_bool(delegated_before_tx)
                & not_bool(authorization_address_seen(authority, auth_state.delegation_set_for)) then {
                 charge_state_gas(G_amsterdam_state_auth_base)
             };
 
             if is_running() then {
-                if au.address == ZERO_ADDR then {
+                if au.address == ZERO_ADDRESS then {
                     k_clear_code(authority)
                 } else {
                     k_set_delegation(authority, au.address)
@@ -440,7 +432,7 @@ function process_amsterdam_auth(
                 if not_bool(seen) & currently_delegated then {
                     next = { next with originally_delegated = authority :: next.originally_delegated }
                 };
-                if au.address != ZERO_ADDR & not_bool(authorization_address_seen(authority, next.delegation_set_for)) then {
+                if au.address != ZERO_ADDRESS & not_bool(authorization_address_seen(authority, next.delegation_set_for)) then {
                     next = { next with delegation_set_for = authority :: next.delegation_set_for }
                 }
             }
@@ -513,28 +505,16 @@ function prewarm(tx : Transaction) -> unit = {
     let precompile_addresses : vector(17, precompile_id) = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
     foreach (i from 0 to 16) {
         let p = precompile_addresses[i];
-        if is_precompile(p) then {
-            let _ = k_access_account(word_to_address(word_of_precompile_id(p)))
+        if precompile_active_at_fork(p) then {
+            let _ = k_access_account(precompile_id_to_address(p))
         }
     };
-    if is_precompile(256) then {
-        let _ = k_access_account(word_to_address(word_of_precompile_id(256))) /* P256VERIFY */
+    if precompile_active_at_fork(256) then {
+        let _ = k_access_account(precompile_id_to_address(256)) /* P256VERIFY */
     };
     warm_access_list_addresses(tx.access_list_addresses);
     warm_access_list_slots(tx.access_list_slots)
 }
-
-/*! The receipt of an invalid (inapplicable) transaction. */
-function invalid_receipt() -> Receipt =
-    struct {
-        tx_type = LegacyTx,
-        success = false,
-        valid = false,
-        gas_used = GAS_ZERO,
-        execution_gas = GAS_ZERO,
-        state_gas = GAS_ZERO,
-        logs = [||],
-    }
 
 /*! The EIP-1559 effective fee: the gas price actually paid is
     `min(max_fee, base_fee + max_priority_fee)`, and the priority tip
@@ -545,10 +525,16 @@ function invalid_receipt() -> Receipt =
     an invalid sub-base-fee price (rejected later by validity) never
     underflows. */
 function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : word) -> (word, word) = {
-    let price : word = match word_checked_add(base_fee, max_priority_fee) {
-        Some(uncapped) => if word_ult(max_fee, uncapped) then { max_fee } else { uncapped },
-        None() => max_fee,
-    };
+    let price : word = if word_ule(max_fee, base_fee) then {
+            max_fee
+        } else {
+            let available_priority = word_sub(max_fee, base_fee);
+            if word_ule(max_priority_fee, available_priority) then {
+                word_add(base_fee, max_priority_fee)
+            } else {
+                max_fee
+            }
+        };
     let priority = if word_ule(base_fee, price) then {
             word_sub(price, base_fee)
         } else {
@@ -568,39 +554,29 @@ function check_transaction_validity(tx : Transaction) -> TxValidity = {
        the address derived from the witnessed public key. A forged key or bad
        v/r/s makes the whole BLOCK invalid, regardless of the validity verdict
        below. */
-    if not_bool(tx_sig_v_ok(k_chain_id, tx.tx_type, tx.sig_v)) then {
+    if not_bool(tx_sig_v_valid(k_chain_id, tx.tx_type, tx.sig_v)) then {
         throw InvalidBlock(InvalidSignature)
     };
     let parity = tx_y_parity(tx.tx_type, tx.sig_v);
-    if not_bool(tx_auth_ok(tx.sender, tx.signing_hash, parity, tx.sig_r, tx.sig_s)) then {
+    if not_bool(tx_auth_valid(tx.sender, tx.signing_hash, parity, tx.sig_r, tx.sig_s)) then {
         throw InvalidBlock(InvalidSignature)
     };
+    let gas_limit = admitted_transaction_gas_limit(tx.gas_limit, k_header.gas_limit);
 
     /* effective gas price (EIP-1559) */
     let (eff_gas_price, eff_priority_fee) = eff_gas_price_for(k_header.base_fee, tx.max_fee, tx.max_priority_fee);
     let sender = tx.sender;
-    let input_len = tx.input_src.len;
+    let input = tx.input_src;
+    let input_len = input.len;
     let nonce_before = k_get_nonce(sender);
     let blob_price = blob_base_fee(k_header.excess_blob_gas);
-    let checked_costs = transaction_costs(tx, blob_price);
-    let costs_valid : bool = match checked_costs {
-        Some(_) => true,
-        None() => false,
+    let costs = transaction_costs(tx, gas_limit, blob_price);
+    let nonce : account_nonce = match word_to_account_nonce(tx.nonce) {
+        Some(nonce) => nonce,
+        None() => throw InvalidBlock(ExecutionInvalid),
     };
-    let costs : TransactionCosts = match checked_costs {
-        Some(costs) => costs,
-        None() => struct {
-            intrinsic_execution = GAS_COST_ZERO,
-            intrinsic_state = GAS_COST_ZERO,
-            calldata_floor = GAS_COST_ZERO,
-            blob_gas = 0,
-            blob_fee = ZERO_WORD,
-            upfront = ZERO_WORD,
-        },
-    };
-    let nonce_ok : bool = match word_to_account_nonce(tx.nonce) {
-        Some(nonce) => nonce == nonce_before,
-        None() => false,
+    if nonce != nonce_before then {
+        throw InvalidBlock(ExecutionInvalid)
     };
 
     /* Transaction validity: an invalid tx is REJECTED with no state change at all
@@ -612,66 +588,74 @@ function check_transaction_validity(tx : Transaction) -> TxValidity = {
        transaction, Prague 9, and Osaka adds MAX_BLOBS_PER_TX = 6. A type-3 tx must
        carry >= 1 blob, must not create, and every versioned hash must be 0x01-tagged. */
     let max_blobs = max_blobs_per_transaction();
-    let blob_ok : bool = if tx_is_blob(tx.tx_type) then {
-              (k_fork >= Cancun)
-            & (tx.blob_hashes.count != 0)
-            & (tx.blob_hashes.count <= max_blobs)
-            & not_bool(tx.is_create)
-            & blob_hashes_versioned(tx.blob_hashes)
-        } else {
-            true
+    if tx_is_blob(tx.tx_type) then {
+        if (k_fork < Cancun) | (tx.blob_hashes.count == 0) | (max_blobs < tx.blob_hashes.count) | tx.is_create then {
+            throw InvalidBlock(ExecutionInvalid)
         };
+        validate_blob_hash_versions(tx.blob_hashes)
+    };
 
     /* EIP-7623 (Prague+): the calldata floor is ALSO a validity bound -- a tx whose
        gas limit cannot cover 21000 + 10*tokens is rejected outright. */
-    let floor_ok : bool = (k_fork < Prague) | costs.calldata_floor <= tx.gas_limit;
-    let chain_id_ok : bool = match tx.tx_type {
-        LegacyTx => true,
-        _ => tx.chain_id == k_chain_id,
+    if (k_fork >= Prague) & (gas_limit < costs.calldata_floor) then {
+        throw InvalidBlock(ExecutionInvalid)
     };
-    let balance_ok : bool = word_ule(costs.upfront, k_get_balance(sender));
-    let sender_code_ok : bool = (k_code_key(sender) == KECCAK_EMPTY) | sender_deleg;
+    if not_bool(word_ule(costs.upfront, k_get_balance(sender))) then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if not_bool((k_code_key(sender) == KECCAK_EMPTY) | sender_deleg) then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
     let intrinsic_total = costs.intrinsic_execution + costs.intrinsic_state;
-    let intrinsic_ok : bool = intrinsic_total <= tx.gas_limit;
-    let amsterdam_intrinsic_limit_ok : bool = (k_fork < Amsterdam) | costs.intrinsic_execution <= AMSTERDAM_TX_MAX_GAS;
-    let amsterdam_floor_limit_ok : bool = (k_fork < Amsterdam) | costs.calldata_floor <= AMSTERDAM_TX_MAX_GAS;
-    let fee_cap_ok : bool = word_ule(k_header.base_fee, tx.max_fee);
-    let blob_fee_cap_ok : bool = (tx.blob_hashes.count == 0) | word_ule(blob_price, tx.max_blob_fee);
-    let initcode_ok : bool = not_bool(tx.is_create) | initcode_size_allowed(input_len);
-    let priority_fee_ok : bool = word_ule(tx.max_priority_fee, tx.max_fee);
-    let access_list_fork_ok : bool = not_bool(tx_is_access_list(tx.tx_type)) | (k_fork >= Berlin);
-    let dynamic_fee_fork_ok : bool = not_bool(tx_is_dynamic_fee(tx.tx_type)) | (k_fork >= London);
-    let set_code_target_ok : bool = not_bool(tx_is_set_code(tx.tx_type)) | not_bool(tx.is_create);
-    let set_code_authorizations_ok : bool = not_bool(tx_is_set_code(tx.tx_type)) | (tx.authorization_count != 0);
-    let set_code_fork_ok : bool = not_bool(tx_is_set_code(tx.tx_type)) | (k_fork >= Prague);
-    let nonce_incrementable : bool = nonce_before != BYTE_QUANTITY_MAX;
-    let block_gas_ok : bool = tx.gas_limit <= k_header.gas_limit;
-    let valid =   costs_valid
-                & balance_ok
-                & sender_code_ok
-                & intrinsic_ok
-                & amsterdam_intrinsic_limit_ok
-                & amsterdam_floor_limit_ok
-                & floor_ok
-                & fee_cap_ok
-                & blob_fee_cap_ok
-                & blob_ok
-                & initcode_ok
-                & priority_fee_ok
-                & access_list_fork_ok
-                & dynamic_fee_fork_ok
-                & set_code_target_ok
-                & set_code_authorizations_ok
-                & set_code_fork_ok
-                & chain_id_ok
-                & nonce_ok
-                & nonce_incrementable
-                & block_gas_ok;
-
+    if gas_limit < intrinsic_total then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if (k_fork >= Amsterdam) & (AMSTERDAM_TX_MAX_GAS < costs.intrinsic_execution) then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if (k_fork >= Amsterdam) & (AMSTERDAM_TX_MAX_GAS < costs.calldata_floor) then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if not_bool(word_ule(k_header.base_fee, tx.max_fee)) then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if (tx.blob_hashes.count != 0) & not_bool(word_ule(blob_price, tx.max_blob_fee)) then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if tx.is_create & not_bool(initcode_size_allowed(input_len)) then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if not_bool(word_ule(tx.max_priority_fee, tx.max_fee)) then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if tx_is_access_list(tx.tx_type) & (k_fork < Berlin) then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if tx_is_dynamic_fee(tx.tx_type) & (k_fork < London) then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if tx_is_set_code(tx.tx_type) & tx.is_create then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if tx_is_set_code(tx.tx_type) & (tx.authorization_count == 0) then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if tx_is_set_code(tx.tx_type) & (k_fork < Prague) then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if match tx.tx_type {
+        LegacyTx => false,
+        _ => tx.chain_id != k_chain_id,
+    } then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
+    if nonce_before == sizeof(account_nonce_bound) then {
+        throw InvalidBlock(ExecutionInvalid)
+    };
     struct {
-        valid = valid,
         sender = sender,
         nonce_before = nonce_before,
+        gas_limit = gas_limit,
         intrinsic_execution_gas = costs.intrinsic_execution,
         intrinsic_state_gas = costs.intrinsic_state,
         calldata_floor = costs.calldata_floor,
@@ -695,7 +679,7 @@ function apply_transaction_upfront_effects(tx : Transaction, v : TxValidity) -> 
         };
 
     /* upfront gas + nonce bump (persist across revert; taken before the snapshot) */
-    k_sub_balance(v.sender, validated_word_product(v.gas_price, tx.gas_limit));
+    k_sub_balance(v.sender, validated_word_product(v.gas_price, v.gas_limit));
 
     /* EIP-4844: burn the blob fee upfront (blob_gas_used * blob_gas_price), no refund */
     if word_nonzero(v.blob_fee) then {
@@ -713,10 +697,16 @@ function apply_transaction_upfront_effects(tx : Transaction, v : TxValidity) -> 
 
 /*! Resets the user-space machine for the transaction's top-level frame,
     funding it with `gas_limit − intrinsic`. */
-function enter_transaction_frame(tx : Transaction, intrinsic_execution : gas_cost, intrinsic_state : gas_cost) -> unit = {
-    pc = BYTE_ZERO;
+function enter_transaction_frame(
+    gas_limit : block_gas_limit,
+    intrinsic_execution : gas_cost,
+    intrinsic_state : gas_cost,
+) -> (
+    unit
+) = {
+    pc = 0;
     call_depth = 0;
-    let after_execution_intrinsic = validated_gas_sub(tx.gas_limit, intrinsic_execution);
+    let after_execution_intrinsic = validated_gas_sub(gas_limit, intrinsic_execution);
     let available_gas = validated_gas_sub(after_execution_intrinsic, intrinsic_state);
     if k_fork >= Amsterdam then {
         let execution_budget = validated_gas_sub(AMSTERDAM_TX_MAX_GAS, intrinsic_execution);
@@ -725,18 +715,19 @@ function enter_transaction_frame(tx : Transaction, intrinsic_execution : gas_cos
             state_gas_remaining = GAS_ZERO
         } else {
             gas_remaining = execution_budget;
-            state_gas_remaining = validated_gas_sub(available_gas, execution_budget)
+            let remaining_state_gas = validated_gas_sub(available_gas, execution_budget);
+            state_gas_remaining = remaining_state_gas
         }
     } else {
         gas_remaining = available_gas;
         state_gas_remaining = GAS_ZERO
     };
-    state_gas_spilled = GAS_ZERO;
+    state_gas_spilled = STATE_GAS_SPILL_ZERO;
     message =
         struct {
-            caller = ZERO_ADDR,
-            address = ZERO_ADDR,
-            code_address = ZERO_ADDR,
+            caller = ZERO_ADDRESS,
+            address = ZERO_ADDRESS,
+            code_address = ZERO_ADDRESS,
             value = ZERO_WORD,
             state_gas_reservoir = state_gas_remaining,
             is_static = false,
@@ -778,7 +769,7 @@ function prepare_amsterdam_transaction_dispatch(tx : Transaction, v : TxValidity
             charge_state_gas(G_amsterdam_state_new_account)
         };
         if is_running() then {
-            frame_code = code_db_resolve(code_db_insert(tx.input_src, k_fork))
+            frame_code = code_db_resolve(code_db_insert(transaction_initcode_slice(tx.input_src), k_fork))
         };
         false
     } else {
@@ -788,7 +779,7 @@ function prepare_amsterdam_transaction_dispatch(tx : Transaction, v : TxValidity
         };
 
         var delegated : bool = false;
-        var delegate = ZERO_ADDR;
+        var delegate = ZERO_ADDRESS;
         if is_running() then {
             let (is_delegated, target) = k_deleg_target(tx.recipient);
             delegated = is_delegated;
@@ -839,25 +830,32 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
                     is_static = false,
                     depth = 0,
                 };
-            frame_code = code_db_resolve(code_db_insert(tx.input_src, k_fork))
+            frame_code = code_db_resolve(code_db_insert(transaction_initcode_slice(tx.input_src), k_fork))
         };
         let deployed_code = interpret();
         if frame_succeeded() then {
             let dep_len = deployed_code.len;
-            let code_ok =    dep_len
-                          <= max_code_size()
-                          &  ((dep_len == BYTE_ZERO) | (slice_byte(deployed_code, BYTE_ZERO) != 0xef)); /* EIP-3541 */
-            if code_ok then {
-                let execution_deposit = code_deployment_execution_cost(dep_len);
-                let state_deposit = code_deployment_state_cost(dep_len);
-                if execution_deposit <= gas_remaining then {
-                    gas_remaining = gas_sub_or_oog(gas_remaining, execution_deposit);
-                    charge_deployment_state_gas(state_deposit);
-                    if frame_succeeded() then {
-                        k_deploy_code(new_addr, deployed_code)
-                    }
-                } else {
-                    exc_halt(OutOfGas)
+            let deployed_length = dep_len;
+            if deployed_code_size_allowed(deployed_length) &
+                ((k_fork < London) | (deployed_length == 0) | (slice_byte(deployed_code, 0) != 0xef)) then {
+                match code_deployment_execution_cost(dep_len, gas_remaining) {
+                    Some(execution_deposit) => {
+                        gas_remaining = gas_sub_or_oog(gas_remaining, execution_deposit);
+                        charge_deployment_state_gas(code_deployment_state_cost(dep_len));
+                        if frame_succeeded() then {
+                            k_deploy_code(new_addr, validated_code_slice(deployed_code))
+                        }
+                    },
+                    None() => {
+                        if k_fork < Homestead then {
+                            /* Frontier consumes the remaining gas and keeps the
+                             * created account with empty code. */
+                            gas_remaining = GAS_ZERO;
+                            k_deploy_code(new_addr, EMPTY_CODE_SLICE)
+                        } else {
+                            exc_halt(OutOfGas)
+                        }
+                    },
                 }
             } else {
                 exc_halt(OutOfGas)
@@ -879,67 +877,59 @@ function run_call_transaction_frame(tx : Transaction, sender : address, delegate
     if word_nonzero(tx.value) then {
         k_transfer(sender, tx.recipient, tx.value)
     };
-    let precompile : option(precompile_id) = if delegated then {
-            None()
-        } else {
-            match word_to_precompile_id(address_to_word(tx.recipient)) {
-                Some(number) if is_precompile(number) => Some(number),
-                _ => None(),
-            }
-        };
-    match precompile {
-        Some(number) => {
-            /* tx directly to a precompile: run it as the top-level frame, gas-checked
-               FIRST (an OOG precompile must not execute). Failure or OOG is an
-               exceptional halt (all gas consumed, value transfer reverted). */
-            match precompile_gas(number, tx.input_src) {
-                Some(used) if used <= gas_remaining => {
-                    let result = run_precompile_slice(number, tx.input_src);
-                    if result.success then {
-                        gas_remaining = gas_sub_or_oog(gas_remaining, used);
-                        if is_running() then {
-                            frame_status = Halted(HaltReturn(result.output))
-                        }
-                    } else {
-                        exc_halt(OutOfGas)
-                    }
-                },
-                _ => exc_halt(OutOfGas),
-            }
-        },
-        None() => {
-            if k_fork < Amsterdam then {
-                calldata = tx.input_src;
-                message =
-                    struct {
-                        caller = sender,
-                        address = tx.recipient,
-                        code_address = tx.recipient,
-                        value = tx.value,
-                        state_gas_reservoir = state_gas_remaining,
-                        is_static = false,
-                        depth = 0,
-                    };
+    let selected_precompile = precompile_number(tx.recipient);
+    if not_bool(delegated) & (selected_precompile != 0) then {
+        let number : precompile_id = selected_precompile;
 
-                /* EIP-7702: before Amsterdam the transaction-level delegate is
-                   warmed but has no separate access charge. */
-                let (tx_deleg, tx_dtgt) = k_deleg_target(tx.recipient);
-                if tx_deleg then {
-                    let _ = k_access_account(tx_dtgt);
-                    let _ = k_aload(tx_dtgt);
-                    ()
+        /* tx directly to a precompile: run it as the top-level frame, gas-checked
+           FIRST (an OOG precompile must not execute). Failure or OOG is an
+           exceptional halt (all gas consumed, value transfer reverted). */
+        match precompile_gas(number, tx.input_src, gas_remaining) {
+            Some(used) => {
+                let result = run_precompile_slice(number, tx.input_src);
+                if result.success then {
+                    gas_remaining = gas_sub_or_oog(gas_remaining, used);
+                    if is_running() then {
+                        frame_status = Halted(HaltReturn(result.output))
+                    }
+                } else {
+                    exc_halt(OutOfGas)
+                }
+            },
+            _ => exc_halt(OutOfGas),
+        }
+    } else {
+        if k_fork < Amsterdam then {
+            calldata = tx.input_src;
+            message =
+                struct {
+                    caller = sender,
+                    address = tx.recipient,
+                    code_address = tx.recipient,
+                    value = tx.value,
+                    state_gas_reservoir = state_gas_remaining,
+                    is_static = false,
+                    depth = 0,
                 };
-                frame_code = executable_code(tx.recipient, tx_deleg, tx_dtgt)
+
+            /* EIP-7702: before Amsterdam the transaction-level delegate is
+               warmed but has no separate access charge. */
+            let (tx_deleg, tx_dtgt) = k_deleg_target(tx.recipient);
+            if tx_deleg then {
+                let _ = k_access_account(tx_dtgt);
+                let _ = k_aload(tx_dtgt);
+                ()
             };
-            let _ = interpret()
-        },
+            frame_code = executable_code(tx.recipient, tx_deleg, tx_dtgt)
+        };
+        let _ = interpret()
     }
 }
 
 /*! Runs a pre-Amsterdam top-level frame under one execution snapshot. */
 function run_legacy_transaction_frame(tx : Transaction, v : TxValidity) -> TxFrameResult = {
     let checkpoint = k_state_checkpoint();
-    enter_transaction_frame(tx, v.intrinsic_execution_gas, v.intrinsic_state_gas);
+    enter_transaction_frame(v.gas_limit, v.intrinsic_execution_gas, v.intrinsic_state_gas);
     if tx.is_create then {
         run_create_transaction_frame(tx, v.sender, v.nonce_before)
     } else {
@@ -965,7 +955,7 @@ function run_legacy_transaction_frame(tx : Transaction, v : TxValidity) -> TxFra
     succeeds, the execution checkpoint lets a failed call/create revert while
     retaining valid authorization writes and their state-gas charge. */
 function run_amsterdam_transaction_frame(tx : Transaction, v : TxValidity, upfront : TxUpfrontResult) -> TxFrameResult = {
-    enter_transaction_frame(tx, v.intrinsic_execution_gas, v.intrinsic_state_gas);
+    enter_transaction_frame(v.gas_limit, v.intrinsic_execution_gas, v.intrinsic_state_gas);
     let preparation_checkpoint = k_state_checkpoint();
     let preparation_reservoir = state_gas_remaining;
     let current_target = if tx.is_create then {
@@ -982,12 +972,12 @@ function run_amsterdam_transaction_frame(tx : Transaction, v : TxValidity, upfro
         EMPTY_AMSTERDAM_AUTHORIZATION_STATE,
     );
 
-    var authorization_state_gas = STATE_GAS_DELTA_ZERO;
+    var authorization_state_gas : frame_state_gas_delta = FRAME_STATE_GAS_DELTA_ZERO;
     var delegated : bool = false;
     if is_running() then {
         authorization_state_gas = frame_state_gas_used();
         message = { message with state_gas_reservoir = state_gas_remaining };
-        state_gas_spilled = GAS_ZERO;
+        state_gas_spilled = STATE_GAS_SPILL_ZERO;
         delegated = prepare_amsterdam_transaction_dispatch(tx, v, upfront)
     };
 
@@ -995,7 +985,7 @@ function run_amsterdam_transaction_frame(tx : Transaction, v : TxValidity, upfro
         k_revert(preparation_checkpoint);
         message = { message with state_gas_reservoir = preparation_reservoir };
         state_gas_remaining = preparation_reservoir;
-        state_gas_spilled = GAS_ZERO;
+        state_gas_spilled = STATE_GAS_SPILL_ZERO;
         return struct {
             success = false,
             execution_gas_remaining = gas_remaining,
@@ -1033,6 +1023,33 @@ function run_transaction_frame(tx : Transaction, v : TxValidity, upfront : TxUpf
         run_legacy_transaction_frame(tx, v)
     }
 
+/*! Caps the signed refund accumulator in the live-gas domain. */
+val capped_transaction_refund : forall 'cap, 0 <= 'cap. (gas_refund, int('cap)) -> range(0, 'cap)
+function capped_transaction_refund(total, cap) =
+    if total <= 0 then {
+        0
+    } else {
+        if total <= sizeof(block_gas_limit_bound) then {
+            let admitted_total : gas = total;
+            if admitted_total <= cap then { admitted_total } else { cap }
+        } else {
+            cap
+        }
+    }
+
+/*! Narrows the final signed state-gas charge into the admitted block-gas
+    domain after clamping credits to zero. */
+function admitted_transaction_state_gas(value : transaction_state_gas_delta) -> gas =
+    if value <= 0 then {
+        GAS_ZERO
+    } else {
+        if value <= sizeof(block_gas_limit_bound) then {
+            value
+        } else {
+            throw InvalidBlock(ExecutionInvalid)
+        }
+    }
+
 /*! Settlement (YP §6.2 g*, A_r): applies the capped refund
     (`gas_used/5` from London, `gas_used/2` before), the EIP-7623
     calldata floor (Prague+), and the EIP-7778 block-gas rule (Amsterdam+:
@@ -1049,34 +1066,36 @@ function settle_transaction(
 ) = {
     /* Refund cap: gas_used / 2 before London, gas_used / 5 after EIP-3529. */
     let gas_left0 = validated_gas_add(fr.execution_gas_remaining, fr.state_gas_remaining);
-    let gas_used0 = validated_gas_sub(tx.gas_limit, gas_left0);
+    let gas_used0 = validated_gas_sub(v.gas_limit, gas_left0);
     let refund_quotient : gas_divisor = if k_fork >= London then { 5 } else { 2 };
-    let refund_cap = gas_quotient(gas_used0, refund_quotient);
-    let refund = capped_gas_refund(authorization_refund + fr.refund, refund_cap);
+    let refund_cap : gas = gas_used0 / refund_quotient;
+    let total_refund = validated_refund_add(authorization_refund, fr.refund);
+    let refund = capped_transaction_refund(total_refund, refund_cap);
     let gas_left1 = validated_gas_add(gas_left0, refund);
-    let gas_used1 = validated_gas_sub(tx.gas_limit, gas_left1);
+    let gas_used1 = validated_gas_sub(v.gas_limit, gas_left1);
 
     /* EIP-7623 (Prague+): a tx pays at least the calldata floor 21000 + 10*tokens */
-    let floor : gas = if k_fork >= Prague then {
-            let GasCost(floor_cost) = v.calldata_floor;
-            let Gas(tx_limit) = tx.gas_limit;
+    let floor : block_gas_limit = if k_fork >= Prague then {
+            let floor_cost = v.calldata_floor;
+            let tx_limit = v.gas_limit;
             if floor_cost <= tx_limit then {
-                Gas(floor_cost)
+                floor_cost
             } else {
                 throw InvalidBlock(ExecutionInvalid)
             }
         } else {
-            GAS_ZERO
+            0
         };
-    let gas_used = if gas_used1 < floor then { floor } else { gas_used1 };
-    let gas_left = validated_gas_sub(tx.gas_limit, gas_used);
+    let gas_used : block_gas_limit = if gas_used1 < floor then { floor } else { gas_used1 };
+    let gas_left = validated_gas_sub(v.gas_limit, gas_used);
 
-    let tx_state_gas = state_gas_delta_nonnegative(fr.state_gas_used + v.intrinsic_state_gas);
-    let execution_before_floor = if tx_state_gas <= gas_used0 then {
-            validated_gas_sub(gas_used0, tx_state_gas)
-        } else {
-            GAS_ZERO
-        };
+    let raw_state_gas : transaction_state_gas_delta = fr.state_gas_used + v.intrinsic_state_gas;
+    let tx_state_gas = admitted_transaction_state_gas(raw_state_gas);
+    var execution_before_floor : gas = GAS_ZERO;
+    if tx_state_gas <= gas_used0 then {
+        let reduced_execution_gas = validated_gas_sub(gas_used0, tx_state_gas);
+        execution_before_floor = reduced_execution_gas
+    };
     let execution_gas = if k_fork >= Amsterdam then {
             if execution_before_floor < floor then { floor } else { execution_before_floor }
         } else {
@@ -1093,7 +1112,6 @@ function settle_transaction(
     struct {
         tx_type = tx.tx_type,
         success = fr.success,
-        valid = true,
         gas_used = gas_used,
         execution_gas = execution_gas,
         state_gas = state_gas,
@@ -1102,17 +1120,25 @@ function settle_transaction(
 }
 
 /*! The complete per-transaction step: reset, validate (an invalid
-    transaction yields an invalid receipt and no state change), apply
-    upfront effects, run the frame, and settle. */
+    transaction throws before state changes), apply upfront effects, run the
+    frame, and settle. */
 function process_transaction(tx : Transaction) -> Receipt = {
+    cycle_scope_start(SCOPE_TX_RESET);
     k_tx_reset();
+    cycle_scope_end(SCOPE_TX_RESET);
 
+    cycle_scope_start(SCOPE_TX_VALIDATE);
     let validity = check_transaction_validity(tx);
-    if not_bool(validity.valid) then {
-        return invalid_receipt()
-    };
+    cycle_scope_end(SCOPE_TX_VALIDATE);
     k_set_tx(struct { origin = tx.sender, gas_price = validity.gas_price, blob_hashes = tx.blob_hashes });
+    cycle_scope_start(SCOPE_TX_UPFRONT);
     let upfront = apply_transaction_upfront_effects(tx, validity);
+    cycle_scope_end(SCOPE_TX_UPFRONT);
+    cycle_scope_start(SCOPE_TX_FRAME);
     let frame_result = run_transaction_frame(tx, validity, upfront);
-    settle_transaction(tx, validity, upfront.authorization_refund, frame_result)
+    cycle_scope_end(SCOPE_TX_FRAME);
+    cycle_scope_start(SCOPE_TX_SETTLE);
+    let receipt = settle_transaction(tx, validity, upfront.authorization_refund, frame_result);
+    cycle_scope_end(SCOPE_TX_SETTLE);
+    receipt
 }

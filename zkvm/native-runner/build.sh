@@ -4,8 +4,9 @@
 # stateless block guest (sail/evm.sail_project evm -> main).
 #
 # This mirrors the guest sail-compile flags in zkvm/build.sh (--c-no-main and
-# --c-preserve main) with the host-optimized sail256 runtime and the
-# directly-linked Rust accel-host cdylib.
+# --c-preserve main) with the directly-linked Rust accel-host cdylib. Optimized
+# builds use the GMP-free sail256 runtime; standard builds use Sail's normal C
+# runtime because the canonical ABI includes sail_int and lbits values.
 #
 # I/O + run harness = test_utils.c, the ONE shared native implementation of
 # read_input/write_output plus large-stack run_once and clear_memory, also
@@ -13,8 +14,8 @@
 #
 # Idempotent: rebuilds the accel-host cdylib only if its library is missing.
 #
-# Requires: feature-capable Sail (resolved below), a C compiler, cargo.
-# NO gmp, NO HTIF, NO spike.
+# Requires: feature-capable Sail (resolved below), a C compiler, cargo. Standard
+# builds additionally require GMP. NO HTIF, NO spike.
 #
 #   export PATH="$HOME/.opam/sail/bin:$PATH"
 #   eval "$(opam env --root=/Users/f/.opam --switch=sail)"
@@ -87,15 +88,31 @@ esac
 CFLAGS=(-O2 -Wno-error=implicit-function-declaration)
 if [ "$EVM_BUILD_MODE" = standard ]; then
   CFLAGS+=(-DEVMSAIL_STANDARD_ABI)
+  GMP_CFLAGS=()
+  GMP_LINK_FLAGS=(-lgmp)
+  if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists gmp; then
+    read -r -a GMP_CFLAGS <<< "$(pkg-config --cflags gmp)"
+    read -r -a GMP_LINK_FLAGS <<< "$(pkg-config --libs gmp)"
+  fi
+  CFLAGS+=("${GMP_CFLAGS[@]}")
 fi
 if [ -n "${SANITIZE:-}" ]; then CFLAGS+=(-g -fsanitize=address,undefined -fno-omit-frame-pointer); fi
 
-# --- 2. sail256 GMP-free runtime objects -----------------------------------
-SF_OBJS=()
-for src in sail.c sail_native.c sail_failure.c; do
+# --- 2. Sail C runtime objects ---------------------------------------------
+if [ "$EVM_BUILD_MODE" = standard ]; then
+  RUNTIME_DIR="$SAIL_LIB"
+  RUNTIME_SOURCES=(sail.c rts.c elf.c sail_failure.c)
+  RUNTIME_LINK_FLAGS=("${GMP_LINK_FLAGS[@]}")
+else
+  RUNTIME_DIR="$SF"
+  RUNTIME_SOURCES=(sail.c sail_native.c sail_failure.c)
+  RUNTIME_LINK_FLAGS=()
+fi
+RUNTIME_OBJS=()
+for src in "${RUNTIME_SOURCES[@]}"; do
   o="$BUILD/sf_${src%.c}.o"
-  "$CC" "${CFLAGS[@]}" -c -I"$SF" -I"$SAIL_LIB" "$SF/$src" -o "$o"
-  SF_OBJS+=("$o")
+  "$CC" "${CFLAGS[@]}" -c -I"$RUNTIME_DIR" -I"$SAIL_LIB" "$RUNTIME_DIR/$src" -o "$o"
+  RUNTIME_OBJS+=("$o")
 done
 
 # --- 3. generate guest C (no main, preserve entry symbol) -------------------
@@ -110,12 +127,16 @@ PRESERVE_FLAGS=(
 )
 for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
 SAIL_CMD=(
-  "$SAIL" -c -O --c-no-main --c-no-rts
+  "$SAIL" -c -O --Oconstant-fold --c-no-main --c-no-rts
+  --c-specialize
   "${PRESERVE_FLAGS[@]}"
   "${MODEL_INCLUDE_FLAGS[@]}"
 )
+if [ "${EVM_SAIL_LOG:-off}" = on ]; then
+  SAIL_CMD+=(--c-specialize-log)
+fi
 if [ "$EVM_BUILD_MODE" = optimized ]; then
-  SAIL_CMD+=(--c-specialize --splice "$C_OPTIMIZED_SPLICE")
+  SAIL_CMD+=(--c-require-bounded-int --splice "$C_OPTIMIZED_SPLICE")
 fi
 SAIL_CMD+=(
   sail/evm.sail_project evm
@@ -125,40 +146,40 @@ SAIL_CMD+=(
 )
 ( cd "$ROOT" && "${SAIL_CMD[@]}" )
 
-# NOTE: the toolchain's sail.h (-I"$SAIL_LIB") #includes <gmp.h>. The GMP-free
-# sail256 runtime ships its own GMP-free sail.h, so -I"$SF" MUST precede
-# -I"$SAIL_LIB" in every unit that includes sail.h.
+# NOTE: the toolchain's sail.h (-I"$SAIL_LIB") #includes <gmp.h>. In optimized
+# builds the GMP-free sail256 runtime ships its own sail.h, so -I"$RUNTIME_DIR"
+# MUST precede -I"$SAIL_LIB" in every unit that includes sail.h.
 
 # --- 4. compile generated model --------------------------------------------
-"$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
 
 # --- 4b. state aggregate glue: account/storage rows use generated layouts;
 #     the rollback journal itself is C-private.
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/journal_glue.c" -o "$BUILD/journal_glue.o"
 
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/hash_glue.c" -o "$BUILD/hash_glue.o"
 
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/code_glue.c" -o "$BUILD/code_glue.o"
 
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/byte_slice_glue.c" -o "$BUILD/byte_slice_glue.o"
 
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/address_result_glue.c" -o "$BUILD/address_result_glue.o"
 
 # --- 5. shared harness I/O + CLI main ---------------------------------------
 #   test_utils.c supplies the native standard I/O implementation, large-stack
 #   run, and clear-memory hooks shared by this executable and build_lib.sh.
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$SF" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$HERE/test_utils.c" -o "$BUILD/test_utils.o"
 "$CC" "${CFLAGS[@]}" -c "$HERE/main.c" -o "$BUILD/main.o"
@@ -167,12 +188,12 @@ SAIL_CMD+=(
 HOST_OBJS=()
 for hc in memory scratch transient_storage state_db stack code_db kernel_state trie_node_db host_crypto precompiles output; do
   o="$BUILD/$hc.o"
-  "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -I"$FFI" -c "$FFI/$hc.c" -o "$o"
+  "$CC" "${CFLAGS[@]}" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$FFI" -c "$FFI/$hc.c" -o "$o"
   HOST_OBJS+=("$o")
 done
 if [ "$EVM_PROFILE" = on ]; then
   o="$BUILD/cycle_scopes.o"
-  "$CC" "${CFLAGS[@]}" -I"$SF" -I"$SAIL_LIB" -c "$RT/cycle_scopes.c" -o "$o"
+  "$CC" "${CFLAGS[@]}" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -c "$RT/cycle_scopes.c" -o "$o"
   HOST_OBJS+=("$o")
 fi
 
@@ -180,9 +201,12 @@ fi
 OUT="$BUILD/zkvm_native"
 LINK_CMD=("$CC" "${CFLAGS[@]}"
     "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/address_result_glue.o" "$BUILD/test_utils.o" "$BUILD/main.o"
-    "${HOST_OBJS[@]}" "${SF_OBJS[@]}"
-    "${ACCEL_FLAGS[@]}" "${STACK_FLAGS[@]}"
-    -o "$OUT")
+    "${HOST_OBJS[@]}" "${RUNTIME_OBJS[@]}"
+    "${ACCEL_FLAGS[@]}")
+if [ "$EVM_BUILD_MODE" = standard ]; then
+  LINK_CMD+=("${RUNTIME_LINK_FLAGS[@]}")
+fi
+LINK_CMD+=("${STACK_FLAGS[@]}" -o "$OUT")
 echo "# link:"
 printf '  %q' "${LINK_CMD[@]}"; echo
 "${LINK_CMD[@]}"

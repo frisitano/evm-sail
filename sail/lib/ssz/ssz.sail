@@ -10,82 +10,104 @@ source. Concrete container layouts belong in their decoder modules.
 */
 /*! The width of one entry in an SSZ variable-field offset table
     (`uint32`, little-endian). */
-let SSZ_OFF_BYTES : byte_length = ByteQuantity(4)
-let SSZ_UINT_BYTES : byte_length = EIGHT_BYTE_LENGTH
+let SSZ_OFF_BYTES : int(4) = 4
+let SSZ_UINT_BYTES : int(8) = 8
 
 /* Container decoders establish that the complete fixed-width field lies in
  * the input before calling these scalar readers. */
-function ssz_field_offset(base : source_pointer, delta : byte_length) -> source_pointer =
-    base + delta
+/*! Resolves a validated container-relative field offset to a source pointer. */
+val ssz_field_offset : forall 'base 'delta, source_valid_range('base, 'delta). (int('base), int('delta)) -> int(
+        'base + 'delta,
+    )
+
+function ssz_field_offset(base, delta) = base + delta
 
 /*! Reads a little-endian SSZ `uint32` used by a variable-field offset table. */
-function ssz_u32_at(input : ByteSlice, offset : source_pointer) -> protocol_quantity = {
-    let b0 = sail_zero_extend(slice_byte(input, offset), 64);
-    let b1 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, BYTE_ONE)), 64);
-    let b2 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, ByteQuantity(2))), 64);
-    let b3 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, ByteQuantity(3))), 64);
+val ssz_u32_at : forall 'offset, source_valid_range('offset, 4). (ByteSlice, int('offset)) -> ssz_offset
+
+function ssz_u32_at(input, offset) = {
+    let b0 = sail_zero_extend(slice_byte(input, offset), 32);
+    let b1 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, 1)), 32);
+    let b2 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, 2)), 32);
+    let b3 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, 3)), 32);
     unsigned(or_vec(b0, or_vec(sail_shiftleft(b1, 8), or_vec(sail_shiftleft(b2, 16), sail_shiftleft(b3, 24)))))
 }
 
 /*! A little-endian `uint32` at absolute input offset `b`. */
-function ssz_u32(input : ByteSlice, offset : source_pointer) -> protocol_quantity = ssz_u32_at(input, offset)
+val ssz_u32 : forall 'offset, source_valid_range('offset, 4). (ByteSlice, int('offset)) -> ssz_offset
 
-/*! Reads an eight-byte little-endian limb from a validated SSZ field. */
-function ssz_limb(input : ByteSlice, offset : source_pointer) -> limb = {
-    let b0 = sail_zero_extend(slice_byte(input, offset), 64);
-    let b1 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, BYTE_ONE)), 64);
-    let b2 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, ByteQuantity(2))), 64);
-    let b3 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, ByteQuantity(3))), 64);
-    let b4 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, SSZ_OFF_BYTES)), 64);
-    let b5 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, ByteQuantity(5))), 64);
-    let b6 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, ByteQuantity(6))), 64);
-    let b7 = sail_zero_extend(slice_byte(input, ssz_field_offset(offset, ByteQuantity(7))), 64);
-    or_vec(
-        b0,
-        or_vec(
-            sail_shiftleft(b1, 8),
-            or_vec(
-                sail_shiftleft(b2, 16),
-                or_vec(
-                    sail_shiftleft(b3, 24),
-                    or_vec(
-                        sail_shiftleft(b4, 32),
-                        or_vec(sail_shiftleft(b5, 40), or_vec(sail_shiftleft(b6, 48), sail_shiftleft(b7, 56))),
-                    ),
-                ),
-            ),
-        ),
-    )
-}
+function ssz_u32(input, offset) = ssz_u32_at(input, offset)
 
-function ssz_uint(input : ByteSlice, offset : source_pointer) -> protocol_quantity =
-    unsigned(ssz_limb(input, offset))
+/*! Narrows a wire-bounded SSZ offset at the host byte-position boundary. */
+function ssz_offset_to_source_pointer(value : ssz_offset) -> source_pointer =
+    value
+
+/*! Reads an eight-byte little-endian SSZ protocol quantity. */
+val decode_ssz_uint : forall 'offset, source_valid_range('offset, 8). (ByteSlice, int('offset)) -> ssz_uint
+
+function decode_ssz_uint(input, offset) =
+      unsigned(slice_byte(input, offset))
+    + unsigned(slice_byte(input, ssz_field_offset(offset, 1)))
+    * 2 ^ 8
+    + unsigned(slice_byte(input, ssz_field_offset(offset, 2)))
+    * 2 ^ 16
+    + unsigned(slice_byte(input, ssz_field_offset(offset, 3)))
+    * 2 ^ 24
+    + unsigned(slice_byte(input, ssz_field_offset(offset, SSZ_OFF_BYTES)))
+    * 2 ^ 32
+    + unsigned(slice_byte(input, ssz_field_offset(offset, 5)))
+    * 2 ^ 40
+    + unsigned(slice_byte(input, ssz_field_offset(offset, 6)))
+    * 2 ^ 48
+    + unsigned(slice_byte(input, ssz_field_offset(offset, 7)))
+    * 2 ^ 56
 
 /*! A big-endian 20-byte address at offset `b`. */
-function ssz_addr(input : ByteSlice, offset : source_pointer) -> address =
+val ssz_addr : forall 'offset, source_valid_range('offset, 20). (ByteSlice, int('offset)) -> address
+
+function ssz_addr(input, offset) =
     word_to_address(slice_load_n(input, offset, ADDRESS_BYTE_LENGTH))
 
 /*! A big-endian 32-byte field (`Bytes32`, e.g. `prev_randao`). */
-function ssz_bytes32(input : ByteSlice, offset : source_pointer) -> hash =
+val ssz_bytes32 : forall 'offset, source_valid_range('offset, 32). (ByteSlice, int('offset)) -> hash
+
+function ssz_bytes32(input, offset) =
     word_to_hash(slice_load(input, offset))
 
 /*! The 256-byte logs bloom at offset `b`. */
-function ssz_logs_bloom(input : ByteSlice, offset : source_pointer) -> LogsBloom = {
-    var out : LogsBloom = vector_init(32, LIMB_ZERO);
-    var cursor : source_pointer = offset;
-    foreach (k from 0 to 31) {
-        out[k] = word_limb_0(slice_load_n(input, cursor, EIGHT_BYTE_LENGTH));
-        cursor = ssz_field_offset(cursor, SSZ_UINT_BYTES)
+val ssz_logs_bloom : forall 'offset, source_valid_range('offset, 256). (ByteSlice, int('offset)) -> LogsBloom
+
+/*! Maps wire order to the decreasing byte-vector index. */
+val ssz_logs_bloom_index : forall 'index, 0 <= 'index & 'index <= 255. int('index) -> int(255 - 'index)
+
+function ssz_logs_bloom_index(index) = 255 - index
+
+/*! Decodes a fixed 256-byte logs bloom from SSZ wire order. */
+function ssz_logs_bloom(input, offset) = {
+    var out : LogsBloom = vector_init(256, 0x00);
+    foreach (k from 0 to 255) {
+        out[ssz_logs_bloom_index(k)] = slice_byte(input, ssz_field_offset(offset, k))
     };
     out
 }
 
 /* little-endian 32-byte uint256 (SSZ), low word first */
 /*! A little-endian 32-byte `uint256` (SSZ). */
-function ssz_u256(input : ByteSlice, offset : source_pointer) -> word = {
-    let c0 = ssz_limb(input, offset);
-    let c1 = ssz_limb(input, ssz_field_offset(offset, SSZ_UINT_BYTES));
-    let c2 = ssz_limb(input, ssz_field_offset(offset, ByteQuantity(16)));
-    let c3 = ssz_limb(input, ssz_field_offset(offset, ByteQuantity(24)));
-    word_from_limbs(c0, c1, c2, c3)
+val ssz_u256 : forall 'offset, source_valid_range('offset, 32). (ByteSlice, int('offset)) -> word
+
+/*! Maps Horner iteration order to the little-endian source-byte index. */
+val ssz_u256_index : forall 'index, 0 <= 'index & 'index <= 31. int('index) -> int(31 - 'index)
+
+function ssz_u256_index(index) = 31 - index
+
+/*! Decodes a 32-byte little-endian SSZ integer into an EVM word. */
+function ssz_u256(input, offset) = {
+    var result : word = WORD_ZERO;
+    foreach (k from 0 to 31) {
+        result = word_add(
+            word_mul(result, 256),
+            unsigned(slice_byte(input, ssz_field_offset(offset, ssz_u256_index(k)))),
+        )
+    };
+    result
 }

@@ -1,7 +1,5 @@
 import Evm.Flow
-import Evm.Arith
 import Evm.Prelude
-import Evm.Primitives.Quantities
 import Evm.Primitives.Bytes
 import Evm.Primitives.Crypto
 import Evm.Host.Kernel.Scratch
@@ -24,23 +22,15 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
-open word
 open option
-open gas_refund
-open gas_cost
-open gas_constant
-open gas
 open exception
-open byte_quantity
-open b256
 open ast
-open address
 open TxType
+open TrieUpdateSource
 open TrieNode
 open TrieItemValue
 open TrieChange
 open StatelessValidationResult
-open StateCheckpoint
 open Register
 open NodeRef
 open MerkleSlot
@@ -53,6 +43,7 @@ open EnvField
 open CallKind
 open Bytes
 open ByteSource
+open ByteRegionResult
 open BlockError
 
 /-! # Trie nodes
@@ -60,90 +51,51 @@ open BlockError
 Merkle-Patricia trie node forms, references, and decoding
 (YP Appendix D). -/
 
-def inline_node_segment (node : InlineNode) : Bytes :=
-  (bytes_list (inline_node_to_list node) node.len)
+def undefined_InlineNode (_ : Unit) : SailM InlineNode := do
+  (pure { data := ← (undefined_vector 32 (← (undefined_bitvector 8))),
+          len := ← (undefined_range 0 31) })
 
-/-- Selects a branch reference by nibble value. -/
-def branch_refs_get (children : BranchRefs) (index : nibble) : NodeRef :=
-  match index with
-  | 0x0 => (GetElem?.getElem! children 0)
-  | 0x1 => (GetElem?.getElem! children 1)
-  | 0x2 => (GetElem?.getElem! children 2)
-  | 0x3 => (GetElem?.getElem! children 3)
-  | 0x4 => (GetElem?.getElem! children 4)
-  | 0x5 => (GetElem?.getElem! children 5)
-  | 0x6 => (GetElem?.getElem! children 6)
-  | 0x7 => (GetElem?.getElem! children 7)
-  | 0x8 => (GetElem?.getElem! children 8)
-  | 0x9 => (GetElem?.getElem! children 9)
-  | 0xA => (GetElem?.getElem! children 10)
-  | 0xB => (GetElem?.getElem! children 11)
-  | 0xC => (GetElem?.getElem! children 12)
-  | 0xD => (GetElem?.getElem! children 13)
-  | 0xE => (GetElem?.getElem! children 14)
-  | _ => (GetElem?.getElem! children 15)
+/-- Hashes an inline node directly from its fixed byte vector. -/
+def inline_node_hash (node : InlineNode) : SailM hash := do
+  (keccak256_segments [(bytes_fixed32 node.data node.len)])
 
-/-- Returns the branch-reference vector with one nibble position replaced. -/
-def branch_refs_set (children : BranchRefs) (index : nibble) (value : NodeRef) : BranchRefs :=
-  let result := children
-  match index with
-  | 0x0 => (vectorUpdate result 0 value)
-  | 0x1 => (vectorUpdate result 1 value)
-  | 0x2 => (vectorUpdate result 2 value)
-  | 0x3 => (vectorUpdate result 3 value)
-  | 0x4 => (vectorUpdate result 4 value)
-  | 0x5 => (vectorUpdate result 5 value)
-  | 0x6 => (vectorUpdate result 6 value)
-  | 0x7 => (vectorUpdate result 7 value)
-  | 0x8 => (vectorUpdate result 8 value)
-  | 0x9 => (vectorUpdate result 9 value)
-  | 0xA => (vectorUpdate result 10 value)
-  | 0xB => (vectorUpdate result 11 value)
-  | 0xC => (vectorUpdate result 12 value)
-  | 0xD => (vectorUpdate result 13 value)
-  | 0xE => (vectorUpdate result 14 value)
-  | _ => (vectorUpdate result 15 value)
+/-- Advances the branch payload length while preserving its structural bound. -/
+/- Type quantifiers: k_ex408810_ : Nat, k_ex408809_ : Nat, 0 ≤ k_ex408809_ ∧ k_ex408809_ ≤ 529, 0
+  ≤ k_ex408810_ ∧ k_ex408810_ ≤ 33 -/
+def branch_content_length_add (current : branch_content_length) (addition : Nat) : SailM branch_content_length := do
+  let current := (current).value
+  let publicResult ← do
+    if ((addition ≤b (529 - current)) : Bool)
+    then (pure (current + addition))
+    else sailThrow ((InvalidBlock RlpDecode))
+  pure (⟨publicResult⟩)
 
 /-- Returns the RLP width of a child reference in its parent node. -/
-def node_ref_size (r : NodeRef) : byte_length :=
+def node_ref_size (r : NodeRef) : Nat :=
   match r with
-  | .EmptyRef () => BYTE_ONE
+  | .EmptyRef () => 1
   | .InlineRef node => node.len
   | .HashRef _ => (rlp_word_size ())
 
 /-- Appends a child reference in its canonical RLP representation. -/
 def rlp_write_node_ref (r : NodeRef) : SailM Unit := do
   match r with
-  | .EmptyRef () => (scratch_push_bytes [0x80#8] BYTE_ONE)
-  | .InlineRef node => (rlp_write_raw_bytes (inline_node_to_list node) node.len)
-  | .HashRef h => (rlp_write_word (hash_to_word h))
+  | .EmptyRef () => (scratch_push_bytes [0x80#8] 1)
+  | .InlineRef node => (scratch_push_b256 node.data node.len)
+  | .HashRef h => (rlp_write_word ⟨((hash_to_word h)).value⟩)
 
 /-- The canonical child reference for an encoded node: inline under 32
 bytes, otherwise its hash (YP Appendix D, Eq. 207). -/
+/- Type quantifiers: k_ex408814_ : Nat, k_ex408813_ : Nat, 0 ≤ k_ex408813_ ∧ 0 ≤ k_ex408814_ -/
 def child_ref (encoded : EvmByteSlice) : SailM NodeRef := do
-  if ((byte_quantity_lt encoded.len MPT_HASH_LENGTH) : Bool)
-  then (pure (InlineRef (← (inline_node_from_slice encoded))))
-  else (pure (HashRef (← (keccak256_slice encoded))))
+  let encoded := ((encoded).2).2
+  if ((encoded.len <b MPT_HASH_LENGTH) : Bool)
+  then (pure (InlineRef (← (inline_node_from_slice ⟨_, ⟨_, encoded⟩⟩))))
+  else (pure (HashRef (← (keccak256_slice ⟨_, ⟨_, encoded⟩⟩))))
 
 /-- Returns the one-hot presence mask for a branch-child nibble. -/
 def branch_mask_for (index : nibble) : (BitVec 16) :=
-  match index with
-  | 0x0 => 0x0001#16
-  | 0x1 => 0x0002#16
-  | 0x2 => 0x0004#16
-  | 0x3 => 0x0008#16
-  | 0x4 => 0x0010#16
-  | 0x5 => 0x0020#16
-  | 0x6 => 0x0040#16
-  | 0x7 => 0x0080#16
-  | 0x8 => 0x0100#16
-  | 0x9 => 0x0200#16
-  | 0xA => 0x0400#16
-  | 0xB => 0x0800#16
-  | 0xC => 0x1000#16
-  | 0xD => 0x2000#16
-  | 0xE => 0x4000#16
-  | _ => 0x8000#16
+  (0x0001#16 <<< (BitVec.toNatInt index))
 
 def branch_mask_has (mask : (BitVec 16)) (index : nibble) : Bool :=
   ((mask &&& (branch_mask_for index)) != 0x0000#16)
@@ -154,73 +106,79 @@ def branch_mask_set (mask : (BitVec 16)) (index : nibble) : (BitVec 16) :=
 /-- The child reference of a leaf, keeping the value in its native
 representation: long nodes hash the RLP framing and value as segments;
 only an inline node materializes a slice. -/
+/- Type quantifiers: k_ex408822_ : Nat, k_ex408821_ : Nat, 0 ≤ k_ex408821_ ∧ 0 ≤ k_ex408822_ -/
 def leaf_child_ref (key : TriePath) (value : EvmByteSlice) : SailM NodeRef := do
+  let value := ((value).2).2
   let (path, encoded_path_len) ← do (hex_prefix_compact key true)
   let content_len ← do
-    (byte_quantity_add (← (rlp_bytes_size path encoded_path_len)) (← (rlp_slice_size value)))
-  let encoded_len ← do (rlp_list_size content_len)
+    (pure (rlp_scratch_length_add (← (rlp_scratch_bytes_size path encoded_path_len))
+        (← (rlp_scratch_slice_size ⟨_, ⟨_, value⟩⟩))))
   let mark ← do (scratch_begin ())
   (rlp_write_list_prefix content_len)
   (rlp_write_bytes path encoded_path_len)
-  (rlp_write_slice value)
-  let result ← do (child_ref (← (rlp_finish mark encoded_len)))
+  (rlp_write_slice ⟨_, ⟨_, value⟩⟩)
+  let result ← do (child_ref (← (rlp_finish mark)))
   (scratch_rewind mark)
   (pure result)
 
 /-- The child reference of an extension node. -/
 def extension_child_ref (key : TriePath) (childref : NodeRef) : SailM NodeRef := do
   let (path, encoded_path_len) ← do (hex_prefix_compact key false)
-  let content_len ← do
-    (byte_quantity_add (← (rlp_bytes_size path encoded_path_len)) (node_ref_size childref))
-  let encoded_len ← do (rlp_list_size content_len)
+  let path_length ← do (rlp_bytes_size path encoded_path_len)
+  let child_length := (node_ref_size childref)
+  let content_len := (path_length + child_length)
   let mark ← do (scratch_begin ())
   (rlp_write_list_prefix content_len)
   (rlp_write_bytes path encoded_path_len)
   (rlp_write_node_ref childref)
-  let result ← do (child_ref (← (rlp_finish mark encoded_len)))
+  let result ← do (child_ref (← (rlp_finish mark)))
   (scratch_rewind mark)
   (pure result)
 
 /-- The child reference of a branch node. -/
 def branch_child_ref (mask : (BitVec 16)) (children : BranchRefs) : SailM NodeRef := do
-  let content_len : byte_quantity := BYTE_ONE
+  let content_length : Nat := 1
   let child_bit : (BitVec 16) := 0x0001#16
-  let (child_bit, content_len) ← (( do
+  let (child_bit, content_length) ← (( do
     let loop_i_lower := 0
     let loop_i_upper := 15
-    let mut loop_vars := (child_bit, content_len)
+    let mut loop_vars := (child_bit, content_length)
     for i in [loop_i_lower:loop_i_upper:1]i do
-      let (child_bit, content_len) := loop_vars
+      let (child_bit, content_length) := loop_vars
       loop_vars ← do
-        let content_len ← (( do
+        let content_length ← (( do
           if (((mask &&& child_bit) != 0x0000#16) : Bool)
           then
             (do
-              (byte_quantity_add content_len (node_ref_size (GetElem?.getElem! children i))))
+              let child_length := (node_ref_size (GetElem?.getElem! children i))
+              (do
+                  let publicResult ← (branch_content_length_add ⟨content_length⟩ child_length)
+                  pure ((publicResult).value)))
           else
             (do
-              (byte_quantity_add content_len BYTE_ONE)) ) : SailM byte_quantity )
+              (do
+                  let publicResult ← (branch_content_length_add ⟨content_length⟩ 1)
+                  pure ((publicResult).value))) ) : SailM Nat )
         let child_bit : (BitVec 16) := (child_bit <<< 1)
-        (pure (child_bit, content_len))
-    (pure loop_vars) ) : SailM ((BitVec 16) × byte_quantity) )
-  let encoded_len ← do (rlp_list_size content_len)
+        (pure (child_bit, content_length))
+    (pure loop_vars) ) : SailM ((BitVec 16) × Nat) )
   let mark ← do (scratch_begin ())
-  (rlp_write_list_prefix content_len)
+  (rlp_write_list_prefix content_length)
   let child_bit : (BitVec 16) := 0x0001#16
   let child_bit ← (( do
     let loop_i_lower := 0
     let loop_i_upper := 15
-    let mut loop_vars_1 := child_bit
+    let mut loop_vars := child_bit
     for i in [loop_i_lower:loop_i_upper:1]i do
-      let child_bit := loop_vars_1
-      loop_vars_1 ← do
+      let child_bit := loop_vars
+      loop_vars ← do
         if (((mask &&& child_bit) != 0x0000#16) : Bool)
         then (rlp_write_node_ref (GetElem?.getElem! children i))
-        else (scratch_push_bytes [0x80#8] BYTE_ONE)
+        else (scratch_push_bytes [0x80#8] 1)
         (pure (child_bit <<< 1))
-    (pure loop_vars_1) ) : SailM (BitVec 16) )
-  (scratch_push_bytes [0x80#8] BYTE_ONE)
-  let result ← do (child_ref (← (rlp_finish mark encoded_len)))
+    (pure loop_vars) ) : SailM (BitVec 16) )
+  (scratch_push_bytes [0x80#8] 1)
+  let result ← do (child_ref (← (rlp_finish mark)))
   (scratch_rewind mark)
   (pure result)
 
@@ -229,37 +187,47 @@ empty-trie root. -/
 def trie_ref_to_root (r : NodeRef) : SailM hash := do
   match r with
   | .EmptyRef () => (pure EMPTY_TRIE_ROOT)
-  | .InlineRef node => (keccak256_segments [(inline_node_segment node)])
+  | .InlineRef node => (inline_node_hash node)
   | .HashRef h => (pure h)
 
 /-- The reference form of raw node bytes: empty, inline under 32 bytes,
 else hashed. -/
+/- Type quantifiers: k_ex408827_ : Nat, k_ex408826_ : Nat, 0 ≤ k_ex408826_ ∧ 0 ≤ k_ex408827_ -/
 def node_to_ref (node : EvmByteSlice) : SailM NodeRef := do
-  if ((node.len == BYTE_ZERO) : Bool)
+  let node := ((node).2).2
+  if ((node.len == 0) : Bool)
   then (pure (EmptyRef ()))
   else
     (do
-      if ((byte_quantity_lt node.len MPT_HASH_LENGTH) : Bool)
-      then (pure (InlineRef (← (inline_node_from_slice node))))
-      else (pure (HashRef (← (keccak256_slice node)))))
+      if ((node.len <b MPT_HASH_LENGTH) : Bool)
+      then (pure (InlineRef (← (inline_node_from_slice ⟨_, ⟨_, node⟩⟩))))
+      else (pure (HashRef (← (keccak256_slice ⟨_, ⟨_, node⟩⟩)))))
 
 /-- Re-keys a decoded child node under `evm_prefix` without copying a leaf
 value. -/
+/- Type quantifiers: k_ex408831_ : Nat, k_ex408830_ : Nat, 0 ≤ k_ex408830_ ∧ 0 ≤ k_ex408831_ -/
 def merge_ext_node (evm_prefix' : TriePath) (childnode : EvmByteSlice) : SailM NodeRef := do
+  let childnode := ((childnode).2).2
   if ((((path_len evm_prefix')).value == 0) : Bool)
-  then (node_to_ref childnode)
+  then (node_to_ref ⟨_, ⟨_, childnode⟩⟩)
   else
     (do
-      if ((childnode.len == BYTE_ZERO) : Bool)
+      if ((childnode.len == 0) : Bool)
       then (pure (EmptyRef ()))
       else
         (do
-          match (← (decode_trie_node childnode)) with
+          match (← (decode_trie_node ⟨_, ⟨_, childnode⟩⟩)) with
           | .LeafNode leaf =>
-            (leaf_child_ref (← (path_concat evm_prefix' leaf.path)) (← (rlp_ref_content leaf.value)))
+            (leaf_child_ref (← (path_concat evm_prefix' leaf.path))
+              (⟨_, ⟨_, ((((⟨_, ⟨_, ⟨_, (rlp_ref_content ((((((leaf.value).2).2).2).2).2).2)⟩⟩⟩ : (Sigma
+                fun (k_ex424914_ : Nat) =>
+                (Sigma fun (k_ex424918_ : Nat) =>
+                (Sigma fun (k_ex424919_ : Nat) =>
+                (EvmByteSliceFields (k_ex424914_ + k_ex424918_) k_ex424919_)))))).2).2).2⟩⟩ : (Sigma
+              fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
           | .ExtensionNode ext =>
             (extension_child_ref (← (path_concat evm_prefix' ext.path)) (← (field_to_ref ext.child)))
-          | _ => (extension_child_ref evm_prefix' (← (node_to_ref childnode)))))
+          | _ => (extension_child_ref evm_prefix' (← (node_to_ref ⟨_, ⟨_, childnode⟩⟩)))))
 
 /-- [merge_ext_node][] over a child reference: an inline reference
 carries its node bytes and re-keys canonically; a 32-byte hash
@@ -277,7 +245,13 @@ def merge_ext_ref (evm_prefix' : TriePath) (childref : NodeRef) : SailM NodeRef 
         (do
           match (← (decode_trie_node (← (inline_node_slice node)))) with
           | .LeafNode leaf =>
-            (leaf_child_ref (← (path_concat evm_prefix' leaf.path)) (← (rlp_ref_content leaf.value)))
+            (leaf_child_ref (← (path_concat evm_prefix' leaf.path))
+              (⟨_, ⟨_, ((((⟨_, ⟨_, ⟨_, (rlp_ref_content ((((((leaf.value).2).2).2).2).2).2)⟩⟩⟩ : (Sigma
+                fun (k_ex424971_ : Nat) =>
+                (Sigma fun (k_ex424975_ : Nat) =>
+                (Sigma fun (k_ex424976_ : Nat) =>
+                (EvmByteSliceFields (k_ex424971_ + k_ex424975_) k_ex424976_)))))).2).2).2⟩⟩ : (Sigma
+              fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
           | .ExtensionNode ext =>
             (extension_child_ref (← (path_concat evm_prefix' ext.path)) (← (field_to_ref ext.child)))
           | _ => (extension_child_ref evm_prefix' childref)))

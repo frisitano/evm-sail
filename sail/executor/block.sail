@@ -5,22 +5,30 @@ Block-start system calls, the transaction loop with block-gas
 accounting, withdrawals, and block-end request collection.
 */
 
-/*! Everything block validation needs from an executed body: overall
-    success, gas and blob-gas totals, receipts, and the collected
-    EIP-7685 requests. */
+/*! Everything block validation needs from a successfully executed body: gas
+    and blob-gas totals, receipts, and the collected EIP-7685 requests. */
 struct BlockExecutionResult = {
-    all_ok : bool,
     header_gas_used : gas,
     execution_gas_used : gas,
     state_gas_used : gas,
-    blob_gas_used : blob_gas,
+    blob_gas_used : blob_gas_used,
     first_tx_recipient : address,
-    gas_limit_exceeded : bool,
     receipts_root : hash,
     logs_bloom : LogsBloom,
     deposits : ByteSlice,
     requests : ExecutionRequests,
 }
+
+let PRE_MERGE_BLOCK_REWARD = unsigned(0x1bc16d674ec80000)
+
+/*! Returns a block's remaining gas, rejecting an accumulated value above the
+    header limit with the block-validation error required by EIP-7778. */
+function remaining_block_gas(limit : block_gas_limit, used : gas) -> gas =
+    if used <= limit then {
+        limit - used
+    } else {
+        throw InvalidBlock(GasUsedExceedsLimit)
+    }
 
 /*! The block-start writes: beacon root (Cancun+, EIP-4788) and parent
     hash history (Prague+, EIP-2935). */
@@ -37,81 +45,76 @@ function run_block_start_system_calls() -> unit = {
     applicability and block gas/blob-gas availability (EIP-7778 block-gas
     accounting), accumulating receipts. */
 function execute_block_transactions(
-    transactions : SszListRef,
+    transactions : TransactionListRef,
     public_keys : ByteSlice,
-    header_gas_limit : gas,
+    header_gas_limit : block_gas_limit,
 ) -> (
     BlockExecutionResult
 ) = {
-    let public_key_count = public_keys.len / PUBLIC_KEY_LENGTH;
-    let ByteQuantity(public_key_count_value) = public_key_count;
-    if (public_key_count_value != transactions.count) | (public_keys.len != public_key_count * PUBLIC_KEY_LENGTH) then {
+    let public_keys_length = public_keys.len;
+    let public_key_length = PUBLIC_KEY_LENGTH;
+    let public_key_count_value = public_keys_length / public_key_length;
+    if (public_key_count_value != transactions.count) |
+        (public_keys_length != public_key_count_value * public_key_length) then {
         throw InvalidBlock(WitnessDeficient)
     };
-    var all_ok : bool = true;
     let gas_limit = header_gas_limit;
     var execution_gas_acc : gas = GAS_ZERO;
     var state_gas_acc : gas = GAS_ZERO;
-    var blob_gas_acc : blob_gas = 0;
-    var tx0_to : address = ZERO_ADDR;
-    var gas_limit_exceeded : bool = false;
+    var blob_gas_acc : blob_gas_used = 0;
+    var tx0_to : address = ZERO_ADDRESS;
     var receipts = receipt_accumulator_empty();
     let deposits_start = scratch_begin();
     var cursor = ssz_list_cursor(transactions);
-    var keys = public_keys;
+    var keys : ByteSlice = public_keys;
     while not_bool(ssz_list_cursor_empty(cursor)) termination_measure(cursor.items.count - cursor.index) do {
         let i = cursor.index;
         let (transaction, next) = ssz_list_pop(cursor);
         cursor = next;
-        let public_key = sub_slice(keys, BYTE_ZERO, PUBLIC_KEY_LENGTH);
-        keys = sub_slice(keys, PUBLIC_KEY_LENGTH, keys.len - PUBLIC_KEY_LENGTH);
+        let keys_fields = keys;
+        let keys_length = keys_fields.len;
+        if keys_length < public_key_length then {
+            throw InvalidBlock(WitnessDeficient)
+        };
+        let public_key = sub_slice(keys_fields, 0, PUBLIC_KEY_LENGTH);
+        keys = slice_suffix(keys_fields, public_key_length);
+        cycle_scope_start(SCOPE_TX_DECODE);
         let tx = decode_transaction(transaction, public_key);
-        bal_set_index(protocol_quantity_increment(i));
-        if not_bool(gas_limit_exceeded) then {
-            if i == 0 then {
-                tx0_to = tx.recipient
-            };
-            if (gas_limit < execution_gas_acc) | (gas_limit < state_gas_acc) then {
-                gas_limit_exceeded = true
+        cycle_scope_end(SCOPE_TX_DECODE);
+        bal_set_index(i + 1);
+        if i == 0 then {
+            tx0_to = tx.recipient
+        };
+        let available_execution_gas = remaining_block_gas(gas_limit, execution_gas_acc);
+        let available_state_gas = remaining_block_gas(gas_limit, state_gas_acc);
+        let transaction_execution_limit : transaction_gas = if AMSTERDAM_TX_MAX_GAS < tx.gas_limit then {
+                AMSTERDAM_TX_MAX_GAS
             } else {
-                let available_execution_gas = gas_sub(gas_limit, execution_gas_acc);
-                let available_state_gas = gas_sub(gas_limit, state_gas_acc);
-                let transaction_execution_limit = if AMSTERDAM_TX_MAX_GAS < tx.gas_limit then {
-                        AMSTERDAM_TX_MAX_GAS
-                    } else {
-                        tx.gas_limit
-                    };
-                let transaction_fits = if k_fork >= Amsterdam then {
-                        (transaction_execution_limit <= available_execution_gas) & (tx.gas_limit <= available_state_gas)
-                    } else {
-                        tx.gas_limit <= available_execution_gas
-                    };
-                if not_bool(transaction_fits) then {
-                    gas_limit_exceeded = true
+                tx.gas_limit
+            };
+        let transaction_fits : bool = if k_fork >= Amsterdam then {
+                (transaction_execution_limit <= available_execution_gas) & (tx.gas_limit <= available_state_gas)
+            } else {
+                tx.gas_limit <= available_execution_gas
+            };
+        if not_bool(transaction_fits) then {
+            throw InvalidBlock(GasUsedExceedsLimit)
+        } else {
+            let tx_blob_gas = transaction_blob_gas_for_count(tx.blob_hashes.count);
+            let next_blob_gas : blob_gas_used = if k_fork < Cancun then {
+                    blob_gas_acc
                 } else {
-                    let tx_blob_gas = transaction_blob_gas(tx.blob_hashes.count);
-                    let next_blob_gas : blob_gas = if k_fork < Cancun then {
-                            blob_gas_acc
-                        } else {
-                            checked_block_blob_gas_add(blob_gas_acc, tx_blob_gas)
-                        };
-                    let receipt = process_transaction(tx);
-                    all_ok = all_ok & receipt.valid;
-                    if gas_sum_supported(execution_gas_acc, receipt.execution_gas) &
-                        gas_sum_supported(state_gas_acc, receipt.state_gas) then {
-                        execution_gas_acc = execution_gas_acc + receipt.execution_gas;
-                        state_gas_acc = state_gas_acc + receipt.state_gas;
-                        gas_limit_exceeded = (gas_limit < execution_gas_acc) | (gas_limit < state_gas_acc)
-                    } else {
-                        gas_limit_exceeded = true
-                    };
-                    if receipt.valid then {
-                        receipts = receipt_accumulator_push(receipts, receipt);
-                        append_deposit_logs(receipt.logs);
-                        blob_gas_acc = next_blob_gas
-                    }
-                }
-            }
+                    checked_block_blob_gas_add(blob_gas_acc, tx_blob_gas)
+                };
+            let receipt = process_transaction(tx);
+            execution_gas_acc = conserved_gas_add(execution_gas_acc, receipt.execution_gas);
+            state_gas_acc = conserved_gas_add(state_gas_acc, receipt.state_gas);
+            if (gas_limit < execution_gas_acc) | (gas_limit < state_gas_acc) then {
+                throw InvalidBlock(GasUsedExceedsLimit)
+            };
+            receipts = receipt_accumulator_push(receipts, receipt, next.index);
+            append_deposit_logs(receipt.logs);
+            blob_gas_acc = next_blob_gas
         }
     };
     let header_gas_used = if (k_fork >= Amsterdam) & (execution_gas_acc < state_gas_acc) then {
@@ -119,15 +122,16 @@ function execute_block_transactions(
         } else {
             execution_gas_acc
         };
+    cycle_scope_start(SCOPE_RECEIPTS_ROOT);
+    let receipts_root = receipt_accumulator_root(receipts);
+    cycle_scope_end(SCOPE_RECEIPTS_ROOT);
     struct {
-        all_ok = all_ok & not_bool(gas_limit_exceeded),
         header_gas_used = header_gas_used,
         execution_gas_used = execution_gas_acc,
         state_gas_used = state_gas_acc,
         blob_gas_used = blob_gas_acc,
         first_tx_recipient = tx0_to,
-        gas_limit_exceeded = gas_limit_exceeded,
-        receipts_root = receipt_accumulator_root(receipts),
+        receipts_root = receipts_root,
         logs_bloom = receipts.bloom,
         deposits = scratch_finish(deposits_start),
         requests = EMPTY_EXECUTION_REQUESTS,
@@ -136,30 +140,13 @@ function execute_block_transactions(
 
 /*! Credits every withdrawal's recipient with its amount in gwei
     (EIP-4895); withdrawals cannot fail and charge no gas. */
-function apply_withdrawals(withdrawals : SszListRef) -> unit = {
+function apply_withdrawals(withdrawals : WithdrawalListRef) -> unit = {
     var rest = withdrawals;
     while rest.count != 0 termination_measure(rest.count) do {
         let (withdrawal_ref, tail) = ssz_fixed_list_pop(rest, WD_SIZE);
         rest = tail;
         let withdrawal = decode_withdrawal(withdrawal_ref);
-        k_add_balance(
-            withdrawal.address,
-            alu_mul(word_of_protocol_quantity(withdrawal.amount), word_of_protocol_quantity(1000000000)),
-        )
-    }
-}
-
-/*! Runs the checked block-end request collection (Prague+, EIP-7685);
-    skipped entirely when the body already failed. */
-function run_checked_block_end_system_calls(all_ok : bool, deposits : ByteSlice) -> (bool, ExecutionRequests) = {
-    if not_bool(all_ok) then {
-        (false, EMPTY_EXECUTION_REQUESTS)
-    } else {
-        if k_fork >= Prague then {
-            collect_execution_requests(deposits)
-        } else {
-            (true, EMPTY_EXECUTION_REQUESTS)
-        }
+        k_add_balance(withdrawal.address, alu_mul(word_of_withdrawal_amount(withdrawal.amount), 1000000000))
     }
 }
 
@@ -171,33 +158,41 @@ function apply_block_end_state(body : BlockBody) -> unit = {
         apply_withdrawals(body.withdrawals)
     };
     if k_fork < Paris then {
-        k_add_balance(k_coinbase(), word_of_protocol_quantity(2000000000000000000))
+        k_add_balance(k_coinbase(), PRE_MERGE_BLOCK_REWARD)
     };
     k_tx_merge()
 }
 
 /*! Executes a block body end to end: block-start system calls, the
     transaction loop, block-end state effects, and request collection;
-    returns overall success with the accumulated
-    [BlockExecutionResult][type-BlockExecutionResult]. */
+    invalid execution throws immediately, while successful execution returns
+    the accumulated [BlockExecutionResult][type-BlockExecutionResult]. */
 function execute_block_body(
     body : BlockBody,
     public_keys : ByteSlice,
-    header_gas_limit : gas,
+    header_gas_limit : block_gas_limit,
 ) -> (
-    (bool, BlockExecutionResult)
+    BlockExecutionResult
 ) = {
     bal_reset();
     bal_set_index(0);
+    cycle_scope_start(SCOPE_BLOCK_START);
     run_block_start_system_calls();
+    cycle_scope_end(SCOPE_BLOCK_START);
+    cycle_scope_start(SCOPE_BLOCK_TRANSACTIONS);
     let result = execute_block_transactions(body.transactions, public_keys, header_gas_limit);
-    let post_tx_index : item_index = if body.transactions.count < BYTE_QUANTITY_MAX then {
-            protocol_quantity_increment(body.transactions.count)
-        } else {
-            throw InvalidBlock(WitnessDeficient)
-        };
+    cycle_scope_end(SCOPE_BLOCK_TRANSACTIONS);
+    let post_tx_index = body.transactions.count + 1;
     bal_set_index(post_tx_index);
+    cycle_scope_start(SCOPE_BLOCK_END_STATE);
     apply_block_end_state(body);
-    let (exec_ok, requests) = run_checked_block_end_system_calls(result.all_ok, result.deposits);
-    (exec_ok, { result with requests = requests })
+    cycle_scope_end(SCOPE_BLOCK_END_STATE);
+    cycle_scope_start(SCOPE_BLOCK_END_REQUESTS);
+    let requests = if k_fork >= Prague then {
+            collect_execution_requests(result.deposits)
+        } else {
+            EMPTY_EXECUTION_REQUESTS
+        };
+    cycle_scope_end(SCOPE_BLOCK_END_REQUESTS);
+    { result with requests = requests }
 }

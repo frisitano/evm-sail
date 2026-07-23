@@ -34,4 +34,14 @@ static inline void evmsail_byte_quantity_set(uint64_t *out, uint64_t value) {
 }
 #endif
 
+/* Generic host-table counts and indices have a semantic 64-bit bound in the
+ * model, so standard and optimized executables share this ABI. */
+#define EVMSAIL_ITEM_PARAM(name) uint64_t name
+#define EVMSAIL_ITEM_RETURN uint64_t
+#define EVMSAIL_ITEM_RESULT(name)
+
+static inline uint64_t evmsail_item_value(uint64_t value) { return value; }
+
+#define EVMSAIL_RETURN_ITEM(result, value) return (value)
+
 #endif

@@ -166,7 +166,8 @@ function k_bump_nonce(a : address) -> unit = {
 }
 
 /*! Credits `v` wei (no-op when zero). */
-function k_add_balance(a : address, v : word) -> unit = {
+val k_add_balance : forall 'value, 0 <= 'value & 'value < 2 ^ 256. (address, int('value)) -> unit
+function k_add_balance(a, v) = {
     let cur = k_aload(a);
     if not_bool(word_is_zero(v)) then {
         store_account_info(a, cur, { cur.info with balance = alu_add(cur.info.balance, v) })

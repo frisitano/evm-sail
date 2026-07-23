@@ -16,10 +16,12 @@ enum evmsail_byte_source_kind {
   EVMSAIL_SOURCE_SCRATCH = 9,
 };
 
-/* This header is injected before the generated model defines ByteSlice, so
- * declarations use incomplete generated types. The matching translation unit
- * is compiled against EVMSAIL_MODEL_H. */
+/* Sail's public ByteSlice existential is represented by ByteSliceFields. Keep
+ * the established FFI tag as a source-level alias; the generated model header
+ * remains the sole owner of the aggregate layout. */
+#define zByteSlice zByteSliceFields
 struct zByteSlice;
+struct zByteRegionResult;
 
 uint64_t evmsail_source_kind(int generated_source);
 int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
@@ -27,8 +29,13 @@ int evmsail_resolve_byte_source(uint64_t kind, uint64_t off, uint64_t len,
                                 uint64_t *resolved_len);
 #ifdef EVMSAIL_STANDARD_ABI
 void stateless_input(struct zByteSlice *out, unit u);
+void mem_expand(struct zByteSlice *out,
+                EVMSAIL_BYTE_QUANTITY_PARAM(len));
+void nodedb_lookup(struct zByteSlice *out, sail_hash hash);
 #else
 struct zByteSlice stateless_input(unit u);
+struct zByteSlice mem_expand(EVMSAIL_BYTE_QUANTITY_PARAM(len));
+struct zByteSlice nodedb_lookup(sail_hash hash);
 #endif
 const uint8_t *evmsail_stateless_input_ptr(uint64_t off, uint64_t len);
 void evmsail_input_reset(void);
@@ -57,11 +64,16 @@ unit slice_copy_to_memory(struct zByteSlice slice,
                           EVMSAIL_BYTE_QUANTITY_PARAM(index),
                           EVMSAIL_BYTE_QUANTITY_PARAM(len));
 
-bool scratch_store_bytes(EVMSAIL_BYTE_QUANTITY_PARAM(off),
+void scratch_store_bytes(struct zByteRegionResult *result,
+                         EVMSAIL_BYTE_QUANTITY_PARAM(off),
                          evmsail_byte_list bytes,
                          EVMSAIL_BYTE_QUANTITY_PARAM(len));
-bool scratch_store_slice(EVMSAIL_BYTE_QUANTITY_PARAM(off),
+void scratch_store_slice(struct zByteRegionResult *result,
+                         EVMSAIL_BYTE_QUANTITY_PARAM(off),
                          struct zByteSlice slice);
+void scratch_store_b256(struct zByteRegionResult *result,
+                        EVMSAIL_BYTE_QUANTITY_PARAM(off), sail_b256 data,
+                        uint64_t len);
 bool public_output_write(struct zByteSlice output);
 
 bool output_buffer_store(struct zByteSlice slice);

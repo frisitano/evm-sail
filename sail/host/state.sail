@@ -27,9 +27,9 @@ val transient_load = impure { c: "transient_storage_read" } : (address, word) ->
 val state_checkpoint_reset = impure { c: "host_state_checkpoint_reset" } : unit -> unit
 /*! Captures the complete frame-revertible transaction state: account and
     storage updates, transient storage, warm sets, and logs. */
-val state_checkpoint = impure { c: "host_state_checkpoint" } : unit -> StateCheckpoint
+val state_checkpoint = impure { c: "host_state_checkpoint" } : unit -> journal_checkpoint
 /*! Restores exactly the semantic state denoted by `checkpoint`. */
-val state_revert = impure { c: "host_state_revert" } : StateCheckpoint -> unit
+val state_revert = impure { c: "host_state_revert" } : journal_checkpoint -> unit
 
 /*! Inserts or overwrites a row in the transaction-layer storage overlay
     (the raw store behind `SSTORE`). */
@@ -63,12 +63,12 @@ val storage_block_cache = impure { c: "storage_block_cache" } : (StorageKey, wor
 /*! Drops every block-layer storage row of an address (account deletion
     or a fresh storage generation). */
 val storage_block_clear = impure { c: "storage_block_clear" } : address -> unit
-/*! The number of block-layer storage rows recorded for an address;
-    with the indexed readers below, the state-root computation's iteration
-    surface. */
-val storage_block_count = impure { c: "storage_block_count" } : address -> item_count
-/*! Returns the indexed materialized storage row for an account. */
-val storage_block_row = impure { c: "storage_block_row" } : (address, item_index) -> option(StorageEntry)
+/*! Starts a non-destructive ascending traversal of the block-layer storage rows
+    for an address. The iterator is valid until the block layer is mutated. */
+val storage_block_iter_begin = impure { c: "storage_block_iter_begin" } : address -> unit
+/*! Returns the next materialized storage row in ascending secure-key order, or
+    `None` when the current traversal is complete. */
+val storage_block_iter_next = impure { c: "storage_block_iter_next" } : address -> option(StorageEntry)
 
 /* transaction-layer account overlay */
 /*! The transaction-layer account row for an address, or `None` when
@@ -102,12 +102,21 @@ val acct_block_write = impure { c: "acct_block_write" } : AcctEntry -> unit
 /*! Caches a witness-read account in the block layer so later
     transactions skip the trie walk. */
 val acct_block_cache = impure { c: "acct_block_cache" } : (address, Account) -> unit
-/*! The number of block-layer account rows; together with
-    [acct_block_row][], this is the state-root computation's iteration
-    surface. */
-val acct_block_count = impure { c: "acct_block_count" } : unit -> item_count
-/*! Returns an indexed materialized account row. */
-val acct_block_row = impure { c: "acct_block_row" } : item_index -> option(AcctEntry)
+/*! Starts a non-destructive ascending traversal of block-layer account update
+    candidates. Candidates were written directly or have written storage rows;
+    Sail decides whether their final current/original values differ. The
+    iterator is valid until the block layer is mutated. */
+val acct_block_iter_begin = impure { c: "acct_block_iter_begin" } : unit -> unit
+/*! Returns the next account update candidate in ascending secure-key order,
+    or `None` when the current traversal is complete. */
+val acct_block_iter_next = impure { c: "acct_block_iter_next" } : unit -> option(AcctEntry)
+/*! Caches the post-state storage root derived by Sail for one account during
+    state-root preparation. This is auxiliary traversal state: it does not
+    mutate the account's pre-state storage-root anchor. */
+val acct_post_storage_root_store = impure { c: "acct_post_storage_root_store" } : (address, hash) -> unit
+/*! Reads the post-state storage root cached by the immediately preceding
+    state-root preparation pass. */
+val acct_post_storage_root_read = impure { c: "acct_post_storage_root_read" } : address -> hash
 
 /* EIP-7928 block-access-list recorder */
 /*! Clears the block-access-list recorder (start of block execution). */
@@ -116,7 +125,9 @@ val bal_reset = impure { c: "bal_reset" } : unit -> unit
     EIP-7928 keys change entries by transaction index, with 0 for the
     pre-execution system calls and `count + 1` for the post-execution
     ones. */
-val bal_set_index = impure { c: "bal_set_index" } : item_index -> unit
+val bal_set_index = impure { c: "bal_set_index" } : forall 'index, 0 <= 'index & 'index <= transaction_count_bound + 1. int(
+        'index,
+    ) -> unit
 /*! Records that the address was accessed, so it appears in the block
     access list even without a change (EIP-7928). */
 val bal_account_touch = impure { c: "bal_note_account_touch" } : address -> unit
