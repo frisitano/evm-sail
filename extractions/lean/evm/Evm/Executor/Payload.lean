@@ -61,8 +61,8 @@ block header hash itself. -/
 
 /-- The RLP of one withdrawal (EIP-4895), assembled in the scratch
 arena. -/
-/- Type quantifiers: k_ex409384_ : Nat, k_ex409383_ : Nat, 0 ≤ k_ex409383_ ∧ 0 ≤ k_ex409384_
-  ∧ k_ex409384_ = 44 -/
+/- Type quantifiers: k_ex411664_ : Nat, k_ex411663_ : Nat, 0 ≤ k_ex411663_ ∧ 0 ≤ k_ex411664_
+  ∧ k_ex411664_ = 44 -/
 def withdrawal_rlp (withdrawal : (EvmByteSliceLength 44)) : SailM EvmByteSlice := do
   let withdrawal := ((withdrawal).2).2
   let index ← do

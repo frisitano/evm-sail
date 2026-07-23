@@ -41,6 +41,7 @@ COQ_MODEL_DIR       := $(COQ_DIR)/model
 LEAN_DIR            := extractions/lean
 LEAN_MODEL_DIR      := $(LEAN_DIR)/evm
 LEAN_HOST_AXIOMS    := $(CONTRACTS_DIR)/HostAxioms.lean
+LEAN_SPECIALIZATION := $(CONTRACTS_DIR)/Specialization.lean
 LEAN_SAIL_LIB       ?= $(abspath $(LEAN_MODEL_DIR)/.lake/packages/Sail)
 COQ_SEMANTIC_FLAGS  := --coq-semantic-range-types --coq-undef-axioms
 LEAN_SEMANTIC_FLAGS := --lean-semantic-range-types
@@ -63,7 +64,7 @@ EXTERN_CONTRACT     := $(CONTRACTS_DIR)/ExternBoundary.v
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail extractions/contracts -name '*.sail' | sort)
 
-.PHONY: all check check-contracts clean docs-site eest-smoke extract extract-c extract-coq extract-lean fmt fmt-check help lean-extract lint runtime-test zisk-guest
+.PHONY: all check check-contracts clean docs-site eest-smoke extract extract-c extract-coq extract-lean fmt fmt-check help lean-extract lean-harness lint runtime-test zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -76,6 +77,7 @@ help:
 	@echo "  make extract-c      - generate source-aligned optimized C and compile-check it"
 	@echo "  make extract-coq    - generate and validate the complete Coq model"
 	@echo "  make extract-lean   - generate and compile the complete Lean model"
+	@echo "  make lean-harness   - build the executable Lean fixture-harness library"
 	@echo "  make docs-site      - build the literate specification book"
 	@echo "  make zisk-guest     - build the production ZisK guest ELF"
 	@echo "  make extract        - run all maintained model extractions"
@@ -116,6 +118,7 @@ check-contracts:
 	@for f in $(SAIL_CONTRACTS); do $(SAIL) "$$f"; done
 	test -s $(EXTERN_CONTRACT)
 	test -s $(LEAN_HOST_AXIOMS)
+	test -s $(LEAN_SPECIALIZATION)
 	grep -q "Record InputOracle" $(EXTERN_CONTRACT)
 	grep -q "Record OutputTraceContract" $(EXTERN_CONTRACT)
 	grep -q "Record CryptoContract" $(EXTERN_CONTRACT)
@@ -204,7 +207,7 @@ extract-lean:
 	test -s $(LEAN_SAIL_LIB)/lakefile.toml
 	rm -rf $(LEAN_MODEL_DIR)/Evm
 	rm -f $(LEAN_MODEL_DIR)/Evm.lean $(LEAN_MODEL_DIR)/lakefile.toml $(LEAN_MODEL_DIR)/lean-toolchain $(LEAN_MODEL_DIR)/.gitignore
-	$(SAIL) --lean --lean-force-output --lean-source-root sail $(LEAN_SEMANTIC_FLAGS) --lean-lib-path $(LEAN_SAIL_LIB) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
+	$(SAIL) --lean --lean-executable --lean-force-output --lean-source-root sail $(LEAN_SEMANTIC_FLAGS) --lean-lib-path $(LEAN_SAIL_LIB) --lean-specialization-file $(LEAN_SPECIALIZATION) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
 	find $(LEAN_MODEL_DIR) -name '*.lean' -exec sed -i.bak 's/ByteSlice/EvmByteSlice/g' {} +
 	find $(LEAN_MODEL_DIR)/Evm -name '*.lean' -exec sed -E -i.bak 's/(^|[^[:alnum:]_])prefix([^[:alnum:]_]|$$)/\1evm_prefix\2/g' {} +
 	find $(LEAN_MODEL_DIR) -name '*.bak' -exec rm -f {} +
@@ -246,6 +249,9 @@ docs-site:
 
 # Compatibility spelling retained for the docs workflow.
 lean-extract: extract-lean
+
+lean-harness:
+	bash $(LEAN_DIR)/runner/build_lib.sh
 
 clean:
 	rm -rf sail_smt_cache sail/sail_smt_cache $(C_BUILD_DIR) $(C_MODEL_DIR)/compile_commands.json $(LEAN_MODEL_DIR)/.lake/build $(BOOK)/site $(BOOK)/doc $(BOOK)/docs/reference $(BOOK)/docs/extraction $(BOOK)/docs/assets $(BOOK)/mkdocs.yml

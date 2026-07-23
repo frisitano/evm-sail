@@ -53,8 +53,8 @@ abstract byte lists.
     This page documents the model's host interface — internal contracts
     of the executable specification, not protocol rules. -/
 
-/- Type quantifiers: k_ex407106_ : Nat, k_ex407105_ : Nat, off : Nat, source_valid_length(off), 0
-  ≤ k_ex407105_ ∧ 0 ≤ k_ex407106_ -/
+/- Type quantifiers: k_ex409306_ : Nat, k_ex409305_ : Nat, off : Nat, source_valid_length(off), 0
+  ≤ k_ex409305_ ∧ 0 ≤ k_ex409306_ -/
 def slice_byte (s : EvmByteSlice) (off : Nat) : SailM byte := do
   let s := ((s).2).2
   let offset := off
@@ -65,21 +65,21 @@ def slice_byte (s : EvmByteSlice) (off : Nat) : SailM byte := do
 
 /-- The number of nonzero bytes in the slice (EIP-2028 / EIP-7623
 calldata gas). -/
-/- Type quantifiers: k_ex407112_ : Nat, k_ex407111_ : Nat, 0 ≤ k_ex407111_ ∧ 0 ≤ k_ex407112_ -/
+/- Type quantifiers: k_ex409312_ : Nat, k_ex409311_ : Nat, 0 ≤ k_ex409311_ ∧ 0 ≤ k_ex409312_ -/
 def slice_count_nonzero (s : EvmByteSlice) : SailM source_length := do
   let s := ((s).2).2
   (host_slice_count_nonzero ⟨_, ⟨_, s⟩⟩)
 
-/- Type quantifiers: k_ex407128_ : Nat, k_ex407127_ : Nat, start : Nat, stride : Nat, width : Nat, count
+/- Type quantifiers: k_ex409328_ : Nat, k_ex409327_ : Nat, start : Nat, stride : Nat, width : Nat, count
   : Nat, source_valid_length(start) ∧
   source_valid_length(stride) ∧ source_valid_length(width) ∧ source_valid_length(count), 0 ≤
-  k_ex407127_ ∧ 0 ≤ k_ex407128_ -/
+  k_ex409327_ ∧ 0 ≤ k_ex409328_ -/
 def slice_strided_zero (s : EvmByteSlice) (start : Nat) (stride : Nat) (width : Nat) (count : Nat) : SailM Bool := do
   let s := ((s).2).2
   (host_slice_strided_zero ⟨_, ⟨_, s⟩⟩ start stride width count)
 
-/- Type quantifiers: k_ex407143_ : Nat, k_ex407142_ : Nat, off : Nat, source_valid_length(off), 0
-  ≤ k_ex407142_ ∧ 0 ≤ k_ex407143_ -/
+/- Type quantifiers: k_ex409343_ : Nat, k_ex409342_ : Nat, off : Nat, source_valid_length(off), 0
+  ≤ k_ex409342_ ∧ 0 ≤ k_ex409343_ -/
 def slice_load (s : EvmByteSlice) (off : Nat) : SailM word := do
   let s := ((s).2).2
   let publicResult ← do
@@ -95,8 +95,8 @@ def slice_load (s : EvmByteSlice) (off : Nat) : SailM word := do
 
 /-- The word at a transaction-controlled 256-bit source offset, returning zero
 when the offset cannot designate a byte in the slice. -/
-/- Type quantifiers: k_ex407150_ : Nat, k_ex407149_ : Nat, k_ex407148_ : Nat, 0 ≤ k_ex407148_ ∧
-  0 ≤ k_ex407149_, 0 ≤ k_ex407150_ ∧ k_ex407150_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex409350_ : Nat, k_ex409349_ : Nat, k_ex409348_ : Nat, 0 ≤ k_ex409348_ ∧
+  0 ≤ k_ex409349_, 0 ≤ k_ex409350_ ∧ k_ex409350_ ≤ (2 ^ 256 - 1) -/
 def slice_load_word_offset (s : EvmByteSlice) (off : word) : SailM word := do
   let s := ((s).2).2
   let off := (off).value
@@ -110,8 +110,8 @@ def slice_load_word_offset (s : EvmByteSlice) (off : word) : SailM word := do
     else (pure (ZERO_WORD).value)
   pure (⟨publicResult⟩)
 
-/- Type quantifiers: k_ex407160_ : Nat, k_ex407159_ : Nat, off : Nat, n : Nat, source_valid_length(off)
-  ∧ source_valid_length(n), 0 ≤ k_ex407159_ ∧ 0 ≤ k_ex407160_ -/
+/- Type quantifiers: k_ex409360_ : Nat, k_ex409359_ : Nat, off : Nat, n : Nat, source_valid_length(off)
+  ∧ source_valid_length(n), 0 ≤ k_ex409359_ ∧ 0 ≤ k_ex409360_ -/
 def slice_load_n (s : EvmByteSlice) (off : Nat) (n : Nat) : SailM word := do
   let s := ((s).2).2
   let publicResult ← do
@@ -125,8 +125,8 @@ def slice_load_n (s : EvmByteSlice) (off : Nat) (n : Nat) : SailM word := do
     else (pure (ZERO_WORD).value)
   pure (⟨publicResult⟩)
 
-/- Type quantifiers: k_ex407177_ : Nat, k_ex407176_ : Nat, dst : Nat, off : Nat, len : Nat, host_valid_access(dst)
-  ∧ source_valid_length(off) ∧ host_valid_access(len), 0 ≤ k_ex407176_ ∧ 0 ≤ k_ex407177_ -/
+/- Type quantifiers: k_ex409377_ : Nat, k_ex409376_ : Nat, dst : Nat, off : Nat, len : Nat, host_valid_access(dst)
+  ∧ source_valid_length(off) ∧ host_valid_access(len), 0 ≤ k_ex409376_ ∧ 0 ≤ k_ex409377_ -/
 def slice_copy (s : EvmByteSlice) (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
   let s := ((s).2).2
   if ((len != 0) : Bool)
@@ -141,9 +141,9 @@ def slice_copy (s : EvmByteSlice) (dst : Nat) (off : Nat) (len : Nat) : SailM Un
 
 /-- Copies from a transaction-controlled 256-bit source offset into EVM
 memory, applying the source operation's empty-read and zero-padding rules. -/
-/- Type quantifiers: k_ex407190_ : Nat, k_ex407189_ : Nat, k_ex407188_ : Nat, k_ex407187_ : Nat, k_ex407186_
-  : Nat, 0 ≤ k_ex407186_ ∧ 0 ≤ k_ex407187_, 0 ≤ k_ex407188_, 0 ≤ k_ex407189_ ∧
-  k_ex407189_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex407190_ -/
+/- Type quantifiers: k_ex409390_ : Nat, k_ex409389_ : Nat, k_ex409388_ : Nat, k_ex409387_ : Nat, k_ex409386_
+  : Nat, 0 ≤ k_ex409386_ ∧ 0 ≤ k_ex409387_, 0 ≤ k_ex409388_, 0 ≤ k_ex409389_ ∧
+  k_ex409389_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex409390_ -/
 def slice_copy_word_offset (s : EvmByteSlice) (dst : memory_pointer) (off : word) (len : memory_length) : SailM Unit := do
   let s := ((s).2).2
   let off := (off).value

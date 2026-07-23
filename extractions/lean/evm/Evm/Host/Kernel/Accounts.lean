@@ -151,7 +151,7 @@ def k_account_occupied (a : address) : SailM Bool := do
 /-- Moves `v` wei from `src` to `dst` (both updates recorded for frame
 rollback; the EVM checks sufficiency before calling) and emits the
 EIP-7708 transfer log. -/
-/- Type quantifiers: k_ex408219_ : Nat, 0 ≤ k_ex408219_ ∧ k_ex408219_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410499_ : Nat, 0 ≤ k_ex410499_ ∧ k_ex410499_ ≤ (2 ^ 256 - 1) -/
 def k_transfer (src : address) (dst : address) (v : word) : SailM Unit := do
   let v := (v).value
   let src_acc ← do (k_aload src)
@@ -187,7 +187,7 @@ def k_add_balance (a : address) (v : Nat) : SailM Unit := do
   else (pure ())
 
 /-- Debits `v` wei (no-op when zero; caller guarantees sufficiency). -/
-/- Type quantifiers: k_ex408220_ : Nat, 0 ≤ k_ex408220_ ∧ k_ex408220_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410500_ : Nat, 0 ≤ k_ex410500_ ∧ k_ex410500_ ≤ (2 ^ 256 - 1) -/
 def k_sub_balance (a : address) (v : word) : SailM Unit := do
   let v := (v).value
   let cur ← do (k_aload a)

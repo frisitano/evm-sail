@@ -1,10 +1,10 @@
 import Sail
-import Evm.Defs
-import Evm.HostAxioms
+import THE_MODULE_NAME.Defs
+import THE_MODULE_NAME.HostAxioms
 
 open Sail
 
-namespace Evm
+namespace THE_MODULE_NAME
 
 open Defs
 
@@ -273,4 +273,4 @@ def prerr_endline : String → Unit := fun _ => ()
 def print : String → Unit := fun _ => ()
 def prerr : String → Unit := fun _ => ()
 
-end Evm
+end THE_MODULE_NAME

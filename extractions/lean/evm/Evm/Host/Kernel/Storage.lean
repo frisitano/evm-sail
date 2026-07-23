@@ -52,7 +52,7 @@ open BlockError
 Warm/cold accounting (EIP-2929), persistent storage (`SLOAD`/`SSTORE`),
 and transient storage (EIP-1153), over the host state stores. -/
 
-/- Type quantifiers: k_ex408155_ : Nat, 0 ≤ k_ex408155_ ∧ k_ex408155_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410435_ : Nat, 0 ≤ k_ex410435_ ∧ k_ex410435_ ≤ (2 ^ 256 - 1) -/
 def storage_key (a : address) (s : word) : StorageKey :=
   let s := (s).value
   { addr := a,
@@ -66,7 +66,7 @@ def k_access_account (a : address) : SailM Bool := do
 
 /-- Marks a storage slot warm and returns its prior warm bit. New entries
 belong to the host's semantic checkpoint. -/
-/- Type quantifiers: k_ex408156_ : Nat, 0 ≤ k_ex408156_ ∧ k_ex408156_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410436_ : Nat, 0 ≤ k_ex410436_ ∧ k_ex410436_ ≤ (2 ^ 256 - 1) -/
 def k_slot_is_warm (a : address) (s : word) : SailM Bool := do
   let s := (s).value
   (warm_slot_touch a ⟨s⟩)
@@ -74,24 +74,24 @@ def k_slot_is_warm (a : address) (s : word) : SailM Bool := do
 /-- Decodes an account trie leaf — `rlp([nonce, balance, storage_root,
 code_hash])` — into an [AccountInfo][type-AccountInfo]; empty
 root/hash fields decode to their empty-sentinel digests. -/
-/- Type quantifiers: k_ex408160_ : Nat, k_ex408159_ : Nat, 0 ≤ k_ex408159_ ∧ 0 ≤ k_ex408160_ -/
+/- Type quantifiers: k_ex410440_ : Nat, k_ex410439_ : Nat, 0 ≤ k_ex410439_ ∧ 0 ≤ k_ex410440_ -/
 def decode_state_account (value : EvmByteSlice) : SailM AccountInfo := do
   let value := ((value).2).2
-  let ⟨k_full_len, ⟨k_next, ⟨k_content_len, ⟨k_content, ⟨k_ex416961_, ⟨k_ex416960_, ⟨k_ex416959_, ⟨k_ex416958_, (nonce, fields)⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+  let ⟨k_full_len, ⟨k_next, ⟨k_content_len, ⟨k_content, ⟨k_ex419421_, ⟨k_ex419420_, ⟨k_ex419419_, ⟨k_ex419418_, (nonce, fields)⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     (do
         let ⟨_, ⟨_, ⟨_, ⟨_, dependentArg0⟩⟩⟩⟩ ← (rlp_node_cursor
           ⟨_, ⟨_, value⟩⟩)
         let publicResult ← (rlp_cursor_pop dependentArg0)
         pure ((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ((((publicResult).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
-        fun (k_ex416958_ : Nat) =>
-        (Sigma fun (k_ex416959_ : Nat) =>
-        (Sigma fun (k_ex416960_ : Nat) =>
-        (Sigma fun (k_ex416961_ : Nat) =>
+        fun (k_ex419418_ : Nat) =>
+        (Sigma fun (k_ex419419_ : Nat) =>
+        (Sigma fun (k_ex419420_ : Nat) =>
+        (Sigma fun (k_ex419421_ : Nat) =>
         (Sigma fun (k_content : Nat) =>
         (Sigma fun (k_content_len : Nat) =>
         (Sigma fun (k_next : Nat) =>
         (Sigma fun (k_full_len : Nat) =>
-        ((RlpFieldRefFields k_ex416958_ k_ex416959_ k_ex416960_ k_full_len k_content k_content_len) × (RlpCursorFields k_ex416958_ k_ex416959_ k_next k_ex416961_)))))))))))))
+        ((RlpFieldRefFields k_ex419418_ k_ex419419_ k_ex419420_ k_full_len k_content k_content_len) × (RlpCursorFields k_ex419418_ k_ex419419_ k_next k_ex419421_)))))))))))))
   let ⟨k_full_len, ⟨k_next, ⟨k_content_len, ⟨k_content, (balance, fields)⟩⟩⟩⟩ ← do
     (rlp_cursor_pop fields)
   let ⟨k_full_len, ⟨k_next, ⟨k_content_len, ⟨k_content, (storage, fields)⟩⟩⟩⟩ ← do
@@ -127,7 +127,7 @@ def decode_state_account (value : EvmByteSlice) : SailM AccountInfo := do
           code_hash := code_hash })
 
 /-- Constructs a path from high-aligned data and a nibble length. -/
-/- Type quantifiers: k_ex408161_ : Nat, 0 ≤ k_ex408161_ ∧ k_ex408161_ ≤ 64 -/
+/- Type quantifiers: k_ex410441_ : Nat, 0 ≤ k_ex410441_ ∧ k_ex410441_ ≤ 64 -/
 def path_new (data : b256) (len : trie_path_len) : TriePath :=
   let len := (len).value
   { data := data,
@@ -282,12 +282,12 @@ def HEX_PREFIX_MAX_LENGTH : Nat := 33
 
 /-- Decodes a compact path directly from its RLP source span, returning
 the leaf flag and the path. -/
-/- Type quantifiers: k_ex408174_ : Nat, k_ex408173_ : Nat, k_ex408172_ : Nat, k_ex408171_ : Nat, k_ex408170_
-  : Nat, k_ex408169_ : Nat, 0 ≤ k_ex408169_ ∧ 0 ≤ k_ex408170_ ∧
-  0 ≤ k_ex408171_ ∧
-  0 ≤ k_ex408172_ ∧
-  (k_ex408171_ + k_ex408172_) ≤ k_ex408170_ ∧
-  0 ≤ k_ex408173_ ∧ 0 ≤ k_ex408174_ ∧ (k_ex408173_ + k_ex408174_) ≤ k_ex408170_ -/
+/- Type quantifiers: k_ex410454_ : Nat, k_ex410453_ : Nat, k_ex410452_ : Nat, k_ex410451_ : Nat, k_ex410450_
+  : Nat, k_ex410449_ : Nat, 0 ≤ k_ex410449_ ∧ 0 ≤ k_ex410450_ ∧
+  0 ≤ k_ex410451_ ∧
+  0 ≤ k_ex410452_ ∧
+  (k_ex410451_ + k_ex410452_) ≤ k_ex410450_ ∧
+  0 ≤ k_ex410453_ ∧ 0 ≤ k_ex410454_ ∧ (k_ex410453_ + k_ex410454_) ≤ k_ex410450_ -/
 def hex_prefix_decode_ref (f : RlpFieldRef) : SailM (Bool × TriePath) := do
   let f := ((((((f).2).2).2).2).2).2
   if (f.is_list : Bool)
@@ -335,7 +335,7 @@ def path_len (path : TriePath) : trie_path_len :=
 
 /-- Decodes node bytes into leaf/extension/branch form by field count
 (2 = leaf or extension by the HP flag; 17 = branch). -/
-/- Type quantifiers: k_ex408178_ : Nat, k_ex408177_ : Nat, 0 ≤ k_ex408177_ ∧ 0 ≤ k_ex408178_ -/
+/- Type quantifiers: k_ex410458_ : Nat, k_ex410457_ : Nat, 0 ≤ k_ex410457_ ∧ 0 ≤ k_ex410458_ -/
 def decode_trie_node (node : EvmByteSlice) : SailM TrieNode := do
   let node := ((node).2).2
   let ⟨_, ⟨_, ⟨_, ⟨_, fields⟩⟩⟩⟩ ← do (rlp_node_cursor ⟨_, ⟨_, node⟩⟩)
@@ -523,7 +523,7 @@ def decode_trie_node (node : EvmByteSlice) : SailM TrieNode := do
 def MPT_HASH_LENGTH : Nat := WORD_BYTE_LENGTH
 
 /-- Copies a sub-32-byte node encoding into an inline node value. -/
-/- Type quantifiers: k_ex408182_ : Nat, k_ex408181_ : Nat, 0 ≤ k_ex408181_ ∧ 0 ≤ k_ex408182_ -/
+/- Type quantifiers: k_ex410462_ : Nat, k_ex410461_ : Nat, 0 ≤ k_ex410461_ ∧ 0 ≤ k_ex410462_ -/
 def inline_node_from_slice (bytes : EvmByteSlice) : SailM InlineNode := do
   let bytes := ((bytes).2).2
   let length := bytes.len
@@ -535,12 +535,12 @@ def inline_node_from_slice (bytes : EvmByteSlice) : SailM InlineNode := do
 
 /-- The reference denoted by a child field: an inline list, a 32-byte
 hash, or empty. -/
-/- Type quantifiers: k_ex408194_ : Nat, k_ex408193_ : Nat, k_ex408192_ : Nat, k_ex408191_ : Nat, k_ex408190_
-  : Nat, k_ex408189_ : Nat, 0 ≤ k_ex408189_ ∧ 0 ≤ k_ex408190_ ∧
-  0 ≤ k_ex408191_ ∧
-  0 ≤ k_ex408192_ ∧
-  (k_ex408191_ + k_ex408192_) ≤ k_ex408190_ ∧
-  0 ≤ k_ex408193_ ∧ 0 ≤ k_ex408194_ ∧ (k_ex408193_ + k_ex408194_) ≤ k_ex408190_ -/
+/- Type quantifiers: k_ex410474_ : Nat, k_ex410473_ : Nat, k_ex410472_ : Nat, k_ex410471_ : Nat, k_ex410470_
+  : Nat, k_ex410469_ : Nat, 0 ≤ k_ex410469_ ∧ 0 ≤ k_ex410470_ ∧
+  0 ≤ k_ex410471_ ∧
+  0 ≤ k_ex410472_ ∧
+  (k_ex410471_ + k_ex410472_) ≤ k_ex410470_ ∧
+  0 ≤ k_ex410473_ ∧ 0 ≤ k_ex410474_ ∧ (k_ex410473_ + k_ex410474_) ≤ k_ex410470_ -/
 def field_to_ref (f : RlpFieldRef) : SailM NodeRef := do
   let f := ((((((f).2).2).2).2).2).2
   if (f.is_list : Bool)
@@ -574,7 +574,7 @@ def path_byte_index (i : trie_path_cursor) : SailM b256_index := do
   pure (⟨publicResult⟩)
 
 /-- The `i`-th nibble, most significant first; out of range yields `0`. -/
-/- Type quantifiers: k_ex408196_ : Nat, 0 ≤ k_ex408196_ ∧ k_ex408196_ ≤ 64 -/
+/- Type quantifiers: k_ex410476_ : Nat, 0 ≤ k_ex410476_ ∧ k_ex410476_ ≤ 64 -/
 def path_nibble (path : TriePath) (i : trie_path_cursor) : SailM nibble := do
   let i := (i).value
   if ((((path_len path)).value ≤b i) : Bool)
@@ -601,7 +601,7 @@ def trie_path_len_increment (value : trie_path_len) : SailM trie_path_len := do
   pure (⟨publicResult⟩)
 
 /-- Whether `seg` occurs in `key` at nibble position `pos`. -/
-/- Type quantifiers: k_ex408198_ : Nat, 0 ≤ k_ex408198_ ∧ k_ex408198_ ≤ 64 -/
+/- Type quantifiers: k_ex410478_ : Nat, 0 ≤ k_ex410478_ ∧ k_ex410478_ ≤ 64 -/
 def path_matches (key : TriePath) (pos : trie_path_cursor) (seg : TriePath) : SailM Bool := do
   let pos := (pos).value
   let stop := (pos + ((path_len seg)).value)
@@ -678,8 +678,8 @@ def resolve_ref (r : NodeRef) : SailM EvmByteSlice := do
 
 /-- Walks the trie toward `key` from `pos`, returning the leaf value
 without copying it; absent paths yield empty bytes. -/
-/- Type quantifiers: _reclimit : Nat, k_ex408203_ : Nat, k_ex408202_ : Nat, k_ex408201_ : Nat, 0 ≤
-  k_ex408201_ ∧ 0 ≤ k_ex408202_, 0 ≤ k_ex408203_ ∧ k_ex408203_ ≤ 64, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex410483_ : Nat, k_ex410482_ : Nat, k_ex410481_ : Nat, 0 ≤
+  k_ex410481_ ∧ 0 ≤ k_ex410482_, 0 ≤ k_ex410483_ ∧ k_ex410483_ ≤ 64, 0 ≤ _reclimit -/
 def _rec_trie_walk (node : EvmByteSlice) (key : TriePath) (pos : trie_path_cursor) (_reclimit : Nat) : SailM EvmByteSlice := do
   let node := ((node).2).2
   let pos := (pos).value
@@ -709,11 +709,11 @@ def _rec_trie_walk (node : EvmByteSlice) (key : TriePath) (pos : trie_path_curso
                 (if (((pos + ((path_len leaf.path)).value) == ((path_len key)).value) : Bool)
                 then
                   (pure ((⟨_, ⟨_, ((((⟨_, ⟨_, ⟨_, (rlp_ref_content
-                      ((((((leaf.value).2).2).2).2).2).2)⟩⟩⟩ : (Sigma fun (k_ex418238_ : Nat)
+                      ((((((leaf.value).2).2).2).2).2).2)⟩⟩⟩ : (Sigma fun (k_ex420698_ : Nat)
                       =>
-                      (Sigma fun (k_ex418242_ : Nat) =>
-                      (Sigma fun (k_ex418243_ : Nat) =>
-                      (EvmByteSliceFields (k_ex418238_ + k_ex418242_) k_ex418243_)))))).2).2).2⟩⟩ : (Sigma
+                      (Sigma fun (k_ex420702_ : Nat) =>
+                      (Sigma fun (k_ex420703_ : Nat) =>
+                      (EvmByteSliceFields (k_ex420698_ + k_ex420702_) k_ex420703_)))))).2).2).2⟩⟩ : (Sigma
                     fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma
                     fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
                 else
@@ -753,11 +753,11 @@ def _rec_trie_walk (node : EvmByteSlice) (key : TriePath) (pos : trie_path_curso
               if ((pos == ((path_len key)).value) : Bool)
               then
                 (pure ((⟨_, ⟨_, ((((⟨_, ⟨_, ⟨_, (rlp_ref_content
-                    ((((((branch.value).2).2).2).2).2).2)⟩⟩⟩ : (Sigma fun (k_ex418372_ : Nat)
+                    ((((((branch.value).2).2).2).2).2).2)⟩⟩⟩ : (Sigma fun (k_ex420832_ : Nat)
                     =>
-                    (Sigma fun (k_ex418376_ : Nat) =>
-                    (Sigma fun (k_ex418377_ : Nat) =>
-                    (EvmByteSliceFields (k_ex418372_ + k_ex418376_) k_ex418377_)))))).2).2).2⟩⟩ : (Sigma
+                    (Sigma fun (k_ex420836_ : Nat) =>
+                    (Sigma fun (k_ex420837_ : Nat) =>
+                    (EvmByteSliceFields (k_ex420832_ + k_ex420836_) k_ex420837_)))))).2).2).2⟩⟩ : (Sigma
                   fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma
                   fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
               else
@@ -783,8 +783,8 @@ decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Walks the trie toward `key` from `pos`, returning the leaf value
 without copying it; absent paths yield empty bytes. -/
-/- Type quantifiers: pos : Nat, k_ex408208_ : Nat, k_ex408207_ : Nat, 0 ≤ k_ex408207_ ∧
-  0 ≤ k_ex408208_, 0 ≤ pos ∧ pos ≤ 64 -/
+/- Type quantifiers: pos : Nat, k_ex410488_ : Nat, k_ex410487_ : Nat, 0 ≤ k_ex410487_ ∧
+  0 ≤ k_ex410488_, 0 ≤ pos ∧ pos ≤ 64 -/
 def trie_walk (node : EvmByteSlice) (key : TriePath) (pos : trie_path_cursor) : SailM EvmByteSlice := do
   let node := ((node).2).2
   let pos := (pos).value
@@ -845,7 +845,7 @@ def k_aload (a : address) : SailM Account := SailME.run do
 
 /-- The witnessed storage value of `slot` under a storage root, reading
 the secure trie at `keccak256(slot)`; absent slots are zero. -/
-/- Type quantifiers: k_ex408211_ : Nat, 0 ≤ k_ex408211_ ∧ k_ex408211_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410491_ : Nat, 0 ≤ k_ex410491_ ∧ k_ex410491_ ≤ (2 ^ 256 - 1) -/
 def stateless_storage (root : hash) (slot : word) : SailM word := do
   let slot := (slot).value
   let publicResult ← do
@@ -870,7 +870,7 @@ storage change). [stateless_storage][] is the base primitive — an
 authenticated MPT point-get, one walk for both the witness and the
 harness-built alloc trie; everything above it (the overlay, the
 read-through, the journal) is common. -/
-/- Type quantifiers: k_ex408212_ : Nat, 0 ≤ k_ex408212_ ∧ k_ex408212_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410492_ : Nat, 0 ≤ k_ex410492_ ∧ k_ex410492_ ≤ (2 ^ 256 - 1) -/
 def k_sload (a : address) (s : word) : SailM StorageValue := SailME.run do
   let s := (s).value
   (bal_storage_read a ⟨s⟩)
@@ -898,7 +898,7 @@ def k_sload (a : address) (s : word) : SailM StorageValue := SailME.run do
 /-- `SSTORE`: creates or updates the live transaction row. The preceding
 [k_sload][] supplies the transaction-original value; the host keeps
 clear generations and frame undo history private. -/
-/- Type quantifiers: k_ex408213_ : Nat, 0 ≤ k_ex408213_ ∧ k_ex408213_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410493_ : Nat, 0 ≤ k_ex410493_ ∧ k_ex410493_ ≤ (2 ^ 256 - 1) -/
 def k_sstore (a : address) (s : word) (v : StorageValue) : SailM Unit := do
   let s := (s).value
   (storage_tx_update
@@ -907,7 +907,7 @@ def k_sstore (a : address) (s : word) (v : StorageValue) : SailM Unit := do
 
 /-- `TLOAD` (EIP-1153): reads per-transaction transient storage, which is
 discarded at transaction end and is not part of the state trie. -/
-/- Type quantifiers: k_ex408214_ : Nat, 0 ≤ k_ex408214_ ∧ k_ex408214_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410494_ : Nat, 0 ≤ k_ex410494_ ∧ k_ex410494_ ≤ (2 ^ 256 - 1) -/
 def k_tload (a : address) (s : word) : SailM word := do
   let s := (s).value
   let publicResult ← do
@@ -918,8 +918,8 @@ def k_tload (a : address) (s : word) : SailM word := do
 
 /-- `TSTORE` (EIP-1153): writes transient storage. Frame rollback is part
 of the host's semantic checkpoint contract. -/
-/- Type quantifiers: k_ex408216_ : Nat, k_ex408215_ : Nat, 0 ≤ k_ex408215_ ∧
-  k_ex408215_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex408216_ ∧ k_ex408216_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410496_ : Nat, k_ex410495_ : Nat, 0 ≤ k_ex410495_ ∧
+  k_ex410495_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex410496_ ∧ k_ex410496_ ≤ (2 ^ 256 - 1) -/
 def k_tstore (a : address) (s : word) (v : word) : SailM Unit := do
   let s := (s).value
   let v := (v).value

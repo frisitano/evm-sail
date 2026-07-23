@@ -357,6 +357,270 @@ function rlp_ref_gas(f : RlpFieldRef, fork : Fork) -> transaction_gas = {
     }
 }
 
+/*! Decodes the payload fields of a legacy transaction. Kept separate from
+    the envelope dispatcher so extraction backends compile each transaction
+    shape as an independent function. */
+function decode_legacy_tx(
+    tx : TransactionByteSlice,
+    pubkey : ByteSlice,
+    fork : Fork,
+    sender : address,
+    fields : RlpCursor,
+) -> Transaction = {
+    let (nonce_f, fields) = rlp_cursor_pop(fields);
+    let (gp_f, fields) = rlp_cursor_pop(fields);
+    let (gas_f, fields) = rlp_cursor_pop(fields);
+    let (to_f, fields) = rlp_cursor_pop(fields);
+    let (value_f, fields) = rlp_cursor_pop(fields);
+    let (data_f, fields) = rlp_cursor_pop(fields);
+    let (v_f, fields) = rlp_cursor_pop(fields);
+    let (r_f, fields) = rlp_cursor_pop(fields);
+    let (s_f, fields) = rlp_cursor_pop(fields);
+    rlp_cursor_expect_end(fields);
+    let v = rlp_ref_word(v_f);
+    let gp = rlp_ref_uint_word(gp_f);
+    struct {
+        tx_type = LegacyTx,
+        sender = sender,
+        raw = tx,
+        nonce = rlp_ref_uint_word(nonce_f),
+        chain_id = 0,
+        gas_limit = rlp_ref_gas(gas_f, fork),
+        is_create = to_f.content_len == 0,
+        recipient = word_to_address(rlp_ref_word(to_f)),
+        value = rlp_ref_uint_word(value_f),
+        input_src = tx_input_span(data_f),
+        access_list_addresses = [||],
+        access_list_address_count = 0,
+        access_list_slots = [||],
+        access_list_slot_count = 0,
+        max_fee = gp,
+        max_blob_fee = ZERO_WORD,
+        max_priority_fee = gp,
+        authorizations = [||],
+        authorization_count = 0,
+        blob_hashes = EMPTY_BLOB_HASHES,
+        pubkey = pubkey,
+        signing_hash = tx_signing_hash(LegacyTx, tx_sig_span(nonce_f, v_f), v),
+        sig_v = v,
+        sig_r = rlp_ref_uint_word(r_f),
+        sig_s = rlp_ref_uint_word(s_f),
+    }
+}
+
+/*! Decodes the payload fields of an EIP-2930 transaction. */
+function decode_access_list_tx(
+    tx : TransactionByteSlice,
+    pubkey : ByteSlice,
+    fork : Fork,
+    sender : address,
+    fields : RlpCursor,
+) -> Transaction = {
+    let (chain_f, fields) = rlp_cursor_pop(fields);
+    let (nonce_f, fields) = rlp_cursor_pop(fields);
+    let (gp_f, fields) = rlp_cursor_pop(fields);
+    let (gas_f, fields) = rlp_cursor_pop(fields);
+    let (to_f, fields) = rlp_cursor_pop(fields);
+    let (value_f, fields) = rlp_cursor_pop(fields);
+    let (data_f, fields) = rlp_cursor_pop(fields);
+    let (al_f, fields) = rlp_cursor_pop(fields);
+    let (v_f, fields) = rlp_cursor_pop(fields);
+    let (r_f, fields) = rlp_cursor_pop(fields);
+    let (s_f, fields) = rlp_cursor_pop(fields);
+    rlp_cursor_expect_end(fields);
+    let v = rlp_ref_word(v_f);
+    let gp = rlp_ref_uint_word(gp_f);
+    let (al_addrs, al_slots, al_addr_count, al_slot_count) = decode_access_list(al_f);
+    struct {
+        tx_type = AccessListTx,
+        sender = sender,
+        raw = tx,
+        nonce = rlp_ref_uint_word(nonce_f),
+        chain_id = rlp_ref_chain_identifier(chain_f),
+        gas_limit = rlp_ref_gas(gas_f, fork),
+        is_create = to_f.content_len == 0,
+        recipient = word_to_address(rlp_ref_word(to_f)),
+        value = rlp_ref_uint_word(value_f),
+        input_src = tx_input_span(data_f),
+        access_list_addresses = al_addrs,
+        access_list_address_count = al_addr_count,
+        access_list_slots = al_slots,
+        access_list_slot_count = al_slot_count,
+        max_fee = gp,
+        max_blob_fee = ZERO_WORD,
+        max_priority_fee = gp,
+        authorizations = [||],
+        authorization_count = 0,
+        blob_hashes = EMPTY_BLOB_HASHES,
+        pubkey = pubkey,
+        signing_hash = tx_signing_hash(AccessListTx, tx_sig_span(chain_f, v_f), v),
+        sig_v = v,
+        sig_r = rlp_ref_uint_word(r_f),
+        sig_s = rlp_ref_uint_word(s_f),
+    }
+}
+
+/*! Decodes the payload fields of an EIP-1559 transaction. */
+function decode_fee_market_tx(
+    tx : TransactionByteSlice,
+    pubkey : ByteSlice,
+    fork : Fork,
+    sender : address,
+    fields : RlpCursor,
+) -> Transaction = {
+    let (chain_f, fields) = rlp_cursor_pop(fields);
+    let (nonce_f, fields) = rlp_cursor_pop(fields);
+    let (mp_f, fields) = rlp_cursor_pop(fields);
+    let (mf_f, fields) = rlp_cursor_pop(fields);
+    let (gas_f, fields) = rlp_cursor_pop(fields);
+    let (to_f, fields) = rlp_cursor_pop(fields);
+    let (value_f, fields) = rlp_cursor_pop(fields);
+    let (data_f, fields) = rlp_cursor_pop(fields);
+    let (al_f, fields) = rlp_cursor_pop(fields);
+    let (v_f, fields) = rlp_cursor_pop(fields);
+    let (r_f, fields) = rlp_cursor_pop(fields);
+    let (s_f, fields) = rlp_cursor_pop(fields);
+    rlp_cursor_expect_end(fields);
+    let v = rlp_ref_word(v_f);
+    let (al_addrs, al_slots, al_addr_count, al_slot_count) = decode_access_list(al_f);
+    struct {
+        tx_type = FeeMarketTx,
+        sender = sender,
+        raw = tx,
+        nonce = rlp_ref_uint_word(nonce_f),
+        chain_id = rlp_ref_chain_identifier(chain_f),
+        gas_limit = rlp_ref_gas(gas_f, fork),
+        is_create = to_f.content_len == 0,
+        recipient = word_to_address(rlp_ref_word(to_f)),
+        value = rlp_ref_uint_word(value_f),
+        input_src = tx_input_span(data_f),
+        access_list_addresses = al_addrs,
+        access_list_address_count = al_addr_count,
+        access_list_slots = al_slots,
+        access_list_slot_count = al_slot_count,
+        max_fee = rlp_ref_uint_word(mf_f),
+        max_blob_fee = ZERO_WORD,
+        max_priority_fee = rlp_ref_uint_word(mp_f),
+        authorizations = [||],
+        authorization_count = 0,
+        blob_hashes = EMPTY_BLOB_HASHES,
+        pubkey = pubkey,
+        signing_hash = tx_signing_hash(FeeMarketTx, tx_sig_span(chain_f, v_f), v),
+        sig_v = v,
+        sig_r = rlp_ref_uint_word(r_f),
+        sig_s = rlp_ref_uint_word(s_f),
+    }
+}
+
+/*! Decodes the payload fields of an EIP-4844 transaction. */
+function decode_blob_tx(
+    tx : TransactionByteSlice,
+    pubkey : ByteSlice,
+    fork : Fork,
+    sender : address,
+    fields : RlpCursor,
+) -> Transaction = {
+    let (chain_f, fields) = rlp_cursor_pop(fields);
+    let (nonce_f, fields) = rlp_cursor_pop(fields);
+    let (mp_f, fields) = rlp_cursor_pop(fields);
+    let (mf_f, fields) = rlp_cursor_pop(fields);
+    let (gas_f, fields) = rlp_cursor_pop(fields);
+    let (to_f, fields) = rlp_cursor_pop(fields);
+    let (value_f, fields) = rlp_cursor_pop(fields);
+    let (data_f, fields) = rlp_cursor_pop(fields);
+    let (al_f, fields) = rlp_cursor_pop(fields);
+    let (mbf_f, fields) = rlp_cursor_pop(fields);
+    let (bh_f, fields) = rlp_cursor_pop(fields);
+    let (v_f, fields) = rlp_cursor_pop(fields);
+    let (r_f, fields) = rlp_cursor_pop(fields);
+    let (s_f, fields) = rlp_cursor_pop(fields);
+    rlp_cursor_expect_end(fields);
+    let v = rlp_ref_word(v_f);
+    let (al_addrs, al_slots, al_addr_count, al_slot_count) = decode_access_list(al_f);
+    let blob_hashes = decode_blob_hashes(bh_f);
+    struct {
+        tx_type = BlobTx,
+        sender = sender,
+        raw = tx,
+        nonce = rlp_ref_uint_word(nonce_f),
+        chain_id = rlp_ref_chain_identifier(chain_f),
+        gas_limit = rlp_ref_gas(gas_f, fork),
+        is_create = to_f.content_len == 0,
+        recipient = word_to_address(rlp_ref_word(to_f)),
+        value = rlp_ref_uint_word(value_f),
+        input_src = tx_input_span(data_f),
+        access_list_addresses = al_addrs,
+        access_list_address_count = al_addr_count,
+        access_list_slots = al_slots,
+        access_list_slot_count = al_slot_count,
+        max_fee = rlp_ref_uint_word(mf_f),
+        max_blob_fee = rlp_ref_uint_word(mbf_f),
+        max_priority_fee = rlp_ref_uint_word(mp_f),
+        authorizations = [||],
+        authorization_count = 0,
+        blob_hashes = blob_hashes,
+        pubkey = pubkey,
+        signing_hash = tx_signing_hash(BlobTx, tx_sig_span(chain_f, v_f), v),
+        sig_v = v,
+        sig_r = rlp_ref_uint_word(r_f),
+        sig_s = rlp_ref_uint_word(s_f),
+    }
+}
+
+/*! Decodes the payload fields of an EIP-7702 transaction. */
+function decode_set_code_tx(
+    tx : TransactionByteSlice,
+    pubkey : ByteSlice,
+    fork : Fork,
+    sender : address,
+    fields : RlpCursor,
+) -> Transaction = {
+    let (chain_f, fields) = rlp_cursor_pop(fields);
+    let (nonce_f, fields) = rlp_cursor_pop(fields);
+    let (mp_f, fields) = rlp_cursor_pop(fields);
+    let (mf_f, fields) = rlp_cursor_pop(fields);
+    let (gas_f, fields) = rlp_cursor_pop(fields);
+    let (to_f, fields) = rlp_cursor_pop(fields);
+    let (value_f, fields) = rlp_cursor_pop(fields);
+    let (data_f, fields) = rlp_cursor_pop(fields);
+    let (al_f, fields) = rlp_cursor_pop(fields);
+    let (auth_f, fields) = rlp_cursor_pop(fields);
+    let (v_f, fields) = rlp_cursor_pop(fields);
+    let (r_f, fields) = rlp_cursor_pop(fields);
+    let (s_f, fields) = rlp_cursor_pop(fields);
+    rlp_cursor_expect_end(fields);
+    let v = rlp_ref_word(v_f);
+    let (al_addrs, al_slots, al_addr_count, al_slot_count) = decode_access_list(al_f);
+    let (authorizations, authorization_count) = decode_auth_list(auth_f);
+    struct {
+        tx_type = SetCodeTx,
+        sender = sender,
+        raw = tx,
+        nonce = word_of_account_nonce(rlp_ref_account_nonce(nonce_f)),
+        chain_id = rlp_ref_chain_identifier(chain_f),
+        gas_limit = rlp_ref_gas(gas_f, fork),
+        is_create = to_f.content_len == 0,
+        recipient = word_to_address(rlp_ref_word(to_f)),
+        value = rlp_ref_uint_word(value_f),
+        input_src = tx_input_span(data_f),
+        access_list_addresses = al_addrs,
+        access_list_address_count = al_addr_count,
+        access_list_slots = al_slots,
+        access_list_slot_count = al_slot_count,
+        max_fee = rlp_ref_uint_word(mf_f),
+        max_blob_fee = ZERO_WORD,
+        max_priority_fee = rlp_ref_uint_word(mp_f),
+        authorizations = authorizations,
+        authorization_count = authorization_count,
+        blob_hashes = EMPTY_BLOB_HASHES,
+        pubkey = pubkey,
+        signing_hash = tx_signing_hash(SetCodeTx, tx_sig_span(chain_f, v_f), v),
+        sig_v = v,
+        sig_r = rlp_ref_uint_word(r_f),
+        sig_s = rlp_ref_uint_word(s_f),
+    }
+}
+
 /*! Decodes one transaction from its raw envelope bytes — standalone and
     purely structural. `tx` is the EIP-2718 envelope as a byte slice (any
     source); `pubkey` the 65-byte witness public key (`0x04 ++ X ++ Y`)
@@ -406,228 +670,11 @@ function rlp_decode_tx(tx, pubkey, fork) = {
     let fields = rlp_node_cursor(payload);
 
     match ttype {
-        0x00 => {
-            let (nonce_f, fields) = rlp_cursor_pop(fields);
-            let (gp_f, fields) = rlp_cursor_pop(fields);
-            let (gas_f, fields) = rlp_cursor_pop(fields);
-            let (to_f, fields) = rlp_cursor_pop(fields);
-            let (value_f, fields) = rlp_cursor_pop(fields);
-            let (data_f, fields) = rlp_cursor_pop(fields);
-            let (v_f, fields) = rlp_cursor_pop(fields);
-            let (r_f, fields) = rlp_cursor_pop(fields);
-            let (s_f, fields) = rlp_cursor_pop(fields);
-            rlp_cursor_expect_end(fields);
-            let v = rlp_ref_word(v_f);
-            let gp = rlp_ref_uint_word(gp_f);
-            struct {
-                tx_type = LegacyTx,
-                sender = sender,
-                raw = tx,
-                nonce = rlp_ref_uint_word(nonce_f),
-                chain_id = 0,
-                gas_limit = rlp_ref_gas(gas_f, fork),
-                is_create = to_f.content_len == 0,
-                recipient = word_to_address(rlp_ref_word(to_f)),
-                value = rlp_ref_uint_word(value_f),
-                input_src = tx_input_span(data_f),
-                access_list_addresses = [||],
-                access_list_address_count = 0,
-                access_list_slots = [||],
-                access_list_slot_count = 0,
-                max_fee = gp,
-                max_blob_fee = ZERO_WORD,
-                max_priority_fee = gp,
-                authorizations = [||],
-                authorization_count = 0,
-                blob_hashes = EMPTY_BLOB_HASHES,
-                pubkey = pubkey,
-                signing_hash = tx_signing_hash(LegacyTx, tx_sig_span(nonce_f, v_f), v),
-                sig_v = v,
-                sig_r = rlp_ref_uint_word(r_f),
-                sig_s = rlp_ref_uint_word(s_f),
-            }
-        },
-        0x01 => {
-            let (chain_f, fields) = rlp_cursor_pop(fields);
-            let (nonce_f, fields) = rlp_cursor_pop(fields);
-            let (gp_f, fields) = rlp_cursor_pop(fields);
-            let (gas_f, fields) = rlp_cursor_pop(fields);
-            let (to_f, fields) = rlp_cursor_pop(fields);
-            let (value_f, fields) = rlp_cursor_pop(fields);
-            let (data_f, fields) = rlp_cursor_pop(fields);
-            let (al_f, fields) = rlp_cursor_pop(fields);
-            let (v_f, fields) = rlp_cursor_pop(fields);
-            let (r_f, fields) = rlp_cursor_pop(fields);
-            let (s_f, fields) = rlp_cursor_pop(fields);
-            rlp_cursor_expect_end(fields);
-            let v = rlp_ref_word(v_f);
-            let gp = rlp_ref_uint_word(gp_f);
-            let (al_addrs, al_slots, al_addr_count, al_slot_count) = decode_access_list(al_f);
-            struct {
-                tx_type = AccessListTx,
-                sender = sender,
-                raw = tx,
-                nonce = rlp_ref_uint_word(nonce_f),
-                chain_id = rlp_ref_chain_identifier(chain_f),
-                gas_limit = rlp_ref_gas(gas_f, fork),
-                is_create = to_f.content_len == 0,
-                recipient = word_to_address(rlp_ref_word(to_f)),
-                value = rlp_ref_uint_word(value_f),
-                input_src = tx_input_span(data_f),
-                access_list_addresses = al_addrs,
-                access_list_address_count = al_addr_count,
-                access_list_slots = al_slots,
-                access_list_slot_count = al_slot_count,
-                max_fee = gp,
-                max_blob_fee = ZERO_WORD,
-                max_priority_fee = gp,
-                authorizations = [||],
-                authorization_count = 0,
-                blob_hashes = EMPTY_BLOB_HASHES,
-                pubkey = pubkey,
-                signing_hash = tx_signing_hash(AccessListTx, tx_sig_span(chain_f, v_f), v),
-                sig_v = v,
-                sig_r = rlp_ref_uint_word(r_f),
-                sig_s = rlp_ref_uint_word(s_f),
-            }
-        },
-        0x02 => {
-            let (chain_f, fields) = rlp_cursor_pop(fields);
-            let (nonce_f, fields) = rlp_cursor_pop(fields);
-            let (mp_f, fields) = rlp_cursor_pop(fields);
-            let (mf_f, fields) = rlp_cursor_pop(fields);
-            let (gas_f, fields) = rlp_cursor_pop(fields);
-            let (to_f, fields) = rlp_cursor_pop(fields);
-            let (value_f, fields) = rlp_cursor_pop(fields);
-            let (data_f, fields) = rlp_cursor_pop(fields);
-            let (al_f, fields) = rlp_cursor_pop(fields);
-            let (v_f, fields) = rlp_cursor_pop(fields);
-            let (r_f, fields) = rlp_cursor_pop(fields);
-            let (s_f, fields) = rlp_cursor_pop(fields);
-            rlp_cursor_expect_end(fields);
-            let v = rlp_ref_word(v_f);
-            let (al_addrs, al_slots, al_addr_count, al_slot_count) = decode_access_list(al_f);
-            struct {
-                tx_type = FeeMarketTx,
-                sender = sender,
-                raw = tx,
-                nonce = rlp_ref_uint_word(nonce_f),
-                chain_id = rlp_ref_chain_identifier(chain_f),
-                gas_limit = rlp_ref_gas(gas_f, fork),
-                is_create = to_f.content_len == 0,
-                recipient = word_to_address(rlp_ref_word(to_f)),
-                value = rlp_ref_uint_word(value_f),
-                input_src = tx_input_span(data_f),
-                access_list_addresses = al_addrs,
-                access_list_address_count = al_addr_count,
-                access_list_slots = al_slots,
-                access_list_slot_count = al_slot_count,
-                max_fee = rlp_ref_uint_word(mf_f),
-                max_blob_fee = ZERO_WORD,
-                max_priority_fee = rlp_ref_uint_word(mp_f),
-                authorizations = [||],
-                authorization_count = 0,
-                blob_hashes = EMPTY_BLOB_HASHES,
-                pubkey = pubkey,
-                signing_hash = tx_signing_hash(FeeMarketTx, tx_sig_span(chain_f, v_f), v),
-                sig_v = v,
-                sig_r = rlp_ref_uint_word(r_f),
-                sig_s = rlp_ref_uint_word(s_f),
-            }
-        },
-        0x03 => {
-            let (chain_f, fields) = rlp_cursor_pop(fields);
-            let (nonce_f, fields) = rlp_cursor_pop(fields);
-            let (mp_f, fields) = rlp_cursor_pop(fields);
-            let (mf_f, fields) = rlp_cursor_pop(fields);
-            let (gas_f, fields) = rlp_cursor_pop(fields);
-            let (to_f, fields) = rlp_cursor_pop(fields);
-            let (value_f, fields) = rlp_cursor_pop(fields);
-            let (data_f, fields) = rlp_cursor_pop(fields);
-            let (al_f, fields) = rlp_cursor_pop(fields);
-            let (mbf_f, fields) = rlp_cursor_pop(fields);
-            let (bh_f, fields) = rlp_cursor_pop(fields);
-            let (v_f, fields) = rlp_cursor_pop(fields);
-            let (r_f, fields) = rlp_cursor_pop(fields);
-            let (s_f, fields) = rlp_cursor_pop(fields);
-            rlp_cursor_expect_end(fields);
-            let v = rlp_ref_word(v_f);
-            let (al_addrs, al_slots, al_addr_count, al_slot_count) = decode_access_list(al_f);
-            let blob_hashes = decode_blob_hashes(bh_f);
-            struct {
-                tx_type = BlobTx,
-                sender = sender,
-                raw = tx,
-                nonce = rlp_ref_uint_word(nonce_f),
-                chain_id = rlp_ref_chain_identifier(chain_f),
-                gas_limit = rlp_ref_gas(gas_f, fork),
-                is_create = to_f.content_len == 0,
-                recipient = word_to_address(rlp_ref_word(to_f)),
-                value = rlp_ref_uint_word(value_f),
-                input_src = tx_input_span(data_f),
-                access_list_addresses = al_addrs,
-                access_list_address_count = al_addr_count,
-                access_list_slots = al_slots,
-                access_list_slot_count = al_slot_count,
-                max_fee = rlp_ref_uint_word(mf_f),
-                max_blob_fee = rlp_ref_uint_word(mbf_f),
-                max_priority_fee = rlp_ref_uint_word(mp_f),
-                authorizations = [||],
-                authorization_count = 0,
-                blob_hashes = blob_hashes,
-                pubkey = pubkey,
-                signing_hash = tx_signing_hash(BlobTx, tx_sig_span(chain_f, v_f), v),
-                sig_v = v,
-                sig_r = rlp_ref_uint_word(r_f),
-                sig_s = rlp_ref_uint_word(s_f),
-            }
-        },
-        0x04 => {
-            let (chain_f, fields) = rlp_cursor_pop(fields);
-            let (nonce_f, fields) = rlp_cursor_pop(fields);
-            let (mp_f, fields) = rlp_cursor_pop(fields);
-            let (mf_f, fields) = rlp_cursor_pop(fields);
-            let (gas_f, fields) = rlp_cursor_pop(fields);
-            let (to_f, fields) = rlp_cursor_pop(fields);
-            let (value_f, fields) = rlp_cursor_pop(fields);
-            let (data_f, fields) = rlp_cursor_pop(fields);
-            let (al_f, fields) = rlp_cursor_pop(fields);
-            let (auth_f, fields) = rlp_cursor_pop(fields);
-            let (v_f, fields) = rlp_cursor_pop(fields);
-            let (r_f, fields) = rlp_cursor_pop(fields);
-            let (s_f, fields) = rlp_cursor_pop(fields);
-            rlp_cursor_expect_end(fields);
-            let v = rlp_ref_word(v_f);
-            let (al_addrs, al_slots, al_addr_count, al_slot_count) = decode_access_list(al_f);
-            let (authorizations, authorization_count) = decode_auth_list(auth_f);
-            struct {
-                tx_type = SetCodeTx,
-                sender = sender,
-                raw = tx,
-                nonce = word_of_account_nonce(rlp_ref_account_nonce(nonce_f)),
-                chain_id = rlp_ref_chain_identifier(chain_f),
-                gas_limit = rlp_ref_gas(gas_f, fork),
-                is_create = to_f.content_len == 0,
-                recipient = word_to_address(rlp_ref_word(to_f)),
-                value = rlp_ref_uint_word(value_f),
-                input_src = tx_input_span(data_f),
-                access_list_addresses = al_addrs,
-                access_list_address_count = al_addr_count,
-                access_list_slots = al_slots,
-                access_list_slot_count = al_slot_count,
-                max_fee = rlp_ref_uint_word(mf_f),
-                max_blob_fee = ZERO_WORD,
-                max_priority_fee = rlp_ref_uint_word(mp_f),
-                authorizations = authorizations,
-                authorization_count = authorization_count,
-                blob_hashes = EMPTY_BLOB_HASHES,
-                pubkey = pubkey,
-                signing_hash = tx_signing_hash(SetCodeTx, tx_sig_span(chain_f, v_f), v),
-                sig_v = v,
-                sig_r = rlp_ref_uint_word(r_f),
-                sig_s = rlp_ref_uint_word(s_f),
-            }
-        },
+        0x00 => decode_legacy_tx(tx, pubkey, fork, sender, fields),
+        0x01 => decode_access_list_tx(tx, pubkey, fork, sender, fields),
+        0x02 => decode_fee_market_tx(tx, pubkey, fork, sender, fields),
+        0x03 => decode_blob_tx(tx, pubkey, fork, sender, fields),
+        0x04 => decode_set_code_tx(tx, pubkey, fork, sender, fields),
         _ => throw InvalidBlock(RlpDecode), /* unknown envelope type or wrong arity */
     }
 }

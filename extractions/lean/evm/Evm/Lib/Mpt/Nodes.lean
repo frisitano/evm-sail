@@ -60,8 +60,8 @@ def inline_node_hash (node : InlineNode) : SailM hash := do
   (keccak256_segments [(bytes_fixed32 node.data node.len)])
 
 /-- Advances the branch payload length while preserving its structural bound. -/
-/- Type quantifiers: k_ex408810_ : Nat, k_ex408809_ : Nat, 0 ≤ k_ex408809_ ∧ k_ex408809_ ≤ 529, 0
-  ≤ k_ex408810_ ∧ k_ex408810_ ≤ 33 -/
+/- Type quantifiers: k_ex411090_ : Nat, k_ex411089_ : Nat, 0 ≤ k_ex411089_ ∧ k_ex411089_ ≤ 529, 0
+  ≤ k_ex411090_ ∧ k_ex411090_ ≤ 33 -/
 def branch_content_length_add (current : branch_content_length) (addition : Nat) : SailM branch_content_length := do
   let current := (current).value
   let publicResult ← do
@@ -86,7 +86,7 @@ def rlp_write_node_ref (r : NodeRef) : SailM Unit := do
 
 /-- The canonical child reference for an encoded node: inline under 32
 bytes, otherwise its hash (YP Appendix D, Eq. 207). -/
-/- Type quantifiers: k_ex408814_ : Nat, k_ex408813_ : Nat, 0 ≤ k_ex408813_ ∧ 0 ≤ k_ex408814_ -/
+/- Type quantifiers: k_ex411094_ : Nat, k_ex411093_ : Nat, 0 ≤ k_ex411093_ ∧ 0 ≤ k_ex411094_ -/
 def child_ref (encoded : EvmByteSlice) : SailM NodeRef := do
   let encoded := ((encoded).2).2
   if ((encoded.len <b MPT_HASH_LENGTH) : Bool)
@@ -106,7 +106,7 @@ def branch_mask_set (mask : (BitVec 16)) (index : nibble) : (BitVec 16) :=
 /-- The child reference of a leaf, keeping the value in its native
 representation: long nodes hash the RLP framing and value as segments;
 only an inline node materializes a slice. -/
-/- Type quantifiers: k_ex408822_ : Nat, k_ex408821_ : Nat, 0 ≤ k_ex408821_ ∧ 0 ≤ k_ex408822_ -/
+/- Type quantifiers: k_ex411102_ : Nat, k_ex411101_ : Nat, 0 ≤ k_ex411101_ ∧ 0 ≤ k_ex411102_ -/
 def leaf_child_ref (key : TriePath) (value : EvmByteSlice) : SailM NodeRef := do
   let value := ((value).2).2
   let (path, encoded_path_len) ← do (hex_prefix_compact key true)
@@ -192,7 +192,7 @@ def trie_ref_to_root (r : NodeRef) : SailM hash := do
 
 /-- The reference form of raw node bytes: empty, inline under 32 bytes,
 else hashed. -/
-/- Type quantifiers: k_ex408827_ : Nat, k_ex408826_ : Nat, 0 ≤ k_ex408826_ ∧ 0 ≤ k_ex408827_ -/
+/- Type quantifiers: k_ex411107_ : Nat, k_ex411106_ : Nat, 0 ≤ k_ex411106_ ∧ 0 ≤ k_ex411107_ -/
 def node_to_ref (node : EvmByteSlice) : SailM NodeRef := do
   let node := ((node).2).2
   if ((node.len == 0) : Bool)
@@ -205,7 +205,7 @@ def node_to_ref (node : EvmByteSlice) : SailM NodeRef := do
 
 /-- Re-keys a decoded child node under `evm_prefix` without copying a leaf
 value. -/
-/- Type quantifiers: k_ex408831_ : Nat, k_ex408830_ : Nat, 0 ≤ k_ex408830_ ∧ 0 ≤ k_ex408831_ -/
+/- Type quantifiers: k_ex411111_ : Nat, k_ex411110_ : Nat, 0 ≤ k_ex411110_ ∧ 0 ≤ k_ex411111_ -/
 def merge_ext_node (evm_prefix' : TriePath) (childnode : EvmByteSlice) : SailM NodeRef := do
   let childnode := ((childnode).2).2
   if ((((path_len evm_prefix')).value == 0) : Bool)
@@ -220,10 +220,10 @@ def merge_ext_node (evm_prefix' : TriePath) (childnode : EvmByteSlice) : SailM N
           | .LeafNode leaf =>
             (leaf_child_ref (← (path_concat evm_prefix' leaf.path))
               (⟨_, ⟨_, ((((⟨_, ⟨_, ⟨_, (rlp_ref_content ((((((leaf.value).2).2).2).2).2).2)⟩⟩⟩ : (Sigma
-                fun (k_ex424914_ : Nat) =>
-                (Sigma fun (k_ex424918_ : Nat) =>
-                (Sigma fun (k_ex424919_ : Nat) =>
-                (EvmByteSliceFields (k_ex424914_ + k_ex424918_) k_ex424919_)))))).2).2).2⟩⟩ : (Sigma
+                fun (k_ex427374_ : Nat) =>
+                (Sigma fun (k_ex427378_ : Nat) =>
+                (Sigma fun (k_ex427379_ : Nat) =>
+                (EvmByteSliceFields (k_ex427374_ + k_ex427378_) k_ex427379_)))))).2).2).2⟩⟩ : (Sigma
               fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
           | .ExtensionNode ext =>
             (extension_child_ref (← (path_concat evm_prefix' ext.path)) (← (field_to_ref ext.child)))
@@ -247,10 +247,10 @@ def merge_ext_ref (evm_prefix' : TriePath) (childref : NodeRef) : SailM NodeRef 
           | .LeafNode leaf =>
             (leaf_child_ref (← (path_concat evm_prefix' leaf.path))
               (⟨_, ⟨_, ((((⟨_, ⟨_, ⟨_, (rlp_ref_content ((((((leaf.value).2).2).2).2).2).2)⟩⟩⟩ : (Sigma
-                fun (k_ex424971_ : Nat) =>
-                (Sigma fun (k_ex424975_ : Nat) =>
-                (Sigma fun (k_ex424976_ : Nat) =>
-                (EvmByteSliceFields (k_ex424971_ + k_ex424975_) k_ex424976_)))))).2).2).2⟩⟩ : (Sigma
+                fun (k_ex427431_ : Nat) =>
+                (Sigma fun (k_ex427435_ : Nat) =>
+                (Sigma fun (k_ex427436_ : Nat) =>
+                (EvmByteSliceFields (k_ex427431_ + k_ex427435_) k_ex427436_)))))).2).2).2⟩⟩ : (Sigma
               fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
           | .ExtensionNode ext =>
             (extension_child_ref (← (path_concat evm_prefix' ext.path)) (← (field_to_ref ext.child)))

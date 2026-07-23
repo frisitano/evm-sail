@@ -43,19 +43,19 @@ open ByteSource
 open ByteRegionResult
 open BlockError
 
-/- Type quantifiers: k_ex406191_ : Int, k_ex406190_ : Int -/
+/- Type quantifiers: k_ex408391_ : Int, k_ex408390_ : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
   if ((n ≥b 0) : Bool)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
-/- Type quantifiers: k_ex406193_ : Int, k_ex406192_ : Int -/
+/- Type quantifiers: k_ex408393_ : Int, k_ex408392_ : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
   if ((n ≥b 0) : Bool)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
-/- Type quantifiers: k_ex406200_ : Int, k_ex406199_ : Int -/
+/- Type quantifiers: k_ex408400_ : Int, k_ex408399_ : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (((n <b 0) && (m >b 0)) : Bool)
   then ((Int.tdiv (n +i 1) m) -i 1)
@@ -64,7 +64,7 @@ def fdiv_int (n : Int) (m : Int) : Int :=
     then ((Int.tdiv (n - 1) m) -i 1)
     else (Int.tdiv n m))
 
-/- Type quantifiers: k_ex406202_ : Int, k_ex406201_ : Int -/
+/- Type quantifiers: k_ex408402_ : Int, k_ex408401_ : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
   (n -i (m *i (fdiv_int n m)))
 

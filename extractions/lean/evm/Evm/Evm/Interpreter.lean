@@ -79,9 +79,9 @@ opcodes. This module specifies that machinery in three layers:
 
 /-- Assembles an `n`-byte big-endian PUSH immediate from a local code cursor;
 bytes past the end of code read as zero. -/
-/- Type quantifiers: k_ex408745_ : Nat, k_ex408744_ : Nat, k_ex408743_ : Nat, k_ex408742_ : Nat, 0
-  ≤ k_ex408742_ ∧ 0 ≤ k_ex408743_ ∧ 0 ≤ k_ex408743_, 0 ≤ k_ex408744_, 0 ≤ k_ex408745_
-  ∧ k_ex408745_ ≤ 32 -/
+/- Type quantifiers: k_ex411025_ : Nat, k_ex411024_ : Nat, k_ex411023_ : Nat, k_ex411022_ : Nat, 0
+  ≤ k_ex411022_ ∧ 0 ≤ k_ex411023_ ∧ 0 ≤ k_ex411023_, 0 ≤ k_ex411024_, 0 ≤ k_ex411025_
+  ∧ k_ex411025_ ≤ 32 -/
 def read_push (code : CodeSlice) (offset : code_pointer) (n : push_width) : SailM word := do
   let code := ((code).2).2
   let n := (n).value
@@ -316,7 +316,7 @@ def frame_succeeded (_ : Unit) : SailM Bool := do
   | .Exceptional _ => (pure false)
 
 /-- Restores a message-call parent and applies the child's outcome. -/
-/- Type quantifiers: k_ex408750_ : Nat, k_ex408749_ : Nat, 0 ≤ k_ex408749_ ∧ 0 ≤ k_ex408750_ -/
+/- Type quantifiers: k_ex411030_ : Nat, k_ex411029_ : Nat, 0 ≤ k_ex411029_ ∧ 0 ≤ k_ex411030_ -/
 def resume_call (continuation : CallContinuation) (output : EvmByteSlice) : SailM Unit := do
   let output := ((output).2).2
   writeReg returndata ⟨_, ⟨_, output⟩⟩
@@ -344,7 +344,7 @@ def resume_call (continuation : CallContinuation) (output : EvmByteSlice) : Sail
       (push_word ⟨(WORD_ZERO).value⟩))
 
 /-- Restores a create parent and either deploys or rolls back the child. -/
-/- Type quantifiers: k_ex408754_ : Nat, k_ex408753_ : Nat, 0 ≤ k_ex408753_ ∧ 0 ≤ k_ex408754_ -/
+/- Type quantifiers: k_ex411034_ : Nat, k_ex411033_ : Nat, 0 ≤ k_ex411033_ ∧ 0 ≤ k_ex411034_ -/
 def resume_create (continuation : CreateContinuation) (output : EvmByteSlice) : SailM Unit := do
   let output := ((output).2).2
   writeReg returndata ⟨_, ⟨_, output⟩⟩
@@ -423,7 +423,7 @@ def resume_create (continuation : CreateContinuation) (output : EvmByteSlice) : 
   else (pure ())
 
 /-- Applies the pending operation for one completed child frame. -/
-/- Type quantifiers: k_ex408758_ : Nat, k_ex408757_ : Nat, 0 ≤ k_ex408757_ ∧ 0 ≤ k_ex408758_ -/
+/- Type quantifiers: k_ex411038_ : Nat, k_ex411037_ : Nat, 0 ≤ k_ex411037_ ∧ 0 ≤ k_ex411038_ -/
 def resume_frame (continuation : FrameContinuation) (output : EvmByteSlice) : SailM Unit := do
   let output := ((output).2).2
   match continuation with

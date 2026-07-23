@@ -57,8 +57,8 @@ def SSZ_UINT_BYTES : Nat := 8
 def ssz_field_offset (base : Nat) (delta : Nat) : Nat :=
   (base + delta)
 
-/- Type quantifiers: k_ex407290_ : Nat, k_ex407289_ : Nat, offset : Nat, source_valid_range(offset, 4), 0
-  ≤ k_ex407289_ ∧ 0 ≤ k_ex407290_ -/
+/- Type quantifiers: k_ex409490_ : Nat, k_ex409489_ : Nat, offset : Nat, source_valid_range(offset, 4), 0
+  ≤ k_ex409489_ ∧ 0 ≤ k_ex409490_ -/
 def ssz_u32_at (input : EvmByteSlice) (offset : Nat) : SailM ssz_offset := do
   let input := ((input).2).2
   let publicResult ← do
@@ -76,8 +76,8 @@ def ssz_u32_at (input : EvmByteSlice) (offset : Nat) : SailM ssz_offset := do
     (pure (BitVec.toNatInt (b0 ||| ((b1 <<< 8) ||| ((b2 <<< 16) ||| (b3 <<< 24))))))
   pure (⟨publicResult⟩)
 
-/- Type quantifiers: k_ex407304_ : Nat, k_ex407303_ : Nat, offset : Nat, source_valid_range(offset, 4), 0
-  ≤ k_ex407303_ ∧ 0 ≤ k_ex407304_ -/
+/- Type quantifiers: k_ex409504_ : Nat, k_ex409503_ : Nat, offset : Nat, source_valid_range(offset, 4), 0
+  ≤ k_ex409503_ ∧ 0 ≤ k_ex409504_ -/
 def ssz_u32 (input : EvmByteSlice) (offset : Nat) : SailM ssz_offset := do
   let input := ((input).2).2
   let publicResult ← do
@@ -92,8 +92,8 @@ def ssz_offset_to_source_pointer (value : ssz_offset) : source_pointer :=
   let value := (value).value
   value
 
-/- Type quantifiers: k_ex407319_ : Nat, k_ex407318_ : Nat, offset : Nat, source_valid_range(offset, 8), 0
-  ≤ k_ex407318_ ∧ 0 ≤ k_ex407319_ -/
+/- Type quantifiers: k_ex409519_ : Nat, k_ex409518_ : Nat, offset : Nat, source_valid_range(offset, 8), 0
+  ≤ k_ex409518_ ∧ 0 ≤ k_ex409519_ -/
 def decode_ssz_uint (input : EvmByteSlice) (offset : Nat) : SailM ssz_uint := do
   let input := ((input).2).2
   let publicResult ← do
@@ -107,15 +107,15 @@ def decode_ssz_uint (input : EvmByteSlice) (offset : Nat) : SailM ssz_uint := do
             (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 7)))) *i (2 ^i 56))))
   pure (⟨publicResult⟩)
 
-/- Type quantifiers: k_ex407333_ : Nat, k_ex407332_ : Nat, offset : Nat, source_valid_range(offset, 20), 0
-  ≤ k_ex407332_ ∧ 0 ≤ k_ex407333_ -/
+/- Type quantifiers: k_ex409533_ : Nat, k_ex409532_ : Nat, offset : Nat, source_valid_range(offset, 20), 0
+  ≤ k_ex409532_ ∧ 0 ≤ k_ex409533_ -/
 def ssz_addr (input : EvmByteSlice) (offset : Nat) : SailM address := do
   let input := ((input).2).2
   (pure (word_to_address
       ⟨((← (slice_load_n ⟨_, ⟨_, input⟩⟩ offset ADDRESS_BYTE_LENGTH))).value⟩))
 
-/- Type quantifiers: k_ex407347_ : Nat, k_ex407346_ : Nat, offset : Nat, source_valid_range(offset, 32), 0
-  ≤ k_ex407346_ ∧ 0 ≤ k_ex407347_ -/
+/- Type quantifiers: k_ex409547_ : Nat, k_ex409546_ : Nat, offset : Nat, source_valid_range(offset, 32), 0
+  ≤ k_ex409546_ ∧ 0 ≤ k_ex409547_ -/
 def ssz_bytes32 (input : EvmByteSlice) (offset : Nat) : SailM hash := do
   let input := ((input).2).2
   (pure (word_to_hash ⟨((← (slice_load ⟨_, ⟨_, input⟩⟩ offset))).value⟩))
@@ -125,8 +125,8 @@ def ssz_logs_bloom_index (index : Nat) : Nat :=
   (255 - index)
 
 /-- Decodes a fixed 256-byte logs bloom from SSZ wire order. -/
-/- Type quantifiers: k_ex407361_ : Nat, k_ex407360_ : Nat, offset : Nat, source_valid_range(offset, 256), 0
-  ≤ k_ex407360_ ∧ 0 ≤ k_ex407361_ -/
+/- Type quantifiers: k_ex409561_ : Nat, k_ex409560_ : Nat, offset : Nat, source_valid_range(offset, 256), 0
+  ≤ k_ex409560_ ∧ 0 ≤ k_ex409561_ -/
 def ssz_logs_bloom (input : EvmByteSlice) (offset : Nat) : SailM LogsBloom := do
   let input := ((input).2).2
   let out : (Vector (BitVec 8) 256) := (vectorInit 0x00#8)
@@ -145,8 +145,8 @@ def ssz_u256_index (index : Nat) : Nat :=
   (31 - index)
 
 /-- Decodes a 32-byte little-endian SSZ integer into an EVM word. -/
-/- Type quantifiers: k_ex407375_ : Nat, k_ex407374_ : Nat, offset : Nat, source_valid_range(offset, 32), 0
-  ≤ k_ex407374_ ∧ 0 ≤ k_ex407375_ -/
+/- Type quantifiers: k_ex409575_ : Nat, k_ex409574_ : Nat, offset : Nat, source_valid_range(offset, 32), 0
+  ≤ k_ex409574_ ∧ 0 ≤ k_ex409575_ -/
 def ssz_u256 (input : EvmByteSlice) (offset : Nat) : SailM word := do
   let input := ((input).2).2
   let publicResult ← do

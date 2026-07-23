@@ -56,7 +56,7 @@ def undefined_CodeAnalysis (_ : Unit) : SailM CodeAnalysis := do
           chunk_offset := ← (undefined_range 0 255) })
 
 /-- Commits a completed nonempty bitmap chunk to its allocated table. -/
-/- Type quantifiers: k_ex407239_ : Nat, 0 ≤ k_ex407239_ -/
+/- Type quantifiers: k_ex409439_ : Nat, 0 ≤ k_ex409439_ -/
 def store_jumpdest_chunk (table : JumpdestRef) (code_len : code_length) (analysis : CodeAnalysis) : SailM Unit := do
   if ((analysis.chunk != EMPTY_JUMPDEST_CHUNK) : Bool)
   then
@@ -72,8 +72,8 @@ def jumpdest_bit (index : Nat) : JumpdestChunk :=
   let chunk : (BitVec 256) := EMPTY_JUMPDEST_CHUNK
   (BitVec.update chunk index 1#1)
 
-/- Type quantifiers: _reclimit : Nat, k_ex407247_ : Nat, k_ex407246_ : Nat, pc : Nat, code_valid_length(pc), 0
-  ≤ k_ex407246_ ∧ 0 ≤ k_ex407247_ ∧ 0 ≤ k_ex407247_, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex409447_ : Nat, k_ex409446_ : Nat, pc : Nat, code_valid_length(pc), 0
+  ≤ k_ex409446_ ∧ 0 ≤ k_ex409447_ ∧ 0 ≤ k_ex409447_, 0 ≤ _reclimit -/
 def _rec_analyze_code_from (code : CodeSlice) (fork : Fork) (table : JumpdestRef) (pc : Nat) (analysis : CodeAnalysis) (_reclimit : Nat) : SailM Unit := do
   let code := ((code).2).2
   match _reclimit with
@@ -149,8 +149,8 @@ def _rec_analyze_code_from (code : CodeSlice) (fork : Fork) (table : JumpdestRef
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
-/- Type quantifiers: k_ex407256_ : Nat, k_ex407255_ : Nat, pc : Nat, code_valid_length(pc), 0 ≤
-  k_ex407255_ ∧ 0 ≤ k_ex407256_ ∧ 0 ≤ k_ex407256_ -/
+/- Type quantifiers: k_ex409456_ : Nat, k_ex409455_ : Nat, pc : Nat, code_valid_length(pc), 0 ≤
+  k_ex409455_ ∧ 0 ≤ k_ex409456_ ∧ 0 ≤ k_ex409456_ -/
 def analyze_code_from (code : CodeSlice) (fork : Fork) (table : JumpdestRef) (pc : Nat) (analysis : CodeAnalysis) : SailM Unit := do
   let code := ((code).2).2
   let _measure :=
@@ -164,8 +164,8 @@ def analyze_code_from (code : CodeSlice) (fork : Fork) (table : JumpdestRef) (pc
 /-- The PUSH-aware `JUMPDEST` analysis (YP §9.4.3): PUSH immediate bytes
 are data even when they contain `0x5b`. The completed bitmap remains a
 first-class Sail value; the host never scans opcodes. -/
-/- Type quantifiers: k_ex407264_ : Nat, k_ex407263_ : Nat, 0 ≤ k_ex407263_ ∧ 0 ≤ k_ex407264_
-  ∧ 0 ≤ k_ex407264_ -/
+/- Type quantifiers: k_ex409464_ : Nat, k_ex409463_ : Nat, 0 ≤ k_ex409463_ ∧ 0 ≤ k_ex409464_
+  ∧ 0 ≤ k_ex409464_ -/
 def analyze_code (code : CodeSlice) (fork : Fork) : SailM JumpdestRef := do
   let code := ((code).2).2
   if ((code.len == 0) : Bool)
@@ -182,8 +182,8 @@ def analyze_code (code : CodeSlice) (fork : Fork) : SailM JumpdestRef := do
       (pure table))
 
 /-- Analyzes and stores code, returning its content hash. -/
-/- Type quantifiers: k_ex407268_ : Nat, k_ex407267_ : Nat, 0 ≤ k_ex407267_ ∧ 0 ≤ k_ex407268_
-  ∧ 0 ≤ k_ex407268_ -/
+/- Type quantifiers: k_ex409468_ : Nat, k_ex409467_ : Nat, 0 ≤ k_ex409467_ ∧ 0 ≤ k_ex409468_
+  ∧ 0 ≤ k_ex409468_ -/
 def code_db_insert (code : CodeSlice) (fork : Fork) : SailM hash := do
   let code := ((code).2).2
   (code_db_store ⟨_, ⟨_, code⟩⟩ (← (analyze_code ⟨_, ⟨_, code⟩⟩ fork)))

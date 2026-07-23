@@ -154,13 +154,13 @@ def k_blobhash (index_word : word) : SailM word := do
   pure (⟨publicResult⟩)
 
 /-- The `CREATE` address rule, in kernel form. -/
-/- Type quantifiers: k_ex408153_ : Nat, 0 ≤ k_ex408153_ ∧ k_ex408153_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex410433_ : Nat, 0 ≤ k_ex410433_ ∧ k_ex410433_ ≤ (2 ^ 64 - 1) -/
 def k_create_addr (a : address) (nonce : account_nonce) : SailM address := do
   let nonce := (nonce).value
   (create_address a ⟨nonce⟩)
 
 /-- The `CREATE2` address rule, in kernel form. -/
-/- Type quantifiers: k_ex408154_ : Nat, 0 ≤ k_ex408154_ ∧ k_ex408154_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410434_ : Nat, 0 ≤ k_ex410434_ ∧ k_ex410434_ ≤ (2 ^ 256 - 1) -/
 def k_create2_addr (a : address) (salt : word) (inithash : hash) : SailM address := do
   let salt := (salt).value
   (create2_address a ⟨salt⟩ inithash)

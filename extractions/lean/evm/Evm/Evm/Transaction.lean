@@ -151,8 +151,8 @@ def undefined_TransactionCosts (_ : Unit) : SailM TransactionCosts := do
 /-- Reclassifies transaction initcode as executable after re-establishing the
 enclosing SSZ transaction-envelope bound. This bound is structural and is
 deliberately independent of the active protocol deployment limit. -/
-/- Type quantifiers: k_ex408764_ : Nat, k_ex408763_ : Nat, 0 ≤ k_ex408763_ ∧ 0 ≤ k_ex408764_
-  ∧ 0 ≤ k_ex408764_ ∧ k_ex408764_ ≤ (2 ^ 30) -/
+/- Type quantifiers: k_ex411044_ : Nat, k_ex411043_ : Nat, 0 ≤ k_ex411043_ ∧ 0 ≤ k_ex411044_
+  ∧ 0 ≤ k_ex411044_ ∧ k_ex411044_ ≤ (2 ^ 30) -/
 def transaction_initcode_slice (input : TransactionEvmByteSlice) : CodeSlice :=
   let input := ((input).2).2
   ((⟨_, ⟨_, (code_slice input)⟩⟩ : (Sigma fun (k_off : Nat) =>
@@ -174,8 +174,8 @@ def EMPTY_AMSTERDAM_AUTHORIZATION_STATE : AmsterdamAuthorizationState :=
 /-- The EIP-2028 calldata cost: 4 gas per zero byte, 16 per nonzero. One
 native pass counts the nonzero bytes; zero bytes are the
 remainder. -/
-/- Type quantifiers: k_ex408768_ : Nat, k_ex408767_ : Nat, 0 ≤ k_ex408767_ ∧ 0 ≤ k_ex408768_
-  ∧ 0 ≤ k_ex408768_ ∧ k_ex408768_ ≤ (2 ^ 30) -/
+/- Type quantifiers: k_ex411048_ : Nat, k_ex411047_ : Nat, 0 ≤ k_ex411047_ ∧ 0 ≤ k_ex411048_
+  ∧ 0 ≤ k_ex411048_ ∧ k_ex411048_ ≤ (2 ^ 30) -/
 def calldata_cost (input : TransactionEvmByteSlice) : SailM transaction_calldata_cost := do
   let input := ((input).2).2
   let publicResult ← do
@@ -190,8 +190,8 @@ def calldata_cost (input : TransactionEvmByteSlice) : SailM transaction_calldata
 
 /-- EIP-7623 calldata tokens: each zero byte counts 1, each nonzero
 byte 4. -/
-/- Type quantifiers: k_ex408772_ : Nat, k_ex408771_ : Nat, 0 ≤ k_ex408771_ ∧ 0 ≤ k_ex408772_
-  ∧ 0 ≤ k_ex408772_ ∧ k_ex408772_ ≤ (2 ^ 30) -/
+/- Type quantifiers: k_ex411052_ : Nat, k_ex411051_ : Nat, 0 ≤ k_ex411051_ ∧ 0 ≤ k_ex411052_
+  ∧ 0 ≤ k_ex411052_ ∧ k_ex411052_ ≤ (2 ^ 30) -/
 def calldata_tokens (input : TransactionEvmByteSlice) : SailM Nat := do
   let input := ((input).2).2
   let nonzeroes ← do (slice_count_nonzero ⟨_, ⟨_, input⟩⟩)
@@ -204,8 +204,8 @@ def calldata_tokens (input : TransactionEvmByteSlice) : SailM Nat := do
 
 /-- EIP-4844: every blob versioned hash must carry
 `VERSIONED_HASH_VERSION_KZG` (`0x01`). -/
-/- Type quantifiers: k_ex408774_ : Nat, k_ex408773_ : Nat, 0 ≤ k_ex408773_ ∧ k_ex408773_ ≤ 9, 1
-  ≤ k_ex408774_ ∧ k_ex408774_ ≤ 265 -/
+/- Type quantifiers: k_ex411054_ : Nat, k_ex411053_ : Nat, 0 ≤ k_ex411053_ ∧ k_ex411053_ ≤ 9, 1
+  ≤ k_ex411054_ ∧ k_ex411054_ ≤ 265 -/
 def validate_blob_hash_version_at (hashes : BlobHashes) (remaining : transaction_blob_count) (offset : Nat) : SailM transaction_blob_count := do
   let remaining := (remaining).value
   let publicResult ← do
@@ -282,8 +282,8 @@ def legacy_intrinsic_gas (tx : Transaction) : SailM gas_cost := do
   else (pure common)
 
 /-- Computes the pre-Amsterdam EIP-7623 calldata floor cost. -/
-/- Type quantifiers: k_ex408778_ : Nat, k_ex408777_ : Nat, 0 ≤ k_ex408777_ ∧ 0 ≤ k_ex408778_
-  ∧ 0 ≤ k_ex408778_ ∧ k_ex408778_ ≤ (2 ^ 30) -/
+/- Type quantifiers: k_ex411058_ : Nat, k_ex411057_ : Nat, 0 ≤ k_ex411057_ ∧ 0 ≤ k_ex411058_
+  ∧ 0 ≤ k_ex411058_ ∧ k_ex411058_ ≤ (2 ^ 30) -/
 def legacy_calldata_floor (input : TransactionEvmByteSlice) : SailM transaction_calldata_floor_cost := do
   let input := ((input).2).2
   let publicResult ← do
@@ -375,8 +375,8 @@ def transaction_blob_gas_for_count (count : transaction_blob_count) : SailM tran
   pure (⟨publicResult⟩)
 
 /-- Computes all transaction costs, rejecting arithmetic beyond word bounds. -/
-/- Type quantifiers: k_ex408781_ : Nat, k_ex408780_ : Nat, 0 ≤ k_ex408780_ ∧
-  k_ex408780_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex408781_ ∧ k_ex408781_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex411061_ : Nat, k_ex411060_ : Nat, 0 ≤ k_ex411060_ ∧
+  k_ex411060_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411061_ ∧ k_ex411061_ ≤ (2 ^ 256 - 1) -/
 def transaction_costs (tx : Transaction) (gas_limit : block_gas_limit) (blob_price : word) : SailM TransactionCosts := do
   let gas_limit := (gas_limit).value
   let blob_price := (blob_price).value
@@ -420,7 +420,7 @@ def validated_word_product (value : word) (factor : Nat) : SailM word := do
   pure (⟨publicResult⟩)
 
 /-- Adds gas quantities whose sum was established to remain valid. -/
-/- Type quantifiers: k_ex408784_ : Nat, k_ex408783_ : Nat, 0 ≤ k_ex408783_, 0 ≤ k_ex408784_ -/
+/- Type quantifiers: k_ex411064_ : Nat, k_ex411063_ : Nat, 0 ≤ k_ex411063_, 0 ≤ k_ex411064_ -/
 def validated_gas_add (left_gas : gas) (right_gas : gas) : gas :=
   (conserved_gas_add left_gas right_gas)
 
@@ -432,8 +432,8 @@ def validated_gas_sub (left : Nat) (right : Nat) : SailM Nat := do
 
 /-- Validates the transaction gas limit against the SSZ-backed block limit and
 exposes that bound to the remainder of the transaction lifecycle. -/
-/- Type quantifiers: k_ex408786_ : Nat, k_ex408785_ : Nat, 0 ≤ k_ex408785_, 0 ≤ k_ex408786_ ∧
-  k_ex408786_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex411066_ : Nat, k_ex411065_ : Nat, 0 ≤ k_ex411065_, 0 ≤ k_ex411066_ ∧
+  k_ex411066_ ≤ (2 ^ 64 - 1) -/
 def admitted_transaction_gas_limit (value : transaction_gas) (block_limit : block_gas_limit) : SailM block_gas_limit := do
   let block_limit := (block_limit).value
   let publicResult ← do
@@ -501,7 +501,7 @@ def authorization_address_seen (a : address) (xs : (List address)) : Bool :=
 execution-gas and state-gas components. Tuple-local signature and chain
 checks precede all authority-state reads; a valid tuple warms its authority
 before checking code and nonce, as required by EIP-7702. -/
-/- Type quantifiers: k_ex408787_ : Bool -/
+/- Type quantifiers: k_ex411067_ : Bool -/
 def process_amsterdam_auth (au : Authorization) (sender : address) (current_target : address) (transfers_value : Bool) (auth_state : AmsterdamAuthorizationState) : SailM AmsterdamAuthorizationState := do
   let next := auth_state
   let authority := au.authority
@@ -555,7 +555,7 @@ def process_amsterdam_auth (au : Authorization) (sender : address) (current_targ
 
 /-- Applies Amsterdam authorizations in wire order, stopping immediately when
 one of their execution-gas or state-gas charges exhausts the transaction. -/
-/- Type quantifiers: k_ex408788_ : Bool -/
+/- Type quantifiers: k_ex411068_ : Bool -/
 def process_amsterdam_auth_list (xs : (List Authorization)) (sender : address) (current_target : address) (transfers_value : Bool) (auth_state : AmsterdamAuthorizationState) : SailM AmsterdamAuthorizationState := do
   match xs with
   | [] => (pure auth_state)
@@ -634,9 +634,9 @@ EIP-2930 transactions carry a single `gas_price`, passed as
 `(gas_price, gas_price − base_fee)`. The priority is clamped at 0 so
 an invalid sub-base-fee price (rejected later by validity) never
 underflows. -/
-/- Type quantifiers: k_ex408791_ : Nat, k_ex408790_ : Nat, k_ex408789_ : Nat, 0 ≤ k_ex408789_ ∧
-  k_ex408789_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex408790_ ∧ k_ex408790_ ≤ (2 ^ 256 - 1), 0 ≤
-  k_ex408791_ ∧ k_ex408791_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex411071_ : Nat, k_ex411070_ : Nat, k_ex411069_ : Nat, 0 ≤ k_ex411069_ ∧
+  k_ex411069_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex411070_ ∧ k_ex411070_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex411071_ ∧ k_ex411071_ ≤ (2 ^ 256 - 1) -/
 def eff_gas_price_for (base_fee : word) (max_fee : word) (max_priority_fee : word) : (word × word) :=
   let base_fee := (base_fee).value
   let max_fee := (max_fee).value
@@ -808,8 +808,8 @@ def apply_transaction_upfront_effects (tx : Transaction) (v : TxValidity) : Sail
 
 /-- Resets the user-space machine for the transaction's top-level frame,
 funding it with `gas_limit − intrinsic`. -/
-/- Type quantifiers: k_ex408794_ : Nat, k_ex408793_ : Nat, k_ex408792_ : Nat, 0 ≤ k_ex408792_ ∧
-  k_ex408792_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex408793_, 0 ≤ k_ex408794_ -/
+/- Type quantifiers: k_ex411074_ : Nat, k_ex411073_ : Nat, k_ex411072_ : Nat, 0 ≤ k_ex411072_ ∧
+  k_ex411072_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411073_, 0 ≤ k_ex411074_ -/
 def enter_transaction_frame (gas_limit : block_gas_limit) (intrinsic_execution : gas_cost) (intrinsic_state : gas_cost) : SailM Unit := do
   let gas_limit := (gas_limit).value
   writeReg pc 0
@@ -916,7 +916,7 @@ def prepare_amsterdam_transaction_dispatch (tx : Transaction) (v : TxValidity) (
 from `(sender, nonce_before)`, fails outright on an address collision
 (all gas consumed, no initcode runs — EIP-684/EIP-7610), and
 otherwise deploys via the initcode path. -/
-/- Type quantifiers: k_ex408795_ : Nat, 0 ≤ k_ex408795_ ∧ k_ex408795_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex411075_ : Nat, 0 ≤ k_ex411075_ ∧ k_ex411075_ ≤ (2 ^ 64 - 1) -/
 def run_create_transaction_frame (tx : Transaction) (sender : address) (nonce_before : account_nonce) : SailM Unit := do
   let nonce_before := (nonce_before).value
   let new_addr ← do (k_create_addr sender ⟨nonce_before⟩)
@@ -981,7 +981,7 @@ runs a direct recipient precompile or interprets the selected code. At
 Amsterdam the preparation phase has already resolved and charged a
 recipient delegation; a delegated recipient never dispatches a precompile
 directly. -/
-/- Type quantifiers: k_ex408796_ : Bool -/
+/- Type quantifiers: k_ex411076_ : Bool -/
 def run_call_transaction_frame (tx : Transaction) (sender : address) (delegated : Bool) : SailM Unit := do
   let _ ← do (k_aload tx.recipient)
   if ((word_nonzero (tx.value).value) : Bool)
@@ -1159,8 +1159,8 @@ calldata floor (Prague+), and the EIP-7778 block-gas rule (Amsterdam+:
 the block charges the unrefunded, floored gas); returns unused gas to
 the sender, pays the coinbase the priority fee, merges the
 transaction into the block layer, and emits the receipt. -/
-/- Type quantifiers: k_ex408799_ : Int, ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex408799_ ∧
-  k_ex408799_ ≤ (199 * (2 ^ 64 - 1)) -/
+/- Type quantifiers: k_ex411079_ : Int, ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex411079_ ∧
+  k_ex411079_ ≤ (199 * (2 ^ 64 - 1)) -/
 def settle_transaction (tx : Transaction) (v : TxValidity) (authorization_refund : gas_refund) (fr : TxFrameResult) : SailM Receipt := do
   let authorization_refund := (authorization_refund).value
   let gas_left0 := (validated_gas_add fr.execution_gas_remaining fr.state_gas_remaining)

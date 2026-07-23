@@ -308,12 +308,15 @@ def run_fixtures(files, args):
     blocks run directly against their statelessOutputBytes; state-test cases are
     built into valid Amsterdam blocks + reference outputs by ssz_builder's t8n
     mode. Pass criterion: the guest's output bytes EQUAL the reference's.
-    Backend: native in-process ctypes, the real RISC-V ELF on Spike, or the
-    production ZisK ELF on ziskemu."""
+    Backend: native in-process ctypes, executable Lean extraction, the real
+    RISC-V ELF on Spike, or the production ZisK ELF on ziskemu."""
     if args.spike:
         run_once = SpikeGuest(args.timeout or 900.0, profile=args.profile).run_once
     elif args.zisk:
         run_once = ZiskGuest(args.timeout or 900.0, profile=args.profile).run_once
+    elif args.lean:
+        dump_state.load_lean_guest(rebuild=args.rebuild)
+        run_once = dump_state.run_once_guest
     else:
         dump_state.load_guest(
             rebuild=args.rebuild,
@@ -383,6 +386,8 @@ def run_fixtures(files, args):
         vehicle = "spike guest"
     elif args.zisk:
         vehicle = "ZisK guest"
+    elif args.lean:
+        vehicle = "Lean extraction"
     else:
         vehicle = f"{args.build_mode} guest"
     print(f"\n=== {npass}/{ntotal} passed ({vehicle}, byte-exact) ===")
@@ -408,6 +413,7 @@ def run_sharded(files, args):
     flags.append("--_trace-files")
     if args.verbose: flags.append("--verbose")
     if args.profile: flags.append("--profile")
+    if args.lean: flags.append("--lean")
     flags += ["--build", args.build_mode]
     if args.fork: flags += ["--fork", args.fork]
     if args.limit: flags += ["--limit", str(args.limit)]
@@ -453,7 +459,8 @@ def run_sharded(files, args):
                     cats[k] = cats.get(k, 0) + v
     print(
         f"\n=== {npass}/{ntotal} passed "
-        f"({args.build_mode} guest, byte-exact) === [{n} jobs]"
+        f"({'Lean extraction' if args.lean else args.build_mode + ' guest'}, "
+        f"byte-exact) === [{n} jobs]"
     )
     if cats: print("fail categories:", dict(sorted(cats.items(), key=lambda x: -x[1])))
     return 1 if (rc or ntotal == 0 or npass != ntotal or ntimeout != 0) else 0
@@ -485,6 +492,9 @@ def main():
                     help="run the production ZisK guest ELF on ziskemu "
                          "(full build once, runtime input per case) instead of "
                          "the native in-process lib")
+    ap.add_argument("--lean", action="store_true",
+                    help="run the executable Lean extraction in process through "
+                         "the shared fixture-harness ABI")
     ap.add_argument("--profile", action="store_true",
                     help="build with optional zkVM cycle-scope markers")
     ap.add_argument("--fail-limit", type=int, default=0,
@@ -499,10 +509,12 @@ def main():
     ap.add_argument("--_trace-files", dest="_trace_files", action="store_true",
                     help=argparse.SUPPRESS)
     args = ap.parse_args()
-    if args.spike and args.zisk:
-        ap.error("--spike and --zisk are mutually exclusive")
+    if sum((args.spike, args.zisk, args.lean)) > 1:
+        ap.error("--spike, --zisk, and --lean are mutually exclusive")
     if (args.spike or args.zisk) and args.build_mode != "optimized":
         ap.error("--spike and --zisk support only --build optimized")
+    if args.lean and args.profile:
+        ap.error("--profile is not available for the Lean extraction")
     if args.debug and (args.spike or args.zisk):
         ap.error("--debug is available only for native runs")
 
@@ -520,7 +532,11 @@ def main():
         if args.spike or args.zisk or args.debug or args.rebuild:
             ap.error("--jobs is incompatible with --spike/--zisk/--debug/--rebuild")
         if len(files) > 1:
-            dump_state.load_guest(profile=args.profile, build_mode=args.build_mode)
+            if args.lean:
+                dump_state.load_lean_guest()
+            else:
+                dump_state.load_guest(
+                    profile=args.profile, build_mode=args.build_mode)
             sys.exit(run_sharded(files, args))
         # a single file: nothing to shard, fall through sequentially
     run_fixtures(files, args)

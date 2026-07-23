@@ -10,11 +10,12 @@ Note: execution is gas-bounded, but a warm in-process worker has
 no per-case timeout/crash isolation (unlike the old subprocess) -- a pathological
 case would take down the whole run. The full corpus is gas-bounded in practice.
 """
-import ctypes, os, subprocess, sys
+import ctypes, os, resource, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, ".."))
 _NR = os.path.join(ROOT, "zkvm", "native-runner")
+_LEAN_RUNNER = os.path.join(ROOT, "extractions", "lean", "runner")
 _EXT = "dylib" if sys.platform == "darwin" else "so"
 
 _guest = None
@@ -73,6 +74,33 @@ def load_guest(rebuild=False, profile=False, build_mode="optimized"):
     _guest = _bind(guest_lib)
     _guest_profile = wanted
     _guest_build_mode = build_mode
+    return _guest
+
+def load_lean_guest(rebuild=False):
+    """Load the executable Lean extraction through the shared harness ABI."""
+    global _guest, _guest_profile, _guest_build_mode
+    soft_stack, hard_stack = resource.getrlimit(resource.RLIMIT_STACK)
+    wanted_stack = 64 * 1024 * 1024
+    if hard_stack != resource.RLIM_INFINITY:
+        wanted_stack = min(wanted_stack, hard_stack)
+    if soft_stack != resource.RLIM_INFINITY and soft_stack < wanted_stack:
+        resource.setrlimit(resource.RLIMIT_STACK, (wanted_stack, hard_stack))
+    guest_lib = os.path.join(
+        _LEAN_RUNNER, ".lake", "build", "lib",
+        f"libevmsail_lean_guest.{_EXT}",
+    )
+    if _guest is not None:
+        if _guest_build_mode != "lean":
+            raise RuntimeError(
+                "cannot switch guest backend after loading a guest library"
+            )
+        return _guest
+    if rebuild or not os.path.exists(guest_lib):
+        print("# building Lean guest lib (one-time)...", file=sys.stderr)
+        subprocess.check_call([os.path.join(_LEAN_RUNNER, "build_lib.sh")])
+    _guest = _bind(guest_lib)
+    _guest_profile = "off"
+    _guest_build_mode = "lean"
     return _guest
 
 def _run(lib, inp):

@@ -147,8 +147,8 @@ def emit_updates_before_child (sink : TrieItemSink) (updates : TrieUpdateCursor)
   else (_rec_emit_updates_before_child sink updates evm_prefix' child (_measure + 1))
 
 /-- Merges one witness leaf with all ordered updates in the same subtree. -/
-/- Type quantifiers: _reclimit : Nat, k_ex408905_ : Nat, k_ex408904_ : Nat, 0 ≤ k_ex408904_ ∧
-  0 ≤ k_ex408905_, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411185_ : Nat, k_ex411184_ : Nat, 0 ≤ k_ex411184_ ∧
+  0 ≤ k_ex411185_, 0 ≤ _reclimit -/
 def _rec_emit_leaf_overlay (sink : TrieItemSink) (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (key : TriePath) (value : EvmByteSlice) (_reclimit : Nat) : SailM (TrieItemSink × TrieUpdateCursor) := do
   let value := ((value).2).2
   match _reclimit with
@@ -198,7 +198,7 @@ termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Merges one witness leaf with all ordered updates in the same subtree. -/
-/- Type quantifiers: k_ex408910_ : Nat, k_ex408909_ : Nat, 0 ≤ k_ex408909_ ∧ 0 ≤ k_ex408910_ -/
+/- Type quantifiers: k_ex411190_ : Nat, k_ex411189_ : Nat, 0 ≤ k_ex411189_ ∧ 0 ≤ k_ex411190_ -/
 def emit_leaf_overlay (sink : TrieItemSink) (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (key : TriePath) (value : EvmByteSlice) : SailM (TrieItemSink × TrieUpdateCursor) := do
   let value := ((value).2).2
   let _measure := ((2 ^i 64) : Int)
@@ -208,8 +208,8 @@ def emit_leaf_overlay (sink : TrieItemSink) (updates : TrieUpdateCursor) (evm_pr
 
 /-- Walks a touched witness subtree and streams its post-update items into the
 canonical trie builder. -/
-/- Type quantifiers: _reclimit : Nat, k_ex408916_ : Nat, k_ex408915_ : Nat, k_ex408914_ : Nat, 0 ≤
-  k_ex408914_ ∧ 0 ≤ k_ex408915_, 0 ≤ k_ex408916_ ∧ k_ex408916_ ≤ 64, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411196_ : Nat, k_ex411195_ : Nat, k_ex411194_ : Nat, 0 ≤
+  k_ex411194_ ∧ 0 ≤ k_ex411195_, 0 ≤ k_ex411196_ ∧ k_ex411196_ ≤ 64, 0 ≤ _reclimit -/
 def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : TrieUpdateCursor) (sink : TrieItemSink) (cursor : trie_path_cursor) (_reclimit : Nat) : SailM (TrieItemSink × TrieUpdateCursor) := do
   let node := ((node).2).2
   let cursor := (cursor).value
@@ -230,10 +230,10 @@ def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : 
               let key ← do (path_concat evm_prefix' leaf.path)
               (emit_leaf_overlay sink updates evm_prefix' key
                 (⟨_, ⟨_, ((((⟨_, ⟨_, ⟨_, (rlp_ref_content
-                  ((((((leaf.value).2).2).2).2).2).2)⟩⟩⟩ : (Sigma fun (k_ex425978_ : Nat) =>
-                  (Sigma fun (k_ex425982_ : Nat) =>
-                  (Sigma fun (k_ex425983_ : Nat) =>
-                  (EvmByteSliceFields (k_ex425978_ + k_ex425982_) k_ex425983_)))))).2).2).2⟩⟩ : (Sigma
+                  ((((((leaf.value).2).2).2).2).2).2)⟩⟩⟩ : (Sigma fun (k_ex428438_ : Nat) =>
+                  (Sigma fun (k_ex428442_ : Nat) =>
+                  (Sigma fun (k_ex428443_ : Nat) =>
+                  (EvmByteSliceFields (k_ex428438_ + k_ex428442_) k_ex428443_)))))).2).2).2⟩⟩ : (Sigma
                 fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))))
           | .ExtensionNode extension =>
             (do
@@ -322,8 +322,8 @@ decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Walks a touched witness subtree and streams its post-update items into the
 canonical trie builder. -/
-/- Type quantifiers: cursor : Nat, k_ex408921_ : Nat, k_ex408920_ : Nat, 0 ≤ k_ex408920_ ∧
-  0 ≤ k_ex408921_, 0 ≤ cursor ∧ cursor ≤ 64 -/
+/- Type quantifiers: cursor : Nat, k_ex411201_ : Nat, k_ex411200_ : Nat, 0 ≤ k_ex411200_ ∧
+  0 ≤ k_ex411201_, 0 ≤ cursor ∧ cursor ≤ 64 -/
 def witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : TrieUpdateCursor) (sink : TrieItemSink) (cursor : trie_path_cursor) : SailM (TrieItemSink × TrieUpdateCursor) := do
   let node := ((node).2).2
   let cursor := (cursor).value

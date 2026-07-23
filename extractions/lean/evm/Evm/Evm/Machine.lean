@@ -211,8 +211,8 @@ def pop (_ : Unit) : SailM word := do
   pure (⟨publicResult⟩)
 
 /-- Overwrites the `n`-th-from-top operand (`SWAP`). -/
-/- Type quantifiers: k_ex408252_ : Nat, k_ex408251_ : Nat, 0 ≤ k_ex408251_ ∧
-  k_ex408251_ ≤ 1023, 0 ≤ k_ex408252_ ∧ k_ex408252_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410532_ : Nat, k_ex410531_ : Nat, 0 ≤ k_ex410531_ ∧
+  k_ex410531_ ≤ 1023, 0 ≤ k_ex410532_ ∧ k_ex410532_ ≤ (2 ^ 256 - 1) -/
 def stack_set (n : stack_index) (w : word) : SailM Unit := do
   let n := (n).value
   let w := (w).value
@@ -225,7 +225,7 @@ def is_running (_ : Unit) : SailM Bool := do
   | _ => (pure false)
 
 /-- Installs the frame's calldata reference. -/
-/- Type quantifiers: k_ex408256_ : Nat, k_ex408255_ : Nat, 0 ≤ k_ex408255_ ∧ 0 ≤ k_ex408256_ -/
+/- Type quantifiers: k_ex410536_ : Nat, k_ex410535_ : Nat, 0 ≤ k_ex410535_ ∧ 0 ≤ k_ex410536_ -/
 def calldata_install (data : EvmByteSlice) : SailM Unit := do
   let data := ((data).2).2
   writeReg calldata ⟨_, ⟨_, data⟩⟩
@@ -251,7 +251,7 @@ def returndata_copy (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
 
 /-- Copies `min(want, size)` returndata bytes — the `CALL`-family output
 write-back. -/
-/- Type quantifiers: k_ex408274_ : Nat, k_ex408273_ : Nat, 0 ≤ k_ex408273_, 0 ≤ k_ex408274_ -/
+/- Type quantifiers: k_ex410554_ : Nat, k_ex410553_ : Nat, 0 ≤ k_ex410553_, 0 ≤ k_ex410554_ -/
 def returndata_copy_prefix (dst : memory_pointer) (want : memory_length) : SailM Unit := do
   let wanted := want
   let available ← do (returndata_size ())
@@ -284,9 +284,9 @@ def validated_returndata_copy (dst : memory_pointer) (source_offset : Nat) (leng
       else (exc_halt InvalidOpcode))
   else (exc_halt InvalidOpcode)
 
-/- Type quantifiers: k_ex408283_ : Nat, k_ex408282_ : Nat, k_ex408281_ : Nat, 0 ≤ k_ex408281_, 0
-  ≤ k_ex408282_ ∧ k_ex408282_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex408283_ ∧
-  k_ex408283_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410563_ : Nat, k_ex410562_ : Nat, k_ex410561_ : Nat, 0 ≤ k_ex410561_, 0
+  ≤ k_ex410562_ ∧ k_ex410562_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex410563_ ∧
+  k_ex410563_ ≤ (2 ^ 256 - 1) -/
 def returndata_copy_words (dst : memory_pointer) (source_offset : word) (length : word) : SailM Unit := do
   let source_offset := (source_offset).value
   let length := (length).value
@@ -331,8 +331,8 @@ def memory_byte_slice (off : Nat) (len : Nat) : SailM EvmByteSlice := do
       (do
         let dependentResult ← (do
             let ⟨_, ⟨_, dependentArg0⟩⟩ ← (memory_expand_to (off + len))
-            pure ((⟨_, (sub_slice dependentArg0 off len)⟩ : (Sigma fun (k_ex419337_ : Nat) =>
-            (EvmByteSliceFields (k_ex419337_ + off) len)))))
+            pure ((⟨_, (sub_slice dependentArg0 off len)⟩ : (Sigma fun (k_ex421797_ : Nat) =>
+            (EvmByteSliceFields (k_ex421797_ + off) len)))))
         pure ((⟨_, ⟨_, (dependentResult).2⟩⟩ : (Sigma fun (k_syn_off : Nat) =>
         (Sigma fun (k_syn_len : Nat) => (EvmByteSliceFields k_syn_off k_syn_len)))))))
 
@@ -349,10 +349,10 @@ def memory_code_slice (off : Nat) (len : Nat) : SailM CodeSlice := do
         let dependentResult ← (do
             let ⟨_, dependentArg0⟩ ← (do
                 let ⟨_, ⟨_, dependentArg0⟩⟩ ← (memory_expand_to (off + len))
-                pure ((⟨_, (sub_slice dependentArg0 off len)⟩ : (Sigma fun (k_ex419384_ : Nat)
-                => (EvmByteSliceFields (k_ex419384_ + off) len)))))
-            pure ((⟨_, (code_slice dependentArg0)⟩ : (Sigma fun (k_ex419392_ : Nat) =>
-            (EvmByteSliceFields (k_ex419392_ + off) len)))))
+                pure ((⟨_, (sub_slice dependentArg0 off len)⟩ : (Sigma fun (k_ex421844_ : Nat)
+                => (EvmByteSliceFields (k_ex421844_ + off) len)))))
+            pure ((⟨_, (code_slice dependentArg0)⟩ : (Sigma fun (k_ex421852_ : Nat) =>
+            (EvmByteSliceFields (k_ex421852_ + off) len)))))
         pure ((⟨_, ⟨_, (dependentResult).2⟩⟩ : (Sigma fun (k_syn_off : Nat) =>
         (Sigma fun (k_syn_len : Nat) => (EvmByteSliceFields k_syn_off k_syn_len)))))))
 
@@ -366,7 +366,7 @@ def memory_frame_enter (_ : Unit) : SailM EvmByteSlice := do
     (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
 
 /-- Releases child memory and restores the saved parent range. -/
-/- Type quantifiers: k_ex408318_ : Nat, k_ex408317_ : Nat, 0 ≤ k_ex408317_ ∧ 0 ≤ k_ex408318_ -/
+/- Type quantifiers: k_ex410598_ : Nat, k_ex410597_ : Nat, 0 ≤ k_ex410597_ ∧ 0 ≤ k_ex410598_ -/
 def memory_frame_leave (parent : EvmByteSlice) : SailM Unit := do
   let parent := ((parent).2).2
   (mem_frame_leave ())
@@ -424,7 +424,7 @@ def mem_get_byte (off : memory_pointer) : SailM byte := do
 
 /-- Writes one memory byte and raises the high-water mark; a no-op when
 halted. -/
-/- Type quantifiers: k_ex408320_ : Nat, 0 ≤ k_ex408320_ -/
+/- Type quantifiers: k_ex410600_ : Nat, 0 ≤ k_ex410600_ -/
 def mem_set_byte (off : memory_pointer) (v : byte) : SailM Unit := do
   if ((← (is_running ())) : Bool)
   then (mem_write_byte off v)
@@ -444,8 +444,8 @@ def mem_load (off : memory_pointer) : SailM word := do
 
 /-- `MSTORE`: writes the big-endian word at `off` and raises the
 high-water mark. -/
-/- Type quantifiers: k_ex408323_ : Nat, k_ex408322_ : Nat, 0 ≤ k_ex408322_, 0 ≤ k_ex408323_ ∧
-  k_ex408323_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410603_ : Nat, k_ex410602_ : Nat, 0 ≤ k_ex410602_, 0 ≤ k_ex410603_ ∧
+  k_ex410603_ ≤ (2 ^ 256 - 1) -/
 def mem_store (off : memory_pointer) (w : word) : SailM Unit := do
   let w := (w).value
   if ((← (is_running ())) : Bool)
@@ -453,15 +453,15 @@ def mem_store (off : memory_pointer) (w : word) : SailM Unit := do
   else (pure ())
 
 /-- `MSTORE8`: writes the low byte of `w`. -/
-/- Type quantifiers: k_ex408325_ : Nat, k_ex408324_ : Nat, 0 ≤ k_ex408324_, 0 ≤ k_ex408325_ ∧
-  k_ex408325_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410605_ : Nat, k_ex410604_ : Nat, 0 ≤ k_ex410604_, 0 ≤ k_ex410605_ ∧
+  k_ex410605_ ≤ (2 ^ 256 - 1) -/
 def mem_store_byte (off : memory_pointer) (w : word) : SailM Unit := do
   let w := (w).value
   (mem_set_byte off (word_low_byte w))
 
 /-- `MCOPY` (EIP-5656): overlapping-safe memory-to-memory copy. -/
-/- Type quantifiers: k_ex408328_ : Nat, k_ex408327_ : Nat, k_ex408326_ : Nat, 0 ≤ k_ex408326_, 0
-  ≤ k_ex408327_, 0 ≤ k_ex408328_ -/
+/- Type quantifiers: k_ex410608_ : Nat, k_ex410607_ : Nat, k_ex410606_ : Nat, 0 ≤ k_ex410606_, 0
+  ≤ k_ex410607_, 0 ≤ k_ex410608_ -/
 def mem_mcopy (dst : memory_pointer) (src : memory_pointer) (len : memory_length) : SailM Unit := do
   if ((len != 0) : Bool)
   then (mem_move dst src len)
@@ -469,8 +469,8 @@ def mem_mcopy (dst : memory_pointer) (src : memory_pointer) (len : memory_length
 
 /-- `CODECOPY`: copies the frame's own code into memory, zero-padded past
 the end. -/
-/- Type quantifiers: k_ex408331_ : Nat, k_ex408330_ : Nat, k_ex408329_ : Nat, 0 ≤ k_ex408329_, 0
-  ≤ k_ex408330_, 0 ≤ k_ex408331_ -/
+/- Type quantifiers: k_ex410611_ : Nat, k_ex410610_ : Nat, k_ex410609_ : Nat, 0 ≤ k_ex410609_, 0
+  ≤ k_ex410610_, 0 ≤ k_ex410611_ -/
 def mem_codecopy (dst : memory_pointer) (off : source_pointer) (len : memory_length) : SailM Unit := do
   (slice_copy
     (⟨_, ⟨_, (((← readReg frame_code).bytes).2).2⟩⟩ : (Sigma fun (k_off : Nat) =>
@@ -478,7 +478,7 @@ def mem_codecopy (dst : memory_pointer) (off : source_pointer) (len : memory_len
 
 /-- `KECCAK256` over the memory range `[off, off+len)`: semantically, the
 caller reads the addressed bytes and hashes that byte list. -/
-/- Type quantifiers: k_ex408335_ : Nat, k_ex408334_ : Nat, 0 ≤ k_ex408334_ ∧ 0 ≤ k_ex408335_ -/
+/- Type quantifiers: k_ex410615_ : Nat, k_ex410614_ : Nat, 0 ≤ k_ex410614_ ∧ 0 ≤ k_ex410615_ -/
 def mem_keccak (range : MemoryRange) : SailM word := do
   let range := ((range).2).2
   let publicResult ← do

@@ -66,8 +66,8 @@ def PRE_MERGE_BLOCK_REWARD := (BitVec.toNatInt 0x1BC16D674EC80000#64)
 
 /-- Returns a block's remaining gas, rejecting an accumulated value above the
 header limit with the block-validation error required by EIP-7778. -/
-/- Type quantifiers: k_ex409369_ : Nat, k_ex409368_ : Nat, 0 ≤ k_ex409368_ ∧
-  k_ex409368_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409369_ -/
+/- Type quantifiers: k_ex411649_ : Nat, k_ex411648_ : Nat, 0 ≤ k_ex411648_ ∧
+  k_ex411648_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411649_ -/
 def remaining_block_gas (limit : block_gas_limit) (used : gas) : SailM gas := do
   let limit := (limit).value
   if ((used ≤b limit) : Bool)
@@ -87,8 +87,8 @@ def run_block_start_system_calls (_ : Unit) : SailM Unit := do
 /-- Executes the block's transactions in order, enforcing per-tx
 applicability and block gas/blob-gas availability (EIP-7778 block-gas
 accounting), accumulating receipts. -/
-/- Type quantifiers: k_ex409374_ : Nat, k_ex409373_ : Nat, k_ex409372_ : Nat, 0 ≤ k_ex409372_ ∧
-  0 ≤ k_ex409373_, 0 ≤ k_ex409374_ ∧ k_ex409374_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex411654_ : Nat, k_ex411653_ : Nat, k_ex411652_ : Nat, 0 ≤ k_ex411652_ ∧
+  0 ≤ k_ex411653_, 0 ≤ k_ex411654_ ∧ k_ex411654_ ≤ (2 ^ 64 - 1) -/
 def execute_block_transactions (transactions : TransactionListRef) (public_keys : EvmByteSlice) (header_gas_limit : block_gas_limit) : SailM BlockExecutionResult := do
   let public_keys := ((public_keys).2).2
   let header_gas_limit := (header_gas_limit).value
@@ -239,8 +239,8 @@ def apply_block_end_state (body : BlockBody) : SailM Unit := do
 transaction loop, block-end state effects, and request collection;
 invalid execution throws immediately, while successful execution returns
 the accumulated [BlockExecutionResult][type-BlockExecutionResult]. -/
-/- Type quantifiers: k_ex409379_ : Nat, k_ex409378_ : Nat, k_ex409377_ : Nat, 0 ≤ k_ex409377_ ∧
-  0 ≤ k_ex409378_, 0 ≤ k_ex409379_ ∧ k_ex409379_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex411659_ : Nat, k_ex411658_ : Nat, k_ex411657_ : Nat, 0 ≤ k_ex411657_ ∧
+  0 ≤ k_ex411658_, 0 ≤ k_ex411659_ ∧ k_ex411659_ ≤ (2 ^ 64 - 1) -/
 def execute_block_body (body : BlockBody) (public_keys : EvmByteSlice) (header_gas_limit : block_gas_limit) : SailM BlockExecutionResult := do
   let public_keys := ((public_keys).2).2
   let header_gas_limit := (header_gas_limit).value

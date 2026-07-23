@@ -66,8 +66,8 @@ def k_get_codehash (a : address) : SailM hash := do
   else (pure acc.info.code_hash)
 
 /-- Deploys code to an account: analyzes, stores, and binds its hash. -/
-/- Type quantifiers: k_ex408224_ : Nat, k_ex408223_ : Nat, 0 ≤ k_ex408223_ ∧ 0 ≤ k_ex408224_
-  ∧ 0 ≤ k_ex408224_ -/
+/- Type quantifiers: k_ex410504_ : Nat, k_ex410503_ : Nat, 0 ≤ k_ex410503_ ∧ 0 ≤ k_ex410504_
+  ∧ 0 ≤ k_ex410504_ -/
 def k_deploy_code (a : address) (code : CodeSlice) : SailM Unit := do
   let code := ((code).2).2
   let cur ← do (k_aload a)
@@ -141,8 +141,8 @@ def k_get_code_size (a : address) : SailM code_length := do
 
 /-- `EXTCODECOPY`: copies account code into frame memory, zero-padded
 past the end. -/
-/- Type quantifiers: k_ex408227_ : Nat, k_ex408226_ : Nat, k_ex408225_ : Nat, 0 ≤ k_ex408225_, 0
-  ≤ k_ex408226_ ∧ k_ex408226_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex408227_ -/
+/- Type quantifiers: k_ex410507_ : Nat, k_ex410506_ : Nat, k_ex410505_ : Nat, 0 ≤ k_ex410505_, 0
+  ≤ k_ex410506_ ∧ k_ex410506_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex410507_ -/
 def k_code_copy (a : address) (dst : memory_pointer) (off : word) (len : memory_length) : SailM Unit := do
   let off := (off).value
   let code ← do (code_db_resolve (← (k_code_key a)))

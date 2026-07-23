@@ -115,7 +115,7 @@ def DEPOSIT_INDEX_LENGTH : Nat := EIGHT_BYTE_LENGTH
 /-- Enters a top-level protocol system-call frame. The caller has already
 made a fresh memory frame and, for a word input, frozen the
 parent-memory span that `input` references. -/
-/- Type quantifiers: k_ex409135_ : Nat, k_ex409134_ : Nat, 0 ≤ k_ex409134_ ∧ 0 ≤ k_ex409135_ -/
+/- Type quantifiers: k_ex411415_ : Nat, k_ex411414_ : Nat, 0 ≤ k_ex411414_ ∧ 0 ≤ k_ex411415_ -/
 def enter_system_call_frame (tgt : address) (input : EvmByteSlice) : SailM journal_checkpoint := do
   let input := ((input).2).2
   let checkpoint ← do (k_state_checkpoint ())
@@ -211,7 +211,7 @@ def deposit_log_matches (log : LogEntry) : Bool :=
 /-- Strips the ABI framing from one `DepositEvent` and appends the
 consensus-layer deposit record's fields directly to the requests
 scratch (EIP-6110). -/
-/- Type quantifiers: k_ex409139_ : Nat, k_ex409138_ : Nat, 0 ≤ k_ex409138_ ∧ 0 ≤ k_ex409139_ -/
+/- Type quantifiers: k_ex411419_ : Nat, k_ex411418_ : Nat, 0 ≤ k_ex411418_ ∧ 0 ≤ k_ex411419_ -/
 def append_deposit_request (data : EvmByteSlice) : SailM Unit := do
   let data := ((data).2).2
   if ((data.len != DEPOSIT_EVENT_DATA_LENGTH) : Bool)
@@ -266,7 +266,7 @@ def append_deposit_logs (logs : (List LogEntry)) : SailM Unit := do
 order: deposits from logs (EIP-6110), withdrawal (EIP-7002),
 consolidation (EIP-7251), and, from Amsterdam, builder deposit and
 builder exit (EIP-8282). -/
-/- Type quantifiers: k_ex409143_ : Nat, k_ex409142_ : Nat, 0 ≤ k_ex409142_ ∧ 0 ≤ k_ex409143_ -/
+/- Type quantifiers: k_ex411423_ : Nat, k_ex411422_ : Nat, 0 ≤ k_ex411422_ ∧ 0 ≤ k_ex411423_ -/
 def collect_execution_requests (deposits : EvmByteSlice) : SailM ExecutionRequests := do
   let deposits := ((deposits).2).2
   let ⟨_, ⟨_, withdrawals⟩⟩ ← do (system_call_checked WITHDRAWAL_REQUEST_ADDR)

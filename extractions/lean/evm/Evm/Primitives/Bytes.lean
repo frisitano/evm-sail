@@ -121,7 +121,7 @@ def undefined_FixedBytes32 (_ : Unit) : SailM FixedBytes32 := do
 def bytes_list (data : (List byte)) (len : Nat) : Bytes :=
   (BytesList (materialized_bytes data len))
 
-/- Type quantifiers: k_ex406700_ : Nat, 0 ≤ k_ex406700_ ∧ k_ex406700_ ≤ 32 -/
+/- Type quantifiers: k_ex408900_ : Nat, 0 ≤ k_ex408900_ ∧ k_ex408900_ ≤ 32 -/
 def bytes_fixed32 (data : b256) (len : Nat) : Bytes :=
   (BytesFixed32
     { data := data,

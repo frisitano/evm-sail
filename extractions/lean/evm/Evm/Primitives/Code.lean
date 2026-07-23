@@ -57,7 +57,7 @@ def code_slice (bytes : (EvmByteSliceFields k_off k_len)) : (EvmByteSliceFields 
 headroom. This is vacuous in the canonical model; the optimized splice
 checks the representation invariant if a proof was erased by storage in a
 non-dependent aggregate. -/
-/- Type quantifiers: k_ex406760_ : Nat, k_ex406759_ : Nat, 0 ≤ k_ex406759_ ∧ 0 ≤ k_ex406760_ -/
+/- Type quantifiers: k_ex408960_ : Nat, k_ex408959_ : Nat, 0 ≤ k_ex408959_ ∧ 0 ≤ k_ex408960_ -/
 def validated_code_slice (bytes : EvmByteSlice) : CodeSlice :=
   let bytes := ((bytes).2).2
   ((⟨_, ⟨_, (code_slice bytes)⟩⟩ : (Sigma fun (k_off : Nat) =>

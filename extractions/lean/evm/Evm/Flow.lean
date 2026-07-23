@@ -43,7 +43,7 @@ open ByteSource
 open ByteRegionResult
 open BlockError
 
-/- Type quantifiers: k_ex406159_ : Bool, k_ex406158_ : Bool -/
+/- Type quantifiers: k_ex408359_ : Bool, k_ex408358_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 

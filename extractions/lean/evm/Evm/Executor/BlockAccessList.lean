@@ -155,8 +155,8 @@ def bal_previous_index (value : item_index) : SailM item_index := do
     else sailThrow ((InvalidBlock ExecutionInvalid))
   pure (⟨publicResult⟩)
 
-/- Type quantifiers: k_ex409151_ : Nat, k_ex409150_ : Nat, 0 ≤ k_ex409150_ ∧
-  k_ex409150_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409151_ ∧ k_ex409151_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex411431_ : Nat, k_ex411430_ : Nat, 0 ≤ k_ex411430_ ∧
+  k_ex411430_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411431_ ∧ k_ex411431_ ≤ (2 ^ 256 - 1) -/
 def bal_index_word_content_size (index : item_index) (value : word) : SailM bal_rlp_length := do
   let index := (index).value
   let value := (value).value
@@ -164,8 +164,8 @@ def bal_index_word_content_size (index : item_index) (value : word) : SailM bal_
     (bal_bounded_byte_length_add (rlp_uint_word_size index) (rlp_uint_word_size value))
   pure (⟨publicResult⟩)
 
-/- Type quantifiers: k_ex409153_ : Nat, k_ex409152_ : Nat, 0 ≤ k_ex409152_ ∧
-  k_ex409152_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409153_ ∧ k_ex409153_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex411433_ : Nat, k_ex411432_ : Nat, 0 ≤ k_ex411432_ ∧
+  k_ex411432_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411433_ ∧ k_ex411433_ ≤ (2 ^ 256 - 1) -/
 def bal_index_word_size (index : item_index) (value : word) : SailM bal_rlp_length := do
   let index := (index).value
   let value := (value).value
@@ -174,8 +174,8 @@ def bal_index_word_size (index : item_index) (value : word) : SailM bal_rlp_leng
   pure (⟨publicResult⟩)
 
 /-- Writes one `[index, word]` BAL pair. -/
-/- Type quantifiers: k_ex409155_ : Nat, k_ex409154_ : Nat, 0 ≤ k_ex409154_ ∧
-  k_ex409154_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409155_ ∧ k_ex409155_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex411435_ : Nat, k_ex411434_ : Nat, 0 ≤ k_ex411434_ ∧
+  k_ex411434_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411435_ ∧ k_ex411435_ ≤ (2 ^ 256 - 1) -/
 def bal_write_index_word (index : item_index) (value : word) : SailM Unit := do
   let index := (index).value
   let value := (value).value
@@ -183,8 +183,8 @@ def bal_write_index_word (index : item_index) (value : word) : SailM Unit := do
   (rlp_write_uint_word index)
   (rlp_write_uint_word value)
 
-/- Type quantifiers: k_ex409157_ : Nat, k_ex409156_ : Nat, 0 ≤ k_ex409156_ ∧
-  k_ex409156_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409157_ ∧ k_ex409157_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex411437_ : Nat, k_ex411436_ : Nat, 0 ≤ k_ex411436_ ∧
+  k_ex411436_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411437_ ∧ k_ex411437_ ≤ (2 ^ 64 - 1) -/
 def bal_index_nonce_content_size (index : item_index) (value : account_nonce) : SailM bal_rlp_length := do
   let index := (index).value
   let value := (value).value
@@ -192,8 +192,8 @@ def bal_index_nonce_content_size (index : item_index) (value : account_nonce) : 
     (bal_bounded_byte_length_add (rlp_uint_word_size index) (rlp_uint_word_size value))
   pure (⟨publicResult⟩)
 
-/- Type quantifiers: k_ex409159_ : Nat, k_ex409158_ : Nat, 0 ≤ k_ex409158_ ∧
-  k_ex409158_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409159_ ∧ k_ex409159_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex411439_ : Nat, k_ex411438_ : Nat, 0 ≤ k_ex411438_ ∧
+  k_ex411438_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411439_ ∧ k_ex411439_ ≤ (2 ^ 64 - 1) -/
 def bal_index_nonce_size (index : item_index) (value : account_nonce) : SailM bal_rlp_length := do
   let index := (index).value
   let value := (value).value
@@ -202,8 +202,8 @@ def bal_index_nonce_size (index : item_index) (value : account_nonce) : SailM ba
   pure (⟨publicResult⟩)
 
 /-- Writes one `[index, nonce]` BAL pair. -/
-/- Type quantifiers: k_ex409161_ : Nat, k_ex409160_ : Nat, 0 ≤ k_ex409160_ ∧
-  k_ex409160_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409161_ ∧ k_ex409161_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex411441_ : Nat, k_ex411440_ : Nat, 0 ≤ k_ex411440_ ∧
+  k_ex411440_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411441_ ∧ k_ex411441_ ≤ (2 ^ 64 - 1) -/
 def bal_write_index_nonce (index : item_index) (value : account_nonce) : SailM Unit := do
   let index := (index).value
   let value := (value).value
@@ -212,7 +212,7 @@ def bal_write_index_nonce (index : item_index) (value : account_nonce) : SailM U
   (rlp_write_uint_word value)
 
 /-- Sizes the content of an index-and-code pair. -/
-/- Type quantifiers: k_ex409162_ : Nat, 0 ≤ k_ex409162_ ∧ k_ex409162_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex411442_ : Nat, 0 ≤ k_ex411442_ ∧ k_ex411442_ ≤ (2 ^ 64 - 1) -/
 def bal_index_code_content_size (index : item_index) (code_hash : hash) : SailM bal_rlp_length := do
   let index := (index).value
   let publicResult ← do
@@ -222,7 +222,7 @@ def bal_index_code_content_size (index : item_index) (code_hash : hash) : SailM 
     (bal_bounded_byte_length_add index_length code_length)
   pure (⟨publicResult⟩)
 
-/- Type quantifiers: k_ex409163_ : Nat, 0 ≤ k_ex409163_ ∧ k_ex409163_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex411443_ : Nat, 0 ≤ k_ex411443_ ∧ k_ex411443_ ≤ (2 ^ 64 - 1) -/
 def bal_index_code_size (index : item_index) (code_hash : hash) : SailM bal_rlp_length := do
   let index := (index).value
   let publicResult ← do
@@ -230,7 +230,7 @@ def bal_index_code_size (index : item_index) (code_hash : hash) : SailM bal_rlp_
   pure (⟨publicResult⟩)
 
 /-- Writes one `[index, code]` BAL pair after resolving the code hash. -/
-/- Type quantifiers: k_ex409164_ : Nat, 0 ≤ k_ex409164_ ∧ k_ex409164_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex411444_ : Nat, 0 ≤ k_ex411444_ ∧ k_ex411444_ ≤ (2 ^ 64 - 1) -/
 def bal_write_index_code (index : item_index) (code_hash : hash) : SailM Unit := do
   let index := (index).value
   let code ← do (code_db_resolve code_hash)
@@ -241,10 +241,10 @@ def bal_write_index_code (index : item_index) (code_hash : hash) : SailM Unit :=
     (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
 
 /-- Finds the end of an equal-slot, equal-index storage-change run. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409169_ : Nat, k_ex409168_ : Nat, k_ex409167_ : Nat, k_ex409166_
-  : Nat, k_ex409165_ : Nat, 0 ≤ k_ex409165_ ∧ k_ex409165_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409166_
-  ∧ k_ex409166_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409167_ ∧ k_ex409167_ ≤ (2 ^ 256 - 1), 0 ≤
-  k_ex409168_ ∧ k_ex409168_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409169_ ∧ k_ex409169_ ≤ (2 ^ 64 - 1), 0
+/- Type quantifiers: _reclimit : Nat, k_ex411449_ : Nat, k_ex411448_ : Nat, k_ex411447_ : Nat, k_ex411446_
+  : Nat, k_ex411445_ : Nat, 0 ≤ k_ex411445_ ∧ k_ex411445_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411446_
+  ∧ k_ex411446_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411447_ ∧ k_ex411447_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex411448_ ∧ k_ex411448_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411449_ ∧ k_ex411449_ ≤ (2 ^ 64 - 1), 0
   ≤ _reclimit -/
 def _rec_bal_storage_change_run_end (account : item_index) (count : item_count) (slot : word) (index : item_index) (cursor : item_index) (_reclimit : Nat) : SailM item_index := do
   let account := (account).value
@@ -299,10 +299,10 @@ def bal_storage_change_run_end (account : item_index) (count : item_count) (slot
   pure (⟨publicResult⟩)
 
 /-- Sizes the final values for all change indices of one storage slot. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409181_ : Nat, k_ex409180_ : Nat, k_ex409179_ : Nat, k_ex409178_
-  : Nat, k_ex409177_ : Nat, 0 ≤ k_ex409177_ ∧ k_ex409177_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409178_
-  ∧ k_ex409178_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409179_ ∧ k_ex409179_ ≤ (2 ^ 256 - 1), 0 ≤
-  k_ex409180_ ∧ k_ex409180_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409181_ ∧ k_ex409181_ ≤ (2 ^ 30), 0
+/- Type quantifiers: _reclimit : Nat, k_ex411461_ : Nat, k_ex411460_ : Nat, k_ex411459_ : Nat, k_ex411458_
+  : Nat, k_ex411457_ : Nat, 0 ≤ k_ex411457_ ∧ k_ex411457_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411458_
+  ∧ k_ex411458_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411459_ ∧ k_ex411459_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex411460_ ∧ k_ex411460_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411461_ ∧ k_ex411461_ ≤ (2 ^ 30), 0
   ≤ _reclimit -/
 def _rec_bal_storage_slot_changes_size (account : item_index) (count : item_count) (slot : word) (cursor : item_index) (content_len : bal_rlp_length) (_reclimit : Nat) : SailM BalContentCursor := do
   let account := (account).value
@@ -372,10 +372,10 @@ def bal_storage_slot_changes_size (account : item_index) (count : item_count) (s
       ⟨content_len⟩ (_measure + 1))
 
 /-- Writes the final value for each change index of one storage slot. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409192_ : Nat, k_ex409191_ : Nat, k_ex409190_ : Nat, k_ex409189_
-  : Nat, 0 ≤ k_ex409189_ ∧ k_ex409189_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409190_ ∧
-  k_ex409190_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409191_ ∧ k_ex409191_ ≤ (2 ^ 256 - 1), 0 ≤
-  k_ex409192_ ∧ k_ex409192_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411472_ : Nat, k_ex411471_ : Nat, k_ex411470_ : Nat, k_ex411469_
+  : Nat, 0 ≤ k_ex411469_ ∧ k_ex411469_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411470_ ∧
+  k_ex411470_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411471_ ∧ k_ex411471_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex411472_ ∧ k_ex411472_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_write_storage_slot_changes (account : item_index) (count : item_count) (slot : word) (cursor : item_index) (_reclimit : Nat) : SailM item_index := do
   let account := (account).value
   let count := (count).value
@@ -441,9 +441,9 @@ def bal_write_storage_slot_changes (account : item_index) (count : item_count) (
   pure (⟨publicResult⟩)
 
 /-- Sizes storage changes grouped by slot and counts the groups. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409201_ : Nat, k_ex409200_ : Nat, k_ex409199_ : Nat, 0 ≤
-  k_ex409199_ ∧ k_ex409199_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409200_ ∧ k_ex409200_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex409201_ ∧ k_ex409201_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411481_ : Nat, k_ex411480_ : Nat, k_ex411479_ : Nat, 0 ≤
+  k_ex411479_ ∧ k_ex411479_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411480_ ∧ k_ex411480_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex411481_ ∧ k_ex411481_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_storage_change_groups_size (account : item_index) (count : item_count) (cursor : item_index) (result : BalContentCount) (_reclimit : Nat) : SailM BalContentCount := do
   let account := (account).value
   let count := (count).value
@@ -504,9 +504,9 @@ def bal_storage_change_groups_size (account : item_index) (count : item_count) (
       (_measure + 1))
 
 /-- Writes storage changes grouped by slot. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409209_ : Nat, k_ex409208_ : Nat, k_ex409207_ : Nat, 0 ≤
-  k_ex409207_ ∧ k_ex409207_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409208_ ∧ k_ex409208_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex409209_ ∧ k_ex409209_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411489_ : Nat, k_ex411488_ : Nat, k_ex411487_ : Nat, 0 ≤
+  k_ex411487_ ∧ k_ex411487_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411488_ ∧ k_ex411488_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex411489_ ∧ k_ex411489_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_write_storage_change_groups (account : item_index) (count : item_count) (cursor : item_index) (_reclimit : Nat) : SailM Unit := do
   let account := (account).value
   let count := (count).value
@@ -572,7 +572,7 @@ def bal_storage_changes_size (account : item_index) : SailM BalContentCount := d
       count := ⟨0⟩ })
 
 /-- Writes the storage-change list for one account. -/
-/- Type quantifiers: k_ex409216_ : Nat, 0 ≤ k_ex409216_ ∧ k_ex409216_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex411496_ : Nat, 0 ≤ k_ex411496_ ∧ k_ex411496_ ≤ (2 ^ 64 - 1) -/
 def bal_write_storage_changes (account : item_index) (size : BalContentCount) : SailM Unit := do
   let account := (account).value
   (rlp_write_list_prefix (bal_rlp_length_to_byte_length ⟨(size.content_len).value⟩))
@@ -580,10 +580,10 @@ def bal_write_storage_changes (account : item_index) (size : BalContentCount) : 
     ⟨((← (bal_storage_change_count ⟨account⟩))).value⟩ ⟨0⟩)
 
 /-- Finds the end of a run of equal storage-read slots. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409220_ : Nat, k_ex409219_ : Nat, k_ex409218_ : Nat, k_ex409217_
-  : Nat, 0 ≤ k_ex409217_ ∧ k_ex409217_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409218_ ∧
-  k_ex409218_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409219_ ∧ k_ex409219_ ≤ (2 ^ 256 - 1), 0 ≤
-  k_ex409220_ ∧ k_ex409220_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411500_ : Nat, k_ex411499_ : Nat, k_ex411498_ : Nat, k_ex411497_
+  : Nat, 0 ≤ k_ex411497_ ∧ k_ex411497_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411498_ ∧
+  k_ex411498_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411499_ ∧ k_ex411499_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex411500_ ∧ k_ex411500_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_storage_read_run_end (account : item_index) (count : item_count) (slot : word) (cursor : item_index) (_reclimit : Nat) : SailM item_index := do
   let account := (account).value
   let count := (count).value
@@ -633,10 +633,10 @@ def bal_storage_read_run_end (account : item_index) (count : item_count) (slot :
   pure (⟨publicResult⟩)
 
 /-- Advances the ordered change cursor to the first slot not below a read. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409230_ : Nat, k_ex409229_ : Nat, k_ex409228_ : Nat, k_ex409227_
-  : Nat, 0 ≤ k_ex409227_ ∧ k_ex409227_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409228_ ∧
-  k_ex409228_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409229_ ∧ k_ex409229_ ≤ (2 ^ 256 - 1), 0 ≤
-  k_ex409230_ ∧ k_ex409230_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411510_ : Nat, k_ex411509_ : Nat, k_ex411508_ : Nat, k_ex411507_
+  : Nat, 0 ≤ k_ex411507_ ∧ k_ex411507_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411508_ ∧
+  k_ex411508_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411509_ ∧ k_ex411509_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex411510_ ∧ k_ex411510_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_storage_change_seek (account : item_index) (count : item_count) (slot : word) (cursor : item_index) (_reclimit : Nat) : SailM item_index := do
   let account := (account).value
   let count := (count).value
@@ -686,10 +686,10 @@ def bal_storage_change_seek (account : item_index) (count : item_count) (slot : 
   pure (⟨publicResult⟩)
 
 /-- Sizes read slots that are not also represented by a storage change. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409241_ : Nat, k_ex409240_ : Nat, k_ex409239_ : Nat, k_ex409238_
-  : Nat, k_ex409237_ : Nat, 0 ≤ k_ex409237_ ∧ k_ex409237_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409238_
-  ∧ k_ex409238_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409239_ ∧ k_ex409239_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex409240_ ∧ k_ex409240_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409241_ ∧ k_ex409241_ ≤ (2 ^ 64 - 1), 0
+/- Type quantifiers: _reclimit : Nat, k_ex411521_ : Nat, k_ex411520_ : Nat, k_ex411519_ : Nat, k_ex411518_
+  : Nat, k_ex411517_ : Nat, 0 ≤ k_ex411517_ ∧ k_ex411517_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411518_
+  ∧ k_ex411518_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411519_ ∧ k_ex411519_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex411520_ ∧ k_ex411520_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411521_ ∧ k_ex411521_ ≤ (2 ^ 64 - 1), 0
   ≤ _reclimit -/
 def _rec_bal_storage_read_groups_size (account : item_index) (read_count : item_count) (change_count : item_count) (read : item_index) (change : item_index) (result : BalContentCount) (_reclimit : Nat) : SailM BalContentCount := do
   let account := (account).value
@@ -764,10 +764,10 @@ def bal_storage_read_groups_size (account : item_index) (read_count : item_count
       ⟨change⟩ result (_measure + 1))
 
 /-- Writes read slots that are not also represented by a storage change. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409253_ : Nat, k_ex409252_ : Nat, k_ex409251_ : Nat, k_ex409250_
-  : Nat, k_ex409249_ : Nat, 0 ≤ k_ex409249_ ∧ k_ex409249_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409250_
-  ∧ k_ex409250_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409251_ ∧ k_ex409251_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex409252_ ∧ k_ex409252_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409253_ ∧ k_ex409253_ ≤ (2 ^ 64 - 1), 0
+/- Type quantifiers: _reclimit : Nat, k_ex411533_ : Nat, k_ex411532_ : Nat, k_ex411531_ : Nat, k_ex411530_
+  : Nat, k_ex411529_ : Nat, 0 ≤ k_ex411529_ ∧ k_ex411529_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411530_
+  ∧ k_ex411530_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411531_ ∧ k_ex411531_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex411532_ ∧ k_ex411532_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411533_ ∧ k_ex411533_ ≤ (2 ^ 64 - 1), 0
   ≤ _reclimit -/
 def _rec_bal_write_storage_read_groups (account : item_index) (read_count : item_count) (change_count : item_count) (read : item_index) (change : item_index) (_reclimit : Nat) : SailM Unit := do
   let account := (account).value
@@ -842,7 +842,7 @@ def bal_storage_reads_size (account : item_index) : SailM BalContentCount := do
       count := ⟨0⟩ })
 
 /-- Writes the storage-read list for one account. -/
-/- Type quantifiers: k_ex409262_ : Nat, 0 ≤ k_ex409262_ ∧ k_ex409262_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex411542_ : Nat, 0 ≤ k_ex411542_ ∧ k_ex411542_ ≤ (2 ^ 64 - 1) -/
 def bal_write_storage_reads (account : item_index) (size : BalContentCount) : SailM Unit := do
   let account := (account).value
   (rlp_write_list_prefix (bal_rlp_length_to_byte_length ⟨(size.content_len).value⟩))
@@ -851,10 +851,10 @@ def bal_write_storage_reads (account : item_index) (size : BalContentCount) : Sa
     ⟨((← (bal_storage_change_count ⟨account⟩))).value⟩ ⟨0⟩ ⟨0⟩)
 
 /-- Finds the end of a run of equal balance-change indices. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409266_ : Nat, k_ex409265_ : Nat, k_ex409264_ : Nat, k_ex409263_
-  : Nat, 0 ≤ k_ex409263_ ∧ k_ex409263_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409264_ ∧
-  k_ex409264_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409265_ ∧ k_ex409265_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex409266_ ∧ k_ex409266_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411546_ : Nat, k_ex411545_ : Nat, k_ex411544_ : Nat, k_ex411543_
+  : Nat, 0 ≤ k_ex411543_ ∧ k_ex411543_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411544_ ∧
+  k_ex411544_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411545_ ∧ k_ex411545_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex411546_ ∧ k_ex411546_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_balance_run_end (account : item_index) (count : item_count) (index : item_index) (cursor : item_index) (_reclimit : Nat) : SailM item_index := do
   let account := (account).value
   let count := (count).value
@@ -904,10 +904,10 @@ def bal_balance_run_end (account : item_index) (count : item_count) (index : ite
   pure (⟨publicResult⟩)
 
 /-- Sizes the final balance value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409276_ : Nat, k_ex409275_ : Nat, k_ex409274_ : Nat, k_ex409273_
-  : Nat, 0 ≤ k_ex409273_ ∧ k_ex409273_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409274_ ∧
-  k_ex409274_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409275_ ∧ k_ex409275_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex409276_ ∧ k_ex409276_ ≤ (2 ^ 30), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411556_ : Nat, k_ex411555_ : Nat, k_ex411554_ : Nat, k_ex411553_
+  : Nat, 0 ≤ k_ex411553_ ∧ k_ex411553_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411554_ ∧
+  k_ex411554_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411555_ ∧ k_ex411555_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex411556_ ∧ k_ex411556_ ≤ (2 ^ 30), 0 ≤ _reclimit -/
 def _rec_bal_balance_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : bal_rlp_length) (_reclimit : Nat) : SailM bal_rlp_length := do
   let account := (account).value
   let count := (count).value
@@ -973,9 +973,9 @@ def bal_balance_groups_size (account : item_index) (count : item_count) (cursor 
   pure (⟨publicResult⟩)
 
 /-- Writes the final balance value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409285_ : Nat, k_ex409284_ : Nat, k_ex409283_ : Nat, 0 ≤
-  k_ex409283_ ∧ k_ex409283_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409284_ ∧ k_ex409284_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex409285_ ∧ k_ex409285_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411565_ : Nat, k_ex411564_ : Nat, k_ex411563_ : Nat, 0 ≤
+  k_ex411563_ ∧ k_ex411563_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411564_ ∧ k_ex411564_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex411565_ ∧ k_ex411565_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_write_balance_groups (account : item_index) (count : item_count) (cursor : item_index) (_reclimit : Nat) : SailM Unit := do
   let account := (account).value
   let count := (count).value
@@ -1035,8 +1035,8 @@ def bal_balance_changes_size (account : item_index) : SailM bal_rlp_length := do
   pure (⟨publicResult⟩)
 
 /-- Writes the balance-change list for one account. -/
-/- Type quantifiers: k_ex409293_ : Nat, k_ex409292_ : Nat, 0 ≤ k_ex409292_ ∧
-  k_ex409292_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409293_ ∧ k_ex409293_ ≤ (2 ^ 30) -/
+/- Type quantifiers: k_ex411573_ : Nat, k_ex411572_ : Nat, 0 ≤ k_ex411572_ ∧
+  k_ex411572_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411573_ ∧ k_ex411573_ ≤ (2 ^ 30) -/
 def bal_write_balance_changes (account : item_index) (content_len : bal_rlp_length) : SailM Unit := do
   let account := (account).value
   let content_len := (content_len).value
@@ -1045,10 +1045,10 @@ def bal_write_balance_changes (account : item_index) (content_len : bal_rlp_leng
     ⟨((← (bal_balance_change_count ⟨account⟩))).value⟩ ⟨0⟩)
 
 /-- Finds one nonce-change run and its greatest observed nonce. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409298_ : Nat, k_ex409297_ : Nat, k_ex409296_ : Nat, k_ex409295_
-  : Nat, k_ex409294_ : Nat, 0 ≤ k_ex409294_ ∧ k_ex409294_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409295_
-  ∧ k_ex409295_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409296_ ∧ k_ex409296_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex409297_ ∧ k_ex409297_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409298_ ∧ k_ex409298_ ≤ (2 ^ 64 - 1), 0
+/- Type quantifiers: _reclimit : Nat, k_ex411578_ : Nat, k_ex411577_ : Nat, k_ex411576_ : Nat, k_ex411575_
+  : Nat, k_ex411574_ : Nat, 0 ≤ k_ex411574_ ∧ k_ex411574_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411575_
+  ∧ k_ex411575_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411576_ ∧ k_ex411576_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex411577_ ∧ k_ex411577_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411578_ ∧ k_ex411578_ ≤ (2 ^ 64 - 1), 0
   ≤ _reclimit -/
 def _rec_bal_nonce_run (account : item_index) (count : item_count) (index : item_index) (cursor : item_index) (maximum : account_nonce) (_reclimit : Nat) : SailM BalNonceRun := do
   let account := (account).value
@@ -1107,10 +1107,10 @@ def bal_nonce_run (account : item_index) (count : item_count) (index : item_inde
       (_measure + 1))
 
 /-- Sizes the maximum nonce value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409309_ : Nat, k_ex409308_ : Nat, k_ex409307_ : Nat, k_ex409306_
-  : Nat, 0 ≤ k_ex409306_ ∧ k_ex409306_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409307_ ∧
-  k_ex409307_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409308_ ∧ k_ex409308_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex409309_ ∧ k_ex409309_ ≤ (2 ^ 30), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411589_ : Nat, k_ex411588_ : Nat, k_ex411587_ : Nat, k_ex411586_
+  : Nat, 0 ≤ k_ex411586_ ∧ k_ex411586_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411587_ ∧
+  k_ex411587_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411588_ ∧ k_ex411588_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex411589_ ∧ k_ex411589_ ≤ (2 ^ 30), 0 ≤ _reclimit -/
 def _rec_bal_nonce_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : bal_rlp_length) (_reclimit : Nat) : SailM bal_rlp_length := do
   let account := (account).value
   let count := (count).value
@@ -1172,9 +1172,9 @@ def bal_nonce_groups_size (account : item_index) (count : item_count) (cursor : 
   pure (⟨publicResult⟩)
 
 /-- Writes the maximum nonce value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409318_ : Nat, k_ex409317_ : Nat, k_ex409316_ : Nat, 0 ≤
-  k_ex409316_ ∧ k_ex409316_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409317_ ∧ k_ex409317_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex409318_ ∧ k_ex409318_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411598_ : Nat, k_ex411597_ : Nat, k_ex411596_ : Nat, 0 ≤
+  k_ex411596_ ∧ k_ex411596_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411597_ ∧ k_ex411597_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex411598_ ∧ k_ex411598_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_write_nonce_groups (account : item_index) (count : item_count) (cursor : item_index) (_reclimit : Nat) : SailM Unit := do
   let account := (account).value
   let count := (count).value
@@ -1231,8 +1231,8 @@ def bal_nonce_changes_size (account : item_index) : SailM bal_rlp_length := do
   pure (⟨publicResult⟩)
 
 /-- Writes the nonce-change list for one account. -/
-/- Type quantifiers: k_ex409326_ : Nat, k_ex409325_ : Nat, 0 ≤ k_ex409325_ ∧
-  k_ex409325_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409326_ ∧ k_ex409326_ ≤ (2 ^ 30) -/
+/- Type quantifiers: k_ex411606_ : Nat, k_ex411605_ : Nat, 0 ≤ k_ex411605_ ∧
+  k_ex411605_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411606_ ∧ k_ex411606_ ≤ (2 ^ 30) -/
 def bal_write_nonce_changes (account : item_index) (content_len : bal_rlp_length) : SailM Unit := do
   let account := (account).value
   let content_len := (content_len).value
@@ -1241,10 +1241,10 @@ def bal_write_nonce_changes (account : item_index) (content_len : bal_rlp_length
     ⟨0⟩)
 
 /-- Finds the end of a run of equal code-change indices. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409330_ : Nat, k_ex409329_ : Nat, k_ex409328_ : Nat, k_ex409327_
-  : Nat, 0 ≤ k_ex409327_ ∧ k_ex409327_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409328_ ∧
-  k_ex409328_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409329_ ∧ k_ex409329_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex409330_ ∧ k_ex409330_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411610_ : Nat, k_ex411609_ : Nat, k_ex411608_ : Nat, k_ex411607_
+  : Nat, 0 ≤ k_ex411607_ ∧ k_ex411607_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411608_ ∧
+  k_ex411608_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411609_ ∧ k_ex411609_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex411610_ ∧ k_ex411610_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_code_run_end (account : item_index) (count : item_count) (index : item_index) (cursor : item_index) (_reclimit : Nat) : SailM item_index := do
   let account := (account).value
   let count := (count).value
@@ -1294,10 +1294,10 @@ def bal_code_run_end (account : item_index) (count : item_count) (index : item_i
   pure (⟨publicResult⟩)
 
 /-- Sizes the final code value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409340_ : Nat, k_ex409339_ : Nat, k_ex409338_ : Nat, k_ex409337_
-  : Nat, 0 ≤ k_ex409337_ ∧ k_ex409337_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409338_ ∧
-  k_ex409338_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409339_ ∧ k_ex409339_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex409340_ ∧ k_ex409340_ ≤ (2 ^ 30), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411620_ : Nat, k_ex411619_ : Nat, k_ex411618_ : Nat, k_ex411617_
+  : Nat, 0 ≤ k_ex411617_ ∧ k_ex411617_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411618_ ∧
+  k_ex411618_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411619_ ∧ k_ex411619_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex411620_ ∧ k_ex411620_ ≤ (2 ^ 30), 0 ≤ _reclimit -/
 def _rec_bal_code_groups_size (account : item_index) (count : item_count) (cursor : item_index) (content_len : bal_rlp_length) (_reclimit : Nat) : SailM bal_rlp_length := do
   let account := (account).value
   let count := (count).value
@@ -1363,9 +1363,9 @@ def bal_code_groups_size (account : item_index) (count : item_count) (cursor : i
   pure (⟨publicResult⟩)
 
 /-- Writes the final code value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409349_ : Nat, k_ex409348_ : Nat, k_ex409347_ : Nat, 0 ≤
-  k_ex409347_ ∧ k_ex409347_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409348_ ∧ k_ex409348_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex409349_ ∧ k_ex409349_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411629_ : Nat, k_ex411628_ : Nat, k_ex411627_ : Nat, 0 ≤
+  k_ex411627_ ∧ k_ex411627_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411628_ ∧ k_ex411628_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex411629_ ∧ k_ex411629_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_write_code_groups (account : item_index) (count : item_count) (cursor : item_index) (_reclimit : Nat) : SailM Unit := do
   let account := (account).value
   let count := (count).value
@@ -1423,8 +1423,8 @@ def bal_code_changes_size (account : item_index) : SailM bal_rlp_length := do
   pure (⟨publicResult⟩)
 
 /-- Writes the code-change list for one account. -/
-/- Type quantifiers: k_ex409357_ : Nat, k_ex409356_ : Nat, 0 ≤ k_ex409356_ ∧
-  k_ex409356_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex409357_ ∧ k_ex409357_ ≤ (2 ^ 30) -/
+/- Type quantifiers: k_ex411637_ : Nat, k_ex411636_ : Nat, 0 ≤ k_ex411636_ ∧
+  k_ex411636_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex411637_ ∧ k_ex411637_ ≤ (2 ^ 30) -/
 def bal_write_code_changes (account : item_index) (content_len : bal_rlp_length) : SailM Unit := do
   let account := (account).value
   let content_len := (content_len).value

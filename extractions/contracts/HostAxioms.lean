@@ -542,321 +542,1173 @@ structure ValidWorldStateContract where
   operations : WorldStateContract
   valid : worldStateBoundary keccak operations
 
-/- The extracted model sees the exact EVM host-memory interface declared in
-`sail/host/memory.sail`.  Keeping these operations in one concrete contract
-prevents proofs from silently substituting an unrelated generic memory model.
-The `Evm.Functions` declarations below are only the generated-name/extern
-adapters for this contract. -/
-structure HostMemoryContract where
-  readByte : memory_pointer → SailM (BitVec 8)
-  writeByte : memory_pointer → BitVec 8 → SailM Unit
-  clear : Unit → SailM Unit
-  frameEnter : Unit → SailM source_pointer
-  frameLeave : Unit → SailM Unit
-  expand : (required : source_length) → SailM (ByteSliceLength required)
-  move : memory_pointer → memory_pointer → memory_length → SailM Unit
-  loadWord : memory_pointer → SailM word
-  storeWord : memory_pointer → word → SailM Unit
-  copySlice :
-    ByteSlice → memory_pointer → source_pointer → memory_length → SailM Unit
-
-axiom hostMemoryContract : HostMemoryContract
-
 end Evm.Contracts
+
+namespace Evm
+
+/- The executable extraction extends Sail's register state with the mutable
+host stores that the C model keeps behind its FFI boundary.  Keeping this
+state explicit makes ordinary memory and database operations executable Lean
+definitions; only genuine cryptographic accelerators remain external. -/
+structure MemoryFrame where
+  base : Nat
+  established : Nat
+  deriving Inhabited
+
+structure JumpdestTable where
+  reference : JumpdestRef
+  codeLength : code_length
+  chunks : List (code_chunk_index × JumpdestChunk)
+  deriving Inhabited
+
+structure JournalSnapshot where
+  transient : List (StorageKey × word)
+  storageTx : List (StorageKey × StorageValue)
+  accountTx : List (address × AcctValue)
+  warmAddresses : List address
+  warmSlots : List StorageKey
+  logs : List LogEntry
+  deriving Inhabited
+
+structure BalStorageChange where
+  account : address
+  slot : word
+  index : Nat
+  value : word
+  deriving Inhabited
+
+structure BalStorageRead where
+  account : address
+  slot : word
+  deriving Inhabited
+
+structure BalBalanceChange where
+  account : address
+  index : Nat
+  value : word
+  deriving Inhabited
+
+structure BalNonceChange where
+  account : address
+  index : Nat
+  value : account_nonce
+  deriving Inhabited
+
+structure BalCodeChange where
+  account : address
+  index : Nat
+  value : hash
+  deriving Inhabited
+
+structure HostState where
+  memoryBytes : Nat → byte
+  memoryFrames : List MemoryFrame
+  inputBytes : Array byte
+  scratchBytes : Array byte
+  codeBytes : Array byte
+  logBytes : Array byte
+  outputBytes : Array byte
+  publicOutput : Array byte
+  stackFrames : List (List word)
+  ancestorHashes : Array hash
+  jumpdestTables : List JumpdestTable
+  codeDb : List (hash × Code)
+  delegations : List (hash × address)
+  transient : List (StorageKey × word)
+  storageTx : List (StorageKey × StorageValue)
+  storageBlock : List (StorageKey × StorageValue)
+  storageIterator : List StorageEntry
+  accountTx : List (address × AcctValue)
+  accountBlock : List (address × AcctValue)
+  accountIterator : List AcctEntry
+  postStorageRoots : List (address × hash)
+  warmAddresses : List address
+  warmSlots : List StorageKey
+  logs : List LogEntry
+  checkpoints : List JournalSnapshot
+  nodeDb : List (hash × ByteSlice)
+  balIndex : Nat
+  balAccounts : List address
+  balStorageChanges : List BalStorageChange
+  balStorageReads : List BalStorageRead
+  balBalanceChanges : List BalBalanceChange
+  balNonceChanges : List BalNonceChange
+  balCodeChanges : List BalCodeChange
+
+def initialHostState : HostState where
+  memoryBytes := fun _ => 0
+  memoryFrames := [{ base := 0, established := 0 }]
+  inputBytes := #[]
+  scratchBytes := #[]
+  codeBytes := #[]
+  logBytes := #[]
+  outputBytes := #[]
+  publicOutput := #[]
+  stackFrames := [[]]
+  ancestorHashes := #[]
+  jumpdestTables := []
+  codeDb := []
+  delegations := []
+  transient := []
+  storageTx := []
+  storageBlock := []
+  storageIterator := []
+  accountTx := []
+  accountBlock := []
+  accountIterator := []
+  postStorageRoots := []
+  warmAddresses := []
+  warmSlots := []
+  logs := []
+  checkpoints := []
+  nodeDb := []
+  balIndex := 0
+  balAccounts := []
+  balStorageChanges := []
+  balStorageReads := []
+  balBalanceChanges := []
+  balNonceChanges := []
+  balCodeChanges := []
+
+abbrev SailM (α : Type) :=
+  StateT HostState Evm.Defs.SailM α
+
+end Evm
 
 namespace Evm.Functions
 
-@[extern "lean_evmsail_ancestor_hash_write"]
-axiom ancestor_hash_write : ancestor_index → hash → SailM Unit
-@[extern "lean_evmsail_ancestor_hash_read"]
-axiom ancestor_hash_read : ancestor_index → SailM hash
+private def ensureArraySize
+    (bytes : Array byte) (required : Nat) : Array byte :=
+  if required ≤ bytes.size then bytes
+  else bytes ++ Array.replicate (required - bytes.size) 0
 
-@[extern "lean_evmsail_keccak256_segments"]
-axiom keccak256_segments : List Bytes → SailM hash
-@[extern "lean_evmsail_sha256_segments"]
-axiom sha256_segments : List Bytes → SailM hash
+private def writeArrayByte
+    (bytes : Array byte) (position : Nat) (value : byte) : Array byte :=
+  (ensureArraySize bytes (position + 1)).set! position value
 
-@[extern "lean_evmsail_mem_read_byte"]
-def mem_read_byte : memory_pointer → SailM (BitVec 8) :=
-  Evm.Contracts.hostMemoryContract.readByte
-@[extern "lean_evmsail_mem_write_byte"]
-def mem_write_byte : memory_pointer → BitVec 8 → SailM Unit :=
-  Evm.Contracts.hostMemoryContract.writeByte
-@[extern "lean_evmsail_mem_clear"]
-def mem_clear : Unit → SailM Unit :=
-  Evm.Contracts.hostMemoryContract.clear
-@[extern "lean_evmsail_mem_frame_enter"]
-def mem_frame_enter : Unit → SailM source_pointer :=
-  Evm.Contracts.hostMemoryContract.frameEnter
-@[extern "lean_evmsail_mem_frame_leave"]
-def mem_frame_leave : Unit → SailM Unit :=
-  Evm.Contracts.hostMemoryContract.frameLeave
-@[extern "lean_evmsail_mem_expand"]
-def mem_expand (required : source_length) : SailM (ByteSliceLength required) :=
-  Evm.Contracts.hostMemoryContract.expand required
-@[extern "lean_evmsail_mem_move"]
-def mem_move : memory_pointer → memory_pointer → memory_length → SailM Unit :=
-  Evm.Contracts.hostMemoryContract.move
-@[extern "lean_evmsail_mem_load_word"]
-def mem_load_word : memory_pointer → SailM word :=
-  Evm.Contracts.hostMemoryContract.loadWord
-@[extern "lean_evmsail_mem_store_word"]
-def mem_store_word : memory_pointer → word → SailM Unit :=
-  Evm.Contracts.hostMemoryContract.storeWord
+private def writeArrayBytes
+    (bytes : Array byte) (position : Nat) (values : List byte) : Array byte :=
+  values.zipIdx.foldl
+    (fun result pair => writeArrayByte result (position + pair.2) pair.1)
+    bytes
 
-@[extern "lean_evmsail_host_scratch_store_bytes"]
-axiom host_scratch_store_bytes
+private def vectorBytes {size : Nat} (bytes : Vector byte size) : List byte :=
+  bytes.toList
+
+def ancestor_hash_write (index : ancestor_index) (value : hash) : SailM Unit :=
+  modify fun state =>
+    { state with
+      ancestorHashes :=
+        let hashes :=
+          if index.value < state.ancestorHashes.size then
+            state.ancestorHashes
+          else
+            state.ancestorHashes ++
+              Array.replicate (index.value + 1 - state.ancestorHashes.size) default
+        hashes.set! index.value value }
+
+def ancestor_hash_read (index : ancestor_index) : SailM hash := do
+  let state ← get
+  pure (state.ancestorHashes.getD index.value default)
+
+private def currentMemoryFrame (state : HostState) : MemoryFrame :=
+  state.memoryFrames.head?.getD default
+
+private def replaceCurrentMemoryFrame
+    (state : HostState) (frame : MemoryFrame) : HostState :=
+  { state with memoryFrames := frame :: state.memoryFrames.drop 1 }
+
+private def writeMemoryByte
+    (bytes : Nat → byte) (position : Nat) (value : byte) : Nat → byte :=
+  fun candidate => if candidate = position then value else bytes candidate
+
+private def zeroMemoryRange
+    (bytes : Nat → byte) (start count : Nat) : Nat → byte :=
+  fun candidate =>
+    if start ≤ candidate ∧ candidate < start + count then 0 else bytes candidate
+
+private def establishMemory (required : Nat) : SailM MemoryFrame := do
+  let state ← get
+  let frame := currentMemoryFrame state
+  if required ≤ frame.established then
+    pure frame
+  else
+    let bytes :=
+      zeroMemoryRange state.memoryBytes
+        (frame.base + frame.established) (required - frame.established)
+    let frame := { frame with established := required }
+    set (replaceCurrentMemoryFrame { state with memoryBytes := bytes } frame)
+    pure frame
+
+def mem_read_byte (off : memory_pointer) : SailM byte := do
+  let state ← get
+  let frame := currentMemoryFrame state
+  pure <| if off < frame.established then state.memoryBytes (frame.base + off) else 0
+
+def mem_write_byte (off : memory_pointer) (value : byte) : SailM Unit := do
+  let frame ← establishMemory (off + 1)
+  modify fun state =>
+    { state with
+      memoryBytes := writeMemoryByte state.memoryBytes (frame.base + off) value }
+
+def mem_clear (_ : Unit) : SailM Unit :=
+  modify fun state =>
+    { state with memoryFrames := [{ base := 0, established := 0 }] }
+
+def mem_frame_enter (_ : Unit) : SailM source_pointer := do
+  let state ← get
+  let parent := currentMemoryFrame state
+  let base := parent.base + parent.established
+  set { state with memoryFrames := { base := base, established := 0 } :: state.memoryFrames }
+  pure base
+
+def mem_frame_leave (_ : Unit) : SailM Unit :=
+  modify fun state =>
+    { state with
+      memoryFrames :=
+        match state.memoryFrames with
+        | _ :: parent :: rest => parent :: rest
+        | frames => frames }
+
+def mem_expand (required : source_length) : SailM (ByteSliceLength required) := do
+  let frame ← establishMemory required
+  pure ⟨frame.base, ⟨required,
+    { source := ByteSource.EvmMemorySource, off := frame.base, len := required }⟩⟩
+
+private def snapshotMemory
+    (bytes : Nat → byte) (base off len : Nat) : List byte :=
+  List.ofFn fun index : Fin len => bytes (base + off + index)
+
+def mem_move
+    (dst : memory_pointer) (src : memory_pointer) (len : memory_length) :
+    SailM Unit := do
+  let frame ← establishMemory (max (src + len) (dst + len))
+  let state ← get
+  let values := snapshotMemory state.memoryBytes frame.base src len
+  let indexed := values.zipIdx
+  let bytes := indexed.foldl
+    (fun result pair =>
+      writeMemoryByte result (frame.base + dst + pair.2) pair.1)
+    state.memoryBytes
+  set { state with memoryBytes := bytes }
+
+def mem_load_word (off : memory_pointer) : SailM word := do
+  let state ← get
+  let frame := currentMemoryFrame state
+  let value := (List.range 32).foldl
+    (fun result index =>
+      let byte :=
+        if off + index < frame.established then
+          state.memoryBytes (frame.base + off + index)
+        else
+          0
+      result * 256 + byte.toNat)
+    0
+  pure ⟨value⟩
+
+def mem_store_word (off : memory_pointer) (value : word) : SailM Unit := do
+  let frame ← establishMemory (off + 32)
+  modify fun state =>
+    let indexed := List.range 32
+    let bytes := indexed.foldl
+      (fun result index =>
+        let shift := 8 * (31 - index)
+        let byte := BitVec.ofNat 8 ((value.value / (2 ^ shift)) % 256)
+        writeMemoryByte result (frame.base + off + index) byte)
+      state.memoryBytes
+    { state with memoryBytes := bytes }
+
+def host_scratch_store_bytes
     (off : source_pointer) (bytes : List (BitVec 8)) (len : source_length) :
-    SailM (ByteRegionResult (off + len))
-@[extern "lean_evmsail_host_scratch_store_slice"]
-axiom host_scratch_store_slice
+    SailM (ByteRegionResult (off + len)) := do
+  modify fun state =>
+    { state with scratchBytes := writeArrayBytes state.scratchBytes off (bytes.take len) }
+  pure (.ByteRegionReady ⟨0, ⟨off + len,
+    { source := .ScratchSource, off := 0, len := off + len }⟩⟩)
+
+private def sourceArray (state : HostState) (source : ByteSource) : Array byte :=
+  match source with
+  | .StatelessInputSource => state.inputBytes
+  | .CodeSource => state.codeBytes
+  | .LogDataSource => state.logBytes
+  | .OutputSource => state.outputBytes
+  | .ScratchSource => state.scratchBytes
+  | .EvmMemorySource => #[]
+
+private def sliceFields (slice : ByteSlice) :
+    Sigma fun off => Sigma fun len => ByteSliceFields off len :=
+  slice
+
+private def readSourceByte
+    (state : HostState) (source : ByteSource) (position : Nat) : byte :=
+  match source with
+  | .EvmMemorySource => state.memoryBytes position
+  | other => (sourceArray state other).getD position 0
+
+private def readSliceByte
+    (state : HostState) (slice : ByteSlice) (position : Nat) : byte :=
+  let ⟨_, ⟨_, fields⟩⟩ := sliceFields slice
+  if position < fields.len then
+    readSourceByte state fields.source (fields.off + position)
+  else
+    0
+
+private def materializeSlice
+    (state : HostState) (slice : ByteSlice) : List byte :=
+  let ⟨_, ⟨_, fields⟩⟩ := sliceFields slice
+  (List.range fields.len).map (readSliceByte state slice)
+
+def host_scratch_store_slice
     {sliceOff sliceLen : Nat}
     (off : source_pointer) (slice : ByteSliceFields sliceOff sliceLen) :
-    SailM (ByteRegionResult (off + slice.len))
-@[extern "lean_evmsail_host_scratch_store_b256"]
-axiom host_scratch_store_b256
+    SailM (ByteRegionResult (off + slice.len)) := do
+  let state ← get
+  let bytes := (List.range slice.len).map fun index =>
+    readSourceByte state slice.source (slice.off + index)
+  set { state with scratchBytes := writeArrayBytes state.scratchBytes off bytes }
+  pure (.ByteRegionReady ⟨0, ⟨off + slice.len,
+    { source := .ScratchSource, off := 0, len := off + slice.len }⟩⟩)
+
+def host_scratch_store_b256
     (off : source_pointer) (bytes : b256) (len : source_length) :
-    SailM (ByteRegionResult (off + len))
-@[extern "lean_evmsail_host_scratch_truncate"]
-axiom host_scratch_truncate : source_pointer → SailM Unit
+    SailM (ByteRegionResult (off + len)) := do
+  modify fun state =>
+    { state with
+      scratchBytes :=
+        writeArrayBytes state.scratchBytes off
+          (vectorBytes bytes |>.reverse |>.take len) }
+  pure (.ByteRegionReady ⟨0, ⟨off + len,
+    { source := .ScratchSource, off := 0, len := off + len }⟩⟩)
 
-@[extern "lean_evmsail_accelerator_ripemd160"]
-axiom accelerator_ripemd160 : ByteSlice → SailM Bool
-@[extern "lean_evmsail_accelerator_modexp"]
-axiom accelerator_modexp : ByteSlice → byte_length → byte_length → byte_length → SailM Bool
-@[extern "lean_evmsail_accelerator_bn254_add"]
-axiom accelerator_bn254_add : ByteSlice → SailM Bool
-@[extern "lean_evmsail_accelerator_bn254_mul"]
-axiom accelerator_bn254_mul : ByteSlice → SailM Bool
-@[extern "lean_evmsail_accelerator_bn254_pairing"]
-axiom accelerator_bn254_pairing : ByteSlice → SailM (BitVec 2)
-@[extern "lean_evmsail_accelerator_blake2f"]
-axiom accelerator_blake2f : ByteSlice → blake2_rounds → y_parity → SailM Bool
-@[extern "lean_evmsail_accelerator_kzg_point_evaluation"]
-axiom accelerator_kzg_point_evaluation : ByteSlice → SailM Bool
-@[extern "lean_evmsail_accelerator_bls_g1_add"]
-axiom accelerator_bls_g1_add : ByteSlice → SailM Bool
-@[extern "lean_evmsail_accelerator_bls_g1_msm"]
-axiom accelerator_bls_g1_msm : ByteSlice → SailM Bool
-@[extern "lean_evmsail_accelerator_bls_g2_add"]
-axiom accelerator_bls_g2_add : ByteSlice → SailM Bool
-@[extern "lean_evmsail_accelerator_bls_g2_msm"]
-axiom accelerator_bls_g2_msm : ByteSlice → SailM Bool
-@[extern "lean_evmsail_accelerator_bls_pairing"]
-axiom accelerator_bls_pairing : ByteSlice → SailM (BitVec 2)
-@[extern "lean_evmsail_accelerator_bls_map_fp_to_g1"]
-axiom accelerator_bls_map_fp_to_g1 : ByteSlice → SailM Bool
-@[extern "lean_evmsail_accelerator_bls_map_fp2_to_g2"]
-axiom accelerator_bls_map_fp2_to_g2 : ByteSlice → SailM Bool
-@[extern "lean_evmsail_accelerator_p256_verify"]
-axiom accelerator_p256_verify : ByteSlice → SailM Bool
-@[extern "lean_evmsail_secp256k1_verify"]
-axiom secp256k1_verify : hash → word → word → word → word → SailM Bool
-@[extern "lean_evmsail_host_ecrecover"]
-axiom host_ecrecover : hash → y_parity → word → word → SailM AddressResult
+def host_scratch_truncate (length : source_pointer) : SailM Unit :=
+  modify fun state => { state with scratchBytes := state.scratchBytes.extract 0 length }
 
-@[extern "lean_evmsail_stack_reset"]
-axiom stack_reset : Unit → SailM Unit
-@[extern "lean_evmsail_stack_enter_frame"]
-axiom stack_enter_frame : Unit → SailM Unit
-@[extern "lean_evmsail_stack_leave_frame"]
-axiom stack_leave_frame : Unit → SailM Unit
-@[extern "lean_evmsail_stack_depth"]
-axiom stack_depth : Unit → SailM operand_stack_height
-@[extern "lean_evmsail_stack_push_word"]
-axiom stack_push_word : word → SailM Unit
-@[extern "lean_evmsail_stack_pop_word"]
-axiom stack_pop_word : Unit → SailM word
-@[extern "lean_evmsail_stack_peek_word"]
-axiom stack_peek_word : stack_index → SailM word
-@[extern "lean_evmsail_stack_set_word"]
-axiom stack_set_word : stack_index → word → SailM Unit
+private def currentStack (state : HostState) : List word :=
+  state.stackFrames.head?.getD []
 
-@[extern "lean_evmsail_stateless_input"]
-axiom stateless_input : Unit → SailM ByteSlice
-@[extern "lean_evmsail_host_slice_byte"]
-axiom host_slice_byte : ByteSlice → source_pointer → SailM (BitVec 8)
-@[extern "lean_evmsail_host_slice_count_nonzero"]
-axiom host_slice_count_nonzero : ByteSlice → SailM host_access
-@[extern "lean_evmsail_host_slice_strided_zero"]
-axiom host_slice_strided_zero :
-  ByteSlice → source_pointer → host_access → host_access → host_access → SailM Bool
-@[extern "lean_evmsail_host_slice_load_word"]
-axiom host_slice_load_word : ByteSlice → source_pointer → SailM word
-@[extern "lean_evmsail_host_slice_load_n_word"]
-axiom host_slice_load_n_word : ByteSlice → source_pointer → host_access → SailM word
-@[extern "lean_evmsail_host_slice_copy_to_memory"]
-def host_slice_copy_to_memory :
-    ByteSlice → memory_pointer → source_pointer → memory_length → SailM Unit :=
-  Evm.Contracts.hostMemoryContract.copySlice
-@[extern "lean_evmsail_bytes_segments_equal_slice"]
-axiom bytes_segments_equal_slice : List Bytes → ByteSlice → SailM Bool
+private def replaceCurrentStack (state : HostState) (stack : List word) : HostState :=
+  { state with stackFrames := stack :: state.stackFrames.drop 1 }
 
-@[extern "lean_evmsail_output_buffer_store"]
-axiom output_buffer_store : ByteSlice → SailM Bool
-@[extern "lean_evmsail_output_buffer_store_word"]
-axiom output_buffer_store_word : word → SailM Bool
-@[extern "lean_evmsail_output_buffer_store_words"]
-axiom output_buffer_store_words : word → word → SailM Bool
-@[extern "lean_evmsail_public_output_write"]
-axiom public_output_write : ByteSlice → SailM Bool
+private def replaceListAt (values : List α) (index : Nat) (value : α) : List α :=
+  match values, index with
+  | [], _ => []
+  | _ :: rest, 0 => value :: rest
+  | head :: rest, index + 1 => head :: replaceListAt rest index value
 
-@[extern "lean_evmsail_code_db_lookup"]
-axiom code_db_lookup : hash → SailM (Option Code)
-@[extern "lean_evmsail_jumpdest_table_alloc"]
-axiom jumpdest_table_alloc : code_length → SailM JumpdestRef
-@[extern "lean_evmsail_jumpdest_table_store_chunk"]
-axiom jumpdest_table_store_chunk :
-  JumpdestRef → code_length → code_chunk_index → JumpdestChunk → SailM Bool
-@[extern "lean_evmsail_code_db_store"]
-axiom code_db_store : CodeSlice → JumpdestRef → SailM hash
-@[extern "lean_evmsail_jumpdest_ref_contains"]
-axiom jumpdest_ref_contains : JumpdestRef → code_length → code_pointer → SailM Bool
-@[extern "lean_evmsail_code_intern_delegation"]
-axiom code_intern_delegation : address → JumpdestRef → SailM hash
-@[extern "lean_evmsail_code_db_read_delegation"]
-axiom code_db_read_delegation : hash → SailM AddressResult
+def stack_reset (_ : Unit) : SailM Unit :=
+  modify fun state => { state with stackFrames := [[]] }
 
-@[extern "lean_evmsail_transient_reset"]
-axiom transient_reset : Unit → SailM Unit
-@[extern "lean_evmsail_transient_store"]
-axiom transient_store : address → word → word → SailM Unit
-@[extern "lean_evmsail_transient_load"]
-axiom transient_load : address → word → SailM word
+def stack_enter_frame (_ : Unit) : SailM Unit :=
+  modify fun state => { state with stackFrames := [] :: state.stackFrames }
 
-@[extern "lean_evmsail_state_checkpoint_reset"]
-axiom state_checkpoint_reset : Unit → SailM Unit
-@[extern "lean_evmsail_state_checkpoint"]
-axiom state_checkpoint : Unit → SailM StateCheckpoint
-@[extern "lean_evmsail_state_revert"]
-axiom state_revert : StateCheckpoint → SailM Unit
+def stack_leave_frame (_ : Unit) : SailM Unit :=
+  modify fun state =>
+    { state with
+      stackFrames :=
+        match state.stackFrames with
+        | _ :: parent :: rest => parent :: rest
+        | frames => frames }
 
-@[extern "lean_evmsail_storage_tx_update"]
-axiom storage_tx_update : StorageEntry → SailM Unit
-@[extern "lean_evmsail_storage_tx_get"]
-axiom storage_tx_get : StorageKey → SailM (Option StorageValue)
-@[extern "lean_evmsail_storage_tx_pop"]
-axiom storage_tx_pop : Unit → SailM (Option StorageEntry)
-@[extern "lean_evmsail_storage_tx_clear"]
-axiom storage_tx_clear : address → SailM Unit
-@[extern "lean_evmsail_storage_tx_reset"]
-axiom storage_tx_reset : Unit → SailM Unit
-@[extern "lean_evmsail_storage_has_writes"]
-axiom storage_has_writes : address → SailM Bool
-@[extern "lean_evmsail_storage_block_get"]
-axiom storage_block_get : StorageKey → SailM (Option StorageValue)
-@[extern "lean_evmsail_storage_block_put"]
-axiom storage_block_put : StorageEntry → SailM Unit
-@[extern "lean_evmsail_storage_block_cache"]
-axiom storage_block_cache : StorageKey → word → SailM Unit
-@[extern "lean_evmsail_storage_block_clear"]
-axiom storage_block_clear : address → SailM Unit
-@[extern "lean_evmsail_storage_block_iter_begin"]
-axiom storage_block_iter_begin : address → SailM Unit
-@[extern "lean_evmsail_storage_block_iter_next"]
-axiom storage_block_iter_next : address → SailM (Option StorageEntry)
+def stack_depth (_ : Unit) : SailM operand_stack_height := do
+  pure ⟨currentStack (← get) |>.length⟩
 
-@[extern "lean_evmsail_acct_tx_get"]
-axiom acct_tx_get : address → SailM (Option Account)
-@[extern "lean_evmsail_acct_tx_update"]
-axiom acct_tx_update : address → Account → SailM Unit
-@[extern "lean_evmsail_acct_tx_set_balance"]
-axiom acct_tx_set_balance : address → word → SailM Unit
-@[extern "lean_evmsail_acct_tx_set_nonce"]
-axiom acct_tx_set_nonce : address → account_nonce → SailM Unit
-@[extern "lean_evmsail_acct_tx_set_code_hash"]
-axiom acct_tx_set_code_hash : address → hash → SailM Unit
-@[extern "lean_evmsail_acct_tx_pop_ascending"]
-axiom acct_tx_pop_ascending : Unit → SailM (Option AcctEntry)
-@[extern "lean_evmsail_acct_tx_reset"]
-axiom acct_tx_reset : Unit → SailM Unit
-@[extern "lean_evmsail_acct_block_get"]
-axiom acct_block_get : address → SailM (Option Account)
-@[extern "lean_evmsail_acct_block_write"]
-axiom acct_block_write : AcctEntry → SailM Unit
-@[extern "lean_evmsail_acct_block_cache"]
-axiom acct_block_cache : address → Account → SailM Unit
-@[extern "lean_evmsail_acct_block_iter_begin"]
-axiom acct_block_iter_begin : Unit → SailM Unit
-@[extern "lean_evmsail_acct_block_iter_next"]
-axiom acct_block_iter_next : Unit → SailM (Option AcctEntry)
-@[extern "lean_evmsail_acct_post_storage_root_store"]
-axiom acct_post_storage_root_store : address → hash → SailM Unit
-@[extern "lean_evmsail_acct_post_storage_root_read"]
-axiom acct_post_storage_root_read : address → SailM hash
+def stack_push_word (value : word) : SailM Unit :=
+  modify fun state => replaceCurrentStack state (value :: currentStack state)
 
-@[extern "lean_evmsail_bal_reset"]
-axiom bal_reset : Unit → SailM Unit
-@[extern "lean_evmsail_bal_set_index"]
-axiom bal_set_index : Nat → SailM Unit
-@[extern "lean_evmsail_bal_account_touch"]
-axiom bal_account_touch : address → SailM Unit
-@[extern "lean_evmsail_bal_storage_change"]
-axiom bal_storage_change : address → word → word → SailM Unit
-@[extern "lean_evmsail_bal_storage_read"]
-axiom bal_storage_read : address → word → SailM Unit
-@[extern "lean_evmsail_bal_balance_change"]
-axiom bal_balance_change : address → word → SailM Unit
-@[extern "lean_evmsail_bal_nonce_change"]
-axiom bal_nonce_change : address → account_nonce → SailM Unit
-@[extern "lean_evmsail_bal_code_change"]
-axiom bal_code_change : address → hash → SailM Unit
-@[extern "lean_evmsail_bal_prepare"]
-axiom bal_prepare : Unit → SailM Unit
-@[extern "lean_evmsail_bal_account_count"]
-axiom bal_account_count : Unit → SailM item_count
-@[extern "lean_evmsail_bal_account_address"]
-axiom bal_account_address : item_index → SailM address
-@[extern "lean_evmsail_bal_storage_change_count"]
-axiom bal_storage_change_count : item_index → SailM item_count
-@[extern "lean_evmsail_bal_storage_change_slot"]
-axiom bal_storage_change_slot : item_index → item_index → SailM word
-@[extern "lean_evmsail_bal_storage_change_index"]
-axiom bal_storage_change_index : item_index → item_index → SailM item_index
-@[extern "lean_evmsail_bal_storage_change_value"]
-axiom bal_storage_change_value : item_index → item_index → SailM word
-@[extern "lean_evmsail_bal_storage_read_count"]
-axiom bal_storage_read_count : item_index → SailM item_count
-@[extern "lean_evmsail_bal_storage_read_slot"]
-axiom bal_storage_read_slot : item_index → item_index → SailM word
-@[extern "lean_evmsail_bal_balance_change_count"]
-axiom bal_balance_change_count : item_index → SailM item_count
-@[extern "lean_evmsail_bal_balance_change_index"]
-axiom bal_balance_change_index : item_index → item_index → SailM item_index
-@[extern "lean_evmsail_bal_balance_change_value"]
-axiom bal_balance_change_value : item_index → item_index → SailM word
-@[extern "lean_evmsail_bal_nonce_change_count"]
-axiom bal_nonce_change_count : item_index → SailM item_count
-@[extern "lean_evmsail_bal_nonce_change_index"]
-axiom bal_nonce_change_index : item_index → item_index → SailM item_index
-@[extern "lean_evmsail_bal_nonce_change_value"]
-axiom bal_nonce_change_value : item_index → item_index → SailM account_nonce
-@[extern "lean_evmsail_bal_code_change_count"]
-axiom bal_code_change_count : item_index → SailM item_count
-@[extern "lean_evmsail_bal_code_change_index"]
-axiom bal_code_change_index : item_index → item_index → SailM item_index
-@[extern "lean_evmsail_bal_code_change_hash"]
-axiom bal_code_change_hash : item_index → item_index → SailM hash
+def stack_pop_word (_ : Unit) : SailM word := do
+  let state ← get
+  match currentStack state with
+  | [] => pure default
+  | value :: rest =>
+      set (replaceCurrentStack state rest)
+      pure value
 
-@[extern "lean_evmsail_warm_reset"]
-axiom warm_reset : Unit → SailM Unit
-@[extern "lean_evmsail_warm_addr_touch"]
-axiom warm_addr_touch : address → SailM Bool
-@[extern "lean_evmsail_warm_slot_touch"]
-axiom warm_slot_touch : address → word → SailM Bool
+def stack_peek_word (index : stack_index) : SailM word := do
+  let state ← get
+  pure ((currentStack state).getD index.value default)
 
-@[extern "lean_evmsail_logs_tx_reset"]
-axiom logs_tx_reset : Unit → SailM Unit
-@[extern "lean_evmsail_log_append"]
-axiom log_append : address → List word → Bytes → SailM Unit
-@[extern "lean_evmsail_read_logs"]
-axiom read_logs : Unit → SailM (List LogEntry)
+def stack_set_word (index : stack_index) (value : word) : SailM Unit :=
+  modify fun state =>
+    replaceCurrentStack state (replaceListAt (currentStack state) index.value value)
 
-@[extern "lean_evmsail_nodedb_reset"]
-axiom nodedb_reset : Unit → SailM Unit
-@[extern "lean_evmsail_nodedb_insert"]
-axiom nodedb_insert : hash → source_pointer → byte_length → SailM Unit
-@[extern "lean_evmsail_nodedb_lookup"]
-axiom nodedb_lookup : hash → SailM ByteSlice
+def stateless_input (_ : Unit) : SailM ByteSlice := do
+  let length := (← get).inputBytes.size
+  pure ⟨0, ⟨length,
+    { source := .StatelessInputSource, off := 0, len := length }⟩⟩
+
+def host_slice_byte
+    (slice : ByteSlice) (position : source_pointer) : SailM byte := do
+  pure (readSliceByte (← get) slice position)
+
+def host_slice_count_nonzero (slice : ByteSlice) : SailM host_access := do
+  pure (materializeSlice (← get) slice |>.countP (· != 0))
+
+def host_slice_strided_zero
+    (slice : ByteSlice) (start stride width count : host_access) : SailM Bool := do
+  let state ← get
+  pure <| (List.range count).all fun item =>
+    (List.range width).all fun offset =>
+      readSliceByte state slice (start + item * stride + offset) == 0
+
+private def bytesToWord (bytes : List byte) : word :=
+  ⟨bytes.foldl (fun result value => result * 256 + value.toNat) 0⟩
+
+def host_slice_load_word
+    (slice : ByteSlice) (position : source_pointer) : SailM word := do
+  let state ← get
+  pure <| bytesToWord <| (List.range 32).map fun index =>
+    readSliceByte state slice (position + index)
+
+def host_slice_load_n_word
+    (slice : ByteSlice) (position : source_pointer) (count : host_access) :
+    SailM word := do
+  let state ← get
+  pure <| bytesToWord <| (List.range count).map fun index =>
+    readSliceByte state slice (position + index)
+
+def host_slice_copy_to_memory
+    (slice : ByteSlice) (dst : memory_pointer)
+    (src : source_pointer) (len : memory_length) : SailM Unit := do
+  let state ← get
+  let values := (List.range len).map fun index =>
+    readSliceByte state slice (src + index)
+  let frame ← establishMemory (dst + len)
+  modify fun state =>
+    let bytes := values.zipIdx.foldl
+      (fun result pair =>
+        writeMemoryByte result (frame.base + dst + pair.2) pair.1)
+      state.memoryBytes
+    { state with memoryBytes := bytes }
+
+private def materializeBytes (state : HostState) (bytes : Bytes) : List byte :=
+  match bytes with
+  | .BytesList materialized => materialized.data.take materialized.len
+  | .BytesSlice slice => materializeSlice state slice
+  | .BytesFixed32 fixed =>
+      vectorBytes fixed.data |>.reverse |>.take fixed.len
+
+def bytes_segments_equal_slice
+    (segments : List Bytes) (slice : ByteSlice) : SailM Bool := do
+  let state ← get
+  pure (segments.flatMap (materializeBytes state) == materializeSlice state slice)
+
+private def wordBytes (value : word) : List byte :=
+  (List.range 32).map fun index =>
+    BitVec.ofNat 8 ((value.value / (2 ^ (8 * (31 - index)))) % 256)
+
+private def hashBytes (value : hash) : List byte :=
+  (vectorBytes value).reverse
+
+@[extern "lean_evmsail_accelerate_bytes"]
+private opaque nativeAccelerateBytes
+    (selector : UInt8) (input : ByteArray)
+    (first second third : UInt64) : Option ByteArray
+
+private def toNativeBytes (bytes : List byte) : ByteArray :=
+  ⟨(bytes.map fun value => UInt8.ofNat value.toNat).toArray⟩
+
+private def fromNativeBytes (bytes : ByteArray) : Array byte :=
+  bytes.data.map fun value => BitVec.ofNat 8 value.toNat
+
+-- The accelerator ABI returns wire-order (big-endian) bytes. Sail's
+-- `vector(size, dec, byte)` stores index zero at the least-significant end,
+-- so fixed hashes and addresses reverse the ABI sequence at this boundary.
+private def nativeDecVectorFromBE
+    (size : Nat) (bytes : ByteArray) : Vector byte size :=
+  Vector.ofFn fun index =>
+    BitVec.ofNat 8 (bytes.data.getD (size - 1 - index.val) 0).toNat
+
+private def callNative
+    (selector : UInt8) (input : List byte)
+    (first second third : Nat) : Option ByteArray :=
+  nativeAccelerateBytes selector (toNativeBytes input)
+    (UInt64.ofNat first) (UInt64.ofNat second) (UInt64.ofNat third)
+
+private def bytesBENat (bytes : List byte) : Nat :=
+  bytes.foldl (fun value next => value * 256 + next.toNat) 0
+
+private def addressSortKey (value : address) : Nat :=
+  bytesBENat (vectorBytes value).reverse
+
+private def secureSortKey (bytes : List byte) : Nat :=
+  match callNative 0 bytes 0 0 0 with
+  | some digest =>
+      digest.data.foldl (fun value next => value * 256 + next.toNat) 0
+  | none => 0
+
+private def accountSecureSortKey (value : address) : Nat :=
+  secureSortKey (vectorBytes value).reverse
+
+private def storageSecureSortKey (value : word) : Nat :=
+  secureSortKey (wordBytes value)
+
+private def acceleratorOutput
+    (selector : UInt8) (slice : ByteSlice)
+    (first second third : Nat) : SailM Bool := do
+  let state ← get
+  match callNative selector (materializeSlice state slice) first second third with
+  | none =>
+      set { state with outputBytes := #[] }
+      pure false
+  | some output =>
+      set { state with outputBytes := fromNativeBytes output }
+      pure true
+
+private def acceleratorCheck
+    (selector : UInt8) (slice : ByteSlice) : SailM Bool := do
+  let state ← get
+  pure <| match callNative selector (materializeSlice state slice) 0 0 0 with
+    | some output => output.data.getD 0 0 != 0
+    | none => false
+
+private def acceleratorPairing
+    (selector : UInt8) (slice : ByteSlice) : SailM (BitVec 2) := do
+  let state ← get
+  pure <| match callNative selector (materializeSlice state slice) 0 0 0 with
+    | some output =>
+        BitVec.ofNat 2 (if output.data.getD 0 0 == 0 then 2 else 3)
+    | none => 0
+
+def keccak256_segments (segments : List Bytes) : SailM hash := do
+  let state ← get
+  let input := segments.flatMap (materializeBytes state)
+  pure <| match callNative 0 input 0 0 0 with
+    | some output => nativeDecVectorFromBE 32 output
+    | none => default
+
+def sha256_segments (segments : List Bytes) : SailM hash := do
+  let state ← get
+  let input := segments.flatMap (materializeBytes state)
+  pure <| match callNative 1 input 0 0 0 with
+    | some output => nativeDecVectorFromBE 32 output
+    | none => default
+
+def accelerator_ripemd160 (slice : ByteSlice) : SailM Bool :=
+  acceleratorOutput 2 slice 0 0 0
+
+def accelerator_modexp
+    (slice : ByteSlice) (base exponent modulus : Nat) : SailM Bool :=
+  acceleratorOutput 3 slice base exponent modulus
+
+def accelerator_bn254_add (slice : ByteSlice) : SailM Bool :=
+  acceleratorOutput 4 slice 0 0 0
+
+def accelerator_bn254_mul (slice : ByteSlice) : SailM Bool :=
+  acceleratorOutput 5 slice 0 0 0
+
+def accelerator_bn254_pairing (slice : ByteSlice) : SailM (BitVec 2) :=
+  acceleratorPairing 6 slice
+
+def accelerator_blake2f
+  (slice : ByteSlice) (rounds : blake2_rounds)
+    (finalBlock : y_parity) : SailM Bool :=
+  acceleratorOutput 7 slice rounds.value finalBlock.value 0
+
+def accelerator_kzg_point_evaluation (slice : ByteSlice) : SailM Bool :=
+  acceleratorCheck 8 slice
+
+def accelerator_bls_g1_add (slice : ByteSlice) : SailM Bool :=
+  acceleratorOutput 9 slice 0 0 0
+
+def accelerator_bls_g1_msm (slice : ByteSlice) : SailM Bool :=
+  acceleratorOutput 10 slice 0 0 0
+
+def accelerator_bls_g2_add (slice : ByteSlice) : SailM Bool :=
+  acceleratorOutput 11 slice 0 0 0
+
+def accelerator_bls_g2_msm (slice : ByteSlice) : SailM Bool :=
+  acceleratorOutput 12 slice 0 0 0
+
+def accelerator_bls_pairing (slice : ByteSlice) : SailM (BitVec 2) :=
+  acceleratorPairing 13 slice
+
+def accelerator_bls_map_fp_to_g1 (slice : ByteSlice) : SailM Bool :=
+  acceleratorOutput 14 slice 0 0 0
+
+def accelerator_bls_map_fp2_to_g2 (slice : ByteSlice) : SailM Bool :=
+  acceleratorOutput 15 slice 0 0 0
+
+def accelerator_p256_verify (slice : ByteSlice) : SailM Bool :=
+  acceleratorCheck 16 slice
+
+def secp256k1_verify
+    (message : hash) (r s x y : word) : SailM Bool :=
+  pure <| match callNative 17
+      (hashBytes message ++ wordBytes r ++ wordBytes s ++
+        wordBytes x ++ wordBytes y) 0 0 0 with
+    | some output => output.data.getD 0 0 != 0
+    | none => false
+
+def host_ecrecover
+    (message : hash) (parity : y_parity) (r s : word) :
+    SailM AddressResult :=
+  pure <| match callNative 18
+      (hashBytes message ++ wordBytes r ++ wordBytes s) parity.value 0 0 with
+    | some output =>
+        { success := true, address := nativeDecVectorFromBE 20 output }
+    | none => default
+
+def output_buffer_store (slice : ByteSlice) : SailM Bool := do
+  let bytes := materializeSlice (← get) slice
+  modify fun state => { state with outputBytes := bytes.toArray }
+  pure true
+
+def output_buffer_store_word (value : word) : SailM Bool := do
+  modify fun state => { state with outputBytes := wordBytes value |>.toArray }
+  pure true
+
+def output_buffer_store_words (first second : word) : SailM Bool := do
+  modify fun state =>
+    { state with outputBytes := (wordBytes first ++ wordBytes second).toArray }
+  pure true
+
+def public_output_write (slice : ByteSlice) : SailM Bool := do
+  let bytes := materializeSlice (← get) slice
+  modify fun state => { state with publicOutput := bytes.toArray }
+  pure true
+
+private def assocGet [BEq κ] (entries : List (κ × ν)) (key : κ) :
+    Option ν :=
+  (entries.find? fun entry => entry.1 == key).map (·.2)
+
+private def assocPut [BEq κ]
+    (entries : List (κ × ν)) (key : κ) (newValue : ν) :
+    List (κ × ν) :=
+  (key, newValue) :: entries.filter fun entry => entry.1 != key
+
+private def codeSliceLength (slice : CodeSlice) : Nat :=
+  let ⟨_, ⟨length, _⟩⟩ := slice
+  length
+
+def code_db_lookup (key : hash) : SailM (Option Code) := do
+  pure (assocGet (← get).codeDb key)
+
+def jumpdest_table_alloc (length : code_length) : SailM JumpdestRef := do
+  let state ← get
+  let reference := BitVec.ofNat 64 (state.jumpdestTables.length + 1)
+  set { state with
+    jumpdestTables :=
+      { reference := reference, codeLength := length, chunks := [] } ::
+        state.jumpdestTables }
+  pure reference
+
+def jumpdest_table_store_chunk
+    (reference : JumpdestRef) (length : code_length)
+    (index : code_chunk_index) (chunk : JumpdestChunk) : SailM Bool := do
+  let state ← get
+  match state.jumpdestTables.find? (·.reference == reference) with
+  | none => pure false
+  | some table =>
+      let table :=
+        { table with
+          codeLength := length
+          chunks := assocPut table.chunks index chunk }
+      set { state with
+        jumpdestTables :=
+          table :: state.jumpdestTables.filter (·.reference != reference) }
+      pure true
+
+private def storedCodeSlice
+    (offset length : Nat) : CodeSlice :=
+  ⟨offset, ⟨length,
+    { source := .CodeSource, off := offset, len := length }⟩⟩
+
+def code_db_store (slice : CodeSlice) (jumpdests : JumpdestRef) : SailM hash := do
+  let state ← get
+  let bytes := materializeSlice state slice
+  let offset := state.codeBytes.size
+  let stored := storedCodeSlice offset bytes.length
+  set { state with codeBytes := state.codeBytes ++ bytes.toArray }
+  let key ← keccak256_segments [.BytesSlice stored]
+  modify fun state =>
+    { state with
+      codeDb := assocPut state.codeDb key { bytes := stored, jumpdests := jumpdests } }
+  pure key
+
+def jumpdest_ref_contains
+    (reference : JumpdestRef) (_ : code_length) (pc : code_pointer) :
+    SailM Bool := do
+  let state ← get
+  match state.jumpdestTables.find? (·.reference == reference) with
+  | none => pure false
+  | some table =>
+      match assocGet table.chunks (pc / 256) with
+      | none => pure false
+      | some chunk => pure ((BitVec.access chunk (pc % 256)) == 1#1)
+
+def code_intern_delegation
+    (target : address) (jumpdests : JumpdestRef) : SailM hash := do
+  let state ← get
+  let bytes := [0xef, 0x01, 0x00] ++ vectorBytes target
+  let offset := state.codeBytes.size
+  let stored := storedCodeSlice offset bytes.length
+  set { state with codeBytes := state.codeBytes ++ bytes.toArray }
+  let key ← keccak256_segments [.BytesSlice stored]
+  modify fun state =>
+    { state with
+      codeDb := assocPut state.codeDb key { bytes := stored, jumpdests := jumpdests }
+      delegations := assocPut state.delegations key target }
+  pure key
+
+def code_db_read_delegation (key : hash) : SailM AddressResult := do
+  match assocGet (← get).delegations key with
+  | none => pure { success := false, address := default }
+  | some target => pure { success := true, address := target }
+
+def transient_reset (_ : Unit) : SailM Unit :=
+  modify fun state => { state with transient := [] }
+
+def transient_store (account : address) (slot value : word) : SailM Unit :=
+  modify fun state =>
+    { state with transient := assocPut state.transient { addr := account, slot := slot } value }
+
+def transient_load (account : address) (slot : word) : SailM word := do
+  pure <| (assocGet (← get).transient { addr := account, slot := slot }).getD default
+
+def state_checkpoint_reset (_ : Unit) : SailM Unit :=
+  modify fun state => { state with checkpoints := [] }
+
+def state_checkpoint (_ : Unit) : SailM journal_checkpoint := do
+  let state ← get
+  let checkpoint := state.checkpoints.length
+  let snapshot :=
+    { transient := state.transient
+      storageTx := state.storageTx
+      accountTx := state.accountTx
+      warmAddresses := state.warmAddresses
+      warmSlots := state.warmSlots
+      logs := state.logs }
+  set { state with checkpoints := state.checkpoints ++ [snapshot] }
+  pure checkpoint
+
+def state_revert (checkpoint : journal_checkpoint) : SailM Unit := do
+  let state ← get
+  match state.checkpoints[checkpoint]? with
+  | none => pure ()
+  | some snapshot =>
+      set { state with
+        transient := snapshot.transient
+        storageTx := snapshot.storageTx
+        accountTx := snapshot.accountTx
+        warmAddresses := snapshot.warmAddresses
+        warmSlots := snapshot.warmSlots
+        logs := snapshot.logs
+        checkpoints := state.checkpoints.take checkpoint }
+
+def storage_tx_update (entry : StorageEntry) : SailM Unit :=
+  modify fun state =>
+    { state with storageTx := assocPut state.storageTx entry.key entry.value }
+
+def storage_tx_get (key : StorageKey) : SailM (Option StorageValue) := do
+  pure (assocGet (← get).storageTx key)
+
+def storage_tx_pop (_ : Unit) : SailM (Option StorageEntry) := do
+  let state ← get
+  match state.storageTx with
+  | [] => pure none
+  | (key, value) :: rest =>
+      set { state with storageTx := rest }
+      pure (some { key := key, value := value })
+
+def storage_tx_clear (account : address) : SailM Unit :=
+  modify fun state =>
+    { state with storageTx := state.storageTx.filter (·.1.addr != account) }
+
+def storage_tx_reset (_ : Unit) : SailM Unit :=
+  modify fun state => { state with storageTx := [] }
+
+def storage_has_writes (account : address) : SailM Bool := do
+  let state ← get
+  pure <| (state.storageTx ++ state.storageBlock).any fun entry =>
+    entry.1.addr == account && entry.2.curr != default
+
+def storage_block_get (key : StorageKey) : SailM (Option StorageValue) := do
+  pure (assocGet (← get).storageBlock key)
+
+def storage_block_put (entry : StorageEntry) : SailM Unit :=
+  modify fun state =>
+    let value :=
+      match assocGet state.storageBlock entry.key with
+      | none => entry.value
+      | some prior => { entry.value with orig := prior.orig }
+    { state with storageBlock := assocPut state.storageBlock entry.key value }
+
+def storage_block_cache (key : StorageKey) (value : word) : SailM Unit :=
+  modify fun state =>
+    if (assocGet state.storageBlock key).isSome then state
+    else
+      { state with
+        storageBlock :=
+          assocPut state.storageBlock key { curr := value, orig := value } }
+
+def storage_block_clear (account : address) : SailM Unit :=
+  modify fun state =>
+    { state with storageBlock := state.storageBlock.filter (·.1.addr != account) }
+
+def storage_block_iter_begin (account : address) : SailM Unit :=
+  modify fun state =>
+    { state with
+      storageIterator :=
+        ((state.storageBlock.filter (·.1.addr == account)).map fun entry =>
+          { key := entry.1, value := entry.2 }).mergeSort fun left right =>
+            storageSecureSortKey left.key.slot ≤ storageSecureSortKey right.key.slot }
+
+def storage_block_iter_next (_ : address) : SailM (Option StorageEntry) := do
+  let state ← get
+  match state.storageIterator with
+  | [] => pure none
+  | entry :: rest =>
+      set { state with storageIterator := rest }
+      pure (some entry)
+
+private def accountTxValue
+    (state : HostState) (account : address) : AcctValue :=
+  match assocGet state.accountTx account with
+  | some value => value
+  | none =>
+      let base := (assocGet state.accountBlock account).map (·.curr) |>.getD default
+      { curr := base, orig := base }
+
+def acct_tx_get (account : address) : SailM (Option Account) := do
+  pure ((assocGet (← get).accountTx account).map (·.curr))
+
+def acct_tx_update (account : address) (value : Account) : SailM Unit :=
+  modify fun state =>
+    let prior := accountTxValue state account
+    { state with
+      accountTx := assocPut state.accountTx account { prior with curr := value } }
+
+def acct_tx_set_balance (account : address) (value : word) : SailM Unit :=
+  modify fun state =>
+    let prior := accountTxValue state account
+    let current := { prior.curr with info := { prior.curr.info with balance := value } }
+    { state with
+      accountTx := assocPut state.accountTx account { prior with curr := current } }
+
+def acct_tx_set_nonce
+    (account : address) (value : account_nonce) : SailM Unit :=
+  modify fun state =>
+    let prior := accountTxValue state account
+    let current := { prior.curr with info := { prior.curr.info with nonce := value } }
+    { state with
+      accountTx := assocPut state.accountTx account { prior with curr := current } }
+
+def acct_tx_set_code_hash (account : address) (value : hash) : SailM Unit :=
+  modify fun state =>
+    let prior := accountTxValue state account
+    let current := { prior.curr with info := { prior.curr.info with code_hash := value } }
+    { state with
+      accountTx := assocPut state.accountTx account { prior with curr := current } }
+
+def acct_tx_pop_ascending (_ : Unit) : SailM (Option AcctEntry) := do
+  let state ← get
+  match state.accountTx.mergeSort fun left right =>
+      addressSortKey left.1 ≤ addressSortKey right.1 with
+  | [] => pure none
+  | (account, value) :: rest =>
+      set { state with accountTx := rest }
+      pure (some { addr := account, value := value })
+
+def acct_tx_reset (_ : Unit) : SailM Unit :=
+  modify fun state => { state with accountTx := [] }
+
+def acct_block_get (account : address) : SailM (Option Account) := do
+  pure ((assocGet (← get).accountBlock account).map (·.curr))
+
+def acct_block_write (entry : AcctEntry) : SailM Unit :=
+  modify fun state =>
+    let value :=
+      match assocGet state.accountBlock entry.addr with
+      | none => entry.value
+      | some prior => { entry.value with orig := prior.orig }
+    { state with accountBlock := assocPut state.accountBlock entry.addr value }
+
+def acct_block_cache (account : address) (value : Account) : SailM Unit :=
+  modify fun state =>
+    if (assocGet state.accountBlock account).isSome then state
+    else
+      { state with
+        accountBlock :=
+          assocPut state.accountBlock account { curr := value, orig := value } }
+
+def acct_block_iter_begin (_ : Unit) : SailM Unit :=
+  modify fun state =>
+    { state with
+      accountIterator :=
+        (state.accountBlock.map fun entry =>
+          { addr := entry.1, value := entry.2 }).mergeSort fun left right =>
+            accountSecureSortKey left.addr ≤ accountSecureSortKey right.addr }
+
+def acct_block_iter_next (_ : Unit) : SailM (Option AcctEntry) := do
+  let state ← get
+  match state.accountIterator with
+  | [] => pure none
+  | entry :: rest =>
+      set { state with accountIterator := rest }
+      pure (some entry)
+
+def acct_post_storage_root_store
+    (account : address) (root : hash) : SailM Unit :=
+  modify fun state =>
+    { state with postStorageRoots := assocPut state.postStorageRoots account root }
+
+def acct_post_storage_root_read (account : address) : SailM hash := do
+  pure ((assocGet (← get).postStorageRoots account).getD default)
+
+private def touchBalAccount (accounts : List address) (account : address) :
+    List address :=
+  if accounts.contains account then accounts else accounts ++ [account]
+
+def bal_reset (_ : Unit) : SailM Unit :=
+  modify fun state =>
+    { state with
+      balIndex := 0
+      balAccounts := []
+      balStorageChanges := []
+      balStorageReads := []
+      balBalanceChanges := []
+      balNonceChanges := []
+      balCodeChanges := [] }
+
+def bal_set_index (index : Nat) : SailM Unit :=
+  modify fun state => { state with balIndex := index }
+
+def bal_account_touch (account : address) : SailM Unit :=
+  modify fun state =>
+    { state with balAccounts := touchBalAccount state.balAccounts account }
+
+def bal_storage_change
+    (account : address) (slot value : word) : SailM Unit :=
+  modify fun state =>
+    { state with
+      balAccounts := touchBalAccount state.balAccounts account
+      balStorageChanges :=
+        state.balStorageChanges ++
+          [{ account := account, slot := slot, index := state.balIndex, value := value }] }
+
+def bal_storage_read (account : address) (slot : word) : SailM Unit :=
+  modify fun state =>
+    { state with
+      balAccounts := touchBalAccount state.balAccounts account
+      balStorageReads :=
+        if state.balStorageReads.any fun entry =>
+            entry.account == account && entry.slot == slot then
+          state.balStorageReads
+        else
+          state.balStorageReads ++ [{ account := account, slot := slot }] }
+
+def bal_balance_change (account : address) (value : word) : SailM Unit :=
+  modify fun state =>
+    { state with
+      balAccounts := touchBalAccount state.balAccounts account
+      balBalanceChanges :=
+        state.balBalanceChanges ++
+          [{ account := account, index := state.balIndex, value := value }] }
+
+def bal_nonce_change
+    (account : address) (value : account_nonce) : SailM Unit :=
+  modify fun state =>
+    { state with
+      balAccounts := touchBalAccount state.balAccounts account
+      balNonceChanges :=
+        state.balNonceChanges ++
+          [{ account := account, index := state.balIndex, value := value }] }
+
+def bal_code_change (account : address) (value : hash) : SailM Unit :=
+  modify fun state =>
+    { state with
+      balAccounts := touchBalAccount state.balAccounts account
+      balCodeChanges :=
+        state.balCodeChanges ++
+          [{ account := account, index := state.balIndex, value := value }] }
+
+def bal_prepare (_ : Unit) : SailM Unit :=
+  modify fun state =>
+    { state with
+      balAccounts :=
+        state.balAccounts.mergeSort fun left right =>
+          addressSortKey left ≤ addressSortKey right
+      balStorageChanges :=
+        state.balStorageChanges.mergeSort fun left right =>
+          if left.account == right.account then
+            if left.slot.value == right.slot.value then
+              left.index ≤ right.index
+            else
+              left.slot.value ≤ right.slot.value
+          else
+            accountSecureSortKey left.account ≤
+              accountSecureSortKey right.account
+      balStorageReads :=
+        (state.balStorageReads.filter fun read =>
+          !(state.balStorageChanges.any fun change =>
+            change.account == read.account && change.slot == read.slot)
+        ).mergeSort fun left right =>
+          if left.account == right.account then
+            left.slot.value ≤ right.slot.value
+          else
+            accountSecureSortKey left.account ≤
+              accountSecureSortKey right.account
+      balBalanceChanges :=
+        state.balBalanceChanges.mergeSort fun left right =>
+          if left.account == right.account then left.index ≤ right.index
+          else
+            accountSecureSortKey left.account ≤
+              accountSecureSortKey right.account
+      balNonceChanges :=
+        state.balNonceChanges.mergeSort fun left right =>
+          if left.account == right.account then left.index ≤ right.index
+          else
+            accountSecureSortKey left.account ≤
+              accountSecureSortKey right.account
+      balCodeChanges :=
+        state.balCodeChanges.mergeSort fun left right =>
+          if left.account == right.account then left.index ≤ right.index
+          else
+            accountSecureSortKey left.account ≤
+              accountSecureSortKey right.account }
+
+private def balAccountAt (state : HostState) (index : item_index) : address :=
+  state.balAccounts.getD index.value default
+
+def bal_account_count (_ : Unit) : SailM item_count := do
+  pure ⟨(← get).balAccounts.length⟩
+
+def bal_account_address (index : item_index) : SailM address := do
+  pure (balAccountAt (← get) index)
+
+def bal_storage_change_count (accountIndex : item_index) : SailM item_count := do
+  let state ← get
+  let account := balAccountAt state accountIndex
+  pure ⟨(state.balStorageChanges.filter (·.account == account)).length⟩
+
+private def balStorageChangeAt
+    (state : HostState) (accountIndex changeIndex : item_index) :
+    BalStorageChange :=
+  let account := balAccountAt state accountIndex
+  (state.balStorageChanges.filter (·.account == account)).getD changeIndex.value default
+
+def bal_storage_change_slot
+    (accountIndex changeIndex : item_index) : SailM word := do
+  pure (balStorageChangeAt (← get) accountIndex changeIndex).slot
+
+def bal_storage_change_index
+    (accountIndex changeIndex : item_index) : SailM item_index := do
+  pure ⟨(balStorageChangeAt (← get) accountIndex changeIndex).index⟩
+
+def bal_storage_change_value
+    (accountIndex changeIndex : item_index) : SailM word := do
+  pure (balStorageChangeAt (← get) accountIndex changeIndex).value
+
+private def balStorageReadsFor
+    (state : HostState) (accountIndex : item_index) : List BalStorageRead :=
+  let account := balAccountAt state accountIndex
+  state.balStorageReads.filter (·.account == account)
+
+def bal_storage_read_count (accountIndex : item_index) : SailM item_count := do
+  pure ⟨(balStorageReadsFor (← get) accountIndex).length⟩
+
+def bal_storage_read_slot
+    (accountIndex readIndex : item_index) : SailM word := do
+  pure ((balStorageReadsFor (← get) accountIndex).getD readIndex.value default).slot
+
+private def balBalanceChangesFor
+    (state : HostState) (accountIndex : item_index) : List BalBalanceChange :=
+  let account := balAccountAt state accountIndex
+  state.balBalanceChanges.filter (·.account == account)
+
+def bal_balance_change_count (accountIndex : item_index) : SailM item_count := do
+  pure ⟨(balBalanceChangesFor (← get) accountIndex).length⟩
+
+def bal_balance_change_index
+    (accountIndex changeIndex : item_index) : SailM item_index := do
+  pure ⟨((balBalanceChangesFor (← get) accountIndex).getD changeIndex.value default).index⟩
+
+def bal_balance_change_value
+    (accountIndex changeIndex : item_index) : SailM word := do
+  pure ((balBalanceChangesFor (← get) accountIndex).getD changeIndex.value default).value
+
+private def balNonceChangesFor
+    (state : HostState) (accountIndex : item_index) : List BalNonceChange :=
+  let account := balAccountAt state accountIndex
+  state.balNonceChanges.filter (·.account == account)
+
+def bal_nonce_change_count (accountIndex : item_index) : SailM item_count := do
+  pure ⟨(balNonceChangesFor (← get) accountIndex).length⟩
+
+def bal_nonce_change_index
+    (accountIndex changeIndex : item_index) : SailM item_index := do
+  pure ⟨((balNonceChangesFor (← get) accountIndex).getD changeIndex.value default).index⟩
+
+def bal_nonce_change_value
+    (accountIndex changeIndex : item_index) : SailM account_nonce := do
+  pure ((balNonceChangesFor (← get) accountIndex).getD changeIndex.value default).value
+
+private def balCodeChangesFor
+    (state : HostState) (accountIndex : item_index) : List BalCodeChange :=
+  let account := balAccountAt state accountIndex
+  state.balCodeChanges.filter (·.account == account)
+
+def bal_code_change_count (accountIndex : item_index) : SailM item_count := do
+  pure ⟨(balCodeChangesFor (← get) accountIndex).length⟩
+
+def bal_code_change_index
+    (accountIndex changeIndex : item_index) : SailM item_index := do
+  pure ⟨((balCodeChangesFor (← get) accountIndex).getD changeIndex.value default).index⟩
+
+def bal_code_change_hash
+    (accountIndex changeIndex : item_index) : SailM hash := do
+  pure ((balCodeChangesFor (← get) accountIndex).getD changeIndex.value default).value
+
+def warm_reset (_ : Unit) : SailM Unit :=
+  modify fun state => { state with warmAddresses := [], warmSlots := [] }
+
+def warm_addr_touch (account : address) : SailM Bool := do
+  let state ← get
+  let warm := state.warmAddresses.contains account
+  set { state with warmAddresses := touchBalAccount state.warmAddresses account }
+  pure warm
+
+def warm_slot_touch (account : address) (slot : word) : SailM Bool := do
+  let state ← get
+  let key : StorageKey := { addr := account, slot := slot }
+  let warm := state.warmSlots.contains key
+  set { state with
+    warmSlots := if warm then state.warmSlots else state.warmSlots ++ [key] }
+  pure warm
+
+def logs_tx_reset (_ : Unit) : SailM Unit :=
+  modify fun state => { state with logs := [], logBytes := #[] }
+
+def log_append (account : address) (topics : List word) (data : Bytes) :
+    SailM Unit := do
+  let state ← get
+  let bytes := materializeBytes state data
+  let offset := state.logBytes.size
+  let slice : ByteSlice :=
+    ⟨offset, ⟨bytes.length,
+      { source := .LogDataSource, off := offset, len := bytes.length }⟩⟩
+  let entry : LogEntry :=
+    { address := account, topics := topics, data := slice }
+  set { state with
+    logBytes := state.logBytes ++ bytes.toArray
+    logs := state.logs ++ [entry] }
+
+def read_logs (_ : Unit) : SailM (List LogEntry) := do
+  pure (← get).logs
+
+def nodedb_reset (_ : Unit) : SailM Unit :=
+  modify fun state => { state with nodeDb := [] }
+
+def nodedb_insert
+    (key : hash) (offset : source_pointer) (length : host_access) :
+    SailM Unit :=
+  modify fun state =>
+    let slice : ByteSlice :=
+      ⟨offset, ⟨length,
+        { source := .StatelessInputSource, off := offset, len := length }⟩⟩
+    { state with nodeDb := assocPut state.nodeDb key slice }
+
+def nodedb_lookup (key : hash) : SailM ByteSlice := do
+  pure ((assocGet (← get).nodeDb key).getD default)
 
 end Evm.Functions

@@ -1,6 +1,12 @@
 name = "evm"
 defaultTargets = ["Evm"]
 moreLeanArgs = ["--tstack=400000"]
+moreLinkArgs = [
+  "/Users/f/dev/ethereum/evm-sail/.agent-tmp/lean_accelerators.o",
+  "-L/Users/f/dev/ethereum/evm-sail/zkvm/accel-host/target/release",
+  "-lzkvm_accel_host",
+  "-Wl,-rpath,/Users/f/dev/ethereum/evm-sail/zkvm/accel-host/target/release",
+]
 
 [[lean_lib]]
 name = "Evm"
@@ -10,3 +16,12 @@ moreLeancArgs= ["-fbracket-depth=500"]
 [[require]]
 name = "Sail"
 path = "/Users/f/dev/ethereum/evm-sail/extractions/lean/evm/.lake/packages/Sail"
+
+
+[[lean_exe]]
+name = "run"
+root = "Evm"
+
+[[lean_exe]]
+name = "trace"
+root = "Trace"

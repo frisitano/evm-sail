@@ -67,7 +67,7 @@ def scratch_push_bytes (data : (List byte)) (len : Nat) : SailM Unit := do
   else (pure ())
 
 /-- Appends a source-backed slice at the cursor. -/
-/- Type quantifiers: k_ex407226_ : Nat, k_ex407225_ : Nat, 0 ≤ k_ex407225_ ∧ 0 ≤ k_ex407226_ -/
+/- Type quantifiers: k_ex409426_ : Nat, k_ex409425_ : Nat, 0 ≤ k_ex409425_ ∧ 0 ≤ k_ex409426_ -/
 def scratch_push_slice (data : EvmByteSlice) : SailM Unit := do
   let data := ((data).2).2
   if ((data.len != 0) : Bool)
@@ -81,7 +81,7 @@ def scratch_push_slice (data : EvmByteSlice) : SailM Unit := do
   else (pure ())
 
 /-- Appends a evm_prefix of a fixed 32-byte value at the cursor. -/
-/- Type quantifiers: k_ex407227_ : Nat, 0 ≤ k_ex407227_ ∧ k_ex407227_ ≤ 32 -/
+/- Type quantifiers: k_ex409427_ : Nat, 0 ≤ k_ex409427_ ∧ k_ex409427_ ≤ 32 -/
 def scratch_push_b256 (data : b256) (len : Nat) : SailM Unit := do
   if ((len != 0) : Bool)
   then

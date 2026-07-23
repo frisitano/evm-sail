@@ -1,0 +1,20 @@
+{"version": "1.1.0",
+ "packagesDir": ".lake/packages",
+ "packages":
+ [{"type": "path",
+   "scope": "",
+   "name": "evm",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../evm",
+   "configFile": "lakefile.toml"},
+  {"type": "path",
+   "scope": "",
+   "name": "Sail",
+   "manifestFile": "lake-manifest.json",
+   "inherited": true,
+   "dir":
+   "/Users/f/dev/ethereum/evm-sail/extractions/lean/evm/.lake/packages/Sail",
+   "configFile": "lakefile.toml"}],
+ "name": "«evm-lean-runner»",
+ "lakeDir": ".lake"}

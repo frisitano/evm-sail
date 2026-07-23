@@ -209,7 +209,7 @@ def next_update_under (updates : TrieUpdateCursor) (evm_prefix' : TriePath) : Sa
   | .some update => (path_prefix_of evm_prefix' update.key)
   | none => (pure false)
 
-/- Type quantifiers: k_ex408844_ : Nat, k_ex408843_ : Nat, 0 ≤ k_ex408843_ ∧ 0 ≤ k_ex408844_ -/
+/- Type quantifiers: k_ex411124_ : Nat, k_ex411123_ : Nat, 0 ≤ k_ex411123_ ∧ 0 ≤ k_ex411124_ -/
 def item_leaf (path : TriePath) (value : EvmByteSlice) : TrieItem :=
   let value := ((value).2).2
   { path := path,
@@ -228,7 +228,7 @@ remaining path is absorbed into it. This is the one place a delete
 collapse can demand node material: an unknown-type hash reference
 absorbing a nonempty suffix resolves its node from the witness db
 (fail-closed). -/
-/- Type quantifiers: k_ex408845_ : Nat, 0 ≤ k_ex408845_ ∧ k_ex408845_ ≤ 64 -/
+/- Type quantifiers: k_ex411125_ : Nat, 0 ≤ k_ex411125_ ∧ k_ex411125_ ≤ 64 -/
 def item_ref (it : TrieItem) (depth : trie_path_len) : SailM NodeRef := do
   let depth := (depth).value
   let suffix ← do (path_drop it.path ⟨depth⟩)
@@ -267,7 +267,7 @@ def trie_builder_empty (_ : Unit) : TrieBuilder :=
     complete := false }
 
 /-- Opens an empty branch at `depth` on the builder stack. -/
-/- Type quantifiers: k_ex408848_ : Nat, 0 ≤ k_ex408848_ ∧ k_ex408848_ ≤ 63 -/
+/- Type quantifiers: k_ex411128_ : Nat, 0 ≤ k_ex411128_ ∧ k_ex411128_ ≤ 63 -/
 def trie_builder_push (builder : TrieBuilder) (depth : trie_depth) : TrieBuilder :=
   let depth := (depth).value
   { frames := ((empty_trie_branch_frame ⟨depth⟩) :: builder.frames),
@@ -307,8 +307,8 @@ def trie_builder_pop (builder : TrieBuilder) : SailM (TrieBranchFrame × TrieBui
 
 /-- Inserts an extension between parent and child depths when their paths have
 an unbranched gap. -/
-/- Type quantifiers: k_ex408850_ : Nat, k_ex408849_ : Nat, 0 ≤ k_ex408849_ ∧ k_ex408849_ ≤ 63, 0
-  ≤ k_ex408850_ ∧ k_ex408850_ ≤ 63 -/
+/- Type quantifiers: k_ex411130_ : Nat, k_ex411129_ : Nat, 0 ≤ k_ex411129_ ∧ k_ex411129_ ≤ 63, 0
+  ≤ k_ex411130_ ∧ k_ex411130_ ≤ 63 -/
 def trie_builder_wrap_branch (anchor : TriePath) (parent_depth : trie_depth) (child_depth : trie_depth) (child : NodeRef) : SailM NodeRef := do
   let parent_depth := (parent_depth).value
   let child_depth := (child_depth).value
@@ -322,7 +322,7 @@ def trie_builder_wrap_branch (anchor : TriePath) (parent_depth : trie_depth) (ch
         child))
 
 /-- Closes every branch deeper than the next key's common evm_prefix. -/
-/- Type quantifiers: _reclimit : Nat, k_ex408851_ : Nat, 0 ≤ k_ex408851_ ∧ k_ex408851_ ≤ 64, 0
+/- Type quantifiers: _reclimit : Nat, k_ex411131_ : Nat, 0 ≤ k_ex411131_ ∧ k_ex411131_ ≤ 64, 0
   ≤ _reclimit -/
 def _rec_trie_builder_close (builder : TrieBuilder) (anchor : TriePath) (next_common : (Option trie_depth)) (fuel : trie_path_len) (_reclimit : Nat) : SailM TrieBuilder := do
   let next_common := (Option.map (fun semanticValue => (semanticValue).value) (next_common))

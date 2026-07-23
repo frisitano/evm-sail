@@ -76,13 +76,13 @@ def EMPTY_TRIE_ROOT : hash :=
     (to_bytes_le (n := 32) 0x56E81F171BCC55A6FF8345E692C0F86E5B48E01B996CADC001622FB5E363B421#256))
 
 /-- KECCAK-256 of a source-tagged slice, without materializing it. -/
-/- Type quantifiers: k_ex406905_ : Nat, k_ex406904_ : Nat, 0 ≤ k_ex406904_ ∧ 0 ≤ k_ex406905_ -/
+/- Type quantifiers: k_ex409105_ : Nat, k_ex409104_ : Nat, 0 ≤ k_ex409104_ ∧ 0 ≤ k_ex409105_ -/
 def keccak256_slice (s : EvmByteSlice) : SailM hash := do
   let s := ((s).2).2
   (keccak256_segments [(BytesSlice ⟨_, ⟨_, s⟩⟩)])
 
 /-- SHA-256 of a source-tagged slice, without materializing it. -/
-/- Type quantifiers: k_ex406909_ : Nat, k_ex406908_ : Nat, 0 ≤ k_ex406908_ ∧ 0 ≤ k_ex406909_ -/
+/- Type quantifiers: k_ex409109_ : Nat, k_ex409108_ : Nat, 0 ≤ k_ex409108_ ∧ 0 ≤ k_ex409109_ -/
 def sha256_slice (s : EvmByteSlice) : SailM hash := do
   let s := ((s).2).2
   (sha256_segments [(BytesSlice ⟨_, ⟨_, s⟩⟩)])
@@ -118,9 +118,9 @@ def SECP_N_HALF : word :=
 
 /-- Recovers the signer address from `(h, y_parity, r, s)`, returning
 recovery success and the recovered address (used by EIP-7702). -/
-/- Type quantifiers: k_ex406921_ : Nat, k_ex406920_ : Nat, k_ex406919_ : Nat, 0 ≤ k_ex406919_ ∧
-  k_ex406919_ ≤ 1, 0 ≤ k_ex406920_ ∧ k_ex406920_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex406921_ ∧
-  k_ex406921_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex409121_ : Nat, k_ex409120_ : Nat, k_ex409119_ : Nat, 0 ≤ k_ex409119_ ∧
+  k_ex409119_ ≤ 1, 0 ≤ k_ex409120_ ∧ k_ex409120_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex409121_ ∧
+  k_ex409121_ ≤ (2 ^ 256 - 1) -/
 def ecrecover_addr (h : hash) (yparity : y_parity) (r : word) (s : word) : SailM (Bool × address) := do
   let yparity := (yparity).value
   let r := (r).value

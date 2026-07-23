@@ -50,7 +50,7 @@ The `CREATE` and `CREATE2` address rules (YP §7, EIP-1014). -/
 
 /-- The `CREATE` address (YP §7): the low 20 bytes of
 `keccak256(rlp([sender, nonce]))`. -/
-/- Type quantifiers: k_ex407775_ : Nat, 0 ≤ k_ex407775_ ∧ k_ex407775_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex409975_ : Nat, 0 ≤ k_ex409975_ ∧ k_ex409975_ ≤ (2 ^ 64 - 1) -/
 def create_address (sender : address) (nonce : account_nonce) : SailM address := do
   let nonce := (nonce).value
   let address_length := (rlp_addr_size ())
@@ -69,7 +69,7 @@ def create_address (sender : address) (nonce : account_nonce) : SailM address :=
 
 /-- The `CREATE2` address (EIP-1014): the low 20 bytes of
 `keccak256(0xff ++ sender ++ salt ++ keccak256(initcode))`. -/
-/- Type quantifiers: k_ex407776_ : Nat, 0 ≤ k_ex407776_ ∧ k_ex407776_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex409976_ : Nat, 0 ≤ k_ex409976_ ∧ k_ex409976_ ≤ (2 ^ 256 - 1) -/
 def create2_address (sender : address) (salt : word) (init_hash : hash) : SailM address := do
   let salt := (salt).value
   (pure (word_to_address

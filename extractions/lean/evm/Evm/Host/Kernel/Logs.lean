@@ -56,7 +56,7 @@ def k_log (a : address) (topics : (List word)) (data : Bytes) : SailM Unit := do
 
 /-- Emits the EIP-7708 transfer log for a nonzero, non-self value
 transfer (Amsterdam onward). -/
-/- Type quantifiers: k_ex408217_ : Nat, 0 ≤ k_ex408217_ ∧ k_ex408217_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410497_ : Nat, 0 ≤ k_ex410497_ ∧ k_ex410497_ ≤ (2 ^ 256 - 1) -/
 def k_emit_transfer_log (src : address) (dst : address) (v : word) : SailM Unit := do
   let v := (v).value
   if (((fork_lt (← readReg k_fork) Amsterdam) || ((word_is_zero v) || (src == dst))) : Bool)
@@ -69,7 +69,7 @@ def k_emit_transfer_log (src : address) (dst : address) (v : word) : SailM Unit 
 
 /-- Emits the EIP-7708 burn log when a selfdestruct deletion burns a
 nonzero balance (Amsterdam onward). -/
-/- Type quantifiers: k_ex408218_ : Nat, 0 ≤ k_ex408218_ ∧ k_ex408218_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410498_ : Nat, 0 ≤ k_ex410498_ ∧ k_ex410498_ ≤ (2 ^ 256 - 1) -/
 def k_emit_burn_log (a : address) (v : word) : SailM Unit := do
   let v := (v).value
   if (((fork_lt (← readReg k_fork) Amsterdam) || (word_is_zero v)) : Bool)

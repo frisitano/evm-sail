@@ -63,7 +63,7 @@ def output_buffer_slice (len : Nat) : EvmByteSlice :=
 
 /-- Copies frame output into the host buffer so it survives frame
 teardown; the canonical returndata source. -/
-/- Type quantifiers: k_ex408147_ : Nat, k_ex408146_ : Nat, 0 ≤ k_ex408146_ ∧ 0 ≤ k_ex408147_ -/
+/- Type quantifiers: k_ex410427_ : Nat, k_ex410426_ : Nat, 0 ≤ k_ex410426_ ∧ 0 ≤ k_ex410427_ -/
 def freeze_output (data : EvmByteSlice) : SailM EvmByteSlice := do
   let data := ((data).2).2
   let len := data.len
@@ -100,8 +100,8 @@ def output_buffer_word (value : word) : SailM EvmByteSlice := do
 
 /-- Stores two words as the output (64-byte precompile results, e.g.
 `ecrecover`-style pairs). -/
-/- Type quantifiers: k_ex408150_ : Nat, k_ex408149_ : Nat, 0 ≤ k_ex408149_ ∧
-  k_ex408149_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex408150_ ∧ k_ex408150_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex410430_ : Nat, k_ex410429_ : Nat, 0 ≤ k_ex410429_ ∧
+  k_ex410429_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex410430_ ∧ k_ex410430_ ≤ (2 ^ 256 - 1) -/
 def output_buffer_words (first : word) (second : word) : SailM EvmByteSlice := do
   let first := (first).value
   let second := (second).value

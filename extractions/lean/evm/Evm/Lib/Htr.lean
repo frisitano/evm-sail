@@ -291,7 +291,7 @@ def merkle_accumulator_empty (depth : htr_depth) : MerkleAccumulator :=
 /-- Adds leaf number `count` to a low-to-high frontier. A set bit in
 `count` has one occupied slot at that level; carries consume those
 slots head-first. -/
-/- Type quantifiers: k_ex409390_ : Nat, 0 ≤ k_ex409390_ ∧ k_ex409390_ ≤ 33554432 -/
+/- Type quantifiers: k_ex411670_ : Nat, 0 ≤ k_ex411670_ ∧ k_ex411670_ ≤ 33554432 -/
 def merkle_push (frontier : (List MerkleSlot)) (count : htr_leaf_count) (leaf : hash) : SailM (List MerkleSlot) := do
   let count := (count).value
   if (((Nat.mod count 2) == 0) : Bool)
@@ -320,9 +320,9 @@ def merkle_accumulator_push (accumulator : MerkleAccumulator) (leaf : hash) : Sa
 
 /-- Completes a frontier with zero subtrees through `remaining` levels and
 returns its Merkle root. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409393_ : Nat, k_ex409392_ : Nat, k_ex409391_ : Nat, 0 ≤
-  k_ex409391_ ∧ k_ex409391_ ≤ 33554432, 0 ≤ k_ex409392_ ∧ k_ex409392_ ≤ 25, 0 ≤
-  k_ex409393_ ∧ k_ex409393_ ≤ 25, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411673_ : Nat, k_ex411672_ : Nat, k_ex411671_ : Nat, 0 ≤
+  k_ex411671_ ∧ k_ex411671_ ≤ 33554432, 0 ≤ k_ex411672_ ∧ k_ex411672_ ≤ 25, 0 ≤
+  k_ex411673_ ∧ k_ex411673_ ≤ 25, 0 ≤ _reclimit -/
 def _rec_merkle_root_levels (slots : (List MerkleSlot)) (n : htr_leaf_count) (acc : hash) (level : htr_depth) (remaining : htr_depth) (_reclimit : Nat) : SailM hash := do
   let n := (n).value
   let level := (level).value
@@ -407,7 +407,7 @@ def merkle_accumulate (leaves : (List hash)) (accumulator : MerkleAccumulator) :
   | (leaf :: rest) => (merkle_accumulate rest (← (merkle_accumulator_push accumulator leaf)))
 
 /-- `merkleize` of a fixed leaf list at `depth` (SSZ spec). -/
-/- Type quantifiers: k_ex409399_ : Nat, 0 ≤ k_ex409399_ ∧ k_ex409399_ ≤ 25 -/
+/- Type quantifiers: k_ex411679_ : Nat, 0 ≤ k_ex411679_ ∧ k_ex411679_ ≤ 25 -/
 def merkleize (leaves : (List hash)) (depth : htr_depth) : SailM hash := do
   let depth := (depth).value
   (merkle_accumulator_root (← (merkle_accumulate leaves (merkle_accumulator_empty ⟨depth⟩))))
@@ -533,8 +533,8 @@ def clog2 (n : htr_leaf_count) : SailM htr_depth := do
   pure (⟨publicResult⟩)
 
 /-- The `chunk_index`-th 32-byte chunk of a byte span, zero-padded. -/
-/- Type quantifiers: k_ex409412_ : Nat, k_ex409411_ : Nat, k_ex409410_ : Nat, 0 ≤ k_ex409410_ ∧
-  0 ≤ k_ex409411_, 0 ≤ k_ex409412_ ∧ k_ex409412_ ≤ 33554432 -/
+/- Type quantifiers: k_ex411692_ : Nat, k_ex411691_ : Nat, k_ex411690_ : Nat, 0 ≤ k_ex411690_ ∧
+  0 ≤ k_ex411691_, 0 ≤ k_ex411692_ ∧ k_ex411692_ ≤ 33554432 -/
 def htr_chunk (bytes : EvmByteSlice) (chunk_index : htr_leaf_count) : SailM hash := do
   let bytes := ((bytes).2).2
   let chunk_index := (chunk_index).value
@@ -550,8 +550,8 @@ def htr_chunk_count (byte_len : Nat) : SailM htr_leaf_count := do
   pure (⟨publicResult⟩)
 
 /-- The Merkle root of a byte span's chunks at `depth`. -/
-/- Type quantifiers: k_ex409422_ : Nat, k_ex409421_ : Nat, k_ex409420_ : Nat, 0 ≤ k_ex409420_ ∧
-  0 ≤ k_ex409421_, 0 ≤ k_ex409422_ ∧ k_ex409422_ ≤ 25 -/
+/- Type quantifiers: k_ex411702_ : Nat, k_ex411701_ : Nat, k_ex411700_ : Nat, 0 ≤ k_ex411700_ ∧
+  0 ≤ k_ex411701_, 0 ≤ k_ex411702_ ∧ k_ex411702_ ≤ 25 -/
 def htr_bytes_root (bytes : EvmByteSlice) (depth : htr_depth) : SailM hash := do
   let bytes := ((bytes).2).2
   let depth := (depth).value
@@ -576,7 +576,7 @@ def htr_bytes_root (bytes : EvmByteSlice) (depth : htr_depth) : SailM hash := do
   (pure root)
 
 /-- `hash_tree_root` of a fixed-size `ByteVector`. -/
-/- Type quantifiers: k_ex409426_ : Nat, k_ex409425_ : Nat, 0 ≤ k_ex409425_ ∧ 0 ≤ k_ex409426_ -/
+/- Type quantifiers: k_ex411706_ : Nat, k_ex411705_ : Nat, 0 ≤ k_ex411705_ ∧ 0 ≤ k_ex411706_ -/
 def htr_bytevector (bytes : EvmByteSlice) : SailM hash := do
   let bytes := ((bytes).2).2
   let chunks ← do
@@ -585,8 +585,8 @@ def htr_bytevector (bytes : EvmByteSlice) : SailM hash := do
         pure ((publicResult).value))
   (htr_bytes_root ⟨_, ⟨_, bytes⟩⟩ ⟨((← (clog2 ⟨chunks⟩))).value⟩)
 
-/- Type quantifiers: k_ex409433_ : Nat, k_ex409432_ : Nat, limit_bytes : Nat, source_valid_length(limit_bytes), 0
-  ≤ k_ex409432_ ∧ 0 ≤ k_ex409433_ -/
+/- Type quantifiers: k_ex411713_ : Nat, k_ex411712_ : Nat, limit_bytes : Nat, source_valid_length(limit_bytes), 0
+  ≤ k_ex411712_ ∧ 0 ≤ k_ex411713_ -/
 def htr_bytelist (bytes : EvmByteSlice) (limit_bytes : Nat) : SailM hash := do
   let bytes := ((bytes).2).2
   let capacity ← do
@@ -598,8 +598,8 @@ def htr_bytelist (bytes : EvmByteSlice) (limit_bytes : Nat) : SailM hash := do
     bytes.len)
 
 /-- `hash_tree_root` of one SSZ withdrawal (4 fields, depth 2). -/
-/- Type quantifiers: k_ex409440_ : Nat, k_ex409439_ : Nat, 0 ≤ k_ex409439_ ∧ 0 ≤ k_ex409440_
-  ∧ k_ex409440_ = 44 -/
+/- Type quantifiers: k_ex411720_ : Nat, k_ex411719_ : Nat, 0 ≤ k_ex411719_ ∧ 0 ≤ k_ex411720_
+  ∧ k_ex411720_ = 44 -/
 def htr_withdrawal (withdrawal : (EvmByteSliceLength 44)) : SailM hash := do
   let withdrawal := ((withdrawal).2).2
   (merkleize
@@ -677,7 +677,7 @@ def htr_execution_payload (input_ref : StatelessInputRef) : SailM hash := do
   (pure root)
 
 /-- `hash_tree_root` of the versioned hashes (`List[Bytes32, 4096]`). -/
-/- Type quantifiers: k_ex409444_ : Nat, k_ex409443_ : Nat, 0 ≤ k_ex409443_ ∧ 0 ≤ k_ex409444_ -/
+/- Type quantifiers: k_ex411724_ : Nat, k_ex411723_ : Nat, 0 ≤ k_ex411723_ ∧ 0 ≤ k_ex411724_ -/
 def htr_versioned_hashes (versioned_hashes : EvmByteSlice) : SailM hash := do
   let versioned_hashes := ((versioned_hashes).2).2
   let _ : Unit := (cycle_scope_start SCOPE_HTR_VERSIONED_HASHES)
@@ -704,8 +704,8 @@ def htr_versioned_hashes (versioned_hashes : EvmByteSlice) : SailM hash := do
   (pure root)
 
 /-- `hash_tree_root` of one deposit request (5 fields, depth 3). -/
-/- Type quantifiers: k_ex409449_ : Nat, k_ex409448_ : Nat, 0 ≤ k_ex409448_ ∧ 0 ≤ k_ex409449_
-  ∧ k_ex409449_ = 192 -/
+/- Type quantifiers: k_ex411729_ : Nat, k_ex411728_ : Nat, 0 ≤ k_ex411728_ ∧ 0 ≤ k_ex411729_
+  ∧ k_ex411729_ = 192 -/
 def htr_deposit (deposit : (EvmByteSliceLength 192)) : SailM hash := do
   let deposit := ((deposit).2).2
   (merkleize
@@ -717,8 +717,8 @@ def htr_deposit (deposit : (EvmByteSliceLength 192)) : SailM hash := do
       ⟨((← (decode_ssz_uint ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_INDEX))).value⟩)] ⟨3⟩)
 
 /-- `hash_tree_root` of one withdrawal request (3 fields, depth 2). -/
-/- Type quantifiers: k_ex409454_ : Nat, k_ex409453_ : Nat, 0 ≤ k_ex409453_ ∧ 0 ≤ k_ex409454_
-  ∧ k_ex409454_ = 76 -/
+/- Type quantifiers: k_ex411734_ : Nat, k_ex411733_ : Nat, 0 ≤ k_ex411733_ ∧ 0 ≤ k_ex411734_
+  ∧ k_ex411734_ = 76 -/
 def htr_withdrawal_request (request : (EvmByteSliceLength 76)) : SailM hash := do
   let request := ((request).2).2
   (merkleize
@@ -729,8 +729,8 @@ def htr_withdrawal_request (request : (EvmByteSliceLength 76)) : SailM hash := d
     ⟨2⟩)
 
 /-- `hash_tree_root` of one consolidation request (3 fields, depth 2). -/
-/- Type quantifiers: k_ex409459_ : Nat, k_ex409458_ : Nat, 0 ≤ k_ex409458_ ∧ 0 ≤ k_ex409459_
-  ∧ k_ex409459_ = 116 -/
+/- Type quantifiers: k_ex411739_ : Nat, k_ex411738_ : Nat, 0 ≤ k_ex411738_ ∧ 0 ≤ k_ex411739_
+  ∧ k_ex411739_ = 116 -/
 def htr_consolidation_request (request : (EvmByteSliceLength 116)) : SailM hash := do
   let request := ((request).2).2
   (merkleize
@@ -741,8 +741,8 @@ def htr_consolidation_request (request : (EvmByteSliceLength 116)) : SailM hash 
           HTR_REQUEST_PUBKEY_LENGTH)⟩⟩))] ⟨2⟩)
 
 /-- `hash_tree_root` of one builder deposit request (4 fields, depth 2). -/
-/- Type quantifiers: k_ex409464_ : Nat, k_ex409463_ : Nat, 0 ≤ k_ex409463_ ∧ 0 ≤ k_ex409464_
-  ∧ k_ex409464_ = 184 -/
+/- Type quantifiers: k_ex411744_ : Nat, k_ex411743_ : Nat, 0 ≤ k_ex411743_ ∧ 0 ≤ k_ex411744_
+  ∧ k_ex411744_ = 184 -/
 def htr_builder_deposit_request (request : (EvmByteSliceLength 184)) : SailM hash := do
   let request := ((request).2).2
   (merkleize
@@ -754,8 +754,8 @@ def htr_builder_deposit_request (request : (EvmByteSliceLength 184)) : SailM has
     ⟨2⟩)
 
 /-- `hash_tree_root` of one builder exit request (2 fields, depth 1). -/
-/- Type quantifiers: k_ex409469_ : Nat, k_ex409468_ : Nat, 0 ≤ k_ex409468_ ∧ 0 ≤ k_ex409469_
-  ∧ k_ex409469_ = 68 -/
+/- Type quantifiers: k_ex411749_ : Nat, k_ex411748_ : Nat, 0 ≤ k_ex411748_ ∧ 0 ≤ k_ex411749_
+  ∧ k_ex411749_ = 68 -/
 def htr_builder_exit_request (request : (EvmByteSliceLength 68)) : SailM hash := do
   let request := ((request).2).2
   (merkleize
@@ -765,7 +765,7 @@ def htr_builder_exit_request (request : (EvmByteSliceLength 68)) : SailM hash :=
     ⟨1⟩)
 
 /-- `hash_tree_root` of the deposit-request list (depth 13). -/
-/- Type quantifiers: k_ex409473_ : Nat, k_ex409472_ : Nat, 0 ≤ k_ex409472_ ∧ 0 ≤ k_ex409473_ -/
+/- Type quantifiers: k_ex411753_ : Nat, k_ex411752_ : Nat, 0 ≤ k_ex411752_ ∧ 0 ≤ k_ex411753_ -/
 def htr_deposits (deposits : EvmByteSlice) : SailM hash := do
   let deposits := ((deposits).2).2
   let rest ← do
@@ -783,7 +783,7 @@ def htr_deposits (deposits : EvmByteSlice) : SailM hash := do
   (mix_in_length (← (merkle_accumulator_root accumulator)) (accumulator.count).value)
 
 /-- `hash_tree_root` of the withdrawal-request list (depth 4). -/
-/- Type quantifiers: k_ex409477_ : Nat, k_ex409476_ : Nat, 0 ≤ k_ex409476_ ∧ 0 ≤ k_ex409477_ -/
+/- Type quantifiers: k_ex411757_ : Nat, k_ex411756_ : Nat, 0 ≤ k_ex411756_ ∧ 0 ≤ k_ex411757_ -/
 def htr_withdrawal_requests (requests : EvmByteSlice) : SailM hash := do
   let requests := ((requests).2).2
   let rest ← do
@@ -802,7 +802,7 @@ def htr_withdrawal_requests (requests : EvmByteSlice) : SailM hash := do
   (mix_in_length (← (merkle_accumulator_root accumulator)) (accumulator.count).value)
 
 /-- `hash_tree_root` of the consolidation-request list (depth 1). -/
-/- Type quantifiers: k_ex409481_ : Nat, k_ex409480_ : Nat, 0 ≤ k_ex409480_ ∧ 0 ≤ k_ex409481_ -/
+/- Type quantifiers: k_ex411761_ : Nat, k_ex411760_ : Nat, 0 ≤ k_ex411760_ ∧ 0 ≤ k_ex411761_ -/
 def htr_consolidation_requests (requests : EvmByteSlice) : SailM hash := do
   let requests := ((requests).2).2
   let rest ← do
@@ -821,7 +821,7 @@ def htr_consolidation_requests (requests : EvmByteSlice) : SailM hash := do
   (mix_in_length (← (merkle_accumulator_root accumulator)) (accumulator.count).value)
 
 /-- `hash_tree_root` of the builder-deposit-request list (depth 6). -/
-/- Type quantifiers: k_ex409485_ : Nat, k_ex409484_ : Nat, 0 ≤ k_ex409484_ ∧ 0 ≤ k_ex409485_ -/
+/- Type quantifiers: k_ex411765_ : Nat, k_ex411764_ : Nat, 0 ≤ k_ex411764_ ∧ 0 ≤ k_ex411765_ -/
 def htr_builder_deposit_requests (requests : EvmByteSlice) : SailM hash := do
   let requests := ((requests).2).2
   let rest ← do
@@ -840,7 +840,7 @@ def htr_builder_deposit_requests (requests : EvmByteSlice) : SailM hash := do
   (mix_in_length (← (merkle_accumulator_root accumulator)) (accumulator.count).value)
 
 /-- `hash_tree_root` of the builder-exit-request list (depth 4). -/
-/- Type quantifiers: k_ex409489_ : Nat, k_ex409488_ : Nat, 0 ≤ k_ex409488_ ∧ 0 ≤ k_ex409489_ -/
+/- Type quantifiers: k_ex411769_ : Nat, k_ex411768_ : Nat, 0 ≤ k_ex411768_ ∧ 0 ≤ k_ex411769_ -/
 def htr_builder_exit_requests (requests : EvmByteSlice) : SailM hash := do
   let requests := ((requests).2).2
   let rest ← do

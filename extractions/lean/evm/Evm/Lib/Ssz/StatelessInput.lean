@@ -346,8 +346,8 @@ def ssz_fixed_list_pop (items : (BoundedSszListRef k_maximum)) (item_size : Nat)
     fun (k_off : Nat) => (Sigma fun (item_size : Nat) => (EvmByteSliceFields k_off item_size))) × (BoundedSszListRef k_maximum))) : ((Sigma
     fun (k_off : Nat) => (Sigma fun (item_size : Nat) => (EvmByteSliceFields k_off item_size))) × (BoundedSszListRef k_maximum))))
 
-/- Type quantifiers: k_ex409008_ : Nat, k_ex409007_ : Nat, minimum : Nat, 0 ≤ minimum, 0 ≤
-  k_ex409007_ ∧ 0 ≤ k_ex409008_ -/
+/- Type quantifiers: k_ex411288_ : Nat, k_ex411287_ : Nat, minimum : Nat, 0 ≤ minimum, 0 ≤
+  k_ex411287_ ∧ 0 ≤ k_ex411288_ -/
 def ssz_container_bytes (bytes : EvmByteSlice) (minimum : Nat) : SailM (EvmByteSliceAtLeast minimum) := do
   let bytes := ((bytes).2).2
   let fields := bytes
@@ -360,8 +360,8 @@ def ssz_container_bytes (bytes : EvmByteSlice) (minimum : Nat) : SailM (EvmByteS
     (do
       sailThrow ((InvalidBlock InvalidConfig)))
 
-/- Type quantifiers: k_ex409013_ : Nat, k_ex409012_ : Nat, fixed_length : Nat, 0 ≤ fixed_length, 0
-  ≤ k_ex409012_ ∧ 0 ≤ k_ex409013_ ∧ 0 ≤ fixed_length ∧ fixed_length ≤ k_ex409013_ -/
+/- Type quantifiers: k_ex411293_ : Nat, k_ex411292_ : Nat, fixed_length : Nat, 0 ≤ fixed_length, 0
+  ≤ k_ex411292_ ∧ 0 ≤ k_ex411293_ ∧ 0 ≤ fixed_length ∧ fixed_length ≤ k_ex411293_ -/
 def ssz_container_cursor (bytes : (EvmByteSliceAtLeast k_minimum)) (fixed_length : Nat) : SszContainerCursor :=
   let bytes := ((bytes).2).2
   { bytes := ⟨_, ⟨_, bytes⟩⟩,
@@ -369,7 +369,7 @@ def ssz_container_cursor (bytes : (EvmByteSliceAtLeast k_minimum)) (fixed_length
 
 /-- Takes the next variable field, ending at its container-relative SSZ
 offset, and returns the advanced cursor. -/
-/- Type quantifiers: k_ex409014_ : Nat, 0 ≤ k_ex409014_ ∧ k_ex409014_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex411294_ : Nat, 0 ≤ k_ex411294_ ∧ k_ex411294_ ≤ (2 ^ 32 - 1) -/
 def ssz_take (cursor : SszContainerCursor) (stop : ssz_offset) : SailM (EvmByteSlice × SszContainerCursor) := do
   let stop := (stop).value
   let current_value := cursor.current
@@ -407,9 +407,9 @@ def ssz_finish (cursor : SszContainerCursor) : SailM EvmByteSlice := do
 /-- Constructs a variable-item list with its SSZ count and per-item byte
 limits attached. Item lengths are checked lazily when reached, before a
 consumer can construct any narrower optimized value. -/
-/- Type quantifiers: k_ex409025_ : Nat, k_ex409024_ : Nat, maximum_count : Nat, maximum_item_length
+/- Type quantifiers: k_ex411305_ : Nat, k_ex411304_ : Nat, maximum_count : Nat, maximum_item_length
   : Nat, source_valid_length(maximum_count) ∧ source_valid_length(maximum_item_length), 0 ≤
-  k_ex409024_ ∧ 0 ≤ k_ex409025_ -/
+  k_ex411304_ ∧ 0 ≤ k_ex411305_ -/
 def ssz_bounded_variable_list_ref (bytes : EvmByteSlice) (maximum_count : Nat) (maximum_item_length : Nat) : SailM (BoundedSszListRef maximum_count) := do
   let bytes := ((bytes).2).2
   let span := bytes.len
@@ -439,8 +439,8 @@ def ssz_bounded_variable_list_ref (bytes : EvmByteSlice) (maximum_count : Nat) (
           max_item_length := maximum_item_length })
 
 /-- Constructs a schema-bounded fixed-item SSZ list reference. -/
-/- Type quantifiers: k_ex409040_ : Nat, k_ex409039_ : Nat, maximum_count : Nat, item_size : Nat, source_valid_length(maximum_count)
-  ∧ source_valid_length(item_size), 0 ≤ k_ex409039_ ∧ 0 ≤ k_ex409040_ -/
+/- Type quantifiers: k_ex411320_ : Nat, k_ex411319_ : Nat, maximum_count : Nat, item_size : Nat, source_valid_length(maximum_count)
+  ∧ source_valid_length(item_size), 0 ≤ k_ex411319_ ∧ 0 ≤ k_ex411320_ -/
 def ssz_bounded_fixed_list_ref (bytes : EvmByteSlice) (item_size : Nat) (maximum_count : Nat) : SailM (BoundedSszListRef maximum_count) := do
   let bytes := ((bytes).2).2
   let width := item_size
@@ -463,7 +463,7 @@ def ssz_bounded_fixed_list_ref (bytes : EvmByteSlice) (item_size : Nat) (maximum
 /-- Resolves the input's offset tables into a
 [StatelessInputRef][type-StatelessInputRef], validating the schema id
 and every region bound; a malformed frame is `InvalidConfig`. -/
-/- Type quantifiers: k_ex409048_ : Nat, k_ex409047_ : Nat, 0 ≤ k_ex409047_ ∧ 0 ≤ k_ex409048_ -/
+/- Type quantifiers: k_ex411328_ : Nat, k_ex411327_ : Nat, 0 ≤ k_ex411327_ ∧ 0 ≤ k_ex411328_ -/
 def decode_stateless_input_ref (input : EvmByteSlice) : SailM StatelessInputRef := do
   let input := ((input).2).2
   let input_fields := input
@@ -704,7 +704,7 @@ def decode_stateless_input_ref (input : EvmByteSlice) : SailM StatelessInputRef 
 
 /-- The EIP-7685 per-type request digest:
 `sha256(request_type ‖ request_data)`. -/
-/- Type quantifiers: k_ex409052_ : Nat, k_ex409051_ : Nat, 0 ≤ k_ex409051_ ∧ 0 ≤ k_ex409052_ -/
+/- Type quantifiers: k_ex411332_ : Nat, k_ex411331_ : Nat, 0 ≤ k_ex411331_ ∧ 0 ≤ k_ex411332_ -/
 def sha256_request_digest (request_type : byte) (s : EvmByteSlice) : SailM hash := do
   let s := ((s).2).2
   (sha256_segments [(bytes_list [request_type] 1), (BytesSlice ⟨_, ⟨_, s⟩⟩)])
@@ -822,10 +822,10 @@ def next_parent_header_field (index : parent_header_field_cursor) : parent_heade
   else 19⟩
 
 /-- Extracts the execution-relevant fields while walking one parent header. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409069_ : Nat, k_ex409068_ : Nat, k_ex409067_ : Nat, k_ex409066_
-  : Nat, k_ex409065_ : Nat, 0 ≤ k_ex409065_ ∧ 0 ≤ k_ex409066_ ∧
-  0 ≤ k_ex409067_ ∧ k_ex409067_ ≤ k_ex409068_ ∧ k_ex409068_ ≤ k_ex409066_, 0 ≤
-  k_ex409069_ ∧ k_ex409069_ ≤ 19, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex411349_ : Nat, k_ex411348_ : Nat, k_ex411347_ : Nat, k_ex411346_
+  : Nat, k_ex411345_ : Nat, 0 ≤ k_ex411345_ ∧ 0 ≤ k_ex411346_ ∧
+  0 ≤ k_ex411347_ ∧ k_ex411347_ ≤ k_ex411348_ ∧ k_ex411348_ ≤ k_ex411346_, 0 ≤
+  k_ex411349_ ∧ k_ex411349_ ≤ 19, 0 ≤ _reclimit -/
 def _rec_decode_parent_header_fields (cursor : RlpCursor) (field_index : parent_header_field_cursor) (fields : ParentHeaderFields) (_reclimit : Nat) : SailM ParentHeaderFields := do
   let cursor := ((((cursor).2).2).2).2
   let field_index := (field_index).value
@@ -908,9 +908,9 @@ termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Extracts the execution-relevant fields while walking one parent header. -/
-/- Type quantifiers: field_index : Nat, k_ex409078_ : Nat, k_ex409077_ : Nat, k_ex409076_ : Nat, k_ex409075_
-  : Nat, 0 ≤ k_ex409075_ ∧ 0 ≤ k_ex409076_ ∧
-  0 ≤ k_ex409077_ ∧ k_ex409077_ ≤ k_ex409078_ ∧ k_ex409078_ ≤ k_ex409076_, 0 ≤
+/- Type quantifiers: field_index : Nat, k_ex411358_ : Nat, k_ex411357_ : Nat, k_ex411356_ : Nat, k_ex411355_
+  : Nat, 0 ≤ k_ex411355_ ∧ 0 ≤ k_ex411356_ ∧
+  0 ≤ k_ex411357_ ∧ k_ex411357_ ≤ k_ex411358_ ∧ k_ex411358_ ≤ k_ex411356_, 0 ≤
   field_index ∧ field_index ≤ 19 -/
 def decode_parent_header_fields (cursor : RlpCursor) (field_index : parent_header_field_cursor) (fields : ParentHeaderFields) : SailM ParentHeaderFields := do
   let cursor := ((((cursor).2).2).2).2
@@ -1036,7 +1036,7 @@ def index_witness_headers (headers : WitnessHeaderListRef) : SailM WitnessContex
 
 /-- Decodes the execution-payload header fields from their fixed SSZ
 offsets. -/
-/- Type quantifiers: k_ex409086_ : Nat, k_ex409085_ : Nat, 0 ≤ k_ex409085_ ∧ 0 ≤ k_ex409086_ -/
+/- Type quantifiers: k_ex411366_ : Nat, k_ex411365_ : Nat, 0 ≤ k_ex411365_ ∧ 0 ≤ k_ex411366_ -/
 def decode_payload_blob_gas_used (payload : EvmByteSlice) : SailM blob_gas_used := do
   let payload := ((payload).2).2
   let publicResult ← do
@@ -1102,7 +1102,7 @@ def decode_block_header_ssz (input_ref : StatelessInputRef) : SailM BlockHeader 
           extra_data := input_ref.extra_data })
 
 /-- Decodes one fixed-layout SSZ withdrawal element. -/
-/- Type quantifiers: k_ex409090_ : Nat, k_ex409089_ : Nat, 0 ≤ k_ex409089_ ∧ 0 ≤ k_ex409090_ -/
+/- Type quantifiers: k_ex411370_ : Nat, k_ex411369_ : Nat, 0 ≤ k_ex411369_ ∧ 0 ≤ k_ex411370_ -/
 def decode_withdrawal (withdrawal : EvmByteSlice) : SailM Withdrawal := do
   let withdrawal := ((withdrawal).2).2
   (pure { index := ← do
@@ -1128,8 +1128,8 @@ the active Amsterdam `SszForkConfig` activation.
 The activation point (optional block number / timestamp, `List[u64,1]`
 each) must be reached by this payload: at least one bound set, none
 exceeding the payload's — a future activation invalidates the block. -/
-/- Type quantifiers: k_ex409096_ : Nat, k_ex409095_ : Nat, k_ex409094_ : Nat, k_ex409093_ : Nat, 0
-  ≤ k_ex409093_ ∧ 0 ≤ k_ex409094_, 0 ≤ k_ex409095_, 0 ≤ k_ex409096_ -/
+/- Type quantifiers: k_ex411376_ : Nat, k_ex411375_ : Nat, k_ex411374_ : Nat, k_ex411373_ : Nat, 0
+  ≤ k_ex411373_ ∧ 0 ≤ k_ex411374_, 0 ≤ k_ex411375_, 0 ≤ k_ex411376_ -/
 def decode_chain_config (cc : EvmByteSlice) (number : block_number) (timestamp : block_timestamp) : SailM ChainConfig := do
   let cc := ((cc).2).2
   let cc_length := cc.len

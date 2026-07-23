@@ -61,7 +61,7 @@ def bloom_bit_mask (bit_to_set : Nat) : byte :=
   (0x01#8 <<< bit_to_set)
 
 /-- Sets one bit (0–2047) in the bloom, most-significant-byte first. -/
-/- Type quantifiers: k_ex409122_ : Nat, 0 ≤ k_ex409122_ ∧ k_ex409122_ ≤ 2047 -/
+/- Type quantifiers: k_ex411402_ : Nat, 0 ≤ k_ex411402_ ∧ k_ex411402_ ≤ 2047 -/
 def bloom_set_bit (bloom : LogsBloom) (bit_to_set : bloom_bit_index) : LogsBloom :=
   let bit_to_set := (bit_to_set).value
   let out := bloom
@@ -257,7 +257,7 @@ def rlp_write_logs (logs : (List LogEntry)) : SailM Unit := do
   (rlp_write_logs_content logs)
 
 /-- Sizes a receipt payload from status, gas, bloom, and logs. -/
-/- Type quantifiers: k_ex409129_ : Nat, 0 ≤ k_ex409129_ -/
+/- Type quantifiers: k_ex411409_ : Nat, 0 ≤ k_ex411409_ -/
 def receipt_payload_content_size (r : Receipt) (cumulative_gas_used : block_gas) : SailM rlp_scratch_length := do
   let status : Nat :=
     if (r.success : Bool)
@@ -279,7 +279,7 @@ def receipt_payload_content_size (r : Receipt) (cumulative_gas_used : block_gas)
 /-- The receipt as stored in the receipts trie: the RLP payload,
 prefixed by the envelope type byte for typed transactions
 (EIP-2718). -/
-/- Type quantifiers: k_ex409130_ : Nat, 0 ≤ k_ex409130_ -/
+/- Type quantifiers: k_ex411410_ : Nat, 0 ≤ k_ex411410_ -/
 def receipt_encoded (r : Receipt) (cumulative_gas_used : block_gas) : SailM EvmByteSlice := do
   let status : Nat :=
     if (r.success : Bool)
@@ -320,7 +320,7 @@ def receipt_insert (builder : TrieBuilder) (pending : PendingReceipt) (next_key 
   (pure inserted)
 
 /-- Adds the next numeric receipt while respecting trie-key lexical order. -/
-/- Type quantifiers: k_ex409131_ : Nat, 0 ≤ k_ex409131_ ∧ k_ex409131_ ≤ (2 ^ 20) -/
+/- Type quantifiers: k_ex411411_ : Nat, 0 ≤ k_ex411411_ ∧ k_ex411411_ ≤ (2 ^ 20) -/
 def receipt_accumulator_push (acc : ReceiptAccumulator) (receipt : Receipt) (next_count : transaction_count) : SailM ReceiptAccumulator := do
   let next_count := (next_count).value
   let cumulative : Nat := (conserved_gas_add acc.cumulative_gas_used receipt.gas_used)

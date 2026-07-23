@@ -172,7 +172,7 @@ def PRECOMPILE_ADDRESS_256 : address :=
   #v[0x00#8, 0x01#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8, 0x00#8]
 
 /-- A successful result carrying `output`. -/
-/- Type quantifiers: k_ex408598_ : Nat, k_ex408597_ : Nat, 0 ≤ k_ex408597_ ∧ 0 ≤ k_ex408598_ -/
+/- Type quantifiers: k_ex410878_ : Nat, k_ex410877_ : Nat, 0 ≤ k_ex410877_ ∧ 0 ≤ k_ex410878_ -/
 def precompile_success (output : EvmByteSlice) : PrecompileResult :=
   let output := ((output).2).2
   { success := true,
@@ -183,7 +183,7 @@ def precompile_failure (_ : Unit) : PrecompileResult :=
   { success := false,
     output := ⟨_, ⟨_, EMPTY_SLICE⟩⟩ }
 
-/- Type quantifiers: k_ex408602_ : Bool, output_len : Nat, source_valid_length(output_len) -/
+/- Type quantifiers: k_ex410882_ : Bool, output_len : Nat, source_valid_length(output_len) -/
 def accelerator_result (success : Bool) (output_len : Nat) : PrecompileResult :=
   if (success : Bool)
   then
@@ -193,7 +193,7 @@ def accelerator_result (success : Bool) (output_len : Nat) : PrecompileResult :=
   else (precompile_failure ())
 
 /-- `IDENTITY` (0x04): the input, copied through the output buffer. -/
-/- Type quantifiers: k_ex408608_ : Nat, k_ex408607_ : Nat, 0 ≤ k_ex408607_ ∧ 0 ≤ k_ex408608_ -/
+/- Type quantifiers: k_ex410888_ : Nat, k_ex410887_ : Nat, 0 ≤ k_ex410887_ ∧ 0 ≤ k_ex410888_ -/
 def copied_result (data : EvmByteSlice) : SailM PrecompileResult := do
   let data := ((data).2).2
   let ⟨_, ⟨_, output⟩⟩ ← do (freeze_output ⟨_, ⟨_, data⟩⟩)
@@ -202,7 +202,7 @@ def copied_result (data : EvmByteSlice) : SailM PrecompileResult := do
   else (pure (precompile_failure ()))
 
 /-- A 32-byte `0`/`1` result word (pairing checks). -/
-/- Type quantifiers: k_ex408609_ : Bool -/
+/- Type quantifiers: k_ex410889_ : Bool -/
 def boolean_result (value : Bool) : SailM PrecompileResult := do
   (pure (precompile_success
       (← (output_buffer_word
@@ -318,7 +318,7 @@ def precompile_number (bytes : address) : SailM precompile_selector := do
 
 /-- `ECRECOVER` (0x01): recovers the signer address; any invalid input
 yields a successful call with empty output. -/
-/- Type quantifiers: k_ex408614_ : Nat, k_ex408613_ : Nat, 0 ≤ k_ex408613_ ∧ 0 ≤ k_ex408614_ -/
+/- Type quantifiers: k_ex410894_ : Nat, k_ex410893_ : Nat, 0 ≤ k_ex410893_ ∧ 0 ≤ k_ex410894_ -/
 def run_ecrecover (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   let v ← do
@@ -345,7 +345,7 @@ def run_ecrecover (input : EvmByteSlice) : SailM PrecompileResult := do
   else (pure (precompile_success ⟨_, ⟨_, EMPTY_SLICE⟩⟩))
 
 /-- `SHA256` (0x02). -/
-/- Type quantifiers: k_ex408618_ : Nat, k_ex408617_ : Nat, 0 ≤ k_ex408617_ ∧ 0 ≤ k_ex408618_ -/
+/- Type quantifiers: k_ex410898_ : Nat, k_ex410897_ : Nat, 0 ≤ k_ex410897_ ∧ 0 ≤ k_ex410898_ -/
 def run_sha256 (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   (pure (precompile_success
@@ -353,7 +353,7 @@ def run_sha256 (input : EvmByteSlice) : SailM PrecompileResult := do
           ⟨((hash_to_word (← (sha256_slice ⟨_, ⟨_, input⟩⟩)))).value⟩))))
 
 /-- `RIPEMD160` (0x03): 20-byte digest, left-padded to 32. -/
-/- Type quantifiers: k_ex408622_ : Nat, k_ex408621_ : Nat, 0 ≤ k_ex408621_ ∧ 0 ≤ k_ex408622_ -/
+/- Type quantifiers: k_ex410902_ : Nat, k_ex410901_ : Nat, 0 ≤ k_ex410901_ ∧ 0 ≤ k_ex410902_ -/
 def run_ripemd160 (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   (pure (accelerator_result (← (accelerator_ripemd160 ⟨_, ⟨_, input⟩⟩))
@@ -362,7 +362,7 @@ def run_ripemd160 (input : EvmByteSlice) : SailM PrecompileResult := do
 /-- `MODEXP` (0x05, EIP-198): arbitrary-precision modular
 exponentiation; a zero-length modulus yields empty output, and inputs
 beyond the accelerator bound fail the call. -/
-/- Type quantifiers: k_ex408626_ : Nat, k_ex408625_ : Nat, 0 ≤ k_ex408625_ ∧ 0 ≤ k_ex408626_ -/
+/- Type quantifiers: k_ex410906_ : Nat, k_ex410905_ : Nat, 0 ≤ k_ex410905_ ∧ 0 ≤ k_ex410906_ -/
 def run_modexp (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   let base_len ← (( do
@@ -405,7 +405,7 @@ def pairing_result (result : (BitVec 2)) : SailM PrecompileResult := do
 
 /-- `BLAKE2F` (0x09, EIP-152): the compression function; the input must
 be exactly 213 bytes with a 0/1 final-block flag. -/
-/- Type quantifiers: k_ex408631_ : Nat, k_ex408630_ : Nat, 0 ≤ k_ex408630_ ∧ 0 ≤ k_ex408631_ -/
+/- Type quantifiers: k_ex410911_ : Nat, k_ex410910_ : Nat, 0 ≤ k_ex410910_ ∧ 0 ≤ k_ex410911_ -/
 def run_blake2f (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   let final_byte ← do (slice_byte ⟨_, ⟨_, input⟩⟩ BLAKE2F_FINAL_BLOCK_OFFSET)
@@ -432,7 +432,7 @@ def kzg_versioned_hash_matches (input : (EvmByteSliceFields k_base k_len)) : Sai
 
 /-- `POINT_EVALUATION` (0x0a, EIP-4844): verifies a KZG proof; success
 returns the field-elements-per-blob and BLS modulus constants. -/
-/- Type quantifiers: k_ex408647_ : Nat, k_ex408646_ : Nat, 0 ≤ k_ex408646_ ∧ 0 ≤ k_ex408647_ -/
+/- Type quantifiers: k_ex410927_ : Nat, k_ex410926_ : Nat, 0 ≤ k_ex410926_ ∧ 0 ≤ k_ex410927_ -/
 def run_kzg_point_evaluation (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   if ((input.len != KZG_INPUT_LENGTH) : Bool)
@@ -450,18 +450,18 @@ def run_kzg_point_evaluation (input : EvmByteSlice) : SailM PrecompileResult := 
                     ⟨(BLS_MODULUS).value⟩))))
           else (pure (precompile_failure ()))))
 
-/- Type quantifiers: k_ex408663_ : Nat, k_ex408662_ : Nat, base : Nat, stride : Nat, count : Nat, source_valid_range(base, 64)
-  ∧ source_valid_length(stride) ∧ source_valid_length(count), 0 ≤ k_ex408662_ ∧
-  0 ≤ k_ex408663_ -/
+/- Type quantifiers: k_ex410943_ : Nat, k_ex410942_ : Nat, base : Nat, stride : Nat, count : Nat, source_valid_range(base, 64)
+  ∧ source_valid_length(stride) ∧ source_valid_length(count), 0 ≤ k_ex410942_ ∧
+  0 ≤ k_ex410943_ -/
 def bls_g1_padding (input : EvmByteSlice) (base : Nat) (stride : Nat) (count : Nat) : SailM Bool := do
   let input := ((input).2).2
   (pure ((← (slice_strided_zero ⟨_, ⟨_, input⟩⟩ base stride BLS_FIELD_PADDING_LENGTH count)) && (← (slice_strided_zero
           ⟨_, ⟨_, input⟩⟩ (base + BLS_PADDED_FIELD_LENGTH) stride BLS_FIELD_PADDING_LENGTH
           count))))
 
-/- Type quantifiers: k_ex408687_ : Nat, k_ex408686_ : Nat, base : Nat, stride : Nat, count : Nat, source_valid_range(base, 192)
-  ∧ source_valid_length(stride) ∧ source_valid_length(count), 0 ≤ k_ex408686_ ∧
-  0 ≤ k_ex408687_ -/
+/- Type quantifiers: k_ex410967_ : Nat, k_ex410966_ : Nat, base : Nat, stride : Nat, count : Nat, source_valid_range(base, 192)
+  ∧ source_valid_length(stride) ∧ source_valid_length(count), 0 ≤ k_ex410966_ ∧
+  0 ≤ k_ex410967_ -/
 def bls_g2_padding (input : EvmByteSlice) (base : Nat) (stride : Nat) (count : Nat) : SailM Bool := do
   let input := ((input).2).2
   (pure ((← (slice_strided_zero ⟨_, ⟨_, input⟩⟩ base stride BLS_FIELD_PADDING_LENGTH count)) && ((← (slice_strided_zero
@@ -472,7 +472,7 @@ def bls_g2_padding (input : EvmByteSlice) (base : Nat) (stride : Nat) (count : N
               BLS_FIELD_PADDING_LENGTH count))))))
 
 /-- `BLS12_G1ADD` (0x0b, EIP-2537). -/
-/- Type quantifiers: k_ex408699_ : Nat, k_ex408698_ : Nat, 0 ≤ k_ex408698_ ∧ 0 ≤ k_ex408699_ -/
+/- Type quantifiers: k_ex410979_ : Nat, k_ex410978_ : Nat, 0 ≤ k_ex410978_ ∧ 0 ≤ k_ex410979_ -/
 def run_bls_g1_add (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   if ((input.len != BLS_G1_ADD_INPUT_LENGTH) : Bool)
@@ -486,7 +486,7 @@ def run_bls_g1_add (input : EvmByteSlice) : SailM PrecompileResult := do
             BLS_G1_POINT_LENGTH)))
 
 /-- `BLS12_G1MSM` (0x0c, EIP-2537): input is `k` 160-byte pairs. -/
-/- Type quantifiers: k_ex408703_ : Nat, k_ex408702_ : Nat, 0 ≤ k_ex408702_ ∧ 0 ≤ k_ex408703_ -/
+/- Type quantifiers: k_ex410983_ : Nat, k_ex410982_ : Nat, 0 ≤ k_ex410982_ ∧ 0 ≤ k_ex410983_ -/
 def run_bls_g1_msm (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   let length := input.len
@@ -503,7 +503,7 @@ def run_bls_g1_msm (input : EvmByteSlice) : SailM PrecompileResult := do
             BLS_G1_POINT_LENGTH)))
 
 /-- `BLS12_G2ADD` (0x0d, EIP-2537). -/
-/- Type quantifiers: k_ex408707_ : Nat, k_ex408706_ : Nat, 0 ≤ k_ex408706_ ∧ 0 ≤ k_ex408707_ -/
+/- Type quantifiers: k_ex410987_ : Nat, k_ex410986_ : Nat, 0 ≤ k_ex410986_ ∧ 0 ≤ k_ex410987_ -/
 def run_bls_g2_add (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   if ((input.len != BLS_G2_ADD_INPUT_LENGTH) : Bool)
@@ -517,7 +517,7 @@ def run_bls_g2_add (input : EvmByteSlice) : SailM PrecompileResult := do
             BLS_G2_POINT_LENGTH)))
 
 /-- `BLS12_G2MSM` (0x0e, EIP-2537): input is `k` 288-byte pairs. -/
-/- Type quantifiers: k_ex408711_ : Nat, k_ex408710_ : Nat, 0 ≤ k_ex408710_ ∧ 0 ≤ k_ex408711_ -/
+/- Type quantifiers: k_ex410991_ : Nat, k_ex410990_ : Nat, 0 ≤ k_ex410990_ ∧ 0 ≤ k_ex410991_ -/
 def run_bls_g2_msm (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   let length := input.len
@@ -535,7 +535,7 @@ def run_bls_g2_msm (input : EvmByteSlice) : SailM PrecompileResult := do
 
 /-- `BLS12_PAIRING_CHECK` (0x0f, EIP-2537): input is `k` 384-byte
 G1×G2 pairs. -/
-/- Type quantifiers: k_ex408715_ : Nat, k_ex408714_ : Nat, 0 ≤ k_ex408714_ ∧ 0 ≤ k_ex408715_ -/
+/- Type quantifiers: k_ex410995_ : Nat, k_ex410994_ : Nat, 0 ≤ k_ex410994_ ∧ 0 ≤ k_ex410995_ -/
 def run_bls_pairing (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   let length := input.len
@@ -552,7 +552,7 @@ def run_bls_pairing (input : EvmByteSlice) : SailM PrecompileResult := do
       else (pure (precompile_failure ())))
 
 /-- `BLS12_MAP_FP_TO_G1` (0x10, EIP-2537). -/
-/- Type quantifiers: k_ex408719_ : Nat, k_ex408718_ : Nat, 0 ≤ k_ex408718_ ∧ 0 ≤ k_ex408719_ -/
+/- Type quantifiers: k_ex410999_ : Nat, k_ex410998_ : Nat, 0 ≤ k_ex410998_ ∧ 0 ≤ k_ex410999_ -/
 def run_bls_map_fp_to_g1 (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   if ((input.len != BLS_PADDED_FIELD_LENGTH) : Bool)
@@ -567,7 +567,7 @@ def run_bls_map_fp_to_g1 (input : EvmByteSlice) : SailM PrecompileResult := do
             BLS_G1_POINT_LENGTH)))
 
 /-- `BLS12_MAP_FP2_TO_G2` (0x11, EIP-2537). -/
-/- Type quantifiers: k_ex408723_ : Nat, k_ex408722_ : Nat, 0 ≤ k_ex408722_ ∧ 0 ≤ k_ex408723_ -/
+/- Type quantifiers: k_ex411003_ : Nat, k_ex411002_ : Nat, 0 ≤ k_ex411002_ ∧ 0 ≤ k_ex411003_ -/
 def run_bls_map_fp2_to_g2 (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   if ((input.len != BLS_G1_POINT_LENGTH) : Bool)
@@ -584,7 +584,7 @@ def run_bls_map_fp2_to_g2 (input : EvmByteSlice) : SailM PrecompileResult := do
 /-- `P256VERIFY` (0x100, EIP-7951): every malformed or invalid signature
 is a successful call with empty output; only a valid signature
 returns the word one. -/
-/- Type quantifiers: k_ex408727_ : Nat, k_ex408726_ : Nat, 0 ≤ k_ex408726_ ∧ 0 ≤ k_ex408727_ -/
+/- Type quantifiers: k_ex411007_ : Nat, k_ex411006_ : Nat, 0 ≤ k_ex411006_ ∧ 0 ≤ k_ex411007_ -/
 def run_p256_verify (input : EvmByteSlice) : SailM PrecompileResult := do
   let input := ((input).2).2
   let verified ← do
@@ -597,8 +597,8 @@ def run_p256_verify (input : EvmByteSlice) : SailM PrecompileResult := do
 
 /-- The precompile dispatch: address to implementation. Gas has already
 been charged by the caller ([precompile_gas][]). -/
-/- Type quantifiers: k_ex408732_ : Nat, k_ex408731_ : Nat, k_ex408728_ : Nat, 1 ≤ k_ex408728_ ∧
-  k_ex408728_ ≤ 256, 0 ≤ k_ex408731_ ∧ 0 ≤ k_ex408732_ -/
+/- Type quantifiers: k_ex411012_ : Nat, k_ex411011_ : Nat, k_ex411008_ : Nat, 1 ≤ k_ex411008_ ∧
+  k_ex411008_ ≤ 256, 0 ≤ k_ex411011_ ∧ 0 ≤ k_ex411012_ -/
 def run_precompile_slice (num : precompile_id) (input : EvmByteSlice) : SailM PrecompileResult := do
   let num := (num).value
   let input := ((input).2).2

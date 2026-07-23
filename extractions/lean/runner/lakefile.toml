@@ -1,0 +1,13 @@
+name = "evm-lean-runner"
+defaultTargets = ["EvmLeanRunner"]
+moreLeanArgs = ["--tstack=400000"]
+
+[[require]]
+name = "evm"
+path = "../evm"
+
+[[lean_lib]]
+name = "EvmLeanRunner"
+roots = ["Runner"]
+leanOptions.weak.linter.style.nameCheck = false
+moreLeancArgs = ["-fbracket-depth=500"]
