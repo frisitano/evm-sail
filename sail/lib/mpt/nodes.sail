@@ -191,15 +191,8 @@ function node_db_lookup(h : hash) -> ByteSlice = {
     nodedb_lookup(h)
 }
 
-/*! A decoded leaf: its remaining path and value field. */
-struct LeafNodeData = { path : TriePath, value : RlpFieldRef }
-/*! A decoded extension: its shared path and child field. */
-struct ExtensionNodeData = { path : TriePath, child : RlpFieldRef }
-/*! The sixteen child fields of a decoded branch node. */
-type BranchChildren = vector(16, dec, RlpFieldRef)
-
-/*! Selects a decoded branch child field by nibble value. */
-function branch_children_get(children : BranchChildren, index : nibble) -> RlpFieldRef = match index {
+/*! Selects a decoded branch child reference by nibble value. */
+function branch_refs_get(children : BranchRefs, index : nibble) -> NodeRef = match index {
     0x0 => children[0],
     0x1 => children[1],
     0x2 => children[2],
@@ -217,82 +210,27 @@ function branch_children_get(children : BranchChildren, index : nibble) -> RlpFi
     0xe => children[14],
     0xf => children[15],
 }
-/*! A decoded branch: sixteen child fields and the value field. */
-struct BranchNodeData = { children : BranchChildren, value : RlpFieldRef }
 
-/*! A decoded trie node, or `InvalidNode` when the bytes are not a
-    well-formed node. */
+/*! A decoded trie node. Malformed node bytes throw
+    `InvalidBlock(RlpDecode)`. */
 union TrieNode = {
     /* remaining path and value */
-    LeafNode : LeafNodeData,
+    LeafNode : (TriePath, ByteSlice),
     /* shared path prefix and single child */
-    ExtensionNode : ExtensionNodeData,
+    ExtensionNode : (TriePath, NodeRef),
     /* sixteen children and an optional value */
-    BranchNode : BranchNodeData,
-    /* undecodable bytes: a deficient witness */
-    InvalidNode : unit,
-}
-
-/*! Decodes node bytes into leaf/extension/branch form by field count
-    (2 = leaf or extension by the HP flag; 17 = branch). */
-function decode_trie_node(node : ByteSlice) -> TrieNode = {
-    let fields = rlp_node_cursor(node);
-    if not_bool(fields.valid) | rlp_cursor_empty(fields) then {
-        InvalidNode()
-    } else {
-        let (first, fields) = rlp_cursor_pop(fields);
-        if rlp_cursor_empty(fields) then {
-            InvalidNode()
-        } else {
-            let (second, fields) = rlp_cursor_pop(fields);
-            if rlp_cursor_empty(fields) then {
-                let path_field = first;
-                let value = second;
-                let (is_leaf, path) = hex_prefix_decode_ref(path_field);
-                if is_leaf then {
-                    LeafNode(struct { path = path, value = value })
-                } else {
-                    if path_len(path) == 0 then {
-                        InvalidNode()
-                    } else {
-                        ExtensionNode(struct { path = path, child = value })
-                    }
-                }
-            } else {
-                var children : BranchChildren = vector_init(16, first);
-                children[0] = first;
-                children[1] = second;
-                var cursor : RlpCursor = fields;
-                var complete : bool = true;
-                foreach (index from 2 to 15) {
-                    if rlp_cursor_empty(cursor) then {
-                        complete = false
-                    } else {
-                        let (child, next) = rlp_cursor_pop(cursor);
-                        children[index] = child;
-                        cursor = next
-                    }
-                };
-                if not_bool(complete) | rlp_cursor_empty(cursor) then {
-                    InvalidNode()
-                } else {
-                    let (value, cursor) = rlp_cursor_pop(cursor);
-                    if rlp_cursor_empty(cursor) then {
-                        BranchNode(struct { children = children, value = value })
-                    } else {
-                        InvalidNode()
-                    }
-                }
-            }
-        }
-    }
+    BranchNode : (BranchRefs, ByteSlice),
 }
 
 /*! The reference denoted by a child field: an inline list, a 32-byte
     hash, or empty. */
-function field_to_ref(f : RlpFieldRef) -> NodeRef =
+function field_to_ref forall 'source_off 'source_len 'content_len,
+                        rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    NodeRef
+) =
     if f.is_list then {
-        InlineRef(inline_node_from_slice(rlp_ref_full(f)))
+        InlineRef(inline_node_from_slice(f.source))
     } else {
         if f.content_len == MPT_HASH_LENGTH then {
             HashRef(word_to_hash(rlp_ref_word(f)))
@@ -300,6 +238,51 @@ function field_to_ref(f : RlpFieldRef) -> NodeRef =
             EmptyRef()
         }
     }
+
+/*! Decodes branch children 2 through 15, followed by the branch value. */
+function decode_branch_node forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
+    cursor : RlpCursor('source_off, 'source_len),
+    index : range(2, 16),
+    children : BranchRefs,
+) -> (
+    TrieNode
+) =
+    if index < 16 then {
+        let (child, next) = rlp_cursor_pop(cursor);
+        var updated = children;
+        updated[index] = field_to_ref(child);
+        decode_branch_node(next, index + 1, updated)
+    } else {
+        let (value, cursor) = rlp_cursor_pop(cursor);
+        rlp_cursor_expect_end(cursor);
+        BranchNode(children, rlp_ref_content(value))
+    }
+termination_measure decode_branch_node(cursor, index, children) = 16 - index
+
+/*! Decodes node bytes into leaf/extension/branch form by field count
+    (2 = leaf or extension by the HP flag; 17 = branch). */
+function decode_trie_node(node : ByteSlice) -> TrieNode = {
+    let fields = rlp_node_cursor(node);
+    let (first, fields) = rlp_cursor_pop(fields);
+    let (second, fields) = rlp_cursor_pop(fields);
+    if fields.len == 0 then {
+        let (is_leaf, path) = hex_prefix_decode_ref(first);
+        if is_leaf then {
+            LeafNode(path, rlp_ref_content(second))
+        } else {
+            if path_len(path) == 0 then {
+                throw InvalidBlock(RlpDecode)
+            } else {
+                ExtensionNode(path, field_to_ref(second))
+            }
+        }
+    } else {
+        var children : BranchRefs = vector_init(16, EmptyRef());
+        children[0] = field_to_ref(first);
+        children[1] = field_to_ref(second);
+        decode_branch_node(fields, 2, children)
+    }
+}
 
 /*! Resolves a reference to node bytes. Resolving a missing hash is a
     deficient witness (`InvalidBlock(WitnessDeficient)`), never an empty
@@ -328,8 +311,8 @@ function merge_ext_node(prefix : TriePath, childnode : ByteSlice) -> NodeRef = {
             EmptyRef()
         } else {
             match decode_trie_node(childnode) {
-                LeafNode(leaf) => leaf_child_ref(path_concat(prefix, leaf.path), rlp_ref_content(leaf.value)),
-                ExtensionNode(ext) => extension_child_ref(path_concat(prefix, ext.path), field_to_ref(ext.child)),
+                LeafNode(path, value) => leaf_child_ref(path_concat(prefix, path), value),
+                ExtensionNode(path, child) => extension_child_ref(path_concat(prefix, path), child),
                 _ => extension_child_ref(prefix, node_to_ref(childnode)),
             }
         }
@@ -349,8 +332,8 @@ function merge_ext_ref(prefix : TriePath, childref : NodeRef) -> NodeRef = {
             HashRef(_) => extension_child_ref(prefix, childref),
             InlineRef(node) => {
                 match decode_trie_node(inline_node_slice(node)) {
-                    LeafNode(leaf) => leaf_child_ref(path_concat(prefix, leaf.path), rlp_ref_content(leaf.value)),
-                    ExtensionNode(ext) => extension_child_ref(path_concat(prefix, ext.path), field_to_ref(ext.child)),
+                    LeafNode(path, value) => leaf_child_ref(path_concat(prefix, path), value),
+                    ExtensionNode(path, child) => extension_child_ref(path_concat(prefix, path), child),
                     _ => extension_child_ref(prefix, childref),
                 }
             },

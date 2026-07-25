@@ -264,8 +264,8 @@ void create_letbind_77(void) {
   internal_vector_update_zz5vecz8z5bv8z9(&z3zE96, z3zE96, INT64_C(253), UINT64_C(0x00));
   internal_vector_update_zz5vecz8z5bv8z9(&z3zE96, z3zE96, INT64_C(254), UINT64_C(0x00));
   internal_vector_update_zz5vecz8z5bv8z9(&z3zE96, z3zE96, INT64_C(255), UINT64_C(0x00));
-  for (size_t z8zE832 = 0; z8zE832 < 256; ++z8zE832) {
-    z3zE97.bytes[z8zE832] = (uint8_t)(z3zE96.data[z8zE832] & UINT64_C(0xff));
+  for (size_t z8zE829 = 0; z8zE829 < 256; ++z8zE829) {
+    z3zE97.bytes[z8zE829] = (uint8_t)(z3zE96.data[z8zE829] & UINT64_C(0xff));
   }
   KILL(zz5vecz8z5bv8z9)(&z3zE96);
   zEMPTY_LOGS_BLOOM = z3zE97;
@@ -279,43 +279,43 @@ bool zlogs_bloom_equal(sail_fixed_bytes_256 za, sail_fixed_bytes_256 zb)
   bool z8zE112;
   bool zequal;
   zequal = true;
-  int64_t z3zE3680;
-  {    z3zE3680 = (int64_t)(UINT64_C(0));
+  int64_t z3zE3609;
+  {    z3zE3609 = (int64_t)(UINT64_C(0));
   }
-  int64_t z3zE3681;
-  {    z3zE3681 = (int64_t)(UINT64_C(255));
+  int64_t z3zE3610;
+  {    z3zE3610 = (int64_t)(UINT64_C(255));
   }
-  int64_t z3zE3682;
-  {    z3zE3682 = (int64_t)(UINT64_C(1));
+  int64_t z3zE3611;
+  {    z3zE3611 = (int64_t)(UINT64_C(1));
   }
   {
     int64_t zi;
-    zi = z3zE3680;
-    unit z3zE3684;
-  for_start_3728: ;
+    zi = z3zE3609;
+    unit z3zE3613;
+  for_start_3709: ;
     {
-      if ((z3zE3681 < zi)) goto for_end_3729;
-      bool z3zE3683;
+      if ((z3zE3610 < zi)) goto for_end_3710;
+      bool z3zE3612;
       if (zequal) {
-        uint64_t z2zE3901;
-        z2zE3901 = fast_vector_access_fixed_bytes_256(za, zi);
-        uint64_t z2zE3902;
-        z2zE3902 = fast_vector_access_fixed_bytes_256(zb, zi);
-        z3zE3683 = (z2zE3901 == z2zE3902);
-      } else {  z3zE3683 = false;  }
-      zequal = z3zE3683;
-      z3zE3684 = UNIT;
-      zi = (zi + z3zE3682);
-      goto for_start_3728;
+        uint64_t z2zE3862;
+        z2zE3862 = fast_vector_access_fixed_bytes_256(za, zi);
+        uint64_t z2zE3863;
+        z2zE3863 = fast_vector_access_fixed_bytes_256(zb, zi);
+        z3zE3612 = (z2zE3862 == z2zE3863);
+      } else {  z3zE3612 = false;  }
+      zequal = z3zE3612;
+      z3zE3613 = UNIT;
+      zi = (zi + z3zE3611);
+      goto for_start_3709;
     }
-  for_end_3729: ;
+  for_end_3710: ;
   }
-  unit z3zE3685;
-  z3zE3685 = UNIT;
+  unit z3zE3614;
+  z3zE3614 = UNIT;
   z8zE112 = zequal;
-end_function_3730: ;
+end_function_3711: ;
   return z8zE112;
-end_block_exception_3731: ;
+end_block_exception_3712: ;
 
   return false;
 }
@@ -326,40 +326,40 @@ void zlogs_bloom_bytes(zz5listz8z5bv8z9 *z8zE113, sail_fixed_bytes_256 zbloom)
   CREATE(zz5listz8z5bv8z9)(&zout);
   {
   }
-  int64_t z3zE3675;
-  {    z3zE3675 = (int64_t)(UINT64_C(0));
+  int64_t z3zE3604;
+  {    z3zE3604 = (int64_t)(UINT64_C(0));
   }
-  int64_t z3zE3676;
-  {    z3zE3676 = (int64_t)(UINT64_C(255));
+  int64_t z3zE3605;
+  {    z3zE3605 = (int64_t)(UINT64_C(255));
   }
-  int64_t z3zE3677;
-  {    z3zE3677 = (int64_t)(UINT64_C(1));
+  int64_t z3zE3606;
+  {    z3zE3606 = (int64_t)(UINT64_C(1));
   }
   {
     int64_t zk;
-    zk = z3zE3675;
-    unit z3zE3678;
-  for_start_3724: ;
+    zk = z3zE3604;
+    unit z3zE3607;
+  for_start_3705: ;
     {
-      if ((z3zE3676 < zk)) goto for_end_3725;
-      uint64_t z2zE3900;
-      z2zE3900 = fast_vector_access_fixed_bytes_256(zbloom, zk);
-      zconsz3z5bv8(&zout, z2zE3900, zout);
-      z3zE3678 = UNIT;
-      zk = (zk + z3zE3677);
-      goto for_start_3724;
+      if ((z3zE3605 < zk)) goto for_end_3706;
+      uint64_t z2zE3861;
+      z2zE3861 = fast_vector_access_fixed_bytes_256(zbloom, zk);
+      zconsz3z5bv8(&zout, z2zE3861, zout);
+      z3zE3607 = UNIT;
+      zk = (zk + z3zE3606);
+      goto for_start_3705;
     }
-  for_end_3725: ;
+  for_end_3706: ;
   }
-  unit z3zE3679;
-  z3zE3679 = UNIT;
+  unit z3zE3608;
+  z3zE3608 = UNIT;
   COPY(zz5listz8z5bv8z9)((*(&z8zE113)), zout);
   KILL(zz5listz8z5bv8z9)(&zout);
-end_function_3726: ;
-  goto end_function_4085;
-end_block_exception_3727: ;
-  goto end_function_4085;
-end_function_4085: ;
+end_function_3707: ;
+  goto end_function_4073;
+end_block_exception_3708: ;
+  goto end_function_4073;
+end_function_4073: ;
 }
 
 void create_letbind_78(void) {
@@ -400,8 +400,8 @@ void create_letbind_78(void) {
   internal_vector_update_zz5vecz8z5bv8z9(&z3zE98, z3zE98, INT64_C(29), UINT64_C(0x4D));
   internal_vector_update_zz5vecz8z5bv8z9(&z3zE98, z3zE98, INT64_C(30), UINT64_C(0xCC));
   internal_vector_update_zz5vecz8z5bv8z9(&z3zE98, z3zE98, INT64_C(31), UINT64_C(0x1D));
-  for (size_t z8zE833 = 0; z8zE833 < 32; ++z8zE833) {
-    z3zE99.bytes[z8zE833] = (uint8_t)(z3zE98.data[z8zE833] & UINT64_C(0xff));
+  for (size_t z8zE830 = 0; z8zE830 < 32; ++z8zE830) {
+    z3zE99.bytes[z8zE830] = (uint8_t)(z3zE98.data[z8zE830] & UINT64_C(0xff));
   }
   KILL(zz5vecz8z5bv8z9)(&z3zE98);
   zEMPTY_OMMER_HASH = z3zE99;

@@ -84,7 +84,12 @@ def load_lean_guest(rebuild=False):
     if hard_stack != resource.RLIM_INFINITY:
         wanted_stack = min(wanted_stack, hard_stack)
     if soft_stack != resource.RLIM_INFINITY and soft_stack < wanted_stack:
-        resource.setrlimit(resource.RLIMIT_STACK, (wanted_stack, hard_stack))
+        try:
+            resource.setrlimit(resource.RLIMIT_STACK, (wanted_stack, hard_stack))
+        except (OSError, ValueError):
+            # Some macOS process environments report a higher hard limit but
+            # still reject any attempt to raise the inherited soft limit.
+            pass
     guest_lib = os.path.join(
         _LEAN_RUNNER, ".lake", "build", "lib",
         f"libevmsail_lean_guest.{_EXT}",

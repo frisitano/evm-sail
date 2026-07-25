@@ -42,6 +42,8 @@ void evmsail_input_reset(void);
 
 uint64_t slice_byte_at(struct zByteSlice slice,
                        EVMSAIL_BYTE_QUANTITY_PARAM(index));
+bool host_byte_slices_equal(struct zByteSlice left,
+                            struct zByteSlice right);
 #ifdef EVMSAIL_STANDARD_ABI
 void slice_count_nonzero(sail_int *out, struct zByteSlice slice);
 #else

@@ -4,7 +4,7 @@
 #endif
 unit zprepare_account_post_storage_root(struct zAcctEntry zentry)
 {
-  unit z8zE558;
+  unit z8zE555;
   struct zAccount zcurrent;
   {
     struct zAcctValue z2zE1160;
@@ -62,7 +62,7 @@ unit zprepare_account_post_storage_root(struct zAcctEntry zentry)
         z2zE1155 = ztrie_root_cursor(zbase_storage_root, zstorage_updates);
         if (have_exception) {
           KILL(zTrieUpdateCursor)(&zstorage_updates);
-          goto end_block_exception_1703;
+          goto end_block_exception_1700;
         }
       }
       zstorage_root = z2zE1155.zroot;
@@ -70,74 +70,74 @@ unit zprepare_account_post_storage_root(struct zAcctEntry zentry)
   }
   sail_fixed_bytes_20 z2zE1150;
   z2zE1150 = zentry.zaddr;
-  z8zE558 = acct_post_storage_root_store(z2zE1150, zstorage_root);
+  z8zE555 = acct_post_storage_root_store(z2zE1150, zstorage_root);
   KILL(zTrieUpdateCursor)(&zstorage_updates);
-end_function_1702: ;
-  return z8zE558;
-end_block_exception_1703: ;
+end_function_1699: ;
+  return z8zE555;
+end_block_exception_1700: ;
 
   return UNIT;
 }
 
 unit zprepare_changed_account_post_storage_roots(unit z3zE1238)
 {
-  unit z8zE559;
+  unit z8zE556;
   bool zpreparing;
   zpreparing = true;
   bool z3zE1242;
   unit z3zE1243;
-while_1695: ;
+while_1692: ;
   {
     z3zE1242 = zpreparing;
-    if (!(z3zE1242)) goto wend_1696;
+    if (!(z3zE1242)) goto wend_1693;
     struct zoptionzIRAcctEntryzK z2zE1148;
     CREATE(zoptionzIRAcctEntryzK)(&z2zE1148);
     acct_block_iter_next(&z2zE1148, UNIT);
     unit z3zE1239;
     {
-      if (z2zE1148.kind != Kind_zSomezIRAcctEntryzK) goto case_1699;
+      if (z2zE1148.kind != Kind_zSomezIRAcctEntryzK) goto case_1696;
       struct zAcctEntry zentry;
       zentry = z2zE1148.variants.zSomezIRAcctEntryzK;
       {
         z3zE1239 = zprepare_account_post_storage_root(zentry);
         if (have_exception) {
           KILL(zoptionzIRAcctEntryzK)(&z2zE1148);
-          goto end_block_exception_1701;
+          goto end_block_exception_1698;
         }
       }
-      goto finish_match_1697;
+      goto finish_match_1694;
     }
-  case_1699: ;
+  case_1696: ;
     {
       /* complete */
       zpreparing = false;
       z3zE1239 = UNIT;
-      goto finish_match_1697;
+      goto finish_match_1694;
     }
-  case_1698: ;
-  finish_match_1697: ;
+  case_1695: ;
+  finish_match_1694: ;
     z3zE1243 = z3zE1239;
     KILL(zoptionzIRAcctEntryzK)(&z2zE1148);
-    goto while_1695;
+    goto while_1692;
   }
-wend_1696: ;
-  z8zE559 = UNIT;
-end_function_1700: ;
-  return z8zE559;
-end_block_exception_1701: ;
+wend_1693: ;
+  z8zE556 = UNIT;
+end_function_1697: ;
+  return z8zE556;
+end_block_exception_1698: ;
 
   return UNIT;
 }
 
 sail_fixed_bytes_32 zcompute_state_root(unit z3zE1234)
 {
-  sail_fixed_bytes_32 z8zE560;
+  sail_fixed_bytes_32 z8zE557;
   unit z3zE1237;
   z3zE1237 = acct_block_iter_begin(UNIT);
   unit z3zE1236;
   {
     z3zE1236 = zprepare_changed_account_post_storage_roots(UNIT);
-    if (have_exception) {  goto end_block_exception_1694;  }
+    if (have_exception) {  goto end_block_exception_1691;  }
   }
   unit z3zE1235;
   z3zE1235 = acct_block_iter_begin(UNIT);
@@ -150,15 +150,15 @@ sail_fixed_bytes_32 zcompute_state_root(unit z3zE1234)
       z2zE1147 = ztrie_root(zk_parent_state_root, z2zE1146);
       if (have_exception) {
         KILL(zTrieUpdateSource)(&z2zE1146);
-        goto end_block_exception_1694;
+        goto end_block_exception_1691;
       }
     }
     KILL(zTrieUpdateSource)(&z2zE1146);
   }
-  z8zE560 = z2zE1147.zroot;
-end_function_1693: ;
-  return z8zE560;
-end_block_exception_1694: ;
+  z8zE557 = z2zE1147.zroot;
+end_function_1690: ;
+  return z8zE557;
+end_block_exception_1691: ;
 
   return fixed_bytes_32_zero();
 }

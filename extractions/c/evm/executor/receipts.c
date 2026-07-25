@@ -7,25 +7,25 @@ void create_letbind_287(void) {
   uint64_t z3zE345;
   z3zE345 = UINT64_C(256);
   zLOGS_BLOOM_BYTE_LENGTH = z3zE345;
-let_end_907: ;
+let_end_904: ;
 }
 void kill_letbind_287(void) {
 }
 
 uint64_t zbloom_bit_mask(uint64_t zbit_to_set)
 {
-  uint64_t z8zE589;
-  z8zE589 = ((zbit_to_set >= UINT64_C(64)) ? UINT64_C(0) : ((UINT64_C(0x01) << zbit_to_set) & UINT64_C(0xFF)));
-end_function_1589: ;
-  return z8zE589;
-end_block_exception_1590: ;
+  uint64_t z8zE586;
+  z8zE586 = ((zbit_to_set >= UINT64_C(64)) ? UINT64_C(0) : ((UINT64_C(0x01) << zbit_to_set) & UINT64_C(0xFF)));
+end_function_1586: ;
+  return z8zE586;
+end_block_exception_1587: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 sail_fixed_bytes_256 zbloom_set_bit(sail_fixed_bytes_256 zbloom, uint64_t zbit_to_set)
 {
-  sail_fixed_bytes_256 z8zE590;
+  sail_fixed_bytes_256 z8zE587;
   sail_fixed_bytes_256 zout;
   zout = zbloom;
   uint64_t zquotient;
@@ -56,17 +56,17 @@ sail_fixed_bytes_256 zbloom_set_bit(sail_fixed_bytes_256 zbloom, uint64_t zbit_t
   zout = fast_unsigned_vector_update_fixed_bytes_256(zout, znatural_byte, z2zE860);
   unit z3zE1092;
   z3zE1092 = UNIT;
-  z8zE590 = zout;
-end_function_1587: ;
-  return z8zE590;
-end_block_exception_1588: ;
+  z8zE587 = zout;
+end_function_1584: ;
+  return z8zE587;
+end_block_exception_1585: ;
 
   return fixed_bytes_256_zero();
 }
 
 sail_fixed_bytes_256 zbloom_add_entry_hash(sail_fixed_bytes_256 zbloom, sail_fixed_bytes_32 zh)
 {
-  sail_fixed_bytes_256 z8zE591;
+  sail_fixed_bytes_256 z8zE588;
   sail_fixed_bytes_32 zbytes;
   zbytes = zh;
   sail_fixed_bytes_256 zout;
@@ -127,24 +127,24 @@ sail_fixed_bytes_256 zbloom_add_entry_hash(sail_fixed_bytes_256 zbloom, sail_fix
   zout = zbloom_set_bit(zout, z2zE852);
   unit z3zE1090;
   z3zE1090 = UNIT;
-  z8zE591 = zout;
-end_function_1585: ;
-  return z8zE591;
-end_block_exception_1586: ;
+  z8zE588 = zout;
+end_function_1582: ;
+  return z8zE588;
+end_block_exception_1583: ;
 
   return fixed_bytes_256_zero();
 }
 
 sail_fixed_bytes_256 zbloom_add_topics(sail_fixed_bytes_256 zbloom, zz5listz8z5structz0zz__sail_c_repr_u256z9 ztopics)
 {
-  sail_fixed_bytes_256 z8zE592;
+  sail_fixed_bytes_256 z8zE589;
   sail_fixed_bytes_256 z3zE1087;
   {
-    if (!((ztopics == NULL))) goto case_1582;
+    if (!((ztopics == NULL))) goto case_1579;
     z3zE1087 = zbloom;
-    goto finish_match_1580;
+    goto finish_match_1577;
   }
-case_1582: ;
+case_1579: ;
   {
     /* complete */
     sail_u256 ztopic;
@@ -160,21 +160,21 @@ case_1582: ;
     }
     z3zE1087 = zbloom_add_topics(z2zE842, zrest);
     KILL(zz5listz8z5structz0zz__sail_c_repr_u256z9)(&zrest);
-    goto finish_match_1580;
+    goto finish_match_1577;
   }
-case_1581: ;
-finish_match_1580: ;
-  z8zE592 = z3zE1087;
-end_function_1583: ;
-  return z8zE592;
-end_block_exception_1584: ;
+case_1578: ;
+finish_match_1577: ;
+  z8zE589 = z3zE1087;
+end_function_1580: ;
+  return z8zE589;
+end_block_exception_1581: ;
 
   return fixed_bytes_256_zero();
 }
 
 sail_fixed_bytes_256 zbloom_add_log(sail_fixed_bytes_256 zbloom, struct zLogEntry zlog)
 {
-  sail_fixed_bytes_256 z8zE593;
+  sail_fixed_bytes_256 z8zE590;
   sail_fixed_bytes_256 zwith_address;
   {
     sail_fixed_bytes_32 z2zE840;
@@ -188,25 +188,25 @@ sail_fixed_bytes_256 zbloom_add_log(sail_fixed_bytes_256 zbloom, struct zLogEntr
   zz5listz8z5structz0zz__sail_c_repr_u256z9 z2zE838;
   CREATE(zz5listz8z5structz0zz__sail_c_repr_u256z9)(&z2zE838);
   COPY(zz5listz8z5structz0zz__sail_c_repr_u256z9)(&z2zE838, zlog.ztopics);
-  z8zE593 = zbloom_add_topics(zwith_address, z2zE838);
+  z8zE590 = zbloom_add_topics(zwith_address, z2zE838);
   KILL(zz5listz8z5structz0zz__sail_c_repr_u256z9)(&z2zE838);
-end_function_1578: ;
-  return z8zE593;
-end_block_exception_1579: ;
+end_function_1575: ;
+  return z8zE590;
+end_block_exception_1576: ;
 
   return fixed_bytes_256_zero();
 }
 
 sail_fixed_bytes_256 zbloom_add_logs(sail_fixed_bytes_256 zbloom, zz5listz8z5structz0zzLogEntryz9 zlogs)
 {
-  sail_fixed_bytes_256 z8zE594;
+  sail_fixed_bytes_256 z8zE591;
   sail_fixed_bytes_256 z3zE1084;
   {
-    if (!((zlogs == NULL))) goto case_1575;
+    if (!((zlogs == NULL))) goto case_1572;
     z3zE1084 = zbloom;
-    goto finish_match_1573;
+    goto finish_match_1570;
   }
-case_1575: ;
+case_1572: ;
   {
     /* complete */
     struct zLogEntry zlog;
@@ -220,39 +220,39 @@ case_1575: ;
     z3zE1084 = zbloom_add_logs(z2zE837, zrest);
     KILL(zz5listz8z5structz0zzLogEntryz9)(&zrest);
     KILL(zLogEntry)(&zlog);
-    goto finish_match_1573;
+    goto finish_match_1570;
   }
-case_1574: ;
-finish_match_1573: ;
-  z8zE594 = z3zE1084;
-end_function_1576: ;
-  return z8zE594;
-end_block_exception_1577: ;
+case_1571: ;
+finish_match_1570: ;
+  z8zE591 = z3zE1084;
+end_function_1573: ;
+  return z8zE591;
+end_block_exception_1574: ;
 
   return fixed_bytes_256_zero();
 }
 
 sail_fixed_bytes_256 zlogs_bloom_for_logs(zz5listz8z5structz0zzLogEntryz9 zlogs)
 {
-  sail_fixed_bytes_256 z8zE595;
-  z8zE595 = zbloom_add_logs(zEMPTY_LOGS_BLOOM, zlogs);
-end_function_1571: ;
-  return z8zE595;
-end_block_exception_1572: ;
+  sail_fixed_bytes_256 z8zE592;
+  z8zE592 = zbloom_add_logs(zEMPTY_LOGS_BLOOM, zlogs);
+end_function_1568: ;
+  return z8zE592;
+end_block_exception_1569: ;
 
   return fixed_bytes_256_zero();
 }
 
 uint64_t ztopics_rlp_content_sizze(zz5listz8z5structz0zz__sail_c_repr_u256z9 ztopics)
 {
-  uint64_t z8zE596;
+  uint64_t z8zE593;
   uint64_t z3zE1081;
   {
-    if (!((ztopics == NULL))) goto case_1568;
+    if (!((ztopics == NULL))) goto case_1565;
     z3zE1081 = UINT64_C(0);
-    goto finish_match_1566;
+    goto finish_match_1563;
   }
-case_1568: ;
+case_1565: ;
   {
     /* complete */
     zz5listz8z5structz0zz__sail_c_repr_u256z9 zrest;
@@ -263,51 +263,51 @@ case_1568: ;
       zrest_length = ztopics_rlp_content_sizze(zrest);
       if (have_exception) {
         KILL(zz5listz8z5structz0zz__sail_c_repr_u256z9)(&zrest);
-        goto end_block_exception_1570;
+        goto end_block_exception_1567;
       }
     }
     {
       z3zE1081 = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(UINT64_C(33), zrest_length);
       if (have_exception) {
         KILL(zz5listz8z5structz0zz__sail_c_repr_u256z9)(&zrest);
-        goto end_block_exception_1570;
+        goto end_block_exception_1567;
       }
     }
     KILL(zz5listz8z5structz0zz__sail_c_repr_u256z9)(&zrest);
-    goto finish_match_1566;
+    goto finish_match_1563;
   }
-case_1567: ;
-finish_match_1566: ;
-  z8zE596 = z3zE1081;
-end_function_1569: ;
-  return z8zE596;
-end_block_exception_1570: ;
+case_1564: ;
+finish_match_1563: ;
+  z8zE593 = z3zE1081;
+end_function_1566: ;
+  return z8zE593;
+end_block_exception_1567: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 uint64_t ztopics_rlp_sizze(zz5listz8z5structz0zz__sail_c_repr_u256z9 ztopics)
 {
-  uint64_t z8zE597;
+  uint64_t z8zE594;
   uint64_t z2zE836;
   {
     z2zE836 = ztopics_rlp_content_sizze(ztopics);
-    if (have_exception) {  goto end_block_exception_1565;  }
+    if (have_exception) {  goto end_block_exception_1562;  }
   }
   {
-    z8zE597 = zrlp_scratch_list_sizze(z2zE836);
-    if (have_exception) {  goto end_block_exception_1565;  }
+    z8zE594 = zrlp_scratch_list_sizze(z2zE836);
+    if (have_exception) {  goto end_block_exception_1562;  }
   }
-end_function_1564: ;
-  return z8zE597;
-end_block_exception_1565: ;
+end_function_1561: ;
+  return z8zE594;
+end_block_exception_1562: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 uint64_t zlog_entry_rlp_content_sizze(struct zLogEntry zlog)
 {
-  uint64_t z8zE598;
+  uint64_t z8zE595;
   uint64_t ztopics_length;
   {
     zz5listz8z5structz0zz__sail_c_repr_u256z9 z2zE835;
@@ -317,7 +317,7 @@ uint64_t zlog_entry_rlp_content_sizze(struct zLogEntry zlog)
       ztopics_length = ztopics_rlp_sizze(z2zE835);
       if (have_exception) {
         KILL(zz5listz8z5structz0zz__sail_c_repr_u256z9)(&z2zE835);
-        goto end_block_exception_1563;
+        goto end_block_exception_1560;
       }
     }
     KILL(zz5listz8z5structz0zz__sail_c_repr_u256z9)(&z2zE835);
@@ -328,54 +328,54 @@ uint64_t zlog_entry_rlp_content_sizze(struct zLogEntry zlog)
     z2zE834 = zlog.zdata;
     {
       zdata_length = zrlp_scratch_slice_sizze(z2zE834);
-      if (have_exception) {  goto end_block_exception_1563;  }
+      if (have_exception) {  goto end_block_exception_1560;  }
     }
   }
   uint64_t z2zE833;
   {
     z2zE833 = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(UINT64_C(21), ztopics_length);
-    if (have_exception) {  goto end_block_exception_1563;  }
+    if (have_exception) {  goto end_block_exception_1560;  }
   }
   {
-    z8zE598 = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(z2zE833, zdata_length);
-    if (have_exception) {  goto end_block_exception_1563;  }
+    z8zE595 = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(z2zE833, zdata_length);
+    if (have_exception) {  goto end_block_exception_1560;  }
   }
-end_function_1562: ;
-  return z8zE598;
-end_block_exception_1563: ;
+end_function_1559: ;
+  return z8zE595;
+end_block_exception_1560: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 uint64_t zlog_entry_rlp_sizze(struct zLogEntry zlog)
 {
-  uint64_t z8zE599;
+  uint64_t z8zE596;
   uint64_t z2zE832;
   {
     z2zE832 = zlog_entry_rlp_content_sizze(zlog);
-    if (have_exception) {  goto end_block_exception_1561;  }
+    if (have_exception) {  goto end_block_exception_1558;  }
   }
   {
-    z8zE599 = zrlp_scratch_list_sizze(z2zE832);
-    if (have_exception) {  goto end_block_exception_1561;  }
+    z8zE596 = zrlp_scratch_list_sizze(z2zE832);
+    if (have_exception) {  goto end_block_exception_1558;  }
   }
-end_function_1560: ;
-  return z8zE599;
-end_block_exception_1561: ;
+end_function_1557: ;
+  return z8zE596;
+end_block_exception_1558: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 uint64_t zlogs_rlp_content_sizze(zz5listz8z5structz0zzLogEntryz9 zlogs)
 {
-  uint64_t z8zE600;
+  uint64_t z8zE597;
   uint64_t z3zE1078;
   {
-    if (!((zlogs == NULL))) goto case_1557;
+    if (!((zlogs == NULL))) goto case_1554;
     z3zE1078 = UINT64_C(0);
-    goto finish_match_1555;
+    goto finish_match_1552;
   }
-case_1557: ;
+case_1554: ;
   {
     /* complete */
     struct zLogEntry zlog;
@@ -390,7 +390,7 @@ case_1557: ;
       if (have_exception) {
         KILL(zLogEntry)(&zlog);
         KILL(zz5listz8z5structz0zzLogEntryz9)(&zrest);
-        goto end_block_exception_1559;
+        goto end_block_exception_1556;
       }
     }
     uint64_t zrest_length;
@@ -399,7 +399,7 @@ case_1557: ;
       if (have_exception) {
         KILL(zLogEntry)(&zlog);
         KILL(zz5listz8z5structz0zzLogEntryz9)(&zrest);
-        goto end_block_exception_1559;
+        goto end_block_exception_1556;
       }
     }
     {
@@ -407,52 +407,52 @@ case_1557: ;
       if (have_exception) {
         KILL(zLogEntry)(&zlog);
         KILL(zz5listz8z5structz0zzLogEntryz9)(&zrest);
-        goto end_block_exception_1559;
+        goto end_block_exception_1556;
       }
     }
     KILL(zz5listz8z5structz0zzLogEntryz9)(&zrest);
     KILL(zLogEntry)(&zlog);
-    goto finish_match_1555;
+    goto finish_match_1552;
   }
-case_1556: ;
-finish_match_1555: ;
-  z8zE600 = z3zE1078;
-end_function_1558: ;
-  return z8zE600;
-end_block_exception_1559: ;
+case_1553: ;
+finish_match_1552: ;
+  z8zE597 = z3zE1078;
+end_function_1555: ;
+  return z8zE597;
+end_block_exception_1556: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 uint64_t zlogs_rlp_sizze(zz5listz8z5structz0zzLogEntryz9 zlogs)
 {
-  uint64_t z8zE601;
+  uint64_t z8zE598;
   uint64_t z2zE831;
   {
     z2zE831 = zlogs_rlp_content_sizze(zlogs);
-    if (have_exception) {  goto end_block_exception_1554;  }
+    if (have_exception) {  goto end_block_exception_1551;  }
   }
   {
-    z8zE601 = zrlp_scratch_list_sizze(z2zE831);
-    if (have_exception) {  goto end_block_exception_1554;  }
+    z8zE598 = zrlp_scratch_list_sizze(z2zE831);
+    if (have_exception) {  goto end_block_exception_1551;  }
   }
-end_function_1553: ;
-  return z8zE601;
-end_block_exception_1554: ;
+end_function_1550: ;
+  return z8zE598;
+end_block_exception_1551: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 unit zrlp_write_topics_content(zz5listz8z5structz0zz__sail_c_repr_u256z9 ztopics)
 {
-  unit z8zE602;
+  unit z8zE599;
   unit z3zE1074;
   {
-    if (!((ztopics == NULL))) goto case_1550;
+    if (!((ztopics == NULL))) goto case_1547;
     z3zE1074 = UNIT;
-    goto finish_match_1548;
+    goto finish_match_1545;
   }
-case_1550: ;
+case_1547: ;
   {
     /* complete */
     sail_u256 ztopic;
@@ -464,43 +464,43 @@ case_1550: ;
     z3zE1075 = zrlp_write_word(ztopic);
     z3zE1074 = zrlp_write_topics_content(zrest);
     KILL(zz5listz8z5structz0zz__sail_c_repr_u256z9)(&zrest);
-    goto finish_match_1548;
+    goto finish_match_1545;
   }
-case_1549: ;
-finish_match_1548: ;
-  z8zE602 = z3zE1074;
-end_function_1551: ;
-  return z8zE602;
-end_block_exception_1552: ;
+case_1546: ;
+finish_match_1545: ;
+  z8zE599 = z3zE1074;
+end_function_1548: ;
+  return z8zE599;
+end_block_exception_1549: ;
 
   return UNIT;
 }
 
 unit zrlp_write_topics(zz5listz8z5structz0zz__sail_c_repr_u256z9 ztopics)
 {
-  unit z8zE603;
+  unit z8zE600;
   uint64_t z2zE830;
   {
     z2zE830 = ztopics_rlp_content_sizze(ztopics);
-    if (have_exception) {  goto end_block_exception_1547;  }
+    if (have_exception) {  goto end_block_exception_1544;  }
   }
   unit z3zE1073;
   z3zE1073 = zrlp_write_list_prefixzIreprzGU64zCuzKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE830);
-  z8zE603 = zrlp_write_topics_content(ztopics);
-end_function_1546: ;
-  return z8zE603;
-end_block_exception_1547: ;
+  z8zE600 = zrlp_write_topics_content(ztopics);
+end_function_1543: ;
+  return z8zE600;
+end_block_exception_1544: ;
 
   return UNIT;
 }
 
 unit zrlp_write_log_entry(struct zLogEntry zlog)
 {
-  unit z8zE604;
+  unit z8zE601;
   uint64_t z2zE826;
   {
     z2zE826 = zlog_entry_rlp_content_sizze(zlog);
-    if (have_exception) {  goto end_block_exception_1545;  }
+    if (have_exception) {  goto end_block_exception_1542;  }
   }
   unit z3zE1072;
   z3zE1072 = zrlp_write_list_prefixzIreprzGU64zCuzKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE826);
@@ -516,30 +516,30 @@ unit zrlp_write_log_entry(struct zLogEntry zlog)
     z3zE1070 = zrlp_write_topics(z2zE828);
     if (have_exception) {
       KILL(zz5listz8z5structz0zz__sail_c_repr_u256z9)(&z2zE828);
-      goto end_block_exception_1545;
+      goto end_block_exception_1542;
     }
   }
   KILL(zz5listz8z5structz0zz__sail_c_repr_u256z9)(&z2zE828);
   struct zByteSliceFields z2zE829;
   z2zE829 = zlog.zdata;
-  z8zE604 = zrlp_write_slice(z2zE829);
-end_function_1544: ;
-  return z8zE604;
-end_block_exception_1545: ;
+  z8zE601 = zrlp_write_slice(z2zE829);
+end_function_1541: ;
+  return z8zE601;
+end_block_exception_1542: ;
 
   return UNIT;
 }
 
 unit zrlp_write_logs_content(zz5listz8z5structz0zzLogEntryz9 zlogs)
 {
-  unit z8zE605;
+  unit z8zE602;
   unit z3zE1066;
   {
-    if (!((zlogs == NULL))) goto case_1541;
+    if (!((zlogs == NULL))) goto case_1538;
     z3zE1066 = UNIT;
-    goto finish_match_1539;
+    goto finish_match_1536;
   }
-case_1541: ;
+case_1538: ;
   {
     /* complete */
     struct zLogEntry zlog;
@@ -554,7 +554,7 @@ case_1541: ;
       if (have_exception) {
         KILL(zLogEntry)(&zlog);
         KILL(zz5listz8z5structz0zzLogEntryz9)(&zrest);
-        goto end_block_exception_1543;
+        goto end_block_exception_1540;
       }
     }
     {
@@ -562,47 +562,47 @@ case_1541: ;
       if (have_exception) {
         KILL(zLogEntry)(&zlog);
         KILL(zz5listz8z5structz0zzLogEntryz9)(&zrest);
-        goto end_block_exception_1543;
+        goto end_block_exception_1540;
       }
     }
     KILL(zz5listz8z5structz0zzLogEntryz9)(&zrest);
     KILL(zLogEntry)(&zlog);
-    goto finish_match_1539;
+    goto finish_match_1536;
   }
-case_1540: ;
-finish_match_1539: ;
-  z8zE605 = z3zE1066;
-end_function_1542: ;
-  return z8zE605;
-end_block_exception_1543: ;
+case_1537: ;
+finish_match_1536: ;
+  z8zE602 = z3zE1066;
+end_function_1539: ;
+  return z8zE602;
+end_block_exception_1540: ;
 
   return UNIT;
 }
 
 unit zrlp_write_logs(zz5listz8z5structz0zzLogEntryz9 zlogs)
 {
-  unit z8zE606;
+  unit z8zE603;
   uint64_t z2zE825;
   {
     z2zE825 = zlogs_rlp_content_sizze(zlogs);
-    if (have_exception) {  goto end_block_exception_1538;  }
+    if (have_exception) {  goto end_block_exception_1535;  }
   }
   unit z3zE1065;
   z3zE1065 = zrlp_write_list_prefixzIreprzGU64zCuzKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE825);
   {
-    z8zE606 = zrlp_write_logs_content(zlogs);
-    if (have_exception) {  goto end_block_exception_1538;  }
+    z8zE603 = zrlp_write_logs_content(zlogs);
+    if (have_exception) {  goto end_block_exception_1535;  }
   }
-end_function_1537: ;
-  return z8zE606;
-end_block_exception_1538: ;
+end_function_1534: ;
+  return z8zE603;
+end_block_exception_1535: ;
 
   return UNIT;
 }
 
 uint64_t zreceipt_payload_content_sizze(struct zReceipt zr, uint64_t zcumulative_gas_used)
 {
-  uint64_t z8zE607;
+  uint64_t z8zE604;
   uint64_t zstatus;
   {
     bool z2zE824;
@@ -633,7 +633,7 @@ uint64_t zreceipt_payload_content_sizze(struct zReceipt zr, uint64_t zcumulative
     }
     {
       zbloom_length = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(zLOGS_BLOOM_BYTE_LENGTH, z2zE821);
-      if (have_exception) {  goto end_block_exception_1536;  }
+      if (have_exception) {  goto end_block_exception_1533;  }
     }
   }
   uint64_t zlogs_length;
@@ -645,7 +645,7 @@ uint64_t zreceipt_payload_content_sizze(struct zReceipt zr, uint64_t zcumulative
       zlogs_length = zlogs_rlp_sizze(z2zE819);
       if (have_exception) {
         KILL(zz5listz8z5structz0zzLogEntryz9)(&z2zE819);
-        goto end_block_exception_1536;
+        goto end_block_exception_1533;
       }
     }
     KILL(zz5listz8z5structz0zzLogEntryz9)(&z2zE819);
@@ -653,27 +653,27 @@ uint64_t zreceipt_payload_content_sizze(struct zReceipt zr, uint64_t zcumulative
   uint64_t zfixed_length;
   {
     zfixed_length = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(zstatus_length, zgas_length);
-    if (have_exception) {  goto end_block_exception_1536;  }
+    if (have_exception) {  goto end_block_exception_1533;  }
   }
   uint64_t z2zE818;
   {
     z2zE818 = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(zfixed_length, zbloom_length);
-    if (have_exception) {  goto end_block_exception_1536;  }
+    if (have_exception) {  goto end_block_exception_1533;  }
   }
   {
-    z8zE607 = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(z2zE818, zlogs_length);
-    if (have_exception) {  goto end_block_exception_1536;  }
+    z8zE604 = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(z2zE818, zlogs_length);
+    if (have_exception) {  goto end_block_exception_1533;  }
   }
-end_function_1535: ;
-  return z8zE607;
-end_block_exception_1536: ;
+end_function_1532: ;
+  return z8zE604;
+end_block_exception_1533: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 struct zByteSliceFields zreceipt_encoded(struct zReceipt zr, uint64_t zcumulative_gas_used)
 {
-  struct zByteSliceFields z8zE608;
+  struct zByteSliceFields z8zE605;
   uint64_t zstatus;
   {
     bool z2zE817;
@@ -698,7 +698,7 @@ struct zByteSliceFields zreceipt_encoded(struct zReceipt zr, uint64_t zcumulativ
     zcontent_len = zreceipt_payload_content_sizze(zr, zcumulative_gas_used);
     if (have_exception) {
       KILL(zz5listz8z5bv8z9)(&zbloom);
-      goto end_block_exception_1534;
+      goto end_block_exception_1531;
     }
   }
   bool ztyped;
@@ -746,20 +746,20 @@ struct zByteSliceFields zreceipt_encoded(struct zReceipt zr, uint64_t zcumulativ
     if (have_exception) {
       KILL(zz5listz8z5bv8z9)(&zbloom);
       KILL(zz5listz8z5structz0zzLogEntryz9)(&z2zE812);
-      goto end_block_exception_1534;
+      goto end_block_exception_1531;
     }
   }
   KILL(zz5listz8z5structz0zzLogEntryz9)(&z2zE812);
-  z8zE608 = zrlp_finish(zstart);
+  z8zE605 = zrlp_finish(zstart);
   KILL(zz5listz8z5bv8z9)(&zbloom);
-end_function_1533: ;
-  return z8zE608;
-end_block_exception_1534: ;
-  struct zByteSliceFields z8zE1091 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE1091;
+end_function_1530: ;
+  return z8zE605;
+end_block_exception_1531: ;
+  struct zByteSliceFields z8zE1079 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE1079;
 }
 
-void zreceipt_accumulator_empty(struct zReceiptAccumulator *z8zE609, unit z3zE1056)
+void zreceipt_accumulator_empty(struct zReceiptAccumulator *z8zE606, unit z3zE1056)
 {
   struct zTrieBuilder z2zE806;
   CREATE(zTrieBuilder)(&z2zE806);
@@ -778,19 +778,19 @@ void zreceipt_accumulator_empty(struct zReceiptAccumulator *z8zE609, unit z3zE10
   z3zE1057.zcumulative_gas_used = UINT64_C(0);
   COPY(zoptionzIRPendingReceiptzK)(&((&z3zE1057)->zfirst), z2zE807);
   COPY(zoptionzIRPendingReceiptzK)(&((&z3zE1057)->zpending), z2zE808);
-  COPY(zReceiptAccumulator)((*(&z8zE609)), z3zE1057);
+  COPY(zReceiptAccumulator)((*(&z8zE606)), z3zE1057);
   KILL(zReceiptAccumulator)(&z3zE1057);
   KILL(zoptionzIRPendingReceiptzK)(&z2zE808);
   KILL(zoptionzIRPendingReceiptzK)(&z2zE807);
   KILL(zTrieBuilder)(&z2zE806);
-end_function_1531: ;
-  goto end_function_4019;
-end_block_exception_1532: ;
-  goto end_function_4019;
-end_function_4019: ;
+end_function_1528: ;
+  goto end_function_4000;
+end_block_exception_1529: ;
+  goto end_function_4000;
+end_function_4000: ;
 }
 
-void zreceipt_insert(struct zTrieBuilder *z8zE610, struct zTrieBuilder zbuilder, struct zPendingReceipt zpending, struct zoptionzIRTriePathzK znext_key)
+void zreceipt_insert(struct zTrieBuilder *z8zE607, struct zTrieBuilder zbuilder, struct zPendingReceipt zpending, struct zoptionzIRTriePathzK znext_key)
 {
   uint64_t zmark;
   zmark = zscratch_begin(UNIT);
@@ -805,7 +805,7 @@ void zreceipt_insert(struct zTrieBuilder *z8zE610, struct zTrieBuilder zbuilder,
       zvalue = zreceipt_encoded(z2zE804, z2zE805);
       if (have_exception) {
         KILL(zReceipt)(&z2zE804);
-        goto end_block_exception_1530;
+        goto end_block_exception_1527;
       }
     }
     KILL(zReceipt)(&z2zE804);
@@ -825,7 +825,7 @@ void zreceipt_insert(struct zTrieBuilder *z8zE610, struct zTrieBuilder zbuilder,
           if (have_exception) {
             KILL(zTrieBuilder)(&zinserted);
             KILL(zTrieItem)(&z2zE803);
-            goto end_block_exception_1530;
+            goto end_block_exception_1527;
           }
         }
       }
@@ -836,23 +836,23 @@ void zreceipt_insert(struct zTrieBuilder *z8zE610, struct zTrieBuilder zbuilder,
       if (have_exception) {
         KILL(zTrieBuilder)(&zinserted);
         KILL(zTrieItem)(&z2zE803);
-        goto end_block_exception_1530;
+        goto end_block_exception_1527;
       }
     }
     KILL(zTrieItem)(&z2zE803);
   }
   unit z3zE1055;
   z3zE1055 = zscratch_rewind(zmark);
-  COPY(zTrieBuilder)((*(&z8zE610)), zinserted);
+  COPY(zTrieBuilder)((*(&z8zE607)), zinserted);
   KILL(zTrieBuilder)(&zinserted);
-end_function_1529: ;
-  goto end_function_4018;
-end_block_exception_1530: ;
-  goto end_function_4018;
-end_function_4018: ;
+end_function_1526: ;
+  goto end_function_3999;
+end_block_exception_1527: ;
+  goto end_function_3999;
+end_function_3999: ;
 }
 
-void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zReceiptAccumulator zacc, struct zReceipt zreceipt, uint64_t znext_count)
+void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE608, struct zReceiptAccumulator zacc, struct zReceipt zreceipt, uint64_t znext_count)
 {
   uint64_t zcumulative;
   {
@@ -862,7 +862,7 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
     z2zE800 = zreceipt.zgas_used;
     {
       zcumulative = zconserved_gas_add(z2zE799, z2zE800);
-      if (have_exception) {  goto end_block_exception_1528;  }
+      if (have_exception) {  goto end_block_exception_1525;  }
     }
   }
   struct zPendingReceipt zcurrent;
@@ -903,7 +903,7 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
     if (z2zE782) {
       unit z3zE1042;
       {
-        if (zpending.kind != Kind_zSomezIRPendingReceiptzK) goto case_1523;
+        if (zpending.kind != Kind_zSomezIRPendingReceiptzK) goto case_1520;
         struct zPendingReceipt zprevious;
         CREATE(zPendingReceipt)(&zprevious);
         COPY(zPendingReceipt)(&zprevious, zpending.variants.zSomezIRPendingReceiptzK);
@@ -946,8 +946,8 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
           internal_vector_update_zz5vecz8z5bv8z9(&z3zE1045, z3zE1045, INT64_C(29), UINT64_C(0x00));
           internal_vector_update_zz5vecz8z5bv8z9(&z3zE1045, z3zE1045, INT64_C(30), UINT64_C(0x00));
           internal_vector_update_zz5vecz8z5bv8z9(&z3zE1045, z3zE1045, INT64_C(31), UINT64_C(0x80));
-          for (size_t z8zE1092 = 0; z8zE1092 < 32; ++z8zE1092) {
-            z3zE1044.zdata.bytes[z8zE1092] = (uint8_t)(z3zE1045.data[z8zE1092] & UINT64_C(0xff));
+          for (size_t z8zE1080 = 0; z8zE1080 < 32; ++z8zE1080) {
+            z3zE1044.zdata.bytes[z8zE1080] = (uint8_t)(z3zE1045.data[z8zE1080] & UINT64_C(0xff));
           }
           KILL(zz5vecz8z5bv8z9)(&z3zE1045);
           z3zE1044.zlen = UINT64_C(2);
@@ -962,15 +962,15 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
             KILL(zoptionzIRPendingReceiptzK)(&zpending);
             KILL(zPendingReceipt)(&zprevious);
             KILL(zoptionzIRTriePathzK)(&z2zE783);
-            goto end_block_exception_1528;
+            goto end_block_exception_1525;
           }
         }
         z3zE1042 = UNIT;
         KILL(zoptionzIRTriePathzK)(&z2zE783);
         KILL(zPendingReceipt)(&zprevious);
-        goto finish_match_1521;
+        goto finish_match_1518;
       }
-    case_1523: ;
+    case_1520: ;
       {
         /* complete */
         struct zexception z2zE784;
@@ -984,18 +984,18 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
         KILL(zoptionzIRPendingReceiptzK)(&zfirst);
         KILL(zoptionzIRPendingReceiptzK)(&zpending);
         KILL(zexception)(&z2zE784);
-        goto end_block_exception_1528;
+        goto end_block_exception_1525;
         /* unreachable after throw */
         KILL(zexception)(&z2zE784);
-        goto finish_match_1521;
+        goto finish_match_1518;
       }
-    case_1522: ;
-    finish_match_1521: ;
+    case_1519: ;
+    finish_match_1518: ;
       unit z3zE1052;
       z3zE1052 = z3zE1042;
       unit z3zE1047;
       {
-        if (zfirst.kind != Kind_zSomezIRPendingReceiptzK) goto case_1526;
+        if (zfirst.kind != Kind_zSomezIRPendingReceiptzK) goto case_1523;
         struct zPendingReceipt zzzero;
         CREATE(zPendingReceipt)(&zzzero);
         COPY(zPendingReceipt)(&zzzero, zfirst.variants.zSomezIRPendingReceiptzK);
@@ -1015,7 +1015,7 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
                 KILL(zoptionzIRPendingReceiptzK)(&zpending);
                 KILL(zPendingReceipt)(&zzzero);
                 KILL(zoptionzIRTriePathzK)(&z2zE787);
-                goto end_block_exception_1528;
+                goto end_block_exception_1525;
               }
             }
           }
@@ -1030,15 +1030,15 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
             KILL(zoptionzIRPendingReceiptzK)(&zpending);
             KILL(zPendingReceipt)(&zzzero);
             KILL(zoptionzIRTriePathzK)(&z2zE787);
-            goto end_block_exception_1528;
+            goto end_block_exception_1525;
           }
         }
         z3zE1047 = UNIT;
         KILL(zoptionzIRTriePathzK)(&z2zE787);
         KILL(zPendingReceipt)(&zzzero);
-        goto finish_match_1524;
+        goto finish_match_1521;
       }
-    case_1526: ;
+    case_1523: ;
       {
         /* complete */
         struct zexception z2zE788;
@@ -1052,13 +1052,13 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
         KILL(zoptionzIRPendingReceiptzK)(&zfirst);
         KILL(zoptionzIRPendingReceiptzK)(&zpending);
         KILL(zexception)(&z2zE788);
-        goto end_block_exception_1528;
+        goto end_block_exception_1525;
         /* unreachable after throw */
         KILL(zexception)(&z2zE788);
-        goto finish_match_1524;
+        goto finish_match_1521;
       }
-    case_1525: ;
-    finish_match_1524: ;
+    case_1522: ;
+    finish_match_1521: ;
       unit z3zE1051;
       z3zE1051 = z3zE1047;
       zNonezIRPendingReceiptzK(&zfirst, UNIT);
@@ -1069,7 +1069,7 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
     } else {
       unit z3zE1038;
       {
-        if (zpending.kind != Kind_zSomezIRPendingReceiptzK) goto case_1520;
+        if (zpending.kind != Kind_zSomezIRPendingReceiptzK) goto case_1517;
         struct zPendingReceipt z3zE1054;
         CREATE(zPendingReceipt)(&z3zE1054);
         COPY(zPendingReceipt)(&z3zE1054, zpending.variants.zSomezIRPendingReceiptzK);
@@ -1089,7 +1089,7 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
                 KILL(zoptionzIRPendingReceiptzK)(&zpending);
                 KILL(zPendingReceipt)(&z3zE1054);
                 KILL(zoptionzIRTriePathzK)(&z2zE791);
-                goto end_block_exception_1528;
+                goto end_block_exception_1525;
               }
             }
           }
@@ -1104,7 +1104,7 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
             KILL(zoptionzIRPendingReceiptzK)(&zpending);
             KILL(zPendingReceipt)(&z3zE1054);
             KILL(zoptionzIRTriePathzK)(&z2zE791);
-            goto end_block_exception_1528;
+            goto end_block_exception_1525;
           }
         }
         unit z3zE1040;
@@ -1113,9 +1113,9 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
         zSomezIRPendingReceiptzK(&zpending, zcurrent);
         z3zE1038 = UNIT;
         KILL(zPendingReceipt)(&z3zE1054);
-        goto finish_match_1518;
+        goto finish_match_1515;
       }
-    case_1520: ;
+    case_1517: ;
       {
         /* complete */
         bool z2zE793;
@@ -1139,14 +1139,14 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
           KILL(zoptionzIRPendingReceiptzK)(&zfirst);
           KILL(zoptionzIRPendingReceiptzK)(&zpending);
           KILL(zexception)(&z2zE794);
-          goto end_block_exception_1528;
+          goto end_block_exception_1525;
           /* unreachable after throw */
           KILL(zexception)(&z2zE794);
         }
-        goto finish_match_1518;
+        goto finish_match_1515;
       }
-    case_1519: ;
-    finish_match_1518: ;
+    case_1516: ;
+    finish_match_1515: ;
       z3zE1037 = z3zE1038;
     }
   }
@@ -1168,22 +1168,22 @@ void zreceipt_accumulator_push(struct zReceiptAccumulator *z8zE611, struct zRece
   z3zE1053.zcumulative_gas_used = zcumulative;
   COPY(zoptionzIRPendingReceiptzK)(&((&z3zE1053)->zfirst), zfirst);
   COPY(zoptionzIRPendingReceiptzK)(&((&z3zE1053)->zpending), zpending);
-  COPY(zReceiptAccumulator)((*(&z8zE611)), z3zE1053);
+  COPY(zReceiptAccumulator)((*(&z8zE608)), z3zE1053);
   KILL(zReceiptAccumulator)(&z3zE1053);
   KILL(zoptionzIRPendingReceiptzK)(&zpending);
   KILL(zoptionzIRPendingReceiptzK)(&zfirst);
   KILL(zTrieBuilder)(&zbuilder);
   KILL(zPendingReceipt)(&zcurrent);
-end_function_1527: ;
-  goto end_function_4017;
-end_block_exception_1528: ;
-  goto end_function_4017;
-end_function_4017: ;
+end_function_1524: ;
+  goto end_function_3998;
+end_block_exception_1525: ;
+  goto end_function_3998;
+end_function_3998: ;
 }
 
 sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
 {
-  sail_fixed_bytes_32 z8zE612;
+  sail_fixed_bytes_32 z8zE609;
   struct zTrieBuilder zbuilder;
   CREATE(zTrieBuilder)(&zbuilder);
   COPY(zTrieBuilder)(&zbuilder, zacc.zbuilder);
@@ -1207,7 +1207,7 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
       COPY(zoptionzIRPendingReceiptzK)(&z2zE763, zacc.zfirst);
       unit z3zE1031;
       {
-        if (z2zE763.kind != Kind_zSomezIRPendingReceiptzK) goto case_1515;
+        if (z2zE763.kind != Kind_zSomezIRPendingReceiptzK) goto case_1512;
         struct zPendingReceipt zzzero;
         CREATE(zPendingReceipt)(&zzzero);
         COPY(zPendingReceipt)(&zzzero, z2zE763.variants.zSomezIRPendingReceiptzK);
@@ -1221,15 +1221,15 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
             KILL(zoptionzIRPendingReceiptzK)(&z2zE763);
             KILL(zPendingReceipt)(&zzzero);
             KILL(zoptionzIRTriePathzK)(&z2zE764);
-            goto end_block_exception_1517;
+            goto end_block_exception_1514;
           }
         }
         z3zE1031 = UNIT;
         KILL(zoptionzIRTriePathzK)(&z2zE764);
         KILL(zPendingReceipt)(&zzzero);
-        goto finish_match_1513;
+        goto finish_match_1510;
       }
-    case_1515: ;
+    case_1512: ;
       {
         /* complete */
         struct zexception z2zE765;
@@ -1241,13 +1241,13 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
         KILL(zTrieBuilder)(&zbuilder);
         KILL(zoptionzIRPendingReceiptzK)(&z2zE763);
         KILL(zexception)(&z2zE765);
-        goto end_block_exception_1517;
+        goto end_block_exception_1514;
         /* unreachable after throw */
         KILL(zexception)(&z2zE765);
-        goto finish_match_1513;
+        goto finish_match_1510;
       }
-    case_1514: ;
-    finish_match_1513: ;
+    case_1511: ;
+    finish_match_1510: ;
       z3zE1014 = z3zE1031;
       KILL(zoptionzIRPendingReceiptzK)(&z2zE763);
     } else {
@@ -1263,7 +1263,7 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
         COPY(zoptionzIRPendingReceiptzK)(&z2zE768, zacc.zpending);
         unit z3zE1022;
         {
-          if (z2zE768.kind != Kind_zSomezIRPendingReceiptzK) goto case_1509;
+          if (z2zE768.kind != Kind_zSomezIRPendingReceiptzK) goto case_1506;
           struct zPendingReceipt zprevious;
           CREATE(zPendingReceipt)(&zprevious);
           COPY(zPendingReceipt)(&zprevious, z2zE768.variants.zSomezIRPendingReceiptzK);
@@ -1306,8 +1306,8 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
             internal_vector_update_zz5vecz8z5bv8z9(&z3zE1025, z3zE1025, INT64_C(29), UINT64_C(0x00));
             internal_vector_update_zz5vecz8z5bv8z9(&z3zE1025, z3zE1025, INT64_C(30), UINT64_C(0x00));
             internal_vector_update_zz5vecz8z5bv8z9(&z3zE1025, z3zE1025, INT64_C(31), UINT64_C(0x80));
-            for (size_t z8zE1093 = 0; z8zE1093 < 32; ++z8zE1093) {
-              z3zE1024.zdata.bytes[z8zE1093] = (uint8_t)(z3zE1025.data[z8zE1093] & UINT64_C(0xff));
+            for (size_t z8zE1081 = 0; z8zE1081 < 32; ++z8zE1081) {
+              z3zE1024.zdata.bytes[z8zE1081] = (uint8_t)(z3zE1025.data[z8zE1081] & UINT64_C(0xff));
             }
             KILL(zz5vecz8z5bv8z9)(&z3zE1025);
             z3zE1024.zlen = UINT64_C(2);
@@ -1320,15 +1320,15 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
               KILL(zoptionzIRPendingReceiptzK)(&z2zE768);
               KILL(zPendingReceipt)(&zprevious);
               KILL(zoptionzIRTriePathzK)(&z2zE769);
-              goto end_block_exception_1517;
+              goto end_block_exception_1514;
             }
           }
           z3zE1022 = UNIT;
           KILL(zoptionzIRTriePathzK)(&z2zE769);
           KILL(zPendingReceipt)(&zprevious);
-          goto finish_match_1507;
+          goto finish_match_1504;
         }
-      case_1509: ;
+      case_1506: ;
         {
           /* complete */
           struct zexception z2zE770;
@@ -1340,13 +1340,13 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
           KILL(zTrieBuilder)(&zbuilder);
           KILL(zoptionzIRPendingReceiptzK)(&z2zE768);
           KILL(zexception)(&z2zE770);
-          goto end_block_exception_1517;
+          goto end_block_exception_1514;
           /* unreachable after throw */
           KILL(zexception)(&z2zE770);
-          goto finish_match_1507;
+          goto finish_match_1504;
         }
-      case_1508: ;
-      finish_match_1507: ;
+      case_1505: ;
+      finish_match_1504: ;
         unit z3zE1027;
         z3zE1027 = z3zE1022;
         KILL(zoptionzIRPendingReceiptzK)(&z2zE768);
@@ -1355,7 +1355,7 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
         COPY(zoptionzIRPendingReceiptzK)(&z2zE771, zacc.zfirst);
         unit z3zE1028;
         {
-          if (z2zE771.kind != Kind_zSomezIRPendingReceiptzK) goto case_1512;
+          if (z2zE771.kind != Kind_zSomezIRPendingReceiptzK) goto case_1509;
           struct zPendingReceipt z3zE1034;
           CREATE(zPendingReceipt)(&z3zE1034);
           COPY(zPendingReceipt)(&z3zE1034, z2zE771.variants.zSomezIRPendingReceiptzK);
@@ -1369,15 +1369,15 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
               KILL(zoptionzIRPendingReceiptzK)(&z2zE771);
               KILL(zPendingReceipt)(&z3zE1034);
               KILL(zoptionzIRTriePathzK)(&z2zE772);
-              goto end_block_exception_1517;
+              goto end_block_exception_1514;
             }
           }
           z3zE1028 = UNIT;
           KILL(zoptionzIRTriePathzK)(&z2zE772);
           KILL(zPendingReceipt)(&z3zE1034);
-          goto finish_match_1510;
+          goto finish_match_1507;
         }
-      case_1512: ;
+      case_1509: ;
         {
           /* complete */
           struct zexception z2zE773;
@@ -1389,13 +1389,13 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
           KILL(zTrieBuilder)(&zbuilder);
           KILL(zoptionzIRPendingReceiptzK)(&z2zE771);
           KILL(zexception)(&z2zE773);
-          goto end_block_exception_1517;
+          goto end_block_exception_1514;
           /* unreachable after throw */
           KILL(zexception)(&z2zE773);
-          goto finish_match_1510;
+          goto finish_match_1507;
         }
-      case_1511: ;
-      finish_match_1510: ;
+      case_1508: ;
+      finish_match_1507: ;
         z3zE1014 = z3zE1028;
         KILL(zoptionzIRPendingReceiptzK)(&z2zE771);
       } else {
@@ -1404,7 +1404,7 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
         COPY(zoptionzIRPendingReceiptzK)(&z2zE774, zacc.zpending);
         unit z3zE1015;
         {
-          if (z2zE774.kind != Kind_zSomezIRPendingReceiptzK) goto case_1503;
+          if (z2zE774.kind != Kind_zSomezIRPendingReceiptzK) goto case_1500;
           struct zPendingReceipt z3zE1035;
           CREATE(zPendingReceipt)(&z3zE1035);
           COPY(zPendingReceipt)(&z3zE1035, z2zE774.variants.zSomezIRPendingReceiptzK);
@@ -1418,15 +1418,15 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
               KILL(zoptionzIRPendingReceiptzK)(&z2zE774);
               KILL(zPendingReceipt)(&z3zE1035);
               KILL(zoptionzIRTriePathzK)(&z2zE775);
-              goto end_block_exception_1517;
+              goto end_block_exception_1514;
             }
           }
           z3zE1015 = UNIT;
           KILL(zoptionzIRTriePathzK)(&z2zE775);
           KILL(zPendingReceipt)(&z3zE1035);
-          goto finish_match_1501;
+          goto finish_match_1498;
         }
-      case_1503: ;
+      case_1500: ;
         {
           /* complete */
           struct zexception z2zE776;
@@ -1438,13 +1438,13 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
           KILL(zTrieBuilder)(&zbuilder);
           KILL(zoptionzIRPendingReceiptzK)(&z2zE774);
           KILL(zexception)(&z2zE776);
-          goto end_block_exception_1517;
+          goto end_block_exception_1514;
           /* unreachable after throw */
           KILL(zexception)(&z2zE776);
-          goto finish_match_1501;
+          goto finish_match_1498;
         }
-      case_1502: ;
-      finish_match_1501: ;
+      case_1499: ;
+      finish_match_1498: ;
         unit z3zE1018;
         z3zE1018 = z3zE1015;
         KILL(zoptionzIRPendingReceiptzK)(&z2zE774);
@@ -1453,7 +1453,7 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
         COPY(zoptionzIRPendingReceiptzK)(&z2zE777, zacc.zfirst);
         unit z3zE1019;
         {
-          if (z2zE777.kind != Kind_zSomezIRPendingReceiptzK) goto case_1506;
+          if (z2zE777.kind != Kind_zSomezIRPendingReceiptzK) goto case_1503;
           struct zexception z2zE778;
           CREATE(zexception)(&z2zE778);
           zInvalidBlock(&z2zE778, zWitnessDeficient);
@@ -1463,35 +1463,35 @@ sail_fixed_bytes_32 zreceipt_accumulator_root(struct zReceiptAccumulator zacc)
           KILL(zTrieBuilder)(&zbuilder);
           KILL(zoptionzIRPendingReceiptzK)(&z2zE777);
           KILL(zexception)(&z2zE778);
-          goto end_block_exception_1517;
+          goto end_block_exception_1514;
           /* unreachable after throw */
           KILL(zexception)(&z2zE778);
-          goto finish_match_1504;
+          goto finish_match_1501;
         }
-      case_1506: ;
+      case_1503: ;
         {
           /* complete */
           z3zE1019 = UNIT;
-          goto finish_match_1504;
+          goto finish_match_1501;
         }
-      case_1505: ;
-      finish_match_1504: ;
+      case_1502: ;
+      finish_match_1501: ;
         z3zE1014 = z3zE1019;
         KILL(zoptionzIRPendingReceiptzK)(&z2zE777);
       }
     }
   }
   {
-    z8zE612 = ztrie_builder_root(zbuilder);
+    z8zE609 = ztrie_builder_root(zbuilder);
     if (have_exception) {
       KILL(zTrieBuilder)(&zbuilder);
-      goto end_block_exception_1517;
+      goto end_block_exception_1514;
     }
   }
   KILL(zTrieBuilder)(&zbuilder);
-end_function_1516: ;
-  return z8zE612;
-end_block_exception_1517: ;
+end_function_1513: ;
+  return z8zE609;
+end_block_exception_1514: ;
 
   return fixed_bytes_32_zero();
 }

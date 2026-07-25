@@ -40,8 +40,8 @@ void create_letbind_55(void) {
   internal_vector_update_zz5vecz8z5bv8z9(&z3zE59, z3zE59, INT64_C(29), UINT64_C(0x46));
   internal_vector_update_zz5vecz8z5bv8z9(&z3zE59, z3zE59, INT64_C(30), UINT64_C(0xD2));
   internal_vector_update_zz5vecz8z5bv8z9(&z3zE59, z3zE59, INT64_C(31), UINT64_C(0xC5));
-  for (size_t z8zE816 = 0; z8zE816 < 32; ++z8zE816) {
-    z3zE60.bytes[z8zE816] = (uint8_t)(z3zE59.data[z8zE816] & UINT64_C(0xff));
+  for (size_t z8zE813 = 0; z8zE813 < 32; ++z8zE813) {
+    z3zE60.bytes[z8zE813] = (uint8_t)(z3zE59.data[z8zE813] & UINT64_C(0xff));
   }
   KILL(zz5vecz8z5bv8z9)(&z3zE59);
   zKECCAK_EMPTY = z3zE60;
@@ -88,8 +88,8 @@ void create_letbind_56(void) {
   internal_vector_update_zz5vecz8z5bv8z9(&z3zE61, z3zE61, INT64_C(29), UINT64_C(0x1F));
   internal_vector_update_zz5vecz8z5bv8z9(&z3zE61, z3zE61, INT64_C(30), UINT64_C(0xE8));
   internal_vector_update_zz5vecz8z5bv8z9(&z3zE61, z3zE61, INT64_C(31), UINT64_C(0x56));
-  for (size_t z8zE817 = 0; z8zE817 < 32; ++z8zE817) {
-    z3zE62.bytes[z8zE817] = (uint8_t)(z3zE61.data[z8zE817] & UINT64_C(0xff));
+  for (size_t z8zE814 = 0; z8zE814 < 32; ++z8zE814) {
+    z3zE62.bytes[z8zE814] = (uint8_t)(z3zE61.data[z8zE814] & UINT64_C(0xff));
   }
   KILL(zz5vecz8z5bv8z9)(&z3zE61);
   zEMPTY_TRIE_ROOT = z3zE62;
@@ -101,20 +101,20 @@ void kill_letbind_56(void) {
 sail_fixed_bytes_32 zkeccak256_slice(struct zByteSliceFields zs)
 {
   sail_fixed_bytes_32 z8zE99;
-  zz5listz8z5unionz0zzBytesz9 z2zE3934;
-  CREATE(zz5listz8z5unionz0zzBytesz9)(&z2zE3934);
+  zz5listz8z5unionz0zzBytesz9 z2zE3895;
+  CREATE(zz5listz8z5unionz0zzBytesz9)(&z2zE3895);
   {
-    struct zBytes z2zE3933;
-    CREATE(zBytes)(&z2zE3933);
-    zBytesSlice(&z2zE3933, zs);
-    zconsz3z5unionz0zzBytes(&z2zE3934, z2zE3933, z2zE3934);
-    KILL(zBytes)(&z2zE3933);
+    struct zBytes z2zE3894;
+    CREATE(zBytes)(&z2zE3894);
+    zBytesSlice(&z2zE3894, zs);
+    zconsz3z5unionz0zzBytes(&z2zE3895, z2zE3894, z2zE3895);
+    KILL(zBytes)(&z2zE3894);
   }
-  z8zE99 = host_keccak_segments(z2zE3934);
-  KILL(zz5listz8z5unionz0zzBytesz9)(&z2zE3934);
-end_function_3776: ;
+  z8zE99 = host_keccak_segments(z2zE3895);
+  KILL(zz5listz8z5unionz0zzBytesz9)(&z2zE3895);
+end_function_3757: ;
   return z8zE99;
-end_block_exception_3777: ;
+end_block_exception_3758: ;
 
   return fixed_bytes_32_zero();
 }
@@ -122,20 +122,20 @@ end_block_exception_3777: ;
 sail_fixed_bytes_32 zsha256_slice(struct zByteSliceFields zs)
 {
   sail_fixed_bytes_32 z8zE100;
-  zz5listz8z5unionz0zzBytesz9 z2zE3932;
-  CREATE(zz5listz8z5unionz0zzBytesz9)(&z2zE3932);
+  zz5listz8z5unionz0zzBytesz9 z2zE3893;
+  CREATE(zz5listz8z5unionz0zzBytesz9)(&z2zE3893);
   {
-    struct zBytes z2zE3931;
-    CREATE(zBytes)(&z2zE3931);
-    zBytesSlice(&z2zE3931, zs);
-    zconsz3z5unionz0zzBytes(&z2zE3932, z2zE3931, z2zE3932);
-    KILL(zBytes)(&z2zE3931);
+    struct zBytes z2zE3892;
+    CREATE(zBytes)(&z2zE3892);
+    zBytesSlice(&z2zE3892, zs);
+    zconsz3z5unionz0zzBytes(&z2zE3893, z2zE3892, z2zE3893);
+    KILL(zBytes)(&z2zE3892);
   }
-  z8zE100 = host_sha256_segments(z2zE3932);
-  KILL(zz5listz8z5unionz0zzBytesz9)(&z2zE3932);
-end_function_3774: ;
+  z8zE100 = host_sha256_segments(z2zE3893);
+  KILL(zz5listz8z5unionz0zzBytesz9)(&z2zE3893);
+end_function_3755: ;
   return z8zE100;
-end_block_exception_3775: ;
+end_block_exception_3756: ;
 
   return fixed_bytes_32_zero();
 }
@@ -143,26 +143,26 @@ end_block_exception_3775: ;
 sail_fixed_bytes_32 zkeccak256_word(sail_u256 zw)
 {
   sail_fixed_bytes_32 z8zE101;
-  zz5listz8z5unionz0zzBytesz9 z2zE3930;
-  CREATE(zz5listz8z5unionz0zzBytesz9)(&z2zE3930);
+  zz5listz8z5unionz0zzBytesz9 z2zE3891;
+  CREATE(zz5listz8z5unionz0zzBytesz9)(&z2zE3891);
   {
-    struct zBytes z2zE3929;
-    CREATE(zBytes)(&z2zE3929);
+    struct zBytes z2zE3890;
+    CREATE(zBytes)(&z2zE3890);
     {
-      zz5listz8z5bv8z9 z2zE3928;
-      CREATE(zz5listz8z5bv8z9)(&z2zE3928);
-      zword_to_bytes32(&z2zE3928, zw);
-      zbytes_list(&z2zE3929, z2zE3928, zWORD_BYTE_LENGTH);
-      KILL(zz5listz8z5bv8z9)(&z2zE3928);
+      zz5listz8z5bv8z9 z2zE3889;
+      CREATE(zz5listz8z5bv8z9)(&z2zE3889);
+      zword_to_bytes32(&z2zE3889, zw);
+      zbytes_list(&z2zE3890, z2zE3889, zWORD_BYTE_LENGTH);
+      KILL(zz5listz8z5bv8z9)(&z2zE3889);
     }
-    zconsz3z5unionz0zzBytes(&z2zE3930, z2zE3929, z2zE3930);
-    KILL(zBytes)(&z2zE3929);
+    zconsz3z5unionz0zzBytes(&z2zE3891, z2zE3890, z2zE3891);
+    KILL(zBytes)(&z2zE3890);
   }
-  z8zE101 = host_keccak_segments(z2zE3930);
-  KILL(zz5listz8z5unionz0zzBytesz9)(&z2zE3930);
-end_function_3772: ;
+  z8zE101 = host_keccak_segments(z2zE3891);
+  KILL(zz5listz8z5unionz0zzBytesz9)(&z2zE3891);
+end_function_3753: ;
   return z8zE101;
-end_block_exception_3773: ;
+end_block_exception_3754: ;
 
   return fixed_bytes_32_zero();
 }
@@ -170,26 +170,26 @@ end_block_exception_3773: ;
 sail_fixed_bytes_32 zkeccak256_address(sail_fixed_bytes_20 za)
 {
   sail_fixed_bytes_32 z8zE102;
-  zz5listz8z5unionz0zzBytesz9 z2zE3927;
-  CREATE(zz5listz8z5unionz0zzBytesz9)(&z2zE3927);
+  zz5listz8z5unionz0zzBytesz9 z2zE3888;
+  CREATE(zz5listz8z5unionz0zzBytesz9)(&z2zE3888);
   {
-    struct zBytes z2zE3926;
-    CREATE(zBytes)(&z2zE3926);
+    struct zBytes z2zE3887;
+    CREATE(zBytes)(&z2zE3887);
     {
-      zz5listz8z5bv8z9 z2zE3925;
-      CREATE(zz5listz8z5bv8z9)(&z2zE3925);
-      zaddress_to_bytes(&z2zE3925, za);
-      zbytes_list(&z2zE3926, z2zE3925, zADDRESS_BYTE_LENGTH);
-      KILL(zz5listz8z5bv8z9)(&z2zE3925);
+      zz5listz8z5bv8z9 z2zE3886;
+      CREATE(zz5listz8z5bv8z9)(&z2zE3886);
+      zaddress_to_bytes(&z2zE3886, za);
+      zbytes_list(&z2zE3887, z2zE3886, zADDRESS_BYTE_LENGTH);
+      KILL(zz5listz8z5bv8z9)(&z2zE3886);
     }
-    zconsz3z5unionz0zzBytes(&z2zE3927, z2zE3926, z2zE3927);
-    KILL(zBytes)(&z2zE3926);
+    zconsz3z5unionz0zzBytes(&z2zE3888, z2zE3887, z2zE3888);
+    KILL(zBytes)(&z2zE3887);
   }
-  z8zE102 = host_keccak_segments(z2zE3927);
-  KILL(zz5listz8z5unionz0zzBytesz9)(&z2zE3927);
-end_function_3770: ;
+  z8zE102 = host_keccak_segments(z2zE3888);
+  KILL(zz5listz8z5unionz0zzBytesz9)(&z2zE3888);
+end_function_3751: ;
   return z8zE102;
-end_block_exception_3771: ;
+end_block_exception_3752: ;
 
   return fixed_bytes_32_zero();
 }
@@ -197,37 +197,37 @@ end_block_exception_3771: ;
 sail_fixed_bytes_32 zsha256_pair(sail_fixed_bytes_32 za, sail_fixed_bytes_32 zb)
 {
   sail_fixed_bytes_32 z8zE103;
-  zz5listz8z5unionz0zzBytesz9 z2zE3924;
-  CREATE(zz5listz8z5unionz0zzBytesz9)(&z2zE3924);
+  zz5listz8z5unionz0zzBytesz9 z2zE3885;
+  CREATE(zz5listz8z5unionz0zzBytesz9)(&z2zE3885);
   {
-    struct zBytes z2zE3922;
-    CREATE(zBytes)(&z2zE3922);
+    struct zBytes z2zE3883;
+    CREATE(zBytes)(&z2zE3883);
     {
-      zz5listz8z5bv8z9 z2zE3920;
-      CREATE(zz5listz8z5bv8z9)(&z2zE3920);
-      zhash_to_bytes32(&z2zE3920, za);
-      zbytes_list(&z2zE3922, z2zE3920, zWORD_BYTE_LENGTH);
-      KILL(zz5listz8z5bv8z9)(&z2zE3920);
+      zz5listz8z5bv8z9 z2zE3881;
+      CREATE(zz5listz8z5bv8z9)(&z2zE3881);
+      zhash_to_bytes32(&z2zE3881, za);
+      zbytes_list(&z2zE3883, z2zE3881, zWORD_BYTE_LENGTH);
+      KILL(zz5listz8z5bv8z9)(&z2zE3881);
     }
-    struct zBytes z2zE3923;
-    CREATE(zBytes)(&z2zE3923);
+    struct zBytes z2zE3884;
+    CREATE(zBytes)(&z2zE3884);
     {
-      zz5listz8z5bv8z9 z2zE3921;
-      CREATE(zz5listz8z5bv8z9)(&z2zE3921);
-      zhash_to_bytes32(&z2zE3921, zb);
-      zbytes_list(&z2zE3923, z2zE3921, zWORD_BYTE_LENGTH);
-      KILL(zz5listz8z5bv8z9)(&z2zE3921);
+      zz5listz8z5bv8z9 z2zE3882;
+      CREATE(zz5listz8z5bv8z9)(&z2zE3882);
+      zhash_to_bytes32(&z2zE3882, zb);
+      zbytes_list(&z2zE3884, z2zE3882, zWORD_BYTE_LENGTH);
+      KILL(zz5listz8z5bv8z9)(&z2zE3882);
     }
-    zconsz3z5unionz0zzBytes(&z2zE3924, z2zE3923, z2zE3924);
-    zconsz3z5unionz0zzBytes(&z2zE3924, z2zE3922, z2zE3924);
-    KILL(zBytes)(&z2zE3923);
-    KILL(zBytes)(&z2zE3922);
+    zconsz3z5unionz0zzBytes(&z2zE3885, z2zE3884, z2zE3885);
+    zconsz3z5unionz0zzBytes(&z2zE3885, z2zE3883, z2zE3885);
+    KILL(zBytes)(&z2zE3884);
+    KILL(zBytes)(&z2zE3883);
   }
-  z8zE103 = host_sha256_segments(z2zE3924);
-  KILL(zz5listz8z5unionz0zzBytesz9)(&z2zE3924);
-end_function_3768: ;
+  z8zE103 = host_sha256_segments(z2zE3885);
+  KILL(zz5listz8z5unionz0zzBytesz9)(&z2zE3885);
+end_function_3749: ;
   return z8zE103;
-end_block_exception_3769: ;
+end_block_exception_3750: ;
 
   return fixed_bytes_32_zero();
 }
@@ -257,18 +257,18 @@ struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 zecrecov
   struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z8zE104;
   struct zAddressResult zrecovered;
   zrecovered = precompile_ecrecover_hash_sig(zh, zyparity, zr, zs);
-  bool z2zE3918;
-  z2zE3918 = zrecovered.zsuccess;
-  sail_fixed_bytes_20 z2zE3919;
-  z2zE3919 = zrecovered.zaddress;
-  struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z3zE3724;
-  z3zE3724.ztup0 = z2zE3918;
-  z3zE3724.ztup1 = z2zE3919;
-  z8zE104 = z3zE3724;
-end_function_3766: ;
+  bool z2zE3879;
+  z2zE3879 = zrecovered.zsuccess;
+  sail_fixed_bytes_20 z2zE3880;
+  z2zE3880 = zrecovered.zaddress;
+  struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z3zE3653;
+  z3zE3653.ztup0 = z2zE3879;
+  z3zE3653.ztup1 = z2zE3880;
+  z8zE104 = z3zE3653;
+end_function_3747: ;
   return z8zE104;
-end_block_exception_3767: ;
-  struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z8zE818 = { .ztup0 = false, .ztup1 = fixed_bytes_20_zero() };
-  return z8zE818;
+end_block_exception_3748: ;
+  struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z8zE815 = { .ztup0 = false, .ztup1 = fixed_bytes_20_zero() };
+  return z8zE815;
 }
 

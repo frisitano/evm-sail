@@ -26,11 +26,11 @@ struct zByteSliceFields zcode_slice(struct zByteSliceFields zbytes)
 {
   struct zByteSliceFields z8zE92;
   z8zE92 = zbytes;
-end_function_3796: ;
+end_function_3777: ;
   return z8zE92;
-end_block_exception_3797: ;
-  struct zByteSliceFields z8zE814 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE814;
+end_block_exception_3778: ;
+  struct zByteSliceFields z8zE811 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE811;
 }
 
 struct zByteSliceFields zvalidated_code_slice(struct zByteSliceFields zbytes)
@@ -38,23 +38,23 @@ struct zByteSliceFields zvalidated_code_slice(struct zByteSliceFields zbytes)
   struct zByteSliceFields z8zE93;
   uint64_t zlength;
   zlength = zbytes.zlen;
-  bool z2zE3941;
+  bool z2zE3902;
   {
-    sail_u128 z2zE3940;
-    z2zE3940 = u128_add_u64_u64(zlength, UINT64_C(32));
-    z2zE3941 = (!u64_lt_u128(UINT64_C(18446744073709551615), z2zE3940));
+    sail_u128 z2zE3901;
+    z2zE3901 = u128_add_u64_u64(zlength, UINT64_C(32));
+    z2zE3902 = (!u64_lt_u128(UINT64_C(18446744073709551615), z2zE3901));
   }
-  if (z2zE3941) {  z8zE93 = zcode_slice(zbytes);  } else {
-    unit z3zE3751;
-    z3zE3751 = sail_assert(false, "executable code cursor headroom");
+  if (z2zE3902) {  z8zE93 = zcode_slice(zbytes);  } else {
+    unit z3zE3680;
+    z3zE3680 = sail_assert(false, "executable code cursor headroom");
     sail_match_failure("validated_code_slice");
     /* unreachable after exit */
   }
-end_function_3794: ;
+end_function_3775: ;
   return z8zE93;
-end_block_exception_3795: ;
-  struct zByteSliceFields z8zE815 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE815;
+end_block_exception_3776: ;
+  struct zByteSliceFields z8zE812 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE812;
 }
 
 void create_letbind_53(void) {
@@ -74,14 +74,14 @@ bool zdeep_stack_immediate_valid(uint64_t zimmediate)
   bool z8zE94;
   uint64_t zvalue;
   zvalue = ((uint64_t) zimmediate);
-  bool z2zE3939;
-  z2zE3939 = (!(UINT64_C(90) < zvalue));
-  bool z3zE3750;
-  if (z2zE3939) {  z3zE3750 = true;  } else {  z3zE3750 = (!(zvalue < UINT64_C(128)));  }
-  z8zE94 = z3zE3750;
-end_function_3792: ;
+  bool z2zE3900;
+  z2zE3900 = (!(UINT64_C(90) < zvalue));
+  bool z3zE3679;
+  if (z2zE3900) {  z3zE3679 = true;  } else {  z3zE3679 = (!(zvalue < UINT64_C(128)));  }
+  z8zE94 = z3zE3679;
+end_function_3773: ;
   return z8zE94;
-end_block_exception_3793: ;
+end_block_exception_3774: ;
 
   return false;
 }
@@ -91,14 +91,14 @@ bool zexchange_immediate_valid(uint64_t zimmediate)
   bool z8zE95;
   uint64_t zvalue;
   zvalue = ((uint64_t) zimmediate);
-  bool z2zE3938;
-  z2zE3938 = (!(UINT64_C(81) < zvalue));
-  bool z3zE3749;
-  if (z2zE3938) {  z3zE3749 = true;  } else {  z3zE3749 = (!(zvalue < UINT64_C(128)));  }
-  z8zE95 = z3zE3749;
-end_function_3790: ;
+  bool z2zE3899;
+  z2zE3899 = (!(UINT64_C(81) < zvalue));
+  bool z3zE3678;
+  if (z2zE3899) {  z3zE3678 = true;  } else {  z3zE3678 = (!(zvalue < UINT64_C(128)));  }
+  z8zE95 = z3zE3678;
+end_function_3771: ;
   return z8zE95;
-end_block_exception_3791: ;
+end_block_exception_3772: ;
 
   return false;
 }

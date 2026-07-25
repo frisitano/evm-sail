@@ -44,7 +44,6 @@ LEAN_HOST_AXIOMS    := $(CONTRACTS_DIR)/HostAxioms.lean
 LEAN_SPECIALIZATION := $(CONTRACTS_DIR)/Specialization.lean
 LEAN_SAIL_LIB       ?= $(abspath $(LEAN_MODEL_DIR)/.lake/packages/Sail)
 COQ_SEMANTIC_FLAGS  := --coq-semantic-range-types --coq-undef-axioms
-LEAN_SEMANTIC_FLAGS := --lean-semantic-range-types
 C_MODEL_HEADERS     := sail_failure.h byte_slice_glue.h host_crypto.h precompiles.h output.h \
                        scratch.h memory.h transient_storage.h stack.h \
                        code_db.h kernel_state.h trie_node_db.h state_db.h \
@@ -207,7 +206,7 @@ extract-lean:
 	test -s $(LEAN_SAIL_LIB)/lakefile.toml
 	rm -rf $(LEAN_MODEL_DIR)/Evm
 	rm -f $(LEAN_MODEL_DIR)/Evm.lean $(LEAN_MODEL_DIR)/lakefile.toml $(LEAN_MODEL_DIR)/lean-toolchain $(LEAN_MODEL_DIR)/.gitignore
-	$(SAIL) --lean --lean-executable --lean-force-output --lean-source-root sail $(LEAN_SEMANTIC_FLAGS) --lean-lib-path $(LEAN_SAIL_LIB) --lean-specialization-file $(LEAN_SPECIALIZATION) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
+	$(SAIL) --lean --lean-executable --lean-explicit-measures --lean-force-output --lean-source-root sail --lean-lib-path $(LEAN_SAIL_LIB) --lean-specialization-file $(LEAN_SPECIALIZATION) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
 	find $(LEAN_MODEL_DIR) -name '*.lean' -exec sed -i.bak 's/ByteSlice/EvmByteSlice/g' {} +
 	find $(LEAN_MODEL_DIR)/Evm -name '*.lean' -exec sed -E -i.bak 's/(^|[^[:alnum:]_])prefix([^[:alnum:]_]|$$)/\1evm_prefix\2/g' {} +
 	find $(LEAN_MODEL_DIR) -name '*.bak' -exec rm -f {} +

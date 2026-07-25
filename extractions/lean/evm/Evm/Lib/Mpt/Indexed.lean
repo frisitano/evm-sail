@@ -47,7 +47,7 @@ Transaction, withdrawal, and receipt tries use RLP-encoded list indices as
 keys. Their bytewise trie order differs from numeric order, so this cursor
 emits indices directly in canonical key order. -/
 
-/- Type quantifiers: atom_maximum : Nat, rlp_index_valid_maximum(atom_maximum) -/
+/- Type quantifiers: atom_maximum : Nat, (rlp_index_valid_maximum atom_maximum) -/
 def undefined_RlpIndexCursor (atom_maximum : Nat) : SailM (RlpIndexCursor atom_maximum) := do
   (pure { count := ← (undefined_range 0 atom_maximum),
           position := ← (undefined_range 0 atom_maximum) })
@@ -60,9 +60,8 @@ def rlp_index_byte_width_decrement (value : Nat) : SailM Nat := do
 
 /-- Returns the minimal byte width of an indexed-trie position. -/
 /- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
-def rlp_index_encoded_width (value : item_index) : rlp_index_byte_width :=
-  let value := (value).value
-  ⟨if ((value <b 256) : Bool)
+def rlp_index_encoded_width (value : Nat) : Nat :=
+  if ((value <b 256) : Bool)
   then 1
   else
     (if ((value <b 65536) : Bool)
@@ -82,13 +81,12 @@ def rlp_index_encoded_width (value : item_index) : rlp_index_byte_width :=
             else
               (if ((value <b 72057594037927936) : Bool)
               then 7
-              else 8))))))⟩
+              else 8))))))
 
 /-- The transactions/withdrawals-trie key for list index `i`:
 `rlp(i)` as a nibble path (YP §4.4.2). -/
 /- Type quantifiers: index : Nat, 0 ≤ index ∧ index ≤ (2 ^ 64 - 1) -/
-def trie_index_key (index : item_index) : SailM TriePath := do
-  let index := (index).value
+def trie_index_key (index : Nat) : SailM TriePath := do
   if ((index == 0) : Bool)
   then (path_append_byte (path_empty ()) 0x80#8)
   else
@@ -97,7 +95,7 @@ def trie_index_key (index : item_index) : SailM TriePath := do
       then (path_append_byte (path_empty ()) (get_slice_int 8 index 0))
       else
         (do
-          let width := ((rlp_index_encoded_width ⟨index⟩)).value
+          let width := (rlp_index_encoded_width index)
           let path ← do (path_append_byte (path_empty ()) (get_slice_int 8 (128 + width) 0))
           let remaining : Nat := width
           let (path, remaining) ← (( do
@@ -122,19 +120,19 @@ def trie_index_key (index : item_index) : SailM TriePath := do
           (pure path)))
 
 /-- Starts canonical RLP-index traversal for a bounded collection. -/
-/- Type quantifiers: count : Nat, k_maximum : Nat, rlp_index_valid_maximum(k_maximum), 0 ≤ count
+/- Type quantifiers: count : Nat, k_maximum : Nat, (rlp_index_valid_maximum k_maximum), 0 ≤ count
   ∧ count ≤ k_maximum -/
 def rlp_index_cursor (count : Nat) : (RlpIndexCursor k_maximum) :=
   { count := count,
     position := 0 }
 
 /-- Whether canonical RLP-index traversal has consumed every index. -/
-/- Type quantifiers: k_maximum : Nat, rlp_index_valid_maximum(k_maximum) -/
+/- Type quantifiers: k_maximum : Nat, (rlp_index_valid_maximum k_maximum) -/
 def rlp_index_cursor_empty (cursor : (RlpIndexCursor k_maximum)) : Bool :=
   (cursor.count ≤b cursor.position)
 
 /-- Maps a canonical-key cursor position back to its numeric list index. -/
-/- Type quantifiers: k_maximum : Nat, rlp_index_valid_maximum(k_maximum) -/
+/- Type quantifiers: k_maximum : Nat, (rlp_index_valid_maximum k_maximum) -/
 def rlp_index_at_position (cursor : (RlpIndexCursor k_maximum)) : SailM Nat := do
   let count := cursor.count
   let position := cursor.position
@@ -154,7 +152,7 @@ def rlp_index_at_position (cursor : (RlpIndexCursor k_maximum)) : SailM Nat := d
   else sailThrow ((InvalidBlock WitnessDeficient))
 
 /-- Removes the next canonical-key item and advances the cursor. -/
-/- Type quantifiers: k_maximum : Nat, rlp_index_valid_maximum(k_maximum) -/
+/- Type quantifiers: k_maximum : Nat, (rlp_index_valid_maximum k_maximum) -/
 def rlp_index_cursor_pop (cursor : (RlpIndexCursor k_maximum)) : SailM ((RlpIndexItem k_maximum) × (RlpIndexCursor k_maximum)) := do
   let count := cursor.count
   let position := cursor.position
@@ -168,9 +166,9 @@ def rlp_index_cursor_pop (cursor : (RlpIndexCursor k_maximum)) : SailM ((RlpInde
       let next_key ← do
         if ((rlp_index_cursor_empty next_cursor) : Bool)
         then (pure none)
-        else (pure (some (← (trie_index_key ⟨(← (rlp_index_at_position next_cursor))⟩))))
+        else (pure (some (← (trie_index_key (← (rlp_index_at_position next_cursor))))))
       (pure ({ index := index,
-               key := ← (trie_index_key ⟨index⟩),
+               key := ← (trie_index_key index),
                next_key := next_key }, next_cursor)))
   else sailThrow ((InvalidBlock WitnessDeficient))
 

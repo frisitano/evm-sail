@@ -106,7 +106,7 @@ private def stageCompletes (inputBytes : ByteArray) (stage : Nat) : Bool :=
           else
             let block := input.payload.block'
             bal_reset ()
-            bal_set_index 0
+            writeReg k_block_access_index 0
             if fork_gteq (← readReg k_fork) .Cancun then
               system_call BEACON_ROOTS_ADDR
                 (← readReg k_header).parent_beacon_block_root
@@ -124,11 +124,12 @@ private def stageCompletes (inputBytes : ByteArray) (stage : Nat) : Bool :=
               else
                 let result ←
                   execute_block_transactions block.body.transactions
-                    inputRef.public_keys ⟨block.header.gas_limit.value⟩
+                    inputRef.public_keys block.header.gas_limit
                 if stage == 6 then
                   pure ()
                 else
-                  bal_set_index (block.body.transactions.count + 1)
+                  writeReg k_block_access_index
+                    (block.body.transactions.count + 1)
                   apply_block_end_state block.body
                   if stage == 7 then
                     pure ()

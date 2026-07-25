@@ -72,10 +72,12 @@ type blob_fee_update_fraction_bound : Int = 11684671
 /*! The positive denominator governing excess-blob-gas fee adjustment. */
 type blob_fee_update_fraction = range(1, blob_fee_update_fraction_bound)
 
-/*! An EIP-155 chain identifier. EIP-155 defines an integer domain without a
-    fixed-width consensus bound; the stateless-input ABI independently uses
-    an SSZ `uint64`. */
-type chain_identifier = nat
+/*! Largest chain identifier admitted by the typed-transaction wire decoder. */
+type chain_identifier_bound : Int = 2 ^ 64 - 1
+
+/*! A chain identifier. Typed-transaction chain identifiers and the stateless
+    chain configuration are decoded as unsigned 64-bit integers. */
+type chain_identifier = range(0, chain_identifier_bound)
 
 /*! The ordinal of a fork in this model's thirteen-member [Fork][type-Fork]
     enumeration. This is a model structural bound, not a wire constraint. */
@@ -209,22 +211,8 @@ function word_of_block_timestamp(value) =
         WORD_ZERO
     }
 
-/*! Converts an EIP-155 chain identifier to the value exposed by CHAINID. */
-val word_of_chain_identifier : forall 'value, 0 <= 'value. int('value) -> {'result,
-                                                                              0
-                                                                           <= 'result
-                                                                           &  'result
-                                                                           <= 'value
-                                                                           &  'result
-                                                                           <  2 ^ 256.
-                                                                           int('result)}
-function word_of_chain_identifier(value) =
-    if value < sizeof(word_modulus) then {
-        value
-    } else {
-        assert(false);
-        WORD_ZERO
-    }
+/*! Converts a chain identifier to the value exposed by CHAINID. */
+function word_of_chain_identifier(value : chain_identifier) -> chain_identifier = value
 
 /*! Encodes a precompiled-contract identifier directly as its 20-byte
     address.  Identifiers currently occupy only the two least-significant

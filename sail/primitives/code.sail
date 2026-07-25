@@ -35,10 +35,9 @@ type CodeSlice = {
 
 /*! Reclassifies a byte span after its producer has established the executable
     length invariant. */
-val code_slice : forall 'off 'len, source_valid_range('off, 'len) & code_valid_length('len). ByteSliceFields('off, 'len) -> ByteSliceFields(
-        'off,
-        'len,
-    )
+val code_slice : forall 'off 'len,
+    source_valid_range('off, 'len) & code_valid_length('len).
+    ByteSliceFields('off, 'len) -> CodeSlice
 function code_slice(bytes) = bytes
 
 /*! Converts a source span whose producer guarantees executable cursor
@@ -49,7 +48,7 @@ function validated_code_slice(bytes : ByteSlice) -> CodeSlice =
     code_slice(bytes)
 
 /*! Canonical empty executable code. */
-let EMPTY_CODE_SLICE : ByteSliceFields(0, 0) = code_slice(byte_slice(StatelessInputSource, 0, 0))
+let EMPTY_CODE_SLICE : CodeSlice = code_slice(byte_slice(StatelessInputSource, 0, 0))
 
 /*! Whether an EIP-8024 `DUPN`/`SWAPN` immediate is valid. Invalid
     immediates remain opcode-aligned during JUMPDEST analysis. */

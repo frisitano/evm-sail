@@ -41,6 +41,9 @@ register k_header : BlockHeader =
 /*! The per-transaction environment (`ORIGIN`, `GASPRICE`,
     `BLOBHASH`). */
 register k_tx : TxEnv = struct { origin = ZERO_ADDRESS, gas_price = ZERO_WORD, blob_hashes = EMPTY_BLOB_HASHES }
+/*! The EIP-7928 position stamped on committed state changes in the current
+    execution phase. */
+register k_block_access_index : block_access_index = 0
 
 /*! The environment fields opcodes read through [k_env][]. */
 enum EnvField = {

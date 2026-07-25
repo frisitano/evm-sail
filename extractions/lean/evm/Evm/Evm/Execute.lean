@@ -77,7 +77,7 @@ opcode bodies live in [execute_opcode][]. -/
 
 /-- The storage owner (YP I_a): `SLOAD`, `SSTORE`, `LOG`, and
 `SELFDESTRUCT` act on this account. -/
-def self_addr (_ : Unit) : SailM address := do
+def self_addr (_ : Unit) : SailM (Vector (BitVec 8) 20) := do
   (pure (← readReg message).address)
 
 /-- EIP-214 write protection: any state-modifying opcode in a
@@ -97,8 +97,7 @@ YP §9.4.3); otherwise an invalid-jump exceptional halt. PUSH-data
 bytes that happen to equal `0x5b` are not valid. -/
 /- Type quantifiers: destination_value : Nat, 0 ≤ destination_value ∧
   destination_value ≤ (2 ^ 256 - 1) -/
-def do_jump (destination_value : word) : SailM Unit := do
-  let destination_value := (destination_value).value
+def do_jump (destination_value : Nat) : SailM Unit := do
   let code_length ← do (frame_code_len ())
   if ((destination_value <b code_length) : Bool)
   then
@@ -111,371 +110,188 @@ def do_jump (destination_value : word) : SailM Unit := do
 
 /-- Pops `count` log topics from the stack. -/
 /- Type quantifiers: count : Nat, 0 ≤ count ∧ count ≤ 4 -/
-def pop_log_topics (count : log_topic_count) : SailM (List word) := do
-  let count := (count).value
-  let publicResult ← do
-    match count with
-    | 0 => (pure [])
-    | 1 => (pure [((← (pop ()))).value])
-    | 2 =>
-      (do
-        let t0 ← do
-          (do
-              let publicResult ← (pop ())
-              pure ((publicResult).value))
-        let t1 ← do
-          (do
-              let publicResult ← (pop ())
-              pure ((publicResult).value))
-        (pure [t0, t1]))
-    | 3 =>
-      (do
-        let t0 ← do
-          (do
-              let publicResult ← (pop ())
-              pure ((publicResult).value))
-        let t1 ← do
-          (do
-              let publicResult ← (pop ())
-              pure ((publicResult).value))
-        let t2 ← do
-          (do
-              let publicResult ← (pop ())
-              pure ((publicResult).value))
-        (pure [t0, t1, t2]))
-    | 4 =>
-      (do
-        let t0 ← do
-          (do
-              let publicResult ← (pop ())
-              pure ((publicResult).value))
-        let t1 ← do
-          (do
-              let publicResult ← (pop ())
-              pure ((publicResult).value))
-        let t2 ← do
-          (do
-              let publicResult ← (pop ())
-              pure ((publicResult).value))
-        let t3 ← do
-          (do
-              let publicResult ← (pop ())
-              pure ((publicResult).value))
-        (pure [t0, t1, t2, t3]))
-    | _ => (pure [])
-  pure ((List.map (fun semanticValue => ⟨semanticValue⟩) (publicResult)))
+def pop_log_topics (count : Nat) : SailM (List Nat) := do
+  match count with
+  | 0 => (pure [])
+  | 1 => (pure [(← (pop ()))])
+  | 2 =>
+    (do
+      let t0 ← do (pop ())
+      let t1 ← do (pop ())
+      (pure [t0, t1]))
+  | 3 =>
+    (do
+      let t0 ← do (pop ())
+      let t1 ← do (pop ())
+      let t2 ← do (pop ())
+      (pure [t0, t1, t2]))
+  | 4 =>
+    (do
+      let t0 ← do (pop ())
+      let t1 ← do (pop ())
+      let t2 ← do (pop ())
+      let t3 ← do (pop ())
+      (pure [t0, t1, t2, t3]))
+  | _ => (pure [])
 
 /-- Executes the arithmetic, comparison, and bitwise opcode families. -/
 def execute_arithmetic (op : ast) : SailM Unit := do
   match op with
   | .ADD () =>
     (do
-      (charge (G_verylow).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_add ⟨a⟩ b)).value⟩))
+      (charge G_verylow)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_add a b)))
   | .MUL () =>
     (do
-      (charge (G_low).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨(alu_mul a b)⟩))
+      (charge G_low)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_mul a b)))
   | .SUB () =>
     (do
-      (charge (G_verylow).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_sub ⟨a⟩ ⟨b⟩)).value⟩))
+      (charge G_verylow)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_sub a b)))
   | .DIV () =>
     (do
-      (charge (G_low).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_div ⟨a⟩ ⟨b⟩)).value⟩))
+      (charge G_low)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_div a b)))
   | .SDIV () =>
     (do
-      (charge (G_low).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_sdiv ⟨a⟩ ⟨b⟩)).value⟩))
+      (charge G_low)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_sdiv a b)))
   | .MOD () =>
     (do
-      (charge (G_low).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_mod ⟨a⟩ ⟨b⟩)).value⟩))
+      (charge G_low)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_mod a b)))
   | .SMOD () =>
     (do
-      (charge (G_low).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_smod ⟨a⟩ ⟨b⟩)).value⟩))
+      (charge G_low)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_smod a b)))
   | .ADDMOD () =>
     (do
-      (charge (G_mid).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let n ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_addmod a b n)).value⟩))
+      (charge G_mid)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      let n ← do (pop ())
+      (push_word (alu_addmod a b n)))
   | .MULMOD () =>
     (do
-      (charge (G_mid).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let n ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_mulmod a b n)).value⟩))
+      (charge G_mid)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      let n ← do (pop ())
+      (push_word (alu_mulmod a b n)))
   | .EXP () =>
     (do
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let e ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (charge (exp_gas ⟨e⟩))
-      (push_word ⟨((alu_exp ⟨a⟩ ⟨e⟩)).value⟩))
+      let a ← do (pop ())
+      let e ← do (pop ())
+      (charge (exp_gas e))
+      (push_word (alu_exp a e)))
   | .SIGNEXTEND () =>
     (do
-      (charge (G_low).value)
-      let bi ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let v ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_signextend ⟨bi⟩ ⟨v⟩)).value⟩))
+      (charge G_low)
+      let bi ← do (pop ())
+      let v ← do (pop ())
+      (push_word (alu_signextend bi v)))
   | .LT () =>
     (do
-      (charge (G_verylow).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_lt ⟨a⟩ ⟨b⟩)).value⟩))
+      (charge G_verylow)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_lt a b)))
   | .GT () =>
     (do
-      (charge (G_verylow).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_gt ⟨a⟩ ⟨b⟩)).value⟩))
+      (charge G_verylow)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_gt a b)))
   | .SLT () =>
     (do
-      (charge (G_verylow).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_slt ⟨a⟩ ⟨b⟩)).value⟩))
+      (charge G_verylow)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_slt a b)))
   | .SGT () =>
     (do
-      (charge (G_verylow).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_sgt ⟨a⟩ ⟨b⟩)).value⟩))
+      (charge G_verylow)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_sgt a b)))
   | .EQ () =>
     (do
-      (charge (G_verylow).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_eq ⟨a⟩ ⟨b⟩)).value⟩))
+      (charge G_verylow)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_eq a b)))
   | .ISZERO () =>
     (do
-      (charge (G_verylow).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_iszero ⟨a⟩)).value⟩))
+      (charge G_verylow)
+      let a ← do (pop ())
+      (push_word (alu_iszero a)))
   | .AND () =>
     (do
-      (charge (G_verylow).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_and ⟨a⟩ ⟨b⟩)).value⟩))
+      (charge G_verylow)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_and a b)))
   | .OR () =>
     (do
-      (charge (G_verylow).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_or ⟨a⟩ ⟨b⟩)).value⟩))
+      (charge G_verylow)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_or a b)))
   | .XOR () =>
     (do
-      (charge (G_verylow).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let b ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_xor ⟨a⟩ ⟨b⟩)).value⟩))
+      (charge G_verylow)
+      let a ← do (pop ())
+      let b ← do (pop ())
+      (push_word (alu_xor a b)))
   | .NOT () =>
     (do
-      (charge (G_verylow).value)
-      let a ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_not ⟨a⟩)).value⟩))
+      (charge G_verylow)
+      let a ← do (pop ())
+      (push_word (alu_not a)))
   | .BYTE () =>
     (do
-      (charge (G_verylow).value)
-      let i ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let x ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_byte ⟨i⟩ ⟨x⟩)).value⟩))
+      (charge G_verylow)
+      let i ← do (pop ())
+      let x ← do (pop ())
+      (push_word (alu_byte i x)))
   | .SHL () =>
     (do
-      (charge (G_verylow).value)
-      let s ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let v ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_shl ⟨s⟩ ⟨v⟩)).value⟩))
+      (charge G_verylow)
+      let s ← do (pop ())
+      let v ← do (pop ())
+      (push_word (alu_shl s v)))
   | .SHR () =>
     (do
-      (charge (G_verylow).value)
-      let s ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let v ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_shr ⟨s⟩ ⟨v⟩)).value⟩))
+      (charge G_verylow)
+      let s ← do (pop ())
+      let v ← do (pop ())
+      (push_word (alu_shr s v)))
   | .SAR () =>
     (do
-      (charge (G_verylow).value)
-      let s ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let v ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_sar ⟨s⟩ ⟨v⟩)).value⟩))
+      (charge G_verylow)
+      let s ← do (pop ())
+      let v ← do (pop ())
+      (push_word (alu_sar s v)))
   | .CLZ () =>
     (do
-      (charge (G_low).value)
-      let x ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((alu_clz ⟨x⟩)).value⟩))
+      (charge G_low)
+      let x ← do (pop ())
+      (push_word (alu_clz x)))
   | _ => assert false "sail/evm/execute.sail:255.21-255.22"
 
 /-- Executes hashing and transaction/environment data access opcodes. -/
@@ -483,177 +299,136 @@ def execute_environment (op : ast) : SailM Unit := do
   match op with
   | .KECCAK256 () =>
     (do
-      let offset_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let length_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (charge_keccak_gas ⟨length_word⟩)
-      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range ⟨offset_word⟩ length_word)
+      let offset_word ← do (pop ())
+      let length_word ← do (pop ())
+      (charge_keccak_gas length_word)
+      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range offset_word length_word)
       if ((← (is_running ())) : Bool)
-      then (push_word ⟨((← (mem_keccak ⟨_, ⟨_, range⟩⟩))).value⟩)
+      then (push_word (← (mem_keccak ⟨_, ⟨_, range⟩⟩)))
       else (pure ()))
   | .ADDRESS () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((address_to_word (← (self_addr ())))).value⟩))
+      (charge G_base)
+      (push_word (address_to_word (← (self_addr ())))))
   | .ORIGIN () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((← (k_env F_Origin))).value⟩))
+      (charge G_base)
+      (push_word (← (k_env F_Origin))))
   | .CALLER () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((address_to_word (← readReg message).caller)).value⟩))
+      (charge G_base)
+      (push_word (address_to_word (← readReg message).caller)))
   | .CALLVALUE () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((← readReg message).value).value⟩))
+      (charge G_base)
+      (push_word (← readReg message).value))
   | .GASPRICE () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((← (k_env F_GasPrice))).value⟩))
+      (charge G_base)
+      (push_word (← (k_env F_GasPrice))))
   | .CALLDATASIZE () =>
     (do
-      (charge (G_base).value)
-      let ⟨_, ⟨_, input⟩⟩ ← do pure ((← readReg calldata))
-      (push_word ⟨((← (word_of_source_byte_count input.len))).value⟩))
+      (charge G_base)
+      let ⟨_, ⟨_, input⟩⟩ ← do readReg calldata
+      (push_word (← (word_of_source_byte_count input.len))))
   | .CALLDATALOAD () =>
     (do
-      (charge (G_verylow).value)
-      let offset_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
+      (charge G_verylow)
+      let offset_word ← do (pop ())
       if ((← (is_running ())) : Bool)
       then
         (push_word
-          ⟨((← (slice_load_word_offset (← readReg calldata) ⟨offset_word⟩))).value⟩)
+          (← do
+              let dependentArg0 := (← readReg calldata)
+              (slice_load_word_offset dependentArg0 offset_word)))
       else (pure ()))
   | .CALLDATACOPY () =>
     (do
-      (charge (G_verylow).value)
-      let destination_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let source_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let length_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (charge_copy_gas ⟨length_word⟩)
-      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range ⟨destination_word⟩ length_word)
+      (charge G_verylow)
+      let destination_word ← do (pop ())
+      let source_word ← do (pop ())
+      let length_word ← do (pop ())
+      (charge_copy_gas length_word)
+      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range destination_word length_word)
       if ((← (is_running ())) : Bool)
-      then (slice_copy_word_offset (← readReg calldata) range.off ⟨source_word⟩ range.len)
+      then
+        (do
+            let dependentArg0 := (← readReg calldata)
+            (slice_copy_word_offset dependentArg0 range.off source_word range.len))
       else (pure ()))
   | .CODESIZE () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((← (word_of_source_byte_count (← (frame_code_len ()))))).value⟩))
+      (charge G_base)
+      (push_word (← (word_of_source_byte_count (← (frame_code_len ()))))))
   | .CODECOPY () =>
     (do
-      (charge (G_verylow).value)
-      let destination_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let source_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let length_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (charge_copy_gas ⟨length_word⟩)
-      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range ⟨destination_word⟩ length_word)
+      (charge G_verylow)
+      let destination_word ← do (pop ())
+      let source_word ← do (pop ())
+      let length_word ← do (pop ())
+      (charge_copy_gas length_word)
+      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range destination_word length_word)
       if ((← (is_running ())) : Bool)
       then
-        (slice_copy_word_offset
-          (⟨_, ⟨_, (((← readReg frame_code).bytes).2).2⟩⟩ : (Sigma fun (k_off : Nat) =>
-          (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) range.off ⟨source_word⟩
-          range.len)
+        (do
+            let dependentArg0 := (← readReg frame_code).bytes
+            (slice_copy_word_offset dependentArg0 range.off source_word range.len))
       else (pure ()))
   | .BALANCE () =>
     (do
-      let a ← do (pure (word_to_address ⟨((← (pop ()))).value⟩))
+      let a ← do (pure (word_to_address (← (pop ()))))
       let warm ← do (k_access_account a)
-      (charge ((← (account_cost warm))).value)
+      (charge (← (account_cost warm)))
       if ((← (is_running ())) : Bool)
-      then (push_word ⟨((← (k_get_balance a))).value⟩)
+      then (push_word (← (k_get_balance a)))
       else (pure ()))
   | .SELFBALANCE () =>
     (do
-      (charge (G_low).value)
-      (push_word ⟨((← (k_get_balance (← (self_addr ()))))).value⟩))
+      (charge G_low)
+      (push_word (← (k_get_balance (← (self_addr ()))))))
   | .EXTCODESIZE () =>
     (do
-      let a ← do (pure (word_to_address ⟨((← (pop ()))).value⟩))
+      let a ← do (pure (word_to_address (← (pop ()))))
       let warm ← do (k_access_account a)
-      (charge (((← (account_cost warm))).value + ((← (external_code_read_cost ()))).value))
+      (charge ((← (account_cost warm)) + (← (external_code_read_cost ()))))
       if ((← (is_running ())) : Bool)
-      then (push_word ⟨((← (word_of_source_byte_count (← (k_get_code_size a))))).value⟩)
+      then (push_word (← (word_of_source_byte_count (← (k_get_code_size a)))))
       else (pure ()))
   | .EXTCODECOPY () =>
     (do
-      let a ← do (pure (word_to_address ⟨((← (pop ()))).value⟩))
-      let destination_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let source_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let length_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
+      let a ← do (pure (word_to_address (← (pop ()))))
+      let destination_word ← do (pop ())
+      let source_word ← do (pop ())
+      let length_word ← do (pop ())
       let warm ← do (k_access_account a)
-      (charge (((← (account_cost warm))).value + ((← (external_code_read_cost ()))).value))
-      (charge_copy_gas ⟨length_word⟩)
-      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range ⟨destination_word⟩ length_word)
+      (charge ((← (account_cost warm)) + (← (external_code_read_cost ()))))
+      (charge_copy_gas length_word)
+      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range destination_word length_word)
       if ((← (is_running ())) : Bool)
-      then (k_code_copy a range.off ⟨source_word⟩ range.len)
+      then (k_code_copy a range.off source_word range.len)
       else (pure ()))
   | .EXTCODEHASH () =>
     (do
-      let a ← do (pure (word_to_address ⟨((← (pop ()))).value⟩))
+      let a ← do (pure (word_to_address (← (pop ()))))
       let warm ← do (k_access_account a)
-      (charge ((← (account_cost warm))).value)
+      (charge (← (account_cost warm)))
       if ((← (is_running ())) : Bool)
-      then (push_word ⟨((hash_to_word (← (k_get_codehash a)))).value⟩)
+      then (push_word (hash_to_word (← (k_get_codehash a))))
       else (pure ()))
   | .RETURNDATASIZE () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((← (word_of_source_byte_count (← (returndata_size ()))))).value⟩))
+      (charge G_base)
+      (push_word (← (word_of_source_byte_count (← (returndata_size ()))))))
   | .RETURNDATACOPY () =>
     (do
-      (charge (G_verylow).value)
-      let destination_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let source_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let length_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (charge_copy_gas ⟨length_word⟩)
-      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range ⟨destination_word⟩ length_word)
+      (charge G_verylow)
+      let destination_word ← do (pop ())
+      let source_word ← do (pop ())
+      let length_word ← do (pop ())
+      (charge_copy_gas length_word)
+      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range destination_word length_word)
       if ((← (is_running ())) : Bool)
-      then (returndata_copy_words range.off ⟨source_word⟩ ⟨length_word⟩)
+      then (returndata_copy_words range.off source_word length_word)
       else (pure ()))
   | _ => assert false "sail/evm/execute.sail:383.21-383.22"
 
@@ -663,48 +438,47 @@ def execute_block (op : ast) : SailM Unit := do
   | .BLOCKHASH () =>
     (do
       (charge 20)
-      (push_word ⟨((hash_to_word (← (k_blockhash ⟨((← (pop ()))).value⟩)))).value⟩))
+      (push_word (hash_to_word (← (k_blockhash (← (pop ())))))))
   | .COINBASE () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((← (k_env F_Coinbase))).value⟩))
+      (charge G_base)
+      (push_word (← (k_env F_Coinbase))))
   | .TIMESTAMP () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((← (k_env F_Timestamp))).value⟩))
+      (charge G_base)
+      (push_word (← (k_env F_Timestamp))))
   | .NUMBER () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((← (k_env F_Number))).value⟩))
+      (charge G_base)
+      (push_word (← (k_env F_Number))))
   | .SLOTNUM () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((← (k_env F_SlotNumber))).value⟩))
+      (charge G_base)
+      (push_word (← (k_env F_SlotNumber))))
   | .PREVRANDAO () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((← (k_env F_PrevRandao))).value⟩))
+      (charge G_base)
+      (push_word (← (k_env F_PrevRandao))))
   | .GASLIMIT () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((← (k_env F_GasLimit))).value⟩))
+      (charge G_base)
+      (push_word (← (k_env F_GasLimit))))
   | .CHAINID () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((← (k_env F_ChainId))).value⟩))
+      (charge G_base)
+      (push_word (← (k_env F_ChainId))))
   | .BASEFEE () =>
     (do
-      (charge (G_base).value)
-      (push_word ⟨((← (k_env F_BaseFee))).value⟩))
+      (charge G_base)
+      (push_word (← (k_env F_BaseFee))))
   | .BLOBBASEFEE () =>
     (do
-      (charge (G_base).value)
-      (push_word
-        ⟨((← (blob_base_fee ⟨((← readReg k_header).excess_blob_gas).value⟩))).value⟩))
+      (charge G_base)
+      (push_word (← (blob_base_fee (← readReg k_header).excess_blob_gas))))
   | .BLOBHASH () =>
     (do
-      (charge (G_verylow).value)
-      (push_word ⟨((← (k_blobhash ⟨((← (pop ()))).value⟩))).value⟩))
+      (charge G_verylow)
+      (push_word (← (k_blobhash (← (pop ()))))))
   | _ => assert false "sail/evm/execute.sail:432.21-432.22"
 
 /-- Executes stack and linear-memory opcodes. -/
@@ -712,82 +486,53 @@ def execute_memory (op : ast) : SailM Unit := do
   match op with
   | .POP () =>
     (do
-      (charge (G_base).value)
-      let _ ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
+      (charge G_base)
+      let _ ← do (pop ())
       (pure ()))
   | .MLOAD () =>
     (do
-      (charge (G_verylow).value)
-      let offset_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range ⟨offset_word⟩ ((U256 32)).value)
+      (charge G_verylow)
+      let offset_word ← do (pop ())
+      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range offset_word (U256 32))
       if ((← (is_running ())) : Bool)
-      then (push_word ⟨((← (mem_load range.off))).value⟩)
+      then (push_word (← (mem_load range.off)))
       else (pure ()))
   | .MSTORE () =>
     (do
-      (charge (G_verylow).value)
-      let offset_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let v ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range ⟨offset_word⟩ ((U256 32)).value)
+      (charge G_verylow)
+      let offset_word ← do (pop ())
+      let v ← do (pop ())
+      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range offset_word (U256 32))
       if ((← (is_running ())) : Bool)
-      then (mem_store range.off ⟨v⟩)
+      then (mem_store range.off v)
       else (pure ()))
   | .MSTORE8 () =>
     (do
-      (charge (G_verylow).value)
-      let offset_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let v ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range ⟨offset_word⟩ (WORD_ONE).value)
+      (charge G_verylow)
+      let offset_word ← do (pop ())
+      let v ← do (pop ())
+      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range offset_word WORD_ONE)
       if ((← (is_running ())) : Bool)
-      then (mem_store_byte range.off ⟨v⟩)
+      then (mem_store_byte range.off v)
       else (pure ()))
   | .MSIZE () =>
     (do
-      (charge (G_base).value)
+      (charge G_base)
       (push_word
-        ⟨((← (word_of_nat_byte_count
-          ((memory_word_count (← (evm_memory_high_water ()))) *i 32)))).value⟩))
+        (← (word_of_nat_byte_count ((memory_word_count (← (evm_memory_high_water ()))) *i 32)))))
   | .MCOPY () =>
     (do
-      (charge (G_verylow).value)
-      let destination_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let source_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let length_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (charge_copy_gas ⟨length_word⟩)
+      (charge G_verylow)
+      let destination_word ← do (pop ())
+      let source_word ← do (pop ())
+      let length_word ← do (pop ())
+      (charge_copy_gas length_word)
       if ((← (is_running ())) : Bool)
       then
         (do
-          let available ← do pure ((← readReg gas_remaining))
+          let available ← do readReg gas_remaining
           let expansion ← do
-            (memory_pair_expansion ⟨destination_word⟩ ⟨length_word⟩ ⟨source_word⟩
-              ⟨length_word⟩ available)
+            (memory_pair_expansion destination_word length_word source_word length_word available)
           (charge expansion.cost)
           if ((← (is_running ())) : Bool)
           then
@@ -803,14 +548,11 @@ def execute_storage (op : ast) : SailM Unit := do
   match op with
   | .SLOAD () =>
     (do
-      let s ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let warm ← do (k_slot_is_warm (← (self_addr ())) ⟨s⟩)
-      (charge ((← (sload_cost warm))).value)
+      let s ← do (pop ())
+      let warm ← do (k_slot_is_warm (← (self_addr ())) s)
+      (charge (← (sload_cost warm)))
       if ((← (is_running ())) : Bool)
-      then (push_word ⟨((← (k_sload (← (self_addr ())) ⟨s⟩)).curr).value⟩)
+      then (push_word (← (k_sload (← (self_addr ())) s)).curr)
       else (pure ()))
   | .SSTORE () =>
     (do
@@ -818,28 +560,25 @@ def execute_storage (op : ast) : SailM Unit := do
       then (pure ())
       else
         (do
-          if (((fork_lt (← readReg k_fork) Amsterdam) && (← do
-                 (pure ((← readReg gas_remaining) ≤b G_callstipend)))) : Bool)
+          if ((← if ((fork_lt (← readReg k_fork) Amsterdam) : Bool)
+               then
+                 (do
+                   (pure ((← readReg gas_remaining) ≤b G_callstipend)))
+               else (pure false)) : Bool)
           then (exc_halt OutOfGas)
           else
             (do
-              let s ← do
-                (do
-                    let publicResult ← (pop ())
-                    pure ((publicResult).value))
-              let v ← do
-                (do
-                    let publicResult ← (pop ())
-                    pure ((publicResult).value))
+              let s ← do (pop ())
+              let v ← do (pop ())
               if ((← (is_running ())) : Bool)
               then
                 (do
-                  let warm ← do (k_slot_is_warm (← (self_addr ())) ⟨s⟩)
+                  let warm ← do (k_slot_is_warm (← (self_addr ())) s)
                   let cold := (! warm)
                   if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
                   then
                     (do
-                      let access_cost := ((amsterdam_storage_access_cost cold)).value
+                      let access_cost := (amsterdam_storage_access_cost cold)
                       let sentry_cost :=
                         if ((access_cost <b G_sstore_sentry) : Bool)
                         then G_sstore_sentry
@@ -850,48 +589,38 @@ def execute_storage (op : ast) : SailM Unit := do
                   then (pure ())
                   else
                     (do
-                      let entry ← do (k_sload (← (self_addr ())) ⟨s⟩)
-                      let costs ← do
-                        (sstore_costs ⟨(entry.orig).value⟩ ⟨(entry.curr).value⟩ ⟨v⟩ cold)
-                      if (((costs.state_credit).value != 0) : Bool)
-                      then (credit_state_gas_refund ⟨(costs.state_credit).value⟩)
+                      let entry ← do (k_sload (← (self_addr ())) s)
+                      let costs ← do (sstore_costs entry.orig entry.curr v cold)
+                      if ((costs.state_credit != 0) : Bool)
+                      then (credit_state_gas_refund costs.state_credit)
                       else (pure ())
                       (charge costs.execution)
                       (charge_state_gas costs.state_charge)
-                      if ((! ((costs.refund).value == (GAS_REFUND_ZERO).value)) : Bool)
-                      then (record_refund (costs.refund).value)
+                      if ((! (costs.refund == GAS_REFUND_ZERO)) : Bool)
+                      then (record_refund costs.refund)
                       else (pure ())
-                      if (((← (is_running ())) && (((entry.curr).value != v) : Bool)) : Bool)
+                      if (((← (is_running ())) && ((entry.curr != v) : Bool)) : Bool)
                       then
-                        (k_sstore (← (self_addr ())) ⟨s⟩
-                          { curr := ⟨v⟩,
-                            orig := ⟨(entry.orig).value⟩ })
+                        (k_sstore (← (self_addr ())) s
+                          { curr := v,
+                            orig := entry.orig })
                       else (pure ())))
               else (pure ()))))
   | .TLOAD () =>
     (do
-      (charge (G_warm_access).value)
-      let s ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (push_word ⟨((← (k_tload (← (self_addr ())) ⟨s⟩))).value⟩))
+      (charge G_warm_access)
+      let s ← do (pop ())
+      (push_word (← (k_tload (← (self_addr ())) s))))
   | .TSTORE () =>
     (do
       if ((← (guard_static ())) : Bool)
       then (pure ())
       else
         (do
-          (charge (G_warm_access).value)
-          let s ← do
-            (do
-                let publicResult ← (pop ())
-                pure ((publicResult).value))
-          let v ← do
-            (do
-                let publicResult ← (pop ())
-                pure ((publicResult).value))
-          (k_tstore (← (self_addr ())) ⟨s⟩ ⟨v⟩)))
+          (charge G_warm_access)
+          let s ← do (pop ())
+          let v ← do (pop ())
+          (k_tstore (← (self_addr ())) s v)))
   | _ => assert false "sail/evm/execute.sail:556.21-556.22"
 
 /-- Executes control-flow and stack-shuffling opcodes. -/
@@ -899,73 +628,52 @@ def execute_control (op : ast) : SailM Unit := do
   match op with
   | .JUMP () =>
     (do
-      (charge (G_mid).value)
-      let dest ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      (do_jump ⟨dest⟩))
+      (charge G_mid)
+      let dest ← do (pop ())
+      (do_jump dest))
   | .JUMPI () =>
     (do
-      (charge (G_high).value)
-      let dest ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let cond ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
+      (charge G_high)
+      let dest ← do (pop ())
+      let cond ← do (pop ())
       if ((word_is_zero cond) : Bool)
       then (pure ())
-      else (do_jump ⟨dest⟩))
+      else (do_jump dest))
   | .PC () =>
     (do
-      (charge (G_base).value)
-      (push_word
-        ⟨((alu_sub ⟨((← (word_of_source_byte_count (← readReg pc)))).value⟩
-          ⟨(WORD_ONE).value⟩)).value⟩))
+      (charge G_base)
+      (push_word (alu_sub (← (word_of_source_byte_count (← readReg pc))) WORD_ONE)))
   | .GAS () =>
     (do
-      (charge (G_base).value)
+      (charge G_base)
       (push_gas (← readReg gas_remaining)))
-  | .JUMPDEST () => (charge (G_jumpdest).value)
+  | .JUMPDEST () => (charge G_jumpdest)
   | .PUSH (n, v) =>
-    let n := (n).value
-    let v := (v).value
     (do
       if ((n == 0) : Bool)
-      then (charge (G_base).value)
-      else (charge (G_verylow).value)
-      (push_word ⟨v⟩))
+      then (charge G_base)
+      else (charge G_verylow)
+      (push_word v))
   | .DUP n =>
-    let n := (n).value
     (do
-      (charge (G_verylow).value)
-      if ((((← (stack_height ()))).value <b n) : Bool)
+      (charge G_verylow)
+      if (((← (stack_height ())) <b n) : Bool)
       then (exc_halt StackUnderflow)
-      else (push_word ⟨((← (peek ⟨(n - 1)⟩))).value⟩))
+      else (push_word (← (peek (n - 1)))))
   | .SWAP n =>
-    let n := (n).value
     (do
-      (charge (G_verylow).value)
-      if ((((← (stack_height ()))).value <b (n + 1)) : Bool)
+      (charge G_verylow)
+      if (((← (stack_height ())) <b (n + 1)) : Bool)
       then (exc_halt StackUnderflow)
       else
         (do
-          let top ← do
-            (do
-                let publicResult ← (peek ⟨0⟩)
-                pure ((publicResult).value))
-          let other ← do
-            (do
-                let publicResult ← (peek ⟨n⟩)
-                pure ((publicResult).value))
-          (stack_set ⟨0⟩ ⟨other⟩)
-          (stack_set ⟨n⟩ ⟨top⟩)))
+          let top ← do (peek 0)
+          let other ← do (peek n)
+          (stack_set 0 other)
+          (stack_set n top)))
   | .DUPN immediate =>
     (do
-      (charge (G_verylow).value)
+      (charge G_verylow)
       if ((← (is_running ())) : Bool)
       then
         (do
@@ -973,17 +681,14 @@ def execute_control (op : ast) : SailM Unit := do
           then (exc_halt InvalidOpcode)
           else
             (do
-              let n ← do
-                (do
-                    let publicResult ← (decode_single_stack_index immediate)
-                    pure ((publicResult).value))
-              if ((((← (stack_height ()))).value <b n) : Bool)
+              let n ← do (decode_single_stack_index immediate)
+              if (((← (stack_height ())) <b n) : Bool)
               then (exc_halt StackUnderflow)
-              else (push_word ⟨((← (peek ⟨(n - 1)⟩))).value⟩)))
+              else (push_word (← (peek (n - 1))))))
       else (pure ()))
   | .SWAPN immediate =>
     (do
-      (charge (G_verylow).value)
+      (charge G_verylow)
       if ((← (is_running ())) : Bool)
       then
         (do
@@ -991,28 +696,19 @@ def execute_control (op : ast) : SailM Unit := do
           then (exc_halt InvalidOpcode)
           else
             (do
-              let n ← do
-                (do
-                    let publicResult ← (decode_single_stack_index immediate)
-                    pure ((publicResult).value))
-              if ((((← (stack_height ()))).value <b (n + 1)) : Bool)
+              let n ← do (decode_single_stack_index immediate)
+              if (((← (stack_height ())) <b (n + 1)) : Bool)
               then (exc_halt StackUnderflow)
               else
                 (do
-                  let top ← do
-                    (do
-                        let publicResult ← (peek ⟨0⟩)
-                        pure ((publicResult).value))
-                  let other ← do
-                    (do
-                        let publicResult ← (peek ⟨n⟩)
-                        pure ((publicResult).value))
-                  (stack_set ⟨0⟩ ⟨other⟩)
-                  (stack_set ⟨n⟩ ⟨top⟩))))
+                  let top ← do (peek 0)
+                  let other ← do (peek n)
+                  (stack_set 0 other)
+                  (stack_set n top))))
       else (pure ()))
   | .EXCHANGE immediate =>
     (do
-      (charge (G_verylow).value)
+      (charge G_verylow)
       if ((← (is_running ())) : Bool)
       then
         (do
@@ -1020,24 +716,15 @@ def execute_control (op : ast) : SailM Unit := do
           then (exc_halt InvalidOpcode)
           else
             (do
-              let (n, m) ← do
-                (do
-                    let publicResult ← (decode_exchange_stack_indices immediate)
-                    pure (((fun (semanticValue0, semanticValue1) => ((semanticValue0).value, (semanticValue1).value)) (publicResult))))
-              if ((((← (stack_height ()))).value <b (m + 1)) : Bool)
+              let (n, m) ← do (decode_exchange_stack_indices immediate)
+              if (((← (stack_height ())) <b (m + 1)) : Bool)
               then (exc_halt StackUnderflow)
               else
                 (do
-                  let first ← do
-                    (do
-                        let publicResult ← (peek ⟨n⟩)
-                        pure ((publicResult).value))
-                  let second ← do
-                    (do
-                        let publicResult ← (peek ⟨m⟩)
-                        pure ((publicResult).value))
-                  (stack_set ⟨n⟩ ⟨second⟩)
-                  (stack_set ⟨m⟩ ⟨first⟩))))
+                  let first ← do (peek n)
+                  let second ← do (peek m)
+                  (stack_set n second)
+                  (stack_set m first))))
       else (pure ()))
   | _ => assert false "sail/evm/execute.sail:663.21-663.22"
 
@@ -1045,33 +732,22 @@ def execute_control (op : ast) : SailM Unit := do
 def execute_log (op : ast) : SailM Unit := do
   match op with
   | .LOG n =>
-    let n := (n).value
     (do
       if ((← (guard_static ())) : Bool)
       then (pure ())
       else
         (do
-          let offset_word ← do
-            (do
-                let publicResult ← (pop ())
-                pure ((publicResult).value))
-          let length_word ← do
-            (do
-                let publicResult ← (pop ())
-                pure ((publicResult).value))
-          let topics ← do
-            (do
-                let publicResult ← (pop_log_topics ⟨n⟩)
-                pure ((List.map (fun semanticValue => (semanticValue).value) (publicResult))))
-          (charge_log_gas ⟨n⟩ ⟨length_word⟩)
-          let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range ⟨offset_word⟩ length_word)
+          let offset_word ← do (pop ())
+          let length_word ← do (pop ())
+          let topics ← do (pop_log_topics n)
+          (charge_log_gas n length_word)
+          let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range offset_word length_word)
           if ((← (is_running ())) : Bool)
           then
-            (k_log (← (self_addr ()))
-              (List.map (fun semanticValue => ⟨semanticValue⟩) (topics))
-              (BytesSlice
-                (⟨_, ⟨_, (((← (memory_byte_slice range.off range.len))).2).2⟩⟩ : (Sigma
-                fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))))
+            (k_log (← (self_addr ())) topics
+              (← do
+                  let dependentArg0 := (← (memory_byte_slice range.off range.len))
+                  pure ((BytesSlice dependentArg0))))
           else (pure ())))
   | _ => assert false "sail/evm/execute.sail:682.21-682.22"
 
@@ -1081,43 +757,37 @@ def execute_halt (op : ast) : SailM Unit := do
   | .STOP () => writeReg frame_status (Halted (HaltStop ()))
   | .RETURN () =>
     (do
-      let offset_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let length_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range ⟨offset_word⟩ length_word)
+      let offset_word ← do (pop ())
+      let length_word ← do (pop ())
+      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range offset_word length_word)
       if ((← (is_running ())) : Bool)
       then
         writeReg frame_status (Halted
-          (HaltReturn
-            (← (freeze_output
-                (⟨_, ⟨_, (((← (memory_byte_slice range.off range.len))).2).2⟩⟩ : (Sigma
-                fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))))))
+          (← do
+              let dependentArg0 := (← do
+                  let dependentArg0 := (← (memory_byte_slice range.off range.len))
+                  let publicResult ← (freeze_output dependentArg0)
+                  pure ((⟨_, ⟨_, ((publicResult).2).2⟩⟩ : (Sigma fun (k_off : Nat) =>
+                  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))))
+              pure ((HaltReturn dependentArg0))))
       else (pure ()))
   | .REVERT () =>
     (do
-      let offset_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let length_word ← do
-        (do
-            let publicResult ← (pop ())
-            pure ((publicResult).value))
-      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range ⟨offset_word⟩ length_word)
+      let offset_word ← do (pop ())
+      let length_word ← do (pop ())
+      let ⟨_, ⟨_, range⟩⟩ ← do (charge_memory_range offset_word length_word)
       if ((← (is_running ())) : Bool)
       then
         (do
           (refill_frame_state_gas ())
           writeReg frame_status (Halted
-            (HaltRevert
-              (← (freeze_output
-                  (⟨_, ⟨_, (((← (memory_byte_slice range.off range.len))).2).2⟩⟩ : (Sigma
-                  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))))))
+            (← do
+                let dependentArg0 := (← do
+                    let dependentArg0 := (← (memory_byte_slice range.off range.len))
+                    let publicResult ← (freeze_output dependentArg0)
+                    pure ((⟨_, ⟨_, ((publicResult).2).2⟩⟩ : (Sigma fun (k_off : Nat) =>
+                    (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))))
+                pure ((HaltRevert dependentArg0)))))
       else (pure ()))
   | .INVALID () =>
     (do
@@ -1129,37 +799,38 @@ def execute_halt (op : ast) : SailM Unit := do
       then (pure ())
       else
         (do
-          let beneficiary ← do (pure (word_to_address ⟨((← (pop ()))).value⟩))
+          let beneficiary ← do (pure (word_to_address (← (pop ()))))
           if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
           then
             (do
               let warm ← do (k_access_account beneficiary)
               let access_cost :=
-                ((0 + (G_selfdestruct).value) + (if (warm : Bool)
-                  then (G_zero).value
-                  else (G_amsterdam_cold_account_access).value))
+                ((0 + G_selfdestruct) + (if (warm : Bool)
+                  then G_zero
+                  else G_amsterdam_cold_account_access))
               (check_execution_gas access_cost)
               if ((← (is_running ())) : Bool)
               then
                 (do
-                  let bal ← do
-                    (do
-                        let publicResult ← (k_get_balance (← (self_addr ())))
-                        pure ((publicResult).value))
+                  let bal ← do (k_get_balance (← (self_addr ())))
                   let creates_account ← do
-                    (pure ((word_nonzero bal) && (← (k_account_is_empty beneficiary))))
+                    if ((word_nonzero bal) : Bool)
+                    then
+                      (do
+                        (k_account_is_empty beneficiary))
+                    else (pure false)
                   let execution_cost :=
                     if (creates_account : Bool)
-                    then (access_cost + (G_amsterdam_account_write).value)
+                    then (access_cost + G_amsterdam_account_write)
                     else access_cost
                   (charge execution_cost)
                   if (((← (is_running ())) && creates_account) : Bool)
-                  then (charge_state_gas (G_amsterdam_state_new_account).value)
+                  then (charge_state_gas G_amsterdam_state_new_account)
                   else (pure ())
                   if ((← (is_running ())) : Bool)
                   then
                     (do
-                      (k_transfer (← (self_addr ())) beneficiary ⟨bal⟩)
+                      (k_transfer (← (self_addr ())) beneficiary bal)
                       if ((← (k_was_created (← (self_addr ())))) : Bool)
                       then (k_selfdestruct (← (self_addr ())))
                       else (pure ())
@@ -1168,18 +839,22 @@ def execute_halt (op : ast) : SailM Unit := do
               else (pure ()))
           else
             (do
-              let bal ← do
-                (do
-                    let publicResult ← (k_get_balance (← (self_addr ())))
-                    pure ((publicResult).value))
+              let bal ← do (k_get_balance (← (self_addr ())))
               let warm ← do (k_access_account beneficiary)
-              (charge (G_selfdestruct).value)
+              (charge G_selfdestruct)
               if ((! warm) : Bool)
-              then (charge (G_cold_account).value)
+              then (charge G_cold_account)
               else (pure ())
-              if (((← (is_running ())) && ((word_nonzero bal) && (← (k_account_is_empty
-                         beneficiary)))) : Bool)
-              then (charge (G_newaccount).value)
+              if ((← if ((← (is_running ())) : Bool)
+                   then
+                     (do
+                       if ((word_nonzero bal) : Bool)
+                       then
+                         (do
+                           (k_account_is_empty beneficiary))
+                       else (pure false))
+                   else (pure false)) : Bool)
+              then (charge G_newaccount)
               else (pure ())
               if ((← (is_running ())) : Bool)
               then
@@ -1187,9 +862,9 @@ def execute_halt (op : ast) : SailM Unit := do
                   let first_selfdestruct ← do
                     (pure (! (← (k_is_selfdestructed (← (self_addr ()))))))
                   if (((fork_lt (← readReg k_fork) London) && first_selfdestruct) : Bool)
-                  then (record_refund (R_selfdestruct_pre_london).value)
+                  then (record_refund R_selfdestruct_pre_london)
                   else (pure ())
-                  (k_transfer (← (self_addr ())) beneficiary ⟨bal⟩)
+                  (k_transfer (← (self_addr ())) beneficiary bal)
                   if ((fork_lt (← readReg k_fork) Cancun) : Bool)
                   then
                     (do
@@ -1337,13 +1012,13 @@ def call_uses_target_address (kind : CallKind) : Bool :=
 account runs the code at its delegation target, following exactly one
 hop; a delegation whose target is a precompile (or has no code)
 executes as empty code. An undelegated account runs its own code. -/
-/- Type quantifiers: k_ex411018_ : Bool -/
-def executable_code (target : address) (dele : Bool) (dtgt : address) : SailM Code := do
+/- Type quantifiers: k_ex417243_ : Bool -/
+def executable_code (target : (Vector (BitVec 8) 20)) (dele : Bool) (dtgt : (Vector (BitVec 8) 20)) : SailM Code := do
   if (dele : Bool)
   then
     (do
       let delegate_code ← do (code_db_resolve (← (k_code_key dtgt)))
-      if ((((← (precompile_number dtgt))).value != 0) : Bool)
+      if (((← (precompile_number dtgt)) != 0) : Bool)
       then (pure EMPTY_CODE)
       else (pure delegate_code))
   else (code_db_resolve (← (k_code_key target)))
@@ -1364,71 +1039,51 @@ Operand layout (top of stack first): `gas`, `target`, `value` (for
 Pushes 1 on success, 0 on failure. -/
 def run_call (kind : CallKind) : SailM Unit := do
   let caller ← do (self_addr ())
-  let gas_request ← do
-    (do
-        let publicResult ← (pop ())
-        pure ((publicResult).value))
-  let target_word ← do
-    (do
-        let publicResult ← (pop ())
-        pure ((publicResult).value))
-  let target := (word_to_address ⟨target_word⟩)
+  let gas_request ← do (pop ())
+  let target_word ← do (pop ())
+  let target := (word_to_address target_word)
   let value ← do
     if ((call_takes_value kind) : Bool)
-    then
-      (do
-          let publicResult ← (pop ())
-          pure ((publicResult).value))
-    else (pure (WORD_ZERO).value)
-  let args_off_word ← do
-    (do
-        let publicResult ← (pop ())
-        pure ((publicResult).value))
-  let args_len_word ← do
-    (do
-        let publicResult ← (pop ())
-        pure ((publicResult).value))
-  let ret_off_word ← do
-    (do
-        let publicResult ← (pop ())
-        pure ((publicResult).value))
-  let ret_len_word ← do
-    (do
-        let publicResult ← (pop ())
-        pure ((publicResult).value))
+    then (pop ())
+    else (pure WORD_ZERO)
+  let args_off_word ← do (pop ())
+  let args_len_word ← do (pop ())
+  let ret_off_word ← do (pop ())
+  let ret_len_word ← do (pop ())
   if ((! (← (is_running ()))) : Bool)
   then (pure ())
   else
     (do
-      if (((call_transfers_value kind) && ((word_nonzero value) && (← readReg message).is_static)) : Bool)
+      if ((← if ((call_transfers_value kind) : Bool)
+           then
+             (do
+               if ((word_nonzero value) : Bool)
+               then
+                 (do
+                   (pure (← readReg message).is_static))
+               else (pure false))
+           else (pure false)) : Bool)
       then
         (do
           (exc_halt WriteProtection))
       else
         (do
           let warm ← do (k_access_account target)
-          let target_cost ← (( do
-            (do
-                let publicResult ← (account_cost warm)
-                pure ((publicResult).value)) ) : SailM Nat )
+          let target_cost ← (( do (account_cost warm) ) : SailM Nat )
           let transfer_cost ← (( do
             if ((word_nonzero value) : Bool)
-            then
-              (do
-                  let publicResult ← (call_value_cost ())
-                  pure ((publicResult).value))
-            else (pure (GAS_CONSTANT_ZERO).value) ) : SailM Nat )
-          let available ← do pure ((← readReg gas_remaining))
+            then (call_value_cost ())
+            else (pure GAS_CONSTANT_ZERO) ) : SailM Nat )
+          let available ← do readReg gas_remaining
           let memory ← do
-            (memory_pair_expansion ⟨args_off_word⟩ ⟨args_len_word⟩ ⟨ret_off_word⟩
-              ⟨ret_len_word⟩ available)
+            (memory_pair_expansion args_off_word args_len_word ret_off_word ret_len_word available)
           if ((! (← (is_running ()))) : Bool)
           then (pure ())
           else
             (do
               let memory_cost := memory.cost
               let static_base : Nat := (target_cost + transfer_cost)
-              let before_static ← do pure ((← readReg gas_remaining))
+              let before_static ← do readReg gas_remaining
               if ((before_static <b static_base) : Bool)
               then
                 (do
@@ -1448,20 +1103,40 @@ def run_call (kind : CallKind) : SailM Unit := do
                         then
                           (do
                             let dw ← do (k_access_account tg_target)
-                            (do
-                                let publicResult ← (account_cost dw)
-                                pure ((publicResult).value)))
-                        else (pure (GAS_CONSTANT_ZERO).value) ) : SailM Nat )
+                            (account_cost dw))
+                        else (pure GAS_CONSTANT_ZERO) ) : SailM Nat )
                       let new_account_charged ← do
-                        (pure ((fork_gteq (← readReg k_fork) Amsterdam) && ((word_nonzero value) && ((call_transfers_value
-                                  kind) && (← (k_account_is_empty target))))))
+                        if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
+                        then
+                          (do
+                            if ((word_nonzero value) : Bool)
+                            then
+                              (do
+                                if ((call_transfers_value kind) : Bool)
+                                then
+                                  (do
+                                    (k_account_is_empty target))
+                                else (pure false))
+                            else (pure false))
+                        else (pure false)
                       let create_cost ← (( do
-                        if (((fork_lt (← readReg k_fork) Amsterdam) && ((word_nonzero value) && ((call_transfers_value
-                                   kind) && (← (k_account_is_empty target))))) : Bool)
-                        then (pure (G_newaccount).value)
-                        else (pure (GAS_CONSTANT_ZERO).value) ) : SailM Nat )
+                        if ((← if ((fork_lt (← readReg k_fork) Amsterdam) : Bool)
+                             then
+                               (do
+                                 if ((word_nonzero value) : Bool)
+                                 then
+                                   (do
+                                     if ((call_transfers_value kind) : Bool)
+                                     then
+                                       (do
+                                         (k_account_is_empty target))
+                                     else (pure false))
+                                 else (pure false))
+                             else (pure false)) : Bool)
+                        then (pure G_newaccount)
+                        else (pure GAS_CONSTANT_ZERO) ) : SailM Nat )
                       let additional_cost : Nat := (delegation_cost + create_cost)
-                      let before_required ← do pure ((← readReg gas_remaining))
+                      let before_required ← do readReg gas_remaining
                       if ((before_required <b static_base) : Bool)
                       then
                         (do
@@ -1498,21 +1173,20 @@ def run_call (kind : CallKind) : SailM Unit := do
                                       (do
                                         (charge required)
                                         if (new_account_charged : Bool)
-                                        then
-                                          (charge_state_gas (G_amsterdam_state_new_account).value)
+                                        then (charge_state_gas G_amsterdam_state_new_account)
                                         else (pure ())
                                         if ((← (is_running ())) : Bool)
                                         then
                                           (do
                                             let base_child ←
                                               (call_gas_cap_word (← readReg gas_remaining)
-                                                ⟨gas_request⟩)
+                                                gas_request)
                                             (charge base_child)
                                             (pure base_child))
                                         else (pure base_child))
                                     else
                                       (do
-                                        let avail ← do pure ((← readReg gas_remaining))
+                                        let avail ← do readReg gas_remaining
                                         let base_child ←
                                           if ((avail <b required) : Bool)
                                           then (pure GAS_ZERO)
@@ -1520,8 +1194,7 @@ def run_call (kind : CallKind) : SailM Unit := do
                                             (do
                                               let available_after_cost ← do
                                                 (gas_sub_or_oog avail required)
-                                              (call_gas_cap_word available_after_cost
-                                                ⟨gas_request⟩))
+                                              (call_gas_cap_word available_after_cost gas_request))
                                         (charge required)
                                         if ((← (is_running ())) : Bool)
                                         then (charge base_child)
@@ -1542,37 +1215,44 @@ def run_call (kind : CallKind) : SailM Unit := do
                                       let (args, ret) ← do (apply_memory_pair_expansion memory)
                                       let child_gas : Nat := (conserved_gas_add base_child stipend)
                                       let _ ← do (k_aload target)
-                                      if (((((← readReg call_depth)).value ≥b (DEPTH_LIMIT).value) || ((call_takes_value
-                                               kind) && ((word_nonzero value) && (! (word_ule value
-                                                   ((← (k_get_balance caller))).value))))) : Bool)
+                                      if ((← if (((← readReg call_depth) ≥b DEPTH_LIMIT) : Bool)
+                                           then (pure true)
+                                           else
+                                             (do
+                                               if ((call_takes_value kind) : Bool)
+                                               then
+                                                 (do
+                                                   if ((word_nonzero value) : Bool)
+                                                   then
+                                                     (do
+                                                       (pure (! (word_ule value
+                                                             (← (k_get_balance caller))))))
+                                                   else (pure false))
+                                               else (pure false))) : Bool)
                                       then
                                         (do
                                           (returndata_clear ())
                                           (refund_gas child_gas)
                                           if (new_account_charged : Bool)
                                           then
-                                            (credit_state_gas_refund
-                                              ⟨(G_amsterdam_state_new_account).value⟩)
+                                            (credit_state_gas_refund G_amsterdam_state_new_account)
                                           else (pure ())
-                                          (push_word ⟨(WORD_ZERO).value⟩))
+                                          (push_word WORD_ZERO))
                                       else
                                         (do
-                                          let selected_precompile ← do
-                                            (do
-                                                let publicResult ← (precompile_number target)
-                                                pure ((publicResult).value))
+                                          let selected_precompile ← do (precompile_number target)
                                           if ((selected_precompile != 0) : Bool)
                                           then
                                             (do
                                               let number : Nat := selected_precompile
                                               let ⟨_, ⟨_, input⟩⟩ ← do
                                                 (memory_byte_slice ((args).2).2.off ((args).2).2.len)
-                                              match (← (precompile_gas ⟨number⟩
+                                              match (← (precompile_gas number
                                                   ⟨_, ⟨_, input⟩⟩ child_gas)) with
                                               | .some used =>
                                                 (do
                                                   let result ← do
-                                                    (run_precompile_slice ⟨number⟩
+                                                    (run_precompile_slice number
                                                       ⟨_, ⟨_, input⟩⟩)
                                                   if (result.success : Bool)
                                                   then
@@ -1580,7 +1260,7 @@ def run_call (kind : CallKind) : SailM Unit := do
                                                       writeReg returndata result.output
                                                       if (((call_transfers_value kind) && (word_nonzero
                                                              value)) : Bool)
-                                                      then (k_transfer caller target ⟨value⟩)
+                                                      then (k_transfer caller target value)
                                                       else (pure ())
                                                       (returndata_copy_prefix ((ret).2).2.off
                                                         ((ret).2).2.len)
@@ -1590,7 +1270,7 @@ def run_call (kind : CallKind) : SailM Unit := do
                                                       then
                                                         (do
                                                           (refund_gas unused)
-                                                          (push_word ⟨(WORD_ONE).value⟩))
+                                                          (push_word WORD_ONE))
                                                       else (pure ()))
                                                   else
                                                     (do
@@ -1598,18 +1278,18 @@ def run_call (kind : CallKind) : SailM Unit := do
                                                       if (new_account_charged : Bool)
                                                       then
                                                         (credit_state_gas_refund
-                                                          ⟨(G_amsterdam_state_new_account).value⟩)
+                                                          G_amsterdam_state_new_account)
                                                       else (pure ())
-                                                      (push_word ⟨(WORD_ZERO).value⟩)))
+                                                      (push_word WORD_ZERO)))
                                               | _ =>
                                                 (do
                                                   (returndata_clear ())
                                                   if (new_account_charged : Bool)
                                                   then
                                                     (credit_state_gas_refund
-                                                      ⟨(G_amsterdam_state_new_account).value⟩)
+                                                      G_amsterdam_state_new_account)
                                                   else (pure ())
-                                                  (push_word ⟨(WORD_ZERO).value⟩)))
+                                                  (push_word WORD_ZERO)))
                                           else
                                             (do
                                               let child_code ← do
@@ -1625,7 +1305,7 @@ def run_call (kind : CallKind) : SailM Unit := do
                                                 )
                                               let child_value ← (( do
                                                 if ((call_is_delegate kind) : Bool)
-                                                then (pure ((← readReg message).value).value)
+                                                then (pure (← readReg message).value)
                                                 else (pure value) ) : SailM Nat )
                                               let child_static ← (( do
                                                 if ((call_is_static kind) : Bool)
@@ -1633,7 +1313,7 @@ def run_call (kind : CallKind) : SailM Unit := do
                                                 else (pure (← readReg message).is_static) ) :
                                                 SailM Bool )
                                               let ⟨_, ⟨_, child_calldata⟩⟩ ← do
-                                                if ((← (is_running ())) : Bool)
+                                                if _sailIf0 : ((← (is_running ())) : Bool) = true
                                                 then
                                                   (do
                                                     (memory_byte_slice ((args).2).2.off
@@ -1646,8 +1326,7 @@ def run_call (kind : CallKind) : SailM Unit := do
                                                     fun (k_syn_off : Nat) =>
                                                     (Sigma fun (k_syn_len : Nat) =>
                                                     (EvmByteSliceFields k_syn_off k_syn_len)))))
-                                              let child_state_gas ← do
-                                                pure ((← readReg state_gas_remaining))
+                                              let child_state_gas ← do readReg state_gas_remaining
                                               let checkpoint ← do
                                                 (pure { (← (suspend_frame ())) with state_gas_remaining := GAS_ZERO })
                                               (frame_stack_push
@@ -1658,31 +1337,27 @@ def run_call (kind : CallKind) : SailM Unit := do
                                                     new_account_charged := new_account_charged }))
                                               if (((call_transfers_value kind) && (word_nonzero
                                                      value)) : Bool)
-                                              then (k_transfer caller target ⟨value⟩)
+                                              then (k_transfer caller target value)
                                               else (pure ())
                                               writeReg message { caller := child_caller,
                                                                  address := child_addr,
                                                                  code_address := target,
-                                                                 value := ⟨child_value⟩,
+                                                                 value := child_value,
                                                                  state_gas_reservoir := child_state_gas,
                                                                  is_static := child_static,
-                                                                 depth := ← do
-                                                                     let publicField ← (do
-                                                                         let publicResult ← (frame_depth_increment
-                                                                         ⟨(checkpoint.call_depth).value⟩)
-                                                                         pure ((publicResult).value))
-                                                                     pure (⟨publicField⟩) }
+                                                                 depth := ← (frame_depth_increment
+                                                                     checkpoint.call_depth) }
                                               (calldata_install ⟨_, ⟨_, child_calldata⟩⟩)
                                               writeReg pc 0
                                               writeReg gas_remaining child_gas
                                               writeReg state_gas_remaining child_state_gas
-                                              writeReg state_gas_spilled ⟨(STATE_GAS_SPILL_ZERO).value⟩
+                                              writeReg state_gas_spilled STATE_GAS_SPILL_ZERO
                                               writeReg frame_status (Running ())
                                               (returndata_clear ())
                                               writeReg frame_code child_code
-                                              writeReg call_depth ⟨((← (frame_depth_increment
-                                                ⟨(checkpoint.call_depth).value⟩))).value⟩
-                                              writeReg frame_refund ⟨(GAS_REFUND_ZERO).value⟩)))))))))))
+                                              writeReg call_depth (← (frame_depth_increment
+                                                  checkpoint.call_depth))
+                                              writeReg frame_refund GAS_REFUND_ZERO)))))))))))
 
 /-- `CREATE` (`is2 = false`) and `CREATE2` (`is2 = true`, EIP-1014).
 Both deploy a new contract by running the initcode supplied in
@@ -1690,28 +1365,16 @@ memory; the new address derives from `(creator, nonce)` for `CREATE`
 or `(creator, salt, keccak256(initcode))` for `CREATE2`. Operand
 layout: `value`, `offset`, `length`, `salt` (for `CREATE2`). Pushes
 the new address on success, 0 on failure. -/
-/- Type quantifiers: k_ex411019_ : Bool -/
+/- Type quantifiers: k_ex417244_ : Bool -/
 def run_create (is2 : Bool) : SailM Unit := do
   let creator ← do (self_addr ())
-  let value ← do
-    (do
-        let publicResult ← (pop ())
-        pure ((publicResult).value))
-  let off_word ← do
-    (do
-        let publicResult ← (pop ())
-        pure ((publicResult).value))
-  let len_word ← do
-    (do
-        let publicResult ← (pop ())
-        pure ((publicResult).value))
+  let value ← do (pop ())
+  let off_word ← do (pop ())
+  let len_word ← do (pop ())
   let salt ← do
     if (is2 : Bool)
-    then
-      (do
-          let publicResult ← (pop ())
-          pure ((publicResult).value))
-    else (pure (WORD_ZERO).value)
+    then (pop ())
+    else (pure WORD_ZERO)
   if ((! (← (is_running ()))) : Bool)
   then (pure ())
   else
@@ -1720,21 +1383,17 @@ def run_create (is2 : Bool) : SailM Unit := do
       then (pure ())
       else
         (do
-          let ⟨_, ⟨_, initcode⟩⟩ ← do (charge_memory_range ⟨off_word⟩ len_word)
+          let ⟨_, ⟨_, initcode⟩⟩ ← do (charge_memory_range off_word len_word)
           if ((! (← (is_running ()))) : Bool)
           then (pure ())
           else
             (do
-              (charge ((← (create_access_cost ()))).value)
+              (charge (← (create_access_cost ())))
               if ((fork_gteq (← readReg k_fork) Shanghai) : Bool)
-              then
-                (charge_word_scaled_gas ⟨G_initcode_word⟩
-                  ⟨((memory_word_count_word ⟨len_word⟩)).value⟩)
+              then (charge_word_scaled_gas G_initcode_word (memory_word_count_word len_word))
               else (pure ())
               if (is2 : Bool)
-              then
-                (charge_word_scaled_gas ⟨G_keccak_word⟩
-                  ⟨((memory_word_count_word ⟨len_word⟩)).value⟩)
+              then (charge_word_scaled_gas G_keccak_word (memory_word_count_word len_word))
               else (pure ())
               if ((! (← (is_running ()))) : Bool)
               then (pure ())
@@ -1744,24 +1403,24 @@ def run_create (is2 : Bool) : SailM Unit := do
                   then (exc_halt InitCodeTooLarge)
                   else
                     (do
-                      let nonce ← do
-                        (do
-                            let publicResult ← (k_get_nonce creator)
-                            pure ((publicResult).value))
+                      let nonce ← do (k_get_nonce creator)
                       let new_addr ← (( do
-                        if ((is2 && (← (is_running ()))) : Bool)
+                        if ((← if (is2 : Bool)
+                             then
+                               (do
+                                 (is_running ()))
+                             else (pure false)) : Bool)
                         then
-                          (k_create2_addr creator ⟨salt⟩
-                            (word_to_hash
-                              ⟨((← (mem_keccak ⟨_, ⟨_, initcode⟩⟩))).value⟩))
-                        else (k_create_addr creator ⟨nonce⟩) ) : SailM (Vector (BitVec 8) 20) )
+                          (k_create2_addr creator salt
+                            (word_to_hash (← (mem_keccak ⟨_, ⟨_, initcode⟩⟩))))
+                        else (k_create_addr creator nonce) ) : SailM (Vector (BitVec 8) 20) )
                       let child_gas : Nat := GAS_ZERO
                       let child_gas ← (( do
                         if ((fork_lt (← readReg k_fork) Amsterdam) : Bool)
                         then
                           (do
-                            let avail ← do pure ((← readReg gas_remaining))
-                            let retained_gas : Nat := (Int.ediv avail 64)
+                            let avail ← do readReg gas_remaining
+                            let retained_gas : Nat := (avail / 64)
                             let child_gas ← (gas_sub_or_oog avail retained_gas)
                             writeReg gas_remaining retained_gas
                             (pure child_gas))
@@ -1776,23 +1435,29 @@ def run_create (is2 : Bool) : SailM Unit := do
                               (exc_halt WriteProtection))
                           else
                             (do
-                              if (((((← readReg call_depth)).value ≥b (DEPTH_LIMIT).value) || ((! (word_ule
-                                         value ((← (k_get_balance creator))).value)) || (nonce == ((2 ^i 64) - 1)))) : Bool)
+                              if ((← if (((← readReg call_depth) ≥b DEPTH_LIMIT) : Bool)
+                                   then (pure true)
+                                   else
+                                     (do
+                                       (pure ((! (word_ule value (← (k_get_balance creator)))) || (nonce == ((2 ^i 64) - 1)))))) : Bool)
                               then
                                 (do
                                   (returndata_clear ())
                                   if ((fork_lt (← readReg k_fork) Amsterdam) : Bool)
                                   then (refund_gas child_gas)
                                   else (pure ())
-                                  (push_word ⟨(WORD_ZERO).value⟩))
+                                  (push_word WORD_ZERO))
                               else
                                 (do
                                   let _ ← do (k_access_account new_addr)
                                   let new_account_charged ← do
-                                    (pure ((fork_gteq (← readReg k_fork) Amsterdam) && (← (k_account_is_empty
-                                            new_addr))))
+                                    if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
+                                    then
+                                      (do
+                                        (k_account_is_empty new_addr))
+                                    else (pure false)
                                   if (new_account_charged : Bool)
-                                  then (charge_state_gas (G_amsterdam_state_new_account).value)
+                                  then (charge_state_gas G_amsterdam_state_new_account)
                                   else (pure ())
                                   if ((! (← (is_running ()))) : Bool)
                                   then (pure ())
@@ -1802,8 +1467,8 @@ def run_create (is2 : Bool) : SailM Unit := do
                                         if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
                                         then
                                           (do
-                                            let avail ← do pure ((← readReg gas_remaining))
-                                            let retained_gas : Nat := (Int.ediv avail 64)
+                                            let avail ← do readReg gas_remaining
+                                            let retained_gas : Nat := (avail / 64)
                                             let child_gas ← (gas_sub_or_oog avail retained_gas)
                                             writeReg gas_remaining retained_gas
                                             (pure child_gas))
@@ -1822,30 +1487,26 @@ def run_create (is2 : Bool) : SailM Unit := do
                                               if (new_account_charged : Bool)
                                               then
                                                 (credit_state_gas_refund
-                                                  ⟨(G_amsterdam_state_new_account).value⟩)
+                                                  G_amsterdam_state_new_account)
                                               else (pure ())
-                                              (push_word ⟨(WORD_ZERO).value⟩))
+                                              (push_word WORD_ZERO))
                                           else
                                             (do
                                               let ⟨_, ⟨_, initcode⟩⟩ ← do
-                                                if ((← (is_running ())) : Bool)
+                                                if _sailIf0 : ((← (is_running ())) : Bool) = true
                                                 then
                                                   (do
                                                     (memory_code_slice initcode.off initcode.len))
                                                 else
-                                                  (pure ((⟨_, ⟨_, EMPTY_CODE_SLICE⟩⟩ : (Sigma
-                                                    fun (k_syn_off : Nat) =>
-                                                    (Sigma fun (k_syn_len : Nat) =>
-                                                    (EvmByteSliceFields k_syn_off k_syn_len)))) : (Sigma
-                                                    fun (k_syn_off : Nat) =>
+                                                  (pure (EMPTY_CODE_SLICE : (Sigma fun
+                                                    (k_syn_off : Nat) =>
                                                     (Sigma fun (k_syn_len : Nat) =>
                                                     (EvmByteSliceFields k_syn_off k_syn_len)))))
                                               let child_code ← do
                                                 (code_db_resolve
                                                   (← (code_db_insert ⟨_, ⟨_, initcode⟩⟩
                                                       (← readReg k_fork))))
-                                              let child_state_gas ← do
-                                                pure ((← readReg state_gas_remaining))
+                                              let child_state_gas ← do readReg state_gas_remaining
                                               let checkpoint ← do
                                                 (pure { (← (suspend_frame ())) with state_gas_remaining := GAS_ZERO })
                                               (frame_stack_push
@@ -1856,30 +1517,26 @@ def run_create (is2 : Bool) : SailM Unit := do
                                               (k_mark_created new_addr)
                                               (k_clear_storage new_addr)
                                               (k_bump_nonce new_addr)
-                                              (k_transfer creator new_addr ⟨value⟩)
+                                              (k_transfer creator new_addr value)
                                               writeReg message { caller := creator,
                                                                  address := new_addr,
                                                                  code_address := new_addr,
-                                                                 value := ⟨value⟩,
+                                                                 value := value,
                                                                  state_gas_reservoir := child_state_gas,
                                                                  is_static := checkpoint.message.is_static,
-                                                                 depth := ← do
-                                                                     let publicField ← (do
-                                                                         let publicResult ← (frame_depth_increment
-                                                                         ⟨(checkpoint.call_depth).value⟩)
-                                                                         pure ((publicResult).value))
-                                                                     pure (⟨publicField⟩) }
+                                                                 depth := ← (frame_depth_increment
+                                                                     checkpoint.call_depth) }
                                               (calldata_install ⟨_, ⟨_, EMPTY_SLICE⟩⟩)
                                               writeReg pc 0
                                               writeReg gas_remaining child_gas
                                               writeReg state_gas_remaining child_state_gas
-                                              writeReg state_gas_spilled ⟨(STATE_GAS_SPILL_ZERO).value⟩
+                                              writeReg state_gas_spilled STATE_GAS_SPILL_ZERO
                                               writeReg frame_status (Running ())
                                               (returndata_clear ())
                                               writeReg frame_code child_code
-                                              writeReg call_depth ⟨((← (frame_depth_increment
-                                                ⟨(checkpoint.call_depth).value⟩))).value⟩
-                                              writeReg frame_refund ⟨(GAS_REFUND_ZERO).value⟩)))))))))))
+                                              writeReg call_depth (← (frame_depth_increment
+                                                  checkpoint.call_depth))
+                                              writeReg frame_refund GAS_REFUND_ZERO)))))))))))
 
 /-- The single-step transition function: call/create opcodes install a child
 frame; every other opcode executes in [execute_opcode][]. -/

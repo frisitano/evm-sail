@@ -51,7 +51,7 @@ EIP-4895 withdrawal record. -/
 def EMPTY_LOGS_BLOOM : LogsBloom := (vectorInit 0x00#8)
 
 /-- Byte-wise bloom equality (the header `logs_bloom` check). -/
-def logs_bloom_equal (a : LogsBloom) (b : LogsBloom) : Bool := Id.run do
+def logs_bloom_equal (a : (Vector (BitVec 8) 256)) (b : (Vector (BitVec 8) 256)) : Bool := Id.run do
   let equal : Bool := true
   let loop_i_lower := 0
   let loop_i_upper := 255
@@ -62,7 +62,7 @@ def logs_bloom_equal (a : LogsBloom) (b : LogsBloom) : Bool := Id.run do
   (pure loop_vars)
 
 /-- The bloom as a most-significant-first byte list, for RLP encoding. -/
-def logs_bloom_bytes (bloom : LogsBloom) : (List byte) := Id.run do
+def logs_bloom_bytes (bloom : (Vector (BitVec 8) 256)) : (List (BitVec 8)) := Id.run do
   let out : (List (BitVec 8)) := []
   let loop_k_lower := 0
   let loop_k_upper := 255
@@ -79,16 +79,10 @@ def EMPTY_OMMER_HASH : hash :=
     (to_bytes_le (n := 32) 0x1DCC4DE8DEC75D7AAB85B567B6CCD41AD312451B948A7413F0A142FD40D49347#256))
 
 def undefined_Withdrawal (_ : Unit) : SailM Withdrawal := do
-  (pure { index := ← do
-              let publicField ← (undefined_range 0 ((2 ^i 64) - 1))
-              pure (⟨publicField⟩),
-          validator_index := ← do
-              let publicField ← (undefined_range 0 ((2 ^i 64) - 1))
-              pure (⟨publicField⟩),
+  (pure { index := ← (undefined_range 0 ((2 ^i 64) - 1)),
+          validator_index := ← (undefined_range 0 ((2 ^i 64) - 1)),
           address := ← (undefined_vector 20 (← (undefined_bitvector 8))),
-          amount := ← do
-              let publicField ← (undefined_range 0 ((2 ^i 64) - 1))
-              pure (⟨publicField⟩) })
+          amount := ← (undefined_range 0 ((2 ^i 64) - 1)) })
 
 def EMPTY_EXECUTION_REQUESTS : ExecutionRequests :=
   { deposits := ⟨_, ⟨_, EMPTY_SLICE⟩⟩,

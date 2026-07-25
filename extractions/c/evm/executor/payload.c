@@ -4,7 +4,7 @@
 #endif
 struct zByteSliceFields zwithdrawal_rlp(struct zByteSliceFields zwithdrawal)
 {
-  struct zByteSliceFields z8zE669;
+  struct zByteSliceFields z8zE666;
   uint64_t zindex;
   zindex = zdecode_sszz_uint(zwithdrawal, zWD_INDEX);
   uint64_t zvalidator_index;
@@ -19,9 +19,9 @@ struct zByteSliceFields zwithdrawal_rlp(struct zByteSliceFields zwithdrawal)
   zvalidator_index_length = zrlp_uint_word_sizzezIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zvalidator_index);
   uint64_t zaddress_length;
   {
-    sail_u128 z3zE3870;
-    z3zE3870 = zrlp_slice_sizze(zaddress);
-    zaddress_length = u128_to_u64(z3zE3870);
+    sail_u128 z3zE3799;
+    z3zE3799 = zrlp_slice_sizze(zaddress);
+    zaddress_length = u128_to_u64(z3zE3799);
   }
   uint64_t zamount_length;
   zamount_length = zrlp_uint_word_sizzezIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zamount);
@@ -49,7 +49,7 @@ struct zByteSliceFields zwithdrawal_rlp(struct zByteSliceFields zwithdrawal)
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/executor/payload.sail:22.8-22.37");
     KILL(zexception)(&z2zE466);
-    goto end_block_exception_1356;
+    goto end_block_exception_1353;
     /* unreachable after throw */
     KILL(zexception)(&z2zE466);
   } else {  z3zE854 = UNIT;  }
@@ -70,17 +70,17 @@ struct zByteSliceFields zwithdrawal_rlp(struct zByteSliceFields zwithdrawal)
   z3zE856 = zrlp_write_slice(zaddress);
   unit z3zE855;
   z3zE855 = zrlp_write_uint_wordzIreprzGU64zCuzKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zamount);
-  z8zE669 = zrlp_finish(zstart);
-end_function_1355: ;
-  return z8zE669;
-end_block_exception_1356: ;
-  struct zByteSliceFields z8zE1126 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE1126;
+  z8zE666 = zrlp_finish(zstart);
+end_function_1352: ;
+  return z8zE666;
+end_block_exception_1353: ;
+  struct zByteSliceFields z8zE1114 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE1114;
 }
 
 sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_bytes_32 ztransactions_root, sail_fixed_bytes_32 zwithdrawals_root, sail_fixed_bytes_32 zrequests_hash, sail_fixed_bytes_32 zblock_access_list_hash)
 {
-  sail_fixed_bytes_32 z8zE670;
+  sail_fixed_bytes_32 z8zE667;
   zz5listz8z5bv8z9 zbloom;
   CREATE(zz5listz8z5bv8z9)(&zbloom);
   {
@@ -106,7 +106,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
     if (have_exception) {
       KILL(zz5listz8z5bv8z9)(&zbloom);
       KILL(zz5listz8z5bv8z9)(&znonce);
-      goto end_block_exception_1354;
+      goto end_block_exception_1351;
     }
   }
   uint64_t znumber_length;
@@ -142,7 +142,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
       if (have_exception) {
         KILL(zz5listz8z5bv8z9)(&zbloom);
         KILL(zz5listz8z5bv8z9)(&znonce);
-        goto end_block_exception_1354;
+        goto end_block_exception_1351;
       }
     }
   }
@@ -152,7 +152,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
     if (have_exception) {
       KILL(zz5listz8z5bv8z9)(&zbloom);
       KILL(zz5listz8z5bv8z9)(&znonce);
-      goto end_block_exception_1354;
+      goto end_block_exception_1351;
     }
   }
   uint64_t zcontent_length;
@@ -162,7 +162,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
     if (have_exception) {
       KILL(zz5listz8z5bv8z9)(&zbloom);
       KILL(zz5listz8z5bv8z9)(&znonce);
-      goto end_block_exception_1354;
+      goto end_block_exception_1351;
     }
   }
   unit z3zE828;
@@ -172,7 +172,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
     if (have_exception) {
       KILL(zz5listz8z5bv8z9)(&zbloom);
       KILL(zz5listz8z5bv8z9)(&znonce);
-      goto end_block_exception_1354;
+      goto end_block_exception_1351;
     }
   }
   unit z3zE827;
@@ -182,7 +182,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
     if (have_exception) {
       KILL(zz5listz8z5bv8z9)(&zbloom);
       KILL(zz5listz8z5bv8z9)(&znonce);
-      goto end_block_exception_1354;
+      goto end_block_exception_1351;
     }
   }
   unit z3zE826;
@@ -192,7 +192,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
     if (have_exception) {
       KILL(zz5listz8z5bv8z9)(&zbloom);
       KILL(zz5listz8z5bv8z9)(&znonce);
-      goto end_block_exception_1354;
+      goto end_block_exception_1351;
     }
   }
   unit z3zE825;
@@ -202,7 +202,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
     if (have_exception) {
       KILL(zz5listz8z5bv8z9)(&zbloom);
       KILL(zz5listz8z5bv8z9)(&znonce);
-      goto end_block_exception_1354;
+      goto end_block_exception_1351;
     }
   }
   unit z3zE824;
@@ -212,7 +212,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
     if (have_exception) {
       KILL(zz5listz8z5bv8z9)(&zbloom);
       KILL(zz5listz8z5bv8z9)(&znonce);
-      goto end_block_exception_1354;
+      goto end_block_exception_1351;
     }
   }
   unit z3zE823;
@@ -222,7 +222,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
     if (have_exception) {
       KILL(zz5listz8z5bv8z9)(&zbloom);
       KILL(zz5listz8z5bv8z9)(&znonce);
-      goto end_block_exception_1354;
+      goto end_block_exception_1351;
     }
   }
   unit z3zE822;
@@ -232,7 +232,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
     if (have_exception) {
       KILL(zz5listz8z5bv8z9)(&zbloom);
       KILL(zz5listz8z5bv8z9)(&znonce);
-      goto end_block_exception_1354;
+      goto end_block_exception_1351;
     }
   }
   unit z3zE821;
@@ -252,7 +252,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
       if (have_exception) {
         KILL(zz5listz8z5bv8z9)(&zbloom);
         KILL(zz5listz8z5bv8z9)(&znonce);
-        goto end_block_exception_1354;
+        goto end_block_exception_1351;
       }
     }
     z3zE820 = UNIT;
@@ -266,7 +266,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
       if (have_exception) {
         KILL(zz5listz8z5bv8z9)(&zbloom);
         KILL(zz5listz8z5bv8z9)(&znonce);
-        goto end_block_exception_1354;
+        goto end_block_exception_1351;
       }
     }
     z3zE819 = UNIT;
@@ -292,7 +292,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
       if (have_exception) {
         KILL(zz5listz8z5bv8z9)(&zbloom);
         KILL(zz5listz8z5bv8z9)(&znonce);
-        goto end_block_exception_1354;
+        goto end_block_exception_1351;
       }
     }
     unit z3zE818;
@@ -302,7 +302,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
       if (have_exception) {
         KILL(zz5listz8z5bv8z9)(&zbloom);
         KILL(zz5listz8z5bv8z9)(&znonce);
-        goto end_block_exception_1354;
+        goto end_block_exception_1351;
       }
     }
     unit z3zE817;
@@ -312,7 +312,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
       if (have_exception) {
         KILL(zz5listz8z5bv8z9)(&zbloom);
         KILL(zz5listz8z5bv8z9)(&znonce);
-        goto end_block_exception_1354;
+        goto end_block_exception_1351;
       }
     }
     z3zE816 = UNIT;
@@ -326,7 +326,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
       if (have_exception) {
         KILL(zz5listz8z5bv8z9)(&zbloom);
         KILL(zz5listz8z5bv8z9)(&znonce);
-        goto end_block_exception_1354;
+        goto end_block_exception_1351;
       }
     }
     z3zE815 = UNIT;
@@ -346,7 +346,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
       if (have_exception) {
         KILL(zz5listz8z5bv8z9)(&zbloom);
         KILL(zz5listz8z5bv8z9)(&znonce);
-        goto end_block_exception_1354;
+        goto end_block_exception_1351;
       }
     }
     unit z3zE814;
@@ -356,7 +356,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
       if (have_exception) {
         KILL(zz5listz8z5bv8z9)(&zbloom);
         KILL(zz5listz8z5bv8z9)(&znonce);
-        goto end_block_exception_1354;
+        goto end_block_exception_1351;
       }
     }
     z3zE813 = UNIT;
@@ -374,7 +374,7 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
     KILL(zz5listz8z5bv8z9)(&zbloom);
     KILL(zz5listz8z5bv8z9)(&znonce);
     KILL(zexception)(&z2zE429);
-    goto end_block_exception_1354;
+    goto end_block_exception_1351;
     /* unreachable after throw */
     KILL(zexception)(&z2zE429);
   } else {  z3zE812 = UNIT;  }
@@ -515,19 +515,19 @@ sail_fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, sail_fixed_b
   zblock_hash = zkeccak256_slice(zencoded);
   unit z3zE853;
   z3zE853 = zscratch_rewind(zmark);
-  z8zE670 = zblock_hash;
+  z8zE667 = zblock_hash;
   KILL(zz5listz8z5bv8z9)(&znonce);
   KILL(zz5listz8z5bv8z9)(&zbloom);
-end_function_1353: ;
-  return z8zE670;
-end_block_exception_1354: ;
+end_function_1350: ;
+  return z8zE667;
+end_block_exception_1351: ;
 
   return fixed_bytes_32_zero();
 }
 
 sail_fixed_bytes_32 ztransaction_trie_root(struct zBoundedSszzListRef ztxs)
 {
-  sail_fixed_bytes_32 z8zE671;
+  sail_fixed_bytes_32 z8zE668;
   struct zTrieBuilder zbuilder;
   CREATE(zTrieBuilder)(&zbuilder);
   ztrie_builder_empty(&zbuilder, UNIT);
@@ -539,12 +539,12 @@ sail_fixed_bytes_32 ztransaction_trie_root(struct zBoundedSszzListRef ztxs)
   }
   bool z3zE808;
   unit z3zE809;
-while_1347: ;
+while_1344: ;
   {
     bool z2zE412;
     z2zE412 = zrlp_index_cursor_empty(zcursor);
     z3zE808 = not(z2zE412);
-    if (!(z3zE808)) goto wend_1348;
+    if (!(z3zE808)) goto wend_1345;
     struct ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9 z2zE413;
     CREATE(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(&z2zE413);
     {
@@ -552,7 +552,7 @@ while_1347: ;
       if (have_exception) {
         KILL(zTrieBuilder)(&zbuilder);
         KILL(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(&z2zE413);
-        goto end_block_exception_1352;
+        goto end_block_exception_1349;
       }
     }
     unit z3zE805;
@@ -575,7 +575,7 @@ while_1347: ;
             KILL(zTrieBuilder)(&zbuilder);
             KILL(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(&z2zE413);
             KILL(zRlpIndexItem)(&zitem);
-            goto end_block_exception_1352;
+            goto end_block_exception_1349;
           }
         }
       }
@@ -597,43 +597,43 @@ while_1347: ;
           KILL(zRlpIndexItem)(&zitem);
           KILL(zTrieItem)(&z2zE415);
           KILL(zoptionzIRTriePathzK)(&z2zE416);
-          goto end_block_exception_1352;
+          goto end_block_exception_1349;
         }
       }
       z3zE805 = UNIT;
       KILL(zoptionzIRTriePathzK)(&z2zE416);
       KILL(zTrieItem)(&z2zE415);
       KILL(zRlpIndexItem)(&zitem);
-      goto finish_match_1349;
+      goto finish_match_1346;
     }
-  case_1350: ;
+  case_1347: ;
     sail_match_failure("transaction_trie_root");
-  finish_match_1349: ;
+  finish_match_1346: ;
     z3zE809 = z3zE805;
     KILL(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(&z2zE413);
-    goto while_1347;
+    goto while_1344;
   }
-wend_1348: ;
+wend_1345: ;
   unit z3zE810;
   z3zE810 = UNIT;
   {
-    z8zE671 = ztrie_builder_root(zbuilder);
+    z8zE668 = ztrie_builder_root(zbuilder);
     if (have_exception) {
       KILL(zTrieBuilder)(&zbuilder);
-      goto end_block_exception_1352;
+      goto end_block_exception_1349;
     }
   }
   KILL(zTrieBuilder)(&zbuilder);
-end_function_1351: ;
-  return z8zE671;
-end_block_exception_1352: ;
+end_function_1348: ;
+  return z8zE668;
+end_block_exception_1349: ;
 
   return fixed_bytes_32_zero();
 }
 
 sail_fixed_bytes_32 zwithdrawals_trie_root(struct zBoundedSszzListRef zwds)
 {
-  sail_fixed_bytes_32 z8zE672;
+  sail_fixed_bytes_32 z8zE669;
   struct zTrieBuilder zbuilder;
   CREATE(zTrieBuilder)(&zbuilder);
   ztrie_builder_empty(&zbuilder, UNIT);
@@ -645,12 +645,12 @@ sail_fixed_bytes_32 zwithdrawals_trie_root(struct zBoundedSszzListRef zwds)
   }
   bool z3zE802;
   unit z3zE803;
-while_1341: ;
+while_1338: ;
   {
     bool z2zE405;
     z2zE405 = zrlp_index_cursor_empty(zcursor);
     z3zE802 = not(z2zE405);
-    if (!(z3zE802)) goto wend_1342;
+    if (!(z3zE802)) goto wend_1339;
     struct ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9 z2zE406;
     CREATE(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(&z2zE406);
     {
@@ -658,7 +658,7 @@ while_1341: ;
       if (have_exception) {
         KILL(zTrieBuilder)(&zbuilder);
         KILL(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(&z2zE406);
-        goto end_block_exception_1346;
+        goto end_block_exception_1343;
       }
     }
     unit z3zE798;
@@ -683,7 +683,7 @@ while_1341: ;
             KILL(zTrieBuilder)(&zbuilder);
             KILL(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(&z2zE406);
             KILL(zRlpIndexItem)(&zitem);
-            goto end_block_exception_1346;
+            goto end_block_exception_1343;
           }
         }
       }
@@ -694,7 +694,7 @@ while_1341: ;
           KILL(zTrieBuilder)(&zbuilder);
           KILL(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(&z2zE406);
           KILL(zRlpIndexItem)(&zitem);
-          goto end_block_exception_1346;
+          goto end_block_exception_1343;
         }
       }
       struct zTrieItem z2zE408;
@@ -715,7 +715,7 @@ while_1341: ;
           KILL(zRlpIndexItem)(&zitem);
           KILL(zTrieItem)(&z2zE408);
           KILL(zoptionzIRTriePathzK)(&z2zE409);
-          goto end_block_exception_1346;
+          goto end_block_exception_1343;
         }
       }
       unit z3zE800;
@@ -724,36 +724,36 @@ while_1341: ;
       KILL(zTrieItem)(&z2zE408);
       z3zE798 = zscratch_rewind(zscratch_mark);
       KILL(zRlpIndexItem)(&zitem);
-      goto finish_match_1343;
+      goto finish_match_1340;
     }
-  case_1344: ;
+  case_1341: ;
     sail_match_failure("withdrawals_trie_root");
-  finish_match_1343: ;
+  finish_match_1340: ;
     z3zE803 = z3zE798;
     KILL(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(&z2zE406);
-    goto while_1341;
+    goto while_1338;
   }
-wend_1342: ;
+wend_1339: ;
   unit z3zE804;
   z3zE804 = UNIT;
   {
-    z8zE672 = ztrie_builder_root(zbuilder);
+    z8zE669 = ztrie_builder_root(zbuilder);
     if (have_exception) {
       KILL(zTrieBuilder)(&zbuilder);
-      goto end_block_exception_1346;
+      goto end_block_exception_1343;
     }
   }
   KILL(zTrieBuilder)(&zbuilder);
-end_function_1345: ;
-  return z8zE672;
-end_block_exception_1346: ;
+end_function_1342: ;
+  return z8zE669;
+end_block_exception_1343: ;
 
   return fixed_bytes_32_zero();
 }
 
 uint64_t zexpected_payload_excess_blob_gas(struct zWitnessContext zwitness)
 {
-  uint64_t z8zE673;
+  uint64_t z8zE670;
   uint64_t z2zE402;
   z2zE402 = zwitness.zparent_excess_blob_gas;
   uint64_t z2zE403;
@@ -761,19 +761,19 @@ uint64_t zexpected_payload_excess_blob_gas(struct zWitnessContext zwitness)
   sail_u256 z2zE404;
   z2zE404 = zwitness.zparent_base_fee_per_gas;
   {
-    z8zE673 = znext_excess_blob_gas(z2zE402, z2zE403, z2zE404);
-    if (have_exception) {  goto end_block_exception_1340;  }
+    z8zE670 = znext_excess_blob_gas(z2zE402, z2zE403, z2zE404);
+    if (have_exception) {  goto end_block_exception_1337;  }
   }
-end_function_1339: ;
-  return z8zE673;
-end_block_exception_1340: ;
+end_function_1336: ;
+  return z8zE670;
+end_block_exception_1337: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 sail_fixed_bytes_32 zexecution_requests_hash(struct zStatelessInputRef zinput_ref)
 {
-  sail_fixed_bytes_32 z8zE674;
+  sail_fixed_bytes_32 z8zE671;
   struct zByteSliceFields zdeposits;
   zdeposits = zinput_ref.zdeposits;
   struct zByteSliceFields zwithdrawal_requests;
@@ -949,18 +949,18 @@ sail_fixed_bytes_32 zexecution_requests_hash(struct zStatelessInputRef zinput_re
     z3zE793 = UNIT;
     KILL(zBytes)(&z2zE391);
   } else {  z3zE793 = UNIT;  }
-  z8zE674 = host_sha256_segments(zsegs);
+  z8zE671 = host_sha256_segments(zsegs);
   KILL(zz5listz8z5unionz0zzBytesz9)(&zsegs);
-end_function_1337: ;
-  return z8zE674;
-end_block_exception_1338: ;
+end_function_1334: ;
+  return z8zE671;
+end_block_exception_1335: ;
 
   return fixed_bytes_32_zero();
 }
 
 unit zvalidate_execution_payload(struct zStatelessInput zinput, struct zStatelessInputRef zinput_ref, struct zWitnessContext zwitness)
 {
-  unit z8zE675;
+  unit z8zE672;
   struct zExecutionPayload zpayload;
   zpayload = zinput.zpayload;
   struct zBlock zblock;
@@ -986,7 +986,7 @@ unit zvalidate_execution_payload(struct zStatelessInput zinput, struct zStateles
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/executor/payload.sail:248.8-248.42");
     KILL(zexception)(&z2zE352);
-    goto end_block_exception_1336;
+    goto end_block_exception_1333;
     /* unreachable after throw */
     KILL(zexception)(&z2zE352);
   } else {  z3zE791 = UNIT;  }
@@ -1007,7 +1007,7 @@ unit zvalidate_execution_payload(struct zStatelessInput zinput, struct zStateles
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/executor/payload.sail:251.8-251.45");
     KILL(zexception)(&z2zE356);
-    goto end_block_exception_1336;
+    goto end_block_exception_1333;
     /* unreachable after throw */
     KILL(zexception)(&z2zE356);
   } else {  z3zE790 = UNIT;  }
@@ -1022,7 +1022,7 @@ unit zvalidate_execution_payload(struct zStatelessInput zinput, struct zStateles
       uint64_t z2zE358;
       {
         z2zE358 = zexpected_payload_excess_blob_gas(zwitness);
-        if (have_exception) {  goto end_block_exception_1336;  }
+        if (have_exception) {  goto end_block_exception_1333;  }
       }
       z3zE788 = (z2zE357 != z2zE358);
     } else {  z3zE788 = false;  }
@@ -1037,7 +1037,7 @@ unit zvalidate_execution_payload(struct zStatelessInput zinput, struct zStateles
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/executor/payload.sail:254.8-254.48");
     KILL(zexception)(&z2zE361);
-    goto end_block_exception_1336;
+    goto end_block_exception_1333;
     /* unreachable after throw */
     KILL(zexception)(&z2zE361);
   } else {  z3zE789 = UNIT;  }
@@ -1050,7 +1050,7 @@ unit zvalidate_execution_payload(struct zStatelessInput zinput, struct zStateles
       z2zE371 = zbody.ztransactions;
       {
         ztransactions_root = ztransaction_trie_root(z2zE371);
-        if (have_exception) {  goto end_block_exception_1336;  }
+        if (have_exception) {  goto end_block_exception_1333;  }
       }
     }
     sail_fixed_bytes_32 zwithdrawals_root;
@@ -1062,7 +1062,7 @@ unit zvalidate_execution_payload(struct zStatelessInput zinput, struct zStateles
         z2zE370 = zbody.zwithdrawals;
         {
           zwithdrawals_root = zwithdrawals_trie_root(z2zE370);
-          if (have_exception) {  goto end_block_exception_1336;  }
+          if (have_exception) {  goto end_block_exception_1333;  }
         }
       } else {  zwithdrawals_root = zEMPTY_TRIE_ROOT;  }
     }
@@ -1085,7 +1085,7 @@ unit zvalidate_execution_payload(struct zStatelessInput zinput, struct zStateles
     sail_fixed_bytes_32 zcomputed_block_hash;
     {
       zcomputed_block_hash = zblock_header_hash(zheader, ztransactions_root, zwithdrawals_root, zrequests_hash, zblock_access_list_hash);
-      if (have_exception) {  goto end_block_exception_1336;  }
+      if (have_exception) {  goto end_block_exception_1333;  }
     }
     bool z2zE364;
     {
@@ -1101,14 +1101,14 @@ unit zvalidate_execution_payload(struct zStatelessInput zinput, struct zStateles
       have_exception = true;
       COPY(sail_string)(throw_location, "sail/executor/payload.sail:281.12-281.48");
       KILL(zexception)(&z2zE365);
-      goto end_block_exception_1336;
+      goto end_block_exception_1333;
       /* unreachable after throw */
       KILL(zexception)(&z2zE365);
-    } else {  z8zE675 = UNIT;  }
-  } else {  z8zE675 = UNIT;  }
-end_function_1335: ;
-  return z8zE675;
-end_block_exception_1336: ;
+    } else {  z8zE672 = UNIT;  }
+  } else {  z8zE672 = UNIT;  }
+end_function_1332: ;
+  return z8zE672;
+end_block_exception_1333: ;
 
   return UNIT;
 }

@@ -48,7 +48,7 @@ into the block layer. -/
 
 /-- Captures all frame-revertible transaction state. The frame checkpoint
 stores its refund counter separately. -/
-def k_state_checkpoint (_ : Unit) : SailM journal_checkpoint := do
+def k_state_checkpoint (_ : Unit) : SailM Nat := do
   (state_checkpoint ())
 
 /-- Installs the block header. -/
@@ -73,7 +73,11 @@ before Cancun; only if created in the same transaction from Cancun on
 (EIP-6780). Amsterdam preserves any balance left by a self-beneficiary
 `SELFDESTRUCT` (EIP-8246). -/
 def account_deleted_at_tx_end (acc : Account) : SailM Bool := do
-  (pure (acc.selfdestructed && ((fork_lt (← readReg k_fork) Cancun) || acc.created)))
+  if (acc.selfdestructed : Bool)
+  then
+    (do
+      (pure ((fork_lt (← readReg k_fork) Cancun) || acc.created)))
+  else (pure false)
 
 /-- The transaction-end merge: drains the transaction overlays into the
 block layer, applying the fork-specific selfdestruct clearing rule,
@@ -105,14 +109,14 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
             if ((deleted || (curr.storage_cleared && (! e.value.orig.storage_cleared))) : Bool)
             then (storage_block_clear e.addr)
             else (pure ())
-            if (((curr.info.nonce).value != (e.value.orig.info.nonce).value) : Bool)
-            then (bal_nonce_change e.addr ⟨(curr.info.nonce).value⟩)
+            if ((curr.info.nonce != e.value.orig.info.nonce) : Bool)
+            then (bal_nonce_change (← readReg k_block_access_index) e.addr curr.info.nonce)
             else (pure ())
-            if (((curr.info.balance).value != (e.value.orig.info.balance).value) : Bool)
-            then (bal_balance_change e.addr ⟨(curr.info.balance).value⟩)
+            if ((curr.info.balance != e.value.orig.info.balance) : Bool)
+            then (bal_balance_change (← readReg k_block_access_index) e.addr curr.info.balance)
             else (pure ())
             if ((bne curr.info.code_hash e.value.orig.info.code_hash) : Bool)
-            then (bal_code_change e.addr curr.info.code_hash)
+            then (bal_code_change (← readReg k_block_access_index) e.addr curr.info.code_hash)
             else (pure ())
             let curr : Account := { curr with created := false, selfdestructed := false }
             if ((account_changed curr e.value.orig) : Bool)
@@ -138,11 +142,11 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
             match (← (acct_block_get e.key.addr)) with
             | .some acc =>
               (do
-                if ((acc.present && (((e.value.curr).value != (e.value.orig).value) : Bool)) : Bool)
+                if ((acc.present && ((e.value.curr != e.value.orig) : Bool)) : Bool)
                 then
                   (do
-                    (bal_storage_change e.key.addr ⟨(e.key.slot).value⟩
-                      ⟨(e.value.curr).value⟩)
+                    (bal_storage_change (← readReg k_block_access_index) e.key.addr e.key.slot
+                      e.value.curr)
                     (storage_block_put e))
                 else (pure ()))
             | none => (pure ())
@@ -156,6 +160,6 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
 
 /-- Atomically restores the transaction state captured at a frame boundary. -/
 /- Type quantifiers: checkpoint : Nat, 0 ≤ checkpoint -/
-def k_revert (checkpoint : journal_checkpoint) : SailM Unit := do
+def k_revert (checkpoint : Nat) : SailM Unit := do
   (state_revert checkpoint)
 

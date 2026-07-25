@@ -144,6 +144,7 @@ Record ByteSourceContract := {
   slice_load_n_word_contract : Prop;
   slice_copy_contract : Prop;
   segmented_equality_refinement_contract : Prop;
+  direct_slice_equality_refinement_contract : Prop;
   memory_slice_stability_contract : Prop;
   scratch_append_refinement_contract : Prop;
   scratch_truncate_refinement_contract : Prop;

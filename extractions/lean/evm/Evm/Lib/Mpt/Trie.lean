@@ -1,6 +1,5 @@
 import Evm.Flow
 import Evm.Primitives.Crypto
-import Evm.Lib.Rlp.Rlp
 import Evm.Host.Kernel.Storage
 import Evm.Lib.Mpt.Primitives
 import Evm.Lib.Mpt.Updates
@@ -122,8 +121,11 @@ def _rec_emit_updates_before_child (sink : TrieItemSink) (updates : TrieUpdateCu
       | none => (pure (sink, updates))
       | .some update =>
         (do
-          if (((! (← (path_prefix_of evm_prefix' update.key))) || ((← (path_prefix_of child
-                     update.key)) || (! (path_lt update.key child)))) : Bool)
+          if ((← if ((! (← (path_prefix_of evm_prefix' update.key))) : Bool)
+               then (pure true)
+               else
+                 (do
+                   (pure ((← (path_prefix_of child update.key)) || (! (path_lt update.key child)))))) : Bool)
           then (pure (sink, updates))
           else
             (do
@@ -147,9 +149,12 @@ def emit_updates_before_child (sink : TrieItemSink) (updates : TrieUpdateCursor)
   else (_rec_emit_updates_before_child sink updates evm_prefix' child (_measure + 1))
 
 /-- Merges one witness leaf with all ordered updates in the same subtree. -/
-/- Type quantifiers: _reclimit : Nat, k_ex411185_ : Nat, k_ex411184_ : Nat, 0 ≤ k_ex411184_ ∧
-  0 ≤ k_ex411185_, 0 ≤ _reclimit -/
-def _rec_emit_leaf_overlay (sink : TrieItemSink) (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (key : TriePath) (value : EvmByteSlice) (_reclimit : Nat) : SailM (TrieItemSink × TrieUpdateCursor) := do
+/- Type quantifiers: _reclimit : Nat, value_dependentWitness1 : Nat, value_dependentWitness0 : Nat, 0
+  ≤ value_dependentWitness0 ∧ 0 ≤ value_dependentWitness1, 0 ≤ _reclimit -/
+def _rec_emit_leaf_overlay (sink : TrieItemSink) (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (key : TriePath) (value : (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (_reclimit : Nat) : SailM (TrieItemSink × TrieUpdateCursor) := do
+  let value_dependentWitness0 := (value).1
+  let value_dependentWitness1 := ((value).2).1
   let value := ((value).2).2
   match _reclimit with
   | 0 =>
@@ -198,8 +203,12 @@ termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Merges one witness leaf with all ordered updates in the same subtree. -/
-/- Type quantifiers: k_ex411190_ : Nat, k_ex411189_ : Nat, 0 ≤ k_ex411189_ ∧ 0 ≤ k_ex411190_ -/
-def emit_leaf_overlay (sink : TrieItemSink) (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (key : TriePath) (value : EvmByteSlice) : SailM (TrieItemSink × TrieUpdateCursor) := do
+/- Type quantifiers: value_dependentWitness1 : Nat, value_dependentWitness0 : Nat, 0 ≤
+  value_dependentWitness0 ∧ 0 ≤ value_dependentWitness1 -/
+def emit_leaf_overlay (sink : TrieItemSink) (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (key : TriePath) (value : (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (TrieItemSink × TrieUpdateCursor) := do
+  let value_dependentWitness0 := (value).1
+  let value_dependentWitness1 := ((value).2).1
   let value := ((value).2).2
   let _measure := ((2 ^i 64) : Int)
   if ((_measure <b 0) : Bool)
@@ -208,11 +217,14 @@ def emit_leaf_overlay (sink : TrieItemSink) (updates : TrieUpdateCursor) (evm_pr
 
 /-- Walks a touched witness subtree and streams its post-update items into the
 canonical trie builder. -/
-/- Type quantifiers: _reclimit : Nat, k_ex411196_ : Nat, k_ex411195_ : Nat, k_ex411194_ : Nat, 0 ≤
-  k_ex411194_ ∧ 0 ≤ k_ex411195_, 0 ≤ k_ex411196_ ∧ k_ex411196_ ≤ 64, 0 ≤ _reclimit -/
-def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : TrieUpdateCursor) (sink : TrieItemSink) (cursor : trie_path_cursor) (_reclimit : Nat) : SailM (TrieItemSink × TrieUpdateCursor) := do
+/- Type quantifiers: _reclimit : Nat, k_ex417458_ : Nat, node_dependentWitness1 : Nat, node_dependentWitness0
+  : Nat, 0 ≤ node_dependentWitness0 ∧ 0 ≤ node_dependentWitness1, 0 ≤ k_ex417458_ ∧
+  k_ex417458_ ≤ 64, 0 ≤ _reclimit -/
+def _rec_witness_emit (node : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (evm_prefix' : TriePath) (updates : TrieUpdateCursor) (sink : TrieItemSink) (cursor : Nat) (_reclimit : Nat) : SailM (TrieItemSink × TrieUpdateCursor) := do
+  let node_dependentWitness0 := (node).1
+  let node_dependentWitness1 := ((node).2).1
   let node := ((node).2).2
-  let cursor := (cursor).value
   match _reclimit with
   | 0 =>
     (do
@@ -225,46 +237,37 @@ def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : 
       else
         (do
           match (← (decode_trie_node ⟨_, ⟨_, node⟩⟩)) with
-          | .LeafNode leaf =>
+          | .LeafNode (path, value) =>
             (do
-              let key ← do (path_concat evm_prefix' leaf.path)
-              (emit_leaf_overlay sink updates evm_prefix' key
-                (⟨_, ⟨_, ((((⟨_, ⟨_, ⟨_, (rlp_ref_content
-                  ((((((leaf.value).2).2).2).2).2).2)⟩⟩⟩ : (Sigma fun (k_ex428438_ : Nat) =>
-                  (Sigma fun (k_ex428442_ : Nat) =>
-                  (Sigma fun (k_ex428443_ : Nat) =>
-                  (EvmByteSliceFields (k_ex428438_ + k_ex428442_) k_ex428443_)))))).2).2).2⟩⟩ : (Sigma
-                fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))))
-          | .ExtensionNode extension =>
+              let key ← do (path_concat evm_prefix' path)
+              (emit_leaf_overlay sink updates evm_prefix' key value))
+          | .ExtensionNode (path, childref) =>
             (do
-              let extension_len := ((path_len extension.path)).value
+              let extension_len := (path_len path)
               let next_cursor := (cursor + extension_len)
               if (((extension_len == 0) || (64 <b next_cursor)) : Bool)
               then sailThrow ((InvalidBlock WitnessDeficient))
               else
                 (do
-                  let child_prefix ← do (path_concat evm_prefix' extension.path)
+                  let child_prefix ← do (path_concat evm_prefix' path)
                   let (before_sink, child_updates) ← do
                     (emit_updates_before_child sink updates evm_prefix' child_prefix)
                   let (child_sink, later_updates) ← do
                     if ((← (next_update_under child_updates child_prefix)) : Bool)
                     then
                       (do
-                        let ⟨_, ⟨_, child⟩⟩ ← do
-                          (resolve_ref (← (field_to_ref extension.child)))
+                        let ⟨_, ⟨_, child⟩⟩ ← do (resolve_ref childref)
                         if ((child.len == 0) : Bool)
                         then (emit_live_updates_under before_sink child_updates child_prefix)
                         else
                           (_rec_witness_emit ⟨_, ⟨_, child⟩⟩ child_prefix child_updates
-                            before_sink ⟨next_cursor⟩ _reclimit_pred))
+                            before_sink next_cursor _reclimit_pred))
                     else
-                      (pure ((← (trie_sink_emit before_sink
-                            (item_branch child_prefix (← (field_to_ref extension.child))))), child_updates))
+                      (pure ((← (trie_sink_emit before_sink (item_branch child_prefix childref))), child_updates))
                   (emit_live_updates_under child_sink later_updates evm_prefix')))
-          | .BranchNode branch =>
+          | .BranchNode (children, value) =>
             (do
-              let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, branch_value⟩⟩⟩⟩⟩⟩ := branch.value
-              if (((branch_value.content_len != 0) || (64 ≤b cursor)) : Bool)
+              if (((((value).2).2.len != 0) || (64 ≤b cursor)) : Bool)
               then sailThrow ((InvalidBlock WitnessDeficient))
               else
                 (do
@@ -279,11 +282,8 @@ def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : 
                     for i in [loop_i_lower:loop_i_upper:1]i do
                       let (current_sink, nib, remaining) := loop_vars
                       loop_vars ← do
-                        let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, field⟩⟩⟩⟩⟩⟩ :=
-                          (GetElem?.getElem! branch.children i)
                         let child_prefix ← do (path_concat evm_prefix' (← (path_single nib)))
-                        let childref ← do
-                          (field_to_ref ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, field⟩⟩⟩⟩⟩⟩)
+                        let childref := (GetElem?.getElem! children i)
                         let present : Bool :=
                           match childref with
                           | .EmptyRef () => false
@@ -295,8 +295,10 @@ def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : 
                               let (next_sink, next_updates) ← do
                                 if (present : Bool)
                                 then
-                                  (_rec_witness_emit (← (resolve_ref childref)) child_prefix
-                                    remaining current_sink ⟨next_cursor⟩ _reclimit_pred)
+                                  (do
+                                      let dependentArg0 := (← (resolve_ref childref))
+                                      (_rec_witness_emit dependentArg0 child_prefix remaining
+                                      current_sink next_cursor _reclimit_pred))
                                 else (emit_live_updates_under current_sink remaining child_prefix)
                               let current_sink : TrieItemSink := next_sink
                               let remaining : TrieUpdateCursor := next_updates
@@ -315,22 +317,23 @@ def _rec_witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : 
                         let nib : (BitVec 4) := (nib + 0x1#4)
                         (pure (current_sink, nib, remaining))
                     (pure loop_vars) ) : SailM (TrieItemSink × (BitVec 4) × TrieUpdateCursor) )
-                  (pure (current_sink, remaining))))
-          | .InvalidNode () => sailThrow ((InvalidBlock WitnessDeficient))))
+                  (pure (current_sink, remaining))))))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Walks a touched witness subtree and streams its post-update items into the
 canonical trie builder. -/
-/- Type quantifiers: cursor : Nat, k_ex411201_ : Nat, k_ex411200_ : Nat, 0 ≤ k_ex411200_ ∧
-  0 ≤ k_ex411201_, 0 ≤ cursor ∧ cursor ≤ 64 -/
-def witness_emit (node : EvmByteSlice) (evm_prefix' : TriePath) (updates : TrieUpdateCursor) (sink : TrieItemSink) (cursor : trie_path_cursor) : SailM (TrieItemSink × TrieUpdateCursor) := do
+/- Type quantifiers: cursor : Nat, node_dependentWitness1 : Nat, node_dependentWitness0 : Nat, 0 ≤
+  node_dependentWitness0 ∧ 0 ≤ node_dependentWitness1, 0 ≤ cursor ∧ cursor ≤ 64 -/
+def witness_emit (node : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (evm_prefix' : TriePath) (updates : TrieUpdateCursor) (sink : TrieItemSink) (cursor : Nat) : SailM (TrieItemSink × TrieUpdateCursor) := do
+  let node_dependentWitness0 := (node).1
+  let node_dependentWitness1 := ((node).2).1
   let node := ((node).2).2
-  let cursor := (cursor).value
   let _measure := ((64 - cursor) : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
-  else (_rec_witness_emit ⟨_, ⟨_, node⟩⟩ evm_prefix' updates sink ⟨cursor⟩ (_measure + 1))
+  else (_rec_witness_emit ⟨_, ⟨_, node⟩⟩ evm_prefix' updates sink cursor (_measure + 1))
 
 def undefined_TrieRootResult (_ : Unit) : SailM TrieRootResult := do
   (pure { root := ← (undefined_vector 32 (← (undefined_bitvector 8))),
@@ -338,7 +341,7 @@ def undefined_TrieRootResult (_ : Unit) : SailM TrieRootResult := do
 
 /-- Applies an already-open update cursor. The `changed` result records
 whether the source contained at least one update. -/
-def trie_root_cursor (base_root : hash) (updates : TrieUpdateCursor) : SailM TrieRootResult := do
+def trie_root_cursor (base_root : (Vector (BitVec 8) 32)) (updates : TrieUpdateCursor) : SailM TrieRootResult := do
   if ((updates_empty updates) : Bool)
   then
     (pure { root := base_root,
@@ -354,7 +357,7 @@ def trie_root_cursor (base_root : hash) (updates : TrieUpdateCursor) : SailM Tri
             let ⟨_, ⟨_, node⟩⟩ ← do (node_db_lookup base_root)
             if ((node.len == 0) : Bool)
             then sailThrow ((InvalidBlock WitnessDeficient))
-            else (witness_emit ⟨_, ⟨_, node⟩⟩ (path_empty ()) updates sink ⟨0⟩))
+            else (witness_emit ⟨_, ⟨_, node⟩⟩ (path_empty ()) updates sink 0))
       if ((updates_empty remaining) : Bool)
       then
         (pure { root := ← (trie_sink_root (← (trie_sink_finish updated_sink))),
@@ -363,6 +366,6 @@ def trie_root_cursor (base_root : hash) (updates : TrieUpdateCursor) : SailM Tri
 
 /-- The root of the trie after pulling and applying the source's ordered
 updates. The source's host iterator must be opened by its owner first. -/
-def trie_root (base_root : hash) (source : TrieUpdateSource) : SailM TrieRootResult := do
+def trie_root (base_root : (Vector (BitVec 8) 32)) (source : TrieUpdateSource) : SailM TrieRootResult := do
   (trie_root_cursor base_root (← (trie_updates_begin source)))
 

@@ -252,7 +252,11 @@ function hex_prefix_compact(path : TriePath, is_leaf : bool) -> (list(byte), ran
 
 /*! Decodes a compact path directly from its RLP source span, returning
     the leaf flag and the path. */
-function hex_prefix_decode_ref(f : RlpFieldRef) -> (bool, TriePath) = {
+function hex_prefix_decode_ref forall 'source_off 'source_len 'content_len,
+                                 rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    (bool, TriePath)
+) = {
     if f.is_list then {
         throw InvalidBlock(RlpDecode)
     };
@@ -264,7 +268,7 @@ function hex_prefix_decode_ref(f : RlpFieldRef) -> (bool, TriePath) = {
         if maximum_length < n then {
             throw InvalidBlock(RlpDecode)
         } else {
-            let content = rlp_ref_content(f);
+            let content = sub_slice(f.source, f.source.len - n, n);
             let fb = slice_byte(content, 0);
             let flag : nibble = fb[7 .. 4];
             let is_leaf : bool = flag[1] == bitone;

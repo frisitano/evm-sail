@@ -96,8 +96,20 @@ static bal_acc_table bal_acc = {NULL, 0, 0};
 static const bal_acc_rec **bal_acc_order = NULL;
 static uint32_t bal_acc_order_cap = 0;
 static uint32_t bal_seq = 0;
-static uint32_t bal_index = 0;
 static int bal_prepared = 0;
+typedef struct {
+  uint32_t begin;
+  uint32_t end;
+  uint32_t position;
+} bal_cursor;
+static uint32_t bal_account_cursor = 0;
+static const bal_acc_rec *bal_active_account = NULL;
+static bal_cursor bal_storage_slot_change_cursor = {0, 0, 0};
+static bal_cursor bal_storage_read_cursor = {0, 0, 0};
+static bal_cursor bal_active_storage_changes = {0, 0, 0};
+static bal_cursor bal_balance_change_cursor = {0, 0, 0};
+static bal_cursor bal_nonce_change_cursor = {0, 0, 0};
+static bal_cursor bal_code_change_cursor = {0, 0, 0};
 
 static uint32_t bal_acc_find(const uint64_t ah[4], int *found) {
   uint32_t lo = 0, hi = bal_acc.n;
@@ -136,20 +148,26 @@ unit bal_reset(const unit u) {
   bal_vec_clear(&bal_nonc); bal_vec_clear(&bal_codc);
   free(bal_acc.rows); bal_acc.rows = NULL; bal_acc.n = bal_acc.cap = 0;
   free(bal_acc_order); bal_acc_order = NULL; bal_acc_order_cap = 0;
-  bal_seq = 0; bal_index = 0;
+  bal_seq = 0;
   bal_prepared = 0;
-  return UNIT;
-}
-unit bal_set_index(uint64_t n) {
-  bal_index = (uint32_t)n;
+  bal_account_cursor = 0;
+  bal_active_account = NULL;
+  bal_storage_slot_change_cursor = (bal_cursor){0, 0, 0};
+  bal_storage_read_cursor = (bal_cursor){0, 0, 0};
+  bal_active_storage_changes = (bal_cursor){0, 0, 0};
+  bal_balance_change_cursor = (bal_cursor){0, 0, 0};
+  bal_nonce_change_cursor = (bal_cursor){0, 0, 0};
+  bal_code_change_cursor = (bal_cursor){0, 0, 0};
   return UNIT;
 }
 
 /* harvest helpers -- called from the overlay merges (state_db-internal) */
-static void bal_add_storage_change(const uint64_t ah[4], const uint64_t slot[4], const uint64_t val[4]) {
+static void bal_add_storage_change(uint32_t index, const uint64_t ah[4],
+                                   const uint64_t slot[4],
+                                   const uint64_t val[4]) {
   bal_sto_rec *r = (bal_sto_rec *)bal_vec_push(&bal_sto);
   memcpy(r->ah, ah, 32); memcpy(r->slot, slot, 32); memcpy(r->val, val, 32);
-  r->idx = bal_index; r->seq = bal_seq++;
+  r->idx = index; r->seq = bal_seq++;
   bal_prepared = 0;
 }
 static void bal_add_storage_read(const uint64_t ah[4], const uint64_t slot[4]) {
@@ -157,22 +175,25 @@ static void bal_add_storage_read(const uint64_t ah[4], const uint64_t slot[4]) {
   memcpy(r->ah, ah, 32); memcpy(r->slot, slot, 32);
   bal_prepared = 0;
 }
-static void bal_add_balance_change(const uint64_t ah[4], const uint64_t val[4]) {
+static void bal_add_balance_change(uint32_t index, const uint64_t ah[4],
+                                   const uint64_t val[4]) {
   bal_bal_rec *r = (bal_bal_rec *)bal_vec_push(&bal_balc);
   memcpy(r->ah, ah, 32); memcpy(r->val, val, 32);
-  r->idx = bal_index; r->seq = bal_seq++;
+  r->idx = index; r->seq = bal_seq++;
   bal_prepared = 0;
 }
-static void bal_add_nonce_change(const uint64_t ah[4], uint64_t nonce) {
+static void bal_add_nonce_change(uint32_t index, const uint64_t ah[4],
+                                 uint64_t nonce) {
   bal_non_rec *r = (bal_non_rec *)bal_vec_push(&bal_nonc);
   memcpy(r->ah, ah, 32); r->val = nonce;
-  r->idx = bal_index; r->seq = bal_seq++;
+  r->idx = index; r->seq = bal_seq++;
   bal_prepared = 0;
 }
-static void bal_add_code_change(const uint64_t ah[4], const uint64_t chash[4]) {
+static void bal_add_code_change(uint32_t index, const uint64_t ah[4],
+                                const uint64_t chash[4]) {
   bal_cod_rec *r = (bal_cod_rec *)bal_vec_push(&bal_codc);
   memcpy(r->ah, ah, 32); memcpy(r->chash, chash, 32);
-  r->idx = bal_index; r->seq = bal_seq++;
+  r->idx = index; r->seq = bal_seq++;
   bal_prepared = 0;
 }
 
@@ -185,14 +206,15 @@ unit bal_note_account_touch(sail_address a) {
   bal_touch_account_key(a, a4);
   return UNIT;
 }
-unit bal_note_storage_change(sail_address a, EVMSAIL_WORD_PARAM(slot),
+unit bal_note_storage_change(uint64_t index, sail_address a,
+                             EVMSAIL_WORD_PARAM(slot),
                              EVMSAIL_WORD_PARAM(val)) {
   uint64_t a4[4], s4[4], v4[4];
   secure_keccak_address(a, a4);
   sail_word_to_be_words4(s4, EVMSAIL_WORD_VALUE(slot));
   sail_word_to_be_words4(v4, EVMSAIL_WORD_VALUE(val));
   bal_touch_account_key(a, a4);
-  bal_add_storage_change(a4, s4, v4);
+  bal_add_storage_change((uint32_t)index, a4, s4, v4);
   return UNIT;
 }
 unit bal_note_storage_read(sail_address a, EVMSAIL_WORD_PARAM(slot)) {
@@ -203,27 +225,28 @@ unit bal_note_storage_read(sail_address a, EVMSAIL_WORD_PARAM(slot)) {
   bal_add_storage_read(a4, s4);
   return UNIT;
 }
-unit bal_note_balance_change(sail_address a, EVMSAIL_WORD_PARAM(val)) {
+unit bal_note_balance_change(uint64_t index, sail_address a,
+                             EVMSAIL_WORD_PARAM(val)) {
   uint64_t a4[4], v4[4];
   secure_keccak_address(a, a4);
   sail_word_to_le_words4(v4, EVMSAIL_WORD_VALUE(val));
   bal_touch_account_key(a, a4);
-  bal_add_balance_change(a4, v4);
+  bal_add_balance_change((uint32_t)index, a4, v4);
   return UNIT;
 }
-unit bal_note_nonce_change(sail_address a, uint64_t nonce) {
+unit bal_note_nonce_change(uint64_t index, sail_address a, uint64_t nonce) {
   uint64_t a4[4];
   secure_keccak_address(a, a4);
   bal_touch_account_key(a, a4);
-  bal_add_nonce_change(a4, nonce);
+  bal_add_nonce_change((uint32_t)index, a4, nonce);
   return UNIT;
 }
-unit bal_note_code_change(sail_address a, sail_hash chash) {
+unit bal_note_code_change(uint64_t index, sail_address a, sail_hash chash) {
   uint64_t a4[4], c4[4];
   secure_keccak_address(a, a4);
   sail_hash_to_le_words4(c4, chash);
   bal_touch_account_key(a, a4);
-  bal_add_code_change(a4, c4);
+  bal_add_code_change((uint32_t)index, a4, c4);
   return UNIT;
 }
 
@@ -1522,33 +1545,37 @@ static int bal_acc_cmp(const void *x, const void *y) {   /* accounts by raw 20-b
 
 unit bal_prepare(const unit u) {
   (void)u;
-  if (bal_prepared) return UNIT;
-  qsort(bal_sto.d, bal_sto.n, sizeof(bal_sto_rec), bal_sto_cmp);
-  qsort(bal_rds.d, bal_rds.n, sizeof(bal_read_rec), bal_read_cmp);
-  qsort(bal_balc.d, bal_balc.n, sizeof(bal_bal_rec), bal_bal_cmp);
-  qsort(bal_nonc.d, bal_nonc.n, sizeof(bal_non_rec), bal_non_cmp);
-  qsort(bal_codc.d, bal_codc.n, sizeof(bal_cod_rec), bal_cod_cmp);
-  if (bal_acc_order_cap < bal_acc.n) {
-    const bal_acc_rec **order =
-        realloc(bal_acc_order, (size_t)bal_acc.n * sizeof(*order));
-    if (!order) return UNIT;
-    bal_acc_order = order;
-    bal_acc_order_cap = bal_acc.n;
+  if (!bal_prepared) {
+    qsort(bal_sto.d, bal_sto.n, sizeof(bal_sto_rec), bal_sto_cmp);
+    qsort(bal_rds.d, bal_rds.n, sizeof(bal_read_rec), bal_read_cmp);
+    qsort(bal_balc.d, bal_balc.n, sizeof(bal_bal_rec), bal_bal_cmp);
+    qsort(bal_nonc.d, bal_nonc.n, sizeof(bal_non_rec), bal_non_cmp);
+    qsort(bal_codc.d, bal_codc.n, sizeof(bal_cod_rec), bal_cod_cmp);
+    if (bal_acc_order_cap < bal_acc.n) {
+      const bal_acc_rec **order =
+          realloc(bal_acc_order, (size_t)bal_acc.n * sizeof(*order));
+      if (!order) return UNIT;
+      bal_acc_order = order;
+      bal_acc_order_cap = bal_acc.n;
+    }
+    for (uint32_t i = 0; i < bal_acc.n; i++)
+      bal_acc_order[i] = &bal_acc.rows[i];
+    qsort(bal_acc_order, bal_acc.n, sizeof(*bal_acc_order), bal_acc_cmp);
+    bal_prepared = 1;
   }
-  for (uint32_t i = 0; i < bal_acc.n; i++) bal_acc_order[i] = &bal_acc.rows[i];
-  qsort(bal_acc_order, bal_acc.n, sizeof(*bal_acc_order), bal_acc_cmp);
-  bal_prepared = 1;
+  bal_account_cursor = 0;
+  bal_active_account = NULL;
+  bal_storage_slot_change_cursor = (bal_cursor){0, 0, 0};
+  bal_storage_read_cursor = (bal_cursor){0, 0, 0};
+  bal_active_storage_changes = (bal_cursor){0, 0, 0};
+  bal_balance_change_cursor = (bal_cursor){0, 0, 0};
+  bal_nonce_change_cursor = (bal_cursor){0, 0, 0};
+  bal_code_change_cursor = (bal_cursor){0, 0, 0};
   return UNIT;
 }
 
 static void bal_ensure_prepared(void) {
   if (!bal_prepared) (void)bal_prepare(UNIT);
-}
-
-static const bal_acc_rec *bal_account_at(uint64_t account) {
-  bal_ensure_prepared();
-  if (!bal_prepared || account >= bal_acc.n) return NULL;
-  return bal_acc_order[account];
 }
 
 static uint32_t bal_range(const void *base, size_t esz, uint32_t n,
@@ -1569,187 +1596,130 @@ static uint32_t bal_range(const void *base, size_t esz, uint32_t n,
   return hi - lo;
 }
 
-static const bal_sto_rec *bal_storage_change_at(uint64_t account,
-                                                 uint64_t record) {
-  const bal_acc_rec *a = bal_account_at(account);
-  uint32_t begin, count = bal_range(bal_sto.d, sizeof(bal_sto_rec), bal_sto.n,
-                                    a, &begin);
-  return record < count ? &((const bal_sto_rec *)bal_sto.d)[begin + record]
-                        : NULL;
+static bal_cursor bal_select_range(const void *base, size_t element_size,
+                                   uint32_t count,
+                                   const bal_acc_rec *account) {
+  uint32_t begin;
+  uint32_t length =
+      bal_range(base, element_size, count, account, &begin);
+  return (bal_cursor){begin, begin + length, begin};
 }
 
-static const bal_read_rec *bal_storage_read_at(uint64_t account,
-                                                uint64_t record) {
-  const bal_acc_rec *a = bal_account_at(account);
-  uint32_t begin, count = bal_range(bal_rds.d, sizeof(bal_read_rec), bal_rds.n,
-                                    a, &begin);
-  return record < count ? &((const bal_read_rec *)bal_rds.d)[begin + record]
-                        : NULL;
-}
-
-static const bal_bal_rec *bal_balance_change_at(uint64_t account,
-                                                 uint64_t record) {
-  const bal_acc_rec *a = bal_account_at(account);
-  uint32_t begin, count = bal_range(bal_balc.d, sizeof(bal_bal_rec), bal_balc.n,
-                                    a, &begin);
-  return record < count ? &((const bal_bal_rec *)bal_balc.d)[begin + record]
-                        : NULL;
-}
-
-static const bal_non_rec *bal_nonce_change_at(uint64_t account,
-                                               uint64_t record) {
-  const bal_acc_rec *a = bal_account_at(account);
-  uint32_t begin, count = bal_range(bal_nonc.d, sizeof(bal_non_rec), bal_nonc.n,
-                                    a, &begin);
-  return record < count ? &((const bal_non_rec *)bal_nonc.d)[begin + record]
-                        : NULL;
-}
-
-static const bal_cod_rec *bal_code_change_at(uint64_t account,
-                                              uint64_t record) {
-  const bal_acc_rec *a = bal_account_at(account);
-  uint32_t begin, count = bal_range(bal_codc.d, sizeof(bal_cod_rec), bal_codc.n,
-                                    a, &begin);
-  return record < count ? &((const bal_cod_rec *)bal_codc.d)[begin + record]
-                        : NULL;
-}
-
-EVMSAIL_ITEM_RETURN bal_account_count(EVMSAIL_ITEM_RESULT(rop) const unit u) {
-  (void)u;
+uint64_t bal_account_next_probe(sail_address *address) {
   bal_ensure_prepared();
-  EVMSAIL_RETURN_ITEM(rop, bal_prepared ? bal_acc.n : 0);
+  if (!bal_prepared || bal_account_cursor >= bal_acc.n) return 0;
+  bal_active_account = bal_acc_order[bal_account_cursor++];
+  bal_storage_slot_change_cursor =
+      bal_select_range(bal_sto.d, sizeof(bal_sto_rec), bal_sto.n,
+                       bal_active_account);
+  bal_storage_read_cursor =
+      bal_select_range(bal_rds.d, sizeof(bal_read_rec), bal_rds.n,
+                       bal_active_account);
+  bal_active_storage_changes = (bal_cursor){0, 0, 0};
+  bal_balance_change_cursor =
+      bal_select_range(bal_balc.d, sizeof(bal_bal_rec), bal_balc.n,
+                       bal_active_account);
+  bal_nonce_change_cursor =
+      bal_select_range(bal_nonc.d, sizeof(bal_non_rec), bal_nonc.n,
+                       bal_active_account);
+  bal_code_change_cursor =
+      bal_select_range(bal_codc.d, sizeof(bal_cod_rec), bal_codc.n,
+                       bal_active_account);
+  *address = be_bytes_to_sail_address(bal_active_account->raw_addr);
+  return 1;
 }
 
-EVMSAIL_ADDRESS_RETURN bal_account_address(
-    EVMSAIL_ADDRESS_RESULT(rop) EVMSAIL_ITEM_PARAM(account)) {
-  static const uint8_t zero_address[20] = {0};
-  const bal_acc_rec *a = bal_account_at(evmsail_item_value(account));
-  EVMSAIL_RETURN_ADDRESS_BE_BYTES(rop, a ? a->raw_addr : zero_address);
+uint64_t bal_storage_slot_next_probe(sail_word *slot, uint64_t *has_change,
+                                     uint64_t *index, sail_word *value) {
+  const bal_sto_rec *change =
+      bal_storage_slot_change_cursor.position <
+              bal_storage_slot_change_cursor.end
+          ? &((const bal_sto_rec *)bal_sto.d)
+                 [bal_storage_slot_change_cursor.position]
+          : NULL;
+  const bal_read_rec *read =
+      bal_storage_read_cursor.position < bal_storage_read_cursor.end
+          ? &((const bal_read_rec *)bal_rds.d)
+                 [bal_storage_read_cursor.position]
+          : NULL;
+  if (!change && !read) {
+    bal_active_storage_changes = (bal_cursor){0, 0, 0};
+    return 0;
+  }
+
+  const uint64_t *selected_slot =
+      !change ? read->slot
+              : (!read || compare_u64x4(change->slot, read->slot) <= 0)
+                    ? change->slot
+                    : read->slot;
+
+  uint32_t change_begin = bal_storage_slot_change_cursor.position;
+  while (bal_storage_slot_change_cursor.position <
+             bal_storage_slot_change_cursor.end &&
+         compare_u64x4(
+             ((const bal_sto_rec *)bal_sto.d)
+                 [bal_storage_slot_change_cursor.position]
+                     .slot,
+             selected_slot) == 0)
+    bal_storage_slot_change_cursor.position++;
+  bal_active_storage_changes =
+      (bal_cursor){change_begin, bal_storage_slot_change_cursor.position,
+                   change_begin};
+
+  while (bal_storage_read_cursor.position < bal_storage_read_cursor.end &&
+         compare_u64x4(
+             ((const bal_read_rec *)bal_rds.d)[bal_storage_read_cursor.position]
+                 .slot,
+             selected_slot) == 0)
+    bal_storage_read_cursor.position++;
+
+  *slot = be_words4_to_sail_word(selected_slot);
+  *has_change =
+      bal_active_storage_changes.position < bal_active_storage_changes.end;
+  if (*has_change) {
+    const bal_sto_rec *record =
+        &((const bal_sto_rec *)bal_sto.d)
+             [bal_active_storage_changes.position++];
+    *index = record->idx;
+    *value = be_words4_to_sail_word(record->val);
+  }
+  return 1;
 }
 
-EVMSAIL_ITEM_RETURN bal_storage_change_count(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account)) {
-  const bal_acc_rec *a = bal_account_at(evmsail_item_value(account));
-  uint32_t begin;
-  EVMSAIL_RETURN_ITEM(
-      rop, bal_range(bal_sto.d, sizeof(bal_sto_rec), bal_sto.n, a, &begin));
+uint64_t bal_storage_change_next_probe(uint64_t *index, sail_word *value) {
+  if (bal_active_storage_changes.position >= bal_active_storage_changes.end)
+    return 0;
+  const bal_sto_rec *record =
+      &((const bal_sto_rec *)bal_sto.d)[bal_active_storage_changes.position++];
+  *index = record->idx;
+  *value = be_words4_to_sail_word(record->val);
+  return 1;
 }
 
-EVMSAIL_WORD_RETURN bal_storage_change_slot(
-    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record)) {
-  const bal_sto_rec *r = bal_storage_change_at(evmsail_item_value(account),
-                                                evmsail_item_value(record));
-  EVMSAIL_RETURN_WORD(
-      rop, be_words4_to_sail_word(r ? r->slot : account_zero_val));
+uint64_t bal_balance_change_next_probe(uint64_t *index, sail_word *value) {
+  if (bal_balance_change_cursor.position >= bal_balance_change_cursor.end)
+    return 0;
+  const bal_bal_rec *record =
+      &((const bal_bal_rec *)bal_balc.d)[bal_balance_change_cursor.position++];
+  *index = record->idx;
+  *value = le_words4_to_sail_word(record->val);
+  return 1;
 }
 
-EVMSAIL_ITEM_RETURN bal_storage_change_index(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record)) {
-  const bal_sto_rec *r = bal_storage_change_at(evmsail_item_value(account),
-                                                evmsail_item_value(record));
-  EVMSAIL_RETURN_ITEM(rop, r ? r->idx : 0);
+uint64_t bal_nonce_change_next_probe(uint64_t *index, uint64_t *value) {
+  if (bal_nonce_change_cursor.position >= bal_nonce_change_cursor.end) return 0;
+  const bal_non_rec *record =
+      &((const bal_non_rec *)bal_nonc.d)[bal_nonce_change_cursor.position++];
+  *index = record->idx;
+  *value = record->val;
+  return 1;
 }
 
-EVMSAIL_WORD_RETURN bal_storage_change_value(
-    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record)) {
-  const bal_sto_rec *r = bal_storage_change_at(evmsail_item_value(account),
-                                                evmsail_item_value(record));
-  EVMSAIL_RETURN_WORD(
-      rop, be_words4_to_sail_word(r ? r->val : account_zero_val));
-}
-
-EVMSAIL_ITEM_RETURN bal_storage_read_count(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account)) {
-  const bal_acc_rec *a = bal_account_at(evmsail_item_value(account));
-  uint32_t begin;
-  EVMSAIL_RETURN_ITEM(
-      rop, bal_range(bal_rds.d, sizeof(bal_read_rec), bal_rds.n, a, &begin));
-}
-
-EVMSAIL_WORD_RETURN bal_storage_read_slot(
-    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record)) {
-  const bal_read_rec *r = bal_storage_read_at(evmsail_item_value(account),
-                                               evmsail_item_value(record));
-  EVMSAIL_RETURN_WORD(
-      rop, be_words4_to_sail_word(r ? r->slot : account_zero_val));
-}
-
-EVMSAIL_ITEM_RETURN bal_balance_change_count(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account)) {
-  const bal_acc_rec *a = bal_account_at(evmsail_item_value(account));
-  uint32_t begin;
-  EVMSAIL_RETURN_ITEM(
-      rop, bal_range(bal_balc.d, sizeof(bal_bal_rec), bal_balc.n, a, &begin));
-}
-
-EVMSAIL_ITEM_RETURN bal_balance_change_index(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record)) {
-  const bal_bal_rec *r = bal_balance_change_at(evmsail_item_value(account),
-                                                evmsail_item_value(record));
-  EVMSAIL_RETURN_ITEM(rop, r ? r->idx : 0);
-}
-
-EVMSAIL_WORD_RETURN bal_balance_change_value(
-    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record)) {
-  const bal_bal_rec *r = bal_balance_change_at(evmsail_item_value(account),
-                                                evmsail_item_value(record));
-  EVMSAIL_RETURN_WORD(
-      rop, le_words4_to_sail_word(r ? r->val : account_zero_val));
-}
-
-EVMSAIL_ITEM_RETURN bal_nonce_change_count(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account)) {
-  const bal_acc_rec *a = bal_account_at(evmsail_item_value(account));
-  uint32_t begin;
-  EVMSAIL_RETURN_ITEM(
-      rop, bal_range(bal_nonc.d, sizeof(bal_non_rec), bal_nonc.n, a, &begin));
-}
-
-EVMSAIL_ITEM_RETURN bal_nonce_change_index(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record)) {
-  const bal_non_rec *r = bal_nonce_change_at(evmsail_item_value(account),
-                                              evmsail_item_value(record));
-  EVMSAIL_RETURN_ITEM(rop, r ? r->idx : 0);
-}
-
-uint64_t bal_nonce_change_value(EVMSAIL_ITEM_PARAM(account),
-                                EVMSAIL_ITEM_PARAM(record)) {
-  const bal_non_rec *r = bal_nonce_change_at(evmsail_item_value(account),
-                                              evmsail_item_value(record));
-  return r ? r->val : 0;
-}
-
-EVMSAIL_ITEM_RETURN bal_code_change_count(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account)) {
-  const bal_acc_rec *a = bal_account_at(evmsail_item_value(account));
-  uint32_t begin;
-  EVMSAIL_RETURN_ITEM(
-      rop, bal_range(bal_codc.d, sizeof(bal_cod_rec), bal_codc.n, a, &begin));
-}
-
-EVMSAIL_ITEM_RETURN bal_code_change_index(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record)) {
-  const bal_cod_rec *r = bal_code_change_at(evmsail_item_value(account),
-                                             evmsail_item_value(record));
-  EVMSAIL_RETURN_ITEM(rop, r ? r->idx : 0);
-}
-
-EVMSAIL_HASH_RETURN bal_code_change_hash(
-    EVMSAIL_HASH_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record)) {
-  const bal_cod_rec *r = bal_code_change_at(evmsail_item_value(account),
-                                             evmsail_item_value(record));
-  const uint64_t *le = r ? r->chash : account_zero_val;
-  const uint64_t be[4] = {le[3], le[2], le[1], le[0]};
-  uint8_t bytes[32];
-  be_words4_to_be_bytes(bytes, be);
-  EVMSAIL_RETURN_HASH_BE_BYTES(rop, bytes);
+uint64_t bal_code_change_next_probe(uint64_t *index, sail_hash *code_hash) {
+  if (bal_code_change_cursor.position >= bal_code_change_cursor.end) return 0;
+  const bal_cod_rec *record =
+      &((const bal_cod_rec *)bal_codc.d)[bal_code_change_cursor.position++];
+  *index = record->idx;
+  *code_hash = le_words4_to_sail_hash(record->chash);
+  return 1;
 }

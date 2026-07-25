@@ -63,7 +63,6 @@ type transaction_state_gas_delta = range(
 type block_number = range(0, 2 ^ 64 - 1)
 type block_timestamp = range(0, 2 ^ 64 - 1)
 type block_gas = range(0, 2 ^ 64 - 1)
-type chain_identifier = range(0, 2 ^ 64 - 1)
 
 /* These values enter the optimized model through SSZ uint64 fields.  Keep
  * that proven lifecycle representation until an opcode explicitly
@@ -72,8 +71,6 @@ val word_of_block_number : block_number -> block_number
 function word_of_block_number(value : block_number) -> block_number = value
 val word_of_block_timestamp : block_timestamp -> block_timestamp
 function word_of_block_timestamp(value : block_timestamp) -> block_timestamp = value
-val word_of_chain_identifier : chain_identifier -> chain_identifier
-function word_of_chain_identifier(value : chain_identifier) -> chain_identifier = value
 
 /* The production host exposes byte arenas through 64-bit positions and
  * lengths.  These aliases remain semantically distinct at function
@@ -182,17 +179,7 @@ function conserved_gas_add(left, right) =
         throw InvalidBlock(ExecutionInvalid)
     }
 
-/* These fields are mathematical naturals in the canonical specification but
- * enter the production guest through uint64-bounded interfaces.  Decode their
- * RLP representation directly in that domain so an oversized input is
- * rejected before an arbitrary-precision value is materialized. */
-function rlp_ref_block_number(f : RlpFieldRef) -> block_number =
-    rlp_ref_uint64(f)
-
-function rlp_ref_chain_identifier(f : RlpFieldRef) -> chain_identifier =
-    rlp_ref_uint64(f)
-
-function rlp_ref_gas(f : RlpFieldRef, fork : Fork) -> transaction_gas = {
+function rlp_ref_gas(f, fork) = {
     let value = rlp_ref_uint64(f);
     if (fork >= Osaka) & (fork < Amsterdam) & (OSAKA_TRANSACTION_GAS_LIMIT_VALUE < value) then {
         throw InvalidBlock(GasUsedExceedsLimit)

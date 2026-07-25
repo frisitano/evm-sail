@@ -16,8 +16,9 @@ A byte `< 0x80` is its own encoding; strings of length `n ≤ 55` use
 length. Lists mirror this with the `0xc0`/`0xf7` prefix bands over an
 already-encoded payload. Integers encode as their minimal big-endian byte
 string with no leading zeros. Decoding proceeds one level at a time; a
-field reference retains its source, full span, and content span without
-copying.
+field reference retains the complete encoded item as a source slice and its
+content length without copying; the content is always the corresponding
+suffix.
 
 Malformed RLP is a normal invalid-block outcome: the decoders throw
 `InvalidBlock(RlpDecode)` at the point of detection, caught once at the
@@ -63,12 +64,6 @@ function rlp_scratch_length_add(left, right) =
 /*md
 ## The encoders
 */
-/*! Decrements a positive RLP length width. */
-function rlp_length_width_decrement(value : range(0, 8)) -> range(0, 8) = {
-    assert(0 < value);
-    value - 1
-}
-
 /*! The minimal big-endian encoding of a word and its length. */
 val minimal_word_bytes : forall 'word, 0 <= 'word & 'word < 2 ^ 256. int('word) -> (list(byte), range(0, 32))
 
@@ -294,13 +289,6 @@ val rlp_scratch_bytes_size : forall 'len, source_valid_length('len). (list(byte)
 function rlp_scratch_bytes_size(data, len) =
     rlp_bytes_size(data, len)
 
-val rlp_write_raw_bytes : forall 'len, source_valid_length('len). (list(byte), int('len)) -> unit
-function rlp_write_raw_bytes(data, len) =
-    scratch_push_bytes(data, len)
-
-function rlp_write_raw_slice(data : ByteSlice) -> unit =
-    scratch_push_slice(data)
-
 /*! Appends the canonical RLP prefix of a byte-string payload. */
 val rlp_write_string_prefix : forall 'len, 0 <= 'len. (int('len), byte) -> unit
 function rlp_write_string_prefix(len, first) = {
@@ -402,38 +390,11 @@ function rlp_uint64_width forall 'n, 0 <= 'n <= 8. (content : ByteSlice, width :
     }
 termination_measure rlp_uint64_width(content, width) = width
 
-/*! Decodes a big-endian RLP length-of-length field of at most eight bytes. */
-val rlp_ref_be_length : forall 'start 'stop 'count,
-                          source_valid_length('start) & source_valid_length('stop) & 0 <= 'count & 'count <= 8. (
-        ByteSlice,
-        int('start),
-        int('stop),
-        int('count),
-    ) -> range(0, 2 ^ 64 - 1)
-function rlp_ref_be_length(source, start, stop, count) = {
-    let source_length = source.len;
-    let (start_value as 'start_value) = start;
-    let (stop_value as 'stop_value) = stop;
-    if stop_value < start_value then {
-        throw InvalidBlock(RlpDecode)
-    } else {
-        if source_length < stop_value then {
-            throw InvalidBlock(RlpDecode)
-        } else {
-            if stop_value - start_value < count then {
-                throw InvalidBlock(RlpDecode)
-            } else {
-                let content = sub_slice(source, start_value, count);
-                rlp_uint64_width(content, count)
-            }
-        }
-    }
-}
-
 /* An RLP length-of-length is encoded in one prefix byte, so it is at most
  * eight bytes for every source length representable by a ByteSlice. */
 /*! Tests a bounded expected byte sequence against a source position. */
-function rlp_bytes_equal_at(expected : list(byte), source : ByteSlice, start : source_pointer) -> bool = {
+val rlp_bytes_equal_at : forall 'start, source_valid_length('start). (list(byte), ByteSlice, int('start)) -> bool
+function rlp_bytes_equal_at(expected, source, start) = {
     var rest : list(byte) = expected;
     var current : source_pointer = start;
     var equal : bool = true;
@@ -459,287 +420,91 @@ function rlp_bytes_equal_at(expected : list(byte), source : ByteSlice, start : s
     }
 }
 
-/*! Decodes the RLP header at `pos`: `(is_list, content_offset,
-    content_length)`. */
-val rlp_ref_hdr : forall 'pos 'stop, source_valid_length('pos) & source_valid_length('stop). (
-        ByteSlice,
-        int('pos),
-        int('stop),
-    ) -> (bool, source_pointer, range(0, 2 ^ 64 - 1))
-function rlp_ref_hdr(b, pos, stop) = {
-    if not_bool(pos < stop) then {
+/*! Decodes the first RLP header in an exact remaining source slice:
+    `(is_list, content_offset, content_length)`. */
+function rlp_ref_hdr(b : ByteSlice) -> (bool, source_pointer, range(0, 2 ^ 64 - 1)) = {
+    let source_len = b.len;
+    if source_len == 0 then {
         throw InvalidBlock(RlpDecode)
     };
-    let h = unsigned(slice_byte(b, pos));
+    let h = unsigned(slice_byte(b, 0));
     if h < 128 then {
-        (false, pos, 1)
+        (false, 0, 1)
     } else {
-        let position = pos;
-        let stop_position = stop;
-        if stop_position <= position then {
-            throw InvalidBlock(RlpDecode)
-        };
-        let length_start : source_pointer = position + 1;
         if h < 184 then {
-            (false, length_start, h - 128)
+            (false, 1, h - 128)
         } else {
             if h < 192 then {
                 let length_width : range(1, 8) = h - 183;
-                if stop_position - (position + 1) < length_width then {
+                if source_len - 1 < length_width then {
                     throw InvalidBlock(RlpDecode)
                 };
-                let content : source_pointer = position + 1 + length_width;
-                (false, content, rlp_ref_be_length(b, length_start, content, length_width))
+                let length_bytes = sub_slice(b, 1, length_width);
+                (false, 1 + length_width, rlp_uint64_width(length_bytes, length_width))
             } else {
                 if h < 248 then {
-                    (true, length_start, h - 192)
+                    (true, 1, h - 192)
                 } else {
                     let length_width : range(1, 8) = h - 247;
-                    if stop_position - (position + 1) < length_width then {
+                    if source_len - 1 < length_width then {
                         throw InvalidBlock(RlpDecode)
                     };
-                    let content : source_pointer = position + 1 + length_width;
-                    (true, content, rlp_ref_be_length(b, length_start, content, length_width))
+                    let length_bytes = sub_slice(b, 1, length_width);
+                    (true, 1 + length_width, rlp_uint64_width(length_bytes, length_width))
                 }
             }
-        }
-    }
-}
-
-/*! Constructs an [RlpFieldRef][type-RlpFieldRef] from validated offsets. */
-val rlp_field_ref : forall 'source_off 'source_len 'full_off 'full_len 'content_off 'content_len,
-                         source_valid_range('source_off, 'source_len)
-                      &  0
-                      <= 'full_off
-                      &  0
-                      <= 'full_len
-                      &  'full_off
-                      +  'full_len
-                      <= 'source_len
-                      &  0
-                      <= 'content_off
-                      &  0
-                      <= 'content_len
-                      &  'content_off
-                      +  'content_len
-                      <= 'source_len. (
-        ByteSliceFields('source_off, 'source_len),
-        bool,
-        int('full_off),
-        int('full_len),
-        int('content_off),
-        int('content_len),
-    ) -> RlpFieldRef
-function rlp_field_ref(source, is_list : bool, full_off, full_len, content_off, content_len) = {
-    let fields : RlpFieldRefFields('source_off, 'source_len, 'full_off, 'full_len, 'content_off, 'content_len) = struct {
-            source = source,
-            is_list = is_list,
-            full_off = full_off,
-            full_len = full_len,
-            content_off = content_off,
-            content_len = content_len,
-        };
-    fields
-}
-
-/*! Constructs a cursor whose bounds are contained by its source. */
-val rlp_cursor : forall 'source_off 'source_len 'current 'stop,
-                      source_valid_range('source_off, 'source_len)
-                   &  0
-                   <= 'current
-                   &  'current
-                   <= 'stop
-                   &  'stop
-                   <= 'source_len. (ByteSliceFields('source_off, 'source_len), int('current), int('stop), bool) -> RlpCursor
-function rlp_cursor(source, current, stop, valid) = {
-    let fields : RlpCursorFields('source_off, 'source_len, 'current, 'stop) = struct {
-            source = source,
-            current = current,
-            stop = stop,
-            valid = valid,
-        };
-    fields
-}
-
-/*! The invalid cursor; popping it throws `InvalidBlock(RlpDecode)`. */
-function rlp_invalid_cursor(source : ByteSlice) -> RlpCursor =
-    rlp_cursor(source, 0, 0, false)
-
-/*! A cursor over the children of a byte sequence that must be exactly
-    one RLP list (e.g. a trie node). */
-function rlp_node_cursor(node : ByteSlice) -> RlpCursor = {
-    let node_length = node.len;
-    if node_length == 0 then {
-        rlp_invalid_cursor(node)
-    } else {
-        let node_stop = node_length;
-        let (is_list, content, content_len) = rlp_ref_hdr(node, 0, node_stop);
-        let content_offset = content;
-        let payload_length = content_len;
-        if content_offset <= node_length then {
-            if payload_length <= node_length - content_offset then {
-                let content_stop = content_offset + payload_length;
-                if is_list then {
-                    if content_stop == node_stop then {
-                        rlp_cursor(node, content, content_stop, true)
-                    } else {
-                        rlp_invalid_cursor(node)
-                    }
-                } else {
-                    rlp_invalid_cursor(node)
-                }
-            } else {
-                rlp_invalid_cursor(node)
-            }
-        } else {
-            rlp_invalid_cursor(node)
         }
     }
 }
 
 /*! A cursor over a decoded field's children; throws if the field is not
     a list. */
-val rlp_ref_cursor : forall 'source_off 'source_len 'full_off 'full_len 'content_off 'content_len,
-                          source_valid_range('source_off, 'source_len)
-                       &  0
-                       <= 'full_off
-                       &  0
-                       <= 'full_len
-                       &  'full_off
-                       +  'full_len
-                       <= 'source_len
-                       &  0
-                       <= 'content_off
-                       &  0
-                       <= 'content_len
-                       &  'content_off
-                       +  'content_len
-                       <= 'source_len. RlpFieldRefFields(
+val rlp_ref_cursor : forall 'source_off 'source_len 'content_len,
+                       rlp_field_ref_valid('source_off, 'source_len, 'content_len). RlpFieldRef(
         'source_off,
         'source_len,
-        'full_off,
-        'full_len,
-        'content_off,
         'content_len,
-    ) -> {'cursor_source_off 'cursor_source_len 'cursor_current 'cursor_stop,
-             source_valid_range('cursor_source_off, 'cursor_source_len)
-          &  0
-          <= 'cursor_current
-          &  'cursor_current
-          <= 'cursor_stop
-          &  'cursor_stop
-          <= 'cursor_source_len
-          &  'cursor_stop
-          -  'cursor_current
-          <= 'full_len.
-          RlpCursorFields('cursor_source_off, 'cursor_source_len, 'cursor_current, 'cursor_stop)}
+    ) -> RlpCursor('source_off + ('source_len - 'content_len), 'content_len)
 
 function rlp_ref_cursor(f) =
     if f.is_list then {
-        let content_offset = f.content_off;
-        let content_length = f.content_len;
-        let source_length = f.source.len;
-        if content_offset <= source_length then {
-            if content_length <= source_length - content_offset then {
-                let stop = content_offset + content_length;
-                let cursor = rlp_cursor(f.source, content_offset, stop, true);
-                let cursor_span = cursor.stop - cursor.current;
-                let full_length = f.full_len;
-                if cursor_span <= full_length then {
-                    cursor
-                } else {
-                    throw InvalidBlock(RlpDecode)
-                }
-            } else {
-                throw InvalidBlock(RlpDecode)
-            }
-        } else {
-            throw InvalidBlock(RlpDecode)
-        }
+        sub_slice(f.source, f.source.len - f.content_len, f.content_len)
     } else {
         throw InvalidBlock(RlpDecode)
     }
 
-/*! Whether the cursor has consumed all children. */
-function rlp_cursor_empty(cursor : RlpCursor) -> bool =
-    cursor.valid & (cursor.current == cursor.stop)
-
 /*! Decodes the next child and advances; throws on truncated input. */
-val rlp_cursor_pop : forall 'source_off 'source_len 'current 'stop,
-                          source_valid_range('source_off, 'source_len)
-                       &  0
-                       <= 'current
-                       &  'current
-                       <= 'stop
-                       &  'stop
-                       <= 'source_len. RlpCursorFields('source_off, 'source_len, 'current, 'stop) -> {'content 'content_len 'next 'full_len,
-                                                                                                         0
-                                                                                                      <= 'content
-                                                                                                      &  0
-                                                                                                      <= 'content_len
-                                                                                                      &  'next
-                                                                                                      == 'content
-                                                                                                      +  'content_len
-                                                                                                      &  'current
-                                                                                                      <  'next
-                                                                                                      &  'next
-                                                                                                      <= 'stop
-                                                                                                      &  'full_len
-                                                                                                      == 'next
-                                                                                                      -  'current.
-                                                                                                      (
-                                                                                                          RlpFieldRefFields(
-                                                                                                              'source_off,
-                                                                                                              'source_len,
-                                                                                                              'current,
-                                                                                                              'full_len,
-                                                                                                              'content,
-                                                                                                              'content_len,
-                                                                                                          ),
-                                                                                                          RlpCursorFields(
-                                                                                                              'source_off,
-                                                                                                              'source_len,
-                                                                                                              'next,
-                                                                                                              'stop,
-                                                                                                          ),
-                                                                                                      )}
+val rlp_cursor_pop : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). RlpCursor(
+        'source_off,
+        'source_len,
+    ) -> {'content_len 'full_len,
+          rlp_cursor_pop_valid('source_off, 'source_len, 'full_len, 'content_len).
+          (
+              RlpFieldRef('source_off, 'full_len, 'content_len),
+              RlpCursor('source_off + 'full_len, 'source_len - 'full_len),
+          )}
+
 function rlp_cursor_pop(cursor) = {
-    let current = cursor.current;
-    let stop = cursor.stop;
-    if not_bool(cursor.valid) | not_bool(current < stop) then {
+    if cursor.len == 0 then {
         throw InvalidBlock(RlpDecode)
     };
-    let (is_list, content_value, content_len_value) = rlp_ref_hdr(cursor.source, current, stop);
-    let (content as 'content) = content_value;
+    let (is_list, content_off, content_len_value) = rlp_ref_hdr(cursor);
     let (content_len as 'content_len) = content_len_value;
-    let content_offset = content;
-    let payload_length = content_len;
-    let stop_offset = stop;
-    if stop_offset < content_offset then {
+    if cursor.len < content_off then {
         throw InvalidBlock(RlpDecode)
     };
-    if stop_offset - content_offset < payload_length then {
+    if cursor.len - content_off < content_len then {
         throw InvalidBlock(RlpDecode)
     };
-    let (next as 'next) = content_offset + payload_length;
-    let current_offset = current;
-    let next_offset = next;
-    if current_offset < next_offset then {
-        let (full_len as 'full_len) = next_offset - current_offset;
-        let field : RlpFieldRefFields('source_off, 'source_len, 'current, 'full_len, 'content, 'content_len) = struct {
-                source = cursor.source,
+    let (full_len as 'full_len) = content_off + content_len;
+    if (0 < full_len) & (full_len <= cursor.len) then {
+        let field_source = sub_slice(cursor, 0, full_len);
+        let field : RlpFieldRef('source_off, 'full_len, 'content_len) = struct {
+                source = field_source,
                 is_list = is_list,
-                full_off = current,
-                full_len = full_len,
-                content_off = content,
                 content_len = content_len,
             };
-        let advanced : RlpCursorFields('source_off, 'source_len, 'next, 'stop) = struct {
-                source = cursor.source,
-                current = next,
-                stop = stop,
-                valid = true,
-            };
+        let advanced = sub_slice(cursor, full_len, cursor.len - full_len);
         (field, advanced)
     } else {
         throw InvalidBlock(RlpDecode)
@@ -748,72 +513,74 @@ function rlp_cursor_pop(cursor) = {
 
 /*! Asserts the cursor is exhausted — trailing bytes are a decode
     error. */
-function rlp_cursor_expect_end(cursor : RlpCursor) -> unit =
-    if rlp_cursor_empty(cursor) then {
+val rlp_cursor_expect_end : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). RlpCursor(
+        'source_off,
+        'source_len,
+    ) -> unit
+function rlp_cursor_expect_end(cursor) =
+    if cursor.len == 0 then {
         ()
     } else {
         throw InvalidBlock(RlpDecode)
     }
 
 /*! Decodes a byte sequence that must be exactly one RLP item. */
-function rlp_single_ref(item : ByteSlice) -> RlpFieldRef = {
+val rlp_single_ref : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). ByteSliceFields(
+        'source_off,
+        'source_len,
+    ) -> {'content_len,
+          rlp_field_ref_valid('source_off, 'source_len, 'content_len).
+          RlpFieldRef('source_off, 'source_len, 'content_len)}
+function rlp_single_ref(item) = {
     let item_length = item.len;
     if item_length == 0 then {
         throw InvalidBlock(RlpDecode)
     } else {
-        let item_stop = item_length;
-        let (isl, cs, cl) = rlp_ref_hdr(item, 0, item_stop);
-        let content_offset = cs;
-        let content_length = cl;
-        if content_offset > item_length then {
+        let (is_list, content_off, content_len_value) = rlp_ref_hdr(item);
+        let (content_len as 'content_len) = content_len_value;
+        if content_off > item_length then {
             throw InvalidBlock(RlpDecode)
         };
-        if content_length != item_length - content_offset then {
+        if content_len != item_length - content_off then {
             throw InvalidBlock(RlpDecode)
         };
-        rlp_field_ref(item, isl, 0, item.len, cs, cl)
+        let field : RlpFieldRef('source_off, 'source_len, 'content_len) = struct {
+                source = item,
+                is_list = is_list,
+                content_len = content_len,
+            };
+        field
     }
 }
 
-/*! The content span of a field. */
-val rlp_ref_content : forall 'source_off 'source_len 'full_off 'full_len 'content_off 'content_len,
-                           source_valid_range('source_off, 'source_len)
-                        &  0
-                        <= 'full_off
-                        &  0
-                        <= 'full_len
-                        &  'full_off
-                        +  'full_len
-                        <= 'source_len
-                        &  0
-                        <= 'content_off
-                        &  0
-                        <= 'content_len
-                        &  'content_off
-                        +  'content_len
-                        <= 'source_len. RlpFieldRefFields(
-        'source_off,
-        'source_len,
-        'full_off,
-        'full_len,
-        'content_off,
-        'content_len,
-    ) -> ByteSliceFields('source_off + 'content_off, 'content_len)
-function rlp_ref_content(f) =
-    sub_slice(f.source, f.content_off, f.content_len)
+/*! A cursor over the children of a byte sequence that must be exactly
+    one RLP list (e.g. a trie node). */
+function rlp_node_cursor(node : ByteSlice) -> (
+    {'source_off 'source_len,
+     source_valid_range('source_off, 'source_len).
+     RlpCursor('source_off, 'source_len)}
+) =
+    rlp_ref_cursor(rlp_single_ref(node))
 
-/*! The full encoded span of a field. */
-function rlp_ref_full(f : RlpFieldRef) -> ByteSlice =
-    sub_slice(f.source, f.full_off, f.full_len)
+/*! The content span of a field. */
+function rlp_ref_content forall 'source_off 'source_len 'content_len,
+                           rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    ByteSlice
+) =
+    sub_slice(f.source, f.source.len - f.content_len, f.content_len)
 
 /*! Whether a field uses the unique canonical RLP framing for its payload. */
-function rlp_ref_framing_canonical(f : RlpFieldRef) -> bool = {
+function rlp_ref_framing_canonical forall 'source_off 'source_len 'content_len,
+                                     rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    bool
+) = {
     let n = f.content_len;
     let payload_length = n;
-    let full_length = f.full_len;
-    let fo = f.full_off;
-    let full_offset = fo;
-    let co = f.content_off;
+    let full_length = f.source.len;
+    let full_offset = 0;
+    let content_offset = full_length - payload_length;
     let source = f.source;
     let source_length = source.len;
     if full_length == 0 then {
@@ -821,11 +588,11 @@ function rlp_ref_framing_canonical(f : RlpFieldRef) -> bool = {
     } else {
         if f.is_list then {
             if n <= RLP_SHORT_LENGTH_LIMIT then {
-                (full_length == payload_length + 1) & (slice_byte(f.source, fo) == add_bits(0xc0, rlp_length_byte(n)))
+                (full_length == payload_length + 1) & (slice_byte(f.source, 0) == add_bits(0xc0, rlp_length_byte(n)))
             } else {
                 let (len_bytes, length_width) = minimal_word_bytes(rlp_length_word(n));
                   (full_length == 1 + length_width + payload_length)
-                & (slice_byte(f.source, fo) == add_bits(0xf7, rlp_length_byte(length_width)))
+                & (slice_byte(f.source, 0) == add_bits(0xf7, rlp_length_byte(length_width)))
                 & (if full_offset < source_length then {
                       rlp_bytes_equal_at(len_bytes, f.source, full_offset + 1)
                   } else {
@@ -834,19 +601,19 @@ function rlp_ref_framing_canonical(f : RlpFieldRef) -> bool = {
             }
         } else {
             if payload_length == 0 then {
-                (full_length == 1) & (slice_byte(f.source, fo) == 0x80)
+                (full_length == 1) & (slice_byte(f.source, 0) == 0x80)
             } else {
-                let first = slice_byte(f.source, co);
+                let first = slice_byte(f.source, content_offset);
                 if (payload_length == 1) & (first[7] == bitzero) then {
-                    (full_length == 1) & (slice_byte(f.source, fo) == first)
+                    (full_length == 1) & (slice_byte(f.source, 0) == first)
                 } else {
                     if n <= RLP_SHORT_LENGTH_LIMIT then {
                         (full_length == payload_length + 1) &
-                            (slice_byte(f.source, fo) == add_bits(0x80, rlp_length_byte(n)))
+                            (slice_byte(f.source, 0) == add_bits(0x80, rlp_length_byte(n)))
                     } else {
                         let (len_bytes, length_width) = minimal_word_bytes(rlp_length_word(n));
                           (full_length == 1 + length_width + payload_length)
-                        & (slice_byte(f.source, fo) == add_bits(0xb7, rlp_length_byte(length_width)))
+                        & (slice_byte(f.source, 0) == add_bits(0xb7, rlp_length_byte(length_width)))
                         & (if full_offset < source_length then {
                               rlp_bytes_equal_at(len_bytes, f.source, full_offset + 1)
                           } else {
@@ -859,40 +626,49 @@ function rlp_ref_framing_canonical(f : RlpFieldRef) -> bool = {
     }
 }
 
-function rlp_ref_bytes_canonical(f : RlpFieldRef) -> bool =
+/*! Whether a field is a byte string with its unique canonical RLP framing. */
+function rlp_ref_bytes_canonical forall 'source_off 'source_len 'content_len,
+                                   rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    bool
+) =
     not_bool(f.is_list) & rlp_ref_framing_canonical(f)
 
 /*! Whether a field is the canonical RLP encoding of a non-negative
     integer: minimal big-endian content with no leading zeros and the
     exact matching prefix. */
-function rlp_ref_uint_canonical(f : RlpFieldRef) -> bool =
+function rlp_ref_uint_canonical forall 'source_off 'source_len 'content_len,
+                                  rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    bool
+) =
     if not_bool(rlp_ref_bytes_canonical(f)) then {
         false
     } else {
-        (f.content_len == 0) | (slice_byte(f.source, f.content_off) != 0x00)
-    }
-
-/*! Returns a canonical byte-string field of exactly `len` bytes. */
-function rlp_ref_fixed_bytes(f : RlpFieldRef, len : nat) -> ByteSlice =
-    if rlp_ref_bytes_canonical(f) & (f.content_len == len) then {
-        rlp_ref_content(f)
-    } else {
-        throw InvalidBlock(RlpDecode)
+        (f.content_len == 0) | (slice_byte(f.source, f.source.len - f.content_len) != 0x00)
     }
 
 /*! Decodes a string field of at most 32 bytes into a word. */
-function rlp_ref_word(f : RlpFieldRef) -> word = {
+function rlp_ref_word forall 'source_off 'source_len 'content_len,
+                        rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    word
+) = {
     let n = f.content_len;
     if f.is_list | (RLP_WORD_LENGTH_LIMIT < n) then {
         throw InvalidBlock(RlpDecode)
     } else {
-        slice_load_n(f.source, f.content_off, n)
+        slice_load_n(f.source, f.source.len - n, n)
     }
 }
 
 /*! Decodes a canonical unsigned integer field into a word; throws
     otherwise. */
-function rlp_ref_uint_word(f : RlpFieldRef) -> word =
+function rlp_ref_uint_word forall 'source_off 'source_len 'content_len,
+                             rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    word
+) =
     if rlp_ref_uint_canonical(f) then {
         rlp_ref_word(f)
     } else {
@@ -901,7 +677,11 @@ function rlp_ref_uint_word(f : RlpFieldRef) -> word =
 
 /*! Decodes a canonical unsigned integer into the uint64 wire domain used by
     EIP-2681 account nonces and EIP-4844 excess blob gas. */
-function rlp_ref_uint64(f : RlpFieldRef) -> ssz_uint = {
+function rlp_ref_uint64 forall 'source_off 'source_len 'content_len,
+                          rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    ssz_uint
+) = {
     if not_bool(rlp_ref_uint_canonical(f)) | (RLP_UINT64_LENGTH_LIMIT < f.content_len) then {
         throw InvalidBlock(RlpDecode)
     };
@@ -928,24 +708,13 @@ function rlp_uint_content(content : ByteSlice) -> nat = {
 termination_measure rlp_uint_content(content) = content.len
 
 /*! Decodes an arbitrary-width canonical RLP unsigned integer. */
-function rlp_ref_uint(f : RlpFieldRef) -> nat =
+function rlp_ref_uint forall 'source_off 'source_len 'content_len,
+                        rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    nat
+) =
     if rlp_ref_uint_canonical(f) then {
         rlp_uint_content(rlp_ref_content(f))
     } else {
         throw InvalidBlock(RlpDecode)
     }
-
-/*! Typed RLP boundaries document and enforce the field's protocol domain. */
-function rlp_ref_account_nonce(f : RlpFieldRef) -> account_nonce = rlp_ref_uint64(f)
-function rlp_ref_block_number(f : RlpFieldRef) -> block_number = rlp_ref_uint(f)
-/*! Decodes block blob gas after enforcing the supported schedule bound. */
-function rlp_ref_blob_gas_used(f : RlpFieldRef) -> blob_gas_used = {
-    let value = rlp_ref_uint64(f);
-    if value <= sizeof(blob_count_bound * gas_per_blob_value) then {
-        value
-    } else {
-        throw InvalidBlock(RlpDecode)
-    }
-}
-function rlp_ref_excess_blob_gas(f : RlpFieldRef) -> excess_blob_gas = rlp_ref_uint64(f)
-function rlp_ref_chain_identifier(f : RlpFieldRef) -> chain_identifier = rlp_ref_uint(f)

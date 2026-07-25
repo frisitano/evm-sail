@@ -80,6 +80,16 @@ def num_of_ByteSource (arg_ : ByteSource) : Nat :=
   | .OutputSource => 4
   | .ScratchSource => 5
 
+/-- Returns the length carried by an existential byte slice. -/
+/- Type quantifiers: s_dependentWitness1 : Nat, s_dependentWitness0 : Nat, 0 ≤ s_dependentWitness0
+  ∧ 0 ≤ s_dependentWitness1 -/
+def byte_slice_length (s : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : Nat :=
+  let s_dependentWitness0 := (s).1
+  let s_dependentWitness1 := ((s).2).1
+  let s := ((s).2).2
+  s.len
+
 def ADDRESS_BYTE_LENGTH : Nat := 20
 
 def WORD_BYTE_LENGTH : Nat := 32
@@ -88,7 +98,7 @@ def EIGHT_BYTE_LENGTH : Nat := 8
 
 def DOUBLE_WORD_BYTE_LENGTH : Nat := 64
 
-/- Type quantifiers: off : Nat, len : Nat, source_valid_range(off, len) -/
+/- Type quantifiers: off : Nat, len : Nat, (source_valid_range off len) -/
 def byte_slice (src : ByteSource) (off : Nat) (len : Nat) : (EvmByteSliceFields off len) :=
   { source := src,
     off := off,
@@ -98,18 +108,18 @@ def byte_slice (src : ByteSource) (off : Nat) (len : Nat) : (EvmByteSliceFields 
 references, deletes). -/
 def EMPTY_SLICE : (EvmByteSliceFields 0 0) := (byte_slice StatelessInputSource 0 0)
 
-/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, len : Nat, source_valid_range(k_base, k_source_len)
+/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, len : Nat, (source_valid_range k_base k_source_len)
   ∧ 0 ≤ off ∧ 0 ≤ len ∧ (off + len) ≤ k_source_len -/
 def sub_slice (s : (EvmByteSliceFields k_base k_source_len)) (off : Nat) (len : Nat) : (EvmByteSliceFields (k_base + off) len) :=
   (byte_slice s.source (k_base + off) len)
 
-/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, source_valid_range(k_base, k_source_len)
+/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, (source_valid_range k_base k_source_len)
   ∧ 0 ≤ off ∧ off ≤ k_source_len -/
 def slice_suffix (s : (EvmByteSliceFields k_base k_source_len)) (off : Nat) : (EvmByteSliceFields (k_base + off) (k_source_len - off)) :=
   (byte_slice s.source (k_base + off) (k_source_len - off))
 
-/- Type quantifiers: len : Nat, source_valid_length(len) -/
-def materialized_bytes (data : (List byte)) (len : Nat) : MaterializedBytes :=
+/- Type quantifiers: len : Nat, (source_valid_length len) -/
+def materialized_bytes (data : (List (BitVec 8))) (len : Nat) : MaterializedBytes :=
   { data := data,
     len := len }
 
@@ -117,12 +127,12 @@ def undefined_FixedBytes32 (_ : Unit) : SailM FixedBytes32 := do
   (pure { data := ← (undefined_vector 32 (← (undefined_bitvector 8))),
           len := ← (undefined_range 0 32) })
 
-/- Type quantifiers: len : Nat, source_valid_length(len) -/
-def bytes_list (data : (List byte)) (len : Nat) : Bytes :=
+/- Type quantifiers: len : Nat, (source_valid_length len) -/
+def bytes_list (data : (List (BitVec 8))) (len : Nat) : Bytes :=
   (BytesList (materialized_bytes data len))
 
-/- Type quantifiers: k_ex408900_ : Nat, 0 ≤ k_ex408900_ ∧ k_ex408900_ ≤ 32 -/
-def bytes_fixed32 (data : b256) (len : Nat) : Bytes :=
+/- Type quantifiers: k_ex414862_ : Nat, 0 ≤ k_ex414862_ ∧ k_ex414862_ ≤ 32 -/
+def bytes_fixed32 (data : (Vector (BitVec 8) 32)) (len : Nat) : Bytes :=
   (BytesFixed32
     { data := data,
       len := len })

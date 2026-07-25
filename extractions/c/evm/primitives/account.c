@@ -36,18 +36,18 @@ void kill_letbind_73(void) {
 struct zAccount zaccount_from_info(struct zAccountInfo zinfo)
 {
   struct zAccount z8zE106;
-  struct zAccount z3zE3706;
-  z3zE3706.zcreated = false;
-  z3zE3706.zinfo = zinfo;
-  z3zE3706.zpresent = true;
-  z3zE3706.zselfdestructed = false;
-  z3zE3706.zstorage_cleared = false;
-  z8zE106 = z3zE3706;
-end_function_3762: ;
+  struct zAccount z3zE3635;
+  z3zE3635.zcreated = false;
+  z3zE3635.zinfo = zinfo;
+  z3zE3635.zpresent = true;
+  z3zE3635.zselfdestructed = false;
+  z3zE3635.zstorage_cleared = false;
+  z8zE106 = z3zE3635;
+end_function_3743: ;
   return z8zE106;
-end_block_exception_3763: ;
-  struct zAccountInfo z8zE831 = { .zbalance = u256_zero(), .zcode_hash = fixed_bytes_32_zero(), .znonce = UINT64_C(0xdeadc0de), .zstorage_root = fixed_bytes_32_zero() };
-  struct zAccount z8zE830 = { .zcreated = false, .zinfo = z8zE831, .zpresent = false, .zselfdestructed = false, .zstorage_cleared = false };
-  return z8zE830;
+end_block_exception_3744: ;
+  struct zAccountInfo z8zE828 = { .zbalance = u256_zero(), .zcode_hash = fixed_bytes_32_zero(), .znonce = UINT64_C(0xdeadc0de), .zstorage_root = fixed_bytes_32_zero() };
+  struct zAccount z8zE827 = { .zcreated = false, .zinfo = z8zE828, .zpresent = false, .zselfdestructed = false, .zstorage_cleared = false };
+  return z8zE827;
 }
 

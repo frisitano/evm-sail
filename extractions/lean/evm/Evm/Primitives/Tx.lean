@@ -73,19 +73,15 @@ def undefined_Authorization (_ : Unit) : SailM Authorization := do
   (pure { valid_sig := ← (undefined_bool ()),
           authority := ← (undefined_vector 20 (← (undefined_bitvector 8))),
           address := ← (undefined_vector 20 (← (undefined_bitvector 8))),
-          nonce := ← do
-              let publicField ← (undefined_range 0 ((2 ^i 64) - 1))
-              pure (⟨publicField⟩),
-          chain_id := ← do
-              let publicField ← (undefined_range 0 ((2 ^i 256) - 1))
-              pure (⟨publicField⟩) })
+          nonce := ← (undefined_range 0 ((2 ^i 64) - 1)),
+          chain_id := ← (undefined_range 0 ((2 ^i 256) - 1)) })
 
 def EMPTY_BLOB_HASHES : BlobHashes :=
   { bytes := ⟨_, ⟨_, EMPTY_SLICE⟩⟩,
-    count := ⟨0⟩ }
+    count := 0 }
 
 /-- The envelope type byte, as it appears in tx and receipt encodings. -/
-def tx_type_byte (t : TxType) : byte :=
+def tx_type_byte (t : TxType) : (BitVec 8) :=
   match t with
   | .LegacyTx => 0x00#8
   | .AccessListTx => 0x01#8

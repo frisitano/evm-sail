@@ -57,9 +57,8 @@ signature, called from transaction validity. -/
 /-- The chain id encoded in a legacy signature with `v >= 35`
 (EIP-155). -/
 /- Type quantifiers: v : Nat, 0 ≤ v ∧ v ≤ (2 ^ 256 - 1) -/
-def legacy_sig_chain_id (v : word) : word :=
-  let v := (v).value
-  ⟨((word_div_word ((word_sub_word v 35)).value 2)).value⟩
+def legacy_sig_chain_id (v : Nat) : Nat :=
+  (word_div_word (word_sub_word v 35) 2)
 
 def LEGACY_SIGNATURE_SUFFIX_LENGTH : Nat := 2
 
@@ -70,17 +69,20 @@ the pre-signature fields in the witness and is hashed as a segment
 (never materialized); legacy EIP-155 transactions append
 `(chain_id, 0, 0)`, typed transactions prepend the type byte as a
 domain separator (EIP-2718). -/
-/- Type quantifiers: k_ex409982_ : Nat, k_ex409981_ : Nat, k_ex409980_ : Nat, 0 ≤ k_ex409980_ ∧
-  0 ≤ k_ex409981_, 0 ≤ k_ex409982_ ∧ k_ex409982_ ≤ (2 ^ 256 - 1) -/
-def tx_signing_hash (t : TxType) (content_src : EvmByteSlice) (v : word) : SailM hash := do
+/- Type quantifiers: k_ex415981_ : Nat, content_src_dependentWitness1 : Nat, content_src_dependentWitness0
+  : Nat, 0 ≤ content_src_dependentWitness0 ∧ 0 ≤ content_src_dependentWitness1, 0 ≤
+  k_ex415981_ ∧ k_ex415981_ ≤ (2 ^ 256 - 1) -/
+def tx_signing_hash (t : TxType) (content_src : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (v : Nat) : SailM (Vector (BitVec 8) 32) := do
+  let content_src_dependentWitness0 := (content_src).1
+  let content_src_dependentWitness1 := ((content_src).2).1
   let content_src := ((content_src).2).2
-  let v := (v).value
   let tb := (tx_type_byte t)
   let eip155 := ((tb == 0x00#8) && (word_ule 35 v))
   let chain_id :=
     if (eip155 : Bool)
-    then ((legacy_sig_chain_id ⟨v⟩)).value
-    else (ZERO_WORD).value
+    then (legacy_sig_chain_id v)
+    else ZERO_WORD
   let suffix_len : Nat :=
     if (eip155 : Bool)
     then
@@ -121,11 +123,9 @@ def tx_signing_hash (t : TxType) (content_src : EvmByteSlice) (v : word) : SailM
 
 /-- The EIP-7702 authorization signing hash:
 `keccak256(0x05 || rlp([chain_id, address, nonce]))`. -/
-/- Type quantifiers: k_ex409984_ : Nat, k_ex409983_ : Nat, 0 ≤ k_ex409983_ ∧
-  k_ex409983_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex409984_ ∧ k_ex409984_ ≤ (2 ^ 64 - 1) -/
-def auth_signing_hash (chain_id : word) (addr : address) (nonce : account_nonce) : SailM hash := do
-  let chain_id := (chain_id).value
-  let nonce := (nonce).value
+/- Type quantifiers: k_ex415983_ : Nat, k_ex415982_ : Nat, 0 ≤ k_ex415982_ ∧
+  k_ex415982_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex415983_ ∧ k_ex415983_ ≤ (2 ^ 64 - 1) -/
+def auth_signing_hash (chain_id : Nat) (addr : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (BitVec 8) 32) := do
   let chain_id_length := (rlp_uint_word_size chain_id)
   let address_length := (rlp_addr_size ())
   let nonce_length := (rlp_uint_word_size nonce)
@@ -144,47 +144,41 @@ def auth_signing_hash (chain_id : word) (addr : address) (nonce : account_nonce)
 /-- The per-envelope `v`-range rule: legacy accepts `27`/`28` or the
 EIP-155 form binding the chain id; typed envelopes accept
 `y_parity ∈ {0, 1}`. -/
-/- Type quantifiers: k_ex409986_ : Nat, k_ex409985_ : Nat, 0 ≤ k_ex409985_, 0 ≤ k_ex409986_ ∧
-  k_ex409986_ ≤ (2 ^ 256 - 1) -/
-def tx_sig_v_valid (chain_id : chain_identifier) (t : TxType) (v : word) : SailM Bool := do
-  let v := (v).value
+/- Type quantifiers: k_ex415985_ : Nat, k_ex415984_ : Nat, 0 ≤ k_ex415984_ ∧
+  k_ex415984_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex415985_ ∧ k_ex415985_ ≤ (2 ^ 256 - 1) -/
+def tx_sig_v_valid (chain_id : Nat) (t : TxType) (v : Nat) : Bool :=
   match t with
   | .LegacyTx =>
-    (pure ((v == 27) || ((v == 28) || ((word_ule 35 v) && (← do
-              (pure (((legacy_sig_chain_id ⟨v⟩)).value == (← (word_of_chain_identifier
-                      chain_id)))))))))
-  | _ => (pure ((v == (WORD_ZERO).value) || (v == (WORD_ONE).value)))
+    ((v == 27) || ((v == 28) || ((word_ule 35 v) && (((legacy_sig_chain_id v) == (word_of_chain_identifier
+              chain_id)) : Bool))))
+  | _ => ((v == WORD_ZERO) || (v == WORD_ONE))
 
 /-- Extracts the recovery parity after [tx_sig_v_valid][] has validated the
 envelope-specific `v` domain. Legacy `27` and every EIP-155 parity-zero
 value are odd; typed envelopes carry the parity directly. -/
-/- Type quantifiers: k_ex409987_ : Nat, 0 ≤ k_ex409987_ ∧ k_ex409987_ ≤ (2 ^ 256 - 1) -/
-def tx_y_parity (t : TxType) (v : word) : y_parity :=
-  let v := (v).value
-  ⟨match t with
+/- Type quantifiers: k_ex415986_ : Nat, 0 ≤ k_ex415986_ ∧ k_ex415986_ ≤ (2 ^ 256 - 1) -/
+def tx_y_parity (t : TxType) (v : Nat) : Nat :=
+  match t with
   | .LegacyTx =>
-    (if ((((word_and ⟨v⟩ ⟨(WORD_ONE).value⟩)).value == (WORD_ONE).value) : Bool)
+    (if (((word_and v WORD_ONE) == WORD_ONE) : Bool)
     then 0
     else 1)
   | _ =>
-    (if ((v == (WORD_ZERO).value) : Bool)
+    (if ((v == WORD_ZERO) : Bool)
     then 0
-    else 1)⟩
+    else 1)
 
 /-- Authenticates a transaction: enforce the EIP-2 low-`s` bound, recover the
 signer selected by `y_parity`, and bind it to the address derived from the
 witnessed 65-byte public key. -/
-/- Type quantifiers: k_ex409990_ : Nat, k_ex409989_ : Nat, k_ex409988_ : Nat, 0 ≤ k_ex409988_ ∧
-  k_ex409988_ ≤ 1, 0 ≤ k_ex409989_ ∧ k_ex409989_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex409990_ ∧
-  k_ex409990_ ≤ (2 ^ 256 - 1) -/
-def tx_auth_valid (sender : address) (h : hash) (parity : y_parity) (r : word) (s : word) : SailM Bool := do
-  let parity := (parity).value
-  let r := (r).value
-  let s := (s).value
-  if ((word_ult (SECP_N_HALF).value s) : Bool)
+/- Type quantifiers: k_ex415989_ : Nat, k_ex415988_ : Nat, k_ex415987_ : Nat, 0 ≤ k_ex415987_ ∧
+  k_ex415987_ ≤ 1, 0 ≤ k_ex415988_ ∧ k_ex415988_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex415989_ ∧
+  k_ex415989_ ≤ (2 ^ 256 - 1) -/
+def tx_auth_valid (sender : (Vector (BitVec 8) 20)) (h : (Vector (BitVec 8) 32)) (parity : Nat) (r : Nat) (s : Nat) : SailM Bool := do
+  if ((word_ult SECP_N_HALF s) : Bool)
   then (pure false)
   else
     (do
-      let (recovered, recovered_sender) ← do (ecrecover_addr h ⟨parity⟩ ⟨r⟩ ⟨s⟩)
+      let (recovered, recovered_sender) ← do (ecrecover_addr h parity r s)
       (pure (recovered && (recovered_sender == sender))))
 

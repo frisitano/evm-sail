@@ -121,68 +121,64 @@ val acct_post_storage_root_read = impure { c: "acct_post_storage_root_read" } : 
 /* EIP-7928 block-access-list recorder */
 /*! Clears the block-access-list recorder (start of block execution). */
 val bal_reset = impure { c: "bal_reset" } : unit -> unit
-/*! Sets the transaction index stamped on subsequently recorded changes:
-    EIP-7928 keys change entries by transaction index, with 0 for the
-    pre-execution system calls and `count + 1` for the post-execution
-    ones. */
-val bal_set_index = impure { c: "bal_set_index" } : forall 'index, 0 <= 'index & 'index <= transaction_count_bound + 1. int(
-        'index,
-    ) -> unit
 /*! Records that the address was accessed, so it appears in the block
     access list even without a change (EIP-7928). */
 val bal_account_touch = impure { c: "bal_note_account_touch" } : address -> unit
 /*! Records a post-transaction storage value for `(address, slot)` at
-    the current transaction index. */
-val bal_storage_change = impure { c: "bal_note_storage_change" } : (address, word, word) -> unit
+    the supplied EIP-7928 position. */
+val bal_storage_change = impure { c: "bal_note_storage_change" } : (block_access_index, address, word, word) -> unit
 /*! Records a storage read of `(address, slot)`; reads with no
     subsequent change are listed slot-only in EIP-7928. */
 val bal_storage_read = impure { c: "bal_note_storage_read" } : (address, word) -> unit
-/*! Records a post-transaction balance for the address at the current
-    transaction index. */
-val bal_balance_change = impure { c: "bal_note_balance_change" } : (address, word) -> unit
-/*! Records a post-transaction nonce for the address at the current
-    transaction index. */
-val bal_nonce_change = impure { c: "bal_note_nonce_change" } : (address, account_nonce) -> unit
-/*! Records a post-transaction code hash for the address at the current
-    transaction index. */
-val bal_code_change = impure { c: "bal_note_code_change" } : (address, hash) -> unit
-/*! Canonicalizes the recorded data — sorted and ready for indexed
-    enumeration — before the block-access-list encoder reads it back. */
+/*! Records a post-transaction balance at the supplied EIP-7928 position. */
+val bal_balance_change = impure { c: "bal_note_balance_change" } : (block_access_index, address, word) -> unit
+/*! Records a post-transaction nonce at the supplied EIP-7928 position. */
+val bal_nonce_change = impure { c: "bal_note_nonce_change" } : (block_access_index, address, account_nonce) -> unit
+/*! Records a post-transaction code hash at the supplied EIP-7928 position. */
+val bal_code_change = impure { c: "bal_note_code_change" } : (block_access_index, address, hash) -> unit
+/*! One recorded change for the selected storage slot. */
+struct BalStorageChangeEntry = {
+    index : block_access_index,
+    value : word,
+}
+/*! One storage slot in the selected account's canonical read/change union.
+    `None` selects the BAL storage-read list; `Some` selects the storage-change
+    list and carries the first change of the selected slot. */
+struct BalStorageSlotEntry = {
+    slot : word,
+    change : option(BalStorageChangeEntry),
+}
+/*! One recorded balance change in canonical host traversal order. */
+struct BalBalanceChangeEntry = {
+    index : block_access_index,
+    value : word,
+}
+/*! One recorded nonce change in canonical host traversal order. */
+struct BalNonceChangeEntry = {
+    index : block_access_index,
+    value : account_nonce,
+}
+/*! One recorded code change in canonical host traversal order. */
+struct BalCodeChangeEntry = {
+    index : block_access_index,
+    code_hash : hash,
+}
+/*! Canonicalizes the recorded data and resets the non-destructive cursors. */
 val bal_prepare = impure { c: "bal_prepare" } : unit -> unit
-/*! The number of recorded accounts (valid after [bal_prepare][]). */
-val bal_account_count = impure { c: "bal_account_count" } : unit -> item_count
-/*! The address of recorded account `i`, in canonical ascending order. */
-val bal_account_address = impure { c: "bal_account_address" } : item_index -> address
-/*! The number of storage changes recorded for account `i`. */
-val bal_storage_change_count = impure { c: "bal_storage_change_count" } : item_index -> item_count
-/*! The slot of storage change `j` of account `i`. */
-val bal_storage_change_slot = impure { c: "bal_storage_change_slot" } : (item_index, item_index) -> word
-/*! The transaction index of storage change `j` of account `i`. */
-val bal_storage_change_index = impure { c: "bal_storage_change_index" } : (item_index, item_index) -> item_index
-/*! The post-transaction value of storage change `j` of account `i`. */
-val bal_storage_change_value = impure { c: "bal_storage_change_value" } : (item_index, item_index) -> word
-/*! The number of change-free storage reads recorded for account `i`. */
-val bal_storage_read_count = impure { c: "bal_storage_read_count" } : item_index -> item_count
-/*! The slot of storage read `j` of account `i`. */
-val bal_storage_read_slot = impure { c: "bal_storage_read_slot" } : (item_index, item_index) -> word
-/*! The number of balance changes recorded for account `i`. */
-val bal_balance_change_count = impure { c: "bal_balance_change_count" } : item_index -> item_count
-/*! The transaction index of balance change `j` of account `i`. */
-val bal_balance_change_index = impure { c: "bal_balance_change_index" } : (item_index, item_index) -> item_index
-/*! The post-transaction balance of balance change `j` of account `i`. */
-val bal_balance_change_value = impure { c: "bal_balance_change_value" } : (item_index, item_index) -> word
-/*! The number of nonce changes recorded for account `i`. */
-val bal_nonce_change_count = impure { c: "bal_nonce_change_count" } : item_index -> item_count
-/*! The transaction index of nonce change `j` of account `i`. */
-val bal_nonce_change_index = impure { c: "bal_nonce_change_index" } : (item_index, item_index) -> item_index
-/*! The post-transaction nonce of nonce change `j` of account `i`. */
-val bal_nonce_change_value = impure { c: "bal_nonce_change_value" } : (item_index, item_index) -> account_nonce
-/*! The number of code changes recorded for account `i`. */
-val bal_code_change_count = impure { c: "bal_code_change_count" } : item_index -> item_count
-/*! The transaction index of code change `j` of account `i`. */
-val bal_code_change_index = impure { c: "bal_code_change_index" } : (item_index, item_index) -> item_index
-/*! The post-transaction code hash of code change `j` of account `i`. */
-val bal_code_change_hash = impure { c: "bal_code_change_hash" } : (item_index, item_index) -> hash
+/*! Pops the next account from the prepared ascending-address cursor. Selecting
+    an account also resets each of its child cursors. */
+val bal_account_next = impure { c: "bal_account_next" } : unit -> option(address)
+/*! Pops the next slot from the selected account's sorted read/change union.
+    A changed slot also selects its remaining change substream. */
+val bal_storage_slot_next = impure { c: "bal_storage_slot_next" } : unit -> option(BalStorageSlotEntry)
+/*! Pops the next change row of the selected storage slot. */
+val bal_storage_change_next = impure { c: "bal_storage_change_next" } : unit -> option(BalStorageChangeEntry)
+/*! Pops the next balance-change row of the selected account. */
+val bal_balance_change_next = impure { c: "bal_balance_change_next" } : unit -> option(BalBalanceChangeEntry)
+/*! Pops the next nonce-change row of the selected account. */
+val bal_nonce_change_next = impure { c: "bal_nonce_change_next" } : unit -> option(BalNonceChangeEntry)
+/*! Pops the next code-change row of the selected account. */
+val bal_code_change_next = impure { c: "bal_code_change_next" } : unit -> option(BalCodeChangeEntry)
 
 /* EIP-2929 warm address/slot sets */
 /*! Clears both warm sets (per-transaction reset; EIP-2929 warmth is

@@ -59,7 +59,10 @@ def sail_main (_ : Unit) : SailM Unit := do
   let _ : Unit := (cycle_scope_start SCOPE_STATELESS_VALIDATION)
   let result ← (( do
     sailTryCatch ((do
-        let input_ref ← do (decode_stateless_input_ref (← (stateless_input ())))
+        let input_ref ← do
+          (do
+              let dependentArg0 := (← (stateless_input ()))
+              (decode_stateless_input_ref dependentArg0))
         let validation ← (( do (verify_stateless_payload input_ref) ) : SailM
           StatelessValidationResult )
         let valid : Bool :=

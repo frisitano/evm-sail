@@ -26,7 +26,7 @@ function decode_state_account(value : ByteSlice) -> AccountInfo = {
             word_to_hash(rlp_ref_word(code))
         };
     struct {
-        nonce = rlp_ref_account_nonce(nonce),
+        nonce = rlp_ref_uint64(nonce),
         balance = rlp_ref_uint_word(balance),
         storage_root = storage_root,
         code_hash = code_hash,

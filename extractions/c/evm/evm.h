@@ -802,6 +802,36 @@ struct zByteSliceFields {
   enum zByteSource zsource;
 };
 
+// struct tuple_(%struct zTriePath, %union zNodeRef)
+struct ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9 {
+  struct zTriePath ztup0;
+  struct zNodeRef ztup1;
+};
+
+// struct tuple_(%struct zTriePath, %struct zByteSliceFields)
+struct ztuple_z8z5structz0zzTriePathzCz0z5structz0zzByteSliceFieldsz9 {
+  struct zTriePath ztup0;
+  struct zByteSliceFields ztup1;
+};
+
+// struct tuple_(%vec(%union zNodeRef), %struct zByteSliceFields)
+struct ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9 {
+  zz5vecz8z5unionz0zzNodeRefz9 ztup0;
+  struct zByteSliceFields ztup1;
+};
+
+// union TrieNode
+enum kind_zTrieNode { Kind_zBranchNode, Kind_zExtensionNode, Kind_zLeafNode };
+
+struct zTrieNode {
+  enum kind_zTrieNode kind;
+  union {
+    struct { struct ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9 zBranchNode; };
+    struct { struct ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9 zExtensionNode; };
+    struct { struct ztuple_z8z5structz0zzTriePathzCz0z5structz0zzByteSliceFieldsz9 zLeafNode; };
+  } variants;
+};
+
 // union TrieItemValue
 enum kind_zTrieItemValue { Kind_zBranchItem, Kind_zLeafItem, Kind_zSubtreeItem };
 
@@ -880,41 +910,18 @@ struct zSszzContainerCursor {
   uint64_t zcurrent;
 };
 
-// struct RlpFieldRefFields
-struct zRlpFieldRefFields {
+// struct RlpFieldRef
+struct zRlpFieldRef {
   uint64_t zcontent_len;
-  uint64_t zcontent_off;
-  uint64_t zfull_len;
-  uint64_t zfull_off;
   bool zis_list;
   struct zByteSliceFields zsource;
 };
 
-// type abbreviation RlpFieldRef
-typedef struct zRlpFieldRefFields zRlpFieldRef;
-
-// struct LeafNodeData
-struct zLeafNodeData {
-  struct zTriePath zpath;
-  struct zRlpFieldRefFields zvalue;
-};
-
-// struct ExtensionNodeData
-struct zExtensionNodeData {
-  struct zRlpFieldRefFields zchild;
-  struct zTriePath zpath;
-};
-
-// struct RlpCursorFields
-struct zRlpCursorFields {
+// struct RlpCursor
+struct zRlpCursor {
   uint64_t zcurrent;
   struct zByteSliceFields zsource;
-  uint64_t zstop;
-  bool zvalid;
 };
-
-// type abbreviation RlpCursor
-typedef struct zRlpCursorFields zRlpCursor;
 
 // struct PrecompileResult
 struct zPrecompileResult {
@@ -1129,37 +1136,6 @@ struct zByteRegionResult {
 
 // type abbreviation BranchRefs
 typedef zz5vecz8z5unionz0zzNodeRefz9 zBranchRefs;
-
-#ifndef SAIL_VECTOR_ZZ5VECZ8Z5STRUCTZ0ZZRLPFIELDREFFIELDSZ9_DEFINED
-#define SAIL_VECTOR_ZZ5VECZ8Z5STRUCTZ0ZZRLPFIELDREFFIELDSZ9_DEFINED
-struct zz5vecz8z5structz0zzRlpFieldRefFieldsz9 {
-  size_t len;
-  struct zRlpFieldRefFields *data;
-};
-typedef struct zz5vecz8z5structz0zzRlpFieldRefFieldsz9 zz5vecz8z5structz0zzRlpFieldRefFieldsz9;
-#endif
-
-// struct BranchNodeData
-struct zBranchNodeData {
-  zz5vecz8z5structz0zzRlpFieldRefFieldsz9 zchildren;
-  struct zRlpFieldRefFields zvalue;
-};
-
-// union TrieNode
-enum kind_zTrieNode { Kind_zBranchNode, Kind_zExtensionNode, Kind_zInvalidNode, Kind_zLeafNode };
-
-struct zTrieNode {
-  enum kind_zTrieNode kind;
-  union {
-    struct { struct zBranchNodeData zBranchNode; };
-    struct { struct zExtensionNodeData zExtensionNode; };
-    struct { unit zInvalidNode; };
-    struct { struct zLeafNodeData zLeafNode; };
-  } variants;
-};
-
-// type abbreviation BranchChildren
-typedef zz5vecz8z5structz0zzRlpFieldRefFieldsz9 zBranchChildren;
 
 // struct BoundedSszListRef
 struct zBoundedSszzListRef {
@@ -1575,10 +1551,10 @@ struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 {
   uint64_t ztup2;
 };
 
-// struct tuple_(%struct zRlpFieldRefFields, %struct zRlpCursorFields)
-struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 {
-  struct zRlpFieldRefFields ztup0;
-  struct zRlpCursorFields ztup1;
+// struct tuple_(%struct zRlpFieldRef, %struct zRlpCursor)
+struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 {
+  struct zRlpFieldRef ztup0;
+  struct zRlpCursor ztup1;
 };
 
 // struct tuple_(%list(%struct z__sail_c_repr_fixed_bytes(20)), %list(%struct zStorageKey), %u64, %u64)
@@ -2380,53 +2356,35 @@ uint64_t zrlp_uint64_append(uint64_t, uint64_t, uint64_t);
 
 uint64_t zrlp_uint64_width(struct zByteSliceFields, uint64_t);
 
-uint64_t zrlp_ref_be_length(struct zByteSliceFields, uint64_t, uint64_t, uint64_t);
-
 bool zrlp_bytes_equal_at(zz5listz8z5bv8z9, struct zByteSliceFields, uint64_t);
 
-struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 zrlp_ref_hdr(struct zByteSliceFields, uint64_t, uint64_t);
+struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 zrlp_ref_hdr(struct zByteSliceFields);
 
-struct zRlpFieldRefFields zrlp_field_ref(struct zByteSliceFields, bool, uint64_t, uint64_t, uint64_t, uint64_t);
+struct zRlpCursor zrlp_ref_cursor(struct zRlpFieldRef);
 
-struct zRlpCursorFields zrlp_cursor(struct zByteSliceFields, uint64_t, uint64_t, bool);
+bool zrlp_cursor_empty(struct zRlpCursor);
 
-struct zRlpCursorFields zrlp_invalid_cursor(struct zByteSliceFields);
+struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 zrlp_cursor_pop(struct zRlpCursor);
 
-struct zRlpCursorFields zrlp_node_cursor(struct zByteSliceFields);
+unit zrlp_cursor_expect_end(struct zRlpCursor);
 
-struct zRlpCursorFields zrlp_ref_cursor(struct zRlpFieldRefFields);
+struct zRlpFieldRef zrlp_single_ref(struct zByteSliceFields);
 
-bool zrlp_cursor_empty(struct zRlpCursorFields);
+struct zRlpCursor zrlp_node_cursor(struct zByteSliceFields);
 
-struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 zrlp_cursor_pop(struct zRlpCursorFields);
+struct zByteSliceFields zrlp_ref_content(struct zRlpFieldRef);
 
-unit zrlp_cursor_expect_end(struct zRlpCursorFields);
+bool zrlp_ref_framing_canonical(struct zRlpFieldRef);
 
-struct zRlpFieldRefFields zrlp_single_ref(struct zByteSliceFields);
+bool zrlp_ref_bytes_canonical(struct zRlpFieldRef);
 
-struct zByteSliceFields zrlp_ref_content(struct zRlpFieldRefFields);
+bool zrlp_ref_uint_canonical(struct zRlpFieldRef);
 
-struct zByteSliceFields zrlp_ref_full(struct zRlpFieldRefFields);
+sail_u256 zrlp_ref_word(struct zRlpFieldRef);
 
-bool zrlp_ref_framing_canonical(struct zRlpFieldRefFields);
+sail_u256 zrlp_ref_uint_word(struct zRlpFieldRef);
 
-bool zrlp_ref_bytes_canonical(struct zRlpFieldRefFields);
-
-bool zrlp_ref_uint_canonical(struct zRlpFieldRefFields);
-
-sail_u256 zrlp_ref_word(struct zRlpFieldRefFields);
-
-sail_u256 zrlp_ref_uint_word(struct zRlpFieldRefFields);
-
-uint64_t zrlp_ref_uint64(struct zRlpFieldRefFields);
-
-uint64_t zrlp_ref_account_nonce(struct zRlpFieldRefFields);
-
-uint64_t zrlp_ref_blob_gas_used(struct zRlpFieldRefFields);
-
-uint64_t zrlp_ref_excess_blob_gas(struct zRlpFieldRefFields);
-
-uint64_t zrlp_ref_chain_identifier(struct zRlpFieldRefFields);
+uint64_t zrlp_ref_uint64(struct zRlpFieldRef);
 
 sail_fixed_bytes_20 zcreate_address(sail_fixed_bytes_20, uint64_t);
 
@@ -2456,11 +2414,11 @@ void create_letbind_92(void);
 void kill_letbind_92(void);
 
 
-void zdecode_access_list_keys(struct zAccessListDecode *rop, struct zRlpCursorFields, sail_fixed_bytes_20, struct zAccessListDecode);
+void zdecode_access_list_keys(struct zAccessListDecode *rop, struct zRlpCursor, sail_fixed_bytes_20, struct zAccessListDecode);
 
-void zdecode_access_list_entries(struct zAccessListDecode *rop, struct zRlpCursorFields);
+void zdecode_access_list_entries(struct zAccessListDecode *rop, struct zRlpCursor);
 
-void zdecode_access_list(struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 *rop, struct zRlpFieldRefFields);
+void zdecode_access_list(struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 *rop, struct zRlpFieldRef);
 
 void create_letbind_93(void);
 void kill_letbind_93(void);
@@ -2470,23 +2428,33 @@ void create_letbind_94(void);
 void kill_letbind_94(void);
 
 
-uint64_t zdecode_blob_hash_items(struct zRlpCursorFields, uint64_t);
+uint64_t zdecode_blob_hash_items(struct zRlpCursor, uint64_t);
 
-struct zBlobHashes zdecode_blob_hashes(struct zRlpFieldRefFields);
+struct zBlobHashes zdecode_blob_hashes(struct zRlpFieldRef);
 
 void create_letbind_95(void);
 void kill_letbind_95(void);
 
 
-void zdecode_auth_tuples(struct zAuthorizzationDecode *rop, struct zRlpCursorFields);
+void zdecode_auth_tuples(struct zAuthorizzationDecode *rop, struct zRlpCursor);
 
-void zdecode_auth_list(struct ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9 *rop, struct zRlpFieldRefFields);
+void zdecode_auth_list(struct ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9 *rop, struct zRlpFieldRef);
 
-struct zByteSliceFields ztx_input_span(struct zRlpFieldRefFields);
+struct zByteSliceFields ztx_input_span(struct zRlpFieldRef);
 
-struct zByteSliceFields ztx_sig_span(struct zRlpFieldRefFields, struct zRlpFieldRefFields);
+struct zByteSliceFields ztx_sig_span(struct zRlpFieldRef, struct zRlpFieldRef);
 
-uint64_t zrlp_ref_gas(struct zRlpFieldRefFields, enum zFork);
+uint64_t zrlp_ref_gas(struct zRlpFieldRef, enum zFork);
+
+void zdecode_legacy_tx(struct zTransaction *rop, struct zByteSliceFields, struct zByteSliceFields, enum zFork, sail_fixed_bytes_20, struct zRlpCursor);
+
+void zdecode_access_list_tx(struct zTransaction *rop, struct zByteSliceFields, struct zByteSliceFields, enum zFork, sail_fixed_bytes_20, struct zRlpCursor);
+
+void zdecode_fee_market_tx(struct zTransaction *rop, struct zByteSliceFields, struct zByteSliceFields, enum zFork, sail_fixed_bytes_20, struct zRlpCursor);
+
+void zdecode_blob_tx(struct zTransaction *rop, struct zByteSliceFields, struct zByteSliceFields, enum zFork, sail_fixed_bytes_20, struct zRlpCursor);
+
+void zdecode_set_code_tx(struct zTransaction *rop, struct zByteSliceFields, struct zByteSliceFields, enum zFork, sail_fixed_bytes_20, struct zRlpCursor);
 
 void zrlp_decode_tx(struct zTransaction *rop, struct zByteSliceFields, struct zByteSliceFields, enum zFork);
 
@@ -2526,25 +2494,27 @@ struct zTriePath zpath_from_hash(sail_fixed_bytes_32);
 
 struct zByteSliceFields znode_db_lookup(sail_fixed_bytes_32);
 
-struct zRlpFieldRefFields zbranch_children_get(zz5vecz8z5structz0zzRlpFieldRefFieldsz9, uint64_t);
+void zbranch_refs_get(struct zNodeRef *rop, zz5vecz8z5unionz0zzNodeRefz9, uint64_t);
 
 void create_letbind_96(void);
 void kill_letbind_96(void);
 
 
-struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 zhex_prefix_decode_ref(struct zRlpFieldRefFields);
+struct zInlineNode zinline_node_from_slice(struct zByteSliceFields);
 
-uint64_t zpath_len(struct zTriePath);
+void zfield_to_ref(struct zNodeRef *rop, struct zRlpFieldRef);
 
-void zdecode_trie_node(struct zTrieNode *rop, struct zByteSliceFields);
+void zdecode_branch_node(struct zTrieNode *rop, struct zRlpCursor, uint64_t, zz5vecz8z5unionz0zzNodeRefz9);
 
 void create_letbind_97(void);
 void kill_letbind_97(void);
 
 
-struct zInlineNode zinline_node_from_slice(struct zByteSliceFields);
+struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 zhex_prefix_decode_ref(struct zRlpFieldRef);
 
-void zfield_to_ref(struct zNodeRef *rop, struct zRlpFieldRefFields);
+uint64_t zpath_len(struct zTriePath);
+
+void zdecode_trie_node(struct zTrieNode *rop, struct zByteSliceFields);
 
 uint64_t zpath_byte_index(uint64_t);
 
@@ -3994,7 +3964,7 @@ void kill_letbind_286(void);
 
 uint64_t znext_parent_header_field(uint64_t);
 
-struct zParentHeaderFields zdecode_parent_header_fields(struct zRlpCursorFields, uint64_t, struct zParentHeaderFields);
+struct zParentHeaderFields zdecode_parent_header_fields(struct zRlpCursor, uint64_t, struct zParentHeaderFields);
 
 struct zWitnessHeaderIndex zindex_witness_header_cursor(struct zWitnessHeaderIndex);
 

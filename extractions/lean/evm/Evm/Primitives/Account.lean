@@ -48,12 +48,8 @@ enumeration). Pure
 data — no registers, no externs. -/
 
 def undefined_AccountInfo (_ : Unit) : SailM AccountInfo := do
-  (pure { nonce := ← do
-              let publicField ← (undefined_range 0 ((2 ^i 64) - 1))
-              pure (⟨publicField⟩),
-          balance := ← do
-              let publicField ← (undefined_range 0 ((2 ^i 256) - 1))
-              pure (⟨publicField⟩),
+  (pure { nonce := ← (undefined_range 0 ((2 ^i 64) - 1)),
+          balance := ← (undefined_range 0 ((2 ^i 256) - 1)),
           code_hash := ← (undefined_vector 32 (← (undefined_bitvector 8))),
           storage_root := ← (undefined_vector 32 (← (undefined_bitvector 8))) })
 
@@ -65,18 +61,12 @@ def undefined_Account (_ : Unit) : SailM Account := do
           selfdestructed := ← (undefined_bool ()) })
 
 def undefined_StorageValue (_ : Unit) : SailM StorageValue := do
-  (pure { curr := ← do
-              let publicField ← (undefined_range 0 ((2 ^i 256) - 1))
-              pure (⟨publicField⟩),
-          orig := ← do
-              let publicField ← (undefined_range 0 ((2 ^i 256) - 1))
-              pure (⟨publicField⟩) })
+  (pure { curr := ← (undefined_range 0 ((2 ^i 256) - 1)),
+          orig := ← (undefined_range 0 ((2 ^i 256) - 1)) })
 
 def undefined_StorageKey (_ : Unit) : SailM StorageKey := do
   (pure { addr := ← (undefined_vector 20 (← (undefined_bitvector 8))),
-          slot := ← do
-              let publicField ← (undefined_range 0 ((2 ^i 256) - 1))
-              pure (⟨publicField⟩) })
+          slot := ← (undefined_range 0 ((2 ^i 256) - 1)) })
 
 def undefined_StorageEntry (_ : Unit) : SailM StorageEntry := do
   (pure { key := ← (undefined_StorageKey ()),
@@ -93,8 +83,8 @@ def undefined_AcctEntry (_ : Unit) : SailM AcctEntry := do
 /-- The empty account tuple: zero nonce and balance, `KECCAK_EMPTY` code
 hash, empty-trie storage root (YP §4.1). -/
 def EMPTY_ACCOUNT_INFO : AccountInfo :=
-  { nonce := ⟨0⟩,
-    balance := ⟨(ZERO_WORD).value⟩,
+  { nonce := 0,
+    balance := ZERO_WORD,
     code_hash := KECCAK_EMPTY,
     storage_root := EMPTY_TRIE_ROOT }
 

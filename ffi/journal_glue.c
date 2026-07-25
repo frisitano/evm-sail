@@ -1,5 +1,5 @@
-/* Generated account/storage glue. This is compiled against the generated
- * model header named by EVMSAIL_MODEL_H, so structured Sail layouts are never
+/* Generated state-store glue. This is compiled against the generated model
+ * header named by EVMSAIL_MODEL_H, so structured Sail layouts are never
  * mirrored by hand in the scalar C stores. Call-frame journaling is private
  * to kernel_state.c and no generated journal value crosses this boundary. */
 #include EVMSAIL_MODEL_H
@@ -180,5 +180,93 @@ void acct_tx_pop_ascending(struct zoptionzIRAcctEntryzK *out, unit u) {
   } else {
     out->kind = Kind_zNonezIRAcctEntryzK;
     out->variants.zNonezIRAcctEntryzK = UNIT;
+  }
+}
+
+void bal_account_next(
+    struct zoptionzIR__sail_c_repr_fixed_byteszIC20zKzK *out, unit u) {
+  (void)u;
+  sail_address address;
+  if (bal_account_next_probe(&address)) {
+    out->kind = Kind_zSomezIR__sail_c_repr_fixed_byteszIC20zKzK;
+    out->variants.zSomezIR__sail_c_repr_fixed_byteszIC20zKzK = address;
+  } else {
+    out->kind = Kind_zNonezIR__sail_c_repr_fixed_byteszIC20zKzK;
+    out->variants.zNonezIR__sail_c_repr_fixed_byteszIC20zKzK = UNIT;
+  }
+}
+
+void bal_storage_slot_next(struct zoptionzIRBalStorageSlotEntryzK *out,
+                           unit u) {
+  (void)u;
+  struct zBalStorageSlotEntry *entry =
+      &out->variants.zSomezIRBalStorageSlotEntryzK;
+  struct zBalStorageChangeEntry *change =
+      &entry->zchange.variants.zSomezIRBalStorageChangeEntryzK;
+  uint64_t has_change;
+  if (bal_storage_slot_next_probe(&entry->zslot, &has_change, &change->zindex,
+                                  &change->zvalue)) {
+    if (has_change) {
+      entry->zchange.kind = Kind_zSomezIRBalStorageChangeEntryzK;
+    } else {
+      entry->zchange.kind = Kind_zNonezIRBalStorageChangeEntryzK;
+      entry->zchange.variants.zNonezIRBalStorageChangeEntryzK = UNIT;
+    }
+    out->kind = Kind_zSomezIRBalStorageSlotEntryzK;
+  } else {
+    out->kind = Kind_zNonezIRBalStorageSlotEntryzK;
+    out->variants.zNonezIRBalStorageSlotEntryzK = UNIT;
+  }
+}
+
+void bal_storage_change_next(
+    struct zoptionzIRBalStorageChangeEntryzK *out, unit u) {
+  (void)u;
+  struct zBalStorageChangeEntry *entry =
+      &out->variants.zSomezIRBalStorageChangeEntryzK;
+  if (bal_storage_change_next_probe(&entry->zindex, &entry->zvalue)) {
+    out->kind = Kind_zSomezIRBalStorageChangeEntryzK;
+  } else {
+    out->kind = Kind_zNonezIRBalStorageChangeEntryzK;
+    out->variants.zNonezIRBalStorageChangeEntryzK = UNIT;
+  }
+}
+
+void bal_balance_change_next(
+    struct zoptionzIRBalBalanceChangeEntryzK *out, unit u) {
+  (void)u;
+  struct zBalBalanceChangeEntry *entry =
+      &out->variants.zSomezIRBalBalanceChangeEntryzK;
+  if (bal_balance_change_next_probe(&entry->zindex, &entry->zvalue)) {
+    out->kind = Kind_zSomezIRBalBalanceChangeEntryzK;
+  } else {
+    out->kind = Kind_zNonezIRBalBalanceChangeEntryzK;
+    out->variants.zNonezIRBalBalanceChangeEntryzK = UNIT;
+  }
+}
+
+void bal_nonce_change_next(struct zoptionzIRBalNonceChangeEntryzK *out,
+                           unit u) {
+  (void)u;
+  struct zBalNonceChangeEntry *entry =
+      &out->variants.zSomezIRBalNonceChangeEntryzK;
+  if (bal_nonce_change_next_probe(&entry->zindex, &entry->zvalue)) {
+    out->kind = Kind_zSomezIRBalNonceChangeEntryzK;
+  } else {
+    out->kind = Kind_zNonezIRBalNonceChangeEntryzK;
+    out->variants.zNonezIRBalNonceChangeEntryzK = UNIT;
+  }
+}
+
+void bal_code_change_next(struct zoptionzIRBalCodeChangeEntryzK *out,
+                          unit u) {
+  (void)u;
+  struct zBalCodeChangeEntry *entry =
+      &out->variants.zSomezIRBalCodeChangeEntryzK;
+  if (bal_code_change_next_probe(&entry->zindex, &entry->zcode_hash)) {
+    out->kind = Kind_zSomezIRBalCodeChangeEntryzK;
+  } else {
+    out->kind = Kind_zNonezIRBalCodeChangeEntryzK;
+    out->variants.zNonezIRBalCodeChangeEntryzK = UNIT;
   }
 }

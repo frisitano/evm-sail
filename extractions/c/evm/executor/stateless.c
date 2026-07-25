@@ -4,7 +4,7 @@
 #endif
 unit zvalidate_executed_block(struct zBlock zblock, struct zStatelessInputRef zinput_ref, struct zBlockExecutionResult zresult)
 {
-  unit z8zE676;
+  unit z8zE673;
   struct zBlockHeader zheader;
   zheader = zblock.zheader;
   bool z2zE278;
@@ -175,7 +175,7 @@ unit zvalidate_executed_block(struct zBlock zblock, struct zStatelessInputRef zi
       have_exception = true;
       COPY(sail_string)(throw_location, "sail/executor/stateless.sail:40.12-40.56");
       KILL(zexception)(&z2zE314);
-      goto end_block_exception_1334;
+      goto end_block_exception_1331;
       /* unreachable after throw */
       KILL(zexception)(&z2zE314);
     } else {  z3zE770 = UNIT;  }
@@ -197,7 +197,7 @@ unit zvalidate_executed_block(struct zBlock zblock, struct zStatelessInputRef zi
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/executor/stateless.sail:44.8-44.42");
     KILL(zexception)(&z2zE318);
-    goto end_block_exception_1334;
+    goto end_block_exception_1331;
     /* unreachable after throw */
     KILL(zexception)(&z2zE318);
   } else {  z3zE769 = UNIT;  }
@@ -224,7 +224,7 @@ unit zvalidate_executed_block(struct zBlock zblock, struct zStatelessInputRef zi
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/executor/stateless.sail:47.8-47.46");
     KILL(zexception)(&z2zE323);
-    goto end_block_exception_1334;
+    goto end_block_exception_1331;
     /* unreachable after throw */
     KILL(zexception)(&z2zE323);
   } else {  z3zE768 = UNIT;  }
@@ -233,7 +233,7 @@ unit zvalidate_executed_block(struct zBlock zblock, struct zStatelessInputRef zi
   sail_fixed_bytes_32 zpoststate;
   {
     zpoststate = zcompute_state_root(UNIT);
-    if (have_exception) {  goto end_block_exception_1334;  }
+    if (have_exception) {  goto end_block_exception_1331;  }
   }
   unit z3zE783;
   z3zE783 = zcycle_scope_end(zSCOPE_STATE_ROOT);
@@ -252,7 +252,7 @@ unit zvalidate_executed_block(struct zBlock zblock, struct zStatelessInputRef zi
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/executor/stateless.sail:53.8-53.44");
     KILL(zexception)(&z2zE326);
-    goto end_block_exception_1334;
+    goto end_block_exception_1331;
     /* unreachable after throw */
     KILL(zexception)(&z2zE326);
   } else {  z3zE782 = UNIT;  }
@@ -273,7 +273,7 @@ unit zvalidate_executed_block(struct zBlock zblock, struct zStatelessInputRef zi
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/executor/stateless.sail:56.8-56.47");
     KILL(zexception)(&z2zE330);
-    goto end_block_exception_1334;
+    goto end_block_exception_1331;
     /* unreachable after throw */
     KILL(zexception)(&z2zE330);
   } else {  z3zE781 = UNIT;  }
@@ -298,7 +298,7 @@ unit zvalidate_executed_block(struct zBlock zblock, struct zStatelessInputRef zi
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/executor/stateless.sail:59.8-59.44");
     KILL(zexception)(&z2zE335);
-    goto end_block_exception_1334;
+    goto end_block_exception_1331;
     /* unreachable after throw */
     KILL(zexception)(&z2zE335);
   } else {  z3zE780 = UNIT;  }
@@ -310,7 +310,7 @@ unit zvalidate_executed_block(struct zBlock zblock, struct zStatelessInputRef zi
     struct zEncodedBlockAccessList zblock_access_list;
     {
       zblock_access_list = zencode_block_access_list(UNIT);
-      if (have_exception) {  goto end_block_exception_1334;  }
+      if (have_exception) {  goto end_block_exception_1331;  }
     }
     unit z3zE785;
     z3zE785 = zcycle_scope_end(zSCOPE_BLOCK_ACCESS_LIST);
@@ -335,7 +335,7 @@ unit zvalidate_executed_block(struct zBlock zblock, struct zStatelessInputRef zi
       have_exception = true;
       COPY(sail_string)(throw_location, "sail/executor/stateless.sail:67.12-67.55");
       KILL(zexception)(&z2zE339);
-      goto end_block_exception_1334;
+      goto end_block_exception_1331;
       /* unreachable after throw */
       KILL(zexception)(&z2zE339);
     } else {  z3zE786 = UNIT;  }
@@ -375,19 +375,19 @@ unit zvalidate_executed_block(struct zBlock zblock, struct zStatelessInputRef zi
       have_exception = true;
       COPY(sail_string)(throw_location, "sail/executor/stateless.sail:70.12-70.54");
       KILL(zexception)(&z2zE347);
-      goto end_block_exception_1334;
+      goto end_block_exception_1331;
       /* unreachable after throw */
       KILL(zexception)(&z2zE347);
-    } else {  z8zE676 = UNIT;  }
-  } else {  z8zE676 = UNIT;  }
-end_function_1333: ;
-  return z8zE676;
-end_block_exception_1334: ;
+    } else {  z8zE673 = UNIT;  }
+  } else {  z8zE673 = UNIT;  }
+end_function_1330: ;
+  return z8zE673;
+end_block_exception_1331: ;
 
   return UNIT;
 }
 
-void zverify_stateless_payload(struct zStatelessValidationResult *z8zE677, struct zStatelessInputRef zinput_ref)
+void zverify_stateless_payload(struct zStatelessValidationResult *z8zE674, struct zStatelessInputRef zinput_ref)
 {
   uint64_t zactive_scope;
   zactive_scope = zSCOPE_DECODE_INPUT;
@@ -401,7 +401,7 @@ void zverify_stateless_payload(struct zStatelessValidationResult *z8zE677, struc
     struct zStatelessInput zinput;
     {
       zinput = zdecode_stateless_input(zinput_ref);
-      if (have_exception) {  goto end_block_exception_1331;  }
+      if (have_exception) {  goto end_block_exception_1328;  }
     }
     struct zProtocolProfile z2zE272;
     z2zE272 = zinput_ref.zprotocol;
@@ -418,7 +418,7 @@ void zverify_stateless_payload(struct zStatelessValidationResult *z8zE677, struc
     struct zWitnessContext zwitness;
     {
       zwitness = zindex_execution_witness(zinput_ref);
-      if (have_exception) {  goto end_block_exception_1331;  }
+      if (have_exception) {  goto end_block_exception_1328;  }
     }
     unit z3zE756;
     z3zE756 = zcycle_scope_end(zactive_scope);
@@ -430,7 +430,7 @@ void zverify_stateless_payload(struct zStatelessValidationResult *z8zE677, struc
     unit z3zE753;
     {
       z3zE753 = zvalidate_execution_payload(zinput, zinput_ref, zwitness);
-      if (have_exception) {  goto end_block_exception_1331;  }
+      if (have_exception) {  goto end_block_exception_1328;  }
     }
     unit z3zE752;
     z3zE752 = zcycle_scope_end(zactive_scope);
@@ -459,7 +459,7 @@ void zverify_stateless_payload(struct zStatelessValidationResult *z8zE677, struc
       }
       {
         zresult = zexecute_block_body(z2zE274, z2zE275, z2zE276);
-        if (have_exception) {  goto end_block_exception_1331;  }
+        if (have_exception) {  goto end_block_exception_1328;  }
       }
     }
     unit z3zE761;
@@ -472,17 +472,17 @@ void zverify_stateless_payload(struct zStatelessValidationResult *z8zE677, struc
     unit z3zE758;
     {
       z3zE758 = zvalidate_executed_block(zblock, zinput_ref, zresult);
-      if (have_exception) {  goto end_block_exception_1331;  }
+      if (have_exception) {  goto end_block_exception_1328;  }
     }
     unit z3zE757;
     z3zE757 = zcycle_scope_end(zactive_scope);
     zStatelessPayloadValid(&z3zE762, UNIT);
-  end_block_exception_1331: ;
+  end_block_exception_1328: ;
   }
-  if (!(have_exception)) goto post_exception_handlers_1328;
+  if (!(have_exception)) goto post_exception_handlers_1325;
   have_exception = false;
   {
-    if ((*current_exception).kind != Kind_zInvalidBlock) goto try_1329;
+    if ((*current_exception).kind != Kind_zInvalidBlock) goto try_1326;
     enum zBlockError zreason;
     zreason = (*current_exception).variants.zInvalidBlock;
     unit z3zE763;
@@ -491,16 +491,16 @@ void zverify_stateless_payload(struct zStatelessValidationResult *z8zE677, struc
     z3zE764.zreason = zreason;
     z3zE764.zscope = zactive_scope;
     zStatelessPayloadInvalid(&z3zE762, z3zE764);
-    goto post_exception_handlers_1328;
+    goto post_exception_handlers_1325;
   }
-try_1329: ;
+try_1326: ;
   have_exception = true;
-post_exception_handlers_1328: ;
-  COPY(zStatelessValidationResult)((*(&z8zE677)), z3zE762);
-end_function_1330: ;
-  goto end_function_4016;
-end_block_exception_1332: ;
-  goto end_function_4016;
-end_function_4016: ;
+post_exception_handlers_1325: ;
+  COPY(zStatelessValidationResult)((*(&z8zE674)), z3zE762);
+end_function_1327: ;
+  goto end_function_3997;
+end_block_exception_1329: ;
+  goto end_function_3997;
+end_function_3997: ;
 }
 

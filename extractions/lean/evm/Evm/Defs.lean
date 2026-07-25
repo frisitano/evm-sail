@@ -33,8 +33,6 @@ instance {α : Type} {β : α → Type} [Repr α] [∀ a, Repr (β a)] :
 
 abbrev bit := (BitVec 1)
 
-abbrev bits (k_n : Int) := (BitVec k_n)
-
 /-- The supported protocol forks, in activation order. Blob-parameter-only
 schema forks collapse to their base execution fork in
 [protocol_profile][]. -/
@@ -42,16 +40,7 @@ inductive Fork where | Frontier | Homestead | Byzantium | Constantinople | Istan
   deriving BEq, Inhabited, Repr
   open Fork
 
-/-- The ordinal of a fork in this model's thirteen-member [Fork][type-Fork]
-enumeration. This is a model structural bound, not a wire constraint. -/
-structure protocol_fork_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace protocol_fork_index
-def Valid (x : protocol_fork_index) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 12
-end protocol_fork_index
+abbrev bits (k_n : Int) := (BitVec k_n)
 
 /- Type quantifiers: k_a : Type -/
 inductive option (k_a : Type) where
@@ -66,14 +55,7 @@ abbrev byte := (BitVec 8)
 /-- The EVM 256-bit machine word (YP §9.1).  A transparent range keeps the
 mathematical subtype relation visible: narrower non-negative ranges can
 be passed as words without a model-level conversion. -/
-structure word where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace word
-def Valid (x : word) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 256 - 1)
-end word
+abbrev word := Nat
 
 /-- A 20-byte account address (YP §4.1). -/
 abbrev address := (Vector byte 20)
@@ -94,27 +76,13 @@ structure AddressResult where
 abbrev word_modulus : Int := (2 ^ 256)
 
 /-- A bit count within one EVM word. -/
-structure word_bit_count where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace word_bit_count
-def Valid (x : word_bit_count) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 256
-end word_bit_count
+abbrev word_bit_count := Nat
 
 /-- The largest account nonce admitted by EIP-2681. -/
 abbrev account_nonce_bound : Int := (2 ^ 64 - 1)
 
 /-- An account transaction-count nonce (EIP-2681). -/
-structure account_nonce where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace account_nonce
-def Valid (x : account_nonce) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 64 - 1)
-end account_nonce
+abbrev account_nonce := Nat
 
 /-- An execution block number. The Yellow Paper header scalar and EIP-1559
 arithmetic impose no fixed-width semantic bound; the stateless-input SSZ
@@ -142,377 +110,138 @@ abbrev blob_target_count_bound : Int := 14
 abbrev gas_per_blob_value : Int := (2 ^ 17)
 
 /-- A blob count in any block schedule supported by this model. -/
-structure blob_count where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace blob_count
-def Valid (x : blob_count) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 21
-end blob_count
+abbrev blob_count := Nat
 
 /-- A target blob count in a supported block schedule. -/
-structure blob_target_count where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace blob_target_count
-def Valid (x : blob_target_count) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 14
-end blob_target_count
+abbrev blob_target_count := Nat
 
 /-- A blob count carried by one EIP-4844 transaction. -/
-structure transaction_blob_count where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace transaction_blob_count
-def Valid (x : transaction_blob_count) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 9
-end transaction_blob_count
+abbrev transaction_blob_count := Nat
 
 /-- Blob gas used by one supported block. EIP-4844 requires this to be a
 multiple of `GAS_PER_BLOB`; the fork-specific maximum is checked against
 the active schedule. -/
-structure blob_gas_used where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace blob_gas_used
-def Valid (x : blob_gas_used) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (21 * 2 ^ 17)
-end blob_gas_used
+abbrev blob_gas_used := Nat
 
 /-- Blob gas contributed by one transaction. -/
-structure transaction_blob_gas where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace transaction_blob_gas
-def Valid (x : transaction_blob_gas) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (9 * 2 ^ 17)
-end transaction_blob_gas
+abbrev transaction_blob_gas := Nat
 
 /-- The accumulating EIP-4844 `excess_blob_gas` header field, encoded as
 `uint64` and not bounded by a single block's blob count. -/
 abbrev excess_blob_gas_bound : Int := (2 ^ 64 - 1)
 
 /-- An accumulated excess-blob-gas value carried by a block header. -/
-structure excess_blob_gas where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace excess_blob_gas
-def Valid (x : excess_blob_gas) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 64 - 1)
-end excess_blob_gas
+abbrev excess_blob_gas := Nat
 
 /-- Largest fee-update fraction in the supported blob schedules: BPO2's
 `BLOB_BASE_FEE_UPDATE_FRACTION = 11684671` (EIP-8135). -/
 abbrev blob_fee_update_fraction_bound : Int := 11684671
 
 /-- The positive denominator governing excess-blob-gas fee adjustment. -/
-structure blob_fee_update_fraction where
-  value : Nat
-  deriving Inhabited, BEq, Repr
+abbrev blob_fee_update_fraction := Nat
 
-namespace blob_fee_update_fraction
-def Valid (x : blob_fee_update_fraction) : Prop :=
-  1 ≤ x.value ∧ x.value ≤ 11684671
-end blob_fee_update_fraction
+/-- Largest chain identifier admitted by the typed-transaction wire decoder. -/
+abbrev chain_identifier_bound : Int := (2 ^ 64 - 1)
 
-/-- An EIP-155 chain identifier. EIP-155 defines an integer domain without a
-fixed-width consensus bound; the stateless-input ABI independently uses
-an SSZ `uint64`. -/
+/-- A chain identifier. Typed-transaction chain identifiers and the stateless
+chain configuration are decoded as unsigned 64-bit integers. -/
 abbrev chain_identifier := Nat
 
-/-- A beacon-chain slot number, explicitly a `uint64` in EIP-7843. -/
-structure slot_number where
-  value : Nat
-  deriving Inhabited, BEq, Repr
+/-- The ordinal of a fork in this model's thirteen-member [Fork][type-Fork]
+enumeration. This is a model structural bound, not a wire constraint. -/
+abbrev protocol_fork_index := Nat
 
-namespace slot_number
-def Valid (x : slot_number) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 64 - 1)
-end slot_number
+/-- A beacon-chain slot number, explicitly a `uint64` in EIP-7843. -/
+abbrev slot_number := Nat
 
 /-- An EIP-4895 withdrawal index, encoded as SSZ `uint64`. -/
-structure withdrawal_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace withdrawal_index
-def Valid (x : withdrawal_index) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 64 - 1)
-end withdrawal_index
+abbrev withdrawal_index := Nat
 
 /-- An EIP-4895 validator index, encoded as SSZ `uint64`. -/
-structure validator_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace validator_index
-def Valid (x : validator_index) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 64 - 1)
-end validator_index
+abbrev validator_index := Nat
 
 /-- An EIP-4895 withdrawal amount in gwei, encoded as SSZ `uint64`. -/
-structure withdrawal_amount where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace withdrawal_amount
-def Valid (x : withdrawal_amount) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 64 - 1)
-end withdrawal_amount
+abbrev withdrawal_amount := Nat
 
 /-- An eight-byte unsigned integer read from the stateless-input SSZ schema.
 This is a transport type; decoders widen or validate it into the semantic
 field type at the container boundary. -/
-structure ssz_uint where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace ssz_uint
-def Valid (x : ssz_uint) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 64 - 1)
-end ssz_uint
+abbrev ssz_uint := Nat
 
 /-- A container-relative offset carried by an SSZ `uint32`. -/
-structure ssz_offset where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace ssz_offset
-def Valid (x : ssz_offset) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 32 - 1)
-end ssz_offset
+abbrev ssz_offset := Nat
 
 /-- An index into a table of four-byte SSZ offsets. -/
-structure ssz_offset_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace ssz_offset_index
-def Valid (x : ssz_offset_index) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 30 - 1)
-end ssz_offset_index
+abbrev ssz_offset_index := Nat
 
 /-- The number of entries in a host-backed collection without a tighter
 schema-specific bound. Host tables are addressed by 64-bit ordinals in
 every executable build; protocol and structural counts use their own
 tighter singleton/range types instead. -/
-structure item_count where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace item_count
-def Valid (x : item_count) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 64 - 1)
-end item_count
+abbrev item_count := Nat
 
 /-- An index into a host-backed collection without a tighter schema bound. -/
-structure item_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace item_index
-def Valid (x : item_index) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 64 - 1)
-end item_index
+abbrev item_index := Nat
 
 /-- The nesting depth of an execution frame. -/
-structure frame_depth where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace frame_depth
-def Valid (x : frame_depth) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 1024
-end frame_depth
+abbrev frame_depth := Nat
 
 /-- The immediate-byte width of a PUSH instruction. -/
-structure push_width where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace push_width
-def Valid (x : push_width) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 32
-end push_width
+abbrev push_width := Nat
 
 /-- The number of words on an operand stack. -/
-structure operand_stack_height where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace operand_stack_height
-def Valid (x : operand_stack_height) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 1024
-end operand_stack_height
+abbrev operand_stack_height := Nat
 
 /-- A zero-based index from the top of the operand stack. -/
-structure stack_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace stack_index
-def Valid (x : stack_index) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 1023
-end stack_index
+abbrev stack_index := Nat
 
 /-- A nonzero operand-stack position used by DUP and SWAP. -/
-structure stack_operation_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace stack_operation_index
-def Valid (x : stack_operation_index) : Prop :=
-  1 ≤ x.value ∧ x.value ≤ 16
-end stack_operation_index
+abbrev stack_operation_index := Nat
 
 /-- The one-based deep-stack index decoded by EIP-8024 DUPN and SWAPN. -/
-structure deep_stack_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace deep_stack_index
-def Valid (x : deep_stack_index) : Prop :=
-  17 ≤ x.value ∧ x.value ≤ 235
-end deep_stack_index
+abbrev deep_stack_index := Nat
 
 /-- The number of indexed topics attached to one log. -/
-structure log_topic_count where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace log_topic_count
-def Valid (x : log_topic_count) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 4
-end log_topic_count
+abbrev log_topic_count := Nat
 
 /-- The parity bit used by transaction signatures. -/
-structure y_parity where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace y_parity
-def Valid (x : y_parity) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 1
-end y_parity
+abbrev y_parity := Nat
 
 /-- A depth in a 64-level binary Merkle tree. -/
-structure merkle_depth where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace merkle_depth
-def Valid (x : merkle_depth) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 64
-end merkle_depth
+abbrev merkle_depth := Nat
 
 /-- An EVM instruction byte. -/
-structure opcode where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace opcode
-def Valid (x : opcode) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 255
-end opcode
+abbrev opcode := Nat
 
 /-- The largest one-based precompile identifier admitted by the model. -/
 abbrev precompile_id_bound : Int := 256
 
 /-- The one-based identifier of a precompiled contract. -/
-structure precompile_id where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace precompile_id
-def Valid (x : precompile_id) : Prop :=
-  1 ≤ x.value ∧ x.value ≤ 256
-end precompile_id
+abbrev precompile_id := Nat
 
 /-- An active precompile identifier, or zero for an ordinary address. -/
-structure precompile_selector where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace precompile_selector
-def Valid (x : precompile_selector) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 256
-end precompile_selector
+abbrev precompile_selector := Nat
 
 /-- The round count supplied to the BLAKE2 compression precompile. -/
-structure blake2_rounds where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace blake2_rounds
-def Valid (x : blake2_rounds) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 32 - 1)
-end blake2_rounds
+abbrev blake2_rounds := Nat
 
 /-- A fixed-point discount factor used by BLS precompile pricing. -/
-structure bls_discount where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace bls_discount
-def Valid (x : bls_discount) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 16 - 1)
-end bls_discount
+abbrev bls_discount := Nat
 
 /-- A bit position in the 2048-bit log bloom. -/
-structure bloom_bit_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace bloom_bit_index
-def Valid (x : bloom_bit_index) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 2047
-end bloom_bit_index
+abbrev bloom_bit_index := Nat
 
 /-- A 64-bit word position in the log bloom. -/
-structure bloom_u64_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace bloom_u64_index
-def Valid (x : bloom_u64_index) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 31
-end bloom_u64_index
+abbrev bloom_u64_index := Nat
 
 /-- A bit position within a log-bloom u64. -/
-structure bloom_u64_bit where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace bloom_u64_bit
-def Valid (x : bloom_u64_bit) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 63
-end bloom_u64_bit
+abbrev bloom_u64_bit := Nat
 
 /-- An index into the 256 most recent ancestor block hashes. -/
-structure ancestor_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace ancestor_index
-def Valid (x : ancestor_index) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 255
-end ancestor_index
+abbrev ancestor_index := Nat
 
 /-- A small positive divisor used for exact protocol arithmetic. -/
-structure protocol_divisor where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace protocol_divisor
-def Valid (x : protocol_divisor) : Prop :=
-  1 ≤ x.value ∧ x.value ≤ 256
-end protocol_divisor
+abbrev protocol_divisor := Nat
 
 /-- Whether an offset/length pair is representable by the host. This is
 vacuous for the canonical natural-number model; optimized builds strengthen
@@ -558,7 +287,7 @@ abbrev memory_length := Nat
 def memory_valid_range (k_off : Int) (k_len : Int) : Prop := 0 ≤ k_off ∧ 0 ≤ k_len
 
 /-- The indexed fields of an EVM memory range. -/
-/- Type quantifiers: k_off : Nat, k_len : Nat, memory_valid_range(k_off, k_len) -/
+/- Type quantifiers: k_off : Nat, k_len : Nat, (memory_valid_range k_off k_len) -/
 structure MemoryRangeFields (k_off : Nat) (k_len : Nat) where
   off : Nat
   len : Nat
@@ -637,53 +366,25 @@ abbrev transaction_execution_gas_limit_value : Int := (2 ^ 24)
 
 /-- Execution gas temporarily consumed by Amsterdam state charges. EIP-8037
 draws spill only from the regular-gas pool, which is capped by EIP-7825. -/
-structure state_gas_spill where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace state_gas_spill
-def Valid (x : state_gas_spill) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 24)
-end state_gas_spill
+abbrev state_gas_spill := Nat
 
 /-- A block header's gas limit. Its SSZ execution-payload field is `uint64`;
 `GASLIMIT` widens this bounded natural into an EVM word when it pushes the
 value onto the stack (Yellow Paper equation 147). -/
-structure block_gas_limit where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace block_gas_limit
-def Valid (x : block_gas_limit) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 64 - 1)
-end block_gas_limit
+abbrev block_gas_limit := Nat
 
 /-- Gas consumed by a block. It remains an exact natural during execution and
 is subsequently checked against the word-bounded header gas limit. -/
 abbrev block_gas := Nat
 
 /-- A fixed gas-schedule value used as an opcode or transaction base cost. -/
-structure gas_constant where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace gas_constant
-def Valid (x : gas_constant) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 45000
-end gas_constant
+abbrev gas_constant := Nat
 
 /-- Absolute lifecycle bound for the signed refund accumulator. -/
 abbrev gas_refund_bound : Int := (199 * (2 ^ 64 - 1))
 
 /-- The signed transaction refund accumulator before capping. -/
-structure gas_refund where
-  value : Int
-  deriving Inhabited, BEq, Repr
-
-namespace gas_refund
-def Valid (x : gas_refund) : Prop :=
-  ((- (199 * (2 ^ 64 - 1)))) ≤ x.value ∧ x.value ≤ (199 * (2 ^ 64 - 1))
-end gas_refund
+abbrev gas_refund := Int
 
 /-- Net state gas consumed by one execution frame. A credit can make this
 negative until transaction settlement clamps the block-level value at
@@ -700,14 +401,7 @@ block-level non-negative/u64 checks. -/
 abbrev transaction_state_gas_delta := Int
 
 /-- A small positive divisor used by the gas schedule. -/
-structure gas_divisor where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace gas_divisor
-def Valid (x : gas_divisor) : Prop :=
-  1 ≤ x.value ∧ x.value ≤ 2000
-end gas_divisor
+abbrev gas_divisor := Nat
 
 /-- The regions of the host interface a [EvmByteSlice][type-EvmByteSlice] may
 reference. `StatelessInputSource` is the SSZ stateless-input envelope;
@@ -720,7 +414,7 @@ inductive ByteSource where | StatelessInputSource | EvmMemorySource | CodeSource
   open ByteSource
 
 /-- The witness-carrying fields of an unmaterialized byte range. -/
-/- Type quantifiers: k_off : Nat, k_len : Nat, source_valid_range(k_off, k_len) -/
+/- Type quantifiers: k_off : Nat, k_len : Nat, (source_valid_range k_off k_len) -/
 structure EvmByteSliceFields (k_off : Nat) (k_len : Nat) where
   source : ByteSource
   off : Nat
@@ -872,28 +566,19 @@ abbrev witness_code_length_bound : Int := (2 ^ 16)
 abbrev witness_header_length_bound : Int := (2 ^ 10)
 
 /-- Number of transactions in a schema-valid execution payload. -/
-structure transaction_count where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace transaction_count
-def Valid (x : transaction_count) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 20)
-end transaction_count
+abbrev transaction_count := Nat
 
 /-- Zero-based transaction position in a non-empty execution payload. -/
-structure transaction_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
+abbrev transaction_index := Nat
 
-namespace transaction_index
-def Valid (x : transaction_index) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 20 - 1)
-end transaction_index
+/-- EIP-7928 change position: pre-execution system calls use zero,
+transactions use their one-based position, and post-execution system calls
+use `transaction_count + 1`. -/
+abbrev block_access_index := Nat
 
 /-- A reference to an SSZ list: its byte span and schema-bounded element
 count. -/
-/- Type quantifiers: k_maximum : Nat, source_valid_length(k_maximum) -/
+/- Type quantifiers: k_maximum : Nat, (source_valid_length k_maximum) -/
 structure BoundedSszListRef (k_maximum : Nat) where
   bytes : EvmByteSlice
   count : Nat
@@ -901,7 +586,7 @@ structure BoundedSszListRef (k_maximum : Nat) where
   deriving BEq, Inhabited, Repr
 
 /-- A sequential cursor over a variable-element SSZ list. -/
-/- Type quantifiers: k_maximum : Nat, source_valid_length(k_maximum) -/
+/- Type quantifiers: k_maximum : Nat, (source_valid_length k_maximum) -/
 structure BoundedSszListCursor (k_maximum : Nat) where
   items : (BoundedSszListRef k_maximum)
   index : Nat
@@ -959,53 +644,35 @@ structure Code where
   jumpdests : JumpdestRef
   deriving BEq, Inhabited, Repr
 
+/-- The complete containment invariant for an RLP field reference. `source`
+is normalized to the complete encoded item. RLP content is its suffix, so
+the content offset is derived as `source.len - content_len`. -/
+def rlp_field_ref_valid (k_source_off : Int) (k_source_len : Int) (k_content_len : Int) : Prop :=
+  (source_valid_range k_source_off k_source_len) ∧
+  0 ≤ k_content_len ∧ k_content_len ≤ k_source_len
+
+/-- The result of popping one complete field from a cursor. In addition to
+the field's own validity, the complete encoding is non-empty and contained
+by the cursor being consumed. -/
+def rlp_cursor_pop_valid
+  (k_source_off : Int) (k_source_len : Int) (k_full_len : Int) (k_content_len : Int) : Prop :=
+  (rlp_field_ref_valid k_source_off k_full_len k_content_len) ∧
+  0 < k_full_len ∧ k_full_len ≤ k_source_len
+
 /-- The witness-carrying fields of a decoded RLP reference. Both the complete
 encoding and its content are statically contained by the source slice. -/
-/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_full_off : Nat, k_full_len : Nat, k_content_off
-  : Nat, k_content_len : Nat, source_valid_range(k_source_off, k_source_len) ∧
-  0 ≤ k_full_off ∧
-  0 ≤ k_full_len ∧
-  (k_full_off + k_full_len) ≤ k_source_len ∧
-  0 ≤ k_content_off ∧ 0 ≤ k_content_len ∧ (k_content_off + k_content_len) ≤ k_source_len -/
-structure RlpFieldRefFields
-  (k_source_off : Nat) (k_source_len : Nat) (k_full_off : Nat) (k_full_len : Nat) (k_content_off :
-  Nat) (k_content_len : Nat) where
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+structure RlpFieldRef (k_source_off : Nat) (k_source_len : Nat) (k_content_len : Nat) where
   source : (EvmByteSliceFields k_source_off k_source_len)
   is_list : Bool
-  full_off : Nat
-  full_len : Nat
-  content_off : Nat
   content_len : Nat
   deriving BEq, Inhabited, Repr
 
-/-- A decoded RLP field: its source, list/string tag, and the offsets and
-lengths of both the full encoding and its content. -/
-abbrev RlpFieldRef :=
-  (Sigma fun (k_source_off : Nat) =>
-  (Sigma fun (k_source_len : Nat) =>
-  (Sigma fun (k_full_off : Nat) =>
-  (Sigma fun (k_full_len : Nat) =>
-  (Sigma fun (k_content_off : Nat) =>
-  (Sigma fun (k_content_len : Nat) =>
-  (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len)))))))
-
-/-- The witness-carrying fields of a one-pass RLP cursor. -/
-/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_current : Nat, k_stop : Nat, source_valid_range(k_source_off, k_source_len)
-  ∧ 0 ≤ k_current ∧ k_current ≤ k_stop ∧ k_stop ≤ k_source_len -/
-structure RlpCursorFields (k_source_off : Nat) (k_source_len : Nat) (k_current : Nat) (k_stop : Nat)
-  where
-  source : (EvmByteSliceFields k_source_off k_source_len)
-  current : Nat
-  stop : Nat
-  valid : Bool
-  deriving BEq, Inhabited, Repr
-
-/-- A one-pass view over the immediate children of an RLP list. -/
-abbrev RlpCursor :=
-  (Sigma fun (k_source_off : Nat) =>
-  (Sigma fun (k_source_len : Nat) =>
-  (Sigma fun (k_current : Nat) =>
-  (Sigma fun (k_stop : Nat) => (RlpCursorFields k_source_off k_source_len k_current k_stop)))))
+/-- A one-pass RLP cursor is the unconsumed suffix of its source. Popping an
+item advances both its offset and its decreasing remaining length without
+carrying a second position field. -/
+abbrev RlpCursor (k_source_off : Nat) (k_source_len : Nat) :=
+  (EvmByteSliceFields k_source_off k_source_len)
 
 /-- A fork's blob parameters (EIP-4844/EIP-7691): target and maximum blob
 counts per block, and the base-fee update fraction. -/
@@ -1117,54 +784,19 @@ abbrev TransactionEvmByteSlice :=
   (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))
 
 /-- A collection count whose entries are encoded inside one transaction. -/
-structure transaction_item_count where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace transaction_item_count
-def Valid (x : transaction_item_count) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 30)
-end transaction_item_count
+abbrev transaction_item_count := Nat
 
 /-- A byte length contained by one SSZ transaction envelope. -/
-structure transaction_byte_length where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace transaction_byte_length
-def Valid (x : transaction_byte_length) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 30)
-end transaction_byte_length
+abbrev transaction_byte_length := Nat
 
 /-- The greatest EIP-2028 calldata charge admitted by an SSZ transaction. -/
-structure transaction_calldata_cost where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace transaction_calldata_cost
-def Valid (x : transaction_calldata_cost) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (16 * 2 ^ 30)
-end transaction_calldata_cost
+abbrev transaction_calldata_cost := Nat
 
 /-- The greatest EIP-7623 calldata floor admitted by an SSZ transaction. -/
-structure transaction_calldata_floor_cost where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace transaction_calldata_floor_cost
-def Valid (x : transaction_calldata_floor_cost) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (40 * 2 ^ 30 + 21000)
-end transaction_calldata_floor_cost
+abbrev transaction_calldata_floor_cost := Nat
 
 /-- The greatest EIP-3860 initcode charge admitted by an SSZ transaction. -/
-structure transaction_initcode_cost where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace transaction_initcode_cost
-def Valid (x : transaction_initcode_cost) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 * (transaction_length_bound + 31) / 32)
-end transaction_initcode_cost
+abbrev transaction_initcode_cost := Nat
 
 /-- A decoded transaction. Covers the EIP-2718 typed envelopes 0–4:
 legacy, EIP-2930 (access list), EIP-1559 (fee market), EIP-4844
@@ -1429,8 +1061,8 @@ def rlp_natural_increment_valid (k_value : Int) : Prop := 0 ≤ k_value
 abbrev rlp_natural_size := Nat
 
 /-- A decoded access list and the counts needed for intrinsic gas. -/
-/- Type quantifiers: k_address_bound : Nat, k_slot_bound : Nat, source_valid_length(k_address_bound)
-  ∧ source_valid_length(k_slot_bound) -/
+/- Type quantifiers: k_address_bound : Nat, k_slot_bound : Nat, (source_valid_length k_address_bound)
+  ∧ (source_valid_length k_slot_bound) -/
 structure AccessListDecode (k_address_bound : Nat) (k_slot_bound : Nat) where
   addresses : (List address)
   storage_slots : (List StorageKey)
@@ -1439,10 +1071,42 @@ structure AccessListDecode (k_address_bound : Nat) (k_slot_bound : Nat) where
   deriving BEq, Inhabited, Repr
 
 /-- A decoded EIP-7702 authorization sequence and its item count. -/
-/- Type quantifiers: k_bound : Nat, source_valid_length(k_bound) -/
+/- Type quantifiers: k_bound : Nat, (source_valid_length k_bound) -/
 structure AuthorizationDecode (k_bound : Nat) where
   authorizations : (List Authorization)
   count : Nat
+  deriving BEq, Inhabited, Repr
+
+/-- One recorded change for the selected storage slot. -/
+structure BalStorageChangeEntry where
+  index : block_access_index
+  value : word
+  deriving BEq, Inhabited, Repr
+
+/-- One storage slot in the selected account's canonical read/change union.
+`None` selects the BAL storage-read list; `Some` selects the storage-change
+list and carries the first change of the selected slot. -/
+structure BalStorageSlotEntry where
+  slot : word
+  change : (Option BalStorageChangeEntry)
+  deriving BEq, Inhabited, Repr
+
+/-- One recorded balance change in canonical host traversal order. -/
+structure BalBalanceChangeEntry where
+  index : block_access_index
+  value : word
+  deriving BEq, Inhabited, Repr
+
+/-- One recorded nonce change in canonical host traversal order. -/
+structure BalNonceChangeEntry where
+  index : block_access_index
+  value : account_nonce
+  deriving BEq, Inhabited, Repr
+
+/-- One recorded code change in canonical host traversal order. -/
+structure BalCodeChangeEntry where
+  index : block_access_index
+  code_hash : hash
   deriving BEq, Inhabited, Repr
 
 /-- The environment fields opcodes read through [k_env][]. -/
@@ -1451,14 +1115,7 @@ inductive EnvField where | F_Number | F_Timestamp | F_Coinbase | F_BaseFee | F_C
   open EnvField
 
 /-- The number of nibbles in a trie path. -/
-structure trie_path_len where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace trie_path_len
-def Valid (x : trie_path_len) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 64
-end trie_path_len
+abbrev trie_path_len := Nat
 
 /-- A trie path of at most 64 nibbles — secure state and storage keys are
 32-byte hashes, and list tries use short RLP indices. `data` is
@@ -1467,40 +1124,6 @@ structure TriePath where
   data : b256
   len : trie_path_len
   deriving BEq, Inhabited, Repr
-
-/-- The sixteen child fields of a decoded branch node. -/
-abbrev BranchChildren := (Vector RlpFieldRef 16)
-
-/-- A four-bit path element (YP Appendix D). -/
-abbrev nibble := (BitVec 4)
-
-/-- A decoded branch: sixteen child fields and the value field. -/
-structure BranchNodeData where
-  children : BranchChildren
-  value : RlpFieldRef
-  deriving BEq, Inhabited, Repr
-
-/-- A decoded extension: its shared path and child field. -/
-structure ExtensionNodeData where
-  path : TriePath
-  child : RlpFieldRef
-  deriving BEq, Inhabited, Repr
-
-/-- A decoded leaf: its remaining path and value field. -/
-structure LeafNodeData where
-  path : TriePath
-  value : RlpFieldRef
-  deriving BEq, Inhabited, Repr
-
-/-- A decoded trie node, or `InvalidNode` when the bytes are not a
-well-formed node. -/
-inductive TrieNode where
-  | LeafNode (_ : LeafNodeData)
-  | ExtensionNode (_ : ExtensionNodeData)
-  | BranchNode (_ : BranchNodeData)
-  | InvalidNode (_ : Unit)
-  deriving Inhabited, BEq, Repr
-  open TrieNode
 
 /-- A self-contained trie-node encoding shorter than 32 bytes. -/
 structure InlineNode where
@@ -1517,45 +1140,32 @@ inductive NodeRef where
   deriving Inhabited, BEq, Repr
   open NodeRef
 
-/-- A byte position in a 32-byte secure key. -/
-structure b256_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
+/-- The sixteen child references of a branch, indexed by nibble. -/
+abbrev BranchRefs := (Vector NodeRef 16)
 
-namespace b256_index
-def Valid (x : b256_index) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 31
-end b256_index
+/-- A four-bit path element (YP Appendix D). -/
+abbrev nibble := (BitVec 4)
+
+/-- A decoded trie node. Malformed node bytes throw
+`InvalidBlock(RlpDecode)`. -/
+inductive TrieNode where
+  | LeafNode (_ : (TriePath × EvmByteSlice))
+  | ExtensionNode (_ : (TriePath × NodeRef))
+  | BranchNode (_ : (BranchRefs × EvmByteSlice))
+  deriving Inhabited, BEq, Repr
+  open TrieNode
+
+/-- A byte position in a 32-byte secure key. -/
+abbrev b256_index := Nat
 
 /-- A cursor at or immediately after a position in a trie path. -/
-structure trie_path_cursor where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace trie_path_cursor
-def Valid (x : trie_path_cursor) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 64
-end trie_path_cursor
+abbrev trie_path_cursor := Nat
 
 /-- A strictly positive Taylor-series index in the fake-exponential equation. -/
-structure fake_exponential_index where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace fake_exponential_index
-def Valid (x : fake_exponential_index) : Prop :=
-  1 ≤ x.value ∧ x.value ≤ (2 ^ 64 - 1)
-end fake_exponential_index
+abbrev fake_exponential_index := Nat
 
 /-- The fractional numerator of a denominator-scaled blob-fee value. -/
-structure blob_fee_remainder where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace blob_fee_remainder
-def Valid (x : blob_fee_remainder) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (11684671 - 1)
-end blob_fee_remainder
+abbrev blob_fee_remainder := Nat
 
 /-- An exact denominator-scaled blob-fee value split into whole and remainder. -/
 structure ScaledBlobValue where
@@ -1571,7 +1181,7 @@ structure BlobProductDivMod where
 
 /-- A single memory operand coupled to the high-water mark and gas cost that
 make the range materializable. -/
-/- Type quantifiers: k_available : Nat, live_gas_valid(k_available) -/
+/- Type quantifiers: k_available : Nat, (live_gas_valid k_available) -/
 structure MemoryExpansion (k_available : Nat) where
   range : MemoryRange
   required_size : memory_length
@@ -1579,7 +1189,7 @@ structure MemoryExpansion (k_available : Nat) where
   deriving BEq, Inhabited, Repr
 
 /-- Two memory operands sharing one expansion high-water mark and gas cost. -/
-/- Type quantifiers: k_available : Nat, live_gas_valid(k_available) -/
+/- Type quantifiers: k_available : Nat, (live_gas_valid k_available) -/
 structure MemoryPairExpansion (k_available : Nat) where
   left : MemoryRange
   right : MemoryRange
@@ -1734,48 +1344,17 @@ structure AmsterdamAuthorizationState where
   deriving BEq, Inhabited, Repr
 
 /-- The maximum Amsterdam recipient-side intrinsic execution charge. -/
-structure amsterdam_recipient_cost where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace amsterdam_recipient_cost
-def Valid (x : amsterdam_recipient_cost) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 12756
-end amsterdam_recipient_cost
+abbrev amsterdam_recipient_cost := Nat
 
 /-- The depth of a branch node in a fixed 64-nibble secure key. -/
-structure trie_depth where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace trie_depth
-def Valid (x : trie_depth) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 63
-end trie_depth
+abbrev trie_depth := Nat
 
 /-- A cursor through the at-most-65 positions used by hex-evm_prefix decoding. -/
-structure hex_prefix_cursor where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace hex_prefix_cursor
-def Valid (x : hex_prefix_cursor) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 65
-end hex_prefix_cursor
-
-/-- The sixteen child references of a branch, indexed by nibble. -/
-abbrev BranchRefs := (Vector NodeRef 16)
+abbrev hex_prefix_cursor := Nat
 
 /-- The RLP payload of a branch contains sixteen child references of at most
 33 bytes and one empty value byte. -/
-structure branch_content_length where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace branch_content_length
-def Valid (x : branch_content_length) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 529
-end branch_content_length
+abbrev branch_content_length := Nat
 
 /-- A pending change at a trie key: a put of new leaf bytes, or a
 delete. -/
@@ -1850,14 +1429,14 @@ def rlp_index_valid_maximum (k_maximum : Int) : Prop :=
 
 /-- The item count and next canonical-key position of a schema-bounded indexed
 trie. Both retain the enclosing collection's semantic maximum. -/
-/- Type quantifiers: k_maximum : Nat, rlp_index_valid_maximum(k_maximum) -/
+/- Type quantifiers: k_maximum : Nat, (rlp_index_valid_maximum k_maximum) -/
 structure RlpIndexCursor (k_maximum : Nat) where
   count : Nat
   position : Nat
   deriving BEq, Inhabited, Repr
 
 /-- One numeric index, its trie key, and the following key when present. -/
-/- Type quantifiers: k_maximum : Nat, rlp_index_valid_maximum(k_maximum) -/
+/- Type quantifiers: k_maximum : Nat, (rlp_index_valid_maximum k_maximum) -/
 structure RlpIndexItem (k_maximum : Nat) where
   index : Nat
   key : TriePath
@@ -1865,14 +1444,7 @@ structure RlpIndexItem (k_maximum : Nat) where
   deriving BEq, Inhabited, Repr
 
 /-- The minimal nonzero byte width of a supported RLP list index. -/
-structure rlp_index_byte_width where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace rlp_index_byte_width
-def Valid (x : rlp_index_byte_width) : Prop :=
-  1 ≤ x.value ∧ x.value ≤ 8
-end rlp_index_byte_width
+abbrev rlp_index_byte_width := Nat
 
 /-- The root of the trie anchored at `base_root` after applying the
 ordered update stream. This is the only public root computation:
@@ -1940,14 +1512,7 @@ structure ParentHeaderFields where
   deriving BEq, Inhabited, Repr
 
 /-- A bounded parent-header field position, including the unused-field sentinel. -/
-structure parent_header_field_cursor where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace parent_header_field_cursor
-def Valid (x : parent_header_field_cursor) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 19
-end parent_header_field_cursor
+abbrev parent_header_field_cursor := Nat
 
 /-- The running authentication and execution context of the witness header
 chain. -/
@@ -1977,49 +1542,6 @@ structure ReceiptAccumulator where
   count : transaction_count
   cumulative_gas_used : block_gas
   bloom : LogsBloom
-  deriving BEq, Inhabited, Repr
-
-/-- The reconstructed BAL: its RLP and its item count (bounded by
-`gas_limit / 2000`). -/
-structure EncodedBlockAccessList where
-  bytes : EvmByteSlice
-  item_count : item_count
-  deriving BEq, Inhabited, Repr
-
-/-- A BAL RLP span. The enclosing SSZ field is `ByteList[2^30]`, so every
-sizing cursor can retain that schema bound instead of repeatedly falling
-back to the backend-wide byte-address maximum. -/
-structure bal_rlp_length where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace bal_rlp_length
-def Valid (x : bal_rlp_length) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ (2 ^ 30)
-end bal_rlp_length
-
-/-- An encoded-content length paired with the next table cursor. -/
-structure BalContentCursor where
-  content_len : bal_rlp_length
-  cursor : item_index
-  deriving BEq, Inhabited, Repr
-
-/-- An encoded-content length paired with its logical BAL item count. -/
-structure BalContentCount where
-  content_len : bal_rlp_length
-  count : item_count
-  deriving BEq, Inhabited, Repr
-
-/-- The encoded length and logical item count contributed by one account. -/
-structure BalAccountSize where
-  encoded_len : bal_rlp_length
-  item_count : item_count
-  deriving BEq, Inhabited, Repr
-
-/-- The end and maximum value of one equal-index nonce run. -/
-structure BalNonceRun where
-  cursor : item_index
-  maximum : account_nonce
   deriving BEq, Inhabited, Repr
 
 /-- Everything block validation needs from a successfully executed body: gas
@@ -2060,24 +1582,10 @@ inductive MerkleSlot where
 
 /-- The largest Merkle depth required by the supported execution-layer SSZ
 schemas. ByteList[2^30] is the widest one, with 2^25 chunks. -/
-structure htr_depth where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace htr_depth
-def Valid (x : htr_depth) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 25
-end htr_depth
+abbrev htr_depth := Nat
 
 /-- A leaf count in any supported execution-layer SSZ Merkle tree. -/
-structure htr_leaf_count where
-  value : Nat
-  deriving Inhabited, BEq, Repr
-
-namespace htr_leaf_count
-def Valid (x : htr_leaf_count) : Prop :=
-  0 ≤ x.value ∧ x.value ≤ 33554432
-end htr_leaf_count
+abbrev htr_leaf_count := Nat
 
 /-- A streaming Merkle frontier together with the number of leaves already
 incorporated. -/
@@ -2108,6 +1616,7 @@ inductive Register : Type where
   | state_gas_remaining
   | gas_remaining
   | pc
+  | k_block_access_index
   | k_tx
   | k_header
   | k_blob_schedule
@@ -2134,6 +1643,7 @@ abbrev RegisterType : Register → Type
   | .state_gas_remaining => gas
   | .gas_remaining => gas
   | .pc => code_pointer
+  | .k_block_access_index => block_access_index
   | .k_tx => TxEnv
   | .k_header => BlockHeader
   | .k_blob_schedule => BlobSchedule
@@ -2161,6 +1671,8 @@ instance : Inhabited (RegisterRef RegisterType Message) where
   default := .Reg message
 instance : Inhabited (RegisterRef RegisterType TxEnv) where
   default := .Reg k_tx
+instance : Inhabited (RegisterRef RegisterType block_access_index) where
+  default := .Reg k_block_access_index
 instance : Inhabited (RegisterRef RegisterType chain_identifier) where
   default := .Reg k_chain_id
 instance : Inhabited (RegisterRef RegisterType code_pointer) where

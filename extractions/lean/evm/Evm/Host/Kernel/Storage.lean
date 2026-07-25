@@ -52,560 +52,284 @@ open BlockError
 Warm/cold accounting (EIP-2929), persistent storage (`SLOAD`/`SSTORE`),
 and transient storage (EIP-1153), over the host state stores. -/
 
-/- Type quantifiers: k_ex410435_ : Nat, 0 ≤ k_ex410435_ ∧ k_ex410435_ ≤ (2 ^ 256 - 1) -/
-def storage_key (a : address) (s : word) : StorageKey :=
-  let s := (s).value
+/- Type quantifiers: k_ex416529_ : Nat, 0 ≤ k_ex416529_ ∧ k_ex416529_ ≤ (2 ^ 256 - 1) -/
+def storage_key (a : (Vector (BitVec 8) 20)) (s : Nat) : StorageKey :=
   { addr := a,
-    slot := ⟨s⟩ }
+    slot := s }
 
 /-- Marks an address warm and returns its prior warm bit (EIP-2929: the
 EVM charges the cold cost on `false`, the warm cost on `true`). The
 host includes a new warm entry in its semantic checkpoint. -/
-def k_access_account (a : address) : SailM Bool := do
+def k_access_account (a : (Vector (BitVec 8) 20)) : SailM Bool := do
   (warm_addr_touch a)
 
 /-- Marks a storage slot warm and returns its prior warm bit. New entries
 belong to the host's semantic checkpoint. -/
-/- Type quantifiers: k_ex410436_ : Nat, 0 ≤ k_ex410436_ ∧ k_ex410436_ ≤ (2 ^ 256 - 1) -/
-def k_slot_is_warm (a : address) (s : word) : SailM Bool := do
-  let s := (s).value
-  (warm_slot_touch a ⟨s⟩)
+/- Type quantifiers: k_ex416530_ : Nat, 0 ≤ k_ex416530_ ∧ k_ex416530_ ≤ (2 ^ 256 - 1) -/
+def k_slot_is_warm (a : (Vector (BitVec 8) 20)) (s : Nat) : SailM Bool := do
+  (warm_slot_touch a s)
 
 /-- Decodes an account trie leaf — `rlp([nonce, balance, storage_root,
 code_hash])` — into an [AccountInfo][type-AccountInfo]; empty
 root/hash fields decode to their empty-sentinel digests. -/
-/- Type quantifiers: k_ex410440_ : Nat, k_ex410439_ : Nat, 0 ≤ k_ex410439_ ∧ 0 ≤ k_ex410440_ -/
-def decode_state_account (value : EvmByteSlice) : SailM AccountInfo := do
+/- Type quantifiers: value_dependentWitness1 : Nat, value_dependentWitness0 : Nat, 0 ≤
+  value_dependentWitness0 ∧ 0 ≤ value_dependentWitness1 -/
+def decode_state_account (value : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM AccountInfo := do
+  let value_dependentWitness0 := (value).1
+  let value_dependentWitness1 := ((value).2).1
   let value := ((value).2).2
-  let ⟨k_full_len, ⟨k_next, ⟨k_content_len, ⟨k_content, ⟨k_ex419421_, ⟨k_ex419420_, ⟨k_ex419419_, ⟨k_ex419418_, (nonce, fields)⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+  let ⟨nonce_ex426033_, ⟨nonce_ex426034_, ⟨nonce_content_len, ⟨nonce_full_len, (nonce, fields)⟩⟩⟩⟩ ← do
     (do
-        let ⟨_, ⟨_, ⟨_, ⟨_, dependentArg0⟩⟩⟩⟩ ← (rlp_node_cursor
-          ⟨_, ⟨_, value⟩⟩)
-        let publicResult ← (rlp_cursor_pop dependentArg0)
-        pure ((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ((((publicResult).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
-        fun (k_ex419418_ : Nat) =>
-        (Sigma fun (k_ex419419_ : Nat) =>
-        (Sigma fun (k_ex419420_ : Nat) =>
-        (Sigma fun (k_ex419421_ : Nat) =>
-        (Sigma fun (k_content : Nat) =>
+        let dependentArg0 := (← (rlp_node_cursor ⟨_, ⟨_, value⟩⟩))
+        let publicResult ← (rlp_cursor_pop ((dependentArg0).2).2)
+        pure ((⟨_, ⟨_, ⟨_, ⟨_, ((publicResult).2).2⟩⟩⟩⟩ : (Sigma fun
+        (k_ex426033_ : Nat) =>
+        (Sigma fun (k_ex426034_ : Nat) =>
         (Sigma fun (k_content_len : Nat) =>
-        (Sigma fun (k_next : Nat) =>
         (Sigma fun (k_full_len : Nat) =>
-        ((RlpFieldRefFields k_ex419418_ k_ex419419_ k_ex419420_ k_full_len k_content k_content_len) × (RlpCursorFields k_ex419418_ k_ex419419_ k_next k_ex419421_)))))))))))))
-  let ⟨k_full_len, ⟨k_next, ⟨k_content_len, ⟨k_content, (balance, fields)⟩⟩⟩⟩ ← do
+        ((RlpFieldRef k_ex426033_ k_full_len k_content_len) × (EvmByteSliceFields (k_ex426033_ + k_full_len) (k_ex426034_ - k_full_len))))))))))
+  let ⟨balance_content_len, ⟨balance_full_len, (balance, fields)⟩⟩ ← do
     (rlp_cursor_pop fields)
-  let ⟨k_full_len, ⟨k_next, ⟨k_content_len, ⟨k_content, (storage, fields)⟩⟩⟩⟩ ← do
+  let ⟨storage_content_len, ⟨storage_full_len, (storage, fields)⟩⟩ ← do
     (rlp_cursor_pop fields)
-  let ⟨k_full_len, ⟨k_next, ⟨k_content_len, ⟨k_content, (code, fields)⟩⟩⟩⟩ ← do
-    (rlp_cursor_pop fields)
-  (rlp_cursor_expect_end ⟨_, ⟨_, ⟨_, ⟨_, fields⟩⟩⟩⟩)
+  let ⟨code_content_len, ⟨code_full_len, (code, fields)⟩⟩ ← do (rlp_cursor_pop fields)
+  (rlp_cursor_expect_end fields)
   let storage_root ← do
-    if ((storage.content_len == 0) : Bool)
+    if ((storage_content_len == 0) : Bool)
     then (pure EMPTY_TRIE_ROOT)
-    else
-      (pure (word_to_hash
-          ⟨((← (rlp_ref_word ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, storage⟩⟩⟩⟩⟩⟩))).value⟩))
+    else (pure (word_to_hash (← (rlp_ref_word storage))))
   let code_hash ← do
-    if ((code.content_len == 0) : Bool)
+    if ((code_content_len == 0) : Bool)
     then (pure KECCAK_EMPTY)
-    else
-      (pure (word_to_hash
-          ⟨((← (rlp_ref_word ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, code⟩⟩⟩⟩⟩⟩))).value⟩))
-  (pure { nonce := ← do
-              let publicField ← (do
-                  let publicResult ← (rlp_ref_account_nonce
-                  ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, nonce⟩⟩⟩⟩⟩⟩)
-                  pure ((publicResult).value))
-              pure (⟨publicField⟩),
-          balance := ← do
-              let publicField ← (do
-                  let publicResult ← (rlp_ref_uint_word
-                  ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, balance⟩⟩⟩⟩⟩⟩)
-                  pure ((publicResult).value))
-              pure (⟨publicField⟩),
+    else (pure (word_to_hash (← (rlp_ref_word code))))
+  (pure { nonce := ← (rlp_ref_uint64 nonce),
+          balance := ← (rlp_ref_uint_word balance),
           storage_root := storage_root,
           code_hash := code_hash })
 
 /-- Constructs a path from high-aligned data and a nibble length. -/
-/- Type quantifiers: k_ex410441_ : Nat, 0 ≤ k_ex410441_ ∧ k_ex410441_ ≤ 64 -/
-def path_new (data : b256) (len : trie_path_len) : TriePath :=
-  let len := (len).value
+/- Type quantifiers: k_ex416537_ : Nat, 0 ≤ k_ex416537_ ∧ k_ex416537_ ≤ 64 -/
+def path_new (data : (Vector (BitVec 8) 32)) (len : Nat) : TriePath :=
   { data := data,
-    len := ⟨len⟩ }
+    len := len }
 
 /-- The 64-nibble path of a 32-byte hash — the secure-trie key form. -/
-def path_from_hash (h : hash) : TriePath :=
-  (path_new h ⟨64⟩)
+def path_from_hash (h : (Vector (BitVec 8) 32)) : TriePath :=
+  (path_new h 64)
 
 /-- The witness node bytes whose KECCAK-256 digest is `h`, retained as a
 slice into the stateless input; empty if unwitnessed. -/
-def node_db_lookup (h : hash) : SailM EvmByteSlice := do
+def node_db_lookup (h : (Vector (BitVec 8) 32)) : SailM (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
   (nodedb_lookup h)
 
-/-- Selects a decoded branch child field by nibble value. -/
-def branch_children_get (children : BranchChildren) (index : nibble) : RlpFieldRef :=
+/-- Selects a decoded branch child reference by nibble value. -/
+def branch_refs_get (children : (Vector NodeRef 16)) (index : (BitVec 4)) : NodeRef :=
   match index with
-  | 0x0 =>
-    ((GetElem?.getElem! children 0) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0x1 =>
-    ((GetElem?.getElem! children 1) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0x2 =>
-    ((GetElem?.getElem! children 2) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0x3 =>
-    ((GetElem?.getElem! children 3) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0x4 =>
-    ((GetElem?.getElem! children 4) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0x5 =>
-    ((GetElem?.getElem! children 5) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0x6 =>
-    ((GetElem?.getElem! children 6) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0x7 =>
-    ((GetElem?.getElem! children 7) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0x8 =>
-    ((GetElem?.getElem! children 8) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0x9 =>
-    ((GetElem?.getElem! children 9) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0xA =>
-    ((GetElem?.getElem! children 10) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0xB =>
-    ((GetElem?.getElem! children 11) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0xC =>
-    ((GetElem?.getElem! children 12) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0xD =>
-    ((GetElem?.getElem! children 13) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | 0xE =>
-    ((GetElem?.getElem! children 14) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
-  | _ =>
-    ((GetElem?.getElem! children 15) : (Sigma fun (k_source_off : Nat) =>
-    (Sigma fun (k_source_len : Nat) =>
-    (Sigma fun (k_full_off : Nat) =>
-    (Sigma fun (k_full_len : Nat) =>
-    (Sigma fun (k_content_off : Nat) =>
-    (Sigma fun (k_content_len : Nat) =>
-    (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))
+  | 0x0 => (GetElem?.getElem! children 0)
+  | 0x1 => (GetElem?.getElem! children 1)
+  | 0x2 => (GetElem?.getElem! children 2)
+  | 0x3 => (GetElem?.getElem! children 3)
+  | 0x4 => (GetElem?.getElem! children 4)
+  | 0x5 => (GetElem?.getElem! children 5)
+  | 0x6 => (GetElem?.getElem! children 6)
+  | 0x7 => (GetElem?.getElem! children 7)
+  | 0x8 => (GetElem?.getElem! children 8)
+  | 0x9 => (GetElem?.getElem! children 9)
+  | 0xA => (GetElem?.getElem! children 10)
+  | 0xB => (GetElem?.getElem! children 11)
+  | 0xC => (GetElem?.getElem! children 12)
+  | 0xD => (GetElem?.getElem! children 13)
+  | 0xE => (GetElem?.getElem! children 14)
+  | _ => (GetElem?.getElem! children 15)
+
+def MPT_HASH_LENGTH : Nat := WORD_BYTE_LENGTH
+
+/-- Copies a sub-32-byte node encoding into an inline node value. -/
+/- Type quantifiers: bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0 ≤
+  bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1 -/
+def inline_node_from_slice (bytes : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM InlineNode := do
+  let bytes_dependentWitness0 := (bytes).1
+  let bytes_dependentWitness1 := ((bytes).2).1
+  let bytes := ((bytes).2).2
+  let length := bytes.len
+  if ((MPT_HASH_LENGTH ≤b length) : Bool)
+  then sailThrow ((InvalidBlock WitnessDeficient))
+  else
+    (pure { data := ← (pure (word_to_hash (← (slice_load ⟨_, ⟨_, bytes⟩⟩ 0)))),
+            len := length })
+
+/-- The reference denoted by a child field: an inline list, a 32-byte
+hash, or empty. -/
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+def field_to_ref (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM NodeRef := do
+  if (f.is_list : Bool)
+  then (pure (InlineRef (← (inline_node_from_slice ⟨_, ⟨_, f.source⟩⟩))))
+  else
+    (do
+      if ((k_content_len == MPT_HASH_LENGTH) : Bool)
+      then (pure (HashRef (word_to_hash (← (rlp_ref_word f)))))
+      else (pure (EmptyRef ())))
+
+/-- Decodes branch children 2 through 15, followed by the branch value. -/
+/- Type quantifiers: _reclimit : Nat, k_ex416573_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 2
+  ≤ k_ex416573_ ∧ k_ex416573_ ≤ 16, 0 ≤ _reclimit -/
+def _rec_decode_branch_node (cursor : (EvmByteSliceFields k_source_off k_source_len)) (index : Nat) (children : (Vector NodeRef 16)) (_reclimit : Nat) : SailM TrieNode := do
+  match _reclimit with
+  | 0 =>
+    (do
+      assert false "recursion limit reached"
+      throw Error.Exit)
+  | _reclimit_pred + 1 =>
+    (do
+      if ((index <b 16) : Bool)
+      then
+        (do
+          let ⟨child_content_len, ⟨child_full_len, (child, next)⟩⟩ ← do
+            (rlp_cursor_pop cursor)
+          let updated := children
+          let updated ← (pure (vectorUpdate updated index (← (field_to_ref child))))
+          (_rec_decode_branch_node next (index + 1) updated _reclimit_pred))
+      else
+        (do
+          let ⟨value_content_len, ⟨value_full_len, (value, cursor)⟩⟩ ← do
+            (rlp_cursor_pop cursor)
+          (rlp_cursor_expect_end cursor)
+          (pure (BranchNode (children, (rlp_ref_content value))))))
+termination_by _reclimit
+decreasing_by all_goals exact Nat.lt_succ_self _
+
+/-- Decodes branch children 2 through 15, followed by the branch value. -/
+/- Type quantifiers: index : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 2
+  ≤ index ∧ index ≤ 16 -/
+def decode_branch_node (cursor : (EvmByteSliceFields k_source_off k_source_len)) (index : Nat) (children : (Vector NodeRef 16)) : SailM TrieNode := do
+  let _measure := ((16 - index) : Int)
+  if ((_measure <b 0) : Bool)
+  then throw Error.Exit
+  else (_rec_decode_branch_node cursor index children (_measure + 1))
 
 /-- The empty path. -/
 def path_empty (_ : Unit) : TriePath :=
-  (path_new ZERO_HASH ⟨0⟩)
+  (path_new ZERO_HASH 0)
 
 def HEX_PREFIX_MAX_LENGTH : Nat := 33
 
 /-- Decodes a compact path directly from its RLP source span, returning
 the leaf flag and the path. -/
-/- Type quantifiers: k_ex410454_ : Nat, k_ex410453_ : Nat, k_ex410452_ : Nat, k_ex410451_ : Nat, k_ex410450_
-  : Nat, k_ex410449_ : Nat, 0 ≤ k_ex410449_ ∧ 0 ≤ k_ex410450_ ∧
-  0 ≤ k_ex410451_ ∧
-  0 ≤ k_ex410452_ ∧
-  (k_ex410451_ + k_ex410452_) ≤ k_ex410450_ ∧
-  0 ≤ k_ex410453_ ∧ 0 ≤ k_ex410454_ ∧ (k_ex410453_ + k_ex410454_) ≤ k_ex410450_ -/
-def hex_prefix_decode_ref (f : RlpFieldRef) : SailM (Bool × TriePath) := do
-  let f := ((((((f).2).2).2).2).2).2
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+def hex_prefix_decode_ref (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM (Bool × TriePath) := do
   if (f.is_list : Bool)
   then sailThrow ((InvalidBlock RlpDecode))
-  else (pure ())
-  let n := f.content_len
-  if ((n == 0) : Bool)
-  then (pure (false, (path_empty ())))
   else
     (do
-      let maximum_length := HEX_PREFIX_MAX_LENGTH
-      if ((maximum_length <b n) : Bool)
-      then sailThrow ((InvalidBlock RlpDecode))
+      let n := k_content_len
+      if ((n == 0) : Bool)
+      then (pure (false, (path_empty ())))
       else
         (do
-          let content := (rlp_ref_content f)
-          let fb ← do (slice_byte ⟨_, ⟨_, content⟩⟩ 0)
-          let flag : (BitVec 4) := (Sail.BitVec.extractLsb fb 7 4)
-          let is_leaf : Bool := ((BitVec.access flag 1) == 1#1)
-          let odd : Bool := ((BitVec.access flag 0) == 1#1)
-          let tail_length : Nat := (n - 1)
-          let tail := (slice_suffix content 1)
-          let packed ← do
+          let maximum_length := HEX_PREFIX_MAX_LENGTH
+          if ((maximum_length <b n) : Bool)
+          then sailThrow ((InvalidBlock RlpDecode))
+          else
             (do
-                let publicResult ← (slice_load ⟨_, ⟨_, tail⟩⟩ 0)
-                pure ((publicResult).value))
-          let paired_nibbles : Nat := (tail_length *i 2)
-          if (odd : Bool)
-          then
-            (do
-              if ((paired_nibbles <b 64) : Bool)
+              let content := (sub_slice f.source (k_source_len - n) n)
+              let fb ← do (slice_byte ⟨_, ⟨_, content⟩⟩ 0)
+              let flag : (BitVec 4) := (Sail.BitVec.extractLsb fb 7 4)
+              let is_leaf : Bool := ((BitVec.access flag 1) == 1#1)
+              let odd : Bool := ((BitVec.access flag 0) == 1#1)
+              let tail_length : Nat := (n - 1)
+              let tail := (slice_suffix content 1)
+              let packed ← do (slice_load ⟨_, ⟨_, tail⟩⟩ 0)
+              let paired_nibbles : Nat := (tail_length *i 2)
+              if (odd : Bool)
               then
-                (let bytes := (word_to_hash ⟨((word_shift_right ⟨packed⟩ ⟨4⟩)).value⟩)
-                let bytes : (Vector (BitVec 8) 32) :=
-                  (vectorUpdate bytes 31
-                    ((Sail.BitVec.extractLsb fb 3 0) +++ (Sail.BitVec.extractLsb
-                        (GetElem?.getElem! bytes 31) 3 0)))
-                (pure (is_leaf, (path_new (B256 bytes) ⟨(paired_nibbles + 1)⟩))))
-              else sailThrow ((InvalidBlock WitnessDeficient)))
-          else (pure (is_leaf, (path_new (word_to_hash ⟨packed⟩) ⟨paired_nibbles⟩)))))
+                (do
+                  if ((paired_nibbles <b 64) : Bool)
+                  then
+                    (let bytes := (word_to_hash (word_shift_right packed 4))
+                    let bytes : (Vector (BitVec 8) 32) :=
+                      (vectorUpdate bytes 31
+                        ((Sail.BitVec.extractLsb fb 3 0) +++ (Sail.BitVec.extractLsb
+                            (GetElem?.getElem! bytes 31) 3 0)))
+                    (pure (is_leaf, (path_new (B256 bytes) (paired_nibbles + 1)))))
+                  else sailThrow ((InvalidBlock WitnessDeficient)))
+              else (pure (is_leaf, (path_new (word_to_hash packed) paired_nibbles))))))
 
 /-- The path length in nibbles. -/
-def path_len (path : TriePath) : trie_path_len :=
-  ⟨(path.len).value⟩
+def path_len (path : TriePath) : Nat :=
+  path.len
 
 /-- Decodes node bytes into leaf/extension/branch form by field count
 (2 = leaf or extension by the HP flag; 17 = branch). -/
-/- Type quantifiers: k_ex410458_ : Nat, k_ex410457_ : Nat, 0 ≤ k_ex410457_ ∧ 0 ≤ k_ex410458_ -/
-def decode_trie_node (node : EvmByteSlice) : SailM TrieNode := do
+/- Type quantifiers: node_dependentWitness1 : Nat, node_dependentWitness0 : Nat, 0 ≤
+  node_dependentWitness0 ∧ 0 ≤ node_dependentWitness1 -/
+def decode_trie_node (node : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM TrieNode := do
+  let node_dependentWitness0 := (node).1
+  let node_dependentWitness1 := ((node).2).1
   let node := ((node).2).2
-  let ⟨_, ⟨_, ⟨_, ⟨_, fields⟩⟩⟩⟩ ← do (rlp_node_cursor ⟨_, ⟨_, node⟩⟩)
-  if (((! fields.valid) || (rlp_cursor_empty ⟨_, ⟨_, ⟨_, ⟨_, fields⟩⟩⟩⟩)) : Bool)
-  then (pure (InvalidNode ()))
-  else
+  let ⟨_, ⟨_, fields⟩⟩ ← do (rlp_node_cursor ⟨_, ⟨_, node⟩⟩)
+  let ⟨first_content_len, ⟨first_full_len, (first, fields)⟩⟩ ← do (rlp_cursor_pop fields)
+  let ⟨second_content_len, ⟨second_full_len, (second, fields)⟩⟩ ← do
+    (rlp_cursor_pop fields)
+  if ((fields.len == 0) : Bool)
+  then
     (do
-      let ⟨k_full_len, ⟨k_next, ⟨k_content_len, ⟨k_content, (first, fields)⟩⟩⟩⟩ ← do
-        (rlp_cursor_pop fields)
-      if ((rlp_cursor_empty ⟨_, ⟨_, ⟨_, ⟨_, fields⟩⟩⟩⟩) : Bool)
-      then (pure (InvalidNode ()))
+      let (is_leaf, path) ← do (hex_prefix_decode_ref first)
+      if (is_leaf : Bool)
+      then (pure (LeafNode (path, (rlp_ref_content second))))
       else
         (do
-          let ⟨k_full_len, ⟨k_next, ⟨k_content_len, ⟨k_content, (second, fields)⟩⟩⟩⟩ ← do
-            (rlp_cursor_pop fields)
-          if ((rlp_cursor_empty ⟨_, ⟨_, ⟨_, ⟨_, fields⟩⟩⟩⟩) : Bool)
-          then
-            (do
-              let path_field := first
-              let value := second
-              let (is_leaf, path) ← do
-                (hex_prefix_decode_ref
-                  ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, path_field⟩⟩⟩⟩⟩⟩)
-              if (is_leaf : Bool)
-              then
-                (pure (LeafNode
-                    { path := path,
-                      value := ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, value⟩⟩⟩⟩⟩⟩ }))
-              else
-                (if ((((path_len path)).value == 0) : Bool)
-                then (pure (InvalidNode ()))
-                else
-                  (pure (ExtensionNode
-                      { path := path,
-                        child := ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, value⟩⟩⟩⟩⟩⟩ }))))
-          else
-            (do
-              let children : (Vector (Sigma fun (k_source_off : Nat) =>
-                  (Sigma fun (k_source_len : Nat) =>
-                  (Sigma fun (k_full_off : Nat) =>
-                  (Sigma fun (k_full_len : Nat) =>
-                  (Sigma fun (k_content_off : Nat) =>
-                  (Sigma fun (k_content_len : Nat) =>
-                  (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))) 16) :=
-                (vectorInit ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, first⟩⟩⟩⟩⟩⟩)
-              let children : (Vector (Sigma fun (k_source_off : Nat) =>
-                  (Sigma fun (k_source_len : Nat) =>
-                  (Sigma fun (k_full_off : Nat) =>
-                  (Sigma fun (k_full_len : Nat) =>
-                  (Sigma fun (k_content_off : Nat) =>
-                  (Sigma fun (k_content_len : Nat) =>
-                  (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))) 16) :=
-                (vectorUpdate children 0 ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, first⟩⟩⟩⟩⟩⟩)
-              let children : (Vector (Sigma fun (k_source_off : Nat) =>
-                  (Sigma fun (k_source_len : Nat) =>
-                  (Sigma fun (k_full_off : Nat) =>
-                  (Sigma fun (k_full_len : Nat) =>
-                  (Sigma fun (k_content_off : Nat) =>
-                  (Sigma fun (k_content_len : Nat) =>
-                  (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))) 16) :=
-                (vectorUpdate children 1
-                  ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, second⟩⟩⟩⟩⟩⟩)
-              let cursor : (Sigma fun (k_source_off : Nat) =>
-                (Sigma fun (k_source_len : Nat) =>
-                (Sigma fun (k_current : Nat) =>
-                (Sigma fun (k_stop : Nat) =>
-                (RlpCursorFields k_source_off k_source_len k_current k_stop))))) :=
-                ((⟨_, ⟨_, ⟨_, ⟨_, fields⟩⟩⟩⟩ : (Sigma fun (k_source_off : Nat) =>
-                (Sigma fun (k_source_len : Nat) =>
-                (Sigma fun (k_current : Nat) =>
-                (Sigma fun (k_stop : Nat) =>
-                (RlpCursorFields k_source_off k_source_len k_current k_stop)))))) : (Sigma fun
-                (k_source_off : Nat) =>
-                (Sigma fun (k_source_len : Nat) =>
-                (Sigma fun (k_current : Nat) =>
-                (Sigma fun (k_stop : Nat) =>
-                (RlpCursorFields k_source_off k_source_len k_current k_stop))))))
-              let complete : Bool := true
-              let (children, complete, cursor) ← (( do
-                let loop_index_lower := 2
-                let loop_index_upper := 15
-                let mut loop_vars := (children, complete, cursor)
-                for index in [loop_index_lower:loop_index_upper:1]i do
-                  let (children, complete, cursor) := loop_vars
-                  loop_vars ← do
-                    let (children, complete, cursor) ← (( do
-                      if ((rlp_cursor_empty cursor) : Bool)
-                      then
-                        (let complete : Bool := false
-                        (pure ((children, complete, cursor) : ((Vector (Sigma fun
-                            (k_source_off : Nat) =>
-                            (Sigma fun (k_source_len : Nat) =>
-                            (Sigma fun (k_full_off : Nat) =>
-                            (Sigma fun (k_full_len : Nat) =>
-                            (Sigma fun (k_content_off : Nat) =>
-                            (Sigma fun (k_content_len : Nat) =>
-                            (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))) 16) × Bool × (Sigma
-                          fun (k_source_off : Nat) =>
-                          (Sigma fun (k_source_len : Nat) =>
-                          (Sigma fun (k_current : Nat) =>
-                          (Sigma fun (k_stop : Nat) =>
-                          (RlpCursorFields k_source_off k_source_len k_current k_stop)))))))))
-                      else
-                        (do
-                          let ⟨k_full_len, ⟨k_next, ⟨k_content_len, ⟨k_content, (child, next)⟩⟩⟩⟩ ← do
-                            (rlp_cursor_pop ((((cursor).2).2).2).2)
-                          let children : (Vector (Sigma fun (k_source_off : Nat) =>
-                              (Sigma fun (k_source_len : Nat) =>
-                              (Sigma fun (k_full_off : Nat) =>
-                              (Sigma fun (k_full_len : Nat) =>
-                              (Sigma fun (k_content_off : Nat) =>
-                              (Sigma fun (k_content_len : Nat) =>
-                              (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))) 16) :=
-                            (vectorUpdate children index
-                              ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, child⟩⟩⟩⟩⟩⟩)
-                          let cursor : (Sigma fun (k_source_off : Nat) =>
-                            (Sigma fun (k_source_len : Nat) =>
-                            (Sigma fun (k_current : Nat) =>
-                            (Sigma fun (k_stop : Nat) =>
-                            (RlpCursorFields k_source_off k_source_len k_current k_stop))))) :=
-                            ((⟨_, ⟨_, ⟨_, ⟨_, next⟩⟩⟩⟩ : (Sigma fun
-                            (k_source_off : Nat) =>
-                            (Sigma fun (k_source_len : Nat) =>
-                            (Sigma fun (k_current : Nat) =>
-                            (Sigma fun (k_stop : Nat) =>
-                            (RlpCursorFields k_source_off k_source_len k_current k_stop)))))) : (Sigma
-                            fun (k_source_off : Nat) =>
-                            (Sigma fun (k_source_len : Nat) =>
-                            (Sigma fun (k_current : Nat) =>
-                            (Sigma fun (k_stop : Nat) =>
-                            (RlpCursorFields k_source_off k_source_len k_current k_stop))))))
-                          (pure ((children, complete, cursor) : ((Vector (Sigma fun
-                              (k_source_off : Nat) =>
-                              (Sigma fun (k_source_len : Nat) =>
-                              (Sigma fun (k_full_off : Nat) =>
-                              (Sigma fun (k_full_len : Nat) =>
-                              (Sigma fun (k_content_off : Nat) =>
-                              (Sigma fun (k_content_len : Nat) =>
-                              (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))) 16) × Bool × (Sigma
-                            fun (k_source_off : Nat) =>
-                            (Sigma fun (k_source_len : Nat) =>
-                            (Sigma fun (k_current : Nat) =>
-                            (Sigma fun (k_stop : Nat) =>
-                            (RlpCursorFields k_source_off k_source_len k_current k_stop))))))))) ) :
-                      SailM
-                      ((Vector (Sigma fun (k_source_off : Nat) =>
-                        (Sigma fun (k_source_len : Nat) =>
-                        (Sigma fun (k_full_off : Nat) =>
-                        (Sigma fun (k_full_len : Nat) =>
-                        (Sigma fun (k_content_off : Nat) =>
-                        (Sigma fun (k_content_len : Nat) =>
-                        (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))) 16) × Bool × (Sigma
-                      fun (k_source_off : Nat) =>
-                      (Sigma fun (k_source_len : Nat) =>
-                      (Sigma fun (k_current : Nat) =>
-                      (Sigma fun (k_stop : Nat) =>
-                      (RlpCursorFields k_source_off k_source_len k_current k_stop)))))) )
-                    (pure (children, complete, cursor))
-                (pure loop_vars) ) : SailM
-                ((Vector (Sigma fun (k_source_off : Nat) =>
-                  (Sigma fun (k_source_len : Nat) =>
-                  (Sigma fun (k_full_off : Nat) =>
-                  (Sigma fun (k_full_len : Nat) =>
-                  (Sigma fun (k_content_off : Nat) =>
-                  (Sigma fun (k_content_len : Nat) =>
-                  (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))) 16) × Bool × (Sigma
-                fun (k_source_off : Nat) =>
-                (Sigma fun (k_source_len : Nat) =>
-                (Sigma fun (k_current : Nat) =>
-                (Sigma fun (k_stop : Nat) =>
-                (RlpCursorFields k_source_off k_source_len k_current k_stop)))))) )
-              if (((! complete) || (rlp_cursor_empty cursor)) : Bool)
-              then (pure (InvalidNode ()))
-              else
-                (do
-                  let ⟨k_full_len, ⟨k_next, ⟨k_content_len, ⟨k_content, (value, cursor)⟩⟩⟩⟩ ← do
-                    (rlp_cursor_pop ((((cursor).2).2).2).2)
-                  if ((rlp_cursor_empty ⟨_, ⟨_, ⟨_, ⟨_, cursor⟩⟩⟩⟩) : Bool)
-                  then
-                    (pure (BranchNode
-                        { children := children,
-                          value := ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, value⟩⟩⟩⟩⟩⟩ }))
-                  else (pure (InvalidNode ()))))))
-
-def MPT_HASH_LENGTH : Nat := WORD_BYTE_LENGTH
-
-/-- Copies a sub-32-byte node encoding into an inline node value. -/
-/- Type quantifiers: k_ex410462_ : Nat, k_ex410461_ : Nat, 0 ≤ k_ex410461_ ∧ 0 ≤ k_ex410462_ -/
-def inline_node_from_slice (bytes : EvmByteSlice) : SailM InlineNode := do
-  let bytes := ((bytes).2).2
-  let length := bytes.len
-  if ((MPT_HASH_LENGTH ≤b length) : Bool)
-  then sailThrow ((InvalidBlock WitnessDeficient))
-  else (pure ())
-  (pure { data := ← (pure (word_to_hash ⟨((← (slice_load ⟨_, ⟨_, bytes⟩⟩ 0))).value⟩)),
-          len := length })
-
-/-- The reference denoted by a child field: an inline list, a 32-byte
-hash, or empty. -/
-/- Type quantifiers: k_ex410474_ : Nat, k_ex410473_ : Nat, k_ex410472_ : Nat, k_ex410471_ : Nat, k_ex410470_
-  : Nat, k_ex410469_ : Nat, 0 ≤ k_ex410469_ ∧ 0 ≤ k_ex410470_ ∧
-  0 ≤ k_ex410471_ ∧
-  0 ≤ k_ex410472_ ∧
-  (k_ex410471_ + k_ex410472_) ≤ k_ex410470_ ∧
-  0 ≤ k_ex410473_ ∧ 0 ≤ k_ex410474_ ∧ (k_ex410473_ + k_ex410474_) ≤ k_ex410470_ -/
-def field_to_ref (f : RlpFieldRef) : SailM NodeRef := do
-  let f := ((((((f).2).2).2).2).2).2
-  if (f.is_list : Bool)
-  then
-    (pure (InlineRef
-        (← (inline_node_from_slice
-            (rlp_ref_full ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩)))))
+          if (((path_len path) == 0) : Bool)
+          then sailThrow ((InvalidBlock RlpDecode))
+          else (pure (ExtensionNode (path, (← (field_to_ref second)))))))
   else
     (do
-      if ((f.content_len == MPT_HASH_LENGTH) : Bool)
-      then
-        (pure (HashRef
-            (word_to_hash
-              ⟨((← (rlp_ref_word ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩))).value⟩)))
-      else (pure (EmptyRef ())))
+      let children : (Vector NodeRef 16) := (vectorInit (EmptyRef ()))
+      let children ← (pure (vectorUpdate children 0 (← (field_to_ref first))))
+      let children ← (pure (vectorUpdate children 1 (← (field_to_ref second))))
+      (decode_branch_node fields 2 children))
 
 /-- Maps a nibble cursor to the corresponding byte in decreasing vector order. -/
 /- Type quantifiers: i : Nat, 0 ≤ i ∧ i ≤ 64 -/
-def path_byte_index (i : trie_path_cursor) : SailM b256_index := do
-  let i := (i).value
-  let publicResult ← do
-    let quotient := (Nat.div i 2)
-    let natural_index ← (( do
-      if (((0 ≤b quotient) && (quotient ≤b 31)) : Bool)
-      then (pure quotient)
-      else
-        (do
-          assert false "sail/lib/mpt/primitives.sail:64.24-64.25"
-          throw Error.Exit) ) : SailM Nat )
-    (pure (31 - natural_index))
-  pure (⟨publicResult⟩)
+def path_byte_index (i : Nat) : SailM Nat := do
+  let quotient := (Nat.div i 2)
+  let natural_index ← (( do
+    if (((0 ≤b quotient) && (quotient ≤b 31)) : Bool)
+    then (pure quotient)
+    else
+      (do
+        assert false "sail/lib/mpt/primitives.sail:64.24-64.25"
+        throw Error.Exit) ) : SailM Nat )
+  (pure (31 - natural_index))
 
 /-- The `i`-th nibble, most significant first; out of range yields `0`. -/
-/- Type quantifiers: k_ex410476_ : Nat, 0 ≤ k_ex410476_ ∧ k_ex410476_ ≤ 64 -/
-def path_nibble (path : TriePath) (i : trie_path_cursor) : SailM nibble := do
-  let i := (i).value
-  if ((((path_len path)).value ≤b i) : Bool)
+/- Type quantifiers: k_ex416618_ : Nat, 0 ≤ k_ex416618_ ∧ k_ex416618_ ≤ 64 -/
+def path_nibble (path : TriePath) (i : Nat) : SailM (BitVec 4) := do
+  if (((path_len path) ≤b i) : Bool)
   then (pure 0x0#4)
   else
     (do
       let bytes := path.data
-      let byte_index ← do
-        (do
-            let publicResult ← (path_byte_index ⟨i⟩)
-            pure ((publicResult).value))
+      let byte_index ← do (path_byte_index i)
       if (((Nat.mod i 2) == 0) : Bool)
       then (pure (Sail.BitVec.extractLsb (GetElem?.getElem! bytes byte_index) 7 4))
       else (pure (Sail.BitVec.extractLsb (GetElem?.getElem! bytes byte_index) 3 0)))
 
 /-- Increments a path length, rejecting a value already at the key bound. -/
 /- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 64 -/
-def trie_path_len_increment (value : trie_path_len) : SailM trie_path_len := do
-  let value := (value).value
-  let publicResult ← do
-    if ((value <b 64) : Bool)
-    then (pure (value + 1))
-    else sailThrow ((InvalidBlock WitnessDeficient))
-  pure (⟨publicResult⟩)
+def trie_path_len_increment (value : Nat) : SailM Nat := do
+  if ((value <b 64) : Bool)
+  then (pure (value + 1))
+  else sailThrow ((InvalidBlock WitnessDeficient))
 
 /-- Whether `seg` occurs in `key` at nibble position `pos`. -/
-/- Type quantifiers: k_ex410478_ : Nat, 0 ≤ k_ex410478_ ∧ k_ex410478_ ≤ 64 -/
-def path_matches (key : TriePath) (pos : trie_path_cursor) (seg : TriePath) : SailM Bool := do
-  let pos := (pos).value
-  let stop := (pos + ((path_len seg)).value)
-  if ((((path_len key)).value <b stop) : Bool)
+/- Type quantifiers: k_ex416620_ : Nat, 0 ≤ k_ex416620_ ∧ k_ex416620_ ≤ 64 -/
+def path_matches (key : TriePath) (pos : Nat) (seg : TriePath) : SailM Bool := do
+  let stop := (pos + (path_len seg))
+  if (((path_len key) <b stop) : Bool)
   then (pure false)
   else
     (do
@@ -619,7 +343,7 @@ def path_matches (key : TriePath) (pos : trie_path_cursor) (seg : TriePath) : Sa
           let (offset, ok) := loop_vars
           loop_vars ← do
             let (offset, ok) ← (( do
-              if ((offset <b ((path_len seg)).value) : Bool)
+              if ((offset <b (path_len seg)) : Bool)
               then
                 (do
                   let key_index := (pos + offset)
@@ -627,8 +351,7 @@ def path_matches (key : TriePath) (pos : trie_path_cursor) (seg : TriePath) : Sa
                     if ((key_index ≤b 64) : Bool)
                     then
                       (do
-                        if (((← (path_nibble key ⟨key_index⟩)) != (← (path_nibble seg
-                                 ⟨offset⟩))) : Bool)
+                        if (((← (path_nibble key key_index)) != (← (path_nibble seg offset))) : Bool)
                         then
                           (let ok : Bool := false
                           (pure ok))
@@ -636,10 +359,7 @@ def path_matches (key : TriePath) (pos : trie_path_cursor) (seg : TriePath) : Sa
                     else
                       (let ok : Bool := false
                       (pure ok)) ) : SailM Bool )
-                  let offset ←
-                    (do
-                        let publicResult ← (trie_path_len_increment ⟨offset⟩)
-                        pure ((publicResult).value))
+                  let offset ← (trie_path_len_increment offset)
                   (pure (offset, ok)))
               else (pure (offset, ok)) ) : SailM (Nat × Bool) )
             (pure (offset, ok))
@@ -647,7 +367,8 @@ def path_matches (key : TriePath) (pos : trie_path_cursor) (seg : TriePath) : Sa
       (pure ok))
 
 /-- Materializes an inline node in scratch memory as a byte slice. -/
-def inline_node_slice (node : InlineNode) : SailM EvmByteSlice := do
+def inline_node_slice (node : InlineNode) : SailM (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
   let start ← do (scratch_begin ())
   (scratch_push_b256 node.data node.len)
   (scratch_finish start)
@@ -655,7 +376,8 @@ def inline_node_slice (node : InlineNode) : SailM EvmByteSlice := do
 /-- Resolves a reference to node bytes. Resolving a missing hash is a
 deficient witness (`InvalidBlock(WitnessDeficient)`), never an empty
 subtree. -/
-def resolve_ref (r : NodeRef) : SailM EvmByteSlice := do
+def resolve_ref (r : NodeRef) : SailM (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
   match r with
   | .EmptyRef () =>
     (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
@@ -667,7 +389,7 @@ def resolve_ref (r : NodeRef) : SailM EvmByteSlice := do
   | .HashRef h =>
     (do
       let ⟨_, ⟨_, node⟩⟩ ← do (node_db_lookup h)
-      if ((node.len == 0) : Bool)
+      if _sailIf0 : ((node.len == 0) : Bool) = true
       then
         (do
           sailThrow ((InvalidBlock WitnessDeficient)))
@@ -678,11 +400,17 @@ def resolve_ref (r : NodeRef) : SailM EvmByteSlice := do
 
 /-- Walks the trie toward `key` from `pos`, returning the leaf value
 without copying it; absent paths yield empty bytes. -/
-/- Type quantifiers: _reclimit : Nat, k_ex410483_ : Nat, k_ex410482_ : Nat, k_ex410481_ : Nat, 0 ≤
-  k_ex410481_ ∧ 0 ≤ k_ex410482_, 0 ≤ k_ex410483_ ∧ k_ex410483_ ≤ 64, 0 ≤ _reclimit -/
-def _rec_trie_walk (node : EvmByteSlice) (key : TriePath) (pos : trie_path_cursor) (_reclimit : Nat) : SailM EvmByteSlice := do
+/- Type quantifiers: _reclimit : Nat, k_ex416633_ : Nat, node_dependentWitness1 : Nat, node_dependentWitness0
+  : Nat, 0 ≤ node_dependentWitness0 ∧ 0 ≤ node_dependentWitness1, 0 ≤ k_ex416633_ ∧
+  k_ex416633_ ≤ 64, 0 ≤ _reclimit -/
+def _rec_trie_walk (node : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (key : TriePath) (pos : Nat) (_reclimit : Nat) : SailM (Sigma
+  fun (node_dependentWitness0 : Nat) =>
+  (Sigma fun (node_dependentWitness1 : Nat) =>
+  (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1))) := do
+  let node_dependentWitness0 := (node).1
+  let node_dependentWitness1 := ((node).2).1
   let node := ((node).2).2
-  let pos := (pos).value
   match _reclimit with
   | 0 =>
     (do
@@ -690,117 +418,137 @@ def _rec_trie_walk (node : EvmByteSlice) (key : TriePath) (pos : trie_path_curso
       throw Error.Exit)
   | _reclimit_pred + 1 =>
     (do
-      if ((node.len == 0) : Bool)
+      if _sailIf0 : ((node.len == 0) : Bool) = true
       then
-        (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
-          (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
-          (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
+        (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (node_dependentWitness0 : Nat) =>
+          (Sigma fun (node_dependentWitness1 : Nat) =>
+          (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))) : (Sigma fun
+          (node_dependentWitness0 : Nat) =>
+          (Sigma fun (node_dependentWitness1 : Nat) =>
+          (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))))
       else
         (do
           match (← (decode_trie_node ⟨_, ⟨_, node⟩⟩)) with
-          | .LeafNode leaf =>
+          | .LeafNode (path, value) =>
             (do
-              if ((! (← (path_matches key ⟨pos⟩ leaf.path))) : Bool)
+              if _sailIf1 : ((! (← (path_matches key pos path))) : Bool) = true
               then
-                (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
-                  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
-                  (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
+                (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (node_dependentWitness0 : Nat) =>
+                  (Sigma fun (node_dependentWitness1 : Nat) =>
+                  (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))) : (Sigma fun
+                  (node_dependentWitness0 : Nat) =>
+                  (Sigma fun (node_dependentWitness1 : Nat) =>
+                  (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))))
               else
-                (if (((pos + ((path_len leaf.path)).value) == ((path_len key)).value) : Bool)
+                (if _sailIf2 : (((pos + (path_len path)) == (path_len key)) : Bool) = true
                 then
-                  (pure ((⟨_, ⟨_, ((((⟨_, ⟨_, ⟨_, (rlp_ref_content
-                      ((((((leaf.value).2).2).2).2).2).2)⟩⟩⟩ : (Sigma fun (k_ex420698_ : Nat)
-                      =>
-                      (Sigma fun (k_ex420702_ : Nat) =>
-                      (Sigma fun (k_ex420703_ : Nat) =>
-                      (EvmByteSliceFields (k_ex420698_ + k_ex420702_) k_ex420703_)))))).2).2).2⟩⟩ : (Sigma
-                    fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma
-                    fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
+                  (pure (value : (Sigma fun (node_dependentWitness0 : Nat) =>
+                    (Sigma fun (node_dependentWitness1 : Nat) =>
+                    (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))))
                 else
-                  (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
-                    (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
-                    (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))))
-          | .ExtensionNode ext =>
+                  (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (node_dependentWitness0 : Nat)
+                    =>
+                    (Sigma fun (node_dependentWitness1 : Nat) =>
+                    (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))) : (Sigma fun
+                    (node_dependentWitness0 : Nat) =>
+                    (Sigma fun (node_dependentWitness1 : Nat) =>
+                    (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))))))
+          | .ExtensionNode (path, childref) =>
             (do
-              let extension_len : Nat := ((path_len ext.path)).value
-              if ((extension_len == 0) : Bool)
+              let extension_len : Nat := (path_len path)
+              if _sailIf1 : ((extension_len == 0) : Bool) = true
               then
-                (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
-                  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
-                  (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
+                (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (node_dependentWitness0 : Nat) =>
+                  (Sigma fun (node_dependentWitness1 : Nat) =>
+                  (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))) : (Sigma fun
+                  (node_dependentWitness0 : Nat) =>
+                  (Sigma fun (node_dependentWitness1 : Nat) =>
+                  (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))))
               else
                 (do
-                  if ((! (← (path_matches key ⟨pos⟩ ext.path))) : Bool)
+                  if _sailIf2 : ((! (← (path_matches key pos path))) : Bool) = true
                   then
-                    (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
-                      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
-                      (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
+                    (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun
+                      (node_dependentWitness0 : Nat) =>
+                      (Sigma fun (node_dependentWitness1 : Nat) =>
+                      (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))) : (Sigma
+                      fun (node_dependentWitness0 : Nat) =>
+                      (Sigma fun (node_dependentWitness1 : Nat) =>
+                      (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))))
                   else
                     (do
                       let next_pos := (pos + extension_len)
-                      if ((next_pos ≤b 64) : Bool)
+                      if _sailIf3 : ((next_pos ≤b 64) : Bool) = true
                       then
                         (do
-                          (_rec_trie_walk (← (resolve_ref (← (field_to_ref ext.child)))) key
-                            ⟨next_pos⟩ _reclimit_pred))
+                          (do
+                              let dependentArg0 := (← (resolve_ref childref))
+                              let publicResult ← (_rec_trie_walk dependentArg0 key next_pos
+                              _reclimit_pred)
+                              pure ((⟨_, ⟨_, ((publicResult).2).2⟩⟩ : (Sigma fun
+                              (node_dependentWitness0 : Nat) =>
+                              (Sigma fun (node_dependentWitness1 : Nat) =>
+                              (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))))))
                       else
-                        (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
-                          (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
-                          (k_off : Nat) =>
-                          (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))))))
-          | .BranchNode branch =>
+                        (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun
+                          (node_dependentWitness0 : Nat) =>
+                          (Sigma fun (node_dependentWitness1 : Nat) =>
+                          (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))) : (Sigma
+                          fun (node_dependentWitness0 : Nat) =>
+                          (Sigma fun (node_dependentWitness1 : Nat) =>
+                          (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1))))))))
+          | .BranchNode (children, value) =>
             (do
-              if ((pos == ((path_len key)).value) : Bool)
+              if _sailIf1 : ((pos == (path_len key)) : Bool) = true
               then
-                (pure ((⟨_, ⟨_, ((((⟨_, ⟨_, ⟨_, (rlp_ref_content
-                    ((((((branch.value).2).2).2).2).2).2)⟩⟩⟩ : (Sigma fun (k_ex420832_ : Nat)
-                    =>
-                    (Sigma fun (k_ex420836_ : Nat) =>
-                    (Sigma fun (k_ex420837_ : Nat) =>
-                    (EvmByteSliceFields (k_ex420832_ + k_ex420836_) k_ex420837_)))))).2).2).2⟩⟩ : (Sigma
-                  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma
-                  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
+                (pure (value : (Sigma fun (node_dependentWitness0 : Nat) =>
+                  (Sigma fun (node_dependentWitness1 : Nat) =>
+                  (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))))
               else
                 (do
-                  if ((pos <b ((path_len key)).value) : Bool)
+                  if _sailIf2 : ((pos <b (path_len key)) : Bool) = true
                   then
                     (do
                       let ⟨_, ⟨_, child⟩⟩ ← do
-                        (resolve_ref
-                          (← (field_to_ref
-                              (branch_children_get branch.children (← (path_nibble key ⟨pos⟩))))))
-                      (_rec_trie_walk ⟨_, ⟨_, child⟩⟩ key ⟨(pos + 1)⟩ _reclimit_pred))
+                        (resolve_ref (branch_refs_get children (← (path_nibble key pos))))
+                      (_rec_trie_walk ⟨_, ⟨_, child⟩⟩ key (pos + 1) _reclimit_pred))
                   else
-                    (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
-                      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
-                      (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))))
-          | .InvalidNode () =>
-            (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
-              (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
-              (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))))
+                    (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun
+                      (node_dependentWitness0 : Nat) =>
+                      (Sigma fun (node_dependentWitness1 : Nat) =>
+                      (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))) : (Sigma
+                      fun (node_dependentWitness0 : Nat) =>
+                      (Sigma fun (node_dependentWitness1 : Nat) =>
+                      (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1)))))))))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Walks the trie toward `key` from `pos`, returning the leaf value
 without copying it; absent paths yield empty bytes. -/
-/- Type quantifiers: pos : Nat, k_ex410488_ : Nat, k_ex410487_ : Nat, 0 ≤ k_ex410487_ ∧
-  0 ≤ k_ex410488_, 0 ≤ pos ∧ pos ≤ 64 -/
-def trie_walk (node : EvmByteSlice) (key : TriePath) (pos : trie_path_cursor) : SailM EvmByteSlice := do
+/- Type quantifiers: pos : Nat, node_dependentWitness1 : Nat, node_dependentWitness0 : Nat, 0 ≤
+  node_dependentWitness0 ∧ 0 ≤ node_dependentWitness1, 0 ≤ pos ∧ pos ≤ 64 -/
+def trie_walk (node : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (key : TriePath) (pos : Nat) : SailM (Sigma
+  fun (node_dependentWitness0 : Nat) =>
+  (Sigma fun (node_dependentWitness1 : Nat) =>
+  (EvmByteSliceFields node_dependentWitness0 node_dependentWitness1))) := do
+  let node_dependentWitness0 := (node).1
+  let node_dependentWitness1 := ((node).2).1
   let node := ((node).2).2
-  let pos := (pos).value
   let _measure := ((64 - pos) : Int)
-  if ((_measure <b 0) : Bool)
+  if _sailIf0 : ((_measure <b 0) : Bool) = true
   then
     (do
       throw Error.Exit)
   else
     (do
-      (_rec_trie_walk ⟨_, ⟨_, node⟩⟩ key ⟨pos⟩ (_measure + 1)))
+      (_rec_trie_walk ⟨_, ⟨_, node⟩⟩ key pos (_measure + 1)))
 
 /-- Looks up `key` from a root hash; the root node itself must be
 witnessed. -/
-def trie_lookup (root : hash) (key : TriePath) : SailM EvmByteSlice := do
-  if ((root == EMPTY_TRIE_ROOT) : Bool)
+def trie_lookup (root : (Vector (BitVec 8) 32)) (key : TriePath) : SailM (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
+  if _sailIf0 : ((root == EMPTY_TRIE_ROOT) : Bool) = true
   then
     (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
       (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
@@ -808,18 +556,18 @@ def trie_lookup (root : hash) (key : TriePath) : SailM EvmByteSlice := do
   else
     (do
       let ⟨_, ⟨_, node⟩⟩ ← do (node_db_lookup root)
-      if ((node.len == 0) : Bool)
+      if _sailIf1 : ((node.len == 0) : Bool) = true
       then
         (do
           sailThrow ((InvalidBlock WitnessDeficient)))
       else
         (do
-          (trie_walk ⟨_, ⟨_, node⟩⟩ key ⟨0⟩)))
+          (trie_walk ⟨_, ⟨_, node⟩⟩ key 0)))
 
 /-- The witnessed account at address `a` under state root `root`,
 reading the secure trie at `keccak256(a)`; `None` when the walk
 proves absence. -/
-def stateless_account (root : hash) (a : address) : SailM (Option AccountInfo) := do
+def stateless_account (root : (Vector (BitVec 8) 32)) (a : (Vector (BitVec 8) 20)) : SailM (Option AccountInfo) := do
   let ⟨_, ⟨_, value⟩⟩ ← do (trie_lookup root (path_from_hash (← (keccak256_address a))))
   if ((value.len == 0) : Bool)
   then (pure none)
@@ -828,7 +576,7 @@ def stateless_account (root : hash) (a : address) : SailM (Option AccountInfo) :
 /-- The account at `a`: transaction overlay, then block overlay, then the
 authenticated witness (cached block-level on first read). Every load
 is recorded for the EIP-7928 block access list. -/
-def k_aload (a : address) : SailM Account := SailME.run do
+def k_aload (a : (Vector (BitVec 8) 20)) : SailM Account := SailME.run do
   (bal_account_touch a)
   match (← (acct_tx_get a)) with
   | .some acc => SailME.throw (acc : Account)
@@ -845,19 +593,15 @@ def k_aload (a : address) : SailM Account := SailME.run do
 
 /-- The witnessed storage value of `slot` under a storage root, reading
 the secure trie at `keccak256(slot)`; absent slots are zero. -/
-/- Type quantifiers: k_ex410491_ : Nat, 0 ≤ k_ex410491_ ∧ k_ex410491_ ≤ (2 ^ 256 - 1) -/
-def stateless_storage (root : hash) (slot : word) : SailM word := do
-  let slot := (slot).value
-  let publicResult ← do
-    let ⟨_, ⟨_, value⟩⟩ ← do
-      (trie_lookup root (path_from_hash (← (keccak256_word ⟨slot⟩))))
-    if ((value.len == 0) : Bool)
-    then (pure (ZERO_WORD).value)
-    else
-      (do
-          let publicResult ← (rlp_ref_uint_word (← (rlp_single_ref ⟨_, ⟨_, value⟩⟩)))
-          pure ((publicResult).value))
-  pure (⟨publicResult⟩)
+/- Type quantifiers: k_ex416647_ : Nat, 0 ≤ k_ex416647_ ∧ k_ex416647_ ≤ (2 ^ 256 - 1) -/
+def stateless_storage (root : (Vector (BitVec 8) 32)) (slot : Nat) : SailM Nat := do
+  let ⟨_, ⟨_, value⟩⟩ ← do (trie_lookup root (path_from_hash (← (keccak256_word slot))))
+  if ((value.len == 0) : Bool)
+  then (pure ZERO_WORD)
+  else
+    (do
+        let dependentArg0 := (← (rlp_single_ref value))
+        (rlp_ref_uint_word (dependentArg0).2))
 
 /-- Resolves a slot to its live [StorageValue][type-StorageValue]: `curr`
 is the value `SLOAD` pushes; `orig` is the EIP-2200 transaction-start
@@ -870,58 +614,46 @@ storage change). [stateless_storage][] is the base primitive — an
 authenticated MPT point-get, one walk for both the witness and the
 harness-built alloc trie; everything above it (the overlay, the
 read-through, the journal) is common. -/
-/- Type quantifiers: k_ex410492_ : Nat, 0 ≤ k_ex410492_ ∧ k_ex410492_ ≤ (2 ^ 256 - 1) -/
-def k_sload (a : address) (s : word) : SailM StorageValue := SailME.run do
-  let s := (s).value
-  (bal_storage_read a ⟨s⟩)
-  let key := (storage_key a ⟨s⟩)
+/- Type quantifiers: k_ex416648_ : Nat, 0 ≤ k_ex416648_ ∧ k_ex416648_ ≤ (2 ^ 256 - 1) -/
+def k_sload (a : (Vector (BitVec 8) 20)) (s : Nat) : SailM StorageValue := SailME.run do
+  (bal_storage_read a s)
+  let key := (storage_key a s)
   match (← (storage_tx_get key)) with
   | .some e => SailME.throw (e : StorageValue)
   | none => (pure ())
   let acc ← do (k_aload a)
   match (← (storage_block_get key)) with
   | .some e =>
-    SailME.throw ({ curr := ⟨(e.curr).value⟩,
-                    orig := ⟨(e.curr).value⟩ } : StorageValue)
+    SailME.throw ({ curr := e.curr,
+                    orig := e.curr } : StorageValue)
   | none => (pure ())
   let v ← do
     if (acc.storage_cleared : Bool)
-    then (pure (ZERO_WORD).value)
-    else
-      (do
-          let publicResult ← (stateless_storage acc.info.storage_root ⟨s⟩)
-          pure ((publicResult).value))
-  (storage_block_cache key ⟨v⟩)
-  (pure { curr := ⟨v⟩,
-          orig := ⟨v⟩ })
+    then (pure ZERO_WORD)
+    else (stateless_storage acc.info.storage_root s)
+  (storage_block_cache key v)
+  (pure { curr := v,
+          orig := v })
 
 /-- `SSTORE`: creates or updates the live transaction row. The preceding
 [k_sload][] supplies the transaction-original value; the host keeps
 clear generations and frame undo history private. -/
-/- Type quantifiers: k_ex410493_ : Nat, 0 ≤ k_ex410493_ ∧ k_ex410493_ ≤ (2 ^ 256 - 1) -/
-def k_sstore (a : address) (s : word) (v : StorageValue) : SailM Unit := do
-  let s := (s).value
+/- Type quantifiers: k_ex416649_ : Nat, 0 ≤ k_ex416649_ ∧ k_ex416649_ ≤ (2 ^ 256 - 1) -/
+def k_sstore (a : (Vector (BitVec 8) 20)) (s : Nat) (v : StorageValue) : SailM Unit := do
   (storage_tx_update
-    { key := (storage_key a ⟨s⟩),
+    { key := (storage_key a s),
       value := v })
 
 /-- `TLOAD` (EIP-1153): reads per-transaction transient storage, which is
 discarded at transaction end and is not part of the state trie. -/
-/- Type quantifiers: k_ex410494_ : Nat, 0 ≤ k_ex410494_ ∧ k_ex410494_ ≤ (2 ^ 256 - 1) -/
-def k_tload (a : address) (s : word) : SailM word := do
-  let s := (s).value
-  let publicResult ← do
-    (do
-        let publicResult ← (transient_load a ⟨s⟩)
-        pure ((publicResult).value))
-  pure (⟨publicResult⟩)
+/- Type quantifiers: k_ex416650_ : Nat, 0 ≤ k_ex416650_ ∧ k_ex416650_ ≤ (2 ^ 256 - 1) -/
+def k_tload (a : (Vector (BitVec 8) 20)) (s : Nat) : SailM Nat := do
+  (transient_load a s)
 
 /-- `TSTORE` (EIP-1153): writes transient storage. Frame rollback is part
 of the host's semantic checkpoint contract. -/
-/- Type quantifiers: k_ex410496_ : Nat, k_ex410495_ : Nat, 0 ≤ k_ex410495_ ∧
-  k_ex410495_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex410496_ ∧ k_ex410496_ ≤ (2 ^ 256 - 1) -/
-def k_tstore (a : address) (s : word) (v : word) : SailM Unit := do
-  let s := (s).value
-  let v := (v).value
-  (transient_store a ⟨s⟩ ⟨v⟩)
+/- Type quantifiers: k_ex416652_ : Nat, k_ex416651_ : Nat, 0 ≤ k_ex416651_ ∧
+  k_ex416651_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex416652_ ∧ k_ex416652_ ≤ (2 ^ 256 - 1) -/
+def k_tstore (a : (Vector (BitVec 8) 20)) (s : Nat) (v : Nat) : SailM Unit := do
+  (transient_store a s v)
 

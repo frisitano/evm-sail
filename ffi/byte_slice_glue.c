@@ -15,6 +15,7 @@
 #include "zkvm_io.h"
 
 #include <stddef.h>
+#include <string.h>
 
 static const uint8_t *private_input;
 static size_t private_input_size;
@@ -271,6 +272,27 @@ uint64_t slice_byte_at(struct zByteSlice slice,
   return slice_byte_at_source(
       evmsail_source_kind(slice.zsource), byte_slice_off(&slice),
       byte_slice_len(&slice), evmsail_byte_quantity_value(index));
+}
+
+bool host_byte_slices_equal(struct zByteSlice left,
+                            struct zByteSlice right) {
+  uint64_t left_len = byte_slice_len(&left);
+  uint64_t right_len = byte_slice_len(&right);
+  const uint8_t *left_bytes = NULL;
+  const uint8_t *right_bytes = NULL;
+  uint64_t resolved_left_len = 0;
+  uint64_t resolved_right_len = 0;
+
+  if (left_len != right_len) return false;
+  if (!evmsail_resolve_byte_source(
+          evmsail_source_kind(left.zsource), byte_slice_off(&left), left_len,
+          &left_bytes, &resolved_left_len) ||
+      !evmsail_resolve_byte_source(
+          evmsail_source_kind(right.zsource), byte_slice_off(&right), right_len,
+          &right_bytes, &resolved_right_len) ||
+      resolved_left_len != left_len || resolved_right_len != right_len)
+    return false;
+  return memcmp(left_bytes, right_bytes, (size_t)left_len) == 0;
 }
 
 #ifdef EVMSAIL_STANDARD_ABI

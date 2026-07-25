@@ -34,24 +34,18 @@ function rlp_item_count_increment(value) = value + 1
  * The unconsumed key-list content span strictly decreases on every call. */
 /*! Decodes the storage keys of one access-list entry while preserving wire
     order during recursive unwind. */
-val decode_access_list_keys : forall 'source_off 'source_len 'current 'stop 'address_bound 'slot_bound,
-                                   source_valid_range('source_off, 'source_len)
-                                &  0
-                                <= 'current
-                                &  'current
-                                <= 'stop
-                                &  'stop
-                                <= 'source_len
-                                &  source_valid_length('address_bound)
-                                &  source_valid_length('slot_bound)
-                                &  source_valid_length('slot_bound + ('stop - 'current)). (
-        RlpCursorFields('source_off, 'source_len, 'current, 'stop),
+val decode_access_list_keys : forall 'source_off 'source_len 'address_bound 'slot_bound,
+                                  source_valid_range('source_off, 'source_len)
+                                & source_valid_length('address_bound)
+                                & source_valid_length('slot_bound)
+                                & source_valid_length('slot_bound + 'source_len). (
+        RlpCursor('source_off, 'source_len),
         address,
         AccessListDecode('address_bound, 'slot_bound),
-    ) -> AccessListDecode('address_bound, 'slot_bound + ('stop - 'current))
+    ) -> AccessListDecode('address_bound, 'slot_bound + 'source_len)
 
 function decode_access_list_keys(cursor, addr, tail) =
-    if rlp_cursor_empty(cursor) then {
+    if cursor.len == 0 then {
         struct {
             addresses = tail.addresses,
             storage_slots = tail.storage_slots,
@@ -70,26 +64,17 @@ function decode_access_list_keys(cursor, addr, tail) =
         }
     }
 termination_measure decode_access_list_keys(cursor, addr, tail) =
-    let stop = cursor.stop in
-    let current = cursor.current in
-    stop - current
+    cursor.len
 
 /* The unconsumed access-list content span strictly decreases on every call. */
 /*! Decodes the remaining access-list entries into a flat execution view. */
-val decode_access_list_entries : forall 'source_off 'source_len 'current 'stop,
-                                      source_valid_range('source_off, 'source_len)
-                                   &  0
-                                   <= 'current
-                                   &  'current
-                                   <= 'stop
-                                   &  'stop
-                                   <= 'source_len. RlpCursorFields('source_off, 'source_len, 'current, 'stop) -> AccessListDecode(
-        'stop - 'current,
-        'stop - 'current,
-    )
+val decode_access_list_entries : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). RlpCursor(
+        'source_off,
+        'source_len,
+    ) -> AccessListDecode('source_len, 'source_len)
 
 function decode_access_list_entries(cursor) =
-    if rlp_cursor_empty(cursor) then {
+    if cursor.len == 0 then {
         struct { addresses = [||], storage_slots = [||], address_count = 0, slot_count = 0 }
     } else {
         let (entry, next) = rlp_cursor_pop(cursor);
@@ -108,15 +93,15 @@ function decode_access_list_entries(cursor) =
         }
     }
 termination_measure decode_access_list_entries(cursor) =
-    let stop = cursor.stop in
-    let current = cursor.current in
-    stop - current
+    cursor.len
 
 /*! Decodes an EIP-2930 access list — RLP `[[address, [slot, …]], …]` —
     into the flat representation the transaction and intrinsic-gas
     accounting use: the addresses (one per entry) and the
     `(address, slot)` pairs. */
-function decode_access_list(f : RlpFieldRef) -> (
+function decode_access_list forall 'source_off 'source_len 'content_len,
+                              rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     (list(address), list(StorageKey), transaction_item_count, transaction_item_count)
 ) = {
     if f.source.len <= sizeof(transaction_length_bound) then {
@@ -141,17 +126,22 @@ let BLOB_HASH_LENGTH : int(32) = WORD_BYTE_LENGTH
 
 /* The unconsumed hash-list content span strictly decreases on every call. */
 /*! Validates every fixed-width versioned-hash item and returns their count. */
-function decode_blob_hash_items(cursor : RlpCursor, count : transaction_blob_count) -> transaction_blob_count =
-    if rlp_cursor_empty(cursor) then {
+function decode_blob_hash_items forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
+    cursor : RlpCursor('source_off, 'source_len),
+    count : transaction_blob_count,
+) -> (
+    transaction_blob_count
+) =
+    if cursor.len == 0 then {
         count
     } else {
         let (item, next) = rlp_cursor_pop(cursor);
         if    item.is_list
-           |  item.full_len
+           |  item.source.len
            != BLOB_HASH_RLP_LENGTH
            |  item.content_len
            != BLOB_HASH_LENGTH
-           |  slice_byte(item.source, item.full_off)
+           |  slice_byte(item.source, 0)
            != 0xa0 then {
             throw InvalidBlock(RlpDecode)
         };
@@ -162,16 +152,18 @@ function decode_blob_hash_items(cursor : RlpCursor, count : transaction_blob_cou
         }
     }
 termination_measure decode_blob_hash_items(cursor, count) =
-    let stop = cursor.stop in
-    let current = cursor.current in
-    stop - current
+    cursor.len
 
 /*! Validates the canonical RLP list of `bytes32` blob versioned hashes
     once, then retains its encoded content as a fixed-stride source view:
     each element is exactly `0xa0` followed by 32 bytes, so `BLOBHASH` can
     load item `i` at `33·i + 1`. */
-function decode_blob_hashes(f : RlpFieldRef) -> BlobHashes = {
-    let bytes = sub_slice(f.source, f.content_off, f.content_len);
+function decode_blob_hashes forall 'source_off 'source_len 'content_len,
+                              rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    BlobHashes
+) = {
+    let bytes = rlp_ref_content(f);
     struct { bytes = bytes, count = decode_blob_hash_items(rlp_ref_cursor(f), 0) }
 }
 
@@ -195,19 +187,13 @@ let EMPTY_AUTHORIZATION_DECODE : AuthorizationDecode(0) = struct { authorization
 /* The unconsumed authorization-list content span strictly decreases on every call. */
 /*! Decodes and signature-recovers the remaining EIP-7702 authorization
     tuples in wire order. */
-val decode_auth_tuples : forall 'source_off 'source_len 'current 'stop,
-                              source_valid_range('source_off, 'source_len)
-                           &  0
-                           <= 'current
-                           &  'current
-                           <= 'stop
-                           &  'stop
-                           <= 'source_len. RlpCursorFields('source_off, 'source_len, 'current, 'stop) -> AuthorizationDecode(
-        'stop - 'current,
-    )
+val decode_auth_tuples : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). RlpCursor(
+        'source_off,
+        'source_len,
+    ) -> AuthorizationDecode('source_len)
 
 function decode_auth_tuples(cursor) =
-    if rlp_cursor_empty(cursor) then {
+    if cursor.len == 0 then {
         struct { authorizations = [||], count = 0 }
     } else {
         let (tuple, next) = rlp_cursor_pop(cursor);
@@ -220,7 +206,7 @@ function decode_auth_tuples(cursor) =
         rlp_cursor_expect_end(fields);
 
         let chain_id = rlp_ref_uint_word(chain_f);
-        let auth_nonce = rlp_ref_account_nonce(nonce_f);
+        let auth_nonce : account_nonce = rlp_ref_uint64(nonce_f);
         let y_value = rlp_ref_uint64(y_f);
         let y_valid = y_value <= 1;
         let y : y_parity = if y_value == 0 then { 0 } else { 1 };
@@ -251,9 +237,7 @@ function decode_auth_tuples(cursor) =
         struct { authorizations = authorization :: tail.authorizations, count = rlp_item_count_increment(tail.count) }
     }
 termination_measure decode_auth_tuples(cursor) =
-    let stop = cursor.stop in
-    let current = cursor.current in
-    stop - current
+    cursor.len
 
 /*! Decodes an EIP-7702 authorization list into
     [Authorization][type-Authorization] tuples, recovering each authority.
@@ -264,7 +248,11 @@ termination_measure decode_auth_tuples(cursor) =
     (recoverable, low-`s`, `r`/`y_parity` ranges, incrementable nonce);
     [process_auth][] then applies the chain-id / account nonce / code
     checks. */
-function decode_auth_list(f : RlpFieldRef) -> (list(Authorization), transaction_item_count) = {
+function decode_auth_list forall 'source_off 'source_len 'content_len,
+                            rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    (list(Authorization), transaction_item_count)
+) = {
     if f.source.len <= sizeof(transaction_length_bound) then {
         let decoded = decode_auth_tuples(rlp_ref_cursor(f));
         (decoded.authorizations, decoded.count)
@@ -276,7 +264,11 @@ function decode_auth_list(f : RlpFieldRef) -> (list(Authorization), transaction_
 /*! The calldata/initcode span of the data field within the envelope. The RLP
     cursor existentially hides its bounded source length, so this boundary
     reifies the already-established transaction-envelope invariant. */
-function tx_input_span(data : RlpFieldRef) -> TransactionByteSlice = {
+function tx_input_span forall 'source_off 'source_len 'content_len,
+                         rlp_field_ref_valid('source_off, 'source_len, 'content_len). (data :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    TransactionByteSlice
+) = {
     let content = rlp_ref_content(data);
     if content.len <= sizeof(transaction_length_bound) then {
         content
@@ -287,68 +279,35 @@ function tx_input_span(data : RlpFieldRef) -> TransactionByteSlice = {
 
 /*! The span of the pre-signature fields — from the first field to the
     start of the signature — hashed by [tx_signing_hash][]. */
-val tx_sig_span : forall 'source_off 'source_len 'first_full_off 'first_full_len 'first_content_off 'first_content_len 'signature_full_off 'signature_full_len 'signature_content_off 'signature_content_len,
-                       source_valid_range('source_off, 'source_len)
-                    &  0
-                    <= 'first_full_off
-                    &  0
-                    <= 'first_full_len
-                    &  'first_full_off
-                    +  'first_full_len
-                    <= 'source_len
-                    &  0
-                    <= 'first_content_off
-                    &  0
-                    <= 'first_content_len
-                    &  'first_content_off
-                    +  'first_content_len
-                    <= 'source_len
-                    &  0
-                    <= 'signature_full_off
-                    &  0
-                    <= 'signature_full_len
-                    &  'signature_full_off
-                    +  'signature_full_len
-                    <= 'source_len
-                    &  0
-                    <= 'signature_content_off
-                    &  0
-                    <= 'signature_content_len
-                    &  'signature_content_off
-                    +  'signature_content_len
-                    <= 'source_len. (
-        RlpFieldRefFields(
-            'source_off,
-            'source_len,
-            'first_full_off,
-            'first_full_len,
-            'first_content_off,
-            'first_content_len,
-        ),
-        RlpFieldRefFields(
-            'source_off,
-            'source_len,
-            'signature_full_off,
-            'signature_full_len,
-            'signature_content_off,
-            'signature_content_len,
-        ),
+val tx_sig_span : forall 'first_source_off 'first_source_len 'first_content_len 'signature_source_off 'signature_source_len 'signature_content_len,
+                       rlp_field_ref_valid('first_source_off, 'first_source_len, 'first_content_len)
+                    &  rlp_field_ref_valid('signature_source_off, 'signature_source_len, 'signature_content_len)
+                    &  'first_source_off
+                    <= 'signature_source_off. (
+        RlpFieldRef('first_source_off, 'first_source_len, 'first_content_len),
+        RlpFieldRef('signature_source_off, 'signature_source_len, 'signature_content_len),
     ) -> ByteSlice
 function tx_sig_span(first, signature) = {
-    let start = first.full_off;
-    let stop = signature.full_off;
+    let start = first.source.off;
+    let stop = signature.source.off;
     let start_offset = start;
     let stop_offset = stop;
     if stop_offset < start_offset then {
         throw InvalidBlock(RlpDecode)
     } else {
-        sub_slice(first.source, start, stop_offset - start_offset)
+        byte_slice(first.source.source, start_offset, stop_offset - start_offset)
     }
 }
 
 /*! Decodes transaction gas and enforces the protocol and fork-specific
     transaction bounds. */
-function rlp_ref_gas(f : RlpFieldRef, fork : Fork) -> transaction_gas = {
+function rlp_ref_gas forall 'source_off 'source_len 'content_len,
+                       rlp_field_ref_valid('source_off, 'source_len, 'content_len). (
+    f : RlpFieldRef('source_off, 'source_len, 'content_len),
+    fork : Fork,
+) -> (
+    transaction_gas
+) = {
     let value = rlp_ref_uint(f);
     if (fork >= Osaka) & (fork < Amsterdam) & (OSAKA_TRANSACTION_GAS_LIMIT_VALUE < value) then {
         throw InvalidBlock(GasUsedExceedsLimit)
@@ -360,13 +319,15 @@ function rlp_ref_gas(f : RlpFieldRef, fork : Fork) -> transaction_gas = {
 /*! Decodes the payload fields of a legacy transaction. Kept separate from
     the envelope dispatcher so extraction backends compile each transaction
     shape as an independent function. */
-function decode_legacy_tx(
+function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionByteSlice,
     pubkey : ByteSlice,
     fork : Fork,
     sender : address,
-    fields : RlpCursor,
-) -> Transaction = {
+    fields : RlpCursor('source_off, 'source_len),
+) -> (
+    Transaction
+) = {
     let (nonce_f, fields) = rlp_cursor_pop(fields);
     let (gp_f, fields) = rlp_cursor_pop(fields);
     let (gas_f, fields) = rlp_cursor_pop(fields);
@@ -409,13 +370,15 @@ function decode_legacy_tx(
 }
 
 /*! Decodes the payload fields of an EIP-2930 transaction. */
-function decode_access_list_tx(
+function decode_access_list_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionByteSlice,
     pubkey : ByteSlice,
     fork : Fork,
     sender : address,
-    fields : RlpCursor,
-) -> Transaction = {
+    fields : RlpCursor('source_off, 'source_len),
+) -> (
+    Transaction
+) = {
     let (chain_f, fields) = rlp_cursor_pop(fields);
     let (nonce_f, fields) = rlp_cursor_pop(fields);
     let (gp_f, fields) = rlp_cursor_pop(fields);
@@ -436,7 +399,7 @@ function decode_access_list_tx(
         sender = sender,
         raw = tx,
         nonce = rlp_ref_uint_word(nonce_f),
-        chain_id = rlp_ref_chain_identifier(chain_f),
+        chain_id = rlp_ref_uint64(chain_f),
         gas_limit = rlp_ref_gas(gas_f, fork),
         is_create = to_f.content_len == 0,
         recipient = word_to_address(rlp_ref_word(to_f)),
@@ -461,13 +424,15 @@ function decode_access_list_tx(
 }
 
 /*! Decodes the payload fields of an EIP-1559 transaction. */
-function decode_fee_market_tx(
+function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionByteSlice,
     pubkey : ByteSlice,
     fork : Fork,
     sender : address,
-    fields : RlpCursor,
-) -> Transaction = {
+    fields : RlpCursor('source_off, 'source_len),
+) -> (
+    Transaction
+) = {
     let (chain_f, fields) = rlp_cursor_pop(fields);
     let (nonce_f, fields) = rlp_cursor_pop(fields);
     let (mp_f, fields) = rlp_cursor_pop(fields);
@@ -488,7 +453,7 @@ function decode_fee_market_tx(
         sender = sender,
         raw = tx,
         nonce = rlp_ref_uint_word(nonce_f),
-        chain_id = rlp_ref_chain_identifier(chain_f),
+        chain_id = rlp_ref_uint64(chain_f),
         gas_limit = rlp_ref_gas(gas_f, fork),
         is_create = to_f.content_len == 0,
         recipient = word_to_address(rlp_ref_word(to_f)),
@@ -513,13 +478,15 @@ function decode_fee_market_tx(
 }
 
 /*! Decodes the payload fields of an EIP-4844 transaction. */
-function decode_blob_tx(
+function decode_blob_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionByteSlice,
     pubkey : ByteSlice,
     fork : Fork,
     sender : address,
-    fields : RlpCursor,
-) -> Transaction = {
+    fields : RlpCursor('source_off, 'source_len),
+) -> (
+    Transaction
+) = {
     let (chain_f, fields) = rlp_cursor_pop(fields);
     let (nonce_f, fields) = rlp_cursor_pop(fields);
     let (mp_f, fields) = rlp_cursor_pop(fields);
@@ -543,7 +510,7 @@ function decode_blob_tx(
         sender = sender,
         raw = tx,
         nonce = rlp_ref_uint_word(nonce_f),
-        chain_id = rlp_ref_chain_identifier(chain_f),
+        chain_id = rlp_ref_uint64(chain_f),
         gas_limit = rlp_ref_gas(gas_f, fork),
         is_create = to_f.content_len == 0,
         recipient = word_to_address(rlp_ref_word(to_f)),
@@ -568,13 +535,15 @@ function decode_blob_tx(
 }
 
 /*! Decodes the payload fields of an EIP-7702 transaction. */
-function decode_set_code_tx(
+function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionByteSlice,
     pubkey : ByteSlice,
     fork : Fork,
     sender : address,
-    fields : RlpCursor,
-) -> Transaction = {
+    fields : RlpCursor('source_off, 'source_len),
+) -> (
+    Transaction
+) = {
     let (chain_f, fields) = rlp_cursor_pop(fields);
     let (nonce_f, fields) = rlp_cursor_pop(fields);
     let (mp_f, fields) = rlp_cursor_pop(fields);
@@ -596,8 +565,8 @@ function decode_set_code_tx(
         tx_type = SetCodeTx,
         sender = sender,
         raw = tx,
-        nonce = word_of_account_nonce(rlp_ref_account_nonce(nonce_f)),
-        chain_id = rlp_ref_chain_identifier(chain_f),
+        nonce = word_of_account_nonce(rlp_ref_uint64(nonce_f)),
+        chain_id = rlp_ref_uint64(chain_f),
         gas_limit = rlp_ref_gas(gas_f, fork),
         is_create = to_f.content_len == 0,
         recipient = word_to_address(rlp_ref_word(to_f)),

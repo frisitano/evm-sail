@@ -91,63 +91,28 @@ sail_word acct_dump_balance(uint64_t i);
 sail_word acct_dump_storage_root(uint64_t i);
 sail_word acct_dump_code_hash(uint64_t i);
 
-/* EIP-7928 record store. Sail owns construction and canonical encoding. */
+/* EIP-7928 record store. Sail owns canonical validation and consumes these
+ * non-destructive sorted cursors through generated-layout glue. */
 unit bal_reset(const unit u);
-unit bal_set_index(uint64_t n);
 unit bal_prepare(const unit u);
-EVMSAIL_ITEM_RETURN bal_account_count(EVMSAIL_ITEM_RESULT(rop) const unit u);
-EVMSAIL_ADDRESS_RETURN bal_account_address(
-    EVMSAIL_ADDRESS_RESULT(rop) EVMSAIL_ITEM_PARAM(account));
-
-EVMSAIL_ITEM_RETURN bal_storage_change_count(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account));
-EVMSAIL_WORD_RETURN bal_storage_change_slot(
-    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record));
-EVMSAIL_ITEM_RETURN bal_storage_change_index(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record));
-EVMSAIL_WORD_RETURN bal_storage_change_value(
-    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record));
-EVMSAIL_ITEM_RETURN bal_storage_read_count(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account));
-EVMSAIL_WORD_RETURN bal_storage_read_slot(
-    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record));
-
-EVMSAIL_ITEM_RETURN bal_balance_change_count(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account));
-EVMSAIL_ITEM_RETURN bal_balance_change_index(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record));
-EVMSAIL_WORD_RETURN bal_balance_change_value(
-    EVMSAIL_WORD_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record));
-EVMSAIL_ITEM_RETURN bal_nonce_change_count(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account));
-EVMSAIL_ITEM_RETURN bal_nonce_change_index(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record));
-uint64_t bal_nonce_change_value(EVMSAIL_ITEM_PARAM(account),
-                                EVMSAIL_ITEM_PARAM(record));
-EVMSAIL_ITEM_RETURN bal_code_change_count(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account));
-EVMSAIL_ITEM_RETURN bal_code_change_index(
-    EVMSAIL_ITEM_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record));
-EVMSAIL_HASH_RETURN bal_code_change_hash(
-    EVMSAIL_HASH_RESULT(rop) EVMSAIL_ITEM_PARAM(account),
-    EVMSAIL_ITEM_PARAM(record));
+uint64_t bal_account_next_probe(sail_address *address);
+uint64_t bal_storage_slot_next_probe(sail_word *slot, uint64_t *has_change,
+                                     uint64_t *index, sail_word *value);
+uint64_t bal_storage_change_next_probe(uint64_t *index, sail_word *value);
+uint64_t bal_balance_change_next_probe(uint64_t *index, sail_word *value);
+uint64_t bal_nonce_change_next_probe(uint64_t *index, uint64_t *value);
+uint64_t bal_code_change_next_probe(uint64_t *index, sail_hash *code_hash);
 
 /* EIP-7928 record sinks + tx-row enumeration (harvest logic is Sail-side) */
-unit bal_note_storage_change(sail_address a, EVMSAIL_WORD_PARAM(slot),
+unit bal_note_storage_change(uint64_t index, sail_address a,
+                             EVMSAIL_WORD_PARAM(slot),
                              EVMSAIL_WORD_PARAM(val));
 unit bal_note_account_touch(sail_address a);
 unit bal_note_storage_read(sail_address a, EVMSAIL_WORD_PARAM(slot));
-unit bal_note_balance_change(sail_address a, EVMSAIL_WORD_PARAM(val));
-unit bal_note_nonce_change(sail_address a, uint64_t nonce);
-unit bal_note_code_change(sail_address a, sail_hash chash);
+unit bal_note_balance_change(uint64_t index, sail_address a,
+                             EVMSAIL_WORD_PARAM(val));
+unit bal_note_nonce_change(uint64_t index, sail_address a, uint64_t nonce);
+unit bal_note_code_change(uint64_t index, sail_address a, sail_hash chash);
 /* Non-destructive ascending state-root iterators over the cumulative maps. */
 unit storage_block_iter_begin(sail_address a);
 uint64_t storage_block_iter_next_probe(sail_address a, sail_word *slot,

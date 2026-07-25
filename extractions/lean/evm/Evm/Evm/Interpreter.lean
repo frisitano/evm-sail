@@ -79,17 +79,15 @@ opcodes. This module specifies that machinery in three layers:
 
 /-- Assembles an `n`-byte big-endian PUSH immediate from a local code cursor;
 bytes past the end of code read as zero. -/
-/- Type quantifiers: k_ex411025_ : Nat, k_ex411024_ : Nat, k_ex411023_ : Nat, k_ex411022_ : Nat, 0
-  ≤ k_ex411022_ ∧ 0 ≤ k_ex411023_ ∧ 0 ≤ k_ex411023_, 0 ≤ k_ex411024_, 0 ≤ k_ex411025_
-  ∧ k_ex411025_ ≤ 32 -/
-def read_push (code : CodeSlice) (offset : code_pointer) (n : push_width) : SailM word := do
+/- Type quantifiers: k_ex417252_ : Nat, k_ex417251_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0
+  : Nat, 0 ≤ code_dependentWitness0 ∧ 0 ≤ code_dependentWitness1 ∧
+  0 ≤ code_dependentWitness1, 0 ≤ k_ex417251_, 0 ≤ k_ex417252_ ∧ k_ex417252_ ≤ 32 -/
+def read_push (code : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (offset : Nat) (n : Nat) : SailM Nat := do
+  let code_dependentWitness0 := (code).1
+  let code_dependentWitness1 := ((code).2).1
   let code := ((code).2).2
-  let n := (n).value
-  let publicResult ← do
-    (do
-        let publicResult ← (slice_load_n ⟨_, ⟨_, code⟩⟩ offset n)
-        pure ((publicResult).value))
-  pure (⟨publicResult⟩)
+  (slice_load_n ⟨_, ⟨_, code⟩⟩ offset n)
 
 /-- Decodes one non-PUSH opcode byte to its AST node. The three
 contiguous families fold to an arity argument — `DUP1`–`DUP16`
@@ -97,18 +95,17 @@ contiguous families fold to an arity argument — `DUP1`–`DUP16`
 — and the remainder is a flat table. Any byte with no defined opcode
 decodes to `INVALID`. -/
 /- Type quantifiers: opcode : Nat, 0 ≤ opcode ∧ opcode ≤ 255 -/
-def decode_simple (opcode : opcode) : SailM ast := do
-  let opcode := (opcode).value
+def decode_simple (opcode : Nat) : SailM ast := do
   if (((128 ≤b opcode) && (opcode ≤b 143)) : Bool)
-  then (pure (DUP ⟨(opcode - 127)⟩))
+  then (pure (DUP (opcode - 127)))
   else
     (do
       if (((144 ≤b opcode) && (opcode ≤b 159)) : Bool)
-      then (pure (SWAP ⟨(opcode - 143)⟩))
+      then (pure (SWAP (opcode - 143)))
       else
         (do
           if (((160 ≤b opcode) && (opcode ≤b 164)) : Bool)
-          then (pure (LOG ⟨(opcode - 160)⟩))
+          then (pure (LOG (opcode - 160)))
           else
             (do
               match opcode with
@@ -233,7 +230,7 @@ immediate; Amsterdam's `DUPN`/`SWAPN`/`EXCHANGE` carry one byte,
 zero-padded at end of code. Every other byte decodes via
 [decode_simple][]. -/
 def fetch (_ : Unit) : SailM ast := do
-  let current ← do pure ((← readReg pc))
+  let current ← do readReg pc
   let ⟨_, ⟨_, code⟩⟩ ← do (pure (← readReg frame_code).bytes)
   let code_length := code.len
   if ((! (current <b code_length)) : Bool)
@@ -244,7 +241,11 @@ def fetch (_ : Unit) : SailM ast := do
         (pure (BitVec.toNatInt (← (slice_byte ⟨_, ⟨_, code⟩⟩ current)))) ) : SailM Nat )
       let immediate_offset := (current + 1)
       let decoded ← (( do
-        if (((opcode == 95) && (fork_lt (← readReg k_fork) Shanghai)) : Bool)
+        if ((← if ((opcode == 95) : Bool)
+             then
+               (do
+                 (pure (fork_lt (← readReg k_fork) Shanghai)))
+             else (pure false)) : Bool)
         then (pure (immediate_offset, (INVALID ())))
         else
           (do
@@ -252,14 +253,9 @@ def fetch (_ : Unit) : SailM ast := do
             then
               (do
                 let size : Nat := (opcode - 95)
-                let value ← do
-                  (do
-                      let publicResult ← (read_push ⟨_, ⟨_, code⟩⟩ immediate_offset
-                      ⟨size⟩)
-                      pure ((publicResult).value))
+                let value ← do (read_push ⟨_, ⟨_, code⟩⟩ immediate_offset size)
                 let after_immediate : Nat := ((current + 1) + size)
-                (pure (after_immediate, (PUSH
-                    ((fun (semanticValue0, semanticValue1) => (⟨semanticValue0⟩, ⟨semanticValue1⟩)) ((size, value)))))))
+                (pure (after_immediate, (PUSH (size, value)))))
             else
               (do
                 if (((fork_gteq (← readReg k_fork) Amsterdam) && ((230 ≤b opcode) && (opcode ≤b 232))) : Bool)
@@ -283,14 +279,15 @@ def fetch (_ : Unit) : SailM ast := do
                       | 232 => (EXCHANGE immediate)
                       | _ => (INVALID ())
                     (pure (after_instruction, instruction)))
-                else (pure (immediate_offset, (← (decode_simple ⟨opcode⟩)))))) ) : SailM
+                else (pure (immediate_offset, (← (decode_simple opcode)))))) ) : SailM
         (Nat × ast) )
       let (next_pc, instruction) := decoded
       writeReg pc next_pc
       (pure instruction))
 
 /-- Returns the active frame's halt output. -/
-def frame_output (_ : Unit) : SailM EvmByteSlice := do
+def frame_output (_ : Unit) : SailM (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
   match (← readReg frame_status) with
   | .Halted (.HaltReturn ⟨_, ⟨_, output⟩⟩) =>
     (pure ((⟨_, ⟨_, output⟩⟩ : (Sigma fun (k_off : Nat) =>
@@ -316,36 +313,44 @@ def frame_succeeded (_ : Unit) : SailM Bool := do
   | .Exceptional _ => (pure false)
 
 /-- Restores a message-call parent and applies the child's outcome. -/
-/- Type quantifiers: k_ex411030_ : Nat, k_ex411029_ : Nat, 0 ≤ k_ex411029_ ∧ 0 ≤ k_ex411030_ -/
-def resume_call (continuation : CallContinuation) (output : EvmByteSlice) : SailM Unit := do
+/- Type quantifiers: output_dependentWitness1 : Nat, output_dependentWitness0 : Nat, 0 ≤
+  output_dependentWitness0 ∧ 0 ≤ output_dependentWitness1 -/
+def resume_call (continuation : CallContinuation) (output : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM Unit := do
+  let output_dependentWitness0 := (output).1
+  let output_dependentWitness1 := ((output).2).1
   let output := ((output).2).2
   writeReg returndata ⟨_, ⟨_, output⟩⟩
   let checkpoint := continuation.checkpoint
   let succeeded ← do (frame_succeeded ())
-  let child_left ← do pure ((← readReg gas_remaining))
-  let child_state_left ← do pure ((← readReg state_gas_remaining))
-  let child_state_spill ← do pure (((← readReg state_gas_spilled)).value)
-  let child_refund ← do pure (((← readReg frame_refund)).value)
+  let child_left ← do readReg gas_remaining
+  let child_state_left ← do readReg state_gas_remaining
+  let child_state_spill ← do readReg state_gas_spilled
+  let child_refund ← do readReg frame_refund
   (restore_frame checkpoint)
   (refund_gas child_left)
-  (return_child_state_gas child_state_left ⟨child_state_spill⟩)
+  (return_child_state_gas child_state_left child_state_spill)
   (returndata_copy_prefix continuation.return_offset continuation.return_length)
   if (succeeded : Bool)
   then
     (do
       (record_refund child_refund)
-      (push_word ⟨(WORD_ONE).value⟩))
+      (push_word WORD_ONE))
   else
     (do
       (k_revert checkpoint.state)
       if (continuation.new_account_charged : Bool)
-      then (credit_state_gas_refund ⟨(G_amsterdam_state_new_account).value⟩)
+      then (credit_state_gas_refund G_amsterdam_state_new_account)
       else (pure ())
-      (push_word ⟨(WORD_ZERO).value⟩))
+      (push_word WORD_ZERO))
 
 /-- Restores a create parent and either deploys or rolls back the child. -/
-/- Type quantifiers: k_ex411034_ : Nat, k_ex411033_ : Nat, 0 ≤ k_ex411033_ ∧ 0 ≤ k_ex411034_ -/
-def resume_create (continuation : CreateContinuation) (output : EvmByteSlice) : SailM Unit := do
+/- Type quantifiers: output_dependentWitness1 : Nat, output_dependentWitness0 : Nat, 0 ≤
+  output_dependentWitness0 ∧ 0 ≤ output_dependentWitness1 -/
+def resume_create (continuation : CreateContinuation) (output : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM Unit := do
+  let output_dependentWitness0 := (output).1
+  let output_dependentWitness1 := ((output).2).1
   let output := ((output).2).2
   writeReg returndata ⟨_, ⟨_, output⟩⟩
   let checkpoint := continuation.checkpoint
@@ -357,9 +362,21 @@ def resume_create (continuation : CreateContinuation) (output : EvmByteSlice) : 
     if (initcode_succeeded : Bool)
     then
       (do
-        if (((! (← (deployed_code_size_allowed deployed_size))) || ((fork_gteq
-                 (← readReg k_fork) London) && ((deployed_size != 0) && ((← (slice_byte
-                       (← readReg returndata) 0)) == 0xEF#8)))) : Bool)
+        if ((← if ((! (← (deployed_code_size_allowed deployed_size))) : Bool)
+             then (pure true)
+             else
+               (do
+                 if ((fork_gteq (← readReg k_fork) London) : Bool)
+                 then
+                   (do
+                     if ((deployed_size != 0) : Bool)
+                     then
+                       (do
+                         (pure ((← do
+                                 let dependentArg0 := (← readReg returndata)
+                                 (slice_byte dependentArg0 0)) == 0xEF#8)))
+                     else (pure false))
+                 else (pure false))) : Bool)
         then
           (do
             (exc_halt OutOfGas)
@@ -386,45 +403,59 @@ def resume_create (continuation : CreateContinuation) (output : EvmByteSlice) : 
                     (exc_halt OutOfGas)
                     (pure frontier_empty_deposit)))))
     else (pure frontier_empty_deposit) ) : SailM Bool )
-  let deploy_succeeds ← do (pure (initcode_succeeded && (← (frame_succeeded ()))))
-  let child_left ← do pure ((← readReg gas_remaining))
-  let child_state_left ← do pure ((← readReg state_gas_remaining))
-  let child_state_spill ← do pure (((← readReg state_gas_spilled)).value)
-  let child_refund ← do pure (((← readReg frame_refund)).value)
+  let deploy_succeeds ← do
+    if (initcode_succeeded : Bool)
+    then
+      (do
+        (frame_succeeded ()))
+    else (pure false)
+  let child_left ← do readReg gas_remaining
+  let child_state_left ← do readReg state_gas_remaining
+  let child_state_spill ← do readReg state_gas_spilled
+  let child_refund ← do readReg frame_refund
   (restore_frame checkpoint)
   (refund_gas child_left)
-  (return_child_state_gas child_state_left ⟨child_state_spill⟩)
+  (return_child_state_gas child_state_left child_state_spill)
   if (deploy_succeeds : Bool)
   then
     (do
       (record_refund child_refund)
       let ⟨_, ⟨_, deployed_bytes⟩⟩ ← (( do
-        if (frontier_empty_deposit : Bool)
+        if _sailIf0 : (frontier_empty_deposit : Bool) = true
         then
-          (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
-            (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat)
-            => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
+          (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (output_dependentWitness0 : Nat) =>
+            (Sigma fun (output_dependentWitness1 : Nat) =>
+            (EvmByteSliceFields output_dependentWitness0 output_dependentWitness1)))) : (Sigma fun
+            (output_dependentWitness0 : Nat) =>
+            (Sigma fun (output_dependentWitness1 : Nat) =>
+            (EvmByteSliceFields output_dependentWitness0 output_dependentWitness1)))))
         else
           (do
-            pure ((← readReg returndata))) ) : SailM
-        (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) )
+            readReg returndata) ) : SailM
+        (Sigma fun (output_dependentWitness0 : Nat) =>
+        (Sigma fun (output_dependentWitness1 : Nat) =>
+        (EvmByteSliceFields output_dependentWitness0 output_dependentWitness1))) )
       let ⟨_, ⟨_, deployed_code⟩⟩ := (validated_code_slice ⟨_, ⟨_, deployed_bytes⟩⟩)
       (k_deploy_code continuation.address ⟨_, ⟨_, deployed_code⟩⟩)
-      (push_word ⟨((address_to_word continuation.address)).value⟩))
+      (push_word (address_to_word continuation.address)))
   else
     (do
       (k_revert checkpoint.state)
       if (continuation.new_account_charged : Bool)
-      then (credit_state_gas_refund ⟨(G_amsterdam_state_new_account).value⟩)
+      then (credit_state_gas_refund G_amsterdam_state_new_account)
       else (pure ())
-      (push_word ⟨(WORD_ZERO).value⟩))
+      (push_word WORD_ZERO))
   if (initcode_succeeded : Bool)
   then (returndata_clear ())
   else (pure ())
 
 /-- Applies the pending operation for one completed child frame. -/
-/- Type quantifiers: k_ex411038_ : Nat, k_ex411037_ : Nat, 0 ≤ k_ex411037_ ∧ 0 ≤ k_ex411038_ -/
-def resume_frame (continuation : FrameContinuation) (output : EvmByteSlice) : SailM Unit := do
+/- Type quantifiers: output_dependentWitness1 : Nat, output_dependentWitness0 : Nat, 0 ≤
+  output_dependentWitness0 ∧ 0 ≤ output_dependentWitness1 -/
+def resume_frame (continuation : FrameContinuation) (output : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM Unit := do
+  let output_dependentWitness0 := (output).1
+  let output_dependentWitness1 := ((output).2).1
   let output := ((output).2).2
   match continuation with
   | .ResumeCall call => (resume_call call ⟨_, ⟨_, output⟩⟩)
@@ -435,7 +466,8 @@ active frame, resumes suspended parents from [frame_stack][] as children
 halt, and returns the top-level frame's output. `STOP`, `SELFDESTRUCT`,
 and exceptional halts return the empty slice; `RETURN` and `REVERT` carry
 their frozen memory slice in the halt value. -/
-def interpret (_ : Unit) : SailM EvmByteSlice := do
+def interpret (_ : Unit) : SailM (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
   (frame_stack_reset ())
   let interpreting : Bool := true
   let result : (Sigma fun (k_off : Nat) =>
@@ -448,7 +480,7 @@ def interpret (_ : Unit) : SailM EvmByteSlice := do
       fun (interpreting, result) => do
         assert true "loop dummy assert"
         let (interpreting, result) ← (( do
-          if ((← (is_running ())) : Bool)
+          if _sailIf0 : ((← (is_running ())) : Bool) = true
           then
             (do
               (execute (← (fetch ())))
@@ -458,7 +490,7 @@ def interpret (_ : Unit) : SailM EvmByteSlice := do
             (do
               let ⟨_, ⟨_, output⟩⟩ ← do (frame_output ())
               let (interpreting, result) ← (( do
-                if ((← (frame_stack_is_empty ())) : Bool)
+                if _sailIf1 : ((← (frame_stack_is_empty ())) : Bool) = true
                 then
                   (let result : (Sigma fun (k_off : Nat) =>
                     (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) :=

@@ -3629,6 +3629,180 @@ static bool EQUAL(zByteSliceFields)(struct zByteSliceFields op1, struct zByteSli
   return (op1.zlen == op2.zlen) && (op1.zoff == op2.zoff) && EQUAL(zByteSource)(op1.zsource, op2.zsource);
 }
 
+static void COPY(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(struct ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9 *rop, const struct ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9 op) {
+  rop->ztup0 = op.ztup0;
+  COPY(zNodeRef)(&rop->ztup1, op.ztup1);
+}
+
+static void CREATE(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(struct ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9 *op) {
+  CREATE(zNodeRef)(&op->ztup1);
+}
+
+static void RECREATE(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(struct ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9 *op) {
+  RECREATE(zNodeRef)(&op->ztup1);
+}
+
+static void KILL(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(struct ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9 *op) {
+  KILL(zNodeRef)(&op->ztup1);
+}
+
+static bool EQUAL(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(struct ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9 op1, struct ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9 op2) {
+  return EQUAL(zTriePath)(op1.ztup0, op2.ztup0) && EQUAL(zNodeRef)(op1.ztup1, op2.ztup1);
+}
+
+static void COPY(ztuple_z8z5structz0zzTriePathzCz0z5structz0zzByteSliceFieldsz9)(struct ztuple_z8z5structz0zzTriePathzCz0z5structz0zzByteSliceFieldsz9 *rop, const struct ztuple_z8z5structz0zzTriePathzCz0z5structz0zzByteSliceFieldsz9 op) {
+  rop->ztup0 = op.ztup0;
+  rop->ztup1 = op.ztup1;
+}
+
+static bool EQUAL(ztuple_z8z5structz0zzTriePathzCz0z5structz0zzByteSliceFieldsz9)(struct ztuple_z8z5structz0zzTriePathzCz0z5structz0zzByteSliceFieldsz9 op1, struct ztuple_z8z5structz0zzTriePathzCz0z5structz0zzByteSliceFieldsz9 op2) {
+  return EQUAL(zTriePath)(op1.ztup0, op2.ztup0) && EQUAL(zByteSliceFields)(op1.ztup1, op2.ztup1);
+}
+
+static void COPY(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(struct ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9 *rop, const struct ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9 op) {
+  COPY(zz5vecz8z5unionz0zzNodeRefz9)(&rop->ztup0, op.ztup0);
+  rop->ztup1 = op.ztup1;
+}
+
+static void CREATE(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(struct ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9 *op) {
+  CREATE(zz5vecz8z5unionz0zzNodeRefz9)(&op->ztup0);
+}
+
+static void RECREATE(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(struct ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9 *op) {
+  RECREATE(zz5vecz8z5unionz0zzNodeRefz9)(&op->ztup0);
+}
+
+static void KILL(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(struct ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9 *op) {
+  KILL(zz5vecz8z5unionz0zzNodeRefz9)(&op->ztup0);
+}
+
+static bool EQUAL(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(struct ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9 op1, struct ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9 op2) {
+  return EQUAL(zz5vecz8z5unionz0zzNodeRefz9)(op1.ztup0, op2.ztup0) && EQUAL(zByteSliceFields)(op1.ztup1, op2.ztup1);
+}
+
+static void CREATE(zTrieNode)(struct zTrieNode *op) {
+  op->kind = Kind_zBranchNode;
+  CREATE(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(&op->variants.zBranchNode);
+}
+
+static void RECREATE(zTrieNode)(struct zTrieNode *op) {
+
+}
+
+static void KILL(zTrieNode)(struct zTrieNode *op) {
+  switch (op->kind) {
+  case Kind_zBranchNode: {
+    KILL(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(&op->variants.zBranchNode);
+    break;
+  }
+  case Kind_zExtensionNode: {
+    KILL(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(&op->variants.zExtensionNode);
+    break;
+  }
+  default: break;
+  }
+}
+
+static void COPY(zTrieNode)(struct zTrieNode *rop, struct zTrieNode op) {
+  switch (rop->kind) {
+  case Kind_zBranchNode: {
+    KILL(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(&rop->variants.zBranchNode);
+    break;
+  }
+  case Kind_zExtensionNode: {
+    KILL(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(&rop->variants.zExtensionNode);
+    break;
+  }
+  default: break;
+  };
+  rop->kind = op.kind;
+  switch (op.kind) {
+  case Kind_zBranchNode: {
+    CREATE(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(&rop->variants.zBranchNode); COPY(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(&rop->variants.zBranchNode, op.variants.zBranchNode);
+    break;
+  }
+  case Kind_zExtensionNode: {
+    CREATE(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(&rop->variants.zExtensionNode); COPY(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(&rop->variants.zExtensionNode, op.variants.zExtensionNode);
+    break;
+  }
+  case Kind_zLeafNode: {
+    rop->variants.zLeafNode = op.variants.zLeafNode;
+    break;
+  }
+  }
+}
+
+static bool EQUAL(zTrieNode)(struct zTrieNode op1, struct zTrieNode op2) {
+  if (op1.kind != op2.kind) {
+    return false;
+  }
+  switch (op1.kind) {
+  case Kind_zBranchNode: {
+    return EQUAL(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(op1.variants.zBranchNode, op2.variants.zBranchNode);
+    break;
+  }
+  case Kind_zExtensionNode: {
+    return EQUAL(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(op1.variants.zExtensionNode, op2.variants.zExtensionNode);
+    break;
+  }
+  case Kind_zLeafNode: {
+    return EQUAL(ztuple_z8z5structz0zzTriePathzCz0z5structz0zzByteSliceFieldsz9)(op1.variants.zLeafNode, op2.variants.zLeafNode);
+    break;
+  }
+  }
+  return false;
+}
+
+static void zBranchNode(struct zTrieNode *rop, struct ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9 op) {
+  switch (rop->kind) {
+  case Kind_zBranchNode: {
+    KILL(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(&rop->variants.zBranchNode);
+    break;
+  }
+  case Kind_zExtensionNode: {
+    KILL(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(&rop->variants.zExtensionNode);
+    break;
+  }
+  default: break;
+  }
+  rop->kind = Kind_zBranchNode;
+  CREATE(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(&rop->variants.zBranchNode);
+  COPY(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(&rop->variants.zBranchNode, op);
+}
+
+static void zExtensionNode(struct zTrieNode *rop, struct ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9 op) {
+  switch (rop->kind) {
+  case Kind_zBranchNode: {
+    KILL(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(&rop->variants.zBranchNode);
+    break;
+  }
+  case Kind_zExtensionNode: {
+    KILL(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(&rop->variants.zExtensionNode);
+    break;
+  }
+  default: break;
+  }
+  rop->kind = Kind_zExtensionNode;
+  CREATE(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(&rop->variants.zExtensionNode);
+  COPY(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(&rop->variants.zExtensionNode, op);
+}
+
+static void zLeafNode(struct zTrieNode *rop, struct ztuple_z8z5structz0zzTriePathzCz0z5structz0zzByteSliceFieldsz9 op) {
+  switch (rop->kind) {
+  case Kind_zBranchNode: {
+    KILL(ztuple_z8z5vecz8z5unionz0zzNodeRefz9zCz0z5structz0zzByteSliceFieldsz9)(&rop->variants.zBranchNode);
+    break;
+  }
+  case Kind_zExtensionNode: {
+    KILL(ztuple_z8z5structz0zzTriePathzCz0z5unionz0zzNodeRefz9)(&rop->variants.zExtensionNode);
+    break;
+  }
+  default: break;
+  }
+  rop->kind = Kind_zLeafNode;
+  rop->variants.zLeafNode = op;
+}
+
 static void CREATE(zTrieItemValue)(struct zTrieItemValue *op) {
   op->kind = Kind_zBranchItem;
   CREATE(zNodeRef)(&op->variants.zBranchItem);
@@ -4069,46 +4243,23 @@ static bool EQUAL(zSszzContainerCursor)(struct zSszzContainerCursor op1, struct 
   return EQUAL(zByteSliceFields)(op1.zbytes, op2.zbytes) && (op1.zcurrent == op2.zcurrent);
 }
 
-static void COPY(zRlpFieldRefFields)(struct zRlpFieldRefFields *rop, const struct zRlpFieldRefFields op) {
+static void COPY(zRlpFieldRef)(struct zRlpFieldRef *rop, const struct zRlpFieldRef op) {
   rop->zcontent_len = op.zcontent_len;
-  rop->zcontent_off = op.zcontent_off;
-  rop->zfull_len = op.zfull_len;
-  rop->zfull_off = op.zfull_off;
   rop->zis_list = op.zis_list;
   rop->zsource = op.zsource;
 }
 
-static bool EQUAL(zRlpFieldRefFields)(struct zRlpFieldRefFields op1, struct zRlpFieldRefFields op2) {
-  return (op1.zcontent_len == op2.zcontent_len) && (op1.zcontent_off == op2.zcontent_off) && (op1.zfull_len == op2.zfull_len) && (op1.zfull_off == op2.zfull_off) && EQUAL(bool)(op1.zis_list, op2.zis_list) && EQUAL(zByteSliceFields)(op1.zsource, op2.zsource);
+static bool EQUAL(zRlpFieldRef)(struct zRlpFieldRef op1, struct zRlpFieldRef op2) {
+  return (op1.zcontent_len == op2.zcontent_len) && EQUAL(bool)(op1.zis_list, op2.zis_list) && EQUAL(zByteSliceFields)(op1.zsource, op2.zsource);
 }
 
-static void COPY(zLeafNodeData)(struct zLeafNodeData *rop, const struct zLeafNodeData op) {
-  rop->zpath = op.zpath;
-  rop->zvalue = op.zvalue;
-}
-
-static bool EQUAL(zLeafNodeData)(struct zLeafNodeData op1, struct zLeafNodeData op2) {
-  return EQUAL(zTriePath)(op1.zpath, op2.zpath) && EQUAL(zRlpFieldRefFields)(op1.zvalue, op2.zvalue);
-}
-
-static void COPY(zExtensionNodeData)(struct zExtensionNodeData *rop, const struct zExtensionNodeData op) {
-  rop->zchild = op.zchild;
-  rop->zpath = op.zpath;
-}
-
-static bool EQUAL(zExtensionNodeData)(struct zExtensionNodeData op1, struct zExtensionNodeData op2) {
-  return EQUAL(zRlpFieldRefFields)(op1.zchild, op2.zchild) && EQUAL(zTriePath)(op1.zpath, op2.zpath);
-}
-
-static void COPY(zRlpCursorFields)(struct zRlpCursorFields *rop, const struct zRlpCursorFields op) {
+static void COPY(zRlpCursor)(struct zRlpCursor *rop, const struct zRlpCursor op) {
   rop->zcurrent = op.zcurrent;
   rop->zsource = op.zsource;
-  rop->zstop = op.zstop;
-  rop->zvalid = op.zvalid;
 }
 
-static bool EQUAL(zRlpCursorFields)(struct zRlpCursorFields op1, struct zRlpCursorFields op2) {
-  return (op1.zcurrent == op2.zcurrent) && EQUAL(zByteSliceFields)(op1.zsource, op2.zsource) && (op1.zstop == op2.zstop) && EQUAL(bool)(op1.zvalid, op2.zvalid);
+static bool EQUAL(zRlpCursor)(struct zRlpCursor op1, struct zRlpCursor op2) {
+  return (op1.zcurrent == op2.zcurrent) && EQUAL(zByteSliceFields)(op1.zsource, op2.zsource);
 }
 
 static void COPY(zPrecompileResult)(struct zPrecompileResult *rop, const struct zPrecompileResult op) {
@@ -5118,238 +5269,6 @@ static void zByteRegionReady(struct zByteRegionResult *rop, struct zByteSliceFie
 
   rop->kind = Kind_zByteRegionReady;
   rop->variants.zByteRegionReady = op;
-}
-
-static void CREATE(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(zz5vecz8z5structz0zzRlpFieldRefFieldsz9 *rop) {
-  rop->len = 0;
-  rop->data = NULL;
-}
-
-static void KILL(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(zz5vecz8z5structz0zzRlpFieldRefFieldsz9 *rop) {
-  if (rop->data != NULL) sail_free(rop->data);
-}
-
-static void fast_vector_init_zz5vecz8z5structz0zzRlpFieldRefFieldsz9(zz5vecz8z5structz0zzRlpFieldRefFieldsz9 *vec, const int64_t n, struct zRlpFieldRefFields elem) {
-  KILL(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(vec);
-  size_t m = (size_t)n;
-  vec->len = m;
-  vec->data = sail_new_array(struct zRlpFieldRefFields, m);
-  for (size_t i = 0; i < m; i++) {
-    (vec->data)[i] = elem;
-  }
-}
-
-static void fast_unsigned_vector_init_zz5vecz8z5structz0zzRlpFieldRefFieldsz9(zz5vecz8z5structz0zzRlpFieldRefFieldsz9 *vec, const uint64_t n, struct zRlpFieldRefFields elem) {
-  KILL(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(vec);
-  size_t m = (size_t)n;
-  vec->len = m;
-  vec->data = sail_new_array(struct zRlpFieldRefFields, m);
-  for (size_t i = 0; i < m; i++) {
-    (vec->data)[i] = elem;
-  }
-}
-
-static void RECREATE(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(zz5vecz8z5structz0zzRlpFieldRefFieldsz9 *rop) {
-  KILL(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(rop);
-  CREATE(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(rop);
-}
-
-static struct zRlpFieldRefFields fast_vector_access_zz5vecz8z5structz0zzRlpFieldRefFieldsz9(zz5vecz8z5structz0zzRlpFieldRefFieldsz9 op, int64_t n) {
-  return op.data[n];
-}
-
-static struct zRlpFieldRefFields fast_unsigned_vector_access_zz5vecz8z5structz0zzRlpFieldRefFieldsz9(zz5vecz8z5structz0zzRlpFieldRefFieldsz9 op, uint64_t n) {
-  return op.data[n];
-}
-
-static void COPY(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(zz5vecz8z5structz0zzRlpFieldRefFieldsz9 *rop, zz5vecz8z5structz0zzRlpFieldRefFieldsz9 op) {
-  KILL(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(rop);
-  rop->len = op.len;
-  rop->data = sail_new_array(struct zRlpFieldRefFields, rop->len);
-  for (int i = 0; i < op.len; i++) {
-    (rop->data)[i] = op.data[i];
-  }
-}
-
-static void fast_vector_update_zz5vecz8z5structz0zzRlpFieldRefFieldsz9(zz5vecz8z5structz0zzRlpFieldRefFieldsz9 *rop, zz5vecz8z5structz0zzRlpFieldRefFieldsz9 op, const int64_t n, struct zRlpFieldRefFields elem) {
-  size_t m = (size_t)n;
-  if (rop->data == op.data) {
-    rop->data[m] = elem;
-  } else {
-    COPY(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(rop, op);
-    rop->data[m] = elem;
-  }
-}
-
-static void fast_unsigned_vector_update_zz5vecz8z5structz0zzRlpFieldRefFieldsz9(zz5vecz8z5structz0zzRlpFieldRefFieldsz9 *rop, zz5vecz8z5structz0zzRlpFieldRefFieldsz9 op, const uint64_t n, struct zRlpFieldRefFields elem) {
-  size_t m = (size_t)n;
-  if (rop->data == op.data) {
-    rop->data[m] = elem;
-  } else {
-    COPY(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(rop, op);
-    rop->data[m] = elem;
-  }
-}
-
-static bool EQUAL(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(const zz5vecz8z5structz0zzRlpFieldRefFieldsz9 op1, const zz5vecz8z5structz0zzRlpFieldRefFieldsz9 op2) {
-  if (op1.len != op2.len) return false;
-  bool result = true;
-  for (int i = 0; i < op1.len; i++) {
-    result &= EQUAL(zRlpFieldRefFields)(op1.data[i], op2.data[i]);
-  }
-  return result;
-}
-
-static void internal_vector_update_zz5vecz8z5structz0zzRlpFieldRefFieldsz9(zz5vecz8z5structz0zzRlpFieldRefFieldsz9 *rop, zz5vecz8z5structz0zzRlpFieldRefFieldsz9 op, const int64_t n, struct zRlpFieldRefFields elem) {
-  rop->data[n] = elem;
-}
-
-static void internal_vector_init_zz5vecz8z5structz0zzRlpFieldRefFieldsz9(zz5vecz8z5structz0zzRlpFieldRefFieldsz9 *rop, const int64_t len) {
-  rop->len = len;
-  rop->data = sail_new_array(struct zRlpFieldRefFields, len);
-}
-
-static void COPY(zBranchNodeData)(struct zBranchNodeData *rop, const struct zBranchNodeData op) {
-  COPY(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(&rop->zchildren, op.zchildren);
-  rop->zvalue = op.zvalue;
-}
-
-static void CREATE(zBranchNodeData)(struct zBranchNodeData *op) {
-  CREATE(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(&op->zchildren);
-}
-
-static void RECREATE(zBranchNodeData)(struct zBranchNodeData *op) {
-  RECREATE(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(&op->zchildren);
-}
-
-static void KILL(zBranchNodeData)(struct zBranchNodeData *op) {
-  KILL(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(&op->zchildren);
-}
-
-static bool EQUAL(zBranchNodeData)(struct zBranchNodeData op1, struct zBranchNodeData op2) {
-  return EQUAL(zz5vecz8z5structz0zzRlpFieldRefFieldsz9)(op1.zchildren, op2.zchildren) && EQUAL(zRlpFieldRefFields)(op1.zvalue, op2.zvalue);
-}
-
-static void CREATE(zTrieNode)(struct zTrieNode *op) {
-  op->kind = Kind_zBranchNode;
-  CREATE(zBranchNodeData)(&op->variants.zBranchNode);
-}
-
-static void RECREATE(zTrieNode)(struct zTrieNode *op) {
-
-}
-
-static void KILL(zTrieNode)(struct zTrieNode *op) {
-  switch (op->kind) {
-  case Kind_zBranchNode: {
-    KILL(zBranchNodeData)(&op->variants.zBranchNode);
-    break;
-  }
-  default: break;
-  }
-}
-
-static void COPY(zTrieNode)(struct zTrieNode *rop, struct zTrieNode op) {
-  switch (rop->kind) {
-  case Kind_zBranchNode: {
-    KILL(zBranchNodeData)(&rop->variants.zBranchNode);
-    break;
-  }
-  default: break;
-  };
-  rop->kind = op.kind;
-  switch (op.kind) {
-  case Kind_zBranchNode: {
-    CREATE(zBranchNodeData)(&rop->variants.zBranchNode); COPY(zBranchNodeData)(&rop->variants.zBranchNode, op.variants.zBranchNode);
-    break;
-  }
-  case Kind_zExtensionNode: {
-    rop->variants.zExtensionNode = op.variants.zExtensionNode;
-    break;
-  }
-  case Kind_zInvalidNode: {
-    rop->variants.zInvalidNode = op.variants.zInvalidNode;
-    break;
-  }
-  case Kind_zLeafNode: {
-    rop->variants.zLeafNode = op.variants.zLeafNode;
-    break;
-  }
-  }
-}
-
-static bool EQUAL(zTrieNode)(struct zTrieNode op1, struct zTrieNode op2) {
-  if (op1.kind != op2.kind) {
-    return false;
-  }
-  switch (op1.kind) {
-  case Kind_zBranchNode: {
-    return EQUAL(zBranchNodeData)(op1.variants.zBranchNode, op2.variants.zBranchNode);
-    break;
-  }
-  case Kind_zExtensionNode: {
-    return EQUAL(zExtensionNodeData)(op1.variants.zExtensionNode, op2.variants.zExtensionNode);
-    break;
-  }
-  case Kind_zInvalidNode: {
-    return EQUAL(unit)(op1.variants.zInvalidNode, op2.variants.zInvalidNode);
-    break;
-  }
-  case Kind_zLeafNode: {
-    return EQUAL(zLeafNodeData)(op1.variants.zLeafNode, op2.variants.zLeafNode);
-    break;
-  }
-  }
-  return false;
-}
-
-static void zBranchNode(struct zTrieNode *rop, struct zBranchNodeData op) {
-  switch (rop->kind) {
-  case Kind_zBranchNode: {
-    KILL(zBranchNodeData)(&rop->variants.zBranchNode);
-    break;
-  }
-  default: break;
-  }
-  rop->kind = Kind_zBranchNode;
-  CREATE(zBranchNodeData)(&rop->variants.zBranchNode);
-  COPY(zBranchNodeData)(&rop->variants.zBranchNode, op);
-}
-
-static void zExtensionNode(struct zTrieNode *rop, struct zExtensionNodeData op) {
-  switch (rop->kind) {
-  case Kind_zBranchNode: {
-    KILL(zBranchNodeData)(&rop->variants.zBranchNode);
-    break;
-  }
-  default: break;
-  }
-  rop->kind = Kind_zExtensionNode;
-  rop->variants.zExtensionNode = op;
-}
-
-static void zInvalidNode(struct zTrieNode *rop, unit op) {
-  switch (rop->kind) {
-  case Kind_zBranchNode: {
-    KILL(zBranchNodeData)(&rop->variants.zBranchNode);
-    break;
-  }
-  default: break;
-  }
-  rop->kind = Kind_zInvalidNode;
-  rop->variants.zInvalidNode = op;
-}
-
-static void zLeafNode(struct zTrieNode *rop, struct zLeafNodeData op) {
-  switch (rop->kind) {
-  case Kind_zBranchNode: {
-    KILL(zBranchNodeData)(&rop->variants.zBranchNode);
-    break;
-  }
-  default: break;
-  }
-  rop->kind = Kind_zLeafNode;
-  rop->variants.zLeafNode = op;
 }
 
 static void COPY(zBoundedSszzListRef)(struct zBoundedSszzListRef *rop, const struct zBoundedSszzListRef op) {
@@ -6475,13 +6394,13 @@ static bool EQUAL(ztuple_z8z5boolzCz0z5u64zCz0z5u64z9)(struct ztuple_z8z5boolzCz
   return EQUAL(bool)(op1.ztup0, op2.ztup0) && (op1.ztup1 == op2.ztup1) && (op1.ztup2 == op2.ztup2);
 }
 
-static void COPY(ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9)(struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 *rop, const struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 op) {
+static void COPY(ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9)(struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 *rop, const struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 op) {
   rop->ztup0 = op.ztup0;
   rop->ztup1 = op.ztup1;
 }
 
-static bool EQUAL(ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9)(struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 op1, struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 op2) {
-  return EQUAL(zRlpFieldRefFields)(op1.ztup0, op2.ztup0) && EQUAL(zRlpCursorFields)(op1.ztup1, op2.ztup1);
+static bool EQUAL(ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9)(struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 op1, struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 op2) {
+  return EQUAL(zRlpFieldRef)(op1.ztup0, op2.ztup0) && EQUAL(zRlpCursor)(op1.ztup1, op2.ztup1);
 }
 
 static void COPY(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 *rop, const struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 op) {
@@ -7261,10 +7180,10 @@ struct zBlockHeader zk_header;
 // register zk_tx
 struct zTxEnv zk_tx;
 
-uint64_t zHEX_PREFIX_MAX_LENGTH;
-
-
 uint64_t zMPT_HASH_LENGTH;
+
+
+uint64_t zHEX_PREFIX_MAX_LENGTH;
 
 
 // register zpc

@@ -57,9 +57,9 @@ inspection; a later record overwrites an earlier one. -/
 def validation_debug_record (_scope : (BitVec 8)) (_reason : BlockError) : Unit :=
   ()
 
-def debug_account_storage_root (_a : address) : hash :=
+def debug_account_storage_root (_a : (Vector (BitVec 8) 20)) : (Vector (BitVec 8) 32) :=
   EMPTY_TRIE_ROOT
 
-def debug_rebuild_state_root (_ : Unit) : hash :=
+def debug_rebuild_state_root (_ : Unit) : (Vector (BitVec 8) 32) :=
   EMPTY_TRIE_ROOT
 

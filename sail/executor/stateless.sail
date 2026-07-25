@@ -60,15 +60,9 @@ function validate_executed_block(block : Block, input_ref : StatelessInputRef, r
     };
     if k_fork >= Amsterdam then {
         cycle_scope_start(SCOPE_BLOCK_ACCESS_LIST);
-        let block_access_list = encode_block_access_list();
-        cycle_scope_end(SCOPE_BLOCK_ACCESS_LIST);
-        let maximum_items = header.gas_limit / 2000;
-        if block_access_list.item_count > maximum_items then {
-            throw InvalidBlock(BlockAccessListTooLarge)
-        };
-        if not_bool(bytes_segments_equal_slice([|BytesSlice(block_access_list.bytes)|], block.body.block_access_list)) then {
-            throw InvalidBlock(InvalidBlockAccessList)
-        }
+        let maximum_items : item_count = header.gas_limit / 2000;
+        validate_block_access_list(block.body.block_access_list, maximum_items);
+        cycle_scope_end(SCOPE_BLOCK_ACCESS_LIST)
     }
 }
 

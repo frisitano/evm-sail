@@ -207,8 +207,7 @@ def SSZ_ZERO_HASH_25 : hash :=
 
 /-- The root of an all-zero subtree at `level`. -/
 /- Type quantifiers: level : Nat, 0 ≤ level ∧ level ≤ 25 -/
-def ssz_zero_hash (level : htr_depth) : hash :=
-  let level := (level).value
+def ssz_zero_hash (level : Nat) : (Vector (BitVec 8) 32) :=
   match level with
   | 0 => ZERO_HASH
   | 1 => SSZ_ZERO_HASH_01
@@ -239,9 +238,8 @@ def ssz_zero_hash (level : htr_depth) : hash :=
 
 /-- Number of leaves in a complete supported SSZ tree at `depth`. -/
 /- Type quantifiers: depth : Nat, 0 ≤ depth ∧ depth ≤ 25 -/
-def htr_leaf_capacity (depth : htr_depth) : htr_leaf_count :=
-  let depth := (depth).value
-  ⟨match depth with
+def htr_leaf_capacity (depth : Nat) : Nat :=
+  match depth with
   | 0 => 1
   | 1 => 2
   | 2 => 4
@@ -267,33 +265,28 @@ def htr_leaf_capacity (depth : htr_depth) : htr_leaf_count :=
   | 22 => 4194304
   | 23 => 8388608
   | 24 => 16777216
-  | _ => 33554432⟩
+  | _ => 33554432
 
 /-- Advances within the supported execution-layer SSZ depth range. -/
 /- Type quantifiers: depth : Nat, 0 ≤ depth ∧ depth ≤ 25 -/
-def htr_depth_increment (depth : htr_depth) : SailM htr_depth := do
-  let depth := (depth).value
-  let publicResult ← do
-    if ((depth <b 25) : Bool)
-    then (pure (depth + 1))
-    else sailThrow ((InvalidBlock WitnessDeficient))
-  pure (⟨publicResult⟩)
+def htr_depth_increment (depth : Nat) : SailM Nat := do
+  if ((depth <b 25) : Bool)
+  then (pure (depth + 1))
+  else sailThrow ((InvalidBlock WitnessDeficient))
 
 /-- Creates an empty accumulator whose capacity is determined by its SSZ tree
 depth. -/
 /- Type quantifiers: depth : Nat, 0 ≤ depth ∧ depth ≤ 25 -/
-def merkle_accumulator_empty (depth : htr_depth) : MerkleAccumulator :=
-  let depth := (depth).value
+def merkle_accumulator_empty (depth : Nat) : MerkleAccumulator :=
   { frontier := [],
-    count := ⟨0⟩,
-    depth := ⟨depth⟩ }
+    count := 0,
+    depth := depth }
 
 /-- Adds leaf number `count` to a low-to-high frontier. A set bit in
 `count` has one occupied slot at that level; carries consume those
 slots head-first. -/
-/- Type quantifiers: k_ex411670_ : Nat, 0 ≤ k_ex411670_ ∧ k_ex411670_ ≤ 33554432 -/
-def merkle_push (frontier : (List MerkleSlot)) (count : htr_leaf_count) (leaf : hash) : SailM (List MerkleSlot) := do
-  let count := (count).value
+/- Type quantifiers: k_ex418109_ : Nat, 0 ≤ k_ex418109_ ∧ k_ex418109_ ≤ 33554432 -/
+def merkle_push (frontier : (List MerkleSlot)) (count : Nat) (leaf : (Vector (BitVec 8) 32)) : SailM (List MerkleSlot) := do
   if (((Nat.mod count 2) == 0) : Bool)
   then
     (match frontier with
@@ -303,30 +296,27 @@ def merkle_push (frontier : (List MerkleSlot)) (count : htr_leaf_count) (leaf : 
     (do
       match frontier with
       | (.OccupiedMerkleSlot left :: rest) =>
-        (pure ((EmptyMerkleSlot ()) :: (← (merkle_push rest ⟨(Nat.div count 2)⟩
+        (pure ((EmptyMerkleSlot ()) :: (← (merkle_push rest (Nat.div count 2)
               (← (sha256_pair left leaf))))))
       | (.EmptyMerkleSlot () :: _) => sailThrow ((InvalidBlock WitnessDeficient))
       | [] => sailThrow ((InvalidBlock WitnessDeficient)))
 
 /-- Adds one leaf to a streaming Merkle accumulator. -/
-def merkle_accumulator_push (accumulator : MerkleAccumulator) (leaf : hash) : SailM MerkleAccumulator := do
-  let count := (accumulator.count).value
-  if ((count <b ((htr_leaf_capacity ⟨(accumulator.depth).value⟩)).value) : Bool)
+def merkle_accumulator_push (accumulator : MerkleAccumulator) (leaf : (Vector (BitVec 8) 32)) : SailM MerkleAccumulator := do
+  let count := accumulator.count
+  if ((count <b (htr_leaf_capacity accumulator.depth)) : Bool)
   then
-    (pure { frontier := ← (merkle_push accumulator.frontier ⟨count⟩ leaf),
-            count := ⟨(count + 1)⟩,
-            depth := ⟨(accumulator.depth).value⟩ })
+    (pure { frontier := ← (merkle_push accumulator.frontier count leaf),
+            count := (count + 1),
+            depth := accumulator.depth })
   else sailThrow ((InvalidBlock WitnessDeficient))
 
 /-- Completes a frontier with zero subtrees through `remaining` levels and
 returns its Merkle root. -/
-/- Type quantifiers: _reclimit : Nat, k_ex411673_ : Nat, k_ex411672_ : Nat, k_ex411671_ : Nat, 0 ≤
-  k_ex411671_ ∧ k_ex411671_ ≤ 33554432, 0 ≤ k_ex411672_ ∧ k_ex411672_ ≤ 25, 0 ≤
-  k_ex411673_ ∧ k_ex411673_ ≤ 25, 0 ≤ _reclimit -/
-def _rec_merkle_root_levels (slots : (List MerkleSlot)) (n : htr_leaf_count) (acc : hash) (level : htr_depth) (remaining : htr_depth) (_reclimit : Nat) : SailM hash := do
-  let n := (n).value
-  let level := (level).value
-  let remaining := (remaining).value
+/- Type quantifiers: _reclimit : Nat, k_ex418112_ : Nat, k_ex418111_ : Nat, k_ex418110_ : Nat, 0 ≤
+  k_ex418110_ ∧ k_ex418110_ ≤ 33554432, 0 ≤ k_ex418111_ ∧ k_ex418111_ ≤ 25, 0 ≤
+  k_ex418112_ ∧ k_ex418112_ ≤ 25, 0 ≤ _reclimit -/
+def _rec_merkle_root_levels (slots : (List MerkleSlot)) (n : Nat) (acc : (Vector (BitVec 8) 32)) (level : Nat) (remaining : Nat) (_reclimit : Nat) : SailM (Vector (BitVec 8) 32) := do
   match _reclimit with
   | 0 =>
     (do
@@ -350,7 +340,7 @@ def _rec_merkle_root_levels (slots : (List MerkleSlot)) (n : htr_leaf_count) (ac
               else sailThrow ((InvalidBlock WitnessDeficient))))
       else
         (do
-          let zero := (ssz_zero_hash ⟨level⟩)
+          let zero := (ssz_zero_hash level)
           let slot : MerkleSlot := (EmptyMerkleSlot ())
           let rest : (List MerkleSlot) := []
           let (rest, slot) : ((List MerkleSlot) × MerkleSlot) :=
@@ -368,12 +358,9 @@ def _rec_merkle_root_levels (slots : (List MerkleSlot)) (n : htr_leaf_count) (ac
                 | .OccupiedMerkleSlot left => (sha256_pair left acc)
                 | .EmptyMerkleSlot () => sailThrow ((InvalidBlock WitnessDeficient)))
             else (sha256_pair acc zero)
-          let next_level ← do
-            (do
-                let publicResult ← (htr_depth_increment ⟨level⟩)
-                pure ((publicResult).value))
-          (_rec_merkle_root_levels rest ⟨(Nat.div n 2)⟩ next_acc ⟨next_level⟩
-            ⟨(remaining - 1)⟩ _reclimit_pred)))
+          let next_level ← do (htr_depth_increment level)
+          (_rec_merkle_root_levels rest (Nat.div n 2) next_acc next_level (remaining - 1)
+            _reclimit_pred)))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
@@ -381,41 +368,35 @@ decreasing_by all_goals exact Nat.lt_succ_self _
 returns its Merkle root. -/
 /- Type quantifiers: remaining : Nat, level : Nat, n : Nat, 0 ≤ n ∧ n ≤ 33554432, 0 ≤ level
   ∧ level ≤ 25, 0 ≤ remaining ∧ remaining ≤ 25 -/
-def merkle_root_levels (slots : (List MerkleSlot)) (n : htr_leaf_count) (acc : hash) (level : htr_depth) (remaining : htr_depth) : SailM hash := do
-  let n := (n).value
-  let level := (level).value
-  let remaining := (remaining).value
+def merkle_root_levels (slots : (List MerkleSlot)) (n : Nat) (acc : (Vector (BitVec 8) 32)) (level : Nat) (remaining : Nat) : SailM (Vector (BitVec 8) 32) := do
   let _measure := (remaining : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
-  else (_rec_merkle_root_levels slots ⟨n⟩ acc ⟨level⟩ ⟨remaining⟩ (_measure + 1))
+  else (_rec_merkle_root_levels slots n acc level remaining (_measure + 1))
 
 /-- Pads an incremental Merkle accumulator to its declared depth and returns
 its root. -/
-def merkle_accumulator_root (accumulator : MerkleAccumulator) : SailM hash := do
+def merkle_accumulator_root (accumulator : MerkleAccumulator) : SailM (Vector (BitVec 8) 32) := do
   let _ : Unit := (cycle_scope_start SCOPE_HTR_MERKLE_PADDING)
   let root ← do
-    (merkle_root_levels accumulator.frontier ⟨(accumulator.count).value⟩ ZERO_HASH ⟨0⟩
-      ⟨(accumulator.depth).value⟩)
+    (merkle_root_levels accumulator.frontier accumulator.count ZERO_HASH 0 accumulator.depth)
   let _ : Unit := (cycle_scope_end SCOPE_HTR_MERKLE_PADDING)
   (pure root)
 
 /-- Folds a leaf list into an existing Merkle accumulator in source order. -/
-def merkle_accumulate (leaves : (List hash)) (accumulator : MerkleAccumulator) : SailM MerkleAccumulator := do
+def merkle_accumulate (leaves : (List (Vector (BitVec 8) 32))) (accumulator : MerkleAccumulator) : SailM MerkleAccumulator := do
   match leaves with
   | [] => (pure accumulator)
   | (leaf :: rest) => (merkle_accumulate rest (← (merkle_accumulator_push accumulator leaf)))
 
 /-- `merkleize` of a fixed leaf list at `depth` (SSZ spec). -/
-/- Type quantifiers: k_ex411679_ : Nat, 0 ≤ k_ex411679_ ∧ k_ex411679_ ≤ 25 -/
-def merkleize (leaves : (List hash)) (depth : htr_depth) : SailM hash := do
-  let depth := (depth).value
-  (merkle_accumulator_root (← (merkle_accumulate leaves (merkle_accumulator_empty ⟨depth⟩))))
+/- Type quantifiers: k_ex418118_ : Nat, 0 ≤ k_ex418118_ ∧ k_ex418118_ ≤ 25 -/
+def merkleize (leaves : (List (Vector (BitVec 8) 32))) (depth : Nat) : SailM (Vector (BitVec 8) 32) := do
+  (merkle_accumulator_root (← (merkle_accumulate leaves (merkle_accumulator_empty depth))))
 
 /-- Encodes a protocol quantity as an SSZ little-endian basic-value chunk. -/
 /- Type quantifiers: v : Nat, 0 ≤ v ∧ v ≤ (2 ^ 64 - 1) -/
-def htr_uint (v : ssz_uint) : hash :=
-  let v := (v).value
+def htr_uint (v : Nat) : (Vector (BitVec 8) 32) :=
   let bytes := ZERO_HASH
   let bytes : (Vector (BitVec 8) 32) := (vectorUpdate bytes 31 (get_slice_int 8 v 0))
   let bytes : (Vector (BitVec 8) 32) := (vectorUpdate bytes 30 (get_slice_int 8 v 8))
@@ -429,8 +410,7 @@ def htr_uint (v : ssz_uint) : hash :=
 
 /-- `uint256` as a 32-byte little-endian chunk. -/
 /- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
-def htr_u256 (value : word) : hash :=
-  let value := (value).value
+def htr_u256 (value : Nat) : (Vector (BitVec 8) 32) :=
   let bytes := ZERO_HASH
   let bytes : (Vector (BitVec 8) 32) := (vectorUpdate bytes 31 (get_slice_int 8 value 0))
   let bytes : (Vector (BitVec 8) 32) := (vectorUpdate bytes 30 (get_slice_int 8 value 8))
@@ -467,11 +447,11 @@ def htr_u256 (value : word) : hash :=
   (B256 bytes)
 
 /-- `Bytes32` chunks are themselves. -/
-def htr_bytes32 (b : hash) : hash :=
+def htr_bytes32 (b : (Vector (BitVec 8) 32)) : (Vector (BitVec 8) 32) :=
   b
 
 /-- A 20-byte address, left-aligned in its chunk. -/
-def htr_addr (address_bytes : address) : hash :=
+def htr_addr (address_bytes : (Vector (BitVec 8) 20)) : (Vector (BitVec 8) 32) :=
   let bytes := ZERO_HASH
   let bytes : (Vector (BitVec 8) 32) := (vectorUpdate bytes 12 (GetElem?.getElem! address_bytes 0))
   let bytes : (Vector (BitVec 8) 32) := (vectorUpdate bytes 13 (GetElem?.getElem! address_bytes 1))
@@ -495,80 +475,74 @@ def htr_addr (address_bytes : address) : hash :=
   let bytes : (Vector (BitVec 8) 32) := (vectorUpdate bytes 31 (GetElem?.getElem! address_bytes 19))
   (B256 bytes)
 
-/- Type quantifiers: len : Nat, source_valid_length(len) -/
-def mix_in_length (root : hash) (len : Nat) : SailM hash := do
-  (sha256_pair root (htr_u256 ⟨((← (word_of_source_byte_count len))).value⟩))
+/- Type quantifiers: len : Nat, (source_valid_length len) -/
+def mix_in_length (root : (Vector (BitVec 8) 32)) (len : Nat) : SailM (Vector (BitVec 8) 32) := do
+  (sha256_pair root (htr_u256 (← (word_of_source_byte_count len))))
 
 /-- The ceiling of log2 — the Merkle depth of an `n`-chunk capacity. -/
 /- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 33554432 -/
-def clog2 (n : htr_leaf_count) : SailM htr_depth := do
-  let n := (n).value
-  let publicResult ← do
-    let remaining : Nat :=
-      if ((n == 0) : Bool)
-      then 0
-      else (n - 1)
-    let depth : Nat := 0
-    let (depth, remaining) ← (( do
-      let loop__step_lower := 0
-      let loop__step_upper := 24
-      let mut loop_vars := (depth, remaining)
-      for _step in [loop__step_lower:loop__step_upper:1]i do
-        let (depth, remaining) := loop_vars
-        loop_vars ← do
-          let (depth, remaining) ← (( do
-            if ((remaining != 0) : Bool)
-            then
-              (do
-                let depth ←
-                  (do
-                      let publicResult ← (htr_depth_increment ⟨depth⟩)
-                      pure ((publicResult).value))
-                let remaining : Nat := (Nat.div remaining 2)
-                (pure (depth, remaining)))
-            else (pure (depth, remaining)) ) : SailM (Nat × Nat) )
-          (pure (depth, remaining))
-      (pure loop_vars) ) : SailM (Nat × Nat) )
-    (pure depth)
-  pure (⟨publicResult⟩)
+def clog2 (n : Nat) : SailM Nat := do
+  let remaining : Nat :=
+    if ((n == 0) : Bool)
+    then 0
+    else (n - 1)
+  let depth : Nat := 0
+  let (depth, remaining) ← (( do
+    let loop__step_lower := 0
+    let loop__step_upper := 24
+    let mut loop_vars := (depth, remaining)
+    for _step in [loop__step_lower:loop__step_upper:1]i do
+      let (depth, remaining) := loop_vars
+      loop_vars ← do
+        let (depth, remaining) ← (( do
+          if ((remaining != 0) : Bool)
+          then
+            (do
+              let depth ← (htr_depth_increment depth)
+              let remaining : Nat := (Nat.div remaining 2)
+              (pure (depth, remaining)))
+          else (pure (depth, remaining)) ) : SailM (Nat × Nat) )
+        (pure (depth, remaining))
+    (pure loop_vars) ) : SailM (Nat × Nat) )
+  (pure depth)
 
 /-- The `chunk_index`-th 32-byte chunk of a byte span, zero-padded. -/
-/- Type quantifiers: k_ex411692_ : Nat, k_ex411691_ : Nat, k_ex411690_ : Nat, 0 ≤ k_ex411690_ ∧
-  0 ≤ k_ex411691_, 0 ≤ k_ex411692_ ∧ k_ex411692_ ≤ 33554432 -/
-def htr_chunk (bytes : EvmByteSlice) (chunk_index : htr_leaf_count) : SailM hash := do
+/- Type quantifiers: k_ex418133_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
+  ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1, 0 ≤ k_ex418133_ ∧
+  k_ex418133_ ≤ 33554432 -/
+def htr_chunk (bytes : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (chunk_index : Nat) : SailM (Vector (BitVec 8) 32) := do
+  let bytes_dependentWitness0 := (bytes).1
+  let bytes_dependentWitness1 := ((bytes).2).1
   let bytes := ((bytes).2).2
-  let chunk_index := (chunk_index).value
-  (pure (word_to_hash
-      ⟨((← (slice_load ⟨_, ⟨_, bytes⟩⟩ (chunk_index *i WORD_BYTE_LENGTH)))).value⟩))
+  (pure (word_to_hash (← (slice_load ⟨_, ⟨_, bytes⟩⟩ (chunk_index *i WORD_BYTE_LENGTH)))))
 
-/- Type quantifiers: byte_len : Nat, source_valid_length(byte_len) -/
-def htr_chunk_count (byte_len : Nat) : SailM htr_leaf_count := do
-  let publicResult ← do
-    if ((byte_len ≤b HTR_BYTE_LIST_LIMIT) : Bool)
-    then (pure (Int.ediv (byte_len + 31) 32))
-    else sailThrow ((InvalidBlock WitnessDeficient))
-  pure (⟨publicResult⟩)
+/- Type quantifiers: byte_len : Nat, (source_valid_length byte_len) -/
+def htr_chunk_count (byte_len : Nat) : SailM Nat := do
+  if ((byte_len ≤b HTR_BYTE_LIST_LIMIT) : Bool)
+  then (pure ((byte_len + 31) / 32))
+  else sailThrow ((InvalidBlock WitnessDeficient))
 
 /-- The Merkle root of a byte span's chunks at `depth`. -/
-/- Type quantifiers: k_ex411702_ : Nat, k_ex411701_ : Nat, k_ex411700_ : Nat, 0 ≤ k_ex411700_ ∧
-  0 ≤ k_ex411701_, 0 ≤ k_ex411702_ ∧ k_ex411702_ ≤ 25 -/
-def htr_bytes_root (bytes : EvmByteSlice) (depth : htr_depth) : SailM hash := do
+/- Type quantifiers: k_ex418145_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
+  ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1, 0 ≤ k_ex418145_ ∧
+  k_ex418145_ ≤ 25 -/
+def htr_bytes_root (bytes : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (depth : Nat) : SailM (Vector (BitVec 8) 32) := do
+  let bytes_dependentWitness0 := (bytes).1
+  let bytes_dependentWitness1 := ((bytes).2).1
   let bytes := ((bytes).2).2
-  let depth := (depth).value
   let _ : Unit := (cycle_scope_start SCOPE_HTR_BYTES_ROOT)
-  let count ← do
-    (do
-        let publicResult ← (htr_chunk_count bytes.len)
-        pure ((publicResult).value))
-  let accumulator := (merkle_accumulator_empty ⟨depth⟩)
+  let count ← do (htr_chunk_count bytes.len)
+  let accumulator := (merkle_accumulator_empty depth)
   let index : Nat := 0
   let (accumulator, index) ← (( do
     let loop_vars ← whileFuelM (fuel :=(count -i index)) (fun (accumulator, index) => (pure (index <b count))) (accumulator, index)
       fun (accumulator, index) => do
         assert true "loop dummy assert"
         let accumulator ←
-          (merkle_accumulator_push accumulator (← (htr_chunk ⟨_, ⟨_, bytes⟩⟩ ⟨index⟩)))
-        let index : Nat := (accumulator.count).value
+          (merkle_accumulator_push accumulator (← (htr_chunk ⟨_, ⟨_, bytes⟩⟩ index)))
+        let index : Nat := accumulator.count
         (pure (accumulator, index))
     (pure loop_vars) ) : SailM (MerkleAccumulator × Nat) )
   let root ← do (merkle_accumulator_root accumulator)
@@ -576,44 +550,47 @@ def htr_bytes_root (bytes : EvmByteSlice) (depth : htr_depth) : SailM hash := do
   (pure root)
 
 /-- `hash_tree_root` of a fixed-size `ByteVector`. -/
-/- Type quantifiers: k_ex411706_ : Nat, k_ex411705_ : Nat, 0 ≤ k_ex411705_ ∧ 0 ≤ k_ex411706_ -/
-def htr_bytevector (bytes : EvmByteSlice) : SailM hash := do
+/- Type quantifiers: bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0 ≤
+  bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1 -/
+def htr_bytevector (bytes : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let bytes_dependentWitness0 := (bytes).1
+  let bytes_dependentWitness1 := ((bytes).2).1
   let bytes := ((bytes).2).2
-  let chunks ← do
-    (do
-        let publicResult ← (htr_chunk_count bytes.len)
-        pure ((publicResult).value))
-  (htr_bytes_root ⟨_, ⟨_, bytes⟩⟩ ⟨((← (clog2 ⟨chunks⟩))).value⟩)
+  let chunks ← do (htr_chunk_count bytes.len)
+  (htr_bytes_root ⟨_, ⟨_, bytes⟩⟩ (← (clog2 chunks)))
 
-/- Type quantifiers: k_ex411713_ : Nat, k_ex411712_ : Nat, limit_bytes : Nat, source_valid_length(limit_bytes), 0
-  ≤ k_ex411712_ ∧ 0 ≤ k_ex411713_ -/
-def htr_bytelist (bytes : EvmByteSlice) (limit_bytes : Nat) : SailM hash := do
+/- Type quantifiers: bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, limit_bytes : Nat, (source_valid_length limit_bytes), 0
+  ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1 -/
+def htr_bytelist (bytes : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (limit_bytes : Nat) : SailM (Vector (BitVec 8) 32) := do
+  let bytes_dependentWitness0 := (bytes).1
+  let bytes_dependentWitness1 := ((bytes).2).1
   let bytes := ((bytes).2).2
-  let capacity ← do
-    (do
-        let publicResult ← (htr_chunk_count limit_bytes)
-        pure ((publicResult).value))
-  (mix_in_length
-    (← (htr_bytes_root ⟨_, ⟨_, bytes⟩⟩ ⟨((← (clog2 ⟨capacity⟩))).value⟩))
-    bytes.len)
+  let capacity ← do (htr_chunk_count limit_bytes)
+  (mix_in_length (← (htr_bytes_root ⟨_, ⟨_, bytes⟩⟩ (← (clog2 capacity)))) bytes.len)
 
 /-- `hash_tree_root` of one SSZ withdrawal (4 fields, depth 2). -/
-/- Type quantifiers: k_ex411720_ : Nat, k_ex411719_ : Nat, 0 ≤ k_ex411719_ ∧ 0 ≤ k_ex411720_
-  ∧ k_ex411720_ = 44 -/
-def htr_withdrawal (withdrawal : (EvmByteSliceLength 44)) : SailM hash := do
+/- Type quantifiers: withdrawal_dependentWitness1 : Nat, withdrawal_dependentWitness0 : Nat, 0 ≤
+  withdrawal_dependentWitness0 ∧ 0 ≤ withdrawal_dependentWitness1 ∧
+  withdrawal_dependentWitness1 = 44 -/
+def htr_withdrawal (withdrawal : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let withdrawal_dependentWitness0 := (withdrawal).1
+  let withdrawal_dependentWitness1 := ((withdrawal).2).1
   let withdrawal := ((withdrawal).2).2
   (merkleize
-    [(htr_uint ⟨((← (decode_ssz_uint ⟨_, ⟨_, withdrawal⟩⟩ WD_INDEX))).value⟩), (htr_uint
-      ⟨((← (decode_ssz_uint ⟨_, ⟨_, withdrawal⟩⟩ WD_VALIDATOR_INDEX))).value⟩), (htr_addr
+    [(htr_uint (← (decode_ssz_uint ⟨_, ⟨_, withdrawal⟩⟩ WD_INDEX))), (htr_uint
+      (← (decode_ssz_uint ⟨_, ⟨_, withdrawal⟩⟩ WD_VALIDATOR_INDEX))), (htr_addr
       (← (ssz_addr ⟨_, ⟨_, withdrawal⟩⟩ WD_ADDRESS))), (htr_uint
-      ⟨((← (decode_ssz_uint ⟨_, ⟨_, withdrawal⟩⟩ WD_AMOUNT))).value⟩)] ⟨2⟩)
+      (← (decode_ssz_uint ⟨_, ⟨_, withdrawal⟩⟩ WD_AMOUNT)))] 2)
 
 /-- `hash_tree_root` of the transactions list
 (`List[ByteList[2^30], 2^20]`). -/
-def htr_transactions (transactions : TransactionListRef) : SailM hash := do
+def htr_transactions (transactions : (BoundedSszListRef (2 ^ 20))) : SailM (Vector (BitVec 8) 32) := do
   let _ : Unit := (cycle_scope_start SCOPE_HTR_TRANSACTIONS)
   let cursor ← do (ssz_list_cursor transactions)
-  let accumulator := (merkle_accumulator_empty ⟨20⟩)
+  let accumulator := (merkle_accumulator_empty 20)
   let (accumulator, cursor) ← (( do
     let loop_vars ← whileFuelM (fuel :=(cursor.items.count -i cursor.index)) (fun (accumulator, cursor) => (pure (! (ssz_list_cursor_empty
           cursor)))) (accumulator, cursor)
@@ -625,16 +602,15 @@ def htr_transactions (transactions : TransactionListRef) : SailM hash := do
           (merkle_accumulator_push accumulator (← (htr_bytelist transaction HTR_BYTE_LIST_LIMIT)))
         (pure (accumulator, cursor))
     (pure loop_vars) ) : SailM (MerkleAccumulator × (BoundedSszListCursor (2 ^ 20))) )
-  let root ← do
-    (mix_in_length (← (merkle_accumulator_root accumulator)) (accumulator.count).value)
+  let root ← do (mix_in_length (← (merkle_accumulator_root accumulator)) accumulator.count)
   let _ : Unit := (cycle_scope_end SCOPE_HTR_TRANSACTIONS)
   (pure root)
 
 /-- `hash_tree_root` of the withdrawals list (`List[SszWithdrawal, 16]`). -/
-def htr_withdrawals (withdrawals : WithdrawalListRef) : SailM hash := do
+def htr_withdrawals (withdrawals : (BoundedSszListRef (2 ^ 4))) : SailM (Vector (BitVec 8) 32) := do
   let _ : Unit := (cycle_scope_start SCOPE_HTR_WITHDRAWALS)
   let rest : (BoundedSszListRef (2 ^ 4)) := withdrawals
-  let accumulator := (merkle_accumulator_empty ⟨4⟩)
+  let accumulator := (merkle_accumulator_empty 4)
   let (accumulator, rest) ← (( do
     let loop_vars ← whileFuelM (fuel :=rest.count) (fun (accumulator, rest) => (pure (rest.count != 0))) (accumulator, rest)
       fun (accumulator, rest) => do
@@ -644,13 +620,12 @@ def htr_withdrawals (withdrawals : WithdrawalListRef) : SailM hash := do
         let accumulator ← (merkle_accumulator_push accumulator (← (htr_withdrawal withdrawal)))
         (pure (accumulator, rest))
     (pure loop_vars) ) : SailM (MerkleAccumulator × (BoundedSszListRef (2 ^ 4))) )
-  let root ← do
-    (mix_in_length (← (merkle_accumulator_root accumulator)) (accumulator.count).value)
+  let root ← do (mix_in_length (← (merkle_accumulator_root accumulator)) accumulator.count)
   let _ : Unit := (cycle_scope_end SCOPE_HTR_WITHDRAWALS)
   (pure root)
 
 /-- `hash_tree_root` of the `SszExecutionPayload` (19 fields, depth 5). -/
-def htr_execution_payload (input_ref : StatelessInputRef) : SailM hash := do
+def htr_execution_payload (input_ref : StatelessInputRef) : SailM (Vector (BitVec 8) 32) := do
   let _ : Unit := (cycle_scope_start SCOPE_HTR_EXECUTION_PAYLOAD)
   let ⟨_, ⟨_, payload⟩⟩ := input_ref.execution_payload
   let root ← do
@@ -661,29 +636,33 @@ def htr_execution_payload (input_ref : StatelessInputRef) : SailM hash := do
         (← (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_RECEIPTS_ROOT))), (← (htr_bytevector
           ⟨_, ⟨_, (sub_slice payload PL_LOGS_BLOOM LOGS_BLOOM_BYTE_LENGTH)⟩⟩)), (htr_bytes32
         (← (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_PREV_RANDAO))), (htr_uint
-        ⟨((← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_BLOCK_NUMBER))).value⟩), (htr_uint
-        ⟨((← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_GAS_LIMIT))).value⟩), (htr_uint
-        ⟨((← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_GAS_USED))).value⟩), (htr_uint
-        ⟨((← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_TIMESTAMP))).value⟩), (← (htr_bytelist
+        (← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_BLOCK_NUMBER))), (htr_uint
+        (← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_GAS_LIMIT))), (htr_uint
+        (← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_GAS_USED))), (htr_uint
+        (← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_TIMESTAMP))), (← (htr_bytelist
           input_ref.extra_data WORD_BYTE_LENGTH)), (htr_u256
-        ⟨((← (ssz_u256 ⟨_, ⟨_, payload⟩⟩ PL_BASE_FEE))).value⟩), (htr_bytes32
+        (← (ssz_u256 ⟨_, ⟨_, payload⟩⟩ PL_BASE_FEE))), (htr_bytes32
         (← (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_BLOCK_HASH))), (← (htr_transactions
           input_ref.transactions)), (← (htr_withdrawals input_ref.withdrawals)), (htr_uint
-        ⟨((← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_BLOB_GAS_USED))).value⟩), (htr_uint
-        ⟨((← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_EXCESS_BLOB_GAS))).value⟩), (← (htr_bytelist
+        (← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_BLOB_GAS_USED))), (htr_uint
+        (← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_EXCESS_BLOB_GAS))), (← (htr_bytelist
           input_ref.block_access_list HTR_BYTE_LIST_LIMIT)), (htr_uint
-        ⟨((← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_SLOT_NUMBER))).value⟩)] ⟨5⟩)
+        (← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_SLOT_NUMBER)))] 5)
   let _ : Unit := (cycle_scope_end SCOPE_HTR_EXECUTION_PAYLOAD)
   (pure root)
 
 /-- `hash_tree_root` of the versioned hashes (`List[Bytes32, 4096]`). -/
-/- Type quantifiers: k_ex411724_ : Nat, k_ex411723_ : Nat, 0 ≤ k_ex411723_ ∧ 0 ≤ k_ex411724_ -/
-def htr_versioned_hashes (versioned_hashes : EvmByteSlice) : SailM hash := do
+/- Type quantifiers: versioned_hashes_dependentWitness1 : Nat, versioned_hashes_dependentWitness0 :
+  Nat, 0 ≤ versioned_hashes_dependentWitness0 ∧ 0 ≤ versioned_hashes_dependentWitness1 -/
+def htr_versioned_hashes (versioned_hashes : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let versioned_hashes_dependentWitness0 := (versioned_hashes).1
+  let versioned_hashes_dependentWitness1 := ((versioned_hashes).2).1
   let versioned_hashes := ((versioned_hashes).2).2
   let _ : Unit := (cycle_scope_start SCOPE_HTR_VERSIONED_HASHES)
   let rest ← do
     (ssz_bounded_fixed_list_ref ⟨_, ⟨_, versioned_hashes⟩⟩ WORD_BYTE_LENGTH (2 ^i 12))
-  let accumulator := (merkle_accumulator_empty ⟨12⟩)
+  let accumulator := (merkle_accumulator_empty 12)
   let (accumulator, rest) ← (( do
     let loop_vars ← whileFuelM (fuel :=rest.count) (fun (accumulator, rest) => (pure (rest.count != 0))) (accumulator, rest)
       fun (accumulator, rest) => do
@@ -691,86 +670,98 @@ def htr_versioned_hashes (versioned_hashes : EvmByteSlice) : SailM hash := do
         let (versioned_hash, tail) ← do (ssz_fixed_list_pop rest WORD_BYTE_LENGTH)
         let rest : (BoundedSszListRef (2 ^ 12)) := tail
         let accumulator ←
-          (merkle_accumulator_push accumulator
-            (word_to_hash
-              ⟨((← (slice_load
-                (⟨_, ⟨_, ((versioned_hash).2).2⟩⟩ : (Sigma fun (k_off : Nat) =>
-                (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) 0))).value⟩))
+          (merkle_accumulator_push accumulator (word_to_hash (← (slice_load versioned_hash 0))))
         (pure (accumulator, rest))
     (pure loop_vars) ) : SailM (MerkleAccumulator × (BoundedSszListRef (2 ^ 12))) )
-  let root ← do
-    (mix_in_length (← (merkle_accumulator_root accumulator)) (accumulator.count).value)
+  let root ← do (mix_in_length (← (merkle_accumulator_root accumulator)) accumulator.count)
   let _ : Unit := (cycle_scope_end SCOPE_HTR_VERSIONED_HASHES)
   (pure root)
 
 /-- `hash_tree_root` of one deposit request (5 fields, depth 3). -/
-/- Type quantifiers: k_ex411729_ : Nat, k_ex411728_ : Nat, 0 ≤ k_ex411728_ ∧ 0 ≤ k_ex411729_
-  ∧ k_ex411729_ = 192 -/
-def htr_deposit (deposit : (EvmByteSliceLength 192)) : SailM hash := do
+/- Type quantifiers: deposit_dependentWitness1 : Nat, deposit_dependentWitness0 : Nat, 0 ≤
+  deposit_dependentWitness0 ∧ 0 ≤ deposit_dependentWitness1 ∧ deposit_dependentWitness1 = 192 -/
+def htr_deposit (deposit : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let deposit_dependentWitness0 := (deposit).1
+  let deposit_dependentWitness1 := ((deposit).2).1
   let deposit := ((deposit).2).2
   (merkleize
     [(← (htr_bytevector
         ⟨_, ⟨_, (sub_slice deposit HTR_DEPOSIT_PUBKEY HTR_DEPOSIT_PUBKEY_LENGTH)⟩⟩)), (htr_bytes32
       (← (ssz_bytes32 ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS))), (htr_uint
-      ⟨((← (decode_ssz_uint ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_AMOUNT))).value⟩), (← (htr_bytevector
+      (← (decode_ssz_uint ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_AMOUNT))), (← (htr_bytevector
         ⟨_, ⟨_, (sub_slice deposit HTR_DEPOSIT_SIGNATURE HTR_DEPOSIT_SIGNATURE_LENGTH)⟩⟩)), (htr_uint
-      ⟨((← (decode_ssz_uint ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_INDEX))).value⟩)] ⟨3⟩)
+      (← (decode_ssz_uint ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_INDEX)))] 3)
 
 /-- `hash_tree_root` of one withdrawal request (3 fields, depth 2). -/
-/- Type quantifiers: k_ex411734_ : Nat, k_ex411733_ : Nat, 0 ≤ k_ex411733_ ∧ 0 ≤ k_ex411734_
-  ∧ k_ex411734_ = 76 -/
-def htr_withdrawal_request (request : (EvmByteSliceLength 76)) : SailM hash := do
+/- Type quantifiers: request_dependentWitness1 : Nat, request_dependentWitness0 : Nat, 0 ≤
+  request_dependentWitness0 ∧ 0 ≤ request_dependentWitness1 ∧ request_dependentWitness1 = 76 -/
+def htr_withdrawal_request (request : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let request_dependentWitness0 := (request).1
+  let request_dependentWitness1 := ((request).2).1
   let request := ((request).2).2
   (merkleize
     [(← (htr_bytevector
         ⟨_, ⟨_, (sub_slice request HTR_REQUEST_SOURCE_ADDRESS ADDRESS_BYTE_LENGTH)⟩⟩)), (← (htr_bytevector
         ⟨_, ⟨_, (sub_slice request HTR_REQUEST_SOURCE_PUBKEY HTR_REQUEST_PUBKEY_LENGTH)⟩⟩)), (htr_uint
-      ⟨((← (decode_ssz_uint ⟨_, ⟨_, request⟩⟩ HTR_WITHDRAWAL_REQUEST_AMOUNT))).value⟩)]
-    ⟨2⟩)
+      (← (decode_ssz_uint ⟨_, ⟨_, request⟩⟩ HTR_WITHDRAWAL_REQUEST_AMOUNT)))] 2)
 
 /-- `hash_tree_root` of one consolidation request (3 fields, depth 2). -/
-/- Type quantifiers: k_ex411739_ : Nat, k_ex411738_ : Nat, 0 ≤ k_ex411738_ ∧ 0 ≤ k_ex411739_
-  ∧ k_ex411739_ = 116 -/
-def htr_consolidation_request (request : (EvmByteSliceLength 116)) : SailM hash := do
+/- Type quantifiers: request_dependentWitness1 : Nat, request_dependentWitness0 : Nat, 0 ≤
+  request_dependentWitness0 ∧ 0 ≤ request_dependentWitness1 ∧ request_dependentWitness1 = 116 -/
+def htr_consolidation_request (request : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let request_dependentWitness0 := (request).1
+  let request_dependentWitness1 := ((request).2).1
   let request := ((request).2).2
   (merkleize
     [(← (htr_bytevector
         ⟨_, ⟨_, (sub_slice request HTR_REQUEST_SOURCE_ADDRESS ADDRESS_BYTE_LENGTH)⟩⟩)), (← (htr_bytevector
         ⟨_, ⟨_, (sub_slice request HTR_REQUEST_SOURCE_PUBKEY HTR_REQUEST_PUBKEY_LENGTH)⟩⟩)), (← (htr_bytevector
         ⟨_, ⟨_, (sub_slice request HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY
-          HTR_REQUEST_PUBKEY_LENGTH)⟩⟩))] ⟨2⟩)
+          HTR_REQUEST_PUBKEY_LENGTH)⟩⟩))] 2)
 
 /-- `hash_tree_root` of one builder deposit request (4 fields, depth 2). -/
-/- Type quantifiers: k_ex411744_ : Nat, k_ex411743_ : Nat, 0 ≤ k_ex411743_ ∧ 0 ≤ k_ex411744_
-  ∧ k_ex411744_ = 184 -/
-def htr_builder_deposit_request (request : (EvmByteSliceLength 184)) : SailM hash := do
+/- Type quantifiers: request_dependentWitness1 : Nat, request_dependentWitness0 : Nat, 0 ≤
+  request_dependentWitness0 ∧ 0 ≤ request_dependentWitness1 ∧ request_dependentWitness1 = 184 -/
+def htr_builder_deposit_request (request : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let request_dependentWitness0 := (request).1
+  let request_dependentWitness1 := ((request).2).1
   let request := ((request).2).2
   (merkleize
     [(← (htr_bytevector
         ⟨_, ⟨_, (sub_slice request HTR_BUILDER_DEPOSIT_PUBKEY HTR_REQUEST_PUBKEY_LENGTH)⟩⟩)), (htr_bytes32
       (← (ssz_bytes32 ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS))), (htr_uint
-      ⟨((← (decode_ssz_uint ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_DEPOSIT_AMOUNT))).value⟩), (← (htr_bytevector
+      (← (decode_ssz_uint ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_DEPOSIT_AMOUNT))), (← (htr_bytevector
         ⟨_, ⟨_, (sub_slice request HTR_BUILDER_DEPOSIT_SIGNATURE HTR_DEPOSIT_SIGNATURE_LENGTH)⟩⟩))]
-    ⟨2⟩)
+    2)
 
 /-- `hash_tree_root` of one builder exit request (2 fields, depth 1). -/
-/- Type quantifiers: k_ex411749_ : Nat, k_ex411748_ : Nat, 0 ≤ k_ex411748_ ∧ 0 ≤ k_ex411749_
-  ∧ k_ex411749_ = 68 -/
-def htr_builder_exit_request (request : (EvmByteSliceLength 68)) : SailM hash := do
+/- Type quantifiers: request_dependentWitness1 : Nat, request_dependentWitness0 : Nat, 0 ≤
+  request_dependentWitness0 ∧ 0 ≤ request_dependentWitness1 ∧ request_dependentWitness1 = 68 -/
+def htr_builder_exit_request (request : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let request_dependentWitness0 := (request).1
+  let request_dependentWitness1 := ((request).2).1
   let request := ((request).2).2
   (merkleize
     [(← (htr_bytevector
         ⟨_, ⟨_, (sub_slice request HTR_BUILDER_EXIT_SOURCE_ADDRESS ADDRESS_BYTE_LENGTH)⟩⟩)), (← (htr_bytevector
-        ⟨_, ⟨_, (sub_slice request HTR_BUILDER_EXIT_PUBKEY HTR_REQUEST_PUBKEY_LENGTH)⟩⟩))]
-    ⟨1⟩)
+        ⟨_, ⟨_, (sub_slice request HTR_BUILDER_EXIT_PUBKEY HTR_REQUEST_PUBKEY_LENGTH)⟩⟩))] 1)
 
 /-- `hash_tree_root` of the deposit-request list (depth 13). -/
-/- Type quantifiers: k_ex411753_ : Nat, k_ex411752_ : Nat, 0 ≤ k_ex411752_ ∧ 0 ≤ k_ex411753_ -/
-def htr_deposits (deposits : EvmByteSlice) : SailM hash := do
+/- Type quantifiers: deposits_dependentWitness1 : Nat, deposits_dependentWitness0 : Nat, 0 ≤
+  deposits_dependentWitness0 ∧ 0 ≤ deposits_dependentWitness1 -/
+def htr_deposits (deposits : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let deposits_dependentWitness0 := (deposits).1
+  let deposits_dependentWitness1 := ((deposits).2).1
   let deposits := ((deposits).2).2
   let rest ← do
     (ssz_bounded_fixed_list_ref ⟨_, ⟨_, deposits⟩⟩ HTR_DEPOSIT_LENGTH (2 ^i 13))
-  let accumulator := (merkle_accumulator_empty ⟨13⟩)
+  let accumulator := (merkle_accumulator_empty 13)
   let (accumulator, rest) ← (( do
     let loop_vars ← whileFuelM (fuel :=rest.count) (fun (accumulator, rest) => (pure (rest.count != 0))) (accumulator, rest)
       fun (accumulator, rest) => do
@@ -780,15 +771,19 @@ def htr_deposits (deposits : EvmByteSlice) : SailM hash := do
         let accumulator ← (merkle_accumulator_push accumulator (← (htr_deposit deposit)))
         (pure (accumulator, rest))
     (pure loop_vars) ) : SailM (MerkleAccumulator × (BoundedSszListRef (2 ^ 13))) )
-  (mix_in_length (← (merkle_accumulator_root accumulator)) (accumulator.count).value)
+  (mix_in_length (← (merkle_accumulator_root accumulator)) accumulator.count)
 
 /-- `hash_tree_root` of the withdrawal-request list (depth 4). -/
-/- Type quantifiers: k_ex411757_ : Nat, k_ex411756_ : Nat, 0 ≤ k_ex411756_ ∧ 0 ≤ k_ex411757_ -/
-def htr_withdrawal_requests (requests : EvmByteSlice) : SailM hash := do
+/- Type quantifiers: requests_dependentWitness1 : Nat, requests_dependentWitness0 : Nat, 0 ≤
+  requests_dependentWitness0 ∧ 0 ≤ requests_dependentWitness1 -/
+def htr_withdrawal_requests (requests : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let requests_dependentWitness0 := (requests).1
+  let requests_dependentWitness1 := ((requests).2).1
   let requests := ((requests).2).2
   let rest ← do
     (ssz_bounded_fixed_list_ref ⟨_, ⟨_, requests⟩⟩ HTR_WITHDRAWAL_REQUEST_LENGTH (2 ^i 4))
-  let accumulator := (merkle_accumulator_empty ⟨4⟩)
+  let accumulator := (merkle_accumulator_empty 4)
   let (accumulator, rest) ← (( do
     let loop_vars ← whileFuelM (fuel :=rest.count) (fun (accumulator, rest) => (pure (rest.count != 0))) (accumulator, rest)
       fun (accumulator, rest) => do
@@ -799,15 +794,19 @@ def htr_withdrawal_requests (requests : EvmByteSlice) : SailM hash := do
           (merkle_accumulator_push accumulator (← (htr_withdrawal_request request)))
         (pure (accumulator, rest))
     (pure loop_vars) ) : SailM (MerkleAccumulator × (BoundedSszListRef (2 ^ 4))) )
-  (mix_in_length (← (merkle_accumulator_root accumulator)) (accumulator.count).value)
+  (mix_in_length (← (merkle_accumulator_root accumulator)) accumulator.count)
 
 /-- `hash_tree_root` of the consolidation-request list (depth 1). -/
-/- Type quantifiers: k_ex411761_ : Nat, k_ex411760_ : Nat, 0 ≤ k_ex411760_ ∧ 0 ≤ k_ex411761_ -/
-def htr_consolidation_requests (requests : EvmByteSlice) : SailM hash := do
+/- Type quantifiers: requests_dependentWitness1 : Nat, requests_dependentWitness0 : Nat, 0 ≤
+  requests_dependentWitness0 ∧ 0 ≤ requests_dependentWitness1 -/
+def htr_consolidation_requests (requests : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let requests_dependentWitness0 := (requests).1
+  let requests_dependentWitness1 := ((requests).2).1
   let requests := ((requests).2).2
   let rest ← do
     (ssz_bounded_fixed_list_ref ⟨_, ⟨_, requests⟩⟩ HTR_CONSOLIDATION_REQUEST_LENGTH (2 ^i 1))
-  let accumulator := (merkle_accumulator_empty ⟨1⟩)
+  let accumulator := (merkle_accumulator_empty 1)
   let (accumulator, rest) ← (( do
     let loop_vars ← whileFuelM (fuel :=rest.count) (fun (accumulator, rest) => (pure (rest.count != 0))) (accumulator, rest)
       fun (accumulator, rest) => do
@@ -818,15 +817,19 @@ def htr_consolidation_requests (requests : EvmByteSlice) : SailM hash := do
           (merkle_accumulator_push accumulator (← (htr_consolidation_request request)))
         (pure (accumulator, rest))
     (pure loop_vars) ) : SailM (MerkleAccumulator × (BoundedSszListRef (2 ^ 1))) )
-  (mix_in_length (← (merkle_accumulator_root accumulator)) (accumulator.count).value)
+  (mix_in_length (← (merkle_accumulator_root accumulator)) accumulator.count)
 
 /-- `hash_tree_root` of the builder-deposit-request list (depth 6). -/
-/- Type quantifiers: k_ex411765_ : Nat, k_ex411764_ : Nat, 0 ≤ k_ex411764_ ∧ 0 ≤ k_ex411765_ -/
-def htr_builder_deposit_requests (requests : EvmByteSlice) : SailM hash := do
+/- Type quantifiers: requests_dependentWitness1 : Nat, requests_dependentWitness0 : Nat, 0 ≤
+  requests_dependentWitness0 ∧ 0 ≤ requests_dependentWitness1 -/
+def htr_builder_deposit_requests (requests : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let requests_dependentWitness0 := (requests).1
+  let requests_dependentWitness1 := ((requests).2).1
   let requests := ((requests).2).2
   let rest ← do
     (ssz_bounded_fixed_list_ref ⟨_, ⟨_, requests⟩⟩ HTR_BUILDER_DEPOSIT_LENGTH (2 ^i 6))
-  let accumulator := (merkle_accumulator_empty ⟨6⟩)
+  let accumulator := (merkle_accumulator_empty 6)
   let (accumulator, rest) ← (( do
     let loop_vars ← whileFuelM (fuel :=rest.count) (fun (accumulator, rest) => (pure (rest.count != 0))) (accumulator, rest)
       fun (accumulator, rest) => do
@@ -837,15 +840,19 @@ def htr_builder_deposit_requests (requests : EvmByteSlice) : SailM hash := do
           (merkle_accumulator_push accumulator (← (htr_builder_deposit_request request)))
         (pure (accumulator, rest))
     (pure loop_vars) ) : SailM (MerkleAccumulator × (BoundedSszListRef (2 ^ 6))) )
-  (mix_in_length (← (merkle_accumulator_root accumulator)) (accumulator.count).value)
+  (mix_in_length (← (merkle_accumulator_root accumulator)) accumulator.count)
 
 /-- `hash_tree_root` of the builder-exit-request list (depth 4). -/
-/- Type quantifiers: k_ex411769_ : Nat, k_ex411768_ : Nat, 0 ≤ k_ex411768_ ∧ 0 ≤ k_ex411769_ -/
-def htr_builder_exit_requests (requests : EvmByteSlice) : SailM hash := do
+/- Type quantifiers: requests_dependentWitness1 : Nat, requests_dependentWitness0 : Nat, 0 ≤
+  requests_dependentWitness0 ∧ 0 ≤ requests_dependentWitness1 -/
+def htr_builder_exit_requests (requests : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let requests_dependentWitness0 := (requests).1
+  let requests_dependentWitness1 := ((requests).2).1
   let requests := ((requests).2).2
   let rest ← do
     (ssz_bounded_fixed_list_ref ⟨_, ⟨_, requests⟩⟩ HTR_BUILDER_EXIT_LENGTH (2 ^i 4))
-  let accumulator := (merkle_accumulator_empty ⟨4⟩)
+  let accumulator := (merkle_accumulator_empty 4)
   let (accumulator, rest) ← (( do
     let loop_vars ← whileFuelM (fuel :=rest.count) (fun (accumulator, rest) => (pure (rest.count != 0))) (accumulator, rest)
       fun (accumulator, rest) => do
@@ -856,10 +863,10 @@ def htr_builder_exit_requests (requests : EvmByteSlice) : SailM hash := do
           (merkle_accumulator_push accumulator (← (htr_builder_exit_request request)))
         (pure (accumulator, rest))
     (pure loop_vars) ) : SailM (MerkleAccumulator × (BoundedSszListRef (2 ^ 4))) )
-  (mix_in_length (← (merkle_accumulator_root accumulator)) (accumulator.count).value)
+  (mix_in_length (← (merkle_accumulator_root accumulator)) accumulator.count)
 
 /-- `hash_tree_root` of the `SszExecutionRequests` container. -/
-def htr_execution_requests (input_ref : StatelessInputRef) : SailM hash := do
+def htr_execution_requests (input_ref : StatelessInputRef) : SailM (Vector (BitVec 8) 32) := do
   let _ : Unit := (cycle_scope_start SCOPE_HTR_EXECUTION_REQUESTS)
   let root ← do
     (merkleize
@@ -867,15 +874,15 @@ def htr_execution_requests (input_ref : StatelessInputRef) : SailM hash := do
           input_ref.withdrawal_requests)), (← (htr_consolidation_requests
           input_ref.consolidation_requests)), (← (htr_builder_deposit_requests
           input_ref.builder_deposit_requests)), (← (htr_builder_exit_requests
-          input_ref.builder_exit_requests))] ⟨3⟩)
+          input_ref.builder_exit_requests))] 3)
   let _ : Unit := (cycle_scope_end SCOPE_HTR_EXECUTION_REQUESTS)
   (pure root)
 
 /-- `hash_tree_root` of the `SszNewPayloadRequest` (4 fields, depth 2) —
 the commitment the guest proves its input against. -/
-def htr_new_payload_request (input_ref : StatelessInputRef) : SailM hash := do
+def htr_new_payload_request (input_ref : StatelessInputRef) : SailM (Vector (BitVec 8) 32) := do
   (merkleize
     [(← (htr_execution_payload input_ref)), (← (htr_versioned_hashes input_ref.versioned_hashes)), (htr_bytes32
       (← (ssz_bytes32 input_ref.new_payload_request NPR_BEACON_ROOT))), (← (htr_execution_requests
-        input_ref))] ⟨2⟩)
+        input_ref))] 2)
 

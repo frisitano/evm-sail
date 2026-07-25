@@ -47,8 +47,7 @@ lists. -/
 
 /-- The 32-byte big-endian encoding of a word. -/
 /- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
-def word_to_bytes32 (value : word) : (List byte) := Id.run do
-  let value := (value).value
+def word_to_bytes32 (value : Nat) : (List (BitVec 8)) := Id.run do
   let remaining : Nat := value
   let out : (List (BitVec 8)) := []
   let (out, remaining) ← (( do
@@ -59,13 +58,13 @@ def word_to_bytes32 (value : word) : (List byte) := Id.run do
       let (out, remaining) := loop_vars
       loop_vars :=
         let out : (List (BitVec 8)) := ((word_low_byte remaining) :: out)
-        let remaining : Nat := ((word_shift_right ⟨remaining⟩ ⟨8⟩)).value
+        let remaining : Nat := (word_shift_right remaining 8)
         (out, remaining)
     (pure loop_vars) ) : Id ((List (BitVec 8)) × Nat) )
   (pure out)
 
 /-- The 32-byte big-endian encoding of a hash. -/
-def hash_to_bytes32 (bytes : hash) : (List byte) := Id.run do
+def hash_to_bytes32 (bytes : (Vector (BitVec 8) 32)) : (List (BitVec 8)) := Id.run do
   let out : (List (BitVec 8)) := []
   let loop_k_lower := 0
   let loop_k_upper := 31
@@ -76,7 +75,7 @@ def hash_to_bytes32 (bytes : hash) : (List byte) := Id.run do
   (pure loop_vars)
 
 /-- The 20-byte big-endian encoding of an address. -/
-def address_to_bytes (bytes : address) : (List byte) := Id.run do
+def address_to_bytes (bytes : (Vector (BitVec 8) 20)) : (List (BitVec 8)) := Id.run do
   let out : (List (BitVec 8)) := []
   let loop_k_lower := 0
   let loop_k_upper := 19

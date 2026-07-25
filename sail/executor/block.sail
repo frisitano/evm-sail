@@ -81,7 +81,7 @@ function execute_block_transactions(
         cycle_scope_start(SCOPE_TX_DECODE);
         let tx = decode_transaction(transaction, public_key);
         cycle_scope_end(SCOPE_TX_DECODE);
-        bal_set_index(i + 1);
+        k_block_access_index = i + 1;
         if i == 0 then {
             tx0_to = tx.recipient
         };
@@ -175,7 +175,7 @@ function execute_block_body(
     BlockExecutionResult
 ) = {
     bal_reset();
-    bal_set_index(0);
+    k_block_access_index = 0;
     cycle_scope_start(SCOPE_BLOCK_START);
     run_block_start_system_calls();
     cycle_scope_end(SCOPE_BLOCK_START);
@@ -183,7 +183,7 @@ function execute_block_body(
     let result = execute_block_transactions(body.transactions, public_keys, header_gas_limit);
     cycle_scope_end(SCOPE_BLOCK_TRANSACTIONS);
     let post_tx_index = body.transactions.count + 1;
-    bal_set_index(post_tx_index);
+    k_block_access_index = post_tx_index;
     cycle_scope_start(SCOPE_BLOCK_END_STATE);
     apply_block_end_state(body);
     cycle_scope_end(SCOPE_BLOCK_END_STATE);

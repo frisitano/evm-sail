@@ -7,7 +7,7 @@ void create_letbind_219(void) {
   uint64_t z3zE276;
   z3zE276 = UINT64_C(2);
   zSSZ_BODY = z3zE276;
-let_end_809: ;
+let_end_806: ;
 }
 void kill_letbind_219(void) {
 }
@@ -17,7 +17,7 @@ void create_letbind_220(void) {
   uint64_t z3zE277;
   z3zE277 = UINT64_C(0);
   zIN_NPR_OFF = z3zE277;
-let_end_810: ;
+let_end_807: ;
 }
 void kill_letbind_220(void) {
 }
@@ -27,7 +27,7 @@ void create_letbind_221(void) {
   uint64_t z3zE278;
   z3zE278 = UINT64_C(4);
   zIN_WITNESS_OFF = z3zE278;
-let_end_811: ;
+let_end_808: ;
 }
 void kill_letbind_221(void) {
 }
@@ -37,7 +37,7 @@ void create_letbind_222(void) {
   uint64_t z3zE279;
   z3zE279 = UINT64_C(8);
   zIN_CHAIN_CONFIG_OFF = z3zE279;
-let_end_812: ;
+let_end_809: ;
 }
 void kill_letbind_222(void) {
 }
@@ -47,7 +47,7 @@ void create_letbind_223(void) {
   uint64_t z3zE280;
   z3zE280 = UINT64_C(12);
   zIN_PUBLIC_KEYS_OFF = z3zE280;
-let_end_813: ;
+let_end_810: ;
 }
 void kill_letbind_223(void) {
 }
@@ -57,7 +57,7 @@ void create_letbind_224(void) {
   uint64_t z3zE281;
   z3zE281 = UINT64_C(0);
   zNPR_PAYLOAD_OFF = z3zE281;
-let_end_814: ;
+let_end_811: ;
 }
 void kill_letbind_224(void) {
 }
@@ -67,7 +67,7 @@ void create_letbind_225(void) {
   uint64_t z3zE282;
   z3zE282 = UINT64_C(4);
   zNPR_VHASHES_OFF = z3zE282;
-let_end_815: ;
+let_end_812: ;
 }
 void kill_letbind_225(void) {
 }
@@ -77,7 +77,7 @@ void create_letbind_226(void) {
   uint64_t z3zE283;
   z3zE283 = UINT64_C(8);
   zNPR_BEACON_ROOT = z3zE283;
-let_end_816: ;
+let_end_813: ;
 }
 void kill_letbind_226(void) {
 }
@@ -87,7 +87,7 @@ void create_letbind_227(void) {
   uint64_t z3zE284;
   z3zE284 = UINT64_C(40);
   zNPR_REQUESTS_OFF = z3zE284;
-let_end_817: ;
+let_end_814: ;
 }
 void kill_letbind_227(void) {
 }
@@ -97,7 +97,7 @@ void create_letbind_228(void) {
   uint64_t z3zE285;
   z3zE285 = UINT64_C(0);
   zREQ_DEPOSITS_OFF = z3zE285;
-let_end_818: ;
+let_end_815: ;
 }
 void kill_letbind_228(void) {
 }
@@ -107,7 +107,7 @@ void create_letbind_229(void) {
   uint64_t z3zE286;
   z3zE286 = UINT64_C(4);
   zREQ_WITHDRAWALS_OFF = z3zE286;
-let_end_819: ;
+let_end_816: ;
 }
 void kill_letbind_229(void) {
 }
@@ -117,7 +117,7 @@ void create_letbind_230(void) {
   uint64_t z3zE287;
   z3zE287 = UINT64_C(8);
   zREQ_CONSOLIDATIONS_OFF = z3zE287;
-let_end_820: ;
+let_end_817: ;
 }
 void kill_letbind_230(void) {
 }
@@ -127,7 +127,7 @@ void create_letbind_231(void) {
   uint64_t z3zE288;
   z3zE288 = UINT64_C(12);
   zREQ_BUILDER_DEPOSITS_OFF = z3zE288;
-let_end_821: ;
+let_end_818: ;
 }
 void kill_letbind_231(void) {
 }
@@ -137,7 +137,7 @@ void create_letbind_232(void) {
   uint64_t z3zE289;
   z3zE289 = UINT64_C(16);
   zREQ_BUILDER_EXITS_OFF = z3zE289;
-let_end_822: ;
+let_end_819: ;
 }
 void kill_letbind_232(void) {
 }
@@ -147,7 +147,7 @@ void create_letbind_233(void) {
   uint64_t z3zE290;
   z3zE290 = UINT64_C(32);
   zPL_FEE_RECIPIENT = z3zE290;
-let_end_823: ;
+let_end_820: ;
 }
 void kill_letbind_233(void) {
 }
@@ -157,7 +157,7 @@ void create_letbind_234(void) {
   uint64_t z3zE291;
   z3zE291 = UINT64_C(52);
   zPL_STATE_ROOT = z3zE291;
-let_end_824: ;
+let_end_821: ;
 }
 void kill_letbind_234(void) {
 }
@@ -167,7 +167,7 @@ void create_letbind_235(void) {
   uint64_t z3zE292;
   z3zE292 = UINT64_C(84);
   zPL_RECEIPTS_ROOT = z3zE292;
-let_end_825: ;
+let_end_822: ;
 }
 void kill_letbind_235(void) {
 }
@@ -177,7 +177,7 @@ void create_letbind_236(void) {
   uint64_t z3zE293;
   z3zE293 = UINT64_C(116);
   zPL_LOGS_BLOOM = z3zE293;
-let_end_826: ;
+let_end_823: ;
 }
 void kill_letbind_236(void) {
 }
@@ -187,7 +187,7 @@ void create_letbind_237(void) {
   uint64_t z3zE294;
   z3zE294 = UINT64_C(372);
   zPL_PREV_RANDAO = z3zE294;
-let_end_827: ;
+let_end_824: ;
 }
 void kill_letbind_237(void) {
 }
@@ -197,7 +197,7 @@ void create_letbind_238(void) {
   uint64_t z3zE295;
   z3zE295 = UINT64_C(404);
   zPL_BLOCK_NUMBER = z3zE295;
-let_end_828: ;
+let_end_825: ;
 }
 void kill_letbind_238(void) {
 }
@@ -207,7 +207,7 @@ void create_letbind_239(void) {
   uint64_t z3zE296;
   z3zE296 = UINT64_C(412);
   zPL_GAS_LIMIT = z3zE296;
-let_end_829: ;
+let_end_826: ;
 }
 void kill_letbind_239(void) {
 }
@@ -217,7 +217,7 @@ void create_letbind_240(void) {
   uint64_t z3zE297;
   z3zE297 = UINT64_C(420);
   zPL_GAS_USED = z3zE297;
-let_end_830: ;
+let_end_827: ;
 }
 void kill_letbind_240(void) {
 }
@@ -227,7 +227,7 @@ void create_letbind_241(void) {
   uint64_t z3zE298;
   z3zE298 = UINT64_C(428);
   zPL_TIMESTAMP = z3zE298;
-let_end_831: ;
+let_end_828: ;
 }
 void kill_letbind_241(void) {
 }
@@ -237,7 +237,7 @@ void create_letbind_242(void) {
   uint64_t z3zE299;
   z3zE299 = UINT64_C(436);
   zPL_EXTRA_OFF = z3zE299;
-let_end_832: ;
+let_end_829: ;
 }
 void kill_letbind_242(void) {
 }
@@ -247,7 +247,7 @@ void create_letbind_243(void) {
   uint64_t z3zE300;
   z3zE300 = UINT64_C(440);
   zPL_BASE_FEE = z3zE300;
-let_end_833: ;
+let_end_830: ;
 }
 void kill_letbind_243(void) {
 }
@@ -257,7 +257,7 @@ void create_letbind_244(void) {
   uint64_t z3zE301;
   z3zE301 = UINT64_C(472);
   zPL_BLOCK_HASH = z3zE301;
-let_end_834: ;
+let_end_831: ;
 }
 void kill_letbind_244(void) {
 }
@@ -267,7 +267,7 @@ void create_letbind_245(void) {
   uint64_t z3zE302;
   z3zE302 = UINT64_C(504);
   zPL_TXS_OFF = z3zE302;
-let_end_835: ;
+let_end_832: ;
 }
 void kill_letbind_245(void) {
 }
@@ -277,7 +277,7 @@ void create_letbind_246(void) {
   uint64_t z3zE303;
   z3zE303 = UINT64_C(508);
   zPL_WDS_OFF = z3zE303;
-let_end_836: ;
+let_end_833: ;
 }
 void kill_letbind_246(void) {
 }
@@ -287,7 +287,7 @@ void create_letbind_247(void) {
   uint64_t z3zE304;
   z3zE304 = UINT64_C(512);
   zPL_BLOB_GAS_USED = z3zE304;
-let_end_837: ;
+let_end_834: ;
 }
 void kill_letbind_247(void) {
 }
@@ -297,7 +297,7 @@ void create_letbind_248(void) {
   uint64_t z3zE305;
   z3zE305 = UINT64_C(520);
   zPL_EXCESS_BLOB_GAS = z3zE305;
-let_end_838: ;
+let_end_835: ;
 }
 void kill_letbind_248(void) {
 }
@@ -307,7 +307,7 @@ void create_letbind_249(void) {
   uint64_t z3zE306;
   z3zE306 = UINT64_C(528);
   zPL_BAL_OFF = z3zE306;
-let_end_839: ;
+let_end_836: ;
 }
 void kill_letbind_249(void) {
 }
@@ -317,7 +317,7 @@ void create_letbind_250(void) {
   uint64_t z3zE307;
   z3zE307 = UINT64_C(532);
   zPL_SLOT_NUMBER = z3zE307;
-let_end_840: ;
+let_end_837: ;
 }
 void kill_letbind_250(void) {
 }
@@ -327,7 +327,7 @@ void create_letbind_251(void) {
   uint64_t z3zE308;
   z3zE308 = UINT64_C(44);
   zWD_SIZE = z3zE308;
-let_end_841: ;
+let_end_838: ;
 }
 void kill_letbind_251(void) {
 }
@@ -337,7 +337,7 @@ void create_letbind_252(void) {
   uint64_t z3zE309;
   z3zE309 = UINT64_C(0);
   zWD_INDEX = z3zE309;
-let_end_842: ;
+let_end_839: ;
 }
 void kill_letbind_252(void) {
 }
@@ -347,7 +347,7 @@ void create_letbind_253(void) {
   uint64_t z3zE310;
   z3zE310 = UINT64_C(8);
   zWD_VALIDATOR_INDEX = z3zE310;
-let_end_843: ;
+let_end_840: ;
 }
 void kill_letbind_253(void) {
 }
@@ -357,7 +357,7 @@ void create_letbind_254(void) {
   uint64_t z3zE311;
   z3zE311 = UINT64_C(16);
   zWD_ADDRESS = z3zE311;
-let_end_844: ;
+let_end_841: ;
 }
 void kill_letbind_254(void) {
 }
@@ -367,7 +367,7 @@ void create_letbind_255(void) {
   uint64_t z3zE312;
   z3zE312 = UINT64_C(36);
   zWD_AMOUNT = z3zE312;
-let_end_845: ;
+let_end_842: ;
 }
 void kill_letbind_255(void) {
 }
@@ -377,7 +377,7 @@ void create_letbind_256(void) {
   uint64_t z3zE313;
   z3zE313 = UINT64_C(0);
   zCC_CHAIN_ID = z3zE313;
-let_end_846: ;
+let_end_843: ;
 }
 void kill_letbind_256(void) {
 }
@@ -387,7 +387,7 @@ void create_letbind_257(void) {
   uint64_t z3zE314;
   z3zE314 = UINT64_C(8);
   zCC_ACTIVE_FORK_OFF = z3zE314;
-let_end_847: ;
+let_end_844: ;
 }
 void kill_letbind_257(void) {
 }
@@ -397,7 +397,7 @@ void create_letbind_258(void) {
   uint64_t z3zE315;
   z3zE315 = UINT64_C(0);
   zFC_ACTIVATION_OFF = z3zE315;
-let_end_848: ;
+let_end_845: ;
 }
 void kill_letbind_258(void) {
 }
@@ -407,7 +407,7 @@ void create_letbind_259(void) {
   uint64_t z3zE316;
   z3zE316 = UINT64_C(0);
   zFA_BLOCK_NUMBER_OFF = z3zE316;
-let_end_849: ;
+let_end_846: ;
 }
 void kill_letbind_259(void) {
 }
@@ -417,7 +417,7 @@ void create_letbind_260(void) {
   uint64_t z3zE317;
   z3zE317 = UINT64_C(4);
   zFA_TIMESTAMP_OFF = z3zE317;
-let_end_850: ;
+let_end_847: ;
 }
 void kill_letbind_260(void) {
 }
@@ -427,7 +427,7 @@ void create_letbind_261(void) {
   uint64_t z3zE318;
   z3zE318 = UINT64_C(0);
   zWIT_STATE_OFF = z3zE318;
-let_end_851: ;
+let_end_848: ;
 }
 void kill_letbind_261(void) {
 }
@@ -437,7 +437,7 @@ void create_letbind_262(void) {
   uint64_t z3zE319;
   z3zE319 = UINT64_C(4);
   zWIT_CODES_OFF = z3zE319;
-let_end_852: ;
+let_end_849: ;
 }
 void kill_letbind_262(void) {
 }
@@ -447,7 +447,7 @@ void create_letbind_263(void) {
   uint64_t z3zE320;
   z3zE320 = UINT64_C(8);
   zWIT_HEADERS_OFF = z3zE320;
-let_end_853: ;
+let_end_850: ;
 }
 void kill_letbind_263(void) {
 }
@@ -457,7 +457,7 @@ void create_letbind_264(void) {
   uint64_t z3zE321;
   z3zE321 = UINT64_C(18);
   zSTATELESS_INPUT_FIXED_LENGTH = z3zE321;
-let_end_854: ;
+let_end_851: ;
 }
 void kill_letbind_264(void) {
 }
@@ -467,7 +467,7 @@ void create_letbind_265(void) {
   uint64_t z3zE322;
   z3zE322 = UINT64_C(16);
   zSTATELESS_INPUT_BODY_FIXED_LENGTH = z3zE322;
-let_end_855: ;
+let_end_852: ;
 }
 void kill_letbind_265(void) {
 }
@@ -477,7 +477,7 @@ void create_letbind_266(void) {
   uint64_t z3zE323;
   z3zE323 = UINT64_C(44);
   zNEW_PAYLOAD_REQUEST_FIXED_LENGTH = z3zE323;
-let_end_856: ;
+let_end_853: ;
 }
 void kill_letbind_266(void) {
 }
@@ -487,7 +487,7 @@ void create_letbind_267(void) {
   uint64_t z3zE324;
   z3zE324 = UINT64_C(540);
   zEXECUTION_PAYLOAD_FIXED_LENGTH = z3zE324;
-let_end_857: ;
+let_end_854: ;
 }
 void kill_letbind_267(void) {
 }
@@ -497,7 +497,7 @@ void create_letbind_268(void) {
   uint64_t z3zE325;
   z3zE325 = UINT64_C(20);
   zEXECUTION_REQUESTS_FIXED_LENGTH = z3zE325;
-let_end_858: ;
+let_end_855: ;
 }
 void kill_letbind_268(void) {
 }
@@ -507,7 +507,7 @@ void create_letbind_269(void) {
   uint64_t z3zE326;
   z3zE326 = UINT64_C(12);
   zEXECUTION_WITNESS_FIXED_LENGTH = z3zE326;
-let_end_859: ;
+let_end_856: ;
 }
 void kill_letbind_269(void) {
 }
@@ -517,7 +517,7 @@ void create_letbind_270(void) {
   uint64_t z3zE327;
   z3zE327 = UINT64_C(65);
   zPUBLIC_KEY_LENGTH = z3zE327;
-let_end_860: ;
+let_end_857: ;
 }
 void kill_letbind_270(void) {
 }
@@ -527,7 +527,7 @@ void create_letbind_271(void) {
   uint64_t z3zE328;
   z3zE328 = UINT64_C(12);
   zCHAIN_CONFIG_HEADER_LENGTH = z3zE328;
-let_end_861: ;
+let_end_858: ;
 }
 void kill_letbind_271(void) {
 }
@@ -537,7 +537,7 @@ void create_letbind_272(void) {
   uint64_t z3zE329;
   z3zE329 = UINT64_C(24);
   zCHAIN_CONFIG_MIN_LENGTH = z3zE329;
-let_end_862: ;
+let_end_859: ;
 }
 void kill_letbind_272(void) {
 }
@@ -547,7 +547,7 @@ void create_letbind_273(void) {
   uint64_t z3zE330;
   z3zE330 = UINT64_C(32);
   zMAX_EXTRA_DATA_LENGTH = z3zE330;
-let_end_863: ;
+let_end_860: ;
 }
 void kill_letbind_273(void) {
 }
@@ -557,7 +557,7 @@ void create_letbind_274(void) {
   uint64_t z3zE331;
   z3zE331 = UINT64_C(1073741824);
   zMAX_TRANSACTION_LENGTH = z3zE331;
-let_end_864: ;
+let_end_861: ;
 }
 void kill_letbind_274(void) {
 }
@@ -567,7 +567,7 @@ void create_letbind_275(void) {
   uint64_t z3zE332;
   z3zE332 = UINT64_C(1048576);
   zMAX_TRANSACTIONS_PER_PAYLOAD = z3zE332;
-let_end_865: ;
+let_end_862: ;
 }
 void kill_letbind_275(void) {
 }
@@ -577,7 +577,7 @@ void create_letbind_276(void) {
   uint64_t z3zE333;
   z3zE333 = UINT64_C(16);
   zMAX_WITHDRAWALS_PER_PAYLOAD = z3zE333;
-let_end_866: ;
+let_end_863: ;
 }
 void kill_letbind_276(void) {
 }
@@ -587,7 +587,7 @@ void create_letbind_277(void) {
   uint64_t z3zE334;
   z3zE334 = UINT64_C(1073741824);
   zMAX_BLOCK_ACCESS_LIST_LENGTH = z3zE334;
-let_end_867: ;
+let_end_864: ;
 }
 void kill_letbind_277(void) {
 }
@@ -597,7 +597,7 @@ void create_letbind_278(void) {
   uint64_t z3zE335;
   z3zE335 = UINT64_C(4096);
   zMAX_BLOB_COMMITMENTS_PER_BLOCK = z3zE335;
-let_end_868: ;
+let_end_865: ;
 }
 void kill_letbind_278(void) {
 }
@@ -607,7 +607,7 @@ void create_letbind_279(void) {
   uint64_t z3zE336;
   z3zE336 = UINT64_C(4194304);
   zMAX_WITNESS_NODES = z3zE336;
-let_end_869: ;
+let_end_866: ;
 }
 void kill_letbind_279(void) {
 }
@@ -617,7 +617,7 @@ void create_letbind_280(void) {
   uint64_t z3zE337;
   z3zE337 = UINT64_C(1024);
   zMAX_WITNESS_NODE_LENGTH = z3zE337;
-let_end_870: ;
+let_end_867: ;
 }
 void kill_letbind_280(void) {
 }
@@ -627,7 +627,7 @@ void create_letbind_281(void) {
   uint64_t z3zE338;
   z3zE338 = UINT64_C(262144);
   zMAX_WITNESS_CODES = z3zE338;
-let_end_871: ;
+let_end_868: ;
 }
 void kill_letbind_281(void) {
 }
@@ -637,7 +637,7 @@ void create_letbind_282(void) {
   uint64_t z3zE339;
   z3zE339 = UINT64_C(65536);
   zMAX_WITNESS_CODE_LENGTH = z3zE339;
-let_end_872: ;
+let_end_869: ;
 }
 void kill_letbind_282(void) {
 }
@@ -647,7 +647,7 @@ void create_letbind_283(void) {
   uint64_t z3zE340;
   z3zE340 = UINT64_C(256);
   zMAX_WITNESS_HEADERS = z3zE340;
-let_end_873: ;
+let_end_870: ;
 }
 void kill_letbind_283(void) {
 }
@@ -657,7 +657,7 @@ void create_letbind_284(void) {
   uint64_t z3zE341;
   z3zE341 = UINT64_C(1024);
   zMAX_WITNESS_HEADER_LENGTH = z3zE341;
-let_end_874: ;
+let_end_871: ;
 }
 void kill_letbind_284(void) {
 }
@@ -667,26 +667,26 @@ void create_letbind_285(void) {
   uint64_t z3zE342;
   z3zE342 = UINT64_C(32768);
   zMAX_PUBLIC_KEYS = z3zE342;
-let_end_875: ;
+let_end_872: ;
 }
 void kill_letbind_285(void) {
 }
 
 uint64_t zsszz_offset_table_position(uint64_t zindex)
 {
-  uint64_t z8zE562;
-  {    z8zE562 = (zindex * UINT64_C(4));
+  uint64_t z8zE559;
+  {    z8zE559 = (zindex * UINT64_C(4));
   }
-end_function_1689: ;
-  return z8zE562;
-end_block_exception_1690: ;
+end_function_1686: ;
+  return z8zE559;
+end_block_exception_1687: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 struct zBoundedSszzListCursor zsszz_list_cursor(struct zBoundedSszzListRef zitems)
 {
-  struct zBoundedSszzListCursor z8zE563;
+  struct zBoundedSszzListCursor z8zE560;
   struct zByteSliceFields zbytes;
   zbytes = zitems.zbytes;
   uint64_t zcurrent;
@@ -707,19 +707,19 @@ struct zBoundedSszzListCursor zsszz_list_cursor(struct zBoundedSszzListRef zitem
   z3zE1233.zcurrent = zcurrent;
   z3zE1233.zindex = UINT64_C(0);
   z3zE1233.zitems = zitems;
-  z8zE563 = z3zE1233;
-end_function_1687: ;
-  return z8zE563;
-end_block_exception_1688: ;
-  struct zByteSliceFields z8zE1022 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBoundedSszzListRef z8zE1021 = { .zbytes = z8zE1022, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
-  struct zBoundedSszzListCursor z8zE1020 = { .zcurrent = UINT64_C(0xdeadc0de), .zindex = UINT64_C(0xdeadc0de), .zitems = z8zE1021 };
-  return z8zE1020;
+  z8zE560 = z3zE1233;
+end_function_1684: ;
+  return z8zE560;
+end_block_exception_1685: ;
+  struct zByteSliceFields z8zE1010 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBoundedSszzListRef z8zE1009 = { .zbytes = z8zE1010, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct zBoundedSszzListCursor z8zE1008 = { .zcurrent = UINT64_C(0xdeadc0de), .zindex = UINT64_C(0xdeadc0de), .zitems = z8zE1009 };
+  return z8zE1008;
 }
 
 bool zsszz_list_cursor_empty(struct zBoundedSszzListCursor zcursor)
 {
-  bool z8zE564;
+  bool z8zE561;
   uint64_t z2zE1141;
   {
     struct zBoundedSszzListRef z2zE1140;
@@ -728,17 +728,17 @@ bool zsszz_list_cursor_empty(struct zBoundedSszzListCursor zcursor)
   }
   uint64_t z2zE1142;
   z2zE1142 = zcursor.zindex;
-  z8zE564 = (!(z2zE1142 < z2zE1141));
-end_function_1685: ;
-  return z8zE564;
-end_block_exception_1686: ;
+  z8zE561 = (!(z2zE1142 < z2zE1141));
+end_function_1682: ;
+  return z8zE561;
+end_block_exception_1683: ;
 
   return false;
 }
 
 struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCursorz9 zsszz_list_pop(struct zBoundedSszzListCursor zcursor)
 {
-  struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCursorz9 z8zE565;
+  struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCursorz9 z8zE562;
   uint64_t zcount;
   {
     struct zBoundedSszzListRef z2zE1139;
@@ -758,7 +758,7 @@ struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCurs
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:153.8-153.41");
     KILL(zexception)(&z2zE1125);
-    goto end_block_exception_1684;
+    goto end_block_exception_1681;
     /* unreachable after throw */
     KILL(zexception)(&z2zE1125);
   } else {  z3zE1228 = UNIT;  }
@@ -827,7 +827,7 @@ struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCurs
         have_exception = true;
         COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:170.16-170.49");
         KILL(zexception)(&z2zE1132);
-        goto end_block_exception_1684;
+        goto end_block_exception_1681;
         /* unreachable after throw */
         KILL(zexception)(&z2zE1132);
       } else {  z3zE1230 = UNIT;  }
@@ -840,7 +840,7 @@ struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCurs
       struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCursorz9 z3zE1232;
       z3zE1232.ztup0 = zitem;
       z3zE1232.ztup1 = z3zE1231;
-      z8zE565 = z3zE1232;
+      z8zE562 = z3zE1232;
     } else {
       struct zexception z2zE1133;
       CREATE(zexception)(&z2zE1133);
@@ -849,7 +849,7 @@ struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCurs
       have_exception = true;
       COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:175.12-175.45");
       KILL(zexception)(&z2zE1133);
-      goto end_block_exception_1684;
+      goto end_block_exception_1681;
       /* unreachable after throw */
       KILL(zexception)(&z2zE1133);
     }
@@ -861,24 +861,24 @@ struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCurs
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:178.8-178.41");
     KILL(zexception)(&z2zE1134);
-    goto end_block_exception_1684;
+    goto end_block_exception_1681;
     /* unreachable after throw */
     KILL(zexception)(&z2zE1134);
   }
-end_function_1683: ;
-  return z8zE565;
-end_block_exception_1684: ;
-  struct zByteSliceFields z8zE1027 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zByteSliceFields z8zE1026 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBoundedSszzListRef z8zE1025 = { .zbytes = z8zE1026, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
-  struct zBoundedSszzListCursor z8zE1024 = { .zcurrent = UINT64_C(0xdeadc0de), .zindex = UINT64_C(0xdeadc0de), .zitems = z8zE1025 };
-  struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCursorz9 z8zE1023 = { .ztup0 = z8zE1027, .ztup1 = z8zE1024 };
-  return z8zE1023;
+end_function_1680: ;
+  return z8zE562;
+end_block_exception_1681: ;
+  struct zByteSliceFields z8zE1015 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zByteSliceFields z8zE1014 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBoundedSszzListRef z8zE1013 = { .zbytes = z8zE1014, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct zBoundedSszzListCursor z8zE1012 = { .zcurrent = UINT64_C(0xdeadc0de), .zindex = UINT64_C(0xdeadc0de), .zitems = z8zE1013 };
+  struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCursorz9 z8zE1011 = { .ztup0 = z8zE1015, .ztup1 = z8zE1012 };
+  return z8zE1011;
 }
 
 struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListRefz9 zsszz_fixed_list_pop(struct zBoundedSszzListRef zitems, uint64_t zitem_sizze)
 {
-  struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListRefz9 z8zE566;
+  struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListRefz9 z8zE563;
   struct zByteSliceFields zbytes;
   zbytes = zitems.zbytes;
   uint64_t zitems_length;
@@ -898,7 +898,7 @@ struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListRefz
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:255.8-255.41");
     KILL(zexception)(&z2zE1095);
-    goto end_block_exception_1678;
+    goto end_block_exception_1675;
     /* unreachable after throw */
     KILL(zexception)(&z2zE1095);
   } else {  z3zE1221 = UNIT;  }
@@ -913,7 +913,7 @@ struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListRefz
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:258.8-258.41");
     KILL(zexception)(&z2zE1097);
-    goto end_block_exception_1678;
+    goto end_block_exception_1675;
     /* unreachable after throw */
     KILL(zexception)(&z2zE1097);
   } else {  z3zE1220 = UNIT;  }
@@ -937,35 +937,35 @@ struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListRefz
   struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListRefz9 z3zE1223;
   z3zE1223.ztup0 = zitem;
   z3zE1223.ztup1 = zrest;
-  z8zE566 = z3zE1223;
-end_function_1677: ;
-  return z8zE566;
-end_block_exception_1678: ;
-  struct zByteSliceFields z8zE1031 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zByteSliceFields z8zE1030 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBoundedSszzListRef z8zE1029 = { .zbytes = z8zE1030, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
-  struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListRefz9 z8zE1028 = { .ztup0 = z8zE1031, .ztup1 = z8zE1029 };
-  return z8zE1028;
+  z8zE563 = z3zE1223;
+end_function_1674: ;
+  return z8zE563;
+end_block_exception_1675: ;
+  struct zByteSliceFields z8zE1019 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zByteSliceFields z8zE1018 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBoundedSszzListRef z8zE1017 = { .zbytes = z8zE1018, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListRefz9 z8zE1016 = { .ztup0 = z8zE1019, .ztup1 = z8zE1017 };
+  return z8zE1016;
 }
 
 struct zSszzContainerCursor zsszz_container_cursor(struct zByteSliceFields zbytes, uint64_t zfixed_length)
 {
-  struct zSszzContainerCursor z8zE567;
+  struct zSszzContainerCursor z8zE564;
   struct zSszzContainerCursor z3zE1219;
   z3zE1219.zbytes = zbytes;
   z3zE1219.zcurrent = zfixed_length;
-  z8zE567 = z3zE1219;
-end_function_1673: ;
-  return z8zE567;
-end_block_exception_1674: ;
-  struct zByteSliceFields z8zE1033 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zSszzContainerCursor z8zE1032 = { .zbytes = z8zE1033, .zcurrent = UINT64_C(0xdeadc0de) };
-  return z8zE1032;
+  z8zE564 = z3zE1219;
+end_function_1670: ;
+  return z8zE564;
+end_block_exception_1671: ;
+  struct zByteSliceFields z8zE1021 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zSszzContainerCursor z8zE1020 = { .zbytes = z8zE1021, .zcurrent = UINT64_C(0xdeadc0de) };
+  return z8zE1020;
 }
 
 struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 zsszz_take(struct zSszzContainerCursor zcursor, uint64_t zstop)
 {
-  struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z8zE568;
+  struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z8zE565;
   uint64_t zcurrent_value;
   zcurrent_value = zcursor.zcurrent;
   struct zByteSliceFields zbytes;
@@ -994,7 +994,7 @@ struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursor
     struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z3zE1218;
     z3zE1218.ztup0 = zspan;
     z3zE1218.ztup1 = z3zE1217;
-    z8zE568 = z3zE1218;
+    z8zE565 = z3zE1218;
   } else {
     struct zexception z2zE1090;
     CREATE(zexception)(&z2zE1090);
@@ -1003,23 +1003,23 @@ struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursor
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:333.8-333.41");
     KILL(zexception)(&z2zE1090);
-    goto end_block_exception_1672;
+    goto end_block_exception_1669;
     /* unreachable after throw */
     KILL(zexception)(&z2zE1090);
   }
-end_function_1671: ;
-  return z8zE568;
-end_block_exception_1672: ;
-  struct zByteSliceFields z8zE1037 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zByteSliceFields z8zE1036 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zSszzContainerCursor z8zE1035 = { .zbytes = z8zE1036, .zcurrent = UINT64_C(0xdeadc0de) };
-  struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z8zE1034 = { .ztup0 = z8zE1037, .ztup1 = z8zE1035 };
-  return z8zE1034;
+end_function_1668: ;
+  return z8zE565;
+end_block_exception_1669: ;
+  struct zByteSliceFields z8zE1025 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zByteSliceFields z8zE1024 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zSszzContainerCursor z8zE1023 = { .zbytes = z8zE1024, .zcurrent = UINT64_C(0xdeadc0de) };
+  struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z8zE1022 = { .ztup0 = z8zE1025, .ztup1 = z8zE1023 };
+  return z8zE1022;
 }
 
 struct zByteSliceFields zsszz_finish(struct zSszzContainerCursor zcursor)
 {
-  struct zByteSliceFields z8zE569;
+  struct zByteSliceFields z8zE566;
   uint64_t zcurrent_value;
   zcurrent_value = zcursor.zcurrent;
   struct zByteSliceFields zbytes;
@@ -1032,7 +1032,7 @@ struct zByteSliceFields zsszz_finish(struct zSszzContainerCursor zcursor)
     uint64_t zremaining;
     {    zremaining = (zcontainer_length - zcurrent_value);
     }
-    z8zE569 = zsub_slice(zbytes, zcurrent_value, zremaining);
+    z8zE566 = zsub_slice(zbytes, zcurrent_value, zremaining);
   } else {
     struct zexception z2zE1087;
     CREATE(zexception)(&z2zE1087);
@@ -1041,20 +1041,20 @@ struct zByteSliceFields zsszz_finish(struct zSszzContainerCursor zcursor)
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:347.8-347.41");
     KILL(zexception)(&z2zE1087);
-    goto end_block_exception_1670;
+    goto end_block_exception_1667;
     /* unreachable after throw */
     KILL(zexception)(&z2zE1087);
   }
-end_function_1669: ;
-  return z8zE569;
-end_block_exception_1670: ;
-  struct zByteSliceFields z8zE1038 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE1038;
+end_function_1666: ;
+  return z8zE566;
+end_block_exception_1667: ;
+  struct zByteSliceFields z8zE1026 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE1026;
 }
 
 struct zBoundedSszzListRef zsszz_bounded_variable_list_ref(struct zByteSliceFields zbytes, uint64_t zmaximum_count, uint64_t zmaximum_item_length)
 {
-  struct zBoundedSszzListRef z8zE570;
+  struct zBoundedSszzListRef z8zE567;
   uint64_t zspan;
   zspan = zbytes.zlen;
   uint64_t zraw_count;
@@ -1073,7 +1073,7 @@ struct zBoundedSszzListRef zsszz_bounded_variable_list_ref(struct zByteSliceFiel
         have_exception = true;
         COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:367.16-367.49");
         KILL(zexception)(&z2zE1080);
-        goto end_block_exception_1668;
+        goto end_block_exception_1665;
         /* unreachable after throw */
         KILL(zexception)(&z2zE1080);
       } else {  z3zE1209 = UNIT;  }
@@ -1110,7 +1110,7 @@ struct zBoundedSszzListRef zsszz_bounded_variable_list_ref(struct zByteSliceFiel
         have_exception = true;
         COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:372.16-372.49");
         KILL(zexception)(&z2zE1085);
-        goto end_block_exception_1668;
+        goto end_block_exception_1665;
         /* unreachable after throw */
         KILL(zexception)(&z2zE1085);
       } else {  z3zE1212 = UNIT;  }
@@ -1128,7 +1128,7 @@ struct zBoundedSszzListRef zsszz_bounded_variable_list_ref(struct zByteSliceFiel
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:377.8-377.41");
     KILL(zexception)(&z2zE1077);
-    goto end_block_exception_1668;
+    goto end_block_exception_1665;
     /* unreachable after throw */
     KILL(zexception)(&z2zE1077);
   } else {  z3zE1213 = UNIT;  }
@@ -1138,18 +1138,18 @@ struct zBoundedSszzListRef zsszz_bounded_variable_list_ref(struct zByteSliceFiel
   z3zE1214.zbytes = zbytes;
   z3zE1214.zcount = z3zE1215;
   z3zE1214.zmax_item_length = zmaximum_item_length;
-  z8zE570 = z3zE1214;
-end_function_1667: ;
-  return z8zE570;
-end_block_exception_1668: ;
-  struct zByteSliceFields z8zE1040 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBoundedSszzListRef z8zE1039 = { .zbytes = z8zE1040, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
-  return z8zE1039;
+  z8zE567 = z3zE1214;
+end_function_1664: ;
+  return z8zE567;
+end_block_exception_1665: ;
+  struct zByteSliceFields z8zE1028 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBoundedSszzListRef z8zE1027 = { .zbytes = z8zE1028, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  return z8zE1027;
 }
 
 struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref(struct zByteSliceFields zbytes, uint64_t zitem_sizze, uint64_t zmaximum_count)
 {
-  struct zBoundedSszzListRef z8zE571;
+  struct zBoundedSszzListRef z8zE568;
   uint64_t zwidth;
   zwidth = zitem_sizze;
   bool z2zE1069;
@@ -1163,7 +1163,7 @@ struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref(struct zByteSliceFields 
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:394.8-394.41");
     KILL(zexception)(&z2zE1070);
-    goto end_block_exception_1666;
+    goto end_block_exception_1663;
     /* unreachable after throw */
     KILL(zexception)(&z2zE1070);
   } else {  z3zE1205 = UNIT;  }
@@ -1187,7 +1187,7 @@ struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref(struct zByteSliceFields 
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:399.8-399.41");
     KILL(zexception)(&z2zE1073);
-    goto end_block_exception_1666;
+    goto end_block_exception_1663;
     /* unreachable after throw */
     KILL(zexception)(&z2zE1073);
   } else {  z3zE1207 = UNIT;  }
@@ -1202,7 +1202,7 @@ struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref(struct zByteSliceFields 
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:402.8-402.41");
     KILL(zexception)(&z2zE1075);
-    goto end_block_exception_1666;
+    goto end_block_exception_1663;
     /* unreachable after throw */
     KILL(zexception)(&z2zE1075);
   } else {  z3zE1206 = UNIT;  }
@@ -1212,18 +1212,18 @@ struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref(struct zByteSliceFields 
   z3zE1208.zbytes = zbytes;
   z3zE1208.zcount = zcount;
   z3zE1208.zmax_item_length = zitem_sizze;
-  z8zE571 = z3zE1208;
-end_function_1665: ;
-  return z8zE571;
-end_block_exception_1666: ;
-  struct zByteSliceFields z8zE1042 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBoundedSszzListRef z8zE1041 = { .zbytes = z8zE1042, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
-  return z8zE1041;
+  z8zE568 = z3zE1208;
+end_function_1662: ;
+  return z8zE568;
+end_block_exception_1663: ;
+  struct zByteSliceFields z8zE1030 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBoundedSszzListRef z8zE1029 = { .zbytes = z8zE1030, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  return z8zE1029;
 }
 
 struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zinput)
 {
-  struct zStatelessInputRef z8zE572;
+  struct zStatelessInputRef z8zE569;
   struct zByteSliceFields zinput_fields;
   zinput_fields = zinput;
   uint64_t zinput_length;
@@ -1243,7 +1243,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:417.8-417.41");
     KILL(zexception)(&z2zE1008);
-    goto end_block_exception_1664;
+    goto end_block_exception_1661;
     /* unreachable after throw */
     KILL(zexception)(&z2zE1008);
   } else {  z3zE1164 = UNIT;  }
@@ -1262,7 +1262,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:420.8-420.41");
     KILL(zexception)(&z2zE1011);
-    goto end_block_exception_1664;
+    goto end_block_exception_1661;
     /* unreachable after throw */
     KILL(zexception)(&z2zE1011);
   } else {  z3zE1163 = UNIT;  }
@@ -1272,7 +1272,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
     z2zE1068 = zslice_byte(zinput_fields, UINT64_C(0));
     {
       zprotocol = zprotocol_profile(z2zE1068);
-      if (have_exception) {  goto end_block_exception_1664;  }
+      if (have_exception) {  goto end_block_exception_1661;  }
     }
   }
   struct zByteSliceFields zbody_bytes;
@@ -1280,7 +1280,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
   struct zByteSliceFields zbody;
   {
     zbody = zsszz_container_byteszIreprzGRByteSliceFieldszCU64zCRByteSliceFieldszKzIboundszGd430ac7621e2b62bc50ae9cc272dba03zK(zbody_bytes, zSTATELESS_INPUT_BODY_FIXED_LENGTH);
-    if (have_exception) {  goto end_block_exception_1664;  }
+    if (have_exception) {  goto end_block_exception_1661;  }
   }
   uint64_t zcontainer_start;
   zcontainer_start = UINT64_C(0);
@@ -1321,7 +1321,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:433.8-433.41");
     KILL(zexception)(&z2zE1013);
-    goto end_block_exception_1664;
+    goto end_block_exception_1661;
     /* unreachable after throw */
     KILL(zexception)(&z2zE1013);
   } else {  z3zE1165 = UNIT;  }
@@ -1330,7 +1330,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
   struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1014;
   {
     z2zE1014 = zsszz_take(zbody_cursor, zwitness_offset);
-    if (have_exception) {  goto end_block_exception_1664;  }
+    if (have_exception) {  goto end_block_exception_1661;  }
   }
   struct zStatelessInputRef z3zE1166;
   {
@@ -1341,12 +1341,12 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
     struct zByteSliceFields znew_payload_request;
     {
       znew_payload_request = zsszz_container_byteszIreprzGRByteSliceFieldszCU64zCRByteSliceFieldszKzIboundszG718308cac13a033149f52c385b3cc002zK(znew_payload_request_bytes, zNEW_PAYLOAD_REQUEST_FIXED_LENGTH);
-      if (have_exception) {  goto end_block_exception_1664;  }
+      if (have_exception) {  goto end_block_exception_1661;  }
     }
     struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1015;
     {
       z2zE1015 = zsszz_take(zbody_after_payload_request, zchain_config_offset);
-      if (have_exception) {  goto end_block_exception_1664;  }
+      if (have_exception) {  goto end_block_exception_1661;  }
     }
     struct zStatelessInputRef z3zE1167;
     {
@@ -1357,12 +1357,12 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
       struct zByteSliceFields zexecution_witness;
       {
         zexecution_witness = zsszz_container_byteszIreprzGRByteSliceFieldszCU64zCRByteSliceFieldszKzIboundszG718308cac13a033149f52c385b3cc002zK(zexecution_witness_bytes, zEXECUTION_WITNESS_FIXED_LENGTH);
-        if (have_exception) {  goto end_block_exception_1664;  }
+        if (have_exception) {  goto end_block_exception_1661;  }
       }
       struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1016;
       {
         z2zE1016 = zsszz_take(zbody_after_witness, zpublic_keys_offset);
-        if (have_exception) {  goto end_block_exception_1664;  }
+        if (have_exception) {  goto end_block_exception_1661;  }
       }
       struct zStatelessInputRef z3zE1168;
       {
@@ -1373,7 +1373,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
         struct zByteSliceFields zpublic_keys;
         {
           zpublic_keys = zsszz_finish(zbody_after_chain_config);
-          if (have_exception) {  goto end_block_exception_1664;  }
+          if (have_exception) {  goto end_block_exception_1661;  }
         }
         uint64_t znpr_start;
         znpr_start = UINT64_C(0);
@@ -1408,7 +1408,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
           have_exception = true;
           COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:449.8-449.41");
           KILL(zexception)(&z2zE1018);
-          goto end_block_exception_1664;
+          goto end_block_exception_1661;
           /* unreachable after throw */
           KILL(zexception)(&z2zE1018);
         } else {  z3zE1169 = UNIT;  }
@@ -1417,7 +1417,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
         struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1019;
         {
           z2zE1019 = zsszz_take(znpr_cursor, zversioned_hashes_offset);
-          if (have_exception) {  goto end_block_exception_1664;  }
+          if (have_exception) {  goto end_block_exception_1661;  }
         }
         struct zStatelessInputRef z3zE1170;
         {
@@ -1428,7 +1428,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
           struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1020;
           {
             z2zE1020 = zsszz_take(znpr_after_payload, zrequests_offset);
-            if (have_exception) {  goto end_block_exception_1664;  }
+            if (have_exception) {  goto end_block_exception_1661;  }
           }
           struct zStatelessInputRef z3zE1171;
           {
@@ -1439,17 +1439,17 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
             struct zByteSliceFields zexecution_requests_bytes;
             {
               zexecution_requests_bytes = zsszz_finish(znpr_after_versioned_hashes);
-              if (have_exception) {  goto end_block_exception_1664;  }
+              if (have_exception) {  goto end_block_exception_1661;  }
             }
             struct zByteSliceFields zexecution_requests;
             {
               zexecution_requests = zsszz_container_byteszIreprzGRByteSliceFieldszCU64zCRByteSliceFieldszKzIboundszG718308cac13a033149f52c385b3cc002zK(zexecution_requests_bytes, zEXECUTION_REQUESTS_FIXED_LENGTH);
-              if (have_exception) {  goto end_block_exception_1664;  }
+              if (have_exception) {  goto end_block_exception_1661;  }
             }
             struct zByteSliceFields zexecution_payload;
             {
               zexecution_payload = zsszz_container_byteszIreprzGRByteSliceFieldszCU64zCRByteSliceFieldszKzIboundszG718308cac13a033149f52c385b3cc002zK(zexecution_payload_bytes, zEXECUTION_PAYLOAD_FIXED_LENGTH);
-              if (have_exception) {  goto end_block_exception_1664;  }
+              if (have_exception) {  goto end_block_exception_1661;  }
             }
             uint64_t zpayload_start;
             zpayload_start = UINT64_C(0);
@@ -1490,7 +1490,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
               have_exception = true;
               COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:465.8-465.41");
               KILL(zexception)(&z2zE1022);
-              goto end_block_exception_1664;
+              goto end_block_exception_1661;
               /* unreachable after throw */
               KILL(zexception)(&z2zE1022);
             } else {  z3zE1172 = UNIT;  }
@@ -1499,7 +1499,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
             struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1023;
             {
               z2zE1023 = zsszz_take(zpayload_cursor, ztransactions_offset);
-              if (have_exception) {  goto end_block_exception_1664;  }
+              if (have_exception) {  goto end_block_exception_1661;  }
             }
             struct zStatelessInputRef z3zE1173;
             {
@@ -1510,7 +1510,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
               struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1024;
               {
                 z2zE1024 = zsszz_take(zpayload_after_extra_data, zwithdrawals_offset);
-                if (have_exception) {  goto end_block_exception_1664;  }
+                if (have_exception) {  goto end_block_exception_1661;  }
               }
               struct zStatelessInputRef z3zE1174;
               {
@@ -1521,12 +1521,12 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                 struct zBoundedSszzListRef ztransactions;
                 {
                   ztransactions = zsszz_bounded_variable_list_ref(ztransaction_bytes, zMAX_TRANSACTIONS_PER_PAYLOAD, zMAX_TRANSACTION_LENGTH);
-                  if (have_exception) {  goto end_block_exception_1664;  }
+                  if (have_exception) {  goto end_block_exception_1661;  }
                 }
                 struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1025;
                 {
                   z2zE1025 = zsszz_take(zpayload_after_transactions, zblock_access_list_offset);
-                  if (have_exception) {  goto end_block_exception_1664;  }
+                  if (have_exception) {  goto end_block_exception_1661;  }
                 }
                 struct zStatelessInputRef z3zE1175;
                 {
@@ -1537,12 +1537,12 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                   struct zBoundedSszzListRef zwithdrawals;
                   {
                     zwithdrawals = zsszz_bounded_fixed_list_ref(zwithdrawal_bytes, zWD_SIZE, zMAX_WITHDRAWALS_PER_PAYLOAD);
-                    if (have_exception) {  goto end_block_exception_1664;  }
+                    if (have_exception) {  goto end_block_exception_1661;  }
                   }
                   struct zByteSliceFields zblock_access_list;
                   {
                     zblock_access_list = zsszz_finish(zpayload_after_withdrawals);
-                    if (have_exception) {  goto end_block_exception_1664;  }
+                    if (have_exception) {  goto end_block_exception_1661;  }
                   }
                   bool z2zE1027;
                   {
@@ -1559,7 +1559,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                     have_exception = true;
                     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:479.8-479.41");
                     KILL(zexception)(&z2zE1028);
-                    goto end_block_exception_1664;
+                    goto end_block_exception_1661;
                     /* unreachable after throw */
                     KILL(zexception)(&z2zE1028);
                   } else {  z3zE1177 = UNIT;  }
@@ -1578,7 +1578,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                     have_exception = true;
                     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:482.8-482.41");
                     KILL(zexception)(&z2zE1031);
-                    goto end_block_exception_1664;
+                    goto end_block_exception_1661;
                     /* unreachable after throw */
                     KILL(zexception)(&z2zE1031);
                   } else {  z3zE1176 = UNIT;  }
@@ -1627,7 +1627,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                     have_exception = true;
                     COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:502.8-502.41");
                     KILL(zexception)(&z2zE1033);
-                    goto end_block_exception_1664;
+                    goto end_block_exception_1661;
                     /* unreachable after throw */
                     KILL(zexception)(&z2zE1033);
                   } else {  z3zE1178 = UNIT;  }
@@ -1636,7 +1636,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                   struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1034;
                   {
                     z2zE1034 = zsszz_take(zrequests_cursor, zwithdrawal_requests_offset);
-                    if (have_exception) {  goto end_block_exception_1664;  }
+                    if (have_exception) {  goto end_block_exception_1661;  }
                   }
                   struct zStatelessInputRef z3zE1179;
                   {
@@ -1647,7 +1647,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                     struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1035;
                     {
                       z2zE1035 = zsszz_take(zrequests_after_deposits, zconsolidation_requests_offset);
-                      if (have_exception) {  goto end_block_exception_1664;  }
+                      if (have_exception) {  goto end_block_exception_1661;  }
                     }
                     struct zStatelessInputRef z3zE1180;
                     {
@@ -1658,7 +1658,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                       struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1036;
                       {
                         z2zE1036 = zsszz_take(zrequests_after_withdrawals, zbuilder_deposit_requests_offset);
-                        if (have_exception) {  goto end_block_exception_1664;  }
+                        if (have_exception) {  goto end_block_exception_1661;  }
                       }
                       struct zStatelessInputRef z3zE1181;
                       {
@@ -1669,7 +1669,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                         struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1037;
                         {
                           z2zE1037 = zsszz_take(zrequests_after_consolidations, zbuilder_exit_requests_offset);
-                          if (have_exception) {  goto end_block_exception_1664;  }
+                          if (have_exception) {  goto end_block_exception_1661;  }
                         }
                         struct zStatelessInputRef z3zE1182;
                         {
@@ -1680,7 +1680,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                           struct zByteSliceFields zbuilder_exit_requests;
                           {
                             zbuilder_exit_requests = zsszz_finish(zrequests_after_builder_deposits);
-                            if (have_exception) {  goto end_block_exception_1664;  }
+                            if (have_exception) {  goto end_block_exception_1661;  }
                           }
                           uint64_t zwitness_start;
                           zwitness_start = UINT64_C(0);
@@ -1715,7 +1715,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                             have_exception = true;
                             COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:526.8-526.41");
                             KILL(zexception)(&z2zE1039);
-                            goto end_block_exception_1664;
+                            goto end_block_exception_1661;
                             /* unreachable after throw */
                             KILL(zexception)(&z2zE1039);
                           } else {  z3zE1183 = UNIT;  }
@@ -1724,7 +1724,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                           struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1040;
                           {
                             z2zE1040 = zsszz_take(zwitness_cursor, zwitness_codes_offset);
-                            if (have_exception) {  goto end_block_exception_1664;  }
+                            if (have_exception) {  goto end_block_exception_1661;  }
                           }
                           struct zStatelessInputRef z3zE1184;
                           {
@@ -1735,12 +1735,12 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                             struct zBoundedSszzListRef zwitness_state;
                             {
                               zwitness_state = zsszz_bounded_variable_list_ref(zwitness_state_bytes, zMAX_WITNESS_NODES, zMAX_WITNESS_NODE_LENGTH);
-                              if (have_exception) {  goto end_block_exception_1664;  }
+                              if (have_exception) {  goto end_block_exception_1661;  }
                             }
                             struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 z2zE1041;
                             {
                               z2zE1041 = zsszz_take(zwitness_after_state, zwitness_headers_offset);
-                              if (have_exception) {  goto end_block_exception_1664;  }
+                              if (have_exception) {  goto end_block_exception_1661;  }
                             }
                             struct zStatelessInputRef z3zE1185;
                             {
@@ -1751,18 +1751,18 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                               struct zBoundedSszzListRef zwitness_codes;
                               {
                                 zwitness_codes = zsszz_bounded_variable_list_ref(zwitness_code_bytes, zMAX_WITNESS_CODES, zMAX_WITNESS_CODE_LENGTH);
-                                if (have_exception) {  goto end_block_exception_1664;  }
+                                if (have_exception) {  goto end_block_exception_1661;  }
                               }
                               struct zBoundedSszzListRef zwitness_headers;
                               {
                                 struct zByteSliceFields z2zE1048;
                                 {
                                   z2zE1048 = zsszz_finish(zwitness_after_codes);
-                                  if (have_exception) {  goto end_block_exception_1664;  }
+                                  if (have_exception) {  goto end_block_exception_1661;  }
                                 }
                                 {
                                   zwitness_headers = zsszz_bounded_variable_list_ref(z2zE1048, zMAX_WITNESS_HEADERS, zMAX_WITNESS_HEADER_LENGTH);
-                                  if (have_exception) {  goto end_block_exception_1664;  }
+                                  if (have_exception) {  goto end_block_exception_1661;  }
                                 }
                               }
                               uint64_t zpublic_key_bytes;
@@ -1787,7 +1787,7 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                                 have_exception = true;
                                 COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:543.8-543.41");
                                 KILL(zexception)(&z2zE1044);
-                                goto end_block_exception_1664;
+                                goto end_block_exception_1661;
                                 /* unreachable after throw */
                                 KILL(zexception)(&z2zE1044);
                               } else {  z3zE1187 = UNIT;  }
@@ -1802,14 +1802,14 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                                 have_exception = true;
                                 COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:546.8-546.41");
                                 KILL(zexception)(&z2zE1046);
-                                goto end_block_exception_1664;
+                                goto end_block_exception_1661;
                                 /* unreachable after throw */
                                 KILL(zexception)(&z2zE1046);
                               } else {  z3zE1186 = UNIT;  }
                               struct zBoundedSszzListRef z2zE1047;
                               {
                                 z2zE1047 = zsszz_bounded_fixed_list_ref(zversioned_hashes, zWORD_BYTE_LENGTH, zMAX_BLOB_COMMITMENTS_PER_BLOCK);
-                                if (have_exception) {  goto end_block_exception_1664;  }
+                                if (have_exception) {  goto end_block_exception_1661;  }
                               }
                               struct zStatelessInputRef z3zE1188;
                               {
@@ -1833,130 +1833,130 @@ struct zStatelessInputRef zdecode_stateless_input_ref(struct zByteSliceFields zi
                                 z3zE1189.zwitness_headers = zwitness_headers;
                                 z3zE1189.zwitness_state = zwitness_state;
                                 z3zE1188 = z3zE1189;
-                                goto finish_match_1661;
+                                goto finish_match_1658;
                               }
-                            case_1662: ;
+                            case_1659: ;
                               sail_match_failure("decode_stateless_input_ref");
-                            finish_match_1661: ;
+                            finish_match_1658: ;
                               z3zE1185 = z3zE1188;
-                              goto finish_match_1659;
+                              goto finish_match_1656;
                             }
-                          case_1660: ;
+                          case_1657: ;
                             sail_match_failure("decode_stateless_input_ref");
-                          finish_match_1659: ;
+                          finish_match_1656: ;
                             z3zE1184 = z3zE1185;
-                            goto finish_match_1657;
+                            goto finish_match_1654;
                           }
-                        case_1658: ;
+                        case_1655: ;
                           sail_match_failure("decode_stateless_input_ref");
-                        finish_match_1657: ;
+                        finish_match_1654: ;
                           z3zE1182 = z3zE1184;
-                          goto finish_match_1655;
+                          goto finish_match_1652;
                         }
-                      case_1656: ;
+                      case_1653: ;
                         sail_match_failure("decode_stateless_input_ref");
-                      finish_match_1655: ;
+                      finish_match_1652: ;
                         z3zE1181 = z3zE1182;
-                        goto finish_match_1653;
+                        goto finish_match_1650;
                       }
-                    case_1654: ;
+                    case_1651: ;
                       sail_match_failure("decode_stateless_input_ref");
-                    finish_match_1653: ;
+                    finish_match_1650: ;
                       z3zE1180 = z3zE1181;
-                      goto finish_match_1651;
+                      goto finish_match_1648;
                     }
-                  case_1652: ;
+                  case_1649: ;
                     sail_match_failure("decode_stateless_input_ref");
-                  finish_match_1651: ;
+                  finish_match_1648: ;
                     z3zE1179 = z3zE1180;
-                    goto finish_match_1649;
+                    goto finish_match_1646;
                   }
-                case_1650: ;
+                case_1647: ;
                   sail_match_failure("decode_stateless_input_ref");
-                finish_match_1649: ;
+                finish_match_1646: ;
                   z3zE1175 = z3zE1179;
-                  goto finish_match_1647;
+                  goto finish_match_1644;
                 }
-              case_1648: ;
+              case_1645: ;
                 sail_match_failure("decode_stateless_input_ref");
-              finish_match_1647: ;
+              finish_match_1644: ;
                 z3zE1174 = z3zE1175;
-                goto finish_match_1645;
+                goto finish_match_1642;
               }
-            case_1646: ;
+            case_1643: ;
               sail_match_failure("decode_stateless_input_ref");
-            finish_match_1645: ;
+            finish_match_1642: ;
               z3zE1173 = z3zE1174;
-              goto finish_match_1643;
+              goto finish_match_1640;
             }
-          case_1644: ;
+          case_1641: ;
             sail_match_failure("decode_stateless_input_ref");
-          finish_match_1643: ;
+          finish_match_1640: ;
             z3zE1171 = z3zE1173;
-            goto finish_match_1641;
+            goto finish_match_1638;
           }
-        case_1642: ;
+        case_1639: ;
           sail_match_failure("decode_stateless_input_ref");
-        finish_match_1641: ;
+        finish_match_1638: ;
           z3zE1170 = z3zE1171;
-          goto finish_match_1639;
+          goto finish_match_1636;
         }
-      case_1640: ;
+      case_1637: ;
         sail_match_failure("decode_stateless_input_ref");
-      finish_match_1639: ;
+      finish_match_1636: ;
         z3zE1168 = z3zE1170;
-        goto finish_match_1637;
+        goto finish_match_1634;
       }
-    case_1638: ;
+    case_1635: ;
       sail_match_failure("decode_stateless_input_ref");
-    finish_match_1637: ;
+    finish_match_1634: ;
       z3zE1167 = z3zE1168;
-      goto finish_match_1635;
+      goto finish_match_1632;
     }
-  case_1636: ;
+  case_1633: ;
     sail_match_failure("decode_stateless_input_ref");
-  finish_match_1635: ;
+  finish_match_1632: ;
     z3zE1166 = z3zE1167;
-    goto finish_match_1633;
+    goto finish_match_1630;
   }
-case_1634: ;
+case_1631: ;
   sail_match_failure("decode_stateless_input_ref");
-finish_match_1633: ;
-  z8zE572 = z3zE1166;
-end_function_1663: ;
-  return z8zE572;
-end_block_exception_1664: ;
-  struct zByteSliceFields z8zE1067 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zByteSliceFields z8zE1066 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zByteSliceFields z8zE1065 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zByteSliceFields z8zE1064 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zByteSliceFields z8zE1063 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zByteSliceFields z8zE1062 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zByteSliceFields z8zE1061 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zByteSliceFields z8zE1060 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zByteSliceFields z8zE1059 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBlobSchedule z8zE1058 = { .zbase_fee_update_fraction = UINT64_C(0xdeadc0de), .zmax = UINT64_C(0xdeadc0de), .ztarget = UINT64_C(0xdeadc0de) };
-  struct zProtocolProfile z8zE1057 = { .zblob_schedule = z8zE1058, .zfork = ((enum zFork)0) };
-  struct zByteSliceFields z8zE1056 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+finish_match_1630: ;
+  z8zE569 = z3zE1166;
+end_function_1660: ;
+  return z8zE569;
+end_block_exception_1661: ;
   struct zByteSliceFields z8zE1055 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBoundedSszzListRef z8zE1054 = { .zbytes = z8zE1055, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct zByteSliceFields z8zE1054 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
   struct zByteSliceFields z8zE1053 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
   struct zByteSliceFields z8zE1052 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
   struct zByteSliceFields z8zE1051 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBoundedSszzListRef z8zE1050 = { .zbytes = z8zE1051, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct zByteSliceFields z8zE1050 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
   struct zByteSliceFields z8zE1049 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBoundedSszzListRef z8zE1048 = { .zbytes = z8zE1049, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct zByteSliceFields z8zE1048 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
   struct zByteSliceFields z8zE1047 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBoundedSszzListRef z8zE1046 = { .zbytes = z8zE1047, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
-  struct zByteSliceFields z8zE1045 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBoundedSszzListRef z8zE1044 = { .zbytes = z8zE1045, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
-  struct zStatelessInputRef z8zE1043 = { .zblock_access_list = z8zE1067, .zbuilder_deposit_requests = z8zE1066, .zbuilder_exit_requests = z8zE1065, .zchain_config = z8zE1064, .zconsolidation_requests = z8zE1063, .zdeposits = z8zE1062, .zexecution_payload = z8zE1061, .zextra_data = z8zE1060, .znew_payload_request = z8zE1059, .zprotocol = z8zE1057, .zpublic_keys = z8zE1056, .ztransactions = z8zE1054, .zversioned_hashes = z8zE1053, .zwithdrawal_requests = z8zE1052, .zwithdrawals = z8zE1050, .zwitness_codes = z8zE1048, .zwitness_headers = z8zE1046, .zwitness_state = z8zE1044 };
-  return z8zE1043;
+  struct zBlobSchedule z8zE1046 = { .zbase_fee_update_fraction = UINT64_C(0xdeadc0de), .zmax = UINT64_C(0xdeadc0de), .ztarget = UINT64_C(0xdeadc0de) };
+  struct zProtocolProfile z8zE1045 = { .zblob_schedule = z8zE1046, .zfork = ((enum zFork)0) };
+  struct zByteSliceFields z8zE1044 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zByteSliceFields z8zE1043 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBoundedSszzListRef z8zE1042 = { .zbytes = z8zE1043, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct zByteSliceFields z8zE1041 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zByteSliceFields z8zE1040 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zByteSliceFields z8zE1039 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBoundedSszzListRef z8zE1038 = { .zbytes = z8zE1039, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct zByteSliceFields z8zE1037 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBoundedSszzListRef z8zE1036 = { .zbytes = z8zE1037, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct zByteSliceFields z8zE1035 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBoundedSszzListRef z8zE1034 = { .zbytes = z8zE1035, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct zByteSliceFields z8zE1033 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBoundedSszzListRef z8zE1032 = { .zbytes = z8zE1033, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct zStatelessInputRef z8zE1031 = { .zblock_access_list = z8zE1055, .zbuilder_deposit_requests = z8zE1054, .zbuilder_exit_requests = z8zE1053, .zchain_config = z8zE1052, .zconsolidation_requests = z8zE1051, .zdeposits = z8zE1050, .zexecution_payload = z8zE1049, .zextra_data = z8zE1048, .znew_payload_request = z8zE1047, .zprotocol = z8zE1045, .zpublic_keys = z8zE1044, .ztransactions = z8zE1042, .zversioned_hashes = z8zE1041, .zwithdrawal_requests = z8zE1040, .zwithdrawals = z8zE1038, .zwitness_codes = z8zE1036, .zwitness_headers = z8zE1034, .zwitness_state = z8zE1032 };
+  return z8zE1031;
 }
 
 sail_fixed_bytes_32 zsha256_request_digest(uint64_t zrequest_type, struct zByteSliceFields zs)
 {
-  sail_fixed_bytes_32 z8zE573;
+  sail_fixed_bytes_32 z8zE570;
   zz5listz8z5unionz0zzBytesz9 z2zE1006;
   CREATE(zz5listz8z5unionz0zzBytesz9)(&z2zE1006);
   {
@@ -1977,25 +1977,25 @@ sail_fixed_bytes_32 zsha256_request_digest(uint64_t zrequest_type, struct zByteS
     KILL(zBytes)(&z2zE1005);
     KILL(zBytes)(&z2zE1004);
   }
-  z8zE573 = host_sha256_segments(z2zE1006);
+  z8zE570 = host_sha256_segments(z2zE1006);
   KILL(zz5listz8z5unionz0zzBytesz9)(&z2zE1006);
-end_function_1631: ;
-  return z8zE573;
-end_block_exception_1632: ;
+end_function_1628: ;
+  return z8zE570;
+end_block_exception_1629: ;
 
   return fixed_bytes_32_zero();
 }
 
 unit zindex_witness_nodes_cursor(struct zBoundedSszzListCursor zcursor)
 {
-  unit z8zE574;
+  unit z8zE571;
   bool z2zE999;
   z2zE999 = zsszz_list_cursor_empty(zcursor);
-  if (z2zE999) {  z8zE574 = UNIT;  } else {
+  if (z2zE999) {  z8zE571 = UNIT;  } else {
     struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCursorz9 z2zE1000;
     {
       z2zE1000 = zsszz_list_pop(zcursor);
-      if (have_exception) {  goto end_block_exception_1630;  }
+      if (have_exception) {  goto end_block_exception_1627;  }
     }
     unit z3zE1158;
     {
@@ -2013,48 +2013,48 @@ unit zindex_witness_nodes_cursor(struct zBoundedSszzListCursor zcursor)
       z3zE1159 = nodedb_insert(z2zE1001, z2zE1002, z2zE1003);
       {
         z3zE1158 = zindex_witness_nodes_cursor(znext);
-        if (have_exception) {  goto end_block_exception_1630;  }
+        if (have_exception) {  goto end_block_exception_1627;  }
       }
-      goto finish_match_1627;
+      goto finish_match_1624;
     }
-  case_1628: ;
+  case_1625: ;
     sail_match_failure("index_witness_nodes_cursor");
-  finish_match_1627: ;
-    z8zE574 = z3zE1158;
+  finish_match_1624: ;
+    z8zE571 = z3zE1158;
   }
-end_function_1629: ;
-  return z8zE574;
-end_block_exception_1630: ;
+end_function_1626: ;
+  return z8zE571;
+end_block_exception_1627: ;
 
   return UNIT;
 }
 
 unit zindex_witness_nodes(struct zBoundedSszzListRef znodes)
 {
-  unit z8zE575;
+  unit z8zE572;
   struct zBoundedSszzListCursor z2zE998;
   z2zE998 = zsszz_list_cursor(znodes);
   {
-    z8zE575 = zindex_witness_nodes_cursor(z2zE998);
-    if (have_exception) {  goto end_block_exception_1626;  }
+    z8zE572 = zindex_witness_nodes_cursor(z2zE998);
+    if (have_exception) {  goto end_block_exception_1623;  }
   }
-end_function_1625: ;
-  return z8zE575;
-end_block_exception_1626: ;
+end_function_1622: ;
+  return z8zE572;
+end_block_exception_1623: ;
 
   return UNIT;
 }
 
 unit zindex_witness_codes_cursor(struct zBoundedSszzListCursor zcursor)
 {
-  unit z8zE576;
+  unit z8zE573;
   bool z2zE993;
   z2zE993 = zsszz_list_cursor_empty(zcursor);
-  if (z2zE993) {  z8zE576 = UNIT;  } else {
+  if (z2zE993) {  z8zE573 = UNIT;  } else {
     struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCursorz9 z2zE994;
     {
       z2zE994 = zsszz_list_pop(zcursor);
-      if (have_exception) {  goto end_block_exception_1624;  }
+      if (have_exception) {  goto end_block_exception_1621;  }
     }
     unit z3zE1153;
     {
@@ -2075,7 +2075,7 @@ unit zindex_witness_codes_cursor(struct zBoundedSszzListCursor zcursor)
         have_exception = true;
         COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:610.12-610.45");
         KILL(zexception)(&z2zE996);
-        goto end_block_exception_1624;
+        goto end_block_exception_1621;
         /* unreachable after throw */
         KILL(zexception)(&z2zE996);
       } else {  z3zE1154 = UNIT;  }
@@ -2087,40 +2087,40 @@ unit zindex_witness_codes_cursor(struct zBoundedSszzListCursor zcursor)
       {
         {
           z3zE1155 = zindex_witness_codes_cursor(znext);
-          if (have_exception) {  goto end_block_exception_1624;  }
+          if (have_exception) {  goto end_block_exception_1621;  }
         }
-        goto finish_match_1621;
+        goto finish_match_1618;
       }
-    case_1622: ;
+    case_1619: ;
       sail_match_failure("index_witness_codes_cursor");
-    finish_match_1621: ;
+    finish_match_1618: ;
       z3zE1153 = z3zE1155;
-      goto finish_match_1619;
+      goto finish_match_1616;
     }
-  case_1620: ;
+  case_1617: ;
     sail_match_failure("index_witness_codes_cursor");
-  finish_match_1619: ;
-    z8zE576 = z3zE1153;
+  finish_match_1616: ;
+    z8zE573 = z3zE1153;
   }
-end_function_1623: ;
-  return z8zE576;
-end_block_exception_1624: ;
+end_function_1620: ;
+  return z8zE573;
+end_block_exception_1621: ;
 
   return UNIT;
 }
 
 unit zindex_witness_codes(struct zBoundedSszzListRef zcodes)
 {
-  unit z8zE577;
+  unit z8zE574;
   struct zBoundedSszzListCursor z2zE992;
   z2zE992 = zsszz_list_cursor(zcodes);
   {
-    z8zE577 = zindex_witness_codes_cursor(z2zE992);
-    if (have_exception) {  goto end_block_exception_1618;  }
+    z8zE574 = zindex_witness_codes_cursor(z2zE992);
+    if (have_exception) {  goto end_block_exception_1615;  }
   }
-end_function_1617: ;
-  return z8zE577;
-end_block_exception_1618: ;
+end_function_1614: ;
+  return z8zE574;
+end_block_exception_1615: ;
 
   return UNIT;
 }
@@ -2141,105 +2141,122 @@ void create_letbind_286(void) {
   z3zE343.zstate_root = zZERO_HASH;
   z3zE344 = z3zE343;
   zEMPTY_PARENT_HEADER_FIELDS = z3zE344;
-let_end_895: ;
+let_end_892: ;
 }
 void kill_letbind_286(void) {
 }
 
 uint64_t znext_parent_header_field(uint64_t zindex)
 {
-  uint64_t z8zE578;
+  uint64_t z8zE575;
   bool z2zE991;
   z2zE991 = (zindex < UINT64_C(19));
   if (z2zE991) {
-    {    z8zE578 = (zindex + UINT64_C(1));
+    {    z8zE575 = (zindex + UINT64_C(1));
     }
-  } else {  z8zE578 = UINT64_C(19);  }
-end_function_1615: ;
-  return z8zE578;
-end_block_exception_1616: ;
+  } else {  z8zE575 = UINT64_C(19);  }
+end_function_1612: ;
+  return z8zE575;
+end_block_exception_1613: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
-struct zParentHeaderFields zdecode_parent_header_fields(struct zRlpCursorFields zcursor, uint64_t zfield_index, struct zParentHeaderFields zfields)
+struct zParentHeaderFields zdecode_parent_header_fields(struct zRlpCursor zcursor, uint64_t zfield_index, struct zParentHeaderFields zfields)
 {
-  struct zParentHeaderFields z8zE579;
-  bool z2zE981;
-  z2zE981 = zrlp_cursor_empty(zcursor);
-  if (z2zE981) {  z8zE579 = zfields;  } else {
-    struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 z2zE982;
+  struct zParentHeaderFields z8zE576;
+  bool z2zE979;
+  z2zE979 = zrlp_cursor_empty(zcursor);
+  if (z2zE979) {  z8zE576 = zfields;  } else {
+    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE980;
     {
-      z2zE982 = zrlp_cursor_pop(zcursor);
-      if (have_exception) {  goto end_block_exception_1614;  }
+      z2zE980 = zrlp_cursor_pop(zcursor);
+      if (have_exception) {  goto end_block_exception_1611;  }
     }
     struct zParentHeaderFields z3zE1145;
     {
-      struct zRlpFieldRefFields zfield;
-      zfield = z2zE982.ztup0;
-      struct zRlpCursorFields znext;
-      znext = z2zE982.ztup1;
+      struct zRlpFieldRef zfield;
+      zfield = z2zE980.ztup0;
+      struct zRlpCursor znext;
+      znext = z2zE980.ztup1;
       struct zParentHeaderFields zdecoded;
       zdecoded = zfields;
-      bool z2zE983;
-      z2zE983 = (zfield_index == UINT64_C(0));
+      bool z2zE981;
+      z2zE981 = (zfield_index == UINT64_C(0));
       unit z3zE1146;
-      if (z2zE983) {
-        sail_u256 z2zE984;
+      if (z2zE981) {
+        sail_u256 z2zE982;
         {
-          z2zE984 = zrlp_ref_word(zfield);
-          if (have_exception) {  goto end_block_exception_1614;  }
+          z2zE982 = zrlp_ref_word(zfield);
+          if (have_exception) {  goto end_block_exception_1611;  }
         }
-        zdecoded.zparent_hash = zword_to_hash(z2zE984);
+        zdecoded.zparent_hash = zword_to_hash(z2zE982);
         unit z3zE1151;
         z3zE1151 = UNIT;
         zdecoded.zhave_parent = true;
         z3zE1146 = UNIT;
       } else {
-        bool z2zE985;
-        z2zE985 = (zfield_index == UINT64_C(3));
-        if (z2zE985) {
-          sail_u256 z2zE986;
+        bool z2zE983;
+        z2zE983 = (zfield_index == UINT64_C(3));
+        if (z2zE983) {
+          sail_u256 z2zE984;
           {
-            z2zE986 = zrlp_ref_word(zfield);
-            if (have_exception) {  goto end_block_exception_1614;  }
+            z2zE984 = zrlp_ref_word(zfield);
+            if (have_exception) {  goto end_block_exception_1611;  }
           }
-          zdecoded.zstate_root = zword_to_hash(z2zE986);
+          zdecoded.zstate_root = zword_to_hash(z2zE984);
           unit z3zE1150;
           z3zE1150 = UNIT;
           zdecoded.zhave_state = true;
           z3zE1146 = UNIT;
         } else {
-          bool z2zE987;
-          z2zE987 = (zfield_index == UINT64_C(15));
-          if (z2zE987) {
+          bool z2zE985;
+          z2zE985 = (zfield_index == UINT64_C(15));
+          if (z2zE985) {
             {
               zdecoded.zbase_fee = zrlp_ref_uint_word(zfield);
-              if (have_exception) {  goto end_block_exception_1614;  }
+              if (have_exception) {  goto end_block_exception_1611;  }
             }
             unit z3zE1149;
             z3zE1149 = UNIT;
             zdecoded.zhave_base_fee = true;
             z3zE1146 = UNIT;
           } else {
-            bool z2zE988;
-            z2zE988 = (zfield_index == UINT64_C(17));
-            if (z2zE988) {
+            bool z2zE986;
+            z2zE986 = (zfield_index == UINT64_C(17));
+            if (z2zE986) {
+              uint64_t zvalue;
               {
-                zdecoded.zblob_gas_used = zrlp_ref_blob_gas_used(zfield);
-                if (have_exception) {  goto end_block_exception_1614;  }
+                zvalue = zrlp_ref_uint64(zfield);
+                if (have_exception) {  goto end_block_exception_1611;  }
               }
-              unit z3zE1148;
-              z3zE1148 = UNIT;
-              zdecoded.zhave_blob_gas = true;
-              z3zE1146 = UNIT;
+              bool z2zE987;
+              z2zE987 = (!(UINT64_C(2752512) < zvalue));
+              if (z2zE987) {
+                zdecoded.zblob_gas_used = zvalue;
+                unit z3zE1148;
+                z3zE1148 = UNIT;
+                zdecoded.zhave_blob_gas = true;
+                z3zE1146 = UNIT;
+              } else {
+                struct zexception z2zE988;
+                CREATE(zexception)(&z2zE988);
+                zInvalidBlock(&z2zE988, zRlpDecode);
+                COPY(zexception)(current_exception, z2zE988);
+                have_exception = true;
+                COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:701.28-701.57");
+                KILL(zexception)(&z2zE988);
+                goto end_block_exception_1611;
+                /* unreachable after throw */
+                KILL(zexception)(&z2zE988);
+              }
             } else {
               bool z2zE989;
               z2zE989 = (zfield_index == UINT64_C(18));
               if (z2zE989) {
                 {
-                  zdecoded.zexcess_blob_gas = zrlp_ref_excess_blob_gas(zfield);
-                  if (have_exception) {  goto end_block_exception_1614;  }
+                  zdecoded.zexcess_blob_gas = zrlp_ref_uint64(zfield);
+                  if (have_exception) {  goto end_block_exception_1611;  }
                 }
                 unit z3zE1147;
                 z3zE1147 = UNIT;
@@ -2254,37 +2271,37 @@ struct zParentHeaderFields zdecode_parent_header_fields(struct zRlpCursorFields 
       z2zE990 = znext_parent_header_field(zfield_index);
       {
         z3zE1145 = zdecode_parent_header_fields(znext, z2zE990, zdecoded);
-        if (have_exception) {  goto end_block_exception_1614;  }
+        if (have_exception) {  goto end_block_exception_1611;  }
       }
-      goto finish_match_1611;
+      goto finish_match_1608;
     }
-  case_1612: ;
+  case_1609: ;
     sail_match_failure("decode_parent_header_fields");
-  finish_match_1611: ;
-    z8zE579 = z3zE1145;
+  finish_match_1608: ;
+    z8zE576 = z3zE1145;
   }
-end_function_1613: ;
-  return z8zE579;
-end_block_exception_1614: ;
-  struct zParentHeaderFields z8zE1068 = { .zbase_fee = u256_zero(), .zblob_gas_used = UINT64_C(0xdeadc0de), .zexcess_blob_gas = UINT64_C(0xdeadc0de), .zhave_base_fee = false, .zhave_blob_gas = false, .zhave_excess_blob_gas = false, .zhave_parent = false, .zhave_state = false, .zparent_hash = fixed_bytes_32_zero(), .zstate_root = fixed_bytes_32_zero() };
-  return z8zE1068;
+end_function_1610: ;
+  return z8zE576;
+end_block_exception_1611: ;
+  struct zParentHeaderFields z8zE1056 = { .zbase_fee = u256_zero(), .zblob_gas_used = UINT64_C(0xdeadc0de), .zexcess_blob_gas = UINT64_C(0xdeadc0de), .zhave_base_fee = false, .zhave_blob_gas = false, .zhave_excess_blob_gas = false, .zhave_parent = false, .zhave_state = false, .zparent_hash = fixed_bytes_32_zero(), .zstate_root = fixed_bytes_32_zero() };
+  return z8zE1056;
 }
 
 struct zWitnessHeaderIndex zindex_witness_header_cursor(struct zWitnessHeaderIndex zstate)
 {
-  struct zWitnessHeaderIndex z8zE580;
+  struct zWitnessHeaderIndex z8zE577;
   bool z2zE952;
   {
     struct zBoundedSszzListCursor z2zE951;
     z2zE951 = zstate.zcursor;
     z2zE952 = zsszz_list_cursor_empty(z2zE951);
   }
-  if (z2zE952) {  z8zE580 = zstate;  } else {
+  if (z2zE952) {  z8zE577 = zstate;  } else {
     uint64_t zindex;
     {
-      struct zBoundedSszzListCursor z2zE980;
-      z2zE980 = zstate.zcursor;
-      zindex = z2zE980.zindex;
+      struct zBoundedSszzListCursor z2zE978;
+      z2zE978 = zstate.zcursor;
+      zindex = z2zE978.zindex;
     }
     struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzBoundedSszzzzListCursorz9 z2zE954;
     {
@@ -2292,7 +2309,7 @@ struct zWitnessHeaderIndex zindex_witness_header_cursor(struct zWitnessHeaderInd
       z2zE953 = zstate.zcursor;
       {
         z2zE954 = zsszz_list_pop(z2zE953);
-        if (have_exception) {  goto end_block_exception_1610;  }
+        if (have_exception) {  goto end_block_exception_1607;  }
       }
     }
     struct zWitnessHeaderIndex z3zE1127;
@@ -2303,19 +2320,19 @@ struct zWitnessHeaderIndex zindex_witness_header_cursor(struct zWitnessHeaderInd
       znext = z2zE954.ztup1;
       bool zis_last;
       {
-        uint64_t z2zE978;
-        z2zE978 = znext.zindex;
-        uint64_t z2zE979;
+        uint64_t z2zE976;
+        z2zE976 = znext.zindex;
+        uint64_t z2zE977;
         {
-          struct zBoundedSszzListRef z2zE977;
+          struct zBoundedSszzListRef z2zE975;
           {
-            struct zBoundedSszzListCursor z2zE976;
-            z2zE976 = zstate.zcursor;
-            z2zE977 = z2zE976.zitems;
+            struct zBoundedSszzListCursor z2zE974;
+            z2zE974 = zstate.zcursor;
+            z2zE975 = z2zE974.zitems;
           }
-          z2zE979 = z2zE977.zcount;
+          z2zE977 = z2zE975.zcount;
         }
-        zis_last = (z2zE978 == z2zE979);
+        zis_last = (z2zE976 == z2zE977);
       }
       struct zWitnessHeaderIndex zresult;
       zresult = zstate;
@@ -2332,100 +2349,89 @@ struct zWitnessHeaderIndex zindex_witness_header_cursor(struct zWitnessHeaderInd
       }
       unit z3zE1129;
       if (z2zE956) {
-        struct zRlpCursorFields zfields;
+        struct zRlpCursor zfields;
         {
           zfields = zrlp_node_cursor(zheader);
-          if (have_exception) {  goto end_block_exception_1610;  }
+          if (have_exception) {  goto end_block_exception_1607;  }
         }
-        bool z2zE957;
-        z2zE957 = zfields.zvalid;
-        if (z2zE957) {
-          struct zParentHeaderFields zdecoded;
-          {
-            zdecoded = zdecode_parent_header_fields(zfields, UINT64_C(0), zEMPTY_PARENT_HEADER_FIELDS);
-            if (have_exception) {  goto end_block_exception_1610;  }
-          }
-          bool z2zE963;
-          {
-            bool z2zE962;
-            z2zE962 = (zindex != UINT64_C(0));
-            bool z3zE1131;
-            if (z2zE962) {
-              bool z2zE961;
-              {
-                bool z2zE958;
-                z2zE958 = zdecoded.zhave_parent;
-                z2zE961 = not(z2zE958);
-              }
-              bool z3zE1130;
-              if (z2zE961) {  z3zE1130 = true;  } else {
-                sail_fixed_bytes_32 z2zE959;
-                z2zE959 = zdecoded.zparent_hash;
-                sail_fixed_bytes_32 z2zE960;
-                z2zE960 = zstate.zprevious_hash;
-                z3zE1130 = zneq_anythingzIR__sail_c_repr_fixed_byteszIC32zKzK(z2zE959, z2zE960);
-              }
-              z3zE1131 = z3zE1130;
-            } else {  z3zE1131 = false;  }
-            z2zE963 = z3zE1131;
-          }
-          unit z3zE1132;
-          if (z2zE963) {
-            zresult.zvalid = false;
-            z3zE1132 = UNIT;
-          } else {  z3zE1132 = UNIT;  }
-          if (zis_last) {
-            zresult.zparent_state_root = zdecoded.zstate_root;
-            unit z3zE1136;
-            z3zE1136 = UNIT;
-            zresult.zparent_base_fee_per_gas = zdecoded.zbase_fee;
-            unit z3zE1135;
-            z3zE1135 = UNIT;
-            zresult.zparent_blob_gas_used = zdecoded.zblob_gas_used;
-            unit z3zE1134;
-            z3zE1134 = UNIT;
-            zresult.zparent_excess_blob_gas = zdecoded.zexcess_blob_gas;
-            unit z3zE1133;
-            z3zE1133 = UNIT;
-            bool z2zE969;
-            z2zE969 = zdecoded.zhave_state;
-            bool z3zE1140;
-            if (z2zE969) {
-              bool z2zE968;
-              {
+        struct zParentHeaderFields zdecoded;
+        {
+          zdecoded = zdecode_parent_header_fields(zfields, UINT64_C(0), zEMPTY_PARENT_HEADER_FIELDS);
+          if (have_exception) {  goto end_block_exception_1607;  }
+        }
+        bool z2zE962;
+        {
+          bool z2zE961;
+          z2zE961 = (zindex != UINT64_C(0));
+          bool z3zE1131;
+          if (z2zE961) {
+            bool z2zE960;
+            {
+              bool z2zE957;
+              z2zE957 = zdecoded.zhave_parent;
+              z2zE960 = not(z2zE957);
+            }
+            bool z3zE1130;
+            if (z2zE960) {  z3zE1130 = true;  } else {
+              sail_fixed_bytes_32 z2zE958;
+              z2zE958 = zdecoded.zparent_hash;
+              sail_fixed_bytes_32 z2zE959;
+              z2zE959 = zstate.zprevious_hash;
+              z3zE1130 = zneq_anythingzIR__sail_c_repr_fixed_byteszIC32zKzK(z2zE958, z2zE959);
+            }
+            z3zE1131 = z3zE1130;
+          } else {  z3zE1131 = false;  }
+          z2zE962 = z3zE1131;
+        }
+        unit z3zE1132;
+        if (z2zE962) {
+          zresult.zvalid = false;
+          z3zE1132 = UNIT;
+        } else {  z3zE1132 = UNIT;  }
+        if (zis_last) {
+          zresult.zparent_state_root = zdecoded.zstate_root;
+          unit z3zE1136;
+          z3zE1136 = UNIT;
+          zresult.zparent_base_fee_per_gas = zdecoded.zbase_fee;
+          unit z3zE1135;
+          z3zE1135 = UNIT;
+          zresult.zparent_blob_gas_used = zdecoded.zblob_gas_used;
+          unit z3zE1134;
+          z3zE1134 = UNIT;
+          zresult.zparent_excess_blob_gas = zdecoded.zexcess_blob_gas;
+          unit z3zE1133;
+          z3zE1133 = UNIT;
+          bool z2zE968;
+          z2zE968 = zdecoded.zhave_state;
+          bool z3zE1140;
+          if (z2zE968) {
+            bool z2zE967;
+            {
+              bool z2zE963;
+              z2zE963 = zfork_lt(zk_fork, zCancun);
+              bool z3zE1137;
+              if (z2zE963) {  z3zE1137 = true;  } else {  z3zE1137 = zdecoded.zhave_base_fee;  }
+              z2zE967 = z3zE1137;
+            }
+            bool z3zE1139;
+            if (z2zE967) {
+              bool z2zE966;
+              z2zE966 = zfork_lt(zk_fork, zCancun);
+              bool z3zE1138;
+              if (z2zE966) {  z3zE1138 = true;  } else {
                 bool z2zE964;
-                z2zE964 = zfork_lt(zk_fork, zCancun);
-                bool z3zE1137;
-                if (z2zE964) {  z3zE1137 = true;  } else {  z3zE1137 = zdecoded.zhave_base_fee;  }
-                z2zE968 = z3zE1137;
+                z2zE964 = zdecoded.zhave_blob_gas;
+                bool z2zE965;
+                z2zE965 = zdecoded.zhave_excess_blob_gas;
+                z3zE1138 = eq_bool(z2zE964, z2zE965);
               }
-              bool z3zE1139;
-              if (z2zE968) {
-                bool z2zE967;
-                z2zE967 = zfork_lt(zk_fork, zCancun);
-                bool z3zE1138;
-                if (z2zE967) {  z3zE1138 = true;  } else {
-                  bool z2zE965;
-                  z2zE965 = zdecoded.zhave_blob_gas;
-                  bool z2zE966;
-                  z2zE966 = zdecoded.zhave_excess_blob_gas;
-                  z3zE1138 = eq_bool(z2zE965, z2zE966);
-                }
-                z3zE1139 = z3zE1138;
-              } else {  z3zE1139 = false;  }
-              z3zE1140 = z3zE1139;
-            } else {  z3zE1140 = false;  }
-            zresult.zparent_fields_valid = z3zE1140;
-            z3zE1129 = UNIT;
-          } else {  z3zE1129 = UNIT;  }
-        } else {
-          bool z2zE970;
-          z2zE970 = (zindex != UINT64_C(0));
-          if (z2zE970) {
-            zresult.zvalid = false;
-            z3zE1129 = UNIT;
-          } else {  z3zE1129 = UNIT;  }
-        }
+              z3zE1139 = z3zE1138;
+            } else {  z3zE1139 = false;  }
+            z3zE1140 = z3zE1139;
+          } else {  z3zE1140 = false;  }
+          zresult.zparent_fields_valid = z3zE1140;
+          z3zE1129 = UNIT;
+        } else {  z3zE1129 = UNIT;  }
       } else {  z3zE1129 = UNIT;  }
       sail_fixed_bytes_32 zcurrent_hash;
       zcurrent_hash = zkeccak256_slice(zheader);
@@ -2434,68 +2440,68 @@ struct zWitnessHeaderIndex zindex_witness_header_cursor(struct zWitnessHeaderInd
       z3zE1142 = UNIT;
       uint64_t zheader_count;
       {
-        struct zBoundedSszzListRef z2zE975;
+        struct zBoundedSszzListRef z2zE973;
         {
-          struct zBoundedSszzListCursor z2zE974;
-          z2zE974 = zstate.zcursor;
-          z2zE975 = z2zE974.zitems;
+          struct zBoundedSszzListCursor z2zE972;
+          z2zE972 = zstate.zcursor;
+          z2zE973 = z2zE972.zitems;
         }
-        zheader_count = z2zE975.zcount;
+        zheader_count = z2zE973.zcount;
       }
       uint64_t znext_index;
       znext_index = znext.zindex;
       uint64_t zdistance;
       {
-        bool z2zE972;
-        z2zE972 = (!(zheader_count < znext_index));
-        if (z2zE972) {
+        bool z2zE970;
+        z2zE970 = (!(zheader_count < znext_index));
+        if (z2zE970) {
           {    zdistance = (zheader_count - znext_index);
           }
         } else {
-          struct zexception z2zE973;
-          CREATE(zexception)(&z2zE973);
-          zInvalidBlock(&z2zE973, zWitnessDeficient);
-          COPY(zexception)(current_exception, z2zE973);
+          struct zexception z2zE971;
+          CREATE(zexception)(&z2zE971);
+          zInvalidBlock(&z2zE971, zWitnessDeficient);
+          COPY(zexception)(current_exception, z2zE971);
           have_exception = true;
-          COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:768.16-768.52");
-          KILL(zexception)(&z2zE973);
-          goto end_block_exception_1610;
+          COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:767.16-767.52");
+          KILL(zexception)(&z2zE971);
+          goto end_block_exception_1607;
           /* unreachable after throw */
-          KILL(zexception)(&z2zE973);
+          KILL(zexception)(&z2zE971);
         }
       }
-      bool z2zE971;
-      z2zE971 = (zdistance < UINT64_C(256));
+      bool z2zE969;
+      z2zE969 = (zdistance < UINT64_C(256));
       unit z3zE1143;
-      if (z2zE971) {
+      if (z2zE969) {
         uint64_t zancestor;
         zancestor = zdistance;
         z3zE1143 = ancestor_hash_write(zancestor, zcurrent_hash);
       } else {  z3zE1143 = UNIT;  }
       {
         z3zE1127 = zindex_witness_header_cursor(zresult);
-        if (have_exception) {  goto end_block_exception_1610;  }
+        if (have_exception) {  goto end_block_exception_1607;  }
       }
-      goto finish_match_1607;
+      goto finish_match_1604;
     }
-  case_1608: ;
+  case_1605: ;
     sail_match_failure("index_witness_header_cursor");
-  finish_match_1607: ;
-    z8zE580 = z3zE1127;
+  finish_match_1604: ;
+    z8zE577 = z3zE1127;
   }
-end_function_1609: ;
-  return z8zE580;
-end_block_exception_1610: ;
-  struct zByteSliceFields z8zE1072 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBoundedSszzListRef z8zE1071 = { .zbytes = z8zE1072, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
-  struct zBoundedSszzListCursor z8zE1070 = { .zcurrent = UINT64_C(0xdeadc0de), .zindex = UINT64_C(0xdeadc0de), .zitems = z8zE1071 };
-  struct zWitnessHeaderIndex z8zE1069 = { .zcursor = z8zE1070, .zparent_base_fee_per_gas = u256_zero(), .zparent_blob_gas_used = UINT64_C(0xdeadc0de), .zparent_excess_blob_gas = UINT64_C(0xdeadc0de), .zparent_fields_valid = false, .zparent_state_root = fixed_bytes_32_zero(), .zprevious_hash = fixed_bytes_32_zero(), .zvalid = false };
-  return z8zE1069;
+end_function_1606: ;
+  return z8zE577;
+end_block_exception_1607: ;
+  struct zByteSliceFields z8zE1060 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBoundedSszzListRef z8zE1059 = { .zbytes = z8zE1060, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct zBoundedSszzListCursor z8zE1058 = { .zcurrent = UINT64_C(0xdeadc0de), .zindex = UINT64_C(0xdeadc0de), .zitems = z8zE1059 };
+  struct zWitnessHeaderIndex z8zE1057 = { .zcursor = z8zE1058, .zparent_base_fee_per_gas = u256_zero(), .zparent_blob_gas_used = UINT64_C(0xdeadc0de), .zparent_excess_blob_gas = UINT64_C(0xdeadc0de), .zparent_fields_valid = false, .zparent_state_root = fixed_bytes_32_zero(), .zprevious_hash = fixed_bytes_32_zero(), .zvalid = false };
+  return z8zE1057;
 }
 
 struct zWitnessContext zindex_witness_headers(struct zBoundedSszzListRef zheaders)
 {
-  struct zWitnessContext z8zE581;
+  struct zWitnessContext z8zE578;
   struct zWitnessHeaderIndex zindexed;
   {
     struct zWitnessHeaderIndex z2zE950;
@@ -2521,7 +2527,7 @@ struct zWitnessContext zindex_witness_headers(struct zBoundedSszzListRef zheader
     }
     {
       zindexed = zindex_witness_header_cursor(z2zE950);
-      if (have_exception) {  goto end_block_exception_1606;  }
+      if (have_exception) {  goto end_block_exception_1603;  }
     }
   }
   zk_n_headers = zheaders.zcount;
@@ -2540,9 +2546,9 @@ struct zWitnessContext zindex_witness_headers(struct zBoundedSszzListRef zheader
     zInvalidBlock(&z2zE938, zWitnessDeficient);
     COPY(zexception)(current_exception, z2zE938);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:801.8-801.44");
+    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:800.8-800.44");
     KILL(zexception)(&z2zE938);
-    goto end_block_exception_1606;
+    goto end_block_exception_1603;
     /* unreachable after throw */
     KILL(zexception)(&z2zE938);
   } else {  z3zE1124 = UNIT;  }
@@ -2559,9 +2565,9 @@ struct zWitnessContext zindex_witness_headers(struct zBoundedSszzListRef zheader
     zInvalidBlock(&z2zE941, zRlpDecode);
     COPY(zexception)(current_exception, z2zE941);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:804.8-804.37");
+    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:803.8-803.37");
     KILL(zexception)(&z2zE941);
-    goto end_block_exception_1606;
+    goto end_block_exception_1603;
     /* unreachable after throw */
     KILL(zexception)(&z2zE941);
   } else {  z3zE1123 = UNIT;  }
@@ -2581,43 +2587,43 @@ struct zWitnessContext zindex_witness_headers(struct zBoundedSszzListRef zheader
   z3zE1126.zparent_excess_blob_gas = z2zE946;
   z3zE1126.zparent_hash = z2zE942;
   z3zE1126.zparent_state_root = z2zE943;
-  z8zE581 = z3zE1126;
-end_function_1605: ;
-  return z8zE581;
-end_block_exception_1606: ;
-  struct zWitnessContext z8zE1073 = { .zparent_base_fee_per_gas = u256_zero(), .zparent_blob_gas_used = UINT64_C(0xdeadc0de), .zparent_excess_blob_gas = UINT64_C(0xdeadc0de), .zparent_hash = fixed_bytes_32_zero(), .zparent_state_root = fixed_bytes_32_zero() };
-  return z8zE1073;
+  z8zE578 = z3zE1126;
+end_function_1602: ;
+  return z8zE578;
+end_block_exception_1603: ;
+  struct zWitnessContext z8zE1061 = { .zparent_base_fee_per_gas = u256_zero(), .zparent_blob_gas_used = UINT64_C(0xdeadc0de), .zparent_excess_blob_gas = UINT64_C(0xdeadc0de), .zparent_hash = fixed_bytes_32_zero(), .zparent_state_root = fixed_bytes_32_zero() };
+  return z8zE1061;
 }
 
 uint64_t zdecode_payload_blob_gas_used(struct zByteSliceFields zpayload)
 {
-  uint64_t z8zE582;
+  uint64_t z8zE579;
   uint64_t zvalue;
   zvalue = zdecode_sszz_uint(zpayload, zPL_BLOB_GAS_USED);
   bool z2zE934;
   z2zE934 = (!(UINT64_C(2752512) < zvalue));
-  if (z2zE934) {  z8zE582 = zvalue;  } else {
+  if (z2zE934) {  z8zE579 = zvalue;  } else {
     struct zexception z2zE935;
     CREATE(zexception)(&z2zE935);
     zInvalidBlock(&z2zE935, zInvalidBlobGasUsed);
     COPY(zexception)(current_exception, z2zE935);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:825.8-825.46");
+    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:824.8-824.46");
     KILL(zexception)(&z2zE935);
-    goto end_block_exception_1604;
+    goto end_block_exception_1601;
     /* unreachable after throw */
     KILL(zexception)(&z2zE935);
   }
-end_function_1603: ;
-  return z8zE582;
-end_block_exception_1604: ;
+end_function_1600: ;
+  return z8zE579;
+end_block_exception_1601: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 struct zBlockHeader zdecode_block_header_sszz(struct zStatelessInputRef zinput_ref)
 {
-  struct zBlockHeader z8zE583;
+  struct zBlockHeader z8zE580;
   struct zByteSliceFields zpayload;
   zpayload = zinput_ref.zexecution_payload;
   uint64_t zgas_limit_value;
@@ -2639,7 +2645,7 @@ struct zBlockHeader zdecode_block_header_sszz(struct zStatelessInputRef zinput_r
   uint64_t z2zE923;
   {
     z2zE923 = zdecode_payload_blob_gas_used(zpayload);
-    if (have_exception) {  goto end_block_exception_1602;  }
+    if (have_exception) {  goto end_block_exception_1599;  }
   }
   uint64_t z2zE924;
   z2zE924 = zdecode_sszz_uint(zpayload, zPL_EXCESS_BLOB_GAS);
@@ -2680,18 +2686,18 @@ struct zBlockHeader zdecode_block_header_sszz(struct zStatelessInputRef zinput_r
   z3zE1121.zslot_number = z2zE932;
   z3zE1121.zstate_root = z2zE925;
   z3zE1121.ztimestamp = z2zE919;
-  z8zE583 = z3zE1121;
-end_function_1601: ;
-  return z8zE583;
-end_block_exception_1602: ;
-  struct zByteSliceFields z8zE1075 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBlockHeader z8zE1074 = { .zbase_fee = u256_zero(), .zblob_gas_used = UINT64_C(0xdeadc0de), .zexcess_blob_gas = UINT64_C(0xdeadc0de), .zextra_data = z8zE1075, .zfee_recipient = fixed_bytes_20_zero(), .zgas_limit = UINT64_C(0xdeadc0de), .zgas_used = UINT64_C(0xdeadc0de), .zlogs_bloom = fixed_bytes_256_zero(), .znumber = UINT64_C(0xdeadc0de), .zparent_beacon_block_root = fixed_bytes_32_zero(), .zparent_hash = fixed_bytes_32_zero(), .zprev_randao = u256_zero(), .zreceipts_root = fixed_bytes_32_zero(), .zslot_number = UINT64_C(0xdeadc0de), .zstate_root = fixed_bytes_32_zero(), .ztimestamp = UINT64_C(0xdeadc0de) };
-  return z8zE1074;
+  z8zE580 = z3zE1121;
+end_function_1598: ;
+  return z8zE580;
+end_block_exception_1599: ;
+  struct zByteSliceFields z8zE1063 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBlockHeader z8zE1062 = { .zbase_fee = u256_zero(), .zblob_gas_used = UINT64_C(0xdeadc0de), .zexcess_blob_gas = UINT64_C(0xdeadc0de), .zextra_data = z8zE1063, .zfee_recipient = fixed_bytes_20_zero(), .zgas_limit = UINT64_C(0xdeadc0de), .zgas_used = UINT64_C(0xdeadc0de), .zlogs_bloom = fixed_bytes_256_zero(), .znumber = UINT64_C(0xdeadc0de), .zparent_beacon_block_root = fixed_bytes_32_zero(), .zparent_hash = fixed_bytes_32_zero(), .zprev_randao = u256_zero(), .zreceipts_root = fixed_bytes_32_zero(), .zslot_number = UINT64_C(0xdeadc0de), .zstate_root = fixed_bytes_32_zero(), .ztimestamp = UINT64_C(0xdeadc0de) };
+  return z8zE1062;
 }
 
 struct zWithdrawal zdecode_withdrawal(struct zByteSliceFields zwithdrawal)
 {
-  struct zWithdrawal z8zE584;
+  struct zWithdrawal z8zE581;
   uint64_t z2zE914;
   z2zE914 = zdecode_sszz_uint(zwithdrawal, zWD_INDEX);
   uint64_t z2zE915;
@@ -2705,17 +2711,17 @@ struct zWithdrawal zdecode_withdrawal(struct zByteSliceFields zwithdrawal)
   z3zE1120.zamount = z2zE917;
   z3zE1120.zindex = z2zE914;
   z3zE1120.zvalidator_index = z2zE915;
-  z8zE584 = z3zE1120;
-end_function_1599: ;
-  return z8zE584;
-end_block_exception_1600: ;
-  struct zWithdrawal z8zE1076 = { .zaddress = fixed_bytes_20_zero(), .zamount = UINT64_C(0xdeadc0de), .zindex = UINT64_C(0xdeadc0de), .zvalidator_index = UINT64_C(0xdeadc0de) };
-  return z8zE1076;
+  z8zE581 = z3zE1120;
+end_function_1596: ;
+  return z8zE581;
+end_block_exception_1597: ;
+  struct zWithdrawal z8zE1064 = { .zaddress = fixed_bytes_20_zero(), .zamount = UINT64_C(0xdeadc0de), .zindex = UINT64_C(0xdeadc0de), .zvalidator_index = UINT64_C(0xdeadc0de) };
+  return z8zE1064;
 }
 
 struct zChainConfig zdecode_chain_config(struct zByteSliceFields zcc, uint64_t znumber, uint64_t ztimestamp)
 {
-  struct zChainConfig z8zE585;
+  struct zChainConfig z8zE582;
   uint64_t zcc_length;
   zcc_length = zcc.zlen;
   uint64_t zheader_length;
@@ -2731,9 +2737,9 @@ struct zChainConfig zdecode_chain_config(struct zByteSliceFields zcc, uint64_t z
     zInvalidBlock(&z2zE882, zInvalidConfig);
     COPY(zexception)(current_exception, z2zE882);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:875.8-875.41");
+    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:874.8-874.41");
     KILL(zexception)(&z2zE882);
-    goto end_block_exception_1598;
+    goto end_block_exception_1595;
     /* unreachable after throw */
     KILL(zexception)(&z2zE882);
   } else {  z3zE1104 = UNIT;  }
@@ -2754,9 +2760,9 @@ struct zChainConfig zdecode_chain_config(struct zByteSliceFields zcc, uint64_t z
     zInvalidBlock(&z2zE885, zInvalidConfig);
     COPY(zexception)(current_exception, z2zE885);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:879.8-879.41");
+    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:878.8-878.41");
     KILL(zexception)(&z2zE885);
-    goto end_block_exception_1598;
+    goto end_block_exception_1595;
     /* unreachable after throw */
     KILL(zexception)(&z2zE885);
   } else {  z3zE1106 = UNIT;  }
@@ -2777,9 +2783,9 @@ struct zChainConfig zdecode_chain_config(struct zByteSliceFields zcc, uint64_t z
     zInvalidBlock(&z2zE887, zInvalidConfig);
     COPY(zexception)(current_exception, z2zE887);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:884.8-884.41");
+    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:883.8-883.41");
     KILL(zexception)(&z2zE887);
-    goto end_block_exception_1598;
+    goto end_block_exception_1595;
     /* unreachable after throw */
     KILL(zexception)(&z2zE887);
   } else {  z3zE1107 = UNIT;  }
@@ -2820,9 +2826,9 @@ struct zChainConfig zdecode_chain_config(struct zByteSliceFields zcc, uint64_t z
     zInvalidBlock(&z2zE889, zInvalidConfig);
     COPY(zexception)(current_exception, z2zE889);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:892.8-892.41");
+    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:891.8-891.41");
     KILL(zexception)(&z2zE889);
-    goto end_block_exception_1598;
+    goto end_block_exception_1595;
     /* unreachable after throw */
     KILL(zexception)(&z2zE889);
   } else {  z3zE1110 = UNIT;  }
@@ -2835,9 +2841,9 @@ struct zChainConfig zdecode_chain_config(struct zByteSliceFields zcc, uint64_t z
     zInvalidBlock(&z2zE891, zInvalidConfig);
     COPY(zexception)(current_exception, z2zE891);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:895.8-895.41");
+    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:894.8-894.41");
     KILL(zexception)(&z2zE891);
-    goto end_block_exception_1598;
+    goto end_block_exception_1595;
     /* unreachable after throw */
     KILL(zexception)(&z2zE891);
   } else {  z3zE1109 = UNIT;  }
@@ -2850,9 +2856,9 @@ struct zChainConfig zdecode_chain_config(struct zByteSliceFields zcc, uint64_t z
     zInvalidBlock(&z2zE893, zInvalidConfig);
     COPY(zexception)(current_exception, z2zE893);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:898.8-898.41");
+    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:897.8-897.41");
     KILL(zexception)(&z2zE893);
-    goto end_block_exception_1598;
+    goto end_block_exception_1595;
     /* unreachable after throw */
     KILL(zexception)(&z2zE893);
   } else {  z3zE1108 = UNIT;  }
@@ -2889,9 +2895,9 @@ struct zChainConfig zdecode_chain_config(struct zByteSliceFields zcc, uint64_t z
     zInvalidBlock(&z2zE898, zInvalidConfig);
     COPY(zexception)(current_exception, z2zE898);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:903.8-903.41");
+    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:902.8-902.41");
     KILL(zexception)(&z2zE898);
-    goto end_block_exception_1598;
+    goto end_block_exception_1595;
     /* unreachable after throw */
     KILL(zexception)(&z2zE898);
   } else {  z3zE1118 = UNIT;  }
@@ -2910,9 +2916,9 @@ struct zChainConfig zdecode_chain_config(struct zByteSliceFields zcc, uint64_t z
     zInvalidBlock(&z2zE901, zInvalidConfig);
     COPY(zexception)(current_exception, z2zE901);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:906.8-906.41");
+    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:905.8-905.41");
     KILL(zexception)(&z2zE901);
-    goto end_block_exception_1598;
+    goto end_block_exception_1595;
     /* unreachable after throw */
     KILL(zexception)(&z2zE901);
   } else {  z3zE1117 = UNIT;  }
@@ -2930,9 +2936,9 @@ struct zChainConfig zdecode_chain_config(struct zByteSliceFields zcc, uint64_t z
       zInvalidBlock(&z2zE904, zInvalidConfig);
       COPY(zexception)(current_exception, z2zE904);
       have_exception = true;
-      COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:911.12-911.45");
+      COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:910.12-910.45");
       KILL(zexception)(&z2zE904);
-      goto end_block_exception_1598;
+      goto end_block_exception_1595;
       /* unreachable after throw */
       KILL(zexception)(&z2zE904);
     } else {  z3zE1116 = UNIT;  }
@@ -2951,9 +2957,9 @@ struct zChainConfig zdecode_chain_config(struct zByteSliceFields zcc, uint64_t z
       zInvalidBlock(&z2zE907, zInvalidConfig);
       COPY(zexception)(current_exception, z2zE907);
       have_exception = true;
-      COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:917.12-917.45");
+      COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:916.12-916.45");
       KILL(zexception)(&z2zE907);
-      goto end_block_exception_1598;
+      goto end_block_exception_1595;
       /* unreachable after throw */
       KILL(zexception)(&z2zE907);
     } else {  z3zE1115 = UNIT;  }
@@ -2962,23 +2968,23 @@ struct zChainConfig zdecode_chain_config(struct zByteSliceFields zcc, uint64_t z
   z2zE908 = zdecode_sszz_uint(zcc, zCC_CHAIN_ID);
   struct zChainConfig z3zE1119;
   z3zE1119.zchain_id = z2zE908;
-  z8zE585 = z3zE1119;
-end_function_1597: ;
-  return z8zE585;
-end_block_exception_1598: ;
-  struct zChainConfig z8zE1077 = { .zchain_id = UINT64_C(0xdeadc0de) };
-  return z8zE1077;
+  z8zE582 = z3zE1119;
+end_function_1594: ;
+  return z8zE582;
+end_block_exception_1595: ;
+  struct zChainConfig z8zE1065 = { .zchain_id = UINT64_C(0xdeadc0de) };
+  return z8zE1065;
 }
 
 struct zStatelessInput zdecode_stateless_input(struct zStatelessInputRef zinput_ref)
 {
-  struct zStatelessInput z8zE586;
+  struct zStatelessInput z8zE583;
   struct zByteSliceFields zpayload;
   zpayload = zinput_ref.zexecution_payload;
   struct zBlockHeader zheader;
   {
     zheader = zdecode_block_header_sszz(zinput_ref);
-    if (have_exception) {  goto end_block_exception_1596;  }
+    if (have_exception) {  goto end_block_exception_1593;  }
   }
   struct zChainConfig zchain_config;
   {
@@ -2990,7 +2996,7 @@ struct zStatelessInput zdecode_stateless_input(struct zStatelessInputRef zinput_
     z2zE880 = zheader.ztimestamp;
     {
       zchain_config = zdecode_chain_config(z2zE878, z2zE879, z2zE880);
-      if (have_exception) {  goto end_block_exception_1596;  }
+      if (have_exception) {  goto end_block_exception_1593;  }
     }
   }
   unit z3zE1099;
@@ -3040,28 +3046,28 @@ struct zStatelessInput zdecode_stateless_input(struct zStatelessInputRef zinput_
   struct zStatelessInput z3zE1103;
   z3zE1103.zchain_config = zchain_config;
   z3zE1103.zpayload = z2zE877;
-  z8zE586 = z3zE1103;
-end_function_1595: ;
-  return z8zE586;
-end_block_exception_1596: ;
-  struct zChainConfig z8zE1089 = { .zchain_id = UINT64_C(0xdeadc0de) };
-  struct zByteSliceFields z8zE1088 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zByteSliceFields z8zE1087 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBoundedSszzListRef z8zE1086 = { .zbytes = z8zE1087, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
-  struct zByteSliceFields z8zE1085 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBoundedSszzListRef z8zE1084 = { .zbytes = z8zE1085, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
-  struct zBlockBody z8zE1083 = { .zblock_access_list = z8zE1088, .ztransactions = z8zE1086, .zwithdrawals = z8zE1084 };
-  struct zByteSliceFields z8zE1082 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBlockHeader z8zE1081 = { .zbase_fee = u256_zero(), .zblob_gas_used = UINT64_C(0xdeadc0de), .zexcess_blob_gas = UINT64_C(0xdeadc0de), .zextra_data = z8zE1082, .zfee_recipient = fixed_bytes_20_zero(), .zgas_limit = UINT64_C(0xdeadc0de), .zgas_used = UINT64_C(0xdeadc0de), .zlogs_bloom = fixed_bytes_256_zero(), .znumber = UINT64_C(0xdeadc0de), .zparent_beacon_block_root = fixed_bytes_32_zero(), .zparent_hash = fixed_bytes_32_zero(), .zprev_randao = u256_zero(), .zreceipts_root = fixed_bytes_32_zero(), .zslot_number = UINT64_C(0xdeadc0de), .zstate_root = fixed_bytes_32_zero(), .ztimestamp = UINT64_C(0xdeadc0de) };
-  struct zBlock z8zE1080 = { .zbody = z8zE1083, .zheader = z8zE1081 };
-  struct zExecutionPayload z8zE1079 = { .zblock = z8zE1080, .zexpected_block_hash = fixed_bytes_32_zero() };
-  struct zStatelessInput z8zE1078 = { .zchain_config = z8zE1089, .zpayload = z8zE1079 };
-  return z8zE1078;
+  z8zE583 = z3zE1103;
+end_function_1592: ;
+  return z8zE583;
+end_block_exception_1593: ;
+  struct zChainConfig z8zE1077 = { .zchain_id = UINT64_C(0xdeadc0de) };
+  struct zByteSliceFields z8zE1076 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zByteSliceFields z8zE1075 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBoundedSszzListRef z8zE1074 = { .zbytes = z8zE1075, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct zByteSliceFields z8zE1073 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBoundedSszzListRef z8zE1072 = { .zbytes = z8zE1073, .zcount = UINT64_C(0xdeadc0de), .zmax_item_length = UINT64_C(0xdeadc0de) };
+  struct zBlockBody z8zE1071 = { .zblock_access_list = z8zE1076, .ztransactions = z8zE1074, .zwithdrawals = z8zE1072 };
+  struct zByteSliceFields z8zE1070 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBlockHeader z8zE1069 = { .zbase_fee = u256_zero(), .zblob_gas_used = UINT64_C(0xdeadc0de), .zexcess_blob_gas = UINT64_C(0xdeadc0de), .zextra_data = z8zE1070, .zfee_recipient = fixed_bytes_20_zero(), .zgas_limit = UINT64_C(0xdeadc0de), .zgas_used = UINT64_C(0xdeadc0de), .zlogs_bloom = fixed_bytes_256_zero(), .znumber = UINT64_C(0xdeadc0de), .zparent_beacon_block_root = fixed_bytes_32_zero(), .zparent_hash = fixed_bytes_32_zero(), .zprev_randao = u256_zero(), .zreceipts_root = fixed_bytes_32_zero(), .zslot_number = UINT64_C(0xdeadc0de), .zstate_root = fixed_bytes_32_zero(), .ztimestamp = UINT64_C(0xdeadc0de) };
+  struct zBlock z8zE1068 = { .zbody = z8zE1071, .zheader = z8zE1069 };
+  struct zExecutionPayload z8zE1067 = { .zblock = z8zE1068, .zexpected_block_hash = fixed_bytes_32_zero() };
+  struct zStatelessInput z8zE1066 = { .zchain_config = z8zE1077, .zpayload = z8zE1067 };
+  return z8zE1066;
 }
 
 struct zWitnessContext zindex_execution_witness(struct zStatelessInputRef zinput_ref)
 {
-  struct zWitnessContext z8zE587;
+  struct zWitnessContext z8zE584;
   unit z3zE1095;
   z3zE1095 = nodedb_reset(UNIT);
   struct zBoundedSszzListRef z2zE866;
@@ -3069,14 +3075,14 @@ struct zWitnessContext zindex_execution_witness(struct zStatelessInputRef zinput
   unit z3zE1094;
   {
     z3zE1094 = zindex_witness_nodes(z2zE866);
-    if (have_exception) {  goto end_block_exception_1594;  }
+    if (have_exception) {  goto end_block_exception_1591;  }
   }
   struct zBoundedSszzListRef z2zE867;
   z2zE867 = zinput_ref.zwitness_codes;
   unit z3zE1093;
   {
     z3zE1093 = zindex_witness_codes(z2zE867);
-    if (have_exception) {  goto end_block_exception_1594;  }
+    if (have_exception) {  goto end_block_exception_1591;  }
   }
   struct zWitnessContext zwitness;
   {
@@ -3084,21 +3090,21 @@ struct zWitnessContext zindex_execution_witness(struct zStatelessInputRef zinput
     z2zE868 = zinput_ref.zwitness_headers;
     {
       zwitness = zindex_witness_headers(z2zE868);
-      if (have_exception) {  goto end_block_exception_1594;  }
+      if (have_exception) {  goto end_block_exception_1591;  }
     }
   }
   zk_parent_state_root = zwitness.zparent_state_root;
   unit z3zE1096;
   z3zE1096 = UNIT;
-  z8zE587 = zwitness;
-end_function_1593: ;
-  return z8zE587;
-end_block_exception_1594: ;
-  struct zWitnessContext z8zE1090 = { .zparent_base_fee_per_gas = u256_zero(), .zparent_blob_gas_used = UINT64_C(0xdeadc0de), .zparent_excess_blob_gas = UINT64_C(0xdeadc0de), .zparent_hash = fixed_bytes_32_zero(), .zparent_state_root = fixed_bytes_32_zero() };
-  return z8zE1090;
+  z8zE584 = zwitness;
+end_function_1590: ;
+  return z8zE584;
+end_block_exception_1591: ;
+  struct zWitnessContext z8zE1078 = { .zparent_base_fee_per_gas = u256_zero(), .zparent_blob_gas_used = UINT64_C(0xdeadc0de), .zparent_excess_blob_gas = UINT64_C(0xdeadc0de), .zparent_hash = fixed_bytes_32_zero(), .zparent_state_root = fixed_bytes_32_zero() };
+  return z8zE1078;
 }
 
-void zdecode_transaction(struct zTransaction *z8zE588, struct zByteSliceFields ztransaction, struct zByteSliceFields zpublic_key)
+void zdecode_transaction(struct zTransaction *z8zE585, struct zByteSliceFields ztransaction, struct zByteSliceFields zpublic_key)
 {
   bool z2zE864;
   {
@@ -3108,8 +3114,8 @@ void zdecode_transaction(struct zTransaction *z8zE588, struct zByteSliceFields z
   }
   if (z2zE864) {
     {
-      zrlp_decode_tx((*(&z8zE588)), ztransaction, zpublic_key, zk_fork);
-      if (have_exception) {  goto end_block_exception_1592;  }
+      zrlp_decode_tx((*(&z8zE585)), ztransaction, zpublic_key, zk_fork);
+      if (have_exception) {  goto end_block_exception_1589;  }
     }
   } else {
     struct zexception z2zE865;
@@ -3117,16 +3123,16 @@ void zdecode_transaction(struct zTransaction *z8zE588, struct zByteSliceFields z
     zInvalidBlock(&z2zE865, zInvalidConfig);
     COPY(zexception)(current_exception, z2zE865);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:975.8-975.41");
+    COPY(sail_string)(throw_location, "sail/lib/ssz/stateless_input.sail:974.8-974.41");
     KILL(zexception)(&z2zE865);
-    goto end_block_exception_1592;
+    goto end_block_exception_1589;
     /* unreachable after throw */
     KILL(zexception)(&z2zE865);
   }
-end_function_1591: ;
-  goto end_function_4020;
-end_block_exception_1592: ;
-  goto end_function_4020;
-end_function_4020: ;
+end_function_1588: ;
+  goto end_function_4001;
+end_block_exception_1589: ;
+  goto end_function_4001;
+end_function_4001: ;
 }
 

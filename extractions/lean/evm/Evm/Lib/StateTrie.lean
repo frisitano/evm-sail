@@ -89,7 +89,7 @@ block-level overlay, recomputes each touched account's storage root
 from its changed slots (zero-valued slots delete), re-encodes the
 account leaf (empty accounts delete, per EIP-161), and streams the
 ordered updates into the parent state root via [trie_root][]. -/
-def compute_state_root (_ : Unit) : SailM hash := do
+def compute_state_root (_ : Unit) : SailM (Vector (BitVec 8) 32) := do
   (acct_block_iter_begin ())
   (prepare_changed_account_post_storage_roots ())
   (acct_block_iter_begin ())

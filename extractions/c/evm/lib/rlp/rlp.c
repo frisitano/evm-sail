@@ -56,9 +56,9 @@ uint64_t zrlp_scratch_small_length(uint64_t zvalue)
 {
   uint64_t z8zE146;
   z8zE146 = zvalue;
-end_function_3642: ;
+end_function_3623: ;
   return z8zE146;
-end_block_exception_3643: ;
+end_block_exception_3624: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -68,9 +68,9 @@ uint64_t zword_byte_count(uint64_t zindex)
   uint64_t z8zE147;
   {    z8zE147 = (zindex + UINT64_C(1));
   }
-end_function_3638: ;
+end_function_3619: ;
   return z8zE147;
-end_block_exception_3639: ;
+end_block_exception_3620: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -85,68 +85,68 @@ void zminimal_word_bytes(struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 *z8zE148, sa
   }
   uint64_t zlen;
   zlen = UINT64_C(0);
-  int64_t z3zE3624;
-  {    z3zE3624 = (int64_t)(UINT64_C(0));
+  int64_t z3zE3553;
+  {    z3zE3553 = (int64_t)(UINT64_C(0));
   }
-  int64_t z3zE3625;
-  {    z3zE3625 = (int64_t)(UINT64_C(31));
+  int64_t z3zE3554;
+  {    z3zE3554 = (int64_t)(UINT64_C(31));
   }
-  int64_t z3zE3626;
-  {    z3zE3626 = (int64_t)(UINT64_C(1));
+  int64_t z3zE3555;
+  {    z3zE3555 = (int64_t)(UINT64_C(1));
   }
   {
     int64_t zbyte_index;
-    zbyte_index = z3zE3624;
-    unit z3zE3627;
-  for_start_3634: ;
+    zbyte_index = z3zE3553;
+    unit z3zE3556;
+  for_start_3615: ;
     {
-      if ((z3zE3625 < zbyte_index)) goto for_end_3635;
-      bool z2zE3780;
-      z2zE3780 = zword_nonzzero(zremaining);
-      if (z2zE3780) {
-        uint64_t z2zE3781;
-        z2zE3781 = zword_low_byte(zremaining);
-        zconsz3z5bv8(&zout, z2zE3781, zout);
-        unit z3zE3629;
-        z3zE3629 = UNIT;
+      if ((z3zE3554 < zbyte_index)) goto for_end_3616;
+      bool z2zE3741;
+      z2zE3741 = zword_nonzzero(zremaining);
+      if (z2zE3741) {
+        uint64_t z2zE3742;
+        z2zE3742 = zword_low_byte(zremaining);
+        zconsz3z5bv8(&zout, z2zE3742, zout);
+        unit z3zE3558;
+        z3zE3558 = UNIT;
         zremaining = zword_shift_right(zremaining, UINT64_C(8));
-        unit z3zE3628;
-        z3zE3628 = UNIT;
+        unit z3zE3557;
+        z3zE3557 = UNIT;
         {
-          uint64_t z3zE3855;
-          z3zE3855 = (uint64_t)(zbyte_index);
-          zlen = zword_byte_count(z3zE3855);
+          uint64_t z3zE3784;
+          z3zE3784 = (uint64_t)(zbyte_index);
+          zlen = zword_byte_count(z3zE3784);
         }
-        z3zE3627 = UNIT;
-      } else {  z3zE3627 = UNIT;  }
-      zbyte_index = (zbyte_index + z3zE3626);
-      goto for_start_3634;
+        z3zE3556 = UNIT;
+      } else {  z3zE3556 = UNIT;  }
+      zbyte_index = (zbyte_index + z3zE3555);
+      goto for_start_3615;
     }
-  for_end_3635: ;
+  for_end_3616: ;
   }
-  unit z3zE3630;
-  z3zE3630 = UNIT;
-  struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 z3zE3631;
-  CREATE(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z3zE3631);
-  COPY(zz5listz8z5bv8z9)(&((&z3zE3631)->ztup0), zout);
-  z3zE3631.ztup1 = zlen;
-  COPY(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)((*(&z8zE148)), z3zE3631);
-  KILL(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z3zE3631);
+  unit z3zE3559;
+  z3zE3559 = UNIT;
+  struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 z3zE3560;
+  CREATE(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z3zE3560);
+  COPY(zz5listz8z5bv8z9)(&((&z3zE3560)->ztup0), zout);
+  z3zE3560.ztup1 = zlen;
+  COPY(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)((*(&z8zE148)), z3zE3560);
+  KILL(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z3zE3560);
   KILL(zz5listz8z5bv8z9)(&zout);
-end_function_3636: ;
-  goto end_function_4084;
-end_block_exception_3637: ;
-  goto end_function_4084;
-end_function_4084: ;
+end_function_3617: ;
+  goto end_function_4072;
+end_block_exception_3618: ;
+  goto end_function_4072;
+end_function_4072: ;
 }
 
 uint64_t zrlp_nat_length_byte(uint64_t zvalue)
 {
   uint64_t z8zE149;
   z8zE149 = (safe_rshift(UINT64_MAX, 64 - 8) & safe_rshift(zvalue, UINT64_C(0)));
-end_function_3632: ;
+end_function_3613: ;
   return z8zE149;
-end_block_exception_3633: ;
+end_block_exception_3614: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -155,9 +155,9 @@ uint64_t zrlp_minimal_word_len(sail_u256 zw)
 {
   uint64_t z8zE150;
   z8zE150 = zword_byte_length(zw);
-end_function_3620: ;
+end_function_3601: ;
   return z8zE150;
-end_block_exception_3621: ;
+end_block_exception_3602: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -169,14 +169,14 @@ sail_u128 zrlp_slice_sizze(struct zByteSliceFields zdata)
   zlen = zdata.zlen;
   uint64_t zfirst;
   {
-    bool z2zE3749;
-    z2zE3749 = (zlen == UINT64_C(0));
-    if (z2zE3749) {  zfirst = UINT64_C(0x00);  } else {  zfirst = zslice_byte(zdata, UINT64_C(0));  }
+    bool z2zE3710;
+    z2zE3710 = (zlen == UINT64_C(0));
+    if (z2zE3710) {  zfirst = UINT64_C(0x00);  } else {  zfirst = zslice_byte(zdata, UINT64_C(0));  }
   }
   z8zE151 = zrlp_string_sizzezIreprzGU64zCB8zCR__sail_c_repr_u128zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(zlen, zfirst);
-end_function_3609: ;
+end_function_3590: ;
   return z8zE151;
-end_block_exception_3610: ;
+end_block_exception_3591: ;
 
   return u128_zero();
 }
@@ -188,29 +188,29 @@ uint64_t zrlp_uint_word_sizze(sail_u256 zw)
   zlen = zrlp_minimal_word_len(zw);
   uint64_t zfirst;
   {
-    bool z2zE3748;
-    z2zE3748 = (zlen == UINT64_C(1));
-    if (z2zE3748) {  zfirst = zword_low_byte(zw);  } else {  zfirst = UINT64_C(0x00);  }
+    bool z2zE3709;
+    z2zE3709 = (zlen == UINT64_C(1));
+    if (z2zE3709) {  zfirst = zword_low_byte(zw);  } else {  zfirst = UINT64_C(0x00);  }
   }
-  bool z2zE3747;
+  bool z2zE3708;
   {
-    bool z2zE3746;
-    z2zE3746 = (zlen == UINT64_C(1));
-    bool z3zE3605;
-    if (z2zE3746) {
-      uint64_t z2zE3745;
-      z2zE3745 = (UINT64_C(1) & (zfirst >> UINT64_C(7)));
-      z3zE3605 = (z2zE3745 == UINT64_C(0b0));
-    } else {  z3zE3605 = false;  }
-    z2zE3747 = z3zE3605;
+    bool z2zE3707;
+    z2zE3707 = (zlen == UINT64_C(1));
+    bool z3zE3534;
+    if (z2zE3707) {
+      uint64_t z2zE3706;
+      z2zE3706 = (UINT64_C(1) & (zfirst >> UINT64_C(7)));
+      z3zE3534 = (z2zE3706 == UINT64_C(0b0));
+    } else {  z3zE3534 = false;  }
+    z2zE3708 = z3zE3534;
   }
-  if (z2zE3747) {  z8zE152 = UINT64_C(1);  } else {
+  if (z2zE3708) {  z8zE152 = UINT64_C(1);  } else {
     {    z8zE152 = (UINT64_C(1) + zlen);
     }
   }
-end_function_3607: ;
+end_function_3588: ;
   return z8zE152;
-end_block_exception_3608: ;
+end_block_exception_3589: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -218,12 +218,12 @@ end_block_exception_3608: ;
 uint64_t zrlp_uint_nat_sizze(uint64_t zn)
 {
   uint64_t z8zE153;
-  sail_u256 z2zE3744;
-  z2zE3744 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zn);
-  z8zE153 = zrlp_uint_word_sizze(z2zE3744);
-end_function_3605: ;
+  sail_u256 z2zE3705;
+  z2zE3705 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zn);
+  z8zE153 = zrlp_uint_word_sizze(z2zE3705);
+end_function_3586: ;
   return z8zE153;
-end_block_exception_3606: ;
+end_block_exception_3587: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -231,19 +231,19 @@ end_block_exception_3606: ;
 uint64_t zrlp_scratch_list_sizze(uint64_t zcontent_len)
 {
   uint64_t z8zE154;
-  uint64_t z2zE3742;
+  uint64_t z2zE3703;
   {
-    uint64_t z2zE3741;
-    z2zE3741 = zrlp_length_prefix_lenzIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zcontent_len);
-    z2zE3742 = zrlp_scratch_small_length(z2zE3741);
+    uint64_t z2zE3702;
+    z2zE3702 = zrlp_length_prefix_lenzIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zcontent_len);
+    z2zE3703 = zrlp_scratch_small_length(z2zE3702);
   }
   {
-    z8zE154 = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(zcontent_len, z2zE3742);
-    if (have_exception) {  goto end_block_exception_3602;  }
+    z8zE154 = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(zcontent_len, z2zE3703);
+    if (have_exception) {  goto end_block_exception_3583;  }
   }
-end_function_3601: ;
+end_function_3582: ;
   return z8zE154;
-end_block_exception_3602: ;
+end_block_exception_3583: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -255,37 +255,37 @@ uint64_t zrlp_scratch_slice_sizze(struct zByteSliceFields zdata)
   zlength = zdata.zlen;
   uint64_t zfirst;
   {
-    bool z2zE3740;
-    z2zE3740 = (zlength == UINT64_C(0));
-    if (z2zE3740) {  zfirst = UINT64_C(0x00);  } else {  zfirst = zslice_byte(zdata, UINT64_C(0));  }
+    bool z2zE3701;
+    z2zE3701 = (zlength == UINT64_C(0));
+    if (z2zE3701) {  zfirst = UINT64_C(0x00);  } else {  zfirst = zslice_byte(zdata, UINT64_C(0));  }
   }
-  bool z2zE3737;
+  bool z2zE3698;
   {
-    bool z2zE3736;
-    z2zE3736 = (zlength == UINT64_C(1));
-    bool z3zE3604;
-    if (z2zE3736) {
-      uint64_t z2zE3735;
-      z2zE3735 = (UINT64_C(1) & (zfirst >> UINT64_C(7)));
-      z3zE3604 = (z2zE3735 == UINT64_C(0b0));
-    } else {  z3zE3604 = false;  }
-    z2zE3737 = z3zE3604;
+    bool z2zE3697;
+    z2zE3697 = (zlength == UINT64_C(1));
+    bool z3zE3533;
+    if (z2zE3697) {
+      uint64_t z2zE3696;
+      z2zE3696 = (UINT64_C(1) & (zfirst >> UINT64_C(7)));
+      z3zE3533 = (z2zE3696 == UINT64_C(0b0));
+    } else {  z3zE3533 = false;  }
+    z2zE3698 = z3zE3533;
   }
-  if (z2zE3737) {  z8zE155 = UINT64_C(1);  } else {
-    uint64_t z2zE3739;
+  if (z2zE3698) {  z8zE155 = UINT64_C(1);  } else {
+    uint64_t z2zE3700;
     {
-      uint64_t z2zE3738;
-      z2zE3738 = zrlp_length_prefix_lenzIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zlength);
-      z2zE3739 = zrlp_scratch_small_length(z2zE3738);
+      uint64_t z2zE3699;
+      z2zE3699 = zrlp_length_prefix_lenzIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zlength);
+      z2zE3700 = zrlp_scratch_small_length(z2zE3699);
     }
     {
-      z8zE155 = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(zlength, z2zE3739);
-      if (have_exception) {  goto end_block_exception_3600;  }
+      z8zE155 = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(zlength, z2zE3700);
+      if (have_exception) {  goto end_block_exception_3581;  }
     }
   }
-end_function_3599: ;
+end_function_3580: ;
   return z8zE155;
-end_block_exception_3600: ;
+end_block_exception_3581: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -295,51 +295,51 @@ uint64_t zrlp_scratch_bytes_sizze(zz5listz8z5bv8z9 zdata, uint64_t zlength)
   uint64_t z8zE156;
   uint64_t zfirst;
   {
-    uint64_t z3zE3600;
+    uint64_t z3zE3529;
     {
-      if ((zdata == NULL)) goto case_3596;
+      if ((zdata == NULL)) goto case_3577;
       uint64_t zb;
       zb = (*zdata).hd;
-      z3zE3600 = zb;
-      goto finish_match_3594;
+      z3zE3529 = zb;
+      goto finish_match_3575;
     }
-  case_3596: ;
+  case_3577: ;
     {
       /* complete */
-      z3zE3600 = UINT64_C(0x00);
-      goto finish_match_3594;
+      z3zE3529 = UINT64_C(0x00);
+      goto finish_match_3575;
     }
-  case_3595: ;
-  finish_match_3594: ;
-    zfirst = z3zE3600;
+  case_3576: ;
+  finish_match_3575: ;
+    zfirst = z3zE3529;
   }
-  bool z2zE3732;
+  bool z2zE3693;
   {
-    bool z2zE3731;
-    z2zE3731 = (zlength == UINT64_C(1));
-    bool z3zE3603;
-    if (z2zE3731) {
-      uint64_t z2zE3730;
-      z2zE3730 = (UINT64_C(1) & (zfirst >> UINT64_C(7)));
-      z3zE3603 = (z2zE3730 == UINT64_C(0b0));
-    } else {  z3zE3603 = false;  }
-    z2zE3732 = z3zE3603;
+    bool z2zE3692;
+    z2zE3692 = (zlength == UINT64_C(1));
+    bool z3zE3532;
+    if (z2zE3692) {
+      uint64_t z2zE3691;
+      z2zE3691 = (UINT64_C(1) & (zfirst >> UINT64_C(7)));
+      z3zE3532 = (z2zE3691 == UINT64_C(0b0));
+    } else {  z3zE3532 = false;  }
+    z2zE3693 = z3zE3532;
   }
-  if (z2zE3732) {  z8zE156 = UINT64_C(1);  } else {
-    uint64_t z2zE3734;
+  if (z2zE3693) {  z8zE156 = UINT64_C(1);  } else {
+    uint64_t z2zE3695;
     {
-      uint64_t z2zE3733;
-      z2zE3733 = zrlp_length_prefix_lenzIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zlength);
-      z2zE3734 = zrlp_scratch_small_length(z2zE3733);
+      uint64_t z2zE3694;
+      z2zE3694 = zrlp_length_prefix_lenzIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zlength);
+      z2zE3695 = zrlp_scratch_small_length(z2zE3694);
     }
     {
-      z8zE156 = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(zlength, z2zE3734);
-      if (have_exception) {  goto end_block_exception_3598;  }
+      z8zE156 = zrlp_scratch_length_addzIreprzGU64zCU64zCU64zKzIboundszG491a746de554142e7d65e0bb42a9e751zK(zlength, z2zE3695);
+      if (have_exception) {  goto end_block_exception_3579;  }
     }
   }
-end_function_3597: ;
+end_function_3578: ;
   return z8zE156;
-end_block_exception_3598: ;
+end_block_exception_3579: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -349,30 +349,30 @@ unit zrlp_write_bytes(zz5listz8z5bv8z9 zdata, uint64_t zlen)
   unit z8zE157;
   uint64_t zfirst;
   {
-    uint64_t z3zE3592;
+    uint64_t z3zE3521;
     {
-      if ((zdata == NULL)) goto case_3583;
+      if ((zdata == NULL)) goto case_3564;
       uint64_t zb;
       zb = (*zdata).hd;
-      z3zE3592 = zb;
-      goto finish_match_3581;
+      z3zE3521 = zb;
+      goto finish_match_3562;
     }
-  case_3583: ;
+  case_3564: ;
     {
       /* complete */
-      z3zE3592 = UINT64_C(0x00);
-      goto finish_match_3581;
+      z3zE3521 = UINT64_C(0x00);
+      goto finish_match_3562;
     }
-  case_3582: ;
-  finish_match_3581: ;
-    zfirst = z3zE3592;
+  case_3563: ;
+  finish_match_3562: ;
+    zfirst = z3zE3521;
   }
-  unit z3zE3595;
-  z3zE3595 = zrlp_write_string_prefixzIreprzGU64zCB8zCuzKzIboundszG491a746de554142e7d65e0bb42a9e751zK(zlen, zfirst);
+  unit z3zE3524;
+  z3zE3524 = zrlp_write_string_prefixzIreprzGU64zCB8zCuzKzIboundszG491a746de554142e7d65e0bb42a9e751zK(zlen, zfirst);
   z8zE157 = zscratch_push_bytes(zdata, zlen);
-end_function_3584: ;
+end_function_3565: ;
   return z8zE157;
-end_block_exception_3585: ;
+end_block_exception_3566: ;
 
   return UNIT;
 }
@@ -380,24 +380,24 @@ end_block_exception_3585: ;
 unit zrlp_write_slice(struct zByteSliceFields zdata)
 {
   unit z8zE158;
-  uint64_t z2zE3726;
-  z2zE3726 = zdata.zlen;
-  uint64_t z2zE3727;
+  uint64_t z2zE3687;
+  z2zE3687 = zdata.zlen;
+  uint64_t z2zE3688;
   {
-    bool z2zE3725;
+    bool z2zE3686;
     {
-      uint64_t z2zE3724;
-      z2zE3724 = zdata.zlen;
-      z2zE3725 = (z2zE3724 == UINT64_C(0));
+      uint64_t z2zE3685;
+      z2zE3685 = zdata.zlen;
+      z2zE3686 = (z2zE3685 == UINT64_C(0));
     }
-    if (z2zE3725) {  z2zE3727 = UINT64_C(0x00);  } else {  z2zE3727 = zslice_byte(zdata, UINT64_C(0));  }
+    if (z2zE3686) {  z2zE3688 = UINT64_C(0x00);  } else {  z2zE3688 = zslice_byte(zdata, UINT64_C(0));  }
   }
-  unit z3zE3591;
-  z3zE3591 = zrlp_write_string_prefixzIreprzGU64zCB8zCuzKzIboundszG491a746de554142e7d65e0bb42a9e751zK(z2zE3726, z2zE3727);
+  unit z3zE3520;
+  z3zE3520 = zrlp_write_string_prefixzIreprzGU64zCB8zCuzKzIboundszG491a746de554142e7d65e0bb42a9e751zK(z2zE3687, z2zE3688);
   z8zE158 = zscratch_push_slice(zdata);
-end_function_3579: ;
+end_function_3560: ;
   return z8zE158;
-end_block_exception_3580: ;
+end_block_exception_3561: ;
 
   return UNIT;
 }
@@ -405,28 +405,28 @@ end_block_exception_3580: ;
 unit zrlp_write_uint_word(sail_u256 zw)
 {
   unit z8zE159;
-  struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 z2zE3723;
-  CREATE(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z2zE3723);
-  zminimal_word_bytes(&z2zE3723, zw);
-  unit z3zE3589;
+  struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 z2zE3684;
+  CREATE(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z2zE3684);
+  zminimal_word_bytes(&z2zE3684, zw);
+  unit z3zE3518;
   {
     zz5listz8z5bv8z9 zbytes;
     CREATE(zz5listz8z5bv8z9)(&zbytes);
-    COPY(zz5listz8z5bv8z9)(&zbytes, z2zE3723.ztup0);
+    COPY(zz5listz8z5bv8z9)(&zbytes, z2zE3684.ztup0);
     uint64_t zlen;
-    zlen = z2zE3723.ztup1;
-    z3zE3589 = zrlp_write_bytes(zbytes, zlen);
+    zlen = z2zE3684.ztup1;
+    z3zE3518 = zrlp_write_bytes(zbytes, zlen);
     KILL(zz5listz8z5bv8z9)(&zbytes);
-    goto finish_match_3575;
+    goto finish_match_3556;
   }
-case_3576: ;
+case_3557: ;
   sail_match_failure("rlp_write_uint_word");
-finish_match_3575: ;
-  z8zE159 = z3zE3589;
-  KILL(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z2zE3723);
-end_function_3577: ;
+finish_match_3556: ;
+  z8zE159 = z3zE3518;
+  KILL(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z2zE3684);
+end_function_3558: ;
   return z8zE159;
-end_block_exception_3578: ;
+end_block_exception_3559: ;
 
   return UNIT;
 }
@@ -434,12 +434,12 @@ end_block_exception_3578: ;
 unit zrlp_write_uint_nat(uint64_t zn)
 {
   unit z8zE160;
-  sail_u256 z2zE3722;
-  z2zE3722 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zn);
-  z8zE160 = zrlp_write_uint_word(z2zE3722);
-end_function_3573: ;
+  sail_u256 z2zE3683;
+  z2zE3683 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zn);
+  z8zE160 = zrlp_write_uint_word(z2zE3683);
+end_function_3554: ;
   return z8zE160;
-end_block_exception_3574: ;
+end_block_exception_3555: ;
 
   return UNIT;
 }
@@ -447,14 +447,14 @@ end_block_exception_3574: ;
 unit zrlp_write_word(sail_u256 zw)
 {
   unit z8zE161;
-  zz5listz8z5bv8z9 z2zE3721;
-  CREATE(zz5listz8z5bv8z9)(&z2zE3721);
-  zword_to_bytes32(&z2zE3721, zw);
-  z8zE161 = zrlp_write_bytes(z2zE3721, zWORD_BYTE_LENGTH);
-  KILL(zz5listz8z5bv8z9)(&z2zE3721);
-end_function_3571: ;
+  zz5listz8z5bv8z9 z2zE3682;
+  CREATE(zz5listz8z5bv8z9)(&z2zE3682);
+  zword_to_bytes32(&z2zE3682, zw);
+  z8zE161 = zrlp_write_bytes(z2zE3682, zWORD_BYTE_LENGTH);
+  KILL(zz5listz8z5bv8z9)(&z2zE3682);
+end_function_3552: ;
   return z8zE161;
-end_block_exception_3572: ;
+end_block_exception_3553: ;
 
   return UNIT;
 }
@@ -462,14 +462,14 @@ end_block_exception_3572: ;
 unit zrlp_write_addr(sail_fixed_bytes_20 za)
 {
   unit z8zE162;
-  zz5listz8z5bv8z9 z2zE3720;
-  CREATE(zz5listz8z5bv8z9)(&z2zE3720);
-  zaddress_to_bytes(&z2zE3720, za);
-  z8zE162 = zrlp_write_bytes(z2zE3720, zADDRESS_BYTE_LENGTH);
-  KILL(zz5listz8z5bv8z9)(&z2zE3720);
-end_function_3569: ;
+  zz5listz8z5bv8z9 z2zE3681;
+  CREATE(zz5listz8z5bv8z9)(&z2zE3681);
+  zaddress_to_bytes(&z2zE3681, za);
+  z8zE162 = zrlp_write_bytes(z2zE3681, zADDRESS_BYTE_LENGTH);
+  KILL(zz5listz8z5bv8z9)(&z2zE3681);
+end_function_3550: ;
   return z8zE162;
-end_block_exception_3570: ;
+end_block_exception_3551: ;
 
   return UNIT;
 }
@@ -478,26 +478,26 @@ struct zByteSliceFields zrlp_finish(uint64_t zstart)
 {
   struct zByteSliceFields z8zE163;
   z8zE163 = zscratch_finish(zstart);
-end_function_3567: ;
+end_function_3548: ;
   return z8zE163;
-end_block_exception_3568: ;
-  struct zByteSliceFields z8zE838 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE838;
+end_block_exception_3549: ;
+  struct zByteSliceFields z8zE835 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE835;
 }
 
 uint64_t zrlp_uint64_append(uint64_t z_width, uint64_t zprefix, uint64_t znext)
 {
   uint64_t z8zE164;
-  uint64_t z2zE3718;
-  {    z2zE3718 = (zprefix * UINT64_C(256));
+  uint64_t z2zE3679;
+  {    z2zE3679 = (zprefix * UINT64_C(256));
   }
-  uint64_t z2zE3719;
-  z2zE3719 = ((uint64_t) znext);
-  {    z8zE164 = (z2zE3718 + z2zE3719);
+  uint64_t z2zE3680;
+  z2zE3680 = ((uint64_t) znext);
+  {    z8zE164 = (z2zE3679 + z2zE3680);
   }
-end_function_3565: ;
+end_function_3546: ;
   return z8zE164;
-end_block_exception_3566: ;
+end_block_exception_3547: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -505,120 +505,35 @@ end_block_exception_3566: ;
 uint64_t zrlp_uint64_width(struct zByteSliceFields zcontent, uint64_t zwidth)
 {
   uint64_t z8zE165;
-  bool z2zE3713;
-  z2zE3713 = (zwidth == UINT64_C(0));
-  if (z2zE3713) {  z8zE165 = UINT64_C(0);  } else {
-    uint64_t z2zE3716;
+  bool z2zE3674;
+  z2zE3674 = (zwidth == UINT64_C(0));
+  if (z2zE3674) {  z8zE165 = UINT64_C(0);  } else {
+    uint64_t z2zE3677;
     {
-      uint64_t z2zE3714;
-      {    z2zE3714 = (zwidth - UINT64_C(1));
+      uint64_t z2zE3675;
+      {    z2zE3675 = (zwidth - UINT64_C(1));
       }
-      z2zE3716 = zrlp_uint64_width(zcontent, z2zE3714);
+      z2zE3677 = zrlp_uint64_width(zcontent, z2zE3675);
     }
-    uint64_t z2zE3717;
+    uint64_t z2zE3678;
     {
-      uint64_t z2zE3715;
-      {    z2zE3715 = (zwidth - UINT64_C(1));
+      uint64_t z2zE3676;
+      {    z2zE3676 = (zwidth - UINT64_C(1));
       }
-      z2zE3717 = zslice_byte(zcontent, z2zE3715);
+      z2zE3678 = zslice_byte(zcontent, z2zE3676);
     }
-    z8zE165 = zrlp_uint64_append(zwidth, z2zE3716, z2zE3717);
+    z8zE165 = zrlp_uint64_append(zwidth, z2zE3677, z2zE3678);
   }
-end_function_3563: ;
+end_function_3544: ;
   return z8zE165;
-end_block_exception_3564: ;
-
-  return UINT64_C(0xdeadc0de);
-}
-
-uint64_t zrlp_ref_be_length(struct zByteSliceFields zsource, uint64_t zstart, uint64_t zstop, uint64_t zcount)
-{
-  uint64_t z8zE166;
-  uint64_t zsource_length;
-  zsource_length = zsource.zlen;
-  uint64_t z3zE3585;
-  {
-    uint64_t zstart_value;
-    zstart_value = zstart;
-    uint64_t z3zE3586;
-    {
-      uint64_t zstop_value;
-      zstop_value = zstop;
-      bool z2zE3706;
-      z2zE3706 = (zstop_value < zstart_value);
-      if (z2zE3706) {
-        struct zexception z2zE3707;
-        CREATE(zexception)(&z2zE3707);
-        zInvalidBlock(&z2zE3707, zRlpDecode);
-        COPY(zexception)(current_exception, z2zE3707);
-        have_exception = true;
-        COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:418.8-418.37");
-        KILL(zexception)(&z2zE3707);
-        goto end_block_exception_3562;
-        /* unreachable after throw */
-        KILL(zexception)(&z2zE3707);
-      } else {
-        bool z2zE3708;
-        z2zE3708 = (zsource_length < zstop_value);
-        if (z2zE3708) {
-          struct zexception z2zE3709;
-          CREATE(zexception)(&z2zE3709);
-          zInvalidBlock(&z2zE3709, zRlpDecode);
-          COPY(zexception)(current_exception, z2zE3709);
-          have_exception = true;
-          COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:421.12-421.41");
-          KILL(zexception)(&z2zE3709);
-          goto end_block_exception_3562;
-          /* unreachable after throw */
-          KILL(zexception)(&z2zE3709);
-        } else {
-          bool z2zE3711;
-          {
-            uint64_t z2zE3710;
-            {    z2zE3710 = (zstop_value - zstart_value);
-            }
-            z2zE3711 = (z2zE3710 < zcount);
-          }
-          if (z2zE3711) {
-            struct zexception z2zE3712;
-            CREATE(zexception)(&z2zE3712);
-            zInvalidBlock(&z2zE3712, zRlpDecode);
-            COPY(zexception)(current_exception, z2zE3712);
-            have_exception = true;
-            COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:424.16-424.45");
-            KILL(zexception)(&z2zE3712);
-            goto end_block_exception_3562;
-            /* unreachable after throw */
-            KILL(zexception)(&z2zE3712);
-          } else {
-            struct zByteSliceFields zcontent;
-            zcontent = zsub_slice(zsource, zstart_value, zcount);
-            z3zE3586 = zrlp_uint64_width(zcontent, zcount);
-          }
-        }
-      }
-      goto finish_match_3559;
-    }
-  case_3560: ;
-    sail_match_failure("rlp_ref_be_length");
-  finish_match_3559: ;
-    z3zE3585 = z3zE3586;
-    goto finish_match_3557;
-  }
-case_3558: ;
-  sail_match_failure("rlp_ref_be_length");
-finish_match_3557: ;
-  z8zE166 = z3zE3585;
-end_function_3561: ;
-  return z8zE166;
-end_block_exception_3562: ;
+end_block_exception_3545: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 bool zrlp_bytes_equal_at(zz5listz8z5bv8z9 zexpected, struct zByteSliceFields zsource, uint64_t zstart)
 {
-  bool z8zE167;
+  bool z8zE166;
   zz5listz8z5bv8z9 zrest;
   CREATE(zz5listz8z5bv8z9)(&zrest);
   COPY(zz5listz8z5bv8z9)(&zrest, zexpected);
@@ -626,25 +541,25 @@ bool zrlp_bytes_equal_at(zz5listz8z5bv8z9 zexpected, struct zByteSliceFields zso
   zcurrent = zstart;
   bool zequal;
   zequal = true;
-  int64_t z3zE3571;
-  {    z3zE3571 = (int64_t)(UINT64_C(0));
+  int64_t z3zE3504;
+  {    z3zE3504 = (int64_t)(UINT64_C(0));
   }
-  int64_t z3zE3572;
-  {    z3zE3572 = (int64_t)(UINT64_C(7));
+  int64_t z3zE3505;
+  {    z3zE3505 = (int64_t)(UINT64_C(7));
   }
-  int64_t z3zE3573;
-  {    z3zE3573 = (int64_t)(UINT64_C(1));
+  int64_t z3zE3506;
+  {    z3zE3506 = (int64_t)(UINT64_C(1));
   }
   {
     int64_t zbyte_index;
-    zbyte_index = z3zE3571;
-    unit z3zE3580;
-  for_start_3547: ;
+    zbyte_index = z3zE3504;
+    unit z3zE3513;
+  for_start_3534: ;
     {
-      if ((z3zE3572 < zbyte_index)) goto for_end_3548;
-      unit z3zE3574;
+      if ((z3zE3505 < zbyte_index)) goto for_end_3535;
+      unit z3zE3507;
       {
-        if ((zrest == NULL)) goto case_3551;
+        if ((zrest == NULL)) goto case_3538;
         uint64_t zb;
         zb = (*zrest).hd;
         zz5listz8z5bv8z9 ztail;
@@ -654,1252 +569,1102 @@ bool zrlp_bytes_equal_at(zz5listz8z5bv8z9 zexpected, struct zByteSliceFields zso
         zposition = zcurrent;
         uint64_t zsource_length;
         zsource_length = zsource.zlen;
-        bool z2zE3704;
-        z2zE3704 = (zposition < zsource_length);
-        unit z3zE3576;
-        if (z2zE3704) {
-          bool z3zE3577;
+        bool z2zE3672;
+        z2zE3672 = (zposition < zsource_length);
+        unit z3zE3509;
+        if (z2zE3672) {
+          bool z3zE3510;
           if (zequal) {
-            uint64_t z2zE3705;
-            z2zE3705 = zslice_byte(zsource, zcurrent);
-            z3zE3577 = (z2zE3705 == zb);
-          } else {  z3zE3577 = false;  }
-          zequal = z3zE3577;
-          unit z3zE3578;
-          z3zE3578 = UNIT;
+            uint64_t z2zE3673;
+            z2zE3673 = zslice_byte(zsource, zcurrent);
+            z3zE3510 = (z2zE3673 == zb);
+          } else {  z3zE3510 = false;  }
+          zequal = z3zE3510;
+          unit z3zE3511;
+          z3zE3511 = UNIT;
           {    zcurrent = (zposition + UINT64_C(1));
           }
-          z3zE3576 = UNIT;
+          z3zE3509 = UNIT;
         } else {
           zequal = false;
-          z3zE3576 = UNIT;
+          z3zE3509 = UNIT;
         }
         COPY(zz5listz8z5bv8z9)(&zrest, ztail);
-        z3zE3574 = UNIT;
+        z3zE3507 = UNIT;
         KILL(zz5listz8z5bv8z9)(&ztail);
-        goto finish_match_3549;
+        goto finish_match_3536;
       }
-    case_3551: ;
+    case_3538: ;
       {
         /* complete */
-        z3zE3574 = UNIT;
-        goto finish_match_3549;
+        z3zE3507 = UNIT;
+        goto finish_match_3536;
       }
-    case_3550: ;
-    finish_match_3549: ;
-      z3zE3580 = z3zE3574;
-      zbyte_index = (zbyte_index + z3zE3573);
-      goto for_start_3547;
+    case_3537: ;
+    finish_match_3536: ;
+      z3zE3513 = z3zE3507;
+      zbyte_index = (zbyte_index + z3zE3506);
+      goto for_start_3534;
     }
-  for_end_3548: ;
+  for_end_3535: ;
   }
-  unit z3zE3581;
-  z3zE3581 = UNIT;
-  bool z3zE3582;
+  unit z3zE3514;
+  z3zE3514 = UNIT;
+  bool z3zE3515;
   {
-    if (!((zrest == NULL))) goto case_3554;
-    z3zE3582 = zequal;
-    goto finish_match_3552;
+    if (!((zrest == NULL))) goto case_3541;
+    z3zE3515 = zequal;
+    goto finish_match_3539;
   }
-case_3554: ;
+case_3541: ;
   {
-    z3zE3582 = false;
-    goto finish_match_3552;
+    z3zE3515 = false;
+    goto finish_match_3539;
   }
-case_3553: ;
-finish_match_3552: ;
-  z8zE167 = z3zE3582;
+case_3540: ;
+finish_match_3539: ;
+  z8zE166 = z3zE3515;
   KILL(zz5listz8z5bv8z9)(&zrest);
-end_function_3555: ;
-  return z8zE167;
-end_block_exception_3556: ;
+end_function_3542: ;
+  return z8zE166;
+end_block_exception_3543: ;
 
   return false;
 }
 
-struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 zrlp_ref_hdr(struct zByteSliceFields zb, uint64_t zpos, uint64_t zstop)
+struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 zrlp_ref_hdr(struct zByteSliceFields zb)
 {
-  struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z8zE168;
-  bool z2zE3681;
-  {
-    bool z2zE3680;
-    z2zE3680 = (zpos < zstop);
-    z2zE3681 = not(z2zE3680);
-  }
-  unit z3zE3560;
-  if (z2zE3681) {
-    struct zexception z2zE3682;
-    CREATE(zexception)(&z2zE3682);
-    zInvalidBlock(&z2zE3682, zRlpDecode);
-    COPY(zexception)(current_exception, z2zE3682);
+  struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z8zE167;
+  uint64_t zsource_len;
+  zsource_len = zb.zlen;
+  bool z2zE3653;
+  z2zE3653 = (zsource_len == UINT64_C(0));
+  unit z3zE3494;
+  if (z2zE3653) {
+    struct zexception z2zE3654;
+    CREATE(zexception)(&z2zE3654);
+    zInvalidBlock(&z2zE3654, zRlpDecode);
+    COPY(zexception)(current_exception, z2zE3654);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:471.8-471.37");
-    KILL(zexception)(&z2zE3682);
-    goto end_block_exception_3546;
+    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:427.8-427.37");
+    KILL(zexception)(&z2zE3654);
+    goto end_block_exception_3533;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE3682);
-  } else {  z3zE3560 = UNIT;  }
+    KILL(zexception)(&z2zE3654);
+  } else {  z3zE3494 = UNIT;  }
   uint64_t zh;
   {
-    uint64_t z2zE3703;
-    z2zE3703 = zslice_byte(zb, zpos);
-    zh = ((uint64_t) z2zE3703);
+    uint64_t z2zE3671;
+    z2zE3671 = zslice_byte(zb, UINT64_C(0));
+    zh = ((uint64_t) z2zE3671);
   }
-  bool z2zE3683;
-  z2zE3683 = (zh < UINT64_C(128));
-  if (z2zE3683) {
-    struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z3zE3568;
-    z3zE3568.ztup0 = false;
-    z3zE3568.ztup1 = zpos;
-    z3zE3568.ztup2 = UINT64_C(1);
-    z8zE168 = z3zE3568;
+  bool z2zE3655;
+  z2zE3655 = (zh < UINT64_C(128));
+  if (z2zE3655) {
+    struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z3zE3501;
+    z3zE3501.ztup0 = false;
+    z3zE3501.ztup1 = UINT64_C(0);
+    z3zE3501.ztup2 = UINT64_C(1);
+    z8zE167 = z3zE3501;
   } else {
-    uint64_t zposition;
-    zposition = zpos;
-    uint64_t zstop_position;
-    zstop_position = zstop;
-    bool z2zE3684;
-    z2zE3684 = (!(zposition < zstop_position));
-    unit z3zE3561;
-    z3zE3561 = UNIT;
-    uint64_t zlength_start;
-    {    zlength_start = (zposition + UINT64_C(1));
-    }
-    bool z2zE3686;
-    z2zE3686 = (zh < UINT64_C(184));
-    if (z2zE3686) {
-      uint64_t z2zE3687;
-      {    z2zE3687 = (zh - UINT64_C(128));
+    bool z2zE3656;
+    z2zE3656 = (zh < UINT64_C(184));
+    if (z2zE3656) {
+      uint64_t z2zE3657;
+      {    z2zE3657 = (zh - UINT64_C(128));
       }
-      struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z3zE3567;
-      z3zE3567.ztup0 = false;
-      z3zE3567.ztup1 = zlength_start;
-      z3zE3567.ztup2 = z2zE3687;
-      z8zE168 = z3zE3567;
+      struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z3zE3500;
+      z3zE3500.ztup0 = false;
+      z3zE3500.ztup1 = UINT64_C(1);
+      z3zE3500.ztup2 = z2zE3657;
+      z8zE167 = z3zE3500;
     } else {
-      bool z2zE3688;
-      z2zE3688 = (zh < UINT64_C(192));
-      if (z2zE3688) {
+      bool z2zE3658;
+      z2zE3658 = (zh < UINT64_C(192));
+      if (z2zE3658) {
         uint64_t zlength_width;
         {    zlength_width = (zh - UINT64_C(183));
         }
-        bool z2zE3691;
+        bool z2zE3660;
         {
-          uint64_t z2zE3690;
-          {
-            uint64_t z2zE3689;
-            {    z2zE3689 = (zposition + UINT64_C(1));
-            }
-            {    z2zE3690 = (zstop_position - z2zE3689);
-            }
+          uint64_t z2zE3659;
+          {    z2zE3659 = (zsource_len - UINT64_C(1));
           }
-          z2zE3691 = (z2zE3690 < zlength_width);
+          z2zE3660 = (z2zE3659 < zlength_width);
         }
-        unit z3zE3565;
-        if (z2zE3691) {
-          struct zexception z2zE3692;
-          CREATE(zexception)(&z2zE3692);
-          zInvalidBlock(&z2zE3692, zRlpDecode);
-          COPY(zexception)(current_exception, z2zE3692);
+        unit z3zE3498;
+        if (z2zE3660) {
+          struct zexception z2zE3661;
+          CREATE(zexception)(&z2zE3661);
+          zInvalidBlock(&z2zE3661, zRlpDecode);
+          COPY(zexception)(current_exception, z2zE3661);
           have_exception = true;
-          COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:489.20-489.49");
-          KILL(zexception)(&z2zE3692);
-          goto end_block_exception_3546;
+          COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:439.20-439.49");
+          KILL(zexception)(&z2zE3661);
+          goto end_block_exception_3533;
           /* unreachable after throw */
-          KILL(zexception)(&z2zE3692);
-        } else {  z3zE3565 = UNIT;  }
-        uint64_t zcontent;
-        {
-          uint64_t z2zE3694;
-          {    z2zE3694 = (zposition + UINT64_C(1));
-          }
-          {    zcontent = (z2zE3694 + zlength_width);
-          }
+          KILL(zexception)(&z2zE3661);
+        } else {  z3zE3498 = UNIT;  }
+        struct zByteSliceFields zlength_bytes;
+        zlength_bytes = zsub_slice(zb, UINT64_C(1), zlength_width);
+        uint64_t z2zE3662;
+        {    z2zE3662 = (UINT64_C(1) + zlength_width);
         }
-        uint64_t z2zE3693;
-        {
-          z2zE3693 = zrlp_ref_be_length(zb, zlength_start, zcontent, zlength_width);
-          if (have_exception) {  goto end_block_exception_3546;  }
-        }
-        struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z3zE3566;
-        z3zE3566.ztup0 = false;
-        z3zE3566.ztup1 = zcontent;
-        z3zE3566.ztup2 = z2zE3693;
-        z8zE168 = z3zE3566;
+        uint64_t z2zE3663;
+        z2zE3663 = zrlp_uint64_width(zlength_bytes, zlength_width);
+        struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z3zE3499;
+        z3zE3499.ztup0 = false;
+        z3zE3499.ztup1 = z2zE3662;
+        z3zE3499.ztup2 = z2zE3663;
+        z8zE167 = z3zE3499;
       } else {
-        bool z2zE3695;
-        z2zE3695 = (zh < UINT64_C(248));
-        if (z2zE3695) {
-          uint64_t z2zE3696;
-          {    z2zE3696 = (zh - UINT64_C(192));
+        bool z2zE3664;
+        z2zE3664 = (zh < UINT64_C(248));
+        if (z2zE3664) {
+          uint64_t z2zE3665;
+          {    z2zE3665 = (zh - UINT64_C(192));
           }
-          struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z3zE3564;
-          z3zE3564.ztup0 = true;
-          z3zE3564.ztup1 = zlength_start;
-          z3zE3564.ztup2 = z2zE3696;
-          z8zE168 = z3zE3564;
+          struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z3zE3497;
+          z3zE3497.ztup0 = true;
+          z3zE3497.ztup1 = UINT64_C(1);
+          z3zE3497.ztup2 = z2zE3665;
+          z8zE167 = z3zE3497;
         } else {
-          uint64_t z3zE3569;
-          {    z3zE3569 = (zh - UINT64_C(247));
+          uint64_t z3zE3502;
+          {    z3zE3502 = (zh - UINT64_C(247));
           }
-          bool z2zE3699;
+          bool z2zE3667;
           {
-            uint64_t z2zE3698;
-            {
-              uint64_t z2zE3697;
-              {    z2zE3697 = (zposition + UINT64_C(1));
-              }
-              {    z2zE3698 = (zstop_position - z2zE3697);
-              }
+            uint64_t z2zE3666;
+            {    z2zE3666 = (zsource_len - UINT64_C(1));
             }
-            z2zE3699 = (z2zE3698 < z3zE3569);
+            z2zE3667 = (z2zE3666 < z3zE3502);
           }
-          unit z3zE3562;
-          if (z2zE3699) {
-            struct zexception z2zE3700;
-            CREATE(zexception)(&z2zE3700);
-            zInvalidBlock(&z2zE3700, zRlpDecode);
-            COPY(zexception)(current_exception, z2zE3700);
+          unit z3zE3495;
+          if (z2zE3667) {
+            struct zexception z2zE3668;
+            CREATE(zexception)(&z2zE3668);
+            zInvalidBlock(&z2zE3668, zRlpDecode);
+            COPY(zexception)(current_exception, z2zE3668);
             have_exception = true;
-            COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:499.24-499.53");
-            KILL(zexception)(&z2zE3700);
-            goto end_block_exception_3546;
+            COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:453.24-453.53");
+            KILL(zexception)(&z2zE3668);
+            goto end_block_exception_3533;
             /* unreachable after throw */
-            KILL(zexception)(&z2zE3700);
-          } else {  z3zE3562 = UNIT;  }
-          uint64_t z3zE3570;
-          {
-            uint64_t z2zE3702;
-            {    z2zE3702 = (zposition + UINT64_C(1));
-            }
-            {    z3zE3570 = (z2zE3702 + z3zE3569);
-            }
+            KILL(zexception)(&z2zE3668);
+          } else {  z3zE3495 = UNIT;  }
+          struct zByteSliceFields z3zE3503;
+          z3zE3503 = zsub_slice(zb, UINT64_C(1), z3zE3502);
+          uint64_t z2zE3669;
+          {    z2zE3669 = (UINT64_C(1) + z3zE3502);
           }
-          uint64_t z2zE3701;
-          {
-            z2zE3701 = zrlp_ref_be_length(zb, zlength_start, z3zE3570, z3zE3569);
-            if (have_exception) {  goto end_block_exception_3546;  }
-          }
-          struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z3zE3563;
-          z3zE3563.ztup0 = true;
-          z3zE3563.ztup1 = z3zE3570;
-          z3zE3563.ztup2 = z2zE3701;
-          z8zE168 = z3zE3563;
+          uint64_t z2zE3670;
+          z2zE3670 = zrlp_uint64_width(z3zE3503, z3zE3502);
+          struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z3zE3496;
+          z3zE3496.ztup0 = true;
+          z3zE3496.ztup1 = z2zE3669;
+          z3zE3496.ztup2 = z2zE3670;
+          z8zE167 = z3zE3496;
         }
       }
     }
   }
-end_function_3545: ;
-  return z8zE168;
-end_block_exception_3546: ;
-  struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z8zE839 = { .ztup0 = false, .ztup1 = UINT64_C(0xdeadc0de), .ztup2 = UINT64_C(0xdeadc0de) };
-  return z8zE839;
+end_function_3532: ;
+  return z8zE167;
+end_block_exception_3533: ;
+  struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z8zE836 = { .ztup0 = false, .ztup1 = UINT64_C(0xdeadc0de), .ztup2 = UINT64_C(0xdeadc0de) };
+  return z8zE836;
 }
 
-struct zRlpFieldRefFields zrlp_field_ref(struct zByteSliceFields zsource, bool zis_list, uint64_t zfull_off, uint64_t zfull_len, uint64_t zcontent_off, uint64_t zcontent_len)
+struct zRlpCursor zrlp_ref_cursor(struct zRlpFieldRef zf)
 {
-  struct zRlpFieldRefFields z8zE169;
-  struct zRlpFieldRefFields zfields;
-  {
-    struct zRlpFieldRefFields z3zE3559;
-    z3zE3559.zcontent_len = zcontent_len;
-    z3zE3559.zcontent_off = zcontent_off;
-    z3zE3559.zfull_len = zfull_len;
-    z3zE3559.zfull_off = zfull_off;
-    z3zE3559.zis_list = zis_list;
-    z3zE3559.zsource = zsource;
-    zfields = z3zE3559;
-  }
-  z8zE169 = zfields;
-end_function_3543: ;
-  return z8zE169;
-end_block_exception_3544: ;
-  struct zByteSliceFields z8zE841 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zRlpFieldRefFields z8zE840 = { .zcontent_len = UINT64_C(0xdeadc0de), .zcontent_off = UINT64_C(0xdeadc0de), .zfull_len = UINT64_C(0xdeadc0de), .zfull_off = UINT64_C(0xdeadc0de), .zis_list = false, .zsource = z8zE841 };
-  return z8zE840;
-}
-
-struct zRlpCursorFields zrlp_cursor(struct zByteSliceFields zsource, uint64_t zcurrent, uint64_t zstop, bool zvalid)
-{
-  struct zRlpCursorFields z8zE170;
-  struct zRlpCursorFields zfields;
-  {
-    struct zRlpCursorFields z3zE3558;
-    z3zE3558.zcurrent = zcurrent;
-    z3zE3558.zsource = zsource;
-    z3zE3558.zstop = zstop;
-    z3zE3558.zvalid = zvalid;
-    zfields = z3zE3558;
-  }
-  z8zE170 = zfields;
-end_function_3541: ;
-  return z8zE170;
-end_block_exception_3542: ;
-  struct zByteSliceFields z8zE843 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zRlpCursorFields z8zE842 = { .zcurrent = UINT64_C(0xdeadc0de), .zsource = z8zE843, .zstop = UINT64_C(0xdeadc0de), .zvalid = false };
-  return z8zE842;
-}
-
-struct zRlpCursorFields zrlp_invalid_cursor(struct zByteSliceFields zsource)
-{
-  struct zRlpCursorFields z8zE171;
-  z8zE171 = zrlp_cursor(zsource, UINT64_C(0), UINT64_C(0), false);
-end_function_3539: ;
-  return z8zE171;
-end_block_exception_3540: ;
-  struct zByteSliceFields z8zE845 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zRlpCursorFields z8zE844 = { .zcurrent = UINT64_C(0xdeadc0de), .zsource = z8zE845, .zstop = UINT64_C(0xdeadc0de), .zvalid = false };
-  return z8zE844;
-}
-
-struct zRlpCursorFields zrlp_node_cursor(struct zByteSliceFields znode)
-{
-  struct zRlpCursorFields z8zE172;
-  uint64_t znode_length;
-  znode_length = znode.zlen;
-  bool z2zE3674;
-  z2zE3674 = (znode_length == UINT64_C(0));
-  if (z2zE3674) {  z8zE172 = zrlp_invalid_cursor(znode);  } else {
-    uint64_t znode_stop;
-    znode_stop = znode_length;
-    struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z2zE3675;
+  struct zRlpCursor z8zE168;
+  bool z2zE3645;
+  z2zE3645 = zf.zis_list;
+  if (z2zE3645) {
+    struct zByteSliceFields zcontent;
     {
-      z2zE3675 = zrlp_ref_hdr(znode, UINT64_C(0), znode_stop);
-      if (have_exception) {  goto end_block_exception_3538;  }
-    }
-    struct zRlpCursorFields z3zE3556;
-    {
-      bool zis_list;
-      zis_list = z2zE3675.ztup0;
-      uint64_t zcontent;
-      zcontent = z2zE3675.ztup1;
-      uint64_t zcontent_len;
-      zcontent_len = z2zE3675.ztup2;
-      uint64_t zcontent_offset;
-      zcontent_offset = zcontent;
-      uint64_t zpayload_length;
-      zpayload_length = zcontent_len;
-      bool z2zE3676;
-      z2zE3676 = (!(znode_length < zcontent_offset));
-      if (z2zE3676) {
-        bool z2zE3678;
+      struct zByteSliceFields z2zE3649;
+      z2zE3649 = zf.zsource;
+      uint64_t z2zE3650;
+      {
+        uint64_t z2zE3647;
         {
-          uint64_t z2zE3677;
-          {    z2zE3677 = (znode_length - zcontent_offset);
-          }
-          z2zE3678 = (!(z2zE3677 < zpayload_length));
+          struct zByteSliceFields z2zE3646;
+          z2zE3646 = zf.zsource;
+          z2zE3647 = z2zE3646.zlen;
         }
-        if (z2zE3678) {
-          uint64_t zcontent_stop;
-          {    zcontent_stop = (zcontent_offset + zpayload_length);
-          }
-          if (zis_list) {
-            bool z2zE3679;
-            z2zE3679 = (zcontent_stop == znode_stop);
-            if (z2zE3679) {  z3zE3556 = zrlp_cursor(znode, zcontent, zcontent_stop, true);  } else {
-              z3zE3556 = zrlp_invalid_cursor(znode);
-            }
-          } else {  z3zE3556 = zrlp_invalid_cursor(znode);  }
-        } else {  z3zE3556 = zrlp_invalid_cursor(znode);  }
-      } else {  z3zE3556 = zrlp_invalid_cursor(znode);  }
-      goto finish_match_3535;
-    }
-  case_3536: ;
-    sail_match_failure("rlp_node_cursor");
-  finish_match_3535: ;
-    z8zE172 = z3zE3556;
-  }
-end_function_3537: ;
-  return z8zE172;
-end_block_exception_3538: ;
-  struct zByteSliceFields z8zE847 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zRlpCursorFields z8zE846 = { .zcurrent = UINT64_C(0xdeadc0de), .zsource = z8zE847, .zstop = UINT64_C(0xdeadc0de), .zvalid = false };
-  return z8zE846;
-}
-
-struct zRlpCursorFields zrlp_ref_cursor(struct zRlpFieldRefFields zf)
-{
-  struct zRlpCursorFields z8zE173;
-  bool z2zE3661;
-  z2zE3661 = zf.zis_list;
-  if (z2zE3661) {
-    uint64_t zcontent_offset;
-    zcontent_offset = zf.zcontent_off;
-    uint64_t zcontent_length;
-    zcontent_length = zf.zcontent_len;
-    uint64_t zsource_length;
-    {
-      struct zByteSliceFields z2zE3672;
-      z2zE3672 = zf.zsource;
-      zsource_length = z2zE3672.zlen;
-    }
-    bool z2zE3662;
-    z2zE3662 = (!(zsource_length < zcontent_offset));
-    bool z2zE3664;
-    {
-      uint64_t z2zE3663;
-      {    z2zE3663 = (zsource_length - zcontent_offset);
+        uint64_t z2zE3648;
+        z2zE3648 = zf.zcontent_len;
+        {    z2zE3650 = (z2zE3647 - z2zE3648);
+        }
       }
-      z2zE3664 = (!(z2zE3663 < zcontent_length));
+      uint64_t z2zE3651;
+      z2zE3651 = zf.zcontent_len;
+      zcontent = zsub_slice(z2zE3649, z2zE3650, z2zE3651);
     }
-    uint64_t zstop;
-    {    zstop = (zcontent_offset + zcontent_length);
-    }
-    struct zRlpCursorFields zcursor;
+    struct zRlpCursor zcursor;
     {
-      struct zByteSliceFields z2zE3669;
-      z2zE3669 = zf.zsource;
-      zcursor = zrlp_cursor(z2zE3669, zcontent_offset, zstop, true);
+      struct zRlpCursor z3zE3493;
+      z3zE3493.zcurrent = UINT64_C(0);
+      z3zE3493.zsource = zcontent;
+      zcursor = z3zE3493;
     }
-    uint64_t zcursor_span;
-    {
-      uint64_t z2zE3667;
-      z2zE3667 = zcursor.zstop;
-      uint64_t z2zE3668;
-      z2zE3668 = zcursor.zcurrent;
-      {    zcursor_span = (z2zE3667 - z2zE3668);
-      }
-    }
-    uint64_t zfull_length;
-    zfull_length = zf.zfull_len;
-    bool z2zE3665;
-    z2zE3665 = (!(zfull_length < zcursor_span));
-    if (z2zE3665) {  z8zE173 = zcursor;  } else {
-      struct zexception z2zE3666;
-      CREATE(zexception)(&z2zE3666);
-      zInvalidBlock(&z2zE3666, zRlpDecode);
-      COPY(zexception)(current_exception, z2zE3666);
-      have_exception = true;
-      COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:651.20-651.49");
-      KILL(zexception)(&z2zE3666);
-      goto end_block_exception_3534;
-      /* unreachable after throw */
-      KILL(zexception)(&z2zE3666);
-    }
+    z8zE168 = zcursor;
   } else {
-    struct zexception z2zE3673;
-    CREATE(zexception)(&z2zE3673);
-    zInvalidBlock(&z2zE3673, zRlpDecode);
-    COPY(zexception)(current_exception, z2zE3673);
+    struct zexception z2zE3652;
+    CREATE(zexception)(&z2zE3652);
+    zInvalidBlock(&z2zE3652, zRlpDecode);
+    COPY(zexception)(current_exception, z2zE3652);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:660.8-660.37");
-    KILL(zexception)(&z2zE3673);
-    goto end_block_exception_3534;
+    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:493.8-493.37");
+    KILL(zexception)(&z2zE3652);
+    goto end_block_exception_3531;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE3673);
+    KILL(zexception)(&z2zE3652);
   }
-end_function_3533: ;
-  return z8zE173;
-end_block_exception_3534: ;
-  struct zByteSliceFields z8zE849 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zRlpCursorFields z8zE848 = { .zcurrent = UINT64_C(0xdeadc0de), .zsource = z8zE849, .zstop = UINT64_C(0xdeadc0de), .zvalid = false };
-  return z8zE848;
+end_function_3530: ;
+  return z8zE168;
+end_block_exception_3531: ;
+  struct zByteSliceFields z8zE838 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zRlpCursor z8zE837 = { .zcurrent = UINT64_C(0xdeadc0de), .zsource = z8zE838 };
+  return z8zE837;
 }
 
-bool zrlp_cursor_empty(struct zRlpCursorFields zcursor)
+bool zrlp_cursor_empty(struct zRlpCursor zcursor)
 {
-  bool z8zE174;
-  bool z2zE3660;
-  z2zE3660 = zcursor.zvalid;
-  bool z3zE3555;
-  if (z2zE3660) {
-    uint64_t z2zE3658;
-    z2zE3658 = zcursor.zcurrent;
-    uint64_t z2zE3659;
-    z2zE3659 = zcursor.zstop;
-    z3zE3555 = (z2zE3658 == z2zE3659);
-  } else {  z3zE3555 = false;  }
-  z8zE174 = z3zE3555;
-end_function_3531: ;
-  return z8zE174;
-end_block_exception_3532: ;
+  bool z8zE169;
+  uint64_t z2zE3643;
+  z2zE3643 = zcursor.zcurrent;
+  uint64_t z2zE3644;
+  {
+    struct zByteSliceFields z2zE3642;
+    z2zE3642 = zcursor.zsource;
+    z2zE3644 = z2zE3642.zlen;
+  }
+  z8zE169 = (z2zE3643 == z2zE3644);
+end_function_3528: ;
+  return z8zE169;
+end_block_exception_3529: ;
 
   return false;
 }
 
-struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 zrlp_cursor_pop(struct zRlpCursorFields zcursor)
+struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 zrlp_cursor_pop(struct zRlpCursor zcursor)
 {
-  struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 z8zE175;
-  uint64_t zcurrent;
-  zcurrent = zcursor.zcurrent;
-  uint64_t zstop;
-  zstop = zcursor.zstop;
-  bool z2zE3643;
+  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z8zE170;
+  bool z2zE3622;
   {
-    bool z2zE3642;
+    bool z2zE3621;
     {
-      bool z2zE3640;
-      z2zE3640 = zcursor.zvalid;
-      z2zE3642 = not(z2zE3640);
+      uint64_t z2zE3619;
+      z2zE3619 = zcursor.zcurrent;
+      uint64_t z2zE3620;
+      {
+        struct zByteSliceFields z2zE3618;
+        z2zE3618 = zcursor.zsource;
+        z2zE3620 = z2zE3618.zlen;
+      }
+      z2zE3621 = (z2zE3619 < z2zE3620);
     }
-    bool z3zE3538;
-    if (z2zE3642) {  z3zE3538 = true;  } else {
-      bool z2zE3641;
-      z2zE3641 = (zcurrent < zstop);
-      z3zE3538 = not(z2zE3641);
-    }
-    z2zE3643 = z3zE3538;
+    z2zE3622 = not(z2zE3621);
   }
-  unit z3zE3539;
-  if (z2zE3643) {
-    struct zexception z2zE3644;
-    CREATE(zexception)(&z2zE3644);
-    zInvalidBlock(&z2zE3644, zRlpDecode);
-    COPY(zexception)(current_exception, z2zE3644);
+  unit z3zE3479;
+  if (z2zE3622) {
+    struct zexception z2zE3623;
+    CREATE(zexception)(&z2zE3623);
+    zInvalidBlock(&z2zE3623, zRlpDecode);
+    COPY(zexception)(current_exception, z2zE3623);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:710.8-710.37");
-    KILL(zexception)(&z2zE3644);
-    goto end_block_exception_3530;
+    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:531.8-531.37");
+    KILL(zexception)(&z2zE3623);
+    goto end_block_exception_3527;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE3644);
-  } else {  z3zE3539 = UNIT;  }
-  struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z2zE3646;
+    KILL(zexception)(&z2zE3623);
+  } else {  z3zE3479 = UNIT;  }
+  struct zByteSliceFields zremaining;
   {
-    struct zByteSliceFields z2zE3645;
-    z2zE3645 = zcursor.zsource;
-    {
-      z2zE3646 = zrlp_ref_hdr(z2zE3645, zcurrent, zstop);
-      if (have_exception) {  goto end_block_exception_3530;  }
-    }
+    struct zByteSliceFields z2zE3640;
+    z2zE3640 = zcursor.zsource;
+    uint64_t z2zE3641;
+    z2zE3641 = zcursor.zcurrent;
+    zremaining = zslice_suffix(z2zE3640, z2zE3641);
   }
-  struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 z3zE3540;
+  struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z2zE3624;
+  {
+    z2zE3624 = zrlp_ref_hdr(zremaining);
+    if (have_exception) {  goto end_block_exception_3527;  }
+  }
+  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z3zE3480;
   {
     bool zis_list;
-    zis_list = z2zE3646.ztup0;
-    uint64_t zcontent_value;
-    zcontent_value = z2zE3646.ztup1;
+    zis_list = z2zE3624.ztup0;
+    uint64_t zcontent_off;
+    zcontent_off = z2zE3624.ztup1;
     uint64_t zcontent_len_value;
-    zcontent_len_value = z2zE3646.ztup2;
-    struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 z3zE3541;
+    zcontent_len_value = z2zE3624.ztup2;
+    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z3zE3481;
     {
-      uint64_t zcontent;
-      zcontent = zcontent_value;
-      struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 z3zE3542;
+      uint64_t zcontent_len;
+      zcontent_len = zcontent_len_value;
+      bool z2zE3626;
       {
-        uint64_t zcontent_len;
-        zcontent_len = zcontent_len_value;
-        uint64_t zcontent_offset;
-        zcontent_offset = zcontent;
-        uint64_t zpayload_length;
-        zpayload_length = zcontent_len;
-        uint64_t zstop_offset;
-        zstop_offset = zstop;
-        bool z2zE3647;
-        z2zE3647 = (zstop_offset < zcontent_offset);
-        unit z3zE3544;
-        if (z2zE3647) {
-          struct zexception z2zE3648;
-          CREATE(zexception)(&z2zE3648);
-          zInvalidBlock(&z2zE3648, zRlpDecode);
-          COPY(zexception)(current_exception, z2zE3648);
-          have_exception = true;
-          COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:719.8-719.37");
-          KILL(zexception)(&z2zE3648);
-          goto end_block_exception_3530;
-          /* unreachable after throw */
-          KILL(zexception)(&z2zE3648);
-        } else {  z3zE3544 = UNIT;  }
-        bool z2zE3650;
+        uint64_t z2zE3625;
+        z2zE3625 = zremaining.zlen;
+        z2zE3626 = (z2zE3625 < zcontent_off);
+      }
+      unit z3zE3483;
+      if (z2zE3626) {
+        struct zexception z2zE3627;
+        CREATE(zexception)(&z2zE3627);
+        zInvalidBlock(&z2zE3627, zRlpDecode);
+        COPY(zexception)(current_exception, z2zE3627);
+        have_exception = true;
+        COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:537.8-537.37");
+        KILL(zexception)(&z2zE3627);
+        goto end_block_exception_3527;
+        /* unreachable after throw */
+        KILL(zexception)(&z2zE3627);
+      } else {  z3zE3483 = UNIT;  }
+      bool z2zE3630;
+      {
+        uint64_t z2zE3629;
         {
-          uint64_t z2zE3649;
-          {    z2zE3649 = (zstop_offset - zcontent_offset);
+          uint64_t z2zE3628;
+          z2zE3628 = zremaining.zlen;
+          {    z2zE3629 = (z2zE3628 - zcontent_off);
           }
-          z2zE3650 = (z2zE3649 < zpayload_length);
         }
-        unit z3zE3543;
-        if (z2zE3650) {
-          struct zexception z2zE3651;
-          CREATE(zexception)(&z2zE3651);
-          zInvalidBlock(&z2zE3651, zRlpDecode);
-          COPY(zexception)(current_exception, z2zE3651);
-          have_exception = true;
-          COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:722.8-722.37");
-          KILL(zexception)(&z2zE3651);
-          goto end_block_exception_3530;
-          /* unreachable after throw */
-          KILL(zexception)(&z2zE3651);
-        } else {  z3zE3543 = UNIT;  }
-        uint64_t z2zE3652;
-        {    z2zE3652 = (zcontent_offset + zpayload_length);
+        z2zE3630 = (z2zE3629 < zcontent_len);
+      }
+      unit z3zE3482;
+      if (z2zE3630) {
+        struct zexception z2zE3631;
+        CREATE(zexception)(&z2zE3631);
+        zInvalidBlock(&z2zE3631, zRlpDecode);
+        COPY(zexception)(current_exception, z2zE3631);
+        have_exception = true;
+        COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:540.8-540.37");
+        KILL(zexception)(&z2zE3631);
+        goto end_block_exception_3527;
+        /* unreachable after throw */
+        KILL(zexception)(&z2zE3631);
+      } else {  z3zE3482 = UNIT;  }
+      uint64_t z2zE3632;
+      {    z2zE3632 = (zcontent_off + zcontent_len);
+      }
+      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z3zE3484;
+      {
+        uint64_t zfull_len;
+        zfull_len = z2zE3632;
+        uint64_t z2zE3634;
+        {
+          uint64_t z2zE3633;
+          z2zE3633 = zcursor.zcurrent;
+          {    z2zE3634 = (z2zE3633 + zfull_len);
+          }
         }
-        struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 z3zE3545;
+        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z3zE3485;
         {
           uint64_t znext;
-          znext = z2zE3652;
-          uint64_t zcurrent_offset;
-          zcurrent_offset = zcurrent;
-          uint64_t znext_offset;
-          znext_offset = znext;
-          bool z2zE3653;
-          z2zE3653 = (zcurrent_offset < znext_offset);
-          if (z2zE3653) {
-            uint64_t z2zE3654;
-            {    z2zE3654 = (znext_offset - zcurrent_offset);
-            }
-            struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 z3zE3547;
+          znext = z2zE3634;
+          bool z2zE3635;
+          z2zE3635 = (UINT64_C(0) < zfull_len);
+          if (z2zE3635) {
+            struct zByteSliceFields zfield_source;
             {
-              uint64_t zfull_len;
-              zfull_len = z2zE3654;
-              struct zRlpFieldRefFields zfield;
-              {
-                struct zByteSliceFields z2zE3656;
-                z2zE3656 = zcursor.zsource;
-                struct zRlpFieldRefFields z3zE3548;
-                z3zE3548.zcontent_len = zcontent_len;
-                z3zE3548.zcontent_off = zcontent;
-                z3zE3548.zfull_len = zfull_len;
-                z3zE3548.zfull_off = zcurrent;
-                z3zE3548.zis_list = zis_list;
-                z3zE3548.zsource = z2zE3656;
-                zfield = z3zE3548;
-              }
-              struct zRlpCursorFields zadvanced;
-              {
-                struct zByteSliceFields z2zE3655;
-                z2zE3655 = zcursor.zsource;
-                struct zRlpCursorFields z3zE3549;
-                z3zE3549.zcurrent = znext;
-                z3zE3549.zsource = z2zE3655;
-                z3zE3549.zstop = zstop;
-                z3zE3549.zvalid = true;
-                zadvanced = z3zE3549;
-              }
-              struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 z3zE3550;
-              z3zE3550.ztup0 = zfield;
-              z3zE3550.ztup1 = zadvanced;
-              z3zE3547 = z3zE3550;
-              goto finish_match_3527;
+              struct zByteSliceFields z2zE3637;
+              z2zE3637 = zcursor.zsource;
+              uint64_t z2zE3638;
+              z2zE3638 = zcursor.zcurrent;
+              zfield_source = zsub_slice(z2zE3637, z2zE3638, zfull_len);
             }
-          case_3528: ;
-            sail_match_failure("rlp_cursor_pop");
-          finish_match_3527: ;
-            z3zE3545 = z3zE3547;
+            struct zRlpFieldRef zfield;
+            {
+              struct zRlpFieldRef z3zE3487;
+              z3zE3487.zcontent_len = zcontent_len;
+              z3zE3487.zis_list = zis_list;
+              z3zE3487.zsource = zfield_source;
+              zfield = z3zE3487;
+            }
+            struct zRlpCursor zadvanced;
+            {
+              struct zByteSliceFields z2zE3636;
+              z2zE3636 = zcursor.zsource;
+              struct zRlpCursor z3zE3488;
+              z3zE3488.zcurrent = znext;
+              z3zE3488.zsource = z2zE3636;
+              zadvanced = z3zE3488;
+            }
+            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z3zE3489;
+            z3zE3489.ztup0 = zfield;
+            z3zE3489.ztup1 = zadvanced;
+            z3zE3485 = z3zE3489;
           } else {
-            struct zexception z2zE3657;
-            CREATE(zexception)(&z2zE3657);
-            zInvalidBlock(&z2zE3657, zRlpDecode);
-            COPY(zexception)(current_exception, z2zE3657);
+            struct zexception z2zE3639;
+            CREATE(zexception)(&z2zE3639);
+            zInvalidBlock(&z2zE3639, zRlpDecode);
+            COPY(zexception)(current_exception, z2zE3639);
             have_exception = true;
-            COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:745.8-745.37");
-            KILL(zexception)(&z2zE3657);
-            goto end_block_exception_3530;
+            COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:557.8-557.37");
+            KILL(zexception)(&z2zE3639);
+            goto end_block_exception_3527;
             /* unreachable after throw */
-            KILL(zexception)(&z2zE3657);
+            KILL(zexception)(&z2zE3639);
           }
-          goto finish_match_3525;
+          goto finish_match_3524;
         }
-      case_3526: ;
+      case_3525: ;
         sail_match_failure("rlp_cursor_pop");
-      finish_match_3525: ;
-        z3zE3542 = z3zE3545;
-        goto finish_match_3523;
+      finish_match_3524: ;
+        z3zE3484 = z3zE3485;
+        goto finish_match_3522;
       }
-    case_3524: ;
+    case_3523: ;
       sail_match_failure("rlp_cursor_pop");
-    finish_match_3523: ;
-      z3zE3541 = z3zE3542;
-      goto finish_match_3521;
+    finish_match_3522: ;
+      z3zE3481 = z3zE3484;
+      goto finish_match_3520;
     }
-  case_3522: ;
+  case_3521: ;
     sail_match_failure("rlp_cursor_pop");
-  finish_match_3521: ;
-    z3zE3540 = z3zE3541;
-    goto finish_match_3519;
+  finish_match_3520: ;
+    z3zE3480 = z3zE3481;
+    goto finish_match_3518;
   }
-case_3520: ;
+case_3519: ;
   sail_match_failure("rlp_cursor_pop");
-finish_match_3519: ;
-  z8zE175 = z3zE3540;
-end_function_3529: ;
-  return z8zE175;
-end_block_exception_3530: ;
-  struct zByteSliceFields z8zE854 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zRlpFieldRefFields z8zE853 = { .zcontent_len = UINT64_C(0xdeadc0de), .zcontent_off = UINT64_C(0xdeadc0de), .zfull_len = UINT64_C(0xdeadc0de), .zfull_off = UINT64_C(0xdeadc0de), .zis_list = false, .zsource = z8zE854 };
-  struct zByteSliceFields z8zE852 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zRlpCursorFields z8zE851 = { .zcurrent = UINT64_C(0xdeadc0de), .zsource = z8zE852, .zstop = UINT64_C(0xdeadc0de), .zvalid = false };
-  struct ztuple_z8z5structz0zzRlpFieldRefFieldszCz0z5structz0zzRlpCursorFieldsz9 z8zE850 = { .ztup0 = z8zE853, .ztup1 = z8zE851 };
-  return z8zE850;
+finish_match_3518: ;
+  z8zE170 = z3zE3480;
+end_function_3526: ;
+  return z8zE170;
+end_block_exception_3527: ;
+  struct zByteSliceFields z8zE843 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zRlpFieldRef z8zE842 = { .zcontent_len = UINT64_C(0xdeadc0de), .zis_list = false, .zsource = z8zE843 };
+  struct zByteSliceFields z8zE841 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zRlpCursor z8zE840 = { .zcurrent = UINT64_C(0xdeadc0de), .zsource = z8zE841 };
+  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z8zE839 = { .ztup0 = z8zE842, .ztup1 = z8zE840 };
+  return z8zE839;
 }
 
-unit zrlp_cursor_expect_end(struct zRlpCursorFields zcursor)
+unit zrlp_cursor_expect_end(struct zRlpCursor zcursor)
 {
-  unit z8zE176;
-  bool z2zE3638;
-  z2zE3638 = zrlp_cursor_empty(zcursor);
-  if (z2zE3638) {  z8zE176 = UNIT;  } else {
-    struct zexception z2zE3639;
-    CREATE(zexception)(&z2zE3639);
-    zInvalidBlock(&z2zE3639, zRlpDecode);
-    COPY(zexception)(current_exception, z2zE3639);
+  unit z8zE171;
+  bool z2zE3616;
+  z2zE3616 = zrlp_cursor_empty(zcursor);
+  if (z2zE3616) {  z8zE171 = UNIT;  } else {
+    struct zexception z2zE3617;
+    CREATE(zexception)(&z2zE3617);
+    zInvalidBlock(&z2zE3617, zRlpDecode);
+    COPY(zexception)(current_exception, z2zE3617);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:755.8-755.37");
-    KILL(zexception)(&z2zE3639);
-    goto end_block_exception_3518;
+    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:570.8-570.37");
+    KILL(zexception)(&z2zE3617);
+    goto end_block_exception_3517;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE3639);
+    KILL(zexception)(&z2zE3617);
   }
-end_function_3517: ;
-  return z8zE176;
-end_block_exception_3518: ;
+end_function_3516: ;
+  return z8zE171;
+end_block_exception_3517: ;
 
   return UNIT;
 }
 
-struct zRlpFieldRefFields zrlp_single_ref(struct zByteSliceFields zitem)
+struct zRlpFieldRef zrlp_single_ref(struct zByteSliceFields zitem)
 {
-  struct zRlpFieldRefFields z8zE177;
+  struct zRlpFieldRef z8zE172;
   uint64_t zitem_length;
   zitem_length = zitem.zlen;
-  bool z2zE3629;
-  z2zE3629 = (zitem_length == UINT64_C(0));
-  if (z2zE3629) {
-    struct zexception z2zE3630;
-    CREATE(zexception)(&z2zE3630);
-    zInvalidBlock(&z2zE3630, zRlpDecode);
-    COPY(zexception)(current_exception, z2zE3630);
+  bool z2zE3608;
+  z2zE3608 = (zitem_length == UINT64_C(0));
+  if (z2zE3608) {
+    struct zexception z2zE3609;
+    CREATE(zexception)(&z2zE3609);
+    zInvalidBlock(&z2zE3609, zRlpDecode);
+    COPY(zexception)(current_exception, z2zE3609);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:762.8-762.37");
-    KILL(zexception)(&z2zE3630);
-    goto end_block_exception_3516;
+    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:592.8-592.37");
+    KILL(zexception)(&z2zE3609);
+    goto end_block_exception_3515;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE3630);
+    KILL(zexception)(&z2zE3609);
   } else {
-    uint64_t zitem_stop;
-    zitem_stop = zitem_length;
-    struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z2zE3631;
+    struct ztuple_z8z5boolzCz0z5u64zCz0z5u64z9 z2zE3610;
     {
-      z2zE3631 = zrlp_ref_hdr(zitem, UINT64_C(0), zitem_stop);
-      if (have_exception) {  goto end_block_exception_3516;  }
+      z2zE3610 = zrlp_ref_hdr(zitem);
+      if (have_exception) {  goto end_block_exception_3515;  }
     }
-    struct zRlpFieldRefFields z3zE3534;
+    struct zRlpFieldRef z3zE3472;
     {
-      bool zisl;
-      zisl = z2zE3631.ztup0;
-      uint64_t zcs;
-      zcs = z2zE3631.ztup1;
-      uint64_t zcl;
-      zcl = z2zE3631.ztup2;
-      uint64_t zcontent_offset;
-      zcontent_offset = zcs;
-      uint64_t zcontent_length;
-      zcontent_length = zcl;
-      bool z2zE3632;
-      z2zE3632 = (zitem_length < zcontent_offset);
-      unit z3zE3536;
-      if (z2zE3632) {
-        struct zexception z2zE3633;
-        CREATE(zexception)(&z2zE3633);
-        zInvalidBlock(&z2zE3633, zRlpDecode);
-        COPY(zexception)(current_exception, z2zE3633);
-        have_exception = true;
-        COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:769.12-769.41");
-        KILL(zexception)(&z2zE3633);
-        goto end_block_exception_3516;
-        /* unreachable after throw */
-        KILL(zexception)(&z2zE3633);
-      } else {  z3zE3536 = UNIT;  }
-      bool z2zE3635;
+      bool zis_list;
+      zis_list = z2zE3610.ztup0;
+      uint64_t zcontent_off;
+      zcontent_off = z2zE3610.ztup1;
+      uint64_t zcontent_len_value;
+      zcontent_len_value = z2zE3610.ztup2;
+      struct zRlpFieldRef z3zE3473;
       {
-        uint64_t z2zE3634;
-        {    z2zE3634 = (zitem_length - zcontent_offset);
+        uint64_t zcontent_len;
+        zcontent_len = zcontent_len_value;
+        bool z2zE3611;
+        z2zE3611 = (zitem_length < zcontent_off);
+        unit z3zE3475;
+        if (z2zE3611) {
+          struct zexception z2zE3612;
+          CREATE(zexception)(&z2zE3612);
+          zInvalidBlock(&z2zE3612, zRlpDecode);
+          COPY(zexception)(current_exception, z2zE3612);
+          have_exception = true;
+          COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:597.12-597.41");
+          KILL(zexception)(&z2zE3612);
+          goto end_block_exception_3515;
+          /* unreachable after throw */
+          KILL(zexception)(&z2zE3612);
+        } else {  z3zE3475 = UNIT;  }
+        bool z2zE3614;
+        {
+          uint64_t z2zE3613;
+          {    z2zE3613 = (zitem_length - zcontent_off);
+          }
+          z2zE3614 = (zcontent_len != z2zE3613);
         }
-        z2zE3635 = (zcontent_length != z2zE3634);
+        unit z3zE3474;
+        if (z2zE3614) {
+          struct zexception z2zE3615;
+          CREATE(zexception)(&z2zE3615);
+          zInvalidBlock(&z2zE3615, zRlpDecode);
+          COPY(zexception)(current_exception, z2zE3615);
+          have_exception = true;
+          COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:600.12-600.41");
+          KILL(zexception)(&z2zE3615);
+          goto end_block_exception_3515;
+          /* unreachable after throw */
+          KILL(zexception)(&z2zE3615);
+        } else {  z3zE3474 = UNIT;  }
+        struct zRlpFieldRef zfield;
+        {
+          struct zRlpFieldRef z3zE3476;
+          z3zE3476.zcontent_len = zcontent_len;
+          z3zE3476.zis_list = zis_list;
+          z3zE3476.zsource = zitem;
+          zfield = z3zE3476;
+        }
+        z3zE3473 = zfield;
+        goto finish_match_3512;
       }
-      unit z3zE3535;
-      if (z2zE3635) {
-        struct zexception z2zE3636;
-        CREATE(zexception)(&z2zE3636);
-        zInvalidBlock(&z2zE3636, zRlpDecode);
-        COPY(zexception)(current_exception, z2zE3636);
-        have_exception = true;
-        COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:772.12-772.41");
-        KILL(zexception)(&z2zE3636);
-        goto end_block_exception_3516;
-        /* unreachable after throw */
-        KILL(zexception)(&z2zE3636);
-      } else {  z3zE3535 = UNIT;  }
-      uint64_t z2zE3637;
-      z2zE3637 = zitem.zlen;
-      z3zE3534 = zrlp_field_ref(zitem, zisl, UINT64_C(0), z2zE3637, zcs, zcl);
-      goto finish_match_3513;
+    case_3513: ;
+      sail_match_failure("rlp_single_ref");
+    finish_match_3512: ;
+      z3zE3472 = z3zE3473;
+      goto finish_match_3510;
     }
-  case_3514: ;
+  case_3511: ;
     sail_match_failure("rlp_single_ref");
-  finish_match_3513: ;
-    z8zE177 = z3zE3534;
+  finish_match_3510: ;
+    z8zE172 = z3zE3472;
   }
-end_function_3515: ;
-  return z8zE177;
-end_block_exception_3516: ;
-  struct zByteSliceFields z8zE856 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zRlpFieldRefFields z8zE855 = { .zcontent_len = UINT64_C(0xdeadc0de), .zcontent_off = UINT64_C(0xdeadc0de), .zfull_len = UINT64_C(0xdeadc0de), .zfull_off = UINT64_C(0xdeadc0de), .zis_list = false, .zsource = z8zE856 };
-  return z8zE855;
+end_function_3514: ;
+  return z8zE172;
+end_block_exception_3515: ;
+  struct zByteSliceFields z8zE845 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zRlpFieldRef z8zE844 = { .zcontent_len = UINT64_C(0xdeadc0de), .zis_list = false, .zsource = z8zE845 };
+  return z8zE844;
 }
 
-struct zByteSliceFields zrlp_ref_content(struct zRlpFieldRefFields zf)
+struct zRlpCursor zrlp_node_cursor(struct zByteSliceFields znode)
 {
-  struct zByteSliceFields z8zE178;
-  struct zByteSliceFields z2zE3626;
-  z2zE3626 = zf.zsource;
-  uint64_t z2zE3627;
-  z2zE3627 = zf.zcontent_off;
-  uint64_t z2zE3628;
-  z2zE3628 = zf.zcontent_len;
-  z8zE178 = zsub_slice(z2zE3626, z2zE3627, z2zE3628);
-end_function_3511: ;
-  return z8zE178;
-end_block_exception_3512: ;
-  struct zByteSliceFields z8zE857 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE857;
+  struct zRlpCursor z8zE173;
+  struct zRlpFieldRef z2zE3607;
+  {
+    z2zE3607 = zrlp_single_ref(znode);
+    if (have_exception) {  goto end_block_exception_3509;  }
+  }
+  {
+    z8zE173 = zrlp_ref_cursor(z2zE3607);
+    if (have_exception) {  goto end_block_exception_3509;  }
+  }
+end_function_3508: ;
+  return z8zE173;
+end_block_exception_3509: ;
+  struct zByteSliceFields z8zE847 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zRlpCursor z8zE846 = { .zcurrent = UINT64_C(0xdeadc0de), .zsource = z8zE847 };
+  return z8zE846;
 }
 
-struct zByteSliceFields zrlp_ref_full(struct zRlpFieldRefFields zf)
+struct zByteSliceFields zrlp_ref_content(struct zRlpFieldRef zf)
 {
-  struct zByteSliceFields z8zE179;
-  struct zByteSliceFields z2zE3623;
-  z2zE3623 = zf.zsource;
-  uint64_t z2zE3624;
-  z2zE3624 = zf.zfull_off;
-  uint64_t z2zE3625;
-  z2zE3625 = zf.zfull_len;
-  z8zE179 = zsub_slice(z2zE3623, z2zE3624, z2zE3625);
-end_function_3509: ;
-  return z8zE179;
-end_block_exception_3510: ;
-  struct zByteSliceFields z8zE858 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE858;
+  struct zByteSliceFields z8zE174;
+  struct zByteSliceFields z2zE3604;
+  z2zE3604 = zf.zsource;
+  uint64_t z2zE3605;
+  {
+    uint64_t z2zE3602;
+    {
+      struct zByteSliceFields z2zE3601;
+      z2zE3601 = zf.zsource;
+      z2zE3602 = z2zE3601.zlen;
+    }
+    uint64_t z2zE3603;
+    z2zE3603 = zf.zcontent_len;
+    {    z2zE3605 = (z2zE3602 - z2zE3603);
+    }
+  }
+  uint64_t z2zE3606;
+  z2zE3606 = zf.zcontent_len;
+  z8zE174 = zsub_slice(z2zE3604, z2zE3605, z2zE3606);
+end_function_3506: ;
+  return z8zE174;
+end_block_exception_3507: ;
+  struct zByteSliceFields z8zE848 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE848;
 }
 
-bool zrlp_ref_framing_canonical(struct zRlpFieldRefFields zf)
+bool zrlp_ref_framing_canonical(struct zRlpFieldRef zf)
 {
-  bool z8zE180;
+  bool z8zE175;
   uint64_t zn;
   zn = zf.zcontent_len;
   uint64_t zpayload_length;
   zpayload_length = zn;
   uint64_t zfull_length;
-  zfull_length = zf.zfull_len;
-  uint64_t zfo;
-  zfo = zf.zfull_off;
-  uint64_t zfull_offset;
-  zfull_offset = zfo;
-  uint64_t zco;
-  zco = zf.zcontent_off;
+  {
+    struct zByteSliceFields z2zE3600;
+    z2zE3600 = zf.zsource;
+    zfull_length = z2zE3600.zlen;
+  }
+  uint64_t zcontent_offset;
+  {    zcontent_offset = (zfull_length - zpayload_length);
+  }
   struct zByteSliceFields zsource;
   zsource = zf.zsource;
   uint64_t zsource_length;
   zsource_length = zsource.zlen;
-  bool z2zE3570;
-  z2zE3570 = (zfull_length == UINT64_C(0));
-  if (z2zE3570) {  z8zE180 = false;  } else {
-    bool z2zE3571;
-    z2zE3571 = zf.zis_list;
-    if (z2zE3571) {
-      bool z2zE3572;
-      z2zE3572 = (!(zRLP_SHORT_LENGTH_LIMIT < zn));
-      if (z2zE3572) {
-        bool z2zE3578;
+  bool z2zE3549;
+  z2zE3549 = (zfull_length == UINT64_C(0));
+  if (z2zE3549) {  z8zE175 = false;  } else {
+    bool z2zE3550;
+    z2zE3550 = zf.zis_list;
+    if (z2zE3550) {
+      bool z2zE3551;
+      z2zE3551 = (!(zRLP_SHORT_LENGTH_LIMIT < zn));
+      if (z2zE3551) {
+        bool z2zE3557;
         {
-          uint64_t z2zE3573;
-          {    z2zE3573 = (zpayload_length + UINT64_C(1));
+          uint64_t z2zE3552;
+          {    z2zE3552 = (zpayload_length + UINT64_C(1));
           }
-          z2zE3578 = (zfull_length == z2zE3573);
+          z2zE3557 = (zfull_length == z2zE3552);
         }
-        bool z3zE3531;
-        if (z2zE3578) {
-          uint64_t z2zE3576;
+        bool z3zE3469;
+        if (z2zE3557) {
+          uint64_t z2zE3555;
           {
-            struct zByteSliceFields z2zE3574;
-            z2zE3574 = zf.zsource;
-            z2zE3576 = zslice_byte(z2zE3574, zfo);
+            struct zByteSliceFields z2zE3553;
+            z2zE3553 = zf.zsource;
+            z2zE3555 = zslice_byte(z2zE3553, UINT64_C(0));
           }
-          uint64_t z2zE3577;
+          uint64_t z2zE3556;
           {
-            uint64_t z2zE3575;
-            z2zE3575 = zrlp_nat_length_byte(zn);
-            z2zE3577 = ((UINT64_C(0xC0) + z2zE3575) & UINT64_C(0xFF));
+            uint64_t z2zE3554;
+            z2zE3554 = zrlp_nat_length_byte(zn);
+            z2zE3556 = ((UINT64_C(0xC0) + z2zE3554) & UINT64_C(0xFF));
           }
-          z3zE3531 = (z2zE3576 == z2zE3577);
-        } else {  z3zE3531 = false;  }
-        z8zE180 = z3zE3531;
+          z3zE3469 = (z2zE3555 == z2zE3556);
+        } else {  z3zE3469 = false;  }
+        z8zE175 = z3zE3469;
       } else {
-        struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 z2zE3580;
-        CREATE(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z2zE3580);
+        struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 z2zE3559;
+        CREATE(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z2zE3559);
         {
-          sail_u256 z2zE3579;
-          z2zE3579 = zrlp_length_wordzIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zn);
-          zminimal_word_bytes(&z2zE3580, z2zE3579);
+          sail_u256 z2zE3558;
+          z2zE3558 = zrlp_length_wordzIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zn);
+          zminimal_word_bytes(&z2zE3559, z2zE3558);
         }
-        bool z3zE3527;
+        bool z3zE3465;
         {
           zz5listz8z5bv8z9 zlen_bytes;
           CREATE(zz5listz8z5bv8z9)(&zlen_bytes);
-          COPY(zz5listz8z5bv8z9)(&zlen_bytes, z2zE3580.ztup0);
+          COPY(zz5listz8z5bv8z9)(&zlen_bytes, z2zE3559.ztup0);
           uint64_t zlength_width;
-          zlength_width = z2zE3580.ztup1;
-          bool z2zE3591;
+          zlength_width = z2zE3559.ztup1;
+          bool z2zE3569;
           {
-            sail_u128 z2zE3582;
+            sail_u128 z2zE3561;
             {
-              uint64_t z2zE3581;
-              {    z2zE3581 = (UINT64_C(1) + zlength_width);
+              uint64_t z2zE3560;
+              {    z2zE3560 = (UINT64_C(1) + zlength_width);
               }
-              z2zE3582 = u128_add_u64_u64(z2zE3581, zpayload_length);
+              z2zE3561 = u128_add_u64_u64(z2zE3560, zpayload_length);
             }
-            z2zE3591 = u128_eq_u64(z2zE3582, zfull_length);
+            z2zE3569 = u128_eq_u64(z2zE3561, zfull_length);
           }
-          bool z3zE3529;
-          if (z2zE3591) {
-            bool z2zE3590;
+          bool z3zE3467;
+          if (z2zE3569) {
+            bool z2zE3568;
             {
-              uint64_t z2zE3585;
+              uint64_t z2zE3564;
               {
-                struct zByteSliceFields z2zE3583;
-                z2zE3583 = zf.zsource;
-                z2zE3585 = zslice_byte(z2zE3583, zfo);
+                struct zByteSliceFields z2zE3562;
+                z2zE3562 = zf.zsource;
+                z2zE3564 = zslice_byte(z2zE3562, UINT64_C(0));
               }
-              uint64_t z2zE3586;
+              uint64_t z2zE3565;
               {
-                uint64_t z2zE3584;
-                z2zE3584 = zrlp_nat_length_byte(zlength_width);
-                z2zE3586 = ((UINT64_C(0xF7) + z2zE3584) & UINT64_C(0xFF));
+                uint64_t z2zE3563;
+                z2zE3563 = zrlp_nat_length_byte(zlength_width);
+                z2zE3565 = ((UINT64_C(0xF7) + z2zE3563) & UINT64_C(0xFF));
               }
-              z2zE3590 = (z2zE3585 == z2zE3586);
+              z2zE3568 = (z2zE3564 == z2zE3565);
             }
-            bool z3zE3528;
-            if (z2zE3590) {
-              bool z2zE3587;
-              z2zE3587 = (zfull_offset < zsource_length);
-              struct zByteSliceFields z2zE3588;
-              z2zE3588 = zf.zsource;
-              uint64_t z2zE3589;
-              {    z2zE3589 = (zfull_offset + UINT64_C(1));
-              }
-              z3zE3528 = zrlp_bytes_equal_at(zlen_bytes, z2zE3588, z2zE3589);
-            } else {  z3zE3528 = false;  }
-            z3zE3529 = z3zE3528;
-          } else {  z3zE3529 = false;  }
-          z3zE3527 = z3zE3529;
+            bool z3zE3466;
+            if (z2zE3568) {
+              bool z2zE3566;
+              z2zE3566 = (UINT64_C(0) < zsource_length);
+              struct zByteSliceFields z2zE3567;
+              z2zE3567 = zf.zsource;
+              z3zE3466 = zrlp_bytes_equal_at(zlen_bytes, z2zE3567, UINT64_C(1));
+            } else {  z3zE3466 = false;  }
+            z3zE3467 = z3zE3466;
+          } else {  z3zE3467 = false;  }
+          z3zE3465 = z3zE3467;
           KILL(zz5listz8z5bv8z9)(&zlen_bytes);
-          goto finish_match_3505;
+          goto finish_match_3502;
         }
-      case_3506: ;
+      case_3503: ;
         sail_match_failure("rlp_ref_framing_canonical");
-      finish_match_3505: ;
-        z8zE180 = z3zE3527;
-        KILL(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z2zE3580);
+      finish_match_3502: ;
+        z8zE175 = z3zE3465;
+        KILL(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z2zE3559);
       }
     } else {
-      bool z2zE3592;
-      z2zE3592 = (zpayload_length == UINT64_C(0));
-      if (z2zE3592) {
-        bool z2zE3595;
-        z2zE3595 = (zfull_length == UINT64_C(1));
-        bool z3zE3526;
-        if (z2zE3595) {
-          uint64_t z2zE3594;
+      bool z2zE3570;
+      z2zE3570 = (zpayload_length == UINT64_C(0));
+      if (z2zE3570) {
+        bool z2zE3573;
+        z2zE3573 = (zfull_length == UINT64_C(1));
+        bool z3zE3464;
+        if (z2zE3573) {
+          uint64_t z2zE3572;
           {
-            struct zByteSliceFields z2zE3593;
-            z2zE3593 = zf.zsource;
-            z2zE3594 = zslice_byte(z2zE3593, zfo);
+            struct zByteSliceFields z2zE3571;
+            z2zE3571 = zf.zsource;
+            z2zE3572 = zslice_byte(z2zE3571, UINT64_C(0));
           }
-          z3zE3526 = (z2zE3594 == UINT64_C(0x80));
-        } else {  z3zE3526 = false;  }
-        z8zE180 = z3zE3526;
+          z3zE3464 = (z2zE3572 == UINT64_C(0x80));
+        } else {  z3zE3464 = false;  }
+        z8zE175 = z3zE3464;
       } else {
         uint64_t zfirst;
         {
-          struct zByteSliceFields z2zE3622;
-          z2zE3622 = zf.zsource;
-          zfirst = zslice_byte(z2zE3622, zco);
+          struct zByteSliceFields z2zE3599;
+          z2zE3599 = zf.zsource;
+          zfirst = zslice_byte(z2zE3599, zcontent_offset);
         }
-        bool z2zE3598;
+        bool z2zE3576;
         {
-          bool z2zE3597;
-          z2zE3597 = (zpayload_length == UINT64_C(1));
-          bool z3zE3519;
-          if (z2zE3597) {
-            uint64_t z2zE3596;
-            z2zE3596 = (UINT64_C(1) & (zfirst >> UINT64_C(7)));
-            z3zE3519 = (z2zE3596 == UINT64_C(0b0));
-          } else {  z3zE3519 = false;  }
-          z2zE3598 = z3zE3519;
+          bool z2zE3575;
+          z2zE3575 = (zpayload_length == UINT64_C(1));
+          bool z3zE3457;
+          if (z2zE3575) {
+            uint64_t z2zE3574;
+            z2zE3574 = (UINT64_C(1) & (zfirst >> UINT64_C(7)));
+            z3zE3457 = (z2zE3574 == UINT64_C(0b0));
+          } else {  z3zE3457 = false;  }
+          z2zE3576 = z3zE3457;
         }
-        if (z2zE3598) {
-          bool z2zE3601;
-          z2zE3601 = (zfull_length == UINT64_C(1));
-          bool z3zE3525;
-          if (z2zE3601) {
-            uint64_t z2zE3600;
+        if (z2zE3576) {
+          bool z2zE3579;
+          z2zE3579 = (zfull_length == UINT64_C(1));
+          bool z3zE3463;
+          if (z2zE3579) {
+            uint64_t z2zE3578;
             {
-              struct zByteSliceFields z2zE3599;
-              z2zE3599 = zf.zsource;
-              z2zE3600 = zslice_byte(z2zE3599, zfo);
+              struct zByteSliceFields z2zE3577;
+              z2zE3577 = zf.zsource;
+              z2zE3578 = zslice_byte(z2zE3577, UINT64_C(0));
             }
-            z3zE3525 = (z2zE3600 == zfirst);
-          } else {  z3zE3525 = false;  }
-          z8zE180 = z3zE3525;
+            z3zE3463 = (z2zE3578 == zfirst);
+          } else {  z3zE3463 = false;  }
+          z8zE175 = z3zE3463;
         } else {
-          bool z2zE3602;
-          z2zE3602 = (!(zRLP_SHORT_LENGTH_LIMIT < zn));
-          if (z2zE3602) {
-            bool z2zE3608;
+          bool z2zE3580;
+          z2zE3580 = (!(zRLP_SHORT_LENGTH_LIMIT < zn));
+          if (z2zE3580) {
+            bool z2zE3586;
             {
-              uint64_t z2zE3603;
-              {    z2zE3603 = (zpayload_length + UINT64_C(1));
+              uint64_t z2zE3581;
+              {    z2zE3581 = (zpayload_length + UINT64_C(1));
               }
-              z2zE3608 = (zfull_length == z2zE3603);
+              z2zE3586 = (zfull_length == z2zE3581);
             }
-            bool z3zE3524;
-            if (z2zE3608) {
-              uint64_t z2zE3606;
+            bool z3zE3462;
+            if (z2zE3586) {
+              uint64_t z2zE3584;
               {
-                struct zByteSliceFields z2zE3604;
-                z2zE3604 = zf.zsource;
-                z2zE3606 = zslice_byte(z2zE3604, zfo);
+                struct zByteSliceFields z2zE3582;
+                z2zE3582 = zf.zsource;
+                z2zE3584 = zslice_byte(z2zE3582, UINT64_C(0));
               }
-              uint64_t z2zE3607;
+              uint64_t z2zE3585;
               {
-                uint64_t z2zE3605;
-                z2zE3605 = zrlp_nat_length_byte(zn);
-                z2zE3607 = ((UINT64_C(0x80) + z2zE3605) & UINT64_C(0xFF));
+                uint64_t z2zE3583;
+                z2zE3583 = zrlp_nat_length_byte(zn);
+                z2zE3585 = ((UINT64_C(0x80) + z2zE3583) & UINT64_C(0xFF));
               }
-              z3zE3524 = (z2zE3606 == z2zE3607);
-            } else {  z3zE3524 = false;  }
-            z8zE180 = z3zE3524;
+              z3zE3462 = (z2zE3584 == z2zE3585);
+            } else {  z3zE3462 = false;  }
+            z8zE175 = z3zE3462;
           } else {
-            struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 z2zE3610;
-            CREATE(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z2zE3610);
+            struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 z2zE3588;
+            CREATE(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z2zE3588);
             {
-              sail_u256 z2zE3609;
-              z2zE3609 = zrlp_length_wordzIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zn);
-              zminimal_word_bytes(&z2zE3610, z2zE3609);
+              sail_u256 z2zE3587;
+              z2zE3587 = zrlp_length_wordzIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zn);
+              zminimal_word_bytes(&z2zE3588, z2zE3587);
             }
-            bool z3zE3520;
+            bool z3zE3458;
             {
-              zz5listz8z5bv8z9 z3zE3532;
-              CREATE(zz5listz8z5bv8z9)(&z3zE3532);
-              COPY(zz5listz8z5bv8z9)(&z3zE3532, z2zE3610.ztup0);
-              uint64_t z3zE3533;
-              z3zE3533 = z2zE3610.ztup1;
-              bool z2zE3621;
+              zz5listz8z5bv8z9 z3zE3470;
+              CREATE(zz5listz8z5bv8z9)(&z3zE3470);
+              COPY(zz5listz8z5bv8z9)(&z3zE3470, z2zE3588.ztup0);
+              uint64_t z3zE3471;
+              z3zE3471 = z2zE3588.ztup1;
+              bool z2zE3598;
               {
-                sail_u128 z2zE3612;
+                sail_u128 z2zE3590;
                 {
-                  uint64_t z2zE3611;
-                  {    z2zE3611 = (UINT64_C(1) + z3zE3533);
+                  uint64_t z2zE3589;
+                  {    z2zE3589 = (UINT64_C(1) + z3zE3471);
                   }
-                  z2zE3612 = u128_add_u64_u64(z2zE3611, zpayload_length);
+                  z2zE3590 = u128_add_u64_u64(z2zE3589, zpayload_length);
                 }
-                z2zE3621 = u128_eq_u64(z2zE3612, zfull_length);
+                z2zE3598 = u128_eq_u64(z2zE3590, zfull_length);
               }
-              bool z3zE3522;
-              if (z2zE3621) {
-                bool z2zE3620;
+              bool z3zE3460;
+              if (z2zE3598) {
+                bool z2zE3597;
                 {
-                  uint64_t z2zE3615;
+                  uint64_t z2zE3593;
                   {
-                    struct zByteSliceFields z2zE3613;
-                    z2zE3613 = zf.zsource;
-                    z2zE3615 = zslice_byte(z2zE3613, zfo);
+                    struct zByteSliceFields z2zE3591;
+                    z2zE3591 = zf.zsource;
+                    z2zE3593 = zslice_byte(z2zE3591, UINT64_C(0));
                   }
-                  uint64_t z2zE3616;
+                  uint64_t z2zE3594;
                   {
-                    uint64_t z2zE3614;
-                    z2zE3614 = zrlp_nat_length_byte(z3zE3533);
-                    z2zE3616 = ((UINT64_C(0xB7) + z2zE3614) & UINT64_C(0xFF));
+                    uint64_t z2zE3592;
+                    z2zE3592 = zrlp_nat_length_byte(z3zE3471);
+                    z2zE3594 = ((UINT64_C(0xB7) + z2zE3592) & UINT64_C(0xFF));
                   }
-                  z2zE3620 = (z2zE3615 == z2zE3616);
+                  z2zE3597 = (z2zE3593 == z2zE3594);
                 }
-                bool z3zE3521;
-                if (z2zE3620) {
-                  bool z2zE3617;
-                  z2zE3617 = (zfull_offset < zsource_length);
-                  struct zByteSliceFields z2zE3618;
-                  z2zE3618 = zf.zsource;
-                  uint64_t z2zE3619;
-                  {    z2zE3619 = (zfull_offset + UINT64_C(1));
-                  }
-                  z3zE3521 = zrlp_bytes_equal_at(z3zE3532, z2zE3618, z2zE3619);
-                } else {  z3zE3521 = false;  }
-                z3zE3522 = z3zE3521;
-              } else {  z3zE3522 = false;  }
-              z3zE3520 = z3zE3522;
-              KILL(zz5listz8z5bv8z9)(&z3zE3532);
-              goto finish_match_3503;
+                bool z3zE3459;
+                if (z2zE3597) {
+                  bool z2zE3595;
+                  z2zE3595 = (UINT64_C(0) < zsource_length);
+                  struct zByteSliceFields z2zE3596;
+                  z2zE3596 = zf.zsource;
+                  z3zE3459 = zrlp_bytes_equal_at(z3zE3470, z2zE3596, UINT64_C(1));
+                } else {  z3zE3459 = false;  }
+                z3zE3460 = z3zE3459;
+              } else {  z3zE3460 = false;  }
+              z3zE3458 = z3zE3460;
+              KILL(zz5listz8z5bv8z9)(&z3zE3470);
+              goto finish_match_3500;
             }
-          case_3504: ;
+          case_3501: ;
             sail_match_failure("rlp_ref_framing_canonical");
-          finish_match_3503: ;
-            z8zE180 = z3zE3520;
-            KILL(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z2zE3610);
+          finish_match_3500: ;
+            z8zE175 = z3zE3458;
+            KILL(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z2zE3588);
           }
         }
       }
     }
   }
-end_function_3507: ;
-  return z8zE180;
-end_block_exception_3508: ;
+end_function_3504: ;
+  return z8zE175;
+end_block_exception_3505: ;
 
   return false;
 }
 
-bool zrlp_ref_bytes_canonical(struct zRlpFieldRefFields zf)
+bool zrlp_ref_bytes_canonical(struct zRlpFieldRef zf)
 {
-  bool z8zE181;
-  bool z2zE3569;
+  bool z8zE176;
+  bool z2zE3548;
   {
-    bool z2zE3568;
-    z2zE3568 = zf.zis_list;
-    z2zE3569 = not(z2zE3568);
+    bool z2zE3547;
+    z2zE3547 = zf.zis_list;
+    z2zE3548 = not(z2zE3547);
   }
-  bool z3zE3518;
-  if (z2zE3569) {  z3zE3518 = zrlp_ref_framing_canonical(zf);  } else {  z3zE3518 = false;  }
-  z8zE181 = z3zE3518;
-end_function_3501: ;
-  return z8zE181;
-end_block_exception_3502: ;
+  bool z3zE3456;
+  if (z2zE3548) {  z3zE3456 = zrlp_ref_framing_canonical(zf);  } else {  z3zE3456 = false;  }
+  z8zE176 = z3zE3456;
+end_function_3498: ;
+  return z8zE176;
+end_block_exception_3499: ;
 
   return false;
 }
 
-bool zrlp_ref_uint_canonical(struct zRlpFieldRefFields zf)
+bool zrlp_ref_uint_canonical(struct zRlpFieldRef zf)
 {
-  bool z8zE182;
-  bool z2zE3562;
+  bool z8zE177;
+  bool z2zE3538;
   {
-    bool z2zE3561;
-    z2zE3561 = zrlp_ref_bytes_canonical(zf);
-    z2zE3562 = not(z2zE3561);
+    bool z2zE3537;
+    z2zE3537 = zrlp_ref_bytes_canonical(zf);
+    z2zE3538 = not(z2zE3537);
   }
-  if (z2zE3562) {  z8zE182 = false;  } else {
-    bool z2zE3567;
+  if (z2zE3538) {  z8zE177 = false;  } else {
+    bool z2zE3546;
     {
-      uint64_t z2zE3563;
-      z2zE3563 = zf.zcontent_len;
-      z2zE3567 = (z2zE3563 == UINT64_C(0));
+      uint64_t z2zE3539;
+      z2zE3539 = zf.zcontent_len;
+      z2zE3546 = (z2zE3539 == UINT64_C(0));
     }
-    bool z3zE3517;
-    if (z2zE3567) {  z3zE3517 = true;  } else {
-      uint64_t z2zE3566;
+    bool z3zE3455;
+    if (z2zE3546) {  z3zE3455 = true;  } else {
+      uint64_t z2zE3545;
       {
-        struct zByteSliceFields z2zE3564;
-        z2zE3564 = zf.zsource;
-        uint64_t z2zE3565;
-        z2zE3565 = zf.zcontent_off;
-        z2zE3566 = zslice_byte(z2zE3564, z2zE3565);
+        struct zByteSliceFields z2zE3543;
+        z2zE3543 = zf.zsource;
+        uint64_t z2zE3544;
+        {
+          uint64_t z2zE3541;
+          {
+            struct zByteSliceFields z2zE3540;
+            z2zE3540 = zf.zsource;
+            z2zE3541 = z2zE3540.zlen;
+          }
+          uint64_t z2zE3542;
+          z2zE3542 = zf.zcontent_len;
+          {    z2zE3544 = (z2zE3541 - z2zE3542);
+          }
+        }
+        z2zE3545 = zslice_byte(z2zE3543, z2zE3544);
       }
-      z3zE3517 = (z2zE3566 != UINT64_C(0x00));
+      z3zE3455 = (z2zE3545 != UINT64_C(0x00));
     }
-    z8zE182 = z3zE3517;
+    z8zE177 = z3zE3455;
   }
-end_function_3499: ;
-  return z8zE182;
-end_block_exception_3500: ;
+end_function_3496: ;
+  return z8zE177;
+end_block_exception_3497: ;
 
   return false;
 }
 
-sail_u256 zrlp_ref_word(struct zRlpFieldRefFields zf)
+sail_u256 zrlp_ref_word(struct zRlpFieldRef zf)
 {
-  sail_u256 z8zE183;
+  sail_u256 z8zE178;
   uint64_t zn;
   zn = zf.zcontent_len;
-  bool z2zE3557;
+  bool z2zE3531;
   {
-    bool z2zE3556;
-    z2zE3556 = zf.zis_list;
-    bool z3zE3516;
-    if (z2zE3556) {  z3zE3516 = true;  } else {  z3zE3516 = (zRLP_WORD_LENGTH_LIMIT < zn);  }
-    z2zE3557 = z3zE3516;
+    bool z2zE3530;
+    z2zE3530 = zf.zis_list;
+    bool z3zE3454;
+    if (z2zE3530) {  z3zE3454 = true;  } else {  z3zE3454 = (zRLP_WORD_LENGTH_LIMIT < zn);  }
+    z2zE3531 = z3zE3454;
   }
-  if (z2zE3557) {
-    struct zexception z2zE3558;
-    CREATE(zexception)(&z2zE3558);
-    zInvalidBlock(&z2zE3558, zRlpDecode);
-    COPY(zexception)(current_exception, z2zE3558);
+  if (z2zE3531) {
+    struct zexception z2zE3532;
+    CREATE(zexception)(&z2zE3532);
+    zInvalidBlock(&z2zE3532, zRlpDecode);
+    COPY(zexception)(current_exception, z2zE3532);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:887.8-887.37");
-    KILL(zexception)(&z2zE3558);
-    goto end_block_exception_3498;
+    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:708.8-708.37");
+    KILL(zexception)(&z2zE3532);
+    goto end_block_exception_3495;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE3558);
+    KILL(zexception)(&z2zE3532);
   } else {
-    struct zByteSliceFields z2zE3559;
-    z2zE3559 = zf.zsource;
-    uint64_t z2zE3560;
-    z2zE3560 = zf.zcontent_off;
-    z8zE183 = zslice_load_n(z2zE3559, z2zE3560, zn);
+    struct zByteSliceFields z2zE3535;
+    z2zE3535 = zf.zsource;
+    uint64_t z2zE3536;
+    {
+      uint64_t z2zE3534;
+      {
+        struct zByteSliceFields z2zE3533;
+        z2zE3533 = zf.zsource;
+        z2zE3534 = z2zE3533.zlen;
+      }
+      {    z2zE3536 = (z2zE3534 - zn);
+      }
+    }
+    z8zE178 = zslice_load_n(z2zE3535, z2zE3536, zn);
   }
-end_function_3497: ;
-  return z8zE183;
-end_block_exception_3498: ;
+end_function_3494: ;
+  return z8zE178;
+end_block_exception_3495: ;
 
   return u256_zero();
 }
 
-sail_u256 zrlp_ref_uint_word(struct zRlpFieldRefFields zf)
+sail_u256 zrlp_ref_uint_word(struct zRlpFieldRef zf)
 {
-  sail_u256 z8zE184;
-  bool z2zE3554;
-  z2zE3554 = zrlp_ref_uint_canonical(zf);
-  if (z2zE3554) {
+  sail_u256 z8zE179;
+  bool z2zE3528;
+  z2zE3528 = zrlp_ref_uint_canonical(zf);
+  if (z2zE3528) {
     {
-      z8zE184 = zrlp_ref_word(zf);
-      if (have_exception) {  goto end_block_exception_3496;  }
+      z8zE179 = zrlp_ref_word(zf);
+      if (have_exception) {  goto end_block_exception_3493;  }
     }
   } else {
-    struct zexception z2zE3555;
-    CREATE(zexception)(&z2zE3555);
-    zInvalidBlock(&z2zE3555, zRlpDecode);
-    COPY(zexception)(current_exception, z2zE3555);
+    struct zexception z2zE3529;
+    CREATE(zexception)(&z2zE3529);
+    zInvalidBlock(&z2zE3529, zRlpDecode);
+    COPY(zexception)(current_exception, z2zE3529);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:899.8-899.37");
-    KILL(zexception)(&z2zE3555);
-    goto end_block_exception_3496;
+    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:723.8-723.37");
+    KILL(zexception)(&z2zE3529);
+    goto end_block_exception_3493;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE3555);
+    KILL(zexception)(&z2zE3529);
   }
-end_function_3495: ;
-  return z8zE184;
-end_block_exception_3496: ;
+end_function_3492: ;
+  return z8zE179;
+end_block_exception_3493: ;
 
   return u256_zero();
 }
 
-uint64_t zrlp_ref_uint64(struct zRlpFieldRefFields zf)
+uint64_t zrlp_ref_uint64(struct zRlpFieldRef zf)
 {
-  uint64_t z8zE185;
-  bool z2zE3552;
+  uint64_t z8zE180;
+  bool z2zE3526;
   {
-    bool z2zE3551;
+    bool z2zE3525;
     {
-      bool z2zE3549;
-      z2zE3549 = zrlp_ref_uint_canonical(zf);
-      z2zE3551 = not(z2zE3549);
+      bool z2zE3523;
+      z2zE3523 = zrlp_ref_uint_canonical(zf);
+      z2zE3525 = not(z2zE3523);
     }
-    bool z3zE3514;
-    if (z2zE3551) {  z3zE3514 = true;  } else {
-      uint64_t z2zE3550;
-      z2zE3550 = zf.zcontent_len;
-      z3zE3514 = (zRLP_UINT64_LENGTH_LIMIT < z2zE3550);
+    bool z3zE3452;
+    if (z2zE3525) {  z3zE3452 = true;  } else {
+      uint64_t z2zE3524;
+      z2zE3524 = zf.zcontent_len;
+      z3zE3452 = (zRLP_UINT64_LENGTH_LIMIT < z2zE3524);
     }
-    z2zE3552 = z3zE3514;
+    z2zE3526 = z3zE3452;
   }
-  unit z3zE3515;
-  if (z2zE3552) {
-    struct zexception z2zE3553;
-    CREATE(zexception)(&z2zE3553);
-    zInvalidBlock(&z2zE3553, zRlpDecode);
-    COPY(zexception)(current_exception, z2zE3553);
+  unit z3zE3453;
+  if (z2zE3526) {
+    struct zexception z2zE3527;
+    CREATE(zexception)(&z2zE3527);
+    zInvalidBlock(&z2zE3527, zRlpDecode);
+    COPY(zexception)(current_exception, z2zE3527);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:906.8-906.37");
-    KILL(zexception)(&z2zE3553);
-    goto end_block_exception_3494;
+    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:733.8-733.37");
+    KILL(zexception)(&z2zE3527);
+    goto end_block_exception_3491;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE3553);
-  } else {  z3zE3515 = UNIT;  }
+    KILL(zexception)(&z2zE3527);
+  } else {  z3zE3453 = UNIT;  }
   uint64_t zcontent_length;
   zcontent_length = zf.zcontent_len;
   struct zByteSliceFields zcontent;
@@ -1907,81 +1672,10 @@ uint64_t zrlp_ref_uint64(struct zRlpFieldRefFields zf)
   uint64_t zwidth;
   {    zwidth = (zcontent_length % UINT64_C(9));
   }
-  z8zE185 = zrlp_uint64_width(zcontent, zwidth);
-end_function_3493: ;
-  return z8zE185;
-end_block_exception_3494: ;
-
-  return UINT64_C(0xdeadc0de);
-}
-
-uint64_t zrlp_ref_account_nonce(struct zRlpFieldRefFields zf)
-{
-  uint64_t z8zE186;
-  {
-    z8zE186 = zrlp_ref_uint64(zf);
-    if (have_exception) {  goto end_block_exception_3492;  }
-  }
-end_function_3491: ;
-  return z8zE186;
-end_block_exception_3492: ;
-
-  return UINT64_C(0xdeadc0de);
-}
-
-uint64_t zrlp_ref_blob_gas_used(struct zRlpFieldRefFields zf)
-{
-  uint64_t z8zE187;
-  uint64_t zvalue;
-  {
-    zvalue = zrlp_ref_uint64(zf);
-    if (have_exception) {  goto end_block_exception_3490;  }
-  }
-  bool z2zE3547;
-  z2zE3547 = (!(UINT64_C(2752512) < zvalue));
-  if (z2zE3547) {  z8zE187 = zvalue;  } else {
-    struct zexception z2zE3548;
-    CREATE(zexception)(&z2zE3548);
-    zInvalidBlock(&z2zE3548, zRlpDecode);
-    COPY(zexception)(current_exception, z2zE3548);
-    have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/rlp/rlp.sail:947.8-947.37");
-    KILL(zexception)(&z2zE3548);
-    goto end_block_exception_3490;
-    /* unreachable after throw */
-    KILL(zexception)(&z2zE3548);
-  }
-end_function_3489: ;
-  return z8zE187;
-end_block_exception_3490: ;
-
-  return UINT64_C(0xdeadc0de);
-}
-
-uint64_t zrlp_ref_excess_blob_gas(struct zRlpFieldRefFields zf)
-{
-  uint64_t z8zE188;
-  {
-    z8zE188 = zrlp_ref_uint64(zf);
-    if (have_exception) {  goto end_block_exception_3488;  }
-  }
-end_function_3487: ;
-  return z8zE188;
-end_block_exception_3488: ;
-
-  return UINT64_C(0xdeadc0de);
-}
-
-uint64_t zrlp_ref_chain_identifier(struct zRlpFieldRefFields zf)
-{
-  uint64_t z8zE189;
-  {
-    z8zE189 = zrlp_ref_uint64(zf);
-    if (have_exception) {  goto end_block_exception_3486;  }
-  }
-end_function_3485: ;
-  return z8zE189;
-end_block_exception_3486: ;
+  z8zE180 = zrlp_uint64_width(zcontent, zwidth);
+end_function_3490: ;
+  return z8zE180;
+end_block_exception_3491: ;
 
   return UINT64_C(0xdeadc0de);
 }

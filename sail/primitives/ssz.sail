@@ -53,6 +53,10 @@ type witness_header_length_bound : Int = 2 ^ 10
 type transaction_count = range(0, transaction_count_bound)
 /*! Zero-based transaction position in a non-empty execution payload. */
 type transaction_index = range(0, transaction_count_bound - 1)
+/*! EIP-7928 change position: pre-execution system calls use zero,
+    transactions use their one-based position, and post-execution system calls
+    use `transaction_count + 1`. */
+type block_access_index = range(0, transaction_count_bound + 1)
 
 /*! A reference to an SSZ list: its byte span and schema-bounded element
     count. */

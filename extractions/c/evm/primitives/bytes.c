@@ -47,18 +47,18 @@ struct zByteSliceFields zbyte_slice(enum zByteSource zsrc, uint64_t zoff, uint64
   struct zByteSliceFields z8zE86;
   struct zByteSliceFields zfields;
   {
-    struct zByteSliceFields z3zE3754;
-    z3zE3754.zlen = zlen;
-    z3zE3754.zoff = zoff;
-    z3zE3754.zsource = zsrc;
-    zfields = z3zE3754;
+    struct zByteSliceFields z3zE3683;
+    z3zE3683.zlen = zlen;
+    z3zE3683.zoff = zoff;
+    z3zE3683.zsource = zsrc;
+    zfields = z3zE3683;
   }
   z8zE86 = zfields;
-end_function_3808: ;
+end_function_3789: ;
   return z8zE86;
-end_block_exception_3809: ;
-  struct zByteSliceFields z8zE811 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE811;
+end_block_exception_3790: ;
+  struct zByteSliceFields z8zE808 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE808;
 }
 
 void create_letbind_50(void) {
@@ -74,89 +74,89 @@ void kill_letbind_50(void) {
 struct zByteSliceFields zsub_slice(struct zByteSliceFields zs, uint64_t zoff, uint64_t zlen)
 {
   struct zByteSliceFields z8zE87;
-  enum zByteSource z2zE3949;
-  z2zE3949 = zs.zsource;
-  uint64_t z2zE3950;
+  enum zByteSource z2zE3910;
+  z2zE3910 = zs.zsource;
+  uint64_t z2zE3911;
   {
-    uint64_t z2zE3948;
-    z2zE3948 = zs.zoff;
-    {    z2zE3950 = (z2zE3948 + zoff);
+    uint64_t z2zE3909;
+    z2zE3909 = zs.zoff;
+    {    z2zE3911 = (z2zE3909 + zoff);
     }
   }
-  z8zE87 = zbyte_slice(z2zE3949, z2zE3950, zlen);
-end_function_3806: ;
+  z8zE87 = zbyte_slice(z2zE3910, z2zE3911, zlen);
+end_function_3787: ;
   return z8zE87;
-end_block_exception_3807: ;
-  struct zByteSliceFields z8zE812 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE812;
+end_block_exception_3788: ;
+  struct zByteSliceFields z8zE809 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE809;
 }
 
 struct zByteSliceFields zslice_suffix(struct zByteSliceFields zs, uint64_t zoff)
 {
   struct zByteSliceFields z8zE88;
-  enum zByteSource z2zE3945;
-  z2zE3945 = zs.zsource;
-  uint64_t z2zE3946;
+  enum zByteSource z2zE3906;
+  z2zE3906 = zs.zsource;
+  uint64_t z2zE3907;
   {
-    uint64_t z2zE3943;
-    z2zE3943 = zs.zoff;
-    {    z2zE3946 = (z2zE3943 + zoff);
+    uint64_t z2zE3904;
+    z2zE3904 = zs.zoff;
+    {    z2zE3907 = (z2zE3904 + zoff);
     }
   }
-  uint64_t z2zE3947;
+  uint64_t z2zE3908;
   {
-    uint64_t z2zE3944;
-    z2zE3944 = zs.zlen;
-    {    z2zE3947 = (z2zE3944 - zoff);
+    uint64_t z2zE3905;
+    z2zE3905 = zs.zlen;
+    {    z2zE3908 = (z2zE3905 - zoff);
     }
   }
-  z8zE88 = zbyte_slice(z2zE3945, z2zE3946, z2zE3947);
-end_function_3804: ;
+  z8zE88 = zbyte_slice(z2zE3906, z2zE3907, z2zE3908);
+end_function_3785: ;
   return z8zE88;
-end_block_exception_3805: ;
-  struct zByteSliceFields z8zE813 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE813;
+end_block_exception_3786: ;
+  struct zByteSliceFields z8zE810 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE810;
 }
 
 void zmaterializzed_bytes(struct zMaterializzedBytes *z8zE89, zz5listz8z5bv8z9 zdata, uint64_t zlen)
 {
-  struct zMaterializzedBytes z3zE3753;
-  CREATE(zMaterializzedBytes)(&z3zE3753);
-  COPY(zz5listz8z5bv8z9)(&((&z3zE3753)->zdata), zdata);
-  z3zE3753.zlen = zlen;
-  COPY(zMaterializzedBytes)((*(&z8zE89)), z3zE3753);
-  KILL(zMaterializzedBytes)(&z3zE3753);
-end_function_3802: ;
-  goto end_function_4091;
-end_block_exception_3803: ;
-  goto end_function_4091;
-end_function_4091: ;
+  struct zMaterializzedBytes z3zE3682;
+  CREATE(zMaterializzedBytes)(&z3zE3682);
+  COPY(zz5listz8z5bv8z9)(&((&z3zE3682)->zdata), zdata);
+  z3zE3682.zlen = zlen;
+  COPY(zMaterializzedBytes)((*(&z8zE89)), z3zE3682);
+  KILL(zMaterializzedBytes)(&z3zE3682);
+end_function_3783: ;
+  goto end_function_4079;
+end_block_exception_3784: ;
+  goto end_function_4079;
+end_function_4079: ;
 }
 
 void zbytes_list(struct zBytes *z8zE90, zz5listz8z5bv8z9 zdata, uint64_t zlen)
 {
-  struct zMaterializzedBytes z2zE3942;
-  CREATE(zMaterializzedBytes)(&z2zE3942);
-  zmaterializzed_bytes(&z2zE3942, zdata, zlen);
-  zBytesList((*(&z8zE90)), z2zE3942);
-  KILL(zMaterializzedBytes)(&z2zE3942);
-end_function_3800: ;
-  goto end_function_4090;
-end_block_exception_3801: ;
-  goto end_function_4090;
-end_function_4090: ;
+  struct zMaterializzedBytes z2zE3903;
+  CREATE(zMaterializzedBytes)(&z2zE3903);
+  zmaterializzed_bytes(&z2zE3903, zdata, zlen);
+  zBytesList((*(&z8zE90)), z2zE3903);
+  KILL(zMaterializzedBytes)(&z2zE3903);
+end_function_3781: ;
+  goto end_function_4078;
+end_block_exception_3782: ;
+  goto end_function_4078;
+end_function_4078: ;
 }
 
 void zbytes_fixed32(struct zBytes *z8zE91, sail_fixed_bytes_32 zdata, uint64_t zlen)
 {
-  struct zFixedBytes32 z3zE3752;
-  z3zE3752.zdata = zdata;
-  z3zE3752.zlen = zlen;
-  zBytesFixed32((*(&z8zE91)), z3zE3752);
-end_function_3798: ;
-  goto end_function_4089;
-end_block_exception_3799: ;
-  goto end_function_4089;
-end_function_4089: ;
+  struct zFixedBytes32 z3zE3681;
+  z3zE3681.zdata = zdata;
+  z3zE3681.zlen = zlen;
+  zBytesFixed32((*(&z8zE91)), z3zE3681);
+end_function_3779: ;
+  goto end_function_4077;
+end_block_exception_3780: ;
+  goto end_function_4077;
+end_function_4077: ;
 }
 

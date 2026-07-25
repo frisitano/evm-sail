@@ -52,13 +52,7 @@ corresponding SSZ list element. -/
 def undefined_WitnessContext (_ : Unit) : SailM WitnessContext := do
   (pure { parent_hash := ← (undefined_vector 32 (← (undefined_bitvector 8))),
           parent_state_root := ← (undefined_vector 32 (← (undefined_bitvector 8))),
-          parent_base_fee_per_gas := ← do
-              let publicField ← (undefined_range 0 ((2 ^i 256) - 1))
-              pure (⟨publicField⟩),
-          parent_blob_gas_used := ← do
-              let publicField ← (undefined_range 0 (21 *i (2 ^i 17)))
-              pure (⟨publicField⟩),
-          parent_excess_blob_gas := ← do
-              let publicField ← (undefined_range 0 ((2 ^i 64) - 1))
-              pure (⟨publicField⟩) })
+          parent_base_fee_per_gas := ← (undefined_range 0 ((2 ^i 256) - 1)),
+          parent_blob_gas_used := ← (undefined_range 0 (21 *i (2 ^i 17))),
+          parent_excess_blob_gas := ← (undefined_range 0 ((2 ^i 64) - 1)) })
 

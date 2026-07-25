@@ -115,16 +115,20 @@ def DEPOSIT_INDEX_LENGTH : Nat := EIGHT_BYTE_LENGTH
 /-- Enters a top-level protocol system-call frame. The caller has already
 made a fresh memory frame and, for a word input, frozen the
 parent-memory span that `input` references. -/
-/- Type quantifiers: k_ex411415_ : Nat, k_ex411414_ : Nat, 0 ≤ k_ex411414_ ∧ 0 ≤ k_ex411415_ -/
-def enter_system_call_frame (tgt : address) (input : EvmByteSlice) : SailM journal_checkpoint := do
+/- Type quantifiers: input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, 0 ≤
+  input_dependentWitness0 ∧ 0 ≤ input_dependentWitness1 -/
+def enter_system_call_frame (tgt : (Vector (BitVec 8) 20)) (input : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM Nat := do
+  let input_dependentWitness0 := (input).1
+  let input_dependentWitness1 := ((input).2).1
   let input := ((input).2).2
   let checkpoint ← do (k_state_checkpoint ())
   writeReg pc 0
-  writeReg call_depth ⟨0⟩
+  writeReg call_depth 0
   writeReg gas_remaining SYSTEM_CALL_GAS_LIMIT
   writeReg state_gas_remaining GAS_ZERO
-  writeReg state_gas_spilled ⟨(STATE_GAS_SPILL_ZERO).value⟩
-  writeReg frame_refund ⟨(GAS_REFUND_ZERO).value⟩
+  writeReg state_gas_spilled STATE_GAS_SPILL_ZERO
+  writeReg frame_refund GAS_REFUND_ZERO
   (stack_reset ())
   (returndata_clear ())
   writeReg frame_status (Running ())
@@ -132,17 +136,17 @@ def enter_system_call_frame (tgt : address) (input : EvmByteSlice) : SailM journ
   writeReg message { caller := SYSTEM_ADDRESS,
                      address := tgt,
                      code_address := tgt,
-                     value := ⟨(ZERO_WORD).value⟩,
+                     value := ZERO_WORD,
                      state_gas_reservoir := GAS_ZERO,
                      is_static := false,
-                     depth := ⟨0⟩ }
+                     depth := 0 }
   writeReg frame_code (← (code_db_resolve (← (k_code_key tgt))))
   (pure checkpoint)
 
 /-- Issues one unchecked block-start system call: a 30M-gas frame from
 `SYSTEM_ADDRESS` with a 32-byte input; skipped when the target has no
 code, and its output is discarded. -/
-def system_call (tgt : address) (input : hash) : SailM Unit := do
+def system_call (tgt : (Vector (BitVec 8) 20)) (input : (Vector (BitVec 8) 32)) : SailM Unit := do
   if (((← (k_code_key tgt)) == KECCAK_EMPTY) : Bool)
   then (pure ())
   else
@@ -154,7 +158,7 @@ def system_call (tgt : address) (input : hash) : SailM Unit := do
         (Sigma fun (k_len : Nat) => (MemoryRangeFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
         (Sigma fun (k_len : Nat) => (MemoryRangeFields k_off k_len))))
       let ⟨_, ⟨_, _⟩⟩ ← do (memory_expand_to ((input_range).2).2.len)
-      (mem_store_word ((input_range).2).2.off ⟨((hash_to_word input)).value⟩)
+      (mem_store_word ((input_range).2).2.off (hash_to_word input))
       let ⟨_, ⟨_, input_slice⟩⟩ ← do
         (memory_byte_slice ((input_range).2).2.off ((input_range).2).2.len)
       let ⟨_, ⟨_, parent_memory⟩⟩ ← do (memory_frame_enter ())
@@ -169,8 +173,9 @@ def system_call (tgt : address) (input : hash) : SailM Unit := do
 /-- Issues one checked block-end system call (EIP-7002/EIP-7251/EIP-8282): the
 target must exist and the call must succeed. Missing code or frame failure
 throws immediately; a successful call returns the dequeued requests. -/
-def system_call_checked (tgt : address) : SailM EvmByteSlice := do
-  if (((← (k_code_key tgt)) == KECCAK_EMPTY) : Bool)
+def system_call_checked (tgt : (Vector (BitVec 8) 20)) : SailM (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
+  if _sailIf0 : (((← (k_code_key tgt)) == KECCAK_EMPTY) : Bool) = true
   then
     (do
       sailThrow ((InvalidBlock ExecutionInvalid)))
@@ -180,7 +185,7 @@ def system_call_checked (tgt : address) : SailM EvmByteSlice := do
       let ⟨_, ⟨_, parent_memory⟩⟩ ← do (memory_frame_enter ())
       let checkpoint ← do (enter_system_call_frame tgt ⟨_, ⟨_, EMPTY_SLICE⟩⟩)
       let ⟨_, ⟨_, output⟩⟩ ← do (interpret ())
-      if ((← (frame_succeeded ())) : Bool)
+      if _sailIf1 : ((← (frame_succeeded ())) : Bool) = true
       then
         (do
           let start ← do (scratch_begin ())
@@ -204,52 +209,83 @@ def deposit_log_matches (log : LogEntry) : Bool :=
   if ((bne log.address DEPOSIT_CONTRACT_ADDR) : Bool)
   then false
   else
-    (match (List.map (fun semanticValue => (semanticValue).value) (log.topics)) with
-    | (topic :: _) => (topic == (DEPOSIT_EVENT_TOPIC).value)
+    (match log.topics with
+    | (topic :: _) => (topic == DEPOSIT_EVENT_TOPIC)
     | [] => false)
 
 /-- Strips the ABI framing from one `DepositEvent` and appends the
 consensus-layer deposit record's fields directly to the requests
 scratch (EIP-6110). -/
-/- Type quantifiers: k_ex411419_ : Nat, k_ex411418_ : Nat, 0 ≤ k_ex411418_ ∧ 0 ≤ k_ex411419_ -/
-def append_deposit_request (data : EvmByteSlice) : SailM Unit := do
+/- Type quantifiers: data_dependentWitness1 : Nat, data_dependentWitness0 : Nat, 0 ≤
+  data_dependentWitness0 ∧ 0 ≤ data_dependentWitness1 -/
+def append_deposit_request (data : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM Unit := do
+  let data_dependentWitness0 := (data).1
+  let data_dependentWitness1 := ((data).2).1
   let data := ((data).2).2
   if ((data.len != DEPOSIT_EVENT_DATA_LENGTH) : Bool)
   then sailThrow ((InvalidBlock InvalidExecutionRequests))
-  else (pure ())
-  if (((((← (slice_load ⟨_, ⟨_, data⟩⟩ DEPOSIT_PUBKEY_HEAD))).value != ((U256 160)).value) || (← do
-         (pure ((((← (slice_load ⟨_, ⟨_, data⟩⟩ DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD))).value != ((U256
-                 256)).value) || (← do
-               (pure ((((← (slice_load ⟨_, ⟨_, data⟩⟩ DEPOSIT_AMOUNT_HEAD))).value != ((U256
-                       320)).value) || (← do
-                     (pure ((((← (slice_load ⟨_, ⟨_, data⟩⟩ DEPOSIT_SIGNATURE_HEAD))).value != ((U256
-                             384)).value) || (← do
-                           (pure ((((← (slice_load ⟨_, ⟨_, data⟩⟩ DEPOSIT_INDEX_HEAD))).value != ((U256
-                                   512)).value) || (← do
-                                 (pure ((((← (slice_load ⟨_, ⟨_, data⟩⟩
-                                         DEPOSIT_PUBKEY_LENGTH_WORD))).value != ((U256 48)).value) || (← do
-                                       (pure ((((← (slice_load ⟨_, ⟨_, data⟩⟩
-                                               DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD))).value != ((U256
-                                               32)).value) || (← do
-                                             (pure ((((← (slice_load ⟨_, ⟨_, data⟩⟩
-                                                     DEPOSIT_AMOUNT_LENGTH_WORD))).value != ((U256 8)).value) || (← do
-                                                   (pure ((((← (slice_load ⟨_, ⟨_, data⟩⟩
-                                                           DEPOSIT_SIGNATURE_LENGTH_WORD))).value != ((U256
-                                                           96)).value) || (← do
-                                                         (pure (((← (slice_load
-                                                               ⟨_, ⟨_, data⟩⟩
-                                                               DEPOSIT_INDEX_LENGTH_WORD))).value != ((U256
-                                                               8)).value)))))))))))))))))))))))))))) : Bool)
-  then sailThrow ((InvalidBlock InvalidExecutionRequests))
-  else (pure ())
-  (scratch_push_slice ⟨_, ⟨_, (sub_slice data DEPOSIT_PUBKEY_DATA DEPOSIT_PUBKEY_LENGTH)⟩⟩)
-  (scratch_push_slice
-    ⟨_, ⟨_, (sub_slice data DEPOSIT_WITHDRAWAL_CREDENTIALS_DATA
-      DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH)⟩⟩)
-  (scratch_push_slice ⟨_, ⟨_, (sub_slice data DEPOSIT_AMOUNT_DATA DEPOSIT_AMOUNT_LENGTH)⟩⟩)
-  (scratch_push_slice
-    ⟨_, ⟨_, (sub_slice data DEPOSIT_SIGNATURE_DATA DEPOSIT_SIGNATURE_LENGTH)⟩⟩)
-  (scratch_push_slice ⟨_, ⟨_, (sub_slice data DEPOSIT_INDEX_DATA DEPOSIT_INDEX_LENGTH)⟩⟩)
+  else
+    (do
+      if ((← if (((← (slice_load ⟨_, ⟨_, data⟩⟩ DEPOSIT_PUBKEY_HEAD)) != (U256 160)) : Bool)
+           then (pure true)
+           else
+             (do
+               if (((← (slice_load ⟨_, ⟨_, data⟩⟩ DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD)) != (U256
+                      256)) : Bool)
+               then (pure true)
+               else
+                 (do
+                   if (((← (slice_load ⟨_, ⟨_, data⟩⟩ DEPOSIT_AMOUNT_HEAD)) != (U256 320)) : Bool)
+                   then (pure true)
+                   else
+                     (do
+                       if (((← (slice_load ⟨_, ⟨_, data⟩⟩ DEPOSIT_SIGNATURE_HEAD)) != (U256
+                              384)) : Bool)
+                       then (pure true)
+                       else
+                         (do
+                           if (((← (slice_load ⟨_, ⟨_, data⟩⟩ DEPOSIT_INDEX_HEAD)) != (U256
+                                  512)) : Bool)
+                           then (pure true)
+                           else
+                             (do
+                               if (((← (slice_load ⟨_, ⟨_, data⟩⟩
+                                        DEPOSIT_PUBKEY_LENGTH_WORD)) != (U256 48)) : Bool)
+                               then (pure true)
+                               else
+                                 (do
+                                   if (((← (slice_load ⟨_, ⟨_, data⟩⟩
+                                            DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD)) != (U256 32)) : Bool)
+                                   then (pure true)
+                                   else
+                                     (do
+                                       if (((← (slice_load ⟨_, ⟨_, data⟩⟩
+                                                DEPOSIT_AMOUNT_LENGTH_WORD)) != (U256 8)) : Bool)
+                                       then (pure true)
+                                       else
+                                         (do
+                                           if (((← (slice_load ⟨_, ⟨_, data⟩⟩
+                                                    DEPOSIT_SIGNATURE_LENGTH_WORD)) != (U256 96)) : Bool)
+                                           then (pure true)
+                                           else
+                                             (do
+                                               (pure ((← (slice_load ⟨_, ⟨_, data⟩⟩
+                                                       DEPOSIT_INDEX_LENGTH_WORD)) != (U256 8))))))))))))) : Bool)
+      then sailThrow ((InvalidBlock InvalidExecutionRequests))
+      else
+        (do
+          (scratch_push_slice
+            ⟨_, ⟨_, (sub_slice data DEPOSIT_PUBKEY_DATA DEPOSIT_PUBKEY_LENGTH)⟩⟩)
+          (scratch_push_slice
+            ⟨_, ⟨_, (sub_slice data DEPOSIT_WITHDRAWAL_CREDENTIALS_DATA
+              DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH)⟩⟩)
+          (scratch_push_slice
+            ⟨_, ⟨_, (sub_slice data DEPOSIT_AMOUNT_DATA DEPOSIT_AMOUNT_LENGTH)⟩⟩)
+          (scratch_push_slice
+            ⟨_, ⟨_, (sub_slice data DEPOSIT_SIGNATURE_DATA DEPOSIT_SIGNATURE_LENGTH)⟩⟩)
+          (scratch_push_slice
+            ⟨_, ⟨_, (sub_slice data DEPOSIT_INDEX_DATA DEPOSIT_INDEX_LENGTH)⟩⟩)))
 
 /-- Appends every matching deposit log in emission order. -/
 def append_deposit_logs (logs : (List LogEntry)) : SailM Unit := do
@@ -266,31 +302,45 @@ def append_deposit_logs (logs : (List LogEntry)) : SailM Unit := do
 order: deposits from logs (EIP-6110), withdrawal (EIP-7002),
 consolidation (EIP-7251), and, from Amsterdam, builder deposit and
 builder exit (EIP-8282). -/
-/- Type quantifiers: k_ex411423_ : Nat, k_ex411422_ : Nat, 0 ≤ k_ex411422_ ∧ 0 ≤ k_ex411423_ -/
-def collect_execution_requests (deposits : EvmByteSlice) : SailM ExecutionRequests := do
+/- Type quantifiers: deposits_dependentWitness1 : Nat, deposits_dependentWitness0 : Nat, 0 ≤
+  deposits_dependentWitness0 ∧ 0 ≤ deposits_dependentWitness1 -/
+def collect_execution_requests (deposits : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM ExecutionRequests := do
+  let deposits_dependentWitness0 := (deposits).1
+  let deposits_dependentWitness1 := ((deposits).2).1
   let deposits := ((deposits).2).2
   let ⟨_, ⟨_, withdrawals⟩⟩ ← do (system_call_checked WITHDRAWAL_REQUEST_ADDR)
   let ⟨_, ⟨_, consolidations⟩⟩ ← do (system_call_checked CONSOLIDATION_REQUEST_ADDR)
   let ⟨_, ⟨_, builder_deposits⟩⟩ ← (( do
-    if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
+    if _sailIf0 : ((fork_gteq (← readReg k_fork) Amsterdam) : Bool) = true
     then
       (do
         (system_call_checked BUILDER_DEPOSIT_REQUEST_ADDR))
     else
-      (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
-        (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
-        (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))) ) : SailM
-    (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) )
+      (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (deposits_dependentWitness0 : Nat) =>
+        (Sigma fun (deposits_dependentWitness1 : Nat) =>
+        (EvmByteSliceFields deposits_dependentWitness0 deposits_dependentWitness1)))) : (Sigma fun
+        (deposits_dependentWitness0 : Nat) =>
+        (Sigma fun (deposits_dependentWitness1 : Nat) =>
+        (EvmByteSliceFields deposits_dependentWitness0 deposits_dependentWitness1))))) ) : SailM
+    (Sigma fun (deposits_dependentWitness0 : Nat) =>
+    (Sigma fun (deposits_dependentWitness1 : Nat) =>
+    (EvmByteSliceFields deposits_dependentWitness0 deposits_dependentWitness1))) )
   let ⟨_, ⟨_, builder_exits⟩⟩ ← (( do
-    if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
+    if _sailIf0 : ((fork_gteq (← readReg k_fork) Amsterdam) : Bool) = true
     then
       (do
         (system_call_checked BUILDER_EXIT_REQUEST_ADDR))
     else
-      (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
-        (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
-        (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))) ) : SailM
-    (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) )
+      (pure ((⟨_, ⟨_, EMPTY_SLICE⟩⟩ : (Sigma fun (deposits_dependentWitness0 : Nat) =>
+        (Sigma fun (deposits_dependentWitness1 : Nat) =>
+        (EvmByteSliceFields deposits_dependentWitness0 deposits_dependentWitness1)))) : (Sigma fun
+        (deposits_dependentWitness0 : Nat) =>
+        (Sigma fun (deposits_dependentWitness1 : Nat) =>
+        (EvmByteSliceFields deposits_dependentWitness0 deposits_dependentWitness1))))) ) : SailM
+    (Sigma fun (deposits_dependentWitness0 : Nat) =>
+    (Sigma fun (deposits_dependentWitness1 : Nat) =>
+    (EvmByteSliceFields deposits_dependentWitness0 deposits_dependentWitness1))) )
   (pure { deposits := ⟨_, ⟨_, deposits⟩⟩,
           withdrawals := ⟨_, ⟨_, withdrawals⟩⟩,
           consolidations := ⟨_, ⟨_, consolidations⟩⟩,

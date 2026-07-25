@@ -38,42 +38,42 @@ void kill_letbind_76(void) {
 uint64_t ztx_type_byte(enum zTxType zt)
 {
   uint64_t z8zE107;
-  uint64_t z3zE3700;
+  uint64_t z3zE3629;
   {
-    if ((zLegacyTx != zt)) goto case_3759;
-    z3zE3700 = UINT64_C(0x00);
-    goto finish_match_3754;
+    if ((zLegacyTx != zt)) goto case_3740;
+    z3zE3629 = UINT64_C(0x00);
+    goto finish_match_3735;
   }
-case_3759: ;
+case_3740: ;
   {
-    if ((zAccessListTx != zt)) goto case_3758;
-    z3zE3700 = UINT64_C(0x01);
-    goto finish_match_3754;
+    if ((zAccessListTx != zt)) goto case_3739;
+    z3zE3629 = UINT64_C(0x01);
+    goto finish_match_3735;
   }
-case_3758: ;
+case_3739: ;
   {
-    if ((zFeeMarketTx != zt)) goto case_3757;
-    z3zE3700 = UINT64_C(0x02);
-    goto finish_match_3754;
+    if ((zFeeMarketTx != zt)) goto case_3738;
+    z3zE3629 = UINT64_C(0x02);
+    goto finish_match_3735;
   }
-case_3757: ;
+case_3738: ;
   {
-    if ((zBlobTx != zt)) goto case_3756;
-    z3zE3700 = UINT64_C(0x03);
-    goto finish_match_3754;
+    if ((zBlobTx != zt)) goto case_3737;
+    z3zE3629 = UINT64_C(0x03);
+    goto finish_match_3735;
   }
-case_3756: ;
+case_3737: ;
   {
     /* complete */
-    z3zE3700 = UINT64_C(0x04);
-    goto finish_match_3754;
+    z3zE3629 = UINT64_C(0x04);
+    goto finish_match_3735;
   }
-case_3755: ;
-finish_match_3754: ;
-  z8zE107 = z3zE3700;
-end_function_3760: ;
+case_3736: ;
+finish_match_3735: ;
+  z8zE107 = z3zE3629;
+end_function_3741: ;
   return z8zE107;
-end_block_exception_3761: ;
+end_block_exception_3742: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -81,23 +81,23 @@ end_block_exception_3761: ;
 bool ztx_is_access_list(enum zTxType zt)
 {
   bool z8zE108;
-  bool z3zE3697;
+  bool z3zE3626;
   {
-    if ((zAccessListTx != zt)) goto case_3751;
-    z3zE3697 = true;
-    goto finish_match_3749;
+    if ((zAccessListTx != zt)) goto case_3732;
+    z3zE3626 = true;
+    goto finish_match_3730;
   }
-case_3751: ;
+case_3732: ;
   {
-    z3zE3697 = false;
-    goto finish_match_3749;
+    z3zE3626 = false;
+    goto finish_match_3730;
   }
-case_3750: ;
-finish_match_3749: ;
-  z8zE108 = z3zE3697;
-end_function_3752: ;
+case_3731: ;
+finish_match_3730: ;
+  z8zE108 = z3zE3626;
+end_function_3733: ;
   return z8zE108;
-end_block_exception_3753: ;
+end_block_exception_3734: ;
 
   return false;
 }
@@ -105,35 +105,35 @@ end_block_exception_3753: ;
 bool ztx_is_dynamic_fee(enum zTxType zt)
 {
   bool z8zE109;
-  bool z3zE3692;
+  bool z3zE3621;
   {
-    if ((zFeeMarketTx != zt)) goto case_3746;
-    z3zE3692 = true;
-    goto finish_match_3742;
+    if ((zFeeMarketTx != zt)) goto case_3727;
+    z3zE3621 = true;
+    goto finish_match_3723;
   }
-case_3746: ;
+case_3727: ;
   {
-    if ((zBlobTx != zt)) goto case_3745;
-    z3zE3692 = true;
-    goto finish_match_3742;
+    if ((zBlobTx != zt)) goto case_3726;
+    z3zE3621 = true;
+    goto finish_match_3723;
   }
-case_3745: ;
+case_3726: ;
   {
-    if ((zSetCodeTx != zt)) goto case_3744;
-    z3zE3692 = true;
-    goto finish_match_3742;
+    if ((zSetCodeTx != zt)) goto case_3725;
+    z3zE3621 = true;
+    goto finish_match_3723;
   }
-case_3744: ;
+case_3725: ;
   {
-    z3zE3692 = false;
-    goto finish_match_3742;
+    z3zE3621 = false;
+    goto finish_match_3723;
   }
-case_3743: ;
-finish_match_3742: ;
-  z8zE109 = z3zE3692;
-end_function_3747: ;
+case_3724: ;
+finish_match_3723: ;
+  z8zE109 = z3zE3621;
+end_function_3728: ;
   return z8zE109;
-end_block_exception_3748: ;
+end_block_exception_3729: ;
 
   return false;
 }
@@ -141,23 +141,23 @@ end_block_exception_3748: ;
 bool ztx_is_blob(enum zTxType zt)
 {
   bool z8zE110;
-  bool z3zE3689;
+  bool z3zE3618;
   {
-    if ((zBlobTx != zt)) goto case_3739;
-    z3zE3689 = true;
-    goto finish_match_3737;
+    if ((zBlobTx != zt)) goto case_3720;
+    z3zE3618 = true;
+    goto finish_match_3718;
   }
-case_3739: ;
+case_3720: ;
   {
-    z3zE3689 = false;
-    goto finish_match_3737;
+    z3zE3618 = false;
+    goto finish_match_3718;
   }
-case_3738: ;
-finish_match_3737: ;
-  z8zE110 = z3zE3689;
-end_function_3740: ;
+case_3719: ;
+finish_match_3718: ;
+  z8zE110 = z3zE3618;
+end_function_3721: ;
   return z8zE110;
-end_block_exception_3741: ;
+end_block_exception_3722: ;
 
   return false;
 }
@@ -165,23 +165,23 @@ end_block_exception_3741: ;
 bool ztx_is_set_code(enum zTxType zt)
 {
   bool z8zE111;
-  bool z3zE3686;
+  bool z3zE3615;
   {
-    if ((zSetCodeTx != zt)) goto case_3734;
-    z3zE3686 = true;
-    goto finish_match_3732;
+    if ((zSetCodeTx != zt)) goto case_3715;
+    z3zE3615 = true;
+    goto finish_match_3713;
   }
-case_3734: ;
+case_3715: ;
   {
-    z3zE3686 = false;
-    goto finish_match_3732;
+    z3zE3615 = false;
+    goto finish_match_3713;
   }
-case_3733: ;
-finish_match_3732: ;
-  z8zE111 = z3zE3686;
-end_function_3735: ;
+case_3714: ;
+finish_match_3713: ;
+  z8zE111 = z3zE3615;
+end_function_3716: ;
   return z8zE111;
-end_block_exception_3736: ;
+end_block_exception_3717: ;
 
   return false;
 }

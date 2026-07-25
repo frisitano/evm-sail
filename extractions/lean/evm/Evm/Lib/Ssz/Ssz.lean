@@ -53,81 +53,88 @@ def SSZ_OFF_BYTES : Nat := 4
 
 def SSZ_UINT_BYTES : Nat := 8
 
-/- Type quantifiers: base : Nat, delta : Nat, source_valid_range(base, delta) -/
+/- Type quantifiers: base : Nat, delta : Nat, (source_valid_range base delta) -/
 def ssz_field_offset (base : Nat) (delta : Nat) : Nat :=
   (base + delta)
 
-/- Type quantifiers: k_ex409490_ : Nat, k_ex409489_ : Nat, offset : Nat, source_valid_range(offset, 4), 0
-  ≤ k_ex409489_ ∧ 0 ≤ k_ex409490_ -/
-def ssz_u32_at (input : EvmByteSlice) (offset : Nat) : SailM ssz_offset := do
+/- Type quantifiers: input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, offset : Nat, (source_valid_range offset 4), 0
+  ≤ input_dependentWitness0 ∧ 0 ≤ input_dependentWitness1 -/
+def ssz_u32_at (input : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (offset : Nat) : SailM Nat := do
+  let input_dependentWitness0 := (input).1
+  let input_dependentWitness1 := ((input).2).1
   let input := ((input).2).2
-  let publicResult ← do
-    let b0 ← do
-      (pure (Sail.BitVec.zeroExtend (← (slice_byte ⟨_, ⟨_, input⟩⟩ offset)) 32))
-    let b1 ← do
-      (pure (Sail.BitVec.zeroExtend
-          (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 1))) 32))
-    let b2 ← do
-      (pure (Sail.BitVec.zeroExtend
-          (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 2))) 32))
-    let b3 ← do
-      (pure (Sail.BitVec.zeroExtend
-          (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 3))) 32))
-    (pure (BitVec.toNatInt (b0 ||| ((b1 <<< 8) ||| ((b2 <<< 16) ||| (b3 <<< 24))))))
-  pure (⟨publicResult⟩)
+  let b0 ← do (pure (Sail.BitVec.zeroExtend (← (slice_byte ⟨_, ⟨_, input⟩⟩ offset)) 32))
+  let b1 ← do
+    (pure (Sail.BitVec.zeroExtend
+        (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 1))) 32))
+  let b2 ← do
+    (pure (Sail.BitVec.zeroExtend
+        (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 2))) 32))
+  let b3 ← do
+    (pure (Sail.BitVec.zeroExtend
+        (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 3))) 32))
+  (pure (BitVec.toNatInt (b0 ||| ((b1 <<< 8) ||| ((b2 <<< 16) ||| (b3 <<< 24))))))
 
-/- Type quantifiers: k_ex409504_ : Nat, k_ex409503_ : Nat, offset : Nat, source_valid_range(offset, 4), 0
-  ≤ k_ex409503_ ∧ 0 ≤ k_ex409504_ -/
-def ssz_u32 (input : EvmByteSlice) (offset : Nat) : SailM ssz_offset := do
+/- Type quantifiers: input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, offset : Nat, (source_valid_range offset 4), 0
+  ≤ input_dependentWitness0 ∧ 0 ≤ input_dependentWitness1 -/
+def ssz_u32 (input : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (offset : Nat) : SailM Nat := do
+  let input_dependentWitness0 := (input).1
+  let input_dependentWitness1 := ((input).2).1
   let input := ((input).2).2
-  let publicResult ← do
-    (do
-        let publicResult ← (ssz_u32_at ⟨_, ⟨_, input⟩⟩ offset)
-        pure ((publicResult).value))
-  pure (⟨publicResult⟩)
+  (ssz_u32_at ⟨_, ⟨_, input⟩⟩ offset)
 
 /-- Narrows a wire-bounded SSZ offset at the host byte-position boundary. -/
 /- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 32 - 1) -/
-def ssz_offset_to_source_pointer (value : ssz_offset) : source_pointer :=
-  let value := (value).value
+def ssz_offset_to_source_pointer (value : Nat) : Nat :=
   value
 
-/- Type quantifiers: k_ex409519_ : Nat, k_ex409518_ : Nat, offset : Nat, source_valid_range(offset, 8), 0
-  ≤ k_ex409518_ ∧ 0 ≤ k_ex409519_ -/
-def decode_ssz_uint (input : EvmByteSlice) (offset : Nat) : SailM ssz_uint := do
+/- Type quantifiers: input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, offset : Nat, (source_valid_range offset 8), 0
+  ≤ input_dependentWitness0 ∧ 0 ≤ input_dependentWitness1 -/
+def decode_ssz_uint (input : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (offset : Nat) : SailM Nat := do
+  let input_dependentWitness0 := (input).1
+  let input_dependentWitness1 := ((input).2).1
   let input := ((input).2).2
-  let publicResult ← do
-    (pure ((((((((BitVec.toNatInt (← (slice_byte ⟨_, ⟨_, input⟩⟩ offset))) + ((BitVec.toNatInt
-                        (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 1)))) *i (2 ^i 8))) + ((BitVec.toNatInt
-                      (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 2)))) *i (2 ^i 16))) + ((BitVec.toNatInt
-                    (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 3)))) *i (2 ^i 24))) + ((BitVec.toNatInt
-                  (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset SSZ_OFF_BYTES)))) *i (2 ^i 32))) + ((BitVec.toNatInt
-                (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 5)))) *i (2 ^i 40))) + ((BitVec.toNatInt
-              (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 6)))) *i (2 ^i 48))) + ((BitVec.toNatInt
-            (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 7)))) *i (2 ^i 56))))
-  pure (⟨publicResult⟩)
+  (pure ((((((((BitVec.toNatInt (← (slice_byte ⟨_, ⟨_, input⟩⟩ offset))) + ((BitVec.toNatInt
+                      (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 1)))) *i (2 ^i 8))) + ((BitVec.toNatInt
+                    (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 2)))) *i (2 ^i 16))) + ((BitVec.toNatInt
+                  (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 3)))) *i (2 ^i 24))) + ((BitVec.toNatInt
+                (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset SSZ_OFF_BYTES)))) *i (2 ^i 32))) + ((BitVec.toNatInt
+              (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 5)))) *i (2 ^i 40))) + ((BitVec.toNatInt
+            (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 6)))) *i (2 ^i 48))) + ((BitVec.toNatInt
+          (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset 7)))) *i (2 ^i 56))))
 
-/- Type quantifiers: k_ex409533_ : Nat, k_ex409532_ : Nat, offset : Nat, source_valid_range(offset, 20), 0
-  ≤ k_ex409532_ ∧ 0 ≤ k_ex409533_ -/
-def ssz_addr (input : EvmByteSlice) (offset : Nat) : SailM address := do
+/- Type quantifiers: input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, offset : Nat, (source_valid_range offset 20), 0
+  ≤ input_dependentWitness0 ∧ 0 ≤ input_dependentWitness1 -/
+def ssz_addr (input : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (offset : Nat) : SailM (Vector (BitVec 8) 20) := do
+  let input_dependentWitness0 := (input).1
+  let input_dependentWitness1 := ((input).2).1
   let input := ((input).2).2
-  (pure (word_to_address
-      ⟨((← (slice_load_n ⟨_, ⟨_, input⟩⟩ offset ADDRESS_BYTE_LENGTH))).value⟩))
+  (pure (word_to_address (← (slice_load_n ⟨_, ⟨_, input⟩⟩ offset ADDRESS_BYTE_LENGTH))))
 
-/- Type quantifiers: k_ex409547_ : Nat, k_ex409546_ : Nat, offset : Nat, source_valid_range(offset, 32), 0
-  ≤ k_ex409546_ ∧ 0 ≤ k_ex409547_ -/
-def ssz_bytes32 (input : EvmByteSlice) (offset : Nat) : SailM hash := do
+/- Type quantifiers: input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, offset : Nat, (source_valid_range offset 32), 0
+  ≤ input_dependentWitness0 ∧ 0 ≤ input_dependentWitness1 -/
+def ssz_bytes32 (input : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (offset : Nat) : SailM (Vector (BitVec 8) 32) := do
+  let input_dependentWitness0 := (input).1
+  let input_dependentWitness1 := ((input).2).1
   let input := ((input).2).2
-  (pure (word_to_hash ⟨((← (slice_load ⟨_, ⟨_, input⟩⟩ offset))).value⟩))
+  (pure (word_to_hash (← (slice_load ⟨_, ⟨_, input⟩⟩ offset))))
 
 /- Type quantifiers: index : Nat, 0 ≤ index ∧ index ≤ 255 -/
 def ssz_logs_bloom_index (index : Nat) : Nat :=
   (255 - index)
 
 /-- Decodes a fixed 256-byte logs bloom from SSZ wire order. -/
-/- Type quantifiers: k_ex409561_ : Nat, k_ex409560_ : Nat, offset : Nat, source_valid_range(offset, 256), 0
-  ≤ k_ex409560_ ∧ 0 ≤ k_ex409561_ -/
-def ssz_logs_bloom (input : EvmByteSlice) (offset : Nat) : SailM LogsBloom := do
+/- Type quantifiers: input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, offset : Nat, (source_valid_range offset 256), 0
+  ≤ input_dependentWitness0 ∧ 0 ≤ input_dependentWitness1 -/
+def ssz_logs_bloom (input : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (offset : Nat) : SailM (Vector (BitVec 8) 256) := do
+  let input_dependentWitness0 := (input).1
+  let input_dependentWitness1 := ((input).2).1
   let input := ((input).2).2
   let out : (Vector (BitVec 8) 256) := (vectorInit 0x00#8)
   let loop_k_lower := 0
@@ -145,21 +152,22 @@ def ssz_u256_index (index : Nat) : Nat :=
   (31 - index)
 
 /-- Decodes a 32-byte little-endian SSZ integer into an EVM word. -/
-/- Type quantifiers: k_ex409575_ : Nat, k_ex409574_ : Nat, offset : Nat, source_valid_range(offset, 32), 0
-  ≤ k_ex409574_ ∧ 0 ≤ k_ex409575_ -/
-def ssz_u256 (input : EvmByteSlice) (offset : Nat) : SailM word := do
+/- Type quantifiers: input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, offset : Nat, (source_valid_range offset 32), 0
+  ≤ input_dependentWitness0 ∧ 0 ≤ input_dependentWitness1 -/
+def ssz_u256 (input : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (offset : Nat) : SailM Nat := do
+  let input_dependentWitness0 := (input).1
+  let input_dependentWitness1 := ((input).2).1
   let input := ((input).2).2
-  let publicResult ← do
-    let result : Nat := (WORD_ZERO).value
-    let loop_k_lower := 0
-    let loop_k_upper := 31
-    let mut loop_vars := result
-    for k in [loop_k_lower:loop_k_upper:1]i do
-      let result := loop_vars
-      loop_vars ← do
-        (pure ((word_add_word (word_mul_word result 256)
-            (BitVec.toNatInt
-              (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset (ssz_u256_index k))))))).value)
-    (pure loop_vars)
-  pure (⟨publicResult⟩)
+  let result : Nat := WORD_ZERO
+  let loop_k_lower := 0
+  let loop_k_upper := 31
+  let mut loop_vars := result
+  for k in [loop_k_lower:loop_k_upper:1]i do
+    let result := loop_vars
+    loop_vars ← do
+      (pure (word_add_word (word_mul_word result 256)
+          (BitVec.toNatInt
+            (← (slice_byte ⟨_, ⟨_, input⟩⟩ (ssz_field_offset offset (ssz_u256_index k)))))))
+  (pure loop_vars)
 

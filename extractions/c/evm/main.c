@@ -4,7 +4,7 @@
 #endif
 unit zmain(unit z3zE446)
 {
-  unit z8zE720;
+  unit z8zE717;
   unit z3zE448;
   z3zE448 = UNIT;
   unit z3zE447;
@@ -19,7 +19,7 @@ unit zmain(unit z3zE446)
         z2zE6 = stateless_input(UNIT);
         {
           zinput_ref = zdecode_stateless_input_ref(z2zE6);
-          if (have_exception) {  goto end_block_exception_1133;  }
+          if (have_exception) {  goto end_block_exception_1130;  }
         }
       }
       struct zStatelessValidationResult zvalidation;
@@ -28,18 +28,18 @@ unit zmain(unit z3zE446)
         zverify_stateless_payload(&zvalidation, zinput_ref);
         if (have_exception) {
           KILL(zStatelessValidationResult)(&zvalidation);
-          goto end_block_exception_1133;
+          goto end_block_exception_1130;
         }
       }
       bool zvalid;
       {
         bool z3zE449;
         {
-          if (zvalidation.kind != Kind_zStatelessPayloadValid) goto case_1126;
+          if (zvalidation.kind != Kind_zStatelessPayloadValid) goto case_1123;
           z3zE449 = true;
-          goto finish_match_1124;
+          goto finish_match_1121;
         }
-      case_1126: ;
+      case_1123: ;
         {
           /* complete */
           struct zStatelessValidationFailure zfailure;
@@ -51,10 +51,10 @@ unit zmain(unit z3zE446)
           unit z3zE450;
           z3zE450 = zvalidation_debug_record(z2zE4, z2zE5);
           z3zE449 = false;
-          goto finish_match_1124;
+          goto finish_match_1121;
         }
-      case_1125: ;
-      finish_match_1124: ;
+      case_1122: ;
+      finish_match_1121: ;
         zvalid = z3zE449;
       }
       struct zGuestValidation z3zE453;
@@ -62,28 +62,28 @@ unit zmain(unit z3zE446)
       z3zE453.zvalid = zvalid;
       zSomezIRGuestValidationzK(&zresult, z3zE453);
       KILL(zStatelessValidationResult)(&zvalidation);
-    end_block_exception_1133: ;
+    end_block_exception_1130: ;
     }
-    if (!(have_exception)) goto post_exception_handlers_1127;
+    if (!(have_exception)) goto post_exception_handlers_1124;
     have_exception = false;
     {
-      if ((*current_exception).kind != Kind_zInvalidBlock) goto try_1128;
+      if ((*current_exception).kind != Kind_zInvalidBlock) goto try_1125;
       enum zBlockError zreason;
       zreason = (*current_exception).variants.zInvalidBlock;
       unit z3zE455;
       z3zE455 = zvalidation_debug_record(zSCOPE_DECODE_INPUT, zreason);
       zNonezIRGuestValidationzK(&zresult, UNIT);
-      goto post_exception_handlers_1127;
+      goto post_exception_handlers_1124;
     }
-  try_1128: ;
+  try_1125: ;
     have_exception = true;
-  post_exception_handlers_1127: ;
+  post_exception_handlers_1124: ;
   }
   unit z3zE457;
   z3zE457 = zcycle_scope_end(zSCOPE_STATELESS_VALIDATION);
   unit z3zE458;
   {
-    if (zresult.kind != Kind_zSomezIRGuestValidationzK) goto case_1131;
+    if (zresult.kind != Kind_zSomezIRGuestValidationzK) goto case_1128;
     struct zGuestValidation z1zE0;
     z1zE0 = zresult.variants.zSomezIRGuestValidationzK;
     struct zStatelessInputRef z2zE2;
@@ -94,24 +94,24 @@ unit zmain(unit z3zE446)
       z3zE458 = zwrite_validation_result(z2zE2, z2zE3);
       if (have_exception) {
         KILL(zoptionzIRGuestValidationzK)(&zresult);
-        goto end_block_exception_1134;
+        goto end_block_exception_1131;
       }
     }
-    goto finish_match_1129;
+    goto finish_match_1126;
   }
-case_1131: ;
+case_1128: ;
   {
     /* complete */
     z3zE458 = zwrite_invalid_result(UNIT);
-    goto finish_match_1129;
+    goto finish_match_1126;
   }
-case_1130: ;
-finish_match_1129: ;
-  z8zE720 = z3zE458;
+case_1127: ;
+finish_match_1126: ;
+  z8zE717 = z3zE458;
   KILL(zoptionzIRGuestValidationzK)(&zresult);
-end_function_1132: ;
-  return z8zE720;
-end_block_exception_1134: ;
+end_function_1129: ;
+  return z8zE717;
+end_block_exception_1131: ;
 
   return UNIT;
 }

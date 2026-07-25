@@ -54,21 +54,24 @@ Account code operations over the content-addressed code store, including
 EIP-7702 delegation designators. -/
 
 /-- The account's code hash — the code-store key. -/
-def k_code_key (a : address) : SailM hash := do
+def k_code_key (a : (Vector (BitVec 8) 20)) : SailM (Vector (BitVec 8) 32) := do
   (pure (← (k_aload a)).info.code_hash)
 
 /-- `EXTCODEHASH` (EIP-1052): a truly non-existent account reads as `0`,
 not `KECCAK_EMPTY`. -/
-def k_get_codehash (a : address) : SailM hash := do
+def k_get_codehash (a : (Vector (BitVec 8) 20)) : SailM (Vector (BitVec 8) 32) := do
   let acc ← do (k_aload a)
   if ((! acc.present) : Bool)
   then (pure ZERO_HASH)
   else (pure acc.info.code_hash)
 
 /-- Deploys code to an account: analyzes, stores, and binds its hash. -/
-/- Type quantifiers: k_ex410504_ : Nat, k_ex410503_ : Nat, 0 ≤ k_ex410503_ ∧ 0 ≤ k_ex410504_
-  ∧ 0 ≤ k_ex410504_ -/
-def k_deploy_code (a : address) (code : CodeSlice) : SailM Unit := do
+/- Type quantifiers: code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0 ≤
+  code_dependentWitness0 ∧ 0 ≤ code_dependentWitness1 ∧ 0 ≤ code_dependentWitness1 -/
+def k_deploy_code (a : (Vector (BitVec 8) 20)) (code : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM Unit := do
+  let code_dependentWitness0 := (code).1
+  let code_dependentWitness1 := ((code).2).1
   let code := ((code).2).2
   let cur ← do (k_aload a)
   let h ← (( do (code_db_insert ⟨_, ⟨_, code⟩⟩ (← readReg k_fork)) ) : SailM
@@ -84,7 +87,7 @@ def delegation_code_index (index : Nat) : Nat :=
   (3 + index)
 
 /-- Marks address bytes that decode as `JUMPDEST` in a delegation designator. -/
-def delegation_jumpdest_chunk (target : address) : JumpdestChunk := Id.run do
+def delegation_jumpdest_chunk (target : (Vector (BitVec 8) 20)) : (BitVec 256) := Id.run do
   let bits := EMPTY_JUMPDEST_CHUNK
   let loop_k_lower := 0
   let loop_k_upper := 19
@@ -100,7 +103,7 @@ def delegation_jumpdest_chunk (target : address) : JumpdestChunk := Id.run do
 
 /-- Installs an EIP-7702 delegation designator
 (`0xef0100 ‖ target`) as the account's code. -/
-def k_set_delegation (a : address) (target : address) : SailM Unit := do
+def k_set_delegation (a : (Vector (BitVec 8) 20)) (target : (Vector (BitVec 8) 20)) : SailM Unit := do
   let cur ← do (k_aload a)
   let code_len : Nat := 23
   let code_length := code_len
@@ -118,35 +121,32 @@ def k_set_delegation (a : address) (target : address) : SailM Unit := do
   (store_account_info a cur { cur.info with code_hash := h })
 
 /-- Resets an account's code to empty (EIP-7702 clearing). -/
-def k_clear_code (a : address) : SailM Unit := do
+def k_clear_code (a : (Vector (BitVec 8) 20)) : SailM Unit := do
   let cur ← do (k_aload a)
   (store_account_info a cur { cur.info with code_hash := KECCAK_EMPTY })
 
 /-- The EIP-7702 delegation designator bytes: `0xef0100 ‖ address`. -/
-def delegation_code (a : address) : (List byte) :=
+def delegation_code (a : (Vector (BitVec 8) 20)) : (List (BitVec 8)) :=
   (0xEF#8 :: (0x01#8 :: (0x00#8 :: (address_to_bytes a))))
 
 /-- The delegation target of an account's code, with a validity flag —
 false when the code is not a designator. -/
-def k_deleg_target (a : address) : SailM (Bool × address) := do
+def k_deleg_target (a : (Vector (BitVec 8) 20)) : SailM (Bool × (Vector (BitVec 8) 20)) := do
   let h ← (( do (k_code_key a) ) : SailM (Vector (BitVec 8) 32) )
   let r ← (( do (code_db_read_delegation h) ) : SailM AddressResult )
   (pure (r.success, r.address))
 
 /-- `EXTCODESIZE`: the account's code length in bytes. -/
-def k_get_code_size (a : address) : SailM code_length := do
+def k_get_code_size (a : (Vector (BitVec 8) 20)) : SailM Nat := do
   let code ← do (code_db_resolve (← (k_code_key a)))
   let ⟨_, ⟨_, bytes⟩⟩ := code.bytes
   (pure bytes.len)
 
 /-- `EXTCODECOPY`: copies account code into frame memory, zero-padded
 past the end. -/
-/- Type quantifiers: k_ex410507_ : Nat, k_ex410506_ : Nat, k_ex410505_ : Nat, 0 ≤ k_ex410505_, 0
-  ≤ k_ex410506_ ∧ k_ex410506_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex410507_ -/
-def k_code_copy (a : address) (dst : memory_pointer) (off : word) (len : memory_length) : SailM Unit := do
-  let off := (off).value
+/- Type quantifiers: k_ex416665_ : Nat, k_ex416664_ : Nat, k_ex416663_ : Nat, 0 ≤ k_ex416663_, 0
+  ≤ k_ex416664_ ∧ k_ex416664_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex416665_ -/
+def k_code_copy (a : (Vector (BitVec 8) 20)) (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
   let code ← do (code_db_resolve (← (k_code_key a)))
-  (slice_copy_word_offset
-    (⟨_, ⟨_, ((code.bytes).2).2⟩⟩ : (Sigma fun (k_off : Nat) =>
-    (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) dst ⟨off⟩ len)
+  (slice_copy_word_offset code.bytes dst off len)
 

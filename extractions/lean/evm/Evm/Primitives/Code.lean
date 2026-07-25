@@ -48,38 +48,48 @@ def EMPTY_JUMPDEST_CHUNK : JumpdestChunk :=
 
 def EMPTY_JUMPDEST_REF : JumpdestRef := 0x0000000000000000#64
 
-/- Type quantifiers: k_off : Nat, k_len : Nat, source_valid_range(k_off, k_len) ∧
-  code_valid_length(k_len) -/
-def code_slice (bytes : (EvmByteSliceFields k_off k_len)) : (EvmByteSliceFields k_off k_len) :=
-  bytes
+/- Type quantifiers: k_off : Nat, k_len : Nat, (source_valid_range k_off k_len) ∧
+  (code_valid_length k_len) -/
+def code_slice (bytes : (EvmByteSliceFields k_off k_len)) : (Sigma fun (k_syn_off : Nat) =>
+  (Sigma fun (k_syn_len : Nat) => (EvmByteSliceFields k_syn_off k_syn_len))) :=
+  ((⟨_, ⟨_, bytes⟩⟩ : (Sigma fun (k_syn_off : Nat) =>
+  (Sigma fun (k_syn_len : Nat) => (EvmByteSliceFields k_syn_off k_syn_len)))) : (Sigma fun
+  (k_syn_off : Nat) => (Sigma fun (k_syn_len : Nat) => (EvmByteSliceFields k_syn_off k_syn_len))))
 
 /-- Converts a source span whose producer guarantees executable cursor
 headroom. This is vacuous in the canonical model; the optimized splice
 checks the representation invariant if a proof was erased by storage in a
 non-dependent aggregate. -/
-/- Type quantifiers: k_ex408960_ : Nat, k_ex408959_ : Nat, 0 ≤ k_ex408959_ ∧ 0 ≤ k_ex408960_ -/
-def validated_code_slice (bytes : EvmByteSlice) : CodeSlice :=
+/- Type quantifiers: bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0 ≤
+  bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1 -/
+def validated_code_slice (bytes : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
+  (bytes_dependentWitness0 : Nat) =>
+  (Sigma fun (bytes_dependentWitness1 : Nat) =>
+  (EvmByteSliceFields bytes_dependentWitness0 bytes_dependentWitness1))) :=
+  let bytes_dependentWitness0 := (bytes).1
+  let bytes_dependentWitness1 := ((bytes).2).1
   let bytes := ((bytes).2).2
-  ((⟨_, ⟨_, (code_slice bytes)⟩⟩ : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))
+  ((code_slice bytes) : (Sigma fun (bytes_dependentWitness0 : Nat) =>
+  (Sigma fun (bytes_dependentWitness1 : Nat) =>
+  (EvmByteSliceFields bytes_dependentWitness0 bytes_dependentWitness1))))
 
 /-- Canonical empty executable code. -/
-def EMPTY_CODE_SLICE : (EvmByteSliceFields 0 0) := (code_slice (byte_slice StatelessInputSource 0 0))
+def EMPTY_CODE_SLICE : CodeSlice := (code_slice (byte_slice StatelessInputSource 0 0))
 
 /-- Whether an EIP-8024 `DUPN`/`SWAPN` immediate is valid. Invalid
 immediates remain opcode-aligned during JUMPDEST analysis. -/
-def deep_stack_immediate_valid (immediate : byte) : Bool :=
+def deep_stack_immediate_valid (immediate : (BitVec 8)) : Bool :=
   let value : Nat := (BitVec.toNatInt immediate)
   ((value ≤b 90) || (128 ≤b value))
 
 /-- Whether an EIP-8024 `EXCHANGE` immediate is valid. Invalid immediates
 remain opcode-aligned during JUMPDEST analysis. -/
-def exchange_immediate_valid (immediate : byte) : Bool :=
+def exchange_immediate_valid (immediate : (BitVec 8)) : Bool :=
   let value : Nat := (BitVec.toNatInt immediate)
   ((value ≤b 81) || (128 ≤b value))
 
 def EMPTY_CODE : Code :=
-  { bytes := ⟨_, ⟨_, EMPTY_CODE_SLICE⟩⟩,
+  { bytes := EMPTY_CODE_SLICE,
     jumpdests := EMPTY_JUMPDEST_REF }
 

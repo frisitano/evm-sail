@@ -667,14 +667,14 @@ function next_parent_header_field(index : parent_header_field_cursor) -> parent_
 
 /* The unconsumed RLP content span strictly decreases on every call. */
 /*! Extracts the execution-relevant fields while walking one parent header. */
-function decode_parent_header_fields(
-    cursor : RlpCursor,
+function decode_parent_header_fields forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
+    cursor : RlpCursor('source_off, 'source_len),
     field_index : parent_header_field_cursor,
     fields : ParentHeaderFields,
 ) -> (
     ParentHeaderFields
 ) =
-    if rlp_cursor_empty(cursor) then {
+    if cursor.len == 0 then {
         fields
     } else {
         let (field, next) = rlp_cursor_pop(cursor);
@@ -692,11 +692,16 @@ function decode_parent_header_fields(
                     decoded.have_base_fee = true
                 } else {
                     if field_index == 17 then {
-                        decoded.blob_gas_used = rlp_ref_blob_gas_used(field);
-                        decoded.have_blob_gas = true
+                        let value = rlp_ref_uint64(field);
+                        if value <= sizeof(blob_count_bound * gas_per_blob_value) then {
+                            decoded.blob_gas_used = value;
+                            decoded.have_blob_gas = true
+                        } else {
+                            throw InvalidBlock(RlpDecode)
+                        }
                     } else {
                         if field_index == 18 then {
-                            decoded.excess_blob_gas = rlp_ref_excess_blob_gas(field);
+                            decoded.excess_blob_gas = rlp_ref_uint64(field);
                             decoded.have_excess_blob_gas = true
                         }
                     }
@@ -706,11 +711,7 @@ function decode_parent_header_fields(
         decode_parent_header_fields(next, next_parent_header_field(field_index), decoded)
     }
 termination_measure decode_parent_header_fields(cursor, field_index, fields) =
-    {
-        let stop = cursor.stop;
-        let current = cursor.current;
-        stop - current
-    }
+    cursor.len
 
 /*! The running authentication and execution context of the witness header
     chain. */
@@ -737,25 +738,19 @@ function index_witness_header_cursor(state : WitnessHeaderIndex) -> WitnessHeade
         result.cursor = next;
         if (index != 0) | is_last then {
             let fields = rlp_node_cursor(header);
-            if fields.valid then {
-                let decoded = decode_parent_header_fields(fields, 0, EMPTY_PARENT_HEADER_FIELDS);
-                if (index != 0) & (not_bool(decoded.have_parent) | (decoded.parent_hash != state.previous_hash)) then {
-                    result.valid = false
-                };
-                if is_last then {
-                    result.parent_state_root = decoded.state_root;
-                    result.parent_base_fee_per_gas = decoded.base_fee;
-                    result.parent_blob_gas_used = decoded.blob_gas_used;
-                    result.parent_excess_blob_gas = decoded.excess_blob_gas;
-                    result.parent_fields_valid =
-                          decoded.have_state
-                        & ((k_fork < Cancun) | decoded.have_base_fee)
-                        & ((k_fork < Cancun) | (decoded.have_blob_gas == decoded.have_excess_blob_gas))
-                }
-            } else {
-                if index != 0 then {
-                    result.valid = false
-                }
+            let decoded = decode_parent_header_fields(fields, 0, EMPTY_PARENT_HEADER_FIELDS);
+            if (index != 0) & (not_bool(decoded.have_parent) | (decoded.parent_hash != state.previous_hash)) then {
+                result.valid = false
+            };
+            if is_last then {
+                result.parent_state_root = decoded.state_root;
+                result.parent_base_fee_per_gas = decoded.base_fee;
+                result.parent_blob_gas_used = decoded.blob_gas_used;
+                result.parent_excess_blob_gas = decoded.excess_blob_gas;
+                result.parent_fields_valid =
+                      decoded.have_state
+                    & ((k_fork < Cancun) | decoded.have_base_fee)
+                    & ((k_fork < Cancun) | (decoded.have_blob_gas == decoded.have_excess_blob_gas))
             }
         };
         let current_hash = keccak256(header);

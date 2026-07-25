@@ -67,49 +67,65 @@ def validate_executed_block (block' : Block) (input_ref : StatelessInputRef) (re
   if ((fork_gteq (← readReg k_fork) Prague) : Bool)
   then
     (do
-      if (((! (← (bytes_segments_equal_slice [(BytesSlice result.requests.deposits)]
-                 input_ref.deposits))) || ((! (← (bytes_segments_equal_slice
-                   [(BytesSlice result.requests.withdrawals)] input_ref.withdrawal_requests))) || ((! (← (bytes_segments_equal_slice
-                     [(BytesSlice result.requests.consolidations)] input_ref.consolidation_requests))) || ((! (← (bytes_segments_equal_slice
-                       [(BytesSlice result.requests.builder_deposits)]
-                       input_ref.builder_deposit_requests))) || (! (← (bytes_segments_equal_slice
-                       [(BytesSlice result.requests.builder_exits)] input_ref.builder_exit_requests))))))) : Bool)
+      if ((← if ((! (← (bytes_segments_equal_slice [(BytesSlice result.requests.deposits)]
+                    input_ref.deposits))) : Bool)
+           then (pure true)
+           else
+             (do
+               if ((! (← (bytes_segments_equal_slice [(BytesSlice result.requests.withdrawals)]
+                        input_ref.withdrawal_requests))) : Bool)
+               then (pure true)
+               else
+                 (do
+                   if ((! (← (bytes_segments_equal_slice
+                            [(BytesSlice result.requests.consolidations)]
+                            input_ref.consolidation_requests))) : Bool)
+                   then (pure true)
+                   else
+                     (do
+                       if ((! (← (bytes_segments_equal_slice
+                                [(BytesSlice result.requests.builder_deposits)]
+                                input_ref.builder_deposit_requests))) : Bool)
+                       then (pure true)
+                       else
+                         (do
+                           (pure (! (← (bytes_segments_equal_slice
+                                   [(BytesSlice result.requests.builder_exits)]
+                                   input_ref.builder_exit_requests))))))))) : Bool)
       then sailThrow ((InvalidBlock InvalidExecutionRequests))
       else (pure ()))
   else (pure ())
   if ((result.header_gas_used != header.gas_used) : Bool)
   then sailThrow ((InvalidBlock InvalidGasUsed))
-  else (pure ())
-  if (((fork_gteq (← readReg k_fork) Cancun) && (((result.blob_gas_used).value != (header.blob_gas_used).value) : Bool)) : Bool)
-  then sailThrow ((InvalidBlock InvalidBlobGasUsed))
-  else (pure ())
-  let _ : Unit := (cycle_scope_start SCOPE_STATE_ROOT)
-  let poststate ← do (compute_state_root ())
-  let _ : Unit := (cycle_scope_end SCOPE_STATE_ROOT)
-  if ((bne poststate header.state_root) : Bool)
-  then sailThrow ((InvalidBlock InvalidStateRoot))
-  else (pure ())
-  if ((bne result.receipts_root header.receipts_root) : Bool)
-  then sailThrow ((InvalidBlock InvalidReceiptsRoot))
-  else (pure ())
-  if ((! (logs_bloom_equal result.logs_bloom header.logs_bloom)) : Bool)
-  then sailThrow ((InvalidBlock InvalidLogsBloom))
-  else (pure ())
-  if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
-  then
+  else
     (do
-      let _ : Unit := (cycle_scope_start SCOPE_BLOCK_ACCESS_LIST)
-      let block_access_list ← do (encode_block_access_list ())
-      let _ : Unit := (cycle_scope_end SCOPE_BLOCK_ACCESS_LIST)
-      let maximum_items := (Int.ediv (header.gas_limit).value 2000)
-      if (((block_access_list.item_count).value >b maximum_items) : Bool)
-      then sailThrow ((InvalidBlock BlockAccessListTooLarge))
-      else (pure ())
-      if ((! (← (bytes_segments_equal_slice [(BytesSlice block_access_list.bytes)]
-               block'.body.block_access_list))) : Bool)
-      then sailThrow ((InvalidBlock InvalidBlockAccessList))
-      else (pure ()))
-  else (pure ())
+      if (((fork_gteq (← readReg k_fork) Cancun) && ((result.blob_gas_used != header.blob_gas_used) : Bool)) : Bool)
+      then sailThrow ((InvalidBlock InvalidBlobGasUsed))
+      else
+        (do
+          let _ : Unit := (cycle_scope_start SCOPE_STATE_ROOT)
+          let poststate ← do (compute_state_root ())
+          let _ : Unit := (cycle_scope_end SCOPE_STATE_ROOT)
+          if ((bne poststate header.state_root) : Bool)
+          then sailThrow ((InvalidBlock InvalidStateRoot))
+          else
+            (do
+              if ((bne result.receipts_root header.receipts_root) : Bool)
+              then sailThrow ((InvalidBlock InvalidReceiptsRoot))
+              else
+                (do
+                  if ((! (logs_bloom_equal result.logs_bloom header.logs_bloom)) : Bool)
+                  then sailThrow ((InvalidBlock InvalidLogsBloom))
+                  else
+                    (do
+                      if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
+                      then
+                        (do
+                          let _ : Unit := (cycle_scope_start SCOPE_BLOCK_ACCESS_LIST)
+                          let maximum_items : Nat := (header.gas_limit / 2000)
+                          (validate_block_access_list block'.body.block_access_list maximum_items)
+                          (pure (cycle_scope_end SCOPE_BLOCK_ACCESS_LIST)))
+                      else (pure ()))))))
 
 def undefined_StatelessValidationFailure (_ : Unit) : SailM StatelessValidationFailure := do
   (pure { scope := ← (undefined_bitvector 8),
@@ -139,7 +155,7 @@ def verify_stateless_payload (input_ref : StatelessInputRef) : SailM StatelessVa
       let _ : Unit := (cycle_scope_start active_scope)
       let block' := input.payload.block'
       let result ← do
-        (execute_block_body block'.body input_ref.public_keys ⟨(block'.header.gas_limit).value⟩)
+        (execute_block_body block'.body input_ref.public_keys block'.header.gas_limit)
       let _ : Unit := (cycle_scope_end active_scope)
       let active_scope : (BitVec 8) := SCOPE_VALIDATE_RESULT
       let _ : Unit := (cycle_scope_start active_scope)

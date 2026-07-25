@@ -58,8 +58,9 @@ A byte `< 0x80` is its own encoding; strings of length `n ≤ 55` use
 length. Lists mirror this with the `0xc0`/`0xf7` evm_prefix bands over an
 already-encoded payload. Integers encode as their minimal big-endian byte
 string with no leading zeros. Decoding proceeds one level at a time; a
-field reference retains its source, full span, and content span without
-copying.
+field reference retains the complete encoded item as a source slice and its
+content length without copying; the content is always the corresponding
+suffix.
 
 Malformed RLP is a normal invalid-block outcome: the decoders throw
 `InvalidBlock(RlpDecode)` at the point of detection, caught once at the
@@ -76,18 +77,12 @@ def RLP_ENCODED_WORD_LENGTH : Nat := 33
 def RLP_ENCODED_ADDRESS_LENGTH : Nat := 21
 
 /- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 33 -/
-def rlp_scratch_small_length (value : Nat) : rlp_scratch_length :=
+def rlp_scratch_small_length (value : Nat) : Nat :=
   value
 
 /- Type quantifiers: left : Nat, right : Nat, 0 ≤ left ∧ 0 ≤ right -/
-def rlp_scratch_length_add (left : Nat) (right : Nat) : rlp_scratch_length :=
+def rlp_scratch_length_add (left : Nat) (right : Nat) : Nat :=
   (left + right)
-
-/-- Decrements a positive RLP length width. -/
-/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 8 -/
-def rlp_length_width_decrement (value : Nat) : SailM Nat := do
-  assert (0 <b value) "sail/lib/rlp/rlp.sail:68.20-68.21"
-  (pure (value - 1))
 
 /- Type quantifiers: index : Nat, 0 ≤ index ∧ index ≤ 31 -/
 def word_byte_count (index : Nat) : Nat :=
@@ -95,7 +90,7 @@ def word_byte_count (index : Nat) : Nat :=
 
 /-- Materializes a word's minimal big-endian byte sequence and its length. -/
 /- Type quantifiers: w : Nat, 0 ≤ w ∧ w < (2 ^ 256) -/
-def minimal_word_bytes (w : Nat) : ((List byte) × Nat) := Id.run do
+def minimal_word_bytes (w : Nat) : ((List (BitVec 8)) × Nat) := Id.run do
   let remaining : Nat := w
   let out : (List (BitVec 8)) := []
   let len : Nat := 0
@@ -110,7 +105,7 @@ def minimal_word_bytes (w : Nat) : ((List byte) × Nat) := Id.run do
           if ((word_nonzero remaining) : Bool)
           then
             (let out : (List (BitVec 8)) := ((word_low_byte remaining) :: out)
-            let remaining : Nat := ((word_shift_right ⟨remaining⟩ ⟨8⟩)).value
+            let remaining : Nat := (word_shift_right remaining 8)
             let len : Nat := (word_byte_count byte_index)
             (len, out, remaining))
           else (len, out, remaining)
@@ -119,25 +114,21 @@ def minimal_word_bytes (w : Nat) : ((List byte) × Nat) := Id.run do
   (pure (out, len))
 
 /- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 255 -/
-def rlp_nat_length_byte (value : Nat) : byte :=
+def rlp_nat_length_byte (value : Nat) : (BitVec 8) :=
   (get_slice_int 8 value 0)
 
 /- Type quantifiers: value : Nat, 0 ≤ value -/
-def rlp_byte_length_byte (value : Nat) : SailM byte := do
-  assert (value ≤b 255) "sail/lib/rlp/rlp.sail:103.23-103.24"
+def rlp_byte_length_byte (value : Nat) : SailM (BitVec 8) := do
+  assert (value ≤b 255) "sail/lib/rlp/rlp.sail:98.23-98.24"
   let length := value
   (pure (get_slice_int 8 length 0))
 
 /- Type quantifiers: value : Nat, 0 ≤ value -/
-def rlp_length_word (value : Nat) : SailM word := do
-  let publicResult ← do
-    (do
-        let publicResult ← (word_of_nat_byte_count value)
-        pure ((publicResult).value))
-  pure (⟨publicResult⟩)
+def rlp_length_word (value : Nat) : SailM Nat := do
+  (word_of_nat_byte_count value)
 
 /- Type quantifiers: len : Nat, 0 ≤ len -/
-def rlp_string_prefix (len : Nat) (first : byte) : SailM ((List byte) × Nat) := do
+def rlp_string_prefix (len : Nat) (first : (BitVec 8)) : SailM ((List (BitVec 8)) × Nat) := do
   if (((len == 1) && ((BitVec.access first 7) == 0#1)) : Bool)
   then (pure ([], 0))
   else
@@ -147,29 +138,28 @@ def rlp_string_prefix (len : Nat) (first : byte) : SailM ((List byte) × Nat) :=
       else
         (do
           let (length_bytes, length_len) ← do
-            (pure (minimal_word_bytes ((← (rlp_length_word len))).value))
+            (pure (minimal_word_bytes (← (rlp_length_word len))))
           (pure (((0xB7#8 + (rlp_nat_length_byte length_len)) :: length_bytes), (1 + length_len)))))
 
 /- Type quantifiers: len : Nat, 0 ≤ len -/
-def rlp_list_prefix (len : Nat) : SailM ((List byte) × Nat) := do
+def rlp_list_prefix (len : Nat) : SailM ((List (BitVec 8)) × Nat) := do
   if ((len ≤b RLP_SHORT_LENGTH_LIMIT) : Bool)
   then (pure ([(0xC0#8 + (rlp_nat_length_byte len))], 1))
   else
     (do
-      let (length_bytes, length_len) ← do
-        (pure (minimal_word_bytes ((← (rlp_length_word len))).value))
+      let (length_bytes, length_len) ← do (pure (minimal_word_bytes (← (rlp_length_word len))))
       (pure (((0xF7#8 + (rlp_nat_length_byte length_len)) :: length_bytes), (1 + length_len))))
 
 /- Type quantifiers: w : Nat, 0 ≤ w ∧ w < (2 ^ 256) -/
 def rlp_minimal_word_len (w : Nat) : Nat :=
   (word_byte_length w)
 
-/- Type quantifiers: value : Nat, rlp_natural_increment_valid(value) -/
+/- Type quantifiers: value : Nat, (rlp_natural_increment_valid value) -/
 def rlp_natural_increment (value : Nat) : Nat :=
   (value + 1)
 
 /-- Computes a natural's minimal big-endian byte length recursively. -/
-/- Type quantifiers: _reclimit : Nat, n : Nat, rlp_natural_valid(n), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, n : Nat, (rlp_natural_valid n), 0 ≤ _reclimit -/
 def _rec_rlp_minimal_uint_len (n : Nat) (_reclimit : Nat) : SailM Nat := do
   match _reclimit with
   | 0 =>
@@ -180,14 +170,12 @@ def _rec_rlp_minimal_uint_len (n : Nat) (_reclimit : Nat) : SailM Nat := do
     (do
       if ((n == 0) : Bool)
       then (pure 0)
-      else
-        (pure (rlp_natural_increment
-            (← (_rec_rlp_minimal_uint_len (Int.ediv n 256) _reclimit_pred)))))
+      else (pure (rlp_natural_increment (← (_rec_rlp_minimal_uint_len (n / 256) _reclimit_pred)))))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Computes a natural's minimal big-endian byte length recursively. -/
-/- Type quantifiers: n : Nat, rlp_natural_valid(n) -/
+/- Type quantifiers: n : Nat, (rlp_natural_valid n) -/
 def rlp_minimal_uint_len (n : Nat) : SailM Nat := do
   let _measure := (n : Int)
   if ((_measure <b 0) : Bool)
@@ -198,23 +186,23 @@ def rlp_minimal_uint_len (n : Nat) : SailM Nat := do
 def rlp_length_prefix_len (len : Nat) : SailM Nat := do
   if ((len ≤b RLP_SHORT_LENGTH_LIMIT) : Bool)
   then (pure 1)
-  else (pure (1 + (rlp_minimal_word_len ((← (rlp_length_word len))).value)))
+  else (pure (1 + (rlp_minimal_word_len (← (rlp_length_word len)))))
 
 /- Type quantifiers: len : Nat, 0 ≤ len -/
-def rlp_string_size (len : Nat) (first : byte) : SailM Nat := do
+def rlp_string_size (len : Nat) (first : (BitVec 8)) : SailM Nat := do
   if (((len == 1) && ((BitVec.access first 7) == 0#1)) : Bool)
   then (pure 1)
   else (pure ((← (rlp_length_prefix_len len)) + len))
 
 /- Type quantifiers: len : Nat, 0 ≤ len -/
-def rlp_bytes_size (data : (List byte)) (len : Nat) : SailM Nat := do
+def rlp_bytes_size (data : (List (BitVec 8))) (len : Nat) : SailM Nat := do
   let first : (BitVec 8) :=
     match data with
     | (b :: _) => b
     | [] => 0x00#8
   (rlp_string_size len first)
 
-/- Type quantifiers: k_off : Nat, k_len : Nat, source_valid_range(k_off, k_len) -/
+/- Type quantifiers: k_off : Nat, k_len : Nat, (source_valid_range k_off k_len) -/
 def rlp_slice_size (data : (EvmByteSliceFields k_off k_len)) : SailM Nat := do
   let len := k_len
   let first ← do
@@ -234,10 +222,10 @@ def rlp_uint_word_size (w : Nat) : Nat :=
   then 1
   else (1 + len)
 
-/- Type quantifiers: n : Nat, rlp_natural_valid(n) -/
-def rlp_uint_nat_size (n : Nat) : SailM rlp_natural_size := do
+/- Type quantifiers: n : Nat, (rlp_natural_valid n) -/
+def rlp_uint_nat_size (n : Nat) : SailM Nat := do
   if ((n <b (2 ^i 256)) : Bool)
-  then (pure (rlp_uint_word_size ((U256 n)).value))
+  then (pure (rlp_uint_word_size (U256 n)))
   else
     (do
       let len ← do (rlp_minimal_uint_len n)
@@ -284,31 +272,26 @@ def rlp_list_size (content_len : Nat) : SailM Nat := do
 
 /-- Adds the canonical list evm_prefix to a materializable RLP content length. -/
 /- Type quantifiers: content_len : Nat, 0 ≤ content_len -/
-def rlp_scratch_list_size (content_len : rlp_scratch_length) : SailM rlp_scratch_length := do
+def rlp_scratch_list_size (content_len : Nat) : SailM Nat := do
   (pure (rlp_scratch_length_add content_len
       (rlp_scratch_small_length (← (rlp_length_prefix_len content_len)))))
 
 /-- Returns the materializable RLP width of a source-backed byte slice. -/
-/- Type quantifiers: k_ex409620_ : Nat, k_ex409619_ : Nat, 0 ≤ k_ex409619_ ∧ 0 ≤ k_ex409620_ -/
-def rlp_scratch_slice_size (data : EvmByteSlice) : SailM rlp_scratch_length := do
+/- Type quantifiers: data_dependentWitness1 : Nat, data_dependentWitness0 : Nat, 0 ≤
+  data_dependentWitness0 ∧ 0 ≤ data_dependentWitness1 -/
+def rlp_scratch_slice_size (data : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM Nat := do
+  let data_dependentWitness0 := (data).1
+  let data_dependentWitness1 := ((data).2).1
   let data := ((data).2).2
   (rlp_slice_size data)
 
-/- Type quantifiers: len : Nat, source_valid_length(len) -/
-def rlp_scratch_bytes_size (data : (List byte)) (len : Nat) : SailM rlp_scratch_length := do
+/- Type quantifiers: len : Nat, (source_valid_length len) -/
+def rlp_scratch_bytes_size (data : (List (BitVec 8))) (len : Nat) : SailM Nat := do
   (rlp_bytes_size data len)
 
-/- Type quantifiers: len : Nat, source_valid_length(len) -/
-def rlp_write_raw_bytes (data : (List byte)) (len : Nat) : SailM Unit := do
-  (scratch_push_bytes data len)
-
-/- Type quantifiers: k_ex409634_ : Nat, k_ex409633_ : Nat, 0 ≤ k_ex409633_ ∧ 0 ≤ k_ex409634_ -/
-def rlp_write_raw_slice (data : EvmByteSlice) : SailM Unit := do
-  let data := ((data).2).2
-  (scratch_push_slice ⟨_, ⟨_, data⟩⟩)
-
 /- Type quantifiers: len : Nat, 0 ≤ len -/
-def rlp_write_string_prefix (len : Nat) (first : byte) : SailM Unit := do
+def rlp_write_string_prefix (len : Nat) (first : (BitVec 8)) : SailM Unit := do
   let (encoded_prefix, prefix_len) ← do (rlp_string_prefix len first)
   (scratch_push_bytes encoded_prefix prefix_len)
 
@@ -317,8 +300,8 @@ def rlp_write_list_prefix (content_len : Nat) : SailM Unit := do
   let (encoded_prefix, prefix_len) ← do (rlp_list_prefix content_len)
   (scratch_push_bytes encoded_prefix prefix_len)
 
-/- Type quantifiers: len : Nat, source_valid_length(len) -/
-def rlp_write_bytes (data : (List byte)) (len : Nat) : SailM Unit := do
+/- Type quantifiers: len : Nat, (source_valid_length len) -/
+def rlp_write_bytes (data : (List (BitVec 8))) (len : Nat) : SailM Unit := do
   let first : (BitVec 8) :=
     match data with
     | (b :: _) => b
@@ -327,8 +310,12 @@ def rlp_write_bytes (data : (List byte)) (len : Nat) : SailM Unit := do
   (scratch_push_bytes data len)
 
 /-- Appends a source-backed byte slice as an RLP string. -/
-/- Type quantifiers: k_ex409643_ : Nat, k_ex409642_ : Nat, 0 ≤ k_ex409642_ ∧ 0 ≤ k_ex409643_ -/
-def rlp_write_slice (data : EvmByteSlice) : SailM Unit := do
+/- Type quantifiers: data_dependentWitness1 : Nat, data_dependentWitness0 : Nat, 0 ≤
+  data_dependentWitness0 ∧ 0 ≤ data_dependentWitness1 -/
+def rlp_write_slice (data : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM Unit := do
+  let data_dependentWitness0 := (data).1
+  let data_dependentWitness1 := ((data).2).1
   let data := ((data).2).2
   (rlp_write_string_prefix data.len
     (← do
@@ -342,38 +329,42 @@ def rlp_write_uint_word (w : Nat) : SailM Unit := do
   let (bytes, len) := (minimal_word_bytes w)
   (rlp_write_bytes bytes len)
 
-/- Type quantifiers: n : Nat, rlp_natural_valid(n) -/
+/- Type quantifiers: n : Nat, (rlp_natural_valid n) -/
 def rlp_write_uint_nat (n : Nat) : SailM Unit := do
   if ((n <b (2 ^i 256)) : Bool)
-  then (rlp_write_uint_word ((U256 n)).value)
+  then (rlp_write_uint_word (U256 n))
   else sailThrow ((InvalidBlock InvalidConfig))
 
 /- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ (2 ^ 64 - 1) -/
 def rlp_write_uint_u64 (n : Nat) : SailM Unit := do
-  (rlp_write_uint_word ((U256 n)).value)
+  (rlp_write_uint_word (U256 n))
 
 /- Type quantifiers: w : Nat, 0 ≤ w ∧ w ≤ (2 ^ 256 - 1) -/
-def rlp_write_word (w : word) : SailM Unit := do
-  let w := (w).value
-  (rlp_write_bytes (word_to_bytes32 ⟨w⟩) WORD_BYTE_LENGTH)
+def rlp_write_word (w : Nat) : SailM Unit := do
+  (rlp_write_bytes (word_to_bytes32 w) WORD_BYTE_LENGTH)
 
-def rlp_write_addr (a : address) : SailM Unit := do
+def rlp_write_addr (a : (Vector (BitVec 8) 20)) : SailM Unit := do
   (rlp_write_bytes (address_to_bytes a) ADDRESS_BYTE_LENGTH)
 
 /-- Finishes a forward scratch encoding. -/
 /- Type quantifiers: start : Nat, 0 ≤ start -/
-def rlp_finish (start : source_pointer) : SailM EvmByteSlice := do
+def rlp_finish (start : Nat) : SailM (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
   (scratch_finish start)
 
 /- Type quantifiers: _width : Nat, evm_prefix' : Nat, 1 ≤ _width ∧
   _width ≤ 8 ∧ 0 ≤ evm_prefix' ∧ evm_prefix' ≤ (2 ^ (8 * (_width - 1)) - 1) -/
-def rlp_uint64_append (_width : Nat) (evm_prefix' : Nat) (next : byte) : Nat :=
+def rlp_uint64_append (_width : Nat) (evm_prefix' : Nat) (next : (BitVec 8)) : Nat :=
   ((evm_prefix' *i 256) + (BitVec.toNatInt next))
 
 /-- Decodes exactly `width` big-endian bytes into a bounded unsigned value. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409654_ : Nat, k_ex409653_ : Nat, width : Nat, 0 ≤ width
-  ∧ width ≤ 8, 0 ≤ k_ex409653_ ∧ 0 ≤ k_ex409654_, 0 ≤ _reclimit -/
-def _rec_rlp_uint64_width (content : EvmByteSlice) (width : Nat) (_reclimit : Nat) : SailM Nat := do
+/- Type quantifiers: _reclimit : Nat, content_dependentWitness1 : Nat, content_dependentWitness0 :
+  Nat, width : Nat, 0 ≤ width ∧ width ≤ 8, 0 ≤ content_dependentWitness0 ∧
+  0 ≤ content_dependentWitness1, 0 ≤ _reclimit -/
+def _rec_rlp_uint64_width (content : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (width : Nat) (_reclimit : Nat) : SailM Nat := do
+  let content_dependentWitness0 := (content).1
+  let content_dependentWitness1 := ((content).2).1
   let content := ((content).2).2
   match _reclimit with
   | 0 =>
@@ -392,42 +383,24 @@ termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Decodes exactly `width` big-endian bytes into a bounded unsigned value. -/
-/- Type quantifiers: k_ex409659_ : Nat, k_ex409658_ : Nat, width : Nat, 0 ≤ width ∧ width ≤ 8, 0
-  ≤ k_ex409658_ ∧ 0 ≤ k_ex409659_ -/
-def rlp_uint64_width (content : EvmByteSlice) (width : Nat) : SailM Nat := do
+/- Type quantifiers: content_dependentWitness1 : Nat, content_dependentWitness0 : Nat, width : Nat, 0
+  ≤ width ∧ width ≤ 8, 0 ≤ content_dependentWitness0 ∧ 0 ≤ content_dependentWitness1 -/
+def rlp_uint64_width (content : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (width : Nat) : SailM Nat := do
+  let content_dependentWitness0 := (content).1
+  let content_dependentWitness1 := ((content).2).1
   let content := ((content).2).2
   let _measure := (width : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
   else (_rec_rlp_uint64_width ⟨_, ⟨_, content⟩⟩ width (_measure + 1))
 
-/- Type quantifiers: k_ex409670_ : Nat, k_ex409669_ : Nat, start : Nat, stop : Nat, count : Nat, source_valid_length(start)
-  ∧ source_valid_length(stop) ∧ 0 ≤ count ∧ count ≤ 8, 0 ≤ k_ex409669_ ∧
-  0 ≤ k_ex409670_ -/
-def rlp_ref_be_length (source : EvmByteSlice) (start : Nat) (stop : Nat) (count : Nat) : SailM Nat := do
-  let source := ((source).2).2
-  let source_length := source.len
-  let start_value := start
-  let stop_value := stop
-  if ((stop_value <b start_value) : Bool)
-  then sailThrow ((InvalidBlock RlpDecode))
-  else
-    (do
-      if ((source_length <b stop_value) : Bool)
-      then sailThrow ((InvalidBlock RlpDecode))
-      else
-        (do
-          if (((stop_value - start_value) <b count) : Bool)
-          then sailThrow ((InvalidBlock RlpDecode))
-          else
-            (do
-              let content := (sub_slice source start_value count)
-              (rlp_uint64_width ⟨_, ⟨_, content⟩⟩ count))))
-
-/-- Tests a bounded expected byte sequence against a source position. -/
-/- Type quantifiers: k_ex409679_ : Nat, k_ex409678_ : Nat, k_ex409677_ : Nat, 0 ≤ k_ex409677_ ∧
-  0 ≤ k_ex409678_, 0 ≤ k_ex409679_ -/
-def rlp_bytes_equal_at (expected : (List byte)) (source : EvmByteSlice) (start : source_pointer) : SailM Bool := do
+/- Type quantifiers: source_dependentWitness1 : Nat, source_dependentWitness0 : Nat, start : Nat, (source_valid_length start), 0
+  ≤ source_dependentWitness0 ∧ 0 ≤ source_dependentWitness1 -/
+def rlp_bytes_equal_at (expected : (List (BitVec 8))) (source : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (start : Nat) : SailM Bool := do
+  let source_dependentWitness0 := (source).1
+  let source_dependentWitness1 := ((source).2).1
   let source := ((source).2).2
   let rest : (List (BitVec 8)) := expected
   let current : Nat := start
@@ -450,7 +423,11 @@ def rlp_bytes_equal_at (expected : (List byte)) (source : EvmByteSlice) (start :
                 then
                   (do
                     let equal ←
-                      (pure (equal && ((← (slice_byte ⟨_, ⟨_, source⟩⟩ current)) == b)))
+                      if (equal : Bool)
+                      then
+                        (do
+                          (pure ((← (slice_byte ⟨_, ⟨_, source⟩⟩ current)) == b)))
+                      else (pure false)
                     let current : Nat := (position + 1)
                     (pure (current, equal)))
                 else
@@ -465,371 +442,179 @@ def rlp_bytes_equal_at (expected : (List byte)) (source : EvmByteSlice) (start :
   | [] => (pure equal)
   | _ => (pure false)
 
-/- Type quantifiers: k_ex409689_ : Nat, k_ex409688_ : Nat, pos : Nat, stop : Nat, source_valid_length(pos)
-  ∧ source_valid_length(stop), 0 ≤ k_ex409688_ ∧ 0 ≤ k_ex409689_ -/
-def rlp_ref_hdr (b : EvmByteSlice) (pos : Nat) (stop : Nat) : SailM (Bool × source_pointer × Nat) := do
+/-- Decodes the first RLP header in an exact remaining source slice:
+`(is_list, content_offset, content_length)`. -/
+/- Type quantifiers: b_dependentWitness1 : Nat, b_dependentWitness0 : Nat, 0 ≤ b_dependentWitness0
+  ∧ 0 ≤ b_dependentWitness1 -/
+def rlp_ref_hdr (b : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Bool × Nat × Nat) := do
+  let b_dependentWitness0 := (b).1
+  let b_dependentWitness1 := ((b).2).1
   let b := ((b).2).2
-  if ((! (pos <b stop)) : Bool)
+  let source_len := b.len
+  if ((source_len == 0) : Bool)
   then sailThrow ((InvalidBlock RlpDecode))
-  else (pure ())
-  let h ← do (pure (BitVec.toNatInt (← (slice_byte ⟨_, ⟨_, b⟩⟩ pos))))
-  if ((h <b 128) : Bool)
-  then (pure (false, pos, 1))
   else
     (do
-      let position := pos
-      let stop_position := stop
-      let length_start : Nat := (position + 1)
-      if ((h <b 184) : Bool)
-      then (pure (false, length_start, (h - 128)))
+      let h ← do (pure (BitVec.toNatInt (← (slice_byte ⟨_, ⟨_, b⟩⟩ 0))))
+      if ((h <b 128) : Bool)
+      then (pure (false, 0, 1))
       else
         (do
-          if ((h <b 192) : Bool)
-          then
-            (do
-              let length_width : Nat := (h - 183)
-              if (((stop_position - (position + 1)) <b length_width) : Bool)
-              then sailThrow ((InvalidBlock RlpDecode))
-              else (pure ())
-              let content : Nat := ((position + 1) + length_width)
-              (pure (false, content, (← (rlp_ref_be_length ⟨_, ⟨_, b⟩⟩ length_start
-                    content length_width)))))
+          if ((h <b 184) : Bool)
+          then (pure (false, 1, (h - 128)))
           else
             (do
-              if ((h <b 248) : Bool)
-              then (pure (true, length_start, (h - 192)))
+              if ((h <b 192) : Bool)
+              then
+                (do
+                  let length_width : Nat := (h - 183)
+                  if (((source_len - 1) <b length_width) : Bool)
+                  then sailThrow ((InvalidBlock RlpDecode))
+                  else
+                    (do
+                      let length_bytes := (sub_slice b 1 length_width)
+                      (pure (false, (1 + length_width), (← (rlp_uint64_width
+                            ⟨_, ⟨_, length_bytes⟩⟩ length_width))))))
               else
                 (do
-                  let length_width : Nat := (h - 247)
-                  if (((stop_position - (position + 1)) <b length_width) : Bool)
-                  then sailThrow ((InvalidBlock RlpDecode))
-                  else (pure ())
-                  let content : Nat := ((position + 1) + length_width)
-                  (pure (true, content, (← (rlp_ref_be_length ⟨_, ⟨_, b⟩⟩ length_start
-                        content length_width))))))))
+                  if ((h <b 248) : Bool)
+                  then (pure (true, 1, (h - 192)))
+                  else
+                    (do
+                      let length_width : Nat := (h - 247)
+                      if (((source_len - 1) <b length_width) : Bool)
+                      then sailThrow ((InvalidBlock RlpDecode))
+                      else
+                        (do
+                          let length_bytes := (sub_slice b 1 length_width)
+                          (pure (true, (1 + length_width), (← (rlp_uint64_width
+                                ⟨_, ⟨_, length_bytes⟩⟩ length_width))))))))))
 
-/- Type quantifiers: k_ex409702_ : Bool, k_source_off : Nat, k_source_len : Nat, full_off : Nat, full_len
-  : Nat, content_off : Nat, content_len : Nat, source_valid_range(k_source_off, k_source_len) ∧
-  0 ≤ full_off ∧
-  0 ≤ full_len ∧
-  (full_off + full_len) ≤ k_source_len ∧
-  0 ≤ content_off ∧ 0 ≤ content_len ∧ (content_off + content_len) ≤ k_source_len -/
-def rlp_field_ref (source : (EvmByteSliceFields k_source_off k_source_len)) (is_list : Bool) (full_off : Nat) (full_len : Nat) (content_off : Nat) (content_len : Nat) : RlpFieldRef :=
-  let fields : (RlpFieldRefFields k_source_off k_source_len full_off full_len content_off content_len) :=
-    { source := source,
-      is_list := is_list,
-      full_off := full_off,
-      full_len := full_len,
-      content_off := content_off,
-      content_len := content_len }
-  ((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, fields⟩⟩⟩⟩⟩⟩ : (Sigma fun
-  (k_syn_source_off : Nat) =>
-  (Sigma fun (k_syn_source_len : Nat) =>
-  (Sigma fun (k_syn_full_off : Nat) =>
-  (Sigma fun (k_syn_full_len : Nat) =>
-  (Sigma fun (k_syn_content_off : Nat) =>
-  (Sigma fun (k_syn_content_len : Nat) =>
-  (RlpFieldRefFields k_syn_source_off k_syn_source_len k_syn_full_off k_syn_full_len k_syn_content_off k_syn_content_len)))))))) : (Sigma
-  fun (k_syn_source_off : Nat) =>
-  (Sigma fun (k_syn_source_len : Nat) =>
-  (Sigma fun (k_syn_full_off : Nat) =>
-  (Sigma fun (k_syn_full_len : Nat) =>
-  (Sigma fun (k_syn_content_off : Nat) =>
-  (Sigma fun (k_syn_content_len : Nat) =>
-  (RlpFieldRefFields k_syn_source_off k_syn_source_len k_syn_full_off k_syn_full_len k_syn_content_off k_syn_content_len))))))))
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+def rlp_ref_cursor (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM (EvmByteSliceFields (k_source_off + (k_source_len - k_content_len)) k_content_len) := do
+  if (f.is_list : Bool)
+  then (pure (sub_slice f.source (k_source_len - k_content_len) k_content_len))
+  else sailThrow ((InvalidBlock RlpDecode))
 
-/- Type quantifiers: k_ex409715_ : Bool, k_source_off : Nat, k_source_len : Nat, current : Nat, stop
-  : Nat, source_valid_range(k_source_off, k_source_len) ∧
-  0 ≤ current ∧ current ≤ stop ∧ stop ≤ k_source_len -/
-def rlp_cursor (source : (EvmByteSliceFields k_source_off k_source_len)) (current : Nat) (stop : Nat) (valid : Bool) : RlpCursor :=
-  let fields : (RlpCursorFields k_source_off k_source_len current stop) :=
-    { source := source,
-      current := current,
-      stop := stop,
-      valid := valid }
-  ((⟨_, ⟨_, ⟨_, ⟨_, fields⟩⟩⟩⟩ : (Sigma fun (k_syn_source_off : Nat) =>
-  (Sigma fun (k_syn_source_len : Nat) =>
-  (Sigma fun (k_syn_current : Nat) =>
-  (Sigma fun (k_syn_stop : Nat) =>
-  (RlpCursorFields k_syn_source_off k_syn_source_len k_syn_current k_syn_stop)))))) : (Sigma fun
-  (k_syn_source_off : Nat) =>
-  (Sigma fun (k_syn_source_len : Nat) =>
-  (Sigma fun (k_syn_current : Nat) =>
-  (Sigma fun (k_syn_stop : Nat) =>
-  (RlpCursorFields k_syn_source_off k_syn_source_len k_syn_current k_syn_stop))))))
-
-/-- The invalid cursor; popping it throws `InvalidBlock(RlpDecode)`. -/
-/- Type quantifiers: k_ex409723_ : Nat, k_ex409722_ : Nat, 0 ≤ k_ex409722_ ∧ 0 ≤ k_ex409723_ -/
-def rlp_invalid_cursor (source : EvmByteSlice) : RlpCursor :=
-  let source := ((source).2).2
-  ((⟨_, ⟨_, ⟨_, ⟨_, (((((rlp_cursor source 0 0 false)).2).2).2).2⟩⟩⟩⟩ : (Sigma fun
-  (k_source_off : Nat) =>
-  (Sigma fun (k_source_len : Nat) =>
-  (Sigma fun (k_current : Nat) =>
-  (Sigma fun (k_stop : Nat) => (RlpCursorFields k_source_off k_source_len k_current k_stop)))))) : (Sigma
-  fun (k_source_off : Nat) =>
-  (Sigma fun (k_source_len : Nat) =>
-  (Sigma fun (k_current : Nat) =>
-  (Sigma fun (k_stop : Nat) => (RlpCursorFields k_source_off k_source_len k_current k_stop))))))
-
-/-- A cursor over the children of a byte sequence that must be exactly
-one RLP list (e.g. a trie node). -/
-/- Type quantifiers: k_ex409727_ : Nat, k_ex409726_ : Nat, 0 ≤ k_ex409726_ ∧ 0 ≤ k_ex409727_ -/
-def rlp_node_cursor (node : EvmByteSlice) : SailM RlpCursor := do
-  let node := ((node).2).2
-  let node_length := node.len
-  if ((node_length == 0) : Bool)
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len) -/
+def rlp_cursor_pop (cursor : (EvmByteSliceFields k_source_off k_source_len)) : SailM (Sigma fun
+  (k_content_len : Nat) =>
+  (Sigma fun (k_full_len : Nat) =>
+  ((RlpFieldRef k_source_off k_full_len k_content_len) × (EvmByteSliceFields (k_source_off + k_full_len) (k_source_len - k_full_len))))) := do
+  if _sailIf0 : ((k_source_len == 0) : Bool) = true
   then
-    (pure ((rlp_invalid_cursor ⟨_, ⟨_, node⟩⟩) : (Sigma fun (k_source_off : Nat) =>
-      (Sigma fun (k_source_len : Nat) =>
-      (Sigma fun (k_current : Nat) =>
-      (Sigma fun (k_stop : Nat) => (RlpCursorFields k_source_off k_source_len k_current k_stop)))))))
+    (do
+      sailThrow ((InvalidBlock RlpDecode)))
   else
     (do
-      let node_stop := node_length
-      let (is_list, content, content_len) ← do (rlp_ref_hdr ⟨_, ⟨_, node⟩⟩ 0 node_stop)
-      let content_offset := content
-      let payload_length := content_len
-      if ((content_offset ≤b node_length) : Bool)
+      let (is_list, content_off, content_len_value) ← do (rlp_ref_hdr ⟨_, ⟨_, cursor⟩⟩)
+      let content_len := content_len_value
+      if _sailIf1 : ((k_source_len <b content_off) : Bool) = true
       then
-        (if ((payload_length ≤b (node_length - content_offset)) : Bool)
-        then
-          (let content_stop := (content_offset + payload_length)
-          if (is_list : Bool)
-          then
-            (if ((content_stop == node_stop) : Bool)
-            then
-              (pure ((⟨_, ⟨_, ⟨_, ⟨_, (((((rlp_cursor node content content_stop true)).2).2).2).2⟩⟩⟩⟩ : (Sigma
-                fun (k_source_off : Nat) =>
-                (Sigma fun (k_source_len : Nat) =>
-                (Sigma fun (k_current : Nat) =>
-                (Sigma fun (k_stop : Nat) =>
-                (RlpCursorFields k_source_off k_source_len k_current k_stop)))))) : (Sigma fun
-                (k_source_off : Nat) =>
-                (Sigma fun (k_source_len : Nat) =>
-                (Sigma fun (k_current : Nat) =>
-                (Sigma fun (k_stop : Nat) =>
-                (RlpCursorFields k_source_off k_source_len k_current k_stop)))))))
-            else
-              (pure ((rlp_invalid_cursor ⟨_, ⟨_, node⟩⟩) : (Sigma fun (k_source_off : Nat)
-                =>
-                (Sigma fun (k_source_len : Nat) =>
-                (Sigma fun (k_current : Nat) =>
-                (Sigma fun (k_stop : Nat) =>
-                (RlpCursorFields k_source_off k_source_len k_current k_stop))))))))
-          else
-            (pure ((rlp_invalid_cursor ⟨_, ⟨_, node⟩⟩) : (Sigma fun (k_source_off : Nat) =>
-              (Sigma fun (k_source_len : Nat) =>
-              (Sigma fun (k_current : Nat) =>
-              (Sigma fun (k_stop : Nat) =>
-              (RlpCursorFields k_source_off k_source_len k_current k_stop))))))))
-        else
-          (pure ((rlp_invalid_cursor ⟨_, ⟨_, node⟩⟩) : (Sigma fun (k_source_off : Nat) =>
-            (Sigma fun (k_source_len : Nat) =>
-            (Sigma fun (k_current : Nat) =>
-            (Sigma fun (k_stop : Nat) =>
-            (RlpCursorFields k_source_off k_source_len k_current k_stop))))))))
-      else
-        (pure ((rlp_invalid_cursor ⟨_, ⟨_, node⟩⟩) : (Sigma fun (k_source_off : Nat) =>
-          (Sigma fun (k_source_len : Nat) =>
-          (Sigma fun (k_current : Nat) =>
-          (Sigma fun (k_stop : Nat) => (RlpCursorFields k_source_off k_source_len k_current k_stop))))))))
-
-/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_full_off : Nat, k_full_len : Nat, k_content_off
-  : Nat, k_content_len : Nat, source_valid_range(k_source_off, k_source_len) ∧
-  0 ≤ k_full_off ∧
-  0 ≤ k_full_len ∧
-  (k_full_off + k_full_len) ≤ k_source_len ∧
-  0 ≤ k_content_off ∧ 0 ≤ k_content_len ∧ (k_content_off + k_content_len) ≤ k_source_len -/
-def rlp_ref_cursor (f : (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len)) : SailM (Sigma
-  fun (k_cursor_source_off : Nat) =>
-  (Sigma fun (k_cursor_source_len : Nat) =>
-  (Sigma fun (k_cursor_current : Nat) =>
-  (Sigma fun (k_cursor_stop : Nat) =>
-  (RlpCursorFields k_cursor_source_off k_cursor_source_len k_cursor_current k_cursor_stop))))) := do
-  if (f.is_list : Bool)
-  then
-    (do
-      let content_offset := k_content_off
-      let content_length := k_content_len
-      let source_length := k_source_len
-      let stop := (content_offset + content_length)
-      let ⟨_, ⟨_, ⟨_, ⟨_, cursor⟩⟩⟩⟩ :=
-        (rlp_cursor f.source content_offset stop true)
-      let cursor_span := (cursor.stop - cursor.current)
-      let full_length := k_full_len
-      if ((cursor_span ≤b full_length) : Bool)
-      then
-        (pure ((⟨_, ⟨_, ⟨_, ⟨_, cursor⟩⟩⟩⟩ : (Sigma fun (k_cursor_source_off : Nat)
-          =>
-          (Sigma fun (k_cursor_source_len : Nat) =>
-          (Sigma fun (k_cursor_current : Nat) =>
-          (Sigma fun (k_cursor_stop : Nat) =>
-          (RlpCursorFields k_cursor_source_off k_cursor_source_len k_cursor_current k_cursor_stop)))))) : (Sigma
-          fun (k_cursor_source_off : Nat) =>
-          (Sigma fun (k_cursor_source_len : Nat) =>
-          (Sigma fun (k_cursor_current : Nat) =>
-          (Sigma fun (k_cursor_stop : Nat) =>
-          (RlpCursorFields k_cursor_source_off k_cursor_source_len k_cursor_current k_cursor_stop)))))))
+        (do
+          sailThrow ((InvalidBlock RlpDecode)))
       else
         (do
-          sailThrow ((InvalidBlock RlpDecode))))
-  else
-    (do
-      sailThrow ((InvalidBlock RlpDecode)))
+          if _sailIf2 : (((k_source_len - content_off) <b content_len) : Bool) = true
+          then
+            (do
+              sailThrow ((InvalidBlock RlpDecode)))
+          else
+            (do
+              let full_len := (content_off + content_len)
+              if _sailIf3 : (((0 <b full_len) && (full_len ≤b k_source_len)) : Bool) = true
+              then
+                (let field_source := (sub_slice cursor 0 full_len)
+                let field : (RlpFieldRef k_source_off full_len content_len) :=
+                  { source := field_source,
+                    is_list := is_list,
+                    content_len := content_len }
+                let advanced := (sub_slice cursor full_len (k_source_len - full_len))
+                (pure ((⟨_, ⟨_, (field, advanced)⟩⟩ : (Sigma fun (k_syn_content_len : Nat)
+                  =>
+                  (Sigma fun (k_syn_full_len : Nat) =>
+                  ((RlpFieldRef k_source_off k_syn_full_len k_syn_content_len) × (EvmByteSliceFields (k_source_off + k_syn_full_len) (k_source_len - k_syn_full_len)))))) : (Sigma
+                  fun (k_syn_content_len : Nat) =>
+                  (Sigma fun (k_syn_full_len : Nat) =>
+                  ((RlpFieldRef k_source_off k_syn_full_len k_syn_content_len) × (EvmByteSliceFields (k_source_off + k_syn_full_len) (k_source_len - k_syn_full_len))))))))
+              else
+                (do
+                  sailThrow ((InvalidBlock RlpDecode))))))
 
-/-- Whether the cursor has consumed all children. -/
-/- Type quantifiers: k_ex409753_ : Nat, k_ex409752_ : Nat, k_ex409751_ : Nat, k_ex409750_ : Nat, 0
-  ≤ k_ex409750_ ∧ 0 ≤ k_ex409751_ ∧
-  0 ≤ k_ex409752_ ∧ k_ex409752_ ≤ k_ex409753_ ∧ k_ex409753_ ≤ k_ex409751_ -/
-def rlp_cursor_empty (cursor : RlpCursor) : Bool :=
-  let cursor := ((((cursor).2).2).2).2
-  (cursor.valid && (cursor.current == cursor.stop))
-
-/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_current : Nat, k_stop : Nat, source_valid_range(k_source_off, k_source_len)
-  ∧ 0 ≤ k_current ∧ k_current ≤ k_stop ∧ k_stop ≤ k_source_len -/
-def rlp_cursor_pop (cursor : (RlpCursorFields k_source_off k_source_len k_current k_stop)) : SailM (Sigma
-  fun (k_content : Nat) =>
-  (Sigma fun (k_content_len : Nat) =>
-  (Sigma fun (k_next : Nat) =>
-  (Sigma fun (k_full_len : Nat) =>
-  ((RlpFieldRefFields k_source_off k_source_len k_current k_full_len k_content k_content_len) × (RlpCursorFields k_source_off k_source_len k_next k_stop)))))) := do
-  let current := k_current
-  let stop := k_stop
-  if (((! cursor.valid) || (! (current <b stop))) : Bool)
-  then sailThrow ((InvalidBlock RlpDecode))
-  else (pure ())
-  let (is_list, content_value, content_len_value) ← do
-    (rlp_ref_hdr ⟨_, ⟨_, cursor.source⟩⟩ current stop)
-  let content := content_value
-  let content_len := content_len_value
-  let content_offset := content
-  let payload_length := content_len
-  let stop_offset := stop
-  if ((stop_offset <b content_offset) : Bool)
-  then sailThrow ((InvalidBlock RlpDecode))
-  else (pure ())
-  if (((stop_offset - content_offset) <b payload_length) : Bool)
-  then sailThrow ((InvalidBlock RlpDecode))
-  else (pure ())
-  let next := (content_offset + payload_length)
-  let current_offset := current
-  let next_offset := next
-  if ((current_offset <b next_offset) : Bool)
-  then
-    (let full_len := (next_offset - current_offset)
-    let field : (RlpFieldRefFields k_source_off k_source_len k_current full_len content content_len) :=
-      { source := cursor.source,
-        is_list := is_list,
-        full_off := current,
-        full_len := full_len,
-        content_off := content,
-        content_len := content_len }
-    let advanced : (RlpCursorFields k_source_off k_source_len next k_stop) :=
-      { source := cursor.source,
-        current := next,
-        stop := stop,
-        valid := true }
-    (pure ((⟨_, ⟨_, ⟨_, ⟨_, (field, advanced)⟩⟩⟩⟩ : (Sigma fun (k_syn_content : Nat)
-      =>
-      (Sigma fun (k_syn_content_len : Nat) =>
-      (Sigma fun (k_syn_next : Nat) =>
-      (Sigma fun (k_syn_full_len : Nat) =>
-      ((RlpFieldRefFields k_source_off k_source_len k_current k_syn_full_len k_syn_content k_syn_content_len) × (RlpCursorFields k_source_off k_source_len k_syn_next k_stop))))))) : (Sigma
-      fun (k_syn_content : Nat) =>
-      (Sigma fun (k_syn_content_len : Nat) =>
-      (Sigma fun (k_syn_next : Nat) =>
-      (Sigma fun (k_syn_full_len : Nat) =>
-      ((RlpFieldRefFields k_source_off k_source_len k_current k_syn_full_len k_syn_content k_syn_content_len) × (RlpCursorFields k_source_off k_source_len k_syn_next k_stop)))))))))
-  else
-    (do
-      sailThrow ((InvalidBlock RlpDecode)))
-
-/-- Asserts the cursor is exhausted — trailing bytes are a decode
-error. -/
-/- Type quantifiers: k_ex409777_ : Nat, k_ex409776_ : Nat, k_ex409775_ : Nat, k_ex409774_ : Nat, 0
-  ≤ k_ex409774_ ∧ 0 ≤ k_ex409775_ ∧
-  0 ≤ k_ex409776_ ∧ k_ex409776_ ≤ k_ex409777_ ∧ k_ex409777_ ≤ k_ex409775_ -/
-def rlp_cursor_expect_end (cursor : RlpCursor) : SailM Unit := do
-  let cursor := ((((cursor).2).2).2).2
-  if ((rlp_cursor_empty ⟨_, ⟨_, ⟨_, ⟨_, cursor⟩⟩⟩⟩) : Bool)
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len) -/
+def rlp_cursor_expect_end (cursor : (EvmByteSliceFields k_source_off k_source_len)) : SailM Unit := do
+  if ((k_source_len == 0) : Bool)
   then (pure ())
   else sailThrow ((InvalidBlock RlpDecode))
 
-/-- Decodes a byte sequence that must be exactly one RLP item. -/
-/- Type quantifiers: k_ex409781_ : Nat, k_ex409780_ : Nat, 0 ≤ k_ex409780_ ∧ 0 ≤ k_ex409781_ -/
-def rlp_single_ref (item : EvmByteSlice) : SailM RlpFieldRef := do
-  let item := ((item).2).2
-  let item_length := item.len
-  if ((item_length == 0) : Bool)
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len) -/
+def rlp_single_ref (item : (EvmByteSliceFields k_source_off k_source_len)) : SailM (Sigma fun
+  (k_content_len : Nat) => (RlpFieldRef k_source_off k_source_len k_content_len)) := do
+  let item_length := k_source_len
+  if _sailIf0 : ((item_length == 0) : Bool) = true
   then
     (do
       sailThrow ((InvalidBlock RlpDecode)))
   else
     (do
-      let item_stop := item_length
-      let (isl, cs, cl) ← do (rlp_ref_hdr ⟨_, ⟨_, item⟩⟩ 0 item_stop)
-      let content_offset := cs
-      let content_length := cl
-      if ((content_offset >b item_length) : Bool)
-      then sailThrow ((InvalidBlock RlpDecode))
-      else (pure ())
-      if ((content_length != (item_length - content_offset)) : Bool)
-      then sailThrow ((InvalidBlock RlpDecode))
-      else (pure ())
-      (pure ((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, (((((((rlp_field_ref item isl 0 item.len cs cl)).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩ : (Sigma
-        fun (k_source_off : Nat) =>
-        (Sigma fun (k_source_len : Nat) =>
-        (Sigma fun (k_full_off : Nat) =>
-        (Sigma fun (k_full_len : Nat) =>
-        (Sigma fun (k_content_off : Nat) =>
-        (Sigma fun (k_content_len : Nat) =>
-        (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len)))))))) : (Sigma
-        fun (k_source_off : Nat) =>
-        (Sigma fun (k_source_len : Nat) =>
-        (Sigma fun (k_full_off : Nat) =>
-        (Sigma fun (k_full_len : Nat) =>
-        (Sigma fun (k_content_off : Nat) =>
-        (Sigma fun (k_content_len : Nat) =>
-        (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len))))))))))
+      let (is_list, content_off, content_len_value) ← do (rlp_ref_hdr ⟨_, ⟨_, item⟩⟩)
+      let content_len := content_len_value
+      if _sailIf1 : ((content_off >b item_length) : Bool) = true
+      then
+        (do
+          sailThrow ((InvalidBlock RlpDecode)))
+      else
+        (do
+          if _sailIf2 : ((content_len != (item_length - content_off)) : Bool) = true
+          then
+            (do
+              sailThrow ((InvalidBlock RlpDecode)))
+          else
+            (let field : (RlpFieldRef k_source_off k_source_len content_len) :=
+              { source := item,
+                is_list := is_list,
+                content_len := content_len }
+            (pure ((⟨_, field⟩ : (Sigma fun (k_syn_content_len : Nat) =>
+              (RlpFieldRef k_source_off k_source_len k_syn_content_len))) : (Sigma fun
+              (k_syn_content_len : Nat) => (RlpFieldRef k_source_off k_source_len k_syn_content_len)))))))
 
-/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_full_off : Nat, k_full_len : Nat, k_content_off
-  : Nat, k_content_len : Nat, source_valid_range(k_source_off, k_source_len) ∧
-  0 ≤ k_full_off ∧
-  0 ≤ k_full_len ∧
-  (k_full_off + k_full_len) ≤ k_source_len ∧
-  0 ≤ k_content_off ∧ 0 ≤ k_content_len ∧ (k_content_off + k_content_len) ≤ k_source_len -/
-def rlp_ref_content (f : (RlpFieldRefFields k_source_off k_source_len k_full_off k_full_len k_content_off k_content_len)) : (EvmByteSliceFields (k_source_off + k_content_off) k_content_len) :=
-  (sub_slice f.source k_content_off k_content_len)
+/-- A cursor over the children of a byte sequence that must be exactly
+one RLP list (e.g. a trie node). -/
+/- Type quantifiers: node_dependentWitness1 : Nat, node_dependentWitness0 : Nat, 0 ≤
+  node_dependentWitness0 ∧ 0 ≤ node_dependentWitness1 -/
+def rlp_node_cursor (node : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Sigma fun
+  (k_source_off : Nat) =>
+  (Sigma fun (k_source_len : Nat) => (EvmByteSliceFields k_source_off k_source_len))) := do
+  let node_dependentWitness0 := (node).1
+  let node_dependentWitness1 := ((node).2).1
+  let node := ((node).2).2
+  (do
+    let dependentResult ← (do
+        let dependentArg0 := (← (rlp_single_ref node))
+        let publicResult ← (rlp_ref_cursor (dependentArg0).2)
+        pure ((⟨_, publicResult⟩ : (Sigma fun (k_ex420436_ : Nat) =>
+        (EvmByteSliceFields (node_dependentWitness0 + (node_dependentWitness1 - k_ex420436_)) k_ex420436_)))))
+    pure ((⟨_, ⟨_, (dependentResult).2⟩⟩ : (Sigma fun (k_source_off : Nat) =>
+    (Sigma fun (k_source_len : Nat) => (EvmByteSliceFields k_source_off k_source_len))))))
 
-/-- The full encoded span of a field. -/
-/- Type quantifiers: k_ex409807_ : Nat, k_ex409806_ : Nat, k_ex409805_ : Nat, k_ex409804_ : Nat, k_ex409803_
-  : Nat, k_ex409802_ : Nat, 0 ≤ k_ex409802_ ∧ 0 ≤ k_ex409803_ ∧
-  0 ≤ k_ex409804_ ∧
-  0 ≤ k_ex409805_ ∧
-  (k_ex409804_ + k_ex409805_) ≤ k_ex409803_ ∧
-  0 ≤ k_ex409806_ ∧ 0 ≤ k_ex409807_ ∧ (k_ex409806_ + k_ex409807_) ≤ k_ex409803_ -/
-def rlp_ref_full (f : RlpFieldRef) : EvmByteSlice :=
-  let f := ((((((f).2).2).2).2).2).2
-  ((⟨_, ⟨_, (sub_slice f.source f.full_off f.full_len)⟩⟩ : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))
+/-- The content span of a field. -/
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+def rlp_ref_content (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : (Sigma fun
+  (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) :=
+  ((⟨_, ⟨_, (sub_slice f.source (k_source_len - k_content_len) k_content_len)⟩⟩ : (Sigma fun
+  (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
+  (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))
 
 /-- Whether a field uses the unique canonical RLP framing for its payload. -/
-/- Type quantifiers: k_ex409819_ : Nat, k_ex409818_ : Nat, k_ex409817_ : Nat, k_ex409816_ : Nat, k_ex409815_
-  : Nat, k_ex409814_ : Nat, 0 ≤ k_ex409814_ ∧ 0 ≤ k_ex409815_ ∧
-  0 ≤ k_ex409816_ ∧
-  0 ≤ k_ex409817_ ∧
-  (k_ex409816_ + k_ex409817_) ≤ k_ex409815_ ∧
-  0 ≤ k_ex409818_ ∧ 0 ≤ k_ex409819_ ∧ (k_ex409818_ + k_ex409819_) ≤ k_ex409815_ -/
-def rlp_ref_framing_canonical (f : RlpFieldRef) : SailM Bool := do
-  let f := ((((((f).2).2).2).2).2).2
-  let n := f.content_len
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+def rlp_ref_framing_canonical (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM Bool := do
+  let n := k_content_len
   let payload_length := n
-  let full_length := f.full_len
-  let fo := f.full_off
-  let full_offset := fo
-  let co := f.content_off
+  let full_length := k_source_len
+  let full_offset := 0
+  let content_offset := (full_length - payload_length)
   let source := f.source
   let source_length := source.len
   if ((full_length == 0) : Bool)
@@ -841,150 +626,130 @@ def rlp_ref_framing_canonical (f : RlpFieldRef) : SailM Bool := do
         (do
           if ((n ≤b RLP_SHORT_LENGTH_LIMIT) : Bool)
           then
-            (pure ((full_length == (payload_length + 1)) && ((← (slice_byte
-                      ⟨_, ⟨_, f.source⟩⟩ fo)) == (0xC0#8 + (rlp_nat_length_byte n)))))
+            if ((full_length == (payload_length + 1)) : Bool)
+            then
+              (do
+                (pure ((← (slice_byte ⟨_, ⟨_, f.source⟩⟩ 0)) == (0xC0#8 + (rlp_nat_length_byte
+                        n)))))
+            else (pure false)
           else
             (do
               let (len_bytes, length_width) ← do
-                (pure (minimal_word_bytes ((← (rlp_length_word n))).value))
-              (pure ((full_length == ((1 + length_width) + payload_length)) && (((← (slice_byte
-                          ⟨_, ⟨_, f.source⟩⟩ fo)) == (0xF7#8 + (rlp_nat_length_byte
-                          length_width))) && (← (rlp_bytes_equal_at len_bytes
-                        ⟨_, ⟨_, f.source⟩⟩ (full_offset + 1))))))))
+                (pure (minimal_word_bytes (← (rlp_length_word n))))
+              if ((full_length == ((1 + length_width) + payload_length)) : Bool)
+              then
+                (do
+                  if (((← (slice_byte ⟨_, ⟨_, f.source⟩⟩ 0)) == (0xF7#8 + (rlp_nat_length_byte
+                           length_width))) : Bool)
+                  then
+                    (do
+                      (rlp_bytes_equal_at len_bytes ⟨_, ⟨_, f.source⟩⟩ (full_offset + 1)))
+                  else (pure false))
+              else (pure false)))
       else
         (do
           if ((payload_length == 0) : Bool)
           then
-            (pure ((full_length == 1) && ((← (slice_byte ⟨_, ⟨_, f.source⟩⟩ fo)) == 0x80#8)))
+            if ((full_length == 1) : Bool)
+            then
+              (do
+                (pure ((← (slice_byte ⟨_, ⟨_, f.source⟩⟩ 0)) == 0x80#8)))
+            else (pure false)
           else
             (do
-              let first ← do (slice_byte ⟨_, ⟨_, f.source⟩⟩ co)
+              let first ← do (slice_byte ⟨_, ⟨_, f.source⟩⟩ content_offset)
               if (((payload_length == 1) && ((BitVec.access first 7) == 0#1)) : Bool)
               then
-                (pure ((full_length == 1) && ((← (slice_byte ⟨_, ⟨_, f.source⟩⟩ fo)) == first)))
+                if ((full_length == 1) : Bool)
+                then
+                  (do
+                    (pure ((← (slice_byte ⟨_, ⟨_, f.source⟩⟩ 0)) == first)))
+                else (pure false)
               else
                 (do
                   if ((n ≤b RLP_SHORT_LENGTH_LIMIT) : Bool)
                   then
-                    (pure ((full_length == (payload_length + 1)) && ((← (slice_byte
-                              ⟨_, ⟨_, f.source⟩⟩ fo)) == (0x80#8 + (rlp_nat_length_byte n)))))
+                    if ((full_length == (payload_length + 1)) : Bool)
+                    then
+                      (do
+                        (pure ((← (slice_byte ⟨_, ⟨_, f.source⟩⟩ 0)) == (0x80#8 + (rlp_nat_length_byte
+                                n)))))
+                    else (pure false)
                   else
                     (do
                       let (len_bytes, length_width) ← do
-                        (pure (minimal_word_bytes ((← (rlp_length_word n))).value))
-                      (pure ((full_length == ((1 + length_width) + payload_length)) && (((← (slice_byte
-                                  ⟨_, ⟨_, f.source⟩⟩ fo)) == (0xB7#8 + (rlp_nat_length_byte
-                                  length_width))) && (← (rlp_bytes_equal_at len_bytes
-                                ⟨_, ⟨_, f.source⟩⟩ (full_offset + 1)))))))))))
+                        (pure (minimal_word_bytes (← (rlp_length_word n))))
+                      if ((full_length == ((1 + length_width) + payload_length)) : Bool)
+                      then
+                        (do
+                          if (((← (slice_byte ⟨_, ⟨_, f.source⟩⟩ 0)) == (0xB7#8 + (rlp_nat_length_byte
+                                   length_width))) : Bool)
+                          then
+                            (do
+                              (rlp_bytes_equal_at len_bytes ⟨_, ⟨_, f.source⟩⟩
+                                (full_offset + 1)))
+                          else (pure false))
+                      else (pure false))))))
 
-/- Type quantifiers: k_ex409831_ : Nat, k_ex409830_ : Nat, k_ex409829_ : Nat, k_ex409828_ : Nat, k_ex409827_
-  : Nat, k_ex409826_ : Nat, 0 ≤ k_ex409826_ ∧ 0 ≤ k_ex409827_ ∧
-  0 ≤ k_ex409828_ ∧
-  0 ≤ k_ex409829_ ∧
-  (k_ex409828_ + k_ex409829_) ≤ k_ex409827_ ∧
-  0 ≤ k_ex409830_ ∧ 0 ≤ k_ex409831_ ∧ (k_ex409830_ + k_ex409831_) ≤ k_ex409827_ -/
-def rlp_ref_bytes_canonical (f : RlpFieldRef) : SailM Bool := do
-  let f := ((((((f).2).2).2).2).2).2
-  (pure ((! f.is_list) && (← (rlp_ref_framing_canonical
-          ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩))))
+/-- Whether a field is a byte string with its unique canonical RLP framing. -/
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+def rlp_ref_bytes_canonical (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM Bool := do
+  if ((! f.is_list) : Bool)
+  then
+    (do
+      (rlp_ref_framing_canonical f))
+  else (pure false)
 
 /-- Whether a field is the canonical RLP encoding of a non-negative
 integer: minimal big-endian content with no leading zeros and the
 exact matching evm_prefix. -/
-/- Type quantifiers: k_ex409843_ : Nat, k_ex409842_ : Nat, k_ex409841_ : Nat, k_ex409840_ : Nat, k_ex409839_
-  : Nat, k_ex409838_ : Nat, 0 ≤ k_ex409838_ ∧ 0 ≤ k_ex409839_ ∧
-  0 ≤ k_ex409840_ ∧
-  0 ≤ k_ex409841_ ∧
-  (k_ex409840_ + k_ex409841_) ≤ k_ex409839_ ∧
-  0 ≤ k_ex409842_ ∧ 0 ≤ k_ex409843_ ∧ (k_ex409842_ + k_ex409843_) ≤ k_ex409839_ -/
-def rlp_ref_uint_canonical (f : RlpFieldRef) : SailM Bool := do
-  let f := ((((((f).2).2).2).2).2).2
-  if ((! (← (rlp_ref_bytes_canonical ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩))) : Bool)
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+def rlp_ref_uint_canonical (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM Bool := do
+  if ((! (← (rlp_ref_bytes_canonical f))) : Bool)
   then (pure false)
   else
-    (pure ((f.content_len == 0) || ((← (slice_byte ⟨_, ⟨_, f.source⟩⟩ f.content_off)) != 0x00#8)))
-
-/-- Returns a canonical byte-string field of exactly `len` bytes. -/
-/- Type quantifiers: k_ex409856_ : Nat, k_ex409855_ : Nat, k_ex409854_ : Nat, k_ex409853_ : Nat, k_ex409852_
-  : Nat, k_ex409851_ : Nat, k_ex409850_ : Nat, 0 ≤ k_ex409850_ ∧ 0 ≤ k_ex409851_ ∧
-  0 ≤ k_ex409852_ ∧
-  0 ≤ k_ex409853_ ∧
-  (k_ex409852_ + k_ex409853_) ≤ k_ex409851_ ∧
-  0 ≤ k_ex409854_ ∧ 0 ≤ k_ex409855_ ∧ (k_ex409854_ + k_ex409855_) ≤ k_ex409851_, 0 ≤
-  k_ex409856_ -/
-def rlp_ref_fixed_bytes (f : RlpFieldRef) (len : Nat) : SailM EvmByteSlice := do
-  let f := ((((((f).2).2).2).2).2).2
-  if (((← (rlp_ref_bytes_canonical ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩)) && (f.content_len == len)) : Bool)
-  then
-    (pure ((⟨_, ⟨_, (rlp_ref_content f)⟩⟩ : (Sigma fun (k_off : Nat) =>
-      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
-      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
-  else
-    (do
-      sailThrow ((InvalidBlock RlpDecode)))
-
-/-- Decodes a string field of at most 32 bytes into a word. -/
-/- Type quantifiers: k_ex409868_ : Nat, k_ex409867_ : Nat, k_ex409866_ : Nat, k_ex409865_ : Nat, k_ex409864_
-  : Nat, k_ex409863_ : Nat, 0 ≤ k_ex409863_ ∧ 0 ≤ k_ex409864_ ∧
-  0 ≤ k_ex409865_ ∧
-  0 ≤ k_ex409866_ ∧
-  (k_ex409865_ + k_ex409866_) ≤ k_ex409864_ ∧
-  0 ≤ k_ex409867_ ∧ 0 ≤ k_ex409868_ ∧ (k_ex409867_ + k_ex409868_) ≤ k_ex409864_ -/
-def rlp_ref_word (f : RlpFieldRef) : SailM word := do
-  let f := ((((((f).2).2).2).2).2).2
-  let publicResult ← do
-    let n := f.content_len
-    if ((f.is_list || (RLP_WORD_LENGTH_LIMIT <b n)) : Bool)
-    then sailThrow ((InvalidBlock RlpDecode))
+    if ((k_content_len == 0) : Bool)
+    then (pure true)
     else
       (do
-          let publicResult ← (slice_load_n ⟨_, ⟨_, f.source⟩⟩ f.content_off n)
-          pure ((publicResult).value))
-  pure (⟨publicResult⟩)
+        (pure ((← (slice_byte ⟨_, ⟨_, f.source⟩⟩ (k_source_len - k_content_len))) != 0x00#8)))
+
+/-- Decodes a string field of at most 32 bytes into a word. -/
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+def rlp_ref_word (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM Nat := do
+  let n := k_content_len
+  if ((f.is_list || (RLP_WORD_LENGTH_LIMIT <b n)) : Bool)
+  then sailThrow ((InvalidBlock RlpDecode))
+  else (slice_load_n ⟨_, ⟨_, f.source⟩⟩ (k_source_len - n) n)
 
 /-- Decodes a canonical unsigned integer field into a word; throws
 otherwise. -/
-/- Type quantifiers: k_ex409880_ : Nat, k_ex409879_ : Nat, k_ex409878_ : Nat, k_ex409877_ : Nat, k_ex409876_
-  : Nat, k_ex409875_ : Nat, 0 ≤ k_ex409875_ ∧ 0 ≤ k_ex409876_ ∧
-  0 ≤ k_ex409877_ ∧
-  0 ≤ k_ex409878_ ∧
-  (k_ex409877_ + k_ex409878_) ≤ k_ex409876_ ∧
-  0 ≤ k_ex409879_ ∧ 0 ≤ k_ex409880_ ∧ (k_ex409879_ + k_ex409880_) ≤ k_ex409876_ -/
-def rlp_ref_uint_word (f : RlpFieldRef) : SailM word := do
-  let f := ((((((f).2).2).2).2).2).2
-  let publicResult ← do
-    if ((← (rlp_ref_uint_canonical ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩)) : Bool)
-    then
-      (do
-          let publicResult ← (rlp_ref_word ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩)
-          pure ((publicResult).value))
-    else sailThrow ((InvalidBlock RlpDecode))
-  pure (⟨publicResult⟩)
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+def rlp_ref_uint_word (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM Nat := do
+  if ((← (rlp_ref_uint_canonical f)) : Bool)
+  then (rlp_ref_word f)
+  else sailThrow ((InvalidBlock RlpDecode))
 
 /-- Decodes a canonical unsigned integer into the uint64 wire domain used by
 EIP-2681 account nonces and EIP-4844 excess blob gas. -/
-/- Type quantifiers: k_ex409892_ : Nat, k_ex409891_ : Nat, k_ex409890_ : Nat, k_ex409889_ : Nat, k_ex409888_
-  : Nat, k_ex409887_ : Nat, 0 ≤ k_ex409887_ ∧ 0 ≤ k_ex409888_ ∧
-  0 ≤ k_ex409889_ ∧
-  0 ≤ k_ex409890_ ∧
-  (k_ex409889_ + k_ex409890_) ≤ k_ex409888_ ∧
-  0 ≤ k_ex409891_ ∧ 0 ≤ k_ex409892_ ∧ (k_ex409891_ + k_ex409892_) ≤ k_ex409888_ -/
-def rlp_ref_uint64 (f : RlpFieldRef) : SailM ssz_uint := do
-  let f := ((((((f).2).2).2).2).2).2
-  let publicResult ← do
-    if (((! (← (rlp_ref_uint_canonical ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩))) || (RLP_UINT64_LENGTH_LIMIT <b f.content_len)) : Bool)
-    then sailThrow ((InvalidBlock RlpDecode))
-    else (pure ())
-    let content_length := f.content_len
-    let content := (rlp_ref_content f)
-    let width : Nat := (Nat.mod content_length 9)
-    (rlp_uint64_width ⟨_, ⟨_, content⟩⟩ width)
-  pure (⟨publicResult⟩)
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+def rlp_ref_uint64 (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM Nat := do
+  if (((! (← (rlp_ref_uint_canonical f))) || (RLP_UINT64_LENGTH_LIMIT <b k_content_len)) : Bool)
+  then sailThrow ((InvalidBlock RlpDecode))
+  else
+    (do
+      let content_length := k_content_len
+      let ⟨_, ⟨_, content⟩⟩ := (rlp_ref_content f)
+      let width : Nat := (Nat.mod content_length 9)
+      (rlp_uint64_width ⟨_, ⟨_, content⟩⟩ width))
 
 /-- Decodes an arbitrary-width big-endian natural. -/
-/- Type quantifiers: _reclimit : Nat, k_ex409896_ : Nat, k_ex409895_ : Nat, 0 ≤ k_ex409895_ ∧
-  0 ≤ k_ex409896_, 0 ≤ _reclimit -/
-def _rec_rlp_uint_content (content : EvmByteSlice) (_reclimit : Nat) : SailM Nat := do
+/- Type quantifiers: _reclimit : Nat, content_dependentWitness1 : Nat, content_dependentWitness0 :
+  Nat, 0 ≤ content_dependentWitness0 ∧ 0 ≤ content_dependentWitness1, 0 ≤ _reclimit -/
+def _rec_rlp_uint_content (content : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (_reclimit : Nat) : SailM Nat := do
+  let content_dependentWitness0 := (content).1
+  let content_dependentWitness1 := ((content).2).1
   let content := ((content).2).2
   match _reclimit with
   | 0 =>
@@ -1006,8 +771,12 @@ termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Decodes an arbitrary-width big-endian natural. -/
-/- Type quantifiers: k_ex409901_ : Nat, k_ex409900_ : Nat, 0 ≤ k_ex409900_ ∧ 0 ≤ k_ex409901_ -/
-def rlp_uint_content (content : EvmByteSlice) : SailM Nat := do
+/- Type quantifiers: content_dependentWitness1 : Nat, content_dependentWitness0 : Nat, 0 ≤
+  content_dependentWitness0 ∧ 0 ≤ content_dependentWitness1 -/
+def rlp_uint_content (content : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM Nat := do
+  let content_dependentWitness0 := (content).1
+  let content_dependentWitness1 := ((content).2).1
   let content := ((content).2).2
   let _measure := (content.len : Int)
   if ((_measure <b 0) : Bool)
@@ -1015,84 +784,9 @@ def rlp_uint_content (content : EvmByteSlice) : SailM Nat := do
   else (_rec_rlp_uint_content ⟨_, ⟨_, content⟩⟩ (_measure + 1))
 
 /-- Decodes an arbitrary-width canonical RLP unsigned integer. -/
-/- Type quantifiers: k_ex409914_ : Nat, k_ex409913_ : Nat, k_ex409912_ : Nat, k_ex409911_ : Nat, k_ex409910_
-  : Nat, k_ex409909_ : Nat, 0 ≤ k_ex409909_ ∧ 0 ≤ k_ex409910_ ∧
-  0 ≤ k_ex409911_ ∧
-  0 ≤ k_ex409912_ ∧
-  (k_ex409911_ + k_ex409912_) ≤ k_ex409910_ ∧
-  0 ≤ k_ex409913_ ∧ 0 ≤ k_ex409914_ ∧ (k_ex409913_ + k_ex409914_) ≤ k_ex409910_ -/
-def rlp_ref_uint (f : RlpFieldRef) : SailM Nat := do
-  let f := ((((((f).2).2).2).2).2).2
-  if ((← (rlp_ref_uint_canonical ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩)) : Bool)
-  then (rlp_uint_content ⟨_, ⟨_, (rlp_ref_content f)⟩⟩)
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+def rlp_ref_uint (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM Nat := do
+  if ((← (rlp_ref_uint_canonical f)) : Bool)
+  then (rlp_uint_content (rlp_ref_content f))
   else sailThrow ((InvalidBlock RlpDecode))
-
-/-- Typed RLP boundaries document and enforce the field's protocol domain. -/
-/- Type quantifiers: k_ex409926_ : Nat, k_ex409925_ : Nat, k_ex409924_ : Nat, k_ex409923_ : Nat, k_ex409922_
-  : Nat, k_ex409921_ : Nat, 0 ≤ k_ex409921_ ∧ 0 ≤ k_ex409922_ ∧
-  0 ≤ k_ex409923_ ∧
-  0 ≤ k_ex409924_ ∧
-  (k_ex409923_ + k_ex409924_) ≤ k_ex409922_ ∧
-  0 ≤ k_ex409925_ ∧ 0 ≤ k_ex409926_ ∧ (k_ex409925_ + k_ex409926_) ≤ k_ex409922_ -/
-def rlp_ref_account_nonce (f : RlpFieldRef) : SailM account_nonce := do
-  let f := ((((((f).2).2).2).2).2).2
-  let publicResult ← do
-    (do
-        let publicResult ← (rlp_ref_uint64 ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩)
-        pure ((publicResult).value))
-  pure (⟨publicResult⟩)
-
-/- Type quantifiers: k_ex409938_ : Nat, k_ex409937_ : Nat, k_ex409936_ : Nat, k_ex409935_ : Nat, k_ex409934_
-  : Nat, k_ex409933_ : Nat, 0 ≤ k_ex409933_ ∧ 0 ≤ k_ex409934_ ∧
-  0 ≤ k_ex409935_ ∧
-  0 ≤ k_ex409936_ ∧
-  (k_ex409935_ + k_ex409936_) ≤ k_ex409934_ ∧
-  0 ≤ k_ex409937_ ∧ 0 ≤ k_ex409938_ ∧ (k_ex409937_ + k_ex409938_) ≤ k_ex409934_ -/
-def rlp_ref_block_number (f : RlpFieldRef) : SailM block_number := do
-  let f := ((((((f).2).2).2).2).2).2
-  (rlp_ref_uint ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩)
-
-/-- Decodes block blob gas after enforcing the supported schedule bound. -/
-/- Type quantifiers: k_ex409950_ : Nat, k_ex409949_ : Nat, k_ex409948_ : Nat, k_ex409947_ : Nat, k_ex409946_
-  : Nat, k_ex409945_ : Nat, 0 ≤ k_ex409945_ ∧ 0 ≤ k_ex409946_ ∧
-  0 ≤ k_ex409947_ ∧
-  0 ≤ k_ex409948_ ∧
-  (k_ex409947_ + k_ex409948_) ≤ k_ex409946_ ∧
-  0 ≤ k_ex409949_ ∧ 0 ≤ k_ex409950_ ∧ (k_ex409949_ + k_ex409950_) ≤ k_ex409946_ -/
-def rlp_ref_blob_gas_used (f : RlpFieldRef) : SailM blob_gas_used := do
-  let f := ((((((f).2).2).2).2).2).2
-  let publicResult ← do
-    let value ← do
-      (do
-          let publicResult ← (rlp_ref_uint64
-          ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩)
-          pure ((publicResult).value))
-    if ((value ≤b (21 *i (2 ^i 17))) : Bool)
-    then (pure value)
-    else sailThrow ((InvalidBlock RlpDecode))
-  pure (⟨publicResult⟩)
-
-/- Type quantifiers: k_ex409962_ : Nat, k_ex409961_ : Nat, k_ex409960_ : Nat, k_ex409959_ : Nat, k_ex409958_
-  : Nat, k_ex409957_ : Nat, 0 ≤ k_ex409957_ ∧ 0 ≤ k_ex409958_ ∧
-  0 ≤ k_ex409959_ ∧
-  0 ≤ k_ex409960_ ∧
-  (k_ex409959_ + k_ex409960_) ≤ k_ex409958_ ∧
-  0 ≤ k_ex409961_ ∧ 0 ≤ k_ex409962_ ∧ (k_ex409961_ + k_ex409962_) ≤ k_ex409958_ -/
-def rlp_ref_excess_blob_gas (f : RlpFieldRef) : SailM excess_blob_gas := do
-  let f := ((((((f).2).2).2).2).2).2
-  let publicResult ← do
-    (do
-        let publicResult ← (rlp_ref_uint64 ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩)
-        pure ((publicResult).value))
-  pure (⟨publicResult⟩)
-
-/- Type quantifiers: k_ex409974_ : Nat, k_ex409973_ : Nat, k_ex409972_ : Nat, k_ex409971_ : Nat, k_ex409970_
-  : Nat, k_ex409969_ : Nat, 0 ≤ k_ex409969_ ∧ 0 ≤ k_ex409970_ ∧
-  0 ≤ k_ex409971_ ∧
-  0 ≤ k_ex409972_ ∧
-  (k_ex409971_ + k_ex409972_) ≤ k_ex409970_ ∧
-  0 ≤ k_ex409973_ ∧ 0 ≤ k_ex409974_ ∧ (k_ex409973_ + k_ex409974_) ≤ k_ex409970_ -/
-def rlp_ref_chain_identifier (f : RlpFieldRef) : SailM chain_identifier := do
-  let f := ((((((f).2).2).2).2).2).2
-  (rlp_ref_uint ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, f⟩⟩⟩⟩⟩⟩)
 

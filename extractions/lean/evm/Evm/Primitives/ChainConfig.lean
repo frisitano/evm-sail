@@ -47,15 +47,9 @@ protocol profile, so neither the fork identifier nor its blob schedule is
 repeated inside the SSZ body. Pure data — no registers, no externs. -/
 
 def undefined_BlobSchedule (_ : Unit) : SailM BlobSchedule := do
-  (pure { target := ← do
-              let publicField ← (undefined_range 0 14)
-              pure (⟨publicField⟩),
-          max := ← do
-              let publicField ← (undefined_range 0 21)
-              pure (⟨publicField⟩),
-          base_fee_update_fraction := ← do
-              let publicField ← (undefined_range 1 11684671)
-              pure (⟨publicField⟩) })
+  (pure { target := ← (undefined_range 0 14),
+          max := ← (undefined_range 0 21),
+          base_fee_update_fraction := ← (undefined_range 1 11684671) })
 
 def undefined_ProtocolProfile (_ : Unit) : SailM ProtocolProfile := do
   (pure { fork := ← (undefined_Fork ()),
@@ -63,16 +57,16 @@ def undefined_ProtocolProfile (_ : Unit) : SailM ProtocolProfile := do
 
 /-- The inactive blob schedule used before EIP-4844. -/
 def NO_BLOB_SCHEDULE : BlobSchedule :=
-  { target := ⟨0⟩,
-    max := ⟨0⟩,
-    base_fee_update_fraction := ⟨1⟩ }
+  { target := 0,
+    max := 0,
+    base_fee_update_fraction := 1 }
 
 /-- Resolves the schema's stable `ProtocolFork` byte to the execution-rule
 family and its protocol-defined blob schedule. BPO forks share Osaka
 execution rules but retain their distinct blob parameters. An unknown
 input byte is rejected before any profile field reaches a kernel
 register. -/
-def protocol_profile (schema_fork : byte) : SailM ProtocolProfile := do
+def protocol_profile (schema_fork : (BitVec 8)) : SailM ProtocolProfile := do
   if ((schema_fork == 0x0A#8) : Bool)
   then
     (pure { fork := Berlin,
@@ -100,9 +94,9 @@ def protocol_profile (schema_fork : byte) : SailM ProtocolProfile := do
                   if ((schema_fork == 0x10#8) : Bool)
                   then
                     (pure { fork := Cancun,
-                            blob_schedule := { target := ⟨3⟩,
-                                               max := ⟨6⟩,
-                                               base_fee_update_fraction := ⟨3338477⟩ } })
+                            blob_schedule := { target := 3,
+                                               max := 6,
+                                               base_fee_update_fraction := 3338477 } })
                   else
                     (do
                       if (((schema_fork == 0x11#8) || (schema_fork == 0x12#8)) : Bool)
@@ -110,35 +104,35 @@ def protocol_profile (schema_fork : byte) : SailM ProtocolProfile := do
                         (pure { fork := if ((schema_fork == 0x11#8) : Bool)
                                   then Prague
                                   else Osaka,
-                                blob_schedule := { target := ⟨6⟩,
-                                                   max := ⟨9⟩,
-                                                   base_fee_update_fraction := ⟨5007716⟩ } })
+                                blob_schedule := { target := 6,
+                                                   max := 9,
+                                                   base_fee_update_fraction := 5007716 } })
                       else
                         (do
                           if ((schema_fork == 0x13#8) : Bool)
                           then
                             (pure { fork := Osaka,
-                                    blob_schedule := { target := ⟨10⟩,
-                                                       max := ⟨15⟩,
-                                                       base_fee_update_fraction := ⟨8346193⟩ } })
+                                    blob_schedule := { target := 10,
+                                                       max := 15,
+                                                       base_fee_update_fraction := 8346193 } })
                           else
                             (do
                               if ((schema_fork == 0x14#8) : Bool)
                               then
                                 (pure { fork := Osaka,
-                                        blob_schedule := { target := ⟨14⟩,
-                                                           max := ⟨21⟩,
-                                                           base_fee_update_fraction := ⟨11684671⟩ } })
+                                        blob_schedule := { target := 14,
+                                                           max := 21,
+                                                           base_fee_update_fraction := 11684671 } })
                               else
                                 (do
                                   if ((schema_fork == 0x15#8) : Bool)
                                   then
                                     (pure { fork := Amsterdam,
-                                            blob_schedule := { target := ⟨14⟩,
-                                                               max := ⟨21⟩,
-                                                               base_fee_update_fraction := ⟨11684671⟩ } })
+                                            blob_schedule := { target := 14,
+                                                               max := 21,
+                                                               base_fee_update_fraction := 11684671 } })
                                   else sailThrow ((InvalidBlock InvalidConfig))))))))))
 
 def undefined_ChainConfig (_ : Unit) : SailM ChainConfig := do
-  (pure { chain_id := ← (undefined_nat ()) })
+  (pure { chain_id := ← (undefined_range 0 ((2 ^i 64) - 1)) })
 

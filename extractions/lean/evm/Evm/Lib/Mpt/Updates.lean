@@ -55,23 +55,24 @@ def cached_account_trie_update_next (_ : Unit) : (Option TrieUpdate) :=
   none
 
 /-- Encodes an account trie leaf with its recomputed storage root. -/
-def encode_state_account (info : AccountInfo) (storage_root : hash) : SailM EvmByteSlice := do
-  let nonce_length := (rlp_uint_word_size (info.nonce).value)
-  let balance_length := (rlp_uint_word_size (info.balance).value)
+def encode_state_account (info : AccountInfo) (storage_root : (Vector (BitVec 8) 32)) : SailM (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
+  let nonce_length := (rlp_uint_word_size info.nonce)
+  let balance_length := (rlp_uint_word_size info.balance)
   let storage_root_length := (rlp_word_size ())
   let code_hash_length := (rlp_word_size ())
   let content_len := (((nonce_length + balance_length) + storage_root_length) + code_hash_length)
   let start ← do (scratch_begin ())
   (rlp_write_list_prefix content_len)
-  (rlp_write_uint_word (info.nonce).value)
-  (rlp_write_uint_word (info.balance).value)
-  (rlp_write_word ⟨((hash_to_word storage_root)).value⟩)
-  (rlp_write_word ⟨((hash_to_word info.code_hash)).value⟩)
+  (rlp_write_uint_word info.nonce)
+  (rlp_write_uint_word info.balance)
+  (rlp_write_word (hash_to_word storage_root))
+  (rlp_write_word (hash_to_word info.code_hash))
   (rlp_finish start)
 
 /-- Converts one account row and its recomputed storage root into a
 state-trie insertion or deletion. -/
-def account_update (entry : AcctEntry) (storage_root : hash) : SailM TrieUpdate := do
+def account_update (entry : AcctEntry) (storage_root : (Vector (BitVec 8) 32)) : SailM TrieUpdate := do
   let current := entry.value.curr
   let key ← do (pure (path_from_hash (← (keccak256_address entry.addr))))
   if (((! current.present) || (account_info_empty current.info)) : Bool)
@@ -80,17 +81,19 @@ def account_update (entry : AcctEntry) (storage_root : hash) : SailM TrieUpdate 
             change := (TrieDelete ()) })
   else
     (pure { key := key,
-            change := ← (pure (TriePut (← (encode_state_account current.info storage_root)))) })
+            change := ← (do
+                  let dependentArg0 := (← (encode_state_account current.info storage_root))
+                  pure ((TriePut dependentArg0))) })
 
 /-- Whether any persisted account field changed across the block. -/
 def account_value_changed (value : AcctValue) : Bool :=
-  ((! ((value.curr.info.nonce).value == (value.orig.info.nonce).value)) || (((! ((value.curr.info.balance).value == (value.orig.info.balance).value)) || ((! (value.curr.info.storage_root == value.orig.info.storage_root)) || ((! (value.curr.info.code_hash == value.orig.info.code_hash)) || ((! (value.curr.present == value.orig.present)) || (! (value.curr.storage_cleared == value.orig.storage_cleared)))))) : Bool))
+  ((! (value.curr.info.nonce == value.orig.info.nonce)) || (((! (value.curr.info.balance == value.orig.info.balance)) || ((! (value.curr.info.storage_root == value.orig.info.storage_root)) || ((! (value.curr.info.code_hash == value.orig.info.code_hash)) || ((! (value.curr.present == value.orig.present)) || (! (value.curr.storage_cleared == value.orig.storage_cleared)))))) : Bool))
 
 def storage_value_changed (value : StorageValue) : Bool :=
-  (! ((value.curr).value == (value.orig).value))
+  (! (value.curr == value.orig))
 
 /-- Pulls the next changed storage row, skipping materialized read-only rows. -/
-def next_changed_storage_entry (addr : address) : SailM (Option StorageEntry) := do
+def next_changed_storage_entry (addr : (Vector (BitVec 8) 20)) : SailM (Option StorageEntry) := do
   let searching : Bool := true
   let result : (Option StorageEntry) := none
   let (result, searching) ← (( do
@@ -157,8 +160,8 @@ def next_changed_account_trie_update (_ : Unit) : SailM (Option TrieUpdate) := d
 
 /-- Encodes a nonzero storage value as its minimal RLP integer leaf payload. -/
 /- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
-def encode_storage_value (value : word) : SailM EvmByteSlice := do
-  let value := (value).value
+def encode_storage_value (value : Nat) : SailM (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
   let encoded_len := (rlp_uint_word_size value)
   let start ← do (scratch_begin ())
   (rlp_write_uint_word value)
@@ -166,16 +169,19 @@ def encode_storage_value (value : word) : SailM EvmByteSlice := do
 
 /-- Converts one changed storage row into a secure-trie update. -/
 def storage_update (entry : StorageEntry) : SailM TrieUpdate := do
-  let key ← do (pure (path_from_hash (← (keccak256_word ⟨(entry.key.slot).value⟩))))
+  let key ← do (pure (path_from_hash (← (keccak256_word entry.key.slot))))
   let change ← do
-    if ((word_is_zero (entry.value.curr).value) : Bool)
+    if ((word_is_zero entry.value.curr) : Bool)
     then (pure (TrieDelete ()))
-    else (pure (TriePut (← (encode_storage_value ⟨(entry.value.curr).value⟩))))
+    else
+      (do
+          let dependentArg0 := (← (encode_storage_value entry.value.curr))
+          pure ((TriePut dependentArg0)))
   (pure { key := key,
           change := change })
 
 /-- Converts the next changed storage row to a trie update. -/
-def next_storage_trie_update (addr : address) : SailM (Option TrieUpdate) := do
+def next_storage_trie_update (addr : (Vector (BitVec 8) 20)) : SailM (Option TrieUpdate) := do
   match (← (next_changed_storage_entry addr)) with
   | .some entry => (pure (some (← (storage_update entry))))
   | none => (pure none)
@@ -209,8 +215,12 @@ def next_update_under (updates : TrieUpdateCursor) (evm_prefix' : TriePath) : Sa
   | .some update => (path_prefix_of evm_prefix' update.key)
   | none => (pure false)
 
-/- Type quantifiers: k_ex411124_ : Nat, k_ex411123_ : Nat, 0 ≤ k_ex411123_ ∧ 0 ≤ k_ex411124_ -/
-def item_leaf (path : TriePath) (value : EvmByteSlice) : TrieItem :=
+/- Type quantifiers: value_dependentWitness1 : Nat, value_dependentWitness0 : Nat, 0 ≤
+  value_dependentWitness0 ∧ 0 ≤ value_dependentWitness1 -/
+def item_leaf (path : TriePath) (value : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : TrieItem :=
+  let value_dependentWitness0 := (value).1
+  let value_dependentWitness1 := ((value).2).1
   let value := ((value).2).2
   { path := path,
     value := (LeafItem ⟨_, ⟨_, value⟩⟩) }
@@ -228,20 +238,19 @@ remaining path is absorbed into it. This is the one place a delete
 collapse can demand node material: an unknown-type hash reference
 absorbing a nonempty suffix resolves its node from the witness db
 (fail-closed). -/
-/- Type quantifiers: k_ex411125_ : Nat, 0 ≤ k_ex411125_ ∧ k_ex411125_ ≤ 64 -/
-def item_ref (it : TrieItem) (depth : trie_path_len) : SailM NodeRef := do
-  let depth := (depth).value
-  let suffix ← do (path_drop it.path ⟨depth⟩)
+/- Type quantifiers: k_ex417381_ : Nat, 0 ≤ k_ex417381_ ∧ k_ex417381_ ≤ 64 -/
+def item_ref (it : TrieItem) (depth : Nat) : SailM NodeRef := do
+  let suffix ← do (path_drop it.path depth)
   match it.value with
   | .LeafItem ⟨_, ⟨_, value⟩⟩ => (leaf_child_ref suffix ⟨_, ⟨_, value⟩⟩)
   | .BranchItem subref =>
     (do
-      if ((((path_len suffix)).value == 0) : Bool)
+      if (((path_len suffix) == 0) : Bool)
       then (pure subref)
       else (merge_ext_ref suffix subref))
   | .SubtreeItem subref =>
     (do
-      if ((((path_len suffix)).value == 0) : Bool)
+      if (((path_len suffix) == 0) : Bool)
       then (pure subref)
       else
         (do
@@ -255,9 +264,8 @@ def item_ref (it : TrieItem) (depth : trie_path_len) : SailM NodeRef := do
           | _ => (merge_ext_ref suffix subref)))
 
 /- Type quantifiers: depth : Nat, 0 ≤ depth ∧ depth ≤ 63 -/
-def empty_trie_branch_frame (depth : trie_depth) : TrieBranchFrame :=
-  let depth := (depth).value
-  { depth := ⟨depth⟩,
+def empty_trie_branch_frame (depth : Nat) : TrieBranchFrame :=
+  { depth := depth,
     mask := 0x0000#16,
     children := (vectorInit (EmptyRef ())) }
 
@@ -267,10 +275,9 @@ def trie_builder_empty (_ : Unit) : TrieBuilder :=
     complete := false }
 
 /-- Opens an empty branch at `depth` on the builder stack. -/
-/- Type quantifiers: k_ex411128_ : Nat, 0 ≤ k_ex411128_ ∧ k_ex411128_ ≤ 63 -/
-def trie_builder_push (builder : TrieBuilder) (depth : trie_depth) : TrieBuilder :=
-  let depth := (depth).value
-  { frames := ((empty_trie_branch_frame ⟨depth⟩) :: builder.frames),
+/- Type quantifiers: k_ex417384_ : Nat, 0 ≤ k_ex417384_ ∧ k_ex417384_ ≤ 63 -/
+def trie_builder_push (builder : TrieBuilder) (depth : Nat) : TrieBuilder :=
+  { frames := ((empty_trie_branch_frame depth) :: builder.frames),
     root := builder.root,
     complete := builder.complete }
 
@@ -281,20 +288,23 @@ def trie_builder_attach (builder : TrieBuilder) (path : TriePath) (child : NodeR
   | (current :: rest) =>
     (do
       let frame := current
-      let depth := (frame.depth).value
-      if ((((path_len path)).value ≤b depth) : Bool)
+      let depth := frame.depth
+      if (((path_len path) ≤b depth) : Bool)
       then sailThrow ((InvalidBlock WitnessDeficient))
-      else (pure ())
-      let child_index ← do (path_nibble path ⟨depth⟩)
-      if ((branch_mask_has frame.mask child_index) : Bool)
-      then sailThrow ((InvalidBlock WitnessDeficient))
-      else (pure ())
-      let frame : TrieBranchFrame := { frame with mask := (branch_mask_set frame.mask child_index) }
-      let frame : TrieBranchFrame :=
-        { frame with children := (vectorUpdate frame.children (BitVec.toNatInt child_index) child) }
-      (pure { frames := (frame :: rest),
-              root := builder.root,
-              complete := builder.complete }))
+      else
+        (do
+          let child_index ← do (path_nibble path depth)
+          if ((branch_mask_has frame.mask child_index) : Bool)
+          then sailThrow ((InvalidBlock WitnessDeficient))
+          else
+            (let frame : TrieBranchFrame :=
+              { frame with mask := (branch_mask_set frame.mask child_index) }
+            let frame : TrieBranchFrame :=
+              { frame with children := (vectorUpdate frame.children (BitVec.toNatInt child_index)
+                  child) }
+            (pure { frames := (frame :: rest),
+                    root := builder.root,
+                    complete := builder.complete }))))
 
 /-- Removes and returns the innermost open branch. -/
 def trie_builder_pop (builder : TrieBuilder) : SailM (TrieBranchFrame × TrieBuilder) := do
@@ -307,26 +317,21 @@ def trie_builder_pop (builder : TrieBuilder) : SailM (TrieBranchFrame × TrieBui
 
 /-- Inserts an extension between parent and child depths when their paths have
 an unbranched gap. -/
-/- Type quantifiers: k_ex411130_ : Nat, k_ex411129_ : Nat, 0 ≤ k_ex411129_ ∧ k_ex411129_ ≤ 63, 0
-  ≤ k_ex411130_ ∧ k_ex411130_ ≤ 63 -/
-def trie_builder_wrap_branch (anchor : TriePath) (parent_depth : trie_depth) (child_depth : trie_depth) (child : NodeRef) : SailM NodeRef := do
-  let parent_depth := (parent_depth).value
-  let child_depth := (child_depth).value
+/- Type quantifiers: k_ex417386_ : Nat, k_ex417385_ : Nat, 0 ≤ k_ex417385_ ∧ k_ex417385_ ≤ 63, 0
+  ≤ k_ex417386_ ∧ k_ex417386_ ≤ 63 -/
+def trie_builder_wrap_branch (anchor : TriePath) (parent_depth : Nat) (child_depth : Nat) (child : NodeRef) : SailM NodeRef := do
   let child_start : Nat := (parent_depth + 1)
   if ((child_depth ≤b child_start) : Bool)
   then (pure child)
   else
     (do
       let gap : Nat := (child_depth - child_start)
-      (extension_child_ref (← (path_take (← (path_drop anchor ⟨child_start⟩)) ⟨gap⟩))
-        child))
+      (extension_child_ref (← (path_take (← (path_drop anchor child_start)) gap)) child))
 
 /-- Closes every branch deeper than the next key's common evm_prefix. -/
-/- Type quantifiers: _reclimit : Nat, k_ex411131_ : Nat, 0 ≤ k_ex411131_ ∧ k_ex411131_ ≤ 64, 0
+/- Type quantifiers: _reclimit : Nat, k_ex417387_ : Nat, 0 ≤ k_ex417387_ ∧ k_ex417387_ ≤ 64, 0
   ≤ _reclimit -/
-def _rec_trie_builder_close (builder : TrieBuilder) (anchor : TriePath) (next_common : (Option trie_depth)) (fuel : trie_path_len) (_reclimit : Nat) : SailM TrieBuilder := do
-  let next_common := (Option.map (fun semanticValue => (semanticValue).value) (next_common))
-  let fuel := (fuel).value
+def _rec_trie_builder_close (builder : TrieBuilder) (anchor : TriePath) (next_common : (Option Nat)) (fuel : Nat) (_reclimit : Nat) : SailM TrieBuilder := do
   match _reclimit with
   | 0 =>
     (do
@@ -345,7 +350,7 @@ def _rec_trie_builder_close (builder : TrieBuilder) (anchor : TriePath) (next_co
               let should_close : Bool :=
                 match next_common with
                 | none => true
-                | .some depth => (depth <b (top.depth).value)
+                | .some depth => (depth <b top.depth)
               if ((! should_close) : Bool)
               then (pure builder)
               else
@@ -359,117 +364,95 @@ def _rec_trie_builder_close (builder : TrieBuilder) (anchor : TriePath) (next_co
                         match next_common with
                         | .some common =>
                           (do
-                            if (((parent.depth).value <b common) : Bool)
+                            if ((parent.depth <b common) : Bool)
                             then
                               (do
-                                let intermediate := (trie_builder_push popped ⟨common⟩)
+                                let intermediate := (trie_builder_push popped common)
                                 (trie_builder_attach intermediate anchor
-                                  (← (trie_builder_wrap_branch anchor ⟨common⟩
-                                      ⟨(frame.depth).value⟩ child))))
+                                  (← (trie_builder_wrap_branch anchor common frame.depth child))))
                             else
                               (trie_builder_attach popped anchor
-                                (← (trie_builder_wrap_branch anchor ⟨(parent.depth).value⟩
-                                    ⟨(frame.depth).value⟩ child))))
+                                (← (trie_builder_wrap_branch anchor parent.depth frame.depth child))))
                         | none =>
                           (trie_builder_attach popped anchor
-                            (← (trie_builder_wrap_branch anchor ⟨(parent.depth).value⟩
-                                ⟨(frame.depth).value⟩ child))))
+                            (← (trie_builder_wrap_branch anchor parent.depth frame.depth child))))
                     | [] =>
                       (do
                         match next_common with
                         | .some common =>
                           (do
-                            let parent := (trie_builder_push popped ⟨common⟩)
+                            let parent := (trie_builder_push popped common)
                             (trie_builder_attach parent anchor
-                              (← (trie_builder_wrap_branch anchor ⟨common⟩
-                                  ⟨(frame.depth).value⟩ child))))
+                              (← (trie_builder_wrap_branch anchor common frame.depth child))))
                         | none =>
                           (do
-                            let depth := (frame.depth).value
+                            let depth := frame.depth
                             let root ← do
                               if ((depth == 0) : Bool)
                               then (pure child)
-                              else (extension_child_ref (← (path_take anchor ⟨depth⟩)) child)
+                              else (extension_child_ref (← (path_take anchor depth)) child)
                             (pure { frames := popped.frames,
                                     root := root,
                                     complete := true }))) ) : SailM TrieBuilder )
-                  (_rec_trie_builder_close with_parent anchor
-                    (Option.map (fun semanticValue => ⟨semanticValue⟩) (next_common))
-                    ⟨(fuel - 1)⟩ _reclimit_pred)))))
+                  (_rec_trie_builder_close with_parent anchor next_common (fuel - 1) _reclimit_pred)))))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Closes every branch deeper than the next key's common evm_prefix. -/
 /- Type quantifiers: fuel : Nat, 0 ≤ fuel ∧ fuel ≤ 64 -/
-def trie_builder_close (builder : TrieBuilder) (anchor : TriePath) (next_common : (Option trie_depth)) (fuel : trie_path_len) : SailM TrieBuilder := do
-  let next_common := (Option.map (fun semanticValue => (semanticValue).value) (next_common))
-  let fuel := (fuel).value
+def trie_builder_close (builder : TrieBuilder) (anchor : TriePath) (next_common : (Option Nat)) (fuel : Nat) : SailM TrieBuilder := do
   let _measure := (fuel : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
-  else
-    (_rec_trie_builder_close builder anchor
-      (Option.map (fun semanticValue => ⟨semanticValue⟩) (next_common)) ⟨fuel⟩
-      (_measure + 1))
+  else (_rec_trie_builder_close builder anchor next_common fuel (_measure + 1))
 
 /-- Computes the branch depth shared by an item and its ordered successor. -/
-def trie_item_next_common (item : TrieItem) (next_key : (Option TriePath)) : SailM (Option trie_depth) := do
-  let publicResult ← do
-    match next_key with
-    | none => (pure none)
-    | .some next =>
-      (do
-        let common ← do
-          (do
-              let publicResult ← (common_prefix_from item.path next ⟨0⟩)
-              pure ((publicResult).value))
-        if (((! (path_lt item.path next)) || (((((path_len item.path)).value ≤b common) || ((((path_len
-                   next)).value ≤b common) : Bool)) : Bool)) : Bool)
-        then sailThrow ((InvalidBlock WitnessDeficient))
-        else (pure ())
-        (pure (some ((← (to_trie_depth ⟨common⟩))).value)))
-  pure ((Option.map (fun semanticValue => ⟨semanticValue⟩) (publicResult)))
+def trie_item_next_common (item : TrieItem) (next_key : (Option TriePath)) : SailM (Option Nat) := do
+  match next_key with
+  | none => (pure none)
+  | .some next =>
+    (do
+      let common ← do (common_prefix_from item.path next 0)
+      if (((! (path_lt item.path next)) || ((((path_len item.path) ≤b common) || (((path_len next) ≤b common) : Bool)) : Bool)) : Bool)
+      then sailThrow ((InvalidBlock WitnessDeficient))
+      else (pure (some (← (to_trie_depth common)))))
 
 /-- Inserts one ordered, evm_prefix-free item using its successor for branch
 lookahead. -/
 def trie_insert_item (builder : TrieBuilder) (item : TrieItem) (next_key : (Option TriePath)) : SailM TrieBuilder := do
   if (builder.complete : Bool)
   then sailThrow ((InvalidBlock WitnessDeficient))
-  else (pure ())
-  let next_common ← do
-    (do
-        let publicResult ← (trie_item_next_common item next_key)
-        pure ((Option.map (fun semanticValue => (semanticValue).value) (publicResult))))
-  let open_child : Bool :=
-    match next_common with
-    | none => false
-    | .some common =>
-      (match builder.frames with
-      | [] => true
-      | (top :: _) => ((top.depth).value <b common))
-  if (open_child : Bool)
-  then
-    (do
-      match next_common with
-      | .some common =>
-        (do
-          let opened := (trie_builder_push builder ⟨common⟩)
-          (trie_builder_attach opened item.path (← (item_ref item ⟨(common + 1)⟩))))
-      | none => sailThrow ((InvalidBlock WitnessDeficient)))
   else
     (do
-      match builder.frames with
-      | [] =>
-        (pure { frames := builder.frames,
-                root := ← (item_ref item ⟨0⟩),
-                complete := true })
-      | (top :: _) =>
+      let next_common ← do (trie_item_next_common item next_key)
+      let open_child : Bool :=
+        match next_common with
+        | none => false
+        | .some common =>
+          (match builder.frames with
+          | [] => true
+          | (top :: _) => (top.depth <b common))
+      if (open_child : Bool)
+      then
         (do
-          let attached ← do
-            (trie_builder_attach builder item.path
-              (← (item_ref item ⟨((top.depth).value + 1)⟩)))
-          (trie_builder_close attached item.path
-            (Option.map (fun semanticValue => ⟨semanticValue⟩) (next_common)) ⟨64⟩)))
+          match next_common with
+          | .some common =>
+            (do
+              let opened := (trie_builder_push builder common)
+              (trie_builder_attach opened item.path (← (item_ref item (common + 1)))))
+          | none => sailThrow ((InvalidBlock WitnessDeficient)))
+      else
+        (do
+          match builder.frames with
+          | [] =>
+            (pure { frames := builder.frames,
+                    root := ← (item_ref item 0),
+                    complete := true })
+          | (top :: _) =>
+            (do
+              let attached ← do
+                (trie_builder_attach builder item.path (← (item_ref item (top.depth + 1))))
+              (trie_builder_close attached item.path next_common 64))))
 
 def trie_sink_empty (_ : Unit) : TrieItemSink :=
   { builder := (trie_builder_empty ()),
@@ -494,7 +477,7 @@ def trie_sink_finish (sink : TrieItemSink) : SailM TrieItemSink := do
             pending := none })
 
 /-- Returns the root of a complete builder, or the canonical empty root. -/
-def trie_builder_root (builder : TrieBuilder) : SailM hash := do
+def trie_builder_root (builder : TrieBuilder) : SailM (Vector (BitVec 8) 32) := do
   match builder.frames with
   | (_ :: _) => sailThrow ((InvalidBlock WitnessDeficient))
   | [] =>
@@ -504,7 +487,7 @@ def trie_builder_root (builder : TrieBuilder) : SailM hash := do
       else (pure EMPTY_TRIE_ROOT))
 
 /-- Returns the completed root after all sink lookahead has been consumed. -/
-def trie_sink_root (sink : TrieItemSink) : SailM hash := do
+def trie_sink_root (sink : TrieItemSink) : SailM (Vector (BitVec 8) 32) := do
   match sink.pending with
   | .some _ => sailThrow ((InvalidBlock WitnessDeficient))
   | none => (trie_builder_root sink.builder)

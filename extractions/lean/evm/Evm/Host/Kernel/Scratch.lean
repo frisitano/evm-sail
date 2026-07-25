@@ -50,16 +50,16 @@ semantics while the bytes themselves remain in host-backed memory.
     of the executable specification, not protocol rules. -/
 
 /-- Marks the start of a scratch construction. -/
-def scratch_begin (_ : Unit) : SailM source_pointer := do
-  let ⟨_, ⟨_, arena⟩⟩ ← do pure ((← readReg scratch_arena))
+def scratch_begin (_ : Unit) : SailM Nat := do
+  let ⟨_, ⟨_, arena⟩⟩ ← do readReg scratch_arena
   (pure arena.len)
 
-/- Type quantifiers: len : Nat, source_valid_length(len) -/
-def scratch_push_bytes (data : (List byte)) (len : Nat) : SailM Unit := do
+/- Type quantifiers: len : Nat, (source_valid_length len) -/
+def scratch_push_bytes (data : (List (BitVec 8))) (len : Nat) : SailM Unit := do
   if ((len != 0) : Bool)
   then
     (do
-      let ⟨_, ⟨_, arena⟩⟩ ← do pure ((← readReg scratch_arena))
+      let ⟨_, ⟨_, arena⟩⟩ ← do readReg scratch_arena
       match (← (host_scratch_store_bytes arena.len data len)) with
       | .ByteRegionReady ⟨_, ⟨_, expanded⟩⟩ =>
         writeReg scratch_arena ⟨_, ⟨_, expanded⟩⟩
@@ -67,13 +67,17 @@ def scratch_push_bytes (data : (List byte)) (len : Nat) : SailM Unit := do
   else (pure ())
 
 /-- Appends a source-backed slice at the cursor. -/
-/- Type quantifiers: k_ex409426_ : Nat, k_ex409425_ : Nat, 0 ≤ k_ex409425_ ∧ 0 ≤ k_ex409426_ -/
-def scratch_push_slice (data : EvmByteSlice) : SailM Unit := do
+/- Type quantifiers: data_dependentWitness1 : Nat, data_dependentWitness0 : Nat, 0 ≤
+  data_dependentWitness0 ∧ 0 ≤ data_dependentWitness1 -/
+def scratch_push_slice (data : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM Unit := do
+  let data_dependentWitness0 := (data).1
+  let data_dependentWitness1 := ((data).2).1
   let data := ((data).2).2
   if ((data.len != 0) : Bool)
   then
     (do
-      let ⟨_, ⟨_, arena⟩⟩ ← do pure ((← readReg scratch_arena))
+      let ⟨_, ⟨_, arena⟩⟩ ← do readReg scratch_arena
       match (← (host_scratch_store_slice arena.len data)) with
       | .ByteRegionReady ⟨_, ⟨_, expanded⟩⟩ =>
         writeReg scratch_arena ⟨_, ⟨_, expanded⟩⟩
@@ -81,12 +85,12 @@ def scratch_push_slice (data : EvmByteSlice) : SailM Unit := do
   else (pure ())
 
 /-- Appends a evm_prefix of a fixed 32-byte value at the cursor. -/
-/- Type quantifiers: k_ex409427_ : Nat, 0 ≤ k_ex409427_ ∧ k_ex409427_ ≤ 32 -/
-def scratch_push_b256 (data : b256) (len : Nat) : SailM Unit := do
+/- Type quantifiers: k_ex415461_ : Nat, 0 ≤ k_ex415461_ ∧ k_ex415461_ ≤ 32 -/
+def scratch_push_b256 (data : (Vector (BitVec 8) 32)) (len : Nat) : SailM Unit := do
   if ((len != 0) : Bool)
   then
     (do
-      let ⟨_, ⟨_, arena⟩⟩ ← do pure ((← readReg scratch_arena))
+      let ⟨_, ⟨_, arena⟩⟩ ← do readReg scratch_arena
       match (← (host_scratch_store_b256 arena.len data len)) with
       | .ByteRegionReady ⟨_, ⟨_, expanded⟩⟩ =>
         writeReg scratch_arena ⟨_, ⟨_, expanded⟩⟩
@@ -95,11 +99,12 @@ def scratch_push_b256 (data : b256) (len : Nat) : SailM Unit := do
 
 /-- The slice covering everything pushed since `start`. -/
 /- Type quantifiers: start : Nat, 0 ≤ start -/
-def scratch_finish (start : source_pointer) : SailM EvmByteSlice := do
+def scratch_finish (start : Nat) : SailM (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
   let start_offset := start
-  let ⟨_, ⟨_, arena⟩⟩ ← do pure ((← readReg scratch_arena))
+  let ⟨_, ⟨_, arena⟩⟩ ← do readReg scratch_arena
   let stop_offset := arena.len
-  if ((start_offset ≤b stop_offset) : Bool)
+  if _sailIf0 : ((start_offset ≤b stop_offset) : Bool) = true
   then
     (pure ((⟨_, ⟨_, (sub_slice arena start (stop_offset - start_offset))⟩⟩ : (Sigma fun
       (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
@@ -111,9 +116,9 @@ def scratch_finish (start : source_pointer) : SailM EvmByteSlice := do
 
 /-- Discards everything pushed since `mark`. -/
 /- Type quantifiers: mark : Nat, 0 ≤ mark -/
-def scratch_rewind (mark : source_pointer) : SailM Unit := do
+def scratch_rewind (mark : Nat) : SailM Unit := do
   let mark_offset := mark
-  let ⟨_, ⟨_, arena⟩⟩ ← do pure ((← readReg scratch_arena))
+  let ⟨_, ⟨_, arena⟩⟩ ← do readReg scratch_arena
   let cursor_offset := arena.len
   if ((mark_offset ≤b cursor_offset) : Bool)
   then

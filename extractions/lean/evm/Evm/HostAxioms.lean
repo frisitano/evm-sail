@@ -21,7 +21,7 @@ namespace Evm.Contracts
 deriving instance DecidableEq for word
 deriving instance DecidableEq for address
 
-def zeroWord : word := ⟨0⟩
+def zeroWord : word := 0
 
 structure PersistentWorld where
   accountAt : address → Account
@@ -34,7 +34,7 @@ def accountWithoutTransactionFlags (account : Account) : Account :=
   { account with created := false, selfdestructed := false }
 
 def zeroAccountNonce : account_nonce :=
-  ⟨0⟩
+  0
 
 def deletedAccount (emptyCodeHash : hash) (account : Account) : Account :=
   { account with
@@ -326,7 +326,7 @@ def fixedBEBytes (width value : Nat) : List byte :=
     BitVec.ofNat 8 ((value / (256 ^ (width - 1 - index))) % 256)
 
 def wordToNat (value : word) : Nat :=
-  value.value
+  value
 
 def addressBytesBE (bytes : address) : List byte :=
   bytes.toList.reverse
@@ -573,7 +573,7 @@ structure JournalSnapshot where
 structure BalStorageChange where
   account : address
   slot : word
-  index : Nat
+  index : block_access_index
   value : word
   deriving Inhabited
 
@@ -584,24 +584,24 @@ structure BalStorageRead where
 
 structure BalBalanceChange where
   account : address
-  index : Nat
+  index : block_access_index
   value : word
   deriving Inhabited
 
 structure BalNonceChange where
   account : address
-  index : Nat
+  index : block_access_index
   value : account_nonce
   deriving Inhabited
 
 structure BalCodeChange where
   account : address
-  index : Nat
+  index : block_access_index
   value : hash
   deriving Inhabited
 
 structure HostState where
-  memoryBytes : Nat → byte
+  memoryBytes : Array byte
   memoryFrames : List MemoryFrame
   inputBytes : Array byte
   scratchBytes : Array byte
@@ -627,16 +627,23 @@ structure HostState where
   logs : List LogEntry
   checkpoints : List JournalSnapshot
   nodeDb : List (hash × EvmByteSlice)
-  balIndex : Nat
   balAccounts : List address
   balStorageChanges : List BalStorageChange
   balStorageReads : List BalStorageRead
   balBalanceChanges : List BalBalanceChange
   balNonceChanges : List BalNonceChange
   balCodeChanges : List BalCodeChange
+  balAccountCursor : Nat
+  balActiveAccount : Option address
+  balStorageSlotCursor : Nat
+  balActiveStorageSlot : Option word
+  balStorageChangeCursor : Nat
+  balBalanceChangeCursor : Nat
+  balNonceChangeCursor : Nat
+  balCodeChangeCursor : Nat
 
 def initialHostState : HostState where
-  memoryBytes := fun _ => 0
+  memoryBytes := #[]
   memoryFrames := [{ base := 0, established := 0 }]
   inputBytes := #[]
   scratchBytes := #[]
@@ -662,13 +669,20 @@ def initialHostState : HostState where
   logs := []
   checkpoints := []
   nodeDb := []
-  balIndex := 0
   balAccounts := []
   balStorageChanges := []
   balStorageReads := []
   balBalanceChanges := []
   balNonceChanges := []
   balCodeChanges := []
+  balAccountCursor := 0
+  balActiveAccount := none
+  balStorageSlotCursor := 0
+  balActiveStorageSlot := none
+  balStorageChangeCursor := 0
+  balBalanceChangeCursor := 0
+  balNonceChangeCursor := 0
+  balCodeChangeCursor := 0
 
 abbrev SailM (α : Type) :=
   StateT HostState Evm.Defs.SailM α
@@ -700,16 +714,16 @@ def ancestor_hash_write (index : ancestor_index) (value : hash) : SailM Unit :=
     { state with
       ancestorHashes :=
         let hashes :=
-          if index.value < state.ancestorHashes.size then
+          if index < state.ancestorHashes.size then
             state.ancestorHashes
           else
             state.ancestorHashes ++
-              Array.replicate (index.value + 1 - state.ancestorHashes.size) default
-        hashes.set! index.value value }
+              Array.replicate (index + 1 - state.ancestorHashes.size) default
+        hashes.set! index value }
 
 def ancestor_hash_read (index : ancestor_index) : SailM hash := do
   let state ← get
-  pure (state.ancestorHashes.getD index.value default)
+  pure (state.ancestorHashes.getD index default)
 
 private def currentMemoryFrame (state : HostState) : MemoryFrame :=
   state.memoryFrames.head?.getD default
@@ -718,14 +732,11 @@ private def replaceCurrentMemoryFrame
     (state : HostState) (frame : MemoryFrame) : HostState :=
   { state with memoryFrames := frame :: state.memoryFrames.drop 1 }
 
-private def writeMemoryByte
-    (bytes : Nat → byte) (position : Nat) (value : byte) : Nat → byte :=
-  fun candidate => if candidate = position then value else bytes candidate
-
 private def zeroMemoryRange
-    (bytes : Nat → byte) (start count : Nat) : Nat → byte :=
-  fun candidate =>
-    if start ≤ candidate ∧ candidate < start + count then 0 else bytes candidate
+    (bytes : Array byte) (start count : Nat) : Array byte :=
+  (List.range count).foldl
+    (fun result index => result.set! (start + index) 0)
+    (ensureArraySize bytes (start + count))
 
 private def establishMemory (required : Nat) : SailM MemoryFrame := do
   let state ← get
@@ -743,13 +754,16 @@ private def establishMemory (required : Nat) : SailM MemoryFrame := do
 def mem_read_byte (off : memory_pointer) : SailM byte := do
   let state ← get
   let frame := currentMemoryFrame state
-  pure <| if off < frame.established then state.memoryBytes (frame.base + off) else 0
+  pure <| if off < frame.established then
+    state.memoryBytes.getD (frame.base + off) 0
+  else
+    0
 
 def mem_write_byte (off : memory_pointer) (value : byte) : SailM Unit := do
   let frame ← establishMemory (off + 1)
   modify fun state =>
     { state with
-      memoryBytes := writeMemoryByte state.memoryBytes (frame.base + off) value }
+      memoryBytes := writeArrayByte state.memoryBytes (frame.base + off) value }
 
 def mem_clear (_ : Unit) : SailM Unit :=
   modify fun state =>
@@ -776,8 +790,8 @@ def mem_expand (required : source_length) : SailM (EvmByteSliceLength required) 
     { source := ByteSource.EvmMemorySource, off := frame.base, len := required }⟩⟩
 
 private def snapshotMemory
-    (bytes : Nat → byte) (base off len : Nat) : List byte :=
-  List.ofFn fun index : Fin len => bytes (base + off + index)
+    (bytes : Array byte) (base off len : Nat) : List byte :=
+  List.ofFn fun index : Fin len => bytes.getD (base + off + index) 0
 
 def mem_move
     (dst : memory_pointer) (src : memory_pointer) (len : memory_length) :
@@ -788,7 +802,7 @@ def mem_move
   let indexed := values.zipIdx
   let bytes := indexed.foldl
     (fun result pair =>
-      writeMemoryByte result (frame.base + dst + pair.2) pair.1)
+      writeArrayByte result (frame.base + dst + pair.2) pair.1)
     state.memoryBytes
   set { state with memoryBytes := bytes }
 
@@ -799,12 +813,12 @@ def mem_load_word (off : memory_pointer) : SailM word := do
     (fun result index =>
       let byte :=
         if off + index < frame.established then
-          state.memoryBytes (frame.base + off + index)
+          state.memoryBytes.getD (frame.base + off + index) 0
         else
           0
       result * 256 + byte.toNat)
     0
-  pure ⟨value⟩
+  pure value
 
 def mem_store_word (off : memory_pointer) (value : word) : SailM Unit := do
   let frame ← establishMemory (off + 32)
@@ -813,8 +827,8 @@ def mem_store_word (off : memory_pointer) (value : word) : SailM Unit := do
     let bytes := indexed.foldl
       (fun result index =>
         let shift := 8 * (31 - index)
-        let byte := BitVec.ofNat 8 ((value.value / (2 ^ shift)) % 256)
-        writeMemoryByte result (frame.base + off + index) byte)
+        let byte := BitVec.ofNat 8 ((value / (2 ^ shift)) % 256)
+        writeArrayByte result (frame.base + off + index) byte)
       state.memoryBytes
     { state with memoryBytes := bytes }
 
@@ -835,19 +849,19 @@ private def sourceArray (state : HostState) (source : ByteSource) : Array byte :
   | .ScratchSource => state.scratchBytes
   | .EvmMemorySource => #[]
 
-private def sliceFields (slice : EvmByteSlice) :
-    Sigma fun off => Sigma fun len => EvmByteSliceFields off len :=
-  slice
+private def makeEvmByteSlice
+    (source : ByteSource) (off len : Nat) : EvmByteSlice :=
+  ⟨off, ⟨len, { source := source, off := off, len := len }⟩⟩
 
 private def readSourceByte
     (state : HostState) (source : ByteSource) (position : Nat) : byte :=
   match source with
-  | .EvmMemorySource => state.memoryBytes position
+  | .EvmMemorySource => state.memoryBytes.getD position 0
   | other => (sourceArray state other).getD position 0
 
 private def readSliceByte
     (state : HostState) (slice : EvmByteSlice) (position : Nat) : byte :=
-  let ⟨_, ⟨_, fields⟩⟩ := sliceFields slice
+  let ⟨_, ⟨_, fields⟩⟩ := slice
   if position < fields.len then
     readSourceByte state fields.source (fields.off + position)
   else
@@ -855,7 +869,7 @@ private def readSliceByte
 
 private def materializeSlice
     (state : HostState) (slice : EvmByteSlice) : List byte :=
-  let ⟨_, ⟨_, fields⟩⟩ := sliceFields slice
+  let ⟨_, ⟨_, fields⟩⟩ := slice
   (List.range fields.len).map (readSliceByte state slice)
 
 def host_scratch_store_slice
@@ -910,7 +924,7 @@ def stack_leave_frame (_ : Unit) : SailM Unit :=
         | frames => frames }
 
 def stack_depth (_ : Unit) : SailM operand_stack_height := do
-  pure ⟨currentStack (← get) |>.length⟩
+  pure (currentStack (← get) |>.length)
 
 def stack_push_word (value : word) : SailM Unit :=
   modify fun state => replaceCurrentStack state (value :: currentStack state)
@@ -925,16 +939,15 @@ def stack_pop_word (_ : Unit) : SailM word := do
 
 def stack_peek_word (index : stack_index) : SailM word := do
   let state ← get
-  pure ((currentStack state).getD index.value default)
+  pure ((currentStack state).getD index default)
 
 def stack_set_word (index : stack_index) (value : word) : SailM Unit :=
   modify fun state =>
-    replaceCurrentStack state (replaceListAt (currentStack state) index.value value)
+    replaceCurrentStack state (replaceListAt (currentStack state) index value)
 
 def stateless_input (_ : Unit) : SailM EvmByteSlice := do
   let length := (← get).inputBytes.size
-  pure ⟨0, ⟨length,
-    { source := .StatelessInputSource, off := 0, len := length }⟩⟩
+  pure (makeEvmByteSlice .StatelessInputSource 0 length)
 
 def host_slice_byte
     (slice : EvmByteSlice) (position : source_pointer) : SailM byte := do
@@ -951,7 +964,7 @@ def host_slice_strided_zero
       readSliceByte state slice (start + item * stride + offset) == 0
 
 private def bytesToWord (bytes : List byte) : word :=
-  ⟨bytes.foldl (fun result value => result * 256 + value.toNat) 0⟩
+  bytes.foldl (fun result value => result * 256 + value.toNat) 0
 
 def host_slice_load_word
     (slice : EvmByteSlice) (position : source_pointer) : SailM word := do
@@ -976,7 +989,7 @@ def host_slice_copy_to_memory
   modify fun state =>
     let bytes := values.zipIdx.foldl
       (fun result pair =>
-        writeMemoryByte result (frame.base + dst + pair.2) pair.1)
+        writeArrayByte result (frame.base + dst + pair.2) pair.1)
       state.memoryBytes
     { state with memoryBytes := bytes }
 
@@ -992,9 +1005,14 @@ def bytes_segments_equal_slice
   let state ← get
   pure (segments.flatMap (materializeBytes state) == materializeSlice state slice)
 
+def byte_slices_equal
+    (left right : EvmByteSlice) : SailM Bool := do
+  let state ← get
+  pure (materializeSlice state left == materializeSlice state right)
+
 private def wordBytes (value : word) : List byte :=
   (List.range 32).map fun index =>
-    BitVec.ofNat 8 ((value.value / (2 ^ (8 * (31 - index)))) % 256)
+    BitVec.ofNat 8 ((value / (2 ^ (8 * (31 - index)))) % 256)
 
 private def hashBytes (value : hash) : List byte :=
   (vectorBytes value).reverse
@@ -1102,7 +1120,7 @@ def accelerator_bn254_pairing (slice : EvmByteSlice) : SailM (BitVec 2) :=
 def accelerator_blake2f
   (slice : EvmByteSlice) (rounds : blake2_rounds)
     (finalBlock : y_parity) : SailM Bool :=
-  acceleratorOutput 7 slice rounds.value finalBlock.value 0
+  acceleratorOutput 7 slice rounds finalBlock 0
 
 def accelerator_kzg_point_evaluation (slice : EvmByteSlice) : SailM Bool :=
   acceleratorCheck 8 slice
@@ -1143,7 +1161,7 @@ def host_ecrecover
     (message : hash) (parity : y_parity) (r s : word) :
     SailM AddressResult :=
   pure <| match callNative 18
-      (hashBytes message ++ wordBytes r ++ wordBytes s) parity.value 0 0 with
+      (hashBytes message ++ wordBytes r ++ wordBytes s) parity 0 0 with
     | some output =>
         { success := true, address := nativeDecVectorFromBE 20 output }
     | none => default
@@ -1239,7 +1257,7 @@ def jumpdest_ref_contains
 def code_intern_delegation
     (target : address) (jumpdests : JumpdestRef) : SailM hash := do
   let state ← get
-  let bytes := [0xef, 0x01, 0x00] ++ vectorBytes target
+  let bytes := [0xef, 0x01, 0x00] ++ (vectorBytes target).reverse
   let offset := state.codeBytes.size
   let stored := storedCodeSlice offset bytes.length
   set { state with codeBytes := state.codeBytes ++ bytes.toArray }
@@ -1251,9 +1269,20 @@ def code_intern_delegation
   pure key
 
 def code_db_read_delegation (key : hash) : SailM AddressResult := do
-  match assocGet (← get).delegations key with
+  let state ← get
+  match assocGet state.codeDb key with
   | none => pure { success := false, address := default }
-  | some target => pure { success := true, address := target }
+  | some code =>
+      let bytes := materializeSlice state code.bytes
+      if bytes.length == 23 &&
+          bytes.getD 0 0 == 0xef &&
+          bytes.getD 1 0 == 0x01 &&
+          bytes.getD 2 0 == 0x00 then
+        pure
+          { success := true
+            address := Vector.ofFn fun index => bytes.getD (22 - index.val) 0 }
+      else
+        pure { success := false, address := default }
 
 def transient_reset (_ : Unit) : SailM Unit :=
   modify fun state => { state with transient := [] }
@@ -1462,29 +1491,34 @@ private def touchBalAccount (accounts : List address) (account : address) :
 def bal_reset (_ : Unit) : SailM Unit :=
   modify fun state =>
     { state with
-      balIndex := 0
       balAccounts := []
       balStorageChanges := []
       balStorageReads := []
       balBalanceChanges := []
       balNonceChanges := []
-      balCodeChanges := [] }
-
-def bal_set_index (index : Nat) : SailM Unit :=
-  modify fun state => { state with balIndex := index }
+      balCodeChanges := []
+      balAccountCursor := 0
+      balActiveAccount := none
+      balStorageSlotCursor := 0
+      balActiveStorageSlot := none
+      balStorageChangeCursor := 0
+      balBalanceChangeCursor := 0
+      balNonceChangeCursor := 0
+      balCodeChangeCursor := 0 }
 
 def bal_account_touch (account : address) : SailM Unit :=
   modify fun state =>
     { state with balAccounts := touchBalAccount state.balAccounts account }
 
 def bal_storage_change
-    (account : address) (slot value : word) : SailM Unit :=
+    (index : block_access_index) (account : address) (slot value : word) :
+    SailM Unit :=
   modify fun state =>
     { state with
       balAccounts := touchBalAccount state.balAccounts account
       balStorageChanges :=
         state.balStorageChanges ++
-          [{ account := account, slot := slot, index := state.balIndex, value := value }] }
+          [{ account := account, slot := slot, index := index, value := value }] }
 
 def bal_storage_read (account : address) (slot : word) : SailM Unit :=
   modify fun state =>
@@ -1497,30 +1531,35 @@ def bal_storage_read (account : address) (slot : word) : SailM Unit :=
         else
           state.balStorageReads ++ [{ account := account, slot := slot }] }
 
-def bal_balance_change (account : address) (value : word) : SailM Unit :=
+def bal_balance_change
+    (index : block_access_index) (account : address) (value : word) :
+    SailM Unit :=
   modify fun state =>
     { state with
       balAccounts := touchBalAccount state.balAccounts account
       balBalanceChanges :=
         state.balBalanceChanges ++
-          [{ account := account, index := state.balIndex, value := value }] }
+          [{ account := account, index := index, value := value }] }
 
 def bal_nonce_change
-    (account : address) (value : account_nonce) : SailM Unit :=
+    (index : block_access_index) (account : address) (value : account_nonce) :
+    SailM Unit :=
   modify fun state =>
     { state with
       balAccounts := touchBalAccount state.balAccounts account
       balNonceChanges :=
         state.balNonceChanges ++
-          [{ account := account, index := state.balIndex, value := value }] }
+          [{ account := account, index := index, value := value }] }
 
-def bal_code_change (account : address) (value : hash) : SailM Unit :=
+def bal_code_change
+    (index : block_access_index) (account : address) (value : hash) :
+    SailM Unit :=
   modify fun state =>
     { state with
       balAccounts := touchBalAccount state.balAccounts account
       balCodeChanges :=
         state.balCodeChanges ++
-          [{ account := account, index := state.balIndex, value := value }] }
+          [{ account := account, index := index, value := value }] }
 
 def bal_prepare (_ : Unit) : SailM Unit :=
   modify fun state =>
@@ -1531,20 +1570,17 @@ def bal_prepare (_ : Unit) : SailM Unit :=
       balStorageChanges :=
         state.balStorageChanges.mergeSort fun left right =>
           if left.account == right.account then
-            if left.slot.value == right.slot.value then
+            if left.slot == right.slot then
               left.index ≤ right.index
             else
-              left.slot.value ≤ right.slot.value
+              left.slot ≤ right.slot
           else
             accountSecureSortKey left.account ≤
               accountSecureSortKey right.account
       balStorageReads :=
-        (state.balStorageReads.filter fun read =>
-          !(state.balStorageChanges.any fun change =>
-            change.account == read.account && change.slot == read.slot)
-        ).mergeSort fun left right =>
+        state.balStorageReads.mergeSort fun left right =>
           if left.account == right.account then
-            left.slot.value ≤ right.slot.value
+            left.slot ≤ right.slot
           else
             accountSecureSortKey left.account ≤
               accountSecureSortKey right.account
@@ -1565,99 +1601,140 @@ def bal_prepare (_ : Unit) : SailM Unit :=
           if left.account == right.account then left.index ≤ right.index
           else
             accountSecureSortKey left.account ≤
-              accountSecureSortKey right.account }
+              accountSecureSortKey right.account
+      balAccountCursor := 0
+      balActiveAccount := none
+      balStorageSlotCursor := 0
+      balActiveStorageSlot := none
+      balStorageChangeCursor := 0
+      balBalanceChangeCursor := 0
+      balNonceChangeCursor := 0
+      balCodeChangeCursor := 0 }
 
-private def balAccountAt (state : HostState) (index : item_index) : address :=
-  state.balAccounts.getD index.value default
-
-def bal_account_count (_ : Unit) : SailM item_count := do
-  pure ⟨(← get).balAccounts.length⟩
-
-def bal_account_address (index : item_index) : SailM address := do
-  pure (balAccountAt (← get) index)
-
-def bal_storage_change_count (accountIndex : item_index) : SailM item_count := do
+def bal_account_next (_ : Unit) : SailM (Option address) := do
   let state ← get
-  let account := balAccountAt state accountIndex
-  pure ⟨(state.balStorageChanges.filter (·.account == account)).length⟩
+  match state.balAccounts[state.balAccountCursor]? with
+  | none => pure none
+  | some account =>
+      set { state with
+        balAccountCursor := state.balAccountCursor + 1
+        balActiveAccount := some account
+        balStorageSlotCursor := 0
+        balActiveStorageSlot := none
+        balStorageChangeCursor := 0
+        balBalanceChangeCursor := 0
+        balNonceChangeCursor := 0
+        balCodeChangeCursor := 0 }
+      pure (some account)
 
-private def balStorageChangeAt
-    (state : HostState) (accountIndex changeIndex : item_index) :
-    BalStorageChange :=
-  let account := balAccountAt state accountIndex
-  (state.balStorageChanges.filter (·.account == account)).getD changeIndex.value default
+private def insertBalStorageSlot (slots : List word) (slot : word) :
+    List word :=
+  match slots with
+  | [] => [slot]
+  | head :: tail =>
+      if slot == head then
+        slots
+      else if slot < head then
+        slot :: slots
+      else
+        head :: insertBalStorageSlot tail slot
 
-def bal_storage_change_slot
-    (accountIndex changeIndex : item_index) : SailM word := do
-  pure (balStorageChangeAt (← get) accountIndex changeIndex).slot
+private def activeBalStorageSlots (state : HostState) : List word :=
+  match state.balActiveAccount with
+  | none => []
+  | some account =>
+      let changeSlots :=
+        (state.balStorageChanges.filter (·.account == account)).map (·.slot)
+      let readSlots :=
+        (state.balStorageReads.filter (·.account == account)).map (·.slot)
+      (changeSlots ++ readSlots).foldl insertBalStorageSlot []
 
-def bal_storage_change_index
-    (accountIndex changeIndex : item_index) : SailM item_index := do
-  pure ⟨(balStorageChangeAt (← get) accountIndex changeIndex).index⟩
+def bal_storage_slot_next (_ : Unit) :
+    SailM (Option BalStorageSlotEntry) := do
+  let state ← get
+  match (activeBalStorageSlots state)[state.balStorageSlotCursor]? with
+  | none =>
+      set { state with balActiveStorageSlot := none }
+      pure none
+  | some slot =>
+      let changes : List BalStorageChange :=
+        match state.balActiveAccount with
+        | none => []
+        | some account =>
+            state.balStorageChanges.filter fun entry =>
+              entry.account == account && entry.slot == slot
+      let change :=
+        changes.head?.map fun entry =>
+          { index := entry.index, value := entry.value }
+      set { state with
+        balStorageSlotCursor := state.balStorageSlotCursor + 1
+        balActiveStorageSlot := some slot
+        balStorageChangeCursor := if change.isSome then 1 else 0 }
+      pure (some { slot := slot, change := change })
 
-def bal_storage_change_value
-    (accountIndex changeIndex : item_index) : SailM word := do
-  pure (balStorageChangeAt (← get) accountIndex changeIndex).value
+private def activeBalStorageChanges (state : HostState) :
+    List BalStorageChange :=
+  match state.balActiveAccount, state.balActiveStorageSlot with
+  | some account, some slot =>
+      state.balStorageChanges.filter fun entry =>
+        entry.account == account && entry.slot == slot
+  | _, _ => []
 
-private def balStorageReadsFor
-    (state : HostState) (accountIndex : item_index) : List BalStorageRead :=
-  let account := balAccountAt state accountIndex
-  state.balStorageReads.filter (·.account == account)
+def bal_storage_change_next (_ : Unit) :
+    SailM (Option BalStorageChangeEntry) := do
+  let state ← get
+  match (activeBalStorageChanges state)[state.balStorageChangeCursor]? with
+  | none => pure none
+  | some entry =>
+      set { state with
+        balStorageChangeCursor := state.balStorageChangeCursor + 1 }
+      pure (some
+        { index := entry.index
+          value := entry.value })
 
-def bal_storage_read_count (accountIndex : item_index) : SailM item_count := do
-  pure ⟨(balStorageReadsFor (← get) accountIndex).length⟩
+private def activeBalBalanceChanges (state : HostState) :
+    List BalBalanceChange :=
+  match state.balActiveAccount with
+  | none => []
+  | some account => state.balBalanceChanges.filter (·.account == account)
 
-def bal_storage_read_slot
-    (accountIndex readIndex : item_index) : SailM word := do
-  pure ((balStorageReadsFor (← get) accountIndex).getD readIndex.value default).slot
+def bal_balance_change_next (_ : Unit) :
+    SailM (Option BalBalanceChangeEntry) := do
+  let state ← get
+  match (activeBalBalanceChanges state)[state.balBalanceChangeCursor]? with
+  | none => pure none
+  | some entry =>
+      set { state with
+        balBalanceChangeCursor := state.balBalanceChangeCursor + 1 }
+      pure (some { index := entry.index, value := entry.value })
 
-private def balBalanceChangesFor
-    (state : HostState) (accountIndex : item_index) : List BalBalanceChange :=
-  let account := balAccountAt state accountIndex
-  state.balBalanceChanges.filter (·.account == account)
+private def activeBalNonceChanges (state : HostState) : List BalNonceChange :=
+  match state.balActiveAccount with
+  | none => []
+  | some account => state.balNonceChanges.filter (·.account == account)
 
-def bal_balance_change_count (accountIndex : item_index) : SailM item_count := do
-  pure ⟨(balBalanceChangesFor (← get) accountIndex).length⟩
+def bal_nonce_change_next (_ : Unit) :
+    SailM (Option BalNonceChangeEntry) := do
+  let state ← get
+  match (activeBalNonceChanges state)[state.balNonceChangeCursor]? with
+  | none => pure none
+  | some entry =>
+      set { state with balNonceChangeCursor := state.balNonceChangeCursor + 1 }
+      pure (some { index := entry.index, value := entry.value })
 
-def bal_balance_change_index
-    (accountIndex changeIndex : item_index) : SailM item_index := do
-  pure ⟨((balBalanceChangesFor (← get) accountIndex).getD changeIndex.value default).index⟩
+private def activeBalCodeChanges (state : HostState) : List BalCodeChange :=
+  match state.balActiveAccount with
+  | none => []
+  | some account => state.balCodeChanges.filter (·.account == account)
 
-def bal_balance_change_value
-    (accountIndex changeIndex : item_index) : SailM word := do
-  pure ((balBalanceChangesFor (← get) accountIndex).getD changeIndex.value default).value
-
-private def balNonceChangesFor
-    (state : HostState) (accountIndex : item_index) : List BalNonceChange :=
-  let account := balAccountAt state accountIndex
-  state.balNonceChanges.filter (·.account == account)
-
-def bal_nonce_change_count (accountIndex : item_index) : SailM item_count := do
-  pure ⟨(balNonceChangesFor (← get) accountIndex).length⟩
-
-def bal_nonce_change_index
-    (accountIndex changeIndex : item_index) : SailM item_index := do
-  pure ⟨((balNonceChangesFor (← get) accountIndex).getD changeIndex.value default).index⟩
-
-def bal_nonce_change_value
-    (accountIndex changeIndex : item_index) : SailM account_nonce := do
-  pure ((balNonceChangesFor (← get) accountIndex).getD changeIndex.value default).value
-
-private def balCodeChangesFor
-    (state : HostState) (accountIndex : item_index) : List BalCodeChange :=
-  let account := balAccountAt state accountIndex
-  state.balCodeChanges.filter (·.account == account)
-
-def bal_code_change_count (accountIndex : item_index) : SailM item_count := do
-  pure ⟨(balCodeChangesFor (← get) accountIndex).length⟩
-
-def bal_code_change_index
-    (accountIndex changeIndex : item_index) : SailM item_index := do
-  pure ⟨((balCodeChangesFor (← get) accountIndex).getD changeIndex.value default).index⟩
-
-def bal_code_change_hash
-    (accountIndex changeIndex : item_index) : SailM hash := do
-  pure ((balCodeChangesFor (← get) accountIndex).getD changeIndex.value default).value
+def bal_code_change_next (_ : Unit) :
+    SailM (Option BalCodeChangeEntry) := do
+  let state ← get
+  match (activeBalCodeChanges state)[state.balCodeChangeCursor]? with
+  | none => pure none
+  | some entry =>
+      set { state with balCodeChangeCursor := state.balCodeChangeCursor + 1 }
+      pure (some { index := entry.index, code_hash := entry.value })
 
 def warm_reset (_ : Unit) : SailM Unit :=
   modify fun state => { state with warmAddresses := [], warmSlots := [] }
@@ -1677,16 +1754,14 @@ def warm_slot_touch (account : address) (slot : word) : SailM Bool := do
   pure warm
 
 def logs_tx_reset (_ : Unit) : SailM Unit :=
-  modify fun state => { state with logs := [], logBytes := #[] }
+  modify fun state => { state with logs := [] }
 
 def log_append (account : address) (topics : List word) (data : Bytes) :
     SailM Unit := do
   let state ← get
   let bytes := materializeBytes state data
   let offset := state.logBytes.size
-  let slice : EvmByteSlice :=
-    ⟨offset, ⟨bytes.length,
-      { source := .LogDataSource, off := offset, len := bytes.length }⟩⟩
+  let slice := makeEvmByteSlice .LogDataSource offset bytes.length
   let entry : LogEntry :=
     { address := account, topics := topics, data := slice }
   set { state with
@@ -1703,9 +1778,7 @@ def nodedb_insert
     (key : hash) (offset : source_pointer) (length : host_access) :
     SailM Unit :=
   modify fun state =>
-    let slice : EvmByteSlice :=
-      ⟨offset, ⟨length,
-        { source := .StatelessInputSource, off := offset, len := length }⟩⟩
+    let slice := makeEvmByteSlice .StatelessInputSource offset length
     { state with nodeDb := assocPut state.nodeDb key slice }
 
 def nodedb_lookup (key : hash) : SailM EvmByteSlice := do

@@ -50,9 +50,8 @@ The `CREATE` and `CREATE2` address rules (YP §7, EIP-1014). -/
 
 /-- The `CREATE` address (YP §7): the low 20 bytes of
 `keccak256(rlp([sender, nonce]))`. -/
-/- Type quantifiers: k_ex409975_ : Nat, 0 ≤ k_ex409975_ ∧ k_ex409975_ ≤ (2 ^ 64 - 1) -/
-def create_address (sender : address) (nonce : account_nonce) : SailM address := do
-  let nonce := (nonce).value
+/- Type quantifiers: k_ex415972_ : Nat, 0 ≤ k_ex415972_ ∧ k_ex415972_ ≤ (2 ^ 64 - 1) -/
+def create_address (sender : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (BitVec 8) 20) := do
   let address_length := (rlp_addr_size ())
   let nonce_length := (rlp_uint_word_size nonce)
   let content_len := (address_length + nonce_length)
@@ -62,20 +61,18 @@ def create_address (sender : address) (nonce : account_nonce) : SailM address :=
   (rlp_write_uint_word nonce)
   let ⟨_, ⟨_, encoded⟩⟩ ← do (rlp_finish mark)
   let address ← do
-    (pure (word_to_address
-        ⟨((hash_to_word (← (keccak256_slice ⟨_, ⟨_, encoded⟩⟩)))).value⟩))
+    (pure (word_to_address (hash_to_word (← (keccak256_slice ⟨_, ⟨_, encoded⟩⟩)))))
   (scratch_rewind mark)
   (pure address)
 
 /-- The `CREATE2` address (EIP-1014): the low 20 bytes of
 `keccak256(0xff ++ sender ++ salt ++ keccak256(initcode))`. -/
-/- Type quantifiers: k_ex409976_ : Nat, 0 ≤ k_ex409976_ ∧ k_ex409976_ ≤ (2 ^ 256 - 1) -/
-def create2_address (sender : address) (salt : word) (init_hash : hash) : SailM address := do
-  let salt := (salt).value
+/- Type quantifiers: k_ex415973_ : Nat, 0 ≤ k_ex415973_ ∧ k_ex415973_ ≤ (2 ^ 256 - 1) -/
+def create2_address (sender : (Vector (BitVec 8) 20)) (salt : Nat) (init_hash : (Vector (BitVec 8) 32)) : SailM (Vector (BitVec 8) 20) := do
   (pure (word_to_address
-      ⟨((hash_to_word
+      (hash_to_word
         (← (keccak256_segments
             [(bytes_list [0xFF#8] 1), (bytes_list (address_to_bytes sender) ADDRESS_BYTE_LENGTH), (bytes_list
-              (word_to_bytes32 ⟨salt⟩) WORD_BYTE_LENGTH), (bytes_list
-              (hash_to_bytes32 init_hash) WORD_BYTE_LENGTH)])))).value⟩))
+              (word_to_bytes32 salt) WORD_BYTE_LENGTH), (bytes_list (hash_to_bytes32 init_hash)
+              WORD_BYTE_LENGTH)])))))
 

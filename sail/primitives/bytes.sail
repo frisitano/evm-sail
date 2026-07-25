@@ -48,6 +48,10 @@ type ByteSliceAtLeast('minimum : Int) = {
     ByteSliceFields('off, 'len)
 }
 
+/*! Returns the length carried by an existential byte slice. */
+function byte_slice_length(s : ByteSlice) -> source_length =
+    s.len
+
 /*! The result of making a requested prefix of a byte region available.
     Success carries a slice of exactly the requested length. This shared type
     deliberately imposes no global region maximum: each region-specific

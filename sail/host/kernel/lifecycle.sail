@@ -63,13 +63,13 @@ function k_tx_merge() -> unit = {
                     storage_block_clear(e.addr)
                 };
                 if curr.info.nonce != e.value.orig.info.nonce then {
-                    bal_nonce_change(e.addr, curr.info.nonce)
+                    bal_nonce_change(k_block_access_index, e.addr, curr.info.nonce)
                 };
                 if curr.info.balance != e.value.orig.info.balance then {
-                    bal_balance_change(e.addr, curr.info.balance)
+                    bal_balance_change(k_block_access_index, e.addr, curr.info.balance)
                 };
                 if curr.info.code_hash != e.value.orig.info.code_hash then {
-                    bal_code_change(e.addr, curr.info.code_hash)
+                    bal_code_change(k_block_access_index, e.addr, curr.info.code_hash)
                 };
                 curr = { curr with created = false,  selfdestructed = false };
                 if account_changed(curr, e.value.orig) then {
@@ -87,7 +87,7 @@ function k_tx_merge() -> unit = {
             Some(e) => {
                 match acct_block_get(e.key.addr) {
                     Some(acc) => if acc.present & e.value.curr != e.value.orig then {
-                        bal_storage_change(e.key.addr, e.key.slot, e.value.curr);
+                        bal_storage_change(k_block_access_index, e.key.addr, e.key.slot, e.value.curr);
                         storage_block_put(e)
                     },
                     None() => (),

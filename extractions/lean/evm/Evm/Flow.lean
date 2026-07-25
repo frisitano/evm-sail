@@ -43,13 +43,13 @@ open ByteSource
 open ByteRegionResult
 open BlockError
 
-/- Type quantifiers: k_ex408359_ : Bool, k_ex408358_ : Bool -/
+/- Type quantifiers: k_ex414386_ : Bool, k_ex414385_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
 /-- The activation index of a fork: its declaration position. -/
-def fork_index (f : Fork) : protocol_fork_index :=
-  ⟨match f with
+def fork_index (f : Fork) : Nat :=
+  match f with
   | .Frontier => 0
   | .Homestead => 1
   | .Byzantium => 2
@@ -62,16 +62,16 @@ def fork_index (f : Fork) : protocol_fork_index :=
   | .Cancun => 9
   | .Prague => 10
   | .Osaka => 11
-  | .Amsterdam => 12⟩
+  | .Amsterdam => 12
 
 /-- Fork `a` activates strictly before fork `b`; overloaded onto `<`. -/
 def fork_lt (a : Fork) (b : Fork) : Bool :=
-  (((fork_index a)).value <b ((fork_index b)).value)
+  ((fork_index a) <b (fork_index b))
 
 /-- Fork `a` activates no earlier than fork `b`. Overloaded onto `>=` so
 fork gates read `k_fork >= Berlin`. -/
 def fork_gteq (a : Fork) (b : Fork) : Bool :=
-  (((fork_index b)).value ≤b ((fork_index a)).value)
+  ((fork_index b) ≤b (fork_index a))
 
 /- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=

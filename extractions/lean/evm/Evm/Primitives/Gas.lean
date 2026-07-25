@@ -69,9 +69,9 @@ def GAS_COST_ZERO : gas_cost := 0
 
 def TRANSACTION_EXECUTION_GAS_LIMIT : transaction_gas := (2 ^i 24)
 
-def STATE_GAS_SPILL_ZERO : state_gas_spill := ⟨0⟩
+def STATE_GAS_SPILL_ZERO : state_gas_spill := 0
 
-def STATE_GAS_SPILL_LIMIT : state_gas_spill := ⟨(2 ^i 24)⟩
+def STATE_GAS_SPILL_LIMIT : state_gas_spill := (2 ^i 24)
 
 def GAS_ZERO : gas := 0
 
@@ -79,9 +79,9 @@ def GAS_ZERO : gas := 0
 EIP-2935, EIP-7002, EIP-7251, and EIP-8282). -/
 def SYSTEM_CALL_GAS_LIMIT : transaction_gas := 30000000
 
-def GAS_CONSTANT_ZERO : gas_constant := ⟨0⟩
+def GAS_CONSTANT_ZERO : gas_constant := 0
 
-def GAS_REFUND_ZERO : gas_refund := ⟨0⟩
+def GAS_REFUND_ZERO : gas_refund := 0
 
 def FRAME_STATE_GAS_DELTA_ZERO : frame_state_gas_delta := 0
 
