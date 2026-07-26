@@ -1013,13 +1013,11 @@ structure CreateContinuation where
 
 /-- The pending action performed when a child frame finishes. -/
 inductive FrameContinuation where
+  | Empty (_ : Unit)
   | ResumeCall (_ : CallContinuation)
   | ResumeCreate (_ : CreateContinuation)
   deriving Inhabited, BEq, Repr
   open FrameContinuation
-
-/-- The protocol-bounded stack of suspended parent continuations. -/
-abbrev FrameStack := (Vector FrameContinuation 1024)
 
 /-- The guest's decoded input: the execution payload and the chain
 configuration it executes under. -/
@@ -1606,8 +1604,6 @@ inductive Register : Type where
   | returndata
   | calldata
   | frame_code
-  | frame_stack_top
-  | frame_stack
   | call_depth
   | message
   | frame_status
@@ -1633,8 +1629,6 @@ abbrev RegisterType : Register → Type
   | .returndata => EvmByteSlice
   | .calldata => EvmByteSlice
   | .frame_code => Code
-  | .frame_stack_top => frame_depth
-  | .frame_stack => FrameStack
   | .call_depth => frame_depth
   | .message => Message
   | .frame_status => FrameStatus
@@ -1663,8 +1657,6 @@ instance : Inhabited (RegisterRef RegisterType Code) where
   default := .Reg frame_code
 instance : Inhabited (RegisterRef RegisterType Fork) where
   default := .Reg k_fork
-instance : Inhabited (RegisterRef RegisterType FrameStack) where
-  default := .Reg frame_stack
 instance : Inhabited (RegisterRef RegisterType FrameStatus) where
   default := .Reg frame_status
 instance : Inhabited (RegisterRef RegisterType Message) where

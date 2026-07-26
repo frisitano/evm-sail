@@ -53,8 +53,8 @@ hashed into the execution-payload header. -/
 
 /-- Counts one logical BAL item and enforces `gas_limit / 2000` without a
 separate sizing pass. -/
-/- Type quantifiers: k_ex417741_ : Nat, k_ex417740_ : Nat, 0 ≤ k_ex417740_ ∧
-  k_ex417740_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex417741_ ∧ k_ex417741_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex417420_ : Nat, k_ex417419_ : Nat, 0 ≤ k_ex417419_ ∧
+  k_ex417419_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex417420_ ∧ k_ex417420_ ≤ (2 ^ 64 - 1) -/
 def bal_count_item (count : Nat) (maximum : Nat) : SailM Nat := do
   if ((count <b maximum) : Bool)
   then (pure (count + 1))
@@ -104,9 +104,9 @@ def bal_expect_end (cursor : (EvmByteSliceFields k_source_off k_source_len)) : S
   else sailThrow ((InvalidBlock InvalidBlockAccessList))
 
 /-- Compares one canonical `[index, word]` pair. -/
-/- Type quantifiers: k_ex417843_ : Nat, k_ex417842_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
-  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex417842_ ∧
-  k_ex417842_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex417843_ ∧ k_ex417843_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex417522_ : Nat, k_ex417521_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
+  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex417521_ ∧
+  k_ex417521_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex417522_ ∧ k_ex417522_ ≤ (2 ^ 256 - 1) -/
 def bal_compare_index_word (pair : (RlpFieldRef k_source_off k_source_len k_content_len)) (index : Nat) (value : Nat) : SailM Unit := do
   let fields ← do (bal_ref_cursor pair)
   let ⟨index_field_syn_content_len, ⟨index_field_full_len, (index_field, fields)⟩⟩ ← do
@@ -123,9 +123,9 @@ def bal_compare_index_word (pair : (RlpFieldRef k_source_off k_source_len k_cont
   else (pure ())
 
 /-- Compares one canonical `[index, nonce]` pair. -/
-/- Type quantifiers: k_ex417863_ : Nat, k_ex417862_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
-  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex417862_ ∧
-  k_ex417862_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex417863_ ∧ k_ex417863_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex417542_ : Nat, k_ex417541_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
+  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex417541_ ∧
+  k_ex417541_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex417542_ ∧ k_ex417542_ ≤ (2 ^ 64 - 1) -/
 def bal_compare_index_nonce (pair : (RlpFieldRef k_source_off k_source_len k_content_len)) (index : Nat) (value : Nat) : SailM Unit := do
   let fields ← do (bal_ref_cursor pair)
   let ⟨index_field_syn_content_len, ⟨index_field_full_len, (index_field, fields)⟩⟩ ← do
@@ -143,8 +143,8 @@ def bal_compare_index_nonce (pair : (RlpFieldRef k_source_off k_source_len k_con
 
 /-- Compares one canonical `[index, code]` pair without materializing either
 source-backed code sequence. -/
-/- Type quantifiers: k_ex417882_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0
-  ≤ k_ex417882_ ∧ k_ex417882_ ≤ (2 ^ 20 + 1) -/
+/- Type quantifiers: k_ex417561_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0
+  ≤ k_ex417561_ ∧ k_ex417561_ ≤ (2 ^ 20 + 1) -/
 def bal_compare_index_code (pair : (RlpFieldRef k_source_off k_source_len k_content_len)) (index : Nat) (code_hash : (Vector (BitVec 8) 32)) : SailM Unit := do
   let fields ← do (bal_ref_cursor pair)
   let ⟨index_field_syn_content_len, ⟨index_field_full_len, (index_field, fields)⟩⟩ ← do
@@ -232,10 +232,10 @@ def bal_compare_storage_slot_changes (fields : (EvmByteSliceFields k_source_off 
 drives one loop iteration per logical slot. A slot with one or more
 changes advances `storage_changes`; a change-free slot advances
 `storage_reads`. -/
-/- Type quantifiers: k_ex417932_ : Nat, k_ex417931_ : Nat, k_changes_source_off : Nat, k_changes_source_len
+/- Type quantifiers: k_ex417611_ : Nat, k_ex417610_ : Nat, k_changes_source_off : Nat, k_changes_source_len
   : Nat, k_reads_source_off : Nat, k_reads_source_len : Nat, (source_valid_range k_changes_source_off k_changes_source_len)
-  ∧ (source_valid_range k_reads_source_off k_reads_source_len), 0 ≤ k_ex417931_ ∧
-  k_ex417931_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex417932_ ∧ k_ex417932_ ≤ (2 ^ 64 - 1) -/
+  ∧ (source_valid_range k_reads_source_off k_reads_source_len), 0 ≤ k_ex417610_ ∧
+  k_ex417610_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex417611_ ∧ k_ex417611_ ≤ (2 ^ 64 - 1) -/
 def bal_compare_storage_slots (initial_changes : (EvmByteSliceFields k_changes_source_off k_changes_source_len)) (initial_reads : (EvmByteSliceFields k_reads_source_off k_reads_source_len)) (item_count : Nat) (maximum_items : Nat) : SailM Nat := do
   let changes : (Sigma fun (k_off : Nat) =>
     (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) :=
@@ -530,9 +530,9 @@ def bal_compare_code_changes (fields : (EvmByteSliceFields k_source_off k_source
   else (_rec_bal_compare_code_changes fields current (_measure + 1))
 
 /-- Compares one account and all five ordered BAL child collections. -/
-/- Type quantifiers: k_ex418032_ : Nat, k_ex418031_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
-  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex418031_ ∧
-  k_ex418031_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex418032_ ∧ k_ex418032_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex417711_ : Nat, k_ex417710_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
+  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex417710_ ∧
+  k_ex417710_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex417711_ ∧ k_ex417711_ ≤ (2 ^ 64 - 1) -/
 def bal_compare_account (field : (RlpFieldRef k_source_off k_source_len k_content_len)) (account : (Vector (BitVec 8) 20)) (item_count : Nat) (maximum_items : Nat) : SailM Nat := do
   let fields ← do (bal_ref_cursor field)
   let ⟨address_field_syn_content_len, ⟨address_field_full_len, (address_field, fields)⟩⟩ ← do
@@ -570,9 +570,9 @@ def bal_compare_account (field : (RlpFieldRef k_source_off k_source_len k_conten
       (pure counted_storage))
 
 /-- Compares all BAL accounts in canonical address order. -/
-/- Type quantifiers: _reclimit : Nat, k_ex418048_ : Nat, k_ex418047_ : Nat, k_source_off : Nat, k_source_len
-  : Nat, (source_valid_range k_source_off k_source_len), 0 ≤ k_ex418047_ ∧
-  k_ex418047_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex418048_ ∧ k_ex418048_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex417727_ : Nat, k_ex417726_ : Nat, k_source_off : Nat, k_source_len
+  : Nat, (source_valid_range k_source_off k_source_len), 0 ≤ k_ex417726_ ∧
+  k_ex417726_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex417727_ ∧ k_ex417727_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_bal_compare_accounts (fields : (EvmByteSliceFields k_source_off k_source_len)) (current : (Option (Vector (BitVec 8) 20))) (item_count : Nat) (maximum_items : Nat) (_reclimit : Nat) : SailM Nat := do
   match _reclimit with
   | 0 =>
@@ -608,9 +608,9 @@ def bal_compare_accounts (fields : (EvmByteSliceFields k_source_off k_source_len
 
 /-- Validates the supplied canonical EIP-7928 block access list directly
 against the recorder's ordered account/change streams. -/
-/- Type quantifiers: k_ex418075_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
-  ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1, 0 ≤ k_ex418075_ ∧
-  k_ex418075_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex417754_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
+  ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1, 0 ≤ k_ex417754_ ∧
+  k_ex417754_ ≤ (2 ^ 64 - 1) -/
 def validate_block_access_list (bytes : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (maximum_items : Nat) : SailM Unit := do
   let bytes_dependentWitness0 := (bytes).1

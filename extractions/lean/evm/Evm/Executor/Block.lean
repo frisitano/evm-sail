@@ -66,8 +66,8 @@ def PRE_MERGE_BLOCK_REWARD := (BitVec.toNatInt 0x1BC16D674EC80000#64)
 
 /-- Returns a block's remaining gas, rejecting an accumulated value above the
 header limit with the block-validation error required by EIP-7778. -/
-/- Type quantifiers: k_ex418077_ : Nat, k_ex418076_ : Nat, 0 ≤ k_ex418076_ ∧
-  k_ex418076_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex418077_ -/
+/- Type quantifiers: k_ex417756_ : Nat, k_ex417755_ : Nat, 0 ≤ k_ex417755_ ∧
+  k_ex417755_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex417756_ -/
 def remaining_block_gas (limit : Nat) (used : Nat) : SailM Nat := do
   if ((used ≤b limit) : Bool)
   then (pure (limit - used))
@@ -86,9 +86,9 @@ def run_block_start_system_calls (_ : Unit) : SailM Unit := do
 /-- Executes the block's transactions in order, enforcing per-tx
 applicability and block gas/blob-gas availability (EIP-7778 block-gas
 accounting), accumulating receipts. -/
-/- Type quantifiers: k_ex418085_ : Nat, public_keys_dependentWitness1 : Nat, public_keys_dependentWitness0
+/- Type quantifiers: k_ex417764_ : Nat, public_keys_dependentWitness1 : Nat, public_keys_dependentWitness0
   : Nat, 0 ≤ public_keys_dependentWitness0 ∧ 0 ≤ public_keys_dependentWitness1, 0 ≤
-  k_ex418085_ ∧ k_ex418085_ ≤ (2 ^ 64 - 1) -/
+  k_ex417764_ ∧ k_ex417764_ ≤ (2 ^ 64 - 1) -/
 def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (public_keys : (Sigma
   fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (header_gas_limit : Nat) : SailM BlockExecutionResult := do
   let public_keys_dependentWitness0 := (public_keys).1
@@ -249,9 +249,9 @@ def apply_block_end_state (body : BlockBody) : SailM Unit := do
 transaction loop, block-end state effects, and request collection;
 invalid execution throws immediately, while successful execution returns
 the accumulated [BlockExecutionResult][type-BlockExecutionResult]. -/
-/- Type quantifiers: k_ex418093_ : Nat, public_keys_dependentWitness1 : Nat, public_keys_dependentWitness0
+/- Type quantifiers: k_ex417772_ : Nat, public_keys_dependentWitness1 : Nat, public_keys_dependentWitness0
   : Nat, 0 ≤ public_keys_dependentWitness0 ∧ 0 ≤ public_keys_dependentWitness1, 0 ≤
-  k_ex418093_ ∧ k_ex418093_ ≤ (2 ^ 64 - 1) -/
+  k_ex417772_ ∧ k_ex417772_ ≤ (2 ^ 64 - 1) -/
 def execute_block_body (body : BlockBody) (public_keys : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (header_gas_limit : Nat) : SailM BlockExecutionResult := do
   let public_keys_dependentWitness0 := (public_keys).1

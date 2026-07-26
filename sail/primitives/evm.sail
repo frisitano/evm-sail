@@ -103,14 +103,13 @@ struct CreateContinuation = {
 
 /*! The pending action performed when a child frame finishes. */
 union FrameContinuation = {
+    /*! No suspended parent remains; the completed frame was top-level. */
+    Empty : unit,
     /*! Resume a suspended message-call parent. */
     ResumeCall : CallContinuation,
     /*! Resume a suspended contract-creation parent. */
     ResumeCreate : CreateContinuation
 }
-
-/*! The protocol-bounded stack of suspended parent continuations. */
-type FrameStack = vector(1024, dec, FrameContinuation)
 
 /*! The zero message; frame registers reset to it between transactions. */
 let DEFAULT_MESSAGE : Message = struct {
@@ -122,22 +121,3 @@ let DEFAULT_MESSAGE : Message = struct {
         is_static = false,
         depth = 0,
     }
-
-let DEFAULT_FRAME_CHECKPOINT : FrameCheckpoint = struct {
-        state = 0,
-        pc = 0,
-        gas_remaining = GAS_ZERO,
-        state_gas_remaining = GAS_ZERO,
-        state_gas_spilled = STATE_GAS_SPILL_ZERO,
-        refund = GAS_REFUND_ZERO,
-        status = Running(),
-        message = DEFAULT_MESSAGE,
-        call_depth = 0,
-        code = EMPTY_CODE,
-        calldata = EMPTY_SLICE,
-        memory = EMPTY_SLICE,
-    }
-
-let DEFAULT_FRAME_CONTINUATION : FrameContinuation = ResumeCall(
-    struct { checkpoint = DEFAULT_FRAME_CHECKPOINT, return_offset = 0, return_length = 0, new_account_charged = false },
-)

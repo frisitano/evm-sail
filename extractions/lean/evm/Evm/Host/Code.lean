@@ -56,7 +56,7 @@ def undefined_CodeAnalysis (_ : Unit) : SailM CodeAnalysis := do
           chunk_offset := ← (undefined_range 0 255) })
 
 /-- Commits a completed nonempty bitmap chunk to its allocated table. -/
-/- Type quantifiers: k_ex415477_ : Nat, 0 ≤ k_ex415477_ -/
+/- Type quantifiers: k_ex415156_ : Nat, 0 ≤ k_ex415156_ -/
 def store_jumpdest_chunk (table : (BitVec 64)) (code_len : Nat) (analysis : CodeAnalysis) : SailM Unit := do
   if ((analysis.chunk != EMPTY_JUMPDEST_CHUNK) : Bool)
   then

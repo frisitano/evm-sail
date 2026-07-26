@@ -187,7 +187,7 @@ def precompile_failure (_ : Unit) : PrecompileResult :=
   { success := false,
     output := ⟨_, ⟨_, EMPTY_SLICE⟩⟩ }
 
-/- Type quantifiers: k_ex417072_ : Bool, output_len : Nat, (source_valid_length output_len) -/
+/- Type quantifiers: k_ex416751_ : Bool, output_len : Nat, (source_valid_length output_len) -/
 def accelerator_result (success : Bool) (output_len : Nat) : PrecompileResult :=
   if (success : Bool)
   then (precompile_success (output_buffer_slice output_len))
@@ -207,7 +207,7 @@ def copied_result (data : (Sigma fun (k_off : Nat) =>
   else (pure (precompile_failure ()))
 
 /-- A 32-byte `0`/`1` result word (pairing checks). -/
-/- Type quantifiers: k_ex417081_ : Bool -/
+/- Type quantifiers: k_ex416760_ : Bool -/
 def boolean_result (value : Bool) : SailM PrecompileResult := do
   (do
       let dependentArg0 := (← (output_buffer_word
@@ -705,8 +705,8 @@ def run_p256_verify (input : (Sigma fun (k_off : Nat) =>
 
 /-- The precompile dispatch: address to implementation. Gas has already
 been charged by the caller ([precompile_gas][]). -/
-/- Type quantifiers: input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, k_ex417233_ : Nat, 1
-  ≤ k_ex417233_ ∧ k_ex417233_ ≤ 256, 0 ≤ input_dependentWitness0 ∧
+/- Type quantifiers: input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, k_ex416912_ : Nat, 1
+  ≤ k_ex416912_ ∧ k_ex416912_ ≤ 256, 0 ≤ input_dependentWitness0 ∧
   0 ≤ input_dependentWitness1 -/
 def run_precompile_slice (num : Nat) (input : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM PrecompileResult := do

@@ -176,12 +176,14 @@ zkvm/
 
 ## Building / running
 
-Requires `riscv64-unknown-elf-gcc` and `spike` on `PATH`. The optimized C
-lowering also requires a Sail compiler with spliceable type definitions and
-bound-driven native C representation. The build's
-`resolve_optimized_sail.sh` uses `SAIL` when set, auto-detects the local feature
-worktree used by this repository, and otherwise uses the compiler on `PATH`.
-The real optimized model build is the capability check.
+Requires `riscv64-unknown-elf-gcc` and `spike` on `PATH`. Every repository
+target uses the same custom Sail compiler. Its optimized C lowering supports
+spliceable type definitions and bound-driven native C representations, while
+its standard Lean and Coq backends preserve the model's semantic types. The
+build's `resolve_optimized_sail.sh` uses `SAIL` when set, auto-detects the local
+feature worktree used by this repository, and otherwise uses the compiler on
+`PATH`. Upstream Sail is not a proof-extraction fallback; the real target build
+is the capability check.
 
 ```
 python3 ../harness/run.py --spike <state-test.json> --fork F   # the gate

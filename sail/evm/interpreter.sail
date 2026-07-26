@@ -15,9 +15,9 @@ opcodes. This module specifies that machinery in three layers:
    decodes to `INVALID`). Reading past the end of code yields `STOP`
    (YP: implicit halt).
 2. **Run loop** — [interpret][] steps fetch-then-execute until the active
-   frame stops. A completed child is resumed through its explicit
-   [FrameContinuation][type-FrameContinuation]; a completed top-level
-   frame ends interpretation.
+   frame stops. Popping a pending [FrameContinuation][type-FrameContinuation]
+   resumes a completed child; [Empty][type-FrameContinuation] marks completion
+   of the top-level frame.
 3. **Message calls** — [run_call][] handles
    `CALL`/`CALLCODE`/`DELEGATECALL`/`STATICCALL` (multiplexed on `mode`)
    and [run_create][] handles `CREATE`/`CREATE2`. A sub-call saves the
@@ -262,11 +262,12 @@ function interpret() -> ByteSlice = {
             execute(fetch())
         } else {
             let output = frame_output();
-            if frame_stack_is_empty() then {
-                result = output;
-                interpreting = false
-            } else {
-                resume_frame(frame_stack_pop(), output)
+            match frame_stack_pop() {
+                Empty() => {
+                    result = output;
+                    interpreting = false
+                },
+                continuation => resume_frame(continuation, output),
             }
         }
     };
@@ -954,6 +955,7 @@ function resume_create(continuation : CreateContinuation, output : ByteSlice) ->
 /*! Applies the pending operation for one completed child frame. */
 function resume_frame(continuation : FrameContinuation, output : ByteSlice) -> unit =
     match continuation {
+        Empty() => throw InvalidBlock(ExecutionInvalid),
         ResumeCall(call) => resume_call(call, output),
         ResumeCreate(create) => resume_create(create, output),
     }

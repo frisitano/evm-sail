@@ -540,7 +540,41 @@ Instance dummy_blob_fee_update_fraction : Inhabited (blob_fee_update_fraction) :
 Definition blob_fee_update_fraction_valid (x : blob_fee_update_fraction) : Prop :=
 1 <= x.(blob_fee_update_fraction_value) /\ x.(blob_fee_update_fraction_value) <= 11684671.
 
-Definition chain_identifier : Type := Z.
+Definition chain_identifier_bound : Z := (2 ^ 64 - 1).
+#[export] Hint Unfold chain_identifier_bound : sail.
+
+Record chain_identifier := { chain_identifier_value : Z; }.
+Arguments chain_identifier : clear implicits.
+#[export]
+Instance Decidable_eq_chain_identifier : EqDecision chain_identifier.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_chain_identifier : Countable chain_identifier.
+refine {|
+  encode x := encode (chain_identifier_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_chain_identifier x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'chain_identifier_value' := e ]}" :=
+  {| chain_identifier_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_chain_identifier : Inhabited (chain_identifier) := {
+  inhabitant := {| chain_identifier_value := inhabitant
+|} }.
+
+
+Definition chain_identifier_valid (x : chain_identifier) : Prop :=
+0 <= x.(chain_identifier_value) /\ x.(chain_identifier_value) <= (2 ^ 64 - 1).
 
 Record slot_number_typ := { slot_number_value : Z; }.
 Arguments slot_number_typ : clear implicits.
@@ -772,21 +806,21 @@ Instance dummy_ssz_offset_index : Inhabited (ssz_offset_index) := {
 Definition ssz_offset_index_valid (x : ssz_offset_index) : Prop :=
 0 <= x.(ssz_offset_index_value) /\ x.(ssz_offset_index_value) <= (2 ^ 30 - 1).
 
-Record item_count_typ := { item_count_value : Z; }.
-Arguments item_count_typ : clear implicits.
+Record item_count := { item_count_value : Z; }.
+Arguments item_count : clear implicits.
 #[export]
-Instance Decidable_eq_item_count_typ : EqDecision item_count_typ.
+Instance Decidable_eq_item_count : EqDecision item_count.
    intros [x0].
    intros [y0].
   cmp_record_field x0 y0.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_item_count_typ : Countable item_count_typ.
+Instance Countable_item_count : Countable item_count.
 refine {|
   encode x := encode (item_count_value x);
   decode x := '(x0) ← decode x;
-              mret (Build_item_count_typ x0)
+              mret (Build_item_count x0)
 |}.
 abstract (
   intros [x0];
@@ -797,12 +831,12 @@ Defined.
 Notation "{[ r 'with' 'item_count_value' := e ]}" :=
   {| item_count_value := e |} (at level 1, only parsing).
 #[export]
-Instance dummy_item_count_typ : Inhabited (item_count_typ) := {
+Instance dummy_item_count : Inhabited (item_count) := {
   inhabitant := {| item_count_value := inhabitant
 |} }.
 
 
-Definition item_count_typ_valid (x : item_count_typ) : Prop :=
+Definition item_count_valid (x : item_count) : Prop :=
 0 <= x.(item_count_value) /\ x.(item_count_value) <= (2 ^ 64 - 1).
 
 Record item_index := { item_index_value : Z; }.
@@ -2446,6 +2480,39 @@ Instance dummy_transaction_index : Inhabited (transaction_index) := {
 Definition transaction_index_valid (x : transaction_index) : Prop :=
 0 <= x.(transaction_index_value) /\ x.(transaction_index_value) <= (2 ^ 20 - 1).
 
+Record block_access_index := { block_access_index_value : Z; }.
+Arguments block_access_index : clear implicits.
+#[export]
+Instance Decidable_eq_block_access_index : EqDecision block_access_index.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_block_access_index : Countable block_access_index.
+refine {|
+  encode x := encode (block_access_index_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_block_access_index x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'block_access_index_value' := e ]}" :=
+  {| block_access_index_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_block_access_index : Inhabited (block_access_index) := {
+  inhabitant := {| block_access_index_value := inhabitant
+|} }.
+
+
+Definition block_access_index_valid (x : block_access_index) : Prop :=
+0 <= x.(block_access_index_value) /\ x.(block_access_index_value) <= (2 ^ 20 + 1).
+
 Record BoundedSszListRef {maximum : Z} (*source_valid_length maximum*) := {
   BoundedSszListRef_bytes : ByteSlice;
   BoundedSszListRef_count : Z;
@@ -2606,169 +2673,70 @@ Instance dummy_Code : Inhabited (Code) := {
 |} }.
 
 
-Record RlpFieldRefFields {source_off : Z} {source_len : Z} {full_off : Z} {full_len : Z}
-{content_off : Z} {content_len : Z}
-(*source_valid_range source_off source_len &&
-  ((0 <=? full_off) &&
-    ((0 <=? full_len) &&
-      (((full_off + full_len) <=? source_len) &&
-        ((0 <=? content_off) &&
-          ((0 <=? content_len) && ((content_off + content_len) <=? source_len))))))*) := {
-  RlpFieldRefFields_source : ByteSliceFields source_off source_len;
-  RlpFieldRefFields_is_list : bool;
-  RlpFieldRefFields_full_off : Z;
-  RlpFieldRefFields_full_len : Z;
-  RlpFieldRefFields_content_off : Z;
-  RlpFieldRefFields_content_len : Z;
+Definition rlp_field_ref_valid (source_off : Z) (source_len : Z) (content_len : Z) : bool :=
+  source_valid_range source_off source_len && ((0 <=? content_len) && (content_len <=? source_len)).
+#[export] Hint Unfold rlp_field_ref_valid : sail.
+
+Definition rlp_cursor_pop_valid (source_off : Z) (source_len : Z) (full_len : Z) (content_len : Z) : bool :=
+  rlp_field_ref_valid source_off full_len content_len &&
+    ((0 <? full_len) && (full_len <=? source_len)).
+#[export] Hint Unfold rlp_cursor_pop_valid : sail.
+
+Record RlpFieldRef {source_off : Z} {source_len : Z} {content_len : Z}
+(*rlp_field_ref_valid source_off source_len content_len*) := {
+  RlpFieldRef_source : ByteSliceFields source_off source_len;
+  RlpFieldRef_is_list : bool;
+  RlpFieldRef_content_len : Z;
 }.
-Arguments RlpFieldRefFields : clear implicits.
+Arguments RlpFieldRef : clear implicits.
 #[export]
-Instance Decidable_eq_RlpFieldRefFields {source_off : Z} {source_len : Z} {full_off : Z}
-  {full_len : Z} {content_off : Z} {content_len : Z}
-  (*source_valid_range source_off source_len &&
-    ((0 <=? full_off) &&
-      ((0 <=? full_len) &&
-        (((full_off + full_len) <=? source_len) &&
-          ((0 <=? content_off) &&
-            ((0 <=? content_len) && ((content_off + content_len) <=? source_len))))))*) :
-  EqDecision (RlpFieldRefFields source_off source_len full_off full_len content_off content_len).
-   intros [x0 x1 x2 x3 x4 x5].
-   intros [y0 y1 y2 y3 y4 y5].
+Instance Decidable_eq_RlpFieldRef {source_off : Z} {source_len : Z} {content_len : Z}
+  (*rlp_field_ref_valid source_off source_len content_len*) :
+  EqDecision (RlpFieldRef source_off source_len content_len).
+   intros [x0 x1 x2].
+   intros [y0 y1 y2].
   cmp_record_field x0 y0.
   cmp_record_field x1 y1.
   cmp_record_field x2 y2.
-  cmp_record_field x3 y3.
-  cmp_record_field x4 y4.
-  cmp_record_field x5 y5.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_RlpFieldRefFields {source_off : Z} {source_len : Z} {full_off : Z} {full_len : Z}
-  {content_off : Z} {content_len : Z}
-  (*source_valid_range source_off source_len &&
-    ((0 <=? full_off) &&
-      ((0 <=? full_len) &&
-        (((full_off + full_len) <=? source_len) &&
-          ((0 <=? content_off) &&
-            ((0 <=? content_len) && ((content_off + content_len) <=? source_len))))))*) : Countable
-  (RlpFieldRefFields source_off source_len full_off full_len content_off content_len).
+Instance Countable_RlpFieldRef {source_off : Z} {source_len : Z} {content_len : Z}
+  (*rlp_field_ref_valid source_off source_len content_len*) : Countable
+  (RlpFieldRef source_off source_len content_len).
 refine {|
-  encode x := encode (RlpFieldRefFields_source x, RlpFieldRefFields_is_list x, RlpFieldRefFields_full_off x, RlpFieldRefFields_full_len x, RlpFieldRefFields_content_off x, RlpFieldRefFields_content_len x);
-  decode x := '(x0, x1, x2, x3, x4, x5) ← decode x;
-              mret (Build_RlpFieldRefFields source_off source_len full_off full_len content_off content_len x0 x1 x2 x3 x4 x5)
+  encode x := encode (RlpFieldRef_source x, RlpFieldRef_is_list x, RlpFieldRef_content_len x);
+  decode x := '(x0, x1, x2) ← decode x;
+              mret (Build_RlpFieldRef source_off source_len content_len x0 x1 x2)
 |}.
 abstract (
-  intros [x0 x1 x2 x3 x4 x5];
+  intros [x0 x1 x2];
   rewrite decode_encode;
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'RlpFieldRefFields_source' := e ]}" :=
-  match r with Build_RlpFieldRefFields _ _ _ _ _ _ _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) =>
-    Build_RlpFieldRefFields _ _ _ _ _ _ e f1 f2 f3 f4 f5 end (at level 1).
-Notation "{[ r 'with' 'RlpFieldRefFields_is_list' := e ]}" :=
-  match r with Build_RlpFieldRefFields _ _ _ _ _ _ (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) =>
-    Build_RlpFieldRefFields _ _ _ _ _ _ f0 e f2 f3 f4 f5 end (at level 1).
-Notation "{[ r 'with' 'RlpFieldRefFields_full_off' := e ]}" :=
-  match r with Build_RlpFieldRefFields _ _ _ _ _ _ (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) =>
-    Build_RlpFieldRefFields _ _ _ _ _ _ f0 f1 e f3 f4 f5 end (at level 1).
-Notation "{[ r 'with' 'RlpFieldRefFields_full_len' := e ]}" :=
-  match r with Build_RlpFieldRefFields _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) =>
-    Build_RlpFieldRefFields _ _ _ _ _ _ f0 f1 f2 e f4 f5 end (at level 1).
-Notation "{[ r 'with' 'RlpFieldRefFields_content_off' := e ]}" :=
-  match r with Build_RlpFieldRefFields _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) =>
-    Build_RlpFieldRefFields _ _ _ _ _ _ f0 f1 f2 f3 e f5 end (at level 1).
-Notation "{[ r 'with' 'RlpFieldRefFields_content_len' := e ]}" :=
-  match r with Build_RlpFieldRefFields _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ =>
-    Build_RlpFieldRefFields _ _ _ _ _ _ f0 f1 f2 f3 f4 e end (at level 1).
+Notation "{[ r 'with' 'RlpFieldRef_source' := e ]}" :=
+  match r with Build_RlpFieldRef _ _ _ _ (_ as f1) (_ as f2) =>
+    Build_RlpFieldRef _ _ _ e f1 f2 end (at level 1).
+Notation "{[ r 'with' 'RlpFieldRef_is_list' := e ]}" :=
+  match r with Build_RlpFieldRef _ _ _ (_ as f0) _ (_ as f2) =>
+    Build_RlpFieldRef _ _ _ f0 e f2 end (at level 1).
+Notation "{[ r 'with' 'RlpFieldRef_content_len' := e ]}" :=
+  match r with Build_RlpFieldRef _ _ _ (_ as f0) (_ as f1) _ =>
+    Build_RlpFieldRef _ _ _ f0 f1 e end (at level 1).
 #[export]
-Instance dummy_RlpFieldRefFields {source_off : Z} {source_len : Z} {full_off : Z} {full_len : Z}
-  {content_off : Z} {content_len : Z}
-  (*source_valid_range source_off source_len &&
-    ((0 <=? full_off) &&
-      ((0 <=? full_len) &&
-        (((full_off + full_len) <=? source_len) &&
-          ((0 <=? content_off) &&
-            ((0 <=? content_len) && ((content_off + content_len) <=? source_len))))))*) :
-  Inhabited (RlpFieldRefFields source_off source_len full_off full_len content_off content_len) := {
+Instance dummy_RlpFieldRef {source_off : Z} {source_len : Z} {content_len : Z}
+  (*rlp_field_ref_valid source_off source_len content_len*) :
+  Inhabited (RlpFieldRef source_off source_len content_len) := {
   inhabitant := {|
-    RlpFieldRefFields_source := inhabitant;
-    RlpFieldRefFields_is_list := inhabitant;
-    RlpFieldRefFields_full_off := inhabitant;
-    RlpFieldRefFields_full_len := inhabitant;
-    RlpFieldRefFields_content_off := inhabitant;
-    RlpFieldRefFields_content_len := inhabitant
+    RlpFieldRef_source := inhabitant;
+    RlpFieldRef_is_list := inhabitant;
+    RlpFieldRef_content_len := inhabitant
 |} }.
 
 
-Definition RlpFieldRef : Type :=
-  {content_len & {content_off & {full_len & {full_off & {source_len & {source_off & (RlpFieldRefFields source_off source_len full_off full_len content_off content_len)}}}}}}%type.
-
-Record RlpCursorFields {source_off : Z} {source_len : Z} {current : Z} {stop : Z}
-(*source_valid_range source_off source_len &&
-  ((0 <=? current) && ((current <=? stop) && (stop <=? source_len)))*) := {
-  RlpCursorFields_source : ByteSliceFields source_off source_len;
-  RlpCursorFields_current : Z;
-  RlpCursorFields_stop : Z;
-  RlpCursorFields_valid : bool;
-}.
-Arguments RlpCursorFields : clear implicits.
-#[export]
-Instance Decidable_eq_RlpCursorFields {source_off : Z} {source_len : Z} {current : Z} {stop : Z}
-  (*source_valid_range source_off source_len &&
-    ((0 <=? current) && ((current <=? stop) && (stop <=? source_len)))*) :
-  EqDecision (RlpCursorFields source_off source_len current stop).
-   intros [x0 x1 x2 x3].
-   intros [y0 y1 y2 y3].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-  cmp_record_field x2 y2.
-  cmp_record_field x3 y3.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_RlpCursorFields {source_off : Z} {source_len : Z} {current : Z} {stop : Z}
-  (*source_valid_range source_off source_len &&
-    ((0 <=? current) && ((current <=? stop) && (stop <=? source_len)))*) : Countable
-  (RlpCursorFields source_off source_len current stop).
-refine {|
-  encode x := encode (RlpCursorFields_source x, RlpCursorFields_current x, RlpCursorFields_stop x, RlpCursorFields_valid x);
-  decode x := '(x0, x1, x2, x3) ← decode x;
-              mret (Build_RlpCursorFields source_off source_len current stop x0 x1 x2 x3)
-|}.
-abstract (
-  intros [x0 x1 x2 x3];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'RlpCursorFields_source' := e ]}" :=
-  match r with Build_RlpCursorFields _ _ _ _ _ (_ as f1) (_ as f2) (_ as f3) =>
-    Build_RlpCursorFields _ _ _ _ e f1 f2 f3 end (at level 1).
-Notation "{[ r 'with' 'RlpCursorFields_current' := e ]}" :=
-  match r with Build_RlpCursorFields _ _ _ _ (_ as f0) _ (_ as f2) (_ as f3) =>
-    Build_RlpCursorFields _ _ _ _ f0 e f2 f3 end (at level 1).
-Notation "{[ r 'with' 'RlpCursorFields_stop' := e ]}" :=
-  match r with Build_RlpCursorFields _ _ _ _ (_ as f0) (_ as f1) _ (_ as f3) =>
-    Build_RlpCursorFields _ _ _ _ f0 f1 e f3 end (at level 1).
-Notation "{[ r 'with' 'RlpCursorFields_valid' := e ]}" :=
-  match r with Build_RlpCursorFields _ _ _ _ (_ as f0) (_ as f1) (_ as f2) _ =>
-    Build_RlpCursorFields _ _ _ _ f0 f1 f2 e end (at level 1).
-#[export]
-Instance dummy_RlpCursorFields {source_off : Z} {source_len : Z} {current : Z} {stop : Z}
-  (*source_valid_range source_off source_len &&
-    ((0 <=? current) && ((current <=? stop) && (stop <=? source_len)))*) :
-  Inhabited (RlpCursorFields source_off source_len current stop) := {
-  inhabitant := {|
-    RlpCursorFields_source := inhabitant;
-    RlpCursorFields_current := inhabitant;
-    RlpCursorFields_stop := inhabitant;
-    RlpCursorFields_valid := inhabitant
-|} }.
-
-
-Definition RlpCursor : Type :=
-  {stop & {current & {source_len & {source_off & (RlpCursorFields source_off source_len current stop)}}}}%type.
+Definition RlpCursor (source_off : Z) (source_len : Z) (*source_valid_range source_off source_len*) : Type :=
+  ByteSliceFields source_off source_len.
 
 Record BlobSchedule := {
   BlobSchedule_target : blob_target_count;
@@ -4665,22 +4633,25 @@ Instance dummy_CreateContinuation : Inhabited (CreateContinuation) := {
 
 
 Inductive FrameContinuation :=
+| Empty : unit -> FrameContinuation
 | ResumeCall : CallContinuation -> FrameContinuation
 | ResumeCreate : CreateContinuation -> FrameContinuation.
 Arguments FrameContinuation : clear implicits.
 
 Definition sail_FrameContinuation_encode (x : FrameContinuation) := match x with
-  | ResumeCall x' => encode (0, encode x')
-  | ResumeCreate x' => encode (1, encode x') end.
+  | Empty x' => encode (0, encode x')
+  | ResumeCall x' => encode (1, encode x')
+  | ResumeCreate x' => encode (2, encode x') end.
 Definition sail_FrameContinuation_decode x : option FrameContinuation := match decode x with
-  | Some (0, x') => ResumeCall <$> decode x'
-  | Some (1, x') => ResumeCreate <$> decode x'
+  | Some (0, x') => Empty <$> decode x'
+  | Some (1, x') => ResumeCall <$> decode x'
+  | Some (2, x') => ResumeCreate <$> decode x'
   | _ => None end.
 Lemma sail_FrameContinuation_decode_encode : forall (x : FrameContinuation),
   sail_FrameContinuation_decode (sail_FrameContinuation_encode x)  = Some x.
 Proof.
   unfold sail_FrameContinuation_decode, sail_FrameContinuation_encode;
-  intros [x|x]; rewrite !decode_encode; reflexivity.
+  intros [x|x|x]; rewrite !decode_encode; reflexivity.
 Qed.
 
 #[export]
@@ -4694,11 +4665,8 @@ Instance Countable_FrameContinuation : Countable FrameContinuation := {|
   decode_encode := sail_FrameContinuation_decode_encode
 |}.
 #[export]
-Instance dummy_FrameContinuation : Inhabited (FrameContinuation) := {
-  inhabitant := ResumeCall inhabitant
+Instance dummy_FrameContinuation : Inhabited (FrameContinuation) := { inhabitant := Empty inhabitant
 }.
-
-Definition FrameStack : Type := vec FrameContinuation 1024.
 
 Record StatelessInput := {
   StatelessInput_payload : ExecutionPayload;
@@ -4952,6 +4920,202 @@ Instance dummy_AuthorizationDecode {bound : Z} (*source_valid_length bound*) :
 |} }.
 
 
+Record BalStorageChangeEntry := {
+  BalStorageChangeEntry_index : block_access_index;
+  BalStorageChangeEntry_value : word;
+}.
+Arguments BalStorageChangeEntry : clear implicits.
+#[export]
+Instance Decidable_eq_BalStorageChangeEntry : EqDecision BalStorageChangeEntry.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_BalStorageChangeEntry : Countable BalStorageChangeEntry.
+refine {|
+  encode x := encode (BalStorageChangeEntry_index x, BalStorageChangeEntry_value x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_BalStorageChangeEntry x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'BalStorageChangeEntry_index' := e ]}" :=
+  match r with Build_BalStorageChangeEntry _ (_ as f1) =>
+    Build_BalStorageChangeEntry e f1 end (at level 1).
+Notation "{[ r 'with' 'BalStorageChangeEntry_value' := e ]}" :=
+  match r with Build_BalStorageChangeEntry (_ as f0) _ =>
+    Build_BalStorageChangeEntry f0 e end (at level 1).
+#[export]
+Instance dummy_BalStorageChangeEntry : Inhabited (BalStorageChangeEntry) := {
+  inhabitant := {|
+    BalStorageChangeEntry_index := inhabitant;
+    BalStorageChangeEntry_value := inhabitant
+|} }.
+
+
+Record BalStorageSlotEntry := {
+  BalStorageSlotEntry_slot : word;
+  BalStorageSlotEntry_change : option BalStorageChangeEntry;
+}.
+Arguments BalStorageSlotEntry : clear implicits.
+#[export]
+Instance Decidable_eq_BalStorageSlotEntry : EqDecision BalStorageSlotEntry.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_BalStorageSlotEntry : Countable BalStorageSlotEntry.
+refine {|
+  encode x := encode (BalStorageSlotEntry_slot x, BalStorageSlotEntry_change x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_BalStorageSlotEntry x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'BalStorageSlotEntry_slot' := e ]}" :=
+  match r with Build_BalStorageSlotEntry _ (_ as f1) =>
+    Build_BalStorageSlotEntry e f1 end (at level 1).
+Notation "{[ r 'with' 'BalStorageSlotEntry_change' := e ]}" :=
+  match r with Build_BalStorageSlotEntry (_ as f0) _ =>
+    Build_BalStorageSlotEntry f0 e end (at level 1).
+#[export]
+Instance dummy_BalStorageSlotEntry : Inhabited (BalStorageSlotEntry) := {
+  inhabitant := {| BalStorageSlotEntry_slot := inhabitant; BalStorageSlotEntry_change := inhabitant
+|} }.
+
+
+Record BalBalanceChangeEntry := {
+  BalBalanceChangeEntry_index : block_access_index;
+  BalBalanceChangeEntry_value : word;
+}.
+Arguments BalBalanceChangeEntry : clear implicits.
+#[export]
+Instance Decidable_eq_BalBalanceChangeEntry : EqDecision BalBalanceChangeEntry.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_BalBalanceChangeEntry : Countable BalBalanceChangeEntry.
+refine {|
+  encode x := encode (BalBalanceChangeEntry_index x, BalBalanceChangeEntry_value x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_BalBalanceChangeEntry x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'BalBalanceChangeEntry_index' := e ]}" :=
+  match r with Build_BalBalanceChangeEntry _ (_ as f1) =>
+    Build_BalBalanceChangeEntry e f1 end (at level 1).
+Notation "{[ r 'with' 'BalBalanceChangeEntry_value' := e ]}" :=
+  match r with Build_BalBalanceChangeEntry (_ as f0) _ =>
+    Build_BalBalanceChangeEntry f0 e end (at level 1).
+#[export]
+Instance dummy_BalBalanceChangeEntry : Inhabited (BalBalanceChangeEntry) := {
+  inhabitant := {|
+    BalBalanceChangeEntry_index := inhabitant;
+    BalBalanceChangeEntry_value := inhabitant
+|} }.
+
+
+Record BalNonceChangeEntry := {
+  BalNonceChangeEntry_index : block_access_index;
+  BalNonceChangeEntry_value : account_nonce;
+}.
+Arguments BalNonceChangeEntry : clear implicits.
+#[export]
+Instance Decidable_eq_BalNonceChangeEntry : EqDecision BalNonceChangeEntry.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_BalNonceChangeEntry : Countable BalNonceChangeEntry.
+refine {|
+  encode x := encode (BalNonceChangeEntry_index x, BalNonceChangeEntry_value x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_BalNonceChangeEntry x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'BalNonceChangeEntry_index' := e ]}" :=
+  match r with Build_BalNonceChangeEntry _ (_ as f1) =>
+    Build_BalNonceChangeEntry e f1 end (at level 1).
+Notation "{[ r 'with' 'BalNonceChangeEntry_value' := e ]}" :=
+  match r with Build_BalNonceChangeEntry (_ as f0) _ =>
+    Build_BalNonceChangeEntry f0 e end (at level 1).
+#[export]
+Instance dummy_BalNonceChangeEntry : Inhabited (BalNonceChangeEntry) := {
+  inhabitant := {| BalNonceChangeEntry_index := inhabitant; BalNonceChangeEntry_value := inhabitant
+|} }.
+
+
+Record BalCodeChangeEntry := {
+  BalCodeChangeEntry_index : block_access_index;
+  BalCodeChangeEntry_code_hash : hash;
+}.
+Arguments BalCodeChangeEntry : clear implicits.
+#[export]
+Instance Decidable_eq_BalCodeChangeEntry : EqDecision BalCodeChangeEntry.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_BalCodeChangeEntry : Countable BalCodeChangeEntry.
+refine {|
+  encode x := encode (BalCodeChangeEntry_index x, BalCodeChangeEntry_code_hash x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_BalCodeChangeEntry x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'BalCodeChangeEntry_index' := e ]}" :=
+  match r with Build_BalCodeChangeEntry _ (_ as f1) =>
+    Build_BalCodeChangeEntry e f1 end (at level 1).
+Notation "{[ r 'with' 'BalCodeChangeEntry_code_hash' := e ]}" :=
+  match r with Build_BalCodeChangeEntry (_ as f0) _ =>
+    Build_BalCodeChangeEntry f0 e end (at level 1).
+#[export]
+Instance dummy_BalCodeChangeEntry : Inhabited (BalCodeChangeEntry) := {
+  inhabitant := {|
+    BalCodeChangeEntry_index := inhabitant;
+    BalCodeChangeEntry_code_hash := inhabitant
+|} }.
+
+
 Inductive EnvField :=
   | F_Number
   | F_Timestamp
@@ -5103,156 +5267,6 @@ Instance dummy_TriePath : Inhabited (TriePath) := {
 |} }.
 
 
-Definition BranchChildren : Type := vec RlpFieldRef 16.
-
-Definition nibble : Type := bits 4.
-
-Record BranchNodeData := {
-  BranchNodeData_children : BranchChildren;
-  BranchNodeData_value : RlpFieldRef;
-}.
-Arguments BranchNodeData : clear implicits.
-#[export]
-Instance Decidable_eq_BranchNodeData : EqDecision BranchNodeData.
-   intros [x0 x1].
-   intros [y0 y1].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_BranchNodeData : Countable BranchNodeData.
-refine {|
-  encode x := encode (BranchNodeData_children x, BranchNodeData_value x);
-  decode x := '(x0, x1) ← decode x;
-              mret (Build_BranchNodeData x0 x1)
-|}.
-abstract (
-  intros [x0 x1];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'BranchNodeData_children' := e ]}" :=
-  match r with Build_BranchNodeData _ (_ as f1) => Build_BranchNodeData e f1 end (at level 1).
-Notation "{[ r 'with' 'BranchNodeData_value' := e ]}" :=
-  match r with Build_BranchNodeData (_ as f0) _ => Build_BranchNodeData f0 e end (at level 1).
-#[export]
-Instance dummy_BranchNodeData : Inhabited (BranchNodeData) := {
-  inhabitant := {| BranchNodeData_children := inhabitant; BranchNodeData_value := inhabitant
-|} }.
-
-
-Record ExtensionNodeData := {
-  ExtensionNodeData_path : TriePath;
-  ExtensionNodeData_child : RlpFieldRef;
-}.
-Arguments ExtensionNodeData : clear implicits.
-#[export]
-Instance Decidable_eq_ExtensionNodeData : EqDecision ExtensionNodeData.
-   intros [x0 x1].
-   intros [y0 y1].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_ExtensionNodeData : Countable ExtensionNodeData.
-refine {|
-  encode x := encode (ExtensionNodeData_path x, ExtensionNodeData_child x);
-  decode x := '(x0, x1) ← decode x;
-              mret (Build_ExtensionNodeData x0 x1)
-|}.
-abstract (
-  intros [x0 x1];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'ExtensionNodeData_path' := e ]}" :=
-  match r with Build_ExtensionNodeData _ (_ as f1) => Build_ExtensionNodeData e f1 end (at level 1).
-Notation "{[ r 'with' 'ExtensionNodeData_child' := e ]}" :=
-  match r with Build_ExtensionNodeData (_ as f0) _ => Build_ExtensionNodeData f0 e end (at level 1).
-#[export]
-Instance dummy_ExtensionNodeData : Inhabited (ExtensionNodeData) := {
-  inhabitant := {| ExtensionNodeData_path := inhabitant; ExtensionNodeData_child := inhabitant
-|} }.
-
-
-Record LeafNodeData := {
-  LeafNodeData_path : TriePath;
-  LeafNodeData_value : RlpFieldRef;
-}.
-Arguments LeafNodeData : clear implicits.
-#[export]
-Instance Decidable_eq_LeafNodeData : EqDecision LeafNodeData.
-   intros [x0 x1].
-   intros [y0 y1].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_LeafNodeData : Countable LeafNodeData.
-refine {|
-  encode x := encode (LeafNodeData_path x, LeafNodeData_value x);
-  decode x := '(x0, x1) ← decode x;
-              mret (Build_LeafNodeData x0 x1)
-|}.
-abstract (
-  intros [x0 x1];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'LeafNodeData_path' := e ]}" :=
-  match r with Build_LeafNodeData _ (_ as f1) => Build_LeafNodeData e f1 end (at level 1).
-Notation "{[ r 'with' 'LeafNodeData_value' := e ]}" :=
-  match r with Build_LeafNodeData (_ as f0) _ => Build_LeafNodeData f0 e end (at level 1).
-#[export]
-Instance dummy_LeafNodeData : Inhabited (LeafNodeData) := {
-  inhabitant := {| LeafNodeData_path := inhabitant; LeafNodeData_value := inhabitant
-|} }.
-
-
-Inductive TrieNode :=
-| LeafNode : LeafNodeData -> TrieNode
-| ExtensionNode : ExtensionNodeData -> TrieNode
-| BranchNode : BranchNodeData -> TrieNode
-| InvalidNode : unit -> TrieNode.
-Arguments TrieNode : clear implicits.
-
-Definition sail_TrieNode_encode (x : TrieNode) := match x with
-  | LeafNode x' => encode (0, encode x')
-  | ExtensionNode x' => encode (1, encode x')
-  | BranchNode x' => encode (2, encode x')
-  | InvalidNode x' => encode (3, encode x') end.
-Definition sail_TrieNode_decode x : option TrieNode := match decode x with
-  | Some (0, x') => LeafNode <$> decode x'
-  | Some (1, x') => ExtensionNode <$> decode x'
-  | Some (2, x') => BranchNode <$> decode x'
-  | Some (3, x') => InvalidNode <$> decode x'
-  | _ => None end.
-Lemma sail_TrieNode_decode_encode : forall (x : TrieNode), sail_TrieNode_decode
-  (sail_TrieNode_encode x)  = Some x.
-Proof.
-  unfold sail_TrieNode_decode, sail_TrieNode_encode;
-  intros [x|x|x|x]; rewrite !decode_encode; reflexivity.
-Qed.
-
-#[export]
-Instance Decidable_eq_TrieNode : EqDecision TrieNode := decode_encode_eq_dec sail_TrieNode_encode
-  sail_TrieNode_decode sail_TrieNode_decode_encode .
-
-#[export]
-Instance Countable_TrieNode : Countable TrieNode := {|
-  encode := sail_TrieNode_encode;
-  decode := sail_TrieNode_decode;
-  decode_encode := sail_TrieNode_decode_encode
-|}.
-#[export]
-Instance dummy_TrieNode : Inhabited (TrieNode) := { inhabitant := LeafNode inhabitant }.
-
 Record InlineNode := {
   InlineNode_data : b256;
   InlineNode_len : Z;
@@ -5323,6 +5337,45 @@ Instance Countable_NodeRef : Countable NodeRef := {|
 |}.
 #[export]
 Instance dummy_NodeRef : Inhabited (NodeRef) := { inhabitant := EmptyRef inhabitant }.
+
+Definition BranchRefs : Type := vec NodeRef 16.
+
+Definition nibble : Type := bits 4.
+
+Inductive TrieNode :=
+| LeafNode : (TriePath * ByteSlice) -> TrieNode
+| ExtensionNode : (TriePath * NodeRef) -> TrieNode
+| BranchNode : (BranchRefs * ByteSlice) -> TrieNode.
+Arguments TrieNode : clear implicits.
+
+Definition sail_TrieNode_encode (x : TrieNode) := match x with
+  | LeafNode x' => encode (0, encode x')
+  | ExtensionNode x' => encode (1, encode x')
+  | BranchNode x' => encode (2, encode x') end.
+Definition sail_TrieNode_decode x : option TrieNode := match decode x with
+  | Some (0, x') => LeafNode <$> decode x'
+  | Some (1, x') => ExtensionNode <$> decode x'
+  | Some (2, x') => BranchNode <$> decode x'
+  | _ => None end.
+Lemma sail_TrieNode_decode_encode : forall (x : TrieNode), sail_TrieNode_decode
+  (sail_TrieNode_encode x)  = Some x.
+Proof.
+  unfold sail_TrieNode_decode, sail_TrieNode_encode;
+  intros [x|x|x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_TrieNode : EqDecision TrieNode := decode_encode_eq_dec sail_TrieNode_encode
+  sail_TrieNode_decode sail_TrieNode_decode_encode .
+
+#[export]
+Instance Countable_TrieNode : Countable TrieNode := {|
+  encode := sail_TrieNode_encode;
+  decode := sail_TrieNode_decode;
+  decode_encode := sail_TrieNode_decode_encode
+|}.
+#[export]
+Instance dummy_TrieNode : Inhabited (TrieNode) := { inhabitant := LeafNode inhabitant }.
 
 Record b256_index := { b256_index_value : Z; }.
 Arguments b256_index : clear implicits.
@@ -6303,8 +6356,6 @@ Instance dummy_hex_prefix_cursor : Inhabited (hex_prefix_cursor) := {
 
 Definition hex_prefix_cursor_valid (x : hex_prefix_cursor) : Prop :=
 0 <= x.(hex_prefix_cursor_value) /\ x.(hex_prefix_cursor_value) <= 65.
-
-Definition BranchRefs : Type := vec NodeRef 16.
 
 Record branch_content_length := { branch_content_length_value : Z; }.
 Arguments branch_content_length : clear implicits.
@@ -7339,223 +7390,6 @@ Instance dummy_ReceiptAccumulator : Inhabited (ReceiptAccumulator) := {
 |} }.
 
 
-Record EncodedBlockAccessList := {
-  EncodedBlockAccessList_bytes : ByteSlice;
-  EncodedBlockAccessList_item_count : item_count_typ;
-}.
-Arguments EncodedBlockAccessList : clear implicits.
-#[export]
-Instance Decidable_eq_EncodedBlockAccessList : EqDecision EncodedBlockAccessList.
-   intros [x0 x1].
-   intros [y0 y1].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_EncodedBlockAccessList : Countable EncodedBlockAccessList.
-refine {|
-  encode x := encode (EncodedBlockAccessList_bytes x, EncodedBlockAccessList_item_count x);
-  decode x := '(x0, x1) ← decode x;
-              mret (Build_EncodedBlockAccessList x0 x1)
-|}.
-abstract (
-  intros [x0 x1];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'EncodedBlockAccessList_bytes' := e ]}" :=
-  match r with Build_EncodedBlockAccessList _ (_ as f1) =>
-    Build_EncodedBlockAccessList e f1 end (at level 1).
-Notation "{[ r 'with' 'EncodedBlockAccessList_item_count' := e ]}" :=
-  match r with Build_EncodedBlockAccessList (_ as f0) _ =>
-    Build_EncodedBlockAccessList f0 e end (at level 1).
-#[export]
-Instance dummy_EncodedBlockAccessList : Inhabited (EncodedBlockAccessList) := {
-  inhabitant := {|
-    EncodedBlockAccessList_bytes := inhabitant;
-    EncodedBlockAccessList_item_count := inhabitant
-|} }.
-
-
-Record bal_rlp_length := { bal_rlp_length_value : Z; }.
-Arguments bal_rlp_length : clear implicits.
-#[export]
-Instance Decidable_eq_bal_rlp_length : EqDecision bal_rlp_length.
-   intros [x0].
-   intros [y0].
-  cmp_record_field x0 y0.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_bal_rlp_length : Countable bal_rlp_length.
-refine {|
-  encode x := encode (bal_rlp_length_value x);
-  decode x := '(x0) ← decode x;
-              mret (Build_bal_rlp_length x0)
-|}.
-abstract (
-  intros [x0];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'bal_rlp_length_value' := e ]}" :=
-  {| bal_rlp_length_value := e |} (at level 1, only parsing).
-#[export]
-Instance dummy_bal_rlp_length : Inhabited (bal_rlp_length) := {
-  inhabitant := {| bal_rlp_length_value := inhabitant
-|} }.
-
-
-Definition bal_rlp_length_valid (x : bal_rlp_length) : Prop :=
-0 <= x.(bal_rlp_length_value) /\ x.(bal_rlp_length_value) <= (2 ^ 30).
-
-Record BalContentCursor := {
-  BalContentCursor_content_len : bal_rlp_length;
-  BalContentCursor_cursor : item_index;
-}.
-Arguments BalContentCursor : clear implicits.
-#[export]
-Instance Decidable_eq_BalContentCursor : EqDecision BalContentCursor.
-   intros [x0 x1].
-   intros [y0 y1].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_BalContentCursor : Countable BalContentCursor.
-refine {|
-  encode x := encode (BalContentCursor_content_len x, BalContentCursor_cursor x);
-  decode x := '(x0, x1) ← decode x;
-              mret (Build_BalContentCursor x0 x1)
-|}.
-abstract (
-  intros [x0 x1];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'BalContentCursor_content_len' := e ]}" :=
-  match r with Build_BalContentCursor _ (_ as f1) => Build_BalContentCursor e f1 end (at level 1).
-Notation "{[ r 'with' 'BalContentCursor_cursor' := e ]}" :=
-  match r with Build_BalContentCursor (_ as f0) _ => Build_BalContentCursor f0 e end (at level 1).
-#[export]
-Instance dummy_BalContentCursor : Inhabited (BalContentCursor) := {
-  inhabitant := {| BalContentCursor_content_len := inhabitant; BalContentCursor_cursor := inhabitant
-|} }.
-
-
-Record BalContentCount := {
-  BalContentCount_content_len : bal_rlp_length;
-  BalContentCount_count : item_count_typ;
-}.
-Arguments BalContentCount : clear implicits.
-#[export]
-Instance Decidable_eq_BalContentCount : EqDecision BalContentCount.
-   intros [x0 x1].
-   intros [y0 y1].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_BalContentCount : Countable BalContentCount.
-refine {|
-  encode x := encode (BalContentCount_content_len x, BalContentCount_count x);
-  decode x := '(x0, x1) ← decode x;
-              mret (Build_BalContentCount x0 x1)
-|}.
-abstract (
-  intros [x0 x1];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'BalContentCount_content_len' := e ]}" :=
-  match r with Build_BalContentCount _ (_ as f1) => Build_BalContentCount e f1 end (at level 1).
-Notation "{[ r 'with' 'BalContentCount_count' := e ]}" :=
-  match r with Build_BalContentCount (_ as f0) _ => Build_BalContentCount f0 e end (at level 1).
-#[export]
-Instance dummy_BalContentCount : Inhabited (BalContentCount) := {
-  inhabitant := {| BalContentCount_content_len := inhabitant; BalContentCount_count := inhabitant
-|} }.
-
-
-Record BalAccountSize := {
-  BalAccountSize_encoded_len : bal_rlp_length;
-  BalAccountSize_item_count : item_count_typ;
-}.
-Arguments BalAccountSize : clear implicits.
-#[export]
-Instance Decidable_eq_BalAccountSize : EqDecision BalAccountSize.
-   intros [x0 x1].
-   intros [y0 y1].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_BalAccountSize : Countable BalAccountSize.
-refine {|
-  encode x := encode (BalAccountSize_encoded_len x, BalAccountSize_item_count x);
-  decode x := '(x0, x1) ← decode x;
-              mret (Build_BalAccountSize x0 x1)
-|}.
-abstract (
-  intros [x0 x1];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'BalAccountSize_encoded_len' := e ]}" :=
-  match r with Build_BalAccountSize _ (_ as f1) => Build_BalAccountSize e f1 end (at level 1).
-Notation "{[ r 'with' 'BalAccountSize_item_count' := e ]}" :=
-  match r with Build_BalAccountSize (_ as f0) _ => Build_BalAccountSize f0 e end (at level 1).
-#[export]
-Instance dummy_BalAccountSize : Inhabited (BalAccountSize) := {
-  inhabitant := {| BalAccountSize_encoded_len := inhabitant; BalAccountSize_item_count := inhabitant
-|} }.
-
-
-Record BalNonceRun := {
-  BalNonceRun_cursor : item_index;
-  BalNonceRun_maximum : account_nonce;
-}.
-Arguments BalNonceRun : clear implicits.
-#[export]
-Instance Decidable_eq_BalNonceRun : EqDecision BalNonceRun.
-   intros [x0 x1].
-   intros [y0 y1].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_BalNonceRun : Countable BalNonceRun.
-refine {|
-  encode x := encode (BalNonceRun_cursor x, BalNonceRun_maximum x);
-  decode x := '(x0, x1) ← decode x;
-              mret (Build_BalNonceRun x0 x1)
-|}.
-abstract (
-  intros [x0 x1];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'BalNonceRun_cursor' := e ]}" :=
-  match r with Build_BalNonceRun _ (_ as f1) => Build_BalNonceRun e f1 end (at level 1).
-Notation "{[ r 'with' 'BalNonceRun_maximum' := e ]}" :=
-  match r with Build_BalNonceRun (_ as f0) _ => Build_BalNonceRun f0 e end (at level 1).
-#[export]
-Instance dummy_BalNonceRun : Inhabited (BalNonceRun) := {
-  inhabitant := {| BalNonceRun_cursor := inhabitant; BalNonceRun_maximum := inhabitant
-|} }.
-
-
 Record BlockExecutionResult := {
   BlockExecutionResult_header_gas_used : gas;
   BlockExecutionResult_execution_gas_used : gas;
@@ -8184,61 +8018,6 @@ Instance Countable_register_Fork : Countable register_Fork. refine {|
   reflexivity.
 Defined.
 
-Variant register_FrameStack :=
-  | frame_stack
-.
-
-Definition num_of_register_FrameStack (r : register_FrameStack) : Z :=
-  match r with
-  | frame_stack => 0
-  end.
-Definition register_FrameStack_of_num (i : Z) : register_FrameStack :=
-  match i with
-  | 0 => frame_stack
-  | _ => frame_stack
-  end.
-Lemma register_FrameStack_num_of_roundtrip (x : register_FrameStack) : register_FrameStack_of_num (num_of_register_FrameStack x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_FrameStack_injective (x y : register_FrameStack) : num_of_register_FrameStack x = num_of_register_FrameStack y -> x = y.
-  intro.
-  rewrite <- (register_FrameStack_num_of_roundtrip x).
-  rewrite <- (register_FrameStack_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_FrameStack_eq_dec (x y : register_FrameStack) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_FrameStack x) (num_of_register_FrameStack y) with
-  | left e => left (num_of_register_FrameStack_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_FrameStack_beq (x y : register_FrameStack) : bool :=
-  Z.eqb (num_of_register_FrameStack x) (num_of_register_FrameStack y).
-Lemma register_FrameStack_beq_iff x y : register_FrameStack_beq x y = true <-> x = y.
-  unfold register_FrameStack_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_FrameStack_injective | congruence].
-Qed.
-Lemma register_FrameStack_beq_refl x : register_FrameStack_beq x x = true.
-apply register_FrameStack_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_FrameStack_beq_iff : register_beq_iffs.
-Hint Rewrite register_FrameStack_beq_refl : register_beq_refls.
-Definition register_FrameStack_list : list (string * register_FrameStack) := [
-  ("frame_stack", frame_stack)
-].
-
-Instance Decidable_eq_register_FrameStack : EqDecision register_FrameStack := register_FrameStack_eq_dec.
-Instance Countable_register_FrameStack : Countable register_FrameStack. refine {|
-  encode x := encode (num_of_register_FrameStack x);
-  decode x := register_FrameStack_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_FrameStack_num_of_roundtrip.
-  reflexivity.
-Defined.
-
 Variant register_FrameStatus :=
   | frame_status
 .
@@ -8404,6 +8183,61 @@ Instance Countable_register_TxEnv : Countable register_TxEnv. refine {|
   reflexivity.
 Defined.
 
+Variant register_block_access_index :=
+  | k_block_access_index
+.
+
+Definition num_of_register_block_access_index (r : register_block_access_index) : Z :=
+  match r with
+  | k_block_access_index => 0
+  end.
+Definition register_block_access_index_of_num (i : Z) : register_block_access_index :=
+  match i with
+  | 0 => k_block_access_index
+  | _ => k_block_access_index
+  end.
+Lemma register_block_access_index_num_of_roundtrip (x : register_block_access_index) : register_block_access_index_of_num (num_of_register_block_access_index x) = x.
+  destruct x; reflexivity.
+Qed.
+Lemma num_of_register_block_access_index_injective (x y : register_block_access_index) : num_of_register_block_access_index x = num_of_register_block_access_index y -> x = y.
+  intro.
+  rewrite <- (register_block_access_index_num_of_roundtrip x).
+  rewrite <- (register_block_access_index_num_of_roundtrip y).
+  congruence.
+Qed.
+Definition register_block_access_index_eq_dec (x y : register_block_access_index) : {x = y} + {x <> y}.
+  refine (match Z.eq_dec (num_of_register_block_access_index x) (num_of_register_block_access_index y) with
+  | left e => left (num_of_register_block_access_index_injective x y e)
+  | right ne => right _
+  end).
+  congruence.
+Defined.
+Definition register_block_access_index_beq (x y : register_block_access_index) : bool :=
+  Z.eqb (num_of_register_block_access_index x) (num_of_register_block_access_index y).
+Lemma register_block_access_index_beq_iff x y : register_block_access_index_beq x y = true <-> x = y.
+  unfold register_block_access_index_beq.
+  rewrite Z.eqb_eq.
+  split; [apply num_of_register_block_access_index_injective | congruence].
+Qed.
+Lemma register_block_access_index_beq_refl x : register_block_access_index_beq x x = true.
+apply register_block_access_index_beq_iff; reflexivity.
+Qed.
+Hint Rewrite register_block_access_index_beq_iff : register_beq_iffs.
+Hint Rewrite register_block_access_index_beq_refl : register_beq_refls.
+Definition register_block_access_index_list : list (string * register_block_access_index) := [
+  ("k_block_access_index", k_block_access_index)
+].
+
+Instance Decidable_eq_register_block_access_index : EqDecision register_block_access_index := register_block_access_index_eq_dec.
+Instance Countable_register_block_access_index : Countable register_block_access_index. refine {|
+  encode x := encode (num_of_register_block_access_index x);
+  decode x := register_block_access_index_of_num <$> decode x
+|}.
+  intro s; rewrite decode_encode; simpl.
+  rewrite register_block_access_index_num_of_roundtrip.
+  reflexivity.
+Defined.
+
 Variant register_chain_identifier :=
   | k_chain_id
 .
@@ -8516,18 +8350,15 @@ Defined.
 
 Variant register_frame_depth :=
   | call_depth
-  | frame_stack_top
 .
 
 Definition num_of_register_frame_depth (r : register_frame_depth) : Z :=
   match r with
   | call_depth => 0
-  | frame_stack_top => 1
   end.
 Definition register_frame_depth_of_num (i : Z) : register_frame_depth :=
   match i with
   | 0 => call_depth
-  | 1 => frame_stack_top
   | _ => call_depth
   end.
 Lemma register_frame_depth_num_of_roundtrip (x : register_frame_depth) : register_frame_depth_of_num (num_of_register_frame_depth x) = x.
@@ -8559,8 +8390,7 @@ Qed.
 Hint Rewrite register_frame_depth_beq_iff : register_beq_iffs.
 Hint Rewrite register_frame_depth_beq_refl : register_beq_refls.
 Definition register_frame_depth_list : list (string * register_frame_depth) := [
-  ("call_depth", call_depth);
-  ("frame_stack_top", frame_stack_top)
+  ("call_depth", call_depth)
 ].
 
 Instance Decidable_eq_register_frame_depth : EqDecision register_frame_depth := register_frame_depth_eq_dec.
@@ -8859,10 +8689,10 @@ Variant register : Type :=
   | R_ByteSlice :> register_ByteSlice -> register
   | R_Code :> register_Code -> register
   | R_Fork :> register_Fork -> register
-  | R_FrameStack :> register_FrameStack -> register
   | R_FrameStatus :> register_FrameStatus -> register
   | R_Message :> register_Message -> register
   | R_TxEnv :> register_TxEnv -> register
+  | R_block_access_index :> register_block_access_index -> register
   | R_chain_identifier :> register_chain_identifier -> register
   | R_code_pointer :> register_code_pointer -> register
   | R_frame_depth :> register_frame_depth -> register
@@ -8880,17 +8710,17 @@ Definition type_of_register (r : register) : Type :=
   | R_ByteSlice _ => ByteSlice
   | R_Code _ => Code
   | R_Fork _ => Fork
-  | R_FrameStack _ => FrameStack
   | R_FrameStatus _ => FrameStatus
   | R_Message _ => Message
   | R_TxEnv _ => TxEnv
+  | R_block_access_index _ => block_access_index
   | R_chain_identifier _ => chain_identifier
   | R_code_pointer _ => code_pointer
   | R_frame_depth _ => frame_depth
   | R_gas _ => gas
   | R_gas_refund _ => gas_refund
   | R_hash _ => hash
-  | R_item_count _ => item_count_typ
+  | R_item_count _ => item_count
   | R_state_gas_spill _ => state_gas_spill
   end.
 
@@ -8901,10 +8731,10 @@ Definition type_of_register (r : register) : Type :=
     | R_ByteSlice r => encode (2, encode r)
     | R_Code r => encode (3, encode r)
     | R_Fork r => encode (4, encode r)
-    | R_FrameStack r => encode (5, encode r)
-    | R_FrameStatus r => encode (6, encode r)
-    | R_Message r => encode (7, encode r)
-    | R_TxEnv r => encode (8, encode r)
+    | R_FrameStatus r => encode (5, encode r)
+    | R_Message r => encode (6, encode r)
+    | R_TxEnv r => encode (7, encode r)
+    | R_block_access_index r => encode (8, encode r)
     | R_chain_identifier r => encode (9, encode r)
     | R_code_pointer r => encode (10, encode r)
     | R_frame_depth r => encode (11, encode r)
@@ -8921,10 +8751,10 @@ Definition type_of_register (r : register) : Type :=
     | Some (2, y) => r ← decode y; mret (R_ByteSlice r)
     | Some (3, y) => r ← decode y; mret (R_Code r)
     | Some (4, y) => r ← decode y; mret (R_Fork r)
-    | Some (5, y) => r ← decode y; mret (R_FrameStack r)
-    | Some (6, y) => r ← decode y; mret (R_FrameStatus r)
-    | Some (7, y) => r ← decode y; mret (R_Message r)
-    | Some (8, y) => r ← decode y; mret (R_TxEnv r)
+    | Some (5, y) => r ← decode y; mret (R_FrameStatus r)
+    | Some (6, y) => r ← decode y; mret (R_Message r)
+    | Some (7, y) => r ← decode y; mret (R_TxEnv r)
+    | Some (8, y) => r ← decode y; mret (R_block_access_index r)
     | Some (9, y) => r ← decode y; mret (R_chain_identifier r)
     | Some (10, y) => r ← decode y; mret (R_code_pointer r)
     | Some (11, y) => r ← decode y; mret (R_frame_depth r)
@@ -8971,10 +8801,10 @@ refine (
   | R_ByteSlice r, R_ByteSlice r' => fun _ x => x
   | R_Code r, R_Code r' => fun _ x => x
   | R_Fork r, R_Fork r' => fun _ x => x
-  | R_FrameStack r, R_FrameStack r' => fun _ x => x
   | R_FrameStatus r, R_FrameStatus r' => fun _ x => x
   | R_Message r, R_Message r' => fun _ x => x
   | R_TxEnv r, R_TxEnv r' => fun _ x => x
+  | R_block_access_index r, R_block_access_index r' => fun _ x => x
   | R_chain_identifier r, R_chain_identifier r' => fun _ x => x
   | R_code_pointer r, R_code_pointer r' => fun _ x => x
   | R_frame_depth r, R_frame_depth r' => fun _ x => x
@@ -9005,10 +8835,10 @@ Definition register_beq (r r' : register) : bool :=
   | R_ByteSlice r, R_ByteSlice r' => register_ByteSlice_beq r r'
   | R_Code r, R_Code r' => register_Code_beq r r'
   | R_Fork r, R_Fork r' => register_Fork_beq r r'
-  | R_FrameStack r, R_FrameStack r' => register_FrameStack_beq r r'
   | R_FrameStatus r, R_FrameStatus r' => register_FrameStatus_beq r r'
   | R_Message r, R_Message r' => register_Message_beq r r'
   | R_TxEnv r, R_TxEnv r' => register_TxEnv_beq r r'
+  | R_block_access_index r, R_block_access_index r' => register_block_access_index_beq r r'
   | R_chain_identifier r, R_chain_identifier r' => register_chain_identifier_beq r r'
   | R_code_pointer r, R_code_pointer r' => register_code_pointer_beq r r'
   | R_frame_depth r, R_frame_depth r' => register_frame_depth_beq r r'
@@ -9031,10 +8861,10 @@ Definition register_eq_cast (P : Type -> Type) (r r' : register) : P (type_of_re
   | R_ByteSlice r, R_ByteSlice r' => fun p => if register_ByteSlice_beq r r' then Some p else None
   | R_Code r, R_Code r' => fun p => if register_Code_beq r r' then Some p else None
   | R_Fork r, R_Fork r' => fun p => if register_Fork_beq r r' then Some p else None
-  | R_FrameStack r, R_FrameStack r' => fun p => if register_FrameStack_beq r r' then Some p else None
   | R_FrameStatus r, R_FrameStatus r' => fun p => if register_FrameStatus_beq r r' then Some p else None
   | R_Message r, R_Message r' => fun p => if register_Message_beq r r' then Some p else None
   | R_TxEnv r, R_TxEnv r' => fun p => if register_TxEnv_beq r r' then Some p else None
+  | R_block_access_index r, R_block_access_index r' => fun p => if register_block_access_index_beq r r' then Some p else None
   | R_chain_identifier r, R_chain_identifier r' => fun p => if register_chain_identifier_beq r r' then Some p else None
   | R_code_pointer r, R_code_pointer r' => fun p => if register_code_pointer_beq r r' then Some p else None
   | R_frame_depth r, R_frame_depth r' => fun p => if register_frame_depth_beq r r' then Some p else None
@@ -9052,10 +8882,10 @@ Definition register_list : list (string * register) := List.concat [
   List.map (fun '(s, r) => (s, R_ByteSlice r)) register_ByteSlice_list;
   List.map (fun '(s, r) => (s, R_Code r)) register_Code_list;
   List.map (fun '(s, r) => (s, R_Fork r)) register_Fork_list;
-  List.map (fun '(s, r) => (s, R_FrameStack r)) register_FrameStack_list;
   List.map (fun '(s, r) => (s, R_FrameStatus r)) register_FrameStatus_list;
   List.map (fun '(s, r) => (s, R_Message r)) register_Message_list;
   List.map (fun '(s, r) => (s, R_TxEnv r)) register_TxEnv_list;
+  List.map (fun '(s, r) => (s, R_block_access_index r)) register_block_access_index_list;
   List.map (fun '(s, r) => (s, R_chain_identifier r)) register_chain_identifier_list;
   List.map (fun '(s, r) => (s, R_code_pointer r)) register_code_pointer_list;
   List.map (fun '(s, r) => (s, R_frame_depth r)) register_frame_depth_list;
@@ -9103,10 +8933,10 @@ match r with
   | R_ByteSlice _ => _
   | R_Code _ => _
   | R_Fork _ => _
-  | R_FrameStack _ => _
   | R_FrameStatus _ => _
   | R_Message _ => _
   | R_TxEnv _ => _
+  | R_block_access_index _ => _
   | R_chain_identifier _ => _
   | R_code_pointer _ => _
   | R_frame_depth _ => _
@@ -9123,10 +8953,10 @@ end.
   | R_ByteSlice _ => _
   | R_Code _ => _
   | R_Fork _ => _
-  | R_FrameStack _ => _
   | R_FrameStatus _ => _
   | R_Message _ => _
   | R_TxEnv _ => _
+  | R_block_access_index _ => _
   | R_chain_identifier _ => _
   | R_code_pointer _ => _
   | R_frame_depth _ => _
@@ -9144,10 +8974,10 @@ refine {|
   | R_ByteSlice _ => encode
   | R_Code _ => encode
   | R_Fork _ => encode
-  | R_FrameStack _ => encode
   | R_FrameStatus _ => encode
   | R_Message _ => encode
   | R_TxEnv _ => encode
+  | R_block_access_index _ => encode
   | R_chain_identifier _ => encode
   | R_code_pointer _ => encode
   | R_frame_depth _ => encode
@@ -9163,10 +8993,10 @@ refine {|
   | R_ByteSlice _ => decode
   | R_Code _ => decode
   | R_Fork _ => decode
-  | R_FrameStack _ => decode
   | R_FrameStatus _ => decode
   | R_Message _ => decode
   | R_TxEnv _ => decode
+  | R_block_access_index _ => decode
   | R_chain_identifier _ => decode
   | R_code_pointer _ => decode
   | R_frame_depth _ => decode
@@ -9206,10 +9036,6 @@ Definition k_fork_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_fork" k_fork (fun x => x) (fun x => x).
 Instance dummy_register_Fork : Inhabited (register_ref _) := populate k_fork_ref.
 
-Definition frame_stack_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "frame_stack" frame_stack (fun x => x) (fun x => x).
-Instance dummy_register_FrameStack : Inhabited (register_ref _) := populate frame_stack_ref.
-
 Definition frame_status_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "frame_status" frame_status (fun x => x) (fun x => x).
 Instance dummy_register_FrameStatus : Inhabited (register_ref _) := populate frame_status_ref.
@@ -9222,6 +9048,10 @@ Definition k_tx_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_tx" k_tx (fun x => x) (fun x => x).
 Instance dummy_register_TxEnv : Inhabited (register_ref _) := populate k_tx_ref.
 
+Definition k_block_access_index_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "k_block_access_index" k_block_access_index (fun x => x) (fun x => x).
+Instance dummy_register_block_access_index : Inhabited (register_ref _) := populate k_block_access_index_ref.
+
 Definition k_chain_id_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_chain_id" k_chain_id (fun x => x) (fun x => x).
 Instance dummy_register_chain_identifier : Inhabited (register_ref _) := populate k_chain_id_ref.
@@ -9232,8 +9062,6 @@ Instance dummy_register_code_pointer : Inhabited (register_ref _) := populate pc
 
 Definition call_depth_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "call_depth" call_depth (fun x => x) (fun x => x).
-Definition frame_stack_top_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "frame_stack_top" frame_stack_top (fun x => x) (fun x => x).
 Instance dummy_register_frame_depth : Inhabited (register_ref _) := populate call_depth_ref.
 
 Definition gas_remaining_ref : register_ref _ :=
@@ -9266,17 +9094,17 @@ Record regstate := {
   ByteSlice_s : register_ByteSlice -> ByteSlice;
   Code_s : register_Code -> Code;
   Fork_s : register_Fork -> Fork;
-  FrameStack_s : register_FrameStack -> FrameStack;
   FrameStatus_s : register_FrameStatus -> FrameStatus;
   Message_s : register_Message -> Message;
   TxEnv_s : register_TxEnv -> TxEnv;
+  block_access_index_s : register_block_access_index -> block_access_index;
   chain_identifier_s : register_chain_identifier -> chain_identifier;
   code_pointer_s : register_code_pointer -> code_pointer;
   frame_depth_s : register_frame_depth -> frame_depth;
   gas_s : register_gas -> gas;
   gas_refund_s : register_gas_refund -> gas_refund;
   hash_s : register_hash -> hash;
-  item_count_s : register_item_count -> item_count_typ;
+  item_count_s : register_item_count -> item_count;
   state_gas_spill_s : register_state_gas_spill -> state_gas_spill;
 }.
 Notation "{[ r 'with' 'BlobSchedule_s' := e ]}" :=
@@ -9294,16 +9122,16 @@ Notation "{[ r 'with' 'Code_s' := e ]}" :=
 Notation "{[ r 'with' 'Fork_s' := e ]}" :=
   match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) =>
     Build_regstate f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 end (at level 1).
-Notation "{[ r 'with' 'FrameStack_s' := e ]}" :=
+Notation "{[ r 'with' 'FrameStatus_s' := e ]}" :=
   match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) =>
     Build_regstate f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 end (at level 1).
-Notation "{[ r 'with' 'FrameStatus_s' := e ]}" :=
+Notation "{[ r 'with' 'Message_s' := e ]}" :=
   match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) =>
     Build_regstate f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 end (at level 1).
-Notation "{[ r 'with' 'Message_s' := e ]}" :=
+Notation "{[ r 'with' 'TxEnv_s' := e ]}" :=
   match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) =>
     Build_regstate f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 f12 f13 f14 f15 f16 end (at level 1).
-Notation "{[ r 'with' 'TxEnv_s' := e ]}" :=
+Notation "{[ r 'with' 'block_access_index_s' := e ]}" :=
   match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) =>
     Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 f12 f13 f14 f15 f16 end (at level 1).
 Notation "{[ r 'with' 'chain_identifier_s' := e ]}" :=
@@ -9358,10 +9186,10 @@ Definition register_lookup (reg : register) (rs : regstate) : type_of_register r
   | R_ByteSlice r => rs.(ByteSlice_s) r
   | R_Code r => rs.(Code_s) r
   | R_Fork r => rs.(Fork_s) r
-  | R_FrameStack r => rs.(FrameStack_s) r
   | R_FrameStatus r => rs.(FrameStatus_s) r
   | R_Message r => rs.(Message_s) r
   | R_TxEnv r => rs.(TxEnv_s) r
+  | R_block_access_index r => rs.(block_access_index_s) r
   | R_chain_identifier r => rs.(chain_identifier_s) r
   | R_code_pointer r => rs.(code_pointer_s) r
   | R_frame_depth r => rs.(frame_depth_s) r
@@ -9379,10 +9207,10 @@ Definition register_set (reg : register) : type_of_register reg -> regstate -> r
   | R_ByteSlice r => fun v rs => {[ rs with ByteSlice_s := fun r' => if register_ByteSlice_beq r' r then v else rs.(ByteSlice_s) r' ]}
   | R_Code r => fun v rs => {[ rs with Code_s := fun r' => if register_Code_beq r' r then v else rs.(Code_s) r' ]}
   | R_Fork r => fun v rs => {[ rs with Fork_s := fun r' => if register_Fork_beq r' r then v else rs.(Fork_s) r' ]}
-  | R_FrameStack r => fun v rs => {[ rs with FrameStack_s := fun r' => if register_FrameStack_beq r' r then v else rs.(FrameStack_s) r' ]}
   | R_FrameStatus r => fun v rs => {[ rs with FrameStatus_s := fun r' => if register_FrameStatus_beq r' r then v else rs.(FrameStatus_s) r' ]}
   | R_Message r => fun v rs => {[ rs with Message_s := fun r' => if register_Message_beq r' r then v else rs.(Message_s) r' ]}
   | R_TxEnv r => fun v rs => {[ rs with TxEnv_s := fun r' => if register_TxEnv_beq r' r then v else rs.(TxEnv_s) r' ]}
+  | R_block_access_index r => fun v rs => {[ rs with block_access_index_s := fun r' => if register_block_access_index_beq r' r then v else rs.(block_access_index_s) r' ]}
   | R_chain_identifier r => fun v rs => {[ rs with chain_identifier_s := fun r' => if register_chain_identifier_beq r' r then v else rs.(chain_identifier_s) r' ]}
   | R_code_pointer r => fun v rs => {[ rs with code_pointer_s := fun r' => if register_code_pointer_beq r' r then v else rs.(code_pointer_s) r' ]}
   | R_frame_depth r => fun v rs => {[ rs with frame_depth_s := fun r' => if register_frame_depth_beq r' r then v else rs.(frame_depth_s) r' ]}

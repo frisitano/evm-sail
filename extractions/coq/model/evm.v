@@ -653,18 +653,18 @@ Definition word_of_slot_number (value : slot_number_typ)
 
 Definition word_of_block_number (value : Z) (*0 <=? value*) : M (Z) :=
    (if Z.ltb (value) ((pow2 (256))) then returnM (value)
-    else assert_exp' false "sail/primitives/quantities.sail:191.20-191.21" >>= fun _ => exit tt)
+    else assert_exp' false "sail/primitives/quantities.sail:193.20-193.21" >>= fun _ => exit tt)
     : M (Z).
 
 Definition word_of_block_timestamp (value : Z) (*0 <=? value*) : M (Z) :=
    (if Z.ltb (value) ((pow2 (256))) then returnM (value)
-    else assert_exp' false "sail/primitives/quantities.sail:208.20-208.21" >>= fun _ => exit tt)
+    else assert_exp' false "sail/primitives/quantities.sail:210.20-210.21" >>= fun _ => exit tt)
     : M (Z).
 
-Definition word_of_chain_identifier (value : Z) (*0 <=? value*) : M (Z) :=
-   (if Z.ltb (value) ((pow2 (256))) then returnM (value)
-    else assert_exp' false "sail/primitives/quantities.sail:225.20-225.21" >>= fun _ => exit tt)
-    : M (Z).
+Definition word_of_chain_identifier (value : chain_identifier)
+(*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
+: chain_identifier :=
+   let value := (value).(chain_identifier_value) in (Build_chain_identifier (value)).
 
 Definition precompile_id_to_address (value : precompile_id) (*(1 <=? value) && (value <=? 256)*)
 : address_typ :=
@@ -677,7 +677,7 @@ Definition account_nonce_increment (value : account_nonce)
 (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
 : M (account_nonce) :=
    let value := (value).(account_nonce_value) in
-   (assert_exp' (Z.ltb (value) ((Z.sub ((pow2 (64))) (1)))) "sail/primitives/quantities.sail:241.46-241.47" >>= fun _ =>
+   (assert_exp' (Z.ltb (value) ((Z.sub ((pow2 (64))) (1)))) "sail/primitives/quantities.sail:229.46-229.47" >>= fun _ =>
     returnM ((Z.add (value) (1)))) >>= fun semanticResult =>
    returnM (Build_account_nonce (semanticResult)).
 
@@ -685,7 +685,7 @@ Definition frame_depth_increment (value : frame_depth) (*(0 <=? value) && (value
 : M (frame_depth) :=
    let value := (value).(frame_depth_value) in
    ((if Z.ltb (value) (1024) then returnM ((Z.add (value) (1)))
-     else assert_exp' false "sail/primitives/quantities.sail:250.20-250.21" >>= fun _ => exit tt)
+     else assert_exp' false "sail/primitives/quantities.sail:238.20-238.21" >>= fun _ => exit tt)
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_frame_depth (semanticResult)).
 
@@ -699,14 +699,14 @@ Definition transaction_blob_count_decrement (value : transaction_blob_count)
 Definition merkle_depth_increment (value : merkle_depth) (*(0 <=? value) && (value <=? 64)*)
 : M (merkle_depth) :=
    let value := (value).(merkle_depth_value) in
-   (assert_exp' (Z.ltb (value) (64)) "sail/primitives/quantities.sail:264.21-264.22" >>= fun _ =>
+   (assert_exp' (Z.ltb (value) (64)) "sail/primitives/quantities.sail:252.21-252.22" >>= fun _ =>
     returnM ((Z.add (value) (1)))) >>= fun semanticResult =>
    returnM (Build_merkle_depth (semanticResult)).
 
 Definition merkle_depth_decrement (value : merkle_depth) (*(0 <=? value) && (value <=? 64)*)
 : M (merkle_depth) :=
    let value := (value).(merkle_depth_value) in
-   (assert_exp' (Z.ltb (0) (value)) "sail/primitives/quantities.sail:270.20-270.21" >>= fun _ =>
+   (assert_exp' (Z.ltb (0) (value)) "sail/primitives/quantities.sail:258.20-258.21" >>= fun _ =>
     returnM ((Z.sub (value) (1)))) >>= fun semanticResult =>
    returnM (Build_merkle_depth (semanticResult)).
 
@@ -718,7 +718,7 @@ Definition EMPTY_MEMORY_RANGE : MemoryRangeFields 0 0 := memory_range (0) (0).
 #[export] Hint Unfold EMPTY_MEMORY_RANGE : sail.
 Definition word_of_nat_byte_count (value : Z) (*0 <=? value*) : M (word) :=
    ((if Z.ltb (value) ((pow2 (256))) then returnM (((U256 (value)).(word_value)))
-     else assert_exp' false "sail/primitives/quantities.sail:363.20-363.21" >>= fun _ => exit tt)
+     else assert_exp' false "sail/primitives/quantities.sail:351.20-351.21" >>= fun _ => exit tt)
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
@@ -757,6 +757,11 @@ Definition undefined_ByteSource '(tt : unit) : M (ByteSource) :=
       OutputSource;
       ScratchSource]))
     : M (ByteSource).
+
+Definition byte_slice_length {ex418121_ : Z} {ex418120_ : Z}
+(s : ByteSliceFields ex418120_ ex418121_) (*(0 <=? ex418120_) && (0 <=? ex418121_)*)
+: source_length :=
+   s.(ByteSliceFields_len).
 
 Definition ADDRESS_BYTE_LENGTH : Z := 20.
 #[export] Hint Unfold ADDRESS_BYTE_LENGTH : sail.
@@ -846,16 +851,17 @@ Definition EMPTY_JUMPDEST_REF : JumpdestRef := (Ox"0000000000000000").
 #[export] Hint Unfold EMPTY_JUMPDEST_REF : sail.
 Definition code_slice {off : Z} {len : Z} (bytes : ByteSliceFields off len)
 (*(0 <=? off) && (0 <=? len) && (0 <=? len)*)
-: ByteSliceFields off len :=
-   bytes.
-
-Definition validated_code_slice {ex412731_ : Z} {ex412730_ : Z}
-(bytes : ByteSliceFields ex412730_ ex412731_) (*(0 <=? ex412730_) && (0 <=? ex412731_)*)
 : CodeSlice :=
-   @existT _ _ _ (@existT _ _ _ (code_slice (bytes))).
+   @existT _ _ len (@existT _ _ off (bytes)).
 
-Definition EMPTY_CODE_SLICE : ByteSliceFields 0 0 :=
-code_slice ((byte_slice (StatelessInputSource) (0) (0))).
+Definition validated_code_slice {ex418252_ : Z} {ex418251_ : Z}
+(bytes : ByteSliceFields ex418251_ ex418252_) (*(0 <=? ex418251_) && (0 <=? ex418252_)*)
+: CodeSlice :=
+   code_slice (bytes).
+
+Definition EMPTY_CODE_SLICE :=
+(code_slice ((byte_slice (StatelessInputSource) (0) (0))))
+ : {len & {off & (ByteSliceFields off len)}}%type.
 #[export] Hint Unfold EMPTY_CODE_SLICE : sail.
 Definition deep_stack_immediate_valid (immediate : mword 8) : bool :=
    let value : Z := uint (immediate) in
@@ -866,7 +872,7 @@ Definition exchange_immediate_valid (immediate : mword 8) : bool :=
    orb ((Z.leb (value) (81))) ((Z.leb (128) (value))).
 
 Definition EMPTY_CODE : Code :=
-{| Code_bytes := @existT _ _ _ (@existT _ _ _ (EMPTY_CODE_SLICE));
+{| Code_bytes := EMPTY_CODE_SLICE;
    Code_jumpdests := EMPTY_JUMPDEST_REF |}.
 #[export] Hint Unfold EMPTY_CODE : sail.
 Definition word_to_bytes32 (value : word) (*(0 <=? value) && (value <=? (2 ^ 256 - 1))*) : list byte :=
@@ -903,117 +909,117 @@ Axiom accelerator_ripemd160 :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467756_) && (0 <=? ex467757_)*),
+  (*(0 <=? ex474187_) && (0 <=? ex474188_)*),
   M (bool).
 
 Axiom accelerator_modexp :
   forall
 
   (_ : ByteSlice) (_ : host_access) (_ : host_access) (_ : host_access)
-  (*(0 <=? ex467760_) && (0 <=? ex467761_)*) (*0 <=? ex467762_*) (*0 <=? ex467763_*) (*0 <=?
-    ex467764_*),
+  (*(0 <=? ex474191_) && (0 <=? ex474192_)*) (*0 <=? ex474193_*) (*0 <=? ex474194_*) (*0 <=?
+    ex474195_*),
   M (bool).
 
 Axiom accelerator_bn254_add :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467767_) && (0 <=? ex467768_)*),
+  (*(0 <=? ex474198_) && (0 <=? ex474199_)*),
   M (bool).
 
 Axiom accelerator_bn254_mul :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467771_) && (0 <=? ex467772_)*),
+  (*(0 <=? ex474202_) && (0 <=? ex474203_)*),
   M (bool).
 
 Axiom accelerator_bn254_pairing :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467776_) && (0 <=? ex467777_)*),
+  (*(0 <=? ex474207_) && (0 <=? ex474208_)*),
   M (bits 2).
 
 Axiom accelerator_blake2f :
   forall
 
   (_ : ByteSlice) (_ : blake2_rounds) (_ : y_parity)
-  (*(0 <=? ex467780_) && (0 <=? ex467781_)*) (*(0 <=? ex467782_) && (ex467782_ <=? (2 ^ 32 - 1))*) (*(0 <=?
-    ex467783_) &&
-    (ex467783_ <=? 1)*),
+  (*(0 <=? ex474211_) && (0 <=? ex474212_)*) (*(0 <=? ex474213_) && (ex474213_ <=? (2 ^ 32 - 1))*) (*(0 <=?
+    ex474214_) &&
+    (ex474214_ <=? 1)*),
   M (bool).
 
 Axiom accelerator_kzg_point_evaluation :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467786_) && (0 <=? ex467787_)*),
+  (*(0 <=? ex474217_) && (0 <=? ex474218_)*),
   M (bool).
 
 Axiom accelerator_bls_g1_add :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467790_) && (0 <=? ex467791_)*),
+  (*(0 <=? ex474221_) && (0 <=? ex474222_)*),
   M (bool).
 
 Axiom accelerator_bls_g1_msm :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467794_) && (0 <=? ex467795_)*),
+  (*(0 <=? ex474225_) && (0 <=? ex474226_)*),
   M (bool).
 
 Axiom accelerator_bls_g2_add :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467798_) && (0 <=? ex467799_)*),
+  (*(0 <=? ex474229_) && (0 <=? ex474230_)*),
   M (bool).
 
 Axiom accelerator_bls_g2_msm :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467802_) && (0 <=? ex467803_)*),
+  (*(0 <=? ex474233_) && (0 <=? ex474234_)*),
   M (bool).
 
 Axiom accelerator_bls_pairing :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467807_) && (0 <=? ex467808_)*),
+  (*(0 <=? ex474238_) && (0 <=? ex474239_)*),
   M (bits 2).
 
 Axiom accelerator_bls_map_fp_to_g1 :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467811_) && (0 <=? ex467812_)*),
+  (*(0 <=? ex474242_) && (0 <=? ex474243_)*),
   M (bool).
 
 Axiom accelerator_bls_map_fp2_to_g2 :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467815_) && (0 <=? ex467816_)*),
+  (*(0 <=? ex474246_) && (0 <=? ex474247_)*),
   M (bool).
 
 Axiom accelerator_p256_verify :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467819_) && (0 <=? ex467820_)*),
+  (*(0 <=? ex474250_) && (0 <=? ex474251_)*),
   M (bool).
 
 Axiom host_ecrecover :
   forall
 
   (_ : hash) (_ : y_parity) (_ : word) (_ : word)
-  (*(0 <=? ex467821_) && (ex467821_ <=? 1)*) (*(0 <=? ex467822_) && (ex467822_ <=? (2 ^ 256 - 1))*) (*(0 <=?
-    ex467823_) &&
-    (ex467823_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex474252_) && (ex474252_ <=? 1)*) (*(0 <=? ex474253_) && (ex474253_ <=? (2 ^ 256 - 1))*) (*(0 <=?
+    ex474254_) &&
+    (ex474254_ <=? (2 ^ 256 - 1))*),
   M (AddressResult).
 
 Definition KECCAK_EMPTY : hash :=
@@ -1026,15 +1032,17 @@ Axiom keccak256_segments : forall  (_ : list Bytes) , M (hash).
 
 Axiom sha256_segments : forall  (_ : list Bytes) , M (hash).
 
-Definition keccak256_slice {ex412876_ : Z} {ex412875_ : Z} (s : ByteSliceFields ex412875_ ex412876_)
-(*(0 <=? ex412875_) && (0 <=? ex412876_)*)
+Definition keccak256_slice {ex418388_ : Z} {ex418387_ : Z} (s : ByteSliceFields ex418387_ ex418388_)
+(*(0 <=? ex418387_) && (0 <=? ex418388_)*)
 : M (hash) :=
-   (keccak256_segments ([BytesSlice (@existT _ _ _ (@existT _ _ _ (s)))]))  : M (vec (mword 8) 32).
+   (keccak256_segments ([BytesSlice (@existT _ _ ex418388_ (@existT _ _ ex418387_ (s)))]))
+    : M (vec (mword 8) 32).
 
-Definition sha256_slice {ex412880_ : Z} {ex412879_ : Z} (s : ByteSliceFields ex412879_ ex412880_)
-(*(0 <=? ex412879_) && (0 <=? ex412880_)*)
+Definition sha256_slice {ex418392_ : Z} {ex418391_ : Z} (s : ByteSliceFields ex418391_ ex418392_)
+(*(0 <=? ex418391_) && (0 <=? ex418392_)*)
 : M (hash) :=
-   (sha256_segments ([BytesSlice (@existT _ _ _ (@existT _ _ _ (s)))]))  : M (vec (mword 8) 32).
+   (sha256_segments ([BytesSlice (@existT _ _ ex418392_ (@existT _ _ ex418391_ (s)))]))
+    : M (vec (mword 8) 32).
 
 Definition keccak256_word (w : word) (*(0 <=? w) && (w <=? (2 ^ 256 - 1))*) : M (hash) :=
    let w := (w).(word_value) in
@@ -1155,7 +1163,8 @@ Definition protocol_profile (schema_fork : mword 8) : M (ProtocolProfile) :=
     : M (ProtocolProfile).
 
 Definition undefined_ChainConfig '(tt : unit) : M (ChainConfig) :=
-   (undefined_nat (tt)) >>= fun (w__0 : Z) => returnM (({| ChainConfig_chain_id := w__0 |})).
+   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__0 : Z) =>
+   returnM (({| ChainConfig_chain_id := (Build_chain_identifier (w__0)) |})).
 
 Definition SYSTEM_ADDRESS : address_typ :=
 word_to_address
@@ -1305,7 +1314,7 @@ Definition undefined_Authorization '(tt : unit) : M (Authorization) :=
                 Authorization_chain_id := (Build_word (w__6)) |})).
 
 Definition EMPTY_BLOB_HASHES : BlobHashes :=
-{| BlobHashes_bytes := @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE));
+{| BlobHashes_bytes := @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE));
    BlobHashes_count := (Build_transaction_blob_count (0)) |}.
 #[export] Hint Unfold EMPTY_BLOB_HASHES : sail.
 Definition tx_type_byte (t : TxType) : byte :=
@@ -1359,11 +1368,11 @@ Definition undefined_Withdrawal '(tt : unit) : M (Withdrawal) :=
                 Withdrawal_amount := (Build_withdrawal_amount (w__4)) |})).
 
 Definition EMPTY_EXECUTION_REQUESTS : ExecutionRequests :=
-{| ExecutionRequests_deposits := @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE));
-   ExecutionRequests_withdrawals := @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE));
-   ExecutionRequests_consolidations := @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE));
-   ExecutionRequests_builder_deposits := @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE));
-   ExecutionRequests_builder_exits := @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)) |}.
+{| ExecutionRequests_deposits := @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE));
+   ExecutionRequests_withdrawals := @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE));
+   ExecutionRequests_consolidations := @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE));
+   ExecutionRequests_builder_deposits := @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE));
+   ExecutionRequests_builder_exits := @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE)) |}.
 #[export] Hint Unfold EMPTY_EXECUTION_REQUESTS : sail.
 Definition undefined_TxValidity '(tt : unit) : M (TxValidity) :=
    (undefined_bitvector (8)) >>= fun (w__0 : mword 8) =>
@@ -1430,28 +1439,6 @@ Definition DEFAULT_MESSAGE : Message :=
    Message_is_static := false;
    Message_depth := (Build_frame_depth (0)) |}.
 #[export] Hint Unfold DEFAULT_MESSAGE : sail.
-Definition DEFAULT_FRAME_CHECKPOINT : FrameCheckpoint :=
-{| FrameCheckpoint_state := 0;
-   FrameCheckpoint_pc := 0;
-   FrameCheckpoint_gas_remaining := GAS_ZERO;
-   FrameCheckpoint_state_gas_remaining := GAS_ZERO;
-   FrameCheckpoint_state_gas_spilled :=
-     (Build_state_gas_spill ((STATE_GAS_SPILL_ZERO).(state_gas_spill_value)));
-   FrameCheckpoint_refund := (Build_gas_refund ((GAS_REFUND_ZERO).(gas_refund_value)));
-   FrameCheckpoint_status := Running (tt);
-   FrameCheckpoint_message := DEFAULT_MESSAGE;
-   FrameCheckpoint_call_depth := (Build_frame_depth (0));
-   FrameCheckpoint_code := EMPTY_CODE;
-   FrameCheckpoint_calldata := @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE));
-   FrameCheckpoint_memory := @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)) |}.
-#[export] Hint Unfold DEFAULT_FRAME_CHECKPOINT : sail.
-Definition DEFAULT_FRAME_CONTINUATION : FrameContinuation :=
-ResumeCall
-  (({| CallContinuation_checkpoint := DEFAULT_FRAME_CHECKPOINT;
-       CallContinuation_return_offset := 0;
-       CallContinuation_return_length := 0;
-       CallContinuation_new_account_charged := false |})).
-#[export] Hint Unfold DEFAULT_FRAME_CONTINUATION : sail.
 Definition undefined_WitnessContext '(tt : unit) : M (WitnessContext) :=
    (undefined_bitvector (8)) >>= fun (w__0 : mword 8) =>
    (undefined_vector (32) (w__0)) >>= fun (w__1 : vec (mword 8) 32) =>
@@ -1472,94 +1459,102 @@ Axiom host_slice_byte :
   forall
 
   (_ : ByteSlice) (_ : source_pointer)
-  (*(0 <=? ex467913_) && (0 <=? ex467914_)*) (*0 <=? ex467915_*),
+  (*(0 <=? ex474344_) && (0 <=? ex474345_)*) (*0 <=? ex474346_*),
   M (bits 8).
 
 Axiom host_slice_count_nonzero :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex467918_) && (0 <=? ex467919_)*),
+  (*(0 <=? ex474349_) && (0 <=? ex474350_)*),
   M (host_access).
 
 Axiom host_slice_strided_zero :
   forall
 
   (_ : ByteSlice) (_ : source_pointer) (_ : host_access) (_ : host_access) (_ : host_access)
-  (*(0 <=? ex467922_) && (0 <=? ex467923_)*) (*0 <=? ex467924_*) (*0 <=? ex467925_*) (*0 <=?
-    ex467926_*) (*0 <=? ex467927_*),
+  (*(0 <=? ex474353_) && (0 <=? ex474354_)*) (*0 <=? ex474355_*) (*0 <=? ex474356_*) (*0 <=?
+    ex474357_*) (*0 <=? ex474358_*),
   M (bool).
 
 Axiom host_slice_load_word :
   forall
 
   (_ : ByteSlice) (_ : source_pointer)
-  (*(0 <=? ex467930_) && (0 <=? ex467931_)*) (*0 <=? ex467932_*),
+  (*(0 <=? ex474361_) && (0 <=? ex474362_)*) (*0 <=? ex474363_*),
   M (word).
 
 Axiom host_slice_load_n_word :
   forall
 
   (_ : ByteSlice) (_ : source_pointer) (_ : host_access)
-  (*(0 <=? ex467935_) && (0 <=? ex467936_)*) (*0 <=? ex467937_*) (*0 <=? ex467938_*),
+  (*(0 <=? ex474366_) && (0 <=? ex474367_)*) (*0 <=? ex474368_*) (*0 <=? ex474369_*),
   M (word).
 
 Axiom host_slice_copy_to_memory :
   forall
 
   (_ : ByteSlice) (_ : memory_pointer) (_ : source_pointer) (_ : memory_length)
-  (*(0 <=? ex467941_) && (0 <=? ex467942_)*) (*0 <=? ex467943_*) (*0 <=? ex467944_*) (*0 <=?
-    ex467945_*),
+  (*(0 <=? ex474372_) && (0 <=? ex474373_)*) (*0 <=? ex474374_*) (*0 <=? ex474375_*) (*0 <=?
+    ex474376_*),
   M (unit).
 
 Axiom bytes_segments_equal_slice :
   forall
 
   (_ : list Bytes) (_ : ByteSlice)
-  (*(0 <=? ex467948_) && (0 <=? ex467949_)*),
+  (*(0 <=? ex474379_) && (0 <=? ex474380_)*),
   M (bool).
 
-Definition slice_byte {ex413077_ : Z} {ex413076_ : Z}
-(s : ByteSliceFields ex413076_ ex413077_) (off : Z) (*0 <=? off*)
-(*(0 <=? ex413076_) && (0 <=? ex413077_)*)
+Axiom byte_slices_equal :
+  forall
+
+  (_ : ByteSlice) (_ : ByteSlice)
+  (*(0 <=? ex474383_) && (0 <=? ex474384_)*) (*(0 <=? ex474387_) && (0 <=? ex474388_)*),
+  M (bool).
+
+Definition slice_byte {ex418568_ : Z} {ex418567_ : Z}
+(s : ByteSliceFields ex418567_ ex418568_) (off : Z) (*0 <=? off*)
+(*(0 <=? ex418567_) && (0 <=? ex418568_)*)
 : M (byte) :=
    let offset := off in
    let length := s.(ByteSliceFields_len) in
-   (if Z.ltb (offset) ex413077_ return M (mword 8) then
-      (host_slice_byte (@existT _ _ _ (@existT _ _ _ (s))) (off))
+   (if Z.ltb (offset) ex418568_ return M (mword 8) then
+      (host_slice_byte (@existT _ _ ex418568_ (@existT _ _ ex418567_ (s))) (off))
        : M (mword 8)
     else returnM ((Ox"00")))
     : M (mword 8).
 
-Definition slice_count_nonzero {ex413083_ : Z} {ex413082_ : Z}
-(s : ByteSliceFields ex413082_ ex413083_) (*(0 <=? ex413082_) && (0 <=? ex413083_)*)
+Definition slice_count_nonzero {ex418574_ : Z} {ex418573_ : Z}
+(s : ByteSliceFields ex418573_ ex418574_) (*(0 <=? ex418573_) && (0 <=? ex418574_)*)
 : M (source_length) :=
-   (host_slice_count_nonzero (@existT _ _ _ (@existT _ _ _ (s))))  : M (Z).
+   (host_slice_count_nonzero (@existT _ _ ex418574_ (@existT _ _ ex418573_ (s))))  : M (Z).
 
-Definition slice_strided_zero {ex413099_ : Z} {ex413098_ : Z}
-(s : ByteSliceFields ex413098_ ex413099_) (start : Z) (stride : Z) (width : Z) (count : Z)
+Definition slice_strided_zero {ex418590_ : Z} {ex418589_ : Z}
+(s : ByteSliceFields ex418589_ ex418590_) (start : Z) (stride : Z) (width : Z) (count : Z)
 (*(0 <=? start) && ((0 <=? stride) && ((0 <=? width) && (0 <=? count)))*)
-(*(0 <=? ex413098_) && (0 <=? ex413099_)*)
+(*(0 <=? ex418589_) && (0 <=? ex418590_)*)
 : M (bool) :=
-   (host_slice_strided_zero (@existT _ _ _ (@existT _ _ _ (s))) (start) (stride) (width) (count))
+   (host_slice_strided_zero (@existT _ _ ex418590_ (@existT _ _ ex418589_ (s))) (start) (stride)
+      (width) (count))
     : M (bool).
 
-Definition slice_load {ex413114_ : Z} {ex413113_ : Z}
-(s : ByteSliceFields ex413113_ ex413114_) (off : Z) (*0 <=? off*)
-(*(0 <=? ex413113_) && (0 <=? ex413114_)*)
+Definition slice_load {ex418605_ : Z} {ex418604_ : Z}
+(s : ByteSliceFields ex418604_ ex418605_) (off : Z) (*0 <=? off*)
+(*(0 <=? ex418604_) && (0 <=? ex418605_)*)
 : M (word) :=
    (let offset := off in
    let length := s.(ByteSliceFields_len) in
-   (if Z.ltb (offset) ex413114_ return M (Z) then
-      ((host_slice_load_word (@existT _ _ _ (@existT _ _ _ (s))) (off)) >>= fun semanticResult =>
+   (if Z.ltb (offset) ex418605_ return M (Z) then
+      ((host_slice_load_word (@existT _ _ ex418605_ (@existT _ _ ex418604_ (s))) (off)) >>= fun semanticResult =>
        returnM (semanticResult).(word_value))
        : M (Z)
     else returnM ((ZERO_WORD).(word_value)))
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition slice_load_word_offset {ex413120_ : Z} {ex413119_ : Z}
-(s : ByteSliceFields ex413119_ ex413120_) (off : word) (*(0 <=? ex413119_) && (0 <=? ex413120_)*)
+Definition slice_load_word_offset {ex418611_ : Z} {ex418610_ : Z}
+(s : ByteSliceFields ex418610_ ex418611_) (off : word) (*(0 <=? ex418610_) && (0 <=? ex418611_)*)
 (*(0 <=? off) && (off <=? (2 ^ 256 - 1))*)
 : M (word) :=
    let off := (off).(word_value) in
@@ -1571,40 +1566,41 @@ Definition slice_load_word_offset {ex413120_ : Z} {ex413119_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition slice_load_n {ex413131_ : Z} {ex413130_ : Z}
-(s : ByteSliceFields ex413130_ ex413131_) (off : Z) (n : Z) (*(0 <=? off) && (0 <=? n)*)
-(*(0 <=? ex413130_) && (0 <=? ex413131_)*)
+Definition slice_load_n {ex418622_ : Z} {ex418621_ : Z}
+(s : ByteSliceFields ex418621_ ex418622_) (off : Z) (n : Z) (*(0 <=? off) && (0 <=? n)*)
+(*(0 <=? ex418621_) && (0 <=? ex418622_)*)
 : M (word) :=
    (let offset := off in
    let length := s.(ByteSliceFields_len) in
-   (if Z.ltb (offset) ex413131_ return M (Z) then
-      ((host_slice_load_n_word (@existT _ _ _ (@existT _ _ _ (s))) (off) (n)) >>= fun semanticResult =>
+   (if Z.ltb (offset) ex418622_ return M (Z) then
+      ((host_slice_load_n_word (@existT _ _ ex418622_ (@existT _ _ ex418621_ (s))) (off) (n)) >>= fun semanticResult =>
        returnM (semanticResult).(word_value))
        : M (Z)
     else returnM ((ZERO_WORD).(word_value)))
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition slice_copy {ex413148_ : Z} {ex413147_ : Z}
-(s : ByteSliceFields ex413147_ ex413148_) (dst : Z) (off : Z) (len : Z)
-(*(0 <=? dst) && ((0 <=? off) && (0 <=? len))*) (*(0 <=? ex413147_) && (0 <=? ex413148_)*)
+Definition slice_copy {ex418639_ : Z} {ex418638_ : Z}
+(s : ByteSliceFields ex418638_ ex418639_) (dst : Z) (off : Z) (len : Z)
+(*(0 <=? dst) && ((0 <=? off) && (0 <=? len))*) (*(0 <=? ex418638_) && (0 <=? ex418639_)*)
 : M (unit) :=
    (if neq_int (len) (0) return M (unit) then
       let offset := off in
       let source_length := s.(ByteSliceFields_len) in
-      (if Z.ltb (offset) ex413148_ return M (unit) then
-         (host_slice_copy_to_memory (@existT _ _ _ (@existT _ _ _ (s))) (dst) (off) (len))
+      (if Z.ltb (offset) ex418639_ return M (unit) then
+         (host_slice_copy_to_memory (@existT _ _ ex418639_ (@existT _ _ ex418638_ (s))) (dst) (off)
+            (len))
           : M (unit)
        else
-         (host_slice_copy_to_memory (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE))) (dst) (0) (len))
+         (host_slice_copy_to_memory (@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) (dst) (0) (len))
           : M (unit))
        : M (unit)
     else returnM (tt))
     : M (unit).
 
-Definition slice_copy_word_offset {ex413158_ : Z} {ex413157_ : Z}
-(s : ByteSliceFields ex413157_ ex413158_) (dst : Z) (off : word) (len : Z)
-(*(0 <=? ex413157_) && (0 <=? ex413158_)*) (*0 <=? dst*) (*(0 <=? off) && (off <=? (2 ^ 256 - 1))*)
+Definition slice_copy_word_offset {ex418649_ : Z} {ex418648_ : Z}
+(s : ByteSliceFields ex418648_ ex418649_) (dst : Z) (off : word) (len : Z)
+(*(0 <=? ex418648_) && (0 <=? ex418649_)*) (*0 <=? dst*) (*(0 <=? off) && (off <=? (2 ^ 256 - 1))*)
 (*0 <=? len*)
 : M (unit) :=
    let off := (off).(word_value) in
@@ -1616,36 +1612,36 @@ Definition slice_copy_word_offset {ex413158_ : Z} {ex413157_ : Z}
 Axiom host_scratch_store_bytes :
   forall
 
-  (fv6261_off : Z) (_ : list byte) (fv6260_len : Z)
-  (*(0 <=? fv6261_off) && (0 <=? fv6260_len)*),
-  M (ByteRegionResult (fv6261_off + fv6260_len)).
+  (fv10432_off : Z) (_ : list byte) (fv10431_len : Z)
+  (*(0 <=? fv10432_off) && (0 <=? fv10431_len)*),
+  M (ByteRegionResult (fv10432_off + fv10431_len)).
 
 Axiom host_scratch_store_slice :
   forall
-  {fv6264_off : Z} {fv6263_len : Z}
-  (fv6262_dst : Z) (_ : ByteSliceFields fv6264_off fv6263_len)
-  (*(0 <=? fv6262_dst) && ((0 <=? fv6264_off) && (0 <=? fv6263_len))*),
-  M (ByteRegionResult (fv6262_dst + fv6263_len)).
+  {fv10435_off : Z} {fv10434_len : Z}
+  (fv10433_dst : Z) (_ : ByteSliceFields fv10435_off fv10434_len)
+  (*(0 <=? fv10433_dst) && ((0 <=? fv10435_off) && (0 <=? fv10434_len))*),
+  M (ByteRegionResult (fv10433_dst + fv10434_len)).
 
 Axiom host_scratch_store_b256 :
   forall
 
-  (fv6266_off : Z) (_ : b256) (fv6265_len : Z)
-  (*(0 <=? fv6266_off) && ((0 <=? fv6265_len) && (fv6265_len <=? 32))*),
-  M (ByteRegionResult (fv6266_off + fv6265_len)).
+  (fv10437_off : Z) (_ : b256) (fv10436_len : Z)
+  (*(0 <=? fv10437_off) && ((0 <=? fv10436_len) && (fv10436_len <=? 32))*),
+  M (ByteRegionResult (fv10437_off + fv10436_len)).
 
-Axiom host_scratch_truncate : forall  (_ : source_pointer) (*0 <=? ex468060_*), M (unit).
+Axiom host_scratch_truncate : forall  (_ : source_pointer) (*0 <=? ex474499_*), M (unit).
 
 Definition scratch_begin '(tt : unit) : M (source_pointer) :=
-   read_reg scratch_arena >>= fun '(@existT _ _ _ (@existT _ _ _ arena)) =>
+   read_reg scratch_arena >>= fun '(@existT _ _ __arena1 (@existT _ _ __arena0 arena)) =>
    returnM (arena.(ByteSliceFields_len)).
 
 Definition scratch_push_bytes (data : list (mword 8)) (len : Z) (*0 <=? len*) : M (unit) :=
    (if neq_int (len) (0) return M (unit) then
-      read_reg scratch_arena >>= fun '(@existT _ _ _ (@existT _ _ _ arena)) =>
+      read_reg scratch_arena >>= fun '(@existT _ _ __arena1 (@existT _ _ __arena0 arena)) =>
       (host_scratch_store_bytes (arena.(ByteSliceFields_len)) (data) (len)) >>= fun w__0 =>
       match w__0 with
-      | ByteRegionReady (@existT _ _ syn_len (@existT _ _ off expanded)) =>
+      | ByteRegionReady (@existT _ _ __arena1 (@existT _ _ __arena0 expanded)) =>
          write_reg scratch_arena (@existT _ _ _ (@existT _ _ _ (expanded)))  : M (unit)
       | ByteRegionFailed tt => assert_exp' false "scratch byte append" >>= fun _ => exit tt
       end
@@ -1653,14 +1649,14 @@ Definition scratch_push_bytes (data : list (mword 8)) (len : Z) (*0 <=? len*) : 
     else returnM (tt))
     : M (unit).
 
-Definition scratch_push_slice {ex413197_ : Z} {ex413196_ : Z}
-(data : ByteSliceFields ex413196_ ex413197_) (*(0 <=? ex413196_) && (0 <=? ex413197_)*)
+Definition scratch_push_slice {ex418688_ : Z} {ex418687_ : Z}
+(data : ByteSliceFields ex418687_ ex418688_) (*(0 <=? ex418687_) && (0 <=? ex418688_)*)
 : M (unit) :=
    (if neq_int (data.(ByteSliceFields_len)) (0) return M (unit) then
-      read_reg scratch_arena >>= fun '(@existT _ _ _ (@existT _ _ _ arena)) =>
+      read_reg scratch_arena >>= fun '(@existT _ _ __arena1 (@existT _ _ __arena0 arena)) =>
       (host_scratch_store_slice (arena.(ByteSliceFields_len)) (data)) >>= fun w__0 =>
       match w__0 with
-      | ByteRegionReady (@existT _ _ len (@existT _ _ off expanded)) =>
+      | ByteRegionReady (@existT _ _ __arena1 (@existT _ _ __arena0 expanded)) =>
          write_reg scratch_arena (@existT _ _ _ (@existT _ _ _ (expanded)))  : M (unit)
       | ByteRegionFailed tt => assert_exp' false "scratch slice append" >>= fun _ => exit tt
       end
@@ -1671,10 +1667,10 @@ Definition scratch_push_slice {ex413197_ : Z} {ex413196_ : Z}
 Definition scratch_push_b256 (data : vec (mword 8) 32) (len : Z) (*(0 <=? len) && (len <=? 32)*)
 : M (unit) :=
    (if neq_int (len) (0) return M (unit) then
-      read_reg scratch_arena >>= fun '(@existT _ _ _ (@existT _ _ _ arena)) =>
+      read_reg scratch_arena >>= fun '(@existT _ _ __arena1 (@existT _ _ __arena0 arena)) =>
       (host_scratch_store_b256 (arena.(ByteSliceFields_len)) (data) (len)) >>= fun w__0 =>
       match w__0 with
-      | ByteRegionReady (@existT _ _ len (@existT _ _ off expanded)) =>
+      | ByteRegionReady (@existT _ _ __arena1 (@existT _ _ __arena0 expanded)) =>
          write_reg scratch_arena (@existT _ _ _ (@existT _ _ _ (expanded)))  : M (unit)
       | ByteRegionFailed tt => assert_exp' false "scratch fixed-byte append" >>= fun _ => exit tt
       end
@@ -1684,17 +1680,17 @@ Definition scratch_push_b256 (data : vec (mword 8) 32) (len : Z) (*(0 <=? len) &
 
 Definition scratch_finish (start : Z) (*0 <=? start*) : M (ByteSlice) :=
    let start_offset := start in
-   read_reg scratch_arena >>= fun '(@existT _ _ _ (@existT _ _ _ arena)) =>
+   read_reg scratch_arena >>= fun '(@existT _ _ __arena1 (@existT _ _ __arena0 arena)) =>
    let stop_offset := arena.(ByteSliceFields_len) in
    (if Z.leb (start_offset) (stop_offset) then
-      returnM (@existT _ _ _ (@existT _ _ _ (sub_slice (arena) (start)
-                                               ((Z.sub (stop_offset) (start_offset))))))
+      returnM ((@existT _ _ _ (@existT _ _ _ (sub_slice (arena) (start)
+                                                ((Z.sub (stop_offset) (start_offset)))))) : {__arena1 & {__arena0 & (ByteSliceFields __arena0 __arena1)}}%type)
     else assert_exp' false "scratch finish mark" >>= fun _ => exit tt)
-    : M ({len & {off & (ByteSliceFields off len)}}%type).
+    : M ({__arena1 & {__arena0 & (ByteSliceFields __arena0 __arena1)}}%type).
 
 Definition scratch_rewind (mark : Z) (*0 <=? mark*) : M (unit) :=
    let mark_offset := mark in
-   read_reg scratch_arena >>= fun '(@existT _ _ _ (@existT _ _ _ arena)) =>
+   read_reg scratch_arena >>= fun '(@existT _ _ __arena1 (@existT _ _ __arena0 arena)) =>
    let cursor_offset := arena.(ByteSliceFields_len) in
    (if Z.leb (mark_offset) (cursor_offset) return M (unit) then
       write_reg scratch_arena (@existT _ _ _ (@existT _ _ _ (sub_slice (arena) (0) (mark)))) >>
@@ -1704,33 +1700,33 @@ Definition scratch_rewind (mark : Z) (*0 <=? mark*) : M (unit) :=
     : M (unit).
 
 Definition scratch_reset '(tt : unit) : M (unit) :=
-   write_reg scratch_arena (@existT _ _ _ (@existT _ _ _ (byte_slice (ScratchSource) (0) (0)))) >>
+   write_reg scratch_arena (@existT _ _ 0 (@existT _ _ 0 (byte_slice (ScratchSource) (0) (0)))) >>
    (host_scratch_truncate (0))
     : M (unit).
 
 Axiom code_db_lookup : forall  (_ : hash) , M (option Code).
 
-Axiom jumpdest_table_alloc : forall  (_ : code_length) (*0 <=? ex468116_*), M (JumpdestRef).
+Axiom jumpdest_table_alloc : forall  (_ : code_length) (*0 <=? ex474555_*), M (JumpdestRef).
 
 Axiom jumpdest_table_store_chunk :
   forall
 
   (_ : JumpdestRef) (_ : code_length) (_ : code_chunk_index) (_ : JumpdestChunk)
-  (*0 <=? ex468117_*) (*0 <=? ex468118_*),
+  (*0 <=? ex474556_*) (*0 <=? ex474557_*),
   M (bool).
 
 Axiom code_db_store :
   forall
 
   (_ : CodeSlice) (_ : JumpdestRef)
-  (*(0 <=? ex468121_) && (0 <=? ex468122_) && (0 <=? ex468122_)*),
+  (*(0 <=? ex474560_) && (0 <=? ex474561_) && (0 <=? ex474561_)*),
   M (hash).
 
 Axiom jumpdest_ref_contains :
   forall
 
   (_ : JumpdestRef) (_ : code_length) (_ : code_pointer)
-  (*0 <=? ex468123_*) (*0 <=? ex468124_*),
+  (*0 <=? ex474562_*) (*0 <=? ex474563_*),
   M (bool).
 
 Axiom code_intern_delegation : forall  (_ : address_typ) (_ : JumpdestRef) , M (hash).
@@ -1760,16 +1756,16 @@ Definition jumpdest_bit (index : Z) (*(0 <=? index) && (index <=? 255)*) : Jumpd
    let chunk : mword 256 := EMPTY_JUMPDEST_CHUNK in
    update_vec_dec (chunk) (index) (('b"1")).
 
-Fixpoint _rec_analyze_code_from {ex413218_ : Z} {ex413217_ : Z}
-(code : ByteSliceFields ex413217_ ex413218_) (fork : Fork) (table : mword 64) (pc : Z)
+Fixpoint _rec_analyze_code_from {ex418709_ : Z} {ex418708_ : Z}
+(code : ByteSliceFields ex418708_ ex418709_) (fork : Fork) (table : mword 64) (pc : Z)
 (analysis : CodeAnalysis) (_reclimit : Z) (*0 <=? pc*)
-(*(0 <=? ex413217_) && (0 <=? ex413218_) && (0 <=? ex413218_)*) (_acc : Acc (Zwf 0) _reclimit)
+(*(0 <=? ex418708_) && (0 <=? ex418709_) && (0 <=? ex418709_)*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (unit).
 exact (
    assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
    let position := pc in
    let code_len := code.(ByteSliceFields_len) in
-   (if Z.ltb (position) ex413218_ return M (unit) then
+   (if Z.ltb (position) ex418709_ return M (unit) then
       let chunk := analysis.(CodeAnalysis_chunk) in
       let chunk_index := analysis.(CodeAnalysis_chunk_index) in
       let chunk_offset : Z := analysis.(CodeAnalysis_chunk_offset) in
@@ -1794,7 +1790,7 @@ exact (
          let w__3 : Z := if exchange_immediate_valid (w__2) then 2 else 1 in
          returnM (w__3)
        else returnM (1)) >>= fun (step : Z) =>
-      (if Z.ltb (step) ((Z.sub ex413218_ (position))) return M (unit) then
+      (if Z.ltb (step) ((Z.sub ex418709_ (position))) return M (unit) then
          let added := Z.add (position) (step) in
          let progressed : Z := Z.add (chunk_offset) (step) in
          (if Z.ltb (progressed) (256) return M (unit) then
@@ -1805,7 +1801,7 @@ exact (
                (_limit_reduces_bool _acc ltac:(assumption)))
              : M (unit)
           else
-            (store_jumpdest_chunk (table) ex413218_
+            (store_jumpdest_chunk (table) ex418709_
                (({| CodeAnalysis_chunk := chunk;
                     CodeAnalysis_chunk_index := chunk_index;
                     CodeAnalysis_chunk_offset := chunk_offset |}))) >>
@@ -1817,33 +1813,33 @@ exact (
              : M (unit))
           : M (unit)
        else
-         (store_jumpdest_chunk (table) ex413218_
+         (store_jumpdest_chunk (table) ex418709_
             (({| CodeAnalysis_chunk := chunk;
                  CodeAnalysis_chunk_index := chunk_index;
                  CodeAnalysis_chunk_offset := chunk_offset |})))
           : M (unit))
        : M (unit)
-    else (store_jumpdest_chunk (table) ex413218_ (analysis))  : M (unit))
+    else (store_jumpdest_chunk (table) ex418709_ (analysis))  : M (unit))
     : M (unit)
 ).
 Defined.
 
 
-Definition analyze_code_from {ex413227_ : Z} {ex413226_ : Z}
-(code : ByteSliceFields ex413226_ ex413227_) (fork : Fork) (table : mword 64) (pc : Z)
+Definition analyze_code_from {ex418718_ : Z} {ex418717_ : Z}
+(code : ByteSliceFields ex418717_ ex418718_) (fork : Fork) (table : mword 64) (pc : Z)
 (analysis : CodeAnalysis) (*0 <=? pc*)
-(*(0 <=? ex413226_) && (0 <=? ex413227_) && (0 <=? ex413227_)*)
+(*(0 <=? ex418717_) && (0 <=? ex418718_) && (0 <=? ex418718_)*)
 : M (unit) :=
    let code_len := code.(ByteSliceFields_len) in
    let position := pc in
    (_rec_analyze_code_from (code) (fork) (table) (pc) (analysis)
-      (((Z.sub ex413227_ (position))
+      (((Z.sub ex418718_ (position))
        : Z)) (Zwf_guarded _))
     : M (unit).
 
-Definition analyze_code {ex413235_ : Z} {ex413234_ : Z}
-(code : ByteSliceFields ex413234_ ex413235_) (fork : Fork)
-(*(0 <=? ex413234_) && (0 <=? ex413235_) && (0 <=? ex413235_)*)
+Definition analyze_code {ex418726_ : Z} {ex418725_ : Z}
+(code : ByteSliceFields ex418725_ ex418726_) (fork : Fork)
+(*(0 <=? ex418725_) && (0 <=? ex418726_) && (0 <=? ex418726_)*)
 : M (JumpdestRef) :=
    (if Z.eqb (code.(ByteSliceFields_len)) (0) then returnM (EMPTY_JUMPDEST_REF)
     else
@@ -1857,12 +1853,12 @@ Definition analyze_code {ex413235_ : Z} {ex413234_ : Z}
       returnM (table))
     : M (mword 64).
 
-Definition code_db_insert {ex413239_ : Z} {ex413238_ : Z}
-(code : ByteSliceFields ex413238_ ex413239_) (fork : Fork)
-(*(0 <=? ex413238_) && (0 <=? ex413239_) && (0 <=? ex413239_)*)
+Definition code_db_insert {ex418730_ : Z} {ex418729_ : Z}
+(code : ByteSliceFields ex418729_ ex418730_) (fork : Fork)
+(*(0 <=? ex418729_) && (0 <=? ex418730_) && (0 <=? ex418730_)*)
 : M (hash) :=
    (analyze_code (code) (fork)) >>= fun (w__0 : mword 64) =>
-   (code_db_store (@existT _ _ _ (@existT _ _ _ (code))) (w__0))
+   (code_db_store (@existT _ _ ex418730_ (@existT _ _ ex418729_ (code))) (w__0))
     : M (vec (mword 8) 32).
 
 Definition code_db_resolve (code_hash : vec (mword 8) 32) : M (Code) :=
@@ -1882,7 +1878,7 @@ Axiom nodedb_insert :
   forall
 
   (_ : hash) (_ : source_pointer) (_ : host_access)
-  (*0 <=? ex468192_*) (*0 <=? ex468193_*),
+  (*0 <=? ex474631_*) (*0 <=? ex474632_*),
   M (unit).
 
 Axiom nodedb_lookup : forall  (_ : hash) , M (ByteSlice).
@@ -1894,9 +1890,9 @@ Definition SSZ_UINT_BYTES : Z := 8.
 Definition ssz_field_offset (base : Z) (delta : Z) (*(0 <=? base) && (0 <=? delta)*) : Z :=
    Z.add (base) (delta).
 
-Definition ssz_u32_at {ex413261_ : Z} {ex413260_ : Z}
-(input : ByteSliceFields ex413260_ ex413261_) (offset : Z) (*(0 <=? offset) && (0 <=? 4)*)
-(*(0 <=? ex413260_) && (0 <=? ex413261_)*)
+Definition ssz_u32_at {ex418752_ : Z} {ex418751_ : Z}
+(input : ByteSliceFields ex418751_ ex418752_) (offset : Z) (*(0 <=? offset) && (0 <=? 4)*)
+(*(0 <=? ex418751_) && (0 <=? ex418752_)*)
 : M (ssz_offset) :=
    ((slice_byte (input) (offset)) >>= fun (w__0 : mword 8) =>
    let b0 := zero_extend (w__0) (32) in
@@ -1911,9 +1907,9 @@ Definition ssz_u32_at {ex413261_ : Z} {ex413260_ : Z}
                    ((or_vec ((shiftl (b1) (8))) ((or_vec ((shiftl (b2) (16))) ((shiftl (b3) (24)))))))))))) >>= fun semanticResult =>
    returnM (Build_ssz_offset (semanticResult)).
 
-Definition ssz_u32 {ex413275_ : Z} {ex413274_ : Z}
-(input : ByteSliceFields ex413274_ ex413275_) (offset : Z) (*(0 <=? offset) && (0 <=? 4)*)
-(*(0 <=? ex413274_) && (0 <=? ex413275_)*)
+Definition ssz_u32 {ex418766_ : Z} {ex418765_ : Z}
+(input : ByteSliceFields ex418765_ ex418766_) (offset : Z) (*(0 <=? offset) && (0 <=? 4)*)
+(*(0 <=? ex418765_) && (0 <=? ex418766_)*)
 : M (ssz_offset) :=
    (((ssz_u32_at (input) (offset)) >>= fun semanticResult =>
      returnM (semanticResult).(ssz_offset_value))
@@ -1925,9 +1921,9 @@ Definition ssz_offset_to_source_pointer (value : ssz_offset)
 : source_pointer :=
    let value := (value).(ssz_offset_value) in value.
 
-Definition decode_ssz_uint {ex413290_ : Z} {ex413289_ : Z}
-(input : ByteSliceFields ex413289_ ex413290_) (offset : Z) (*(0 <=? offset) && (0 <=? 8)*)
-(*(0 <=? ex413289_) && (0 <=? ex413290_)*)
+Definition decode_ssz_uint {ex418781_ : Z} {ex418780_ : Z}
+(input : ByteSliceFields ex418780_ ex418781_) (offset : Z) (*(0 <=? offset) && (0 <=? 8)*)
+(*(0 <=? ex418780_) && (0 <=? ex418781_)*)
 : M (ssz_uint) :=
    ((slice_byte (input) (offset)) >>= fun (w__0 : mword 8) =>
    (slice_byte (input) ((ssz_field_offset (offset) (1)))) >>= fun (w__1 : mword 8) =>
@@ -1951,17 +1947,17 @@ Definition decode_ssz_uint {ex413290_ : Z} {ex413289_ : Z}
                    ((Z.mul ((uint (w__6))) ((pow2 (48))))))) ((Z.mul ((uint (w__7))) ((pow2 (56)))))))) >>= fun semanticResult =>
    returnM (Build_ssz_uint (semanticResult)).
 
-Definition ssz_addr {ex413304_ : Z} {ex413303_ : Z}
-(input : ByteSliceFields ex413303_ ex413304_) (offset : Z) (*(0 <=? offset) && (0 <=? 20)*)
-(*(0 <=? ex413303_) && (0 <=? ex413304_)*)
+Definition ssz_addr {ex418795_ : Z} {ex418794_ : Z}
+(input : ByteSliceFields ex418794_ ex418795_) (offset : Z) (*(0 <=? offset) && (0 <=? 20)*)
+(*(0 <=? ex418794_) && (0 <=? ex418795_)*)
 : M (address_typ) :=
    ((slice_load_n (input) (offset) (ADDRESS_BYTE_LENGTH)) >>= fun semanticResult =>
     returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
    returnM ((word_to_address (Build_word ((w__0))))).
 
-Definition ssz_bytes32 {ex413318_ : Z} {ex413317_ : Z}
-(input : ByteSliceFields ex413317_ ex413318_) (offset : Z) (*(0 <=? offset) && (0 <=? 32)*)
-(*(0 <=? ex413317_) && (0 <=? ex413318_)*)
+Definition ssz_bytes32 {ex418809_ : Z} {ex418808_ : Z}
+(input : ByteSliceFields ex418808_ ex418809_) (offset : Z) (*(0 <=? offset) && (0 <=? 32)*)
+(*(0 <=? ex418808_) && (0 <=? ex418809_)*)
 : M (hash) :=
    ((slice_load (input) (offset)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
    returnM ((word_to_hash (Build_word ((w__0))))).
@@ -1969,9 +1965,9 @@ Definition ssz_bytes32 {ex413318_ : Z} {ex413317_ : Z}
 Definition ssz_logs_bloom_index (index : Z) (*(0 <=? index) && (index <=? 255)*) : Z :=
    Z.sub (255) (index).
 
-Definition ssz_logs_bloom {ex413332_ : Z} {ex413331_ : Z}
-(input : ByteSliceFields ex413331_ ex413332_) (offset : Z) (*(0 <=? offset) && (0 <=? 256)*)
-(*(0 <=? ex413331_) && (0 <=? ex413332_)*)
+Definition ssz_logs_bloom {ex418823_ : Z} {ex418822_ : Z}
+(input : ByteSliceFields ex418822_ ex418823_) (offset : Z) (*(0 <=? offset) && (0 <=? 256)*)
+(*(0 <=? ex418822_) && (0 <=? ex418823_)*)
 : M (LogsBloom) :=
    let out : vec (mword 8) 256 := vector_init (256) ((Ox"00")) in
    (let '(loop_k_lower) := 0 in
@@ -1985,9 +1981,9 @@ Definition ssz_logs_bloom {ex413332_ : Z} {ex413331_ : Z}
 
 Definition ssz_u256_index (index : Z) (*(0 <=? index) && (index <=? 31)*) : Z := Z.sub (31) (index).
 
-Definition ssz_u256 {ex413346_ : Z} {ex413345_ : Z}
-(input : ByteSliceFields ex413345_ ex413346_) (offset : Z) (*(0 <=? offset) && (0 <=? 32)*)
-(*(0 <=? ex413345_) && (0 <=? ex413346_)*)
+Definition ssz_u256 {ex418837_ : Z} {ex418836_ : Z}
+(input : ByteSliceFields ex418836_ ex418837_) (offset : Z) (*(0 <=? offset) && (0 <=? 32)*)
+(*(0 <=? ex418836_) && (0 <=? ex418837_)*)
 : M (word) :=
    (let result : Z := (WORD_ZERO).(word_value) in
    (let '(loop_k_lower) := 0 in
@@ -2020,10 +2016,6 @@ Definition rlp_scratch_length_add (left' : Z) (right' : Z) (*(0 <=? left') && (0
 : rlp_scratch_length :=
    Z.add (left') (right').
 
-Definition rlp_length_width_decrement (value : Z) (*(0 <=? value) && (value <=? 8)*) : M (Z) :=
-   assert_exp' (Z.ltb (0) (value)) "sail/lib/rlp/rlp.sail:68.20-68.21" >>= fun _ =>
-   returnM ((Z.sub (value) (1))).
-
 Definition word_byte_count (index : Z) (*(0 <=? index) && (index <=? 31)*) : Z := Z.add (index) (1).
 
 Definition minimal_word_bytes (w : Z) (*(0 <=? w) && (w <? (2 ^ 256))*) : (list byte * Z) :=
@@ -2052,7 +2044,7 @@ Definition rlp_nat_length_byte (value : Z) (*(0 <=? value) && (value <=? 255)*) 
    get_slice_int (8) (value) (0).
 
 Definition rlp_byte_length_byte (value : Z) (*0 <=? value*) : M (byte) :=
-   assert_exp' (Z.leb (value) (255)) "sail/lib/rlp/rlp.sail:103.23-103.24" >>= fun _ =>
+   assert_exp' (Z.leb (value) (255)) "sail/lib/rlp/rlp.sail:98.23-98.24" >>= fun _ =>
    let length := value in
    returnM ((get_slice_int (8) (length) (0))).
 
@@ -2172,22 +2164,14 @@ Definition rlp_scratch_list_size (content_len : Z) (*0 <=? content_len*) : M (rl
    (rlp_length_prefix_len (content_len)) >>= fun (w__0 : Z) =>
    returnM ((rlp_scratch_length_add (content_len) ((rlp_scratch_small_length (w__0))))).
 
-Definition rlp_scratch_slice_size {ex413391_ : Z} {ex413390_ : Z}
-(data : ByteSliceFields ex413390_ ex413391_) (*(0 <=? ex413390_) && (0 <=? ex413391_)*)
+Definition rlp_scratch_slice_size {ex418881_ : Z} {ex418880_ : Z}
+(data : ByteSliceFields ex418880_ ex418881_) (*(0 <=? ex418880_) && (0 <=? ex418881_)*)
 : M (rlp_scratch_length) :=
    rlp_slice_size (data).
 
 Definition rlp_scratch_bytes_size (data : list (mword 8)) (len : Z) (*0 <=? len*)
 : M (rlp_scratch_length) :=
    (rlp_bytes_size (data) (len))  : M (Z).
-
-Definition rlp_write_raw_bytes (data : list (mword 8)) (len : Z) (*0 <=? len*) : M (unit) :=
-   (scratch_push_bytes (data) (len))  : M (unit).
-
-Definition rlp_write_raw_slice {ex413405_ : Z} {ex413404_ : Z}
-(data : ByteSliceFields ex413404_ ex413405_) (*(0 <=? ex413404_) && (0 <=? ex413405_)*)
-: M (unit) :=
-   (scratch_push_slice (data))  : M (unit).
 
 Definition rlp_write_string_prefix (len : Z) (first : mword 8) (*0 <=? len*) : M (unit) :=
    (rlp_string_prefix (len) (first)) >>= fun '((encoded_prefix, prefix_len)) =>
@@ -2203,8 +2187,8 @@ Definition rlp_write_bytes (data : list (mword 8)) (len : Z) (*0 <=? len*) : M (
    let first : mword 8 := match data with | b :: _ => b | [] => (Ox"00") end in
    (rlp_write_string_prefix (len) (first)) >> (scratch_push_bytes (data) (len))  : M (unit).
 
-Definition rlp_write_slice {ex413414_ : Z} {ex413413_ : Z}
-(data : ByteSliceFields ex413413_ ex413414_) (*(0 <=? ex413413_) && (0 <=? ex413414_)*)
+Definition rlp_write_slice {ex418895_ : Z} {ex418894_ : Z}
+(data : ByteSliceFields ex418894_ ex418895_) (*(0 <=? ex418894_) && (0 <=? ex418895_)*)
 : M (unit) :=
    (if Z.eqb (data.(ByteSliceFields_len)) (0) then returnM ((Ox"00"))
     else (slice_byte (data) (0))  : M (mword 8)) >>= fun (w__1 : mword 8) =>
@@ -2244,9 +2228,9 @@ Definition rlp_uint64_append (_width : Z) (prefix : Z) (next : mword 8)
 : Z :=
    Z.add ((Z.mul (prefix) (256))) ((uint (next))).
 
-Fixpoint _rec_rlp_uint64_width {ex413425_ : Z} {ex413424_ : Z}
-(content : ByteSliceFields ex413424_ ex413425_) (width : Z) (_reclimit : Z)
-(*(0 <=? width) && (width <=? 8)*) (*(0 <=? ex413424_) && (0 <=? ex413425_)*)
+Fixpoint _rec_rlp_uint64_width {ex418906_ : Z} {ex418905_ : Z}
+(content : ByteSliceFields ex418905_ ex418906_) (width : Z) (_reclimit : Z)
+(*(0 <=? width) && (width <=? 8)*) (*(0 <=? ex418905_) && (0 <=? ex418906_)*)
 (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (Z).
 exact (
@@ -2262,33 +2246,15 @@ exact (
 Defined.
 
 
-Definition rlp_uint64_width {ex413430_ : Z} {ex413429_ : Z}
-(content : ByteSliceFields ex413429_ ex413430_) (width : Z) (*(0 <=? width) && (width <=? 8)*)
-(*(0 <=? ex413429_) && (0 <=? ex413430_)*)
+Definition rlp_uint64_width {ex418911_ : Z} {ex418910_ : Z}
+(content : ByteSliceFields ex418910_ ex418911_) (width : Z) (*(0 <=? width) && (width <=? 8)*)
+(*(0 <=? ex418910_) && (0 <=? ex418911_)*)
 : M (Z) :=
    (_rec_rlp_uint64_width (content) (width) ((width  : Z)) (Zwf_guarded _))  : M (Z).
 
-Definition rlp_ref_be_length {ex413441_ : Z} {ex413440_ : Z}
-(source : ByteSliceFields ex413440_ ex413441_) (start : Z) (stop : Z) (count : Z)
-(*(0 <=? start) && ((0 <=? stop) && ((0 <=? count) && (count <=? 8)))*)
-(*(0 <=? ex413440_) && (0 <=? ex413441_)*)
-: M (Z) :=
-   let source_length := source.(ByteSliceFields_len) in
-   let start_value := start in
-   let stop_value := stop in
-   (if Z.ltb (stop_value) (start_value) return M (Z) then throw (InvalidBlock (RlpDecode))
-    else if Z.ltb ex413441_ (stop_value) return M (Z) then throw (InvalidBlock (RlpDecode))
-    else if Z.ltb ((Z.sub (stop_value) (start_value))) (count) return M (Z) then
-      throw (InvalidBlock (RlpDecode))
-    else
-      let content := sub_slice (source) (start_value) (count) in
-      (rlp_uint64_width (content) (count))
-       : M (Z))
-    : M (Z).
-
-Definition rlp_bytes_equal_at {ex413449_ : Z} {ex413448_ : Z}
-(expected : list (mword 8)) (source : ByteSliceFields ex413448_ ex413449_) (start : Z)
-(*(0 <=? ex413448_) && (0 <=? ex413449_)*) (*0 <=? start*)
+Definition rlp_bytes_equal_at {ex418919_ : Z} {ex418918_ : Z}
+(expected : list (mword 8)) (source : ByteSliceFields ex418918_ ex418919_) (start : Z)
+(*0 <=? start*) (*(0 <=? ex418918_) && (0 <=? ex418919_)*)
 : M (bool) :=
    let rest : list (mword 8) := expected in
    let current : Z := start in
@@ -2301,7 +2267,7 @@ Definition rlp_bytes_equal_at {ex413449_ : Z} {ex413448_ : Z}
        | b :: tail =>
           let position := current in
           let source_length := source.(ByteSliceFields_len) in
-          (if Z.ltb (position) (source_length) return M ((Z * bool)) then
+          (if Z.ltb (position) ex418919_ return M ((Z * bool)) then
              (and_boolM (returnM ((equal  : bool)))
                 ((slice_byte (source) (current)) >>= fun (w__0 : mword 8) =>
                  returnM (((eq_vec (w__0) (b))  : bool)))) >>= fun (w__1 : bool) =>
@@ -2320,385 +2286,225 @@ Definition rlp_bytes_equal_at {ex413449_ : Z} {ex413448_ : Z}
    : (Z * bool * list (mword 8))) =>
    returnM (match rest with | [] => equal | _ => false end).
 
-Definition rlp_ref_hdr {ex413460_ : Z} {ex413459_ : Z}
-(b : ByteSliceFields ex413459_ ex413460_) (pos : Z) (stop : Z) (*(0 <=? pos) && (0 <=? stop)*)
-(*(0 <=? ex413459_) && (0 <=? ex413460_)*)
+Definition rlp_ref_hdr {ex418925_ : Z} {ex418924_ : Z} (b : ByteSliceFields ex418924_ ex418925_)
+(*(0 <=? ex418924_) && (0 <=? ex418925_)*)
 : M ((bool * source_pointer * Z)) :=
-   (if negb ((Z.ltb (pos) (stop))) return M (unit) then throw (InvalidBlock (RlpDecode))
+   let source_len := b.(ByteSliceFields_len) in
+   (if Z.eqb (source_len) (0) return M (unit) then throw (InvalidBlock (RlpDecode))
     else returnM (tt)) >>
-   (slice_byte (b) (pos)) >>= fun (w__0 : mword 8) =>
+   (slice_byte (b) (0)) >>= fun (w__0 : mword 8) =>
    let h := uint (w__0) in
-   (if Z.ltb (h) (128) then returnM ((false, pos, 1))
-    else
-      let position := pos in
-      let stop_position := stop in
-      let length_start : Z := Z.add (position) (1) in
-      (if Z.ltb (h) (184) then returnM ((false, length_start, Z.sub (h) (128)))
-       else if Z.ltb (h) (192) return M ((bool * Z * Z)) then
-         let length_width : Z := Z.sub (h) (183) in
-         (if Z.ltb ((Z.sub (stop_position) ((Z.add (position) (1))))) (length_width)
-            return
-            M (unit) then
-            throw (InvalidBlock (RlpDecode))
-          else returnM (tt)) >>
-         let content : Z := Z.add ((Z.add (position) (1))) (length_width) in
-         (rlp_ref_be_length (b) (length_start) (content) (length_width)) >>= fun (w__1 : Z) =>
-         returnM ((false, content, w__1))
-       else if Z.ltb (h) (248) then returnM ((true, length_start, Z.sub (h) (192)))
-       else
-         let length_width : Z := Z.sub (h) (247) in
-         (if Z.ltb ((Z.sub (stop_position) ((Z.add (position) (1))))) (length_width)
-            return
-            M (unit) then
-            throw (InvalidBlock (RlpDecode))
-          else returnM (tt)) >>
-         let content : Z := Z.add ((Z.add (position) (1))) (length_width) in
-         (rlp_ref_be_length (b) (length_start) (content) (length_width)) >>= fun (w__2 : Z) =>
-         returnM ((true, content, w__2)))
-       : M ((bool * Z * Z)))
-    : M ((bool * Z * Z)).
-
-Definition rlp_field_ref {source_off : Z} {source_len : Z}
-(source : ByteSliceFields source_off source_len) (is_list : bool) (full_off : Z) (full_len : Z)
-(content_off : Z) (content_len : Z)
-(*(0 <=? source_off) && (0 <=? source_len) &&
-  ((0 <=? full_off) &&
-    ((0 <=? full_len) &&
-      (((full_off + full_len) <=? source_len) &&
-        ((0 <=? content_off) &&
-          ((0 <=? content_len) && ((content_off + content_len) <=? source_len))))))*)
-: RlpFieldRef :=
-   let fields : RlpFieldRefFields source_off source_len full_off full_len content_off content_len :=
-     {| RlpFieldRefFields_source := source;
-        RlpFieldRefFields_is_list := is_list;
-        RlpFieldRefFields_full_off := full_off;
-        RlpFieldRefFields_full_len := full_len;
-        RlpFieldRefFields_content_off := content_off;
-        RlpFieldRefFields_content_len := content_len |} in
-   @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (fields)))))).
-
-Definition rlp_cursor {source_off : Z} {source_len : Z}
-(source : ByteSliceFields source_off source_len) (current : Z) (stop : Z) (valid : bool)
-(*(0 <=? source_off) && (0 <=? source_len) &&
-  ((0 <=? current) && ((current <=? stop) && (stop <=? source_len)))*)
-: RlpCursor :=
-   let fields : RlpCursorFields source_off source_len current stop :=
-     {| RlpCursorFields_source := source;
-        RlpCursorFields_current := current;
-        RlpCursorFields_stop := stop;
-        RlpCursorFields_valid := valid |} in
-   @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (fields)))).
-
-Definition rlp_invalid_cursor {ex413494_ : Z} {ex413493_ : Z}
-(source : ByteSliceFields ex413493_ ex413494_) (*(0 <=? ex413493_) && (0 <=? ex413494_)*)
-: RlpCursor :=
-   rlp_cursor (source) (0) (0) (false).
-
-Definition rlp_node_cursor {ex413498_ : Z} {ex413497_ : Z}
-(node : ByteSliceFields ex413497_ ex413498_) (*(0 <=? ex413497_) && (0 <=? ex413498_)*)
-: M (RlpCursor) :=
-   let node_length := node.(ByteSliceFields_len) in
-   (if Z.eqb (node_length) (0) then returnM (rlp_invalid_cursor (node))
-    else
-      let node_stop := node_length in
-      (rlp_ref_hdr (node) (0) (node_stop)) >>= fun '((is_list, content, content_len)) =>
-      let content_offset := content in
-      let payload_length := content_len in
-      returnM (if Z.leb (content_offset) (node_length) then
-                 if Z.leb (payload_length) ((Z.sub (node_length) (content_offset))) then
-                   let content_stop := Z.add (content_offset) (payload_length) in
-                   if is_list then
-                     if Z.eqb (content_stop) (node_stop) then
-                       rlp_cursor (node) (content) (content_stop) (true)
-                     else rlp_invalid_cursor (node)
-                   else rlp_invalid_cursor (node)
-                 else rlp_invalid_cursor (node)
-               else rlp_invalid_cursor (node)))
-    : M ({stop & {current & {source_len & {source_off & (RlpCursorFields source_off source_len current stop)}}}}%type).
-
-Definition rlp_ref_cursor {source_off : Z} {source_len : Z} {full_off : Z} {full_len : Z}
-{content_off : Z} {content_len : Z}
-(f : RlpFieldRefFields source_off source_len full_off full_len content_off content_len)
-(*(0 <=? source_off) && (0 <=? source_len) &&
-  ((0 <=? full_off) &&
-    ((0 <=? full_len) &&
-      (((full_off + full_len) <=? source_len) &&
-        ((0 <=? content_off) &&
-          ((0 <=? content_len) && ((content_off + content_len) <=? source_len))))))*)
-:
-M ({cursor_stop & {cursor_current & {cursor_source_len & {cursor_source_off & (RlpCursorFields cursor_source_off cursor_source_len cursor_current cursor_stop)}}}}%type) :=
-   (if f.(RlpFieldRefFields_is_list)
-      return
-      M ({cursor_stop & {cursor_current & {cursor_source_len & {cursor_source_off & (RlpCursorFields cursor_source_off cursor_source_len cursor_current cursor_stop)}}}}%type)
-    then
-      let content_offset := f.(RlpFieldRefFields_content_off) in
-      let content_length := f.(RlpFieldRefFields_content_len) in
-      let source_length := f.(RlpFieldRefFields_source).(ByteSliceFields_len) in
-      let stop := Z.add content_off content_len in
-      let '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ cursor)))) :=
-        (rlp_cursor (f.(RlpFieldRefFields_source)) content_off (stop) (true) : {syn_stop & {syn_current & {syn_source_len & {syn_source_off & (RlpCursorFields syn_source_off syn_source_len syn_current syn_stop)}}}}%type) in
-      let cursor_span := Z.sub (cursor.(RlpCursorFields_stop)) (cursor.(RlpCursorFields_current)) in
-      let full_length := f.(RlpFieldRefFields_full_len) in
-      (if Z.leb (cursor_span) full_len then
-         returnM (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (cursor)))))
-       else throw (InvalidBlock (RlpDecode)))
-       : M ({cursor_stop & {cursor_current & {cursor_source_len & {cursor_source_off & (RlpCursorFields cursor_source_off cursor_source_len cursor_current cursor_stop)}}}}%type)
-    else throw (InvalidBlock (RlpDecode)))
-    : M ({cursor_stop & {cursor_current & {cursor_source_len & {cursor_source_off & (RlpCursorFields cursor_source_off cursor_source_len cursor_current cursor_stop)}}}}%type).
-
-Definition rlp_cursor_empty {ex413524_ : Z} {ex413523_ : Z} {ex413522_ : Z} {ex413521_ : Z}
-(cursor : RlpCursorFields ex413521_ ex413522_ ex413523_ ex413524_)
-(*(0 <=? ex413521_) && (0 <=? ex413522_) &&
-  ((0 <=? ex413523_) && ((ex413523_ <=? ex413524_) && (ex413524_ <=? ex413522_)))*)
-: bool :=
-   andb (cursor.(RlpCursorFields_valid))
-     ((Z.eqb (cursor.(RlpCursorFields_current)) (cursor.(RlpCursorFields_stop)))).
-
-Definition rlp_cursor_pop {source_off : Z} {source_len : Z} {current0 : Z} {stop0 : Z}
-(cursor : RlpCursorFields source_off source_len current0 stop0)
-(*(0 <=? source_off) && (0 <=? source_len) &&
-  ((0 <=? current0) && ((current0 <=? stop0) && (stop0 <=? source_len)))*)
-:
-M ({full_len & {next & {content_len & {content & (RlpFieldRefFields source_off source_len current0 full_len content content_len * RlpCursorFields source_off source_len next stop0)}}}}%type) :=
-   let current := cursor.(RlpCursorFields_current) in
-   let stop := cursor.(RlpCursorFields_stop) in
-   (if orb ((negb (cursor.(RlpCursorFields_valid)))) ((negb ((Z.ltb current0 stop0))))
-      return
-      M (unit) then
-      throw (InvalidBlock (RlpDecode))
-    else returnM (tt)) >>
-   (rlp_ref_hdr (cursor.(RlpCursorFields_source)) current0 stop0) >>= fun '((is_list, content_value, content_len_value)) =>
-   let content := content_value in
-   let content_len := content_len_value in
-   let content_offset := content in
-   let payload_length := content_len in
-   let stop_offset := stop in
-   (if Z.ltb stop0 (content_offset) return M (unit) then throw (InvalidBlock (RlpDecode))
-    else returnM (tt)) >>
-   (if Z.ltb ((Z.sub stop0 (content_offset))) (payload_length) return M (unit) then
-      throw (InvalidBlock (RlpDecode))
-    else returnM (tt)) >>
-   let next := Z.add (content_offset) (payload_length) in
-   let current_offset := current in
-   let next_offset := next in
-   (if Z.ltb current0 (next_offset) then
-      let full_len := Z.sub (next_offset) current0 in
-      let field' : RlpFieldRefFields source_off source_len current0 full_len content content_len :=
-        {| RlpFieldRefFields_source := cursor.(RlpCursorFields_source);
-           RlpFieldRefFields_is_list := is_list;
-           RlpFieldRefFields_full_off := current;
-           RlpFieldRefFields_full_len := full_len;
-           RlpFieldRefFields_content_off := content;
-           RlpFieldRefFields_content_len := content_len |} in
-      let advanced : RlpCursorFields source_off source_len next stop0 :=
-        {| RlpCursorFields_source := cursor.(RlpCursorFields_source);
-           RlpCursorFields_current := next;
-           RlpCursorFields_stop := stop;
-           RlpCursorFields_valid := true |} in
-      returnM (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ ((field', advanced))))))
-    else throw (InvalidBlock (RlpDecode)))
-    : M ({full_len & {syn_next & {syn_content_len & {syn_content & (RlpFieldRefFields source_off source_len current0 full_len syn_content syn_content_len * RlpCursorFields source_off source_len syn_next stop0)}}}}%type).
-
-Definition rlp_cursor_expect_end {ex413548_ : Z} {ex413547_ : Z} {ex413546_ : Z} {ex413545_ : Z}
-(cursor : RlpCursorFields ex413545_ ex413546_ ex413547_ ex413548_)
-(*(0 <=? ex413545_) && (0 <=? ex413546_) &&
-  ((0 <=? ex413547_) && ((ex413547_ <=? ex413548_) && (ex413548_ <=? ex413546_)))*)
-: M (unit) :=
-   (if rlp_cursor_empty (cursor) then returnM (tt)
-    else throw (InvalidBlock (RlpDecode)))
-    : M (unit).
-
-Definition rlp_single_ref {ex413552_ : Z} {ex413551_ : Z}
-(item : ByteSliceFields ex413551_ ex413552_) (*(0 <=? ex413551_) && (0 <=? ex413552_)*)
-: M (RlpFieldRef) :=
-   let item_length := item.(ByteSliceFields_len) in
-   (if Z.eqb (item_length) (0)
-      return
-      M ({content_len & {content_off & {full_len & {full_off & {source_len & {source_off & (RlpFieldRefFields source_off source_len full_off full_len content_off content_len)}}}}}}%type)
-    then
-      throw (InvalidBlock (RlpDecode))
-    else
-      let item_stop := item_length in
-      (rlp_ref_hdr (item) (0) (item_stop)) >>= fun '((isl, cs, cl)) =>
-      let content_offset := cs in
-      let content_length := cl in
-      (if Z.gtb (content_offset) (item_length) return M (unit) then throw (InvalidBlock (RlpDecode))
-       else returnM (tt)) >>
-      (if neq_int (content_length) ((Z.sub (item_length) (content_offset))) return M (unit) then
+   (if Z.ltb (h) (128) then returnM ((false, 0, 1))
+    else if Z.ltb (h) (184) then returnM ((false, 1, Z.sub (h) (128)))
+    else if Z.ltb (h) (192) return M ((bool * Z * Z)) then
+      let length_width : Z := Z.sub (h) (183) in
+      (if Z.ltb ((Z.sub (source_len) (1))) (length_width) return M (unit) then
          throw (InvalidBlock (RlpDecode))
        else returnM (tt)) >>
-      returnM (rlp_field_ref (item) (isl) (0) (item.(ByteSliceFields_len)) (cs) (cl)))
-    : M ({content_len & {content_off & {full_len & {full_off & {source_len & {source_off & (RlpFieldRefFields source_off source_len full_off full_len content_off content_len)}}}}}}%type).
+      let length_bytes := sub_slice (b) (1) (length_width) in
+      (rlp_uint64_width (length_bytes) (length_width)) >>= fun w__1 =>
+      returnM ((false, Z.add (1) (length_width), w__1))
+    else if Z.ltb (h) (248) then returnM ((true, 1, Z.sub (h) (192)))
+    else
+      let length_width : Z := Z.sub (h) (247) in
+      (if Z.ltb ((Z.sub (source_len) (1))) (length_width) return M (unit) then
+         throw (InvalidBlock (RlpDecode))
+       else returnM (tt)) >>
+      let length_bytes := sub_slice (b) (1) (length_width) in
+      (rlp_uint64_width (length_bytes) (length_width)) >>= fun w__2 =>
+      returnM ((true, Z.add (1) (length_width), w__2)))
+    : M ((bool * Z * Z)).
 
-Definition rlp_ref_content {source_off : Z} {source_len : Z} {full_off : Z} {full_len : Z}
-{content_off : Z} {content_len : Z}
-(f : RlpFieldRefFields source_off source_len full_off full_len content_off content_len)
-(*(0 <=? source_off) && (0 <=? source_len) &&
-  ((0 <=? full_off) &&
-    ((0 <=? full_len) &&
-      (((full_off + full_len) <=? source_len) &&
-        ((0 <=? content_off) &&
-          ((0 <=? content_len) && ((content_off + content_len) <=? source_len))))))*)
-: ByteSliceFields (source_off + content_off) content_len :=
-   sub_slice (f.(RlpFieldRefFields_source)) content_off content_len.
+Definition rlp_ref_cursor {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
+: M (RlpCursor (source_off + (source_len - content_len)) content_len) :=
+   (if f.(RlpFieldRef_is_list) then
+      returnM ((sub_slice (f.(RlpFieldRef_source)) ((Z.sub source_len content_len)) content_len))
+    else throw (InvalidBlock (RlpDecode)))
+    : M (ByteSliceFields (source_off + (source_len - content_len)) content_len).
 
-Definition rlp_ref_full {ex413578_ : Z} {ex413577_ : Z} {ex413576_ : Z} {ex413575_ : Z}
-{ex413574_ : Z} {ex413573_ : Z}
-(f : RlpFieldRefFields ex413573_ ex413574_ ex413575_ ex413576_ ex413577_ ex413578_)
-(*(0 <=? ex413573_) && (0 <=? ex413574_) &&
-  ((0 <=? ex413575_) &&
-    ((0 <=? ex413576_) &&
-      (((ex413575_ + ex413576_) <=? ex413574_) &&
-        ((0 <=? ex413577_) && ((0 <=? ex413578_) && ((ex413577_ + ex413578_) <=? ex413574_))))))*)
+Definition rlp_cursor_pop {source_off : Z} {source_len : Z}
+(cursor : ByteSliceFields source_off source_len) (*(0 <=? source_off) && (0 <=? source_len)*)
+:
+M ({full_len & {content_len & (RlpFieldRef source_off full_len content_len * RlpCursor (source_off + full_len) (source_len - full_len))}}%type) :=
+   (if Z.eqb source_len (0) return M (unit) then throw (InvalidBlock (RlpDecode))
+    else returnM (tt)) >>
+   (rlp_ref_hdr (cursor)) >>= fun '((is_list, content_off, content_len_value)) =>
+   let content_len := content_len_value in
+   (if Z.ltb source_len (content_off) return M (unit) then throw (InvalidBlock (RlpDecode))
+    else returnM (tt)) >>
+   (if Z.ltb ((Z.sub source_len (content_off))) (content_len) return M (unit) then
+      throw (InvalidBlock (RlpDecode))
+    else returnM (tt)) >>
+   let full_len := Z.add (content_off) (content_len) in
+   (if andb ((Z.ltb (0) (full_len))) ((Z.leb (full_len) source_len)) then
+      let field_source := sub_slice (cursor) (0) (full_len) in
+      let field' : RlpFieldRef source_off full_len content_len :=
+        {| RlpFieldRef_source :=
+             autocast (T := fun _sz => (ByteSliceFields _sz _)%type)
+             field_source;
+           RlpFieldRef_is_list := is_list;
+           RlpFieldRef_content_len := content_len |} in
+      let advanced := sub_slice (cursor) (full_len) ((Z.sub source_len (full_len))) in
+      returnM ((@existT _ _ full_len (@existT _ _ content_len ((field', advanced)))) : {syn_full_len & {syn_content_len & (RlpFieldRef source_off syn_full_len syn_content_len * ByteSliceFields (source_off + syn_full_len) (source_len - syn_full_len))}}%type)
+    else throw (InvalidBlock (RlpDecode)))
+    : M ({syn_full_len & {syn_content_len & (RlpFieldRef source_off syn_full_len syn_content_len * ByteSliceFields (source_off + syn_full_len) (source_len - syn_full_len))}}%type).
+
+Definition rlp_cursor_expect_end {source_off : Z} {source_len : Z}
+(cursor : ByteSliceFields source_off source_len) (*(0 <=? source_off) && (0 <=? source_len)*)
+: M (unit) :=
+   (if Z.eqb source_len (0) then returnM (tt) else throw (InvalidBlock (RlpDecode)))  : M (unit).
+
+Definition rlp_single_ref {source_off : Z} {source_len : Z}
+(item : ByteSliceFields source_off source_len) (*(0 <=? source_off) && (0 <=? source_len)*)
+: M ({content_len & (RlpFieldRef source_off source_len content_len)}%type) :=
+   let item_length := item.(ByteSliceFields_len) in
+   (if Z.eqb source_len (0)
+      return
+      M ({content_len & (RlpFieldRef source_off source_len content_len)}%type) then
+      throw (InvalidBlock (RlpDecode))
+    else
+      (rlp_ref_hdr (item)) >>= fun '((is_list, content_off, content_len_value)) =>
+      let content_len := content_len_value in
+      (if Z.gtb (content_off) source_len return M (unit) then throw (InvalidBlock (RlpDecode))
+       else returnM (tt)) >>
+      (if neq_int (content_len) ((Z.sub source_len (content_off))) return M (unit) then
+         throw (InvalidBlock (RlpDecode))
+       else returnM (tt)) >>
+      let field' : RlpFieldRef source_off source_len content_len :=
+        {| RlpFieldRef_source := item;
+           RlpFieldRef_is_list := is_list;
+           RlpFieldRef_content_len := content_len |} in
+      returnM ((@existT _ _ content_len (field')) : {content_len & (RlpFieldRef source_off source_len content_len)}%type))
+    : M ({content_len & (RlpFieldRef source_off source_len content_len)}%type).
+
+Definition rlp_node_cursor {ex419017_ : Z} {ex419016_ : Z}
+(node : ByteSliceFields ex419016_ ex419017_) (*(0 <=? ex419016_) && (0 <=? ex419017_)*)
+: M ({source_len & {source_off & (RlpCursor source_off source_len)}}%type) :=
+   (rlp_single_ref (node)) >>= fun '(@existT _ _ __w__0 w__0) =>
+   (rlp_ref_cursor (w__0)) >>= fun dependentResult =>
+   returnM (@existT _ _ __w__0 (@existT _ _ (ex419016_ + (ex419017_ - __w__0)) (dependentResult)) : {source_len & {source_off & (ByteSliceFields source_off source_len)}}%type).
+
+Definition rlp_ref_content {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : ByteSlice :=
-   @existT _ _ _ (@existT _ _ _ (sub_slice (f.(RlpFieldRefFields_source))
-                                   (f.(RlpFieldRefFields_full_off)) (f.(RlpFieldRefFields_full_len)))).
+   @existT _ _ content_len (@existT _ _ (source_off + (source_len - content_len)) (sub_slice
+                                                                                     (f.(RlpFieldRef_source))
+                                                                                     ((Z.sub
+                                                                                         source_len
+                                                                                         content_len))
+                                                                                     content_len)).
 
-Definition rlp_ref_framing_canonical {ex413590_ : Z} {ex413589_ : Z} {ex413588_ : Z} {ex413587_ : Z}
-{ex413586_ : Z} {ex413585_ : Z}
-(f : RlpFieldRefFields ex413585_ ex413586_ ex413587_ ex413588_ ex413589_ ex413590_)
-(*(0 <=? ex413585_) && (0 <=? ex413586_) &&
-  ((0 <=? ex413587_) &&
-    ((0 <=? ex413588_) &&
-      (((ex413587_ + ex413588_) <=? ex413586_) &&
-        ((0 <=? ex413589_) && ((0 <=? ex413590_) && ((ex413589_ + ex413590_) <=? ex413586_))))))*)
+Definition rlp_ref_framing_canonical {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : M (bool) :=
-   let n := f.(RlpFieldRefFields_content_len) in
+   let n := f.(RlpFieldRef_content_len) in
    let payload_length := n in
-   let full_length := f.(RlpFieldRefFields_full_len) in
-   let fo := f.(RlpFieldRefFields_full_off) in
-   let full_offset := fo in
-   let co := f.(RlpFieldRefFields_content_off) in
-   let source := f.(RlpFieldRefFields_source) in
+   let full_length := f.(RlpFieldRef_source).(ByteSliceFields_len) in
+   let full_offset := 0 in
+   let content_offset := Z.sub source_len content_len in
+   let source := f.(RlpFieldRef_source) in
    let source_length := source.(ByteSliceFields_len) in
-   (if Z.eqb (full_length) (0) then returnM (false)
-    else if f.(RlpFieldRefFields_is_list) return M (bool) then
-      (if Z.leb (n) (RLP_SHORT_LENGTH_LIMIT) return M (bool) then
-         and_boolM (returnM ((Z.eqb (full_length) ((Z.add (payload_length) (1))))))
-           ((slice_byte (f.(RlpFieldRefFields_source)) (fo)) >>= fun (w__0 : mword 8) =>
-            returnM (((eq_vec (w__0) ((add_vec ((Ox"C0")) ((rlp_nat_length_byte (n))))))  : bool)))
+   (if Z.eqb source_len (0) then returnM (false)
+    else if f.(RlpFieldRef_is_list) return M (bool) then
+      (if Z.leb content_len (RLP_SHORT_LENGTH_LIMIT) return M (bool) then
+         (and_boolM (returnM (((Z.eqb source_len ((Z.add content_len (1))))  : bool)))
+            ((slice_byte (f.(RlpFieldRef_source)) (0)) >>= fun (w__0 : mword 8) =>
+             returnM (((eq_vec (w__0) ((add_vec ((Ox"C0")) ((rlp_nat_length_byte content_len)))))
+              : bool))))
+          : M (bool)
        else
-         ((rlp_length_word (n)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__2 : Z) =>
+         ((rlp_length_word content_len) >>= fun semanticResult =>
+          returnM (semanticResult).(word_value)) >>= fun (w__2 : Z) =>
          let '((len_bytes, length_width)) := minimal_word_bytes (w__2) in
-         and_boolM
-           (returnM ((Z.eqb (full_length) ((Z.add ((Z.add (1) (length_width))) (payload_length))))))
+         and_boolM (returnM ((Z.eqb source_len ((Z.add ((Z.add (1) (length_width))) content_len)))))
            ((and_boolM
-               ((slice_byte (f.(RlpFieldRefFields_source)) (fo)) >>= fun (w__3 : mword 8) =>
+               ((slice_byte (f.(RlpFieldRef_source)) (0)) >>= fun (w__3 : mword 8) =>
                 returnM (((eq_vec (w__3)
                              ((add_vec ((Ox"F7")) ((rlp_nat_length_byte (length_width))))))
                  : bool)))
-               ((rlp_bytes_equal_at (len_bytes) (f.(RlpFieldRefFields_source))
-                   ((Z.add (full_offset) (1))))
+               ((rlp_bytes_equal_at (len_bytes) (f.(RlpFieldRef_source)) ((Z.add (full_offset) (1))))
                 : M (bool)))
             : M (bool)))
        : M (bool)
-    else if Z.eqb (payload_length) (0) return M (bool) then
-      and_boolM (returnM ((Z.eqb (full_length) (1))))
-        ((slice_byte (f.(RlpFieldRefFields_source)) (fo)) >>= fun (w__8 : mword 8) =>
-         returnM (((eq_vec (w__8) ((Ox"80")))  : bool)))
+    else if Z.eqb content_len (0) return M (bool) then
+      (and_boolM (returnM (((Z.eqb source_len (1))  : bool)))
+         ((slice_byte (f.(RlpFieldRef_source)) (0)) >>= fun (w__8 : mword 8) =>
+          returnM (((eq_vec (w__8) ((Ox"80")))  : bool))))
+       : M (bool)
     else
-      (slice_byte (f.(RlpFieldRefFields_source)) (co)) >>= fun first =>
-      (if andb ((Z.eqb (payload_length) (1))) ((eq_vec ((access_vec_dec (first) (7))) (('b"0"))))
+      (slice_byte (f.(RlpFieldRef_source)) (content_offset)) >>= fun first =>
+      (if andb ((Z.eqb content_len (1))) ((eq_vec ((access_vec_dec (first) (7))) (('b"0"))))
          return
          M (bool) then
-         and_boolM (returnM ((Z.eqb (full_length) (1))))
-           ((slice_byte (f.(RlpFieldRefFields_source)) (fo)) >>= fun (w__10 : mword 8) =>
-            returnM (((eq_vec (w__10) (first))  : bool)))
-       else if Z.leb (n) (RLP_SHORT_LENGTH_LIMIT) return M (bool) then
-         and_boolM (returnM ((Z.eqb (full_length) ((Z.add (payload_length) (1))))))
-           ((slice_byte (f.(RlpFieldRefFields_source)) (fo)) >>= fun (w__12 : mword 8) =>
-            returnM (((eq_vec (w__12) ((add_vec ((Ox"80")) ((rlp_nat_length_byte (n))))))  : bool)))
+         (and_boolM (returnM (((Z.eqb source_len (1))  : bool)))
+            ((slice_byte (f.(RlpFieldRef_source)) (0)) >>= fun (w__10 : mword 8) =>
+             returnM (((eq_vec (w__10) (first))  : bool))))
+          : M (bool)
+       else if Z.leb content_len (RLP_SHORT_LENGTH_LIMIT) return M (bool) then
+         (and_boolM (returnM (((Z.eqb source_len ((Z.add content_len (1))))  : bool)))
+            ((slice_byte (f.(RlpFieldRef_source)) (0)) >>= fun (w__12 : mword 8) =>
+             returnM (((eq_vec (w__12) ((add_vec ((Ox"80")) ((rlp_nat_length_byte content_len)))))
+              : bool))))
+          : M (bool)
        else
-         ((rlp_length_word (n)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__14 : Z) =>
+         ((rlp_length_word content_len) >>= fun semanticResult =>
+          returnM (semanticResult).(word_value)) >>= fun (w__14 : Z) =>
          let '((len_bytes, length_width)) := minimal_word_bytes (w__14) in
-         and_boolM
-           (returnM ((Z.eqb (full_length) ((Z.add ((Z.add (1) (length_width))) (payload_length))))))
+         and_boolM (returnM ((Z.eqb source_len ((Z.add ((Z.add (1) (length_width))) content_len)))))
            ((and_boolM
-               ((slice_byte (f.(RlpFieldRefFields_source)) (fo)) >>= fun (w__15 : mword 8) =>
+               ((slice_byte (f.(RlpFieldRef_source)) (0)) >>= fun (w__15 : mword 8) =>
                 returnM (((eq_vec (w__15)
                              ((add_vec ((Ox"B7")) ((rlp_nat_length_byte (length_width))))))
                  : bool)))
-               ((rlp_bytes_equal_at (len_bytes) (f.(RlpFieldRefFields_source))
-                   ((Z.add (full_offset) (1))))
+               ((rlp_bytes_equal_at (len_bytes) (f.(RlpFieldRef_source)) ((Z.add (full_offset) (1))))
                 : M (bool)))
             : M (bool)))
        : M (bool))
     : M (bool).
 
-Definition rlp_ref_bytes_canonical {ex413602_ : Z} {ex413601_ : Z} {ex413600_ : Z} {ex413599_ : Z}
-{ex413598_ : Z} {ex413597_ : Z}
-(f : RlpFieldRefFields ex413597_ ex413598_ ex413599_ ex413600_ ex413601_ ex413602_)
-(*(0 <=? ex413597_) && (0 <=? ex413598_) &&
-  ((0 <=? ex413599_) &&
-    ((0 <=? ex413600_) &&
-      (((ex413599_ + ex413600_) <=? ex413598_) &&
-        ((0 <=? ex413601_) && ((0 <=? ex413602_) && ((ex413601_ + ex413602_) <=? ex413598_))))))*)
+Definition rlp_ref_bytes_canonical {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : M (bool) :=
-   (and_boolM (returnM (((negb (f.(RlpFieldRefFields_is_list)))  : bool)))
+   (and_boolM (returnM (((negb (f.(RlpFieldRef_is_list)))  : bool)))
       ((rlp_ref_framing_canonical (f))
        : M (bool)))
     : M (bool).
 
-Definition rlp_ref_uint_canonical {ex413614_ : Z} {ex413613_ : Z} {ex413612_ : Z} {ex413611_ : Z}
-{ex413610_ : Z} {ex413609_ : Z}
-(f : RlpFieldRefFields ex413609_ ex413610_ ex413611_ ex413612_ ex413613_ ex413614_)
-(*(0 <=? ex413609_) && (0 <=? ex413610_) &&
-  ((0 <=? ex413611_) &&
-    ((0 <=? ex413612_) &&
-      (((ex413611_ + ex413612_) <=? ex413610_) &&
-        ((0 <=? ex413613_) && ((0 <=? ex413614_) && ((ex413613_ + ex413614_) <=? ex413610_))))))*)
+Definition rlp_ref_uint_canonical {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : M (bool) :=
    (rlp_ref_bytes_canonical (f)) >>= fun (w__0 : bool) =>
    (if negb (w__0) then returnM (false)
     else
-      or_boolM (returnM ((Z.eqb (f.(RlpFieldRefFields_content_len)) (0))))
-        ((slice_byte (f.(RlpFieldRefFields_source)) (f.(RlpFieldRefFields_content_off))) >>= fun (w__1 : mword 8) =>
-         returnM (((neq_vec (w__1) ((Ox"00")))  : bool))))
+      (or_boolM (returnM (((Z.eqb content_len (0))  : bool)))
+         ((slice_byte (f.(RlpFieldRef_source)) ((Z.sub source_len content_len))) >>= fun (w__1 : mword 8) =>
+          returnM (((neq_vec (w__1) ((Ox"00")))  : bool))))
+       : M (bool))
     : M (bool).
 
-Definition rlp_ref_fixed_bytes {ex413626_ : Z} {ex413625_ : Z} {ex413624_ : Z} {ex413623_ : Z}
-{ex413622_ : Z} {ex413621_ : Z}
-(f : RlpFieldRefFields ex413621_ ex413622_ ex413623_ ex413624_ ex413625_ ex413626_) (len : Z)
-(*(0 <=? ex413621_) && (0 <=? ex413622_) &&
-  ((0 <=? ex413623_) &&
-    ((0 <=? ex413624_) &&
-      (((ex413623_ + ex413624_) <=? ex413622_) &&
-        ((0 <=? ex413625_) && ((0 <=? ex413626_) && ((ex413625_ + ex413626_) <=? ex413622_))))))*)
-(*0 <=? len*)
-: M (ByteSlice) :=
-   (and_boolM ((rlp_ref_bytes_canonical (f))  : M (bool))
-      (returnM ((Z.eqb (f.(RlpFieldRefFields_content_len)) (len))))) >>= fun w__1 =>
-   (if w__1 then returnM (@existT _ _ _ (@existT _ _ _ (rlp_ref_content (f))))
-    else throw (InvalidBlock (RlpDecode)))
-    : M ({len & {off & (ByteSliceFields off len)}}%type).
-
-Definition rlp_ref_word {ex413639_ : Z} {ex413638_ : Z} {ex413637_ : Z} {ex413636_ : Z}
-{ex413635_ : Z} {ex413634_ : Z}
-(f : RlpFieldRefFields ex413634_ ex413635_ ex413636_ ex413637_ ex413638_ ex413639_)
-(*(0 <=? ex413634_) && (0 <=? ex413635_) &&
-  ((0 <=? ex413636_) &&
-    ((0 <=? ex413637_) &&
-      (((ex413636_ + ex413637_) <=? ex413635_) &&
-        ((0 <=? ex413638_) && ((0 <=? ex413639_) && ((ex413638_ + ex413639_) <=? ex413635_))))))*)
+Definition rlp_ref_word {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : M (word) :=
-   (let n := f.(RlpFieldRefFields_content_len) in
-   (if orb (f.(RlpFieldRefFields_is_list)) ((Z.ltb (RLP_WORD_LENGTH_LIMIT) (n))) return M (Z) then
+   (let n := f.(RlpFieldRef_content_len) in
+   (if orb (f.(RlpFieldRef_is_list)) ((Z.ltb (RLP_WORD_LENGTH_LIMIT) content_len)) return M (Z) then
       throw (InvalidBlock (RlpDecode))
     else
-      ((slice_load_n (f.(RlpFieldRefFields_source)) (f.(RlpFieldRefFields_content_off)) (n)) >>= fun semanticResult =>
+      ((slice_load_n (f.(RlpFieldRef_source)) ((Z.sub source_len content_len)) content_len) >>= fun semanticResult =>
        returnM (semanticResult).(word_value))
        : M (Z))
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition rlp_ref_uint_word {ex413651_ : Z} {ex413650_ : Z} {ex413649_ : Z} {ex413648_ : Z}
-{ex413647_ : Z} {ex413646_ : Z}
-(f : RlpFieldRefFields ex413646_ ex413647_ ex413648_ ex413649_ ex413650_ ex413651_)
-(*(0 <=? ex413646_) && (0 <=? ex413647_) &&
-  ((0 <=? ex413648_) &&
-    ((0 <=? ex413649_) &&
-      (((ex413648_ + ex413649_) <=? ex413647_) &&
-        ((0 <=? ex413650_) && ((0 <=? ex413651_) && ((ex413650_ + ex413651_) <=? ex413647_))))))*)
+Definition rlp_ref_uint_word {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : M (word) :=
    ((rlp_ref_uint_canonical (f)) >>= fun (w__0 : bool) =>
    (if w__0 return M (Z) then
@@ -2708,29 +2514,25 @@ Definition rlp_ref_uint_word {ex413651_ : Z} {ex413650_ : Z} {ex413649_ : Z} {ex
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition rlp_ref_uint64 {ex413663_ : Z} {ex413662_ : Z} {ex413661_ : Z} {ex413660_ : Z}
-{ex413659_ : Z} {ex413658_ : Z}
-(f : RlpFieldRefFields ex413658_ ex413659_ ex413660_ ex413661_ ex413662_ ex413663_)
-(*(0 <=? ex413658_) && (0 <=? ex413659_) &&
-  ((0 <=? ex413660_) &&
-    ((0 <=? ex413661_) &&
-      (((ex413660_ + ex413661_) <=? ex413659_) &&
-        ((0 <=? ex413662_) && ((0 <=? ex413663_) && ((ex413662_ + ex413663_) <=? ex413659_))))))*)
+Definition rlp_ref_uint64 {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : M (ssz_uint) :=
    ((or_boolM
        ((rlp_ref_uint_canonical (f)) >>= fun (w__0 : bool) => returnM (((negb (w__0))  : bool)))
-       (returnM ((Z.ltb (RLP_UINT64_LENGTH_LIMIT) (f.(RlpFieldRefFields_content_len)))))) >>= fun w__1 =>
+       (returnM (((Z.ltb (RLP_UINT64_LENGTH_LIMIT) content_len)  : bool)))) >>= fun (w__1 : bool) =>
    (if w__1 return M (unit) then throw (InvalidBlock (RlpDecode))
     else returnM (tt)) >>
-   let content_length := f.(RlpFieldRefFields_content_len) in
-   let content := rlp_ref_content (f) in
-   let width : Z := Z.rem (content_length) (9) in
+   let content_length := f.(RlpFieldRef_content_len) in
+   let '(@existT _ _ content__'len (@existT _ _ content__'off content)) :=
+     (rlp_ref_content (f) : {len & {off & (ByteSliceFields off len)}}%type) in
+   let width : Z := Z.rem content_len (9) in
    rlp_uint64_width (content) (width)) >>= fun semanticResult =>
    returnM (Build_ssz_uint (semanticResult)).
 
-Fixpoint _rec_rlp_uint_content {ex413667_ : Z} {ex413666_ : Z}
-(content : ByteSliceFields ex413666_ ex413667_) (_reclimit : Z)
-(*(0 <=? ex413666_) && (0 <=? ex413667_)*) (_acc : Acc (Zwf 0) _reclimit)
+Fixpoint _rec_rlp_uint_content {ex419147_ : Z} {ex419146_ : Z}
+(content : ByteSliceFields ex419146_ ex419147_) (_reclimit : Z)
+(*(0 <=? ex419146_) && (0 <=? ex419147_)*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (Z).
 exact (
    assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
@@ -2748,87 +2550,19 @@ exact (
 Defined.
 
 
-Definition rlp_uint_content {ex413672_ : Z} {ex413671_ : Z}
-(content : ByteSliceFields ex413671_ ex413672_) (*(0 <=? ex413671_) && (0 <=? ex413672_)*)
+Definition rlp_uint_content {ex419152_ : Z} {ex419151_ : Z}
+(content : ByteSliceFields ex419151_ ex419152_) (*(0 <=? ex419151_) && (0 <=? ex419152_)*)
 : M (Z) :=
    (_rec_rlp_uint_content (content) ((content.(ByteSliceFields_len)  : Z)) (Zwf_guarded _))  : M (Z).
 
-Definition rlp_ref_uint {ex413685_ : Z} {ex413684_ : Z} {ex413683_ : Z} {ex413682_ : Z}
-{ex413681_ : Z} {ex413680_ : Z}
-(f : RlpFieldRefFields ex413680_ ex413681_ ex413682_ ex413683_ ex413684_ ex413685_)
-(*(0 <=? ex413680_) && (0 <=? ex413681_) &&
-  ((0 <=? ex413682_) &&
-    ((0 <=? ex413683_) &&
-      (((ex413682_ + ex413683_) <=? ex413681_) &&
-        ((0 <=? ex413684_) && ((0 <=? ex413685_) && ((ex413684_ + ex413685_) <=? ex413681_))))))*)
+Definition rlp_ref_uint {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : M (Z) :=
    (rlp_ref_uint_canonical (f)) >>= fun (w__0 : bool) =>
-   (if w__0 return M (Z) then (rlp_uint_content ((rlp_ref_content (f))))  : M (Z)
+   (if w__0 return M (Z) then (rlp_uint_content ((projT2 (projT2 (rlp_ref_content (f))))))  : M (Z)
     else throw (InvalidBlock (RlpDecode)))
     : M (Z).
-
-Definition rlp_ref_account_nonce {ex413697_ : Z} {ex413696_ : Z} {ex413695_ : Z} {ex413694_ : Z}
-{ex413693_ : Z} {ex413692_ : Z}
-(f : RlpFieldRefFields ex413692_ ex413693_ ex413694_ ex413695_ ex413696_ ex413697_)
-(*(0 <=? ex413692_) && (0 <=? ex413693_) &&
-  ((0 <=? ex413694_) &&
-    ((0 <=? ex413695_) &&
-      (((ex413694_ + ex413695_) <=? ex413693_) &&
-        ((0 <=? ex413696_) && ((0 <=? ex413697_) && ((ex413696_ + ex413697_) <=? ex413693_))))))*)
-: M (account_nonce) :=
-   (((rlp_ref_uint64 (f)) >>= fun semanticResult => returnM (semanticResult).(ssz_uint_value))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_account_nonce (semanticResult)).
-
-Definition rlp_ref_block_number {ex413709_ : Z} {ex413708_ : Z} {ex413707_ : Z} {ex413706_ : Z}
-{ex413705_ : Z} {ex413704_ : Z}
-(f : RlpFieldRefFields ex413704_ ex413705_ ex413706_ ex413707_ ex413708_ ex413709_)
-(*(0 <=? ex413704_) && (0 <=? ex413705_) &&
-  ((0 <=? ex413706_) &&
-    ((0 <=? ex413707_) &&
-      (((ex413706_ + ex413707_) <=? ex413705_) &&
-        ((0 <=? ex413708_) && ((0 <=? ex413709_) && ((ex413708_ + ex413709_) <=? ex413705_))))))*)
-: M (block_number) :=
-   (rlp_ref_uint (f))  : M (Z).
-
-Definition rlp_ref_blob_gas_used {ex413721_ : Z} {ex413720_ : Z} {ex413719_ : Z} {ex413718_ : Z}
-{ex413717_ : Z} {ex413716_ : Z}
-(f : RlpFieldRefFields ex413716_ ex413717_ ex413718_ ex413719_ ex413720_ ex413721_)
-(*(0 <=? ex413716_) && (0 <=? ex413717_) &&
-  ((0 <=? ex413718_) &&
-    ((0 <=? ex413719_) &&
-      (((ex413718_ + ex413719_) <=? ex413717_) &&
-        ((0 <=? ex413720_) && ((0 <=? ex413721_) && ((ex413720_ + ex413721_) <=? ex413717_))))))*)
-: M (blob_gas_used_typ) :=
-   (((rlp_ref_uint64 (f)) >>= fun semanticResult => returnM (semanticResult).(ssz_uint_value)) >>= fun value =>
-   (if Z.leb (value) ((Z.mul (21) ((pow2 (17))))) then returnM (value)
-    else throw (InvalidBlock (RlpDecode)))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_blob_gas_used_typ (semanticResult)).
-
-Definition rlp_ref_excess_blob_gas {ex413733_ : Z} {ex413732_ : Z} {ex413731_ : Z} {ex413730_ : Z}
-{ex413729_ : Z} {ex413728_ : Z}
-(f : RlpFieldRefFields ex413728_ ex413729_ ex413730_ ex413731_ ex413732_ ex413733_)
-(*(0 <=? ex413728_) && (0 <=? ex413729_) &&
-  ((0 <=? ex413730_) &&
-    ((0 <=? ex413731_) &&
-      (((ex413730_ + ex413731_) <=? ex413729_) &&
-        ((0 <=? ex413732_) && ((0 <=? ex413733_) && ((ex413732_ + ex413733_) <=? ex413729_))))))*)
-: M (excess_blob_gas_typ) :=
-   (((rlp_ref_uint64 (f)) >>= fun semanticResult => returnM (semanticResult).(ssz_uint_value))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_excess_blob_gas_typ (semanticResult)).
-
-Definition rlp_ref_chain_identifier {ex413745_ : Z} {ex413744_ : Z} {ex413743_ : Z} {ex413742_ : Z}
-{ex413741_ : Z} {ex413740_ : Z}
-(f : RlpFieldRefFields ex413740_ ex413741_ ex413742_ ex413743_ ex413744_ ex413745_)
-(*(0 <=? ex413740_) && (0 <=? ex413741_) &&
-  ((0 <=? ex413742_) &&
-    ((0 <=? ex413743_) &&
-      (((ex413742_ + ex413743_) <=? ex413741_) &&
-        ((0 <=? ex413744_) && ((0 <=? ex413745_) && ((ex413744_ + ex413745_) <=? ex413741_))))))*)
-: M (chain_identifier) :=
-   (rlp_ref_uint (f))  : M (Z).
 
 Definition create_address (sender : vec (mword 8) 20) (nonce : account_nonce)
 (*(0 <=? nonce) && (nonce <=? (2 ^ 64 - 1))*)
@@ -2841,7 +2575,7 @@ Definition create_address (sender : vec (mword 8) 20) (nonce : account_nonce)
    (rlp_write_list_prefix (content_len)) >>
    (rlp_write_addr (sender)) >>
    (rlp_write_uint_word (nonce)) >>
-   (rlp_finish (mark)) >>= fun '(@existT _ _ _ (@existT _ _ _ encoded)) =>
+   (rlp_finish (mark)) >>= fun '(@existT _ _ __encoded1 (@existT _ _ __encoded0 encoded)) =>
    (keccak256_slice (encoded)) >>= fun (w__0 : vec (mword 8) 32) =>
    let address := word_to_address (Build_word ((((hash_to_word (w__0)).(word_value))))) in
    (scratch_rewind (mark)) >> returnM (address).
@@ -2865,9 +2599,9 @@ Definition LEGACY_SIGNATURE_SUFFIX_LENGTH : Z := 2.
 #[export] Hint Unfold LEGACY_SIGNATURE_SUFFIX_LENGTH : sail.
 Definition PUBLIC_KEY_BODY_LENGTH : Z := DOUBLE_WORD_BYTE_LENGTH.
 #[export] Hint Unfold PUBLIC_KEY_BODY_LENGTH : sail.
-Definition tx_signing_hash {ex413752_ : Z} {ex413751_ : Z}
-(t : TxType) (content_src : ByteSliceFields ex413751_ ex413752_) (v : word)
-(*(0 <=? ex413751_) && (0 <=? ex413752_)*) (*(0 <=? v) && (v <=? (2 ^ 256 - 1))*)
+Definition tx_signing_hash {ex419178_ : Z} {ex419177_ : Z}
+(t : TxType) (content_src : ByteSliceFields ex419177_ ex419178_) (v : word)
+(*(0 <=? ex419177_) && (0 <=? ex419178_)*) (*(0 <=? v) && (v <=? (2 ^ 256 - 1))*)
 : M (hash) :=
    let v := (v).(word_value) in
    let tb := tx_type_byte (t) in
@@ -2891,22 +2625,22 @@ Definition tx_signing_hash {ex413752_ : Z} {ex413751_ : Z}
       (scratch_begin (tt)) >>= fun mark =>
       (rlp_write_uint_word (chain_id)) >>
       (scratch_push_bytes ([(Ox"80"); (Ox"80")]) (LEGACY_SIGNATURE_SUFFIX_LENGTH)) >>
-      (rlp_finish (mark)) >>= fun '(@existT _ _ _ (@existT _ _ _ suffix)) =>
+      (rlp_finish (mark)) >>= fun '(@existT _ _ __suffix1 (@existT _ _ __suffix0 suffix)) =>
       (keccak256_segments
          ([bytes_list (prefix) (prefix_len);
-         BytesSlice (@existT _ _ _ (@existT _ _ _ (content_src)));
+         BytesSlice (@existT _ _ ex419178_ (@existT _ _ ex419177_ (content_src)));
          BytesSlice (@existT _ _ _ (@existT _ _ _ (suffix)))])) >>= fun signing_hash =>
       (scratch_rewind (mark)) >> returnM (signing_hash)
     else if neq_vec (tb) ((Ox"00")) return M (vec (mword 8) 32) then
       (keccak256_segments
          ([bytes_list ([tb]) (1);
          bytes_list (prefix) (prefix_len);
-         BytesSlice (@existT _ _ _ (@existT _ _ _ (content_src)))]))
+         BytesSlice (@existT _ _ ex419178_ (@existT _ _ ex419177_ (content_src)))]))
        : M (vec (mword 8) 32)
     else
       (keccak256_segments
          ([bytes_list (prefix) (prefix_len);
-         BytesSlice (@existT _ _ _ (@existT _ _ _ (content_src)))]))
+         BytesSlice (@existT _ _ ex419178_ (@existT _ _ ex419177_ (content_src)))]))
        : M (vec (mword 8) 32))
     : M (vec (mword 8) 32).
 
@@ -2925,27 +2659,25 @@ Definition auth_signing_hash (chain_id : word) (addr : vec (mword 8) 20) (nonce 
    (rlp_write_uint_word (chain_id)) >>
    (rlp_write_addr (addr)) >>
    (rlp_write_uint_word (nonce)) >>
-   (rlp_finish (mark)) >>= fun '(@existT _ _ _ (@existT _ _ _ encoded)) =>
+   (rlp_finish (mark)) >>= fun '(@existT _ _ __encoded1 (@existT _ _ __encoded0 encoded)) =>
    (keccak256_slice (encoded)) >>= fun signing_hash =>
    (scratch_rewind (mark)) >> returnM (signing_hash).
 
-Definition tx_sig_v_valid (chain_id : Z) (t : TxType) (v : word) (*0 <=? chain_id*)
-(*(0 <=? v) && (v <=? (2 ^ 256 - 1))*)
-: M (bool) :=
+Definition tx_sig_v_valid (chain_id : chain_identifier) (t : TxType) (v : word)
+(*(0 <=? chain_id) && (chain_id <=? (2 ^ 64 - 1))*) (*(0 <=? v) && (v <=? (2 ^ 256 - 1))*)
+: bool :=
+   let chain_id := (chain_id).(chain_identifier_value) in
    let v := (v).(word_value) in
    match t with
    | LegacyTx =>
-      or_boolM (returnM ((Z.eqb (v) (27))))
-        (or_boolM (returnM ((Z.eqb (v) (28))))
-           ((and_boolM (returnM (((word_ule (35) (v))  : bool)))
-               ((word_of_chain_identifier (chain_id)) >>= fun w__0 =>
-                returnM (((Z.eqb (((legacy_sig_chain_id (Build_word ((v)))).(word_value))) (w__0))
-                 : bool))))
-            : M (bool)))
-   | _ =>
-      returnM ((orb ((Z.eqb (v) ((WORD_ZERO).(word_value)))) ((Z.eqb (v) ((WORD_ONE).(word_value))))))
-   end
-    : M (bool).
+      orb ((Z.eqb (v) (27)))
+        ((orb ((Z.eqb (v) (28)))
+            ((andb ((word_ule (35) (v)))
+                (((Z.eqb (((legacy_sig_chain_id (Build_word ((v)))).(word_value)))
+                     (((word_of_chain_identifier (Build_chain_identifier ((chain_id)))).(chain_identifier_value))))
+                 : bool))))))
+   | _ => orb ((Z.eqb (v) ((WORD_ZERO).(word_value)))) ((Z.eqb (v) ((WORD_ONE).(word_value))))
+   end.
 
 Definition tx_y_parity (t : TxType) (v : word) (*(0 <=? v) && (v <=? (2 ^ 256 - 1))*) : y_parity :=
    let v := (v).(word_value) in
@@ -2981,31 +2713,28 @@ Definition EMPTY_ACCESS_LIST_DECODE : AccessListDecode 0 0 :=
 #[export] Hint Unfold EMPTY_ACCESS_LIST_DECODE : sail.
 Definition rlp_item_count_increment (value : Z) (*0 <=? (value + 1)*) : Z := Z.add (value) (1).
 
-Fixpoint _rec_decode_access_list_keys {source_off : Z} {source_len : Z} {current : Z} {stop : Z}
-{address_bound : Z} {slot_bound : Z}
-(cursor : RlpCursorFields source_off source_len current stop) (addr : vec (mword 8) 20)
+Fixpoint _rec_decode_access_list_keys {source_off : Z} {source_len : Z} {address_bound : Z}
+{slot_bound : Z}
+(cursor : ByteSliceFields source_off source_len) (addr : vec (mword 8) 20)
 (tail : AccessListDecode address_bound slot_bound) (_reclimit : Z)
 (*(0 <=? source_off) && (0 <=? source_len) &&
-  ((0 <=? current) &&
-    ((current <=? stop) &&
-      ((stop <=? source_len) &&
-        ((0 <=? address_bound) && ((0 <=? slot_bound) && (0 <=? (slot_bound + (stop - current))))))))*)
+  ((0 <=? address_bound) && ((0 <=? slot_bound) && (0 <=? (slot_bound + source_len))))*)
 (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (AccessListDecode address_bound (slot_bound + (stop - current))).
+{struct _acc} : M (AccessListDecode address_bound (slot_bound + source_len)).
 exact (
    assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if rlp_cursor_empty (cursor) then
+   (if Z.eqb source_len (0) then
       returnM (({| AccessListDecode_addresses := tail.(AccessListDecode_addresses);
                    AccessListDecode_storage_slots := tail.(AccessListDecode_storage_slots);
                    AccessListDecode_address_count := tail.(AccessListDecode_address_count);
                    AccessListDecode_slot_count := tail.(AccessListDecode_slot_count) |}))
     else
-      (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (key, next))))) =>
+      (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (key, next))) =>
       ((rlp_ref_word (key)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
       let storage_key : StorageKey :=
         {| StorageKey_addr := addr;
            StorageKey_slot := (Build_word (w__0)) |} in
-      (_rec_decode_access_list_keys _ _ _ _ _ _ (next) (addr) (tail) ((Z.sub (_reclimit) (1)))
+      (_rec_decode_access_list_keys _ _ _ _ (next) (addr) (tail) ((Z.sub (_reclimit) (1)))
          (_limit_reduces_bool _acc ltac:(assumption))) >>= fun result =>
       returnM (({| AccessListDecode_addresses := result.(AccessListDecode_addresses);
                    AccessListDecode_storage_slots :=
@@ -3013,85 +2742,69 @@ exact (
                    AccessListDecode_address_count := result.(AccessListDecode_address_count);
                    AccessListDecode_slot_count :=
                      rlp_item_count_increment (result.(AccessListDecode_slot_count)) |})))
-    : M (AccessListDecode address_bound (slot_bound + (stop - current)))
+    : M (AccessListDecode address_bound (slot_bound + source_len))
 ).
 Defined.
 
 
-Definition decode_access_list_keys {source_off : Z} {source_len : Z} {current0 : Z} {stop0 : Z}
-{address_bound : Z} {slot_bound : Z}
-(cursor : RlpCursorFields source_off source_len current0 stop0) (addr : vec (mword 8) 20)
+Definition decode_access_list_keys {source_off : Z} {source_len : Z} {address_bound : Z}
+{slot_bound : Z}
+(cursor : ByteSliceFields source_off source_len) (addr : vec (mword 8) 20)
 (tail : AccessListDecode address_bound slot_bound)
 (*(0 <=? source_off) && (0 <=? source_len) &&
-  ((0 <=? current0) &&
-    ((current0 <=? stop0) &&
-      ((stop0 <=? source_len) &&
-        ((0 <=? address_bound) && ((0 <=? slot_bound) && (0 <=? (slot_bound + (stop0 - current0))))))))*)
-: M (AccessListDecode address_bound (slot_bound + (stop0 - current0))) :=
-   let stop := cursor.(RlpCursorFields_stop) in
-   let current := cursor.(RlpCursorFields_current) in
-   (_rec_decode_access_list_keys (cursor) (addr) (tail) (((Z.sub stop0 current0)  : Z))
+  ((0 <=? address_bound) && ((0 <=? slot_bound) && (0 <=? (slot_bound + source_len))))*)
+: M (AccessListDecode address_bound (slot_bound + source_len)) :=
+   (_rec_decode_access_list_keys (cursor) (addr) (tail) ((cursor.(ByteSliceFields_len)  : Z))
       (Zwf_guarded _))
-    : M (AccessListDecode address_bound (slot_bound + (stop0 - current0))).
+    : M (AccessListDecode address_bound (slot_bound + source_len)).
 
-Fixpoint _rec_decode_access_list_entries {source_off : Z} {source_len : Z} {current : Z} {stop : Z}
-(cursor : RlpCursorFields source_off source_len current stop) (_reclimit : Z)
-(*(0 <=? source_off) && (0 <=? source_len) &&
-  ((0 <=? current) && ((current <=? stop) && (stop <=? source_len)))*)
-(_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (AccessListDecode (stop - current) (stop - current)).
+Fixpoint _rec_decode_access_list_entries {source_off : Z} {source_len : Z}
+(cursor : ByteSliceFields source_off source_len) (_reclimit : Z)
+(*(0 <=? source_off) && (0 <=? source_len)*) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (AccessListDecode source_len source_len).
 exact (
    assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if rlp_cursor_empty (cursor) then
+   (if Z.eqb source_len (0) then
       returnM (({| AccessListDecode_addresses := [];
                    AccessListDecode_storage_slots := [];
                    AccessListDecode_address_count := 0;
                    AccessListDecode_slot_count := 0 |}))
     else
-      (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (entry, next))))) =>
-      (rlp_ref_cursor (entry)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ w__0)))) =>
-      (rlp_cursor_pop (w__0)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (addr_f, entry_fields))))) =>
-      (rlp_cursor_pop (entry_fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (keys_f, entry_fields))))) =>
+      (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (entry, next))) =>
+      (rlp_ref_cursor (entry)) >>= fun w__0 =>
+      (rlp_cursor_pop (w__0)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (addr_f, entry_fields))) =>
+      (rlp_cursor_pop (entry_fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (keys_f, entry_fields))) =>
       (rlp_cursor_expect_end (entry_fields)) >>
       ((rlp_ref_word (addr_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__1 : Z) =>
       let addr := word_to_address (Build_word ((w__1))) in
-      (_rec_decode_access_list_entries _ _ _ _ (next) ((Z.sub (_reclimit) (1)))
+      (_rec_decode_access_list_entries _ _ (next) ((Z.sub (_reclimit) (1)))
          (_limit_reduces_bool _acc ltac:(assumption))) >>= fun tail =>
-      (rlp_ref_cursor (keys_f)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ w__2)))) =>
+      (rlp_ref_cursor (keys_f)) >>= fun w__2 =>
       (decode_access_list_keys (w__2) (addr) (tail)) >>= fun result =>
       returnM (({| AccessListDecode_addresses := addr :: result.(AccessListDecode_addresses);
                    AccessListDecode_storage_slots := result.(AccessListDecode_storage_slots);
                    AccessListDecode_address_count :=
                      rlp_item_count_increment (result.(AccessListDecode_address_count));
                    AccessListDecode_slot_count := result.(AccessListDecode_slot_count) |})))
-    : M (AccessListDecode (stop - current) (stop - current))
+    : M (AccessListDecode source_len source_len)
 ).
 Defined.
 
 
-Definition decode_access_list_entries {source_off : Z} {source_len : Z} {current0 : Z} {stop0 : Z}
-(cursor : RlpCursorFields source_off source_len current0 stop0)
-(*(0 <=? source_off) && (0 <=? source_len) &&
-  ((0 <=? current0) && ((current0 <=? stop0) && (stop0 <=? source_len)))*)
-: M (AccessListDecode (stop0 - current0) (stop0 - current0)) :=
-   let stop := cursor.(RlpCursorFields_stop) in
-   let current := cursor.(RlpCursorFields_current) in
-   (_rec_decode_access_list_entries (cursor) (((Z.sub stop0 current0)  : Z)) (Zwf_guarded _))
-    : M (AccessListDecode (stop0 - current0) (stop0 - current0)).
+Definition decode_access_list_entries {source_off : Z} {source_len : Z}
+(cursor : ByteSliceFields source_off source_len) (*(0 <=? source_off) && (0 <=? source_len)*)
+: M (AccessListDecode source_len source_len) :=
+   (_rec_decode_access_list_entries (cursor) ((cursor.(ByteSliceFields_len)  : Z)) (Zwf_guarded _))
+    : M (AccessListDecode source_len source_len).
 
-Definition decode_access_list {ex413892_ : Z} {ex413891_ : Z} {ex413890_ : Z} {ex413889_ : Z}
-{ex413888_ : Z} {ex413887_ : Z}
-(f : RlpFieldRefFields ex413887_ ex413888_ ex413889_ ex413890_ ex413891_ ex413892_)
-(*(0 <=? ex413887_) && (0 <=? ex413888_) &&
-  ((0 <=? ex413889_) &&
-    ((0 <=? ex413890_) &&
-      (((ex413889_ + ex413890_) <=? ex413888_) &&
-        ((0 <=? ex413891_) && ((0 <=? ex413892_) && ((ex413891_ + ex413892_) <=? ex413888_))))))*)
+Definition decode_access_list {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : M ((list address_typ * list StorageKey * transaction_item_count * transaction_item_count)) :=
-   ((if Z.leb (f.(RlpFieldRefFields_source).(ByteSliceFields_len)) ((pow2 (30)))
+   ((if Z.leb source_len ((pow2 (30)))
        return
        M ((list (vec (mword 8) 20) * list StorageKey * Z * Z)) then
-       (rlp_ref_cursor (f)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ w__0)))) =>
+       (rlp_ref_cursor (f)) >>= fun (w__0 : ByteSliceFields (source_off + (source_len - content_len)) content_len) =>
        (decode_access_list_entries (w__0)) >>= fun decoded =>
        returnM ((decoded.(AccessListDecode_addresses), decoded.(AccessListDecode_storage_slots), decoded.(AccessListDecode_address_count), decoded.(AccessListDecode_slot_count)))
      else throw (InvalidBlock (RlpDecode)))
@@ -3102,29 +2815,28 @@ Definition BLOB_HASH_RLP_LENGTH : Z := 33.
 #[export] Hint Unfold BLOB_HASH_RLP_LENGTH : sail.
 Definition BLOB_HASH_LENGTH : Z := WORD_BYTE_LENGTH.
 #[export] Hint Unfold BLOB_HASH_LENGTH : sail.
-Fixpoint _rec_decode_blob_hash_items {ex413900_ : Z} {ex413899_ : Z} {ex413898_ : Z} {ex413897_ : Z}
-(cursor : RlpCursorFields ex413897_ ex413898_ ex413899_ ex413900_) (count : transaction_blob_count)
-(_reclimit : Z)
-(*(0 <=? ex413897_) && (0 <=? ex413898_) &&
-  ((0 <=? ex413899_) && ((ex413899_ <=? ex413900_) && (ex413900_ <=? ex413898_)))*)
-(*(0 <=? count) && (count <=? 9)*) (_acc : Acc (Zwf 0) _reclimit)
+Fixpoint _rec_decode_blob_hash_items {source_off : Z} {source_len : Z}
+(cursor : ByteSliceFields source_off source_len) (count : transaction_blob_count) (_reclimit : Z)
+(*(0 <=? source_off) && (0 <=? source_len)*) (*(0 <=? count) && (count <=? 9)*)
+(_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (transaction_blob_count).
 exact (
    let count := (count).(transaction_blob_count_value) in
    (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-    (if rlp_cursor_empty (cursor) then returnM (count)
+    (if Z.eqb source_len (0) then returnM (count)
      else
-       (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (item, next))))) =>
-       (or_boolM (returnM ((item.(RlpFieldRefFields_is_list)  : bool)))
-          (or_boolM (returnM ((neq_int (item.(RlpFieldRefFields_full_len)) (BLOB_HASH_RLP_LENGTH))))
-             (or_boolM
-                (returnM ((neq_int (item.(RlpFieldRefFields_content_len)) (BLOB_HASH_LENGTH))))
-                ((slice_byte (item.(RlpFieldRefFields_source)) (item.(RlpFieldRefFields_full_off))) >>= fun (w__0 : mword 8) =>
+       (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (item, next))) =>
+       (or_boolM (returnM ((item.(RlpFieldRef_is_list)  : bool)))
+          (or_boolM
+             (returnM ((neq_int (item.(RlpFieldRef_source).(ByteSliceFields_len))
+                          (BLOB_HASH_RLP_LENGTH))))
+             (or_boolM (returnM ((neq_int (item.(RlpFieldRef_content_len)) (BLOB_HASH_LENGTH))))
+                ((slice_byte (item.(RlpFieldRef_source)) (0)) >>= fun (w__0 : mword 8) =>
                  returnM (((neq_vec (w__0) ((Ox"A0")))  : bool)))))) >>= fun w__3 =>
        (if w__3 return M (unit) then throw (InvalidBlock (RlpDecode))
         else returnM (tt)) >>
        (if Z.ltb (count) (9) return M (Z) then
-          ((_rec_decode_blob_hash_items _ _ _ _ (next)
+          ((_rec_decode_blob_hash_items _ _ (next)
               (Build_transaction_blob_count (((Z.add (count) (1))))) ((Z.sub (_reclimit) (1)))
               (_limit_reduces_bool _acc ltac:(assumption))) >>= fun semanticResult =>
            returnM (semanticResult).(transaction_blob_count_value))
@@ -3137,35 +2849,25 @@ exact (
 Defined.
 
 
-Definition decode_blob_hash_items {ex413910_ : Z} {ex413909_ : Z} {ex413908_ : Z} {ex413907_ : Z}
-(cursor : RlpCursorFields ex413907_ ex413908_ ex413909_ ex413910_) (count : transaction_blob_count)
-(*(0 <=? ex413907_) && (0 <=? ex413908_) &&
-  ((0 <=? ex413909_) && ((ex413909_ <=? ex413910_) && (ex413910_ <=? ex413908_)))*)
-(*(0 <=? count) && (count <=? 9)*)
+Definition decode_blob_hash_items {source_off : Z} {source_len : Z}
+(cursor : ByteSliceFields source_off source_len) (count : transaction_blob_count)
+(*(0 <=? source_off) && (0 <=? source_len)*) (*(0 <=? count) && (count <=? 9)*)
 : M (transaction_blob_count) :=
    let count := (count).(transaction_blob_count_value) in
-   (let stop := cursor.(RlpCursorFields_stop) in
-   let current := cursor.(RlpCursorFields_current) in
-   ((_rec_decode_blob_hash_items (cursor) (Build_transaction_blob_count ((count)))
-       (((Z.sub ex413910_ ex413909_)
-        : Z)) (Zwf_guarded _)) >>= fun semanticResult =>
-    returnM (semanticResult).(transaction_blob_count_value))
+   (((_rec_decode_blob_hash_items (cursor) (Build_transaction_blob_count ((count)))
+        ((cursor.(ByteSliceFields_len)
+         : Z)) (Zwf_guarded _)) >>= fun semanticResult =>
+     returnM (semanticResult).(transaction_blob_count_value))
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_transaction_blob_count (semanticResult)).
 
-Definition decode_blob_hashes {ex413924_ : Z} {ex413923_ : Z} {ex413922_ : Z} {ex413921_ : Z}
-{ex413920_ : Z} {ex413919_ : Z}
-(f : RlpFieldRefFields ex413919_ ex413920_ ex413921_ ex413922_ ex413923_ ex413924_)
-(*(0 <=? ex413919_) && (0 <=? ex413920_) &&
-  ((0 <=? ex413921_) &&
-    ((0 <=? ex413922_) &&
-      (((ex413921_ + ex413922_) <=? ex413920_) &&
-        ((0 <=? ex413923_) && ((0 <=? ex413924_) && ((ex413923_ + ex413924_) <=? ex413920_))))))*)
+Definition decode_blob_hashes {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : M (BlobHashes) :=
-   let bytes :=
-     sub_slice (f.(RlpFieldRefFields_source)) (f.(RlpFieldRefFields_content_off))
-       (f.(RlpFieldRefFields_content_len)) in
-   (rlp_ref_cursor (f)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ w__0)))) =>
+   let '(@existT _ _ bytes__'len (@existT _ _ bytes__'off bytes)) :=
+     (rlp_ref_content (f) : {len & {off & (ByteSliceFields off len)}}%type) in
+   (rlp_ref_cursor (f)) >>= fun (w__0 : ByteSliceFields (source_off + (source_len - content_len)) content_len) =>
    ((decode_blob_hash_items (w__0) (Build_transaction_blob_count ((0)))) >>= fun semanticResult =>
     returnM (semanticResult).(transaction_blob_count_value)) >>= fun (w__1 : Z) =>
    returnM (({| BlobHashes_bytes := @existT _ _ _ (@existT _ _ _ (bytes));
@@ -3175,29 +2877,27 @@ Definition EMPTY_AUTHORIZATION_DECODE : AuthorizationDecode 0 :=
 {| AuthorizationDecode_authorizations := [];
    AuthorizationDecode_count := 0 |}.
 #[export] Hint Unfold EMPTY_AUTHORIZATION_DECODE : sail.
-Fixpoint _rec_decode_auth_tuples {source_off : Z} {source_len : Z} {current : Z} {stop : Z}
-(cursor : RlpCursorFields source_off source_len current stop) (_reclimit : Z)
-(*(0 <=? source_off) && (0 <=? source_len) &&
-  ((0 <=? current) && ((current <=? stop) && (stop <=? source_len)))*)
-(_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (AuthorizationDecode (stop - current)).
+Fixpoint _rec_decode_auth_tuples {source_off : Z} {source_len : Z}
+(cursor : ByteSliceFields source_off source_len) (_reclimit : Z)
+(*(0 <=? source_off) && (0 <=? source_len)*) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (AuthorizationDecode source_len).
 exact (
    assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if rlp_cursor_empty (cursor) then
+   (if Z.eqb source_len (0) then
       returnM (({| AuthorizationDecode_authorizations := [];  AuthorizationDecode_count := 0 |}))
     else
-      (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (tuple, next))))) =>
-      (rlp_ref_cursor (tuple)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ w__0)))) =>
-      (rlp_cursor_pop (w__0)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (chain_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (addr_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (nonce_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (y_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (r_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (s_f, fields))))) =>
+      (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (tuple, next))) =>
+      (rlp_ref_cursor (tuple)) >>= fun w__0 =>
+      (rlp_cursor_pop (w__0)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (chain_f, fields))) =>
+      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (addr_f, fields))) =>
+      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (nonce_f, fields))) =>
+      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (y_f, fields))) =>
+      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (r_f, fields))) =>
+      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (s_f, fields))) =>
       (rlp_cursor_expect_end (fields)) >>
       ((rlp_ref_uint_word (chain_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun chain_id =>
-      ((rlp_ref_account_nonce (nonce_f)) >>= fun semanticResult =>
-       returnM (semanticResult).(account_nonce_value)) >>= fun auth_nonce =>
+      ((rlp_ref_uint64 (nonce_f)) >>= fun semanticResult =>
+       returnM (semanticResult).(ssz_uint_value)) >>= fun (auth_nonce : Z) =>
       ((rlp_ref_uint64 (y_f)) >>= fun semanticResult => returnM (semanticResult).(ssz_uint_value)) >>= fun y_value =>
       let y_valid := Z.leb (y_value) (1) in
       let y : Z := if Z.eqb (y_value) (0) then 0 else 1 in
@@ -3224,102 +2924,70 @@ exact (
            Authorization_address := auth_addr;
            Authorization_nonce := (Build_account_nonce (auth_nonce));
            Authorization_chain_id := (Build_word (chain_id)) |} in
-      (_rec_decode_auth_tuples _ _ _ _ (next) ((Z.sub (_reclimit) (1)))
+      (_rec_decode_auth_tuples _ _ (next) ((Z.sub (_reclimit) (1)))
          (_limit_reduces_bool _acc ltac:(assumption))) >>= fun tail =>
       returnM (({| AuthorizationDecode_authorizations :=
                      authorization :: tail.(AuthorizationDecode_authorizations);
                    AuthorizationDecode_count :=
                      rlp_item_count_increment (tail.(AuthorizationDecode_count)) |})))
-    : M (AuthorizationDecode (stop - current))
+    : M (AuthorizationDecode source_len)
 ).
 Defined.
 
 
-Definition decode_auth_tuples {source_off : Z} {source_len : Z} {current0 : Z} {stop0 : Z}
-(cursor : RlpCursorFields source_off source_len current0 stop0)
-(*(0 <=? source_off) && (0 <=? source_len) &&
-  ((0 <=? current0) && ((current0 <=? stop0) && (stop0 <=? source_len)))*)
-: M (AuthorizationDecode (stop0 - current0)) :=
-   let stop := cursor.(RlpCursorFields_stop) in
-   let current := cursor.(RlpCursorFields_current) in
-   (_rec_decode_auth_tuples (cursor) (((Z.sub stop0 current0)  : Z)) (Zwf_guarded _))
-    : M (AuthorizationDecode (stop0 - current0)).
+Definition decode_auth_tuples {source_off : Z} {source_len : Z}
+(cursor : ByteSliceFields source_off source_len) (*(0 <=? source_off) && (0 <=? source_len)*)
+: M (AuthorizationDecode source_len) :=
+   (_rec_decode_auth_tuples (cursor) ((cursor.(ByteSliceFields_len)  : Z)) (Zwf_guarded _))
+    : M (AuthorizationDecode source_len).
 
-Definition decode_auth_list {ex413972_ : Z} {ex413971_ : Z} {ex413970_ : Z} {ex413969_ : Z}
-{ex413968_ : Z} {ex413967_ : Z}
-(f : RlpFieldRefFields ex413967_ ex413968_ ex413969_ ex413970_ ex413971_ ex413972_)
-(*(0 <=? ex413967_) && (0 <=? ex413968_) &&
-  ((0 <=? ex413969_) &&
-    ((0 <=? ex413970_) &&
-      (((ex413969_ + ex413970_) <=? ex413968_) &&
-        ((0 <=? ex413971_) && ((0 <=? ex413972_) && ((ex413971_ + ex413972_) <=? ex413968_))))))*)
+Definition decode_auth_list {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : M ((list Authorization * transaction_item_count)) :=
-   ((if Z.leb (f.(RlpFieldRefFields_source).(ByteSliceFields_len)) ((pow2 (30)))
-       return
-       M ((list Authorization * Z)) then
-       (rlp_ref_cursor (f)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ w__0)))) =>
+   ((if Z.leb source_len ((pow2 (30))) return M ((list Authorization * Z)) then
+       (rlp_ref_cursor (f)) >>= fun (w__0 : ByteSliceFields (source_off + (source_len - content_len)) content_len) =>
        (decode_auth_tuples (w__0)) >>= fun decoded =>
        returnM ((decoded.(AuthorizationDecode_authorizations), decoded.(AuthorizationDecode_count)))
      else throw (InvalidBlock (RlpDecode)))
     : M ((list Authorization * Z))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1) := semanticResult in (semanticValue0, (Build_transaction_item_count (semanticValue1)))).
 
-Definition tx_input_span {ex413984_ : Z} {ex413983_ : Z} {ex413982_ : Z} {ex413981_ : Z}
-{ex413980_ : Z} {ex413979_ : Z}
-(data : RlpFieldRefFields ex413979_ ex413980_ ex413981_ ex413982_ ex413983_ ex413984_)
-(*(0 <=? ex413979_) && (0 <=? ex413980_) &&
-  ((0 <=? ex413981_) &&
-    ((0 <=? ex413982_) &&
-      (((ex413981_ + ex413982_) <=? ex413980_) &&
-        ((0 <=? ex413983_) && ((0 <=? ex413984_) && ((ex413983_ + ex413984_) <=? ex413980_))))))*)
+Definition tx_input_span {source_off : Z} {source_len : Z} {content_len : Z}
+(data : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : M (TransactionByteSlice) :=
-   let content := rlp_ref_content (data) in
+   let '(@existT _ _ content__'len (@existT _ _ content__'off content)) :=
+     (rlp_ref_content (data) : {len & {off & (ByteSliceFields off len)}}%type) in
    (if Z.leb (content.(ByteSliceFields_len)) ((pow2 (30))) then
-      returnM (@existT _ _ _ (@existT _ _ _ (content)))
+      returnM ((@existT _ _ _ (@existT _ _ _ (content))) : {len & {off & (ByteSliceFields off len)}}%type)
     else throw (InvalidBlock (RlpDecode)))
     : M ({len & {off & (ByteSliceFields off len)}}%type).
 
-Definition tx_sig_span {source_off : Z} {source_len : Z} {first_full_off : Z} {first_full_len : Z}
-{first_content_off : Z} {first_content_len : Z} {signature_full_off : Z} {signature_full_len : Z}
-{signature_content_off : Z} {signature_content_len : Z}
-(first : RlpFieldRefFields source_off source_len first_full_off first_full_len first_content_off first_content_len)
-(signature : RlpFieldRefFields source_off source_len signature_full_off signature_full_len signature_content_off signature_content_len)
-(*(0 <=? source_off) && (0 <=? source_len) &&
-  ((0 <=? first_full_off) &&
-    ((0 <=? first_full_len) &&
-      (((first_full_off + first_full_len) <=? source_len) &&
-        ((0 <=? first_content_off) &&
-          ((0 <=? first_content_len) &&
-            (((first_content_off + first_content_len) <=? source_len) &&
-              ((0 <=? signature_full_off) &&
-                ((0 <=? signature_full_len) &&
-                  (((signature_full_off + signature_full_len) <=? source_len) &&
-                    ((0 <=? signature_content_off) &&
-                      ((0 <=? signature_content_len) &&
-                        ((signature_content_off + signature_content_len) <=? source_len))))))))))))*)
-: M (ByteSlice) :=
-   let start := first.(RlpFieldRefFields_full_off) in
-   let stop := signature.(RlpFieldRefFields_full_off) in
+Definition tx_sig_span {first_source_off : Z} {first_source_len : Z} {first_content_len : Z}
+{signature_source_off : Z} {signature_source_len : Z} {signature_content_len : Z}
+(first : RlpFieldRef first_source_off first_source_len first_content_len)
+(signature : RlpFieldRef signature_source_off signature_source_len signature_content_len)
+(*(0 <=? first_source_off) && (0 <=? first_source_len) &&
+  ((0 <=? first_content_len) && (first_content_len <=? first_source_len)) &&
+  ((0 <=? signature_source_off) && (0 <=? signature_source_len) &&
+    ((0 <=? signature_content_len) && (signature_content_len <=? signature_source_len)) &&
+    (first_source_off <=? signature_source_off))*)
+: ByteSlice :=
+   let start := first.(RlpFieldRef_source).(ByteSliceFields_off) in
+   let stop := signature.(RlpFieldRef_source).(ByteSliceFields_off) in
    let start_offset := start in
    let stop_offset := stop in
-   (if Z.ltb signature_full_off first_full_off
-      return
-      M ({len & {off & (ByteSliceFields off len)}}%type) then
-      throw (InvalidBlock (RlpDecode))
-    else
-      returnM (@existT _ _ _ (@existT _ _ _ (sub_slice (first.(RlpFieldRefFields_source))
-                                               first_full_off
-                                               ((Z.sub signature_full_off first_full_off))))))
-    : M ({len & {off & (ByteSliceFields off len)}}%type).
+   @existT _ _ (signature_source_off - first_source_off) (@existT _ _ first_source_off (byte_slice
+                                                                                          (first.(RlpFieldRef_source).(ByteSliceFields_source))
+                                                                                          first_source_off
+                                                                                          ((Z.sub
+                                                                                              signature_source_off
+                                                                                              first_source_off)))).
 
-Definition rlp_ref_gas {ex414010_ : Z} {ex414009_ : Z} {ex414008_ : Z} {ex414007_ : Z}
-{ex414006_ : Z} {ex414005_ : Z}
-(f : RlpFieldRefFields ex414005_ ex414006_ ex414007_ ex414008_ ex414009_ ex414010_) (fork : Fork)
-(*(0 <=? ex414005_) && (0 <=? ex414006_) &&
-  ((0 <=? ex414007_) &&
-    ((0 <=? ex414008_) &&
-      (((ex414007_ + ex414008_) <=? ex414006_) &&
-        ((0 <=? ex414009_) && ((0 <=? ex414010_) && ((ex414009_ + ex414010_) <=? ex414006_))))))*)
+Definition rlp_ref_gas {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len) (fork : Fork)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : M (transaction_gas) :=
    (rlp_ref_uint (f)) >>= fun value =>
    (if andb ((fork_gteq (fork) (Osaka)))
@@ -3329,6 +2997,317 @@ Definition rlp_ref_gas {ex414010_ : Z} {ex414009_ : Z} {ex414008_ : Z} {ex414007
       throw (InvalidBlock (GasUsedExceedsLimit))
     else returnM (value))
     : M (Z).
+
+Definition decode_legacy_tx {ex419512_ : Z} {ex419511_ : Z} {ex419508_ : Z} {ex419507_ : Z}
+{source_off : Z} {source_len : Z}
+(tx : ByteSliceFields ex419507_ ex419508_) (pubkey : ByteSliceFields ex419511_ ex419512_)
+(fork : Fork) (sender : vec (mword 8) 20) (fields : ByteSliceFields source_off source_len)
+(*(0 <=? source_off) && (0 <=? source_len)*)
+(*(0 <=? ex419507_) && (0 <=? ex419508_) && ((0 <=? ex419508_) && (ex419508_ <=? (2 ^ 30)))*)
+(*(0 <=? ex419511_) && (0 <=? ex419512_)*)
+: M (Transaction) :=
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (nonce_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (gp_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (gas_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (to_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (value_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (data_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (v_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (r_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (s_f, fields))) =>
+   (rlp_cursor_expect_end (fields)) >>
+   ((rlp_ref_word (v_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun v =>
+   ((rlp_ref_uint_word (gp_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun gp =>
+   ((rlp_ref_uint_word (nonce_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
+   (rlp_ref_gas (gas_f) (fork)) >>= fun (w__1 : Z) =>
+   ((rlp_ref_word (to_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__2 : Z) =>
+   ((rlp_ref_uint_word (value_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__3 : Z) =>
+   (tx_input_span (data_f)) >>= fun '(@existT _ _ __w__41 (@existT _ _ __w__40 w__4)) =>
+   (tx_signing_hash (LegacyTx) ((projT2 (projT2 (tx_sig_span (nonce_f) (v_f))))) (Build_word ((v)))) >>= fun (w__5 : vec (mword 8) 32) =>
+   ((rlp_ref_uint_word (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__6 : Z) =>
+   ((rlp_ref_uint_word (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__7 : Z) =>
+   returnM (({| Transaction_tx_type := LegacyTx;
+                Transaction_sender := sender;
+                Transaction_raw := @existT _ _ ex419508_ (@existT _ _ ex419507_ (tx));
+                Transaction_nonce := (Build_word (w__0));
+                Transaction_chain_id := (Build_chain_identifier (0));
+                Transaction_gas_limit := w__1;
+                Transaction_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
+                Transaction_recipient := word_to_address (Build_word ((w__2)));
+                Transaction_value := (Build_word (w__3));
+                Transaction_input_src := @existT _ _ _ (@existT _ _ _ (w__4));
+                Transaction_access_list_addresses := [];
+                Transaction_access_list_address_count := (Build_transaction_item_count (0));
+                Transaction_access_list_slots := [];
+                Transaction_access_list_slot_count := (Build_transaction_item_count (0));
+                Transaction_max_fee := (Build_word (gp));
+                Transaction_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
+                Transaction_max_priority_fee := (Build_word (gp));
+                Transaction_authorizations := [];
+                Transaction_authorization_count := (Build_transaction_item_count (0));
+                Transaction_blob_hashes := EMPTY_BLOB_HASHES;
+                Transaction_pubkey := @existT _ _ ex419512_ (@existT _ _ ex419511_ (pubkey));
+                Transaction_signing_hash := w__5;
+                Transaction_sig_v := (Build_word (v));
+                Transaction_sig_r := (Build_word (w__6));
+                Transaction_sig_s := (Build_word (w__7)) |})).
+
+Definition decode_access_list_tx {ex419532_ : Z} {ex419531_ : Z} {ex419528_ : Z} {ex419527_ : Z}
+{source_off : Z} {source_len : Z}
+(tx : ByteSliceFields ex419527_ ex419528_) (pubkey : ByteSliceFields ex419531_ ex419532_)
+(fork : Fork) (sender : vec (mword 8) 20) (fields : ByteSliceFields source_off source_len)
+(*(0 <=? source_off) && (0 <=? source_len)*)
+(*(0 <=? ex419527_) && (0 <=? ex419528_) && ((0 <=? ex419528_) && (ex419528_ <=? (2 ^ 30)))*)
+(*(0 <=? ex419531_) && (0 <=? ex419532_)*)
+: M (Transaction) :=
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (chain_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (nonce_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (gp_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (gas_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (to_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (value_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (data_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (al_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (v_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (r_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (s_f, fields))) =>
+   (rlp_cursor_expect_end (fields)) >>
+   ((rlp_ref_word (v_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun v =>
+   ((rlp_ref_uint_word (gp_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun gp =>
+   ((decode_access_list (al_f)) >>= fun semanticResult =>
+    returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in (semanticValue0, semanticValue1, (semanticValue2).(transaction_item_count_value), (semanticValue3).(transaction_item_count_value)))) >>= fun '((al_addrs, al_slots, al_addr_count, al_slot_count)) =>
+   ((rlp_ref_uint_word (nonce_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
+   ((rlp_ref_uint64 (chain_f)) >>= fun semanticResult => returnM (semanticResult).(ssz_uint_value)) >>= fun (w__1 : Z) =>
+   (rlp_ref_gas (gas_f) (fork)) >>= fun (w__2 : Z) =>
+   ((rlp_ref_word (to_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__3 : Z) =>
+   ((rlp_ref_uint_word (value_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__4 : Z) =>
+   (tx_input_span (data_f)) >>= fun '(@existT _ _ __w__51 (@existT _ _ __w__50 w__5)) =>
+   (tx_signing_hash (AccessListTx) ((projT2 (projT2 (tx_sig_span (chain_f) (v_f)))))
+      (Build_word ((v)))) >>= fun (w__6 : vec (mword 8) 32) =>
+   ((rlp_ref_uint_word (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__7 : Z) =>
+   ((rlp_ref_uint_word (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__8 : Z) =>
+   returnM (({| Transaction_tx_type := AccessListTx;
+                Transaction_sender := sender;
+                Transaction_raw := @existT _ _ ex419528_ (@existT _ _ ex419527_ (tx));
+                Transaction_nonce := (Build_word (w__0));
+                Transaction_chain_id := (Build_chain_identifier (w__1));
+                Transaction_gas_limit := w__2;
+                Transaction_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
+                Transaction_recipient := word_to_address (Build_word ((w__3)));
+                Transaction_value := (Build_word (w__4));
+                Transaction_input_src := @existT _ _ _ (@existT _ _ _ (w__5));
+                Transaction_access_list_addresses := al_addrs;
+                Transaction_access_list_address_count :=
+                  (Build_transaction_item_count (al_addr_count));
+                Transaction_access_list_slots := al_slots;
+                Transaction_access_list_slot_count := (Build_transaction_item_count (al_slot_count));
+                Transaction_max_fee := (Build_word (gp));
+                Transaction_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
+                Transaction_max_priority_fee := (Build_word (gp));
+                Transaction_authorizations := [];
+                Transaction_authorization_count := (Build_transaction_item_count (0));
+                Transaction_blob_hashes := EMPTY_BLOB_HASHES;
+                Transaction_pubkey := @existT _ _ ex419532_ (@existT _ _ ex419531_ (pubkey));
+                Transaction_signing_hash := w__6;
+                Transaction_sig_v := (Build_word (v));
+                Transaction_sig_r := (Build_word (w__7));
+                Transaction_sig_s := (Build_word (w__8)) |})).
+
+Definition decode_fee_market_tx {ex419552_ : Z} {ex419551_ : Z} {ex419548_ : Z} {ex419547_ : Z}
+{source_off : Z} {source_len : Z}
+(tx : ByteSliceFields ex419547_ ex419548_) (pubkey : ByteSliceFields ex419551_ ex419552_)
+(fork : Fork) (sender : vec (mword 8) 20) (fields : ByteSliceFields source_off source_len)
+(*(0 <=? source_off) && (0 <=? source_len)*)
+(*(0 <=? ex419547_) && (0 <=? ex419548_) && ((0 <=? ex419548_) && (ex419548_ <=? (2 ^ 30)))*)
+(*(0 <=? ex419551_) && (0 <=? ex419552_)*)
+: M (Transaction) :=
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (chain_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (nonce_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (mp_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (mf_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (gas_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (to_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (value_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (data_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (al_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (v_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (r_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (s_f, fields))) =>
+   (rlp_cursor_expect_end (fields)) >>
+   ((rlp_ref_word (v_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun v =>
+   ((decode_access_list (al_f)) >>= fun semanticResult =>
+    returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in (semanticValue0, semanticValue1, (semanticValue2).(transaction_item_count_value), (semanticValue3).(transaction_item_count_value)))) >>= fun '((al_addrs, al_slots, al_addr_count, al_slot_count)) =>
+   ((rlp_ref_uint_word (nonce_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
+   ((rlp_ref_uint64 (chain_f)) >>= fun semanticResult => returnM (semanticResult).(ssz_uint_value)) >>= fun (w__1 : Z) =>
+   (rlp_ref_gas (gas_f) (fork)) >>= fun (w__2 : Z) =>
+   ((rlp_ref_word (to_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__3 : Z) =>
+   ((rlp_ref_uint_word (value_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__4 : Z) =>
+   (tx_input_span (data_f)) >>= fun '(@existT _ _ __w__51 (@existT _ _ __w__50 w__5)) =>
+   ((rlp_ref_uint_word (mf_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__6 : Z) =>
+   ((rlp_ref_uint_word (mp_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__7 : Z) =>
+   (tx_signing_hash (FeeMarketTx) ((projT2 (projT2 (tx_sig_span (chain_f) (v_f)))))
+      (Build_word ((v)))) >>= fun (w__8 : vec (mword 8) 32) =>
+   ((rlp_ref_uint_word (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__9 : Z) =>
+   ((rlp_ref_uint_word (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__10 : Z) =>
+   returnM (({| Transaction_tx_type := FeeMarketTx;
+                Transaction_sender := sender;
+                Transaction_raw := @existT _ _ ex419548_ (@existT _ _ ex419547_ (tx));
+                Transaction_nonce := (Build_word (w__0));
+                Transaction_chain_id := (Build_chain_identifier (w__1));
+                Transaction_gas_limit := w__2;
+                Transaction_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
+                Transaction_recipient := word_to_address (Build_word ((w__3)));
+                Transaction_value := (Build_word (w__4));
+                Transaction_input_src := @existT _ _ _ (@existT _ _ _ (w__5));
+                Transaction_access_list_addresses := al_addrs;
+                Transaction_access_list_address_count :=
+                  (Build_transaction_item_count (al_addr_count));
+                Transaction_access_list_slots := al_slots;
+                Transaction_access_list_slot_count := (Build_transaction_item_count (al_slot_count));
+                Transaction_max_fee := (Build_word (w__6));
+                Transaction_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
+                Transaction_max_priority_fee := (Build_word (w__7));
+                Transaction_authorizations := [];
+                Transaction_authorization_count := (Build_transaction_item_count (0));
+                Transaction_blob_hashes := EMPTY_BLOB_HASHES;
+                Transaction_pubkey := @existT _ _ ex419552_ (@existT _ _ ex419551_ (pubkey));
+                Transaction_signing_hash := w__8;
+                Transaction_sig_v := (Build_word (v));
+                Transaction_sig_r := (Build_word (w__9));
+                Transaction_sig_s := (Build_word (w__10)) |})).
+
+Definition decode_blob_tx {ex419572_ : Z} {ex419571_ : Z} {ex419568_ : Z} {ex419567_ : Z}
+{source_off : Z} {source_len : Z}
+(tx : ByteSliceFields ex419567_ ex419568_) (pubkey : ByteSliceFields ex419571_ ex419572_)
+(fork : Fork) (sender : vec (mword 8) 20) (fields : ByteSliceFields source_off source_len)
+(*(0 <=? source_off) && (0 <=? source_len)*)
+(*(0 <=? ex419567_) && (0 <=? ex419568_) && ((0 <=? ex419568_) && (ex419568_ <=? (2 ^ 30)))*)
+(*(0 <=? ex419571_) && (0 <=? ex419572_)*)
+: M (Transaction) :=
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (chain_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (nonce_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (mp_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (mf_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (gas_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (to_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (value_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (data_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (al_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (mbf_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (bh_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (v_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (r_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (s_f, fields))) =>
+   (rlp_cursor_expect_end (fields)) >>
+   ((rlp_ref_word (v_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun v =>
+   ((decode_access_list (al_f)) >>= fun semanticResult =>
+    returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in (semanticValue0, semanticValue1, (semanticValue2).(transaction_item_count_value), (semanticValue3).(transaction_item_count_value)))) >>= fun '((al_addrs, al_slots, al_addr_count, al_slot_count)) =>
+   (decode_blob_hashes (bh_f)) >>= fun blob_hashes =>
+   ((rlp_ref_uint_word (nonce_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
+   ((rlp_ref_uint64 (chain_f)) >>= fun semanticResult => returnM (semanticResult).(ssz_uint_value)) >>= fun (w__1 : Z) =>
+   (rlp_ref_gas (gas_f) (fork)) >>= fun (w__2 : Z) =>
+   ((rlp_ref_word (to_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__3 : Z) =>
+   ((rlp_ref_uint_word (value_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__4 : Z) =>
+   (tx_input_span (data_f)) >>= fun '(@existT _ _ __w__51 (@existT _ _ __w__50 w__5)) =>
+   ((rlp_ref_uint_word (mf_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__6 : Z) =>
+   ((rlp_ref_uint_word (mbf_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__7 : Z) =>
+   ((rlp_ref_uint_word (mp_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__8 : Z) =>
+   (tx_signing_hash (BlobTx) ((projT2 (projT2 (tx_sig_span (chain_f) (v_f))))) (Build_word ((v)))) >>= fun (w__9 : vec (mword 8) 32) =>
+   ((rlp_ref_uint_word (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__10 : Z) =>
+   ((rlp_ref_uint_word (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__11 : Z) =>
+   returnM (({| Transaction_tx_type := BlobTx;
+                Transaction_sender := sender;
+                Transaction_raw := @existT _ _ ex419568_ (@existT _ _ ex419567_ (tx));
+                Transaction_nonce := (Build_word (w__0));
+                Transaction_chain_id := (Build_chain_identifier (w__1));
+                Transaction_gas_limit := w__2;
+                Transaction_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
+                Transaction_recipient := word_to_address (Build_word ((w__3)));
+                Transaction_value := (Build_word (w__4));
+                Transaction_input_src := @existT _ _ _ (@existT _ _ _ (w__5));
+                Transaction_access_list_addresses := al_addrs;
+                Transaction_access_list_address_count :=
+                  (Build_transaction_item_count (al_addr_count));
+                Transaction_access_list_slots := al_slots;
+                Transaction_access_list_slot_count := (Build_transaction_item_count (al_slot_count));
+                Transaction_max_fee := (Build_word (w__6));
+                Transaction_max_blob_fee := (Build_word (w__7));
+                Transaction_max_priority_fee := (Build_word (w__8));
+                Transaction_authorizations := [];
+                Transaction_authorization_count := (Build_transaction_item_count (0));
+                Transaction_blob_hashes := blob_hashes;
+                Transaction_pubkey := @existT _ _ ex419572_ (@existT _ _ ex419571_ (pubkey));
+                Transaction_signing_hash := w__9;
+                Transaction_sig_v := (Build_word (v));
+                Transaction_sig_r := (Build_word (w__10));
+                Transaction_sig_s := (Build_word (w__11)) |})).
+
+Definition decode_set_code_tx {ex419592_ : Z} {ex419591_ : Z} {ex419588_ : Z} {ex419587_ : Z}
+{source_off : Z} {source_len : Z}
+(tx : ByteSliceFields ex419587_ ex419588_) (pubkey : ByteSliceFields ex419591_ ex419592_)
+(fork : Fork) (sender : vec (mword 8) 20) (fields : ByteSliceFields source_off source_len)
+(*(0 <=? source_off) && (0 <=? source_len)*)
+(*(0 <=? ex419587_) && (0 <=? ex419588_) && ((0 <=? ex419588_) && (ex419588_ <=? (2 ^ 30)))*)
+(*(0 <=? ex419591_) && (0 <=? ex419592_)*)
+: M (Transaction) :=
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (chain_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (nonce_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (mp_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (mf_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (gas_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (to_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (value_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (data_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (al_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (auth_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (v_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (r_f, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (s_f, fields))) =>
+   (rlp_cursor_expect_end (fields)) >>
+   ((rlp_ref_word (v_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun v =>
+   ((decode_access_list (al_f)) >>= fun semanticResult =>
+    returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in (semanticValue0, semanticValue1, (semanticValue2).(transaction_item_count_value), (semanticValue3).(transaction_item_count_value)))) >>= fun '((al_addrs, al_slots, al_addr_count, al_slot_count)) =>
+   ((decode_auth_list (auth_f)) >>= fun semanticResult =>
+    returnM (let '(semanticValue0, semanticValue1) := semanticResult in (semanticValue0, (semanticValue1).(transaction_item_count_value)))) >>= fun '((authorizations, authorization_count)) =>
+   ((rlp_ref_uint64 (nonce_f)) >>= fun semanticResult => returnM (semanticResult).(ssz_uint_value)) >>= fun (w__0 : Z) =>
+   ((rlp_ref_uint64 (chain_f)) >>= fun semanticResult => returnM (semanticResult).(ssz_uint_value)) >>= fun (w__1 : Z) =>
+   (rlp_ref_gas (gas_f) (fork)) >>= fun (w__2 : Z) =>
+   ((rlp_ref_word (to_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__3 : Z) =>
+   ((rlp_ref_uint_word (value_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__4 : Z) =>
+   (tx_input_span (data_f)) >>= fun '(@existT _ _ __w__51 (@existT _ _ __w__50 w__5)) =>
+   ((rlp_ref_uint_word (mf_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__6 : Z) =>
+   ((rlp_ref_uint_word (mp_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__7 : Z) =>
+   (tx_signing_hash (SetCodeTx) ((projT2 (projT2 (tx_sig_span (chain_f) (v_f))))) (Build_word ((v)))) >>= fun (w__8 : vec (mword 8) 32) =>
+   ((rlp_ref_uint_word (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__9 : Z) =>
+   ((rlp_ref_uint_word (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__10 : Z) =>
+   returnM (({| Transaction_tx_type := SetCodeTx;
+                Transaction_sender := sender;
+                Transaction_raw := @existT _ _ ex419588_ (@existT _ _ ex419587_ (tx));
+                Transaction_nonce :=
+                  (Build_word ((word_of_account_nonce (Build_account_nonce ((w__0)))).(account_nonce_value)));
+                Transaction_chain_id := (Build_chain_identifier (w__1));
+                Transaction_gas_limit := w__2;
+                Transaction_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
+                Transaction_recipient := word_to_address (Build_word ((w__3)));
+                Transaction_value := (Build_word (w__4));
+                Transaction_input_src := @existT _ _ _ (@existT _ _ _ (w__5));
+                Transaction_access_list_addresses := al_addrs;
+                Transaction_access_list_address_count :=
+                  (Build_transaction_item_count (al_addr_count));
+                Transaction_access_list_slots := al_slots;
+                Transaction_access_list_slot_count := (Build_transaction_item_count (al_slot_count));
+                Transaction_max_fee := (Build_word (w__6));
+                Transaction_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
+                Transaction_max_priority_fee := (Build_word (w__7));
+                Transaction_authorizations := authorizations;
+                Transaction_authorization_count :=
+                  (Build_transaction_item_count (authorization_count));
+                Transaction_blob_hashes := EMPTY_BLOB_HASHES;
+                Transaction_pubkey := @existT _ _ ex419592_ (@existT _ _ ex419591_ (pubkey));
+                Transaction_signing_hash := w__8;
+                Transaction_sig_v := (Build_word (v));
+                Transaction_sig_r := (Build_word (w__9));
+                Transaction_sig_s := (Build_word (w__10)) |})).
 
 Definition rlp_decode_tx {tx_off : Z} {tx_len : Z} {public_key_off : Z}
 (tx : ByteSliceFields tx_off tx_len) (pubkey : ByteSliceFields public_key_off 65) (fork : Fork)
@@ -3346,291 +3325,28 @@ Definition rlp_decode_tx {tx_off : Z} {tx_len : Z} {public_key_off : Z}
    let typed := neq_vec (ttype) ((Ox"00")) in
    (if typed return M (TransactionByteSlice) then
       (if Z.leb (1) tx_len then
-         returnM (@existT _ _ _ (@existT _ _ _ (sub_slice (tx) (1) ((Z.sub tx_len (1))))))
+         returnM ((@existT _ _ (tx_len - 1) (@existT _ _ (tx_off + 1) (sub_slice (tx) (1)
+                                                                         ((Z.sub tx_len (1)))))) : {len & {off & (ByteSliceFields off len)}}%type)
        else throw (InvalidBlock (RlpDecode)))
        : M (TransactionByteSlice)
-    else returnM (@existT _ _ _ (@existT _ _ _ (tx)))) >>= fun '(@existT _ _ _ (@existT _ _ _ payload)) =>
-   (rlp_node_cursor (payload)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ fields)))) =>
+    else returnM ((@existT _ _ tx_len (@existT _ _ tx_off (tx))) : TransactionByteSlice)) >>= fun '(@existT _ _ __payload1 (@existT _ _ __payload0 payload)) =>
+   (rlp_node_cursor (payload)) >>= fun '(@existT _ _ __fields1 (@existT _ _ __fields0 fields)) =>
    let p0_ := ttype in
    (if eq_vec (p0_) ((Ox"00")) return M (Transaction) then
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (nonce_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gp_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (to_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (value_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (data_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (v_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (r_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (s_f, fields))))) =>
-      (rlp_cursor_expect_end (fields)) >>
-      ((rlp_ref_word (v_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun v =>
-      ((rlp_ref_uint_word (gp_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun gp =>
-      ((rlp_ref_uint_word (nonce_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__5 : Z) =>
-      (rlp_ref_gas (gas_f) (fork)) >>= fun (w__6 : Z) =>
-      ((rlp_ref_word (to_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__7 : Z) =>
-      ((rlp_ref_uint_word (value_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__8 : Z) =>
-      (tx_input_span (data_f)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__9)) =>
-      (tx_sig_span (nonce_f) (v_f)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__10)) =>
-      (tx_signing_hash (LegacyTx) (w__10) (Build_word ((v)))) >>= fun (w__11 : vec (mword 8) 32) =>
-      ((rlp_ref_uint_word (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__12 : Z) =>
-      ((rlp_ref_uint_word (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__13 : Z) =>
-      returnM (({| Transaction_tx_type := LegacyTx;
-                   Transaction_sender := sender;
-                   Transaction_raw := @existT _ _ _ (@existT _ _ _ (tx));
-                   Transaction_nonce := (Build_word (w__5));
-                   Transaction_chain_id := 0;
-                   Transaction_gas_limit := w__6;
-                   Transaction_is_create := Z.eqb (to_f.(RlpFieldRefFields_content_len)) (0);
-                   Transaction_recipient := word_to_address (Build_word ((w__7)));
-                   Transaction_value := (Build_word (w__8));
-                   Transaction_input_src := @existT _ _ _ (@existT _ _ _ (w__9));
-                   Transaction_access_list_addresses := [];
-                   Transaction_access_list_address_count := (Build_transaction_item_count (0));
-                   Transaction_access_list_slots := [];
-                   Transaction_access_list_slot_count := (Build_transaction_item_count (0));
-                   Transaction_max_fee := (Build_word (gp));
-                   Transaction_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
-                   Transaction_max_priority_fee := (Build_word (gp));
-                   Transaction_authorizations := [];
-                   Transaction_authorization_count := (Build_transaction_item_count (0));
-                   Transaction_blob_hashes := EMPTY_BLOB_HASHES;
-                   Transaction_pubkey := @existT _ _ _ (@existT _ _ _ (pubkey));
-                   Transaction_signing_hash := w__11;
-                   Transaction_sig_v := (Build_word (v));
-                   Transaction_sig_r := (Build_word (w__12));
-                   Transaction_sig_s := (Build_word (w__13)) |}))
+      (decode_legacy_tx (tx) (pubkey) (fork) (sender) (fields))
+       : M (Transaction)
     else if eq_vec (p0_) ((Ox"01")) return M (Transaction) then
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (chain_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (nonce_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gp_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (to_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (value_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (data_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (al_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (v_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (r_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (s_f, fields))))) =>
-      (rlp_cursor_expect_end (fields)) >>
-      ((rlp_ref_word (v_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun v =>
-      ((rlp_ref_uint_word (gp_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun gp =>
-      ((decode_access_list (al_f)) >>= fun semanticResult =>
-       returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in (semanticValue0, semanticValue1, (semanticValue2).(transaction_item_count_value), (semanticValue3).(transaction_item_count_value)))) >>= fun '((al_addrs, al_slots, al_addr_count, al_slot_count)) =>
-      ((rlp_ref_uint_word (nonce_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__14 : Z) =>
-      (rlp_ref_chain_identifier (chain_f)) >>= fun (w__15 : Z) =>
-      (rlp_ref_gas (gas_f) (fork)) >>= fun (w__16 : Z) =>
-      ((rlp_ref_word (to_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__17 : Z) =>
-      ((rlp_ref_uint_word (value_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__18 : Z) =>
-      (tx_input_span (data_f)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__19)) =>
-      (tx_sig_span (chain_f) (v_f)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__20)) =>
-      (tx_signing_hash (AccessListTx) (w__20) (Build_word ((v)))) >>= fun (w__21 : vec (mword 8) 32) =>
-      ((rlp_ref_uint_word (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__22 : Z) =>
-      ((rlp_ref_uint_word (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__23 : Z) =>
-      returnM (({| Transaction_tx_type := AccessListTx;
-                   Transaction_sender := sender;
-                   Transaction_raw := @existT _ _ _ (@existT _ _ _ (tx));
-                   Transaction_nonce := (Build_word (w__14));
-                   Transaction_chain_id := w__15;
-                   Transaction_gas_limit := w__16;
-                   Transaction_is_create := Z.eqb (to_f.(RlpFieldRefFields_content_len)) (0);
-                   Transaction_recipient := word_to_address (Build_word ((w__17)));
-                   Transaction_value := (Build_word (w__18));
-                   Transaction_input_src := @existT _ _ _ (@existT _ _ _ (w__19));
-                   Transaction_access_list_addresses := al_addrs;
-                   Transaction_access_list_address_count :=
-                     (Build_transaction_item_count (al_addr_count));
-                   Transaction_access_list_slots := al_slots;
-                   Transaction_access_list_slot_count :=
-                     (Build_transaction_item_count (al_slot_count));
-                   Transaction_max_fee := (Build_word (gp));
-                   Transaction_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
-                   Transaction_max_priority_fee := (Build_word (gp));
-                   Transaction_authorizations := [];
-                   Transaction_authorization_count := (Build_transaction_item_count (0));
-                   Transaction_blob_hashes := EMPTY_BLOB_HASHES;
-                   Transaction_pubkey := @existT _ _ _ (@existT _ _ _ (pubkey));
-                   Transaction_signing_hash := w__21;
-                   Transaction_sig_v := (Build_word (v));
-                   Transaction_sig_r := (Build_word (w__22));
-                   Transaction_sig_s := (Build_word (w__23)) |}))
+      (decode_access_list_tx (tx) (pubkey) (fork) (sender) (fields))
+       : M (Transaction)
     else if eq_vec (p0_) ((Ox"02")) return M (Transaction) then
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (chain_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (nonce_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (mp_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (mf_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (to_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (value_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (data_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (al_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (v_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (r_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (s_f, fields))))) =>
-      (rlp_cursor_expect_end (fields)) >>
-      ((rlp_ref_word (v_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun v =>
-      ((decode_access_list (al_f)) >>= fun semanticResult =>
-       returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in (semanticValue0, semanticValue1, (semanticValue2).(transaction_item_count_value), (semanticValue3).(transaction_item_count_value)))) >>= fun '((al_addrs, al_slots, al_addr_count, al_slot_count)) =>
-      ((rlp_ref_uint_word (nonce_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__24 : Z) =>
-      (rlp_ref_chain_identifier (chain_f)) >>= fun (w__25 : Z) =>
-      (rlp_ref_gas (gas_f) (fork)) >>= fun (w__26 : Z) =>
-      ((rlp_ref_word (to_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__27 : Z) =>
-      ((rlp_ref_uint_word (value_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__28 : Z) =>
-      (tx_input_span (data_f)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__29)) =>
-      ((rlp_ref_uint_word (mf_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__30 : Z) =>
-      ((rlp_ref_uint_word (mp_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__31 : Z) =>
-      (tx_sig_span (chain_f) (v_f)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__32)) =>
-      (tx_signing_hash (FeeMarketTx) (w__32) (Build_word ((v)))) >>= fun (w__33 : vec (mword 8) 32) =>
-      ((rlp_ref_uint_word (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__34 : Z) =>
-      ((rlp_ref_uint_word (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__35 : Z) =>
-      returnM (({| Transaction_tx_type := FeeMarketTx;
-                   Transaction_sender := sender;
-                   Transaction_raw := @existT _ _ _ (@existT _ _ _ (tx));
-                   Transaction_nonce := (Build_word (w__24));
-                   Transaction_chain_id := w__25;
-                   Transaction_gas_limit := w__26;
-                   Transaction_is_create := Z.eqb (to_f.(RlpFieldRefFields_content_len)) (0);
-                   Transaction_recipient := word_to_address (Build_word ((w__27)));
-                   Transaction_value := (Build_word (w__28));
-                   Transaction_input_src := @existT _ _ _ (@existT _ _ _ (w__29));
-                   Transaction_access_list_addresses := al_addrs;
-                   Transaction_access_list_address_count :=
-                     (Build_transaction_item_count (al_addr_count));
-                   Transaction_access_list_slots := al_slots;
-                   Transaction_access_list_slot_count :=
-                     (Build_transaction_item_count (al_slot_count));
-                   Transaction_max_fee := (Build_word (w__30));
-                   Transaction_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
-                   Transaction_max_priority_fee := (Build_word (w__31));
-                   Transaction_authorizations := [];
-                   Transaction_authorization_count := (Build_transaction_item_count (0));
-                   Transaction_blob_hashes := EMPTY_BLOB_HASHES;
-                   Transaction_pubkey := @existT _ _ _ (@existT _ _ _ (pubkey));
-                   Transaction_signing_hash := w__33;
-                   Transaction_sig_v := (Build_word (v));
-                   Transaction_sig_r := (Build_word (w__34));
-                   Transaction_sig_s := (Build_word (w__35)) |}))
+      (decode_fee_market_tx (tx) (pubkey) (fork) (sender) (fields))
+       : M (Transaction)
     else if eq_vec (p0_) ((Ox"03")) return M (Transaction) then
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (chain_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (nonce_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (mp_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (mf_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (to_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (value_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (data_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (al_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (mbf_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (bh_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (v_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (r_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (s_f, fields))))) =>
-      (rlp_cursor_expect_end (fields)) >>
-      ((rlp_ref_word (v_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun v =>
-      ((decode_access_list (al_f)) >>= fun semanticResult =>
-       returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in (semanticValue0, semanticValue1, (semanticValue2).(transaction_item_count_value), (semanticValue3).(transaction_item_count_value)))) >>= fun '((al_addrs, al_slots, al_addr_count, al_slot_count)) =>
-      (decode_blob_hashes (bh_f)) >>= fun blob_hashes =>
-      ((rlp_ref_uint_word (nonce_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__36 : Z) =>
-      (rlp_ref_chain_identifier (chain_f)) >>= fun (w__37 : Z) =>
-      (rlp_ref_gas (gas_f) (fork)) >>= fun (w__38 : Z) =>
-      ((rlp_ref_word (to_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__39 : Z) =>
-      ((rlp_ref_uint_word (value_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__40 : Z) =>
-      (tx_input_span (data_f)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__41)) =>
-      ((rlp_ref_uint_word (mf_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__42 : Z) =>
-      ((rlp_ref_uint_word (mbf_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__43 : Z) =>
-      ((rlp_ref_uint_word (mp_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__44 : Z) =>
-      (tx_sig_span (chain_f) (v_f)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__45)) =>
-      (tx_signing_hash (BlobTx) (w__45) (Build_word ((v)))) >>= fun (w__46 : vec (mword 8) 32) =>
-      ((rlp_ref_uint_word (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__47 : Z) =>
-      ((rlp_ref_uint_word (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__48 : Z) =>
-      returnM (({| Transaction_tx_type := BlobTx;
-                   Transaction_sender := sender;
-                   Transaction_raw := @existT _ _ _ (@existT _ _ _ (tx));
-                   Transaction_nonce := (Build_word (w__36));
-                   Transaction_chain_id := w__37;
-                   Transaction_gas_limit := w__38;
-                   Transaction_is_create := Z.eqb (to_f.(RlpFieldRefFields_content_len)) (0);
-                   Transaction_recipient := word_to_address (Build_word ((w__39)));
-                   Transaction_value := (Build_word (w__40));
-                   Transaction_input_src := @existT _ _ _ (@existT _ _ _ (w__41));
-                   Transaction_access_list_addresses := al_addrs;
-                   Transaction_access_list_address_count :=
-                     (Build_transaction_item_count (al_addr_count));
-                   Transaction_access_list_slots := al_slots;
-                   Transaction_access_list_slot_count :=
-                     (Build_transaction_item_count (al_slot_count));
-                   Transaction_max_fee := (Build_word (w__42));
-                   Transaction_max_blob_fee := (Build_word (w__43));
-                   Transaction_max_priority_fee := (Build_word (w__44));
-                   Transaction_authorizations := [];
-                   Transaction_authorization_count := (Build_transaction_item_count (0));
-                   Transaction_blob_hashes := blob_hashes;
-                   Transaction_pubkey := @existT _ _ _ (@existT _ _ _ (pubkey));
-                   Transaction_signing_hash := w__46;
-                   Transaction_sig_v := (Build_word (v));
-                   Transaction_sig_r := (Build_word (w__47));
-                   Transaction_sig_s := (Build_word (w__48)) |}))
+      (decode_blob_tx (tx) (pubkey) (fork) (sender) (fields))
+       : M (Transaction)
     else if eq_vec (p0_) ((Ox"04")) return M (Transaction) then
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (chain_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (nonce_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (mp_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (mf_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (to_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (value_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (data_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (al_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (auth_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (v_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (r_f, fields))))) =>
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (s_f, fields))))) =>
-      (rlp_cursor_expect_end (fields)) >>
-      ((rlp_ref_word (v_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun v =>
-      ((decode_access_list (al_f)) >>= fun semanticResult =>
-       returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in (semanticValue0, semanticValue1, (semanticValue2).(transaction_item_count_value), (semanticValue3).(transaction_item_count_value)))) >>= fun '((al_addrs, al_slots, al_addr_count, al_slot_count)) =>
-      ((decode_auth_list (auth_f)) >>= fun semanticResult =>
-       returnM (let '(semanticValue0, semanticValue1) := semanticResult in (semanticValue0, (semanticValue1).(transaction_item_count_value)))) >>= fun '((authorizations, authorization_count)) =>
-      ((rlp_ref_account_nonce (nonce_f)) >>= fun semanticResult =>
-       returnM (semanticResult).(account_nonce_value)) >>= fun (w__49 : Z) =>
-      (rlp_ref_chain_identifier (chain_f)) >>= fun (w__50 : Z) =>
-      (rlp_ref_gas (gas_f) (fork)) >>= fun (w__51 : Z) =>
-      ((rlp_ref_word (to_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__52 : Z) =>
-      ((rlp_ref_uint_word (value_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__53 : Z) =>
-      (tx_input_span (data_f)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__54)) =>
-      ((rlp_ref_uint_word (mf_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__55 : Z) =>
-      ((rlp_ref_uint_word (mp_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__56 : Z) =>
-      (tx_sig_span (chain_f) (v_f)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__57)) =>
-      (tx_signing_hash (SetCodeTx) (w__57) (Build_word ((v)))) >>= fun (w__58 : vec (mword 8) 32) =>
-      ((rlp_ref_uint_word (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__59 : Z) =>
-      ((rlp_ref_uint_word (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__60 : Z) =>
-      returnM (({| Transaction_tx_type := SetCodeTx;
-                   Transaction_sender := sender;
-                   Transaction_raw := @existT _ _ _ (@existT _ _ _ (tx));
-                   Transaction_nonce :=
-                     (Build_word ((word_of_account_nonce (Build_account_nonce ((w__49)))).(account_nonce_value)));
-                   Transaction_chain_id := w__50;
-                   Transaction_gas_limit := w__51;
-                   Transaction_is_create := Z.eqb (to_f.(RlpFieldRefFields_content_len)) (0);
-                   Transaction_recipient := word_to_address (Build_word ((w__52)));
-                   Transaction_value := (Build_word (w__53));
-                   Transaction_input_src := @existT _ _ _ (@existT _ _ _ (w__54));
-                   Transaction_access_list_addresses := al_addrs;
-                   Transaction_access_list_address_count :=
-                     (Build_transaction_item_count (al_addr_count));
-                   Transaction_access_list_slots := al_slots;
-                   Transaction_access_list_slot_count :=
-                     (Build_transaction_item_count (al_slot_count));
-                   Transaction_max_fee := (Build_word (w__55));
-                   Transaction_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
-                   Transaction_max_priority_fee := (Build_word (w__56));
-                   Transaction_authorizations := authorizations;
-                   Transaction_authorization_count :=
-                     (Build_transaction_item_count (authorization_count));
-                   Transaction_blob_hashes := EMPTY_BLOB_HASHES;
-                   Transaction_pubkey := @existT _ _ _ (@existT _ _ _ (pubkey));
-                   Transaction_signing_hash := w__58;
-                   Transaction_sig_v := (Build_word (v));
-                   Transaction_sig_r := (Build_word (w__59));
-                   Transaction_sig_s := (Build_word (w__60)) |}))
+      (decode_set_code_tx (tx) (pubkey) (fork) (sender) (fields))
+       : M (Transaction)
     else throw (InvalidBlock (RlpDecode)))
     : M (Transaction).
 
@@ -3640,22 +3356,22 @@ Axiom transient_store :
   forall
 
   (_ : address_typ) (_ : word) (_ : word)
-  (*(0 <=? ex470512_) && (ex470512_ <=? (2 ^ 256 - 1))*) (*(0 <=? ex470513_) &&
-    (ex470513_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex478071_) && (ex478071_ <=? (2 ^ 256 - 1))*) (*(0 <=? ex478072_) &&
+    (ex478072_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom transient_load :
   forall
 
   (_ : address_typ) (_ : word)
-  (*(0 <=? ex470514_) && (ex470514_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex478073_) && (ex478073_ <=? (2 ^ 256 - 1))*),
   M (word).
 
 Axiom state_checkpoint_reset : forall  (_ : unit) , M (unit).
 
 Axiom state_checkpoint : forall  (_ : unit) , M (journal_checkpoint).
 
-Axiom state_revert : forall  (_ : journal_checkpoint) (*0 <=? ex470515_*), M (unit).
+Axiom state_revert : forall  (_ : journal_checkpoint) (*0 <=? ex478074_*), M (unit).
 
 Axiom storage_tx_update : forall  (_ : StorageEntry) , M (unit).
 
@@ -3677,7 +3393,7 @@ Axiom storage_block_cache :
   forall
 
   (_ : StorageKey) (_ : word)
-  (*(0 <=? ex470516_) && (ex470516_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex478075_) && (ex478075_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom storage_block_clear : forall  (_ : address_typ) , M (unit).
@@ -3694,14 +3410,14 @@ Axiom acct_tx_set_balance :
   forall
 
   (_ : address_typ) (_ : word)
-  (*(0 <=? ex470517_) && (ex470517_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex478076_) && (ex478076_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom acct_tx_set_nonce :
   forall
 
   (_ : address_typ) (_ : account_nonce)
-  (*(0 <=? ex470518_) && (ex470518_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex478077_) && (ex478077_ <=? (2 ^ 64 - 1))*),
   M (unit).
 
 Axiom acct_tx_set_code_hash : forall  (_ : address_typ) (_ : hash) , M (unit).
@@ -3726,171 +3442,84 @@ Axiom acct_post_storage_root_read : forall  (_ : address_typ) , M (hash).
 
 Axiom bal_reset : forall  (_ : unit) , M (unit).
 
-Axiom bal_set_index :
-  forall
-
-  (fv6651_index : Z)
-  (*(0 <=? fv6651_index) && (fv6651_index <=? (2 ^ 20 + 1))*),
-  M (unit).
-
 Axiom bal_account_touch : forall  (_ : address_typ) , M (unit).
 
 Axiom bal_storage_change :
   forall
 
-  (_ : address_typ) (_ : word) (_ : word)
-  (*(0 <=? ex470519_) && (ex470519_ <=? (2 ^ 256 - 1))*) (*(0 <=? ex470520_) &&
-    (ex470520_ <=? (2 ^ 256 - 1))*),
+  (_ : block_access_index) (_ : address_typ) (_ : word) (_ : word)
+  (*(0 <=? ex478078_) && (ex478078_ <=? (2 ^ 20 + 1))*) (*(0 <=? ex478079_) &&
+    (ex478079_ <=? (2 ^ 256 - 1))*) (*(0 <=? ex478080_) && (ex478080_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom bal_storage_read :
   forall
 
   (_ : address_typ) (_ : word)
-  (*(0 <=? ex470521_) && (ex470521_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex478081_) && (ex478081_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom bal_balance_change :
   forall
 
-  (_ : address_typ) (_ : word)
-  (*(0 <=? ex470522_) && (ex470522_ <=? (2 ^ 256 - 1))*),
+  (_ : block_access_index) (_ : address_typ) (_ : word)
+  (*(0 <=? ex478082_) && (ex478082_ <=? (2 ^ 20 + 1))*) (*(0 <=? ex478083_) &&
+    (ex478083_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom bal_nonce_change :
   forall
 
-  (_ : address_typ) (_ : account_nonce)
-  (*(0 <=? ex470523_) && (ex470523_ <=? (2 ^ 64 - 1))*),
+  (_ : block_access_index) (_ : address_typ) (_ : account_nonce)
+  (*(0 <=? ex478084_) && (ex478084_ <=? (2 ^ 20 + 1))*) (*(0 <=? ex478085_) &&
+    (ex478085_ <=? (2 ^ 64 - 1))*),
   M (unit).
 
-Axiom bal_code_change : forall  (_ : address_typ) (_ : hash) , M (unit).
+Axiom bal_code_change :
+  forall
+
+  (_ : block_access_index) (_ : address_typ) (_ : hash)
+  (*(0 <=? ex478086_) && (ex478086_ <=? (2 ^ 20 + 1))*),
+  M (unit).
+
+Definition undefined_BalStorageChangeEntry '(tt : unit) : M (BalStorageChangeEntry) :=
+   (undefined_range (0) ((Z.add ((pow2 (20))) (1)))) >>= fun (w__0 : Z) =>
+   (undefined_range (0) ((Z.sub ((pow2 (256))) (1)))) >>= fun (w__1 : Z) =>
+   returnM (({| BalStorageChangeEntry_index := (Build_block_access_index (w__0));
+                BalStorageChangeEntry_value := (Build_word (w__1)) |})).
+
+Definition undefined_BalBalanceChangeEntry '(tt : unit) : M (BalBalanceChangeEntry) :=
+   (undefined_range (0) ((Z.add ((pow2 (20))) (1)))) >>= fun (w__0 : Z) =>
+   (undefined_range (0) ((Z.sub ((pow2 (256))) (1)))) >>= fun (w__1 : Z) =>
+   returnM (({| BalBalanceChangeEntry_index := (Build_block_access_index (w__0));
+                BalBalanceChangeEntry_value := (Build_word (w__1)) |})).
+
+Definition undefined_BalNonceChangeEntry '(tt : unit) : M (BalNonceChangeEntry) :=
+   (undefined_range (0) ((Z.add ((pow2 (20))) (1)))) >>= fun (w__0 : Z) =>
+   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__1 : Z) =>
+   returnM (({| BalNonceChangeEntry_index := (Build_block_access_index (w__0));
+                BalNonceChangeEntry_value := (Build_account_nonce (w__1)) |})).
+
+Definition undefined_BalCodeChangeEntry '(tt : unit) : M (BalCodeChangeEntry) :=
+   (undefined_range (0) ((Z.add ((pow2 (20))) (1)))) >>= fun (w__0 : Z) =>
+   (undefined_bitvector (8)) >>= fun (w__1 : mword 8) =>
+   (undefined_vector (32) (w__1)) >>= fun (w__2 : vec (mword 8) 32) =>
+   returnM (({| BalCodeChangeEntry_index := (Build_block_access_index (w__0));
+                BalCodeChangeEntry_code_hash := w__2 |})).
 
 Axiom bal_prepare : forall  (_ : unit) , M (unit).
 
-Axiom bal_account_count : forall  (_ : unit) , M (item_count_typ).
+Axiom bal_account_next : forall  (_ : unit) , M (option address_typ).
 
-Axiom bal_account_address :
-  forall
+Axiom bal_storage_slot_next : forall  (_ : unit) , M (option BalStorageSlotEntry).
 
-  (_ : item_index)
-  (*(0 <=? ex470524_) && (ex470524_ <=? (2 ^ 64 - 1))*),
-  M (address_typ).
+Axiom bal_storage_change_next : forall  (_ : unit) , M (option BalStorageChangeEntry).
 
-Axiom bal_storage_change_count :
-  forall
+Axiom bal_balance_change_next : forall  (_ : unit) , M (option BalBalanceChangeEntry).
 
-  (_ : item_index)
-  (*(0 <=? ex470525_) && (ex470525_ <=? (2 ^ 64 - 1))*),
-  M (item_count_typ).
+Axiom bal_nonce_change_next : forall  (_ : unit) , M (option BalNonceChangeEntry).
 
-Axiom bal_storage_change_slot :
-  forall
-
-  (_ : item_index) (_ : item_index)
-  (*(0 <=? ex470526_) && (ex470526_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex470527_) &&
-    (ex470527_ <=? (2 ^ 64 - 1))*),
-  M (word).
-
-Axiom bal_storage_change_index :
-  forall
-
-  (_ : item_index) (_ : item_index)
-  (*(0 <=? ex470528_) && (ex470528_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex470529_) &&
-    (ex470529_ <=? (2 ^ 64 - 1))*),
-  M (item_index).
-
-Axiom bal_storage_change_value :
-  forall
-
-  (_ : item_index) (_ : item_index)
-  (*(0 <=? ex470530_) && (ex470530_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex470531_) &&
-    (ex470531_ <=? (2 ^ 64 - 1))*),
-  M (word).
-
-Axiom bal_storage_read_count :
-  forall
-
-  (_ : item_index)
-  (*(0 <=? ex470532_) && (ex470532_ <=? (2 ^ 64 - 1))*),
-  M (item_count_typ).
-
-Axiom bal_storage_read_slot :
-  forall
-
-  (_ : item_index) (_ : item_index)
-  (*(0 <=? ex470533_) && (ex470533_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex470534_) &&
-    (ex470534_ <=? (2 ^ 64 - 1))*),
-  M (word).
-
-Axiom bal_balance_change_count :
-  forall
-
-  (_ : item_index)
-  (*(0 <=? ex470535_) && (ex470535_ <=? (2 ^ 64 - 1))*),
-  M (item_count_typ).
-
-Axiom bal_balance_change_index :
-  forall
-
-  (_ : item_index) (_ : item_index)
-  (*(0 <=? ex470536_) && (ex470536_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex470537_) &&
-    (ex470537_ <=? (2 ^ 64 - 1))*),
-  M (item_index).
-
-Axiom bal_balance_change_value :
-  forall
-
-  (_ : item_index) (_ : item_index)
-  (*(0 <=? ex470538_) && (ex470538_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex470539_) &&
-    (ex470539_ <=? (2 ^ 64 - 1))*),
-  M (word).
-
-Axiom bal_nonce_change_count :
-  forall
-
-  (_ : item_index)
-  (*(0 <=? ex470540_) && (ex470540_ <=? (2 ^ 64 - 1))*),
-  M (item_count_typ).
-
-Axiom bal_nonce_change_index :
-  forall
-
-  (_ : item_index) (_ : item_index)
-  (*(0 <=? ex470541_) && (ex470541_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex470542_) &&
-    (ex470542_ <=? (2 ^ 64 - 1))*),
-  M (item_index).
-
-Axiom bal_nonce_change_value :
-  forall
-
-  (_ : item_index) (_ : item_index)
-  (*(0 <=? ex470543_) && (ex470543_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex470544_) &&
-    (ex470544_ <=? (2 ^ 64 - 1))*),
-  M (account_nonce).
-
-Axiom bal_code_change_count :
-  forall
-
-  (_ : item_index)
-  (*(0 <=? ex470545_) && (ex470545_ <=? (2 ^ 64 - 1))*),
-  M (item_count_typ).
-
-Axiom bal_code_change_index :
-  forall
-
-  (_ : item_index) (_ : item_index)
-  (*(0 <=? ex470546_) && (ex470546_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex470547_) &&
-    (ex470547_ <=? (2 ^ 64 - 1))*),
-  M (item_index).
-
-Axiom bal_code_change_hash :
-  forall
-
-  (_ : item_index) (_ : item_index)
-  (*(0 <=? ex470548_) && (ex470548_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex470549_) &&
-    (ex470549_ <=? (2 ^ 64 - 1))*),
-  M (hash).
+Axiom bal_code_change_next : forall  (_ : unit) , M (option BalCodeChangeEntry).
 
 Axiom warm_reset : forall  (_ : unit) , M (unit).
 
@@ -3900,7 +3529,7 @@ Axiom warm_slot_touch :
   forall
 
   (_ : address_typ) (_ : word)
-  (*(0 <=? ex470550_) && (ex470550_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex478087_) && (ex478087_ <=? (2 ^ 256 - 1))*),
   M (bool).
 
 Axiom logs_tx_reset : forall  (_ : unit) , M (unit).
@@ -3913,14 +3542,14 @@ Axiom ancestor_hash_write :
   forall
 
   (_ : ancestor_index) (_ : hash)
-  (*(0 <=? ex470551_) && (ex470551_ <=? 255)*),
+  (*(0 <=? ex478088_) && (ex478088_ <=? 255)*),
   M (unit).
 
 Axiom ancestor_hash_read :
   forall
 
   (_ : ancestor_index)
-  (*(0 <=? ex470552_) && (ex470552_ <=? 255)*),
+  (*(0 <=? ex478089_) && (ex478089_ <=? 255)*),
   M (hash).
 
 Axiom stack_reset : forall  (_ : unit) , M (unit).
@@ -3935,7 +3564,7 @@ Axiom stack_push_word :
   forall
 
   (_ : word)
-  (*(0 <=? ex470553_) && (ex470553_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex478090_) && (ex478090_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom stack_pop_word : forall  (_ : unit) , M (word).
@@ -3944,19 +3573,25 @@ Axiom stack_peek_word :
   forall
 
   (_ : stack_index)
-  (*(0 <=? ex470554_) && (ex470554_ <=? 1023)*),
+  (*(0 <=? ex478091_) && (ex478091_ <=? 1023)*),
   M (word).
 
 Axiom stack_set_word :
   forall
 
   (_ : stack_index) (_ : word)
-  (*(0 <=? ex470555_) && (ex470555_ <=? 1023)*) (*(0 <=? ex470556_) && (ex470556_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex478092_) && (ex478092_ <=? 1023)*) (*(0 <=? ex478093_) && (ex478093_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
-Axiom mem_read_byte : forall  (_ : memory_pointer) (*0 <=? ex470558_*), M (bits 8).
+Axiom frame_stack_reset : forall  (_ : unit) , M (unit).
 
-Axiom mem_write_byte : forall  (_ : memory_pointer) (_ : bits 8) (*0 <=? ex470560_*), M (unit).
+Axiom frame_stack_push : forall  (_ : FrameContinuation) , M (unit).
+
+Axiom frame_stack_pop : forall  (_ : unit) , M (FrameContinuation).
+
+Axiom mem_read_byte : forall  (_ : memory_pointer) (*0 <=? ex478095_*), M (bits 8).
+
+Axiom mem_write_byte : forall  (_ : memory_pointer) (_ : bits 8) (*0 <=? ex478097_*), M (unit).
 
 Axiom mem_clear : forall  (_ : unit) , M (unit).
 
@@ -3967,80 +3602,81 @@ Axiom mem_frame_leave : forall  (_ : unit) , M (unit).
 Axiom mem_expand :
   forall
 
-  (fv6652_required : Z)
-  (*(0 <=? 0) && (0 <=? fv6652_required)*),
-  M (ByteSliceLength fv6652_required).
+  (fv11544_required : Z)
+  (*(0 <=? 0) && (0 <=? fv11544_required)*),
+  M (ByteSliceLength fv11544_required).
 
 Axiom mem_move :
   forall
 
   (_ : memory_pointer) (_ : memory_pointer) (_ : memory_length)
-  (*0 <=? ex470578_*) (*0 <=? ex470579_*) (*0 <=? ex470580_*),
+  (*0 <=? ex478115_*) (*0 <=? ex478116_*) (*0 <=? ex478117_*),
   M (unit).
 
-Axiom mem_load_word : forall  (_ : memory_pointer) (*0 <=? ex470581_*), M (word).
+Axiom mem_load_word : forall  (_ : memory_pointer) (*0 <=? ex478118_*), M (word).
 
 Axiom mem_store_word :
   forall
 
   (_ : memory_pointer) (_ : word)
-  (*0 <=? ex470582_*) (*(0 <=? ex470583_) && (ex470583_ <=? (2 ^ 256 - 1))*),
+  (*0 <=? ex478119_*) (*(0 <=? ex478120_) && (ex478120_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom output_buffer_store :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex470586_) && (0 <=? ex470587_)*),
+  (*(0 <=? ex478123_) && (0 <=? ex478124_)*),
   M (bool).
 
 Axiom output_buffer_store_word :
   forall
 
   (_ : word)
-  (*(0 <=? ex470588_) && (ex470588_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex478125_) && (ex478125_ <=? (2 ^ 256 - 1))*),
   M (bool).
 
 Axiom output_buffer_store_words :
   forall
 
   (_ : word) (_ : word)
-  (*(0 <=? ex470589_) && (ex470589_ <=? (2 ^ 256 - 1))*) (*(0 <=? ex470590_) &&
-    (ex470590_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex478126_) && (ex478126_ <=? (2 ^ 256 - 1))*) (*(0 <=? ex478127_) &&
+    (ex478127_ <=? (2 ^ 256 - 1))*),
   M (bool).
 
 Axiom public_output_write :
   forall
 
   (_ : ByteSlice)
-  (*(0 <=? ex470593_) && (0 <=? ex470594_)*),
+  (*(0 <=? ex478130_) && (0 <=? ex478131_)*),
   M (bool).
 
 Definition output_buffer_slice (len : Z) (*0 <=? len*) : ByteSlice :=
-   if Z.eqb (len) (0) then @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE))
-   else @existT _ _ _ (@existT _ _ _ (byte_slice (OutputSource) (0) (len))).
+   if Z.eqb (len) (0) then @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))
+   else @existT _ _ len (@existT _ _ 0 (byte_slice (OutputSource) (0) (len))).
 
-Definition freeze_output {ex414118_ : Z} {ex414117_ : Z}
-(data : ByteSliceFields ex414117_ ex414118_) (*(0 <=? ex414117_) && (0 <=? ex414118_)*)
+Definition freeze_output {ex419682_ : Z} {ex419681_ : Z}
+(data : ByteSliceFields ex419681_ ex419682_) (*(0 <=? ex419681_) && (0 <=? ex419682_)*)
 : M (ByteSlice) :=
    let len := data.(ByteSliceFields_len) in
-   (if Z.eqb (len) (0) then returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)))
+   (if Z.eqb (len) (0) then
+      returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) : {len & {off & (ByteSliceFields off len)}}%type)
     else
-      (output_buffer_store (@existT _ _ _ (@existT _ _ _ (data)))) >>= fun (w__0 : bool) =>
-      let '(@existT _ _ _ (@existT _ _ _ w__1)) :=
+      (output_buffer_store (@existT _ _ ex419682_ (@existT _ _ ex419681_ (data)))) >>= fun (w__0 : bool) =>
+      let '(@existT _ _ w__1__'len (@existT _ _ w__1__'off w__1)) :=
         (if w__0 then output_buffer_slice (len)
-        else @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)) : {len & {off & (ByteSliceFields off len)}}%type) in
-      returnM (@existT _ _ _ (@existT _ _ _ (w__1))))
+        else @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE)) : {len & {off & (ByteSliceFields off len)}}%type) in
+      returnM ((@existT _ _ _ (@existT _ _ _ (w__1))) : {len & {off & (ByteSliceFields off len)}}%type))
     : M ({len & {off & (ByteSliceFields off len)}}%type).
 
 Definition output_buffer_word (value : word) (*(0 <=? value) && (value <=? (2 ^ 256 - 1))*)
 : M (ByteSlice) :=
    let value := (value).(word_value) in
    (output_buffer_store_word (Build_word ((value)))) >>= fun (w__0 : bool) =>
-   let '(@existT _ _ _ (@existT _ _ _ w__1)) :=
+   let '(@existT _ _ w__1__'len (@existT _ _ w__1__'off w__1)) :=
      (if w__0 then output_buffer_slice (WORD_BYTE_LENGTH)
-     else @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)) : {len & {off & (ByteSliceFields off len)}}%type) in
-   returnM (@existT _ _ _ (@existT _ _ _ (w__1))).
+     else @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE)) : {len & {off & (ByteSliceFields off len)}}%type) in
+   returnM ((@existT _ _ _ (@existT _ _ _ (w__1))) : {len & {off & (ByteSliceFields off len)}}%type).
 
 Definition output_buffer_words (first : word) (second : word)
 (*(0 <=? first) && (first <=? (2 ^ 256 - 1))*) (*(0 <=? second) && (second <=? (2 ^ 256 - 1))*)
@@ -4048,10 +3684,10 @@ Definition output_buffer_words (first : word) (second : word)
    let first := (first).(word_value) in
    let second := (second).(word_value) in
    (output_buffer_store_words (Build_word ((first))) (Build_word ((second)))) >>= fun (w__0 : bool) =>
-   let '(@existT _ _ _ (@existT _ _ _ w__1)) :=
+   let '(@existT _ _ w__1__'len (@existT _ _ w__1__'off w__1)) :=
      (if w__0 then output_buffer_slice (DOUBLE_WORD_BYTE_LENGTH)
-     else @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)) : {len & {off & (ByteSliceFields off len)}}%type) in
-   returnM (@existT _ _ _ (@existT _ _ _ (w__1))).
+     else @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE)) : {len & {off & (ByteSliceFields off len)}}%type) in
+   returnM ((@existT _ _ _ (@existT _ _ _ (w__1))) : {len & {off & (ByteSliceFields off len)}}%type).
 
 Definition undefined_EnvField '(tt : unit) : M (EnvField) :=
    (internal_pick
@@ -4084,24 +3720,26 @@ Definition k_env (f : EnvField) : M (word) :=
       read_reg k_header >>= fun (w__5 : BlockHeader) =>
       returnM ((w__5.(BlockHeader_base_fee)).(word_value))
    | F_ChainId =>
-      read_reg k_chain_id >>= fun (w__6 : Z) =>
-      (word_of_chain_identifier (w__6)) >>= fun w__7 => returnM (((U256 (w__7)).(word_value)))
+      (read_reg k_chain_id) >>= fun semanticResult =>
+      returnM (semanticResult).(chain_identifier_value) >>= fun (w__6 : Z) =>
+      returnM (((U256
+                   (((word_of_chain_identifier (Build_chain_identifier ((w__6)))).(chain_identifier_value)))).(word_value)))
    | F_GasLimit =>
-      read_reg k_header >>= fun (w__8 : BlockHeader) =>
-      returnM (((U256 ((w__8.(BlockHeader_gas_limit)).(block_gas_limit_value))).(word_value)))
+      read_reg k_header >>= fun (w__7 : BlockHeader) =>
+      returnM (((U256 ((w__7.(BlockHeader_gas_limit)).(block_gas_limit_value))).(word_value)))
    | F_PrevRandao =>
-      read_reg k_header >>= fun (w__9 : BlockHeader) =>
-      returnM ((w__9.(BlockHeader_prev_randao)).(word_value))
+      read_reg k_header >>= fun (w__8 : BlockHeader) =>
+      returnM ((w__8.(BlockHeader_prev_randao)).(word_value))
    | F_Origin =>
-      read_reg k_tx >>= fun (w__10 : TxEnv) =>
-      returnM (((address_to_word (w__10.(TxEnv_origin))).(word_value)))
+      read_reg k_tx >>= fun (w__9 : TxEnv) =>
+      returnM (((address_to_word (w__9.(TxEnv_origin))).(word_value)))
    | F_GasPrice =>
-      read_reg k_tx >>= fun (w__11 : TxEnv) => returnM ((w__11.(TxEnv_gas_price)).(word_value))
+      read_reg k_tx >>= fun (w__10 : TxEnv) => returnM ((w__10.(TxEnv_gas_price)).(word_value))
    | F_SlotNumber =>
-      read_reg k_header >>= fun (w__12 : BlockHeader) =>
+      read_reg k_header >>= fun (w__11 : BlockHeader) =>
       returnM (((U256
                    (((word_of_slot_number
-                        (Build_slot_number_typ (((w__12.(BlockHeader_slot_number)).(slot_number_value))))).(slot_number_value)))).(word_value)))
+                        (Build_slot_number_typ (((w__11.(BlockHeader_slot_number)).(slot_number_value))))).(slot_number_value)))).(word_value)))
    end
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
@@ -4181,25 +3819,24 @@ Definition k_slot_is_warm (a : vec (mword 8) 20) (s : word) (*(0 <=? s) && (s <=
 : M (bool) :=
    let s := (s).(word_value) in (warm_slot_touch (a) (Build_word ((s))))  : M (bool).
 
-Definition decode_state_account {ex414131_ : Z} {ex414130_ : Z}
-(value : ByteSliceFields ex414130_ ex414131_) (*(0 <=? ex414130_) && (0 <=? ex414131_)*)
+Definition decode_state_account {ex419695_ : Z} {ex419694_ : Z}
+(value : ByteSliceFields ex419694_ ex419695_) (*(0 <=? ex419694_) && (0 <=? ex419695_)*)
 : M (AccountInfo) :=
-   (rlp_node_cursor (value)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ w__0)))) =>
-   (rlp_cursor_pop (w__0)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (nonce, fields))))) =>
-   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (balance, fields))))) =>
-   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (storage, fields))))) =>
-   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (code, fields))))) =>
+   (rlp_node_cursor (value)) >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 w__0)) =>
+   (rlp_cursor_pop (w__0)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (nonce, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (balance, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (storage, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (code, fields))) =>
    (rlp_cursor_expect_end (fields)) >>
-   (if Z.eqb (storage.(RlpFieldRefFields_content_len)) (0) then returnM (EMPTY_TRIE_ROOT)
+   (if Z.eqb (storage.(RlpFieldRef_content_len)) (0) then returnM (EMPTY_TRIE_ROOT)
     else
       ((rlp_ref_word (storage)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__1 : Z) =>
       returnM ((word_to_hash (Build_word ((w__1)))))) >>= fun storage_root =>
-   (if Z.eqb (code.(RlpFieldRefFields_content_len)) (0) then returnM (KECCAK_EMPTY)
+   (if Z.eqb (code.(RlpFieldRef_content_len)) (0) then returnM (KECCAK_EMPTY)
     else
       ((rlp_ref_word (code)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__2 : Z) =>
       returnM ((word_to_hash (Build_word ((w__2)))))) >>= fun code_hash =>
-   ((rlp_ref_account_nonce (nonce)) >>= fun semanticResult =>
-    returnM (semanticResult).(account_nonce_value)) >>= fun (w__3 : Z) =>
+   ((rlp_ref_uint64 (nonce)) >>= fun semanticResult => returnM (semanticResult).(ssz_uint_value)) >>= fun (w__3 : Z) =>
    ((rlp_ref_uint_word (balance)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__4 : Z) =>
    returnM (({| AccountInfo_nonce := (Build_account_nonce (w__3));
                 AccountInfo_balance := (Build_word (w__4));
@@ -4218,10 +3855,7 @@ Definition path_from_hash (h : vec (mword 8) 32) : TriePath :=
 Definition node_db_lookup (h : vec (mword 8) 32) : M (ByteSlice) :=
    (nodedb_lookup (h))  : M ({len & {off & (ByteSliceFields off len)}}%type).
 
-Definition branch_children_get
-(children : vec {content_len & {content_off & {full_len & {full_off & {source_len & {source_off & (RlpFieldRefFields source_off source_len full_off full_len content_off content_len)}}}}}}%type 16)
-(index : mword 4)
-: RlpFieldRef :=
+Definition branch_refs_get (children : vec NodeRef 16) (index : mword 4) : NodeRef :=
    let p0_ := index in
    if eq_vec (p0_) ((Ox"0")) then vec_access_dec (children) (0)
    else if eq_vec (p0_) ((Ox"1")) then vec_access_dec (children) (1)
@@ -4240,34 +3874,87 @@ Definition branch_children_get
    else if eq_vec (p0_) ((Ox"E")) then vec_access_dec (children) (14)
    else vec_access_dec (children) (15).
 
+Definition MPT_HASH_LENGTH : Z := WORD_BYTE_LENGTH.
+#[export] Hint Unfold MPT_HASH_LENGTH : sail.
+Definition inline_node_from_slice {ex419701_ : Z} {ex419700_ : Z}
+(bytes : ByteSliceFields ex419700_ ex419701_) (*(0 <=? ex419700_) && (0 <=? ex419701_)*)
+: M (InlineNode) :=
+   let length := bytes.(ByteSliceFields_len) in
+   (if Z.leb (MPT_HASH_LENGTH) (length) return M (unit) then throw (InvalidBlock (WitnessDeficient))
+    else returnM (tt)) >>
+   ((slice_load (bytes) (0)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
+   returnM (({| InlineNode_data := word_to_hash (Build_word ((w__0)));
+                InlineNode_len := length |})).
+
+Definition field_to_ref {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
+: M (NodeRef) :=
+   (if f.(RlpFieldRef_is_list) return M (NodeRef) then
+      (inline_node_from_slice (f.(RlpFieldRef_source))) >>= fun (w__0 : InlineNode) =>
+      returnM ((InlineRef (w__0)))
+    else if Z.eqb content_len (MPT_HASH_LENGTH) return M (NodeRef) then
+      ((rlp_ref_word (f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__1 : Z) =>
+      returnM ((HashRef ((word_to_hash (Build_word ((w__1)))))))
+    else returnM ((EmptyRef (tt))))
+    : M (NodeRef).
+
+Fixpoint _rec_decode_branch_node {source_off : Z} {source_len : Z}
+(cursor : ByteSliceFields source_off source_len) (index : Z) (children : vec NodeRef 16)
+(_reclimit : Z) (*(0 <=? source_off) && (0 <=? source_len)*) (*(2 <=? index) && (index <=? 16)*)
+(_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (TrieNode).
+exact (
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   (if Z.ltb (index) (16) return M (TrieNode) then
+      (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (child, next))) =>
+      let updated := children in
+      (field_to_ref (child)) >>= fun (w__0 : NodeRef) =>
+      let updated := (vec_update_dec (updated) (index) (w__0))  : vec NodeRef 16 in
+      (_rec_decode_branch_node _ _ (next) ((Z.add (index) (1))) (updated) ((Z.sub (_reclimit) (1)))
+         (_limit_reduces_bool _acc ltac:(assumption)))
+       : M (TrieNode)
+    else
+      (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (value, cursor))) =>
+      (rlp_cursor_expect_end (cursor)) >>
+      returnM ((BranchNode ((children, rlp_ref_content (value))))))
+    : M (TrieNode)
+).
+Defined.
+
+
+Definition decode_branch_node {source_off : Z} {source_len : Z}
+(cursor : ByteSliceFields source_off source_len) (index : Z) (children : vec NodeRef 16)
+(*(0 <=? source_off) && (0 <=? source_len)*) (*(2 <=? index) && (index <=? 16)*)
+: M (TrieNode) :=
+   (_rec_decode_branch_node (cursor) (index) (children) (((Z.sub (16) (index))  : Z))
+      (Zwf_guarded _))
+    : M (TrieNode).
+
 Definition path_empty '(tt : unit) : TriePath := path_new (ZERO_HASH) (Build_trie_path_len ((0))).
 
 Definition HEX_PREFIX_MAX_LENGTH : Z := 33.
 #[export] Hint Unfold HEX_PREFIX_MAX_LENGTH : sail.
-Definition hex_prefix_decode_ref {ex414145_ : Z} {ex414144_ : Z} {ex414143_ : Z} {ex414142_ : Z}
-{ex414141_ : Z} {ex414140_ : Z}
-(f : RlpFieldRefFields ex414140_ ex414141_ ex414142_ ex414143_ ex414144_ ex414145_)
-(*(0 <=? ex414140_) && (0 <=? ex414141_) &&
-  ((0 <=? ex414142_) &&
-    ((0 <=? ex414143_) &&
-      (((ex414142_ + ex414143_) <=? ex414141_) &&
-        ((0 <=? ex414144_) && ((0 <=? ex414145_) && ((ex414144_ + ex414145_) <=? ex414141_))))))*)
+Definition hex_prefix_decode_ref {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
 : M ((bool * TriePath)) :=
-   (if f.(RlpFieldRefFields_is_list) return M (unit) then throw (InvalidBlock (RlpDecode))
+   (if f.(RlpFieldRef_is_list) return M (unit) then throw (InvalidBlock (RlpDecode))
     else returnM (tt)) >>
-   let n := f.(RlpFieldRefFields_content_len) in
-   (if Z.eqb (n) (0) then returnM ((false, path_empty (tt)))
+   let n := f.(RlpFieldRef_content_len) in
+   (if Z.eqb content_len (0) then returnM ((false, path_empty (tt)))
     else
       let maximum_length := HEX_PREFIX_MAX_LENGTH in
-      (if Z.ltb (maximum_length) (n) return M ((bool * TriePath)) then
+      (if Z.ltb (maximum_length) content_len return M ((bool * TriePath)) then
          throw (InvalidBlock (RlpDecode))
        else
-         let content := rlp_ref_content (f) in
+         let content :=
+           sub_slice (f.(RlpFieldRef_source)) ((Z.sub source_len content_len)) content_len in
          (slice_byte (content) (0)) >>= fun fb =>
          let flag : mword 4 := subrange_vec_dec (fb) (7) (4) in
          let is_leaf : bool := eq_vec ((access_vec_dec (flag) (1))) (('b"1")) in
          let odd : bool := eq_vec ((access_vec_dec (flag) (0))) (('b"1")) in
-         let tail_length : Z := Z.sub (n) (1) in
+         let tail_length : Z := Z.sub content_len (1) in
          let tail := slice_suffix (content) (1) in
          ((slice_load (tail) (0)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun packed =>
          let paired_nibbles : Z := Z.mul (tail_length) (2) in
@@ -4295,108 +3982,30 @@ Definition hex_prefix_decode_ref {ex414145_ : Z} {ex414144_ : Z} {ex414143_ : Z}
 Definition path_len (path : TriePath) : trie_path_len :=
    (Build_trie_path_len ((path.(TriePath_len)).(trie_path_len_value))).
 
-Definition decode_trie_node {ex414149_ : Z} {ex414148_ : Z}
-(node : ByteSliceFields ex414148_ ex414149_) (*(0 <=? ex414148_) && (0 <=? ex414149_)*)
+Definition decode_trie_node {ex419769_ : Z} {ex419768_ : Z}
+(node : ByteSliceFields ex419768_ ex419769_) (*(0 <=? ex419768_) && (0 <=? ex419769_)*)
 : M (TrieNode) :=
-   (rlp_node_cursor (node)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ fields)))) =>
-   (if orb ((negb (fields.(RlpCursorFields_valid)))) ((rlp_cursor_empty (fields))) then
-      returnM ((InvalidNode (tt)))
-    else
-      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (first, fields))))) =>
-      (if rlp_cursor_empty (fields) then returnM ((InvalidNode (tt)))
+   (rlp_node_cursor (node)) >>= fun '(@existT _ _ __fields1 (@existT _ _ __fields0 fields)) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (first, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (second, fields))) =>
+   (if Z.eqb (fields.(ByteSliceFields_len)) (0) return M (TrieNode) then
+      (hex_prefix_decode_ref (first)) >>= fun '((is_leaf, path)) =>
+      (if is_leaf then returnM ((LeafNode ((path, rlp_ref_content (second)))))
+       else if Z.eqb (((path_len (path)).(trie_path_len_value))) (0) return M (TrieNode) then
+         throw (InvalidBlock (RlpDecode))
        else
-         (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (second, fields))))) =>
-         (if rlp_cursor_empty (fields) return M (TrieNode) then
-            let path_field := first in
-            let value := second in
-            (hex_prefix_decode_ref (path_field)) >>= fun '((is_leaf, path)) =>
-            returnM ((if is_leaf then
-                        LeafNode
-                          (({| LeafNodeData_path := path;
-                               LeafNodeData_value :=
-                                 @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (value)))))) |}))
-                      else if Z.eqb (((path_len (path)).(trie_path_len_value))) (0) then
-                        InvalidNode (tt)
-                      else
-                        ExtensionNode
-                          (({| ExtensionNodeData_path := path;
-                               ExtensionNodeData_child :=
-                                 @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (value)))))) |}))))
-          else
-            let children : vec {content_len & {content_off & {full_len & {full_off & {source_len & {source_off & (RlpFieldRefFields source_off source_len full_off full_len content_off content_len)}}}}}}%type 16 :=
-              (vec_map (fun dependentValue => @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (dependentValue))))))) (vector_init
-                                                                                                                                                                 (16)
-                                                                                                                                                                 (first))) in
-            let children : vec {content_len & {content_off & {full_len & {full_off & {source_len & {source_off & (RlpFieldRefFields source_off source_len full_off full_len content_off content_len)}}}}}}%type 16 :=
-              vec_update_dec (children) (0)
-                (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (first))))))) in
-            let children : vec {content_len & {content_off & {full_len & {full_off & {source_len & {source_off & (RlpFieldRefFields source_off source_len full_off full_len content_off content_len)}}}}}}%type 16 :=
-              vec_update_dec (children) (1)
-                (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (second))))))) in
-            let '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ cursor)))) :=
-              (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (fields)))) : RlpCursor) in
-            let complete : bool := true in
-            (let '(loop_index_lower) := 2 in
-            let '(loop_index_upper) := 15 in
-            (foreach_ZM_up loop_index_lower loop_index_upper 1 (children, complete, @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (cursor)))))
-              (fun index '((children, complete, @existT _ _ stop (@existT _ _ current (@existT _ _ source_len (@existT _ _ source_off cursor))))) =>
-                (if rlp_cursor_empty (cursor) then
-                   let complete : bool := false in
-                   returnM ((children, complete, @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (cursor))))))
-                 else
-                   (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (child, next))))) =>
-                   let children : vec {content_len & {content_off & {full_len & {full_off & {source_len & {source_off & (RlpFieldRefFields source_off source_len full_off full_len content_off content_len)}}}}}}%type 16 :=
-                     vec_update_dec (children) (index)
-                       (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (child))))))) in
-                   let '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ cursor)))) :=
-                     (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (next)))) : RlpCursor) in
-                   returnM ((children, complete, @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (cursor)))))))
-                 : M ((vec {content_len & {content_off & {full_len & {full_off & {source_len & {source_off & (RlpFieldRefFields source_off source_len full_off full_len content_off content_len)}}}}}}%type 16 * bool * {stop & {current & {source_len & {source_off & (RlpCursorFields source_off source_len current stop)}}}}%type))))) >>= fun '((children, complete, @existT _ _ stop (@existT _ _ current (@existT _ _ source_len (@existT _ _ source_off cursor))))
-            : (vec {content_len & {content_off & {full_len & {full_off & {source_len & {source_off & (RlpFieldRefFields source_off source_len full_off full_len content_off content_len)}}}}}}%type 16 * bool * {stop & {current & {source_len & {source_off & (RlpCursorFields source_off source_len current stop)}}}}%type)) =>
-            (if orb ((negb (complete))) ((rlp_cursor_empty (cursor))) then
-               returnM ((InvalidNode (tt)))
-             else
-               (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (value, cursor))))) =>
-               returnM ((if rlp_cursor_empty (cursor) then
-                           BranchNode
-                             (({| BranchNodeData_children := children;
-                                  BranchNodeData_value :=
-                                    @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (value)))))) |}))
-                         else InvalidNode (tt))))
-             : M (TrieNode))
-          : M (TrieNode))
+         (field_to_ref (second)) >>= fun (w__1 : NodeRef) =>
+         returnM ((ExtensionNode ((path, w__1)))))
+       : M (TrieNode)
+    else
+      let children : vec NodeRef 16 := vector_init (16) ((EmptyRef (tt))) in
+      (field_to_ref (first)) >>= fun (w__4 : NodeRef) =>
+      let children := (vec_update_dec (children) (0) (w__4))  : vec NodeRef 16 in
+      (field_to_ref (second)) >>= fun (w__5 : NodeRef) =>
+      let children := (vec_update_dec (children) (1) (w__5))  : vec NodeRef 16 in
+      (decode_branch_node (fields) (2) (children))
        : M (TrieNode))
     : M (TrieNode).
-
-Definition MPT_HASH_LENGTH : Z := WORD_BYTE_LENGTH.
-#[export] Hint Unfold MPT_HASH_LENGTH : sail.
-Definition inline_node_from_slice {ex414153_ : Z} {ex414152_ : Z}
-(bytes : ByteSliceFields ex414152_ ex414153_) (*(0 <=? ex414152_) && (0 <=? ex414153_)*)
-: M (InlineNode) :=
-   let length := bytes.(ByteSliceFields_len) in
-   (if Z.leb (MPT_HASH_LENGTH) (length) return M (unit) then throw (InvalidBlock (WitnessDeficient))
-    else returnM (tt)) >>
-   ((slice_load (bytes) (0)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
-   returnM (({| InlineNode_data := word_to_hash (Build_word ((w__0)));
-                InlineNode_len := length |})).
-
-Definition field_to_ref {ex414165_ : Z} {ex414164_ : Z} {ex414163_ : Z} {ex414162_ : Z}
-{ex414161_ : Z} {ex414160_ : Z}
-(f : RlpFieldRefFields ex414160_ ex414161_ ex414162_ ex414163_ ex414164_ ex414165_)
-(*(0 <=? ex414160_) && (0 <=? ex414161_) &&
-  ((0 <=? ex414162_) &&
-    ((0 <=? ex414163_) &&
-      (((ex414162_ + ex414163_) <=? ex414161_) &&
-        ((0 <=? ex414164_) && ((0 <=? ex414165_) && ((ex414164_ + ex414165_) <=? ex414161_))))))*)
-: M (NodeRef) :=
-   (if f.(RlpFieldRefFields_is_list) return M (NodeRef) then
-      (inline_node_from_slice ((projT2 (projT2 (rlp_ref_full (f)))))) >>= fun (w__0 : InlineNode) =>
-      returnM ((InlineRef (w__0)))
-    else if Z.eqb (f.(RlpFieldRefFields_content_len)) (MPT_HASH_LENGTH) return M (NodeRef) then
-      ((rlp_ref_word (f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__1 : Z) =>
-      returnM ((HashRef ((word_to_hash (Build_word ((w__1)))))))
-    else returnM ((EmptyRef (tt))))
-    : M (NodeRef).
 
 Definition path_byte_index (i : trie_path_cursor) (*(0 <=? i) && (i <=? 64)*) : M (b256_index) :=
    let i := (i).(trie_path_cursor_value) in
@@ -4470,84 +4079,80 @@ Definition inline_node_slice (node : InlineNode) : M (ByteSlice) :=
 
 Definition resolve_ref (r : NodeRef) : M (ByteSlice) :=
    match r with
-   | EmptyRef tt => returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)))
+   | EmptyRef tt =>
+      returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) : {len & {off & (ByteSliceFields off len)}}%type)
    | InlineRef node =>
       (inline_node_slice (node))  : M ({len & {off & (ByteSliceFields off len)}}%type)
    | HashRef h =>
-      (node_db_lookup (h)) >>= fun '(@existT _ _ _ (@existT _ _ _ node)) =>
+      (node_db_lookup (h)) >>= fun '(@existT _ _ __node1 (@existT _ _ __node0 node)) =>
       (if Z.eqb (node.(ByteSliceFields_len)) (0)
          return
-         M ({len & {off & (ByteSliceFields off len)}}%type) then
+         M ({__node1 & {__node0 & (ByteSliceFields __node0 __node1)}}%type) then
          throw (InvalidBlock (WitnessDeficient))
-       else returnM (@existT _ _ _ (@existT _ _ _ (node))))
-       : M ({len & {off & (ByteSliceFields off len)}}%type)
+       else
+         returnM ((@existT _ _ _ (@existT _ _ _ (node))) : {__node1 & {__node0 & (ByteSliceFields __node0 __node1)}}%type))
+       : M ({__node1 & {__node0 & (ByteSliceFields __node0 __node1)}}%type)
    end
     : M ({len & {off & (ByteSliceFields off len)}}%type).
 
-Fixpoint _rec_trie_walk {ex414173_ : Z} {ex414172_ : Z}
-(node : ByteSliceFields ex414172_ ex414173_) (key : TriePath) (pos : trie_path_cursor)
-(_reclimit : Z) (*(0 <=? ex414172_) && (0 <=? ex414173_)*) (*(0 <=? pos) && (pos <=? 64)*)
+Fixpoint _rec_trie_walk {ex419777_ : Z} {ex419776_ : Z}
+(node : ByteSliceFields ex419776_ ex419777_) (key : TriePath) (pos : trie_path_cursor)
+(_reclimit : Z) (*(0 <=? ex419776_) && (0 <=? ex419777_)*) (*(0 <=? pos) && (pos <=? 64)*)
 (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (ByteSlice).
 exact (
    let pos := (pos).(trie_path_cursor_value) in
    assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
    (if Z.eqb (node.(ByteSliceFields_len)) (0) then
-      returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)))
+      returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) : {len & {off & (ByteSliceFields off len)}}%type)
     else
       (decode_trie_node (node)) >>= fun (w__0 : TrieNode) =>
       match w__0 with
-      | LeafNode leaf =>
-         (path_matches (key) (Build_trie_path_cursor ((pos))) (leaf.(LeafNodeData_path))) >>= fun (w__1 : bool) =>
-         let '(@existT _ _ _ (@existT _ _ _ w__2)) :=
-           (if negb (w__1) then @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE))
-           else if Z.eqb
-                     ((Z.add (pos) (((path_len (leaf.(LeafNodeData_path))).(trie_path_len_value)))))
+      | LeafNode (path, @existT _ _ len (@existT _ _ off value)) =>
+         (path_matches (key) (Build_trie_path_cursor ((pos))) (path)) >>= fun (w__1 : bool) =>
+         let '(@existT _ _ w__2__'len (@existT _ _ w__2__'off w__2)) :=
+           (if negb (w__1) then @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))
+           else if Z.eqb ((Z.add (pos) (((path_len (path)).(trie_path_len_value)))))
                      (((path_len (key)).(trie_path_len_value))) then
-             @existT _ _ _ (@existT _ _ _ (rlp_ref_content
-                                             (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (leaf.(LeafNodeData_value))))))))))
-           else @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)) : {len & {off & (ByteSliceFields off len)}}%type) in
-         returnM (@existT _ _ _ (@existT _ _ _ (w__2)))
-      | ExtensionNode ext =>
-         let extension_len : Z := (path_len (ext.(ExtensionNodeData_path))).(trie_path_len_value) in
-         (if Z.eqb (extension_len) (0) then returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)))
+             @existT _ _ _ (@existT _ _ _ (value))
+           else @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE)) : {len & {off & (ByteSliceFields off len)}}%type) in
+         returnM ((@existT _ _ _ (@existT _ _ _ (w__2))) : {len & {off & (ByteSliceFields off len)}}%type)
+      | ExtensionNode (path, childref) =>
+         let extension_len : Z := (path_len (path)).(trie_path_len_value) in
+         (if Z.eqb (extension_len) (0) then
+            returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) : {len & {off & (ByteSliceFields off len)}}%type)
           else
-            (path_matches (key) (Build_trie_path_cursor ((pos))) (ext.(ExtensionNodeData_path))) >>= fun (w__3 : bool) =>
-            (if negb (w__3) then returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)))
+            (path_matches (key) (Build_trie_path_cursor ((pos))) (path)) >>= fun (w__3 : bool) =>
+            (if negb (w__3) then
+               returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) : {len & {off & (ByteSliceFields off len)}}%type)
              else
                let next_pos := Z.add (pos) (extension_len) in
                (if Z.leb (next_pos) (64)
                   return
                   M ({len & {off & (ByteSliceFields off len)}}%type) then
-                  (field_to_ref
-                     (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (ext.(ExtensionNodeData_child))))))))) >>= fun (w__4 : NodeRef) =>
-                  (resolve_ref (w__4)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__5)) =>
-                  (_rec_trie_walk _ _ (w__5) (key) (Build_trie_path_cursor ((next_pos)))
+                  (resolve_ref (childref)) >>= fun '(@existT _ _ __w__41 (@existT _ _ __w__40 w__4)) =>
+                  (_rec_trie_walk _ _ (w__4) (key) (Build_trie_path_cursor ((next_pos)))
                      ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
-                   : M ({len & {off & (ByteSliceFields off len)}}%type)
-                else returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE))))
+                   : M ({__w__41 & {__w__40 & (ByteSliceFields __w__40 __w__41)}}%type)
+                else
+                  returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) : {len & {off & (ByteSliceFields off len)}}%type))
                 : M ({len & {off & (ByteSliceFields off len)}}%type))
              : M ({len & {off & (ByteSliceFields off len)}}%type))
           : M ({len & {off & (ByteSliceFields off len)}}%type)
-      | BranchNode branch =>
+      | BranchNode (children, @existT _ _ len (@existT _ _ off value)) =>
          (if Z.eqb (pos) (((path_len (key)).(trie_path_len_value))) then
-            returnM (@existT _ _ _ (@existT _ _ _ (rlp_ref_content
-                                                     (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (branch.(BranchNodeData_value)))))))))))
+            returnM ((@existT _ _ _ (@existT _ _ _ (value))) : {len & {off & (ByteSliceFields off len)}}%type)
           else if Z.ltb (pos) (((path_len (key)).(trie_path_len_value)))
             return
             M ({len & {off & (ByteSliceFields off len)}}%type) then
-            (path_nibble (key) (Build_trie_path_cursor ((pos)))) >>= fun (w__10 : mword 4) =>
-            (field_to_ref
-               ((projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (branch_children_get
-                                                                   (branch.(BranchNodeData_children))
-                                                                   (w__10)))))))))) >>= fun (w__11 : NodeRef) =>
-            (resolve_ref (w__11)) >>= fun '(@existT _ _ _ (@existT _ _ _ child)) =>
+            (path_nibble (key) (Build_trie_path_cursor ((pos)))) >>= fun (w__9 : mword 4) =>
+            (resolve_ref ((branch_refs_get (children) (w__9)))) >>= fun '(@existT _ _ __child1 (@existT _ _ __child0 child)) =>
             (_rec_trie_walk _ _ (child) (key) (Build_trie_path_cursor (((Z.add (pos) (1)))))
                ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
-             : M ({len & {off & (ByteSliceFields off len)}}%type)
-          else returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE))))
+             : M ({__child1 & {__child0 & (ByteSliceFields __child0 __child1)}}%type)
+          else
+            returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) : {len & {off & (ByteSliceFields off len)}}%type))
           : M ({len & {off & (ByteSliceFields off len)}}%type)
-      | InvalidNode tt => returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)))
       end
        : M ({len & {off & (ByteSliceFields off len)}}%type))
     : M ({len & {off & (ByteSliceFields off len)}}%type)
@@ -4555,9 +4160,9 @@ exact (
 Defined.
 
 
-Definition trie_walk {ex414179_ : Z} {ex414178_ : Z}
-(node : ByteSliceFields ex414178_ ex414179_) (key : TriePath) (pos : trie_path_cursor)
-(*(0 <=? ex414178_) && (0 <=? ex414179_)*) (*(0 <=? pos) && (pos <=? 64)*)
+Definition trie_walk {ex419783_ : Z} {ex419782_ : Z}
+(node : ByteSliceFields ex419782_ ex419783_) (key : TriePath) (pos : trie_path_cursor)
+(*(0 <=? ex419782_) && (0 <=? ex419783_)*) (*(0 <=? pos) && (pos <=? 64)*)
 : M (ByteSlice) :=
    let pos := (pos).(trie_path_cursor_value) in
    (_rec_trie_walk (node) (key) (Build_trie_path_cursor ((pos))) (((Z.sub (64) (pos))  : Z))
@@ -4566,23 +4171,23 @@ Definition trie_walk {ex414179_ : Z} {ex414178_ : Z}
 
 Definition trie_lookup (root : vec (mword 8) 32) (key : TriePath) : M (ByteSlice) :=
    (if generic_eq (root) (EMPTY_TRIE_ROOT) then
-      returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)))
+      returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) : {len & {off & (ByteSliceFields off len)}}%type)
     else
-      (node_db_lookup (root)) >>= fun '(@existT _ _ _ (@existT _ _ _ node)) =>
+      (node_db_lookup (root)) >>= fun '(@existT _ _ __node1 (@existT _ _ __node0 node)) =>
       (if Z.eqb (node.(ByteSliceFields_len)) (0)
          return
-         M ({len & {off & (ByteSliceFields off len)}}%type) then
+         M ({__node1 & {__node0 & (ByteSliceFields __node0 __node1)}}%type) then
          throw (InvalidBlock (WitnessDeficient))
        else
          (trie_walk (node) (key) (Build_trie_path_cursor ((0))))
-          : M ({len & {off & (ByteSliceFields off len)}}%type))
-       : M ({len & {off & (ByteSliceFields off len)}}%type))
+          : M ({__node1 & {__node0 & (ByteSliceFields __node0 __node1)}}%type))
+       : M ({__node1 & {__node0 & (ByteSliceFields __node0 __node1)}}%type))
     : M ({len & {off & (ByteSliceFields off len)}}%type).
 
 Definition stateless_account (root : vec (mword 8) 32) (a : vec (mword 8) 20)
 : M (option AccountInfo) :=
    (keccak256_address (a)) >>= fun (w__0 : vec (mword 8) 32) =>
-   (trie_lookup (root) ((path_from_hash (w__0)))) >>= fun '(@existT _ _ _ (@existT _ _ _ value)) =>
+   (trie_lookup (root) ((path_from_hash (w__0)))) >>= fun '(@existT _ _ __value1 (@existT _ _ __value0 value)) =>
    (if Z.eqb (value.(ByteSliceFields_len)) (0) then returnM (None)
     else (decode_state_account (value)) >>= fun (w__1 : AccountInfo) => returnM ((Some (w__1))))
     : M (option AccountInfo).
@@ -4611,10 +4216,10 @@ Definition stateless_storage (root : vec (mword 8) 32) (slot : word)
 : M (word) :=
    let slot := (slot).(word_value) in
    ((keccak256_word (Build_word ((slot)))) >>= fun (w__0 : vec (mword 8) 32) =>
-   (trie_lookup (root) ((path_from_hash (w__0)))) >>= fun '(@existT _ _ _ (@existT _ _ _ value)) =>
+   (trie_lookup (root) ((path_from_hash (w__0)))) >>= fun '(@existT _ _ __value1 (@existT _ _ __value0 value)) =>
    (if Z.eqb (value.(ByteSliceFields_len)) (0) then returnM ((ZERO_WORD).(word_value))
     else
-      (rlp_single_ref (value)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ w__1)))))) =>
+      (rlp_single_ref (value)) >>= fun '(@existT _ _ __w__1 w__1) =>
       ((rlp_ref_uint_word (w__1)) >>= fun semanticResult => returnM (semanticResult).(word_value))
        : M (Z))
     : M (Z)) >>= fun semanticResult =>
@@ -4919,9 +4524,9 @@ Definition k_get_codehash (a : vec (mword 8) 20) : M (hash) :=
    returnM ((if negb (acc.(Account_present)) then ZERO_HASH
              else acc.(Account_info).(AccountInfo_code_hash))).
 
-Definition k_deploy_code {ex414195_ : Z} {ex414194_ : Z}
-(a : vec (mword 8) 20) (code : ByteSliceFields ex414194_ ex414195_)
-(*(0 <=? ex414194_) && (0 <=? ex414195_) && (0 <=? ex414195_)*)
+Definition k_deploy_code {ex419799_ : Z} {ex419798_ : Z}
+(a : vec (mword 8) 20) (code : ByteSliceFields ex419798_ ex419799_)
+(*(0 <=? ex419798_) && (0 <=? ex419799_) && (0 <=? ex419799_)*)
 : M (unit) :=
    (k_aload (a)) >>= fun cur =>
    read_reg k_fork >>= fun (w__0 : Fork) =>
@@ -4980,7 +4585,7 @@ Definition k_deleg_target (a : vec (mword 8) 20) : M ((bool * address_typ)) :=
 Definition k_get_code_size (a : vec (mword 8) 20) : M (code_length) :=
    (k_code_key (a)) >>= fun (w__0 : vec (mword 8) 32) =>
    (code_db_resolve (w__0)) >>= fun code =>
-   let '(@existT _ _ _ (@existT _ _ _ bytes)) :=
+   let '(@existT _ _ bytes__'len (@existT _ _ bytes__'off bytes)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (code.(Code_bytes))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    returnM (bytes.(ByteSliceFields_len)).
 
@@ -5074,7 +4679,9 @@ Definition k_tx_merge '(tt : unit) : M (unit) :=
                  ((e.(AcctEntry_value).(AcctValue_orig).(Account_info).(AccountInfo_nonce)).(account_nonce_value))
               return
               M (unit) then
-              (bal_nonce_change (e.(AcctEntry_addr))
+              (read_reg k_block_access_index) >>= fun semanticResult =>
+              returnM (semanticResult).(block_access_index_value) >>= fun (w__2 : Z) =>
+              (bal_nonce_change (Build_block_access_index ((w__2))) (e.(AcctEntry_addr))
                  (Build_account_nonce (((curr.(Account_info).(AccountInfo_nonce)).(account_nonce_value)))))
                : M (unit)
             else returnM (tt)) >>
@@ -5082,7 +4689,9 @@ Definition k_tx_merge '(tt : unit) : M (unit) :=
                  ((e.(AcctEntry_value).(AcctValue_orig).(Account_info).(AccountInfo_balance)).(word_value))
               return
               M (unit) then
-              (bal_balance_change (e.(AcctEntry_addr))
+              (read_reg k_block_access_index) >>= fun semanticResult =>
+              returnM (semanticResult).(block_access_index_value) >>= fun (w__3 : Z) =>
+              (bal_balance_change (Build_block_access_index ((w__3))) (e.(AcctEntry_addr))
                  (Build_word (((curr.(Account_info).(AccountInfo_balance)).(word_value)))))
                : M (unit)
             else returnM (tt)) >>
@@ -5090,7 +4699,10 @@ Definition k_tx_merge '(tt : unit) : M (unit) :=
                  (e.(AcctEntry_value).(AcctValue_orig).(Account_info).(AccountInfo_code_hash))
               return
               M (unit) then
-              (bal_code_change (e.(AcctEntry_addr)) (curr.(Account_info).(AccountInfo_code_hash)))
+              (read_reg k_block_access_index) >>= fun semanticResult =>
+              returnM (semanticResult).(block_access_index_value) >>= fun (w__4 : Z) =>
+              (bal_code_change (Build_block_access_index ((w__4))) (e.(AcctEntry_addr))
+                 (curr.(Account_info).(AccountInfo_code_hash)))
                : M (unit)
             else returnM (tt)) >>
            let curr : Account :=
@@ -5119,11 +4731,11 @@ Definition k_tx_merge '(tt : unit) : M (unit) :=
      (fun more => returnM (more))
      (fun more =>
        (assert_exp' true "loop dummy assert" >>= fun _ =>
-        (storage_tx_pop (tt)) >>= fun (w__2 : option StorageEntry) =>
-        match w__2 with
+        (storage_tx_pop (tt)) >>= fun (w__5 : option StorageEntry) =>
+        match w__5 with
         | Some e =>
-           (acct_block_get (e.(StorageEntry_key).(StorageKey_addr))) >>= fun (w__3 : option Account) =>
-           match w__3 with
+           (acct_block_get (e.(StorageEntry_key).(StorageKey_addr))) >>= fun (w__6 : option Account) =>
+           match w__6 with
            | Some acc =>
               (if andb (acc.(Account_present))
                     (((neq_int ((e.(StorageEntry_value).(StorageValue_curr)).(word_value))
@@ -5131,7 +4743,10 @@ Definition k_tx_merge '(tt : unit) : M (unit) :=
                      : bool))
                  return
                  M (unit) then
-                 (bal_storage_change (e.(StorageEntry_key).(StorageKey_addr))
+                 (read_reg k_block_access_index) >>= fun semanticResult =>
+                 returnM (semanticResult).(block_access_index_value) >>= fun (w__7 : Z) =>
+                 (bal_storage_change (Build_block_access_index ((w__7)))
+                    (e.(StorageEntry_key).(StorageKey_addr))
                     (Build_word (((e.(StorageEntry_key).(StorageKey_slot)).(word_value))))
                     (Build_word (((e.(StorageEntry_value).(StorageValue_curr)).(word_value))))) >>
                  (storage_block_put (e))
@@ -5152,33 +4767,6 @@ Definition k_revert (checkpoint : Z) (*0 <=? checkpoint*) : M (unit) :=
 
 Definition DEPTH_LIMIT : frame_depth := (Build_frame_depth (1024)).
 #[export] Hint Unfold DEPTH_LIMIT : sail.
-Definition frame_stack_reset '(tt : unit) : M (unit) :=
-   write_reg frame_stack_top (Build_frame_depth ((0)))  : M (unit).
-
-Definition frame_stack_is_empty '(tt : unit) : M (bool) :=
-   (read_reg frame_stack_top) >>= fun semanticResult => returnM (semanticResult).(frame_depth_value) >>= fun (w__0 : Z) =>
-   returnM ((Z.eqb (w__0) (0))).
-
-Definition frame_stack_push (continuation : FrameContinuation) : M (unit) :=
-   (read_reg frame_stack_top) >>= fun semanticResult => returnM (semanticResult).(frame_depth_value) >>= fun top =>
-   (if Z.ltb (top) ((DEPTH_LIMIT).(frame_depth_value)) return M (unit) then
-      read_reg frame_stack >>= fun (w__0 : vec FrameContinuation 1024) =>
-      write_reg frame_stack ((vec_update_dec (w__0) (top) (continuation))) >>
-      write_reg frame_stack_top (Build_frame_depth (((Z.add (top) (1)))))
-       : M (unit)
-    else assert_exp' false "sail/evm/machine.sail:59.20-59.21" >>= fun _ => exit tt)
-    : M (unit).
-
-Definition frame_stack_pop '(tt : unit) : M (FrameContinuation) :=
-   (read_reg frame_stack_top) >>= fun semanticResult => returnM (semanticResult).(frame_depth_value) >>= fun top =>
-   (if Z.ltb (0) (top) return M (FrameContinuation) then
-      let parent_top := Z.sub (top) (1) in
-      write_reg frame_stack_top (Build_frame_depth ((parent_top))) >>
-      read_reg frame_stack >>= fun (w__0 : vec FrameContinuation 1024) =>
-      returnM ((vec_access_dec (w__0) (parent_top)))
-    else assert_exp' false "sail/evm/machine.sail:71.20-71.21" >>= fun _ => exit tt)
-    : M (FrameContinuation).
-
 Definition validated_refund_add (left' : Z) (right' : Z)
 (*(((- (199 * (2 ^ 64 - 1)))) <=? left') &&
   ((left' <=? (199 * (2 ^ 64 - 1))) &&
@@ -5203,14 +4791,14 @@ Definition record_refund (delta : Z)
 
 Definition frame_code_len '(tt : unit) : M (code_length) :=
    read_reg frame_code >>= fun (w__0 : Code) =>
-   let '(@existT _ _ _ (@existT _ _ _ code)) :=
+   let '(@existT _ _ code__'len (@existT _ _ code__'off code)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (w__0.(Code_bytes))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    let length := code.(ByteSliceFields_len) in
    returnM (length).
 
 Definition frame_jumpdest_valid (dest : Z) (*0 <=? dest*) : M (bool) :=
    read_reg frame_code >>= fun (w__0 : Code) =>
-   let '(@existT _ _ _ (@existT _ _ _ code)) :=
+   let '(@existT _ _ code__'len (@existT _ _ code__'off code)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (w__0.(Code_bytes))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    let length := code.(ByteSliceFields_len) in
    read_reg frame_code >>= fun (w__1 : Code) =>
@@ -5253,7 +4841,7 @@ Definition exc_halt (k : ExceptionKind) : M (unit) :=
 Definition stack_height '(tt : unit) : M (operand_stack_height) :=
    (((stack_depth (tt)) >>= fun semanticResult =>
      returnM (semanticResult).(operand_stack_height_value)) >>= fun height =>
-   assert_exp' (Z.leb (height) ((STACK_LIMIT).(operand_stack_height_value))) "sail/evm/machine.sail:168.32-168.33" >>= fun _ =>
+   assert_exp' (Z.leb (height) ((STACK_LIMIT).(operand_stack_height_value))) "sail/evm/machine.sail:131.32-131.33" >>= fun _ =>
    returnM (height)) >>= fun semanticResult =>
    returnM (Build_operand_stack_height (semanticResult)).
 
@@ -5301,27 +4889,27 @@ Definition is_running '(tt : unit) : M (bool) :=
    let w__1 : bool := match w__0 with | Running tt => true | _ => false end in
    returnM (w__1).
 
-Definition calldata_install {ex414227_ : Z} {ex414226_ : Z}
-(data : ByteSliceFields ex414226_ ex414227_) (*(0 <=? ex414226_) && (0 <=? ex414227_)*)
+Definition calldata_install {ex419831_ : Z} {ex419830_ : Z}
+(data : ByteSliceFields ex419830_ ex419831_) (*(0 <=? ex419830_) && (0 <=? ex419831_)*)
 : M (unit) :=
-   write_reg calldata (@existT _ _ _ (@existT _ _ _ (data)))  : M (unit).
+   write_reg calldata (@existT _ _ ex419831_ (@existT _ _ ex419830_ (data)))  : M (unit).
 
 Definition returndata_clear '(tt : unit) : M (unit) :=
-   write_reg returndata (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)))  : M (unit).
+   write_reg returndata (@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE)))  : M (unit).
 
 Definition returndata_size '(tt : unit) : M (source_pointer) :=
-   read_reg returndata >>= fun '(@existT _ _ _ (@existT _ _ _ data)) =>
+   read_reg returndata >>= fun '(@existT _ _ __data1 (@existT _ _ __data0 data)) =>
    returnM (data.(ByteSliceFields_len)).
 
 Definition returndata_byte (index : Z) (*0 <=? index*) : M (byte) :=
-   read_reg returndata >>= fun '(@existT _ _ _ (@existT _ _ _ w__0)) =>
+   read_reg returndata >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 w__0)) =>
    (slice_byte (w__0) (index))
     : M (mword 8).
 
 Definition returndata_copy (dst : Z) (off : Z) (len : Z)
 (*(0 <=? dst) && ((0 <=? off) && (0 <=? len))*)
 : M (unit) :=
-   read_reg returndata >>= fun '(@existT _ _ _ (@existT _ _ _ w__0)) =>
+   read_reg returndata >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 w__0)) =>
    (slice_copy (w__0) (dst) (off) (len))
     : M (unit).
 
@@ -5329,7 +4917,7 @@ Definition returndata_copy_prefix (dst : Z) (want : Z) (*0 <=? dst*) (*0 <=? wan
    let wanted := want in
    (returndata_size (tt)) >>= fun available =>
    let copy_length : Z := if Z.ltb (wanted) (available) then wanted else available in
-   read_reg returndata >>= fun '(@existT _ _ _ (@existT _ _ _ w__0)) =>
+   read_reg returndata >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 w__0)) =>
    (slice_copy (w__0) (dst) (0) (copy_length))
     : M (unit).
 
@@ -5365,52 +4953,55 @@ Definition returndata_copy_words (dst : Z) (source_offset : word) (length : word
     : M (unit).
 
 Definition evm_memory_high_water '(tt : unit) : M (memory_length) :=
-   read_reg evm_memory >>= fun '(@existT _ _ _ (@existT _ _ _ memory)) =>
+   read_reg evm_memory >>= fun '(@existT _ _ __memory1 (@existT _ _ __memory0 memory)) =>
    let length := memory.(ByteSliceFields_len) in
    returnM (length).
 
 Definition memory_reset '(tt : unit) : M (unit) :=
    (mem_clear (tt)) >>
-   write_reg evm_memory (@existT _ _ _ (@existT _ _ _ (byte_slice (EvmMemorySource) (0) (0))))
+   write_reg evm_memory (@existT _ _ 0 (@existT _ _ 0 (byte_slice (EvmMemorySource) (0) (0))))
     : M (unit).
 
 Definition memory_expand_to (new_size : Z) (*(0 <=? 0) && (0 <=? new_size)*)
 : M (ByteSliceLength new_size) :=
-   read_reg evm_memory >>= fun '(@existT _ _ _ (@existT _ _ _ memory)) =>
+   read_reg evm_memory >>= fun '(@existT _ _ __memory1 (@existT _ _ __memory0 memory)) =>
    (if Z.ltb (memory.(ByteSliceFields_len)) (new_size)
       return
-      M ({len & {off & (ByteSliceFields off len)}}%type) then
-      (mem_expand (new_size)) >>= fun '(@existT _ _ _ (@existT _ _ _ expanded)) =>
+      M ({__memory1 & {__memory0 & (ByteSliceFields __memory0 __memory1)}}%type) then
+      (mem_expand (new_size)) >>= fun '(@existT _ _ __memory1 (@existT _ _ __memory0 expanded)) =>
       write_reg evm_memory (@existT _ _ _ (@existT _ _ _ (expanded))) >>
-      returnM (@existT _ _ _ (@existT _ _ _ (expanded)))
-    else returnM (@existT _ _ _ (@existT _ _ _ (sub_slice (memory) (0) (new_size)))))
-    : M ({len & {off & (ByteSliceFields off len)}}%type).
+      returnM ((@existT _ _ _ (@existT _ _ _ (expanded))) : {__memory1 & {__memory0 & (ByteSliceFields __memory0 __memory1)}}%type)
+    else
+      returnM ((@existT _ _ _ (@existT _ _ _ (sub_slice (memory) (0) (new_size)))) : {__memory1 & {__memory0 & (ByteSliceFields __memory0 __memory1)}}%type))
+    : M ({__memory1 & {__memory0 & (ByteSliceFields __memory0 __memory1)}}%type).
 
 Definition memory_byte_slice (off : Z) (len : Z) (*(0 <=? off) && (0 <=? len)*) : M (ByteSlice) :=
-   (if Z.eqb (len) (0) then returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)))
+   (if Z.eqb (len) (0) then
+      returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) : {syn_len & {syn_off & (ByteSliceFields syn_off syn_len)}}%type)
     else
-      (memory_expand_to ((Z.add (off) (len)))) >>= fun '(@existT _ _ _ (@existT _ _ _ w__0)) =>
-      returnM (@existT _ _ _ (@existT _ _ _ (sub_slice (w__0) (off) (len)))))
+      (memory_expand_to ((Z.add (off) (len)))) >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 w__0)) =>
+      returnM ((@existT _ _ _ (@existT _ _ _ (sub_slice (w__0) (off) (len)))) : {__w__01 & {__w__00 & (ByteSliceFields __w__00 __w__01)}}%type))
     : M ({syn_len & {syn_off & (ByteSliceFields syn_off syn_len)}}%type).
 
 Definition memory_code_slice (off : Z) (len : Z) (*(0 <=? off) && (0 <=? len)*) : M (CodeSlice) :=
-   (if Z.eqb (len) (0) then returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_CODE_SLICE)))
+   (if Z.eqb (len) (0) then
+      returnM (EMPTY_CODE_SLICE : {syn_len & {syn_off & (ByteSliceFields syn_off syn_len)}}%type)
     else
-      (memory_expand_to ((Z.add (off) (len)))) >>= fun '(@existT _ _ _ (@existT _ _ _ w__0)) =>
-      returnM (@existT _ _ _ (@existT _ _ _ (code_slice ((sub_slice (w__0) (off) (len)))))))
+      (memory_expand_to ((Z.add (off) (len)))) >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 w__0)) =>
+      returnM ((code_slice ((sub_slice (w__0) (off) (len)))) : {__w__01 & {__w__00 & (ByteSliceFields __w__00 __w__01)}}%type))
     : M ({syn_len & {syn_off & (ByteSliceFields syn_off syn_len)}}%type).
 
 Definition memory_frame_enter '(tt : unit) : M (ByteSlice) :=
-   read_reg evm_memory >>= fun '(@existT _ _ _ (@existT _ _ _ parent)) =>
+   read_reg evm_memory >>= fun '(@existT _ _ __parent1 (@existT _ _ __parent0 parent)) =>
    (mem_frame_enter (tt)) >>= fun (base : Z) =>
-   write_reg evm_memory (@existT _ _ _ (@existT _ _ _ (byte_slice (EvmMemorySource) (base) (0)))) >>
-   returnM (@existT _ _ _ (@existT _ _ _ (parent))).
+   write_reg evm_memory (@existT _ _ 0 (@existT _ _ base (byte_slice (EvmMemorySource) (base) (0)))) >>
+   returnM ((@existT _ _ _ (@existT _ _ _ (parent))) : {__parent1 & {__parent0 & (ByteSliceFields __parent0 __parent1)}}%type).
 
-Definition memory_frame_leave {ex414289_ : Z} {ex414288_ : Z}
-(parent : ByteSliceFields ex414288_ ex414289_) (*(0 <=? ex414288_) && (0 <=? ex414289_)*)
+Definition memory_frame_leave {ex419893_ : Z} {ex419892_ : Z}
+(parent : ByteSliceFields ex419892_ ex419893_) (*(0 <=? ex419892_) && (0 <=? ex419893_)*)
 : M (unit) :=
    (mem_frame_leave (tt)) >>
-   write_reg evm_memory (@existT _ _ _ (@existT _ _ _ (parent)))
+   write_reg evm_memory (@existT _ _ ex419893_ (@existT _ _ ex419892_ (parent)))
     : M (unit).
 
 Definition suspend_frame '(tt : unit) : M (FrameCheckpoint) :=
@@ -5425,9 +5016,9 @@ Definition suspend_frame '(tt : unit) : M (FrameCheckpoint) :=
    read_reg message >>= fun saved_message =>
    (read_reg call_depth) >>= fun semanticResult => returnM (semanticResult).(frame_depth_value) >>= fun saved_depth =>
    read_reg frame_code >>= fun saved_code =>
-   read_reg calldata >>= fun '(@existT _ _ _ (@existT _ _ _ saved_calldata)) =>
+   read_reg calldata >>= fun '(@existT _ _ __saved_calldata1 (@existT _ _ __saved_calldata0 saved_calldata)) =>
    (stack_enter_frame (tt)) >>
-   (memory_frame_enter (tt)) >>= fun '(@existT _ _ _ (@existT _ _ _ saved_memory)) =>
+   (memory_frame_enter (tt)) >>= fun '(@existT _ _ __saved_calldata1 (@existT _ _ __saved_calldata0 saved_memory)) =>
    returnM (({| FrameCheckpoint_state := state;
                 FrameCheckpoint_pc := saved_pc;
                 FrameCheckpoint_gas_remaining := saved_gas;
@@ -5509,10 +5100,10 @@ Definition mem_codecopy (dst : Z) (off : Z) (len : Z) (*0 <=? dst*) (*0 <=? off*
    (slice_copy (projT2 (projT2 (w__0.(Code_bytes)))) (dst) (off) (len))
     : M (unit).
 
-Definition mem_keccak {ex414306_ : Z} {ex414305_ : Z}
-(range : MemoryRangeFields ex414305_ ex414306_) (*(0 <=? ex414305_) && (0 <=? ex414306_)*)
+Definition mem_keccak {ex419910_ : Z} {ex419909_ : Z}
+(range : MemoryRangeFields ex419909_ ex419910_) (*(0 <=? ex419909_) && (0 <=? ex419910_)*)
 : M (word) :=
-   ((memory_byte_slice (range.(MemoryRangeFields_off)) (range.(MemoryRangeFields_len))) >>= fun '(@existT _ _ _ (@existT _ _ _ w__0)) =>
+   ((memory_byte_slice (range.(MemoryRangeFields_off)) (range.(MemoryRangeFields_len))) >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 w__0)) =>
    (keccak256_slice (w__0)) >>= fun (w__1 : vec (mword 8) 32) =>
    returnM (((hash_to_word (w__1)).(word_value)))) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
@@ -6087,9 +5678,9 @@ Definition memory_expansion (start : word) (size : Z) (available : Z)
 : M (MemoryExpansion available) :=
    let start := (start).(word_value) in
    let required_size := memory_required_size (Build_word ((start))) (size) in
-   let '(@existT _ _ _ (@existT _ _ _ range)) :=
-     (if Z.eqb (size) (0) then @existT _ _ _ (@existT _ _ _ (EMPTY_MEMORY_RANGE))
-     else @existT _ _ _ (@existT _ _ _ (memory_range (start) (size))) : MemoryRange) in
+   let '(@existT _ _ range__'len (@existT _ _ range__'off range)) :=
+     (if Z.eqb (size) (0) then @existT _ _ 0 (@existT _ _ 0 (EMPTY_MEMORY_RANGE))
+     else @existT _ _ size (@existT _ _ start (memory_range (start) (size))) : MemoryRange) in
    (memory_expansion_cost (required_size) (available)) >>= fun (w__0 : Z) =>
    returnM (({| MemoryExpansion_range := @existT _ _ _ (@existT _ _ _ (range));
                 MemoryExpansion_required_size := required_size;
@@ -6111,11 +5702,11 @@ Definition memory_pair_expansion
    let required_size :=
      if Z.ltb (left_required) (right_required) then right_required
      else left_required in
-   let '(@existT _ _ _ (@existT _ _ _ left')) :=
-     (if Z.eqb (left_size) (0) then @existT _ _ _ (@existT _ _ _ (EMPTY_MEMORY_RANGE))
+   let '(@existT _ _ left__'len (@existT _ _ left__'off left')) :=
+     (if Z.eqb (left_size) (0) then @existT _ _ 0 (@existT _ _ 0 (EMPTY_MEMORY_RANGE))
      else @existT _ _ _ (@existT _ _ _ (memory_range (left_start) (left_size))) : MemoryRange) in
-   let '(@existT _ _ _ (@existT _ _ _ right')) :=
-     (if Z.eqb (right_size) (0) then @existT _ _ _ (@existT _ _ _ (EMPTY_MEMORY_RANGE))
+   let '(@existT _ _ right__'len (@existT _ _ right__'off right')) :=
+     (if Z.eqb (right_size) (0) then @existT _ _ 0 (@existT _ _ 0 (EMPTY_MEMORY_RANGE))
      else @existT _ _ _ (@existT _ _ _ (memory_range (right_start) (right_size))) : MemoryRange) in
    (memory_expansion_cost (required_size) (available)) >>= fun (w__0 : Z) =>
    returnM (({| MemoryPairExpansion_left := @existT _ _ _ (@existT _ _ _ (left'));
@@ -6124,13 +5715,13 @@ Definition memory_pair_expansion
                 MemoryPairExpansion_cost := w__0 |})).
 
 Definition expand_memory (required_size : Z) (*0 <=? required_size*) : M (unit) :=
-   (memory_expand_to (required_size)) >>= fun '(@existT _ _ _ (@existT _ _ _ _)) => returnM (tt).
+   (memory_expand_to (required_size)) >>= fun '(@existT _ _ len (@existT _ _ off _)) => returnM (tt).
 
 Definition apply_memory_expansion {available : Z} (plan : MemoryExpansion available)
 (*0 <=? available*)
 : M (MemoryRange) :=
    (expand_memory (plan.(MemoryExpansion_required_size))) >>
-   returnM (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (plan.(MemoryExpansion_range)))))).
+   returnM ((@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (plan.(MemoryExpansion_range)))))) : {len & {off & (MemoryRangeFields off len)}}%type).
 
 Definition charge_memory_range (start : word) (size : Z) (*(0 <=? size) && (size <? (2 ^ 256))*)
 (*(0 <=? start) && (start <=? (2 ^ 256 - 1))*)
@@ -6145,9 +5736,11 @@ Definition charge_memory_range (start : word) (size : Z) (*(0 <=? size) && (size
       (if w__1 return M ({len & {off & (MemoryRangeFields off len)}}%type) then
          (apply_memory_expansion (plan))
           : M ({len & {off & (MemoryRangeFields off len)}}%type)
-       else returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_MEMORY_RANGE))))
+       else
+         returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_MEMORY_RANGE))) : {len & {off & (MemoryRangeFields off len)}}%type))
        : M ({len & {off & (MemoryRangeFields off len)}}%type)
-    else returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_MEMORY_RANGE))))
+    else
+      returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_MEMORY_RANGE))) : {len & {off & (MemoryRangeFields off len)}}%type))
     : M ({len & {off & (MemoryRangeFields off len)}}%type).
 
 Definition apply_memory_pair_expansion {available : Z} (plan : MemoryPairExpansion available)
@@ -6231,10 +5824,10 @@ Definition code_deployment_state_cost (byte_len : Z) (*0 <=? byte_len*) : M (gas
     else returnM (GAS_COST_ZERO))
     : M (Z).
 
-Definition pc_word {ex414479_ : Z} {ex414478_ : Z}
-(input : ByteSliceFields ex414478_ ex414479_) (start : Z) (byte_count : Z)
+Definition pc_word {ex420083_ : Z} {ex420082_ : Z}
+(input : ByteSliceFields ex420082_ ex420083_) (start : Z) (byte_count : Z)
 (*(0 <=? start) && ((0 <=? byte_count) && (byte_count <=? 32))*)
-(*(0 <=? ex414478_) && (0 <=? ex414479_)*)
+(*(0 <=? ex420082_) && (0 <=? ex420083_)*)
 : M (word) :=
    (let value : Z := (ZERO_WORD).(word_value) in
    let start_offset := start in
@@ -6246,8 +5839,8 @@ Definition pc_word {ex414479_ : Z} {ex414478_ : Z}
      (fun byte_index '(value) =>
        let offset : Z := byte_index in
        (if Z.ltb (offset) (count) return M (Z) then
-          (if Z.ltb (start_offset) ex414479_ return M (mword 8) then
-             let remaining := Z.sub ex414479_ (start_offset) in
+          (if Z.ltb (start_offset) ex420083_ return M (mword 8) then
+             let remaining := Z.sub ex420083_ (start_offset) in
              (if Z.ltb (offset) (remaining) return M (mword 8) then
                 let cursor := Z.add (start_offset) (offset) in
                 (slice_byte (input) (cursor))
@@ -6265,17 +5858,17 @@ Definition pc_word {ex414479_ : Z} {ex414478_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition pc_word_after_declared_field {ex414488_ : Z} {ex414487_ : Z}
-(input : ByteSliceFields ex414487_ ex414488_) (prefix : Z) (declared_length : word) (byte_count : Z)
+Definition pc_word_after_declared_field {ex420092_ : Z} {ex420091_ : Z}
+(input : ByteSliceFields ex420091_ ex420092_) (prefix : Z) (declared_length : word) (byte_count : Z)
 (*(0 <=? prefix) && ((0 <=? byte_count) && (byte_count <=? 32))*)
-(*(0 <=? ex414487_) && (0 <=? ex414488_)*)
+(*(0 <=? ex420091_) && (0 <=? ex420092_)*)
 (*(0 <=? declared_length) && (declared_length <=? (2 ^ 256 - 1))*)
 : M (word) :=
    let declared_length := (declared_length).(word_value) in
    (let input_length := input.(ByteSliceFields_len) in
    let prefix_offset := prefix in
-   (if Z.ltb (prefix_offset) ex414488_ return M (Z) then
-      let suffix_length := Z.sub ex414488_ (prefix_offset) in
+   (if Z.ltb (prefix_offset) ex420092_ return M (Z) then
+      let suffix_length := Z.sub ex420092_ (prefix_offset) in
       (if Z.ltb (declared_length) (suffix_length) return M (Z) then
          let '(field_length) := declared_length  : Z in
          let start : Z := Z.add (prefix_offset) (field_length) in
@@ -6288,16 +5881,16 @@ Definition pc_word_after_declared_field {ex414488_ : Z} {ex414487_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition pc_blake2_rounds {ex414495_ : Z} {ex414494_ : Z}
-(input : ByteSliceFields ex414494_ ex414495_) (*(0 <=? ex414494_) && (0 <=? ex414495_)*)
+Definition pc_blake2_rounds {ex420099_ : Z} {ex420098_ : Z}
+(input : ByteSliceFields ex420098_ ex420099_) (*(0 <=? ex420098_) && (0 <=? ex420099_)*)
 : M (blake2_rounds) :=
    (((pc_word (input) (0) (4)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
    returnM ((Z.rem (w__0) ((pow2 (32)))))) >>= fun semanticResult =>
    returnM (Build_blake2_rounds (semanticResult)).
 
-Definition modexp_gas {ex414499_ : Z} {ex414498_ : Z}
-(input : ByteSliceFields ex414498_ ex414499_) (available : Z)
-(*(0 <=? ex414498_) && (0 <=? ex414499_)*) (*0 <=? available*)
+Definition modexp_gas {ex420103_ : Z} {ex420102_ : Z}
+(input : ByteSliceFields ex420102_ ex420103_) (available : Z)
+(*(0 <=? ex420102_) && (0 <=? ex420103_)*) (*0 <=? available*)
 : M (option gas_cost) :=
    catch_early_return
      (liftR (((pc_word (input) (0) (32)) >>= fun semanticResult =>
@@ -6519,9 +6112,9 @@ Definition fixed_precompile_gas (cost : Z) (available : Z) (*0 <=? cost*) (*0 <=
      Some (affordable)
    else None.
 
-Definition precompile_gas {ex414527_ : Z} {ex414526_ : Z}
-(num : precompile_id) (input : ByteSliceFields ex414526_ ex414527_) (available : Z)
-(*(1 <=? num) && (num <=? 256)*) (*(0 <=? ex414526_) && (0 <=? ex414527_)*) (*0 <=? available*)
+Definition precompile_gas {ex420131_ : Z} {ex420130_ : Z}
+(num : precompile_id) (input : ByteSliceFields ex420130_ ex420131_) (available : Z)
+(*(1 <=? num) && (num <=? 256)*) (*(0 <=? ex420130_) && (0 <=? ex420131_)*) (*0 <=? available*)
 : M (option gas_cost) :=
    let num := (num).(precompile_id_value) in
    let input_len := input.(ByteSliceFields_len) in
@@ -6960,25 +6553,25 @@ vec_of_list_len [(Ox"00");(Ox"00");(Ox"00");(Ox"00");(Ox"00");(Ox"00");(Ox"00");
                  (Ox"00");(Ox"00");(Ox"00");(Ox"00");(Ox"00");(Ox"00");(Ox"00");(Ox"00");(Ox"00");
                  (Ox"01");(Ox"00")].
 #[export] Hint Unfold PRECOMPILE_ADDRESS_256 : sail.
-Definition precompile_success {ex414569_ : Z} {ex414568_ : Z}
-(output : ByteSliceFields ex414568_ ex414569_) (*(0 <=? ex414568_) && (0 <=? ex414569_)*)
+Definition precompile_success {ex420173_ : Z} {ex420172_ : Z}
+(output : ByteSliceFields ex420172_ ex420173_) (*(0 <=? ex420172_) && (0 <=? ex420173_)*)
 : PrecompileResult :=
    {| PrecompileResult_success := true;
-      PrecompileResult_output := @existT _ _ _ (@existT _ _ _ (output)) |}.
+      PrecompileResult_output := @existT _ _ ex420173_ (@existT _ _ ex420172_ (output)) |}.
 
 Definition precompile_failure '(tt : unit) : PrecompileResult :=
    {| PrecompileResult_success := false;
-      PrecompileResult_output := @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)) |}.
+      PrecompileResult_output := @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE)) |}.
 
 Definition accelerator_result (success : bool) (output_len : Z) (*0 <=? output_len*)
 : PrecompileResult :=
    if success then precompile_success ((projT2 (projT2 (output_buffer_slice (output_len)))))
    else precompile_failure (tt).
 
-Definition copied_result {ex414579_ : Z} {ex414578_ : Z}
-(data : ByteSliceFields ex414578_ ex414579_) (*(0 <=? ex414578_) && (0 <=? ex414579_)*)
+Definition copied_result {ex420183_ : Z} {ex420182_ : Z}
+(data : ByteSliceFields ex420182_ ex420183_) (*(0 <=? ex420182_) && (0 <=? ex420183_)*)
 : M (PrecompileResult) :=
-   (freeze_output (data)) >>= fun '(@existT _ _ _ (@existT _ _ _ output)) =>
+   (freeze_output (data)) >>= fun '(@existT _ _ __output1 (@existT _ _ __output0 output)) =>
    returnM ((if Z.eqb (output.(ByteSliceFields_len)) (data.(ByteSliceFields_len)) then
                precompile_success (output)
              else precompile_failure (tt))).
@@ -6986,7 +6579,7 @@ Definition copied_result {ex414579_ : Z} {ex414578_ : Z}
 Definition boolean_result (value : bool) : M (PrecompileResult) :=
    (output_buffer_word
       (Build_word (((if value then (WORD_ONE).(word_value)
-                     else (WORD_ZERO).(word_value)))))) >>= fun '(@existT _ _ _ (@existT _ _ _ w__0)) =>
+                     else (WORD_ZERO).(word_value)))))) >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 w__0)) =>
    returnM ((precompile_success (w__0))).
 
 Definition precompile_active_at_fork (n : precompile_id) (*(1 <=? n) && (n <=? 256)*) : M (bool) :=
@@ -7074,8 +6667,8 @@ Definition precompile_number (bytes : vec (mword 8) 20) : M (precompile_selector
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_precompile_selector (semanticResult)).
 
-Definition run_ecrecover {ex414585_ : Z} {ex414584_ : Z}
-(input : ByteSliceFields ex414584_ ex414585_) (*(0 <=? ex414584_) && (0 <=? ex414585_)*)
+Definition run_ecrecover {ex420189_ : Z} {ex420188_ : Z}
+(input : ByteSliceFields ex420188_ ex420189_) (*(0 <=? ex420188_) && (0 <=? ex420189_)*)
 : M (PrecompileResult) :=
    ((slice_load (input) (PRECOMPILE_WORD_OFFSET)) >>= fun semanticResult =>
     returnM (semanticResult).(word_value)) >>= fun v =>
@@ -7093,28 +6686,28 @@ Definition run_ecrecover {ex414585_ : Z} {ex414584_ : Z}
       (ecrecover_addr ((word_to_hash (Build_word ((w__0))))) (Build_y_parity ((parity)))
          (Build_word ((w__1))) (Build_word ((w__2)))) >>= fun '((recovered, address)) =>
       (if recovered return M (PrecompileResult) then
-         (output_buffer_word (Build_word ((((address_to_word (address)).(word_value)))))) >>= fun '(@existT _ _ _ (@existT _ _ _ w__3)) =>
+         (output_buffer_word (Build_word ((((address_to_word (address)).(word_value)))))) >>= fun '(@existT _ _ __w__31 (@existT _ _ __w__30 w__3)) =>
          returnM ((precompile_success (w__3)))
        else returnM ((precompile_success (EMPTY_SLICE))))
        : M (PrecompileResult)
     else returnM ((precompile_success (EMPTY_SLICE))))
     : M (PrecompileResult).
 
-Definition run_sha256 {ex414589_ : Z} {ex414588_ : Z} (input : ByteSliceFields ex414588_ ex414589_)
-(*(0 <=? ex414588_) && (0 <=? ex414589_)*)
+Definition run_sha256 {ex420193_ : Z} {ex420192_ : Z} (input : ByteSliceFields ex420192_ ex420193_)
+(*(0 <=? ex420192_) && (0 <=? ex420193_)*)
 : M (PrecompileResult) :=
    (sha256_slice (input)) >>= fun (w__0 : vec (mword 8) 32) =>
-   (output_buffer_word (Build_word ((((hash_to_word (w__0)).(word_value)))))) >>= fun '(@existT _ _ _ (@existT _ _ _ w__1)) =>
+   (output_buffer_word (Build_word ((((hash_to_word (w__0)).(word_value)))))) >>= fun '(@existT _ _ __w__11 (@existT _ _ __w__10 w__1)) =>
    returnM ((precompile_success (w__1))).
 
-Definition run_ripemd160 {ex414593_ : Z} {ex414592_ : Z}
-(input : ByteSliceFields ex414592_ ex414593_) (*(0 <=? ex414592_) && (0 <=? ex414593_)*)
+Definition run_ripemd160 {ex420197_ : Z} {ex420196_ : Z}
+(input : ByteSliceFields ex420196_ ex420197_) (*(0 <=? ex420196_) && (0 <=? ex420197_)*)
 : M (PrecompileResult) :=
-   (accelerator_ripemd160 (@existT _ _ _ (@existT _ _ _ (input)))) >>= fun (w__0 : bool) =>
+   (accelerator_ripemd160 (@existT _ _ ex420197_ (@existT _ _ ex420196_ (input)))) >>= fun (w__0 : bool) =>
    returnM ((accelerator_result (w__0) (PRECOMPILE_WORD_LENGTH))).
 
-Definition run_modexp {ex414597_ : Z} {ex414596_ : Z} (input : ByteSliceFields ex414596_ ex414597_)
-(*(0 <=? ex414596_) && (0 <=? ex414597_)*)
+Definition run_modexp {ex420201_ : Z} {ex420200_ : Z} (input : ByteSliceFields ex420200_ ex420201_)
+(*(0 <=? ex420200_) && (0 <=? ex420201_)*)
 : M (PrecompileResult) :=
    ((pc_word (input) (0) (32)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (base_len : Z) =>
    ((pc_word (input) (32) (32)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (exponent_len : Z) =>
@@ -7132,7 +6725,7 @@ Definition run_modexp {ex414597_ : Z} {ex414596_ : Z} (input : ByteSliceFields e
         Z.add ((Z.add ((Z.add (96) (bounded_base))) (bounded_exponent))) (bounded_modulus) in
       (if Z.ltb (ACCELERATOR_INPUT_MAX) (input_end) then returnM ((precompile_failure (tt)))
        else
-         (accelerator_modexp (@existT _ _ _ (@existT _ _ _ (input))) (bounded_base)
+         (accelerator_modexp (@existT _ _ ex420201_ (@existT _ _ ex420200_ (input))) (bounded_base)
             (bounded_exponent) (bounded_modulus)) >>= fun (w__0 : bool) =>
          returnM ((accelerator_result (w__0) (bounded_modulus))))
        : M (PrecompileResult))
@@ -7145,8 +6738,8 @@ Definition pairing_result (result : mword 2) : M (PrecompileResult) :=
        : M (PrecompileResult))
     : M (PrecompileResult).
 
-Definition run_blake2f {ex414602_ : Z} {ex414601_ : Z} (input : ByteSliceFields ex414601_ ex414602_)
-(*(0 <=? ex414601_) && (0 <=? ex414602_)*)
+Definition run_blake2f {ex420206_ : Z} {ex420205_ : Z} (input : ByteSliceFields ex420205_ ex420206_)
+(*(0 <=? ex420205_) && (0 <=? ex420206_)*)
 : M (PrecompileResult) :=
    (slice_byte (input) (BLAKE2F_FINAL_BLOCK_OFFSET)) >>= fun final_byte =>
    (if orb ((neq_int (input.(ByteSliceFields_len)) (BLAKE2F_INPUT_LENGTH)))
@@ -7156,8 +6749,8 @@ Definition run_blake2f {ex414602_ : Z} {ex414601_ : Z} (input : ByteSliceFields 
       let final_block : Z := if eq_vec (final_byte) ((Ox"00")) then 0 else 1 in
       ((pc_blake2_rounds (input)) >>= fun semanticResult =>
        returnM (semanticResult).(blake2_rounds_value)) >>= fun (w__0 : Z) =>
-      (accelerator_blake2f (@existT _ _ _ (@existT _ _ _ (input))) (Build_blake2_rounds ((w__0)))
-         (Build_y_parity ((final_block)))) >>= fun (w__1 : bool) =>
+      (accelerator_blake2f (@existT _ _ ex420206_ (@existT _ _ ex420205_ (input)))
+         (Build_blake2_rounds ((w__0))) (Build_y_parity ((final_block)))) >>= fun (w__1 : bool) =>
       returnM ((accelerator_result (w__1) (BLAKE2F_OUTPUT_LENGTH))))
     : M (PrecompileResult).
 
@@ -7170,8 +6763,8 @@ Definition kzg_versioned_hash_matches {base : Z} (input : ByteSliceFields base 1
    ((slice_load (input) (0)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
    returnM ((generic_eq ((word_to_hash (Build_word ((w__0))))) (expected))).
 
-Definition run_kzg_point_evaluation {ex414618_ : Z} {ex414617_ : Z}
-(input : ByteSliceFields ex414617_ ex414618_) (*(0 <=? ex414617_) && (0 <=? ex414618_)*)
+Definition run_kzg_point_evaluation {ex420222_ : Z} {ex420221_ : Z}
+(input : ByteSliceFields ex420221_ ex420222_) (*(0 <=? ex420221_) && (0 <=? ex420222_)*)
 : M (PrecompileResult) :=
    (if neq_int (input.(ByteSliceFields_len)) (KZG_INPUT_LENGTH) then
       returnM ((precompile_failure (tt)))
@@ -7179,20 +6772,20 @@ Definition run_kzg_point_evaluation {ex414618_ : Z} {ex414617_ : Z}
       (kzg_versioned_hash_matches (autocast (T := fun _sz => (ByteSliceFields _ _sz)%type) (input))) >>= fun (w__0 : bool) =>
       (if negb (w__0) then returnM ((precompile_failure (tt)))
        else
-         (accelerator_kzg_point_evaluation (@existT _ _ _ (@existT _ _ _ (input)))) >>= fun (w__1 : bool) =>
+         (accelerator_kzg_point_evaluation (@existT _ _ ex420222_ (@existT _ _ ex420221_ (input)))) >>= fun (w__1 : bool) =>
          (if w__1 return M (PrecompileResult) then
             (output_buffer_words (Build_word (((FIELD_ELEMENTS_PER_BLOB).(word_value))))
-               (Build_word (((BLS_MODULUS).(word_value))))) >>= fun '(@existT _ _ _ (@existT _ _ _ w__2)) =>
+               (Build_word (((BLS_MODULUS).(word_value))))) >>= fun '(@existT _ _ __w__21 (@existT _ _ __w__20 w__2)) =>
             returnM ((precompile_success (w__2)))
           else returnM ((precompile_failure (tt))))
           : M (PrecompileResult))
        : M (PrecompileResult))
     : M (PrecompileResult).
 
-Definition bls_g1_padding {ex414634_ : Z} {ex414633_ : Z}
-(input : ByteSliceFields ex414633_ ex414634_) (base : Z) (stride : Z) (count : Z)
+Definition bls_g1_padding {ex420238_ : Z} {ex420237_ : Z}
+(input : ByteSliceFields ex420237_ ex420238_) (base : Z) (stride : Z) (count : Z)
 (*(0 <=? base) && (0 <=? 64) && ((0 <=? stride) && (0 <=? count))*)
-(*(0 <=? ex414633_) && (0 <=? ex414634_)*)
+(*(0 <=? ex420237_) && (0 <=? ex420238_)*)
 : M (bool) :=
    (and_boolM
       ((slice_strided_zero (input) (base) (stride) (BLS_FIELD_PADDING_LENGTH) (count))
@@ -7202,10 +6795,10 @@ Definition bls_g1_padding {ex414634_ : Z} {ex414633_ : Z}
        : M (bool)))
     : M (bool).
 
-Definition bls_g2_padding {ex414658_ : Z} {ex414657_ : Z}
-(input : ByteSliceFields ex414657_ ex414658_) (base : Z) (stride : Z) (count : Z)
+Definition bls_g2_padding {ex420262_ : Z} {ex420261_ : Z}
+(input : ByteSliceFields ex420261_ ex420262_) (base : Z) (stride : Z) (count : Z)
 (*(0 <=? base) && (0 <=? 192) && ((0 <=? stride) && (0 <=? count))*)
-(*(0 <=? ex414657_) && (0 <=? ex414658_)*)
+(*(0 <=? ex420261_) && (0 <=? ex420262_)*)
 : M (bool) :=
    (and_boolM
       ((slice_strided_zero (input) (base) (stride) (BLS_FIELD_PADDING_LENGTH) (count))
@@ -7225,8 +6818,8 @@ Definition bls_g2_padding {ex414658_ : Z} {ex414657_ : Z}
        : M (bool)))
     : M (bool).
 
-Definition run_bls_g1_add {ex414670_ : Z} {ex414669_ : Z}
-(input : ByteSliceFields ex414669_ ex414670_) (*(0 <=? ex414669_) && (0 <=? ex414670_)*)
+Definition run_bls_g1_add {ex420274_ : Z} {ex420273_ : Z}
+(input : ByteSliceFields ex420273_ ex420274_) (*(0 <=? ex420273_) && (0 <=? ex420274_)*)
 : M (PrecompileResult) :=
    (if neq_int (input.(ByteSliceFields_len)) (BLS_G1_ADD_INPUT_LENGTH) then
       returnM ((precompile_failure (tt)))
@@ -7234,13 +6827,13 @@ Definition run_bls_g1_add {ex414670_ : Z} {ex414669_ : Z}
       (bls_g1_padding (input) (0) (BLS_G1_POINT_LENGTH) (TWO_COMPONENTS)) >>= fun (w__0 : bool) =>
       (if negb (w__0) then returnM ((precompile_failure (tt)))
        else
-         (accelerator_bls_g1_add (@existT _ _ _ (@existT _ _ _ (input)))) >>= fun (w__1 : bool) =>
+         (accelerator_bls_g1_add (@existT _ _ ex420274_ (@existT _ _ ex420273_ (input)))) >>= fun (w__1 : bool) =>
          returnM ((accelerator_result (w__1) (BLS_G1_POINT_LENGTH))))
        : M (PrecompileResult))
     : M (PrecompileResult).
 
-Definition run_bls_g1_msm {ex414674_ : Z} {ex414673_ : Z}
-(input : ByteSliceFields ex414673_ ex414674_) (*(0 <=? ex414673_) && (0 <=? ex414674_)*)
+Definition run_bls_g1_msm {ex420278_ : Z} {ex420277_ : Z}
+(input : ByteSliceFields ex420277_ ex420278_) (*(0 <=? ex420277_) && (0 <=? ex420278_)*)
 : M (PrecompileResult) :=
    let length := input.(ByteSliceFields_len) in
    let item_length := BLS_G1_MSM_ITEM_LENGTH in
@@ -7251,13 +6844,13 @@ Definition run_bls_g1_msm {ex414674_ : Z} {ex414673_ : Z}
       (bls_g1_padding (input) (0) (BLS_G1_MSM_ITEM_LENGTH) (pairs)) >>= fun (w__0 : bool) =>
       (if negb (w__0) then returnM ((precompile_failure (tt)))
        else
-         (accelerator_bls_g1_msm (@existT _ _ _ (@existT _ _ _ (input)))) >>= fun (w__1 : bool) =>
+         (accelerator_bls_g1_msm (@existT _ _ ex420278_ (@existT _ _ ex420277_ (input)))) >>= fun (w__1 : bool) =>
          returnM ((accelerator_result (w__1) (BLS_G1_POINT_LENGTH))))
        : M (PrecompileResult))
     : M (PrecompileResult).
 
-Definition run_bls_g2_add {ex414678_ : Z} {ex414677_ : Z}
-(input : ByteSliceFields ex414677_ ex414678_) (*(0 <=? ex414677_) && (0 <=? ex414678_)*)
+Definition run_bls_g2_add {ex420282_ : Z} {ex420281_ : Z}
+(input : ByteSliceFields ex420281_ ex420282_) (*(0 <=? ex420281_) && (0 <=? ex420282_)*)
 : M (PrecompileResult) :=
    (if neq_int (input.(ByteSliceFields_len)) (BLS_G2_ADD_INPUT_LENGTH) then
       returnM ((precompile_failure (tt)))
@@ -7265,13 +6858,13 @@ Definition run_bls_g2_add {ex414678_ : Z} {ex414677_ : Z}
       (bls_g2_padding (input) (0) (BLS_G2_POINT_LENGTH) (TWO_COMPONENTS)) >>= fun (w__0 : bool) =>
       (if negb (w__0) then returnM ((precompile_failure (tt)))
        else
-         (accelerator_bls_g2_add (@existT _ _ _ (@existT _ _ _ (input)))) >>= fun (w__1 : bool) =>
+         (accelerator_bls_g2_add (@existT _ _ ex420282_ (@existT _ _ ex420281_ (input)))) >>= fun (w__1 : bool) =>
          returnM ((accelerator_result (w__1) (BLS_G2_POINT_LENGTH))))
        : M (PrecompileResult))
     : M (PrecompileResult).
 
-Definition run_bls_g2_msm {ex414682_ : Z} {ex414681_ : Z}
-(input : ByteSliceFields ex414681_ ex414682_) (*(0 <=? ex414681_) && (0 <=? ex414682_)*)
+Definition run_bls_g2_msm {ex420286_ : Z} {ex420285_ : Z}
+(input : ByteSliceFields ex420285_ ex420286_) (*(0 <=? ex420285_) && (0 <=? ex420286_)*)
 : M (PrecompileResult) :=
    let length := input.(ByteSliceFields_len) in
    let item_length := BLS_G2_MSM_ITEM_LENGTH in
@@ -7282,13 +6875,13 @@ Definition run_bls_g2_msm {ex414682_ : Z} {ex414681_ : Z}
       (bls_g2_padding (input) (0) (BLS_G2_MSM_ITEM_LENGTH) (pairs)) >>= fun (w__0 : bool) =>
       (if negb (w__0) then returnM ((precompile_failure (tt)))
        else
-         (accelerator_bls_g2_msm (@existT _ _ _ (@existT _ _ _ (input)))) >>= fun (w__1 : bool) =>
+         (accelerator_bls_g2_msm (@existT _ _ ex420286_ (@existT _ _ ex420285_ (input)))) >>= fun (w__1 : bool) =>
          returnM ((accelerator_result (w__1) (BLS_G2_POINT_LENGTH))))
        : M (PrecompileResult))
     : M (PrecompileResult).
 
-Definition run_bls_pairing {ex414686_ : Z} {ex414685_ : Z}
-(input : ByteSliceFields ex414685_ ex414686_) (*(0 <=? ex414685_) && (0 <=? ex414686_)*)
+Definition run_bls_pairing {ex420290_ : Z} {ex420289_ : Z}
+(input : ByteSliceFields ex420289_ ex420290_) (*(0 <=? ex420289_) && (0 <=? ex420290_)*)
 : M (PrecompileResult) :=
    let length := input.(ByteSliceFields_len) in
    let item_length := BLS_PAIRING_ITEM_LENGTH in
@@ -7301,15 +6894,15 @@ Definition run_bls_pairing {ex414686_ : Z} {ex414685_ : Z}
          ((bls_g2_padding (input) (BLS_G2_POINT_OFFSET) (BLS_PAIRING_ITEM_LENGTH) (pair_count))
           : M (bool))) >>= fun (w__2 : bool) =>
       (if w__2 return M (PrecompileResult) then
-         (accelerator_bls_pairing (@existT _ _ _ (@existT _ _ _ (input)))) >>= fun (w__3 : mword 2) =>
+         (accelerator_bls_pairing (@existT _ _ ex420290_ (@existT _ _ ex420289_ (input)))) >>= fun (w__3 : mword 2) =>
          (pairing_result (w__3))
           : M (PrecompileResult)
        else returnM ((precompile_failure (tt))))
        : M (PrecompileResult))
     : M (PrecompileResult).
 
-Definition run_bls_map_fp_to_g1 {ex414690_ : Z} {ex414689_ : Z}
-(input : ByteSliceFields ex414689_ ex414690_) (*(0 <=? ex414689_) && (0 <=? ex414690_)*)
+Definition run_bls_map_fp_to_g1 {ex420294_ : Z} {ex420293_ : Z}
+(input : ByteSliceFields ex420293_ ex420294_) (*(0 <=? ex420293_) && (0 <=? ex420294_)*)
 : M (PrecompileResult) :=
    (if neq_int (input.(ByteSliceFields_len)) (BLS_PADDED_FIELD_LENGTH) then
       returnM ((precompile_failure (tt)))
@@ -7317,13 +6910,13 @@ Definition run_bls_map_fp_to_g1 {ex414690_ : Z} {ex414689_ : Z}
       (slice_strided_zero (input) (0) (BLS_PADDED_FIELD_LENGTH) (BLS_FIELD_PADDING_LENGTH) (1)) >>= fun (w__0 : bool) =>
       (if negb (w__0) then returnM ((precompile_failure (tt)))
        else
-         (accelerator_bls_map_fp_to_g1 (@existT _ _ _ (@existT _ _ _ (input)))) >>= fun (w__1 : bool) =>
+         (accelerator_bls_map_fp_to_g1 (@existT _ _ ex420294_ (@existT _ _ ex420293_ (input)))) >>= fun (w__1 : bool) =>
          returnM ((accelerator_result (w__1) (BLS_G1_POINT_LENGTH))))
        : M (PrecompileResult))
     : M (PrecompileResult).
 
-Definition run_bls_map_fp2_to_g2 {ex414694_ : Z} {ex414693_ : Z}
-(input : ByteSliceFields ex414693_ ex414694_) (*(0 <=? ex414693_) && (0 <=? ex414694_)*)
+Definition run_bls_map_fp2_to_g2 {ex420298_ : Z} {ex420297_ : Z}
+(input : ByteSliceFields ex420297_ ex420298_) (*(0 <=? ex420297_) && (0 <=? ex420298_)*)
 : M (PrecompileResult) :=
    (if neq_int (input.(ByteSliceFields_len)) (BLS_G1_POINT_LENGTH) then
       returnM ((precompile_failure (tt)))
@@ -7332,27 +6925,27 @@ Definition run_bls_map_fp2_to_g2 {ex414694_ : Z} {ex414693_ : Z}
          (TWO_COMPONENTS)) >>= fun (w__0 : bool) =>
       (if negb (w__0) then returnM ((precompile_failure (tt)))
        else
-         (accelerator_bls_map_fp2_to_g2 (@existT _ _ _ (@existT _ _ _ (input)))) >>= fun (w__1 : bool) =>
+         (accelerator_bls_map_fp2_to_g2 (@existT _ _ ex420298_ (@existT _ _ ex420297_ (input)))) >>= fun (w__1 : bool) =>
          returnM ((accelerator_result (w__1) (BLS_G2_POINT_LENGTH))))
        : M (PrecompileResult))
     : M (PrecompileResult).
 
-Definition run_p256_verify {ex414698_ : Z} {ex414697_ : Z}
-(input : ByteSliceFields ex414697_ ex414698_) (*(0 <=? ex414697_) && (0 <=? ex414698_)*)
+Definition run_p256_verify {ex420302_ : Z} {ex420301_ : Z}
+(input : ByteSliceFields ex420301_ ex420302_) (*(0 <=? ex420301_) && (0 <=? ex420302_)*)
 : M (PrecompileResult) :=
    (if Z.eqb (input.(ByteSliceFields_len)) (P256_INPUT_LENGTH) return M (bool) then
-      (accelerator_p256_verify (@existT _ _ _ (@existT _ _ _ (input))))
+      (accelerator_p256_verify (@existT _ _ ex420302_ (@existT _ _ ex420301_ (input))))
        : M (bool)
     else returnM (false)) >>= fun verified =>
    (if verified return M (PrecompileResult) then
-      (output_buffer_word (Build_word (((WORD_ONE).(word_value))))) >>= fun '(@existT _ _ _ (@existT _ _ _ w__1)) =>
+      (output_buffer_word (Build_word (((WORD_ONE).(word_value))))) >>= fun '(@existT _ _ __w__11 (@existT _ _ __w__10 w__1)) =>
       returnM ((precompile_success (w__1)))
     else returnM ((precompile_success (EMPTY_SLICE))))
     : M (PrecompileResult).
 
-Definition run_precompile_slice {ex414703_ : Z} {ex414702_ : Z}
-(num : precompile_id) (input : ByteSliceFields ex414702_ ex414703_) (*(1 <=? num) && (num <=? 256)*)
-(*(0 <=? ex414702_) && (0 <=? ex414703_)*)
+Definition run_precompile_slice {ex420307_ : Z} {ex420306_ : Z}
+(num : precompile_id) (input : ByteSliceFields ex420306_ ex420307_) (*(1 <=? num) && (num <=? 256)*)
+(*(0 <=? ex420306_) && (0 <=? ex420307_)*)
 : M (PrecompileResult) :=
    let num := (num).(precompile_id_value) in
    let l__0 := num in
@@ -7372,10 +6965,10 @@ Definition run_precompile_slice {ex414703_ : Z} {ex414702_ : Z}
       (run_modexp (input))
        : M (PrecompileResult)
     else if Z.eqb (l__0) (6) return M (PrecompileResult) then
-      (accelerator_bn254_add (@existT _ _ _ (@existT _ _ _ (input)))) >>= fun (w__5 : bool) =>
+      (accelerator_bn254_add (@existT _ _ ex420307_ (@existT _ _ ex420306_ (input)))) >>= fun (w__5 : bool) =>
       returnM ((accelerator_result (w__5) (PRECOMPILE_DOUBLE_WORD_LENGTH)))
     else if Z.eqb (l__0) (7) return M (PrecompileResult) then
-      (accelerator_bn254_mul (@existT _ _ _ (@existT _ _ _ (input)))) >>= fun (w__6 : bool) =>
+      (accelerator_bn254_mul (@existT _ _ ex420307_ (@existT _ _ ex420306_ (input)))) >>= fun (w__6 : bool) =>
       returnM ((accelerator_result (w__6) (PRECOMPILE_DOUBLE_WORD_LENGTH)))
     else if Z.eqb (l__0) (8) return M (PrecompileResult) then
       let input_length := input.(ByteSliceFields_len) in
@@ -7383,7 +6976,7 @@ Definition run_precompile_slice {ex414703_ : Z} {ex414702_ : Z}
       (if Z.eqb (input_length) ((Z.mul ((e_div (input_length) (item_length))) (item_length)))
          return
          M (PrecompileResult) then
-         (accelerator_bn254_pairing (@existT _ _ _ (@existT _ _ _ (input)))) >>= fun (w__7 : mword 2) =>
+         (accelerator_bn254_pairing (@existT _ _ ex420307_ (@existT _ _ ex420306_ (input)))) >>= fun (w__7 : mword 2) =>
          (pairing_result (w__7))
           : M (PrecompileResult)
        else returnM ((precompile_failure (tt))))
@@ -7658,7 +7251,7 @@ Definition execute_environment (op : ast) : M (unit) :=
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun offset_word =>
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun length_word =>
       (charge_keccak_gas (Build_word ((length_word)))) >>
-      (charge_memory_range (Build_word ((offset_word))) (length_word)) >>= fun '(@existT _ _ _ (@existT _ _ _ range)) =>
+      (charge_memory_range (Build_word ((offset_word))) (length_word)) >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 range)) =>
       (is_running (tt)) >>= fun (w__0 : bool) =>
       (if w__0 return M (unit) then
          ((mem_keccak (range)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__1 : Z) =>
@@ -7693,7 +7286,7 @@ Definition execute_environment (op : ast) : M (unit) :=
        : M (unit)
    | CALLDATASIZE tt =>
       (charge ((G_base).(gas_constant_value))) >>
-      read_reg calldata >>= fun '(@existT _ _ _ (@existT _ _ _ input)) =>
+      read_reg calldata >>= fun '(@existT _ _ __input1 (@existT _ _ __input0 input)) =>
       ((word_of_source_byte_count (input.(ByteSliceFields_len))) >>= fun semanticResult =>
        returnM (semanticResult).(word_value)) >>= fun (w__7 : Z) =>
       (push_word (Build_word ((w__7))))
@@ -7703,7 +7296,7 @@ Definition execute_environment (op : ast) : M (unit) :=
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun offset_word =>
       (is_running (tt)) >>= fun (w__8 : bool) =>
       (if w__8 return M (unit) then
-         read_reg calldata >>= fun '(@existT _ _ _ (@existT _ _ _ w__9)) =>
+         read_reg calldata >>= fun '(@existT _ _ __w__91 (@existT _ _ __w__90 w__9)) =>
          ((slice_load_word_offset (w__9) (Build_word ((offset_word)))) >>= fun semanticResult =>
           returnM (semanticResult).(word_value)) >>= fun (w__10 : Z) =>
          (push_word (Build_word ((w__10))))
@@ -7716,10 +7309,10 @@ Definition execute_environment (op : ast) : M (unit) :=
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun source_word =>
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun length_word =>
       (charge_copy_gas (Build_word ((length_word)))) >>
-      (charge_memory_range (Build_word ((destination_word))) (length_word)) >>= fun '(@existT _ _ _ (@existT _ _ _ range)) =>
+      (charge_memory_range (Build_word ((destination_word))) (length_word)) >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 range)) =>
       (is_running (tt)) >>= fun (w__11 : bool) =>
       (if w__11 return M (unit) then
-         read_reg calldata >>= fun '(@existT _ _ _ (@existT _ _ _ w__12)) =>
+         read_reg calldata >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 w__12)) =>
          (slice_copy_word_offset (w__12) (range.(MemoryRangeFields_off))
             (Build_word ((source_word))) (range.(MemoryRangeFields_len)))
           : M (unit)
@@ -7738,7 +7331,7 @@ Definition execute_environment (op : ast) : M (unit) :=
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun source_word =>
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun length_word =>
       (charge_copy_gas (Build_word ((length_word)))) >>
-      (charge_memory_range (Build_word ((destination_word))) (length_word)) >>= fun '(@existT _ _ _ (@existT _ _ _ range)) =>
+      (charge_memory_range (Build_word ((destination_word))) (length_word)) >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 range)) =>
       (is_running (tt)) >>= fun (w__15 : bool) =>
       (if w__15 return M (unit) then
          read_reg frame_code >>= fun (w__16 : Code) =>
@@ -7796,7 +7389,7 @@ Definition execute_environment (op : ast) : M (unit) :=
        returnM (semanticResult).(gas_constant_value)) >>= fun (w__31 : Z) =>
       (charge ((Z.add (w__30) (w__31)))) >>
       (charge_copy_gas (Build_word ((length_word)))) >>
-      (charge_memory_range (Build_word ((destination_word))) (length_word)) >>= fun '(@existT _ _ _ (@existT _ _ _ range)) =>
+      (charge_memory_range (Build_word ((destination_word))) (length_word)) >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 range)) =>
       (is_running (tt)) >>= fun (w__32 : bool) =>
       (if w__32 return M (unit) then
          (k_code_copy (a) (range.(MemoryRangeFields_off)) (Build_word ((source_word)))
@@ -7830,7 +7423,7 @@ Definition execute_environment (op : ast) : M (unit) :=
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun source_word =>
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun length_word =>
       (charge_copy_gas (Build_word ((length_word)))) >>
-      (charge_memory_range (Build_word ((destination_word))) (length_word)) >>= fun '(@existT _ _ _ (@existT _ _ _ range)) =>
+      (charge_memory_range (Build_word ((destination_word))) (length_word)) >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 range)) =>
       (is_running (tt)) >>= fun (w__39 : bool) =>
       (if w__39 return M (unit) then
          (returndata_copy_words (range.(MemoryRangeFields_off)) (Build_word ((source_word)))
@@ -7918,7 +7511,7 @@ Definition execute_memory (op : ast) : M (unit) :=
    | MLOAD tt =>
       (charge ((G_verylow).(gas_constant_value))) >>
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun offset_word =>
-      (charge_memory_range (Build_word ((offset_word))) (((U256 (32)).(word_value)))) >>= fun '(@existT _ _ _ (@existT _ _ _ range)) =>
+      (charge_memory_range (Build_word ((offset_word))) (((U256 (32)).(word_value)))) >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 range)) =>
       (is_running (tt)) >>= fun (w__0 : bool) =>
       (if w__0 return M (unit) then
          ((mem_load (range.(MemoryRangeFields_off))) >>= fun semanticResult =>
@@ -7931,7 +7524,7 @@ Definition execute_memory (op : ast) : M (unit) :=
       (charge ((G_verylow).(gas_constant_value))) >>
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun offset_word =>
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun v =>
-      (charge_memory_range (Build_word ((offset_word))) (((U256 (32)).(word_value)))) >>= fun '(@existT _ _ _ (@existT _ _ _ range)) =>
+      (charge_memory_range (Build_word ((offset_word))) (((U256 (32)).(word_value)))) >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 range)) =>
       (is_running (tt)) >>= fun (w__2 : bool) =>
       (if w__2 return M (unit) then
          (mem_store (range.(MemoryRangeFields_off)) (Build_word ((v))))
@@ -7942,7 +7535,7 @@ Definition execute_memory (op : ast) : M (unit) :=
       (charge ((G_verylow).(gas_constant_value))) >>
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun offset_word =>
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun v =>
-      (charge_memory_range (Build_word ((offset_word))) ((WORD_ONE).(word_value))) >>= fun '(@existT _ _ _ (@existT _ _ _ range)) =>
+      (charge_memory_range (Build_word ((offset_word))) ((WORD_ONE).(word_value))) >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 range)) =>
       (is_running (tt)) >>= fun (w__3 : bool) =>
       (if w__3 return M (unit) then
          (mem_store_byte (range.(MemoryRangeFields_off)) (Build_word ((v))))
@@ -8241,11 +7834,11 @@ Definition execute_log (op : ast) : M (unit) :=
          ((pop_log_topics (Build_log_topic_count ((n)))) >>= fun semanticResult =>
           returnM (List.map (fun semanticValue => (semanticValue).(word_value)) (semanticResult))) >>= fun topics =>
          (charge_log_gas (Build_log_topic_count ((n))) (Build_word ((length_word)))) >>
-         (charge_memory_range (Build_word ((offset_word))) (length_word)) >>= fun '(@existT _ _ _ (@existT _ _ _ range)) =>
+         (charge_memory_range (Build_word ((offset_word))) (length_word)) >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 range)) =>
          (is_running (tt)) >>= fun (w__1 : bool) =>
          (if w__1 return M (unit) then
             (self_addr (tt)) >>= fun (w__2 : vec (mword 8) 20) =>
-            (memory_byte_slice (range.(MemoryRangeFields_off)) (range.(MemoryRangeFields_len))) >>= fun '(@existT _ _ _ (@existT _ _ _ w__3)) =>
+            (memory_byte_slice (range.(MemoryRangeFields_off)) (range.(MemoryRangeFields_len))) >>= fun '(@existT _ _ __w__31 (@existT _ _ __w__30 w__3)) =>
             (k_log (w__2) (List.map (fun semanticValue => (Build_word (semanticValue))) ((topics)))
                ((BytesSlice (@existT _ _ _ (@existT _ _ _ (w__3))))))
              : M (unit)
@@ -8262,11 +7855,11 @@ Definition execute_halt (op : ast) : M (unit) :=
    | RETURN tt =>
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun offset_word =>
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun length_word =>
-      (charge_memory_range (Build_word ((offset_word))) (length_word)) >>= fun '(@existT _ _ _ (@existT _ _ _ range)) =>
+      (charge_memory_range (Build_word ((offset_word))) (length_word)) >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 range)) =>
       (is_running (tt)) >>= fun (w__0 : bool) =>
       (if w__0 return M (unit) then
-         (memory_byte_slice (range.(MemoryRangeFields_off)) (range.(MemoryRangeFields_len))) >>= fun '(@existT _ _ _ (@existT _ _ _ w__1)) =>
-         (freeze_output (w__1)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__2)) =>
+         (memory_byte_slice (range.(MemoryRangeFields_off)) (range.(MemoryRangeFields_len))) >>= fun '(@existT _ _ __w__11 (@existT _ _ __w__10 w__1)) =>
+         (freeze_output (w__1)) >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 w__2)) =>
          write_reg frame_status ((Halted ((HaltReturn (@existT _ _ _ (@existT _ _ _ (w__2)))))))
           : M (unit)
        else returnM (tt))
@@ -8274,12 +7867,12 @@ Definition execute_halt (op : ast) : M (unit) :=
    | REVERT tt =>
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun offset_word =>
       ((pop (tt)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun length_word =>
-      (charge_memory_range (Build_word ((offset_word))) (length_word)) >>= fun '(@existT _ _ _ (@existT _ _ _ range)) =>
+      (charge_memory_range (Build_word ((offset_word))) (length_word)) >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 range)) =>
       (is_running (tt)) >>= fun (w__3 : bool) =>
       (if w__3 return M (unit) then
          (refill_frame_state_gas (tt)) >>
-         (memory_byte_slice (range.(MemoryRangeFields_off)) (range.(MemoryRangeFields_len))) >>= fun '(@existT _ _ _ (@existT _ _ _ w__4)) =>
-         (freeze_output (w__4)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__5)) =>
+         (memory_byte_slice (range.(MemoryRangeFields_off)) (range.(MemoryRangeFields_len))) >>= fun '(@existT _ _ __w__41 (@existT _ _ __w__40 w__4)) =>
+         (freeze_output (w__4)) >>= fun '(@existT _ _ __range1 (@existT _ _ __range0 w__5)) =>
          write_reg frame_status ((Halted ((HaltRevert (@existT _ _ _ (@existT _ _ _ (w__5)))))))
           : M (unit)
        else returnM (tt))
@@ -8682,7 +8275,7 @@ Definition run_call (kind : CallKind) : M (unit) :=
                             if neq_int (selected_precompile) (0) return M (unit) then
                               let number : Z := selected_precompile in
                               (memory_byte_slice (args.(MemoryRangeFields_off))
-                                 (args.(MemoryRangeFields_len))) >>= fun '(@existT _ _ _ (@existT _ _ _ input)) =>
+                                 (args.(MemoryRangeFields_len))) >>= fun '(@existT _ _ __input1 (@existT _ _ __input0 input)) =>
                               (precompile_gas (Build_precompile_id ((number))) (input) (child_gas)) >>= fun (w__32 : option Z) =>
                               match w__32 with
                               | Some used =>
@@ -8754,7 +8347,8 @@ Definition run_call (kind : CallKind) : M (unit) :=
                                  (memory_byte_slice (args.(MemoryRangeFields_off))
                                     (args.(MemoryRangeFields_len)))
                                   : M ({syn_len & {syn_off & (ByteSliceFields syn_off syn_len)}}%type)
-                               else returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)))) >>= fun '(@existT _ _ _ (@existT _ _ _ child_calldata)) =>
+                               else
+                                 returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) : {syn_len & {syn_off & (ByteSliceFields syn_off syn_len)}}%type)) >>= fun '(@existT _ _ __child_calldata1 (@existT _ _ __child_calldata0 child_calldata)) =>
                               read_reg state_gas_remaining >>= fun child_state_gas =>
                               (suspend_frame (tt)) >>= fun (w__39 : FrameCheckpoint) =>
                               let checkpoint :=
@@ -8829,7 +8423,7 @@ Definition run_create (is2 : bool) : M (unit) :=
     (guard_static (tt)) >>= fun (w__2 : bool) =>
     if w__2 then returnM (tt)
     else
-      (charge_memory_range (Build_word ((off_word))) (len_word)) >>= fun '(@existT _ _ _ (@existT _ _ _ initcode)) =>
+      (charge_memory_range (Build_word ((off_word))) (len_word)) >>= fun '(@existT _ _ __initcode1 (@existT _ _ __initcode0 initcode)) =>
       (is_running (tt)) >>= fun (w__3 : bool) =>
       (if negb (w__3) then returnM (tt)
        else
@@ -8942,7 +8536,8 @@ Definition run_create (is2 : bool) : M (unit) :=
                            (memory_code_slice (initcode.(MemoryRangeFields_off))
                               (initcode.(MemoryRangeFields_len)))
                             : M ({syn_len & {syn_off & (ByteSliceFields syn_off syn_len)}}%type)
-                         else returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_CODE_SLICE)))) >>= fun '(@existT _ _ _ (@existT _ _ _ initcode)) =>
+                         else
+                           returnM (EMPTY_CODE_SLICE : {syn_len & {syn_off & (ByteSliceFields syn_off syn_len)}}%type)) >>= fun '(@existT _ _ __initcode1 (@existT _ _ __initcode0 initcode)) =>
                         read_reg k_fork >>= fun (w__30 : Fork) =>
                         (code_db_insert (initcode) (w__30)) >>= fun (w__31 : vec (mword 8) 32) =>
                         (code_db_resolve (w__31)) >>= fun child_code =>
@@ -9010,9 +8605,9 @@ Definition execute (op : ast) : M (unit) :=
    end
     : M (unit).
 
-Definition read_push {ex414714_ : Z} {ex414713_ : Z}
-(code : ByteSliceFields ex414713_ ex414714_) (offset : Z) (n : push_width)
-(*(0 <=? ex414713_) && (0 <=? ex414714_) && (0 <=? ex414714_)*) (*0 <=? offset*)
+Definition read_push {ex420318_ : Z} {ex420317_ : Z}
+(code : ByteSliceFields ex420317_ ex420318_) (offset : Z) (n : push_width)
+(*(0 <=? ex420317_) && (0 <=? ex420318_) && (0 <=? ex420318_)*) (*0 <=? offset*)
 (*(0 <=? n) && (n <=? 32)*)
 : M (word) :=
    let n := (n).(push_width_value) in
@@ -9143,7 +8738,7 @@ Definition decode_simple (opcode : opcode) (*(0 <=? opcode) && (opcode <=? 255)*
 Definition fetch '(tt : unit) : M (ast) :=
    read_reg pc >>= fun current =>
    read_reg frame_code >>= fun (w__0 : Code) =>
-   let '(@existT _ _ _ (@existT _ _ _ code)) :=
+   let '(@existT _ _ code__'len (@existT _ _ code__'off code)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (w__0.(Code_bytes))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    let code_length := code.(ByteSliceFields_len) in
    (if negb ((Z.ltb (current) (code_length))) then returnM ((STOP (tt)))
@@ -9194,15 +8789,15 @@ Definition fetch '(tt : unit) : M (ast) :=
 
 Definition frame_output '(tt : unit) : M (ByteSlice) :=
    read_reg frame_status >>= fun (w__0 : FrameStatus) =>
-   let '(@existT _ _ _ (@existT _ _ _ w__1)) :=
+   let '(@existT _ _ w__1__'len (@existT _ _ w__1__'off w__1)) :=
      (match w__0 with
      | Halted (HaltReturn (@existT _ _ len (@existT _ _ off output))) =>
         @existT _ _ _ (@existT _ _ _ (output))
      | Halted (HaltRevert (@existT _ _ len (@existT _ _ off output))) =>
         @existT _ _ _ (@existT _ _ _ (output))
-     | _ => @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE))
+     | _ => @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))
      end : {len & {off & (ByteSliceFields off len)}}%type) in
-   returnM (@existT _ _ _ (@existT _ _ _ (w__1))).
+   returnM ((@existT _ _ _ (@existT _ _ _ (w__1))) : {len & {off & (ByteSliceFields off len)}}%type).
 
 Definition frame_succeeded '(tt : unit) : M (bool) :=
    read_reg frame_status >>= fun (w__0 : FrameStatus) =>
@@ -9215,11 +8810,11 @@ Definition frame_succeeded '(tt : unit) : M (bool) :=
      end in
    returnM (w__1).
 
-Definition resume_call {ex414721_ : Z} {ex414720_ : Z}
-(continuation : CallContinuation) (output : ByteSliceFields ex414720_ ex414721_)
-(*(0 <=? ex414720_) && (0 <=? ex414721_)*)
+Definition resume_call {ex420325_ : Z} {ex420324_ : Z}
+(continuation : CallContinuation) (output : ByteSliceFields ex420324_ ex420325_)
+(*(0 <=? ex420324_) && (0 <=? ex420325_)*)
 : M (unit) :=
-   write_reg returndata (@existT _ _ _ (@existT _ _ _ (output))) >>
+   write_reg returndata (@existT _ _ ex420325_ (@existT _ _ ex420324_ (output))) >>
    let checkpoint := continuation.(CallContinuation_checkpoint) in
    (frame_succeeded (tt)) >>= fun succeeded =>
    read_reg gas_remaining >>= fun child_left =>
@@ -9247,11 +8842,11 @@ Definition resume_call {ex414721_ : Z} {ex414720_ : Z}
        : M (unit))
     : M (unit).
 
-Definition resume_create {ex414725_ : Z} {ex414724_ : Z}
-(continuation : CreateContinuation) (output : ByteSliceFields ex414724_ ex414725_)
-(*(0 <=? ex414724_) && (0 <=? ex414725_)*)
+Definition resume_create {ex420329_ : Z} {ex420328_ : Z}
+(continuation : CreateContinuation) (output : ByteSliceFields ex420328_ ex420329_)
+(*(0 <=? ex420328_) && (0 <=? ex420329_)*)
 : M (unit) :=
-   write_reg returndata (@existT _ _ _ (@existT _ _ _ (output))) >>
+   write_reg returndata (@existT _ _ ex420329_ (@existT _ _ ex420328_ (output))) >>
    let checkpoint := continuation.(CreateContinuation_checkpoint) in
    (frame_succeeded (tt)) >>= fun initcode_succeeded =>
    (returndata_size (tt)) >>= fun deployed_length =>
@@ -9265,7 +8860,7 @@ Definition resume_create {ex414725_ : Z} {ex414724_ : Z}
             (read_reg k_fork >>= fun (w__1 : Fork) =>
              returnM (((fork_gteq (w__1) (London))  : bool)))
             (and_boolM (returnM ((neq_int (deployed_size) (0))))
-               (read_reg returndata >>= fun '(@existT _ _ _ (@existT _ _ _ w__2)) =>
+               (read_reg returndata >>= fun '(@existT _ _ __w__21 (@existT _ _ __w__20 w__2)) =>
                 (slice_byte (w__2) (0)) >>= fun (w__3 : mword 8) =>
                 returnM (((eq_vec (w__3) ((Ox"EF")))  : bool)))))) >>= fun w__6 =>
       (if w__6 return M (bool) then (exc_halt (OutOfGas)) >> returnM (frontier_empty_deposit)
@@ -9300,10 +8895,11 @@ Definition resume_create {ex414725_ : Z} {ex414724_ : Z}
    (return_child_state_gas (child_state_left) (Build_state_gas_spill ((child_state_spill)))) >>
    (if deploy_succeeds return M (unit) then
       (record_refund (child_refund)) >>
-      (if frontier_empty_deposit then returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)))
-       else read_reg returndata  : M (ByteSlice)) >>= fun '(@existT _ _ _ (@existT _ _ _ deployed_bytes)) =>
-      let '(@existT _ _ _ (@existT _ _ _ deployed_code)) :=
-        (validated_code_slice (deployed_bytes) : {len & {off & (ByteSliceFields off len)}}%type) in
+      (if frontier_empty_deposit then
+         returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) : ByteSlice)
+       else read_reg returndata  : M (ByteSlice)) >>= fun '(@existT _ _ __deployed_bytes1 (@existT _ _ __deployed_bytes0 deployed_bytes)) =>
+      let '(@existT _ _ deployed_code__'len (@existT _ _ deployed_code__'off deployed_code)) :=
+        (validated_code_slice (deployed_bytes) : {__deployed_bytes1 & {__deployed_bytes0 & (ByteSliceFields __deployed_bytes0 __deployed_bytes1)}}%type) in
       (k_deploy_code (continuation.(CreateContinuation_address)) (deployed_code)) >>
       (push_word
          (Build_word ((((address_to_word (continuation.(CreateContinuation_address))).(word_value))))))
@@ -9321,11 +8917,12 @@ Definition resume_create {ex414725_ : Z} {ex414724_ : Z}
     else returnM (tt))
     : M (unit).
 
-Definition resume_frame {ex414729_ : Z} {ex414728_ : Z}
-(continuation : FrameContinuation) (output : ByteSliceFields ex414728_ ex414729_)
-(*(0 <=? ex414728_) && (0 <=? ex414729_)*)
+Definition resume_frame {ex420333_ : Z} {ex420332_ : Z}
+(continuation : FrameContinuation) (output : ByteSliceFields ex420332_ ex420333_)
+(*(0 <=? ex420332_) && (0 <=? ex420333_)*)
 : M (unit) :=
    match continuation with
+   | Empty tt => throw (InvalidBlock (ExecutionInvalid))
    | ResumeCall call => (resume_call (call) (output))  : M (unit)
    | ResumeCreate create => (resume_create (create) (output))  : M (unit)
    end
@@ -9334,35 +8931,37 @@ Definition resume_frame {ex414729_ : Z} {ex414728_ : Z}
 Definition interpret '(tt : unit) : M (ByteSlice) :=
    (frame_stack_reset (tt)) >>
    let interpreting : bool := true in
-   let '(@existT _ _ _ (@existT _ _ _ result)) :=
-     (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)) : ByteSlice) in
+   let '(@existT _ _ result__'len (@existT _ _ result__'off result)) :=
+     (@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE)) : ByteSlice) in
    (whileMT
      (interpreting, @existT _ _ _ (@existT _ _ _ (result)))
-     (fun '((interpreting, @existT _ _ len (@existT _ _ off result))) => pow2 (64))
-     (fun '((interpreting, @existT _ _ len (@existT _ _ off result))) => returnM (interpreting))
-     (fun '((interpreting, @existT _ _ len (@existT _ _ off result))) =>
+     (fun '((interpreting, @existT _ _ result__'len (@existT _ _ result__'off result))) => pow2 (64))
+     (fun '((interpreting, @existT _ _ result__'len (@existT _ _ result__'off result))) =>
+       returnM (interpreting))
+     (fun '((interpreting, @existT _ _ result__'len (@existT _ _ result__'off result))) =>
        (assert_exp' true "loop dummy assert" >>= fun _ =>
         (is_running (tt)) >>= fun (w__0 : bool) =>
         (if w__0 return M ((bool * {len & {off & (ByteSliceFields off len)}}%type)) then
            (fetch (tt)) >>= fun (w__1 : ast) =>
            (execute (w__1)) >> returnM ((interpreting, @existT _ _ _ (@existT _ _ _ (result))))
          else
-           (frame_output (tt)) >>= fun '(@existT _ _ _ (@existT _ _ _ output)) =>
-           (frame_stack_is_empty (tt)) >>= fun (w__2 : bool) =>
-           (if w__2 then
-              let '(@existT _ _ _ (@existT _ _ _ result)) :=
+           (frame_output (tt)) >>= fun '(@existT _ _ __output1 (@existT _ _ __output0 output)) =>
+           (frame_stack_pop (tt)) >>= fun (w__2 : FrameContinuation) =>
+           match w__2 with
+           | Empty tt =>
+              let '(@existT _ _ result__'len (@existT _ _ result__'off result)) :=
                 (@existT _ _ _ (@existT _ _ _ (output)) : ByteSlice) in
               let interpreting : bool := false in
               returnM ((interpreting, @existT _ _ _ (@existT _ _ _ (result))))
-            else
-              (frame_stack_pop (tt)) >>= fun (w__3 : FrameContinuation) =>
-              (resume_frame (w__3) (output)) >>
-              returnM ((interpreting, @existT _ _ _ (@existT _ _ _ (result)))))
-            : M ((bool * {len & {off & (ByteSliceFields off len)}}%type)))
+           | continuation =>
+              (resume_frame (continuation) (output)) >>
+              returnM ((interpreting, @existT _ _ _ (@existT _ _ _ (result))))
+           end
+            : M ((bool * {__output1 & {__output0 & (ByteSliceFields __output0 __output1)}}%type)))
          : M ((bool * {len & {off & (ByteSliceFields off len)}}%type)))
         : M ((bool * {len & {off & (ByteSliceFields off len)}}%type)))) >>= fun '((interpreting, @existT _ _ len (@existT _ _ off result))
    : (bool * {len & {off & (ByteSliceFields off len)}}%type)) =>
-   returnM (@existT _ _ _ (@existT _ _ _ (result))).
+   returnM ((@existT _ _ _ (@existT _ _ _ (result))) : {len & {off & (ByteSliceFields off len)}}%type).
 
 Definition G_transaction : Z := 21000.
 #[export] Hint Unfold G_transaction : sail.
@@ -9426,11 +9025,11 @@ Definition undefined_TransactionCosts '(tt : unit) : M (TransactionCosts) :=
                 TransactionCosts_blob_fee := (Build_word (w__4));
                 TransactionCosts_upfront := (Build_word (w__5)) |})).
 
-Definition transaction_initcode_slice {ex414735_ : Z} {ex414734_ : Z}
-(input : ByteSliceFields ex414734_ ex414735_)
-(*(0 <=? ex414734_) && (0 <=? ex414735_) && ((0 <=? ex414735_) && (ex414735_ <=? (2 ^ 30)))*)
+Definition transaction_initcode_slice {ex420339_ : Z} {ex420338_ : Z}
+(input : ByteSliceFields ex420338_ ex420339_)
+(*(0 <=? ex420338_) && (0 <=? ex420339_) && ((0 <=? ex420339_) && (ex420339_ <=? (2 ^ 30)))*)
 : CodeSlice :=
-   @existT _ _ _ (@existT _ _ _ (code_slice (input))).
+   code_slice (input).
 
 Definition undefined_TxUpfrontResult '(tt : unit) : M (TxUpfrontResult) :=
    (undefined_range ((Z.opp ((Z.mul (199) ((Z.sub ((pow2 (64))) (1)))))))
@@ -9444,9 +9043,9 @@ Definition EMPTY_AMSTERDAM_AUTHORIZATION_STATE : AmsterdamAuthorizationState :=
    AmsterdamAuthorizationState_originally_delegated := [];
    AmsterdamAuthorizationState_delegation_set_for := [] |}.
 #[export] Hint Unfold EMPTY_AMSTERDAM_AUTHORIZATION_STATE : sail.
-Definition calldata_cost {ex414739_ : Z} {ex414738_ : Z}
-(input : ByteSliceFields ex414738_ ex414739_)
-(*(0 <=? ex414738_) && (0 <=? ex414739_) && ((0 <=? ex414739_) && (ex414739_ <=? (2 ^ 30)))*)
+Definition calldata_cost {ex420343_ : Z} {ex420342_ : Z}
+(input : ByteSliceFields ex420342_ ex420343_)
+(*(0 <=? ex420342_) && (0 <=? ex420343_) && ((0 <=? ex420343_) && (ex420343_ <=? (2 ^ 30)))*)
 : M (transaction_calldata_cost) :=
    ((slice_count_nonzero (input)) >>= fun nonzeroes =>
    let input_len := input.(ByteSliceFields_len) in
@@ -9457,9 +9056,9 @@ Definition calldata_cost {ex414739_ : Z} {ex414738_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_transaction_calldata_cost (semanticResult)).
 
-Definition calldata_tokens {ex414743_ : Z} {ex414742_ : Z}
-(input : ByteSliceFields ex414742_ ex414743_)
-(*(0 <=? ex414742_) && (0 <=? ex414743_) && ((0 <=? ex414743_) && (ex414743_ <=? (2 ^ 30)))*)
+Definition calldata_tokens {ex420347_ : Z} {ex420346_ : Z}
+(input : ByteSliceFields ex420346_ ex420347_)
+(*(0 <=? ex420346_) && (0 <=? ex420347_) && ((0 <=? ex420347_) && (ex420347_ <=? (2 ^ 30)))*)
 : M (Z) :=
    (slice_count_nonzero (input)) >>= fun nonzeroes =>
    let input_len := input.(ByteSliceFields_len) in
@@ -9517,7 +9116,7 @@ Definition validate_blob_hash_versions (hashes : BlobHashes) : M (unit) :=
 Definition legacy_intrinsic_gas (tx : Transaction) : M (gas_cost) :=
    ((calldata_cost (projT2 (projT2 (tx.(Transaction_input_src))))) >>= fun semanticResult =>
     returnM (semanticResult).(transaction_calldata_cost_value)) >>= fun data_cost =>
-   let '(@existT _ _ _ (@existT _ _ _ input)) :=
+   let '(@existT _ _ input__'len (@existT _ _ input__'off input)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (tx.(Transaction_input_src))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    let input_len := input.(ByteSliceFields_len) in
    let address_cost :=
@@ -9539,9 +9138,9 @@ Definition legacy_intrinsic_gas (tx : Transaction) : M (gas_cost) :=
     else returnM (common))
     : M (Z).
 
-Definition legacy_calldata_floor {ex414749_ : Z} {ex414748_ : Z}
-(input : ByteSliceFields ex414748_ ex414749_)
-(*(0 <=? ex414748_) && (0 <=? ex414749_) && ((0 <=? ex414749_) && (ex414749_ <=? (2 ^ 30)))*)
+Definition legacy_calldata_floor {ex420353_ : Z} {ex420352_ : Z}
+(input : ByteSliceFields ex420352_ ex420353_)
+(*(0 <=? ex420352_) && (0 <=? ex420353_) && ((0 <=? ex420353_) && (ex420353_ <=? (2 ^ 30)))*)
 : M (transaction_calldata_floor_cost) :=
    ((slice_count_nonzero (input)) >>= fun nonzeroes =>
    let input_len := input.(ByteSliceFields_len) in
@@ -9574,7 +9173,7 @@ Definition intrinsic_gas (tx : Transaction) : M (IntrinsicGasCost) :=
                    IntrinsicGasCost_state := 0;
                    IntrinsicGasCost_calldata_floor := w__2 |}))
     else
-      let '(@existT _ _ _ (@existT _ _ _ input)) :=
+      let '(@existT _ _ input__'len (@existT _ _ input__'off input)) :=
         (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (tx.(Transaction_input_src))))) : {len & {off & (ByteSliceFields off len)}}%type) in
       let recipient := (amsterdam_recipient_execution_cost (tx)).(amsterdam_recipient_cost_value) in
       let address_count :=
@@ -9697,21 +9296,23 @@ Definition process_auth (au : Authorization) : M (gas_refund) :=
    let authority := au.(Authorization_authority) in
    (and_boolM (returnM ((au.(Authorization_valid_sig)  : bool)))
       ((or_boolM (returnM (((word_is_zero ((au.(Authorization_chain_id)).(word_value)))  : bool)))
-          (read_reg k_chain_id >>= fun (w__0 : Z) =>
-           (word_of_chain_identifier (w__0)) >>= fun w__1 =>
-           returnM (((Z.eqb ((au.(Authorization_chain_id)).(word_value)) (w__1))  : bool))))
-       : M (bool))) >>= fun (w__3 : bool) =>
-   (if w__3 return M (Z) then
+          ((read_reg k_chain_id) >>= fun semanticResult =>
+           returnM (semanticResult).(chain_identifier_value) >>= fun (w__0 : Z) =>
+           returnM (((Z.eqb ((au.(Authorization_chain_id)).(word_value))
+                        (((word_of_chain_identifier (Build_chain_identifier ((w__0)))).(chain_identifier_value))))
+            : bool))))
+       : M (bool))) >>= fun (w__2 : bool) =>
+   (if w__2 return M (Z) then
       (k_access_account (authority)) >>= fun '(_) =>
       (k_deleg_target (authority)) >>= fun '((is_deleg, _)) =>
       (and_boolM
          (or_boolM
-            ((k_code_key (authority)) >>= fun (w__4 : vec (mword 8) 32) =>
-             returnM (((generic_eq (w__4) (KECCAK_EMPTY))  : bool))) (returnM (is_deleg)))
+            ((k_code_key (authority)) >>= fun (w__3 : vec (mword 8) 32) =>
+             returnM (((generic_eq (w__3) (KECCAK_EMPTY))  : bool))) (returnM (is_deleg)))
          (((k_get_nonce (authority)) >>= fun semanticResult =>
-           returnM (semanticResult).(account_nonce_value)) >>= fun (w__6 : Z) =>
-          returnM (((Z.eqb (w__6) ((au.(Authorization_nonce)).(account_nonce_value)))  : bool)))) >>= fun w__7 =>
-      (if w__7 return M (Z) then
+           returnM (semanticResult).(account_nonce_value)) >>= fun (w__5 : Z) =>
+          returnM (((Z.eqb (w__5) ((au.(Authorization_nonce)).(account_nonce_value)))  : bool)))) >>= fun w__6 =>
+      (if w__6 return M (Z) then
          (k_account_exists (authority)) >>= fun existed =>
          (if generic_eq (au.(Authorization_address)) (ZERO_ADDRESS) return M (unit) then
             (k_clear_code (authority))
@@ -9757,21 +9358,23 @@ Definition process_amsterdam_auth
    let authority := au.(Authorization_authority) in
    (and_boolM (returnM ((au.(Authorization_valid_sig)  : bool)))
       ((or_boolM (returnM (((word_is_zero ((au.(Authorization_chain_id)).(word_value)))  : bool)))
-          (read_reg k_chain_id >>= fun (w__0 : Z) =>
-           (word_of_chain_identifier (w__0)) >>= fun w__1 =>
-           returnM (((Z.eqb ((au.(Authorization_chain_id)).(word_value)) (w__1))  : bool))))
-       : M (bool))) >>= fun (w__3 : bool) =>
-   (if w__3 return M (AmsterdamAuthorizationState) then
+          ((read_reg k_chain_id) >>= fun semanticResult =>
+           returnM (semanticResult).(chain_identifier_value) >>= fun (w__0 : Z) =>
+           returnM (((Z.eqb ((au.(Authorization_chain_id)).(word_value))
+                        (((word_of_chain_identifier (Build_chain_identifier ((w__0)))).(chain_identifier_value))))
+            : bool))))
+       : M (bool))) >>= fun (w__2 : bool) =>
+   (if w__2 return M (AmsterdamAuthorizationState) then
       (k_access_account (authority)) >>= fun '(_) =>
       (k_deleg_target (authority)) >>= fun '((currently_delegated, _)) =>
       (and_boolM
          (or_boolM
-            ((k_code_key (authority)) >>= fun (w__4 : vec (mword 8) 32) =>
-             returnM (((generic_eq (w__4) (KECCAK_EMPTY))  : bool))) (returnM (currently_delegated)))
+            ((k_code_key (authority)) >>= fun (w__3 : vec (mword 8) 32) =>
+             returnM (((generic_eq (w__3) (KECCAK_EMPTY))  : bool))) (returnM (currently_delegated)))
          (((k_get_nonce (authority)) >>= fun semanticResult =>
-           returnM (semanticResult).(account_nonce_value)) >>= fun (w__6 : Z) =>
-          returnM (((Z.eqb (w__6) ((au.(Authorization_nonce)).(account_nonce_value)))  : bool)))) >>= fun w__7 =>
-      (if w__7 return M (AmsterdamAuthorizationState) then
+           returnM (semanticResult).(account_nonce_value)) >>= fun (w__5 : Z) =>
+          returnM (((Z.eqb (w__5) ((au.(Authorization_nonce)).(account_nonce_value)))  : bool)))) >>= fun w__6 =>
+      (if w__6 return M (AmsterdamAuthorizationState) then
          let seen :=
            authorization_address_seen (authority)
              (auth_state.(AmsterdamAuthorizationState_seen_valid_authorities)) in
@@ -9784,13 +9387,13 @@ Definition process_amsterdam_auth
            orb (seen)
              ((orb ((generic_eq (authority) (sender)))
                  ((andb (transfers_value) ((generic_eq (authority) (current_target))))))) in
-         (k_account_exists (authority)) >>= fun (w__8 : bool) =>
-         (if negb (w__8) return M (unit) then
+         (k_account_exists (authority)) >>= fun (w__7 : bool) =>
+         (if negb (w__7) return M (unit) then
             (charge_state_gas ((G_amsterdam_state_new_account).(state_gas_spill_value)))
              : M (unit)
           else returnM (tt)) >>
-         (and_boolM ((is_running (tt))  : M (bool)) (returnM ((negb (already_written))))) >>= fun w__10 =>
-         (if w__10 return M (unit) then
+         (and_boolM ((is_running (tt))  : M (bool)) (returnM ((negb (already_written))))) >>= fun w__9 =>
+         (if w__9 return M (unit) then
             (charge ((G_amsterdam_account_write).(gas_constant_value)))
              : M (unit)
           else returnM (tt)) >>
@@ -9799,13 +9402,13 @@ Definition process_amsterdam_auth
                          ((andb ((negb (delegated_before_tx)))
                              ((negb
                                  ((authorization_address_seen (authority)
-                                     (auth_state.(AmsterdamAuthorizationState_delegation_set_for)))))))))))) >>= fun w__12 =>
-         (if w__12 return M (unit) then
+                                     (auth_state.(AmsterdamAuthorizationState_delegation_set_for)))))))))))) >>= fun w__11 =>
+         (if w__11 return M (unit) then
             (charge_state_gas ((G_amsterdam_state_auth_base).(state_gas_spill_value)))
              : M (unit)
           else returnM (tt)) >>
-         (is_running (tt)) >>= fun (w__13 : bool) =>
-         (if w__13 return M (AmsterdamAuthorizationState) then
+         (is_running (tt)) >>= fun (w__12 : bool) =>
+         (if w__12 return M (AmsterdamAuthorizationState) then
             (if generic_eq (au.(Authorization_address)) (ZERO_ADDRESS) return M (unit) then
                (k_clear_code (authority))
                 : M (unit)
@@ -9924,36 +9527,39 @@ Definition eff_gas_price_for (base_fee : word) (max_fee : word) (max_priority_fe
    ((price, priority)) in ((Build_word (semanticValue0)), (Build_word (semanticValue1)))).
 
 Definition check_transaction_validity (tx : Transaction) : M (TxValidity) :=
-   read_reg k_chain_id >>= fun (w__0 : Z) =>
-   (tx_sig_v_valid (w__0) (tx.(Transaction_tx_type))
-      (Build_word (((tx.(Transaction_sig_v)).(word_value))))) >>= fun (w__1 : bool) =>
-   (if negb (w__1) return M (unit) then throw (InvalidBlock (InvalidSignature))
+   (read_reg k_chain_id) >>= fun semanticResult => returnM (semanticResult).(chain_identifier_value) >>= fun (w__0 : Z) =>
+   (if negb
+         ((tx_sig_v_valid (Build_chain_identifier ((w__0))) (tx.(Transaction_tx_type))
+             (Build_word (((tx.(Transaction_sig_v)).(word_value))))))
+      return
+      M (unit) then
+      throw (InvalidBlock (InvalidSignature))
     else returnM (tt)) >>
    let parity :=
      (tx_y_parity (tx.(Transaction_tx_type)) (Build_word (((tx.(Transaction_sig_v)).(word_value))))).(y_parity_value) in
    (tx_auth_valid (tx.(Transaction_sender)) (tx.(Transaction_signing_hash))
       (Build_y_parity ((parity))) (Build_word (((tx.(Transaction_sig_r)).(word_value))))
-      (Build_word (((tx.(Transaction_sig_s)).(word_value))))) >>= fun (w__2 : bool) =>
-   (if negb (w__2) return M (unit) then throw (InvalidBlock (InvalidSignature))
+      (Build_word (((tx.(Transaction_sig_s)).(word_value))))) >>= fun (w__1 : bool) =>
+   (if negb (w__1) return M (unit) then throw (InvalidBlock (InvalidSignature))
     else returnM (tt)) >>
-   read_reg k_header >>= fun (w__3 : BlockHeader) =>
+   read_reg k_header >>= fun (w__2 : BlockHeader) =>
    ((admitted_transaction_gas_limit (tx.(Transaction_gas_limit))
-       (Build_block_gas_limit (((w__3.(BlockHeader_gas_limit)).(block_gas_limit_value))))) >>= fun semanticResult =>
+       (Build_block_gas_limit (((w__2.(BlockHeader_gas_limit)).(block_gas_limit_value))))) >>= fun semanticResult =>
     returnM (semanticResult).(block_gas_limit_value)) >>= fun gas_limit =>
-   read_reg k_header >>= fun (w__4 : BlockHeader) =>
+   read_reg k_header >>= fun (w__3 : BlockHeader) =>
    let '((eff_gas_price, eff_priority_fee)) :=
      (let '(semanticValue0, semanticValue1) := eff_gas_price_for
-                                                 (Build_word (((w__4.(BlockHeader_base_fee)).(word_value))))
+                                                 (Build_word (((w__3.(BlockHeader_base_fee)).(word_value))))
                                                  (Build_word (((tx.(Transaction_max_fee)).(word_value))))
                                                  (Build_word (((tx.(Transaction_max_priority_fee)).(word_value)))) in ((semanticValue0).(word_value), (semanticValue1).(word_value))) in
    let sender := tx.(Transaction_sender) in
-   let '(@existT _ _ _ (@existT _ _ _ input)) :=
+   let '(@existT _ _ input__'len (@existT _ _ input__'off input)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (tx.(Transaction_input_src))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    let input_len := input.(ByteSliceFields_len) in
    ((k_get_nonce (sender)) >>= fun semanticResult => returnM (semanticResult).(account_nonce_value)) >>= fun nonce_before =>
-   read_reg k_header >>= fun (w__5 : BlockHeader) =>
+   read_reg k_header >>= fun (w__4 : BlockHeader) =>
    ((blob_base_fee
-       (Build_excess_blob_gas_typ (((w__5.(BlockHeader_excess_blob_gas)).(excess_blob_gas_value))))) >>= fun semanticResult =>
+       (Build_excess_blob_gas_typ (((w__4.(BlockHeader_excess_blob_gas)).(excess_blob_gas_value))))) >>= fun semanticResult =>
     returnM (semanticResult).(word_value)) >>= fun blob_price =>
    (transaction_costs (tx) (Build_block_gas_limit ((gas_limit))) (Build_word ((blob_price)))) >>= fun costs =>
    match (option_map (fun semanticValue => (semanticValue).(account_nonce_value)) (word_to_account_nonce
@@ -9968,7 +9574,7 @@ Definition check_transaction_validity (tx : Transaction) : M (TxValidity) :=
     returnM (semanticResult).(transaction_blob_count_value)) >>= fun max_blobs =>
    (if tx_is_blob (tx.(Transaction_tx_type)) return M (unit) then
       (or_boolM
-         (read_reg k_fork >>= fun (w__7 : Fork) => returnM (((fork_lt (w__7) (Cancun))  : bool)))
+         (read_reg k_fork >>= fun (w__6 : Fork) => returnM (((fork_lt (w__6) (Cancun))  : bool)))
          (returnM (((orb
                        ((Z.eqb
                            ((tx.(Transaction_blob_hashes).(BlobHashes_count)).(transaction_blob_count_value))
@@ -9978,27 +9584,27 @@ Definition check_transaction_validity (tx : Transaction) : M (TxValidity) :=
                                 ((tx.(Transaction_blob_hashes).(BlobHashes_count)).(transaction_blob_count_value))))
                             (tx.(Transaction_is_create)))
                         : bool)))
-           : bool)))) >>= fun (w__8 : bool) =>
-      (if w__8 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
+           : bool)))) >>= fun (w__7 : bool) =>
+      (if w__7 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
        else returnM (tt)) >>
       (validate_blob_hash_versions (tx.(Transaction_blob_hashes)))
        : M (unit)
     else returnM (tt)) >>
    (and_boolM
-      (read_reg k_fork >>= fun (w__9 : Fork) => returnM (((fork_gteq (w__9) (Prague))  : bool)))
-      (returnM (((Z.ltb (gas_limit) (costs.(TransactionCosts_calldata_floor)))  : bool)))) >>= fun (w__10 : bool) =>
-   (if w__10 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
+      (read_reg k_fork >>= fun (w__8 : Fork) => returnM (((fork_gteq (w__8) (Prague))  : bool)))
+      (returnM (((Z.ltb (gas_limit) (costs.(TransactionCosts_calldata_floor)))  : bool)))) >>= fun (w__9 : bool) =>
+   (if w__9 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
-   ((k_get_balance (sender)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__11 : Z) =>
-   (if negb ((word_ule ((costs.(TransactionCosts_upfront)).(word_value)) (w__11)))
+   ((k_get_balance (sender)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__10 : Z) =>
+   (if negb ((word_ule ((costs.(TransactionCosts_upfront)).(word_value)) (w__10)))
       return
       M (unit) then
       throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
    (or_boolM
-      ((k_code_key (sender)) >>= fun (w__12 : vec (mword 8) 32) =>
-       returnM (((generic_eq (w__12) (KECCAK_EMPTY))  : bool))) (returnM (sender_deleg))) >>= fun w__13 =>
-   (if negb (w__13) return M (unit) then throw (InvalidBlock (ExecutionInvalid))
+      ((k_code_key (sender)) >>= fun (w__11 : vec (mword 8) 32) =>
+       returnM (((generic_eq (w__11) (KECCAK_EMPTY))  : bool))) (returnM (sender_deleg))) >>= fun w__12 =>
+   (if negb (w__12) return M (unit) then throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
    let intrinsic_total :=
      Z.add (costs.(TransactionCosts_intrinsic_execution)) (costs.(TransactionCosts_intrinsic_state)) in
@@ -10006,19 +9612,19 @@ Definition check_transaction_validity (tx : Transaction) : M (TxValidity) :=
       throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
    (and_boolM
-      (read_reg k_fork >>= fun (w__14 : Fork) => returnM (((fork_gteq (w__14) (Amsterdam))  : bool)))
+      (read_reg k_fork >>= fun (w__13 : Fork) => returnM (((fork_gteq (w__13) (Amsterdam))  : bool)))
       (returnM (((Z.ltb (AMSTERDAM_TX_MAX_GAS) (costs.(TransactionCosts_intrinsic_execution)))
-        : bool)))) >>= fun (w__15 : bool) =>
-   (if w__15 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
+        : bool)))) >>= fun (w__14 : bool) =>
+   (if w__14 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
    (and_boolM
-      (read_reg k_fork >>= fun (w__16 : Fork) => returnM (((fork_gteq (w__16) (Amsterdam))  : bool)))
-      (returnM (((Z.ltb (AMSTERDAM_TX_MAX_GAS) (costs.(TransactionCosts_calldata_floor)))  : bool)))) >>= fun (w__17 : bool) =>
-   (if w__17 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
+      (read_reg k_fork >>= fun (w__15 : Fork) => returnM (((fork_gteq (w__15) (Amsterdam))  : bool)))
+      (returnM (((Z.ltb (AMSTERDAM_TX_MAX_GAS) (costs.(TransactionCosts_calldata_floor)))  : bool)))) >>= fun (w__16 : bool) =>
+   (if w__16 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
-   read_reg k_header >>= fun (w__18 : BlockHeader) =>
+   read_reg k_header >>= fun (w__17 : BlockHeader) =>
    (if negb
-         ((word_ule ((w__18.(BlockHeader_base_fee)).(word_value))
+         ((word_ule ((w__17.(BlockHeader_base_fee)).(word_value))
              ((tx.(Transaction_max_fee)).(word_value))))
       return
       M (unit) then
@@ -10033,9 +9639,9 @@ Definition check_transaction_validity (tx : Transaction) : M (TxValidity) :=
       throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
    (and_boolM (returnM ((tx.(Transaction_is_create)  : bool)))
-      ((initcode_size_allowed (input_len)) >>= fun (w__19 : bool) =>
-       returnM (((negb (w__19))  : bool)))) >>= fun (w__20 : bool) =>
-   (if w__20 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
+      ((initcode_size_allowed (input_len)) >>= fun (w__18 : bool) =>
+       returnM (((negb (w__18))  : bool)))) >>= fun (w__19 : bool) =>
+   (if w__19 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
    (if negb
          ((word_ule ((tx.(Transaction_max_priority_fee)).(word_value))
@@ -10045,12 +9651,12 @@ Definition check_transaction_validity (tx : Transaction) : M (TxValidity) :=
       throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
    (and_boolM (returnM (((tx_is_access_list (tx.(Transaction_tx_type)))  : bool)))
-      (read_reg k_fork >>= fun (w__21 : Fork) => returnM (((fork_lt (w__21) (Berlin))  : bool)))) >>= fun (w__22 : bool) =>
-   (if w__22 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
+      (read_reg k_fork >>= fun (w__20 : Fork) => returnM (((fork_lt (w__20) (Berlin))  : bool)))) >>= fun (w__21 : bool) =>
+   (if w__21 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
    (and_boolM (returnM (((tx_is_dynamic_fee (tx.(Transaction_tx_type)))  : bool)))
-      (read_reg k_fork >>= fun (w__23 : Fork) => returnM (((fork_lt (w__23) (London))  : bool)))) >>= fun (w__24 : bool) =>
-   (if w__24 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
+      (read_reg k_fork >>= fun (w__22 : Fork) => returnM (((fork_lt (w__22) (London))  : bool)))) >>= fun (w__23 : bool) =>
+   (if w__23 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
    (if andb ((tx_is_set_code (tx.(Transaction_tx_type)))) (tx.(Transaction_is_create))
       return
@@ -10065,16 +9671,17 @@ Definition check_transaction_validity (tx : Transaction) : M (TxValidity) :=
       throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
    (and_boolM (returnM (((tx_is_set_code (tx.(Transaction_tx_type)))  : bool)))
-      (read_reg k_fork >>= fun (w__25 : Fork) => returnM (((fork_lt (w__25) (Prague))  : bool)))) >>= fun (w__26 : bool) =>
-   (if w__26 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
+      (read_reg k_fork >>= fun (w__24 : Fork) => returnM (((fork_lt (w__24) (Prague))  : bool)))) >>= fun (w__25 : bool) =>
+   (if w__25 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
    match tx.(Transaction_tx_type) with
    | LegacyTx => returnM (false)
    | _ =>
-      read_reg k_chain_id >>= fun (w__27 : Z) =>
-      returnM ((neq_int (tx.(Transaction_chain_id)) (w__27)))
-   end >>= fun (w__28 : bool) =>
-   (if w__28 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
+      (read_reg k_chain_id) >>= fun semanticResult =>
+      returnM (semanticResult).(chain_identifier_value) >>= fun (w__26 : Z) =>
+      returnM ((neq_int ((tx.(Transaction_chain_id)).(chain_identifier_value)) (w__26)))
+   end >>= fun (w__27 : bool) =>
+   (if w__27 return M (unit) then throw (InvalidBlock (ExecutionInvalid))
     else returnM (tt)) >>
    (if Z.eqb (nonce_before) ((Z.sub ((pow2 (64))) (1))) return M (unit) then
       throw (InvalidBlock (ExecutionInvalid))
@@ -10162,7 +9769,7 @@ Definition enter_transaction_frame
    (stack_reset (tt)) >>
    (memory_reset (tt)) >>
    (returndata_clear (tt)) >>
-   write_reg calldata (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE))) >>
+   write_reg calldata (@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) >>
    write_reg frame_code (EMPTY_CODE) >>
    write_reg frame_refund (Build_gas_refund (((GAS_REFUND_ZERO).(gas_refund_value)))) >>
    write_reg frame_status ((Running (tt)))
@@ -10277,7 +9884,7 @@ Definition run_create_transaction_frame
                                 (projT2 (projT2 (tx.(Transaction_input_src)))))))) (w__3)) >>= fun (w__4 : vec (mword 8) 32) =>
          (code_db_resolve (w__4)) >>= fun (w__5 : Code) => write_reg frame_code (w__5)  : M (unit)
        else returnM (tt)) >>
-      (interpret (tt)) >>= fun '(@existT _ _ _ (@existT _ _ _ deployed_code)) =>
+      (interpret (tt)) >>= fun '(@existT _ _ __deployed_code1 (@existT _ _ __deployed_code0 deployed_code)) =>
       (frame_succeeded (tt)) >>= fun (w__6 : bool) =>
       (if w__6 return M (unit) then
          let dep_len := deployed_code.(ByteSliceFields_len) in
@@ -10310,7 +9917,7 @@ Definition run_create_transaction_frame
                read_reg k_fork >>= fun (w__19 : Fork) =>
                (if fork_lt (w__19) (Homestead) return M (unit) then
                   write_reg gas_remaining (GAS_ZERO) >>
-                  (k_deploy_code (new_addr) (EMPTY_CODE_SLICE))
+                  (k_deploy_code (new_addr) (projT2 (projT2 (EMPTY_CODE_SLICE))))
                    : M (unit)
                 else (exc_halt (OutOfGas))  : M (unit))
                 : M (unit)
@@ -10386,7 +9993,7 @@ Definition run_call_transaction_frame
          write_reg frame_code (w__7)
           : M (unit)
        else returnM (tt)) >>
-      (interpret (tt)) >>= fun '(@existT _ _ _ (@existT _ _ _ _)) => returnM (tt))
+      (interpret (tt)) >>= fun '(@existT _ _ len (@existT _ _ off _)) => returnM (tt))
     : M (unit).
 
 Definition run_legacy_transaction_frame (tx : Transaction) (v : TxValidity) : M (TxFrameResult) :=
@@ -10853,8 +10460,8 @@ Definition rlp_write_node_ref (r : NodeRef) : M (unit) :=
    end
     : M (unit).
 
-Definition child_ref {ex414785_ : Z} {ex414784_ : Z} (encoded : ByteSliceFields ex414784_ ex414785_)
-(*(0 <=? ex414784_) && (0 <=? ex414785_)*)
+Definition child_ref {ex420389_ : Z} {ex420388_ : Z} (encoded : ByteSliceFields ex420388_ ex420389_)
+(*(0 <=? ex420388_) && (0 <=? ex420389_)*)
 : M (NodeRef) :=
    (if Z.ltb (encoded.(ByteSliceFields_len)) (MPT_HASH_LENGTH) return M (NodeRef) then
       (inline_node_from_slice (encoded)) >>= fun (w__0 : InlineNode) => returnM ((InlineRef (w__0)))
@@ -10869,9 +10476,9 @@ Definition branch_mask_has (mask : mword 16) (index : mword 4) : bool :=
 Definition branch_mask_set (mask : mword 16) (index : mword 4) : bits 16 :=
    or_vec (mask) ((branch_mask_for (index))).
 
-Definition leaf_child_ref {ex414793_ : Z} {ex414792_ : Z}
-(key : TriePath) (value : ByteSliceFields ex414792_ ex414793_)
-(*(0 <=? ex414792_) && (0 <=? ex414793_)*)
+Definition leaf_child_ref {ex420397_ : Z} {ex420396_ : Z}
+(key : TriePath) (value : ByteSliceFields ex420396_ ex420397_)
+(*(0 <=? ex420396_) && (0 <=? ex420397_)*)
 : M (NodeRef) :=
    (hex_prefix_compact (key) (true)) >>= fun '((path, encoded_path_len)) =>
    (rlp_scratch_bytes_size (path) (encoded_path_len)) >>= fun (w__0 : Z) =>
@@ -10881,7 +10488,7 @@ Definition leaf_child_ref {ex414793_ : Z} {ex414792_ : Z}
    (rlp_write_list_prefix (content_len)) >>
    (rlp_write_bytes (path) (encoded_path_len)) >>
    (rlp_write_slice (value)) >>
-   (rlp_finish (mark)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__2)) =>
+   (rlp_finish (mark)) >>= fun '(@existT _ _ __w__21 (@existT _ _ __w__20 w__2)) =>
    (child_ref (w__2)) >>= fun result => (scratch_rewind (mark)) >> returnM (result).
 
 Definition extension_child_ref (key : TriePath) (childref : NodeRef) : M (NodeRef) :=
@@ -10893,7 +10500,7 @@ Definition extension_child_ref (key : TriePath) (childref : NodeRef) : M (NodeRe
    (rlp_write_list_prefix (content_len)) >>
    (rlp_write_bytes (path) (encoded_path_len)) >>
    (rlp_write_node_ref (childref)) >>
-   (rlp_finish (mark)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__0)) =>
+   (rlp_finish (mark)) >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 w__0)) =>
    (child_ref (w__0)) >>= fun result => (scratch_rewind (mark)) >> returnM (result).
 
 Definition branch_child_ref (mask : mword 16) (children : vec NodeRef 16) : M (NodeRef) :=
@@ -10930,7 +10537,7 @@ Definition branch_child_ref (mask : mword 16) (children : vec NodeRef 16) : M (N
        let child_bit : mword 16 := shiftl (child_bit) (1) in
        returnM (child_bit)))) >>= fun (child_bit : mword 16) =>
    (scratch_push_bytes ([(Ox"80")]) (1)) >>
-   (rlp_finish (mark)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__2)) =>
+   (rlp_finish (mark)) >>= fun '(@existT _ _ __w__21 (@existT _ _ __w__20 w__2)) =>
    (child_ref (w__2)) >>= fun result => (scratch_rewind (mark)) >> returnM (result).
 
 Definition trie_ref_to_root (r : NodeRef) : M (hash) :=
@@ -10941,8 +10548,8 @@ Definition trie_ref_to_root (r : NodeRef) : M (hash) :=
    end
     : M (vec (mword 8) 32).
 
-Definition node_to_ref {ex414798_ : Z} {ex414797_ : Z} (node : ByteSliceFields ex414797_ ex414798_)
-(*(0 <=? ex414797_) && (0 <=? ex414798_)*)
+Definition node_to_ref {ex420402_ : Z} {ex420401_ : Z} (node : ByteSliceFields ex420401_ ex420402_)
+(*(0 <=? ex420401_) && (0 <=? ex420402_)*)
 : M (NodeRef) :=
    (if Z.eqb (node.(ByteSliceFields_len)) (0) then returnM ((EmptyRef (tt)))
     else if Z.ltb (node.(ByteSliceFields_len)) (MPT_HASH_LENGTH) return M (NodeRef) then
@@ -10950,9 +10557,9 @@ Definition node_to_ref {ex414798_ : Z} {ex414797_ : Z} (node : ByteSliceFields e
     else (keccak256_slice (node)) >>= fun (w__1 : vec (mword 8) 32) => returnM ((HashRef (w__1))))
     : M (NodeRef).
 
-Definition merge_ext_node {ex414802_ : Z} {ex414801_ : Z}
-(prefix : TriePath) (childnode : ByteSliceFields ex414801_ ex414802_)
-(*(0 <=? ex414801_) && (0 <=? ex414802_)*)
+Definition merge_ext_node {ex420406_ : Z} {ex420405_ : Z}
+(prefix : TriePath) (childnode : ByteSliceFields ex420405_ ex420406_)
+(*(0 <=? ex420405_) && (0 <=? ex420406_)*)
 : M (NodeRef) :=
    (if Z.eqb (((path_len (prefix)).(trie_path_len_value))) (0) return M (NodeRef) then
       (node_to_ref (childnode))
@@ -10961,21 +10568,17 @@ Definition merge_ext_node {ex414802_ : Z} {ex414801_ : Z}
     else
       (decode_trie_node (childnode)) >>= fun (w__1 : TrieNode) =>
       match w__1 with
-      | LeafNode leaf =>
-         (path_concat (prefix) (leaf.(LeafNodeData_path))) >>= fun (w__2 : TriePath) =>
-         (leaf_child_ref (w__2)
-            ((rlp_ref_content
-                (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (leaf.(LeafNodeData_value)))))))))))
+      | LeafNode (path, @existT _ _ len (@existT _ _ off value)) =>
+         (path_concat (prefix) (path)) >>= fun (w__2 : TriePath) =>
+         (leaf_child_ref (w__2) (value))
           : M (NodeRef)
-      | ExtensionNode ext =>
-         (path_concat (prefix) (ext.(ExtensionNodeData_path))) >>= fun (w__4 : TriePath) =>
-         (field_to_ref
-            (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (ext.(ExtensionNodeData_child))))))))) >>= fun (w__5 : NodeRef) =>
-         (extension_child_ref (w__4) (w__5))
+      | ExtensionNode (path, child) =>
+         (path_concat (prefix) (path)) >>= fun (w__4 : TriePath) =>
+         (extension_child_ref (w__4) (child))
           : M (NodeRef)
       | _ =>
-         (node_to_ref (childnode)) >>= fun (w__7 : NodeRef) =>
-         (extension_child_ref (prefix) (w__7))
+         (node_to_ref (childnode)) >>= fun (w__6 : NodeRef) =>
+         (extension_child_ref (prefix) (w__6))
           : M (NodeRef)
       end
        : M (NodeRef))
@@ -10988,20 +10591,16 @@ Definition merge_ext_ref (prefix : TriePath) (childref : NodeRef) : M (NodeRef) 
       | EmptyRef tt => returnM ((EmptyRef (tt)))
       | HashRef _ => (extension_child_ref (prefix) (childref))  : M (NodeRef)
       | InlineRef node =>
-         (inline_node_slice (node)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__1)) =>
+         (inline_node_slice (node)) >>= fun '(@existT _ _ __w__11 (@existT _ _ __w__10 w__1)) =>
          (decode_trie_node (w__1)) >>= fun (w__2 : TrieNode) =>
          match w__2 with
-         | LeafNode leaf =>
-            (path_concat (prefix) (leaf.(LeafNodeData_path))) >>= fun (w__3 : TriePath) =>
-            (leaf_child_ref (w__3)
-               ((rlp_ref_content
-                   (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (leaf.(LeafNodeData_value)))))))))))
+         | LeafNode (path, @existT _ _ __w__11 (@existT _ _ __w__10 value)) =>
+            (path_concat (prefix) (path)) >>= fun (w__3 : TriePath) =>
+            (leaf_child_ref (w__3) (value))
              : M (NodeRef)
-         | ExtensionNode ext =>
-            (path_concat (prefix) (ext.(ExtensionNodeData_path))) >>= fun (w__5 : TriePath) =>
-            (field_to_ref
-               (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (ext.(ExtensionNodeData_child))))))))) >>= fun (w__6 : NodeRef) =>
-            (extension_child_ref (w__5) (w__6))
+         | ExtensionNode (path, child) =>
+            (path_concat (prefix) (path)) >>= fun (w__5 : TriePath) =>
+            (extension_child_ref (w__5) (child))
              : M (NodeRef)
          | _ => (extension_child_ref (prefix) (childref))  : M (NodeRef)
          end
@@ -11037,7 +10636,7 @@ Definition account_update (entry : AcctEntry) (storage_root : vec (mword 8) 32) 
    (if orb ((negb (current.(Account_present)))) ((account_info_empty (current.(Account_info)))) then
       returnM (({| TrieUpdate_key := key;  TrieUpdate_change := TrieDelete (tt) |}))
     else
-      (encode_state_account (current.(Account_info)) (storage_root)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__1)) =>
+      (encode_state_account (current.(Account_info)) (storage_root)) >>= fun '(@existT _ _ __w__11 (@existT _ _ __w__10 w__1)) =>
       returnM (({| TrieUpdate_key := key;
                    TrieUpdate_change := TriePut (@existT _ _ _ (@existT _ _ _ (w__1))) |})))
     : M (TrieUpdate).
@@ -11157,7 +10756,7 @@ Definition storage_update (entry : StorageEntry) : M (TrieUpdate) :=
       returnM ((TrieDelete (tt)))
     else
       (encode_storage_value
-         (Build_word (((entry.(StorageEntry_value).(StorageValue_curr)).(word_value))))) >>= fun '(@existT _ _ _ (@existT _ _ _ w__1)) =>
+         (Build_word (((entry.(StorageEntry_value).(StorageValue_curr)).(word_value))))) >>= fun '(@existT _ _ __w__11 (@existT _ _ __w__10 w__1)) =>
       returnM ((TriePut (@existT _ _ _ (@existT _ _ _ (w__1)))))) >>= fun change =>
    returnM (({| TrieUpdate_key := key;  TrieUpdate_change := change |})).
 
@@ -11197,11 +10796,12 @@ Definition next_update_under (updates : TrieUpdateCursor) (prefix : TriePath) : 
    end
     : M (bool).
 
-Definition item_leaf {ex414815_ : Z} {ex414814_ : Z}
-(path : TriePath) (value : ByteSliceFields ex414814_ ex414815_)
-(*(0 <=? ex414814_) && (0 <=? ex414815_)*)
+Definition item_leaf {ex420419_ : Z} {ex420418_ : Z}
+(path : TriePath) (value : ByteSliceFields ex420418_ ex420419_)
+(*(0 <=? ex420418_) && (0 <=? ex420419_)*)
 : TrieItem :=
-   {| TrieItem_path := path;  TrieItem_value := LeafItem (@existT _ _ _ (@existT _ _ _ (value))) |}.
+   {| TrieItem_path := path;
+      TrieItem_value := LeafItem (@existT _ _ ex420419_ (@existT _ _ ex420418_ (value))) |}.
 
 Definition item_branch (path : TriePath) (childref : NodeRef) : TrieItem :=
    {| TrieItem_path := path;  TrieItem_value := BranchItem (childref) |}.
@@ -11225,7 +10825,7 @@ Definition item_ref (it : TrieItem) (depth : trie_path_len) (*(0 <=? depth) && (
        else
          match subref with
          | HashRef h =>
-            (node_db_lookup (h)) >>= fun '(@existT _ _ _ (@existT _ _ _ node)) =>
+            (node_db_lookup (h)) >>= fun '(@existT _ _ __node1 (@existT _ _ __node0 node)) =>
             (if Z.eqb (node.(ByteSliceFields_len)) (0) return M (NodeRef) then
                throw (InvalidBlock (WitnessDeficient))
              else (merge_ext_node (suffix) (node))  : M (NodeRef))
@@ -11695,10 +11295,10 @@ Definition emit_updates_before_child
       (Zwf_guarded _))
     : M ((TrieItemSink * TrieUpdateCursor)).
 
-Fixpoint _rec_emit_leaf_overlay {ex414876_ : Z} {ex414875_ : Z}
+Fixpoint _rec_emit_leaf_overlay {ex420480_ : Z} {ex420479_ : Z}
 (sink : TrieItemSink) (updates : TrieUpdateCursor) (prefix : TriePath) (key : TriePath)
-(value : ByteSliceFields ex414875_ ex414876_) (_reclimit : Z)
-(*(0 <=? ex414875_) && (0 <=? ex414876_)*) (_acc : Acc (Zwf 0) _reclimit)
+(value : ByteSliceFields ex420479_ ex420480_) (_reclimit : Z)
+(*(0 <=? ex420479_) && (0 <=? ex420480_)*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M ((TrieItemSink * TrieUpdateCursor)).
 exact (
    assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
@@ -11746,18 +11346,18 @@ exact (
 Defined.
 
 
-Definition emit_leaf_overlay {ex414881_ : Z} {ex414880_ : Z}
+Definition emit_leaf_overlay {ex420485_ : Z} {ex420484_ : Z}
 (sink : TrieItemSink) (updates : TrieUpdateCursor) (prefix : TriePath) (key : TriePath)
-(value : ByteSliceFields ex414880_ ex414881_) (*(0 <=? ex414880_) && (0 <=? ex414881_)*)
+(value : ByteSliceFields ex420484_ ex420485_) (*(0 <=? ex420484_) && (0 <=? ex420485_)*)
 : M ((TrieItemSink * TrieUpdateCursor)) :=
    (_rec_emit_leaf_overlay (sink) (updates) (prefix) (key) (value) (((pow2 (64))  : Z))
       (Zwf_guarded _))
     : M ((TrieItemSink * TrieUpdateCursor)).
 
-Fixpoint _rec_witness_emit {ex414886_ : Z} {ex414885_ : Z}
-(node : ByteSliceFields ex414885_ ex414886_) (prefix : TriePath) (updates : TrieUpdateCursor)
+Fixpoint _rec_witness_emit {ex420490_ : Z} {ex420489_ : Z}
+(node : ByteSliceFields ex420489_ ex420490_) (prefix : TriePath) (updates : TrieUpdateCursor)
 (sink : TrieItemSink) (cursor : trie_path_cursor) (_reclimit : Z)
-(*(0 <=? ex414885_) && (0 <=? ex414886_)*) (*(0 <=? cursor) && (cursor <=? 64)*)
+(*(0 <=? ex420489_) && (0 <=? ex420490_)*) (*(0 <=? cursor) && (cursor <=? 64)*)
 (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M ((TrieItemSink * TrieUpdateCursor)).
 exact (
@@ -11769,27 +11369,23 @@ exact (
     else
       (decode_trie_node (node)) >>= fun (w__1 : TrieNode) =>
       match w__1 with
-      | LeafNode leaf =>
-         (path_concat (prefix) (leaf.(LeafNodeData_path))) >>= fun key =>
-         (emit_leaf_overlay (sink) (updates) (prefix) (key)
-            ((rlp_ref_content
-                (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (leaf.(LeafNodeData_value)))))))))))
+      | LeafNode (path, @existT _ _ len (@existT _ _ off value)) =>
+         (path_concat (prefix) (path)) >>= fun key =>
+         (emit_leaf_overlay (sink) (updates) (prefix) (key) (value))
           : M ((TrieItemSink * TrieUpdateCursor))
-      | ExtensionNode extension =>
-         let extension_len := (path_len (extension.(ExtensionNodeData_path))).(trie_path_len_value) in
+      | ExtensionNode (path, childref) =>
+         let extension_len := (path_len (path)).(trie_path_len_value) in
          let next_cursor := Z.add (cursor) (extension_len) in
          (if orb ((Z.eqb (extension_len) (0))) ((Z.ltb (64) (next_cursor)))
             return
             M ((TrieItemSink * TrieUpdateCursor)) then
             throw (InvalidBlock (WitnessDeficient))
           else
-            (path_concat (prefix) (extension.(ExtensionNodeData_path))) >>= fun child_prefix =>
+            (path_concat (prefix) (path)) >>= fun child_prefix =>
             (emit_updates_before_child (sink) (updates) (prefix) (child_prefix)) >>= fun '((before_sink, child_updates)) =>
             (next_update_under (child_updates) (child_prefix)) >>= fun (w__4 : bool) =>
             (if w__4 return M ((TrieItemSink * TrieUpdateCursor)) then
-               (field_to_ref
-                  (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (extension.(ExtensionNodeData_child))))))))) >>= fun (w__5 : NodeRef) =>
-               (resolve_ref (w__5)) >>= fun '(@existT _ _ _ (@existT _ _ _ child)) =>
+               (resolve_ref (childref)) >>= fun '(@existT _ _ __child1 (@existT _ _ __child0 child)) =>
                (if Z.eqb (child.(ByteSliceFields_len)) (0)
                   return
                   M ((TrieItemSink * TrieUpdateCursor)) then
@@ -11802,18 +11398,13 @@ exact (
                    : M ((TrieItemSink * TrieUpdateCursor)))
                 : M ((TrieItemSink * TrieUpdateCursor))
              else
-               (field_to_ref
-                  (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (extension.(ExtensionNodeData_child))))))))) >>= fun (w__9 : NodeRef) =>
-               (trie_sink_emit (before_sink) ((item_branch (child_prefix) (w__9)))) >>= fun (w__10 : TrieItemSink) =>
-               returnM ((w__10, child_updates))) >>= fun '((child_sink, later_updates)) =>
+               (trie_sink_emit (before_sink) ((item_branch (child_prefix) (childref)))) >>= fun (w__8 : TrieItemSink) =>
+               returnM ((w__8, child_updates))) >>= fun '((child_sink, later_updates)) =>
             (emit_live_updates_under (child_sink) (later_updates) (prefix))
              : M ((TrieItemSink * TrieUpdateCursor)))
           : M ((TrieItemSink * TrieUpdateCursor))
-      | BranchNode branch =>
-         let '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ branch_value)))))) :=
-           (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (branch.(BranchNodeData_value))))))))))))) : {content_len & {content_off & {full_len & {full_off & {source_len & {source_off & (RlpFieldRefFields source_off source_len full_off full_len content_off content_len)}}}}}}%type) in
-         (if orb ((neq_int (branch_value.(RlpFieldRefFields_content_len)) (0)))
-               ((Z.leb (64) (cursor)))
+      | BranchNode (children, @existT _ _ len (@existT _ _ off value)) =>
+         (if orb ((neq_int (value.(ByteSliceFields_len)) (0))) ((Z.leb (64) (cursor)))
             return
             M ((TrieItemSink * TrieUpdateCursor)) then
             throw (InvalidBlock (WitnessDeficient))
@@ -11826,17 +11417,15 @@ exact (
             let '(loop_i_upper) := 15 in
             (foreach_ZM_up loop_i_lower loop_i_upper 1 (current_sink, nib, remaining)
               (fun i '((current_sink, nib, remaining)) =>
-                let '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ field')))))) :=
-                  (vec_access_dec (branch.(BranchNodeData_children)) (i) : {content_len & {content_off & {full_len & {full_off & {source_len & {source_off & (RlpFieldRefFields source_off source_len full_off full_len content_off content_len)}}}}}}%type) in
-                (path_single (nib)) >>= fun (w__14 : TriePath) =>
-                (path_concat (prefix) (w__14)) >>= fun child_prefix =>
-                (field_to_ref (field')) >>= fun childref =>
+                (path_single (nib)) >>= fun (w__12 : TriePath) =>
+                (path_concat (prefix) (w__12)) >>= fun child_prefix =>
+                let childref := vec_access_dec (children) (i) in
                 let present : bool := match childref with | EmptyRef tt => false | _ => true end in
-                (next_update_under (remaining) (child_prefix)) >>= fun (w__15 : bool) =>
-                (if w__15 return M ((TrieItemSink * TrieUpdateCursor)) then
+                (next_update_under (remaining) (child_prefix)) >>= fun (w__13 : bool) =>
+                (if w__13 return M ((TrieItemSink * TrieUpdateCursor)) then
                    (if present return M ((TrieItemSink * TrieUpdateCursor)) then
-                      (resolve_ref (childref)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__16)) =>
-                      (_rec_witness_emit _ _ (w__16) (child_prefix) (remaining) (current_sink)
+                      (resolve_ref (childref)) >>= fun '(@existT _ _ __w__141 (@existT _ _ __w__140 w__14)) =>
+                      (_rec_witness_emit _ _ (w__14) (child_prefix) (remaining) (current_sink)
                          (Build_trie_path_cursor ((next_cursor))) ((Z.sub (_reclimit) (1)))
                          (_limit_reduces_bool _acc ltac:(assumption)))
                        : M ((TrieItemSink * TrieUpdateCursor))
@@ -11858,7 +11447,6 @@ exact (
             : (TrieItemSink * mword 4 * TrieUpdateCursor)) =>
             returnM ((current_sink, remaining)))
           : M ((TrieItemSink * TrieUpdateCursor))
-      | InvalidNode tt => throw (InvalidBlock (WitnessDeficient))
       end
        : M ((TrieItemSink * TrieUpdateCursor)))
     : M ((TrieItemSink * TrieUpdateCursor))
@@ -11866,9 +11454,9 @@ exact (
 Defined.
 
 
-Definition witness_emit {ex414892_ : Z} {ex414891_ : Z}
-(node : ByteSliceFields ex414891_ ex414892_) (prefix : TriePath) (updates : TrieUpdateCursor)
-(sink : TrieItemSink) (cursor : trie_path_cursor) (*(0 <=? ex414891_) && (0 <=? ex414892_)*)
+Definition witness_emit {ex420496_ : Z} {ex420495_ : Z}
+(node : ByteSliceFields ex420495_ ex420496_) (prefix : TriePath) (updates : TrieUpdateCursor)
+(sink : TrieItemSink) (cursor : trie_path_cursor) (*(0 <=? ex420495_) && (0 <=? ex420496_)*)
 (*(0 <=? cursor) && (cursor <=? 64)*)
 : M ((TrieItemSink * TrieUpdateCursor)) :=
    let cursor := (cursor).(trie_path_cursor_value) in
@@ -11893,7 +11481,7 @@ Definition trie_root_cursor (base_root : vec (mword 8) 32) (updates : TrieUpdate
          (emit_live_updates_under (sink) (updates) ((path_empty (tt))))
           : M ((TrieItemSink * TrieUpdateCursor))
        else
-         (node_db_lookup (base_root)) >>= fun '(@existT _ _ _ (@existT _ _ _ node)) =>
+         (node_db_lookup (base_root)) >>= fun '(@existT _ _ __node1 (@existT _ _ __node0 node)) =>
          (if Z.eqb (node.(ByteSliceFields_len)) (0)
             return
             M ((TrieItemSink * TrieUpdateCursor)) then
@@ -12104,7 +11692,7 @@ Definition ssz_offset_table_position (index : ssz_offset_index)
 
 Definition ssz_list_cursor {maximum : Z} (items : BoundedSszListRef maximum) (*0 <=? maximum*)
 : M (BoundedSszListCursor maximum) :=
-   let '(@existT _ _ _ (@existT _ _ _ bytes)) :=
+   let '(@existT _ _ bytes__'len (@existT _ _ bytes__'off bytes)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (items.(BoundedSszListRef_bytes))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    (if neq_int (items.(BoundedSszListRef_count)) (0) return M (Z) then
       ((ssz_u32 (bytes) (0)) >>= fun semanticResult => returnM (semanticResult).(ssz_offset_value)) >>= fun (w__0 : Z) =>
@@ -12129,7 +11717,7 @@ Definition ssz_list_pop {maximum : Z} (cursor : BoundedSszListCursor maximum)
     else returnM (tt)) >>
    let next_index : Z := Z.add (index) (1) in
    let items := cursor.(BoundedSszListCursor_items) in
-   let '(@existT _ _ _ (@existT _ _ _ bytes)) :=
+   let '(@existT _ _ bytes__'len (@existT _ _ bytes__'off bytes)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (items.(BoundedSszListRef_bytes))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    let nat := bytes.(ByteSliceFields_len) in
    (if Z.ltb (next_index) (items.(BoundedSszListRef_count)) return M (Z) then
@@ -12166,7 +11754,7 @@ Definition ssz_list_pop {maximum : Z} (cursor : BoundedSszListCursor maximum)
 Definition ssz_list_at {maximum : Z} (items : BoundedSszListRef maximum) (index : Z)
 (*(0 <=? maximum) && ((maximum <=? (2 ^ 30 - 1)) && (0 <=? index))*)
 : M (ByteSlice) :=
-   let '(@existT _ _ _ (@existT _ _ _ bytes)) :=
+   let '(@existT _ _ bytes__'len (@existT _ _ bytes__'off bytes)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (items.(BoundedSszListRef_bytes))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    let count := items.(BoundedSszListRef_count) in
    (if Z.leb (count) (index) return M (unit) then throw (InvalidBlock (InvalidConfig))
@@ -12199,7 +11787,7 @@ Definition ssz_list_at {maximum : Z} (items : BoundedSszListRef maximum) (index 
             M (unit) then
             throw (InvalidBlock (InvalidConfig))
           else returnM (tt)) >>
-         returnM (@existT _ _ _ (@existT _ _ _ (sub_slice (bytes) (start) (item_length))))
+         returnM ((@existT _ _ _ (@existT _ _ _ (sub_slice (bytes) (start) (item_length)))) : {len & {off & (ByteSliceFields off len)}}%type)
        else throw (InvalidBlock (InvalidConfig)))
        : M ({len & {off & (ByteSliceFields off len)}}%type)
     else throw (InvalidBlock (InvalidConfig)))
@@ -12209,7 +11797,7 @@ Definition ssz_fixed_list_at {maximum : Z}
 (items : BoundedSszListRef maximum) (index : Z) (item_size : Z)
 (*(0 <=? maximum) && ((0 <=? item_size) && (0 <=? index))*)
 : M (ByteSliceLength item_size) :=
-   let '(@existT _ _ _ (@existT _ _ _ bytes)) :=
+   let '(@existT _ _ bytes__'len (@existT _ _ bytes__'off bytes)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (items.(BoundedSszListRef_bytes))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    (if Z.leb (items.(BoundedSszListRef_count)) (index) return M (unit) then
       throw (InvalidBlock (InvalidConfig))
@@ -12218,14 +11806,14 @@ Definition ssz_fixed_list_at {maximum : Z}
    let offset_value := Z.mul (index) (width_value) in
    let items_length := bytes.(ByteSliceFields_len) in
    (if Z.leb ((Z.add (offset_value) (width_value))) (items_length) then
-      returnM (@existT _ _ _ (@existT _ _ _ (sub_slice (bytes) (offset_value) (width_value))))
+      returnM ((@existT _ _ _ (@existT _ _ _ (sub_slice (bytes) (offset_value) (width_value)))) : {len & {off & (ByteSliceFields off len)}}%type)
     else throw (InvalidBlock (InvalidConfig)))
     : M ({len & {off & (ByteSliceFields off len)}}%type).
 
 Definition ssz_fixed_list_pop {maximum : Z} (items : BoundedSszListRef maximum) (item_size : Z)
 (*(0 <=? maximum) && (0 <=? item_size)*)
 : M ((ByteSliceLength item_size * BoundedSszListRef maximum)) :=
-   let '(@existT _ _ _ (@existT _ _ _ bytes)) :=
+   let '(@existT _ _ bytes__'len (@existT _ _ bytes__'off bytes)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (items.(BoundedSszListRef_bytes))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    let items_length := bytes.(ByteSliceFields_len) in
    let width := item_size in
@@ -12241,20 +11829,21 @@ Definition ssz_fixed_list_pop {maximum : Z} (items : BoundedSszListRef maximum) 
         BoundedSszListRef_max_item_length := items.(BoundedSszListRef_max_item_length) |} in
    returnM ((@existT _ _ _ (@existT _ _ _ (item)), rest)).
 
-Definition ssz_container_bytes {ex414979_ : Z} {ex414978_ : Z}
-(bytes : ByteSliceFields ex414978_ ex414979_) (minimum : Z) (*0 <=? minimum*)
-(*(0 <=? ex414978_) && (0 <=? ex414979_)*)
+Definition ssz_container_bytes {ex420583_ : Z} {ex420582_ : Z}
+(bytes : ByteSliceFields ex420582_ ex420583_) (minimum : Z) (*0 <=? minimum*)
+(*(0 <=? ex420582_) && (0 <=? ex420583_)*)
 : M (ByteSliceAtLeast minimum) :=
    let fields := bytes in
-   (if Z.leb (minimum) ex414979_ then returnM (@existT _ _ _ (@existT _ _ _ (fields)))
+   (if Z.leb (minimum) ex420583_ then
+      returnM ((@existT _ _ ex420583_ (@existT _ _ ex420582_ (fields))) : {len & {off & (ByteSliceFields off len)}}%type)
     else throw (InvalidBlock (InvalidConfig)))
     : M ({len & {off & (ByteSliceFields off len)}}%type).
 
-Definition ssz_container_cursor {ex414984_ : Z} {ex414983_ : Z}
-(bytes : ByteSliceFields ex414983_ ex414984_) (fixed_length : Z) (*0 <=? fixed_length*)
-(*(0 <=? ex414983_) && (0 <=? ex414984_) && ((0 <=? fixed_length) && (fixed_length <=? ex414984_))*)
+Definition ssz_container_cursor {ex420588_ : Z} {ex420587_ : Z}
+(bytes : ByteSliceFields ex420587_ ex420588_) (fixed_length : Z) (*0 <=? fixed_length*)
+(*(0 <=? ex420587_) && (0 <=? ex420588_) && ((0 <=? fixed_length) && (fixed_length <=? ex420588_))*)
 : SszContainerCursor :=
-   {| SszContainerCursor_bytes := @existT _ _ _ (@existT _ _ _ (bytes));
+   {| SszContainerCursor_bytes := @existT _ _ ex420588_ (@existT _ _ ex420587_ (bytes));
       SszContainerCursor_current := fixed_length |}.
 
 Definition ssz_take (cursor : SszContainerCursor) (stop : ssz_offset)
@@ -12262,7 +11851,7 @@ Definition ssz_take (cursor : SszContainerCursor) (stop : ssz_offset)
 : M ((ByteSlice * SszContainerCursor)) :=
    let stop := (stop).(ssz_offset_value) in
    let current_value := cursor.(SszContainerCursor_current) in
-   let '(@existT _ _ _ (@existT _ _ _ bytes)) :=
+   let '(@existT _ _ bytes__'len (@existT _ _ bytes__'off bytes)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (cursor.(SszContainerCursor_bytes))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    let container_length := bytes.(ByteSliceFields_len) in
    (if andb ((Z.leb (current_value) (stop))) ((Z.leb (stop) (container_length))) then
@@ -12277,18 +11866,18 @@ Definition ssz_take (cursor : SszContainerCursor) (stop : ssz_offset)
 
 Definition ssz_finish (cursor : SszContainerCursor) : M (ByteSlice) :=
    let current_value := cursor.(SszContainerCursor_current) in
-   let '(@existT _ _ _ (@existT _ _ _ bytes)) :=
+   let '(@existT _ _ bytes__'len (@existT _ _ bytes__'off bytes)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (cursor.(SszContainerCursor_bytes))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    let container_length := bytes.(ByteSliceFields_len) in
    (if Z.leb (current_value) (container_length) then
       let remaining := Z.sub (container_length) (current_value) in
-      returnM (@existT _ _ _ (@existT _ _ _ (sub_slice (bytes) (current_value) (remaining))))
+      returnM ((@existT _ _ _ (@existT _ _ _ (sub_slice (bytes) (current_value) (remaining)))) : {len & {off & (ByteSliceFields off len)}}%type)
     else throw (InvalidBlock (InvalidConfig)))
     : M ({len & {off & (ByteSliceFields off len)}}%type).
 
-Definition ssz_bounded_variable_list_ref {ex414996_ : Z} {ex414995_ : Z}
-(bytes : ByteSliceFields ex414995_ ex414996_) (maximum_count : Z) (maximum_item_length : Z)
-(*(0 <=? maximum_count) && (0 <=? maximum_item_length)*) (*(0 <=? ex414995_) && (0 <=? ex414996_)*)
+Definition ssz_bounded_variable_list_ref {ex420600_ : Z} {ex420599_ : Z}
+(bytes : ByteSliceFields ex420599_ ex420600_) (maximum_count : Z) (maximum_item_length : Z)
+(*(0 <=? maximum_count) && (0 <=? maximum_item_length)*) (*(0 <=? ex420599_) && (0 <=? ex420600_)*)
 : M (BoundedSszListRef maximum_count) :=
    let span := bytes.(ByteSliceFields_len) in
    (if Z.eqb (span) (0) then returnM (0)
@@ -12307,13 +11896,13 @@ Definition ssz_bounded_variable_list_ref {ex414996_ : Z} {ex414995_ : Z}
    (if Z.ltb (maximum_count) (raw_count) return M (unit) then throw (InvalidBlock (InvalidConfig))
     else returnM (tt)) >>
    let count : Z := raw_count in
-   returnM (({| BoundedSszListRef_bytes := @existT _ _ _ (@existT _ _ _ (bytes));
+   returnM (({| BoundedSszListRef_bytes := @existT _ _ ex420600_ (@existT _ _ ex420599_ (bytes));
                 BoundedSszListRef_count := count;
                 BoundedSszListRef_max_item_length := maximum_item_length |})).
 
-Definition ssz_bounded_fixed_list_ref {ex415011_ : Z} {ex415010_ : Z}
-(bytes : ByteSliceFields ex415010_ ex415011_) (item_size : Z) (maximum_count : Z)
-(*(0 <=? maximum_count) && (0 <=? item_size)*) (*(0 <=? ex415010_) && (0 <=? ex415011_)*)
+Definition ssz_bounded_fixed_list_ref {ex420615_ : Z} {ex420614_ : Z}
+(bytes : ByteSliceFields ex420614_ ex420615_) (item_size : Z) (maximum_count : Z)
+(*(0 <=? maximum_count) && (0 <=? item_size)*) (*(0 <=? ex420614_) && (0 <=? ex420615_)*)
 : M (BoundedSszListRef maximum_count) :=
    let width := item_size in
    (if Z.eqb (width) (0) return M (unit) then throw (InvalidBlock (InvalidConfig))
@@ -12326,12 +11915,12 @@ Definition ssz_bounded_fixed_list_ref {ex415011_ : Z} {ex415010_ : Z}
    (if Z.ltb (maximum_count) (raw_count) return M (unit) then throw (InvalidBlock (InvalidConfig))
     else returnM (tt)) >>
    let count : Z := raw_count in
-   returnM (({| BoundedSszListRef_bytes := @existT _ _ _ (@existT _ _ _ (bytes));
+   returnM (({| BoundedSszListRef_bytes := @existT _ _ ex420615_ (@existT _ _ ex420614_ (bytes));
                 BoundedSszListRef_count := count;
                 BoundedSszListRef_max_item_length := item_size |})).
 
-Definition decode_stateless_input_ref {ex415019_ : Z} {ex415018_ : Z}
-(input : ByteSliceFields ex415018_ ex415019_) (*(0 <=? ex415018_) && (0 <=? ex415019_)*)
+Definition decode_stateless_input_ref {ex420623_ : Z} {ex420622_ : Z}
+(input : ByteSliceFields ex420622_ ex420623_) (*(0 <=? ex420622_) && (0 <=? ex420623_)*)
 : M (StatelessInputRef) :=
    let input_fields := input in
    let input_length := input_fields.(ByteSliceFields_len) in
@@ -12345,7 +11934,7 @@ Definition decode_stateless_input_ref {ex415019_ : Z} {ex415018_ : Z}
    (slice_byte (input_fields) (0)) >>= fun (w__1 : mword 8) =>
    (protocol_profile (w__1)) >>= fun protocol =>
    let body_bytes := slice_suffix (input_fields) (body_offset_value) in
-   (ssz_container_bytes (body_bytes) (STATELESS_INPUT_BODY_FIXED_LENGTH)) >>= fun '(@existT _ _ _ (@existT _ _ _ body)) =>
+   (ssz_container_bytes (body_bytes) (STATELESS_INPUT_BODY_FIXED_LENGTH)) >>= fun '(@existT _ _ __body1 (@existT _ _ __body0 body)) =>
    let container_start : Z := 0 in
    ((ssz_u32 (body) ((ssz_field_offset (container_start) (IN_NPR_OFF)))) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_offset_value)) >>= fun new_payload_request_offset =>
@@ -12360,12 +11949,12 @@ Definition decode_stateless_input_ref {ex415019_ : Z} {ex415018_ : Z}
       throw (InvalidBlock (InvalidConfig))
     else returnM (tt)) >>
    let body_cursor := ssz_container_cursor (body) (STATELESS_INPUT_BODY_FIXED_LENGTH) in
-   (ssz_take (body_cursor) (Build_ssz_offset ((witness_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off new_payload_request_bytes), body_after_payload_request)) =>
-   (ssz_container_bytes (new_payload_request_bytes) (NEW_PAYLOAD_REQUEST_FIXED_LENGTH)) >>= fun '(@existT _ _ _ (@existT _ _ _ new_payload_request)) =>
-   (ssz_take (body_after_payload_request) (Build_ssz_offset ((chain_config_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off execution_witness_bytes), body_after_witness)) =>
-   (ssz_container_bytes (execution_witness_bytes) (EXECUTION_WITNESS_FIXED_LENGTH)) >>= fun '(@existT _ _ _ (@existT _ _ _ execution_witness)) =>
-   (ssz_take (body_after_witness) (Build_ssz_offset ((public_keys_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off chain_config), body_after_chain_config)) =>
-   (ssz_finish (body_after_chain_config)) >>= fun '(@existT _ _ _ (@existT _ _ _ public_keys)) =>
+   (ssz_take (body_cursor) (Build_ssz_offset ((witness_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 new_payload_request_bytes), body_after_payload_request)) =>
+   (ssz_container_bytes (new_payload_request_bytes) (NEW_PAYLOAD_REQUEST_FIXED_LENGTH)) >>= fun '(@existT _ _ __body1 (@existT _ _ __body0 new_payload_request)) =>
+   (ssz_take (body_after_payload_request) (Build_ssz_offset ((chain_config_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 execution_witness_bytes), body_after_witness)) =>
+   (ssz_container_bytes (execution_witness_bytes) (EXECUTION_WITNESS_FIXED_LENGTH)) >>= fun '(@existT _ _ __body1 (@existT _ _ __body0 execution_witness)) =>
+   (ssz_take (body_after_witness) (Build_ssz_offset ((public_keys_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 chain_config), body_after_chain_config)) =>
+   (ssz_finish (body_after_chain_config)) >>= fun '(@existT _ _ __body1 (@existT _ _ __body0 public_keys)) =>
    let npr_start : Z := 0 in
    ((ssz_u32 (new_payload_request) ((ssz_field_offset (npr_start) (NPR_PAYLOAD_OFF)))) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_offset_value)) >>= fun payload_offset =>
@@ -12378,11 +11967,11 @@ Definition decode_stateless_input_ref {ex415019_ : Z} {ex415018_ : Z}
       throw (InvalidBlock (InvalidConfig))
     else returnM (tt)) >>
    let npr_cursor := ssz_container_cursor (new_payload_request) (NEW_PAYLOAD_REQUEST_FIXED_LENGTH) in
-   (ssz_take (npr_cursor) (Build_ssz_offset ((versioned_hashes_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off execution_payload_bytes), npr_after_payload)) =>
-   (ssz_take (npr_after_payload) (Build_ssz_offset ((requests_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off versioned_hashes), npr_after_versioned_hashes)) =>
-   (ssz_finish (npr_after_versioned_hashes)) >>= fun '(@existT _ _ _ (@existT _ _ _ execution_requests_bytes)) =>
-   (ssz_container_bytes (execution_requests_bytes) (EXECUTION_REQUESTS_FIXED_LENGTH)) >>= fun '(@existT _ _ _ (@existT _ _ _ execution_requests)) =>
-   (ssz_container_bytes (execution_payload_bytes) (EXECUTION_PAYLOAD_FIXED_LENGTH)) >>= fun '(@existT _ _ _ (@existT _ _ _ execution_payload)) =>
+   (ssz_take (npr_cursor) (Build_ssz_offset ((versioned_hashes_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 execution_payload_bytes), npr_after_payload)) =>
+   (ssz_take (npr_after_payload) (Build_ssz_offset ((requests_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 versioned_hashes), npr_after_versioned_hashes)) =>
+   (ssz_finish (npr_after_versioned_hashes)) >>= fun '(@existT _ _ __body1 (@existT _ _ __body0 execution_requests_bytes)) =>
+   (ssz_container_bytes (execution_requests_bytes) (EXECUTION_REQUESTS_FIXED_LENGTH)) >>= fun '(@existT _ _ __body1 (@existT _ _ __body0 execution_requests)) =>
+   (ssz_container_bytes (execution_payload_bytes) (EXECUTION_PAYLOAD_FIXED_LENGTH)) >>= fun '(@existT _ _ __body1 (@existT _ _ __body0 execution_payload)) =>
    let payload_start : Z := 0 in
    ((ssz_u32 (execution_payload) ((ssz_field_offset (payload_start) (PL_EXTRA_OFF)))) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_offset_value)) >>= fun extra_data_offset =>
@@ -12397,13 +11986,13 @@ Definition decode_stateless_input_ref {ex415019_ : Z} {ex415018_ : Z}
       throw (InvalidBlock (InvalidConfig))
     else returnM (tt)) >>
    let payload_cursor := ssz_container_cursor (execution_payload) (EXECUTION_PAYLOAD_FIXED_LENGTH) in
-   (ssz_take (payload_cursor) (Build_ssz_offset ((transactions_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off extra_data), payload_after_extra_data)) =>
-   (ssz_take (payload_after_extra_data) (Build_ssz_offset ((withdrawals_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off transaction_bytes), payload_after_transactions)) =>
+   (ssz_take (payload_cursor) (Build_ssz_offset ((transactions_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 extra_data), payload_after_extra_data)) =>
+   (ssz_take (payload_after_extra_data) (Build_ssz_offset ((withdrawals_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 transaction_bytes), payload_after_transactions)) =>
    (ssz_bounded_variable_list_ref (transaction_bytes) (MAX_TRANSACTIONS_PER_PAYLOAD)
       (MAX_TRANSACTION_LENGTH)) >>= fun transactions =>
-   (ssz_take (payload_after_transactions) (Build_ssz_offset ((block_access_list_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off withdrawal_bytes), payload_after_withdrawals)) =>
+   (ssz_take (payload_after_transactions) (Build_ssz_offset ((block_access_list_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 withdrawal_bytes), payload_after_withdrawals)) =>
    (ssz_bounded_fixed_list_ref (withdrawal_bytes) (WD_SIZE) (MAX_WITHDRAWALS_PER_PAYLOAD)) >>= fun withdrawals =>
-   (ssz_finish (payload_after_withdrawals)) >>= fun '(@existT _ _ _ (@existT _ _ _ block_access_list)) =>
+   (ssz_finish (payload_after_withdrawals)) >>= fun '(@existT _ _ __body1 (@existT _ _ __body0 block_access_list)) =>
    (if Z.ltb (MAX_EXTRA_DATA_LENGTH) (extra_data.(ByteSliceFields_len)) return M (unit) then
       throw (InvalidBlock (InvalidConfig))
     else returnM (tt)) >>
@@ -12429,11 +12018,11 @@ Definition decode_stateless_input_ref {ex415019_ : Z} {ex415018_ : Z}
     else returnM (tt)) >>
    let requests_cursor :=
      ssz_container_cursor (execution_requests) (EXECUTION_REQUESTS_FIXED_LENGTH) in
-   (ssz_take (requests_cursor) (Build_ssz_offset ((withdrawal_requests_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off deposits), requests_after_deposits)) =>
-   (ssz_take (requests_after_deposits) (Build_ssz_offset ((consolidation_requests_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off withdrawal_requests), requests_after_withdrawals)) =>
-   (ssz_take (requests_after_withdrawals) (Build_ssz_offset ((builder_deposit_requests_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off consolidation_requests), requests_after_consolidations)) =>
-   (ssz_take (requests_after_consolidations) (Build_ssz_offset ((builder_exit_requests_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off builder_deposit_requests), requests_after_builder_deposits)) =>
-   (ssz_finish (requests_after_builder_deposits)) >>= fun '(@existT _ _ _ (@existT _ _ _ builder_exit_requests)) =>
+   (ssz_take (requests_cursor) (Build_ssz_offset ((withdrawal_requests_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 deposits), requests_after_deposits)) =>
+   (ssz_take (requests_after_deposits) (Build_ssz_offset ((consolidation_requests_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 withdrawal_requests), requests_after_withdrawals)) =>
+   (ssz_take (requests_after_withdrawals) (Build_ssz_offset ((builder_deposit_requests_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 consolidation_requests), requests_after_consolidations)) =>
+   (ssz_take (requests_after_consolidations) (Build_ssz_offset ((builder_exit_requests_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 builder_deposit_requests), requests_after_builder_deposits)) =>
+   (ssz_finish (requests_after_builder_deposits)) >>= fun '(@existT _ _ __body1 (@existT _ _ __body0 builder_exit_requests)) =>
    let witness_start : Z := 0 in
    ((ssz_u32 (execution_witness) ((ssz_field_offset (witness_start) (WIT_STATE_OFF)))) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_offset_value)) >>= fun witness_state_offset =>
@@ -12446,12 +12035,12 @@ Definition decode_stateless_input_ref {ex415019_ : Z} {ex415018_ : Z}
       throw (InvalidBlock (InvalidConfig))
     else returnM (tt)) >>
    let witness_cursor := ssz_container_cursor (execution_witness) (EXECUTION_WITNESS_FIXED_LENGTH) in
-   (ssz_take (witness_cursor) (Build_ssz_offset ((witness_codes_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off witness_state_bytes), witness_after_state)) =>
+   (ssz_take (witness_cursor) (Build_ssz_offset ((witness_codes_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 witness_state_bytes), witness_after_state)) =>
    (ssz_bounded_variable_list_ref (witness_state_bytes) (MAX_WITNESS_NODES)
       (MAX_WITNESS_NODE_LENGTH)) >>= fun witness_state =>
-   (ssz_take (witness_after_state) (Build_ssz_offset ((witness_headers_offset)))) >>= fun '((@existT _ _ len (@existT _ _ off witness_code_bytes), witness_after_codes)) =>
+   (ssz_take (witness_after_state) (Build_ssz_offset ((witness_headers_offset)))) >>= fun '((@existT _ _ __body1 (@existT _ _ __body0 witness_code_bytes), witness_after_codes)) =>
    (ssz_bounded_variable_list_ref (witness_code_bytes) (MAX_WITNESS_CODES) (MAX_WITNESS_CODE_LENGTH)) >>= fun witness_codes =>
-   (ssz_finish (witness_after_codes)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__2)) =>
+   (ssz_finish (witness_after_codes)) >>= fun '(@existT _ _ __body1 (@existT _ _ __body0 w__2)) =>
    (ssz_bounded_variable_list_ref (w__2) (MAX_WITNESS_HEADERS) (MAX_WITNESS_HEADER_LENGTH)) >>= fun witness_headers =>
    let public_key_bytes := public_keys.(ByteSliceFields_len) in
    let public_key_length := PUBLIC_KEY_LENGTH in
@@ -12503,13 +12092,13 @@ Definition decode_stateless_input_ref {ex415019_ : Z} {ex415018_ : Z}
                 StatelessInputRef_chain_config := @existT _ _ _ (@existT _ _ _ (chain_config));
                 StatelessInputRef_public_keys := @existT _ _ _ (@existT _ _ _ (public_keys)) |})).
 
-Definition sha256_request_digest {ex415023_ : Z} {ex415022_ : Z}
-(request_type : mword 8) (s : ByteSliceFields ex415022_ ex415023_)
-(*(0 <=? ex415022_) && (0 <=? ex415023_)*)
+Definition sha256_request_digest {ex420627_ : Z} {ex420626_ : Z}
+(request_type : mword 8) (s : ByteSliceFields ex420626_ ex420627_)
+(*(0 <=? ex420626_) && (0 <=? ex420627_)*)
 : M (hash) :=
    (sha256_segments
       ([bytes_list ([request_type]) (1);
-      BytesSlice (@existT _ _ _ (@existT _ _ _ (s)))]))
+      BytesSlice (@existT _ _ ex420627_ (@existT _ _ ex420626_ (s)))]))
     : M (vec (mword 8) 32).
 
 Fixpoint _rec_index_witness_nodes_cursor (cursor : BoundedSszListCursor (2 ^ 22)) (_reclimit : Z)
@@ -12554,7 +12143,8 @@ exact (
       (if Z.ltb (MAX_WITNESS_CODE_LENGTH) (code_length) return M (unit) then
          throw (InvalidBlock (InvalidConfig))
        else returnM (tt)) >>
-      let executable := code_slice (code) in
+      let '(@existT _ _ executable__'syn_len (@existT _ _ executable__'syn_off executable)) :=
+        (code_slice (code) : {syn_len & {syn_off & (ByteSliceFields syn_off syn_len)}}%type) in
       read_reg k_fork >>= fun (w__0 : Fork) =>
       (code_db_insert (executable) (w__0)) >>= fun '(_) =>
       (_rec_index_witness_codes_cursor (next) ((Z.sub (_reclimit) (1)))
@@ -12620,20 +12210,17 @@ Definition next_parent_header_field (index : parent_header_field_cursor)
    (Build_parent_header_field_cursor (if Z.ltb (index) (19) then Z.add (index) (1)
    else 19)).
 
-Fixpoint _rec_decode_parent_header_fields {ex415039_ : Z} {ex415038_ : Z} {ex415037_ : Z}
-{ex415036_ : Z}
-(cursor : RlpCursorFields ex415036_ ex415037_ ex415038_ ex415039_)
-(field_index : parent_header_field_cursor) (fields : ParentHeaderFields) (_reclimit : Z)
-(*(0 <=? ex415036_) && (0 <=? ex415037_) &&
-  ((0 <=? ex415038_) && ((ex415038_ <=? ex415039_) && (ex415039_ <=? ex415037_)))*)
+Fixpoint _rec_decode_parent_header_fields {source_off : Z} {source_len : Z}
+(cursor : ByteSliceFields source_off source_len) (field_index : parent_header_field_cursor)
+(fields : ParentHeaderFields) (_reclimit : Z) (*(0 <=? source_off) && (0 <=? source_len)*)
 (*(0 <=? field_index) && (field_index <=? 19)*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (ParentHeaderFields).
 exact (
    let field_index := (field_index).(parent_header_field_cursor_value) in
    assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if rlp_cursor_empty (cursor) then returnM (fields)
+   (if Z.eqb source_len (0) then returnM (fields)
     else
-      (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (field', next))))) =>
+      (rlp_cursor_pop (cursor)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (field', next))) =>
       let decoded := fields in
       (if Z.eqb (field_index) (0) return M (ParentHeaderFields) then
          ((rlp_ref_word (field')) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
@@ -12661,25 +12248,27 @@ exact (
            {[ decoded with ParentHeaderFields_have_base_fee := true ]} in
          returnM (decoded)
        else if Z.eqb (field_index) (17) return M (ParentHeaderFields) then
-         ((rlp_ref_blob_gas_used (field')) >>= fun semanticResult =>
-          returnM (semanticResult).(blob_gas_used_value)) >>= fun (w__3 : Z) =>
-         let decoded :=
-           {[ decoded with ParentHeaderFields_blob_gas_used := (Build_blob_gas_used_typ (w__3)) ]}
-            : ParentHeaderFields in
-         let decoded : ParentHeaderFields :=
-           {[ decoded with ParentHeaderFields_have_blob_gas := true ]} in
-         returnM (decoded)
+         ((rlp_ref_uint64 (field')) >>= fun semanticResult =>
+          returnM (semanticResult).(ssz_uint_value)) >>= fun value =>
+         (if Z.leb (value) ((Z.mul (21) ((pow2 (17))))) then
+            let decoded : ParentHeaderFields :=
+              {[ decoded with ParentHeaderFields_blob_gas_used := (Build_blob_gas_used_typ (value)) ]} in
+            let decoded : ParentHeaderFields :=
+              {[ decoded with ParentHeaderFields_have_blob_gas := true ]} in
+            returnM (decoded)
+          else throw (InvalidBlock (RlpDecode)))
+          : M (ParentHeaderFields)
        else if Z.eqb (field_index) (18) return M (ParentHeaderFields) then
-         ((rlp_ref_excess_blob_gas (field')) >>= fun semanticResult =>
-          returnM (semanticResult).(excess_blob_gas_value)) >>= fun (w__4 : Z) =>
+         ((rlp_ref_uint64 (field')) >>= fun semanticResult =>
+          returnM (semanticResult).(ssz_uint_value)) >>= fun (w__3 : Z) =>
          let decoded :=
-           {[ decoded with ParentHeaderFields_excess_blob_gas := (Build_excess_blob_gas_typ (w__4)) ]}
+           {[ decoded with ParentHeaderFields_excess_blob_gas := (Build_excess_blob_gas_typ (w__3)) ]}
             : ParentHeaderFields in
          let decoded : ParentHeaderFields :=
            {[ decoded with ParentHeaderFields_have_excess_blob_gas := true ]} in
          returnM (decoded)
        else returnM (decoded)) >>= fun (decoded : ParentHeaderFields) =>
-      (_rec_decode_parent_header_fields _ _ _ _ (next)
+      (_rec_decode_parent_header_fields _ _ (next)
          (Build_parent_header_field_cursor ((((next_parent_header_field
                                                  (Build_parent_header_field_cursor ((field_index)))).(parent_header_field_cursor_value)))))
          (decoded) ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
@@ -12689,19 +12278,14 @@ exact (
 Defined.
 
 
-Definition decode_parent_header_fields {ex415049_ : Z} {ex415048_ : Z} {ex415047_ : Z}
-{ex415046_ : Z}
-(cursor : RlpCursorFields ex415046_ ex415047_ ex415048_ ex415049_)
-(field_index : parent_header_field_cursor) (fields : ParentHeaderFields)
-(*(0 <=? ex415046_) && (0 <=? ex415047_) &&
-  ((0 <=? ex415048_) && ((ex415048_ <=? ex415049_) && (ex415049_ <=? ex415047_)))*)
+Definition decode_parent_header_fields {source_off : Z} {source_len : Z}
+(cursor : ByteSliceFields source_off source_len) (field_index : parent_header_field_cursor)
+(fields : ParentHeaderFields) (*(0 <=? source_off) && (0 <=? source_len)*)
 (*(0 <=? field_index) && (field_index <=? 19)*)
 : M (ParentHeaderFields) :=
    let field_index := (field_index).(parent_header_field_cursor_value) in
-   let stop := cursor.(RlpCursorFields_stop) in
-   let current := cursor.(RlpCursorFields_current) in
    (_rec_decode_parent_header_fields (cursor) (Build_parent_header_field_cursor ((field_index)))
-      (fields) (((Z.sub ex415049_ ex415048_)  : Z)) (Zwf_guarded _))
+      (fields) ((cursor.(ByteSliceFields_len)  : Z)) (Zwf_guarded _))
     : M (ParentHeaderFields).
 
 Fixpoint _rec_index_witness_header_cursor (state : WitnessHeaderIndex) (_reclimit : Z)
@@ -12719,59 +12303,52 @@ exact (
       let result := state in
       let result : WitnessHeaderIndex := {[ result with WitnessHeaderIndex_cursor := next ]} in
       (if orb ((neq_int (index) (0))) (is_last) return M (WitnessHeaderIndex) then
-         (rlp_node_cursor (header)) >>= fun '(@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ fields)))) =>
-         (if fields.(RlpCursorFields_valid) return M (WitnessHeaderIndex) then
-            (decode_parent_header_fields (fields) (Build_parent_header_field_cursor ((0)))
-               (EMPTY_PARENT_HEADER_FIELDS)) >>= fun decoded =>
+         (rlp_node_cursor (header)) >>= fun '(@existT _ _ __fields1 (@existT _ _ __fields0 fields)) =>
+         (decode_parent_header_fields (fields) (Build_parent_header_field_cursor ((0)))
+            (EMPTY_PARENT_HEADER_FIELDS)) >>= fun decoded =>
+         let result : WitnessHeaderIndex :=
+           if andb ((neq_int (index) (0)))
+                ((orb ((negb (decoded.(ParentHeaderFields_have_parent))))
+                    ((generic_neq (decoded.(ParentHeaderFields_parent_hash))
+                        (state.(WitnessHeaderIndex_previous_hash)))))) then
+             {[ result with WitnessHeaderIndex_valid := false ]}
+           else result in
+         (if is_last return M (WitnessHeaderIndex) then
             let result : WitnessHeaderIndex :=
-              if andb ((neq_int (index) (0)))
-                   ((orb ((negb (decoded.(ParentHeaderFields_have_parent))))
-                       ((generic_neq (decoded.(ParentHeaderFields_parent_hash))
-                           (state.(WitnessHeaderIndex_previous_hash)))))) then
-                {[ result with WitnessHeaderIndex_valid := false ]}
-              else result in
-            (if is_last return M (WitnessHeaderIndex) then
-               let result : WitnessHeaderIndex :=
-                 {[ result with
-                   WitnessHeaderIndex_parent_state_root := decoded.(ParentHeaderFields_state_root) ]} in
-               let result : WitnessHeaderIndex :=
-                 {[ result with
-                   WitnessHeaderIndex_parent_base_fee_per_gas :=
-                     (Build_word ((decoded.(ParentHeaderFields_base_fee)).(word_value))) ]} in
-               let result : WitnessHeaderIndex :=
-                 {[ result with
-                   WitnessHeaderIndex_parent_blob_gas_used :=
-                     (Build_blob_gas_used_typ ((decoded.(ParentHeaderFields_blob_gas_used)).(blob_gas_used_value))) ]} in
-               let result : WitnessHeaderIndex :=
-                 {[ result with
-                   WitnessHeaderIndex_parent_excess_blob_gas :=
-                     (Build_excess_blob_gas_typ ((decoded.(ParentHeaderFields_excess_blob_gas)).(excess_blob_gas_value))) ]} in
-               (and_boolM (returnM ((decoded.(ParentHeaderFields_have_state)  : bool)))
-                  ((and_boolM
-                      ((or_boolM
-                          (read_reg k_fork >>= fun (w__0 : Fork) =>
-                           returnM (((fork_lt (w__0) (Cancun))  : bool)))
-                          (returnM ((decoded.(ParentHeaderFields_have_base_fee)  : bool))))
-                       : M (bool))
-                      ((or_boolM
-                          (read_reg k_fork >>= fun (w__2 : Fork) =>
-                           returnM (((fork_lt (w__2) (Cancun))  : bool)))
-                          (returnM (((Bool.eqb (decoded.(ParentHeaderFields_have_blob_gas))
-                                        (decoded.(ParentHeaderFields_have_excess_blob_gas)))
-                            : bool))))
-                       : M (bool)))
-                   : M (bool))) >>= fun (w__5 : bool) =>
-               let result :=
-                 {[ result with WitnessHeaderIndex_parent_fields_valid := w__5 ]}
-                  : WitnessHeaderIndex in
-               returnM (result)
-             else returnM (result))
-             : M (WitnessHeaderIndex)
-          else
+              {[ result with
+                WitnessHeaderIndex_parent_state_root := decoded.(ParentHeaderFields_state_root) ]} in
             let result : WitnessHeaderIndex :=
-              if neq_int (index) (0) then {[ result with WitnessHeaderIndex_valid := false ]}
-              else result in
-            returnM (result))
+              {[ result with
+                WitnessHeaderIndex_parent_base_fee_per_gas :=
+                  (Build_word ((decoded.(ParentHeaderFields_base_fee)).(word_value))) ]} in
+            let result : WitnessHeaderIndex :=
+              {[ result with
+                WitnessHeaderIndex_parent_blob_gas_used :=
+                  (Build_blob_gas_used_typ ((decoded.(ParentHeaderFields_blob_gas_used)).(blob_gas_used_value))) ]} in
+            let result : WitnessHeaderIndex :=
+              {[ result with
+                WitnessHeaderIndex_parent_excess_blob_gas :=
+                  (Build_excess_blob_gas_typ ((decoded.(ParentHeaderFields_excess_blob_gas)).(excess_blob_gas_value))) ]} in
+            (and_boolM (returnM ((decoded.(ParentHeaderFields_have_state)  : bool)))
+               ((and_boolM
+                   ((or_boolM
+                       (read_reg k_fork >>= fun (w__0 : Fork) =>
+                        returnM (((fork_lt (w__0) (Cancun))  : bool)))
+                       (returnM ((decoded.(ParentHeaderFields_have_base_fee)  : bool))))
+                    : M (bool))
+                   ((or_boolM
+                       (read_reg k_fork >>= fun (w__2 : Fork) =>
+                        returnM (((fork_lt (w__2) (Cancun))  : bool)))
+                       (returnM (((Bool.eqb (decoded.(ParentHeaderFields_have_blob_gas))
+                                     (decoded.(ParentHeaderFields_have_excess_blob_gas)))
+                         : bool))))
+                    : M (bool)))
+                : M (bool))) >>= fun (w__5 : bool) =>
+            let result :=
+              {[ result with WitnessHeaderIndex_parent_fields_valid := w__5 ]}
+               : WitnessHeaderIndex in
+            returnM (result)
+          else returnM (result))
           : M (WitnessHeaderIndex)
        else returnM (result)) >>= fun (result : WitnessHeaderIndex) =>
       (keccak256_slice (header)) >>= fun current_hash =>
@@ -12814,7 +12391,7 @@ Definition index_witness_headers (headers : BoundedSszListRef (2 ^ 8)) : M (Witn
            WitnessHeaderIndex_parent_blob_gas_used := (Build_blob_gas_used_typ (0));
            WitnessHeaderIndex_parent_excess_blob_gas := (Build_excess_blob_gas_typ (0));
            WitnessHeaderIndex_parent_fields_valid := false |}))) >>= fun indexed =>
-   write_reg k_n_headers (Build_item_count_typ ((headers.(BoundedSszListRef_count)))) >>
+   write_reg k_n_headers (Build_item_count ((headers.(BoundedSszListRef_count)))) >>
    (if negb (indexed.(WitnessHeaderIndex_valid)) return M (unit) then
       throw (InvalidBlock (WitnessDeficient))
     else returnM (tt)) >>
@@ -12830,8 +12407,8 @@ Definition index_witness_headers (headers : BoundedSszListRef (2 ^ 8)) : M (Witn
                 WitnessContext_parent_excess_blob_gas :=
                   (Build_excess_blob_gas_typ ((indexed.(WitnessHeaderIndex_parent_excess_blob_gas)).(excess_blob_gas_value))) |})).
 
-Definition decode_payload_blob_gas_used {ex415057_ : Z} {ex415056_ : Z}
-(payload : ByteSliceFields ex415056_ ex415057_) (*(0 <=? ex415056_) && (0 <=? ex415057_)*)
+Definition decode_payload_blob_gas_used {ex420669_ : Z} {ex420668_ : Z}
+(payload : ByteSliceFields ex420668_ ex420669_) (*(0 <=? ex420668_) && (0 <=? ex420669_)*)
 : M (blob_gas_used_typ) :=
    (((decode_ssz_uint (payload) (PL_BLOB_GAS_USED)) >>= fun semanticResult =>
      returnM (semanticResult).(ssz_uint_value)) >>= fun value =>
@@ -12841,7 +12418,7 @@ Definition decode_payload_blob_gas_used {ex415057_ : Z} {ex415056_ : Z}
    returnM (Build_blob_gas_used_typ (semanticResult)).
 
 Definition decode_block_header_ssz (input_ref : StatelessInputRef) : M (BlockHeader) :=
-   let '(@existT _ _ _ (@existT _ _ _ payload)) :=
+   let '(@existT _ _ payload__'len (@existT _ _ payload__'off payload)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_execution_payload))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    ((decode_ssz_uint (payload) (PL_GAS_LIMIT)) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_uint_value)) >>= fun gas_limit_value =>
@@ -12885,8 +12462,8 @@ Definition decode_block_header_ssz (input_ref : StatelessInputRef) : M (BlockHea
                 BlockHeader_extra_data :=
                   @existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_extra_data))))) |})).
 
-Definition decode_withdrawal {ex415061_ : Z} {ex415060_ : Z}
-(withdrawal : ByteSliceFields ex415060_ ex415061_) (*(0 <=? ex415060_) && (0 <=? ex415061_)*)
+Definition decode_withdrawal {ex420673_ : Z} {ex420672_ : Z}
+(withdrawal : ByteSliceFields ex420672_ ex420673_) (*(0 <=? ex420672_) && (0 <=? ex420673_)*)
 : M (Withdrawal) :=
    ((decode_ssz_uint (withdrawal) (WD_INDEX)) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_uint_value)) >>= fun (w__0 : Z) =>
@@ -12900,9 +12477,9 @@ Definition decode_withdrawal {ex415061_ : Z} {ex415060_ : Z}
                 Withdrawal_address := w__2;
                 Withdrawal_amount := (Build_withdrawal_amount (w__3)) |})).
 
-Definition decode_chain_config {ex415065_ : Z} {ex415064_ : Z}
-(cc : ByteSliceFields ex415064_ ex415065_) (number : Z) (timestamp : Z)
-(*(0 <=? ex415064_) && (0 <=? ex415065_)*) (*0 <=? number*) (*0 <=? timestamp*)
+Definition decode_chain_config {ex420677_ : Z} {ex420676_ : Z}
+(cc : ByteSliceFields ex420676_ ex420677_) (number : Z) (timestamp : Z)
+(*(0 <=? ex420676_) && (0 <=? ex420677_)*) (*0 <=? number*) (*0 <=? timestamp*)
 : M (ChainConfig) :=
    let cc_length := cc.(ByteSliceFields_len) in
    let header_length := CHAIN_CONFIG_HEADER_LENGTH in
@@ -12965,16 +12542,18 @@ Definition decode_chain_config {ex415065_ : Z} {ex415064_ : Z}
     else returnM (tt)) >>
    ((decode_ssz_uint (cc) (CC_CHAIN_ID)) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_uint_value)) >>= fun (w__2 : Z) =>
-   returnM (({| ChainConfig_chain_id := w__2 |})).
+   returnM (({| ChainConfig_chain_id := (Build_chain_identifier (w__2)) |})).
 
 Definition decode_stateless_input (input_ref : StatelessInputRef) : M (StatelessInput) :=
-   let '(@existT _ _ _ (@existT _ _ _ payload)) :=
+   let '(@existT _ _ payload__'len (@existT _ _ payload__'off payload)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_execution_payload))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    (decode_block_header_ssz (input_ref)) >>= fun header =>
    (decode_chain_config (projT2 (projT2 (input_ref.(StatelessInputRef_chain_config))))
       (header.(BlockHeader_number)) (header.(BlockHeader_timestamp))) >>= fun chain_config =>
    (k_set_header (header)) >>
-   write_reg k_chain_id (chain_config.(ChainConfig_chain_id)) >>
+   write_reg
+     k_chain_id
+     (Build_chain_identifier (((chain_config.(ChainConfig_chain_id)).(chain_identifier_value)))) >>
    write_reg
      k_blob_schedule
      (input_ref.(StatelessInputRef_protocol).(ProtocolProfile_blob_schedule)) >>
@@ -13256,7 +12835,7 @@ Definition receipt_insert
 : M (TrieBuilder) :=
    (scratch_begin (tt)) >>= fun mark =>
    (receipt_encoded (pending.(PendingReceipt_receipt))
-      (pending.(PendingReceipt_cumulative_gas_used))) >>= fun '(@existT _ _ _ (@existT _ _ _ value)) =>
+      (pending.(PendingReceipt_cumulative_gas_used))) >>= fun '(@existT _ _ __value1 (@existT _ _ __value0 value)) =>
    (trie_index_key (Build_item_index (((pending.(PendingReceipt_index)).(transaction_count_value))))) >>= fun (w__0 : TriePath) =>
    (trie_insert_item (builder) ((item_leaf (w__0) (value))) (next_key)) >>= fun inserted =>
    (scratch_rewind (mark)) >> returnM (inserted).
@@ -13410,9 +12989,9 @@ Definition DEPOSIT_INDEX_DATA : Z := 544.
 #[export] Hint Unfold DEPOSIT_INDEX_DATA : sail.
 Definition DEPOSIT_INDEX_LENGTH : Z := EIGHT_BYTE_LENGTH.
 #[export] Hint Unfold DEPOSIT_INDEX_LENGTH : sail.
-Definition enter_system_call_frame {ex415106_ : Z} {ex415105_ : Z}
-(tgt : vec (mword 8) 20) (input : ByteSliceFields ex415105_ ex415106_)
-(*(0 <=? ex415105_) && (0 <=? ex415106_)*)
+Definition enter_system_call_frame {ex420718_ : Z} {ex420717_ : Z}
+(tgt : vec (mword 8) 20) (input : ByteSliceFields ex420717_ ex420718_)
+(*(0 <=? ex420717_) && (0 <=? ex420718_)*)
 : M (journal_checkpoint) :=
    (k_state_checkpoint (tt)) >>= fun checkpoint =>
    write_reg pc (0) >>
@@ -13426,7 +13005,7 @@ Definition enter_system_call_frame {ex415106_ : Z} {ex415105_ : Z}
    (stack_reset (tt)) >>
    (returndata_clear (tt)) >>
    write_reg frame_status ((Running (tt))) >>
-   write_reg calldata (@existT _ _ _ (@existT _ _ _ (input))) >>
+   write_reg calldata (@existT _ _ ex420718_ (@existT _ _ ex420717_ (input))) >>
    write_reg
      message
      (({| Message_caller := SYSTEM_ADDRESS;
@@ -13445,15 +13024,15 @@ Definition system_call (tgt : vec (mword 8) 20) (input : vec (mword 8) 32) : M (
    (if generic_eq (w__0) (KECCAK_EMPTY) then returnM (tt)
     else
       (memory_reset (tt)) >>
-      let '(@existT _ _ _ (@existT _ _ _ input_range)) :=
-        (@existT _ _ _ (@existT _ _ _ (memory_range (0) (SYSTEM_CALL_INPUT_LENGTH))) : MemoryRange) in
-      (memory_expand_to (input_range.(MemoryRangeFields_len))) >>= fun '(@existT _ _ _ (@existT _ _ _ _)) =>
+      let '(@existT _ _ input_range__'len (@existT _ _ input_range__'off input_range)) :=
+        (@existT _ _ 32 (@existT _ _ 0 (memory_range (0) (SYSTEM_CALL_INPUT_LENGTH))) : MemoryRange) in
+      (memory_expand_to (input_range.(MemoryRangeFields_len))) >>= fun '(@existT _ _ len (@existT _ _ off _)) =>
       (mem_store_word (input_range.(MemoryRangeFields_off))
          (Build_word ((((hash_to_word (input)).(word_value)))))) >>
-      (memory_byte_slice (input_range.(MemoryRangeFields_off)) (input_range.(MemoryRangeFields_len))) >>= fun '(@existT _ _ _ (@existT _ _ _ input_slice)) =>
-      (memory_frame_enter (tt)) >>= fun '(@existT _ _ _ (@existT _ _ _ parent_memory)) =>
+      (memory_byte_slice (input_range.(MemoryRangeFields_off)) (input_range.(MemoryRangeFields_len))) >>= fun '(@existT _ _ __input_slice1 (@existT _ _ __input_slice0 input_slice)) =>
+      (memory_frame_enter (tt)) >>= fun '(@existT _ _ __parent_memory1 (@existT _ _ __parent_memory0 parent_memory)) =>
       (enter_system_call_frame (tgt) (input_slice)) >>= fun checkpoint =>
-      (interpret (tt)) >>= fun '(@existT _ _ _ (@existT _ _ _ _)) =>
+      (interpret (tt)) >>= fun '(@existT _ _ __parent_memory1 (@existT _ _ __parent_memory0 _)) =>
       (memory_frame_leave (parent_memory)) >>
       (frame_succeeded (tt)) >>= fun (w__1 : bool) =>
       (if negb (w__1) return M (unit) then (k_revert (checkpoint))  : M (unit)
@@ -13470,20 +13049,24 @@ Definition system_call_checked (tgt : vec (mword 8) 20) : M (ByteSlice) :=
       throw (InvalidBlock (ExecutionInvalid))
     else
       (memory_reset (tt)) >>
-      (memory_frame_enter (tt)) >>= fun '(@existT _ _ _ (@existT _ _ _ parent_memory)) =>
+      (memory_frame_enter (tt)) >>= fun '(@existT _ _ __parent_memory1 (@existT _ _ __parent_memory0 parent_memory)) =>
       (enter_system_call_frame (tgt) (EMPTY_SLICE)) >>= fun checkpoint =>
-      (interpret (tt)) >>= fun '(@existT _ _ _ (@existT _ _ _ output)) =>
+      (interpret (tt)) >>= fun '(@existT _ _ __parent_memory1 (@existT _ _ __parent_memory0 output)) =>
       (frame_succeeded (tt)) >>= fun (w__2 : bool) =>
-      (if w__2 return M ({len & {off & (ByteSliceFields off len)}}%type) then
+      (if w__2
+         return
+         M ({__parent_memory1 & {__parent_memory0 & (ByteSliceFields __parent_memory0 __parent_memory1)}}%type)
+       then
          (scratch_begin (tt)) >>= fun start =>
          (scratch_push_slice (output)) >>
-         (scratch_finish (start)) >>= fun '(@existT _ _ _ (@existT _ _ _ result)) =>
+         (scratch_finish (start)) >>= fun '(@existT _ _ __parent_memory1 (@existT _ _ __parent_memory0 result)) =>
          (memory_frame_leave (parent_memory)) >>
-         (k_tx_merge (tt)) >> returnM (@existT _ _ _ (@existT _ _ _ (result)))
+         (k_tx_merge (tt)) >>
+         returnM ((@existT _ _ _ (@existT _ _ _ (result))) : {__parent_memory1 & {__parent_memory0 & (ByteSliceFields __parent_memory0 __parent_memory1)}}%type)
        else
          (memory_frame_leave (parent_memory)) >>
          (k_revert (checkpoint)) >> (k_tx_merge (tt)) >> throw (InvalidBlock (ExecutionInvalid)))
-       : M ({len & {off & (ByteSliceFields off len)}}%type))
+       : M ({__parent_memory1 & {__parent_memory0 & (ByteSliceFields __parent_memory0 __parent_memory1)}}%type))
     : M ({len & {off & (ByteSliceFields off len)}}%type).
 
 Definition deposit_log_matches (log : LogEntry) : bool :=
@@ -13494,8 +13077,8 @@ Definition deposit_log_matches (log : LogEntry) : bool :=
      | [] => false
      end.
 
-Definition append_deposit_request {ex415110_ : Z} {ex415109_ : Z}
-(data : ByteSliceFields ex415109_ ex415110_) (*(0 <=? ex415109_) && (0 <=? ex415110_)*)
+Definition append_deposit_request {ex420722_ : Z} {ex420721_ : Z}
+(data : ByteSliceFields ex420721_ ex420722_) (*(0 <=? ex420721_) && (0 <=? ex420722_)*)
 : M (unit) :=
    (if neq_int (data.(ByteSliceFields_len)) (DEPOSIT_EVENT_DATA_LENGTH) return M (unit) then
       throw (InvalidBlock (InvalidExecutionRequests))
@@ -13585,1499 +13168,605 @@ Fixpoint append_deposit_logs (logs : list LogEntry) : M (unit) :=
    end
     : M (unit).
 
-Definition collect_execution_requests {ex415114_ : Z} {ex415113_ : Z}
-(deposits : ByteSliceFields ex415113_ ex415114_) (*(0 <=? ex415113_) && (0 <=? ex415114_)*)
+Definition collect_execution_requests {ex420726_ : Z} {ex420725_ : Z}
+(deposits : ByteSliceFields ex420725_ ex420726_) (*(0 <=? ex420725_) && (0 <=? ex420726_)*)
 : M (ExecutionRequests) :=
-   (system_call_checked (WITHDRAWAL_REQUEST_ADDR)) >>= fun '(@existT _ _ _ (@existT _ _ _ withdrawals)) =>
-   (system_call_checked (CONSOLIDATION_REQUEST_ADDR)) >>= fun '(@existT _ _ _ (@existT _ _ _ consolidations)) =>
+   (system_call_checked (WITHDRAWAL_REQUEST_ADDR)) >>= fun '(@existT _ _ __withdrawals1 (@existT _ _ __withdrawals0 withdrawals)) =>
+   (system_call_checked (CONSOLIDATION_REQUEST_ADDR)) >>= fun '(@existT _ _ __withdrawals1 (@existT _ _ __withdrawals0 consolidations)) =>
    read_reg k_fork >>= fun (w__0 : Fork) =>
    (if fork_gteq (w__0) (Amsterdam) return M (ByteSlice) then
       (system_call_checked (BUILDER_DEPOSIT_REQUEST_ADDR))
        : M (ByteSlice)
-    else returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)))) >>= fun '(@existT _ _ _ (@existT _ _ _ builder_deposits)) =>
+    else returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) : ByteSlice)) >>= fun '(@existT _ _ __withdrawals1 (@existT _ _ __withdrawals0 builder_deposits)) =>
    read_reg k_fork >>= fun (w__2 : Fork) =>
    (if fork_gteq (w__2) (Amsterdam) return M (ByteSlice) then
       (system_call_checked (BUILDER_EXIT_REQUEST_ADDR))
        : M (ByteSlice)
-    else returnM (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE)))) >>= fun '(@existT _ _ _ (@existT _ _ _ builder_exits)) =>
-   returnM (({| ExecutionRequests_deposits := @existT _ _ _ (@existT _ _ _ (deposits));
+    else returnM ((@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) : ByteSlice)) >>= fun '(@existT _ _ __withdrawals1 (@existT _ _ __withdrawals0 builder_exits)) =>
+   returnM (({| ExecutionRequests_deposits :=
+                  @existT _ _ ex420726_ (@existT _ _ ex420725_ (deposits));
                 ExecutionRequests_withdrawals := @existT _ _ _ (@existT _ _ _ (withdrawals));
                 ExecutionRequests_consolidations := @existT _ _ _ (@existT _ _ _ (consolidations));
                 ExecutionRequests_builder_deposits :=
                   @existT _ _ _ (@existT _ _ _ (builder_deposits));
                 ExecutionRequests_builder_exits := @existT _ _ _ (@existT _ _ _ (builder_exits)) |})).
 
-Definition BAL_RLP_ZERO : bal_rlp_length := (Build_bal_rlp_length (0)).
-#[export] Hint Unfold BAL_RLP_ZERO : sail.
-Definition bal_rlp_length_from_byte_length (value : Z) (*0 <=? value*) : M (bal_rlp_length) :=
-   ((if Z.leb (value) ((pow2 (30))) then returnM (value)
-     else throw (InvalidBlock (ExecutionInvalid)))
+Definition bal_count_item (count : item_count) (maximum : item_count)
+(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? maximum) && (maximum <=? (2 ^ 64 - 1))*)
+: M (item_count) :=
+   let count := (count).(item_count_value) in
+   let maximum := (maximum).(item_count_value) in
+   ((if Z.ltb (count) (maximum) then returnM ((Z.add (count) (1)))
+     else throw (InvalidBlock (BlockAccessListTooLarge)))
     : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
+   returnM (Build_item_count (semanticResult)).
 
-Definition bal_rlp_length_to_byte_length (value : bal_rlp_length)
-(*(0 <=? value) && (value <=? (2 ^ 30))*)
-: Z :=
-   let value := (value).(bal_rlp_length_value) in value.
+Definition bal_ref_cursor {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
+: M (RlpCursor (source_off + (source_len - content_len)) content_len) :=
+   (and_boolM (returnM ((f.(RlpFieldRef_is_list)  : bool)))
+      ((rlp_ref_framing_canonical (f))
+       : M (bool))) >>= fun (w__1 : bool) =>
+   (if w__1 return M (ByteSliceFields (source_off + (source_len - content_len)) content_len) then
+      (rlp_ref_cursor (f))
+       : M (ByteSliceFields (source_off + (source_len - content_len)) content_len)
+    else throw (InvalidBlock (InvalidBlockAccessList)))
+    : M (ByteSliceFields (source_off + (source_len - content_len)) content_len).
 
-Definition bal_rlp_length_add (current : bal_rlp_length) (addition : Z) (*0 <=? addition*)
-(*(0 <=? current) && (current <=? (2 ^ 30))*)
-: M (bal_rlp_length) :=
-   let current := (current).(bal_rlp_length_value) in
-   (((bal_rlp_length_from_byte_length (addition)) >>= fun semanticResult =>
-     returnM (semanticResult).(bal_rlp_length_value)) >>= fun bounded_addition =>
-   (if Z.leb (bounded_addition) ((Z.sub ((pow2 (30))) (current))) then
-      returnM ((Z.add (current) (bounded_addition)))
-    else throw (InvalidBlock (ExecutionInvalid)))
+Definition bal_ref_bytes {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
+: M (ByteSlice) :=
+   (rlp_ref_bytes_canonical (f)) >>= fun (w__0 : bool) =>
+   (if w__0 then returnM ((rlp_ref_content (f)) : {len & {off & (ByteSliceFields off len)}}%type)
+    else throw (InvalidBlock (InvalidBlockAccessList)))
+    : M ({len & {off & (ByteSliceFields off len)}}%type).
+
+Definition bal_ref_word {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
+: M (word) :=
+   ((and_boolM ((rlp_ref_uint_canonical (f))  : M (bool))
+       (returnM (((Z.leb content_len (32))  : bool)))) >>= fun (w__1 : bool) =>
+   (if w__1 return M (Z) then
+      ((rlp_ref_word (f)) >>= fun semanticResult => returnM (semanticResult).(word_value))
+       : M (Z)
+    else throw (InvalidBlock (InvalidBlockAccessList)))
     : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
+   returnM (Build_word (semanticResult)).
 
-Definition bal_bounded_byte_length_add (left' : Z) (right' : Z) (*(0 <=? left') && (0 <=? right')*)
-: M (Z) :=
-   ((bal_rlp_length_from_byte_length (left')) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__0 : Z) =>
-   ((bal_rlp_length_add (Build_bal_rlp_length ((w__0))) (right')) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__1 : Z) =>
-   returnM ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__1))))).
-
-Definition bal_rlp_list_size (content_len : bal_rlp_length)
-(*(0 <=? content_len) && (content_len <=? (2 ^ 30))*)
-: M (bal_rlp_length) :=
-   let content_len := (content_len).(bal_rlp_length_value) in
-   (let content_length := bal_rlp_length_to_byte_length (Build_bal_rlp_length ((content_len))) in
-   (rlp_list_size (content_length)) >>= fun encoded_length =>
-   ((bal_rlp_length_from_byte_length (encoded_length)) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value))
+Definition bal_ref_uint64 {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
+: M (ssz_uint) :=
+   ((and_boolM ((rlp_ref_uint_canonical (f))  : M (bool))
+       (returnM (((Z.leb content_len (8))  : bool)))) >>= fun (w__1 : bool) =>
+   (if w__1 return M (Z) then
+      ((rlp_ref_uint64 (f)) >>= fun semanticResult => returnM (semanticResult).(ssz_uint_value))
+       : M (Z)
+    else throw (InvalidBlock (InvalidBlockAccessList)))
     : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
+   returnM (Build_ssz_uint (semanticResult)).
 
-Definition bal_bounded_list_size (content_len : Z) (*0 <=? content_len*) : M (Z) :=
-   ((bal_rlp_length_from_byte_length (content_len)) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__0 : Z) =>
-   ((bal_rlp_list_size (Build_bal_rlp_length ((w__0)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__1 : Z) =>
-   returnM ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__1))))).
-
-Definition undefined_BalContentCursor '(tt : unit) : M (BalContentCursor) :=
-   (undefined_range (0) ((pow2 (30)))) >>= fun (w__0 : Z) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__1 : Z) =>
-   returnM (({| BalContentCursor_content_len := (Build_bal_rlp_length (w__0));
-                BalContentCursor_cursor := (Build_item_index (w__1)) |})).
-
-Definition undefined_BalContentCount '(tt : unit) : M (BalContentCount) :=
-   (undefined_range (0) ((pow2 (30)))) >>= fun (w__0 : Z) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__1 : Z) =>
-   returnM (({| BalContentCount_content_len := (Build_bal_rlp_length (w__0));
-                BalContentCount_count := (Build_item_count_typ (w__1)) |})).
-
-Definition undefined_BalAccountSize '(tt : unit) : M (BalAccountSize) :=
-   (undefined_range (0) ((pow2 (30)))) >>= fun (w__0 : Z) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__1 : Z) =>
-   returnM (({| BalAccountSize_encoded_len := (Build_bal_rlp_length (w__0));
-                BalAccountSize_item_count := (Build_item_count_typ (w__1)) |})).
-
-Definition undefined_BalNonceRun '(tt : unit) : M (BalNonceRun) :=
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__0 : Z) =>
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__1 : Z) =>
-   returnM (({| BalNonceRun_cursor := (Build_item_index (w__0));
-                BalNonceRun_maximum := (Build_account_nonce (w__1)) |})).
-
-Definition bal_count_add (a : Z) (b : Z) (*(0 <=? a) && (0 <=? b)*) : M (Z) :=
-   (if andb ((Z.leb (a) ((pow2 (30))))) ((Z.leb (b) ((Z.sub ((pow2 (30))) (a))))) then
-      returnM ((Z.add (a) (b)))
-    else throw (InvalidBlock (BlockAccessListTooLarge)))
-    : M (Z).
-
-Definition bal_previous_index (value : item_index) (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
-: M (item_index) :=
-   let value := (value).(item_index_value) in
-   ((if neq_int (value) (0) then returnM ((Z.sub (value) (1)))
-     else throw (InvalidBlock (ExecutionInvalid)))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_item_index (semanticResult)).
-
-Definition bal_index_word_content_size (index : item_index) (value : word)
-(*(0 <=? index) && (index <=? (2 ^ 64 - 1))*) (*(0 <=? value) && (value <=? (2 ^ 256 - 1))*)
-: M (bal_rlp_length) :=
-   let index := (index).(item_index_value) in
-   let value := (value).(word_value) in
-   ((bal_bounded_byte_length_add ((rlp_uint_word_size (index))) ((rlp_uint_word_size (value))))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
-
-Definition bal_index_word_size (index : item_index) (value : word)
-(*(0 <=? index) && (index <=? (2 ^ 64 - 1))*) (*(0 <=? value) && (value <=? (2 ^ 256 - 1))*)
-: M (bal_rlp_length) :=
-   let index := (index).(item_index_value) in
-   let value := (value).(word_value) in
-   (((bal_index_word_content_size (Build_item_index ((index))) (Build_word ((value)))) >>= fun semanticResult =>
-     returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__0 : Z) =>
-   (bal_bounded_list_size (w__0))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
-
-Definition bal_write_index_word (index : item_index) (value : word)
-(*(0 <=? index) && (index <=? (2 ^ 64 - 1))*) (*(0 <=? value) && (value <=? (2 ^ 256 - 1))*)
+Definition bal_expect_end {source_off : Z} {source_len : Z}
+(cursor : ByteSliceFields source_off source_len) (*(0 <=? source_off) && (0 <=? source_len)*)
 : M (unit) :=
-   let index := (index).(item_index_value) in
+   (if Z.eqb source_len (0) then returnM (tt)
+    else throw (InvalidBlock (InvalidBlockAccessList)))
+    : M (unit).
+
+Definition bal_compare_index_word {source_off : Z} {source_len : Z} {content_len : Z}
+(pair' : RlpFieldRef source_off source_len content_len) (index : block_access_index) (value : word)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
+(*(0 <=? index) && (index <=? (2 ^ 20 + 1))*) (*(0 <=? value) && (value <=? (2 ^ 256 - 1))*)
+: M (unit) :=
+   let index := (index).(block_access_index_value) in
    let value := (value).(word_value) in
-   ((bal_index_word_content_size (Build_item_index ((index))) (Build_word ((value)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__0 : Z) =>
-   (rlp_write_list_prefix (w__0)) >>
-   (rlp_write_uint_word (index)) >> (rlp_write_uint_word (value))  : M (unit).
+   (bal_ref_cursor (pair')) >>= fun fields =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ syn_content_len (index_field, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ syn_content_len (value_field, fields))) =>
+   (bal_expect_end (fields)) >>
+   (or_boolM
+      (((bal_ref_uint64 (index_field)) >>= fun semanticResult =>
+        returnM (semanticResult).(ssz_uint_value)) >>= fun (w__0 : Z) =>
+       returnM ((neq_int (w__0) (index))))
+      (((bal_ref_word (value_field)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__1 : Z) =>
+       returnM (((neq_int (w__1) (value))  : bool)))) >>= fun w__2 =>
+   (if w__2 return M (unit) then throw (InvalidBlock (InvalidBlockAccessList))
+    else returnM (tt))
+    : M (unit).
 
-Definition bal_index_nonce_content_size (index : item_index) (value : account_nonce)
-(*(0 <=? index) && (index <=? (2 ^ 64 - 1))*) (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
-: M (bal_rlp_length) :=
-   let index := (index).(item_index_value) in
-   let value := (value).(account_nonce_value) in
-   ((bal_bounded_byte_length_add ((rlp_uint_word_size (index))) ((rlp_uint_word_size (value))))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
-
-Definition bal_index_nonce_size (index : item_index) (value : account_nonce)
-(*(0 <=? index) && (index <=? (2 ^ 64 - 1))*) (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
-: M (bal_rlp_length) :=
-   let index := (index).(item_index_value) in
-   let value := (value).(account_nonce_value) in
-   (((bal_index_nonce_content_size (Build_item_index ((index))) (Build_account_nonce ((value)))) >>= fun semanticResult =>
-     returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__0 : Z) =>
-   (bal_bounded_list_size (w__0))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
-
-Definition bal_write_index_nonce (index : item_index) (value : account_nonce)
-(*(0 <=? index) && (index <=? (2 ^ 64 - 1))*) (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
+Definition bal_compare_index_nonce {source_off : Z} {source_len : Z} {content_len : Z}
+(pair' : RlpFieldRef source_off source_len content_len) (index : block_access_index)
+(value : account_nonce)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
+(*(0 <=? index) && (index <=? (2 ^ 20 + 1))*) (*(0 <=? value) && (value <=? (2 ^ 64 - 1))*)
 : M (unit) :=
-   let index := (index).(item_index_value) in
+   let index := (index).(block_access_index_value) in
    let value := (value).(account_nonce_value) in
-   ((bal_index_nonce_content_size (Build_item_index ((index))) (Build_account_nonce ((value)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__0 : Z) =>
-   (rlp_write_list_prefix (w__0)) >>
-   (rlp_write_uint_word (index)) >> (rlp_write_uint_word (value))  : M (unit).
+   (bal_ref_cursor (pair')) >>= fun fields =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ syn_content_len (index_field, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ syn_content_len (value_field, fields))) =>
+   (bal_expect_end (fields)) >>
+   (or_boolM
+      (((bal_ref_uint64 (index_field)) >>= fun semanticResult =>
+        returnM (semanticResult).(ssz_uint_value)) >>= fun (w__0 : Z) =>
+       returnM ((neq_int (w__0) (index))))
+      (((bal_ref_uint64 (value_field)) >>= fun semanticResult =>
+        returnM (semanticResult).(ssz_uint_value)) >>= fun (w__1 : Z) =>
+       returnM (((neq_int (w__1) (value))  : bool)))) >>= fun w__2 =>
+   (if w__2 return M (unit) then throw (InvalidBlock (InvalidBlockAccessList))
+    else returnM (tt))
+    : M (unit).
 
-Definition bal_index_code_content_size (index : item_index) (code_hash : vec (mword 8) 32)
-(*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
-: M (bal_rlp_length) :=
-   let index := (index).(item_index_value) in
-   ((code_db_resolve (code_hash)) >>= fun code =>
-   let index_length := rlp_uint_word_size (index) in
-   (rlp_slice_size (projT2 (projT2 (code.(Code_bytes))))) >>= fun code_length =>
-   (bal_bounded_byte_length_add (index_length) (code_length))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
-
-Definition bal_index_code_size (index : item_index) (code_hash : vec (mword 8) 32)
-(*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
-: M (bal_rlp_length) :=
-   let index := (index).(item_index_value) in
-   (((bal_index_code_content_size (Build_item_index ((index))) (code_hash)) >>= fun semanticResult =>
-     returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__0 : Z) =>
-   (bal_bounded_list_size (w__0))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
-
-Definition bal_write_index_code (index : item_index) (code_hash : vec (mword 8) 32)
-(*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
+Definition bal_compare_index_code {source_off : Z} {source_len : Z} {content_len : Z}
+(pair' : RlpFieldRef source_off source_len content_len) (index : block_access_index)
+(code_hash : vec (mword 8) 32)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
+(*(0 <=? index) && (index <=? (2 ^ 20 + 1))*)
 : M (unit) :=
-   let index := (index).(item_index_value) in
+   let index := (index).(block_access_index_value) in
+   (bal_ref_cursor (pair')) >>= fun fields =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ syn_content_len (index_field, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ syn_content_len (code_field, fields))) =>
+   (bal_expect_end (fields)) >>
    (code_db_resolve (code_hash)) >>= fun code =>
-   ((bal_index_code_content_size (Build_item_index ((index))) (code_hash)) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__0 : Z) =>
-   (rlp_write_list_prefix (w__0)) >>
-   (rlp_write_uint_word (index)) >>
-   (rlp_write_slice (projT2 (projT2 (code.(Code_bytes)))))
+   (or_boolM
+      (((bal_ref_uint64 (index_field)) >>= fun semanticResult =>
+        returnM (semanticResult).(ssz_uint_value)) >>= fun (w__0 : Z) =>
+       returnM ((neq_int (w__0) (index))))
+      ((bal_ref_bytes (code_field)) >>= fun '(@existT _ _ __w__11 (@existT _ _ __w__10 w__1)) =>
+       (byte_slices_equal (@existT _ _ _ (@existT _ _ _ (w__1)))
+          (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (code.(Code_bytes))))))) >>= fun (w__2 : bool) =>
+       returnM (((negb (w__2))  : bool)))) >>= fun w__3 =>
+   (if w__3 return M (unit) then throw (InvalidBlock (InvalidBlockAccessList))
+    else returnM (tt))
     : M (unit).
 
-Fixpoint _rec_bal_storage_change_run_end
-(account : item_index) (count : item_count_typ) (slot : word) (index : item_index)
-(cursor : item_index) (_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? slot) && (slot <=? (2 ^ 256 - 1))*)
-(*(0 <=? index) && (index <=? (2 ^ 64 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (item_index).
-exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let slot := (slot).(word_value) in
-   let index := (index).(item_index_value) in
-   let cursor := (cursor).(item_index_value) in
-   (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-    (if Z.ltb (cursor) (count) return M (Z) then
-       (and_boolM
-          (((bal_storage_change_slot (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-            returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
-           returnM ((Z.eqb (w__0) (slot))))
-          (((bal_storage_change_index (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-            returnM (semanticResult).(item_index_value)) >>= fun (w__1 : Z) =>
-           returnM (((Z.eqb (w__1) (index))  : bool)))) >>= fun w__2 =>
-       (if w__2 return M (Z) then
-          ((_rec_bal_storage_change_run_end (Build_item_index ((account)))
-              (Build_item_count_typ ((count))) (Build_word ((slot))) (Build_item_index ((index)))
-              (Build_item_index (((Z.add (cursor) (1))))) ((Z.sub (_reclimit) (1)))
-              (_limit_reduces_bool _acc ltac:(assumption))) >>= fun semanticResult =>
-           returnM (semanticResult).(item_index_value))
-           : M (Z)
-        else returnM (cursor))
-        : M (Z)
-     else returnM (cursor))
-     : M (Z)) >>= fun semanticResult =>
-   returnM (Build_item_index (semanticResult))
-).
-Defined.
+Definition bal_storage_change_run (first : BalStorageChangeEntry)
+: M ((BalStorageChangeEntry * option BalStorageChangeEntry)) :=
+   let last := first in
+   (bal_storage_change_next (tt)) >>= fun next =>
+   let scanning : bool := true in
+   (whileMT
+     (last, next, scanning)
+     (fun '(last, next, scanning) => pow2 (64))
+     (fun '(last, next, scanning) => returnM (scanning))
+     (fun '(last, next, scanning) =>
+       (assert_exp' true "loop dummy assert" >>= fun _ =>
+        match next with
+        | Some entry =>
+           (if Z.eqb ((entry.(BalStorageChangeEntry_index)).(block_access_index_value))
+                 ((first.(BalStorageChangeEntry_index)).(block_access_index_value))
+              return
+              M ((BalStorageChangeEntry * option BalStorageChangeEntry * bool)) then
+              let last : BalStorageChangeEntry := entry in
+              (bal_storage_change_next (tt)) >>= fun (w__0 : option BalStorageChangeEntry) =>
+              let next := w__0  : option BalStorageChangeEntry in
+              returnM ((last, next, scanning))
+            else
+              let scanning : bool := false in
+              returnM ((last, next, scanning)))
+            : M ((BalStorageChangeEntry * option BalStorageChangeEntry * bool))
+        | None =>
+           let scanning : bool := false in
+           returnM ((last, next, scanning))
+        end
+         : M ((BalStorageChangeEntry * option BalStorageChangeEntry * bool)))
+        : M ((BalStorageChangeEntry * option BalStorageChangeEntry * bool)))) >>= fun '((last, next, scanning)
+   : (BalStorageChangeEntry * option BalStorageChangeEntry * bool)) =>
+   returnM ((last, next)).
 
-
-Definition bal_storage_change_run_end
-(account : item_index) (count : item_count_typ) (slot : word) (index : item_index)
-(cursor : item_index) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? slot) && (slot <=? (2 ^ 256 - 1))*)
-(*(0 <=? index) && (index <=? (2 ^ 64 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-: M (item_index) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let slot := (slot).(word_value) in
-   let index := (index).(item_index_value) in
-   let cursor := (cursor).(item_index_value) in
-   (((_rec_bal_storage_change_run_end (Build_item_index ((account)))
-        (Build_item_count_typ ((count))) (Build_word ((slot))) (Build_item_index ((index)))
-        (Build_item_index ((cursor))) (((Z.sub (count) (cursor))  : Z)) (Zwf_guarded _)) >>= fun semanticResult =>
-     returnM (semanticResult).(item_index_value))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_item_index (semanticResult)).
-
-Fixpoint _rec_bal_storage_slot_changes_size
-(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index)
-(content_len : bal_rlp_length) (_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? slot) && (slot <=? (2 ^ 256 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(*(0 <=? content_len) && (content_len <=? (2 ^ 30))*) (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (BalContentCursor).
-exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let slot := (slot).(word_value) in
-   let cursor := (cursor).(item_index_value) in
-   let content_len := (content_len).(bal_rlp_length_value) in
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if Z.ltb (cursor) (count) return M (BalContentCursor) then
-      ((bal_storage_change_slot (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-       returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
-      (if Z.eqb (w__0) (slot) return M (BalContentCursor) then
-         ((bal_storage_change_index (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-          returnM (semanticResult).(item_index_value)) >>= fun index =>
-         ((bal_storage_change_run_end (Build_item_index ((account)))
-             (Build_item_count_typ ((count))) (Build_word ((slot))) (Build_item_index ((index)))
-             (Build_item_index ((cursor)))) >>= fun semanticResult =>
-          returnM (semanticResult).(item_index_value)) >>= fun next =>
-         ((bal_previous_index (Build_item_index ((next)))) >>= fun semanticResult =>
-          returnM (semanticResult).(item_index_value)) >>= fun last =>
-         ((bal_storage_change_value (Build_item_index ((account))) (Build_item_index ((last)))) >>= fun semanticResult =>
-          returnM (semanticResult).(word_value)) >>= fun (w__1 : Z) =>
-         ((bal_index_word_size (Build_item_index ((index))) (Build_word ((w__1)))) >>= fun semanticResult =>
-          returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__2 : Z) =>
-         ((bal_rlp_length_add (Build_bal_rlp_length ((content_len))) (w__2)) >>= fun semanticResult =>
-          returnM (semanticResult).(bal_rlp_length_value)) >>= fun next_len =>
-         (_rec_bal_storage_slot_changes_size (Build_item_index ((account)))
-            (Build_item_count_typ ((count))) (Build_word ((slot))) (Build_item_index ((next)))
-            (Build_bal_rlp_length ((next_len))) ((Z.sub (_reclimit) (1)))
-            (_limit_reduces_bool _acc ltac:(assumption)))
-          : M (BalContentCursor)
-       else
-         returnM (({| BalContentCursor_content_len := (Build_bal_rlp_length (content_len));
-                      BalContentCursor_cursor := (Build_item_index (cursor)) |})))
-       : M (BalContentCursor)
-    else
-      returnM (({| BalContentCursor_content_len := (Build_bal_rlp_length (content_len));
-                   BalContentCursor_cursor := (Build_item_index (cursor)) |})))
-    : M (BalContentCursor)
-).
-Defined.
-
-
-Definition bal_storage_slot_changes_size
-(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index)
-(content_len : bal_rlp_length) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? slot) && (slot <=? (2 ^ 256 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(*(0 <=? content_len) && (content_len <=? (2 ^ 30))*)
-: M (BalContentCursor) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let slot := (slot).(word_value) in
-   let cursor := (cursor).(item_index_value) in
-   let content_len := (content_len).(bal_rlp_length_value) in
-   (_rec_bal_storage_slot_changes_size (Build_item_index ((account)))
-      (Build_item_count_typ ((count))) (Build_word ((slot))) (Build_item_index ((cursor)))
-      (Build_bal_rlp_length ((content_len))) (((Z.sub (count) (cursor))  : Z)) (Zwf_guarded _))
-    : M (BalContentCursor).
-
-Fixpoint _rec_bal_write_storage_slot_changes
-(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index) (_reclimit : Z)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? slot) && (slot <=? (2 ^ 256 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (item_index).
-exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let slot := (slot).(word_value) in
-   let cursor := (cursor).(item_index_value) in
-   (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-    (if Z.ltb (cursor) (count) return M (Z) then
-       ((bal_storage_change_slot (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-        returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
-       (if Z.eqb (w__0) (slot) return M (Z) then
-          ((bal_storage_change_index (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-           returnM (semanticResult).(item_index_value)) >>= fun index =>
-          ((bal_storage_change_run_end (Build_item_index ((account)))
-              (Build_item_count_typ ((count))) (Build_word ((slot))) (Build_item_index ((index)))
-              (Build_item_index ((cursor)))) >>= fun semanticResult =>
-           returnM (semanticResult).(item_index_value)) >>= fun next =>
-          ((bal_previous_index (Build_item_index ((next)))) >>= fun semanticResult =>
-           returnM (semanticResult).(item_index_value)) >>= fun last =>
-          ((bal_storage_change_value (Build_item_index ((account))) (Build_item_index ((last)))) >>= fun semanticResult =>
-           returnM (semanticResult).(word_value)) >>= fun (w__1 : Z) =>
-          (bal_write_index_word (Build_item_index ((index))) (Build_word ((w__1)))) >>
-          ((_rec_bal_write_storage_slot_changes (Build_item_index ((account)))
-              (Build_item_count_typ ((count))) (Build_word ((slot))) (Build_item_index ((next)))
-              ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun semanticResult =>
-           returnM (semanticResult).(item_index_value))
-           : M (Z)
-        else returnM (cursor))
-        : M (Z)
-     else returnM (cursor))
-     : M (Z)) >>= fun semanticResult =>
-   returnM (Build_item_index (semanticResult))
-).
-Defined.
-
-
-Definition bal_write_storage_slot_changes
-(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? slot) && (slot <=? (2 ^ 256 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-: M (item_index) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let slot := (slot).(word_value) in
-   let cursor := (cursor).(item_index_value) in
-   (((_rec_bal_write_storage_slot_changes (Build_item_index ((account)))
-        (Build_item_count_typ ((count))) (Build_word ((slot))) (Build_item_index ((cursor)))
-        (((Z.sub (count) (cursor))
-         : Z)) (Zwf_guarded _)) >>= fun semanticResult =>
-     returnM (semanticResult).(item_index_value))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_item_index (semanticResult)).
-
-Fixpoint _rec_bal_storage_change_groups_size
-(account : item_index) (count : item_count_typ) (cursor : item_index) (result : BalContentCount)
-(_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (BalContentCount).
-exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if Z.ltb (cursor) (count) return M (BalContentCount) then
-      ((bal_storage_change_slot (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-       returnM (semanticResult).(word_value)) >>= fun slot =>
-      (bal_storage_slot_changes_size (Build_item_index ((account))) (Build_item_count_typ ((count)))
-         (Build_word ((slot))) (Build_item_index ((cursor)))
-         (Build_bal_rlp_length (((BAL_RLP_ZERO).(bal_rlp_length_value))))) >>= fun changes =>
-      ((bal_rlp_length_from_byte_length ((rlp_uint_word_size (slot)))) >>= fun semanticResult =>
-       returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__0 : Z) =>
-      ((bal_rlp_list_size
-          (Build_bal_rlp_length (((changes.(BalContentCursor_content_len)).(bal_rlp_length_value))))) >>= fun semanticResult =>
-       returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__1 : Z) =>
-      ((bal_rlp_length_add (Build_bal_rlp_length ((w__0)))
-          ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__1)))))) >>= fun semanticResult =>
-       returnM (semanticResult).(bal_rlp_length_value)) >>= fun slot_content_len =>
-      ((bal_rlp_list_size (Build_bal_rlp_length ((slot_content_len)))) >>= fun semanticResult =>
-       returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__2 : Z) =>
-      ((bal_rlp_length_add
-          (Build_bal_rlp_length (((result.(BalContentCount_content_len)).(bal_rlp_length_value))))
-          ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__2)))))) >>= fun semanticResult =>
-       returnM (semanticResult).(bal_rlp_length_value)) >>= fun next_content_len =>
-      (bal_count_add ((result.(BalContentCount_count)).(item_count_value)) (1)) >>= fun (w__3 : Z) =>
-      (_rec_bal_storage_change_groups_size (Build_item_index ((account)))
-         (Build_item_count_typ ((count)))
-         (Build_item_index (((changes.(BalContentCursor_cursor)).(item_index_value))))
-         (({| BalContentCount_content_len := (Build_bal_rlp_length (next_content_len));
-              BalContentCount_count := (Build_item_count_typ (w__3)) |})) ((Z.sub (_reclimit) (1)))
-         (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (BalContentCount)
-    else returnM (result))
-    : M (BalContentCount)
-).
-Defined.
-
-
-Definition bal_storage_change_groups_size
-(account : item_index) (count : item_count_typ) (cursor : item_index) (result : BalContentCount)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-: M (BalContentCount) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   (_rec_bal_storage_change_groups_size (Build_item_index ((account)))
-      (Build_item_count_typ ((count))) (Build_item_index ((cursor))) (result)
-      (((Z.sub (count) (cursor))
-       : Z)) (Zwf_guarded _))
-    : M (BalContentCount).
-
-Fixpoint _rec_bal_write_storage_change_groups
-(account : item_index) (count : item_count_typ) (cursor : item_index) (_reclimit : Z)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
+Fixpoint _rec_bal_compare_storage_slot_changes {source_off : Z} {source_len : Z}
+(fields : ByteSliceFields source_off source_len) (current : option BalStorageChangeEntry)
+(_reclimit : Z) (*(0 <=? source_off) && (0 <=? source_len)*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (unit).
 exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
    assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if Z.ltb (cursor) (count) return M (unit) then
-      ((bal_storage_change_slot (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-       returnM (semanticResult).(word_value)) >>= fun slot =>
-      (bal_storage_slot_changes_size (Build_item_index ((account))) (Build_item_count_typ ((count)))
-         (Build_word ((slot))) (Build_item_index ((cursor)))
-         (Build_bal_rlp_length (((BAL_RLP_ZERO).(bal_rlp_length_value))))) >>= fun changes =>
-      ((bal_rlp_length_from_byte_length ((rlp_uint_word_size (slot)))) >>= fun semanticResult =>
-       returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__0 : Z) =>
-      ((bal_rlp_list_size
-          (Build_bal_rlp_length (((changes.(BalContentCursor_content_len)).(bal_rlp_length_value))))) >>= fun semanticResult =>
-       returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__1 : Z) =>
-      ((bal_rlp_length_add (Build_bal_rlp_length ((w__0)))
-          ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__1)))))) >>= fun semanticResult =>
-       returnM (semanticResult).(bal_rlp_length_value)) >>= fun slot_content_len =>
-      (rlp_write_list_prefix
-         ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((slot_content_len)))))) >>
-      (rlp_write_uint_word (slot)) >>
-      (rlp_write_list_prefix
-         ((bal_rlp_length_to_byte_length
-             (Build_bal_rlp_length (((changes.(BalContentCursor_content_len)).(bal_rlp_length_value))))))) >>
-      ((bal_write_storage_slot_changes (Build_item_index ((account)))
-          (Build_item_count_typ ((count))) (Build_word ((slot))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-       returnM (semanticResult).(item_index_value)) >>= fun next =>
-      assert_exp (Z.eqb (next) ((changes.(BalContentCursor_cursor)).(item_index_value))) "BAL storage-change sizing cursor" >>
-      (_rec_bal_write_storage_change_groups (Build_item_index ((account)))
-         (Build_item_count_typ ((count))) (Build_item_index ((next))) ((Z.sub (_reclimit) (1)))
+   match current with
+   | Some first =>
+      (bal_storage_change_run (first)) >>= fun '((last, next)) =>
+      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (pair', remaining))) =>
+      (bal_compare_index_word (pair')
+         (Build_block_access_index (((first.(BalStorageChangeEntry_index)).(block_access_index_value))))
+         (Build_word (((last.(BalStorageChangeEntry_value)).(word_value))))) >>
+      (_rec_bal_compare_storage_slot_changes _ _ (remaining) (next) ((Z.sub (_reclimit) (1)))
          (_limit_reduces_bool _acc ltac:(assumption)))
        : M (unit)
-    else returnM (tt))
+   | None => (bal_expect_end (fields))  : M (unit)
+   end
     : M (unit)
 ).
 Defined.
 
 
-Definition bal_write_storage_change_groups
-(account : item_index) (count : item_count_typ) (cursor : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
+Definition bal_compare_storage_slot_changes {source_off : Z} {source_len : Z}
+(fields : ByteSliceFields source_off source_len) (current : option BalStorageChangeEntry)
+(*(0 <=? source_off) && (0 <=? source_len)*)
 : M (unit) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   (_rec_bal_write_storage_change_groups (Build_item_index ((account)))
-      (Build_item_count_typ ((count))) (Build_item_index ((cursor)))
-      (((Z.sub (count) (cursor))
-       : Z)) (Zwf_guarded _))
-    : M (unit).
-
-Definition bal_storage_changes_size (account : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-: M (BalContentCount) :=
-   let account := (account).(item_index_value) in
-   ((bal_storage_change_count (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(item_count_value)) >>= fun (w__0 : Z) =>
-   (bal_storage_change_groups_size (Build_item_index ((account))) (Build_item_count_typ ((w__0)))
-      (Build_item_index ((0)))
-      (({| BalContentCount_content_len :=
-             (Build_bal_rlp_length ((BAL_RLP_ZERO).(bal_rlp_length_value)));
-           BalContentCount_count := (Build_item_count_typ (0)) |})))
-    : M (BalContentCount).
-
-Definition bal_write_storage_changes (account : item_index) (size : BalContentCount)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-: M (unit) :=
-   let account := (account).(item_index_value) in
-   (rlp_write_list_prefix
-      ((bal_rlp_length_to_byte_length
-          (Build_bal_rlp_length (((size.(BalContentCount_content_len)).(bal_rlp_length_value))))))) >>
-   ((bal_storage_change_count (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(item_count_value)) >>= fun (w__0 : Z) =>
-   (bal_write_storage_change_groups (Build_item_index ((account))) (Build_item_count_typ ((w__0)))
-      (Build_item_index ((0))))
-    : M (unit).
-
-Fixpoint _rec_bal_storage_read_run_end
-(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index) (_reclimit : Z)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? slot) && (slot <=? (2 ^ 256 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (item_index).
-exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let slot := (slot).(word_value) in
-   let cursor := (cursor).(item_index_value) in
-   (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-    (if Z.ltb (cursor) (count) return M (Z) then
-       ((bal_storage_read_slot (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-        returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
-       (if Z.eqb (w__0) (slot) return M (Z) then
-          ((_rec_bal_storage_read_run_end (Build_item_index ((account)))
-              (Build_item_count_typ ((count))) (Build_word ((slot)))
-              (Build_item_index (((Z.add (cursor) (1))))) ((Z.sub (_reclimit) (1)))
-              (_limit_reduces_bool _acc ltac:(assumption))) >>= fun semanticResult =>
-           returnM (semanticResult).(item_index_value))
-           : M (Z)
-        else returnM (cursor))
-        : M (Z)
-     else returnM (cursor))
-     : M (Z)) >>= fun semanticResult =>
-   returnM (Build_item_index (semanticResult))
-).
-Defined.
-
-
-Definition bal_storage_read_run_end
-(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? slot) && (slot <=? (2 ^ 256 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-: M (item_index) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let slot := (slot).(word_value) in
-   let cursor := (cursor).(item_index_value) in
-   (((_rec_bal_storage_read_run_end (Build_item_index ((account))) (Build_item_count_typ ((count)))
-        (Build_word ((slot))) (Build_item_index ((cursor))) (((Z.sub (count) (cursor))  : Z))
-        (Zwf_guarded _)) >>= fun semanticResult =>
-     returnM (semanticResult).(item_index_value))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_item_index (semanticResult)).
-
-Fixpoint _rec_bal_storage_change_seek
-(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index) (_reclimit : Z)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? slot) && (slot <=? (2 ^ 256 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (item_index).
-exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let slot := (slot).(word_value) in
-   let cursor := (cursor).(item_index_value) in
-   (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-    (if Z.ltb (cursor) (count) return M (Z) then
-       ((bal_storage_change_slot (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-        returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
-       (if word_ult (w__0) (slot) return M (Z) then
-          ((_rec_bal_storage_change_seek (Build_item_index ((account)))
-              (Build_item_count_typ ((count))) (Build_word ((slot)))
-              (Build_item_index (((Z.add (cursor) (1))))) ((Z.sub (_reclimit) (1)))
-              (_limit_reduces_bool _acc ltac:(assumption))) >>= fun semanticResult =>
-           returnM (semanticResult).(item_index_value))
-           : M (Z)
-        else returnM (cursor))
-        : M (Z)
-     else returnM (cursor))
-     : M (Z)) >>= fun semanticResult =>
-   returnM (Build_item_index (semanticResult))
-).
-Defined.
-
-
-Definition bal_storage_change_seek
-(account : item_index) (count : item_count_typ) (slot : word) (cursor : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? slot) && (slot <=? (2 ^ 256 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-: M (item_index) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let slot := (slot).(word_value) in
-   let cursor := (cursor).(item_index_value) in
-   (((_rec_bal_storage_change_seek (Build_item_index ((account))) (Build_item_count_typ ((count)))
-        (Build_word ((slot))) (Build_item_index ((cursor))) (((Z.sub (count) (cursor))  : Z))
-        (Zwf_guarded _)) >>= fun semanticResult =>
-     returnM (semanticResult).(item_index_value))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_item_index (semanticResult)).
-
-Fixpoint _rec_bal_storage_read_groups_size
-(account : item_index) (read_count : item_count_typ) (change_count : item_count_typ)
-(read : item_index) (change : item_index) (result : BalContentCount) (_reclimit : Z)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? read_count) && (read_count <=? (2 ^ 64 - 1))*)
-(*(0 <=? change_count) && (change_count <=? (2 ^ 64 - 1))*)
-(*(0 <=? read) && (read <=? (2 ^ 64 - 1))*) (*(0 <=? change) && (change <=? (2 ^ 64 - 1))*)
-(_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (BalContentCount).
-exact (
-   let account := (account).(item_index_value) in
-   let read_count := (read_count).(item_count_value) in
-   let change_count := (change_count).(item_count_value) in
-   let read := (read).(item_index_value) in
-   let change := (change).(item_index_value) in
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if Z.ltb (read) (read_count) return M (BalContentCount) then
-      ((bal_storage_read_slot (Build_item_index ((account))) (Build_item_index ((read)))) >>= fun semanticResult =>
-       returnM (semanticResult).(word_value)) >>= fun slot =>
-      ((bal_storage_read_run_end (Build_item_index ((account)))
-          (Build_item_count_typ ((read_count))) (Build_word ((slot))) (Build_item_index ((read)))) >>= fun semanticResult =>
-       returnM (semanticResult).(item_index_value)) >>= fun next_read =>
-      ((bal_storage_change_seek (Build_item_index ((account)))
-          (Build_item_count_typ ((change_count))) (Build_word ((slot)))
-          (Build_item_index ((change)))) >>= fun semanticResult =>
-       returnM (semanticResult).(item_index_value)) >>= fun next_change =>
-      (if Z.ltb (next_change) (change_count) return M (bool) then
-         ((bal_storage_change_slot (Build_item_index ((account))) (Build_item_index ((next_change)))) >>= fun semanticResult =>
-          returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
-         returnM ((Z.eqb (w__0) (slot)))
-       else returnM (false)) >>= fun (changed : bool) =>
-      (if changed then returnM (result)
-       else
-         ((bal_rlp_length_add
-             (Build_bal_rlp_length (((result.(BalContentCount_content_len)).(bal_rlp_length_value))))
-             ((rlp_uint_word_size (slot)))) >>= fun semanticResult =>
-          returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__1 : Z) =>
-         (bal_count_add ((result.(BalContentCount_count)).(item_count_value)) (1)) >>= fun (w__2 : Z) =>
-         returnM (({| BalContentCount_content_len := (Build_bal_rlp_length (w__1));
-                      BalContentCount_count := (Build_item_count_typ (w__2)) |}))) >>= fun updated =>
-      (_rec_bal_storage_read_groups_size (Build_item_index ((account)))
-         (Build_item_count_typ ((read_count))) (Build_item_count_typ ((change_count)))
-         (Build_item_index ((next_read))) (Build_item_index ((next_change))) (updated)
-         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (BalContentCount)
-    else returnM (result))
-    : M (BalContentCount)
-).
-Defined.
-
-
-Definition bal_storage_read_groups_size
-(account : item_index) (read_count : item_count_typ) (change_count : item_count_typ)
-(read : item_index) (change : item_index) (result : BalContentCount)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? read_count) && (read_count <=? (2 ^ 64 - 1))*)
-(*(0 <=? change_count) && (change_count <=? (2 ^ 64 - 1))*)
-(*(0 <=? read) && (read <=? (2 ^ 64 - 1))*) (*(0 <=? change) && (change <=? (2 ^ 64 - 1))*)
-: M (BalContentCount) :=
-   let account := (account).(item_index_value) in
-   let read_count := (read_count).(item_count_value) in
-   let change_count := (change_count).(item_count_value) in
-   let read := (read).(item_index_value) in
-   let change := (change).(item_index_value) in
-   (_rec_bal_storage_read_groups_size (Build_item_index ((account)))
-      (Build_item_count_typ ((read_count))) (Build_item_count_typ ((change_count)))
-      (Build_item_index ((read))) (Build_item_index ((change))) (result)
-      (((Z.sub (read_count) (read))
-       : Z)) (Zwf_guarded _))
-    : M (BalContentCount).
-
-Fixpoint _rec_bal_write_storage_read_groups
-(account : item_index) (read_count : item_count_typ) (change_count : item_count_typ)
-(read : item_index) (change : item_index) (_reclimit : Z)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? read_count) && (read_count <=? (2 ^ 64 - 1))*)
-(*(0 <=? change_count) && (change_count <=? (2 ^ 64 - 1))*)
-(*(0 <=? read) && (read <=? (2 ^ 64 - 1))*) (*(0 <=? change) && (change <=? (2 ^ 64 - 1))*)
-(_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (unit).
-exact (
-   let account := (account).(item_index_value) in
-   let read_count := (read_count).(item_count_value) in
-   let change_count := (change_count).(item_count_value) in
-   let read := (read).(item_index_value) in
-   let change := (change).(item_index_value) in
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if Z.ltb (read) (read_count) return M (unit) then
-      ((bal_storage_read_slot (Build_item_index ((account))) (Build_item_index ((read)))) >>= fun semanticResult =>
-       returnM (semanticResult).(word_value)) >>= fun slot =>
-      ((bal_storage_read_run_end (Build_item_index ((account)))
-          (Build_item_count_typ ((read_count))) (Build_word ((slot))) (Build_item_index ((read)))) >>= fun semanticResult =>
-       returnM (semanticResult).(item_index_value)) >>= fun next_read =>
-      ((bal_storage_change_seek (Build_item_index ((account)))
-          (Build_item_count_typ ((change_count))) (Build_word ((slot)))
-          (Build_item_index ((change)))) >>= fun semanticResult =>
-       returnM (semanticResult).(item_index_value)) >>= fun next_change =>
-      (if Z.ltb (next_change) (change_count) return M (bool) then
-         ((bal_storage_change_slot (Build_item_index ((account))) (Build_item_index ((next_change)))) >>= fun semanticResult =>
-          returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
-         returnM ((Z.eqb (w__0) (slot)))
-       else returnM (false)) >>= fun (changed : bool) =>
-      (if negb (changed) return M (unit) then (rlp_write_uint_word (slot))  : M (unit)
-       else returnM (tt)) >>
-      (_rec_bal_write_storage_read_groups (Build_item_index ((account)))
-         (Build_item_count_typ ((read_count))) (Build_item_count_typ ((change_count)))
-         (Build_item_index ((next_read))) (Build_item_index ((next_change)))
-         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (unit)
-    else returnM (tt))
-    : M (unit)
-).
-Defined.
-
-
-Definition bal_write_storage_read_groups
-(account : item_index) (read_count : item_count_typ) (change_count : item_count_typ)
-(read : item_index) (change : item_index) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? read_count) && (read_count <=? (2 ^ 64 - 1))*)
-(*(0 <=? change_count) && (change_count <=? (2 ^ 64 - 1))*)
-(*(0 <=? read) && (read <=? (2 ^ 64 - 1))*) (*(0 <=? change) && (change <=? (2 ^ 64 - 1))*)
-: M (unit) :=
-   let account := (account).(item_index_value) in
-   let read_count := (read_count).(item_count_value) in
-   let change_count := (change_count).(item_count_value) in
-   let read := (read).(item_index_value) in
-   let change := (change).(item_index_value) in
-   (_rec_bal_write_storage_read_groups (Build_item_index ((account)))
-      (Build_item_count_typ ((read_count))) (Build_item_count_typ ((change_count)))
-      (Build_item_index ((read))) (Build_item_index ((change))) (((Z.sub (read_count) (read))  : Z))
+   (_rec_bal_compare_storage_slot_changes (fields) (current) ((fields.(ByteSliceFields_len)  : Z))
       (Zwf_guarded _))
     : M (unit).
 
-Definition bal_storage_reads_size (account : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-: M (BalContentCount) :=
-   let account := (account).(item_index_value) in
-   ((bal_storage_read_count (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(item_count_value)) >>= fun (w__0 : Z) =>
-   ((bal_storage_change_count (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(item_count_value)) >>= fun (w__1 : Z) =>
-   (bal_storage_read_groups_size (Build_item_index ((account))) (Build_item_count_typ ((w__0)))
-      (Build_item_count_typ ((w__1))) (Build_item_index ((0))) (Build_item_index ((0)))
-      (({| BalContentCount_content_len :=
-             (Build_bal_rlp_length ((BAL_RLP_ZERO).(bal_rlp_length_value)));
-           BalContentCount_count := (Build_item_count_typ (0)) |})))
-    : M (BalContentCount).
+Definition bal_compare_storage_slots {changes_source_off : Z} {changes_source_len : Z}
+{reads_source_off : Z} {reads_source_len : Z}
+(initial_changes : ByteSliceFields changes_source_off changes_source_len)
+(initial_reads : ByteSliceFields reads_source_off reads_source_len) (item_count : item_count)
+(maximum_items : evm_types.item_count)
+(*(0 <=? changes_source_off) && (0 <=? changes_source_len) &&
+  ((0 <=? reads_source_off) && (0 <=? reads_source_len))*)
+(*(0 <=? item_count) && (item_count <=? (2 ^ 64 - 1))*)
+(*(0 <=? maximum_items) && (maximum_items <=? (2 ^ 64 - 1))*)
+: M (evm_types.item_count) :=
+   let item_count := (item_count).(item_count_value) in
+   let maximum_items := (maximum_items).(item_count_value) in
+   (let '(@existT _ _ changes__'len (@existT _ _ changes__'off changes)) :=
+     (@existT _ _ changes_source_len (@existT _ _ changes_source_off (initial_changes)) : ByteSlice) in
+   let '(@existT _ _ reads__'len (@existT _ _ reads__'off reads)) :=
+     (@existT _ _ reads_source_len (@existT _ _ reads_source_off (initial_reads)) : ByteSlice) in
+   let count : Z := item_count in
+   (bal_storage_slot_next (tt)) >>= fun current =>
+   let scanning : bool := true in
+   (whileMT
+     (@existT _ _ _ (@existT _ _ _ (changes)), count, current, @existT _ _ _ (@existT _ _ _ (reads)), scanning)
+     (fun '((@existT _ _ changes__'len (@existT _ _ changes__'off changes), count, current, @existT _ _ reads__'len (@existT _ _ reads__'off reads), scanning)) =>
+       Z.add ((byte_slice_length (changes))) ((byte_slice_length (reads))))
+     (fun '((@existT _ _ changes__'len (@existT _ _ changes__'off changes), count, current, @existT _ _ reads__'len (@existT _ _ reads__'off reads), scanning)) =>
+       returnM (scanning))
+     (fun '((@existT _ _ changes__'len (@existT _ _ changes__'off changes), count, current, @existT _ _ reads__'len (@existT _ _ reads__'off reads), scanning)) =>
+       (assert_exp' true "loop dummy assert" >>= fun _ =>
+        match current with
+        | Some slot_entry =>
+           match slot_entry.(BalStorageSlotEntry_change) with
+           | Some first_change =>
+              (rlp_cursor_pop (changes)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (slot_field, remaining_changes))) =>
+              let '(@existT _ _ changes__'len (@existT _ _ changes__'off changes)) :=
+                (@existT _ _ _ (@existT _ _ _ (remaining_changes)) : ByteSlice) in
+              (bal_ref_cursor (slot_field)) >>= fun slot_fields =>
+              (rlp_cursor_pop (slot_fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (slot_value, slot_fields))) =>
+              (rlp_cursor_pop (slot_fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (slot_changes, slot_fields))) =>
+              (bal_expect_end (slot_fields)) >>
+              ((bal_ref_word (slot_value)) >>= fun semanticResult =>
+               returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
+              (if neq_int (w__0) ((slot_entry.(BalStorageSlotEntry_slot)).(word_value))
+                 return
+                 M (unit) then
+                 throw (InvalidBlock (InvalidBlockAccessList))
+               else returnM (tt)) >>
+              (bal_ref_cursor (slot_changes)) >>= fun w__1 =>
+              (bal_compare_storage_slot_changes (w__1) ((Some (first_change)))) >>
+              returnM ((@existT _ _ _ (@existT _ _ _ (changes)), @existT _ _ _ (@existT _ _ _ (reads))))
+           | None =>
+              (rlp_cursor_pop (reads)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (slot_field, remaining_reads))) =>
+              let '(@existT _ _ reads__'len (@existT _ _ reads__'off reads)) :=
+                (@existT _ _ _ (@existT _ _ _ (remaining_reads)) : ByteSlice) in
+              ((bal_ref_word (slot_field)) >>= fun semanticResult =>
+               returnM (semanticResult).(word_value)) >>= fun (w__2 : Z) =>
+              (if neq_int (w__2) ((slot_entry.(BalStorageSlotEntry_slot)).(word_value))
+                 return
+                 M (unit) then
+                 throw (InvalidBlock (InvalidBlockAccessList))
+               else returnM (tt)) >>
+              returnM ((@existT _ _ _ (@existT _ _ _ (changes)), @existT _ _ _ (@existT _ _ _ (reads))))
+           end >>= fun '((@existT _ _ len (@existT _ _ off changes), @existT _ _ len (@existT _ _ off reads))
+           : ({len & {off & (ByteSliceFields off len)}}%type * {len & {off & (ByteSliceFields off len)}}%type)) =>
+           ((bal_count_item (Build_item_count ((count))) (Build_item_count ((maximum_items)))) >>= fun semanticResult =>
+            returnM (semanticResult).(item_count_value)) >>= fun (w__3 : Z) =>
+           let count := w__3  : Z in
+           (bal_storage_slot_next (tt)) >>= fun (w__4 : option BalStorageSlotEntry) =>
+           let current := w__4  : option BalStorageSlotEntry in
+           returnM ((@existT _ _ _ (@existT _ _ _ (changes)), count, current, @existT _ _ _ (@existT _ _ _ (reads)), scanning))
+        | None =>
+           let scanning : bool := false in
+           returnM ((@existT _ _ _ (@existT _ _ _ (changes)), count, current, @existT _ _ _ (@existT _ _ _ (reads)), scanning))
+        end
+         : M (({len & {off & (ByteSliceFields off len)}}%type * Z * option BalStorageSlotEntry * {len & {off & (ByteSliceFields off len)}}%type * bool)))
+        : M (({len & {off & (ByteSliceFields off len)}}%type * Z * option BalStorageSlotEntry * {len & {off & (ByteSliceFields off len)}}%type * bool)))) >>= fun '((@existT _ _ len (@existT _ _ off changes), count, current, @existT _ _ len (@existT _ _ off reads), scanning)
+   : ({len & {off & (ByteSliceFields off len)}}%type * Z * option BalStorageSlotEntry * {len & {off & (ByteSliceFields off len)}}%type * bool)) =>
+   (rlp_cursor_expect_end (changes)) >> (rlp_cursor_expect_end (reads)) >> returnM (count)) >>= fun semanticResult =>
+   returnM (Build_item_count (semanticResult)).
 
-Definition bal_write_storage_reads (account : item_index) (size : BalContentCount)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-: M (unit) :=
-   let account := (account).(item_index_value) in
-   (rlp_write_list_prefix
-      ((bal_rlp_length_to_byte_length
-          (Build_bal_rlp_length (((size.(BalContentCount_content_len)).(bal_rlp_length_value))))))) >>
-   ((bal_storage_read_count (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(item_count_value)) >>= fun (w__0 : Z) =>
-   ((bal_storage_change_count (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(item_count_value)) >>= fun (w__1 : Z) =>
-   (bal_write_storage_read_groups (Build_item_index ((account))) (Build_item_count_typ ((w__0)))
-      (Build_item_count_typ ((w__1))) (Build_item_index ((0))) (Build_item_index ((0))))
-    : M (unit).
+Definition bal_balance_change_run (first : BalBalanceChangeEntry)
+: M ((BalBalanceChangeEntry * option BalBalanceChangeEntry)) :=
+   let last := first in
+   (bal_balance_change_next (tt)) >>= fun next =>
+   let scanning : bool := true in
+   (whileMT
+     (last, next, scanning)
+     (fun '(last, next, scanning) => pow2 (64))
+     (fun '(last, next, scanning) => returnM (scanning))
+     (fun '(last, next, scanning) =>
+       (assert_exp' true "loop dummy assert" >>= fun _ =>
+        match next with
+        | Some entry =>
+           (if Z.eqb ((entry.(BalBalanceChangeEntry_index)).(block_access_index_value))
+                 ((first.(BalBalanceChangeEntry_index)).(block_access_index_value))
+              return
+              M ((BalBalanceChangeEntry * option BalBalanceChangeEntry * bool)) then
+              let last : BalBalanceChangeEntry := entry in
+              (bal_balance_change_next (tt)) >>= fun (w__0 : option BalBalanceChangeEntry) =>
+              let next := w__0  : option BalBalanceChangeEntry in
+              returnM ((last, next, scanning))
+            else
+              let scanning : bool := false in
+              returnM ((last, next, scanning)))
+            : M ((BalBalanceChangeEntry * option BalBalanceChangeEntry * bool))
+        | None =>
+           let scanning : bool := false in
+           returnM ((last, next, scanning))
+        end
+         : M ((BalBalanceChangeEntry * option BalBalanceChangeEntry * bool)))
+        : M ((BalBalanceChangeEntry * option BalBalanceChangeEntry * bool)))) >>= fun '((last, next, scanning)
+   : (BalBalanceChangeEntry * option BalBalanceChangeEntry * bool)) =>
+   returnM ((last, next)).
 
-Fixpoint _rec_bal_balance_run_end
-(account : item_index) (count : item_count_typ) (index : item_index) (cursor : item_index)
-(_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (item_index).
+Fixpoint _rec_bal_compare_balance_changes {source_off : Z} {source_len : Z}
+(fields : ByteSliceFields source_off source_len) (current : option BalBalanceChangeEntry)
+(_reclimit : Z) (*(0 <=? source_off) && (0 <=? source_len)*) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (unit).
 exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let index := (index).(item_index_value) in
-   let cursor := (cursor).(item_index_value) in
-   (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-    (if Z.ltb (cursor) (count) return M (Z) then
-       ((bal_balance_change_index (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-        returnM (semanticResult).(item_index_value)) >>= fun (w__0 : Z) =>
-       (if Z.eqb (w__0) (index) return M (Z) then
-          ((_rec_bal_balance_run_end (Build_item_index ((account))) (Build_item_count_typ ((count)))
-              (Build_item_index ((index))) (Build_item_index (((Z.add (cursor) (1)))))
-              ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun semanticResult =>
-           returnM (semanticResult).(item_index_value))
-           : M (Z)
-        else returnM (cursor))
-        : M (Z)
-     else returnM (cursor))
-     : M (Z)) >>= fun semanticResult =>
-   returnM (Build_item_index (semanticResult))
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   match current with
+   | Some first =>
+      (bal_balance_change_run (first)) >>= fun '((last, next)) =>
+      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (pair', remaining))) =>
+      (bal_compare_index_word (pair')
+         (Build_block_access_index (((first.(BalBalanceChangeEntry_index)).(block_access_index_value))))
+         (Build_word (((last.(BalBalanceChangeEntry_value)).(word_value))))) >>
+      (_rec_bal_compare_balance_changes _ _ (remaining) (next) ((Z.sub (_reclimit) (1)))
+         (_limit_reduces_bool _acc ltac:(assumption)))
+       : M (unit)
+   | None => (bal_expect_end (fields))  : M (unit)
+   end
+    : M (unit)
 ).
 Defined.
 
 
-Definition bal_balance_run_end
-(account : item_index) (count : item_count_typ) (index : item_index) (cursor : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? index) && (index <=? (2 ^ 64 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-: M (item_index) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let index := (index).(item_index_value) in
-   let cursor := (cursor).(item_index_value) in
-   (((_rec_bal_balance_run_end (Build_item_index ((account))) (Build_item_count_typ ((count)))
-        (Build_item_index ((index))) (Build_item_index ((cursor))) (((Z.sub (count) (cursor))  : Z))
-        (Zwf_guarded _)) >>= fun semanticResult =>
-     returnM (semanticResult).(item_index_value))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_item_index (semanticResult)).
+Definition bal_compare_balance_changes {source_off : Z} {source_len : Z}
+(fields : ByteSliceFields source_off source_len) (current : option BalBalanceChangeEntry)
+(*(0 <=? source_off) && (0 <=? source_len)*)
+: M (unit) :=
+   (_rec_bal_compare_balance_changes (fields) (current) ((fields.(ByteSliceFields_len)  : Z))
+      (Zwf_guarded _))
+    : M (unit).
 
-Fixpoint _rec_bal_balance_groups_size
-(account : item_index) (count : item_count_typ) (cursor : item_index) (content_len : bal_rlp_length)
-(_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(*(0 <=? content_len) && (content_len <=? (2 ^ 30))*) (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (bal_rlp_length).
+Definition bal_nonce_change_run (first : BalNonceChangeEntry)
+: M ((account_nonce * option BalNonceChangeEntry)) :=
+   (let maximum := (first.(BalNonceChangeEntry_value)).(account_nonce_value) in
+   (bal_nonce_change_next (tt)) >>= fun next =>
+   let scanning : bool := true in
+   (whileMT
+     (maximum, next, scanning)
+     (fun '(maximum, next, scanning) => pow2 (64))
+     (fun '(maximum, next, scanning) => returnM (scanning))
+     (fun '(maximum, next, scanning) =>
+       (assert_exp' true "loop dummy assert" >>= fun _ =>
+        match next with
+        | Some entry =>
+           (if Z.eqb ((entry.(BalNonceChangeEntry_index)).(block_access_index_value))
+                 ((first.(BalNonceChangeEntry_index)).(block_access_index_value))
+              return
+              M ((Z * option BalNonceChangeEntry * bool)) then
+              let maximum : Z :=
+                if Z.ltb (maximum) ((entry.(BalNonceChangeEntry_value)).(account_nonce_value)) then
+                  (entry.(BalNonceChangeEntry_value)).(account_nonce_value)
+                else maximum in
+              (bal_nonce_change_next (tt)) >>= fun (w__0 : option BalNonceChangeEntry) =>
+              let next := w__0  : option BalNonceChangeEntry in
+              returnM ((maximum, next, scanning))
+            else
+              let scanning : bool := false in
+              returnM ((maximum, next, scanning)))
+            : M ((Z * option BalNonceChangeEntry * bool))
+        | None =>
+           let scanning : bool := false in
+           returnM ((maximum, next, scanning))
+        end
+         : M ((Z * option BalNonceChangeEntry * bool)))
+        : M ((Z * option BalNonceChangeEntry * bool)))) >>= fun '((maximum, next, scanning)
+   : (Z * option BalNonceChangeEntry * bool)) =>
+   returnM ((maximum, next))) >>= fun semanticResult =>
+   returnM (let '(semanticValue0, semanticValue1) := semanticResult in ((Build_account_nonce (semanticValue0)), semanticValue1)).
+
+Fixpoint _rec_bal_compare_nonce_changes {source_off : Z} {source_len : Z}
+(fields : ByteSliceFields source_off source_len) (current : option BalNonceChangeEntry)
+(_reclimit : Z) (*(0 <=? source_off) && (0 <=? source_len)*) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (unit).
 exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   let content_len := (content_len).(bal_rlp_length_value) in
-   (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-    (if Z.ltb (cursor) (count) return M (Z) then
-       ((bal_balance_change_index (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-        returnM (semanticResult).(item_index_value)) >>= fun index =>
-       ((bal_balance_run_end (Build_item_index ((account))) (Build_item_count_typ ((count)))
-           (Build_item_index ((index))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-        returnM (semanticResult).(item_index_value)) >>= fun next =>
-       ((bal_previous_index (Build_item_index ((next)))) >>= fun semanticResult =>
-        returnM (semanticResult).(item_index_value)) >>= fun last =>
-       ((bal_balance_change_value (Build_item_index ((account))) (Build_item_index ((last)))) >>= fun semanticResult =>
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   match current with
+   | Some first =>
+      ((bal_nonce_change_run (first)) >>= fun semanticResult =>
+       returnM (let '(semanticValue0, semanticValue1) := semanticResult in ((semanticValue0).(account_nonce_value), semanticValue1))) >>= fun '((maximum, next)) =>
+      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (pair', remaining))) =>
+      (bal_compare_index_nonce (pair')
+         (Build_block_access_index (((first.(BalNonceChangeEntry_index)).(block_access_index_value))))
+         (Build_account_nonce ((maximum)))) >>
+      (_rec_bal_compare_nonce_changes _ _ (remaining) (next) ((Z.sub (_reclimit) (1)))
+         (_limit_reduces_bool _acc ltac:(assumption)))
+       : M (unit)
+   | None => (bal_expect_end (fields))  : M (unit)
+   end
+    : M (unit)
+).
+Defined.
+
+
+Definition bal_compare_nonce_changes {source_off : Z} {source_len : Z}
+(fields : ByteSliceFields source_off source_len) (current : option BalNonceChangeEntry)
+(*(0 <=? source_off) && (0 <=? source_len)*)
+: M (unit) :=
+   (_rec_bal_compare_nonce_changes (fields) (current) ((fields.(ByteSliceFields_len)  : Z))
+      (Zwf_guarded _))
+    : M (unit).
+
+Definition bal_code_change_run (first : BalCodeChangeEntry)
+: M ((BalCodeChangeEntry * option BalCodeChangeEntry)) :=
+   let last := first in
+   (bal_code_change_next (tt)) >>= fun next =>
+   let scanning : bool := true in
+   (whileMT
+     (last, next, scanning)
+     (fun '(last, next, scanning) => pow2 (64))
+     (fun '(last, next, scanning) => returnM (scanning))
+     (fun '(last, next, scanning) =>
+       (assert_exp' true "loop dummy assert" >>= fun _ =>
+        match next with
+        | Some entry =>
+           (if Z.eqb ((entry.(BalCodeChangeEntry_index)).(block_access_index_value))
+                 ((first.(BalCodeChangeEntry_index)).(block_access_index_value))
+              return
+              M ((BalCodeChangeEntry * option BalCodeChangeEntry * bool)) then
+              let last : BalCodeChangeEntry := entry in
+              (bal_code_change_next (tt)) >>= fun (w__0 : option BalCodeChangeEntry) =>
+              let next := w__0  : option BalCodeChangeEntry in
+              returnM ((last, next, scanning))
+            else
+              let scanning : bool := false in
+              returnM ((last, next, scanning)))
+            : M ((BalCodeChangeEntry * option BalCodeChangeEntry * bool))
+        | None =>
+           let scanning : bool := false in
+           returnM ((last, next, scanning))
+        end
+         : M ((BalCodeChangeEntry * option BalCodeChangeEntry * bool)))
+        : M ((BalCodeChangeEntry * option BalCodeChangeEntry * bool)))) >>= fun '((last, next, scanning)
+   : (BalCodeChangeEntry * option BalCodeChangeEntry * bool)) =>
+   returnM ((last, next)).
+
+Fixpoint _rec_bal_compare_code_changes {source_off : Z} {source_len : Z}
+(fields : ByteSliceFields source_off source_len) (current : option BalCodeChangeEntry)
+(_reclimit : Z) (*(0 <=? source_off) && (0 <=? source_len)*) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (unit).
+exact (
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   match current with
+   | Some first =>
+      (bal_code_change_run (first)) >>= fun '((last, next)) =>
+      (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (pair', remaining))) =>
+      (bal_compare_index_code (pair')
+         (Build_block_access_index (((first.(BalCodeChangeEntry_index)).(block_access_index_value))))
+         (last.(BalCodeChangeEntry_code_hash))) >>
+      (_rec_bal_compare_code_changes _ _ (remaining) (next) ((Z.sub (_reclimit) (1)))
+         (_limit_reduces_bool _acc ltac:(assumption)))
+       : M (unit)
+   | None => (bal_expect_end (fields))  : M (unit)
+   end
+    : M (unit)
+).
+Defined.
+
+
+Definition bal_compare_code_changes {source_off : Z} {source_len : Z}
+(fields : ByteSliceFields source_off source_len) (current : option BalCodeChangeEntry)
+(*(0 <=? source_off) && (0 <=? source_len)*)
+: M (unit) :=
+   (_rec_bal_compare_code_changes (fields) (current) ((fields.(ByteSliceFields_len)  : Z))
+      (Zwf_guarded _))
+    : M (unit).
+
+Definition bal_compare_account {source_off : Z} {source_len : Z} {content_len : Z}
+(field' : RlpFieldRef source_off source_len content_len) (account : vec (mword 8) 20)
+(item_count : item_count) (maximum_items : evm_types.item_count)
+(*(0 <=? source_off) && (0 <=? source_len) && ((0 <=? content_len) && (content_len <=? source_len))*)
+(*(0 <=? item_count) && (item_count <=? (2 ^ 64 - 1))*)
+(*(0 <=? maximum_items) && (maximum_items <=? (2 ^ 64 - 1))*)
+: M (evm_types.item_count) :=
+   let item_count := (item_count).(item_count_value) in
+   let maximum_items := (maximum_items).(item_count_value) in
+   ((bal_ref_cursor (field')) >>= fun fields =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ syn_content_len (address_field, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ syn_content_len (storage_changes_field, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ syn_content_len (storage_reads_field, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ syn_content_len (balance_changes_field, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ syn_content_len (nonce_changes_field, fields))) =>
+   (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ syn_content_len (code_changes_field, fields))) =>
+   (bal_expect_end (fields)) >>
+   (bal_ref_bytes (address_field)) >>= fun '(@existT _ _ __address_bytes1 (@existT _ _ __address_bytes0 address_bytes)) =>
+   (or_boolM (returnM ((neq_int (address_bytes.(ByteSliceFields_len)) (20))))
+      (((rlp_ref_word (address_field)) >>= fun semanticResult =>
         returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
-       ((bal_index_word_size (Build_item_index ((index))) (Build_word ((w__0)))) >>= fun semanticResult =>
-        returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__1 : Z) =>
-       ((bal_rlp_length_add (Build_bal_rlp_length ((content_len))) (w__1)) >>= fun semanticResult =>
-        returnM (semanticResult).(bal_rlp_length_value)) >>= fun next_length =>
-       ((_rec_bal_balance_groups_size (Build_item_index ((account)))
-           (Build_item_count_typ ((count))) (Build_item_index ((next)))
-           (Build_bal_rlp_length ((next_length))) ((Z.sub (_reclimit) (1)))
+       returnM (((generic_neq ((word_to_address (Build_word ((w__0))))) (account))  : bool)))) >>= fun w__1 =>
+   (if w__1 return M (unit) then throw (InvalidBlock (InvalidBlockAccessList))
+    else returnM (tt)) >>
+   ((bal_count_item (Build_item_count ((item_count))) (Build_item_count ((maximum_items)))) >>= fun semanticResult =>
+    returnM (semanticResult).(item_count_value)) >>= fun counted_account =>
+   (bal_ref_cursor (storage_changes_field)) >>= fun w__2 =>
+   (bal_ref_cursor (storage_reads_field)) >>= fun w__3 =>
+   ((bal_compare_storage_slots (w__2) (w__3) (Build_item_count ((counted_account)))
+       (Build_item_count ((maximum_items)))) >>= fun semanticResult =>
+    returnM (semanticResult).(item_count_value)) >>= fun counted_storage =>
+   (bal_ref_cursor (balance_changes_field)) >>= fun w__4 =>
+   (bal_balance_change_next (tt)) >>= fun (w__5 : option BalBalanceChangeEntry) =>
+   (bal_compare_balance_changes (w__4) (w__5)) >>
+   (bal_ref_cursor (nonce_changes_field)) >>= fun w__6 =>
+   (bal_nonce_change_next (tt)) >>= fun (w__7 : option BalNonceChangeEntry) =>
+   (bal_compare_nonce_changes (w__6) (w__7)) >>
+   (bal_ref_cursor (code_changes_field)) >>= fun w__8 =>
+   (bal_code_change_next (tt)) >>= fun (w__9 : option BalCodeChangeEntry) =>
+   (bal_compare_code_changes (w__8) (w__9)) >> returnM (counted_storage)) >>= fun semanticResult =>
+   returnM (Build_item_count (semanticResult)).
+
+Fixpoint _rec_bal_compare_accounts {source_off : Z} {source_len : Z}
+(fields : ByteSliceFields source_off source_len) (current : option (vec (mword 8) 20))
+(item_count : item_count) (maximum_items : evm_types.item_count) (_reclimit : Z)
+(*(0 <=? source_off) && (0 <=? source_len)*) (*(0 <=? item_count) && (item_count <=? (2 ^ 64 - 1))*)
+(*(0 <=? maximum_items) && (maximum_items <=? (2 ^ 64 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (evm_types.item_count).
+exact (
+   let item_count := (item_count).(item_count_value) in
+   let maximum_items := (maximum_items).(item_count_value) in
+   (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+    match current with
+    | Some account =>
+       (rlp_cursor_pop (fields)) >>= fun '(@existT _ _ full_len (@existT _ _ content_len (field', remaining))) =>
+       ((bal_compare_account (field') (account) (Build_item_count ((item_count)))
+           (Build_item_count ((maximum_items)))) >>= fun semanticResult =>
+        returnM (semanticResult).(item_count_value)) >>= fun next_count =>
+       (bal_account_next (tt)) >>= fun (w__0 : option (vec (mword 8) 20)) =>
+       ((_rec_bal_compare_accounts _ _ (remaining) (w__0) (Build_item_count ((next_count)))
+           (Build_item_count ((maximum_items))) ((Z.sub (_reclimit) (1)))
            (_limit_reduces_bool _acc ltac:(assumption))) >>= fun semanticResult =>
-        returnM (semanticResult).(bal_rlp_length_value))
+        returnM (semanticResult).(item_count_value))
         : M (Z)
-     else returnM (content_len))
+    | None => (bal_expect_end (fields)) >> returnM (item_count)
+    end
      : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult))
+   returnM (Build_item_count (semanticResult))
 ).
 Defined.
 
 
-Definition bal_balance_groups_size
-(account : item_index) (count : item_count_typ) (cursor : item_index) (content_len : bal_rlp_length)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(*(0 <=? content_len) && (content_len <=? (2 ^ 30))*)
-: M (bal_rlp_length) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   let content_len := (content_len).(bal_rlp_length_value) in
-   (((_rec_bal_balance_groups_size (Build_item_index ((account))) (Build_item_count_typ ((count)))
-        (Build_item_index ((cursor))) (Build_bal_rlp_length ((content_len)))
-        (((Z.sub (count) (cursor))
-         : Z)) (Zwf_guarded _)) >>= fun semanticResult =>
-     returnM (semanticResult).(bal_rlp_length_value))
+Definition bal_compare_accounts {source_off : Z} {source_len : Z}
+(fields : ByteSliceFields source_off source_len) (current : option (vec (mword 8) 20))
+(item_count : item_count) (maximum_items : evm_types.item_count)
+(*(0 <=? source_off) && (0 <=? source_len)*) (*(0 <=? item_count) && (item_count <=? (2 ^ 64 - 1))*)
+(*(0 <=? maximum_items) && (maximum_items <=? (2 ^ 64 - 1))*)
+: M (evm_types.item_count) :=
+   let item_count := (item_count).(item_count_value) in
+   let maximum_items := (maximum_items).(item_count_value) in
+   (((_rec_bal_compare_accounts (fields) (current) (Build_item_count ((item_count)))
+        (Build_item_count ((maximum_items))) ((fields.(ByteSliceFields_len)  : Z)) (Zwf_guarded _)) >>= fun semanticResult =>
+     returnM (semanticResult).(item_count_value))
     : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
+   returnM (Build_item_count (semanticResult)).
 
-Fixpoint _rec_bal_write_balance_groups
-(account : item_index) (count : item_count_typ) (cursor : item_index) (_reclimit : Z)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (unit).
-exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if Z.ltb (cursor) (count) return M (unit) then
-      ((bal_balance_change_index (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-       returnM (semanticResult).(item_index_value)) >>= fun index =>
-      ((bal_balance_run_end (Build_item_index ((account))) (Build_item_count_typ ((count)))
-          (Build_item_index ((index))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-       returnM (semanticResult).(item_index_value)) >>= fun next =>
-      ((bal_previous_index (Build_item_index ((next)))) >>= fun semanticResult =>
-       returnM (semanticResult).(item_index_value)) >>= fun last =>
-      ((bal_balance_change_value (Build_item_index ((account))) (Build_item_index ((last)))) >>= fun semanticResult =>
-       returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
-      (bal_write_index_word (Build_item_index ((index))) (Build_word ((w__0)))) >>
-      (_rec_bal_write_balance_groups (Build_item_index ((account))) (Build_item_count_typ ((count)))
-         (Build_item_index ((next))) ((Z.sub (_reclimit) (1)))
-         (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (unit)
-    else returnM (tt))
-    : M (unit)
-).
-Defined.
-
-
-Definition bal_write_balance_groups
-(account : item_index) (count : item_count_typ) (cursor : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
+Definition validate_block_access_list {ex421057_ : Z} {ex421056_ : Z}
+(bytes : ByteSliceFields ex421056_ ex421057_) (maximum_items : item_count)
+(*(0 <=? ex421056_) && (0 <=? ex421057_)*)
+(*(0 <=? maximum_items) && (maximum_items <=? (2 ^ 64 - 1))*)
 : M (unit) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   (_rec_bal_write_balance_groups (Build_item_index ((account))) (Build_item_count_typ ((count)))
-      (Build_item_index ((cursor))) (((Z.sub (count) (cursor))  : Z)) (Zwf_guarded _))
-    : M (unit).
-
-Definition bal_balance_changes_size (account : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-: M (bal_rlp_length) :=
-   let account := (account).(item_index_value) in
-   (((bal_balance_change_count (Build_item_index ((account)))) >>= fun semanticResult =>
-     returnM (semanticResult).(item_count_value)) >>= fun (w__0 : Z) =>
-   ((bal_balance_groups_size (Build_item_index ((account))) (Build_item_count_typ ((w__0)))
-       (Build_item_index ((0))) (Build_bal_rlp_length (((BAL_RLP_ZERO).(bal_rlp_length_value))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
-
-Definition bal_write_balance_changes (account : item_index) (content_len : bal_rlp_length)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? content_len) && (content_len <=? (2 ^ 30))*)
-: M (unit) :=
-   let account := (account).(item_index_value) in
-   let content_len := (content_len).(bal_rlp_length_value) in
-   (rlp_write_list_prefix ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((content_len)))))) >>
-   ((bal_balance_change_count (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(item_count_value)) >>= fun (w__0 : Z) =>
-   (bal_write_balance_groups (Build_item_index ((account))) (Build_item_count_typ ((w__0)))
-      (Build_item_index ((0))))
-    : M (unit).
-
-Fixpoint _rec_bal_nonce_run
-(account : item_index) (count : item_count_typ) (index : item_index) (cursor : item_index)
-(maximum : account_nonce) (_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*) (*(0 <=? maximum) && (maximum <=? (2 ^ 64 - 1))*)
-(_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (BalNonceRun).
-exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let index := (index).(item_index_value) in
-   let cursor := (cursor).(item_index_value) in
-   let maximum := (maximum).(account_nonce_value) in
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if Z.ltb (cursor) (count) return M (BalNonceRun) then
-      ((bal_nonce_change_index (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-       returnM (semanticResult).(item_index_value)) >>= fun (w__0 : Z) =>
-      (if Z.eqb (w__0) (index) return M (BalNonceRun) then
-         ((bal_nonce_change_value (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-          returnM (semanticResult).(account_nonce_value)) >>= fun value =>
-         let next_maximum := if Z.ltb (maximum) (value) then value else maximum in
-         (_rec_bal_nonce_run (Build_item_index ((account))) (Build_item_count_typ ((count)))
-            (Build_item_index ((index))) (Build_item_index (((Z.add (cursor) (1)))))
-            (Build_account_nonce ((next_maximum))) ((Z.sub (_reclimit) (1)))
-            (_limit_reduces_bool _acc ltac:(assumption)))
-          : M (BalNonceRun)
-       else
-         returnM (({| BalNonceRun_cursor := (Build_item_index (cursor));
-                      BalNonceRun_maximum := (Build_account_nonce (maximum)) |})))
-       : M (BalNonceRun)
-    else
-      returnM (({| BalNonceRun_cursor := (Build_item_index (cursor));
-                   BalNonceRun_maximum := (Build_account_nonce (maximum)) |})))
-    : M (BalNonceRun)
-).
-Defined.
-
-
-Definition bal_nonce_run
-(account : item_index) (count : item_count_typ) (index : item_index) (cursor : item_index)
-(maximum : account_nonce) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*) (*(0 <=? maximum) && (maximum <=? (2 ^ 64 - 1))*)
-: M (BalNonceRun) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let index := (index).(item_index_value) in
-   let cursor := (cursor).(item_index_value) in
-   let maximum := (maximum).(account_nonce_value) in
-   (_rec_bal_nonce_run (Build_item_index ((account))) (Build_item_count_typ ((count)))
-      (Build_item_index ((index))) (Build_item_index ((cursor))) (Build_account_nonce ((maximum)))
-      (((Z.sub (count) (cursor))
-       : Z)) (Zwf_guarded _))
-    : M (BalNonceRun).
-
-Fixpoint _rec_bal_nonce_groups_size
-(account : item_index) (count : item_count_typ) (cursor : item_index) (content_len : bal_rlp_length)
-(_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(*(0 <=? content_len) && (content_len <=? (2 ^ 30))*) (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (bal_rlp_length).
-exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   let content_len := (content_len).(bal_rlp_length_value) in
-   (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-    (if Z.ltb (cursor) (count) return M (Z) then
-       ((bal_nonce_change_index (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-        returnM (semanticResult).(item_index_value)) >>= fun index =>
-       ((bal_nonce_change_value (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-        returnM (semanticResult).(account_nonce_value)) >>= fun first =>
-       (bal_nonce_run (Build_item_index ((account))) (Build_item_count_typ ((count)))
-          (Build_item_index ((index))) (Build_item_index (((Z.add (cursor) (1)))))
-          (Build_account_nonce ((first)))) >>= fun run =>
-       ((bal_index_nonce_size (Build_item_index ((index)))
-           (Build_account_nonce (((run.(BalNonceRun_maximum)).(account_nonce_value))))) >>= fun semanticResult =>
-        returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__0 : Z) =>
-       ((bal_rlp_length_add (Build_bal_rlp_length ((content_len))) (w__0)) >>= fun semanticResult =>
-        returnM (semanticResult).(bal_rlp_length_value)) >>= fun next_length =>
-       ((_rec_bal_nonce_groups_size (Build_item_index ((account))) (Build_item_count_typ ((count)))
-           (Build_item_index (((run.(BalNonceRun_cursor)).(item_index_value))))
-           (Build_bal_rlp_length ((next_length))) ((Z.sub (_reclimit) (1)))
-           (_limit_reduces_bool _acc ltac:(assumption))) >>= fun semanticResult =>
-        returnM (semanticResult).(bal_rlp_length_value))
-        : M (Z)
-     else returnM (content_len))
-     : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult))
-).
-Defined.
-
-
-Definition bal_nonce_groups_size
-(account : item_index) (count : item_count_typ) (cursor : item_index) (content_len : bal_rlp_length)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(*(0 <=? content_len) && (content_len <=? (2 ^ 30))*)
-: M (bal_rlp_length) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   let content_len := (content_len).(bal_rlp_length_value) in
-   (((_rec_bal_nonce_groups_size (Build_item_index ((account))) (Build_item_count_typ ((count)))
-        (Build_item_index ((cursor))) (Build_bal_rlp_length ((content_len)))
-        (((Z.sub (count) (cursor))
-         : Z)) (Zwf_guarded _)) >>= fun semanticResult =>
-     returnM (semanticResult).(bal_rlp_length_value))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
-
-Fixpoint _rec_bal_write_nonce_groups
-(account : item_index) (count : item_count_typ) (cursor : item_index) (_reclimit : Z)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (unit).
-exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if Z.ltb (cursor) (count) return M (unit) then
-      ((bal_nonce_change_index (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-       returnM (semanticResult).(item_index_value)) >>= fun index =>
-      ((bal_nonce_change_value (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-       returnM (semanticResult).(account_nonce_value)) >>= fun first =>
-      (bal_nonce_run (Build_item_index ((account))) (Build_item_count_typ ((count)))
-         (Build_item_index ((index))) (Build_item_index (((Z.add (cursor) (1)))))
-         (Build_account_nonce ((first)))) >>= fun run =>
-      (bal_write_index_nonce (Build_item_index ((index)))
-         (Build_account_nonce (((run.(BalNonceRun_maximum)).(account_nonce_value))))) >>
-      (_rec_bal_write_nonce_groups (Build_item_index ((account))) (Build_item_count_typ ((count)))
-         (Build_item_index (((run.(BalNonceRun_cursor)).(item_index_value))))
-         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (unit)
-    else returnM (tt))
-    : M (unit)
-).
-Defined.
-
-
-Definition bal_write_nonce_groups
-(account : item_index) (count : item_count_typ) (cursor : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-: M (unit) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   (_rec_bal_write_nonce_groups (Build_item_index ((account))) (Build_item_count_typ ((count)))
-      (Build_item_index ((cursor))) (((Z.sub (count) (cursor))  : Z)) (Zwf_guarded _))
-    : M (unit).
-
-Definition bal_nonce_changes_size (account : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-: M (bal_rlp_length) :=
-   let account := (account).(item_index_value) in
-   (((bal_nonce_change_count (Build_item_index ((account)))) >>= fun semanticResult =>
-     returnM (semanticResult).(item_count_value)) >>= fun (w__0 : Z) =>
-   ((bal_nonce_groups_size (Build_item_index ((account))) (Build_item_count_typ ((w__0)))
-       (Build_item_index ((0))) (Build_bal_rlp_length (((BAL_RLP_ZERO).(bal_rlp_length_value))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
-
-Definition bal_write_nonce_changes (account : item_index) (content_len : bal_rlp_length)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? content_len) && (content_len <=? (2 ^ 30))*)
-: M (unit) :=
-   let account := (account).(item_index_value) in
-   let content_len := (content_len).(bal_rlp_length_value) in
-   (rlp_write_list_prefix ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((content_len)))))) >>
-   ((bal_nonce_change_count (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(item_count_value)) >>= fun (w__0 : Z) =>
-   (bal_write_nonce_groups (Build_item_index ((account))) (Build_item_count_typ ((w__0)))
-      (Build_item_index ((0))))
-    : M (unit).
-
-Fixpoint _rec_bal_code_run_end
-(account : item_index) (count : item_count_typ) (index : item_index) (cursor : item_index)
-(_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? index) && (index <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (item_index).
-exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let index := (index).(item_index_value) in
-   let cursor := (cursor).(item_index_value) in
-   (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-    (if Z.ltb (cursor) (count) return M (Z) then
-       ((bal_code_change_index (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-        returnM (semanticResult).(item_index_value)) >>= fun (w__0 : Z) =>
-       (if Z.eqb (w__0) (index) return M (Z) then
-          ((_rec_bal_code_run_end (Build_item_index ((account))) (Build_item_count_typ ((count)))
-              (Build_item_index ((index))) (Build_item_index (((Z.add (cursor) (1)))))
-              ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun semanticResult =>
-           returnM (semanticResult).(item_index_value))
-           : M (Z)
-        else returnM (cursor))
-        : M (Z)
-     else returnM (cursor))
-     : M (Z)) >>= fun semanticResult =>
-   returnM (Build_item_index (semanticResult))
-).
-Defined.
-
-
-Definition bal_code_run_end
-(account : item_index) (count : item_count_typ) (index : item_index) (cursor : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? index) && (index <=? (2 ^ 64 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-: M (item_index) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let index := (index).(item_index_value) in
-   let cursor := (cursor).(item_index_value) in
-   (((_rec_bal_code_run_end (Build_item_index ((account))) (Build_item_count_typ ((count)))
-        (Build_item_index ((index))) (Build_item_index ((cursor))) (((Z.sub (count) (cursor))  : Z))
-        (Zwf_guarded _)) >>= fun semanticResult =>
-     returnM (semanticResult).(item_index_value))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_item_index (semanticResult)).
-
-Fixpoint _rec_bal_code_groups_size
-(account : item_index) (count : item_count_typ) (cursor : item_index) (content_len : bal_rlp_length)
-(_reclimit : Z) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? count) && (count <=? (2 ^ 64 - 1))*) (*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(*(0 <=? content_len) && (content_len <=? (2 ^ 30))*) (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (bal_rlp_length).
-exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   let content_len := (content_len).(bal_rlp_length_value) in
-   (assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-    (if Z.ltb (cursor) (count) return M (Z) then
-       ((bal_code_change_index (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-        returnM (semanticResult).(item_index_value)) >>= fun index =>
-       ((bal_code_run_end (Build_item_index ((account))) (Build_item_count_typ ((count)))
-           (Build_item_index ((index))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-        returnM (semanticResult).(item_index_value)) >>= fun next =>
-       ((bal_previous_index (Build_item_index ((next)))) >>= fun semanticResult =>
-        returnM (semanticResult).(item_index_value)) >>= fun last =>
-       (bal_code_change_hash (Build_item_index ((account))) (Build_item_index ((last)))) >>= fun (w__0 : vec (mword 8) 32) =>
-       ((bal_index_code_size (Build_item_index ((index))) (w__0)) >>= fun semanticResult =>
-        returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__1 : Z) =>
-       ((bal_rlp_length_add (Build_bal_rlp_length ((content_len))) (w__1)) >>= fun semanticResult =>
-        returnM (semanticResult).(bal_rlp_length_value)) >>= fun next_length =>
-       ((_rec_bal_code_groups_size (Build_item_index ((account))) (Build_item_count_typ ((count)))
-           (Build_item_index ((next))) (Build_bal_rlp_length ((next_length)))
-           ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun semanticResult =>
-        returnM (semanticResult).(bal_rlp_length_value))
-        : M (Z)
-     else returnM (content_len))
-     : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult))
-).
-Defined.
-
-
-Definition bal_code_groups_size
-(account : item_index) (count : item_count_typ) (cursor : item_index) (content_len : bal_rlp_length)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-(*(0 <=? content_len) && (content_len <=? (2 ^ 30))*)
-: M (bal_rlp_length) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   let content_len := (content_len).(bal_rlp_length_value) in
-   (((_rec_bal_code_groups_size (Build_item_index ((account))) (Build_item_count_typ ((count)))
-        (Build_item_index ((cursor))) (Build_bal_rlp_length ((content_len)))
-        (((Z.sub (count) (cursor))
-         : Z)) (Zwf_guarded _)) >>= fun semanticResult =>
-     returnM (semanticResult).(bal_rlp_length_value))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
-
-Fixpoint _rec_bal_write_code_groups
-(account : item_index) (count : item_count_typ) (cursor : item_index) (_reclimit : Z)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (unit).
-exact (
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if Z.ltb (cursor) (count) return M (unit) then
-      ((bal_code_change_index (Build_item_index ((account))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-       returnM (semanticResult).(item_index_value)) >>= fun index =>
-      ((bal_code_run_end (Build_item_index ((account))) (Build_item_count_typ ((count)))
-          (Build_item_index ((index))) (Build_item_index ((cursor)))) >>= fun semanticResult =>
-       returnM (semanticResult).(item_index_value)) >>= fun next =>
-      ((bal_previous_index (Build_item_index ((next)))) >>= fun semanticResult =>
-       returnM (semanticResult).(item_index_value)) >>= fun last =>
-      (bal_code_change_hash (Build_item_index ((account))) (Build_item_index ((last)))) >>= fun (w__0 : vec (mword 8) 32) =>
-      (bal_write_index_code (Build_item_index ((index))) (w__0)) >>
-      (_rec_bal_write_code_groups (Build_item_index ((account))) (Build_item_count_typ ((count)))
-         (Build_item_index ((next))) ((Z.sub (_reclimit) (1)))
-         (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (unit)
-    else returnM (tt))
-    : M (unit)
-).
-Defined.
-
-
-Definition bal_write_code_groups
-(account : item_index) (count : item_count_typ) (cursor : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*) (*(0 <=? count) && (count <=? (2 ^ 64 - 1))*)
-(*(0 <=? cursor) && (cursor <=? (2 ^ 64 - 1))*)
-: M (unit) :=
-   let account := (account).(item_index_value) in
-   let count := (count).(item_count_value) in
-   let cursor := (cursor).(item_index_value) in
-   (_rec_bal_write_code_groups (Build_item_index ((account))) (Build_item_count_typ ((count)))
-      (Build_item_index ((cursor))) (((Z.sub (count) (cursor))  : Z)) (Zwf_guarded _))
-    : M (unit).
-
-Definition bal_code_changes_size (account : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-: M (bal_rlp_length) :=
-   let account := (account).(item_index_value) in
-   (((bal_code_change_count (Build_item_index ((account)))) >>= fun semanticResult =>
-     returnM (semanticResult).(item_count_value)) >>= fun (w__0 : Z) =>
-   ((bal_code_groups_size (Build_item_index ((account))) (Build_item_count_typ ((w__0)))
-       (Build_item_index ((0))) (Build_bal_rlp_length (((BAL_RLP_ZERO).(bal_rlp_length_value))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_bal_rlp_length (semanticResult)).
-
-Definition bal_write_code_changes (account : item_index) (content_len : bal_rlp_length)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-(*(0 <=? content_len) && (content_len <=? (2 ^ 30))*)
-: M (unit) :=
-   let account := (account).(item_index_value) in
-   let content_len := (content_len).(bal_rlp_length_value) in
-   (rlp_write_list_prefix ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((content_len)))))) >>
-   ((bal_code_change_count (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(item_count_value)) >>= fun (w__0 : Z) =>
-   (bal_write_code_groups (Build_item_index ((account))) (Build_item_count_typ ((w__0)))
-      (Build_item_index ((0))))
-    : M (unit).
-
-Definition bal_account_size (account : item_index) (*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-: M (BalAccountSize) :=
-   let account := (account).(item_index_value) in
-   (bal_storage_changes_size (Build_item_index ((account)))) >>= fun storage_changes =>
-   (bal_storage_reads_size (Build_item_index ((account)))) >>= fun storage_reads =>
-   ((bal_balance_changes_size (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun balance_changes_len =>
-   ((bal_nonce_changes_size (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun nonce_changes_len =>
-   ((bal_code_changes_size (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun code_changes_len =>
-   ((bal_rlp_length_from_byte_length ((rlp_addr_size (tt)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun content_len =>
-   ((bal_rlp_list_size
-       (Build_bal_rlp_length (((storage_changes.(BalContentCount_content_len)).(bal_rlp_length_value))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__0 : Z) =>
-   ((bal_rlp_length_add (Build_bal_rlp_length ((content_len)))
-       ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__0)))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__1 : Z) =>
-   let content_len := w__1  : Z in
-   ((bal_rlp_list_size
-       (Build_bal_rlp_length (((storage_reads.(BalContentCount_content_len)).(bal_rlp_length_value))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__2 : Z) =>
-   ((bal_rlp_length_add (Build_bal_rlp_length ((content_len)))
-       ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__2)))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__3 : Z) =>
-   let content_len := w__3  : Z in
-   ((bal_rlp_list_size (Build_bal_rlp_length ((balance_changes_len)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__4 : Z) =>
-   ((bal_rlp_length_add (Build_bal_rlp_length ((content_len)))
-       ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__4)))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__5 : Z) =>
-   let content_len := w__5  : Z in
-   ((bal_rlp_list_size (Build_bal_rlp_length ((nonce_changes_len)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__6 : Z) =>
-   ((bal_rlp_length_add (Build_bal_rlp_length ((content_len)))
-       ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__6)))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__7 : Z) =>
-   let content_len := w__7  : Z in
-   ((bal_rlp_list_size (Build_bal_rlp_length ((code_changes_len)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__8 : Z) =>
-   ((bal_rlp_length_add (Build_bal_rlp_length ((content_len)))
-       ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__8)))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__9 : Z) =>
-   let content_len := w__9  : Z in
-   ((bal_rlp_list_size (Build_bal_rlp_length ((content_len)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__10 : Z) =>
-   (bal_count_add (1) ((storage_changes.(BalContentCount_count)).(item_count_value))) >>= fun (w__11 : Z) =>
-   (bal_count_add (w__11) ((storage_reads.(BalContentCount_count)).(item_count_value))) >>= fun (w__12 : Z) =>
-   returnM (({| BalAccountSize_encoded_len := (Build_bal_rlp_length (w__10));
-                BalAccountSize_item_count := (Build_item_count_typ (w__12)) |})).
-
-Definition bal_write_account (account : item_index)
-(*(0 <=? account) && (account <=? (2 ^ 64 - 1))*)
-: M (unit) :=
-   let account := (account).(item_index_value) in
-   (bal_storage_changes_size (Build_item_index ((account)))) >>= fun storage_changes =>
-   (bal_storage_reads_size (Build_item_index ((account)))) >>= fun storage_reads =>
-   ((bal_balance_changes_size (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun balance_changes_len =>
-   ((bal_nonce_changes_size (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun nonce_changes_len =>
-   ((bal_code_changes_size (Build_item_index ((account)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun code_changes_len =>
-   ((bal_rlp_length_from_byte_length ((rlp_addr_size (tt)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun content_len =>
-   ((bal_rlp_list_size
-       (Build_bal_rlp_length (((storage_changes.(BalContentCount_content_len)).(bal_rlp_length_value))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__0 : Z) =>
-   ((bal_rlp_length_add (Build_bal_rlp_length ((content_len)))
-       ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__0)))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__1 : Z) =>
-   let content_len := w__1  : Z in
-   ((bal_rlp_list_size
-       (Build_bal_rlp_length (((storage_reads.(BalContentCount_content_len)).(bal_rlp_length_value))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__2 : Z) =>
-   ((bal_rlp_length_add (Build_bal_rlp_length ((content_len)))
-       ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__2)))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__3 : Z) =>
-   let content_len := w__3  : Z in
-   ((bal_rlp_list_size (Build_bal_rlp_length ((balance_changes_len)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__4 : Z) =>
-   ((bal_rlp_length_add (Build_bal_rlp_length ((content_len)))
-       ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__4)))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__5 : Z) =>
-   let content_len := w__5  : Z in
-   ((bal_rlp_list_size (Build_bal_rlp_length ((nonce_changes_len)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__6 : Z) =>
-   ((bal_rlp_length_add (Build_bal_rlp_length ((content_len)))
-       ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__6)))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__7 : Z) =>
-   let content_len := w__7  : Z in
-   ((bal_rlp_list_size (Build_bal_rlp_length ((code_changes_len)))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__8 : Z) =>
-   ((bal_rlp_length_add (Build_bal_rlp_length ((content_len)))
-       ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((w__8)))))) >>= fun semanticResult =>
-    returnM (semanticResult).(bal_rlp_length_value)) >>= fun (w__9 : Z) =>
-   let content_len := w__9  : Z in
-   (rlp_write_list_prefix ((bal_rlp_length_to_byte_length (Build_bal_rlp_length ((content_len)))))) >>
-   (bal_account_address (Build_item_index ((account)))) >>= fun (w__10 : vec (mword 8) 20) =>
-   (rlp_write_addr (w__10)) >>
-   (bal_write_storage_changes (Build_item_index ((account))) (storage_changes)) >>
-   (bal_write_storage_reads (Build_item_index ((account))) (storage_reads)) >>
-   (bal_write_balance_changes (Build_item_index ((account)))
-      (Build_bal_rlp_length ((balance_changes_len)))) >>
-   (bal_write_nonce_changes (Build_item_index ((account)))
-      (Build_bal_rlp_length ((nonce_changes_len)))) >>
-   (bal_write_code_changes (Build_item_index ((account)))
-      (Build_bal_rlp_length ((code_changes_len))))
-    : M (unit).
-
-Fixpoint _rec_bal_accounts_size
-(account_count : item_count_typ) (account : Z) (result : BalContentCount) (_reclimit : Z)
-(*0 <=? account*) (*(0 <=? account_count) && (account_count <=? (2 ^ 64 - 1))*)
-(_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (BalContentCount).
-exact (
-   let account_count := (account_count).(item_count_value) in
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if Z.ltb (account) (account_count) return M (BalContentCount) then
-      (bal_account_size (Build_item_index ((account)))) >>= fun account_size =>
-      ((bal_rlp_length_add
-          (Build_bal_rlp_length (((result.(BalContentCount_content_len)).(bal_rlp_length_value))))
-          ((bal_rlp_length_to_byte_length
-              (Build_bal_rlp_length (((account_size.(BalAccountSize_encoded_len)).(bal_rlp_length_value))))))) >>= fun semanticResult =>
-       returnM (semanticResult).(bal_rlp_length_value)) >>= fun next_length =>
-      (bal_count_add ((result.(BalContentCount_count)).(item_count_value))
-         ((account_size.(BalAccountSize_item_count)).(item_count_value))) >>= fun (w__0 : Z) =>
-      (_rec_bal_accounts_size (Build_item_count_typ ((account_count))) ((Z.add (account) (1)))
-         (({| BalContentCount_content_len := (Build_bal_rlp_length (next_length));
-              BalContentCount_count := (Build_item_count_typ (w__0)) |})) ((Z.sub (_reclimit) (1)))
-         (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (BalContentCount)
-    else returnM (result))
-    : M (BalContentCount)
-).
-Defined.
-
-
-Definition bal_accounts_size
-(account_count : item_count_typ) (account : Z) (result : BalContentCount) (*0 <=? account*)
-(*(0 <=? account_count) && (account_count <=? (2 ^ 64 - 1))*)
-: M (BalContentCount) :=
-   let account_count := (account_count).(item_count_value) in
-   (_rec_bal_accounts_size (Build_item_count_typ ((account_count))) (account) (result)
-      (((Z.sub (account_count) (account))
-       : Z)) (Zwf_guarded _))
-    : M (BalContentCount).
-
-Fixpoint _rec_bal_write_accounts (account_count : item_count_typ) (account : Z) (_reclimit : Z)
-(*0 <=? account*) (*(0 <=? account_count) && (account_count <=? (2 ^ 64 - 1))*)
-(_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (unit).
-exact (
-   let account_count := (account_count).(item_count_value) in
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if Z.ltb (account) (account_count) return M (unit) then
-      (bal_write_account (Build_item_index ((account)))) >>
-      (_rec_bal_write_accounts (Build_item_count_typ ((account_count))) ((Z.add (account) (1)))
-         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
-       : M (unit)
-    else returnM (tt))
-    : M (unit)
-).
-Defined.
-
-
-Definition bal_write_accounts (account_count : item_count_typ) (account : Z) (*0 <=? account*)
-(*(0 <=? account_count) && (account_count <=? (2 ^ 64 - 1))*)
-: M (unit) :=
-   let account_count := (account_count).(item_count_value) in
-   (_rec_bal_write_accounts (Build_item_count_typ ((account_count))) (account)
-      (((Z.sub (account_count) (account))
-       : Z)) (Zwf_guarded _))
-    : M (unit).
-
-Definition encode_block_access_list '(tt : unit) : M (EncodedBlockAccessList) :=
+   let maximum_items := (maximum_items).(item_count_value) in
    (bal_prepare (tt)) >>
-   ((bal_account_count (tt)) >>= fun semanticResult => returnM (semanticResult).(item_count_value)) >>= fun account_count =>
-   (bal_accounts_size (Build_item_count_typ ((account_count))) (0)
-      (({| BalContentCount_content_len :=
-             (Build_bal_rlp_length ((BAL_RLP_ZERO).(bal_rlp_length_value)));
-           BalContentCount_count := (Build_item_count_typ (0)) |}))) >>= fun size =>
-   (scratch_begin (tt)) >>= fun start =>
-   (rlp_write_list_prefix
-      ((bal_rlp_length_to_byte_length
-          (Build_bal_rlp_length (((size.(BalContentCount_content_len)).(bal_rlp_length_value))))))) >>
-   (bal_write_accounts (Build_item_count_typ ((account_count))) (0)) >>
-   (rlp_finish (start)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__0)) =>
-   returnM (({| EncodedBlockAccessList_bytes := @existT _ _ _ (@existT _ _ _ (w__0));
-                EncodedBlockAccessList_item_count :=
-                  (Build_item_count_typ ((size.(BalContentCount_count)).(item_count_value))) |})).
+   (rlp_single_ref (bytes)) >>= fun '(@existT _ _ __root root) =>
+   (bal_ref_cursor (root)) >>= fun w__0 =>
+   (bal_account_next (tt)) >>= fun (w__1 : option (vec (mword 8) 20)) =>
+   ((bal_compare_accounts (w__0) (w__1) (Build_item_count ((0)))
+       (Build_item_count ((maximum_items)))) >>= fun semanticResult =>
+    returnM (semanticResult).(item_count_value)) >>= fun '(_) =>
+   returnM (tt).
 
 Definition PRE_MERGE_BLOCK_REWARD := uint ((Ox"1BC16D674EC80000")).
 #[export] Hint Unfold PRE_MERGE_BLOCK_REWARD : sail.
@@ -15104,9 +13793,9 @@ Definition run_block_start_system_calls '(tt : unit) : M (unit) :=
     else returnM (tt))
     : M (unit).
 
-Definition execute_block_transactions {ex415344_ : Z} {ex415343_ : Z}
-(transactions : BoundedSszListRef (2 ^ 20)) (public_keys : ByteSliceFields ex415343_ ex415344_)
-(header_gas_limit : block_gas_limit) (*(0 <=? ex415343_) && (0 <=? ex415344_)*)
+Definition execute_block_transactions {ex421064_ : Z} {ex421063_ : Z}
+(transactions : BoundedSszListRef (2 ^ 20)) (public_keys : ByteSliceFields ex421063_ ex421064_)
+(header_gas_limit : block_gas_limit) (*(0 <=? ex421063_) && (0 <=? ex421064_)*)
 (*(0 <=? header_gas_limit) && (header_gas_limit <=? (2 ^ 64 - 1))*)
 : M (BlockExecutionResult) :=
    let header_gas_limit := (header_gas_limit).(block_gas_limit_value) in
@@ -15127,16 +13816,16 @@ Definition execute_block_transactions {ex415344_ : Z} {ex415343_ : Z}
    let receipts := receipt_accumulator_empty (tt) in
    (scratch_begin (tt)) >>= fun deposits_start =>
    (ssz_list_cursor (transactions)) >>= fun cursor =>
-   let '(@existT _ _ _ (@existT _ _ _ keys)) :=
-     (@existT _ _ _ (@existT _ _ _ (public_keys)) : ByteSlice) in
+   let '(@existT _ _ keys__'len (@existT _ _ keys__'off keys)) :=
+     (@existT _ _ ex421064_ (@existT _ _ ex421063_ (public_keys)) : ByteSlice) in
    (whileMT
      (blob_gas_acc, cursor, execution_gas_acc, @existT _ _ _ (@existT _ _ _ (keys)), receipts, state_gas_acc, tx0_to)
-     (fun '((blob_gas_acc, cursor, execution_gas_acc, @existT _ _ len (@existT _ _ off keys), receipts, state_gas_acc, tx0_to)) =>
+     (fun '((blob_gas_acc, cursor, execution_gas_acc, @existT _ _ keys__'len (@existT _ _ keys__'off keys), receipts, state_gas_acc, tx0_to)) =>
        Z.sub (cursor.(BoundedSszListCursor_items).(BoundedSszListRef_count))
          (cursor.(BoundedSszListCursor_index)))
-     (fun '((blob_gas_acc, cursor, execution_gas_acc, @existT _ _ len (@existT _ _ off keys), receipts, state_gas_acc, tx0_to)) =>
+     (fun '((blob_gas_acc, cursor, execution_gas_acc, @existT _ _ keys__'len (@existT _ _ keys__'off keys), receipts, state_gas_acc, tx0_to)) =>
        returnM ((negb ((ssz_list_cursor_empty (cursor))))))
-     (fun '((blob_gas_acc, cursor, execution_gas_acc, @existT _ _ len (@existT _ _ off keys), receipts, state_gas_acc, tx0_to)) =>
+     (fun '((blob_gas_acc, cursor, execution_gas_acc, @existT _ _ keys__'len (@existT _ _ keys__'off keys), receipts, state_gas_acc, tx0_to)) =>
        (assert_exp' true "loop dummy assert" >>= fun _ =>
         let i := cursor.(BoundedSszListCursor_index) in
         (ssz_list_pop (cursor)) >>= fun '((@existT _ _ len (@existT _ _ off transaction), next)) =>
@@ -15147,12 +13836,12 @@ Definition execute_block_transactions {ex415344_ : Z} {ex415343_ : Z}
            throw (InvalidBlock (WitnessDeficient))
          else returnM (tt)) >>
         let public_key := sub_slice (keys_fields) (0) (PUBLIC_KEY_LENGTH) in
-        let '(@existT _ _ _ (@existT _ _ _ keys)) :=
+        let '(@existT _ _ keys__'len (@existT _ _ keys__'off keys)) :=
           (@existT _ _ _ (@existT _ _ _ (slice_suffix (keys_fields) (public_key_length))) : ByteSlice) in
         let '(_) := (cycle_scope_start (SCOPE_TX_DECODE))  : unit in
         (decode_transaction (transaction) (public_key)) >>= fun tx =>
         let '(_) := (cycle_scope_end (SCOPE_TX_DECODE))  : unit in
-        (bal_set_index ((Z.add (i) (1)))) >>
+        write_reg k_block_access_index (Build_block_access_index (((Z.add (i) (1))))) >>
         let tx0_to : vec (mword 8) 20 :=
           if Z.eqb (i) (0) then tx.(Transaction_recipient)
           else tx0_to in
@@ -15209,7 +13898,7 @@ Definition execute_block_transactions {ex415344_ : Z} {ex415343_ : Z}
    let '(_) := (cycle_scope_start (SCOPE_RECEIPTS_ROOT))  : unit in
    (receipt_accumulator_root (receipts)) >>= fun receipts_root =>
    let '(_) := (cycle_scope_end (SCOPE_RECEIPTS_ROOT))  : unit in
-   (scratch_finish (deposits_start)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__6)) =>
+   (scratch_finish (deposits_start)) >>= fun '(@existT _ _ __w__61 (@existT _ _ __w__60 w__6)) =>
    returnM (({| BlockExecutionResult_header_gas_used := header_gas_used;
                 BlockExecutionResult_execution_gas_used := execution_gas_acc;
                 BlockExecutionResult_state_gas_used := state_gas_acc;
@@ -15255,14 +13944,14 @@ Definition apply_block_end_state (body : BlockBody) : M (unit) :=
    (k_tx_merge (tt))
     : M (unit).
 
-Definition execute_block_body {ex415349_ : Z} {ex415348_ : Z}
-(body : BlockBody) (public_keys : ByteSliceFields ex415348_ ex415349_)
-(header_gas_limit : block_gas_limit) (*(0 <=? ex415348_) && (0 <=? ex415349_)*)
+Definition execute_block_body {ex421069_ : Z} {ex421068_ : Z}
+(body : BlockBody) (public_keys : ByteSliceFields ex421068_ ex421069_)
+(header_gas_limit : block_gas_limit) (*(0 <=? ex421068_) && (0 <=? ex421069_)*)
 (*(0 <=? header_gas_limit) && (header_gas_limit <=? (2 ^ 64 - 1))*)
 : M (BlockExecutionResult) :=
    let header_gas_limit := (header_gas_limit).(block_gas_limit_value) in
    (bal_reset (tt)) >>
-   (bal_set_index (0)) >>
+   write_reg k_block_access_index (Build_block_access_index ((0))) >>
    let '(_) := (cycle_scope_start (SCOPE_BLOCK_START))  : unit in
    (run_block_start_system_calls (tt)) >>
    let '(_) := (cycle_scope_end (SCOPE_BLOCK_START))  : unit in
@@ -15271,7 +13960,7 @@ Definition execute_block_body {ex415349_ : Z} {ex415348_ : Z}
       (Build_block_gas_limit ((header_gas_limit)))) >>= fun result =>
    let '(_) := (cycle_scope_end (SCOPE_BLOCK_TRANSACTIONS))  : unit in
    let post_tx_index := Z.add (body.(BlockBody_transactions).(BoundedSszListRef_count)) (1) in
-   (bal_set_index (post_tx_index)) >>
+   write_reg k_block_access_index (Build_block_access_index ((post_tx_index))) >>
    let '(_) := (cycle_scope_start (SCOPE_BLOCK_END_STATE))  : unit in
    (apply_block_end_state (body)) >>
    let '(_) := (cycle_scope_end (SCOPE_BLOCK_END_STATE))  : unit in
@@ -15284,8 +13973,8 @@ Definition execute_block_body {ex415349_ : Z} {ex415348_ : Z}
    let '(_) := (cycle_scope_end (SCOPE_BLOCK_END_REQUESTS))  : unit in
    returnM ({[ result with BlockExecutionResult_requests := requests ]}).
 
-Definition withdrawal_rlp {ex415354_ : Z} (withdrawal : ByteSliceFields ex415354_ 44)
-(ex415355_ := 44) (*(0 <=? ex415354_) && (0 <=? ex415355_) && (ex415355_ =? 44)*)
+Definition withdrawal_rlp {ex421074_ : Z} (withdrawal : ByteSliceFields ex421074_ 44)
+(ex421075_ := 44) (*(0 <=? ex421074_) && (0 <=? ex421075_) && (ex421075_ =? 44)*)
 : M (ByteSlice) :=
    ((decode_ssz_uint (withdrawal) (WD_INDEX)) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_uint_value)) >>= fun index =>
@@ -15432,7 +14121,7 @@ Definition block_header_hash
       (rlp_write_uint_word ((header.(BlockHeader_slot_number)).(slot_number_value)))
        : M (unit)
     else returnM (tt)) >>
-   (rlp_finish (mark)) >>= fun '(@existT _ _ _ (@existT _ _ _ encoded)) =>
+   (rlp_finish (mark)) >>= fun '(@existT _ _ __encoded1 (@existT _ _ __encoded0 encoded)) =>
    (keccak256_slice (encoded)) >>= fun block_hash => (scratch_rewind (mark)) >> returnM (block_hash).
 
 Definition transaction_trie_root (txs : BoundedSszListRef (2 ^ 20)) : M (hash) :=
@@ -15447,7 +14136,7 @@ Definition transaction_trie_root (txs : BoundedSszListRef (2 ^ 20)) : M (hash) :
        (assert_exp' true "loop dummy assert" >>= fun _ =>
         (rlp_index_cursor_pop (cursor)) >>= fun '((item, next)) =>
         let cursor : RlpIndexCursor (2 ^ 20) := next in
-        (ssz_list_at (txs) (item.(RlpIndexItem_index))) >>= fun '(@existT _ _ _ (@existT _ _ _ tx)) =>
+        (ssz_list_at (txs) (item.(RlpIndexItem_index))) >>= fun '(@existT _ _ __tx1 (@existT _ _ __tx0 tx)) =>
         (trie_insert_item (builder) ((item_leaf (item.(RlpIndexItem_key)) (tx)))
            (item.(RlpIndexItem_next_key))) >>= fun (w__0 : TrieBuilder) =>
         let builder := w__0  : TrieBuilder in
@@ -15470,8 +14159,8 @@ Definition withdrawals_trie_root (wds : BoundedSszListRef (2 ^ 4)) : M (hash) :=
         (rlp_index_cursor_pop (cursor)) >>= fun '((item, next)) =>
         let cursor : RlpIndexCursor (2 ^ 4) := next in
         (scratch_begin (tt)) >>= fun scratch_mark =>
-        (ssz_fixed_list_at (wds) (item.(RlpIndexItem_index)) (WD_SIZE)) >>= fun '(@existT _ _ _ (@existT _ _ _ withdrawal)) =>
-        (withdrawal_rlp (autocast (T := fun _sz => (ByteSliceFields _ _sz)%type) (withdrawal))) >>= fun '(@existT _ _ _ (@existT _ _ _ value)) =>
+        (ssz_fixed_list_at (wds) (item.(RlpIndexItem_index)) (WD_SIZE)) >>= fun '(@existT _ _ __withdrawal1 (@existT _ _ __withdrawal0 withdrawal)) =>
+        (withdrawal_rlp (autocast (T := fun _sz => (ByteSliceFields _ _sz)%type) (withdrawal))) >>= fun '(@existT _ _ __withdrawal1 (@existT _ _ __withdrawal0 value)) =>
         (trie_insert_item (builder) ((item_leaf (item.(RlpIndexItem_key)) (value)))
            (item.(RlpIndexItem_next_key))) >>= fun (w__0 : TrieBuilder) =>
         let builder := w__0  : TrieBuilder in
@@ -15491,15 +14180,15 @@ Definition expected_payload_excess_blob_gas (witness : WitnessContext) : M (exce
    returnM (Build_excess_blob_gas_typ (semanticResult)).
 
 Definition execution_requests_hash (input_ref : StatelessInputRef) : M (hash) :=
-   let '(@existT _ _ _ (@existT _ _ _ deposits)) :=
+   let '(@existT _ _ deposits__'len (@existT _ _ deposits__'off deposits)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_deposits))))) : {len & {off & (ByteSliceFields off len)}}%type) in
-   let '(@existT _ _ _ (@existT _ _ _ withdrawal_requests)) :=
+   let '(@existT _ _ withdrawal_requests__'len (@existT _ _ withdrawal_requests__'off withdrawal_requests)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_withdrawal_requests))))) : {len & {off & (ByteSliceFields off len)}}%type) in
-   let '(@existT _ _ _ (@existT _ _ _ consolidation_requests)) :=
+   let '(@existT _ _ consolidation_requests__'len (@existT _ _ consolidation_requests__'off consolidation_requests)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_consolidation_requests))))) : {len & {off & (ByteSliceFields off len)}}%type) in
-   let '(@existT _ _ _ (@existT _ _ _ builder_deposit_requests)) :=
+   let '(@existT _ _ builder_deposit_requests__'len (@existT _ _ builder_deposit_requests__'off builder_deposit_requests)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_builder_deposit_requests))))) : {len & {off & (ByteSliceFields off len)}}%type) in
-   let '(@existT _ _ _ (@existT _ _ _ builder_exit_requests)) :=
+   let '(@existT _ _ builder_exit_requests__'len (@existT _ _ builder_exit_requests__'off builder_exit_requests)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_builder_exit_requests))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    (if neq_int (deposits.(ByteSliceFields_len)) (0) return M (vec (mword 8) 32) then
       (sha256_request_digest ((Ox"00")) (deposits))
@@ -15676,22 +14365,12 @@ Definition validate_executed_block
    read_reg k_fork >>= fun (w__12 : Fork) =>
    (if fork_gteq (w__12) (Amsterdam) return M (unit) then
       let '(_) := (cycle_scope_start (SCOPE_BLOCK_ACCESS_LIST))  : unit in
-      (encode_block_access_list (tt)) >>= fun block_access_list =>
-      let '(_) := (cycle_scope_end (SCOPE_BLOCK_ACCESS_LIST))  : unit in
-      let maximum_items := e_div ((header.(BlockHeader_gas_limit)).(block_gas_limit_value)) (2000) in
-      (if Z.gtb ((block_access_list.(EncodedBlockAccessList_item_count)).(item_count_value))
-            (maximum_items)
-         return
-         M (unit) then
-         throw (InvalidBlock (BlockAccessListTooLarge))
-       else returnM (tt)) >>
-      (bytes_segments_equal_slice
-         ([BytesSlice
-             (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (block_access_list.(EncodedBlockAccessList_bytes))))))])
-         (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (block.(Block_body).(BlockBody_block_access_list))))))) >>= fun (w__13 : bool) =>
-      (if negb (w__13) return M (unit) then throw (InvalidBlock (InvalidBlockAccessList))
-       else returnM (tt))
-       : M (unit)
+      let maximum_items : Z :=
+        e_div ((header.(BlockHeader_gas_limit)).(block_gas_limit_value)) (2000) in
+      (validate_block_access_list
+         (projT2 (projT2 (block.(Block_body).(BlockBody_block_access_list))))
+         (Build_item_count ((maximum_items)))) >>
+      returnM ((cycle_scope_end (SCOPE_BLOCK_ACCESS_LIST)))
     else returnM (tt))
     : M (unit).
 
@@ -16187,9 +14866,9 @@ Definition clog2 (n : htr_leaf_count) (*(0 <=? n) && (n <=? 33554432)*) : M (htr
    returnM (depth)) >>= fun semanticResult =>
    returnM (Build_htr_depth (semanticResult)).
 
-Definition htr_chunk {ex415382_ : Z} {ex415381_ : Z}
-(bytes : ByteSliceFields ex415381_ ex415382_) (chunk_index : htr_leaf_count)
-(*(0 <=? ex415381_) && (0 <=? ex415382_)*) (*(0 <=? chunk_index) && (chunk_index <=? 33554432)*)
+Definition htr_chunk {ex421102_ : Z} {ex421101_ : Z}
+(bytes : ByteSliceFields ex421101_ ex421102_) (chunk_index : htr_leaf_count)
+(*(0 <=? ex421101_) && (0 <=? ex421102_)*) (*(0 <=? chunk_index) && (chunk_index <=? 33554432)*)
 : M (hash) :=
    let chunk_index := (chunk_index).(htr_leaf_count_value) in
    ((slice_load (bytes) ((Z.mul (chunk_index) (WORD_BYTE_LENGTH)))) >>= fun semanticResult =>
@@ -16202,9 +14881,9 @@ Definition htr_chunk_count (byte_len : Z) (*0 <=? byte_len*) : M (htr_leaf_count
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_htr_leaf_count (semanticResult)).
 
-Definition htr_bytes_root {ex415392_ : Z} {ex415391_ : Z}
-(bytes : ByteSliceFields ex415391_ ex415392_) (depth : htr_depth)
-(*(0 <=? ex415391_) && (0 <=? ex415392_)*) (*(0 <=? depth) && (depth <=? 25)*)
+Definition htr_bytes_root {ex421112_ : Z} {ex421111_ : Z}
+(bytes : ByteSliceFields ex421111_ ex421112_) (depth : htr_depth)
+(*(0 <=? ex421111_) && (0 <=? ex421112_)*) (*(0 <=? depth) && (depth <=? 25)*)
 : M (hash) :=
    let depth := (depth).(htr_depth_value) in
    let '(_) := (cycle_scope_start (SCOPE_HTR_BYTES_ROOT))  : unit in
@@ -16229,8 +14908,8 @@ Definition htr_bytes_root {ex415392_ : Z} {ex415391_ : Z}
    let '(_) := (cycle_scope_end (SCOPE_HTR_BYTES_ROOT))  : unit in
    returnM (root).
 
-Definition htr_bytevector {ex415397_ : Z} {ex415396_ : Z}
-(bytes : ByteSliceFields ex415396_ ex415397_) (*(0 <=? ex415396_) && (0 <=? ex415397_)*)
+Definition htr_bytevector {ex421117_ : Z} {ex421116_ : Z}
+(bytes : ByteSliceFields ex421116_ ex421117_) (*(0 <=? ex421116_) && (0 <=? ex421117_)*)
 : M (hash) :=
    ((htr_chunk_count (bytes.(ByteSliceFields_len))) >>= fun semanticResult =>
     returnM (semanticResult).(htr_leaf_count_value)) >>= fun chunks =>
@@ -16239,20 +14918,20 @@ Definition htr_bytevector {ex415397_ : Z} {ex415396_ : Z}
    (htr_bytes_root (bytes) (Build_htr_depth ((w__0))))
     : M (vec (mword 8) 32).
 
-Definition htr_bytelist {ex415404_ : Z} {ex415403_ : Z}
-(bytes : ByteSliceFields ex415403_ ex415404_) (limit_bytes : Z) (*0 <=? limit_bytes*)
-(*(0 <=? ex415403_) && (0 <=? ex415404_)*)
+Definition htr_bytelist {ex421124_ : Z} {ex421123_ : Z}
+(bytes : ByteSliceFields ex421123_ ex421124_) (limit_bytes : Z) (*0 <=? limit_bytes*)
+(*(0 <=? ex421123_) && (0 <=? ex421124_)*)
 : M (hash) :=
    ((htr_chunk_count (limit_bytes)) >>= fun semanticResult =>
     returnM (semanticResult).(htr_leaf_count_value)) >>= fun capacity =>
    ((clog2 (Build_htr_leaf_count ((capacity)))) >>= fun semanticResult =>
     returnM (semanticResult).(htr_depth_value)) >>= fun (w__0 : Z) =>
    (htr_bytes_root (bytes) (Build_htr_depth ((w__0)))) >>= fun (w__1 : vec (mword 8) 32) =>
-   (mix_in_length (w__1) ex415404_)
+   (mix_in_length (w__1) ex421124_)
     : M (vec (mword 8) 32).
 
-Definition htr_withdrawal {ex415410_ : Z} (withdrawal : ByteSliceFields ex415410_ 44)
-(ex415411_ := 44) (*(0 <=? ex415410_) && (0 <=? ex415411_) && (ex415411_ =? 44)*)
+Definition htr_withdrawal {ex421130_ : Z} (withdrawal : ByteSliceFields ex421130_ 44)
+(ex421131_ := 44) (*(0 <=? ex421130_) && (0 <=? ex421131_) && (ex421131_ =? 44)*)
 : M (hash) :=
    ((decode_ssz_uint (withdrawal) (WD_INDEX)) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_uint_value)) >>= fun (w__0 : Z) =>
@@ -16318,7 +14997,7 @@ Definition htr_withdrawals (withdrawals : BoundedSszListRef (2 ^ 4)) : M (hash) 
 
 Definition htr_execution_payload (input_ref : StatelessInputRef) : M (hash) :=
    let '(_) := (cycle_scope_start (SCOPE_HTR_EXECUTION_PAYLOAD))  : unit in
-   let '(@existT _ _ _ (@existT _ _ _ payload)) :=
+   let '(@existT _ _ payload__'len (@existT _ _ payload__'off payload)) :=
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_execution_payload))))) : {len & {off & (ByteSliceFields off len)}}%type) in
    (ssz_bytes32 (payload) (0)) >>= fun (w__0 : vec (mword 8) 32) =>
    (ssz_addr (payload) (PL_FEE_RECIPIENT)) >>= fun (w__1 : vec (mword 8) 20) =>
@@ -16371,8 +15050,8 @@ Definition htr_execution_payload (input_ref : StatelessInputRef) : M (hash) :=
    let '(_) := (cycle_scope_end (SCOPE_HTR_EXECUTION_PAYLOAD))  : unit in
    returnM (root).
 
-Definition htr_versioned_hashes {ex415415_ : Z} {ex415414_ : Z}
-(versioned_hashes : ByteSliceFields ex415414_ ex415415_) (*(0 <=? ex415414_) && (0 <=? ex415415_)*)
+Definition htr_versioned_hashes {ex421135_ : Z} {ex421134_ : Z}
+(versioned_hashes : ByteSliceFields ex421134_ ex421135_) (*(0 <=? ex421134_) && (0 <=? ex421135_)*)
 : M (hash) :=
    let '(_) := (cycle_scope_start (SCOPE_HTR_VERSIONED_HASHES))  : unit in
    (ssz_bounded_fixed_list_ref (versioned_hashes) (WORD_BYTE_LENGTH) ((pow2 (12)))) >>= fun rest =>
@@ -16397,8 +15076,8 @@ Definition htr_versioned_hashes {ex415415_ : Z} {ex415414_ : Z}
    let '(_) := (cycle_scope_end (SCOPE_HTR_VERSIONED_HASHES))  : unit in
    returnM (root).
 
-Definition htr_deposit {ex415419_ : Z} (deposit : ByteSliceFields ex415419_ 192) (ex415420_ := 192)
-(*(0 <=? ex415419_) && (0 <=? ex415420_) && (ex415420_ =? 192)*)
+Definition htr_deposit {ex421139_ : Z} (deposit : ByteSliceFields ex421139_ 192) (ex421140_ := 192)
+(*(0 <=? ex421139_) && (0 <=? ex421140_) && (ex421140_ =? 192)*)
 : M (hash) :=
    (htr_bytevector ((sub_slice (deposit) (HTR_DEPOSIT_PUBKEY) (HTR_DEPOSIT_PUBKEY_LENGTH)))) >>= fun (w__0 : vec (mword 8) 32) =>
    (ssz_bytes32 (deposit) (HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS)) >>= fun (w__1 : vec (mword 8) 32) =>
@@ -16415,8 +15094,8 @@ Definition htr_deposit {ex415419_ : Z} (deposit : ByteSliceFields ex415419_ 192)
       htr_uint (Build_ssz_uint ((w__4)))]) (Build_htr_depth ((3))))
     : M (vec (mword 8) 32).
 
-Definition htr_withdrawal_request {ex415424_ : Z} (request : ByteSliceFields ex415424_ 76)
-(ex415425_ := 76) (*(0 <=? ex415424_) && (0 <=? ex415425_) && (ex415425_ =? 76)*)
+Definition htr_withdrawal_request {ex421144_ : Z} (request : ByteSliceFields ex421144_ 76)
+(ex421145_ := 76) (*(0 <=? ex421144_) && (0 <=? ex421145_) && (ex421145_ =? 76)*)
 : M (hash) :=
    (htr_bytevector ((sub_slice (request) (HTR_REQUEST_SOURCE_ADDRESS) (ADDRESS_BYTE_LENGTH)))) >>= fun (w__0 : vec (mword 8) 32) =>
    (htr_bytevector ((sub_slice (request) (HTR_REQUEST_SOURCE_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)))) >>= fun (w__1 : vec (mword 8) 32) =>
@@ -16425,8 +15104,8 @@ Definition htr_withdrawal_request {ex415424_ : Z} (request : ByteSliceFields ex4
    (merkleize ([w__0; w__1; htr_uint (Build_ssz_uint ((w__2)))]) (Build_htr_depth ((2))))
     : M (vec (mword 8) 32).
 
-Definition htr_consolidation_request {ex415429_ : Z} (request : ByteSliceFields ex415429_ 116)
-(ex415430_ := 116) (*(0 <=? ex415429_) && (0 <=? ex415430_) && (ex415430_ =? 116)*)
+Definition htr_consolidation_request {ex421149_ : Z} (request : ByteSliceFields ex421149_ 116)
+(ex421150_ := 116) (*(0 <=? ex421149_) && (0 <=? ex421150_) && (ex421150_ =? 116)*)
 : M (hash) :=
    (htr_bytevector ((sub_slice (request) (HTR_REQUEST_SOURCE_ADDRESS) (ADDRESS_BYTE_LENGTH)))) >>= fun (w__0 : vec (mword 8) 32) =>
    (htr_bytevector ((sub_slice (request) (HTR_REQUEST_SOURCE_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)))) >>= fun (w__1 : vec (mword 8) 32) =>
@@ -16435,8 +15114,8 @@ Definition htr_consolidation_request {ex415429_ : Z} (request : ByteSliceFields 
    (merkleize ([w__0; w__1; w__2]) (Build_htr_depth ((2))))
     : M (vec (mword 8) 32).
 
-Definition htr_builder_deposit_request {ex415434_ : Z} (request : ByteSliceFields ex415434_ 184)
-(ex415435_ := 184) (*(0 <=? ex415434_) && (0 <=? ex415435_) && (ex415435_ =? 184)*)
+Definition htr_builder_deposit_request {ex421154_ : Z} (request : ByteSliceFields ex421154_ 184)
+(ex421155_ := 184) (*(0 <=? ex421154_) && (0 <=? ex421155_) && (ex421155_ =? 184)*)
 : M (hash) :=
    (htr_bytevector ((sub_slice (request) (HTR_BUILDER_DEPOSIT_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)))) >>= fun (w__0 : vec (mword 8) 32) =>
    (ssz_bytes32 (request) (HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS)) >>= fun (w__1 : vec (mword 8) 32) =>
@@ -16448,16 +15127,16 @@ Definition htr_builder_deposit_request {ex415434_ : Z} (request : ByteSliceField
       (Build_htr_depth ((2))))
     : M (vec (mword 8) 32).
 
-Definition htr_builder_exit_request {ex415439_ : Z} (request : ByteSliceFields ex415439_ 68)
-(ex415440_ := 68) (*(0 <=? ex415439_) && (0 <=? ex415440_) && (ex415440_ =? 68)*)
+Definition htr_builder_exit_request {ex421159_ : Z} (request : ByteSliceFields ex421159_ 68)
+(ex421160_ := 68) (*(0 <=? ex421159_) && (0 <=? ex421160_) && (ex421160_ =? 68)*)
 : M (hash) :=
    (htr_bytevector ((sub_slice (request) (HTR_BUILDER_EXIT_SOURCE_ADDRESS) (ADDRESS_BYTE_LENGTH)))) >>= fun (w__0 : vec (mword 8) 32) =>
    (htr_bytevector ((sub_slice (request) (HTR_BUILDER_EXIT_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)))) >>= fun (w__1 : vec (mword 8) 32) =>
    (merkleize ([w__0; w__1]) (Build_htr_depth ((1))))
     : M (vec (mword 8) 32).
 
-Definition htr_deposits {ex415444_ : Z} {ex415443_ : Z}
-(deposits : ByteSliceFields ex415443_ ex415444_) (*(0 <=? ex415443_) && (0 <=? ex415444_)*)
+Definition htr_deposits {ex421164_ : Z} {ex421163_ : Z}
+(deposits : ByteSliceFields ex421163_ ex421164_) (*(0 <=? ex421163_) && (0 <=? ex421164_)*)
 : M (hash) :=
    (ssz_bounded_fixed_list_ref (deposits) (HTR_DEPOSIT_LENGTH) ((pow2 (13)))) >>= fun rest =>
    let accumulator := merkle_accumulator_empty (Build_htr_depth ((13))) in
@@ -16479,8 +15158,8 @@ Definition htr_deposits {ex415444_ : Z} {ex415443_ : Z}
    (mix_in_length (w__2) ((accumulator.(MerkleAccumulator_count)).(htr_leaf_count_value)))
     : M (vec (mword 8) 32).
 
-Definition htr_withdrawal_requests {ex415448_ : Z} {ex415447_ : Z}
-(requests : ByteSliceFields ex415447_ ex415448_) (*(0 <=? ex415447_) && (0 <=? ex415448_)*)
+Definition htr_withdrawal_requests {ex421168_ : Z} {ex421167_ : Z}
+(requests : ByteSliceFields ex421167_ ex421168_) (*(0 <=? ex421167_) && (0 <=? ex421168_)*)
 : M (hash) :=
    (ssz_bounded_fixed_list_ref (requests) (HTR_WITHDRAWAL_REQUEST_LENGTH) ((pow2 (4)))) >>= fun rest =>
    let accumulator := merkle_accumulator_empty (Build_htr_depth ((4))) in
@@ -16502,8 +15181,8 @@ Definition htr_withdrawal_requests {ex415448_ : Z} {ex415447_ : Z}
    (mix_in_length (w__2) ((accumulator.(MerkleAccumulator_count)).(htr_leaf_count_value)))
     : M (vec (mword 8) 32).
 
-Definition htr_consolidation_requests {ex415452_ : Z} {ex415451_ : Z}
-(requests : ByteSliceFields ex415451_ ex415452_) (*(0 <=? ex415451_) && (0 <=? ex415452_)*)
+Definition htr_consolidation_requests {ex421172_ : Z} {ex421171_ : Z}
+(requests : ByteSliceFields ex421171_ ex421172_) (*(0 <=? ex421171_) && (0 <=? ex421172_)*)
 : M (hash) :=
    (ssz_bounded_fixed_list_ref (requests) (HTR_CONSOLIDATION_REQUEST_LENGTH) ((pow2 (1)))) >>= fun rest =>
    let accumulator := merkle_accumulator_empty (Build_htr_depth ((1))) in
@@ -16527,8 +15206,8 @@ Definition htr_consolidation_requests {ex415452_ : Z} {ex415451_ : Z}
    (mix_in_length (w__2) ((accumulator.(MerkleAccumulator_count)).(htr_leaf_count_value)))
     : M (vec (mword 8) 32).
 
-Definition htr_builder_deposit_requests {ex415456_ : Z} {ex415455_ : Z}
-(requests : ByteSliceFields ex415455_ ex415456_) (*(0 <=? ex415455_) && (0 <=? ex415456_)*)
+Definition htr_builder_deposit_requests {ex421176_ : Z} {ex421175_ : Z}
+(requests : ByteSliceFields ex421175_ ex421176_) (*(0 <=? ex421175_) && (0 <=? ex421176_)*)
 : M (hash) :=
    (ssz_bounded_fixed_list_ref (requests) (HTR_BUILDER_DEPOSIT_LENGTH) ((pow2 (6)))) >>= fun rest =>
    let accumulator := merkle_accumulator_empty (Build_htr_depth ((6))) in
@@ -16552,8 +15231,8 @@ Definition htr_builder_deposit_requests {ex415456_ : Z} {ex415455_ : Z}
    (mix_in_length (w__2) ((accumulator.(MerkleAccumulator_count)).(htr_leaf_count_value)))
     : M (vec (mword 8) 32).
 
-Definition htr_builder_exit_requests {ex415460_ : Z} {ex415459_ : Z}
-(requests : ByteSliceFields ex415459_ ex415460_) (*(0 <=? ex415459_) && (0 <=? ex415460_)*)
+Definition htr_builder_exit_requests {ex421180_ : Z} {ex421179_ : Z}
+(requests : ByteSliceFields ex421179_ ex421180_) (*(0 <=? ex421179_) && (0 <=? ex421180_)*)
 : M (hash) :=
    (ssz_bounded_fixed_list_ref (requests) (HTR_BUILDER_EXIT_LENGTH) ((pow2 (4)))) >>= fun rest =>
    let accumulator := merkle_accumulator_empty (Build_htr_depth ((4))) in
@@ -16613,14 +15292,14 @@ Definition result_prefix (root : vec (mword 8) 32) (success : bool) : M (unit) :
       (Ox"00")]) (RESULT_METADATA_LENGTH))
     : M (unit).
 
-Definition commit_validation_result {ex415466_ : Z} {ex415465_ : Z}
-(root : vec (mword 8) 32) (success : bool) (chain_config : ByteSliceFields ex415465_ ex415466_)
-(*(0 <=? ex415465_) && (0 <=? ex415466_)*)
+Definition commit_validation_result {ex421186_ : Z} {ex421185_ : Z}
+(root : vec (mword 8) 32) (success : bool) (chain_config : ByteSliceFields ex421185_ ex421186_)
+(*(0 <=? ex421185_) && (0 <=? ex421186_)*)
 : M (unit) :=
    (scratch_begin (tt)) >>= fun start =>
    (result_prefix (root) (success)) >>
    (scratch_push_slice (chain_config)) >>
-   (scratch_finish (start)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__0)) =>
+   (scratch_finish (start)) >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 w__0)) =>
    (public_output_write (@existT _ _ _ (@existT _ _ _ (w__0)))) >>= fun (w__1 : bool) =>
    (assert_exp w__1 "public output write")
     : M (unit).
@@ -16662,14 +15341,14 @@ Definition write_invalid_result '(tt : unit) : M (unit) :=
       (Ox"00");
       (Ox"00");
       (Ox"00")]) (24)) >>
-   (scratch_finish (start)) >>= fun '(@existT _ _ _ (@existT _ _ _ chain_config)) =>
+   (scratch_finish (start)) >>= fun '(@existT _ _ __chain_config1 (@existT _ _ __chain_config0 chain_config)) =>
    (commit_validation_result (ZERO_HASH) (false) (chain_config)) >>
    returnM ((cycle_scope_end (SCOPE_SERIALIZE_OUTPUT))).
 
 Definition main '(tt : unit) : M (unit) :=
    let '(_) := (validation_debug_reset (tt))  : unit in
    let '(_) := (cycle_scope_start (SCOPE_STATELESS_VALIDATION))  : unit in
-   (try_catch ((stateless_input (tt)) >>= fun '(@existT _ _ _ (@existT _ _ _ w__0)) =>
+   (try_catch ((stateless_input (tt)) >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 w__0)) =>
                (decode_stateless_input_ref (w__0)) >>= fun input_ref =>
                (verify_stateless_payload (input_ref)) >>= fun (validation : StatelessValidationResult) =>
                let valid : bool :=
@@ -16701,10 +15380,10 @@ Definition main '(tt : unit) : M (unit) :=
 Definition initialize_registers '(tt : unit) : unit := tt.
 
 Definition sail_model_init (_ : unit) : M (unit) :=
-   write_reg scratch_arena (@existT _ _ _ (@existT _ _ _ (byte_slice (ScratchSource) (0) (0)))) >>
+   write_reg scratch_arena (@existT _ _ 0 (@existT _ _ 0 (byte_slice (ScratchSource) (0) (0)))) >>
    write_reg k_parent_state_root (ZERO_HASH) >>
-   write_reg k_n_headers (Build_item_count_typ ((0))) >>
-   write_reg k_chain_id (1) >>
+   write_reg k_n_headers (Build_item_count ((0))) >>
+   write_reg k_chain_id (Build_chain_identifier ((1))) >>
    write_reg k_fork (Amsterdam) >>
    write_reg
      k_blob_schedule
@@ -16715,7 +15394,7 @@ Definition sail_model_init (_ : unit) : M (unit) :=
      k_header
      (({| BlockHeader_number := 0;
           BlockHeader_timestamp := 0;
-          BlockHeader_extra_data := @existT _ _ _ (@existT _ _ _ (EMPTY_SLICE));
+          BlockHeader_extra_data := @existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE));
           BlockHeader_gas_limit := (Build_block_gas_limit (0));
           BlockHeader_gas_used := 0;
           BlockHeader_prev_randao := (Build_word ((ZERO_WORD).(word_value)));
@@ -16734,6 +15413,7 @@ Definition sail_model_init (_ : unit) : M (unit) :=
      (({| TxEnv_origin := ZERO_ADDRESS;
           TxEnv_gas_price := (Build_word ((ZERO_WORD).(word_value)));
           TxEnv_blob_hashes := EMPTY_BLOB_HASHES |})) >>
+   write_reg k_block_access_index (Build_block_access_index ((0))) >>
    write_reg pc (0) >>
    write_reg gas_remaining (GAS_ZERO) >>
    write_reg state_gas_remaining (GAS_ZERO) >>
@@ -16744,12 +15424,10 @@ Definition sail_model_init (_ : unit) : M (unit) :=
    write_reg frame_status ((Running (tt))) >>
    write_reg message (DEFAULT_MESSAGE) >>
    write_reg call_depth (Build_frame_depth ((0))) >>
-   write_reg frame_stack ((vector_init (1024) (DEFAULT_FRAME_CONTINUATION))) >>
-   write_reg frame_stack_top (Build_frame_depth ((0))) >>
    write_reg frame_code (EMPTY_CODE) >>
-   write_reg calldata (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE))) >>
-   write_reg returndata (@existT _ _ _ (@existT _ _ _ (EMPTY_SLICE))) >>
-   write_reg evm_memory (@existT _ _ _ (@existT _ _ _ (byte_slice (EvmMemorySource) (0) (0)))) >>
+   write_reg calldata (@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) >>
+   write_reg returndata (@existT _ _ 0 (@existT _ _ 0 (EMPTY_SLICE))) >>
+   write_reg evm_memory (@existT _ _ 0 (@existT _ _ 0 (byte_slice (EvmMemorySource) (0) (0)))) >>
    returnM ((initialize_registers (tt))).
 
 

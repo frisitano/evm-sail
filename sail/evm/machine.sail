@@ -36,43 +36,6 @@ register call_depth : frame_depth = 0
 /*! A message call may nest at most 1024 frames deep (EIP-150 / YP). */
 let DEPTH_LIMIT : frame_depth = 1024
 
-/* Suspended parents occupy a fixed protocol-sized arena. Popping or resetting
- * changes only the top pointer; stale entries are overwritten by later calls. */
-/*! The continuation arena for nested calls and creates. */
-register frame_stack : FrameStack = vector_init(DEFAULT_FRAME_CONTINUATION)
-/*! The number of live continuations in [frame_stack][]. */
-register frame_stack_top : frame_depth = 0
-
-/*! Starts a top-level interpretation with no suspended parent. */
-function frame_stack_reset() -> unit = frame_stack_top = 0
-
-/*! Whether the active frame is the top-level frame. */
-function frame_stack_is_empty() -> bool = frame_stack_top == 0
-
-/*! Saves the action to perform when the newly-entered child finishes. */
-function frame_stack_push(continuation : FrameContinuation) -> unit = {
-    let top = frame_stack_top;
-    if top < DEPTH_LIMIT then {
-        frame_stack[top] = continuation;
-        frame_stack_top = top + 1
-    } else {
-        assert(false)
-    }
-}
-
-/*! Removes and returns the current child frame's parent continuation. */
-function frame_stack_pop() -> FrameContinuation = {
-    let top = frame_stack_top;
-    if 0 < top then {
-        let parent_top = top - 1;
-        frame_stack_top = parent_top;
-        frame_stack[parent_top]
-    } else {
-        assert(false);
-        DEFAULT_FRAME_CONTINUATION
-    }
-}
-
 /*! Adds two semantically bounded refund quantities and narrows their exact sum
     back to the accumulator range. The dependent signature preserves the input
     values and their bounds for proof extraction; optimized C specializes the

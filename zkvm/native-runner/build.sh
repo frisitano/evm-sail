@@ -61,7 +61,7 @@ FFI="$ROOT/ffi"
 # model/input umbrella: each external operation is declared by its subsystem.
 MODEL_HEADERS=(
   byte_slice_glue.h host_crypto.h precompiles.h output.h scratch.h memory.h
-  transient_storage.h stack.h code_db.h kernel_state.h trie_node_db.h
+  transient_storage.h stack.h frame_stack.h code_db.h kernel_state.h trie_node_db.h
   state_db.h cycle_scopes.h
 )
 MODEL_INCLUDE_FLAGS=()
@@ -176,6 +176,10 @@ SAIL_CMD+=(
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/address_result_glue.c" -o "$BUILD/address_result_glue.o"
 
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+    -c "$FFI/frame_stack_glue.c" -o "$BUILD/frame_stack_glue.o"
+
 # --- 5. shared harness I/O + CLI main ---------------------------------------
 #   test_utils.c supplies the native standard I/O implementation, large-stack
 #   run, and clear-memory hooks shared by this executable and build_lib.sh.
@@ -200,7 +204,7 @@ fi
 # --- 7. link ----------------------------------------------------------------
 OUT="$BUILD/zkvm_native"
 LINK_CMD=("$CC" "${CFLAGS[@]}"
-    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/address_result_glue.o" "$BUILD/test_utils.o" "$BUILD/main.o"
+    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/address_result_glue.o" "$BUILD/frame_stack_glue.o" "$BUILD/test_utils.o" "$BUILD/main.o"
     "${HOST_OBJS[@]}" "${RUNTIME_OBJS[@]}"
     "${ACCEL_FLAGS[@]}")
 if [ "$EVM_BUILD_MODE" = standard ]; then

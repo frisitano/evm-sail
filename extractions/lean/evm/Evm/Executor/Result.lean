@@ -53,7 +53,7 @@ request, the validation verdict, and the echoed chain configuration. -/
 def RESULT_METADATA_LENGTH : Nat := 5
 
 /-- Writes the request root and validation metadata evm_prefix. -/
-/- Type quantifiers: k_ex418237_ : Bool -/
+/- Type quantifiers: k_ex417916_ : Bool -/
 def result_prefix (root : (Vector (BitVec 8) 32)) (success : Bool) : SailM Unit := do
   (scratch_push_bytes (hash_to_bytes32 root) WORD_BYTE_LENGTH)
   (scratch_push_bytes
@@ -62,7 +62,7 @@ def result_prefix (root : (Vector (BitVec 8) 32)) (success : Bool) : SailM Unit 
     else 0x00#8), 0x25#8, 0x00#8, 0x00#8, 0x00#8] RESULT_METADATA_LENGTH)
 
 /-- Serializes and commits the public validation result exactly once. -/
-/- Type quantifiers: chain_config_dependentWitness1 : Nat, chain_config_dependentWitness0 : Nat, k_ex418240_
+/- Type quantifiers: chain_config_dependentWitness1 : Nat, chain_config_dependentWitness0 : Nat, k_ex417919_
   : Bool, 0 ≤ chain_config_dependentWitness0 ∧ 0 ≤ chain_config_dependentWitness1 -/
 def commit_validation_result (root : (Vector (BitVec 8) 32)) (success : Bool) (chain_config : (Sigma
   fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM Unit := do
@@ -79,7 +79,7 @@ def commit_validation_result (root : (Vector (BitVec 8) 32)) (success : Bool) (c
 /-- Emits the full public output for a decoded input: the request root
 computed from the input itself, the verdict, and the input's chain
 configuration echoed byte for byte. -/
-/- Type quantifiers: k_ex418245_ : Bool -/
+/- Type quantifiers: k_ex417924_ : Bool -/
 def write_validation_result (input_ref : StatelessInputRef) (success : Bool) : SailM Unit := do
   let _ : Unit := (cycle_scope_start SCOPE_COMPUTE_OUTPUT_ROOT)
   let root ← do (htr_new_payload_request input_ref)

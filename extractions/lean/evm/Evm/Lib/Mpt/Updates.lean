@@ -238,7 +238,7 @@ remaining path is absorbed into it. This is the one place a delete
 collapse can demand node material: an unknown-type hash reference
 absorbing a nonempty suffix resolves its node from the witness db
 (fail-closed). -/
-/- Type quantifiers: k_ex417381_ : Nat, 0 ≤ k_ex417381_ ∧ k_ex417381_ ≤ 64 -/
+/- Type quantifiers: k_ex417060_ : Nat, 0 ≤ k_ex417060_ ∧ k_ex417060_ ≤ 64 -/
 def item_ref (it : TrieItem) (depth : Nat) : SailM NodeRef := do
   let suffix ← do (path_drop it.path depth)
   match it.value with
@@ -275,7 +275,7 @@ def trie_builder_empty (_ : Unit) : TrieBuilder :=
     complete := false }
 
 /-- Opens an empty branch at `depth` on the builder stack. -/
-/- Type quantifiers: k_ex417384_ : Nat, 0 ≤ k_ex417384_ ∧ k_ex417384_ ≤ 63 -/
+/- Type quantifiers: k_ex417063_ : Nat, 0 ≤ k_ex417063_ ∧ k_ex417063_ ≤ 63 -/
 def trie_builder_push (builder : TrieBuilder) (depth : Nat) : TrieBuilder :=
   { frames := ((empty_trie_branch_frame depth) :: builder.frames),
     root := builder.root,
@@ -317,8 +317,8 @@ def trie_builder_pop (builder : TrieBuilder) : SailM (TrieBranchFrame × TrieBui
 
 /-- Inserts an extension between parent and child depths when their paths have
 an unbranched gap. -/
-/- Type quantifiers: k_ex417386_ : Nat, k_ex417385_ : Nat, 0 ≤ k_ex417385_ ∧ k_ex417385_ ≤ 63, 0
-  ≤ k_ex417386_ ∧ k_ex417386_ ≤ 63 -/
+/- Type quantifiers: k_ex417065_ : Nat, k_ex417064_ : Nat, 0 ≤ k_ex417064_ ∧ k_ex417064_ ≤ 63, 0
+  ≤ k_ex417065_ ∧ k_ex417065_ ≤ 63 -/
 def trie_builder_wrap_branch (anchor : TriePath) (parent_depth : Nat) (child_depth : Nat) (child : NodeRef) : SailM NodeRef := do
   let child_start : Nat := (parent_depth + 1)
   if ((child_depth ≤b child_start) : Bool)
@@ -329,7 +329,7 @@ def trie_builder_wrap_branch (anchor : TriePath) (parent_depth : Nat) (child_dep
       (extension_child_ref (← (path_take (← (path_drop anchor child_start)) gap)) child))
 
 /-- Closes every branch deeper than the next key's common evm_prefix. -/
-/- Type quantifiers: _reclimit : Nat, k_ex417387_ : Nat, 0 ≤ k_ex417387_ ∧ k_ex417387_ ≤ 64, 0
+/- Type quantifiers: _reclimit : Nat, k_ex417066_ : Nat, 0 ≤ k_ex417066_ ∧ k_ex417066_ ≤ 64, 0
   ≤ _reclimit -/
 def _rec_trie_builder_close (builder : TrieBuilder) (anchor : TriePath) (next_common : (Option Nat)) (fuel : Nat) (_reclimit : Nat) : SailM TrieBuilder := do
   match _reclimit with

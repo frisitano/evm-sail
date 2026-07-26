@@ -55,7 +55,7 @@ def k_log (a : (Vector (BitVec 8) 20)) (topics : (List Nat)) (data : Bytes) : Sa
 
 /-- Emits the EIP-7708 transfer log for a nonzero, non-self value
 transfer (Amsterdam onward). -/
-/- Type quantifiers: k_ex416653_ : Nat, 0 ≤ k_ex416653_ ∧ k_ex416653_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex416332_ : Nat, 0 ≤ k_ex416332_ ∧ k_ex416332_ ≤ (2 ^ 256 - 1) -/
 def k_emit_transfer_log (src : (Vector (BitVec 8) 20)) (dst : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   if (((fork_lt (← readReg k_fork) Amsterdam) || ((word_is_zero v) || (src == dst))) : Bool)
   then (pure ())
@@ -66,7 +66,7 @@ def k_emit_transfer_log (src : (Vector (BitVec 8) 20)) (dst : (Vector (BitVec 8)
 
 /-- Emits the EIP-7708 burn log when a selfdestruct deletion burns a
 nonzero balance (Amsterdam onward). -/
-/- Type quantifiers: k_ex416654_ : Nat, 0 ≤ k_ex416654_ ∧ k_ex416654_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex416333_ : Nat, 0 ≤ k_ex416333_ ∧ k_ex416333_ ≤ (2 ^ 256 - 1) -/
 def k_emit_burn_log (a : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   if (((fork_lt (← readReg k_fork) Amsterdam) || (word_is_zero v)) : Bool)
   then (pure ())

@@ -610,6 +610,7 @@ structure HostState where
   outputBytes : Array byte
   publicOutput : Array byte
   stackFrames : List (List word)
+  continuationFrames : List FrameContinuation
   ancestorHashes : Array hash
   jumpdestTables : List JumpdestTable
   codeDb : List (hash × Code)
@@ -652,6 +653,7 @@ def initialHostState : HostState where
   outputBytes := #[]
   publicOutput := #[]
   stackFrames := [[]]
+  continuationFrames := []
   ancestorHashes := #[]
   jumpdestTables := []
   codeDb := []
@@ -944,6 +946,21 @@ def stack_peek_word (index : stack_index) : SailM word := do
 def stack_set_word (index : stack_index) (value : word) : SailM Unit :=
   modify fun state =>
     replaceCurrentStack state (replaceListAt (currentStack state) index value)
+
+def frame_stack_reset (_ : Unit) : SailM Unit :=
+  modify fun state => { state with continuationFrames := [] }
+
+def frame_stack_push (continuation : FrameContinuation) : SailM Unit :=
+  modify fun state =>
+    { state with continuationFrames := continuation :: state.continuationFrames }
+
+def frame_stack_pop (_ : Unit) : SailM FrameContinuation := do
+  let state ← get
+  match state.continuationFrames with
+  | continuation :: rest =>
+      set { state with continuationFrames := rest }
+      pure continuation
+  | [] => pure (FrameContinuation.Empty ())
 
 def stateless_input (_ : Unit) : SailM EvmByteSlice := do
   let length := (← get).inputBytes.size

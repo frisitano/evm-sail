@@ -13,7 +13,7 @@ elif [ -x "$LOCAL_FEATURE_SAIL" ]; then
 elif command -v sail >/dev/null 2>&1; then
     candidate="$(command -v sail)"
 else
-    echo "error: Sail was not found; set SAIL to a compiler with bound-driven C specialization support" >&2
+    echo "error: custom Sail was not found; set SAIL to the repository compiler with standard proof backends and bound-driven C specialization" >&2
     exit 1
 fi
 

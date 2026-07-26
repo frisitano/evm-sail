@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Benchmark stateless-validator ZisK guests with the local CPU emulator.
 
-The benchmark is deliberately sequential and sets ``RAYON_NUM_THREADS=1``.
-ZisK steps are the primary comparison; wall time includes process startup and
-is reported only as a secondary host-side measurement.
+Guest invocations are deliberately sequential, while each emulator process is
+free to use its normal Rayon parallelism. ZisK steps are the primary
+comparison; wall time includes process startup and is reported only as a
+secondary host-side measurement.
 """
 
 from __future__ import annotations
@@ -219,7 +220,6 @@ def run_emulator(
     result = subprocess.run(
         command,
         capture_output=True,
-        env={**os.environ, "RAYON_NUM_THREADS": "1"},
         text=True,
         timeout=timeout,
     )
@@ -303,7 +303,6 @@ def run_profile(
     result = subprocess.run(
         command,
         capture_output=True,
-        env={**os.environ, "RAYON_NUM_THREADS": "1"},
         text=True,
         timeout=timeout,
     )
@@ -354,7 +353,7 @@ def markdown_report(result: dict[str, object], baseline: str) -> str:
         "# ZisK CPU benchmark",
         "",
         f"Cases: {result['case_count']}; repetitions: {result['repetitions']}; "
-        f"single-threaded and sequential.",
+        "guest invocations are sequential.",
         "",
         "| Guest | ELF MiB | ZisK steps | vs baseline | median wall ms | p95 wall ms | Output |",
         "| --- | ---: | ---: | ---: | ---: | ---: | --- |",
@@ -373,7 +372,9 @@ def markdown_report(result: dict[str, object], baseline: str) -> str:
         [
             "",
             "ZisK steps are deterministic for a fixed ELF and input. Wall time includes",
-            "ELF loading and emulator process startup and is therefore secondary.",
+            "ELF loading and emulator process startup and is therefore secondary. The",
+            "emulator uses its normal Rayon parallelism unless RAYON_NUM_THREADS is set",
+            "by the caller.",
             "",
         ]
     )
@@ -463,7 +464,7 @@ def main() -> int:
             "platform": platform.platform(),
             "machine": platform.machine(),
             "python": sys.version.split()[0],
-            "rayon_num_threads": 1,
+            "rayon_num_threads": os.environ.get("RAYON_NUM_THREADS", "default"),
         },
         "ziskemu": {
             "path": str(ziskemu),

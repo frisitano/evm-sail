@@ -89,8 +89,6 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg frame_status (Running ())
   writeReg message DEFAULT_MESSAGE
   writeReg call_depth 0
-  writeReg frame_stack (vectorInit DEFAULT_FRAME_CONTINUATION)
-  writeReg frame_stack_top 0
   writeReg frame_code EMPTY_CODE
   writeReg calldata ⟨_, ⟨_, EMPTY_SLICE⟩⟩
   writeReg returndata ⟨_, ⟨_, EMPTY_SLICE⟩⟩

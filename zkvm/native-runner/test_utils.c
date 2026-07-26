@@ -1,6 +1,7 @@
 /* Native implementation of the same standard read_input/write_output ABI used
  * by the zkVM guest, plus the reusable test-process lifecycle and dump hooks. */
 #include "byte_slice_glue.h"
+#include "frame_stack.h"
 #include EVMSAIL_MODEL_H
 #include "value_convert.h"
 #include "test_utils.h"
@@ -82,6 +83,7 @@ void evmsail_clear_memory(void)
      * not enough: the "codes_missing_*" negative tests need the code DB too. */
     nodedb_reset(UNIT);
     code_db_reset(UNIT);
+    frame_stack_reset(UNIT);
     /* a Sail exception that propagated out of the previous run. Left set it would
      * poison the next run: generated code short-circuits every call while
      * have_exception is true. */

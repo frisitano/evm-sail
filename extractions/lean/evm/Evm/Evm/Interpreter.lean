@@ -61,9 +61,9 @@ opcodes. This module specifies that machinery in three layers:
    decodes to `INVALID`). Reading past the end of code yields `STOP`
    (YP: implicit halt).
 2. **Run loop** — [interpret][] steps fetch-then-execute until the active
-   frame stops. A completed child is resumed through its explicit
-   [FrameContinuation][type-FrameContinuation]; a completed top-level
-   frame ends interpretation.
+   frame stops. Popping a pending [FrameContinuation][type-FrameContinuation]
+   resumes a completed child; [Empty][type-FrameContinuation] marks completion
+   of the top-level frame.
 3. **Message calls** — [run_call][] handles
    `CALL`/`CALLCODE`/`DELEGATECALL`/`STATICCALL` (multiplexed on `mode`)
    and [run_create][] handles `CREATE`/`CREATE2`. A sub-call saves the
@@ -79,9 +79,9 @@ opcodes. This module specifies that machinery in three layers:
 
 /-- Assembles an `n`-byte big-endian PUSH immediate from a local code cursor;
 bytes past the end of code read as zero. -/
-/- Type quantifiers: k_ex417252_ : Nat, k_ex417251_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0
+/- Type quantifiers: k_ex416931_ : Nat, k_ex416930_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0
   : Nat, 0 ≤ code_dependentWitness0 ∧ 0 ≤ code_dependentWitness1 ∧
-  0 ≤ code_dependentWitness1, 0 ≤ k_ex417251_, 0 ≤ k_ex417252_ ∧ k_ex417252_ ≤ 32 -/
+  0 ≤ code_dependentWitness1, 0 ≤ k_ex416930_, 0 ≤ k_ex416931_ ∧ k_ex416931_ ≤ 32 -/
 def read_push (code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (offset : Nat) (n : Nat) : SailM Nat := do
   let code_dependentWitness0 := (code).1
@@ -458,6 +458,7 @@ def resume_frame (continuation : FrameContinuation) (output : (Sigma fun (k_off 
   let output_dependentWitness1 := ((output).2).1
   let output := ((output).2).2
   match continuation with
+  | .Empty () => sailThrow ((InvalidBlock ExecutionInvalid))
   | .ResumeCall call => (resume_call call ⟨_, ⟨_, output⟩⟩)
   | .ResumeCreate create => (resume_create create ⟨_, ⟨_, output⟩⟩)
 
@@ -490,8 +491,8 @@ def interpret (_ : Unit) : SailM (Sigma fun (k_off : Nat) =>
             (do
               let ⟨_, ⟨_, output⟩⟩ ← do (frame_output ())
               let (interpreting, result) ← (( do
-                if _sailIf1 : ((← (frame_stack_is_empty ())) : Bool) = true
-                then
+                match (← (frame_stack_pop ())) with
+                | .Empty () =>
                   (let result : (Sigma fun (k_off : Nat) =>
                     (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) :=
                     ((⟨_, ⟨_, output⟩⟩ : (Sigma fun (k_off : Nat) =>
@@ -500,9 +501,9 @@ def interpret (_ : Unit) : SailM (Sigma fun (k_off : Nat) =>
                   let interpreting : Bool := false
                   (pure ((interpreting, result) : (Bool × (Sigma fun (k_off : Nat) =>
                     (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))))
-                else
+                | continuation =>
                   (do
-                    (resume_frame (← (frame_stack_pop ())) ⟨_, ⟨_, output⟩⟩)
+                    (resume_frame continuation ⟨_, ⟨_, output⟩⟩)
                     (pure ((interpreting, result) : (Bool × (Sigma fun (k_off : Nat) =>
                       (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))))) ) : SailM
                 (Bool × (Sigma fun (k_off : Nat) =>

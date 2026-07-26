@@ -594,8 +594,8 @@ def rlp_node_cursor (node : (Sigma fun (k_off : Nat) =>
     let dependentResult ← (do
         let dependentArg0 := (← (rlp_single_ref node))
         let publicResult ← (rlp_ref_cursor (dependentArg0).2)
-        pure ((⟨_, publicResult⟩ : (Sigma fun (k_ex420436_ : Nat) =>
-        (EvmByteSliceFields (node_dependentWitness0 + (node_dependentWitness1 - k_ex420436_)) k_ex420436_)))))
+        pure ((⟨_, publicResult⟩ : (Sigma fun (k_ex420115_ : Nat) =>
+        (EvmByteSliceFields (node_dependentWitness0 + (node_dependentWitness1 - k_ex420115_)) k_ex420115_)))))
     pure ((⟨_, ⟨_, (dependentResult).2⟩⟩ : (Sigma fun (k_source_off : Nat) =>
     (Sigma fun (k_source_len : Nat) => (EvmByteSliceFields k_source_off k_source_len))))))
 

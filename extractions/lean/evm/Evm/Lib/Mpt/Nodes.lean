@@ -60,8 +60,8 @@ def inline_node_hash (node : InlineNode) : SailM (Vector (BitVec 8) 32) := do
   (keccak256_segments [(bytes_fixed32 node.data node.len)])
 
 /-- Advances the branch payload length while preserving its structural bound. -/
-/- Type quantifiers: k_ex417337_ : Nat, k_ex417336_ : Nat, 0 ≤ k_ex417336_ ∧ k_ex417336_ ≤ 529, 0
-  ≤ k_ex417337_ ∧ k_ex417337_ ≤ 33 -/
+/- Type quantifiers: k_ex417016_ : Nat, k_ex417015_ : Nat, 0 ≤ k_ex417015_ ∧ k_ex417015_ ≤ 529, 0
+  ≤ k_ex417016_ ∧ k_ex417016_ ≤ 33 -/
 def branch_content_length_add (current : Nat) (addition : Nat) : SailM Nat := do
   if ((addition ≤b (529 - current)) : Bool)
   then (pure (current + addition))

@@ -1,7 +1,5 @@
 import Evm.Prelude
 import Evm.Primitives.Gas
-import Evm.Primitives.Bytes
-import Evm.Primitives.Code
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -102,25 +100,4 @@ def DEFAULT_MESSAGE : Message :=
     state_gas_reservoir := GAS_ZERO,
     is_static := false,
     depth := 0 }
-
-def DEFAULT_FRAME_CHECKPOINT : FrameCheckpoint :=
-  { state := 0,
-    pc := 0,
-    gas_remaining := GAS_ZERO,
-    state_gas_remaining := GAS_ZERO,
-    state_gas_spilled := STATE_GAS_SPILL_ZERO,
-    refund := GAS_REFUND_ZERO,
-    status := (Running ()),
-    message := DEFAULT_MESSAGE,
-    call_depth := 0,
-    code := EMPTY_CODE,
-    calldata := ⟨_, ⟨_, EMPTY_SLICE⟩⟩,
-    memory := ⟨_, ⟨_, EMPTY_SLICE⟩⟩ }
-
-def DEFAULT_FRAME_CONTINUATION : FrameContinuation :=
-  (ResumeCall
-    { checkpoint := DEFAULT_FRAME_CHECKPOINT,
-      return_offset := 0,
-      return_length := 0,
-      new_account_charged := false })
 

@@ -51,15 +51,18 @@ duplicating instructions elsewhere.
   `extractions/contracts/ExternBoundary.v`). These `c:`-bound vals are the TRUE
   axioms (crypto core, I/O oracle, mutable host stores) -- extraction targets
   see them as bodyless parameters; executables link their C definitions from
-  `ffi/`. Generated aggregate values cross through three hand-written glue
+  `ffi/`. Generated aggregate values cross through four hand-written glue
   translation units compiled per build against the GENERATED model header
   (`-DEVMSAIL_MODEL_H`, `-I` build dir), so generated layouts are never
   hand-mirrored: `ffi/journal_glue.c` handles structured account/storage
   rows and options (the rollback journal itself is C-private);
   `ffi/hash_glue.c` handles the hash axioms
   (`keccak256_segments` / `sha256_segments : list(Bytes) -> hash`), segmented
-  byte equality, and log records; and `ffi/code_glue.c` constructs aggregate
-  `option(Code)` lookup results. Sail emits fixed 256-bit JUMPDEST chunks
+  byte equality, and log records; `ffi/code_glue.c` constructs aggregate
+  `option(Code)` lookup results; and `ffi/frame_stack_glue.c` owns the
+  lazily allocated continuation arena, including the standard GMP-backed C
+  ownership operations for only the slots actually reached. Sail emits fixed
+  256-bit JUMPDEST chunks
   directly into one length-preallocated packed C table, so no generated list
   crosses that boundary. A
   hash preimage is a list of Bytes segments -- materialized bytes or
@@ -78,7 +81,8 @@ duplicating instructions elsewhere.
   scratch arena, `state_db.c` for accounts and
   persistent storage cache/update rows, `transient_storage.c` for transient
   storage, the content-addressed code and packed JUMPDEST arenas, node DB,
-  operand stack, and accelerator shims.
+  operand stack, lazily allocated suspended-frame continuation stack, and
+  accelerator shims.
 - `harness/run.py` is the SINGLE fixture harness for the single executable
   entry, built ONCE as a shared library and driven IN-PROCESS via ctypes
   (`harness/dump_state.py`). Each case is serialized to the SSZ
@@ -126,12 +130,14 @@ recursive and trie-shaped:
 
 ## Build And Lint
 
-Optimized native and RISC-V C builds run `zkvm/resolve_optimized_sail.sh` and
-require spliceable type definitions plus bound-driven C specialization. The
-model never carries C-representation annotations: the backend selects native
-representations from the semantic type bounds. Set `SAIL` explicitly to test
-another compiler. Pure model and extraction targets continue to use upstream
-Sail.
+Every model check, extraction target, and executable build resolves the same
+custom Sail compiler through `zkvm/resolve_optimized_sail.sh`. That compiler
+supports the standard Sail backends plus spliceable type definitions and
+bound-driven C specialization. The latter two features are C-backend concerns:
+the model never carries C-representation annotations, and Lean/Coq extraction
+retains the ordinary semantic types without loading the C-only splice. Set
+`SAIL` explicitly to test another build of this custom compiler; upstream Sail
+is not a supported fallback for repository targets.
 
 Run from repo root unless noted:
 

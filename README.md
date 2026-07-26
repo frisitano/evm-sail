@@ -164,15 +164,16 @@ opam install -y rocq-sail-stdpp.0.20.2
 sail --version
 ```
 
-The compiler and `rocq-sail-stdpp` package must have the same Sail release.
+The compiler and `rocq-sail-stdpp` package must have compatible Sail releases.
 
-The pure model and proof extraction targets work with upstream Sail. The C
-extraction and optimized executable builds require spliceable type definitions
-and bound-driven native C representation
-representation extension. `zkvm/resolve_optimized_sail.sh` checks this by
-compiling a small representation probe: it respects an explicit `SAIL`,
-otherwise uses the local feature worktree when present, and fails before the
-full build if the selected compiler lacks the extension.
+All repository targets use one custom Sail compiler, selected by
+`zkvm/resolve_optimized_sail.sh`: an explicit `SAIL` takes precedence, followed
+by the adjacent feature worktree and then `sail` on `PATH`. The compiler
+supports the standard Sail backends plus spliceable type definitions and
+bound-driven native C representations. Those extensions affect only optimized
+C lowering; Lean and Coq use the same compiler without the C-only splice and
+therefore retain the model's ordinary semantic types. Upstream Sail is not a
+supported fallback for checks or proof extraction.
 
 Type-check the specification (block execution is validated by the EEST harness
 and the zkVM guest, below):

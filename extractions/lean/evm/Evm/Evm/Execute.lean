@@ -1012,7 +1012,7 @@ def call_uses_target_address (kind : CallKind) : Bool :=
 account runs the code at its delegation target, following exactly one
 hop; a delegation whose target is a precompile (or has no code)
 executes as empty code. An undelegated account runs its own code. -/
-/- Type quantifiers: k_ex417243_ : Bool -/
+/- Type quantifiers: k_ex416922_ : Bool -/
 def executable_code (target : (Vector (BitVec 8) 20)) (dele : Bool) (dtgt : (Vector (BitVec 8) 20)) : SailM Code := do
   if (dele : Bool)
   then
@@ -1365,7 +1365,7 @@ memory; the new address derives from `(creator, nonce)` for `CREATE`
 or `(creator, salt, keccak256(initcode))` for `CREATE2`. Operand
 layout: `value`, `offset`, `length`, `salt` (for `CREATE2`). Pushes
 the new address on success, 0 on failure. -/
-/- Type quantifiers: k_ex417244_ : Bool -/
+/- Type quantifiers: k_ex416923_ : Bool -/
 def run_create (is2 : Bool) : SailM Unit := do
   let creator ← do (self_addr ())
   let value ← do (pop ())

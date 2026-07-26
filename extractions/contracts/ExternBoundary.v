@@ -153,9 +153,10 @@ Record ByteSourceContract := {
   source_precompile_refinement_contract : Prop;
 }.
 
-(* sail/host/{memory,output,stack}.sail and sail/evm/machine.sail:
-   mem_*, output_buffer_*, stack_*, generic ByteSlice views, the active Code
-   value, and Sail-owned EVM returndata state. *)
+(* sail/host/{memory,output,stack,frame_stack}.sail and
+   sail/evm/machine.sail: mem_*, output_buffer_*, stack_*, frame_stack_*,
+   generic ByteSlice views, the active Code value, and Sail-owned EVM
+   returndata state. *)
 Record MemoryStackContract := {
   memory_state : Type;
   stack_state : Type;
@@ -181,6 +182,7 @@ Record MemoryStackContract := {
   generic_slice_view_contract : Prop;
   output_buffer_contract : Prop;
   evm_stack_lifo_contract : Prop;
+  continuation_stack_lifo_contract : Prop;
   indexed_code_frame_contract : Prop;
 }.
 
@@ -983,6 +985,7 @@ Definition main_boundary (contract : GuestExternContract) : Prop :=
   generic_slice_view_contract contract.(guest_memory_stack) /\
   output_buffer_contract contract.(guest_memory_stack) /\
   evm_stack_lifo_contract contract.(guest_memory_stack) /\
+  continuation_stack_lifo_contract contract.(guest_memory_stack) /\
   indexed_code_frame_contract contract.(guest_memory_stack) /\
   world_state_boundary contract.(guest_crypto)
                        contract.(guest_world_state) /\

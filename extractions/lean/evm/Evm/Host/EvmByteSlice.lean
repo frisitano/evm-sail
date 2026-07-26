@@ -103,9 +103,9 @@ def slice_load (s : (Sigma fun (k_syn_off : Nat) =>
 
 /-- The word at a transaction-controlled 256-bit source offset, returning zero
 when the offset cannot designate a byte in the slice. -/
-/- Type quantifiers: k_ex415376_ : Nat, s_dependentWitness1 : Nat, s_dependentWitness0 : Nat, 0 ≤
-  s_dependentWitness0 ∧ 0 ≤ s_dependentWitness1, 0 ≤ k_ex415376_ ∧
-  k_ex415376_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415055_ : Nat, s_dependentWitness1 : Nat, s_dependentWitness0 : Nat, 0 ≤
+  s_dependentWitness0 ∧ 0 ≤ s_dependentWitness1, 0 ≤ k_ex415055_ ∧
+  k_ex415055_ ≤ (2 ^ 256 - 1) -/
 def slice_load_word_offset (s : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (off : Nat) : SailM Nat := do
   let s_dependentWitness0 := (s).1
@@ -149,9 +149,9 @@ def slice_copy (s : (Sigma fun (k_syn_off : Nat) =>
 
 /-- Copies from a transaction-controlled 256-bit source offset into EVM
 memory, applying the source operation's empty-read and zero-padding rules. -/
-/- Type quantifiers: k_ex415422_ : Nat, k_ex415421_ : Nat, k_ex415420_ : Nat, s_dependentWitness1 :
+/- Type quantifiers: k_ex415101_ : Nat, k_ex415100_ : Nat, k_ex415099_ : Nat, s_dependentWitness1 :
   Nat, s_dependentWitness0 : Nat, 0 ≤ s_dependentWitness0 ∧ 0 ≤ s_dependentWitness1, 0 ≤
-  k_ex415420_, 0 ≤ k_ex415421_ ∧ k_ex415421_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex415422_ -/
+  k_ex415099_, 0 ≤ k_ex415100_ ∧ k_ex415100_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex415101_ -/
 def slice_copy_word_offset (s : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
   let s_dependentWitness0 := (s).1

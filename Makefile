@@ -10,8 +10,9 @@
 #   make all            check + lint + fmt-check
 #   make clean          remove build artifacts
 #
-# Requires the rems-project Sail toolchain (`sail`) on PATH, installed via
-# opam (NOT `brew install sail`, which is an unrelated tool). See README.md.
+# Requires this repository's custom rems-project Sail compiler. It is resolved
+# once through zkvm/resolve_optimized_sail.sh and used for checks plus the C,
+# Coq, and Lean backends. See README.md.
 #
 # Block EXECUTION (compile to C and run) is validated by the EEST harness
 # and the zkVM guest (harness/run.py over the zkvm/native-runner builds).
@@ -45,7 +46,7 @@ LEAN_SPECIALIZATION := $(CONTRACTS_DIR)/Specialization.lean
 LEAN_SAIL_LIB       ?= $(abspath $(LEAN_MODEL_DIR)/.lake/packages/Sail)
 COQ_SEMANTIC_FLAGS  := --coq-semantic-range-types --coq-undef-axioms
 C_MODEL_HEADERS     := sail_failure.h byte_slice_glue.h host_crypto.h precompiles.h output.h \
-                       scratch.h memory.h transient_storage.h stack.h \
+                       scratch.h memory.h transient_storage.h stack.h frame_stack.h \
                        code_db.h kernel_state.h trie_node_db.h state_db.h \
                        cycle_scopes.h
 C_MODEL_INCLUDES    := $(foreach header,$(C_MODEL_HEADERS),--c-include $(header))
@@ -122,6 +123,7 @@ check-contracts:
 	grep -q "Record OutputTraceContract" $(EXTERN_CONTRACT)
 	grep -q "Record CryptoContract" $(EXTERN_CONTRACT)
 	grep -q "Record MemoryStackContract" $(EXTERN_CONTRACT)
+	grep -q "continuation_stack_lifo_contract" $(EXTERN_CONTRACT)
 	grep -q "Record PersistentWorld" $(EXTERN_CONTRACT)
 	grep -q "Record TransactionSnapshot" $(EXTERN_CONTRACT)
 	grep -q "Definition reference_read_storage_original" $(EXTERN_CONTRACT)
@@ -134,6 +136,9 @@ check-contracts:
 	grep -q "Record GuestExternContract" $(EXTERN_CONTRACT)
 	grep -q "^structure PersistentWorld where" $(LEAN_HOST_AXIOMS)
 	grep -q "^structure TransactionSnapshot where" $(LEAN_HOST_AXIOMS)
+	grep -q "^def frame_stack_reset " $(LEAN_HOST_AXIOMS)
+	grep -q "^def frame_stack_push " $(LEAN_HOST_AXIOMS)
+	grep -q "^def frame_stack_pop " $(LEAN_HOST_AXIOMS)
 	grep -q "^def referenceReadStorageOriginal" $(LEAN_HOST_AXIOMS)
 	grep -q "^def worldDeltaDescribes" $(LEAN_HOST_AXIOMS)
 	grep -q "checkpointDenotes" $(LEAN_HOST_AXIOMS)
@@ -151,6 +156,9 @@ extract-coq: check-contracts
 	grep -q "Definition trie_root " $(COQ_MODEL_DIR)/evm.v
 	grep -q "Definition decode_stateless_input_ref" $(COQ_MODEL_DIR)/evm.v
 	grep -q "Definition main" $(COQ_MODEL_DIR)/evm.v
+	grep -q "Axiom frame_stack_reset " $(COQ_MODEL_DIR)/evm.v
+	grep -q "Axiom frame_stack_push " $(COQ_MODEL_DIR)/evm.v
+	grep -q "Axiom frame_stack_pop " $(COQ_MODEL_DIR)/evm.v
 	cd $(COQ_MODEL_DIR) && $(COQC) evm_types.v
 	cd $(COQ_MODEL_DIR) && $(COQC) evm.v
 
@@ -220,6 +228,9 @@ extract-lean:
 	grep -R -q "^def trie_root " $(LEAN_MODEL_DIR)/Evm
 	grep -R -q "^def decode_stateless_input_ref " $(LEAN_MODEL_DIR)/Evm
 	grep -q "^def main " $(LEAN_MODEL_DIR)/Evm.lean
+	grep -q "^def frame_stack_reset " $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
+	grep -q "^def frame_stack_push " $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
+	grep -q "^def frame_stack_pop " $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
 	grep -q "^def referenceWorldStateContract" $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
 	grep -q "^def worldStateBoundary" $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
 	! grep -R -E -q "noncomputable (section|def)|^[[:space:]]*partial def" $(LEAN_MODEL_DIR)/Evm $(LEAN_MODEL_DIR)/Evm.lean
