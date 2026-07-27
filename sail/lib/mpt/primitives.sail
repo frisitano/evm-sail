@@ -113,11 +113,9 @@ function path_concat(a : TriePath, b : TriePath) -> TriePath = {
     if combined <= 64 then {
         var result = a;
         var index : trie_path_len = 0;
-        foreach (_step from 0 to 63) {
-            if index < blen then {
-                result = path_append_nibble(result, path_nibble(b, index));
-                index = trie_path_len_increment(index)
-            }
+        while index < blen termination_measure(blen - index) do {
+            result = path_append_nibble(result, path_nibble(b, index));
+            index = trie_path_len_increment(index)
         };
         result
     } else {
@@ -135,11 +133,9 @@ function path_take(path : TriePath, n : trie_path_len) -> TriePath =
         } else {
             var result = path_empty();
             var index : trie_path_len = 0;
-            foreach (_step from 0 to 63) {
-                if index < n then {
-                    result = path_append_nibble(result, path_nibble(path, index));
-                    index = trie_path_len_increment(index)
-                }
+            while index < n termination_measure(n - index) do {
+                result = path_append_nibble(result, path_nibble(path, index));
+                index = trie_path_len_increment(index)
             };
             result
         }
@@ -157,18 +153,16 @@ function path_drop(path : TriePath, n : trie_path_len) -> TriePath = {
             let remain : trie_path_len = length - n;
             var result = path_empty();
             var offset : trie_path_len = 0;
-            foreach (_step from 0 to 63) {
-                if offset < remain then {
-                    let candidate = n + offset;
-                    let source_index : trie_path_cursor = if (0 <= candidate) & (candidate <= 64) then {
-                            candidate
-                        } else {
-                            assert(false);
-                            0
-                        };
-                    result = path_append_nibble(result, path_nibble(path, source_index));
-                    offset = trie_path_len_increment(offset)
-                }
+            while offset < remain termination_measure(remain - offset) do {
+                let candidate = n + offset;
+                let source_index : trie_path_cursor = if (0 <= candidate) & (candidate <= 64) then {
+                        candidate
+                    } else {
+                        assert(false);
+                        0
+                    };
+                result = path_append_nibble(result, path_nibble(path, source_index));
+                offset = trie_path_len_increment(offset)
             };
             result
         }
@@ -187,67 +181,67 @@ function path_lt(a : TriePath, b : TriePath) -> bool =
         hash_lt(a.data, b.data)
     }
 
-/*! Whether `prefix` is a prefix of `path`. */
-function path_prefix_of(prefix : TriePath, path : TriePath) -> bool = {
-    if path_len(path) < path_len(prefix) then {
+/*! Whether `seg` occurs in `key` at nibble position `pos`. */
+function path_matches(key : TriePath, pos : trie_path_cursor, seg : TriePath) -> bool = {
+    let stop = pos + path_len(seg);
+    if path_len(key) < stop then {
         false
     } else {
-        path_eq(prefix, path_take(path, path_len(prefix)))
+        var ok : bool = true;
+        var offset : trie_path_len = 0;
+        while ok & offset < path_len(seg) termination_measure(path_len(seg) - offset) do {
+            let key_index = pos + offset;
+            if key_index <= 64 then {
+                if path_nibble(key, key_index) != path_nibble(seg, offset) then {
+                    ok = false
+                }
+            } else {
+                ok = false
+            };
+            offset = trie_path_len_increment(offset)
+        };
+        ok
     }
 }
 
-/*! The length of the common prefix of `a` and `b` starting at nibble
-    `start`. */
-function common_prefix_from(a : TriePath, b : TriePath, start : trie_path_len) -> trie_path_len = {
+/*! Whether `prefix` is a prefix of `path`. */
+function path_prefix_of(prefix : TriePath, path : TriePath) -> bool =
+    path_matches(path, 0, prefix)
+
+/*! The common-prefix length of two canonical nibble paths. */
+function common_prefix_length(a : TriePath, b : TriePath) -> trie_path_len = {
     let alen = path_len(a);
     let blen = path_len(b);
     let stop = if alen < blen then { alen } else { blen };
-    var index : trie_path_len = start;
-    var count : trie_path_len = 0;
+    var length : trie_path_len = 0;
     var matching : bool = true;
-    foreach (_step from 0 to 63) {
-        if matching & index < stop then {
-            if path_nibble(a, index) == path_nibble(b, index) then {
-                count = trie_path_len_increment(count);
-                index = trie_path_len_increment(index)
-            } else {
-                matching = false
-            }
+    while matching & length < stop termination_measure(stop - length) do {
+        if path_nibble(a, length) == path_nibble(b, length) then {
+            length = trie_path_len_increment(length)
+        } else {
+            matching = false
         }
     };
-    count
+    length
 }
 
-/* Encode the remaining nibble pairs directly in wire order. The nibble index
- * increases by two and the secure-key path is bounded by 64 nibbles. */
-/*! Encodes the remaining nibble pairs of a compact trie path in wire order. */
-function hex_prefix_pairs(path : TriePath, index : hex_prefix_cursor) -> list(byte) =
-    if path_len(path) <= index then {
-        [||]
-    } else {
-        let next = index + 1;
-        append(path_nibble(path, index), path_nibble(path, next)) :: hex_prefix_pairs(path, next + 1)
-    }
-termination_measure hex_prefix_pairs(path, index) = path_len(path) - index
-
-/* hex-prefix (compact) encoding of a nibble path + leaf/extension flag
- * (Yellow Paper Appendix C.1, the HP function). Its length is known from the
- * path length, so callers never walk the resulting byte list to measure it. */
-/*! The hex-prefix (compact) encoding of a nibble path with its
-    leaf/extension flag (YP Appendix C.1, the HP function). */
-function hex_prefix_compact(path : TriePath, is_leaf : bool) -> (list(byte), range(1, 33)) = {
+/*! The encoded byte length of the hex-prefix form of a trie path. */
+function hex_prefix_encoded_length(path : TriePath) -> range(1, 33) = {
     let length : trie_path_len = path_len(path);
     let packed_pair_count : range(0, 32) = tdiv_nat(length, 2);
+    1 + packed_pair_count
+}
+
+/*! The flag byte beginning the hex-prefix form of a trie path. */
+function hex_prefix_first_byte(path : TriePath, is_leaf : bool) -> byte = {
+    let length : trie_path_len = path_len(path);
     let odd = tmod_nat(length, 2) != 0;
     let flag : nibble = if is_leaf then { 0x2 } else { 0x0 };
-    let first = if odd then {
-            append(flag | 0x1, path_nibble(path, 0))
-        } else {
-            append(flag, 0x0)
-        };
-    let first_path_index : hex_prefix_cursor = if odd then { 1 } else { 0 };
-    let encoded_len : range(1, 33) = 1 + packed_pair_count;
-    (first :: hex_prefix_pairs(path, first_path_index), encoded_len)
+    if odd then {
+        append(flag | 0x1, path_nibble(path, 0))
+    } else {
+        append(flag, 0x0)
+    }
 }
 
 /*! Decodes a compact path directly from its RLP source span, returning
@@ -289,30 +283,5 @@ function hex_prefix_decode_ref forall 'source_off 'source_len 'content_len,
                 (is_leaf, path_new(word_to_hash(packed), paired_nibbles))
             }
         }
-    }
-}
-
-/*! Whether `seg` occurs in `key` at nibble position `pos`. */
-function path_matches(key : TriePath, pos : trie_path_cursor, seg : TriePath) -> bool = {
-    let stop = pos + path_len(seg);
-    if path_len(key) < stop then {
-        false
-    } else {
-        var ok : bool = true;
-        var offset : trie_path_len = 0;
-        foreach (_step from 0 to 63) {
-            if offset < path_len(seg) then {
-                let key_index = pos + offset;
-                if key_index <= 64 then {
-                    if path_nibble(key, key_index) != path_nibble(seg, offset) then {
-                        ok = false
-                    }
-                } else {
-                    ok = false
-                };
-                offset = trie_path_len_increment(offset)
-            }
-        };
-        ok
     }
 }

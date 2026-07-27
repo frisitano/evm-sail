@@ -27,7 +27,7 @@ function inline_node_from_slice(bytes : ByteSlice) -> InlineNode = {
 
 /*! Materializes an inline node in scratch memory as a byte slice. */
 function inline_node_slice(node : InlineNode) -> ByteSlice = {
-    let start = scratch_begin();
+    let start = scratch_reserve(node.len);
     scratch_push_b256(node.data, node.len);
     scratch_finish(start)
 }
@@ -78,10 +78,37 @@ function node_ref_size(r : NodeRef) -> range(0, 33) =
 /*! Appends a child reference in its canonical RLP representation. */
 function rlp_write_node_ref(r : NodeRef) -> unit =
     match r {
-        EmptyRef() => scratch_push_bytes([|0x80|], 1),
+        EmptyRef() => scratch_push_byte(0x80),
         InlineRef(node) => scratch_push_b256(node.data, node.len),
         HashRef(h) => rlp_write_word(hash_to_word(h)),
     }
+
+/*! Returns the canonical RLP width of a compact trie path. */
+function rlp_hex_prefix_size(path : TriePath, is_leaf : bool) -> range(1, 34) = {
+    let encoded_length = hex_prefix_encoded_length(path);
+    let first = hex_prefix_first_byte(path, is_leaf);
+    if (encoded_length == 1) & (first[7] == bitzero) then {
+        1
+    } else {
+        encoded_length + 1
+    }
+}
+
+/*! Writes the hex-prefix path directly into scratch in wire order. */
+function rlp_write_hex_prefix(path : TriePath, is_leaf : bool) -> unit = {
+    let length = path_len(path);
+    let encoded_length = hex_prefix_encoded_length(path);
+    let first = hex_prefix_first_byte(path, is_leaf);
+    rlp_write_string_prefix(encoded_length, first);
+    scratch_push_byte(first);
+    var index : hex_prefix_cursor = if tmod_nat(length, 2) != 0 then { 1 } else { 0 };
+    while index < length termination_measure(length - index) do {
+        let current : trie_path_cursor = tmod_nat(index, 65);
+        let next : trie_path_cursor = tmod_nat(current + 1, 65);
+        scratch_push_byte(append(path_nibble(path, current), path_nibble(path, next)));
+        index = next + 1
+    }
+}
 
 /*! The canonical child reference for an encoded node: inline under 32
     bytes, otherwise its hash (YP Appendix D, Eq. 207). */
@@ -108,14 +135,10 @@ function branch_mask_set(mask : bits(16), index : nibble) -> bits(16) =
     representation: long nodes hash the RLP framing and value as segments;
     only an inline node materializes a slice. */
 function leaf_child_ref(key : TriePath, value : ByteSlice) -> NodeRef = {
-    let (path, encoded_path_len) = hex_prefix_compact(key, true);
-    let content_len = rlp_scratch_length_add(
-        rlp_scratch_bytes_size(path, encoded_path_len),
-        rlp_scratch_slice_size(value),
-    );
-    let mark = scratch_begin();
+    let content_len = rlp_scratch_length_add(rlp_hex_prefix_size(key, true), rlp_scratch_slice_size(value));
+    let mark = scratch_reserve(rlp_scratch_list_size(content_len));
     rlp_write_list_prefix(content_len);
-    rlp_write_bytes(path, encoded_path_len);
+    rlp_write_hex_prefix(key, true);
     rlp_write_slice(value);
     let result = child_ref(rlp_finish(mark));
     scratch_rewind(mark);
@@ -124,13 +147,12 @@ function leaf_child_ref(key : TriePath, value : ByteSlice) -> NodeRef = {
 
 /*! The child reference of an extension node. */
 function extension_child_ref(key : TriePath, childref : NodeRef) -> NodeRef = {
-    let (path, encoded_path_len) = hex_prefix_compact(key, false);
-    let path_length = rlp_bytes_size(path, encoded_path_len);
+    let path_length = rlp_hex_prefix_size(key, false);
     let child_length = node_ref_size(childref);
     let content_len = path_length + child_length;
-    let mark = scratch_begin();
+    let mark = scratch_reserve(rlp_list_size(content_len));
     rlp_write_list_prefix(content_len);
-    rlp_write_bytes(path, encoded_path_len);
+    rlp_write_hex_prefix(key, false);
     rlp_write_node_ref(childref);
     let result = child_ref(rlp_finish(mark));
     scratch_rewind(mark);
@@ -151,18 +173,19 @@ function branch_child_ref(mask : bits(16), children : BranchRefs) -> NodeRef = {
         child_bit = sail_shiftleft(child_bit, 1)
     };
 
-    let mark = scratch_begin();
+    let scratch_content_length = rlp_scratch_length_add(content_length, 0);
+    let mark = scratch_reserve(rlp_scratch_list_size(scratch_content_length));
     rlp_write_list_prefix(content_length);
     child_bit = 0x0001;
     foreach (i from 0 to 15) {
         if and_vec(mask, child_bit) != 0x0000 then {
             rlp_write_node_ref(children[i])
         } else {
-            scratch_push_bytes([|0x80|], 1)
+            scratch_push_byte(0x80)
         };
         child_bit = sail_shiftleft(child_bit, 1)
     };
-    scratch_push_bytes([|0x80|], 1);
+    scratch_push_byte(0x80);
     let result = child_ref(rlp_finish(mark));
     scratch_rewind(mark);
     result

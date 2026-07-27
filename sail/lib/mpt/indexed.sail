@@ -11,18 +11,19 @@ emits indices directly in canonical key order.
 type rlp_index_valid_maximum('maximum : Int) -> Bool =
     0 < 'maximum & 'maximum <= transaction_count_bound
 
-/*! The item count and next canonical-key position of a schema-bounded indexed
-    trie. Both retain the enclosing collection's semantic maximum. */
-struct RlpIndexCursor('maximum : Int), rlp_index_valid_maximum('maximum) = {
-    count : range(0, 'maximum),
-    position : range(0, 'maximum),
-}
-
-/*! One numeric index, its trie key, and the following key when present. */
+/*! One numeric index and its canonical trie key. The numeric index addresses
+    the source collection directly; the key places that item in the trie. */
 struct RlpIndexItem('maximum : Int), rlp_index_valid_maximum('maximum) = {
     index : range(0, 'maximum - 1),
     key : TriePath,
-    next_key : option(TriePath),
+}
+
+/*! The item count, next canonical-key position, and its cached lookup
+    descriptor. Each `rlp(index)` key is therefore constructed exactly once. */
+struct RlpIndexCursor('maximum : Int), rlp_index_valid_maximum('maximum) = {
+    count : range(0, 'maximum),
+    position : range(0, 'maximum),
+    current : option(RlpIndexItem('maximum)),
 }
 
 /*! The minimal nonzero byte width of a supported RLP list index. */
@@ -74,30 +75,15 @@ function trie_index_key(index : item_index) -> TriePath =
             let width = rlp_index_encoded_width(index);
             var path = path_append_byte(path_empty(), get_slice_int(8, 128 + width, 0));
             var remaining : range(0, 8) = width;
-            foreach (_offset from 0 to 7) {
-                if remaining != 0 then {
-                    let byte_offset = rlp_index_byte_width_decrement(remaining);
-                    let shift : range(0, 56) = byte_offset * 8;
-                    path = path_append_byte(path, get_slice_int(8, index, shift));
-                    remaining = byte_offset
-                }
+            while remaining != 0 termination_measure(remaining) do {
+                let byte_offset = rlp_index_byte_width_decrement(remaining);
+                let shift : range(0, 56) = byte_offset * 8;
+                path = path_append_byte(path, get_slice_int(8, index, shift));
+                remaining = byte_offset
             };
             path
         }
     }
-
-/*! Starts canonical RLP-index traversal for a bounded collection. */
-function rlp_index_cursor forall ('maximum : Int), rlp_index_valid_maximum('maximum). (count : range(0, 'maximum)) -> (
-    RlpIndexCursor('maximum)
-) =
-    struct { count = count, position = 0 }
-
-/*! Whether canonical RLP-index traversal has consumed every index. */
-function rlp_index_cursor_empty forall ('maximum : Int), rlp_index_valid_maximum('maximum). (cursor :
-    RlpIndexCursor('maximum)) -> (
-    bool
-) =
-    cursor.count <= cursor.position
 
 /*! Maps a canonical-key cursor position back to its numeric list index. */
 function rlp_index_at_position forall ('maximum : Int), rlp_index_valid_maximum('maximum). (cursor :
@@ -119,23 +105,62 @@ function rlp_index_at_position forall ('maximum : Int), rlp_index_valid_maximum(
     }
 }
 
-/*! Removes the next canonical-key item and advances the cursor. */
-function rlp_index_cursor_pop forall ('maximum : Int), rlp_index_valid_maximum('maximum). (cursor :
+/*! Starts canonical RLP-index traversal for a bounded collection. */
+function rlp_index_cursor forall ('maximum : Int), rlp_index_valid_maximum('maximum). (count : range(0, 'maximum)) -> (
+    RlpIndexCursor('maximum)
+) = {
+    var cursor : RlpIndexCursor('maximum) = struct { count = count, position = 0, current = None() };
+    if count != 0 then {
+        let index = rlp_index_at_position(cursor);
+        cursor.current = Some(struct { index = index, key = trie_index_key(index) })
+    };
+    cursor
+}
+
+/*! Whether canonical RLP-index traversal has consumed every index. */
+function rlp_index_cursor_empty forall ('maximum : Int), rlp_index_valid_maximum('maximum). (cursor :
     RlpIndexCursor('maximum)) -> (
-    (RlpIndexItem('maximum), RlpIndexCursor('maximum))
+    bool
+) =
+    match cursor.current {
+        None() => true,
+        Some(_) => false,
+    }
+
+/*! Returns the cached numeric index and trie key without advancing. */
+function rlp_index_cursor_peek forall ('maximum : Int), rlp_index_valid_maximum('maximum). (cursor :
+    RlpIndexCursor('maximum)) -> (
+    RlpIndexItem('maximum)
+) =
+    match cursor.current {
+        Some(item) => item,
+        None() => throw InvalidBlock(WitnessDeficient),
+    }
+
+/*! Consumes the current position and returns its fully populated successor. */
+function rlp_index_cursor_advance forall ('maximum : Int), rlp_index_valid_maximum('maximum). (cursor :
+    RlpIndexCursor('maximum)) -> (
+    RlpIndexCursor('maximum)
 ) = {
     let count = cursor.count;
     let position = cursor.position;
     if position < count then {
-        let index = rlp_index_at_position(cursor);
-        let next_cursor : RlpIndexCursor('maximum) = struct { count = count, position = position + 1 };
-        let next_key = if rlp_index_cursor_empty(next_cursor) then {
-                None()
-            } else {
-                Some(trie_index_key(rlp_index_at_position(next_cursor)))
-            };
-        (struct { index = index, key = trie_index_key(index), next_key = next_key }, next_cursor)
+        var next : RlpIndexCursor('maximum) = struct { count = count, position = position + 1, current = None() };
+        if next.position < count then {
+            let index = rlp_index_at_position(next);
+            next.current = Some(struct { index = index, key = trie_index_key(index) })
+        };
+        next
     } else {
         throw InvalidBlock(WitnessDeficient)
     }
+}
+
+/*! Removes the cached indexed item and advances the cursor. */
+function rlp_index_cursor_pop forall ('maximum : Int), rlp_index_valid_maximum('maximum). (cursor :
+    RlpIndexCursor('maximum)) -> (
+    (RlpIndexItem('maximum), RlpIndexCursor('maximum))
+) = {
+    let item = rlp_index_cursor_peek(cursor);
+    (item, rlp_index_cursor_advance(cursor))
 }
