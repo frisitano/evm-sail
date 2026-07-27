@@ -36,8 +36,8 @@ function decode_state_account(value : ByteSlice) -> AccountInfo = {
 /*! The witnessed account at address `a` under state root `root`,
     reading the secure trie at `keccak256(a)`; `None` when the walk
     proves absence. */
-function stateless_account(root : hash, a : address) -> option(AccountInfo) = {
-    let value = trie_lookup(root, path_from_hash(keccak256_address(a)));
+function stateless_account_by_key(root : hash, address_hash : hash) -> option(AccountInfo) = {
+    let value = trie_lookup(root, path_from_hash(address_hash));
     if value.len == 0 then {
         None()
     } else {
@@ -47,8 +47,8 @@ function stateless_account(root : hash, a : address) -> option(AccountInfo) = {
 
 /*! The witnessed storage value of `slot` under a storage root, reading
     the secure trie at `keccak256(slot)`; absent slots are zero. */
-function stateless_storage(root : hash, slot : word) -> word = {
-    let value = trie_lookup(root, path_from_hash(keccak256_word(slot)));
+function stateless_storage_by_key(root : hash, slot_hash : hash) -> word = {
+    let value = trie_lookup(root, path_from_hash(slot_hash));
     if value.len == 0 then {
         ZERO_WORD
     } else {
@@ -93,8 +93,9 @@ function encode_state_account(info : AccountInfo, storage_root : hash) -> ByteSl
 }
 
 /*! Converts one changed storage row into a secure-trie update. */
-function storage_update(entry : StorageEntry) -> TrieUpdate = {
-    let key = path_from_hash(keccak256_word(entry.key.slot));
+function storage_update(trie_entry : StorageTrieEntry) -> TrieUpdate = {
+    let entry = trie_entry.entry;
+    let key = path_from_hash(trie_entry.slot_hash);
     let change = if word_is_zero(entry.value.curr) then {
             TrieDelete()
         } else {
@@ -105,9 +106,10 @@ function storage_update(entry : StorageEntry) -> TrieUpdate = {
 
 /*! Converts one account row and its recomputed storage root into a
     state-trie insertion or deletion. */
-function account_update(entry : AcctEntry, storage_root : hash) -> TrieUpdate = {
+function account_update(trie_entry : AcctTrieEntry, storage_root : hash) -> TrieUpdate = {
+    let entry = trie_entry.entry;
     let current = entry.value.curr;
-    let key = path_from_hash(keccak256_address(entry.addr));
+    let key = path_from_hash(trie_entry.address_hash);
     if not_bool(current.present) | account_info_empty(current.info) then {
         struct { key = key, change = TrieDelete() }
     } else {
@@ -116,13 +118,13 @@ function account_update(entry : AcctEntry, storage_root : hash) -> TrieUpdate = 
 }
 
 /*! Pulls the next changed storage row, skipping materialized read-only rows. */
-function next_changed_storage_entry(addr : address) -> option(StorageEntry) = {
+function next_changed_storage_entry(addr : address) -> option(StorageTrieEntry) = {
     var searching : bool = true;
-    var result : option(StorageEntry) = None();
+    var result : option(StorageTrieEntry) = None();
     while searching termination_measure(2 ^ 64) do {
         match storage_block_iter_next(addr) {
-            Some(entry) => if storage_value_changed(entry.value) then {
-                result = Some(entry);
+            Some(trie_entry) => if storage_value_changed(trie_entry.entry.value) then {
+                result = Some(trie_entry);
                 searching = false
             },
             None() => searching = false,
@@ -141,7 +143,8 @@ function next_storage_trie_update(addr : address) -> option(TrieUpdate) =
 /*! Derives and caches one account's post-state storage root. Keeping this
     preparation separate from the account-update pull source makes the nested
     storage walk statically acyclic while retaining lazy ordered update streams. */
-function prepare_account_post_storage_root(entry : AcctEntry) -> unit = {
+function prepare_account_post_storage_root(trie_entry : AcctTrieEntry) -> unit = {
+    let entry = trie_entry.entry;
     let current = entry.value.curr;
     storage_block_iter_begin(entry.addr);
     let storage_updates = trie_updates_begin(StorageTrieUpdates(entry.addr));
@@ -171,14 +174,15 @@ function prepare_changed_account_post_storage_roots() -> unit = {
 
 /*! Computes one already-prepared account update and whether the account or
     any storage row has a net change. The equality decision remains in Sail. */
-function account_trie_update(entry : AcctEntry) -> (TrieUpdate, bool) = {
+function account_trie_update(trie_entry : AcctTrieEntry) -> (TrieUpdate, bool) = {
+    let entry = trie_entry.entry;
     storage_block_iter_begin(entry.addr);
     let storage_changed : bool = match next_changed_storage_entry(entry.addr) {
         Some(_storage_entry) => true,
         None() => false,
     };
     let storage_root = acct_post_storage_root_read(entry.addr);
-    (account_update(entry, storage_root), account_value_changed(entry.value) | storage_changed)
+    (account_update(trie_entry, storage_root), account_value_changed(entry.value) | storage_changed)
 }
 
 /*! Pulls the next net-changed account update for the protocol state-root path.

@@ -15,28 +15,11 @@ list.
 function validate_executed_block(block : Block, input_ref : StatelessInputRef, result : BlockExecutionResult) -> unit = {
     let header = block.header;
     if k_fork >= Prague then {
-        if   not_bool(bytes_segments_equal_slice([|BytesSlice(result.requests.deposits)|], input_ref.deposits))
-           | not_bool(
-                 bytes_segments_equal_slice([|BytesSlice(result.requests.withdrawals)|], input_ref.withdrawal_requests),
-             )
-           | not_bool(
-                 bytes_segments_equal_slice(
-                     [|BytesSlice(result.requests.consolidations)|],
-                     input_ref.consolidation_requests,
-                 ),
-             )
-           | not_bool(
-                 bytes_segments_equal_slice(
-                     [|BytesSlice(result.requests.builder_deposits)|],
-                     input_ref.builder_deposit_requests,
-                 ),
-             )
-           | not_bool(
-                 bytes_segments_equal_slice(
-                     [|BytesSlice(result.requests.builder_exits)|],
-                     input_ref.builder_exit_requests,
-                 ),
-             ) then {
+        if   not_bool(byte_slices_equal(result.requests.deposits, input_ref.deposits))
+           | not_bool(byte_slices_equal(result.requests.withdrawals, input_ref.withdrawal_requests))
+           | not_bool(byte_slices_equal(result.requests.consolidations, input_ref.consolidation_requests))
+           | not_bool(byte_slices_equal(result.requests.builder_deposits, input_ref.builder_deposit_requests))
+           | not_bool(byte_slices_equal(result.requests.builder_exits, input_ref.builder_exit_requests)) then {
             throw InvalidBlock(InvalidExecutionRequests)
         }
     };

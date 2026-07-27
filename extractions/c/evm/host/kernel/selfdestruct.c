@@ -4,123 +4,123 @@
 #endif
 unit zk_selfdestruct(sail_fixed_bytes_20 za)
 {
-  unit z8zE277;
+  unit z8zE249;
   struct zAccount zcur;
   {
     zcur = zk_aload(za);
-    if (have_exception) {  goto end_block_exception_3041;  }
+    if (have_exception) {  goto end_block_exception_2746;  }
   }
-  bool z2zE2927;
+  bool z2zE2424;
   {
-    bool z2zE2926;
-    z2zE2926 = zcur.zselfdestructed;
-    z2zE2927 = not(z2zE2926);
+    bool z2zE2423;
+    z2zE2423 = zcur.zselfdestructed;
+    z2zE2424 = not(z2zE2423);
   }
-  if (z2zE2927) {
-    struct zAccount z2zE2928;
+  if (z2zE2424) {
+    struct zAccount z2zE2425;
     {
-      struct zAccount z3zE3025;
-      z3zE3025 = zcur;
-      z3zE3025.zselfdestructed = true;
-      z2zE2928 = z3zE3025;
+      struct zAccount z3zE2375;
+      z3zE2375 = zcur;
+      z3zE2375.zselfdestructed = true;
+      z2zE2425 = z3zE2375;
     }
-    z8zE277 = zstore_account(za, z2zE2928);
-  } else {  z8zE277 = UNIT;  }
-end_function_3040: ;
-  return z8zE277;
-end_block_exception_3041: ;
+    z8zE249 = zstore_account(za, z2zE2425);
+  } else {  z8zE249 = UNIT;  }
+end_function_2745: ;
+  return z8zE249;
+end_block_exception_2746: ;
 
   return UNIT;
 }
 
 bool zk_is_selfdestructed(sail_fixed_bytes_20 za)
 {
-  bool z8zE278;
-  struct zAccount z2zE2925;
+  bool z8zE250;
+  struct zAccount z2zE2422;
   {
-    z2zE2925 = zk_aload(za);
-    if (have_exception) {  goto end_block_exception_3039;  }
+    z2zE2422 = zk_aload(za);
+    if (have_exception) {  goto end_block_exception_2744;  }
   }
-  z8zE278 = z2zE2925.zselfdestructed;
-end_function_3038: ;
-  return z8zE278;
-end_block_exception_3039: ;
+  z8zE250 = z2zE2422.zselfdestructed;
+end_function_2743: ;
+  return z8zE250;
+end_block_exception_2744: ;
 
   return false;
 }
 
 unit zk_mark_created(sail_fixed_bytes_20 za)
 {
-  unit z8zE279;
+  unit z8zE251;
   struct zAccount zcur;
   {
     zcur = zk_aload(za);
-    if (have_exception) {  goto end_block_exception_3037;  }
+    if (have_exception) {  goto end_block_exception_2742;  }
   }
-  struct zAccount z2zE2924;
+  struct zAccount z2zE2421;
   {
-    struct zAccount z3zE3024;
-    z3zE3024 = zcur;
-    z3zE3024.zcreated = true;
-    z2zE2924 = z3zE3024;
+    struct zAccount z3zE2374;
+    z3zE2374 = zcur;
+    z3zE2374.zcreated = true;
+    z2zE2421 = z3zE2374;
   }
-  z8zE279 = zstore_account(za, z2zE2924);
-end_function_3036: ;
-  return z8zE279;
-end_block_exception_3037: ;
+  z8zE251 = zstore_account(za, z2zE2421);
+end_function_2741: ;
+  return z8zE251;
+end_block_exception_2742: ;
 
   return UNIT;
 }
 
 bool zk_was_created(sail_fixed_bytes_20 za)
 {
-  bool z8zE280;
-  struct zAccount z2zE2923;
+  bool z8zE252;
+  struct zAccount z2zE2420;
   {
-    z2zE2923 = zk_aload(za);
-    if (have_exception) {  goto end_block_exception_3035;  }
+    z2zE2420 = zk_aload(za);
+    if (have_exception) {  goto end_block_exception_2740;  }
   }
-  z8zE280 = z2zE2923.zcreated;
-end_function_3034: ;
-  return z8zE280;
-end_block_exception_3035: ;
+  z8zE252 = z2zE2420.zcreated;
+end_function_2739: ;
+  return z8zE252;
+end_block_exception_2740: ;
 
   return false;
 }
 
 unit zk_zzero_balance(sail_fixed_bytes_20 za)
 {
-  unit z8zE281;
+  unit z8zE253;
   struct zAccount zcur;
   {
     zcur = zk_aload(za);
-    if (have_exception) {  goto end_block_exception_3033;  }
+    if (have_exception) {  goto end_block_exception_2738;  }
   }
-  bool z2zE2920;
+  bool z2zE2417;
   {
-    sail_u256 z2zE2919;
+    sail_u256 z2zE2416;
     {
-      struct zAccountInfo z2zE2918;
-      z2zE2918 = zcur.zinfo;
-      z2zE2919 = z2zE2918.zbalance;
+      struct zAccountInfo z2zE2415;
+      z2zE2415 = zcur.zinfo;
+      z2zE2416 = z2zE2415.zbalance;
     }
-    z2zE2920 = zword_is_zzero(z2zE2919);
+    z2zE2417 = zword_is_zzero(z2zE2416);
   }
-  if (z2zE2920) {  z8zE281 = UNIT;  } else {
-    struct zAccountInfo z2zE2922;
+  if (z2zE2417) {  z8zE253 = UNIT;  } else {
+    struct zAccountInfo z2zE2419;
     {
-      struct zAccountInfo z2zE2921;
-      z2zE2921 = zcur.zinfo;
-      struct zAccountInfo z3zE3023;
-      z3zE3023 = z2zE2921;
-      z3zE3023.zbalance = zZERO_WORD;
-      z2zE2922 = z3zE3023;
+      struct zAccountInfo z2zE2418;
+      z2zE2418 = zcur.zinfo;
+      struct zAccountInfo z3zE2373;
+      z3zE2373 = z2zE2418;
+      z3zE2373.zbalance = zZERO_WORD;
+      z2zE2419 = z3zE2373;
     }
-    z8zE281 = zstore_account_info(za, zcur, z2zE2922);
+    z8zE253 = zstore_account_info(za, zcur, z2zE2419);
   }
-end_function_3032: ;
-  return z8zE281;
-end_block_exception_3033: ;
+end_function_2737: ;
+  return z8zE253;
+end_block_exception_2738: ;
 
   return UNIT;
 }

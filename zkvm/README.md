@@ -206,10 +206,11 @@ VEC=<input.ssz> ./build.sh run     # build if needed, supply input, run on spike
   precompiles. Native links it directly; the spike guest offloads every op to the host
   accelerator device (`accel-device/accel_device.cc`, linked against the Rust lib), so no
   crypto runs as guest instructions. (The portable-C reference `zkvm_accelerators.c` has
-  been removed.) Sail calls explicit C adapters instead of a catch-all shim:
-  `../ffi/host_crypto.c` for direct hash pointer/length calls,
-  `../ffi/precompiles.c` for EVM precompile execution,
-  and `../ffi/output.c` for output ownership.
+  been removed.) Sail calls focused C adapters directly against that interface:
+  `../ffi/hash_glue.c` for segmented hash axioms,
+  `../ffi/htr_glue.c` for the optimized whole-request HTR refinement,
+  `../ffi/precompiles.c` for EVM precompile execution, and `../ffi/output.c`
+  for output ownership.
 * `start.S`/trap-vector use Zicsr (machine-mode CSRs) — these are **platform/crt0 glue**
   (a vendor responsibility under the memory-layout standard), not the proven STF, which
   stays pure `rv64im_zicclsm`.

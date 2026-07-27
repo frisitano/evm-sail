@@ -134,287 +134,199 @@ function bal_compare_index_code forall 'source_off 'source_len 'content_len,
     }
 }
 
-/*! Consumes an equal-index run within the selected storage slot and returns
-    its final row plus the first row of the following run. */
-function bal_storage_change_run(first : BalStorageChangeEntry) -> (
-    (BalStorageChangeEntry, option(BalStorageChangeEntry))
-) = {
-    var last = first;
-    var next = bal_storage_change_next();
-    var scanning : bool = true;
-    while scanning termination_measure(2 ^ 64) do {
-        match next {
-            Some(entry) => if entry.index == first.index then {
-                last = entry;
-                next = bal_storage_change_next()
-            } else {
-                scanning = false
-            },
-            None() => scanning = false,
-        }
-    };
-    (last, next)
-}
-
-/*! Compares every change-index run belonging to the selected storage slot. */
-function bal_compare_storage_slot_changes forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
-    fields : RlpCursor('source_off, 'source_len),
-    current : option(BalStorageChangeEntry),
+/*! Consumes the encoded changes for one storage slot.  Each RLP pop strictly
+    reduces the remaining byte length and must have one matching host event. */
+function bal_validate_storage_change_values forall 'source_off 'source_len,
+                                              source_valid_range('source_off, 'source_len). (
+    cursor : RlpCursor('source_off, 'source_len),
+    slot : word,
 ) -> (
     unit
 ) =
-    match current {
-        Some(first) => {
-            let (last, next) = bal_storage_change_run(first);
-            let (pair, remaining) = rlp_cursor_pop(fields);
-            bal_compare_index_word(pair, first.index, last.value);
-            bal_compare_storage_slot_changes(remaining, next)
-        },
-        None() => bal_expect_end(fields),
-    }
-termination_measure bal_compare_storage_slot_changes(fields, current) =
-    fields.len
-
-/*! Consumes the selected account's sorted storage-slot union. The host cursor
-    drives one loop iteration per logical slot. A slot with one or more
-    changes advances `storage_changes`; a change-free slot advances
-    `storage_reads`. */
-function bal_compare_storage_slots forall 'changes_source_off 'changes_source_len 'reads_source_off 'reads_source_len,
-                                     source_valid_range('changes_source_off, 'changes_source_len) &
-                                         source_valid_range('reads_source_off, 'reads_source_len). (
-    initial_changes : RlpCursor('changes_source_off, 'changes_source_len),
-    initial_reads : RlpCursor('reads_source_off, 'reads_source_len),
-    item_count : item_count,
-    maximum_items : item_count,
-) -> (
-    item_count
-) = {
-    var changes : ByteSlice = initial_changes;
-    var reads : ByteSlice = initial_reads;
-    var count : item_count = item_count;
-    var current = bal_storage_slot_next();
-    var scanning : bool = true;
-    while scanning termination_measure(byte_slice_length(changes) + byte_slice_length(reads)) do {
-        match current {
-            Some(slot_entry) => {
-                match slot_entry.change {
-                    Some(first_change) => {
-                        let (slot_field, remaining_changes) = rlp_cursor_pop(changes);
-                        changes = remaining_changes;
-                        let slot_fields = bal_ref_cursor(slot_field);
-                        let (slot_value, slot_fields) = rlp_cursor_pop(slot_fields);
-                        let (slot_changes, slot_fields) = rlp_cursor_pop(slot_fields);
-                        bal_expect_end(slot_fields);
-                        if bal_ref_word(slot_value) != slot_entry.slot then {
-                            throw InvalidBlock(InvalidBlockAccessList)
-                        };
-                        bal_compare_storage_slot_changes(bal_ref_cursor(slot_changes), Some(first_change))
-                    },
-                    None() => {
-                        let (slot_field, remaining_reads) = rlp_cursor_pop(reads);
-                        reads = remaining_reads;
-                        if bal_ref_word(slot_field) != slot_entry.slot then {
-                            throw InvalidBlock(InvalidBlockAccessList)
-                        }
-                    },
+    if cursor.len == 0 then {
+        ()
+    } else {
+        let (pair, next) = rlp_cursor_pop(cursor);
+        match bal_iter_next() {
+            BalStorageChange(change) => {
+                if change.slot != slot then {
+                    throw InvalidBlock(InvalidBlockAccessList)
                 };
-                count = bal_count_item(count, maximum_items);
-                current = bal_storage_slot_next()
+                bal_compare_index_word(pair, change.index, change.value)
             },
-            None() => scanning = false,
-        }
-    };
-    rlp_cursor_expect_end(changes);
-    rlp_cursor_expect_end(reads);
-    count
-}
-
-/*! Consumes an equal-index balance run and returns its final row plus the
-    first row of the following run. */
-function bal_balance_change_run(first : BalBalanceChangeEntry) -> (
-    (BalBalanceChangeEntry, option(BalBalanceChangeEntry))
-) = {
-    var last = first;
-    var next = bal_balance_change_next();
-    var scanning : bool = true;
-    while scanning termination_measure(2 ^ 64) do {
-        match next {
-            Some(entry) => if entry.index == first.index then {
-                last = entry;
-                next = bal_balance_change_next()
-            } else {
-                scanning = false
-            },
-            None() => scanning = false,
-        }
-    };
-    (last, next)
-}
-
-/*! Compares the final balance value for each change index. */
-function bal_compare_balance_changes forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
-    fields : RlpCursor('source_off, 'source_len),
-    current : option(BalBalanceChangeEntry),
-) -> (
-    unit
-) =
-    match current {
-        Some(first) => {
-            let (last, next) = bal_balance_change_run(first);
-            let (pair, remaining) = rlp_cursor_pop(fields);
-            bal_compare_index_word(pair, first.index, last.value);
-            bal_compare_balance_changes(remaining, next)
-        },
-        None() => bal_expect_end(fields),
+            _ => throw InvalidBlock(InvalidBlockAccessList),
+        };
+        bal_validate_storage_change_values(next, slot)
     }
-termination_measure bal_compare_balance_changes(fields, current) =
-    fields.len
+termination_measure bal_validate_storage_change_values(cursor, slot) =
+    cursor.len
 
-/*! Consumes an equal-index nonce run and returns its maximum value plus the
-    first row of the following run. */
-function bal_nonce_change_run(first : BalNonceChangeEntry) -> (account_nonce, option(BalNonceChangeEntry)) = {
-    var maximum = first.value;
-    var next = bal_nonce_change_next();
-    var scanning : bool = true;
-    while scanning termination_measure(2 ^ 64) do {
-        match next {
-            Some(entry) => if entry.index == first.index then {
-                if maximum < entry.value then {
-                    maximum = entry.value
-                };
-                next = bal_nonce_change_next()
-            } else {
-                scanning = false
-            },
-            None() => scanning = false,
-        }
-    };
-    (maximum, next)
-}
-
-/*! Compares the maximum nonce value for each change index. */
-function bal_compare_nonce_changes forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
-    fields : RlpCursor('source_off, 'source_len),
-    current : option(BalNonceChangeEntry),
-) -> (
-    unit
-) =
-    match current {
-        Some(first) => {
-            let (maximum, next) = bal_nonce_change_run(first);
-            let (pair, remaining) = rlp_cursor_pop(fields);
-            bal_compare_index_nonce(pair, first.index, maximum);
-            bal_compare_nonce_changes(remaining, next)
-        },
-        None() => bal_expect_end(fields),
-    }
-termination_measure bal_compare_nonce_changes(fields, current) =
-    fields.len
-
-/*! Consumes an equal-index code run and returns its final row plus the first
-    row of the following run. */
-function bal_code_change_run(first : BalCodeChangeEntry) -> (BalCodeChangeEntry, option(BalCodeChangeEntry)) = {
-    var last = first;
-    var next = bal_code_change_next();
-    var scanning : bool = true;
-    while scanning termination_measure(2 ^ 64) do {
-        match next {
-            Some(entry) => if entry.index == first.index then {
-                last = entry;
-                next = bal_code_change_next()
-            } else {
-                scanning = false
-            },
-            None() => scanning = false,
-        }
-    };
-    (last, next)
-}
-
-/*! Compares the final code value for each change index. */
-function bal_compare_code_changes forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
-    fields : RlpCursor('source_off, 'source_len),
-    current : option(BalCodeChangeEntry),
-) -> (
-    unit
-) =
-    match current {
-        Some(first) => {
-            let (last, next) = bal_code_change_run(first);
-            let (pair, remaining) = rlp_cursor_pop(fields);
-            bal_compare_index_code(pair, first.index, last.code_hash);
-            bal_compare_code_changes(remaining, next)
-        },
-        None() => bal_expect_end(fields),
-    }
-termination_measure bal_compare_code_changes(fields, current) =
-    fields.len
-
-/*! Compares one account and all five ordered BAL child collections. */
-function bal_compare_account forall 'source_off 'source_len 'content_len,
-                               rlp_field_ref_valid('source_off, 'source_len, 'content_len). (
-    field : RlpFieldRef('source_off, 'source_len, 'content_len),
-    account : address,
-    item_count : item_count,
-    maximum_items : item_count,
-) -> (
-    item_count
-) = {
-    let fields = bal_ref_cursor(field);
-    let (address_field, fields) = rlp_cursor_pop(fields);
-    let (storage_changes_field, fields) = rlp_cursor_pop(fields);
-    let (storage_reads_field, fields) = rlp_cursor_pop(fields);
-    let (balance_changes_field, fields) = rlp_cursor_pop(fields);
-    let (nonce_changes_field, fields) = rlp_cursor_pop(fields);
-    let (code_changes_field, fields) = rlp_cursor_pop(fields);
-    bal_expect_end(fields);
-
-    let address_bytes = bal_ref_bytes(address_field);
-    if (address_bytes.len != 20) | (word_to_address(rlp_ref_word(address_field)) != account) then {
-        throw InvalidBlock(InvalidBlockAccessList)
-    };
-
-    let counted_account = bal_count_item(item_count, maximum_items);
-    let counted_storage = bal_compare_storage_slots(
-        bal_ref_cursor(storage_changes_field),
-        bal_ref_cursor(storage_reads_field),
-        counted_account,
-        maximum_items,
-    );
-    bal_compare_balance_changes(bal_ref_cursor(balance_changes_field), bal_balance_change_next());
-    bal_compare_nonce_changes(bal_ref_cursor(nonce_changes_field), bal_nonce_change_next());
-    bal_compare_code_changes(bal_ref_cursor(code_changes_field), bal_code_change_next());
-    counted_storage
-}
-
-/*! Compares all BAL accounts in canonical address order. */
-function bal_compare_accounts forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
-    fields : RlpCursor('source_off, 'source_len),
-    current : option(address),
-    item_count : item_count,
-    maximum_items : item_count,
+/*! Consumes canonical `[slot, changes]` entries in their encoded order. */
+function bal_validate_storage_changes forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
+    cursor : RlpCursor('source_off, 'source_len),
+    count : item_count,
+    maximum : item_count,
 ) -> (
     item_count
 ) =
-    match current {
-        Some(account) => {
-            let (field, remaining) = rlp_cursor_pop(fields);
-            let next_count = bal_compare_account(field, account, item_count, maximum_items);
-            bal_compare_accounts(remaining, bal_account_next(), next_count, maximum_items)
-        },
-        None() => {
-            bal_expect_end(fields);
-            item_count
-        },
+    if cursor.len == 0 then {
+        count
+    } else {
+        let (slot_field, next) = rlp_cursor_pop(cursor);
+        let fields = bal_ref_cursor(slot_field);
+        let (slot_value, fields) = rlp_cursor_pop(fields);
+        let (changes_value, fields) = rlp_cursor_pop(fields);
+        bal_expect_end(fields);
+        let changes = bal_ref_cursor(changes_value);
+        if changes.len == 0 then {
+            throw InvalidBlock(InvalidBlockAccessList)
+        };
+        let slot = bal_ref_word(slot_value);
+        bal_validate_storage_change_values(changes, slot);
+        let count = bal_count_item(count, maximum);
+        bal_validate_storage_changes(next, count, maximum)
     }
-termination_measure bal_compare_accounts(fields, current, item_count, maximum_items) =
-    fields.len
+termination_measure bal_validate_storage_changes(cursor, count, maximum) =
+    cursor.len
 
-/*! Validates the supplied canonical EIP-7928 block access list directly
-    against the recorder's ordered account/change streams. */
+/*! Consumes the read-only storage slots in their encoded order. */
+function bal_validate_storage_reads forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
+    cursor : RlpCursor('source_off, 'source_len),
+    count : item_count,
+    maximum : item_count,
+) -> (
+    item_count
+) =
+    if cursor.len == 0 then {
+        count
+    } else {
+        let (slot_field, next) = rlp_cursor_pop(cursor);
+        let slot = bal_ref_word(slot_field);
+        match bal_iter_next() {
+            BalStorageRead(recorded) => {
+                if recorded != slot then {
+                    throw InvalidBlock(InvalidBlockAccessList)
+                }
+            },
+            _ => throw InvalidBlock(InvalidBlockAccessList),
+        };
+        let count = bal_count_item(count, maximum);
+        bal_validate_storage_reads(next, count, maximum)
+    }
+termination_measure bal_validate_storage_reads(cursor, count, maximum) =
+    cursor.len
+
+/*! Consumes balance changes in their encoded order. */
+function bal_validate_balance_changes forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (cursor :
+    RlpCursor('source_off, 'source_len)) -> (
+    unit
+) =
+    if cursor.len == 0 then {
+        ()
+    } else {
+        let (pair, next) = rlp_cursor_pop(cursor);
+        match bal_iter_next() {
+            BalBalanceChange(change) => bal_compare_index_word(pair, change.index, change.value),
+            _ => throw InvalidBlock(InvalidBlockAccessList),
+        };
+        bal_validate_balance_changes(next)
+    }
+termination_measure bal_validate_balance_changes(cursor) =
+    cursor.len
+
+/*! Consumes nonce changes in their encoded order. */
+function bal_validate_nonce_changes forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (cursor :
+    RlpCursor('source_off, 'source_len)) -> (
+    unit
+) =
+    if cursor.len == 0 then {
+        ()
+    } else {
+        let (pair, next) = rlp_cursor_pop(cursor);
+        match bal_iter_next() {
+            BalNonceChange(change) => bal_compare_index_nonce(pair, change.index, change.value),
+            _ => throw InvalidBlock(InvalidBlockAccessList),
+        };
+        bal_validate_nonce_changes(next)
+    }
+termination_measure bal_validate_nonce_changes(cursor) =
+    cursor.len
+
+/*! Consumes code changes in their encoded order. */
+function bal_validate_code_changes forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (cursor :
+    RlpCursor('source_off, 'source_len)) -> (
+    unit
+) =
+    if cursor.len == 0 then {
+        ()
+    } else {
+        let (pair, next) = rlp_cursor_pop(cursor);
+        match bal_iter_next() {
+            BalCodeChange(change) => bal_compare_index_code(pair, change.index, change.code_hash),
+            _ => throw InvalidBlock(InvalidBlockAccessList),
+        };
+        bal_validate_code_changes(next)
+    }
+termination_measure bal_validate_code_changes(cursor) =
+    cursor.len
+
+/*! Consumes account entries from the canonical RLP list.  The encoded cursor
+    is the traversal driver; the host iterator supplies exactly one comparison
+    event for every decoded semantic value. */
+function bal_validate_accounts forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
+    cursor : RlpCursor('source_off, 'source_len),
+    count : item_count,
+    maximum : item_count,
+) -> (
+    item_count
+) =
+    if cursor.len == 0 then {
+        count
+    } else {
+        let (account_field, next) = rlp_cursor_pop(cursor);
+        let fields = bal_ref_cursor(account_field);
+        let (address_field, fields) = rlp_cursor_pop(fields);
+        let (storage_changes_field, fields) = rlp_cursor_pop(fields);
+        let (storage_reads_field, fields) = rlp_cursor_pop(fields);
+        let (balance_changes_field, fields) = rlp_cursor_pop(fields);
+        let (nonce_changes_field, fields) = rlp_cursor_pop(fields);
+        let (code_changes_field, fields) = rlp_cursor_pop(fields);
+        bal_expect_end(fields);
+
+        let address_bytes = bal_ref_bytes(address_field);
+        let account = word_to_address(rlp_ref_word(address_field));
+        if address_bytes.len != 20 then {
+            throw InvalidBlock(InvalidBlockAccessList)
+        };
+        match bal_iter_next() {
+            BalAccount(recorded) => if recorded != account then {
+                throw InvalidBlock(InvalidBlockAccessList)
+            },
+            _ => throw InvalidBlock(InvalidBlockAccessList),
+        };
+
+        let count = bal_count_item(count, maximum);
+        let count = bal_validate_storage_changes(bal_ref_cursor(storage_changes_field), count, maximum);
+        let count = bal_validate_storage_reads(bal_ref_cursor(storage_reads_field), count, maximum);
+        bal_validate_balance_changes(bal_ref_cursor(balance_changes_field));
+        bal_validate_nonce_changes(bal_ref_cursor(nonce_changes_field));
+        bal_validate_code_changes(bal_ref_cursor(code_changes_field));
+        match bal_iter_next() {
+            BalAccountEnd(_) => (),
+            _ => throw InvalidBlock(InvalidBlockAccessList),
+        };
+        bal_validate_accounts(next, count, maximum)
+    }
+termination_measure bal_validate_accounts(cursor, count, maximum) =
+    cursor.len
+
+/*! Validates the canonical EIP-7928 BAL directly against the host recorder. */
 function validate_block_access_list(bytes : ByteSlice, maximum_items : item_count) -> unit = {
-    bal_prepare();
+    bal_prepare_iter();
     let root = rlp_single_ref(bytes);
-    let _ = bal_compare_accounts(bal_ref_cursor(root), bal_account_next(), 0, maximum_items);
-    ()
+    let _ = bal_validate_accounts(bal_ref_cursor(root), 0, maximum_items);
+    match bal_iter_next() {
+        BalEmpty(_) => (),
+        _ => throw InvalidBlock(InvalidBlockAccessList),
+    }
 }

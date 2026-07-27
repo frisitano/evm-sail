@@ -40,6 +40,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # Trie paths and hex-evm_prefix encoding
 
@@ -114,7 +115,7 @@ def path_concat (a : TriePath) (b : TriePath) : SailM TriePath := do
   else sailThrow ((InvalidBlock WitnessDeficient))
 
 /-- The first `n` nibbles. -/
-/- Type quantifiers: k_ex417007_ : Nat, 0 ≤ k_ex417007_ ∧ k_ex417007_ ≤ 64 -/
+/- Type quantifiers: k_ex415872_ : Nat, 0 ≤ k_ex415872_ ∧ k_ex415872_ ≤ 64 -/
 def path_take (path : TriePath) (n : Nat) : SailM TriePath := do
   if ((n == 0) : Bool)
   then (pure (path_empty ()))
@@ -146,7 +147,7 @@ def path_take (path : TriePath) (n : Nat) : SailM TriePath := do
           (pure result)))
 
 /-- The path with its first `n` nibbles removed. -/
-/- Type quantifiers: k_ex417008_ : Nat, 0 ≤ k_ex417008_ ∧ k_ex417008_ ≤ 64 -/
+/- Type quantifiers: k_ex415873_ : Nat, 0 ≤ k_ex415873_ ∧ k_ex415873_ ≤ 64 -/
 def path_drop (path : TriePath) (n : Nat) : SailM TriePath := do
   let length := (path_len path)
   if ((length ≤b n) : Bool)
@@ -206,7 +207,7 @@ def path_prefix_of (evm_prefix' : TriePath) (path : TriePath) : SailM Bool := do
 
 /-- The length of the common evm_prefix of `a` and `b` starting at nibble
 `start`. -/
-/- Type quantifiers: k_ex417009_ : Nat, 0 ≤ k_ex417009_ ∧ k_ex417009_ ≤ 64 -/
+/- Type quantifiers: k_ex415874_ : Nat, 0 ≤ k_ex415874_ ∧ k_ex415874_ ≤ 64 -/
 def common_prefix_from (a : TriePath) (b : TriePath) (start : Nat) : SailM Nat := do
   let alen := (path_len a)
   let blen := (path_len b)
@@ -245,7 +246,7 @@ def common_prefix_from (a : TriePath) (b : TriePath) (start : Nat) : SailM Nat :
   (pure count)
 
 /-- Encodes the remaining nibble pairs of a compact trie path in wire order. -/
-/- Type quantifiers: _reclimit : Nat, k_ex417010_ : Nat, 0 ≤ k_ex417010_ ∧ k_ex417010_ ≤ 65, 0
+/- Type quantifiers: _reclimit : Nat, k_ex415875_ : Nat, 0 ≤ k_ex415875_ ∧ k_ex415875_ ≤ 65, 0
   ≤ _reclimit -/
 def _rec_hex_prefix_pairs (path : TriePath) (index : Nat) (_reclimit : Nat) : SailM (List (BitVec 8)) := do
   match _reclimit with
@@ -275,7 +276,7 @@ def hex_prefix_pairs (path : TriePath) (index : Nat) : SailM (List (BitVec 8)) :
 
 /-- The hex-evm_prefix (compact) encoding of a nibble path with its
 leaf/extension flag (YP Appendix C.1, the HP function). -/
-/- Type quantifiers: k_ex417014_ : Bool -/
+/- Type quantifiers: k_ex415879_ : Bool -/
 def hex_prefix_compact (path : TriePath) (is_leaf : Bool) : SailM ((List (BitVec 8)) × Nat) := do
   let length : Nat := (path_len path)
   let packed_pair_count : Nat := (Nat.div length 2)

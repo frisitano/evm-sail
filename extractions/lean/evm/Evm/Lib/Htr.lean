@@ -49,6 +49,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # SSZ hash_tree_root
 
@@ -285,7 +286,7 @@ def merkle_accumulator_empty (depth : Nat) : MerkleAccumulator :=
 /-- Adds leaf number `count` to a low-to-high frontier. A set bit in
 `count` has one occupied slot at that level; carries consume those
 slots head-first. -/
-/- Type quantifiers: k_ex417788_ : Nat, 0 ≤ k_ex417788_ ∧ k_ex417788_ ≤ 33554432 -/
+/- Type quantifiers: k_ex416669_ : Nat, 0 ≤ k_ex416669_ ∧ k_ex416669_ ≤ 33554432 -/
 def merkle_push (frontier : (List MerkleSlot)) (count : Nat) (leaf : (Vector (BitVec 8) 32)) : SailM (List MerkleSlot) := do
   if (((Nat.mod count 2) == 0) : Bool)
   then
@@ -313,9 +314,9 @@ def merkle_accumulator_push (accumulator : MerkleAccumulator) (leaf : (Vector (B
 
 /-- Completes a frontier with zero subtrees through `remaining` levels and
 returns its Merkle root. -/
-/- Type quantifiers: _reclimit : Nat, k_ex417791_ : Nat, k_ex417790_ : Nat, k_ex417789_ : Nat, 0 ≤
-  k_ex417789_ ∧ k_ex417789_ ≤ 33554432, 0 ≤ k_ex417790_ ∧ k_ex417790_ ≤ 25, 0 ≤
-  k_ex417791_ ∧ k_ex417791_ ≤ 25, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex416672_ : Nat, k_ex416671_ : Nat, k_ex416670_ : Nat, 0 ≤
+  k_ex416670_ ∧ k_ex416670_ ≤ 33554432, 0 ≤ k_ex416671_ ∧ k_ex416671_ ≤ 25, 0 ≤
+  k_ex416672_ ∧ k_ex416672_ ≤ 25, 0 ≤ _reclimit -/
 def _rec_merkle_root_levels (slots : (List MerkleSlot)) (n : Nat) (acc : (Vector (BitVec 8) 32)) (level : Nat) (remaining : Nat) (_reclimit : Nat) : SailM (Vector (BitVec 8) 32) := do
   match _reclimit with
   | 0 =>
@@ -390,7 +391,7 @@ def merkle_accumulate (leaves : (List (Vector (BitVec 8) 32))) (accumulator : Me
   | (leaf :: rest) => (merkle_accumulate rest (← (merkle_accumulator_push accumulator leaf)))
 
 /-- `merkleize` of a fixed leaf list at `depth` (SSZ spec). -/
-/- Type quantifiers: k_ex417797_ : Nat, 0 ≤ k_ex417797_ ∧ k_ex417797_ ≤ 25 -/
+/- Type quantifiers: k_ex416678_ : Nat, 0 ≤ k_ex416678_ ∧ k_ex416678_ ≤ 25 -/
 def merkleize (leaves : (List (Vector (BitVec 8) 32))) (depth : Nat) : SailM (Vector (BitVec 8) 32) := do
   (merkle_accumulator_root (← (merkle_accumulate leaves (merkle_accumulator_empty depth))))
 
@@ -507,9 +508,9 @@ def clog2 (n : Nat) : SailM Nat := do
   (pure depth)
 
 /-- The `chunk_index`-th 32-byte chunk of a byte span, zero-padded. -/
-/- Type quantifiers: k_ex417812_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
-  ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1, 0 ≤ k_ex417812_ ∧
-  k_ex417812_ ≤ 33554432 -/
+/- Type quantifiers: k_ex416693_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
+  ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1, 0 ≤ k_ex416693_ ∧
+  k_ex416693_ ≤ 33554432 -/
 def htr_chunk (bytes : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (chunk_index : Nat) : SailM (Vector (BitVec 8) 32) := do
   let bytes_dependentWitness0 := (bytes).1
@@ -524,9 +525,9 @@ def htr_chunk_count (byte_len : Nat) : SailM Nat := do
   else sailThrow ((InvalidBlock WitnessDeficient))
 
 /-- The Merkle root of a byte span's chunks at `depth`. -/
-/- Type quantifiers: k_ex417824_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
-  ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1, 0 ≤ k_ex417824_ ∧
-  k_ex417824_ ≤ 25 -/
+/- Type quantifiers: k_ex416705_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
+  ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1, 0 ≤ k_ex416705_ ∧
+  k_ex416705_ ≤ 25 -/
 def htr_bytes_root (bytes : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (depth : Nat) : SailM (Vector (BitVec 8) 32) := do
   let bytes_dependentWitness0 := (bytes).1

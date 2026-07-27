@@ -4,22 +4,22 @@
 #endif
 unit zcycle_scope_start(uint64_t z_scope)
 {
-  unit z8zE71;
-  z8zE71 = UNIT;
-end_function_3821: ;
-  return z8zE71;
-end_block_exception_3822: ;
+  unit z8zE72;
+  z8zE72 = UNIT;
+end_function_3405: ;
+  return z8zE72;
+end_block_exception_3406: ;
 
   return UNIT;
 }
 
 unit zcycle_scope_end(uint64_t z_scope)
 {
-  unit z8zE72;
-  z8zE72 = UNIT;
-end_function_3819: ;
-  return z8zE72;
-end_block_exception_3820: ;
+  unit z8zE73;
+  z8zE73 = UNIT;
+end_function_3403: ;
+  return z8zE73;
+end_block_exception_3404: ;
 
   return UNIT;
 }

@@ -570,31 +570,31 @@ structure JournalSnapshot where
   logs : List LogEntry
   deriving Inhabited
 
-structure BalStorageChange where
+structure BalStorageChangeRecord where
   account : address
   slot : word
   index : block_access_index
   value : word
   deriving Inhabited
 
-structure BalStorageRead where
+structure BalStorageReadRecord where
   account : address
   slot : word
   deriving Inhabited
 
-structure BalBalanceChange where
+structure BalBalanceChangeRecord where
   account : address
   index : block_access_index
   value : word
   deriving Inhabited
 
-structure BalNonceChange where
+structure BalNonceChangeRecord where
   account : address
   index : block_access_index
   value : account_nonce
   deriving Inhabited
 
-structure BalCodeChange where
+structure BalCodeChangeRecord where
   account : address
   index : block_access_index
   value : hash
@@ -629,19 +629,12 @@ structure HostState where
   checkpoints : List JournalSnapshot
   nodeDb : List (hash × ByteSlice)
   balAccounts : List address
-  balStorageChanges : List BalStorageChange
-  balStorageReads : List BalStorageRead
-  balBalanceChanges : List BalBalanceChange
-  balNonceChanges : List BalNonceChange
-  balCodeChanges : List BalCodeChange
-  balAccountCursor : Nat
-  balActiveAccount : Option address
-  balStorageSlotCursor : Nat
-  balActiveStorageSlot : Option word
-  balStorageChangeCursor : Nat
-  balBalanceChangeCursor : Nat
-  balNonceChangeCursor : Nat
-  balCodeChangeCursor : Nat
+  balStorageChanges : List BalStorageChangeRecord
+  balStorageReads : List BalStorageReadRecord
+  balBalanceChanges : List BalBalanceChangeRecord
+  balNonceChanges : List BalNonceChangeRecord
+  balCodeChanges : List BalCodeChangeRecord
+  balIterator : List BalIterEntry
 
 def initialHostState : HostState where
   memoryBytes := #[]
@@ -677,14 +670,7 @@ def initialHostState : HostState where
   balBalanceChanges := []
   balNonceChanges := []
   balCodeChanges := []
-  balAccountCursor := 0
-  balActiveAccount := none
-  balStorageSlotCursor := 0
-  balActiveStorageSlot := none
-  balStorageChangeCursor := 0
-  balBalanceChangeCursor := 0
-  balNonceChangeCursor := 0
-  balCodeChangeCursor := 0
+  balIterator := []
 
 abbrev SailM (α : Type) :=
   StateT HostState Evm.Defs.SailM α
@@ -1505,6 +1491,50 @@ private def touchBalAccount (accounts : List address) (account : address) :
     List address :=
   if accounts.contains account then accounts else accounts ++ [account]
 
+private def putBalStorageChange
+    (entries : List BalStorageChangeRecord)
+    (replacement : BalStorageChangeRecord) :
+    List BalStorageChangeRecord :=
+  (entries.filter fun entry =>
+      !(entry.account == replacement.account &&
+        entry.slot == replacement.slot &&
+        entry.index == replacement.index)) ++ [replacement]
+
+private def putBalStorageRead
+    (entries : List BalStorageReadRecord)
+    (replacement : BalStorageReadRecord) :
+    List BalStorageReadRecord :=
+  if entries.any fun entry =>
+      entry.account == replacement.account &&
+      entry.slot == replacement.slot then
+    entries
+  else
+    entries ++ [replacement]
+
+private def putBalBalanceChange
+    (entries : List BalBalanceChangeRecord)
+    (replacement : BalBalanceChangeRecord) :
+    List BalBalanceChangeRecord :=
+  (entries.filter fun entry =>
+      !(entry.account == replacement.account &&
+        entry.index == replacement.index)) ++ [replacement]
+
+private def putBalNonceChange
+    (entries : List BalNonceChangeRecord)
+    (replacement : BalNonceChangeRecord) :
+    List BalNonceChangeRecord :=
+  (entries.filter fun entry =>
+      !(entry.account == replacement.account &&
+        entry.index == replacement.index)) ++ [replacement]
+
+private def putBalCodeChange
+    (entries : List BalCodeChangeRecord)
+    (replacement : BalCodeChangeRecord) :
+    List BalCodeChangeRecord :=
+  (entries.filter fun entry =>
+      !(entry.account == replacement.account &&
+        entry.index == replacement.index)) ++ [replacement]
+
 def bal_reset (_ : Unit) : SailM Unit :=
   modify fun state =>
     { state with
@@ -1514,14 +1544,7 @@ def bal_reset (_ : Unit) : SailM Unit :=
       balBalanceChanges := []
       balNonceChanges := []
       balCodeChanges := []
-      balAccountCursor := 0
-      balActiveAccount := none
-      balStorageSlotCursor := 0
-      balActiveStorageSlot := none
-      balStorageChangeCursor := 0
-      balBalanceChangeCursor := 0
-      balNonceChangeCursor := 0
-      balCodeChangeCursor := 0 }
+      balIterator := [] }
 
 def bal_account_touch (account : address) : SailM Unit :=
   modify fun state =>
@@ -1534,19 +1557,16 @@ def bal_storage_change
     { state with
       balAccounts := touchBalAccount state.balAccounts account
       balStorageChanges :=
-        state.balStorageChanges ++
-          [{ account := account, slot := slot, index := index, value := value }] }
+        putBalStorageChange state.balStorageChanges
+          { account := account, slot := slot, index := index, value := value } }
 
 def bal_storage_read (account : address) (slot : word) : SailM Unit :=
   modify fun state =>
     { state with
       balAccounts := touchBalAccount state.balAccounts account
       balStorageReads :=
-        if state.balStorageReads.any fun entry =>
-            entry.account == account && entry.slot == slot then
-          state.balStorageReads
-        else
-          state.balStorageReads ++ [{ account := account, slot := slot }] }
+        putBalStorageRead state.balStorageReads
+          { account := account, slot := slot } }
 
 def bal_balance_change
     (index : block_access_index) (account : address) (value : word) :
@@ -1555,8 +1575,8 @@ def bal_balance_change
     { state with
       balAccounts := touchBalAccount state.balAccounts account
       balBalanceChanges :=
-        state.balBalanceChanges ++
-          [{ account := account, index := index, value := value }] }
+        putBalBalanceChange state.balBalanceChanges
+          { account := account, index := index, value := value } }
 
 def bal_nonce_change
     (index : block_access_index) (account : address) (value : account_nonce) :
@@ -1565,8 +1585,8 @@ def bal_nonce_change
     { state with
       balAccounts := touchBalAccount state.balAccounts account
       balNonceChanges :=
-        state.balNonceChanges ++
-          [{ account := account, index := index, value := value }] }
+        putBalNonceChange state.balNonceChanges
+          { account := account, index := index, value := value } }
 
 def bal_code_change
     (index : block_access_index) (account : address) (value : hash) :
@@ -1575,183 +1595,81 @@ def bal_code_change
     { state with
       balAccounts := touchBalAccount state.balAccounts account
       balCodeChanges :=
-        state.balCodeChanges ++
-          [{ account := account, index := index, value := value }] }
+        putBalCodeChange state.balCodeChanges
+          { account := account, index := index, value := value } }
 
-def bal_prepare (_ : Unit) : SailM Unit :=
+private def balEventsForAccount
+    (state : HostState) (account : address) : List BalIterEntry :=
+  let changes :=
+    state.balStorageChanges.filter (·.account == account)
+  let storageChanges :=
+    changes.map fun entry =>
+      BalIterEntry.BalStorageChange
+        { slot := entry.slot, index := entry.index, value := entry.value }
+  let storageReads :=
+    (state.balStorageReads.filter fun entry =>
+      entry.account == account &&
+      !(changes.any fun change => change.slot == entry.slot)).map fun entry =>
+        BalIterEntry.BalStorageRead entry.slot
+  let balances :=
+    (state.balBalanceChanges.filter (·.account == account)).map fun entry =>
+      BalIterEntry.BalBalanceChange { index := entry.index, value := entry.value }
+  let nonces :=
+    (state.balNonceChanges.filter (·.account == account)).map fun entry =>
+      BalIterEntry.BalNonceChange { index := entry.index, value := entry.value }
+  let codes :=
+    (state.balCodeChanges.filter (·.account == account)).map fun entry =>
+      BalIterEntry.BalCodeChange { index := entry.index, code_hash := entry.value }
+  [BalIterEntry.BalAccount account] ++ storageChanges ++ storageReads ++
+    balances ++ nonces ++ codes ++ [BalIterEntry.BalAccountEnd ()]
+
+def bal_prepare_iter (_ : Unit) : SailM Unit :=
   modify fun state =>
-    { state with
-      balAccounts :=
-        state.balAccounts.mergeSort fun left right =>
-          addressSortKey left ≤ addressSortKey right
-      balStorageChanges :=
-        state.balStorageChanges.mergeSort fun left right =>
-          if left.account == right.account then
-            if left.slot == right.slot then
-              left.index ≤ right.index
+    let prepared :=
+      { state with
+        balAccounts :=
+          state.balAccounts.mergeSort fun left right =>
+            addressSortKey left ≤ addressSortKey right
+        balStorageChanges :=
+          state.balStorageChanges.mergeSort fun left right =>
+            if left.account == right.account then
+              if left.slot == right.slot then
+                left.index ≤ right.index
+              else
+                left.slot ≤ right.slot
             else
+              addressSortKey left.account ≤ addressSortKey right.account
+        balStorageReads :=
+          state.balStorageReads.mergeSort fun left right =>
+            if left.account == right.account then
               left.slot ≤ right.slot
-          else
-            accountSecureSortKey left.account ≤
-              accountSecureSortKey right.account
-      balStorageReads :=
-        state.balStorageReads.mergeSort fun left right =>
-          if left.account == right.account then
-            left.slot ≤ right.slot
-          else
-            accountSecureSortKey left.account ≤
-              accountSecureSortKey right.account
-      balBalanceChanges :=
-        state.balBalanceChanges.mergeSort fun left right =>
-          if left.account == right.account then left.index ≤ right.index
-          else
-            accountSecureSortKey left.account ≤
-              accountSecureSortKey right.account
-      balNonceChanges :=
-        state.balNonceChanges.mergeSort fun left right =>
-          if left.account == right.account then left.index ≤ right.index
-          else
-            accountSecureSortKey left.account ≤
-              accountSecureSortKey right.account
-      balCodeChanges :=
-        state.balCodeChanges.mergeSort fun left right =>
-          if left.account == right.account then left.index ≤ right.index
-          else
-            accountSecureSortKey left.account ≤
-              accountSecureSortKey right.account
-      balAccountCursor := 0
-      balActiveAccount := none
-      balStorageSlotCursor := 0
-      balActiveStorageSlot := none
-      balStorageChangeCursor := 0
-      balBalanceChangeCursor := 0
-      balNonceChangeCursor := 0
-      balCodeChangeCursor := 0 }
+            else
+              addressSortKey left.account ≤ addressSortKey right.account
+        balBalanceChanges :=
+          state.balBalanceChanges.mergeSort fun left right =>
+            if left.account == right.account then left.index ≤ right.index
+            else addressSortKey left.account ≤ addressSortKey right.account
+        balNonceChanges :=
+          state.balNonceChanges.mergeSort fun left right =>
+            if left.account == right.account then left.index ≤ right.index
+            else addressSortKey left.account ≤ addressSortKey right.account
+        balCodeChanges :=
+          state.balCodeChanges.mergeSort fun left right =>
+            if left.account == right.account then left.index ≤ right.index
+            else addressSortKey left.account ≤ addressSortKey right.account }
+    let events :=
+      prepared.balAccounts.foldl
+        (fun result account => result ++ balEventsForAccount prepared account)
+        []
+    { prepared with balIterator := events }
 
-def bal_account_next (_ : Unit) : SailM (Option address) := do
+def bal_iter_next (_ : Unit) : SailM BalIterEntry := do
   let state ← get
-  match state.balAccounts[state.balAccountCursor]? with
-  | none => pure none
-  | some account =>
-      set { state with
-        balAccountCursor := state.balAccountCursor + 1
-        balActiveAccount := some account
-        balStorageSlotCursor := 0
-        balActiveStorageSlot := none
-        balStorageChangeCursor := 0
-        balBalanceChangeCursor := 0
-        balNonceChangeCursor := 0
-        balCodeChangeCursor := 0 }
-      pure (some account)
-
-private def insertBalStorageSlot (slots : List word) (slot : word) :
-    List word :=
-  match slots with
-  | [] => [slot]
-  | head :: tail =>
-      if slot == head then
-        slots
-      else if slot < head then
-        slot :: slots
-      else
-        head :: insertBalStorageSlot tail slot
-
-private def activeBalStorageSlots (state : HostState) : List word :=
-  match state.balActiveAccount with
-  | none => []
-  | some account =>
-      let changeSlots :=
-        (state.balStorageChanges.filter (·.account == account)).map (·.slot)
-      let readSlots :=
-        (state.balStorageReads.filter (·.account == account)).map (·.slot)
-      (changeSlots ++ readSlots).foldl insertBalStorageSlot []
-
-def bal_storage_slot_next (_ : Unit) :
-    SailM (Option BalStorageSlotEntry) := do
-  let state ← get
-  match (activeBalStorageSlots state)[state.balStorageSlotCursor]? with
-  | none =>
-      set { state with balActiveStorageSlot := none }
-      pure none
-  | some slot =>
-      let changes : List BalStorageChange :=
-        match state.balActiveAccount with
-        | none => []
-        | some account =>
-            state.balStorageChanges.filter fun entry =>
-              entry.account == account && entry.slot == slot
-      let change :=
-        changes.head?.map fun entry =>
-          { index := entry.index, value := entry.value }
-      set { state with
-        balStorageSlotCursor := state.balStorageSlotCursor + 1
-        balActiveStorageSlot := some slot
-        balStorageChangeCursor := if change.isSome then 1 else 0 }
-      pure (some { slot := slot, change := change })
-
-private def activeBalStorageChanges (state : HostState) :
-    List BalStorageChange :=
-  match state.balActiveAccount, state.balActiveStorageSlot with
-  | some account, some slot =>
-      state.balStorageChanges.filter fun entry =>
-        entry.account == account && entry.slot == slot
-  | _, _ => []
-
-def bal_storage_change_next (_ : Unit) :
-    SailM (Option BalStorageChangeEntry) := do
-  let state ← get
-  match (activeBalStorageChanges state)[state.balStorageChangeCursor]? with
-  | none => pure none
-  | some entry =>
-      set { state with
-        balStorageChangeCursor := state.balStorageChangeCursor + 1 }
-      pure (some
-        { index := entry.index
-          value := entry.value })
-
-private def activeBalBalanceChanges (state : HostState) :
-    List BalBalanceChange :=
-  match state.balActiveAccount with
-  | none => []
-  | some account => state.balBalanceChanges.filter (·.account == account)
-
-def bal_balance_change_next (_ : Unit) :
-    SailM (Option BalBalanceChangeEntry) := do
-  let state ← get
-  match (activeBalBalanceChanges state)[state.balBalanceChangeCursor]? with
-  | none => pure none
-  | some entry =>
-      set { state with
-        balBalanceChangeCursor := state.balBalanceChangeCursor + 1 }
-      pure (some { index := entry.index, value := entry.value })
-
-private def activeBalNonceChanges (state : HostState) : List BalNonceChange :=
-  match state.balActiveAccount with
-  | none => []
-  | some account => state.balNonceChanges.filter (·.account == account)
-
-def bal_nonce_change_next (_ : Unit) :
-    SailM (Option BalNonceChangeEntry) := do
-  let state ← get
-  match (activeBalNonceChanges state)[state.balNonceChangeCursor]? with
-  | none => pure none
-  | some entry =>
-      set { state with balNonceChangeCursor := state.balNonceChangeCursor + 1 }
-      pure (some { index := entry.index, value := entry.value })
-
-private def activeBalCodeChanges (state : HostState) : List BalCodeChange :=
-  match state.balActiveAccount with
-  | none => []
-  | some account => state.balCodeChanges.filter (·.account == account)
-
-def bal_code_change_next (_ : Unit) :
-    SailM (Option BalCodeChangeEntry) := do
-  let state ← get
-  match (activeBalCodeChanges state)[state.balCodeChangeCursor]? with
-  | none => pure none
-  | some entry =>
-      set { state with balCodeChangeCursor := state.balCodeChangeCursor + 1 }
-      pure (some { index := entry.index, code_hash := entry.value })
+  match state.balIterator with
+  | [] => pure (BalIterEntry.BalEmpty ())
+  | entry :: rest =>
+      set { state with balIterator := rest }
+      pure entry
 
 def warm_reset (_ : Unit) : SailM Unit :=
   modify fun state => { state with warmAddresses := [], warmSlots := [] }

@@ -42,6 +42,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=

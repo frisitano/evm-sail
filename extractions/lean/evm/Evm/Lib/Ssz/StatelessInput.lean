@@ -50,6 +50,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # The stateless input decoder
 
@@ -400,7 +401,7 @@ def ssz_container_cursor (bytes : (Sigma fun (k_off : Nat) =>
 
 /-- Takes the next variable field, ending at its container-relative SSZ
 offset, and returns the advanced cursor. -/
-/- Type quantifiers: k_ex417248_ : Nat, 0 ≤ k_ex417248_ ∧ k_ex417248_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex416113_ : Nat, 0 ≤ k_ex416113_ ∧ k_ex416113_ ≤ (2 ^ 32 - 1) -/
 def ssz_take (cursor : SszContainerCursor) (stop : Nat) : SailM ((Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × SszContainerCursor) := do
   let current_value := cursor.current
@@ -845,8 +846,8 @@ def next_parent_header_field (index : Nat) : Nat :=
   else 19
 
 /-- Extracts the execution-relevant fields while walking one parent header. -/
-/- Type quantifiers: _reclimit : Nat, k_ex417319_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ k_ex417319_ ∧ k_ex417319_ ≤ 19, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex416184_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ k_ex416184_ ∧ k_ex416184_ ≤ 19, 0 ≤ _reclimit -/
 def _rec_decode_parent_header_fields (cursor : (EvmByteSliceFields k_source_off k_source_len)) (field_index : Nat) (fields : ParentHeaderFields) (_reclimit : Nat) : SailM ParentHeaderFields := do
   match _reclimit with
   | 0 =>
@@ -1085,9 +1086,9 @@ the active Amsterdam `SszForkConfig` activation.
 The activation point (optional block number / timestamp, `List[u64,1]`
 each) must be reached by this payload: at least one bound set, none
 exceeding the payload's — a future activation invalidates the block. -/
-/- Type quantifiers: k_ex417361_ : Nat, k_ex417360_ : Nat, cc_dependentWitness1 : Nat, cc_dependentWitness0
-  : Nat, 0 ≤ cc_dependentWitness0 ∧ 0 ≤ cc_dependentWitness1, 0 ≤ k_ex417360_, 0 ≤
-  k_ex417361_ -/
+/- Type quantifiers: k_ex416226_ : Nat, k_ex416225_ : Nat, cc_dependentWitness1 : Nat, cc_dependentWitness0
+  : Nat, 0 ≤ cc_dependentWitness0 ∧ 0 ≤ cc_dependentWitness1, 0 ≤ k_ex416225_, 0 ≤
+  k_ex416226_ -/
 def decode_chain_config (cc : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (number : Nat) (timestamp : Nat) : SailM ChainConfig := do
   let cc_dependentWitness0 := (cc).1

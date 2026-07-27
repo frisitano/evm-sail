@@ -49,6 +49,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # Stateless block validation
 

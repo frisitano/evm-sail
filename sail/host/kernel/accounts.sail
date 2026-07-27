@@ -6,7 +6,7 @@ block) with the witness as base, plus the EIP-161/EIP-684 predicates and
 value transfer.
 */
 
-val stateless_account : (hash, address) -> option(AccountInfo)
+val stateless_account_by_key : (hash, hash) -> option(AccountInfo)
 
 /*! Field-wise inequality of account tuples. */
 function account_info_changed(c : AccountInfo, o : AccountInfo) -> bool =
@@ -66,6 +66,7 @@ function store_account(a : address, v : Account) -> unit =
     fast paths when existence/storage state is unchanged, and a storage
     clear when the tuple collapses to empty. */
 function store_account_info(a : address, acc : Account, info : AccountInfo) -> unit = {
+    cycle_scope_start(SCOPE_ACCOUNT_MUTATION);
     if account_info_empty(info) then {
         storage_tx_clear(a)
     };
@@ -84,28 +85,53 @@ function store_account_info(a : address, acc : Account, info : AccountInfo) -> u
         if next.info.code_hash != acc.info.code_hash then {
             acct_tx_set_code_hash(a, next.info.code_hash)
         }
-    }
+    };
+    cycle_scope_end(SCOPE_ACCOUNT_MUTATION)
+}
+
+/*! Resolves an account through the transaction and block overlays before an
+    authenticated witness read, recording the EIP-7928 account touch once at
+    the semantic access boundary. */
+function k_aload_inner(a : address) -> Account = {
+    cycle_scope_start(SCOPE_BAL_ACCOUNT_TOUCH);
+    bal_account_touch(a);
+    cycle_scope_end(SCOPE_BAL_ACCOUNT_TOUCH);
+
+    cycle_scope_start(SCOPE_ACCOUNT_TX_LOOKUP);
+    let tx_account = acct_tx_get(a);
+    cycle_scope_end(SCOPE_ACCOUNT_TX_LOOKUP);
+    match tx_account {
+        Some(acc) => return acc,
+        None() => (),
+    };
+
+    cycle_scope_start(SCOPE_ACCOUNT_BLOCK_LOOKUP);
+    let block_account = acct_block_get(a);
+    cycle_scope_end(SCOPE_ACCOUNT_BLOCK_LOOKUP);
+    match block_account {
+        Some(acc) => return acc,
+        None() => (),
+    };
+
+    cycle_scope_start(SCOPE_ACCOUNT_WITNESS);
+    let address_hash = keccak256_address(a);
+    let acc : Account = match stateless_account_by_key(k_parent_state_root, address_hash) {
+        Some(info) => account_from_info(info),
+        None() => EMPTY_ACCOUNT,
+    };
+    acct_block_cache(a, address_hash, acc);
+    cycle_scope_end(SCOPE_ACCOUNT_WITNESS);
+    acc
 }
 
 /*! The account at `a`: transaction overlay, then block overlay, then the
     authenticated witness (cached block-level on first read). Every load
     is recorded for the EIP-7928 block access list. */
 function k_aload(a : address) -> Account = {
-    bal_account_touch(a);
-    match acct_tx_get(a) {
-        Some(acc) => return acc,
-        None() => (),
-    };
-    match acct_block_get(a) {
-        Some(acc) => return acc,
-        None() => (),
-    };
-    let acc : Account = match stateless_account(k_parent_state_root, a) {
-        Some(info) => account_from_info(info),
-        None() => EMPTY_ACCOUNT,
-    };
-    acct_block_cache(a, acc);
-    acc
+    cycle_scope_start(SCOPE_ACCOUNT_LOAD);
+    let account = k_aload_inner(a);
+    cycle_scope_end(SCOPE_ACCOUNT_LOAD);
+    account
 }
 
 /*! The account balance (`BALANCE`, `SELFBALANCE`). */

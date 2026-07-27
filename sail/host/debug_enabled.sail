@@ -11,13 +11,13 @@ Build variant recording the failing validation stage and reason.
 /*! Debug-only traversal of every cached block-layer account row. */
 val acct_debug_iter_begin = impure { c: "acct_debug_iter_begin" } : unit -> unit
 /*! Returns the next cached account row from the debug-only traversal. */
-val acct_debug_iter_next = impure { c: "acct_debug_iter_next" } : unit -> option(AcctEntry)
+val acct_debug_iter_next = impure { c: "acct_debug_iter_next" } : unit -> option(AcctTrieEntry)
 
 /*! Pulls one all-cached account update for the debug empty-base rebuild. */
 function cached_account_trie_update_next() -> option(TrieUpdate) =
     match acct_debug_iter_next() {
         Some(entry) => {
-            Some(account_update(entry, acct_post_storage_root_read(entry.addr)))
+            Some(account_update(entry, acct_post_storage_root_read(entry.entry.addr)))
         },
         None() => None(),
     }

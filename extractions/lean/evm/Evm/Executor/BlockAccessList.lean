@@ -1,6 +1,5 @@
 import Evm.Flow
 import Evm.Prelude
-import Evm.Primitives.Bytes
 import Evm.Host.Code
 import Evm.Lib.Rlp.Rlp
 
@@ -42,6 +41,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # The block access list
 
@@ -53,8 +53,8 @@ hashed into the execution-payload header. -/
 
 /-- Counts one logical BAL item and enforces `gas_limit / 2000` without a
 separate sizing pass. -/
-/- Type quantifiers: k_ex417420_ : Nat, k_ex417419_ : Nat, 0 ≤ k_ex417419_ ∧
-  k_ex417419_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex417420_ ∧ k_ex417420_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex416285_ : Nat, k_ex416284_ : Nat, 0 ≤ k_ex416284_ ∧
+  k_ex416284_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex416285_ ∧ k_ex416285_ ≤ (2 ^ 64 - 1) -/
 def bal_count_item (count : Nat) (maximum : Nat) : SailM Nat := do
   if ((count <b maximum) : Bool)
   then (pure (count + 1))
@@ -104,9 +104,9 @@ def bal_expect_end (cursor : (EvmByteSliceFields k_source_off k_source_len)) : S
   else sailThrow ((InvalidBlock InvalidBlockAccessList))
 
 /-- Compares one canonical `[index, word]` pair. -/
-/- Type quantifiers: k_ex417522_ : Nat, k_ex417521_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
-  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex417521_ ∧
-  k_ex417521_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex417522_ ∧ k_ex417522_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex416387_ : Nat, k_ex416386_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
+  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex416386_ ∧
+  k_ex416386_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex416387_ ∧ k_ex416387_ ≤ (2 ^ 256 - 1) -/
 def bal_compare_index_word (pair : (RlpFieldRef k_source_off k_source_len k_content_len)) (index : Nat) (value : Nat) : SailM Unit := do
   let fields ← do (bal_ref_cursor pair)
   let ⟨index_field_syn_content_len, ⟨index_field_full_len, (index_field, fields)⟩⟩ ← do
@@ -123,9 +123,9 @@ def bal_compare_index_word (pair : (RlpFieldRef k_source_off k_source_len k_cont
   else (pure ())
 
 /-- Compares one canonical `[index, nonce]` pair. -/
-/- Type quantifiers: k_ex417542_ : Nat, k_ex417541_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
-  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex417541_ ∧
-  k_ex417541_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex417542_ ∧ k_ex417542_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex416407_ : Nat, k_ex416406_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
+  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex416406_ ∧
+  k_ex416406_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex416407_ ∧ k_ex416407_ ≤ (2 ^ 64 - 1) -/
 def bal_compare_index_nonce (pair : (RlpFieldRef k_source_off k_source_len k_content_len)) (index : Nat) (value : Nat) : SailM Unit := do
   let fields ← do (bal_ref_cursor pair)
   let ⟨index_field_syn_content_len, ⟨index_field_full_len, (index_field, fields)⟩⟩ ← do
@@ -143,8 +143,8 @@ def bal_compare_index_nonce (pair : (RlpFieldRef k_source_off k_source_len k_con
 
 /-- Compares one canonical `[index, code]` pair without materializing either
 source-backed code sequence. -/
-/- Type quantifiers: k_ex417561_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0
-  ≤ k_ex417561_ ∧ k_ex417561_ ≤ (2 ^ 20 + 1) -/
+/- Type quantifiers: k_ex416426_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0
+  ≤ k_ex416426_ ∧ k_ex416426_ ≤ (2 ^ 20 + 1) -/
 def bal_compare_index_code (pair : (RlpFieldRef k_source_off k_source_len k_content_len)) (index : Nat) (code_hash : (Vector (BitVec 8) 32)) : SailM Unit := do
   let fields ← do (bal_ref_cursor pair)
   let ⟨index_field_syn_content_len, ⟨index_field_full_len, (index_field, fields)⟩⟩ ← do
@@ -163,44 +163,11 @@ def bal_compare_index_code (pair : (RlpFieldRef k_source_off k_source_len k_cont
   then sailThrow ((InvalidBlock InvalidBlockAccessList))
   else (pure ())
 
-/-- Consumes an equal-index run within the selected storage slot and returns
-its final row plus the first row of the following run. -/
-def bal_storage_change_run (first : BalStorageChangeEntry) : SailM (BalStorageChangeEntry × (Option BalStorageChangeEntry)) := do
-  let last := first
-  let next ← do (bal_storage_change_next ())
-  let scanning : Bool := true
-  let (last, next, scanning) ← (( do
-    let loop_vars ← whileFuelM (fuel :=(2 ^i 64)) (fun (last, next, scanning) => (pure scanning)) (last, next, scanning)
-      fun (last, next, scanning) => do
-        assert true "loop dummy assert"
-        let (last, next, scanning) ← (( do
-          match next with
-          | .some entry =>
-            (do
-              let (last, next, scanning) ← (( do
-                if ((entry.index == first.index) : Bool)
-                then
-                  (do
-                    let last : BalStorageChangeEntry := entry
-                    let next ← (bal_storage_change_next ())
-                    (pure (last, next, scanning)))
-                else
-                  (let scanning : Bool := false
-                  (pure (last, next, scanning))) ) : SailM
-                (BalStorageChangeEntry × (Option BalStorageChangeEntry) × Bool) )
-              (pure (last, next, scanning)))
-          | none =>
-            (let scanning : Bool := false
-            (pure (last, next, scanning))) ) : SailM
-          (BalStorageChangeEntry × (Option BalStorageChangeEntry) × Bool) )
-        (pure (last, next, scanning))
-    (pure loop_vars) ) : SailM (BalStorageChangeEntry × (Option BalStorageChangeEntry) × Bool) )
-  (pure (last, next))
-
-/-- Compares every change-index run belonging to the selected storage slot. -/
-/- Type quantifiers: _reclimit : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ _reclimit -/
-def _rec_bal_compare_storage_slot_changes (fields : (EvmByteSliceFields k_source_off k_source_len)) (current : (Option BalStorageChangeEntry)) (_reclimit : Nat) : SailM Unit := do
+/-- Consumes the encoded changes for one storage slot.  Each RLP pop strictly
+reduces the remaining byte length and must have one matching host event. -/
+/- Type quantifiers: _reclimit : Nat, k_ex416441_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ k_ex416441_ ∧ k_ex416441_ ≤ (2 ^ 256 - 1), 0 ≤ _reclimit -/
+def _rec_bal_validate_storage_change_values (cursor : (EvmByteSliceFields k_source_off k_source_len)) (slot : Nat) (_reclimit : Nat) : SailM Unit := do
   match _reclimit with
   | 0 =>
     (do
@@ -208,167 +175,38 @@ def _rec_bal_compare_storage_slot_changes (fields : (EvmByteSliceFields k_source
       throw Error.Exit)
   | _reclimit_pred + 1 =>
     (do
-      match current with
-      | .some first =>
+      if ((k_source_len == 0) : Bool)
+      then (pure ())
+      else
         (do
-          let (last, next) ← do (bal_storage_change_run first)
-          let ⟨pair_content_len, ⟨pair_full_len, (pair, remaining)⟩⟩ ← do
-            (rlp_cursor_pop fields)
-          (bal_compare_index_word pair first.index last.value)
-          (_rec_bal_compare_storage_slot_changes remaining next _reclimit_pred))
-      | none => (bal_expect_end fields))
+          let ⟨pair_content_len, ⟨pair_full_len, (pair, next)⟩⟩ ← do
+            (rlp_cursor_pop cursor)
+          match (← (bal_iter_next ())) with
+          | .BalStorageChange change =>
+            (do
+              if ((change.slot != slot) : Bool)
+              then sailThrow ((InvalidBlock InvalidBlockAccessList))
+              else (bal_compare_index_word pair change.index change.value))
+          | _ => sailThrow ((InvalidBlock InvalidBlockAccessList))
+          (_rec_bal_validate_storage_change_values next slot _reclimit_pred)))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
-/-- Compares every change-index run belonging to the selected storage slot. -/
-/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len) -/
-def bal_compare_storage_slot_changes (fields : (EvmByteSliceFields k_source_off k_source_len)) (current : (Option BalStorageChangeEntry)) : SailM Unit := do
+/-- Consumes the encoded changes for one storage slot.  Each RLP pop strictly
+reduces the remaining byte length and must have one matching host event. -/
+/- Type quantifiers: slot : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ slot ∧ slot ≤ (2 ^ 256 - 1) -/
+def bal_validate_storage_change_values (cursor : (EvmByteSliceFields k_source_off k_source_len)) (slot : Nat) : SailM Unit := do
   let _measure := (k_source_len : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
-  else (_rec_bal_compare_storage_slot_changes fields current (_measure + 1))
+  else (_rec_bal_validate_storage_change_values cursor slot (_measure + 1))
 
-/-- Consumes the selected account's sorted storage-slot union. The host cursor
-drives one loop iteration per logical slot. A slot with one or more
-changes advances `storage_changes`; a change-free slot advances
-`storage_reads`. -/
-/- Type quantifiers: k_ex417611_ : Nat, k_ex417610_ : Nat, k_changes_source_off : Nat, k_changes_source_len
-  : Nat, k_reads_source_off : Nat, k_reads_source_len : Nat, (source_valid_range k_changes_source_off k_changes_source_len)
-  ∧ (source_valid_range k_reads_source_off k_reads_source_len), 0 ≤ k_ex417610_ ∧
-  k_ex417610_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex417611_ ∧ k_ex417611_ ≤ (2 ^ 64 - 1) -/
-def bal_compare_storage_slots (initial_changes : (EvmByteSliceFields k_changes_source_off k_changes_source_len)) (initial_reads : (EvmByteSliceFields k_reads_source_off k_reads_source_len)) (item_count : Nat) (maximum_items : Nat) : SailM Nat := do
-  let changes : (Sigma fun (k_off : Nat) =>
-    (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) :=
-    ((⟨_, ⟨_, initial_changes⟩⟩ : (Sigma fun (k_off : Nat) =>
-    (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
-    (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))
-  let reads : (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) :=
-    ((⟨_, ⟨_, initial_reads⟩⟩ : (Sigma fun (k_off : Nat) =>
-    (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
-    (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))
-  let count : Nat := item_count
-  let current ← do (bal_storage_slot_next ())
-  let scanning : Bool := true
-  let (changes, count, current, reads, scanning) ← (( do
-    let loop_vars ← whileFuelM (fuel :=((byte_slice_length changes) + (byte_slice_length reads))) (fun (changes, count, current, reads, scanning) => (pure scanning)) (changes, count, current, reads, scanning)
-      fun (changes, count, current, reads, scanning) => do
-        assert true "loop dummy assert"
-        let (changes, count, current, reads, scanning) ← (( do
-          match current with
-          | .some slot_entry =>
-            (do
-              let (changes, reads) ← (( do
-                match slot_entry.change with
-                | .some first_change =>
-                  (do
-                    let ⟨slot_field_content_len, ⟨slot_field_full_len, (slot_field, remaining_changes)⟩⟩ ← do
-                      (rlp_cursor_pop ((changes).2).2)
-                    let changes : (Sigma fun (k_off : Nat) =>
-                      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) :=
-                      ((⟨_, ⟨_, remaining_changes⟩⟩ : (Sigma fun (k_off : Nat) =>
-                      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
-                      (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))
-                    let slot_fields ← do (bal_ref_cursor slot_field)
-                    let ⟨slot_value_content_len, ⟨slot_value_full_len, (slot_value, slot_fields)⟩⟩ ← do
-                      (rlp_cursor_pop slot_fields)
-                    let ⟨slot_changes_content_len, ⟨slot_changes_full_len, (slot_changes, slot_fields)⟩⟩ ← do
-                      (rlp_cursor_pop slot_fields)
-                    (bal_expect_end slot_fields)
-                    if _sailIf0 : (((← (bal_ref_word slot_value)) != slot_entry.slot) : Bool) = true
-                    then
-                      (do
-                        sailThrow ((InvalidBlock InvalidBlockAccessList)))
-                    else
-                      (do
-                        (bal_compare_storage_slot_changes (← (bal_ref_cursor slot_changes))
-                          (some first_change))
-                        (pure ((changes, reads) : ((Sigma fun (k_off : Nat) =>
-                          (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × (Sigma fun
-                          (k_off : Nat) =>
-                          (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))))))
-                | none =>
-                  (do
-                    let ⟨slot_field_content_len, ⟨slot_field_full_len, (slot_field, remaining_reads)⟩⟩ ← do
-                      (rlp_cursor_pop ((reads).2).2)
-                    let reads : (Sigma fun (k_off : Nat) =>
-                      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) :=
-                      ((⟨_, ⟨_, remaining_reads⟩⟩ : (Sigma fun (k_off : Nat) =>
-                      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
-                      (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))
-                    if _sailIf0 : (((← (bal_ref_word slot_field)) != slot_entry.slot) : Bool) = true
-                    then
-                      (do
-                        sailThrow ((InvalidBlock InvalidBlockAccessList)))
-                    else
-                      (pure ((changes, reads) : ((Sigma fun (k_off : Nat) =>
-                        (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × (Sigma fun
-                        (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))))
-                ) : SailM
-                ((Sigma fun (k_off : Nat) =>
-                (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × (Sigma fun
-                (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) )
-              let count ← (bal_count_item count maximum_items)
-              let current ← (bal_storage_slot_next ())
-              (pure ((changes, count, current, reads, scanning) : ((Sigma fun (k_off : Nat) =>
-                (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × Nat × (Option BalStorageSlotEntry) × (Sigma
-                fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × Bool))))
-          | none =>
-            (let scanning : Bool := false
-            (pure ((changes, count, current, reads, scanning) : ((Sigma fun (k_off : Nat) =>
-              (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × Nat × (Option BalStorageSlotEntry) × (Sigma
-              fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × Bool))))
-          ) : SailM
-          ((Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × Nat × (Option BalStorageSlotEntry) × (Sigma
-          fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × Bool)
-          )
-        (pure ((changes, count, current, reads, scanning) : ((Sigma fun (k_off : Nat) =>
-          (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × Nat × (Option BalStorageSlotEntry) × (Sigma
-          fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × Bool)))
-    (pure loop_vars) ) : SailM
-    ((Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × Nat × (Option BalStorageSlotEntry) × (Sigma
-    fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × Bool) )
-  (rlp_cursor_expect_end ((changes).2).2)
-  (rlp_cursor_expect_end ((reads).2).2)
-  (pure count)
-
-/-- Consumes an equal-index balance run and returns its final row plus the
-first row of the following run. -/
-def bal_balance_change_run (first : BalBalanceChangeEntry) : SailM (BalBalanceChangeEntry × (Option BalBalanceChangeEntry)) := do
-  let last := first
-  let next ← do (bal_balance_change_next ())
-  let scanning : Bool := true
-  let (last, next, scanning) ← (( do
-    let loop_vars ← whileFuelM (fuel :=(2 ^i 64)) (fun (last, next, scanning) => (pure scanning)) (last, next, scanning)
-      fun (last, next, scanning) => do
-        assert true "loop dummy assert"
-        let (last, next, scanning) ← (( do
-          match next with
-          | .some entry =>
-            (do
-              let (last, next, scanning) ← (( do
-                if ((entry.index == first.index) : Bool)
-                then
-                  (do
-                    let last : BalBalanceChangeEntry := entry
-                    let next ← (bal_balance_change_next ())
-                    (pure (last, next, scanning)))
-                else
-                  (let scanning : Bool := false
-                  (pure (last, next, scanning))) ) : SailM
-                (BalBalanceChangeEntry × (Option BalBalanceChangeEntry) × Bool) )
-              (pure (last, next, scanning)))
-          | none =>
-            (let scanning : Bool := false
-            (pure (last, next, scanning))) ) : SailM
-          (BalBalanceChangeEntry × (Option BalBalanceChangeEntry) × Bool) )
-        (pure (last, next, scanning))
-    (pure loop_vars) ) : SailM (BalBalanceChangeEntry × (Option BalBalanceChangeEntry) × Bool) )
-  (pure (last, next))
-
-/-- Compares the final balance value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ _reclimit -/
-def _rec_bal_compare_balance_changes (fields : (EvmByteSliceFields k_source_off k_source_len)) (current : (Option BalBalanceChangeEntry)) (_reclimit : Nat) : SailM Unit := do
+/-- Consumes canonical `[slot, changes]` entries in their encoded order. -/
+/- Type quantifiers: _reclimit : Nat, k_ex416470_ : Nat, k_ex416469_ : Nat, k_source_off : Nat, k_source_len
+  : Nat, (source_valid_range k_source_off k_source_len), 0 ≤ k_ex416469_ ∧
+  k_ex416469_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex416470_ ∧ k_ex416470_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+def _rec_bal_validate_storage_changes (cursor : (EvmByteSliceFields k_source_off k_source_len)) (count : Nat) (maximum : Nat) (_reclimit : Nat) : SailM Nat := do
   match _reclimit with
   | 0 =>
     (do
@@ -376,249 +214,262 @@ def _rec_bal_compare_balance_changes (fields : (EvmByteSliceFields k_source_off 
       throw Error.Exit)
   | _reclimit_pred + 1 =>
     (do
-      match current with
-      | .some first =>
+      if ((k_source_len == 0) : Bool)
+      then (pure count)
+      else
         (do
-          let (last, next) ← do (bal_balance_change_run first)
-          let ⟨pair_content_len, ⟨pair_full_len, (pair, remaining)⟩⟩ ← do
+          let ⟨slot_field_content_len, ⟨slot_field_full_len, (slot_field, next)⟩⟩ ← do
+            (rlp_cursor_pop cursor)
+          let fields ← do (bal_ref_cursor slot_field)
+          let ⟨slot_value_content_len, ⟨slot_value_full_len, (slot_value, fields)⟩⟩ ← do
             (rlp_cursor_pop fields)
-          (bal_compare_index_word pair first.index last.value)
-          (_rec_bal_compare_balance_changes remaining next _reclimit_pred))
-      | none => (bal_expect_end fields))
-termination_by _reclimit
-decreasing_by all_goals exact Nat.lt_succ_self _
-
-/-- Compares the final balance value for each change index. -/
-/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len) -/
-def bal_compare_balance_changes (fields : (EvmByteSliceFields k_source_off k_source_len)) (current : (Option BalBalanceChangeEntry)) : SailM Unit := do
-  let _measure := (k_source_len : Int)
-  if ((_measure <b 0) : Bool)
-  then throw Error.Exit
-  else (_rec_bal_compare_balance_changes fields current (_measure + 1))
-
-/-- Consumes an equal-index nonce run and returns its maximum value plus the
-first row of the following run. -/
-def bal_nonce_change_run (first : BalNonceChangeEntry) : SailM (Nat × (Option BalNonceChangeEntry)) := do
-  let maximum := first.value
-  let next ← do (bal_nonce_change_next ())
-  let scanning : Bool := true
-  let (maximum, next, scanning) ← (( do
-    let loop_vars ← whileFuelM (fuel :=(2 ^i 64)) (fun (maximum, next, scanning) => (pure scanning)) (maximum, next, scanning)
-      fun (maximum, next, scanning) => do
-        assert true "loop dummy assert"
-        let (maximum, next, scanning) ← (( do
-          match next with
-          | .some entry =>
-            (do
-              let (maximum, next, scanning) ← (( do
-                if ((entry.index == first.index) : Bool)
-                then
-                  (do
-                    let maximum : Nat :=
-                      if ((maximum <b entry.value) : Bool)
-                      then entry.value
-                      else maximum
-                    let next ← (bal_nonce_change_next ())
-                    (pure (maximum, next, scanning)))
-                else
-                  (let scanning : Bool := false
-                  (pure (maximum, next, scanning))) ) : SailM
-                (Nat × (Option BalNonceChangeEntry) × Bool) )
-              (pure (maximum, next, scanning)))
-          | none =>
-            (let scanning : Bool := false
-            (pure (maximum, next, scanning))) ) : SailM
-          (Nat × (Option BalNonceChangeEntry) × Bool) )
-        (pure (maximum, next, scanning))
-    (pure loop_vars) ) : SailM (Nat × (Option BalNonceChangeEntry) × Bool) )
-  (pure (maximum, next))
-
-/-- Compares the maximum nonce value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ _reclimit -/
-def _rec_bal_compare_nonce_changes (fields : (EvmByteSliceFields k_source_off k_source_len)) (current : (Option BalNonceChangeEntry)) (_reclimit : Nat) : SailM Unit := do
-  match _reclimit with
-  | 0 =>
-    (do
-      assert false "recursion limit reached"
-      throw Error.Exit)
-  | _reclimit_pred + 1 =>
-    (do
-      match current with
-      | .some first =>
-        (do
-          let (maximum, next) ← do (bal_nonce_change_run first)
-          let ⟨pair_content_len, ⟨pair_full_len, (pair, remaining)⟩⟩ ← do
+          let ⟨changes_value_content_len, ⟨changes_value_full_len, (changes_value, fields)⟩⟩ ← do
             (rlp_cursor_pop fields)
-          (bal_compare_index_nonce pair first.index maximum)
-          (_rec_bal_compare_nonce_changes remaining next _reclimit_pred))
-      | none => (bal_expect_end fields))
-termination_by _reclimit
-decreasing_by all_goals exact Nat.lt_succ_self _
-
-/-- Compares the maximum nonce value for each change index. -/
-/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len) -/
-def bal_compare_nonce_changes (fields : (EvmByteSliceFields k_source_off k_source_len)) (current : (Option BalNonceChangeEntry)) : SailM Unit := do
-  let _measure := (k_source_len : Int)
-  if ((_measure <b 0) : Bool)
-  then throw Error.Exit
-  else (_rec_bal_compare_nonce_changes fields current (_measure + 1))
-
-/-- Consumes an equal-index code run and returns its final row plus the first
-row of the following run. -/
-def bal_code_change_run (first : BalCodeChangeEntry) : SailM (BalCodeChangeEntry × (Option BalCodeChangeEntry)) := do
-  let last := first
-  let next ← do (bal_code_change_next ())
-  let scanning : Bool := true
-  let (last, next, scanning) ← (( do
-    let loop_vars ← whileFuelM (fuel :=(2 ^i 64)) (fun (last, next, scanning) => (pure scanning)) (last, next, scanning)
-      fun (last, next, scanning) => do
-        assert true "loop dummy assert"
-        let (last, next, scanning) ← (( do
-          match next with
-          | .some entry =>
-            (do
-              let (last, next, scanning) ← (( do
-                if ((entry.index == first.index) : Bool)
-                then
-                  (do
-                    let last : BalCodeChangeEntry := entry
-                    let next ← (bal_code_change_next ())
-                    (pure (last, next, scanning)))
-                else
-                  (let scanning : Bool := false
-                  (pure (last, next, scanning))) ) : SailM
-                (BalCodeChangeEntry × (Option BalCodeChangeEntry) × Bool) )
-              (pure (last, next, scanning)))
-          | none =>
-            (let scanning : Bool := false
-            (pure (last, next, scanning))) ) : SailM
-          (BalCodeChangeEntry × (Option BalCodeChangeEntry) × Bool) )
-        (pure (last, next, scanning))
-    (pure loop_vars) ) : SailM (BalCodeChangeEntry × (Option BalCodeChangeEntry) × Bool) )
-  (pure (last, next))
-
-/-- Compares the final code value for each change index. -/
-/- Type quantifiers: _reclimit : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ _reclimit -/
-def _rec_bal_compare_code_changes (fields : (EvmByteSliceFields k_source_off k_source_len)) (current : (Option BalCodeChangeEntry)) (_reclimit : Nat) : SailM Unit := do
-  match _reclimit with
-  | 0 =>
-    (do
-      assert false "recursion limit reached"
-      throw Error.Exit)
-  | _reclimit_pred + 1 =>
-    (do
-      match current with
-      | .some first =>
-        (do
-          let (last, next) ← do (bal_code_change_run first)
-          let ⟨pair_content_len, ⟨pair_full_len, (pair, remaining)⟩⟩ ← do
-            (rlp_cursor_pop fields)
-          (bal_compare_index_code pair first.index last.code_hash)
-          (_rec_bal_compare_code_changes remaining next _reclimit_pred))
-      | none => (bal_expect_end fields))
-termination_by _reclimit
-decreasing_by all_goals exact Nat.lt_succ_self _
-
-/-- Compares the final code value for each change index. -/
-/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len) -/
-def bal_compare_code_changes (fields : (EvmByteSliceFields k_source_off k_source_len)) (current : (Option BalCodeChangeEntry)) : SailM Unit := do
-  let _measure := (k_source_len : Int)
-  if ((_measure <b 0) : Bool)
-  then throw Error.Exit
-  else (_rec_bal_compare_code_changes fields current (_measure + 1))
-
-/-- Compares one account and all five ordered BAL child collections. -/
-/- Type quantifiers: k_ex417711_ : Nat, k_ex417710_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
-  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex417710_ ∧
-  k_ex417710_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex417711_ ∧ k_ex417711_ ≤ (2 ^ 64 - 1) -/
-def bal_compare_account (field : (RlpFieldRef k_source_off k_source_len k_content_len)) (account : (Vector (BitVec 8) 20)) (item_count : Nat) (maximum_items : Nat) : SailM Nat := do
-  let fields ← do (bal_ref_cursor field)
-  let ⟨address_field_syn_content_len, ⟨address_field_full_len, (address_field, fields)⟩⟩ ← do
-    (rlp_cursor_pop fields)
-  let ⟨storage_changes_field_syn_content_len, ⟨storage_changes_field_full_len, (storage_changes_field, fields)⟩⟩ ← do
-    (rlp_cursor_pop fields)
-  let ⟨storage_reads_field_syn_content_len, ⟨storage_reads_field_full_len, (storage_reads_field, fields)⟩⟩ ← do
-    (rlp_cursor_pop fields)
-  let ⟨balance_changes_field_syn_content_len, ⟨balance_changes_field_full_len, (balance_changes_field, fields)⟩⟩ ← do
-    (rlp_cursor_pop fields)
-  let ⟨nonce_changes_field_syn_content_len, ⟨nonce_changes_field_full_len, (nonce_changes_field, fields)⟩⟩ ← do
-    (rlp_cursor_pop fields)
-  let ⟨code_changes_field_syn_content_len, ⟨code_changes_field_full_len, (code_changes_field, fields)⟩⟩ ← do
-    (rlp_cursor_pop fields)
-  (bal_expect_end fields)
-  let ⟨_, ⟨_, address_bytes⟩⟩ ← do (bal_ref_bytes address_field)
-  if ((← if ((address_bytes.len != 20) : Bool)
-       then (pure true)
-       else
-         (do
-           (pure (bne (word_to_address (← (rlp_ref_word address_field))) account)))) : Bool)
-  then sailThrow ((InvalidBlock InvalidBlockAccessList))
-  else
-    (do
-      let counted_account ← do (bal_count_item item_count maximum_items)
-      let counted_storage ← do
-        (bal_compare_storage_slots (← (bal_ref_cursor storage_changes_field))
-          (← (bal_ref_cursor storage_reads_field)) counted_account maximum_items)
-      (bal_compare_balance_changes (← (bal_ref_cursor balance_changes_field))
-        (← (bal_balance_change_next ())))
-      (bal_compare_nonce_changes (← (bal_ref_cursor nonce_changes_field))
-        (← (bal_nonce_change_next ())))
-      (bal_compare_code_changes (← (bal_ref_cursor code_changes_field))
-        (← (bal_code_change_next ())))
-      (pure counted_storage))
-
-/-- Compares all BAL accounts in canonical address order. -/
-/- Type quantifiers: _reclimit : Nat, k_ex417727_ : Nat, k_ex417726_ : Nat, k_source_off : Nat, k_source_len
-  : Nat, (source_valid_range k_source_off k_source_len), 0 ≤ k_ex417726_ ∧
-  k_ex417726_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex417727_ ∧ k_ex417727_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
-def _rec_bal_compare_accounts (fields : (EvmByteSliceFields k_source_off k_source_len)) (current : (Option (Vector (BitVec 8) 20))) (item_count : Nat) (maximum_items : Nat) (_reclimit : Nat) : SailM Nat := do
-  match _reclimit with
-  | 0 =>
-    (do
-      assert false "recursion limit reached"
-      throw Error.Exit)
-  | _reclimit_pred + 1 =>
-    (do
-      match current with
-      | .some account =>
-        (do
-          let ⟨field_content_len, ⟨field_full_len, (field, remaining)⟩⟩ ← do
-            (rlp_cursor_pop fields)
-          let next_count ← do (bal_compare_account field account item_count maximum_items)
-          (_rec_bal_compare_accounts remaining (← (bal_account_next ())) next_count maximum_items
-            _reclimit_pred))
-      | none =>
-        (do
           (bal_expect_end fields)
-          (pure item_count)))
+          let changes ← do (bal_ref_cursor changes_value)
+          if ((changes.len == 0) : Bool)
+          then sailThrow ((InvalidBlock InvalidBlockAccessList))
+          else
+            (do
+              let slot ← do (bal_ref_word slot_value)
+              (bal_validate_storage_change_values changes slot)
+              let count ← do (bal_count_item count maximum)
+              (_rec_bal_validate_storage_changes next count maximum _reclimit_pred))))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
-/-- Compares all BAL accounts in canonical address order. -/
-/- Type quantifiers: maximum_items : Nat, item_count : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ item_count ∧ item_count ≤ (2 ^ 64 - 1), 0 ≤ maximum_items ∧
-  maximum_items ≤ (2 ^ 64 - 1) -/
-def bal_compare_accounts (fields : (EvmByteSliceFields k_source_off k_source_len)) (current : (Option (Vector (BitVec 8) 20))) (item_count : Nat) (maximum_items : Nat) : SailM Nat := do
+/-- Consumes canonical `[slot, changes]` entries in their encoded order. -/
+/- Type quantifiers: maximum : Nat, count : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ maximum ∧ maximum ≤ (2 ^ 64 - 1) -/
+def bal_validate_storage_changes (cursor : (EvmByteSliceFields k_source_off k_source_len)) (count : Nat) (maximum : Nat) : SailM Nat := do
   let _measure := (k_source_len : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
-  else (_rec_bal_compare_accounts fields current item_count maximum_items (_measure + 1))
+  else (_rec_bal_validate_storage_changes cursor count maximum (_measure + 1))
 
-/-- Validates the supplied canonical EIP-7928 block access list directly
-against the recorder's ordered account/change streams. -/
-/- Type quantifiers: k_ex417754_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
-  ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1, 0 ≤ k_ex417754_ ∧
-  k_ex417754_ ≤ (2 ^ 64 - 1) -/
+/-- Consumes the read-only storage slots in their encoded order. -/
+/- Type quantifiers: _reclimit : Nat, k_ex416500_ : Nat, k_ex416499_ : Nat, k_source_off : Nat, k_source_len
+  : Nat, (source_valid_range k_source_off k_source_len), 0 ≤ k_ex416499_ ∧
+  k_ex416499_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex416500_ ∧ k_ex416500_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+def _rec_bal_validate_storage_reads (cursor : (EvmByteSliceFields k_source_off k_source_len)) (count : Nat) (maximum : Nat) (_reclimit : Nat) : SailM Nat := do
+  match _reclimit with
+  | 0 =>
+    (do
+      assert false "recursion limit reached"
+      throw Error.Exit)
+  | _reclimit_pred + 1 =>
+    (do
+      if ((k_source_len == 0) : Bool)
+      then (pure count)
+      else
+        (do
+          let ⟨slot_field_content_len, ⟨slot_field_full_len, (slot_field, next)⟩⟩ ← do
+            (rlp_cursor_pop cursor)
+          let slot ← do (bal_ref_word slot_field)
+          match (← (bal_iter_next ())) with
+          | .BalStorageRead recorded =>
+            (do
+              if ((recorded != slot) : Bool)
+              then sailThrow ((InvalidBlock InvalidBlockAccessList))
+              else (pure ()))
+          | _ => sailThrow ((InvalidBlock InvalidBlockAccessList))
+          let count ← do (bal_count_item count maximum)
+          (_rec_bal_validate_storage_reads next count maximum _reclimit_pred)))
+termination_by _reclimit
+decreasing_by all_goals exact Nat.lt_succ_self _
+
+/-- Consumes the read-only storage slots in their encoded order. -/
+/- Type quantifiers: maximum : Nat, count : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ maximum ∧ maximum ≤ (2 ^ 64 - 1) -/
+def bal_validate_storage_reads (cursor : (EvmByteSliceFields k_source_off k_source_len)) (count : Nat) (maximum : Nat) : SailM Nat := do
+  let _measure := (k_source_len : Int)
+  if ((_measure <b 0) : Bool)
+  then throw Error.Exit
+  else (_rec_bal_validate_storage_reads cursor count maximum (_measure + 1))
+
+/-- Consumes balance changes in their encoded order. -/
+/- Type quantifiers: _reclimit : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ _reclimit -/
+def _rec_bal_validate_balance_changes (cursor : (EvmByteSliceFields k_source_off k_source_len)) (_reclimit : Nat) : SailM Unit := do
+  match _reclimit with
+  | 0 =>
+    (do
+      assert false "recursion limit reached"
+      throw Error.Exit)
+  | _reclimit_pred + 1 =>
+    (do
+      if ((k_source_len == 0) : Bool)
+      then (pure ())
+      else
+        (do
+          let ⟨pair_content_len, ⟨pair_full_len, (pair, next)⟩⟩ ← do
+            (rlp_cursor_pop cursor)
+          match (← (bal_iter_next ())) with
+          | .BalBalanceChange change => (bal_compare_index_word pair change.index change.value)
+          | _ => sailThrow ((InvalidBlock InvalidBlockAccessList))
+          (_rec_bal_validate_balance_changes next _reclimit_pred)))
+termination_by _reclimit
+decreasing_by all_goals exact Nat.lt_succ_self _
+
+/-- Consumes balance changes in their encoded order. -/
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len) -/
+def bal_validate_balance_changes (cursor : (EvmByteSliceFields k_source_off k_source_len)) : SailM Unit := do
+  let _measure := (k_source_len : Int)
+  if ((_measure <b 0) : Bool)
+  then throw Error.Exit
+  else (_rec_bal_validate_balance_changes cursor (_measure + 1))
+
+/-- Consumes nonce changes in their encoded order. -/
+/- Type quantifiers: _reclimit : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ _reclimit -/
+def _rec_bal_validate_nonce_changes (cursor : (EvmByteSliceFields k_source_off k_source_len)) (_reclimit : Nat) : SailM Unit := do
+  match _reclimit with
+  | 0 =>
+    (do
+      assert false "recursion limit reached"
+      throw Error.Exit)
+  | _reclimit_pred + 1 =>
+    (do
+      if ((k_source_len == 0) : Bool)
+      then (pure ())
+      else
+        (do
+          let ⟨pair_content_len, ⟨pair_full_len, (pair, next)⟩⟩ ← do
+            (rlp_cursor_pop cursor)
+          match (← (bal_iter_next ())) with
+          | .BalNonceChange change => (bal_compare_index_nonce pair change.index change.value)
+          | _ => sailThrow ((InvalidBlock InvalidBlockAccessList))
+          (_rec_bal_validate_nonce_changes next _reclimit_pred)))
+termination_by _reclimit
+decreasing_by all_goals exact Nat.lt_succ_self _
+
+/-- Consumes nonce changes in their encoded order. -/
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len) -/
+def bal_validate_nonce_changes (cursor : (EvmByteSliceFields k_source_off k_source_len)) : SailM Unit := do
+  let _measure := (k_source_len : Int)
+  if ((_measure <b 0) : Bool)
+  then throw Error.Exit
+  else (_rec_bal_validate_nonce_changes cursor (_measure + 1))
+
+/-- Consumes code changes in their encoded order. -/
+/- Type quantifiers: _reclimit : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ _reclimit -/
+def _rec_bal_validate_code_changes (cursor : (EvmByteSliceFields k_source_off k_source_len)) (_reclimit : Nat) : SailM Unit := do
+  match _reclimit with
+  | 0 =>
+    (do
+      assert false "recursion limit reached"
+      throw Error.Exit)
+  | _reclimit_pred + 1 =>
+    (do
+      if ((k_source_len == 0) : Bool)
+      then (pure ())
+      else
+        (do
+          let ⟨pair_content_len, ⟨pair_full_len, (pair, next)⟩⟩ ← do
+            (rlp_cursor_pop cursor)
+          match (← (bal_iter_next ())) with
+          | .BalCodeChange change => (bal_compare_index_code pair change.index change.code_hash)
+          | _ => sailThrow ((InvalidBlock InvalidBlockAccessList))
+          (_rec_bal_validate_code_changes next _reclimit_pred)))
+termination_by _reclimit
+decreasing_by all_goals exact Nat.lt_succ_self _
+
+/-- Consumes code changes in their encoded order. -/
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len) -/
+def bal_validate_code_changes (cursor : (EvmByteSliceFields k_source_off k_source_len)) : SailM Unit := do
+  let _measure := (k_source_len : Int)
+  if ((_measure <b 0) : Bool)
+  then throw Error.Exit
+  else (_rec_bal_validate_code_changes cursor (_measure + 1))
+
+/-- Consumes account entries from the canonical RLP list.  The encoded cursor
+is the traversal driver; the host iterator supplies exactly one comparison
+event for every decoded semantic value. -/
+/- Type quantifiers: _reclimit : Nat, k_ex416608_ : Nat, k_ex416607_ : Nat, k_source_off : Nat, k_source_len
+  : Nat, (source_valid_range k_source_off k_source_len), 0 ≤ k_ex416607_ ∧
+  k_ex416607_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex416608_ ∧ k_ex416608_ ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
+def _rec_bal_validate_accounts (cursor : (EvmByteSliceFields k_source_off k_source_len)) (count : Nat) (maximum : Nat) (_reclimit : Nat) : SailM Nat := do
+  match _reclimit with
+  | 0 =>
+    (do
+      assert false "recursion limit reached"
+      throw Error.Exit)
+  | _reclimit_pred + 1 =>
+    (do
+      if ((k_source_len == 0) : Bool)
+      then (pure count)
+      else
+        (do
+          let ⟨account_field_content_len, ⟨account_field_full_len, (account_field, next)⟩⟩ ← do
+            (rlp_cursor_pop cursor)
+          let fields ← do (bal_ref_cursor account_field)
+          let ⟨address_field_content_len, ⟨address_field_full_len, (address_field, fields)⟩⟩ ← do
+            (rlp_cursor_pop fields)
+          let ⟨storage_changes_field_content_len, ⟨storage_changes_field_full_len, (storage_changes_field, fields)⟩⟩ ← do
+            (rlp_cursor_pop fields)
+          let ⟨storage_reads_field_content_len, ⟨storage_reads_field_full_len, (storage_reads_field, fields)⟩⟩ ← do
+            (rlp_cursor_pop fields)
+          let ⟨balance_changes_field_content_len, ⟨balance_changes_field_full_len, (balance_changes_field, fields)⟩⟩ ← do
+            (rlp_cursor_pop fields)
+          let ⟨nonce_changes_field_content_len, ⟨nonce_changes_field_full_len, (nonce_changes_field, fields)⟩⟩ ← do
+            (rlp_cursor_pop fields)
+          let ⟨code_changes_field_content_len, ⟨code_changes_field_full_len, (code_changes_field, fields)⟩⟩ ← do
+            (rlp_cursor_pop fields)
+          (bal_expect_end fields)
+          let ⟨_, ⟨_, address_bytes⟩⟩ ← do (bal_ref_bytes address_field)
+          let account ← do (pure (word_to_address (← (rlp_ref_word address_field))))
+          if ((address_bytes.len != 20) : Bool)
+          then sailThrow ((InvalidBlock InvalidBlockAccessList))
+          else
+            (do
+              match (← (bal_iter_next ())) with
+              | .BalAccount recorded =>
+                (do
+                  if ((bne recorded account) : Bool)
+                  then sailThrow ((InvalidBlock InvalidBlockAccessList))
+                  else (pure ()))
+              | _ => sailThrow ((InvalidBlock InvalidBlockAccessList))
+              let count ← do (bal_count_item count maximum)
+              let count ← do
+                (bal_validate_storage_changes (← (bal_ref_cursor storage_changes_field)) count
+                  maximum)
+              let count ← do
+                (bal_validate_storage_reads (← (bal_ref_cursor storage_reads_field)) count maximum)
+              (bal_validate_balance_changes (← (bal_ref_cursor balance_changes_field)))
+              (bal_validate_nonce_changes (← (bal_ref_cursor nonce_changes_field)))
+              (bal_validate_code_changes (← (bal_ref_cursor code_changes_field)))
+              match (← (bal_iter_next ())) with
+              | .BalAccountEnd _ => (pure ())
+              | _ => sailThrow ((InvalidBlock InvalidBlockAccessList))
+              (_rec_bal_validate_accounts next count maximum _reclimit_pred))))
+termination_by _reclimit
+decreasing_by all_goals exact Nat.lt_succ_self _
+
+/-- Consumes account entries from the canonical RLP list.  The encoded cursor
+is the traversal driver; the host iterator supplies exactly one comparison
+event for every decoded semantic value. -/
+/- Type quantifiers: maximum : Nat, count : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ count ∧ count ≤ (2 ^ 64 - 1), 0 ≤ maximum ∧ maximum ≤ (2 ^ 64 - 1) -/
+def bal_validate_accounts (cursor : (EvmByteSliceFields k_source_off k_source_len)) (count : Nat) (maximum : Nat) : SailM Nat := do
+  let _measure := (k_source_len : Int)
+  if ((_measure <b 0) : Bool)
+  then throw Error.Exit
+  else (_rec_bal_validate_accounts cursor count maximum (_measure + 1))
+
+/-- Validates the canonical EIP-7928 BAL directly against the host recorder. -/
+/- Type quantifiers: k_ex416635_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
+  ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1, 0 ≤ k_ex416635_ ∧
+  k_ex416635_ ≤ (2 ^ 64 - 1) -/
 def validate_block_access_list (bytes : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (maximum_items : Nat) : SailM Unit := do
   let bytes_dependentWitness0 := (bytes).1
   let bytes_dependentWitness1 := ((bytes).2).1
   let bytes := ((bytes).2).2
-  (bal_prepare ())
+  (bal_prepare_iter ())
   let ⟨_, root⟩ ← do (rlp_single_ref bytes)
-  let _ ← do
-    (bal_compare_accounts (← (bal_ref_cursor root)) (← (bal_account_next ())) 0 maximum_items)
-  (pure ())
+  let _ ← do (bal_validate_accounts (← (bal_ref_cursor root)) 0 maximum_items)
+  match (← (bal_iter_next ())) with
+  | .BalEmpty _ => (pure ())
+  | _ => sailThrow ((InvalidBlock InvalidBlockAccessList))
 

@@ -46,13 +46,14 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # State: storage
 
 Warm/cold accounting (EIP-2929), persistent storage (`SLOAD`/`SSTORE`),
 and transient storage (EIP-1153), over the host state stores. -/
 
-/- Type quantifiers: k_ex416208_ : Nat, 0 ≤ k_ex416208_ ∧ k_ex416208_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415073_ : Nat, 0 ≤ k_ex415073_ ∧ k_ex415073_ ≤ (2 ^ 256 - 1) -/
 def storage_key (a : (Vector (BitVec 8) 20)) (s : Nat) : StorageKey :=
   { addr := a,
     slot := s }
@@ -65,7 +66,7 @@ def k_access_account (a : (Vector (BitVec 8) 20)) : SailM Bool := do
 
 /-- Marks a storage slot warm and returns its prior warm bit. New entries
 belong to the host's semantic checkpoint. -/
-/- Type quantifiers: k_ex416209_ : Nat, 0 ≤ k_ex416209_ ∧ k_ex416209_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415074_ : Nat, 0 ≤ k_ex415074_ ∧ k_ex415074_ ≤ (2 ^ 256 - 1) -/
 def k_slot_is_warm (a : (Vector (BitVec 8) 20)) (s : Nat) : SailM Bool := do
   (warm_slot_touch a s)
 
@@ -79,16 +80,16 @@ def decode_state_account (value : (Sigma fun (k_off : Nat) =>
   let value_dependentWitness0 := (value).1
   let value_dependentWitness1 := ((value).2).1
   let value := ((value).2).2
-  let ⟨nonce_ex425712_, ⟨nonce_ex425713_, ⟨nonce_content_len, ⟨nonce_full_len, (nonce, fields)⟩⟩⟩⟩ ← do
+  let ⟨nonce_ex424595_, ⟨nonce_ex424596_, ⟨nonce_content_len, ⟨nonce_full_len, (nonce, fields)⟩⟩⟩⟩ ← do
     (do
         let dependentArg0 := (← (rlp_node_cursor ⟨_, ⟨_, value⟩⟩))
         let publicResult ← (rlp_cursor_pop ((dependentArg0).2).2)
         pure ((⟨_, ⟨_, ⟨_, ⟨_, ((publicResult).2).2⟩⟩⟩⟩ : (Sigma fun
-        (k_ex425712_ : Nat) =>
-        (Sigma fun (k_ex425713_ : Nat) =>
+        (k_ex424595_ : Nat) =>
+        (Sigma fun (k_ex424596_ : Nat) =>
         (Sigma fun (k_content_len : Nat) =>
         (Sigma fun (k_full_len : Nat) =>
-        ((RlpFieldRef k_ex425712_ k_full_len k_content_len) × (EvmByteSliceFields (k_ex425712_ + k_full_len) (k_ex425713_ - k_full_len))))))))))
+        ((RlpFieldRef k_ex424595_ k_full_len k_content_len) × (EvmByteSliceFields (k_ex424595_ + k_full_len) (k_ex424596_ - k_full_len))))))))))
   let ⟨balance_content_len, ⟨balance_full_len, (balance, fields)⟩⟩ ← do
     (rlp_cursor_pop fields)
   let ⟨storage_content_len, ⟨storage_full_len, (storage, fields)⟩⟩ ← do
@@ -109,7 +110,7 @@ def decode_state_account (value : (Sigma fun (k_off : Nat) =>
           code_hash := code_hash })
 
 /-- Constructs a path from high-aligned data and a nibble length. -/
-/- Type quantifiers: k_ex416216_ : Nat, 0 ≤ k_ex416216_ ∧ k_ex416216_ ≤ 64 -/
+/- Type quantifiers: k_ex415081_ : Nat, 0 ≤ k_ex415081_ ∧ k_ex415081_ ≤ 64 -/
 def path_new (data : (Vector (BitVec 8) 32)) (len : Nat) : TriePath :=
   { data := data,
     len := len }
@@ -174,8 +175,8 @@ def field_to_ref (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : S
       else (pure (EmptyRef ())))
 
 /-- Decodes branch children 2 through 15, followed by the branch value. -/
-/- Type quantifiers: _reclimit : Nat, k_ex416252_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 2
-  ≤ k_ex416252_ ∧ k_ex416252_ ≤ 16, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex415117_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 2
+  ≤ k_ex415117_ ∧ k_ex415117_ ≤ 16, 0 ≤ _reclimit -/
 def _rec_decode_branch_node (cursor : (EvmByteSliceFields k_source_off k_source_len)) (index : Nat) (children : (Vector NodeRef 16)) (_reclimit : Nat) : SailM TrieNode := do
   match _reclimit with
   | 0 =>
@@ -306,7 +307,7 @@ def path_byte_index (i : Nat) : SailM Nat := do
   (pure (31 - natural_index))
 
 /-- The `i`-th nibble, most significant first; out of range yields `0`. -/
-/- Type quantifiers: k_ex416297_ : Nat, 0 ≤ k_ex416297_ ∧ k_ex416297_ ≤ 64 -/
+/- Type quantifiers: k_ex415162_ : Nat, 0 ≤ k_ex415162_ ∧ k_ex415162_ ≤ 64 -/
 def path_nibble (path : TriePath) (i : Nat) : SailM (BitVec 4) := do
   if (((path_len path) ≤b i) : Bool)
   then (pure 0x0#4)
@@ -326,7 +327,7 @@ def trie_path_len_increment (value : Nat) : SailM Nat := do
   else sailThrow ((InvalidBlock WitnessDeficient))
 
 /-- Whether `seg` occurs in `key` at nibble position `pos`. -/
-/- Type quantifiers: k_ex416299_ : Nat, 0 ≤ k_ex416299_ ∧ k_ex416299_ ≤ 64 -/
+/- Type quantifiers: k_ex415164_ : Nat, 0 ≤ k_ex415164_ ∧ k_ex415164_ ≤ 64 -/
 def path_matches (key : TriePath) (pos : Nat) (seg : TriePath) : SailM Bool := do
   let stop := (pos + (path_len seg))
   if (((path_len key) <b stop) : Bool)
@@ -400,9 +401,9 @@ def resolve_ref (r : NodeRef) : SailM (Sigma fun (k_off : Nat) =>
 
 /-- Walks the trie toward `key` from `pos`, returning the leaf value
 without copying it; absent paths yield empty bytes. -/
-/- Type quantifiers: _reclimit : Nat, k_ex416312_ : Nat, node_dependentWitness1 : Nat, node_dependentWitness0
-  : Nat, 0 ≤ node_dependentWitness0 ∧ 0 ≤ node_dependentWitness1, 0 ≤ k_ex416312_ ∧
-  k_ex416312_ ≤ 64, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex415177_ : Nat, node_dependentWitness1 : Nat, node_dependentWitness0
+  : Nat, 0 ≤ node_dependentWitness0 ∧ 0 ≤ node_dependentWitness1, 0 ≤ k_ex415177_ ∧
+  k_ex415177_ ≤ 64, 0 ≤ _reclimit -/
 def _rec_trie_walk (node : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (key : TriePath) (pos : Nat) (_reclimit : Nat) : SailM (Sigma
   fun (node_dependentWitness0 : Nat) =>
@@ -593,7 +594,7 @@ def k_aload (a : (Vector (BitVec 8) 20)) : SailM Account := SailME.run do
 
 /-- The witnessed storage value of `slot` under a storage root, reading
 the secure trie at `keccak256(slot)`; absent slots are zero. -/
-/- Type quantifiers: k_ex416326_ : Nat, 0 ≤ k_ex416326_ ∧ k_ex416326_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415191_ : Nat, 0 ≤ k_ex415191_ ∧ k_ex415191_ ≤ (2 ^ 256 - 1) -/
 def stateless_storage (root : (Vector (BitVec 8) 32)) (slot : Nat) : SailM Nat := do
   let ⟨_, ⟨_, value⟩⟩ ← do (trie_lookup root (path_from_hash (← (keccak256_word slot))))
   if ((value.len == 0) : Bool)
@@ -614,7 +615,7 @@ storage change). [stateless_storage][] is the base primitive — an
 authenticated MPT point-get, one walk for both the witness and the
 harness-built alloc trie; everything above it (the overlay, the
 read-through, the journal) is common. -/
-/- Type quantifiers: k_ex416327_ : Nat, 0 ≤ k_ex416327_ ∧ k_ex416327_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415192_ : Nat, 0 ≤ k_ex415192_ ∧ k_ex415192_ ≤ (2 ^ 256 - 1) -/
 def k_sload (a : (Vector (BitVec 8) 20)) (s : Nat) : SailM StorageValue := SailME.run do
   (bal_storage_read a s)
   let key := (storage_key a s)
@@ -638,7 +639,7 @@ def k_sload (a : (Vector (BitVec 8) 20)) (s : Nat) : SailM StorageValue := SailM
 /-- `SSTORE`: creates or updates the live transaction row. The preceding
 [k_sload][] supplies the transaction-original value; the host keeps
 clear generations and frame undo history private. -/
-/- Type quantifiers: k_ex416328_ : Nat, 0 ≤ k_ex416328_ ∧ k_ex416328_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415193_ : Nat, 0 ≤ k_ex415193_ ∧ k_ex415193_ ≤ (2 ^ 256 - 1) -/
 def k_sstore (a : (Vector (BitVec 8) 20)) (s : Nat) (v : StorageValue) : SailM Unit := do
   (storage_tx_update
     { key := (storage_key a s),
@@ -646,14 +647,14 @@ def k_sstore (a : (Vector (BitVec 8) 20)) (s : Nat) (v : StorageValue) : SailM U
 
 /-- `TLOAD` (EIP-1153): reads per-transaction transient storage, which is
 discarded at transaction end and is not part of the state trie. -/
-/- Type quantifiers: k_ex416329_ : Nat, 0 ≤ k_ex416329_ ∧ k_ex416329_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415194_ : Nat, 0 ≤ k_ex415194_ ∧ k_ex415194_ ≤ (2 ^ 256 - 1) -/
 def k_tload (a : (Vector (BitVec 8) 20)) (s : Nat) : SailM Nat := do
   (transient_load a s)
 
 /-- `TSTORE` (EIP-1153): writes transient storage. Frame rollback is part
 of the host's semantic checkpoint contract. -/
-/- Type quantifiers: k_ex416331_ : Nat, k_ex416330_ : Nat, 0 ≤ k_ex416330_ ∧
-  k_ex416330_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex416331_ ∧ k_ex416331_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415196_ : Nat, k_ex415195_ : Nat, 0 ≤ k_ex415195_ ∧
+  k_ex415195_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex415196_ ∧ k_ex415196_ ≤ (2 ^ 256 - 1) -/
 def k_tstore (a : (Vector (BitVec 8) 20)) (s : Nat) (v : Nat) : SailM Unit := do
   (transient_store a s v)
 

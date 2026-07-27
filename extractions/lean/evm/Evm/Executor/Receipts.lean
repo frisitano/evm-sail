@@ -47,6 +47,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # Receipts, blooms, and the receipts trie
 
@@ -61,7 +62,7 @@ def bloom_bit_mask (bit_to_set : Nat) : (BitVec 8) :=
   (0x01#8 <<< bit_to_set)
 
 /-- Sets one bit (0–2047) in the bloom, most-significant-byte first. -/
-/- Type quantifiers: k_ex417387_ : Nat, 0 ≤ k_ex417387_ ∧ k_ex417387_ ≤ 2047 -/
+/- Type quantifiers: k_ex416252_ : Nat, 0 ≤ k_ex416252_ ∧ k_ex416252_ ≤ 2047 -/
 def bloom_set_bit (bloom : (Vector (BitVec 8) 256)) (bit_to_set : Nat) : (Vector (BitVec 8) 256) :=
   let out := bloom
   let quotient := (bit_to_set / 8)
@@ -233,7 +234,7 @@ def rlp_write_logs (logs : (List LogEntry)) : SailM Unit := do
   (rlp_write_logs_content logs)
 
 /-- Sizes a receipt payload from status, gas, bloom, and logs. -/
-/- Type quantifiers: k_ex417394_ : Nat, 0 ≤ k_ex417394_ -/
+/- Type quantifiers: k_ex416259_ : Nat, 0 ≤ k_ex416259_ -/
 def receipt_payload_content_size (r : Receipt) (cumulative_gas_used : Nat) : SailM Nat := do
   let status : Nat :=
     if (r.success : Bool)
@@ -252,7 +253,7 @@ def receipt_payload_content_size (r : Receipt) (cumulative_gas_used : Nat) : Sai
 /-- The receipt as stored in the receipts trie: the RLP payload,
 prefixed by the envelope type byte for typed transactions
 (EIP-2718). -/
-/- Type quantifiers: k_ex417397_ : Nat, 0 ≤ k_ex417397_ -/
+/- Type quantifiers: k_ex416262_ : Nat, 0 ≤ k_ex416262_ -/
 def receipt_encoded (r : Receipt) (cumulative_gas_used : Nat) : SailM (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
   let status : Nat :=
@@ -293,7 +294,7 @@ def receipt_insert (builder : TrieBuilder) (pending : PendingReceipt) (next_key 
   (pure inserted)
 
 /-- Adds the next numeric receipt while respecting trie-key lexical order. -/
-/- Type quantifiers: k_ex417398_ : Nat, 0 ≤ k_ex417398_ ∧ k_ex417398_ ≤ (2 ^ 20) -/
+/- Type quantifiers: k_ex416263_ : Nat, 0 ≤ k_ex416263_ ∧ k_ex416263_ ≤ (2 ^ 20) -/
 def receipt_accumulator_push (acc : ReceiptAccumulator) (receipt : Receipt) (next_count : Nat) : SailM ReceiptAccumulator := do
   let cumulative : Nat := (conserved_gas_add acc.cumulative_gas_used receipt.gas_used)
   let current : PendingReceipt :=

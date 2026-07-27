@@ -38,11 +38,13 @@ function account_deleted_at_tx_end(acc : Account) -> bool =
     changes for the EIP-7928 block access list. Lifecycle flags reset as
     rows merge. */
 function k_tx_merge() -> unit = {
+    cycle_scope_start(SCOPE_TX_MERGE);
     var more : bool = true;
 
     /* Each pop advances a cursor over a protocol-sized host table. */
+    cycle_scope_start(SCOPE_TX_MERGE_ACCOUNTS);
     while more termination_measure(2 ^ 64) do {
-        match acct_tx_pop_ascending() {
+        match acct_tx_pop() {
             Some(e) => {
                 var curr : Account = e.value.curr;
                 let deleted = account_deleted_at_tx_end(curr);
@@ -79,9 +81,11 @@ function k_tx_merge() -> unit = {
             None() => more = false,
         }
     };
+    cycle_scope_end(SCOPE_TX_MERGE_ACCOUNTS);
     more = true;
 
     /* Each pop advances a cursor over a protocol-sized host table. */
+    cycle_scope_start(SCOPE_TX_MERGE_STORAGE);
     while more termination_measure(2 ^ 64) do {
         match storage_tx_pop() {
             Some(e) => {
@@ -96,8 +100,10 @@ function k_tx_merge() -> unit = {
             None() => more = false,
         }
     };
+    cycle_scope_end(SCOPE_TX_MERGE_STORAGE);
     acct_tx_reset();
-    storage_tx_reset()
+    storage_tx_reset();
+    cycle_scope_end(SCOPE_TX_MERGE)
 }
 
 /*! Atomically restores the transaction state captured at a frame boundary. */

@@ -1,8 +1,9 @@
 /* Generated-aggregate glue for the suspended-frame continuation stack.
- * Storage is allocated without initialization on the first push, so a guest
- * that never enters a child frame pays no arena allocation or construction
- * cost. The optimized ABI is inline. The standard ABI owns the GMP-backed
- * fields directly and initializes only the slots it reaches. */
+ * Storage is reserved without initialization on the first push, so a guest
+ * that never enters a child frame pays no allocation cost and deeper calls
+ * require no reallocation or copying. The optimized ABI is inline. The
+ * standard ABI owns the GMP-backed fields directly and initializes only the
+ * slots it reaches. */
 #include EVMSAIL_MODEL_H
 #include "frame_stack.h"
 
@@ -136,11 +137,10 @@ static void frame_continuation_clone(struct zFrameContinuation *dst,
 #endif
 
 static void frame_stack_ensure(void) {
-  if (frame_slots == NULL) {
-    frame_slots =
-        sail_new_array(struct zFrameContinuation, FRAME_STACK_CAPACITY);
-    if (frame_slots == NULL) abort();
-  }
+  if (frame_slots != NULL) return;
+  frame_slots =
+      malloc((size_t)FRAME_STACK_CAPACITY * sizeof(*frame_slots));
+  if (frame_slots == NULL) abort();
 }
 
 unit frame_stack_reset(unit u) {

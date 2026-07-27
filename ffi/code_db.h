@@ -24,7 +24,8 @@ int code_db_resolve_code(uint64_t off, uint64_t len,
                          const uint8_t **p, uint64_t *resolved_len);
 bool code_db_lookup_indexed(sail_hash h, uint64_t *off, uint64_t *len,
                             uint64_t *jumpdest_ref);
-const uint8_t *code_db_code_by_words(const uint64_t key_be[4], uint64_t *len_out);
+bool code_db_insert_analyzed_bytes(const uint8_t *src, uint64_t len,
+                                   bool amsterdam_or_later);
 EVMSAIL_ADDRESS_RESULT_RECORD_RETURN code_db_read_delegation(
     EVMSAIL_ADDRESS_RESULT_RECORD_RESULT(result) sail_hash h);
 bool code_db_read_delegation_address(uint8_t address[20], sail_hash h);

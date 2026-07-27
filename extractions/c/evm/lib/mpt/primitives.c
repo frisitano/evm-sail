@@ -2,181 +2,298 @@
 #ifndef EVMSAIL_C_UNITY_BUILD
 #include "../../evm_internal.h"
 #endif
+void create_letbind_239(void) {
+
+  uint64_t z3zE264;
+  z3zE264 = UINT64_C(33);
+  zHEX_PREFIX_MAX_LENGTH = z3zE264;
+let_end_789: ;
+}
+void kill_letbind_239(void) {
+}
+
+uint64_t zpath_len(struct zTriePath zpath)
+{
+  uint64_t z8zE523;
+  z8zE523 = zpath.zlen;
+end_function_1795: ;
+  return z8zE523;
+end_block_exception_1796: ;
+
+  return UINT64_C(0xdeadc0de);
+}
+
+uint64_t ztrie_path_len_increment(uint64_t zvalue)
+{
+  uint64_t z8zE524;
+  bool z2zE1189;
+  z2zE1189 = (zvalue < UINT64_C(64));
+  if (z2zE1189) {
+    {    z8zE524 = (zvalue + UINT64_C(1));
+    }
+  } else {
+    struct zexception z2zE1190;
+    CREATE(zexception)(&z2zE1190);
+    zInvalidBlock(&z2zE1190, zWitnessDeficient);
+    COPY(zexception)(current_exception, z2zE1190);
+    have_exception = true;
+    COPY(sail_string)(throw_location, "sail/lib/mpt/primitives.sail:35.8-35.44");
+    KILL(zexception)(&z2zE1190);
+    goto end_block_exception_1794;
+    /* unreachable after throw */
+    KILL(zexception)(&z2zE1190);
+  }
+end_function_1793: ;
+  return z8zE524;
+end_block_exception_1794: ;
+
+  return UINT64_C(0xdeadc0de);
+}
+
+struct zTriePath zpath_new(sail_fixed_bytes_32 zdata, uint64_t zlen)
+{
+  struct zTriePath z8zE525;
+  struct zTriePath z3zE1271;
+  z3zE1271.zdata = zdata;
+  z3zE1271.zlen = zlen;
+  z8zE525 = z3zE1271;
+end_function_1791: ;
+  return z8zE525;
+end_block_exception_1792: ;
+  struct zTriePath z8zE898 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
+  return z8zE898;
+}
+
 uint64_t zto_trie_depth(uint64_t zvalue)
 {
-  uint64_t z8zE480;
-  bool z2zE1592;
-  z2zE1592 = (!(zvalue < UINT64_C(64)));
-  if (z2zE1592) {
-    struct zexception z2zE1593;
-    CREATE(zexception)(&z2zE1593);
-    zInvalidBlock(&z2zE1593, zWitnessDeficient);
-    COPY(zexception)(current_exception, z2zE1593);
+  uint64_t z8zE526;
+  bool z2zE1187;
+  z2zE1187 = (!(zvalue < UINT64_C(64)));
+  if (z2zE1187) {
+    struct zexception z2zE1188;
+    CREATE(zexception)(&z2zE1188);
+    zInvalidBlock(&z2zE1188, zWitnessDeficient);
+    COPY(zexception)(current_exception, z2zE1188);
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/mpt/primitives.sail:45.8-45.44");
-    KILL(zexception)(&z2zE1593);
-    goto end_block_exception_2015;
+    KILL(zexception)(&z2zE1188);
+    goto end_block_exception_1790;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE1593);
-  } else {  z8zE480 = zvalue;  }
-end_function_2014: ;
-  return z8zE480;
-end_block_exception_2015: ;
+    KILL(zexception)(&z2zE1188);
+  } else {  z8zE526 = zvalue;  }
+end_function_1789: ;
+  return z8zE526;
+end_block_exception_1790: ;
+
+  return UINT64_C(0xdeadc0de);
+}
+
+struct zTriePath zpath_from_hash(sail_fixed_bytes_32 zh)
+{
+  struct zTriePath z8zE527;
+  z8zE527 = zpath_new(zh, UINT64_C(64));
+end_function_1787: ;
+  return z8zE527;
+end_block_exception_1788: ;
+  struct zTriePath z8zE899 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
+  return z8zE899;
+}
+
+uint64_t zpath_byte_index(uint64_t zi)
+{
+  uint64_t z8zE528;
+  uint64_t zquotient;
+  {    zquotient = (zi / UINT64_C(2));
+  }
+  uint64_t znatural_index;
+  {
+    bool z2zE1186;
+    {
+      bool z2zE1185;
+      z2zE1185 = (!(zquotient < UINT64_C(0)));
+      bool z3zE1269;
+      if (z2zE1185) {  z3zE1269 = (!(UINT64_C(31) < zquotient));  } else {  z3zE1269 = false;  }
+      z2zE1186 = z3zE1269;
+    }
+    if (z2zE1186) {  znatural_index = zquotient;  } else {
+      unit z3zE1270;
+      z3zE1270 = sail_assert(false, "sail/lib/mpt/primitives.sail:64.24-64.25");
+      sail_match_failure("path_byte_index");
+      /* unreachable after exit */
+    }
+  }
+  z8zE528 = znatural_index;
+end_function_1785: ;
+  return z8zE528;
+end_block_exception_1786: ;
+
+  return UINT64_C(0xdeadc0de);
+}
+
+uint64_t zpath_nibble(struct zTriePath zpath, uint64_t zi)
+{
+  uint64_t z8zE529;
+  bool z2zE1180;
+  {
+    uint64_t z2zE1179;
+    z2zE1179 = zpath_len(zpath);
+    z2zE1180 = (!(zi < z2zE1179));
+  }
+  if (z2zE1180) {  z8zE529 = UINT64_C(0x0);  } else {
+    sail_fixed_bytes_32 zbytes;
+    zbytes = zpath.zdata;
+    uint64_t zbyte_index;
+    zbyte_index = zpath_byte_index(zi);
+    bool z2zE1182;
+    {
+      uint64_t z2zE1181;
+      {    z2zE1181 = (zi % UINT64_C(2));
+      }
+      z2zE1182 = (z2zE1181 == UINT64_C(0));
+    }
+    if (z2zE1182) {
+      uint64_t z2zE1183;
+      z2zE1183 = fast_unsigned_vector_access_fixed_bytes_32(zbytes, zbyte_index);
+      z8zE529 = (safe_rshift(UINT64_MAX, 64 - 4) & (z2zE1183 >> UINT64_C(4)));
+    } else {
+      uint64_t z2zE1184;
+      z2zE1184 = fast_unsigned_vector_access_fixed_bytes_32(zbytes, zbyte_index);
+      z8zE529 = (safe_rshift(UINT64_MAX, 64 - 4) & (z2zE1184 >> UINT64_C(0)));
+    }
+  }
+end_function_1783: ;
+  return z8zE529;
+end_block_exception_1784: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 struct zTriePath zpath_append_nibble(struct zTriePath zpath, uint64_t zvalue)
 {
-  struct zTriePath z8zE481;
+  struct zTriePath z8zE530;
   uint64_t zlength;
   zlength = zpath_len(zpath);
-  bool z2zE1582;
-  z2zE1582 = (!(zlength < UINT64_C(64)));
-  unit z3zE1574;
-  if (z2zE1582) {
-    struct zexception z2zE1583;
-    CREATE(zexception)(&z2zE1583);
-    zInvalidBlock(&z2zE1583, zWitnessDeficient);
-    COPY(zexception)(current_exception, z2zE1583);
+  bool z2zE1169;
+  z2zE1169 = (!(zlength < UINT64_C(64)));
+  unit z3zE1267;
+  if (z2zE1169) {
+    struct zexception z2zE1170;
+    CREATE(zexception)(&z2zE1170);
+    zInvalidBlock(&z2zE1170, zWitnessDeficient);
+    COPY(zexception)(current_exception, z2zE1170);
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/mpt/primitives.sail:88.8-88.44");
-    KILL(zexception)(&z2zE1583);
-    goto end_block_exception_2013;
+    KILL(zexception)(&z2zE1170);
+    goto end_block_exception_1782;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE1583);
-  } else {  z3zE1574 = UNIT;  }
+    KILL(zexception)(&z2zE1170);
+  } else {  z3zE1267 = UNIT;  }
   sail_fixed_bytes_32 zoriginal;
   zoriginal = zpath.zdata;
   sail_fixed_bytes_32 zbytes;
   zbytes = zoriginal;
   uint64_t zbyte_index;
   zbyte_index = zpath_byte_index(zlength);
-  bool z2zE1585;
+  bool z2zE1172;
   {
-    uint64_t z2zE1584;
-    {    z2zE1584 = (zlength % UINT64_C(2));
+    uint64_t z2zE1171;
+    {    z2zE1171 = (zlength % UINT64_C(2));
     }
-    z2zE1585 = (z2zE1584 == UINT64_C(0));
+    z2zE1172 = (z2zE1171 == UINT64_C(0));
   }
-  unit z3zE1575;
-  if (z2zE1585) {
-    uint64_t z2zE1586;
-    z2zE1586 = (zvalue << 4) | UINT64_C(0x0);
-    zbytes = fast_unsigned_vector_update_fixed_bytes_32(zbytes, zbyte_index, z2zE1586);
-    z3zE1575 = UNIT;
+  unit z3zE1268;
+  if (z2zE1172) {
+    uint64_t z2zE1173;
+    z2zE1173 = (zvalue << 4) | UINT64_C(0x0);
+    zbytes = fast_unsigned_vector_update_fixed_bytes_32(zbytes, zbyte_index, z2zE1173);
+    z3zE1268 = UNIT;
   } else {
-    uint64_t z2zE1589;
+    uint64_t z2zE1176;
     {
-      uint64_t z2zE1588;
+      uint64_t z2zE1175;
       {
-        uint64_t z2zE1587;
-        z2zE1587 = fast_unsigned_vector_access_fixed_bytes_32(zbytes, zbyte_index);
-        z2zE1588 = (safe_rshift(UINT64_MAX, 64 - 4) & (z2zE1587 >> UINT64_C(4)));
+        uint64_t z2zE1174;
+        z2zE1174 = fast_unsigned_vector_access_fixed_bytes_32(zbytes, zbyte_index);
+        z2zE1175 = (safe_rshift(UINT64_MAX, 64 - 4) & (z2zE1174 >> UINT64_C(4)));
       }
-      z2zE1589 = (z2zE1588 << 4) | zvalue;
+      z2zE1176 = (z2zE1175 << 4) | zvalue;
     }
-    zbytes = fast_unsigned_vector_update_fixed_bytes_32(zbytes, zbyte_index, z2zE1589);
-    z3zE1575 = UNIT;
+    zbytes = fast_unsigned_vector_update_fixed_bytes_32(zbytes, zbyte_index, z2zE1176);
+    z3zE1268 = UNIT;
   }
-  sail_fixed_bytes_32 z2zE1590;
-  z2zE1590 = zB256(zbytes);
-  uint64_t z2zE1591;
+  sail_fixed_bytes_32 z2zE1177;
+  z2zE1177 = zB256(zbytes);
+  uint64_t z2zE1178;
   {
-    z2zE1591 = ztrie_path_len_increment(zlength);
-    if (have_exception) {  goto end_block_exception_2013;  }
+    z2zE1178 = ztrie_path_len_increment(zlength);
+    if (have_exception) {  goto end_block_exception_1782;  }
   }
-  z8zE481 = zpath_new(z2zE1590, z2zE1591);
-end_function_2012: ;
-  return z8zE481;
-end_block_exception_2013: ;
-  struct zTriePath z8zE986 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
-  return z8zE986;
-}
-
-struct zTriePath zpath_append_byte(struct zTriePath zpath, uint64_t zvalue)
-{
-  struct zTriePath z8zE482;
-  struct zTriePath z2zE1580;
-  {
-    uint64_t z2zE1579;
-    z2zE1579 = (safe_rshift(UINT64_MAX, 64 - 4) & (zvalue >> UINT64_C(4)));
-    {
-      z2zE1580 = zpath_append_nibble(zpath, z2zE1579);
-      if (have_exception) {  goto end_block_exception_2011;  }
-    }
-  }
-  uint64_t z2zE1581;
-  z2zE1581 = (safe_rshift(UINT64_MAX, 64 - 4) & (zvalue >> UINT64_C(0)));
-  {
-    z8zE482 = zpath_append_nibble(z2zE1580, z2zE1581);
-    if (have_exception) {  goto end_block_exception_2011;  }
-  }
-end_function_2010: ;
-  return z8zE482;
-end_block_exception_2011: ;
-  struct zTriePath z8zE987 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
-  return z8zE987;
+  z8zE530 = zpath_new(z2zE1177, z2zE1178);
+end_function_1781: ;
+  return z8zE530;
+end_block_exception_1782: ;
+  struct zTriePath z8zE900 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
+  return z8zE900;
 }
 
 struct zTriePath zpath_single(uint64_t zn)
 {
-  struct zTriePath z8zE483;
-  struct zTriePath z3zE1572;
-  zz5vecz8z5bv8z9 z3zE1573;
-  CREATE(zz5vecz8z5bv8z9)(&z3zE1573);
-  internal_vector_init_zz5vecz8z5bv8z9(&z3zE1573, INT64_C(32));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(0), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(1), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(2), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(3), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(4), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(5), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(6), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(7), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(8), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(9), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(10), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(11), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(12), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(13), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(14), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(15), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(16), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(17), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(18), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(19), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(20), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(21), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(22), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(23), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(24), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(25), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(26), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(27), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(28), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(29), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(30), UINT64_C(0x00));
-  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1573, z3zE1573, INT64_C(31), UINT64_C(0x00));
-  for (size_t z8zE988 = 0; z8zE988 < 32; ++z8zE988) {
-    z3zE1572.zdata.bytes[z8zE988] = (uint8_t)(z3zE1573.data[z8zE988] & UINT64_C(0xff));
+  struct zTriePath z8zE531;
+  struct zTriePath z3zE1265;
+  zz5vecz8z5bv8z9 z3zE1266;
+  CREATE(zz5vecz8z5bv8z9)(&z3zE1266);
+  internal_vector_init_zz5vecz8z5bv8z9(&z3zE1266, INT64_C(32));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(0), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(1), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(2), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(3), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(4), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(5), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(6), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(7), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(8), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(9), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(10), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(11), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(12), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(13), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(14), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(15), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(16), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(17), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(18), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(19), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(20), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(21), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(22), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(23), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(24), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(25), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(26), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(27), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(28), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(29), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(30), UINT64_C(0x00));
+  internal_vector_update_zz5vecz8z5bv8z9(&z3zE1266, z3zE1266, INT64_C(31), UINT64_C(0x00));
+  for (size_t z8zE901 = 0; z8zE901 < 32; ++z8zE901) {
+    z3zE1265.zdata.bytes[z8zE901] = (uint8_t)(z3zE1266.data[z8zE901] & UINT64_C(0xff));
   }
-  KILL(zz5vecz8z5bv8z9)(&z3zE1573);
-  z3zE1572.zlen = UINT64_C(0);
+  KILL(zz5vecz8z5bv8z9)(&z3zE1266);
+  z3zE1265.zlen = UINT64_C(0);
   {
-    z8zE483 = zpath_append_nibble(z3zE1572, zn);
-    if (have_exception) {  goto end_block_exception_2009;  }
+    z8zE531 = zpath_append_nibble(z3zE1265, zn);
+    if (have_exception) {  goto end_block_exception_1780;  }
   }
-end_function_2008: ;
-  return z8zE483;
-end_block_exception_2009: ;
-  struct zTriePath z8zE989 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
-  return z8zE989;
+end_function_1779: ;
+  return z8zE531;
+end_block_exception_1780: ;
+  struct zTriePath z8zE902 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
+  return z8zE902;
 }
 
 struct zTriePath zpath_concat(struct zTriePath za, struct zTriePath zb)
 {
-  struct zTriePath z8zE484;
+  struct zTriePath z8zE532;
   uint64_t zalen;
   zalen = zpath_len(za);
   uint64_t zblen;
@@ -184,500 +301,500 @@ struct zTriePath zpath_concat(struct zTriePath za, struct zTriePath zb)
   uint64_t zcombined;
   {    zcombined = (zalen + zblen);
   }
-  bool z2zE1575;
-  z2zE1575 = (!(UINT64_C(64) < zcombined));
-  if (z2zE1575) {
+  bool z2zE1165;
+  z2zE1165 = (!(UINT64_C(64) < zcombined));
+  if (z2zE1165) {
     struct zTriePath zresult;
     zresult = za;
     uint64_t zindex;
     zindex = UINT64_C(0);
-    int64_t z3zE1566;
-    {    z3zE1566 = (int64_t)(UINT64_C(0));
+    int64_t z3zE1259;
+    {    z3zE1259 = (int64_t)(UINT64_C(0));
     }
-    int64_t z3zE1567;
-    {    z3zE1567 = (int64_t)(UINT64_C(63));
+    int64_t z3zE1260;
+    {    z3zE1260 = (int64_t)(UINT64_C(63));
     }
-    int64_t z3zE1568;
-    {    z3zE1568 = (int64_t)(UINT64_C(1));
+    int64_t z3zE1261;
+    {    z3zE1261 = (int64_t)(UINT64_C(1));
     }
     {
       int64_t z_step;
-      z_step = z3zE1566;
-      unit z3zE1569;
-    for_start_2004: ;
+      z_step = z3zE1259;
+      unit z3zE1262;
+    for_start_1775: ;
       {
-        if ((z3zE1567 < z_step)) goto for_end_2005;
-        bool z2zE1576;
-        z2zE1576 = (zindex < zblen);
-        if (z2zE1576) {
-          uint64_t z2zE1577;
-          z2zE1577 = zpath_nibble(zb, zindex);
+        if ((z3zE1260 < z_step)) goto for_end_1776;
+        bool z2zE1166;
+        z2zE1166 = (zindex < zblen);
+        if (z2zE1166) {
+          uint64_t z2zE1167;
+          z2zE1167 = zpath_nibble(zb, zindex);
           {
-            zresult = zpath_append_nibble(zresult, z2zE1577);
-            if (have_exception) {  goto end_block_exception_2007;  }
+            zresult = zpath_append_nibble(zresult, z2zE1167);
+            if (have_exception) {  goto end_block_exception_1778;  }
           }
-          unit z3zE1570;
-          z3zE1570 = UNIT;
+          unit z3zE1263;
+          z3zE1263 = UNIT;
           {
             zindex = ztrie_path_len_increment(zindex);
-            if (have_exception) {  goto end_block_exception_2007;  }
+            if (have_exception) {  goto end_block_exception_1778;  }
           }
-          z3zE1569 = UNIT;
-        } else {  z3zE1569 = UNIT;  }
-        z_step = (z_step + z3zE1568);
-        goto for_start_2004;
+          z3zE1262 = UNIT;
+        } else {  z3zE1262 = UNIT;  }
+        z_step = (z_step + z3zE1261);
+        goto for_start_1775;
       }
-    for_end_2005: ;
+    for_end_1776: ;
     }
-    unit z3zE1571;
-    z3zE1571 = UNIT;
-    z8zE484 = zresult;
+    unit z3zE1264;
+    z3zE1264 = UNIT;
+    z8zE532 = zresult;
   } else {
-    struct zexception z2zE1578;
-    CREATE(zexception)(&z2zE1578);
-    zInvalidBlock(&z2zE1578, zWitnessDeficient);
-    COPY(zexception)(current_exception, z2zE1578);
+    struct zexception z2zE1168;
+    CREATE(zexception)(&z2zE1168);
+    zInvalidBlock(&z2zE1168, zWitnessDeficient);
+    COPY(zexception)(current_exception, z2zE1168);
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/mpt/primitives.sail:124.8-124.44");
-    KILL(zexception)(&z2zE1578);
-    goto end_block_exception_2007;
+    KILL(zexception)(&z2zE1168);
+    goto end_block_exception_1778;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE1578);
+    KILL(zexception)(&z2zE1168);
   }
-end_function_2006: ;
-  return z8zE484;
-end_block_exception_2007: ;
-  struct zTriePath z8zE990 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
-  return z8zE990;
+end_function_1777: ;
+  return z8zE532;
+end_block_exception_1778: ;
+  struct zTriePath z8zE903 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
+  return z8zE903;
 }
 
 struct zTriePath zpath_take(struct zTriePath zpath, uint64_t zn)
 {
-  struct zTriePath z8zE485;
-  bool z2zE1570;
-  z2zE1570 = (zn == UINT64_C(0));
-  if (z2zE1570) {
-    struct zTriePath z3zE1564;
-    zz5vecz8z5bv8z9 z3zE1565;
-    CREATE(zz5vecz8z5bv8z9)(&z3zE1565);
-    internal_vector_init_zz5vecz8z5bv8z9(&z3zE1565, INT64_C(32));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(0), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(1), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(2), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(3), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(4), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(5), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(6), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(7), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(8), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(9), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(10), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(11), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(12), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(13), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(14), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(15), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(16), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(17), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(18), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(19), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(20), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(21), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(22), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(23), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(24), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(25), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(26), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(27), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(28), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(29), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(30), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1565, z3zE1565, INT64_C(31), UINT64_C(0x00));
-    for (size_t z8zE992 = 0; z8zE992 < 32; ++z8zE992) {
-      z3zE1564.zdata.bytes[z8zE992] = (uint8_t)(z3zE1565.data[z8zE992] & UINT64_C(0xff));
+  struct zTriePath z8zE533;
+  bool z2zE1160;
+  z2zE1160 = (zn == UINT64_C(0));
+  if (z2zE1160) {
+    struct zTriePath z3zE1257;
+    zz5vecz8z5bv8z9 z3zE1258;
+    CREATE(zz5vecz8z5bv8z9)(&z3zE1258);
+    internal_vector_init_zz5vecz8z5bv8z9(&z3zE1258, INT64_C(32));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(0), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(1), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(2), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(3), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(4), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(5), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(6), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(7), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(8), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(9), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(10), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(11), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(12), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(13), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(14), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(15), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(16), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(17), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(18), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(19), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(20), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(21), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(22), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(23), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(24), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(25), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(26), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(27), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(28), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(29), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(30), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1258, z3zE1258, INT64_C(31), UINT64_C(0x00));
+    for (size_t z8zE905 = 0; z8zE905 < 32; ++z8zE905) {
+      z3zE1257.zdata.bytes[z8zE905] = (uint8_t)(z3zE1258.data[z8zE905] & UINT64_C(0xff));
     }
-    KILL(zz5vecz8z5bv8z9)(&z3zE1565);
-    z3zE1564.zlen = UINT64_C(0);
-    z8zE485 = z3zE1564;
+    KILL(zz5vecz8z5bv8z9)(&z3zE1258);
+    z3zE1257.zlen = UINT64_C(0);
+    z8zE533 = z3zE1257;
   } else {
-    bool z2zE1572;
+    bool z2zE1162;
     {
-      uint64_t z2zE1571;
-      z2zE1571 = zpath_len(zpath);
-      z2zE1572 = (!(zn < z2zE1571));
+      uint64_t z2zE1161;
+      z2zE1161 = zpath_len(zpath);
+      z2zE1162 = (!(zn < z2zE1161));
     }
-    if (z2zE1572) {  z8zE485 = zpath;  } else {
+    if (z2zE1162) {  z8zE533 = zpath;  } else {
       struct zTriePath zresult;
       {
-        struct zTriePath z3zE1556;
-        zz5vecz8z5bv8z9 z3zE1557;
-        CREATE(zz5vecz8z5bv8z9)(&z3zE1557);
-        internal_vector_init_zz5vecz8z5bv8z9(&z3zE1557, INT64_C(32));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(0), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(1), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(2), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(3), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(4), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(5), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(6), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(7), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(8), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(9), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(10), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(11), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(12), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(13), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(14), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(15), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(16), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(17), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(18), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(19), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(20), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(21), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(22), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(23), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(24), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(25), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(26), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(27), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(28), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(29), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(30), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1557, z3zE1557, INT64_C(31), UINT64_C(0x00));
-        for (size_t z8zE991 = 0; z8zE991 < 32; ++z8zE991) {
-          z3zE1556.zdata.bytes[z8zE991] = (uint8_t)(z3zE1557.data[z8zE991] & UINT64_C(0xff));
+        struct zTriePath z3zE1249;
+        zz5vecz8z5bv8z9 z3zE1250;
+        CREATE(zz5vecz8z5bv8z9)(&z3zE1250);
+        internal_vector_init_zz5vecz8z5bv8z9(&z3zE1250, INT64_C(32));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(0), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(1), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(2), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(3), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(4), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(5), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(6), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(7), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(8), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(9), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(10), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(11), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(12), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(13), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(14), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(15), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(16), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(17), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(18), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(19), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(20), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(21), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(22), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(23), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(24), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(25), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(26), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(27), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(28), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(29), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(30), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1250, z3zE1250, INT64_C(31), UINT64_C(0x00));
+        for (size_t z8zE904 = 0; z8zE904 < 32; ++z8zE904) {
+          z3zE1249.zdata.bytes[z8zE904] = (uint8_t)(z3zE1250.data[z8zE904] & UINT64_C(0xff));
         }
-        KILL(zz5vecz8z5bv8z9)(&z3zE1557);
-        z3zE1556.zlen = UINT64_C(0);
-        zresult = z3zE1556;
+        KILL(zz5vecz8z5bv8z9)(&z3zE1250);
+        z3zE1249.zlen = UINT64_C(0);
+        zresult = z3zE1249;
       }
       uint64_t zindex;
       zindex = UINT64_C(0);
-      int64_t z3zE1558;
-      {    z3zE1558 = (int64_t)(UINT64_C(0));
+      int64_t z3zE1251;
+      {    z3zE1251 = (int64_t)(UINT64_C(0));
       }
-      int64_t z3zE1559;
-      {    z3zE1559 = (int64_t)(UINT64_C(63));
+      int64_t z3zE1252;
+      {    z3zE1252 = (int64_t)(UINT64_C(63));
       }
-      int64_t z3zE1560;
-      {    z3zE1560 = (int64_t)(UINT64_C(1));
+      int64_t z3zE1253;
+      {    z3zE1253 = (int64_t)(UINT64_C(1));
       }
       {
         int64_t z_step;
-        z_step = z3zE1558;
-        unit z3zE1561;
-      for_start_2000: ;
+        z_step = z3zE1251;
+        unit z3zE1254;
+      for_start_1771: ;
         {
-          if ((z3zE1559 < z_step)) goto for_end_2001;
-          bool z2zE1573;
-          z2zE1573 = (zindex < zn);
-          if (z2zE1573) {
-            uint64_t z2zE1574;
-            z2zE1574 = zpath_nibble(zpath, zindex);
+          if ((z3zE1252 < z_step)) goto for_end_1772;
+          bool z2zE1163;
+          z2zE1163 = (zindex < zn);
+          if (z2zE1163) {
+            uint64_t z2zE1164;
+            z2zE1164 = zpath_nibble(zpath, zindex);
             {
-              zresult = zpath_append_nibble(zresult, z2zE1574);
-              if (have_exception) {  goto end_block_exception_2003;  }
+              zresult = zpath_append_nibble(zresult, z2zE1164);
+              if (have_exception) {  goto end_block_exception_1774;  }
             }
-            unit z3zE1562;
-            z3zE1562 = UNIT;
+            unit z3zE1255;
+            z3zE1255 = UNIT;
             {
               zindex = ztrie_path_len_increment(zindex);
-              if (have_exception) {  goto end_block_exception_2003;  }
+              if (have_exception) {  goto end_block_exception_1774;  }
             }
-            z3zE1561 = UNIT;
-          } else {  z3zE1561 = UNIT;  }
-          z_step = (z_step + z3zE1560);
-          goto for_start_2000;
+            z3zE1254 = UNIT;
+          } else {  z3zE1254 = UNIT;  }
+          z_step = (z_step + z3zE1253);
+          goto for_start_1771;
         }
-      for_end_2001: ;
+      for_end_1772: ;
       }
-      unit z3zE1563;
-      z3zE1563 = UNIT;
-      z8zE485 = zresult;
+      unit z3zE1256;
+      z3zE1256 = UNIT;
+      z8zE533 = zresult;
     }
   }
-end_function_2002: ;
-  return z8zE485;
-end_block_exception_2003: ;
-  struct zTriePath z8zE993 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
-  return z8zE993;
+end_function_1773: ;
+  return z8zE533;
+end_block_exception_1774: ;
+  struct zTriePath z8zE906 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
+  return z8zE906;
 }
 
 struct zTriePath zpath_drop(struct zTriePath zpath, uint64_t zn)
 {
-  struct zTriePath z8zE486;
+  struct zTriePath z8zE534;
   uint64_t zlength;
   zlength = zpath_len(zpath);
-  bool z2zE1564;
-  z2zE1564 = (!(zn < zlength));
-  if (z2zE1564) {
-    struct zTriePath z3zE1554;
-    zz5vecz8z5bv8z9 z3zE1555;
-    CREATE(zz5vecz8z5bv8z9)(&z3zE1555);
-    internal_vector_init_zz5vecz8z5bv8z9(&z3zE1555, INT64_C(32));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(0), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(1), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(2), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(3), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(4), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(5), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(6), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(7), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(8), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(9), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(10), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(11), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(12), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(13), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(14), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(15), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(16), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(17), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(18), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(19), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(20), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(21), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(22), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(23), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(24), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(25), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(26), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(27), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(28), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(29), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(30), UINT64_C(0x00));
-    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1555, z3zE1555, INT64_C(31), UINT64_C(0x00));
-    for (size_t z8zE995 = 0; z8zE995 < 32; ++z8zE995) {
-      z3zE1554.zdata.bytes[z8zE995] = (uint8_t)(z3zE1555.data[z8zE995] & UINT64_C(0xff));
+  bool z2zE1154;
+  z2zE1154 = (!(zn < zlength));
+  if (z2zE1154) {
+    struct zTriePath z3zE1247;
+    zz5vecz8z5bv8z9 z3zE1248;
+    CREATE(zz5vecz8z5bv8z9)(&z3zE1248);
+    internal_vector_init_zz5vecz8z5bv8z9(&z3zE1248, INT64_C(32));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(0), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(1), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(2), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(3), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(4), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(5), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(6), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(7), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(8), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(9), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(10), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(11), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(12), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(13), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(14), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(15), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(16), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(17), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(18), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(19), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(20), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(21), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(22), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(23), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(24), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(25), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(26), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(27), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(28), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(29), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(30), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1248, z3zE1248, INT64_C(31), UINT64_C(0x00));
+    for (size_t z8zE908 = 0; z8zE908 < 32; ++z8zE908) {
+      z3zE1247.zdata.bytes[z8zE908] = (uint8_t)(z3zE1248.data[z8zE908] & UINT64_C(0xff));
     }
-    KILL(zz5vecz8z5bv8z9)(&z3zE1555);
-    z3zE1554.zlen = UINT64_C(0);
-    z8zE486 = z3zE1554;
+    KILL(zz5vecz8z5bv8z9)(&z3zE1248);
+    z3zE1247.zlen = UINT64_C(0);
+    z8zE534 = z3zE1247;
   } else {
-    bool z2zE1565;
-    z2zE1565 = (zn == UINT64_C(0));
-    if (z2zE1565) {  z8zE486 = zpath;  } else {
+    bool z2zE1155;
+    z2zE1155 = (zn == UINT64_C(0));
+    if (z2zE1155) {  z8zE534 = zpath;  } else {
       uint64_t zremain;
       {    zremain = (zlength - zn);
       }
       struct zTriePath zresult;
       {
-        struct zTriePath z3zE1544;
-        zz5vecz8z5bv8z9 z3zE1545;
-        CREATE(zz5vecz8z5bv8z9)(&z3zE1545);
-        internal_vector_init_zz5vecz8z5bv8z9(&z3zE1545, INT64_C(32));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(0), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(1), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(2), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(3), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(4), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(5), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(6), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(7), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(8), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(9), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(10), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(11), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(12), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(13), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(14), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(15), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(16), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(17), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(18), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(19), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(20), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(21), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(22), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(23), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(24), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(25), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(26), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(27), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(28), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(29), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(30), UINT64_C(0x00));
-        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1545, z3zE1545, INT64_C(31), UINT64_C(0x00));
-        for (size_t z8zE994 = 0; z8zE994 < 32; ++z8zE994) {
-          z3zE1544.zdata.bytes[z8zE994] = (uint8_t)(z3zE1545.data[z8zE994] & UINT64_C(0xff));
+        struct zTriePath z3zE1237;
+        zz5vecz8z5bv8z9 z3zE1238;
+        CREATE(zz5vecz8z5bv8z9)(&z3zE1238);
+        internal_vector_init_zz5vecz8z5bv8z9(&z3zE1238, INT64_C(32));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(0), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(1), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(2), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(3), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(4), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(5), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(6), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(7), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(8), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(9), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(10), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(11), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(12), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(13), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(14), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(15), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(16), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(17), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(18), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(19), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(20), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(21), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(22), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(23), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(24), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(25), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(26), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(27), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(28), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(29), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(30), UINT64_C(0x00));
+        internal_vector_update_zz5vecz8z5bv8z9(&z3zE1238, z3zE1238, INT64_C(31), UINT64_C(0x00));
+        for (size_t z8zE907 = 0; z8zE907 < 32; ++z8zE907) {
+          z3zE1237.zdata.bytes[z8zE907] = (uint8_t)(z3zE1238.data[z8zE907] & UINT64_C(0xff));
         }
-        KILL(zz5vecz8z5bv8z9)(&z3zE1545);
-        z3zE1544.zlen = UINT64_C(0);
-        zresult = z3zE1544;
+        KILL(zz5vecz8z5bv8z9)(&z3zE1238);
+        z3zE1237.zlen = UINT64_C(0);
+        zresult = z3zE1237;
       }
       uint64_t zoffset;
       zoffset = UINT64_C(0);
-      int64_t z3zE1546;
-      {    z3zE1546 = (int64_t)(UINT64_C(0));
+      int64_t z3zE1239;
+      {    z3zE1239 = (int64_t)(UINT64_C(0));
       }
-      int64_t z3zE1547;
-      {    z3zE1547 = (int64_t)(UINT64_C(63));
+      int64_t z3zE1240;
+      {    z3zE1240 = (int64_t)(UINT64_C(63));
       }
-      int64_t z3zE1548;
-      {    z3zE1548 = (int64_t)(UINT64_C(1));
+      int64_t z3zE1241;
+      {    z3zE1241 = (int64_t)(UINT64_C(1));
       }
       {
         int64_t z_step;
-        z_step = z3zE1546;
-        unit z3zE1549;
-      for_start_1996: ;
+        z_step = z3zE1239;
+        unit z3zE1242;
+      for_start_1767: ;
         {
-          if ((z3zE1547 < z_step)) goto for_end_1997;
-          bool z2zE1566;
-          z2zE1566 = (zoffset < zremain);
-          if (z2zE1566) {
+          if ((z3zE1240 < z_step)) goto for_end_1768;
+          bool z2zE1156;
+          z2zE1156 = (zoffset < zremain);
+          if (z2zE1156) {
             uint64_t zcandidate;
             {    zcandidate = (zn + zoffset);
             }
             uint64_t zsource_index;
             {
-              bool z2zE1569;
+              bool z2zE1159;
               {
-                bool z2zE1568;
-                z2zE1568 = (!(zcandidate < UINT64_C(0)));
-                bool z3zE1550;
-                if (z2zE1568) {  z3zE1550 = (!(UINT64_C(64) < zcandidate));  } else {  z3zE1550 = false;  }
-                z2zE1569 = z3zE1550;
+                bool z2zE1158;
+                z2zE1158 = (!(zcandidate < UINT64_C(0)));
+                bool z3zE1243;
+                if (z2zE1158) {  z3zE1243 = (!(UINT64_C(64) < zcandidate));  } else {  z3zE1243 = false;  }
+                z2zE1159 = z3zE1243;
               }
-              if (z2zE1569) {  zsource_index = zcandidate;  } else {
-                unit z3zE1551;
-                z3zE1551 = sail_assert(false, "sail/lib/mpt/primitives.sail:166.40-166.41");
+              if (z2zE1159) {  zsource_index = zcandidate;  } else {
+                unit z3zE1244;
+                z3zE1244 = sail_assert(false, "sail/lib/mpt/primitives.sail:166.40-166.41");
                 sail_match_failure("path_drop");
                 /* unreachable after exit */
               }
             }
-            uint64_t z2zE1567;
-            z2zE1567 = zpath_nibble(zpath, zsource_index);
+            uint64_t z2zE1157;
+            z2zE1157 = zpath_nibble(zpath, zsource_index);
             {
-              zresult = zpath_append_nibble(zresult, z2zE1567);
-              if (have_exception) {  goto end_block_exception_1999;  }
+              zresult = zpath_append_nibble(zresult, z2zE1157);
+              if (have_exception) {  goto end_block_exception_1770;  }
             }
-            unit z3zE1552;
-            z3zE1552 = UNIT;
+            unit z3zE1245;
+            z3zE1245 = UNIT;
             {
               zoffset = ztrie_path_len_increment(zoffset);
-              if (have_exception) {  goto end_block_exception_1999;  }
+              if (have_exception) {  goto end_block_exception_1770;  }
             }
-            z3zE1549 = UNIT;
-          } else {  z3zE1549 = UNIT;  }
-          z_step = (z_step + z3zE1548);
-          goto for_start_1996;
+            z3zE1242 = UNIT;
+          } else {  z3zE1242 = UNIT;  }
+          z_step = (z_step + z3zE1241);
+          goto for_start_1767;
         }
-      for_end_1997: ;
+      for_end_1768: ;
       }
-      unit z3zE1553;
-      z3zE1553 = UNIT;
-      z8zE486 = zresult;
+      unit z3zE1246;
+      z3zE1246 = UNIT;
+      z8zE534 = zresult;
     }
   }
-end_function_1998: ;
-  return z8zE486;
-end_block_exception_1999: ;
-  struct zTriePath z8zE996 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
-  return z8zE996;
+end_function_1769: ;
+  return z8zE534;
+end_block_exception_1770: ;
+  struct zTriePath z8zE909 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
+  return z8zE909;
 }
 
 bool zpath_eq(struct zTriePath za, struct zTriePath zb)
 {
-  bool z8zE487;
-  bool z2zE1563;
+  bool z8zE535;
+  bool z2zE1153;
   {
-    uint64_t z2zE1559;
-    z2zE1559 = za.zlen;
-    uint64_t z2zE1560;
-    z2zE1560 = zb.zlen;
-    z2zE1563 = (z2zE1559 == z2zE1560);
+    uint64_t z2zE1149;
+    z2zE1149 = za.zlen;
+    uint64_t z2zE1150;
+    z2zE1150 = zb.zlen;
+    z2zE1153 = (z2zE1149 == z2zE1150);
   }
-  bool z3zE1543;
-  if (z2zE1563) {
-    sail_fixed_bytes_32 z2zE1561;
-    z2zE1561 = za.zdata;
-    sail_fixed_bytes_32 z2zE1562;
-    z2zE1562 = zb.zdata;
-    z3zE1543 = eq_fixed_bytes_32(z2zE1561, z2zE1562);
-  } else {  z3zE1543 = false;  }
-  z8zE487 = z3zE1543;
-end_function_1994: ;
-  return z8zE487;
-end_block_exception_1995: ;
+  bool z3zE1236;
+  if (z2zE1153) {
+    sail_fixed_bytes_32 z2zE1151;
+    z2zE1151 = za.zdata;
+    sail_fixed_bytes_32 z2zE1152;
+    z2zE1152 = zb.zdata;
+    z3zE1236 = eq_fixed_bytes_32(z2zE1151, z2zE1152);
+  } else {  z3zE1236 = false;  }
+  z8zE535 = z3zE1236;
+end_function_1765: ;
+  return z8zE535;
+end_block_exception_1766: ;
 
   return false;
 }
 
 bool zpath_lt(struct zTriePath za, struct zTriePath zb)
 {
-  bool z8zE488;
-  bool z2zE1554;
+  bool z8zE536;
+  bool z2zE1144;
   {
-    sail_fixed_bytes_32 z2zE1552;
-    z2zE1552 = za.zdata;
-    sail_fixed_bytes_32 z2zE1553;
-    z2zE1553 = zb.zdata;
-    z2zE1554 = eq_fixed_bytes_32(z2zE1552, z2zE1553);
+    sail_fixed_bytes_32 z2zE1142;
+    z2zE1142 = za.zdata;
+    sail_fixed_bytes_32 z2zE1143;
+    z2zE1143 = zb.zdata;
+    z2zE1144 = eq_fixed_bytes_32(z2zE1142, z2zE1143);
   }
-  if (z2zE1554) {
-    uint64_t z2zE1555;
-    z2zE1555 = zpath_len(za);
-    uint64_t z2zE1556;
-    z2zE1556 = zpath_len(zb);
-    z8zE488 = (z2zE1555 < z2zE1556);
+  if (z2zE1144) {
+    uint64_t z2zE1145;
+    z2zE1145 = zpath_len(za);
+    uint64_t z2zE1146;
+    z2zE1146 = zpath_len(zb);
+    z8zE536 = (z2zE1145 < z2zE1146);
   } else {
-    sail_fixed_bytes_32 z2zE1557;
-    z2zE1557 = za.zdata;
-    sail_fixed_bytes_32 z2zE1558;
-    z2zE1558 = zb.zdata;
-    z8zE488 = zhash_lt(z2zE1557, z2zE1558);
+    sail_fixed_bytes_32 z2zE1147;
+    z2zE1147 = za.zdata;
+    sail_fixed_bytes_32 z2zE1148;
+    z2zE1148 = zb.zdata;
+    z8zE536 = evmsail_hash_lt(z2zE1147, z2zE1148);
   }
-end_function_1992: ;
-  return z8zE488;
-end_block_exception_1993: ;
+end_function_1763: ;
+  return z8zE536;
+end_block_exception_1764: ;
 
   return false;
 }
 
 bool zpath_prefix_of(struct zTriePath zprefix, struct zTriePath zpath)
 {
-  bool z8zE489;
-  bool z2zE1549;
+  bool z8zE537;
+  bool z2zE1139;
   {
-    uint64_t z2zE1547;
-    z2zE1547 = zpath_len(zpath);
-    uint64_t z2zE1548;
-    z2zE1548 = zpath_len(zprefix);
-    z2zE1549 = (z2zE1547 < z2zE1548);
+    uint64_t z2zE1137;
+    z2zE1137 = zpath_len(zpath);
+    uint64_t z2zE1138;
+    z2zE1138 = zpath_len(zprefix);
+    z2zE1139 = (z2zE1137 < z2zE1138);
   }
-  if (z2zE1549) {  z8zE489 = false;  } else {
-    struct zTriePath z2zE1551;
+  if (z2zE1139) {  z8zE537 = false;  } else {
+    struct zTriePath z2zE1141;
     {
-      uint64_t z2zE1550;
-      z2zE1550 = zpath_len(zprefix);
+      uint64_t z2zE1140;
+      z2zE1140 = zpath_len(zprefix);
       {
-        z2zE1551 = zpath_take(zpath, z2zE1550);
-        if (have_exception) {  goto end_block_exception_1991;  }
+        z2zE1141 = zpath_take(zpath, z2zE1140);
+        if (have_exception) {  goto end_block_exception_1762;  }
       }
     }
-    z8zE489 = zpath_eq(zprefix, z2zE1551);
+    z8zE537 = zpath_eq(zprefix, z2zE1141);
   }
-end_function_1990: ;
-  return z8zE489;
-end_block_exception_1991: ;
+end_function_1761: ;
+  return z8zE537;
+end_block_exception_1762: ;
 
   return false;
 }
 
 uint64_t zcommon_prefix_from(struct zTriePath za, struct zTriePath zb, uint64_t zstart)
 {
-  uint64_t z8zE490;
+  uint64_t z8zE538;
   uint64_t zalen;
   zalen = zpath_len(za);
   uint64_t zblen;
   zblen = zpath_len(zb);
   uint64_t zstop;
   {
-    bool z2zE1546;
-    z2zE1546 = (zalen < zblen);
-    if (z2zE1546) {  zstop = zalen;  } else {  zstop = zblen;  }
+    bool z2zE1136;
+    z2zE1136 = (zalen < zblen);
+    if (z2zE1136) {  zstop = zalen;  } else {  zstop = zblen;  }
   }
   uint64_t zindex;
   zindex = zstart;
@@ -685,113 +802,113 @@ uint64_t zcommon_prefix_from(struct zTriePath za, struct zTriePath zb, uint64_t 
   zcount = UINT64_C(0);
   bool zmatching;
   zmatching = true;
-  int64_t z3zE1536;
-  {    z3zE1536 = (int64_t)(UINT64_C(0));
+  int64_t z3zE1229;
+  {    z3zE1229 = (int64_t)(UINT64_C(0));
   }
-  int64_t z3zE1537;
-  {    z3zE1537 = (int64_t)(UINT64_C(63));
+  int64_t z3zE1230;
+  {    z3zE1230 = (int64_t)(UINT64_C(63));
   }
-  int64_t z3zE1538;
-  {    z3zE1538 = (int64_t)(UINT64_C(1));
+  int64_t z3zE1231;
+  {    z3zE1231 = (int64_t)(UINT64_C(1));
   }
   {
     int64_t z_step;
-    z_step = z3zE1536;
-    unit z3zE1540;
-  for_start_1986: ;
+    z_step = z3zE1229;
+    unit z3zE1233;
+  for_start_1757: ;
     {
-      if ((z3zE1537 < z_step)) goto for_end_1987;
-      bool z2zE1542;
+      if ((z3zE1230 < z_step)) goto for_end_1758;
+      bool z2zE1132;
       {
-        bool z3zE1539;
-        if (zmatching) {  z3zE1539 = (zindex < zstop);  } else {  z3zE1539 = false;  }
-        z2zE1542 = z3zE1539;
+        bool z3zE1232;
+        if (zmatching) {  z3zE1232 = (zindex < zstop);  } else {  z3zE1232 = false;  }
+        z2zE1132 = z3zE1232;
       }
-      if (z2zE1542) {
-        bool z2zE1545;
+      if (z2zE1132) {
+        bool z2zE1135;
         {
-          uint64_t z2zE1543;
-          z2zE1543 = zpath_nibble(za, zindex);
-          uint64_t z2zE1544;
-          z2zE1544 = zpath_nibble(zb, zindex);
-          z2zE1545 = (z2zE1543 == z2zE1544);
+          uint64_t z2zE1133;
+          z2zE1133 = zpath_nibble(za, zindex);
+          uint64_t z2zE1134;
+          z2zE1134 = zpath_nibble(zb, zindex);
+          z2zE1135 = (z2zE1133 == z2zE1134);
         }
-        if (z2zE1545) {
+        if (z2zE1135) {
           {
             zcount = ztrie_path_len_increment(zcount);
-            if (have_exception) {  goto end_block_exception_1989;  }
+            if (have_exception) {  goto end_block_exception_1760;  }
           }
-          unit z3zE1541;
-          z3zE1541 = UNIT;
+          unit z3zE1234;
+          z3zE1234 = UNIT;
           {
             zindex = ztrie_path_len_increment(zindex);
-            if (have_exception) {  goto end_block_exception_1989;  }
+            if (have_exception) {  goto end_block_exception_1760;  }
           }
-          z3zE1540 = UNIT;
+          z3zE1233 = UNIT;
         } else {
           zmatching = false;
-          z3zE1540 = UNIT;
+          z3zE1233 = UNIT;
         }
-      } else {  z3zE1540 = UNIT;  }
-      z_step = (z_step + z3zE1538);
-      goto for_start_1986;
+      } else {  z3zE1233 = UNIT;  }
+      z_step = (z_step + z3zE1231);
+      goto for_start_1757;
     }
-  for_end_1987: ;
+  for_end_1758: ;
   }
-  unit z3zE1542;
-  z3zE1542 = UNIT;
-  z8zE490 = zcount;
-end_function_1988: ;
-  return z8zE490;
-end_block_exception_1989: ;
+  unit z3zE1235;
+  z3zE1235 = UNIT;
+  z8zE538 = zcount;
+end_function_1759: ;
+  return z8zE538;
+end_block_exception_1760: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
-void zhex_prefix_pairs(zz5listz8z5bv8z9 *z8zE491, struct zTriePath zpath, uint64_t zindex)
+void zhex_prefix_pairs(zz5listz8z5bv8z9 *z8zE539, struct zTriePath zpath, uint64_t zindex)
 {
-  bool z2zE1536;
+  bool z2zE1126;
   {
-    uint64_t z2zE1535;
-    z2zE1535 = zpath_len(zpath);
-    z2zE1536 = (!(zindex < z2zE1535));
+    uint64_t z2zE1125;
+    z2zE1125 = zpath_len(zpath);
+    z2zE1126 = (!(zindex < z2zE1125));
   }
-  if (z2zE1536) {
-    zz5listz8z5bv8z9 z3zE1535;
-    CREATE(zz5listz8z5bv8z9)(&z3zE1535);
-    COPY(zz5listz8z5bv8z9)((*(&z8zE491)), z3zE1535);
-    KILL(zz5listz8z5bv8z9)(&z3zE1535);
+  if (z2zE1126) {
+    zz5listz8z5bv8z9 z3zE1228;
+    CREATE(zz5listz8z5bv8z9)(&z3zE1228);
+    COPY(zz5listz8z5bv8z9)((*(&z8zE539)), z3zE1228);
+    KILL(zz5listz8z5bv8z9)(&z3zE1228);
   } else {
     uint64_t znext;
     {    znext = (zindex + UINT64_C(1));
     }
-    uint64_t z2zE1540;
+    uint64_t z2zE1130;
     {
-      uint64_t z2zE1537;
-      z2zE1537 = zpath_nibble(zpath, zindex);
-      uint64_t z2zE1538;
-      z2zE1538 = zpath_nibble(zpath, znext);
-      z2zE1540 = (z2zE1537 << 4) | z2zE1538;
+      uint64_t z2zE1127;
+      z2zE1127 = zpath_nibble(zpath, zindex);
+      uint64_t z2zE1128;
+      z2zE1128 = zpath_nibble(zpath, znext);
+      z2zE1130 = (z2zE1127 << 4) | z2zE1128;
     }
-    zz5listz8z5bv8z9 z2zE1541;
-    CREATE(zz5listz8z5bv8z9)(&z2zE1541);
+    zz5listz8z5bv8z9 z2zE1131;
+    CREATE(zz5listz8z5bv8z9)(&z2zE1131);
     {
-      uint64_t z2zE1539;
-      {    z2zE1539 = (znext + UINT64_C(1));
+      uint64_t z2zE1129;
+      {    z2zE1129 = (znext + UINT64_C(1));
       }
-      zhex_prefix_pairs(&z2zE1541, zpath, z2zE1539);
+      zhex_prefix_pairs(&z2zE1131, zpath, z2zE1129);
     }
-    zconsz3z5bv8((*(&z8zE491)), z2zE1540, z2zE1541);
-    KILL(zz5listz8z5bv8z9)(&z2zE1541);
+    zconsz3z5bv8((*(&z8zE539)), z2zE1130, z2zE1131);
+    KILL(zz5listz8z5bv8z9)(&z2zE1131);
   }
-end_function_1984: ;
-  goto end_function_4041;
-end_block_exception_1985: ;
-  goto end_function_4041;
-end_function_4041: ;
+end_function_1755: ;
+  goto end_function_3630;
+end_block_exception_1756: ;
+  goto end_function_3630;
+end_function_3630: ;
 }
 
-void zhex_prefix_compact(struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 *z8zE492, struct zTriePath zpath, bool zis_leaf)
+void zhex_prefix_compact(struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 *z8zE540, struct zTriePath zpath, bool zis_leaf)
 {
   uint64_t zlength;
   zlength = zpath_len(zpath);
@@ -800,46 +917,246 @@ void zhex_prefix_compact(struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 *z8zE492, st
   }
   bool zodd;
   {
-    uint64_t z2zE1534;
-    {    z2zE1534 = (zlength % UINT64_C(2));
+    uint64_t z2zE1124;
+    {    z2zE1124 = (zlength % UINT64_C(2));
     }
-    zodd = (z2zE1534 != UINT64_C(0));
+    zodd = (z2zE1124 != UINT64_C(0));
   }
   uint64_t zflag;
   if (zis_leaf) {  zflag = UINT64_C(0x2);  } else {  zflag = UINT64_C(0x0);  }
   uint64_t zfirst;
   if (zodd) {
-    uint64_t z2zE1532;
-    z2zE1532 = (zflag | UINT64_C(0x1));
-    uint64_t z2zE1533;
-    z2zE1533 = zpath_nibble(zpath, UINT64_C(0));
-    zfirst = (z2zE1532 << 4) | z2zE1533;
+    uint64_t z2zE1122;
+    z2zE1122 = (zflag | UINT64_C(0x1));
+    uint64_t z2zE1123;
+    z2zE1123 = zpath_nibble(zpath, UINT64_C(0));
+    zfirst = (z2zE1122 << 4) | z2zE1123;
   } else {  zfirst = (zflag << 4) | UINT64_C(0x0);  }
   uint64_t zfirst_path_index;
   if (zodd) {  zfirst_path_index = UINT64_C(1);  } else {  zfirst_path_index = UINT64_C(0);  }
   uint64_t zencoded_len;
   {    zencoded_len = (UINT64_C(1) + zpacked_pair_count);
   }
-  zz5listz8z5bv8z9 z2zE1531;
-  CREATE(zz5listz8z5bv8z9)(&z2zE1531);
+  zz5listz8z5bv8z9 z2zE1121;
+  CREATE(zz5listz8z5bv8z9)(&z2zE1121);
   {
-    zz5listz8z5bv8z9 z2zE1530;
-    CREATE(zz5listz8z5bv8z9)(&z2zE1530);
-    zhex_prefix_pairs(&z2zE1530, zpath, zfirst_path_index);
-    zconsz3z5bv8(&z2zE1531, zfirst, z2zE1530);
-    KILL(zz5listz8z5bv8z9)(&z2zE1530);
+    zz5listz8z5bv8z9 z2zE1120;
+    CREATE(zz5listz8z5bv8z9)(&z2zE1120);
+    zhex_prefix_pairs(&z2zE1120, zpath, zfirst_path_index);
+    zconsz3z5bv8(&z2zE1121, zfirst, z2zE1120);
+    KILL(zz5listz8z5bv8z9)(&z2zE1120);
   }
-  struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 z3zE1534;
-  CREATE(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z3zE1534);
-  COPY(zz5listz8z5bv8z9)(&((&z3zE1534)->ztup0), z2zE1531);
-  z3zE1534.ztup1 = zencoded_len;
-  COPY(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)((*(&z8zE492)), z3zE1534);
-  KILL(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z3zE1534);
-  KILL(zz5listz8z5bv8z9)(&z2zE1531);
-end_function_1982: ;
-  goto end_function_4040;
-end_block_exception_1983: ;
-  goto end_function_4040;
-end_function_4040: ;
+  struct ztuple_z8z5listz8z5bv8z9zCz0z5u64z9 z3zE1227;
+  CREATE(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z3zE1227);
+  COPY(zz5listz8z5bv8z9)(&((&z3zE1227)->ztup0), z2zE1121);
+  z3zE1227.ztup1 = zencoded_len;
+  COPY(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)((*(&z8zE540)), z3zE1227);
+  KILL(ztuple_z8z5listz8z5bv8z9zCz0z5u64z9)(&z3zE1227);
+  KILL(zz5listz8z5bv8z9)(&z2zE1121);
+end_function_1753: ;
+  goto end_function_3629;
+end_block_exception_1754: ;
+  goto end_function_3629;
+end_function_3629: ;
+}
+
+struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 zhex_prefix_decode_ref(struct zRlpFieldRef zf)
+{
+  struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 z8zE541;
+  bool z2zE1097;
+  z2zE1097 = zf.zis_list;
+  unit z3zE1220;
+  if (z2zE1097) {
+    struct zexception z2zE1098;
+    CREATE(zexception)(&z2zE1098);
+    zInvalidBlock(&z2zE1098, zRlpDecode);
+    COPY(zexception)(current_exception, z2zE1098);
+    have_exception = true;
+    COPY(sail_string)(throw_location, "sail/lib/mpt/primitives.sail:261.8-261.37");
+    KILL(zexception)(&z2zE1098);
+    goto end_block_exception_1752;
+    /* unreachable after throw */
+    KILL(zexception)(&z2zE1098);
+  } else {  z3zE1220 = UNIT;  }
+  uint64_t zn;
+  zn = zf.zcontent_len;
+  bool z2zE1099;
+  z2zE1099 = (zn == UINT64_C(0));
+  if (z2zE1099) {
+    struct zTriePath z3zE1224;
+    zz5vecz8z5bv8z9 z3zE1225;
+    CREATE(zz5vecz8z5bv8z9)(&z3zE1225);
+    internal_vector_init_zz5vecz8z5bv8z9(&z3zE1225, INT64_C(32));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(0), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(1), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(2), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(3), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(4), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(5), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(6), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(7), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(8), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(9), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(10), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(11), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(12), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(13), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(14), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(15), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(16), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(17), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(18), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(19), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(20), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(21), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(22), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(23), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(24), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(25), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(26), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(27), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(28), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(29), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(30), UINT64_C(0x00));
+    internal_vector_update_zz5vecz8z5bv8z9(&z3zE1225, z3zE1225, INT64_C(31), UINT64_C(0x00));
+    for (size_t z8zE910 = 0; z8zE910 < 32; ++z8zE910) {
+      z3zE1224.zdata.bytes[z8zE910] = (uint8_t)(z3zE1225.data[z8zE910] & UINT64_C(0xff));
+    }
+    KILL(zz5vecz8z5bv8z9)(&z3zE1225);
+    z3zE1224.zlen = UINT64_C(0);
+    struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 z3zE1226;
+    z3zE1226.ztup0 = false;
+    z3zE1226.ztup1 = z3zE1224;
+    z8zE541 = z3zE1226;
+  } else {
+    uint64_t zmaximum_length;
+    zmaximum_length = zHEX_PREFIX_MAX_LENGTH;
+    bool z2zE1100;
+    z2zE1100 = (zmaximum_length < zn);
+    if (z2zE1100) {
+      struct zexception z2zE1101;
+      CREATE(zexception)(&z2zE1101);
+      zInvalidBlock(&z2zE1101, zRlpDecode);
+      COPY(zexception)(current_exception, z2zE1101);
+      have_exception = true;
+      COPY(sail_string)(throw_location, "sail/lib/mpt/primitives.sail:269.12-269.41");
+      KILL(zexception)(&z2zE1101);
+      goto end_block_exception_1752;
+      /* unreachable after throw */
+      KILL(zexception)(&z2zE1101);
+    } else {
+      struct zByteSliceFields zcontent;
+      {
+        struct zByteSliceFields z2zE1118;
+        z2zE1118 = zf.zsource;
+        uint64_t z2zE1119;
+        {
+          uint64_t z2zE1117;
+          {
+            struct zByteSliceFields z2zE1116;
+            z2zE1116 = zf.zsource;
+            z2zE1117 = z2zE1116.zlen;
+          }
+          {    z2zE1119 = (z2zE1117 - zn);
+          }
+        }
+        zcontent = zsub_slice(z2zE1118, z2zE1119, zn);
+      }
+      uint64_t zfb;
+      zfb = zslice_byte(zcontent, UINT64_C(0));
+      uint64_t zflag;
+      zflag = (safe_rshift(UINT64_MAX, 64 - 4) & (zfb >> UINT64_C(4)));
+      bool zis_leaf;
+      {
+        uint64_t z2zE1115;
+        z2zE1115 = (UINT64_C(1) & (zflag >> UINT64_C(1)));
+        zis_leaf = (z2zE1115 == UINT64_C(0b1));
+      }
+      bool zodd;
+      {
+        uint64_t z2zE1114;
+        z2zE1114 = (UINT64_C(1) & (zflag >> UINT64_C(0)));
+        zodd = (z2zE1114 == UINT64_C(0b1));
+      }
+      uint64_t ztail_length;
+      {    ztail_length = (zn - UINT64_C(1));
+      }
+      struct zByteSliceFields ztail;
+      ztail = zslice_suffix(zcontent, UINT64_C(1));
+      sail_u256 zpacked;
+      zpacked = zslice_load(ztail, UINT64_C(0));
+      uint64_t zpaired_nibbles;
+      {    zpaired_nibbles = (ztail_length * UINT64_C(2));
+      }
+      if (zodd) {
+        bool z2zE1102;
+        z2zE1102 = (zpaired_nibbles < UINT64_C(64));
+        if (z2zE1102) {
+          sail_fixed_bytes_32 zbytes;
+          {
+            sail_u256 z2zE1110;
+            z2zE1110 = zword_shift_right(zpacked, UINT64_C(4));
+            zbytes = evmsail_word_to_hash(z2zE1110);
+          }
+          uint64_t z2zE1106;
+          {
+            uint64_t z2zE1104;
+            z2zE1104 = (safe_rshift(UINT64_MAX, 64 - 4) & (zfb >> UINT64_C(0)));
+            uint64_t z2zE1105;
+            {
+              uint64_t z2zE1103;
+              z2zE1103 = fast_unsigned_vector_access_fixed_bytes_32(zbytes, UINT64_C(0));
+              z2zE1105 = (safe_rshift(UINT64_MAX, 64 - 4) & (z2zE1103 >> UINT64_C(0)));
+            }
+            z2zE1106 = (z2zE1104 << 4) | z2zE1105;
+          }
+          zbytes = fast_unsigned_vector_update_fixed_bytes_32(zbytes, UINT64_C(0), z2zE1106);
+          unit z3zE1222;
+          z3zE1222 = UNIT;
+          struct zTriePath z2zE1109;
+          {
+            sail_fixed_bytes_32 z2zE1107;
+            z2zE1107 = zB256(zbytes);
+            uint64_t z2zE1108;
+            {    z2zE1108 = (zpaired_nibbles + UINT64_C(1));
+            }
+            z2zE1109 = zpath_new(z2zE1107, z2zE1108);
+          }
+          struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 z3zE1223;
+          z3zE1223.ztup0 = zis_leaf;
+          z3zE1223.ztup1 = z2zE1109;
+          z8zE541 = z3zE1223;
+        } else {
+          struct zexception z2zE1111;
+          CREATE(zexception)(&z2zE1111);
+          zInvalidBlock(&z2zE1111, zWitnessDeficient);
+          COPY(zexception)(current_exception, z2zE1111);
+          have_exception = true;
+          COPY(sail_string)(throw_location, "sail/lib/mpt/primitives.sail:286.20-286.56");
+          KILL(zexception)(&z2zE1111);
+          goto end_block_exception_1752;
+          /* unreachable after throw */
+          KILL(zexception)(&z2zE1111);
+        }
+      } else {
+        struct zTriePath z2zE1113;
+        {
+          sail_fixed_bytes_32 z2zE1112;
+          z2zE1112 = evmsail_word_to_hash(zpacked);
+          z2zE1113 = zpath_new(z2zE1112, zpaired_nibbles);
+        }
+        struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 z3zE1221;
+        z3zE1221.ztup0 = zis_leaf;
+        z3zE1221.ztup1 = z2zE1113;
+        z8zE541 = z3zE1221;
+      }
+    }
+  }
+end_function_1751: ;
+  return z8zE541;
+end_block_exception_1752: ;
+  struct zTriePath z8zE912 = { .zdata = fixed_bytes_32_zero(), .zlen = UINT64_C(0xdeadc0de) };
+  struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 z8zE911 = { .ztup0 = false, .ztup1 = z8zE912 };
+  return z8zE911;
 }
 

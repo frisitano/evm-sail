@@ -44,6 +44,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # State: accounts
 
@@ -148,7 +149,7 @@ def k_account_occupied (a : (Vector (BitVec 8) 20)) : SailM Bool := do
 /-- Moves `v` wei from `src` to `dst` (both updates recorded for frame
 rollback; the EVM checks sufficiency before calling) and emits the
 EIP-7708 transfer log. -/
-/- Type quantifiers: k_ex416334_ : Nat, 0 ≤ k_ex416334_ ∧ k_ex416334_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415199_ : Nat, 0 ≤ k_ex415199_ ∧ k_ex415199_ ≤ (2 ^ 256 - 1) -/
 def k_transfer (src : (Vector (BitVec 8) 20)) (dst : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   let src_acc ← do (k_aload src)
   let dst_acc ← do (k_aload dst)
@@ -176,7 +177,7 @@ def k_add_balance (a : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   else (pure ())
 
 /-- Debits `v` wei (no-op when zero; caller guarantees sufficiency). -/
-/- Type quantifiers: k_ex416335_ : Nat, 0 ≤ k_ex416335_ ∧ k_ex416335_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415200_ : Nat, 0 ≤ k_ex415200_ ∧ k_ex415200_ ≤ (2 ^ 256 - 1) -/
 def k_sub_balance (a : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   let cur ← do (k_aload a)
   if ((! (word_is_zero v)) : Bool)

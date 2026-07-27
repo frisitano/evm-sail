@@ -26,11 +26,6 @@ function k_deploy_code(a : address, code : CodeSlice) -> unit = {
     store_account_info(a, cur, { cur.info with code_hash = h })
 }
 
-/*! Computes the PUSH-aware JUMPDEST bitmap of an EIP-7702 delegation
-    designator. */
-val delegation_address_index : forall 'index, 0 <= 'index & 'index <= 19. int('index) -> int(19 - 'index)
-function delegation_address_index(index) = 19 - index
-
 val delegation_code_index : forall 'index, 0 <= 'index & 'index <= 19. int('index) -> int(3 + 'index)
 function delegation_code_index(index) = 3 + index
 
@@ -38,7 +33,7 @@ function delegation_code_index(index) = 3 + index
 function delegation_jumpdest_chunk(target : address) -> JumpdestChunk = {
     var bits = EMPTY_JUMPDEST_CHUNK;
     foreach (k from 0 to 19) {
-        let b = target[delegation_address_index(k)];
+        let b = target[k];
         if b == 0x5b then {
             bits = or_vec(bits, sail_shiftleft(sail_zero_extend(0x01, 256), delegation_code_index(k)))
         }
@@ -69,9 +64,6 @@ function k_clear_code(a : address) -> unit = {
     let cur = k_aload(a);
     store_account_info(a, cur, { cur.info with code_hash = KECCAK_EMPTY })
 }
-
-/*! The EIP-7702 delegation designator bytes: `0xef0100 ‖ address`. */
-function delegation_code(a : address) -> list(byte) = 0xef :: 0x01 :: 0x00 :: address_to_bytes(a)
 
 /*! The delegation target of an account's code, with a validity flag —
     false when the code is not a designator. */

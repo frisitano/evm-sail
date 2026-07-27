@@ -48,9 +48,6 @@ val host_slice_copy_to_memory = impure { c: "slice_copy_to_memory" } : (
         source_pointer,
         memory_length,
     ) -> unit
-/*! Whether the concatenation of the `Bytes` segments equals the slice
-    byte for byte, without materializing either side. */
-val bytes_segments_equal_slice = impure { c: "host_bytes_segments_equal_slice" } : (list(Bytes), ByteSlice) -> bool
 /*! Whether two source-backed slices contain identical bytes, without
     materializing either side. */
 val byte_slices_equal = impure { c: "host_byte_slices_equal" } : (ByteSlice, ByteSlice) -> bool

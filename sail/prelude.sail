@@ -54,17 +54,17 @@ type word = range(0, 2 ^ 256 - 1)
 val U256 : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> word
 function U256(value) = value
 
-/*! A 20-byte account address (YP §4.1). */
-type address = vector(20, dec, byte)
+/*! A 20-byte account address (YP §4.1), in canonical protocol byte order. */
+type address = vector(20, inc, byte)
 
 /* Transitional constructor spelling for address-producing sites. */
-function Address(bytes : vector(20, dec, byte)) -> address = bytes
+function Address(bytes : vector(20, inc, byte)) -> address = bytes
 
-/*! A KECCAK-256 / storage-key sized digest. */
-type b256 = vector(32, dec, byte)
+/*! A KECCAK-256 / storage-key sized digest, in canonical protocol byte order. */
+type b256 = vector(32, inc, byte)
 
 /* Transitional constructor spelling for digest-producing sites. */
-function B256(bytes : vector(32, dec, byte)) -> b256 = bytes
+function B256(bytes : vector(32, inc, byte)) -> b256 = bytes
 /*! The common digest type used by trie, code, and block hashes. */
 type hash = b256
 
@@ -85,19 +85,108 @@ type word_bit_count = range(0, 256)
 
 /*! Interprets a digest as the corresponding big-endian EVM word. */
 function hash_to_word(bytes : hash) -> word =
-    unsigned(from_bytes_le(32, bytes))
+    unsigned(
+          bytes[0]
+        @ bytes[1]
+        @ bytes[2]
+        @ bytes[3]
+        @ bytes[4]
+        @ bytes[5]
+        @ bytes[6]
+        @ bytes[7]
+        @ bytes[8]
+        @ bytes[9]
+        @ bytes[10]
+        @ bytes[11]
+        @ bytes[12]
+        @ bytes[13]
+        @ bytes[14]
+        @ bytes[15]
+        @ bytes[16]
+        @ bytes[17]
+        @ bytes[18]
+        @ bytes[19]
+        @ bytes[20]
+        @ bytes[21]
+        @ bytes[22]
+        @ bytes[23]
+        @ bytes[24]
+        @ bytes[25]
+        @ bytes[26]
+        @ bytes[27]
+        @ bytes[28]
+        @ bytes[29]
+        @ bytes[30]
+        @ bytes[31],
+    )
 
 /*! Serializes an EVM word as a 32-byte big-endian digest. */
-function word_to_hash(value : word) -> hash =
-    B256(to_bytes_le(32, get_slice_int(256, value, 0)))
+function word_to_hash(value : word) -> hash = {
+    var result : hash = B256(vector_init(32, 0x00));
+    result[0] = get_slice_int(8, value, 248);
+    result[1] = get_slice_int(8, value, 240);
+    result[2] = get_slice_int(8, value, 232);
+    result[3] = get_slice_int(8, value, 224);
+    result[4] = get_slice_int(8, value, 216);
+    result[5] = get_slice_int(8, value, 208);
+    result[6] = get_slice_int(8, value, 200);
+    result[7] = get_slice_int(8, value, 192);
+    result[8] = get_slice_int(8, value, 184);
+    result[9] = get_slice_int(8, value, 176);
+    result[10] = get_slice_int(8, value, 168);
+    result[11] = get_slice_int(8, value, 160);
+    result[12] = get_slice_int(8, value, 152);
+    result[13] = get_slice_int(8, value, 144);
+    result[14] = get_slice_int(8, value, 136);
+    result[15] = get_slice_int(8, value, 128);
+    result[16] = get_slice_int(8, value, 120);
+    result[17] = get_slice_int(8, value, 112);
+    result[18] = get_slice_int(8, value, 104);
+    result[19] = get_slice_int(8, value, 96);
+    result[20] = get_slice_int(8, value, 88);
+    result[21] = get_slice_int(8, value, 80);
+    result[22] = get_slice_int(8, value, 72);
+    result[23] = get_slice_int(8, value, 64);
+    result[24] = get_slice_int(8, value, 56);
+    result[25] = get_slice_int(8, value, 48);
+    result[26] = get_slice_int(8, value, 40);
+    result[27] = get_slice_int(8, value, 32);
+    result[28] = get_slice_int(8, value, 24);
+    result[29] = get_slice_int(8, value, 16);
+    result[30] = get_slice_int(8, value, 8);
+    result[31] = get_slice_int(8, value, 0);
+    result
+}
 
 /*! Compares two digests as unsigned big-endian integers. */
 function hash_lt(left : hash, right : hash) -> bool =
     hash_to_word(left) < hash_to_word(right)
 
-/*! Converts a word to its low 160-bit address. */
-function word_to_address(value : word) -> address =
-    Address(to_bytes_le(20, get_slice_int(160, value, 0)))
+/*! Converts a word to its low 160-bit address in canonical byte order. */
+function word_to_address(value : word) -> address = {
+    var result : address = Address(vector_init(20, 0x00));
+    result[0] = get_slice_int(8, value, 152);
+    result[1] = get_slice_int(8, value, 144);
+    result[2] = get_slice_int(8, value, 136);
+    result[3] = get_slice_int(8, value, 128);
+    result[4] = get_slice_int(8, value, 120);
+    result[5] = get_slice_int(8, value, 112);
+    result[6] = get_slice_int(8, value, 104);
+    result[7] = get_slice_int(8, value, 96);
+    result[8] = get_slice_int(8, value, 88);
+    result[9] = get_slice_int(8, value, 80);
+    result[10] = get_slice_int(8, value, 72);
+    result[11] = get_slice_int(8, value, 64);
+    result[12] = get_slice_int(8, value, 56);
+    result[13] = get_slice_int(8, value, 48);
+    result[14] = get_slice_int(8, value, 40);
+    result[15] = get_slice_int(8, value, 32);
+    result[16] = get_slice_int(8, value, 24);
+    result[17] = get_slice_int(8, value, 16);
+    result[18] = get_slice_int(8, value, 8);
+    result[19] = get_slice_int(8, value, 0);
+    result
+}
 
 /* the all-zero word / address constants */
 let ZERO_WORD : word = U256(unsigned(0x0000000000000000000000000000000000000000000000000000000000000000))
@@ -320,9 +409,30 @@ function word_arithmetic_shift_right(value : word, amount : word_bit_count) -> w
     }
 }
 
-/*! Embeds an address's bytes into the low 160 bits of an EVM word. */
+/*! Embeds a canonical-order address into the low 160 bits of an EVM word. */
 function address_to_word(bytes : address) -> word =
-    unsigned(from_bytes_le(20, bytes))
+    unsigned(
+          bytes[0]
+        @ bytes[1]
+        @ bytes[2]
+        @ bytes[3]
+        @ bytes[4]
+        @ bytes[5]
+        @ bytes[6]
+        @ bytes[7]
+        @ bytes[8]
+        @ bytes[9]
+        @ bytes[10]
+        @ bytes[11]
+        @ bytes[12]
+        @ bytes[13]
+        @ bytes[14]
+        @ bytes[15]
+        @ bytes[16]
+        @ bytes[17]
+        @ bytes[18]
+        @ bytes[19],
+    )
 
 function word_negate(value : word) -> word = word_sub(WORD_ZERO, value)
 

@@ -41,6 +41,15 @@ function scratch_push_slice(data : ByteSlice) -> unit = {
     }
 }
 
+/*! Appends a fixed 20-byte address at the cursor. */
+function scratch_push_address(data : address) -> unit = {
+    let arena = scratch_arena;
+    match host_scratch_store_address(arena.len, data) {
+        ByteRegionReady(expanded) => scratch_arena = expanded,
+        ByteRegionFailed() => assert(false, "scratch address append"),
+    }
+}
+
 /*! Appends a prefix of a fixed 32-byte value at the cursor. */
 function scratch_push_b256(data : b256, len : range(0, 32)) -> unit = {
     if len != 0 then {

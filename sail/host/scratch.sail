@@ -26,6 +26,12 @@ val host_scratch_store_slice = impure { c: "scratch_store_slice" } : forall 'dst
         int('dst),
         ByteSliceFields('off, 'len),
     ) -> ByteRegionResult('dst + 'len)
+/*! Stores a fixed 20-byte address in wire order. */
+val host_scratch_store_address = impure { c: "scratch_store_address" } : forall 'off,
+                                                                         host_valid_access('off). (
+        int('off),
+        address,
+    ) -> ByteRegionResult('off + 20)
 /*! Stores the first `len` wire-order bytes of a fixed 32-byte value. */
 val host_scratch_store_b256 = impure { c: "scratch_store_b256" } : forall 'off 'len,
                                                                      host_valid_access('off) & 0 <= 'len & 'len <= 32. (

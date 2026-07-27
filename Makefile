@@ -45,17 +45,21 @@ LEAN_HOST_AXIOMS    := $(CONTRACTS_DIR)/HostAxioms.lean
 LEAN_SPECIALIZATION := $(CONTRACTS_DIR)/Specialization.lean
 LEAN_SAIL_LIB       ?= $(abspath $(LEAN_MODEL_DIR)/.lake/packages/Sail)
 COQ_SEMANTIC_FLAGS  := --coq-semantic-range-types --coq-undef-axioms
-C_MODEL_HEADERS     := sail_failure.h byte_slice_glue.h host_crypto.h precompiles.h output.h \
+C_MODEL_HEADERS     := sail_failure.h byte_slice_glue.h hash_glue.h precompiles.h output.h \
                        scratch.h memory.h transient_storage.h stack.h frame_stack.h \
                        code_db.h kernel_state.h trie_node_db.h state_db.h \
                        cycle_scopes.h
+C_OPTIMIZED_HEADERS := word_bytes_glue.h htr_glue.h mpt_glue.h journal_glue.h interpreter_glue.h
 C_MODEL_INCLUDES    := $(foreach header,$(C_MODEL_HEADERS),--c-include $(header))
+C_OPTIMIZED_INCLUDES := $(foreach header,$(C_OPTIMIZED_HEADERS),--c-include $(header))
 C_PRESERVE_FLAGS    := --c-preserve main \
+                       --c-preserve leaf_child_ref \
+                       --c-preserve resume_frame \
                        --c-preserve process_transaction \
                        --c-preserve compute_state_root \
                        --c-preserve trie_root \
                        --c-preserve decode_stateless_input_ref
-C_EDITOR_FLAGS      := -w -I$(C_MODEL_DIR) \
+C_EDITOR_FLAGS      := -w -DEVMSAIL_MODEL_H=\"evm.h\" -I$(C_MODEL_DIR) \
                        -Izkvm/runtime/sail256 -Izkvm/runtime -Iffi
 C_EDITOR_ARGS       := $(foreach flag,$(C_EDITOR_FLAGS),--compile-flag=$(flag))
 SAIL_CONTRACTS      :=
@@ -177,7 +181,7 @@ extract-c:
 		--output-dir $(C_MODEL_DIR) --work-dir $(C_GENERATOR_DIR) \
 		--variable EVM_PROFILE=off --variable EVM_DEBUG=off -- \
 		-c -O --Oconstant-fold --c-no-main --c-no-rts \
-		$(C_PRESERVE_FLAGS) $(C_MODEL_INCLUDES) \
+		$(C_PRESERVE_FLAGS) $(C_MODEL_INCLUDES) $(C_OPTIMIZED_INCLUDES) \
 		--c-specialize --c-require-bounded-int --splice $(C_OPTIMIZED_SPLICE)
 	test -s $(C_MODEL).c
 	test -s $(C_MODEL).h

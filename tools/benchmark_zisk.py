@@ -31,6 +31,12 @@ DEFAULT_TMP_ROOT = Path(
 )
 DEFAULT_ZISKEMU = Path.home() / ".zisk" / "bin" / "ziskemu"
 DEFAULT_ZISK_LOCK = REPO_ROOT / "zkvm" / "zisk" / "Cargo.lock"
+DEFAULT_GUEST_DIR = REPO_ROOT / "tools" / "zisk-guests"
+DEFAULT_GUESTS = (
+    ("evm-sail", "stateless-validator-evm-sail-zisk.elf"),
+    ("reth", "stateless-validator-reth-zisk.elf"),
+    ("ethrex", "stateless-validator-ethrex-zisk.elf"),
+)
 STEP_PATTERNS = (
     re.compile(r"(?i)\bsteps?\b\s*[:=]\s*([0-9][0-9,_]*)"),
     re.compile(r"(?i)\b([0-9][0-9,_]*)\s+steps?\b"),
@@ -138,6 +144,21 @@ def parse_guest(value: str) -> Guest:
     if not elf.is_file():
         raise argparse.ArgumentTypeError(f"guest ELF does not exist: {elf}")
     return Guest(name=name, elf=elf)
+
+
+def default_guests() -> list[Guest]:
+    guests = [
+        Guest(name=name, elf=(DEFAULT_GUEST_DIR / filename).resolve())
+        for name, filename in DEFAULT_GUESTS
+    ]
+    missing = [str(guest.elf) for guest in guests if not guest.elf.is_file()]
+    if missing:
+        raise ValueError(
+            "standard guest ELF(s) are missing:\n  "
+            + "\n  ".join(missing)
+            + "\nstage them with tools/stage_zisk_guests.sh or pass --guest"
+        )
+    return guests
 
 
 def frame_input(payload: bytes) -> bytes:
@@ -251,9 +272,9 @@ def run_profile(
     profile_dir = run_dir / "profiles" / guest.name
     profile_dir.mkdir(parents=True, exist_ok=True)
     stem = profile_dir / case.identity
-    input_path = stem.with_suffix(".input.bin")
-    output_path = stem.with_suffix(".output.bin")
-    report_path = stem.with_suffix(f".{mode}.txt")
+    input_path = Path(f"{stem}.input.bin")
+    output_path = Path(f"{stem}.output.bin")
+    report_path = Path(f"{stem}.{mode}.txt")
     input_path.write_bytes(frame_input(case.payload))
     output_path.unlink(missing_ok=True)
 
@@ -278,8 +299,8 @@ def run_profile(
             ]
         )
     else:
-        profiler_path = stem.with_suffix(".profile.json.gz")
-        disassembly_path = stem.with_suffix(".disassembly.txt")
+        profiler_path = Path(f"{stem}.profile.json.gz")
+        disassembly_path = Path(f"{stem}.disassembly.txt")
         command.extend(
             [
                 "--stats",
@@ -388,8 +409,10 @@ def parse_args() -> argparse.Namespace:
         "--guest",
         action="append",
         type=parse_guest,
-        required=True,
-        help="named guest ELF as NAME=PATH (repeatable)",
+        help=(
+            "named guest ELF as NAME=PATH (repeatable); defaults to the three "
+            "ELFs under tools/zisk-guests"
+        ),
     )
     parser.add_argument("--baseline", help="guest name used for step ratios")
     parser.add_argument("--ziskemu", type=Path, default=DEFAULT_ZISKEMU)
@@ -424,11 +447,11 @@ def main() -> int:
     args = parse_args()
     if args.warmups < 0 or args.repetitions < 1:
         raise ValueError("warmups must be non-negative and repetitions positive")
-    guests: list[Guest] = args.guest
+    guests: list[Guest] = args.guest or default_guests()
     guest_names = [guest.name for guest in guests]
     if len(guest_names) != len(set(guest_names)):
         raise ValueError("guest names must be unique")
-    baseline = args.baseline or guest_names[0]
+    baseline = args.baseline or ("reth" if "reth" in guest_names else guest_names[0])
     if baseline not in guest_names:
         raise ValueError(f"unknown baseline guest: {baseline}")
     unknown_profile_guests = set(args.profile_guest) - set(guest_names)
@@ -532,15 +555,28 @@ def main() -> int:
         if args.profile != "none" and (
             not args.profile_guest or guest.name in args.profile_guest
         ):
-            print(f"  {args.profile} profile", flush=True)
-            guest_result["profile"] = run_profile(
-                ziskemu,
-                guest,
-                cases[0],
-                run_dir,
-                args.timeout,
-                args.profile,
-            )
+            profiles = []
+            for case_index, case in enumerate(cases, 1):
+                print(
+                    f"  {args.profile} profile {case_index}/{len(cases)}",
+                    flush=True,
+                )
+                profiles.append(
+                    {
+                        "identity": case.identity,
+                        "name": case.name,
+                        "block_index": case.block_index,
+                        "artifacts": run_profile(
+                            ziskemu,
+                            guest,
+                            case,
+                            run_dir,
+                            args.timeout,
+                            args.profile,
+                        ),
+                    }
+                )
+            guest_result["profiles"] = profiles
         guest_results[guest.name] = guest_result
 
         (run_dir / "results.json").write_text(json.dumps(result, indent=2) + "\n")

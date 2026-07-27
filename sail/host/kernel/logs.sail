@@ -6,7 +6,7 @@ logs — and the gas-refund counter.
 */
 
 /*! Appends a log record (YP §4.4.1) to the transaction's log series. */
-function k_log(a : address, topics : list(word), data : Bytes) -> unit = {
+function k_log(a : address, topics : list(word), data : LogData) -> unit = {
     log_append(a, topics, data)
 }
 
@@ -19,7 +19,7 @@ function k_emit_transfer_log(src : address, dst : address, v : word) -> unit = {
         log_append(
             EIP7708_SYSTEM_ADDRESS,
             [|EIP7708_TRANSFER_TOPIC, address_to_word(src), address_to_word(dst)|],
-            bytes_list(word_to_bytes32(v), WORD_BYTE_LENGTH),
+            LogDataWord(v),
         )
     }
 }
@@ -33,7 +33,7 @@ function k_emit_burn_log(a : address, v : word) -> unit = {
         log_append(
             EIP7708_SYSTEM_ADDRESS,
             [|EIP7708_BURN_TOPIC, address_to_word(a)|],
-            bytes_list(word_to_bytes32(v), WORD_BYTE_LENGTH),
+            LogDataWord(v),
         )
     }
 }

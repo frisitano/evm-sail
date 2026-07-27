@@ -38,6 +38,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # The output buffer
 
@@ -113,8 +114,8 @@ def output_buffer_word (value : Nat) : SailM (Sigma fun (k_off : Nat) =>
 
 /-- Stores two words as the output (64-byte precompile results, e.g.
 `ecrecover`-style pairs). -/
-/- Type quantifiers: k_ex416203_ : Nat, k_ex416202_ : Nat, 0 ≤ k_ex416202_ ∧
-  k_ex416202_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex416203_ ∧ k_ex416203_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415068_ : Nat, k_ex415067_ : Nat, 0 ≤ k_ex415067_ ∧
+  k_ex415067_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex415068_ ∧ k_ex415068_ ≤ (2 ^ 256 - 1) -/
 def output_buffer_words (first : Nat) (second : Nat) : SailM (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
   if _sailIf0 : ((← (output_buffer_store_words first second)) : Bool) = true

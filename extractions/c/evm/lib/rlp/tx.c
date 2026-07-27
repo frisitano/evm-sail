@@ -2,4919 +2,4935 @@
 #ifndef EVMSAIL_C_UNITY_BUILD
 #include "../../evm_internal.h"
 #endif
-void create_letbind_92(void) {    CREATE(zAccessListDecode)(&zEMPTY_ACCESS_LIST_DECODE);
+void create_letbind_114(void) {    CREATE(zAccessListDecode)(&zEMPTY_ACCESS_LIST_DECODE);
 
-  struct zAccessListDecode z3zE120;
-  CREATE(zAccessListDecode)(&z3zE120);
-  struct zAccessListDecode z3zE117;
-  CREATE(zAccessListDecode)(&z3zE117);
-  z3zE117.zaddress_count = UINT64_C(0);
-  zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z3zE118;
-  CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z3zE118);
-  COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE117)->zaddresses), z3zE118);
-  KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z3zE118);
-  z3zE117.zslot_count = UINT64_C(0);
-  zz5listz8z5structz0zzStorageKeyz9 z3zE119;
-  CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z3zE119);
-  COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE117)->zstorage_slots), z3zE119);
-  KILL(zz5listz8z5structz0zzStorageKeyz9)(&z3zE119);
-  COPY(zAccessListDecode)(&z3zE120, z3zE117);
-  KILL(zAccessListDecode)(&z3zE117);
-  COPY(zAccessListDecode)(&zEMPTY_ACCESS_LIST_DECODE, z3zE120);
-  KILL(zAccessListDecode)(&z3zE120);
-let_end_294: ;
+  struct zAccessListDecode z3zE128;
+  CREATE(zAccessListDecode)(&z3zE128);
+  struct zAccessListDecode z3zE125;
+  CREATE(zAccessListDecode)(&z3zE125);
+  z3zE125.zaddress_count = UINT64_C(0);
+  zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z3zE126;
+  CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z3zE126);
+  COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE125)->zaddresses), z3zE126);
+  KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z3zE126);
+  z3zE125.zslot_count = UINT64_C(0);
+  zz5listz8z5structz0zzStorageKeyz9 z3zE127;
+  CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z3zE127);
+  COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE125)->zstorage_slots), z3zE127);
+  KILL(zz5listz8z5structz0zzStorageKeyz9)(&z3zE127);
+  COPY(zAccessListDecode)(&z3zE128, z3zE125);
+  KILL(zAccessListDecode)(&z3zE125);
+  COPY(zAccessListDecode)(&zEMPTY_ACCESS_LIST_DECODE, z3zE128);
+  KILL(zAccessListDecode)(&z3zE128);
+let_end_312: ;
 }
-void kill_letbind_92(void) {    KILL(zAccessListDecode)(&zEMPTY_ACCESS_LIST_DECODE);
+void kill_letbind_114(void) {    KILL(zAccessListDecode)(&zEMPTY_ACCESS_LIST_DECODE);
 }
 
-void zdecode_access_list_keys(struct zAccessListDecode *z8zE189, struct zRlpCursor zcursor, sail_fixed_bytes_20 zaddr, struct zAccessListDecode ztail)
+void zdecode_access_list_keys(struct zAccessListDecode *z8zE186, struct zByteSliceFields zcursor, sail_fixed_bytes_20 zaddr, struct zAccessListDecode ztail)
 {
-  bool z2zE3468;
-  z2zE3468 = zrlp_cursor_empty(zcursor);
-  if (z2zE3468) {
-    zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z2zE3469;
-    CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3469);
-    COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3469, ztail.zaddresses);
-    zz5listz8z5structz0zzStorageKeyz9 z2zE3470;
-    CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3470);
-    COPY(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3470, ztail.zstorage_slots);
-    uint64_t z2zE3471;
-    z2zE3471 = ztail.zaddress_count;
-    uint64_t z2zE3472;
-    z2zE3472 = ztail.zslot_count;
-    struct zAccessListDecode z3zE3412;
-    CREATE(zAccessListDecode)(&z3zE3412);
-    z3zE3412.zaddress_count = z2zE3471;
-    COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE3412)->zaddresses), z2zE3469);
-    z3zE3412.zslot_count = z2zE3472;
-    COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE3412)->zstorage_slots), z2zE3470);
-    COPY(zAccessListDecode)((*(&z8zE189)), z3zE3412);
-    KILL(zAccessListDecode)(&z3zE3412);
-    KILL(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3470);
-    KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3469);
+  bool z2zE2773;
+  {
+    uint64_t z2zE2772;
+    z2zE2772 = zcursor.zlen;
+    z2zE2773 = (z2zE2772 == UINT64_C(0));
+  }
+  if (z2zE2773) {
+    zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z2zE2774;
+    CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2774);
+    COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2774, ztail.zaddresses);
+    zz5listz8z5structz0zzStorageKeyz9 z2zE2775;
+    CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2775);
+    COPY(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2775, ztail.zstorage_slots);
+    uint64_t z2zE2776;
+    z2zE2776 = ztail.zaddress_count;
+    uint64_t z2zE2777;
+    z2zE2777 = ztail.zslot_count;
+    struct zAccessListDecode z3zE2637;
+    CREATE(zAccessListDecode)(&z3zE2637);
+    z3zE2637.zaddress_count = z2zE2776;
+    COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE2637)->zaddresses), z2zE2774);
+    z3zE2637.zslot_count = z2zE2777;
+    COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE2637)->zstorage_slots), z2zE2775);
+    COPY(zAccessListDecode)((*(&z8zE186)), z3zE2637);
+    KILL(zAccessListDecode)(&z3zE2637);
+    KILL(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2775);
+    KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2774);
   } else {
-    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3473;
+    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2778;
     {
-      z2zE3473 = zrlp_cursor_pop(zcursor);
-      if (have_exception) {  goto end_block_exception_3461;  }
+      z2zE2778 = zrlp_cursor_pop(zcursor);
+      if (have_exception) {  goto end_block_exception_3057;  }
     }
-    struct zAccessListDecode z3zE3408;
-    CREATE(zAccessListDecode)(&z3zE3408);
+    struct zAccessListDecode z3zE2633;
+    CREATE(zAccessListDecode)(&z3zE2633);
     {
       struct zRlpFieldRef zkey;
-      zkey = z2zE3473.ztup0;
-      struct zRlpCursor znext;
-      znext = z2zE3473.ztup1;
+      zkey = z2zE2778.ztup0;
+      struct zByteSliceFields znext;
+      znext = z2zE2778.ztup1;
       struct zStorageKey zstorage_key;
       {
-        sail_u256 z2zE3480;
+        sail_u256 z2zE2785;
         {
-          z2zE3480 = zrlp_ref_word(zkey);
+          z2zE2785 = zrlp_ref_word(zkey);
           if (have_exception) {
-            KILL(zAccessListDecode)(&z3zE3408);
-            goto end_block_exception_3461;
+            KILL(zAccessListDecode)(&z3zE2633);
+            goto end_block_exception_3057;
           }
         }
-        struct zStorageKey z3zE3409;
-        z3zE3409.zaddr = zaddr;
-        z3zE3409.zslot = z2zE3480;
-        zstorage_key = z3zE3409;
+        struct zStorageKey z3zE2634;
+        z3zE2634.zaddr = zaddr;
+        z3zE2634.zslot = z2zE2785;
+        zstorage_key = z3zE2634;
       }
       struct zAccessListDecode zresult;
       CREATE(zAccessListDecode)(&zresult);
       {
         zdecode_access_list_keys(&zresult, znext, zaddr, ztail);
         if (have_exception) {
-          KILL(zAccessListDecode)(&z3zE3408);
+          KILL(zAccessListDecode)(&z3zE2633);
           KILL(zAccessListDecode)(&zresult);
-          goto end_block_exception_3461;
+          goto end_block_exception_3057;
         }
       }
-      zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z2zE3474;
-      CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3474);
-      COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3474, zresult.zaddresses);
-      zz5listz8z5structz0zzStorageKeyz9 z2zE3476;
-      CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3476);
+      zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z2zE2779;
+      CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2779);
+      COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2779, zresult.zaddresses);
+      zz5listz8z5structz0zzStorageKeyz9 z2zE2781;
+      CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2781);
       {
-        zz5listz8z5structz0zzStorageKeyz9 z2zE3475;
-        CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3475);
-        COPY(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3475, zresult.zstorage_slots);
-        zconsz3z5structz0zzStorageKey(&z2zE3476, zstorage_key, z2zE3475);
-        KILL(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3475);
+        zz5listz8z5structz0zzStorageKeyz9 z2zE2780;
+        CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2780);
+        COPY(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2780, zresult.zstorage_slots);
+        zconsz3z5structz0zzStorageKey(&z2zE2781, zstorage_key, z2zE2780);
+        KILL(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2780);
       }
-      uint64_t z2zE3477;
-      z2zE3477 = zresult.zaddress_count;
-      uint64_t z2zE3479;
+      uint64_t z2zE2782;
+      z2zE2782 = zresult.zaddress_count;
+      uint64_t z2zE2784;
       {
-        uint64_t z2zE3478;
-        z2zE3478 = zresult.zslot_count;
-        z2zE3479 = zrlp_item_count_incrementzIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE3478);
+        uint64_t z2zE2783;
+        z2zE2783 = zresult.zslot_count;
+        z2zE2784 = zrlp_item_count_incrementzIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE2783);
       }
-      struct zAccessListDecode z3zE3410;
-      CREATE(zAccessListDecode)(&z3zE3410);
-      z3zE3410.zaddress_count = z2zE3477;
-      COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE3410)->zaddresses), z2zE3474);
-      z3zE3410.zslot_count = z2zE3479;
-      COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE3410)->zstorage_slots), z2zE3476);
-      COPY(zAccessListDecode)(&z3zE3408, z3zE3410);
-      KILL(zAccessListDecode)(&z3zE3410);
-      KILL(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3476);
-      KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3474);
+      struct zAccessListDecode z3zE2635;
+      CREATE(zAccessListDecode)(&z3zE2635);
+      z3zE2635.zaddress_count = z2zE2782;
+      COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE2635)->zaddresses), z2zE2779);
+      z3zE2635.zslot_count = z2zE2784;
+      COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE2635)->zstorage_slots), z2zE2781);
+      COPY(zAccessListDecode)(&z3zE2633, z3zE2635);
+      KILL(zAccessListDecode)(&z3zE2635);
+      KILL(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2781);
+      KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2779);
       KILL(zAccessListDecode)(&zresult);
-      goto finish_match_3458;
+      goto finish_match_3054;
     }
-  case_3459: ;
+  case_3055: ;
     sail_match_failure("decode_access_list_keys");
-  finish_match_3458: ;
-    COPY(zAccessListDecode)((*(&z8zE189)), z3zE3408);
-    KILL(zAccessListDecode)(&z3zE3408);
+  finish_match_3054: ;
+    COPY(zAccessListDecode)((*(&z8zE186)), z3zE2633);
+    KILL(zAccessListDecode)(&z3zE2633);
   }
-end_function_3460: ;
-  goto end_function_4071;
-end_block_exception_3461: ;
-  goto end_function_4071;
-end_function_4071: ;
+end_function_3056: ;
+  goto end_function_3652;
+end_block_exception_3057: ;
+  goto end_function_3652;
+end_function_3652: ;
 }
 
-void zdecode_access_list_entries(struct zAccessListDecode *z8zE190, struct zRlpCursor zcursor)
+void zdecode_access_list_entries(struct zAccessListDecode *z8zE187, struct zByteSliceFields zcursor)
 {
-  bool z2zE3455;
-  z2zE3455 = zrlp_cursor_empty(zcursor);
-  if (z2zE3455) {
-    struct zAccessListDecode z3zE3405;
-    CREATE(zAccessListDecode)(&z3zE3405);
-    z3zE3405.zaddress_count = UINT64_C(0);
-    zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z3zE3406;
-    CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z3zE3406);
-    COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE3405)->zaddresses), z3zE3406);
-    KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z3zE3406);
-    z3zE3405.zslot_count = UINT64_C(0);
-    zz5listz8z5structz0zzStorageKeyz9 z3zE3407;
-    CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z3zE3407);
-    COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE3405)->zstorage_slots), z3zE3407);
-    KILL(zz5listz8z5structz0zzStorageKeyz9)(&z3zE3407);
-    COPY(zAccessListDecode)((*(&z8zE190)), z3zE3405);
-    KILL(zAccessListDecode)(&z3zE3405);
+  bool z2zE2759;
+  {
+    uint64_t z2zE2758;
+    z2zE2758 = zcursor.zlen;
+    z2zE2759 = (z2zE2758 == UINT64_C(0));
+  }
+  if (z2zE2759) {
+    struct zAccessListDecode z3zE2630;
+    CREATE(zAccessListDecode)(&z3zE2630);
+    z3zE2630.zaddress_count = UINT64_C(0);
+    zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z3zE2631;
+    CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z3zE2631);
+    COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE2630)->zaddresses), z3zE2631);
+    KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z3zE2631);
+    z3zE2630.zslot_count = UINT64_C(0);
+    zz5listz8z5structz0zzStorageKeyz9 z3zE2632;
+    CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z3zE2632);
+    COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE2630)->zstorage_slots), z3zE2632);
+    KILL(zz5listz8z5structz0zzStorageKeyz9)(&z3zE2632);
+    COPY(zAccessListDecode)((*(&z8zE187)), z3zE2630);
+    KILL(zAccessListDecode)(&z3zE2630);
   } else {
-    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3456;
+    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2760;
     {
-      z2zE3456 = zrlp_cursor_pop(zcursor);
-      if (have_exception) {  goto end_block_exception_3457;  }
+      z2zE2760 = zrlp_cursor_pop(zcursor);
+      if (have_exception) {  goto end_block_exception_3053;  }
     }
-    struct zAccessListDecode z3zE3397;
-    CREATE(zAccessListDecode)(&z3zE3397);
+    struct zAccessListDecode z3zE2622;
+    CREATE(zAccessListDecode)(&z3zE2622);
     {
       struct zRlpFieldRef zentry;
-      zentry = z2zE3456.ztup0;
-      struct zRlpCursor znext;
-      znext = z2zE3456.ztup1;
-      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3458;
+      zentry = z2zE2760.ztup0;
+      struct zByteSliceFields znext;
+      znext = z2zE2760.ztup1;
+      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2762;
       {
-        struct zRlpCursor z2zE3457;
+        struct zByteSliceFields z2zE2761;
         {
-          z2zE3457 = zrlp_ref_cursor(zentry);
+          z2zE2761 = zrlp_ref_cursor(zentry);
           if (have_exception) {
-            KILL(zAccessListDecode)(&z3zE3397);
-            goto end_block_exception_3457;
+            KILL(zAccessListDecode)(&z3zE2622);
+            goto end_block_exception_3053;
           }
         }
         {
-          z2zE3458 = zrlp_cursor_pop(z2zE3457);
+          z2zE2762 = zrlp_cursor_pop(z2zE2761);
           if (have_exception) {
-            KILL(zAccessListDecode)(&z3zE3397);
-            goto end_block_exception_3457;
+            KILL(zAccessListDecode)(&z3zE2622);
+            goto end_block_exception_3053;
           }
         }
       }
-      struct zAccessListDecode z3zE3398;
-      CREATE(zAccessListDecode)(&z3zE3398);
+      struct zAccessListDecode z3zE2623;
+      CREATE(zAccessListDecode)(&z3zE2623);
       {
         struct zRlpFieldRef zaddr_f;
-        zaddr_f = z2zE3458.ztup0;
-        struct zRlpCursor zentry_fields;
-        zentry_fields = z2zE3458.ztup1;
-        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3459;
+        zaddr_f = z2zE2762.ztup0;
+        struct zByteSliceFields zentry_fields;
+        zentry_fields = z2zE2762.ztup1;
+        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2763;
         {
-          z2zE3459 = zrlp_cursor_pop(zentry_fields);
+          z2zE2763 = zrlp_cursor_pop(zentry_fields);
           if (have_exception) {
-            KILL(zAccessListDecode)(&z3zE3397);
-            KILL(zAccessListDecode)(&z3zE3398);
-            goto end_block_exception_3457;
+            KILL(zAccessListDecode)(&z3zE2622);
+            KILL(zAccessListDecode)(&z3zE2623);
+            goto end_block_exception_3053;
           }
         }
-        struct zAccessListDecode z3zE3399;
-        CREATE(zAccessListDecode)(&z3zE3399);
+        struct zAccessListDecode z3zE2624;
+        CREATE(zAccessListDecode)(&z3zE2624);
         {
           struct zRlpFieldRef zkeys_f;
-          zkeys_f = z2zE3459.ztup0;
-          struct zRlpCursor z1zE73;
-          z1zE73 = z2zE3459.ztup1;
-          unit z3zE3400;
+          zkeys_f = z2zE2763.ztup0;
+          struct zByteSliceFields z1zE89;
+          z1zE89 = z2zE2763.ztup1;
+          unit z3zE2625;
           {
-            z3zE3400 = zrlp_cursor_expect_end(z1zE73);
+            z3zE2625 = zrlp_cursor_expect_end(z1zE89);
             if (have_exception) {
-              KILL(zAccessListDecode)(&z3zE3397);
-              KILL(zAccessListDecode)(&z3zE3398);
-              KILL(zAccessListDecode)(&z3zE3399);
-              goto end_block_exception_3457;
+              KILL(zAccessListDecode)(&z3zE2622);
+              KILL(zAccessListDecode)(&z3zE2623);
+              KILL(zAccessListDecode)(&z3zE2624);
+              goto end_block_exception_3053;
             }
           }
           sail_fixed_bytes_20 zaddr;
           {
-            sail_u256 z2zE3467;
+            sail_u256 z2zE2771;
             {
-              z2zE3467 = zrlp_ref_word(zaddr_f);
+              z2zE2771 = zrlp_ref_word(zaddr_f);
               if (have_exception) {
-                KILL(zAccessListDecode)(&z3zE3397);
-                KILL(zAccessListDecode)(&z3zE3398);
-                KILL(zAccessListDecode)(&z3zE3399);
-                goto end_block_exception_3457;
+                KILL(zAccessListDecode)(&z3zE2622);
+                KILL(zAccessListDecode)(&z3zE2623);
+                KILL(zAccessListDecode)(&z3zE2624);
+                goto end_block_exception_3053;
               }
             }
-            zaddr = zword_to_address(z2zE3467);
+            zaddr = evmsail_word_to_address(z2zE2771);
           }
           struct zAccessListDecode ztail;
           CREATE(zAccessListDecode)(&ztail);
           {
             zdecode_access_list_entries(&ztail, znext);
             if (have_exception) {
-              KILL(zAccessListDecode)(&z3zE3397);
-              KILL(zAccessListDecode)(&z3zE3398);
-              KILL(zAccessListDecode)(&z3zE3399);
+              KILL(zAccessListDecode)(&z3zE2622);
+              KILL(zAccessListDecode)(&z3zE2623);
+              KILL(zAccessListDecode)(&z3zE2624);
               KILL(zAccessListDecode)(&ztail);
-              goto end_block_exception_3457;
+              goto end_block_exception_3053;
             }
           }
           struct zAccessListDecode zresult;
           CREATE(zAccessListDecode)(&zresult);
           {
-            struct zRlpCursor z2zE3466;
+            struct zByteSliceFields z2zE2770;
             {
-              z2zE3466 = zrlp_ref_cursor(zkeys_f);
+              z2zE2770 = zrlp_ref_cursor(zkeys_f);
               if (have_exception) {
-                KILL(zAccessListDecode)(&z3zE3397);
-                KILL(zAccessListDecode)(&z3zE3398);
-                KILL(zAccessListDecode)(&z3zE3399);
+                KILL(zAccessListDecode)(&z3zE2622);
+                KILL(zAccessListDecode)(&z3zE2623);
+                KILL(zAccessListDecode)(&z3zE2624);
                 KILL(zAccessListDecode)(&ztail);
                 KILL(zAccessListDecode)(&zresult);
-                goto end_block_exception_3457;
+                goto end_block_exception_3053;
               }
             }
             {
-              zdecode_access_list_keys(&zresult, z2zE3466, zaddr, ztail);
+              zdecode_access_list_keys(&zresult, z2zE2770, zaddr, ztail);
               if (have_exception) {
-                KILL(zAccessListDecode)(&z3zE3397);
-                KILL(zAccessListDecode)(&z3zE3398);
-                KILL(zAccessListDecode)(&z3zE3399);
+                KILL(zAccessListDecode)(&z3zE2622);
+                KILL(zAccessListDecode)(&z3zE2623);
+                KILL(zAccessListDecode)(&z3zE2624);
                 KILL(zAccessListDecode)(&ztail);
                 KILL(zAccessListDecode)(&zresult);
-                goto end_block_exception_3457;
+                goto end_block_exception_3053;
               }
             }
           }
-          zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z2zE3461;
-          CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3461);
+          zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z2zE2765;
+          CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2765);
           {
-            zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z2zE3460;
-            CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3460);
-            COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3460, zresult.zaddresses);
-            zconsz3z5structz0zz__sail_c_repr_fixed_bytesz820z9(&z2zE3461, zaddr, z2zE3460);
-            KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3460);
+            zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z2zE2764;
+            CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2764);
+            COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2764, zresult.zaddresses);
+            zconsz3z5structz0zz__sail_c_repr_fixed_bytesz820z9(&z2zE2765, zaddr, z2zE2764);
+            KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2764);
           }
-          zz5listz8z5structz0zzStorageKeyz9 z2zE3462;
-          CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3462);
-          COPY(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3462, zresult.zstorage_slots);
-          uint64_t z2zE3464;
+          zz5listz8z5structz0zzStorageKeyz9 z2zE2766;
+          CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2766);
+          COPY(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2766, zresult.zstorage_slots);
+          uint64_t z2zE2768;
           {
-            uint64_t z2zE3463;
-            z2zE3463 = zresult.zaddress_count;
-            z2zE3464 = zrlp_item_count_incrementzIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE3463);
+            uint64_t z2zE2767;
+            z2zE2767 = zresult.zaddress_count;
+            z2zE2768 = zrlp_item_count_incrementzIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE2767);
           }
-          uint64_t z2zE3465;
-          z2zE3465 = zresult.zslot_count;
-          struct zAccessListDecode z3zE3401;
-          CREATE(zAccessListDecode)(&z3zE3401);
-          z3zE3401.zaddress_count = z2zE3464;
-          COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE3401)->zaddresses), z2zE3461);
-          z3zE3401.zslot_count = z2zE3465;
-          COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE3401)->zstorage_slots), z2zE3462);
-          COPY(zAccessListDecode)(&z3zE3399, z3zE3401);
-          KILL(zAccessListDecode)(&z3zE3401);
-          KILL(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3462);
-          KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3461);
+          uint64_t z2zE2769;
+          z2zE2769 = zresult.zslot_count;
+          struct zAccessListDecode z3zE2626;
+          CREATE(zAccessListDecode)(&z3zE2626);
+          z3zE2626.zaddress_count = z2zE2768;
+          COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE2626)->zaddresses), z2zE2765);
+          z3zE2626.zslot_count = z2zE2769;
+          COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE2626)->zstorage_slots), z2zE2766);
+          COPY(zAccessListDecode)(&z3zE2624, z3zE2626);
+          KILL(zAccessListDecode)(&z3zE2626);
+          KILL(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2766);
+          KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2765);
           KILL(zAccessListDecode)(&zresult);
           KILL(zAccessListDecode)(&ztail);
-          goto finish_match_3454;
+          goto finish_match_3050;
         }
-      case_3455: ;
+      case_3051: ;
         sail_match_failure("decode_access_list_entries");
-      finish_match_3454: ;
-        COPY(zAccessListDecode)(&z3zE3398, z3zE3399);
-        KILL(zAccessListDecode)(&z3zE3399);
-        goto finish_match_3452;
+      finish_match_3050: ;
+        COPY(zAccessListDecode)(&z3zE2623, z3zE2624);
+        KILL(zAccessListDecode)(&z3zE2624);
+        goto finish_match_3048;
       }
-    case_3453: ;
+    case_3049: ;
       sail_match_failure("decode_access_list_entries");
-    finish_match_3452: ;
-      COPY(zAccessListDecode)(&z3zE3397, z3zE3398);
-      KILL(zAccessListDecode)(&z3zE3398);
-      goto finish_match_3450;
+    finish_match_3048: ;
+      COPY(zAccessListDecode)(&z3zE2622, z3zE2623);
+      KILL(zAccessListDecode)(&z3zE2623);
+      goto finish_match_3046;
     }
-  case_3451: ;
+  case_3047: ;
     sail_match_failure("decode_access_list_entries");
-  finish_match_3450: ;
-    COPY(zAccessListDecode)((*(&z8zE190)), z3zE3397);
-    KILL(zAccessListDecode)(&z3zE3397);
+  finish_match_3046: ;
+    COPY(zAccessListDecode)((*(&z8zE187)), z3zE2622);
+    KILL(zAccessListDecode)(&z3zE2622);
   }
-end_function_3456: ;
-  goto end_function_4070;
-end_block_exception_3457: ;
-  goto end_function_4070;
-end_function_4070: ;
+end_function_3052: ;
+  goto end_function_3651;
+end_block_exception_3053: ;
+  goto end_function_3651;
+end_function_3651: ;
 }
 
-void zdecode_access_list(struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 *z8zE191, struct zRlpFieldRef zf)
+void zdecode_access_list(struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 *z8zE188, struct zRlpFieldRef zf)
 {
-  bool z2zE3448;
+  bool z2zE2751;
   {
-    uint64_t z2zE3447;
+    uint64_t z2zE2750;
     {
-      struct zByteSliceFields z2zE3446;
-      z2zE3446 = zf.zsource;
-      z2zE3447 = z2zE3446.zlen;
+      struct zByteSliceFields z2zE2749;
+      z2zE2749 = zf.zsource;
+      z2zE2750 = z2zE2749.zlen;
     }
-    z2zE3448 = (!(UINT64_C(1073741824) < z2zE3447));
+    z2zE2751 = (!(UINT64_C(1073741824) < z2zE2750));
   }
-  if (z2zE3448) {
+  if (z2zE2751) {
     struct zAccessListDecode zdecoded;
     CREATE(zAccessListDecode)(&zdecoded);
     {
-      struct zRlpCursor z2zE3453;
+      struct zByteSliceFields z2zE2756;
       {
-        z2zE3453 = zrlp_ref_cursor(zf);
+        z2zE2756 = zrlp_ref_cursor(zf);
         if (have_exception) {
           KILL(zAccessListDecode)(&zdecoded);
-          goto end_block_exception_3449;
+          goto end_block_exception_3045;
         }
       }
       {
-        zdecode_access_list_entries(&zdecoded, z2zE3453);
+        zdecode_access_list_entries(&zdecoded, z2zE2756);
         if (have_exception) {
           KILL(zAccessListDecode)(&zdecoded);
-          goto end_block_exception_3449;
+          goto end_block_exception_3045;
         }
       }
     }
-    zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z2zE3449;
-    CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3449);
-    COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3449, zdecoded.zaddresses);
-    zz5listz8z5structz0zzStorageKeyz9 z2zE3450;
-    CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3450);
-    COPY(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3450, zdecoded.zstorage_slots);
-    uint64_t z2zE3451;
-    z2zE3451 = zdecoded.zaddress_count;
-    uint64_t z2zE3452;
-    z2zE3452 = zdecoded.zslot_count;
-    struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 z3zE3396;
-    CREATE(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z3zE3396);
-    COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE3396)->ztup0), z2zE3449);
-    COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE3396)->ztup1), z2zE3450);
-    z3zE3396.ztup2 = z2zE3451;
-    z3zE3396.ztup3 = z2zE3452;
-    COPY(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)((*(&z8zE191)), z3zE3396);
-    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z3zE3396);
-    KILL(zz5listz8z5structz0zzStorageKeyz9)(&z2zE3450);
-    KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE3449);
+    zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z2zE2752;
+    CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2752);
+    COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2752, zdecoded.zaddresses);
+    zz5listz8z5structz0zzStorageKeyz9 z2zE2753;
+    CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2753);
+    COPY(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2753, zdecoded.zstorage_slots);
+    uint64_t z2zE2754;
+    z2zE2754 = zdecoded.zaddress_count;
+    uint64_t z2zE2755;
+    z2zE2755 = zdecoded.zslot_count;
+    struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 z3zE2621;
+    CREATE(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z3zE2621);
+    COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE2621)->ztup0), z2zE2752);
+    COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE2621)->ztup1), z2zE2753);
+    z3zE2621.ztup2 = z2zE2754;
+    z3zE2621.ztup3 = z2zE2755;
+    COPY(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)((*(&z8zE188)), z3zE2621);
+    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z3zE2621);
+    KILL(zz5listz8z5structz0zzStorageKeyz9)(&z2zE2753);
+    KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z2zE2752);
     KILL(zAccessListDecode)(&zdecoded);
   } else {
-    struct zexception z2zE3454;
-    CREATE(zexception)(&z2zE3454);
-    zInvalidBlock(&z2zE3454, zRlpDecode);
-    COPY(zexception)(current_exception, z2zE3454);
+    struct zexception z2zE2757;
+    CREATE(zexception)(&z2zE2757);
+    zInvalidBlock(&z2zE2757, zRlpDecode);
+    COPY(zexception)(current_exception, z2zE2757);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:116.8-116.37");
-    KILL(zexception)(&z2zE3454);
-    goto end_block_exception_3449;
+    COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:111.8-111.37");
+    KILL(zexception)(&z2zE2757);
+    goto end_block_exception_3045;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE3454);
+    KILL(zexception)(&z2zE2757);
   }
-end_function_3448: ;
-  goto end_function_4069;
-end_block_exception_3449: ;
-  goto end_function_4069;
-end_function_4069: ;
+end_function_3044: ;
+  goto end_function_3650;
+end_block_exception_3045: ;
+  goto end_function_3650;
+end_function_3650: ;
 }
 
-void create_letbind_93(void) {
+void create_letbind_115(void) {
 
-  uint64_t z3zE121;
-  z3zE121 = UINT64_C(33);
-  zBLOB_HASH_RLP_LENGTH = z3zE121;
-let_end_299: ;
+  uint64_t z3zE129;
+  z3zE129 = UINT64_C(33);
+  zBLOB_HASH_RLP_LENGTH = z3zE129;
+let_end_317: ;
 }
-void kill_letbind_93(void) {
-}
-
-void create_letbind_94(void) {
-
-  uint64_t z3zE122;
-  z3zE122 = zWORD_BYTE_LENGTH;
-  zBLOB_HASH_LENGTH = z3zE122;
-let_end_300: ;
-}
-void kill_letbind_94(void) {
+void kill_letbind_115(void) {
 }
 
-uint64_t zdecode_blob_hash_items(struct zRlpCursor zcursor, uint64_t zcount)
+void create_letbind_116(void) {
+
+  uint64_t z3zE130;
+  z3zE130 = zWORD_BYTE_LENGTH;
+  zBLOB_HASH_LENGTH = z3zE130;
+let_end_318: ;
+}
+void kill_letbind_116(void) {
+}
+
+uint64_t zdecode_blob_hash_items(struct zByteSliceFields zcursor, uint64_t zcount)
 {
-  uint64_t z8zE192;
-  bool z2zE3431;
-  z2zE3431 = zrlp_cursor_empty(zcursor);
-  if (z2zE3431) {  z8zE192 = zcount;  } else {
-    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3432;
+  uint64_t z8zE189;
+  bool z2zE2734;
+  {
+    uint64_t z2zE2733;
+    z2zE2733 = zcursor.zlen;
+    z2zE2734 = (z2zE2733 == UINT64_C(0));
+  }
+  if (z2zE2734) {  z8zE189 = zcount;  } else {
+    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2735;
     {
-      z2zE3432 = zrlp_cursor_pop(zcursor);
-      if (have_exception) {  goto end_block_exception_3447;  }
+      z2zE2735 = zrlp_cursor_pop(zcursor);
+      if (have_exception) {  goto end_block_exception_3043;  }
     }
-    uint64_t z3zE3390;
+    uint64_t z3zE2615;
     {
       struct zRlpFieldRef zitem;
-      zitem = z2zE3432.ztup0;
-      struct zRlpCursor znext;
-      znext = z2zE3432.ztup1;
-      bool z2zE3441;
+      zitem = z2zE2735.ztup0;
+      struct zByteSliceFields znext;
+      znext = z2zE2735.ztup1;
+      bool z2zE2744;
       {
-        bool z2zE3440;
-        z2zE3440 = zitem.zis_list;
-        bool z3zE3393;
-        if (z2zE3440) {  z3zE3393 = true;  } else {
-          bool z2zE3439;
+        bool z2zE2743;
+        z2zE2743 = zitem.zis_list;
+        bool z3zE2618;
+        if (z2zE2743) {  z3zE2618 = true;  } else {
+          bool z2zE2742;
           {
-            uint64_t z2zE3434;
+            uint64_t z2zE2737;
             {
-              struct zByteSliceFields z2zE3433;
-              z2zE3433 = zitem.zsource;
-              z2zE3434 = z2zE3433.zlen;
+              struct zByteSliceFields z2zE2736;
+              z2zE2736 = zitem.zsource;
+              z2zE2737 = z2zE2736.zlen;
             }
-            z2zE3439 = (z2zE3434 != zBLOB_HASH_RLP_LENGTH);
+            z2zE2742 = (z2zE2737 != zBLOB_HASH_RLP_LENGTH);
           }
-          bool z3zE3392;
-          if (z2zE3439) {  z3zE3392 = true;  } else {
-            bool z2zE3438;
+          bool z3zE2617;
+          if (z2zE2742) {  z3zE2617 = true;  } else {
+            bool z2zE2741;
             {
-              uint64_t z2zE3435;
-              z2zE3435 = zitem.zcontent_len;
-              z2zE3438 = (z2zE3435 != zBLOB_HASH_LENGTH);
+              uint64_t z2zE2738;
+              z2zE2738 = zitem.zcontent_len;
+              z2zE2741 = (z2zE2738 != zBLOB_HASH_LENGTH);
             }
-            bool z3zE3391;
-            if (z2zE3438) {  z3zE3391 = true;  } else {
-              uint64_t z2zE3437;
+            bool z3zE2616;
+            if (z2zE2741) {  z3zE2616 = true;  } else {
+              uint64_t z2zE2740;
               {
-                struct zByteSliceFields z2zE3436;
-                z2zE3436 = zitem.zsource;
-                z2zE3437 = zslice_byte(z2zE3436, UINT64_C(0));
+                struct zByteSliceFields z2zE2739;
+                z2zE2739 = zitem.zsource;
+                z2zE2740 = zslice_byte(z2zE2739, UINT64_C(0));
               }
-              z3zE3391 = (z2zE3437 != UINT64_C(0xA0));
+              z3zE2616 = (z2zE2740 != UINT64_C(0xA0));
             }
-            z3zE3392 = z3zE3391;
+            z3zE2617 = z3zE2616;
           }
-          z3zE3393 = z3zE3392;
+          z3zE2618 = z3zE2617;
         }
-        z2zE3441 = z3zE3393;
+        z2zE2744 = z3zE2618;
       }
-      unit z3zE3394;
-      if (z2zE3441) {
-        struct zexception z2zE3442;
-        CREATE(zexception)(&z2zE3442);
-        zInvalidBlock(&z2zE3442, zRlpDecode);
-        COPY(zexception)(current_exception, z2zE3442);
+      unit z3zE2619;
+      if (z2zE2744) {
+        struct zexception z2zE2745;
+        CREATE(zexception)(&z2zE2745);
+        zInvalidBlock(&z2zE2745, zRlpDecode);
+        COPY(zexception)(current_exception, z2zE2745);
         have_exception = true;
-        COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:150.12-150.41");
-        KILL(zexception)(&z2zE3442);
-        goto end_block_exception_3447;
+        COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:146.12-146.41");
+        KILL(zexception)(&z2zE2745);
+        goto end_block_exception_3043;
         /* unreachable after throw */
-        KILL(zexception)(&z2zE3442);
-      } else {  z3zE3394 = UNIT;  }
-      bool z2zE3443;
-      z2zE3443 = (zcount < UINT64_C(9));
-      if (z2zE3443) {
-        uint64_t z2zE3444;
-        {    z2zE3444 = (zcount + UINT64_C(1));
+        KILL(zexception)(&z2zE2745);
+      } else {  z3zE2619 = UNIT;  }
+      bool z2zE2746;
+      z2zE2746 = (zcount < UINT64_C(9));
+      if (z2zE2746) {
+        uint64_t z2zE2747;
+        {    z2zE2747 = (zcount + UINT64_C(1));
         }
         {
-          z3zE3390 = zdecode_blob_hash_items(znext, z2zE3444);
-          if (have_exception) {  goto end_block_exception_3447;  }
+          z3zE2615 = zdecode_blob_hash_items(znext, z2zE2747);
+          if (have_exception) {  goto end_block_exception_3043;  }
         }
       } else {
-        struct zexception z2zE3445;
-        CREATE(zexception)(&z2zE3445);
-        zInvalidBlock(&z2zE3445, zRlpDecode);
-        COPY(zexception)(current_exception, z2zE3445);
+        struct zexception z2zE2748;
+        CREATE(zexception)(&z2zE2748);
+        zInvalidBlock(&z2zE2748, zRlpDecode);
+        COPY(zexception)(current_exception, z2zE2748);
         have_exception = true;
-        COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:155.12-155.41");
-        KILL(zexception)(&z2zE3445);
-        goto end_block_exception_3447;
+        COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:151.12-151.41");
+        KILL(zexception)(&z2zE2748);
+        goto end_block_exception_3043;
         /* unreachable after throw */
-        KILL(zexception)(&z2zE3445);
+        KILL(zexception)(&z2zE2748);
       }
-      goto finish_match_3444;
+      goto finish_match_3040;
     }
-  case_3445: ;
+  case_3041: ;
     sail_match_failure("decode_blob_hash_items");
-  finish_match_3444: ;
-    z8zE192 = z3zE3390;
+  finish_match_3040: ;
+    z8zE189 = z3zE2615;
   }
-end_function_3446: ;
-  return z8zE192;
-end_block_exception_3447: ;
+end_function_3042: ;
+  return z8zE189;
+end_block_exception_3043: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 struct zBlobHashes zdecode_blob_hashes(struct zRlpFieldRef zf)
 {
-  struct zBlobHashes z8zE193;
+  struct zBlobHashes z8zE190;
   struct zByteSliceFields zbytes;
   zbytes = zrlp_ref_content(zf);
-  uint64_t z2zE3430;
+  uint64_t z2zE2732;
   {
-    struct zRlpCursor z2zE3429;
+    struct zByteSliceFields z2zE2731;
     {
-      z2zE3429 = zrlp_ref_cursor(zf);
-      if (have_exception) {  goto end_block_exception_3443;  }
+      z2zE2731 = zrlp_ref_cursor(zf);
+      if (have_exception) {  goto end_block_exception_3039;  }
     }
     {
-      z2zE3430 = zdecode_blob_hash_items(z2zE3429, UINT64_C(0));
-      if (have_exception) {  goto end_block_exception_3443;  }
+      z2zE2732 = zdecode_blob_hash_items(z2zE2731, UINT64_C(0));
+      if (have_exception) {  goto end_block_exception_3039;  }
     }
   }
-  struct zBlobHashes z3zE3389;
-  z3zE3389.zbytes = zbytes;
-  z3zE3389.zcount = z2zE3430;
-  z8zE193 = z3zE3389;
-end_function_3442: ;
-  return z8zE193;
-end_block_exception_3443: ;
-  struct zByteSliceFields z8zE850 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  struct zBlobHashes z8zE849 = { .zbytes = z8zE850, .zcount = UINT64_C(0xdeadc0de) };
-  return z8zE849;
+  struct zBlobHashes z3zE2614;
+  z3zE2614.zbytes = zbytes;
+  z3zE2614.zcount = z2zE2732;
+  z8zE190 = z3zE2614;
+end_function_3038: ;
+  return z8zE190;
+end_block_exception_3039: ;
+  struct zByteSliceFields z8zE797 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  struct zBlobHashes z8zE796 = { .zbytes = z8zE797, .zcount = UINT64_C(0xdeadc0de) };
+  return z8zE796;
 }
 
-void create_letbind_95(void) {    CREATE(zAuthorizzationDecode)(&zEMPTY_AUTHORIZATION_DECODE);
+void create_letbind_117(void) {    CREATE(zAuthorizzationDecode)(&zEMPTY_AUTHORIZATION_DECODE);
 
-  struct zAuthorizzationDecode z3zE125;
-  CREATE(zAuthorizzationDecode)(&z3zE125);
-  struct zAuthorizzationDecode z3zE123;
-  CREATE(zAuthorizzationDecode)(&z3zE123);
-  zz5listz8z5structz0zzAuthorizzzzationz9 z3zE124;
-  CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE124);
-  COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE123)->zauthorizzations), z3zE124);
-  KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE124);
-  z3zE123.zcount = UINT64_C(0);
-  COPY(zAuthorizzationDecode)(&z3zE125, z3zE123);
-  KILL(zAuthorizzationDecode)(&z3zE123);
-  COPY(zAuthorizzationDecode)(&zEMPTY_AUTHORIZATION_DECODE, z3zE125);
-  KILL(zAuthorizzationDecode)(&z3zE125);
-let_end_303: ;
+  struct zAuthorizzationDecode z3zE133;
+  CREATE(zAuthorizzationDecode)(&z3zE133);
+  struct zAuthorizzationDecode z3zE131;
+  CREATE(zAuthorizzationDecode)(&z3zE131);
+  zz5listz8z5structz0zzAuthorizzzzationz9 z3zE132;
+  CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE132);
+  COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE131)->zauthorizzations), z3zE132);
+  KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE132);
+  z3zE131.zcount = UINT64_C(0);
+  COPY(zAuthorizzationDecode)(&z3zE133, z3zE131);
+  KILL(zAuthorizzationDecode)(&z3zE131);
+  COPY(zAuthorizzationDecode)(&zEMPTY_AUTHORIZATION_DECODE, z3zE133);
+  KILL(zAuthorizzationDecode)(&z3zE133);
+let_end_321: ;
 }
-void kill_letbind_95(void) {    KILL(zAuthorizzationDecode)(&zEMPTY_AUTHORIZATION_DECODE);
+void kill_letbind_117(void) {    KILL(zAuthorizzationDecode)(&zEMPTY_AUTHORIZATION_DECODE);
 }
 
-void zdecode_auth_tuples(struct zAuthorizzationDecode *z8zE194, struct zRlpCursor zcursor)
+void zdecode_auth_tuples(struct zAuthorizzationDecode *z8zE191, struct zByteSliceFields zcursor)
 {
-  bool z2zE3407;
-  z2zE3407 = zrlp_cursor_empty(zcursor);
-  if (z2zE3407) {
-    struct zAuthorizzationDecode z3zE3387;
-    CREATE(zAuthorizzationDecode)(&z3zE3387);
-    zz5listz8z5structz0zzAuthorizzzzationz9 z3zE3388;
-    CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE3388);
-    COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE3387)->zauthorizzations), z3zE3388);
-    KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE3388);
-    z3zE3387.zcount = UINT64_C(0);
-    COPY(zAuthorizzationDecode)((*(&z8zE194)), z3zE3387);
-    KILL(zAuthorizzationDecode)(&z3zE3387);
+  bool z2zE2709;
+  {
+    uint64_t z2zE2708;
+    z2zE2708 = zcursor.zlen;
+    z2zE2709 = (z2zE2708 == UINT64_C(0));
+  }
+  if (z2zE2709) {
+    struct zAuthorizzationDecode z3zE2612;
+    CREATE(zAuthorizzationDecode)(&z3zE2612);
+    zz5listz8z5structz0zzAuthorizzzzationz9 z3zE2613;
+    CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE2613);
+    COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE2612)->zauthorizzations), z3zE2613);
+    KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE2613);
+    z3zE2612.zcount = UINT64_C(0);
+    COPY(zAuthorizzationDecode)((*(&z8zE191)), z3zE2612);
+    KILL(zAuthorizzationDecode)(&z3zE2612);
   } else {
-    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3408;
+    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2710;
     {
-      z2zE3408 = zrlp_cursor_pop(zcursor);
-      if (have_exception) {  goto end_block_exception_3441;  }
+      z2zE2710 = zrlp_cursor_pop(zcursor);
+      if (have_exception) {  goto end_block_exception_3037;  }
     }
-    struct zAuthorizzationDecode z3zE3361;
-    CREATE(zAuthorizzationDecode)(&z3zE3361);
+    struct zAuthorizzationDecode z3zE2586;
+    CREATE(zAuthorizzationDecode)(&z3zE2586);
     {
       struct zRlpFieldRef ztuple;
-      ztuple = z2zE3408.ztup0;
-      struct zRlpCursor znext;
-      znext = z2zE3408.ztup1;
-      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3410;
+      ztuple = z2zE2710.ztup0;
+      struct zByteSliceFields znext;
+      znext = z2zE2710.ztup1;
+      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2712;
       {
-        struct zRlpCursor z2zE3409;
+        struct zByteSliceFields z2zE2711;
         {
-          z2zE3409 = zrlp_ref_cursor(ztuple);
+          z2zE2711 = zrlp_ref_cursor(ztuple);
           if (have_exception) {
-            KILL(zAuthorizzationDecode)(&z3zE3361);
-            goto end_block_exception_3441;
+            KILL(zAuthorizzationDecode)(&z3zE2586);
+            goto end_block_exception_3037;
           }
         }
         {
-          z2zE3410 = zrlp_cursor_pop(z2zE3409);
+          z2zE2712 = zrlp_cursor_pop(z2zE2711);
           if (have_exception) {
-            KILL(zAuthorizzationDecode)(&z3zE3361);
-            goto end_block_exception_3441;
+            KILL(zAuthorizzationDecode)(&z3zE2586);
+            goto end_block_exception_3037;
           }
         }
       }
-      struct zAuthorizzationDecode z3zE3362;
-      CREATE(zAuthorizzationDecode)(&z3zE3362);
+      struct zAuthorizzationDecode z3zE2587;
+      CREATE(zAuthorizzationDecode)(&z3zE2587);
       {
         struct zRlpFieldRef zchain_f;
-        zchain_f = z2zE3410.ztup0;
-        struct zRlpCursor zfields;
-        zfields = z2zE3410.ztup1;
-        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3411;
+        zchain_f = z2zE2712.ztup0;
+        struct zByteSliceFields zfields;
+        zfields = z2zE2712.ztup1;
+        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2713;
         {
-          z2zE3411 = zrlp_cursor_pop(zfields);
+          z2zE2713 = zrlp_cursor_pop(zfields);
           if (have_exception) {
-            KILL(zAuthorizzationDecode)(&z3zE3361);
-            KILL(zAuthorizzationDecode)(&z3zE3362);
-            goto end_block_exception_3441;
+            KILL(zAuthorizzationDecode)(&z3zE2586);
+            KILL(zAuthorizzationDecode)(&z3zE2587);
+            goto end_block_exception_3037;
           }
         }
-        struct zAuthorizzationDecode z3zE3363;
-        CREATE(zAuthorizzationDecode)(&z3zE3363);
+        struct zAuthorizzationDecode z3zE2588;
+        CREATE(zAuthorizzationDecode)(&z3zE2588);
         {
           struct zRlpFieldRef zaddr_f;
-          zaddr_f = z2zE3411.ztup0;
-          struct zRlpCursor z1zE68;
-          z1zE68 = z2zE3411.ztup1;
-          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3412;
+          zaddr_f = z2zE2713.ztup0;
+          struct zByteSliceFields z1zE84;
+          z1zE84 = z2zE2713.ztup1;
+          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2714;
           {
-            z2zE3412 = zrlp_cursor_pop(z1zE68);
+            z2zE2714 = zrlp_cursor_pop(z1zE84);
             if (have_exception) {
-              KILL(zAuthorizzationDecode)(&z3zE3361);
-              KILL(zAuthorizzationDecode)(&z3zE3362);
-              KILL(zAuthorizzationDecode)(&z3zE3363);
-              goto end_block_exception_3441;
+              KILL(zAuthorizzationDecode)(&z3zE2586);
+              KILL(zAuthorizzationDecode)(&z3zE2587);
+              KILL(zAuthorizzationDecode)(&z3zE2588);
+              goto end_block_exception_3037;
             }
           }
-          struct zAuthorizzationDecode z3zE3364;
-          CREATE(zAuthorizzationDecode)(&z3zE3364);
+          struct zAuthorizzationDecode z3zE2589;
+          CREATE(zAuthorizzationDecode)(&z3zE2589);
           {
             struct zRlpFieldRef znonce_f;
-            znonce_f = z2zE3412.ztup0;
-            struct zRlpCursor z1zE69;
-            z1zE69 = z2zE3412.ztup1;
-            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3413;
+            znonce_f = z2zE2714.ztup0;
+            struct zByteSliceFields z1zE85;
+            z1zE85 = z2zE2714.ztup1;
+            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2715;
             {
-              z2zE3413 = zrlp_cursor_pop(z1zE69);
+              z2zE2715 = zrlp_cursor_pop(z1zE85);
               if (have_exception) {
-                KILL(zAuthorizzationDecode)(&z3zE3361);
-                KILL(zAuthorizzationDecode)(&z3zE3362);
-                KILL(zAuthorizzationDecode)(&z3zE3363);
-                KILL(zAuthorizzationDecode)(&z3zE3364);
-                goto end_block_exception_3441;
+                KILL(zAuthorizzationDecode)(&z3zE2586);
+                KILL(zAuthorizzationDecode)(&z3zE2587);
+                KILL(zAuthorizzationDecode)(&z3zE2588);
+                KILL(zAuthorizzationDecode)(&z3zE2589);
+                goto end_block_exception_3037;
               }
             }
-            struct zAuthorizzationDecode z3zE3365;
-            CREATE(zAuthorizzationDecode)(&z3zE3365);
+            struct zAuthorizzationDecode z3zE2590;
+            CREATE(zAuthorizzationDecode)(&z3zE2590);
             {
               struct zRlpFieldRef zy_f;
-              zy_f = z2zE3413.ztup0;
-              struct zRlpCursor z1zE70;
-              z1zE70 = z2zE3413.ztup1;
-              struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3414;
+              zy_f = z2zE2715.ztup0;
+              struct zByteSliceFields z1zE86;
+              z1zE86 = z2zE2715.ztup1;
+              struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2716;
               {
-                z2zE3414 = zrlp_cursor_pop(z1zE70);
+                z2zE2716 = zrlp_cursor_pop(z1zE86);
                 if (have_exception) {
-                  KILL(zAuthorizzationDecode)(&z3zE3361);
-                  KILL(zAuthorizzationDecode)(&z3zE3362);
-                  KILL(zAuthorizzationDecode)(&z3zE3363);
-                  KILL(zAuthorizzationDecode)(&z3zE3364);
-                  KILL(zAuthorizzationDecode)(&z3zE3365);
-                  goto end_block_exception_3441;
+                  KILL(zAuthorizzationDecode)(&z3zE2586);
+                  KILL(zAuthorizzationDecode)(&z3zE2587);
+                  KILL(zAuthorizzationDecode)(&z3zE2588);
+                  KILL(zAuthorizzationDecode)(&z3zE2589);
+                  KILL(zAuthorizzationDecode)(&z3zE2590);
+                  goto end_block_exception_3037;
                 }
               }
-              struct zAuthorizzationDecode z3zE3366;
-              CREATE(zAuthorizzationDecode)(&z3zE3366);
+              struct zAuthorizzationDecode z3zE2591;
+              CREATE(zAuthorizzationDecode)(&z3zE2591);
               {
                 struct zRlpFieldRef zr_f;
-                zr_f = z2zE3414.ztup0;
-                struct zRlpCursor z1zE71;
-                z1zE71 = z2zE3414.ztup1;
-                struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3415;
+                zr_f = z2zE2716.ztup0;
+                struct zByteSliceFields z1zE87;
+                z1zE87 = z2zE2716.ztup1;
+                struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2717;
                 {
-                  z2zE3415 = zrlp_cursor_pop(z1zE71);
+                  z2zE2717 = zrlp_cursor_pop(z1zE87);
                   if (have_exception) {
-                    KILL(zAuthorizzationDecode)(&z3zE3361);
-                    KILL(zAuthorizzationDecode)(&z3zE3362);
-                    KILL(zAuthorizzationDecode)(&z3zE3363);
-                    KILL(zAuthorizzationDecode)(&z3zE3364);
-                    KILL(zAuthorizzationDecode)(&z3zE3365);
-                    KILL(zAuthorizzationDecode)(&z3zE3366);
-                    goto end_block_exception_3441;
+                    KILL(zAuthorizzationDecode)(&z3zE2586);
+                    KILL(zAuthorizzationDecode)(&z3zE2587);
+                    KILL(zAuthorizzationDecode)(&z3zE2588);
+                    KILL(zAuthorizzationDecode)(&z3zE2589);
+                    KILL(zAuthorizzationDecode)(&z3zE2590);
+                    KILL(zAuthorizzationDecode)(&z3zE2591);
+                    goto end_block_exception_3037;
                   }
                 }
-                struct zAuthorizzationDecode z3zE3367;
-                CREATE(zAuthorizzationDecode)(&z3zE3367);
+                struct zAuthorizzationDecode z3zE2592;
+                CREATE(zAuthorizzationDecode)(&z3zE2592);
                 {
                   struct zRlpFieldRef zs_f;
-                  zs_f = z2zE3415.ztup0;
-                  struct zRlpCursor z1zE72;
-                  z1zE72 = z2zE3415.ztup1;
-                  unit z3zE3368;
+                  zs_f = z2zE2717.ztup0;
+                  struct zByteSliceFields z1zE88;
+                  z1zE88 = z2zE2717.ztup1;
+                  unit z3zE2593;
                   {
-                    z3zE3368 = zrlp_cursor_expect_end(z1zE72);
+                    z3zE2593 = zrlp_cursor_expect_end(z1zE88);
                     if (have_exception) {
-                      KILL(zAuthorizzationDecode)(&z3zE3361);
-                      KILL(zAuthorizzationDecode)(&z3zE3362);
-                      KILL(zAuthorizzationDecode)(&z3zE3363);
-                      KILL(zAuthorizzationDecode)(&z3zE3364);
-                      KILL(zAuthorizzationDecode)(&z3zE3365);
-                      KILL(zAuthorizzationDecode)(&z3zE3366);
-                      KILL(zAuthorizzationDecode)(&z3zE3367);
-                      goto end_block_exception_3441;
+                      KILL(zAuthorizzationDecode)(&z3zE2586);
+                      KILL(zAuthorizzationDecode)(&z3zE2587);
+                      KILL(zAuthorizzationDecode)(&z3zE2588);
+                      KILL(zAuthorizzationDecode)(&z3zE2589);
+                      KILL(zAuthorizzationDecode)(&z3zE2590);
+                      KILL(zAuthorizzationDecode)(&z3zE2591);
+                      KILL(zAuthorizzationDecode)(&z3zE2592);
+                      goto end_block_exception_3037;
                     }
                   }
                   sail_u256 zchain_id;
                   {
                     zchain_id = zrlp_ref_uint_word(zchain_f);
                     if (have_exception) {
-                      KILL(zAuthorizzationDecode)(&z3zE3361);
-                      KILL(zAuthorizzationDecode)(&z3zE3362);
-                      KILL(zAuthorizzationDecode)(&z3zE3363);
-                      KILL(zAuthorizzationDecode)(&z3zE3364);
-                      KILL(zAuthorizzationDecode)(&z3zE3365);
-                      KILL(zAuthorizzationDecode)(&z3zE3366);
-                      KILL(zAuthorizzationDecode)(&z3zE3367);
-                      goto end_block_exception_3441;
+                      KILL(zAuthorizzationDecode)(&z3zE2586);
+                      KILL(zAuthorizzationDecode)(&z3zE2587);
+                      KILL(zAuthorizzationDecode)(&z3zE2588);
+                      KILL(zAuthorizzationDecode)(&z3zE2589);
+                      KILL(zAuthorizzationDecode)(&z3zE2590);
+                      KILL(zAuthorizzationDecode)(&z3zE2591);
+                      KILL(zAuthorizzationDecode)(&z3zE2592);
+                      goto end_block_exception_3037;
                     }
                   }
                   uint64_t zauth_nonce;
                   {
                     zauth_nonce = zrlp_ref_uint64(znonce_f);
                     if (have_exception) {
-                      KILL(zAuthorizzationDecode)(&z3zE3361);
-                      KILL(zAuthorizzationDecode)(&z3zE3362);
-                      KILL(zAuthorizzationDecode)(&z3zE3363);
-                      KILL(zAuthorizzationDecode)(&z3zE3364);
-                      KILL(zAuthorizzationDecode)(&z3zE3365);
-                      KILL(zAuthorizzationDecode)(&z3zE3366);
-                      KILL(zAuthorizzationDecode)(&z3zE3367);
-                      goto end_block_exception_3441;
+                      KILL(zAuthorizzationDecode)(&z3zE2586);
+                      KILL(zAuthorizzationDecode)(&z3zE2587);
+                      KILL(zAuthorizzationDecode)(&z3zE2588);
+                      KILL(zAuthorizzationDecode)(&z3zE2589);
+                      KILL(zAuthorizzationDecode)(&z3zE2590);
+                      KILL(zAuthorizzationDecode)(&z3zE2591);
+                      KILL(zAuthorizzationDecode)(&z3zE2592);
+                      goto end_block_exception_3037;
                     }
                   }
                   uint64_t zy_value;
                   {
                     zy_value = zrlp_ref_uint64(zy_f);
                     if (have_exception) {
-                      KILL(zAuthorizzationDecode)(&z3zE3361);
-                      KILL(zAuthorizzationDecode)(&z3zE3362);
-                      KILL(zAuthorizzationDecode)(&z3zE3363);
-                      KILL(zAuthorizzationDecode)(&z3zE3364);
-                      KILL(zAuthorizzationDecode)(&z3zE3365);
-                      KILL(zAuthorizzationDecode)(&z3zE3366);
-                      KILL(zAuthorizzationDecode)(&z3zE3367);
-                      goto end_block_exception_3441;
+                      KILL(zAuthorizzationDecode)(&z3zE2586);
+                      KILL(zAuthorizzationDecode)(&z3zE2587);
+                      KILL(zAuthorizzationDecode)(&z3zE2588);
+                      KILL(zAuthorizzationDecode)(&z3zE2589);
+                      KILL(zAuthorizzationDecode)(&z3zE2590);
+                      KILL(zAuthorizzationDecode)(&z3zE2591);
+                      KILL(zAuthorizzationDecode)(&z3zE2592);
+                      goto end_block_exception_3037;
                     }
                   }
                   bool zy_valid;
                   zy_valid = (!(UINT64_C(1) < zy_value));
                   uint64_t zy;
                   {
-                    bool z2zE3428;
-                    z2zE3428 = (zy_value == UINT64_C(0));
-                    if (z2zE3428) {  zy = UINT64_C(0);  } else {  zy = UINT64_C(1);  }
+                    bool z2zE2730;
+                    z2zE2730 = (zy_value == UINT64_C(0));
+                    if (z2zE2730) {  zy = UINT64_C(0);  } else {  zy = UINT64_C(1);  }
                   }
                   sail_u256 zr;
                   {
                     zr = zrlp_ref_uint_word(zr_f);
                     if (have_exception) {
-                      KILL(zAuthorizzationDecode)(&z3zE3361);
-                      KILL(zAuthorizzationDecode)(&z3zE3362);
-                      KILL(zAuthorizzationDecode)(&z3zE3363);
-                      KILL(zAuthorizzationDecode)(&z3zE3364);
-                      KILL(zAuthorizzationDecode)(&z3zE3365);
-                      KILL(zAuthorizzationDecode)(&z3zE3366);
-                      KILL(zAuthorizzationDecode)(&z3zE3367);
-                      goto end_block_exception_3441;
+                      KILL(zAuthorizzationDecode)(&z3zE2586);
+                      KILL(zAuthorizzationDecode)(&z3zE2587);
+                      KILL(zAuthorizzationDecode)(&z3zE2588);
+                      KILL(zAuthorizzationDecode)(&z3zE2589);
+                      KILL(zAuthorizzationDecode)(&z3zE2590);
+                      KILL(zAuthorizzationDecode)(&z3zE2591);
+                      KILL(zAuthorizzationDecode)(&z3zE2592);
+                      goto end_block_exception_3037;
                     }
                   }
                   sail_u256 zs;
                   {
                     zs = zrlp_ref_uint_word(zs_f);
                     if (have_exception) {
-                      KILL(zAuthorizzationDecode)(&z3zE3361);
-                      KILL(zAuthorizzationDecode)(&z3zE3362);
-                      KILL(zAuthorizzationDecode)(&z3zE3363);
-                      KILL(zAuthorizzationDecode)(&z3zE3364);
-                      KILL(zAuthorizzationDecode)(&z3zE3365);
-                      KILL(zAuthorizzationDecode)(&z3zE3366);
-                      KILL(zAuthorizzationDecode)(&z3zE3367);
-                      goto end_block_exception_3441;
+                      KILL(zAuthorizzationDecode)(&z3zE2586);
+                      KILL(zAuthorizzationDecode)(&z3zE2587);
+                      KILL(zAuthorizzationDecode)(&z3zE2588);
+                      KILL(zAuthorizzationDecode)(&z3zE2589);
+                      KILL(zAuthorizzationDecode)(&z3zE2590);
+                      KILL(zAuthorizzationDecode)(&z3zE2591);
+                      KILL(zAuthorizzationDecode)(&z3zE2592);
+                      goto end_block_exception_3037;
                     }
                   }
                   sail_fixed_bytes_20 zauth_addr;
                   {
-                    sail_u256 z2zE3427;
+                    sail_u256 z2zE2729;
                     {
-                      z2zE3427 = zrlp_ref_word(zaddr_f);
+                      z2zE2729 = zrlp_ref_word(zaddr_f);
                       if (have_exception) {
-                        KILL(zAuthorizzationDecode)(&z3zE3361);
-                        KILL(zAuthorizzationDecode)(&z3zE3362);
-                        KILL(zAuthorizzationDecode)(&z3zE3363);
-                        KILL(zAuthorizzationDecode)(&z3zE3364);
-                        KILL(zAuthorizzationDecode)(&z3zE3365);
-                        KILL(zAuthorizzationDecode)(&z3zE3366);
-                        KILL(zAuthorizzationDecode)(&z3zE3367);
-                        goto end_block_exception_3441;
+                        KILL(zAuthorizzationDecode)(&z3zE2586);
+                        KILL(zAuthorizzationDecode)(&z3zE2587);
+                        KILL(zAuthorizzationDecode)(&z3zE2588);
+                        KILL(zAuthorizzationDecode)(&z3zE2589);
+                        KILL(zAuthorizzationDecode)(&z3zE2590);
+                        KILL(zAuthorizzationDecode)(&z3zE2591);
+                        KILL(zAuthorizzationDecode)(&z3zE2592);
+                        goto end_block_exception_3037;
                       }
                     }
-                    zauth_addr = zword_to_address(z2zE3427);
+                    zauth_addr = evmsail_word_to_address(z2zE2729);
                   }
-                  struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z2zE3417;
+                  struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z2zE2719;
                   if (zy_valid) {
-                    sail_fixed_bytes_32 z2zE3416;
-                    z2zE3416 = zauth_signing_hash(zchain_id, zauth_addr, zauth_nonce);
-                    z2zE3417 = zecrecover_addr(z2zE3416, zy, zr, zs);
+                    sail_fixed_bytes_32 z2zE2718;
+                    z2zE2718 = zauth_signing_hash(zchain_id, zauth_addr, zauth_nonce);
+                    z2zE2719 = zecrecover_addr(z2zE2718, zy, zr, zs);
                   } else {
-                    struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z3zE3369;
-                    z3zE3369.ztup0 = false;
-                    z3zE3369.ztup1 = zZERO_ADDRESS;
-                    z2zE3417 = z3zE3369;
+                    struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z3zE2594;
+                    z3zE2594.ztup0 = false;
+                    z3zE2594.ztup1 = zZERO_ADDRESS;
+                    z2zE2719 = z3zE2594;
                   }
-                  struct zAuthorizzationDecode z3zE3370;
-                  CREATE(zAuthorizzationDecode)(&z3zE3370);
+                  struct zAuthorizzationDecode z3zE2595;
+                  CREATE(zAuthorizzationDecode)(&z3zE2595);
                   {
                     bool zok;
-                    zok = z2zE3417.ztup0;
+                    zok = z2zE2719.ztup0;
                     sail_fixed_bytes_20 zauthority;
-                    zauthority = z2zE3417.ztup1;
+                    zauthority = z2zE2719.ztup1;
                     bool znonce_valid;
                     znonce_valid = (zauth_nonce != UINT64_C(18446744073709551615));
                     struct zAuthorizzation zauthorizzation;
                     {
-                      bool z2zE3426;
+                      bool z2zE2728;
                       {
-                        bool z3zE3376;
+                        bool z3zE2601;
                         if (zok) {
-                          bool z3zE3375;
+                          bool z3zE2600;
                           if (zy_valid) {
-                            bool z2zE3425;
-                            z2zE3425 = zword_ult(zZERO_WORD, zr);
-                            bool z3zE3374;
-                            if (z2zE3425) {
-                              bool z2zE3424;
-                              z2zE3424 = zword_ult(zr, zSECP_N_FULL);
-                              bool z3zE3373;
-                              if (z2zE3424) {
-                                bool z2zE3423;
-                                z2zE3423 = zword_ult(zZERO_WORD, zs);
-                                bool z3zE3372;
-                                if (z2zE3423) {
-                                  bool z2zE3422;
-                                  z2zE3422 = zword_ule(zs, zSECP_N_HALF);
-                                  bool z3zE3371;
-                                  if (z2zE3422) {  z3zE3371 = znonce_valid;  } else {  z3zE3371 = false;  }
-                                  z3zE3372 = z3zE3371;
-                                } else {  z3zE3372 = false;  }
-                                z3zE3373 = z3zE3372;
-                              } else {  z3zE3373 = false;  }
-                              z3zE3374 = z3zE3373;
-                            } else {  z3zE3374 = false;  }
-                            z3zE3375 = z3zE3374;
-                          } else {  z3zE3375 = false;  }
-                          z3zE3376 = z3zE3375;
-                        } else {  z3zE3376 = false;  }
-                        z2zE3426 = z3zE3376;
+                            bool z2zE2727;
+                            z2zE2727 = zword_ult(zZERO_WORD, zr);
+                            bool z3zE2599;
+                            if (z2zE2727) {
+                              bool z2zE2726;
+                              z2zE2726 = zword_ult(zr, zSECP_N_FULL);
+                              bool z3zE2598;
+                              if (z2zE2726) {
+                                bool z2zE2725;
+                                z2zE2725 = zword_ult(zZERO_WORD, zs);
+                                bool z3zE2597;
+                                if (z2zE2725) {
+                                  bool z2zE2724;
+                                  z2zE2724 = zword_ule(zs, zSECP_N_HALF);
+                                  bool z3zE2596;
+                                  if (z2zE2724) {  z3zE2596 = znonce_valid;  } else {  z3zE2596 = false;  }
+                                  z3zE2597 = z3zE2596;
+                                } else {  z3zE2597 = false;  }
+                                z3zE2598 = z3zE2597;
+                              } else {  z3zE2598 = false;  }
+                              z3zE2599 = z3zE2598;
+                            } else {  z3zE2599 = false;  }
+                            z3zE2600 = z3zE2599;
+                          } else {  z3zE2600 = false;  }
+                          z3zE2601 = z3zE2600;
+                        } else {  z3zE2601 = false;  }
+                        z2zE2728 = z3zE2601;
                       }
-                      struct zAuthorizzation z3zE3377;
-                      z3zE3377.zaddress = zauth_addr;
-                      z3zE3377.zauthority = zauthority;
-                      z3zE3377.zchain_id = zchain_id;
-                      z3zE3377.znonce = zauth_nonce;
-                      z3zE3377.zvalid_sig = z2zE3426;
-                      zauthorizzation = z3zE3377;
+                      struct zAuthorizzation z3zE2602;
+                      z3zE2602.zaddress = zauth_addr;
+                      z3zE2602.zauthority = zauthority;
+                      z3zE2602.zchain_id = zchain_id;
+                      z3zE2602.znonce = zauth_nonce;
+                      z3zE2602.zvalid_sig = z2zE2728;
+                      zauthorizzation = z3zE2602;
                     }
                     struct zAuthorizzationDecode ztail;
                     CREATE(zAuthorizzationDecode)(&ztail);
                     {
                       zdecode_auth_tuples(&ztail, znext);
                       if (have_exception) {
-                        KILL(zAuthorizzationDecode)(&z3zE3361);
-                        KILL(zAuthorizzationDecode)(&z3zE3362);
-                        KILL(zAuthorizzationDecode)(&z3zE3363);
-                        KILL(zAuthorizzationDecode)(&z3zE3364);
-                        KILL(zAuthorizzationDecode)(&z3zE3365);
-                        KILL(zAuthorizzationDecode)(&z3zE3366);
-                        KILL(zAuthorizzationDecode)(&z3zE3367);
-                        KILL(zAuthorizzationDecode)(&z3zE3370);
+                        KILL(zAuthorizzationDecode)(&z3zE2586);
+                        KILL(zAuthorizzationDecode)(&z3zE2587);
+                        KILL(zAuthorizzationDecode)(&z3zE2588);
+                        KILL(zAuthorizzationDecode)(&z3zE2589);
+                        KILL(zAuthorizzationDecode)(&z3zE2590);
+                        KILL(zAuthorizzationDecode)(&z3zE2591);
+                        KILL(zAuthorizzationDecode)(&z3zE2592);
+                        KILL(zAuthorizzationDecode)(&z3zE2595);
                         KILL(zAuthorizzationDecode)(&ztail);
-                        goto end_block_exception_3441;
+                        goto end_block_exception_3037;
                       }
                     }
-                    zz5listz8z5structz0zzAuthorizzzzationz9 z2zE3419;
-                    CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE3419);
+                    zz5listz8z5structz0zzAuthorizzzzationz9 z2zE2721;
+                    CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE2721);
                     {
-                      zz5listz8z5structz0zzAuthorizzzzationz9 z2zE3418;
-                      CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE3418);
-                      COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE3418, ztail.zauthorizzations);
-                      zconsz3z5structz0zzAuthorizzzzation(&z2zE3419, zauthorizzation, z2zE3418);
-                      KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE3418);
+                      zz5listz8z5structz0zzAuthorizzzzationz9 z2zE2720;
+                      CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE2720);
+                      COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE2720, ztail.zauthorizzations);
+                      zconsz3z5structz0zzAuthorizzzzation(&z2zE2721, zauthorizzation, z2zE2720);
+                      KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE2720);
                     }
-                    uint64_t z2zE3421;
+                    uint64_t z2zE2723;
                     {
-                      uint64_t z2zE3420;
-                      z2zE3420 = ztail.zcount;
-                      z2zE3421 = zrlp_item_count_incrementzIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE3420);
+                      uint64_t z2zE2722;
+                      z2zE2722 = ztail.zcount;
+                      z2zE2723 = zrlp_item_count_incrementzIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE2722);
                     }
-                    struct zAuthorizzationDecode z3zE3378;
-                    CREATE(zAuthorizzationDecode)(&z3zE3378);
-                    COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE3378)->zauthorizzations), z2zE3419);
-                    z3zE3378.zcount = z2zE3421;
-                    COPY(zAuthorizzationDecode)(&z3zE3370, z3zE3378);
-                    KILL(zAuthorizzationDecode)(&z3zE3378);
-                    KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE3419);
+                    struct zAuthorizzationDecode z3zE2603;
+                    CREATE(zAuthorizzationDecode)(&z3zE2603);
+                    COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE2603)->zauthorizzations), z2zE2721);
+                    z3zE2603.zcount = z2zE2723;
+                    COPY(zAuthorizzationDecode)(&z3zE2595, z3zE2603);
+                    KILL(zAuthorizzationDecode)(&z3zE2603);
+                    KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE2721);
                     KILL(zAuthorizzationDecode)(&ztail);
-                    goto finish_match_3438;
+                    goto finish_match_3034;
                   }
-                case_3439: ;
+                case_3035: ;
                   sail_match_failure("decode_auth_tuples");
-                finish_match_3438: ;
-                  COPY(zAuthorizzationDecode)(&z3zE3367, z3zE3370);
-                  KILL(zAuthorizzationDecode)(&z3zE3370);
-                  goto finish_match_3436;
+                finish_match_3034: ;
+                  COPY(zAuthorizzationDecode)(&z3zE2592, z3zE2595);
+                  KILL(zAuthorizzationDecode)(&z3zE2595);
+                  goto finish_match_3032;
                 }
-              case_3437: ;
+              case_3033: ;
                 sail_match_failure("decode_auth_tuples");
-              finish_match_3436: ;
-                COPY(zAuthorizzationDecode)(&z3zE3366, z3zE3367);
-                KILL(zAuthorizzationDecode)(&z3zE3367);
-                goto finish_match_3434;
+              finish_match_3032: ;
+                COPY(zAuthorizzationDecode)(&z3zE2591, z3zE2592);
+                KILL(zAuthorizzationDecode)(&z3zE2592);
+                goto finish_match_3030;
               }
-            case_3435: ;
+            case_3031: ;
               sail_match_failure("decode_auth_tuples");
-            finish_match_3434: ;
-              COPY(zAuthorizzationDecode)(&z3zE3365, z3zE3366);
-              KILL(zAuthorizzationDecode)(&z3zE3366);
-              goto finish_match_3432;
+            finish_match_3030: ;
+              COPY(zAuthorizzationDecode)(&z3zE2590, z3zE2591);
+              KILL(zAuthorizzationDecode)(&z3zE2591);
+              goto finish_match_3028;
             }
-          case_3433: ;
+          case_3029: ;
             sail_match_failure("decode_auth_tuples");
-          finish_match_3432: ;
-            COPY(zAuthorizzationDecode)(&z3zE3364, z3zE3365);
-            KILL(zAuthorizzationDecode)(&z3zE3365);
-            goto finish_match_3430;
+          finish_match_3028: ;
+            COPY(zAuthorizzationDecode)(&z3zE2589, z3zE2590);
+            KILL(zAuthorizzationDecode)(&z3zE2590);
+            goto finish_match_3026;
           }
-        case_3431: ;
+        case_3027: ;
           sail_match_failure("decode_auth_tuples");
-        finish_match_3430: ;
-          COPY(zAuthorizzationDecode)(&z3zE3363, z3zE3364);
-          KILL(zAuthorizzationDecode)(&z3zE3364);
-          goto finish_match_3428;
+        finish_match_3026: ;
+          COPY(zAuthorizzationDecode)(&z3zE2588, z3zE2589);
+          KILL(zAuthorizzationDecode)(&z3zE2589);
+          goto finish_match_3024;
         }
-      case_3429: ;
+      case_3025: ;
         sail_match_failure("decode_auth_tuples");
-      finish_match_3428: ;
-        COPY(zAuthorizzationDecode)(&z3zE3362, z3zE3363);
-        KILL(zAuthorizzationDecode)(&z3zE3363);
-        goto finish_match_3426;
+      finish_match_3024: ;
+        COPY(zAuthorizzationDecode)(&z3zE2587, z3zE2588);
+        KILL(zAuthorizzationDecode)(&z3zE2588);
+        goto finish_match_3022;
       }
-    case_3427: ;
+    case_3023: ;
       sail_match_failure("decode_auth_tuples");
-    finish_match_3426: ;
-      COPY(zAuthorizzationDecode)(&z3zE3361, z3zE3362);
-      KILL(zAuthorizzationDecode)(&z3zE3362);
-      goto finish_match_3424;
+    finish_match_3022: ;
+      COPY(zAuthorizzationDecode)(&z3zE2586, z3zE2587);
+      KILL(zAuthorizzationDecode)(&z3zE2587);
+      goto finish_match_3020;
     }
-  case_3425: ;
+  case_3021: ;
     sail_match_failure("decode_auth_tuples");
-  finish_match_3424: ;
-    COPY(zAuthorizzationDecode)((*(&z8zE194)), z3zE3361);
-    KILL(zAuthorizzationDecode)(&z3zE3361);
+  finish_match_3020: ;
+    COPY(zAuthorizzationDecode)((*(&z8zE191)), z3zE2586);
+    KILL(zAuthorizzationDecode)(&z3zE2586);
   }
-end_function_3440: ;
-  goto end_function_4068;
-end_block_exception_3441: ;
-  goto end_function_4068;
-end_function_4068: ;
+end_function_3036: ;
+  goto end_function_3649;
+end_block_exception_3037: ;
+  goto end_function_3649;
+end_function_3649: ;
 }
 
-void zdecode_auth_list(struct ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9 *z8zE195, struct zRlpFieldRef zf)
+void zdecode_auth_list(struct ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9 *z8zE192, struct zRlpFieldRef zf)
 {
-  bool z2zE3402;
+  bool z2zE2703;
   {
-    uint64_t z2zE3401;
+    uint64_t z2zE2702;
     {
-      struct zByteSliceFields z2zE3400;
-      z2zE3400 = zf.zsource;
-      z2zE3401 = z2zE3400.zlen;
+      struct zByteSliceFields z2zE2701;
+      z2zE2701 = zf.zsource;
+      z2zE2702 = z2zE2701.zlen;
     }
-    z2zE3402 = (!(UINT64_C(1073741824) < z2zE3401));
+    z2zE2703 = (!(UINT64_C(1073741824) < z2zE2702));
   }
-  if (z2zE3402) {
+  if (z2zE2703) {
     struct zAuthorizzationDecode zdecoded;
     CREATE(zAuthorizzationDecode)(&zdecoded);
     {
-      struct zRlpCursor z2zE3405;
+      struct zByteSliceFields z2zE2706;
       {
-        z2zE3405 = zrlp_ref_cursor(zf);
+        z2zE2706 = zrlp_ref_cursor(zf);
         if (have_exception) {
           KILL(zAuthorizzationDecode)(&zdecoded);
-          goto end_block_exception_3423;
+          goto end_block_exception_3019;
         }
       }
       {
-        zdecode_auth_tuples(&zdecoded, z2zE3405);
+        zdecode_auth_tuples(&zdecoded, z2zE2706);
         if (have_exception) {
           KILL(zAuthorizzationDecode)(&zdecoded);
-          goto end_block_exception_3423;
+          goto end_block_exception_3019;
         }
       }
     }
-    zz5listz8z5structz0zzAuthorizzzzationz9 z2zE3403;
-    CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE3403);
-    COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE3403, zdecoded.zauthorizzations);
-    uint64_t z2zE3404;
-    z2zE3404 = zdecoded.zcount;
-    struct ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9 z3zE3360;
-    CREATE(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z3zE3360);
-    COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE3360)->ztup0), z2zE3403);
-    z3zE3360.ztup1 = z2zE3404;
-    COPY(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)((*(&z8zE195)), z3zE3360);
-    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z3zE3360);
-    KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE3403);
+    zz5listz8z5structz0zzAuthorizzzzationz9 z2zE2704;
+    CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE2704);
+    COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE2704, zdecoded.zauthorizzations);
+    uint64_t z2zE2705;
+    z2zE2705 = zdecoded.zcount;
+    struct ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9 z3zE2585;
+    CREATE(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z3zE2585);
+    COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE2585)->ztup0), z2zE2704);
+    z3zE2585.ztup1 = z2zE2705;
+    COPY(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)((*(&z8zE192)), z3zE2585);
+    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z3zE2585);
+    KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z2zE2704);
     KILL(zAuthorizzationDecode)(&zdecoded);
   } else {
-    struct zexception z2zE3406;
-    CREATE(zexception)(&z2zE3406);
-    zInvalidBlock(&z2zE3406, zRlpDecode);
-    COPY(zexception)(current_exception, z2zE3406);
+    struct zexception z2zE2707;
+    CREATE(zexception)(&z2zE2707);
+    zInvalidBlock(&z2zE2707, zRlpDecode);
+    COPY(zexception)(current_exception, z2zE2707);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:265.8-265.37");
-    KILL(zexception)(&z2zE3406);
-    goto end_block_exception_3423;
+    COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:260.8-260.37");
+    KILL(zexception)(&z2zE2707);
+    goto end_block_exception_3019;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE3406);
+    KILL(zexception)(&z2zE2707);
   }
-end_function_3422: ;
-  goto end_function_4067;
-end_block_exception_3423: ;
-  goto end_function_4067;
-end_function_4067: ;
+end_function_3018: ;
+  goto end_function_3648;
+end_block_exception_3019: ;
+  goto end_function_3648;
+end_function_3648: ;
 }
 
 struct zByteSliceFields ztx_input_span(struct zRlpFieldRef zdata)
 {
-  struct zByteSliceFields z8zE196;
+  struct zByteSliceFields z8zE193;
   struct zByteSliceFields zcontent;
   zcontent = zrlp_ref_content(zdata);
-  bool z2zE3398;
+  bool z2zE2699;
   {
-    uint64_t z2zE3397;
-    z2zE3397 = zcontent.zlen;
-    z2zE3398 = (!(UINT64_C(1073741824) < z2zE3397));
+    uint64_t z2zE2698;
+    z2zE2698 = zcontent.zlen;
+    z2zE2699 = (!(UINT64_C(1073741824) < z2zE2698));
   }
-  if (z2zE3398) {  z8zE196 = zcontent;  } else {
-    struct zexception z2zE3399;
-    CREATE(zexception)(&z2zE3399);
-    zInvalidBlock(&z2zE3399, zRlpDecode);
-    COPY(zexception)(current_exception, z2zE3399);
+  if (z2zE2699) {  z8zE193 = zcontent;  } else {
+    struct zexception z2zE2700;
+    CREATE(zexception)(&z2zE2700);
+    zInvalidBlock(&z2zE2700, zRlpDecode);
+    COPY(zexception)(current_exception, z2zE2700);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:280.8-280.37");
-    KILL(zexception)(&z2zE3399);
-    goto end_block_exception_3421;
+    COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:276.8-276.37");
+    KILL(zexception)(&z2zE2700);
+    goto end_block_exception_3017;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE3399);
+    KILL(zexception)(&z2zE2700);
   }
-end_function_3420: ;
-  return z8zE196;
-end_block_exception_3421: ;
-  struct zByteSliceFields z8zE851 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE851;
+end_function_3016: ;
+  return z8zE193;
+end_block_exception_3017: ;
+  struct zByteSliceFields z8zE798 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE798;
 }
 
 struct zByteSliceFields ztx_sig_span(struct zRlpFieldRef zfirst, struct zRlpFieldRef zsignature)
 {
-  struct zByteSliceFields z8zE197;
+  struct zByteSliceFields z8zE194;
   uint64_t zstart;
   {
-    struct zByteSliceFields z2zE3396;
-    z2zE3396 = zfirst.zsource;
-    zstart = z2zE3396.zoff;
+    struct zByteSliceFields z2zE2697;
+    z2zE2697 = zfirst.zsource;
+    zstart = z2zE2697.zoff;
   }
   uint64_t zstop;
   {
-    struct zByteSliceFields z2zE3395;
-    z2zE3395 = zsignature.zsource;
-    zstop = z2zE3395.zoff;
+    struct zByteSliceFields z2zE2696;
+    z2zE2696 = zsignature.zsource;
+    zstop = z2zE2696.zoff;
   }
   uint64_t zstart_offset;
   zstart_offset = zstart;
   uint64_t zstop_offset;
   zstop_offset = zstop;
-  bool z2zE3390;
-  z2zE3390 = (zstop_offset < zstart_offset);
-  enum zByteSource z2zE3393;
+  bool z2zE2691;
+  z2zE2691 = (zstop_offset < zstart_offset);
+  enum zByteSource z2zE2694;
   {
-    struct zByteSliceFields z2zE3392;
-    z2zE3392 = zfirst.zsource;
-    z2zE3393 = z2zE3392.zsource;
+    struct zByteSliceFields z2zE2693;
+    z2zE2693 = zfirst.zsource;
+    z2zE2694 = z2zE2693.zsource;
   }
-  uint64_t z2zE3394;
-  {    z2zE3394 = (zstop_offset - zstart_offset);
+  uint64_t z2zE2695;
+  {    z2zE2695 = (zstop_offset - zstart_offset);
   }
-  z8zE197 = zbyte_slice(z2zE3393, zstart_offset, z2zE3394);
-end_function_3418: ;
-  return z8zE197;
-end_block_exception_3419: ;
-  struct zByteSliceFields z8zE852 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE852;
+  z8zE194 = zbyte_slice(z2zE2694, zstart_offset, z2zE2695);
+end_function_3014: ;
+  return z8zE194;
+end_block_exception_3015: ;
+  struct zByteSliceFields z8zE799 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE799;
 }
 
 uint64_t zrlp_ref_gas(struct zRlpFieldRef zf, enum zFork zfork)
 {
-  uint64_t z8zE198;
+  uint64_t z8zE195;
   uint64_t zvalue;
   {
     zvalue = zrlp_ref_uint64(zf);
-    if (have_exception) {  goto end_block_exception_3417;  }
+    if (have_exception) {  goto end_block_exception_3013;  }
   }
-  bool z2zE3388;
+  bool z2zE2689;
   {
-    bool z2zE3387;
-    z2zE3387 = zfork_gteq(zfork, zOsaka);
-    bool z3zE3359;
-    if (z2zE3387) {
-      bool z2zE3386;
-      z2zE3386 = zfork_lt(zfork, zAmsterdam);
-      bool z3zE3358;
-      if (z2zE3386) {  z3zE3358 = (zOSAKA_TRANSACTION_GAS_LIMIT_VALUE < zvalue);  } else {  z3zE3358 = false;  }
-      z3zE3359 = z3zE3358;
-    } else {  z3zE3359 = false;  }
-    z2zE3388 = z3zE3359;
+    bool z2zE2688;
+    z2zE2688 = zfork_gteq(zfork, zOsaka);
+    bool z3zE2584;
+    if (z2zE2688) {
+      bool z2zE2687;
+      z2zE2687 = zfork_lt(zfork, zAmsterdam);
+      bool z3zE2583;
+      if (z2zE2687) {  z3zE2583 = (zOSAKA_TRANSACTION_GAS_LIMIT_VALUE < zvalue);  } else {  z3zE2583 = false;  }
+      z3zE2584 = z3zE2583;
+    } else {  z3zE2584 = false;  }
+    z2zE2689 = z3zE2584;
   }
-  if (z2zE3388) {
-    struct zexception z2zE3389;
-    CREATE(zexception)(&z2zE3389);
-    zInvalidBlock(&z2zE3389, zGasUsedExceedsLimit);
-    COPY(zexception)(current_exception, z2zE3389);
+  if (z2zE2689) {
+    struct zexception z2zE2690;
+    CREATE(zexception)(&z2zE2690);
+    zInvalidBlock(&z2zE2690, zGasUsedExceedsLimit);
+    COPY(zexception)(current_exception, z2zE2690);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/splices/c_optimized.sail:185.8-185.47");
-    KILL(zexception)(&z2zE3389);
-    goto end_block_exception_3417;
+    COPY(sail_string)(throw_location, "sail/splices/c_optimized.sail:450.8-450.47");
+    KILL(zexception)(&z2zE2690);
+    goto end_block_exception_3013;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE3389);
-  } else {  z8zE198 = zvalue;  }
-end_function_3416: ;
-  return z8zE198;
-end_block_exception_3417: ;
+    KILL(zexception)(&z2zE2690);
+  } else {  z8zE195 = zvalue;  }
+end_function_3012: ;
+  return z8zE195;
+end_block_exception_3013: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
-void zdecode_legacy_tx(struct zTransaction *z8zE199, struct zByteSliceFields ztx, struct zByteSliceFields zpubkey, enum zFork zfork, sail_fixed_bytes_20 zsender, struct zRlpCursor zfields)
+void zdecode_legacy_tx(struct zTransaction *z8zE196, struct zByteSliceFields ztx, struct zByteSliceFields zpubkey, enum zFork zfork, sail_fixed_bytes_20 zsender, struct zByteSliceFields zfields)
 {
-  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3365;
+  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2666;
   {
-    z2zE3365 = zrlp_cursor_pop(zfields);
-    if (have_exception) {  goto end_block_exception_3415;  }
+    z2zE2666 = zrlp_cursor_pop(zfields);
+    if (have_exception) {  goto end_block_exception_3011;  }
   }
-  struct zTransaction z3zE3335;
-  CREATE(zTransaction)(&z3zE3335);
+  struct zTransaction z3zE2560;
+  CREATE(zTransaction)(&z3zE2560);
   {
     struct zRlpFieldRef znonce_f;
-    znonce_f = z2zE3365.ztup0;
-    struct zRlpCursor z1zE59;
-    z1zE59 = z2zE3365.ztup1;
-    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3366;
+    znonce_f = z2zE2666.ztup0;
+    struct zByteSliceFields z1zE75;
+    z1zE75 = z2zE2666.ztup1;
+    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2667;
     {
-      z2zE3366 = zrlp_cursor_pop(z1zE59);
+      z2zE2667 = zrlp_cursor_pop(z1zE75);
       if (have_exception) {
-        KILL(zTransaction)(&z3zE3335);
-        goto end_block_exception_3415;
+        KILL(zTransaction)(&z3zE2560);
+        goto end_block_exception_3011;
       }
     }
-    struct zTransaction z3zE3336;
-    CREATE(zTransaction)(&z3zE3336);
+    struct zTransaction z3zE2561;
+    CREATE(zTransaction)(&z3zE2561);
     {
       struct zRlpFieldRef zgp_f;
-      zgp_f = z2zE3366.ztup0;
-      struct zRlpCursor z1zE60;
-      z1zE60 = z2zE3366.ztup1;
-      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3367;
+      zgp_f = z2zE2667.ztup0;
+      struct zByteSliceFields z1zE76;
+      z1zE76 = z2zE2667.ztup1;
+      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2668;
       {
-        z2zE3367 = zrlp_cursor_pop(z1zE60);
+        z2zE2668 = zrlp_cursor_pop(z1zE76);
         if (have_exception) {
-          KILL(zTransaction)(&z3zE3335);
-          KILL(zTransaction)(&z3zE3336);
-          goto end_block_exception_3415;
+          KILL(zTransaction)(&z3zE2560);
+          KILL(zTransaction)(&z3zE2561);
+          goto end_block_exception_3011;
         }
       }
-      struct zTransaction z3zE3337;
-      CREATE(zTransaction)(&z3zE3337);
+      struct zTransaction z3zE2562;
+      CREATE(zTransaction)(&z3zE2562);
       {
         struct zRlpFieldRef zgas_f;
-        zgas_f = z2zE3367.ztup0;
-        struct zRlpCursor z1zE61;
-        z1zE61 = z2zE3367.ztup1;
-        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3368;
+        zgas_f = z2zE2668.ztup0;
+        struct zByteSliceFields z1zE77;
+        z1zE77 = z2zE2668.ztup1;
+        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2669;
         {
-          z2zE3368 = zrlp_cursor_pop(z1zE61);
+          z2zE2669 = zrlp_cursor_pop(z1zE77);
           if (have_exception) {
-            KILL(zTransaction)(&z3zE3335);
-            KILL(zTransaction)(&z3zE3336);
-            KILL(zTransaction)(&z3zE3337);
-            goto end_block_exception_3415;
+            KILL(zTransaction)(&z3zE2560);
+            KILL(zTransaction)(&z3zE2561);
+            KILL(zTransaction)(&z3zE2562);
+            goto end_block_exception_3011;
           }
         }
-        struct zTransaction z3zE3338;
-        CREATE(zTransaction)(&z3zE3338);
+        struct zTransaction z3zE2563;
+        CREATE(zTransaction)(&z3zE2563);
         {
           struct zRlpFieldRef zto_f;
-          zto_f = z2zE3368.ztup0;
-          struct zRlpCursor z1zE62;
-          z1zE62 = z2zE3368.ztup1;
-          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3369;
+          zto_f = z2zE2669.ztup0;
+          struct zByteSliceFields z1zE78;
+          z1zE78 = z2zE2669.ztup1;
+          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2670;
           {
-            z2zE3369 = zrlp_cursor_pop(z1zE62);
+            z2zE2670 = zrlp_cursor_pop(z1zE78);
             if (have_exception) {
-              KILL(zTransaction)(&z3zE3335);
-              KILL(zTransaction)(&z3zE3336);
-              KILL(zTransaction)(&z3zE3337);
-              KILL(zTransaction)(&z3zE3338);
-              goto end_block_exception_3415;
+              KILL(zTransaction)(&z3zE2560);
+              KILL(zTransaction)(&z3zE2561);
+              KILL(zTransaction)(&z3zE2562);
+              KILL(zTransaction)(&z3zE2563);
+              goto end_block_exception_3011;
             }
           }
-          struct zTransaction z3zE3339;
-          CREATE(zTransaction)(&z3zE3339);
+          struct zTransaction z3zE2564;
+          CREATE(zTransaction)(&z3zE2564);
           {
             struct zRlpFieldRef zvalue_f;
-            zvalue_f = z2zE3369.ztup0;
-            struct zRlpCursor z1zE63;
-            z1zE63 = z2zE3369.ztup1;
-            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3370;
+            zvalue_f = z2zE2670.ztup0;
+            struct zByteSliceFields z1zE79;
+            z1zE79 = z2zE2670.ztup1;
+            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2671;
             {
-              z2zE3370 = zrlp_cursor_pop(z1zE63);
+              z2zE2671 = zrlp_cursor_pop(z1zE79);
               if (have_exception) {
-                KILL(zTransaction)(&z3zE3335);
-                KILL(zTransaction)(&z3zE3336);
-                KILL(zTransaction)(&z3zE3337);
-                KILL(zTransaction)(&z3zE3338);
-                KILL(zTransaction)(&z3zE3339);
-                goto end_block_exception_3415;
+                KILL(zTransaction)(&z3zE2560);
+                KILL(zTransaction)(&z3zE2561);
+                KILL(zTransaction)(&z3zE2562);
+                KILL(zTransaction)(&z3zE2563);
+                KILL(zTransaction)(&z3zE2564);
+                goto end_block_exception_3011;
               }
             }
-            struct zTransaction z3zE3340;
-            CREATE(zTransaction)(&z3zE3340);
+            struct zTransaction z3zE2565;
+            CREATE(zTransaction)(&z3zE2565);
             {
               struct zRlpFieldRef zdata_f;
-              zdata_f = z2zE3370.ztup0;
-              struct zRlpCursor z1zE64;
-              z1zE64 = z2zE3370.ztup1;
-              struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3371;
+              zdata_f = z2zE2671.ztup0;
+              struct zByteSliceFields z1zE80;
+              z1zE80 = z2zE2671.ztup1;
+              struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2672;
               {
-                z2zE3371 = zrlp_cursor_pop(z1zE64);
+                z2zE2672 = zrlp_cursor_pop(z1zE80);
                 if (have_exception) {
-                  KILL(zTransaction)(&z3zE3335);
-                  KILL(zTransaction)(&z3zE3336);
-                  KILL(zTransaction)(&z3zE3337);
-                  KILL(zTransaction)(&z3zE3338);
-                  KILL(zTransaction)(&z3zE3339);
-                  KILL(zTransaction)(&z3zE3340);
-                  goto end_block_exception_3415;
+                  KILL(zTransaction)(&z3zE2560);
+                  KILL(zTransaction)(&z3zE2561);
+                  KILL(zTransaction)(&z3zE2562);
+                  KILL(zTransaction)(&z3zE2563);
+                  KILL(zTransaction)(&z3zE2564);
+                  KILL(zTransaction)(&z3zE2565);
+                  goto end_block_exception_3011;
                 }
               }
-              struct zTransaction z3zE3341;
-              CREATE(zTransaction)(&z3zE3341);
+              struct zTransaction z3zE2566;
+              CREATE(zTransaction)(&z3zE2566);
               {
                 struct zRlpFieldRef zv_f;
-                zv_f = z2zE3371.ztup0;
-                struct zRlpCursor z1zE65;
-                z1zE65 = z2zE3371.ztup1;
-                struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3372;
+                zv_f = z2zE2672.ztup0;
+                struct zByteSliceFields z1zE81;
+                z1zE81 = z2zE2672.ztup1;
+                struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2673;
                 {
-                  z2zE3372 = zrlp_cursor_pop(z1zE65);
+                  z2zE2673 = zrlp_cursor_pop(z1zE81);
                   if (have_exception) {
-                    KILL(zTransaction)(&z3zE3335);
-                    KILL(zTransaction)(&z3zE3336);
-                    KILL(zTransaction)(&z3zE3337);
-                    KILL(zTransaction)(&z3zE3338);
-                    KILL(zTransaction)(&z3zE3339);
-                    KILL(zTransaction)(&z3zE3340);
-                    KILL(zTransaction)(&z3zE3341);
-                    goto end_block_exception_3415;
+                    KILL(zTransaction)(&z3zE2560);
+                    KILL(zTransaction)(&z3zE2561);
+                    KILL(zTransaction)(&z3zE2562);
+                    KILL(zTransaction)(&z3zE2563);
+                    KILL(zTransaction)(&z3zE2564);
+                    KILL(zTransaction)(&z3zE2565);
+                    KILL(zTransaction)(&z3zE2566);
+                    goto end_block_exception_3011;
                   }
                 }
-                struct zTransaction z3zE3342;
-                CREATE(zTransaction)(&z3zE3342);
+                struct zTransaction z3zE2567;
+                CREATE(zTransaction)(&z3zE2567);
                 {
                   struct zRlpFieldRef zr_f;
-                  zr_f = z2zE3372.ztup0;
-                  struct zRlpCursor z1zE66;
-                  z1zE66 = z2zE3372.ztup1;
-                  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3373;
+                  zr_f = z2zE2673.ztup0;
+                  struct zByteSliceFields z1zE82;
+                  z1zE82 = z2zE2673.ztup1;
+                  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2674;
                   {
-                    z2zE3373 = zrlp_cursor_pop(z1zE66);
+                    z2zE2674 = zrlp_cursor_pop(z1zE82);
                     if (have_exception) {
-                      KILL(zTransaction)(&z3zE3335);
-                      KILL(zTransaction)(&z3zE3336);
-                      KILL(zTransaction)(&z3zE3337);
-                      KILL(zTransaction)(&z3zE3338);
-                      KILL(zTransaction)(&z3zE3339);
-                      KILL(zTransaction)(&z3zE3340);
-                      KILL(zTransaction)(&z3zE3341);
-                      KILL(zTransaction)(&z3zE3342);
-                      goto end_block_exception_3415;
+                      KILL(zTransaction)(&z3zE2560);
+                      KILL(zTransaction)(&z3zE2561);
+                      KILL(zTransaction)(&z3zE2562);
+                      KILL(zTransaction)(&z3zE2563);
+                      KILL(zTransaction)(&z3zE2564);
+                      KILL(zTransaction)(&z3zE2565);
+                      KILL(zTransaction)(&z3zE2566);
+                      KILL(zTransaction)(&z3zE2567);
+                      goto end_block_exception_3011;
                     }
                   }
-                  struct zTransaction z3zE3343;
-                  CREATE(zTransaction)(&z3zE3343);
+                  struct zTransaction z3zE2568;
+                  CREATE(zTransaction)(&z3zE2568);
                   {
                     struct zRlpFieldRef zs_f;
-                    zs_f = z2zE3373.ztup0;
-                    struct zRlpCursor z1zE67;
-                    z1zE67 = z2zE3373.ztup1;
-                    unit z3zE3344;
+                    zs_f = z2zE2674.ztup0;
+                    struct zByteSliceFields z1zE83;
+                    z1zE83 = z2zE2674.ztup1;
+                    unit z3zE2569;
                     {
-                      z3zE3344 = zrlp_cursor_expect_end(z1zE67);
+                      z3zE2569 = zrlp_cursor_expect_end(z1zE83);
                       if (have_exception) {
-                        KILL(zTransaction)(&z3zE3335);
-                        KILL(zTransaction)(&z3zE3336);
-                        KILL(zTransaction)(&z3zE3337);
-                        KILL(zTransaction)(&z3zE3338);
-                        KILL(zTransaction)(&z3zE3339);
-                        KILL(zTransaction)(&z3zE3340);
-                        KILL(zTransaction)(&z3zE3341);
-                        KILL(zTransaction)(&z3zE3342);
-                        KILL(zTransaction)(&z3zE3343);
-                        goto end_block_exception_3415;
+                        KILL(zTransaction)(&z3zE2560);
+                        KILL(zTransaction)(&z3zE2561);
+                        KILL(zTransaction)(&z3zE2562);
+                        KILL(zTransaction)(&z3zE2563);
+                        KILL(zTransaction)(&z3zE2564);
+                        KILL(zTransaction)(&z3zE2565);
+                        KILL(zTransaction)(&z3zE2566);
+                        KILL(zTransaction)(&z3zE2567);
+                        KILL(zTransaction)(&z3zE2568);
+                        goto end_block_exception_3011;
                       }
                     }
                     sail_u256 zv;
                     {
                       zv = zrlp_ref_word(zv_f);
                       if (have_exception) {
-                        KILL(zTransaction)(&z3zE3335);
-                        KILL(zTransaction)(&z3zE3336);
-                        KILL(zTransaction)(&z3zE3337);
-                        KILL(zTransaction)(&z3zE3338);
-                        KILL(zTransaction)(&z3zE3339);
-                        KILL(zTransaction)(&z3zE3340);
-                        KILL(zTransaction)(&z3zE3341);
-                        KILL(zTransaction)(&z3zE3342);
-                        KILL(zTransaction)(&z3zE3343);
-                        goto end_block_exception_3415;
+                        KILL(zTransaction)(&z3zE2560);
+                        KILL(zTransaction)(&z3zE2561);
+                        KILL(zTransaction)(&z3zE2562);
+                        KILL(zTransaction)(&z3zE2563);
+                        KILL(zTransaction)(&z3zE2564);
+                        KILL(zTransaction)(&z3zE2565);
+                        KILL(zTransaction)(&z3zE2566);
+                        KILL(zTransaction)(&z3zE2567);
+                        KILL(zTransaction)(&z3zE2568);
+                        goto end_block_exception_3011;
                       }
                     }
                     sail_u256 zgp;
                     {
                       zgp = zrlp_ref_uint_word(zgp_f);
                       if (have_exception) {
-                        KILL(zTransaction)(&z3zE3335);
-                        KILL(zTransaction)(&z3zE3336);
-                        KILL(zTransaction)(&z3zE3337);
-                        KILL(zTransaction)(&z3zE3338);
-                        KILL(zTransaction)(&z3zE3339);
-                        KILL(zTransaction)(&z3zE3340);
-                        KILL(zTransaction)(&z3zE3341);
-                        KILL(zTransaction)(&z3zE3342);
-                        KILL(zTransaction)(&z3zE3343);
-                        goto end_block_exception_3415;
+                        KILL(zTransaction)(&z3zE2560);
+                        KILL(zTransaction)(&z3zE2561);
+                        KILL(zTransaction)(&z3zE2562);
+                        KILL(zTransaction)(&z3zE2563);
+                        KILL(zTransaction)(&z3zE2564);
+                        KILL(zTransaction)(&z3zE2565);
+                        KILL(zTransaction)(&z3zE2566);
+                        KILL(zTransaction)(&z3zE2567);
+                        KILL(zTransaction)(&z3zE2568);
+                        goto end_block_exception_3011;
                       }
                     }
-                    sail_u256 z2zE3374;
+                    sail_u256 z2zE2675;
                     {
-                      z2zE3374 = zrlp_ref_uint_word(znonce_f);
+                      z2zE2675 = zrlp_ref_uint_word(znonce_f);
                       if (have_exception) {
-                        KILL(zTransaction)(&z3zE3335);
-                        KILL(zTransaction)(&z3zE3336);
-                        KILL(zTransaction)(&z3zE3337);
-                        KILL(zTransaction)(&z3zE3338);
-                        KILL(zTransaction)(&z3zE3339);
-                        KILL(zTransaction)(&z3zE3340);
-                        KILL(zTransaction)(&z3zE3341);
-                        KILL(zTransaction)(&z3zE3342);
-                        KILL(zTransaction)(&z3zE3343);
-                        goto end_block_exception_3415;
+                        KILL(zTransaction)(&z3zE2560);
+                        KILL(zTransaction)(&z3zE2561);
+                        KILL(zTransaction)(&z3zE2562);
+                        KILL(zTransaction)(&z3zE2563);
+                        KILL(zTransaction)(&z3zE2564);
+                        KILL(zTransaction)(&z3zE2565);
+                        KILL(zTransaction)(&z3zE2566);
+                        KILL(zTransaction)(&z3zE2567);
+                        KILL(zTransaction)(&z3zE2568);
+                        goto end_block_exception_3011;
                       }
                     }
-                    uint64_t z2zE3375;
+                    uint64_t z2zE2676;
                     {
-                      z2zE3375 = zrlp_ref_gas(zgas_f, zfork);
+                      z2zE2676 = zrlp_ref_gas(zgas_f, zfork);
                       if (have_exception) {
-                        KILL(zTransaction)(&z3zE3335);
-                        KILL(zTransaction)(&z3zE3336);
-                        KILL(zTransaction)(&z3zE3337);
-                        KILL(zTransaction)(&z3zE3338);
-                        KILL(zTransaction)(&z3zE3339);
-                        KILL(zTransaction)(&z3zE3340);
-                        KILL(zTransaction)(&z3zE3341);
-                        KILL(zTransaction)(&z3zE3342);
-                        KILL(zTransaction)(&z3zE3343);
-                        goto end_block_exception_3415;
+                        KILL(zTransaction)(&z3zE2560);
+                        KILL(zTransaction)(&z3zE2561);
+                        KILL(zTransaction)(&z3zE2562);
+                        KILL(zTransaction)(&z3zE2563);
+                        KILL(zTransaction)(&z3zE2564);
+                        KILL(zTransaction)(&z3zE2565);
+                        KILL(zTransaction)(&z3zE2566);
+                        KILL(zTransaction)(&z3zE2567);
+                        KILL(zTransaction)(&z3zE2568);
+                        goto end_block_exception_3011;
                       }
                     }
-                    bool z2zE3377;
+                    bool z2zE2678;
                     {
-                      uint64_t z2zE3376;
-                      z2zE3376 = zto_f.zcontent_len;
-                      z2zE3377 = (z2zE3376 == UINT64_C(0));
+                      uint64_t z2zE2677;
+                      z2zE2677 = zto_f.zcontent_len;
+                      z2zE2678 = (z2zE2677 == UINT64_C(0));
                     }
-                    sail_fixed_bytes_20 z2zE3379;
+                    sail_fixed_bytes_20 z2zE2680;
                     {
-                      sail_u256 z2zE3378;
+                      sail_u256 z2zE2679;
                       {
-                        z2zE3378 = zrlp_ref_word(zto_f);
+                        z2zE2679 = zrlp_ref_word(zto_f);
                         if (have_exception) {
-                          KILL(zTransaction)(&z3zE3335);
-                          KILL(zTransaction)(&z3zE3336);
-                          KILL(zTransaction)(&z3zE3337);
-                          KILL(zTransaction)(&z3zE3338);
-                          KILL(zTransaction)(&z3zE3339);
-                          KILL(zTransaction)(&z3zE3340);
-                          KILL(zTransaction)(&z3zE3341);
-                          KILL(zTransaction)(&z3zE3342);
-                          KILL(zTransaction)(&z3zE3343);
-                          goto end_block_exception_3415;
+                          KILL(zTransaction)(&z3zE2560);
+                          KILL(zTransaction)(&z3zE2561);
+                          KILL(zTransaction)(&z3zE2562);
+                          KILL(zTransaction)(&z3zE2563);
+                          KILL(zTransaction)(&z3zE2564);
+                          KILL(zTransaction)(&z3zE2565);
+                          KILL(zTransaction)(&z3zE2566);
+                          KILL(zTransaction)(&z3zE2567);
+                          KILL(zTransaction)(&z3zE2568);
+                          goto end_block_exception_3011;
                         }
                       }
-                      z2zE3379 = zword_to_address(z2zE3378);
+                      z2zE2680 = evmsail_word_to_address(z2zE2679);
                     }
-                    sail_u256 z2zE3380;
+                    sail_u256 z2zE2681;
                     {
-                      z2zE3380 = zrlp_ref_uint_word(zvalue_f);
+                      z2zE2681 = zrlp_ref_uint_word(zvalue_f);
                       if (have_exception) {
-                        KILL(zTransaction)(&z3zE3335);
-                        KILL(zTransaction)(&z3zE3336);
-                        KILL(zTransaction)(&z3zE3337);
-                        KILL(zTransaction)(&z3zE3338);
-                        KILL(zTransaction)(&z3zE3339);
-                        KILL(zTransaction)(&z3zE3340);
-                        KILL(zTransaction)(&z3zE3341);
-                        KILL(zTransaction)(&z3zE3342);
-                        KILL(zTransaction)(&z3zE3343);
-                        goto end_block_exception_3415;
+                        KILL(zTransaction)(&z3zE2560);
+                        KILL(zTransaction)(&z3zE2561);
+                        KILL(zTransaction)(&z3zE2562);
+                        KILL(zTransaction)(&z3zE2563);
+                        KILL(zTransaction)(&z3zE2564);
+                        KILL(zTransaction)(&z3zE2565);
+                        KILL(zTransaction)(&z3zE2566);
+                        KILL(zTransaction)(&z3zE2567);
+                        KILL(zTransaction)(&z3zE2568);
+                        goto end_block_exception_3011;
                       }
                     }
-                    struct zByteSliceFields z2zE3381;
+                    struct zByteSliceFields z2zE2682;
                     {
-                      z2zE3381 = ztx_input_span(zdata_f);
+                      z2zE2682 = ztx_input_span(zdata_f);
                       if (have_exception) {
-                        KILL(zTransaction)(&z3zE3335);
-                        KILL(zTransaction)(&z3zE3336);
-                        KILL(zTransaction)(&z3zE3337);
-                        KILL(zTransaction)(&z3zE3338);
-                        KILL(zTransaction)(&z3zE3339);
-                        KILL(zTransaction)(&z3zE3340);
-                        KILL(zTransaction)(&z3zE3341);
-                        KILL(zTransaction)(&z3zE3342);
-                        KILL(zTransaction)(&z3zE3343);
-                        goto end_block_exception_3415;
+                        KILL(zTransaction)(&z3zE2560);
+                        KILL(zTransaction)(&z3zE2561);
+                        KILL(zTransaction)(&z3zE2562);
+                        KILL(zTransaction)(&z3zE2563);
+                        KILL(zTransaction)(&z3zE2564);
+                        KILL(zTransaction)(&z3zE2565);
+                        KILL(zTransaction)(&z3zE2566);
+                        KILL(zTransaction)(&z3zE2567);
+                        KILL(zTransaction)(&z3zE2568);
+                        goto end_block_exception_3011;
                       }
                     }
-                    sail_fixed_bytes_32 z2zE3383;
+                    sail_fixed_bytes_32 z2zE2684;
                     {
-                      struct zByteSliceFields z2zE3382;
+                      struct zByteSliceFields z2zE2683;
                       {
-                        z2zE3382 = ztx_sig_span(znonce_f, zv_f);
+                        z2zE2683 = ztx_sig_span(znonce_f, zv_f);
                         if (have_exception) {
-                          KILL(zTransaction)(&z3zE3335);
-                          KILL(zTransaction)(&z3zE3336);
-                          KILL(zTransaction)(&z3zE3337);
-                          KILL(zTransaction)(&z3zE3338);
-                          KILL(zTransaction)(&z3zE3339);
-                          KILL(zTransaction)(&z3zE3340);
-                          KILL(zTransaction)(&z3zE3341);
-                          KILL(zTransaction)(&z3zE3342);
-                          KILL(zTransaction)(&z3zE3343);
-                          goto end_block_exception_3415;
+                          KILL(zTransaction)(&z3zE2560);
+                          KILL(zTransaction)(&z3zE2561);
+                          KILL(zTransaction)(&z3zE2562);
+                          KILL(zTransaction)(&z3zE2563);
+                          KILL(zTransaction)(&z3zE2564);
+                          KILL(zTransaction)(&z3zE2565);
+                          KILL(zTransaction)(&z3zE2566);
+                          KILL(zTransaction)(&z3zE2567);
+                          KILL(zTransaction)(&z3zE2568);
+                          goto end_block_exception_3011;
                         }
                       }
                       {
-                        z2zE3383 = ztx_signing_hash(zLegacyTx, z2zE3382, zv);
+                        z2zE2684 = ztx_signing_hash(zLegacyTx, z2zE2683, zv);
                         if (have_exception) {
-                          KILL(zTransaction)(&z3zE3335);
-                          KILL(zTransaction)(&z3zE3336);
-                          KILL(zTransaction)(&z3zE3337);
-                          KILL(zTransaction)(&z3zE3338);
-                          KILL(zTransaction)(&z3zE3339);
-                          KILL(zTransaction)(&z3zE3340);
-                          KILL(zTransaction)(&z3zE3341);
-                          KILL(zTransaction)(&z3zE3342);
-                          KILL(zTransaction)(&z3zE3343);
-                          goto end_block_exception_3415;
+                          KILL(zTransaction)(&z3zE2560);
+                          KILL(zTransaction)(&z3zE2561);
+                          KILL(zTransaction)(&z3zE2562);
+                          KILL(zTransaction)(&z3zE2563);
+                          KILL(zTransaction)(&z3zE2564);
+                          KILL(zTransaction)(&z3zE2565);
+                          KILL(zTransaction)(&z3zE2566);
+                          KILL(zTransaction)(&z3zE2567);
+                          KILL(zTransaction)(&z3zE2568);
+                          goto end_block_exception_3011;
                         }
                       }
                     }
-                    sail_u256 z2zE3384;
+                    sail_u256 z2zE2685;
                     {
-                      z2zE3384 = zrlp_ref_uint_word(zr_f);
+                      z2zE2685 = zrlp_ref_uint_word(zr_f);
                       if (have_exception) {
-                        KILL(zTransaction)(&z3zE3335);
-                        KILL(zTransaction)(&z3zE3336);
-                        KILL(zTransaction)(&z3zE3337);
-                        KILL(zTransaction)(&z3zE3338);
-                        KILL(zTransaction)(&z3zE3339);
-                        KILL(zTransaction)(&z3zE3340);
-                        KILL(zTransaction)(&z3zE3341);
-                        KILL(zTransaction)(&z3zE3342);
-                        KILL(zTransaction)(&z3zE3343);
-                        goto end_block_exception_3415;
+                        KILL(zTransaction)(&z3zE2560);
+                        KILL(zTransaction)(&z3zE2561);
+                        KILL(zTransaction)(&z3zE2562);
+                        KILL(zTransaction)(&z3zE2563);
+                        KILL(zTransaction)(&z3zE2564);
+                        KILL(zTransaction)(&z3zE2565);
+                        KILL(zTransaction)(&z3zE2566);
+                        KILL(zTransaction)(&z3zE2567);
+                        KILL(zTransaction)(&z3zE2568);
+                        goto end_block_exception_3011;
                       }
                     }
-                    sail_u256 z2zE3385;
+                    sail_u256 z2zE2686;
                     {
-                      z2zE3385 = zrlp_ref_uint_word(zs_f);
+                      z2zE2686 = zrlp_ref_uint_word(zs_f);
                       if (have_exception) {
-                        KILL(zTransaction)(&z3zE3335);
-                        KILL(zTransaction)(&z3zE3336);
-                        KILL(zTransaction)(&z3zE3337);
-                        KILL(zTransaction)(&z3zE3338);
-                        KILL(zTransaction)(&z3zE3339);
-                        KILL(zTransaction)(&z3zE3340);
-                        KILL(zTransaction)(&z3zE3341);
-                        KILL(zTransaction)(&z3zE3342);
-                        KILL(zTransaction)(&z3zE3343);
-                        goto end_block_exception_3415;
+                        KILL(zTransaction)(&z3zE2560);
+                        KILL(zTransaction)(&z3zE2561);
+                        KILL(zTransaction)(&z3zE2562);
+                        KILL(zTransaction)(&z3zE2563);
+                        KILL(zTransaction)(&z3zE2564);
+                        KILL(zTransaction)(&z3zE2565);
+                        KILL(zTransaction)(&z3zE2566);
+                        KILL(zTransaction)(&z3zE2567);
+                        KILL(zTransaction)(&z3zE2568);
+                        goto end_block_exception_3011;
                       }
                     }
-                    z3zE3343.zaccess_list_address_count = UINT64_C(0);
-                    zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z3zE3346;
-                    CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z3zE3346);
-                    COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE3343)->zaccess_list_addresses), z3zE3346);
-                    KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z3zE3346);
-                    z3zE3343.zaccess_list_slot_count = UINT64_C(0);
-                    zz5listz8z5structz0zzStorageKeyz9 z3zE3347;
-                    CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z3zE3347);
-                    COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE3343)->zaccess_list_slots), z3zE3347);
-                    KILL(zz5listz8z5structz0zzStorageKeyz9)(&z3zE3347);
-                    z3zE3343.zauthorizzation_count = UINT64_C(0);
-                    zz5listz8z5structz0zzAuthorizzzzationz9 z3zE3348;
-                    CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE3348);
-                    COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE3343)->zauthorizzations), z3zE3348);
-                    KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE3348);
-                    z3zE3343.zblob_hashes = zEMPTY_BLOB_HASHES;
-                    z3zE3343.zchain_id = UINT64_C(0);
-                    z3zE3343.zgas_limit = z2zE3375;
-                    z3zE3343.zinput_src = z2zE3381;
-                    z3zE3343.zis_create = z2zE3377;
-                    z3zE3343.zmax_blob_fee = zZERO_WORD;
-                    z3zE3343.zmax_fee = zgp;
-                    z3zE3343.zmax_priority_fee = zgp;
-                    z3zE3343.znonce = z2zE3374;
-                    z3zE3343.zpubkey = zpubkey;
-                    z3zE3343.zraw = ztx;
-                    z3zE3343.zrecipient = z2zE3379;
-                    z3zE3343.zsender = zsender;
-                    z3zE3343.zsig_r = z2zE3384;
-                    z3zE3343.zsig_s = z2zE3385;
-                    z3zE3343.zsig_v = zv;
-                    z3zE3343.zsigning_hash = z2zE3383;
-                    z3zE3343.ztx_type = zLegacyTx;
-                    z3zE3343.zvalue = z2zE3380;
-                    goto finish_match_3412;
+                    z3zE2568.zaccess_list_address_count = UINT64_C(0);
+                    zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 z3zE2571;
+                    CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z3zE2571);
+                    COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE2568)->zaccess_list_addresses), z3zE2571);
+                    KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&z3zE2571);
+                    z3zE2568.zaccess_list_slot_count = UINT64_C(0);
+                    zz5listz8z5structz0zzStorageKeyz9 z3zE2572;
+                    CREATE(zz5listz8z5structz0zzStorageKeyz9)(&z3zE2572);
+                    COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE2568)->zaccess_list_slots), z3zE2572);
+                    KILL(zz5listz8z5structz0zzStorageKeyz9)(&z3zE2572);
+                    z3zE2568.zauthorizzation_count = UINT64_C(0);
+                    zz5listz8z5structz0zzAuthorizzzzationz9 z3zE2573;
+                    CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE2573);
+                    COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE2568)->zauthorizzations), z3zE2573);
+                    KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE2573);
+                    z3zE2568.zblob_hashes = zEMPTY_BLOB_HASHES;
+                    z3zE2568.zchain_id = UINT64_C(0);
+                    z3zE2568.zgas_limit = z2zE2676;
+                    z3zE2568.zinput_src = z2zE2682;
+                    z3zE2568.zis_create = z2zE2678;
+                    z3zE2568.zmax_blob_fee = zZERO_WORD;
+                    z3zE2568.zmax_fee = zgp;
+                    z3zE2568.zmax_priority_fee = zgp;
+                    z3zE2568.znonce = z2zE2675;
+                    z3zE2568.zpubkey = zpubkey;
+                    z3zE2568.zraw = ztx;
+                    z3zE2568.zrecipient = z2zE2680;
+                    z3zE2568.zsender = zsender;
+                    z3zE2568.zsig_r = z2zE2685;
+                    z3zE2568.zsig_s = z2zE2686;
+                    z3zE2568.zsig_v = zv;
+                    z3zE2568.zsigning_hash = z2zE2684;
+                    z3zE2568.ztx_type = zLegacyTx;
+                    z3zE2568.zvalue = z2zE2681;
+                    goto finish_match_3008;
                   }
-                case_3413: ;
+                case_3009: ;
                   sail_match_failure("decode_legacy_tx");
-                finish_match_3412: ;
-                  COPY(zTransaction)(&z3zE3342, z3zE3343);
-                  KILL(zTransaction)(&z3zE3343);
-                  goto finish_match_3410;
+                finish_match_3008: ;
+                  COPY(zTransaction)(&z3zE2567, z3zE2568);
+                  KILL(zTransaction)(&z3zE2568);
+                  goto finish_match_3006;
                 }
-              case_3411: ;
+              case_3007: ;
                 sail_match_failure("decode_legacy_tx");
-              finish_match_3410: ;
-                COPY(zTransaction)(&z3zE3341, z3zE3342);
-                KILL(zTransaction)(&z3zE3342);
-                goto finish_match_3408;
+              finish_match_3006: ;
+                COPY(zTransaction)(&z3zE2566, z3zE2567);
+                KILL(zTransaction)(&z3zE2567);
+                goto finish_match_3004;
               }
-            case_3409: ;
+            case_3005: ;
               sail_match_failure("decode_legacy_tx");
-            finish_match_3408: ;
-              COPY(zTransaction)(&z3zE3340, z3zE3341);
-              KILL(zTransaction)(&z3zE3341);
-              goto finish_match_3406;
+            finish_match_3004: ;
+              COPY(zTransaction)(&z3zE2565, z3zE2566);
+              KILL(zTransaction)(&z3zE2566);
+              goto finish_match_3002;
             }
-          case_3407: ;
+          case_3003: ;
             sail_match_failure("decode_legacy_tx");
-          finish_match_3406: ;
-            COPY(zTransaction)(&z3zE3339, z3zE3340);
-            KILL(zTransaction)(&z3zE3340);
-            goto finish_match_3404;
+          finish_match_3002: ;
+            COPY(zTransaction)(&z3zE2564, z3zE2565);
+            KILL(zTransaction)(&z3zE2565);
+            goto finish_match_3000;
           }
-        case_3405: ;
+        case_3001: ;
           sail_match_failure("decode_legacy_tx");
-        finish_match_3404: ;
-          COPY(zTransaction)(&z3zE3338, z3zE3339);
-          KILL(zTransaction)(&z3zE3339);
-          goto finish_match_3402;
+        finish_match_3000: ;
+          COPY(zTransaction)(&z3zE2563, z3zE2564);
+          KILL(zTransaction)(&z3zE2564);
+          goto finish_match_2998;
         }
-      case_3403: ;
+      case_2999: ;
         sail_match_failure("decode_legacy_tx");
-      finish_match_3402: ;
-        COPY(zTransaction)(&z3zE3337, z3zE3338);
-        KILL(zTransaction)(&z3zE3338);
-        goto finish_match_3400;
+      finish_match_2998: ;
+        COPY(zTransaction)(&z3zE2562, z3zE2563);
+        KILL(zTransaction)(&z3zE2563);
+        goto finish_match_2996;
       }
-    case_3401: ;
+    case_2997: ;
       sail_match_failure("decode_legacy_tx");
-    finish_match_3400: ;
-      COPY(zTransaction)(&z3zE3336, z3zE3337);
-      KILL(zTransaction)(&z3zE3337);
-      goto finish_match_3398;
+    finish_match_2996: ;
+      COPY(zTransaction)(&z3zE2561, z3zE2562);
+      KILL(zTransaction)(&z3zE2562);
+      goto finish_match_2994;
     }
-  case_3399: ;
+  case_2995: ;
     sail_match_failure("decode_legacy_tx");
-  finish_match_3398: ;
-    COPY(zTransaction)(&z3zE3335, z3zE3336);
-    KILL(zTransaction)(&z3zE3336);
-    goto finish_match_3396;
+  finish_match_2994: ;
+    COPY(zTransaction)(&z3zE2560, z3zE2561);
+    KILL(zTransaction)(&z3zE2561);
+    goto finish_match_2992;
   }
-case_3397: ;
+case_2993: ;
   sail_match_failure("decode_legacy_tx");
-finish_match_3396: ;
-  COPY(zTransaction)((*(&z8zE199)), z3zE3335);
-  KILL(zTransaction)(&z3zE3335);
-end_function_3414: ;
-  goto end_function_4066;
-end_block_exception_3415: ;
-  goto end_function_4066;
-end_function_4066: ;
+finish_match_2992: ;
+  COPY(zTransaction)((*(&z8zE196)), z3zE2560);
+  KILL(zTransaction)(&z3zE2560);
+end_function_3010: ;
+  goto end_function_3647;
+end_block_exception_3011: ;
+  goto end_function_3647;
+end_function_3647: ;
 }
 
-void zdecode_access_list_tx(struct zTransaction *z8zE200, struct zByteSliceFields ztx, struct zByteSliceFields zpubkey, enum zFork zfork, sail_fixed_bytes_20 zsender, struct zRlpCursor zfields)
+void zdecode_access_list_tx(struct zTransaction *z8zE197, struct zByteSliceFields ztx, struct zByteSliceFields zpubkey, enum zFork zfork, sail_fixed_bytes_20 zsender, struct zByteSliceFields zfields)
 {
-  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3340;
+  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2641;
   {
-    z2zE3340 = zrlp_cursor_pop(zfields);
-    if (have_exception) {  goto end_block_exception_3395;  }
+    z2zE2641 = zrlp_cursor_pop(zfields);
+    if (have_exception) {  goto end_block_exception_2991;  }
   }
-  struct zTransaction z3zE3308;
-  CREATE(zTransaction)(&z3zE3308);
+  struct zTransaction z3zE2533;
+  CREATE(zTransaction)(&z3zE2533);
   {
     struct zRlpFieldRef zchain_f;
-    zchain_f = z2zE3340.ztup0;
-    struct zRlpCursor z1zE48;
-    z1zE48 = z2zE3340.ztup1;
-    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3341;
+    zchain_f = z2zE2641.ztup0;
+    struct zByteSliceFields z1zE64;
+    z1zE64 = z2zE2641.ztup1;
+    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2642;
     {
-      z2zE3341 = zrlp_cursor_pop(z1zE48);
+      z2zE2642 = zrlp_cursor_pop(z1zE64);
       if (have_exception) {
-        KILL(zTransaction)(&z3zE3308);
-        goto end_block_exception_3395;
+        KILL(zTransaction)(&z3zE2533);
+        goto end_block_exception_2991;
       }
     }
-    struct zTransaction z3zE3309;
-    CREATE(zTransaction)(&z3zE3309);
+    struct zTransaction z3zE2534;
+    CREATE(zTransaction)(&z3zE2534);
     {
       struct zRlpFieldRef znonce_f;
-      znonce_f = z2zE3341.ztup0;
-      struct zRlpCursor z1zE49;
-      z1zE49 = z2zE3341.ztup1;
-      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3342;
+      znonce_f = z2zE2642.ztup0;
+      struct zByteSliceFields z1zE65;
+      z1zE65 = z2zE2642.ztup1;
+      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2643;
       {
-        z2zE3342 = zrlp_cursor_pop(z1zE49);
+        z2zE2643 = zrlp_cursor_pop(z1zE65);
         if (have_exception) {
-          KILL(zTransaction)(&z3zE3308);
-          KILL(zTransaction)(&z3zE3309);
-          goto end_block_exception_3395;
+          KILL(zTransaction)(&z3zE2533);
+          KILL(zTransaction)(&z3zE2534);
+          goto end_block_exception_2991;
         }
       }
-      struct zTransaction z3zE3310;
-      CREATE(zTransaction)(&z3zE3310);
+      struct zTransaction z3zE2535;
+      CREATE(zTransaction)(&z3zE2535);
       {
         struct zRlpFieldRef zgp_f;
-        zgp_f = z2zE3342.ztup0;
-        struct zRlpCursor z1zE50;
-        z1zE50 = z2zE3342.ztup1;
-        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3343;
+        zgp_f = z2zE2643.ztup0;
+        struct zByteSliceFields z1zE66;
+        z1zE66 = z2zE2643.ztup1;
+        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2644;
         {
-          z2zE3343 = zrlp_cursor_pop(z1zE50);
+          z2zE2644 = zrlp_cursor_pop(z1zE66);
           if (have_exception) {
-            KILL(zTransaction)(&z3zE3308);
-            KILL(zTransaction)(&z3zE3309);
-            KILL(zTransaction)(&z3zE3310);
-            goto end_block_exception_3395;
+            KILL(zTransaction)(&z3zE2533);
+            KILL(zTransaction)(&z3zE2534);
+            KILL(zTransaction)(&z3zE2535);
+            goto end_block_exception_2991;
           }
         }
-        struct zTransaction z3zE3311;
-        CREATE(zTransaction)(&z3zE3311);
+        struct zTransaction z3zE2536;
+        CREATE(zTransaction)(&z3zE2536);
         {
           struct zRlpFieldRef zgas_f;
-          zgas_f = z2zE3343.ztup0;
-          struct zRlpCursor z1zE51;
-          z1zE51 = z2zE3343.ztup1;
-          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3344;
+          zgas_f = z2zE2644.ztup0;
+          struct zByteSliceFields z1zE67;
+          z1zE67 = z2zE2644.ztup1;
+          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2645;
           {
-            z2zE3344 = zrlp_cursor_pop(z1zE51);
+            z2zE2645 = zrlp_cursor_pop(z1zE67);
             if (have_exception) {
-              KILL(zTransaction)(&z3zE3308);
-              KILL(zTransaction)(&z3zE3309);
-              KILL(zTransaction)(&z3zE3310);
-              KILL(zTransaction)(&z3zE3311);
-              goto end_block_exception_3395;
+              KILL(zTransaction)(&z3zE2533);
+              KILL(zTransaction)(&z3zE2534);
+              KILL(zTransaction)(&z3zE2535);
+              KILL(zTransaction)(&z3zE2536);
+              goto end_block_exception_2991;
             }
           }
-          struct zTransaction z3zE3312;
-          CREATE(zTransaction)(&z3zE3312);
+          struct zTransaction z3zE2537;
+          CREATE(zTransaction)(&z3zE2537);
           {
             struct zRlpFieldRef zto_f;
-            zto_f = z2zE3344.ztup0;
-            struct zRlpCursor z1zE52;
-            z1zE52 = z2zE3344.ztup1;
-            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3345;
+            zto_f = z2zE2645.ztup0;
+            struct zByteSliceFields z1zE68;
+            z1zE68 = z2zE2645.ztup1;
+            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2646;
             {
-              z2zE3345 = zrlp_cursor_pop(z1zE52);
+              z2zE2646 = zrlp_cursor_pop(z1zE68);
               if (have_exception) {
-                KILL(zTransaction)(&z3zE3308);
-                KILL(zTransaction)(&z3zE3309);
-                KILL(zTransaction)(&z3zE3310);
-                KILL(zTransaction)(&z3zE3311);
-                KILL(zTransaction)(&z3zE3312);
-                goto end_block_exception_3395;
+                KILL(zTransaction)(&z3zE2533);
+                KILL(zTransaction)(&z3zE2534);
+                KILL(zTransaction)(&z3zE2535);
+                KILL(zTransaction)(&z3zE2536);
+                KILL(zTransaction)(&z3zE2537);
+                goto end_block_exception_2991;
               }
             }
-            struct zTransaction z3zE3313;
-            CREATE(zTransaction)(&z3zE3313);
+            struct zTransaction z3zE2538;
+            CREATE(zTransaction)(&z3zE2538);
             {
               struct zRlpFieldRef zvalue_f;
-              zvalue_f = z2zE3345.ztup0;
-              struct zRlpCursor z1zE53;
-              z1zE53 = z2zE3345.ztup1;
-              struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3346;
+              zvalue_f = z2zE2646.ztup0;
+              struct zByteSliceFields z1zE69;
+              z1zE69 = z2zE2646.ztup1;
+              struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2647;
               {
-                z2zE3346 = zrlp_cursor_pop(z1zE53);
+                z2zE2647 = zrlp_cursor_pop(z1zE69);
                 if (have_exception) {
-                  KILL(zTransaction)(&z3zE3308);
-                  KILL(zTransaction)(&z3zE3309);
-                  KILL(zTransaction)(&z3zE3310);
-                  KILL(zTransaction)(&z3zE3311);
-                  KILL(zTransaction)(&z3zE3312);
-                  KILL(zTransaction)(&z3zE3313);
-                  goto end_block_exception_3395;
+                  KILL(zTransaction)(&z3zE2533);
+                  KILL(zTransaction)(&z3zE2534);
+                  KILL(zTransaction)(&z3zE2535);
+                  KILL(zTransaction)(&z3zE2536);
+                  KILL(zTransaction)(&z3zE2537);
+                  KILL(zTransaction)(&z3zE2538);
+                  goto end_block_exception_2991;
                 }
               }
-              struct zTransaction z3zE3314;
-              CREATE(zTransaction)(&z3zE3314);
+              struct zTransaction z3zE2539;
+              CREATE(zTransaction)(&z3zE2539);
               {
                 struct zRlpFieldRef zdata_f;
-                zdata_f = z2zE3346.ztup0;
-                struct zRlpCursor z1zE54;
-                z1zE54 = z2zE3346.ztup1;
-                struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3347;
+                zdata_f = z2zE2647.ztup0;
+                struct zByteSliceFields z1zE70;
+                z1zE70 = z2zE2647.ztup1;
+                struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2648;
                 {
-                  z2zE3347 = zrlp_cursor_pop(z1zE54);
+                  z2zE2648 = zrlp_cursor_pop(z1zE70);
                   if (have_exception) {
-                    KILL(zTransaction)(&z3zE3308);
-                    KILL(zTransaction)(&z3zE3309);
-                    KILL(zTransaction)(&z3zE3310);
-                    KILL(zTransaction)(&z3zE3311);
-                    KILL(zTransaction)(&z3zE3312);
-                    KILL(zTransaction)(&z3zE3313);
-                    KILL(zTransaction)(&z3zE3314);
-                    goto end_block_exception_3395;
+                    KILL(zTransaction)(&z3zE2533);
+                    KILL(zTransaction)(&z3zE2534);
+                    KILL(zTransaction)(&z3zE2535);
+                    KILL(zTransaction)(&z3zE2536);
+                    KILL(zTransaction)(&z3zE2537);
+                    KILL(zTransaction)(&z3zE2538);
+                    KILL(zTransaction)(&z3zE2539);
+                    goto end_block_exception_2991;
                   }
                 }
-                struct zTransaction z3zE3315;
-                CREATE(zTransaction)(&z3zE3315);
+                struct zTransaction z3zE2540;
+                CREATE(zTransaction)(&z3zE2540);
                 {
                   struct zRlpFieldRef zal_f;
-                  zal_f = z2zE3347.ztup0;
-                  struct zRlpCursor z1zE55;
-                  z1zE55 = z2zE3347.ztup1;
-                  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3348;
+                  zal_f = z2zE2648.ztup0;
+                  struct zByteSliceFields z1zE71;
+                  z1zE71 = z2zE2648.ztup1;
+                  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2649;
                   {
-                    z2zE3348 = zrlp_cursor_pop(z1zE55);
+                    z2zE2649 = zrlp_cursor_pop(z1zE71);
                     if (have_exception) {
-                      KILL(zTransaction)(&z3zE3308);
-                      KILL(zTransaction)(&z3zE3309);
-                      KILL(zTransaction)(&z3zE3310);
-                      KILL(zTransaction)(&z3zE3311);
-                      KILL(zTransaction)(&z3zE3312);
-                      KILL(zTransaction)(&z3zE3313);
-                      KILL(zTransaction)(&z3zE3314);
-                      KILL(zTransaction)(&z3zE3315);
-                      goto end_block_exception_3395;
+                      KILL(zTransaction)(&z3zE2533);
+                      KILL(zTransaction)(&z3zE2534);
+                      KILL(zTransaction)(&z3zE2535);
+                      KILL(zTransaction)(&z3zE2536);
+                      KILL(zTransaction)(&z3zE2537);
+                      KILL(zTransaction)(&z3zE2538);
+                      KILL(zTransaction)(&z3zE2539);
+                      KILL(zTransaction)(&z3zE2540);
+                      goto end_block_exception_2991;
                     }
                   }
-                  struct zTransaction z3zE3316;
-                  CREATE(zTransaction)(&z3zE3316);
+                  struct zTransaction z3zE2541;
+                  CREATE(zTransaction)(&z3zE2541);
                   {
                     struct zRlpFieldRef zv_f;
-                    zv_f = z2zE3348.ztup0;
-                    struct zRlpCursor z1zE56;
-                    z1zE56 = z2zE3348.ztup1;
-                    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3349;
+                    zv_f = z2zE2649.ztup0;
+                    struct zByteSliceFields z1zE72;
+                    z1zE72 = z2zE2649.ztup1;
+                    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2650;
                     {
-                      z2zE3349 = zrlp_cursor_pop(z1zE56);
+                      z2zE2650 = zrlp_cursor_pop(z1zE72);
                       if (have_exception) {
-                        KILL(zTransaction)(&z3zE3308);
-                        KILL(zTransaction)(&z3zE3309);
-                        KILL(zTransaction)(&z3zE3310);
-                        KILL(zTransaction)(&z3zE3311);
-                        KILL(zTransaction)(&z3zE3312);
-                        KILL(zTransaction)(&z3zE3313);
-                        KILL(zTransaction)(&z3zE3314);
-                        KILL(zTransaction)(&z3zE3315);
-                        KILL(zTransaction)(&z3zE3316);
-                        goto end_block_exception_3395;
+                        KILL(zTransaction)(&z3zE2533);
+                        KILL(zTransaction)(&z3zE2534);
+                        KILL(zTransaction)(&z3zE2535);
+                        KILL(zTransaction)(&z3zE2536);
+                        KILL(zTransaction)(&z3zE2537);
+                        KILL(zTransaction)(&z3zE2538);
+                        KILL(zTransaction)(&z3zE2539);
+                        KILL(zTransaction)(&z3zE2540);
+                        KILL(zTransaction)(&z3zE2541);
+                        goto end_block_exception_2991;
                       }
                     }
-                    struct zTransaction z3zE3317;
-                    CREATE(zTransaction)(&z3zE3317);
+                    struct zTransaction z3zE2542;
+                    CREATE(zTransaction)(&z3zE2542);
                     {
                       struct zRlpFieldRef zr_f;
-                      zr_f = z2zE3349.ztup0;
-                      struct zRlpCursor z1zE57;
-                      z1zE57 = z2zE3349.ztup1;
-                      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3350;
+                      zr_f = z2zE2650.ztup0;
+                      struct zByteSliceFields z1zE73;
+                      z1zE73 = z2zE2650.ztup1;
+                      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2651;
                       {
-                        z2zE3350 = zrlp_cursor_pop(z1zE57);
+                        z2zE2651 = zrlp_cursor_pop(z1zE73);
                         if (have_exception) {
-                          KILL(zTransaction)(&z3zE3308);
-                          KILL(zTransaction)(&z3zE3309);
-                          KILL(zTransaction)(&z3zE3310);
-                          KILL(zTransaction)(&z3zE3311);
-                          KILL(zTransaction)(&z3zE3312);
-                          KILL(zTransaction)(&z3zE3313);
-                          KILL(zTransaction)(&z3zE3314);
-                          KILL(zTransaction)(&z3zE3315);
-                          KILL(zTransaction)(&z3zE3316);
-                          KILL(zTransaction)(&z3zE3317);
-                          goto end_block_exception_3395;
+                          KILL(zTransaction)(&z3zE2533);
+                          KILL(zTransaction)(&z3zE2534);
+                          KILL(zTransaction)(&z3zE2535);
+                          KILL(zTransaction)(&z3zE2536);
+                          KILL(zTransaction)(&z3zE2537);
+                          KILL(zTransaction)(&z3zE2538);
+                          KILL(zTransaction)(&z3zE2539);
+                          KILL(zTransaction)(&z3zE2540);
+                          KILL(zTransaction)(&z3zE2541);
+                          KILL(zTransaction)(&z3zE2542);
+                          goto end_block_exception_2991;
                         }
                       }
-                      struct zTransaction z3zE3318;
-                      CREATE(zTransaction)(&z3zE3318);
+                      struct zTransaction z3zE2543;
+                      CREATE(zTransaction)(&z3zE2543);
                       {
                         struct zRlpFieldRef zs_f;
-                        zs_f = z2zE3350.ztup0;
-                        struct zRlpCursor z1zE58;
-                        z1zE58 = z2zE3350.ztup1;
-                        unit z3zE3319;
+                        zs_f = z2zE2651.ztup0;
+                        struct zByteSliceFields z1zE74;
+                        z1zE74 = z2zE2651.ztup1;
+                        unit z3zE2544;
                         {
-                          z3zE3319 = zrlp_cursor_expect_end(z1zE58);
+                          z3zE2544 = zrlp_cursor_expect_end(z1zE74);
                           if (have_exception) {
-                            KILL(zTransaction)(&z3zE3308);
-                            KILL(zTransaction)(&z3zE3309);
-                            KILL(zTransaction)(&z3zE3310);
-                            KILL(zTransaction)(&z3zE3311);
-                            KILL(zTransaction)(&z3zE3312);
-                            KILL(zTransaction)(&z3zE3313);
-                            KILL(zTransaction)(&z3zE3314);
-                            KILL(zTransaction)(&z3zE3315);
-                            KILL(zTransaction)(&z3zE3316);
-                            KILL(zTransaction)(&z3zE3317);
-                            KILL(zTransaction)(&z3zE3318);
-                            goto end_block_exception_3395;
+                            KILL(zTransaction)(&z3zE2533);
+                            KILL(zTransaction)(&z3zE2534);
+                            KILL(zTransaction)(&z3zE2535);
+                            KILL(zTransaction)(&z3zE2536);
+                            KILL(zTransaction)(&z3zE2537);
+                            KILL(zTransaction)(&z3zE2538);
+                            KILL(zTransaction)(&z3zE2539);
+                            KILL(zTransaction)(&z3zE2540);
+                            KILL(zTransaction)(&z3zE2541);
+                            KILL(zTransaction)(&z3zE2542);
+                            KILL(zTransaction)(&z3zE2543);
+                            goto end_block_exception_2991;
                           }
                         }
                         sail_u256 zv;
                         {
                           zv = zrlp_ref_word(zv_f);
                           if (have_exception) {
-                            KILL(zTransaction)(&z3zE3308);
-                            KILL(zTransaction)(&z3zE3309);
-                            KILL(zTransaction)(&z3zE3310);
-                            KILL(zTransaction)(&z3zE3311);
-                            KILL(zTransaction)(&z3zE3312);
-                            KILL(zTransaction)(&z3zE3313);
-                            KILL(zTransaction)(&z3zE3314);
-                            KILL(zTransaction)(&z3zE3315);
-                            KILL(zTransaction)(&z3zE3316);
-                            KILL(zTransaction)(&z3zE3317);
-                            KILL(zTransaction)(&z3zE3318);
-                            goto end_block_exception_3395;
+                            KILL(zTransaction)(&z3zE2533);
+                            KILL(zTransaction)(&z3zE2534);
+                            KILL(zTransaction)(&z3zE2535);
+                            KILL(zTransaction)(&z3zE2536);
+                            KILL(zTransaction)(&z3zE2537);
+                            KILL(zTransaction)(&z3zE2538);
+                            KILL(zTransaction)(&z3zE2539);
+                            KILL(zTransaction)(&z3zE2540);
+                            KILL(zTransaction)(&z3zE2541);
+                            KILL(zTransaction)(&z3zE2542);
+                            KILL(zTransaction)(&z3zE2543);
+                            goto end_block_exception_2991;
                           }
                         }
                         sail_u256 zgp;
                         {
                           zgp = zrlp_ref_uint_word(zgp_f);
                           if (have_exception) {
-                            KILL(zTransaction)(&z3zE3308);
-                            KILL(zTransaction)(&z3zE3309);
-                            KILL(zTransaction)(&z3zE3310);
-                            KILL(zTransaction)(&z3zE3311);
-                            KILL(zTransaction)(&z3zE3312);
-                            KILL(zTransaction)(&z3zE3313);
-                            KILL(zTransaction)(&z3zE3314);
-                            KILL(zTransaction)(&z3zE3315);
-                            KILL(zTransaction)(&z3zE3316);
-                            KILL(zTransaction)(&z3zE3317);
-                            KILL(zTransaction)(&z3zE3318);
-                            goto end_block_exception_3395;
+                            KILL(zTransaction)(&z3zE2533);
+                            KILL(zTransaction)(&z3zE2534);
+                            KILL(zTransaction)(&z3zE2535);
+                            KILL(zTransaction)(&z3zE2536);
+                            KILL(zTransaction)(&z3zE2537);
+                            KILL(zTransaction)(&z3zE2538);
+                            KILL(zTransaction)(&z3zE2539);
+                            KILL(zTransaction)(&z3zE2540);
+                            KILL(zTransaction)(&z3zE2541);
+                            KILL(zTransaction)(&z3zE2542);
+                            KILL(zTransaction)(&z3zE2543);
+                            goto end_block_exception_2991;
                           }
                         }
-                        struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 z2zE3351;
-                        CREATE(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3351);
+                        struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 z2zE2652;
+                        CREATE(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2652);
                         {
-                          zdecode_access_list(&z2zE3351, zal_f);
+                          zdecode_access_list(&z2zE2652, zal_f);
                           if (have_exception) {
-                            KILL(zTransaction)(&z3zE3308);
-                            KILL(zTransaction)(&z3zE3309);
-                            KILL(zTransaction)(&z3zE3310);
-                            KILL(zTransaction)(&z3zE3311);
-                            KILL(zTransaction)(&z3zE3312);
-                            KILL(zTransaction)(&z3zE3313);
-                            KILL(zTransaction)(&z3zE3314);
-                            KILL(zTransaction)(&z3zE3315);
-                            KILL(zTransaction)(&z3zE3316);
-                            KILL(zTransaction)(&z3zE3317);
-                            KILL(zTransaction)(&z3zE3318);
-                            KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3351);
-                            goto end_block_exception_3395;
+                            KILL(zTransaction)(&z3zE2533);
+                            KILL(zTransaction)(&z3zE2534);
+                            KILL(zTransaction)(&z3zE2535);
+                            KILL(zTransaction)(&z3zE2536);
+                            KILL(zTransaction)(&z3zE2537);
+                            KILL(zTransaction)(&z3zE2538);
+                            KILL(zTransaction)(&z3zE2539);
+                            KILL(zTransaction)(&z3zE2540);
+                            KILL(zTransaction)(&z3zE2541);
+                            KILL(zTransaction)(&z3zE2542);
+                            KILL(zTransaction)(&z3zE2543);
+                            KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2652);
+                            goto end_block_exception_2991;
                           }
                         }
-                        struct zTransaction z3zE3320;
-                        CREATE(zTransaction)(&z3zE3320);
+                        struct zTransaction z3zE2545;
+                        CREATE(zTransaction)(&z3zE2545);
                         {
                           zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 zal_addrs;
                           CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
-                          COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs, z2zE3351.ztup0);
+                          COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs, z2zE2652.ztup0);
                           zz5listz8z5structz0zzStorageKeyz9 zal_slots;
                           CREATE(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                          COPY(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots, z2zE3351.ztup1);
+                          COPY(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots, z2zE2652.ztup1);
                           uint64_t zal_addr_count;
-                          zal_addr_count = z2zE3351.ztup2;
+                          zal_addr_count = z2zE2652.ztup2;
                           uint64_t zal_slot_count;
-                          zal_slot_count = z2zE3351.ztup3;
-                          sail_u256 z2zE3352;
+                          zal_slot_count = z2zE2652.ztup3;
+                          sail_u256 z2zE2653;
                           {
-                            z2zE3352 = zrlp_ref_uint_word(znonce_f);
+                            z2zE2653 = zrlp_ref_uint_word(znonce_f);
                             if (have_exception) {
-                              KILL(zTransaction)(&z3zE3308);
-                              KILL(zTransaction)(&z3zE3309);
-                              KILL(zTransaction)(&z3zE3310);
-                              KILL(zTransaction)(&z3zE3311);
-                              KILL(zTransaction)(&z3zE3312);
-                              KILL(zTransaction)(&z3zE3313);
-                              KILL(zTransaction)(&z3zE3314);
-                              KILL(zTransaction)(&z3zE3315);
-                              KILL(zTransaction)(&z3zE3316);
-                              KILL(zTransaction)(&z3zE3317);
-                              KILL(zTransaction)(&z3zE3318);
-                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3351);
-                              KILL(zTransaction)(&z3zE3320);
+                              KILL(zTransaction)(&z3zE2533);
+                              KILL(zTransaction)(&z3zE2534);
+                              KILL(zTransaction)(&z3zE2535);
+                              KILL(zTransaction)(&z3zE2536);
+                              KILL(zTransaction)(&z3zE2537);
+                              KILL(zTransaction)(&z3zE2538);
+                              KILL(zTransaction)(&z3zE2539);
+                              KILL(zTransaction)(&z3zE2540);
+                              KILL(zTransaction)(&z3zE2541);
+                              KILL(zTransaction)(&z3zE2542);
+                              KILL(zTransaction)(&z3zE2543);
+                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2652);
+                              KILL(zTransaction)(&z3zE2545);
                               KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                               KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                              goto end_block_exception_3395;
+                              goto end_block_exception_2991;
                             }
                           }
-                          uint64_t z2zE3353;
+                          uint64_t z2zE2654;
                           {
-                            z2zE3353 = zrlp_ref_uint64(zchain_f);
+                            z2zE2654 = zrlp_ref_uint64(zchain_f);
                             if (have_exception) {
-                              KILL(zTransaction)(&z3zE3308);
-                              KILL(zTransaction)(&z3zE3309);
-                              KILL(zTransaction)(&z3zE3310);
-                              KILL(zTransaction)(&z3zE3311);
-                              KILL(zTransaction)(&z3zE3312);
-                              KILL(zTransaction)(&z3zE3313);
-                              KILL(zTransaction)(&z3zE3314);
-                              KILL(zTransaction)(&z3zE3315);
-                              KILL(zTransaction)(&z3zE3316);
-                              KILL(zTransaction)(&z3zE3317);
-                              KILL(zTransaction)(&z3zE3318);
-                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3351);
-                              KILL(zTransaction)(&z3zE3320);
+                              KILL(zTransaction)(&z3zE2533);
+                              KILL(zTransaction)(&z3zE2534);
+                              KILL(zTransaction)(&z3zE2535);
+                              KILL(zTransaction)(&z3zE2536);
+                              KILL(zTransaction)(&z3zE2537);
+                              KILL(zTransaction)(&z3zE2538);
+                              KILL(zTransaction)(&z3zE2539);
+                              KILL(zTransaction)(&z3zE2540);
+                              KILL(zTransaction)(&z3zE2541);
+                              KILL(zTransaction)(&z3zE2542);
+                              KILL(zTransaction)(&z3zE2543);
+                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2652);
+                              KILL(zTransaction)(&z3zE2545);
                               KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                               KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                              goto end_block_exception_3395;
+                              goto end_block_exception_2991;
                             }
                           }
-                          uint64_t z2zE3354;
+                          uint64_t z2zE2655;
                           {
-                            z2zE3354 = zrlp_ref_gas(zgas_f, zfork);
+                            z2zE2655 = zrlp_ref_gas(zgas_f, zfork);
                             if (have_exception) {
-                              KILL(zTransaction)(&z3zE3308);
-                              KILL(zTransaction)(&z3zE3309);
-                              KILL(zTransaction)(&z3zE3310);
-                              KILL(zTransaction)(&z3zE3311);
-                              KILL(zTransaction)(&z3zE3312);
-                              KILL(zTransaction)(&z3zE3313);
-                              KILL(zTransaction)(&z3zE3314);
-                              KILL(zTransaction)(&z3zE3315);
-                              KILL(zTransaction)(&z3zE3316);
-                              KILL(zTransaction)(&z3zE3317);
-                              KILL(zTransaction)(&z3zE3318);
-                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3351);
-                              KILL(zTransaction)(&z3zE3320);
+                              KILL(zTransaction)(&z3zE2533);
+                              KILL(zTransaction)(&z3zE2534);
+                              KILL(zTransaction)(&z3zE2535);
+                              KILL(zTransaction)(&z3zE2536);
+                              KILL(zTransaction)(&z3zE2537);
+                              KILL(zTransaction)(&z3zE2538);
+                              KILL(zTransaction)(&z3zE2539);
+                              KILL(zTransaction)(&z3zE2540);
+                              KILL(zTransaction)(&z3zE2541);
+                              KILL(zTransaction)(&z3zE2542);
+                              KILL(zTransaction)(&z3zE2543);
+                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2652);
+                              KILL(zTransaction)(&z3zE2545);
                               KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                               KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                              goto end_block_exception_3395;
+                              goto end_block_exception_2991;
                             }
                           }
-                          bool z2zE3356;
+                          bool z2zE2657;
                           {
-                            uint64_t z2zE3355;
-                            z2zE3355 = zto_f.zcontent_len;
-                            z2zE3356 = (z2zE3355 == UINT64_C(0));
+                            uint64_t z2zE2656;
+                            z2zE2656 = zto_f.zcontent_len;
+                            z2zE2657 = (z2zE2656 == UINT64_C(0));
                           }
-                          sail_fixed_bytes_20 z2zE3358;
+                          sail_fixed_bytes_20 z2zE2659;
                           {
-                            sail_u256 z2zE3357;
+                            sail_u256 z2zE2658;
                             {
-                              z2zE3357 = zrlp_ref_word(zto_f);
+                              z2zE2658 = zrlp_ref_word(zto_f);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3308);
-                                KILL(zTransaction)(&z3zE3309);
-                                KILL(zTransaction)(&z3zE3310);
-                                KILL(zTransaction)(&z3zE3311);
-                                KILL(zTransaction)(&z3zE3312);
-                                KILL(zTransaction)(&z3zE3313);
-                                KILL(zTransaction)(&z3zE3314);
-                                KILL(zTransaction)(&z3zE3315);
-                                KILL(zTransaction)(&z3zE3316);
-                                KILL(zTransaction)(&z3zE3317);
-                                KILL(zTransaction)(&z3zE3318);
-                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3351);
-                                KILL(zTransaction)(&z3zE3320);
+                                KILL(zTransaction)(&z3zE2533);
+                                KILL(zTransaction)(&z3zE2534);
+                                KILL(zTransaction)(&z3zE2535);
+                                KILL(zTransaction)(&z3zE2536);
+                                KILL(zTransaction)(&z3zE2537);
+                                KILL(zTransaction)(&z3zE2538);
+                                KILL(zTransaction)(&z3zE2539);
+                                KILL(zTransaction)(&z3zE2540);
+                                KILL(zTransaction)(&z3zE2541);
+                                KILL(zTransaction)(&z3zE2542);
+                                KILL(zTransaction)(&z3zE2543);
+                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2652);
+                                KILL(zTransaction)(&z3zE2545);
                                 KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                 KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                goto end_block_exception_3395;
+                                goto end_block_exception_2991;
                               }
                             }
-                            z2zE3358 = zword_to_address(z2zE3357);
+                            z2zE2659 = evmsail_word_to_address(z2zE2658);
                           }
-                          sail_u256 z2zE3359;
+                          sail_u256 z2zE2660;
                           {
-                            z2zE3359 = zrlp_ref_uint_word(zvalue_f);
+                            z2zE2660 = zrlp_ref_uint_word(zvalue_f);
                             if (have_exception) {
-                              KILL(zTransaction)(&z3zE3308);
-                              KILL(zTransaction)(&z3zE3309);
-                              KILL(zTransaction)(&z3zE3310);
-                              KILL(zTransaction)(&z3zE3311);
-                              KILL(zTransaction)(&z3zE3312);
-                              KILL(zTransaction)(&z3zE3313);
-                              KILL(zTransaction)(&z3zE3314);
-                              KILL(zTransaction)(&z3zE3315);
-                              KILL(zTransaction)(&z3zE3316);
-                              KILL(zTransaction)(&z3zE3317);
-                              KILL(zTransaction)(&z3zE3318);
-                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3351);
-                              KILL(zTransaction)(&z3zE3320);
+                              KILL(zTransaction)(&z3zE2533);
+                              KILL(zTransaction)(&z3zE2534);
+                              KILL(zTransaction)(&z3zE2535);
+                              KILL(zTransaction)(&z3zE2536);
+                              KILL(zTransaction)(&z3zE2537);
+                              KILL(zTransaction)(&z3zE2538);
+                              KILL(zTransaction)(&z3zE2539);
+                              KILL(zTransaction)(&z3zE2540);
+                              KILL(zTransaction)(&z3zE2541);
+                              KILL(zTransaction)(&z3zE2542);
+                              KILL(zTransaction)(&z3zE2543);
+                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2652);
+                              KILL(zTransaction)(&z3zE2545);
                               KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                               KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                              goto end_block_exception_3395;
+                              goto end_block_exception_2991;
                             }
                           }
-                          struct zByteSliceFields z2zE3360;
+                          struct zByteSliceFields z2zE2661;
                           {
-                            z2zE3360 = ztx_input_span(zdata_f);
+                            z2zE2661 = ztx_input_span(zdata_f);
                             if (have_exception) {
-                              KILL(zTransaction)(&z3zE3308);
-                              KILL(zTransaction)(&z3zE3309);
-                              KILL(zTransaction)(&z3zE3310);
-                              KILL(zTransaction)(&z3zE3311);
-                              KILL(zTransaction)(&z3zE3312);
-                              KILL(zTransaction)(&z3zE3313);
-                              KILL(zTransaction)(&z3zE3314);
-                              KILL(zTransaction)(&z3zE3315);
-                              KILL(zTransaction)(&z3zE3316);
-                              KILL(zTransaction)(&z3zE3317);
-                              KILL(zTransaction)(&z3zE3318);
-                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3351);
-                              KILL(zTransaction)(&z3zE3320);
+                              KILL(zTransaction)(&z3zE2533);
+                              KILL(zTransaction)(&z3zE2534);
+                              KILL(zTransaction)(&z3zE2535);
+                              KILL(zTransaction)(&z3zE2536);
+                              KILL(zTransaction)(&z3zE2537);
+                              KILL(zTransaction)(&z3zE2538);
+                              KILL(zTransaction)(&z3zE2539);
+                              KILL(zTransaction)(&z3zE2540);
+                              KILL(zTransaction)(&z3zE2541);
+                              KILL(zTransaction)(&z3zE2542);
+                              KILL(zTransaction)(&z3zE2543);
+                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2652);
+                              KILL(zTransaction)(&z3zE2545);
                               KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                               KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                              goto end_block_exception_3395;
+                              goto end_block_exception_2991;
                             }
                           }
-                          sail_fixed_bytes_32 z2zE3362;
+                          sail_fixed_bytes_32 z2zE2663;
                           {
-                            struct zByteSliceFields z2zE3361;
+                            struct zByteSliceFields z2zE2662;
                             {
-                              z2zE3361 = ztx_sig_span(zchain_f, zv_f);
+                              z2zE2662 = ztx_sig_span(zchain_f, zv_f);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3308);
-                                KILL(zTransaction)(&z3zE3309);
-                                KILL(zTransaction)(&z3zE3310);
-                                KILL(zTransaction)(&z3zE3311);
-                                KILL(zTransaction)(&z3zE3312);
-                                KILL(zTransaction)(&z3zE3313);
-                                KILL(zTransaction)(&z3zE3314);
-                                KILL(zTransaction)(&z3zE3315);
-                                KILL(zTransaction)(&z3zE3316);
-                                KILL(zTransaction)(&z3zE3317);
-                                KILL(zTransaction)(&z3zE3318);
-                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3351);
-                                KILL(zTransaction)(&z3zE3320);
+                                KILL(zTransaction)(&z3zE2533);
+                                KILL(zTransaction)(&z3zE2534);
+                                KILL(zTransaction)(&z3zE2535);
+                                KILL(zTransaction)(&z3zE2536);
+                                KILL(zTransaction)(&z3zE2537);
+                                KILL(zTransaction)(&z3zE2538);
+                                KILL(zTransaction)(&z3zE2539);
+                                KILL(zTransaction)(&z3zE2540);
+                                KILL(zTransaction)(&z3zE2541);
+                                KILL(zTransaction)(&z3zE2542);
+                                KILL(zTransaction)(&z3zE2543);
+                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2652);
+                                KILL(zTransaction)(&z3zE2545);
                                 KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                 KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                goto end_block_exception_3395;
+                                goto end_block_exception_2991;
                               }
                             }
                             {
-                              z2zE3362 = ztx_signing_hash(zAccessListTx, z2zE3361, zv);
+                              z2zE2663 = ztx_signing_hash(zAccessListTx, z2zE2662, zv);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3308);
-                                KILL(zTransaction)(&z3zE3309);
-                                KILL(zTransaction)(&z3zE3310);
-                                KILL(zTransaction)(&z3zE3311);
-                                KILL(zTransaction)(&z3zE3312);
-                                KILL(zTransaction)(&z3zE3313);
-                                KILL(zTransaction)(&z3zE3314);
-                                KILL(zTransaction)(&z3zE3315);
-                                KILL(zTransaction)(&z3zE3316);
-                                KILL(zTransaction)(&z3zE3317);
-                                KILL(zTransaction)(&z3zE3318);
-                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3351);
-                                KILL(zTransaction)(&z3zE3320);
+                                KILL(zTransaction)(&z3zE2533);
+                                KILL(zTransaction)(&z3zE2534);
+                                KILL(zTransaction)(&z3zE2535);
+                                KILL(zTransaction)(&z3zE2536);
+                                KILL(zTransaction)(&z3zE2537);
+                                KILL(zTransaction)(&z3zE2538);
+                                KILL(zTransaction)(&z3zE2539);
+                                KILL(zTransaction)(&z3zE2540);
+                                KILL(zTransaction)(&z3zE2541);
+                                KILL(zTransaction)(&z3zE2542);
+                                KILL(zTransaction)(&z3zE2543);
+                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2652);
+                                KILL(zTransaction)(&z3zE2545);
                                 KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                 KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                goto end_block_exception_3395;
+                                goto end_block_exception_2991;
                               }
                             }
                           }
-                          sail_u256 z2zE3363;
+                          sail_u256 z2zE2664;
                           {
-                            z2zE3363 = zrlp_ref_uint_word(zr_f);
+                            z2zE2664 = zrlp_ref_uint_word(zr_f);
                             if (have_exception) {
-                              KILL(zTransaction)(&z3zE3308);
-                              KILL(zTransaction)(&z3zE3309);
-                              KILL(zTransaction)(&z3zE3310);
-                              KILL(zTransaction)(&z3zE3311);
-                              KILL(zTransaction)(&z3zE3312);
-                              KILL(zTransaction)(&z3zE3313);
-                              KILL(zTransaction)(&z3zE3314);
-                              KILL(zTransaction)(&z3zE3315);
-                              KILL(zTransaction)(&z3zE3316);
-                              KILL(zTransaction)(&z3zE3317);
-                              KILL(zTransaction)(&z3zE3318);
-                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3351);
-                              KILL(zTransaction)(&z3zE3320);
+                              KILL(zTransaction)(&z3zE2533);
+                              KILL(zTransaction)(&z3zE2534);
+                              KILL(zTransaction)(&z3zE2535);
+                              KILL(zTransaction)(&z3zE2536);
+                              KILL(zTransaction)(&z3zE2537);
+                              KILL(zTransaction)(&z3zE2538);
+                              KILL(zTransaction)(&z3zE2539);
+                              KILL(zTransaction)(&z3zE2540);
+                              KILL(zTransaction)(&z3zE2541);
+                              KILL(zTransaction)(&z3zE2542);
+                              KILL(zTransaction)(&z3zE2543);
+                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2652);
+                              KILL(zTransaction)(&z3zE2545);
                               KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                               KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                              goto end_block_exception_3395;
+                              goto end_block_exception_2991;
                             }
                           }
-                          sail_u256 z2zE3364;
+                          sail_u256 z2zE2665;
                           {
-                            z2zE3364 = zrlp_ref_uint_word(zs_f);
+                            z2zE2665 = zrlp_ref_uint_word(zs_f);
                             if (have_exception) {
-                              KILL(zTransaction)(&z3zE3308);
-                              KILL(zTransaction)(&z3zE3309);
-                              KILL(zTransaction)(&z3zE3310);
-                              KILL(zTransaction)(&z3zE3311);
-                              KILL(zTransaction)(&z3zE3312);
-                              KILL(zTransaction)(&z3zE3313);
-                              KILL(zTransaction)(&z3zE3314);
-                              KILL(zTransaction)(&z3zE3315);
-                              KILL(zTransaction)(&z3zE3316);
-                              KILL(zTransaction)(&z3zE3317);
-                              KILL(zTransaction)(&z3zE3318);
-                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3351);
-                              KILL(zTransaction)(&z3zE3320);
+                              KILL(zTransaction)(&z3zE2533);
+                              KILL(zTransaction)(&z3zE2534);
+                              KILL(zTransaction)(&z3zE2535);
+                              KILL(zTransaction)(&z3zE2536);
+                              KILL(zTransaction)(&z3zE2537);
+                              KILL(zTransaction)(&z3zE2538);
+                              KILL(zTransaction)(&z3zE2539);
+                              KILL(zTransaction)(&z3zE2540);
+                              KILL(zTransaction)(&z3zE2541);
+                              KILL(zTransaction)(&z3zE2542);
+                              KILL(zTransaction)(&z3zE2543);
+                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2652);
+                              KILL(zTransaction)(&z3zE2545);
                               KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                               KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                              goto end_block_exception_3395;
+                              goto end_block_exception_2991;
                             }
                           }
-                          z3zE3320.zaccess_list_address_count = zal_addr_count;
-                          COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE3320)->zaccess_list_addresses), zal_addrs);
-                          z3zE3320.zaccess_list_slot_count = zal_slot_count;
-                          COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE3320)->zaccess_list_slots), zal_slots);
-                          z3zE3320.zauthorizzation_count = UINT64_C(0);
-                          zz5listz8z5structz0zzAuthorizzzzationz9 z3zE3322;
-                          CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE3322);
-                          COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE3320)->zauthorizzations), z3zE3322);
-                          KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE3322);
-                          z3zE3320.zblob_hashes = zEMPTY_BLOB_HASHES;
-                          z3zE3320.zchain_id = z2zE3353;
-                          z3zE3320.zgas_limit = z2zE3354;
-                          z3zE3320.zinput_src = z2zE3360;
-                          z3zE3320.zis_create = z2zE3356;
-                          z3zE3320.zmax_blob_fee = zZERO_WORD;
-                          z3zE3320.zmax_fee = zgp;
-                          z3zE3320.zmax_priority_fee = zgp;
-                          z3zE3320.znonce = z2zE3352;
-                          z3zE3320.zpubkey = zpubkey;
-                          z3zE3320.zraw = ztx;
-                          z3zE3320.zrecipient = z2zE3358;
-                          z3zE3320.zsender = zsender;
-                          z3zE3320.zsig_r = z2zE3363;
-                          z3zE3320.zsig_s = z2zE3364;
-                          z3zE3320.zsig_v = zv;
-                          z3zE3320.zsigning_hash = z2zE3362;
-                          z3zE3320.ztx_type = zAccessListTx;
-                          z3zE3320.zvalue = z2zE3359;
+                          z3zE2545.zaccess_list_address_count = zal_addr_count;
+                          COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE2545)->zaccess_list_addresses), zal_addrs);
+                          z3zE2545.zaccess_list_slot_count = zal_slot_count;
+                          COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE2545)->zaccess_list_slots), zal_slots);
+                          z3zE2545.zauthorizzation_count = UINT64_C(0);
+                          zz5listz8z5structz0zzAuthorizzzzationz9 z3zE2547;
+                          CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE2547);
+                          COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE2545)->zauthorizzations), z3zE2547);
+                          KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE2547);
+                          z3zE2545.zblob_hashes = zEMPTY_BLOB_HASHES;
+                          z3zE2545.zchain_id = z2zE2654;
+                          z3zE2545.zgas_limit = z2zE2655;
+                          z3zE2545.zinput_src = z2zE2661;
+                          z3zE2545.zis_create = z2zE2657;
+                          z3zE2545.zmax_blob_fee = zZERO_WORD;
+                          z3zE2545.zmax_fee = zgp;
+                          z3zE2545.zmax_priority_fee = zgp;
+                          z3zE2545.znonce = z2zE2653;
+                          z3zE2545.zpubkey = zpubkey;
+                          z3zE2545.zraw = ztx;
+                          z3zE2545.zrecipient = z2zE2659;
+                          z3zE2545.zsender = zsender;
+                          z3zE2545.zsig_r = z2zE2664;
+                          z3zE2545.zsig_s = z2zE2665;
+                          z3zE2545.zsig_v = zv;
+                          z3zE2545.zsigning_hash = z2zE2663;
+                          z3zE2545.ztx_type = zAccessListTx;
+                          z3zE2545.zvalue = z2zE2660;
                           KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
                           KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
-                          goto finish_match_3392;
+                          goto finish_match_2988;
                         }
-                      case_3393: ;
+                      case_2989: ;
                         sail_match_failure("decode_access_list_tx");
-                      finish_match_3392: ;
-                        COPY(zTransaction)(&z3zE3318, z3zE3320);
-                        KILL(zTransaction)(&z3zE3320);
-                        KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3351);
-                        goto finish_match_3390;
+                      finish_match_2988: ;
+                        COPY(zTransaction)(&z3zE2543, z3zE2545);
+                        KILL(zTransaction)(&z3zE2545);
+                        KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2652);
+                        goto finish_match_2986;
                       }
-                    case_3391: ;
+                    case_2987: ;
                       sail_match_failure("decode_access_list_tx");
-                    finish_match_3390: ;
-                      COPY(zTransaction)(&z3zE3317, z3zE3318);
-                      KILL(zTransaction)(&z3zE3318);
-                      goto finish_match_3388;
+                    finish_match_2986: ;
+                      COPY(zTransaction)(&z3zE2542, z3zE2543);
+                      KILL(zTransaction)(&z3zE2543);
+                      goto finish_match_2984;
                     }
-                  case_3389: ;
+                  case_2985: ;
                     sail_match_failure("decode_access_list_tx");
-                  finish_match_3388: ;
-                    COPY(zTransaction)(&z3zE3316, z3zE3317);
-                    KILL(zTransaction)(&z3zE3317);
-                    goto finish_match_3386;
+                  finish_match_2984: ;
+                    COPY(zTransaction)(&z3zE2541, z3zE2542);
+                    KILL(zTransaction)(&z3zE2542);
+                    goto finish_match_2982;
                   }
-                case_3387: ;
+                case_2983: ;
                   sail_match_failure("decode_access_list_tx");
-                finish_match_3386: ;
-                  COPY(zTransaction)(&z3zE3315, z3zE3316);
-                  KILL(zTransaction)(&z3zE3316);
-                  goto finish_match_3384;
+                finish_match_2982: ;
+                  COPY(zTransaction)(&z3zE2540, z3zE2541);
+                  KILL(zTransaction)(&z3zE2541);
+                  goto finish_match_2980;
                 }
-              case_3385: ;
+              case_2981: ;
                 sail_match_failure("decode_access_list_tx");
-              finish_match_3384: ;
-                COPY(zTransaction)(&z3zE3314, z3zE3315);
-                KILL(zTransaction)(&z3zE3315);
-                goto finish_match_3382;
+              finish_match_2980: ;
+                COPY(zTransaction)(&z3zE2539, z3zE2540);
+                KILL(zTransaction)(&z3zE2540);
+                goto finish_match_2978;
               }
-            case_3383: ;
+            case_2979: ;
               sail_match_failure("decode_access_list_tx");
-            finish_match_3382: ;
-              COPY(zTransaction)(&z3zE3313, z3zE3314);
-              KILL(zTransaction)(&z3zE3314);
-              goto finish_match_3380;
+            finish_match_2978: ;
+              COPY(zTransaction)(&z3zE2538, z3zE2539);
+              KILL(zTransaction)(&z3zE2539);
+              goto finish_match_2976;
             }
-          case_3381: ;
+          case_2977: ;
             sail_match_failure("decode_access_list_tx");
-          finish_match_3380: ;
-            COPY(zTransaction)(&z3zE3312, z3zE3313);
-            KILL(zTransaction)(&z3zE3313);
-            goto finish_match_3378;
+          finish_match_2976: ;
+            COPY(zTransaction)(&z3zE2537, z3zE2538);
+            KILL(zTransaction)(&z3zE2538);
+            goto finish_match_2974;
           }
-        case_3379: ;
+        case_2975: ;
           sail_match_failure("decode_access_list_tx");
-        finish_match_3378: ;
-          COPY(zTransaction)(&z3zE3311, z3zE3312);
-          KILL(zTransaction)(&z3zE3312);
-          goto finish_match_3376;
+        finish_match_2974: ;
+          COPY(zTransaction)(&z3zE2536, z3zE2537);
+          KILL(zTransaction)(&z3zE2537);
+          goto finish_match_2972;
         }
-      case_3377: ;
+      case_2973: ;
         sail_match_failure("decode_access_list_tx");
-      finish_match_3376: ;
-        COPY(zTransaction)(&z3zE3310, z3zE3311);
-        KILL(zTransaction)(&z3zE3311);
-        goto finish_match_3374;
+      finish_match_2972: ;
+        COPY(zTransaction)(&z3zE2535, z3zE2536);
+        KILL(zTransaction)(&z3zE2536);
+        goto finish_match_2970;
       }
-    case_3375: ;
+    case_2971: ;
       sail_match_failure("decode_access_list_tx");
-    finish_match_3374: ;
-      COPY(zTransaction)(&z3zE3309, z3zE3310);
-      KILL(zTransaction)(&z3zE3310);
-      goto finish_match_3372;
+    finish_match_2970: ;
+      COPY(zTransaction)(&z3zE2534, z3zE2535);
+      KILL(zTransaction)(&z3zE2535);
+      goto finish_match_2968;
     }
-  case_3373: ;
+  case_2969: ;
     sail_match_failure("decode_access_list_tx");
-  finish_match_3372: ;
-    COPY(zTransaction)(&z3zE3308, z3zE3309);
-    KILL(zTransaction)(&z3zE3309);
-    goto finish_match_3370;
+  finish_match_2968: ;
+    COPY(zTransaction)(&z3zE2533, z3zE2534);
+    KILL(zTransaction)(&z3zE2534);
+    goto finish_match_2966;
   }
-case_3371: ;
+case_2967: ;
   sail_match_failure("decode_access_list_tx");
-finish_match_3370: ;
-  COPY(zTransaction)((*(&z8zE200)), z3zE3308);
-  KILL(zTransaction)(&z3zE3308);
-end_function_3394: ;
-  goto end_function_4065;
-end_block_exception_3395: ;
-  goto end_function_4065;
-end_function_4065: ;
+finish_match_2966: ;
+  COPY(zTransaction)((*(&z8zE197)), z3zE2533);
+  KILL(zTransaction)(&z3zE2533);
+end_function_2990: ;
+  goto end_function_3646;
+end_block_exception_2991: ;
+  goto end_function_3646;
+end_function_3646: ;
 }
 
-void zdecode_fee_market_tx(struct zTransaction *z8zE201, struct zByteSliceFields ztx, struct zByteSliceFields zpubkey, enum zFork zfork, sail_fixed_bytes_20 zsender, struct zRlpCursor zfields)
+void zdecode_fee_market_tx(struct zTransaction *z8zE198, struct zByteSliceFields ztx, struct zByteSliceFields zpubkey, enum zFork zfork, sail_fixed_bytes_20 zsender, struct zByteSliceFields zfields)
 {
-  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3312;
+  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2613;
   {
-    z2zE3312 = zrlp_cursor_pop(zfields);
-    if (have_exception) {  goto end_block_exception_3369;  }
+    z2zE2613 = zrlp_cursor_pop(zfields);
+    if (have_exception) {  goto end_block_exception_2965;  }
   }
-  struct zTransaction z3zE3279;
-  CREATE(zTransaction)(&z3zE3279);
+  struct zTransaction z3zE2504;
+  CREATE(zTransaction)(&z3zE2504);
   {
     struct zRlpFieldRef zchain_f;
-    zchain_f = z2zE3312.ztup0;
-    struct zRlpCursor z1zE36;
-    z1zE36 = z2zE3312.ztup1;
-    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3313;
+    zchain_f = z2zE2613.ztup0;
+    struct zByteSliceFields z1zE52;
+    z1zE52 = z2zE2613.ztup1;
+    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2614;
     {
-      z2zE3313 = zrlp_cursor_pop(z1zE36);
+      z2zE2614 = zrlp_cursor_pop(z1zE52);
       if (have_exception) {
-        KILL(zTransaction)(&z3zE3279);
-        goto end_block_exception_3369;
+        KILL(zTransaction)(&z3zE2504);
+        goto end_block_exception_2965;
       }
     }
-    struct zTransaction z3zE3280;
-    CREATE(zTransaction)(&z3zE3280);
+    struct zTransaction z3zE2505;
+    CREATE(zTransaction)(&z3zE2505);
     {
       struct zRlpFieldRef znonce_f;
-      znonce_f = z2zE3313.ztup0;
-      struct zRlpCursor z1zE37;
-      z1zE37 = z2zE3313.ztup1;
-      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3314;
+      znonce_f = z2zE2614.ztup0;
+      struct zByteSliceFields z1zE53;
+      z1zE53 = z2zE2614.ztup1;
+      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2615;
       {
-        z2zE3314 = zrlp_cursor_pop(z1zE37);
+        z2zE2615 = zrlp_cursor_pop(z1zE53);
         if (have_exception) {
-          KILL(zTransaction)(&z3zE3279);
-          KILL(zTransaction)(&z3zE3280);
-          goto end_block_exception_3369;
+          KILL(zTransaction)(&z3zE2504);
+          KILL(zTransaction)(&z3zE2505);
+          goto end_block_exception_2965;
         }
       }
-      struct zTransaction z3zE3281;
-      CREATE(zTransaction)(&z3zE3281);
+      struct zTransaction z3zE2506;
+      CREATE(zTransaction)(&z3zE2506);
       {
         struct zRlpFieldRef zmp_f;
-        zmp_f = z2zE3314.ztup0;
-        struct zRlpCursor z1zE38;
-        z1zE38 = z2zE3314.ztup1;
-        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3315;
+        zmp_f = z2zE2615.ztup0;
+        struct zByteSliceFields z1zE54;
+        z1zE54 = z2zE2615.ztup1;
+        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2616;
         {
-          z2zE3315 = zrlp_cursor_pop(z1zE38);
+          z2zE2616 = zrlp_cursor_pop(z1zE54);
           if (have_exception) {
-            KILL(zTransaction)(&z3zE3279);
-            KILL(zTransaction)(&z3zE3280);
-            KILL(zTransaction)(&z3zE3281);
-            goto end_block_exception_3369;
+            KILL(zTransaction)(&z3zE2504);
+            KILL(zTransaction)(&z3zE2505);
+            KILL(zTransaction)(&z3zE2506);
+            goto end_block_exception_2965;
           }
         }
-        struct zTransaction z3zE3282;
-        CREATE(zTransaction)(&z3zE3282);
+        struct zTransaction z3zE2507;
+        CREATE(zTransaction)(&z3zE2507);
         {
           struct zRlpFieldRef zmf_f;
-          zmf_f = z2zE3315.ztup0;
-          struct zRlpCursor z1zE39;
-          z1zE39 = z2zE3315.ztup1;
-          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3316;
+          zmf_f = z2zE2616.ztup0;
+          struct zByteSliceFields z1zE55;
+          z1zE55 = z2zE2616.ztup1;
+          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2617;
           {
-            z2zE3316 = zrlp_cursor_pop(z1zE39);
+            z2zE2617 = zrlp_cursor_pop(z1zE55);
             if (have_exception) {
-              KILL(zTransaction)(&z3zE3279);
-              KILL(zTransaction)(&z3zE3280);
-              KILL(zTransaction)(&z3zE3281);
-              KILL(zTransaction)(&z3zE3282);
-              goto end_block_exception_3369;
+              KILL(zTransaction)(&z3zE2504);
+              KILL(zTransaction)(&z3zE2505);
+              KILL(zTransaction)(&z3zE2506);
+              KILL(zTransaction)(&z3zE2507);
+              goto end_block_exception_2965;
             }
           }
-          struct zTransaction z3zE3283;
-          CREATE(zTransaction)(&z3zE3283);
+          struct zTransaction z3zE2508;
+          CREATE(zTransaction)(&z3zE2508);
           {
             struct zRlpFieldRef zgas_f;
-            zgas_f = z2zE3316.ztup0;
-            struct zRlpCursor z1zE40;
-            z1zE40 = z2zE3316.ztup1;
-            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3317;
+            zgas_f = z2zE2617.ztup0;
+            struct zByteSliceFields z1zE56;
+            z1zE56 = z2zE2617.ztup1;
+            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2618;
             {
-              z2zE3317 = zrlp_cursor_pop(z1zE40);
+              z2zE2618 = zrlp_cursor_pop(z1zE56);
               if (have_exception) {
-                KILL(zTransaction)(&z3zE3279);
-                KILL(zTransaction)(&z3zE3280);
-                KILL(zTransaction)(&z3zE3281);
-                KILL(zTransaction)(&z3zE3282);
-                KILL(zTransaction)(&z3zE3283);
-                goto end_block_exception_3369;
+                KILL(zTransaction)(&z3zE2504);
+                KILL(zTransaction)(&z3zE2505);
+                KILL(zTransaction)(&z3zE2506);
+                KILL(zTransaction)(&z3zE2507);
+                KILL(zTransaction)(&z3zE2508);
+                goto end_block_exception_2965;
               }
             }
-            struct zTransaction z3zE3284;
-            CREATE(zTransaction)(&z3zE3284);
+            struct zTransaction z3zE2509;
+            CREATE(zTransaction)(&z3zE2509);
             {
               struct zRlpFieldRef zto_f;
-              zto_f = z2zE3317.ztup0;
-              struct zRlpCursor z1zE41;
-              z1zE41 = z2zE3317.ztup1;
-              struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3318;
+              zto_f = z2zE2618.ztup0;
+              struct zByteSliceFields z1zE57;
+              z1zE57 = z2zE2618.ztup1;
+              struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2619;
               {
-                z2zE3318 = zrlp_cursor_pop(z1zE41);
+                z2zE2619 = zrlp_cursor_pop(z1zE57);
                 if (have_exception) {
-                  KILL(zTransaction)(&z3zE3279);
-                  KILL(zTransaction)(&z3zE3280);
-                  KILL(zTransaction)(&z3zE3281);
-                  KILL(zTransaction)(&z3zE3282);
-                  KILL(zTransaction)(&z3zE3283);
-                  KILL(zTransaction)(&z3zE3284);
-                  goto end_block_exception_3369;
+                  KILL(zTransaction)(&z3zE2504);
+                  KILL(zTransaction)(&z3zE2505);
+                  KILL(zTransaction)(&z3zE2506);
+                  KILL(zTransaction)(&z3zE2507);
+                  KILL(zTransaction)(&z3zE2508);
+                  KILL(zTransaction)(&z3zE2509);
+                  goto end_block_exception_2965;
                 }
               }
-              struct zTransaction z3zE3285;
-              CREATE(zTransaction)(&z3zE3285);
+              struct zTransaction z3zE2510;
+              CREATE(zTransaction)(&z3zE2510);
               {
                 struct zRlpFieldRef zvalue_f;
-                zvalue_f = z2zE3318.ztup0;
-                struct zRlpCursor z1zE42;
-                z1zE42 = z2zE3318.ztup1;
-                struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3319;
+                zvalue_f = z2zE2619.ztup0;
+                struct zByteSliceFields z1zE58;
+                z1zE58 = z2zE2619.ztup1;
+                struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2620;
                 {
-                  z2zE3319 = zrlp_cursor_pop(z1zE42);
+                  z2zE2620 = zrlp_cursor_pop(z1zE58);
                   if (have_exception) {
-                    KILL(zTransaction)(&z3zE3279);
-                    KILL(zTransaction)(&z3zE3280);
-                    KILL(zTransaction)(&z3zE3281);
-                    KILL(zTransaction)(&z3zE3282);
-                    KILL(zTransaction)(&z3zE3283);
-                    KILL(zTransaction)(&z3zE3284);
-                    KILL(zTransaction)(&z3zE3285);
-                    goto end_block_exception_3369;
+                    KILL(zTransaction)(&z3zE2504);
+                    KILL(zTransaction)(&z3zE2505);
+                    KILL(zTransaction)(&z3zE2506);
+                    KILL(zTransaction)(&z3zE2507);
+                    KILL(zTransaction)(&z3zE2508);
+                    KILL(zTransaction)(&z3zE2509);
+                    KILL(zTransaction)(&z3zE2510);
+                    goto end_block_exception_2965;
                   }
                 }
-                struct zTransaction z3zE3286;
-                CREATE(zTransaction)(&z3zE3286);
+                struct zTransaction z3zE2511;
+                CREATE(zTransaction)(&z3zE2511);
                 {
                   struct zRlpFieldRef zdata_f;
-                  zdata_f = z2zE3319.ztup0;
-                  struct zRlpCursor z1zE43;
-                  z1zE43 = z2zE3319.ztup1;
-                  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3320;
+                  zdata_f = z2zE2620.ztup0;
+                  struct zByteSliceFields z1zE59;
+                  z1zE59 = z2zE2620.ztup1;
+                  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2621;
                   {
-                    z2zE3320 = zrlp_cursor_pop(z1zE43);
+                    z2zE2621 = zrlp_cursor_pop(z1zE59);
                     if (have_exception) {
-                      KILL(zTransaction)(&z3zE3279);
-                      KILL(zTransaction)(&z3zE3280);
-                      KILL(zTransaction)(&z3zE3281);
-                      KILL(zTransaction)(&z3zE3282);
-                      KILL(zTransaction)(&z3zE3283);
-                      KILL(zTransaction)(&z3zE3284);
-                      KILL(zTransaction)(&z3zE3285);
-                      KILL(zTransaction)(&z3zE3286);
-                      goto end_block_exception_3369;
+                      KILL(zTransaction)(&z3zE2504);
+                      KILL(zTransaction)(&z3zE2505);
+                      KILL(zTransaction)(&z3zE2506);
+                      KILL(zTransaction)(&z3zE2507);
+                      KILL(zTransaction)(&z3zE2508);
+                      KILL(zTransaction)(&z3zE2509);
+                      KILL(zTransaction)(&z3zE2510);
+                      KILL(zTransaction)(&z3zE2511);
+                      goto end_block_exception_2965;
                     }
                   }
-                  struct zTransaction z3zE3287;
-                  CREATE(zTransaction)(&z3zE3287);
+                  struct zTransaction z3zE2512;
+                  CREATE(zTransaction)(&z3zE2512);
                   {
                     struct zRlpFieldRef zal_f;
-                    zal_f = z2zE3320.ztup0;
-                    struct zRlpCursor z1zE44;
-                    z1zE44 = z2zE3320.ztup1;
-                    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3321;
+                    zal_f = z2zE2621.ztup0;
+                    struct zByteSliceFields z1zE60;
+                    z1zE60 = z2zE2621.ztup1;
+                    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2622;
                     {
-                      z2zE3321 = zrlp_cursor_pop(z1zE44);
+                      z2zE2622 = zrlp_cursor_pop(z1zE60);
                       if (have_exception) {
-                        KILL(zTransaction)(&z3zE3279);
-                        KILL(zTransaction)(&z3zE3280);
-                        KILL(zTransaction)(&z3zE3281);
-                        KILL(zTransaction)(&z3zE3282);
-                        KILL(zTransaction)(&z3zE3283);
-                        KILL(zTransaction)(&z3zE3284);
-                        KILL(zTransaction)(&z3zE3285);
-                        KILL(zTransaction)(&z3zE3286);
-                        KILL(zTransaction)(&z3zE3287);
-                        goto end_block_exception_3369;
+                        KILL(zTransaction)(&z3zE2504);
+                        KILL(zTransaction)(&z3zE2505);
+                        KILL(zTransaction)(&z3zE2506);
+                        KILL(zTransaction)(&z3zE2507);
+                        KILL(zTransaction)(&z3zE2508);
+                        KILL(zTransaction)(&z3zE2509);
+                        KILL(zTransaction)(&z3zE2510);
+                        KILL(zTransaction)(&z3zE2511);
+                        KILL(zTransaction)(&z3zE2512);
+                        goto end_block_exception_2965;
                       }
                     }
-                    struct zTransaction z3zE3288;
-                    CREATE(zTransaction)(&z3zE3288);
+                    struct zTransaction z3zE2513;
+                    CREATE(zTransaction)(&z3zE2513);
                     {
                       struct zRlpFieldRef zv_f;
-                      zv_f = z2zE3321.ztup0;
-                      struct zRlpCursor z1zE45;
-                      z1zE45 = z2zE3321.ztup1;
-                      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3322;
+                      zv_f = z2zE2622.ztup0;
+                      struct zByteSliceFields z1zE61;
+                      z1zE61 = z2zE2622.ztup1;
+                      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2623;
                       {
-                        z2zE3322 = zrlp_cursor_pop(z1zE45);
+                        z2zE2623 = zrlp_cursor_pop(z1zE61);
                         if (have_exception) {
-                          KILL(zTransaction)(&z3zE3279);
-                          KILL(zTransaction)(&z3zE3280);
-                          KILL(zTransaction)(&z3zE3281);
-                          KILL(zTransaction)(&z3zE3282);
-                          KILL(zTransaction)(&z3zE3283);
-                          KILL(zTransaction)(&z3zE3284);
-                          KILL(zTransaction)(&z3zE3285);
-                          KILL(zTransaction)(&z3zE3286);
-                          KILL(zTransaction)(&z3zE3287);
-                          KILL(zTransaction)(&z3zE3288);
-                          goto end_block_exception_3369;
+                          KILL(zTransaction)(&z3zE2504);
+                          KILL(zTransaction)(&z3zE2505);
+                          KILL(zTransaction)(&z3zE2506);
+                          KILL(zTransaction)(&z3zE2507);
+                          KILL(zTransaction)(&z3zE2508);
+                          KILL(zTransaction)(&z3zE2509);
+                          KILL(zTransaction)(&z3zE2510);
+                          KILL(zTransaction)(&z3zE2511);
+                          KILL(zTransaction)(&z3zE2512);
+                          KILL(zTransaction)(&z3zE2513);
+                          goto end_block_exception_2965;
                         }
                       }
-                      struct zTransaction z3zE3289;
-                      CREATE(zTransaction)(&z3zE3289);
+                      struct zTransaction z3zE2514;
+                      CREATE(zTransaction)(&z3zE2514);
                       {
                         struct zRlpFieldRef zr_f;
-                        zr_f = z2zE3322.ztup0;
-                        struct zRlpCursor z1zE46;
-                        z1zE46 = z2zE3322.ztup1;
-                        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3323;
+                        zr_f = z2zE2623.ztup0;
+                        struct zByteSliceFields z1zE62;
+                        z1zE62 = z2zE2623.ztup1;
+                        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2624;
                         {
-                          z2zE3323 = zrlp_cursor_pop(z1zE46);
+                          z2zE2624 = zrlp_cursor_pop(z1zE62);
                           if (have_exception) {
-                            KILL(zTransaction)(&z3zE3279);
-                            KILL(zTransaction)(&z3zE3280);
-                            KILL(zTransaction)(&z3zE3281);
-                            KILL(zTransaction)(&z3zE3282);
-                            KILL(zTransaction)(&z3zE3283);
-                            KILL(zTransaction)(&z3zE3284);
-                            KILL(zTransaction)(&z3zE3285);
-                            KILL(zTransaction)(&z3zE3286);
-                            KILL(zTransaction)(&z3zE3287);
-                            KILL(zTransaction)(&z3zE3288);
-                            KILL(zTransaction)(&z3zE3289);
-                            goto end_block_exception_3369;
+                            KILL(zTransaction)(&z3zE2504);
+                            KILL(zTransaction)(&z3zE2505);
+                            KILL(zTransaction)(&z3zE2506);
+                            KILL(zTransaction)(&z3zE2507);
+                            KILL(zTransaction)(&z3zE2508);
+                            KILL(zTransaction)(&z3zE2509);
+                            KILL(zTransaction)(&z3zE2510);
+                            KILL(zTransaction)(&z3zE2511);
+                            KILL(zTransaction)(&z3zE2512);
+                            KILL(zTransaction)(&z3zE2513);
+                            KILL(zTransaction)(&z3zE2514);
+                            goto end_block_exception_2965;
                           }
                         }
-                        struct zTransaction z3zE3290;
-                        CREATE(zTransaction)(&z3zE3290);
+                        struct zTransaction z3zE2515;
+                        CREATE(zTransaction)(&z3zE2515);
                         {
                           struct zRlpFieldRef zs_f;
-                          zs_f = z2zE3323.ztup0;
-                          struct zRlpCursor z1zE47;
-                          z1zE47 = z2zE3323.ztup1;
-                          unit z3zE3291;
+                          zs_f = z2zE2624.ztup0;
+                          struct zByteSliceFields z1zE63;
+                          z1zE63 = z2zE2624.ztup1;
+                          unit z3zE2516;
                           {
-                            z3zE3291 = zrlp_cursor_expect_end(z1zE47);
+                            z3zE2516 = zrlp_cursor_expect_end(z1zE63);
                             if (have_exception) {
-                              KILL(zTransaction)(&z3zE3279);
-                              KILL(zTransaction)(&z3zE3280);
-                              KILL(zTransaction)(&z3zE3281);
-                              KILL(zTransaction)(&z3zE3282);
-                              KILL(zTransaction)(&z3zE3283);
-                              KILL(zTransaction)(&z3zE3284);
-                              KILL(zTransaction)(&z3zE3285);
-                              KILL(zTransaction)(&z3zE3286);
-                              KILL(zTransaction)(&z3zE3287);
-                              KILL(zTransaction)(&z3zE3288);
-                              KILL(zTransaction)(&z3zE3289);
-                              KILL(zTransaction)(&z3zE3290);
-                              goto end_block_exception_3369;
+                              KILL(zTransaction)(&z3zE2504);
+                              KILL(zTransaction)(&z3zE2505);
+                              KILL(zTransaction)(&z3zE2506);
+                              KILL(zTransaction)(&z3zE2507);
+                              KILL(zTransaction)(&z3zE2508);
+                              KILL(zTransaction)(&z3zE2509);
+                              KILL(zTransaction)(&z3zE2510);
+                              KILL(zTransaction)(&z3zE2511);
+                              KILL(zTransaction)(&z3zE2512);
+                              KILL(zTransaction)(&z3zE2513);
+                              KILL(zTransaction)(&z3zE2514);
+                              KILL(zTransaction)(&z3zE2515);
+                              goto end_block_exception_2965;
                             }
                           }
                           sail_u256 zv;
                           {
                             zv = zrlp_ref_word(zv_f);
                             if (have_exception) {
-                              KILL(zTransaction)(&z3zE3279);
-                              KILL(zTransaction)(&z3zE3280);
-                              KILL(zTransaction)(&z3zE3281);
-                              KILL(zTransaction)(&z3zE3282);
-                              KILL(zTransaction)(&z3zE3283);
-                              KILL(zTransaction)(&z3zE3284);
-                              KILL(zTransaction)(&z3zE3285);
-                              KILL(zTransaction)(&z3zE3286);
-                              KILL(zTransaction)(&z3zE3287);
-                              KILL(zTransaction)(&z3zE3288);
-                              KILL(zTransaction)(&z3zE3289);
-                              KILL(zTransaction)(&z3zE3290);
-                              goto end_block_exception_3369;
+                              KILL(zTransaction)(&z3zE2504);
+                              KILL(zTransaction)(&z3zE2505);
+                              KILL(zTransaction)(&z3zE2506);
+                              KILL(zTransaction)(&z3zE2507);
+                              KILL(zTransaction)(&z3zE2508);
+                              KILL(zTransaction)(&z3zE2509);
+                              KILL(zTransaction)(&z3zE2510);
+                              KILL(zTransaction)(&z3zE2511);
+                              KILL(zTransaction)(&z3zE2512);
+                              KILL(zTransaction)(&z3zE2513);
+                              KILL(zTransaction)(&z3zE2514);
+                              KILL(zTransaction)(&z3zE2515);
+                              goto end_block_exception_2965;
                             }
                           }
-                          struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 z2zE3324;
-                          CREATE(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
+                          struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 z2zE2625;
+                          CREATE(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
                           {
-                            zdecode_access_list(&z2zE3324, zal_f);
+                            zdecode_access_list(&z2zE2625, zal_f);
                             if (have_exception) {
-                              KILL(zTransaction)(&z3zE3279);
-                              KILL(zTransaction)(&z3zE3280);
-                              KILL(zTransaction)(&z3zE3281);
-                              KILL(zTransaction)(&z3zE3282);
-                              KILL(zTransaction)(&z3zE3283);
-                              KILL(zTransaction)(&z3zE3284);
-                              KILL(zTransaction)(&z3zE3285);
-                              KILL(zTransaction)(&z3zE3286);
-                              KILL(zTransaction)(&z3zE3287);
-                              KILL(zTransaction)(&z3zE3288);
-                              KILL(zTransaction)(&z3zE3289);
-                              KILL(zTransaction)(&z3zE3290);
-                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                              goto end_block_exception_3369;
+                              KILL(zTransaction)(&z3zE2504);
+                              KILL(zTransaction)(&z3zE2505);
+                              KILL(zTransaction)(&z3zE2506);
+                              KILL(zTransaction)(&z3zE2507);
+                              KILL(zTransaction)(&z3zE2508);
+                              KILL(zTransaction)(&z3zE2509);
+                              KILL(zTransaction)(&z3zE2510);
+                              KILL(zTransaction)(&z3zE2511);
+                              KILL(zTransaction)(&z3zE2512);
+                              KILL(zTransaction)(&z3zE2513);
+                              KILL(zTransaction)(&z3zE2514);
+                              KILL(zTransaction)(&z3zE2515);
+                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                              goto end_block_exception_2965;
                             }
                           }
-                          struct zTransaction z3zE3292;
-                          CREATE(zTransaction)(&z3zE3292);
+                          struct zTransaction z3zE2517;
+                          CREATE(zTransaction)(&z3zE2517);
                           {
                             zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 zal_addrs;
                             CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
-                            COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs, z2zE3324.ztup0);
+                            COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs, z2zE2625.ztup0);
                             zz5listz8z5structz0zzStorageKeyz9 zal_slots;
                             CREATE(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                            COPY(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots, z2zE3324.ztup1);
+                            COPY(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots, z2zE2625.ztup1);
                             uint64_t zal_addr_count;
-                            zal_addr_count = z2zE3324.ztup2;
+                            zal_addr_count = z2zE2625.ztup2;
                             uint64_t zal_slot_count;
-                            zal_slot_count = z2zE3324.ztup3;
-                            sail_u256 z2zE3325;
+                            zal_slot_count = z2zE2625.ztup3;
+                            sail_u256 z2zE2626;
                             {
-                              z2zE3325 = zrlp_ref_uint_word(znonce_f);
+                              z2zE2626 = zrlp_ref_uint_word(znonce_f);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3279);
-                                KILL(zTransaction)(&z3zE3280);
-                                KILL(zTransaction)(&z3zE3281);
-                                KILL(zTransaction)(&z3zE3282);
-                                KILL(zTransaction)(&z3zE3283);
-                                KILL(zTransaction)(&z3zE3284);
-                                KILL(zTransaction)(&z3zE3285);
-                                KILL(zTransaction)(&z3zE3286);
-                                KILL(zTransaction)(&z3zE3287);
-                                KILL(zTransaction)(&z3zE3288);
-                                KILL(zTransaction)(&z3zE3289);
-                                KILL(zTransaction)(&z3zE3290);
-                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                                KILL(zTransaction)(&z3zE3292);
+                                KILL(zTransaction)(&z3zE2504);
+                                KILL(zTransaction)(&z3zE2505);
+                                KILL(zTransaction)(&z3zE2506);
+                                KILL(zTransaction)(&z3zE2507);
+                                KILL(zTransaction)(&z3zE2508);
+                                KILL(zTransaction)(&z3zE2509);
+                                KILL(zTransaction)(&z3zE2510);
+                                KILL(zTransaction)(&z3zE2511);
+                                KILL(zTransaction)(&z3zE2512);
+                                KILL(zTransaction)(&z3zE2513);
+                                KILL(zTransaction)(&z3zE2514);
+                                KILL(zTransaction)(&z3zE2515);
+                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                                KILL(zTransaction)(&z3zE2517);
                                 KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                 KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                goto end_block_exception_3369;
+                                goto end_block_exception_2965;
                               }
                             }
-                            uint64_t z2zE3326;
+                            uint64_t z2zE2627;
                             {
-                              z2zE3326 = zrlp_ref_uint64(zchain_f);
+                              z2zE2627 = zrlp_ref_uint64(zchain_f);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3279);
-                                KILL(zTransaction)(&z3zE3280);
-                                KILL(zTransaction)(&z3zE3281);
-                                KILL(zTransaction)(&z3zE3282);
-                                KILL(zTransaction)(&z3zE3283);
-                                KILL(zTransaction)(&z3zE3284);
-                                KILL(zTransaction)(&z3zE3285);
-                                KILL(zTransaction)(&z3zE3286);
-                                KILL(zTransaction)(&z3zE3287);
-                                KILL(zTransaction)(&z3zE3288);
-                                KILL(zTransaction)(&z3zE3289);
-                                KILL(zTransaction)(&z3zE3290);
-                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                                KILL(zTransaction)(&z3zE3292);
+                                KILL(zTransaction)(&z3zE2504);
+                                KILL(zTransaction)(&z3zE2505);
+                                KILL(zTransaction)(&z3zE2506);
+                                KILL(zTransaction)(&z3zE2507);
+                                KILL(zTransaction)(&z3zE2508);
+                                KILL(zTransaction)(&z3zE2509);
+                                KILL(zTransaction)(&z3zE2510);
+                                KILL(zTransaction)(&z3zE2511);
+                                KILL(zTransaction)(&z3zE2512);
+                                KILL(zTransaction)(&z3zE2513);
+                                KILL(zTransaction)(&z3zE2514);
+                                KILL(zTransaction)(&z3zE2515);
+                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                                KILL(zTransaction)(&z3zE2517);
                                 KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                 KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                goto end_block_exception_3369;
+                                goto end_block_exception_2965;
                               }
                             }
-                            uint64_t z2zE3327;
+                            uint64_t z2zE2628;
                             {
-                              z2zE3327 = zrlp_ref_gas(zgas_f, zfork);
+                              z2zE2628 = zrlp_ref_gas(zgas_f, zfork);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3279);
-                                KILL(zTransaction)(&z3zE3280);
-                                KILL(zTransaction)(&z3zE3281);
-                                KILL(zTransaction)(&z3zE3282);
-                                KILL(zTransaction)(&z3zE3283);
-                                KILL(zTransaction)(&z3zE3284);
-                                KILL(zTransaction)(&z3zE3285);
-                                KILL(zTransaction)(&z3zE3286);
-                                KILL(zTransaction)(&z3zE3287);
-                                KILL(zTransaction)(&z3zE3288);
-                                KILL(zTransaction)(&z3zE3289);
-                                KILL(zTransaction)(&z3zE3290);
-                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                                KILL(zTransaction)(&z3zE3292);
+                                KILL(zTransaction)(&z3zE2504);
+                                KILL(zTransaction)(&z3zE2505);
+                                KILL(zTransaction)(&z3zE2506);
+                                KILL(zTransaction)(&z3zE2507);
+                                KILL(zTransaction)(&z3zE2508);
+                                KILL(zTransaction)(&z3zE2509);
+                                KILL(zTransaction)(&z3zE2510);
+                                KILL(zTransaction)(&z3zE2511);
+                                KILL(zTransaction)(&z3zE2512);
+                                KILL(zTransaction)(&z3zE2513);
+                                KILL(zTransaction)(&z3zE2514);
+                                KILL(zTransaction)(&z3zE2515);
+                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                                KILL(zTransaction)(&z3zE2517);
                                 KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                 KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                goto end_block_exception_3369;
+                                goto end_block_exception_2965;
                               }
                             }
-                            bool z2zE3329;
+                            bool z2zE2630;
                             {
-                              uint64_t z2zE3328;
-                              z2zE3328 = zto_f.zcontent_len;
-                              z2zE3329 = (z2zE3328 == UINT64_C(0));
+                              uint64_t z2zE2629;
+                              z2zE2629 = zto_f.zcontent_len;
+                              z2zE2630 = (z2zE2629 == UINT64_C(0));
                             }
-                            sail_fixed_bytes_20 z2zE3331;
+                            sail_fixed_bytes_20 z2zE2632;
                             {
-                              sail_u256 z2zE3330;
+                              sail_u256 z2zE2631;
                               {
-                                z2zE3330 = zrlp_ref_word(zto_f);
+                                z2zE2631 = zrlp_ref_word(zto_f);
                                 if (have_exception) {
-                                  KILL(zTransaction)(&z3zE3279);
-                                  KILL(zTransaction)(&z3zE3280);
-                                  KILL(zTransaction)(&z3zE3281);
-                                  KILL(zTransaction)(&z3zE3282);
-                                  KILL(zTransaction)(&z3zE3283);
-                                  KILL(zTransaction)(&z3zE3284);
-                                  KILL(zTransaction)(&z3zE3285);
-                                  KILL(zTransaction)(&z3zE3286);
-                                  KILL(zTransaction)(&z3zE3287);
-                                  KILL(zTransaction)(&z3zE3288);
-                                  KILL(zTransaction)(&z3zE3289);
-                                  KILL(zTransaction)(&z3zE3290);
-                                  KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                                  KILL(zTransaction)(&z3zE3292);
+                                  KILL(zTransaction)(&z3zE2504);
+                                  KILL(zTransaction)(&z3zE2505);
+                                  KILL(zTransaction)(&z3zE2506);
+                                  KILL(zTransaction)(&z3zE2507);
+                                  KILL(zTransaction)(&z3zE2508);
+                                  KILL(zTransaction)(&z3zE2509);
+                                  KILL(zTransaction)(&z3zE2510);
+                                  KILL(zTransaction)(&z3zE2511);
+                                  KILL(zTransaction)(&z3zE2512);
+                                  KILL(zTransaction)(&z3zE2513);
+                                  KILL(zTransaction)(&z3zE2514);
+                                  KILL(zTransaction)(&z3zE2515);
+                                  KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                                  KILL(zTransaction)(&z3zE2517);
                                   KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                   KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                  goto end_block_exception_3369;
+                                  goto end_block_exception_2965;
                                 }
                               }
-                              z2zE3331 = zword_to_address(z2zE3330);
+                              z2zE2632 = evmsail_word_to_address(z2zE2631);
                             }
-                            sail_u256 z2zE3332;
+                            sail_u256 z2zE2633;
                             {
-                              z2zE3332 = zrlp_ref_uint_word(zvalue_f);
+                              z2zE2633 = zrlp_ref_uint_word(zvalue_f);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3279);
-                                KILL(zTransaction)(&z3zE3280);
-                                KILL(zTransaction)(&z3zE3281);
-                                KILL(zTransaction)(&z3zE3282);
-                                KILL(zTransaction)(&z3zE3283);
-                                KILL(zTransaction)(&z3zE3284);
-                                KILL(zTransaction)(&z3zE3285);
-                                KILL(zTransaction)(&z3zE3286);
-                                KILL(zTransaction)(&z3zE3287);
-                                KILL(zTransaction)(&z3zE3288);
-                                KILL(zTransaction)(&z3zE3289);
-                                KILL(zTransaction)(&z3zE3290);
-                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                                KILL(zTransaction)(&z3zE3292);
+                                KILL(zTransaction)(&z3zE2504);
+                                KILL(zTransaction)(&z3zE2505);
+                                KILL(zTransaction)(&z3zE2506);
+                                KILL(zTransaction)(&z3zE2507);
+                                KILL(zTransaction)(&z3zE2508);
+                                KILL(zTransaction)(&z3zE2509);
+                                KILL(zTransaction)(&z3zE2510);
+                                KILL(zTransaction)(&z3zE2511);
+                                KILL(zTransaction)(&z3zE2512);
+                                KILL(zTransaction)(&z3zE2513);
+                                KILL(zTransaction)(&z3zE2514);
+                                KILL(zTransaction)(&z3zE2515);
+                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                                KILL(zTransaction)(&z3zE2517);
                                 KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                 KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                goto end_block_exception_3369;
+                                goto end_block_exception_2965;
                               }
                             }
-                            struct zByteSliceFields z2zE3333;
+                            struct zByteSliceFields z2zE2634;
                             {
-                              z2zE3333 = ztx_input_span(zdata_f);
+                              z2zE2634 = ztx_input_span(zdata_f);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3279);
-                                KILL(zTransaction)(&z3zE3280);
-                                KILL(zTransaction)(&z3zE3281);
-                                KILL(zTransaction)(&z3zE3282);
-                                KILL(zTransaction)(&z3zE3283);
-                                KILL(zTransaction)(&z3zE3284);
-                                KILL(zTransaction)(&z3zE3285);
-                                KILL(zTransaction)(&z3zE3286);
-                                KILL(zTransaction)(&z3zE3287);
-                                KILL(zTransaction)(&z3zE3288);
-                                KILL(zTransaction)(&z3zE3289);
-                                KILL(zTransaction)(&z3zE3290);
-                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                                KILL(zTransaction)(&z3zE3292);
+                                KILL(zTransaction)(&z3zE2504);
+                                KILL(zTransaction)(&z3zE2505);
+                                KILL(zTransaction)(&z3zE2506);
+                                KILL(zTransaction)(&z3zE2507);
+                                KILL(zTransaction)(&z3zE2508);
+                                KILL(zTransaction)(&z3zE2509);
+                                KILL(zTransaction)(&z3zE2510);
+                                KILL(zTransaction)(&z3zE2511);
+                                KILL(zTransaction)(&z3zE2512);
+                                KILL(zTransaction)(&z3zE2513);
+                                KILL(zTransaction)(&z3zE2514);
+                                KILL(zTransaction)(&z3zE2515);
+                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                                KILL(zTransaction)(&z3zE2517);
                                 KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                 KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                goto end_block_exception_3369;
+                                goto end_block_exception_2965;
                               }
                             }
-                            sail_u256 z2zE3334;
+                            sail_u256 z2zE2635;
                             {
-                              z2zE3334 = zrlp_ref_uint_word(zmf_f);
+                              z2zE2635 = zrlp_ref_uint_word(zmf_f);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3279);
-                                KILL(zTransaction)(&z3zE3280);
-                                KILL(zTransaction)(&z3zE3281);
-                                KILL(zTransaction)(&z3zE3282);
-                                KILL(zTransaction)(&z3zE3283);
-                                KILL(zTransaction)(&z3zE3284);
-                                KILL(zTransaction)(&z3zE3285);
-                                KILL(zTransaction)(&z3zE3286);
-                                KILL(zTransaction)(&z3zE3287);
-                                KILL(zTransaction)(&z3zE3288);
-                                KILL(zTransaction)(&z3zE3289);
-                                KILL(zTransaction)(&z3zE3290);
-                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                                KILL(zTransaction)(&z3zE3292);
+                                KILL(zTransaction)(&z3zE2504);
+                                KILL(zTransaction)(&z3zE2505);
+                                KILL(zTransaction)(&z3zE2506);
+                                KILL(zTransaction)(&z3zE2507);
+                                KILL(zTransaction)(&z3zE2508);
+                                KILL(zTransaction)(&z3zE2509);
+                                KILL(zTransaction)(&z3zE2510);
+                                KILL(zTransaction)(&z3zE2511);
+                                KILL(zTransaction)(&z3zE2512);
+                                KILL(zTransaction)(&z3zE2513);
+                                KILL(zTransaction)(&z3zE2514);
+                                KILL(zTransaction)(&z3zE2515);
+                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                                KILL(zTransaction)(&z3zE2517);
                                 KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                 KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                goto end_block_exception_3369;
+                                goto end_block_exception_2965;
                               }
                             }
-                            sail_u256 z2zE3335;
+                            sail_u256 z2zE2636;
                             {
-                              z2zE3335 = zrlp_ref_uint_word(zmp_f);
+                              z2zE2636 = zrlp_ref_uint_word(zmp_f);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3279);
-                                KILL(zTransaction)(&z3zE3280);
-                                KILL(zTransaction)(&z3zE3281);
-                                KILL(zTransaction)(&z3zE3282);
-                                KILL(zTransaction)(&z3zE3283);
-                                KILL(zTransaction)(&z3zE3284);
-                                KILL(zTransaction)(&z3zE3285);
-                                KILL(zTransaction)(&z3zE3286);
-                                KILL(zTransaction)(&z3zE3287);
-                                KILL(zTransaction)(&z3zE3288);
-                                KILL(zTransaction)(&z3zE3289);
-                                KILL(zTransaction)(&z3zE3290);
-                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                                KILL(zTransaction)(&z3zE3292);
+                                KILL(zTransaction)(&z3zE2504);
+                                KILL(zTransaction)(&z3zE2505);
+                                KILL(zTransaction)(&z3zE2506);
+                                KILL(zTransaction)(&z3zE2507);
+                                KILL(zTransaction)(&z3zE2508);
+                                KILL(zTransaction)(&z3zE2509);
+                                KILL(zTransaction)(&z3zE2510);
+                                KILL(zTransaction)(&z3zE2511);
+                                KILL(zTransaction)(&z3zE2512);
+                                KILL(zTransaction)(&z3zE2513);
+                                KILL(zTransaction)(&z3zE2514);
+                                KILL(zTransaction)(&z3zE2515);
+                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                                KILL(zTransaction)(&z3zE2517);
                                 KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                 KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                goto end_block_exception_3369;
+                                goto end_block_exception_2965;
                               }
                             }
-                            sail_fixed_bytes_32 z2zE3337;
+                            sail_fixed_bytes_32 z2zE2638;
                             {
-                              struct zByteSliceFields z2zE3336;
+                              struct zByteSliceFields z2zE2637;
                               {
-                                z2zE3336 = ztx_sig_span(zchain_f, zv_f);
+                                z2zE2637 = ztx_sig_span(zchain_f, zv_f);
                                 if (have_exception) {
-                                  KILL(zTransaction)(&z3zE3279);
-                                  KILL(zTransaction)(&z3zE3280);
-                                  KILL(zTransaction)(&z3zE3281);
-                                  KILL(zTransaction)(&z3zE3282);
-                                  KILL(zTransaction)(&z3zE3283);
-                                  KILL(zTransaction)(&z3zE3284);
-                                  KILL(zTransaction)(&z3zE3285);
-                                  KILL(zTransaction)(&z3zE3286);
-                                  KILL(zTransaction)(&z3zE3287);
-                                  KILL(zTransaction)(&z3zE3288);
-                                  KILL(zTransaction)(&z3zE3289);
-                                  KILL(zTransaction)(&z3zE3290);
-                                  KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                                  KILL(zTransaction)(&z3zE3292);
+                                  KILL(zTransaction)(&z3zE2504);
+                                  KILL(zTransaction)(&z3zE2505);
+                                  KILL(zTransaction)(&z3zE2506);
+                                  KILL(zTransaction)(&z3zE2507);
+                                  KILL(zTransaction)(&z3zE2508);
+                                  KILL(zTransaction)(&z3zE2509);
+                                  KILL(zTransaction)(&z3zE2510);
+                                  KILL(zTransaction)(&z3zE2511);
+                                  KILL(zTransaction)(&z3zE2512);
+                                  KILL(zTransaction)(&z3zE2513);
+                                  KILL(zTransaction)(&z3zE2514);
+                                  KILL(zTransaction)(&z3zE2515);
+                                  KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                                  KILL(zTransaction)(&z3zE2517);
                                   KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                   KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                  goto end_block_exception_3369;
+                                  goto end_block_exception_2965;
                                 }
                               }
                               {
-                                z2zE3337 = ztx_signing_hash(zFeeMarketTx, z2zE3336, zv);
+                                z2zE2638 = ztx_signing_hash(zFeeMarketTx, z2zE2637, zv);
                                 if (have_exception) {
-                                  KILL(zTransaction)(&z3zE3279);
-                                  KILL(zTransaction)(&z3zE3280);
-                                  KILL(zTransaction)(&z3zE3281);
-                                  KILL(zTransaction)(&z3zE3282);
-                                  KILL(zTransaction)(&z3zE3283);
-                                  KILL(zTransaction)(&z3zE3284);
-                                  KILL(zTransaction)(&z3zE3285);
-                                  KILL(zTransaction)(&z3zE3286);
-                                  KILL(zTransaction)(&z3zE3287);
-                                  KILL(zTransaction)(&z3zE3288);
-                                  KILL(zTransaction)(&z3zE3289);
-                                  KILL(zTransaction)(&z3zE3290);
-                                  KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                                  KILL(zTransaction)(&z3zE3292);
+                                  KILL(zTransaction)(&z3zE2504);
+                                  KILL(zTransaction)(&z3zE2505);
+                                  KILL(zTransaction)(&z3zE2506);
+                                  KILL(zTransaction)(&z3zE2507);
+                                  KILL(zTransaction)(&z3zE2508);
+                                  KILL(zTransaction)(&z3zE2509);
+                                  KILL(zTransaction)(&z3zE2510);
+                                  KILL(zTransaction)(&z3zE2511);
+                                  KILL(zTransaction)(&z3zE2512);
+                                  KILL(zTransaction)(&z3zE2513);
+                                  KILL(zTransaction)(&z3zE2514);
+                                  KILL(zTransaction)(&z3zE2515);
+                                  KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                                  KILL(zTransaction)(&z3zE2517);
                                   KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                   KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                  goto end_block_exception_3369;
+                                  goto end_block_exception_2965;
                                 }
                               }
                             }
-                            sail_u256 z2zE3338;
+                            sail_u256 z2zE2639;
                             {
-                              z2zE3338 = zrlp_ref_uint_word(zr_f);
+                              z2zE2639 = zrlp_ref_uint_word(zr_f);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3279);
-                                KILL(zTransaction)(&z3zE3280);
-                                KILL(zTransaction)(&z3zE3281);
-                                KILL(zTransaction)(&z3zE3282);
-                                KILL(zTransaction)(&z3zE3283);
-                                KILL(zTransaction)(&z3zE3284);
-                                KILL(zTransaction)(&z3zE3285);
-                                KILL(zTransaction)(&z3zE3286);
-                                KILL(zTransaction)(&z3zE3287);
-                                KILL(zTransaction)(&z3zE3288);
-                                KILL(zTransaction)(&z3zE3289);
-                                KILL(zTransaction)(&z3zE3290);
-                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                                KILL(zTransaction)(&z3zE3292);
+                                KILL(zTransaction)(&z3zE2504);
+                                KILL(zTransaction)(&z3zE2505);
+                                KILL(zTransaction)(&z3zE2506);
+                                KILL(zTransaction)(&z3zE2507);
+                                KILL(zTransaction)(&z3zE2508);
+                                KILL(zTransaction)(&z3zE2509);
+                                KILL(zTransaction)(&z3zE2510);
+                                KILL(zTransaction)(&z3zE2511);
+                                KILL(zTransaction)(&z3zE2512);
+                                KILL(zTransaction)(&z3zE2513);
+                                KILL(zTransaction)(&z3zE2514);
+                                KILL(zTransaction)(&z3zE2515);
+                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                                KILL(zTransaction)(&z3zE2517);
                                 KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                 KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                goto end_block_exception_3369;
+                                goto end_block_exception_2965;
                               }
                             }
-                            sail_u256 z2zE3339;
+                            sail_u256 z2zE2640;
                             {
-                              z2zE3339 = zrlp_ref_uint_word(zs_f);
+                              z2zE2640 = zrlp_ref_uint_word(zs_f);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3279);
-                                KILL(zTransaction)(&z3zE3280);
-                                KILL(zTransaction)(&z3zE3281);
-                                KILL(zTransaction)(&z3zE3282);
-                                KILL(zTransaction)(&z3zE3283);
-                                KILL(zTransaction)(&z3zE3284);
-                                KILL(zTransaction)(&z3zE3285);
-                                KILL(zTransaction)(&z3zE3286);
-                                KILL(zTransaction)(&z3zE3287);
-                                KILL(zTransaction)(&z3zE3288);
-                                KILL(zTransaction)(&z3zE3289);
-                                KILL(zTransaction)(&z3zE3290);
-                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                                KILL(zTransaction)(&z3zE3292);
+                                KILL(zTransaction)(&z3zE2504);
+                                KILL(zTransaction)(&z3zE2505);
+                                KILL(zTransaction)(&z3zE2506);
+                                KILL(zTransaction)(&z3zE2507);
+                                KILL(zTransaction)(&z3zE2508);
+                                KILL(zTransaction)(&z3zE2509);
+                                KILL(zTransaction)(&z3zE2510);
+                                KILL(zTransaction)(&z3zE2511);
+                                KILL(zTransaction)(&z3zE2512);
+                                KILL(zTransaction)(&z3zE2513);
+                                KILL(zTransaction)(&z3zE2514);
+                                KILL(zTransaction)(&z3zE2515);
+                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                                KILL(zTransaction)(&z3zE2517);
                                 KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                 KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                goto end_block_exception_3369;
+                                goto end_block_exception_2965;
                               }
                             }
-                            z3zE3292.zaccess_list_address_count = zal_addr_count;
-                            COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE3292)->zaccess_list_addresses), zal_addrs);
-                            z3zE3292.zaccess_list_slot_count = zal_slot_count;
-                            COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE3292)->zaccess_list_slots), zal_slots);
-                            z3zE3292.zauthorizzation_count = UINT64_C(0);
-                            zz5listz8z5structz0zzAuthorizzzzationz9 z3zE3294;
-                            CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE3294);
-                            COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE3292)->zauthorizzations), z3zE3294);
-                            KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE3294);
-                            z3zE3292.zblob_hashes = zEMPTY_BLOB_HASHES;
-                            z3zE3292.zchain_id = z2zE3326;
-                            z3zE3292.zgas_limit = z2zE3327;
-                            z3zE3292.zinput_src = z2zE3333;
-                            z3zE3292.zis_create = z2zE3329;
-                            z3zE3292.zmax_blob_fee = zZERO_WORD;
-                            z3zE3292.zmax_fee = z2zE3334;
-                            z3zE3292.zmax_priority_fee = z2zE3335;
-                            z3zE3292.znonce = z2zE3325;
-                            z3zE3292.zpubkey = zpubkey;
-                            z3zE3292.zraw = ztx;
-                            z3zE3292.zrecipient = z2zE3331;
-                            z3zE3292.zsender = zsender;
-                            z3zE3292.zsig_r = z2zE3338;
-                            z3zE3292.zsig_s = z2zE3339;
-                            z3zE3292.zsig_v = zv;
-                            z3zE3292.zsigning_hash = z2zE3337;
-                            z3zE3292.ztx_type = zFeeMarketTx;
-                            z3zE3292.zvalue = z2zE3332;
+                            z3zE2517.zaccess_list_address_count = zal_addr_count;
+                            COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE2517)->zaccess_list_addresses), zal_addrs);
+                            z3zE2517.zaccess_list_slot_count = zal_slot_count;
+                            COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE2517)->zaccess_list_slots), zal_slots);
+                            z3zE2517.zauthorizzation_count = UINT64_C(0);
+                            zz5listz8z5structz0zzAuthorizzzzationz9 z3zE2519;
+                            CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE2519);
+                            COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE2517)->zauthorizzations), z3zE2519);
+                            KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE2519);
+                            z3zE2517.zblob_hashes = zEMPTY_BLOB_HASHES;
+                            z3zE2517.zchain_id = z2zE2627;
+                            z3zE2517.zgas_limit = z2zE2628;
+                            z3zE2517.zinput_src = z2zE2634;
+                            z3zE2517.zis_create = z2zE2630;
+                            z3zE2517.zmax_blob_fee = zZERO_WORD;
+                            z3zE2517.zmax_fee = z2zE2635;
+                            z3zE2517.zmax_priority_fee = z2zE2636;
+                            z3zE2517.znonce = z2zE2626;
+                            z3zE2517.zpubkey = zpubkey;
+                            z3zE2517.zraw = ztx;
+                            z3zE2517.zrecipient = z2zE2632;
+                            z3zE2517.zsender = zsender;
+                            z3zE2517.zsig_r = z2zE2639;
+                            z3zE2517.zsig_s = z2zE2640;
+                            z3zE2517.zsig_v = zv;
+                            z3zE2517.zsigning_hash = z2zE2638;
+                            z3zE2517.ztx_type = zFeeMarketTx;
+                            z3zE2517.zvalue = z2zE2633;
                             KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
                             KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
-                            goto finish_match_3366;
+                            goto finish_match_2962;
                           }
-                        case_3367: ;
+                        case_2963: ;
                           sail_match_failure("decode_fee_market_tx");
-                        finish_match_3366: ;
-                          COPY(zTransaction)(&z3zE3290, z3zE3292);
-                          KILL(zTransaction)(&z3zE3292);
-                          KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3324);
-                          goto finish_match_3364;
+                        finish_match_2962: ;
+                          COPY(zTransaction)(&z3zE2515, z3zE2517);
+                          KILL(zTransaction)(&z3zE2517);
+                          KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2625);
+                          goto finish_match_2960;
                         }
-                      case_3365: ;
+                      case_2961: ;
                         sail_match_failure("decode_fee_market_tx");
-                      finish_match_3364: ;
-                        COPY(zTransaction)(&z3zE3289, z3zE3290);
-                        KILL(zTransaction)(&z3zE3290);
-                        goto finish_match_3362;
+                      finish_match_2960: ;
+                        COPY(zTransaction)(&z3zE2514, z3zE2515);
+                        KILL(zTransaction)(&z3zE2515);
+                        goto finish_match_2958;
                       }
-                    case_3363: ;
+                    case_2959: ;
                       sail_match_failure("decode_fee_market_tx");
-                    finish_match_3362: ;
-                      COPY(zTransaction)(&z3zE3288, z3zE3289);
-                      KILL(zTransaction)(&z3zE3289);
-                      goto finish_match_3360;
+                    finish_match_2958: ;
+                      COPY(zTransaction)(&z3zE2513, z3zE2514);
+                      KILL(zTransaction)(&z3zE2514);
+                      goto finish_match_2956;
                     }
-                  case_3361: ;
+                  case_2957: ;
                     sail_match_failure("decode_fee_market_tx");
-                  finish_match_3360: ;
-                    COPY(zTransaction)(&z3zE3287, z3zE3288);
-                    KILL(zTransaction)(&z3zE3288);
-                    goto finish_match_3358;
+                  finish_match_2956: ;
+                    COPY(zTransaction)(&z3zE2512, z3zE2513);
+                    KILL(zTransaction)(&z3zE2513);
+                    goto finish_match_2954;
                   }
-                case_3359: ;
+                case_2955: ;
                   sail_match_failure("decode_fee_market_tx");
-                finish_match_3358: ;
-                  COPY(zTransaction)(&z3zE3286, z3zE3287);
-                  KILL(zTransaction)(&z3zE3287);
-                  goto finish_match_3356;
+                finish_match_2954: ;
+                  COPY(zTransaction)(&z3zE2511, z3zE2512);
+                  KILL(zTransaction)(&z3zE2512);
+                  goto finish_match_2952;
                 }
-              case_3357: ;
+              case_2953: ;
                 sail_match_failure("decode_fee_market_tx");
-              finish_match_3356: ;
-                COPY(zTransaction)(&z3zE3285, z3zE3286);
-                KILL(zTransaction)(&z3zE3286);
-                goto finish_match_3354;
+              finish_match_2952: ;
+                COPY(zTransaction)(&z3zE2510, z3zE2511);
+                KILL(zTransaction)(&z3zE2511);
+                goto finish_match_2950;
               }
-            case_3355: ;
+            case_2951: ;
               sail_match_failure("decode_fee_market_tx");
-            finish_match_3354: ;
-              COPY(zTransaction)(&z3zE3284, z3zE3285);
-              KILL(zTransaction)(&z3zE3285);
-              goto finish_match_3352;
+            finish_match_2950: ;
+              COPY(zTransaction)(&z3zE2509, z3zE2510);
+              KILL(zTransaction)(&z3zE2510);
+              goto finish_match_2948;
             }
-          case_3353: ;
+          case_2949: ;
             sail_match_failure("decode_fee_market_tx");
-          finish_match_3352: ;
-            COPY(zTransaction)(&z3zE3283, z3zE3284);
-            KILL(zTransaction)(&z3zE3284);
-            goto finish_match_3350;
+          finish_match_2948: ;
+            COPY(zTransaction)(&z3zE2508, z3zE2509);
+            KILL(zTransaction)(&z3zE2509);
+            goto finish_match_2946;
           }
-        case_3351: ;
+        case_2947: ;
           sail_match_failure("decode_fee_market_tx");
-        finish_match_3350: ;
-          COPY(zTransaction)(&z3zE3282, z3zE3283);
-          KILL(zTransaction)(&z3zE3283);
-          goto finish_match_3348;
+        finish_match_2946: ;
+          COPY(zTransaction)(&z3zE2507, z3zE2508);
+          KILL(zTransaction)(&z3zE2508);
+          goto finish_match_2944;
         }
-      case_3349: ;
+      case_2945: ;
         sail_match_failure("decode_fee_market_tx");
-      finish_match_3348: ;
-        COPY(zTransaction)(&z3zE3281, z3zE3282);
-        KILL(zTransaction)(&z3zE3282);
-        goto finish_match_3346;
+      finish_match_2944: ;
+        COPY(zTransaction)(&z3zE2506, z3zE2507);
+        KILL(zTransaction)(&z3zE2507);
+        goto finish_match_2942;
       }
-    case_3347: ;
+    case_2943: ;
       sail_match_failure("decode_fee_market_tx");
-    finish_match_3346: ;
-      COPY(zTransaction)(&z3zE3280, z3zE3281);
-      KILL(zTransaction)(&z3zE3281);
-      goto finish_match_3344;
+    finish_match_2942: ;
+      COPY(zTransaction)(&z3zE2505, z3zE2506);
+      KILL(zTransaction)(&z3zE2506);
+      goto finish_match_2940;
     }
-  case_3345: ;
+  case_2941: ;
     sail_match_failure("decode_fee_market_tx");
-  finish_match_3344: ;
-    COPY(zTransaction)(&z3zE3279, z3zE3280);
-    KILL(zTransaction)(&z3zE3280);
-    goto finish_match_3342;
+  finish_match_2940: ;
+    COPY(zTransaction)(&z3zE2504, z3zE2505);
+    KILL(zTransaction)(&z3zE2505);
+    goto finish_match_2938;
   }
-case_3343: ;
+case_2939: ;
   sail_match_failure("decode_fee_market_tx");
-finish_match_3342: ;
-  COPY(zTransaction)((*(&z8zE201)), z3zE3279);
-  KILL(zTransaction)(&z3zE3279);
-end_function_3368: ;
-  goto end_function_4064;
-end_block_exception_3369: ;
-  goto end_function_4064;
-end_function_4064: ;
+finish_match_2938: ;
+  COPY(zTransaction)((*(&z8zE198)), z3zE2504);
+  KILL(zTransaction)(&z3zE2504);
+end_function_2964: ;
+  goto end_function_3645;
+end_block_exception_2965: ;
+  goto end_function_3645;
+end_function_3645: ;
 }
 
-void zdecode_blob_tx(struct zTransaction *z8zE202, struct zByteSliceFields ztx, struct zByteSliceFields zpubkey, enum zFork zfork, sail_fixed_bytes_20 zsender, struct zRlpCursor zfields)
+void zdecode_blob_tx(struct zTransaction *z8zE199, struct zByteSliceFields ztx, struct zByteSliceFields zpubkey, enum zFork zfork, sail_fixed_bytes_20 zsender, struct zByteSliceFields zfields)
 {
-  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3281;
+  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2582;
   {
-    z2zE3281 = zrlp_cursor_pop(zfields);
-    if (have_exception) {  goto end_block_exception_3341;  }
+    z2zE2582 = zrlp_cursor_pop(zfields);
+    if (have_exception) {  goto end_block_exception_2937;  }
   }
-  struct zTransaction z3zE3246;
-  CREATE(zTransaction)(&z3zE3246);
+  struct zTransaction z3zE2471;
+  CREATE(zTransaction)(&z3zE2471);
   {
     struct zRlpFieldRef zchain_f;
-    zchain_f = z2zE3281.ztup0;
-    struct zRlpCursor z1zE22;
-    z1zE22 = z2zE3281.ztup1;
-    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3282;
+    zchain_f = z2zE2582.ztup0;
+    struct zByteSliceFields z1zE38;
+    z1zE38 = z2zE2582.ztup1;
+    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2583;
     {
-      z2zE3282 = zrlp_cursor_pop(z1zE22);
+      z2zE2583 = zrlp_cursor_pop(z1zE38);
       if (have_exception) {
-        KILL(zTransaction)(&z3zE3246);
-        goto end_block_exception_3341;
+        KILL(zTransaction)(&z3zE2471);
+        goto end_block_exception_2937;
       }
     }
-    struct zTransaction z3zE3247;
-    CREATE(zTransaction)(&z3zE3247);
+    struct zTransaction z3zE2472;
+    CREATE(zTransaction)(&z3zE2472);
     {
       struct zRlpFieldRef znonce_f;
-      znonce_f = z2zE3282.ztup0;
-      struct zRlpCursor z1zE23;
-      z1zE23 = z2zE3282.ztup1;
-      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3283;
+      znonce_f = z2zE2583.ztup0;
+      struct zByteSliceFields z1zE39;
+      z1zE39 = z2zE2583.ztup1;
+      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2584;
       {
-        z2zE3283 = zrlp_cursor_pop(z1zE23);
+        z2zE2584 = zrlp_cursor_pop(z1zE39);
         if (have_exception) {
-          KILL(zTransaction)(&z3zE3246);
-          KILL(zTransaction)(&z3zE3247);
-          goto end_block_exception_3341;
+          KILL(zTransaction)(&z3zE2471);
+          KILL(zTransaction)(&z3zE2472);
+          goto end_block_exception_2937;
         }
       }
-      struct zTransaction z3zE3248;
-      CREATE(zTransaction)(&z3zE3248);
+      struct zTransaction z3zE2473;
+      CREATE(zTransaction)(&z3zE2473);
       {
         struct zRlpFieldRef zmp_f;
-        zmp_f = z2zE3283.ztup0;
-        struct zRlpCursor z1zE24;
-        z1zE24 = z2zE3283.ztup1;
-        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3284;
+        zmp_f = z2zE2584.ztup0;
+        struct zByteSliceFields z1zE40;
+        z1zE40 = z2zE2584.ztup1;
+        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2585;
         {
-          z2zE3284 = zrlp_cursor_pop(z1zE24);
+          z2zE2585 = zrlp_cursor_pop(z1zE40);
           if (have_exception) {
-            KILL(zTransaction)(&z3zE3246);
-            KILL(zTransaction)(&z3zE3247);
-            KILL(zTransaction)(&z3zE3248);
-            goto end_block_exception_3341;
+            KILL(zTransaction)(&z3zE2471);
+            KILL(zTransaction)(&z3zE2472);
+            KILL(zTransaction)(&z3zE2473);
+            goto end_block_exception_2937;
           }
         }
-        struct zTransaction z3zE3249;
-        CREATE(zTransaction)(&z3zE3249);
+        struct zTransaction z3zE2474;
+        CREATE(zTransaction)(&z3zE2474);
         {
           struct zRlpFieldRef zmf_f;
-          zmf_f = z2zE3284.ztup0;
-          struct zRlpCursor z1zE25;
-          z1zE25 = z2zE3284.ztup1;
-          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3285;
+          zmf_f = z2zE2585.ztup0;
+          struct zByteSliceFields z1zE41;
+          z1zE41 = z2zE2585.ztup1;
+          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2586;
           {
-            z2zE3285 = zrlp_cursor_pop(z1zE25);
+            z2zE2586 = zrlp_cursor_pop(z1zE41);
             if (have_exception) {
-              KILL(zTransaction)(&z3zE3246);
-              KILL(zTransaction)(&z3zE3247);
-              KILL(zTransaction)(&z3zE3248);
-              KILL(zTransaction)(&z3zE3249);
-              goto end_block_exception_3341;
+              KILL(zTransaction)(&z3zE2471);
+              KILL(zTransaction)(&z3zE2472);
+              KILL(zTransaction)(&z3zE2473);
+              KILL(zTransaction)(&z3zE2474);
+              goto end_block_exception_2937;
             }
           }
-          struct zTransaction z3zE3250;
-          CREATE(zTransaction)(&z3zE3250);
+          struct zTransaction z3zE2475;
+          CREATE(zTransaction)(&z3zE2475);
           {
             struct zRlpFieldRef zgas_f;
-            zgas_f = z2zE3285.ztup0;
-            struct zRlpCursor z1zE26;
-            z1zE26 = z2zE3285.ztup1;
-            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3286;
+            zgas_f = z2zE2586.ztup0;
+            struct zByteSliceFields z1zE42;
+            z1zE42 = z2zE2586.ztup1;
+            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2587;
             {
-              z2zE3286 = zrlp_cursor_pop(z1zE26);
+              z2zE2587 = zrlp_cursor_pop(z1zE42);
               if (have_exception) {
-                KILL(zTransaction)(&z3zE3246);
-                KILL(zTransaction)(&z3zE3247);
-                KILL(zTransaction)(&z3zE3248);
-                KILL(zTransaction)(&z3zE3249);
-                KILL(zTransaction)(&z3zE3250);
-                goto end_block_exception_3341;
+                KILL(zTransaction)(&z3zE2471);
+                KILL(zTransaction)(&z3zE2472);
+                KILL(zTransaction)(&z3zE2473);
+                KILL(zTransaction)(&z3zE2474);
+                KILL(zTransaction)(&z3zE2475);
+                goto end_block_exception_2937;
               }
             }
-            struct zTransaction z3zE3251;
-            CREATE(zTransaction)(&z3zE3251);
+            struct zTransaction z3zE2476;
+            CREATE(zTransaction)(&z3zE2476);
             {
               struct zRlpFieldRef zto_f;
-              zto_f = z2zE3286.ztup0;
-              struct zRlpCursor z1zE27;
-              z1zE27 = z2zE3286.ztup1;
-              struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3287;
+              zto_f = z2zE2587.ztup0;
+              struct zByteSliceFields z1zE43;
+              z1zE43 = z2zE2587.ztup1;
+              struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2588;
               {
-                z2zE3287 = zrlp_cursor_pop(z1zE27);
+                z2zE2588 = zrlp_cursor_pop(z1zE43);
                 if (have_exception) {
-                  KILL(zTransaction)(&z3zE3246);
-                  KILL(zTransaction)(&z3zE3247);
-                  KILL(zTransaction)(&z3zE3248);
-                  KILL(zTransaction)(&z3zE3249);
-                  KILL(zTransaction)(&z3zE3250);
-                  KILL(zTransaction)(&z3zE3251);
-                  goto end_block_exception_3341;
+                  KILL(zTransaction)(&z3zE2471);
+                  KILL(zTransaction)(&z3zE2472);
+                  KILL(zTransaction)(&z3zE2473);
+                  KILL(zTransaction)(&z3zE2474);
+                  KILL(zTransaction)(&z3zE2475);
+                  KILL(zTransaction)(&z3zE2476);
+                  goto end_block_exception_2937;
                 }
               }
-              struct zTransaction z3zE3252;
-              CREATE(zTransaction)(&z3zE3252);
+              struct zTransaction z3zE2477;
+              CREATE(zTransaction)(&z3zE2477);
               {
                 struct zRlpFieldRef zvalue_f;
-                zvalue_f = z2zE3287.ztup0;
-                struct zRlpCursor z1zE28;
-                z1zE28 = z2zE3287.ztup1;
-                struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3288;
+                zvalue_f = z2zE2588.ztup0;
+                struct zByteSliceFields z1zE44;
+                z1zE44 = z2zE2588.ztup1;
+                struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2589;
                 {
-                  z2zE3288 = zrlp_cursor_pop(z1zE28);
+                  z2zE2589 = zrlp_cursor_pop(z1zE44);
                   if (have_exception) {
-                    KILL(zTransaction)(&z3zE3246);
-                    KILL(zTransaction)(&z3zE3247);
-                    KILL(zTransaction)(&z3zE3248);
-                    KILL(zTransaction)(&z3zE3249);
-                    KILL(zTransaction)(&z3zE3250);
-                    KILL(zTransaction)(&z3zE3251);
-                    KILL(zTransaction)(&z3zE3252);
-                    goto end_block_exception_3341;
+                    KILL(zTransaction)(&z3zE2471);
+                    KILL(zTransaction)(&z3zE2472);
+                    KILL(zTransaction)(&z3zE2473);
+                    KILL(zTransaction)(&z3zE2474);
+                    KILL(zTransaction)(&z3zE2475);
+                    KILL(zTransaction)(&z3zE2476);
+                    KILL(zTransaction)(&z3zE2477);
+                    goto end_block_exception_2937;
                   }
                 }
-                struct zTransaction z3zE3253;
-                CREATE(zTransaction)(&z3zE3253);
+                struct zTransaction z3zE2478;
+                CREATE(zTransaction)(&z3zE2478);
                 {
                   struct zRlpFieldRef zdata_f;
-                  zdata_f = z2zE3288.ztup0;
-                  struct zRlpCursor z1zE29;
-                  z1zE29 = z2zE3288.ztup1;
-                  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3289;
+                  zdata_f = z2zE2589.ztup0;
+                  struct zByteSliceFields z1zE45;
+                  z1zE45 = z2zE2589.ztup1;
+                  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2590;
                   {
-                    z2zE3289 = zrlp_cursor_pop(z1zE29);
+                    z2zE2590 = zrlp_cursor_pop(z1zE45);
                     if (have_exception) {
-                      KILL(zTransaction)(&z3zE3246);
-                      KILL(zTransaction)(&z3zE3247);
-                      KILL(zTransaction)(&z3zE3248);
-                      KILL(zTransaction)(&z3zE3249);
-                      KILL(zTransaction)(&z3zE3250);
-                      KILL(zTransaction)(&z3zE3251);
-                      KILL(zTransaction)(&z3zE3252);
-                      KILL(zTransaction)(&z3zE3253);
-                      goto end_block_exception_3341;
+                      KILL(zTransaction)(&z3zE2471);
+                      KILL(zTransaction)(&z3zE2472);
+                      KILL(zTransaction)(&z3zE2473);
+                      KILL(zTransaction)(&z3zE2474);
+                      KILL(zTransaction)(&z3zE2475);
+                      KILL(zTransaction)(&z3zE2476);
+                      KILL(zTransaction)(&z3zE2477);
+                      KILL(zTransaction)(&z3zE2478);
+                      goto end_block_exception_2937;
                     }
                   }
-                  struct zTransaction z3zE3254;
-                  CREATE(zTransaction)(&z3zE3254);
+                  struct zTransaction z3zE2479;
+                  CREATE(zTransaction)(&z3zE2479);
                   {
                     struct zRlpFieldRef zal_f;
-                    zal_f = z2zE3289.ztup0;
-                    struct zRlpCursor z1zE30;
-                    z1zE30 = z2zE3289.ztup1;
-                    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3290;
+                    zal_f = z2zE2590.ztup0;
+                    struct zByteSliceFields z1zE46;
+                    z1zE46 = z2zE2590.ztup1;
+                    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2591;
                     {
-                      z2zE3290 = zrlp_cursor_pop(z1zE30);
+                      z2zE2591 = zrlp_cursor_pop(z1zE46);
                       if (have_exception) {
-                        KILL(zTransaction)(&z3zE3246);
-                        KILL(zTransaction)(&z3zE3247);
-                        KILL(zTransaction)(&z3zE3248);
-                        KILL(zTransaction)(&z3zE3249);
-                        KILL(zTransaction)(&z3zE3250);
-                        KILL(zTransaction)(&z3zE3251);
-                        KILL(zTransaction)(&z3zE3252);
-                        KILL(zTransaction)(&z3zE3253);
-                        KILL(zTransaction)(&z3zE3254);
-                        goto end_block_exception_3341;
+                        KILL(zTransaction)(&z3zE2471);
+                        KILL(zTransaction)(&z3zE2472);
+                        KILL(zTransaction)(&z3zE2473);
+                        KILL(zTransaction)(&z3zE2474);
+                        KILL(zTransaction)(&z3zE2475);
+                        KILL(zTransaction)(&z3zE2476);
+                        KILL(zTransaction)(&z3zE2477);
+                        KILL(zTransaction)(&z3zE2478);
+                        KILL(zTransaction)(&z3zE2479);
+                        goto end_block_exception_2937;
                       }
                     }
-                    struct zTransaction z3zE3255;
-                    CREATE(zTransaction)(&z3zE3255);
+                    struct zTransaction z3zE2480;
+                    CREATE(zTransaction)(&z3zE2480);
                     {
                       struct zRlpFieldRef zmbf_f;
-                      zmbf_f = z2zE3290.ztup0;
-                      struct zRlpCursor z1zE31;
-                      z1zE31 = z2zE3290.ztup1;
-                      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3291;
+                      zmbf_f = z2zE2591.ztup0;
+                      struct zByteSliceFields z1zE47;
+                      z1zE47 = z2zE2591.ztup1;
+                      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2592;
                       {
-                        z2zE3291 = zrlp_cursor_pop(z1zE31);
+                        z2zE2592 = zrlp_cursor_pop(z1zE47);
                         if (have_exception) {
-                          KILL(zTransaction)(&z3zE3246);
-                          KILL(zTransaction)(&z3zE3247);
-                          KILL(zTransaction)(&z3zE3248);
-                          KILL(zTransaction)(&z3zE3249);
-                          KILL(zTransaction)(&z3zE3250);
-                          KILL(zTransaction)(&z3zE3251);
-                          KILL(zTransaction)(&z3zE3252);
-                          KILL(zTransaction)(&z3zE3253);
-                          KILL(zTransaction)(&z3zE3254);
-                          KILL(zTransaction)(&z3zE3255);
-                          goto end_block_exception_3341;
+                          KILL(zTransaction)(&z3zE2471);
+                          KILL(zTransaction)(&z3zE2472);
+                          KILL(zTransaction)(&z3zE2473);
+                          KILL(zTransaction)(&z3zE2474);
+                          KILL(zTransaction)(&z3zE2475);
+                          KILL(zTransaction)(&z3zE2476);
+                          KILL(zTransaction)(&z3zE2477);
+                          KILL(zTransaction)(&z3zE2478);
+                          KILL(zTransaction)(&z3zE2479);
+                          KILL(zTransaction)(&z3zE2480);
+                          goto end_block_exception_2937;
                         }
                       }
-                      struct zTransaction z3zE3256;
-                      CREATE(zTransaction)(&z3zE3256);
+                      struct zTransaction z3zE2481;
+                      CREATE(zTransaction)(&z3zE2481);
                       {
                         struct zRlpFieldRef zbh_f;
-                        zbh_f = z2zE3291.ztup0;
-                        struct zRlpCursor z1zE32;
-                        z1zE32 = z2zE3291.ztup1;
-                        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3292;
+                        zbh_f = z2zE2592.ztup0;
+                        struct zByteSliceFields z1zE48;
+                        z1zE48 = z2zE2592.ztup1;
+                        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2593;
                         {
-                          z2zE3292 = zrlp_cursor_pop(z1zE32);
+                          z2zE2593 = zrlp_cursor_pop(z1zE48);
                           if (have_exception) {
-                            KILL(zTransaction)(&z3zE3246);
-                            KILL(zTransaction)(&z3zE3247);
-                            KILL(zTransaction)(&z3zE3248);
-                            KILL(zTransaction)(&z3zE3249);
-                            KILL(zTransaction)(&z3zE3250);
-                            KILL(zTransaction)(&z3zE3251);
-                            KILL(zTransaction)(&z3zE3252);
-                            KILL(zTransaction)(&z3zE3253);
-                            KILL(zTransaction)(&z3zE3254);
-                            KILL(zTransaction)(&z3zE3255);
-                            KILL(zTransaction)(&z3zE3256);
-                            goto end_block_exception_3341;
+                            KILL(zTransaction)(&z3zE2471);
+                            KILL(zTransaction)(&z3zE2472);
+                            KILL(zTransaction)(&z3zE2473);
+                            KILL(zTransaction)(&z3zE2474);
+                            KILL(zTransaction)(&z3zE2475);
+                            KILL(zTransaction)(&z3zE2476);
+                            KILL(zTransaction)(&z3zE2477);
+                            KILL(zTransaction)(&z3zE2478);
+                            KILL(zTransaction)(&z3zE2479);
+                            KILL(zTransaction)(&z3zE2480);
+                            KILL(zTransaction)(&z3zE2481);
+                            goto end_block_exception_2937;
                           }
                         }
-                        struct zTransaction z3zE3257;
-                        CREATE(zTransaction)(&z3zE3257);
+                        struct zTransaction z3zE2482;
+                        CREATE(zTransaction)(&z3zE2482);
                         {
                           struct zRlpFieldRef zv_f;
-                          zv_f = z2zE3292.ztup0;
-                          struct zRlpCursor z1zE33;
-                          z1zE33 = z2zE3292.ztup1;
-                          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3293;
+                          zv_f = z2zE2593.ztup0;
+                          struct zByteSliceFields z1zE49;
+                          z1zE49 = z2zE2593.ztup1;
+                          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2594;
                           {
-                            z2zE3293 = zrlp_cursor_pop(z1zE33);
+                            z2zE2594 = zrlp_cursor_pop(z1zE49);
                             if (have_exception) {
-                              KILL(zTransaction)(&z3zE3246);
-                              KILL(zTransaction)(&z3zE3247);
-                              KILL(zTransaction)(&z3zE3248);
-                              KILL(zTransaction)(&z3zE3249);
-                              KILL(zTransaction)(&z3zE3250);
-                              KILL(zTransaction)(&z3zE3251);
-                              KILL(zTransaction)(&z3zE3252);
-                              KILL(zTransaction)(&z3zE3253);
-                              KILL(zTransaction)(&z3zE3254);
-                              KILL(zTransaction)(&z3zE3255);
-                              KILL(zTransaction)(&z3zE3256);
-                              KILL(zTransaction)(&z3zE3257);
-                              goto end_block_exception_3341;
+                              KILL(zTransaction)(&z3zE2471);
+                              KILL(zTransaction)(&z3zE2472);
+                              KILL(zTransaction)(&z3zE2473);
+                              KILL(zTransaction)(&z3zE2474);
+                              KILL(zTransaction)(&z3zE2475);
+                              KILL(zTransaction)(&z3zE2476);
+                              KILL(zTransaction)(&z3zE2477);
+                              KILL(zTransaction)(&z3zE2478);
+                              KILL(zTransaction)(&z3zE2479);
+                              KILL(zTransaction)(&z3zE2480);
+                              KILL(zTransaction)(&z3zE2481);
+                              KILL(zTransaction)(&z3zE2482);
+                              goto end_block_exception_2937;
                             }
                           }
-                          struct zTransaction z3zE3258;
-                          CREATE(zTransaction)(&z3zE3258);
+                          struct zTransaction z3zE2483;
+                          CREATE(zTransaction)(&z3zE2483);
                           {
                             struct zRlpFieldRef zr_f;
-                            zr_f = z2zE3293.ztup0;
-                            struct zRlpCursor z1zE34;
-                            z1zE34 = z2zE3293.ztup1;
-                            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3294;
+                            zr_f = z2zE2594.ztup0;
+                            struct zByteSliceFields z1zE50;
+                            z1zE50 = z2zE2594.ztup1;
+                            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2595;
                             {
-                              z2zE3294 = zrlp_cursor_pop(z1zE34);
+                              z2zE2595 = zrlp_cursor_pop(z1zE50);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3246);
-                                KILL(zTransaction)(&z3zE3247);
-                                KILL(zTransaction)(&z3zE3248);
-                                KILL(zTransaction)(&z3zE3249);
-                                KILL(zTransaction)(&z3zE3250);
-                                KILL(zTransaction)(&z3zE3251);
-                                KILL(zTransaction)(&z3zE3252);
-                                KILL(zTransaction)(&z3zE3253);
-                                KILL(zTransaction)(&z3zE3254);
-                                KILL(zTransaction)(&z3zE3255);
-                                KILL(zTransaction)(&z3zE3256);
-                                KILL(zTransaction)(&z3zE3257);
-                                KILL(zTransaction)(&z3zE3258);
-                                goto end_block_exception_3341;
+                                KILL(zTransaction)(&z3zE2471);
+                                KILL(zTransaction)(&z3zE2472);
+                                KILL(zTransaction)(&z3zE2473);
+                                KILL(zTransaction)(&z3zE2474);
+                                KILL(zTransaction)(&z3zE2475);
+                                KILL(zTransaction)(&z3zE2476);
+                                KILL(zTransaction)(&z3zE2477);
+                                KILL(zTransaction)(&z3zE2478);
+                                KILL(zTransaction)(&z3zE2479);
+                                KILL(zTransaction)(&z3zE2480);
+                                KILL(zTransaction)(&z3zE2481);
+                                KILL(zTransaction)(&z3zE2482);
+                                KILL(zTransaction)(&z3zE2483);
+                                goto end_block_exception_2937;
                               }
                             }
-                            struct zTransaction z3zE3259;
-                            CREATE(zTransaction)(&z3zE3259);
+                            struct zTransaction z3zE2484;
+                            CREATE(zTransaction)(&z3zE2484);
                             {
                               struct zRlpFieldRef zs_f;
-                              zs_f = z2zE3294.ztup0;
-                              struct zRlpCursor z1zE35;
-                              z1zE35 = z2zE3294.ztup1;
-                              unit z3zE3260;
+                              zs_f = z2zE2595.ztup0;
+                              struct zByteSliceFields z1zE51;
+                              z1zE51 = z2zE2595.ztup1;
+                              unit z3zE2485;
                               {
-                                z3zE3260 = zrlp_cursor_expect_end(z1zE35);
+                                z3zE2485 = zrlp_cursor_expect_end(z1zE51);
                                 if (have_exception) {
-                                  KILL(zTransaction)(&z3zE3246);
-                                  KILL(zTransaction)(&z3zE3247);
-                                  KILL(zTransaction)(&z3zE3248);
-                                  KILL(zTransaction)(&z3zE3249);
-                                  KILL(zTransaction)(&z3zE3250);
-                                  KILL(zTransaction)(&z3zE3251);
-                                  KILL(zTransaction)(&z3zE3252);
-                                  KILL(zTransaction)(&z3zE3253);
-                                  KILL(zTransaction)(&z3zE3254);
-                                  KILL(zTransaction)(&z3zE3255);
-                                  KILL(zTransaction)(&z3zE3256);
-                                  KILL(zTransaction)(&z3zE3257);
-                                  KILL(zTransaction)(&z3zE3258);
-                                  KILL(zTransaction)(&z3zE3259);
-                                  goto end_block_exception_3341;
+                                  KILL(zTransaction)(&z3zE2471);
+                                  KILL(zTransaction)(&z3zE2472);
+                                  KILL(zTransaction)(&z3zE2473);
+                                  KILL(zTransaction)(&z3zE2474);
+                                  KILL(zTransaction)(&z3zE2475);
+                                  KILL(zTransaction)(&z3zE2476);
+                                  KILL(zTransaction)(&z3zE2477);
+                                  KILL(zTransaction)(&z3zE2478);
+                                  KILL(zTransaction)(&z3zE2479);
+                                  KILL(zTransaction)(&z3zE2480);
+                                  KILL(zTransaction)(&z3zE2481);
+                                  KILL(zTransaction)(&z3zE2482);
+                                  KILL(zTransaction)(&z3zE2483);
+                                  KILL(zTransaction)(&z3zE2484);
+                                  goto end_block_exception_2937;
                                 }
                               }
                               sail_u256 zv;
                               {
                                 zv = zrlp_ref_word(zv_f);
                                 if (have_exception) {
-                                  KILL(zTransaction)(&z3zE3246);
-                                  KILL(zTransaction)(&z3zE3247);
-                                  KILL(zTransaction)(&z3zE3248);
-                                  KILL(zTransaction)(&z3zE3249);
-                                  KILL(zTransaction)(&z3zE3250);
-                                  KILL(zTransaction)(&z3zE3251);
-                                  KILL(zTransaction)(&z3zE3252);
-                                  KILL(zTransaction)(&z3zE3253);
-                                  KILL(zTransaction)(&z3zE3254);
-                                  KILL(zTransaction)(&z3zE3255);
-                                  KILL(zTransaction)(&z3zE3256);
-                                  KILL(zTransaction)(&z3zE3257);
-                                  KILL(zTransaction)(&z3zE3258);
-                                  KILL(zTransaction)(&z3zE3259);
-                                  goto end_block_exception_3341;
+                                  KILL(zTransaction)(&z3zE2471);
+                                  KILL(zTransaction)(&z3zE2472);
+                                  KILL(zTransaction)(&z3zE2473);
+                                  KILL(zTransaction)(&z3zE2474);
+                                  KILL(zTransaction)(&z3zE2475);
+                                  KILL(zTransaction)(&z3zE2476);
+                                  KILL(zTransaction)(&z3zE2477);
+                                  KILL(zTransaction)(&z3zE2478);
+                                  KILL(zTransaction)(&z3zE2479);
+                                  KILL(zTransaction)(&z3zE2480);
+                                  KILL(zTransaction)(&z3zE2481);
+                                  KILL(zTransaction)(&z3zE2482);
+                                  KILL(zTransaction)(&z3zE2483);
+                                  KILL(zTransaction)(&z3zE2484);
+                                  goto end_block_exception_2937;
                                 }
                               }
-                              struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 z2zE3295;
-                              CREATE(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
+                              struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 z2zE2596;
+                              CREATE(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
                               {
-                                zdecode_access_list(&z2zE3295, zal_f);
+                                zdecode_access_list(&z2zE2596, zal_f);
                                 if (have_exception) {
-                                  KILL(zTransaction)(&z3zE3246);
-                                  KILL(zTransaction)(&z3zE3247);
-                                  KILL(zTransaction)(&z3zE3248);
-                                  KILL(zTransaction)(&z3zE3249);
-                                  KILL(zTransaction)(&z3zE3250);
-                                  KILL(zTransaction)(&z3zE3251);
-                                  KILL(zTransaction)(&z3zE3252);
-                                  KILL(zTransaction)(&z3zE3253);
-                                  KILL(zTransaction)(&z3zE3254);
-                                  KILL(zTransaction)(&z3zE3255);
-                                  KILL(zTransaction)(&z3zE3256);
-                                  KILL(zTransaction)(&z3zE3257);
-                                  KILL(zTransaction)(&z3zE3258);
-                                  KILL(zTransaction)(&z3zE3259);
-                                  KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                  goto end_block_exception_3341;
+                                  KILL(zTransaction)(&z3zE2471);
+                                  KILL(zTransaction)(&z3zE2472);
+                                  KILL(zTransaction)(&z3zE2473);
+                                  KILL(zTransaction)(&z3zE2474);
+                                  KILL(zTransaction)(&z3zE2475);
+                                  KILL(zTransaction)(&z3zE2476);
+                                  KILL(zTransaction)(&z3zE2477);
+                                  KILL(zTransaction)(&z3zE2478);
+                                  KILL(zTransaction)(&z3zE2479);
+                                  KILL(zTransaction)(&z3zE2480);
+                                  KILL(zTransaction)(&z3zE2481);
+                                  KILL(zTransaction)(&z3zE2482);
+                                  KILL(zTransaction)(&z3zE2483);
+                                  KILL(zTransaction)(&z3zE2484);
+                                  KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                  goto end_block_exception_2937;
                                 }
                               }
-                              struct zTransaction z3zE3261;
-                              CREATE(zTransaction)(&z3zE3261);
+                              struct zTransaction z3zE2486;
+                              CREATE(zTransaction)(&z3zE2486);
                               {
                                 zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 zal_addrs;
                                 CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
-                                COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs, z2zE3295.ztup0);
+                                COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs, z2zE2596.ztup0);
                                 zz5listz8z5structz0zzStorageKeyz9 zal_slots;
                                 CREATE(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                COPY(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots, z2zE3295.ztup1);
+                                COPY(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots, z2zE2596.ztup1);
                                 uint64_t zal_addr_count;
-                                zal_addr_count = z2zE3295.ztup2;
+                                zal_addr_count = z2zE2596.ztup2;
                                 uint64_t zal_slot_count;
-                                zal_slot_count = z2zE3295.ztup3;
+                                zal_slot_count = z2zE2596.ztup3;
                                 struct zBlobHashes zblob_hashes;
                                 {
                                   zblob_hashes = zdecode_blob_hashes(zbh_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3246);
-                                    KILL(zTransaction)(&z3zE3247);
-                                    KILL(zTransaction)(&z3zE3248);
-                                    KILL(zTransaction)(&z3zE3249);
-                                    KILL(zTransaction)(&z3zE3250);
-                                    KILL(zTransaction)(&z3zE3251);
-                                    KILL(zTransaction)(&z3zE3252);
-                                    KILL(zTransaction)(&z3zE3253);
-                                    KILL(zTransaction)(&z3zE3254);
-                                    KILL(zTransaction)(&z3zE3255);
-                                    KILL(zTransaction)(&z3zE3256);
-                                    KILL(zTransaction)(&z3zE3257);
-                                    KILL(zTransaction)(&z3zE3258);
-                                    KILL(zTransaction)(&z3zE3259);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                    KILL(zTransaction)(&z3zE3261);
+                                    KILL(zTransaction)(&z3zE2471);
+                                    KILL(zTransaction)(&z3zE2472);
+                                    KILL(zTransaction)(&z3zE2473);
+                                    KILL(zTransaction)(&z3zE2474);
+                                    KILL(zTransaction)(&z3zE2475);
+                                    KILL(zTransaction)(&z3zE2476);
+                                    KILL(zTransaction)(&z3zE2477);
+                                    KILL(zTransaction)(&z3zE2478);
+                                    KILL(zTransaction)(&z3zE2479);
+                                    KILL(zTransaction)(&z3zE2480);
+                                    KILL(zTransaction)(&z3zE2481);
+                                    KILL(zTransaction)(&z3zE2482);
+                                    KILL(zTransaction)(&z3zE2483);
+                                    KILL(zTransaction)(&z3zE2484);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                    KILL(zTransaction)(&z3zE2486);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    goto end_block_exception_3341;
+                                    goto end_block_exception_2937;
                                   }
                                 }
-                                sail_u256 z2zE3296;
+                                sail_u256 z2zE2597;
                                 {
-                                  z2zE3296 = zrlp_ref_uint_word(znonce_f);
+                                  z2zE2597 = zrlp_ref_uint_word(znonce_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3246);
-                                    KILL(zTransaction)(&z3zE3247);
-                                    KILL(zTransaction)(&z3zE3248);
-                                    KILL(zTransaction)(&z3zE3249);
-                                    KILL(zTransaction)(&z3zE3250);
-                                    KILL(zTransaction)(&z3zE3251);
-                                    KILL(zTransaction)(&z3zE3252);
-                                    KILL(zTransaction)(&z3zE3253);
-                                    KILL(zTransaction)(&z3zE3254);
-                                    KILL(zTransaction)(&z3zE3255);
-                                    KILL(zTransaction)(&z3zE3256);
-                                    KILL(zTransaction)(&z3zE3257);
-                                    KILL(zTransaction)(&z3zE3258);
-                                    KILL(zTransaction)(&z3zE3259);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                    KILL(zTransaction)(&z3zE3261);
+                                    KILL(zTransaction)(&z3zE2471);
+                                    KILL(zTransaction)(&z3zE2472);
+                                    KILL(zTransaction)(&z3zE2473);
+                                    KILL(zTransaction)(&z3zE2474);
+                                    KILL(zTransaction)(&z3zE2475);
+                                    KILL(zTransaction)(&z3zE2476);
+                                    KILL(zTransaction)(&z3zE2477);
+                                    KILL(zTransaction)(&z3zE2478);
+                                    KILL(zTransaction)(&z3zE2479);
+                                    KILL(zTransaction)(&z3zE2480);
+                                    KILL(zTransaction)(&z3zE2481);
+                                    KILL(zTransaction)(&z3zE2482);
+                                    KILL(zTransaction)(&z3zE2483);
+                                    KILL(zTransaction)(&z3zE2484);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                    KILL(zTransaction)(&z3zE2486);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    goto end_block_exception_3341;
+                                    goto end_block_exception_2937;
                                   }
                                 }
-                                uint64_t z2zE3297;
+                                uint64_t z2zE2598;
                                 {
-                                  z2zE3297 = zrlp_ref_uint64(zchain_f);
+                                  z2zE2598 = zrlp_ref_uint64(zchain_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3246);
-                                    KILL(zTransaction)(&z3zE3247);
-                                    KILL(zTransaction)(&z3zE3248);
-                                    KILL(zTransaction)(&z3zE3249);
-                                    KILL(zTransaction)(&z3zE3250);
-                                    KILL(zTransaction)(&z3zE3251);
-                                    KILL(zTransaction)(&z3zE3252);
-                                    KILL(zTransaction)(&z3zE3253);
-                                    KILL(zTransaction)(&z3zE3254);
-                                    KILL(zTransaction)(&z3zE3255);
-                                    KILL(zTransaction)(&z3zE3256);
-                                    KILL(zTransaction)(&z3zE3257);
-                                    KILL(zTransaction)(&z3zE3258);
-                                    KILL(zTransaction)(&z3zE3259);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                    KILL(zTransaction)(&z3zE3261);
+                                    KILL(zTransaction)(&z3zE2471);
+                                    KILL(zTransaction)(&z3zE2472);
+                                    KILL(zTransaction)(&z3zE2473);
+                                    KILL(zTransaction)(&z3zE2474);
+                                    KILL(zTransaction)(&z3zE2475);
+                                    KILL(zTransaction)(&z3zE2476);
+                                    KILL(zTransaction)(&z3zE2477);
+                                    KILL(zTransaction)(&z3zE2478);
+                                    KILL(zTransaction)(&z3zE2479);
+                                    KILL(zTransaction)(&z3zE2480);
+                                    KILL(zTransaction)(&z3zE2481);
+                                    KILL(zTransaction)(&z3zE2482);
+                                    KILL(zTransaction)(&z3zE2483);
+                                    KILL(zTransaction)(&z3zE2484);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                    KILL(zTransaction)(&z3zE2486);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    goto end_block_exception_3341;
+                                    goto end_block_exception_2937;
                                   }
                                 }
-                                uint64_t z2zE3298;
+                                uint64_t z2zE2599;
                                 {
-                                  z2zE3298 = zrlp_ref_gas(zgas_f, zfork);
+                                  z2zE2599 = zrlp_ref_gas(zgas_f, zfork);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3246);
-                                    KILL(zTransaction)(&z3zE3247);
-                                    KILL(zTransaction)(&z3zE3248);
-                                    KILL(zTransaction)(&z3zE3249);
-                                    KILL(zTransaction)(&z3zE3250);
-                                    KILL(zTransaction)(&z3zE3251);
-                                    KILL(zTransaction)(&z3zE3252);
-                                    KILL(zTransaction)(&z3zE3253);
-                                    KILL(zTransaction)(&z3zE3254);
-                                    KILL(zTransaction)(&z3zE3255);
-                                    KILL(zTransaction)(&z3zE3256);
-                                    KILL(zTransaction)(&z3zE3257);
-                                    KILL(zTransaction)(&z3zE3258);
-                                    KILL(zTransaction)(&z3zE3259);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                    KILL(zTransaction)(&z3zE3261);
+                                    KILL(zTransaction)(&z3zE2471);
+                                    KILL(zTransaction)(&z3zE2472);
+                                    KILL(zTransaction)(&z3zE2473);
+                                    KILL(zTransaction)(&z3zE2474);
+                                    KILL(zTransaction)(&z3zE2475);
+                                    KILL(zTransaction)(&z3zE2476);
+                                    KILL(zTransaction)(&z3zE2477);
+                                    KILL(zTransaction)(&z3zE2478);
+                                    KILL(zTransaction)(&z3zE2479);
+                                    KILL(zTransaction)(&z3zE2480);
+                                    KILL(zTransaction)(&z3zE2481);
+                                    KILL(zTransaction)(&z3zE2482);
+                                    KILL(zTransaction)(&z3zE2483);
+                                    KILL(zTransaction)(&z3zE2484);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                    KILL(zTransaction)(&z3zE2486);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    goto end_block_exception_3341;
+                                    goto end_block_exception_2937;
                                   }
                                 }
-                                bool z2zE3300;
+                                bool z2zE2601;
                                 {
-                                  uint64_t z2zE3299;
-                                  z2zE3299 = zto_f.zcontent_len;
-                                  z2zE3300 = (z2zE3299 == UINT64_C(0));
+                                  uint64_t z2zE2600;
+                                  z2zE2600 = zto_f.zcontent_len;
+                                  z2zE2601 = (z2zE2600 == UINT64_C(0));
                                 }
-                                sail_fixed_bytes_20 z2zE3302;
+                                sail_fixed_bytes_20 z2zE2603;
                                 {
-                                  sail_u256 z2zE3301;
+                                  sail_u256 z2zE2602;
                                   {
-                                    z2zE3301 = zrlp_ref_word(zto_f);
+                                    z2zE2602 = zrlp_ref_word(zto_f);
                                     if (have_exception) {
-                                      KILL(zTransaction)(&z3zE3246);
-                                      KILL(zTransaction)(&z3zE3247);
-                                      KILL(zTransaction)(&z3zE3248);
-                                      KILL(zTransaction)(&z3zE3249);
-                                      KILL(zTransaction)(&z3zE3250);
-                                      KILL(zTransaction)(&z3zE3251);
-                                      KILL(zTransaction)(&z3zE3252);
-                                      KILL(zTransaction)(&z3zE3253);
-                                      KILL(zTransaction)(&z3zE3254);
-                                      KILL(zTransaction)(&z3zE3255);
-                                      KILL(zTransaction)(&z3zE3256);
-                                      KILL(zTransaction)(&z3zE3257);
-                                      KILL(zTransaction)(&z3zE3258);
-                                      KILL(zTransaction)(&z3zE3259);
-                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                      KILL(zTransaction)(&z3zE3261);
+                                      KILL(zTransaction)(&z3zE2471);
+                                      KILL(zTransaction)(&z3zE2472);
+                                      KILL(zTransaction)(&z3zE2473);
+                                      KILL(zTransaction)(&z3zE2474);
+                                      KILL(zTransaction)(&z3zE2475);
+                                      KILL(zTransaction)(&z3zE2476);
+                                      KILL(zTransaction)(&z3zE2477);
+                                      KILL(zTransaction)(&z3zE2478);
+                                      KILL(zTransaction)(&z3zE2479);
+                                      KILL(zTransaction)(&z3zE2480);
+                                      KILL(zTransaction)(&z3zE2481);
+                                      KILL(zTransaction)(&z3zE2482);
+                                      KILL(zTransaction)(&z3zE2483);
+                                      KILL(zTransaction)(&z3zE2484);
+                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                      KILL(zTransaction)(&z3zE2486);
                                       KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                       KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                      goto end_block_exception_3341;
+                                      goto end_block_exception_2937;
                                     }
                                   }
-                                  z2zE3302 = zword_to_address(z2zE3301);
+                                  z2zE2603 = evmsail_word_to_address(z2zE2602);
                                 }
-                                sail_u256 z2zE3303;
+                                sail_u256 z2zE2604;
                                 {
-                                  z2zE3303 = zrlp_ref_uint_word(zvalue_f);
+                                  z2zE2604 = zrlp_ref_uint_word(zvalue_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3246);
-                                    KILL(zTransaction)(&z3zE3247);
-                                    KILL(zTransaction)(&z3zE3248);
-                                    KILL(zTransaction)(&z3zE3249);
-                                    KILL(zTransaction)(&z3zE3250);
-                                    KILL(zTransaction)(&z3zE3251);
-                                    KILL(zTransaction)(&z3zE3252);
-                                    KILL(zTransaction)(&z3zE3253);
-                                    KILL(zTransaction)(&z3zE3254);
-                                    KILL(zTransaction)(&z3zE3255);
-                                    KILL(zTransaction)(&z3zE3256);
-                                    KILL(zTransaction)(&z3zE3257);
-                                    KILL(zTransaction)(&z3zE3258);
-                                    KILL(zTransaction)(&z3zE3259);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                    KILL(zTransaction)(&z3zE3261);
+                                    KILL(zTransaction)(&z3zE2471);
+                                    KILL(zTransaction)(&z3zE2472);
+                                    KILL(zTransaction)(&z3zE2473);
+                                    KILL(zTransaction)(&z3zE2474);
+                                    KILL(zTransaction)(&z3zE2475);
+                                    KILL(zTransaction)(&z3zE2476);
+                                    KILL(zTransaction)(&z3zE2477);
+                                    KILL(zTransaction)(&z3zE2478);
+                                    KILL(zTransaction)(&z3zE2479);
+                                    KILL(zTransaction)(&z3zE2480);
+                                    KILL(zTransaction)(&z3zE2481);
+                                    KILL(zTransaction)(&z3zE2482);
+                                    KILL(zTransaction)(&z3zE2483);
+                                    KILL(zTransaction)(&z3zE2484);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                    KILL(zTransaction)(&z3zE2486);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    goto end_block_exception_3341;
+                                    goto end_block_exception_2937;
                                   }
                                 }
-                                struct zByteSliceFields z2zE3304;
+                                struct zByteSliceFields z2zE2605;
                                 {
-                                  z2zE3304 = ztx_input_span(zdata_f);
+                                  z2zE2605 = ztx_input_span(zdata_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3246);
-                                    KILL(zTransaction)(&z3zE3247);
-                                    KILL(zTransaction)(&z3zE3248);
-                                    KILL(zTransaction)(&z3zE3249);
-                                    KILL(zTransaction)(&z3zE3250);
-                                    KILL(zTransaction)(&z3zE3251);
-                                    KILL(zTransaction)(&z3zE3252);
-                                    KILL(zTransaction)(&z3zE3253);
-                                    KILL(zTransaction)(&z3zE3254);
-                                    KILL(zTransaction)(&z3zE3255);
-                                    KILL(zTransaction)(&z3zE3256);
-                                    KILL(zTransaction)(&z3zE3257);
-                                    KILL(zTransaction)(&z3zE3258);
-                                    KILL(zTransaction)(&z3zE3259);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                    KILL(zTransaction)(&z3zE3261);
+                                    KILL(zTransaction)(&z3zE2471);
+                                    KILL(zTransaction)(&z3zE2472);
+                                    KILL(zTransaction)(&z3zE2473);
+                                    KILL(zTransaction)(&z3zE2474);
+                                    KILL(zTransaction)(&z3zE2475);
+                                    KILL(zTransaction)(&z3zE2476);
+                                    KILL(zTransaction)(&z3zE2477);
+                                    KILL(zTransaction)(&z3zE2478);
+                                    KILL(zTransaction)(&z3zE2479);
+                                    KILL(zTransaction)(&z3zE2480);
+                                    KILL(zTransaction)(&z3zE2481);
+                                    KILL(zTransaction)(&z3zE2482);
+                                    KILL(zTransaction)(&z3zE2483);
+                                    KILL(zTransaction)(&z3zE2484);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                    KILL(zTransaction)(&z3zE2486);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    goto end_block_exception_3341;
+                                    goto end_block_exception_2937;
                                   }
                                 }
-                                sail_u256 z2zE3305;
+                                sail_u256 z2zE2606;
                                 {
-                                  z2zE3305 = zrlp_ref_uint_word(zmf_f);
+                                  z2zE2606 = zrlp_ref_uint_word(zmf_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3246);
-                                    KILL(zTransaction)(&z3zE3247);
-                                    KILL(zTransaction)(&z3zE3248);
-                                    KILL(zTransaction)(&z3zE3249);
-                                    KILL(zTransaction)(&z3zE3250);
-                                    KILL(zTransaction)(&z3zE3251);
-                                    KILL(zTransaction)(&z3zE3252);
-                                    KILL(zTransaction)(&z3zE3253);
-                                    KILL(zTransaction)(&z3zE3254);
-                                    KILL(zTransaction)(&z3zE3255);
-                                    KILL(zTransaction)(&z3zE3256);
-                                    KILL(zTransaction)(&z3zE3257);
-                                    KILL(zTransaction)(&z3zE3258);
-                                    KILL(zTransaction)(&z3zE3259);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                    KILL(zTransaction)(&z3zE3261);
+                                    KILL(zTransaction)(&z3zE2471);
+                                    KILL(zTransaction)(&z3zE2472);
+                                    KILL(zTransaction)(&z3zE2473);
+                                    KILL(zTransaction)(&z3zE2474);
+                                    KILL(zTransaction)(&z3zE2475);
+                                    KILL(zTransaction)(&z3zE2476);
+                                    KILL(zTransaction)(&z3zE2477);
+                                    KILL(zTransaction)(&z3zE2478);
+                                    KILL(zTransaction)(&z3zE2479);
+                                    KILL(zTransaction)(&z3zE2480);
+                                    KILL(zTransaction)(&z3zE2481);
+                                    KILL(zTransaction)(&z3zE2482);
+                                    KILL(zTransaction)(&z3zE2483);
+                                    KILL(zTransaction)(&z3zE2484);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                    KILL(zTransaction)(&z3zE2486);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    goto end_block_exception_3341;
+                                    goto end_block_exception_2937;
                                   }
                                 }
-                                sail_u256 z2zE3306;
+                                sail_u256 z2zE2607;
                                 {
-                                  z2zE3306 = zrlp_ref_uint_word(zmbf_f);
+                                  z2zE2607 = zrlp_ref_uint_word(zmbf_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3246);
-                                    KILL(zTransaction)(&z3zE3247);
-                                    KILL(zTransaction)(&z3zE3248);
-                                    KILL(zTransaction)(&z3zE3249);
-                                    KILL(zTransaction)(&z3zE3250);
-                                    KILL(zTransaction)(&z3zE3251);
-                                    KILL(zTransaction)(&z3zE3252);
-                                    KILL(zTransaction)(&z3zE3253);
-                                    KILL(zTransaction)(&z3zE3254);
-                                    KILL(zTransaction)(&z3zE3255);
-                                    KILL(zTransaction)(&z3zE3256);
-                                    KILL(zTransaction)(&z3zE3257);
-                                    KILL(zTransaction)(&z3zE3258);
-                                    KILL(zTransaction)(&z3zE3259);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                    KILL(zTransaction)(&z3zE3261);
+                                    KILL(zTransaction)(&z3zE2471);
+                                    KILL(zTransaction)(&z3zE2472);
+                                    KILL(zTransaction)(&z3zE2473);
+                                    KILL(zTransaction)(&z3zE2474);
+                                    KILL(zTransaction)(&z3zE2475);
+                                    KILL(zTransaction)(&z3zE2476);
+                                    KILL(zTransaction)(&z3zE2477);
+                                    KILL(zTransaction)(&z3zE2478);
+                                    KILL(zTransaction)(&z3zE2479);
+                                    KILL(zTransaction)(&z3zE2480);
+                                    KILL(zTransaction)(&z3zE2481);
+                                    KILL(zTransaction)(&z3zE2482);
+                                    KILL(zTransaction)(&z3zE2483);
+                                    KILL(zTransaction)(&z3zE2484);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                    KILL(zTransaction)(&z3zE2486);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    goto end_block_exception_3341;
+                                    goto end_block_exception_2937;
                                   }
                                 }
-                                sail_u256 z2zE3307;
+                                sail_u256 z2zE2608;
                                 {
-                                  z2zE3307 = zrlp_ref_uint_word(zmp_f);
+                                  z2zE2608 = zrlp_ref_uint_word(zmp_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3246);
-                                    KILL(zTransaction)(&z3zE3247);
-                                    KILL(zTransaction)(&z3zE3248);
-                                    KILL(zTransaction)(&z3zE3249);
-                                    KILL(zTransaction)(&z3zE3250);
-                                    KILL(zTransaction)(&z3zE3251);
-                                    KILL(zTransaction)(&z3zE3252);
-                                    KILL(zTransaction)(&z3zE3253);
-                                    KILL(zTransaction)(&z3zE3254);
-                                    KILL(zTransaction)(&z3zE3255);
-                                    KILL(zTransaction)(&z3zE3256);
-                                    KILL(zTransaction)(&z3zE3257);
-                                    KILL(zTransaction)(&z3zE3258);
-                                    KILL(zTransaction)(&z3zE3259);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                    KILL(zTransaction)(&z3zE3261);
+                                    KILL(zTransaction)(&z3zE2471);
+                                    KILL(zTransaction)(&z3zE2472);
+                                    KILL(zTransaction)(&z3zE2473);
+                                    KILL(zTransaction)(&z3zE2474);
+                                    KILL(zTransaction)(&z3zE2475);
+                                    KILL(zTransaction)(&z3zE2476);
+                                    KILL(zTransaction)(&z3zE2477);
+                                    KILL(zTransaction)(&z3zE2478);
+                                    KILL(zTransaction)(&z3zE2479);
+                                    KILL(zTransaction)(&z3zE2480);
+                                    KILL(zTransaction)(&z3zE2481);
+                                    KILL(zTransaction)(&z3zE2482);
+                                    KILL(zTransaction)(&z3zE2483);
+                                    KILL(zTransaction)(&z3zE2484);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                    KILL(zTransaction)(&z3zE2486);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    goto end_block_exception_3341;
+                                    goto end_block_exception_2937;
                                   }
                                 }
-                                sail_fixed_bytes_32 z2zE3309;
+                                sail_fixed_bytes_32 z2zE2610;
                                 {
-                                  struct zByteSliceFields z2zE3308;
+                                  struct zByteSliceFields z2zE2609;
                                   {
-                                    z2zE3308 = ztx_sig_span(zchain_f, zv_f);
+                                    z2zE2609 = ztx_sig_span(zchain_f, zv_f);
                                     if (have_exception) {
-                                      KILL(zTransaction)(&z3zE3246);
-                                      KILL(zTransaction)(&z3zE3247);
-                                      KILL(zTransaction)(&z3zE3248);
-                                      KILL(zTransaction)(&z3zE3249);
-                                      KILL(zTransaction)(&z3zE3250);
-                                      KILL(zTransaction)(&z3zE3251);
-                                      KILL(zTransaction)(&z3zE3252);
-                                      KILL(zTransaction)(&z3zE3253);
-                                      KILL(zTransaction)(&z3zE3254);
-                                      KILL(zTransaction)(&z3zE3255);
-                                      KILL(zTransaction)(&z3zE3256);
-                                      KILL(zTransaction)(&z3zE3257);
-                                      KILL(zTransaction)(&z3zE3258);
-                                      KILL(zTransaction)(&z3zE3259);
-                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                      KILL(zTransaction)(&z3zE3261);
+                                      KILL(zTransaction)(&z3zE2471);
+                                      KILL(zTransaction)(&z3zE2472);
+                                      KILL(zTransaction)(&z3zE2473);
+                                      KILL(zTransaction)(&z3zE2474);
+                                      KILL(zTransaction)(&z3zE2475);
+                                      KILL(zTransaction)(&z3zE2476);
+                                      KILL(zTransaction)(&z3zE2477);
+                                      KILL(zTransaction)(&z3zE2478);
+                                      KILL(zTransaction)(&z3zE2479);
+                                      KILL(zTransaction)(&z3zE2480);
+                                      KILL(zTransaction)(&z3zE2481);
+                                      KILL(zTransaction)(&z3zE2482);
+                                      KILL(zTransaction)(&z3zE2483);
+                                      KILL(zTransaction)(&z3zE2484);
+                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                      KILL(zTransaction)(&z3zE2486);
                                       KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                       KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                      goto end_block_exception_3341;
+                                      goto end_block_exception_2937;
                                     }
                                   }
                                   {
-                                    z2zE3309 = ztx_signing_hash(zBlobTx, z2zE3308, zv);
+                                    z2zE2610 = ztx_signing_hash(zBlobTx, z2zE2609, zv);
                                     if (have_exception) {
-                                      KILL(zTransaction)(&z3zE3246);
-                                      KILL(zTransaction)(&z3zE3247);
-                                      KILL(zTransaction)(&z3zE3248);
-                                      KILL(zTransaction)(&z3zE3249);
-                                      KILL(zTransaction)(&z3zE3250);
-                                      KILL(zTransaction)(&z3zE3251);
-                                      KILL(zTransaction)(&z3zE3252);
-                                      KILL(zTransaction)(&z3zE3253);
-                                      KILL(zTransaction)(&z3zE3254);
-                                      KILL(zTransaction)(&z3zE3255);
-                                      KILL(zTransaction)(&z3zE3256);
-                                      KILL(zTransaction)(&z3zE3257);
-                                      KILL(zTransaction)(&z3zE3258);
-                                      KILL(zTransaction)(&z3zE3259);
-                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                      KILL(zTransaction)(&z3zE3261);
+                                      KILL(zTransaction)(&z3zE2471);
+                                      KILL(zTransaction)(&z3zE2472);
+                                      KILL(zTransaction)(&z3zE2473);
+                                      KILL(zTransaction)(&z3zE2474);
+                                      KILL(zTransaction)(&z3zE2475);
+                                      KILL(zTransaction)(&z3zE2476);
+                                      KILL(zTransaction)(&z3zE2477);
+                                      KILL(zTransaction)(&z3zE2478);
+                                      KILL(zTransaction)(&z3zE2479);
+                                      KILL(zTransaction)(&z3zE2480);
+                                      KILL(zTransaction)(&z3zE2481);
+                                      KILL(zTransaction)(&z3zE2482);
+                                      KILL(zTransaction)(&z3zE2483);
+                                      KILL(zTransaction)(&z3zE2484);
+                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                      KILL(zTransaction)(&z3zE2486);
                                       KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                       KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                      goto end_block_exception_3341;
+                                      goto end_block_exception_2937;
                                     }
                                   }
                                 }
-                                sail_u256 z2zE3310;
+                                sail_u256 z2zE2611;
                                 {
-                                  z2zE3310 = zrlp_ref_uint_word(zr_f);
+                                  z2zE2611 = zrlp_ref_uint_word(zr_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3246);
-                                    KILL(zTransaction)(&z3zE3247);
-                                    KILL(zTransaction)(&z3zE3248);
-                                    KILL(zTransaction)(&z3zE3249);
-                                    KILL(zTransaction)(&z3zE3250);
-                                    KILL(zTransaction)(&z3zE3251);
-                                    KILL(zTransaction)(&z3zE3252);
-                                    KILL(zTransaction)(&z3zE3253);
-                                    KILL(zTransaction)(&z3zE3254);
-                                    KILL(zTransaction)(&z3zE3255);
-                                    KILL(zTransaction)(&z3zE3256);
-                                    KILL(zTransaction)(&z3zE3257);
-                                    KILL(zTransaction)(&z3zE3258);
-                                    KILL(zTransaction)(&z3zE3259);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                    KILL(zTransaction)(&z3zE3261);
+                                    KILL(zTransaction)(&z3zE2471);
+                                    KILL(zTransaction)(&z3zE2472);
+                                    KILL(zTransaction)(&z3zE2473);
+                                    KILL(zTransaction)(&z3zE2474);
+                                    KILL(zTransaction)(&z3zE2475);
+                                    KILL(zTransaction)(&z3zE2476);
+                                    KILL(zTransaction)(&z3zE2477);
+                                    KILL(zTransaction)(&z3zE2478);
+                                    KILL(zTransaction)(&z3zE2479);
+                                    KILL(zTransaction)(&z3zE2480);
+                                    KILL(zTransaction)(&z3zE2481);
+                                    KILL(zTransaction)(&z3zE2482);
+                                    KILL(zTransaction)(&z3zE2483);
+                                    KILL(zTransaction)(&z3zE2484);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                    KILL(zTransaction)(&z3zE2486);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    goto end_block_exception_3341;
+                                    goto end_block_exception_2937;
                                   }
                                 }
-                                sail_u256 z2zE3311;
+                                sail_u256 z2zE2612;
                                 {
-                                  z2zE3311 = zrlp_ref_uint_word(zs_f);
+                                  z2zE2612 = zrlp_ref_uint_word(zs_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3246);
-                                    KILL(zTransaction)(&z3zE3247);
-                                    KILL(zTransaction)(&z3zE3248);
-                                    KILL(zTransaction)(&z3zE3249);
-                                    KILL(zTransaction)(&z3zE3250);
-                                    KILL(zTransaction)(&z3zE3251);
-                                    KILL(zTransaction)(&z3zE3252);
-                                    KILL(zTransaction)(&z3zE3253);
-                                    KILL(zTransaction)(&z3zE3254);
-                                    KILL(zTransaction)(&z3zE3255);
-                                    KILL(zTransaction)(&z3zE3256);
-                                    KILL(zTransaction)(&z3zE3257);
-                                    KILL(zTransaction)(&z3zE3258);
-                                    KILL(zTransaction)(&z3zE3259);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                                    KILL(zTransaction)(&z3zE3261);
+                                    KILL(zTransaction)(&z3zE2471);
+                                    KILL(zTransaction)(&z3zE2472);
+                                    KILL(zTransaction)(&z3zE2473);
+                                    KILL(zTransaction)(&z3zE2474);
+                                    KILL(zTransaction)(&z3zE2475);
+                                    KILL(zTransaction)(&z3zE2476);
+                                    KILL(zTransaction)(&z3zE2477);
+                                    KILL(zTransaction)(&z3zE2478);
+                                    KILL(zTransaction)(&z3zE2479);
+                                    KILL(zTransaction)(&z3zE2480);
+                                    KILL(zTransaction)(&z3zE2481);
+                                    KILL(zTransaction)(&z3zE2482);
+                                    KILL(zTransaction)(&z3zE2483);
+                                    KILL(zTransaction)(&z3zE2484);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                                    KILL(zTransaction)(&z3zE2486);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    goto end_block_exception_3341;
+                                    goto end_block_exception_2937;
                                   }
                                 }
-                                z3zE3261.zaccess_list_address_count = zal_addr_count;
-                                COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE3261)->zaccess_list_addresses), zal_addrs);
-                                z3zE3261.zaccess_list_slot_count = zal_slot_count;
-                                COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE3261)->zaccess_list_slots), zal_slots);
-                                z3zE3261.zauthorizzation_count = UINT64_C(0);
-                                zz5listz8z5structz0zzAuthorizzzzationz9 z3zE3263;
-                                CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE3263);
-                                COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE3261)->zauthorizzations), z3zE3263);
-                                KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE3263);
-                                z3zE3261.zblob_hashes = zblob_hashes;
-                                z3zE3261.zchain_id = z2zE3297;
-                                z3zE3261.zgas_limit = z2zE3298;
-                                z3zE3261.zinput_src = z2zE3304;
-                                z3zE3261.zis_create = z2zE3300;
-                                z3zE3261.zmax_blob_fee = z2zE3306;
-                                z3zE3261.zmax_fee = z2zE3305;
-                                z3zE3261.zmax_priority_fee = z2zE3307;
-                                z3zE3261.znonce = z2zE3296;
-                                z3zE3261.zpubkey = zpubkey;
-                                z3zE3261.zraw = ztx;
-                                z3zE3261.zrecipient = z2zE3302;
-                                z3zE3261.zsender = zsender;
-                                z3zE3261.zsig_r = z2zE3310;
-                                z3zE3261.zsig_s = z2zE3311;
-                                z3zE3261.zsig_v = zv;
-                                z3zE3261.zsigning_hash = z2zE3309;
-                                z3zE3261.ztx_type = zBlobTx;
-                                z3zE3261.zvalue = z2zE3303;
+                                z3zE2486.zaccess_list_address_count = zal_addr_count;
+                                COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE2486)->zaccess_list_addresses), zal_addrs);
+                                z3zE2486.zaccess_list_slot_count = zal_slot_count;
+                                COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE2486)->zaccess_list_slots), zal_slots);
+                                z3zE2486.zauthorizzation_count = UINT64_C(0);
+                                zz5listz8z5structz0zzAuthorizzzzationz9 z3zE2488;
+                                CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE2488);
+                                COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE2486)->zauthorizzations), z3zE2488);
+                                KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&z3zE2488);
+                                z3zE2486.zblob_hashes = zblob_hashes;
+                                z3zE2486.zchain_id = z2zE2598;
+                                z3zE2486.zgas_limit = z2zE2599;
+                                z3zE2486.zinput_src = z2zE2605;
+                                z3zE2486.zis_create = z2zE2601;
+                                z3zE2486.zmax_blob_fee = z2zE2607;
+                                z3zE2486.zmax_fee = z2zE2606;
+                                z3zE2486.zmax_priority_fee = z2zE2608;
+                                z3zE2486.znonce = z2zE2597;
+                                z3zE2486.zpubkey = zpubkey;
+                                z3zE2486.zraw = ztx;
+                                z3zE2486.zrecipient = z2zE2603;
+                                z3zE2486.zsender = zsender;
+                                z3zE2486.zsig_r = z2zE2611;
+                                z3zE2486.zsig_s = z2zE2612;
+                                z3zE2486.zsig_v = zv;
+                                z3zE2486.zsigning_hash = z2zE2610;
+                                z3zE2486.ztx_type = zBlobTx;
+                                z3zE2486.zvalue = z2zE2604;
                                 KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
                                 KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
-                                goto finish_match_3338;
+                                goto finish_match_2934;
                               }
-                            case_3339: ;
+                            case_2935: ;
                               sail_match_failure("decode_blob_tx");
-                            finish_match_3338: ;
-                              COPY(zTransaction)(&z3zE3259, z3zE3261);
-                              KILL(zTransaction)(&z3zE3261);
-                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3295);
-                              goto finish_match_3336;
+                            finish_match_2934: ;
+                              COPY(zTransaction)(&z3zE2484, z3zE2486);
+                              KILL(zTransaction)(&z3zE2486);
+                              KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2596);
+                              goto finish_match_2932;
                             }
-                          case_3337: ;
+                          case_2933: ;
                             sail_match_failure("decode_blob_tx");
-                          finish_match_3336: ;
-                            COPY(zTransaction)(&z3zE3258, z3zE3259);
-                            KILL(zTransaction)(&z3zE3259);
-                            goto finish_match_3334;
+                          finish_match_2932: ;
+                            COPY(zTransaction)(&z3zE2483, z3zE2484);
+                            KILL(zTransaction)(&z3zE2484);
+                            goto finish_match_2930;
                           }
-                        case_3335: ;
+                        case_2931: ;
                           sail_match_failure("decode_blob_tx");
-                        finish_match_3334: ;
-                          COPY(zTransaction)(&z3zE3257, z3zE3258);
-                          KILL(zTransaction)(&z3zE3258);
-                          goto finish_match_3332;
+                        finish_match_2930: ;
+                          COPY(zTransaction)(&z3zE2482, z3zE2483);
+                          KILL(zTransaction)(&z3zE2483);
+                          goto finish_match_2928;
                         }
-                      case_3333: ;
+                      case_2929: ;
                         sail_match_failure("decode_blob_tx");
-                      finish_match_3332: ;
-                        COPY(zTransaction)(&z3zE3256, z3zE3257);
-                        KILL(zTransaction)(&z3zE3257);
-                        goto finish_match_3330;
+                      finish_match_2928: ;
+                        COPY(zTransaction)(&z3zE2481, z3zE2482);
+                        KILL(zTransaction)(&z3zE2482);
+                        goto finish_match_2926;
                       }
-                    case_3331: ;
+                    case_2927: ;
                       sail_match_failure("decode_blob_tx");
-                    finish_match_3330: ;
-                      COPY(zTransaction)(&z3zE3255, z3zE3256);
-                      KILL(zTransaction)(&z3zE3256);
-                      goto finish_match_3328;
+                    finish_match_2926: ;
+                      COPY(zTransaction)(&z3zE2480, z3zE2481);
+                      KILL(zTransaction)(&z3zE2481);
+                      goto finish_match_2924;
                     }
-                  case_3329: ;
+                  case_2925: ;
                     sail_match_failure("decode_blob_tx");
-                  finish_match_3328: ;
-                    COPY(zTransaction)(&z3zE3254, z3zE3255);
-                    KILL(zTransaction)(&z3zE3255);
-                    goto finish_match_3326;
+                  finish_match_2924: ;
+                    COPY(zTransaction)(&z3zE2479, z3zE2480);
+                    KILL(zTransaction)(&z3zE2480);
+                    goto finish_match_2922;
                   }
-                case_3327: ;
+                case_2923: ;
                   sail_match_failure("decode_blob_tx");
-                finish_match_3326: ;
-                  COPY(zTransaction)(&z3zE3253, z3zE3254);
-                  KILL(zTransaction)(&z3zE3254);
-                  goto finish_match_3324;
+                finish_match_2922: ;
+                  COPY(zTransaction)(&z3zE2478, z3zE2479);
+                  KILL(zTransaction)(&z3zE2479);
+                  goto finish_match_2920;
                 }
-              case_3325: ;
+              case_2921: ;
                 sail_match_failure("decode_blob_tx");
-              finish_match_3324: ;
-                COPY(zTransaction)(&z3zE3252, z3zE3253);
-                KILL(zTransaction)(&z3zE3253);
-                goto finish_match_3322;
+              finish_match_2920: ;
+                COPY(zTransaction)(&z3zE2477, z3zE2478);
+                KILL(zTransaction)(&z3zE2478);
+                goto finish_match_2918;
               }
-            case_3323: ;
+            case_2919: ;
               sail_match_failure("decode_blob_tx");
-            finish_match_3322: ;
-              COPY(zTransaction)(&z3zE3251, z3zE3252);
-              KILL(zTransaction)(&z3zE3252);
-              goto finish_match_3320;
+            finish_match_2918: ;
+              COPY(zTransaction)(&z3zE2476, z3zE2477);
+              KILL(zTransaction)(&z3zE2477);
+              goto finish_match_2916;
             }
-          case_3321: ;
+          case_2917: ;
             sail_match_failure("decode_blob_tx");
-          finish_match_3320: ;
-            COPY(zTransaction)(&z3zE3250, z3zE3251);
-            KILL(zTransaction)(&z3zE3251);
-            goto finish_match_3318;
+          finish_match_2916: ;
+            COPY(zTransaction)(&z3zE2475, z3zE2476);
+            KILL(zTransaction)(&z3zE2476);
+            goto finish_match_2914;
           }
-        case_3319: ;
+        case_2915: ;
           sail_match_failure("decode_blob_tx");
-        finish_match_3318: ;
-          COPY(zTransaction)(&z3zE3249, z3zE3250);
-          KILL(zTransaction)(&z3zE3250);
-          goto finish_match_3316;
+        finish_match_2914: ;
+          COPY(zTransaction)(&z3zE2474, z3zE2475);
+          KILL(zTransaction)(&z3zE2475);
+          goto finish_match_2912;
         }
-      case_3317: ;
+      case_2913: ;
         sail_match_failure("decode_blob_tx");
-      finish_match_3316: ;
-        COPY(zTransaction)(&z3zE3248, z3zE3249);
-        KILL(zTransaction)(&z3zE3249);
-        goto finish_match_3314;
+      finish_match_2912: ;
+        COPY(zTransaction)(&z3zE2473, z3zE2474);
+        KILL(zTransaction)(&z3zE2474);
+        goto finish_match_2910;
       }
-    case_3315: ;
+    case_2911: ;
       sail_match_failure("decode_blob_tx");
-    finish_match_3314: ;
-      COPY(zTransaction)(&z3zE3247, z3zE3248);
-      KILL(zTransaction)(&z3zE3248);
-      goto finish_match_3312;
+    finish_match_2910: ;
+      COPY(zTransaction)(&z3zE2472, z3zE2473);
+      KILL(zTransaction)(&z3zE2473);
+      goto finish_match_2908;
     }
-  case_3313: ;
+  case_2909: ;
     sail_match_failure("decode_blob_tx");
-  finish_match_3312: ;
-    COPY(zTransaction)(&z3zE3246, z3zE3247);
-    KILL(zTransaction)(&z3zE3247);
-    goto finish_match_3310;
+  finish_match_2908: ;
+    COPY(zTransaction)(&z3zE2471, z3zE2472);
+    KILL(zTransaction)(&z3zE2472);
+    goto finish_match_2906;
   }
-case_3311: ;
+case_2907: ;
   sail_match_failure("decode_blob_tx");
-finish_match_3310: ;
-  COPY(zTransaction)((*(&z8zE202)), z3zE3246);
-  KILL(zTransaction)(&z3zE3246);
-end_function_3340: ;
-  goto end_function_4063;
-end_block_exception_3341: ;
-  goto end_function_4063;
-end_function_4063: ;
+finish_match_2906: ;
+  COPY(zTransaction)((*(&z8zE199)), z3zE2471);
+  KILL(zTransaction)(&z3zE2471);
+end_function_2936: ;
+  goto end_function_3644;
+end_block_exception_2937: ;
+  goto end_function_3644;
+end_function_3644: ;
 }
 
-void zdecode_set_code_tx(struct zTransaction *z8zE203, struct zByteSliceFields ztx, struct zByteSliceFields zpubkey, enum zFork zfork, sail_fixed_bytes_20 zsender, struct zRlpCursor zfields)
+void zdecode_set_code_tx(struct zTransaction *z8zE200, struct zByteSliceFields ztx, struct zByteSliceFields zpubkey, enum zFork zfork, sail_fixed_bytes_20 zsender, struct zByteSliceFields zfields)
 {
-  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3250;
+  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2551;
   {
-    z2zE3250 = zrlp_cursor_pop(zfields);
-    if (have_exception) {  goto end_block_exception_3309;  }
+    z2zE2551 = zrlp_cursor_pop(zfields);
+    if (have_exception) {  goto end_block_exception_2905;  }
   }
-  struct zTransaction z3zE3214;
-  CREATE(zTransaction)(&z3zE3214);
+  struct zTransaction z3zE2439;
+  CREATE(zTransaction)(&z3zE2439);
   {
     struct zRlpFieldRef zchain_f;
-    zchain_f = z2zE3250.ztup0;
-    struct zRlpCursor z1zE9;
-    z1zE9 = z2zE3250.ztup1;
-    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3251;
+    zchain_f = z2zE2551.ztup0;
+    struct zByteSliceFields z1zE25;
+    z1zE25 = z2zE2551.ztup1;
+    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2552;
     {
-      z2zE3251 = zrlp_cursor_pop(z1zE9);
+      z2zE2552 = zrlp_cursor_pop(z1zE25);
       if (have_exception) {
-        KILL(zTransaction)(&z3zE3214);
-        goto end_block_exception_3309;
+        KILL(zTransaction)(&z3zE2439);
+        goto end_block_exception_2905;
       }
     }
-    struct zTransaction z3zE3215;
-    CREATE(zTransaction)(&z3zE3215);
+    struct zTransaction z3zE2440;
+    CREATE(zTransaction)(&z3zE2440);
     {
       struct zRlpFieldRef znonce_f;
-      znonce_f = z2zE3251.ztup0;
-      struct zRlpCursor z1zE10;
-      z1zE10 = z2zE3251.ztup1;
-      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3252;
+      znonce_f = z2zE2552.ztup0;
+      struct zByteSliceFields z1zE26;
+      z1zE26 = z2zE2552.ztup1;
+      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2553;
       {
-        z2zE3252 = zrlp_cursor_pop(z1zE10);
+        z2zE2553 = zrlp_cursor_pop(z1zE26);
         if (have_exception) {
-          KILL(zTransaction)(&z3zE3214);
-          KILL(zTransaction)(&z3zE3215);
-          goto end_block_exception_3309;
+          KILL(zTransaction)(&z3zE2439);
+          KILL(zTransaction)(&z3zE2440);
+          goto end_block_exception_2905;
         }
       }
-      struct zTransaction z3zE3216;
-      CREATE(zTransaction)(&z3zE3216);
+      struct zTransaction z3zE2441;
+      CREATE(zTransaction)(&z3zE2441);
       {
         struct zRlpFieldRef zmp_f;
-        zmp_f = z2zE3252.ztup0;
-        struct zRlpCursor z1zE11;
-        z1zE11 = z2zE3252.ztup1;
-        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3253;
+        zmp_f = z2zE2553.ztup0;
+        struct zByteSliceFields z1zE27;
+        z1zE27 = z2zE2553.ztup1;
+        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2554;
         {
-          z2zE3253 = zrlp_cursor_pop(z1zE11);
+          z2zE2554 = zrlp_cursor_pop(z1zE27);
           if (have_exception) {
-            KILL(zTransaction)(&z3zE3214);
-            KILL(zTransaction)(&z3zE3215);
-            KILL(zTransaction)(&z3zE3216);
-            goto end_block_exception_3309;
+            KILL(zTransaction)(&z3zE2439);
+            KILL(zTransaction)(&z3zE2440);
+            KILL(zTransaction)(&z3zE2441);
+            goto end_block_exception_2905;
           }
         }
-        struct zTransaction z3zE3217;
-        CREATE(zTransaction)(&z3zE3217);
+        struct zTransaction z3zE2442;
+        CREATE(zTransaction)(&z3zE2442);
         {
           struct zRlpFieldRef zmf_f;
-          zmf_f = z2zE3253.ztup0;
-          struct zRlpCursor z1zE12;
-          z1zE12 = z2zE3253.ztup1;
-          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3254;
+          zmf_f = z2zE2554.ztup0;
+          struct zByteSliceFields z1zE28;
+          z1zE28 = z2zE2554.ztup1;
+          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2555;
           {
-            z2zE3254 = zrlp_cursor_pop(z1zE12);
+            z2zE2555 = zrlp_cursor_pop(z1zE28);
             if (have_exception) {
-              KILL(zTransaction)(&z3zE3214);
-              KILL(zTransaction)(&z3zE3215);
-              KILL(zTransaction)(&z3zE3216);
-              KILL(zTransaction)(&z3zE3217);
-              goto end_block_exception_3309;
+              KILL(zTransaction)(&z3zE2439);
+              KILL(zTransaction)(&z3zE2440);
+              KILL(zTransaction)(&z3zE2441);
+              KILL(zTransaction)(&z3zE2442);
+              goto end_block_exception_2905;
             }
           }
-          struct zTransaction z3zE3218;
-          CREATE(zTransaction)(&z3zE3218);
+          struct zTransaction z3zE2443;
+          CREATE(zTransaction)(&z3zE2443);
           {
             struct zRlpFieldRef zgas_f;
-            zgas_f = z2zE3254.ztup0;
-            struct zRlpCursor z1zE13;
-            z1zE13 = z2zE3254.ztup1;
-            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3255;
+            zgas_f = z2zE2555.ztup0;
+            struct zByteSliceFields z1zE29;
+            z1zE29 = z2zE2555.ztup1;
+            struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2556;
             {
-              z2zE3255 = zrlp_cursor_pop(z1zE13);
+              z2zE2556 = zrlp_cursor_pop(z1zE29);
               if (have_exception) {
-                KILL(zTransaction)(&z3zE3214);
-                KILL(zTransaction)(&z3zE3215);
-                KILL(zTransaction)(&z3zE3216);
-                KILL(zTransaction)(&z3zE3217);
-                KILL(zTransaction)(&z3zE3218);
-                goto end_block_exception_3309;
+                KILL(zTransaction)(&z3zE2439);
+                KILL(zTransaction)(&z3zE2440);
+                KILL(zTransaction)(&z3zE2441);
+                KILL(zTransaction)(&z3zE2442);
+                KILL(zTransaction)(&z3zE2443);
+                goto end_block_exception_2905;
               }
             }
-            struct zTransaction z3zE3219;
-            CREATE(zTransaction)(&z3zE3219);
+            struct zTransaction z3zE2444;
+            CREATE(zTransaction)(&z3zE2444);
             {
               struct zRlpFieldRef zto_f;
-              zto_f = z2zE3255.ztup0;
-              struct zRlpCursor z1zE14;
-              z1zE14 = z2zE3255.ztup1;
-              struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3256;
+              zto_f = z2zE2556.ztup0;
+              struct zByteSliceFields z1zE30;
+              z1zE30 = z2zE2556.ztup1;
+              struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2557;
               {
-                z2zE3256 = zrlp_cursor_pop(z1zE14);
+                z2zE2557 = zrlp_cursor_pop(z1zE30);
                 if (have_exception) {
-                  KILL(zTransaction)(&z3zE3214);
-                  KILL(zTransaction)(&z3zE3215);
-                  KILL(zTransaction)(&z3zE3216);
-                  KILL(zTransaction)(&z3zE3217);
-                  KILL(zTransaction)(&z3zE3218);
-                  KILL(zTransaction)(&z3zE3219);
-                  goto end_block_exception_3309;
+                  KILL(zTransaction)(&z3zE2439);
+                  KILL(zTransaction)(&z3zE2440);
+                  KILL(zTransaction)(&z3zE2441);
+                  KILL(zTransaction)(&z3zE2442);
+                  KILL(zTransaction)(&z3zE2443);
+                  KILL(zTransaction)(&z3zE2444);
+                  goto end_block_exception_2905;
                 }
               }
-              struct zTransaction z3zE3220;
-              CREATE(zTransaction)(&z3zE3220);
+              struct zTransaction z3zE2445;
+              CREATE(zTransaction)(&z3zE2445);
               {
                 struct zRlpFieldRef zvalue_f;
-                zvalue_f = z2zE3256.ztup0;
-                struct zRlpCursor z1zE15;
-                z1zE15 = z2zE3256.ztup1;
-                struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3257;
+                zvalue_f = z2zE2557.ztup0;
+                struct zByteSliceFields z1zE31;
+                z1zE31 = z2zE2557.ztup1;
+                struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2558;
                 {
-                  z2zE3257 = zrlp_cursor_pop(z1zE15);
+                  z2zE2558 = zrlp_cursor_pop(z1zE31);
                   if (have_exception) {
-                    KILL(zTransaction)(&z3zE3214);
-                    KILL(zTransaction)(&z3zE3215);
-                    KILL(zTransaction)(&z3zE3216);
-                    KILL(zTransaction)(&z3zE3217);
-                    KILL(zTransaction)(&z3zE3218);
-                    KILL(zTransaction)(&z3zE3219);
-                    KILL(zTransaction)(&z3zE3220);
-                    goto end_block_exception_3309;
+                    KILL(zTransaction)(&z3zE2439);
+                    KILL(zTransaction)(&z3zE2440);
+                    KILL(zTransaction)(&z3zE2441);
+                    KILL(zTransaction)(&z3zE2442);
+                    KILL(zTransaction)(&z3zE2443);
+                    KILL(zTransaction)(&z3zE2444);
+                    KILL(zTransaction)(&z3zE2445);
+                    goto end_block_exception_2905;
                   }
                 }
-                struct zTransaction z3zE3221;
-                CREATE(zTransaction)(&z3zE3221);
+                struct zTransaction z3zE2446;
+                CREATE(zTransaction)(&z3zE2446);
                 {
                   struct zRlpFieldRef zdata_f;
-                  zdata_f = z2zE3257.ztup0;
-                  struct zRlpCursor z1zE16;
-                  z1zE16 = z2zE3257.ztup1;
-                  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3258;
+                  zdata_f = z2zE2558.ztup0;
+                  struct zByteSliceFields z1zE32;
+                  z1zE32 = z2zE2558.ztup1;
+                  struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2559;
                   {
-                    z2zE3258 = zrlp_cursor_pop(z1zE16);
+                    z2zE2559 = zrlp_cursor_pop(z1zE32);
                     if (have_exception) {
-                      KILL(zTransaction)(&z3zE3214);
-                      KILL(zTransaction)(&z3zE3215);
-                      KILL(zTransaction)(&z3zE3216);
-                      KILL(zTransaction)(&z3zE3217);
-                      KILL(zTransaction)(&z3zE3218);
-                      KILL(zTransaction)(&z3zE3219);
-                      KILL(zTransaction)(&z3zE3220);
-                      KILL(zTransaction)(&z3zE3221);
-                      goto end_block_exception_3309;
+                      KILL(zTransaction)(&z3zE2439);
+                      KILL(zTransaction)(&z3zE2440);
+                      KILL(zTransaction)(&z3zE2441);
+                      KILL(zTransaction)(&z3zE2442);
+                      KILL(zTransaction)(&z3zE2443);
+                      KILL(zTransaction)(&z3zE2444);
+                      KILL(zTransaction)(&z3zE2445);
+                      KILL(zTransaction)(&z3zE2446);
+                      goto end_block_exception_2905;
                     }
                   }
-                  struct zTransaction z3zE3222;
-                  CREATE(zTransaction)(&z3zE3222);
+                  struct zTransaction z3zE2447;
+                  CREATE(zTransaction)(&z3zE2447);
                   {
                     struct zRlpFieldRef zal_f;
-                    zal_f = z2zE3258.ztup0;
-                    struct zRlpCursor z1zE17;
-                    z1zE17 = z2zE3258.ztup1;
-                    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3259;
+                    zal_f = z2zE2559.ztup0;
+                    struct zByteSliceFields z1zE33;
+                    z1zE33 = z2zE2559.ztup1;
+                    struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2560;
                     {
-                      z2zE3259 = zrlp_cursor_pop(z1zE17);
+                      z2zE2560 = zrlp_cursor_pop(z1zE33);
                       if (have_exception) {
-                        KILL(zTransaction)(&z3zE3214);
-                        KILL(zTransaction)(&z3zE3215);
-                        KILL(zTransaction)(&z3zE3216);
-                        KILL(zTransaction)(&z3zE3217);
-                        KILL(zTransaction)(&z3zE3218);
-                        KILL(zTransaction)(&z3zE3219);
-                        KILL(zTransaction)(&z3zE3220);
-                        KILL(zTransaction)(&z3zE3221);
-                        KILL(zTransaction)(&z3zE3222);
-                        goto end_block_exception_3309;
+                        KILL(zTransaction)(&z3zE2439);
+                        KILL(zTransaction)(&z3zE2440);
+                        KILL(zTransaction)(&z3zE2441);
+                        KILL(zTransaction)(&z3zE2442);
+                        KILL(zTransaction)(&z3zE2443);
+                        KILL(zTransaction)(&z3zE2444);
+                        KILL(zTransaction)(&z3zE2445);
+                        KILL(zTransaction)(&z3zE2446);
+                        KILL(zTransaction)(&z3zE2447);
+                        goto end_block_exception_2905;
                       }
                     }
-                    struct zTransaction z3zE3223;
-                    CREATE(zTransaction)(&z3zE3223);
+                    struct zTransaction z3zE2448;
+                    CREATE(zTransaction)(&z3zE2448);
                     {
                       struct zRlpFieldRef zauth_f;
-                      zauth_f = z2zE3259.ztup0;
-                      struct zRlpCursor z1zE18;
-                      z1zE18 = z2zE3259.ztup1;
-                      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3260;
+                      zauth_f = z2zE2560.ztup0;
+                      struct zByteSliceFields z1zE34;
+                      z1zE34 = z2zE2560.ztup1;
+                      struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2561;
                       {
-                        z2zE3260 = zrlp_cursor_pop(z1zE18);
+                        z2zE2561 = zrlp_cursor_pop(z1zE34);
                         if (have_exception) {
-                          KILL(zTransaction)(&z3zE3214);
-                          KILL(zTransaction)(&z3zE3215);
-                          KILL(zTransaction)(&z3zE3216);
-                          KILL(zTransaction)(&z3zE3217);
-                          KILL(zTransaction)(&z3zE3218);
-                          KILL(zTransaction)(&z3zE3219);
-                          KILL(zTransaction)(&z3zE3220);
-                          KILL(zTransaction)(&z3zE3221);
-                          KILL(zTransaction)(&z3zE3222);
-                          KILL(zTransaction)(&z3zE3223);
-                          goto end_block_exception_3309;
+                          KILL(zTransaction)(&z3zE2439);
+                          KILL(zTransaction)(&z3zE2440);
+                          KILL(zTransaction)(&z3zE2441);
+                          KILL(zTransaction)(&z3zE2442);
+                          KILL(zTransaction)(&z3zE2443);
+                          KILL(zTransaction)(&z3zE2444);
+                          KILL(zTransaction)(&z3zE2445);
+                          KILL(zTransaction)(&z3zE2446);
+                          KILL(zTransaction)(&z3zE2447);
+                          KILL(zTransaction)(&z3zE2448);
+                          goto end_block_exception_2905;
                         }
                       }
-                      struct zTransaction z3zE3224;
-                      CREATE(zTransaction)(&z3zE3224);
+                      struct zTransaction z3zE2449;
+                      CREATE(zTransaction)(&z3zE2449);
                       {
                         struct zRlpFieldRef zv_f;
-                        zv_f = z2zE3260.ztup0;
-                        struct zRlpCursor z1zE19;
-                        z1zE19 = z2zE3260.ztup1;
-                        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3261;
+                        zv_f = z2zE2561.ztup0;
+                        struct zByteSliceFields z1zE35;
+                        z1zE35 = z2zE2561.ztup1;
+                        struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2562;
                         {
-                          z2zE3261 = zrlp_cursor_pop(z1zE19);
+                          z2zE2562 = zrlp_cursor_pop(z1zE35);
                           if (have_exception) {
-                            KILL(zTransaction)(&z3zE3214);
-                            KILL(zTransaction)(&z3zE3215);
-                            KILL(zTransaction)(&z3zE3216);
-                            KILL(zTransaction)(&z3zE3217);
-                            KILL(zTransaction)(&z3zE3218);
-                            KILL(zTransaction)(&z3zE3219);
-                            KILL(zTransaction)(&z3zE3220);
-                            KILL(zTransaction)(&z3zE3221);
-                            KILL(zTransaction)(&z3zE3222);
-                            KILL(zTransaction)(&z3zE3223);
-                            KILL(zTransaction)(&z3zE3224);
-                            goto end_block_exception_3309;
+                            KILL(zTransaction)(&z3zE2439);
+                            KILL(zTransaction)(&z3zE2440);
+                            KILL(zTransaction)(&z3zE2441);
+                            KILL(zTransaction)(&z3zE2442);
+                            KILL(zTransaction)(&z3zE2443);
+                            KILL(zTransaction)(&z3zE2444);
+                            KILL(zTransaction)(&z3zE2445);
+                            KILL(zTransaction)(&z3zE2446);
+                            KILL(zTransaction)(&z3zE2447);
+                            KILL(zTransaction)(&z3zE2448);
+                            KILL(zTransaction)(&z3zE2449);
+                            goto end_block_exception_2905;
                           }
                         }
-                        struct zTransaction z3zE3225;
-                        CREATE(zTransaction)(&z3zE3225);
+                        struct zTransaction z3zE2450;
+                        CREATE(zTransaction)(&z3zE2450);
                         {
                           struct zRlpFieldRef zr_f;
-                          zr_f = z2zE3261.ztup0;
-                          struct zRlpCursor z1zE20;
-                          z1zE20 = z2zE3261.ztup1;
-                          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 z2zE3262;
+                          zr_f = z2zE2562.ztup0;
+                          struct zByteSliceFields z1zE36;
+                          z1zE36 = z2zE2562.ztup1;
+                          struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 z2zE2563;
                           {
-                            z2zE3262 = zrlp_cursor_pop(z1zE20);
+                            z2zE2563 = zrlp_cursor_pop(z1zE36);
                             if (have_exception) {
-                              KILL(zTransaction)(&z3zE3214);
-                              KILL(zTransaction)(&z3zE3215);
-                              KILL(zTransaction)(&z3zE3216);
-                              KILL(zTransaction)(&z3zE3217);
-                              KILL(zTransaction)(&z3zE3218);
-                              KILL(zTransaction)(&z3zE3219);
-                              KILL(zTransaction)(&z3zE3220);
-                              KILL(zTransaction)(&z3zE3221);
-                              KILL(zTransaction)(&z3zE3222);
-                              KILL(zTransaction)(&z3zE3223);
-                              KILL(zTransaction)(&z3zE3224);
-                              KILL(zTransaction)(&z3zE3225);
-                              goto end_block_exception_3309;
+                              KILL(zTransaction)(&z3zE2439);
+                              KILL(zTransaction)(&z3zE2440);
+                              KILL(zTransaction)(&z3zE2441);
+                              KILL(zTransaction)(&z3zE2442);
+                              KILL(zTransaction)(&z3zE2443);
+                              KILL(zTransaction)(&z3zE2444);
+                              KILL(zTransaction)(&z3zE2445);
+                              KILL(zTransaction)(&z3zE2446);
+                              KILL(zTransaction)(&z3zE2447);
+                              KILL(zTransaction)(&z3zE2448);
+                              KILL(zTransaction)(&z3zE2449);
+                              KILL(zTransaction)(&z3zE2450);
+                              goto end_block_exception_2905;
                             }
                           }
-                          struct zTransaction z3zE3226;
-                          CREATE(zTransaction)(&z3zE3226);
+                          struct zTransaction z3zE2451;
+                          CREATE(zTransaction)(&z3zE2451);
                           {
                             struct zRlpFieldRef zs_f;
-                            zs_f = z2zE3262.ztup0;
-                            struct zRlpCursor z1zE21;
-                            z1zE21 = z2zE3262.ztup1;
-                            unit z3zE3227;
+                            zs_f = z2zE2563.ztup0;
+                            struct zByteSliceFields z1zE37;
+                            z1zE37 = z2zE2563.ztup1;
+                            unit z3zE2452;
                             {
-                              z3zE3227 = zrlp_cursor_expect_end(z1zE21);
+                              z3zE2452 = zrlp_cursor_expect_end(z1zE37);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3214);
-                                KILL(zTransaction)(&z3zE3215);
-                                KILL(zTransaction)(&z3zE3216);
-                                KILL(zTransaction)(&z3zE3217);
-                                KILL(zTransaction)(&z3zE3218);
-                                KILL(zTransaction)(&z3zE3219);
-                                KILL(zTransaction)(&z3zE3220);
-                                KILL(zTransaction)(&z3zE3221);
-                                KILL(zTransaction)(&z3zE3222);
-                                KILL(zTransaction)(&z3zE3223);
-                                KILL(zTransaction)(&z3zE3224);
-                                KILL(zTransaction)(&z3zE3225);
-                                KILL(zTransaction)(&z3zE3226);
-                                goto end_block_exception_3309;
+                                KILL(zTransaction)(&z3zE2439);
+                                KILL(zTransaction)(&z3zE2440);
+                                KILL(zTransaction)(&z3zE2441);
+                                KILL(zTransaction)(&z3zE2442);
+                                KILL(zTransaction)(&z3zE2443);
+                                KILL(zTransaction)(&z3zE2444);
+                                KILL(zTransaction)(&z3zE2445);
+                                KILL(zTransaction)(&z3zE2446);
+                                KILL(zTransaction)(&z3zE2447);
+                                KILL(zTransaction)(&z3zE2448);
+                                KILL(zTransaction)(&z3zE2449);
+                                KILL(zTransaction)(&z3zE2450);
+                                KILL(zTransaction)(&z3zE2451);
+                                goto end_block_exception_2905;
                               }
                             }
                             sail_u256 zv;
                             {
                               zv = zrlp_ref_word(zv_f);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3214);
-                                KILL(zTransaction)(&z3zE3215);
-                                KILL(zTransaction)(&z3zE3216);
-                                KILL(zTransaction)(&z3zE3217);
-                                KILL(zTransaction)(&z3zE3218);
-                                KILL(zTransaction)(&z3zE3219);
-                                KILL(zTransaction)(&z3zE3220);
-                                KILL(zTransaction)(&z3zE3221);
-                                KILL(zTransaction)(&z3zE3222);
-                                KILL(zTransaction)(&z3zE3223);
-                                KILL(zTransaction)(&z3zE3224);
-                                KILL(zTransaction)(&z3zE3225);
-                                KILL(zTransaction)(&z3zE3226);
-                                goto end_block_exception_3309;
+                                KILL(zTransaction)(&z3zE2439);
+                                KILL(zTransaction)(&z3zE2440);
+                                KILL(zTransaction)(&z3zE2441);
+                                KILL(zTransaction)(&z3zE2442);
+                                KILL(zTransaction)(&z3zE2443);
+                                KILL(zTransaction)(&z3zE2444);
+                                KILL(zTransaction)(&z3zE2445);
+                                KILL(zTransaction)(&z3zE2446);
+                                KILL(zTransaction)(&z3zE2447);
+                                KILL(zTransaction)(&z3zE2448);
+                                KILL(zTransaction)(&z3zE2449);
+                                KILL(zTransaction)(&z3zE2450);
+                                KILL(zTransaction)(&z3zE2451);
+                                goto end_block_exception_2905;
                               }
                             }
-                            struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 z2zE3263;
-                            CREATE(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
+                            struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 z2zE2564;
+                            CREATE(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
                             {
-                              zdecode_access_list(&z2zE3263, zal_f);
+                              zdecode_access_list(&z2zE2564, zal_f);
                               if (have_exception) {
-                                KILL(zTransaction)(&z3zE3214);
-                                KILL(zTransaction)(&z3zE3215);
-                                KILL(zTransaction)(&z3zE3216);
-                                KILL(zTransaction)(&z3zE3217);
-                                KILL(zTransaction)(&z3zE3218);
-                                KILL(zTransaction)(&z3zE3219);
-                                KILL(zTransaction)(&z3zE3220);
-                                KILL(zTransaction)(&z3zE3221);
-                                KILL(zTransaction)(&z3zE3222);
-                                KILL(zTransaction)(&z3zE3223);
-                                KILL(zTransaction)(&z3zE3224);
-                                KILL(zTransaction)(&z3zE3225);
-                                KILL(zTransaction)(&z3zE3226);
-                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                goto end_block_exception_3309;
+                                KILL(zTransaction)(&z3zE2439);
+                                KILL(zTransaction)(&z3zE2440);
+                                KILL(zTransaction)(&z3zE2441);
+                                KILL(zTransaction)(&z3zE2442);
+                                KILL(zTransaction)(&z3zE2443);
+                                KILL(zTransaction)(&z3zE2444);
+                                KILL(zTransaction)(&z3zE2445);
+                                KILL(zTransaction)(&z3zE2446);
+                                KILL(zTransaction)(&z3zE2447);
+                                KILL(zTransaction)(&z3zE2448);
+                                KILL(zTransaction)(&z3zE2449);
+                                KILL(zTransaction)(&z3zE2450);
+                                KILL(zTransaction)(&z3zE2451);
+                                KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                goto end_block_exception_2905;
                               }
                             }
-                            struct zTransaction z3zE3228;
-                            CREATE(zTransaction)(&z3zE3228);
+                            struct zTransaction z3zE2453;
+                            CREATE(zTransaction)(&z3zE2453);
                             {
                               zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 zal_addrs;
                               CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
-                              COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs, z2zE3263.ztup0);
+                              COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs, z2zE2564.ztup0);
                               zz5listz8z5structz0zzStorageKeyz9 zal_slots;
                               CREATE(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                              COPY(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots, z2zE3263.ztup1);
+                              COPY(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots, z2zE2564.ztup1);
                               uint64_t zal_addr_count;
-                              zal_addr_count = z2zE3263.ztup2;
+                              zal_addr_count = z2zE2564.ztup2;
                               uint64_t zal_slot_count;
-                              zal_slot_count = z2zE3263.ztup3;
-                              struct ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9 z2zE3264;
-                              CREATE(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
+                              zal_slot_count = z2zE2564.ztup3;
+                              struct ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9 z2zE2565;
+                              CREATE(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
                               {
-                                zdecode_auth_list(&z2zE3264, zauth_f);
+                                zdecode_auth_list(&z2zE2565, zauth_f);
                                 if (have_exception) {
-                                  KILL(zTransaction)(&z3zE3214);
-                                  KILL(zTransaction)(&z3zE3215);
-                                  KILL(zTransaction)(&z3zE3216);
-                                  KILL(zTransaction)(&z3zE3217);
-                                  KILL(zTransaction)(&z3zE3218);
-                                  KILL(zTransaction)(&z3zE3219);
-                                  KILL(zTransaction)(&z3zE3220);
-                                  KILL(zTransaction)(&z3zE3221);
-                                  KILL(zTransaction)(&z3zE3222);
-                                  KILL(zTransaction)(&z3zE3223);
-                                  KILL(zTransaction)(&z3zE3224);
-                                  KILL(zTransaction)(&z3zE3225);
-                                  KILL(zTransaction)(&z3zE3226);
-                                  KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                  KILL(zTransaction)(&z3zE3228);
+                                  KILL(zTransaction)(&z3zE2439);
+                                  KILL(zTransaction)(&z3zE2440);
+                                  KILL(zTransaction)(&z3zE2441);
+                                  KILL(zTransaction)(&z3zE2442);
+                                  KILL(zTransaction)(&z3zE2443);
+                                  KILL(zTransaction)(&z3zE2444);
+                                  KILL(zTransaction)(&z3zE2445);
+                                  KILL(zTransaction)(&z3zE2446);
+                                  KILL(zTransaction)(&z3zE2447);
+                                  KILL(zTransaction)(&z3zE2448);
+                                  KILL(zTransaction)(&z3zE2449);
+                                  KILL(zTransaction)(&z3zE2450);
+                                  KILL(zTransaction)(&z3zE2451);
+                                  KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                  KILL(zTransaction)(&z3zE2453);
                                   KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                   KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                  KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
-                                  goto end_block_exception_3309;
+                                  KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
+                                  goto end_block_exception_2905;
                                 }
                               }
-                              struct zTransaction z3zE3229;
-                              CREATE(zTransaction)(&z3zE3229);
+                              struct zTransaction z3zE2454;
+                              CREATE(zTransaction)(&z3zE2454);
                               {
                                 zz5listz8z5structz0zzAuthorizzzzationz9 zauthorizzations;
                                 CREATE(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations, z2zE3264.ztup0);
+                                COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations, z2zE2565.ztup0);
                                 uint64_t zauthorizzation_count;
-                                zauthorizzation_count = z2zE3264.ztup1;
-                                uint64_t z2zE3266;
+                                zauthorizzation_count = z2zE2565.ztup1;
+                                uint64_t z2zE2567;
                                 {
-                                  uint64_t z2zE3265;
+                                  uint64_t z2zE2566;
                                   {
-                                    z2zE3265 = zrlp_ref_uint64(znonce_f);
+                                    z2zE2566 = zrlp_ref_uint64(znonce_f);
                                     if (have_exception) {
-                                      KILL(zTransaction)(&z3zE3214);
-                                      KILL(zTransaction)(&z3zE3215);
-                                      KILL(zTransaction)(&z3zE3216);
-                                      KILL(zTransaction)(&z3zE3217);
-                                      KILL(zTransaction)(&z3zE3218);
-                                      KILL(zTransaction)(&z3zE3219);
-                                      KILL(zTransaction)(&z3zE3220);
-                                      KILL(zTransaction)(&z3zE3221);
-                                      KILL(zTransaction)(&z3zE3222);
-                                      KILL(zTransaction)(&z3zE3223);
-                                      KILL(zTransaction)(&z3zE3224);
-                                      KILL(zTransaction)(&z3zE3225);
-                                      KILL(zTransaction)(&z3zE3226);
-                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                      KILL(zTransaction)(&z3zE3228);
+                                      KILL(zTransaction)(&z3zE2439);
+                                      KILL(zTransaction)(&z3zE2440);
+                                      KILL(zTransaction)(&z3zE2441);
+                                      KILL(zTransaction)(&z3zE2442);
+                                      KILL(zTransaction)(&z3zE2443);
+                                      KILL(zTransaction)(&z3zE2444);
+                                      KILL(zTransaction)(&z3zE2445);
+                                      KILL(zTransaction)(&z3zE2446);
+                                      KILL(zTransaction)(&z3zE2447);
+                                      KILL(zTransaction)(&z3zE2448);
+                                      KILL(zTransaction)(&z3zE2449);
+                                      KILL(zTransaction)(&z3zE2450);
+                                      KILL(zTransaction)(&z3zE2451);
+                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                      KILL(zTransaction)(&z3zE2453);
                                       KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                       KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                      KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
-                                      KILL(zTransaction)(&z3zE3229);
+                                      KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
+                                      KILL(zTransaction)(&z3zE2454);
                                       KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                      goto end_block_exception_3309;
+                                      goto end_block_exception_2905;
                                     }
                                   }
-                                  z2zE3266 = zword_of_account_nonce(z2zE3265);
+                                  z2zE2567 = zword_of_account_nonce(z2zE2566);
                                 }
-                                uint64_t z2zE3267;
+                                uint64_t z2zE2568;
                                 {
-                                  z2zE3267 = zrlp_ref_uint64(zchain_f);
+                                  z2zE2568 = zrlp_ref_uint64(zchain_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3214);
-                                    KILL(zTransaction)(&z3zE3215);
-                                    KILL(zTransaction)(&z3zE3216);
-                                    KILL(zTransaction)(&z3zE3217);
-                                    KILL(zTransaction)(&z3zE3218);
-                                    KILL(zTransaction)(&z3zE3219);
-                                    KILL(zTransaction)(&z3zE3220);
-                                    KILL(zTransaction)(&z3zE3221);
-                                    KILL(zTransaction)(&z3zE3222);
-                                    KILL(zTransaction)(&z3zE3223);
-                                    KILL(zTransaction)(&z3zE3224);
-                                    KILL(zTransaction)(&z3zE3225);
-                                    KILL(zTransaction)(&z3zE3226);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                    KILL(zTransaction)(&z3zE3228);
+                                    KILL(zTransaction)(&z3zE2439);
+                                    KILL(zTransaction)(&z3zE2440);
+                                    KILL(zTransaction)(&z3zE2441);
+                                    KILL(zTransaction)(&z3zE2442);
+                                    KILL(zTransaction)(&z3zE2443);
+                                    KILL(zTransaction)(&z3zE2444);
+                                    KILL(zTransaction)(&z3zE2445);
+                                    KILL(zTransaction)(&z3zE2446);
+                                    KILL(zTransaction)(&z3zE2447);
+                                    KILL(zTransaction)(&z3zE2448);
+                                    KILL(zTransaction)(&z3zE2449);
+                                    KILL(zTransaction)(&z3zE2450);
+                                    KILL(zTransaction)(&z3zE2451);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                    KILL(zTransaction)(&z3zE2453);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
-                                    KILL(zTransaction)(&z3zE3229);
+                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
+                                    KILL(zTransaction)(&z3zE2454);
                                     KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                    goto end_block_exception_3309;
+                                    goto end_block_exception_2905;
                                   }
                                 }
-                                uint64_t z2zE3268;
+                                uint64_t z2zE2569;
                                 {
-                                  z2zE3268 = zrlp_ref_gas(zgas_f, zfork);
+                                  z2zE2569 = zrlp_ref_gas(zgas_f, zfork);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3214);
-                                    KILL(zTransaction)(&z3zE3215);
-                                    KILL(zTransaction)(&z3zE3216);
-                                    KILL(zTransaction)(&z3zE3217);
-                                    KILL(zTransaction)(&z3zE3218);
-                                    KILL(zTransaction)(&z3zE3219);
-                                    KILL(zTransaction)(&z3zE3220);
-                                    KILL(zTransaction)(&z3zE3221);
-                                    KILL(zTransaction)(&z3zE3222);
-                                    KILL(zTransaction)(&z3zE3223);
-                                    KILL(zTransaction)(&z3zE3224);
-                                    KILL(zTransaction)(&z3zE3225);
-                                    KILL(zTransaction)(&z3zE3226);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                    KILL(zTransaction)(&z3zE3228);
+                                    KILL(zTransaction)(&z3zE2439);
+                                    KILL(zTransaction)(&z3zE2440);
+                                    KILL(zTransaction)(&z3zE2441);
+                                    KILL(zTransaction)(&z3zE2442);
+                                    KILL(zTransaction)(&z3zE2443);
+                                    KILL(zTransaction)(&z3zE2444);
+                                    KILL(zTransaction)(&z3zE2445);
+                                    KILL(zTransaction)(&z3zE2446);
+                                    KILL(zTransaction)(&z3zE2447);
+                                    KILL(zTransaction)(&z3zE2448);
+                                    KILL(zTransaction)(&z3zE2449);
+                                    KILL(zTransaction)(&z3zE2450);
+                                    KILL(zTransaction)(&z3zE2451);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                    KILL(zTransaction)(&z3zE2453);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
-                                    KILL(zTransaction)(&z3zE3229);
+                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
+                                    KILL(zTransaction)(&z3zE2454);
                                     KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                    goto end_block_exception_3309;
+                                    goto end_block_exception_2905;
                                   }
                                 }
-                                bool z2zE3270;
+                                bool z2zE2571;
                                 {
-                                  uint64_t z2zE3269;
-                                  z2zE3269 = zto_f.zcontent_len;
-                                  z2zE3270 = (z2zE3269 == UINT64_C(0));
+                                  uint64_t z2zE2570;
+                                  z2zE2570 = zto_f.zcontent_len;
+                                  z2zE2571 = (z2zE2570 == UINT64_C(0));
                                 }
-                                sail_fixed_bytes_20 z2zE3272;
+                                sail_fixed_bytes_20 z2zE2573;
                                 {
-                                  sail_u256 z2zE3271;
+                                  sail_u256 z2zE2572;
                                   {
-                                    z2zE3271 = zrlp_ref_word(zto_f);
+                                    z2zE2572 = zrlp_ref_word(zto_f);
                                     if (have_exception) {
-                                      KILL(zTransaction)(&z3zE3214);
-                                      KILL(zTransaction)(&z3zE3215);
-                                      KILL(zTransaction)(&z3zE3216);
-                                      KILL(zTransaction)(&z3zE3217);
-                                      KILL(zTransaction)(&z3zE3218);
-                                      KILL(zTransaction)(&z3zE3219);
-                                      KILL(zTransaction)(&z3zE3220);
-                                      KILL(zTransaction)(&z3zE3221);
-                                      KILL(zTransaction)(&z3zE3222);
-                                      KILL(zTransaction)(&z3zE3223);
-                                      KILL(zTransaction)(&z3zE3224);
-                                      KILL(zTransaction)(&z3zE3225);
-                                      KILL(zTransaction)(&z3zE3226);
-                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                      KILL(zTransaction)(&z3zE3228);
+                                      KILL(zTransaction)(&z3zE2439);
+                                      KILL(zTransaction)(&z3zE2440);
+                                      KILL(zTransaction)(&z3zE2441);
+                                      KILL(zTransaction)(&z3zE2442);
+                                      KILL(zTransaction)(&z3zE2443);
+                                      KILL(zTransaction)(&z3zE2444);
+                                      KILL(zTransaction)(&z3zE2445);
+                                      KILL(zTransaction)(&z3zE2446);
+                                      KILL(zTransaction)(&z3zE2447);
+                                      KILL(zTransaction)(&z3zE2448);
+                                      KILL(zTransaction)(&z3zE2449);
+                                      KILL(zTransaction)(&z3zE2450);
+                                      KILL(zTransaction)(&z3zE2451);
+                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                      KILL(zTransaction)(&z3zE2453);
                                       KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                       KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                      KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
-                                      KILL(zTransaction)(&z3zE3229);
+                                      KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
+                                      KILL(zTransaction)(&z3zE2454);
                                       KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                      goto end_block_exception_3309;
+                                      goto end_block_exception_2905;
                                     }
                                   }
-                                  z2zE3272 = zword_to_address(z2zE3271);
+                                  z2zE2573 = evmsail_word_to_address(z2zE2572);
                                 }
-                                sail_u256 z2zE3273;
+                                sail_u256 z2zE2574;
                                 {
-                                  z2zE3273 = zrlp_ref_uint_word(zvalue_f);
+                                  z2zE2574 = zrlp_ref_uint_word(zvalue_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3214);
-                                    KILL(zTransaction)(&z3zE3215);
-                                    KILL(zTransaction)(&z3zE3216);
-                                    KILL(zTransaction)(&z3zE3217);
-                                    KILL(zTransaction)(&z3zE3218);
-                                    KILL(zTransaction)(&z3zE3219);
-                                    KILL(zTransaction)(&z3zE3220);
-                                    KILL(zTransaction)(&z3zE3221);
-                                    KILL(zTransaction)(&z3zE3222);
-                                    KILL(zTransaction)(&z3zE3223);
-                                    KILL(zTransaction)(&z3zE3224);
-                                    KILL(zTransaction)(&z3zE3225);
-                                    KILL(zTransaction)(&z3zE3226);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                    KILL(zTransaction)(&z3zE3228);
+                                    KILL(zTransaction)(&z3zE2439);
+                                    KILL(zTransaction)(&z3zE2440);
+                                    KILL(zTransaction)(&z3zE2441);
+                                    KILL(zTransaction)(&z3zE2442);
+                                    KILL(zTransaction)(&z3zE2443);
+                                    KILL(zTransaction)(&z3zE2444);
+                                    KILL(zTransaction)(&z3zE2445);
+                                    KILL(zTransaction)(&z3zE2446);
+                                    KILL(zTransaction)(&z3zE2447);
+                                    KILL(zTransaction)(&z3zE2448);
+                                    KILL(zTransaction)(&z3zE2449);
+                                    KILL(zTransaction)(&z3zE2450);
+                                    KILL(zTransaction)(&z3zE2451);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                    KILL(zTransaction)(&z3zE2453);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
-                                    KILL(zTransaction)(&z3zE3229);
+                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
+                                    KILL(zTransaction)(&z3zE2454);
                                     KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                    goto end_block_exception_3309;
+                                    goto end_block_exception_2905;
                                   }
                                 }
-                                struct zByteSliceFields z2zE3274;
+                                struct zByteSliceFields z2zE2575;
                                 {
-                                  z2zE3274 = ztx_input_span(zdata_f);
+                                  z2zE2575 = ztx_input_span(zdata_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3214);
-                                    KILL(zTransaction)(&z3zE3215);
-                                    KILL(zTransaction)(&z3zE3216);
-                                    KILL(zTransaction)(&z3zE3217);
-                                    KILL(zTransaction)(&z3zE3218);
-                                    KILL(zTransaction)(&z3zE3219);
-                                    KILL(zTransaction)(&z3zE3220);
-                                    KILL(zTransaction)(&z3zE3221);
-                                    KILL(zTransaction)(&z3zE3222);
-                                    KILL(zTransaction)(&z3zE3223);
-                                    KILL(zTransaction)(&z3zE3224);
-                                    KILL(zTransaction)(&z3zE3225);
-                                    KILL(zTransaction)(&z3zE3226);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                    KILL(zTransaction)(&z3zE3228);
+                                    KILL(zTransaction)(&z3zE2439);
+                                    KILL(zTransaction)(&z3zE2440);
+                                    KILL(zTransaction)(&z3zE2441);
+                                    KILL(zTransaction)(&z3zE2442);
+                                    KILL(zTransaction)(&z3zE2443);
+                                    KILL(zTransaction)(&z3zE2444);
+                                    KILL(zTransaction)(&z3zE2445);
+                                    KILL(zTransaction)(&z3zE2446);
+                                    KILL(zTransaction)(&z3zE2447);
+                                    KILL(zTransaction)(&z3zE2448);
+                                    KILL(zTransaction)(&z3zE2449);
+                                    KILL(zTransaction)(&z3zE2450);
+                                    KILL(zTransaction)(&z3zE2451);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                    KILL(zTransaction)(&z3zE2453);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
-                                    KILL(zTransaction)(&z3zE3229);
+                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
+                                    KILL(zTransaction)(&z3zE2454);
                                     KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                    goto end_block_exception_3309;
+                                    goto end_block_exception_2905;
                                   }
                                 }
-                                sail_u256 z2zE3275;
+                                sail_u256 z2zE2576;
                                 {
-                                  z2zE3275 = zrlp_ref_uint_word(zmf_f);
+                                  z2zE2576 = zrlp_ref_uint_word(zmf_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3214);
-                                    KILL(zTransaction)(&z3zE3215);
-                                    KILL(zTransaction)(&z3zE3216);
-                                    KILL(zTransaction)(&z3zE3217);
-                                    KILL(zTransaction)(&z3zE3218);
-                                    KILL(zTransaction)(&z3zE3219);
-                                    KILL(zTransaction)(&z3zE3220);
-                                    KILL(zTransaction)(&z3zE3221);
-                                    KILL(zTransaction)(&z3zE3222);
-                                    KILL(zTransaction)(&z3zE3223);
-                                    KILL(zTransaction)(&z3zE3224);
-                                    KILL(zTransaction)(&z3zE3225);
-                                    KILL(zTransaction)(&z3zE3226);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                    KILL(zTransaction)(&z3zE3228);
+                                    KILL(zTransaction)(&z3zE2439);
+                                    KILL(zTransaction)(&z3zE2440);
+                                    KILL(zTransaction)(&z3zE2441);
+                                    KILL(zTransaction)(&z3zE2442);
+                                    KILL(zTransaction)(&z3zE2443);
+                                    KILL(zTransaction)(&z3zE2444);
+                                    KILL(zTransaction)(&z3zE2445);
+                                    KILL(zTransaction)(&z3zE2446);
+                                    KILL(zTransaction)(&z3zE2447);
+                                    KILL(zTransaction)(&z3zE2448);
+                                    KILL(zTransaction)(&z3zE2449);
+                                    KILL(zTransaction)(&z3zE2450);
+                                    KILL(zTransaction)(&z3zE2451);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                    KILL(zTransaction)(&z3zE2453);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
-                                    KILL(zTransaction)(&z3zE3229);
+                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
+                                    KILL(zTransaction)(&z3zE2454);
                                     KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                    goto end_block_exception_3309;
+                                    goto end_block_exception_2905;
                                   }
                                 }
-                                sail_u256 z2zE3276;
+                                sail_u256 z2zE2577;
                                 {
-                                  z2zE3276 = zrlp_ref_uint_word(zmp_f);
+                                  z2zE2577 = zrlp_ref_uint_word(zmp_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3214);
-                                    KILL(zTransaction)(&z3zE3215);
-                                    KILL(zTransaction)(&z3zE3216);
-                                    KILL(zTransaction)(&z3zE3217);
-                                    KILL(zTransaction)(&z3zE3218);
-                                    KILL(zTransaction)(&z3zE3219);
-                                    KILL(zTransaction)(&z3zE3220);
-                                    KILL(zTransaction)(&z3zE3221);
-                                    KILL(zTransaction)(&z3zE3222);
-                                    KILL(zTransaction)(&z3zE3223);
-                                    KILL(zTransaction)(&z3zE3224);
-                                    KILL(zTransaction)(&z3zE3225);
-                                    KILL(zTransaction)(&z3zE3226);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                    KILL(zTransaction)(&z3zE3228);
+                                    KILL(zTransaction)(&z3zE2439);
+                                    KILL(zTransaction)(&z3zE2440);
+                                    KILL(zTransaction)(&z3zE2441);
+                                    KILL(zTransaction)(&z3zE2442);
+                                    KILL(zTransaction)(&z3zE2443);
+                                    KILL(zTransaction)(&z3zE2444);
+                                    KILL(zTransaction)(&z3zE2445);
+                                    KILL(zTransaction)(&z3zE2446);
+                                    KILL(zTransaction)(&z3zE2447);
+                                    KILL(zTransaction)(&z3zE2448);
+                                    KILL(zTransaction)(&z3zE2449);
+                                    KILL(zTransaction)(&z3zE2450);
+                                    KILL(zTransaction)(&z3zE2451);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                    KILL(zTransaction)(&z3zE2453);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
-                                    KILL(zTransaction)(&z3zE3229);
+                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
+                                    KILL(zTransaction)(&z3zE2454);
                                     KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                    goto end_block_exception_3309;
+                                    goto end_block_exception_2905;
                                   }
                                 }
-                                sail_fixed_bytes_32 z2zE3278;
+                                sail_fixed_bytes_32 z2zE2579;
                                 {
-                                  struct zByteSliceFields z2zE3277;
+                                  struct zByteSliceFields z2zE2578;
                                   {
-                                    z2zE3277 = ztx_sig_span(zchain_f, zv_f);
+                                    z2zE2578 = ztx_sig_span(zchain_f, zv_f);
                                     if (have_exception) {
-                                      KILL(zTransaction)(&z3zE3214);
-                                      KILL(zTransaction)(&z3zE3215);
-                                      KILL(zTransaction)(&z3zE3216);
-                                      KILL(zTransaction)(&z3zE3217);
-                                      KILL(zTransaction)(&z3zE3218);
-                                      KILL(zTransaction)(&z3zE3219);
-                                      KILL(zTransaction)(&z3zE3220);
-                                      KILL(zTransaction)(&z3zE3221);
-                                      KILL(zTransaction)(&z3zE3222);
-                                      KILL(zTransaction)(&z3zE3223);
-                                      KILL(zTransaction)(&z3zE3224);
-                                      KILL(zTransaction)(&z3zE3225);
-                                      KILL(zTransaction)(&z3zE3226);
-                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                      KILL(zTransaction)(&z3zE3228);
+                                      KILL(zTransaction)(&z3zE2439);
+                                      KILL(zTransaction)(&z3zE2440);
+                                      KILL(zTransaction)(&z3zE2441);
+                                      KILL(zTransaction)(&z3zE2442);
+                                      KILL(zTransaction)(&z3zE2443);
+                                      KILL(zTransaction)(&z3zE2444);
+                                      KILL(zTransaction)(&z3zE2445);
+                                      KILL(zTransaction)(&z3zE2446);
+                                      KILL(zTransaction)(&z3zE2447);
+                                      KILL(zTransaction)(&z3zE2448);
+                                      KILL(zTransaction)(&z3zE2449);
+                                      KILL(zTransaction)(&z3zE2450);
+                                      KILL(zTransaction)(&z3zE2451);
+                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                      KILL(zTransaction)(&z3zE2453);
                                       KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                       KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                      KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
-                                      KILL(zTransaction)(&z3zE3229);
+                                      KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
+                                      KILL(zTransaction)(&z3zE2454);
                                       KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                      goto end_block_exception_3309;
+                                      goto end_block_exception_2905;
                                     }
                                   }
                                   {
-                                    z2zE3278 = ztx_signing_hash(zSetCodeTx, z2zE3277, zv);
+                                    z2zE2579 = ztx_signing_hash(zSetCodeTx, z2zE2578, zv);
                                     if (have_exception) {
-                                      KILL(zTransaction)(&z3zE3214);
-                                      KILL(zTransaction)(&z3zE3215);
-                                      KILL(zTransaction)(&z3zE3216);
-                                      KILL(zTransaction)(&z3zE3217);
-                                      KILL(zTransaction)(&z3zE3218);
-                                      KILL(zTransaction)(&z3zE3219);
-                                      KILL(zTransaction)(&z3zE3220);
-                                      KILL(zTransaction)(&z3zE3221);
-                                      KILL(zTransaction)(&z3zE3222);
-                                      KILL(zTransaction)(&z3zE3223);
-                                      KILL(zTransaction)(&z3zE3224);
-                                      KILL(zTransaction)(&z3zE3225);
-                                      KILL(zTransaction)(&z3zE3226);
-                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                      KILL(zTransaction)(&z3zE3228);
+                                      KILL(zTransaction)(&z3zE2439);
+                                      KILL(zTransaction)(&z3zE2440);
+                                      KILL(zTransaction)(&z3zE2441);
+                                      KILL(zTransaction)(&z3zE2442);
+                                      KILL(zTransaction)(&z3zE2443);
+                                      KILL(zTransaction)(&z3zE2444);
+                                      KILL(zTransaction)(&z3zE2445);
+                                      KILL(zTransaction)(&z3zE2446);
+                                      KILL(zTransaction)(&z3zE2447);
+                                      KILL(zTransaction)(&z3zE2448);
+                                      KILL(zTransaction)(&z3zE2449);
+                                      KILL(zTransaction)(&z3zE2450);
+                                      KILL(zTransaction)(&z3zE2451);
+                                      KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                      KILL(zTransaction)(&z3zE2453);
                                       KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                       KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                      KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
-                                      KILL(zTransaction)(&z3zE3229);
+                                      KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
+                                      KILL(zTransaction)(&z3zE2454);
                                       KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                      goto end_block_exception_3309;
+                                      goto end_block_exception_2905;
                                     }
                                   }
                                 }
-                                sail_u256 z2zE3279;
+                                sail_u256 z2zE2580;
                                 {
-                                  z2zE3279 = zrlp_ref_uint_word(zr_f);
+                                  z2zE2580 = zrlp_ref_uint_word(zr_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3214);
-                                    KILL(zTransaction)(&z3zE3215);
-                                    KILL(zTransaction)(&z3zE3216);
-                                    KILL(zTransaction)(&z3zE3217);
-                                    KILL(zTransaction)(&z3zE3218);
-                                    KILL(zTransaction)(&z3zE3219);
-                                    KILL(zTransaction)(&z3zE3220);
-                                    KILL(zTransaction)(&z3zE3221);
-                                    KILL(zTransaction)(&z3zE3222);
-                                    KILL(zTransaction)(&z3zE3223);
-                                    KILL(zTransaction)(&z3zE3224);
-                                    KILL(zTransaction)(&z3zE3225);
-                                    KILL(zTransaction)(&z3zE3226);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                    KILL(zTransaction)(&z3zE3228);
+                                    KILL(zTransaction)(&z3zE2439);
+                                    KILL(zTransaction)(&z3zE2440);
+                                    KILL(zTransaction)(&z3zE2441);
+                                    KILL(zTransaction)(&z3zE2442);
+                                    KILL(zTransaction)(&z3zE2443);
+                                    KILL(zTransaction)(&z3zE2444);
+                                    KILL(zTransaction)(&z3zE2445);
+                                    KILL(zTransaction)(&z3zE2446);
+                                    KILL(zTransaction)(&z3zE2447);
+                                    KILL(zTransaction)(&z3zE2448);
+                                    KILL(zTransaction)(&z3zE2449);
+                                    KILL(zTransaction)(&z3zE2450);
+                                    KILL(zTransaction)(&z3zE2451);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                    KILL(zTransaction)(&z3zE2453);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
-                                    KILL(zTransaction)(&z3zE3229);
+                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
+                                    KILL(zTransaction)(&z3zE2454);
                                     KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                    goto end_block_exception_3309;
+                                    goto end_block_exception_2905;
                                   }
                                 }
-                                sail_u256 z2zE3280;
+                                sail_u256 z2zE2581;
                                 {
-                                  z2zE3280 = zrlp_ref_uint_word(zs_f);
+                                  z2zE2581 = zrlp_ref_uint_word(zs_f);
                                   if (have_exception) {
-                                    KILL(zTransaction)(&z3zE3214);
-                                    KILL(zTransaction)(&z3zE3215);
-                                    KILL(zTransaction)(&z3zE3216);
-                                    KILL(zTransaction)(&z3zE3217);
-                                    KILL(zTransaction)(&z3zE3218);
-                                    KILL(zTransaction)(&z3zE3219);
-                                    KILL(zTransaction)(&z3zE3220);
-                                    KILL(zTransaction)(&z3zE3221);
-                                    KILL(zTransaction)(&z3zE3222);
-                                    KILL(zTransaction)(&z3zE3223);
-                                    KILL(zTransaction)(&z3zE3224);
-                                    KILL(zTransaction)(&z3zE3225);
-                                    KILL(zTransaction)(&z3zE3226);
-                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                                    KILL(zTransaction)(&z3zE3228);
+                                    KILL(zTransaction)(&z3zE2439);
+                                    KILL(zTransaction)(&z3zE2440);
+                                    KILL(zTransaction)(&z3zE2441);
+                                    KILL(zTransaction)(&z3zE2442);
+                                    KILL(zTransaction)(&z3zE2443);
+                                    KILL(zTransaction)(&z3zE2444);
+                                    KILL(zTransaction)(&z3zE2445);
+                                    KILL(zTransaction)(&z3zE2446);
+                                    KILL(zTransaction)(&z3zE2447);
+                                    KILL(zTransaction)(&z3zE2448);
+                                    KILL(zTransaction)(&z3zE2449);
+                                    KILL(zTransaction)(&z3zE2450);
+                                    KILL(zTransaction)(&z3zE2451);
+                                    KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                                    KILL(zTransaction)(&z3zE2453);
                                     KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
                                     KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
-                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
-                                    KILL(zTransaction)(&z3zE3229);
+                                    KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
+                                    KILL(zTransaction)(&z3zE2454);
                                     KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                    goto end_block_exception_3309;
+                                    goto end_block_exception_2905;
                                   }
                                 }
-                                z3zE3229.zaccess_list_address_count = zal_addr_count;
-                                COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE3229)->zaccess_list_addresses), zal_addrs);
-                                z3zE3229.zaccess_list_slot_count = zal_slot_count;
-                                COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE3229)->zaccess_list_slots), zal_slots);
-                                z3zE3229.zauthorizzation_count = zauthorizzation_count;
-                                COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE3229)->zauthorizzations), zauthorizzations);
-                                z3zE3229.zblob_hashes = zEMPTY_BLOB_HASHES;
-                                z3zE3229.zchain_id = z2zE3267;
-                                z3zE3229.zgas_limit = z2zE3268;
-                                z3zE3229.zinput_src = z2zE3274;
-                                z3zE3229.zis_create = z2zE3270;
-                                z3zE3229.zmax_blob_fee = zZERO_WORD;
-                                z3zE3229.zmax_fee = z2zE3275;
-                                z3zE3229.zmax_priority_fee = z2zE3276;
-                                z3zE3229.znonce = u256_of_fbits(z2zE3266);
-                                z3zE3229.zpubkey = zpubkey;
-                                z3zE3229.zraw = ztx;
-                                z3zE3229.zrecipient = z2zE3272;
-                                z3zE3229.zsender = zsender;
-                                z3zE3229.zsig_r = z2zE3279;
-                                z3zE3229.zsig_s = z2zE3280;
-                                z3zE3229.zsig_v = zv;
-                                z3zE3229.zsigning_hash = z2zE3278;
-                                z3zE3229.ztx_type = zSetCodeTx;
-                                z3zE3229.zvalue = z2zE3273;
+                                z3zE2454.zaccess_list_address_count = zal_addr_count;
+                                COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&((&z3zE2454)->zaccess_list_addresses), zal_addrs);
+                                z3zE2454.zaccess_list_slot_count = zal_slot_count;
+                                COPY(zz5listz8z5structz0zzStorageKeyz9)(&((&z3zE2454)->zaccess_list_slots), zal_slots);
+                                z3zE2454.zauthorizzation_count = zauthorizzation_count;
+                                COPY(zz5listz8z5structz0zzAuthorizzzzationz9)(&((&z3zE2454)->zauthorizzations), zauthorizzations);
+                                z3zE2454.zblob_hashes = zEMPTY_BLOB_HASHES;
+                                z3zE2454.zchain_id = z2zE2568;
+                                z3zE2454.zgas_limit = z2zE2569;
+                                z3zE2454.zinput_src = z2zE2575;
+                                z3zE2454.zis_create = z2zE2571;
+                                z3zE2454.zmax_blob_fee = zZERO_WORD;
+                                z3zE2454.zmax_fee = z2zE2576;
+                                z3zE2454.zmax_priority_fee = z2zE2577;
+                                z3zE2454.znonce = u256_of_fbits(z2zE2567);
+                                z3zE2454.zpubkey = zpubkey;
+                                z3zE2454.zraw = ztx;
+                                z3zE2454.zrecipient = z2zE2573;
+                                z3zE2454.zsender = zsender;
+                                z3zE2454.zsig_r = z2zE2580;
+                                z3zE2454.zsig_s = z2zE2581;
+                                z3zE2454.zsig_v = zv;
+                                z3zE2454.zsigning_hash = z2zE2579;
+                                z3zE2454.ztx_type = zSetCodeTx;
+                                z3zE2454.zvalue = z2zE2574;
                                 KILL(zz5listz8z5structz0zzAuthorizzzzationz9)(&zauthorizzations);
-                                goto finish_match_3306;
+                                goto finish_match_2902;
                               }
-                            case_3307: ;
+                            case_2903: ;
                               sail_match_failure("decode_set_code_tx");
-                            finish_match_3306: ;
-                              COPY(zTransaction)(&z3zE3228, z3zE3229);
-                              KILL(zTransaction)(&z3zE3229);
-                              KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE3264);
+                            finish_match_2902: ;
+                              COPY(zTransaction)(&z3zE2453, z3zE2454);
+                              KILL(zTransaction)(&z3zE2454);
+                              KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(&z2zE2565);
                               KILL(zz5listz8z5structz0zzStorageKeyz9)(&zal_slots);
                               KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9)(&zal_addrs);
-                              goto finish_match_3304;
+                              goto finish_match_2900;
                             }
-                          case_3305: ;
+                          case_2901: ;
                             sail_match_failure("decode_set_code_tx");
-                          finish_match_3304: ;
-                            COPY(zTransaction)(&z3zE3226, z3zE3228);
-                            KILL(zTransaction)(&z3zE3228);
-                            KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE3263);
-                            goto finish_match_3302;
+                          finish_match_2900: ;
+                            COPY(zTransaction)(&z3zE2451, z3zE2453);
+                            KILL(zTransaction)(&z3zE2453);
+                            KILL(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(&z2zE2564);
+                            goto finish_match_2898;
                           }
-                        case_3303: ;
+                        case_2899: ;
                           sail_match_failure("decode_set_code_tx");
-                        finish_match_3302: ;
-                          COPY(zTransaction)(&z3zE3225, z3zE3226);
-                          KILL(zTransaction)(&z3zE3226);
-                          goto finish_match_3300;
+                        finish_match_2898: ;
+                          COPY(zTransaction)(&z3zE2450, z3zE2451);
+                          KILL(zTransaction)(&z3zE2451);
+                          goto finish_match_2896;
                         }
-                      case_3301: ;
+                      case_2897: ;
                         sail_match_failure("decode_set_code_tx");
-                      finish_match_3300: ;
-                        COPY(zTransaction)(&z3zE3224, z3zE3225);
-                        KILL(zTransaction)(&z3zE3225);
-                        goto finish_match_3298;
+                      finish_match_2896: ;
+                        COPY(zTransaction)(&z3zE2449, z3zE2450);
+                        KILL(zTransaction)(&z3zE2450);
+                        goto finish_match_2894;
                       }
-                    case_3299: ;
+                    case_2895: ;
                       sail_match_failure("decode_set_code_tx");
-                    finish_match_3298: ;
-                      COPY(zTransaction)(&z3zE3223, z3zE3224);
-                      KILL(zTransaction)(&z3zE3224);
-                      goto finish_match_3296;
+                    finish_match_2894: ;
+                      COPY(zTransaction)(&z3zE2448, z3zE2449);
+                      KILL(zTransaction)(&z3zE2449);
+                      goto finish_match_2892;
                     }
-                  case_3297: ;
+                  case_2893: ;
                     sail_match_failure("decode_set_code_tx");
-                  finish_match_3296: ;
-                    COPY(zTransaction)(&z3zE3222, z3zE3223);
-                    KILL(zTransaction)(&z3zE3223);
-                    goto finish_match_3294;
+                  finish_match_2892: ;
+                    COPY(zTransaction)(&z3zE2447, z3zE2448);
+                    KILL(zTransaction)(&z3zE2448);
+                    goto finish_match_2890;
                   }
-                case_3295: ;
+                case_2891: ;
                   sail_match_failure("decode_set_code_tx");
-                finish_match_3294: ;
-                  COPY(zTransaction)(&z3zE3221, z3zE3222);
-                  KILL(zTransaction)(&z3zE3222);
-                  goto finish_match_3292;
+                finish_match_2890: ;
+                  COPY(zTransaction)(&z3zE2446, z3zE2447);
+                  KILL(zTransaction)(&z3zE2447);
+                  goto finish_match_2888;
                 }
-              case_3293: ;
+              case_2889: ;
                 sail_match_failure("decode_set_code_tx");
-              finish_match_3292: ;
-                COPY(zTransaction)(&z3zE3220, z3zE3221);
-                KILL(zTransaction)(&z3zE3221);
-                goto finish_match_3290;
+              finish_match_2888: ;
+                COPY(zTransaction)(&z3zE2445, z3zE2446);
+                KILL(zTransaction)(&z3zE2446);
+                goto finish_match_2886;
               }
-            case_3291: ;
+            case_2887: ;
               sail_match_failure("decode_set_code_tx");
-            finish_match_3290: ;
-              COPY(zTransaction)(&z3zE3219, z3zE3220);
-              KILL(zTransaction)(&z3zE3220);
-              goto finish_match_3288;
+            finish_match_2886: ;
+              COPY(zTransaction)(&z3zE2444, z3zE2445);
+              KILL(zTransaction)(&z3zE2445);
+              goto finish_match_2884;
             }
-          case_3289: ;
+          case_2885: ;
             sail_match_failure("decode_set_code_tx");
-          finish_match_3288: ;
-            COPY(zTransaction)(&z3zE3218, z3zE3219);
-            KILL(zTransaction)(&z3zE3219);
-            goto finish_match_3286;
+          finish_match_2884: ;
+            COPY(zTransaction)(&z3zE2443, z3zE2444);
+            KILL(zTransaction)(&z3zE2444);
+            goto finish_match_2882;
           }
-        case_3287: ;
+        case_2883: ;
           sail_match_failure("decode_set_code_tx");
-        finish_match_3286: ;
-          COPY(zTransaction)(&z3zE3217, z3zE3218);
-          KILL(zTransaction)(&z3zE3218);
-          goto finish_match_3284;
+        finish_match_2882: ;
+          COPY(zTransaction)(&z3zE2442, z3zE2443);
+          KILL(zTransaction)(&z3zE2443);
+          goto finish_match_2880;
         }
-      case_3285: ;
+      case_2881: ;
         sail_match_failure("decode_set_code_tx");
-      finish_match_3284: ;
-        COPY(zTransaction)(&z3zE3216, z3zE3217);
-        KILL(zTransaction)(&z3zE3217);
-        goto finish_match_3282;
+      finish_match_2880: ;
+        COPY(zTransaction)(&z3zE2441, z3zE2442);
+        KILL(zTransaction)(&z3zE2442);
+        goto finish_match_2878;
       }
-    case_3283: ;
+    case_2879: ;
       sail_match_failure("decode_set_code_tx");
-    finish_match_3282: ;
-      COPY(zTransaction)(&z3zE3215, z3zE3216);
-      KILL(zTransaction)(&z3zE3216);
-      goto finish_match_3280;
+    finish_match_2878: ;
+      COPY(zTransaction)(&z3zE2440, z3zE2441);
+      KILL(zTransaction)(&z3zE2441);
+      goto finish_match_2876;
     }
-  case_3281: ;
+  case_2877: ;
     sail_match_failure("decode_set_code_tx");
-  finish_match_3280: ;
-    COPY(zTransaction)(&z3zE3214, z3zE3215);
-    KILL(zTransaction)(&z3zE3215);
-    goto finish_match_3278;
+  finish_match_2876: ;
+    COPY(zTransaction)(&z3zE2439, z3zE2440);
+    KILL(zTransaction)(&z3zE2440);
+    goto finish_match_2874;
   }
-case_3279: ;
+case_2875: ;
   sail_match_failure("decode_set_code_tx");
-finish_match_3278: ;
-  COPY(zTransaction)((*(&z8zE203)), z3zE3214);
-  KILL(zTransaction)(&z3zE3214);
-end_function_3308: ;
-  goto end_function_4062;
-end_block_exception_3309: ;
-  goto end_function_4062;
-end_function_4062: ;
+finish_match_2874: ;
+  COPY(zTransaction)((*(&z8zE200)), z3zE2439);
+  KILL(zTransaction)(&z3zE2439);
+end_function_2904: ;
+  goto end_function_3643;
+end_block_exception_2905: ;
+  goto end_function_3643;
+end_function_3643: ;
 }
 
-void zrlp_decode_tx(struct zTransaction *z8zE204, struct zByteSliceFields ztx, struct zByteSliceFields zpubkey, enum zFork zfork)
+void zrlp_decode_tx(struct zTransaction *z8zE201, struct zByteSliceFields ztx, struct zByteSliceFields zpubkey, enum zFork zfork)
 {
   sail_fixed_bytes_20 zsender;
   {
-    sail_u256 z2zE3249;
+    sail_u256 z2zE2550;
     {
-      sail_fixed_bytes_32 z2zE3248;
+      sail_fixed_bytes_32 z2zE2549;
       {
-        struct zByteSliceFields z2zE3247;
-        z2zE3247 = zsub_slice(zpubkey, UINT64_C(1), zPUBLIC_KEY_BODY_LENGTH);
-        z2zE3248 = zkeccak256_slice(z2zE3247);
+        struct zByteSliceFields z2zE2548;
+        z2zE2548 = zsub_slice(zpubkey, UINT64_C(1), zPUBLIC_KEY_BODY_LENGTH);
+        z2zE2549 = zkeccak256_slice(z2zE2548);
       }
-      z2zE3249 = zhash_to_word(z2zE3248);
+      z2zE2550 = evmsail_hash_to_word(z2zE2549);
     }
-    zsender = zword_to_address(z2zE3249);
+    zsender = evmsail_word_to_address(z2zE2550);
   }
   uint64_t ztx_length;
   ztx_length = ztx.zlen;
   uint64_t zb0;
   {
-    bool z2zE3245;
-    z2zE3245 = (ztx_length == UINT64_C(0));
-    if (z2zE3245) {
-      struct zexception z2zE3246;
-      CREATE(zexception)(&z2zE3246);
-      zInvalidBlock(&z2zE3246, zRlpDecode);
-      COPY(zexception)(current_exception, z2zE3246);
+    bool z2zE2546;
+    z2zE2546 = (ztx_length == UINT64_C(0));
+    if (z2zE2546) {
+      struct zexception z2zE2547;
+      CREATE(zexception)(&z2zE2547);
+      zInvalidBlock(&z2zE2547, zRlpDecode);
+      COPY(zexception)(current_exception, z2zE2547);
       have_exception = true;
-      COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:636.12-636.41");
-      KILL(zexception)(&z2zE3246);
-      goto end_block_exception_3277;
+      COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:624.12-624.41");
+      KILL(zexception)(&z2zE2547);
+      goto end_block_exception_2873;
       /* unreachable after throw */
-      KILL(zexception)(&z2zE3246);
+      KILL(zexception)(&z2zE2547);
     } else {  zb0 = zslice_byte(ztx, UINT64_C(0));  }
   }
   uint64_t zttype;
   {
-    bool z2zE3244;
+    bool z2zE2545;
     {
-      uint64_t z2zE3243;
-      z2zE3243 = (safe_rshift(UINT64_MAX, 64 - 2) & (zb0 >> UINT64_C(6)));
-      z2zE3244 = (z2zE3243 == UINT64_C(0b11));
+      uint64_t z2zE2544;
+      z2zE2544 = (safe_rshift(UINT64_MAX, 64 - 2) & (zb0 >> UINT64_C(6)));
+      z2zE2545 = (z2zE2544 == UINT64_C(0b11));
     }
-    if (z2zE3244) {  zttype = UINT64_C(0x00);  } else {  zttype = zb0;  }
+    if (z2zE2545) {  zttype = UINT64_C(0x00);  } else {  zttype = zb0;  }
   }
   bool ztyped;
   ztyped = (zttype != UINT64_C(0x00));
   struct zByteSliceFields zpayload;
   if (ztyped) {
-    bool z2zE3240;
-    z2zE3240 = (!(ztx_length < UINT64_C(1)));
-    if (z2zE3240) {
-      uint64_t z2zE3241;
-      {    z2zE3241 = (ztx_length - UINT64_C(1));
+    bool z2zE2541;
+    z2zE2541 = (!(ztx_length < UINT64_C(1)));
+    if (z2zE2541) {
+      uint64_t z2zE2542;
+      {    z2zE2542 = (ztx_length - UINT64_C(1));
       }
-      zpayload = zsub_slice(ztx, UINT64_C(1), z2zE3241);
+      zpayload = zsub_slice(ztx, UINT64_C(1), z2zE2542);
     } else {
-      struct zexception z2zE3242;
-      CREATE(zexception)(&z2zE3242);
-      zInvalidBlock(&z2zE3242, zRlpDecode);
-      COPY(zexception)(current_exception, z2zE3242);
+      struct zexception z2zE2543;
+      CREATE(zexception)(&z2zE2543);
+      zInvalidBlock(&z2zE2543, zRlpDecode);
+      COPY(zexception)(current_exception, z2zE2543);
       have_exception = true;
-      COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:646.16-646.45");
-      KILL(zexception)(&z2zE3242);
-      goto end_block_exception_3277;
+      COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:634.16-634.45");
+      KILL(zexception)(&z2zE2543);
+      goto end_block_exception_2873;
       /* unreachable after throw */
-      KILL(zexception)(&z2zE3242);
+      KILL(zexception)(&z2zE2543);
     }
   } else {  zpayload = ztx;  }
-  struct zRlpCursor zfields;
+  struct zByteSliceFields zfields;
   {
     zfields = zrlp_node_cursor(zpayload);
-    if (have_exception) {  goto end_block_exception_3277;  }
+    if (have_exception) {  goto end_block_exception_2873;  }
   }
-  struct zTransaction z3zE3203;
-  CREATE(zTransaction)(&z3zE3203);
+  struct zTransaction z3zE2428;
+  CREATE(zTransaction)(&z3zE2428);
   {
     uint64_t zp0z3;
     zp0z3 = zttype;
-    bool z3zE3209;
-    z3zE3209 = (zp0z3 == UINT64_C(0x00));
-    if (!(z3zE3209)) {  goto case_3275;  }
+    bool z3zE2434;
+    z3zE2434 = (zp0z3 == UINT64_C(0x00));
+    if (!(z3zE2434)) {  goto case_2871;  }
     {
-      zdecode_legacy_tx(&z3zE3203, ztx, zpubkey, zfork, zsender, zfields);
+      zdecode_legacy_tx(&z3zE2428, ztx, zpubkey, zfork, zsender, zfields);
       if (have_exception) {
-        KILL(zTransaction)(&z3zE3203);
-        goto end_block_exception_3277;
+        KILL(zTransaction)(&z3zE2428);
+        goto end_block_exception_2873;
       }
     }
-    goto finish_match_3269;
+    goto finish_match_2865;
   }
-case_3275: ;
+case_2871: ;
   {
-    uint64_t z3zE3210;
-    z3zE3210 = zttype;
-    bool z3zE3208;
-    z3zE3208 = (z3zE3210 == UINT64_C(0x01));
-    if (!(z3zE3208)) {  goto case_3274;  }
+    uint64_t z3zE2435;
+    z3zE2435 = zttype;
+    bool z3zE2433;
+    z3zE2433 = (z3zE2435 == UINT64_C(0x01));
+    if (!(z3zE2433)) {  goto case_2870;  }
     {
-      zdecode_access_list_tx(&z3zE3203, ztx, zpubkey, zfork, zsender, zfields);
+      zdecode_access_list_tx(&z3zE2428, ztx, zpubkey, zfork, zsender, zfields);
       if (have_exception) {
-        KILL(zTransaction)(&z3zE3203);
-        goto end_block_exception_3277;
+        KILL(zTransaction)(&z3zE2428);
+        goto end_block_exception_2873;
       }
     }
-    goto finish_match_3269;
+    goto finish_match_2865;
   }
-case_3274: ;
+case_2870: ;
   {
-    uint64_t z3zE3211;
-    z3zE3211 = zttype;
-    bool z3zE3207;
-    z3zE3207 = (z3zE3211 == UINT64_C(0x02));
-    if (!(z3zE3207)) {  goto case_3273;  }
+    uint64_t z3zE2436;
+    z3zE2436 = zttype;
+    bool z3zE2432;
+    z3zE2432 = (z3zE2436 == UINT64_C(0x02));
+    if (!(z3zE2432)) {  goto case_2869;  }
     {
-      zdecode_fee_market_tx(&z3zE3203, ztx, zpubkey, zfork, zsender, zfields);
+      zdecode_fee_market_tx(&z3zE2428, ztx, zpubkey, zfork, zsender, zfields);
       if (have_exception) {
-        KILL(zTransaction)(&z3zE3203);
-        goto end_block_exception_3277;
+        KILL(zTransaction)(&z3zE2428);
+        goto end_block_exception_2873;
       }
     }
-    goto finish_match_3269;
+    goto finish_match_2865;
   }
-case_3273: ;
+case_2869: ;
   {
-    uint64_t z3zE3212;
-    z3zE3212 = zttype;
-    bool z3zE3206;
-    z3zE3206 = (z3zE3212 == UINT64_C(0x03));
-    if (!(z3zE3206)) {  goto case_3272;  }
+    uint64_t z3zE2437;
+    z3zE2437 = zttype;
+    bool z3zE2431;
+    z3zE2431 = (z3zE2437 == UINT64_C(0x03));
+    if (!(z3zE2431)) {  goto case_2868;  }
     {
-      zdecode_blob_tx(&z3zE3203, ztx, zpubkey, zfork, zsender, zfields);
+      zdecode_blob_tx(&z3zE2428, ztx, zpubkey, zfork, zsender, zfields);
       if (have_exception) {
-        KILL(zTransaction)(&z3zE3203);
-        goto end_block_exception_3277;
+        KILL(zTransaction)(&z3zE2428);
+        goto end_block_exception_2873;
       }
     }
-    goto finish_match_3269;
+    goto finish_match_2865;
   }
-case_3272: ;
+case_2868: ;
   {
-    uint64_t z3zE3213;
-    z3zE3213 = zttype;
-    bool z3zE3205;
-    z3zE3205 = (z3zE3213 == UINT64_C(0x04));
-    if (!(z3zE3205)) {  goto case_3271;  }
+    uint64_t z3zE2438;
+    z3zE2438 = zttype;
+    bool z3zE2430;
+    z3zE2430 = (z3zE2438 == UINT64_C(0x04));
+    if (!(z3zE2430)) {  goto case_2867;  }
     {
-      zdecode_set_code_tx(&z3zE3203, ztx, zpubkey, zfork, zsender, zfields);
+      zdecode_set_code_tx(&z3zE2428, ztx, zpubkey, zfork, zsender, zfields);
       if (have_exception) {
-        KILL(zTransaction)(&z3zE3203);
-        goto end_block_exception_3277;
+        KILL(zTransaction)(&z3zE2428);
+        goto end_block_exception_2873;
       }
     }
-    goto finish_match_3269;
+    goto finish_match_2865;
   }
-case_3271: ;
+case_2867: ;
   {
-    struct zexception z2zE3239;
-    CREATE(zexception)(&z2zE3239);
-    zInvalidBlock(&z2zE3239, zRlpDecode);
-    COPY(zexception)(current_exception, z2zE3239);
+    struct zexception z2zE2540;
+    CREATE(zexception)(&z2zE2540);
+    zInvalidBlock(&z2zE2540, zRlpDecode);
+    COPY(zexception)(current_exception, z2zE2540);
     have_exception = true;
-    COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:659.13-659.42");
-    KILL(zTransaction)(&z3zE3203);
-    KILL(zexception)(&z2zE3239);
-    goto end_block_exception_3277;
+    COPY(sail_string)(throw_location, "sail/lib/rlp/tx.sail:647.13-647.42");
+    KILL(zTransaction)(&z3zE2428);
+    KILL(zexception)(&z2zE2540);
+    goto end_block_exception_2873;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE3239);
-    goto finish_match_3269;
+    KILL(zexception)(&z2zE2540);
+    goto finish_match_2865;
   }
-case_3270: ;
-finish_match_3269: ;
-  COPY(zTransaction)((*(&z8zE204)), z3zE3203);
-  KILL(zTransaction)(&z3zE3203);
-end_function_3276: ;
-  goto end_function_4061;
-end_block_exception_3277: ;
-  goto end_function_4061;
-end_function_4061: ;
+case_2866: ;
+finish_match_2865: ;
+  COPY(zTransaction)((*(&z8zE201)), z3zE2428);
+  KILL(zTransaction)(&z3zE2428);
+end_function_2872: ;
+  goto end_function_3642;
+end_block_exception_2873: ;
+  goto end_function_3642;
+end_function_3642: ;
 }
 

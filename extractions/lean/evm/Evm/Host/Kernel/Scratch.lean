@@ -39,6 +39,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # Kernel scratch allocation
 
@@ -85,7 +86,7 @@ def scratch_push_slice (data : (Sigma fun (k_off : Nat) =>
   else (pure ())
 
 /-- Appends a evm_prefix of a fixed 32-byte value at the cursor. -/
-/- Type quantifiers: k_ex415140_ : Nat, 0 ≤ k_ex415140_ ∧ k_ex415140_ ≤ 32 -/
+/- Type quantifiers: k_ex414004_ : Nat, 0 ≤ k_ex414004_ ∧ k_ex414004_ ≤ 32 -/
 def scratch_push_b256 (data : (Vector (BitVec 8) 32)) (len : Nat) : SailM Unit := do
   if ((len != 0) : Bool)
   then

@@ -42,6 +42,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # The witness-native trie
 
@@ -217,9 +218,9 @@ def emit_leaf_overlay (sink : TrieItemSink) (updates : TrieUpdateCursor) (evm_pr
 
 /-- Walks a touched witness subtree and streams its post-update items into the
 canonical trie builder. -/
-/- Type quantifiers: _reclimit : Nat, k_ex417137_ : Nat, node_dependentWitness1 : Nat, node_dependentWitness0
-  : Nat, 0 ≤ node_dependentWitness0 ∧ 0 ≤ node_dependentWitness1, 0 ≤ k_ex417137_ ∧
-  k_ex417137_ ≤ 64, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex416002_ : Nat, node_dependentWitness1 : Nat, node_dependentWitness0
+  : Nat, 0 ≤ node_dependentWitness0 ∧ 0 ≤ node_dependentWitness1, 0 ≤ k_ex416002_ ∧
+  k_ex416002_ ≤ 64, 0 ≤ _reclimit -/
 def _rec_witness_emit (node : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (evm_prefix' : TriePath) (updates : TrieUpdateCursor) (sink : TrieItemSink) (cursor : Nat) (_reclimit : Nat) : SailM (TrieItemSink × TrieUpdateCursor) := do
   let node_dependentWitness0 := (node).1

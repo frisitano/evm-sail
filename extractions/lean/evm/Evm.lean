@@ -48,6 +48,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

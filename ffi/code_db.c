@@ -4,17 +4,18 @@
  * Account code is written rarely (seeding, CREATE deploys, EIP-7702
  * delegations) and executed constantly. Each code_db entry names an absolute
  * span in the arena plus a JumpdestRef into a flat arena allocated once from
- * the code length and populated with completed 256-bit chunks by Sail. C never
- * analyzes opcodes: it only stores packed words and answers membership
- * queries. Sail's single frame_code Code register is the complete active
- * executable state.
+ * the code length. Standard builds populate completed 256-bit chunks from the
+ * explicit Sail analysis. Optimized witness indexing may scan the same bytes
+ * directly in C as one whole-operation lowering. Sail's single frame_code Code
+ * register is the complete active executable state.
  *
  * The Sail account store remains the authoritative account-code value;
  * this is the execution mirror. */
 #include "sail.h"
 #include "byte_slice_glue.h"
+#include "hash_bytes.h"
 #include "value_convert.h"
-#include "host_crypto.h"
+#include "zkvm_accelerators.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -68,10 +69,7 @@ static int jumpdest_table_matches(uint64_t ref, uint32_t code_len) {
   return !used || (jumpdest_arena[base + (size_t)nwords - 1] >> used) == 0;
 }
 
-/* Reserve the exact table size before Sail starts analysis. The arena is
- * zeroed so chunks without JUMPDESTs need no writes. */
-uint64_t jumpdest_table_alloc(EVMSAIL_BYTE_QUANTITY_PARAM(code_len)) {
-  uint64_t code_len_value = evmsail_byte_quantity_value(code_len);
+static uint64_t jumpdest_table_alloc_value(uint64_t code_len_value) {
   if (!code_len_value || code_len_value > UINT32_MAX) return 0;
   uint64_t nwords = jumpdest_word_count(code_len_value);
   if (nwords > SIZE_MAX - jumpdest_arena_len) return 0;
@@ -81,6 +79,12 @@ uint64_t jumpdest_table_alloc(EVMSAIL_BYTE_QUANTITY_PARAM(code_len)) {
   memset(jumpdest_arena + off, 0, (size_t)nwords * sizeof(*jumpdest_arena));
   jumpdest_arena_len = end;
   return (uint64_t)off + 1;
+}
+
+/* Reserve the exact table size before Sail starts analysis. The arena is
+ * zeroed so chunks without JUMPDESTs need no writes. */
+uint64_t jumpdest_table_alloc(EVMSAIL_BYTE_QUANTITY_PARAM(code_len)) {
+  return jumpdest_table_alloc_value(evmsail_byte_quantity_value(code_len));
 }
 
 /* Store one completed Sail chunk. Chunk bit zero describes the first byte in
@@ -130,7 +134,7 @@ bool jumpdest_ref_contains(uint64_t ref,
 /* ------------------------------ code_db -------------------------------- */
 
 typedef struct {
-  uint64_t a[4];                  /* codeHash key (BE 64-bit limbs) */
+  sail_hash key;             /* codeHash digest bytes          */
   uint64_t off;                   /* absolute offset in code_arena   */
   uint64_t jumpdest_ref;          /* resolved Sail-built bitmap      */
   uint32_t len;
@@ -142,16 +146,21 @@ static uint32_t code_db_cap, code_db_n;
 static uint8_t *code_arena;
 static size_t code_arena_cap, code_arena_len;
 
-static uint64_t code_db_hash(const uint64_t *a) {
+static uint64_t code_db_hash(const sail_hash *key) {
   uint64_t h = 0xcbf29ce484222325ull;
-  for (int i = 0; i < 4; i++) { h ^= a[i]; h *= 0x100000001b3ull; }
+  for (int i = 0; i < 4; i++) {
+    uint64_t word;
+    memcpy(&word, key->bytes + i * sizeof(word), sizeof(word));
+    h ^= word;
+    h *= 0x100000001b3ull;
+  }
   return h;
 }
-static code_db_ent *code_db_find(const uint64_t *a) {
-  uint32_t i = (uint32_t)(code_db_hash(a) & (code_db_cap - 1));
+static code_db_ent *code_db_find(const sail_hash *key) {
+  uint32_t i = (uint32_t)(code_db_hash(key) & (code_db_cap - 1));
   for (;;) {
     code_db_ent *e = &code_db[i];
-    if (!e->used || (e->a[0] == a[0] && e->a[1] == a[1] && e->a[2] == a[2] && e->a[3] == a[3]))
+    if (!e->used || evmsail_hash_equal(&e->key, key))
       return e;
     i = (i + 1) & (code_db_cap - 1);
   }
@@ -162,7 +171,7 @@ static void code_db_grow(void) {
   code_db_cap = ocap ? ocap * 2 : CODE_DB_INIT_CAP;
   code_db = (code_db_ent *)calloc(code_db_cap, sizeof(code_db_ent));
   for (uint32_t i = 0; i < ocap; i++)
-    if (otab[i].used) *code_db_find(otab[i].a) = otab[i];
+    if (otab[i].used) *code_db_find(&otab[i].key) = otab[i];
   free(otab);
 }
 
@@ -201,7 +210,7 @@ static int code_arena_reserve(size_t need) {
  * insert the bytes and Sail-supplied analysis result. A hash already present
  * with bytes is left untouched. Empty code interns nothing -- a codeless
  * account carries KECCAK_EMPTY with no store entry. */
-static int code_db_intern(const uint64_t key[4], const uint8_t *src,
+static int code_db_intern(const sail_hash *key, const uint8_t *src,
                           uint32_t len, uint64_t jumpdest_ref) {
   if (!len) return jumpdest_ref == 0;
   if (!jumpdest_table_matches(jumpdest_ref, len)) return 0;
@@ -219,7 +228,7 @@ static int code_db_intern(const uint64_t key[4], const uint8_t *src,
   }
   if (!e->used) {
     e->used = 1;
-    e->a[0] = key[0]; e->a[1] = key[1]; e->a[2] = key[2]; e->a[3] = key[3];
+    e->key = *key;
     code_db_n++;
     if (code_db_n * 10 >= code_db_cap * 7) { code_db_grow(); e = code_db_find(key); }
   }
@@ -247,28 +256,77 @@ static int code_db_intern(const uint64_t key[4], const uint8_t *src,
   return 1;
 }
 
+/*
+ * Optimized whole-witness-code lowering of analyze_code + code_db_store.
+ * PUSH immediate bytes are skipped exactly as in sail/host/code.sail.
+ * Amsterdam's EIP-8024 immediate byte is skipped only when valid; an invalid
+ * immediate remains the next opcode.
+ */
+bool code_db_insert_analyzed_bytes(const uint8_t *src, uint64_t len,
+                                   bool amsterdam_or_later) {
+  static const uint8_t empty = 0;
+  if (len > UINT32_MAX || (len != 0 && src == NULL)) return false;
+  if (len == 0) src = &empty;
+
+  const uint64_t jumpdest_ref =
+      len == 0 ? 0 : jumpdest_table_alloc_value(len);
+  if (len != 0 && jumpdest_ref == 0) return false;
+
+  if (len != 0) {
+    const size_t base = (size_t)(jumpdest_ref - 1);
+    uint64_t position = 0;
+    while (position < len) {
+      const uint8_t opcode = src[position];
+      if (opcode == 0x5b)
+        jumpdest_arena[base + (size_t)(position >> 6)] |=
+            UINT64_C(1) << (position & 63);
+
+      uint64_t step = 1;
+      if (opcode >= 0x60 && opcode <= 0x7f) {
+        step = (uint64_t)opcode - 0x5e;
+      } else if (amsterdam_or_later &&
+                 (opcode == 0xe6 || opcode == 0xe7 || opcode == 0xe8)) {
+        const uint8_t immediate =
+            position + 1 < len ? src[position + 1] : 0;
+        const bool valid =
+            opcode == 0xe8 ? (immediate <= 81 || immediate >= 128)
+                           : (immediate <= 90 || immediate >= 128);
+        if (valid) step = 2;
+      }
+
+      if (step >= len - position) break;
+      position += step;
+    }
+  }
+
+  sail_hash key = {{0}};
+  zkvm_keccak256_hash digest = {{0}};
+  if (zkvm_keccak256(src, (size_t)len, &digest) != ZKVM_EOK)
+    return false;
+  memcpy(key.bytes, digest.data, sizeof(key.bytes));
+  return code_db_intern(&key, src, (uint32_t)len, jumpdest_ref);
+}
+
 EVMSAIL_HASH_RETURN code_db_store_indexed_source(
     EVMSAIL_HASH_RESULT(result) uint64_t source_kind, uint64_t off,
     uint64_t len, uint64_t jumpdest_ref) {
-  uint64_t key[4] = {0, 0, 0, 0};
-  uint8_t key_bytes[32];
+  sail_hash key = {{0}};
   if (len > UINT32_MAX ||
       !jumpdest_table_matches(jumpdest_ref, (uint32_t)len)) {
-    be_words4_to_be_bytes(key_bytes, key);
-    EVMSAIL_RETURN_HASH_BE_BYTES(result, key_bytes);
+    EVMSAIL_RETURN_HASH_BE_BYTES(result, key.bytes);
   }
   const uint8_t *src = NULL;
   uint64_t source_len = 0;
   if (!evmsail_resolve_byte_source(source_kind, off, len, &src, &source_len) ||
       !src || source_len != len) {
-    be_words4_to_be_bytes(key_bytes, key);
-    EVMSAIL_RETURN_HASH_BE_BYTES(result, key_bytes);
+    EVMSAIL_RETURN_HASH_BE_BYTES(result, key.bytes);
   }
-  host_keccak256_bytes(key, src, len);
-  if (!code_db_intern(key, src, (uint32_t)len, jumpdest_ref))
-    memset(key, 0, sizeof key);
-  be_words4_to_be_bytes(key_bytes, key);
-  EVMSAIL_RETURN_HASH_BE_BYTES(result, key_bytes);
+  zkvm_keccak256_hash digest = {{0}};
+  if (zkvm_keccak256(src, (size_t)len, &digest) == ZKVM_EOK)
+    memcpy(key.bytes, digest.data, sizeof(key.bytes));
+  if (!code_db_intern(&key, src, (uint32_t)len, jumpdest_ref))
+    memset(&key, 0, sizeof(key));
+  EVMSAIL_RETURN_HASH_BE_BYTES(result, key.bytes);
 }
 
 /* Intern the 23-byte EIP-7702 delegation designation 0xef0100 ++ addr under its
@@ -278,13 +336,13 @@ EVMSAIL_HASH_RETURN code_intern_indexed_delegation(
   uint8_t b[23];
   b[0] = 0xef; b[1] = 0x01; b[2] = 0x00;
   evmsail_address_to_be_bytes(b + 3, addr);
-  uint64_t key[4] = {0, 0, 0, 0};
-  uint8_t key_bytes[32];
-  host_keccak256_bytes(key, b, sizeof b);
-  if (!code_db_intern(key, b, (uint32_t)sizeof b, jumpdest_ref))
-    memset(key, 0, sizeof key);
-  be_words4_to_be_bytes(key_bytes, key);
-  EVMSAIL_RETURN_HASH_BE_BYTES(result, key_bytes);
+  sail_hash key = {{0}};
+  zkvm_keccak256_hash digest = {{0}};
+  if (zkvm_keccak256(b, sizeof(b), &digest) == ZKVM_EOK)
+    memcpy(key.bytes, digest.data, sizeof(key.bytes));
+  if (!code_db_intern(&key, b, (uint32_t)sizeof b, jumpdest_ref))
+    memset(&key, 0, sizeof(key));
+  EVMSAIL_RETURN_HASH_BE_BYTES(result, key.bytes);
 }
 
 /* ----------------------- code-hash lookup ------------------------------- */
@@ -293,9 +351,8 @@ EVMSAIL_HASH_RETURN code_intern_indexed_delegation(
 
 static const code_db_ent *code_db_get(sail_hash h) {
   if (!code_db) return NULL;
-  uint64_t key[4];
-  sail_hash_to_be_words4(key, h);
-  const code_db_ent *e = code_db_find(key);
+  sail_hash key = h;
+  const code_db_ent *e = code_db_find(&key);
   return (e->used && e->len) ? e : NULL;
 }
 
@@ -322,17 +379,6 @@ int code_db_resolve_code(uint64_t off, uint64_t len,
   if (p) *p = src;
   if (resolved_len) *resolved_len = len;
   return 1;
-}
-
-/* EIP-7928 BAL code_changes: raw deployed code bytes for a code hash given as
-   big-endian 64-bit limbs. NULL/0 for KECCAK_EMPTY / missing. */
-const uint8_t *code_db_code_by_words(const uint64_t key_be[4], uint64_t *len_out) {
-  *len_out = 0;
-  if (!code_db) return NULL;
-  const code_db_ent *e = code_db_find(key_be);
-  if (!(e->used && e->len)) return NULL;
-  *len_out = e->len;
-  return code_arena + e->off;
 }
 
 /* EIP-7702 delegation probe in one call (this runs on every CALL-family

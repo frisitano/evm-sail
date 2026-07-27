@@ -49,6 +49,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # The interpreter
 
@@ -79,9 +80,9 @@ opcodes. This module specifies that machinery in three layers:
 
 /-- Assembles an `n`-byte big-endian PUSH immediate from a local code cursor;
 bytes past the end of code read as zero. -/
-/- Type quantifiers: k_ex416931_ : Nat, k_ex416930_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0
+/- Type quantifiers: k_ex415796_ : Nat, k_ex415795_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0
   : Nat, 0 ≤ code_dependentWitness0 ∧ 0 ≤ code_dependentWitness1 ∧
-  0 ≤ code_dependentWitness1, 0 ≤ k_ex416930_, 0 ≤ k_ex416931_ ∧ k_ex416931_ ≤ 32 -/
+  0 ≤ code_dependentWitness1, 0 ≤ k_ex415795_, 0 ≤ k_ex415796_ ∧ k_ex415796_ ≤ 32 -/
 def read_push (code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (offset : Nat) (n : Nat) : SailM Nat := do
   let code_dependentWitness0 := (code).1

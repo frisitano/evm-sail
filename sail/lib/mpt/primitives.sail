@@ -55,7 +55,7 @@ function path_empty() -> TriePath =
 function path_from_hash(h : hash) -> TriePath =
     path_new(h, 64)
 
-/*! Maps a nibble cursor to the corresponding byte in decreasing vector order. */
+/*! Maps a nibble cursor to the corresponding canonical-order path byte. */
 function path_byte_index(i : trie_path_cursor) -> b256_index = {
     let quotient = tdiv_nat(i, 2);
     let natural_index : b256_index = if (0 <= quotient) & (quotient <= 31) then {
@@ -64,7 +64,7 @@ function path_byte_index(i : trie_path_cursor) -> b256_index = {
             assert(false);
             0
         };
-    31 - natural_index
+    natural_index
 }
 
 /*! The `i`-th nibble, most significant first; out of range yields `0`. */
@@ -280,7 +280,7 @@ function hex_prefix_decode_ref forall 'source_off 'source_len 'content_len,
             if odd then {
                 if paired_nibbles < 64 then {
                     var bytes = word_to_hash(word_shift_right(packed, 4));
-                    bytes[31] = append(fb[3 .. 0], bytes[31][3 .. 0]);
+                    bytes[0] = append(fb[3 .. 0], bytes[0][3 .. 0]);
                     (is_leaf, path_new(B256(bytes), paired_nibbles + 1))
                 } else {
                     throw InvalidBlock(WitnessDeficient)

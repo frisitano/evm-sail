@@ -2,18 +2,24 @@
 #pragma once
 #include "sail.h"
 #include <string.h>
+#include "interpreter_glue.h"
+#include "journal_glue.h"
+#include "mpt_glue.h"
+#include "htr_glue.h"
+#include "word_bytes_glue.h"
 #include "cycle_scopes.h"
 #include "state_db.h"
 #include "trie_node_db.h"
 #include "kernel_state.h"
 #include "code_db.h"
+#include "frame_stack.h"
 #include "stack.h"
 #include "transient_storage.h"
 #include "memory.h"
 #include "scratch.h"
 #include "output.h"
 #include "precompiles.h"
-#include "host_crypto.h"
+#include "hash_glue.h"
 #include "byte_slice_glue.h"
 #include "sail_failure.h"
 #ifdef __cplusplus
@@ -2752,62 +2758,6 @@ static bool EQUAL(zStorageValue)(struct zStorageValue op1, struct zStorageValue 
   return EQUAL(u256)(op1.zcurr, op2.zcurr) && EQUAL(u256)(op1.zorig, op2.zorig);
 }
 
-static void CREATE(zoptionzIRStorageValuezK)(struct zoptionzIRStorageValuezK *op) {
-  op->kind = Kind_zNonezIRStorageValuezK;
-}
-
-static void RECREATE(zoptionzIRStorageValuezK)(struct zoptionzIRStorageValuezK *op) {
-
-}
-
-static void KILL(zoptionzIRStorageValuezK)(struct zoptionzIRStorageValuezK *op) {
-
-}
-
-static void COPY(zoptionzIRStorageValuezK)(struct zoptionzIRStorageValuezK *rop, struct zoptionzIRStorageValuezK op) {
-  ;
-  rop->kind = op.kind;
-  switch (op.kind) {
-  case Kind_zNonezIRStorageValuezK: {
-    rop->variants.zNonezIRStorageValuezK = op.variants.zNonezIRStorageValuezK;
-    break;
-  }
-  case Kind_zSomezIRStorageValuezK: {
-    rop->variants.zSomezIRStorageValuezK = op.variants.zSomezIRStorageValuezK;
-    break;
-  }
-  }
-}
-
-static bool EQUAL(zoptionzIRStorageValuezK)(struct zoptionzIRStorageValuezK op1, struct zoptionzIRStorageValuezK op2) {
-  if (op1.kind != op2.kind) {
-    return false;
-  }
-  switch (op1.kind) {
-  case Kind_zNonezIRStorageValuezK: {
-    return EQUAL(unit)(op1.variants.zNonezIRStorageValuezK, op2.variants.zNonezIRStorageValuezK);
-    break;
-  }
-  case Kind_zSomezIRStorageValuezK: {
-    return EQUAL(zStorageValue)(op1.variants.zSomezIRStorageValuezK, op2.variants.zSomezIRStorageValuezK);
-    break;
-  }
-  }
-  return false;
-}
-
-static void zNonezIRStorageValuezK(struct zoptionzIRStorageValuezK *rop, unit op) {
-
-  rop->kind = Kind_zNonezIRStorageValuezK;
-  rop->variants.zNonezIRStorageValuezK = op;
-}
-
-static void zSomezIRStorageValuezK(struct zoptionzIRStorageValuezK *rop, struct zStorageValue op) {
-
-  rop->kind = Kind_zSomezIRStorageValuezK;
-  rop->variants.zSomezIRStorageValuezK = op;
-}
-
 static void COPY(zStorageKey)(struct zStorageKey *rop, const struct zStorageKey op) {
   rop->zaddr = op.zaddr;
   rop->zslot = op.zslot;
@@ -2826,60 +2776,70 @@ static bool EQUAL(zStorageEntry)(struct zStorageEntry op1, struct zStorageEntry 
   return EQUAL(zStorageKey)(op1.zkey, op2.zkey) && EQUAL(zStorageValue)(op1.zvalue, op2.zvalue);
 }
 
-static void CREATE(zoptionzIRStorageEntryzK)(struct zoptionzIRStorageEntryzK *op) {
-  op->kind = Kind_zNonezIRStorageEntryzK;
+static void COPY(zStorageTrieEntry)(struct zStorageTrieEntry *rop, const struct zStorageTrieEntry op) {
+  rop->zaddress_hash = op.zaddress_hash;
+  rop->zentry = op.zentry;
+  rop->zslot_hash = op.zslot_hash;
 }
 
-static void RECREATE(zoptionzIRStorageEntryzK)(struct zoptionzIRStorageEntryzK *op) {
+static bool EQUAL(zStorageTrieEntry)(struct zStorageTrieEntry op1, struct zStorageTrieEntry op2) {
+  return EQUAL(fixed_bytes_32)(op1.zaddress_hash, op2.zaddress_hash) && EQUAL(zStorageEntry)(op1.zentry, op2.zentry) && EQUAL(fixed_bytes_32)(op1.zslot_hash, op2.zslot_hash);
+}
+
+static void CREATE(zoptionzIRStorageTrieEntryzK)(struct zoptionzIRStorageTrieEntryzK *op) {
+  op->kind = Kind_zNonezIRStorageTrieEntryzK;
+}
+
+static void RECREATE(zoptionzIRStorageTrieEntryzK)(struct zoptionzIRStorageTrieEntryzK *op) {
 
 }
 
-static void KILL(zoptionzIRStorageEntryzK)(struct zoptionzIRStorageEntryzK *op) {
+static void KILL(zoptionzIRStorageTrieEntryzK)(struct zoptionzIRStorageTrieEntryzK *op) {
 
 }
 
-static void COPY(zoptionzIRStorageEntryzK)(struct zoptionzIRStorageEntryzK *rop, struct zoptionzIRStorageEntryzK op) {
+static void COPY(zoptionzIRStorageTrieEntryzK)(struct zoptionzIRStorageTrieEntryzK *rop, struct zoptionzIRStorageTrieEntryzK op) {
   ;
   rop->kind = op.kind;
   switch (op.kind) {
-  case Kind_zNonezIRStorageEntryzK: {
-    rop->variants.zNonezIRStorageEntryzK = op.variants.zNonezIRStorageEntryzK;
+  case Kind_zNonezIRStorageTrieEntryzK: {
+    rop->variants.zNonezIRStorageTrieEntryzK = op.variants.zNonezIRStorageTrieEntryzK;
     break;
   }
-  case Kind_zSomezIRStorageEntryzK: {
-    rop->variants.zSomezIRStorageEntryzK = op.variants.zSomezIRStorageEntryzK;
+  case Kind_zSomezIRStorageTrieEntryzK: {
+    rop->variants.zSomezIRStorageTrieEntryzK = op.variants.zSomezIRStorageTrieEntryzK;
     break;
   }
   }
 }
 
-static bool EQUAL(zoptionzIRStorageEntryzK)(struct zoptionzIRStorageEntryzK op1, struct zoptionzIRStorageEntryzK op2) {
+static bool EQUAL(zoptionzIRStorageTrieEntryzK)(struct zoptionzIRStorageTrieEntryzK op1, struct zoptionzIRStorageTrieEntryzK op2) {
   if (op1.kind != op2.kind) {
     return false;
   }
   switch (op1.kind) {
-  case Kind_zNonezIRStorageEntryzK: {
-    return EQUAL(unit)(op1.variants.zNonezIRStorageEntryzK, op2.variants.zNonezIRStorageEntryzK);
+  case Kind_zNonezIRStorageTrieEntryzK: {
+    return EQUAL(unit)(op1.variants.zNonezIRStorageTrieEntryzK, op2.variants.zNonezIRStorageTrieEntryzK);
     break;
   }
-  case Kind_zSomezIRStorageEntryzK: {
-    return EQUAL(zStorageEntry)(op1.variants.zSomezIRStorageEntryzK, op2.variants.zSomezIRStorageEntryzK);
+  case Kind_zSomezIRStorageTrieEntryzK: {
+    return EQUAL(zStorageTrieEntry)(op1.variants.zSomezIRStorageTrieEntryzK, op2.variants.zSomezIRStorageTrieEntryzK);
     break;
   }
   }
   return false;
 }
 
-static void zNonezIRStorageEntryzK(struct zoptionzIRStorageEntryzK *rop, unit op) {
+static void zNonezIRStorageTrieEntryzK(struct zoptionzIRStorageTrieEntryzK *rop, unit op) {
 
-  rop->kind = Kind_zNonezIRStorageEntryzK;
-  rop->variants.zNonezIRStorageEntryzK = op;
+  rop->kind = Kind_zNonezIRStorageTrieEntryzK;
+  rop->variants.zNonezIRStorageTrieEntryzK = op;
 }
 
-static void zSomezIRStorageEntryzK(struct zoptionzIRStorageEntryzK *rop, struct zStorageEntry op) {
+static void zSomezIRStorageTrieEntryzK(struct zoptionzIRStorageTrieEntryzK *rop, struct zStorageTrieEntry op) {
 
-  rop->kind = Kind_zSomezIRStorageEntryzK;
-  rop->variants.zSomezIRStorageEntryzK = op;
+  rop->kind = Kind_zSomezIRStorageTrieEntryzK;
+  rop->variants.zSomezIRStorageTrieEntryzK = op;
 }
 
 static void COPY(zSstoreCosts)(struct zSstoreCosts *rop, const struct zSstoreCosts op) {
@@ -2902,35 +2862,65 @@ static bool EQUAL(zScaledBlobValue)(struct zScaledBlobValue op1, struct zScaledB
   return (op1.zremainder == op2.zremainder) && EQUAL(u256)(op1.zwhole, op2.zwhole);
 }
 
-static void COPY(zRlpIndexItem)(struct zRlpIndexItem *rop, const struct zRlpIndexItem op) {
-  rop->zindex = op.zindex;
-  rop->zkey = op.zkey;
-  COPY(zoptionzIRTriePathzK)(&rop->znext_key, op.znext_key);
+
+static inline sail_fixed_bytes_256 fixed_bytes_256_zero(void) {
+  sail_fixed_bytes_256 result = {{0}};
+  return result;
 }
 
-static void CREATE(zRlpIndexItem)(struct zRlpIndexItem *op) {
-  CREATE(zoptionzIRTriePathzK)(&op->znext_key);
+static inline bool eq_fixed_bytes_256(const sail_fixed_bytes_256 lhs, const sail_fixed_bytes_256 rhs) {
+  return memcmp(lhs.bytes, rhs.bytes, 256) == 0;
 }
 
-static void RECREATE(zRlpIndexItem)(struct zRlpIndexItem *op) {
-  RECREATE(zoptionzIRTriePathzK)(&op->znext_key);
+static inline sail_fixed_bytes_256 internal_vector_init_fixed_bytes_256(const int64_t length_arg) {
+  (void)length_arg;
+  return fixed_bytes_256_zero();
 }
 
-static void KILL(zRlpIndexItem)(struct zRlpIndexItem *op) {
-  KILL(zoptionzIRTriePathzK)(&op->znext_key);
+static inline sail_fixed_bytes_256 internal_vector_update_fixed_bytes_256(
+    sail_fixed_bytes_256 value, const int64_t index, const uint64_t elem) {
+  if (index >= 0 && index < 256) value.bytes[index] = (uint8_t)elem;
+  return value;
 }
 
-static bool EQUAL(zRlpIndexItem)(struct zRlpIndexItem op1, struct zRlpIndexItem op2) {
-  return (op1.zindex == op2.zindex) && EQUAL(zTriePath)(op1.zkey, op2.zkey) && EQUAL(zoptionzIRTriePathzK)(op1.znext_key, op2.znext_key);
+static inline uint64_t fast_vector_access_fixed_bytes_256(const sail_fixed_bytes_256 value, const int64_t index) {
+  return index >= 0 && index < 256 ? (uint64_t)value.bytes[index] : UINT64_C(0);
 }
 
-static void COPY(zRlpIndexCursor)(struct zRlpIndexCursor *rop, const struct zRlpIndexCursor op) {
+static inline sail_fixed_bytes_256 fast_unsigned_vector_update_fixed_bytes_256(
+    sail_fixed_bytes_256 value, const uint64_t index, const uint64_t elem) {
+  if (index < 256) value.bytes[index] = (uint8_t)elem;
+  return value;
+}
+
+static inline uint64_t fast_unsigned_vector_access_fixed_bytes_256(
+    const sail_fixed_bytes_256 value, const uint64_t index) {
+  return index < 256 ? (uint64_t)value.bytes[index] : UINT64_C(0);
+}
+
+static inline sail_fixed_bytes_256 fast_vector_init_fixed_bytes_256(const int64_t length_arg, const uint64_t elem) {
+  (void)length_arg;
+  sail_fixed_bytes_256 result;
+  for (size_t i = 0; i < 256; ++i) result.bytes[i] = (uint8_t)elem;
+  return result;
+}
+
+static inline sail_fixed_bytes_256 fast_unsigned_vector_init_fixed_bytes_256(const uint64_t length_arg, const uint64_t elem) {
+  (void)length_arg;
+  sail_fixed_bytes_256 result;
+  for (size_t i = 0; i < 256; ++i) result.bytes[i] = (uint8_t)elem;
+  return result;
+}
+
+
+static void COPY(zReceiptAccumulator)(struct zReceiptAccumulator *rop, const struct zReceiptAccumulator op) {
+  rop->zbloom = op.zbloom;
   rop->zcount = op.zcount;
-  rop->zposition = op.zposition;
+  rop->zcumulative_gas_used = op.zcumulative_gas_used;
 }
 
-static bool EQUAL(zRlpIndexCursor)(struct zRlpIndexCursor op1, struct zRlpIndexCursor op2) {
-  return (op1.zcount == op2.zcount) && (op1.zposition == op2.zposition);
+static bool EQUAL(zReceiptAccumulator)(struct zReceiptAccumulator op1, struct zReceiptAccumulator op2) {
+  return EQUAL(fixed_bytes_256)(op1.zbloom, op2.zbloom) && (op1.zcount == op2.zcount) && (op1.zcumulative_gas_used == op2.zcumulative_gas_used);
 }
 
 static void COPY(zParentHeaderFields)(struct zParentHeaderFields *rop, const struct zParentHeaderFields op) {
@@ -2962,146 +2952,6 @@ static void COPY(zMessage)(struct zMessage *rop, const struct zMessage op) {
 
 static bool EQUAL(zMessage)(struct zMessage op1, struct zMessage op2) {
   return EQUAL(fixed_bytes_20)(op1.zaddress, op2.zaddress) && EQUAL(fixed_bytes_20)(op1.zcaller, op2.zcaller) && EQUAL(fixed_bytes_20)(op1.zcode_address, op2.zcode_address) && (op1.zdepth == op2.zdepth) && EQUAL(bool)(op1.zis_static, op2.zis_static) && (op1.zstate_gas_reservoir == op2.zstate_gas_reservoir) && EQUAL(u256)(op1.zvalue, op2.zvalue);
-}
-
-static void CREATE(zMerkleSlot)(struct zMerkleSlot *op) {
-  op->kind = Kind_zEmptyMerkleSlot;
-}
-
-static void RECREATE(zMerkleSlot)(struct zMerkleSlot *op) {
-
-}
-
-static void KILL(zMerkleSlot)(struct zMerkleSlot *op) {
-
-}
-
-static void COPY(zMerkleSlot)(struct zMerkleSlot *rop, struct zMerkleSlot op) {
-  ;
-  rop->kind = op.kind;
-  switch (op.kind) {
-  case Kind_zEmptyMerkleSlot: {
-    rop->variants.zEmptyMerkleSlot = op.variants.zEmptyMerkleSlot;
-    break;
-  }
-  case Kind_zOccupiedMerkleSlot: {
-    rop->variants.zOccupiedMerkleSlot = op.variants.zOccupiedMerkleSlot;
-    break;
-  }
-  }
-}
-
-static bool EQUAL(zMerkleSlot)(struct zMerkleSlot op1, struct zMerkleSlot op2) {
-  if (op1.kind != op2.kind) {
-    return false;
-  }
-  switch (op1.kind) {
-  case Kind_zEmptyMerkleSlot: {
-    return EQUAL(unit)(op1.variants.zEmptyMerkleSlot, op2.variants.zEmptyMerkleSlot);
-    break;
-  }
-  case Kind_zOccupiedMerkleSlot: {
-    return EQUAL(fixed_bytes_32)(op1.variants.zOccupiedMerkleSlot, op2.variants.zOccupiedMerkleSlot);
-    break;
-  }
-  }
-  return false;
-}
-
-static void zEmptyMerkleSlot(struct zMerkleSlot *rop, unit op) {
-
-  rop->kind = Kind_zEmptyMerkleSlot;
-  rop->variants.zEmptyMerkleSlot = op;
-}
-
-static void zOccupiedMerkleSlot(struct zMerkleSlot *rop, sail_fixed_bytes_32 op) {
-
-  rop->kind = Kind_zOccupiedMerkleSlot;
-  rop->variants.zOccupiedMerkleSlot = op;
-}
-
-static void CREATE(zz5listz8z5unionz0zzMerkleSlotz9)(zz5listz8z5unionz0zzMerkleSlotz9 *rop) { *rop = NULL; }
-
-static void internal_inc_zz5listz8z5unionz0zzMerkleSlotz9(zz5listz8z5unionz0zzMerkleSlotz9 l) {
-  if (l == NULL) return;
-  l->rc += 1;
-}
-
-static void internal_dec_zz5listz8z5unionz0zzMerkleSlotz9(zz5listz8z5unionz0zzMerkleSlotz9 l) {
-  if (l == NULL) return;
-  l->rc -= 1;
-}
-
-static void KILL(zz5listz8z5unionz0zzMerkleSlotz9)(zz5listz8z5unionz0zzMerkleSlotz9 *rop) {
-  if (*rop == NULL) return;
-  if ((*rop)->rc >= 1) {
-    (*rop)->rc -= 1;
-  }
-  zz5listz8z5unionz0zzMerkleSlotz9 node = *rop;
-  while (node != NULL && node->rc == 0) {
-    KILL(zMerkleSlot)(&node->hd);
-    zz5listz8z5unionz0zzMerkleSlotz9 next = node->tl;
-    sail_free(node);
-    node = next;
-    internal_dec_zz5listz8z5unionz0zzMerkleSlotz9(node);
-  }
-}
-
-static void RECREATE(zz5listz8z5unionz0zzMerkleSlotz9)(zz5listz8z5unionz0zzMerkleSlotz9 *rop) {
-  KILL(zz5listz8z5unionz0zzMerkleSlotz9)(rop);
-  *rop = NULL;
-}
-
-static void COPY(zz5listz8z5unionz0zzMerkleSlotz9)(zz5listz8z5unionz0zzMerkleSlotz9 *rop, zz5listz8z5unionz0zzMerkleSlotz9 op) {
-  internal_inc_zz5listz8z5unionz0zzMerkleSlotz9(op);
-  KILL(zz5listz8z5unionz0zzMerkleSlotz9)(rop);
-  *rop = op;
-}
-
-static void zconsz3z5unionz0zzMerkleSlot(zz5listz8z5unionz0zzMerkleSlotz9 *rop, struct zMerkleSlot x, zz5listz8z5unionz0zzMerkleSlotz9 xs) {
-  bool same = *rop == xs;
-  *rop = sail_new(struct node_zz5listz8z5unionz0zzMerkleSlotz9);
-  (*rop)->rc = 1;
-  CREATE(zMerkleSlot)(&(*rop)->hd);
-  COPY(zMerkleSlot)(&(*rop)->hd, x);
-  if (!same) internal_inc_zz5listz8z5unionz0zzMerkleSlotz9(xs);
-  (*rop)->tl = xs;
-}
-
-static void pick_zMerkleSlot(struct zMerkleSlot *x, const zz5listz8z5unionz0zzMerkleSlotz9 xs) {
-  COPY(zMerkleSlot)(x, xs->hd);
-}
-
-static bool EQUAL(zz5listz8z5unionz0zzMerkleSlotz9)(const zz5listz8z5unionz0zzMerkleSlotz9 op1, const zz5listz8z5unionz0zzMerkleSlotz9 op2) {
-  if (op1 == NULL && op2 == NULL) { return true; };
-  if (op1 == NULL || op2 == NULL) { return false; };
-  return EQUAL(zMerkleSlot)(op1->hd, op2->hd) && EQUAL(zz5listz8z5unionz0zzMerkleSlotz9)(op1->tl, op2->tl);
-}
-
-static void UNDEFINED(zz5listz8z5unionz0zzMerkleSlotz9)(zz5listz8z5unionz0zzMerkleSlotz9 *rop, struct zMerkleSlot u) {
-  *rop = NULL;
-}
-
-static void COPY(zMerkleAccumulator)(struct zMerkleAccumulator *rop, const struct zMerkleAccumulator op) {
-  rop->zcount = op.zcount;
-  rop->zdepth = op.zdepth;
-  COPY(zz5listz8z5unionz0zzMerkleSlotz9)(&rop->zfrontier, op.zfrontier);
-}
-
-static void CREATE(zMerkleAccumulator)(struct zMerkleAccumulator *op) {
-  CREATE(zz5listz8z5unionz0zzMerkleSlotz9)(&op->zfrontier);
-}
-
-static void RECREATE(zMerkleAccumulator)(struct zMerkleAccumulator *op) {
-  RECREATE(zz5listz8z5unionz0zzMerkleSlotz9)(&op->zfrontier);
-}
-
-static void KILL(zMerkleAccumulator)(struct zMerkleAccumulator *op) {
-  KILL(zz5listz8z5unionz0zzMerkleSlotz9)(&op->zfrontier);
-}
-
-static bool EQUAL(zMerkleAccumulator)(struct zMerkleAccumulator op1, struct zMerkleAccumulator op2) {
-  return (op1.zcount == op2.zcount) && (op1.zdepth == op2.zdepth) && EQUAL(zz5listz8z5unionz0zzMerkleSlotz9)(op1.zfrontier, op2.zfrontier);
 }
 
 static void COPY(zMemoryRangeFields)(struct zMemoryRangeFields *rop, const struct zMemoryRangeFields op) {
@@ -3214,57 +3064,6 @@ static void KILL(zMaterializzedBytes)(struct zMaterializzedBytes *op) {
 static bool EQUAL(zMaterializzedBytes)(struct zMaterializzedBytes op1, struct zMaterializzedBytes op2) {
   return EQUAL(zz5listz8z5bv8z9)(op1.zdata, op2.zdata) && (op1.zlen == op2.zlen);
 }
-
-
-static inline sail_fixed_bytes_256 fixed_bytes_256_zero(void) {
-  sail_fixed_bytes_256 result = {{0}};
-  return result;
-}
-
-static inline bool eq_fixed_bytes_256(const sail_fixed_bytes_256 lhs, const sail_fixed_bytes_256 rhs) {
-  return memcmp(lhs.bytes, rhs.bytes, 256) == 0;
-}
-
-static inline sail_fixed_bytes_256 internal_vector_init_fixed_bytes_256(const int64_t length_arg) {
-  (void)length_arg;
-  return fixed_bytes_256_zero();
-}
-
-static inline sail_fixed_bytes_256 internal_vector_update_fixed_bytes_256(
-    sail_fixed_bytes_256 value, const int64_t index, const uint64_t elem) {
-  if (index >= 0 && index < 256) value.bytes[index] = (uint8_t)elem;
-  return value;
-}
-
-static inline uint64_t fast_vector_access_fixed_bytes_256(const sail_fixed_bytes_256 value, const int64_t index) {
-  return index >= 0 && index < 256 ? (uint64_t)value.bytes[index] : UINT64_C(0);
-}
-
-static inline sail_fixed_bytes_256 fast_unsigned_vector_update_fixed_bytes_256(
-    sail_fixed_bytes_256 value, const uint64_t index, const uint64_t elem) {
-  if (index < 256) value.bytes[index] = (uint8_t)elem;
-  return value;
-}
-
-static inline uint64_t fast_unsigned_vector_access_fixed_bytes_256(
-    const sail_fixed_bytes_256 value, const uint64_t index) {
-  return index < 256 ? (uint64_t)value.bytes[index] : UINT64_C(0);
-}
-
-static inline sail_fixed_bytes_256 fast_vector_init_fixed_bytes_256(const int64_t length_arg, const uint64_t elem) {
-  (void)length_arg;
-  sail_fixed_bytes_256 result;
-  for (size_t i = 0; i < 256; ++i) result.bytes[i] = (uint8_t)elem;
-  return result;
-}
-
-static inline sail_fixed_bytes_256 fast_unsigned_vector_init_fixed_bytes_256(const uint64_t length_arg, const uint64_t elem) {
-  (void)length_arg;
-  sail_fixed_bytes_256 result;
-  for (size_t i = 0; i < 256; ++i) result.bytes[i] = (uint8_t)elem;
-  return result;
-}
-
 
 static void COPY(zIntrinsicGasCost)(struct zIntrinsicGasCost *rop, const struct zIntrinsicGasCost op) {
   rop->zcalldata_floor = op.zcalldata_floor;
@@ -4253,15 +4052,6 @@ static bool EQUAL(zRlpFieldRef)(struct zRlpFieldRef op1, struct zRlpFieldRef op2
   return (op1.zcontent_len == op2.zcontent_len) && EQUAL(bool)(op1.zis_list, op2.zis_list) && EQUAL(zByteSliceFields)(op1.zsource, op2.zsource);
 }
 
-static void COPY(zRlpCursor)(struct zRlpCursor *rop, const struct zRlpCursor op) {
-  rop->zcurrent = op.zcurrent;
-  rop->zsource = op.zsource;
-}
-
-static bool EQUAL(zRlpCursor)(struct zRlpCursor op1, struct zRlpCursor op2) {
-  return (op1.zcurrent == op2.zcurrent) && EQUAL(zByteSliceFields)(op1.zsource, op2.zsource);
-}
-
 static void COPY(zPrecompileResult)(struct zPrecompileResult *rop, const struct zPrecompileResult op) {
   rop->zoutput = op.zoutput;
   rop->zsuccess = op.zsuccess;
@@ -4438,140 +4228,6 @@ static void KILL(zReceipt)(struct zReceipt *op) {
 
 static bool EQUAL(zReceipt)(struct zReceipt op1, struct zReceipt op2) {
   return (op1.zexecution_gas == op2.zexecution_gas) && (op1.zgas_used == op2.zgas_used) && EQUAL(zz5listz8z5structz0zzLogEntryz9)(op1.zlogs, op2.zlogs) && (op1.zstate_gas == op2.zstate_gas) && EQUAL(bool)(op1.zsuccess, op2.zsuccess) && EQUAL(zTxType)(op1.ztx_type, op2.ztx_type);
-}
-
-static void COPY(zPendingReceipt)(struct zPendingReceipt *rop, const struct zPendingReceipt op) {
-  rop->zcumulative_gas_used = op.zcumulative_gas_used;
-  rop->zindex = op.zindex;
-  COPY(zReceipt)(&rop->zreceipt, op.zreceipt);
-}
-
-static void CREATE(zPendingReceipt)(struct zPendingReceipt *op) {
-  CREATE(zReceipt)(&op->zreceipt);
-}
-
-static void RECREATE(zPendingReceipt)(struct zPendingReceipt *op) {
-  RECREATE(zReceipt)(&op->zreceipt);
-}
-
-static void KILL(zPendingReceipt)(struct zPendingReceipt *op) {
-  KILL(zReceipt)(&op->zreceipt);
-}
-
-static bool EQUAL(zPendingReceipt)(struct zPendingReceipt op1, struct zPendingReceipt op2) {
-  return (op1.zcumulative_gas_used == op2.zcumulative_gas_used) && (op1.zindex == op2.zindex) && EQUAL(zReceipt)(op1.zreceipt, op2.zreceipt);
-}
-
-static void CREATE(zoptionzIRPendingReceiptzK)(struct zoptionzIRPendingReceiptzK *op) {
-  op->kind = Kind_zNonezIRPendingReceiptzK;
-}
-
-static void RECREATE(zoptionzIRPendingReceiptzK)(struct zoptionzIRPendingReceiptzK *op) {
-
-}
-
-static void KILL(zoptionzIRPendingReceiptzK)(struct zoptionzIRPendingReceiptzK *op) {
-  switch (op->kind) {
-  case Kind_zSomezIRPendingReceiptzK: {
-    KILL(zPendingReceipt)(&op->variants.zSomezIRPendingReceiptzK);
-    break;
-  }
-  default: break;
-  }
-}
-
-static void COPY(zoptionzIRPendingReceiptzK)(struct zoptionzIRPendingReceiptzK *rop, struct zoptionzIRPendingReceiptzK op) {
-  switch (rop->kind) {
-  case Kind_zSomezIRPendingReceiptzK: {
-    KILL(zPendingReceipt)(&rop->variants.zSomezIRPendingReceiptzK);
-    break;
-  }
-  default: break;
-  };
-  rop->kind = op.kind;
-  switch (op.kind) {
-  case Kind_zNonezIRPendingReceiptzK: {
-    rop->variants.zNonezIRPendingReceiptzK = op.variants.zNonezIRPendingReceiptzK;
-    break;
-  }
-  case Kind_zSomezIRPendingReceiptzK: {
-    CREATE(zPendingReceipt)(&rop->variants.zSomezIRPendingReceiptzK); COPY(zPendingReceipt)(&rop->variants.zSomezIRPendingReceiptzK, op.variants.zSomezIRPendingReceiptzK);
-    break;
-  }
-  }
-}
-
-static bool EQUAL(zoptionzIRPendingReceiptzK)(struct zoptionzIRPendingReceiptzK op1, struct zoptionzIRPendingReceiptzK op2) {
-  if (op1.kind != op2.kind) {
-    return false;
-  }
-  switch (op1.kind) {
-  case Kind_zNonezIRPendingReceiptzK: {
-    return EQUAL(unit)(op1.variants.zNonezIRPendingReceiptzK, op2.variants.zNonezIRPendingReceiptzK);
-    break;
-  }
-  case Kind_zSomezIRPendingReceiptzK: {
-    return EQUAL(zPendingReceipt)(op1.variants.zSomezIRPendingReceiptzK, op2.variants.zSomezIRPendingReceiptzK);
-    break;
-  }
-  }
-  return false;
-}
-
-static void zNonezIRPendingReceiptzK(struct zoptionzIRPendingReceiptzK *rop, unit op) {
-  switch (rop->kind) {
-  case Kind_zSomezIRPendingReceiptzK: {
-    KILL(zPendingReceipt)(&rop->variants.zSomezIRPendingReceiptzK);
-    break;
-  }
-  default: break;
-  }
-  rop->kind = Kind_zNonezIRPendingReceiptzK;
-  rop->variants.zNonezIRPendingReceiptzK = op;
-}
-
-static void zSomezIRPendingReceiptzK(struct zoptionzIRPendingReceiptzK *rop, struct zPendingReceipt op) {
-  switch (rop->kind) {
-  case Kind_zSomezIRPendingReceiptzK: {
-    KILL(zPendingReceipt)(&rop->variants.zSomezIRPendingReceiptzK);
-    break;
-  }
-  default: break;
-  }
-  rop->kind = Kind_zSomezIRPendingReceiptzK;
-  CREATE(zPendingReceipt)(&rop->variants.zSomezIRPendingReceiptzK);
-  COPY(zPendingReceipt)(&rop->variants.zSomezIRPendingReceiptzK, op);
-}
-
-static void COPY(zReceiptAccumulator)(struct zReceiptAccumulator *rop, const struct zReceiptAccumulator op) {
-  rop->zbloom = op.zbloom;
-  COPY(zTrieBuilder)(&rop->zbuilder, op.zbuilder);
-  rop->zcount = op.zcount;
-  rop->zcumulative_gas_used = op.zcumulative_gas_used;
-  COPY(zoptionzIRPendingReceiptzK)(&rop->zfirst, op.zfirst);
-  COPY(zoptionzIRPendingReceiptzK)(&rop->zpending, op.zpending);
-}
-
-static void CREATE(zReceiptAccumulator)(struct zReceiptAccumulator *op) {
-  CREATE(zTrieBuilder)(&op->zbuilder);
-  CREATE(zoptionzIRPendingReceiptzK)(&op->zfirst);
-  CREATE(zoptionzIRPendingReceiptzK)(&op->zpending);
-}
-
-static void RECREATE(zReceiptAccumulator)(struct zReceiptAccumulator *op) {
-  RECREATE(zTrieBuilder)(&op->zbuilder);
-  RECREATE(zoptionzIRPendingReceiptzK)(&op->zfirst);
-  RECREATE(zoptionzIRPendingReceiptzK)(&op->zpending);
-}
-
-static void KILL(zReceiptAccumulator)(struct zReceiptAccumulator *op) {
-  KILL(zTrieBuilder)(&op->zbuilder);
-  KILL(zoptionzIRPendingReceiptzK)(&op->zfirst);
-  KILL(zoptionzIRPendingReceiptzK)(&op->zpending);
-}
-
-static bool EQUAL(zReceiptAccumulator)(struct zReceiptAccumulator op1, struct zReceiptAccumulator op2) {
-  return EQUAL(fixed_bytes_256)(op1.zbloom, op2.zbloom) && EQUAL(zTrieBuilder)(op1.zbuilder, op2.zbuilder) && (op1.zcount == op2.zcount) && (op1.zcumulative_gas_used == op2.zcumulative_gas_used) && EQUAL(zoptionzIRPendingReceiptzK)(op1.zfirst, op2.zfirst) && EQUAL(zoptionzIRPendingReceiptzK)(op1.zpending, op2.zpending);
 }
 
 static void CREATE(zHaltKind)(struct zHaltKind *op) {
@@ -4771,15 +4427,6 @@ static bool EQUAL(zExecutionRequests)(struct zExecutionRequests op1, struct zExe
   return EQUAL(zByteSliceFields)(op1.zbuilder_deposits, op2.zbuilder_deposits) && EQUAL(zByteSliceFields)(op1.zbuilder_exits, op2.zbuilder_exits) && EQUAL(zByteSliceFields)(op1.zconsolidations, op2.zconsolidations) && EQUAL(zByteSliceFields)(op1.zdeposits, op2.zdeposits) && EQUAL(zByteSliceFields)(op1.zwithdrawals, op2.zwithdrawals);
 }
 
-static void COPY(zEncodedBlockAccessList)(struct zEncodedBlockAccessList *rop, const struct zEncodedBlockAccessList op) {
-  rop->zbytes = op.zbytes;
-  rop->zitem_count = op.zitem_count;
-}
-
-static bool EQUAL(zEncodedBlockAccessList)(struct zEncodedBlockAccessList op1, struct zEncodedBlockAccessList op2) {
-  return EQUAL(zByteSliceFields)(op1.zbytes, op2.zbytes) && (op1.zitem_count == op2.zitem_count);
-}
-
 static void COPY(zCode)(struct zCode *rop, const struct zCode op) {
   rop->zbytes = op.zbytes;
   rop->zjumpdests = op.zjumpdests;
@@ -4922,8 +4569,7 @@ static bool EQUAL(zCallContinuation)(struct zCallContinuation op1, struct zCallC
 }
 
 static void CREATE(zFrameContinuation)(struct zFrameContinuation *op) {
-  op->kind = Kind_zResumeCall;
-  CREATE(zCallContinuation)(&op->variants.zResumeCall);
+  op->kind = Kind_zEmpty;
 }
 
 static void RECREATE(zFrameContinuation)(struct zFrameContinuation *op) {
@@ -4940,6 +4586,7 @@ static void KILL(zFrameContinuation)(struct zFrameContinuation *op) {
     KILL(zCreateContinuation)(&op->variants.zResumeCreate);
     break;
   }
+  default: break;
   }
 }
 
@@ -4953,9 +4600,14 @@ static void COPY(zFrameContinuation)(struct zFrameContinuation *rop, struct zFra
     KILL(zCreateContinuation)(&rop->variants.zResumeCreate);
     break;
   }
+  default: break;
   };
   rop->kind = op.kind;
   switch (op.kind) {
+  case Kind_zEmpty: {
+    rop->variants.zEmpty = op.variants.zEmpty;
+    break;
+  }
   case Kind_zResumeCall: {
     CREATE(zCallContinuation)(&rop->variants.zResumeCall); COPY(zCallContinuation)(&rop->variants.zResumeCall, op.variants.zResumeCall);
     break;
@@ -4972,6 +4624,10 @@ static bool EQUAL(zFrameContinuation)(struct zFrameContinuation op1, struct zFra
     return false;
   }
   switch (op1.kind) {
+  case Kind_zEmpty: {
+    return EQUAL(unit)(op1.variants.zEmpty, op2.variants.zEmpty);
+    break;
+  }
   case Kind_zResumeCall: {
     return EQUAL(zCallContinuation)(op1.variants.zResumeCall, op2.variants.zResumeCall);
     break;
@@ -4984,6 +4640,22 @@ static bool EQUAL(zFrameContinuation)(struct zFrameContinuation op1, struct zFra
   return false;
 }
 
+static void zEmpty(struct zFrameContinuation *rop, unit op) {
+  switch (rop->kind) {
+  case Kind_zResumeCall: {
+    KILL(zCallContinuation)(&rop->variants.zResumeCall);
+    break;
+  }
+  case Kind_zResumeCreate: {
+    KILL(zCreateContinuation)(&rop->variants.zResumeCreate);
+    break;
+  }
+  default: break;
+  }
+  rop->kind = Kind_zEmpty;
+  rop->variants.zEmpty = op;
+}
+
 static void zResumeCall(struct zFrameContinuation *rop, struct zCallContinuation op) {
   switch (rop->kind) {
   case Kind_zResumeCall: {
@@ -4994,6 +4666,7 @@ static void zResumeCall(struct zFrameContinuation *rop, struct zCallContinuation
     KILL(zCreateContinuation)(&rop->variants.zResumeCreate);
     break;
   }
+  default: break;
   }
   rop->kind = Kind_zResumeCall;
   CREATE(zCallContinuation)(&rop->variants.zResumeCall);
@@ -5010,108 +4683,11 @@ static void zResumeCreate(struct zFrameContinuation *rop, struct zCreateContinua
     KILL(zCreateContinuation)(&rop->variants.zResumeCreate);
     break;
   }
+  default: break;
   }
   rop->kind = Kind_zResumeCreate;
   CREATE(zCreateContinuation)(&rop->variants.zResumeCreate);
   COPY(zCreateContinuation)(&rop->variants.zResumeCreate, op);
-}
-
-static void CREATE(zz5vecz8z5unionz0zzFrameContinuationz9)(zz5vecz8z5unionz0zzFrameContinuationz9 *rop) {
-  rop->len = 0;
-  rop->data = NULL;
-}
-
-static void KILL(zz5vecz8z5unionz0zzFrameContinuationz9)(zz5vecz8z5unionz0zzFrameContinuationz9 *rop) {
-  for (int i = 0; i < (rop->len); i++) {
-    KILL(zFrameContinuation)((rop->data) + i);
-  }
-  if (rop->data != NULL) sail_free(rop->data);
-}
-
-static void fast_vector_init_zz5vecz8z5unionz0zzFrameContinuationz9(zz5vecz8z5unionz0zzFrameContinuationz9 *vec, const int64_t n, struct zFrameContinuation elem) {
-  KILL(zz5vecz8z5unionz0zzFrameContinuationz9)(vec);
-  size_t m = (size_t)n;
-  vec->len = m;
-  vec->data = sail_new_array(struct zFrameContinuation, m);
-  for (size_t i = 0; i < m; i++) {
-    CREATE(zFrameContinuation)((vec->data) + i);
-    COPY(zFrameContinuation)((vec->data) + i, elem);
-  }
-}
-
-static void fast_unsigned_vector_init_zz5vecz8z5unionz0zzFrameContinuationz9(zz5vecz8z5unionz0zzFrameContinuationz9 *vec, const uint64_t n, struct zFrameContinuation elem) {
-  KILL(zz5vecz8z5unionz0zzFrameContinuationz9)(vec);
-  size_t m = (size_t)n;
-  vec->len = m;
-  vec->data = sail_new_array(struct zFrameContinuation, m);
-  for (size_t i = 0; i < m; i++) {
-    CREATE(zFrameContinuation)((vec->data) + i);
-    COPY(zFrameContinuation)((vec->data) + i, elem);
-  }
-}
-
-static void RECREATE(zz5vecz8z5unionz0zzFrameContinuationz9)(zz5vecz8z5unionz0zzFrameContinuationz9 *rop) {
-  KILL(zz5vecz8z5unionz0zzFrameContinuationz9)(rop);
-  CREATE(zz5vecz8z5unionz0zzFrameContinuationz9)(rop);
-}
-
-static void fast_vector_access_zz5vecz8z5unionz0zzFrameContinuationz9(struct zFrameContinuation *rop, zz5vecz8z5unionz0zzFrameContinuationz9 op, int64_t n) {
-  COPY(zFrameContinuation)(rop, op.data[n]);
-}
-
-static void fast_unsigned_vector_access_zz5vecz8z5unionz0zzFrameContinuationz9(struct zFrameContinuation *rop, zz5vecz8z5unionz0zzFrameContinuationz9 op, uint64_t n) {
-  COPY(zFrameContinuation)(rop, op.data[n]);
-}
-
-static void COPY(zz5vecz8z5unionz0zzFrameContinuationz9)(zz5vecz8z5unionz0zzFrameContinuationz9 *rop, zz5vecz8z5unionz0zzFrameContinuationz9 op) {
-  KILL(zz5vecz8z5unionz0zzFrameContinuationz9)(rop);
-  rop->len = op.len;
-  rop->data = sail_new_array(struct zFrameContinuation, rop->len);
-  for (int i = 0; i < op.len; i++) {
-    CREATE(zFrameContinuation)((rop->data) + i);
-    COPY(zFrameContinuation)((rop->data) + i, op.data[i]);
-  }
-}
-
-static void fast_vector_update_zz5vecz8z5unionz0zzFrameContinuationz9(zz5vecz8z5unionz0zzFrameContinuationz9 *rop, zz5vecz8z5unionz0zzFrameContinuationz9 op, const int64_t n, struct zFrameContinuation elem) {
-  size_t m = (size_t)n;
-  if (rop->data == op.data) {
-    COPY(zFrameContinuation)((rop->data) + m, elem);
-  } else {
-    COPY(zz5vecz8z5unionz0zzFrameContinuationz9)(rop, op);
-    COPY(zFrameContinuation)((rop->data) + m, elem);
-  }
-}
-
-static void fast_unsigned_vector_update_zz5vecz8z5unionz0zzFrameContinuationz9(zz5vecz8z5unionz0zzFrameContinuationz9 *rop, zz5vecz8z5unionz0zzFrameContinuationz9 op, const uint64_t n, struct zFrameContinuation elem) {
-  size_t m = (size_t)n;
-  if (rop->data == op.data) {
-    COPY(zFrameContinuation)((rop->data) + m, elem);
-  } else {
-    COPY(zz5vecz8z5unionz0zzFrameContinuationz9)(rop, op);
-    COPY(zFrameContinuation)((rop->data) + m, elem);
-  }
-}
-
-static bool EQUAL(zz5vecz8z5unionz0zzFrameContinuationz9)(const zz5vecz8z5unionz0zzFrameContinuationz9 op1, const zz5vecz8z5unionz0zzFrameContinuationz9 op2) {
-  if (op1.len != op2.len) return false;
-  bool result = true;
-  for (int i = 0; i < op1.len; i++) {
-    result &= EQUAL(zFrameContinuation)(op1.data[i], op2.data[i]);
-  }
-  return result;
-}
-
-static void internal_vector_update_zz5vecz8z5unionz0zzFrameContinuationz9(zz5vecz8z5unionz0zzFrameContinuationz9 *rop, zz5vecz8z5unionz0zzFrameContinuationz9 op, const int64_t n, struct zFrameContinuation elem) {
-  COPY(zFrameContinuation)((rop->data) + n, elem);
-}
-
-static void internal_vector_init_zz5vecz8z5unionz0zzFrameContinuationz9(zz5vecz8z5unionz0zzFrameContinuationz9 *rop, const int64_t len) {
-  rop->len = len;
-  rop->data = sail_new_array(struct zFrameContinuation, len);
-  for (int i = 0; i < len; i++) {
-    CREATE(zFrameContinuation)((rop->data) + i);
-  }
 }
 
 static void CREATE(zBytes)(struct zBytes *op) {
@@ -5458,6 +5034,174 @@ static void zStatelessPayloadValid(struct zStatelessValidationResult *rop, unit 
   rop->variants.zStatelessPayloadValid = op;
 }
 
+static void CREATE(zOptimizzedUnitResult)(struct zOptimizzedUnitResult *op) {
+  op->kind = Kind_zOptimizzedUnitError;
+}
+
+static void RECREATE(zOptimizzedUnitResult)(struct zOptimizzedUnitResult *op) {
+
+}
+
+static void KILL(zOptimizzedUnitResult)(struct zOptimizzedUnitResult *op) {
+
+}
+
+static void COPY(zOptimizzedUnitResult)(struct zOptimizzedUnitResult *rop, struct zOptimizzedUnitResult op) {
+  ;
+  rop->kind = op.kind;
+  switch (op.kind) {
+  case Kind_zOptimizzedUnitError: {
+    rop->variants.zOptimizzedUnitError = op.variants.zOptimizzedUnitError;
+    break;
+  }
+  case Kind_zOptimizzedUnitOk: {
+    rop->variants.zOptimizzedUnitOk = op.variants.zOptimizzedUnitOk;
+    break;
+  }
+  }
+}
+
+static bool EQUAL(zOptimizzedUnitResult)(struct zOptimizzedUnitResult op1, struct zOptimizzedUnitResult op2) {
+  if (op1.kind != op2.kind) {
+    return false;
+  }
+  switch (op1.kind) {
+  case Kind_zOptimizzedUnitError: {
+    return EQUAL(zBlockError)(op1.variants.zOptimizzedUnitError, op2.variants.zOptimizzedUnitError);
+    break;
+  }
+  case Kind_zOptimizzedUnitOk: {
+    return EQUAL(unit)(op1.variants.zOptimizzedUnitOk, op2.variants.zOptimizzedUnitOk);
+    break;
+  }
+  }
+  return false;
+}
+
+static void zOptimizzedUnitError(struct zOptimizzedUnitResult *rop, enum zBlockError op) {
+
+  rop->kind = Kind_zOptimizzedUnitError;
+  rop->variants.zOptimizzedUnitError = op;
+}
+
+static void zOptimizzedUnitOk(struct zOptimizzedUnitResult *rop, unit op) {
+
+  rop->kind = Kind_zOptimizzedUnitOk;
+  rop->variants.zOptimizzedUnitOk = op;
+}
+
+static void CREATE(zOptimizzedStorageResult)(struct zOptimizzedStorageResult *op) {
+  op->kind = Kind_zOptimizzedStorageError;
+}
+
+static void RECREATE(zOptimizzedStorageResult)(struct zOptimizzedStorageResult *op) {
+
+}
+
+static void KILL(zOptimizzedStorageResult)(struct zOptimizzedStorageResult *op) {
+
+}
+
+static void COPY(zOptimizzedStorageResult)(struct zOptimizzedStorageResult *rop, struct zOptimizzedStorageResult op) {
+  ;
+  rop->kind = op.kind;
+  switch (op.kind) {
+  case Kind_zOptimizzedStorageError: {
+    rop->variants.zOptimizzedStorageError = op.variants.zOptimizzedStorageError;
+    break;
+  }
+  case Kind_zOptimizzedStorageOk: {
+    rop->variants.zOptimizzedStorageOk = op.variants.zOptimizzedStorageOk;
+    break;
+  }
+  }
+}
+
+static bool EQUAL(zOptimizzedStorageResult)(struct zOptimizzedStorageResult op1, struct zOptimizzedStorageResult op2) {
+  if (op1.kind != op2.kind) {
+    return false;
+  }
+  switch (op1.kind) {
+  case Kind_zOptimizzedStorageError: {
+    return EQUAL(zBlockError)(op1.variants.zOptimizzedStorageError, op2.variants.zOptimizzedStorageError);
+    break;
+  }
+  case Kind_zOptimizzedStorageOk: {
+    return EQUAL(zStorageValue)(op1.variants.zOptimizzedStorageOk, op2.variants.zOptimizzedStorageOk);
+    break;
+  }
+  }
+  return false;
+}
+
+static void zOptimizzedStorageError(struct zOptimizzedStorageResult *rop, enum zBlockError op) {
+
+  rop->kind = Kind_zOptimizzedStorageError;
+  rop->variants.zOptimizzedStorageError = op;
+}
+
+static void zOptimizzedStorageOk(struct zOptimizzedStorageResult *rop, struct zStorageValue op) {
+
+  rop->kind = Kind_zOptimizzedStorageOk;
+  rop->variants.zOptimizzedStorageOk = op;
+}
+
+static void CREATE(zOptimizzedHashResult)(struct zOptimizzedHashResult *op) {
+  op->kind = Kind_zOptimizzedHashError;
+}
+
+static void RECREATE(zOptimizzedHashResult)(struct zOptimizzedHashResult *op) {
+
+}
+
+static void KILL(zOptimizzedHashResult)(struct zOptimizzedHashResult *op) {
+
+}
+
+static void COPY(zOptimizzedHashResult)(struct zOptimizzedHashResult *rop, struct zOptimizzedHashResult op) {
+  ;
+  rop->kind = op.kind;
+  switch (op.kind) {
+  case Kind_zOptimizzedHashError: {
+    rop->variants.zOptimizzedHashError = op.variants.zOptimizzedHashError;
+    break;
+  }
+  case Kind_zOptimizzedHashOk: {
+    rop->variants.zOptimizzedHashOk = op.variants.zOptimizzedHashOk;
+    break;
+  }
+  }
+}
+
+static bool EQUAL(zOptimizzedHashResult)(struct zOptimizzedHashResult op1, struct zOptimizzedHashResult op2) {
+  if (op1.kind != op2.kind) {
+    return false;
+  }
+  switch (op1.kind) {
+  case Kind_zOptimizzedHashError: {
+    return EQUAL(zBlockError)(op1.variants.zOptimizzedHashError, op2.variants.zOptimizzedHashError);
+    break;
+  }
+  case Kind_zOptimizzedHashOk: {
+    return EQUAL(fixed_bytes_32)(op1.variants.zOptimizzedHashOk, op2.variants.zOptimizzedHashOk);
+    break;
+  }
+  }
+  return false;
+}
+
+static void zOptimizzedHashError(struct zOptimizzedHashResult *rop, enum zBlockError op) {
+
+  rop->kind = Kind_zOptimizzedHashError;
+  rop->variants.zOptimizzedHashError = op;
+}
+
+static void zOptimizzedHashOk(struct zOptimizzedHashResult *rop, sail_fixed_bytes_32 op) {
+
+  rop->kind = Kind_zOptimizzedHashOk;
+  rop->variants.zOptimizzedHashOk = op;
+}
+
 static void COPY(zBlockBody)(struct zBlockBody *rop, const struct zBlockBody op) {
   rop->zblock_access_list = op.zblock_access_list;
   rop->ztransactions = op.ztransactions;
@@ -5632,40 +5376,181 @@ static bool EQUAL(zTxEnv)(struct zTxEnv op1, struct zTxEnv op2) {
   return EQUAL(zBlobHashes)(op1.zblob_hashes, op2.zblob_hashes) && EQUAL(u256)(op1.zgas_price, op2.zgas_price) && EQUAL(fixed_bytes_20)(op1.zorigin, op2.zorigin);
 }
 
-static void COPY(zBalNonceRun)(struct zBalNonceRun *rop, const struct zBalNonceRun op) {
-  rop->zcursor = op.zcursor;
-  rop->zmaximum = op.zmaximum;
+static void COPY(zBalStorageChangeEntry)(struct zBalStorageChangeEntry *rop, const struct zBalStorageChangeEntry op) {
+  rop->zindex = op.zindex;
+  rop->zslot = op.zslot;
+  rop->zvalue = op.zvalue;
 }
 
-static bool EQUAL(zBalNonceRun)(struct zBalNonceRun op1, struct zBalNonceRun op2) {
-  return (op1.zcursor == op2.zcursor) && (op1.zmaximum == op2.zmaximum);
+static bool EQUAL(zBalStorageChangeEntry)(struct zBalStorageChangeEntry op1, struct zBalStorageChangeEntry op2) {
+  return (op1.zindex == op2.zindex) && EQUAL(u256)(op1.zslot, op2.zslot) && EQUAL(u256)(op1.zvalue, op2.zvalue);
 }
 
-static void COPY(zBalContentCursor)(struct zBalContentCursor *rop, const struct zBalContentCursor op) {
-  rop->zcontent_len = op.zcontent_len;
-  rop->zcursor = op.zcursor;
+static void COPY(zBalNonceChangeEntry)(struct zBalNonceChangeEntry *rop, const struct zBalNonceChangeEntry op) {
+  rop->zindex = op.zindex;
+  rop->zvalue = op.zvalue;
 }
 
-static bool EQUAL(zBalContentCursor)(struct zBalContentCursor op1, struct zBalContentCursor op2) {
-  return (op1.zcontent_len == op2.zcontent_len) && (op1.zcursor == op2.zcursor);
+static bool EQUAL(zBalNonceChangeEntry)(struct zBalNonceChangeEntry op1, struct zBalNonceChangeEntry op2) {
+  return (op1.zindex == op2.zindex) && (op1.zvalue == op2.zvalue);
 }
 
-static void COPY(zBalContentCount)(struct zBalContentCount *rop, const struct zBalContentCount op) {
-  rop->zcontent_len = op.zcontent_len;
-  rop->zcount = op.zcount;
+static void COPY(zBalCodeChangeEntry)(struct zBalCodeChangeEntry *rop, const struct zBalCodeChangeEntry op) {
+  rop->zcode_hash = op.zcode_hash;
+  rop->zindex = op.zindex;
 }
 
-static bool EQUAL(zBalContentCount)(struct zBalContentCount op1, struct zBalContentCount op2) {
-  return (op1.zcontent_len == op2.zcontent_len) && (op1.zcount == op2.zcount);
+static bool EQUAL(zBalCodeChangeEntry)(struct zBalCodeChangeEntry op1, struct zBalCodeChangeEntry op2) {
+  return EQUAL(fixed_bytes_32)(op1.zcode_hash, op2.zcode_hash) && (op1.zindex == op2.zindex);
 }
 
-static void COPY(zBalAccountSizze)(struct zBalAccountSizze *rop, const struct zBalAccountSizze op) {
-  rop->zencoded_len = op.zencoded_len;
-  rop->zitem_count = op.zitem_count;
+static void COPY(zBalBalanceChangeEntry)(struct zBalBalanceChangeEntry *rop, const struct zBalBalanceChangeEntry op) {
+  rop->zindex = op.zindex;
+  rop->zvalue = op.zvalue;
 }
 
-static bool EQUAL(zBalAccountSizze)(struct zBalAccountSizze op1, struct zBalAccountSizze op2) {
-  return (op1.zencoded_len == op2.zencoded_len) && (op1.zitem_count == op2.zitem_count);
+static bool EQUAL(zBalBalanceChangeEntry)(struct zBalBalanceChangeEntry op1, struct zBalBalanceChangeEntry op2) {
+  return (op1.zindex == op2.zindex) && EQUAL(u256)(op1.zvalue, op2.zvalue);
+}
+
+static void CREATE(zBalIterEntry)(struct zBalIterEntry *op) {
+  op->kind = Kind_zBalAccount;
+}
+
+static void RECREATE(zBalIterEntry)(struct zBalIterEntry *op) {
+
+}
+
+static void KILL(zBalIterEntry)(struct zBalIterEntry *op) {
+
+}
+
+static void COPY(zBalIterEntry)(struct zBalIterEntry *rop, struct zBalIterEntry op) {
+  ;
+  rop->kind = op.kind;
+  switch (op.kind) {
+  case Kind_zBalAccount: {
+    rop->variants.zBalAccount = op.variants.zBalAccount;
+    break;
+  }
+  case Kind_zBalAccountEnd: {
+    rop->variants.zBalAccountEnd = op.variants.zBalAccountEnd;
+    break;
+  }
+  case Kind_zBalBalanceChange: {
+    rop->variants.zBalBalanceChange = op.variants.zBalBalanceChange;
+    break;
+  }
+  case Kind_zBalCodeChange: {
+    rop->variants.zBalCodeChange = op.variants.zBalCodeChange;
+    break;
+  }
+  case Kind_zBalEmpty: {
+    rop->variants.zBalEmpty = op.variants.zBalEmpty;
+    break;
+  }
+  case Kind_zBalNonceChange: {
+    rop->variants.zBalNonceChange = op.variants.zBalNonceChange;
+    break;
+  }
+  case Kind_zBalStorageChange: {
+    rop->variants.zBalStorageChange = op.variants.zBalStorageChange;
+    break;
+  }
+  case Kind_zBalStorageRead: {
+    rop->variants.zBalStorageRead = op.variants.zBalStorageRead;
+    break;
+  }
+  }
+}
+
+static bool EQUAL(zBalIterEntry)(struct zBalIterEntry op1, struct zBalIterEntry op2) {
+  if (op1.kind != op2.kind) {
+    return false;
+  }
+  switch (op1.kind) {
+  case Kind_zBalAccount: {
+    return EQUAL(fixed_bytes_20)(op1.variants.zBalAccount, op2.variants.zBalAccount);
+    break;
+  }
+  case Kind_zBalAccountEnd: {
+    return EQUAL(unit)(op1.variants.zBalAccountEnd, op2.variants.zBalAccountEnd);
+    break;
+  }
+  case Kind_zBalBalanceChange: {
+    return EQUAL(zBalBalanceChangeEntry)(op1.variants.zBalBalanceChange, op2.variants.zBalBalanceChange);
+    break;
+  }
+  case Kind_zBalCodeChange: {
+    return EQUAL(zBalCodeChangeEntry)(op1.variants.zBalCodeChange, op2.variants.zBalCodeChange);
+    break;
+  }
+  case Kind_zBalEmpty: {
+    return EQUAL(unit)(op1.variants.zBalEmpty, op2.variants.zBalEmpty);
+    break;
+  }
+  case Kind_zBalNonceChange: {
+    return EQUAL(zBalNonceChangeEntry)(op1.variants.zBalNonceChange, op2.variants.zBalNonceChange);
+    break;
+  }
+  case Kind_zBalStorageChange: {
+    return EQUAL(zBalStorageChangeEntry)(op1.variants.zBalStorageChange, op2.variants.zBalStorageChange);
+    break;
+  }
+  case Kind_zBalStorageRead: {
+    return EQUAL(u256)(op1.variants.zBalStorageRead, op2.variants.zBalStorageRead);
+    break;
+  }
+  }
+  return false;
+}
+
+static void zBalAccount(struct zBalIterEntry *rop, sail_fixed_bytes_20 op) {
+
+  rop->kind = Kind_zBalAccount;
+  rop->variants.zBalAccount = op;
+}
+
+static void zBalAccountEnd(struct zBalIterEntry *rop, unit op) {
+
+  rop->kind = Kind_zBalAccountEnd;
+  rop->variants.zBalAccountEnd = op;
+}
+
+static void zBalBalanceChange(struct zBalIterEntry *rop, struct zBalBalanceChangeEntry op) {
+
+  rop->kind = Kind_zBalBalanceChange;
+  rop->variants.zBalBalanceChange = op;
+}
+
+static void zBalCodeChange(struct zBalIterEntry *rop, struct zBalCodeChangeEntry op) {
+
+  rop->kind = Kind_zBalCodeChange;
+  rop->variants.zBalCodeChange = op;
+}
+
+static void zBalEmpty(struct zBalIterEntry *rop, unit op) {
+
+  rop->kind = Kind_zBalEmpty;
+  rop->variants.zBalEmpty = op;
+}
+
+static void zBalNonceChange(struct zBalIterEntry *rop, struct zBalNonceChangeEntry op) {
+
+  rop->kind = Kind_zBalNonceChange;
+  rop->variants.zBalNonceChange = op;
+}
+
+static void zBalStorageChange(struct zBalIterEntry *rop, struct zBalStorageChangeEntry op) {
+
+  rop->kind = Kind_zBalStorageChange;
+  rop->variants.zBalStorageChange = op;
+}
+
+static void zBalStorageRead(struct zBalIterEntry *rop, sail_u256 op) {
+
+  rop->kind = Kind_zBalStorageRead;
+  rop->variants.zBalStorageRead = op;
 }
 
 static void COPY(zAuthorizzation)(struct zAuthorizzation *rop, const struct zAuthorizzation op) {
@@ -5979,62 +5864,6 @@ static bool EQUAL(zAccountInfo)(struct zAccountInfo op1, struct zAccountInfo op2
   return EQUAL(u256)(op1.zbalance, op2.zbalance) && EQUAL(fixed_bytes_32)(op1.zcode_hash, op2.zcode_hash) && (op1.znonce == op2.znonce) && EQUAL(fixed_bytes_32)(op1.zstorage_root, op2.zstorage_root);
 }
 
-static void CREATE(zoptionzIRAccountInfozK)(struct zoptionzIRAccountInfozK *op) {
-  op->kind = Kind_zNonezIRAccountInfozK;
-}
-
-static void RECREATE(zoptionzIRAccountInfozK)(struct zoptionzIRAccountInfozK *op) {
-
-}
-
-static void KILL(zoptionzIRAccountInfozK)(struct zoptionzIRAccountInfozK *op) {
-
-}
-
-static void COPY(zoptionzIRAccountInfozK)(struct zoptionzIRAccountInfozK *rop, struct zoptionzIRAccountInfozK op) {
-  ;
-  rop->kind = op.kind;
-  switch (op.kind) {
-  case Kind_zNonezIRAccountInfozK: {
-    rop->variants.zNonezIRAccountInfozK = op.variants.zNonezIRAccountInfozK;
-    break;
-  }
-  case Kind_zSomezIRAccountInfozK: {
-    rop->variants.zSomezIRAccountInfozK = op.variants.zSomezIRAccountInfozK;
-    break;
-  }
-  }
-}
-
-static bool EQUAL(zoptionzIRAccountInfozK)(struct zoptionzIRAccountInfozK op1, struct zoptionzIRAccountInfozK op2) {
-  if (op1.kind != op2.kind) {
-    return false;
-  }
-  switch (op1.kind) {
-  case Kind_zNonezIRAccountInfozK: {
-    return EQUAL(unit)(op1.variants.zNonezIRAccountInfozK, op2.variants.zNonezIRAccountInfozK);
-    break;
-  }
-  case Kind_zSomezIRAccountInfozK: {
-    return EQUAL(zAccountInfo)(op1.variants.zSomezIRAccountInfozK, op2.variants.zSomezIRAccountInfozK);
-    break;
-  }
-  }
-  return false;
-}
-
-static void zNonezIRAccountInfozK(struct zoptionzIRAccountInfozK *rop, unit op) {
-
-  rop->kind = Kind_zNonezIRAccountInfozK;
-  rop->variants.zNonezIRAccountInfozK = op;
-}
-
-static void zSomezIRAccountInfozK(struct zoptionzIRAccountInfozK *rop, struct zAccountInfo op) {
-
-  rop->kind = Kind_zSomezIRAccountInfozK;
-  rop->variants.zSomezIRAccountInfozK = op;
-}
-
 static void COPY(zAccount)(struct zAccount *rop, const struct zAccount op) {
   rop->zcreated = op.zcreated;
   rop->zinfo = op.zinfo;
@@ -6047,60 +5876,60 @@ static bool EQUAL(zAccount)(struct zAccount op1, struct zAccount op2) {
   return EQUAL(bool)(op1.zcreated, op2.zcreated) && EQUAL(zAccountInfo)(op1.zinfo, op2.zinfo) && EQUAL(bool)(op1.zpresent, op2.zpresent) && EQUAL(bool)(op1.zselfdestructed, op2.zselfdestructed) && EQUAL(bool)(op1.zstorage_cleared, op2.zstorage_cleared);
 }
 
-static void CREATE(zoptionzIRAccountzK)(struct zoptionzIRAccountzK *op) {
-  op->kind = Kind_zNonezIRAccountzK;
+static void CREATE(zOptimizzedAccountResult)(struct zOptimizzedAccountResult *op) {
+  op->kind = Kind_zOptimizzedAccountError;
 }
 
-static void RECREATE(zoptionzIRAccountzK)(struct zoptionzIRAccountzK *op) {
-
-}
-
-static void KILL(zoptionzIRAccountzK)(struct zoptionzIRAccountzK *op) {
+static void RECREATE(zOptimizzedAccountResult)(struct zOptimizzedAccountResult *op) {
 
 }
 
-static void COPY(zoptionzIRAccountzK)(struct zoptionzIRAccountzK *rop, struct zoptionzIRAccountzK op) {
+static void KILL(zOptimizzedAccountResult)(struct zOptimizzedAccountResult *op) {
+
+}
+
+static void COPY(zOptimizzedAccountResult)(struct zOptimizzedAccountResult *rop, struct zOptimizzedAccountResult op) {
   ;
   rop->kind = op.kind;
   switch (op.kind) {
-  case Kind_zNonezIRAccountzK: {
-    rop->variants.zNonezIRAccountzK = op.variants.zNonezIRAccountzK;
+  case Kind_zOptimizzedAccountError: {
+    rop->variants.zOptimizzedAccountError = op.variants.zOptimizzedAccountError;
     break;
   }
-  case Kind_zSomezIRAccountzK: {
-    rop->variants.zSomezIRAccountzK = op.variants.zSomezIRAccountzK;
+  case Kind_zOptimizzedAccountOk: {
+    rop->variants.zOptimizzedAccountOk = op.variants.zOptimizzedAccountOk;
     break;
   }
   }
 }
 
-static bool EQUAL(zoptionzIRAccountzK)(struct zoptionzIRAccountzK op1, struct zoptionzIRAccountzK op2) {
+static bool EQUAL(zOptimizzedAccountResult)(struct zOptimizzedAccountResult op1, struct zOptimizzedAccountResult op2) {
   if (op1.kind != op2.kind) {
     return false;
   }
   switch (op1.kind) {
-  case Kind_zNonezIRAccountzK: {
-    return EQUAL(unit)(op1.variants.zNonezIRAccountzK, op2.variants.zNonezIRAccountzK);
+  case Kind_zOptimizzedAccountError: {
+    return EQUAL(zBlockError)(op1.variants.zOptimizzedAccountError, op2.variants.zOptimizzedAccountError);
     break;
   }
-  case Kind_zSomezIRAccountzK: {
-    return EQUAL(zAccount)(op1.variants.zSomezIRAccountzK, op2.variants.zSomezIRAccountzK);
+  case Kind_zOptimizzedAccountOk: {
+    return EQUAL(zAccount)(op1.variants.zOptimizzedAccountOk, op2.variants.zOptimizzedAccountOk);
     break;
   }
   }
   return false;
 }
 
-static void zNonezIRAccountzK(struct zoptionzIRAccountzK *rop, unit op) {
+static void zOptimizzedAccountError(struct zOptimizzedAccountResult *rop, enum zBlockError op) {
 
-  rop->kind = Kind_zNonezIRAccountzK;
-  rop->variants.zNonezIRAccountzK = op;
+  rop->kind = Kind_zOptimizzedAccountError;
+  rop->variants.zOptimizzedAccountError = op;
 }
 
-static void zSomezIRAccountzK(struct zoptionzIRAccountzK *rop, struct zAccount op) {
+static void zOptimizzedAccountOk(struct zOptimizzedAccountResult *rop, struct zAccount op) {
 
-  rop->kind = Kind_zSomezIRAccountzK;
-  rop->variants.zSomezIRAccountzK = op;
+  rop->kind = Kind_zOptimizzedAccountOk;
+  rop->variants.zOptimizzedAccountOk = op;
 }
 
 static void COPY(zAcctValue)(struct zAcctValue *rop, const struct zAcctValue op) {
@@ -6121,60 +5950,69 @@ static bool EQUAL(zAcctEntry)(struct zAcctEntry op1, struct zAcctEntry op2) {
   return EQUAL(fixed_bytes_20)(op1.zaddr, op2.zaddr) && EQUAL(zAcctValue)(op1.zvalue, op2.zvalue);
 }
 
-static void CREATE(zoptionzIRAcctEntryzK)(struct zoptionzIRAcctEntryzK *op) {
-  op->kind = Kind_zNonezIRAcctEntryzK;
+static void COPY(zAcctTrieEntry)(struct zAcctTrieEntry *rop, const struct zAcctTrieEntry op) {
+  rop->zaddress_hash = op.zaddress_hash;
+  rop->zentry = op.zentry;
 }
 
-static void RECREATE(zoptionzIRAcctEntryzK)(struct zoptionzIRAcctEntryzK *op) {
+static bool EQUAL(zAcctTrieEntry)(struct zAcctTrieEntry op1, struct zAcctTrieEntry op2) {
+  return EQUAL(fixed_bytes_32)(op1.zaddress_hash, op2.zaddress_hash) && EQUAL(zAcctEntry)(op1.zentry, op2.zentry);
+}
+
+static void CREATE(zoptionzIRAcctTrieEntryzK)(struct zoptionzIRAcctTrieEntryzK *op) {
+  op->kind = Kind_zNonezIRAcctTrieEntryzK;
+}
+
+static void RECREATE(zoptionzIRAcctTrieEntryzK)(struct zoptionzIRAcctTrieEntryzK *op) {
 
 }
 
-static void KILL(zoptionzIRAcctEntryzK)(struct zoptionzIRAcctEntryzK *op) {
+static void KILL(zoptionzIRAcctTrieEntryzK)(struct zoptionzIRAcctTrieEntryzK *op) {
 
 }
 
-static void COPY(zoptionzIRAcctEntryzK)(struct zoptionzIRAcctEntryzK *rop, struct zoptionzIRAcctEntryzK op) {
+static void COPY(zoptionzIRAcctTrieEntryzK)(struct zoptionzIRAcctTrieEntryzK *rop, struct zoptionzIRAcctTrieEntryzK op) {
   ;
   rop->kind = op.kind;
   switch (op.kind) {
-  case Kind_zNonezIRAcctEntryzK: {
-    rop->variants.zNonezIRAcctEntryzK = op.variants.zNonezIRAcctEntryzK;
+  case Kind_zNonezIRAcctTrieEntryzK: {
+    rop->variants.zNonezIRAcctTrieEntryzK = op.variants.zNonezIRAcctTrieEntryzK;
     break;
   }
-  case Kind_zSomezIRAcctEntryzK: {
-    rop->variants.zSomezIRAcctEntryzK = op.variants.zSomezIRAcctEntryzK;
+  case Kind_zSomezIRAcctTrieEntryzK: {
+    rop->variants.zSomezIRAcctTrieEntryzK = op.variants.zSomezIRAcctTrieEntryzK;
     break;
   }
   }
 }
 
-static bool EQUAL(zoptionzIRAcctEntryzK)(struct zoptionzIRAcctEntryzK op1, struct zoptionzIRAcctEntryzK op2) {
+static bool EQUAL(zoptionzIRAcctTrieEntryzK)(struct zoptionzIRAcctTrieEntryzK op1, struct zoptionzIRAcctTrieEntryzK op2) {
   if (op1.kind != op2.kind) {
     return false;
   }
   switch (op1.kind) {
-  case Kind_zNonezIRAcctEntryzK: {
-    return EQUAL(unit)(op1.variants.zNonezIRAcctEntryzK, op2.variants.zNonezIRAcctEntryzK);
+  case Kind_zNonezIRAcctTrieEntryzK: {
+    return EQUAL(unit)(op1.variants.zNonezIRAcctTrieEntryzK, op2.variants.zNonezIRAcctTrieEntryzK);
     break;
   }
-  case Kind_zSomezIRAcctEntryzK: {
-    return EQUAL(zAcctEntry)(op1.variants.zSomezIRAcctEntryzK, op2.variants.zSomezIRAcctEntryzK);
+  case Kind_zSomezIRAcctTrieEntryzK: {
+    return EQUAL(zAcctTrieEntry)(op1.variants.zSomezIRAcctTrieEntryzK, op2.variants.zSomezIRAcctTrieEntryzK);
     break;
   }
   }
   return false;
 }
 
-static void zNonezIRAcctEntryzK(struct zoptionzIRAcctEntryzK *rop, unit op) {
+static void zNonezIRAcctTrieEntryzK(struct zoptionzIRAcctTrieEntryzK *rop, unit op) {
 
-  rop->kind = Kind_zNonezIRAcctEntryzK;
-  rop->variants.zNonezIRAcctEntryzK = op;
+  rop->kind = Kind_zNonezIRAcctTrieEntryzK;
+  rop->variants.zNonezIRAcctTrieEntryzK = op;
 }
 
-static void zSomezIRAcctEntryzK(struct zoptionzIRAcctEntryzK *rop, struct zAcctEntry op) {
+static void zSomezIRAcctTrieEntryzK(struct zoptionzIRAcctTrieEntryzK *rop, struct zAcctTrieEntry op) {
 
-  rop->kind = Kind_zSomezIRAcctEntryzK;
-  rop->variants.zSomezIRAcctEntryzK = op;
+  rop->kind = Kind_zSomezIRAcctTrieEntryzK;
+  rop->variants.zSomezIRAcctTrieEntryzK = op;
 }
 
 static void COPY(zAccessListDecode)(struct zAccessListDecode *rop, const struct zAccessListDecode op) {
@@ -6394,13 +6232,13 @@ static bool EQUAL(ztuple_z8z5boolzCz0z5u64zCz0z5u64z9)(struct ztuple_z8z5boolzCz
   return EQUAL(bool)(op1.ztup0, op2.ztup0) && (op1.ztup1 == op2.ztup1) && (op1.ztup2 == op2.ztup2);
 }
 
-static void COPY(ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9)(struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 *rop, const struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 op) {
+static void COPY(ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9)(struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 *rop, const struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 op) {
   rop->ztup0 = op.ztup0;
   rop->ztup1 = op.ztup1;
 }
 
-static bool EQUAL(ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9)(struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 op1, struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzRlpCursorz9 op2) {
-  return EQUAL(zRlpFieldRef)(op1.ztup0, op2.ztup0) && EQUAL(zRlpCursor)(op1.ztup1, op2.ztup1);
+static bool EQUAL(ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9)(struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 op1, struct ztuple_z8z5structz0zzRlpFieldRefzCz0z5structz0zzByteSliceFieldsz9 op2) {
+  return EQUAL(zRlpFieldRef)(op1.ztup0, op2.ztup0) && EQUAL(zByteSliceFields)(op1.ztup1, op2.ztup1);
 }
 
 static void COPY(ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9)(struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 *rop, const struct ztuple_z8z5listz8z5structz0zz__sail_c_repr_fixed_bytesz820z9z9zCz0z5listz8z5structz0zzStorageKeyz9zCz0z5u64zCz0z5u64z9 op) {
@@ -6448,15 +6286,6 @@ static void KILL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(str
 
 static bool EQUAL(ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9)(struct ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9 op1, struct ztuple_z8z5listz8z5structz0zzAuthorizzzzationz9zCz0z5u64z9 op2) {
   return EQUAL(zz5listz8z5structz0zzAuthorizzzzationz9)(op1.ztup0, op2.ztup0) && (op1.ztup1 == op2.ztup1);
-}
-
-static void COPY(ztuple_z8z5boolzCz0z5structz0zzTriePathz9)(struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 *rop, const struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 op) {
-  rop->ztup0 = op.ztup0;
-  rop->ztup1 = op.ztup1;
-}
-
-static bool EQUAL(ztuple_z8z5boolzCz0z5structz0zzTriePathz9)(struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 op1, struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 op2) {
-  return EQUAL(bool)(op1.ztup0, op2.ztup0) && EQUAL(zTriePath)(op1.ztup1, op2.ztup1);
 }
 
 static void COPY(ztuple_z8z5structz0zzMemoryRangeFieldszCz0z5structz0zzMemoryRangeFieldsz9)(struct ztuple_z8z5structz0zzMemoryRangeFieldszCz0z5structz0zzMemoryRangeFieldsz9 *rop, const struct ztuple_z8z5structz0zzMemoryRangeFieldszCz0z5structz0zzMemoryRangeFieldsz9 op) {
@@ -6566,27 +6395,6 @@ static bool EQUAL(ztuple_z8z5u64zCz0z5u64z9)(struct ztuple_z8z5u64zCz0z5u64z9 op
   return (op1.ztup0 == op2.ztup0) && (op1.ztup1 == op2.ztup1);
 }
 
-static void COPY(ztuple_z8z5u64zCz0z5unionz0zzastz9)(struct ztuple_z8z5u64zCz0z5unionz0zzastz9 *rop, const struct ztuple_z8z5u64zCz0z5unionz0zzastz9 op) {
-  rop->ztup0 = op.ztup0;
-  COPY(zast)(&rop->ztup1, op.ztup1);
-}
-
-static void CREATE(ztuple_z8z5u64zCz0z5unionz0zzastz9)(struct ztuple_z8z5u64zCz0z5unionz0zzastz9 *op) {
-  CREATE(zast)(&op->ztup1);
-}
-
-static void RECREATE(ztuple_z8z5u64zCz0z5unionz0zzastz9)(struct ztuple_z8z5u64zCz0z5unionz0zzastz9 *op) {
-  RECREATE(zast)(&op->ztup1);
-}
-
-static void KILL(ztuple_z8z5u64zCz0z5unionz0zzastz9)(struct ztuple_z8z5u64zCz0z5unionz0zzastz9 *op) {
-  KILL(zast)(&op->ztup1);
-}
-
-static bool EQUAL(ztuple_z8z5u64zCz0z5unionz0zzastz9)(struct ztuple_z8z5u64zCz0z5unionz0zzastz9 op1, struct ztuple_z8z5u64zCz0z5unionz0zzastz9 op2) {
-  return (op1.ztup0 == op2.ztup0) && EQUAL(zast)(op1.ztup1, op2.ztup1);
-}
-
 static void CREATE(zz5vecz8z5u64z9)(zz5vecz8z5u64z9 *rop) {
   rop->len = 0;
   rop->data = NULL;
@@ -6685,6 +6493,15 @@ static bool EQUAL(ztuple_z8z5structz0zz__sail_c_repr_u256zCz0z5structz0zz__sail_
   return EQUAL(u256)(op1.ztup0, op2.ztup0) && EQUAL(u256)(op1.ztup1, op2.ztup1);
 }
 
+static void COPY(ztuple_z8z5boolzCz0z5structz0zzTriePathz9)(struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 *rop, const struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 op) {
+  rop->ztup0 = op.ztup0;
+  rop->ztup1 = op.ztup1;
+}
+
+static bool EQUAL(ztuple_z8z5boolzCz0z5structz0zzTriePathz9)(struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 op1, struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 op2) {
+  return EQUAL(bool)(op1.ztup0, op2.ztup0) && EQUAL(zTriePath)(op1.ztup1, op2.ztup1);
+}
+
 static void COPY(ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9)(struct ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9 *rop, const struct ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9 op) {
   COPY(zTrieUpdate)(&rop->ztup0, op.ztup0);
   rop->ztup1 = op.ztup1;
@@ -6728,27 +6545,6 @@ static void KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilder
 
 static bool EQUAL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(struct ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9 op1, struct ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9 op2) {
   return EQUAL(zTrieBranchFrame)(op1.ztup0, op2.ztup0) && EQUAL(zTrieBuilder)(op1.ztup1, op2.ztup1);
-}
-
-static void COPY(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(struct ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9 *rop, const struct ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9 op) {
-  COPY(zRlpIndexItem)(&rop->ztup0, op.ztup0);
-  rop->ztup1 = op.ztup1;
-}
-
-static void CREATE(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(struct ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9 *op) {
-  CREATE(zRlpIndexItem)(&op->ztup0);
-}
-
-static void RECREATE(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(struct ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9 *op) {
-  RECREATE(zRlpIndexItem)(&op->ztup0);
-}
-
-static void KILL(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(struct ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9 *op) {
-  KILL(zRlpIndexItem)(&op->ztup0);
-}
-
-static bool EQUAL(ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9)(struct ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9 op1, struct ztuple_z8z5structz0zzRlpIndexItemzCz0z5structz0zzRlpIndexCursorz9 op2) {
-  return EQUAL(zRlpIndexItem)(op1.ztup0, op2.ztup0) && EQUAL(zRlpIndexCursor)(op1.ztup1, op2.ztup1);
 }
 
 static void COPY(ztuple_z8z5structz0zzTrieItemSinkzCz0z5structz0zzTrieUpdateCursorz9)(struct ztuple_z8z5structz0zzTrieItemSinkzCz0z5structz0zzTrieUpdateCursorz9 *rop, const struct ztuple_z8z5structz0zzTrieItemSinkzCz0z5structz0zzTrieUpdateCursorz9 op) {
@@ -6800,66 +6596,6 @@ static void COPY(ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzConta
 
 static bool EQUAL(ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9)(struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 op1, struct ztuple_z8z5structz0zzByteSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 op2) {
   return EQUAL(zByteSliceFields)(op1.ztup0, op2.ztup0) && EQUAL(zSszzContainerCursor)(op1.ztup1, op2.ztup1);
-}
-
-static void CREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9)(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 *rop) { *rop = NULL; }
-
-static void internal_inc_zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 l) {
-  if (l == NULL) return;
-  l->rc += 1;
-}
-
-static void internal_dec_zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 l) {
-  if (l == NULL) return;
-  l->rc -= 1;
-}
-
-static void KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9)(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 *rop) {
-  if (*rop == NULL) return;
-  if ((*rop)->rc >= 1) {
-    (*rop)->rc -= 1;
-  }
-  zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 node = *rop;
-  while (node != NULL && node->rc == 0) {
-    zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 next = node->tl;
-    sail_free(node);
-    node = next;
-    internal_dec_zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9(node);
-  }
-}
-
-static void RECREATE(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9)(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 *rop) {
-  KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9)(rop);
-  *rop = NULL;
-}
-
-static void COPY(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9)(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 *rop, zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 op) {
-  internal_inc_zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9(op);
-  KILL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9)(rop);
-  *rop = op;
-}
-
-static void zconsz3z5structz0zz__sail_c_repr_fixed_bytesz832z9(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 *rop, sail_fixed_bytes_32 x, zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 xs) {
-  bool same = *rop == xs;
-  *rop = sail_new(struct node_zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9);
-  (*rop)->rc = 1;
-  (*rop)->hd = x;
-  if (!same) internal_inc_zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9(xs);
-  (*rop)->tl = xs;
-}
-
-static sail_fixed_bytes_32 pick_fixed_bytes_32(const zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 xs) {
-  return xs->hd;
-}
-
-static bool EQUAL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9)(const zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 op1, const zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 op2) {
-  if (op1 == NULL && op2 == NULL) { return true; };
-  if (op1 == NULL || op2 == NULL) { return false; };
-  return EQUAL(fixed_bytes_32)(op1->hd, op2->hd) && EQUAL(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9)(op1->tl, op2->tl);
-}
-
-static void UNDEFINED(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9)(zz5listz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 *rop, sail_fixed_bytes_32 u) {
-  *rop = NULL;
 }
 
 struct zexception *current_exception = NULL;
@@ -6971,6 +6707,78 @@ uint64_t zSCOPE_HTR_BYTES_ROOT;
 
 
 uint64_t zSCOPE_HTR_MERKLE_PADDING;
+
+
+uint64_t zSCOPE_ACCOUNT_LOAD;
+
+
+uint64_t zSCOPE_ACCOUNT_TX_LOOKUP;
+
+
+uint64_t zSCOPE_ACCOUNT_BLOCK_LOOKUP;
+
+
+uint64_t zSCOPE_ACCOUNT_WITNESS;
+
+
+uint64_t zSCOPE_STORAGE_LOAD;
+
+
+uint64_t zSCOPE_STORAGE_TX_LOOKUP;
+
+
+uint64_t zSCOPE_STORAGE_BLOCK_LOOKUP;
+
+
+uint64_t zSCOPE_STORAGE_WITNESS;
+
+
+uint64_t zSCOPE_BAL_ACCOUNT_TOUCH;
+
+
+uint64_t zSCOPE_BAL_STORAGE_READ;
+
+
+uint64_t zSCOPE_INDEX_WITNESS_NODES;
+
+
+uint64_t zSCOPE_INDEX_WITNESS_CODES;
+
+
+uint64_t zSCOPE_INDEX_WITNESS_HEADERS;
+
+
+uint64_t zSCOPE_REQUEST_WITHDRAWALS;
+
+
+uint64_t zSCOPE_REQUEST_CONSOLIDATIONS;
+
+
+uint64_t zSCOPE_REQUEST_BUILDER_DEPOSITS;
+
+
+uint64_t zSCOPE_REQUEST_BUILDER_EXITS;
+
+
+uint64_t zSCOPE_ACCOUNT_MUTATION;
+
+
+uint64_t zSCOPE_STORAGE_MUTATION;
+
+
+uint64_t zSCOPE_TX_MERGE;
+
+
+uint64_t zSCOPE_TX_MERGE_ACCOUNTS;
+
+
+uint64_t zSCOPE_TX_MERGE_STORAGE;
+
+
+uint64_t zSCOPE_SYSTEM_CALL_INTERPRET;
+
+
+uint64_t zSCOPE_SYSTEM_CALL_MERGE;
 
 
 struct zMemoryRangeFields zEMPTY_MEMORY_RANGE;
@@ -7111,12 +6919,6 @@ struct zExecutionRequests zEMPTY_EXECUTION_REQUESTS;
 struct zMessage zDEFAULT_MESSAGE;
 
 
-struct zFrameCheckpoint zDEFAULT_FRAME_CHECKPOINT;
-
-
-struct zFrameContinuation zDEFAULT_FRAME_CONTINUATION;
-
-
 // register zscratch_arena
 struct zByteSliceFields zscratch_arena;
 
@@ -7180,11 +6982,8 @@ struct zBlockHeader zk_header;
 // register zk_tx
 struct zTxEnv zk_tx;
 
-uint64_t zMPT_HASH_LENGTH;
-
-
-uint64_t zHEX_PREFIX_MAX_LENGTH;
-
+// register zk_block_access_index
+uint64_t zk_block_access_index;
 
 // register zpc
 uint64_t zpc;
@@ -7212,12 +7011,6 @@ uint64_t zcall_depth;
 
 uint64_t zDEPTH_LIMIT;
 
-
-// register zframe_stack
-zz5vecz8z5unionz0zzFrameContinuationz9 zframe_stack;
-
-// register zframe_stack_top
-uint64_t zframe_stack_top;
 
 // register zframe_code
 struct zCode zframe_code;
@@ -7591,6 +7384,12 @@ uint64_t zAMSTERDAM_TX_MAX_GAS;
 struct zAmsterdamAuthorizzationState zEMPTY_AMSTERDAM_AUTHORIZATION_STATE;
 
 
+uint64_t zHEX_PREFIX_MAX_LENGTH;
+
+
+uint64_t zMPT_HASH_LENGTH;
+
+
 uint64_t zSSZ_BODY;
 
 
@@ -7862,9 +7661,6 @@ uint64_t zDEPOSIT_INDEX_DATA;
 
 
 uint64_t zDEPOSIT_INDEX_LENGTH;
-
-
-uint64_t zBAL_RLP_ZERO;
 
 
 uint64_t zPRE_MERGE_BLOCK_REWARD;

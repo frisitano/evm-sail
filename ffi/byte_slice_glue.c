@@ -235,6 +235,20 @@ void scratch_store_slice(struct zByteRegionResult *result,
                        accepted ? off_value + byte_slice_len(&slice) : 0);
 }
 
+void scratch_store_address(struct zByteRegionResult *result,
+                           EVMSAIL_BYTE_QUANTITY_PARAM(off),
+                           sail_address data) {
+  uint64_t off_value = evmsail_byte_quantity_value(off);
+  uint8_t *out = scratch_prepare(off_value, 20);
+  if (!out) {
+    scratch_result_value(result, false, 0);
+    return;
+  }
+  memcpy(out, data.bytes, 20);
+  bool accepted = scratch_commit(off_value, 20);
+  scratch_result_value(result, accepted, accepted ? off_value + 20 : 0);
+}
+
 void scratch_store_b256(struct zByteRegionResult *result,
                         EVMSAIL_BYTE_QUANTITY_PARAM(off), sail_b256 data,
                         uint64_t len) {
@@ -243,14 +257,12 @@ void scratch_store_b256(struct zByteRegionResult *result,
     scratch_result_value(result, false, 0);
     return;
   }
-  uint8_t bytes[32];
-  evmsail_hash_to_be_bytes(bytes, data);
   uint8_t *out = scratch_prepare(off_value, len);
   if (len != 0 && !out) {
     scratch_result_value(result, false, 0);
     return;
   }
-  if (len != 0) memcpy(out, bytes, (size_t)len);
+  if (len != 0) memcpy(out, data.bytes, (size_t)len);
   bool accepted = scratch_commit(off_value, len);
   scratch_result_value(result, accepted, accepted ? off_value + len : 0);
 }

@@ -97,12 +97,16 @@ function system_call(tgt : address, input : hash) -> unit = {
         let input_slice = memory_byte_slice(input_range.off, input_range.len);
         let parent_memory = memory_frame_enter();
         let checkpoint = enter_system_call_frame(tgt, input_slice);
+        cycle_scope_start(SCOPE_SYSTEM_CALL_INTERPRET);
         let _ = interpret();
+        cycle_scope_end(SCOPE_SYSTEM_CALL_INTERPRET);
         memory_frame_leave(parent_memory);
         if not_bool(frame_succeeded()) then {
             k_revert(checkpoint)
         };
-        k_tx_merge() /* system call is a top-level boundary: merge its storage */
+        cycle_scope_start(SCOPE_SYSTEM_CALL_MERGE);
+        k_tx_merge(); /* system call is a top-level boundary: merge its storage */
+        cycle_scope_end(SCOPE_SYSTEM_CALL_MERGE)
     }
 }
 
@@ -126,18 +130,24 @@ function system_call_checked(tgt : address) -> ByteSlice = {
         memory_reset();
         let parent_memory = memory_frame_enter();
         let checkpoint = enter_system_call_frame(tgt, EMPTY_SLICE);
+        cycle_scope_start(SCOPE_SYSTEM_CALL_INTERPRET);
         let output = interpret();
+        cycle_scope_end(SCOPE_SYSTEM_CALL_INTERPRET);
         if frame_succeeded() then {
             let start = scratch_begin();
             scratch_push_slice(output);
             let result = scratch_finish(start);
             memory_frame_leave(parent_memory);
+            cycle_scope_start(SCOPE_SYSTEM_CALL_MERGE);
             k_tx_merge(); /* system call is a top-level boundary: merge its storage */
+            cycle_scope_end(SCOPE_SYSTEM_CALL_MERGE);
             result
         } else {
             memory_frame_leave(parent_memory);
             k_revert(checkpoint);
+            cycle_scope_start(SCOPE_SYSTEM_CALL_MERGE);
             k_tx_merge();
+            cycle_scope_end(SCOPE_SYSTEM_CALL_MERGE);
             throw InvalidBlock(ExecutionInvalid)
         }
     }
@@ -200,18 +210,26 @@ function append_deposit_logs(logs : list(LogEntry)) -> unit =
     consolidation (EIP-7251), and, from Amsterdam, builder deposit and
     builder exit (EIP-8282). */
 function collect_execution_requests(deposits : ByteSlice) -> ExecutionRequests = {
+    cycle_scope_start(SCOPE_REQUEST_WITHDRAWALS);
     let withdrawals = system_call_checked(WITHDRAWAL_REQUEST_ADDR);
+    cycle_scope_end(SCOPE_REQUEST_WITHDRAWALS);
+    cycle_scope_start(SCOPE_REQUEST_CONSOLIDATIONS);
     let consolidations = system_call_checked(CONSOLIDATION_REQUEST_ADDR);
+    cycle_scope_end(SCOPE_REQUEST_CONSOLIDATIONS);
+    cycle_scope_start(SCOPE_REQUEST_BUILDER_DEPOSITS);
     let builder_deposits : ByteSlice = if k_fork >= Amsterdam then {
             system_call_checked(BUILDER_DEPOSIT_REQUEST_ADDR)
         } else {
             EMPTY_SLICE
         };
+    cycle_scope_end(SCOPE_REQUEST_BUILDER_DEPOSITS);
+    cycle_scope_start(SCOPE_REQUEST_BUILDER_EXITS);
     let builder_exits : ByteSlice = if k_fork >= Amsterdam then {
             system_call_checked(BUILDER_EXIT_REQUEST_ADDR)
         } else {
             EMPTY_SLICE
         };
+    cycle_scope_end(SCOPE_REQUEST_BUILDER_EXITS);
     struct {
         deposits = deposits,
         withdrawals = withdrawals,

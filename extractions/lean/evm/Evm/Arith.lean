@@ -42,20 +42,21 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
-/- Type quantifiers: k_ex414110_ : Int, k_ex414109_ : Int -/
+/- Type quantifiers: k_ex412974_ : Int, k_ex412973_ : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
   if ((n ≥b 0) : Bool)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
-/- Type quantifiers: k_ex414112_ : Int, k_ex414111_ : Int -/
+/- Type quantifiers: k_ex412976_ : Int, k_ex412975_ : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
   if ((n ≥b 0) : Bool)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
-/- Type quantifiers: k_ex414119_ : Int, k_ex414118_ : Int -/
+/- Type quantifiers: k_ex412983_ : Int, k_ex412982_ : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (((n <b 0) && (m >b 0)) : Bool)
   then ((Int.tdiv (n +i 1) m) -i 1)
@@ -64,7 +65,7 @@ def fdiv_int (n : Int) (m : Int) : Int :=
     then ((Int.tdiv (n - 1) m) -i 1)
     else (Int.tdiv n m))
 
-/- Type quantifiers: k_ex414121_ : Int, k_ex414120_ : Int -/
+/- Type quantifiers: k_ex412985_ : Int, k_ex412984_ : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
   (n -i (m *i (fdiv_int n m)))
 

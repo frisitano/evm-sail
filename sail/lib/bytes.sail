@@ -15,21 +15,3 @@ function word_to_bytes32(value : word) -> list(byte) = {
     };
     out
 }
-
-/*! The 32-byte big-endian encoding of a hash. */
-function hash_to_bytes32(bytes : hash) -> list(byte) = {
-    var out : list(byte) = [||];
-    foreach (k from 0 to 31) {
-        out = bytes[k] :: out
-    };
-    out
-}
-
-/*! The 20-byte big-endian encoding of an address. */
-function address_to_bytes(bytes : address) -> list(byte) = {
-    var out : list(byte) = [||];
-    foreach (k from 0 to 19) {
-        out = bytes[k] :: out
-    };
-    out
-}

@@ -35,9 +35,9 @@ function bloom_set_bit(bloom : LogsBloom, bit_to_set : bloom_bit_index) -> LogsB
 /*! Adds a hashed bloom entry: three bits from its KECCAK-256. */
 function bloom_add_entry_hash(bloom : LogsBloom, h : hash) -> LogsBloom = {
     let bytes = h;
-    var out = bloom_set_bit(bloom, unsigned(append(bytes[31][2 .. 0], bytes[30])));
-    out = bloom_set_bit(out, unsigned(append(bytes[29][2 .. 0], bytes[28])));
-    out = bloom_set_bit(out, unsigned(append(bytes[27][2 .. 0], bytes[26])));
+    var out = bloom_set_bit(bloom, unsigned(append(bytes[0][2 .. 0], bytes[1])));
+    out = bloom_set_bit(out, unsigned(append(bytes[2][2 .. 0], bytes[3])));
+    out = bloom_set_bit(out, unsigned(append(bytes[4][2 .. 0], bytes[5])));
     out
 }
 

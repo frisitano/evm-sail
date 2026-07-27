@@ -40,6 +40,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # State: the transaction lifecycle
 

@@ -70,17 +70,43 @@ duplicating instructions elsewhere.
   and fused source hashers are gone. Everything else,
   including the former C fast-path hooks (`keccak256_word`,
   `keccak256_address`, `sha256_pair`), is a pure Sail body compiled and
-  executed directly. SSZ decoding reads only from the single input
-  `ByteSlice`; the old byte-at-a-time `ssz_src_*` oracle no longer exists. The
-  dormant one-call C versions in
-  `ffi/host_crypto.c` (shape-matching ones only) are candidates for future
-  link-time override (weak-stub mechanism, not yet wired). The old `sail/c/*.sail` extern-binding menu and the
+  executed directly. Fallible optimized-only C refinements return explicit
+  `Optimized*Result` unions; thin Sail wrappers translate their error variants
+  into `InvalidBlock` throws, so C never mutates generated exception globals
+  and the failure relation remains visible to proof extraction. SSZ decoding
+  reads only from the single input
+  `ByteSlice`; the old byte-at-a-time `ssz_src_*` oracle no longer exists.
+  `ffi/hash_glue.c`, `ffi/htr_glue.c`, and `ffi/precompiles.c` call the
+  `zkvm_accelerators.h` interface directly; the former `host_crypto.c`
+  forwarding layer has been removed.
+  `ffi/htr_glue.c` is a narrower optimized-C refinement: the
+  `c_optimized.sail` splice replaces the complete
+  `htr_new_payload_request` operation with one pure C call that consumes the
+  validated `StatelessInputRef` slices directly. Standard C and Lean/Coq
+  extraction retain the explicit equations in `sail/lib/htr.sail`, so this
+  optimization is not a proof axiom. The optimized implementation currently
+  stages 32-byte leaves and 64-byte hash pairs locally. A raw-pointer input
+  experiment saved only about 0.009% of whole-program ZisK steps and was
+  rejected in favour of the validated-reference boundary;
+  `zkvm_accelerators.h` remains unchanged.
+  Optimized C also injects the header-only `ffi/word_bytes_glue.h`
+  refinements for fixed hash/address ↔ native-word conversions. Standard C
+  and proof extraction retain the direct canonical-byte concatenation and
+  fixed-slice endian equations in `sail/prelude.sail`; neither standard nor
+  optimized builds use temporary reversal vectors.
+  The old `sail/c/*.sail` extern-binding menu and the
   `EVM_BACKEND=spec|build` project variable were deleted (this change).
 - `ffi/` contains native C backends for performance-sensitive host structures:
   memory/generic byte slices/output storage, the Sail-cursor-owned executor
-  scratch arena, `state_db.c` for accounts and
-  persistent storage cache/update rows, `transient_storage.c` for transient
-  storage, the content-addressed code and packed JUMPDEST arenas, node DB,
+  scratch arena, `state_db.c` for accounts, persistent storage cache/update
+  rows, and the EIP-7928 recorder. The BAL recorder uses distinct keyed hash
+  tables for storage reads `(address, slot)` and storage changes
+  `(address, slot, block_access_index)` plus field changes keyed by
+  `(address, block_access_index)`. It sorts the dense rows once and exposes one
+  account-delimited event stream; canonical RLP cursors, not the host stream,
+  drive validation and enforce the address-plus-storage-key item limit.
+  `transient_storage.c` handles transient storage; the remaining backends
+  provide the content-addressed code and packed JUMPDEST arenas, node DB,
   operand stack, lazily allocated suspended-frame continuation stack, and
   accelerator shims.
 - `harness/run.py` is the SINGLE fixture harness for the single executable
@@ -99,6 +125,10 @@ duplicating instructions elsewhere.
   it with `ziskemu`. The harness requires the emulator version to equal the
   `ziskos` version in `zkvm/zisk/Cargo.lock`; set `ZISKEMU` to select a
   compatible binary.
+  `tools/zisk-guests/` is the stable machine-local home for the optimized EVM
+  Sail, reth, and ethrex comparison ELFs. The binaries are ignored by Git;
+  `tools/stage_zisk_guests.sh` refreshes them and their checksums, and
+  `tools/benchmark_zisk.py` uses these three guests by default.
   `--debug` invokes the
   native-only `evmsail_debug_dump` after a failure; it is not linked into the
   real guest. `--profile` enables optional cycle-scope markers.

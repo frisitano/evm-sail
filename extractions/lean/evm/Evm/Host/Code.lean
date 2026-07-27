@@ -41,6 +41,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # Code storage
 
@@ -56,7 +57,7 @@ def undefined_CodeAnalysis (_ : Unit) : SailM CodeAnalysis := do
           chunk_offset := ← (undefined_range 0 255) })
 
 /-- Commits a completed nonempty bitmap chunk to its allocated table. -/
-/- Type quantifiers: k_ex415156_ : Nat, 0 ≤ k_ex415156_ -/
+/- Type quantifiers: k_ex414020_ : Nat, 0 ≤ k_ex414020_ -/
 def store_jumpdest_chunk (table : (BitVec 64)) (code_len : Nat) (analysis : CodeAnalysis) : SailM Unit := do
   if ((analysis.chunk != EMPTY_JUMPDEST_CHUNK) : Bool)
   then

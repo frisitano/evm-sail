@@ -1075,18 +1075,11 @@ structure AuthorizationDecode (k_bound : Nat) where
   count : Nat
   deriving BEq, Inhabited, Repr
 
-/-- One recorded change for the selected storage slot. -/
+/-- One recorded storage change in canonical host traversal order. -/
 structure BalStorageChangeEntry where
+  slot : word
   index : block_access_index
   value : word
-  deriving BEq, Inhabited, Repr
-
-/-- One storage slot in the selected account's canonical read/change union.
-`None` selects the BAL storage-read list; `Some` selects the storage-change
-list and carries the first change of the selected slot. -/
-structure BalStorageSlotEntry where
-  slot : word
-  change : (Option BalStorageChangeEntry)
   deriving BEq, Inhabited, Repr
 
 /-- One recorded balance change in canonical host traversal order. -/
@@ -1106,6 +1099,19 @@ structure BalCodeChangeEntry where
   index : block_access_index
   code_hash : hash
   deriving BEq, Inhabited, Repr
+
+/-- One event in the canonical account-delimited BAL stream. -/
+inductive BalIterEntry where
+  | BalAccount (_ : address)
+  | BalStorageChange (_ : BalStorageChangeEntry)
+  | BalStorageRead (_ : word)
+  | BalBalanceChange (_ : BalBalanceChangeEntry)
+  | BalNonceChange (_ : BalNonceChangeEntry)
+  | BalCodeChange (_ : BalCodeChangeEntry)
+  | BalAccountEnd (_ : Unit)
+  | BalEmpty (_ : Unit)
+  deriving Inhabited, BEq, Repr
+  open BalIterEntry
 
 /-- The environment fields opcodes read through [k_env][]. -/
 inductive EnvField where | F_Number | F_Timestamp | F_Coinbase | F_BaseFee | F_ChainId | F_GasLimit | F_PrevRandao | F_Origin | F_GasPrice | F_SlotNumber

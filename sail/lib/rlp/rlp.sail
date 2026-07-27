@@ -354,8 +354,10 @@ overload rlp_write_uint = {rlp_write_uint_word, rlp_write_uint_u64, rlp_write_ui
 function rlp_write_word(w : word) -> unit =
     rlp_write_bytes(word_to_bytes32(w), WORD_BYTE_LENGTH)
 
-function rlp_write_addr(a : address) -> unit =
-    rlp_write_bytes(address_to_bytes(a), ADDRESS_BYTE_LENGTH)
+function rlp_write_addr(a : address) -> unit = {
+    rlp_write_string_prefix(ADDRESS_BYTE_LENGTH, a[0]);
+    scratch_push_address(a)
+}
 
 /*md
 ## The decoders

@@ -14,6 +14,7 @@
  * (count reset, allocation retained) at tx/world reset, matching the cached
  * per-frame arrays used elsewhere in the FFI. */
 #include "kernel_state.h"
+#include "hash_bytes.h"
 #include "value_convert.h"
 #include "state_db.h"
 #include "transient_storage.h"
@@ -31,11 +32,6 @@ typedef struct { uint8_t b[20]; } address160;
 static inline word256 sail_word256(sail_word v) {
   word256 r;
   sail_word_to_be_words4(r.w, v);
-  return r;
-}
-static inline word256 sail_hash256(sail_hash v) {
-  word256 r;
-  sail_hash_to_be_words4(r.w, v);
   return r;
 }
 static inline address160 sail_address160(sail_address v) {
@@ -138,16 +134,16 @@ bool warm_slot_touch(sail_address a, EVMSAIL_WORD_PARAM(s)) {
  * slot j = keccak of the (j+1)-blocks-back witness header. Writes come from
  * the witness-header pass; reads are guarded Sail-side by k_n_headers, so
  * stale slots are unreachable and no reset is needed. */
-static word256 hdrhash[256];
+static sail_hash hdrhash[256];
 
 unit ancestor_hash_write(uint64_t j, sail_hash h) {
-  if (j < 256) hdrhash[j] = sail_hash256(h);
+  if (j < 256) hdrhash[j] = h;
   return UNIT;
 }
 EVMSAIL_HASH_RETURN ancestor_hash_read(EVMSAIL_HASH_RESULT(result) uint64_t j) {
-  static const word256 zero = {{0, 0, 0, 0}};
-  const word256 *value = j < 256 ? &hdrhash[j] : &zero;
-  EVMSAIL_RETURN_HASH(result, be_words4_to_sail_hash(value->w));
+  static const sail_hash zero = {{0}};
+  const sail_hash *value = j < 256 ? &hdrhash[j] : &zero;
+  EVMSAIL_RETURN_HASH(result, *value);
 }
 
 /* -------------------------------- logs ---------------------------------- */

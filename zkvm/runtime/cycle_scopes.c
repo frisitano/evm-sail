@@ -38,6 +38,30 @@ ZISK_PROFILE_TAG(htr_versioned_hashes);
 ZISK_PROFILE_TAG(htr_execution_requests);
 ZISK_PROFILE_TAG(htr_bytes_root);
 ZISK_PROFILE_TAG(htr_merkle_padding);
+ZISK_PROFILE_TAG(account_load);
+ZISK_PROFILE_TAG(account_tx_lookup);
+ZISK_PROFILE_TAG(account_block_lookup);
+ZISK_PROFILE_TAG(account_witness);
+ZISK_PROFILE_TAG(storage_load);
+ZISK_PROFILE_TAG(storage_tx_lookup);
+ZISK_PROFILE_TAG(storage_block_lookup);
+ZISK_PROFILE_TAG(storage_witness);
+ZISK_PROFILE_TAG(bal_account_touch);
+ZISK_PROFILE_TAG(bal_storage_read);
+ZISK_PROFILE_TAG(index_witness_nodes);
+ZISK_PROFILE_TAG(index_witness_codes);
+ZISK_PROFILE_TAG(index_witness_headers);
+ZISK_PROFILE_TAG(request_withdrawals);
+ZISK_PROFILE_TAG(request_consolidations);
+ZISK_PROFILE_TAG(request_builder_deposits);
+ZISK_PROFILE_TAG(request_builder_exits);
+ZISK_PROFILE_TAG(account_mutation);
+ZISK_PROFILE_TAG(storage_mutation);
+ZISK_PROFILE_TAG(tx_merge);
+ZISK_PROFILE_TAG(tx_merge_accounts);
+ZISK_PROFILE_TAG(tx_merge_storage);
+ZISK_PROFILE_TAG(system_call_interpret);
+ZISK_PROFILE_TAG(system_call_merge);
 
 #define ZISK_PROFILE_REPORT_STEPS(tag, command) \
     __asm__ volatile( \
@@ -108,6 +132,54 @@ __asm__(
     ".set __ZISKOS_PROFILE_ID_26_htr_bytes_root, 26\n"
     ".globl __ZISKOS_PROFILE_ID_27_htr_merkle_padding\n"
     ".set __ZISKOS_PROFILE_ID_27_htr_merkle_padding, 27\n"
+    ".globl __ZISKOS_PROFILE_ID_28_account_load\n"
+    ".set __ZISKOS_PROFILE_ID_28_account_load, 28\n"
+    ".globl __ZISKOS_PROFILE_ID_29_account_tx_lookup\n"
+    ".set __ZISKOS_PROFILE_ID_29_account_tx_lookup, 29\n"
+    ".globl __ZISKOS_PROFILE_ID_30_account_block_lookup\n"
+    ".set __ZISKOS_PROFILE_ID_30_account_block_lookup, 30\n"
+    ".globl __ZISKOS_PROFILE_ID_31_account_witness\n"
+    ".set __ZISKOS_PROFILE_ID_31_account_witness, 31\n"
+    ".globl __ZISKOS_PROFILE_ID_32_storage_load\n"
+    ".set __ZISKOS_PROFILE_ID_32_storage_load, 32\n"
+    ".globl __ZISKOS_PROFILE_ID_33_storage_tx_lookup\n"
+    ".set __ZISKOS_PROFILE_ID_33_storage_tx_lookup, 33\n"
+    ".globl __ZISKOS_PROFILE_ID_34_storage_block_lookup\n"
+    ".set __ZISKOS_PROFILE_ID_34_storage_block_lookup, 34\n"
+    ".globl __ZISKOS_PROFILE_ID_35_storage_witness\n"
+    ".set __ZISKOS_PROFILE_ID_35_storage_witness, 35\n"
+    ".globl __ZISKOS_PROFILE_ID_36_bal_account_touch\n"
+    ".set __ZISKOS_PROFILE_ID_36_bal_account_touch, 36\n"
+    ".globl __ZISKOS_PROFILE_ID_37_bal_storage_read\n"
+    ".set __ZISKOS_PROFILE_ID_37_bal_storage_read, 37\n"
+    ".globl __ZISKOS_PROFILE_ID_38_index_witness_nodes\n"
+    ".set __ZISKOS_PROFILE_ID_38_index_witness_nodes, 38\n"
+    ".globl __ZISKOS_PROFILE_ID_39_index_witness_codes\n"
+    ".set __ZISKOS_PROFILE_ID_39_index_witness_codes, 39\n"
+    ".globl __ZISKOS_PROFILE_ID_40_index_witness_headers\n"
+    ".set __ZISKOS_PROFILE_ID_40_index_witness_headers, 40\n"
+    ".globl __ZISKOS_PROFILE_ID_41_request_withdrawals\n"
+    ".set __ZISKOS_PROFILE_ID_41_request_withdrawals, 41\n"
+    ".globl __ZISKOS_PROFILE_ID_42_request_consolidations\n"
+    ".set __ZISKOS_PROFILE_ID_42_request_consolidations, 42\n"
+    ".globl __ZISKOS_PROFILE_ID_43_request_builder_deposits\n"
+    ".set __ZISKOS_PROFILE_ID_43_request_builder_deposits, 43\n"
+    ".globl __ZISKOS_PROFILE_ID_44_request_builder_exits\n"
+    ".set __ZISKOS_PROFILE_ID_44_request_builder_exits, 44\n"
+    ".globl __ZISKOS_PROFILE_ID_45_account_mutation\n"
+    ".set __ZISKOS_PROFILE_ID_45_account_mutation, 45\n"
+    ".globl __ZISKOS_PROFILE_ID_46_storage_mutation\n"
+    ".set __ZISKOS_PROFILE_ID_46_storage_mutation, 46\n"
+    ".globl __ZISKOS_PROFILE_ID_47_tx_merge\n"
+    ".set __ZISKOS_PROFILE_ID_47_tx_merge, 47\n"
+    ".globl __ZISKOS_PROFILE_ID_48_tx_merge_accounts\n"
+    ".set __ZISKOS_PROFILE_ID_48_tx_merge_accounts, 48\n"
+    ".globl __ZISKOS_PROFILE_ID_49_tx_merge_storage\n"
+    ".set __ZISKOS_PROFILE_ID_49_tx_merge_storage, 49\n"
+    ".globl __ZISKOS_PROFILE_ID_50_system_call_interpret\n"
+    ".set __ZISKOS_PROFILE_ID_50_system_call_interpret, 50\n"
+    ".globl __ZISKOS_PROFILE_ID_51_system_call_merge\n"
+    ".set __ZISKOS_PROFILE_ID_51_system_call_merge, 51\n"
 );
 
 #define START_SCOPE(id, tag) case id: __asm__ volatile("addi x0, x1, " #id ::: "memory"); break
@@ -146,6 +218,30 @@ unit evmsail_cycle_scope_start(uint64_t scope)
     START_SCOPE(25, htr_execution_requests);
     START_SCOPE(26, htr_bytes_root);
     START_SCOPE(27, htr_merkle_padding);
+    START_SCOPE(28, account_load);
+    START_SCOPE(29, account_tx_lookup);
+    START_SCOPE(30, account_block_lookup);
+    START_SCOPE(31, account_witness);
+    START_SCOPE(32, storage_load);
+    START_SCOPE(33, storage_tx_lookup);
+    START_SCOPE(34, storage_block_lookup);
+    START_SCOPE(35, storage_witness);
+    START_SCOPE(36, bal_account_touch);
+    START_SCOPE(37, bal_storage_read);
+    START_SCOPE(38, index_witness_nodes);
+    START_SCOPE(39, index_witness_codes);
+    START_SCOPE(40, index_witness_headers);
+    START_SCOPE(41, request_withdrawals);
+    START_SCOPE(42, request_consolidations);
+    START_SCOPE(43, request_builder_deposits);
+    START_SCOPE(44, request_builder_exits);
+    START_SCOPE(45, account_mutation);
+    START_SCOPE(46, storage_mutation);
+    START_SCOPE(47, tx_merge);
+    START_SCOPE(48, tx_merge_accounts);
+    START_SCOPE(49, tx_merge_storage);
+    START_SCOPE(50, system_call_interpret);
+    START_SCOPE(51, system_call_merge);
     default: break;
     }
 #else
@@ -186,6 +282,30 @@ unit evmsail_cycle_scope_end(uint64_t scope)
     END_SCOPE(25, htr_execution_requests);
     END_SCOPE(26, htr_bytes_root);
     END_SCOPE(27, htr_merkle_padding);
+    END_SCOPE(28, account_load);
+    END_SCOPE(29, account_tx_lookup);
+    END_SCOPE(30, account_block_lookup);
+    END_SCOPE(31, account_witness);
+    END_SCOPE(32, storage_load);
+    END_SCOPE(33, storage_tx_lookup);
+    END_SCOPE(34, storage_block_lookup);
+    END_SCOPE(35, storage_witness);
+    END_SCOPE(36, bal_account_touch);
+    END_SCOPE(37, bal_storage_read);
+    END_SCOPE(38, index_witness_nodes);
+    END_SCOPE(39, index_witness_codes);
+    END_SCOPE(40, index_witness_headers);
+    END_SCOPE(41, request_withdrawals);
+    END_SCOPE(42, request_consolidations);
+    END_SCOPE(43, request_builder_deposits);
+    END_SCOPE(44, request_builder_exits);
+    END_SCOPE(45, account_mutation);
+    END_SCOPE(46, storage_mutation);
+    END_SCOPE(47, tx_merge);
+    END_SCOPE(48, tx_merge_accounts);
+    END_SCOPE(49, tx_merge_storage);
+    END_SCOPE(50, system_call_interpret);
+    END_SCOPE(51, system_call_merge);
     default: break;
     }
 #else

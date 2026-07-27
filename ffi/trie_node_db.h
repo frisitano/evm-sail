@@ -22,5 +22,6 @@ unit nodedb_reset(const unit u);
 unit nodedb_insert(sail_hash kh, EVMSAIL_BYTE_QUANTITY_PARAM(off),
                    EVMSAIL_BYTE_QUANTITY_PARAM(len));
 bool nodedb_lookup_span(sail_hash kh, uint64_t *off, uint64_t *len);
+void nodedb_insert_digest(const sail_hash *hash, uint64_t off, uint64_t len);
 
 #endif

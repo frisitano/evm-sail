@@ -133,7 +133,7 @@ function block_header_hash(
         rlp_write_uint(header.slot_number)
     };
     let encoded = rlp_finish(mark);
-    let block_hash = keccak256_slice(encoded);
+    let block_hash = keccak256(encoded);
     scratch_rewind(mark);
     block_hash
 }
@@ -208,23 +208,25 @@ function execution_requests_hash(input_ref : StatelessInputRef) -> hash = {
         } else {
             ZERO_HASH
         };
-    var segs : list(Bytes) = [||];
+    let mark = scratch_begin();
     if builder_exit_requests.len != 0 then {
-        segs = bytes_list(hash_to_bytes32(d4), WORD_BYTE_LENGTH) :: segs
+        scratch_push_b256(d4, WORD_BYTE_LENGTH)
     };
     if builder_deposit_requests.len != 0 then {
-        segs = bytes_list(hash_to_bytes32(d3), WORD_BYTE_LENGTH) :: segs
+        scratch_push_b256(d3, WORD_BYTE_LENGTH)
     };
     if consolidation_requests.len != 0 then {
-        segs = bytes_list(hash_to_bytes32(d2), WORD_BYTE_LENGTH) :: segs
+        scratch_push_b256(d2, WORD_BYTE_LENGTH)
     };
     if withdrawal_requests.len != 0 then {
-        segs = bytes_list(hash_to_bytes32(d1), WORD_BYTE_LENGTH) :: segs
+        scratch_push_b256(d1, WORD_BYTE_LENGTH)
     };
     if deposits.len != 0 then {
-        segs = bytes_list(hash_to_bytes32(d0), WORD_BYTE_LENGTH) :: segs
+        scratch_push_b256(d0, WORD_BYTE_LENGTH)
     };
-    sha256(segs)
+    let digest = sha256(scratch_finish(mark));
+    scratch_rewind(mark);
+    digest
 }
 
 /*! Validates every commitment checkable before transaction decoding:

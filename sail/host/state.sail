@@ -57,18 +57,18 @@ val storage_block_get = impure { c: "storage_block_get" } : StorageKey -> option
 /*! Writes a merged row into the block-layer overlay (transaction-end
     merge of a changed slot). */
 val storage_block_put = impure { c: "storage_block_put" } : StorageEntry -> unit
-/*! Caches a witness-read value in the block layer so later
-    transactions skip the trie walk. */
-val storage_block_cache = impure { c: "storage_block_cache" } : (StorageKey, word) -> unit
+/*! Caches a witness-read value and its already-derived secure slot key in the
+    block layer so later transactions skip both the trie walk and re-hashing. */
+val storage_block_cache = impure { c: "storage_block_cache" } : (StorageKey, hash, word) -> unit
 /*! Drops every block-layer storage row of an address (account deletion
     or a fresh storage generation). */
 val storage_block_clear = impure { c: "storage_block_clear" } : address -> unit
 /*! Starts a non-destructive ascending traversal of the block-layer storage rows
     for an address. The iterator is valid until the block layer is mutated. */
 val storage_block_iter_begin = impure { c: "storage_block_iter_begin" } : address -> unit
-/*! Returns the next materialized storage row in ascending secure-key order, or
-    `None` when the current traversal is complete. */
-val storage_block_iter_next = impure { c: "storage_block_iter_next" } : address -> option(StorageEntry)
+/*! Returns the next materialized storage row and its cached secure keys in
+    ascending slot-key order, or `None` when traversal is complete. */
+val storage_block_iter_next = impure { c: "storage_block_iter_next" } : address -> option(StorageTrieEntry)
 
 /* transaction-layer account overlay */
 /*! The transaction-layer account row for an address, or `None` when
@@ -84,10 +84,9 @@ val acct_tx_set_balance = impure { c: "acct_tx_set_balance" } : (address, word) 
 val acct_tx_set_nonce = impure { c: "acct_tx_set_nonce" } : (address, account_nonce) -> unit
 /*! Code-hash-only fast path into the transaction-layer row. */
 val acct_tx_set_code_hash = impure { c: "acct_tx_set_code_hash" } : (address, hash) -> unit
-/*! Removes and returns the transaction-layer account row with the
-    lowest address, or `None` when the layer is empty; gives the
-    transaction-end merge its deterministic order. */
-val acct_tx_pop_ascending = impure { c: "acct_tx_pop_ascending" } : unit -> option(AcctEntry)
+/*! Returns the next transaction-layer account row in insertion order, or
+    `None` when the layer is empty. Merge order is not protocol-visible. */
+val acct_tx_pop = impure { c: "acct_tx_pop" } : unit -> option(AcctEntry)
 /*! Empties the transaction-layer account overlay (per-transaction
     reset). */
 val acct_tx_reset = impure { c: "acct_tx_reset" } : unit -> unit
@@ -99,17 +98,18 @@ val acct_block_get = impure { c: "acct_block_get" } : address -> option(Account)
 /*! Writes a merged current/original account pair into the block layer
     (transaction-end merge). */
 val acct_block_write = impure { c: "acct_block_write" } : AcctEntry -> unit
-/*! Caches a witness-read account in the block layer so later
-    transactions skip the trie walk. */
-val acct_block_cache = impure { c: "acct_block_cache" } : (address, Account) -> unit
+/*! Caches a witness-read account and its already-derived secure address key in
+    the block layer so later transactions skip both the trie walk and
+    re-hashing. */
+val acct_block_cache = impure { c: "acct_block_cache" } : (address, hash, Account) -> unit
 /*! Starts a non-destructive ascending traversal of block-layer account update
     candidates. Candidates were written directly or have written storage rows;
     Sail decides whether their final current/original values differ. The
     iterator is valid until the block layer is mutated. */
 val acct_block_iter_begin = impure { c: "acct_block_iter_begin" } : unit -> unit
-/*! Returns the next account update candidate in ascending secure-key order,
-    or `None` when the current traversal is complete. */
-val acct_block_iter_next = impure { c: "acct_block_iter_next" } : unit -> option(AcctEntry)
+/*! Returns the next account update candidate and its cached secure key in
+    ascending secure-key order, or `None` when traversal is complete. */
+val acct_block_iter_next = impure { c: "acct_block_iter_next" } : unit -> option(AcctTrieEntry)
 /*! Caches the post-state storage root derived by Sail for one account during
     state-root preparation. This is auxiliary traversal state: it does not
     mutate the account's pre-state storage-root anchor. */
@@ -136,17 +136,11 @@ val bal_balance_change = impure { c: "bal_note_balance_change" } : (block_access
 val bal_nonce_change = impure { c: "bal_note_nonce_change" } : (block_access_index, address, account_nonce) -> unit
 /*! Records a post-transaction code hash at the supplied EIP-7928 position. */
 val bal_code_change = impure { c: "bal_note_code_change" } : (block_access_index, address, hash) -> unit
-/*! One recorded change for the selected storage slot. */
+/*! One recorded storage change in canonical host traversal order. */
 struct BalStorageChangeEntry = {
+    slot : word,
     index : block_access_index,
     value : word,
-}
-/*! One storage slot in the selected account's canonical read/change union.
-    `None` selects the BAL storage-read list; `Some` selects the storage-change
-    list and carries the first change of the selected slot. */
-struct BalStorageSlotEntry = {
-    slot : word,
-    change : option(BalStorageChangeEntry),
 }
 /*! One recorded balance change in canonical host traversal order. */
 struct BalBalanceChangeEntry = {
@@ -163,22 +157,29 @@ struct BalCodeChangeEntry = {
     index : block_access_index,
     code_hash : hash,
 }
-/*! Canonicalizes the recorded data and resets the non-destructive cursors. */
-val bal_prepare = impure { c: "bal_prepare" } : unit -> unit
-/*! Pops the next account from the prepared ascending-address cursor. Selecting
-    an account also resets each of its child cursors. */
-val bal_account_next = impure { c: "bal_account_next" } : unit -> option(address)
-/*! Pops the next slot from the selected account's sorted read/change union.
-    A changed slot also selects its remaining change substream. */
-val bal_storage_slot_next = impure { c: "bal_storage_slot_next" } : unit -> option(BalStorageSlotEntry)
-/*! Pops the next change row of the selected storage slot. */
-val bal_storage_change_next = impure { c: "bal_storage_change_next" } : unit -> option(BalStorageChangeEntry)
-/*! Pops the next balance-change row of the selected account. */
-val bal_balance_change_next = impure { c: "bal_balance_change_next" } : unit -> option(BalBalanceChangeEntry)
-/*! Pops the next nonce-change row of the selected account. */
-val bal_nonce_change_next = impure { c: "bal_nonce_change_next" } : unit -> option(BalNonceChangeEntry)
-/*! Pops the next code-change row of the selected account. */
-val bal_code_change_next = impure { c: "bal_code_change_next" } : unit -> option(BalCodeChangeEntry)
+/*! One event in the canonical account-delimited BAL stream. */
+union BalIterEntry = {
+    /* starts one account and carries its address */
+    BalAccount : address,
+    /* one indexed post-transaction value for a changed storage slot */
+    BalStorageChange : BalStorageChangeEntry,
+    /* one storage slot that was read but never changed */
+    BalStorageRead : word,
+    /* one indexed post-transaction balance */
+    BalBalanceChange : BalBalanceChangeEntry,
+    /* one indexed post-transaction nonce */
+    BalNonceChange : BalNonceChangeEntry,
+    /* one indexed post-transaction code hash */
+    BalCodeChange : BalCodeChangeEntry,
+    /* ends the current account */
+    BalAccountEnd : unit,
+    /* marks the end of the complete stream */
+    BalEmpty : unit,
+}
+/*! Canonicalizes the recorded keyed tables and resets the flat iterator. */
+val bal_prepare_iter = impure { c: "bal_prepare_iter" } : unit -> unit
+/*! Pops the next event from the canonical account-delimited BAL stream. */
+val bal_iter_next = impure { c: "bal_iter_next" } : unit -> BalIterEntry
 
 /* EIP-2929 warm address/slot sets */
 /*! Clears both warm sets (per-transaction reset; EIP-2929 warmth is
@@ -196,7 +197,7 @@ val warm_slot_touch = impure { c: "warm_slot_touch" } : (address, word) -> bool
 val logs_tx_reset = impure { c: "logs_tx_reset" } : unit -> unit
 /*! Appends a log record — emitter address, topics, data — to the
     transaction's series (YP §4.4.1). */
-val log_append = impure { c: "log_append_record" } : (address, list(word), Bytes) -> unit
+val log_append = impure { c: "log_append_record" } : (address, list(word), LogData) -> unit
 /*! The transaction's complete log series in emission order (receipt
     construction). */
 val read_logs = impure { c: "logs_read_all" } : unit -> list(LogEntry)

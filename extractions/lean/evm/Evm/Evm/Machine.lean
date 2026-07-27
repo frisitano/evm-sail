@@ -47,6 +47,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # Machine state
 
@@ -161,8 +162,8 @@ def pop (_ : Unit) : SailM Nat := do
   else (stack_pop_word ())
 
 /-- Overwrites the `n`-th-from-top operand (`SWAP`). -/
-/- Type quantifiers: k_ex416369_ : Nat, k_ex416368_ : Nat, 0 ≤ k_ex416368_ ∧
-  k_ex416368_ ≤ 1023, 0 ≤ k_ex416369_ ∧ k_ex416369_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415234_ : Nat, k_ex415233_ : Nat, 0 ≤ k_ex415233_ ∧
+  k_ex415233_ ≤ 1023, 0 ≤ k_ex415234_ ∧ k_ex415234_ ≤ (2 ^ 256 - 1) -/
 def stack_set (n : Nat) (w : Nat) : SailM Unit := do
   (stack_set_word n w)
 
@@ -207,7 +208,7 @@ def returndata_copy (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
 
 /-- Copies `min(want, size)` returndata bytes — the `CALL`-family output
 write-back. -/
-/- Type quantifiers: k_ex416393_ : Nat, k_ex416392_ : Nat, 0 ≤ k_ex416392_, 0 ≤ k_ex416393_ -/
+/- Type quantifiers: k_ex415258_ : Nat, k_ex415257_ : Nat, 0 ≤ k_ex415257_, 0 ≤ k_ex415258_ -/
 def returndata_copy_prefix (dst : Nat) (want : Nat) : SailM Unit := do
   let wanted := want
   let available ← do (returndata_size ())
@@ -242,9 +243,9 @@ def validated_returndata_copy (dst : Nat) (source_offset : Nat) (length : Nat) :
       else (exc_halt InvalidOpcode))
   else (exc_halt InvalidOpcode)
 
-/- Type quantifiers: k_ex416402_ : Nat, k_ex416401_ : Nat, k_ex416400_ : Nat, 0 ≤ k_ex416400_, 0
-  ≤ k_ex416401_ ∧ k_ex416401_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex416402_ ∧
-  k_ex416402_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415267_ : Nat, k_ex415266_ : Nat, k_ex415265_ : Nat, 0 ≤ k_ex415265_, 0
+  ≤ k_ex415266_ ∧ k_ex415266_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex415267_ ∧
+  k_ex415267_ ≤ (2 ^ 256 - 1) -/
 def returndata_copy_words (dst : Nat) (source_offset : Nat) (length : Nat) : SailM Unit := do
   (validated_returndata_copy dst source_offset length)
 
@@ -290,7 +291,7 @@ def memory_byte_slice (off : Nat) (len : Nat) : SailM (Sigma fun (k_syn_off : Na
         let dependentResult ← (do
             let dependentArg0 := (← (memory_expand_to (off + len)))
             pure ((⟨_, (sub_slice ((dependentArg0).2).2 off len)⟩ : (Sigma fun
-            (k_ex427456_ : Nat) => (EvmByteSliceFields (k_ex427456_ + off) len)))))
+            (k_ex426339_ : Nat) => (EvmByteSliceFields (k_ex426339_ + off) len)))))
         pure ((⟨_, ⟨_, (dependentResult).2⟩⟩ : (Sigma fun (k_syn_off : Nat) =>
         (Sigma fun (k_syn_len : Nat) => (EvmByteSliceFields k_syn_off k_syn_len)))))))
 
@@ -307,7 +308,7 @@ def memory_code_slice (off : Nat) (len : Nat) : SailM (Sigma fun (k_syn_off : Na
           let dependentArg0 := (← do
               let dependentArg0 := (← (memory_expand_to (off + len)))
               pure ((⟨_, (sub_slice ((dependentArg0).2).2 off len)⟩ : (Sigma fun
-              (k_ex427503_ : Nat) => (EvmByteSliceFields (k_ex427503_ + off) len)))))
+              (k_ex426386_ : Nat) => (EvmByteSliceFields (k_ex426386_ + off) len)))))
           pure ((⟨_, ⟨_, (((code_slice (dependentArg0).2)).2).2⟩⟩ : (Sigma fun
           (k_syn_off : Nat) =>
           (Sigma fun (k_syn_len : Nat) => (EvmByteSliceFields k_syn_off k_syn_len)))))))
@@ -385,7 +386,7 @@ def mem_get_byte (off : Nat) : SailM (BitVec 8) := do
 
 /-- Writes one memory byte and raises the high-water mark; a no-op when
 halted. -/
-/- Type quantifiers: k_ex416448_ : Nat, 0 ≤ k_ex416448_ -/
+/- Type quantifiers: k_ex415313_ : Nat, 0 ≤ k_ex415313_ -/
 def mem_set_byte (off : Nat) (v : (BitVec 8)) : SailM Unit := do
   if ((← (is_running ())) : Bool)
   then (mem_write_byte off v)
@@ -400,22 +401,22 @@ def mem_load (off : Nat) : SailM Nat := do
 
 /-- `MSTORE`: writes the big-endian word at `off` and raises the
 high-water mark. -/
-/- Type quantifiers: k_ex416451_ : Nat, k_ex416450_ : Nat, 0 ≤ k_ex416450_, 0 ≤ k_ex416451_ ∧
-  k_ex416451_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415316_ : Nat, k_ex415315_ : Nat, 0 ≤ k_ex415315_, 0 ≤ k_ex415316_ ∧
+  k_ex415316_ ≤ (2 ^ 256 - 1) -/
 def mem_store (off : Nat) (w : Nat) : SailM Unit := do
   if ((← (is_running ())) : Bool)
   then (mem_store_word off w)
   else (pure ())
 
 /-- `MSTORE8`: writes the low byte of `w`. -/
-/- Type quantifiers: k_ex416453_ : Nat, k_ex416452_ : Nat, 0 ≤ k_ex416452_, 0 ≤ k_ex416453_ ∧
-  k_ex416453_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex415318_ : Nat, k_ex415317_ : Nat, 0 ≤ k_ex415317_, 0 ≤ k_ex415318_ ∧
+  k_ex415318_ ≤ (2 ^ 256 - 1) -/
 def mem_store_byte (off : Nat) (w : Nat) : SailM Unit := do
   (mem_set_byte off (word_low_byte w))
 
 /-- `MCOPY` (EIP-5656): overlapping-safe memory-to-memory copy. -/
-/- Type quantifiers: k_ex416456_ : Nat, k_ex416455_ : Nat, k_ex416454_ : Nat, 0 ≤ k_ex416454_, 0
-  ≤ k_ex416455_, 0 ≤ k_ex416456_ -/
+/- Type quantifiers: k_ex415321_ : Nat, k_ex415320_ : Nat, k_ex415319_ : Nat, 0 ≤ k_ex415319_, 0
+  ≤ k_ex415320_, 0 ≤ k_ex415321_ -/
 def mem_mcopy (dst : Nat) (src : Nat) (len : Nat) : SailM Unit := do
   if ((len != 0) : Bool)
   then (mem_move dst src len)
@@ -423,8 +424,8 @@ def mem_mcopy (dst : Nat) (src : Nat) (len : Nat) : SailM Unit := do
 
 /-- `CODECOPY`: copies the frame's own code into memory, zero-padded past
 the end. -/
-/- Type quantifiers: k_ex416459_ : Nat, k_ex416458_ : Nat, k_ex416457_ : Nat, 0 ≤ k_ex416457_, 0
-  ≤ k_ex416458_, 0 ≤ k_ex416459_ -/
+/- Type quantifiers: k_ex415324_ : Nat, k_ex415323_ : Nat, k_ex415322_ : Nat, 0 ≤ k_ex415322_, 0
+  ≤ k_ex415323_, 0 ≤ k_ex415324_ -/
 def mem_codecopy (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
   (do
       let dependentArg0 := (← readReg frame_code).bytes

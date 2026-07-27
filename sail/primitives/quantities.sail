@@ -219,8 +219,8 @@ function word_of_chain_identifier(value : chain_identifier) -> chain_identifier 
     bytes, including Osaka's `0x0100` P256VERIFY address. */
 function precompile_id_to_address(value : precompile_id) -> address = {
     var result : address = ZERO_ADDRESS;
-    result[0] = get_slice_int(8, value, 0);
-    result[1] = get_slice_int(8, value, 8);
+    result[19] = get_slice_int(8, value, 0);
+    result[18] = get_slice_int(8, value, 8);
     result
 }
 

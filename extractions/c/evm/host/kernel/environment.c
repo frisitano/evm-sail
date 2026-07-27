@@ -4,239 +4,239 @@
 #endif
 sail_u256 zk_env(enum zEnvField zf)
 {
-  sail_u256 z8zE209;
-  sail_u256 z3zE3192;
+  sail_u256 z8zE206;
+  sail_u256 z3zE2417;
   {
-    if ((zF_Number != zf)) goto case_3258;
-    uint64_t z2zE3225;
+    if ((zF_Number != zf)) goto case_2854;
+    uint64_t z2zE2526;
     {
-      uint64_t z2zE3224;
-      z2zE3224 = zk_header.znumber;
-      z2zE3225 = zword_of_block_number(z2zE3224);
+      uint64_t z2zE2525;
+      z2zE2525 = zk_header.znumber;
+      z2zE2526 = zword_of_block_number(z2zE2525);
     }
-    z3zE3192 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE3225);
-    goto finish_match_3248;
+    z3zE2417 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE2526);
+    goto finish_match_2844;
   }
-case_3258: ;
+case_2854: ;
   {
-    if ((zF_Timestamp != zf)) goto case_3257;
-    uint64_t z2zE3227;
+    if ((zF_Timestamp != zf)) goto case_2853;
+    uint64_t z2zE2528;
     {
-      uint64_t z2zE3226;
-      z2zE3226 = zk_header.ztimestamp;
-      z2zE3227 = zword_of_block_timestamp(z2zE3226);
+      uint64_t z2zE2527;
+      z2zE2527 = zk_header.ztimestamp;
+      z2zE2528 = zword_of_block_timestamp(z2zE2527);
     }
-    z3zE3192 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE3227);
-    goto finish_match_3248;
+    z3zE2417 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE2528);
+    goto finish_match_2844;
   }
-case_3257: ;
+case_2853: ;
   {
-    if ((zF_Coinbase != zf)) goto case_3256;
-    sail_fixed_bytes_20 z2zE3228;
-    z2zE3228 = zk_header.zfee_recipient;
-    z3zE3192 = zaddress_to_word(z2zE3228);
-    goto finish_match_3248;
+    if ((zF_Coinbase != zf)) goto case_2852;
+    sail_fixed_bytes_20 z2zE2529;
+    z2zE2529 = zk_header.zfee_recipient;
+    z3zE2417 = evmsail_address_to_word(z2zE2529);
+    goto finish_match_2844;
   }
-case_3256: ;
+case_2852: ;
   {
-    if ((zF_BaseFee != zf)) goto case_3255;
-    z3zE3192 = zk_header.zbase_fee;
-    goto finish_match_3248;
+    if ((zF_BaseFee != zf)) goto case_2851;
+    z3zE2417 = zk_header.zbase_fee;
+    goto finish_match_2844;
   }
-case_3255: ;
+case_2851: ;
   {
-    if ((zF_ChainId != zf)) goto case_3254;
-    uint64_t z2zE3229;
-    z2zE3229 = zword_of_chain_identifier(zk_chain_id);
-    z3zE3192 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE3229);
-    goto finish_match_3248;
+    if ((zF_ChainId != zf)) goto case_2850;
+    uint64_t z2zE2530;
+    z2zE2530 = zword_of_chain_identifier(zk_chain_id);
+    z3zE2417 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE2530);
+    goto finish_match_2844;
   }
-case_3254: ;
+case_2850: ;
   {
-    if ((zF_GasLimit != zf)) goto case_3253;
-    uint64_t z2zE3230;
-    z2zE3230 = zk_header.zgas_limit;
-    z3zE3192 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE3230);
-    goto finish_match_3248;
+    if ((zF_GasLimit != zf)) goto case_2849;
+    uint64_t z2zE2531;
+    z2zE2531 = zk_header.zgas_limit;
+    z3zE2417 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE2531);
+    goto finish_match_2844;
   }
-case_3253: ;
+case_2849: ;
   {
-    if ((zF_PrevRandao != zf)) goto case_3252;
-    z3zE3192 = zk_header.zprev_randao;
-    goto finish_match_3248;
+    if ((zF_PrevRandao != zf)) goto case_2848;
+    z3zE2417 = zk_header.zprev_randao;
+    goto finish_match_2844;
   }
-case_3252: ;
+case_2848: ;
   {
-    if ((zF_Origin != zf)) goto case_3251;
-    sail_fixed_bytes_20 z2zE3231;
-    z2zE3231 = zk_tx.zorigin;
-    z3zE3192 = zaddress_to_word(z2zE3231);
-    goto finish_match_3248;
+    if ((zF_Origin != zf)) goto case_2847;
+    sail_fixed_bytes_20 z2zE2532;
+    z2zE2532 = zk_tx.zorigin;
+    z3zE2417 = evmsail_address_to_word(z2zE2532);
+    goto finish_match_2844;
   }
-case_3251: ;
+case_2847: ;
   {
-    if ((zF_GasPrice != zf)) goto case_3250;
-    z3zE3192 = zk_tx.zgas_price;
-    goto finish_match_3248;
+    if ((zF_GasPrice != zf)) goto case_2846;
+    z3zE2417 = zk_tx.zgas_price;
+    goto finish_match_2844;
   }
-case_3250: ;
+case_2846: ;
   {
     /* complete */
-    uint64_t z2zE3233;
+    uint64_t z2zE2534;
     {
-      uint64_t z2zE3232;
-      z2zE3232 = zk_header.zslot_number;
-      z2zE3233 = zword_of_slot_number(z2zE3232);
+      uint64_t z2zE2533;
+      z2zE2533 = zk_header.zslot_number;
+      z2zE2534 = zword_of_slot_number(z2zE2533);
     }
-    z3zE3192 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE3233);
-    goto finish_match_3248;
+    z3zE2417 = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE2534);
+    goto finish_match_2844;
   }
-case_3249: ;
-finish_match_3248: ;
-  z8zE209 = z3zE3192;
-end_function_3259: ;
-  return z8zE209;
-end_block_exception_3260: ;
+case_2845: ;
+finish_match_2844: ;
+  z8zE206 = z3zE2417;
+end_function_2855: ;
+  return z8zE206;
+end_block_exception_2856: ;
 
   return u256_zero();
 }
 
-sail_fixed_bytes_20 zk_coinbase(unit z3zE3191)
+sail_fixed_bytes_20 zk_coinbase(unit z3zE2416)
 {
-  sail_fixed_bytes_20 z8zE210;
-  z8zE210 = zk_header.zfee_recipient;
-end_function_3246: ;
-  return z8zE210;
-end_block_exception_3247: ;
+  sail_fixed_bytes_20 z8zE207;
+  z8zE207 = zk_header.zfee_recipient;
+end_function_2842: ;
+  return z8zE207;
+end_block_exception_2843: ;
 
   return fixed_bytes_20_zero();
 }
 
 sail_u256 zblockhash_word_distance(sail_u256 zcurrent, sail_u256 znumber)
 {
-  sail_u256 z8zE211;
-  z8zE211 = u256_sub(zcurrent, znumber);
-end_function_3244: ;
-  return z8zE211;
-end_block_exception_3245: ;
+  sail_u256 z8zE208;
+  z8zE208 = u256_sub(zcurrent, znumber);
+end_function_2840: ;
+  return z8zE208;
+end_block_exception_2841: ;
 
   return u256_zero();
 }
 
 sail_fixed_bytes_32 zk_blockhash(sail_u256 znumber_word)
 {
-  sail_fixed_bytes_32 z8zE212;
+  sail_fixed_bytes_32 z8zE209;
   uint64_t zcurrent;
   zcurrent = zk_header.znumber;
   sail_u256 zcurrent_word;
   {
-    uint64_t z2zE3223;
-    z2zE3223 = zword_of_block_number(zcurrent);
-    zcurrent_word = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE3223);
+    uint64_t z2zE2524;
+    z2zE2524 = zword_of_block_number(zcurrent);
+    zcurrent_word = zU256zIreprzGU64zCR__sail_c_repr_u256zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE2524);
   }
-  bool z2zE3218;
-  z2zE3218 = u256_lt(znumber_word, zcurrent_word);
-  if (z2zE3218) {
-    sail_u256 z2zE3219;
-    z2zE3219 = zblockhash_word_distance(zcurrent_word, znumber_word);
-    sail_fixed_bytes_32 z3zE3189;
+  bool z2zE2519;
+  z2zE2519 = u256_lt(znumber_word, zcurrent_word);
+  if (z2zE2519) {
+    sail_u256 z2zE2520;
+    z2zE2520 = zblockhash_word_distance(zcurrent_word, znumber_word);
+    sail_fixed_bytes_32 z3zE2414;
     {
       sail_u256 zdistance_word;
-      zdistance_word = z2zE3219;
-      bool z2zE3220;
-      z2zE3220 = (!u64_lt_u256(UINT64_C(256), zdistance_word));
-      if (z2zE3220) {
+      zdistance_word = z2zE2520;
+      bool z2zE2521;
+      z2zE2521 = (!u64_lt_u256(UINT64_C(256), zdistance_word));
+      if (z2zE2521) {
         uint64_t zdistance;
         zdistance = u256_to_u64(zdistance_word);
-        bool z2zE3221;
-        z2zE3221 = (zk_n_headers < zdistance);
-        if (z2zE3221) {
-          struct zexception z2zE3222;
-          CREATE(zexception)(&z2zE3222);
-          zInvalidBlock(&z2zE3222, zWitnessDeficient);
-          COPY(zexception)(current_exception, z2zE3222);
+        bool z2zE2522;
+        z2zE2522 = (zk_n_headers < zdistance);
+        if (z2zE2522) {
+          struct zexception z2zE2523;
+          CREATE(zexception)(&z2zE2523);
+          zInvalidBlock(&z2zE2523, zWitnessDeficient);
+          COPY(zexception)(current_exception, z2zE2523);
           have_exception = true;
-          COPY(sail_string)(throw_location, "sail/host/kernel/environment.sail:106.16-106.52");
-          KILL(zexception)(&z2zE3222);
-          goto end_block_exception_3243;
+          COPY(sail_string)(throw_location, "sail/host/kernel/environment.sail:109.16-109.52");
+          KILL(zexception)(&z2zE2523);
+          goto end_block_exception_2839;
           /* unreachable after throw */
-          KILL(zexception)(&z2zE3222);
+          KILL(zexception)(&z2zE2523);
         } else {
           uint64_t zindex;
           {    zindex = (zdistance - UINT64_C(1));
           }
-          z3zE3189 = ancestor_hash_read(zindex);
+          z3zE2414 = ancestor_hash_read(zindex);
         }
-      } else {  z3zE3189 = zZERO_HASH;  }
-      goto finish_match_3240;
+      } else {  z3zE2414 = zZERO_HASH;  }
+      goto finish_match_2836;
     }
-  case_3241: ;
+  case_2837: ;
     sail_match_failure("k_blockhash");
-  finish_match_3240: ;
-    z8zE212 = z3zE3189;
-  } else {  z8zE212 = zZERO_HASH;  }
-end_function_3242: ;
-  return z8zE212;
-end_block_exception_3243: ;
+  finish_match_2836: ;
+    z8zE209 = z3zE2414;
+  } else {  z8zE209 = zZERO_HASH;  }
+end_function_2838: ;
+  return z8zE209;
+end_block_exception_2839: ;
 
   return fixed_bytes_32_zero();
 }
 
 sail_u256 zk_blobhash(sail_u256 zindex_word)
 {
-  sail_u256 z8zE213;
+  sail_u256 z8zE210;
   uint64_t zcount;
   {
-    struct zBlobHashes z2zE3217;
-    z2zE3217 = zk_tx.zblob_hashes;
-    zcount = z2zE3217.zcount;
+    struct zBlobHashes z2zE2518;
+    z2zE2518 = zk_tx.zblob_hashes;
+    zcount = z2zE2518.zcount;
   }
-  bool z2zE3213;
-  z2zE3213 = u256_lt_u64(zindex_word, zcount);
-  if (z2zE3213) {
+  bool z2zE2514;
+  z2zE2514 = u256_lt_u64(zindex_word, zcount);
+  if (z2zE2514) {
     uint64_t zindex;
     zindex = u256_to_u64(zindex_word);
     uint64_t zoffset;
     {
-      uint64_t z2zE3216;
-      {    z2zE3216 = (UINT64_C(33) * zindex);
+      uint64_t z2zE2517;
+      {    z2zE2517 = (UINT64_C(33) * zindex);
       }
-      {    zoffset = (z2zE3216 + UINT64_C(1));
+      {    zoffset = (z2zE2517 + UINT64_C(1));
       }
     }
-    struct zByteSliceFields z2zE3215;
+    struct zByteSliceFields z2zE2516;
     {
-      struct zBlobHashes z2zE3214;
-      z2zE3214 = zk_tx.zblob_hashes;
-      z2zE3215 = z2zE3214.zbytes;
+      struct zBlobHashes z2zE2515;
+      z2zE2515 = zk_tx.zblob_hashes;
+      z2zE2516 = z2zE2515.zbytes;
     }
-    z8zE213 = zslice_load_n(z2zE3215, zoffset, zWORD_BYTE_LENGTH);
-  } else {  z8zE213 = zZERO_WORD;  }
-end_function_3238: ;
-  return z8zE213;
-end_block_exception_3239: ;
+    z8zE210 = zslice_load_n(z2zE2516, zoffset, zWORD_BYTE_LENGTH);
+  } else {  z8zE210 = zZERO_WORD;  }
+end_function_2834: ;
+  return z8zE210;
+end_block_exception_2835: ;
 
   return u256_zero();
 }
 
 sail_fixed_bytes_20 zk_create_addr(sail_fixed_bytes_20 za, uint64_t znonce)
 {
-  sail_fixed_bytes_20 z8zE214;
-  z8zE214 = zcreate_address(za, znonce);
-end_function_3236: ;
-  return z8zE214;
-end_block_exception_3237: ;
+  sail_fixed_bytes_20 z8zE211;
+  z8zE211 = zcreate_address(za, znonce);
+end_function_2832: ;
+  return z8zE211;
+end_block_exception_2833: ;
 
   return fixed_bytes_20_zero();
 }
 
 sail_fixed_bytes_20 zk_create2_addr(sail_fixed_bytes_20 za, sail_u256 zsalt, sail_fixed_bytes_32 zinithash)
 {
-  sail_fixed_bytes_20 z8zE215;
-  z8zE215 = zcreate2_address(za, zsalt, zinithash);
-end_function_3234: ;
-  return z8zE215;
-end_block_exception_3235: ;
+  sail_fixed_bytes_20 z8zE212;
+  z8zE212 = zcreate2_address(za, zsalt, zinithash);
+end_function_2830: ;
+  return z8zE212;
+end_block_exception_2831: ;
 
   return fixed_bytes_20_zero();
 }

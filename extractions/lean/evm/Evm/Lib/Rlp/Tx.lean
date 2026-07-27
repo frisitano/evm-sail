@@ -46,6 +46,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # Transaction decoding
 
@@ -170,8 +171,8 @@ def BLOB_HASH_RLP_LENGTH : Nat := 33
 def BLOB_HASH_LENGTH : Nat := WORD_BYTE_LENGTH
 
 /-- Validates every fixed-width versioned-hash item and returns their count. -/
-/- Type quantifiers: _reclimit : Nat, k_ex415814_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ k_ex415814_ ∧ k_ex415814_ ≤ 9, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex414678_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ k_ex414678_ ∧ k_ex414678_ ≤ 9, 0 ≤ _reclimit -/
 def _rec_decode_blob_hash_items (cursor : (EvmByteSliceFields k_source_off k_source_len)) (count : Nat) (_reclimit : Nat) : SailM Nat := do
   match _reclimit with
   | 0 =>

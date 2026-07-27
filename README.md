@@ -71,9 +71,9 @@ the host's mechanism is backed by C FFI; the Sail definitions stay the
 specification while these provide the data structures underneath it.
 Performance-critical state lives behind C FFI with O(1) operations — EVM
 memory, generic byte-slice sources, and the output arena (`ffi/memory.c`,
-`ffi/output.c`), direct host crypto and precompile adapters
-(`ffi/host_crypto.c`, `ffi/precompiles.c`), the operand stack (`ffi/stack.c`),
-and the content-addressed code arena plus packed JUMPDEST tables
+`ffi/output.c`), direct accelerator-backed hash and precompile adapters
+(`ffi/hash_glue.c`, `ffi/htr_glue.c`, `ffi/precompiles.c`), the operand stack
+(`ffi/stack.c`), and the content-addressed code arena plus packed JUMPDEST tables
 (`ffi/code_db.c`). Sail performs PUSH-aware code analysis before insertion;
 each active frame holds one `Code` pairing the code slice with its
 resolved table reference. Transient
@@ -95,6 +95,10 @@ integers use a fixed 12-limb, 768-bit sign-magnitude runtime selected from the
 model-wide maximum intermediate; proven 64-bit ranges can still lower to
 native scalars. Operations trap rather than truncate if that audited bound is
 violated.
+
+The evidence-backed zkVM optimisation backlog, current measurements, and
+validation requirements are tracked in
+[`docs/OPTIMIZATIONS.md`](docs/OPTIMIZATIONS.md).
 
 ## Layout
 
@@ -138,10 +142,12 @@ sail/        the specification (evm.sail_project defines the single build)
 ffi/         C backends: memory.c (memory/generic byte slices), scratch.c
              (Sail-cursor-owned executor scratch arena), transient_storage.c
              (transient storage), state_db.c (account and persistent storage
-             cache/update maps), stack.c (operand stack), code_db.c
+             cache/update maps plus distinct keyed EIP-7928 read/change tables
+             exposed as one sorted event stream), stack.c (operand stack), code_db.c
              (content-addressed code + packed JUMPDEST arenas), trie_node_db.c
-             (witness node-db), host_crypto.c + precompiles.c +
-             zkvm_accelerators.h (eth-act zkvm-standards crypto)
+             (witness node-db), hash_glue.c + precompiles.c +
+             zkvm_accelerators.h (eth-act zkvm-standards crypto), and the
+             optimized-C-only htr_glue.c whole-request refinement
 harness/     the EEST harness: run.py drives main.sail in-process and gates its
              canonical output byte-exactly against EELS; state tests are first
              materialized as valid stateless blocks by the in-process t8n
@@ -193,8 +199,14 @@ make extract                                # run all maintained extractions
 unity fragment, while `evm.c` remains the compilation entry point and `evm.h`
 the complete generated interface. The extraction retains Sail's default C
 name mangling and uses the same specialization and `c_optimized.sail` splice as
-the optimized native and zkVM builds. Machine-local generator scratch, editor
-metadata, and object files remain untracked. See
+the optimized native and zkVM builds. That splice lowers the complete
+`htr_new_payload_request` operation to `ffi/htr_glue.c`, allowing production C
+to hash the already validated `StatelessInputRef` slices without constructing
+the intermediate Sail values. Standard native C and Lean/Coq extraction do not
+load this C-only replacement and retain the explicit, readable equations in
+`sail/lib/htr.sail`; the refinement therefore does not add a proof axiom.
+Machine-local generator scratch, editor metadata, and object files remain
+untracked. See
 [`extractions/README.md`](extractions/README.md) for the ownership contract.
 
 `make all` runs `check` + `lint` + `fmt-check`. `make lint`

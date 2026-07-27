@@ -45,6 +45,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # Trie nodes
 
@@ -60,8 +61,8 @@ def inline_node_hash (node : InlineNode) : SailM (Vector (BitVec 8) 32) := do
   (keccak256_segments [(bytes_fixed32 node.data node.len)])
 
 /-- Advances the branch payload length while preserving its structural bound. -/
-/- Type quantifiers: k_ex417016_ : Nat, k_ex417015_ : Nat, 0 ≤ k_ex417015_ ∧ k_ex417015_ ≤ 529, 0
-  ≤ k_ex417016_ ∧ k_ex417016_ ≤ 33 -/
+/- Type quantifiers: k_ex415881_ : Nat, k_ex415880_ : Nat, 0 ≤ k_ex415880_ ∧ k_ex415880_ ≤ 529, 0
+  ≤ k_ex415881_ ∧ k_ex415881_ ≤ 33 -/
 def branch_content_length_add (current : Nat) (addition : Nat) : SailM Nat := do
   if ((addition ≤b (529 - current)) : Bool)
   then (pure (current + addition))

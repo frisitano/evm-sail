@@ -12,6 +12,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #ifndef SAIL_U256_DEFINED
 #define SAIL_U256_DEFINED
@@ -58,21 +59,21 @@ static inline uint8_t evmsail_byte_value(const uint64_t value) {
 
 static inline void evmsail_address_to_be_bytes(uint8_t out[20],
                                                sail_address value) {
-  for (size_t i = 0; i < 20; ++i) out[i] = value.bytes[19 - i];
+  memcpy(out, value.bytes, 20);
 }
 
 static inline void evmsail_hash_to_be_bytes(uint8_t out[32], sail_hash value) {
-  for (size_t i = 0; i < 32; ++i) out[i] = value.bytes[31 - i];
+  memcpy(out, value.bytes, 32);
 }
 
 static inline void evmsail_address_set_be_bytes(sail_address *out,
                                                 const uint8_t in[20]) {
-  for (size_t i = 0; i < 20; ++i) out->bytes[i] = in[19 - i];
+  memcpy(out->bytes, in, 20);
 }
 
 static inline void evmsail_hash_set_be_bytes(sail_hash *out,
                                              const uint8_t in[32]) {
-  for (size_t i = 0; i < 32; ++i) out->bytes[i] = in[31 - i];
+  memcpy(out->bytes, in, 32);
 }
 
 static inline void evmsail_address_assign(sail_address *out,

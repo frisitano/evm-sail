@@ -571,8 +571,14 @@ function decode_stateless_input_ref(input : ByteSlice) -> StatelessInputRef = {
 
 /*! The EIP-7685 per-type request digest:
     `sha256(request_type ‖ request_data)`. */
-function sha256_request_digest(request_type : byte, s : ByteSlice) -> hash =
-    sha256([|bytes_list([|request_type|], 1), BytesSlice(s)|])
+function sha256_request_digest(request_type : byte, s : ByteSlice) -> hash = {
+    let mark = scratch_begin();
+    scratch_push_bytes([|request_type|], 1);
+    scratch_push_slice(s);
+    let digest = sha256(scratch_finish(mark));
+    scratch_rewind(mark);
+    digest
+}
 
 /* Index every witness node/code directly from its SSZ list reference. */
 /*! Hashes and indexes every remaining witness trie node from its source
@@ -949,9 +955,15 @@ function decode_stateless_input(input_ref : StatelessInputRef) -> StatelessInput
     materialized. */
 function index_execution_witness(input_ref : StatelessInputRef) -> WitnessContext = {
     nodedb_reset();
+    cycle_scope_start(SCOPE_INDEX_WITNESS_NODES);
     index_witness_nodes(input_ref.witness_state);
+    cycle_scope_end(SCOPE_INDEX_WITNESS_NODES);
+    cycle_scope_start(SCOPE_INDEX_WITNESS_CODES);
     index_witness_codes(input_ref.witness_codes);
+    cycle_scope_end(SCOPE_INDEX_WITNESS_CODES);
+    cycle_scope_start(SCOPE_INDEX_WITNESS_HEADERS);
     let witness = index_witness_headers(input_ref.witness_headers);
+    cycle_scope_end(SCOPE_INDEX_WITNESS_HEADERS);
     k_parent_state_root = witness.parent_state_root;
     witness
 }

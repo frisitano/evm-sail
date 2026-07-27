@@ -42,6 +42,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # State store axioms
 
@@ -58,7 +59,8 @@ model.
     of the executable specification, not protocol rules. -/
 
 def undefined_BalStorageChangeEntry (_ : Unit) : SailM BalStorageChangeEntry := do
-  (pure { index := ← (undefined_range 0 ((2 ^i 20) + 1)),
+  (pure { slot := ← (undefined_range 0 ((2 ^i 256) - 1)),
+          index := ← (undefined_range 0 ((2 ^i 20) + 1)),
           value := ← (undefined_range 0 ((2 ^i 256) - 1)) })
 
 def undefined_BalBalanceChangeEntry (_ : Unit) : SailM BalBalanceChangeEntry := do

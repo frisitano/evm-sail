@@ -102,43 +102,9 @@ function slice_suffix(s, off) = {
     byte_slice(s.source, s.off + off, s.len - off)
 }
 
-/* Materialized fragments carry their length at construction time. This keeps
- * every generic Bytes operation O(1) without rediscovering a linked-list
- * length. Bulk data remains source-backed through ByteSlice. */
-/*! A finite list of bytes paired with its construction-time length. */
-struct MaterializedBytes = {
-    data : list(byte),
-    len : source_length,
+/*! A log payload retained by the host: either an existing byte slice or the
+    canonical big-endian bytes of one EVM word used by system logs. */
+union LogData = {
+    LogDataSlice : ByteSlice,
+    LogDataWord : word,
 }
-
-val materialized_bytes : forall 'len, source_valid_length('len). (list(byte), int('len)) -> MaterializedBytes
-function materialized_bytes(data, len) =
-    struct { data = data, len = len }
-
-/*! A prefix of a fixed 32-byte vector, in wire order. */
-struct FixedBytes32 = {
-    data : b256,
-    len : range(0, 32),
-}
-
-/*! A byte-sequence segment: materialized bytes or a region-backed span.
-    A `list(Bytes)` denotes the concatenation of its segments.
-
-    !!! note "Implementation"
-        A segment list crosses the host interface whole
-        (`ffi/hash_glue.c`); no per-byte crossings occur. */
-union Bytes = {
-    /* materialized bytes */
-    BytesList : MaterializedBytes,
-    /* a region-backed reference */
-    BytesSlice : ByteSlice,
-    /* a prefix of an inline fixed-width vector */
-    BytesFixed32 : FixedBytes32,
-}
-
-val bytes_list : forall 'len, source_valid_length('len). (list(byte), int('len)) -> Bytes
-function bytes_list(data, len) =
-    BytesList(materialized_bytes(data, len))
-
-function bytes_fixed32(data : b256, len : range(0, 32)) -> Bytes =
-    BytesFixed32(struct { data = data, len = len })

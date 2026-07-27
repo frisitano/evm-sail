@@ -45,6 +45,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # Transaction signature rules
 
@@ -69,9 +70,9 @@ the pre-signature fields in the witness and is hashed as a segment
 (never materialized); legacy EIP-155 transactions append
 `(chain_id, 0, 0)`, typed transactions prepend the type byte as a
 domain separator (EIP-2718). -/
-/- Type quantifiers: k_ex415660_ : Nat, content_src_dependentWitness1 : Nat, content_src_dependentWitness0
+/- Type quantifiers: k_ex414524_ : Nat, content_src_dependentWitness1 : Nat, content_src_dependentWitness0
   : Nat, 0 ≤ content_src_dependentWitness0 ∧ 0 ≤ content_src_dependentWitness1, 0 ≤
-  k_ex415660_ ∧ k_ex415660_ ≤ (2 ^ 256 - 1) -/
+  k_ex414524_ ∧ k_ex414524_ ≤ (2 ^ 256 - 1) -/
 def tx_signing_hash (t : TxType) (content_src : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (v : Nat) : SailM (Vector (BitVec 8) 32) := do
   let content_src_dependentWitness0 := (content_src).1
@@ -123,8 +124,8 @@ def tx_signing_hash (t : TxType) (content_src : (Sigma fun (k_off : Nat) =>
 
 /-- The EIP-7702 authorization signing hash:
 `keccak256(0x05 || rlp([chain_id, address, nonce]))`. -/
-/- Type quantifiers: k_ex415662_ : Nat, k_ex415661_ : Nat, 0 ≤ k_ex415661_ ∧
-  k_ex415661_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex415662_ ∧ k_ex415662_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex414526_ : Nat, k_ex414525_ : Nat, 0 ≤ k_ex414525_ ∧
+  k_ex414525_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex414526_ ∧ k_ex414526_ ≤ (2 ^ 64 - 1) -/
 def auth_signing_hash (chain_id : Nat) (addr : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (BitVec 8) 32) := do
   let chain_id_length := (rlp_uint_word_size chain_id)
   let address_length := (rlp_addr_size ())
@@ -144,8 +145,8 @@ def auth_signing_hash (chain_id : Nat) (addr : (Vector (BitVec 8) 20)) (nonce : 
 /-- The per-envelope `v`-range rule: legacy accepts `27`/`28` or the
 EIP-155 form binding the chain id; typed envelopes accept
 `y_parity ∈ {0, 1}`. -/
-/- Type quantifiers: k_ex415664_ : Nat, k_ex415663_ : Nat, 0 ≤ k_ex415663_ ∧
-  k_ex415663_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex415664_ ∧ k_ex415664_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex414528_ : Nat, k_ex414527_ : Nat, 0 ≤ k_ex414527_ ∧
+  k_ex414527_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex414528_ ∧ k_ex414528_ ≤ (2 ^ 256 - 1) -/
 def tx_sig_v_valid (chain_id : Nat) (t : TxType) (v : Nat) : Bool :=
   match t with
   | .LegacyTx =>
@@ -156,7 +157,7 @@ def tx_sig_v_valid (chain_id : Nat) (t : TxType) (v : Nat) : Bool :=
 /-- Extracts the recovery parity after [tx_sig_v_valid][] has validated the
 envelope-specific `v` domain. Legacy `27` and every EIP-155 parity-zero
 value are odd; typed envelopes carry the parity directly. -/
-/- Type quantifiers: k_ex415665_ : Nat, 0 ≤ k_ex415665_ ∧ k_ex415665_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex414529_ : Nat, 0 ≤ k_ex414529_ ∧ k_ex414529_ ≤ (2 ^ 256 - 1) -/
 def tx_y_parity (t : TxType) (v : Nat) : Nat :=
   match t with
   | .LegacyTx =>
@@ -171,9 +172,9 @@ def tx_y_parity (t : TxType) (v : Nat) : Nat :=
 /-- Authenticates a transaction: enforce the EIP-2 low-`s` bound, recover the
 signer selected by `y_parity`, and bind it to the address derived from the
 witnessed 65-byte public key. -/
-/- Type quantifiers: k_ex415668_ : Nat, k_ex415667_ : Nat, k_ex415666_ : Nat, 0 ≤ k_ex415666_ ∧
-  k_ex415666_ ≤ 1, 0 ≤ k_ex415667_ ∧ k_ex415667_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex415668_ ∧
-  k_ex415668_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex414532_ : Nat, k_ex414531_ : Nat, k_ex414530_ : Nat, 0 ≤ k_ex414530_ ∧
+  k_ex414530_ ≤ 1, 0 ≤ k_ex414531_ ∧ k_ex414531_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex414532_ ∧
+  k_ex414532_ ≤ (2 ^ 256 - 1) -/
 def tx_auth_valid (sender : (Vector (BitVec 8) 20)) (h : (Vector (BitVec 8) 32)) (parity : Nat) (r : Nat) (s : Nat) : SailM Bool := do
   if ((word_ult SECP_N_HALF s) : Bool)
   then (pure false)

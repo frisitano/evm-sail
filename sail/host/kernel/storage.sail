@@ -6,7 +6,7 @@ and transient storage (EIP-1153), over the host state stores.
 */
 
 val k_aload : address -> Account
-val stateless_storage : (hash, word) -> word
+val stateless_storage_by_key : (hash, hash) -> word
 
 function storage_key(a : address, s : word) -> StorageKey = struct { addr = a, slot = s }
 
@@ -32,32 +32,57 @@ function k_slot_is_warm(a : address, s : word) -> bool = warm_slot_touch(a, s)
     authenticated MPT point-get, one walk for both the witness and the
     harness-built alloc trie; everything above it (the overlay, the
     read-through, the journal) is common. */
-function k_sload(a : address, s : word) -> StorageValue = {
+function k_sload_inner(a : address, s : word) -> StorageValue = {
+    cycle_scope_start(SCOPE_BAL_STORAGE_READ);
     bal_storage_read(a, s);
+    cycle_scope_end(SCOPE_BAL_STORAGE_READ);
+
     let key = storage_key(a, s);
-    match storage_tx_get(key) {
+    cycle_scope_start(SCOPE_STORAGE_TX_LOOKUP);
+    let tx_value = storage_tx_get(key);
+    cycle_scope_end(SCOPE_STORAGE_TX_LOOKUP);
+    match tx_value {
         Some(e) => return e,
         None() => (),
     };
-    let acc = k_aload(a);
-    match storage_block_get(key) {
+
+    cycle_scope_start(SCOPE_STORAGE_BLOCK_LOOKUP);
+    let block_value = storage_block_get(key);
+    cycle_scope_end(SCOPE_STORAGE_BLOCK_LOOKUP);
+    match block_value {
         Some(e) => return struct { curr = e.curr, orig = e.curr },
         None() => (),
     };
+
+    cycle_scope_start(SCOPE_STORAGE_WITNESS);
+    let acc = k_aload(a);
+    let slot_hash = keccak256_word(s);
     let v = if acc.storage_cleared then {
             ZERO_WORD
         } else {
-            stateless_storage(acc.info.storage_root, s)
+            stateless_storage_by_key(acc.info.storage_root, slot_hash)
         };
-    storage_block_cache(key, v);
+    storage_block_cache(key, slot_hash, v);
+    cycle_scope_end(SCOPE_STORAGE_WITNESS);
     struct { curr = v, orig = v }
+}
+
+/*! Profiles and returns one complete persistent-storage read. */
+function k_sload(a : address, s : word) -> StorageValue = {
+    cycle_scope_start(SCOPE_STORAGE_LOAD);
+    let value = k_sload_inner(a, s);
+    cycle_scope_end(SCOPE_STORAGE_LOAD);
+    value
 }
 
 /*! `SSTORE`: creates or updates the live transaction row. The preceding
     [k_sload][] supplies the transaction-original value; the host keeps
     clear generations and frame undo history private. */
-function k_sstore(a : address, s : word, v : StorageValue) -> unit =
-    storage_tx_update(struct { key = storage_key(a, s), value = v })
+function k_sstore(a : address, s : word, v : StorageValue) -> unit = {
+    cycle_scope_start(SCOPE_STORAGE_MUTATION);
+    storage_tx_update(struct { key = storage_key(a, s), value = v });
+    cycle_scope_end(SCOPE_STORAGE_MUTATION)
+}
 
 /*! `TLOAD` (EIP-1153): reads per-transaction transient storage, which is
     discarded at transaction end and is not part of the state trie. */

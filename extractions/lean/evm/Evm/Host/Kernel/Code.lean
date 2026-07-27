@@ -47,6 +47,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /-! # State: account code
 
@@ -144,8 +145,8 @@ def k_get_code_size (a : (Vector (BitVec 8) 20)) : SailM Nat := do
 
 /-- `EXTCODECOPY`: copies account code into frame memory, zero-padded
 past the end. -/
-/- Type quantifiers: k_ex416344_ : Nat, k_ex416343_ : Nat, k_ex416342_ : Nat, 0 ≤ k_ex416342_, 0
-  ≤ k_ex416343_ ∧ k_ex416343_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex416344_ -/
+/- Type quantifiers: k_ex415209_ : Nat, k_ex415208_ : Nat, k_ex415207_ : Nat, 0 ≤ k_ex415207_, 0
+  ≤ k_ex415208_ ∧ k_ex415208_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex415209_ -/
 def k_code_copy (a : (Vector (BitVec 8) 20)) (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
   let code ← do (code_db_resolve (← (k_code_key a)))
   (slice_copy_word_offset code.bytes dst off len)

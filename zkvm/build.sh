@@ -104,11 +104,14 @@ SPIKE_FLAGS=(--isa="$SPIKE_ISA" --misaligned -m"$SPIKE_MEM" --extlib="$SPIKE_DEV
 # Inject the owning FFI headers directly. There is deliberately no aggregate
 # model/input umbrella: each external operation is declared by its subsystem.
 MODEL_HEADERS=(
-  byte_slice_glue.h host_crypto.h precompiles.h output.h scratch.h memory.h
+  byte_slice_glue.h hash_glue.h precompiles.h output.h scratch.h memory.h
   frame_stack.h
   transient_storage.h stack.h code_db.h kernel_state.h trie_node_db.h
   state_db.h cycle_scopes.h
 )
+if [ -z "${GUEST:-}" ]; then
+  MODEL_HEADERS+=(word_bytes_glue.h htr_glue.h mpt_glue.h journal_glue.h interpreter_glue.h)
+fi
 MODEL_INCLUDE_FLAGS=()
 for header in "${MODEL_HEADERS[@]}"; do
   MODEL_INCLUDE_FLAGS+=(--c-include "$header")
@@ -139,13 +142,23 @@ resolve_sail() {
 
 compile_common() {
   local lib; lib="$(sail_lib)"
+  local trie_aggregate_glue_flags=()
+  local state_access_aggregate_glue_flags=()
+  if [ -z "${GUEST:-}" ] && [ "$EVM_DEBUG" = off ]; then
+    trie_aggregate_glue_flags=(-DEVMSAIL_NO_TRIE_AGGREGATE_GLUE)
+  fi
+  if [ -z "${GUEST:-}" ]; then
+    state_access_aggregate_glue_flags=(-DEVMSAIL_NO_STATE_ACCESS_AGGREGATE_GLUE)
+  fi
   # 1. Sail -> C: no main, no Sail runtime harness (we supply our own).
   if [ -n "${GUEST:-}" ]; then
     "$SAIL" -c --c-no-main --c-no-rts --c-preserve main \
         "${MODEL_INCLUDE_FLAGS[@]}" \
         "$GUEST" -o "$BUILD/zkvm_block"
   else
-    ( cd "$ROOT" && "$SAIL" -c -O --Oconstant-fold --c-no-main --c-no-rts --c-preserve main \
+    ( cd "$ROOT" && "$SAIL" -c -O --Oconstant-fold --c-no-main --c-no-rts \
+        --c-preserve main --c-preserve leaf_child_ref \
+        --c-preserve resume_frame \
         --c-specialize --c-require-bounded-int \
         "${MODEL_INCLUDE_FLAGS[@]}" \
         --splice "$C_SPLICE" \
@@ -158,13 +171,16 @@ compile_common() {
   #    integers; mathematical int/nat values use sail256's exact bounded ABI.
   #    The model calls setup_rts/cleanup_rts (provided by runtime.c) without a
   #    prototype since --c-no-rts omits rts.h; downgrade that to a warning.
-  "$GCC" "${CFLAGS[@]}" -I"$lib" \
+  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
+      -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
       -Wno-unused -Wno-error=implicit-function-declaration \
       -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
   # 2b. state aggregate glue: account/storage rows cross the extern boundary
   #     using generated layouts; the rollback journal itself is C-private.
   "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+      "${trie_aggregate_glue_flags[@]}" \
+      "${state_access_aggregate_glue_flags[@]}" \
       -c "$ROOT/ffi/journal_glue.c" -o "$BUILD/journal_glue.o"
   "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
@@ -181,16 +197,31 @@ compile_common() {
   "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
       -c "$ROOT/ffi/frame_stack_glue.c" -o "$BUILD/frame_stack_glue.o"
+  HTR_GLUE_OBJ=""
+  MPT_GLUE_OBJ=""
+  INTERPRETER_GLUE_OBJ=""
+  if [ -z "${GUEST:-}" ]; then
+    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+        -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+        -c "$ROOT/ffi/htr_glue.c" -o "$BUILD/htr_glue.o"
+    HTR_GLUE_OBJ="$BUILD/htr_glue.o"
+    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+        -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+        -c "$ROOT/ffi/mpt_glue.c" -o "$BUILD/mpt_glue.o"
+    MPT_GLUE_OBJ="$BUILD/mpt_glue.o"
+    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+        -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+        -c "$ROOT/ffi/interpreter_glue.c" -o "$BUILD/interpreter_glue.o"
+    INTERPRETER_GLUE_OBJ="$BUILD/interpreter_glue.o"
+  fi
   # 3. GMP-free Sail runtime: exact bounded integers and inline 256-bit lbits.
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
       -Wno-unused -Wno-error=implicit-function-declaration \
       -c "$RT/sail256/sail.c" -o "$BUILD/sail.o"
-  # 3b. Host crypto/precompile adapters are platform-neutral and call only the
-  #     standard zkvm_accelerators.h interface.
-  for hc in host_crypto precompiles; do
-    "$GCC" "${CFLAGS[@]}" -I"$lib" -I"$ROOT/ffi" \
-        -Wno-unused -c "$ROOT/ffi/$hc.c" -o "$BUILD/$hc.o"
-  done
+  # 3b. The precompile adapter is platform-neutral and calls only the standard
+  #     zkvm_accelerators.h interface.
+  "$GCC" "${CFLAGS[@]}" -I"$lib" -I"$ROOT/ffi" \
+      -Wno-unused -c "$ROOT/ffi/precompiles.c" -o "$BUILD/precompiles.o"
   # 3c. C host backends: memory/generic byte slices, transient storage,
   #     output arena, operand stack, code/JUMPDEST arenas, and witness/account
   #     databases.
@@ -253,10 +284,17 @@ cmd_zisk_lib() {
   "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra \
       -c "$HERE/zisk/platform.c" -o "$BUILD/zisk_platform.o"
   compile_profile_scope
+  # `ar crs` updates an existing archive without removing members that are no
+  # longer named. Recreate it so renamed/deleted glue objects cannot survive a
+  # rebuild and contribute stale symbols to the final guest.
+  rm -f "$BUILD/libevmsail_zisk.a"
   "$AR" crs "$BUILD/libevmsail_zisk.a" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/zisk_platform.o" "$BUILD/sail.o" \
-      "$BUILD/host_crypto.o" "$BUILD/precompiles.o" \
+      "$BUILD/precompiles.o" \
       "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/address_result_glue.o" "$BUILD/frame_stack_glue.o" \
+      ${HTR_GLUE_OBJ:+"$HTR_GLUE_OBJ"} \
+      ${MPT_GLUE_OBJ:+"$MPT_GLUE_OBJ"} \
+      ${INTERPRETER_GLUE_OBJ:+"$INTERPRETER_GLUE_OBJ"} \
       "$BUILD/memory.o" "$BUILD/scratch.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
       "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/output.o" \
       ${PROFILE_OBJ:+"$PROFILE_OBJ"} "$BUILD/zkvm_block.o"
@@ -267,8 +305,11 @@ link_guest() {
   "$GCC" "${CFLAGS[@]}" "${LDFLAGS[@]}" \
       "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/zkvm_io.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
-      "$BUILD/host_crypto.o" "$BUILD/precompiles.o" "$BUILD/accel_guest.o" \
+      "$BUILD/precompiles.o" "$BUILD/accel_guest.o" \
       "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/address_result_glue.o" "$BUILD/frame_stack_glue.o" \
+      ${HTR_GLUE_OBJ:+"$HTR_GLUE_OBJ"} \
+      ${MPT_GLUE_OBJ:+"$MPT_GLUE_OBJ"} \
+      ${INTERPRETER_GLUE_OBJ:+"$INTERPRETER_GLUE_OBJ"} \
       "$BUILD/memory.o" "$BUILD/scratch.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
       "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/output.o" \
       ${PROFILE_OBJ:+"$PROFILE_OBJ"} \

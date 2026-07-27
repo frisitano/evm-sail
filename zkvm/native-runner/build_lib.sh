@@ -49,10 +49,18 @@ fi
 
 # 2. link a shared library: build.sh's objects (incl. test_utils.o), minus main.o
 HOST_OBJS=()
-for hc in memory scratch transient_storage state_db stack code_db kernel_state trie_node_db host_crypto precompiles output; do
+for hc in memory scratch transient_storage state_db stack code_db kernel_state trie_node_db precompiles output; do
   HOST_OBJS+=("$BUILD/$hc.o")
 done
 if [ "${EVM_PROFILE:-off}" = on ]; then HOST_OBJS+=("$BUILD/cycle_scopes.o"); fi
+HTR_GLUE_OBJ=""
+MPT_GLUE_OBJ=""
+INTERPRETER_GLUE_OBJ=""
+if [ "${EVM_BUILD_MODE:-optimized}" = optimized ]; then
+  HTR_GLUE_OBJ="$BUILD/htr_glue.o"
+  MPT_GLUE_OBJ="$BUILD/mpt_glue.o"
+  INTERPRETER_GLUE_OBJ="$BUILD/interpreter_glue.o"
+fi
 case "$(uname -s)" in
   Darwin) SHFLAG=(-dynamiclib -install_name "@rpath/libevmsail_guest.dylib"); EXT=dylib ;;
   *)      SHFLAG=(-shared); EXT=so ;;
@@ -63,6 +71,9 @@ OUT="$BUILD/libevmsail_guest.$EXT"
 # Spike I/O device adapter is never linked into host builds.
 LINK_CMD=("$CC" "${CFLAGS[@]}" "${SHFLAG[@]}"
     "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/address_result_glue.o" "$BUILD/frame_stack_glue.o" "$BUILD/test_utils.o"
+    ${HTR_GLUE_OBJ:+"$HTR_GLUE_OBJ"}
+    ${MPT_GLUE_OBJ:+"$MPT_GLUE_OBJ"}
+    ${INTERPRETER_GLUE_OBJ:+"$INTERPRETER_GLUE_OBJ"}
     "${HOST_OBJS[@]}" "${RUNTIME_OBJS[@]}"
     -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB")
 if [ "${EVM_BUILD_MODE:-optimized}" = standard ]; then

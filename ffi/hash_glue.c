@@ -9,15 +9,16 @@
  * of the segments. One FFI call performs each complete operation; the walk
  * over the generated cons cells is native pointer chasing.
  * A BytesList segment contributes its materialized Sail bytes; a BytesSlice
- * segment resolves through the central ByteSlice source resolver; and a
- * BytesFixed32 segment contributes the selected prefix of its fixed vector --
- * an unresolvable slice poisons the preimage, yielding the same sentinel
- * digest path the old source hashers used. */
+ * segment resolves through the central ByteSlice source resolver; and fixed
+ * 20/32-byte segments contribute their inline vectors directly -- an
+ * unresolvable slice poisons the preimage, yielding the same sentinel digest
+ * path the old source hashers used. */
 #include EVMSAIL_MODEL_H
 #include "byte_slice_glue.h"
-#include "host_crypto.h"
+#include "hash_glue.h"
 #include "kernel_state.h"
 #include "value_convert.h"
+#include "zkvm_accelerators.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,20 +39,6 @@ static uint64_t byte_slice_off(const struct zByteSliceFields *slice) {
 
 static uint64_t byte_slice_len(const struct zByteSliceFields *slice) {
   return evmsail_byte_quantity_value(slice->zlen);
-}
-
-static uint64_t fixed_bytes32_len(const struct zFixedBytes32 *bytes) {
-  /* range(0, 32) is native-width in both generated ABIs.  It is deliberately
-     narrower than the host_access fields handled by quantity_abi.h. */
-  return bytes->zlen;
-}
-
-static int fixed_bytes32_value(const struct zFixedBytes32 *fixed,
-                               uint8_t bytes[32], uint64_t *len) {
-  *len = fixed_bytes32_len(fixed);
-  if (*len > 32) return 0;
-  evmsail_hash_to_be_bytes(bytes, fixed->zdata);
-  return 1;
 }
 
 static void seg_put(const uint8_t *p, uint64_t n) {
@@ -103,15 +90,10 @@ static void seg_accumulate(zz5listz8z5unionz0zzBytesz9 segs) {
         return;
       }
       seg_put(p, len);
-    } else { /* Kind_zBytesFixed32 */
-      const struct zFixedBytes32 *fixed = &n->hd.variants.zBytesFixed32;
-      uint8_t bytes[32];
-      uint64_t len = 0;
-      if (!fixed_bytes32_value(fixed, bytes, &len)) {
-        seg_ok = 0;
-        return;
-      }
-      seg_put(bytes, len);
+    } else if (n->hd.kind == Kind_zBytesAddress) {
+      seg_put(n->hd.variants.zBytesAddress.bytes, 20);
+    } else { /* Kind_zBytesHash */
+      seg_put(n->hd.variants.zBytesHash.bytes, 32);
     }
   }
 }
@@ -178,15 +160,16 @@ bool host_bytes_segments_equal_slice(zz5listz8z5unionz0zzBytesz9 segs,
           memcmp(actual, want + offset, (size_t)slice_len) != 0)
         return false;
       offset += slice_len;
-    } else { /* Kind_zBytesFixed32 */
-      const struct zFixedBytes32 *fixed = &n->hd.variants.zBytesFixed32;
-      uint8_t bytes[32];
-      uint64_t len = 0;
-      if (!fixed_bytes32_value(fixed, bytes, &len) ||
-          offset > expected_len || len > expected_len - offset ||
-          memcmp(bytes, want + offset, (size_t)len) != 0)
+    } else if (n->hd.kind == Kind_zBytesAddress) {
+      if (offset > expected_len || 20 > expected_len - offset ||
+          memcmp(n->hd.variants.zBytesAddress.bytes, want + offset, 20) != 0)
         return false;
-      offset += len;
+      offset += 20;
+    } else { /* Kind_zBytesHash */
+      if (offset > expected_len || 32 > expected_len - offset ||
+          memcmp(n->hd.variants.zBytesHash.bytes, want + offset, 32) != 0)
+        return false;
+      offset += 32;
     }
   }
   return offset == expected_len;
@@ -194,34 +177,38 @@ bool host_bytes_segments_equal_slice(zz5listz8z5unionz0zzBytesz9 segs,
 
 EVMSAIL_HASH_RETURN host_keccak_segments(
     EVMSAIL_HASH_RESULT(result) zz5listz8z5unionz0zzBytesz9 segs) {
+  static const uint8_t empty[1] = {0};
   const uint8_t *p = NULL;
   uint64_t len = 0;
-  uint64_t digest[4];
-  uint8_t bytes[32];
+  zkvm_keccak256_hash digest = {{0}};
   if (!seg_single_slice(segs, &p, &len)) {
     seg_accumulate(segs);
     p = seg_ok ? seg_buf : NULL;
     len = seg_ok ? seg_len : UINT64_MAX;
   }
-  host_keccak256_bytes(digest, p, len);
-  be_words4_to_be_bytes(bytes, digest);
-  EVMSAIL_RETURN_HASH_BE_BYTES(result, bytes);
+  const uint8_t *input = len ? p : empty;
+  if (!input || len > UINT32_MAX ||
+      zkvm_keccak256(input, (size_t)len, &digest) != ZKVM_EOK)
+    memset(&digest, 0, sizeof(digest));
+  EVMSAIL_RETURN_HASH_BE_BYTES(result, digest.data);
 }
 
 EVMSAIL_HASH_RETURN host_sha256_segments(
     EVMSAIL_HASH_RESULT(result) zz5listz8z5unionz0zzBytesz9 segs) {
+  static const uint8_t empty[1] = {0};
   const uint8_t *p = NULL;
   uint64_t len = 0;
-  uint64_t digest[4];
-  uint8_t bytes[32];
+  zkvm_sha256_hash digest = {{0}};
   if (!seg_single_slice(segs, &p, &len)) {
     seg_accumulate(segs);
     p = seg_ok ? seg_buf : NULL;
     len = seg_ok ? seg_len : UINT64_MAX;
   }
-  host_sha256_bytes(digest, p, len);
-  be_words4_to_be_bytes(bytes, digest);
-  EVMSAIL_RETURN_HASH_BE_BYTES(result, bytes);
+  const uint8_t *input = len ? p : empty;
+  if (!input || len > UINT32_MAX ||
+      zkvm_sha256(input, (size_t)len, &digest) != ZKVM_EOK)
+    memset(&digest, 0, sizeof(digest));
+  EVMSAIL_RETURN_HASH_BE_BYTES(result, digest.data);
 }
 
 /* ---- log records (host/state.sail log_append / read_logs) --------------- */
@@ -255,12 +242,10 @@ unit log_append_record(sail_address a, evmsail_word_list topics,
                                     &p, &rlen) &&
         rlen == len)
       log_add_data_bulk(p, len);
+  } else if (data.kind == Kind_zBytesAddress) {
+    log_add_data_bulk(data.variants.zBytesAddress.bytes, 20);
   } else {
-    const struct zFixedBytes32 *fixed = &data.variants.zBytesFixed32;
-    uint8_t bytes[32];
-    uint64_t len = 0;
-    if (fixed_bytes32_value(fixed, bytes, &len))
-      log_add_data_bulk(bytes, len);
+    log_add_data_bulk(data.variants.zBytesHash.bytes, 32);
   }
   return UNIT;
 }

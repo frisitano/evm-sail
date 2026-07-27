@@ -35,9 +35,7 @@ type CodeSlice = {
 
 /*! Reclassifies a byte span after its producer has established the executable
     length invariant. */
-val code_slice : forall 'off 'len,
-    source_valid_range('off, 'len) & code_valid_length('len).
-    ByteSliceFields('off, 'len) -> CodeSlice
+val code_slice : forall 'off 'len, source_valid_range('off, 'len) & code_valid_length('len). ByteSliceFields('off, 'len) -> CodeSlice
 function code_slice(bytes) = bytes
 
 /*! Converts a source span whose producer guarantees executable cursor

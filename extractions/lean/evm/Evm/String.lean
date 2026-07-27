@@ -42,6 +42,7 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
 /- Type quantifiers: k_n : Int -/
 def concat_str_bits (str : String) (x : (BitVec k_n)) : String :=

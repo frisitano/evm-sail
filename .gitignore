@@ -10,6 +10,8 @@ sail_smt_cache
 # zkVM RISC-V guest build artifacts
 zkvm/build/
 zkvm/build-zisk/
+/tools/zisk-guests/*.elf
+/tools/zisk-guests/SHA256SUMS
 
 # harness caches
 harness/.rtcache/

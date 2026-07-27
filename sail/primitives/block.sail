@@ -56,7 +56,9 @@ struct BlockHeader = {
 
 /*! `keccak256(rlp([]))` — the ommers hash of every post-merge block
     (EIP-3675 requires an empty ommers list). */
-let EMPTY_OMMER_HASH : hash = B256(to_bytes_le(32, 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347))
+let EMPTY_OMMER_HASH : hash = word_to_hash(
+    U256(unsigned(0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347)),
+)
 
 /*! An EIP-4895 beacon-chain withdrawal: index, validator, recipient,
     and amount in gwei. */

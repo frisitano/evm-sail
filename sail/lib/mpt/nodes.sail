@@ -32,9 +32,14 @@ function inline_node_slice(node : InlineNode) -> ByteSlice = {
     scratch_finish(start)
 }
 
-/*! Hashes an inline node directly from its fixed byte vector. */
-function inline_node_hash(node : InlineNode) -> hash =
-    keccak256([|bytes_fixed32(node.data, node.len)|])
+/*! Hashes an inline node from its existing scratch representation. */
+function inline_node_hash(node : InlineNode) -> hash = {
+    let mark = scratch_begin();
+    let encoded = inline_node_slice(node);
+    let digest = keccak256(encoded);
+    scratch_rewind(mark);
+    digest
+}
 
 /*! A reference to a trie node: empty, inline (encodings under 32 bytes),
     or by KECCAK-256 hash (YP Appendix D, Eq. 207). */
@@ -84,7 +89,7 @@ function child_ref(encoded : ByteSlice) -> NodeRef =
     if encoded.len < MPT_HASH_LENGTH then {
         InlineRef(inline_node_from_slice(encoded))
     } else {
-        HashRef(keccak256_slice(encoded))
+        HashRef(keccak256(encoded))
     }
 
 /*! Returns the one-hot presence mask for a branch-child nibble. */
@@ -181,7 +186,7 @@ function node_to_ref(node : ByteSlice) -> NodeRef =
         if node.len < MPT_HASH_LENGTH then {
             InlineRef(inline_node_from_slice(node))
         } else {
-            HashRef(keccak256_slice(node))
+            HashRef(keccak256(node))
         }
     }
 

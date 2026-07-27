@@ -48,21 +48,20 @@ function tx_signing_hash(t : TxType, content_src : ByteSlice, v : word) -> hash 
     let suffix_length = suffix_len;
     let content_len : range(0, transaction_length_bound + 35) = content_length + suffix_length;
     let (prefix, prefix_len) = rlp_list_prefix(content_len);
+    let mark = scratch_begin();
+    if tb != 0x00 then {
+        scratch_push_bytes([|tb|], 1)
+    };
+    scratch_push_bytes(prefix, prefix_len);
+    scratch_push_slice(content_src);
     if eip155 then {
-        let mark = scratch_begin();
         rlp_write_uint_word(chain_id);
-        scratch_push_bytes([|0x80, 0x80|], LEGACY_SIGNATURE_SUFFIX_LENGTH);
-        let suffix = rlp_finish(mark);
-        let signing_hash = keccak256([|bytes_list(prefix, prefix_len), BytesSlice(content_src), BytesSlice(suffix)|]);
-        scratch_rewind(mark);
-        signing_hash
-    } else {
-        if tb != 0x00 then {
-            keccak256([|bytes_list([|tb|], 1), bytes_list(prefix, prefix_len), BytesSlice(content_src)|])
-        } else {
-            keccak256([|bytes_list(prefix, prefix_len), BytesSlice(content_src)|])
-        }
+        scratch_push_bytes([|0x80, 0x80|], LEGACY_SIGNATURE_SUFFIX_LENGTH)
     }
+    ;
+    let signing_hash = keccak256(scratch_finish(mark));
+    scratch_rewind(mark);
+    signing_hash
 }
 
 /*! The EIP-7702 authorization signing hash:
@@ -79,7 +78,7 @@ function auth_signing_hash(chain_id : word, addr : address, nonce : account_nonc
     rlp_write_addr(addr);
     rlp_write_uint(nonce);
     let encoded = rlp_finish(mark);
-    let signing_hash = keccak256_slice(encoded);
+    let signing_hash = keccak256(encoded);
     scratch_rewind(mark);
     signing_hash
 }

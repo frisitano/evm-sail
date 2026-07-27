@@ -15,23 +15,20 @@ function create_address(sender : address, nonce : account_nonce) -> address = {
     rlp_write_addr(sender);
     rlp_write_uint(nonce);
     let encoded = rlp_finish(mark);
-    let address = word_to_address(hash_to_word(keccak256_slice(encoded)));
+    let address = word_to_address(hash_to_word(keccak256(encoded)));
     scratch_rewind(mark);
     address
 }
 
 /*! The `CREATE2` address (EIP-1014): the low 20 bytes of
     `keccak256(0xff ++ sender ++ salt ++ keccak256(initcode))`. */
-function create2_address(sender : address, salt : word, init_hash : hash) -> address =
-    word_to_address(
-        hash_to_word(
-            keccak256(
-                [|
-                    bytes_list([|0xff|], 1),
-                    bytes_list(address_to_bytes(sender), ADDRESS_BYTE_LENGTH),
-                    bytes_list(word_to_bytes32(salt), WORD_BYTE_LENGTH),
-                    bytes_list(hash_to_bytes32(init_hash), WORD_BYTE_LENGTH),
-                |],
-            ),
-        ),
-    )
+function create2_address(sender : address, salt : word, init_hash : hash) -> address = {
+    let mark = scratch_begin();
+    scratch_push_bytes([|0xff|], 1);
+    scratch_push_address(sender);
+    scratch_push_b256(word_to_hash(salt), WORD_BYTE_LENGTH);
+    scratch_push_b256(init_hash, WORD_BYTE_LENGTH);
+    let digest = keccak256(scratch_finish(mark));
+    scratch_rewind(mark);
+    word_to_address(hash_to_word(digest))
+}

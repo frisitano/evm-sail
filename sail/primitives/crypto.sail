@@ -3,14 +3,14 @@
 
 The axiomatic hash core — `keccak256` (the `KECCAK256` opcode, trie/RLP
 node references, `CREATE2` salting) and `sha256` (precompile `0x02` and SSZ
-merkleization) as pure functions of `Bytes` segment lists — plus the
+merkleization) as pure functions of contiguous byte slices — plus the
 well-known digests of fixed inputs. Loaded before the account types:
 `EMPTY_ACCOUNT` and the kernel's emptiness checks read the digests long
 before `lib/mpt/primitives.sail` loads.
 
 The `c:`-bound `val`s in this module form the accelerator interface:
-hash/signature primitives with no pure Sail body (`ffi/host_crypto.c`,
-`ffi/precompiles.c` — the eth-act zkvm-standards accelerator surface).
+hash/signature primitives with no pure Sail body (`ffi/hash_glue.c`,
+`ffi/precompiles.c` — direct callers of the eth-act zkvm-standards surface).
 Proof targets see them as bodyless axioms.
 
 | Name | Value | Description |
@@ -22,19 +22,23 @@ Proof targets see them as bodyless axioms.
 
 /*! keccak256 of the empty string: the `codeHash` of every codeless
     account. */
-let KECCAK_EMPTY : hash = B256(to_bytes_le(32, 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470))
+let KECCAK_EMPTY : hash = word_to_hash(
+    U256(unsigned(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470)),
+)
 
 /*! `keccak256(rlp(""))` — the root of an empty Merkle-Patricia trie: the
     storage root of every account with no storage (`EMPTY_ACCOUNT`, freshly
     created). */
-let EMPTY_TRIE_ROOT : hash = B256(to_bytes_le(32, 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421))
+let EMPTY_TRIE_ROOT : hash = word_to_hash(
+    U256(unsigned(0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421)),
+)
 
 /* ---- Crypto core. The `c:`-bound vals below are the axiomatic boundary:
- * hash/signature primitives with NO pure Sail body (ffi/host_crypto.c,
- * ffi/precompiles.c -- the eth-act zkvm-standards accelerator surface); proof
+ * hash/signature primitives with NO pure Sail body (ffi/hash_glue.c,
+ * ffi/precompiles.c -- direct users of the eth-act zkvm-standards surface); proof
  * targets see them as bodyless axioms (the c: key binds only C). keccak256 and
- * sha256 are the axiomatic hash core. All shared consensus
- * hashing (lib/consensus_hash.sail) is written against these three. The
+ * sha256 are the axiomatic hash core. All shared consensus hashing is
+ * written against these two. The
  * StatelessInput/Memory/Code source of a ByteSlice denotes its abstract byte
  * sequence directly: keccak256(s : ByteSlice) hashes exactly that sequence;
  * the prefixed SHA-256 digest = sha256(type_byte :: bytes). ---- */
@@ -42,52 +46,30 @@ let EMPTY_TRIE_ROOT : hash = B256(to_bytes_le(32, 0x56e81f171bcc55a6ff8345e692c0
 /*md
 ## The hash axioms
 
-Pure functions of a segment list. A preimage is accumulated Sail-side as
-`list(Bytes)` — its denotation is the concatenation of the segments — and
-crosses the host interface in one call; the implementation
-(`ffi/hash_glue.c`) walks the segment list natively, resolves each
-`BytesSlice` from its region, and hashes. Fixed 32-byte vectors cross directly
-with their meaningful prefix length. No channel state, no per-byte crossings.
+Pure functions of a contiguous source-backed slice. Single-slice inputs hash
+in place. Composite preimages are written in order to the reusable scratch
+arena and then cross the accelerator boundary as one slice; no Sail byte or
+segment list is allocated.
 
 The `StatelessInput`/`Memory`/`Code` source of a
 [ByteSlice][type-ByteSlice] denotes an abstract byte sequence:
-`keccak256(s : ByteSlice) = keccak256(read_byte_slice(s))`. All shared
-consensus hashing is written against [keccak256_segments][] and
-[sha256_segments][]. RLP hashing constructs the domain, list prefix, and
-payload as separate segments of the same preimage.
+`keccak256(s : ByteSlice) = keccak256(read_byte_slice(s))`. RLP hashing writes
+the domain, list prefix, and payload into one scratch-backed preimage.
 */
-/*! The KECCAK-256 axiom: the digest of a segment list's concatenation
-    (bodyless; bound to `host_keccak_segments` in C). */
-val keccak256_segments = impure { c: "host_keccak_segments" } : list(Bytes) -> hash
-/*! The SHA-256 axiom: the digest of a segment list's concatenation
-    (bodyless; bound to `host_sha256_segments` in C). */
-val sha256_segments = impure { c: "host_sha256_segments" } : list(Bytes) -> hash
+/*! The KECCAK-256 axiom: the digest of a source-tagged slice. */
+val keccak256 = impure { c: "host_keccak_slice" } : ByteSlice -> hash
+/*! The SHA-256 axiom: the digest of a source-tagged slice. */
+val sha256 = impure { c: "host_sha256_slice" } : ByteSlice -> hash
 
-/*! KECCAK-256 of a source-tagged slice, without materializing it. */
-function keccak256_slice(s : ByteSlice) -> hash = keccak256_segments([|BytesSlice(s)|])
-/*! SHA-256 of a source-tagged slice, without materializing it. */
-function sha256_slice(s : ByteSlice) -> hash = sha256_segments([|BytesSlice(s)|])
-
-/* Materialized fragments always enter through Bytes with an explicit length;
- * source-backed payloads can use the single-slice overload directly. */
-overload keccak256 = { keccak256_slice, keccak256_segments }
-overload sha256 = { sha256_slice, sha256_segments }
-
-/*! KECCAK-256 of a single word. Fixed-width helper with pure meaning over
-    [keccak256_segments][]; implementations may override
-    it with a one-call accelerator (`host_keccak_word`) — secure-trie keys
-    hash on every state access. */
-function keccak256_word(w : word) -> hash =
-    keccak256([|bytes_list(word_to_bytes32(w), WORD_BYTE_LENGTH)|])
+/*! KECCAK-256 of one EVM word in canonical big-endian byte order. */
+val keccak256_word = impure { c: "host_keccak_word" } : word -> hash
 
 /*! KECCAK-256 of a 20-byte address (secure-trie account keys). */
-function keccak256_address(a : address) -> hash =
-    keccak256([|bytes_list(address_to_bytes(a), ADDRESS_BYTE_LENGTH)|])
+val keccak256_address = impure { c: "host_keccak_address" } : address -> hash
 
 /*! The SSZ Merkle parent: `SHA-256(left ++ right)` over two 32-byte
     chunks. */
-function sha256_pair(a : hash, b : hash) -> hash =
-    sha256([|bytes_list(hash_to_bytes32(a), WORD_BYTE_LENGTH), bytes_list(hash_to_bytes32(b), WORD_BYTE_LENGTH)|])
+val sha256_pair = impure { c: "host_sha256_pair" } : (hash, hash) -> hash
 
 /*md
 ## The signature core

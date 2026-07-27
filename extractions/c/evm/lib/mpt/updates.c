@@ -2,2406 +2,2404 @@
 #ifndef EVMSAIL_C_UNITY_BUILD
 #include "../../evm_internal.h"
 #endif
-void zcached_account_trie_update_next(struct zoptionzIRTrieUpdatezK *z8zE508, unit z3zE1474)
+void zcached_account_trie_update_next(struct zoptionzIRTrieUpdatezK *z8zE564, unit z3zE1135)
 {
-  zNonezIRTrieUpdatezK((*(&z8zE508)), UNIT);
-end_function_1918: ;
-  goto end_function_4032;
-end_block_exception_1919: ;
-  goto end_function_4032;
-end_function_4032: ;
+  zNonezIRTrieUpdatezK((*(&z8zE564)), UNIT);
+end_function_1659: ;
+  goto end_function_3618;
+end_block_exception_1660: ;
+  goto end_function_3618;
+end_function_3618: ;
 }
 
 struct zByteSliceFields zencode_state_account(struct zAccountInfo zinfo, sail_fixed_bytes_32 zstorage_root)
 {
-  struct zByteSliceFields z8zE509;
+  struct zByteSliceFields z8zE565;
   uint64_t znonce_length;
   {
-    uint64_t z2zE1478;
-    z2zE1478 = zinfo.znonce;
-    znonce_length = zrlp_uint_word_sizzezIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE1478);
+    uint64_t z2zE1007;
+    z2zE1007 = zinfo.znonce;
+    znonce_length = zrlp_uint_word_sizzezIreprzGU64zCU64zKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE1007);
   }
   uint64_t zbalance_length;
   {
-    sail_u256 z2zE1477;
-    z2zE1477 = zinfo.zbalance;
-    zbalance_length = zrlp_uint_word_sizze(z2zE1477);
+    sail_u256 z2zE1006;
+    z2zE1006 = zinfo.zbalance;
+    zbalance_length = zrlp_uint_word_sizze(z2zE1006);
   }
   uint64_t zcontent_len;
   {
-    uint64_t z2zE1476;
+    uint64_t z2zE1005;
     {
-      uint64_t z2zE1475;
-      {    z2zE1475 = (znonce_length + zbalance_length);
+      uint64_t z2zE1004;
+      {    z2zE1004 = (znonce_length + zbalance_length);
       }
-      {    z2zE1476 = (z2zE1475 + UINT64_C(33));
+      {    z2zE1005 = (z2zE1004 + UINT64_C(33));
       }
     }
-    {    zcontent_len = (z2zE1476 + UINT64_C(33));
+    {    zcontent_len = (z2zE1005 + UINT64_C(33));
     }
   }
   uint64_t zstart;
   zstart = zscratch_begin(UNIT);
-  unit z3zE1473;
-  z3zE1473 = zrlp_write_list_prefixzIreprzGU64zCuzKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zcontent_len);
-  uint64_t z2zE1470;
-  z2zE1470 = zinfo.znonce;
-  unit z3zE1472;
-  z3zE1472 = zrlp_write_uint_wordzIreprzGU64zCuzKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE1470);
-  sail_u256 z2zE1471;
-  z2zE1471 = zinfo.zbalance;
-  unit z3zE1471;
-  z3zE1471 = zrlp_write_uint_word(z2zE1471);
-  sail_u256 z2zE1472;
-  z2zE1472 = zhash_to_word(zstorage_root);
-  unit z3zE1470;
-  z3zE1470 = zrlp_write_word(z2zE1472);
-  sail_u256 z2zE1474;
+  unit z3zE1134;
+  z3zE1134 = zrlp_write_list_prefixzIreprzGU64zCuzKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(zcontent_len);
+  uint64_t z2zE999;
+  z2zE999 = zinfo.znonce;
+  unit z3zE1133;
+  z3zE1133 = zrlp_write_uint_wordzIreprzGU64zCuzKzIboundszG4c3f6287b16f25a07ff498da45d6ed37zK(z2zE999);
+  sail_u256 z2zE1000;
+  z2zE1000 = zinfo.zbalance;
+  unit z3zE1132;
+  z3zE1132 = zrlp_write_uint_word(z2zE1000);
+  sail_u256 z2zE1001;
+  z2zE1001 = evmsail_hash_to_word(zstorage_root);
+  unit z3zE1131;
+  z3zE1131 = zrlp_write_word(z2zE1001);
+  sail_u256 z2zE1003;
   {
-    sail_fixed_bytes_32 z2zE1473;
-    z2zE1473 = zinfo.zcode_hash;
-    z2zE1474 = zhash_to_word(z2zE1473);
+    sail_fixed_bytes_32 z2zE1002;
+    z2zE1002 = zinfo.zcode_hash;
+    z2zE1003 = evmsail_hash_to_word(z2zE1002);
   }
-  unit z3zE1469;
-  z3zE1469 = zrlp_write_word(z2zE1474);
-  z8zE509 = zrlp_finish(zstart);
-end_function_1916: ;
-  return z8zE509;
-end_block_exception_1917: ;
-  struct zByteSliceFields z8zE997 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE997;
+  unit z3zE1130;
+  z3zE1130 = zrlp_write_word(z2zE1003);
+  z8zE565 = zrlp_finish(zstart);
+end_function_1657: ;
+  return z8zE565;
+end_block_exception_1658: ;
+  struct zByteSliceFields z8zE917 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE917;
 }
 
-void zaccount_update(struct zTrieUpdate *z8zE510, struct zAcctEntry zentry, sail_fixed_bytes_32 zstorage_root)
+void zaccount_update(struct zTrieUpdate *z8zE566, struct zAcctTrieEntry ztrie_entry, sail_fixed_bytes_32 zstorage_root)
 {
+  struct zAcctEntry zentry;
+  zentry = ztrie_entry.zentry;
   struct zAccount zcurrent;
   {
-    struct zAcctValue z2zE1469;
-    z2zE1469 = zentry.zvalue;
-    zcurrent = z2zE1469.zcurr;
+    struct zAcctValue z2zE998;
+    z2zE998 = zentry.zvalue;
+    zcurrent = z2zE998.zcurr;
   }
   struct zTriePath zkey;
   {
-    sail_fixed_bytes_32 z2zE1468;
-    {
-      sail_fixed_bytes_20 z2zE1467;
-      z2zE1467 = zentry.zaddr;
-      z2zE1468 = zkeccak256_address(z2zE1467);
-    }
-    zkey = zpath_from_hash(z2zE1468);
+    sail_fixed_bytes_32 z2zE997;
+    z2zE997 = ztrie_entry.zaddress_hash;
+    zkey = zpath_from_hash(z2zE997);
   }
-  bool z2zE1462;
+  bool z2zE992;
   {
-    bool z2zE1461;
+    bool z2zE991;
     {
-      bool z2zE1459;
-      z2zE1459 = zcurrent.zpresent;
-      z2zE1461 = not(z2zE1459);
+      bool z2zE989;
+      z2zE989 = zcurrent.zpresent;
+      z2zE991 = not(z2zE989);
     }
-    bool z3zE1466;
-    if (z2zE1461) {  z3zE1466 = true;  } else {
-      struct zAccountInfo z2zE1460;
-      z2zE1460 = zcurrent.zinfo;
-      z3zE1466 = zaccount_info_empty(z2zE1460);
+    bool z3zE1127;
+    if (z2zE991) {  z3zE1127 = true;  } else {
+      struct zAccountInfo z2zE990;
+      z2zE990 = zcurrent.zinfo;
+      z3zE1127 = zaccount_info_empty(z2zE990);
     }
-    z2zE1462 = z3zE1466;
+    z2zE992 = z3zE1127;
   }
-  if (z2zE1462) {
-    struct zTrieChange z2zE1463;
-    CREATE(zTrieChange)(&z2zE1463);
-    zTrieDelete(&z2zE1463, UNIT);
-    struct zTrieUpdate z3zE1468;
-    CREATE(zTrieUpdate)(&z3zE1468);
-    COPY(zTrieChange)(&((&z3zE1468)->zchange), z2zE1463);
-    z3zE1468.zkey = zkey;
-    COPY(zTrieUpdate)((*(&z8zE510)), z3zE1468);
-    KILL(zTrieUpdate)(&z3zE1468);
-    KILL(zTrieChange)(&z2zE1463);
+  if (z2zE992) {
+    struct zTrieChange z2zE993;
+    CREATE(zTrieChange)(&z2zE993);
+    zTrieDelete(&z2zE993, UNIT);
+    struct zTrieUpdate z3zE1129;
+    CREATE(zTrieUpdate)(&z3zE1129);
+    z3zE1129.zchange = z2zE993;
+    z3zE1129.zkey = zkey;
+    (*(z8zE566)) = z3zE1129;
+    KILL(zTrieUpdate)(&z3zE1129);
+    KILL(zTrieChange)(&z2zE993);
   } else {
-    struct zTrieChange z2zE1466;
-    CREATE(zTrieChange)(&z2zE1466);
+    struct zTrieChange z2zE996;
+    CREATE(zTrieChange)(&z2zE996);
     {
-      struct zByteSliceFields z2zE1465;
+      struct zByteSliceFields z2zE995;
       {
-        struct zAccountInfo z2zE1464;
-        z2zE1464 = zcurrent.zinfo;
-        z2zE1465 = zencode_state_account(z2zE1464, zstorage_root);
+        struct zAccountInfo z2zE994;
+        z2zE994 = zcurrent.zinfo;
+        z2zE995 = zencode_state_account(z2zE994, zstorage_root);
       }
-      zTriePut(&z2zE1466, z2zE1465);
+      zTriePut(&z2zE996, z2zE995);
     }
-    struct zTrieUpdate z3zE1467;
-    CREATE(zTrieUpdate)(&z3zE1467);
-    COPY(zTrieChange)(&((&z3zE1467)->zchange), z2zE1466);
-    z3zE1467.zkey = zkey;
-    COPY(zTrieUpdate)((*(&z8zE510)), z3zE1467);
-    KILL(zTrieUpdate)(&z3zE1467);
-    KILL(zTrieChange)(&z2zE1466);
+    struct zTrieUpdate z3zE1128;
+    CREATE(zTrieUpdate)(&z3zE1128);
+    z3zE1128.zchange = z2zE996;
+    z3zE1128.zkey = zkey;
+    (*(z8zE566)) = z3zE1128;
+    KILL(zTrieUpdate)(&z3zE1128);
+    KILL(zTrieChange)(&z2zE996);
   }
-end_function_1914: ;
-  goto end_function_4031;
-end_block_exception_1915: ;
-  goto end_function_4031;
-end_function_4031: ;
+end_function_1655: ;
+  goto end_function_3617;
+end_block_exception_1656: ;
+  goto end_function_3617;
+end_function_3617: ;
 }
 
 bool zaccount_value_changed(struct zAcctValue zvalue)
 {
-  bool z8zE511;
-  bool z2zE1458;
+  bool z8zE567;
+  bool z2zE988;
   {
-    bool z2zE1422;
+    bool z2zE952;
     {
-      uint64_t z2zE1420;
+      uint64_t z2zE950;
       {
-        struct zAccountInfo z2zE1417;
+        struct zAccountInfo z2zE947;
         {
-          struct zAccount z2zE1416;
-          z2zE1416 = zvalue.zcurr;
-          z2zE1417 = z2zE1416.zinfo;
+          struct zAccount z2zE946;
+          z2zE946 = zvalue.zcurr;
+          z2zE947 = z2zE946.zinfo;
         }
-        z2zE1420 = z2zE1417.znonce;
+        z2zE950 = z2zE947.znonce;
       }
-      uint64_t z2zE1421;
+      uint64_t z2zE951;
       {
-        struct zAccountInfo z2zE1419;
+        struct zAccountInfo z2zE949;
         {
-          struct zAccount z2zE1418;
-          z2zE1418 = zvalue.zorig;
-          z2zE1419 = z2zE1418.zinfo;
+          struct zAccount z2zE948;
+          z2zE948 = zvalue.zorig;
+          z2zE949 = z2zE948.zinfo;
         }
-        z2zE1421 = z2zE1419.znonce;
+        z2zE951 = z2zE949.znonce;
       }
-      z2zE1422 = (z2zE1420 == z2zE1421);
+      z2zE952 = (z2zE950 == z2zE951);
     }
-    z2zE1458 = not(z2zE1422);
+    z2zE988 = not(z2zE952);
   }
-  bool z3zE1465;
-  if (z2zE1458) {  z3zE1465 = true;  } else {
-    bool z2zE1457;
+  bool z3zE1126;
+  if (z2zE988) {  z3zE1126 = true;  } else {
+    bool z2zE987;
     {
-      bool z2zE1429;
+      bool z2zE959;
       {
-        sail_u256 z2zE1427;
+        sail_u256 z2zE957;
         {
-          struct zAccountInfo z2zE1424;
+          struct zAccountInfo z2zE954;
           {
-            struct zAccount z2zE1423;
-            z2zE1423 = zvalue.zcurr;
-            z2zE1424 = z2zE1423.zinfo;
+            struct zAccount z2zE953;
+            z2zE953 = zvalue.zcurr;
+            z2zE954 = z2zE953.zinfo;
           }
-          z2zE1427 = z2zE1424.zbalance;
+          z2zE957 = z2zE954.zbalance;
         }
-        sail_u256 z2zE1428;
+        sail_u256 z2zE958;
         {
-          struct zAccountInfo z2zE1426;
+          struct zAccountInfo z2zE956;
           {
-            struct zAccount z2zE1425;
-            z2zE1425 = zvalue.zorig;
-            z2zE1426 = z2zE1425.zinfo;
+            struct zAccount z2zE955;
+            z2zE955 = zvalue.zorig;
+            z2zE956 = z2zE955.zinfo;
           }
-          z2zE1428 = z2zE1426.zbalance;
+          z2zE958 = z2zE956.zbalance;
         }
-        z2zE1429 = eq_u256(z2zE1427, z2zE1428);
+        z2zE959 = eq_u256(z2zE957, z2zE958);
       }
-      z2zE1457 = not(z2zE1429);
+      z2zE987 = not(z2zE959);
     }
-    bool z3zE1464;
-    if (z2zE1457) {  z3zE1464 = true;  } else {
-      bool z2zE1456;
+    bool z3zE1125;
+    if (z2zE987) {  z3zE1125 = true;  } else {
+      bool z2zE986;
       {
-        bool z2zE1436;
+        bool z2zE966;
         {
-          sail_fixed_bytes_32 z2zE1434;
+          sail_fixed_bytes_32 z2zE964;
           {
-            struct zAccountInfo z2zE1431;
+            struct zAccountInfo z2zE961;
             {
-              struct zAccount z2zE1430;
-              z2zE1430 = zvalue.zcurr;
-              z2zE1431 = z2zE1430.zinfo;
+              struct zAccount z2zE960;
+              z2zE960 = zvalue.zcurr;
+              z2zE961 = z2zE960.zinfo;
             }
-            z2zE1434 = z2zE1431.zstorage_root;
+            z2zE964 = z2zE961.zstorage_root;
           }
-          sail_fixed_bytes_32 z2zE1435;
+          sail_fixed_bytes_32 z2zE965;
           {
-            struct zAccountInfo z2zE1433;
+            struct zAccountInfo z2zE963;
             {
-              struct zAccount z2zE1432;
-              z2zE1432 = zvalue.zorig;
-              z2zE1433 = z2zE1432.zinfo;
+              struct zAccount z2zE962;
+              z2zE962 = zvalue.zorig;
+              z2zE963 = z2zE962.zinfo;
             }
-            z2zE1435 = z2zE1433.zstorage_root;
+            z2zE965 = z2zE963.zstorage_root;
           }
-          z2zE1436 = eq_fixed_bytes_32(z2zE1434, z2zE1435);
+          z2zE966 = eq_fixed_bytes_32(z2zE964, z2zE965);
         }
-        z2zE1456 = not(z2zE1436);
+        z2zE986 = not(z2zE966);
       }
-      bool z3zE1463;
-      if (z2zE1456) {  z3zE1463 = true;  } else {
-        bool z2zE1455;
+      bool z3zE1124;
+      if (z2zE986) {  z3zE1124 = true;  } else {
+        bool z2zE985;
         {
-          bool z2zE1443;
+          bool z2zE973;
           {
-            sail_fixed_bytes_32 z2zE1441;
+            sail_fixed_bytes_32 z2zE971;
             {
-              struct zAccountInfo z2zE1438;
+              struct zAccountInfo z2zE968;
               {
-                struct zAccount z2zE1437;
-                z2zE1437 = zvalue.zcurr;
-                z2zE1438 = z2zE1437.zinfo;
+                struct zAccount z2zE967;
+                z2zE967 = zvalue.zcurr;
+                z2zE968 = z2zE967.zinfo;
               }
-              z2zE1441 = z2zE1438.zcode_hash;
+              z2zE971 = z2zE968.zcode_hash;
             }
-            sail_fixed_bytes_32 z2zE1442;
+            sail_fixed_bytes_32 z2zE972;
             {
-              struct zAccountInfo z2zE1440;
+              struct zAccountInfo z2zE970;
               {
-                struct zAccount z2zE1439;
-                z2zE1439 = zvalue.zorig;
-                z2zE1440 = z2zE1439.zinfo;
+                struct zAccount z2zE969;
+                z2zE969 = zvalue.zorig;
+                z2zE970 = z2zE969.zinfo;
               }
-              z2zE1442 = z2zE1440.zcode_hash;
+              z2zE972 = z2zE970.zcode_hash;
             }
-            z2zE1443 = eq_fixed_bytes_32(z2zE1441, z2zE1442);
+            z2zE973 = eq_fixed_bytes_32(z2zE971, z2zE972);
           }
-          z2zE1455 = not(z2zE1443);
+          z2zE985 = not(z2zE973);
         }
-        bool z3zE1462;
-        if (z2zE1455) {  z3zE1462 = true;  } else {
-          bool z2zE1454;
+        bool z3zE1123;
+        if (z2zE985) {  z3zE1123 = true;  } else {
+          bool z2zE984;
           {
-            bool z2zE1448;
+            bool z2zE978;
             {
-              bool z2zE1446;
+              bool z2zE976;
               {
-                struct zAccount z2zE1444;
-                z2zE1444 = zvalue.zcurr;
-                z2zE1446 = z2zE1444.zpresent;
+                struct zAccount z2zE974;
+                z2zE974 = zvalue.zcurr;
+                z2zE976 = z2zE974.zpresent;
               }
-              bool z2zE1447;
+              bool z2zE977;
               {
-                struct zAccount z2zE1445;
-                z2zE1445 = zvalue.zorig;
-                z2zE1447 = z2zE1445.zpresent;
+                struct zAccount z2zE975;
+                z2zE975 = zvalue.zorig;
+                z2zE977 = z2zE975.zpresent;
               }
-              z2zE1448 = eq_bool(z2zE1446, z2zE1447);
+              z2zE978 = eq_bool(z2zE976, z2zE977);
             }
-            z2zE1454 = not(z2zE1448);
+            z2zE984 = not(z2zE978);
           }
-          bool z3zE1461;
-          if (z2zE1454) {  z3zE1461 = true;  } else {
-            bool z2zE1453;
+          bool z3zE1122;
+          if (z2zE984) {  z3zE1122 = true;  } else {
+            bool z2zE983;
             {
-              bool z2zE1451;
+              bool z2zE981;
               {
-                struct zAccount z2zE1449;
-                z2zE1449 = zvalue.zcurr;
-                z2zE1451 = z2zE1449.zstorage_cleared;
+                struct zAccount z2zE979;
+                z2zE979 = zvalue.zcurr;
+                z2zE981 = z2zE979.zstorage_cleared;
               }
-              bool z2zE1452;
+              bool z2zE982;
               {
-                struct zAccount z2zE1450;
-                z2zE1450 = zvalue.zorig;
-                z2zE1452 = z2zE1450.zstorage_cleared;
+                struct zAccount z2zE980;
+                z2zE980 = zvalue.zorig;
+                z2zE982 = z2zE980.zstorage_cleared;
               }
-              z2zE1453 = eq_bool(z2zE1451, z2zE1452);
+              z2zE983 = eq_bool(z2zE981, z2zE982);
             }
-            z3zE1461 = not(z2zE1453);
+            z3zE1122 = not(z2zE983);
           }
-          z3zE1462 = z3zE1461;
+          z3zE1123 = z3zE1122;
         }
-        z3zE1463 = z3zE1462;
+        z3zE1124 = z3zE1123;
       }
-      z3zE1464 = z3zE1463;
+      z3zE1125 = z3zE1124;
     }
-    z3zE1465 = z3zE1464;
+    z3zE1126 = z3zE1125;
   }
-  z8zE511 = z3zE1465;
-end_function_1912: ;
-  return z8zE511;
-end_block_exception_1913: ;
+  z8zE567 = z3zE1126;
+end_function_1653: ;
+  return z8zE567;
+end_block_exception_1654: ;
 
   return false;
 }
 
 bool zstorage_value_changed(struct zStorageValue zvalue)
 {
-  bool z8zE512;
-  bool z2zE1415;
+  bool z8zE568;
+  bool z2zE945;
   {
-    sail_u256 z2zE1413;
-    z2zE1413 = zvalue.zcurr;
-    sail_u256 z2zE1414;
-    z2zE1414 = zvalue.zorig;
-    z2zE1415 = eq_u256(z2zE1413, z2zE1414);
+    sail_u256 z2zE943;
+    z2zE943 = zvalue.zcurr;
+    sail_u256 z2zE944;
+    z2zE944 = zvalue.zorig;
+    z2zE945 = eq_u256(z2zE943, z2zE944);
   }
-  z8zE512 = not(z2zE1415);
-end_function_1910: ;
-  return z8zE512;
-end_block_exception_1911: ;
+  z8zE568 = not(z2zE945);
+end_function_1651: ;
+  return z8zE568;
+end_block_exception_1652: ;
 
   return false;
 }
 
-void znext_changed_storage_entry(struct zoptionzIRStorageEntryzK *z8zE513, sail_fixed_bytes_20 zaddr)
+void znext_changed_storage_entry(struct zoptionzIRStorageTrieEntryzK *z8zE569, sail_fixed_bytes_20 zaddr)
 {
   bool zsearching;
   zsearching = true;
-  struct zoptionzIRStorageEntryzK zresult;
-  CREATE(zoptionzIRStorageEntryzK)(&zresult);
-  zNonezIRStorageEntryzK(&zresult, UNIT);
-  bool z3zE1458;
-  unit z3zE1459;
-while_1903: ;
+  struct zoptionzIRStorageTrieEntryzK zresult;
+  CREATE(zoptionzIRStorageTrieEntryzK)(&zresult);
+  zNonezIRStorageTrieEntryzK(&zresult, UNIT);
+  bool z3zE1119;
+  unit z3zE1120;
+while_1644: ;
   {
-    z3zE1458 = zsearching;
-    if (!(z3zE1458)) goto wend_1904;
-    struct zoptionzIRStorageEntryzK z2zE1410;
-    CREATE(zoptionzIRStorageEntryzK)(&z2zE1410);
-    storage_block_iter_next(&z2zE1410, zaddr);
-    unit z3zE1454;
+    z3zE1119 = zsearching;
+    if (!(z3zE1119)) goto wend_1645;
+    struct zoptionzIRStorageTrieEntryzK z2zE939;
+    CREATE(zoptionzIRStorageTrieEntryzK)(&z2zE939);
+    storage_block_iter_next(&z2zE939, zaddr);
+    unit z3zE1115;
     {
-      if (z2zE1410.kind != Kind_zSomezIRStorageEntryzK) goto case_1907;
-      struct zStorageEntry zentry;
-      zentry = z2zE1410.variants.zSomezIRStorageEntryzK;
-      bool z2zE1412;
+      if (z2zE939.kind != Kind_zSomezIRStorageTrieEntryzK) goto case_1648;
+      struct zStorageTrieEntry ztrie_entry;
+      ztrie_entry = z2zE939.variants.zSomezIRStorageTrieEntryzK;
+      bool z2zE942;
       {
-        struct zStorageValue z2zE1411;
-        z2zE1411 = zentry.zvalue;
-        z2zE1412 = zstorage_value_changed(z2zE1411);
+        struct zStorageValue z2zE941;
+        {
+          struct zStorageEntry z2zE940;
+          z2zE940 = ztrie_entry.zentry;
+          z2zE941 = z2zE940.zvalue;
+        }
+        z2zE942 = zstorage_value_changed(z2zE941);
       }
-      if (z2zE1412) {
-        zSomezIRStorageEntryzK(&zresult, zentry);
-        unit z3zE1457;
-        z3zE1457 = UNIT;
+      if (z2zE942) {
+        zSomezIRStorageTrieEntryzK(&zresult, ztrie_entry);
+        unit z3zE1118;
+        z3zE1118 = UNIT;
         zsearching = false;
-        z3zE1454 = UNIT;
-      } else {  z3zE1454 = UNIT;  }
-      goto finish_match_1905;
+        z3zE1115 = UNIT;
+      } else {  z3zE1115 = UNIT;  }
+      goto finish_match_1646;
     }
-  case_1907: ;
+  case_1648: ;
     {
       /* complete */
       zsearching = false;
-      z3zE1454 = UNIT;
-      goto finish_match_1905;
+      z3zE1115 = UNIT;
+      goto finish_match_1646;
     }
-  case_1906: ;
-  finish_match_1905: ;
-    z3zE1459 = z3zE1454;
-    KILL(zoptionzIRStorageEntryzK)(&z2zE1410);
-    goto while_1903;
+  case_1647: ;
+  finish_match_1646: ;
+    z3zE1120 = z3zE1115;
+    KILL(zoptionzIRStorageTrieEntryzK)(&z2zE939);
+    goto while_1644;
   }
-wend_1904: ;
-  unit z3zE1460;
-  z3zE1460 = UNIT;
-  COPY(zoptionzIRStorageEntryzK)((*(&z8zE513)), zresult);
-  KILL(zoptionzIRStorageEntryzK)(&zresult);
-end_function_1908: ;
-  goto end_function_4030;
-end_block_exception_1909: ;
-  goto end_function_4030;
-end_function_4030: ;
+wend_1645: ;
+  unit z3zE1121;
+  z3zE1121 = UNIT;
+  (*(z8zE569)) = zresult;
+  KILL(zoptionzIRStorageTrieEntryzK)(&zresult);
+end_function_1649: ;
+  goto end_function_3616;
+end_block_exception_1650: ;
+  goto end_function_3616;
+end_function_3616: ;
 }
 
-void zaccount_trie_update(struct ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9 *z8zE514, struct zAcctEntry zentry)
+void zaccount_trie_update(struct ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9 *z8zE570, struct zAcctTrieEntry ztrie_entry)
 {
-  sail_fixed_bytes_20 z2zE1402;
-  z2zE1402 = zentry.zaddr;
-  unit z3zE1448;
-  z3zE1448 = storage_block_iter_begin(z2zE1402);
+  struct zAcctEntry zentry;
+  zentry = ztrie_entry.zentry;
+  sail_fixed_bytes_20 z2zE931;
+  z2zE931 = zentry.zaddr;
+  unit z3zE1109;
+  z3zE1109 = storage_block_iter_begin(z2zE931);
   bool zstorage_changed;
   {
-    struct zoptionzIRStorageEntryzK z2zE1409;
-    CREATE(zoptionzIRStorageEntryzK)(&z2zE1409);
+    struct zoptionzIRStorageTrieEntryzK z2zE938;
+    CREATE(zoptionzIRStorageTrieEntryzK)(&z2zE938);
     {
-      sail_fixed_bytes_20 z2zE1408;
-      z2zE1408 = zentry.zaddr;
-      znext_changed_storage_entry(&z2zE1409, z2zE1408);
+      sail_fixed_bytes_20 z2zE937;
+      z2zE937 = zentry.zaddr;
+      znext_changed_storage_entry(&z2zE938, z2zE937);
     }
-    bool z3zE1449;
+    bool z3zE1110;
     {
-      if (z2zE1409.kind != Kind_zSomezIRStorageEntryzK) goto case_1900;
-      struct zStorageEntry z_storage_entry;
-      z_storage_entry = z2zE1409.variants.zSomezIRStorageEntryzK;
-      z3zE1449 = true;
-      goto finish_match_1898;
+      if (z2zE938.kind != Kind_zSomezIRStorageTrieEntryzK) goto case_1641;
+      struct zStorageTrieEntry z_storage_entry;
+      z_storage_entry = z2zE938.variants.zSomezIRStorageTrieEntryzK;
+      z3zE1110 = true;
+      goto finish_match_1639;
     }
-  case_1900: ;
+  case_1641: ;
     {
       /* complete */
-      z3zE1449 = false;
-      goto finish_match_1898;
+      z3zE1110 = false;
+      goto finish_match_1639;
     }
-  case_1899: ;
-  finish_match_1898: ;
-    zstorage_changed = z3zE1449;
-    KILL(zoptionzIRStorageEntryzK)(&z2zE1409);
+  case_1640: ;
+  finish_match_1639: ;
+    zstorage_changed = z3zE1110;
+    KILL(zoptionzIRStorageTrieEntryzK)(&z2zE938);
   }
   sail_fixed_bytes_32 zstorage_root;
   {
-    sail_fixed_bytes_20 z2zE1407;
-    z2zE1407 = zentry.zaddr;
-    zstorage_root = acct_post_storage_root_read(z2zE1407);
+    sail_fixed_bytes_20 z2zE936;
+    z2zE936 = zentry.zaddr;
+    zstorage_root = acct_post_storage_root_read(z2zE936);
   }
-  struct zTrieUpdate z2zE1405;
-  CREATE(zTrieUpdate)(&z2zE1405);
-  zaccount_update(&z2zE1405, zentry, zstorage_root);
-  bool z2zE1406;
+  struct zTrieUpdate z2zE934;
+  CREATE(zTrieUpdate)(&z2zE934);
+  zaccount_update(&z2zE934, ztrie_entry, zstorage_root);
+  bool z2zE935;
   {
-    bool z2zE1404;
+    bool z2zE933;
     {
-      struct zAcctValue z2zE1403;
-      z2zE1403 = zentry.zvalue;
-      z2zE1404 = zaccount_value_changed(z2zE1403);
+      struct zAcctValue z2zE932;
+      z2zE932 = zentry.zvalue;
+      z2zE933 = zaccount_value_changed(z2zE932);
     }
-    bool z3zE1452;
-    if (z2zE1404) {  z3zE1452 = true;  } else {  z3zE1452 = zstorage_changed;  }
-    z2zE1406 = z3zE1452;
+    bool z3zE1113;
+    if (z2zE933) {  z3zE1113 = true;  } else {  z3zE1113 = zstorage_changed;  }
+    z2zE935 = z3zE1113;
   }
-  struct ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9 z3zE1453;
-  CREATE(ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9)(&z3zE1453);
-  COPY(zTrieUpdate)(&((&z3zE1453)->ztup0), z2zE1405);
-  z3zE1453.ztup1 = z2zE1406;
-  COPY(ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9)((*(&z8zE514)), z3zE1453);
-  KILL(ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9)(&z3zE1453);
-  KILL(zTrieUpdate)(&z2zE1405);
-end_function_1901: ;
-  goto end_function_4029;
-end_block_exception_1902: ;
-  goto end_function_4029;
-end_function_4029: ;
+  struct ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9 z3zE1114;
+  CREATE(ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9)(&z3zE1114);
+  z3zE1114.ztup0 = z2zE934;
+  z3zE1114.ztup1 = z2zE935;
+  (*(z8zE570)) = z3zE1114;
+  KILL(ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9)(&z3zE1114);
+  KILL(zTrieUpdate)(&z2zE934);
+end_function_1642: ;
+  goto end_function_3615;
+end_block_exception_1643: ;
+  goto end_function_3615;
+end_function_3615: ;
 }
 
-void znext_changed_account_trie_update(struct zoptionzIRTrieUpdatezK *z8zE515, unit z3zE1438)
+void znext_changed_account_trie_update(struct zoptionzIRTrieUpdatezK *z8zE571, unit z3zE1099)
 {
   bool zsearching;
   zsearching = true;
   struct zoptionzIRTrieUpdatezK zresult;
   CREATE(zoptionzIRTrieUpdatezK)(&zresult);
   zNonezIRTrieUpdatezK(&zresult, UNIT);
-  bool z3zE1445;
-  unit z3zE1446;
-while_1889: ;
+  bool z3zE1106;
+  unit z3zE1107;
+while_1630: ;
   {
-    z3zE1445 = zsearching;
-    if (!(z3zE1445)) goto wend_1890;
-    struct zoptionzIRAcctEntryzK z2zE1400;
-    CREATE(zoptionzIRAcctEntryzK)(&z2zE1400);
-    acct_block_iter_next(&z2zE1400, UNIT);
-    unit z3zE1439;
+    z3zE1106 = zsearching;
+    if (!(z3zE1106)) goto wend_1631;
+    struct zoptionzIRAcctTrieEntryzK z2zE929;
+    CREATE(zoptionzIRAcctTrieEntryzK)(&z2zE929);
+    acct_block_iter_next(&z2zE929, UNIT);
+    unit z3zE1100;
     {
-      if (z2zE1400.kind != Kind_zSomezIRAcctEntryzK) goto case_1893;
-      struct zAcctEntry zentry;
-      zentry = z2zE1400.variants.zSomezIRAcctEntryzK;
-      struct ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9 z2zE1401;
-      CREATE(ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9)(&z2zE1401);
-      zaccount_trie_update(&z2zE1401, zentry);
-      unit z3zE1441;
+      if (z2zE929.kind != Kind_zSomezIRAcctTrieEntryzK) goto case_1634;
+      struct zAcctTrieEntry zentry;
+      zentry = z2zE929.variants.zSomezIRAcctTrieEntryzK;
+      struct ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9 z2zE930;
+      CREATE(ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9)(&z2zE930);
+      zaccount_trie_update(&z2zE930, zentry);
+      unit z3zE1102;
       {
         struct zTrieUpdate zupdate;
         CREATE(zTrieUpdate)(&zupdate);
-        COPY(zTrieUpdate)(&zupdate, z2zE1401.ztup0);
+        zupdate = z2zE930.ztup0;
         bool zchanged;
-        zchanged = z2zE1401.ztup1;
+        zchanged = z2zE930.ztup1;
         if (zchanged) {
           zSomezIRTrieUpdatezK(&zresult, zupdate);
-          unit z3zE1443;
-          z3zE1443 = UNIT;
+          unit z3zE1104;
+          z3zE1104 = UNIT;
           zsearching = false;
-          z3zE1441 = UNIT;
-        } else {  z3zE1441 = UNIT;  }
+          z3zE1102 = UNIT;
+        } else {  z3zE1102 = UNIT;  }
         KILL(zTrieUpdate)(&zupdate);
-        goto finish_match_1894;
+        goto finish_match_1635;
       }
-    case_1895: ;
+    case_1636: ;
       sail_match_failure("next_changed_account_trie_update");
-    finish_match_1894: ;
-      z3zE1439 = z3zE1441;
-      KILL(ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9)(&z2zE1401);
-      goto finish_match_1891;
+    finish_match_1635: ;
+      z3zE1100 = z3zE1102;
+      KILL(ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9)(&z2zE930);
+      goto finish_match_1632;
     }
-  case_1893: ;
+  case_1634: ;
     {
       /* complete */
       zsearching = false;
-      z3zE1439 = UNIT;
-      goto finish_match_1891;
+      z3zE1100 = UNIT;
+      goto finish_match_1632;
     }
-  case_1892: ;
-  finish_match_1891: ;
-    z3zE1446 = z3zE1439;
-    KILL(zoptionzIRAcctEntryzK)(&z2zE1400);
-    goto while_1889;
+  case_1633: ;
+  finish_match_1632: ;
+    z3zE1107 = z3zE1100;
+    KILL(zoptionzIRAcctTrieEntryzK)(&z2zE929);
+    goto while_1630;
   }
-wend_1890: ;
-  unit z3zE1447;
-  z3zE1447 = UNIT;
-  COPY(zoptionzIRTrieUpdatezK)((*(&z8zE515)), zresult);
+wend_1631: ;
+  unit z3zE1108;
+  z3zE1108 = UNIT;
+  (*(z8zE571)) = zresult;
   KILL(zoptionzIRTrieUpdatezK)(&zresult);
-end_function_1896: ;
-  goto end_function_4028;
-end_block_exception_1897: ;
-  goto end_function_4028;
-end_function_4028: ;
+end_function_1637: ;
+  goto end_function_3614;
+end_block_exception_1638: ;
+  goto end_function_3614;
+end_function_3614: ;
 }
 
 struct zByteSliceFields zencode_storage_value(sail_u256 zvalue)
 {
-  struct zByteSliceFields z8zE516;
+  struct zByteSliceFields z8zE572;
   uint64_t zencoded_len;
   zencoded_len = zrlp_uint_word_sizze(zvalue);
   uint64_t zstart;
   zstart = zscratch_begin(UNIT);
-  unit z3zE1437;
-  z3zE1437 = zrlp_write_uint_word(zvalue);
-  z8zE516 = zrlp_finish(zstart);
-end_function_1887: ;
-  return z8zE516;
-end_block_exception_1888: ;
-  struct zByteSliceFields z8zE998 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
-  return z8zE998;
+  unit z3zE1098;
+  z3zE1098 = zrlp_write_uint_word(zvalue);
+  z8zE572 = zrlp_finish(zstart);
+end_function_1628: ;
+  return z8zE572;
+end_block_exception_1629: ;
+  struct zByteSliceFields z8zE918 = { .zlen = UINT64_C(0xdeadc0de), .zoff = UINT64_C(0xdeadc0de), .zsource = ((enum zByteSource)0) };
+  return z8zE918;
 }
 
-void zstorage_update(struct zTrieUpdate *z8zE517, struct zStorageEntry zentry)
+void zstorage_update(struct zTrieUpdate *z8zE573, struct zStorageTrieEntry ztrie_entry)
 {
+  struct zStorageEntry zentry;
+  zentry = ztrie_entry.zentry;
   struct zTriePath zkey;
   {
-    sail_fixed_bytes_32 z2zE1399;
-    {
-      sail_u256 z2zE1398;
-      {
-        struct zStorageKey z2zE1397;
-        z2zE1397 = zentry.zkey;
-        z2zE1398 = z2zE1397.zslot;
-      }
-      z2zE1399 = zkeccak256_word(z2zE1398);
-    }
-    zkey = zpath_from_hash(z2zE1399);
+    sail_fixed_bytes_32 z2zE928;
+    z2zE928 = ztrie_entry.zslot_hash;
+    zkey = zpath_from_hash(z2zE928);
   }
   struct zTrieChange zchange;
   CREATE(zTrieChange)(&zchange);
   {
-    bool z2zE1393;
+    bool z2zE924;
     {
-      sail_u256 z2zE1392;
+      sail_u256 z2zE923;
       {
-        struct zStorageValue z2zE1391;
-        z2zE1391 = zentry.zvalue;
-        z2zE1392 = z2zE1391.zcurr;
+        struct zStorageValue z2zE922;
+        z2zE922 = zentry.zvalue;
+        z2zE923 = z2zE922.zcurr;
       }
-      z2zE1393 = zword_is_zzero(z2zE1392);
+      z2zE924 = zword_is_zzero(z2zE923);
     }
-    if (z2zE1393) {  zTrieDelete(&zchange, UNIT);  } else {
-      struct zByteSliceFields z2zE1396;
+    if (z2zE924) {  zTrieDelete(&zchange, UNIT);  } else {
+      struct zByteSliceFields z2zE927;
       {
-        sail_u256 z2zE1395;
+        sail_u256 z2zE926;
         {
-          struct zStorageValue z2zE1394;
-          z2zE1394 = zentry.zvalue;
-          z2zE1395 = z2zE1394.zcurr;
+          struct zStorageValue z2zE925;
+          z2zE925 = zentry.zvalue;
+          z2zE926 = z2zE925.zcurr;
         }
-        z2zE1396 = zencode_storage_value(z2zE1395);
+        z2zE927 = zencode_storage_value(z2zE926);
       }
-      zTriePut(&zchange, z2zE1396);
+      zTriePut(&zchange, z2zE927);
     }
   }
-  struct zTrieUpdate z3zE1436;
-  CREATE(zTrieUpdate)(&z3zE1436);
-  COPY(zTrieChange)(&((&z3zE1436)->zchange), zchange);
-  z3zE1436.zkey = zkey;
-  COPY(zTrieUpdate)((*(&z8zE517)), z3zE1436);
-  KILL(zTrieUpdate)(&z3zE1436);
+  struct zTrieUpdate z3zE1097;
+  CREATE(zTrieUpdate)(&z3zE1097);
+  z3zE1097.zchange = zchange;
+  z3zE1097.zkey = zkey;
+  (*(z8zE573)) = z3zE1097;
+  KILL(zTrieUpdate)(&z3zE1097);
   KILL(zTrieChange)(&zchange);
-end_function_1885: ;
-  goto end_function_4027;
-end_block_exception_1886: ;
-  goto end_function_4027;
-end_function_4027: ;
+end_function_1626: ;
+  goto end_function_3613;
+end_block_exception_1627: ;
+  goto end_function_3613;
+end_function_3613: ;
 }
 
-void znext_storage_trie_update(struct zoptionzIRTrieUpdatezK *z8zE518, sail_fixed_bytes_20 zaddr)
+void znext_storage_trie_update(struct zoptionzIRTrieUpdatezK *z8zE574, sail_fixed_bytes_20 zaddr)
 {
-  struct zoptionzIRStorageEntryzK z2zE1389;
-  CREATE(zoptionzIRStorageEntryzK)(&z2zE1389);
-  znext_changed_storage_entry(&z2zE1389, zaddr);
-  struct zoptionzIRTrieUpdatezK z3zE1433;
-  CREATE(zoptionzIRTrieUpdatezK)(&z3zE1433);
+  struct zoptionzIRStorageTrieEntryzK z2zE920;
+  CREATE(zoptionzIRStorageTrieEntryzK)(&z2zE920);
+  znext_changed_storage_entry(&z2zE920, zaddr);
+  struct zoptionzIRTrieUpdatezK z3zE1094;
+  CREATE(zoptionzIRTrieUpdatezK)(&z3zE1094);
   {
-    if (z2zE1389.kind != Kind_zSomezIRStorageEntryzK) goto case_1882;
-    struct zStorageEntry zentry;
-    zentry = z2zE1389.variants.zSomezIRStorageEntryzK;
-    struct zTrieUpdate z2zE1390;
-    CREATE(zTrieUpdate)(&z2zE1390);
-    zstorage_update(&z2zE1390, zentry);
-    zSomezIRTrieUpdatezK(&z3zE1433, z2zE1390);
-    KILL(zTrieUpdate)(&z2zE1390);
-    goto finish_match_1880;
+    if (z2zE920.kind != Kind_zSomezIRStorageTrieEntryzK) goto case_1623;
+    struct zStorageTrieEntry zentry;
+    zentry = z2zE920.variants.zSomezIRStorageTrieEntryzK;
+    struct zTrieUpdate z2zE921;
+    CREATE(zTrieUpdate)(&z2zE921);
+    zstorage_update(&z2zE921, zentry);
+    zSomezIRTrieUpdatezK(&z3zE1094, z2zE921);
+    KILL(zTrieUpdate)(&z2zE921);
+    goto finish_match_1621;
   }
-case_1882: ;
+case_1623: ;
   {
     /* complete */
-    zNonezIRTrieUpdatezK(&z3zE1433, UNIT);
-    goto finish_match_1880;
+    zNonezIRTrieUpdatezK(&z3zE1094, UNIT);
+    goto finish_match_1621;
   }
-case_1881: ;
-finish_match_1880: ;
-  COPY(zoptionzIRTrieUpdatezK)((*(&z8zE518)), z3zE1433);
-  KILL(zoptionzIRTrieUpdatezK)(&z3zE1433);
-  KILL(zoptionzIRStorageEntryzK)(&z2zE1389);
-end_function_1883: ;
-  goto end_function_4026;
-end_block_exception_1884: ;
-  goto end_function_4026;
-end_function_4026: ;
+case_1622: ;
+finish_match_1621: ;
+  (*(z8zE574)) = z3zE1094;
+  KILL(zoptionzIRTrieUpdatezK)(&z3zE1094);
+  KILL(zoptionzIRStorageTrieEntryzK)(&z2zE920);
+end_function_1624: ;
+  goto end_function_3612;
+end_block_exception_1625: ;
+  goto end_function_3612;
+end_function_3612: ;
 }
 
-void ztrie_update_source_next(struct zoptionzIRTrieUpdatezK *z8zE519, struct zTrieUpdateSource zsource)
+void ztrie_update_source_next(struct zoptionzIRTrieUpdatezK *z8zE575, struct zTrieUpdateSource zsource)
 {
-  struct zoptionzIRTrieUpdatezK z3zE1429;
-  CREATE(zoptionzIRTrieUpdatezK)(&z3zE1429);
+  struct zoptionzIRTrieUpdatezK z3zE1090;
+  CREATE(zoptionzIRTrieUpdatezK)(&z3zE1090);
   {
-    if (zsource.kind != Kind_zStorageTrieUpdates) goto case_1877;
+    if (zsource.kind != Kind_zStorageTrieUpdates) goto case_1618;
     sail_fixed_bytes_20 zaddr;
     zaddr = zsource.variants.zStorageTrieUpdates;
-    znext_storage_trie_update(&z3zE1429, zaddr);
-    goto finish_match_1874;
+    znext_storage_trie_update(&z3zE1090, zaddr);
+    goto finish_match_1615;
   }
-case_1877: ;
+case_1618: ;
   {
-    if (zsource.kind != Kind_zChangedAccountTrieUpdates) goto case_1876;
-    znext_changed_account_trie_update(&z3zE1429, UNIT);
-    goto finish_match_1874;
+    if (zsource.kind != Kind_zChangedAccountTrieUpdates) goto case_1617;
+    znext_changed_account_trie_update(&z3zE1090, UNIT);
+    goto finish_match_1615;
   }
-case_1876: ;
+case_1617: ;
   {
     /* complete */
-    zcached_account_trie_update_next(&z3zE1429, UNIT);
-    goto finish_match_1874;
+    zcached_account_trie_update_next(&z3zE1090, UNIT);
+    goto finish_match_1615;
   }
-case_1875: ;
-finish_match_1874: ;
-  COPY(zoptionzIRTrieUpdatezK)((*(&z8zE519)), z3zE1429);
-  KILL(zoptionzIRTrieUpdatezK)(&z3zE1429);
-end_function_1878: ;
-  goto end_function_4025;
-end_block_exception_1879: ;
-  goto end_function_4025;
-end_function_4025: ;
+case_1616: ;
+finish_match_1615: ;
+  (*(z8zE575)) = z3zE1090;
+  KILL(zoptionzIRTrieUpdatezK)(&z3zE1090);
+end_function_1619: ;
+  goto end_function_3611;
+end_block_exception_1620: ;
+  goto end_function_3611;
+end_function_3611: ;
 }
 
-void ztrie_updates_begin(struct zTrieUpdateCursor *z8zE520, struct zTrieUpdateSource zsource)
+void ztrie_updates_begin(struct zTrieUpdateCursor *z8zE576, struct zTrieUpdateSource zsource)
 {
-  struct zoptionzIRTrieUpdatezK z2zE1388;
-  CREATE(zoptionzIRTrieUpdatezK)(&z2zE1388);
-  ztrie_update_source_next(&z2zE1388, zsource);
-  struct zTrieUpdateCursor z3zE1428;
-  CREATE(zTrieUpdateCursor)(&z3zE1428);
-  COPY(zoptionzIRTrieUpdatezK)(&((&z3zE1428)->zpending), z2zE1388);
-  COPY(zTrieUpdateSource)(&((&z3zE1428)->zsource), zsource);
-  COPY(zTrieUpdateCursor)((*(&z8zE520)), z3zE1428);
-  KILL(zTrieUpdateCursor)(&z3zE1428);
-  KILL(zoptionzIRTrieUpdatezK)(&z2zE1388);
-end_function_1872: ;
-  goto end_function_4024;
-end_block_exception_1873: ;
-  goto end_function_4024;
-end_function_4024: ;
+  struct zoptionzIRTrieUpdatezK z2zE919;
+  CREATE(zoptionzIRTrieUpdatezK)(&z2zE919);
+  ztrie_update_source_next(&z2zE919, zsource);
+  struct zTrieUpdateCursor z3zE1089;
+  CREATE(zTrieUpdateCursor)(&z3zE1089);
+  z3zE1089.zpending = z2zE919;
+  z3zE1089.zsource = zsource;
+  (*(z8zE576)) = z3zE1089;
+  KILL(zTrieUpdateCursor)(&z3zE1089);
+  KILL(zoptionzIRTrieUpdatezK)(&z2zE919);
+end_function_1613: ;
+  goto end_function_3610;
+end_block_exception_1614: ;
+  goto end_function_3610;
+end_function_3610: ;
 }
 
 bool zupdates_empty(struct zTrieUpdateCursor zupdates)
 {
-  bool z8zE521;
-  struct zoptionzIRTrieUpdatezK z2zE1387;
-  CREATE(zoptionzIRTrieUpdatezK)(&z2zE1387);
-  COPY(zoptionzIRTrieUpdatezK)(&z2zE1387, zupdates.zpending);
-  bool z3zE1425;
+  bool z8zE577;
+  struct zoptionzIRTrieUpdatezK z2zE918;
+  CREATE(zoptionzIRTrieUpdatezK)(&z2zE918);
+  z2zE918 = zupdates.zpending;
+  bool z3zE1086;
   {
-    if (z2zE1387.kind != Kind_zNonezIRTrieUpdatezK) goto case_1869;
-    z3zE1425 = true;
-    goto finish_match_1867;
+    if (z2zE918.kind != Kind_zNonezIRTrieUpdatezK) goto case_1610;
+    z3zE1086 = true;
+    goto finish_match_1608;
   }
-case_1869: ;
+case_1610: ;
   {
     /* complete */
-    z3zE1425 = false;
-    goto finish_match_1867;
+    z3zE1086 = false;
+    goto finish_match_1608;
   }
-case_1868: ;
-finish_match_1867: ;
-  z8zE521 = z3zE1425;
-  KILL(zoptionzIRTrieUpdatezK)(&z2zE1387);
-end_function_1870: ;
-  return z8zE521;
-end_block_exception_1871: ;
+case_1609: ;
+finish_match_1608: ;
+  z8zE577 = z3zE1086;
+  KILL(zoptionzIRTrieUpdatezK)(&z2zE918);
+end_function_1611: ;
+  return z8zE577;
+end_block_exception_1612: ;
 
   return false;
 }
 
-void ztrie_updates_advance(struct zTrieUpdateCursor *z8zE522, struct zTrieUpdateCursor zupdates)
+void ztrie_updates_advance(struct zTrieUpdateCursor *z8zE578, struct zTrieUpdateCursor zupdates)
 {
-  struct zTrieUpdateSource z2zE1384;
-  CREATE(zTrieUpdateSource)(&z2zE1384);
-  COPY(zTrieUpdateSource)(&z2zE1384, zupdates.zsource);
-  struct zoptionzIRTrieUpdatezK z2zE1386;
-  CREATE(zoptionzIRTrieUpdatezK)(&z2zE1386);
+  struct zTrieUpdateSource z2zE915;
+  CREATE(zTrieUpdateSource)(&z2zE915);
+  z2zE915 = zupdates.zsource;
+  struct zoptionzIRTrieUpdatezK z2zE917;
+  CREATE(zoptionzIRTrieUpdatezK)(&z2zE917);
   {
-    struct zTrieUpdateSource z2zE1385;
-    CREATE(zTrieUpdateSource)(&z2zE1385);
-    COPY(zTrieUpdateSource)(&z2zE1385, zupdates.zsource);
-    ztrie_update_source_next(&z2zE1386, z2zE1385);
-    KILL(zTrieUpdateSource)(&z2zE1385);
+    struct zTrieUpdateSource z2zE916;
+    CREATE(zTrieUpdateSource)(&z2zE916);
+    z2zE916 = zupdates.zsource;
+    ztrie_update_source_next(&z2zE917, z2zE916);
+    KILL(zTrieUpdateSource)(&z2zE916);
   }
-  struct zTrieUpdateCursor z3zE1424;
-  CREATE(zTrieUpdateCursor)(&z3zE1424);
-  COPY(zoptionzIRTrieUpdatezK)(&((&z3zE1424)->zpending), z2zE1386);
-  COPY(zTrieUpdateSource)(&((&z3zE1424)->zsource), z2zE1384);
-  COPY(zTrieUpdateCursor)((*(&z8zE522)), z3zE1424);
-  KILL(zTrieUpdateCursor)(&z3zE1424);
-  KILL(zoptionzIRTrieUpdatezK)(&z2zE1386);
-  KILL(zTrieUpdateSource)(&z2zE1384);
-end_function_1865: ;
-  goto end_function_4023;
-end_block_exception_1866: ;
-  goto end_function_4023;
-end_function_4023: ;
+  struct zTrieUpdateCursor z3zE1085;
+  CREATE(zTrieUpdateCursor)(&z3zE1085);
+  z3zE1085.zpending = z2zE917;
+  z3zE1085.zsource = z2zE915;
+  (*(z8zE578)) = z3zE1085;
+  KILL(zTrieUpdateCursor)(&z3zE1085);
+  KILL(zoptionzIRTrieUpdatezK)(&z2zE917);
+  KILL(zTrieUpdateSource)(&z2zE915);
+end_function_1606: ;
+  goto end_function_3609;
+end_block_exception_1607: ;
+  goto end_function_3609;
+end_function_3609: ;
 }
 
 bool znext_update_under(struct zTrieUpdateCursor zupdates, struct zTriePath zprefix)
 {
-  bool z8zE523;
-  struct zoptionzIRTrieUpdatezK z2zE1382;
-  CREATE(zoptionzIRTrieUpdatezK)(&z2zE1382);
-  COPY(zoptionzIRTrieUpdatezK)(&z2zE1382, zupdates.zpending);
-  bool z3zE1421;
+  bool z8zE579;
+  struct zoptionzIRTrieUpdatezK z2zE913;
+  CREATE(zoptionzIRTrieUpdatezK)(&z2zE913);
+  z2zE913 = zupdates.zpending;
+  bool z3zE1082;
   {
-    if (z2zE1382.kind != Kind_zSomezIRTrieUpdatezK) goto case_1862;
+    if (z2zE913.kind != Kind_zSomezIRTrieUpdatezK) goto case_1603;
     struct zTrieUpdate zupdate;
     CREATE(zTrieUpdate)(&zupdate);
-    COPY(zTrieUpdate)(&zupdate, z2zE1382.variants.zSomezIRTrieUpdatezK);
-    struct zTriePath z2zE1383;
-    z2zE1383 = zupdate.zkey;
+    zupdate = z2zE913.variants.zSomezIRTrieUpdatezK;
+    struct zTriePath z2zE914;
+    z2zE914 = zupdate.zkey;
     {
-      z3zE1421 = zpath_prefix_of(zprefix, z2zE1383);
+      z3zE1082 = zpath_prefix_of(zprefix, z2zE914);
       if (have_exception) {
-        KILL(zoptionzIRTrieUpdatezK)(&z2zE1382);
+        KILL(zoptionzIRTrieUpdatezK)(&z2zE913);
         KILL(zTrieUpdate)(&zupdate);
-        goto end_block_exception_1864;
+        goto end_block_exception_1605;
       }
     }
     KILL(zTrieUpdate)(&zupdate);
-    goto finish_match_1860;
+    goto finish_match_1601;
   }
-case_1862: ;
+case_1603: ;
   {
     /* complete */
-    z3zE1421 = false;
-    goto finish_match_1860;
+    z3zE1082 = false;
+    goto finish_match_1601;
   }
-case_1861: ;
-finish_match_1860: ;
-  z8zE523 = z3zE1421;
-  KILL(zoptionzIRTrieUpdatezK)(&z2zE1382);
-end_function_1863: ;
-  return z8zE523;
-end_block_exception_1864: ;
+case_1602: ;
+finish_match_1601: ;
+  z8zE579 = z3zE1082;
+  KILL(zoptionzIRTrieUpdatezK)(&z2zE913);
+end_function_1604: ;
+  return z8zE579;
+end_block_exception_1605: ;
 
   return false;
 }
 
-void zitem_leaf(struct zTrieItem *z8zE524, struct zTriePath zpath, struct zByteSliceFields zvalue)
+void zitem_leaf(struct zTrieItem *z8zE580, struct zTriePath zpath, struct zByteSliceFields zvalue)
 {
-  struct zTrieItemValue z2zE1381;
-  CREATE(zTrieItemValue)(&z2zE1381);
-  zLeafItem(&z2zE1381, zvalue);
-  struct zTrieItem z3zE1420;
-  CREATE(zTrieItem)(&z3zE1420);
-  z3zE1420.zpath = zpath;
-  COPY(zTrieItemValue)(&((&z3zE1420)->zvalue), z2zE1381);
-  COPY(zTrieItem)((*(&z8zE524)), z3zE1420);
-  KILL(zTrieItem)(&z3zE1420);
-  KILL(zTrieItemValue)(&z2zE1381);
-end_function_1858: ;
-  goto end_function_4022;
-end_block_exception_1859: ;
-  goto end_function_4022;
-end_function_4022: ;
+  struct zTrieItemValue z2zE912;
+  CREATE(zTrieItemValue)(&z2zE912);
+  zLeafItem(&z2zE912, zvalue);
+  struct zTrieItem z3zE1081;
+  CREATE(zTrieItem)(&z3zE1081);
+  z3zE1081.zpath = zpath;
+  z3zE1081.zvalue = z2zE912;
+  (*(z8zE580)) = z3zE1081;
+  KILL(zTrieItem)(&z3zE1081);
+  KILL(zTrieItemValue)(&z2zE912);
+end_function_1599: ;
+  goto end_function_3608;
+end_block_exception_1600: ;
+  goto end_function_3608;
+end_function_3608: ;
 }
 
-void zitem_branch(struct zTrieItem *z8zE525, struct zTriePath zpath, struct zNodeRef zchildref)
+void zitem_branch(struct zTrieItem *z8zE581, struct zTriePath zpath, struct zNodeRef zchildref)
 {
-  struct zTrieItemValue z2zE1380;
-  CREATE(zTrieItemValue)(&z2zE1380);
-  zBranchItem(&z2zE1380, zchildref);
-  struct zTrieItem z3zE1419;
-  CREATE(zTrieItem)(&z3zE1419);
-  z3zE1419.zpath = zpath;
-  COPY(zTrieItemValue)(&((&z3zE1419)->zvalue), z2zE1380);
-  COPY(zTrieItem)((*(&z8zE525)), z3zE1419);
-  KILL(zTrieItem)(&z3zE1419);
-  KILL(zTrieItemValue)(&z2zE1380);
-end_function_1856: ;
-  goto end_function_4021;
-end_block_exception_1857: ;
-  goto end_function_4021;
-end_function_4021: ;
+  struct zTrieItemValue z2zE911;
+  CREATE(zTrieItemValue)(&z2zE911);
+  zBranchItem(&z2zE911, zchildref);
+  struct zTrieItem z3zE1080;
+  CREATE(zTrieItem)(&z3zE1080);
+  z3zE1080.zpath = zpath;
+  z3zE1080.zvalue = z2zE911;
+  (*(z8zE581)) = z3zE1080;
+  KILL(zTrieItem)(&z3zE1080);
+  KILL(zTrieItemValue)(&z2zE911);
+end_function_1597: ;
+  goto end_function_3607;
+end_block_exception_1598: ;
+  goto end_function_3607;
+end_function_3607: ;
 }
 
-void zitem_subtree(struct zTrieItem *z8zE526, struct zTriePath zpath, struct zNodeRef zchildref)
+void zitem_subtree(struct zTrieItem *z8zE582, struct zTriePath zpath, struct zNodeRef zchildref)
 {
-  struct zTrieItemValue z2zE1379;
-  CREATE(zTrieItemValue)(&z2zE1379);
-  zSubtreeItem(&z2zE1379, zchildref);
-  struct zTrieItem z3zE1418;
-  CREATE(zTrieItem)(&z3zE1418);
-  z3zE1418.zpath = zpath;
-  COPY(zTrieItemValue)(&((&z3zE1418)->zvalue), z2zE1379);
-  COPY(zTrieItem)((*(&z8zE526)), z3zE1418);
-  KILL(zTrieItem)(&z3zE1418);
-  KILL(zTrieItemValue)(&z2zE1379);
-end_function_1854: ;
-  goto end_function_4020;
-end_block_exception_1855: ;
-  goto end_function_4020;
-end_function_4020: ;
+  struct zTrieItemValue z2zE910;
+  CREATE(zTrieItemValue)(&z2zE910);
+  zSubtreeItem(&z2zE910, zchildref);
+  struct zTrieItem z3zE1079;
+  CREATE(zTrieItem)(&z3zE1079);
+  z3zE1079.zpath = zpath;
+  z3zE1079.zvalue = z2zE910;
+  (*(z8zE582)) = z3zE1079;
+  KILL(zTrieItem)(&z3zE1079);
+  KILL(zTrieItemValue)(&z2zE910);
+end_function_1595: ;
+  goto end_function_3606;
+end_block_exception_1596: ;
+  goto end_function_3606;
+end_function_3606: ;
 }
 
-void zitem_ref(struct zNodeRef *z8zE527, struct zTrieItem zit, uint64_t zdepth)
+void zitem_ref(struct zNodeRef *z8zE583, struct zTrieItem zit, uint64_t zdepth)
 {
   struct zTriePath zsuffix;
   {
-    struct zTriePath z2zE1378;
-    z2zE1378 = zit.zpath;
+    struct zTriePath z2zE909;
+    z2zE909 = zit.zpath;
     {
-      zsuffix = zpath_drop(z2zE1378, zdepth);
-      if (have_exception) {  goto end_block_exception_1853;  }
+      zsuffix = zpath_drop(z2zE909, zdepth);
+      if (have_exception) {  goto end_block_exception_1594;  }
     }
   }
-  struct zTrieItemValue z2zE1370;
-  CREATE(zTrieItemValue)(&z2zE1370);
-  COPY(zTrieItemValue)(&z2zE1370, zit.zvalue);
-  struct zNodeRef z3zE1410;
-  CREATE(zNodeRef)(&z3zE1410);
+  struct zTrieItemValue z2zE901;
+  CREATE(zTrieItemValue)(&z2zE901);
+  z2zE901 = zit.zvalue;
+  struct zNodeRef z3zE1071;
+  CREATE(zNodeRef)(&z3zE1071);
   {
-    if (z2zE1370.kind != Kind_zLeafItem) goto case_1851;
+    if (z2zE901.kind != Kind_zLeafItem) goto case_1592;
     struct zByteSliceFields zvalue;
-    zvalue = z2zE1370.variants.zLeafItem;
+    zvalue = z2zE901.variants.zLeafItem;
     {
-      zleaf_child_ref(&z3zE1410, zsuffix, zvalue);
+      zleaf_child_ref(&z3zE1071, zsuffix, zvalue);
       if (have_exception) {
-        KILL(zTrieItemValue)(&z2zE1370);
-        KILL(zNodeRef)(&z3zE1410);
-        goto end_block_exception_1853;
+        KILL(zTrieItemValue)(&z2zE901);
+        KILL(zNodeRef)(&z3zE1071);
+        goto end_block_exception_1594;
       }
     }
-    goto finish_match_1845;
+    goto finish_match_1586;
   }
-case_1851: ;
+case_1592: ;
   {
-    if (z2zE1370.kind != Kind_zBranchItem) goto case_1850;
+    if (z2zE901.kind != Kind_zBranchItem) goto case_1591;
     struct zNodeRef zsubref;
     CREATE(zNodeRef)(&zsubref);
-    COPY(zNodeRef)(&zsubref, z2zE1370.variants.zBranchItem);
-    bool z2zE1372;
+    zsubref = z2zE901.variants.zBranchItem;
+    bool z2zE903;
     {
-      uint64_t z2zE1371;
-      z2zE1371 = zpath_len(zsuffix);
-      z2zE1372 = (z2zE1371 == UINT64_C(0));
+      uint64_t z2zE902;
+      z2zE902 = zpath_len(zsuffix);
+      z2zE903 = (z2zE902 == UINT64_C(0));
     }
-    if (z2zE1372) {  COPY(zNodeRef)(&z3zE1410, zsubref);  } else {
+    if (z2zE903) {  z3zE1071 = zsubref;  } else {
       {
-        zmerge_ext_ref(&z3zE1410, zsuffix, zsubref);
+        zmerge_ext_ref(&z3zE1071, zsuffix, zsubref);
         if (have_exception) {
-          KILL(zTrieItemValue)(&z2zE1370);
-          KILL(zNodeRef)(&z3zE1410);
+          KILL(zTrieItemValue)(&z2zE901);
+          KILL(zNodeRef)(&z3zE1071);
           KILL(zNodeRef)(&zsubref);
-          goto end_block_exception_1853;
+          goto end_block_exception_1594;
         }
       }
     }
     KILL(zNodeRef)(&zsubref);
-    goto finish_match_1845;
+    goto finish_match_1586;
   }
-case_1850: ;
+case_1591: ;
   {
     /* complete */
-    struct zNodeRef z3zE1417;
-    CREATE(zNodeRef)(&z3zE1417);
-    COPY(zNodeRef)(&z3zE1417, z2zE1370.variants.zSubtreeItem);
-    bool z2zE1374;
+    struct zNodeRef z3zE1078;
+    CREATE(zNodeRef)(&z3zE1078);
+    z3zE1078 = z2zE901.variants.zSubtreeItem;
+    bool z2zE905;
     {
-      uint64_t z2zE1373;
-      z2zE1373 = zpath_len(zsuffix);
-      z2zE1374 = (z2zE1373 == UINT64_C(0));
+      uint64_t z2zE904;
+      z2zE904 = zpath_len(zsuffix);
+      z2zE905 = (z2zE904 == UINT64_C(0));
     }
-    if (z2zE1374) {  COPY(zNodeRef)(&z3zE1410, z3zE1417);  } else {
-      struct zNodeRef z3zE1412;
-      CREATE(zNodeRef)(&z3zE1412);
+    if (z2zE905) {  z3zE1071 = z3zE1078;  } else {
+      struct zNodeRef z3zE1073;
+      CREATE(zNodeRef)(&z3zE1073);
       {
-        if (z3zE1417.kind != Kind_zHashRef) goto case_1849;
+        if (z3zE1078.kind != Kind_zHashRef) goto case_1590;
         sail_fixed_bytes_32 zh;
-        zh = z3zE1417.variants.zHashRef;
+        zh = z3zE1078.variants.zHashRef;
         struct zByteSliceFields znode;
         znode = znode_db_lookup(zh);
-        bool z2zE1376;
+        bool z2zE907;
         {
-          uint64_t z2zE1375;
-          z2zE1375 = znode.zlen;
-          z2zE1376 = (z2zE1375 == UINT64_C(0));
+          uint64_t z2zE906;
+          z2zE906 = znode.zlen;
+          z2zE907 = (z2zE906 == UINT64_C(0));
         }
-        if (z2zE1376) {
-          struct zexception z2zE1377;
-          CREATE(zexception)(&z2zE1377);
-          zInvalidBlock(&z2zE1377, zWitnessDeficient);
-          COPY(zexception)(current_exception, z2zE1377);
+        if (z2zE907) {
+          struct zexception z2zE908;
+          CREATE(zexception)(&z2zE908);
+          zInvalidBlock(&z2zE908, zWitnessDeficient);
+          COPY(zexception)(current_exception, z2zE908);
           have_exception = true;
           COPY(sail_string)(throw_location, "sail/lib/mpt/updates.sail:117.24-117.60");
-          KILL(zTrieItemValue)(&z2zE1370);
-          KILL(zNodeRef)(&z3zE1410);
-          KILL(zNodeRef)(&z3zE1417);
-          KILL(zNodeRef)(&z3zE1412);
-          KILL(zexception)(&z2zE1377);
-          goto end_block_exception_1853;
+          KILL(zTrieItemValue)(&z2zE901);
+          KILL(zNodeRef)(&z3zE1071);
+          KILL(zNodeRef)(&z3zE1078);
+          KILL(zNodeRef)(&z3zE1073);
+          KILL(zexception)(&z2zE908);
+          goto end_block_exception_1594;
           /* unreachable after throw */
-          KILL(zexception)(&z2zE1377);
+          KILL(zexception)(&z2zE908);
         } else {
           {
-            zmerge_ext_node(&z3zE1412, zsuffix, znode);
+            zmerge_ext_node(&z3zE1073, zsuffix, znode);
             if (have_exception) {
-              KILL(zTrieItemValue)(&z2zE1370);
-              KILL(zNodeRef)(&z3zE1410);
-              KILL(zNodeRef)(&z3zE1417);
-              KILL(zNodeRef)(&z3zE1412);
-              goto end_block_exception_1853;
+              KILL(zTrieItemValue)(&z2zE901);
+              KILL(zNodeRef)(&z3zE1071);
+              KILL(zNodeRef)(&z3zE1078);
+              KILL(zNodeRef)(&z3zE1073);
+              goto end_block_exception_1594;
             }
           }
         }
-        goto finish_match_1847;
+        goto finish_match_1588;
       }
-    case_1849: ;
+    case_1590: ;
       {
         {
-          zmerge_ext_ref(&z3zE1412, zsuffix, z3zE1417);
+          zmerge_ext_ref(&z3zE1073, zsuffix, z3zE1078);
           if (have_exception) {
-            KILL(zTrieItemValue)(&z2zE1370);
-            KILL(zNodeRef)(&z3zE1410);
-            KILL(zNodeRef)(&z3zE1417);
-            KILL(zNodeRef)(&z3zE1412);
-            goto end_block_exception_1853;
+            KILL(zTrieItemValue)(&z2zE901);
+            KILL(zNodeRef)(&z3zE1071);
+            KILL(zNodeRef)(&z3zE1078);
+            KILL(zNodeRef)(&z3zE1073);
+            goto end_block_exception_1594;
           }
         }
-        goto finish_match_1847;
+        goto finish_match_1588;
       }
-    case_1848: ;
-    finish_match_1847: ;
-      COPY(zNodeRef)(&z3zE1410, z3zE1412);
-      KILL(zNodeRef)(&z3zE1412);
+    case_1589: ;
+    finish_match_1588: ;
+      z3zE1071 = z3zE1073;
+      KILL(zNodeRef)(&z3zE1073);
     }
-    KILL(zNodeRef)(&z3zE1417);
-    goto finish_match_1845;
+    KILL(zNodeRef)(&z3zE1078);
+    goto finish_match_1586;
   }
-case_1846: ;
-finish_match_1845: ;
-  COPY(zNodeRef)((*(&z8zE527)), z3zE1410);
-  KILL(zNodeRef)(&z3zE1410);
-  KILL(zTrieItemValue)(&z2zE1370);
-end_function_1852: ;
-  goto end_function_4019;
-end_block_exception_1853: ;
-  goto end_function_4019;
-end_function_4019: ;
+case_1587: ;
+finish_match_1586: ;
+  (*(z8zE583)) = z3zE1071;
+  KILL(zNodeRef)(&z3zE1071);
+  KILL(zTrieItemValue)(&z2zE901);
+end_function_1593: ;
+  goto end_function_3605;
+end_block_exception_1594: ;
+  goto end_function_3605;
+end_function_3605: ;
 }
 
-void zempty_trie_branch_frame(struct zTrieBranchFrame *z8zE528, uint64_t zdepth)
+void zempty_trie_branch_frame(struct zTrieBranchFrame *z8zE584, uint64_t zdepth)
 {
-  zz5vecz8z5unionz0zzNodeRefz9 z2zE1369;
-  CREATE(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE1369);
+  zz5vecz8z5unionz0zzNodeRefz9 z2zE900;
+  CREATE(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE900);
   {
-    struct zNodeRef z2zE1368;
-    CREATE(zNodeRef)(&z2zE1368);
-    zEmptyRef(&z2zE1368, UNIT);
-    fast_unsigned_vector_init_zz5vecz8z5unionz0zzNodeRefz9(&z2zE1369, UINT64_C(16), z2zE1368);
-    KILL(zNodeRef)(&z2zE1368);
+    struct zNodeRef z2zE899;
+    CREATE(zNodeRef)(&z2zE899);
+    zEmptyRef(&z2zE899, UNIT);
+    fast_unsigned_vector_init_zz5vecz8z5unionz0zzNodeRefz9(&z2zE900, UINT64_C(16), z2zE899);
+    KILL(zNodeRef)(&z2zE899);
   }
-  struct zTrieBranchFrame z3zE1409;
-  CREATE(zTrieBranchFrame)(&z3zE1409);
-  COPY(zz5vecz8z5unionz0zzNodeRefz9)(&((&z3zE1409)->zchildren), z2zE1369);
-  z3zE1409.zdepth = zdepth;
-  z3zE1409.zmask = UINT64_C(0x0000);
-  COPY(zTrieBranchFrame)((*(&z8zE528)), z3zE1409);
-  KILL(zTrieBranchFrame)(&z3zE1409);
-  KILL(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE1369);
-end_function_1843: ;
-  goto end_function_4018;
-end_block_exception_1844: ;
-  goto end_function_4018;
-end_function_4018: ;
+  struct zTrieBranchFrame z3zE1070;
+  CREATE(zTrieBranchFrame)(&z3zE1070);
+  COPY(zz5vecz8z5unionz0zzNodeRefz9)(&((&z3zE1070)->zchildren), z2zE900);
+  z3zE1070.zdepth = zdepth;
+  z3zE1070.zmask = UINT64_C(0x0000);
+  COPY(zTrieBranchFrame)((*(&z8zE584)), z3zE1070);
+  KILL(zTrieBranchFrame)(&z3zE1070);
+  KILL(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE900);
+end_function_1584: ;
+  goto end_function_3604;
+end_block_exception_1585: ;
+  goto end_function_3604;
+end_function_3604: ;
 }
 
-void ztrie_builder_empty(struct zTrieBuilder *z8zE529, unit z3zE1406)
+void ztrie_builder_empty(struct zTrieBuilder *z8zE585, unit z3zE1067)
 {
-  struct zNodeRef z2zE1367;
-  CREATE(zNodeRef)(&z2zE1367);
-  zEmptyRef(&z2zE1367, UNIT);
-  struct zTrieBuilder z3zE1407;
-  CREATE(zTrieBuilder)(&z3zE1407);
-  z3zE1407.zcomplete = false;
-  zz5listz8z5structz0zzTrieBranchFramez9 z3zE1408;
-  CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z3zE1408);
-  COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&((&z3zE1407)->zframes), z3zE1408);
-  KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z3zE1408);
-  COPY(zNodeRef)(&((&z3zE1407)->zroot), z2zE1367);
-  COPY(zTrieBuilder)((*(&z8zE529)), z3zE1407);
-  KILL(zTrieBuilder)(&z3zE1407);
-  KILL(zNodeRef)(&z2zE1367);
-end_function_1841: ;
-  goto end_function_4017;
-end_block_exception_1842: ;
-  goto end_function_4017;
-end_function_4017: ;
+  struct zNodeRef z2zE898;
+  CREATE(zNodeRef)(&z2zE898);
+  zEmptyRef(&z2zE898, UNIT);
+  struct zTrieBuilder z3zE1068;
+  CREATE(zTrieBuilder)(&z3zE1068);
+  z3zE1068.zcomplete = false;
+  zz5listz8z5structz0zzTrieBranchFramez9 z3zE1069;
+  CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z3zE1069);
+  COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&((&z3zE1068)->zframes), z3zE1069);
+  KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z3zE1069);
+  z3zE1068.zroot = z2zE898;
+  COPY(zTrieBuilder)((*(&z8zE585)), z3zE1068);
+  KILL(zTrieBuilder)(&z3zE1068);
+  KILL(zNodeRef)(&z2zE898);
+end_function_1582: ;
+  goto end_function_3603;
+end_block_exception_1583: ;
+  goto end_function_3603;
+end_function_3603: ;
 }
 
-void ztrie_builder_push(struct zTrieBuilder *z8zE530, struct zTrieBuilder zbuilder, uint64_t zdepth)
+void ztrie_builder_push(struct zTrieBuilder *z8zE586, struct zTrieBuilder zbuilder, uint64_t zdepth)
 {
-  zz5listz8z5structz0zzTrieBranchFramez9 z2zE1364;
-  CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1364);
+  zz5listz8z5structz0zzTrieBranchFramez9 z2zE895;
+  CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE895);
   {
-    struct zTrieBranchFrame z2zE1362;
-    CREATE(zTrieBranchFrame)(&z2zE1362);
-    zempty_trie_branch_frame(&z2zE1362, zdepth);
-    zz5listz8z5structz0zzTrieBranchFramez9 z2zE1363;
-    CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1363);
-    COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1363, zbuilder.zframes);
-    zconsz3z5structz0zzTrieBranchFrame(&z2zE1364, z2zE1362, z2zE1363);
-    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1363);
-    KILL(zTrieBranchFrame)(&z2zE1362);
+    struct zTrieBranchFrame z2zE893;
+    CREATE(zTrieBranchFrame)(&z2zE893);
+    zempty_trie_branch_frame(&z2zE893, zdepth);
+    zz5listz8z5structz0zzTrieBranchFramez9 z2zE894;
+    CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE894);
+    COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE894, zbuilder.zframes);
+    zconsz3z5structz0zzTrieBranchFrame(&z2zE895, z2zE893, z2zE894);
+    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE894);
+    KILL(zTrieBranchFrame)(&z2zE893);
   }
-  struct zNodeRef z2zE1365;
-  CREATE(zNodeRef)(&z2zE1365);
-  COPY(zNodeRef)(&z2zE1365, zbuilder.zroot);
-  bool z2zE1366;
-  z2zE1366 = zbuilder.zcomplete;
-  struct zTrieBuilder z3zE1405;
-  CREATE(zTrieBuilder)(&z3zE1405);
-  z3zE1405.zcomplete = z2zE1366;
-  COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&((&z3zE1405)->zframes), z2zE1364);
-  COPY(zNodeRef)(&((&z3zE1405)->zroot), z2zE1365);
-  COPY(zTrieBuilder)((*(&z8zE530)), z3zE1405);
-  KILL(zTrieBuilder)(&z3zE1405);
-  KILL(zNodeRef)(&z2zE1365);
-  KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1364);
-end_function_1839: ;
-  goto end_function_4016;
-end_block_exception_1840: ;
-  goto end_function_4016;
-end_function_4016: ;
+  struct zNodeRef z2zE896;
+  CREATE(zNodeRef)(&z2zE896);
+  z2zE896 = zbuilder.zroot;
+  bool z2zE897;
+  z2zE897 = zbuilder.zcomplete;
+  struct zTrieBuilder z3zE1066;
+  CREATE(zTrieBuilder)(&z3zE1066);
+  z3zE1066.zcomplete = z2zE897;
+  COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&((&z3zE1066)->zframes), z2zE895);
+  z3zE1066.zroot = z2zE896;
+  COPY(zTrieBuilder)((*(&z8zE586)), z3zE1066);
+  KILL(zTrieBuilder)(&z3zE1066);
+  KILL(zNodeRef)(&z2zE896);
+  KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE895);
+end_function_1580: ;
+  goto end_function_3602;
+end_block_exception_1581: ;
+  goto end_function_3602;
+end_function_3602: ;
 }
 
-void ztrie_builder_attach(struct zTrieBuilder *z8zE531, struct zTrieBuilder zbuilder, struct zTriePath zpath, struct zNodeRef zchild)
+void ztrie_builder_attach(struct zTrieBuilder *z8zE587, struct zTrieBuilder zbuilder, struct zTriePath zpath, struct zNodeRef zchild)
 {
-  zz5listz8z5structz0zzTrieBranchFramez9 z2zE1347;
-  CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1347);
-  COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1347, zbuilder.zframes);
-  struct zTrieBuilder z3zE1396;
-  CREATE(zTrieBuilder)(&z3zE1396);
+  zz5listz8z5structz0zzTrieBranchFramez9 z2zE878;
+  CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE878);
+  COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE878, zbuilder.zframes);
+  struct zTrieBuilder z3zE1057;
+  CREATE(zTrieBuilder)(&z3zE1057);
   {
-    if (!((z2zE1347 == NULL))) goto case_1836;
-    struct zexception z2zE1348;
-    CREATE(zexception)(&z2zE1348);
-    zInvalidBlock(&z2zE1348, zWitnessDeficient);
-    COPY(zexception)(current_exception, z2zE1348);
+    if (!((z2zE878 == NULL))) goto case_1577;
+    struct zexception z2zE879;
+    CREATE(zexception)(&z2zE879);
+    zInvalidBlock(&z2zE879, zWitnessDeficient);
+    COPY(zexception)(current_exception, z2zE879);
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/mpt/updates.sail:181.16-181.52");
-    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1347);
-    KILL(zTrieBuilder)(&z3zE1396);
-    KILL(zexception)(&z2zE1348);
-    goto end_block_exception_1838;
+    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE878);
+    KILL(zTrieBuilder)(&z3zE1057);
+    KILL(zexception)(&z2zE879);
+    goto end_block_exception_1579;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE1348);
-    goto finish_match_1834;
+    KILL(zexception)(&z2zE879);
+    goto finish_match_1575;
   }
-case_1836: ;
+case_1577: ;
   {
     /* complete */
     struct zTrieBranchFrame zcurrent;
     CREATE(zTrieBranchFrame)(&zcurrent);
-    COPY(zTrieBranchFrame)(&zcurrent, (*z2zE1347).hd);
+    COPY(zTrieBranchFrame)(&zcurrent, (*z2zE878).hd);
     zz5listz8z5structz0zzTrieBranchFramez9 zrest;
     CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&zrest);
-    COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&zrest, (*z2zE1347).tl);
+    COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&zrest, (*z2zE878).tl);
     struct zTrieBranchFrame zframe;
     CREATE(zTrieBranchFrame)(&zframe);
     COPY(zTrieBranchFrame)(&zframe, zcurrent);
     uint64_t zdepth;
     zdepth = zframe.zdepth;
-    bool z2zE1350;
+    bool z2zE881;
     {
-      uint64_t z2zE1349;
-      z2zE1349 = zpath_len(zpath);
-      z2zE1350 = (!(zdepth < z2zE1349));
+      uint64_t z2zE880;
+      z2zE880 = zpath_len(zpath);
+      z2zE881 = (!(zdepth < z2zE880));
     }
-    unit z3zE1397;
-    if (z2zE1350) {
-      struct zexception z2zE1351;
-      CREATE(zexception)(&z2zE1351);
-      zInvalidBlock(&z2zE1351, zWitnessDeficient);
-      COPY(zexception)(current_exception, z2zE1351);
+    unit z3zE1058;
+    if (z2zE881) {
+      struct zexception z2zE882;
+      CREATE(zexception)(&z2zE882);
+      zInvalidBlock(&z2zE882, zWitnessDeficient);
+      COPY(zexception)(current_exception, z2zE882);
       have_exception = true;
       COPY(sail_string)(throw_location, "sail/lib/mpt/updates.sail:186.16-186.52");
-      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1347);
-      KILL(zTrieBuilder)(&z3zE1396);
+      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE878);
+      KILL(zTrieBuilder)(&z3zE1057);
       KILL(zTrieBranchFrame)(&zcurrent);
       KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&zrest);
       KILL(zTrieBranchFrame)(&zframe);
-      KILL(zexception)(&z2zE1351);
-      goto end_block_exception_1838;
+      KILL(zexception)(&z2zE882);
+      goto end_block_exception_1579;
       /* unreachable after throw */
-      KILL(zexception)(&z2zE1351);
-    } else {  z3zE1397 = UNIT;  }
+      KILL(zexception)(&z2zE882);
+    } else {  z3zE1058 = UNIT;  }
     uint64_t zchild_index;
     zchild_index = zpath_nibble(zpath, zdepth);
-    bool z2zE1353;
+    bool z2zE884;
     {
-      uint64_t z2zE1352;
-      z2zE1352 = zframe.zmask;
-      z2zE1353 = zbranch_mask_has(z2zE1352, zchild_index);
+      uint64_t z2zE883;
+      z2zE883 = zframe.zmask;
+      z2zE884 = zbranch_mask_has(z2zE883, zchild_index);
     }
-    unit z3zE1401;
-    if (z2zE1353) {
-      struct zexception z2zE1354;
-      CREATE(zexception)(&z2zE1354);
-      zInvalidBlock(&z2zE1354, zWitnessDeficient);
-      COPY(zexception)(current_exception, z2zE1354);
+    unit z3zE1062;
+    if (z2zE884) {
+      struct zexception z2zE885;
+      CREATE(zexception)(&z2zE885);
+      zInvalidBlock(&z2zE885, zWitnessDeficient);
+      COPY(zexception)(current_exception, z2zE885);
       have_exception = true;
       COPY(sail_string)(throw_location, "sail/lib/mpt/updates.sail:190.16-190.52");
-      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1347);
-      KILL(zTrieBuilder)(&z3zE1396);
+      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE878);
+      KILL(zTrieBuilder)(&z3zE1057);
       KILL(zTrieBranchFrame)(&zcurrent);
       KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&zrest);
       KILL(zTrieBranchFrame)(&zframe);
-      KILL(zexception)(&z2zE1354);
-      goto end_block_exception_1838;
+      KILL(zexception)(&z2zE885);
+      goto end_block_exception_1579;
       /* unreachable after throw */
-      KILL(zexception)(&z2zE1354);
-    } else {  z3zE1401 = UNIT;  }
-    uint64_t z2zE1355;
-    z2zE1355 = zframe.zmask;
-    zframe.zmask = zbranch_mask_set(z2zE1355, zchild_index);
-    unit z3zE1400;
-    z3zE1400 = UNIT;
-    zz5vecz8z5unionz0zzNodeRefz9 z2zE1358;
-    CREATE(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE1358);
+      KILL(zexception)(&z2zE885);
+    } else {  z3zE1062 = UNIT;  }
+    uint64_t z2zE886;
+    z2zE886 = zframe.zmask;
+    zframe.zmask = zbranch_mask_set(z2zE886, zchild_index);
+    unit z3zE1061;
+    z3zE1061 = UNIT;
+    zz5vecz8z5unionz0zzNodeRefz9 z2zE889;
+    CREATE(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE889);
     {
-      zz5vecz8z5unionz0zzNodeRefz9 z2zE1356;
-      CREATE(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE1356);
-      COPY(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE1356, zframe.zchildren);
-      uint64_t z2zE1357;
-      z2zE1357 = ((uint64_t) zchild_index);
-      fast_unsigned_vector_update_zz5vecz8z5unionz0zzNodeRefz9(&z2zE1358, z2zE1356, z2zE1357, zchild);
-      KILL(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE1356);
+      zz5vecz8z5unionz0zzNodeRefz9 z2zE887;
+      CREATE(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE887);
+      COPY(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE887, zframe.zchildren);
+      uint64_t z2zE888;
+      z2zE888 = ((uint64_t) zchild_index);
+      fast_unsigned_vector_update_zz5vecz8z5unionz0zzNodeRefz9(&z2zE889, z2zE887, z2zE888, zchild);
+      KILL(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE887);
     }
-    COPY(zz5vecz8z5unionz0zzNodeRefz9)(&((&zframe)->zchildren), z2zE1358);
-    unit z3zE1399;
-    z3zE1399 = UNIT;
-    zz5listz8z5structz0zzTrieBranchFramez9 z2zE1359;
-    CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1359);
-    zconsz3z5structz0zzTrieBranchFrame(&z2zE1359, zframe, zrest);
-    struct zNodeRef z2zE1360;
-    CREATE(zNodeRef)(&z2zE1360);
-    COPY(zNodeRef)(&z2zE1360, zbuilder.zroot);
-    bool z2zE1361;
-    z2zE1361 = zbuilder.zcomplete;
-    z3zE1396.zcomplete = z2zE1361;
-    COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&((&z3zE1396)->zframes), z2zE1359);
-    COPY(zNodeRef)(&((&z3zE1396)->zroot), z2zE1360);
-    goto finish_match_1834;
+    COPY(zz5vecz8z5unionz0zzNodeRefz9)(&((&zframe)->zchildren), z2zE889);
+    unit z3zE1060;
+    z3zE1060 = UNIT;
+    zz5listz8z5structz0zzTrieBranchFramez9 z2zE890;
+    CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE890);
+    zconsz3z5structz0zzTrieBranchFrame(&z2zE890, zframe, zrest);
+    struct zNodeRef z2zE891;
+    CREATE(zNodeRef)(&z2zE891);
+    z2zE891 = zbuilder.zroot;
+    bool z2zE892;
+    z2zE892 = zbuilder.zcomplete;
+    z3zE1057.zcomplete = z2zE892;
+    COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&((&z3zE1057)->zframes), z2zE890);
+    z3zE1057.zroot = z2zE891;
+    goto finish_match_1575;
   }
-case_1835: ;
-finish_match_1834: ;
-  COPY(zTrieBuilder)((*(&z8zE531)), z3zE1396);
-  KILL(zTrieBuilder)(&z3zE1396);
-  KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1347);
-end_function_1837: ;
-  goto end_function_4015;
-end_block_exception_1838: ;
-  goto end_function_4015;
-end_function_4015: ;
+case_1576: ;
+finish_match_1575: ;
+  COPY(zTrieBuilder)((*(&z8zE587)), z3zE1057);
+  KILL(zTrieBuilder)(&z3zE1057);
+  KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE878);
+end_function_1578: ;
+  goto end_function_3601;
+end_block_exception_1579: ;
+  goto end_function_3601;
+end_function_3601: ;
 }
 
-void ztrie_builder_pop(struct ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9 *z8zE532, struct zTrieBuilder zbuilder)
+void ztrie_builder_pop(struct ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9 *z8zE588, struct zTrieBuilder zbuilder)
 {
-  zz5listz8z5structz0zzTrieBranchFramez9 z2zE1342;
-  CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1342);
-  COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1342, zbuilder.zframes);
-  struct ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9 z3zE1391;
-  CREATE(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z3zE1391);
+  zz5listz8z5structz0zzTrieBranchFramez9 z2zE873;
+  CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE873);
+  COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE873, zbuilder.zframes);
+  struct ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9 z3zE1052;
+  CREATE(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z3zE1052);
   {
-    if (!((z2zE1342 == NULL))) goto case_1831;
-    struct zexception z2zE1343;
-    CREATE(zexception)(&z2zE1343);
-    zInvalidBlock(&z2zE1343, zWitnessDeficient);
-    COPY(zexception)(current_exception, z2zE1343);
+    if (!((z2zE873 == NULL))) goto case_1572;
+    struct zexception z2zE874;
+    CREATE(zexception)(&z2zE874);
+    zInvalidBlock(&z2zE874, zWitnessDeficient);
+    COPY(zexception)(current_exception, z2zE874);
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/mpt/updates.sail:201.16-201.52");
-    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1342);
-    KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z3zE1391);
-    KILL(zexception)(&z2zE1343);
-    goto end_block_exception_1833;
+    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE873);
+    KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z3zE1052);
+    KILL(zexception)(&z2zE874);
+    goto end_block_exception_1574;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE1343);
-    goto finish_match_1829;
+    KILL(zexception)(&z2zE874);
+    goto finish_match_1570;
   }
-case_1831: ;
+case_1572: ;
   {
     /* complete */
     struct zTrieBranchFrame zframe;
     CREATE(zTrieBranchFrame)(&zframe);
-    COPY(zTrieBranchFrame)(&zframe, (*z2zE1342).hd);
+    COPY(zTrieBranchFrame)(&zframe, (*z2zE873).hd);
     zz5listz8z5structz0zzTrieBranchFramez9 zrest;
     CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&zrest);
-    COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&zrest, (*z2zE1342).tl);
-    struct zTrieBuilder z2zE1346;
-    CREATE(zTrieBuilder)(&z2zE1346);
+    COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&zrest, (*z2zE873).tl);
+    struct zTrieBuilder z2zE877;
+    CREATE(zTrieBuilder)(&z2zE877);
     {
-      struct zNodeRef z2zE1344;
-      CREATE(zNodeRef)(&z2zE1344);
-      COPY(zNodeRef)(&z2zE1344, zbuilder.zroot);
-      bool z2zE1345;
-      z2zE1345 = zbuilder.zcomplete;
-      z2zE1346.zcomplete = z2zE1345;
-      COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&((&z2zE1346)->zframes), zrest);
-      COPY(zNodeRef)(&((&z2zE1346)->zroot), z2zE1344);
-      KILL(zNodeRef)(&z2zE1344);
+      struct zNodeRef z2zE875;
+      CREATE(zNodeRef)(&z2zE875);
+      z2zE875 = zbuilder.zroot;
+      bool z2zE876;
+      z2zE876 = zbuilder.zcomplete;
+      z2zE877.zcomplete = z2zE876;
+      COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&((&z2zE877)->zframes), zrest);
+      z2zE877.zroot = z2zE875;
+      KILL(zNodeRef)(&z2zE875);
     }
-    COPY(zTrieBranchFrame)(&((&z3zE1391)->ztup0), zframe);
-    COPY(zTrieBuilder)(&((&z3zE1391)->ztup1), z2zE1346);
-    KILL(zTrieBuilder)(&z2zE1346);
+    COPY(zTrieBranchFrame)(&((&z3zE1052)->ztup0), zframe);
+    COPY(zTrieBuilder)(&((&z3zE1052)->ztup1), z2zE877);
+    KILL(zTrieBuilder)(&z2zE877);
     KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&zrest);
     KILL(zTrieBranchFrame)(&zframe);
-    goto finish_match_1829;
+    goto finish_match_1570;
   }
-case_1830: ;
-finish_match_1829: ;
-  COPY(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)((*(&z8zE532)), z3zE1391);
-  KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z3zE1391);
-  KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1342);
-end_function_1832: ;
-  goto end_function_4014;
-end_block_exception_1833: ;
-  goto end_function_4014;
-end_function_4014: ;
+case_1571: ;
+finish_match_1570: ;
+  COPY(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)((*(&z8zE588)), z3zE1052);
+  KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z3zE1052);
+  KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE873);
+end_function_1573: ;
+  goto end_function_3600;
+end_block_exception_1574: ;
+  goto end_function_3600;
+end_function_3600: ;
 }
 
-void ztrie_builder_wrap_branch(struct zNodeRef *z8zE533, struct zTriePath zanchor, uint64_t zparent_depth, uint64_t zchild_depth, struct zNodeRef zchild)
+void ztrie_builder_wrap_branch(struct zNodeRef *z8zE589, struct zTriePath zanchor, uint64_t zparent_depth, uint64_t zchild_depth, struct zNodeRef zchild)
 {
   uint64_t zchild_start;
   {    zchild_start = (zparent_depth + UINT64_C(1));
   }
-  bool z2zE1339;
-  z2zE1339 = (!(zchild_start < zchild_depth));
-  if (z2zE1339) {  COPY(zNodeRef)((*(&z8zE533)), zchild);  } else {
+  bool z2zE870;
+  z2zE870 = (!(zchild_start < zchild_depth));
+  if (z2zE870) {  (*(z8zE589)) = zchild;  } else {
     uint64_t zgap;
     {    zgap = (zchild_depth - zchild_start);
     }
-    struct zTriePath z2zE1341;
+    struct zTriePath z2zE872;
     {
-      struct zTriePath z2zE1340;
+      struct zTriePath z2zE871;
       {
-        z2zE1340 = zpath_drop(zanchor, zchild_start);
-        if (have_exception) {  goto end_block_exception_1828;  }
+        z2zE871 = zpath_drop(zanchor, zchild_start);
+        if (have_exception) {  goto end_block_exception_1569;  }
       }
       {
-        z2zE1341 = zpath_take(z2zE1340, zgap);
-        if (have_exception) {  goto end_block_exception_1828;  }
+        z2zE872 = zpath_take(z2zE871, zgap);
+        if (have_exception) {  goto end_block_exception_1569;  }
       }
     }
     {
-      zextension_child_ref((*(&z8zE533)), z2zE1341, zchild);
-      if (have_exception) {  goto end_block_exception_1828;  }
+      zextension_child_ref((*(&z8zE589)), z2zE872, zchild);
+      if (have_exception) {  goto end_block_exception_1569;  }
     }
   }
-end_function_1827: ;
-  goto end_function_4013;
-end_block_exception_1828: ;
-  goto end_function_4013;
-end_function_4013: ;
+end_function_1568: ;
+  goto end_function_3599;
+end_block_exception_1569: ;
+  goto end_function_3599;
+end_function_3599: ;
 }
 
-void ztrie_builder_close(struct zTrieBuilder *z8zE534, struct zTrieBuilder zbuilder, struct zTriePath zanchor, struct zoptionzIU64zK znext_common, uint64_t zfuel)
+void ztrie_builder_close(struct zTrieBuilder *z8zE590, struct zTrieBuilder zbuilder, struct zTriePath zanchor, struct zoptionzIU64zK znext_common, uint64_t zfuel)
 {
-  bool z2zE1314;
-  z2zE1314 = (zfuel == UINT64_C(0));
-  if (z2zE1314) {
-    struct zexception z2zE1315;
-    CREATE(zexception)(&z2zE1315);
-    zInvalidBlock(&z2zE1315, zWitnessDeficient);
-    COPY(zexception)(current_exception, z2zE1315);
+  bool z2zE845;
+  z2zE845 = (zfuel == UINT64_C(0));
+  if (z2zE845) {
+    struct zexception z2zE846;
+    CREATE(zexception)(&z2zE846);
+    zInvalidBlock(&z2zE846, zWitnessDeficient);
+    COPY(zexception)(current_exception, z2zE846);
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/mpt/updates.sail:234.8-234.44");
-    KILL(zexception)(&z2zE1315);
-    goto end_block_exception_1826;
+    KILL(zexception)(&z2zE846);
+    goto end_block_exception_1567;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE1315);
+    KILL(zexception)(&z2zE846);
   } else {
-    zz5listz8z5structz0zzTrieBranchFramez9 z2zE1316;
-    CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-    COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316, zbuilder.zframes);
-    struct zTrieBuilder z3zE1370;
-    CREATE(zTrieBuilder)(&z3zE1370);
+    zz5listz8z5structz0zzTrieBranchFramez9 z2zE847;
+    CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+    COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847, zbuilder.zframes);
+    struct zTrieBuilder z3zE1031;
+    CREATE(zTrieBuilder)(&z3zE1031);
     {
-      if (!((z2zE1316 == NULL))) goto case_1824;
-      COPY(zTrieBuilder)(&z3zE1370, zbuilder);
-      goto finish_match_1808;
+      if (!((z2zE847 == NULL))) goto case_1565;
+      COPY(zTrieBuilder)(&z3zE1031, zbuilder);
+      goto finish_match_1549;
     }
-  case_1824: ;
+  case_1565: ;
     {
       /* complete */
       struct zTrieBranchFrame ztop;
       CREATE(zTrieBranchFrame)(&ztop);
-      COPY(zTrieBranchFrame)(&ztop, (*z2zE1316).hd);
+      COPY(zTrieBranchFrame)(&ztop, (*z2zE847).hd);
       bool zshould_close;
       {
-        bool z3zE1371;
+        bool z3zE1032;
         {
-          if (znext_common.kind != Kind_zNonezIU64zK) goto case_1812;
-          z3zE1371 = true;
-          goto finish_match_1810;
+          if (znext_common.kind != Kind_zNonezIU64zK) goto case_1553;
+          z3zE1032 = true;
+          goto finish_match_1551;
         }
-      case_1812: ;
+      case_1553: ;
         {
           /* complete */
           uint64_t zdepth;
           zdepth = znext_common.variants.zSomezIU64zK;
-          uint64_t z2zE1338;
-          z2zE1338 = ztop.zdepth;
-          z3zE1371 = (zdepth < z2zE1338);
-          goto finish_match_1810;
+          uint64_t z2zE869;
+          z2zE869 = ztop.zdepth;
+          z3zE1032 = (zdepth < z2zE869);
+          goto finish_match_1551;
         }
-      case_1811: ;
-      finish_match_1810: ;
-        zshould_close = z3zE1371;
+      case_1552: ;
+      finish_match_1551: ;
+        zshould_close = z3zE1032;
       }
-      bool z2zE1317;
-      z2zE1317 = not(zshould_close);
-      if (z2zE1317) {  COPY(zTrieBuilder)(&z3zE1370, zbuilder);  } else {
-        struct ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9 z2zE1318;
-        CREATE(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
+      bool z2zE848;
+      z2zE848 = not(zshould_close);
+      if (z2zE848) {  COPY(zTrieBuilder)(&z3zE1031, zbuilder);  } else {
+        struct ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9 z2zE849;
+        CREATE(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
         {
-          ztrie_builder_pop(&z2zE1318, zbuilder);
+          ztrie_builder_pop(&z2zE849, zbuilder);
           if (have_exception) {
-            KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-            KILL(zTrieBuilder)(&z3zE1370);
+            KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+            KILL(zTrieBuilder)(&z3zE1031);
             KILL(zTrieBranchFrame)(&ztop);
-            KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
-            goto end_block_exception_1826;
+            KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
+            goto end_block_exception_1567;
           }
         }
-        struct zTrieBuilder z3zE1375;
-        CREATE(zTrieBuilder)(&z3zE1375);
+        struct zTrieBuilder z3zE1036;
+        CREATE(zTrieBuilder)(&z3zE1036);
         {
           struct zTrieBranchFrame zframe;
           CREATE(zTrieBranchFrame)(&zframe);
-          COPY(zTrieBranchFrame)(&zframe, z2zE1318.ztup0);
+          COPY(zTrieBranchFrame)(&zframe, z2zE849.ztup0);
           struct zTrieBuilder zpopped;
           CREATE(zTrieBuilder)(&zpopped);
-          COPY(zTrieBuilder)(&zpopped, z2zE1318.ztup1);
+          COPY(zTrieBuilder)(&zpopped, z2zE849.ztup1);
           struct zNodeRef zchild;
           CREATE(zNodeRef)(&zchild);
           {
-            uint64_t z2zE1336;
-            z2zE1336 = zframe.zmask;
-            zz5vecz8z5unionz0zzNodeRefz9 z2zE1337;
-            CREATE(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE1337);
-            COPY(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE1337, zframe.zchildren);
+            uint64_t z2zE867;
+            z2zE867 = zframe.zmask;
+            zz5vecz8z5unionz0zzNodeRefz9 z2zE868;
+            CREATE(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE868);
+            COPY(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE868, zframe.zchildren);
             {
-              zbranch_child_ref(&zchild, z2zE1336, z2zE1337);
+              zbranch_child_ref(&zchild, z2zE867, z2zE868);
               if (have_exception) {
-                KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-                KILL(zTrieBuilder)(&z3zE1370);
+                KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+                KILL(zTrieBuilder)(&z3zE1031);
                 KILL(zTrieBranchFrame)(&ztop);
-                KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
-                KILL(zTrieBuilder)(&z3zE1375);
+                KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
+                KILL(zTrieBuilder)(&z3zE1036);
                 KILL(zTrieBranchFrame)(&zframe);
                 KILL(zTrieBuilder)(&zpopped);
                 KILL(zNodeRef)(&zchild);
-                KILL(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE1337);
-                goto end_block_exception_1826;
+                KILL(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE868);
+                goto end_block_exception_1567;
               }
             }
-            KILL(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE1337);
+            KILL(zz5vecz8z5unionz0zzNodeRefz9)(&z2zE868);
           }
           struct zTrieBuilder zwith_parent;
           CREATE(zTrieBuilder)(&zwith_parent);
           {
-            zz5listz8z5structz0zzTrieBranchFramez9 z2zE1320;
-            CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1320);
-            COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1320, zpopped.zframes);
-            struct zTrieBuilder z3zE1376;
-            CREATE(zTrieBuilder)(&z3zE1376);
+            zz5listz8z5structz0zzTrieBranchFramez9 z2zE851;
+            CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE851);
+            COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE851, zpopped.zframes);
+            struct zTrieBuilder z3zE1037;
+            CREATE(zTrieBuilder)(&z3zE1037);
             {
-              if ((z2zE1320 == NULL)) goto case_1820;
+              if ((z2zE851 == NULL)) goto case_1561;
               struct zTrieBranchFrame zparent;
               CREATE(zTrieBranchFrame)(&zparent);
-              COPY(zTrieBranchFrame)(&zparent, (*z2zE1320).hd);
-              struct zTrieBuilder z3zE1382;
-              CREATE(zTrieBuilder)(&z3zE1382);
+              COPY(zTrieBranchFrame)(&zparent, (*z2zE851).hd);
+              struct zTrieBuilder z3zE1043;
+              CREATE(zTrieBuilder)(&z3zE1043);
               {
-                if (znext_common.kind != Kind_zSomezIU64zK) goto case_1823;
+                if (znext_common.kind != Kind_zSomezIU64zK) goto case_1564;
                 uint64_t zcommon;
                 zcommon = znext_common.variants.zSomezIU64zK;
-                bool z2zE1322;
+                bool z2zE853;
                 {
-                  uint64_t z2zE1321;
-                  z2zE1321 = zparent.zdepth;
-                  z2zE1322 = (z2zE1321 < zcommon);
+                  uint64_t z2zE852;
+                  z2zE852 = zparent.zdepth;
+                  z2zE853 = (z2zE852 < zcommon);
                 }
-                if (z2zE1322) {
+                if (z2zE853) {
                   struct zTrieBuilder zintermediate;
                   CREATE(zTrieBuilder)(&zintermediate);
                   ztrie_builder_push(&zintermediate, zpopped, zcommon);
-                  struct zNodeRef z2zE1324;
-                  CREATE(zNodeRef)(&z2zE1324);
+                  struct zNodeRef z2zE855;
+                  CREATE(zNodeRef)(&z2zE855);
                   {
-                    uint64_t z2zE1323;
-                    z2zE1323 = zframe.zdepth;
+                    uint64_t z2zE854;
+                    z2zE854 = zframe.zdepth;
                     {
-                      ztrie_builder_wrap_branch(&z2zE1324, zanchor, zcommon, z2zE1323, zchild);
+                      ztrie_builder_wrap_branch(&z2zE855, zanchor, zcommon, z2zE854, zchild);
                       if (have_exception) {
-                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-                        KILL(zTrieBuilder)(&z3zE1370);
+                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+                        KILL(zTrieBuilder)(&z3zE1031);
                         KILL(zTrieBranchFrame)(&ztop);
-                        KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
-                        KILL(zTrieBuilder)(&z3zE1375);
+                        KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
+                        KILL(zTrieBuilder)(&z3zE1036);
                         KILL(zTrieBranchFrame)(&zframe);
                         KILL(zTrieBuilder)(&zpopped);
                         KILL(zNodeRef)(&zchild);
                         KILL(zTrieBuilder)(&zwith_parent);
-                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1320);
-                        KILL(zTrieBuilder)(&z3zE1376);
+                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE851);
+                        KILL(zTrieBuilder)(&z3zE1037);
                         KILL(zTrieBranchFrame)(&zparent);
-                        KILL(zTrieBuilder)(&z3zE1382);
+                        KILL(zTrieBuilder)(&z3zE1043);
                         KILL(zTrieBuilder)(&zintermediate);
-                        KILL(zNodeRef)(&z2zE1324);
-                        goto end_block_exception_1826;
+                        KILL(zNodeRef)(&z2zE855);
+                        goto end_block_exception_1567;
                       }
                     }
                   }
                   {
-                    ztrie_builder_attach(&z3zE1382, zintermediate, zanchor, z2zE1324);
+                    ztrie_builder_attach(&z3zE1043, zintermediate, zanchor, z2zE855);
                     if (have_exception) {
-                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-                      KILL(zTrieBuilder)(&z3zE1370);
+                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+                      KILL(zTrieBuilder)(&z3zE1031);
                       KILL(zTrieBranchFrame)(&ztop);
-                      KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
-                      KILL(zTrieBuilder)(&z3zE1375);
+                      KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
+                      KILL(zTrieBuilder)(&z3zE1036);
                       KILL(zTrieBranchFrame)(&zframe);
                       KILL(zTrieBuilder)(&zpopped);
                       KILL(zNodeRef)(&zchild);
                       KILL(zTrieBuilder)(&zwith_parent);
-                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1320);
-                      KILL(zTrieBuilder)(&z3zE1376);
+                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE851);
+                      KILL(zTrieBuilder)(&z3zE1037);
                       KILL(zTrieBranchFrame)(&zparent);
-                      KILL(zTrieBuilder)(&z3zE1382);
+                      KILL(zTrieBuilder)(&z3zE1043);
                       KILL(zTrieBuilder)(&zintermediate);
-                      KILL(zNodeRef)(&z2zE1324);
-                      goto end_block_exception_1826;
+                      KILL(zNodeRef)(&z2zE855);
+                      goto end_block_exception_1567;
                     }
                   }
-                  KILL(zNodeRef)(&z2zE1324);
+                  KILL(zNodeRef)(&z2zE855);
                   KILL(zTrieBuilder)(&zintermediate);
                 } else {
-                  struct zNodeRef z2zE1327;
-                  CREATE(zNodeRef)(&z2zE1327);
+                  struct zNodeRef z2zE858;
+                  CREATE(zNodeRef)(&z2zE858);
                   {
-                    uint64_t z2zE1325;
-                    z2zE1325 = zparent.zdepth;
-                    uint64_t z2zE1326;
-                    z2zE1326 = zframe.zdepth;
+                    uint64_t z2zE856;
+                    z2zE856 = zparent.zdepth;
+                    uint64_t z2zE857;
+                    z2zE857 = zframe.zdepth;
                     {
-                      ztrie_builder_wrap_branch(&z2zE1327, zanchor, z2zE1325, z2zE1326, zchild);
+                      ztrie_builder_wrap_branch(&z2zE858, zanchor, z2zE856, z2zE857, zchild);
                       if (have_exception) {
-                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-                        KILL(zTrieBuilder)(&z3zE1370);
+                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+                        KILL(zTrieBuilder)(&z3zE1031);
                         KILL(zTrieBranchFrame)(&ztop);
-                        KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
-                        KILL(zTrieBuilder)(&z3zE1375);
+                        KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
+                        KILL(zTrieBuilder)(&z3zE1036);
                         KILL(zTrieBranchFrame)(&zframe);
                         KILL(zTrieBuilder)(&zpopped);
                         KILL(zNodeRef)(&zchild);
                         KILL(zTrieBuilder)(&zwith_parent);
-                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1320);
-                        KILL(zTrieBuilder)(&z3zE1376);
+                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE851);
+                        KILL(zTrieBuilder)(&z3zE1037);
                         KILL(zTrieBranchFrame)(&zparent);
-                        KILL(zTrieBuilder)(&z3zE1382);
-                        KILL(zNodeRef)(&z2zE1327);
-                        goto end_block_exception_1826;
+                        KILL(zTrieBuilder)(&z3zE1043);
+                        KILL(zNodeRef)(&z2zE858);
+                        goto end_block_exception_1567;
                       }
                     }
                   }
                   {
-                    ztrie_builder_attach(&z3zE1382, zpopped, zanchor, z2zE1327);
+                    ztrie_builder_attach(&z3zE1043, zpopped, zanchor, z2zE858);
                     if (have_exception) {
-                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-                      KILL(zTrieBuilder)(&z3zE1370);
+                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+                      KILL(zTrieBuilder)(&z3zE1031);
                       KILL(zTrieBranchFrame)(&ztop);
-                      KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
-                      KILL(zTrieBuilder)(&z3zE1375);
+                      KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
+                      KILL(zTrieBuilder)(&z3zE1036);
                       KILL(zTrieBranchFrame)(&zframe);
                       KILL(zTrieBuilder)(&zpopped);
                       KILL(zNodeRef)(&zchild);
                       KILL(zTrieBuilder)(&zwith_parent);
-                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1320);
-                      KILL(zTrieBuilder)(&z3zE1376);
+                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE851);
+                      KILL(zTrieBuilder)(&z3zE1037);
                       KILL(zTrieBranchFrame)(&zparent);
-                      KILL(zTrieBuilder)(&z3zE1382);
-                      KILL(zNodeRef)(&z2zE1327);
-                      goto end_block_exception_1826;
+                      KILL(zTrieBuilder)(&z3zE1043);
+                      KILL(zNodeRef)(&z2zE858);
+                      goto end_block_exception_1567;
                     }
                   }
-                  KILL(zNodeRef)(&z2zE1327);
+                  KILL(zNodeRef)(&z2zE858);
                 }
-                goto finish_match_1821;
+                goto finish_match_1562;
               }
-            case_1823: ;
+            case_1564: ;
               {
                 /* complete */
-                struct zNodeRef z2zE1330;
-                CREATE(zNodeRef)(&z2zE1330);
+                struct zNodeRef z2zE861;
+                CREATE(zNodeRef)(&z2zE861);
                 {
-                  uint64_t z2zE1328;
-                  z2zE1328 = zparent.zdepth;
-                  uint64_t z2zE1329;
-                  z2zE1329 = zframe.zdepth;
+                  uint64_t z2zE859;
+                  z2zE859 = zparent.zdepth;
+                  uint64_t z2zE860;
+                  z2zE860 = zframe.zdepth;
                   {
-                    ztrie_builder_wrap_branch(&z2zE1330, zanchor, z2zE1328, z2zE1329, zchild);
+                    ztrie_builder_wrap_branch(&z2zE861, zanchor, z2zE859, z2zE860, zchild);
                     if (have_exception) {
-                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-                      KILL(zTrieBuilder)(&z3zE1370);
+                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+                      KILL(zTrieBuilder)(&z3zE1031);
                       KILL(zTrieBranchFrame)(&ztop);
-                      KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
-                      KILL(zTrieBuilder)(&z3zE1375);
+                      KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
+                      KILL(zTrieBuilder)(&z3zE1036);
                       KILL(zTrieBranchFrame)(&zframe);
                       KILL(zTrieBuilder)(&zpopped);
                       KILL(zNodeRef)(&zchild);
                       KILL(zTrieBuilder)(&zwith_parent);
-                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1320);
-                      KILL(zTrieBuilder)(&z3zE1376);
+                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE851);
+                      KILL(zTrieBuilder)(&z3zE1037);
                       KILL(zTrieBranchFrame)(&zparent);
-                      KILL(zTrieBuilder)(&z3zE1382);
-                      KILL(zNodeRef)(&z2zE1330);
-                      goto end_block_exception_1826;
+                      KILL(zTrieBuilder)(&z3zE1043);
+                      KILL(zNodeRef)(&z2zE861);
+                      goto end_block_exception_1567;
                     }
                   }
                 }
                 {
-                  ztrie_builder_attach(&z3zE1382, zpopped, zanchor, z2zE1330);
+                  ztrie_builder_attach(&z3zE1043, zpopped, zanchor, z2zE861);
                   if (have_exception) {
-                    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-                    KILL(zTrieBuilder)(&z3zE1370);
+                    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+                    KILL(zTrieBuilder)(&z3zE1031);
                     KILL(zTrieBranchFrame)(&ztop);
-                    KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
-                    KILL(zTrieBuilder)(&z3zE1375);
+                    KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
+                    KILL(zTrieBuilder)(&z3zE1036);
                     KILL(zTrieBranchFrame)(&zframe);
                     KILL(zTrieBuilder)(&zpopped);
                     KILL(zNodeRef)(&zchild);
                     KILL(zTrieBuilder)(&zwith_parent);
-                    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1320);
-                    KILL(zTrieBuilder)(&z3zE1376);
+                    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE851);
+                    KILL(zTrieBuilder)(&z3zE1037);
                     KILL(zTrieBranchFrame)(&zparent);
-                    KILL(zTrieBuilder)(&z3zE1382);
-                    KILL(zNodeRef)(&z2zE1330);
-                    goto end_block_exception_1826;
+                    KILL(zTrieBuilder)(&z3zE1043);
+                    KILL(zNodeRef)(&z2zE861);
+                    goto end_block_exception_1567;
                   }
                 }
-                KILL(zNodeRef)(&z2zE1330);
-                goto finish_match_1821;
+                KILL(zNodeRef)(&z2zE861);
+                goto finish_match_1562;
               }
-            case_1822: ;
-            finish_match_1821: ;
-              COPY(zTrieBuilder)(&z3zE1376, z3zE1382);
-              KILL(zTrieBuilder)(&z3zE1382);
+            case_1563: ;
+            finish_match_1562: ;
+              COPY(zTrieBuilder)(&z3zE1037, z3zE1043);
+              KILL(zTrieBuilder)(&z3zE1043);
               KILL(zTrieBranchFrame)(&zparent);
-              goto finish_match_1815;
+              goto finish_match_1556;
             }
-          case_1820: ;
+          case_1561: ;
             {
               /* complete */
-              struct zTrieBuilder z3zE1377;
-              CREATE(zTrieBuilder)(&z3zE1377);
+              struct zTrieBuilder z3zE1038;
+              CREATE(zTrieBuilder)(&z3zE1038);
               {
-                if (znext_common.kind != Kind_zSomezIU64zK) goto case_1819;
-                uint64_t z3zE1388;
-                z3zE1388 = znext_common.variants.zSomezIU64zK;
-                struct zTrieBuilder z3zE1389;
-                CREATE(zTrieBuilder)(&z3zE1389);
-                ztrie_builder_push(&z3zE1389, zpopped, z3zE1388);
-                struct zNodeRef z2zE1332;
-                CREATE(zNodeRef)(&z2zE1332);
+                if (znext_common.kind != Kind_zSomezIU64zK) goto case_1560;
+                uint64_t z3zE1049;
+                z3zE1049 = znext_common.variants.zSomezIU64zK;
+                struct zTrieBuilder z3zE1050;
+                CREATE(zTrieBuilder)(&z3zE1050);
+                ztrie_builder_push(&z3zE1050, zpopped, z3zE1049);
+                struct zNodeRef z2zE863;
+                CREATE(zNodeRef)(&z2zE863);
                 {
-                  uint64_t z2zE1331;
-                  z2zE1331 = zframe.zdepth;
+                  uint64_t z2zE862;
+                  z2zE862 = zframe.zdepth;
                   {
-                    ztrie_builder_wrap_branch(&z2zE1332, zanchor, z3zE1388, z2zE1331, zchild);
+                    ztrie_builder_wrap_branch(&z2zE863, zanchor, z3zE1049, z2zE862, zchild);
                     if (have_exception) {
-                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-                      KILL(zTrieBuilder)(&z3zE1370);
+                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+                      KILL(zTrieBuilder)(&z3zE1031);
                       KILL(zTrieBranchFrame)(&ztop);
-                      KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
-                      KILL(zTrieBuilder)(&z3zE1375);
+                      KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
+                      KILL(zTrieBuilder)(&z3zE1036);
                       KILL(zTrieBranchFrame)(&zframe);
                       KILL(zTrieBuilder)(&zpopped);
                       KILL(zNodeRef)(&zchild);
                       KILL(zTrieBuilder)(&zwith_parent);
-                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1320);
-                      KILL(zTrieBuilder)(&z3zE1376);
-                      KILL(zTrieBuilder)(&z3zE1377);
-                      KILL(zTrieBuilder)(&z3zE1389);
-                      KILL(zNodeRef)(&z2zE1332);
-                      goto end_block_exception_1826;
+                      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE851);
+                      KILL(zTrieBuilder)(&z3zE1037);
+                      KILL(zTrieBuilder)(&z3zE1038);
+                      KILL(zTrieBuilder)(&z3zE1050);
+                      KILL(zNodeRef)(&z2zE863);
+                      goto end_block_exception_1567;
                     }
                   }
                 }
                 {
-                  ztrie_builder_attach(&z3zE1377, z3zE1389, zanchor, z2zE1332);
+                  ztrie_builder_attach(&z3zE1038, z3zE1050, zanchor, z2zE863);
                   if (have_exception) {
-                    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-                    KILL(zTrieBuilder)(&z3zE1370);
+                    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+                    KILL(zTrieBuilder)(&z3zE1031);
                     KILL(zTrieBranchFrame)(&ztop);
-                    KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
-                    KILL(zTrieBuilder)(&z3zE1375);
+                    KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
+                    KILL(zTrieBuilder)(&z3zE1036);
                     KILL(zTrieBranchFrame)(&zframe);
                     KILL(zTrieBuilder)(&zpopped);
                     KILL(zNodeRef)(&zchild);
                     KILL(zTrieBuilder)(&zwith_parent);
-                    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1320);
-                    KILL(zTrieBuilder)(&z3zE1376);
-                    KILL(zTrieBuilder)(&z3zE1377);
-                    KILL(zTrieBuilder)(&z3zE1389);
-                    KILL(zNodeRef)(&z2zE1332);
-                    goto end_block_exception_1826;
+                    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE851);
+                    KILL(zTrieBuilder)(&z3zE1037);
+                    KILL(zTrieBuilder)(&z3zE1038);
+                    KILL(zTrieBuilder)(&z3zE1050);
+                    KILL(zNodeRef)(&z2zE863);
+                    goto end_block_exception_1567;
                   }
                 }
-                KILL(zNodeRef)(&z2zE1332);
-                KILL(zTrieBuilder)(&z3zE1389);
-                goto finish_match_1817;
+                KILL(zNodeRef)(&z2zE863);
+                KILL(zTrieBuilder)(&z3zE1050);
+                goto finish_match_1558;
               }
-            case_1819: ;
+            case_1560: ;
               {
                 /* complete */
-                uint64_t z3zE1390;
-                z3zE1390 = zframe.zdepth;
+                uint64_t z3zE1051;
+                z3zE1051 = zframe.zdepth;
                 struct zNodeRef zroot;
                 CREATE(zNodeRef)(&zroot);
                 {
-                  bool z2zE1334;
-                  z2zE1334 = (z3zE1390 == UINT64_C(0));
-                  if (z2zE1334) {  COPY(zNodeRef)(&zroot, zchild);  } else {
-                    struct zTriePath z2zE1335;
+                  bool z2zE865;
+                  z2zE865 = (z3zE1051 == UINT64_C(0));
+                  if (z2zE865) {  zroot = zchild;  } else {
+                    struct zTriePath z2zE866;
                     {
-                      z2zE1335 = zpath_take(zanchor, z3zE1390);
+                      z2zE866 = zpath_take(zanchor, z3zE1051);
                       if (have_exception) {
-                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-                        KILL(zTrieBuilder)(&z3zE1370);
+                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+                        KILL(zTrieBuilder)(&z3zE1031);
                         KILL(zTrieBranchFrame)(&ztop);
-                        KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
-                        KILL(zTrieBuilder)(&z3zE1375);
+                        KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
+                        KILL(zTrieBuilder)(&z3zE1036);
                         KILL(zTrieBranchFrame)(&zframe);
                         KILL(zTrieBuilder)(&zpopped);
                         KILL(zNodeRef)(&zchild);
                         KILL(zTrieBuilder)(&zwith_parent);
-                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1320);
-                        KILL(zTrieBuilder)(&z3zE1376);
-                        KILL(zTrieBuilder)(&z3zE1377);
+                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE851);
+                        KILL(zTrieBuilder)(&z3zE1037);
+                        KILL(zTrieBuilder)(&z3zE1038);
                         KILL(zNodeRef)(&zroot);
-                        goto end_block_exception_1826;
+                        goto end_block_exception_1567;
                       }
                     }
                     {
-                      zextension_child_ref(&zroot, z2zE1335, zchild);
+                      zextension_child_ref(&zroot, z2zE866, zchild);
                       if (have_exception) {
-                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-                        KILL(zTrieBuilder)(&z3zE1370);
+                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+                        KILL(zTrieBuilder)(&z3zE1031);
                         KILL(zTrieBranchFrame)(&ztop);
-                        KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
-                        KILL(zTrieBuilder)(&z3zE1375);
+                        KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
+                        KILL(zTrieBuilder)(&z3zE1036);
                         KILL(zTrieBranchFrame)(&zframe);
                         KILL(zTrieBuilder)(&zpopped);
                         KILL(zNodeRef)(&zchild);
                         KILL(zTrieBuilder)(&zwith_parent);
-                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1320);
-                        KILL(zTrieBuilder)(&z3zE1376);
-                        KILL(zTrieBuilder)(&z3zE1377);
+                        KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE851);
+                        KILL(zTrieBuilder)(&z3zE1037);
+                        KILL(zTrieBuilder)(&z3zE1038);
                         KILL(zNodeRef)(&zroot);
-                        goto end_block_exception_1826;
+                        goto end_block_exception_1567;
                       }
                     }
                   }
                 }
-                zz5listz8z5structz0zzTrieBranchFramez9 z2zE1333;
-                CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1333);
-                COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1333, zpopped.zframes);
-                z3zE1377.zcomplete = true;
-                COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&((&z3zE1377)->zframes), z2zE1333);
-                COPY(zNodeRef)(&((&z3zE1377)->zroot), zroot);
-                KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1333);
+                zz5listz8z5structz0zzTrieBranchFramez9 z2zE864;
+                CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE864);
+                COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE864, zpopped.zframes);
+                z3zE1038.zcomplete = true;
+                COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&((&z3zE1038)->zframes), z2zE864);
+                z3zE1038.zroot = zroot;
+                KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE864);
                 KILL(zNodeRef)(&zroot);
-                goto finish_match_1817;
+                goto finish_match_1558;
               }
-            case_1818: ;
-            finish_match_1817: ;
-              COPY(zTrieBuilder)(&z3zE1376, z3zE1377);
-              KILL(zTrieBuilder)(&z3zE1377);
-              goto finish_match_1815;
+            case_1559: ;
+            finish_match_1558: ;
+              COPY(zTrieBuilder)(&z3zE1037, z3zE1038);
+              KILL(zTrieBuilder)(&z3zE1038);
+              goto finish_match_1556;
             }
-          case_1816: ;
-          finish_match_1815: ;
-            COPY(zTrieBuilder)(&zwith_parent, z3zE1376);
-            KILL(zTrieBuilder)(&z3zE1376);
-            KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1320);
+          case_1557: ;
+          finish_match_1556: ;
+            COPY(zTrieBuilder)(&zwith_parent, z3zE1037);
+            KILL(zTrieBuilder)(&z3zE1037);
+            KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE851);
           }
-          uint64_t z2zE1319;
-          {    z2zE1319 = (zfuel - UINT64_C(1));
+          uint64_t z2zE850;
+          {    z2zE850 = (zfuel - UINT64_C(1));
           }
           {
-            ztrie_builder_close(&z3zE1375, zwith_parent, zanchor, znext_common, z2zE1319);
+            ztrie_builder_close(&z3zE1036, zwith_parent, zanchor, znext_common, z2zE850);
             if (have_exception) {
-              KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
-              KILL(zTrieBuilder)(&z3zE1370);
+              KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
+              KILL(zTrieBuilder)(&z3zE1031);
               KILL(zTrieBranchFrame)(&ztop);
-              KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
-              KILL(zTrieBuilder)(&z3zE1375);
+              KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
+              KILL(zTrieBuilder)(&z3zE1036);
               KILL(zTrieBranchFrame)(&zframe);
               KILL(zTrieBuilder)(&zpopped);
               KILL(zNodeRef)(&zchild);
               KILL(zTrieBuilder)(&zwith_parent);
-              goto end_block_exception_1826;
+              goto end_block_exception_1567;
             }
           }
           KILL(zTrieBuilder)(&zwith_parent);
           KILL(zNodeRef)(&zchild);
           KILL(zTrieBuilder)(&zpopped);
           KILL(zTrieBranchFrame)(&zframe);
-          goto finish_match_1813;
+          goto finish_match_1554;
         }
-      case_1814: ;
+      case_1555: ;
         sail_match_failure("trie_builder_close");
-      finish_match_1813: ;
-        COPY(zTrieBuilder)(&z3zE1370, z3zE1375);
-        KILL(zTrieBuilder)(&z3zE1375);
-        KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE1318);
+      finish_match_1554: ;
+        COPY(zTrieBuilder)(&z3zE1031, z3zE1036);
+        KILL(zTrieBuilder)(&z3zE1036);
+        KILL(ztuple_z8z5structz0zzTrieBranchFramezCz0z5structz0zzTrieBuilderz9)(&z2zE849);
       }
       KILL(zTrieBranchFrame)(&ztop);
-      goto finish_match_1808;
+      goto finish_match_1549;
     }
-  case_1809: ;
-  finish_match_1808: ;
-    COPY(zTrieBuilder)((*(&z8zE534)), z3zE1370);
-    KILL(zTrieBuilder)(&z3zE1370);
-    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1316);
+  case_1550: ;
+  finish_match_1549: ;
+    COPY(zTrieBuilder)((*(&z8zE590)), z3zE1031);
+    KILL(zTrieBuilder)(&z3zE1031);
+    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE847);
   }
-end_function_1825: ;
-  goto end_function_4012;
-end_block_exception_1826: ;
-  goto end_function_4012;
-end_function_4012: ;
+end_function_1566: ;
+  goto end_function_3598;
+end_block_exception_1567: ;
+  goto end_function_3598;
+end_function_3598: ;
 }
 
-void ztrie_item_next_common(struct zoptionzIU64zK *z8zE535, struct zTrieItem zitem, struct zoptionzIRTriePathzK znext_key)
+void ztrie_item_next_common(struct zoptionzIU64zK *z8zE591, struct zTrieItem zitem, struct zoptionzIRTriePathzK znext_key)
 {
-  struct zoptionzIU64zK z3zE1364;
-  CREATE(zoptionzIU64zK)(&z3zE1364);
+  struct zoptionzIU64zK z3zE1025;
+  CREATE(zoptionzIU64zK)(&z3zE1025);
   {
-    if (znext_key.kind != Kind_zNonezIRTriePathzK) goto case_1805;
-    zNonezIU64zK(&z3zE1364, UNIT);
-    goto finish_match_1803;
+    if (znext_key.kind != Kind_zNonezIRTriePathzK) goto case_1546;
+    zNonezIU64zK(&z3zE1025, UNIT);
+    goto finish_match_1544;
   }
-case_1805: ;
+case_1546: ;
   {
     /* complete */
     struct zTriePath znext;
     znext = znext_key.variants.zSomezIRTriePathzK;
     uint64_t zcommon;
     {
-      struct zTriePath z2zE1313;
-      z2zE1313 = zitem.zpath;
+      struct zTriePath z2zE844;
+      z2zE844 = zitem.zpath;
       {
-        zcommon = zcommon_prefix_from(z2zE1313, znext, UINT64_C(0));
+        zcommon = zcommon_prefix_from(z2zE844, znext, UINT64_C(0));
         if (have_exception) {
-          KILL(zoptionzIU64zK)(&z3zE1364);
-          goto end_block_exception_1807;
+          KILL(zoptionzIU64zK)(&z3zE1025);
+          goto end_block_exception_1548;
         }
       }
     }
-    bool z2zE1310;
+    bool z2zE841;
     {
-      bool z2zE1309;
+      bool z2zE840;
       {
-        bool z2zE1304;
+        bool z2zE835;
         {
-          struct zTriePath z2zE1303;
-          z2zE1303 = zitem.zpath;
-          z2zE1304 = zpath_lt(z2zE1303, znext);
+          struct zTriePath z2zE834;
+          z2zE834 = zitem.zpath;
+          z2zE835 = zpath_lt(z2zE834, znext);
         }
-        z2zE1309 = not(z2zE1304);
+        z2zE840 = not(z2zE835);
       }
-      bool z3zE1366;
-      if (z2zE1309) {  z3zE1366 = true;  } else {
-        bool z2zE1308;
+      bool z3zE1027;
+      if (z2zE840) {  z3zE1027 = true;  } else {
+        bool z2zE839;
         {
-          uint64_t z2zE1306;
+          uint64_t z2zE837;
           {
-            struct zTriePath z2zE1305;
-            z2zE1305 = zitem.zpath;
-            z2zE1306 = zpath_len(z2zE1305);
+            struct zTriePath z2zE836;
+            z2zE836 = zitem.zpath;
+            z2zE837 = zpath_len(z2zE836);
           }
-          z2zE1308 = (!(zcommon < z2zE1306));
+          z2zE839 = (!(zcommon < z2zE837));
         }
-        bool z3zE1365;
-        if (z2zE1308) {  z3zE1365 = true;  } else {
-          uint64_t z2zE1307;
-          z2zE1307 = zpath_len(znext);
-          z3zE1365 = (!(zcommon < z2zE1307));
+        bool z3zE1026;
+        if (z2zE839) {  z3zE1026 = true;  } else {
+          uint64_t z2zE838;
+          z2zE838 = zpath_len(znext);
+          z3zE1026 = (!(zcommon < z2zE838));
         }
-        z3zE1366 = z3zE1365;
+        z3zE1027 = z3zE1026;
       }
-      z2zE1310 = z3zE1366;
+      z2zE841 = z3zE1027;
     }
-    unit z3zE1367;
-    if (z2zE1310) {
-      struct zexception z2zE1311;
-      CREATE(zexception)(&z2zE1311);
-      zInvalidBlock(&z2zE1311, zWitnessDeficient);
-      COPY(zexception)(current_exception, z2zE1311);
+    unit z3zE1028;
+    if (z2zE841) {
+      struct zexception z2zE842;
+      CREATE(zexception)(&z2zE842);
+      zInvalidBlock(&z2zE842, zWitnessDeficient);
+      COPY(zexception)(current_exception, z2zE842);
       have_exception = true;
       COPY(sail_string)(throw_location, "sail/lib/mpt/updates.sail:305.16-305.52");
-      KILL(zoptionzIU64zK)(&z3zE1364);
-      KILL(zexception)(&z2zE1311);
-      goto end_block_exception_1807;
+      KILL(zoptionzIU64zK)(&z3zE1025);
+      KILL(zexception)(&z2zE842);
+      goto end_block_exception_1548;
       /* unreachable after throw */
-      KILL(zexception)(&z2zE1311);
-    } else {  z3zE1367 = UNIT;  }
-    uint64_t z2zE1312;
+      KILL(zexception)(&z2zE842);
+    } else {  z3zE1028 = UNIT;  }
+    uint64_t z2zE843;
     {
-      z2zE1312 = zto_trie_depth(zcommon);
+      z2zE843 = zto_trie_depth(zcommon);
       if (have_exception) {
-        KILL(zoptionzIU64zK)(&z3zE1364);
-        goto end_block_exception_1807;
+        KILL(zoptionzIU64zK)(&z3zE1025);
+        goto end_block_exception_1548;
       }
     }
-    zSomezIU64zK(&z3zE1364, z2zE1312);
-    goto finish_match_1803;
+    zSomezIU64zK(&z3zE1025, z2zE843);
+    goto finish_match_1544;
   }
-case_1804: ;
-finish_match_1803: ;
-  COPY(zoptionzIU64zK)((*(&z8zE535)), z3zE1364);
-  KILL(zoptionzIU64zK)(&z3zE1364);
-end_function_1806: ;
-  goto end_function_4011;
-end_block_exception_1807: ;
-  goto end_function_4011;
-end_function_4011: ;
+case_1545: ;
+finish_match_1544: ;
+  (*(z8zE591)) = z3zE1025;
+  KILL(zoptionzIU64zK)(&z3zE1025);
+end_function_1547: ;
+  goto end_function_3597;
+end_block_exception_1548: ;
+  goto end_function_3597;
+end_function_3597: ;
 }
 
-void ztrie_insert_item(struct zTrieBuilder *z8zE536, struct zTrieBuilder zbuilder, struct zTrieItem zitem, struct zoptionzIRTriePathzK znext_key)
+void ztrie_insert_item(struct zTrieBuilder *z8zE592, struct zTrieBuilder zbuilder, struct zTrieItem zitem, struct zoptionzIRTriePathzK znext_key)
 {
-  bool z2zE1287;
-  z2zE1287 = zbuilder.zcomplete;
-  unit z3zE1348;
-  if (z2zE1287) {
-    struct zexception z2zE1288;
-    CREATE(zexception)(&z2zE1288);
-    zInvalidBlock(&z2zE1288, zWitnessDeficient);
-    COPY(zexception)(current_exception, z2zE1288);
+  bool z2zE818;
+  z2zE818 = zbuilder.zcomplete;
+  unit z3zE1009;
+  if (z2zE818) {
+    struct zexception z2zE819;
+    CREATE(zexception)(&z2zE819);
+    zInvalidBlock(&z2zE819, zWitnessDeficient);
+    COPY(zexception)(current_exception, z2zE819);
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/mpt/updates.sail:315.8-315.44");
-    KILL(zexception)(&z2zE1288);
-    goto end_block_exception_1802;
+    KILL(zexception)(&z2zE819);
+    goto end_block_exception_1543;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE1288);
-  } else {  z3zE1348 = UNIT;  }
+    KILL(zexception)(&z2zE819);
+  } else {  z3zE1009 = UNIT;  }
   struct zoptionzIU64zK znext_common;
   CREATE(zoptionzIU64zK)(&znext_common);
   {
     ztrie_item_next_common(&znext_common, zitem, znext_key);
     if (have_exception) {
       KILL(zoptionzIU64zK)(&znext_common);
-      goto end_block_exception_1802;
+      goto end_block_exception_1543;
     }
   }
   bool zopen_child;
   {
-    bool z3zE1349;
+    bool z3zE1010;
     {
-      if (znext_common.kind != Kind_zNonezIU64zK) goto case_1794;
-      z3zE1349 = false;
-      goto finish_match_1789;
+      if (znext_common.kind != Kind_zNonezIU64zK) goto case_1535;
+      z3zE1010 = false;
+      goto finish_match_1530;
     }
-  case_1794: ;
+  case_1535: ;
     {
       /* complete */
       uint64_t zcommon;
       zcommon = znext_common.variants.zSomezIU64zK;
-      zz5listz8z5structz0zzTrieBranchFramez9 z2zE1301;
-      CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1301);
-      COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1301, zbuilder.zframes);
-      bool z3zE1350;
+      zz5listz8z5structz0zzTrieBranchFramez9 z2zE832;
+      CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE832);
+      COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE832, zbuilder.zframes);
+      bool z3zE1011;
       {
-        if (!((z2zE1301 == NULL))) goto case_1793;
-        z3zE1350 = true;
-        goto finish_match_1791;
+        if (!((z2zE832 == NULL))) goto case_1534;
+        z3zE1011 = true;
+        goto finish_match_1532;
       }
-    case_1793: ;
+    case_1534: ;
       {
         /* complete */
         struct zTrieBranchFrame ztop;
         CREATE(zTrieBranchFrame)(&ztop);
-        COPY(zTrieBranchFrame)(&ztop, (*z2zE1301).hd);
-        uint64_t z2zE1302;
-        z2zE1302 = ztop.zdepth;
-        z3zE1350 = (z2zE1302 < zcommon);
+        COPY(zTrieBranchFrame)(&ztop, (*z2zE832).hd);
+        uint64_t z2zE833;
+        z2zE833 = ztop.zdepth;
+        z3zE1011 = (z2zE833 < zcommon);
         KILL(zTrieBranchFrame)(&ztop);
-        goto finish_match_1791;
+        goto finish_match_1532;
       }
-    case_1792: ;
-    finish_match_1791: ;
-      z3zE1349 = z3zE1350;
-      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1301);
-      goto finish_match_1789;
+    case_1533: ;
+    finish_match_1532: ;
+      z3zE1010 = z3zE1011;
+      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE832);
+      goto finish_match_1530;
     }
-  case_1790: ;
-  finish_match_1789: ;
-    zopen_child = z3zE1349;
+  case_1531: ;
+  finish_match_1530: ;
+    zopen_child = z3zE1010;
   }
   if (zopen_child) {
-    struct zTrieBuilder z3zE1359;
-    CREATE(zTrieBuilder)(&z3zE1359);
+    struct zTrieBuilder z3zE1020;
+    CREATE(zTrieBuilder)(&z3zE1020);
     {
-      if (znext_common.kind != Kind_zSomezIU64zK) goto case_1800;
-      uint64_t z3zE1362;
-      z3zE1362 = znext_common.variants.zSomezIU64zK;
+      if (znext_common.kind != Kind_zSomezIU64zK) goto case_1541;
+      uint64_t z3zE1023;
+      z3zE1023 = znext_common.variants.zSomezIU64zK;
       struct zTrieBuilder zopened;
       CREATE(zTrieBuilder)(&zopened);
-      ztrie_builder_push(&zopened, zbuilder, z3zE1362);
-      struct zTriePath z2zE1290;
-      z2zE1290 = zitem.zpath;
-      struct zNodeRef z2zE1291;
-      CREATE(zNodeRef)(&z2zE1291);
+      ztrie_builder_push(&zopened, zbuilder, z3zE1023);
+      struct zTriePath z2zE821;
+      z2zE821 = zitem.zpath;
+      struct zNodeRef z2zE822;
+      CREATE(zNodeRef)(&z2zE822);
       {
-        uint64_t z2zE1289;
-        {    z2zE1289 = (z3zE1362 + UINT64_C(1));
+        uint64_t z2zE820;
+        {    z2zE820 = (z3zE1023 + UINT64_C(1));
         }
         {
-          zitem_ref(&z2zE1291, zitem, z2zE1289);
+          zitem_ref(&z2zE822, zitem, z2zE820);
           if (have_exception) {
             KILL(zoptionzIU64zK)(&znext_common);
-            KILL(zTrieBuilder)(&z3zE1359);
+            KILL(zTrieBuilder)(&z3zE1020);
             KILL(zTrieBuilder)(&zopened);
-            KILL(zNodeRef)(&z2zE1291);
-            goto end_block_exception_1802;
+            KILL(zNodeRef)(&z2zE822);
+            goto end_block_exception_1543;
           }
         }
       }
       {
-        ztrie_builder_attach(&z3zE1359, zopened, z2zE1290, z2zE1291);
+        ztrie_builder_attach(&z3zE1020, zopened, z2zE821, z2zE822);
         if (have_exception) {
           KILL(zoptionzIU64zK)(&znext_common);
-          KILL(zTrieBuilder)(&z3zE1359);
+          KILL(zTrieBuilder)(&z3zE1020);
           KILL(zTrieBuilder)(&zopened);
-          KILL(zNodeRef)(&z2zE1291);
-          goto end_block_exception_1802;
+          KILL(zNodeRef)(&z2zE822);
+          goto end_block_exception_1543;
         }
       }
-      KILL(zNodeRef)(&z2zE1291);
+      KILL(zNodeRef)(&z2zE822);
       KILL(zTrieBuilder)(&zopened);
-      goto finish_match_1798;
+      goto finish_match_1539;
     }
-  case_1800: ;
+  case_1541: ;
     {
       /* complete */
-      struct zexception z2zE1292;
-      CREATE(zexception)(&z2zE1292);
-      zInvalidBlock(&z2zE1292, zWitnessDeficient);
-      COPY(zexception)(current_exception, z2zE1292);
+      struct zexception z2zE823;
+      CREATE(zexception)(&z2zE823);
+      zInvalidBlock(&z2zE823, zWitnessDeficient);
+      COPY(zexception)(current_exception, z2zE823);
       have_exception = true;
       COPY(sail_string)(throw_location, "sail/lib/mpt/updates.sail:331.22-331.58");
       KILL(zoptionzIU64zK)(&znext_common);
-      KILL(zTrieBuilder)(&z3zE1359);
-      KILL(zexception)(&z2zE1292);
-      goto end_block_exception_1802;
+      KILL(zTrieBuilder)(&z3zE1020);
+      KILL(zexception)(&z2zE823);
+      goto end_block_exception_1543;
       /* unreachable after throw */
-      KILL(zexception)(&z2zE1292);
-      goto finish_match_1798;
+      KILL(zexception)(&z2zE823);
+      goto finish_match_1539;
     }
-  case_1799: ;
-  finish_match_1798: ;
-    COPY(zTrieBuilder)((*(&z8zE536)), z3zE1359);
-    KILL(zTrieBuilder)(&z3zE1359);
+  case_1540: ;
+  finish_match_1539: ;
+    COPY(zTrieBuilder)((*(&z8zE592)), z3zE1020);
+    KILL(zTrieBuilder)(&z3zE1020);
   } else {
-    zz5listz8z5structz0zzTrieBranchFramez9 z2zE1293;
-    CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1293);
-    COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1293, zbuilder.zframes);
-    struct zTrieBuilder z3zE1355;
-    CREATE(zTrieBuilder)(&z3zE1355);
+    zz5listz8z5structz0zzTrieBranchFramez9 z2zE824;
+    CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE824);
+    COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE824, zbuilder.zframes);
+    struct zTrieBuilder z3zE1016;
+    CREATE(zTrieBuilder)(&z3zE1016);
     {
-      if (!((z2zE1293 == NULL))) goto case_1797;
-      zz5listz8z5structz0zzTrieBranchFramez9 z2zE1294;
-      CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1294);
-      COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1294, zbuilder.zframes);
-      struct zNodeRef z2zE1295;
-      CREATE(zNodeRef)(&z2zE1295);
+      if (!((z2zE824 == NULL))) goto case_1538;
+      zz5listz8z5structz0zzTrieBranchFramez9 z2zE825;
+      CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE825);
+      COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE825, zbuilder.zframes);
+      struct zNodeRef z2zE826;
+      CREATE(zNodeRef)(&z2zE826);
       {
-        zitem_ref(&z2zE1295, zitem, UINT64_C(0));
+        zitem_ref(&z2zE826, zitem, UINT64_C(0));
         if (have_exception) {
           KILL(zoptionzIU64zK)(&znext_common);
-          KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1293);
-          KILL(zTrieBuilder)(&z3zE1355);
-          KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1294);
-          KILL(zNodeRef)(&z2zE1295);
-          goto end_block_exception_1802;
+          KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE824);
+          KILL(zTrieBuilder)(&z3zE1016);
+          KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE825);
+          KILL(zNodeRef)(&z2zE826);
+          goto end_block_exception_1543;
         }
       }
-      z3zE1355.zcomplete = true;
-      COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&((&z3zE1355)->zframes), z2zE1294);
-      COPY(zNodeRef)(&((&z3zE1355)->zroot), z2zE1295);
-      KILL(zNodeRef)(&z2zE1295);
-      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1294);
-      goto finish_match_1795;
+      z3zE1016.zcomplete = true;
+      COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&((&z3zE1016)->zframes), z2zE825);
+      z3zE1016.zroot = z2zE826;
+      KILL(zNodeRef)(&z2zE826);
+      KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE825);
+      goto finish_match_1536;
     }
-  case_1797: ;
+  case_1538: ;
     {
       /* complete */
-      struct zTrieBranchFrame z3zE1363;
-      CREATE(zTrieBranchFrame)(&z3zE1363);
-      COPY(zTrieBranchFrame)(&z3zE1363, (*z2zE1293).hd);
+      struct zTrieBranchFrame z3zE1024;
+      CREATE(zTrieBranchFrame)(&z3zE1024);
+      COPY(zTrieBranchFrame)(&z3zE1024, (*z2zE824).hd);
       struct zTrieBuilder zattached;
       CREATE(zTrieBuilder)(&zattached);
       {
-        struct zTriePath z2zE1299;
-        z2zE1299 = zitem.zpath;
-        struct zNodeRef z2zE1300;
-        CREATE(zNodeRef)(&z2zE1300);
+        struct zTriePath z2zE830;
+        z2zE830 = zitem.zpath;
+        struct zNodeRef z2zE831;
+        CREATE(zNodeRef)(&z2zE831);
         {
-          uint64_t z2zE1298;
+          uint64_t z2zE829;
           {
-            uint64_t z2zE1297;
-            z2zE1297 = z3zE1363.zdepth;
-            {    z2zE1298 = (z2zE1297 + UINT64_C(1));
+            uint64_t z2zE828;
+            z2zE828 = z3zE1024.zdepth;
+            {    z2zE829 = (z2zE828 + UINT64_C(1));
             }
           }
           {
-            zitem_ref(&z2zE1300, zitem, z2zE1298);
+            zitem_ref(&z2zE831, zitem, z2zE829);
             if (have_exception) {
               KILL(zoptionzIU64zK)(&znext_common);
-              KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1293);
-              KILL(zTrieBuilder)(&z3zE1355);
-              KILL(zTrieBranchFrame)(&z3zE1363);
+              KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE824);
+              KILL(zTrieBuilder)(&z3zE1016);
+              KILL(zTrieBranchFrame)(&z3zE1024);
               KILL(zTrieBuilder)(&zattached);
-              KILL(zNodeRef)(&z2zE1300);
-              goto end_block_exception_1802;
+              KILL(zNodeRef)(&z2zE831);
+              goto end_block_exception_1543;
             }
           }
         }
         {
-          ztrie_builder_attach(&zattached, zbuilder, z2zE1299, z2zE1300);
+          ztrie_builder_attach(&zattached, zbuilder, z2zE830, z2zE831);
           if (have_exception) {
             KILL(zoptionzIU64zK)(&znext_common);
-            KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1293);
-            KILL(zTrieBuilder)(&z3zE1355);
-            KILL(zTrieBranchFrame)(&z3zE1363);
+            KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE824);
+            KILL(zTrieBuilder)(&z3zE1016);
+            KILL(zTrieBranchFrame)(&z3zE1024);
             KILL(zTrieBuilder)(&zattached);
-            KILL(zNodeRef)(&z2zE1300);
-            goto end_block_exception_1802;
+            KILL(zNodeRef)(&z2zE831);
+            goto end_block_exception_1543;
           }
         }
-        KILL(zNodeRef)(&z2zE1300);
+        KILL(zNodeRef)(&z2zE831);
       }
-      struct zTriePath z2zE1296;
-      z2zE1296 = zitem.zpath;
+      struct zTriePath z2zE827;
+      z2zE827 = zitem.zpath;
       {
-        ztrie_builder_close(&z3zE1355, zattached, z2zE1296, znext_common, UINT64_C(64));
+        ztrie_builder_close(&z3zE1016, zattached, z2zE827, znext_common, UINT64_C(64));
         if (have_exception) {
           KILL(zoptionzIU64zK)(&znext_common);
-          KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1293);
-          KILL(zTrieBuilder)(&z3zE1355);
-          KILL(zTrieBranchFrame)(&z3zE1363);
+          KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE824);
+          KILL(zTrieBuilder)(&z3zE1016);
+          KILL(zTrieBranchFrame)(&z3zE1024);
           KILL(zTrieBuilder)(&zattached);
-          goto end_block_exception_1802;
+          goto end_block_exception_1543;
         }
       }
       KILL(zTrieBuilder)(&zattached);
-      KILL(zTrieBranchFrame)(&z3zE1363);
-      goto finish_match_1795;
+      KILL(zTrieBranchFrame)(&z3zE1024);
+      goto finish_match_1536;
     }
-  case_1796: ;
-  finish_match_1795: ;
-    COPY(zTrieBuilder)((*(&z8zE536)), z3zE1355);
-    KILL(zTrieBuilder)(&z3zE1355);
-    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1293);
+  case_1537: ;
+  finish_match_1536: ;
+    COPY(zTrieBuilder)((*(&z8zE592)), z3zE1016);
+    KILL(zTrieBuilder)(&z3zE1016);
+    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE824);
   }
   KILL(zoptionzIU64zK)(&znext_common);
-end_function_1801: ;
-  goto end_function_4010;
-end_block_exception_1802: ;
-  goto end_function_4010;
-end_function_4010: ;
+end_function_1542: ;
+  goto end_function_3596;
+end_block_exception_1543: ;
+  goto end_function_3596;
+end_function_3596: ;
 }
 
-void ztrie_sink_empty(struct zTrieItemSink *z8zE537, unit z3zE1346)
+void ztrie_sink_empty(struct zTrieItemSink *z8zE593, unit z3zE1007)
 {
-  struct zTrieBuilder z2zE1285;
-  CREATE(zTrieBuilder)(&z2zE1285);
-  ztrie_builder_empty(&z2zE1285, UNIT);
-  struct zoptionzIRTrieItemzK z2zE1286;
-  CREATE(zoptionzIRTrieItemzK)(&z2zE1286);
-  zNonezIRTrieItemzK(&z2zE1286, UNIT);
-  struct zTrieItemSink z3zE1347;
-  CREATE(zTrieItemSink)(&z3zE1347);
-  COPY(zTrieBuilder)(&((&z3zE1347)->zbuilder), z2zE1285);
-  COPY(zoptionzIRTrieItemzK)(&((&z3zE1347)->zpending), z2zE1286);
-  COPY(zTrieItemSink)((*(&z8zE537)), z3zE1347);
-  KILL(zTrieItemSink)(&z3zE1347);
-  KILL(zoptionzIRTrieItemzK)(&z2zE1286);
-  KILL(zTrieBuilder)(&z2zE1285);
-end_function_1787: ;
-  goto end_function_4009;
-end_block_exception_1788: ;
-  goto end_function_4009;
-end_function_4009: ;
+  struct zTrieBuilder z2zE816;
+  CREATE(zTrieBuilder)(&z2zE816);
+  ztrie_builder_empty(&z2zE816, UNIT);
+  struct zoptionzIRTrieItemzK z2zE817;
+  CREATE(zoptionzIRTrieItemzK)(&z2zE817);
+  zNonezIRTrieItemzK(&z2zE817, UNIT);
+  struct zTrieItemSink z3zE1008;
+  CREATE(zTrieItemSink)(&z3zE1008);
+  COPY(zTrieBuilder)(&((&z3zE1008)->zbuilder), z2zE816);
+  z3zE1008.zpending = z2zE817;
+  COPY(zTrieItemSink)((*(&z8zE593)), z3zE1008);
+  KILL(zTrieItemSink)(&z3zE1008);
+  KILL(zoptionzIRTrieItemzK)(&z2zE817);
+  KILL(zTrieBuilder)(&z2zE816);
+end_function_1528: ;
+  goto end_function_3595;
+end_block_exception_1529: ;
+  goto end_function_3595;
+end_function_3595: ;
 }
 
-void ztrie_sink_emit(struct zTrieItemSink *z8zE538, struct zTrieItemSink zsink, struct zTrieItem zitem)
+void ztrie_sink_emit(struct zTrieItemSink *z8zE594, struct zTrieItemSink zsink, struct zTrieItem zitem)
 {
-  struct zoptionzIRTrieItemzK z2zE1277;
-  CREATE(zoptionzIRTrieItemzK)(&z2zE1277);
-  COPY(zoptionzIRTrieItemzK)(&z2zE1277, zsink.zpending);
-  struct zTrieItemSink z3zE1341;
-  CREATE(zTrieItemSink)(&z3zE1341);
+  struct zoptionzIRTrieItemzK z2zE808;
+  CREATE(zoptionzIRTrieItemzK)(&z2zE808);
+  z2zE808 = zsink.zpending;
+  struct zTrieItemSink z3zE1002;
+  CREATE(zTrieItemSink)(&z3zE1002);
   {
-    if (z2zE1277.kind != Kind_zNonezIRTrieItemzK) goto case_1784;
-    struct zTrieBuilder z2zE1278;
-    CREATE(zTrieBuilder)(&z2zE1278);
-    COPY(zTrieBuilder)(&z2zE1278, zsink.zbuilder);
-    struct zoptionzIRTrieItemzK z2zE1279;
-    CREATE(zoptionzIRTrieItemzK)(&z2zE1279);
-    zSomezIRTrieItemzK(&z2zE1279, zitem);
-    COPY(zTrieBuilder)(&((&z3zE1341)->zbuilder), z2zE1278);
-    COPY(zoptionzIRTrieItemzK)(&((&z3zE1341)->zpending), z2zE1279);
-    KILL(zoptionzIRTrieItemzK)(&z2zE1279);
-    KILL(zTrieBuilder)(&z2zE1278);
-    goto finish_match_1782;
+    if (z2zE808.kind != Kind_zNonezIRTrieItemzK) goto case_1525;
+    struct zTrieBuilder z2zE809;
+    CREATE(zTrieBuilder)(&z2zE809);
+    COPY(zTrieBuilder)(&z2zE809, zsink.zbuilder);
+    struct zoptionzIRTrieItemzK z2zE810;
+    CREATE(zoptionzIRTrieItemzK)(&z2zE810);
+    zSomezIRTrieItemzK(&z2zE810, zitem);
+    COPY(zTrieBuilder)(&((&z3zE1002)->zbuilder), z2zE809);
+    z3zE1002.zpending = z2zE810;
+    KILL(zoptionzIRTrieItemzK)(&z2zE810);
+    KILL(zTrieBuilder)(&z2zE809);
+    goto finish_match_1523;
   }
-case_1784: ;
+case_1525: ;
   {
     /* complete */
     struct zTrieItem zprevious;
     CREATE(zTrieItem)(&zprevious);
-    COPY(zTrieItem)(&zprevious, z2zE1277.variants.zSomezIRTrieItemzK);
-    struct zTrieBuilder z2zE1283;
-    CREATE(zTrieBuilder)(&z2zE1283);
+    zprevious = z2zE808.variants.zSomezIRTrieItemzK;
+    struct zTrieBuilder z2zE814;
+    CREATE(zTrieBuilder)(&z2zE814);
     {
-      struct zTrieBuilder z2zE1281;
-      CREATE(zTrieBuilder)(&z2zE1281);
-      COPY(zTrieBuilder)(&z2zE1281, zsink.zbuilder);
-      struct zoptionzIRTriePathzK z2zE1282;
-      CREATE(zoptionzIRTriePathzK)(&z2zE1282);
+      struct zTrieBuilder z2zE812;
+      CREATE(zTrieBuilder)(&z2zE812);
+      COPY(zTrieBuilder)(&z2zE812, zsink.zbuilder);
+      struct zoptionzIRTriePathzK z2zE813;
+      CREATE(zoptionzIRTriePathzK)(&z2zE813);
       {
-        struct zTriePath z2zE1280;
-        z2zE1280 = zitem.zpath;
-        zSomezIRTriePathzK(&z2zE1282, z2zE1280);
+        struct zTriePath z2zE811;
+        z2zE811 = zitem.zpath;
+        zSomezIRTriePathzK(&z2zE813, z2zE811);
       }
       {
-        ztrie_insert_item(&z2zE1283, z2zE1281, zprevious, z2zE1282);
+        ztrie_insert_item(&z2zE814, z2zE812, zprevious, z2zE813);
         if (have_exception) {
-          KILL(zoptionzIRTrieItemzK)(&z2zE1277);
-          KILL(zTrieItemSink)(&z3zE1341);
+          KILL(zoptionzIRTrieItemzK)(&z2zE808);
+          KILL(zTrieItemSink)(&z3zE1002);
           KILL(zTrieItem)(&zprevious);
-          KILL(zTrieBuilder)(&z2zE1283);
-          KILL(zTrieBuilder)(&z2zE1281);
-          KILL(zoptionzIRTriePathzK)(&z2zE1282);
-          goto end_block_exception_1786;
+          KILL(zTrieBuilder)(&z2zE814);
+          KILL(zTrieBuilder)(&z2zE812);
+          KILL(zoptionzIRTriePathzK)(&z2zE813);
+          goto end_block_exception_1527;
         }
       }
-      KILL(zoptionzIRTriePathzK)(&z2zE1282);
-      KILL(zTrieBuilder)(&z2zE1281);
+      KILL(zoptionzIRTriePathzK)(&z2zE813);
+      KILL(zTrieBuilder)(&z2zE812);
     }
-    struct zoptionzIRTrieItemzK z2zE1284;
-    CREATE(zoptionzIRTrieItemzK)(&z2zE1284);
-    zSomezIRTrieItemzK(&z2zE1284, zitem);
-    COPY(zTrieBuilder)(&((&z3zE1341)->zbuilder), z2zE1283);
-    COPY(zoptionzIRTrieItemzK)(&((&z3zE1341)->zpending), z2zE1284);
-    KILL(zoptionzIRTrieItemzK)(&z2zE1284);
-    KILL(zTrieBuilder)(&z2zE1283);
+    struct zoptionzIRTrieItemzK z2zE815;
+    CREATE(zoptionzIRTrieItemzK)(&z2zE815);
+    zSomezIRTrieItemzK(&z2zE815, zitem);
+    COPY(zTrieBuilder)(&((&z3zE1002)->zbuilder), z2zE814);
+    z3zE1002.zpending = z2zE815;
+    KILL(zoptionzIRTrieItemzK)(&z2zE815);
+    KILL(zTrieBuilder)(&z2zE814);
     KILL(zTrieItem)(&zprevious);
-    goto finish_match_1782;
+    goto finish_match_1523;
   }
-case_1783: ;
-finish_match_1782: ;
-  COPY(zTrieItemSink)((*(&z8zE538)), z3zE1341);
-  KILL(zTrieItemSink)(&z3zE1341);
-  KILL(zoptionzIRTrieItemzK)(&z2zE1277);
-end_function_1785: ;
-  goto end_function_4008;
-end_block_exception_1786: ;
-  goto end_function_4008;
-end_function_4008: ;
+case_1524: ;
+finish_match_1523: ;
+  COPY(zTrieItemSink)((*(&z8zE594)), z3zE1002);
+  KILL(zTrieItemSink)(&z3zE1002);
+  KILL(zoptionzIRTrieItemzK)(&z2zE808);
+end_function_1526: ;
+  goto end_function_3594;
+end_block_exception_1527: ;
+  goto end_function_3594;
+end_function_3594: ;
 }
 
-void ztrie_sink_finish(struct zTrieItemSink *z8zE539, struct zTrieItemSink zsink)
+void ztrie_sink_finish(struct zTrieItemSink *z8zE595, struct zTrieItemSink zsink)
 {
-  struct zoptionzIRTrieItemzK z2zE1272;
-  CREATE(zoptionzIRTrieItemzK)(&z2zE1272);
-  COPY(zoptionzIRTrieItemzK)(&z2zE1272, zsink.zpending);
-  struct zTrieItemSink z3zE1337;
-  CREATE(zTrieItemSink)(&z3zE1337);
+  struct zoptionzIRTrieItemzK z2zE803;
+  CREATE(zoptionzIRTrieItemzK)(&z2zE803);
+  z2zE803 = zsink.zpending;
+  struct zTrieItemSink z3zE998;
+  CREATE(zTrieItemSink)(&z3zE998);
   {
-    if (z2zE1272.kind != Kind_zNonezIRTrieItemzK) goto case_1779;
-    COPY(zTrieItemSink)(&z3zE1337, zsink);
-    goto finish_match_1777;
+    if (z2zE803.kind != Kind_zNonezIRTrieItemzK) goto case_1520;
+    COPY(zTrieItemSink)(&z3zE998, zsink);
+    goto finish_match_1518;
   }
-case_1779: ;
+case_1520: ;
   {
     /* complete */
     struct zTrieItem zitem;
     CREATE(zTrieItem)(&zitem);
-    COPY(zTrieItem)(&zitem, z2zE1272.variants.zSomezIRTrieItemzK);
-    struct zTrieBuilder z2zE1275;
-    CREATE(zTrieBuilder)(&z2zE1275);
+    zitem = z2zE803.variants.zSomezIRTrieItemzK;
+    struct zTrieBuilder z2zE806;
+    CREATE(zTrieBuilder)(&z2zE806);
     {
-      struct zTrieBuilder z2zE1273;
-      CREATE(zTrieBuilder)(&z2zE1273);
-      COPY(zTrieBuilder)(&z2zE1273, zsink.zbuilder);
-      struct zoptionzIRTriePathzK z2zE1274;
-      CREATE(zoptionzIRTriePathzK)(&z2zE1274);
-      zNonezIRTriePathzK(&z2zE1274, UNIT);
+      struct zTrieBuilder z2zE804;
+      CREATE(zTrieBuilder)(&z2zE804);
+      COPY(zTrieBuilder)(&z2zE804, zsink.zbuilder);
+      struct zoptionzIRTriePathzK z2zE805;
+      CREATE(zoptionzIRTriePathzK)(&z2zE805);
+      zNonezIRTriePathzK(&z2zE805, UNIT);
       {
-        ztrie_insert_item(&z2zE1275, z2zE1273, zitem, z2zE1274);
+        ztrie_insert_item(&z2zE806, z2zE804, zitem, z2zE805);
         if (have_exception) {
-          KILL(zoptionzIRTrieItemzK)(&z2zE1272);
-          KILL(zTrieItemSink)(&z3zE1337);
+          KILL(zoptionzIRTrieItemzK)(&z2zE803);
+          KILL(zTrieItemSink)(&z3zE998);
           KILL(zTrieItem)(&zitem);
-          KILL(zTrieBuilder)(&z2zE1275);
-          KILL(zTrieBuilder)(&z2zE1273);
-          KILL(zoptionzIRTriePathzK)(&z2zE1274);
-          goto end_block_exception_1781;
+          KILL(zTrieBuilder)(&z2zE806);
+          KILL(zTrieBuilder)(&z2zE804);
+          KILL(zoptionzIRTriePathzK)(&z2zE805);
+          goto end_block_exception_1522;
         }
       }
-      KILL(zoptionzIRTriePathzK)(&z2zE1274);
-      KILL(zTrieBuilder)(&z2zE1273);
+      KILL(zoptionzIRTriePathzK)(&z2zE805);
+      KILL(zTrieBuilder)(&z2zE804);
     }
-    struct zoptionzIRTrieItemzK z2zE1276;
-    CREATE(zoptionzIRTrieItemzK)(&z2zE1276);
-    zNonezIRTrieItemzK(&z2zE1276, UNIT);
-    COPY(zTrieBuilder)(&((&z3zE1337)->zbuilder), z2zE1275);
-    COPY(zoptionzIRTrieItemzK)(&((&z3zE1337)->zpending), z2zE1276);
-    KILL(zoptionzIRTrieItemzK)(&z2zE1276);
-    KILL(zTrieBuilder)(&z2zE1275);
+    struct zoptionzIRTrieItemzK z2zE807;
+    CREATE(zoptionzIRTrieItemzK)(&z2zE807);
+    zNonezIRTrieItemzK(&z2zE807, UNIT);
+    COPY(zTrieBuilder)(&((&z3zE998)->zbuilder), z2zE806);
+    z3zE998.zpending = z2zE807;
+    KILL(zoptionzIRTrieItemzK)(&z2zE807);
+    KILL(zTrieBuilder)(&z2zE806);
     KILL(zTrieItem)(&zitem);
-    goto finish_match_1777;
+    goto finish_match_1518;
   }
-case_1778: ;
-finish_match_1777: ;
-  COPY(zTrieItemSink)((*(&z8zE539)), z3zE1337);
-  KILL(zTrieItemSink)(&z3zE1337);
-  KILL(zoptionzIRTrieItemzK)(&z2zE1272);
-end_function_1780: ;
-  goto end_function_4007;
-end_block_exception_1781: ;
-  goto end_function_4007;
-end_function_4007: ;
+case_1519: ;
+finish_match_1518: ;
+  COPY(zTrieItemSink)((*(&z8zE595)), z3zE998);
+  KILL(zTrieItemSink)(&z3zE998);
+  KILL(zoptionzIRTrieItemzK)(&z2zE803);
+end_function_1521: ;
+  goto end_function_3593;
+end_block_exception_1522: ;
+  goto end_function_3593;
+end_function_3593: ;
 }
 
 sail_fixed_bytes_32 ztrie_builder_root(struct zTrieBuilder zbuilder)
 {
-  sail_fixed_bytes_32 z8zE540;
-  zz5listz8z5structz0zzTrieBranchFramez9 z2zE1268;
-  CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1268);
-  COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1268, zbuilder.zframes);
-  sail_fixed_bytes_32 z3zE1334;
+  sail_fixed_bytes_32 z8zE596;
+  zz5listz8z5structz0zzTrieBranchFramez9 z2zE799;
+  CREATE(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE799);
+  COPY(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE799, zbuilder.zframes);
+  sail_fixed_bytes_32 z3zE995;
   {
-    if ((z2zE1268 == NULL)) goto case_1774;
-    struct zexception z2zE1269;
-    CREATE(zexception)(&z2zE1269);
-    zInvalidBlock(&z2zE1269, zWitnessDeficient);
-    COPY(zexception)(current_exception, z2zE1269);
+    if ((z2zE799 == NULL)) goto case_1515;
+    struct zexception z2zE800;
+    CREATE(zexception)(&z2zE800);
+    zInvalidBlock(&z2zE800, zWitnessDeficient);
+    COPY(zexception)(current_exception, z2zE800);
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/mpt/updates.sail:376.18-376.54");
-    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1268);
-    KILL(zexception)(&z2zE1269);
-    goto end_block_exception_1776;
+    KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE799);
+    KILL(zexception)(&z2zE800);
+    goto end_block_exception_1517;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE1269);
-    goto finish_match_1772;
+    KILL(zexception)(&z2zE800);
+    goto finish_match_1513;
   }
-case_1774: ;
+case_1515: ;
   {
     /* complete */
-    bool z2zE1270;
-    z2zE1270 = zbuilder.zcomplete;
-    if (z2zE1270) {
-      struct zNodeRef z2zE1271;
-      CREATE(zNodeRef)(&z2zE1271);
-      COPY(zNodeRef)(&z2zE1271, zbuilder.zroot);
-      z3zE1334 = ztrie_ref_to_root(z2zE1271);
-      KILL(zNodeRef)(&z2zE1271);
-    } else {  z3zE1334 = zEMPTY_TRIE_ROOT;  }
-    goto finish_match_1772;
+    bool z2zE801;
+    z2zE801 = zbuilder.zcomplete;
+    if (z2zE801) {
+      struct zNodeRef z2zE802;
+      CREATE(zNodeRef)(&z2zE802);
+      z2zE802 = zbuilder.zroot;
+      z3zE995 = ztrie_ref_to_root(z2zE802);
+      KILL(zNodeRef)(&z2zE802);
+    } else {  z3zE995 = zEMPTY_TRIE_ROOT;  }
+    goto finish_match_1513;
   }
-case_1773: ;
-finish_match_1772: ;
-  z8zE540 = z3zE1334;
-  KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE1268);
-end_function_1775: ;
-  return z8zE540;
-end_block_exception_1776: ;
+case_1514: ;
+finish_match_1513: ;
+  z8zE596 = z3zE995;
+  KILL(zz5listz8z5structz0zzTrieBranchFramez9)(&z2zE799);
+end_function_1516: ;
+  return z8zE596;
+end_block_exception_1517: ;
 
   return fixed_bytes_32_zero();
 }
 
 sail_fixed_bytes_32 ztrie_sink_root(struct zTrieItemSink zsink)
 {
-  sail_fixed_bytes_32 z8zE541;
-  struct zoptionzIRTrieItemzK z2zE1265;
-  CREATE(zoptionzIRTrieItemzK)(&z2zE1265);
-  COPY(zoptionzIRTrieItemzK)(&z2zE1265, zsink.zpending);
-  sail_fixed_bytes_32 z3zE1331;
+  sail_fixed_bytes_32 z8zE597;
+  struct zoptionzIRTrieItemzK z2zE796;
+  CREATE(zoptionzIRTrieItemzK)(&z2zE796);
+  z2zE796 = zsink.zpending;
+  sail_fixed_bytes_32 z3zE992;
   {
-    if (z2zE1265.kind != Kind_zSomezIRTrieItemzK) goto case_1769;
-    struct zexception z2zE1266;
-    CREATE(zexception)(&z2zE1266);
-    zInvalidBlock(&z2zE1266, zWitnessDeficient);
-    COPY(zexception)(current_exception, z2zE1266);
+    if (z2zE796.kind != Kind_zSomezIRTrieItemzK) goto case_1510;
+    struct zexception z2zE797;
+    CREATE(zexception)(&z2zE797);
+    zInvalidBlock(&z2zE797, zWitnessDeficient);
+    COPY(zexception)(current_exception, z2zE797);
     have_exception = true;
     COPY(sail_string)(throw_location, "sail/lib/mpt/updates.sail:387.19-387.55");
-    KILL(zoptionzIRTrieItemzK)(&z2zE1265);
-    KILL(zexception)(&z2zE1266);
-    goto end_block_exception_1771;
+    KILL(zoptionzIRTrieItemzK)(&z2zE796);
+    KILL(zexception)(&z2zE797);
+    goto end_block_exception_1512;
     /* unreachable after throw */
-    KILL(zexception)(&z2zE1266);
-    goto finish_match_1767;
+    KILL(zexception)(&z2zE797);
+    goto finish_match_1508;
   }
-case_1769: ;
+case_1510: ;
   {
     /* complete */
-    struct zTrieBuilder z2zE1267;
-    CREATE(zTrieBuilder)(&z2zE1267);
-    COPY(zTrieBuilder)(&z2zE1267, zsink.zbuilder);
+    struct zTrieBuilder z2zE798;
+    CREATE(zTrieBuilder)(&z2zE798);
+    COPY(zTrieBuilder)(&z2zE798, zsink.zbuilder);
     {
-      z3zE1331 = ztrie_builder_root(z2zE1267);
+      z3zE992 = ztrie_builder_root(z2zE798);
       if (have_exception) {
-        KILL(zoptionzIRTrieItemzK)(&z2zE1265);
-        KILL(zTrieBuilder)(&z2zE1267);
-        goto end_block_exception_1771;
+        KILL(zoptionzIRTrieItemzK)(&z2zE796);
+        KILL(zTrieBuilder)(&z2zE798);
+        goto end_block_exception_1512;
       }
     }
-    KILL(zTrieBuilder)(&z2zE1267);
-    goto finish_match_1767;
+    KILL(zTrieBuilder)(&z2zE798);
+    goto finish_match_1508;
   }
-case_1768: ;
-finish_match_1767: ;
-  z8zE541 = z3zE1331;
-  KILL(zoptionzIRTrieItemzK)(&z2zE1265);
-end_function_1770: ;
-  return z8zE541;
-end_block_exception_1771: ;
+case_1509: ;
+finish_match_1508: ;
+  z8zE597 = z3zE992;
+  KILL(zoptionzIRTrieItemzK)(&z2zE796);
+end_function_1511: ;
+  return z8zE597;
+end_block_exception_1512: ;
 
   return fixed_bytes_32_zero();
 }

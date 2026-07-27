@@ -42,8 +42,9 @@ open Bytes
 open ByteSource
 open ByteRegionResult
 open BlockError
+open BalIterEntry
 
-/- Type quantifiers: k_ex414094_ : Bool, k_ex414093_ : Bool -/
+/- Type quantifiers: k_ex412958_ : Bool, k_ex412957_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 

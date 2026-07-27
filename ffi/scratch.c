@@ -48,6 +48,13 @@ bool scratch_commit(uint64_t off, uint64_t len) {
   return true;
 }
 
+uint8_t *scratch_borrow(uint64_t len) {
+  if (len > UINT64_MAX - scratch_top ||
+      !scratch_reserve(scratch_top + len))
+    return NULL;
+  return scratch_bytes + scratch_top;
+}
+
 bool scratch_append_source(uint64_t dst, uint64_t source, uint64_t off,
                            uint64_t len) {
   if (dst != scratch_top || len > UINT64_MAX - dst) return false;

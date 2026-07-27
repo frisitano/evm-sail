@@ -2,7 +2,7 @@
 #ifndef EVMSAIL_C_UNITY_BUILD
 #include "../evm_internal.h"
 #endif
-void zword_to_bytes32(zz5listz8z5bv8z9 *z8zE96, sail_u256 zvalue)
+void zword_to_bytes32(zz5listz8z5bv8z9 *z8zE97, sail_u256 zvalue)
 {
   sail_u256 zremaining;
   zremaining = zvalue;
@@ -10,126 +10,142 @@ void zword_to_bytes32(zz5listz8z5bv8z9 *z8zE96, sail_u256 zvalue)
   CREATE(zz5listz8z5bv8z9)(&zout);
   {
   }
-  int64_t z3zE3672;
-  {    z3zE3672 = (int64_t)(UINT64_C(0));
+  int64_t z3zE2892;
+  {    z3zE2892 = (int64_t)(UINT64_C(0));
   }
-  int64_t z3zE3673;
-  {    z3zE3673 = (int64_t)(UINT64_C(31));
+  int64_t z3zE2893;
+  {    z3zE2893 = (int64_t)(UINT64_C(31));
   }
-  int64_t z3zE3674;
-  {    z3zE3674 = (int64_t)(UINT64_C(1));
+  int64_t z3zE2894;
+  {    z3zE2894 = (int64_t)(UINT64_C(1));
   }
   {
     int64_t zbyte_index;
-    zbyte_index = z3zE3672;
-    unit z3zE3676;
-  for_start_3767: ;
+    zbyte_index = z3zE2892;
+    unit z3zE2896;
+  for_start_3351: ;
     {
-      if ((z3zE3673 < zbyte_index)) goto for_end_3768;
-      uint64_t z2zE3898;
-      z2zE3898 = zword_low_byte(zremaining);
-      zconsz3z5bv8(&zout, z2zE3898, zout);
-      unit z3zE3675;
-      z3zE3675 = UNIT;
+      if ((z3zE2893 < zbyte_index)) goto for_end_3352;
+      uint64_t z2zE3190;
+      z2zE3190 = zword_low_byte(zremaining);
+      zconsz3z5bv8(&zout, z2zE3190, zout);
+      unit z3zE2895;
+      z3zE2895 = UNIT;
       zremaining = zword_shift_right(zremaining, UINT64_C(8));
-      z3zE3676 = UNIT;
-      zbyte_index = (zbyte_index + z3zE3674);
-      goto for_start_3767;
+      z3zE2896 = UNIT;
+      zbyte_index = (zbyte_index + z3zE2894);
+      goto for_start_3351;
     }
-  for_end_3768: ;
+  for_end_3352: ;
   }
-  unit z3zE3677;
-  z3zE3677 = UNIT;
-  COPY(zz5listz8z5bv8z9)((*(&z8zE96)), zout);
-  KILL(zz5listz8z5bv8z9)(&zout);
-end_function_3769: ;
-  goto end_function_4076;
-end_block_exception_3770: ;
-  goto end_function_4076;
-end_function_4076: ;
-}
-
-void zhash_to_bytes32(zz5listz8z5bv8z9 *z8zE97, sail_fixed_bytes_32 zbytes)
-{
-  zz5listz8z5bv8z9 zout;
-  CREATE(zz5listz8z5bv8z9)(&zout);
-  {
-  }
-  int64_t z3zE3666;
-  {    z3zE3666 = (int64_t)(UINT64_C(0));
-  }
-  int64_t z3zE3667;
-  {    z3zE3667 = (int64_t)(UINT64_C(31));
-  }
-  int64_t z3zE3668;
-  {    z3zE3668 = (int64_t)(UINT64_C(1));
-  }
-  {
-    int64_t zk;
-    zk = z3zE3666;
-    unit z3zE3669;
-  for_start_3763: ;
-    {
-      if ((z3zE3667 < zk)) goto for_end_3764;
-      uint64_t z2zE3897;
-      z2zE3897 = fast_vector_access_fixed_bytes_32(zbytes, zk);
-      zconsz3z5bv8(&zout, z2zE3897, zout);
-      z3zE3669 = UNIT;
-      zk = (zk + z3zE3668);
-      goto for_start_3763;
-    }
-  for_end_3764: ;
-  }
-  unit z3zE3670;
-  z3zE3670 = UNIT;
+  unit z3zE2897;
+  z3zE2897 = UNIT;
   COPY(zz5listz8z5bv8z9)((*(&z8zE97)), zout);
   KILL(zz5listz8z5bv8z9)(&zout);
-end_function_3765: ;
-  goto end_function_4075;
-end_block_exception_3766: ;
-  goto end_function_4075;
-end_function_4075: ;
+end_function_3353: ;
+  goto end_function_3657;
+end_block_exception_3354: ;
+  goto end_function_3657;
+end_function_3657: ;
 }
 
-void zaddress_to_bytes(zz5listz8z5bv8z9 *z8zE98, sail_fixed_bytes_20 zbytes)
+void zhash_to_bytes32(zz5listz8z5bv8z9 *z8zE98, sail_fixed_bytes_32 zbytes)
 {
   zz5listz8z5bv8z9 zout;
   CREATE(zz5listz8z5bv8z9)(&zout);
   {
   }
-  int64_t z3zE3660;
-  {    z3zE3660 = (int64_t)(UINT64_C(0));
+  int64_t z3zE2886;
+  {    z3zE2886 = (int64_t)(UINT64_C(0));
   }
-  int64_t z3zE3661;
-  {    z3zE3661 = (int64_t)(UINT64_C(19));
+  int64_t z3zE2887;
+  {    z3zE2887 = (int64_t)(UINT64_C(31));
   }
-  int64_t z3zE3662;
-  {    z3zE3662 = (int64_t)(UINT64_C(1));
+  int64_t z3zE2888;
+  {    z3zE2888 = (int64_t)(UINT64_C(1));
   }
   {
     int64_t zk;
-    zk = z3zE3660;
-    unit z3zE3663;
-  for_start_3759: ;
+    zk = z3zE2886;
+    unit z3zE2889;
+  for_start_3347: ;
     {
-      if ((z3zE3661 < zk)) goto for_end_3760;
-      uint64_t z2zE3896;
-      z2zE3896 = fast_vector_access_fixed_bytes_20(zbytes, zk);
-      zconsz3z5bv8(&zout, z2zE3896, zout);
-      z3zE3663 = UNIT;
-      zk = (zk + z3zE3662);
-      goto for_start_3759;
+      if ((z3zE2887 < zk)) goto for_end_3348;
+      uint64_t z2zE3189;
+      {
+        uint64_t z2zE3188;
+        {
+          uint64_t z3zE3011;
+          z3zE3011 = (uint64_t)(zk);
+          z2zE3188 = zhash_little_endian_index(z3zE3011);
+        }
+        z2zE3189 = fast_unsigned_vector_access_fixed_bytes_32(zbytes, z2zE3188);
+      }
+      zconsz3z5bv8(&zout, z2zE3189, zout);
+      z3zE2889 = UNIT;
+      zk = (zk + z3zE2888);
+      goto for_start_3347;
     }
-  for_end_3760: ;
+  for_end_3348: ;
   }
-  unit z3zE3664;
-  z3zE3664 = UNIT;
+  unit z3zE2890;
+  z3zE2890 = UNIT;
   COPY(zz5listz8z5bv8z9)((*(&z8zE98)), zout);
   KILL(zz5listz8z5bv8z9)(&zout);
-end_function_3761: ;
-  goto end_function_4074;
-end_block_exception_3762: ;
-  goto end_function_4074;
-end_function_4074: ;
+end_function_3349: ;
+  goto end_function_3656;
+end_block_exception_3350: ;
+  goto end_function_3656;
+end_function_3656: ;
+}
+
+void zaddress_to_bytes(zz5listz8z5bv8z9 *z8zE99, sail_fixed_bytes_20 zbytes)
+{
+  zz5listz8z5bv8z9 zout;
+  CREATE(zz5listz8z5bv8z9)(&zout);
+  {
+  }
+  int64_t z3zE2880;
+  {    z3zE2880 = (int64_t)(UINT64_C(0));
+  }
+  int64_t z3zE2881;
+  {    z3zE2881 = (int64_t)(UINT64_C(19));
+  }
+  int64_t z3zE2882;
+  {    z3zE2882 = (int64_t)(UINT64_C(1));
+  }
+  {
+    int64_t zk;
+    zk = z3zE2880;
+    unit z3zE2883;
+  for_start_3343: ;
+    {
+      if ((z3zE2881 < zk)) goto for_end_3344;
+      uint64_t z2zE3187;
+      {
+        uint64_t z2zE3186;
+        {
+          uint64_t z3zE3012;
+          z3zE3012 = (uint64_t)(zk);
+          z2zE3186 = zaddress_little_endian_index(z3zE3012);
+        }
+        z2zE3187 = fast_unsigned_vector_access_fixed_bytes_20(zbytes, z2zE3186);
+      }
+      zconsz3z5bv8(&zout, z2zE3187, zout);
+      z3zE2883 = UNIT;
+      zk = (zk + z3zE2882);
+      goto for_start_3343;
+    }
+  for_end_3344: ;
+  }
+  unit z3zE2884;
+  z3zE2884 = UNIT;
+  COPY(zz5listz8z5bv8z9)((*(&z8zE99)), zout);
+  KILL(zz5listz8z5bv8z9)(&zout);
+end_function_3345: ;
+  goto end_function_3655;
+end_block_exception_3346: ;
+  goto end_function_3655;
+end_function_3655: ;
 }
 

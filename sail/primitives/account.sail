@@ -55,6 +55,21 @@ struct AcctValue = { curr : Account, orig : Account }
     enumerated at transaction-end merge. */
 struct AcctEntry = { addr : address, value : AcctValue }
 
+/*! A host storage row prepared for secure-trie traversal. The semantic row
+    remains [StorageEntry][type-StorageEntry]; these cached digests are derived
+    traversal metadata computed when the witness value is first materialized. */
+struct StorageTrieEntry = {
+    entry : StorageEntry,
+    address_hash : hash,
+    slot_hash : hash,
+}
+
+/*! A host account row prepared for secure-trie traversal. */
+struct AcctTrieEntry = {
+    entry : AcctEntry,
+    address_hash : hash,
+}
+
 /*! The empty account tuple: zero nonce and balance, `KECCAK_EMPTY` code
     hash, empty-trie storage root (YP §4.1). */
 let EMPTY_ACCOUNT_INFO : AccountInfo = struct {

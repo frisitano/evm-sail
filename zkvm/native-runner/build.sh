@@ -60,10 +60,13 @@ FFI="$ROOT/ffi"
 # Inject the owning FFI headers directly. There is deliberately no aggregate
 # model/input umbrella: each external operation is declared by its subsystem.
 MODEL_HEADERS=(
-  byte_slice_glue.h host_crypto.h precompiles.h output.h scratch.h memory.h
+  byte_slice_glue.h hash_glue.h precompiles.h output.h scratch.h memory.h
   transient_storage.h stack.h frame_stack.h code_db.h kernel_state.h trie_node_db.h
   state_db.h cycle_scopes.h
 )
+if [ "$EVM_BUILD_MODE" = optimized ]; then
+  MODEL_HEADERS+=(word_bytes_glue.h htr_glue.h mpt_glue.h journal_glue.h interpreter_glue.h)
+fi
 MODEL_INCLUDE_FLAGS=()
 for header in "${MODEL_HEADERS[@]}"; do
   MODEL_INCLUDE_FLAGS+=(--c-include "$header")
@@ -86,6 +89,7 @@ case "$(uname -s)" in
 esac
 
 CFLAGS=(-O2 -Wno-error=implicit-function-declaration)
+STATE_ACCESS_AGGREGATE_GLUE_FLAG=""
 if [ "$EVM_BUILD_MODE" = standard ]; then
   CFLAGS+=(-DEVMSAIL_STANDARD_ABI)
   GMP_CFLAGS=()
@@ -95,6 +99,9 @@ if [ "$EVM_BUILD_MODE" = standard ]; then
     read -r -a GMP_LINK_FLAGS <<< "$(pkg-config --libs gmp)"
   fi
   CFLAGS+=("${GMP_CFLAGS[@]}")
+else
+  STATE_ACCESS_AGGREGATE_GLUE_FLAG="-DEVMSAIL_NO_STATE_ACCESS_AGGREGATE_GLUE"
+  CFLAGS+=(-DEVMSAIL_NATIVE_DEBUG_AGGREGATE_GLUE)
 fi
 if [ -n "${SANITIZE:-}" ]; then CFLAGS+=(-g -fsanitize=address,undefined -fno-omit-frame-pointer); fi
 
@@ -122,6 +129,8 @@ done
 #   EXTRA_PRESERVE adds any one-off inspection symbols.
 PRESERVE_FLAGS=(
   --c-preserve main
+  --c-preserve leaf_child_ref
+  --c-preserve resume_frame
   --c-preserve debug_account_storage_root
   --c-preserve debug_rebuild_state_root
 )
@@ -151,13 +160,15 @@ SAIL_CMD+=(
 # MUST precede -I"$SAIL_LIB" in every unit that includes sail.h.
 
 # --- 4. compile generated model --------------------------------------------
-"$CC" "${CFLAGS[@]}" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
 
 # --- 4b. state aggregate glue: account/storage rows use generated layouts;
 #     the rollback journal itself is C-private.
 "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+    ${STATE_ACCESS_AGGREGATE_GLUE_FLAG:+"$STATE_ACCESS_AGGREGATE_GLUE_FLAG"} \
     -c "$FFI/journal_glue.c" -o "$BUILD/journal_glue.o"
 
 "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
@@ -180,6 +191,24 @@ SAIL_CMD+=(
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$FFI/frame_stack_glue.c" -o "$BUILD/frame_stack_glue.o"
 
+HTR_GLUE_OBJ=""
+MPT_GLUE_OBJ=""
+INTERPRETER_GLUE_OBJ=""
+if [ "$EVM_BUILD_MODE" = optimized ]; then
+  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+      -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+      -c "$FFI/htr_glue.c" -o "$BUILD/htr_glue.o"
+  HTR_GLUE_OBJ="$BUILD/htr_glue.o"
+  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+      -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+      -c "$FFI/mpt_glue.c" -o "$BUILD/mpt_glue.o"
+  MPT_GLUE_OBJ="$BUILD/mpt_glue.o"
+  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+      -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+      -c "$FFI/interpreter_glue.c" -o "$BUILD/interpreter_glue.o"
+  INTERPRETER_GLUE_OBJ="$BUILD/interpreter_glue.o"
+fi
+
 # --- 5. shared harness I/O + CLI main ---------------------------------------
 #   test_utils.c supplies the native standard I/O implementation, large-stack
 #   run, and clear-memory hooks shared by this executable and build_lib.sh.
@@ -188,9 +217,9 @@ SAIL_CMD+=(
     -c "$HERE/test_utils.c" -o "$BUILD/test_utils.o"
 "$CC" "${CFLAGS[@]}" -c "$HERE/main.c" -o "$BUILD/main.o"
 
-# --- 6. C host backends + direct host crypto/precompile adapters ------------
+# --- 6. C host backends + direct precompile adapter -------------------------
 HOST_OBJS=()
-for hc in memory scratch transient_storage state_db stack code_db kernel_state trie_node_db host_crypto precompiles output; do
+for hc in memory scratch transient_storage state_db stack code_db kernel_state trie_node_db precompiles output; do
   o="$BUILD/$hc.o"
   "$CC" "${CFLAGS[@]}" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$FFI" -c "$FFI/$hc.c" -o "$o"
   HOST_OBJS+=("$o")
@@ -205,6 +234,9 @@ fi
 OUT="$BUILD/zkvm_native"
 LINK_CMD=("$CC" "${CFLAGS[@]}"
     "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/address_result_glue.o" "$BUILD/frame_stack_glue.o" "$BUILD/test_utils.o" "$BUILD/main.o"
+    ${HTR_GLUE_OBJ:+"$HTR_GLUE_OBJ"}
+    ${MPT_GLUE_OBJ:+"$MPT_GLUE_OBJ"}
+    ${INTERPRETER_GLUE_OBJ:+"$INTERPRETER_GLUE_OBJ"}
     "${HOST_OBJS[@]}" "${RUNTIME_OBJS[@]}"
     "${ACCEL_FLAGS[@]}")
 if [ "$EVM_BUILD_MODE" = standard ]; then

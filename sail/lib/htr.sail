@@ -63,31 +63,81 @@ let HTR_BUILDER_EXIT_PUBKEY : int(20) = 20
 
 /* SSZ zero hashes by subtree level. Keeping these as constants avoids hashing
  * the same all-zero subtree once per level for every Merkle root. */
-let SSZ_ZERO_HASH_01 : hash = B256(to_bytes_le(32, 0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b))
-let SSZ_ZERO_HASH_02 : hash = B256(to_bytes_le(32, 0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71))
-let SSZ_ZERO_HASH_03 : hash = B256(to_bytes_le(32, 0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c))
-let SSZ_ZERO_HASH_04 : hash = B256(to_bytes_le(32, 0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c))
-let SSZ_ZERO_HASH_05 : hash = B256(to_bytes_le(32, 0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30))
-let SSZ_ZERO_HASH_06 : hash = B256(to_bytes_le(32, 0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1))
-let SSZ_ZERO_HASH_07 : hash = B256(to_bytes_le(32, 0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c))
-let SSZ_ZERO_HASH_08 : hash = B256(to_bytes_le(32, 0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193))
-let SSZ_ZERO_HASH_09 : hash = B256(to_bytes_le(32, 0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1))
-let SSZ_ZERO_HASH_10 : hash = B256(to_bytes_le(32, 0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b))
-let SSZ_ZERO_HASH_11 : hash = B256(to_bytes_le(32, 0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220))
-let SSZ_ZERO_HASH_12 : hash = B256(to_bytes_le(32, 0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f))
-let SSZ_ZERO_HASH_13 : hash = B256(to_bytes_le(32, 0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e))
-let SSZ_ZERO_HASH_14 : hash = B256(to_bytes_le(32, 0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784))
-let SSZ_ZERO_HASH_15 : hash = B256(to_bytes_le(32, 0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb))
-let SSZ_ZERO_HASH_16 : hash = B256(to_bytes_le(32, 0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb))
-let SSZ_ZERO_HASH_17 : hash = B256(to_bytes_le(32, 0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab))
-let SSZ_ZERO_HASH_18 : hash = B256(to_bytes_le(32, 0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4))
-let SSZ_ZERO_HASH_19 : hash = B256(to_bytes_le(32, 0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f))
-let SSZ_ZERO_HASH_20 : hash = B256(to_bytes_le(32, 0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa))
-let SSZ_ZERO_HASH_21 : hash = B256(to_bytes_le(32, 0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c))
-let SSZ_ZERO_HASH_22 : hash = B256(to_bytes_le(32, 0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167))
-let SSZ_ZERO_HASH_23 : hash = B256(to_bytes_le(32, 0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7))
-let SSZ_ZERO_HASH_24 : hash = B256(to_bytes_le(32, 0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0))
-let SSZ_ZERO_HASH_25 : hash = B256(to_bytes_le(32, 0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544))
+let SSZ_ZERO_HASH_01 : hash = word_to_hash(
+    U256(unsigned(0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b)),
+)
+let SSZ_ZERO_HASH_02 : hash = word_to_hash(
+    U256(unsigned(0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71)),
+)
+let SSZ_ZERO_HASH_03 : hash = word_to_hash(
+    U256(unsigned(0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c)),
+)
+let SSZ_ZERO_HASH_04 : hash = word_to_hash(
+    U256(unsigned(0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c)),
+)
+let SSZ_ZERO_HASH_05 : hash = word_to_hash(
+    U256(unsigned(0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30)),
+)
+let SSZ_ZERO_HASH_06 : hash = word_to_hash(
+    U256(unsigned(0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1)),
+)
+let SSZ_ZERO_HASH_07 : hash = word_to_hash(
+    U256(unsigned(0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c)),
+)
+let SSZ_ZERO_HASH_08 : hash = word_to_hash(
+    U256(unsigned(0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193)),
+)
+let SSZ_ZERO_HASH_09 : hash = word_to_hash(
+    U256(unsigned(0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1)),
+)
+let SSZ_ZERO_HASH_10 : hash = word_to_hash(
+    U256(unsigned(0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b)),
+)
+let SSZ_ZERO_HASH_11 : hash = word_to_hash(
+    U256(unsigned(0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220)),
+)
+let SSZ_ZERO_HASH_12 : hash = word_to_hash(
+    U256(unsigned(0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f)),
+)
+let SSZ_ZERO_HASH_13 : hash = word_to_hash(
+    U256(unsigned(0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e)),
+)
+let SSZ_ZERO_HASH_14 : hash = word_to_hash(
+    U256(unsigned(0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784)),
+)
+let SSZ_ZERO_HASH_15 : hash = word_to_hash(
+    U256(unsigned(0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb)),
+)
+let SSZ_ZERO_HASH_16 : hash = word_to_hash(
+    U256(unsigned(0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb)),
+)
+let SSZ_ZERO_HASH_17 : hash = word_to_hash(
+    U256(unsigned(0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab)),
+)
+let SSZ_ZERO_HASH_18 : hash = word_to_hash(
+    U256(unsigned(0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4)),
+)
+let SSZ_ZERO_HASH_19 : hash = word_to_hash(
+    U256(unsigned(0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f)),
+)
+let SSZ_ZERO_HASH_20 : hash = word_to_hash(
+    U256(unsigned(0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa)),
+)
+let SSZ_ZERO_HASH_21 : hash = word_to_hash(
+    U256(unsigned(0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c)),
+)
+let SSZ_ZERO_HASH_22 : hash = word_to_hash(
+    U256(unsigned(0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167)),
+)
+let SSZ_ZERO_HASH_23 : hash = word_to_hash(
+    U256(unsigned(0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7)),
+)
+let SSZ_ZERO_HASH_24 : hash = word_to_hash(
+    U256(unsigned(0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0)),
+)
+let SSZ_ZERO_HASH_25 : hash = word_to_hash(
+    U256(unsigned(0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544)),
+)
 
 /*! The root of an all-zero subtree at `level`. */
 function ssz_zero_hash(level : htr_depth) -> hash = match level {
@@ -197,13 +247,17 @@ function merkle_accumulator_push(accumulator : MerkleAccumulator, leaf : hash) -
 }
 
 /* Pad a frontier to 2^depth leaves. The zero subtree for each level is a
- * precomputed SSZ constant, so padding is O(depth) without zero hashing. */
+ * precomputed SSZ constant. `has_right` distinguishes an accumulated
+ * right-hand subtree from the scratch value in `right`, so an absent subtree
+ * can advance through even levels without hashing zeroes that will be
+ * discarded. */
 /*! Completes a frontier with zero subtrees through `remaining` levels and
     returns its Merkle root. */
 function merkle_root_levels(
     slots : list(MerkleSlot),
     n : htr_leaf_count,
-    acc : hash,
+    right : hash,
+    has_right : bool,
     level : htr_depth,
     remaining : htr_depth,
 ) -> (
@@ -211,7 +265,11 @@ function merkle_root_levels(
 ) =
     if remaining == 0 then {
         if n == 0 then {
-            acc
+            if has_right then {
+                right
+            } else {
+                ssz_zero_hash(level)
+            }
         } else {
             if n == 1 then {
                 match slots {
@@ -233,24 +291,29 @@ function merkle_root_levels(
             },
             [||] => (),
         };
-        let next_acc = if tmod_int(n, 2) == 1 then {
+        let is_odd = tmod_int(n, 2) == 1;
+        let next_right = if is_odd then {
                 match slot {
-                    OccupiedMerkleSlot(left) => sha256_pair(left, acc),
+                    OccupiedMerkleSlot(left) => sha256_pair(left, if has_right then right else zero),
                     EmptyMerkleSlot() => throw InvalidBlock(WitnessDeficient),
                 }
             } else {
-                sha256_pair(acc, zero)
+                if has_right then {
+                    sha256_pair(right, zero)
+                } else {
+                    ZERO_HASH
+                }
             };
         let next_level = htr_depth_increment(level);
-        merkle_root_levels(rest, tdiv_nat(n, 2), next_acc, next_level, remaining - 1)
+        merkle_root_levels(rest, tdiv_nat(n, 2), next_right, has_right | is_odd, next_level, remaining - 1)
     }
-termination_measure merkle_root_levels(slots, n, acc, level, remaining) = remaining
+termination_measure merkle_root_levels(slots, n, right, has_right, level, remaining) = remaining
 
 /*! Pads an incremental Merkle accumulator to its declared depth and returns
     its root. */
 function merkle_accumulator_root(accumulator : MerkleAccumulator) -> hash = {
     cycle_scope_start(SCOPE_HTR_MERKLE_PADDING);
-    let root = merkle_root_levels(accumulator.frontier, accumulator.count, ZERO_HASH, 0, accumulator.depth);
+    let root = merkle_root_levels(accumulator.frontier, accumulator.count, ZERO_HASH, false, 0, accumulator.depth);
     cycle_scope_end(SCOPE_HTR_MERKLE_PADDING);
     root
 }
@@ -272,87 +335,94 @@ function merkleize(leaves : list(hash), depth : htr_depth) -> hash =
 /*! Encodes a protocol quantity as an SSZ little-endian basic-value chunk. */
 function htr_uint(v : ssz_uint) -> hash = {
     var bytes = ZERO_HASH;
-    bytes[31] = get_slice_int(8, v, 0);
-    bytes[30] = get_slice_int(8, v, 8);
-    bytes[29] = get_slice_int(8, v, 16);
-    bytes[28] = get_slice_int(8, v, 24);
-    bytes[27] = get_slice_int(8, v, 32);
-    bytes[26] = get_slice_int(8, v, 40);
-    bytes[25] = get_slice_int(8, v, 48);
-    bytes[24] = get_slice_int(8, v, 56);
+    bytes[0] = get_slice_int(8, v, 0);
+    bytes[1] = get_slice_int(8, v, 8);
+    bytes[2] = get_slice_int(8, v, 16);
+    bytes[3] = get_slice_int(8, v, 24);
+    bytes[4] = get_slice_int(8, v, 32);
+    bytes[5] = get_slice_int(8, v, 40);
+    bytes[6] = get_slice_int(8, v, 48);
+    bytes[7] = get_slice_int(8, v, 56);
     B256(bytes)
 }
 
 /*! `uint256` as a 32-byte little-endian chunk. */
 function htr_u256(value : word) -> hash = {
     var bytes = ZERO_HASH;
-    bytes[31] = get_slice_int(8, value, 0);
-    bytes[30] = get_slice_int(8, value, 8);
-    bytes[29] = get_slice_int(8, value, 16);
-    bytes[28] = get_slice_int(8, value, 24);
-    bytes[27] = get_slice_int(8, value, 32);
-    bytes[26] = get_slice_int(8, value, 40);
-    bytes[25] = get_slice_int(8, value, 48);
-    bytes[24] = get_slice_int(8, value, 56);
-    bytes[23] = get_slice_int(8, value, 64);
-    bytes[22] = get_slice_int(8, value, 72);
-    bytes[21] = get_slice_int(8, value, 80);
-    bytes[20] = get_slice_int(8, value, 88);
-    bytes[19] = get_slice_int(8, value, 96);
-    bytes[18] = get_slice_int(8, value, 104);
-    bytes[17] = get_slice_int(8, value, 112);
-    bytes[16] = get_slice_int(8, value, 120);
-    bytes[15] = get_slice_int(8, value, 128);
-    bytes[14] = get_slice_int(8, value, 136);
-    bytes[13] = get_slice_int(8, value, 144);
-    bytes[12] = get_slice_int(8, value, 152);
-    bytes[11] = get_slice_int(8, value, 160);
-    bytes[10] = get_slice_int(8, value, 168);
-    bytes[9] = get_slice_int(8, value, 176);
-    bytes[8] = get_slice_int(8, value, 184);
-    bytes[7] = get_slice_int(8, value, 192);
-    bytes[6] = get_slice_int(8, value, 200);
-    bytes[5] = get_slice_int(8, value, 208);
-    bytes[4] = get_slice_int(8, value, 216);
-    bytes[3] = get_slice_int(8, value, 224);
-    bytes[2] = get_slice_int(8, value, 232);
-    bytes[1] = get_slice_int(8, value, 240);
-    bytes[0] = get_slice_int(8, value, 248);
+    bytes[0] = get_slice_int(8, value, 0);
+    bytes[1] = get_slice_int(8, value, 8);
+    bytes[2] = get_slice_int(8, value, 16);
+    bytes[3] = get_slice_int(8, value, 24);
+    bytes[4] = get_slice_int(8, value, 32);
+    bytes[5] = get_slice_int(8, value, 40);
+    bytes[6] = get_slice_int(8, value, 48);
+    bytes[7] = get_slice_int(8, value, 56);
+    bytes[8] = get_slice_int(8, value, 64);
+    bytes[9] = get_slice_int(8, value, 72);
+    bytes[10] = get_slice_int(8, value, 80);
+    bytes[11] = get_slice_int(8, value, 88);
+    bytes[12] = get_slice_int(8, value, 96);
+    bytes[13] = get_slice_int(8, value, 104);
+    bytes[14] = get_slice_int(8, value, 112);
+    bytes[15] = get_slice_int(8, value, 120);
+    bytes[16] = get_slice_int(8, value, 128);
+    bytes[17] = get_slice_int(8, value, 136);
+    bytes[18] = get_slice_int(8, value, 144);
+    bytes[19] = get_slice_int(8, value, 152);
+    bytes[20] = get_slice_int(8, value, 160);
+    bytes[21] = get_slice_int(8, value, 168);
+    bytes[22] = get_slice_int(8, value, 176);
+    bytes[23] = get_slice_int(8, value, 184);
+    bytes[24] = get_slice_int(8, value, 192);
+    bytes[25] = get_slice_int(8, value, 200);
+    bytes[26] = get_slice_int(8, value, 208);
+    bytes[27] = get_slice_int(8, value, 216);
+    bytes[28] = get_slice_int(8, value, 224);
+    bytes[29] = get_slice_int(8, value, 232);
+    bytes[30] = get_slice_int(8, value, 240);
+    bytes[31] = get_slice_int(8, value, 248);
     B256(bytes)
 }
 
 /*! `Bytes32` chunks are themselves. */
 function htr_bytes32(b : hash) -> hash = b
+
 /*! A 20-byte address, left-aligned in its chunk. */
 function htr_addr(address_bytes : address) -> hash = {
     var bytes = ZERO_HASH;
-    bytes[12] = address_bytes[0];
-    bytes[13] = address_bytes[1];
-    bytes[14] = address_bytes[2];
-    bytes[15] = address_bytes[3];
-    bytes[16] = address_bytes[4];
-    bytes[17] = address_bytes[5];
-    bytes[18] = address_bytes[6];
-    bytes[19] = address_bytes[7];
-    bytes[20] = address_bytes[8];
-    bytes[21] = address_bytes[9];
-    bytes[22] = address_bytes[10];
-    bytes[23] = address_bytes[11];
-    bytes[24] = address_bytes[12];
-    bytes[25] = address_bytes[13];
-    bytes[26] = address_bytes[14];
-    bytes[27] = address_bytes[15];
-    bytes[28] = address_bytes[16];
-    bytes[29] = address_bytes[17];
-    bytes[30] = address_bytes[18];
-    bytes[31] = address_bytes[19];
+    bytes[0] = address_bytes[0];
+    bytes[1] = address_bytes[1];
+    bytes[2] = address_bytes[2];
+    bytes[3] = address_bytes[3];
+    bytes[4] = address_bytes[4];
+    bytes[5] = address_bytes[5];
+    bytes[6] = address_bytes[6];
+    bytes[7] = address_bytes[7];
+    bytes[8] = address_bytes[8];
+    bytes[9] = address_bytes[9];
+    bytes[10] = address_bytes[10];
+    bytes[11] = address_bytes[11];
+    bytes[12] = address_bytes[12];
+    bytes[13] = address_bytes[13];
+    bytes[14] = address_bytes[14];
+    bytes[15] = address_bytes[15];
+    bytes[16] = address_bytes[16];
+    bytes[17] = address_bytes[17];
+    bytes[18] = address_bytes[18];
+    bytes[19] = address_bytes[19];
     B256(bytes)
 }
+
+/*! A source length as the SSZ little-endian `uint256` chunk used by
+    `mix_in_length`. */
+val htr_length_chunk : forall 'len, source_valid_length('len). int('len) -> hash
+function htr_length_chunk(len) =
+    htr_u256(word_of_byte_count(len))
 
 /*! `mix_in_length`: hashes the list root with its uint256 length chunk. */
 val mix_in_length : forall 'len, source_valid_length('len). (hash, int('len)) -> hash
 function mix_in_length(root, len) =
-    sha256_pair(root, htr_u256(word_of_byte_count(len)))
+    sha256_pair(root, htr_length_chunk(len))
 
 /*! The ceiling of log2 — the Merkle depth of an `n`-chunk capacity. */
 function clog2(n : htr_leaf_count) -> htr_depth = {
@@ -408,6 +478,41 @@ function htr_bytevector(bytes : ByteSlice) -> hash = {
     htr_bytes_root(bytes, clog2(chunks))
 }
 
+/* These source-bound helpers deliberately state the decode-then-HTR
+ * equations used by the SSZ specification. The standard native build and
+ * proof extractions retain these equations. The optimized C splice replaces
+ * only the complete `htr_new_payload_request` operation, leaving this
+ * readable specification unchanged. */
+/*! HTR of an SSZ `uint64` field in an enclosing serialized object. */
+val htr_ssz_uint : forall 'off, source_valid_range('off, 8). (ByteSlice, int('off)) -> hash
+function htr_ssz_uint(bytes, offset) =
+    htr_uint(decode_ssz_uint(bytes, offset))
+
+/*! HTR of an SSZ `uint256` field in an enclosing serialized object. */
+val htr_ssz_u256 : forall 'off, source_valid_range('off, 32). (ByteSlice, int('off)) -> hash
+function htr_ssz_u256(bytes, offset) =
+    htr_u256(ssz_u256(bytes, offset))
+
+/*! HTR of an SSZ `Bytes32` field in an enclosing serialized object. */
+val htr_ssz_bytes32 : forall 'off, source_valid_range('off, 32). (ByteSlice, int('off)) -> hash
+function htr_ssz_bytes32(bytes, offset) =
+    htr_bytes32(ssz_bytes32(bytes, offset))
+
+/*! HTR of an SSZ 20-byte address field in an enclosing serialized object. */
+val htr_ssz_addr : forall 'off, source_valid_range('off, 20). (ByteSlice, int('off)) -> hash
+function htr_ssz_addr(bytes, offset) =
+    htr_addr(ssz_addr(bytes, offset))
+
+/*! HTR of a fixed-size `ByteVector` field in an enclosing serialized object. */
+val htr_ssz_bytevector : forall 'off 'len, source_valid_range('off, 'len). (ByteSlice, int('off), int('len)) -> hash
+function htr_ssz_bytevector(bytes, offset, len) = {
+    if offset + len <= bytes.len then {
+        htr_bytevector(sub_slice(bytes, offset, len))
+    } else {
+        throw InvalidBlock(InvalidConfig)
+    }
+}
+
 /*! `hash_tree_root` of a `ByteList[limit_bytes]` (root at the limit's
     depth, length mixed in). */
 val htr_bytelist : forall 'limit, source_valid_length('limit). (ByteSlice, int('limit)) -> hash
@@ -423,10 +528,10 @@ function htr_bytelist(bytes, limit_bytes) = {
 function htr_withdrawal(withdrawal : ByteSliceLength(44)) -> hash = {
     merkleize(
         [|
-            htr_uint(decode_ssz_uint(withdrawal, WD_INDEX)),
-            htr_uint(decode_ssz_uint(withdrawal, WD_VALIDATOR_INDEX)),
-            htr_addr(ssz_addr(withdrawal, WD_ADDRESS)),
-            htr_uint(decode_ssz_uint(withdrawal, WD_AMOUNT)),
+            htr_ssz_uint(withdrawal, WD_INDEX),
+            htr_ssz_uint(withdrawal, WD_VALIDATOR_INDEX),
+            htr_ssz_addr(withdrawal, WD_ADDRESS),
+            htr_ssz_uint(withdrawal, WD_AMOUNT),
         |],
         2,
     )
@@ -469,25 +574,25 @@ function htr_execution_payload(input_ref : StatelessInputRef) -> hash = {
     let payload = input_ref.execution_payload;
     let root = merkleize(
         [|
-            htr_bytes32(ssz_bytes32(payload, 0)),
-            htr_addr(ssz_addr(payload, PL_FEE_RECIPIENT)),
-            htr_bytes32(ssz_bytes32(payload, PL_STATE_ROOT)),
-            htr_bytes32(ssz_bytes32(payload, PL_RECEIPTS_ROOT)),
-            htr_bytevector(sub_slice(payload, PL_LOGS_BLOOM, LOGS_BLOOM_BYTE_LENGTH)),
-            htr_bytes32(ssz_bytes32(payload, PL_PREV_RANDAO)),
-            htr_uint(decode_ssz_uint(payload, PL_BLOCK_NUMBER)),
-            htr_uint(decode_ssz_uint(payload, PL_GAS_LIMIT)),
-            htr_uint(decode_ssz_uint(payload, PL_GAS_USED)),
-            htr_uint(decode_ssz_uint(payload, PL_TIMESTAMP)),
+            htr_ssz_bytes32(payload, 0),
+            htr_ssz_addr(payload, PL_FEE_RECIPIENT),
+            htr_ssz_bytes32(payload, PL_STATE_ROOT),
+            htr_ssz_bytes32(payload, PL_RECEIPTS_ROOT),
+            htr_ssz_bytevector(payload, PL_LOGS_BLOOM, LOGS_BLOOM_BYTE_LENGTH),
+            htr_ssz_bytes32(payload, PL_PREV_RANDAO),
+            htr_ssz_uint(payload, PL_BLOCK_NUMBER),
+            htr_ssz_uint(payload, PL_GAS_LIMIT),
+            htr_ssz_uint(payload, PL_GAS_USED),
+            htr_ssz_uint(payload, PL_TIMESTAMP),
             htr_bytelist(input_ref.extra_data, WORD_BYTE_LENGTH),
-            htr_u256(ssz_u256(payload, PL_BASE_FEE)),
-            htr_bytes32(ssz_bytes32(payload, PL_BLOCK_HASH)),
+            htr_ssz_u256(payload, PL_BASE_FEE),
+            htr_ssz_bytes32(payload, PL_BLOCK_HASH),
             htr_transactions(input_ref.transactions),
             htr_withdrawals(input_ref.withdrawals),
-            htr_uint(decode_ssz_uint(payload, PL_BLOB_GAS_USED)),
-            htr_uint(decode_ssz_uint(payload, PL_EXCESS_BLOB_GAS)),
+            htr_ssz_uint(payload, PL_BLOB_GAS_USED),
+            htr_ssz_uint(payload, PL_EXCESS_BLOB_GAS),
             htr_bytelist(input_ref.block_access_list, HTR_BYTE_LIST_LIMIT),
-            htr_uint(decode_ssz_uint(payload, PL_SLOT_NUMBER)),
+            htr_ssz_uint(payload, PL_SLOT_NUMBER),
         |],
         5,
     );
@@ -519,11 +624,11 @@ The EIP-7685 execution-request commitments.
 function htr_deposit(deposit : ByteSliceLength(192)) -> hash = {
     merkleize(
         [|
-            htr_bytevector(sub_slice(deposit, HTR_DEPOSIT_PUBKEY, HTR_DEPOSIT_PUBKEY_LENGTH)),
-            htr_bytes32(ssz_bytes32(deposit, HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS)),
-            htr_uint(decode_ssz_uint(deposit, HTR_DEPOSIT_AMOUNT)),
-            htr_bytevector(sub_slice(deposit, HTR_DEPOSIT_SIGNATURE, HTR_DEPOSIT_SIGNATURE_LENGTH)),
-            htr_uint(decode_ssz_uint(deposit, HTR_DEPOSIT_INDEX)),
+            htr_ssz_bytevector(deposit, HTR_DEPOSIT_PUBKEY, HTR_DEPOSIT_PUBKEY_LENGTH),
+            htr_ssz_bytes32(deposit, HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS),
+            htr_ssz_uint(deposit, HTR_DEPOSIT_AMOUNT),
+            htr_ssz_bytevector(deposit, HTR_DEPOSIT_SIGNATURE, HTR_DEPOSIT_SIGNATURE_LENGTH),
+            htr_ssz_uint(deposit, HTR_DEPOSIT_INDEX),
         |],
         3,
     )
@@ -533,9 +638,9 @@ function htr_deposit(deposit : ByteSliceLength(192)) -> hash = {
 function htr_withdrawal_request(request : ByteSliceLength(76)) -> hash = {
     merkleize(
         [|
-            htr_bytevector(sub_slice(request, HTR_REQUEST_SOURCE_ADDRESS, ADDRESS_BYTE_LENGTH)),
-            htr_bytevector(sub_slice(request, HTR_REQUEST_SOURCE_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH)),
-            htr_uint(decode_ssz_uint(request, HTR_WITHDRAWAL_REQUEST_AMOUNT)),
+            htr_ssz_addr(request, HTR_REQUEST_SOURCE_ADDRESS),
+            htr_ssz_bytevector(request, HTR_REQUEST_SOURCE_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
+            htr_ssz_uint(request, HTR_WITHDRAWAL_REQUEST_AMOUNT),
         |],
         2,
     )
@@ -545,9 +650,9 @@ function htr_withdrawal_request(request : ByteSliceLength(76)) -> hash = {
 function htr_consolidation_request(request : ByteSliceLength(116)) -> hash =
     merkleize(
         [|
-            htr_bytevector(sub_slice(request, HTR_REQUEST_SOURCE_ADDRESS, ADDRESS_BYTE_LENGTH)),
-            htr_bytevector(sub_slice(request, HTR_REQUEST_SOURCE_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH)),
-            htr_bytevector(sub_slice(request, HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH)),
+            htr_ssz_addr(request, HTR_REQUEST_SOURCE_ADDRESS),
+            htr_ssz_bytevector(request, HTR_REQUEST_SOURCE_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
+            htr_ssz_bytevector(request, HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
         |],
         2,
     )
@@ -556,10 +661,10 @@ function htr_consolidation_request(request : ByteSliceLength(116)) -> hash =
 function htr_builder_deposit_request(request : ByteSliceLength(184)) -> hash =
     merkleize(
         [|
-            htr_bytevector(sub_slice(request, HTR_BUILDER_DEPOSIT_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH)),
-            htr_bytes32(ssz_bytes32(request, HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS)),
-            htr_uint(decode_ssz_uint(request, HTR_BUILDER_DEPOSIT_AMOUNT)),
-            htr_bytevector(sub_slice(request, HTR_BUILDER_DEPOSIT_SIGNATURE, HTR_DEPOSIT_SIGNATURE_LENGTH)),
+            htr_ssz_bytevector(request, HTR_BUILDER_DEPOSIT_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
+            htr_ssz_bytes32(request, HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS),
+            htr_ssz_uint(request, HTR_BUILDER_DEPOSIT_AMOUNT),
+            htr_ssz_bytevector(request, HTR_BUILDER_DEPOSIT_SIGNATURE, HTR_DEPOSIT_SIGNATURE_LENGTH),
         |],
         2,
     )
@@ -568,8 +673,8 @@ function htr_builder_deposit_request(request : ByteSliceLength(184)) -> hash =
 function htr_builder_exit_request(request : ByteSliceLength(68)) -> hash =
     merkleize(
         [|
-            htr_bytevector(sub_slice(request, HTR_BUILDER_EXIT_SOURCE_ADDRESS, ADDRESS_BYTE_LENGTH)),
-            htr_bytevector(sub_slice(request, HTR_BUILDER_EXIT_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH)),
+            htr_ssz_addr(request, HTR_BUILDER_EXIT_SOURCE_ADDRESS),
+            htr_ssz_bytevector(request, HTR_BUILDER_EXIT_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
         |],
         1,
     )
@@ -670,7 +775,7 @@ function htr_new_payload_request(input_ref : StatelessInputRef) -> hash = {
         [|
             htr_execution_payload(input_ref),
             htr_versioned_hashes(input_ref.versioned_hashes),
-            htr_bytes32(ssz_bytes32(input_ref.new_payload_request, NPR_BEACON_ROOT)),
+            htr_ssz_bytes32(input_ref.new_payload_request, NPR_BEACON_ROOT),
             htr_execution_requests(input_ref),
         |],
         2,

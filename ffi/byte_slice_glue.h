@@ -73,6 +73,9 @@ void scratch_store_bytes(struct zByteRegionResult *result,
 void scratch_store_slice(struct zByteRegionResult *result,
                          EVMSAIL_BYTE_QUANTITY_PARAM(off),
                          struct zByteSlice slice);
+void scratch_store_address(struct zByteRegionResult *result,
+                           EVMSAIL_BYTE_QUANTITY_PARAM(off),
+                           sail_address data);
 void scratch_store_b256(struct zByteRegionResult *result,
                         EVMSAIL_BYTE_QUANTITY_PARAM(off), sail_b256 data,
                         uint64_t len);
