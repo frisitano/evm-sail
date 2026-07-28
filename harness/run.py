@@ -141,14 +141,17 @@ class SpikeGuest:
     run_once(input)->bytes seam as the native ctypes guest, so everything above
     the backend (input sources, reference oracle, reporting) is shared."""
 
-    def __init__(self, timeout, profile=False):
+    def __init__(self, timeout, profile=False, rebuild=False):
         self.zkvm = os.path.join(ELDIR, "zkvm")
         self.build_dir = tempfile.mkdtemp(prefix="zkvm-spike-", dir=TMP_ROOT)
         self.built = False
         self.timeout = timeout
         self.profile = profile
+        self.rebuild = rebuild
 
     def run_once(self, inp):
+        inp = dump_state.prepare_optimized_input(inp, rebuild=self.rebuild)
+        self.rebuild = False
         with tempfile.NamedTemporaryFile(
             suffix=".ssz", delete=False, dir=TMP_ROOT
         ) as tf:
@@ -183,7 +186,7 @@ class ZiskGuest:
     zero.
     """
 
-    def __init__(self, timeout, profile=False):
+    def __init__(self, timeout, profile=False, rebuild=False):
         self.build_script = os.path.join(ELDIR, "zkvm", "zisk", "build.sh")
         self.build_dir = tempfile.mkdtemp(prefix="zkvm-zisk-", dir=TMP_ROOT)
         self.ziskemu = os.environ.get(
@@ -193,6 +196,7 @@ class ZiskGuest:
         self.built = False
         self.timeout = timeout
         self.profile = profile
+        self.rebuild = rebuild
 
     @staticmethod
     def _locked_zisk_version():
@@ -255,6 +259,8 @@ class ZiskGuest:
         self.built = True
 
     def run_once(self, inp):
+        inp = dump_state.prepare_optimized_input(inp, rebuild=self.rebuild)
+        self.rebuild = False
         if not self.built:
             self._build()
         elf = os.path.join(
@@ -311,9 +317,17 @@ def run_fixtures(files, args):
     Backend: native in-process ctypes, executable Lean extraction, the real
     RISC-V ELF on Spike, or the production ZisK ELF on ziskemu."""
     if args.spike:
-        run_once = SpikeGuest(args.timeout or 900.0, profile=args.profile).run_once
+        run_once = SpikeGuest(
+            args.timeout or 900.0,
+            profile=args.profile,
+            rebuild=args.rebuild,
+        ).run_once
     elif args.zisk:
-        run_once = ZiskGuest(args.timeout or 900.0, profile=args.profile).run_once
+        run_once = ZiskGuest(
+            args.timeout or 900.0,
+            profile=args.profile,
+            rebuild=args.rebuild,
+        ).run_once
     elif args.lean:
         dump_state.load_lean_guest(rebuild=args.rebuild)
         run_once = dump_state.run_once_guest

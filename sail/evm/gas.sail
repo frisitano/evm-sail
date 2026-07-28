@@ -36,37 +36,6 @@ let MIN_BLOB_BASE_FEE : word = WORD_ONE
 let GAS_PER_BLOB : range(gas_per_blob_value, gas_per_blob_value) = sizeof(gas_per_blob_value)
 let BLOB_RESERVE_PRICE_SHIFT_LIMIT : word = U256(2 ^ 252)
 
-/*! A strictly positive Taylor-series index in the fake-exponential equation. */
-type fake_exponential_index = range(1, 2 ^ 64 - 1)
-
-/*! The fractional numerator of a denominator-scaled blob-fee value. */
-type blob_fee_remainder = range(0, blob_fee_update_fraction_bound - 1)
-
-/* Taylor terms and their running sum are represented as
- * `whole * denominator + remainder`.  This is the exact integer value, not
- * fixed-point approximation: retaining the remainder lets each recurrence
- * divide before multiplying values that could otherwise require more than
- * 256 bits. */
-/*! An exact denominator-scaled blob-fee value split into whole and remainder. */
-struct ScaledBlobValue = {
-    whole : word,
-    remainder : blob_fee_remainder,
-}
-
-/*! An exact quotient and remainder in the EVM-word domain. */
-struct BlobProductDivMod = {
-    quotient : word,
-    remainder : word,
-}
-
-/*! Advances the fake-exponential series index without exceeding `uint64`. */
-function fake_exponential_index_increment(value : fake_exponential_index) -> fake_exponential_index =
-    if value < 2 ^ 64 - 1 then {
-        value + 1
-    } else {
-        throw InvalidBlock(ExecutionInvalid)
-    }
-
 /*! Adds two EVM words, failing instead of applying EVM modular overflow. */
 val blob_word_add : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
         int('left),
@@ -95,99 +64,34 @@ function blob_word_mul(left, right) =
         }
     }
 
-/*! Adds two exact denominator-scaled blob-fee values. */
-function scaled_blob_add(
-    left : ScaledBlobValue,
-    right : ScaledBlobValue,
-    denominator : blob_fee_update_fraction,
-) -> (
-    ScaledBlobValue
-) = {
-    let combined = left.remainder + right.remainder;
-    let carry = denominator <= combined;
-    let remainder_value = if carry then {
-            combined - denominator
-        } else {
-            combined
+/*! The EIP-4844 `fake_exponential` used for the blob base fee.
+
+    This is the protocol equation over mathematical non-negative integers.
+    The intermediate numerator remains scaled by `denominator`, exactly as in
+    the EIP pseudocode. Once the accumulated scaled output reaches
+    `2^256 * denominator`, the final fee cannot fit an EVM word; fail closed
+    without evaluating terms that cannot affect that conclusion. */
+function blob_base_fee(excess_blob_gas : excess_blob_gas) -> word = {
+    let denominator = k_blob_schedule.base_fee_update_fraction;
+    let output_limit = sizeof(word_modulus) * denominator;
+    var i : int = 1;
+    var output : int = 0;
+    var numerator_accum : int = MIN_BLOB_BASE_FEE * denominator;
+    while numerator_accum > 0 do {
+        output = output + numerator_accum;
+        if output_limit <= output then {
+            throw InvalidBlock(ExecutionInvalid)
         };
-    if remainder_value < denominator then {
-        let remainder : blob_fee_remainder = remainder_value;
-        let whole = blob_word_add(left.whole, right.whole);
-        let carried_whole = if carry then {
-                blob_word_add(whole, WORD_ONE)
-            } else {
-                whole
-            };
-        struct { whole = carried_whole, remainder = remainder }
+        numerator_accum = ediv_int(numerator_accum * excess_blob_gas, denominator * i);
+        i = i + 1
+    };
+    let fee = ediv_int(output, denominator);
+    if 0 <= fee & fee < sizeof(word_modulus) then {
+        U256(fee)
     } else {
         throw InvalidBlock(ExecutionInvalid)
     }
 }
-
-/* Exact divmod of `value * factor + addend` by
- * `denominator * iteration`.  Dividing `value` first bounds the residual
- * product below 2^152 for the uint64 protocol inputs. */
-/*! Divides an exact blob-fee product while detecting word overflow. */
-function blob_product_divmod(
-    value : word,
-    factor : excess_blob_gas,
-    addend : word,
-    denominator : blob_fee_update_fraction,
-    iteration : fake_exponential_index,
-) -> (
-    BlobProductDivMod
-) = {
-    let divisor = word_mul(denominator, iteration);
-    if word_is_zero(divisor) then {
-        throw InvalidBlock(ExecutionInvalid)
-    };
-    let value_quotient = word_div(value, divisor);
-    let value_remainder = word_mod(value, divisor);
-    let whole = blob_word_mul(value_quotient, factor);
-    let residual_product = word_mul(value_remainder, factor);
-    let residual_sum = blob_word_add(residual_product, addend);
-    let residual_quotient = word_div(residual_sum, divisor);
-    struct { quotient = blob_word_add(whole, residual_quotient), remainder = word_mod(residual_sum, divisor) }
-}
-
-/*! Computes the next exact denominator-scaled Taylor term. */
-function scaled_blob_next(
-    term : ScaledBlobValue,
-    numerator : excess_blob_gas,
-    denominator : blob_fee_update_fraction,
-    iteration : fake_exponential_index,
-) -> (
-    ScaledBlobValue
-) = {
-    let remainder_product = word_mul(term.remainder, numerator);
-    let addend = word_div(remainder_product, denominator);
-    let divided = blob_product_divmod(term.whole, numerator, addend, denominator, iteration);
-    let remainder_word = word_div(divided.remainder, iteration);
-    if remainder_word < denominator then {
-        let remainder : blob_fee_remainder = remainder_word;
-        struct { whole = divided.quotient, remainder = remainder }
-    } else {
-        throw InvalidBlock(ExecutionInvalid)
-    }
-}
-
-/*! The EIP-4844 `fake_exponential`: an integer approximation of
-    `factor · e^(numerator/denominator)` by Taylor expansion. */
-function fake_exponential(factor : word, numerator : excess_blob_gas, denominator : blob_fee_update_fraction) -> word = {
-    var i : fake_exponential_index = 1;
-    var output : ScaledBlobValue = struct { whole = WORD_ZERO, remainder = 0 };
-    var term : ScaledBlobValue = struct { whole = factor, remainder = 0 };
-    while word_nonzero(term.whole) | (term.remainder != 0) termination_measure(2 ^ 64 - i) do {
-        output = scaled_blob_add(output, term, denominator);
-        term = scaled_blob_next(term, numerator, denominator, i);
-        i = fake_exponential_index_increment(i)
-    };
-    output.whole
-}
-
-/*! The blob base fee for a given excess blob gas. */
-function blob_base_fee(excess_blob_gas : excess_blob_gas) -> word =
-    fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas, k_blob_schedule.base_fee_update_fraction)
 
 /* EIP-7918 compares BLOB_BASE_COST*base_fee with GAS_PER_BLOB*blob_fee.
  * Their ratio is exactly 16, so compare base_fee with 16*blob_fee instead of
@@ -820,12 +724,12 @@ function code_deployment_state_cost(byte_len : code_length) -> gas_cost =
 ## The precompile costs
 
 Precompile gas inspects the same byte slice that execution consumes;
-bytes past its declared length read as zero, matching [slice_byte][]
-semantics.
+bytes past its declared length read as zero, matching
+[calldata_slice_byte][] semantics.
 */
 /*! Reads up to 32 big-endian precompile input bytes with zero padding. */
 val pc_word : forall 'start 'byte_count, source_valid_length('start) & 0 <= 'byte_count & 'byte_count <= 32. (
-        ByteSlice,
+        CalldataSlice,
         int('start),
         int('byte_count),
     ) -> word
@@ -833,7 +737,7 @@ function pc_word(input, start, byte_count) = {
     var value : word = ZERO_WORD;
     let start_offset = start;
     let count = byte_count;
-    let input_length = input.len;
+    let input_length = calldata_slice_length(input);
     foreach (byte_index from 0 to 31) {
         let offset : range(0, 31) = byte_index;
         if offset < count then {
@@ -860,13 +764,13 @@ function pc_word(input, start, byte_count) = {
     same all-zero result as an ordinary padded read. */
 val pc_word_after_declared_field : forall 'prefix 'byte_count,
                                      source_valid_length('prefix) & 0 <= 'byte_count & 'byte_count <= 32. (
-        ByteSlice,
+        CalldataSlice,
         int('prefix),
         word,
         int('byte_count),
     ) -> word
 function pc_word_after_declared_field(input, prefix, declared_length, byte_count) = {
-    let input_length = input.len;
+    let input_length = calldata_slice_length(input);
     let (prefix_offset as 'prefix_offset) = prefix;
     if prefix_offset < input_length then {
         let (suffix_length as 'suffix_length) = input_length - prefix_offset;
@@ -885,7 +789,7 @@ function pc_word_after_declared_field(input, prefix, declared_length, byte_count
     }
 }
 
-function pc_blake2_rounds(input : ByteSlice) -> blake2_rounds =
+function pc_blake2_rounds(input : CalldataSlice) -> blake2_rounds =
     tmod_nat(pc_word(input, 0, 4), 2 ^ 32)
 
 /*! `MODEXP` (precompile `0x05`) gas: EIP-2565 as amended by EIP-7883
@@ -897,7 +801,7 @@ function pc_blake2_rounds(input : ByteSlice) -> blake2_rounds =
     `2^768`, but an EVM caller can observe only whether that expression fits
     its available gas. The staged affordability checks below therefore keep
     every materialized intermediate at most 256 bits in optimized builds. */
-function modexp_gas(input : ByteSlice, available : gas) -> option(gas_cost) = {
+function modexp_gas(input : CalldataSlice, available : gas) -> option(gas_cost) = {
     let bl_word = pc_word(input, 0, 32);
     let el_word = pc_word(input, 32, 32);
     let ml_word = pc_word(input, 64, 32);
@@ -1065,271 +969,271 @@ function modexp_gas(input : ByteSlice, available : gas) -> option(gas_cost) = {
 /*! The EIP-2537 BLS12-381 G1 MSM discount table: entry `k−1` is the
     per-pair discount (in thousandths) applied to a `k`-pair MSM,
     constant for `k ≥ 128`. */
-let BLS_G1_DISCOUNT : vector(128, inc, bits(16)) = [
-        0x03E8,
-        0x03B5,
-        0x0350,
-        0x031D,
-        0x02FC,
-        0x02EE,
-        0x02E2,
-        0x02D8,
-        0x02CF,
-        0x02C8,
-        0x02C1,
-        0x02BA,
-        0x02B4,
-        0x02AF,
-        0x02AA,
-        0x02A5,
-        0x02A1,
-        0x029D,
-        0x0299,
-        0x0295,
-        0x0292,
-        0x028E,
-        0x028B,
-        0x0288,
-        0x0285,
-        0x0282,
-        0x0280,
-        0x027D,
-        0x027B,
-        0x0278,
-        0x0276,
-        0x0273,
-        0x0271,
-        0x026F,
-        0x026D,
-        0x026B,
-        0x0269,
-        0x0267,
-        0x0265,
-        0x0263,
-        0x0261,
-        0x0260,
-        0x025E,
-        0x025C,
-        0x025B,
-        0x0259,
-        0x0257,
-        0x0256,
-        0x0254,
-        0x0253,
-        0x0251,
-        0x0250,
-        0x024F,
-        0x024D,
-        0x024C,
-        0x024A,
-        0x0249,
-        0x0248,
-        0x0246,
-        0x0245,
-        0x0244,
-        0x0243,
-        0x0241,
-        0x0240,
-        0x023F,
-        0x023E,
-        0x023D,
-        0x023C,
-        0x023A,
-        0x0239,
-        0x0238,
-        0x0237,
-        0x0236,
-        0x0235,
-        0x0234,
-        0x0233,
-        0x0232,
-        0x0231,
-        0x0230,
-        0x022F,
-        0x022E,
-        0x022D,
-        0x022C,
-        0x022B,
-        0x022A,
-        0x0229,
-        0x0228,
-        0x0227,
-        0x0226,
-        0x0225,
-        0x0224,
-        0x0223,
-        0x0223,
-        0x0222,
-        0x0221,
-        0x0220,
-        0x021F,
-        0x021E,
-        0x021D,
-        0x021C,
-        0x021C,
-        0x021B,
-        0x021A,
-        0x0219,
-        0x0218,
-        0x0218,
-        0x0217,
-        0x0216,
-        0x0215,
-        0x0214,
-        0x0214,
-        0x0213,
-        0x0212,
-        0x0211,
-        0x0210,
-        0x0210,
-        0x020F,
-        0x020E,
-        0x020D,
-        0x020D,
-        0x020C,
-        0x020B,
-        0x020A,
-        0x020A,
-        0x0209,
-        0x0208,
-        0x0208,
-        0x0207,
+let BLS_G1_DISCOUNT : vector(128, inc, bls_discount) = [
+        1000,
+        949,
+        848,
+        797,
+        764,
+        750,
+        738,
+        728,
+        719,
+        712,
+        705,
+        698,
+        692,
+        687,
+        682,
+        677,
+        673,
+        669,
+        665,
+        661,
+        658,
+        654,
+        651,
+        648,
+        645,
+        642,
+        640,
+        637,
+        635,
+        632,
+        630,
+        627,
+        625,
+        623,
+        621,
+        619,
+        617,
+        615,
+        613,
+        611,
+        609,
+        608,
+        606,
+        604,
+        603,
+        601,
+        599,
+        598,
+        596,
+        595,
+        593,
+        592,
+        591,
+        589,
+        588,
+        586,
+        585,
+        584,
+        582,
+        581,
+        580,
+        579,
+        577,
+        576,
+        575,
+        574,
+        573,
+        572,
+        570,
+        569,
+        568,
+        567,
+        566,
+        565,
+        564,
+        563,
+        562,
+        561,
+        560,
+        559,
+        558,
+        557,
+        556,
+        555,
+        554,
+        553,
+        552,
+        551,
+        550,
+        549,
+        548,
+        547,
+        547,
+        546,
+        545,
+        544,
+        543,
+        542,
+        541,
+        540,
+        540,
+        539,
+        538,
+        537,
+        536,
+        536,
+        535,
+        534,
+        533,
+        532,
+        532,
+        531,
+        530,
+        529,
+        528,
+        528,
+        527,
+        526,
+        525,
+        525,
+        524,
+        523,
+        522,
+        522,
+        521,
+        520,
+        520,
+        519,
     ]
-let BLS_G2_DISCOUNT : vector(128, inc, bits(16)) = [
-        0x03E8,
-        0x03E8,
-        0x039B,
-        0x0374,
-        0x0357,
-        0x0340,
-        0x032C,
-        0x031C,
-        0x030E,
-        0x0302,
-        0x02F7,
-        0x02ED,
-        0x02E4,
-        0x02DC,
-        0x02D4,
-        0x02CD,
-        0x02C7,
-        0x02C0,
-        0x02BB,
-        0x02B5,
-        0x02B0,
-        0x02AB,
-        0x02A7,
-        0x02A2,
-        0x029E,
-        0x029A,
-        0x0297,
-        0x0293,
-        0x028F,
-        0x028C,
-        0x0289,
-        0x0286,
-        0x0283,
-        0x0280,
-        0x027D,
-        0x027A,
-        0x0278,
-        0x0275,
-        0x0273,
-        0x0270,
-        0x026E,
-        0x026C,
-        0x026A,
-        0x0267,
-        0x0265,
-        0x0263,
-        0x0261,
-        0x025F,
-        0x025E,
-        0x025C,
-        0x025A,
-        0x0258,
-        0x0256,
-        0x0255,
-        0x0253,
-        0x0251,
-        0x0250,
-        0x024E,
-        0x024D,
-        0x024B,
-        0x024A,
-        0x0248,
-        0x0247,
-        0x0246,
-        0x0244,
-        0x0243,
-        0x0242,
-        0x0240,
-        0x023F,
-        0x023E,
-        0x023D,
-        0x023B,
-        0x023A,
-        0x0239,
-        0x0238,
-        0x0237,
-        0x0236,
-        0x0235,
-        0x0233,
-        0x0232,
-        0x0231,
-        0x0230,
-        0x022F,
-        0x022E,
-        0x022D,
-        0x022C,
-        0x022B,
-        0x022A,
-        0x0229,
-        0x0228,
-        0x0228,
-        0x0227,
-        0x0226,
-        0x0225,
-        0x0224,
-        0x0223,
-        0x0222,
-        0x0221,
-        0x0221,
-        0x0220,
-        0x021F,
-        0x021E,
-        0x021D,
-        0x021D,
-        0x021C,
-        0x021B,
-        0x021A,
-        0x0219,
-        0x0219,
-        0x0218,
-        0x0217,
-        0x0217,
-        0x0216,
-        0x0215,
-        0x0214,
-        0x0214,
-        0x0213,
-        0x0212,
-        0x0212,
-        0x0211,
-        0x0210,
-        0x0210,
-        0x020F,
-        0x020E,
-        0x020E,
-        0x020D,
-        0x020C,
-        0x020C,
+let BLS_G2_DISCOUNT : vector(128, inc, bls_discount) = [
+        1000,
+        1000,
+        923,
+        884,
+        855,
+        832,
+        812,
+        796,
+        782,
+        770,
+        759,
+        749,
+        740,
+        732,
+        724,
+        717,
+        711,
+        704,
+        699,
+        693,
+        688,
+        683,
+        679,
+        674,
+        670,
+        666,
+        663,
+        659,
+        655,
+        652,
+        649,
+        646,
+        643,
+        640,
+        637,
+        634,
+        632,
+        629,
+        627,
+        624,
+        622,
+        620,
+        618,
+        615,
+        613,
+        611,
+        609,
+        607,
+        606,
+        604,
+        602,
+        600,
+        598,
+        597,
+        595,
+        593,
+        592,
+        590,
+        589,
+        587,
+        586,
+        584,
+        583,
+        582,
+        580,
+        579,
+        578,
+        576,
+        575,
+        574,
+        573,
+        571,
+        570,
+        569,
+        568,
+        567,
+        566,
+        565,
+        563,
+        562,
+        561,
+        560,
+        559,
+        558,
+        557,
+        556,
+        555,
+        554,
+        553,
+        552,
+        552,
+        551,
+        550,
+        549,
+        548,
+        547,
+        546,
+        545,
+        545,
+        544,
+        543,
+        542,
+        541,
+        541,
+        540,
+        539,
+        538,
+        537,
+        537,
+        536,
+        535,
+        535,
+        534,
+        533,
+        532,
+        532,
+        531,
+        530,
+        530,
+        529,
+        528,
+        528,
+        527,
+        526,
+        526,
+        525,
+        524,
+        524,
     ]
 
 /*! EIP-2537 MSM gas: `(k · base · discount(k)) / 1000`, with the
     discount clamped to the `k = 128` entry beyond the table. */
 function bls_msm_gas(
-    table : vector(128, inc, bits(16)),
+    table : vector(128, inc, bls_discount),
     base : gas_constant,
     maxd : bls_discount,
     k : source_length,
@@ -1345,7 +1249,7 @@ function bls_msm_gas(
             /* Sail vector literals place the first table entry at index 127;
              * the clamped k = 128 entry is supplied by maxd (index 0). */
             let index : range(1, 127) = 128 - k;
-            discount = unsigned(table[index])
+            discount = table[index]
         };
         let coefficient : bls_msm_coefficient = base * discount;
         let whole = k / 1000;
@@ -1405,8 +1309,8 @@ function fixed_precompile_gas(cost, available) =
     derive from the word count; the two input-dependent curves (`MODEXP`,
     `BLAKE2F` rounds) read the input in place. The match arms are the
     precompile catalog with their addresses and pricing EIPs. */
-function precompile_gas(num : precompile_id, input : ByteSlice, available : gas) -> option(gas_cost) = {
-    let input_len = input.len;
+function precompile_gas(num : precompile_id, input : CalldataSlice, available : gas) -> option(gas_cost) = {
+    let input_len = calldata_slice_length(input);
     let input_length = input_len;
     let words = memory_word_count(input_len);
     match num {

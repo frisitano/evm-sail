@@ -1,7 +1,4 @@
 
-/* Minimal big-endian encodings are built in one pass. Consing successive low
- * bytes puts them in big-endian order and gives us the encoded length without
- * a second list traversal. */
 /*md
 # RLP encoding and decoding
 
@@ -64,29 +61,6 @@ function rlp_scratch_length_add(left, right) =
 /*md
 ## The encoders
 */
-/*! The minimal big-endian encoding of a word and its length. */
-val minimal_word_bytes : forall 'word, 0 <= 'word & 'word < 2 ^ 256. int('word) -> (list(byte), range(0, 32))
-
-/*! Converts a zero-based word-byte index to its one-based byte count. */
-val word_byte_count : forall 'index, 0 <= 'index & 'index <= 31. int('index) -> int('index + 1)
-
-function word_byte_count(index) = index + 1
-
-/*! Materializes a word's minimal big-endian byte sequence and its length. */
-function minimal_word_bytes(w) = {
-    var remaining : word = w;
-    var out : list(byte) = [||];
-    var len : range(0, 32) = 0;
-    foreach (byte_index from 0 to 31) {
-        if word_nonzero(remaining) then {
-            out = word_low_byte(remaining) :: out;
-            remaining = word_shift_right(remaining, 8);
-            len = word_byte_count(byte_index)
-        }
-    };
-    (out, len)
-}
-
 /* Wire-format conversions stay with RLP rather than defining arithmetic over
  * every byte quantity. Callers establish the stated bounds before encoding. */
 function rlp_nat_length_byte(value : range(0, 255)) -> byte =
@@ -106,31 +80,6 @@ val rlp_length_word : forall 'value, 0 <= 'value. int('value) -> word
 function rlp_length_word(value) = {
     word_of_nat_byte_count(value)
 }
-
-/*! The RLP string prefix for a payload of `len` bytes whose first byte
-    is `first`; single bytes below `0x80` need no prefix. */
-val rlp_string_prefix : forall 'len, 0 <= 'len. (int('len), byte) -> (list(byte), range(0, 33))
-function rlp_string_prefix(len, first) =
-    if (len == 1) & (first[7] == bitzero) then {
-        ([||], 0)
-    } else {
-        if len <= RLP_SHORT_LENGTH_LIMIT then {
-            ([|add_bits(0x80, rlp_length_byte(len))|], 1)
-        } else {
-            let (length_bytes, length_len) = minimal_word_bytes(rlp_length_word(len));
-            (add_bits(0xb7, rlp_length_byte(length_len)) :: length_bytes, 1 + length_len)
-        }
-    }
-
-/*! The RLP list header for a payload of `len` content bytes. */
-val rlp_list_prefix : forall 'len, 0 <= 'len. int('len) -> (list(byte), range(1, 33))
-function rlp_list_prefix(len) =
-    if len <= RLP_SHORT_LENGTH_LIMIT then {
-        ([|add_bits(0xc0, rlp_length_byte(len))|], 1)
-    } else {
-        let (length_bytes, length_len) = minimal_word_bytes(rlp_length_word(len));
-        (add_bits(0xf7, rlp_length_byte(length_len)) :: length_bytes, 1 + length_len)
-    }
 
 /*! Returns the minimal big-endian byte length of a 256-bit word. */
 val rlp_minimal_word_len : forall 'word, 0 <= 'word & 'word < 2 ^ 256. int('word) -> range(0, 32)
@@ -175,22 +124,12 @@ function rlp_string_size(len, first) = {
     }
 }
 
-/*! Returns the encoded RLP width of a materialized byte sequence. */
-val rlp_bytes_size : forall 'len, 0 <= 'len. (list(byte), int('len)) -> range(1, 'len + 33)
-function rlp_bytes_size(data, len) = {
-    let first : byte = match data {
-        b :: _ => b,
-        [||] => 0x00,
-    };
-    rlp_string_size(len, first)
-}
-
 /*! Returns the encoded RLP width of a source-backed byte slice. */
-val rlp_slice_size : forall 'off 'len, source_valid_range('off, 'len). ByteSliceFields('off, 'len) -> range(
+val rlp_input_slice_size : forall 'off 'len, source_valid_range('off, 'len). StatelessInputSliceFields('off, 'len) -> range(
         1,
         'len + 33,
     )
-function rlp_slice_size(data) = {
+function rlp_input_slice_size(data) = {
     let len = data.len;
     let first = if len == 0 then {
             0x00
@@ -199,6 +138,26 @@ function rlp_slice_size(data) = {
         };
     rlp_string_size(len, first)
 }
+
+function rlp_scratch_region_size(data : ScratchSlice) -> rlp_scratch_length = {
+    let first = if data.len == 0 then {
+            0x00
+        } else {
+            slice_byte(data, 0)
+        };
+    rlp_string_size(data.len, first)
+}
+
+function rlp_log_data_size(data : LogDataSlice) -> rlp_scratch_length = {
+    let first = if data.len == 0 then {
+            0x00
+        } else {
+            slice_byte(data, 0)
+        };
+    rlp_string_size(data.len, first)
+}
+
+overload rlp_slice_size = {rlp_input_slice_size, rlp_scratch_region_size, rlp_log_data_size}
 
 /*! Returns the encoded RLP width of a minimally represented word integer. */
 val rlp_uint_word_size : forall 'word, 0 <= 'word & 'word < 2 ^ 256. int('word) -> range(1, 33)
@@ -280,42 +239,53 @@ function rlp_scratch_list_size(content_len : rlp_scratch_length) -> rlp_scratch_
     rlp_scratch_length_add(content_len, rlp_scratch_small_length(rlp_length_prefix_len(content_len)))
 
 /*! Returns the materializable RLP width of a source-backed byte slice. */
-function rlp_scratch_slice_size(data : ByteSlice) -> rlp_scratch_length =
+function rlp_input_scratch_slice_size(data : StatelessInputSlice) -> rlp_scratch_length =
     rlp_slice_size(data)
 
-/*! Returns the materializable RLP width of a byte list and declared source
-    length. */
-val rlp_scratch_bytes_size : forall 'len, source_valid_length('len). (list(byte), int('len)) -> rlp_scratch_length
-function rlp_scratch_bytes_size(data, len) =
-    rlp_bytes_size(data, len)
+function rlp_scratch_scratch_slice_size(data : ScratchSlice) -> rlp_scratch_length =
+    rlp_slice_size(data)
+
+function rlp_log_scratch_slice_size(data : LogDataSlice) -> rlp_scratch_length =
+    rlp_slice_size(data)
+
+overload rlp_scratch_slice_size = {
+    rlp_input_scratch_slice_size,
+    rlp_scratch_scratch_slice_size,
+    rlp_log_scratch_slice_size
+}
 
 /*! Appends the canonical RLP prefix of a byte-string payload. */
 val rlp_write_string_prefix : forall 'len, 0 <= 'len. (int('len), byte) -> unit
 function rlp_write_string_prefix(len, first) = {
-    let (encoded_prefix, prefix_len) = rlp_string_prefix(len, first);
-    scratch_push_bytes(encoded_prefix, prefix_len)
+    if (len == 1) & (first[7] == bitzero) then {
+        ()
+    } else {
+        if len <= RLP_SHORT_LENGTH_LIMIT then {
+            scratch_push_byte(add_bits(0x80, rlp_length_byte(len)))
+        } else {
+            let length_word = rlp_length_word(len);
+            let length_len = rlp_minimal_word_len(length_word);
+            scratch_push_byte(add_bits(0xb7, rlp_length_byte(length_len)));
+            scratch_push_word_be(length_word, length_len)
+        }
+    }
 }
 
 /*! Appends the canonical RLP prefix of a list payload. */
 val rlp_write_list_prefix : forall 'len, 0 <= 'len. int('len) -> unit
 function rlp_write_list_prefix(content_len) = {
-    let (encoded_prefix, prefix_len) = rlp_list_prefix(content_len);
-    scratch_push_bytes(encoded_prefix, prefix_len)
-}
-
-/*! Appends a materialized byte sequence as an RLP string. */
-val rlp_write_bytes : forall 'len, source_valid_length('len). (list(byte), int('len)) -> unit
-function rlp_write_bytes(data, len) = {
-    let first : byte = match data {
-        b :: _ => b,
-        [||] => 0x00,
-    };
-    rlp_write_string_prefix(len, first);
-    scratch_push_bytes(data, len)
+    if content_len <= RLP_SHORT_LENGTH_LIMIT then {
+        scratch_push_byte(add_bits(0xc0, rlp_length_byte(content_len)))
+    } else {
+        let length_word = rlp_length_word(content_len);
+        let length_len = rlp_minimal_word_len(length_word);
+        scratch_push_byte(add_bits(0xf7, rlp_length_byte(length_len)));
+        scratch_push_word_be(length_word, length_len)
+    }
 }
 
 /*! Appends a source-backed byte slice as an RLP string. */
-function rlp_write_slice(data : ByteSlice) -> unit = {
+function rlp_write_input_slice(data : StatelessInputSlice) -> unit = {
     rlp_write_string_prefix(
         data.len,
         if data.len == 0 then {
@@ -327,11 +297,43 @@ function rlp_write_slice(data : ByteSlice) -> unit = {
     scratch_push_slice(data)
 }
 
+function rlp_write_scratch_slice(data : ScratchSlice) -> unit = {
+    rlp_write_string_prefix(
+        data.len,
+        if data.len == 0 then {
+            0x00
+        } else {
+            slice_byte(data, 0)
+        },
+    );
+    scratch_push_slice(data)
+}
+
+function rlp_write_log_data_slice(data : LogDataSlice) -> unit = {
+    rlp_write_string_prefix(
+        data.len,
+        if data.len == 0 then {
+            0x00
+        } else {
+            slice_byte(data, 0)
+        },
+    );
+    scratch_push_slice(data)
+}
+
+overload rlp_write_slice = {rlp_write_input_slice, rlp_write_scratch_slice, rlp_write_log_data_slice}
+
 /*! Appends a word as a minimal RLP integer. */
 val rlp_write_uint_word : forall 'word, 0 <= 'word & 'word < 2 ^ 256. int('word) -> unit
 function rlp_write_uint_word(w) = {
-    let (bytes, len) = minimal_word_bytes(w);
-    rlp_write_bytes(bytes, len)
+    let len = rlp_minimal_word_len(w);
+    let first = if len == 1 then {
+            word_low_byte(w)
+        } else {
+            0x00
+        };
+    rlp_write_string_prefix(len, first);
+    scratch_push_word_be(U256(w), len)
 }
 
 /*! Appends a natural as a minimal RLP integer. */
@@ -351,9 +353,13 @@ function rlp_write_uint_u64(n) = rlp_write_uint_word(U256(n))
  * Canonical unbounded naturals retain the generic specification. */
 overload rlp_write_uint = {rlp_write_uint_word, rlp_write_uint_u64, rlp_write_uint_nat}
 
-function rlp_write_word(w : word) -> unit =
-    rlp_write_bytes(word_to_bytes32(w), WORD_BYTE_LENGTH)
+/*! Appends one full-width EVM word as an RLP byte string. */
+function rlp_write_word(w : word) -> unit = {
+    rlp_write_string_prefix(WORD_BYTE_LENGTH, 0x00);
+    scratch_push_word_be(w, WORD_BYTE_LENGTH)
+}
 
+/*! Appends one Ethereum address as an RLP byte string. */
 function rlp_write_addr(a : address) -> unit = {
     rlp_write_string_prefix(ADDRESS_BYTE_LENGTH, a[0]);
     scratch_push_address(a)
@@ -363,7 +369,7 @@ function rlp_write_addr(a : address) -> unit = {
 ## The decoders
 */
 /*! Finishes a forward scratch encoding. */
-function rlp_finish(start : source_pointer) -> ByteSlice =
+function rlp_finish(start : source_pointer) -> ScratchSlice =
     scratch_finish(start)
 
 /* Malformed RLP is a normal invalid-block outcome: the decoders throw
@@ -384,7 +390,12 @@ function rlp_uint64_append(_width, prefix, next) =
     prefix * 256 + unsigned(next)
 
 /*! Decodes exactly `width` big-endian bytes into a bounded unsigned value. */
-function rlp_uint64_width forall 'n, 0 <= 'n <= 8. (content : ByteSlice, width : int('n)) -> range(0, 2 ^ (8 * 'n) - 1) =
+function rlp_uint64_width forall 'n, 0 <= 'n <= 8. (
+    content : StatelessInputSlice,
+    width : int('n),
+) -> (
+    range(0, 2 ^ (8 * 'n) - 1)
+) =
     if width == 0 then {
         0
     } else {
@@ -392,39 +403,9 @@ function rlp_uint64_width forall 'n, 0 <= 'n <= 8. (content : ByteSlice, width :
     }
 termination_measure rlp_uint64_width(content, width) = width
 
-/* An RLP length-of-length is encoded in one prefix byte, so it is at most
- * eight bytes for every source length representable by a ByteSlice. */
-/*! Tests a bounded expected byte sequence against a source position. */
-val rlp_bytes_equal_at : forall 'start, source_valid_length('start). (list(byte), ByteSlice, int('start)) -> bool
-function rlp_bytes_equal_at(expected, source, start) = {
-    var rest : list(byte) = expected;
-    var current : source_pointer = start;
-    var equal : bool = true;
-    foreach (byte_index from 0 to 7) {
-        match rest {
-            b :: tail => {
-                let position = current;
-                let source_length = source.len;
-                if position < source_length then {
-                    equal = equal & (slice_byte(source, current) == b);
-                    current = position + 1
-                } else {
-                    equal = false
-                };
-                rest = tail
-            },
-            [||] => (),
-        }
-    };
-    match rest {
-        [||] => equal,
-        _ => false,
-    }
-}
-
 /*! Decodes the first RLP header in an exact remaining source slice:
     `(is_list, content_offset, content_length)`. */
-function rlp_ref_hdr(b : ByteSlice) -> (bool, source_pointer, range(0, 2 ^ 64 - 1)) = {
+function rlp_ref_hdr(b : StatelessInputSlice) -> (bool, source_pointer, range(0, 2 ^ 64 - 1)) = {
     let source_len = b.len;
     if source_len == 0 then {
         throw InvalidBlock(RlpDecode)
@@ -527,7 +508,7 @@ function rlp_cursor_expect_end(cursor) =
     }
 
 /*! Decodes a byte sequence that must be exactly one RLP item. */
-val rlp_single_ref : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). ByteSliceFields(
+val rlp_single_ref : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). StatelessInputSliceFields(
         'source_off,
         'source_len,
     ) -> {'content_len,
@@ -557,20 +538,195 @@ function rlp_single_ref(item) = {
 
 /*! A cursor over the children of a byte sequence that must be exactly
     one RLP list (e.g. a trie node). */
-function rlp_node_cursor(node : ByteSlice) -> (
+function rlp_node_cursor(node : StatelessInputSlice) -> (
     {'source_off 'source_len,
      source_valid_range('source_off, 'source_len).
      RlpCursor('source_off, 'source_len)}
-) =
-    rlp_ref_cursor(rlp_single_ref(node))
+) = {
+    if node.len == 0 then {
+        throw InvalidBlock(RlpDecode)
+    } else {
+        rlp_ref_cursor(rlp_single_ref(node))
+    }
+}
 
 /*! The content span of a field. */
 function rlp_ref_content forall 'source_off 'source_len 'content_len,
                            rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
-    ByteSlice
+    StatelessInputSlice
 ) =
     sub_slice(f.source, f.source.len - f.content_len, f.content_len)
+
+/*md
+### Scratch-node decoding
+
+Canonical MPT construction can embed a freshly encoded child in its parent.
+Those sub-32-byte encodings live in scratch, so they use a separate cursor
+family rather than a generic source-tagged RLP cursor.
+*/
+function scratch_rlp_uint64_width forall 'n, 0 <= 'n <= 8. (
+    content : ScratchSlice,
+    width : int('n),
+) -> (
+    range(0, 2 ^ (8 * 'n) - 1)
+) =
+    if width == 0 then {
+        0
+    } else {
+        rlp_uint64_append(width, scratch_rlp_uint64_width(content, width - 1), slice_byte(content, width - 1))
+    }
+termination_measure scratch_rlp_uint64_width(content, width) = width
+
+function scratch_rlp_ref_hdr(b : ScratchSlice) -> (bool, source_pointer, range(0, 2 ^ 64 - 1)) = {
+    let source_len = b.len;
+    if source_len == 0 then {
+        throw InvalidBlock(RlpDecode)
+    };
+    let h = unsigned(slice_byte(b, 0));
+    if h < 128 then {
+        (false, 0, 1)
+    } else {
+        if h < 184 then {
+            (false, 1, h - 128)
+        } else {
+            if h < 192 then {
+                let length_width : range(1, 8) = h - 183;
+                if source_len - 1 < length_width then {
+                    throw InvalidBlock(RlpDecode)
+                };
+                let length_bytes = sub_slice(b, 1, length_width);
+                (false, 1 + length_width, scratch_rlp_uint64_width(length_bytes, length_width))
+            } else {
+                if h < 248 then {
+                    (true, 1, h - 192)
+                } else {
+                    let length_width : range(1, 8) = h - 247;
+                    if source_len - 1 < length_width then {
+                        throw InvalidBlock(RlpDecode)
+                    };
+                    let length_bytes = sub_slice(b, 1, length_width);
+                    (true, 1 + length_width, scratch_rlp_uint64_width(length_bytes, length_width))
+                }
+            }
+        }
+    }
+}
+
+val scratch_rlp_ref_cursor : forall 'source_off 'source_len 'content_len,
+                               rlp_field_ref_valid('source_off, 'source_len, 'content_len). ScratchRlpFieldRef(
+        'source_off,
+        'source_len,
+        'content_len,
+    ) -> ScratchRlpCursor('source_off + ('source_len - 'content_len), 'content_len)
+function scratch_rlp_ref_cursor(f) =
+    if f.is_list then {
+        sub_slice(f.source, f.source.len - f.content_len, f.content_len)
+    } else {
+        throw InvalidBlock(RlpDecode)
+    }
+
+val scratch_rlp_cursor_pop : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). ScratchRlpCursor(
+        'source_off,
+        'source_len,
+    ) -> {'content_len 'full_len,
+          rlp_cursor_pop_valid('source_off, 'source_len, 'full_len, 'content_len).
+          (
+              ScratchRlpFieldRef('source_off, 'full_len, 'content_len),
+              ScratchRlpCursor('source_off + 'full_len, 'source_len - 'full_len),
+          )}
+function scratch_rlp_cursor_pop(cursor) = {
+    if cursor.len == 0 then {
+        throw InvalidBlock(RlpDecode)
+    };
+    let (is_list, content_off, content_len_value) = scratch_rlp_ref_hdr(cursor);
+    let (content_len as 'content_len) = content_len_value;
+    if cursor.len < content_off then {
+        throw InvalidBlock(RlpDecode)
+    };
+    if cursor.len - content_off < content_len then {
+        throw InvalidBlock(RlpDecode)
+    };
+    let (full_len as 'full_len) = content_off + content_len;
+    if (0 < full_len) & (full_len <= cursor.len) then {
+        let field_source = sub_slice(cursor, 0, full_len);
+        let field : ScratchRlpFieldRef('source_off, 'full_len, 'content_len) = struct {
+                source = field_source,
+                is_list = is_list,
+                content_len = content_len,
+            };
+        let advanced = sub_slice(cursor, full_len, cursor.len - full_len);
+        (field, advanced)
+    } else {
+        throw InvalidBlock(RlpDecode)
+    }
+}
+
+val scratch_rlp_cursor_expect_end : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). ScratchRlpCursor(
+        'source_off,
+        'source_len,
+    ) -> unit
+function scratch_rlp_cursor_expect_end(cursor) =
+    if cursor.len == 0 then {
+        ()
+    } else {
+        throw InvalidBlock(RlpDecode)
+    }
+
+val scratch_rlp_single_ref : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). ScratchSliceFields(
+        'source_off,
+        'source_len,
+    ) -> {'content_len,
+          rlp_field_ref_valid('source_off, 'source_len, 'content_len).
+          ScratchRlpFieldRef('source_off, 'source_len, 'content_len)}
+function scratch_rlp_single_ref(item) = {
+    let item_length = item.len;
+    if item_length == 0 then {
+        throw InvalidBlock(RlpDecode)
+    } else {
+        let (is_list, content_off, content_len_value) = scratch_rlp_ref_hdr(item);
+        let (content_len as 'content_len) = content_len_value;
+        if content_off > item_length then {
+            throw InvalidBlock(RlpDecode)
+        };
+        if content_len != item_length - content_off then {
+            throw InvalidBlock(RlpDecode)
+        };
+        let field : ScratchRlpFieldRef('source_off, 'source_len, 'content_len) = struct {
+                source = item,
+                is_list = is_list,
+                content_len = content_len,
+            };
+        field
+    }
+}
+
+function scratch_rlp_node_cursor(node : ScratchSlice) -> (
+    {'source_off 'source_len,
+     source_valid_range('source_off, 'source_len).
+     ScratchRlpCursor('source_off, 'source_len)}
+) =
+    scratch_rlp_ref_cursor(scratch_rlp_single_ref(node))
+
+function scratch_rlp_ref_content forall 'source_off 'source_len 'content_len,
+                                   rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    ScratchRlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    ScratchSlice
+) =
+    sub_slice(f.source, f.source.len - f.content_len, f.content_len)
+
+function scratch_rlp_ref_word forall 'source_off 'source_len 'content_len,
+                                rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    ScratchRlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    word
+) = {
+    let n = f.content_len;
+    if f.is_list | (RLP_WORD_LENGTH_LIMIT < n) then {
+        throw InvalidBlock(RlpDecode)
+    } else {
+        slice_load_n(f.source, f.source.len - n, n)
+    }
+}
 
 /*! Whether a field uses the unique canonical RLP framing for its payload. */
 function rlp_ref_framing_canonical forall 'source_off 'source_len 'content_len,
@@ -592,11 +748,12 @@ function rlp_ref_framing_canonical forall 'source_off 'source_len 'content_len,
             if n <= RLP_SHORT_LENGTH_LIMIT then {
                 (full_length == payload_length + 1) & (slice_byte(f.source, 0) == add_bits(0xc0, rlp_length_byte(n)))
             } else {
-                let (len_bytes, length_width) = minimal_word_bytes(rlp_length_word(n));
+                let length_word = rlp_length_word(n);
+                let length_width = rlp_minimal_word_len(length_word);
                   (full_length == 1 + length_width + payload_length)
                 & (slice_byte(f.source, 0) == add_bits(0xf7, rlp_length_byte(length_width)))
                 & (if full_offset < source_length then {
-                      rlp_bytes_equal_at(len_bytes, f.source, full_offset + 1)
+                      slice_load_n(f.source, full_offset + 1, length_width) == length_word
                   } else {
                       false
                   })
@@ -613,11 +770,12 @@ function rlp_ref_framing_canonical forall 'source_off 'source_len 'content_len,
                         (full_length == payload_length + 1) &
                             (slice_byte(f.source, 0) == add_bits(0x80, rlp_length_byte(n)))
                     } else {
-                        let (len_bytes, length_width) = minimal_word_bytes(rlp_length_word(n));
+                        let length_word = rlp_length_word(n);
+                        let length_width = rlp_minimal_word_len(length_word);
                           (full_length == 1 + length_width + payload_length)
                         & (slice_byte(f.source, 0) == add_bits(0xb7, rlp_length_byte(length_width)))
                         & (if full_offset < source_length then {
-                              rlp_bytes_equal_at(len_bytes, f.source, full_offset + 1)
+                              slice_load_n(f.source, full_offset + 1, length_width) == length_word
                           } else {
                               false
                           })
@@ -696,8 +854,29 @@ function rlp_ref_uint64 forall 'source_off 'source_len 'content_len,
     rlp_uint64_width(content, width)
 }
 
+/*! Pops one canonical RLP integer and interprets `0`/`1` as a Boolean.
+    Other canonical integers return `RlpInvalidValue` rather than throwing so
+    callers such as EIP-7702 can reject only the containing authorization
+    tuple. */
+val rlp_pop_bool : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). RlpCursor(
+        'source_off,
+        'source_len,
+    ) -> (RlpResult(bool), StatelessInputSlice)
+
+function rlp_pop_bool(cursor) = match rlp_cursor_pop(cursor) {
+    (field, next) => {
+        let value = rlp_ref_uint64(field);
+        let decoded : RlpResult(bool) = match value {
+            0 => RlpOk(false),
+            1 => RlpOk(true),
+            _ => RlpInvalidValue(),
+        };
+        (decoded, next)
+    },
+}
+
 /*! Decodes an arbitrary-width big-endian natural. */
-function rlp_uint_content(content : ByteSlice) -> nat = {
+function rlp_uint_content(content : StatelessInputSlice) -> nat = {
     let content_length = content.len;
     if content_length == 0 then {
         0

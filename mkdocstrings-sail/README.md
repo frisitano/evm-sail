@@ -114,7 +114,7 @@ With the index configured, rendered source gains:
   cards** — the target's header (`kind name : signature`), its doc comment
   rendered as Markdown, and its body syntax-highlighted — matching the Sail
   LSP's editor hover. Cards are embedded as inert `<template>` elements and
-  positioned by `assets/sail-hover.js` (`sail-book-gen` installs and wires
+  positioned by `assets/generated/sail-hover.js` (`sail-book-gen` installs
   it; for hand-written configs copy it from the package and list it under
   `extra_javascript`). Without the script, links fall back gracefully (set
   `hover_cards: false` to restore plain-text `title` tooltips). Definition
@@ -194,19 +194,29 @@ three levels:
 
 ```sh
 sail-book-gen --root . --project model.sail_project --module core \
-              --book book --site-name "My Spec"
+              --book book --site-name "My Spec" --no-config
 ```
 
 emits one page per source file under `book/docs/reference/` (`/*md` blocks
-and `::: name` directives in source order) and `mkdocs.yml` (`--no-config`
-to keep yours). Hand-authored pages under `book/docs/` still work:
-identifiers they render are skipped in the generated pages.
+and `::: name` directives in source order). Hand-authored pages under
+`book/docs/` coexist with those outputs: identifiers they render are skipped
+in the generated pages.
 
-A `mod.md` in a source directory is that directory's section overview: it
-is rendered (EIP references linked) as the directory's `index.md` under
-`reference/`, and [mkdocs-section-index] attaches it to the nav section,
-so the section title itself opens the overview. List it as the section's
-first entry in `SUMMARY.md`.
+Directory overview pages are authored directly at their canonical URLs. For
+example, `book/docs/reference/sail/lib/index.md` describes the `sail/lib/`
+section. Material's `navigation.indexes` feature attaches that page directly
+to the nav section title. List each index as its section's first entry in
+`SUMMARY.md`.
+
+Generated source pages and package assets are recorded in
+`book/.build/generated-manifest.json`. Each run removes only files listed by
+the previous manifest, so renamed Sail modules disappear without deleting
+authored pages from the shared `docs/reference/` tree. `sail-book-gen --book
+book --clean` performs the same manifest-scoped cleanup. Docinfo and LSP
+metadata also belong under `book/.build/`; package JavaScript and CSS are
+installed under `book/docs/assets/generated/`. Keep `book/mkdocs.yml` authored
+and pass `--no-config` in project builds; without that flag a default config is
+created only when none exists.
 
 Navigation uses [mkdocs-literate-nav]: author `book/docs/SUMMARY.md` as a
 Markdown list of `[Title](path.md)` links, `Section` headers, and `*.md`
@@ -215,7 +225,8 @@ you don't list explicitly (titled by their `# Title` heading), so new
 source files appear without touching the nav. When no `SUMMARY.md` exists,
 a default is generated that includes everything in alphabetical order.
 
-`EIP-N` references in prose become links carrying full-document cards.
+Enable the packaged `sail-book` MkDocs plugin so `EIP-N` references in both
+authored and generated prose become links carrying full-document cards.
 Card content is exclusively **rendered client-side from the actual
 source**: on first view the EIP's markdown is fetched from the canonical
 `ethereum/EIPs` repository, rendered in the browser (vendored `marked`
@@ -239,11 +250,10 @@ over from Sail verbatim) anchors every definition site, links every
 identifier use to its definition — cross-page, including inductive
 constructors resolved to their owning type — and attaches IDE-style
 hover cards (docstring + highlighted body). Cards are per-definition
-fragments under `assets/lean-cards/`, fetched on first hover so pages
+fragments under `assets/generated/lean-cards/`, fetched on first hover so pages
 referencing hundreds of definitions stay small.
 
 [mkdocs-literate-nav]: https://oprypin.github.io/mkdocs-literate-nav/
-[mkdocs-section-index]: https://oprypin.github.io/mkdocs-section-index/
 
 ## Development
 

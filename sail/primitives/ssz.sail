@@ -61,7 +61,7 @@ type block_access_index = range(0, transaction_count_bound + 1)
 /*! A reference to an SSZ list: its byte span and schema-bounded element
     count. */
 struct BoundedSszListRef('maximum : Int), source_valid_length('maximum) = {
-    bytes : ByteSlice,
+    bytes : StatelessInputSlice,
     count : range(0, 'maximum),
     /* Zero means that this generic view carries no per-item schema bound. */
     max_item_length : source_length,

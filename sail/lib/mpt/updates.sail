@@ -9,7 +9,7 @@ recomposes canonical nodes (YP Appendix D).
     delete. */
 union TrieChange = {
     /* insert or replace the leaf bytes at the key */
-    TriePut : ByteSlice,
+    TriePut : ScratchSlice,
     /* remove the key */
     TrieDelete : unit,
 }
@@ -145,7 +145,7 @@ references.
     The distinction permits untouched hashes to stay opaque. */
 union TrieItemValue = {
     /* a live leaf's bytes */
-    LeafItem : ByteSlice,
+    LeafItem : TrieLeafValue,
     /* a known-branch child reference */
     BranchItem : NodeRef,
     /* an opaque subtree reference of unknown kind */
@@ -155,8 +155,14 @@ union TrieItemValue = {
 /*! A sorted-stream item: a path and its payload. */
 struct TrieItem = { path : TriePath, value : TrieItemValue }
 
-function item_leaf(path : TriePath, value : ByteSlice) -> TrieItem =
+function item_leaf(path : TriePath, value : TrieLeafValue) -> TrieItem =
     struct { path = path, value = LeafItem(value) }
+
+function item_input_leaf(path : TriePath, value : StatelessInputSlice) -> TrieItem =
+    item_leaf(path, InputTrieLeaf(value))
+
+function item_scratch_leaf(path : TriePath, value : ScratchSlice) -> TrieItem =
+    item_leaf(path, ScratchTrieLeaf(value))
 
 function item_branch(path : TriePath, childref : NodeRef) -> TrieItem =
     struct { path = path, value = BranchItem(childref) }
@@ -218,15 +224,23 @@ TRIE(I) = KEC(RLP(c(I,0)))                     (Eq. 206)  trie_subtree_root
     canonical leaf/extension collapse does not need to reopen an encoded
     hash. */
 struct TrieChildren = {
-    mask : bits(16),
+    mask : branch_mask,
     children : BranchRefs,
     only : option(TrieItem),
-    count : bits(5),
+    count : range(0, 16),
 }
+
+/*! Increments the number of populated branch children within its radix bound. */
+function trie_child_count_increment(count : range(0, 16)) -> range(0, 16) =
+    if count < 16 then {
+        count + 1
+    } else {
+        throw InvalidBlock(WitnessDeficient)
+    }
 
 /*! Constructs an empty child accumulator. */
 function trie_children_empty() -> TrieChildren =
-    struct { mask = 0x0000, children = vector_init(16, EmptyRef()), only = None(), count = 0b00000 }
+    struct { mask = 0x0000, children = vector_init(16, EmptyRef()), only = None(), count = 0 }
 
 /*! Adds one recursively built child at `index`. */
 function trie_children_add(
@@ -241,7 +255,7 @@ function trie_children_add(
         None() => children,
         Some(item) => {
             let depth = path_len(prefix);
-            if 64 <= depth | children.count == 0b10000 then {
+            if 64 <= depth | children.count == 16 then {
                 throw InvalidBlock(WitnessDeficient)
             };
             let child_prefix = path_concat(prefix, path_single(index));
@@ -255,7 +269,7 @@ function trie_children_add(
             updated.mask = branch_mask_set(updated.mask, index);
             updated.children[unsigned(index)] = item_ref(item, depth + 1);
             updated.only = Some(item);
-            updated.count = add_bits(children.count, 0b00001);
+            updated.count = trie_child_count_increment(children.count);
             updated
         },
     }
@@ -263,10 +277,10 @@ function trie_children_add(
 /*! Finishes a recursive branch: zero children disappear, one child bubbles
     upward structurally, and multiple children form a canonical branch item. */
 function trie_children_finish(prefix : TriePath, children : TrieChildren) -> option(TrieItem) =
-    if children.count == 0b00000 then {
+    if children.count == 0 then {
         None()
     } else {
-        if children.count == 0b00001 then {
+        if children.count == 1 then {
             children.only
         } else {
             Some(item_branch(prefix, branch_child_ref(children.mask, children.children)))

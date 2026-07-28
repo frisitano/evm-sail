@@ -21,7 +21,7 @@ opcodes. This module specifies that machinery in three layers:
 3. **Message calls** — [run_call][] handles
    `CALL`/`CALLCODE`/`DELEGATECALL`/`STATICCALL` (multiplexed on `mode`)
    and [run_create][] handles `CREATE`/`CREATE2`. A sub-call saves the
-   parent's user-space frame registers in [frame_stack][], installs the
+   parent's user-space frame registers through [frame_stack_push][], installs the
    child as the active frame, and returns to the single run loop. When the
    child halts, that loop restores and resumes the parent. There is no
    recursive interpreter invocation. All world effects go through kernel syscalls:
@@ -235,25 +235,25 @@ function fetch() -> ast = {
 /*md
 ## The run loop
 */
-val resume_frame : (FrameContinuation, ByteSlice) -> unit
+val resume_frame : (FrameContinuation, OutputSlice) -> unit
 
 /*! Returns the active frame's halt output. */
-function frame_output() -> ByteSlice =
+function frame_output() -> OutputSlice =
     match frame_status {
         Halted(HaltReturn(output)) => output,
         Halted(HaltRevert(output)) => output,
-        _ => EMPTY_SLICE,
+        _ => EMPTY_OUTPUT_SLICE,
     }
 
 /*! The non-recursive step loop for one complete call tree. It executes the
-    active frame, resumes suspended parents from [frame_stack][] as children
+    active frame, resumes suspended parents through [frame_stack_pop][] as children
     halt, and returns the top-level frame's output. `STOP`, `SELFDESTRUCT`,
     and exceptional halts return the empty slice; `RETURN` and `REVERT` carry
     their frozen memory slice in the halt value. */
-function interpret() -> ByteSlice = {
+function interpret() -> OutputSlice = {
     frame_stack_reset();
     var interpreting : bool = true;
-    var result : ByteSlice = EMPTY_SLICE;
+    var result : OutputSlice = EMPTY_OUTPUT_SLICE;
 
     /* Each opcode step consumes gas; every child completion corresponds to an
      * earlier gas-consuming CALL or CREATE step. */
@@ -557,7 +557,7 @@ function run_call(kind : CallKind) -> unit = {
                set is an ordinary code call. The precompile's input is the
                child message's calldata: mem[args_off .. args_off+args_len).
                Gas inspects the same memory source before execution. */
-            let input = memory_byte_slice(args.off, args.len);
+            let input = MemoryCalldata(active_memory_slice(args.off, args.len));
 
             /* Gas is checked before execution: an unpayable/OOG precompile call
              * must not execute (a BLAKE2F request may carry an enormous round
@@ -623,9 +623,10 @@ function run_call(kind : CallKind) -> unit = {
                     message.is_static
                 };
             let child_calldata = if is_running() then {
-                    memory_byte_slice(args.off, args.len)
+                    let bytes = active_memory_slice(args.off, args.len);
+                    MemoryCalldata(memory_slice(bytes.off, bytes.len))
                 } else {
-                    EMPTY_SLICE
+                    EMPTY_CALLDATA
                 };
             let child_state_gas = state_gas_remaining;
             let checkpoint = { suspend_frame() with state_gas_remaining = GAS_ZERO };
@@ -840,7 +841,7 @@ function run_create(is2 : bool) -> unit = {
                         is_static = checkpoint.message.is_static,
                         depth = frame_depth_increment(checkpoint.call_depth),
                     };
-                calldata_install(EMPTY_SLICE);
+                calldata_install(EMPTY_CALLDATA);
                 pc = 0;
                 gas_remaining = child_gas;
                 state_gas_remaining = child_state_gas;
@@ -856,7 +857,7 @@ function run_create(is2 : bool) -> unit = {
 }
 
 /*! Restores a message-call parent and applies the child's outcome. */
-function resume_call(continuation : CallContinuation, output : ByteSlice) -> unit = {
+function resume_call(continuation : CallContinuation, output : OutputSlice) -> unit = {
     returndata = output;
     let checkpoint = continuation.checkpoint;
     let succeeded = frame_succeeded();
@@ -886,7 +887,7 @@ function resume_call(continuation : CallContinuation, output : ByteSlice) -> uni
 }
 
 /*! Restores a create parent and either deploys or rolls back the child. */
-function resume_create(continuation : CreateContinuation, output : ByteSlice) -> unit = {
+function resume_create(continuation : CreateContinuation, output : OutputSlice) -> unit = {
     returndata = output;
     let checkpoint = continuation.checkpoint;
     let initcode_succeeded = frame_succeeded();
@@ -933,8 +934,8 @@ function resume_create(continuation : CreateContinuation, output : ByteSlice) ->
 
     if deploy_succeeds then {
         record_refund(child_refund);
-        let deployed_bytes : ByteSlice = if frontier_empty_deposit then { EMPTY_SLICE } else { returndata };
-        let deployed_code = validated_code_slice(deployed_bytes);
+        let deployed_bytes : OutputSlice = if frontier_empty_deposit then { EMPTY_OUTPUT_SLICE } else { returndata };
+        let deployed_code = code_db_intern_output(deployed_bytes);
         k_deploy_code(continuation.address, deployed_code);
         push(address_to_word(continuation.address))
     } else {
@@ -953,7 +954,7 @@ function resume_create(continuation : CreateContinuation, output : ByteSlice) ->
 }
 
 /*! Applies the pending operation for one completed child frame. */
-function resume_frame(continuation : FrameContinuation, output : ByteSlice) -> unit =
+function resume_frame(continuation : FrameContinuation, output : OutputSlice) -> unit =
     match continuation {
         Empty() => throw InvalidBlock(ExecutionInvalid),
         ResumeCall(call) => resume_call(call, output),

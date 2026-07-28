@@ -35,7 +35,7 @@ function bal_ref_cursor(f) =
 function bal_ref_bytes forall 'source_off 'source_len 'content_len,
                          rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
-    ByteSlice
+    StatelessInputSlice
 ) =
     if rlp_ref_bytes_canonical(f) then {
         rlp_ref_content(f)
@@ -129,7 +129,7 @@ function bal_compare_index_code forall 'source_off 'source_len 'content_len,
     let (code_field, fields) = rlp_cursor_pop(fields);
     bal_expect_end(fields);
     let code = code_db_resolve(code_hash);
-    if (bal_ref_uint64(index_field) != index) | not_bool(byte_slices_equal(bal_ref_bytes(code_field), code.bytes)) then {
+    if (bal_ref_uint64(index_field) != index) | not_bool(region_slices_equal(bal_ref_bytes(code_field), code.bytes)) then {
         throw InvalidBlock(InvalidBlockAccessList)
     }
 }
@@ -321,7 +321,7 @@ termination_measure bal_validate_accounts(cursor, count, maximum) =
     cursor.len
 
 /*! Validates the canonical EIP-7928 BAL directly against the host recorder. */
-function validate_block_access_list(bytes : ByteSlice, maximum_items : item_count) -> unit = {
+function validate_block_access_list(bytes : StatelessInputSlice, maximum_items : item_count) -> unit = {
     bal_prepare_iter();
     let root = rlp_single_ref(bytes);
     let _ = bal_validate_accounts(bal_ref_cursor(root), 0, maximum_items);

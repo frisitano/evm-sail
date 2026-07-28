@@ -19,9 +19,9 @@ union HaltKind = {
   /* STOP: success, empty return data */
   HaltStop : unit,
   /* RETURN: success with output data */
-  HaltReturn : ByteSlice,
+  HaltReturn : OutputSlice,
   /* REVERT: state unwound, output kept (EIP-140) */
-  HaltRevert : ByteSlice,
+  HaltRevert : OutputSlice,
   /* SELFDESTRUCT: success, empty return data */
   HaltSelfDestruct : unit
 }

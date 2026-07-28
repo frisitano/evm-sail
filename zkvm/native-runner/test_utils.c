@@ -1,6 +1,6 @@
 /* Native implementation of the same standard read_input/write_output ABI used
  * by the zkVM guest, plus the reusable test-process lifecycle and dump hooks. */
-#include "byte_slice_glue.h"
+#include "region_access.h"
 #include "frame_stack.h"
 #include EVMSAIL_MODEL_H
 #include "value_convert.h"
@@ -158,7 +158,7 @@ unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
  *                                     position of the throw site)
  *   'O' u32 len output[len]          (the canonical output emitted by main.sail)
  *   'V' failed[1]                    (main.sail's caught validation failure)
- *       when failed=1: scope[1] reason[1]
+ *       when failed=1: scope[1] reason[1] loc_len[2] loc[loc_len]
  *   'A' u32 n_acct  { hkey[32] address[20] nonce[8] bal[32]
  *                     base_sroot[32] computed_sroot[32] chash[32]
  *                     u32 n_slot { slot[32] val[32] }* }*
@@ -186,6 +186,21 @@ extern uint64_t hm_depth(unit);
 
 static unsigned char g_dump[1u << 22];
 static size_t g_dump_len;
+static char g_validation_location[513];
+
+unit validation_debug_capture_location(unit u)
+{
+    (void)u;
+    const char *loc =
+        (throw_location && *throw_location) ? *throw_location : "";
+    size_t len = 0;
+    while (loc[len] && len < sizeof g_validation_location - 1) {
+        g_validation_location[len] = loc[len];
+        len++;
+    }
+    g_validation_location[len] = '\0';
+    return UNIT;
+}
 
 static void d_byte(unsigned char b) { if (g_dump_len < sizeof g_dump) g_dump[g_dump_len++] = b; }
 static void d_u32(uint32_t v) { for (int i = 3; i >= 0; i--) d_byte((unsigned char)(v >> (8 * i))); }
@@ -239,6 +254,8 @@ unsigned long evmsail_debug_dump(const unsigned char **out)
     sail_hash rebuilt = {0};
     bool validation_failed = zvalidation_failure_present;
     bool state_available = !have_exception;
+    const char *validation_loc =
+        validation_failed ? g_validation_location : "";
 
     if (state_available) {
         root = model_state_root();
@@ -283,6 +300,12 @@ unsigned long evmsail_debug_dump(const unsigned char **out)
     if (zvalidation_failure_present) {
         d_byte((unsigned char)zvalidation_failure_scope);
         d_byte((unsigned char)zvalidation_failure_reason);
+        size_t ln = 0;
+        while (validation_loc[ln] && ln < 512) ln++;
+        d_byte((unsigned char)(ln >> 8));
+        d_byte((unsigned char)(ln & 0xff));
+        for (size_t i = 0; i < ln; i++)
+            d_byte((unsigned char)validation_loc[i]);
     }
 
     d_byte('A');

@@ -23,14 +23,17 @@ duplicating instructions elsewhere.
 
 - `sail/evm.sail_project` is the single model project and `sail/main.sail` is
   its only executable entry. There is no entry/backend selection: every build
-  contains the full stateless validator. `EVM_PROFILE=on|off` controls optional
-  cycle scopes. `EVM_DEBUG=on|off` controls native-test validation diagnostics;
-  real zkVM guest builds set it to `off`.
+  contains the full stateless validator. The canonical project contains no
+  cycle-scope declarations or calls. `EVM_PROFILE=on` is an optimized-C
+  build-only switch that applies `sail/splices/c_optimized_profile.sail` after
+  the ordinary optimized splice; standard builds reject it.
+  `EVM_DEBUG=on|off` controls native-test validation diagnostics; real zkVM
+  guest builds set it to `off`.
 - `sail/host/state.sail` is the declaration-only host world-state surface for
   impure FFI contracts. `sail/host/environment.sail` declares the fixed-size,
-  O(1) ancestor-hash host table. `sail/host/kernel/environment.sail` owns the
-  kernel registers, and the remaining `sail/host/kernel/` modules group pure
-  Sail `k_*` operations by subsystem.
+  O(1) ancestor-hash host table. `sail/kernel/environment.sail` owns the kernel
+  registers, and the remaining `sail/kernel/` modules group pure Sail `k_*`
+  operations by subsystem.
 - `sail/executor/payload.sail` owns the transaction and withdrawal MPT roots
   used to reconstruct and validate the execution payload's block hash.
 - `sail/lib/mpt/` is the generic trie implementation, split by dependency
@@ -66,16 +69,19 @@ duplicating instructions elsewhere.
   directly into one length-preallocated packed C table, so no generated list
   crosses that boundary. A
   hash preimage is a list of Bytes segments -- materialized bytes or
-  source-tagged slices -- crossing in ONE call; the old streaming hash channel
+  nominal region slices -- crossing in ONE call; the old streaming hash channel
   and fused source hashers are gone. Everything else,
   including the former C fast-path hooks (`keccak256_word`,
   `keccak256_address`, `sha256_pair`), is a pure Sail body compiled and
-  executed directly. Fallible optimized-only C refinements return explicit
-  `Optimized*Result` unions; thin Sail wrappers translate their error variants
-  into `InvalidBlock` throws, so C never mutates generated exception globals
-  and the failure relation remains visible to proof extraction. SSZ decoding
-  reads only from the single input
-  `ByteSlice`; the old byte-at-a-time `ssz_src_*` oracle no longer exists.
+  executed directly. Fallible optimized-only C externs carry `$[c_throws]`;
+  the custom compiler marks those calls as throwing and emits the ordinary
+  generated `have_exception` unwind immediately after each call. Their C
+  implementations raise the generated `InvalidBlock` exception directly,
+  without result-union wrappers or process aborts. This annotation exists only
+  in the optimized C splice, while standard C and proof extraction retain the
+  explicit Sail bodies and throws. SSZ decoding reads only from
+  `StatelessInputSlice`; the old byte-at-a-time `ssz_src_*` oracle no longer
+  exists.
   `ffi/hash_glue.c`, `ffi/htr_glue.c`, and `ffi/precompiles.c` call the
   `zkvm_accelerators.h` interface directly; the former `host_crypto.c`
   forwarding layer has been removed.
@@ -97,7 +103,7 @@ duplicating instructions elsewhere.
   The old `sail/c/*.sail` extern-binding menu and the
   `EVM_BACKEND=spec|build` project variable were deleted (this change).
 - `ffi/` contains native C backends for performance-sensitive host structures:
-  memory/generic byte slices/output storage, the Sail-cursor-owned executor
+  memory/nominal region access/output storage, the Sail-cursor-owned executor
   scratch arena, `state_db.c` for accounts, persistent storage cache/update
   rows, and the EIP-7928 recorder. The BAL recorder uses distinct keyed hash
   tables for storage reads `(address, slot)` and storage changes
@@ -163,11 +169,13 @@ recursive and trie-shaped:
 Every model check, extraction target, and executable build resolves the same
 custom Sail compiler through `zkvm/resolve_optimized_sail.sh`. That compiler
 supports the standard Sail backends plus spliceable type definitions and
-bound-driven C specialization. The latter two features are C-backend concerns:
-the model never carries C-representation annotations, and Lean/Coq extraction
-retains the ordinary semantic types without loading the C-only splice. Set
-`SAIL` explicitly to test another build of this custom compiler; upstream Sail
-is not a supported fallback for repository targets.
+bound-driven C specialization. It also recognizes `$[c_throws]` on impure
+externs and propagates the `Throw` effect to generated C call sites. These
+features are C-backend concerns: the model never carries C-representation or
+optimized-exception annotations, and Lean/Coq extraction retains the ordinary
+semantic types without loading the C-only splice. Set `SAIL` explicitly to
+test another build of this custom compiler; upstream Sail is not a supported
+fallback for repository targets.
 
 Run from repo root unless noted:
 

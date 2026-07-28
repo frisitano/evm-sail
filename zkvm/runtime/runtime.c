@@ -42,6 +42,96 @@ __attribute__((noreturn)) void zkvm_abort(const char *why)
     htif_exit(ZKVM_ABORT_CODE);
 }
 
+/* ----- compiler helpers for the standalone Spike link ---------------------
+ *
+ * The optimized model uses native fixed-width arithmetic. RV64 handles
+ * 128-bit add/multiply inline, but GCC lowers 128/64 division and a few bit
+ * operations to compiler-runtime symbols. The production ZisK guest gets
+ * those symbols from Rust's compiler_builtins; the standalone Spike guest is
+ * linked directly with -nostdlib and therefore needs this small fallback.
+ *
+ * Keep these definitions out of the ZisK archive so the final Rust link
+ * remains the single owner of its compiler-runtime ABI. */
+#ifndef EVMSAIL_PLATFORM_ZISK
+typedef unsigned __int128 zkvm_u128;
+
+static unsigned zkvm_u128_width(zkvm_u128 value)
+{
+    unsigned width = 0;
+    while (value != 0) {
+        value >>= 1;
+        width++;
+    }
+    return width;
+}
+
+static zkvm_u128 zkvm_u128_divmod(zkvm_u128 dividend, zkvm_u128 divisor,
+                                  zkvm_u128 *remainder)
+{
+    if (divisor == 0) {
+        zkvm_abort("128-bit division by zero");
+    }
+    if (dividend < divisor) {
+        if (remainder != NULL) {
+            *remainder = dividend;
+        }
+        return 0;
+    }
+
+    unsigned shift = zkvm_u128_width(dividend) - zkvm_u128_width(divisor);
+    zkvm_u128 shifted_divisor = divisor << shift;
+    zkvm_u128 quotient_bit = ((zkvm_u128)1) << shift;
+    zkvm_u128 quotient = 0;
+
+    do {
+        if (dividend >= shifted_divisor) {
+            dividend -= shifted_divisor;
+            quotient |= quotient_bit;
+        }
+        shifted_divisor >>= 1;
+        quotient_bit >>= 1;
+    } while (quotient_bit != 0);
+
+    if (remainder != NULL) {
+        *remainder = dividend;
+    }
+    return quotient;
+}
+
+zkvm_u128 __udivti3(zkvm_u128 dividend, zkvm_u128 divisor)
+{
+    return zkvm_u128_divmod(dividend, divisor, NULL);
+}
+
+zkvm_u128 __umodti3(zkvm_u128 dividend, zkvm_u128 divisor)
+{
+    zkvm_u128 remainder;
+    (void)zkvm_u128_divmod(dividend, divisor, &remainder);
+    return remainder;
+}
+
+int __clzdi2(uint64_t value)
+{
+    int count = 0;
+    uint64_t mask = UINT64_C(1) << 63;
+    while (mask != 0 && (value & mask) == 0) {
+        mask >>= 1;
+        count++;
+    }
+    return count;
+}
+
+uint64_t __bswapdi2(uint64_t value)
+{
+    volatile uint64_t result = 0;
+    for (unsigned i = 0; i < 8; i++) {
+        result = (result << 8) | (value & UINT64_C(0xff));
+        value >>= 8;
+    }
+    return result;
+}
+#endif
+
 /* Synchronous-exception handler, entered from _trap_vector in start.S. A guard-
  * region access, null dereference, or instruction-address-misaligned fault all
  * land here and are reported as abnormal termination (standard-termination-

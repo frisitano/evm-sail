@@ -10,7 +10,8 @@ Note: execution is gas-bounded, but a warm in-process worker has
 no per-case timeout/crash isolation (unlike the old subprocess) -- a pathological
 case would take down the whole run. The full corpus is gas-bounded in practice.
 """
-import ctypes, os, resource, subprocess, sys
+import ctypes, hashlib, os, resource, struct, subprocess, sys
+from collections import OrderedDict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, ".."))
@@ -21,11 +22,15 @@ _EXT = "dylib" if sys.platform == "darwin" else "so"
 _guest = None
 _guest_profile = None
 _guest_build_mode = None
+_capacity_planner = None
+_capacity_cache = OrderedDict()
+_CAPACITY_CACHE_LIMIT = 64
 
-def _build_paths(build_mode):
+def _build_paths(build_mode, capacity_mode="fixed"):
     if build_mode not in ("standard", "optimized"):
         raise ValueError("build_mode must be 'standard' or 'optimized'")
-    build_dir = os.path.join(_NR, f".build-{build_mode}")
+    suffix = "-measure" if build_mode == "optimized" and capacity_mode == "measure" else ""
+    build_dir = os.path.join(_NR, f".build-{build_mode}{suffix}")
     return (
         build_dir,
         os.path.join(build_dir, f"libevmsail_guest.{_EXT}"),
@@ -42,6 +47,55 @@ def _bind(path):
     lib.evmsail_debug_dump.argtypes = [ctypes.POINTER(P)]
     lib.evmsail_lib_init()
     return lib
+
+def _load_capacity_planner(rebuild=False):
+    """Load the growable optimized ABI used only to measure region high-water
+    marks before entering the fixed-allocation pointer ABI."""
+    global _capacity_planner
+    if _capacity_planner is not None:
+        return _capacity_planner
+    build_dir, guest_lib, profile_marker = _build_paths("optimized", "measure")
+    if rebuild or not os.path.exists(guest_lib):
+        print("# building optimized capacity planner (one-time)...", file=sys.stderr)
+        env = dict(
+            os.environ,
+            EVM_BUILD_MODE="optimized",
+            EVM_CAPACITY_MODE="measure",
+            EVM_PROFILE="off",
+            NATIVE_BUILD=build_dir,
+        )
+        subprocess.check_call([os.path.join(_NR, "build_lib.sh")], env=env)
+        with open(profile_marker, "w") as f:
+            f.write("off\n")
+    lib = _bind(guest_lib)
+    lib.evmsail_capacity_measure_get.restype = ctypes.c_ulong
+    lib.evmsail_capacity_measure_get.argtypes = [ctypes.c_ulong]
+    _capacity_planner = lib
+    return lib
+
+def prepare_optimized_input(inp, rebuild=False):
+    """Append private fixed-arena capacity metadata to canonical SSZ input.
+
+    The trailer is stripped by the optimized host before any Sail decoder or
+    commitment code sees the input. It is therefore execution metadata, not a
+    protocol field or part of the authenticated stateless input.
+    """
+    cache_key = (len(inp), hashlib.sha256(inp).digest())
+    cached_trailer = _capacity_cache.get(cache_key)
+    if cached_trailer is not None and not rebuild:
+        _capacity_cache.move_to_end(cache_key)
+        return inp + cached_trailer
+    planner = _load_capacity_planner(rebuild=rebuild)
+    _run(planner, inp)
+    capacities = [planner.evmsail_capacity_measure_get(i) for i in range(6)]
+    trailer = b"EVMCAP01" + struct.pack(
+        "<IIQ6Q", 1, len(capacities), len(inp), *capacities
+    )
+    _capacity_cache[cache_key] = trailer
+    _capacity_cache.move_to_end(cache_key)
+    while len(_capacity_cache) > _CAPACITY_CACHE_LIMIT:
+        _capacity_cache.popitem(last=False)
+    return inp + trailer
 
 def load_guest(rebuild=False, profile=False, build_mode="optimized"):
     """Load main.sail's native shared library, building it if needed."""
@@ -64,6 +118,7 @@ def load_guest(rebuild=False, profile=False, build_mode="optimized"):
         env = dict(
             os.environ,
             EVM_BUILD_MODE=build_mode,
+            EVM_CAPACITY_MODE="fixed",
             EVM_PROFILE=wanted,
             NATIVE_BUILD=build_dir,
             EXTRA_PRESERVE="debug_account_storage_root debug_rebuild_state_root",
@@ -74,6 +129,8 @@ def load_guest(rebuild=False, profile=False, build_mode="optimized"):
     _guest = _bind(guest_lib)
     _guest_profile = wanted
     _guest_build_mode = build_mode
+    if build_mode == "optimized":
+        _load_capacity_planner(rebuild=rebuild)
     return _guest
 
 def load_lean_guest(rebuild=False):
@@ -117,7 +174,10 @@ def _run(lib, inp):
 def run_once_guest(inp):
     """Wipe state, run one SszStatelessInput through main.sail, returning its
     canonical SSZ SszStatelessValidationResult bytes."""
-    return _run(_guest if _guest is not None else load_guest(), inp)
+    lib = _guest if _guest is not None else load_guest()
+    if _guest_build_mode == "optimized":
+        inp = prepare_optimized_input(inp)
+    return _run(lib, inp)
 
 def _debug_dump_bytes():
     lib = _guest if _guest is not None else load_guest()
@@ -185,9 +245,16 @@ def decode_snapshot(b):
     if b[p] == 1:
         p += 1
         scope, reason = b[p], b[p + 1]; p += 2
+        location_len = int.from_bytes(b[p:p + 2], "big"); p += 2
+        location = b[p:p + location_len].decode("utf-8", errors="replace")
+        p += location_len
         scope_name = VALIDATION_SCOPES[scope] if scope < len(VALIDATION_SCOPES) else f"?{scope}"
         reason_name = BLOCK_ERRORS[reason] if reason < len(BLOCK_ERRORS) else f"?{reason}"
-        validation_failure = {"scope": scope_name, "reason": reason_name}
+        validation_failure = {
+            "scope": scope_name,
+            "reason": reason_name,
+            "location": location,
+        }
     else:
         p += 1
     assert b[p:p + 1] == b"A", "bad snapshot: missing accounts section"; p += 1
@@ -224,7 +291,8 @@ def format_snapshot(snap, limit=0):
     rejected = snap["validation_failure"]
     exc = "" if snap["ok"] or rejected is not None else f"  [ESCAPED: {snap['exc']}]"
     failure = "" if rejected is None else (
-        f"  [REJECTED: {rejected['reason']} during {rejected['scope']}]"
+        f"  [REJECTED: {rejected['reason']} during {rejected['scope']}"
+        f" at {rejected['location']}]"
     )
     lines = [f"state_root={snap['root']:#066x} "
              f"rebuilt_root={snap['rebuilt_root']:#066x} "

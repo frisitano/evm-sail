@@ -10,8 +10,7 @@
     - [Block types](reference/sail/primitives/block.md)
     - [EVM execution types](reference/sail/primitives/evm.md)
     - [System addresses and topics](reference/sail/primitives/system.md)
-    - [Journal types](reference/sail/primitives/journal.md)
-    - [Regions and byte slices](reference/sail/primitives/bytes.md)
+    - [Typed byte regions](reference/sail/primitives/bytes.md)
     - [Code](reference/sail/primitives/code.md)
     - [Cryptographic primitives](reference/sail/primitives/crypto.md)
     - [RLP field references](reference/sail/primitives/rlp.md)
@@ -40,7 +39,6 @@
     - [The guest entry point](reference/sail/main.md)
 - Serialization and tries
     - [Serialization and tries](reference/sail/lib/index.md)
-    - [Byte conversions](reference/sail/lib/bytes.md)
     - [Contract address derivation](reference/sail/lib/address.md)
     - [Transaction signature rules](reference/sail/lib/tx.md)
     - RLP
@@ -58,11 +56,10 @@
         - [Trie updates and the canonical builder](reference/sail/lib/mpt/updates.md)
         - [The witness-native trie](reference/sail/lib/mpt/trie.md)
     - [The state trie](reference/sail/lib/state_trie.md)
+- State kernel
+    - [The state kernel](reference/sail/kernel/index.md)
+    - reference/sail/kernel/*.md
 - Host interface
     - [Host interface](reference/sail/host/index.md)
     - reference/sail/host/*.md
-    - The state kernel
-        - [The state kernel](reference/sail/host/kernel/index.md)
-        - reference/sail/host/kernel/*.md
-- Lean extraction
-    - extraction/lean/*
+- [zkVM benchmarks](performance.md)

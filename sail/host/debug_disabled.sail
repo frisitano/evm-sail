@@ -14,7 +14,7 @@ function validation_debug_reset() -> unit = ()
 
 /*! Records the failing validation stage and reason for host
     inspection; a later record overwrites an earlier one. */
-function validation_debug_record(_scope : bits(8), _reason : BlockError) -> unit = ()
+function validation_debug_record(_stage : validation_stage, _reason : BlockError) -> unit = ()
 
 function cached_account_trie_update_next() -> option(TrieUpdate) = None()
 

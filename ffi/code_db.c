@@ -12,7 +12,9 @@
  * The Sail account store remains the authoritative account-code value;
  * this is the execution mirror. */
 #include "sail.h"
-#include "byte_slice_glue.h"
+#include "capacity.h"
+#include "code_db.h"
+#include "region_access.h"
 #include "hash_bytes.h"
 #include "value_convert.h"
 #include "zkvm_accelerators.h"
@@ -27,8 +29,41 @@
 
 static uint64_t *jumpdest_arena;
 static size_t jumpdest_arena_cap, jumpdest_arena_len;
+static uint8_t *code_arena;
+static size_t code_arena_cap, code_arena_len;
+
+bool code_db_configure_capacities(uint64_t code_bytes,
+                                  uint64_t jumpdest_words) {
+  if (code_bytes > SIZE_MAX || jumpdest_words > SIZE_MAX ||
+      jumpdest_words > SIZE_MAX / sizeof(*jumpdest_arena))
+    return false;
+  if ((size_t)code_bytes > code_arena_cap) {
+    uint8_t *next =
+        (uint8_t *)realloc(code_arena, code_bytes ? (size_t)code_bytes : 1);
+    if (!next) return false;
+    code_arena = next;
+    code_arena_cap = (size_t)code_bytes;
+  }
+  if ((size_t)jumpdest_words > jumpdest_arena_cap) {
+    uint64_t *next = (uint64_t *)realloc(
+        jumpdest_arena,
+        jumpdest_words ? (size_t)jumpdest_words * sizeof(*jumpdest_arena)
+                       : sizeof(*jumpdest_arena));
+    if (!next) return false;
+    jumpdest_arena = next;
+    jumpdest_arena_cap = (size_t)jumpdest_words;
+  }
+  code_arena_len = 0;
+  jumpdest_arena_len = 0;
+  return true;
+}
 
 static int jumpdest_arena_reserve(size_t need) {
+  evmsail_capacity_observe(EVMSAIL_CAP_JUMPDEST_WORDS, (uint64_t)need);
+#ifdef EVMSAIL_CAPACITY_FIXED
+  return need <= evmsail_capacity_limit(EVMSAIL_CAP_JUMPDEST_WORDS) &&
+         need <= jumpdest_arena_cap;
+#endif
   if (need <= jumpdest_arena_cap) return 1;
   size_t n = jumpdest_arena_cap ? jumpdest_arena_cap : 256;
   while (n < need) {
@@ -50,7 +85,17 @@ static int jumpdest_table_span(uint64_t ref, uint64_t code_len,
                                size_t *base_out, uint64_t *nwords_out) {
   if (!ref || !code_len || code_len > UINT32_MAX) return 0;
   uint64_t nwords = jumpdest_word_count(code_len);
+#ifdef EVMSAIL_POINTER_ABI
+  uintptr_t arena_base = (uintptr_t)jumpdest_arena;
+  uintptr_t pointer = (uintptr_t)ref;
+  if (!jumpdest_arena || pointer < arena_base ||
+      (pointer - arena_base) % sizeof(*jumpdest_arena) != 0)
+    return 0;
+  uint64_t base64 =
+      (uint64_t)((pointer - arena_base) / sizeof(*jumpdest_arena));
+#else
   uint64_t base64 = ref - 1;
+#endif
   if (base64 > SIZE_MAX) return 0;
   size_t base = (size_t)base64;
   if (base > jumpdest_arena_len ||
@@ -78,7 +123,11 @@ static uint64_t jumpdest_table_alloc_value(uint64_t code_len_value) {
   if (!jumpdest_arena_reserve(end)) return 0;
   memset(jumpdest_arena + off, 0, (size_t)nwords * sizeof(*jumpdest_arena));
   jumpdest_arena_len = end;
+#ifdef EVMSAIL_POINTER_ABI
+  return (uint64_t)(uintptr_t)(jumpdest_arena + off);
+#else
   return (uint64_t)off + 1;
+#endif
 }
 
 /* Reserve the exact table size before Sail starts analysis. The arena is
@@ -123,12 +172,11 @@ bool jumpdest_ref_contains(uint64_t ref,
   uint64_t code_len_value = evmsail_byte_quantity_value(code_len);
   uint64_t index_value = evmsail_byte_quantity_value(i);
   if (ref == 0 || index_value >= code_len_value) return false;
-  uint64_t base = ref - 1;
-  uint64_t word = index_value >> 6;
-  if (word > UINT64_MAX - base) return false;
-  uint64_t index = base + word;
-  return index < jumpdest_arena_len &&
-         ((jumpdest_arena[(size_t)index] >> (index_value & 63)) & UINT64_C(1));
+  size_t base = 0;
+  if (!jumpdest_table_span(ref, code_len_value, &base, NULL)) return false;
+  return ((jumpdest_arena[base + (size_t)(index_value >> 6)] >>
+           (index_value & 63)) &
+          UINT64_C(1));
 }
 
 /* ------------------------------ code_db -------------------------------- */
@@ -143,8 +191,6 @@ typedef struct {
 
 static code_db_ent *code_db;
 static uint32_t code_db_cap, code_db_n;
-static uint8_t *code_arena;
-static size_t code_arena_cap, code_arena_len;
 
 static uint64_t code_db_hash(const sail_hash *key) {
   uint64_t h = 0xcbf29ce484222325ull;
@@ -193,6 +239,11 @@ unit code_db_reset(const unit u) {
 }
 
 static int code_arena_reserve(size_t need) {
+  evmsail_capacity_observe(EVMSAIL_CAP_CODE_BYTES, (uint64_t)need);
+#ifdef EVMSAIL_CAPACITY_FIXED
+  return need <= evmsail_capacity_limit(EVMSAIL_CAP_CODE_BYTES) &&
+         need <= code_arena_cap;
+#endif
   if (need <= code_arena_cap) return 1;
   size_t n = code_arena_cap ? code_arena_cap : 4096;
   while (n < need) {
@@ -206,6 +257,24 @@ static int code_arena_reserve(size_t need) {
   return 1;
 }
 
+bool code_db_append_region(const uint8_t *src, uint64_t len, uint64_t *off) {
+  static const uint8_t empty = 0;
+  if (!off || len > UINT32_MAX || (len != 0 && src == NULL)) return false;
+  if (len == 0) src = &empty;
+  if (len > SIZE_MAX - code_arena_len ||
+      !code_arena_reserve(code_arena_len + (size_t)len))
+    return false;
+  *off =
+#ifdef EVMSAIL_POINTER_ABI
+      len ? (uint64_t)(uintptr_t)(code_arena + code_arena_len) : 0;
+#else
+      (uint64_t)code_arena_len;
+#endif
+  if (len != 0) memcpy(code_arena + code_arena_len, src, (size_t)len);
+  code_arena_len += (size_t)len;
+  return true;
+}
+
 /* Content-address `src[0..len)` under the precomputed keccak `key`: find or
  * insert the bytes and Sail-supplied analysis result. A hash already present
  * with bytes is left untouched. Empty code interns nothing -- a codeless
@@ -217,8 +286,13 @@ static int code_db_intern(const sail_hash *key, const uint8_t *src,
   if (!code_db) code_db_grow();
   code_db_ent *e = code_db_find(key);
   if (e->used && e->len) {
-    if (e->len != len || memcmp(code_arena + e->off, src, len) != 0 ||
-        e->jumpdest_ref == 0) return 0;
+    const uint8_t *existing = NULL;
+    uint64_t existing_len = 0;
+    if (e->len != len ||
+        !code_db_resolve_code(e->off, e->len, &existing, &existing_len) ||
+        existing_len != len || memcmp(existing, src, len) != 0 ||
+        e->jumpdest_ref == 0)
+      return 0;
     size_t old_base = 0, new_base = 0;
     uint64_t nwords = 0;
     if (!jumpdest_table_span(e->jumpdest_ref, len, &old_base, &nwords) ||
@@ -232,6 +306,15 @@ static int code_db_intern(const sail_hash *key, const uint8_t *src,
     code_db_n++;
     if (code_db_n * 10 >= code_db_cap * 7) { code_db_grow(); e = code_db_find(key); }
   }
+#ifdef EVMSAIL_POINTER_ABI
+  if (!evmsail_stateless_input_contains((uint64_t)(uintptr_t)src, len) &&
+      !code_db_owned_contains((uint64_t)(uintptr_t)src, len)) {
+    uint64_t owned = 0;
+    if (!code_db_append_region(src, len, &owned)) return 0;
+    src = (const uint8_t *)(uintptr_t)owned;
+  }
+  e->off = (uint64_t)(uintptr_t)src;
+#else
   /* A source may itself be a CodeSource sub-slice. Preserve its arena offset
    * across reserve/realloc before copying the new (content-addressed) entry. */
   int src_in_arena = 0;
@@ -245,12 +328,27 @@ static int code_db_intern(const sail_hash *key, const uint8_t *src,
       src_off = (size_t)(addr - base);
     }
   }
+#ifdef EVMSAIL_CAPACITY_MEASURE
+  if (src_in_arena) {
+    e->off = (uint64_t)src_off;
+  } else {
+    if (len > SIZE_MAX - code_arena_len ||
+        !code_arena_reserve(code_arena_len + len))
+      return 0;
+    e->off = (uint64_t)code_arena_len;
+    memcpy(code_arena + code_arena_len, src, len);
+    code_arena_len += len;
+  }
+#else
   if (len > SIZE_MAX - code_arena_len ||
-      !code_arena_reserve(code_arena_len + len)) return 0;
+      !code_arena_reserve(code_arena_len + len))
+    return 0;
   if (src_in_arena) src = code_arena + src_off;
   e->off = (uint64_t)code_arena_len;
   memmove(code_arena + code_arena_len, src, len);
   code_arena_len += len;
+#endif
+#endif
   e->len = len;
   e->jumpdest_ref = jumpdest_ref;
   return 1;
@@ -273,7 +371,8 @@ bool code_db_insert_analyzed_bytes(const uint8_t *src, uint64_t len,
   if (len != 0 && jumpdest_ref == 0) return false;
 
   if (len != 0) {
-    const size_t base = (size_t)(jumpdest_ref - 1);
+    size_t base = 0;
+    if (!jumpdest_table_span(jumpdest_ref, len, &base, NULL)) return false;
     uint64_t position = 0;
     while (position < len) {
       const uint8_t opcode = src[position];
@@ -307,18 +406,15 @@ bool code_db_insert_analyzed_bytes(const uint8_t *src, uint64_t len,
   return code_db_intern(&key, src, (uint32_t)len, jumpdest_ref);
 }
 
-EVMSAIL_HASH_RETURN code_db_store_indexed_source(
-    EVMSAIL_HASH_RESULT(result) uint64_t source_kind, uint64_t off,
-    uint64_t len, uint64_t jumpdest_ref) {
+EVMSAIL_HASH_RETURN code_db_store_indexed_bytes(
+    EVMSAIL_HASH_RESULT(result) const uint8_t *src, uint64_t len,
+    uint64_t jumpdest_ref) {
   sail_hash key = {{0}};
   if (len > UINT32_MAX ||
       !jumpdest_table_matches(jumpdest_ref, (uint32_t)len)) {
     EVMSAIL_RETURN_HASH_BE_BYTES(result, key.bytes);
   }
-  const uint8_t *src = NULL;
-  uint64_t source_len = 0;
-  if (!evmsail_resolve_byte_source(source_kind, off, len, &src, &source_len) ||
-      !src || source_len != len) {
+  if (!src) {
     EVMSAIL_RETURN_HASH_BE_BYTES(result, key.bytes);
   }
   zkvm_keccak256_hash digest = {{0}};
@@ -366,19 +462,43 @@ bool code_db_lookup_indexed(sail_hash h, uint64_t *off, uint64_t *len,
   return true;
 }
 
-/* Resolve an absolute CodeSource arena span. Offsets, unlike pointers, remain
- * valid when the arena allocation grows. */
+/* Resolve a CodeSource span. The standard ABI uses owned-arena offsets. The
+ * fixed optimized ABI uses stable pointers into either the immutable input or
+ * the exactly preallocated owned-code arena. */
 int code_db_resolve_code(uint64_t off, uint64_t len,
                          const uint8_t **p, uint64_t *resolved_len) {
   static const uint8_t empty = 0;
   const uint8_t *src = &empty;
   if (len != 0) {
+#ifdef EVMSAIL_POINTER_ABI
+    if (code_db_owned_contains(off, len) ||
+        evmsail_stateless_input_contains(off, len))
+      src = (const uint8_t *)(uintptr_t)off;
+    else
+      return 0;
+#elif defined(EVMSAIL_CAPACITY_MEASURE)
+    if (evmsail_stateless_input_contains(off, len)) {
+      src = (const uint8_t *)(uintptr_t)off;
+    } else {
+      if (off > code_arena_len || len > code_arena_len - off) return 0;
+      src = code_arena + off;
+    }
+#else
     if (off > code_arena_len || len > code_arena_len - off) return 0;
     src = code_arena + off;
+#endif
   }
   if (p) *p = src;
   if (resolved_len) *resolved_len = len;
   return 1;
+}
+
+bool code_db_owned_contains(uint64_t pointer, uint64_t len) {
+  if (len == 0) return true;
+  uintptr_t base = (uintptr_t)code_arena;
+  uintptr_t address = (uintptr_t)pointer;
+  return code_arena && address >= base && address - base <= code_arena_len &&
+         len <= code_arena_len - (size_t)(address - base);
 }
 
 /* EIP-7702 delegation probe in one call (this runs on every CALL-family
@@ -386,7 +506,10 @@ int code_db_resolve_code(uint64_t off, uint64_t len,
  * walk).  The generated-model glue pairs this flag with the nominal address. */
 bool code_db_read_delegation_address(uint8_t address[20], sail_hash h) {
   const code_db_ent *e = code_db_get(h);
-  const uint8_t *p = e ? code_arena + e->off : NULL;
+  const uint8_t *p = NULL;
+  uint64_t resolved_len = 0;
+  if (e)
+    (void)code_db_resolve_code(e->off, e->len, &p, &resolved_len);
   bool deleg = e && e->len == 23 && p[0] == 0xef && p[1] == 0x01 && p[2] == 0x00;
   memset(address, 0, 20);
   if (deleg) memcpy(address, p + 3, 20);

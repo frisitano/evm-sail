@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+bool scratch_configure_capacity(uint64_t capacity);
 uint8_t *scratch_prepare(uint64_t off, uint64_t len);
 bool scratch_commit(uint64_t off, uint64_t len);
 /*
@@ -15,9 +16,11 @@ bool scratch_commit(uint64_t off, uint64_t len);
  * the visible arena length.
  */
 uint8_t *scratch_borrow(uint64_t len);
-bool scratch_append_source(uint64_t dst, uint64_t source, uint64_t off,
-                           uint64_t len);
+bool scratch_reserve_at(EVMSAIL_BYTE_QUANTITY_PARAM(off),
+                        EVMSAIL_BYTE_QUANTITY_PARAM(len));
 unit scratch_truncate(EVMSAIL_BYTE_QUANTITY_PARAM(len));
 const uint8_t *scratch_region(uint64_t off, uint64_t len);
+const uint8_t *scratch_base(void);
+uint64_t scratch_length(void);
 
 #endif

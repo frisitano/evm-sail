@@ -36,11 +36,13 @@ function debug_prepare_account_post_storage_roots() -> unit = {
 /*! Whether a validation failure has been recorded for the current
     block. */
 register validation_failure_present : bool = false
-/*! The instrumentation scope that was active when the failure was
-    recorded. */
-register validation_failure_scope : bits(8) = SCOPE_STATELESS_VALIDATION
+/*! The validation stage that was active when the failure was recorded. */
+register validation_failure_scope : validation_stage = 0
 /*! The block-validation error recorded by the last failure. */
 register validation_failure_reason : BlockError = InvalidConfig
+
+/*! Captures Sail's current throw site for the native failure dump. */
+val validation_debug_capture_location = impure { c: "validation_debug_capture_location" } : unit -> unit
 
 /*! Clears the recorded failure at the start of a validation attempt. */
 function validation_debug_reset() -> unit = {
@@ -49,10 +51,11 @@ function validation_debug_reset() -> unit = {
 
 /*! Records the failing validation stage and reason for host
     inspection; a later record overwrites an earlier one. */
-function validation_debug_record(scope : bits(8), reason : BlockError) -> unit = {
+function validation_debug_record(stage : validation_stage, reason : BlockError) -> unit = {
     validation_failure_present = true;
-    validation_failure_scope = scope;
-    validation_failure_reason = reason
+    validation_failure_scope = stage;
+    validation_failure_reason = reason;
+    validation_debug_capture_location()
 }
 
 /*! Rebuilds the storage root represented by the cached storage of `a`. */

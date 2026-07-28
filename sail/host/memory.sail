@@ -1,5 +1,5 @@
 /* Frames form a stack in the backing arena. Sail owns the active frame's   */
-/* absolute ByteSlice and saves/restores it with the other frame registers; */
+/* absolute MemorySlice and saves/restores it with the other frame registers; */
 /* this boundary only allocates, establishes, and releases arena frames.    */
 
 /*md
@@ -25,9 +25,9 @@ module where the frame context is defined.
 */
 /*! The byte at `off` of the current frame's memory; zero when never
     written. */
-val mem_read_byte = impure { c: "mem_read_byte" } : memory_pointer -> bits(8)
+val mem_read_byte = impure { c: "mem_read_byte" } : memory_pointer -> byte
 /*! Writes one byte at `off` of the current frame's memory (`MSTORE8`). */
-val mem_write_byte = impure { c: "mem_write_byte" } : (memory_pointer, bits(8)) -> unit
+val mem_write_byte = impure { c: "mem_write_byte" } : (memory_pointer, byte) -> unit
 
 /* call-frame memory lifecycle (the implementation owns the bytes) */
 /*! Resets memory to a single empty frame (per-transaction reset). */
@@ -44,7 +44,7 @@ val mem_frame_leave = impure { c: "mem_frame_leave" } : unit -> unit
     charged and returns the current frame's absolute source slice. Failure to
     realize this established precondition is a host implementation failure,
     not an EVM out-of-gas result. */
-val mem_expand = impure { c: "mem_expand" } : forall 'required, host_valid_range(0, 'required). int('required) -> ByteSliceLength(
+val mem_expand = impure { c: "mem_expand" } : forall 'required, host_valid_range(0, 'required). int('required) -> MemorySliceLength(
         'required,
     )
 

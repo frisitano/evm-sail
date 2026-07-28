@@ -49,8 +49,16 @@ optimized paths to C removed another 1,157,371 steps (13.53%). Together these
 two changes remove 2,506,900 steps (25.31%) from the pre-code-index build. The
 explicit result-union refinement then adds 71,274 steps (0.96%) while removing
 the optimized backend's direct mutation of generated Sail exception state:
-fallible C operations now return `Optimized*Result`, and the Sail wrapper
-performs the protocol `throw`.
+fallible C operations at that historical measurement point returned
+`Optimized*Result`, and the Sail wrapper performed the protocol `throw`.
+
+The current ABI has removed those result unions. Fallible optimized externs
+carry `$[c_throws]`, which makes the custom compiler emit the same
+`have_exception` unwind used after ordinary Sail throws. Their C
+implementations set the generated `InvalidBlock` exception and return a
+placeholder value that the generated caller never consumes. This preserves
+canonical exception propagation without the result aggregate or a process
+abort; a new ZisK step measurement has not yet been recorded for this change.
 
 The subsequent shared-table implementation initially regressed the five-case
 workload to 7,703,331 steps. One-probe reads, direct merge worklists, compact
@@ -222,6 +230,75 @@ On the five-case workload, the change reduced the guest from 6,097,003 to
 to 87,992 steps. The retained ELF produces byte-exact output and is 182,170
 steps (3.04%) cheaper than the staged Ethrex guest on this workload.
 
+### Direct blob-fee equation
+
+The standard Sail model states the EIP-4844 `fake_exponential` recurrence
+directly over mathematical non-negative integers. Blob-specific scaled-value,
+remainder, and product/divmod types are not part of the protocol model.
+
+The optimized splice replaces the complete `blob_base_fee` function with a
+fixed four-limb C implementation. It evaluates the same recurrence, caps the
+scaled output at `2^128 * denominator`, and returns the optimized `u128`
+block-context value. If the exact result exceeds that optimized domain, the
+`$[c_throws]` extern raises `InvalidBlock(ExecutionInvalid)` through the
+generated Sail exception state. Binary long division uses shifts and
+subtraction, so the freestanding RISC-V guest does not acquire
+compiler-provided 128-bit division dependencies.
+
+The increasing and decreasing excess-blob-gas fixtures each pass 12/12
+byte-exact in standard and optimized native builds. The increasing fixture also
+passes 12/12 in the forced-rebuilt optimized Spike guest.
+
+### Forward scratch RLP assembly
+
+The next serialization refinement is specified in
+[`HASH_PREIMAGE_ASSEMBLY.md`](HASH_PREIMAGE_ASSEMBLY.md). It removes
+prepend-and-reverse Sail-list construction from RLP output without making the
+readable specification depend on the optimized C representation.
+
+All non-contiguous RLP and composite preimages use one reusable scratch arena.
+The reservation policy varies with the encoding, but the storage model does
+not:
+
+- protocol-bounded encodings reserve their proven maximum;
+- transaction, receipt, and complete-trie encodings reserve a computed or
+  input-derived capacity;
+- outer RLP prefixes use reserved headroom, so completing a list does not move
+  its content;
+- one prepared cursor writes the encoding, and only its logical live
+  `ScratchSlice` is passed to the hash or enclosing encoder.
+
+The Amsterdam header is the first bounded target. Its RLP list content is
+629–749 bytes, its outer prefix is always three bytes, and its full encoding
+fits in 752 bytes. The standard Sail body will retain explicit forward
+field writes into a 752-byte scratch reservation. The optimized splice will
+reserve before borrowing the arena pointer, write every live byte directly,
+place the three-byte prefix in its headroom, and make one accelerator call
+over the actual encoded span. It neither clears unused capacity nor allocates
+a per-call `uint8_t[752]`.
+
+Implementation order:
+
+1. introduce the scratch-window invariant, nested marks, prefix headroom,
+   checked reservation, and the no-growth-while-borrowed rule;
+2. remove encoder-side `list(byte)` prepend/reversal paths;
+3. implement the header path in standard Sail and optimized C using the same
+   752-byte scratch reservation;
+4. add the transaction-signing plan, generating its list prefix and optional
+   EIP-155 suffix directly into scratch;
+5. move authorization signing, `CREATE`, transaction, receipt, and MPT
+   encoders to the same builder, selecting protocol or input-derived
+   reservations as appropriate;
+6. run complete standard/optimized native byte-exact validation, rebuild the
+   production ZisK ELF, and compare the retained workload against the current
+   5,806,021-step baseline, Reth, and Ethrex.
+
+Capacity and live length remain distinct. There is no serialization-specific
+Sail vector or C-local output array: scratch capacity grows to a workload
+high-water mark and is reused. Every live byte must be initialized before it
+is consumed, unused reserved bytes remain outside the live span, and no
+operation may grow the arena while an optimized C writer holds its pointer.
+
 ### Fixed-stack state-root refinement
 
 The readable Sail specification remains the normative state-root equation. The
@@ -272,8 +349,10 @@ different payload shapes rather than isolated to one fixture.
    for 712,563 and the already optimized state root for 453,365. The next BAL
    experiment should refine `validate_block_access_list` at the whole-operation
    boundary: parse canonical RLP and compare directly against the C-private
-   recorder, return an explicit `OptimizedUnitResult`, and let the Sail wrapper
-   throw. The standard Sail decoder and iterator remain normative.
+   recorder. The optimized exception bridge now raises canonical
+   `InvalidBlock` directly from C and unwinds through `$[c_throws]`; a BAL
+   override should use that same boundary. The standard Sail decoder and
+   iterator remain normative.
 3. **Input decoding and payload validation.**
    `decode_input` and `validate_payload` each cost about 579,000 tagged steps.
    Split SSZ offset/list validation from aggregate construction and separate
@@ -357,9 +436,9 @@ different shapes.
    `interpret`, while merge is negligible. Record the exact canonical code
    hashes and opcode/state-access counts for withdrawal, consolidation,
    builder-deposit, and builder-exit contracts.
-2. **Complete:** the generic optimized fetch/dispatch path resolves the code
-   source once, reads opcode/PUSH bytes without repeated `ByteSlice` source
-   dispatch, and preserves the generated Sail execution handlers. It improves
+2. **Complete:** the generic optimized fetch/dispatch path resolves the
+   nominal `CodeRegionSlice` once, reads opcode/PUSH bytes through that stable
+   region, and preserves the generated Sail execution handlers. It improves
    both request-contract and transaction execution.
 3. If generic fetch still leaves the fixed contracts dominant, prototype one
    whole-operation C implementation for one canonical request contract. Gate
@@ -397,10 +476,10 @@ follow-ups rather than the next default optimization:
    optimized ABI already uses one lazily allocated fixed-capacity array and
    structure assignment; it does not perform a heap allocation per frame.
    Change continuation storage only if counters show copying is material.
-5. Attribute `slice_load_n_word_source`, `evmsail_resolve_byte_source`,
-   `memcpy`, and `copy_zast` to opcode fetch, calldata, memory, hashing, or
-   receipts. Cache a resolved code pointer for the active frame or construct
-   words directly from the resolved bytes only where source lifetime permits.
+5. Attribute the provenance-specific slice loads, `memcpy`, and `copy_zast` to
+   opcode fetch, calldata, memory, hashing, or receipts. Cache a resolved code
+   pointer for the active frame or construct words directly from the resolved
+   bytes only where the nominal region lifetime permits.
 
 Retain generic interpreter changes only when they improve the five-case and
 recursive workloads. A request-contract-only improvement belongs in Phase 1,
@@ -417,7 +496,8 @@ not in the generic interpreter.
    - derive list bounds from canonical RLP lengths and enforce the protocol
      gas-derived maximum;
    - avoid generated recursive lists and aggregate option/union copies; and
-   - return `OptimizedUnitResult`, leaving the Sail wrapper to throw.
+   - return `unit` directly and raise canonical `InvalidBlock` through the
+     `$[c_throws]` optimized exception boundary on failure.
 3. Keep the existing Sail RLP decoder and `bal_iter_next` algorithm unchanged
    as the standard specification and differential oracle.
 4. Compare empty, duplicate-invalid, ordering-invalid, maximum-bound, and
@@ -504,10 +584,12 @@ Profile-enabled ELFs are diagnostic only and must not be used for the final
 step-count comparison.
 
 The implicit-zero skipping, whole-request HTR, raw state/BAL key,
-fixed-stack state-root, code-indexing, whole state-access, explicit optimized
-result unions, shared state tables, direct C merge, compact active indexes, and
-direct optimized root view passed all 26,104 retained fixtures byte-exact in
-both standard and optimised native builds on 2026-07-27. The high-level C
+fixed-stack state-root, code-indexing, whole state-access, direct optimized
+exception propagation, shared state tables, direct C merge, compact active
+indexes, and direct optimized root view passed all 26,104 retained fixtures
+byte-exact in both standard and optimised native builds. The direct
+`$[c_throws]` bridge was revalidated on the full optimized corpus on
+2026-07-28. The high-level C
 interpreter override, raw-opcode leaf dispatch, and direct word/fixed-byte
 conversion refinement subsequently passed the same 26,104/26,104 standard and
 26,104/26,104 optimized runs. The standard build retains the Sail interpreter

@@ -81,6 +81,5 @@ Every page's introduction contains prose, not just headings.
 
 ## Non-normative pages
 
-Pages documenting the host interface (`sail/host/`, excluding
-`sail/host/kernel/`) carry a `!!! note "Non-normative"` banner immediately
-after the introduction.
+Pages documenting the host interface (`sail/host/`) carry a
+`!!! note "Non-normative"` banner immediately after the introduction.

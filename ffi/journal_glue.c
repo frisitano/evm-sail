@@ -4,6 +4,7 @@
  * to kernel_state.c and no generated journal value crosses this boundary. */
 #include EVMSAIL_MODEL_H
 #include "kernel_state.h"
+#include "optimized_exception.h"
 #include "state_db.h"
 #include "value_convert.h"
 #include <stdbool.h>
@@ -13,7 +14,6 @@
 
 #ifndef EVMSAIL_STANDARD_ABI
 #include "mpt_glue.h"
-#include "optimized_result.h"
 
 static const uint8_t optimized_empty_trie_root[32] = {
     0x56, 0xe8, 0x1f, 0x17, 0x1b, 0xcc, 0x55, 0xa6,
@@ -59,10 +59,10 @@ static bool optimized_account_info_empty(const struct zAccountInfo *info) {
                 sizeof(optimized_keccak_empty)) == 0;
 }
 
-static bool optimized_account_row(struct zAccount *account,
+static bool optimized_account_row(struct zAccount *account, uint64_t layer,
                                   sail_address address) {
-  return acct_current_row_probe(
-      address, &account->zinfo.znonce, &account->zinfo.zbalance,
+  return acct_row_probe(
+      layer, address, &account->zinfo.znonce, &account->zinfo.zbalance,
       &account->zinfo.zstorage_root, &account->zinfo.zcode_hash,
       &account->zpresent, &account->zstorage_cleared, &account->zcreated,
       &account->zselfdestructed);
@@ -72,21 +72,27 @@ static enum zBlockError optimized_witness_error(uint64_t status) {
   return status == 1 ? zWitnessDeficient : zRlpDecode;
 }
 
-static struct zAccount optimized_k_aload_inner(sail_hash parent_state_root,
-                                               sail_address address,
-                                               uint64_t *status) {
+struct zAccount evmsail_k_aload(sail_hash parent_state_root,
+                                sail_address address) {
   struct zAccount account = optimized_empty_account();
+  if (optimized_account_row(&account, 0, address))
+    return account;
+
   bal_note_account_touch(address);
-  if (optimized_account_row(&account, address))
+  if (optimized_account_row(&account, 1, address))
     return account;
 
   sail_hash address_hash;
   struct zAccountInfo info;
   bool found = false;
   acct_secure_key(address, &address_hash);
-  *status = evmsail_stateless_account_read(
+  const uint64_t status = evmsail_stateless_account_read(
       parent_state_root, address_hash, &info, &found);
-  if (*status != 0) return account;
+  if (status != 0) {
+    evmsail_throw_invalid_block(optimized_witness_error(status),
+                                "optimized k_aload");
+    return account;
+  }
   if (found) {
     account.zinfo = info;
     account.zpresent = true;
@@ -99,50 +105,42 @@ static struct zAccount optimized_k_aload_inner(sail_hash parent_state_root,
   return account;
 }
 
-void evmsail_k_aload(struct zOptimizzedAccountResult *result,
-                     sail_hash parent_state_root, sail_address address) {
-  uint64_t status = 0;
-  const struct zAccount account =
-      optimized_k_aload_inner(parent_state_root, address, &status);
-  if (status == 0)
-    evmsail_account_result_ok(result, account);
-  else
-    evmsail_account_result_error(result, optimized_witness_error(status));
-}
-
-void evmsail_k_sload(struct zOptimizzedStorageResult *result,
-                     sail_hash parent_state_root, sail_address address,
-                     sail_word slot) {
+struct zStorageValue evmsail_k_sload(sail_hash parent_state_root,
+                                     sail_address address, sail_word slot) {
   struct zStorageValue value;
   memset(&value, 0, sizeof(value));
-  uint64_t status = 0;
+
+  const uint64_t tx_status =
+      storage_row_probe(0, address, slot, &value.zcurr, &value.zorig);
+  if (tx_status == 1) {
+    return value;
+  }
+
   bal_note_storage_read(address, slot);
+  if (tx_status == 2)
+    return value;
 
-  if (storage_current_row_probe(
-          address, slot, &value.zcurr, &value.zorig)) {
-    evmsail_storage_result_ok(result, value);
-    return;
+  if (storage_row_probe(1, address, slot, &value.zcurr, &value.zorig)) {
+    value.zorig = value.zcurr;
+    return value;
   }
 
-  const struct zAccount account =
-      optimized_k_aload_inner(parent_state_root, address, &status);
-  if (status != 0) {
-    evmsail_storage_result_error(result, optimized_witness_error(status));
-    return;
-  }
+  const struct zAccount account = evmsail_k_aload(parent_state_root, address);
+  if (have_exception) return value;
   sail_hash slot_hash;
   storage_secure_key(slot, &slot_hash);
   if (!account.zstorage_cleared) {
-    status = evmsail_stateless_storage_read(
+    const uint64_t status = evmsail_stateless_storage_read(
         account.zinfo.zstorage_root, slot_hash, &value.zcurr);
     if (status != 0) {
-      evmsail_storage_result_error(result, optimized_witness_error(status));
-      return;
+      evmsail_throw_invalid_block(optimized_witness_error(status),
+                                  "optimized k_sload");
+      return value;
     }
   }
   value.zorig = value.zcurr;
   storage_block_cache_raw(address, slot, slot_hash, value.zcurr);
-  evmsail_storage_result_ok(result, value);
+  return value;
 }
 
 unit evmsail_k_sstore(sail_address address, sail_word slot,
@@ -194,10 +192,10 @@ unit evmsail_store_account_info(sail_address address,
 
 #ifndef EVMSAIL_NO_STATE_ACCESS_AGGREGATE_GLUE
 static void storage_value_out(struct zoptionzIRStorageValuezK *out,
-                              uint64_t layer, sail_address addr,
+                              sail_address addr,
                               sail_word slot) {
   sail_word curr, orig;
-  if (storage_row_probe(layer, addr, slot, &curr, &orig)) {
+  if (storage_row_probe(1, addr, slot, &curr, &orig)) {
     out->kind = Kind_zSomezIRStorageValuezK;
     out->variants.zSomezIRStorageValuezK.zcurr = curr;
     out->variants.zSomezIRStorageValuezK.zorig = orig;
@@ -207,14 +205,26 @@ static void storage_value_out(struct zoptionzIRStorageValuezK *out,
   }
 }
 
-void storage_tx_get(struct zoptionzIRStorageValuezK *out,
-                    struct zStorageKey key) {
-  storage_value_out(out, 0, key.zaddr, key.zslot);
+void storage_tx_get(struct zStorageTxLookup *out, struct zStorageKey key) {
+  sail_word curr, orig;
+  const uint64_t status =
+      storage_row_probe(0, key.zaddr, key.zslot, &curr, &orig);
+  if (status == 1) {
+    out->kind = Kind_zStorageTxHit;
+    out->variants.zStorageTxHit.zcurr = curr;
+    out->variants.zStorageTxHit.zorig = orig;
+  } else if (status == 2) {
+    out->kind = Kind_zStorageTxCleared;
+    out->variants.zStorageTxCleared = UNIT;
+  } else {
+    out->kind = Kind_zStorageTxMiss;
+    out->variants.zStorageTxMiss = UNIT;
+  }
 }
 
 void storage_block_get(struct zoptionzIRStorageValuezK *out,
                        struct zStorageKey key) {
-  storage_value_out(out, 1, key.zaddr, key.zslot);
+  storage_value_out(out, key.zaddr, key.zslot);
 }
 #endif
 

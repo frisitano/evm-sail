@@ -80,8 +80,8 @@ struct FrameCheckpoint = {
     message : Message,
     call_depth : frame_depth,
     code : Code,
-    calldata : ByteSlice,
-    memory : ByteSlice,
+    calldata : CalldataSlice,
+    memory : MemorySlice,
 }
 
 /*! The suspended parent information needed after a message call returns. */

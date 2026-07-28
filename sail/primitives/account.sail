@@ -41,6 +41,15 @@ struct Account = {
     the pair EIP-2200/EIP-3529 gas and refund rules compare. */
 struct StorageValue = { curr : word, orig : word }
 
+/*! Result of consulting the transaction storage layer. A clear generation is
+    not a slot-row hit: it resolves the value to zero, but the caller must
+    still record the first EIP-7928 read of that slot. */
+union StorageTxLookup = {
+    StorageTxHit : StorageValue,
+    StorageTxCleared : unit,
+    StorageTxMiss : unit,
+}
+
 /*! A fully qualified storage key: account address and 256-bit slot. */
 struct StorageKey = { addr : address, slot : word }
 

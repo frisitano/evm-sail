@@ -16,7 +16,7 @@ This formal specification is inspired by and intended as a complement to [`evm-a
 Objectives:
 
 - **Complete & objective.** The specification is complete — it defines the EVM,
-  the host kernel it runs over, and the interface between them. And it is
+  the state kernel it runs over, and the host interface beneath them. And it is
   objective: the semantics are fixed by executable code, not by a
   natural-language description, and the conformance suite runs against the same
   model you reason about.
@@ -34,12 +34,16 @@ Objectives:
   syscall interface — exactly where symbolic execution, differential fuzzing,
   and witness-based (stateless) execution attach.
 
-## Architecture: a host kernel, and the EVM as user space
+## Architecture: a state kernel, and the EVM as user space
 
-- **The host** (`sail/host/`): Ethereum world state — user accounts, storage, transient
-  storage, warm sets, logs, refunds, snapshots, the block/tx environment —
-  plus per-frame memory and the crypto accelerators. Pure mechanism: no gas,
-  no policy. State is reachable **only** through the host's kernel functions:
+- **The host interface** (`sail/host/`): declaration-only contracts for
+  world-state containers, regions, per-frame memory, and crypto accelerators.
+  It supplies mechanism to executable builds but contains no protocol policy.
+
+- **The state kernel** (`sail/kernel/`): pure Sail state semantics over those
+  host contracts — accounts, storage, transient storage, warm sets, logs,
+  refunds, snapshots, and the block/transaction environment. State is
+  reachable from the EVM **only** through these kernel functions:
 
 ```
 Storage:  k_access_slot  k_sload  k_sstore  k_tload  k_tstore
@@ -56,12 +60,12 @@ Utils:    k_state_checkpoint  k_revert  k_log
   schedule, the EIP-2929/2200/3529 rules, transaction validity
   (EIP-1559/2930/3860/4844/7623/7702/7825), and *the decision of whether an
   effect happens* (a no-op SSTORE charges gas in the EVM but performs no
-  host write). User space: it holds no world state of its own and reaches
+  kernel write). User space: it holds no world state of its own and reaches
   it only through the k_* syscalls.
 
-The host-call boundary is what makes the model a natural front end for proof
+The kernel-call boundary is what makes the model a natural front end for proof
 systems (each kernel function is an interface channel), for stateless
-validation (the host fails closed on state absent from a witness), and for
+validation (the state layer fails closed on data absent from a witness), and for
 symbolic engines (the world is an explicit, finite interface).
 
 ### Native execution: C FFI backends
@@ -70,7 +74,7 @@ To *run* the model — the generated C compiled against `sail256` —
 the host's mechanism is backed by C FFI; the Sail definitions stay the
 specification while these provide the data structures underneath it.
 Performance-critical state lives behind C FFI with O(1) operations — EVM
-memory, generic byte-slice sources, and the output arena (`ffi/memory.c`,
+memory, nominal byte regions, and the output arena (`ffi/memory.c`,
 `ffi/output.c`), direct accelerator-backed hash and precompile adapters
 (`ffi/hash_glue.c`, `ffi/htr_glue.c`, `ffi/precompiles.c`), the operand stack
 (`ffi/stack.c`), and the content-addressed code arena plus packed JUMPDEST tables
@@ -105,12 +109,12 @@ validation requirements are tracked in
 ```
 sail/        the specification (evm.sail_project defines the single build)
   main.sail           the single stateless block executable entry
+  kernel/             the pure Sail k_* state semantics
   host/
     state.sail        world state: accounts, storage overlays, warm sets,
                       logs, journal, block/tx environment
-    kernel/           the kernel functions (k_*): the only state interface
     memory.sail       per-frame byte memory (C-backed, O(1))
-    byte_slice.sail   generic calldata/code views + Sail JUMPDEST analysis
+    region_access.sail nominal input/memory/code/scratch/output access
     scratch.sail      executor scratch-arena FFI contract
     code.sail         content-addressed code/JUMPDEST FFI contract
     nodes.sail        witness trie node DB FFI contract
@@ -139,7 +143,7 @@ sail/        the specification (evm.sail_project defines the single build)
       nodes.sail       node refs, RLP encoding/decoding + C-backed node-db
       updates.sail     ordered updates + canonical trie rebuilding
       trie.sail        witness overlay, roots + fail-closed lookup
-ffi/         C backends: memory.c (memory/generic byte slices), scratch.c
+ffi/         C backends: memory.c (memory/nominal region access), scratch.c
              (Sail-cursor-owned executor scratch arena), transient_storage.c
              (transient storage), state_db.c (account and persistent storage
              cache/update maps plus distinct keyed EIP-7928 read/change tables

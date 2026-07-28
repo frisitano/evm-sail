@@ -1,6 +1,5 @@
 #include "precompiles.h"
 
-#include "byte_slice_glue.h"
 #include "value_convert.h"
 #include "output.h"
 #include "zkvm_accelerators.h"
@@ -35,14 +34,9 @@ static uint8_t *grow(uint8_t **buffer, uint32_t *capacity, uint64_t need) {
   return bytes;
 }
 
-static bool resolve_input(AcceleratorInput *input, uint64_t kind, uint64_t off,
+static bool resolve_input(AcceleratorInput *input, const uint8_t *bytes,
                           uint64_t len) {
-  const uint8_t *bytes = NULL;
-  uint64_t resolved_len = 0;
-  if (len > UINT32_MAX ||
-      !evmsail_resolve_byte_source(kind, off, len, &bytes, &resolved_len) ||
-      resolved_len != len || (len && !bytes))
-    return false;
+  if (len > UINT32_MAX || (len && !bytes)) return false;
   input->bytes = len ? bytes : empty_input;
   input->length = (uint32_t)len;
   return true;
@@ -81,10 +75,10 @@ static bool finish_output(uint64_t len) {
   return output_buffer_finish(len);
 }
 
-bool accelerator_ripemd160_source(uint64_t kind, uint64_t off, uint64_t len) {
+bool accelerator_ripemd160_bytes(const uint8_t *bytes, uint64_t len) {
   AcceleratorInput input;
   zkvm_ripemd160_hash digest;
-  if (!resolve_input(&input, kind, off, len) ||
+  if (!resolve_input(&input, bytes, len) ||
       zkvm_ripemd160(input.bytes, input.length, &digest) != ZKVM_EOK)
     return output_failed();
   uint8_t *out = reserve_output(32);
@@ -93,11 +87,11 @@ bool accelerator_ripemd160_source(uint64_t kind, uint64_t off, uint64_t len) {
   return finish_output(32);
 }
 
-bool accelerator_modexp_source(uint64_t kind, uint64_t off, uint64_t len,
-                               uint64_t base_len, uint64_t exponent_len,
-                               uint64_t modulus_len) {
+bool accelerator_modexp_bytes(const uint8_t *bytes, uint64_t len,
+                              uint64_t base_len, uint64_t exponent_len,
+                              uint64_t modulus_len) {
   AcceleratorInput input;
-  if (!resolve_input(&input, kind, off, len)) return output_failed();
+  if (!resolve_input(&input, bytes, len)) return output_failed();
   if (base_len > UINT32_MAX || exponent_len > UINT32_MAX ||
       modulus_len > UINT32_MAX || base_len > UINT64_MAX - 96 ||
       exponent_len > UINT64_MAX - 96 - base_len ||
@@ -115,10 +109,10 @@ bool accelerator_modexp_source(uint64_t kind, uint64_t off, uint64_t len,
   return finish_output(modulus_len);
 }
 
-bool accelerator_bn254_add_source(uint64_t kind, uint64_t off, uint64_t len) {
+bool accelerator_bn254_add_bytes(const uint8_t *bytes, uint64_t len) {
   AcceleratorInput input;
   uint8_t encoded[128];
-  if (!resolve_input(&input, kind, off, len)) return output_failed();
+  if (!resolve_input(&input, bytes, len)) return output_failed();
   copy_padded(&input, encoded, 0, sizeof encoded);
   uint8_t *out = reserve_output(64);
   if (!out) return output_failed();
@@ -129,10 +123,10 @@ bool accelerator_bn254_add_source(uint64_t kind, uint64_t off, uint64_t len) {
   return finish_output(64);
 }
 
-bool accelerator_bn254_mul_source(uint64_t kind, uint64_t off, uint64_t len) {
+bool accelerator_bn254_mul_bytes(const uint8_t *bytes, uint64_t len) {
   AcceleratorInput input;
   uint8_t encoded[96];
-  if (!resolve_input(&input, kind, off, len)) return output_failed();
+  if (!resolve_input(&input, bytes, len)) return output_failed();
   copy_padded(&input, encoded, 0, sizeof encoded);
   uint8_t *out = reserve_output(64);
   if (!out) return output_failed();
@@ -143,11 +137,10 @@ bool accelerator_bn254_mul_source(uint64_t kind, uint64_t off, uint64_t len) {
   return finish_output(64);
 }
 
-uint64_t accelerator_bn254_pairing_source(uint64_t kind, uint64_t off,
-                                          uint64_t len) {
+uint64_t accelerator_bn254_pairing_bytes(const uint8_t *bytes, uint64_t len) {
   AcceleratorInput input;
   bool verified = false;
-  if (len % 192 != 0 || !resolve_input(&input, kind, off, len)) return 0;
+  if (len % 192 != 0 || !resolve_input(&input, bytes, len)) return 0;
   uint8_t *encoded = materialize(&input, len);
   if (!encoded ||
       zkvm_bn254_pairing((const zkvm_bn254_pairing_pair *)encoded,
@@ -156,12 +149,12 @@ uint64_t accelerator_bn254_pairing_source(uint64_t kind, uint64_t off,
   return 2 | (verified ? 1 : 0);
 }
 
-bool accelerator_blake2f_source(uint64_t kind, uint64_t off, uint64_t len,
-                                uint64_t rounds, uint64_t final_block) {
+bool accelerator_blake2f_bytes(const uint8_t *bytes, uint64_t len,
+                               uint64_t rounds, uint64_t final_block) {
   AcceleratorInput input;
   uint8_t state[64], message[128], offset_counter[16];
   if (len != 213 || rounds > UINT32_MAX || final_block > 1 ||
-      !resolve_input(&input, kind, off, len))
+      !resolve_input(&input, bytes, len))
     return output_failed();
   copy_padded(&input, state, 4, sizeof state);
   copy_padded(&input, message, 68, sizeof message);
@@ -177,12 +170,12 @@ bool accelerator_blake2f_source(uint64_t kind, uint64_t off, uint64_t len,
   return finish_output(64);
 }
 
-bool accelerator_kzg_point_evaluation_source(uint64_t kind, uint64_t off,
-                                             uint64_t len) {
+bool accelerator_kzg_point_evaluation_bytes(const uint8_t *bytes,
+                                            uint64_t len) {
   AcceleratorInput input;
   uint8_t commitment[48], z[32], y[32], proof[48];
   bool verified = false;
-  if (len != 192 || !resolve_input(&input, kind, off, len)) return false;
+  if (len != 192 || !resolve_input(&input, bytes, len)) return false;
   copy_padded(&input, z, 32, sizeof z);
   copy_padded(&input, y, 64, sizeof y);
   copy_padded(&input, commitment, 96, sizeof commitment);
@@ -238,10 +231,10 @@ static uint8_t *reserve_bls(uint64_t count, uint64_t item_size) {
   return grow(&bls_scratch, &bls_scratch_capacity, count * item_size);
 }
 
-bool accelerator_bls_g1_add_source(uint64_t kind, uint64_t off, uint64_t len) {
+bool accelerator_bls_g1_add_bytes(const uint8_t *bytes, uint64_t len) {
   AcceleratorInput input;
   uint8_t encoded[192], compact_result[96];
-  if (len != 256 || !resolve_input(&input, kind, off, len))
+  if (len != 256 || !resolve_input(&input, bytes, len))
     return output_failed();
   compact_g1(&input, encoded, 0);
   compact_g1(&input, encoded + 96, 128);
@@ -255,10 +248,10 @@ bool accelerator_bls_g1_add_source(uint64_t kind, uint64_t off, uint64_t len) {
   return finish_output(128);
 }
 
-bool accelerator_bls_g1_msm_source(uint64_t kind, uint64_t off, uint64_t len) {
+bool accelerator_bls_g1_msm_bytes(const uint8_t *bytes, uint64_t len) {
   AcceleratorInput input;
   uint8_t compact_result[96];
-  if (len == 0 || len % 160 != 0 || !resolve_input(&input, kind, off, len))
+  if (len == 0 || len % 160 != 0 || !resolve_input(&input, bytes, len))
     return output_failed();
   uint64_t count = len / 160;
   uint8_t *pairs = reserve_bls(count, 128);
@@ -277,10 +270,10 @@ bool accelerator_bls_g1_msm_source(uint64_t kind, uint64_t off, uint64_t len) {
   return finish_output(128);
 }
 
-bool accelerator_bls_g2_add_source(uint64_t kind, uint64_t off, uint64_t len) {
+bool accelerator_bls_g2_add_bytes(const uint8_t *bytes, uint64_t len) {
   AcceleratorInput input;
   uint8_t encoded[384], compact_result[192];
-  if (len != 512 || !resolve_input(&input, kind, off, len))
+  if (len != 512 || !resolve_input(&input, bytes, len))
     return output_failed();
   compact_g2(&input, encoded, 0);
   compact_g2(&input, encoded + 192, 256);
@@ -294,10 +287,10 @@ bool accelerator_bls_g2_add_source(uint64_t kind, uint64_t off, uint64_t len) {
   return finish_output(256);
 }
 
-bool accelerator_bls_g2_msm_source(uint64_t kind, uint64_t off, uint64_t len) {
+bool accelerator_bls_g2_msm_bytes(const uint8_t *bytes, uint64_t len) {
   AcceleratorInput input;
   uint8_t compact_result[192];
-  if (len == 0 || len % 288 != 0 || !resolve_input(&input, kind, off, len))
+  if (len == 0 || len % 288 != 0 || !resolve_input(&input, bytes, len))
     return output_failed();
   uint64_t count = len / 288;
   uint8_t *pairs = reserve_bls(count, 224);
@@ -316,11 +309,10 @@ bool accelerator_bls_g2_msm_source(uint64_t kind, uint64_t off, uint64_t len) {
   return finish_output(256);
 }
 
-uint64_t accelerator_bls_pairing_source(uint64_t kind, uint64_t off,
-                                        uint64_t len) {
+uint64_t accelerator_bls_pairing_bytes(const uint8_t *bytes, uint64_t len) {
   AcceleratorInput input;
   bool verified = false;
-  if (len == 0 || len % 384 != 0 || !resolve_input(&input, kind, off, len))
+  if (len == 0 || len % 384 != 0 || !resolve_input(&input, bytes, len))
     return 0;
   uint64_t count = len / 384;
   uint8_t *pairs = reserve_bls(count, 288);
@@ -335,11 +327,10 @@ uint64_t accelerator_bls_pairing_source(uint64_t kind, uint64_t off,
   return 2 | (verified ? 1 : 0);
 }
 
-bool accelerator_bls_map_fp_to_g1_source(uint64_t kind, uint64_t off,
-                                         uint64_t len) {
+bool accelerator_bls_map_fp_to_g1_bytes(const uint8_t *bytes, uint64_t len) {
   AcceleratorInput input;
   uint8_t field[48], compact_result[96];
-  if (len != 64 || !resolve_input(&input, kind, off, len))
+  if (len != 64 || !resolve_input(&input, bytes, len))
     return output_failed();
   compact_fp(&input, field, 0);
   uint8_t *out = reserve_output(128);
@@ -351,11 +342,10 @@ bool accelerator_bls_map_fp_to_g1_source(uint64_t kind, uint64_t off,
   return finish_output(128);
 }
 
-bool accelerator_bls_map_fp2_to_g2_source(uint64_t kind, uint64_t off,
-                                          uint64_t len) {
+bool accelerator_bls_map_fp2_to_g2_bytes(const uint8_t *bytes, uint64_t len) {
   AcceleratorInput input;
   uint8_t field[96], compact_result[192];
-  if (len != 128 || !resolve_input(&input, kind, off, len))
+  if (len != 128 || !resolve_input(&input, bytes, len))
     return output_failed();
   compact_fp(&input, field, 0);
   compact_fp(&input, field + 48, 64);
@@ -368,11 +358,10 @@ bool accelerator_bls_map_fp2_to_g2_source(uint64_t kind, uint64_t off,
   return finish_output(256);
 }
 
-bool accelerator_p256_verify_source(uint64_t kind, uint64_t off,
-                                    uint64_t len) {
+bool accelerator_p256_verify_bytes(const uint8_t *bytes, uint64_t len) {
   AcceleratorInput input;
   bool verified = false;
-  if (len != 160 || !resolve_input(&input, kind, off, len)) return false;
+  if (len != 160 || !resolve_input(&input, bytes, len)) return false;
   return zkvm_secp256r1_verify((const zkvm_secp256r1_hash *)input.bytes,
                               (const zkvm_secp256r1_signature *)(input.bytes + 32),
                               (const zkvm_secp256r1_pubkey *)(input.bytes + 96),

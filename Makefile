@@ -23,6 +23,10 @@ LAKE ?= lake
 COQC ?= opam exec -- rocq c
 PYTHON ?= python3
 UV ?= uv
+DOCS_VENV ?= .venv-docs
+DOCS_VENV_ABS := $(abspath $(DOCS_VENV))
+DOCS_BIN := $(DOCS_VENV_ABS)/bin
+DOCS_ENV_STAMP := $(DOCS_VENV_ABS)/.evm-sail-docs-ready
 
 PROJECT             := sail/evm.sail_project
 MODEL               := $(PROJECT) evm
@@ -45,11 +49,11 @@ LEAN_HOST_AXIOMS    := $(CONTRACTS_DIR)/HostAxioms.lean
 LEAN_SPECIALIZATION := $(CONTRACTS_DIR)/Specialization.lean
 LEAN_SAIL_LIB       ?= $(abspath $(LEAN_MODEL_DIR)/.lake/packages/Sail)
 COQ_SEMANTIC_FLAGS  := --coq-semantic-range-types --coq-undef-axioms
-C_MODEL_HEADERS     := sail_failure.h byte_slice_glue.h hash_glue.h precompiles.h output.h \
+C_MODEL_HEADERS     := sail_failure.h region_access.h hash_glue.h precompiles.h output.h \
                        scratch.h memory.h transient_storage.h stack.h frame_stack.h \
-                       code_db.h kernel_state.h trie_node_db.h state_db.h \
-                       cycle_scopes.h
-C_OPTIMIZED_HEADERS := word_bytes_glue.h htr_glue.h mpt_glue.h journal_glue.h interpreter_glue.h
+                       code_db.h kernel_state.h trie_node_db.h state_db.h
+C_OPTIMIZED_HEADERS := word_bytes_glue.h htr_glue.h mpt_glue.h journal_glue.h interpreter_glue.h \
+                       blob_fee_glue.h
 C_MODEL_INCLUDES    := $(foreach header,$(C_MODEL_HEADERS),--c-include $(header))
 C_OPTIMIZED_INCLUDES := $(foreach header,$(C_OPTIMIZED_HEADERS),--c-include $(header))
 C_PRESERVE_FLAGS    := --c-preserve main \
@@ -68,7 +72,7 @@ EXTERN_CONTRACT     := $(CONTRACTS_DIR)/ExternBoundary.v
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail extractions/contracts -name '*.sail' | sort)
 
-.PHONY: all check check-contracts clean docs-site eest-smoke extract extract-c extract-coq extract-lean fmt fmt-check help lean-extract lean-harness lint runtime-test zisk-guest
+.PHONY: all check check-contracts clean docs-env docs-site eest-smoke extract extract-c extract-coq extract-lean fmt fmt-check help lean-extract lean-harness lint runtime-test zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -82,6 +86,7 @@ help:
 	@echo "  make extract-coq    - generate and validate the complete Coq model"
 	@echo "  make extract-lean   - generate and compile the complete Lean model"
 	@echo "  make lean-harness   - build the executable Lean fixture-harness library"
+	@echo "  make docs-env       - create/update the repo-local uv documentation environment"
 	@echo "  make docs-site      - build the literate specification book"
 	@echo "  make zisk-guest     - build the production ZisK guest ELF"
 	@echo "  make extract        - run all maintained model extractions"
@@ -179,7 +184,7 @@ extract-c:
 		--cc "$(CC)" $(C_EDITOR_ARGS) \
 		--project $(PROJECT) --module evm --source-root sail \
 		--output-dir $(C_MODEL_DIR) --work-dir $(C_GENERATOR_DIR) \
-		--variable EVM_PROFILE=off --variable EVM_DEBUG=off -- \
+		--variable EVM_DEBUG=off -- \
 		-c -O --Oconstant-fold --c-no-main --c-no-rts \
 		$(C_PRESERVE_FLAGS) $(C_MODEL_INCLUDES) $(C_OPTIMIZED_INCLUDES) \
 		--c-specialize --c-require-bounded-int --splice $(C_OPTIMIZED_SPLICE)
@@ -190,7 +195,7 @@ extract-c:
 	test -s $(C_MODEL_DIR)/prelude.c
 	test -s $(C_MODEL_DIR)/primitives/quantities.c
 	test -s $(C_MODEL_DIR)/main.c
-	@source_count="$$($(SAIL) --list-files $(MODEL) --variable EVM_PROFILE=off --variable EVM_DEBUG=off | wc -w | tr -d ' ')"; \
+	@source_count="$$($(SAIL) --list-files $(MODEL) --variable EVM_DEBUG=off | wc -w | tr -d ' ')"; \
 		c_count="$$(find $(C_MODEL_DIR) -name '*.c' | wc -l | tr -d ' ')"; \
 		h_count="$$(find $(C_MODEL_DIR) -name '*.h' | wc -l | tr -d ' ')"; \
 		expected_count="$$((source_count + 1))"; \
@@ -219,10 +224,8 @@ extract-lean:
 	rm -rf $(LEAN_MODEL_DIR)/Evm
 	rm -f $(LEAN_MODEL_DIR)/Evm.lean $(LEAN_MODEL_DIR)/lakefile.toml $(LEAN_MODEL_DIR)/lean-toolchain $(LEAN_MODEL_DIR)/.gitignore
 	$(SAIL) --lean --lean-executable --lean-explicit-measures --lean-force-output --lean-source-root sail --lean-lib-path $(LEAN_SAIL_LIB) --lean-specialization-file $(LEAN_SPECIALIZATION) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
-	find $(LEAN_MODEL_DIR) -name '*.lean' -exec sed -i.bak 's/ByteSlice/EvmByteSlice/g' {} +
 	find $(LEAN_MODEL_DIR)/Evm -name '*.lean' -exec sed -E -i.bak 's/(^|[^[:alnum:]_])prefix([^[:alnum:]_]|$$)/\1evm_prefix\2/g' {} +
 	find $(LEAN_MODEL_DIR) -name '*.bak' -exec rm -f {} +
-	mv $(LEAN_MODEL_DIR)/Evm/Host/ByteSlice.lean $(LEAN_MODEL_DIR)/Evm/Host/EvmByteSlice.lean
 	rm -f $(LEAN_MODEL_DIR)/.gitignore
 	test -s $(LEAN_MODEL_DIR)/lakefile.toml
 	test -s $(LEAN_MODEL_DIR)/lean-toolchain
@@ -251,14 +254,24 @@ all: check lint fmt-check
 # sources. Requires uv, sail_lsp, and the mkdocstrings-sail package
 # (override MKDOCSTRINGS_SAIL to test another package checkout).
 BOOK ?= book
+BOOK_BUILD := $(BOOK)/.build
 MKDOCSTRINGS_SAIL ?= mkdocstrings-sail
-LEAN_BOOK_ROOT ?= $(LEAN_MODEL_DIR)
-docs-site:
-	@mkdir -p $(BOOK)/doc $(BOOK)/docs
-	$(SAIL) --doc --doc-format identity --doc-embed plain --doc-embed-with-location --doc-bundle doc.json -o $(BOOK)/doc $(MODEL)
-	$(UV) run --with-editable '$(abspath $(MKDOCSTRINGS_SAIL))' sail-lsp-index --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --output $(BOOK)/doc/lsp-index.json
-	$(UV) run --with-editable '$(abspath $(MKDOCSTRINGS_SAIL))' sail-book-gen --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --book $(BOOK) --site-name "EVM Sail Specification" $(if $(wildcard $(LEAN_BOOK_ROOT)/Evm.lean),--lean $(LEAN_BOOK_ROOT))
-	cd $(BOOK) && DISABLE_MKDOCS_2_WARNING=true $(UV) run --with-editable '$(abspath $(MKDOCSTRINGS_SAIL))' mkdocs build --strict -d site
+
+docs-env:
+	@if [ ! -x '$(DOCS_BIN)/python' ] || [ ! -f '$(DOCS_ENV_STAMP)' ] || [ '$(MKDOCSTRINGS_SAIL)/pyproject.toml' -nt '$(DOCS_ENV_STAMP)' ] || [ '$(MKDOCSTRINGS_SAIL)/uv.lock' -nt '$(DOCS_ENV_STAMP)' ]; then \
+		echo "docs-env: syncing $(DOCS_VENV) from $(MKDOCSTRINGS_SAIL)/uv.lock"; \
+		UV_PROJECT_ENVIRONMENT='$(DOCS_VENV_ABS)' $(UV) sync --project '$(abspath $(MKDOCSTRINGS_SAIL))' --locked || exit $$?; \
+		touch '$(DOCS_ENV_STAMP)'; \
+	fi
+
+docs-site: docs-env
+	'$(DOCS_BIN)/sail-book-gen' --book '$(BOOK)' --clean
+	rm -rf $(BOOK)/site $(BOOK_BUILD)
+	@mkdir -p $(BOOK_BUILD) $(BOOK)/docs
+	$(SAIL) --doc --doc-format identity --doc-embed plain --doc-embed-with-location --doc-bundle doc.json -o $(BOOK_BUILD) $(MODEL)
+	'$(DOCS_BIN)/sail-lsp-index' --sail '$(SAIL)' --root . --workspace-root sail --project $(PROJECT) --module evm --output $(BOOK_BUILD)/lsp-index.json
+	'$(DOCS_BIN)/sail-book-gen' --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --book $(BOOK) --site-name "EVM Sail Specification" --no-config
+	cd $(BOOK) && DISABLE_MKDOCS_2_WARNING=true '$(DOCS_BIN)/mkdocs' build --strict -d site
 	@echo "book: $(BOOK)/site/index.html"
 
 # Compatibility spelling retained for the docs workflow.
@@ -268,4 +281,5 @@ lean-harness:
 	bash $(LEAN_DIR)/runner/build_lib.sh
 
 clean:
-	rm -rf sail_smt_cache sail/sail_smt_cache $(C_BUILD_DIR) $(C_MODEL_DIR)/compile_commands.json $(LEAN_MODEL_DIR)/.lake/build $(BOOK)/site $(BOOK)/doc $(BOOK)/docs/reference $(BOOK)/docs/extraction $(BOOK)/docs/assets $(BOOK)/mkdocs.yml
+	@if [ -x '$(DOCS_BIN)/sail-book-gen' ]; then '$(DOCS_BIN)/sail-book-gen' --book '$(BOOK)' --clean; fi
+	rm -rf sail_smt_cache sail/sail_smt_cache $(C_BUILD_DIR) $(C_MODEL_DIR)/compile_commands.json $(LEAN_MODEL_DIR)/.lake/build $(BOOK)/site $(BOOK_BUILD) $(BOOK)/docs/extraction $(BOOK)/docs/assets/generated

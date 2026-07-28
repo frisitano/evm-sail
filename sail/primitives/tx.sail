@@ -21,6 +21,13 @@ enum TxType = {
     SetCodeTx,
 }
 
+/*md
+## Constants
+
+The Osaka execution-gas limit aliases the shared transaction bound.
+The empty source-backed collection constants initialize transactions without
+blob hashes, access-list entries, or authorization tuples.
+*/
 let OSAKA_TRANSACTION_GAS_LIMIT_VALUE : transaction_gas = TRANSACTION_EXECUTION_GAS_LIMIT
 let OSAKA_TRANSACTION_GAS_LIMIT : transaction_gas = TRANSACTION_EXECUTION_GAS_LIMIT
 
@@ -35,22 +42,45 @@ struct Authorization = {
 
 /*! The source-backed EIP-4844 versioned blob hashes of a transaction. */
 struct BlobHashes = {
-    bytes : ByteSlice,
+    bytes : StatelessInputSlice,
     count : transaction_blob_count,
 }
 
-let EMPTY_BLOB_HASHES : BlobHashes = struct { bytes = EMPTY_SLICE, count = 0 }
+let EMPTY_BLOB_HASHES : BlobHashes = struct { bytes = EMPTY_STATELESS_INPUT_SLICE, count = 0 }
 
 /*! A byte span contained by one SSZ transaction envelope. This structural
     bound is independent of fork-specific calldata and initcode limits. */
-type TransactionByteSlice = {
+type TransactionInputSlice = {
     'off 'len,
     source_valid_range('off, 'len) & 0 <= 'len & 'len <= transaction_length_bound.
-    ByteSliceFields('off, 'len)
+    StatelessInputSliceFields('off, 'len)
 }
 
 /*! A collection count whose entries are encoded inside one transaction. */
 type transaction_item_count = range(0, transaction_length_bound)
+
+/*! A validated EIP-2930 access-list content span. Entries remain in their
+    canonical RLP encoding and are consumed with a cursor when prewarming. */
+struct AccessListRef = {
+    encoded : StatelessInputSlice,
+    address_count : transaction_item_count,
+    slot_count : transaction_item_count,
+}
+
+let EMPTY_ACCESS_LIST_REF : AccessListRef = struct {
+        encoded = EMPTY_STATELESS_INPUT_SLICE,
+        address_count = 0,
+        slot_count = 0,
+    }
+
+/*! A validated EIP-7702 authorization-list content span. Tuples remain
+    source-backed and are decoded one at a time during execution. */
+struct AuthorizationListRef = {
+    encoded : StatelessInputSlice,
+    count : transaction_item_count,
+}
+
+let EMPTY_AUTHORIZATION_LIST_REF : AuthorizationListRef = struct { encoded = EMPTY_STATELESS_INPUT_SLICE, count = 0 }
 
 /*! A byte length contained by one SSZ transaction envelope. */
 type transaction_byte_length = range(0, transaction_length_bound)
@@ -77,30 +107,25 @@ struct Transaction = {
   gas_limit : transaction_gas, is_create : bool, recipient : address, value : word,
   /* the EIP-2718 envelope span this tx decoded from
      (the transactions-trie leaf value) */
-  raw : ByteSlice,
+  raw : StatelessInputSlice,
   /* calldata / creation initcode as a host byte source
      (normally a span of the stateless input) */
-  input_src : TransactionByteSlice,
-  /* EIP-2930 access-list addresses (one per entry) */
-  access_list_addresses : list(address),
-  access_list_address_count : transaction_item_count,
-  /* EIP-2930 access-list (address, slot) pairs */
-  access_list_slots : list(StorageKey),
-  access_list_slot_count : transaction_item_count,
+  input_src : TransactionInputSlice,
+  /* source-backed EIP-2930 access-list entries */
+  access_list : AccessListRef,
   /* EIP-1559 max_fee_per_gas (cap, for validity) */
   max_fee : word,
   /* EIP-4844 max_fee_per_blob_gas (cap, for validity) */
   max_blob_fee : word,
   /* EIP-1559 max_priority_fee_per_gas (cap, for validity) */
   max_priority_fee : word,
-  /* EIP-7702 set-code authorization tuples */
-  authorizations : list(Authorization),
-  authorization_count : transaction_item_count,
+  /* source-backed EIP-7702 set-code authorization tuples */
+  authorizations : AuthorizationListRef,
   /* source-backed EIP-4844 BLOBHASH operands */
   blob_hashes : BlobHashes,
   /* witnessed sender public key (0x04 ++ X ++ Y span); NOT trusted -- its
      derived address must equal the signer recovered at execution */
-  pubkey : ByteSlice,
+  pubkey : StatelessInputSlice,
   /* keccak of the signing preimage (EIP-155 / EIP-2718 domain applied),
      computed structurally at decode */
   signing_hash : hash,
@@ -110,15 +135,51 @@ struct Transaction = {
   sig_s : word
 }
 
-/*! A log record (YP §4.4.1, the log series): emitting address, 0–4
-    topics (`LOG0`–`LOG4`), and the data bytes. */
-struct LogEntry = {
-    address : address,
-    topics : list(word),
-    /* span into the log-data store (LogDataSource); the store persists across
-       the BLOCK (per-tx reset keeps it) so receipt-held entries stay valid
-       until block validation */
-    data : ByteSlice,
+/*! The bounded topic operands of one `LOG0`–`LOG4` instruction. Keeping the
+    arity in the constructor avoids allocating a Sail list for at most four
+    stack words. */
+union LogTopics = {
+    /* `LOG0`: no topics */
+    LogTopics0 : unit,
+    /* `LOG1`: one topic */
+    LogTopics1 : word,
+    /* `LOG2`: two topics in stack-pop order */
+    LogTopics2 : (word, word),
+    /* `LOG3`: three topics in stack-pop order */
+    LogTopics3 : (word, word, word),
+    /* `LOG4`: four topics in stack-pop order */
+    LogTopics4 : (word, word, word, word),
+}
+
+/*! A host log-store cursor. It is an opaque bounded collection position,
+    not an EVM quantity; the host rejects positions outside the current
+    block's retained log series. */
+type log_store_index_bound : Int = 2 ^ 64 - 1
+type log_store_index = range(0, log_store_index_bound)
+
+/*! Advances a valid log cursor without fixed-width wrapping. */
+function log_store_index_increment(value : log_store_index) -> log_store_index =
+    if value < sizeof(log_store_index_bound) then {
+        value + 1
+    } else {
+        assert(false, "log store index overflow");
+        0
+    }
+
+/*! Adds a relative log offset to its series start without wrapping. */
+function log_store_index_add(left : log_store_index, right : log_store_index) -> log_store_index =
+    if right <= sizeof(log_store_index_bound) - left then {
+        left + right
+    } else {
+        assert(false, "log store index overflow");
+        0
+    }
+
+/*! A consecutive transaction-local view into the block-lifetime host log
+    store. Reverted frame records are removed before this view is captured. */
+struct LogSeriesRef = {
+    start : log_store_index,
+    count : log_store_index,
 }
 
 /*! A transaction receipt. `success` means the top-level frame
@@ -138,7 +199,7 @@ struct Receipt = {
     gas_used : gas,
     execution_gas : gas,
     state_gas : gas,
-    logs : list(LogEntry),
+    logs : LogSeriesRef,
 }
 
 /*! The envelope type byte, as it appears in tx and receipt encodings. */

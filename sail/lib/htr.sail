@@ -2,33 +2,17 @@
 /*md
 # SSZ hash_tree_root
 
-Consensus-layer merkleization (SHA-256). Variable SSZ lists are consumed
-in source order: each real leaf is folded into a Merkle frontier exactly
-once, and final zero padding is then folded one level at a time. No leaf
-list or zero-hash lookup table is materialized.
+Consensus-layer merkleization (SHA-256). The standard specification follows
+the recursive SSZ definition directly: a subtree is either its leaf, the
+precomputed zero root at that depth, or the hash of its two children. Source
+references are indexed only when recursion reaches a live leaf, so no leaf
+list or explicit Merkle frontier is materialized.
 */
-/*! One level of the Merkle frontier: empty, or holding the pending left
-    subtree hash for that level. */
-union MerkleSlot = {
-    /* no pending subtree at this level */
-    EmptyMerkleSlot : unit,
-    /* the pending left-subtree hash */
-    OccupiedMerkleSlot : hash,
-}
-
 /*! The largest Merkle depth required by the supported execution-layer SSZ
     schemas. ByteList[2^30] is the widest one, with 2^25 chunks. */
 type htr_depth = range(0, 25)
 /*! A leaf count in any supported execution-layer SSZ Merkle tree. */
 type htr_leaf_count = range(0, 33554432)
-
-/*! A streaming Merkle frontier together with the number of leaves already
-    incorporated. */
-struct MerkleAccumulator = {
-    frontier : list(MerkleSlot),
-    count : htr_leaf_count,
-    depth : htr_depth,
-}
 
 /*md
 ## Constants
@@ -207,127 +191,51 @@ function htr_depth_increment(depth : htr_depth) -> htr_depth =
         throw InvalidBlock(WitnessDeficient)
     }
 
-/*! Creates an empty accumulator whose capacity is determined by its SSZ tree
-    depth. */
-function merkle_accumulator_empty(depth : htr_depth) -> MerkleAccumulator =
-    struct { frontier = [||], count = 0, depth = depth }
+/*! Recursively merkleizes the live prefix of a fixed leaf vector. */
+val merkleize_vector_subtree : forall 'n 'start, 1 <= 'n & 'n <= 32 & 0 <= 'start. (
+        vector('n, dec, hash),
+        int('start),
+        htr_leaf_count,
+        htr_depth,
+    ) -> hash
 
-/* Add leaf number `count` to a low-to-high frontier. A set bit in count has
- * one occupied slot at that level; carries consume those slots head-first. */
-/*! Adds leaf number `count` to a low-to-high frontier. A set bit in
-    `count` has one occupied slot at that level; carries consume those
-    slots head-first. */
-function merkle_push(frontier : list(MerkleSlot), count : htr_leaf_count, leaf : hash) -> list(MerkleSlot) =
-    if tmod_int(count, 2) == 0 then {
-        match frontier {
-            _ :: rest => OccupiedMerkleSlot(leaf) :: rest,
-            [||] => [|OccupiedMerkleSlot(leaf)|],
-        }
+function merkleize_vector_subtree(leaves, start, count, depth) =
+    if count == 0 then {
+        ssz_zero_hash(depth)
     } else {
-        match frontier {
-            OccupiedMerkleSlot(left) :: rest => EmptyMerkleSlot() ::
-                merkle_push(rest, tdiv_nat(count, 2), sha256_pair(left, leaf)),
-            EmptyMerkleSlot() :: _ => throw InvalidBlock(WitnessDeficient),
-            [||] => throw InvalidBlock(WitnessDeficient),
+        if depth == 0 then {
+            if (count == 1) & (start < length(leaves)) then {
+                leaves[length(leaves) - 1 - start]
+            } else {
+                throw InvalidBlock(WitnessDeficient)
+            }
+        } else {
+            let child_depth : htr_depth = depth - 1;
+            let half = htr_leaf_capacity(child_depth);
+            let left_count : htr_leaf_count = if count < half then { count } else { half };
+            let right_count : htr_leaf_count = if count < half then {
+                    0
+                } else {
+                    count - half
+                };
+            sha256_pair(
+                merkleize_vector_subtree(leaves, start, left_count, child_depth),
+                merkleize_vector_subtree(leaves, start + half, right_count, child_depth),
+            )
         }
     }
+termination_measure merkleize_vector_subtree(leaves, start, count, depth) = depth
 
-/*! Adds one leaf to a streaming Merkle accumulator. */
-function merkle_accumulator_push(accumulator : MerkleAccumulator, leaf : hash) -> MerkleAccumulator = {
-    let count = accumulator.count;
-    if count < htr_leaf_capacity(accumulator.depth) then {
-        struct {
-            frontier = merkle_push(accumulator.frontier, count, leaf),
-            count = count + 1,
-            depth = accumulator.depth,
-        }
+/*! `merkleize` of a fixed leaf vector at `depth` (SSZ spec). */
+val merkleize : forall 'n, 1 <= 'n & 'n <= 32. (vector('n, dec, hash), htr_depth) -> hash
+function merkleize(leaves, depth) = {
+    let count : htr_leaf_count = length(leaves);
+    if count <= htr_leaf_capacity(depth) then {
+        merkleize_vector_subtree(leaves, 0, count, depth)
     } else {
         throw InvalidBlock(WitnessDeficient)
     }
 }
-
-/* Pad a frontier to 2^depth leaves. The zero subtree for each level is a
- * precomputed SSZ constant. `has_right` distinguishes an accumulated
- * right-hand subtree from the scratch value in `right`, so an absent subtree
- * can advance through even levels without hashing zeroes that will be
- * discarded. */
-/*! Completes a frontier with zero subtrees through `remaining` levels and
-    returns its Merkle root. */
-function merkle_root_levels(
-    slots : list(MerkleSlot),
-    n : htr_leaf_count,
-    right : hash,
-    has_right : bool,
-    level : htr_depth,
-    remaining : htr_depth,
-) -> (
-    hash
-) =
-    if remaining == 0 then {
-        if n == 0 then {
-            if has_right then {
-                right
-            } else {
-                ssz_zero_hash(level)
-            }
-        } else {
-            if n == 1 then {
-                match slots {
-                    OccupiedMerkleSlot(root) :: _ => root,
-                    _ => throw InvalidBlock(WitnessDeficient),
-                }
-            } else {
-                throw InvalidBlock(WitnessDeficient)
-            }
-        }
-    } else {
-        let zero = ssz_zero_hash(level);
-        var slot : MerkleSlot = EmptyMerkleSlot();
-        var rest : list(MerkleSlot) = [||];
-        match slots {
-            head :: tail => {
-                slot = head;
-                rest = tail
-            },
-            [||] => (),
-        };
-        let is_odd = tmod_int(n, 2) == 1;
-        let next_right = if is_odd then {
-                match slot {
-                    OccupiedMerkleSlot(left) => sha256_pair(left, if has_right then right else zero),
-                    EmptyMerkleSlot() => throw InvalidBlock(WitnessDeficient),
-                }
-            } else {
-                if has_right then {
-                    sha256_pair(right, zero)
-                } else {
-                    ZERO_HASH
-                }
-            };
-        let next_level = htr_depth_increment(level);
-        merkle_root_levels(rest, tdiv_nat(n, 2), next_right, has_right | is_odd, next_level, remaining - 1)
-    }
-termination_measure merkle_root_levels(slots, n, right, has_right, level, remaining) = remaining
-
-/*! Pads an incremental Merkle accumulator to its declared depth and returns
-    its root. */
-function merkle_accumulator_root(accumulator : MerkleAccumulator) -> hash = {
-    cycle_scope_start(SCOPE_HTR_MERKLE_PADDING);
-    let root = merkle_root_levels(accumulator.frontier, accumulator.count, ZERO_HASH, false, 0, accumulator.depth);
-    cycle_scope_end(SCOPE_HTR_MERKLE_PADDING);
-    root
-}
-
-/*! Folds a leaf list into an existing Merkle accumulator in source order. */
-function merkle_accumulate(leaves : list(hash), accumulator : MerkleAccumulator) -> MerkleAccumulator =
-    match leaves {
-        [||] => accumulator,
-        leaf :: rest => merkle_accumulate(rest, merkle_accumulator_push(accumulator, leaf)),
-    }
-
-/*! `merkleize` of a fixed leaf list at `depth` (SSZ spec). */
-function merkleize(leaves : list(hash), depth : htr_depth) -> hash =
-    merkle_accumulator_root(merkle_accumulate(leaves, merkle_accumulator_empty(depth)))
 
 /* ---- basic types and byte sequences ----------------------------------- */
 
@@ -442,8 +350,14 @@ function clog2(n : htr_leaf_count) -> htr_depth = {
 }
 
 /*! The `chunk_index`-th 32-byte chunk of a byte span, zero-padded. */
-function htr_chunk(bytes : ByteSlice, chunk_index : htr_leaf_count) -> hash =
-    word_to_hash(slice_load(bytes, chunk_index * WORD_BYTE_LENGTH))
+val htr_chunk : forall 'index, 0 <= 'index. (StatelessInputSlice, int('index)) -> hash
+function htr_chunk(bytes, chunk_index) =
+    if chunk_index <= 33554432 then {
+        let offset : source_pointer = chunk_index * WORD_BYTE_LENGTH;
+        word_to_hash(slice_load(bytes, offset))
+    } else {
+        throw InvalidBlock(WitnessDeficient)
+    }
 
 /*! Returns the number of 32-byte chunks needed to contain `byte_len` bytes. */
 val htr_chunk_count : forall 'byte_len, source_valid_length('byte_len). int('byte_len) -> htr_leaf_count
@@ -454,26 +368,50 @@ function htr_chunk_count(byte_len) =
         throw InvalidBlock(WitnessDeficient)
     }
 
+/*! Recursively merkleizes the live chunk prefix of a byte span. */
+val htr_bytes_subtree : forall 'start, 0 <= 'start. (StatelessInputSlice, int('start), htr_leaf_count, htr_depth) -> hash
+function htr_bytes_subtree(bytes, start, count, depth) =
+    if count == 0 then {
+        ssz_zero_hash(depth)
+    } else {
+        if depth == 0 then {
+            if count == 1 then {
+                htr_chunk(bytes, start)
+            } else {
+                throw InvalidBlock(WitnessDeficient)
+            }
+        } else {
+            let child_depth : htr_depth = depth - 1;
+            let half = htr_leaf_capacity(child_depth);
+            let left_count : htr_leaf_count = if count < half then { count } else { half };
+            let right_count : htr_leaf_count = if count < half then {
+                    0
+                } else {
+                    count - half
+                };
+            sha256_pair(
+                htr_bytes_subtree(bytes, start, left_count, child_depth),
+                htr_bytes_subtree(bytes, start + half, right_count, child_depth),
+            )
+        }
+    }
+termination_measure htr_bytes_subtree(bytes, start, count, depth) = depth
+
 /*! The Merkle root of a byte span's chunks at `depth`. */
-function htr_bytes_root(bytes : ByteSlice, depth : htr_depth) -> hash = {
-    cycle_scope_start(SCOPE_HTR_BYTES_ROOT);
+function htr_bytes_root(bytes : StatelessInputSlice, depth : htr_depth) -> hash = {
     let count = htr_chunk_count(bytes.len);
-    var accumulator = merkle_accumulator_empty(depth);
-    var index : htr_leaf_count = 0;
-    while index < count termination_measure(count - index) do {
-        accumulator = merkle_accumulator_push(accumulator, htr_chunk(bytes, index));
-        index = accumulator.count
-    };
-    let root = merkle_accumulator_root(accumulator);
-    cycle_scope_end(SCOPE_HTR_BYTES_ROOT);
-    root
+    if count <= htr_leaf_capacity(depth) then {
+            htr_bytes_subtree(bytes, 0, count, depth)
+        } else {
+            throw InvalidBlock(WitnessDeficient)
+        }
 }
 
 /*md
 ## Helpers
 */
 /*! `hash_tree_root` of a fixed-size `ByteVector`. */
-function htr_bytevector(bytes : ByteSlice) -> hash = {
+function htr_bytevector(bytes : StatelessInputSlice) -> hash = {
     let chunks = htr_chunk_count(bytes.len);
     htr_bytes_root(bytes, clog2(chunks))
 }
@@ -484,27 +422,27 @@ function htr_bytevector(bytes : ByteSlice) -> hash = {
  * only the complete `htr_new_payload_request` operation, leaving this
  * readable specification unchanged. */
 /*! HTR of an SSZ `uint64` field in an enclosing serialized object. */
-val htr_ssz_uint : forall 'off, source_valid_range('off, 8). (ByteSlice, int('off)) -> hash
+val htr_ssz_uint : forall 'off, source_valid_range('off, 8). (StatelessInputSlice, int('off)) -> hash
 function htr_ssz_uint(bytes, offset) =
     htr_uint(decode_ssz_uint(bytes, offset))
 
 /*! HTR of an SSZ `uint256` field in an enclosing serialized object. */
-val htr_ssz_u256 : forall 'off, source_valid_range('off, 32). (ByteSlice, int('off)) -> hash
+val htr_ssz_u256 : forall 'off, source_valid_range('off, 32). (StatelessInputSlice, int('off)) -> hash
 function htr_ssz_u256(bytes, offset) =
     htr_u256(ssz_u256(bytes, offset))
 
 /*! HTR of an SSZ `Bytes32` field in an enclosing serialized object. */
-val htr_ssz_bytes32 : forall 'off, source_valid_range('off, 32). (ByteSlice, int('off)) -> hash
+val htr_ssz_bytes32 : forall 'off, source_valid_range('off, 32). (StatelessInputSlice, int('off)) -> hash
 function htr_ssz_bytes32(bytes, offset) =
     htr_bytes32(ssz_bytes32(bytes, offset))
 
 /*! HTR of an SSZ 20-byte address field in an enclosing serialized object. */
-val htr_ssz_addr : forall 'off, source_valid_range('off, 20). (ByteSlice, int('off)) -> hash
+val htr_ssz_addr : forall 'off, source_valid_range('off, 20). (StatelessInputSlice, int('off)) -> hash
 function htr_ssz_addr(bytes, offset) =
     htr_addr(ssz_addr(bytes, offset))
 
 /*! HTR of a fixed-size `ByteVector` field in an enclosing serialized object. */
-val htr_ssz_bytevector : forall 'off 'len, source_valid_range('off, 'len). (ByteSlice, int('off), int('len)) -> hash
+val htr_ssz_bytevector : forall 'off 'len, source_valid_range('off, 'len). (StatelessInputSlice, int('off), int('len)) -> hash
 function htr_ssz_bytevector(bytes, offset, len) = {
     if offset + len <= bytes.len then {
         htr_bytevector(sub_slice(bytes, offset, len))
@@ -515,7 +453,7 @@ function htr_ssz_bytevector(bytes, offset, len) = {
 
 /*! `hash_tree_root` of a `ByteList[limit_bytes]` (root at the limit's
     depth, length mixed in). */
-val htr_bytelist : forall 'limit, source_valid_length('limit). (ByteSlice, int('limit)) -> hash
+val htr_bytelist : forall 'limit, source_valid_length('limit). (StatelessInputSlice, int('limit)) -> hash
 function htr_bytelist(bytes, limit_bytes) = {
     let capacity = htr_chunk_count(limit_bytes);
     mix_in_length(htr_bytes_root(bytes, clog2(capacity)), bytes.len)
@@ -525,55 +463,94 @@ function htr_bytelist(bytes, limit_bytes) = {
 ## The execution payload
 */
 /*! `hash_tree_root` of one SSZ withdrawal (4 fields, depth 2). */
-function htr_withdrawal(withdrawal : ByteSliceLength(44)) -> hash = {
+function htr_withdrawal(withdrawal : StatelessInputSliceLength(44)) -> hash = {
     merkleize(
-        [|
+        [
             htr_ssz_uint(withdrawal, WD_INDEX),
             htr_ssz_uint(withdrawal, WD_VALIDATOR_INDEX),
             htr_ssz_addr(withdrawal, WD_ADDRESS),
             htr_ssz_uint(withdrawal, WD_AMOUNT),
-        |],
+        ],
         2,
     )
 }
 
+/*! Recursively merkleizes a range of transaction roots. */
+val htr_transactions_subtree : forall 'start, 0 <= 'start. (TransactionListRef, int('start), htr_leaf_count, htr_depth) -> hash
+function htr_transactions_subtree(transactions, start, count, depth) =
+    if count == 0 then {
+        ssz_zero_hash(depth)
+    } else {
+        if depth == 0 then {
+            if count == 1 then {
+                htr_bytelist(ssz_list_at(transactions, start), HTR_BYTE_LIST_LIMIT)
+            } else {
+                throw InvalidBlock(WitnessDeficient)
+            }
+        } else {
+            let child_depth : htr_depth = depth - 1;
+            let half = htr_leaf_capacity(child_depth);
+            let left_count : htr_leaf_count = if count < half then { count } else { half };
+            let right_count : htr_leaf_count = if count < half then {
+                    0
+                } else {
+                    count - half
+                };
+            sha256_pair(
+                htr_transactions_subtree(transactions, start, left_count, child_depth),
+                htr_transactions_subtree(transactions, start + half, right_count, child_depth),
+            )
+        }
+    }
+termination_measure htr_transactions_subtree(transactions, start, count, depth) = depth
+
 /*! `hash_tree_root` of the transactions list
     (`List[ByteList[2^30], 2^20]`). */
 function htr_transactions(transactions : TransactionListRef) -> hash = {
-    cycle_scope_start(SCOPE_HTR_TRANSACTIONS);
-    var cursor = ssz_list_cursor(transactions);
-    var accumulator = merkle_accumulator_empty(20);
-    while not_bool(ssz_list_cursor_empty(cursor)) termination_measure(cursor.items.count - cursor.index) do {
-        let (transaction, next) = ssz_list_pop(cursor);
-        cursor = next;
-        accumulator = merkle_accumulator_push(accumulator, htr_bytelist(transaction, HTR_BYTE_LIST_LIMIT))
-    };
-    let root = mix_in_length(merkle_accumulator_root(accumulator), accumulator.count);
-    cycle_scope_end(SCOPE_HTR_TRANSACTIONS);
-    root
+    let count : htr_leaf_count = transactions.count;
+    mix_in_length(htr_transactions_subtree(transactions, 0, count, 20), transactions.count)
 }
+
+/*! Recursively merkleizes a range of withdrawal roots. */
+val htr_withdrawals_subtree : forall 'start, 0 <= 'start. (WithdrawalListRef, int('start), htr_leaf_count, htr_depth) -> hash
+function htr_withdrawals_subtree(withdrawals, start, count, depth) =
+    if count == 0 then {
+        ssz_zero_hash(depth)
+    } else {
+        if depth == 0 then {
+            if count == 1 then {
+                htr_withdrawal(ssz_fixed_list_at(withdrawals, start, WD_SIZE))
+            } else {
+                throw InvalidBlock(WitnessDeficient)
+            }
+        } else {
+            let child_depth : htr_depth = depth - 1;
+            let half = htr_leaf_capacity(child_depth);
+            let left_count : htr_leaf_count = if count < half then { count } else { half };
+            let right_count : htr_leaf_count = if count < half then {
+                    0
+                } else {
+                    count - half
+                };
+            sha256_pair(
+                htr_withdrawals_subtree(withdrawals, start, left_count, child_depth),
+                htr_withdrawals_subtree(withdrawals, start + half, right_count, child_depth),
+            )
+        }
+    }
+termination_measure htr_withdrawals_subtree(withdrawals, start, count, depth) = depth
 
 /*! `hash_tree_root` of the withdrawals list (`List[SszWithdrawal, 16]`). */
 function htr_withdrawals(withdrawals : WithdrawalListRef) -> hash = {
-    cycle_scope_start(SCOPE_HTR_WITHDRAWALS);
-    var rest : WithdrawalListRef = withdrawals;
-    var accumulator = merkle_accumulator_empty(4);
-    while rest.count != 0 termination_measure(rest.count) do {
-        let (withdrawal, tail) = ssz_fixed_list_pop(rest, WD_SIZE);
-        rest = tail;
-        accumulator = merkle_accumulator_push(accumulator, htr_withdrawal(withdrawal))
-    };
-    let root = mix_in_length(merkle_accumulator_root(accumulator), accumulator.count);
-    cycle_scope_end(SCOPE_HTR_WITHDRAWALS);
-    root
+    let count : htr_leaf_count = withdrawals.count;
+    mix_in_length(htr_withdrawals_subtree(withdrawals, 0, count, 4), withdrawals.count)
 }
 
 /*! `hash_tree_root` of the `SszExecutionPayload` (19 fields, depth 5). */
 function htr_execution_payload(input_ref : StatelessInputRef) -> hash = {
-    cycle_scope_start(SCOPE_HTR_EXECUTION_PAYLOAD);
     let payload = input_ref.execution_payload;
-    let root = merkleize(
-        [|
+    merkleize(
+        [
             htr_ssz_bytes32(payload, 0),
             htr_ssz_addr(payload, PL_FEE_RECIPIENT),
             htr_ssz_bytes32(payload, PL_STATE_ROOT),
@@ -593,26 +570,50 @@ function htr_execution_payload(input_ref : StatelessInputRef) -> hash = {
             htr_ssz_uint(payload, PL_EXCESS_BLOB_GAS),
             htr_bytelist(input_ref.block_access_list, HTR_BYTE_LIST_LIMIT),
             htr_ssz_uint(payload, PL_SLOT_NUMBER),
-        |],
+        ],
         5,
-    );
-    cycle_scope_end(SCOPE_HTR_EXECUTION_PAYLOAD);
-    root
+    )
 }
 
+/*! Recursively merkleizes a range of fixed-width versioned hashes. */
+val htr_versioned_hashes_subtree : forall 'start, 0 <= 'start. (
+        StatelessInputSlice,
+        int('start),
+        htr_leaf_count,
+        htr_depth,
+    ) -> hash
+function htr_versioned_hashes_subtree(versioned_hashes, start, count, depth) =
+    if count == 0 then {
+        ssz_zero_hash(depth)
+    } else {
+        if depth == 0 then {
+            if count == 1 then {
+                htr_chunk(versioned_hashes, start)
+            } else {
+                throw InvalidBlock(WitnessDeficient)
+            }
+        } else {
+            let child_depth : htr_depth = depth - 1;
+            let half = htr_leaf_capacity(child_depth);
+            let left_count : htr_leaf_count = if count < half then { count } else { half };
+            let right_count : htr_leaf_count = if count < half then {
+                    0
+                } else {
+                    count - half
+                };
+            sha256_pair(
+                htr_versioned_hashes_subtree(versioned_hashes, start, left_count, child_depth),
+                htr_versioned_hashes_subtree(versioned_hashes, start + half, right_count, child_depth),
+            )
+        }
+    }
+termination_measure htr_versioned_hashes_subtree(versioned_hashes, start, count, depth) = depth
+
 /*! `hash_tree_root` of the versioned hashes (`List[Bytes32, 4096]`). */
-function htr_versioned_hashes(versioned_hashes : ByteSlice) -> hash = {
-    cycle_scope_start(SCOPE_HTR_VERSIONED_HASHES);
-    var rest = ssz_bounded_fixed_list_ref(versioned_hashes, WORD_BYTE_LENGTH, sizeof(blob_commitment_count_bound));
-    var accumulator = merkle_accumulator_empty(12);
-    while rest.count != 0 termination_measure(rest.count) do {
-        let (versioned_hash, tail) = ssz_fixed_list_pop(rest, WORD_BYTE_LENGTH);
-        rest = tail;
-        accumulator = merkle_accumulator_push(accumulator, word_to_hash(slice_load(versioned_hash, 0)))
-    };
-    let root = mix_in_length(merkle_accumulator_root(accumulator), accumulator.count);
-    cycle_scope_end(SCOPE_HTR_VERSIONED_HASHES);
-    root
+function htr_versioned_hashes(versioned_hashes : StatelessInputSlice) -> hash = {
+    let items = ssz_bounded_fixed_list_ref(versioned_hashes, WORD_BYTE_LENGTH, sizeof(blob_commitment_count_bound));
+    let count : htr_leaf_count = items.count;
+    mix_in_length(htr_versioned_hashes_subtree(versioned_hashes, 0, count, 12), items.count)
 }
 
 /*md
@@ -621,163 +622,226 @@ function htr_versioned_hashes(versioned_hashes : ByteSlice) -> hash = {
 The EIP-7685 execution-request commitments.
 */
 /*! `hash_tree_root` of one deposit request (5 fields, depth 3). */
-function htr_deposit(deposit : ByteSliceLength(192)) -> hash = {
+function htr_deposit(deposit : StatelessInputSliceLength(192)) -> hash = {
     merkleize(
-        [|
+        [
             htr_ssz_bytevector(deposit, HTR_DEPOSIT_PUBKEY, HTR_DEPOSIT_PUBKEY_LENGTH),
             htr_ssz_bytes32(deposit, HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS),
             htr_ssz_uint(deposit, HTR_DEPOSIT_AMOUNT),
             htr_ssz_bytevector(deposit, HTR_DEPOSIT_SIGNATURE, HTR_DEPOSIT_SIGNATURE_LENGTH),
             htr_ssz_uint(deposit, HTR_DEPOSIT_INDEX),
-        |],
+        ],
         3,
     )
 }
 
 /*! `hash_tree_root` of one withdrawal request (3 fields, depth 2). */
-function htr_withdrawal_request(request : ByteSliceLength(76)) -> hash = {
+function htr_withdrawal_request(request : StatelessInputSliceLength(76)) -> hash = {
     merkleize(
-        [|
+        [
             htr_ssz_addr(request, HTR_REQUEST_SOURCE_ADDRESS),
             htr_ssz_bytevector(request, HTR_REQUEST_SOURCE_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
             htr_ssz_uint(request, HTR_WITHDRAWAL_REQUEST_AMOUNT),
-        |],
+        ],
         2,
     )
 }
 
 /*! `hash_tree_root` of one consolidation request (3 fields, depth 2). */
-function htr_consolidation_request(request : ByteSliceLength(116)) -> hash =
+function htr_consolidation_request(request : StatelessInputSliceLength(116)) -> hash =
     merkleize(
-        [|
+        [
             htr_ssz_addr(request, HTR_REQUEST_SOURCE_ADDRESS),
             htr_ssz_bytevector(request, HTR_REQUEST_SOURCE_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
             htr_ssz_bytevector(request, HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
-        |],
+        ],
         2,
     )
 
 /*! `hash_tree_root` of one builder deposit request (4 fields, depth 2). */
-function htr_builder_deposit_request(request : ByteSliceLength(184)) -> hash =
+function htr_builder_deposit_request(request : StatelessInputSliceLength(184)) -> hash =
     merkleize(
-        [|
+        [
             htr_ssz_bytevector(request, HTR_BUILDER_DEPOSIT_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
             htr_ssz_bytes32(request, HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS),
             htr_ssz_uint(request, HTR_BUILDER_DEPOSIT_AMOUNT),
             htr_ssz_bytevector(request, HTR_BUILDER_DEPOSIT_SIGNATURE, HTR_DEPOSIT_SIGNATURE_LENGTH),
-        |],
+        ],
         2,
     )
 
 /*! `hash_tree_root` of one builder exit request (2 fields, depth 1). */
-function htr_builder_exit_request(request : ByteSliceLength(68)) -> hash =
+function htr_builder_exit_request(request : StatelessInputSliceLength(68)) -> hash =
     merkleize(
-        [|
+        [
             htr_ssz_addr(request, HTR_BUILDER_EXIT_SOURCE_ADDRESS),
             htr_ssz_bytevector(request, HTR_BUILDER_EXIT_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
-        |],
+        ],
         1,
     )
 
+/*! The fixed-width execution-request element whose root occupies a list
+    leaf. */
+enum HtrRequestKind = {
+    HtrDeposit,
+    HtrWithdrawalRequest,
+    HtrConsolidationRequest,
+    HtrBuilderDepositRequest,
+    HtrBuilderExitRequest,
+}
+
+/*! Hashes one fixed-width execution-request item at `index`. */
+val htr_request_leaf : forall 'index, 0 <= 'index. (StatelessInputSlice, int('index), HtrRequestKind) -> hash
+function htr_request_leaf(requests, index, kind) =
+    match kind {
+        HtrDeposit => {
+            let offset = index * HTR_DEPOSIT_LENGTH;
+            if offset + HTR_DEPOSIT_LENGTH <= requests.len then {
+                htr_deposit(sub_slice(requests, offset, HTR_DEPOSIT_LENGTH))
+            } else {
+                throw InvalidBlock(InvalidConfig)
+            }
+        },
+        HtrWithdrawalRequest => {
+            let offset = index * HTR_WITHDRAWAL_REQUEST_LENGTH;
+            if offset + HTR_WITHDRAWAL_REQUEST_LENGTH <= requests.len then {
+                htr_withdrawal_request(sub_slice(requests, offset, HTR_WITHDRAWAL_REQUEST_LENGTH))
+            } else {
+                throw InvalidBlock(InvalidConfig)
+            }
+        },
+        HtrConsolidationRequest => {
+            let offset = index * HTR_CONSOLIDATION_REQUEST_LENGTH;
+            if offset + HTR_CONSOLIDATION_REQUEST_LENGTH <= requests.len then {
+                htr_consolidation_request(sub_slice(requests, offset, HTR_CONSOLIDATION_REQUEST_LENGTH))
+            } else {
+                throw InvalidBlock(InvalidConfig)
+            }
+        },
+        HtrBuilderDepositRequest => {
+            let offset = index * HTR_BUILDER_DEPOSIT_LENGTH;
+            if offset + HTR_BUILDER_DEPOSIT_LENGTH <= requests.len then {
+                htr_builder_deposit_request(sub_slice(requests, offset, HTR_BUILDER_DEPOSIT_LENGTH))
+            } else {
+                throw InvalidBlock(InvalidConfig)
+            }
+        },
+        HtrBuilderExitRequest => {
+            let offset = index * HTR_BUILDER_EXIT_LENGTH;
+            if offset + HTR_BUILDER_EXIT_LENGTH <= requests.len then {
+                htr_builder_exit_request(sub_slice(requests, offset, HTR_BUILDER_EXIT_LENGTH))
+            } else {
+                throw InvalidBlock(InvalidConfig)
+            }
+        },
+    }
+
+/*! Recursively merkleizes a range of fixed-width execution-request roots. */
+val htr_requests_subtree : forall 'start, 0 <= 'start. (
+        StatelessInputSlice,
+        HtrRequestKind,
+        int('start),
+        htr_leaf_count,
+        htr_depth,
+    ) -> hash
+function htr_requests_subtree(requests, kind, start, count, depth) =
+    if count == 0 then {
+        ssz_zero_hash(depth)
+    } else {
+        if depth == 0 then {
+            if count == 1 then {
+                htr_request_leaf(requests, start, kind)
+            } else {
+                throw InvalidBlock(WitnessDeficient)
+            }
+        } else {
+            let child_depth : htr_depth = depth - 1;
+            let half = htr_leaf_capacity(child_depth);
+            let left_count : htr_leaf_count = if count < half then { count } else { half };
+            let right_count : htr_leaf_count = if count < half then {
+                    0
+                } else {
+                    count - half
+                };
+            sha256_pair(
+                htr_requests_subtree(requests, kind, start, left_count, child_depth),
+                htr_requests_subtree(requests, kind, start + half, right_count, child_depth),
+            )
+        }
+    }
+termination_measure htr_requests_subtree(requests, kind, start, count, depth) = depth
+
 /*! `hash_tree_root` of the deposit-request list (depth 13). */
-function htr_deposits(deposits : ByteSlice) -> hash = {
-    var rest = ssz_bounded_fixed_list_ref(deposits, HTR_DEPOSIT_LENGTH, sizeof(deposit_request_count_bound));
-    var accumulator = merkle_accumulator_empty(13);
-    while rest.count != 0 termination_measure(rest.count) do {
-        let (deposit, tail) = ssz_fixed_list_pop(rest, HTR_DEPOSIT_LENGTH);
-        rest = tail;
-        accumulator = merkle_accumulator_push(accumulator, htr_deposit(deposit))
-    };
-    mix_in_length(merkle_accumulator_root(accumulator), accumulator.count)
+function htr_deposits(deposits : StatelessInputSlice) -> hash = {
+    let items = ssz_bounded_fixed_list_ref(deposits, HTR_DEPOSIT_LENGTH, sizeof(deposit_request_count_bound));
+    let count : htr_leaf_count = items.count;
+    mix_in_length(htr_requests_subtree(deposits, HtrDeposit, 0, count, 13), items.count)
 }
 
 /*! `hash_tree_root` of the withdrawal-request list (depth 4). */
-function htr_withdrawal_requests(requests : ByteSlice) -> hash = {
-    var rest = ssz_bounded_fixed_list_ref(
+function htr_withdrawal_requests(requests : StatelessInputSlice) -> hash = {
+    let items = ssz_bounded_fixed_list_ref(
         requests,
         HTR_WITHDRAWAL_REQUEST_LENGTH,
         sizeof(withdrawal_request_count_bound),
     );
-    var accumulator = merkle_accumulator_empty(4);
-    while rest.count != 0 termination_measure(rest.count) do {
-        let (request, tail) = ssz_fixed_list_pop(rest, HTR_WITHDRAWAL_REQUEST_LENGTH);
-        rest = tail;
-        accumulator = merkle_accumulator_push(accumulator, htr_withdrawal_request(request))
-    };
-    mix_in_length(merkle_accumulator_root(accumulator), accumulator.count)
+    let count : htr_leaf_count = items.count;
+    mix_in_length(htr_requests_subtree(requests, HtrWithdrawalRequest, 0, count, 4), items.count)
 }
 
 /*! `hash_tree_root` of the consolidation-request list (depth 1). */
-function htr_consolidation_requests(requests : ByteSlice) -> hash = {
-    var rest = ssz_bounded_fixed_list_ref(
+function htr_consolidation_requests(requests : StatelessInputSlice) -> hash = {
+    let items = ssz_bounded_fixed_list_ref(
         requests,
         HTR_CONSOLIDATION_REQUEST_LENGTH,
         sizeof(consolidation_request_count_bound),
     );
-    var accumulator = merkle_accumulator_empty(1);
-    while rest.count != 0 termination_measure(rest.count) do {
-        let (request, tail) = ssz_fixed_list_pop(rest, HTR_CONSOLIDATION_REQUEST_LENGTH);
-        rest = tail;
-        accumulator = merkle_accumulator_push(accumulator, htr_consolidation_request(request))
-    };
-    mix_in_length(merkle_accumulator_root(accumulator), accumulator.count)
+    let count : htr_leaf_count = items.count;
+    mix_in_length(htr_requests_subtree(requests, HtrConsolidationRequest, 0, count, 1), items.count)
 }
 
 /*! `hash_tree_root` of the builder-deposit-request list (depth 6). */
-function htr_builder_deposit_requests(requests : ByteSlice) -> hash = {
-    var rest = ssz_bounded_fixed_list_ref(
+function htr_builder_deposit_requests(requests : StatelessInputSlice) -> hash = {
+    let items = ssz_bounded_fixed_list_ref(
         requests,
         HTR_BUILDER_DEPOSIT_LENGTH,
         sizeof(builder_deposit_request_count_bound),
     );
-    var accumulator = merkle_accumulator_empty(6);
-    while rest.count != 0 termination_measure(rest.count) do {
-        let (request, tail) = ssz_fixed_list_pop(rest, HTR_BUILDER_DEPOSIT_LENGTH);
-        rest = tail;
-        accumulator = merkle_accumulator_push(accumulator, htr_builder_deposit_request(request))
-    };
-    mix_in_length(merkle_accumulator_root(accumulator), accumulator.count)
+    let count : htr_leaf_count = items.count;
+    mix_in_length(htr_requests_subtree(requests, HtrBuilderDepositRequest, 0, count, 6), items.count)
 }
 
 /*! `hash_tree_root` of the builder-exit-request list (depth 4). */
-function htr_builder_exit_requests(requests : ByteSlice) -> hash = {
-    var rest = ssz_bounded_fixed_list_ref(requests, HTR_BUILDER_EXIT_LENGTH, sizeof(builder_exit_request_count_bound));
-    var accumulator = merkle_accumulator_empty(4);
-    while rest.count != 0 termination_measure(rest.count) do {
-        let (request, tail) = ssz_fixed_list_pop(rest, HTR_BUILDER_EXIT_LENGTH);
-        rest = tail;
-        accumulator = merkle_accumulator_push(accumulator, htr_builder_exit_request(request))
-    };
-    mix_in_length(merkle_accumulator_root(accumulator), accumulator.count)
+function htr_builder_exit_requests(requests : StatelessInputSlice) -> hash = {
+    let items = ssz_bounded_fixed_list_ref(requests, HTR_BUILDER_EXIT_LENGTH, sizeof(builder_exit_request_count_bound));
+    let count : htr_leaf_count = items.count;
+    mix_in_length(htr_requests_subtree(requests, HtrBuilderExitRequest, 0, count, 4), items.count)
 }
 
 /*! `hash_tree_root` of the `SszExecutionRequests` container. */
 function htr_execution_requests(input_ref : StatelessInputRef) -> hash = {
-    cycle_scope_start(SCOPE_HTR_EXECUTION_REQUESTS);
-    let root = merkleize(
-        [|
+    merkleize(
+        [
             htr_deposits(input_ref.deposits),
             htr_withdrawal_requests(input_ref.withdrawal_requests),
             htr_consolidation_requests(input_ref.consolidation_requests),
             htr_builder_deposit_requests(input_ref.builder_deposit_requests),
             htr_builder_exit_requests(input_ref.builder_exit_requests),
-        |],
+        ],
         3,
-    );
-    cycle_scope_end(SCOPE_HTR_EXECUTION_REQUESTS);
-    root
+    )
 }
 
 /*! `hash_tree_root` of the `SszNewPayloadRequest` (4 fields, depth 2) —
     the commitment the guest proves its input against. */
 function htr_new_payload_request(input_ref : StatelessInputRef) -> hash = {
     merkleize(
-        [|
+        [
             htr_execution_payload(input_ref),
             htr_versioned_hashes(input_ref.versioned_hashes),
             htr_ssz_bytes32(input_ref.new_payload_request, NPR_BEACON_ROOT),
             htr_execution_requests(input_ref),
-        |],
+        ],
         2,
     )
 }

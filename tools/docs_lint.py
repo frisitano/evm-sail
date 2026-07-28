@@ -85,7 +85,7 @@ def lint_file(path: Path, rel: str) -> list[str]:
         if flat and "." not in flat:
             problems.append(f"{rel}: /*! first sentence lacks a period: {flat[:60]!r}")
 
-    is_host = "/host/" in rel and "/host/kernel/" not in rel
+    is_host = "/host/" in rel
     if is_host and md_blocks and "Non-normative" not in md_blocks[0]:
         problems.append(f"{rel}: host-interface page missing the Non-normative banner")
 
@@ -227,7 +227,7 @@ def lint_mod(path: Path, rel: str) -> list[str]:
         problems.append(f"{rel}:{line}: banned term {match.group(0)!r}")
     if not any(line.strip() and not line.lstrip().startswith(("#", "-", "!!!", " ")) for line in text.splitlines()):
         problems.append(f"{rel}: overview has no prose")
-    is_host = "/host/" in f"/{rel}" and "/host/kernel/" not in f"/{rel}"
+    is_host = "/host/" in f"/{rel}"
     if is_host and "Non-normative" not in text:
         problems.append(f"{rel}: host-interface overview missing the Non-normative banner")
     return problems

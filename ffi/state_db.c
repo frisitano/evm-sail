@@ -694,8 +694,10 @@ unit storage_block_cache_raw(sail_address a, sail_word s_, sail_hash slot_hash,
 }
 
 
-/* A transaction miss after a storage clear resolves to zero instead of
-   falling through to the block/witness base. */
+/* A hit is an actual cached row in the requested semantic layer. A fresh
+   transaction storage generation is intentionally not reported as a hit:
+   k_sload must record the first slot read in the BAL before resolving that
+   separately-observed clear generation to zero. */
 uint64_t storage_row_probe(uint64_t layer, sail_address a, sail_word s,
                            sail_word *cur, sail_word *orig) {
   uint8_t address[20];
@@ -718,42 +720,8 @@ uint64_t storage_row_probe(uint64_t layer, sail_address a, sail_word s,
     *orig = be_words4_to_sail_word(row->tx_original);
     return 1;
   }
-  if (generation != STORAGE_INITIAL_GENERATION) {
-    *cur = be_words4_to_sail_word(storage_zero_val);
-    *orig = be_words4_to_sail_word(storage_zero_val);
-    return 1;
-  }
+  if (generation != STORAGE_INITIAL_GENERATION) return 2;
   return 0;
-}
-
-/* The optimized execution path has no generated option values between its
- * semantic transaction and cumulative layers. Resolve both projections after
- * one physical table lookup; the standard ABI retains storage_row_probe so
- * the readable Sail transaction-then-block equation remains unchanged. */
-uint64_t storage_current_row_probe(sail_address a, sail_word s,
-                                   sail_word *cur, sail_word *orig) {
-  uint8_t address[20];
-  uint64_t slot[4];
-  storage_raw_key(a, s, address, slot);
-  const uint64_t generation = storage_active_generation(address);
-  const storage_state_row *row =
-      storage_table_get(&storage_table, address, slot, generation);
-
-  if (row && row->tx_active && row->generation == generation) {
-    *cur = be_words4_to_sail_word(row->tx_current);
-    *orig = be_words4_to_sail_word(row->tx_original);
-    return 1;
-  }
-  if (generation != STORAGE_INITIAL_GENERATION) {
-    *cur = be_words4_to_sail_word(storage_zero_val);
-    *orig = be_words4_to_sail_word(storage_zero_val);
-    return 1;
-  }
-  if (!row || !row->state_valid) return 0;
-
-  *cur = be_words4_to_sail_word(row->current);
-  *orig = *cur;
-  return 1;
 }
 
 /* Write the active generation. Sail supplies the transaction original from
@@ -1580,26 +1548,6 @@ uint64_t acct_row_probe(uint64_t layer, sail_address a, uint64_t *nonce,
   evmsail_address_to_be_bytes(address, a);
   acct_state_row *e = acct_table_get(&acct_table, address);
   if (!e || !e->state_valid || (layer == 0 && !e->tx_active)) return 0;
-  *nonce = e->cur_nonce;
-  *bal = le_words4_to_sail_word(e->cur_bal);
-  *sroot = e->cur_sroot;
-  *chash = e->cur_chash;
-  *exists = e->cur_exists;
-  *storage_cleared = e->cur_storage_cleared;
-  *created = e->cur_created;
-  *selfdestructed = e->cur_selfdestructed;
-  return 1;
-}
-
-uint64_t acct_current_row_probe(sail_address a, uint64_t *nonce,
-                                sail_word *bal, sail_hash *sroot,
-                                sail_hash *chash, bool *exists,
-                                bool *storage_cleared, bool *created,
-                                bool *selfdestructed) {
-  uint8_t address[20];
-  evmsail_address_to_be_bytes(address, a);
-  const acct_state_row *e = acct_table_get(&acct_table, address);
-  if (!e || !e->state_valid) return 0;
   *nonce = e->cur_nonce;
   *bal = le_words4_to_sail_word(e->cur_bal);
   *sroot = e->cur_sroot;

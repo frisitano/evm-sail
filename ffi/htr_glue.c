@@ -10,7 +10,7 @@
 #include EVMSAIL_MODEL_H
 
 #include "htr_glue.h"
-#include "byte_slice_glue.h"
+#include "region_access.h"
 #include "zkvm_accelerators.h"
 
 #include <stdbool.h>
@@ -144,16 +144,12 @@ static int htr_subspan(const struct htr_span *span, uint64_t off, uint64_t len,
   return 1;
 }
 
-static int htr_resolve(struct zByteSliceFields slice,
+static int htr_resolve(struct zStatelessInputSliceFields slice,
                        struct htr_span *result) {
   const uint64_t off = evmsail_byte_quantity_value(slice.zoff);
   const uint64_t len = evmsail_byte_quantity_value(slice.zlen);
-  uint64_t resolved_len = 0;
-  if (!evmsail_resolve_byte_source(evmsail_source_kind(slice.zsource), off, len,
-                                   &result->bytes, &resolved_len) ||
-      resolved_len != len) {
-    return 0;
-  }
+  result->bytes = evmsail_stateless_input_ptr(off, len);
+  if (!result->bytes) return 0;
   result->len = len;
   return 1;
 }

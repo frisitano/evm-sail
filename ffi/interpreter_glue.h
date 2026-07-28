@@ -8,8 +8,8 @@
  * and its implementation are injected only into optimized C builds. Standard
  * C and proof extraction continue to use interpreter.sail directly.
  */
-struct zByteSliceFields;
+struct zOutputSliceFields;
 
-struct zByteSliceFields evmsail_interpret(unit);
+struct zOutputSliceFields evmsail_interpret(unit);
 
 #endif

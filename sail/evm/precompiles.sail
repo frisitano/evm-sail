@@ -72,16 +72,16 @@ let PRECOMPILE_ADDRESS_256 : address = word_to_address(U256(256))
     Failure consumes the frame's gas like any exceptional call. */
 struct PrecompileResult = {
   success : bool,
-  output  : ByteSlice
+  output  : OutputSlice
 }
 
 /*! A successful result carrying `output`. */
-function precompile_success(output : ByteSlice) -> PrecompileResult =
+function precompile_success(output : OutputSlice) -> PrecompileResult =
     struct { success = true, output = output }
 
 /*! The failed result (empty output; the call reports failure). */
 function precompile_failure() -> PrecompileResult =
-    struct { success = false, output = EMPTY_SLICE }
+    struct { success = false, output = EMPTY_OUTPUT_SLICE }
 
 /*! Adapts an accelerator's boolean outcome: on success the output is
     the accelerator's write into the output arena. */
@@ -94,9 +94,9 @@ function accelerator_result(success, output_len) =
     }
 
 /*! `IDENTITY` (0x04): the input, copied through the output buffer. */
-function copied_result(data : ByteSlice) -> PrecompileResult = {
+function copied_result(data : CalldataSlice) -> PrecompileResult = {
     let output = freeze_output(data);
-    if output.len == data.len then {
+    if output.len == calldata_slice_length(data) then {
         precompile_success(output)
     } else {
         precompile_failure()
@@ -124,26 +124,27 @@ function precompile_active_at_fork(n : precompile_id) -> bool = {
 /*! Returns the active precompile number represented by `target`, or zero
     when it is an ordinary address at the current fork. */
 function precompile_number(bytes : address) -> precompile_selector = {
-    let selector : bits(16) = bytes[18] @ bytes[19];
+    let selector : range(0, 2 ^ 16 - 1) =
+        unsigned(bytes[18]) * 256 + unsigned(bytes[19]);
     let candidate : precompile_selector = match selector {
-        0x0001 => if bytes == PRECOMPILE_ADDRESS_1 then { 1 } else { 0 },
-        0x0002 => if bytes == PRECOMPILE_ADDRESS_2 then { 2 } else { 0 },
-        0x0003 => if bytes == PRECOMPILE_ADDRESS_3 then { 3 } else { 0 },
-        0x0004 => if bytes == PRECOMPILE_ADDRESS_4 then { 4 } else { 0 },
-        0x0005 => if bytes == PRECOMPILE_ADDRESS_5 then { 5 } else { 0 },
-        0x0006 => if bytes == PRECOMPILE_ADDRESS_6 then { 6 } else { 0 },
-        0x0007 => if bytes == PRECOMPILE_ADDRESS_7 then { 7 } else { 0 },
-        0x0008 => if bytes == PRECOMPILE_ADDRESS_8 then { 8 } else { 0 },
-        0x0009 => if bytes == PRECOMPILE_ADDRESS_9 then { 9 } else { 0 },
-        0x000a => if bytes == PRECOMPILE_ADDRESS_10 then { 10 } else { 0 },
-        0x000b => if bytes == PRECOMPILE_ADDRESS_11 then { 11 } else { 0 },
-        0x000c => if bytes == PRECOMPILE_ADDRESS_12 then { 12 } else { 0 },
-        0x000d => if bytes == PRECOMPILE_ADDRESS_13 then { 13 } else { 0 },
-        0x000e => if bytes == PRECOMPILE_ADDRESS_14 then { 14 } else { 0 },
-        0x000f => if bytes == PRECOMPILE_ADDRESS_15 then { 15 } else { 0 },
-        0x0010 => if bytes == PRECOMPILE_ADDRESS_16 then { 16 } else { 0 },
-        0x0011 => if bytes == PRECOMPILE_ADDRESS_17 then { 17 } else { 0 },
-        0x0100 => if bytes == PRECOMPILE_ADDRESS_256 then { 256 } else { 0 },
+        1 => if bytes == PRECOMPILE_ADDRESS_1 then { 1 } else { 0 },
+        2 => if bytes == PRECOMPILE_ADDRESS_2 then { 2 } else { 0 },
+        3 => if bytes == PRECOMPILE_ADDRESS_3 then { 3 } else { 0 },
+        4 => if bytes == PRECOMPILE_ADDRESS_4 then { 4 } else { 0 },
+        5 => if bytes == PRECOMPILE_ADDRESS_5 then { 5 } else { 0 },
+        6 => if bytes == PRECOMPILE_ADDRESS_6 then { 6 } else { 0 },
+        7 => if bytes == PRECOMPILE_ADDRESS_7 then { 7 } else { 0 },
+        8 => if bytes == PRECOMPILE_ADDRESS_8 then { 8 } else { 0 },
+        9 => if bytes == PRECOMPILE_ADDRESS_9 then { 9 } else { 0 },
+        10 => if bytes == PRECOMPILE_ADDRESS_10 then { 10 } else { 0 },
+        11 => if bytes == PRECOMPILE_ADDRESS_11 then { 11 } else { 0 },
+        12 => if bytes == PRECOMPILE_ADDRESS_12 then { 12 } else { 0 },
+        13 => if bytes == PRECOMPILE_ADDRESS_13 then { 13 } else { 0 },
+        14 => if bytes == PRECOMPILE_ADDRESS_14 then { 14 } else { 0 },
+        15 => if bytes == PRECOMPILE_ADDRESS_15 then { 15 } else { 0 },
+        16 => if bytes == PRECOMPILE_ADDRESS_16 then { 16 } else { 0 },
+        17 => if bytes == PRECOMPILE_ADDRESS_17 then { 17 } else { 0 },
+        256 => if bytes == PRECOMPILE_ADDRESS_256 then { 256 } else { 0 },
         _ => 0,
     };
     if candidate != 0 then {
@@ -156,7 +157,7 @@ function precompile_number(bytes : address) -> precompile_selector = {
 
 /*! `ECRECOVER` (0x01): recovers the signer address; any invalid input
     yields a successful call with empty output. */
-function run_ecrecover(input : ByteSlice) -> PrecompileResult = {
+function run_ecrecover(input : CalldataSlice) -> PrecompileResult = {
     let v = slice_load(input, PRECOMPILE_WORD_OFFSET);
     let valid_v = (v == U256(27)) | (v == U256(28));
     if valid_v then {
@@ -170,30 +171,30 @@ function run_ecrecover(input : ByteSlice) -> PrecompileResult = {
         if recovered then {
             precompile_success(output_buffer_word(address_to_word(address)))
         } else {
-            precompile_success(EMPTY_SLICE)
+            precompile_success(EMPTY_OUTPUT_SLICE)
         }
     } else {
-        precompile_success(EMPTY_SLICE)
+        precompile_success(EMPTY_OUTPUT_SLICE)
     }
 }
 
 /*! `SHA256` (0x02). */
-function run_sha256(input : ByteSlice) -> PrecompileResult =
+function run_sha256(input : CalldataSlice) -> PrecompileResult =
     precompile_success(output_buffer_word(hash_to_word(sha256(input))))
 
 /*! `RIPEMD160` (0x03): 20-byte digest, left-padded to 32. */
-function run_ripemd160(input : ByteSlice) -> PrecompileResult =
+function run_ripemd160(input : CalldataSlice) -> PrecompileResult =
     accelerator_result(accelerator_ripemd160(input), PRECOMPILE_WORD_LENGTH)
 
 /*! `MODEXP` (0x05, EIP-198): arbitrary-precision modular
     exponentiation; a zero-length modulus yields empty output, and inputs
     beyond the accelerator bound fail the call. */
-function run_modexp(input : ByteSlice) -> PrecompileResult = {
+function run_modexp(input : CalldataSlice) -> PrecompileResult = {
     let base_len : word = pc_word(input, 0, 32);
     let exponent_len : word = pc_word(input, 32, 32);
     let modulus_len : word = pc_word(input, 64, 32);
     if modulus_len == 0 then {
-        precompile_success(EMPTY_SLICE)
+        precompile_success(EMPTY_OUTPUT_SLICE)
     } else {
         if ACCELERATOR_INPUT_MAX < base_len | ACCELERATOR_INPUT_MAX < exponent_len | ACCELERATOR_INPUT_MAX < modulus_len then {
             precompile_failure()
@@ -214,20 +215,20 @@ function run_modexp(input : ByteSlice) -> PrecompileResult = {
     }
 }
 
-/*! Decodes an accelerator pairing result: bit 1 is validity of the
-    input, bit 0 the pairing outcome. */
-function pairing_result(result : bits(2)) -> PrecompileResult =
-    if result[1] == bitzero then {
+/*! Decodes an accelerator pairing result: values below two denote malformed
+    input; the low-order parity of a valid value is the pairing outcome. */
+function pairing_result(result : pairing_check_result) -> PrecompileResult =
+    if result < 2 then {
         precompile_failure()
     } else {
-        boolean_result(result[0] == bitone)
+        boolean_result(tmod_nat(result, 2) == 1)
     }
 
 /*! `BLAKE2F` (0x09, EIP-152): the compression function; the input must
     be exactly 213 bytes with a 0/1 final-block flag. */
-function run_blake2f(input : ByteSlice) -> PrecompileResult = {
+function run_blake2f(input : CalldataSlice) -> PrecompileResult = {
     let final_byte = slice_byte(input, BLAKE2F_FINAL_BLOCK_OFFSET);
-    if (input.len != BLAKE2F_INPUT_LENGTH) | ((final_byte != 0x00) & (final_byte != 0x01)) then {
+    if (calldata_slice_length(input) != BLAKE2F_INPUT_LENGTH) | ((final_byte != 0x00) & (final_byte != 0x01)) then {
         precompile_failure()
     } else {
         let final_block : y_parity = if final_byte == 0x00 then { 0 } else { 1 };
@@ -237,12 +238,7 @@ function run_blake2f(input : ByteSlice) -> PrecompileResult = {
 
 /*! The EIP-4844 versioned-hash binding: the input's claimed hash must
     equal `0x01 ‖ sha256(commitment)[1:]`. */
-val kzg_versioned_hash_matches : forall 'base 'len, source_valid_range('base, 'len) & 'len == 192. ByteSliceFields(
-        'base,
-        'len,
-    ) -> bool
-
-function kzg_versioned_hash_matches(input) = {
+function kzg_versioned_hash_matches(input : CalldataSlice) -> bool = {
     let commitment_hash = sha256(sub_slice(input, KZG_COMMITMENT_OFFSET, KZG_COMMITMENT_LENGTH));
     var expected = commitment_hash;
     expected[0] = 0x01;
@@ -251,8 +247,8 @@ function kzg_versioned_hash_matches(input) = {
 
 /*! `POINT_EVALUATION` (0x0a, EIP-4844): verifies a KZG proof; success
     returns the field-elements-per-blob and BLS modulus constants. */
-function run_kzg_point_evaluation(input : ByteSlice) -> PrecompileResult =
-    if input.len != KZG_INPUT_LENGTH then {
+function run_kzg_point_evaluation(input : CalldataSlice) -> PrecompileResult =
+    if calldata_slice_length(input) != KZG_INPUT_LENGTH then {
         precompile_failure()
     } else {
         if not_bool(kzg_versioned_hash_matches(input)) then {
@@ -271,7 +267,7 @@ function run_kzg_point_evaluation(input : ByteSlice) -> PrecompileResult =
     bulk source predicate per field position. */
 val bls_g1_padding : forall 'base 'stride 'count,
                        source_valid_range('base, 64) & source_valid_length('stride) & source_valid_length('count). (
-        ByteSlice,
+        CalldataSlice,
         int('base),
         int('stride),
         int('count),
@@ -284,7 +280,7 @@ function bls_g1_padding(input, base, stride, count) = {
 /*! The EIP-2537 padding rule for G2 points (four Fp components). */
 val bls_g2_padding : forall 'base 'stride 'count,
                        source_valid_range('base, 192) & source_valid_length('stride) & source_valid_length('count). (
-        ByteSlice,
+        CalldataSlice,
         int('base),
         int('stride),
         int('count),
@@ -297,8 +293,8 @@ function bls_g2_padding(input, base, stride, count) = {
 }
 
 /*! `BLS12_G1ADD` (0x0b, EIP-2537). */
-function run_bls_g1_add(input : ByteSlice) -> PrecompileResult =
-    if input.len != BLS_G1_ADD_INPUT_LENGTH then {
+function run_bls_g1_add(input : CalldataSlice) -> PrecompileResult =
+    if calldata_slice_length(input) != BLS_G1_ADD_INPUT_LENGTH then {
         precompile_failure()
     } else {
         if not_bool(bls_g1_padding(input, 0, BLS_G1_POINT_LENGTH, TWO_COMPONENTS)) then {
@@ -309,8 +305,8 @@ function run_bls_g1_add(input : ByteSlice) -> PrecompileResult =
     }
 
 /*! `BLS12_G1MSM` (0x0c, EIP-2537): input is `k` 160-byte pairs. */
-function run_bls_g1_msm(input : ByteSlice) -> PrecompileResult = {
-    let length = input.len;
+function run_bls_g1_msm(input : CalldataSlice) -> PrecompileResult = {
+    let length = calldata_slice_length(input);
     let item_length = BLS_G1_MSM_ITEM_LENGTH;
     let pairs = length / item_length;
     if (length == 0) | (length != pairs * item_length) then {
@@ -325,8 +321,8 @@ function run_bls_g1_msm(input : ByteSlice) -> PrecompileResult = {
 }
 
 /*! `BLS12_G2ADD` (0x0d, EIP-2537). */
-function run_bls_g2_add(input : ByteSlice) -> PrecompileResult =
-    if input.len != BLS_G2_ADD_INPUT_LENGTH then {
+function run_bls_g2_add(input : CalldataSlice) -> PrecompileResult =
+    if calldata_slice_length(input) != BLS_G2_ADD_INPUT_LENGTH then {
         precompile_failure()
     } else {
         if not_bool(bls_g2_padding(input, 0, BLS_G2_POINT_LENGTH, TWO_COMPONENTS)) then {
@@ -337,8 +333,8 @@ function run_bls_g2_add(input : ByteSlice) -> PrecompileResult =
     }
 
 /*! `BLS12_G2MSM` (0x0e, EIP-2537): input is `k` 288-byte pairs. */
-function run_bls_g2_msm(input : ByteSlice) -> PrecompileResult = {
-    let length = input.len;
+function run_bls_g2_msm(input : CalldataSlice) -> PrecompileResult = {
+    let length = calldata_slice_length(input);
     let item_length = BLS_G2_MSM_ITEM_LENGTH;
     let pairs = length / item_length;
     if (length == 0) | (length != pairs * item_length) then {
@@ -354,8 +350,8 @@ function run_bls_g2_msm(input : ByteSlice) -> PrecompileResult = {
 
 /*! `BLS12_PAIRING_CHECK` (0x0f, EIP-2537): input is `k` 384-byte
     G1×G2 pairs. */
-function run_bls_pairing(input : ByteSlice) -> PrecompileResult = {
-    let length = input.len;
+function run_bls_pairing(input : CalldataSlice) -> PrecompileResult = {
+    let length = calldata_slice_length(input);
     let item_length = BLS_PAIRING_ITEM_LENGTH;
     let pairs = length / item_length;
     if (length == 0) | (length != pairs * item_length) then {
@@ -372,8 +368,8 @@ function run_bls_pairing(input : ByteSlice) -> PrecompileResult = {
 }
 
 /*! `BLS12_MAP_FP_TO_G1` (0x10, EIP-2537). */
-function run_bls_map_fp_to_g1(input : ByteSlice) -> PrecompileResult =
-    if input.len != BLS_PADDED_FIELD_LENGTH then {
+function run_bls_map_fp_to_g1(input : CalldataSlice) -> PrecompileResult =
+    if calldata_slice_length(input) != BLS_PADDED_FIELD_LENGTH then {
         precompile_failure()
     } else {
         if not_bool(slice_strided_zero(input, 0, BLS_PADDED_FIELD_LENGTH, BLS_FIELD_PADDING_LENGTH, 1)) then {
@@ -384,8 +380,8 @@ function run_bls_map_fp_to_g1(input : ByteSlice) -> PrecompileResult =
     }
 
 /*! `BLS12_MAP_FP2_TO_G2` (0x11, EIP-2537). */
-function run_bls_map_fp2_to_g2(input : ByteSlice) -> PrecompileResult =
-    if input.len != BLS_G1_POINT_LENGTH then {
+function run_bls_map_fp2_to_g2(input : CalldataSlice) -> PrecompileResult =
+    if calldata_slice_length(input) != BLS_G1_POINT_LENGTH then {
         precompile_failure()
     } else {
         if not_bool(slice_strided_zero(input, 0, BLS_PADDED_FIELD_LENGTH, BLS_FIELD_PADDING_LENGTH, TWO_COMPONENTS)) then {
@@ -398,8 +394,8 @@ function run_bls_map_fp2_to_g2(input : ByteSlice) -> PrecompileResult =
 /*! `P256VERIFY` (0x100, EIP-7951): every malformed or invalid signature
     is a successful call with empty output; only a valid signature
     returns the word one. */
-function run_p256_verify(input : ByteSlice) -> PrecompileResult = {
-    let verified = if input.len == P256_INPUT_LENGTH then {
+function run_p256_verify(input : CalldataSlice) -> PrecompileResult = {
+    let verified = if calldata_slice_length(input) == P256_INPUT_LENGTH then {
             accelerator_p256_verify(input)
         } else {
             false
@@ -407,13 +403,13 @@ function run_p256_verify(input : ByteSlice) -> PrecompileResult = {
     if verified then {
         precompile_success(output_buffer_word(WORD_ONE))
     } else {
-        precompile_success(EMPTY_SLICE)
+        precompile_success(EMPTY_OUTPUT_SLICE)
     }
 }
 
 /*! The precompile dispatch: address to implementation. Gas has already
     been charged by the caller ([precompile_gas][]). */
-function run_precompile_slice(num : precompile_id, input : ByteSlice) -> PrecompileResult =
+function run_precompile_slice(num : precompile_id, input : CalldataSlice) -> PrecompileResult =
     match num {
         1 => run_ecrecover(input),
         2 => run_sha256(input),
@@ -423,7 +419,7 @@ function run_precompile_slice(num : precompile_id, input : ByteSlice) -> Precomp
         6 => accelerator_result(accelerator_bn254_add(input), PRECOMPILE_DOUBLE_WORD_LENGTH),
         7 => accelerator_result(accelerator_bn254_mul(input), PRECOMPILE_DOUBLE_WORD_LENGTH),
         8 => {
-            let input_length = input.len;
+            let input_length = calldata_slice_length(input);
             let item_length = BN254_PAIRING_ITEM_LENGTH;
             if input_length == (input_length / item_length) * item_length then {
                 pairing_result(accelerator_bn254_pairing(input))

@@ -9,10 +9,10 @@
 #include EVMSAIL_MODEL_H
 
 #include "mpt_glue.h"
+#include "optimized_exception.h"
 
-#include "byte_slice_glue.h"
+#include "region_access.h"
 #include "code_db.h"
-#include "optimized_result.h"
 #include "scratch.h"
 #include "state_db.h"
 #include "trie_node_db.h"
@@ -51,9 +51,6 @@ static const uint8_t sr_keccak_empty[32] = {
 };
 
 static uint64_t sr_last_status;
-static bool sr_account_found;
-static struct zAccountInfo sr_account_info;
-static sail_word sr_storage_value;
 
 struct sr_ctx {
   uint64_t status;
@@ -85,8 +82,6 @@ struct sr_item {
   struct sr_ref ref;
   uint8_t value[SR_VALUE_MAX];
   uint8_t value_len;
-  bool generated_value;
-  struct zByteSliceFields value_slice;
   bool external_value;
   const uint8_t *external_value_bytes;
   size_t external_value_len;
@@ -126,49 +121,43 @@ static struct sr_sink sr_workspace;
 
 /*
  * Receipt execution order is numeric, while trie insertion order is the
- * lexical order of RLP(index). The optimized high-level root operation owns
- * both that ordering and construction of the shared fixed-stack MPT.
+ * lexical order of RLP(index). Receipt bytes are copied from temporary
+ * executor scratch into one reusable C arena. This keeps the block-spanning
+ * deposit accumulator contiguous in scratch while avoiding one allocation per
+ * receipt. The optimized high-level root operation owns both ordering and
+ * construction of the shared fixed-stack MPT.
  */
 struct sr_receipt_entry {
-  uint8_t *value;
+  size_t value_off;
   size_t value_len;
-  size_t value_cap;
 };
 
 static struct sr_receipt_entry *sr_receipts;
 static size_t sr_receipt_count;
 static size_t sr_receipt_cap;
+static uint8_t *sr_receipt_bytes;
+static size_t sr_receipt_bytes_len;
+static size_t sr_receipt_bytes_cap;
 
 static bool sr_fail(struct sr_ctx *ctx, uint64_t status) {
   if (ctx->status == SR_OK) ctx->status = status;
   return false;
 }
 
-static enum zBlockError sr_status_error(uint64_t status) {
+static enum zBlockError sr_block_error(uint64_t status) {
   switch (status) {
-    case SR_WITNESS_DEFICIENT:
-      return zWitnessDeficient;
-    case SR_RLP_DECODE:
-      return zRlpDecode;
-    default:
-      return zInvalidConfig;
+  case SR_RLP_DECODE:
+    return zRlpDecode;
+  case SR_INVALID_CONFIG:
+    return zInvalidConfig;
+  case SR_WITNESS_DEFICIENT:
+  default:
+    return zWitnessDeficient;
   }
 }
 
-static void sr_unit_result(struct zOptimizzedUnitResult *result,
-                           uint64_t status) {
-  if (status == SR_OK)
-    evmsail_unit_result_ok(result);
-  else
-    evmsail_unit_result_error(result, sr_status_error(status));
-}
-
-static void sr_hash_result(struct zOptimizzedHashResult *result,
-                           uint64_t status, sail_hash value) {
-  if (status == SR_OK)
-    evmsail_hash_result_ok(result, value);
-  else
-    evmsail_hash_result_error(result, sr_status_error(status));
+static void sr_throw(const struct sr_ctx *ctx, const char *location) {
+  evmsail_throw_invalid_block(sr_block_error(ctx->status), location);
 }
 
 static bool sr_hash_equal(const sail_hash *a, const uint8_t b[32]) {
@@ -868,39 +857,11 @@ static bool sr_merge_ext_node(struct sr_ctx *ctx,
   return sr_extension_ref(ctx, prefix, &child, out);
 }
 
-static bool sr_generated_leaf_ref(struct sr_ctx *ctx,
-                                  struct zTriePath path,
-                                  struct zByteSliceFields value,
-                                  struct sr_ref *out) {
-  struct zNodeRef generated;
-  if (path.zlen > SR_PATH_NIBBLES)
-    return sr_fail(ctx, SR_WITNESS_DEFICIENT);
-  memset(&generated, 0, sizeof(generated));
-  zleaf_child_ref(&generated, path, value);
-  switch (generated.kind) {
-    case Kind_zHashRef:
-      *out = sr_hash_ref(generated.variants.zHashRef.bytes);
-      return true;
-    case Kind_zInlineRef:
-      if (generated.variants.zInlineRef.zlen > SR_INLINE_MAX)
-        return sr_fail(ctx, SR_RLP_DECODE);
-      *out = sr_inline_ref(generated.variants.zInlineRef.zdata.bytes,
-                           generated.variants.zInlineRef.zlen);
-      return true;
-    case Kind_zEmptyRef:
-      return sr_fail(ctx, SR_RLP_DECODE);
-  }
-  return sr_fail(ctx, SR_RLP_DECODE);
-}
-
 static bool sr_item_ref(struct sr_ctx *ctx, const struct sr_item *item,
                         unsigned depth, struct sr_ref *out) {
   if (depth > item->path.len)
     return sr_fail(ctx, SR_WITNESS_DEFICIENT);
   const struct sr_path suffix = sr_path_drop(&item->path, depth);
-  if (item->kind == SR_ITEM_LEAF && item->generated_value)
-    return sr_generated_leaf_ref(ctx, sr_generated_path(&suffix),
-                                 item->value_slice, out);
   if (item->kind == SR_ITEM_LEAF && item->external_value)
     return sr_large_leaf_ref(ctx, &suffix, item->external_value_bytes,
                              item->external_value_len, out);
@@ -1530,49 +1491,55 @@ static bool sr_receipt_table_reserve(struct sr_ctx *ctx, size_t need) {
   return true;
 }
 
+static bool sr_receipt_bytes_reserve(struct sr_ctx *ctx, size_t need) {
+  if (need <= sr_receipt_bytes_cap) return true;
+  size_t cap = sr_receipt_bytes_cap ? sr_receipt_bytes_cap : 4096;
+  while (cap < need) {
+    if (cap > SIZE_MAX / 2)
+      return sr_fail(ctx, SR_WITNESS_DEFICIENT);
+    cap *= 2;
+  }
+  uint8_t *next = realloc(sr_receipt_bytes, cap);
+  if (!next) return sr_fail(ctx, SR_WITNESS_DEFICIENT);
+  sr_receipt_bytes = next;
+  sr_receipt_bytes_cap = cap;
+  return true;
+}
+
 unit evmsail_receipt_table_reset(unit ignored) {
   (void)ignored;
   evmsail_mpt_reset(UNIT);
   sr_receipt_count = 0;
+  sr_receipt_bytes_len = 0;
   return UNIT;
 }
 
-void evmsail_receipt_table_push(struct zOptimizzedUnitResult *result,
-                                uint64_t index,
-                                struct zByteSliceFields value) {
+unit evmsail_receipt_table_push(uint64_t index,
+                                struct zScratchSliceFields value) {
   struct sr_ctx ctx = {sr_last_status};
   const uint64_t off = evmsail_byte_quantity_value(value.zoff);
   const uint64_t len = evmsail_byte_quantity_value(value.zlen);
-  const uint8_t *bytes = NULL;
-  uint64_t resolved_len = 0;
+  const uint8_t *source = NULL;
   if (ctx.status != SR_OK || index != sr_receipt_count ||
       len > SIZE_MAX ||
-      !evmsail_resolve_byte_source(evmsail_source_kind(value.zsource), off,
-                                   len, &bytes, &resolved_len) ||
-      resolved_len != len ||
-      !sr_receipt_table_reserve(&ctx, sr_receipt_count + 1)) {
+      !(source = scratch_region(off, len)) ||
+      sr_receipt_bytes_len > SIZE_MAX - (size_t)len ||
+      !sr_receipt_table_reserve(&ctx, sr_receipt_count + 1) ||
+      !sr_receipt_bytes_reserve(
+          &ctx, sr_receipt_bytes_len + (size_t)len)) {
     sr_fail(&ctx, SR_WITNESS_DEFICIENT);
     sr_last_status = ctx.status;
-    sr_unit_result(result, ctx.status);
-    return;
+    sr_throw(&ctx, "optimized receipt accumulator push");
+    return UNIT;
   }
   struct sr_receipt_entry *entry = &sr_receipts[sr_receipt_count];
-  if ((size_t)len > entry->value_cap) {
-    uint8_t *next = realloc(entry->value, (size_t)len);
-    if (!next) {
-      sr_fail(&ctx, SR_WITNESS_DEFICIENT);
-      sr_last_status = ctx.status;
-      sr_unit_result(result, ctx.status);
-      return;
-    }
-    entry->value = next;
-    entry->value_cap = (size_t)len;
-  }
-  if (len) memcpy(entry->value, bytes, (size_t)len);
+  entry->value_off = sr_receipt_bytes_len;
   entry->value_len = (size_t)len;
+  memmove(sr_receipt_bytes + sr_receipt_bytes_len, source, (size_t)len);
+  sr_receipt_bytes_len += (size_t)len;
   ++sr_receipt_count;
   sr_last_status = ctx.status;
-  sr_unit_result(result, ctx.status);
+  return UNIT;
 }
 
 static struct sr_path sr_index_path(uint64_t index) {
@@ -1611,13 +1578,8 @@ static bool sr_resolve_list(struct sr_ctx *ctx,
                             struct sr_span *bytes) {
   const uint64_t off = evmsail_byte_quantity_value(items->zbytes.zoff);
   const uint64_t len = evmsail_byte_quantity_value(items->zbytes.zlen);
-  const uint8_t *resolved = NULL;
-  uint64_t resolved_len = 0;
-  if (len > SIZE_MAX ||
-      !evmsail_resolve_byte_source(
-          evmsail_source_kind(items->zbytes.zsource), off, len, &resolved,
-          &resolved_len) ||
-      resolved_len != len)
+  const uint8_t *resolved = evmsail_stateless_input_ptr(off, len);
+  if (len > SIZE_MAX || !resolved)
     return sr_fail(ctx, SR_INVALID_CONFIG);
   bytes->data = resolved;
   bytes->len = (size_t)len;
@@ -1670,8 +1632,7 @@ static bool sr_variable_list_item(struct sr_ctx *ctx,
   return true;
 }
 
-void evmsail_index_witness_nodes(struct zOptimizzedUnitResult *result,
-                                 struct zBoundedSszzListRef nodes) {
+unit evmsail_index_witness_nodes(struct zBoundedSszzListRef nodes) {
   enum {
     SR_MAX_WITNESS_NODES = 1u << 22,
     SR_MAX_WITNESS_NODE_LENGTH = 1u << 10,
@@ -1682,8 +1643,9 @@ void evmsail_index_witness_nodes(struct zOptimizzedUnitResult *result,
       evmsail_byte_quantity_value(nodes.zbytes.zoff);
   if (nodes.zcount > SR_MAX_WITNESS_NODES ||
       !sr_resolve_list(&ctx, &nodes, &bytes)) {
-    evmsail_unit_result_error(result, zInvalidConfig);
-    return;
+    sr_fail(&ctx, SR_INVALID_CONFIG);
+    sr_throw(&ctx, "optimized witness node list");
+    return UNIT;
   }
 
   for (uint64_t index = 0; index < nodes.zcount; ++index) {
@@ -1692,21 +1654,22 @@ void evmsail_index_witness_nodes(struct zOptimizzedUnitResult *result,
     if (!sr_variable_list_item(&ctx, &nodes, bytes, index, &node) ||
         node.len > SR_MAX_WITNESS_NODE_LENGTH ||
         !sr_keccak(&ctx, node.data, node.len, digest.bytes)) {
-      evmsail_unit_result_error(result, zInvalidConfig);
-      return;
+      sr_fail(&ctx, SR_INVALID_CONFIG);
+      sr_throw(&ctx, "optimized witness node");
+      return UNIT;
     }
     const uint64_t relative_off = (uint64_t)(node.data - bytes.data);
     if (relative_off > UINT64_MAX - list_off) {
-      evmsail_unit_result_error(result, zInvalidConfig);
-      return;
+      sr_fail(&ctx, SR_INVALID_CONFIG);
+      sr_throw(&ctx, "optimized witness node offset");
+      return UNIT;
     }
     nodedb_insert_digest(&digest, list_off + relative_off, node.len);
   }
-  evmsail_unit_result_ok(result);
+  return UNIT;
 }
 
-void evmsail_index_witness_codes(struct zOptimizzedUnitResult *result,
-                                 struct zBoundedSszzListRef codes,
+unit evmsail_index_witness_codes(struct zBoundedSszzListRef codes,
                                  bool amsterdam_or_later) {
   enum {
     SR_MAX_WITNESS_CODES = 1u << 18,
@@ -1716,8 +1679,9 @@ void evmsail_index_witness_codes(struct zOptimizzedUnitResult *result,
   struct sr_span bytes = {0};
   if (codes.zcount > SR_MAX_WITNESS_CODES ||
       !sr_resolve_list(&ctx, &codes, &bytes)) {
-    evmsail_unit_result_error(result, zInvalidConfig);
-    return;
+    sr_fail(&ctx, SR_INVALID_CONFIG);
+    sr_throw(&ctx, "optimized witness code list");
+    return UNIT;
   }
 
   for (uint64_t index = 0; index < codes.zcount; ++index) {
@@ -1726,11 +1690,12 @@ void evmsail_index_witness_codes(struct zOptimizzedUnitResult *result,
         code.len > SR_MAX_WITNESS_CODE_LENGTH ||
         !code_db_insert_analyzed_bytes(code.data, code.len,
                                        amsterdam_or_later)) {
-      evmsail_unit_result_error(result, zInvalidConfig);
-      return;
+      sr_fail(&ctx, SR_INVALID_CONFIG);
+      sr_throw(&ctx, "optimized witness code");
+      return UNIT;
     }
   }
-  evmsail_unit_result_ok(result);
+  return UNIT;
 }
 
 static bool sr_ordered_insert(struct sr_ctx *ctx, struct sr_item *item,
@@ -1753,17 +1718,18 @@ static void sr_ordered_root_finish(struct sr_ctx *ctx, sail_hash *root) {
   sr_last_status = ctx->status;
 }
 
-void evmsail_transaction_trie_root(struct zOptimizzedHashResult *result,
-                                   struct zBoundedSszzListRef transactions) {
+sail_hash evmsail_transaction_trie_root(
+    struct zBoundedSszzListRef transactions) {
   evmsail_mpt_reset(UNIT);
   struct sr_ctx ctx = {SR_OK};
   struct sr_span bytes = {0};
   sail_hash root = {{0}};
   if (transactions.zcount > (UINT64_C(1) << 20) ||
       !sr_resolve_list(&ctx, &transactions, &bytes)) {
+    sr_fail(&ctx, SR_INVALID_CONFIG);
     sr_ordered_root_finish(&ctx, &root);
-    sr_hash_result(result, ctx.status, root);
-    return;
+    sr_throw(&ctx, "optimized transaction trie root");
+    return root;
   }
   for (uint64_t position = 0;
        ctx.status == SR_OK && position < transactions.zcount; ++position) {
@@ -1783,11 +1749,13 @@ void evmsail_transaction_trie_root(struct zOptimizzedHashResult *result,
       break;
   }
   sr_ordered_root_finish(&ctx, &root);
-  sr_hash_result(result, ctx.status, root);
+  if (ctx.status != SR_OK)
+    sr_throw(&ctx, "optimized transaction trie root");
+  return root;
 }
 
-void evmsail_withdrawals_trie_root(struct zOptimizzedHashResult *result,
-                                   struct zBoundedSszzListRef withdrawals) {
+sail_hash evmsail_withdrawals_trie_root(
+    struct zBoundedSszzListRef withdrawals) {
   enum {
     SR_WITHDRAWAL_SIZE = 44,
     SR_WITHDRAWAL_ADDRESS_OFF = 16,
@@ -1804,8 +1772,8 @@ void evmsail_withdrawals_trie_root(struct zOptimizzedHashResult *result,
       bytes.len != (size_t)withdrawals.zcount * SR_WITHDRAWAL_SIZE) {
     sr_fail(&ctx, SR_INVALID_CONFIG);
     sr_ordered_root_finish(&ctx, &root);
-    sr_hash_result(result, ctx.status, root);
-    return;
+    sr_throw(&ctx, "optimized withdrawals trie root");
+    return root;
   }
   for (uint64_t position = 0;
        ctx.status == SR_OK && position < withdrawals.zcount; ++position) {
@@ -1845,11 +1813,12 @@ void evmsail_withdrawals_trie_root(struct zOptimizzedHashResult *result,
       break;
   }
   sr_ordered_root_finish(&ctx, &root);
-  sr_hash_result(result, ctx.status, root);
+  if (ctx.status != SR_OK)
+    sr_throw(&ctx, "optimized withdrawals trie root");
+  return root;
 }
 
-void evmsail_receipt_table_root(struct zOptimizzedHashResult *result,
-                                uint64_t count) {
+sail_hash evmsail_receipt_table_root(uint64_t count) {
   struct sr_ctx ctx = {sr_last_status};
   sail_hash root = {{0}};
   if (ctx.status == SR_OK && count != sr_receipt_count)
@@ -1872,8 +1841,13 @@ void evmsail_receipt_table_root(struct zOptimizzedHashResult *result,
     item.path = key;
     item.kind = SR_ITEM_LEAF;
     item.external_value = true;
-    item.external_value_bytes = entry->value;
+    item.external_value_bytes = sr_receipt_bytes + entry->value_off;
     item.external_value_len = entry->value_len;
+    if (entry->value_off > sr_receipt_bytes_len ||
+        entry->value_len > sr_receipt_bytes_len - entry->value_off) {
+      sr_fail(&ctx, SR_WITNESS_DEFICIENT);
+      break;
+    }
     if (!sr_builder_insert(&ctx, &sr_workspace.builder, &item, next_key))
       break;
   }
@@ -1881,69 +1855,9 @@ void evmsail_receipt_table_root(struct zOptimizzedHashResult *result,
       !sr_sink_finish(&ctx, &sr_workspace, &root))
     memset(&root, 0, sizeof(root));
   sr_last_status = ctx.status;
-  sr_hash_result(result, ctx.status, root);
-}
-
-static bool sr_insert_generated_leaf(struct zTriePath path,
-                                     struct zByteSliceFields value,
-                                     const struct zTriePath *next_path) {
-  struct sr_ctx ctx = {sr_last_status};
-  struct sr_item item;
-  struct sr_path next;
-  memset(&item, 0, sizeof(item));
-  item.kind = SR_ITEM_LEAF;
-  item.generated_value = true;
-  item.value_slice = value;
-  if (ctx.status != SR_OK ||
-      !sr_path_generated(&ctx, &path, &item.path) ||
-      (next_path != NULL && !sr_path_generated(&ctx, next_path, &next)) ||
-      !sr_builder_insert(&ctx, &sr_workspace.builder, &item,
-                         next_path != NULL ? &next : NULL)) {
-    sr_last_status = ctx.status;
-    return false;
-  }
-  sr_last_status = ctx.status;
-  return true;
-}
-
-void evmsail_mpt_insert_leaf(struct zOptimizzedUnitResult *result,
-                             struct zTriePath path,
-                             struct zByteSliceFields value,
-                             struct zTriePath next_path) {
-  sr_insert_generated_leaf(path, value, &next_path);
-  sr_unit_result(result, sr_last_status);
-}
-
-void evmsail_mpt_insert_last(struct zOptimizzedUnitResult *result,
-                             struct zTriePath path,
-                             struct zByteSliceFields value) {
-  struct sr_ctx ctx = {sr_last_status};
-  struct sr_builder *builder = &sr_workspace.builder;
-  if (ctx.status == SR_OK && !builder->complete &&
-      builder->frame_count == 0) {
-    if (!sr_generated_leaf_ref(&ctx, path, value, &builder->root)) {
-      sr_last_status = ctx.status;
-      sr_unit_result(result, ctx.status);
-      return;
-    }
-    builder->complete = true;
-    sr_last_status = ctx.status;
-    sr_unit_result(result, ctx.status);
-    return;
-  }
-  sr_insert_generated_leaf(path, value, NULL);
-  sr_unit_result(result, sr_last_status);
-}
-
-void evmsail_mpt_root(struct zOptimizzedHashResult *result, unit ignored) {
-  (void)ignored;
-  struct sr_ctx ctx = {sr_last_status};
-  sail_hash root = {{0}};
-  if (ctx.status == SR_OK &&
-      !sr_sink_finish(&ctx, &sr_workspace, &root))
-    memset(&root, 0, sizeof(root));
-  sr_last_status = ctx.status;
-  sr_hash_result(result, ctx.status, root);
+  if (ctx.status != SR_OK)
+    sr_throw(&ctx, "optimized receipt trie root");
+  return root;
 }
 
 uint64_t evmsail_stateless_account_read(sail_hash root,
@@ -1960,42 +1874,6 @@ uint64_t evmsail_stateless_account_read(sail_hash root,
     sr_decode_account_value(&ctx, value, info);
   }
   return ctx.status;
-}
-
-void evmsail_stateless_account_lookup(struct zOptimizzedUnitResult *result,
-                                      sail_hash root,
-                                      sail_hash address_hash) {
-  const uint64_t status = evmsail_stateless_account_read(
-      root, address_hash, &sr_account_info, &sr_account_found);
-  sr_unit_result(result, status);
-}
-
-bool evmsail_stateless_account_found(unit ignored) {
-  (void)ignored;
-  return sr_account_found;
-}
-
-uint64_t evmsail_stateless_account_nonce(unit ignored) {
-  (void)ignored;
-  return sr_account_info.znonce;
-}
-
-EVMSAIL_WORD_RETURN evmsail_stateless_account_balance(
-    EVMSAIL_WORD_RESULT(result) unit ignored) {
-  (void)ignored;
-  EVMSAIL_RETURN_WORD(result, sr_account_info.zbalance);
-}
-
-EVMSAIL_HASH_RETURN evmsail_stateless_account_storage_root(
-    EVMSAIL_HASH_RESULT(result) unit ignored) {
-  (void)ignored;
-  EVMSAIL_RETURN_HASH(result, sr_account_info.zstorage_root);
-}
-
-EVMSAIL_HASH_RETURN evmsail_stateless_account_code_hash(
-    EVMSAIL_HASH_RESULT(result) unit ignored) {
-  (void)ignored;
-  EVMSAIL_RETURN_HASH(result, sr_account_info.zcode_hash);
 }
 
 uint64_t evmsail_stateless_storage_read(sail_hash root,
@@ -2015,21 +1893,7 @@ uint64_t evmsail_stateless_storage_read(sail_hash root,
   return ctx.status;
 }
 
-void evmsail_stateless_storage_lookup(struct zOptimizzedUnitResult *result,
-                                      sail_hash root, sail_hash slot_hash) {
-  const uint64_t status =
-      evmsail_stateless_storage_read(root, slot_hash, &sr_storage_value);
-  sr_unit_result(result, status);
-}
-
-EVMSAIL_WORD_RETURN evmsail_stateless_storage_value(
-    EVMSAIL_WORD_RESULT(result) unit ignored) {
-  (void)ignored;
-  EVMSAIL_RETURN_WORD(result, sr_storage_value);
-}
-
-void evmsail_compute_state_root(struct zOptimizzedHashResult *result,
-                                sail_hash parent_state_root) {
+sail_hash evmsail_compute_state_root(sail_hash parent_state_root) {
   struct sr_ctx ctx = {SR_OK};
   sail_hash root = {{0}};
   const uint32_t account_count = acct_block_updates_prepare();
@@ -2041,5 +1905,7 @@ void evmsail_compute_state_root(struct zOptimizzedHashResult *result,
       memset(&root, 0, sizeof(root));
   }
   sr_last_status = ctx.status;
-  sr_hash_result(result, ctx.status, root);
+  if (ctx.status != SR_OK)
+    sr_throw(&ctx, "optimized state trie root");
+  return root;
 }

@@ -15,11 +15,10 @@
 #include EVMSAIL_MODEL_H
 #include "sail_abi.h"
 
-void evmsail_k_aload(struct zOptimizzedAccountResult *result,
-                     sail_hash parent_state_root, sail_address address);
-void evmsail_k_sload(struct zOptimizzedStorageResult *result,
-                     sail_hash parent_state_root, sail_address address,
-                     sail_word slot);
+struct zAccount evmsail_k_aload(sail_hash parent_state_root,
+                                sail_address address);
+struct zStorageValue evmsail_k_sload(sail_hash parent_state_root,
+                                     sail_address address, sail_word slot);
 unit evmsail_k_sstore(sail_address address, sail_word slot,
                       sail_word current, sail_word original);
 unit evmsail_store_account(sail_address address, struct zAccount account);

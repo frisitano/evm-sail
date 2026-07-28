@@ -1,13 +1,8 @@
-variable EVM_PROFILE = off
 variable EVM_DEBUG = off
 
 evm {
   files
     prelude.sail,
-    primitives/cycle_scopes.sail,
-    if $EVM_PROFILE == off then host/cycle_scopes_disabled.sail
-    else if $EVM_PROFILE == on then host/cycle_scopes_enabled.sail
-    else error("EVM_PROFILE must be off or on"),
     primitives/quantities.sail,
     primitives/gas.sail,
     primitives/bytes.sail,
@@ -15,12 +10,11 @@ evm {
     evm/halt.sail,
     primitives/ssz.sail,
     primitives/code.sail,
-    lib/bytes.sail,
     host/accelerators.sail,
     primitives/rlp.sail,
-    host/byte_slice.sail,
+    host/region_access.sail,
     host/scratch.sail,
-    host/kernel/scratch.sail,
+    kernel/scratch.sail,
     primitives/crypto.sail,
     primitives/fork.sail,
     primitives/chain_config.sail,
@@ -43,13 +37,13 @@ evm {
     host/frame_stack.sail,
     host/memory.sail,
     host/output.sail,
-    host/kernel/environment.sail,
-    host/kernel/storage.sail,
-    host/kernel/logs.sail,
-    host/kernel/accounts.sail,
-    host/kernel/code.sail,
-    host/kernel/selfdestruct.sail,
-    host/kernel/lifecycle.sail,
+    kernel/environment.sail,
+    kernel/storage.sail,
+    kernel/logs.sail,
+    kernel/accounts.sail,
+    kernel/code.sail,
+    kernel/selfdestruct.sail,
+    kernel/lifecycle.sail,
     evm/machine.sail,
     evm/gas.sail,
     evm/precompiles.sail,

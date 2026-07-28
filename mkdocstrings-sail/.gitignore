@@ -3,4 +3,3 @@ tests/integration/site*/
 _build/
 __pycache__/
 *.egg-info/
-uv.lock

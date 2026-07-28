@@ -6,6 +6,7 @@
 #include "sail_abi.h"
 #include <stdbool.h>
 #include <stdint.h>
+bool evm_memory_configure_capacity(uint64_t capacity);
 unit     mem_clear(const unit u);        /* clear to one empty frame (per tx)   */
 #ifdef EVMSAIL_STANDARD_ABI
 void mem_frame_enter(sail_int *out, const unit u);
@@ -18,18 +19,9 @@ uint64_t mem_read_byte(EVMSAIL_BYTE_QUANTITY_PARAM(off));
 unit mem_write_byte(EVMSAIL_BYTE_QUANTITY_PARAM(off), uint64_t v);
 uint64_t hm_depth(const unit u);                    /* call-frame depth   */
 const uint8_t *evm_memory_region(uint64_t off, uint64_t len);
-uint64_t slice_byte_at_source(uint64_t kind, uint64_t off, uint64_t len,
-                              uint64_t i);
-uint64_t slice_count_nonzero_source(uint64_t kind, uint64_t off, uint64_t len);
-bool slice_strided_zero_source(uint64_t kind, uint64_t off, uint64_t len,
-                               uint64_t start, uint64_t stride, uint64_t width,
-                               uint64_t count);
-sail_word slice_load_word_source(uint64_t kind, uint64_t off, uint64_t len,
-                                 uint64_t i);
-sail_word slice_load_n_word_source(uint64_t kind, uint64_t off, uint64_t len,
-                                   uint64_t i, uint64_t n);
-unit slice_copy_to_memory_source(uint64_t kind, uint64_t off, uint64_t len,
-                                 uint64_t dst, uint64_t i, uint64_t n);
+const uint8_t *evm_memory_base(void);
+uint64_t evm_memory_capacity(void);
+uint8_t *evm_memory_write_region(uint64_t off, uint64_t len);
 unit mem_move(EVMSAIL_BYTE_QUANTITY_PARAM(dst),
               EVMSAIL_BYTE_QUANTITY_PARAM(src),
               EVMSAIL_BYTE_QUANTITY_PARAM(len));

@@ -15,11 +15,10 @@ list.
 function validate_executed_block(block : Block, input_ref : StatelessInputRef, result : BlockExecutionResult) -> unit = {
     let header = block.header;
     if k_fork >= Prague then {
-        if   not_bool(byte_slices_equal(result.requests.deposits, input_ref.deposits))
-           | not_bool(byte_slices_equal(result.requests.withdrawals, input_ref.withdrawal_requests))
-           | not_bool(byte_slices_equal(result.requests.consolidations, input_ref.consolidation_requests))
-           | not_bool(byte_slices_equal(result.requests.builder_deposits, input_ref.builder_deposit_requests))
-           | not_bool(byte_slices_equal(result.requests.builder_exits, input_ref.builder_exit_requests)) then {
+        if   not_bool(region_slices_equal(result.requests.withdrawals, input_ref.withdrawal_requests))
+           | not_bool(region_slices_equal(result.requests.consolidations, input_ref.consolidation_requests))
+           | not_bool(region_slices_equal(result.requests.builder_deposits, input_ref.builder_deposit_requests))
+           | not_bool(region_slices_equal(result.requests.builder_exits, input_ref.builder_exit_requests)) then {
             throw InvalidBlock(InvalidExecutionRequests)
         }
     };
@@ -29,30 +28,34 @@ function validate_executed_block(block : Block, input_ref : StatelessInputRef, r
     if (k_fork >= Cancun) & (result.blob_gas_used != header.blob_gas_used) then {
         throw InvalidBlock(InvalidBlobGasUsed)
     };
-    cycle_scope_start(SCOPE_STATE_ROOT);
     let poststate = compute_state_root();
-    cycle_scope_end(SCOPE_STATE_ROOT);
     if poststate != header.state_root then {
         throw InvalidBlock(InvalidStateRoot)
     };
     if result.receipts_root != header.receipts_root then {
         throw InvalidBlock(InvalidReceiptsRoot)
     };
-    if not_bool(logs_bloom_equal(result.logs_bloom, header.logs_bloom)) then {
+    if not_bool(logs_bloom_matches_ref(result.logs_bloom, header.logs_bloom)) then {
         throw InvalidBlock(InvalidLogsBloom)
     };
     if k_fork >= Amsterdam then {
-        cycle_scope_start(SCOPE_BLOCK_ACCESS_LIST);
         let maximum_items : item_count = header.gas_limit / 2000;
-        validate_block_access_list(block.body.block_access_list, maximum_items);
-        cycle_scope_end(SCOPE_BLOCK_ACCESS_LIST)
+        validate_block_access_list(block.body.block_access_list, maximum_items)
     }
 }
+
+/* Stable stage identifiers for optional native validation diagnostics. These
+   are validation metadata, not performance instrumentation. */
+let VALIDATION_STAGE_DECODE_INPUT : validation_stage = 1
+let VALIDATION_STAGE_INDEX_WITNESS : validation_stage = 2
+let VALIDATION_STAGE_VALIDATE_PAYLOAD : validation_stage = 3
+let VALIDATION_STAGE_EXECUTE_BLOCK : validation_stage = 4
+let VALIDATION_STAGE_VALIDATE_RESULT : validation_stage = 5
 
 /*! A validation failure: the pipeline stage it occurred in and the
     violated rule. */
 struct StatelessValidationFailure = {
-    scope : bits(8),
+    stage : validation_stage,
     reason : BlockError,
 }
 
@@ -69,39 +72,28 @@ union StatelessValidationResult = {
     block body one transaction at a time, and validate the execution
     results; the first violated rule becomes the failure verdict. */
 function verify_stateless_payload(input_ref : StatelessInputRef) -> StatelessValidationResult = {
-    var active_scope = SCOPE_DECODE_INPUT;
+    var active_stage : validation_stage = VALIDATION_STAGE_DECODE_INPUT;
     try {
-        cycle_scope_start(active_scope);
         scratch_reset();
         let input = decode_stateless_input(input_ref);
         k_fork = input_ref.protocol.fork;
 
-        cycle_scope_end(active_scope);
-        active_scope = SCOPE_INDEX_WITNESS;
-        cycle_scope_start(active_scope);
+        active_stage = VALIDATION_STAGE_INDEX_WITNESS;
         let witness = index_execution_witness(input_ref);
 
-        cycle_scope_end(active_scope);
-        active_scope = SCOPE_VALIDATE_PAYLOAD;
-        cycle_scope_start(active_scope);
+        active_stage = VALIDATION_STAGE_VALIDATE_PAYLOAD;
         validate_execution_payload(input, input_ref, witness);
 
-        cycle_scope_end(active_scope);
-        active_scope = SCOPE_EXECUTE_BLOCK;
-        cycle_scope_start(active_scope);
+        active_stage = VALIDATION_STAGE_EXECUTE_BLOCK;
         let block = input.payload.block;
-        let result = execute_block_body(block.body, input_ref.public_keys, block.header.gas_limit);
+        let result = execute_block_body(block.body, input_ref.public_keys, block.header.gas_limit, input_ref.deposits);
 
-        cycle_scope_end(active_scope);
-        active_scope = SCOPE_VALIDATE_RESULT;
-        cycle_scope_start(active_scope);
+        active_stage = VALIDATION_STAGE_VALIDATE_RESULT;
         validate_executed_block(block, input_ref, result);
-        cycle_scope_end(active_scope);
         StatelessPayloadValid()
     } catch {
         InvalidBlock(reason) => {
-            cycle_scope_end(active_scope);
-            StatelessPayloadInvalid(struct { scope = active_scope, reason = reason })
+            StatelessPayloadInvalid(struct { stage = active_stage, reason = reason })
         },
     }
 }

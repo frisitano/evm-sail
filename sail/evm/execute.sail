@@ -62,30 +62,30 @@ function do_jump(destination_value : word) -> unit = {
     }
 }
 
-/*! Pops `count` log topics from the stack. */
-function pop_log_topics(count : log_topic_count) -> list(word) =
+/*! Pops `count` log topics from the stack into its bounded representation. */
+function pop_log_topics(count : log_topic_count) -> LogTopics =
     match count {
-        0 => [||],
-        1 => [|pop()|],
+        0 => LogTopics0(),
+        1 => LogTopics1(pop()),
         2 => {
             let t0 = pop();
             let t1 = pop();
-            [|t0, t1|]
+            LogTopics2((t0, t1))
         },
         3 => {
             let t0 = pop();
             let t1 = pop();
             let t2 = pop();
-            [|t0, t1, t2|]
+            LogTopics3((t0, t1, t2))
         },
         4 => {
             let t0 = pop();
             let t1 = pop();
             let t2 = pop();
             let t3 = pop();
-            [|t0, t1, t2, t3|]
+            LogTopics4((t0, t1, t2, t3))
         },
-        _ => [||],
+        _ => LogTopics0(),
     }
 
 /*md
@@ -352,7 +352,7 @@ function execute_gasprice() -> unit = {
 function execute_calldatasize() -> unit = {
     charge(G_base);
     let input = calldata;
-    push(word_of_byte_count(input.len))
+    push(word_of_byte_count(region_slice_length(input)))
 }
 
 /*! Implements `CALLDATALOAD`. */
@@ -801,7 +801,8 @@ function execute_log(n : log_topic_count) -> unit = {
         charge_log_gas(n, length_word);
         let range = charge_memory_range(offset_word, length_word);
         if is_running() then {
-            k_log(self_addr(), topics, LogDataSlice(memory_byte_slice(range.off, range.len)))
+            let data = active_memory_slice(range.off, range.len);
+            k_log(self_addr(), topics, LogDataMemory(memory_slice(data.off, data.len)))
         }
     }
 }
@@ -815,7 +816,7 @@ function execute_return() -> unit = {
     let length_word = pop();
     let range = charge_memory_range(offset_word, length_word);
     if is_running() then {
-        frame_status = Halted(HaltReturn(freeze_output(memory_byte_slice(range.off, range.len))))
+        frame_status = Halted(HaltReturn(freeze_output(active_memory_slice(range.off, range.len))))
     }
 }
 
@@ -827,7 +828,7 @@ function execute_revert() -> unit = {
     let range = charge_memory_range(offset_word, length_word);
     if is_running() then {
         refill_frame_state_gas();
-        frame_status = Halted(HaltRevert(freeze_output(memory_byte_slice(range.off, range.len))))
+        frame_status = Halted(HaltRevert(freeze_output(active_memory_slice(range.off, range.len))))
     }
 }
 

@@ -91,6 +91,10 @@ enum BlockError = {
     WitnessDeficient,
 }
 
+/*! Stable identifier for the validation stage that raised a block error.
+    This diagnostic metadata is a bounded integer, not a protocol bitvector. */
+type validation_stage = range(0, 255)
+
 /*! The single Sail exception type. Block validation throws
     `InvalidBlock(reason)` at the failure point, and `main` catches it
     once — any failure yields an unsuccessful validation. Sail's C backend

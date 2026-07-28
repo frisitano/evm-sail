@@ -3,7 +3,7 @@
 # The operand stack
 
 The per-frame EVM operand stack (YP §9.1, μ_s): up to 1024 words, LIFO.
-The EVM layer ([push][] / [pop][] in the machine module) enforces the
+The EVM layer ([push_word][] / [pop][] in the machine module) enforces the
 depth bounds and charges nothing here — this is pure mechanism. Frames
 form a stack of stacks: [stack_enter_frame][] on a sub-call,
 [stack_leave_frame][] on return, [stack_reset][] per transaction. The

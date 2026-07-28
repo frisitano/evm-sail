@@ -17,4 +17,4 @@ val nodedb_insert = impure { c: "nodedb_insert" } : (hash, source_pointer, host_
 /*! The complete stateless-input span recorded for a node hash; the empty
     slice when the node is unwitnessed. Returning the span as one value keeps
     its source and host-range constraint intact. */
-val nodedb_lookup = impure { c: "nodedb_lookup" } : hash -> ByteSlice
+val nodedb_lookup = impure { c: "nodedb_lookup" } : hash -> StatelessInputSlice

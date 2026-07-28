@@ -34,9 +34,9 @@ val state_revert = impure { c: "host_state_revert" } : journal_checkpoint -> uni
 /*! Inserts or overwrites a row in the transaction-layer storage overlay
     (the raw store behind `SSTORE`). */
 val storage_tx_update = impure { c: "storage_tx_update" } : StorageEntry -> unit
-/*! The transaction-layer row for a storage key, or `None` when this
-    transaction has not written it. */
-val storage_tx_get = impure { c: "storage_tx_get" } : StorageKey -> option(StorageValue)
+/*! Resolves a transaction-layer storage key, distinguishing an actual cached
+    row from an uncached slot made known-zero by an account storage clear. */
+val storage_tx_get = impure { c: "storage_tx_get" } : StorageKey -> StorageTxLookup
 /*! Removes and returns one row of the transaction-layer overlay, or
     `None` when it is empty; the drain loop of the transaction-end merge. */
 val storage_tx_pop = impure { c: "storage_tx_pop" } : unit -> option(StorageEntry)
@@ -192,12 +192,40 @@ val warm_addr_touch = impure { c: "warm_addr_touch" } : address -> bool
     membership. */
 val warm_slot_touch = impure { c: "warm_slot_touch" } : (address, word) -> bool
 
+/* EIP-7702 transaction-local authority bookkeeping */
+/*! Clears and pre-sizes the authorization tracker for one transaction. */
+val authorization_tracker_reset = impure { c: "authorization_tracker_reset" } : transaction_item_count -> unit
+/*! Whether a successfully applied authorization for this authority was seen. */
+val authorization_tracker_seen = impure { c: "authorization_tracker_seen" } : address -> bool
+/*! Whether the authority was delegated before its first successful tuple. */
+val authorization_tracker_originally_delegated = impure { c: "authorization_tracker_originally_delegated" } : address -> bool
+/*! Whether this transaction has successfully set a delegation for the authority. */
+val authorization_tracker_delegation_set = impure { c: "authorization_tracker_delegation_set" } : address -> bool
+/*! Records one successfully applied authorization. */
+val authorization_tracker_commit = impure { c: "authorization_tracker_commit" } : (address, bool, bool) -> unit
+
 /* the per-transaction log store */
-/*! Clears the transaction's log series (per-transaction reset). */
+/*! Starts a new transaction-local view in the block-lifetime log store. */
 val logs_tx_reset = impure { c: "logs_tx_reset" } : unit -> unit
-/*! Appends a log record — emitter address, topics, data — to the
-    transaction's series (YP §4.4.1). */
-val log_append = impure { c: "log_append_record" } : (address, list(word), LogData) -> unit
-/*! The transaction's complete log series in emission order (receipt
-    construction). */
-val read_logs = impure { c: "logs_read_all" } : unit -> list(LogEntry)
+/*! Begins a log record for `address`. */
+val log_begin = impure { c: "log_begin" } : address -> unit
+/*! Appends one topic to the current record. */
+val log_add_topic = impure { c: "log_add_topic" } : word -> unit
+/*! Copies an EVM-memory payload into the current retained log record. */
+val log_add_data_memory = impure { c: "log_add_data_memory" } : MemorySlice -> unit
+/*! Appends one canonical big-endian word payload to the current record. */
+val log_add_data_word = impure { c: "log_add_data_word" } : word -> unit
+/*! Start and length of the current transaction's retained log range. */
+val logs_tx_start = impure { c: "logs_tx_start" } : unit -> log_store_index
+/*! Number of retained logs emitted by the current transaction. */
+val logs_tx_count = impure { c: "logs_tx_count" } : unit -> log_store_index
+/*! Indexed access to a retained log record. */
+val log_address = impure { c: "log_addr" } : log_store_index -> address
+/*! Number of topics attached to an indexed retained log. */
+val log_topics_count = impure { c: "log_topic_count" } : log_store_index -> log_store_index
+/*! Reads one topic from an indexed retained log. */
+val log_topic = impure { c: "log_topic" } : (log_store_index, log_store_index) -> word
+/*! Offset of an indexed retained log's payload in the host log-data arena. */
+val log_data_offset = impure { c: "log_data_off" } : log_store_index -> log_store_index
+/*! Byte length of an indexed retained log's payload. */
+val log_data_length = impure { c: "log_data_len" } : log_store_index -> log_store_index

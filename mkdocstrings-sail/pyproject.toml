@@ -19,10 +19,12 @@ dependencies = [
     "mkdocs-material~=9.7.7",
     "Markdown>=3.3",
     "mkdocs-literate-nav>=0.6",
-    "mkdocs-section-index>=0.3",
     "Pygments>=2.12",
     "MarkupSafe>=2.0",
 ]
+
+[project.entry-points."mkdocs.plugins"]
+sail-book = "mkdocstrings_handlers.sail._plugin:SailBookPlugin"
 
 [project.entry-points."pygments.lexers"]
 sail = "mkdocstrings_handlers.sail._lexer:SailLexer"

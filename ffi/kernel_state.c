@@ -14,10 +14,12 @@
  * (count reset, allocation retained) at tx/world reset, matching the cached
  * per-frame arrays used elsewhere in the FFI. */
 #include "kernel_state.h"
+#include "capacity.h"
 #include "hash_bytes.h"
 #include "value_convert.h"
 #include "state_db.h"
 #include "transient_storage.h"
+#include "zkvm_accelerators.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -129,6 +131,92 @@ bool warm_slot_touch(sail_address a, EVMSAIL_WORD_PARAM(s)) {
   return false;
 }
 
+/* --------------------- EIP-7702 authority tracker ---------------------- */
+
+typedef struct {
+  address160 key;
+  uint8_t used;
+  uint8_t originally_delegated;
+  uint8_t delegation_set;
+} auth_tracker_entry;
+
+static auth_tracker_entry *auth_tracker;
+static uint32_t auth_tracker_cap;
+
+static uint64_t auth_tracker_hash(const address160 *a) {
+  uint64_t h = UINT64_C(1469598103934665603);
+  for (unsigned i = 0; i < sizeof a->b; ++i) {
+    h ^= a->b[i];
+    h *= UINT64_C(1099511628211);
+  }
+  h ^= h >> 32;
+  h *= UINT64_C(0xd6e8feb86659fd93);
+  h ^= h >> 32;
+  return h;
+}
+
+static auth_tracker_entry *auth_tracker_find(const address160 *key,
+                                              int insert) {
+  if (auth_tracker_cap == 0) return NULL;
+  uint32_t slot = (uint32_t)auth_tracker_hash(key) & (auth_tracker_cap - 1);
+  for (;;) {
+    auth_tracker_entry *entry = &auth_tracker[slot];
+    if (!entry->used) {
+      if (!insert) return NULL;
+      entry->used = 1;
+      entry->key = *key;
+      entry->originally_delegated = 0;
+      entry->delegation_set = 0;
+      return entry;
+    }
+    if (address_eq(&entry->key, key)) return entry;
+    slot = (slot + 1) & (auth_tracker_cap - 1);
+  }
+}
+
+unit authorization_tracker_reset(uint64_t count_hint) {
+  uint64_t need = count_hint < 8 ? 16 : count_hint * 2;
+  uint32_t cap = 16;
+  while ((uint64_t)cap < need && cap <= UINT32_MAX / 2) cap *= 2;
+  if ((uint64_t)cap < need) abort();
+  if (cap > auth_tracker_cap) {
+    auth_tracker_entry *next =
+        (auth_tracker_entry *)realloc(auth_tracker, cap * sizeof(*next));
+    if (next == NULL) abort();
+    auth_tracker = next;
+    auth_tracker_cap = cap;
+  }
+  memset(auth_tracker, 0, auth_tracker_cap * sizeof(*auth_tracker));
+  return UNIT;
+}
+
+bool authorization_tracker_seen(sail_address authority) {
+  address160 key = sail_address160(authority);
+  return auth_tracker_find(&key, 0) != NULL;
+}
+
+bool authorization_tracker_originally_delegated(sail_address authority) {
+  address160 key = sail_address160(authority);
+  auth_tracker_entry *entry = auth_tracker_find(&key, 0);
+  return entry != NULL && entry->originally_delegated != 0;
+}
+
+bool authorization_tracker_delegation_set(sail_address authority) {
+  address160 key = sail_address160(authority);
+  auth_tracker_entry *entry = auth_tracker_find(&key, 0);
+  return entry != NULL && entry->delegation_set != 0;
+}
+
+unit authorization_tracker_commit(sail_address authority,
+                                  bool originally_delegated,
+                                  bool sets_delegation) {
+  address160 key = sail_address160(authority);
+  auth_tracker_entry *entry = auth_tracker_find(&key, 1);
+  if (originally_delegated) entry->originally_delegated = 1;
+  if (sets_delegation) entry->delegation_set = 1;
+  return UNIT;
+}
+
 /* ------------------------ ancestor header hashes ------------------------ */
 /* Fixed 256-slot table (the protocol's BLOCKHASH depth), distance-indexed:
  * slot j = keccak of the (j+1)-blocks-back witness header. Writes come from
@@ -162,6 +250,21 @@ static word256 *log_topics;
 static uint32_t topics_n, topics_cap;
 static uint8_t *log_data;
 static uint32_t data_n, data_cap;
+static uint32_t tx_log_start;
+static uint64_t block_logs_bloom[32];
+
+bool log_data_configure_capacity(uint64_t capacity) {
+  if (capacity > UINT32_MAX || capacity > SIZE_MAX) return false;
+  if (capacity > data_cap) {
+    uint8_t *next =
+        (uint8_t *)realloc(log_data, (size_t)(capacity ? capacity : 1));
+    if (!next) return false;
+    log_data = next;
+    data_cap = (uint32_t)capacity;
+  }
+  data_n = 0;
+  return true;
+}
 
 static int logrec_reserve(uint32_t need) {
   if (need <= logs_cap) return 1;
@@ -184,6 +287,11 @@ static int topics_reserve(uint32_t need) {
   return 1;
 }
 static int data_reserve(uint32_t need) {
+  evmsail_capacity_observe(EVMSAIL_CAP_LOG_DATA_BYTES, need);
+#ifdef EVMSAIL_CAPACITY_FIXED
+  return need <= evmsail_capacity_limit(EVMSAIL_CAP_LOG_DATA_BYTES) &&
+         need <= data_cap;
+#endif
   if (need <= data_cap) return 1;
   uint32_t cap = data_cap ? data_cap * 2 : 1024;
   while (cap < need) cap *= 2;
@@ -199,16 +307,24 @@ unit logs_reset(const unit u) {
   logs_n = 0;
   topics_n = 0;
   data_n = 0;
+  tx_log_start = 0;
+  memset(block_logs_bloom, 0, sizeof(block_logs_bloom));
   return UNIT;
 }
-/* per-tx reset: records + topics only. The DATA arena persists across the
- * block -- receipt-held LogEntry slices (LogDataSource) reference it until
- * block validation; the full logs_reset above runs per case/block. */
+/* Per-tx reset starts a new view. Records, topics, and data all persist across
+ * the block so receipts retain stable indices and source-backed payloads. */
 unit logs_tx_reset(const unit u) {
   (void)u;
-  logs_n = 0;
-  topics_n = 0;
+  tx_log_start = logs_n;
   return UNIT;
+}
+uint64_t logs_tx_start(const unit u) {
+  (void)u;
+  return tx_log_start;
+}
+uint64_t logs_tx_count(const unit u) {
+  (void)u;
+  return logs_n - tx_log_start;
 }
 unit log_begin(sail_address a) {
   if (logrec_reserve(logs_n + 1)) {
@@ -236,6 +352,11 @@ unit log_add_data_bulk(const uint8_t *p, uint64_t n) {
   }
   return UNIT;
 }
+unit log_add_data_word(sail_word value) {
+  uint8_t bytes[32];
+  sail_word_to_be_bytes(bytes, value);
+  return log_add_data_bulk(bytes, sizeof(bytes));
+}
 uint64_t logs_checkpoint(const unit u) { (void)u; return logs_n; }
 unit logs_revert(uint64_t checkpoint) {
   if (checkpoint < logs_n) {
@@ -260,15 +381,96 @@ EVMSAIL_WORD_RETURN log_topic(EVMSAIL_WORD_RESULT(result) uint64_t i,
   if (i < logs_n && j < logs[i].topic_cnt) t = &log_topics[logs[i].topic_off + j];
   EVMSAIL_RETURN_WORD(result, be_words4_to_sail_word(t->w));
 }
+
+static void logs_bloom_write_digest(uint8_t out[256],
+                                    const zkvm_keccak256_hash *digest) {
+  for (size_t i = 0; i < 3; ++i) {
+    uint16_t bit =
+        (uint16_t)(((uint16_t)(digest->data[2 * i] & 0x07) << 8) |
+                   digest->data[2 * i + 1]);
+    out[255 - (bit >> 3)] |= (uint8_t)(UINT8_C(1) << (bit & 7));
+    const size_t word = bit >> 6;
+    const uint64_t mask = UINT64_C(1) << (bit & 63);
+    block_logs_bloom[word] |= mask;
+  }
+}
+
+static bool logs_bloom_write_bytes(uint8_t out[256], const uint8_t *bytes,
+                                   size_t length) {
+  zkvm_keccak256_hash digest = {{0}};
+  if (zkvm_keccak256(bytes, length, &digest) != ZKVM_EOK)
+    return false;
+  logs_bloom_write_digest(out, &digest);
+  return true;
+}
+
+unit evmsail_block_logs_bloom_reset(unit ignored) {
+  (void)ignored;
+  memset(block_logs_bloom, 0, sizeof(block_logs_bloom));
+  return UNIT;
+}
+
+static sail_logs_bloom logs_bloom_from_words(const uint64_t words[32]) {
+  sail_logs_bloom bloom;
+  memcpy(bloom.bytes, words, sizeof(bloom.bytes));
+  return bloom;
+}
+
+bool evmsail_receipt_logs_bloom_write(uint64_t start, uint64_t count,
+                                      uint8_t out[256]) {
+  if (start > logs_n || count > logs_n - start)
+    return false;
+
+  memset(out, 0, 256);
+  for (uint64_t offset = 0; offset < count; ++offset) {
+    const log_rec *record = &logs[start + offset];
+    if (!logs_bloom_write_bytes(out, record->a.b, sizeof(record->a.b)))
+      return false;
+    for (uint32_t topic = 0; topic < record->topic_cnt; ++topic) {
+      uint8_t bytes[32];
+      const word256 *value = &log_topics[record->topic_off + topic];
+      be_words4_to_be_bytes(bytes, value->w);
+      if (!logs_bloom_write_bytes(out, bytes, sizeof(bytes)))
+        return false;
+    }
+  }
+  return true;
+}
+
+sail_logs_bloom evmsail_block_logs_bloom(unit ignored) {
+  (void)ignored;
+  return logs_bloom_from_words(block_logs_bloom);
+}
+
 uint64_t log_data_len(uint64_t i) { return (i < logs_n) ? logs[i].data_len : 0; }
-uint64_t log_data_off(uint64_t i) { return (i < logs_n) ? logs[i].data_off : 0; }
+uint64_t log_data_off(uint64_t i) {
+  if (i >= logs_n || logs[i].data_len == 0) return 0;
+#ifdef EVMSAIL_POINTER_ABI
+  return (uint64_t)(uintptr_t)(log_data + logs[i].data_off);
+#else
+  return logs[i].data_off;
+#endif
+}
 
 /* bounds-checked view of the log-data arena (the LogDataSource resolver) */
 const uint8_t *log_data_region(uint64_t off, uint64_t len) {
   static const uint8_t empty = 0;
+#ifdef EVMSAIL_POINTER_ABI
+  if (len == 0) return &empty;
+  uintptr_t base = (uintptr_t)log_data;
+  uintptr_t pointer = (uintptr_t)off;
+  if (!log_data || pointer < base || pointer - base > data_n ||
+      len > data_n - (uint64_t)(pointer - base))
+    return NULL;
+  return (const uint8_t *)pointer;
+#else
   if (off > data_n || len > data_n - off) return NULL;
   return len ? log_data + off : &empty;
+#endif
 }
+
+const uint8_t *log_data_base(void) { return log_data; }
+uint64_t log_data_length(void) { return data_n; }
 
 /* ------------------------- private undo journal ------------------------- */
 /* These tags and rows are backend implementation details. Sail observes only

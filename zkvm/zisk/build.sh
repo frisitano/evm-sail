@@ -11,6 +11,7 @@ TOOLCHAIN="${ZISK_TOOLCHAIN:-zisk}"
 
 build_guest() {
     mkdir -p "$BUILD"
+    BUILD="$(cd "$BUILD" && pwd)"
 
     ZKVM_PLATFORM=zisk ZKVM_BUILD="$BUILD" \
         bash "$ROOT/zkvm/build.sh" zisk-lib

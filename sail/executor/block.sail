@@ -15,7 +15,6 @@ struct BlockExecutionResult = {
     first_tx_recipient : address,
     receipts_root : hash,
     logs_bloom : LogsBloom,
-    deposits : ByteSlice,
     requests : ExecutionRequests,
 }
 
@@ -46,8 +45,9 @@ function run_block_start_system_calls() -> unit = {
     accounting), accumulating receipts. */
 function execute_block_transactions(
     transactions : TransactionListRef,
-    public_keys : ByteSlice,
+    public_keys : StatelessInputSlice,
     header_gas_limit : block_gas_limit,
+    expected_deposits : StatelessInputSlice,
 ) -> (
     BlockExecutionResult
 ) = {
@@ -64,9 +64,9 @@ function execute_block_transactions(
     var blob_gas_acc : blob_gas_used = 0;
     var tx0_to : address = ZERO_ADDRESS;
     var receipts = receipt_accumulator_empty();
-    let deposits_start = scratch_begin();
+    var remaining_deposits : StatelessInputSlice = expected_deposits;
     var cursor = ssz_list_cursor(transactions);
-    var keys : ByteSlice = public_keys;
+    var keys : StatelessInputSlice = public_keys;
     while not_bool(ssz_list_cursor_empty(cursor)) termination_measure(cursor.items.count - cursor.index) do {
         let i = cursor.index;
         let (transaction, next) = ssz_list_pop(cursor);
@@ -78,9 +78,7 @@ function execute_block_transactions(
         };
         let public_key = sub_slice(keys_fields, 0, PUBLIC_KEY_LENGTH);
         keys = slice_suffix(keys_fields, public_key_length);
-        cycle_scope_start(SCOPE_TX_DECODE);
         let tx = decode_transaction(transaction, public_key);
-        cycle_scope_end(SCOPE_TX_DECODE);
         k_block_access_index = i + 1;
         if i == 0 then {
             tx0_to = tx.recipient
@@ -113,18 +111,21 @@ function execute_block_transactions(
                 throw InvalidBlock(GasUsedExceedsLimit)
             };
             receipts = receipt_accumulator_push(receipts, receipt, next.index);
-            append_deposit_logs(receipt.logs);
+            if k_fork >= Prague then {
+                remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
+            };
             blob_gas_acc = next_blob_gas
         }
+    };
+    if (k_fork >= Prague) & (region_slice_length(remaining_deposits) != 0) then {
+        throw InvalidBlock(InvalidExecutionRequests)
     };
     let header_gas_used = if (k_fork >= Amsterdam) & (execution_gas_acc < state_gas_acc) then {
             state_gas_acc
         } else {
             execution_gas_acc
         };
-    cycle_scope_start(SCOPE_RECEIPTS_ROOT);
     let receipts_root = receipt_accumulator_root(receipts);
-    cycle_scope_end(SCOPE_RECEIPTS_ROOT);
     struct {
         header_gas_used = header_gas_used,
         execution_gas_used = execution_gas_acc,
@@ -132,8 +133,7 @@ function execute_block_transactions(
         blob_gas_used = blob_gas_acc,
         first_tx_recipient = tx0_to,
         receipts_root = receipts_root,
-        logs_bloom = receipts.bloom,
-        deposits = scratch_finish(deposits_start),
+        logs_bloom = receipt_accumulator_bloom(receipts),
         requests = EMPTY_EXECUTION_REQUESTS,
     }
 }
@@ -169,30 +169,23 @@ function apply_block_end_state(body : BlockBody) -> unit = {
     the accumulated [BlockExecutionResult][type-BlockExecutionResult]. */
 function execute_block_body(
     body : BlockBody,
-    public_keys : ByteSlice,
+    public_keys : StatelessInputSlice,
     header_gas_limit : block_gas_limit,
+    expected_deposits : StatelessInputSlice,
 ) -> (
     BlockExecutionResult
 ) = {
     bal_reset();
     k_block_access_index = 0;
-    cycle_scope_start(SCOPE_BLOCK_START);
     run_block_start_system_calls();
-    cycle_scope_end(SCOPE_BLOCK_START);
-    cycle_scope_start(SCOPE_BLOCK_TRANSACTIONS);
-    let result = execute_block_transactions(body.transactions, public_keys, header_gas_limit);
-    cycle_scope_end(SCOPE_BLOCK_TRANSACTIONS);
+    let result = execute_block_transactions(body.transactions, public_keys, header_gas_limit, expected_deposits);
     let post_tx_index = body.transactions.count + 1;
     k_block_access_index = post_tx_index;
-    cycle_scope_start(SCOPE_BLOCK_END_STATE);
     apply_block_end_state(body);
-    cycle_scope_end(SCOPE_BLOCK_END_STATE);
-    cycle_scope_start(SCOPE_BLOCK_END_REQUESTS);
     let requests = if k_fork >= Prague then {
-            collect_execution_requests(result.deposits)
+            collect_execution_requests(expected_deposits)
         } else {
             EMPTY_EXECUTION_REQUESTS
         };
-    cycle_scope_end(SCOPE_BLOCK_END_REQUESTS);
     { result with requests = requests }
 }

@@ -48,6 +48,12 @@ let DEPOSIT_SIGNATURE_LENGTH : int(96) = 96
 let DEPOSIT_INDEX_LENGTH_WORD : int(512) = 512
 let DEPOSIT_INDEX_DATA : int(544) = 544
 let DEPOSIT_INDEX_LENGTH : int(8) = EIGHT_BYTE_LENGTH
+let DEPOSIT_REQUEST_LENGTH : int(192) = 192
+let DEPOSIT_REQUEST_PUBKEY : int(0) = 0
+let DEPOSIT_REQUEST_WITHDRAWAL_CREDENTIALS : int(48) = 48
+let DEPOSIT_REQUEST_AMOUNT : int(80) = 80
+let DEPOSIT_REQUEST_SIGNATURE : int(88) = 88
+let DEPOSIT_REQUEST_INDEX : int(184) = 184
 
 /* Enter a top-level protocol system-call frame. The caller has already made a
  * fresh memory frame and, for a word input, frozen the parent-memory span that
@@ -55,7 +61,7 @@ let DEPOSIT_INDEX_LENGTH : int(8) = EIGHT_BYTE_LENGTH
 /*! Enters a top-level protocol system-call frame. The caller has already
     made a fresh memory frame and, for a word input, frozen the
     parent-memory span that `input` references. */
-function enter_system_call_frame(tgt : address, input : ByteSlice) -> journal_checkpoint = {
+function enter_system_call_frame(tgt : address, input : CalldataSlice) -> journal_checkpoint = {
     let checkpoint = k_state_checkpoint();
     pc = 0;
     call_depth = 0;
@@ -94,19 +100,15 @@ function system_call(tgt : address, input : hash) -> unit = {
         let input_range : MemoryRange = memory_range(0, SYSTEM_CALL_INPUT_LENGTH);
         let _ = memory_expand_to(input_range.len);
         mem_store_word(input_range.off, hash_to_word(input));
-        let input_slice = memory_byte_slice(input_range.off, input_range.len);
+        let input_slice = active_memory_slice(input_range.off, input_range.len);
         let parent_memory = memory_frame_enter();
-        let checkpoint = enter_system_call_frame(tgt, input_slice);
-        cycle_scope_start(SCOPE_SYSTEM_CALL_INTERPRET);
+        let checkpoint = enter_system_call_frame(tgt, MemoryCalldata(memory_slice(input_slice.off, input_slice.len)));
         let _ = interpret();
-        cycle_scope_end(SCOPE_SYSTEM_CALL_INTERPRET);
         memory_frame_leave(parent_memory);
         if not_bool(frame_succeeded()) then {
             k_revert(checkpoint)
         };
-        cycle_scope_start(SCOPE_SYSTEM_CALL_MERGE);
-        k_tx_merge(); /* system call is a top-level boundary: merge its storage */
-        cycle_scope_end(SCOPE_SYSTEM_CALL_MERGE)
+        k_tx_merge() /* system call is a top-level boundary: merge its storage */
     }
 }
 
@@ -123,52 +125,43 @@ function system_call(tgt : address, input : hash) -> unit = {
 /*! Issues one checked block-end system call (EIP-7002/EIP-7251/EIP-8282): the
     target must exist and the call must succeed. Missing code or frame failure
     throws immediately; a successful call returns the dequeued requests. */
-function system_call_checked(tgt : address) -> ByteSlice = {
+function system_call_checked(tgt : address) -> ScratchSlice = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
         throw InvalidBlock(ExecutionInvalid)
     } else {
         memory_reset();
         let parent_memory = memory_frame_enter();
-        let checkpoint = enter_system_call_frame(tgt, EMPTY_SLICE);
-        cycle_scope_start(SCOPE_SYSTEM_CALL_INTERPRET);
+        let checkpoint = enter_system_call_frame(tgt, EMPTY_CALLDATA);
         let output = interpret();
-        cycle_scope_end(SCOPE_SYSTEM_CALL_INTERPRET);
         if frame_succeeded() then {
-            let start = scratch_begin();
+            let start = scratch_reserve(output.len);
             scratch_push_slice(output);
             let result = scratch_finish(start);
             memory_frame_leave(parent_memory);
-            cycle_scope_start(SCOPE_SYSTEM_CALL_MERGE);
             k_tx_merge(); /* system call is a top-level boundary: merge its storage */
-            cycle_scope_end(SCOPE_SYSTEM_CALL_MERGE);
             result
         } else {
             memory_frame_leave(parent_memory);
             k_revert(checkpoint);
-            cycle_scope_start(SCOPE_SYSTEM_CALL_MERGE);
             k_tx_merge();
-            cycle_scope_end(SCOPE_SYSTEM_CALL_MERGE);
             throw InvalidBlock(ExecutionInvalid)
         }
     }
 }
 
-/*! Whether a log is a `DepositEvent` from the deposit contract
+/*! Whether a retained log is a `DepositEvent` from the deposit contract
     (EIP-6110). */
-function deposit_log_matches(log : LogEntry) -> bool =
-    if log.address != DEPOSIT_CONTRACT_ADDR then {
+function deposit_log_matches(index : log_store_index) -> bool =
+    if log_address(index) != DEPOSIT_CONTRACT_ADDR then {
         false
     } else {
-        match log.topics {
-            topic :: _ => topic == DEPOSIT_EVENT_TOPIC,
-            [||] => false,
-        }
+        (log_topics_count(index) != 0) & (log_topic(index, 0) == DEPOSIT_EVENT_TOPIC)
     }
 
-/*! Strips the ABI framing from one `DepositEvent` and appends the
-    consensus-layer deposit record's fields directly to the requests
-    scratch (EIP-6110). */
-function append_deposit_request(data : ByteSlice) -> unit = {
+/*! Validates one `DepositEvent` ABI payload against the next authenticated
+    consensus-layer deposit request and returns the unconsumed request
+    suffix (EIP-6110). */
+function authenticate_deposit_request(data : LogDataSlice, expected : StatelessInputSlice) -> StatelessInputSlice = {
     if data.len != DEPOSIT_EVENT_DATA_LENGTH then {
         throw InvalidBlock(InvalidExecutionRequests)
     };
@@ -184,24 +177,59 @@ function append_deposit_request(data : ByteSlice) -> unit = {
        | (slice_load(data, DEPOSIT_INDEX_LENGTH_WORD) != U256(8)) then {
         throw InvalidBlock(InvalidExecutionRequests)
     };
-    scratch_push_slice(sub_slice(data, DEPOSIT_PUBKEY_DATA, DEPOSIT_PUBKEY_LENGTH));
-    scratch_push_slice(sub_slice(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_DATA, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH));
-    scratch_push_slice(sub_slice(data, DEPOSIT_AMOUNT_DATA, DEPOSIT_AMOUNT_LENGTH));
-    scratch_push_slice(sub_slice(data, DEPOSIT_SIGNATURE_DATA, DEPOSIT_SIGNATURE_LENGTH));
-    scratch_push_slice(sub_slice(data, DEPOSIT_INDEX_DATA, DEPOSIT_INDEX_LENGTH))
+    if DEPOSIT_REQUEST_LENGTH <= expected.len then {
+        if   not_bool(
+                 region_slices_equal(
+                     sub_slice(data, DEPOSIT_PUBKEY_DATA, DEPOSIT_PUBKEY_LENGTH),
+                     sub_slice(expected, DEPOSIT_REQUEST_PUBKEY, DEPOSIT_PUBKEY_LENGTH),
+                 ),
+             )
+           | not_bool(
+                 region_slices_equal(
+                     sub_slice(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_DATA, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH),
+                     sub_slice(expected, DEPOSIT_REQUEST_WITHDRAWAL_CREDENTIALS, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH),
+                 ),
+             )
+           | not_bool(
+                 region_slices_equal(
+                     sub_slice(data, DEPOSIT_AMOUNT_DATA, DEPOSIT_AMOUNT_LENGTH),
+                     sub_slice(expected, DEPOSIT_REQUEST_AMOUNT, DEPOSIT_AMOUNT_LENGTH),
+                 ),
+             )
+           | not_bool(
+                 region_slices_equal(
+                     sub_slice(data, DEPOSIT_SIGNATURE_DATA, DEPOSIT_SIGNATURE_LENGTH),
+                     sub_slice(expected, DEPOSIT_REQUEST_SIGNATURE, DEPOSIT_SIGNATURE_LENGTH),
+                 ),
+             )
+           | not_bool(
+                 region_slices_equal(
+                     sub_slice(data, DEPOSIT_INDEX_DATA, DEPOSIT_INDEX_LENGTH),
+                     sub_slice(expected, DEPOSIT_REQUEST_INDEX, DEPOSIT_INDEX_LENGTH),
+                 ),
+             ) then {
+            throw InvalidBlock(InvalidExecutionRequests)
+        };
+        slice_suffix(expected, DEPOSIT_REQUEST_LENGTH)
+    } else {
+        throw InvalidBlock(InvalidExecutionRequests)
+    }
 }
 
-/*! Appends every matching deposit log in emission order. */
-function append_deposit_logs(logs : list(LogEntry)) -> unit =
-    match logs {
-        [||] => (),
-        log :: rest => {
-            if deposit_log_matches(log) then {
-                append_deposit_request(log.data)
-            };
-            append_deposit_logs(rest)
-        },
-    }
+/*! Authenticates matching deposit logs in emission order and returns the
+    unconsumed suffix of the expected request bytes. */
+function authenticate_deposit_logs(logs : LogSeriesRef, expected : StatelessInputSlice) -> StatelessInputSlice = {
+    var remaining : StatelessInputSlice = expected;
+    var offset : log_store_index = 0;
+    while offset < logs.count termination_measure(logs.count - offset) do {
+        let index = log_store_index_add(logs.start, offset);
+        if deposit_log_matches(index) then {
+            remaining = authenticate_deposit_request(read_log_data(index), remaining)
+        };
+        offset = log_store_index_increment(offset)
+    };
+    remaining
+}
 
 /* Request types are processed in ascending order, stopping immediately when
  * a checked system call is missing or fails. */
@@ -209,27 +237,19 @@ function append_deposit_logs(logs : list(LogEntry)) -> unit =
     order: deposits from logs (EIP-6110), withdrawal (EIP-7002),
     consolidation (EIP-7251), and, from Amsterdam, builder deposit and
     builder exit (EIP-8282). */
-function collect_execution_requests(deposits : ByteSlice) -> ExecutionRequests = {
-    cycle_scope_start(SCOPE_REQUEST_WITHDRAWALS);
+function collect_execution_requests(deposits : StatelessInputSlice) -> ExecutionRequests = {
     let withdrawals = system_call_checked(WITHDRAWAL_REQUEST_ADDR);
-    cycle_scope_end(SCOPE_REQUEST_WITHDRAWALS);
-    cycle_scope_start(SCOPE_REQUEST_CONSOLIDATIONS);
     let consolidations = system_call_checked(CONSOLIDATION_REQUEST_ADDR);
-    cycle_scope_end(SCOPE_REQUEST_CONSOLIDATIONS);
-    cycle_scope_start(SCOPE_REQUEST_BUILDER_DEPOSITS);
-    let builder_deposits : ByteSlice = if k_fork >= Amsterdam then {
+    let builder_deposits : ScratchSlice = if k_fork >= Amsterdam then {
             system_call_checked(BUILDER_DEPOSIT_REQUEST_ADDR)
         } else {
-            EMPTY_SLICE
+            EMPTY_SCRATCH_SLICE
         };
-    cycle_scope_end(SCOPE_REQUEST_BUILDER_DEPOSITS);
-    cycle_scope_start(SCOPE_REQUEST_BUILDER_EXITS);
-    let builder_exits : ByteSlice = if k_fork >= Amsterdam then {
+    let builder_exits : ScratchSlice = if k_fork >= Amsterdam then {
             system_call_checked(BUILDER_EXIT_REQUEST_ADDR)
         } else {
-            EMPTY_SLICE
+            EMPTY_SCRATCH_SLICE
         };
-    cycle_scope_end(SCOPE_REQUEST_BUILDER_EXITS);
     struct {
         deposits = deposits,
         withdrawals = withdrawals,

@@ -9,6 +9,11 @@ EIP-4895 withdrawal record.
 /*! The 2048-bit logs bloom filter (YP §4.4.1), as 256 bytes. */
 type LogsBloom = vector(256, dec, byte)
 
+/*! The payload header's 2048-bit logs bloom in canonical SSZ wire order.
+    Keeping the authenticated input range by reference lets consumers that
+    already operate on bytes avoid an eager 256-byte materialization. */
+type LogsBloomRef = StatelessInputSliceLength(256)
+
 let EMPTY_LOGS_BLOOM : LogsBloom = vector_init(256, 0x00)
 
 /*! Byte-wise bloom equality (the header `logs_bloom` check). */
@@ -20,18 +25,25 @@ function logs_bloom_equal(a : LogsBloom, b : LogsBloom) -> bool = {
     equal
 }
 
-/*! The bloom as a most-significant-first byte list, for RLP encoding. */
-function logs_bloom_bytes(bloom : LogsBloom) -> list(byte) = {
-    var out : list(byte) = [||];
-    foreach (k from 0 to 255) {
-        out = bloom[k] :: out
+/*! Materializes a referenced wire-order bloom into the decreasing-index
+    semantic vector used by the Yellow Paper equations. */
+function logs_bloom_from_ref(reference : LogsBloomRef) -> LogsBloom = {
+    var out : LogsBloom = EMPTY_LOGS_BLOOM;
+    foreach (i from 0 to 255) {
+        out[255 - i] = slice_byte(reference, i)
     };
     out
 }
 
+/*! Compares the computed block bloom with the payload-header commitment. */
+function logs_bloom_matches_ref(computed : LogsBloom, reference : LogsBloomRef) -> bool =
+    logs_bloom_equal(computed, logs_bloom_from_ref(reference))
+
 /*! The execution-payload header fields the model reads and validates
     (YP §4.4). `extra_data` stays a reference into the payload — it is
-    RLP-encoded whole for the header hash and never inspected. */
+    RLP-encoded whole for the header hash and never inspected. The fixed
+    `logs_bloom` commitment likewise stays source-backed until a semantic
+    consumer explicitly decodes it. */
 struct BlockHeader = {
     number : block_number,
     timestamp : block_timestamp,
@@ -45,13 +57,13 @@ struct BlockHeader = {
     excess_blob_gas : excess_blob_gas,
     state_root : hash,
     receipts_root : hash,
-    logs_bloom : LogsBloom,
+    logs_bloom : LogsBloomRef,
     fee_recipient : address,
     parent_hash : hash,
     parent_beacon_block_root : hash,
     /* uint64 (EIP-7843) */
     slot_number : slot_number,
-    extra_data : ByteSlice,
+    extra_data : StatelessInputSlice,
 }
 
 /*! `keccak256(rlp([]))` — the ommers hash of every post-merge block
@@ -75,7 +87,7 @@ struct Withdrawal = {
 struct BlockBody = {
     transactions : TransactionListRef,
     withdrawals : WithdrawalListRef,
-    block_access_list : ByteSlice,
+    block_access_list : StatelessInputSlice,
 }
 
 /*! A block: header plus body. */
@@ -95,17 +107,17 @@ struct ExecutionPayload = {
     while computing the header commitment; the SSZ input carries one field
     per type. */
 struct ExecutionRequests = {
-    deposits : ByteSlice,
-    withdrawals : ByteSlice,
-    consolidations : ByteSlice,
-    builder_deposits : ByteSlice,
-    builder_exits : ByteSlice,
+    deposits : StatelessInputSlice,
+    withdrawals : ScratchSlice,
+    consolidations : ScratchSlice,
+    builder_deposits : ScratchSlice,
+    builder_exits : ScratchSlice,
 }
 
 let EMPTY_EXECUTION_REQUESTS : ExecutionRequests = struct {
-        deposits = EMPTY_SLICE,
-        withdrawals = EMPTY_SLICE,
-        consolidations = EMPTY_SLICE,
-        builder_deposits = EMPTY_SLICE,
-        builder_exits = EMPTY_SLICE,
+        deposits = EMPTY_STATELESS_INPUT_SLICE,
+        withdrawals = EMPTY_SCRATCH_SLICE,
+        consolidations = EMPTY_SCRATCH_SLICE,
+        builder_deposits = EMPTY_SCRATCH_SLICE,
+        builder_exits = EMPTY_SCRATCH_SLICE,
     }

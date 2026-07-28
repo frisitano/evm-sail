@@ -39,8 +39,7 @@ let EMPTY_TRIE_ROOT : hash = word_to_hash(
  * targets see them as bodyless axioms (the c: key binds only C). keccak256 and
  * sha256 are the axiomatic hash core. All shared consensus hashing is
  * written against these two. The
- * StatelessInput/Memory/Code source of a ByteSlice denotes its abstract byte
- * sequence directly: keccak256(s : ByteSlice) hashes exactly that sequence;
+ * Each nominal slice denotes its abstract byte sequence directly;
  * the prefixed SHA-256 digest = sha256(type_byte :: bytes). ---- */
 
 /*md
@@ -51,15 +50,43 @@ in place. Composite preimages are written in order to the reusable scratch
 arena and then cross the accelerator boundary as one slice; no Sail byte or
 segment list is allocated.
 
-The `StatelessInput`/`Memory`/`Code` source of a
-[ByteSlice][type-ByteSlice] denotes an abstract byte sequence:
-`keccak256(s : ByteSlice) = keccak256(read_byte_slice(s))`. RLP hashing writes
-the domain, list prefix, and payload into one scratch-backed preimage.
+The slice's nominal type selects its backing region without a runtime source
+tag. RLP hashing writes the domain, list prefix, and payload into one
+scratch-backed preimage.
 */
-/*! The KECCAK-256 axiom: the digest of a source-tagged slice. */
-val keccak256 = impure { c: "host_keccak_slice" } : ByteSlice -> hash
-/*! The SHA-256 axiom: the digest of a source-tagged slice. */
-val sha256 = impure { c: "host_sha256_slice" } : ByteSlice -> hash
+val stateless_input_keccak256 = impure { c: "host_keccak_stateless_input" } : StatelessInputSlice -> hash
+val scratch_keccak256 = impure { c: "host_keccak_scratch" } : ScratchSlice -> hash
+val memory_keccak256 = impure { c: "host_keccak_memory" } : MemorySlice -> hash
+val code_keccak256 = impure { c: "host_keccak_code" } : CodeRegionSlice -> hash
+val output_keccak256 = impure { c: "host_keccak_output" } : OutputSlice -> hash
+val log_data_keccak256 = impure { c: "host_keccak_log_data" } : LogDataSlice -> hash
+
+val stateless_input_sha256 = impure { c: "host_sha256_stateless_input" } : StatelessInputSlice -> hash
+val scratch_sha256 = impure { c: "host_sha256_scratch" } : ScratchSlice -> hash
+val memory_sha256 = impure { c: "host_sha256_memory" } : MemorySlice -> hash
+
+function calldata_keccak256(input : CalldataSlice) -> hash =
+    match input {
+        InputCalldata(bytes) => stateless_input_keccak256(bytes),
+        MemoryCalldata(bytes) => memory_keccak256(bytes),
+    }
+
+function calldata_sha256(input : CalldataSlice) -> hash =
+    match input {
+        InputCalldata(bytes) => stateless_input_sha256(bytes),
+        MemoryCalldata(bytes) => memory_sha256(bytes),
+    }
+
+overload keccak256 = {
+    stateless_input_keccak256,
+    scratch_keccak256,
+    memory_keccak256,
+    code_keccak256,
+    output_keccak256,
+    log_data_keccak256,
+    calldata_keccak256
+}
+overload sha256 = {stateless_input_sha256, scratch_sha256, memory_sha256, calldata_sha256}
 
 /*! KECCAK-256 of one EVM word in canonical big-endian byte order. */
 val keccak256_word = impure { c: "host_keccak_word" } : word -> hash

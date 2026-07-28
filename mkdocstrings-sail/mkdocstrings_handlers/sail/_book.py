@@ -1,6 +1,7 @@
-"""Generate a spec book directly from Sail sources ("literate Sail").
+"""Generate the derived pages in a Sail specification book.
 
-Prose lives in the sources, so no intermediary Markdown files are needed:
+Definition-adjacent prose lives in the sources, so no intermediary Markdown
+files are needed:
 
 - ``/*md ... */`` comments hold Markdown prose. They are ordinary Sail
   comments (ignored by the compiler, preserved by ``sail --fmt``) and are
@@ -9,11 +10,17 @@ Prose lives in the sources, so no intermediary Markdown files are needed:
   ``## Section`` block between definitions opens a section, and so on.
 - ``/*! ... */`` doc comments attach to the following definition and are
   rendered under its heading, as usual.
+- Authored section overviews live directly at their canonical URLs as
+  ``BOOK/docs/reference/<source-directory>/index.md``.
 
 For each source file containing definitions, a page is emitted with the
 ``/*md`` blocks and ``::: name`` directives in source order. Identifiers
 already rendered by hand-authored pages under ``docs/`` are skipped, so
 authored chapters and generated pages can coexist.
+
+Generated files are recorded in ``BOOK/.build/generated-manifest.json``.
+Before each run, only files listed in that manifest are removed; authored
+pages sharing the ``docs/reference`` tree are never deleted.
 
 Usage::
 
@@ -24,6 +31,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import sys
@@ -270,32 +278,115 @@ def render_lean_page(
     return title, "\n".join(out)
 
 
-def render_mod_page(text: str) -> str:
-    """Render a directory's mod.md overview, with EIP references linked."""
-    return link_eip_references(text, set(), hover=True)
+_MANIFEST = Path(".build/generated-manifest.json")
+
+
+def _manifest_entries(book: Path) -> list[str]:
+    manifest = book / _MANIFEST
+    if not manifest.exists():
+        return []
+    data = json.loads(manifest.read_text())
+    if not isinstance(data, dict) or not isinstance(data.get("files"), list):
+        raise ValueError(f"invalid generated-file manifest: {manifest}")
+    if not all(isinstance(path, str) for path in data["files"]):
+        raise ValueError(f"invalid generated-file manifest paths: {manifest}")
+    return data["files"]
+
+
+def _generated_path(book: Path, relative: str) -> Path:
+    path = book / relative
+    try:
+        path.resolve().relative_to(book.resolve())
+    except ValueError as error:
+        raise ValueError(f"generated path escapes the book: {relative}") from error
+    return path
+
+
+def clean_generated(book: Path) -> int:
+    """Remove only files owned by the previous generator run."""
+    removed = 0
+    for relative in _manifest_entries(book):
+        path = _generated_path(book, relative)
+        if path.is_file() or path.is_symlink():
+            path.unlink()
+            removed += 1
+            parent = path.parent
+            while parent != book and parent != book / "docs":
+                try:
+                    parent.rmdir()
+                except OSError:
+                    break
+                parent = parent.parent
+    manifest = book / _MANIFEST
+    if manifest.exists():
+        manifest.unlink()
+    return removed
+
+
+class GeneratedFiles:
+    """Manifest-backed writer which refuses to overwrite authored files."""
+
+    def __init__(self, book: Path):
+        self.book = book
+        clean_generated(book)
+        self.files: set[str] = set()
+
+    def _relative(self, path: Path) -> str:
+        try:
+            return path.resolve().relative_to(self.book.resolve()).as_posix()
+        except ValueError as error:
+            raise ValueError(f"generated path escapes the book: {path}") from error
+
+    def _claim(self, path: Path) -> str:
+        relative = self._relative(path)
+        if path.exists() and relative not in self.files:
+            raise FileExistsError(
+                f"refusing to replace authored book file with generated output: {path}"
+            )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.files.add(relative)
+        self._save()
+        return relative
+
+    def _save(self) -> None:
+        manifest = self.book / _MANIFEST
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(
+            json.dumps({"version": 1, "files": sorted(self.files)}, indent=2) + "\n"
+        )
+
+    def write_text(self, path: Path, text: str) -> None:
+        self._claim(path)
+        path.write_text(text)
+
+    def copy(self, source: Path, destination: Path) -> None:
+        self._claim(destination)
+        shutil.copy(source, destination)
 
 
 _CONFIG_TEMPLATE = """site_name: "{site_name}"
+use_directory_urls: false
 theme:
   name: material
   features:
     - content.code.copy
     - content.tooltips
+    - navigation.indexes
     - navigation.top
     - search.highlight
 plugins:
   - search
+  - sail-book
   - literate-nav:
       nav_file: SUMMARY.md
-  - section-index
   - autorefs:
       link_titles: false
   - mkdocstrings:
       default_handler: sail
       handlers:
         sail:
-          bundle: doc/doc.json
-          lsp_index: doc/lsp-index.json
+          bundle: .build/doc.json
+          lsp_index: .build/lsp-index.json
 markdown_extensions:
   - admonition
   - attr_list
@@ -305,34 +396,53 @@ markdown_extensions:
 extra:
   version:
     provider: mike
+extra_css:
+  - assets/generated/performance-dashboard.css
 extra_javascript:
-  - assets/marked.min.js
-  - assets/highlight.min.js
-  - assets/sail-hover.js
+  - assets/generated/marked.min.js
+  - assets/generated/highlight.min.js
+  - assets/generated/sail-hover.js
+  - assets/generated/performance-dashboard.js
 """
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--root", default=".", help="project root (paths must match the docinfo bundle)")
-    parser.add_argument("--project", required=True, help="a .sail_project file")
-    parser.add_argument("--module", required=True, help="project module to resolve")
+    parser.add_argument("--project", help="a .sail_project file")
+    parser.add_argument("--module", help="project module to resolve")
     parser.add_argument("--variable", action="append", default=[], help="project variable NAME=VALUE (repeatable)")
     parser.add_argument("--sail", default="sail", help="sail binary for --list-files")
-    parser.add_argument("--book", required=True, help="book directory (holds mkdocs.yml, docs/, doc/doc.json)")
+    parser.add_argument(
+        "--book",
+        required=True,
+        help="book directory (holds mkdocs.yml, docs/, and .build/doc.json)",
+    )
     parser.add_argument("--site-name", default="Sail Specification")
     parser.add_argument("--lean", help="extracted Lean project directory; renders an extraction section")
     parser.add_argument("--no-config", action="store_true", help="do not (re)write mkdocs.yml")
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="remove manifest-owned generated files and exit",
+    )
     args = parser.parse_args(argv)
 
-    root = Path(args.root).resolve()
     book = Path(args.book)
-    bundle = Bundle.load(book / "doc/doc.json")
+    if args.clean:
+        print(f"removed {clean_generated(book)} generated book files", file=sys.stderr)
+        return 0
+    if not args.project or not args.module:
+        parser.error("--project and --module are required unless --clean is used")
+
+    root = Path(args.root).resolve()
+    bundle = Bundle.load(book / ".build/doc.json")
     files = project_files(args.sail, root, args.project, args.module, args.variable)
+    generated = GeneratedFiles(book)
 
     # identifiers rendered by hand-authored pages are not re-rendered
     excluded: set[str] = set()
-    for page in (book / "docs").glob("*.md"):
+    for page in (book / "docs").rglob("*.md"):
         for match in re.finditer(r"^::: (\S+)", page.read_text(), re.M):
             excluded.add(match.group(1))
 
@@ -349,22 +459,8 @@ def main(argv: list[str] | None = None) -> int:
         title, markdown = render_page(file, items)
         page = str(Path(file).with_suffix(".md"))
         path = book / "docs/reference" / page
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(markdown)
+        generated.write_text(path, markdown)
         pages.append((file, "reference/" + page, title))
-
-    # a mod.md in a source directory is its section overview; rendered as
-    # the directory's index page (mkdocs-section-index attaches it to the
-    # nav section, making the section title clickable)
-    mod_files = []
-    for directory in sorted({str(Path(file).parent) for file in files if (root / file).exists()}):
-        mod = root / directory / "mod.md"
-        if mod.exists():
-            mod_files.append(mod)
-            markdown = render_mod_page(mod.read_text())
-            path = book / "docs/reference" / directory / "index.md"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(markdown)
 
     # extracted Lean modules become literate pages under extraction/lean/
     lean_files: list[Path] = []
@@ -378,40 +474,41 @@ def main(argv: list[str] | None = None) -> int:
             relpath = f.relative_to(lean_root)
             title, page_md = render_lean_page(f.stem, f.read_text(), lean_index, lean_page_url(relpath))
             path = book / "docs/extraction/lean" / relpath.with_suffix(".md")
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(page_md)
-        cards_dir = book / "docs/assets/lean-cards"
-        cards_dir.mkdir(parents=True, exist_ok=True)
+            generated.write_text(path, page_md)
+        cards_dir = book / "docs/assets/generated/lean-cards"
         written: set[str] = set()
         for entry in lean_index.values():
             if entry["anchor"] not in written:
                 written.add(entry["anchor"])
-                (cards_dir / f"{entry['anchor']}.html").write_text(lean_card_html(entry))
+                generated.write_text(
+                    cards_dir / f"{entry['anchor']}.html", lean_card_html(entry)
+                )
         if lean_files:
             print(
                 f"rendered {len(lean_files)} Lean extraction pages, {len(written)} hover cards",
                 file=sys.stderr,
             )
 
-    assets = book / "docs/assets"
-    assets.mkdir(parents=True, exist_ok=True)
-    for script in _ASSETS_DIR.glob("*.js"):
-        shutil.copy(script, assets / script.name)
+    assets = book / "docs/assets/generated"
+    for pattern in ("*.js", "*.css"):
+        for asset in _ASSETS_DIR.glob(pattern):
+            generated.copy(asset, assets / asset.name)
 
     # a home page is required for the site root; generate one if not authored
     index = book / "docs/index.md"
     if not index.exists():
         toc = "\n".join(f"- [{title}]({page})" for _, page, title in pages)
-        index.write_text(f"# {args.site_name}\n\n## Modules\n\n" + toc + "\n")
+        generated.write_text(index, f"# {args.site_name}\n\n## Modules\n\n" + toc + "\n")
 
     # navigation lives in docs/SUMMARY.md (mkdocs-literate-nav); generate a
     # default covering everything when none is authored
     summary = book / "docs/SUMMARY.md"
     if not summary.exists():
-        summary.write_text("- [Home](index.md)\n- *.md\n- reference/*\n")
+        generated.write_text(summary, "- [Home](index.md)\n- *.md\n- reference/*\n")
 
-    if not args.no_config:
-        (book / "mkdocs.yml").write_text(_CONFIG_TEMPLATE.format(site_name=args.site_name))
+    config = book / "mkdocs.yml"
+    if not args.no_config and not config.exists():
+        generated.write_text(config, _CONFIG_TEMPLATE.format(site_name=args.site_name))
 
     print(
         f"generated {len(pages)} pages covering {definitions} definitions"

@@ -2,9 +2,9 @@
 """Benchmark stateless-validator ZisK guests with the local CPU emulator.
 
 Guest invocations are deliberately sequential, while each emulator process is
-free to use its normal Rayon parallelism. ZisK steps are the primary
-comparison; wall time includes process startup and is reported only as a
-secondary host-side measurement.
+free to use its normal Rayon parallelism. ZisK steps provide a deterministic
+execution-size comparison; SDK profiles additionally report proving cost.
+Wall time includes process startup and is only a secondary host-side measure.
 """
 
 from __future__ import annotations
@@ -40,7 +40,43 @@ DEFAULT_GUESTS = (
 STEP_PATTERNS = (
     re.compile(r"(?i)\bsteps?\b\s*[:=]\s*([0-9][0-9,_]*)"),
     re.compile(r"(?i)\b([0-9][0-9,_]*)\s+steps?\b"),
+    re.compile(r"(?im)^[║│]\s*STEPS\s+([0-9][0-9,_]*)\s+[║│]\s*$"),
+    re.compile(r"(?im)^STEPS\s+([0-9][0-9,_]*)\s*$"),
 )
+COST_PATTERNS = (
+    re.compile(r"(?i)\bcost\b\s*[:=]\s*([0-9][0-9,_]*)"),
+    re.compile(r"(?im)^[║│]\s*COST\s+([0-9][0-9,_]*)\s+[║│]\s*$"),
+    re.compile(
+        r"(?im)^TOTAL\s+([0-9][0-9,_]*)\s+100(?:\.0+)?%\s*$"
+    ),
+)
+PROFILE_TAG_ROW = re.compile(
+    r"^[║│]\s{2}([a-z][a-z0-9_]*)\s+.*?"
+    r"([0-9][0-9,]*)\s+([0-9]+(?:\.[0-9]+)?)%\s+[║│]\s*$"
+)
+TOP_COST_FUNCTION_ROW = re.compile(
+    r"^[║│]\s+\d+\s+(.+?)\s+[█▓▒░]+\s+"
+    r"([0-9][0-9,]*)\s+([0-9]+(?:\.[0-9]+)?)%\s+[║│]\s*$"
+)
+SDK_OPCODE_COST_ROW = re.compile(
+    r"^[║│]\s{2}([a-z][a-z0-9_]*)\s+[█▓▒░]+\s+"
+    r"([0-9][0-9,]*)\s+([0-9]+(?:\.[0-9]+)?)%\s+[║│]"
+)
+FULL_OPCODE_COST_ROW = re.compile(
+    r"^OP ([a-z][a-z0-9_]*)\s+"
+    r"([0-9][0-9,]*)\s+([0-9]+(?:\.[0-9]+)?)%\s+"
+    r"([0-9][0-9,]*)\s+([0-9]+(?:\.[0-9]+)?)%"
+)
+FULL_FROP_COST_ROW = re.compile(
+    r"^FROP ([a-z][a-z0-9_]*)\s+"
+    r"([0-9][0-9,]*)\s+([0-9]+(?:\.[0-9]+)?)%\s+"
+    r"([0-9][0-9,]*)\s+([0-9]+(?:\.[0-9]+)?)%"
+)
+DISASSEMBLY_SYMBOL_ROW = re.compile(r"^[0-9a-f]+ <(.+)>:$")
+DISASSEMBLY_INSTRUCTION_ROW = re.compile(
+    r"^\s+[0-9a-f]+:\s+([0-9][0-9,]*)\s+"
+)
+FIXTURE_SUITES = frozenset(("blockchain_tests", "blockchain_tests_engine"))
 
 
 @dataclass(frozen=True)
@@ -166,6 +202,26 @@ def frame_input(payload: bytes) -> bytes:
     return framed + bytes((-len(framed)) % 8)
 
 
+def prepare_guest_payload(guest: Guest, payload: bytes) -> bytes:
+    """Attach private execution metadata required by a specific guest.
+
+    The optimized evm-sail guest uses the same per-fixture capacity trailer as
+    the native and Spike fixture harnesses. Peer guests must continue to see
+    the canonical stateless input unchanged.
+    """
+    if guest.name != "evm-sail":
+        return payload
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    from harness.dump_state import prepare_optimized_input
+
+    return prepare_optimized_input(payload)
+
+
+def frame_guest_input(guest: Guest, payload: bytes) -> bytes:
+    return frame_input(prepare_guest_payload(guest, payload))
+
+
 def output_matches(actual: bytes, expected: bytes) -> bool:
     return actual[: len(expected)] == expected and not any(actual[len(expected) :])
 
@@ -176,6 +232,166 @@ def parse_steps(output: str) -> int:
         if match:
             return int(match.group(1).replace(",", "").replace("_", ""))
     raise RuntimeError(f"could not parse ZisK step count:\n{output[-4000:]}")
+
+
+def parse_cost(output: str) -> int:
+    for pattern in COST_PATTERNS:
+        match = pattern.search(output)
+        if match:
+            return int(match.group(1).replace(",", "").replace("_", ""))
+    raise RuntimeError(f"could not parse ZisK proving cost:\n{output[-4000:]}")
+
+
+def parse_profile_scope_metric(output: str, metric: str) -> dict[str, int]:
+    """Parse inclusive scope totals from a ziskemu profile-tag table."""
+    marker = f"{metric.upper()} PROFILE TAGS"
+    if marker not in output:
+        raise RuntimeError(f"ZisK profile report has no {metric} profile-tag section")
+    section = output.split(marker, 1)[1]
+    scopes: dict[str, int] = {}
+    for line in section.splitlines():
+        match = PROFILE_TAG_ROW.match(line)
+        if match:
+            scopes[match.group(1)] = int(match.group(2).replace(",", ""))
+        elif scopes and line.startswith(("╚", "└")):
+            break
+    if not scopes:
+        raise RuntimeError(
+            f"ZisK {metric} profile-tag section contains no scope rows"
+        )
+    return scopes
+
+
+def parse_profile_scope_steps(output: str) -> dict[str, int]:
+    return parse_profile_scope_metric(output, "steps")
+
+
+def parse_profile_scope_costs(output: str) -> dict[str, int]:
+    return parse_profile_scope_metric(output, "cost")
+
+
+def parse_top_cost_functions(output: str) -> list[dict[str, object]]:
+    """Parse the compact SDK top-cost function table."""
+    marker = "TOP COST FUNCTIONS"
+    if marker not in output:
+        return []
+    section = output.split(marker, 1)[1]
+    functions: list[dict[str, object]] = []
+    for line in section.splitlines():
+        match = TOP_COST_FUNCTION_ROW.match(line)
+        if match:
+            functions.append(
+                {
+                    "name": match.group(1).rstrip(),
+                    "cost": int(match.group(2).replace(",", "")),
+                    "share_percent": float(match.group(3)),
+                }
+            )
+        elif functions and line.startswith(("╚", "└")):
+            break
+    return functions
+
+
+def parse_opcode_costs(output: str) -> list[dict[str, object]]:
+    """Parse the SDK's truncated ZisK operation cost-distribution table."""
+    marker = "COST DISTRIBUTION BY OPCODE"
+    if marker not in output:
+        return []
+    section = output.split(marker, 1)[1]
+    operations: list[dict[str, object]] = []
+    for line in section.splitlines():
+        match = SDK_OPCODE_COST_ROW.match(line)
+        if match:
+            operations.append(
+                {
+                    "name": match.group(1),
+                    "cost": int(match.group(2).replace(",", "")),
+                    "share_percent": float(match.group(3)),
+                }
+            )
+        elif operations and line.startswith(("╚", "└")):
+            break
+    return operations
+
+
+def parse_comprehensive_opcode_costs(output: str) -> list[dict[str, object]]:
+    """Parse every used ZisK operation from a full statistics report."""
+    total_cost = parse_cost(output)
+    operations: dict[str, dict[str, object]] = {}
+    for line in output.splitlines():
+        match = FULL_OPCODE_COST_ROW.match(line)
+        kind = "op"
+        if match is None:
+            match = FULL_FROP_COST_ROW.match(line)
+            kind = "frop"
+        if match is None:
+            continue
+        name = match.group(1)
+        entry = operations.setdefault(
+            name,
+            {
+                "name": name,
+                "op_count": 0,
+                "frop_count": 0,
+                "op_cost": 0,
+                "frop_cost": 0,
+            },
+        )
+        entry[f"{kind}_count"] = int(match.group(2).replace(",", ""))
+        entry[f"{kind}_cost"] = int(match.group(4).replace(",", ""))
+
+    result = []
+    for entry in operations.values():
+        cost = int(entry["op_cost"]) + int(entry["frop_cost"])
+        result.append(
+            {
+                **entry,
+                "cost": cost,
+                "share_percent": 100.0 * cost / total_cost,
+            }
+        )
+    return sorted(result, key=lambda entry: (-int(entry["cost"]), entry["name"]))
+
+
+def parse_executed_functions(
+    disassembly: str, total_steps: int
+) -> list[dict[str, object]]:
+    """Aggregate exclusive executed steps under every non-local ELF symbol."""
+    current_symbol = "<guest startup>"
+    steps_by_symbol: dict[str, int] = {}
+    for line in disassembly.splitlines():
+        symbol_match = DISASSEMBLY_SYMBOL_ROW.match(line)
+        if symbol_match:
+            symbol = symbol_match.group(1)
+            if not symbol.startswith(".L"):
+                current_symbol = symbol
+            continue
+        instruction_match = DISASSEMBLY_INSTRUCTION_ROW.match(line)
+        if instruction_match:
+            count = int(instruction_match.group(1).replace(",", ""))
+            steps_by_symbol[current_symbol] = (
+                steps_by_symbol.get(current_symbol, 0) + count
+            )
+
+    accounted_steps = sum(steps_by_symbol.values())
+    if accounted_steps != total_steps:
+        raise RuntimeError(
+            "disassembly execution counts do not match the ZisK step total: "
+            f"{accounted_steps} != {total_steps}"
+        )
+    functions = [
+        {
+            "name": name,
+            "exclusive_steps": steps,
+            "share_percent": 100.0 * steps / total_steps,
+        }
+        for name, steps in steps_by_symbol.items()
+        if steps
+    ]
+    return sorted(
+        functions,
+        key=lambda entry: (-int(entry["exclusive_steps"]), entry["name"]),
+    )
 
 
 def ziskemu_version(ziskemu: Path) -> str:
@@ -224,7 +440,7 @@ def run_emulator(
     case_dir.mkdir(parents=True, exist_ok=True)
     input_path = case_dir / "input.bin"
     output_path = case_dir / "output.bin"
-    input_path.write_bytes(frame_input(case.payload))
+    input_path.write_bytes(frame_guest_input(guest, case.payload))
     output_path.unlink(missing_ok=True)
 
     command = [
@@ -268,14 +484,16 @@ def run_profile(
     run_dir: Path,
     timeout: float,
     mode: str,
-) -> dict[str, str]:
+    keep_report: bool = True,
+    comprehensive: bool = False,
+) -> dict[str, object]:
     profile_dir = run_dir / "profiles" / guest.name
     profile_dir.mkdir(parents=True, exist_ok=True)
     stem = profile_dir / case.identity
     input_path = Path(f"{stem}.input.bin")
     output_path = Path(f"{stem}.output.bin")
     report_path = Path(f"{stem}.{mode}.txt")
-    input_path.write_bytes(frame_input(case.payload))
+    input_path.write_bytes(frame_guest_input(guest, case.payload))
     output_path.unlink(missing_ok=True)
 
     command = [
@@ -287,7 +505,9 @@ def run_profile(
         "--output",
         str(output_path),
     ]
-    artifacts: dict[str, str] = {"report": str(report_path)}
+    artifacts: dict[str, object] = {}
+    if keep_report:
+        artifacts["report"] = str(report_path)
     if mode == "sdk":
         command.extend(
             [
@@ -321,20 +541,353 @@ def run_profile(
             profiler=str(profiler_path), disassembly=str(disassembly_path)
         )
 
+    started = time.perf_counter_ns()
     result = subprocess.run(
         command,
         capture_output=True,
         text=True,
         timeout=timeout,
     )
-    report_path.write_text(result.stdout + result.stderr)
+    elapsed_ns = time.perf_counter_ns() - started
+    diagnostic = result.stdout + result.stderr
+    report_path.write_text(diagnostic)
     actual = output_path.read_bytes() if output_path.exists() else b""
     if result.returncode != 0 or not output_matches(actual, case.expected):
         raise RuntimeError(
             f"{guest.name} {mode} profile failed {case.identity}; "
             f"see {report_path}"
         )
+    artifacts["steps"] = parse_steps(diagnostic)
+    artifacts["elapsed_ns"] = elapsed_ns
+    artifacts["actual_output_bytes"] = len(actual)
+    if mode == "sdk":
+        artifacts["cost"] = parse_cost(diagnostic)
+        artifacts["opcode_costs"] = parse_opcode_costs(diagnostic)
+        artifacts["top_cost_functions"] = parse_top_cost_functions(diagnostic)
+        artifacts["function_profile_status"] = (
+            "stack_mismatch"
+            if "STACK MISMATCH DETECTED" in diagnostic
+            else (
+                "ok"
+                if artifacts["top_cost_functions"]
+                else "no_function_rows"
+            )
+        )
+        artifacts["scope_steps"] = (
+            parse_profile_scope_steps(diagnostic)
+            if "STEPS PROFILE TAGS" in diagnostic
+            else {}
+        )
+        artifacts["scope_costs"] = (
+            parse_profile_scope_costs(diagnostic)
+            if "COST PROFILE TAGS" in diagnostic
+            else {}
+        )
+        if comprehensive:
+            comprehensive_output_path = Path(f"{stem}.comprehensive.output.bin")
+            comprehensive_report_path = Path(f"{stem}.comprehensive.txt")
+            disassembly_path = Path(f"{stem}.disassembly.txt")
+            comprehensive_output_path.unlink(missing_ok=True)
+            comprehensive_command = [
+                str(ziskemu),
+                "--elf",
+                str(guest.elf),
+                "--inputs",
+                str(input_path),
+                "--output",
+                str(comprehensive_output_path),
+                "--stats",
+                "--read-symbols",
+                "--disasm",
+                str(disassembly_path),
+            ]
+            comprehensive_result = subprocess.run(
+                comprehensive_command,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            comprehensive_diagnostic = (
+                comprehensive_result.stdout + comprehensive_result.stderr
+            )
+            comprehensive_report_path.write_text(comprehensive_diagnostic)
+            comprehensive_output = (
+                comprehensive_output_path.read_bytes()
+                if comprehensive_output_path.exists()
+                else b""
+            )
+            if (
+                comprehensive_result.returncode != 0
+                or not output_matches(comprehensive_output, case.expected)
+            ):
+                raise RuntimeError(
+                    f"{guest.name} comprehensive profile failed "
+                    f"{case.identity}; see {comprehensive_report_path}"
+                )
+            comprehensive_steps = parse_steps(comprehensive_diagnostic)
+            if comprehensive_steps != artifacts["steps"]:
+                raise RuntimeError(
+                    f"{guest.name} profile step mismatch for {case.identity}: "
+                    f"SDK={artifacts['steps']}, full={comprehensive_steps}"
+                )
+            comprehensive_cost = parse_cost(comprehensive_diagnostic)
+            if comprehensive_cost != artifacts["cost"]:
+                raise RuntimeError(
+                    f"{guest.name} profile cost mismatch for {case.identity}: "
+                    f"SDK={artifacts['cost']}, full={comprehensive_cost}"
+                )
+            artifacts["opcode_costs"] = parse_comprehensive_opcode_costs(
+                comprehensive_diagnostic
+            )
+            artifacts["opcode_profile_completeness"] = "all_used_operations"
+            artifacts["executed_functions"] = parse_executed_functions(
+                disassembly_path.read_text(), comprehensive_steps
+            )
+            artifacts["function_inventory_status"] = "ok"
+            if keep_report:
+                artifacts["comprehensive_report"] = str(
+                    comprehensive_report_path
+                )
+                artifacts["disassembly"] = str(disassembly_path)
+                artifacts["comprehensive_output"] = str(
+                    comprehensive_output_path
+                )
+            else:
+                comprehensive_report_path.unlink()
+                comprehensive_output_path.unlink()
+                disassembly_path.unlink()
+    if not keep_report:
+        report_path.unlink()
+        input_path.unlink()
+        output_path.unlink()
     return artifacts
+
+
+def fixture_taxonomy(path: Path) -> dict[str, str]:
+    """Map a retained fixture path to the dashboard's cascading groups."""
+    parts = path.parts
+    suite_index = next(
+        (index for index, part in enumerate(parts) if part in FIXTURE_SUITES),
+        None,
+    )
+    if suite_index is None:
+        return {
+            "corpus": path.parent.name or "fixtures",
+            "suite": "fixtures",
+            "target": "unspecified",
+            "fork": "unspecified",
+            "feature": "other",
+            "category": "",
+            "fixture": path.stem,
+            "path": str(path),
+        }
+
+    relative = parts[suite_index:]
+
+    def component(index: int, fallback: str) -> str:
+        return relative[index] if len(relative) > index else fallback
+
+    return {
+        "corpus": parts[suite_index - 1] if suite_index else "fixtures",
+        "suite": component(0, "fixtures"),
+        "target": component(1, "unspecified"),
+        "fork": component(2, "unspecified"),
+        "feature": component(3, "other"),
+        "category": "/".join(relative[4:-1]),
+        "fixture": path.stem,
+        "path": "/".join(relative),
+    }
+
+
+def export_dashboard_data(
+    dashboard_dir: Path,
+    cases: list[FixtureCase],
+    guests: list[Guest],
+    guest_results: dict[str, object],
+    benchmark_result: dict[str, object],
+) -> None:
+    """Write one shared catalog with comparative per-fixture guest shards."""
+    results_by_guest: dict[str, tuple[dict, list, list]] = {}
+    for guest in guests:
+        guest_result = guest_results.get(guest.name)
+        if not isinstance(guest_result, dict):
+            raise ValueError(f"dashboard result is missing guest {guest.name}")
+        measured = guest_result.get("cases")
+        profiles = guest_result.get("profiles")
+        if not isinstance(measured, list) or not isinstance(profiles, list):
+            raise ValueError(
+                f"dashboard export requires measured SDK profiles for {guest.name}"
+            )
+        if len(measured) != len(cases) or len(profiles) != len(cases):
+            raise ValueError(
+                f"dashboard profile count does not match fixture cases for "
+                f"{guest.name}"
+            )
+        results_by_guest[guest.name] = (guest_result, measured, profiles)
+
+    dashboard_dir.mkdir(parents=True, exist_ok=True)
+    shards_dir = dashboard_dir / "fixtures"
+    shards_dir.mkdir(parents=True, exist_ok=True)
+    grouped: dict[Path, list[tuple[int, FixtureCase]]] = {}
+    for case_index, case in enumerate(cases):
+        grouped.setdefault(case.fixture, []).append((case_index, case))
+
+    catalog = []
+    for fixture, fixture_cases in grouped.items():
+        taxonomy = fixture_taxonomy(fixture)
+        fixture_id = hashlib.sha256(
+            f"{taxonomy['path']}\0{fixture_cases[0][1].fixture_sha256}".encode()
+        ).hexdigest()[:20]
+        shard_name = f"fixtures/{fixture_id}.json"
+        shard_cases = []
+        for case_index, case in fixture_cases:
+            case_guests = {}
+            for guest in guests:
+                _, measured, profiles = results_by_guest[guest.name]
+                measurement = measured[case_index]
+                profile = profiles[case_index]
+                measurements = measurement.get("measurements")
+                artifacts = profile.get("artifacts")
+                if not isinstance(measurements, list) or not measurements:
+                    raise ValueError(
+                        f"missing measurements for {guest.name} {case.identity}"
+                    )
+                if not isinstance(artifacts, dict):
+                    raise ValueError(
+                        f"missing profile artifacts for {guest.name} "
+                        f"{case.identity}"
+                    )
+                scope_steps = artifacts.get("scope_steps", {})
+                scope_costs = artifacts.get("scope_costs", {})
+                total_cost = artifacts.get("cost")
+                opcode_costs = artifacts.get("opcode_costs", [])
+                functions = artifacts.get("top_cost_functions", [])
+                executed_functions = artifacts.get("executed_functions", [])
+                function_profile_status = artifacts.get(
+                    "function_profile_status", "unknown"
+                )
+                function_inventory_status = artifacts.get(
+                    "function_inventory_status", "unknown"
+                )
+                opcode_profile_completeness = artifacts.get(
+                    "opcode_profile_completeness", "sdk_top_operations"
+                )
+                if not isinstance(scope_steps, dict) or not isinstance(
+                    scope_costs, dict
+                ):
+                    raise ValueError(
+                        f"invalid SDK scope totals for {guest.name} "
+                        f"{case.identity}"
+                    )
+                if not isinstance(total_cost, int):
+                    raise ValueError(
+                        f"missing SDK total cost for {guest.name} {case.identity}"
+                    )
+                if not isinstance(functions, list):
+                    raise ValueError(
+                        f"invalid SDK function totals for {guest.name} "
+                        f"{case.identity}"
+                    )
+                if not isinstance(executed_functions, list):
+                    raise ValueError(
+                        f"invalid executed-function inventory for {guest.name} "
+                        f"{case.identity}"
+                    )
+                if not isinstance(opcode_costs, list):
+                    raise ValueError(
+                        f"invalid SDK operation totals for {guest.name} "
+                        f"{case.identity}"
+                    )
+                if not isinstance(function_profile_status, str):
+                    raise ValueError(
+                        f"invalid function profile status for {guest.name} "
+                        f"{case.identity}"
+                    )
+                if not isinstance(function_inventory_status, str):
+                    raise ValueError(
+                        f"invalid function inventory status for {guest.name} "
+                        f"{case.identity}"
+                    )
+                if not isinstance(opcode_profile_completeness, str):
+                    raise ValueError(
+                        f"invalid operation profile completeness for "
+                        f"{guest.name} {case.identity}"
+                    )
+                case_guests[guest.name] = {
+                    "total_steps": int(artifacts["steps"]),
+                    "total_cost": total_cost,
+                    "scope_steps": scope_steps,
+                    "scope_costs": scope_costs,
+                    "opcode_costs": opcode_costs,
+                    "opcode_profile_completeness": (
+                        opcode_profile_completeness
+                    ),
+                    "top_cost_functions": functions,
+                    "function_profile_status": function_profile_status,
+                    "executed_functions": executed_functions,
+                    "function_inventory_status": function_inventory_status,
+                }
+            shard_cases.append(
+                {
+                    "id": case.identity,
+                    "name": case.name,
+                    "block_index": case.block_index,
+                    "input_bytes": len(case.payload),
+                    "guests": case_guests,
+                }
+            )
+        shard = {
+            "format_version": 4,
+            "fixture": {**taxonomy, "id": fixture_id},
+            "cases": shard_cases,
+        }
+        (dashboard_dir / shard_name).write_text(
+            json.dumps(shard, separators=(",", ":")) + "\n"
+        )
+        catalog.append(
+            {
+                **taxonomy,
+                "id": fixture_id,
+                "shard": shard_name,
+                "case_count": len(shard_cases),
+            }
+        )
+
+    guest_catalog = []
+    for guest in guests:
+        guest_result, _, _ = results_by_guest[guest.name]
+        elf = guest_result["elf"]
+        assert isinstance(elf, dict)
+        guest_catalog.append(
+            {
+                "name": guest.name,
+                "elf_sha256": elf["sha256"],
+                "elf_size_bytes": elf["size_bytes"],
+            }
+        )
+    catalog.sort(
+        key=lambda item: (
+            item["suite"],
+            item["target"],
+            item["fork"],
+            item["feature"],
+            item["category"],
+            item["fixture"],
+        )
+    )
+    payload = {
+        "format_version": 4,
+        "generated_at_unix_ns": str(benchmark_result["generated_at_unix_ns"]),
+        "guests": guest_catalog,
+        "ziskemu": benchmark_result["ziskemu"],
+        "metadata": benchmark_result["metadata"],
+        "fixture_count": len(catalog),
+        "case_count": len(cases),
+        "fixtures": catalog,
+    }
+    (dashboard_dir / "catalog.json").write_text(
+        json.dumps(payload, separators=(",", ":")) + "\n"
+    )
 
 
 def percentile(values: list[int], probability: float) -> int:
@@ -440,6 +993,23 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="profile only the named guest (repeatable; default: all guests)",
     )
+    parser.add_argument(
+        "--dashboard-dir",
+        type=Path,
+        help=(
+            "export a lazy-loaded MkDocs dashboard dataset; requires "
+            "--profile sdk and profiles every selected guest"
+        ),
+    )
+    parser.add_argument(
+        "--dashboard-only",
+        action="store_true",
+        help=(
+            "use each SDK profile invocation as the benchmark measurement; "
+            "dashboard generation also runs a supplemental full profile for "
+            "comprehensive operation and executed-function data"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -458,6 +1028,22 @@ def main() -> int:
     if unknown_profile_guests:
         raise ValueError(
             f"unknown profile guests: {', '.join(sorted(unknown_profile_guests))}"
+        )
+    dashboard_guest_names = args.profile_guest or guest_names
+    if args.dashboard_dir and (
+        args.profile != "sdk" or set(dashboard_guest_names) != set(guest_names)
+    ):
+        raise ValueError(
+            "--dashboard-dir requires --profile sdk and profiles for every "
+            "selected guest"
+        )
+    if args.dashboard_only and (
+        not args.dashboard_dir
+        or set(dashboard_guest_names) != set(guest_names)
+    ):
+        raise ValueError(
+            "--dashboard-only requires --dashboard-dir and profiles for every "
+            "selected guest"
         )
 
     ziskemu = args.ziskemu.expanduser().resolve()
@@ -496,8 +1082,8 @@ def main() -> int:
         },
         "metadata": metadata,
         "case_count": len(cases),
-        "warmups": args.warmups,
-        "repetitions": args.repetitions,
+        "warmups": 0 if args.dashboard_only else args.warmups,
+        "repetitions": 1 if args.dashboard_only else args.repetitions,
         "baseline": baseline,
         "fixtures": [
             {
@@ -518,44 +1104,14 @@ def main() -> int:
     assert isinstance(guest_results, dict)
     for guest in guests:
         print(f"benchmarking {guest.name}", flush=True)
-        for warmup in range(args.warmups):
+        for warmup in range(0 if args.dashboard_only else args.warmups):
             print(f"  warmup {warmup + 1}/{args.warmups}", flush=True)
             run_emulator(ziskemu, guest, cases[0], run_dir, args.timeout)
 
-        measured_cases: list[dict[str, object]] = []
-        for case_index, case in enumerate(cases, 1):
-            measurements = []
-            for repetition in range(args.repetitions):
-                print(
-                    f"  case {case_index}/{len(cases)} repetition "
-                    f"{repetition + 1}/{args.repetitions}",
-                    flush=True,
-                )
-                measurements.append(
-                    run_emulator(ziskemu, guest, case, run_dir, args.timeout)
-                )
-            measured_cases.append(
-                {
-                    "identity": case.identity,
-                    "name": case.name,
-                    "block_index": case.block_index,
-                    "measurements": measurements,
-                }
-            )
-
-        guest_result: dict[str, object] = {
-            "elf": {
-                "path": str(guest.elf),
-                "size_bytes": guest.elf.stat().st_size,
-                "sha256": sha256_file(guest.elf),
-            },
-            "cases": measured_cases,
-            "summary": summarize_guest(measured_cases),
-        }
+        profiles = []
         if args.profile != "none" and (
             not args.profile_guest or guest.name in args.profile_guest
         ):
-            profiles = []
             for case_index, case in enumerate(cases, 1):
                 print(
                     f"  {args.profile} profile {case_index}/{len(cases)}",
@@ -573,13 +1129,80 @@ def main() -> int:
                             run_dir,
                             args.timeout,
                             args.profile,
+                            keep_report=not args.dashboard_only,
+                            comprehensive=bool(args.dashboard_dir),
                         ),
                     }
                 )
+
+        measured_cases: list[dict[str, object]] = []
+        if args.dashboard_only:
+            for case, profile in zip(cases, profiles):
+                artifacts = profile["artifacts"]
+                assert isinstance(artifacts, dict)
+                measured_cases.append(
+                    {
+                        "identity": case.identity,
+                        "name": case.name,
+                        "block_index": case.block_index,
+                        "measurements": [
+                            {
+                                "steps": artifacts["steps"],
+                                "elapsed_ns": artifacts["elapsed_ns"],
+                                "actual_output_bytes": artifacts[
+                                    "actual_output_bytes"
+                                ],
+                                "output_matched": True,
+                            }
+                        ],
+                    }
+                )
+        else:
+            for case_index, case in enumerate(cases, 1):
+                measurements = []
+                for repetition in range(args.repetitions):
+                    print(
+                        f"  case {case_index}/{len(cases)} repetition "
+                        f"{repetition + 1}/{args.repetitions}",
+                        flush=True,
+                    )
+                    measurements.append(
+                        run_emulator(
+                            ziskemu, guest, case, run_dir, args.timeout
+                        )
+                    )
+                measured_cases.append(
+                    {
+                        "identity": case.identity,
+                        "name": case.name,
+                        "block_index": case.block_index,
+                        "measurements": measurements,
+                    }
+                )
+
+        guest_result: dict[str, object] = {
+            "elf": {
+                "path": str(guest.elf),
+                "size_bytes": guest.elf.stat().st_size,
+                "sha256": sha256_file(guest.elf),
+            },
+            "cases": measured_cases,
+            "summary": summarize_guest(measured_cases),
+        }
+        if profiles:
             guest_result["profiles"] = profiles
         guest_results[guest.name] = guest_result
 
         (run_dir / "results.json").write_text(json.dumps(result, indent=2) + "\n")
+
+    if args.dashboard_dir:
+        export_dashboard_data(
+            args.dashboard_dir.expanduser().resolve(),
+            cases,
+            guests,
+            guest_results,
+            result,
+        )
 
     report = markdown_report(result, baseline)
     (run_dir / "report.md").write_text(report)

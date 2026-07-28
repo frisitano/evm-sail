@@ -65,8 +65,8 @@
   });
 
   /* Lean definition cards are per-definition fragments generated at build
-   * time (assets/lean-cards/<anchor>.html), fetched on first use so pages
-   * embedding hundreds of references stay small. */
+   * time (assets/generated/lean-cards/<anchor>.html), fetched on first use so
+   * pages embedding hundreds of references stay small. */
   var leanCache = {};
   function leanCard(key, target) {
     function render(html) {

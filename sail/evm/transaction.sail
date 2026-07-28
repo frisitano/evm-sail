@@ -69,8 +69,8 @@ struct TransactionCosts = {
 /*! Reclassifies transaction initcode as executable after re-establishing the
     enclosing SSZ transaction-envelope bound. This bound is structural and is
     deliberately independent of the active protocol deployment limit. */
-function transaction_initcode_slice(input : TransactionByteSlice) -> CodeSlice =
-    code_slice(input)
+function transaction_initcode_slice(input : TransactionInputSlice) -> CodeSlice =
+    code_db_intern_input(stateless_input_slice(input.off, input.len))
 
 /*! Values established before entering the top-level transaction frame. */
 struct TxUpfrontResult = {
@@ -78,24 +78,10 @@ struct TxUpfrontResult = {
     create_target_prestate_empty : bool,
 }
 
-/*! Transaction-local bookkeeping for Amsterdam EIP-7702 authorization
-    charges. The lists contain only successfully validated authorities. */
-struct AmsterdamAuthorizationState = {
-    seen_valid_authorities : list(address),
-    originally_delegated : list(address),
-    delegation_set_for : list(address),
-}
-
-let EMPTY_AMSTERDAM_AUTHORIZATION_STATE : AmsterdamAuthorizationState = struct {
-        seen_valid_authorities = [||],
-        originally_delegated = [||],
-        delegation_set_for = [||],
-    }
-
 /*! The EIP-2028 calldata cost: 4 gas per zero byte, 16 per nonzero. One
     native pass counts the nonzero bytes; zero bytes are the
     remainder. */
-function calldata_cost(input : TransactionByteSlice) -> transaction_calldata_cost = {
+function calldata_cost(input : TransactionInputSlice) -> transaction_calldata_cost = {
     let nonzeroes = slice_count_nonzero(input);
     let input_len = input.len;
     if nonzeroes <= input_len then {
@@ -108,7 +94,7 @@ function calldata_cost(input : TransactionByteSlice) -> transaction_calldata_cos
 
 /*! EIP-7623 calldata tokens: each zero byte counts 1, each nonzero
     byte 4. */
-function calldata_tokens(input : TransactionByteSlice) -> nat = {
+function calldata_tokens(input : TransactionInputSlice) -> nat = {
     let nonzeroes = slice_count_nonzero(input);
     let input_len = input.len;
     let zeroes : nat = if nonzeroes <= input_len then {
@@ -165,9 +151,9 @@ function legacy_intrinsic_gas(tx : Transaction) -> gas_cost = {
     let data_cost = calldata_cost(tx.input_src);
     let input = tx.input_src;
     let input_len = input.len;
-    let address_cost = G_access_list_address * tx.access_list_address_count;
-    let slot_cost = G_access_list_storage_key * tx.access_list_slot_count;
-    let auth_cost = PER_EMPTY_ACCOUNT * tx.authorization_count;
+    let address_cost = G_access_list_address * tx.access_list.address_count;
+    let slot_cost = G_access_list_storage_key * tx.access_list.slot_count;
+    let auth_cost = PER_EMPTY_ACCOUNT * tx.authorizations.count;
     let common = data_cost + G_transaction + address_cost + slot_cost + auth_cost;
     if tx.is_create then {
         common + G_txcreate + transaction_initcode_gas(input_len)
@@ -177,7 +163,7 @@ function legacy_intrinsic_gas(tx : Transaction) -> gas_cost = {
 }
 
 /*! Computes the pre-Amsterdam EIP-7623 calldata floor cost. */
-function legacy_calldata_floor(input : TransactionByteSlice) -> transaction_calldata_floor_cost = {
+function legacy_calldata_floor(input : TransactionInputSlice) -> transaction_calldata_floor_cost = {
     let nonzeroes = slice_count_nonzero(input);
     let input_len = input.len;
     if nonzeroes <= input_len then {
@@ -222,8 +208,8 @@ function intrinsic_gas(tx : Transaction) -> IntrinsicGasCost = {
     } else {
         let input = tx.input_src;
         let recipient = amsterdam_recipient_execution_cost(tx);
-        let address_count = tx.access_list_address_count;
-        let slot_count = tx.access_list_slot_count;
+        let address_count = tx.access_list.address_count;
+        let slot_count = tx.access_list.slot_count;
         let access_execution =   AMSTERDAM_ACCESS_LIST_ADDRESS
                                * address_count
                                + AMSTERDAM_ACCESS_LIST_SLOT
@@ -232,7 +218,7 @@ function intrinsic_gas(tx : Transaction) -> IntrinsicGasCost = {
                                * address_count
                                + AMSTERDAM_ACCESS_LIST_SLOT_FLOOR
                                * slot_count;
-        let authorization_execution = AMSTERDAM_AUTH_BASE * tx.authorization_count;
+        let authorization_execution = AMSTERDAM_AUTH_BASE * tx.authorizations.count;
         let create_execution = if tx.is_create then {
                 transaction_initcode_gas(input.len)
             } else {
@@ -364,20 +350,25 @@ function process_auth(au : Authorization) -> gas_refund = {
     refund
 }
 
-/*! Applies an authorization list in order. */
-function process_auth_list(xs : list(Authorization)) -> gas_refund =
-    match xs {
-        [||] => GAS_REFUND_ZERO,
-        a :: r => validated_refund_add(process_auth(a), process_auth_list(r)),
+/*! Applies source-backed authorizations in wire order. */
+val process_auth_cursor : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). RlpCursor(
+        'source_off,
+        'source_len,
+    ) -> gas_refund
+function process_auth_cursor(cursor) =
+    if cursor.len == 0 then {
+        GAS_REFUND_ZERO
+    } else {
+        let (tuple, next) = rlp_cursor_pop(cursor);
+        validated_refund_add(process_auth(decode_authorization(tuple)), process_auth_cursor(next))
     }
+termination_measure process_auth_cursor(cursor) = cursor.len
 
-/*! Whether an Amsterdam authorization address has already appeared in a
-    successfully applied tuple. */
-function authorization_address_seen(a : address, xs : list(address)) -> bool =
-    match xs {
-        [||] => false,
-        h :: t => (a == h) | authorization_address_seen(a, t),
-    }
+/*! Applies an authorization-list view in order. */
+function process_auth_list(authorizations : AuthorizationListRef) -> gas_refund = {
+    let encoded : StatelessInputSlice = authorizations.encoded;
+    process_auth_cursor(encoded)
+}
 
 /*! Applies one Amsterdam authorization and charges its state-dependent
     execution-gas and state-gas components. Tuple-local signature and chain
@@ -388,11 +379,9 @@ function process_amsterdam_auth(
     sender : address,
     current_target : address,
     transfers_value : bool,
-    auth_state : AmsterdamAuthorizationState,
 ) -> (
-    AmsterdamAuthorizationState
+    unit
 ) = {
-    var next = auth_state;
     let authority = au.authority;
 
     if au.valid_sig & (word_is_zero(au.chain_id) | (au.chain_id == word_of_chain_identifier(k_chain_id))) then {
@@ -400,9 +389,9 @@ function process_amsterdam_auth(
         let (currently_delegated, _) = k_deleg_target(authority);
 
         if ((k_code_key(authority) == KECCAK_EMPTY) | currently_delegated) & (k_get_nonce(authority) == au.nonce) then {
-            let seen = authorization_address_seen(authority, auth_state.seen_valid_authorities);
+            let seen = authorization_tracker_seen(authority);
             let delegated_before_tx = if seen then {
-                    authorization_address_seen(authority, auth_state.originally_delegated)
+                    authorization_tracker_originally_delegated(authority)
                 } else {
                     currently_delegated
                 };
@@ -417,7 +406,7 @@ function process_amsterdam_auth(
             if   is_running()
                & (au.address != ZERO_ADDRESS)
                & not_bool(delegated_before_tx)
-               & not_bool(authorization_address_seen(authority, auth_state.delegation_set_for)) then {
+               & not_bool(authorization_tracker_delegation_set(authority)) then {
                 charge_state_gas(G_amsterdam_state_auth_base)
             };
 
@@ -428,61 +417,70 @@ function process_amsterdam_auth(
                     k_set_delegation(authority, au.address)
                 };
                 k_bump_nonce(authority);
-                next = { next with seen_valid_authorities = authority :: next.seen_valid_authorities };
-                if not_bool(seen) & currently_delegated then {
-                    next = { next with originally_delegated = authority :: next.originally_delegated }
-                };
-                if au.address != ZERO_ADDRESS & not_bool(authorization_address_seen(authority, next.delegation_set_for)) then {
-                    next = { next with delegation_set_for = authority :: next.delegation_set_for }
-                }
+                authorization_tracker_commit(
+                    authority,
+                    not_bool(seen) & currently_delegated,
+                    au.address != ZERO_ADDRESS,
+                )
             }
         }
-    };
-    next
+    }
 }
 
 /*! Applies Amsterdam authorizations in wire order, stopping immediately when
     one of their execution-gas or state-gas charges exhausts the transaction. */
-function process_amsterdam_auth_list(
-    xs : list(Authorization),
-    sender : address,
-    current_target : address,
-    transfers_value : bool,
-    auth_state : AmsterdamAuthorizationState,
-) -> (
-    AmsterdamAuthorizationState
-) =
-    match xs {
-        [||] => auth_state,
-        a :: r => {
-            let next = process_amsterdam_auth(a, sender, current_target, transfers_value, auth_state);
-            if is_running() then {
-                process_amsterdam_auth_list(r, sender, current_target, transfers_value, next)
-            } else {
-                next
-            }
-        },
+val process_amsterdam_auth_cursor : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
+        RlpCursor('source_off, 'source_len),
+        address,
+        address,
+        bool,
+    ) -> unit
+function process_amsterdam_auth_cursor(cursor, sender, current_target, transfers_value) =
+    if cursor.len == 0 then {
+        ()
+    } else {
+        let (tuple, next) = rlp_cursor_pop(cursor);
+        process_amsterdam_auth(decode_authorization(tuple), sender, current_target, transfers_value);
+        if is_running() then {
+            process_amsterdam_auth_cursor(next, sender, current_target, transfers_value)
+        }
     }
+termination_measure process_amsterdam_auth_cursor(cursor, sender, current_target, transfers_value) = cursor.len
 
-/*! Warms every access-list address (EIP-2930/EIP-2929 prewarming). */
-function warm_access_list_addresses(xs : list(address)) -> unit =
-    match xs {
-        [||] => (),
-        a :: r => {
-            let _ = k_access_account(a);
-            warm_access_list_addresses(r)
-        },
+/*! Warms the storage keys of one source-backed access-list entry. */
+val warm_access_list_keys : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
+        RlpCursor('source_off, 'source_len),
+        address,
+    ) -> unit
+function warm_access_list_keys(cursor, addr) =
+    if cursor.len == 0 then {
+        ()
+    } else {
+        let (key, next) = rlp_cursor_pop(cursor);
+        let _ = k_slot_is_warm(addr, rlp_ref_word(key));
+        warm_access_list_keys(next, addr)
     }
-/*! Warms every access-list storage slot (EIP-2930/EIP-2929
-    prewarming). */
-function warm_access_list_slots(xs : list(StorageKey)) -> unit =
-    match xs {
-        [||] => (),
-        k :: r => {
-            let _ = k_slot_is_warm(k.addr, k.slot);
-            warm_access_list_slots(r)
-        },
+termination_measure warm_access_list_keys(cursor, addr) = cursor.len
+
+/*! Warms every account and storage key in a source-backed access list. */
+val warm_access_list : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). RlpCursor(
+        'source_off,
+        'source_len,
+    ) -> unit
+function warm_access_list(cursor) =
+    if cursor.len == 0 then {
+        ()
+    } else {
+        let (entry, next) = rlp_cursor_pop(cursor);
+        let (addr_f, fields) = rlp_cursor_pop(rlp_ref_cursor(entry));
+        let (keys_f, fields) = rlp_cursor_pop(fields);
+        rlp_cursor_expect_end(fields);
+        let addr = word_to_address(rlp_ref_word(addr_f));
+        let _ = k_access_account(addr);
+        warm_access_list_keys(rlp_ref_cursor(keys_f), addr);
+        warm_access_list(next)
     }
+termination_measure warm_access_list(cursor) = cursor.len
 
 /*! Pre-warms the accessed-address set (EIP-2929): the sender, the call
     target, the active fork's precompiles, and the access list
@@ -512,8 +510,8 @@ function prewarm(tx : Transaction) -> unit = {
     if precompile_active_at_fork(256) then {
         let _ = k_access_account(precompile_id_to_address(256)) /* P256VERIFY */
     };
-    warm_access_list_addresses(tx.access_list_addresses);
-    warm_access_list_slots(tx.access_list_slots)
+    let access_list : StatelessInputSlice = tx.access_list.encoded;
+    warm_access_list(access_list)
 }
 
 /*! The EIP-1559 effective fee: the gas price actually paid is
@@ -637,7 +635,7 @@ function check_transaction_validity(tx : Transaction) -> TxValidity = {
     if tx_is_set_code(tx.tx_type) & tx.is_create then {
         throw InvalidBlock(ExecutionInvalid)
     };
-    if tx_is_set_code(tx.tx_type) & (tx.authorization_count == 0) then {
+    if tx_is_set_code(tx.tx_type) & (tx.authorizations.count == 0) then {
         throw InvalidBlock(ExecutionInvalid)
     };
     if tx_is_set_code(tx.tx_type) & (k_fork < Prague) then {
@@ -736,7 +734,7 @@ function enter_transaction_frame(
     stack_reset();
     memory_reset();
     returndata_clear();
-    calldata = EMPTY_SLICE;
+    calldata = EMPTY_CALLDATA;
     frame_code = EMPTY_CODE;
     frame_refund = GAS_REFUND_ZERO;
     frame_status = Running()
@@ -773,7 +771,7 @@ function prepare_amsterdam_transaction_dispatch(tx : Transaction, v : TxValidity
         };
         false
     } else {
-        calldata = tx.input_src;
+        calldata = InputCalldata(tx.input_src);
         if word_nonzero(tx.value) & k_account_is_empty(tx.recipient) then {
             charge_state_gas(G_amsterdam_state_new_account)
         };
@@ -843,7 +841,7 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
                         gas_remaining = gas_sub_or_oog(gas_remaining, execution_deposit);
                         charge_deployment_state_gas(code_deployment_state_cost(dep_len));
                         if frame_succeeded() then {
-                            k_deploy_code(new_addr, validated_code_slice(deployed_code))
+                            k_deploy_code(new_addr, code_db_intern_output(deployed_code))
                         }
                     },
                     None() => {
@@ -884,9 +882,11 @@ function run_call_transaction_frame(tx : Transaction, sender : address, delegate
         /* tx directly to a precompile: run it as the top-level frame, gas-checked
            FIRST (an OOG precompile must not execute). Failure or OOG is an
            exceptional halt (all gas consumed, value transfer reverted). */
-        match precompile_gas(number, tx.input_src, gas_remaining) {
+        let input_src : StatelessInputSlice = tx.input_src;
+        let precompile_input = InputCalldata(input_src);
+        match precompile_gas(number, precompile_input, gas_remaining) {
             Some(used) => {
-                let result = run_precompile_slice(number, tx.input_src);
+                let result = run_precompile_slice(number, precompile_input);
                 if result.success then {
                     gas_remaining = gas_sub_or_oog(gas_remaining, used);
                     if is_running() then {
@@ -900,7 +900,7 @@ function run_call_transaction_frame(tx : Transaction, sender : address, delegate
         }
     } else {
         if k_fork < Amsterdam then {
-            calldata = tx.input_src;
+            calldata = InputCalldata(tx.input_src);
             message =
                 struct {
                     caller = sender,
@@ -964,13 +964,9 @@ function run_amsterdam_transaction_frame(tx : Transaction, v : TxValidity, upfro
             tx.recipient
         };
 
-    let _ = process_amsterdam_auth_list(
-        tx.authorizations,
-        v.sender,
-        current_target,
-        word_nonzero(tx.value),
-        EMPTY_AMSTERDAM_AUTHORIZATION_STATE,
-    );
+    authorization_tracker_reset(tx.authorizations.count);
+    let authorizations : StatelessInputSlice = tx.authorizations.encoded;
+    process_amsterdam_auth_cursor(authorizations, v.sender, current_target, word_nonzero(tx.value));
 
     var authorization_state_gas : frame_state_gas_delta = FRAME_STATE_GAS_DELTA_ZERO;
     var delegated : bool = false;
@@ -1109,13 +1105,14 @@ function settle_transaction(
 
     k_tx_merge();
 
+    let logs = read_logs();
     struct {
         tx_type = tx.tx_type,
         success = fr.success,
         gas_used = gas_used,
         execution_gas = execution_gas,
         state_gas = state_gas,
-        logs = read_logs(),
+        logs = logs,
     }
 }
 
@@ -1123,22 +1120,11 @@ function settle_transaction(
     transaction throws before state changes), apply upfront effects, run the
     frame, and settle. */
 function process_transaction(tx : Transaction) -> Receipt = {
-    cycle_scope_start(SCOPE_TX_RESET);
     k_tx_reset();
-    cycle_scope_end(SCOPE_TX_RESET);
-
-    cycle_scope_start(SCOPE_TX_VALIDATE);
     let validity = check_transaction_validity(tx);
-    cycle_scope_end(SCOPE_TX_VALIDATE);
     k_set_tx(struct { origin = tx.sender, gas_price = validity.gas_price, blob_hashes = tx.blob_hashes });
-    cycle_scope_start(SCOPE_TX_UPFRONT);
     let upfront = apply_transaction_upfront_effects(tx, validity);
-    cycle_scope_end(SCOPE_TX_UPFRONT);
-    cycle_scope_start(SCOPE_TX_FRAME);
     let frame_result = run_transaction_frame(tx, validity, upfront);
-    cycle_scope_end(SCOPE_TX_FRAME);
-    cycle_scope_start(SCOPE_TX_SETTLE);
     let receipt = settle_transaction(tx, validity, upfront.authorization_refund, frame_result);
-    cycle_scope_end(SCOPE_TX_SETTLE);
     receipt
 }

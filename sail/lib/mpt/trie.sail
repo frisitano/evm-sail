@@ -73,7 +73,7 @@ function overlay_child_ranges_remaining(
             unsigned(update_child_nibble(updates))
         } else {
             16
-        };
+    };
     let existing_position : range(0, 16) = if existing_pending then {
             unsigned(existing_nibble)
         } else {
@@ -111,7 +111,7 @@ function updates_subtree(
             };
             let subtree : option(TrieItem) = match update.change {
                 TrieDelete() => None(),
-                TriePut(value) => Some(item_leaf(update.key, value)),
+                TriePut(value) => Some(item_scratch_leaf(update.key, value)),
             };
             (subtree, next)
         } else {
@@ -145,7 +145,7 @@ function overlay_leaf_subtree(
     updates : TrieUpdateCursor,
     prefix : TriePath,
     key : TriePath,
-    value : ByteSlice,
+    value : StatelessInputSlice,
     cursor : trie_path_cursor,
 ) -> (
     (option(TrieItem), TrieUpdateCursor)
@@ -170,11 +170,11 @@ function overlay_leaf_subtree(
             };
             let subtree : option(TrieItem) = match update.change {
                 TrieDelete() => None(),
-                TriePut(updated) => Some(item_leaf(key, updated)),
+                TriePut(updated) => Some(item_scratch_leaf(key, updated)),
             };
             (subtree, next)
         } else {
-            (Some(item_leaf(key, value)), updates)
+            (Some(item_input_leaf(key, value)), updates)
         }
     } else {
         let next_cursor : trie_path_cursor = cursor + 1;
@@ -188,7 +188,7 @@ function overlay_leaf_subtree(
             if update_under_current_prefix(remaining) then {
                 let update_nibble = update_child_nibble(remaining);
                 if leaf_pending & (unsigned(leaf_nibble) < unsigned(update_nibble)) then {
-                    children = trie_children_add(children, prefix, leaf_nibble, Some(item_leaf(key, value)));
+                    children = trie_children_add(children, prefix, leaf_nibble, Some(item_input_leaf(key, value)));
                     leaf_pending = false
                 } else {
                     let child_prefix = path_concat(prefix, path_single(update_nibble));
@@ -212,7 +212,7 @@ function overlay_leaf_subtree(
                     remaining = rebased
                 }
             } else {
-                children = trie_children_add(children, prefix, leaf_nibble, Some(item_leaf(key, value)));
+                children = trie_children_add(children, prefix, leaf_nibble, Some(item_input_leaf(key, value)));
                 leaf_pending = false
             }
         };
@@ -223,7 +223,10 @@ termination_measure overlay_leaf_subtree(updates, prefix, key, value, cursor) = 
 
 /*! Recursive witness walk signature, declared before extension expansion
     because an extension's terminal child resumes the decoded-node walk. */
-val witness_subtree : (ByteSlice, TriePath, TrieUpdateCursor, trie_path_cursor) -> (option(TrieItem), TrieUpdateCursor)
+val witness_subtree : (StatelessInputSlice, TriePath, TrieUpdateCursor, trie_path_cursor) -> (
+        option(TrieItem),
+        TrieUpdateCursor,
+    )
 
 /*! Merges updates with the virtual single-child branches represented by an
     extension path, resolving the real child only when an update reaches it. */
@@ -241,7 +244,7 @@ function overlay_extension_subtree(
     };
     if path_eq(prefix, child_prefix) then {
         if update_under_current_prefix(updates) then {
-            witness_subtree(resolve_ref(childref), child_prefix, updates, cursor)
+            witness_subtree(resolve_witness_ref(childref), child_prefix, updates, cursor)
         } else {
             (Some(item_branch(child_prefix, childref)), updates)
         }
@@ -313,12 +316,12 @@ function witness_subtree(node, prefix, updates, cursor) = {
     if node.len == 0 then {
         updates_subtree(updates, prefix, cursor)
     } else {
-        match decode_trie_node(node) {
-            LeafNode(path, value) => {
+        match decode_input_trie_node(node) {
+            InputLeafNode(path, value) => {
                 let key = path_concat(prefix, path);
                 overlay_leaf_subtree(updates, prefix, key, value, cursor)
             },
-            ExtensionNode(path, childref) => {
+            InputExtensionNode(path, childref) => {
                 let extension_len = path_len(path);
                 let next_cursor = cursor + extension_len;
                 if extension_len == 0 | 64 < next_cursor then {
@@ -327,7 +330,7 @@ function witness_subtree(node, prefix, updates, cursor) = {
                     overlay_extension_subtree(childref, path_concat(prefix, path), updates, prefix, cursor)
                 }
             },
-            BranchNode(children, value) => {
+            InputBranchNode(children, value) => {
                 if value.len != 0 | 64 <= cursor then {
                     throw InvalidBlock(WitnessDeficient)
                 } else {
@@ -354,7 +357,7 @@ function witness_subtree(node, prefix, updates, cursor) = {
                         let (child, next_updates) = if update_here then {
                                 let descended = trie_updates_descend(remaining);
                                 if present then {
-                                    witness_subtree(resolve_ref(childref), child_prefix, descended, next_cursor)
+                                    witness_subtree(resolve_witness_ref(childref), child_prefix, descended, next_cursor)
                                 } else {
                                     updates_subtree(descended, child_prefix, next_cursor)
                                 }
@@ -435,42 +438,42 @@ function trie_root(base_root : hash, source : TrieUpdateSource) -> TrieRootResul
 
 /*! Walks the trie toward `key` from `pos`, returning the leaf value
     without copying it; absent paths yield empty bytes. */
-function trie_walk(node : ByteSlice, key : TriePath, pos : trie_path_cursor) -> ByteSlice = {
+function trie_walk(node : StatelessInputSlice, key : TriePath, pos : trie_path_cursor) -> StatelessInputSlice = {
     if node.len == 0 then {
-        EMPTY_SLICE
+        EMPTY_STATELESS_INPUT_SLICE
     } else {
-        match decode_trie_node(node) {
-            LeafNode(path, value) => if not_bool(path_matches(key, pos, path)) then {
-                EMPTY_SLICE
+        match decode_input_trie_node(node) {
+            InputLeafNode(path, value) => if not_bool(path_matches(key, pos, path)) then {
+                EMPTY_STATELESS_INPUT_SLICE
             } else {
-                if pos + path_len(path) == path_len(key) then { value } else { EMPTY_SLICE }
+                if pos + path_len(path) == path_len(key) then { value } else { EMPTY_STATELESS_INPUT_SLICE }
             },
-            ExtensionNode(path, childref) => {
+            InputExtensionNode(path, childref) => {
                 let extension_len : trie_path_len = path_len(path);
                 if extension_len == 0 then {
-                    EMPTY_SLICE
+                    EMPTY_STATELESS_INPUT_SLICE
                 } else {
                     if not_bool(path_matches(key, pos, path)) then {
-                        EMPTY_SLICE
+                        EMPTY_STATELESS_INPUT_SLICE
                     } else {
                         let next_pos = pos + extension_len;
                         if next_pos <= 64 then {
-                            trie_walk(resolve_ref(childref), key, next_pos)
+                            trie_walk(resolve_witness_ref(childref), key, next_pos)
                         } else {
-                            EMPTY_SLICE
+                            EMPTY_STATELESS_INPUT_SLICE
                         }
                     }
                 }
             },
-            BranchNode(children, value) => {
+            InputBranchNode(children, value) => {
                 if pos == path_len(key) then {
                     value
                 } else {
                     if pos < path_len(key) then {
-                        let child = resolve_ref(branch_refs_get(children, path_nibble(key, pos)));
+                        let child = resolve_witness_ref(branch_refs_get(children, path_nibble(key, pos)));
                         trie_walk(child, key, pos + 1)
                     } else {
-                        EMPTY_SLICE
+                        EMPTY_STATELESS_INPUT_SLICE
                     }
                 }
             },
@@ -481,9 +484,9 @@ termination_measure trie_walk(node, key, pos) = 64 - pos
 
 /*! Looks up `key` from a root hash; the root node itself must be
     witnessed. */
-function trie_lookup(root : hash, key : TriePath) -> ByteSlice = {
+function trie_lookup(root : hash, key : TriePath) -> StatelessInputSlice = {
     if root == EMPTY_TRIE_ROOT then {
-        EMPTY_SLICE
+        EMPTY_STATELESS_INPUT_SLICE
     } else {
         let node = node_db_lookup(root);
         if node.len == 0 then {

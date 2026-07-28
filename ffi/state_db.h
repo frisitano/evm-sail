@@ -15,14 +15,14 @@
 /* Generated account/storage adapters implemented by journal_glue.c. The Sail
  * operations already live in host/state.sail; these declarations only fix the
  * generated C calling convention for aggregate arguments and results. */
+struct zStorageTxLookup;
 struct zoptionzIRStorageValuezK;
 struct zoptionzIRStorageEntryzK;
 struct zoptionzIRStorageTrieEntryzK;
 struct zStorageKey;
 struct zStorageEntry;
 struct zBalIterEntry;
-void storage_tx_get(struct zoptionzIRStorageValuezK *result,
-                    struct zStorageKey key);
+void storage_tx_get(struct zStorageTxLookup *result, struct zStorageKey key);
 void storage_block_get(struct zoptionzIRStorageValuezK *result,
                        struct zStorageKey key);
 void storage_block_iter_next(struct zoptionzIRStorageTrieEntryzK *result,
@@ -54,10 +54,6 @@ unit storage_db_reset(const unit u);
 /* Per-layer row probe (layer 0 = tx writes, 1 = block cache/update map). */
 uint64_t storage_row_probe(uint64_t layer, sail_address a, sail_word s,
                            sail_word *cur, sail_word *orig);
-/* Optimized execution probe: resolves both semantic projections after one
- * physical raw-(address, slot) table lookup. */
-uint64_t storage_current_row_probe(sail_address a, sail_word s,
-                                   sail_word *cur, sail_word *orig);
 unit storage_tx_update_raw(sail_address a, sail_word s, sail_word v,
                            sail_word orig);
 void storage_secure_key(sail_word slot, sail_hash *slot_hash);
@@ -82,13 +78,6 @@ uint64_t acct_row_probe(uint64_t layer, sail_address a, uint64_t *nonce,
                         sail_word *bal, sail_hash *sroot, sail_hash *chash,
                         bool *exists, bool *storage_cleared,
                         bool *created, bool *selfdestructed);
-/* Optimized execution probe: the shared row's current fields already select
- * the active transaction projection or cumulative block projection. */
-uint64_t acct_current_row_probe(sail_address a, uint64_t *nonce,
-                                sail_word *bal, sail_hash *sroot,
-                                sail_hash *chash, bool *exists,
-                                bool *storage_cleared, bool *created,
-                                bool *selfdestructed);
 unit acct_tx_update_raw(sail_address a, uint64_t nonce,
                         sail_word bal, sail_hash sroot, sail_hash chash,
                         bool exists, bool storage_cleared, bool created,

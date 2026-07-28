@@ -106,6 +106,14 @@ type source_pointer = range(0, 2 ^ 64 - 1)
 type source_length = range(0, 2 ^ 64 - 1)
 type journal_checkpoint = range(0, 2 ^ 64 - 1)
 
+function scratch_length_add(left, right) =
+    if right <= 2 ^ 64 - 1 - left then {
+        left + right
+    } else {
+        assert(false, "scratch length overflow");
+        0
+    }
+
 /* Successful memory plans are bounded by their exact expansion cost and the
  * live gas value. Host-sized offsets are introduced only after that semantic
  * check; there is no precomputed memory ceiling in the production model. */
@@ -120,6 +128,22 @@ type code_valid_length('len : Int) -> Bool =
 type code_chunk_index = range(0, 2 ^ 64 - 1)
 type item_count = range(0, 2 ^ 64 - 1)
 type item_index = range(0, 2 ^ 64 - 1)
+
+/*
+ * Region-backed slice offsets are absolute validated pointers in optimized C.
+ * The standard model retains offsets. Sub-slicing remains ordinary addition,
+ * while the host resolver checks that the resulting span belongs to its
+ * nominal backing region.
+ */
+val optimized_output_buffer_slice = impure { c: "evmsail_output_buffer_slice" } : forall 'len,
+                                                                                    source_valid_length('len). int('len) -> OutputSlice
+
+function output_buffer_slice(len) =
+    if len == 0 then {
+        EMPTY_OUTPUT_SLICE
+    } else {
+        optimized_output_buffer_slice(len)
+    }
 
 /* RLP emitted into scratch shares the host's 64-bit byte-address domain.
  * Recursive list sizing is exact, then narrowed once at this materialization
@@ -140,13 +164,7 @@ function rlp_uint_nat_size(n) =
 function rlp_write_uint_nat(n) =
     rlp_write_uint_word(U256(n))
 
-function rlp_scratch_slice_size(data) = {
-    let length = data.len;
-    let first = if length == 0 then {
-            0x00
-        } else {
-            slice_byte(data, 0)
-        };
+function optimized_rlp_scratch_slice_size(length : rlp_scratch_length, first : byte) -> rlp_scratch_length = {
     if (length == 1) & (first[7] == bitzero) then {
         1
     } else {
@@ -154,17 +172,55 @@ function rlp_scratch_slice_size(data) = {
     }
 }
 
-function rlp_scratch_bytes_size(data, length) = {
-    let first : byte = match data {
-        b :: _ => b,
-        [||] => 0x00,
-    };
-    if (length == 1) & (first[7] == bitzero) then {
-        1
-    } else {
-        rlp_scratch_length_add(length, rlp_scratch_small_length(rlp_length_prefix_len(length)))
-    }
-}
+function rlp_scratch_region_size(data : ScratchSlice) -> rlp_scratch_length =
+    optimized_rlp_scratch_slice_size(
+        data.len,
+        if data.len == 0 then {
+            0x00
+        } else {
+            slice_byte(data, 0)
+        },
+    )
+
+function rlp_log_data_size(data : LogDataSlice) -> rlp_scratch_length =
+    optimized_rlp_scratch_slice_size(
+        data.len,
+        if data.len == 0 then {
+            0x00
+        } else {
+            slice_byte(data, 0)
+        },
+    )
+
+function rlp_input_scratch_slice_size(data : StatelessInputSlice) -> rlp_scratch_length =
+    optimized_rlp_scratch_slice_size(
+        data.len,
+        if data.len == 0 then {
+            0x00
+        } else {
+            slice_byte(data, 0)
+        },
+    )
+
+function rlp_scratch_scratch_slice_size(data : ScratchSlice) -> rlp_scratch_length =
+    optimized_rlp_scratch_slice_size(
+        data.len,
+        if data.len == 0 then {
+            0x00
+        } else {
+            slice_byte(data, 0)
+        },
+    )
+
+function rlp_log_scratch_slice_size(data : LogDataSlice) -> rlp_scratch_length =
+    optimized_rlp_scratch_slice_size(
+        data.len,
+        if data.len == 0 then {
+            0x00
+        } else {
+            slice_byte(data, 0)
+        },
+    )
 
 function rlp_scratch_length_add(left, right) =
     if right <= 2 ^ 64 - 1 - left then {
@@ -172,6 +228,53 @@ function rlp_scratch_length_add(left, right) =
     } else {
         throw InvalidBlock(RlpDecode)
     }
+
+/*
+ * Complete preimage refinements. The standard model retains the explicit
+ * scratch/RLP equations; optimized C computes the same exact widths and
+ * writes each complete preimage once into borrowed shared scratch.
+ */
+val optimized_create2_address = impure { c: "evmsail_optimized_create2_address" } : (address, word, hash) -> address
+
+function create2_address(sender : address, salt : word, init_hash : hash) -> address =
+    optimized_create2_address(sender, salt, init_hash)
+
+val optimized_tx_signing_hash = impure { c: "evmsail_optimized_tx_signing_hash" } : (TxType, StatelessInputSlice, word) -> hash
+
+function tx_signing_hash(t : TxType, content_src : StatelessInputSlice, v : word) -> hash =
+    optimized_tx_signing_hash(t, content_src, v)
+
+val optimized_sha256_request_digest = impure { c: "evmsail_optimized_sha256_request_digest" } : (
+        byte,
+        StatelessInputSlice,
+    ) -> hash
+
+function sha256_request_digest(request_type : byte, request : StatelessInputSlice) -> hash =
+    optimized_sha256_request_digest(request_type, request)
+
+val optimized_execution_requests_hash = impure { c: "evmsail_optimized_execution_requests_hash" } : StatelessInputRef -> hash
+
+function execution_requests_hash(input_ref : StatelessInputRef) -> hash =
+    optimized_execution_requests_hash(input_ref)
+
+val optimized_block_header_hash = impure { c: "evmsail_optimized_block_header_hash" } : (
+        BlockHeader,
+        hash,
+        hash,
+        hash,
+        hash,
+    ) -> hash
+
+function block_header_hash(
+    header : BlockHeader,
+    transactions_root : hash,
+    withdrawals_root : hash,
+    requests_hash : hash,
+    block_access_list_hash : hash,
+) -> (
+    hash
+) =
+    optimized_block_header_hash(header, transactions_root, withdrawals_root, requests_hash, block_access_list_hash)
 
 val optimized_htr_new_payload_request = pure { c: "evmsail_htr_new_payload_request" } : StatelessInputRef -> hash
 
@@ -185,141 +288,88 @@ function htr_new_payload_request(input_ref : StatelessInputRef) -> hash =
  * This definition replaces `interpret` from `evm/interpreter.sail` when the
  * optimized C splice is selected.
  */
-val optimized_interpret = impure { c: "evmsail_interpret" } : unit -> ByteSlice
+val optimized_interpret = impure { c: "evmsail_interpret" } : unit -> OutputSlice
 
-function interpret() -> ByteSlice =
+function interpret() -> OutputSlice =
     optimized_interpret()
 
 /*
- * Optimized C operations report protocol failures as ordinary return values.
- * Thin Sail wrappers below turn those failures into the model's canonical
- * InvalidBlock exception, so throwing remains explicit and visible to Sail's
- * normal effect inference without requiring C to mutate generated exception
- * state.
+ * The optimized receipt encoder hashes its retained C log range directly into
+ * the final reserved RLP span and updates the block's 32-word accumulator in
+ * the same pass. There is no per-receipt LogsBloom aggregate or 256-byte copy.
  */
-union OptimizedUnitResult = {
-    OptimizedUnitOk : unit,
-    OptimizedUnitError : BlockError,
+val optimized_scratch_store_receipt_logs_bloom = impure { c: "scratch_store_receipt_logs_bloom" } : forall 'off,
+                                                                                                      host_valid_access(
+                                                                                                          'off,
+                                                                                                      ). (
+        int('off),
+        log_store_index,
+        log_store_index,
+    ) -> ScratchRegionResult('off + 256)
+
+function receipt_write_logs_bloom(receipt : Receipt, _bloom : LogsBloom) -> unit = {
+    rlp_write_string_prefix(LOGS_BLOOM_BYTE_LENGTH, 0x00);
+    let arena = scratch_arena;
+    match optimized_scratch_store_receipt_logs_bloom(arena.len, receipt.logs.start, receipt.logs.count) {
+        ScratchRegionReady(expanded) => scratch_arena = expanded,
+        ScratchRegionFailed() => assert(false, "scratch receipt bloom append"),
+    }
 }
 
-union OptimizedHashResult = {
-    OptimizedHashOk : hash,
-    OptimizedHashError : BlockError,
-}
+/*
+ * The computed bloom uses the fixed decreasing-index representation while
+ * the header retains canonical SSZ wire order. Compare those representations
+ * directly at the source boundary without materializing the header bloom.
+ */
+val optimized_logs_bloom_matches_ref = pure { c: "evmsail_logs_bloom_matches_ref" } : (LogsBloom, LogsBloomRef) -> bool
 
-union OptimizedAccountResult = {
-    OptimizedAccountOk : Account,
-    OptimizedAccountError : BlockError,
-}
+function logs_bloom_matches_ref(computed : LogsBloom, reference : LogsBloomRef) -> bool =
+    optimized_logs_bloom_matches_ref(computed, reference)
 
-union OptimizedStorageResult = {
-    OptimizedStorageOk : StorageValue,
-    OptimizedStorageError : BlockError,
-}
+/*
+ * The standard model states EIP-4844 fake_exponential directly over
+ * mathematical integers. Optimized C follows the u128 block-context
+ * representation used by Reth/Revm and widens the result once at this
+ * boundary. It raises `InvalidBlock(ExecutionInvalid)` if the exact result
+ * exceeds that optimized domain, matching the standard equation.
+ */
+type optimized_blob_base_fee_value = range(0, 2 ^ 128 - 1)
+$[c_throws]
+val optimized_blob_base_fee = impure { c: "evmsail_blob_base_fee" } : excess_blob_gas -> optimized_blob_base_fee_value
 
-function optimized_unit_unwrap(result : OptimizedUnitResult) -> unit =
-    match result {
-        OptimizedUnitOk() => (),
-        OptimizedUnitError(reason) => throw InvalidBlock(reason),
-    }
-
-function optimized_hash_unwrap(result : OptimizedHashResult) -> hash =
-    match result {
-        OptimizedHashOk(value) => value,
-        OptimizedHashError(reason) => throw InvalidBlock(reason),
-    }
-
-function optimized_account_unwrap(result : OptimizedAccountResult) -> Account =
-    match result {
-        OptimizedAccountOk(value) => value,
-        OptimizedAccountError(reason) => throw InvalidBlock(reason),
-    }
-
-function optimized_storage_unwrap(result : OptimizedStorageResult) -> StorageValue =
-    match result {
-        OptimizedStorageOk(value) => value,
-        OptimizedStorageError(reason) => throw InvalidBlock(reason),
-    }
+function blob_base_fee(excess_blob_gas : excess_blob_gas) -> word =
+    U256(optimized_blob_base_fee(excess_blob_gas))
 
 /*
  * Optimized state-root refinement. The standard model keeps the explicit
  * witness walker and canonical MPT builder; optimized C links an equivalent
  * fixed-stack implementation over the same host iterators and node database.
- * The C entry point returns an explicit result; the Sail wrapper owns the
- * InvalidBlock exception on witness or RLP failure.
+ * The optimized ABI raises the same Sail InvalidBlock exception on witness or
+ * RLP failure as the standard implementation.
  */
-val optimized_compute_state_root_raw = impure { c: "evmsail_compute_state_root" } : hash -> OptimizedHashResult
+$[c_throws]
+val optimized_compute_state_root = impure { c: "evmsail_compute_state_root" } : hash -> hash
 
 function compute_state_root() -> hash =
-    optimized_hash_unwrap(optimized_compute_state_root_raw(k_parent_state_root))
+    optimized_compute_state_root(k_parent_state_root)
 
 /*
  * All ordered protocol tries use the same optimized fixed-stack builder as
  * state/storage roots. Transaction and withdrawal roots cross as complete
  * operations so optimized C can consume their already validated SSZ list
  * references directly. The standard model retains the explicit RLP(index)
- * cursor, withdrawal encoding, and streaming TrieBuilder equations.
+ * cursor, withdrawal encoding, and recursive subtree equations.
  */
-val optimized_mpt_reset = impure { c: "evmsail_mpt_reset" } : unit -> unit
-val optimized_mpt_insert_leaf_raw = impure { c: "evmsail_mpt_insert_leaf" } : (TriePath, ByteSlice, TriePath) -> OptimizedUnitResult
-val optimized_mpt_insert_last_raw = impure { c: "evmsail_mpt_insert_last" } : (TriePath, ByteSlice) -> OptimizedUnitResult
-val optimized_mpt_root_raw = impure { c: "evmsail_mpt_root" } : unit -> OptimizedHashResult
-
-function optimized_mpt_insert(path : TriePath, value : ByteSlice, next_key : option(TriePath)) -> unit =
-    match next_key {
-        Some(next) => optimized_unit_unwrap(optimized_mpt_insert_leaf_raw(path, value, next)),
-        None() => optimized_unit_unwrap(optimized_mpt_insert_last_raw(path, value)),
-    }
-
-function optimized_mpt_root() -> hash =
-    optimized_hash_unwrap(optimized_mpt_root_raw())
-
-val optimized_transaction_trie_root_raw = impure { c: "evmsail_transaction_trie_root" } : TransactionListRef -> OptimizedHashResult
-val optimized_withdrawals_trie_root_raw = impure { c: "evmsail_withdrawals_trie_root" } : WithdrawalListRef -> OptimizedHashResult
+$[c_throws]
+val optimized_transaction_trie_root = impure { c: "evmsail_transaction_trie_root" } : TransactionListRef -> hash
+$[c_throws]
+val optimized_withdrawals_trie_root = impure { c: "evmsail_withdrawals_trie_root" } : WithdrawalListRef -> hash
 
 function transaction_trie_root(txs : TransactionListRef) -> hash =
-    optimized_hash_unwrap(optimized_transaction_trie_root_raw(txs))
+    optimized_transaction_trie_root(txs)
 
 function withdrawals_trie_root(wds : WithdrawalListRef) -> hash =
-    optimized_hash_unwrap(optimized_withdrawals_trie_root_raw(wds))
-
-/*
- * Optimized authenticated point reads. The base state-trie module retains the
- * explicit secure-key path construction, recursive trie walk, and RLP field
- * equations. This splice crosses each optimized read once and reconstructs
- * the same option/zero semantics after preserving the two witness failures.
- */
-val optimized_stateless_account_lookup_raw = impure { c: "evmsail_stateless_account_lookup" } : (hash, hash) -> OptimizedUnitResult
-
-val optimized_stateless_account_found = impure { c: "evmsail_stateless_account_found" } : unit -> bool
-val optimized_stateless_account_nonce = impure { c: "evmsail_stateless_account_nonce" } : unit -> account_nonce
-val optimized_stateless_account_balance = impure { c: "evmsail_stateless_account_balance" } : unit -> word
-val optimized_stateless_account_storage_root = impure { c: "evmsail_stateless_account_storage_root" } : unit -> hash
-val optimized_stateless_account_code_hash = impure { c: "evmsail_stateless_account_code_hash" } : unit -> hash
-
-val optimized_stateless_storage_lookup_raw = impure { c: "evmsail_stateless_storage_lookup" } : (hash, hash) -> OptimizedUnitResult
-val optimized_stateless_storage_value = impure { c: "evmsail_stateless_storage_value" } : unit -> word
-
-function stateless_account_by_key(root : hash, address_hash : hash) -> option(AccountInfo) = {
-    optimized_unit_unwrap(optimized_stateless_account_lookup_raw(root, address_hash));
-    if optimized_stateless_account_found() then {
-        Some(
-            struct {
-                nonce = optimized_stateless_account_nonce(),
-                balance = optimized_stateless_account_balance(),
-                storage_root = optimized_stateless_account_storage_root(),
-                code_hash = optimized_stateless_account_code_hash(),
-            },
-        )
-    } else {
-        None()
-    }
-}
-
-function stateless_storage_by_key(root : hash, slot_hash : hash) -> word = {
-    optimized_unit_unwrap(optimized_stateless_storage_lookup_raw(root, slot_hash));
-    optimized_stateless_storage_value()
-}
+    optimized_withdrawals_trie_root(wds)
 
 /*
  * Complete optimized state accesses. The standard account/storage modules
@@ -328,17 +378,19 @@ function stateless_storage_by_key(root : hash, slot_hash : hash) -> word = {
  * Optimized C performs each complete operation against the same host-owned
  * tables in one crossing.
  */
-val optimized_k_aload_raw = impure { c: "evmsail_k_aload" } : (hash, address) -> OptimizedAccountResult
-val optimized_k_sload_raw = impure { c: "evmsail_k_sload" } : (hash, address, word) -> OptimizedStorageResult
+$[c_throws]
+val optimized_k_aload = impure { c: "evmsail_k_aload" } : (hash, address) -> Account
+$[c_throws]
+val optimized_k_sload = impure { c: "evmsail_k_sload" } : (hash, address, word) -> StorageValue
 val optimized_k_sstore = impure { c: "evmsail_k_sstore" } : (address, word, word, word) -> unit
 val optimized_store_account = impure { c: "evmsail_store_account" } : (address, Account) -> unit
 val optimized_store_account_info = impure { c: "evmsail_store_account_info" } : (address, Account, AccountInfo) -> unit
 
 function k_aload(a : address) -> Account =
-    optimized_account_unwrap(optimized_k_aload_raw(k_parent_state_root, a))
+    optimized_k_aload(k_parent_state_root, a)
 
 function k_sload(a : address, s : word) -> StorageValue =
-    optimized_storage_unwrap(optimized_k_sload_raw(k_parent_state_root, a, s))
+    optimized_k_sload(k_parent_state_root, a, s)
 
 function k_sstore(a : address, s : word, value : StorageValue) -> unit =
     optimized_k_sstore(a, s, value.curr, value.orig)
@@ -356,50 +408,50 @@ function store_account_info(a : address, account : Account, info : AccountInfo) 
  */
 val optimized_tx_merge = impure { c: "evmsail_tx_merge" } : (bool, bool, block_access_index) -> unit
 
-function k_tx_merge() -> unit = {
-    cycle_scope_start(SCOPE_TX_MERGE);
-    optimized_tx_merge(k_fork >= Cancun, k_fork >= Amsterdam, k_block_access_index);
-    cycle_scope_end(SCOPE_TX_MERGE)
-}
+function k_tx_merge() -> unit =
+    optimized_tx_merge(k_fork >= Cancun, k_fork >= Amsterdam, k_block_access_index)
 
 /*
  * Index source-backed witness nodes in one operation. The standard model
  * retains the explicit SSZ cursor and per-node hash equation.
  */
-val optimized_index_witness_nodes_raw = impure { c: "evmsail_index_witness_nodes" } : WitnessNodeListRef -> OptimizedUnitResult
+$[c_throws]
+val optimized_index_witness_nodes = impure { c: "evmsail_index_witness_nodes" } : WitnessNodeListRef -> unit
 
 function index_witness_nodes(nodes : WitnessNodeListRef) -> unit =
-    optimized_unit_unwrap(optimized_index_witness_nodes_raw(nodes))
+    optimized_index_witness_nodes(nodes)
 
 /*
  * Likewise, keep the standard PUSH-aware opcode scan in Sail while allowing
  * the optimized build to consume and index the complete source-backed code
  * list in one call.
  */
-val optimized_index_witness_codes_raw = impure { c: "evmsail_index_witness_codes" } : (WitnessCodeListRef, bool) -> OptimizedUnitResult
+$[c_throws]
+val optimized_index_witness_codes = impure { c: "evmsail_index_witness_codes" } : (WitnessCodeListRef, bool) -> unit
 
 function index_witness_codes(codes : WitnessCodeListRef) -> unit =
-    optimized_unit_unwrap(optimized_index_witness_codes_raw(codes, k_fork >= Amsterdam))
+    optimized_index_witness_codes(codes, k_fork >= Amsterdam)
 
 /*
- * The standard model retains its explicit streaming TrieBuilder and pending
- * receipts. The optimized build encodes each receipt once into a C-owned
- * execution-order vector. Its high-level root operation owns RLP(index) key
- * generation, canonical trie ordering, and MPT construction entirely in C.
+ * The standard model retains execution-ordered, length-prefixed receipt bytes
+ * in scratch and feeds them to the shared recursive indexed-trie equations.
+ * The optimized build instead copies each temporary encoding into one
+ * reusable C arena and stores its offset/length in execution order. Its
+ * high-level root operation owns RLP(index) key generation, canonical trie
+ * ordering, and MPT construction entirely in C.
  */
-struct ReceiptAccumulator = {
-    count : transaction_count,
-    cumulative_gas_used : block_gas,
-    bloom : LogsBloom,
-}
-
 val optimized_receipt_table_reset = impure { c: "evmsail_receipt_table_reset" } : unit -> unit
-val optimized_receipt_table_push_raw = impure { c: "evmsail_receipt_table_push" } : (transaction_count, ByteSlice) -> OptimizedUnitResult
-val optimized_receipt_table_root_raw = impure { c: "evmsail_receipt_table_root" } : transaction_count -> OptimizedHashResult
+$[c_throws]
+val optimized_receipt_table_push = impure { c: "evmsail_receipt_table_push" } : (transaction_count, ScratchSlice) -> unit
+$[c_throws]
+val optimized_receipt_table_root = impure { c: "evmsail_receipt_table_root" } : transaction_count -> hash
+val optimized_block_logs_bloom_reset = impure { c: "evmsail_block_logs_bloom_reset" } : unit -> unit
+val optimized_block_logs_bloom = impure { c: "evmsail_block_logs_bloom" } : unit -> LogsBloom
 
 function receipt_accumulator_empty() -> ReceiptAccumulator = {
     optimized_receipt_table_reset();
-    struct { count = 0, cumulative_gas_used = 0, bloom = EMPTY_LOGS_BLOOM }
+    optimized_block_logs_bloom_reset();
+    struct { records_start = 0, count = 0, cumulative_gas_used = 0, bloom = EMPTY_LOGS_BLOOM }
 }
 
 function receipt_accumulator_push(
@@ -411,20 +463,28 @@ function receipt_accumulator_push(
 ) = {
     let cumulative : block_gas = conserved_gas_add(acc.cumulative_gas_used, receipt.gas_used);
     let mark = scratch_begin();
-    let value = receipt_encoded(receipt, cumulative);
-    optimized_unit_unwrap(optimized_receipt_table_push_raw(acc.count, value));
+    let value = receipt_encoded(receipt, cumulative, EMPTY_LOGS_BLOOM);
+    optimized_receipt_table_push(acc.count, value);
     scratch_rewind(mark);
-    struct { count = next_count, cumulative_gas_used = cumulative, bloom = bloom_add_logs(acc.bloom, receipt.logs) }
+    struct {
+        records_start = acc.records_start,
+        count = next_count,
+        cumulative_gas_used = cumulative,
+        bloom = acc.bloom,
+    }
 }
 
 function receipt_accumulator_root(acc : ReceiptAccumulator) -> hash =
-    optimized_hash_unwrap(optimized_receipt_table_root_raw(acc.count))
+    optimized_receipt_table_root(acc.count)
+
+function receipt_accumulator_bloom(_acc : ReceiptAccumulator) -> LogsBloom =
+    optimized_block_logs_bloom()
 
 /* Re-establish executable cursor headroom after a CodeSlice has crossed a
  * non-dependent aggregate such as transaction or frame output. All callers
  * derive this condition from their source bound; failure is an internal
  * representation violation rather than a protocol code-size decision. */
-function validated_code_slice(bytes : ByteSlice) -> CodeSlice = {
+function validated_code_slice(bytes : CodeRegionSlice) -> CodeSlice = {
     let length = bytes.len;
     if length + 32 <= 2 ^ 64 - 1 then {
         code_slice(bytes)

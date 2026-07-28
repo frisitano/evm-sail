@@ -14,6 +14,11 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifndef SAIL_U128_DEFINED
+#define SAIL_U128_DEFINED
+typedef struct { uint64_t limbs[2]; } sail_u128;
+#endif
+
 #ifndef SAIL_U256_DEFINED
 #define SAIL_U256_DEFINED
 typedef struct { uint64_t limbs[4]; } sail_u256;
@@ -29,14 +34,17 @@ typedef struct { uint8_t bytes[20]; } sail_fixed_bytes_20;
 typedef struct { uint8_t bytes[32]; } sail_fixed_bytes_32;
 #endif
 
-struct node_zz5listz8z5bv8z9;
-typedef struct node_zz5listz8z5bv8z9 *evmsail_byte_list;
+#ifndef SAIL_FIXED_BYTES_256_DEFINED
+#define SAIL_FIXED_BYTES_256_DEFINED
+typedef struct { uint8_t bytes[256]; } sail_fixed_bytes_256;
+#endif
 
 struct zAddressResult;
 
 typedef sail_u256 sail_word;
 typedef sail_fixed_bytes_20 sail_address;
 typedef sail_fixed_bytes_32 sail_b256;
+typedef sail_fixed_bytes_256 sail_logs_bloom;
 typedef sail_b256 sail_hash;
 typedef sail_word sail_bits256;
 

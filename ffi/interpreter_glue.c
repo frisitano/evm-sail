@@ -1,58 +1,50 @@
 /*
  * Optimized fetch/decode/run loop.
  *
- * This translation unit deliberately owns only interpreter control flow. The
- * readable Sail decoder remains the standard implementation, and all opcode
- * semantics, gas accounting, exceptions, calls, and creates remain in the
- * generated Sail handlers called below.
+ * The readable Sail decoder and opcode bodies remain the standard
+ * implementation. This optimized override executes stack-local opcodes
+ * against the C stack window and calls their generated Sail ALU functions
+ * directly. Stateful, control-flow, call, and create opcodes continue to use
+ * the generated Sail handlers below.
  */
 #include EVMSAIL_MODEL_H
 
 #include "interpreter_glue.h"
 
-#include "byte_slice_glue.h"
+#include "region_access.h"
 #include "frame_stack.h"
+#include "optimized_stack.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 
 struct code_view {
-  enum zByteSource source;
   uint64_t off;
   uint64_t len;
   const uint8_t *bytes;
   bool valid;
 };
 
-static struct zByteSliceFields empty_slice(void) {
-  return (struct zByteSliceFields){
+static struct zOutputSliceFields empty_slice(void) {
+  return (struct zOutputSliceFields){
       .zlen = 0,
       .zoff = 0,
-      .zsource = zStatelessInputSource,
   };
 }
 
 static bool same_code(const struct code_view *view,
-                      const struct zByteSliceFields *code) {
-  return view->valid && view->source == code->zsource &&
-         view->off == code->zoff && view->len == code->zlen;
+                      const struct zCodeRegionSliceFields *code) {
+  return view->valid && view->off == code->zoff && view->len == code->zlen;
 }
 
 static void resolve_code(struct code_view *view) {
-  const struct zByteSliceFields *code = &zframe_code.zbytes;
+  const struct zCodeRegionSliceFields *code = &zframe_code.zbytes;
   if (same_code(view, code)) return;
 
-  const uint8_t *bytes = NULL;
-  uint64_t resolved_len = 0;
-  if (!evmsail_resolve_byte_source(evmsail_source_kind(code->zsource),
-                                   code->zoff, code->zlen, &bytes,
-                                   &resolved_len) ||
-      resolved_len != code->zlen) {
-    abort();
-  }
+  const uint8_t *bytes = evmsail_code_ptr(code->zoff, code->zlen);
+  if (!bytes) abort();
 
-  view->source = code->zsource;
   view->off = code->zoff;
   view->len = code->zlen;
   view->bytes = bytes;
@@ -76,24 +68,141 @@ static sail_u256 read_push(const struct code_view *view, uint64_t offset,
 }
 
 #define EXECUTE(name) ((void)zexecute_##name(UNIT))
-#define EXECUTE_ISZERO() ((void)zexecute_iszzero(UNIT))
-#define EXECUTE_CLZ() ((void)zexecute_clzz(UNIT))
 #define EXECUTE_CALLDATASIZE() ((void)zexecute_calldatasizze(UNIT))
 #define EXECUTE_CODESIZE() ((void)zexecute_codesizze(UNIT))
 #define EXECUTE_EXTCODESIZE() ((void)zexecute_extcodesizze(UNIT))
 #define EXECUTE_RETURNDATASIZE() ((void)zexecute_returndatasizze(UNIT))
 #define EXECUTE_MSIZE() ((void)zexecute_msizze(UNIT))
 
+typedef sail_u256 (*unary_alu)(sail_u256);
+typedef sail_u256 (*binary_alu)(sail_u256, sail_u256);
+typedef sail_u256 (*ternary_alu)(sail_u256, sail_u256, sail_u256);
+
+enum {
+  GAS_BASE = 2,
+  GAS_VERYLOW = 3,
+  GAS_LOW = 5,
+  GAS_MID = 8,
+};
+
+static void charge_opcode(uint64_t amount) {
+  if (zframe_status.kind != Kind_zRunning || amount == 0) return;
+  if (amount <= zgas_remaining) {
+    zgas_remaining -= amount;
+  } else {
+    (void)zexc_halt(zOutOfGas);
+  }
+}
+
+static bool stack_rewrite_succeeded(
+    enum evmsail_stack_rewrite_status status) {
+  if (status == EVMSAIL_STACK_REWRITE_OK) return true;
+  (void)zexc_halt(status == EVMSAIL_STACK_REWRITE_UNDERFLOW
+                      ? zStackUnderflow
+                      : zStackOverflow);
+  return false;
+}
+
+static void execute_unary(uint64_t gas, unary_alu operation) {
+  charge_opcode(gas);
+  sail_u256 *rows = NULL;
+  if (!stack_rewrite_succeeded(evmsail_stack_rewrite(1, 1, &rows))) return;
+  rows[0] = operation(rows[0]);
+}
+
+static void execute_binary(uint64_t gas, binary_alu operation) {
+  charge_opcode(gas);
+  sail_u256 *rows = NULL;
+  if (!stack_rewrite_succeeded(evmsail_stack_rewrite(2, 1, &rows))) return;
+  rows[0] = operation(rows[1], rows[0]);
+}
+
+static void execute_ternary(uint64_t gas, ternary_alu operation) {
+  charge_opcode(gas);
+  sail_u256 *rows = NULL;
+  if (!stack_rewrite_succeeded(evmsail_stack_rewrite(3, 1, &rows))) return;
+  rows[0] = operation(rows[2], rows[1], rows[0]);
+}
+
+static void execute_exp(void) {
+  sail_u256 *rows = NULL;
+  if (!stack_rewrite_succeeded(evmsail_stack_rewrite(2, 1, &rows))) return;
+  charge_opcode(zexp_gas(rows[0]));
+  rows[0] = zalu_exp(rows[1], rows[0]);
+}
+
 static void execute_push(uint64_t width, sail_u256 value) {
-  (void)zexecute_push(width, value);
+  charge_opcode(width == 0 ? GAS_BASE : GAS_VERYLOW);
+  sail_u256 *rows = NULL;
+  if (!stack_rewrite_succeeded(evmsail_stack_rewrite(0, 1, &rows))) return;
+  rows[0] = value;
 }
 
 static void execute_dup(uint64_t depth) {
-  (void)zexecute_dup(depth);
+  charge_opcode(GAS_VERYLOW);
+  (void)stack_rewrite_succeeded(evmsail_stack_dup((uint32_t)depth));
 }
 
 static void execute_swap(uint64_t depth) {
-  (void)zexecute_swap(depth);
+  charge_opcode(GAS_VERYLOW);
+  (void)stack_rewrite_succeeded(evmsail_stack_swap((uint32_t)depth));
+}
+
+static void execute_pop(void) {
+  charge_opcode(GAS_BASE);
+  sail_u256 *rows = NULL;
+  (void)stack_rewrite_succeeded(evmsail_stack_rewrite(1, 0, &rows));
+}
+
+static bool deep_stack_immediate_valid(uint8_t immediate) {
+  return immediate <= 90 || immediate >= 128;
+}
+
+static uint32_t deep_stack_index(uint8_t immediate) {
+  return immediate <= 90 ? (uint32_t)immediate + 145
+                         : (uint32_t)immediate - 111;
+}
+
+static bool exchange_immediate_valid(uint8_t immediate) {
+  return immediate <= 81 || immediate >= 128;
+}
+
+static void execute_dupn(uint8_t immediate) {
+  charge_opcode(GAS_VERYLOW);
+  if (zframe_status.kind != Kind_zRunning) return;
+  if (!deep_stack_immediate_valid(immediate)) {
+    (void)zexc_halt(zInvalidOpcode);
+    return;
+  }
+  (void)stack_rewrite_succeeded(
+      evmsail_stack_dup(deep_stack_index(immediate)));
+}
+
+static void execute_swapn(uint8_t immediate) {
+  charge_opcode(GAS_VERYLOW);
+  if (zframe_status.kind != Kind_zRunning) return;
+  if (!deep_stack_immediate_valid(immediate)) {
+    (void)zexc_halt(zInvalidOpcode);
+    return;
+  }
+  (void)stack_rewrite_succeeded(
+      evmsail_stack_swap(deep_stack_index(immediate)));
+}
+
+static void execute_exchange(uint8_t immediate) {
+  charge_opcode(GAS_VERYLOW);
+  if (zframe_status.kind != Kind_zRunning) return;
+  if (!exchange_immediate_valid(immediate)) {
+    (void)zexc_halt(zInvalidOpcode);
+    return;
+  }
+
+  const uint8_t shifted = immediate ^ 0x8f;
+  const uint32_t quotient = shifted >> 4;
+  const uint32_t remainder = shifted & 0x0f;
+  const uint32_t left = quotient < remainder ? quotient + 1 : remainder + 1;
+  const uint32_t right = quotient < remainder ? remainder + 1 : 29 - quotient;
+  (void)stack_rewrite_succeeded(evmsail_stack_exchange(left, right));
 }
 
 static void execute_log(uint64_t topics) {
@@ -121,83 +230,83 @@ static void execute_simple(uint8_t opcode) {
       EXECUTE(stop);
       return;
     case 0x01:
-      EXECUTE(add);
+      execute_binary(GAS_VERYLOW, zalu_add);
       return;
     case 0x02:
-      EXECUTE(mul);
+      execute_binary(GAS_LOW, zalu_mul);
       return;
     case 0x03:
-      EXECUTE(sub);
+      execute_binary(GAS_VERYLOW, zalu_sub);
       return;
     case 0x04:
-      EXECUTE(div);
+      execute_binary(GAS_LOW, zalu_div);
       return;
     case 0x05:
-      EXECUTE(sdiv);
+      execute_binary(GAS_LOW, zalu_sdiv);
       return;
     case 0x06:
-      EXECUTE(mod);
+      execute_binary(GAS_LOW, zalu_mod);
       return;
     case 0x07:
-      EXECUTE(smod);
+      execute_binary(GAS_LOW, zalu_smod);
       return;
     case 0x08:
-      EXECUTE(addmod);
+      execute_ternary(GAS_MID, zalu_addmod);
       return;
     case 0x09:
-      EXECUTE(mulmod);
+      execute_ternary(GAS_MID, zalu_mulmod);
       return;
     case 0x0a:
-      EXECUTE(exp);
+      execute_exp();
       return;
     case 0x0b:
-      EXECUTE(signextend);
+      execute_binary(GAS_LOW, zalu_signextend);
       return;
     case 0x10:
-      EXECUTE(lt);
+      execute_binary(GAS_VERYLOW, zalu_lt);
       return;
     case 0x11:
-      EXECUTE(gt);
+      execute_binary(GAS_VERYLOW, zalu_gt);
       return;
     case 0x12:
-      EXECUTE(slt);
+      execute_binary(GAS_VERYLOW, zalu_slt);
       return;
     case 0x13:
-      EXECUTE(sgt);
+      execute_binary(GAS_VERYLOW, zalu_sgt);
       return;
     case 0x14:
-      EXECUTE(eq);
+      execute_binary(GAS_VERYLOW, zalu_eq);
       return;
     case 0x15:
-      EXECUTE_ISZERO();
+      execute_unary(GAS_VERYLOW, zalu_iszzero);
       return;
     case 0x16:
-      EXECUTE(and);
+      execute_binary(GAS_VERYLOW, zalu_and);
       return;
     case 0x17:
-      EXECUTE(or);
+      execute_binary(GAS_VERYLOW, zalu_or);
       return;
     case 0x18:
-      EXECUTE(xor);
+      execute_binary(GAS_VERYLOW, zalu_xor);
       return;
     case 0x19:
-      EXECUTE(not);
+      execute_unary(GAS_VERYLOW, zalu_not);
       return;
     case 0x1a:
-      EXECUTE(byte);
+      execute_binary(GAS_VERYLOW, zalu_byte);
       return;
     case 0x1b:
-      EXECUTE(shl);
+      execute_binary(GAS_VERYLOW, zalu_shl);
       return;
     case 0x1c:
-      EXECUTE(shr);
+      execute_binary(GAS_VERYLOW, zalu_shr);
       return;
     case 0x1d:
-      EXECUTE(sar);
+      execute_binary(GAS_VERYLOW, zalu_sar);
       return;
     case 0x1e:
       if (zk_fork >= zOsaka)
-        EXECUTE_CLZ();
+        execute_unary(GAS_LOW, zalu_clzz);
       else
         execute_invalid();
       return;
@@ -301,7 +410,7 @@ static void execute_simple(uint8_t opcode) {
         execute_invalid();
       return;
     case 0x50:
-      EXECUTE(pop);
+      execute_pop();
       return;
     case 0x51:
       EXECUTE(mload);
@@ -387,7 +496,7 @@ static void execute_simple(uint8_t opcode) {
   }
 }
 
-static struct zByteSliceFields frame_output(void) {
+static struct zOutputSliceFields frame_output(void) {
   if (zframe_status.kind != Kind_zHalted) return empty_slice();
 
   switch (zframe_status.variants.zHalted.kind) {
@@ -400,7 +509,7 @@ static struct zByteSliceFields frame_output(void) {
   }
 }
 
-struct zByteSliceFields evmsail_interpret(unit u) {
+struct zOutputSliceFields evmsail_interpret(unit u) {
   struct code_view code = {0};
   (void)u;
   frame_stack_reset(UNIT);
@@ -440,11 +549,11 @@ struct zByteSliceFields evmsail_interpret(unit u) {
                          : (immediate <= 90 || immediate >= 128);
         if (valid) zpc = immediate_offset + 1;
         if (opcode == 0xe6)
-          (void)zexecute_dupn(immediate);
+          execute_dupn(immediate);
         else if (opcode == 0xe7)
-          (void)zexecute_swapn(immediate);
+          execute_swapn(immediate);
         else
-          (void)zexecute_exchange(immediate);
+          execute_exchange(immediate);
         continue;
       }
 
@@ -452,7 +561,7 @@ struct zByteSliceFields evmsail_interpret(unit u) {
       continue;
     }
 
-    struct zByteSliceFields output = frame_output();
+    struct zOutputSliceFields output = frame_output();
     struct zFrameContinuation continuation = {0};
     continuation.kind = Kind_zEmpty;
     frame_stack_pop(&continuation, UNIT);

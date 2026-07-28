@@ -15,7 +15,7 @@
  * The map stores spans, not bytes: node bytes stay in the witness buffer and
  * are materialized by offset only when a node is actually visited. The 256-bit
  * keccak key crosses the FFI as one fixed 32-byte value. Lookups are
- * argument-keyed span lookup (no cursor). The model-aware byte-slice glue
+ * argument-keyed span lookup (no cursor). The model-aware region glue
  * packages a successful span with its source tag; this table stays unaware of
  * generated aggregate layouts. */
 unit nodedb_reset(const unit u);

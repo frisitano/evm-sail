@@ -48,15 +48,16 @@ section or EIP it implements; fork-dependent rules are gated on the
 ## Architecture
 
 The model is split into a **user-space machine** (the per-message-call
-compute state: program counter, stack, memory, gas) and a **host kernel**
-(the world state: accounts, storage, logs, and their transactional
+compute state: program counter, stack, memory, gas) and a **state kernel**
+(the world-state semantics for accounts, storage, logs, and transactional
 overlays). Every world effect crosses that split as an explicit `k_*`
-kernel call, and world rollback is a kernel snapshot/revert.
+kernel call, and world rollback is a kernel snapshot/revert. The kernel is
+part of the normative Sail specification under `kernel/`.
 
 Beneath both sits the **host interface**, with two facets: **regions** —
-the named byte stores ([ByteSource][type-ByteSource]: stateless input,
-frame memory, code, log data, output, scratch) that slices reference
-without copying — and the **accelerator interface**, the cryptographic
+the stateless input, frame memory, code, log data, output, and scratch stores,
+each addressed by its own nominal `{off, len}` slice type without runtime
+source dispatch — and the **accelerator interface**, the cryptographic
 functions the implementation computes (hashing, secp256k1, the precompile
 accelerators). Pages under `host/` document that interface and are
 **non-normative**: they specify the model's internal contracts, not

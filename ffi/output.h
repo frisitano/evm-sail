@@ -6,9 +6,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Scratch storage for the one live frame or precompile output. Sail owns the
- * ByteSlice registers and all frame transitions. */
-bool output_buffer_store_source(uint64_t kind, uint64_t off, uint64_t len);
+bool output_buffer_configure_capacity(uint64_t capacity);
+/* Scratch storage for the one live frame or precompile output. */
+bool output_buffer_store_bytes(const uint8_t *source, uint64_t len);
 bool output_buffer_store_word(EVMSAIL_WORD_PARAM(word));
 bool output_buffer_store_words(EVMSAIL_WORD_PARAM(first),
                                EVMSAIL_WORD_PARAM(second));

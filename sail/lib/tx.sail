@@ -14,18 +14,18 @@ function legacy_sig_chain_id(v : word) -> word =
     word_div(word_sub(v, 35), 2)
 
 /* Tx signing preimage hash. `content_src` spans the RLP of the pre-signature
- * fields in the witness and is hashed as a SEGMENT (never materialized);
- * legacy EIP-155 txs append (chain_id, 0, 0), typed txs prepend the type
- * byte as a domain separator. */
+ * fields in the witness and is copied once into the final contiguous
+ * preimage; legacy EIP-155 txs append (chain_id, 0, 0), typed txs prepend the
+ * type byte as a domain separator. */
 let LEGACY_SIGNATURE_SUFFIX_LENGTH : int(2) = 2
 let PUBLIC_KEY_BODY_LENGTH : int(64) = DOUBLE_WORD_BYTE_LENGTH
 
 /*! The transaction signing-preimage hash. `content_src` spans the RLP of
-    the pre-signature fields in the witness and is hashed as a segment
-    (never materialized); legacy EIP-155 transactions append
+    the pre-signature fields in the witness and is copied once into the final
+    contiguous preimage; legacy EIP-155 transactions append
     `(chain_id, 0, 0)`, typed transactions prepend the type byte as a
     domain separator (EIP-2718). */
-function tx_signing_hash(t : TxType, content_src : ByteSlice, v : word) -> hash = {
+function tx_signing_hash(t : TxType, content_src : StatelessInputSlice, v : word) -> hash = {
     let tb = tx_type_byte(t);
     let eip155 = (tb == 0x00) & word_ule(35, v);
     let chain_id = if eip155 then {
@@ -47,18 +47,21 @@ function tx_signing_hash(t : TxType, content_src : ByteSlice, v : word) -> hash 
         };
     let suffix_length = suffix_len;
     let content_len : range(0, transaction_length_bound + 35) = content_length + suffix_length;
-    let (prefix, prefix_len) = rlp_list_prefix(content_len);
-    let mark = scratch_begin();
+    let prefix_len = rlp_length_prefix_len(content_len);
+    let type_len : range(0, 1) = if tb == 0x00 then { 0 } else { 1 };
+    let preimage_len : range(0, transaction_length_bound + 69) = type_len + prefix_len + content_len;
+    let mark = scratch_reserve(preimage_len);
     if tb != 0x00 then {
-        scratch_push_bytes([|tb|], 1)
+        scratch_push_byte(tb)
     };
-    scratch_push_bytes(prefix, prefix_len);
+    rlp_write_list_prefix(content_len);
     scratch_push_slice(content_src);
     if eip155 then {
         rlp_write_uint_word(chain_id);
-        scratch_push_bytes([|0x80, 0x80|], LEGACY_SIGNATURE_SUFFIX_LENGTH)
-    }
-    ;
+        scratch_push_byte(0x80);
+        scratch_push_byte(0x80)
+    };
+
     let signing_hash = keccak256(scratch_finish(mark));
     scratch_rewind(mark);
     signing_hash
@@ -71,8 +74,9 @@ function auth_signing_hash(chain_id : word, addr : address, nonce : account_nonc
     let address_length = rlp_addr_size();
     let nonce_length = rlp_uint_size(nonce);
     let content_len : range(0, 87) = chain_id_length + address_length + nonce_length;
-    let mark = scratch_begin();
-    scratch_push_bytes([|0x05|], 1);
+    let preimage_len : range(0, 121) = 1 + rlp_list_size(content_len);
+    let mark = scratch_reserve(preimage_len);
+    scratch_push_byte(0x05);
     rlp_write_list_prefix(content_len);
     rlp_write_uint_word(chain_id);
     rlp_write_addr(addr);

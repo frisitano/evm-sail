@@ -14,6 +14,8 @@ extractions/c/
     ├── primitives/
     │   ├── quantities.c
     │   └── ...
+    ├── kernel/
+    │   └── ...
     ├── host/
     │   └── ...
     ├── lib/
@@ -60,9 +62,9 @@ The tracked extraction owns `evm.c`, public `evm.h`, private
 `evm_internal.h`, and all mirrored `.c` fragments below `evm/`. Injected
 headers name the impure host contracts, but all hand-written implementations
 remain under `ffi/`; neither FFI sources nor a Sail runtime are copied here. The
-active source list comes from
-`sail/evm.sail_project` with `EVM_PROFILE=off` and `EVM_DEBUG=off`, so stale
-fragments are removed when that list changes.
+active source list comes from `sail/evm.sail_project` with `EVM_DEBUG=off`
+and without the optimized-only profiling splice, so stale fragments are
+removed when that list changes.
 
 Regenerate and validate the artifacts with:
 

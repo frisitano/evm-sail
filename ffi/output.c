@@ -1,6 +1,6 @@
 #include "output.h"
 
-#include "byte_slice_glue.h"
+#include "capacity.h"
 #include "value_convert.h"
 
 #include <stdbool.h>
@@ -16,7 +16,25 @@ typedef struct {
 
 static OutputBuffer buffer;
 
+bool output_buffer_configure_capacity(uint64_t capacity) {
+  if (capacity > SIZE_MAX) return false;
+  if (capacity > buffer.capacity) {
+    uint8_t *bytes =
+        (uint8_t *)realloc(buffer.bytes, capacity ? (size_t)capacity : 1);
+    if (!bytes) return false;
+    buffer.bytes = bytes;
+    buffer.capacity = capacity;
+  }
+  buffer.length = 0;
+  return true;
+}
+
 static bool reserve(uint64_t need) {
+  evmsail_capacity_observe(EVMSAIL_CAP_OUTPUT_BYTES, need);
+#ifdef EVMSAIL_CAPACITY_FIXED
+  return need <= evmsail_capacity_limit(EVMSAIL_CAP_OUTPUT_BYTES) &&
+         need <= buffer.capacity;
+#endif
   if (need > SIZE_MAX) return false;
   if (buffer.capacity >= need && buffer.bytes) return true;
   uint64_t capacity = buffer.capacity ? buffer.capacity : 256;
@@ -34,11 +52,8 @@ static bool reserve(uint64_t need) {
   return true;
 }
 
-bool output_buffer_store_source(uint64_t kind, uint64_t off, uint64_t len) {
-  const uint8_t *source = NULL;
-  uint64_t resolved_len = 0;
-  if (!evmsail_resolve_byte_source(kind, off, len, &source, &resolved_len) ||
-      resolved_len != len || (len && !source) || (len && !reserve(len))) {
+bool output_buffer_store_bytes(const uint8_t *source, uint64_t len) {
+  if ((len && !source) || (len && !reserve(len))) {
     buffer.length = 0;
     return false;
   }

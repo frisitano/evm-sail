@@ -35,6 +35,7 @@ esac
 BUILD="${ZKVM_BUILD:-$HERE/build}"
 ROOT="$(cd "$HERE/.." && pwd)"
 C_SPLICE="$ROOT/sail/splices/c_optimized.sail"
+C_PROFILE_SPLICE="$ROOT/sail/splices/c_optimized_profile.sail"
 
 SAIL="${SAIL:-}"
 GCC="${GCC:-riscv64-unknown-elf-gcc}"
@@ -64,28 +65,35 @@ if [ "$PLATFORM" = zisk ]; then
   # emission disabled ensures every C section lands in a linker-owned output
   # section that the emulator can load without overlapping orphan sections.
   ARCH=(-march=rv64ima -mabi=lp64 -mcmodel=medany -msmall-data-limit=0)
-  PLATFORM_CFLAGS=(
-    -DEVMSAIL_EXTERNAL_HEAP
-    -DEVMSAIL_PLATFORM_LIBC_MEMORY
-    -DEVMSAIL_PLATFORM_ZISK
-  )
-  if [ "$EVM_DEBUG" = on ]; then
-    PLATFORM_CFLAGS+=(-DEVMSAIL_DEBUG)
-  fi
 else
   ARCH=(-march=rv64im_zicclsm -mabi=lp64 -mcmodel=medany)
-  PLATFORM_CFLAGS=()
 fi
 # Freestanding includes FIRST so <stdio.h>/<stdlib.h>/<string.h>/<gmp.h> resolve
 # to our shims + vendored mini-gmp instead of newlib / libgmp.
 CFLAGS=("${ARCH[@]}" -O2 -ffreestanding -nostdlib -fno-builtin
         -fno-stack-protector -fno-pic -mno-relax -DNDEBUG
         -ffunction-sections -fdata-sections
-        "${PLATFORM_CFLAGS[@]}"
         -I"$RT/sail256" -I"$RT/freestanding" -I"$RT"
         -I"$ROOT/zkvm" -I"$ROOT/zkvm/io-device" -I"$ROOT/ffi")
-# -lgcc supplies compiler runtime helpers; --gc-sections drops the unused Sail
-# diagnostic/format surface (and its gmp_printf/asprintf references).
+if [ "$PLATFORM" = zisk ]; then
+  CFLAGS+=(
+    -DEVMSAIL_EXTERNAL_HEAP
+    -DEVMSAIL_PLATFORM_LIBC_MEMORY
+    -DEVMSAIL_PLATFORM_ZISK
+  )
+  if [ "$EVM_DEBUG" = on ]; then
+    CFLAGS+=(-DEVMSAIL_DEBUG)
+  fi
+fi
+if [ -z "${GUEST:-}" ]; then
+  CFLAGS+=(
+    -DEVMSAIL_OPTIMIZED_ABI
+    -DEVMSAIL_POINTER_ABI
+    -DEVMSAIL_CAPACITY_FIXED
+  )
+fi
+# --gc-sections drops the unused Sail diagnostic/format surface (and its
+# gmp_printf/asprintf references).
 LDFLAGS=(-T "$RT/link.ld" -Wl,--no-relax -Wl,--gc-sections -nostdlib -static)
 
 # Sail nostd runtime library (ships with the toolchain).
@@ -104,13 +112,16 @@ SPIKE_FLAGS=(--isa="$SPIKE_ISA" --misaligned -m"$SPIKE_MEM" --extlib="$SPIKE_DEV
 # Inject the owning FFI headers directly. There is deliberately no aggregate
 # model/input umbrella: each external operation is declared by its subsystem.
 MODEL_HEADERS=(
-  byte_slice_glue.h hash_glue.h precompiles.h output.h scratch.h memory.h
+  region_access.h hash_glue.h precompiles.h output.h scratch.h memory.h
   frame_stack.h
   transient_storage.h stack.h code_db.h kernel_state.h trie_node_db.h
-  state_db.h cycle_scopes.h
+  state_db.h
 )
+if [ "$EVM_PROFILE" = on ]; then
+  MODEL_HEADERS+=(cycle_scopes.h)
+fi
 if [ -z "${GUEST:-}" ]; then
-  MODEL_HEADERS+=(word_bytes_glue.h htr_glue.h mpt_glue.h journal_glue.h interpreter_glue.h)
+  MODEL_HEADERS+=(word_bytes_glue.h preimage_glue.h htr_glue.h mpt_glue.h journal_glue.h interpreter_glue.h blob_fee_glue.h)
 fi
 MODEL_INCLUDE_FLAGS=()
 for header in "${MODEL_HEADERS[@]}"; do
@@ -156,14 +167,18 @@ compile_common() {
         "${MODEL_INCLUDE_FLAGS[@]}" \
         "$GUEST" -o "$BUILD/zkvm_block"
   else
+    local profile_splice_flags=()
+    if [ "$EVM_PROFILE" = on ]; then
+      profile_splice_flags=(--splice "$C_PROFILE_SPLICE")
+    fi
     ( cd "$ROOT" && "$SAIL" -c -O --Oconstant-fold --c-no-main --c-no-rts \
         --c-preserve main --c-preserve leaf_child_ref \
         --c-preserve resume_frame \
         --c-specialize --c-require-bounded-int \
         "${MODEL_INCLUDE_FLAGS[@]}" \
         --splice "$C_SPLICE" \
+        "${profile_splice_flags[@]}" \
         sail/evm.sail_project evm \
-        --variable EVM_PROFILE="$EVM_PROFILE" \
         --variable EVM_DEBUG="$EVM_DEBUG" \
         -o "$BUILD/zkvm_block" )
   fi
@@ -190,7 +205,7 @@ compile_common() {
       -c "$ROOT/ffi/code_glue.c" -o "$BUILD/code_glue.o"
   "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$ROOT/ffi/byte_slice_glue.c" -o "$BUILD/byte_slice_glue.o"
+      -c "$ROOT/ffi/region_access.c" -o "$BUILD/region_access.o"
   "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
       -c "$ROOT/ffi/address_result_glue.c" -o "$BUILD/address_result_glue.o"
@@ -198,9 +213,15 @@ compile_common() {
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
       -c "$ROOT/ffi/frame_stack_glue.c" -o "$BUILD/frame_stack_glue.o"
   HTR_GLUE_OBJ=""
+  PREIMAGE_GLUE_OBJ=""
   MPT_GLUE_OBJ=""
   INTERPRETER_GLUE_OBJ=""
+  BLOB_FEE_GLUE_OBJ=""
   if [ -z "${GUEST:-}" ]; then
+    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+        -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+        -c "$ROOT/ffi/preimage_glue.c" -o "$BUILD/preimage_glue.o"
+    PREIMAGE_GLUE_OBJ="$BUILD/preimage_glue.o"
     "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
         -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
         -c "$ROOT/ffi/htr_glue.c" -o "$BUILD/htr_glue.o"
@@ -213,6 +234,10 @@ compile_common() {
         -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
         -c "$ROOT/ffi/interpreter_glue.c" -o "$BUILD/interpreter_glue.o"
     INTERPRETER_GLUE_OBJ="$BUILD/interpreter_glue.o"
+    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+        -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+        -c "$ROOT/ffi/blob_fee_glue.c" -o "$BUILD/blob_fee_glue.o"
+    BLOB_FEE_GLUE_OBJ="$BUILD/blob_fee_glue.o"
   fi
   # 3. GMP-free Sail runtime: exact bounded integers and inline 256-bit lbits.
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
@@ -222,10 +247,10 @@ compile_common() {
   #     zkvm_accelerators.h interface.
   "$GCC" "${CFLAGS[@]}" -I"$lib" -I"$ROOT/ffi" \
       -Wno-unused -c "$ROOT/ffi/precompiles.c" -o "$BUILD/precompiles.o"
-  # 3c. C host backends: memory/generic byte slices, transient storage,
+  # 3c. C host backends: nominal region access, transient storage,
   #     output arena, operand stack, code/JUMPDEST arenas, and witness/account
   #     databases.
-  for hc in memory scratch transient_storage state_db stack code_db kernel_state trie_node_db output; do
+  for hc in capacity memory scratch transient_storage state_db stack code_db kernel_state trie_node_db output; do
     "$GCC" "${CFLAGS[@]}" -I"$lib" \
         -Wno-unused -c "$ROOT/ffi/$hc.c" -o "$BUILD/$hc.o"
   done
@@ -291,12 +316,14 @@ cmd_zisk_lib() {
   "$AR" crs "$BUILD/libevmsail_zisk.a" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/zisk_platform.o" "$BUILD/sail.o" \
       "$BUILD/precompiles.o" \
-      "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/address_result_glue.o" "$BUILD/frame_stack_glue.o" \
+      "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/region_access.o" "$BUILD/address_result_glue.o" "$BUILD/frame_stack_glue.o" \
+      ${PREIMAGE_GLUE_OBJ:+"$PREIMAGE_GLUE_OBJ"} \
       ${HTR_GLUE_OBJ:+"$HTR_GLUE_OBJ"} \
       ${MPT_GLUE_OBJ:+"$MPT_GLUE_OBJ"} \
       ${INTERPRETER_GLUE_OBJ:+"$INTERPRETER_GLUE_OBJ"} \
+      ${BLOB_FEE_GLUE_OBJ:+"$BLOB_FEE_GLUE_OBJ"} \
       "$BUILD/memory.o" "$BUILD/scratch.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
-      "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/output.o" \
+      "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/output.o" "$BUILD/capacity.o" \
       ${PROFILE_OBJ:+"$PROFILE_OBJ"} "$BUILD/zkvm_block.o"
   echo "built $BUILD/libevmsail_zisk.a"
 }
@@ -306,12 +333,14 @@ link_guest() {
       "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/zkvm_io.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
       "$BUILD/precompiles.o" "$BUILD/accel_guest.o" \
-      "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/byte_slice_glue.o" "$BUILD/address_result_glue.o" "$BUILD/frame_stack_glue.o" \
+      "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/region_access.o" "$BUILD/address_result_glue.o" "$BUILD/frame_stack_glue.o" \
+      ${PREIMAGE_GLUE_OBJ:+"$PREIMAGE_GLUE_OBJ"} \
       ${HTR_GLUE_OBJ:+"$HTR_GLUE_OBJ"} \
       ${MPT_GLUE_OBJ:+"$MPT_GLUE_OBJ"} \
       ${INTERPRETER_GLUE_OBJ:+"$INTERPRETER_GLUE_OBJ"} \
+      ${BLOB_FEE_GLUE_OBJ:+"$BLOB_FEE_GLUE_OBJ"} \
       "$BUILD/memory.o" "$BUILD/scratch.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
-      "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/output.o" \
+      "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/output.o" "$BUILD/capacity.o" \
       ${PROFILE_OBJ:+"$PROFILE_OBJ"} \
       "$BUILD/zkvm_block.o" \
       -o "$BUILD/zkvm_guest.elf"

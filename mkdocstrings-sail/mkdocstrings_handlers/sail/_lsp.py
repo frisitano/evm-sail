@@ -154,15 +154,21 @@ def project_files(sail_binary: str, root: Path, project: str, module: str, varia
 
 
 def build_index(
-    binary: str, root: Path, *, compiler_tokens: bool = True, files: list[str] | None = None
+    binary: str,
+    root: Path,
+    *,
+    compiler_tokens: bool = True,
+    files: list[str] | None = None,
+    workspace_root: Path | None = None,
 ) -> dict[str, Any]:
     client = LspClient([binary, "--stdio"])
     try:
+        workspace_root = workspace_root or root
         init = client.request(
             "initialize",
             {
                 "processId": None,
-                "rootUri": root.as_uri(),
+                "rootUri": workspace_root.as_uri(),
                 "capabilities": {"general": {"positionEncodings": ["utf-16"]}},
                 "initializationOptions": {"semanticCompilerTokens": compiler_tokens},
             },
@@ -263,6 +269,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--binary", default="sail_lsp", help="sail-lsp binary (default: sail_lsp on PATH)")
     parser.add_argument("--root", default=".", help="workspace root; paths are stored relative to it")
+    parser.add_argument(
+        "--workspace-root",
+        help="narrower LSP workspace root; indexed paths remain relative to --root",
+    )
     parser.add_argument("--output", required=True, help="output JSON path")
     parser.add_argument("--no-compiler-tokens", action="store_true", help="skip compiler-derived token overlay")
     parser.add_argument("--project", help="a .sail_project file; index exactly its resolved file closure")
@@ -284,6 +294,7 @@ def main(argv: list[str] | None = None) -> int:
         root,
         compiler_tokens=not args.no_compiler_tokens,
         files=files,
+        workspace_root=Path(args.workspace_root).resolve() if args.workspace_root else None,
     )
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)

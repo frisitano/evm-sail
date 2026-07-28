@@ -145,7 +145,7 @@ function ssz_list_cursor_empty forall ('maximum : Int), source_valid_length('max
 /*! The next element's span, and the advanced cursor. */
 function ssz_list_pop forall ('maximum : Int), source_valid_length('maximum) & 'maximum <= 2 ^ 30 - 1. (cursor :
     BoundedSszListCursor('maximum)) -> (
-    (ByteSlice, BoundedSszListCursor('maximum))
+    (StatelessInputSlice, BoundedSszListCursor('maximum))
 ) = {
     let count = cursor.items.count;
     let index = cursor.index;
@@ -185,7 +185,7 @@ function ssz_list_at forall ('maximum : Int) ('index : Int),
     items : BoundedSszListRef('maximum),
     index : int('index),
 ) -> (
-    ByteSlice
+    StatelessInputSlice
 ) = {
     let bytes = items.bytes;
     let count = items.count;
@@ -223,7 +223,7 @@ val ssz_fixed_list_at : forall 'maximum 'item_size 'index,
         BoundedSszListRef('maximum),
         int('index),
         int('item_size),
-    ) -> ByteSliceLength('item_size)
+    ) -> StatelessInputSliceLength('item_size)
 
 function ssz_fixed_list_at(items, index, item_size) = {
     let bytes = items.bytes;
@@ -244,7 +244,7 @@ function ssz_fixed_list_at(items, index, item_size) = {
 val ssz_fixed_list_pop : forall 'maximum 'item_size, source_valid_length('maximum) & source_valid_length('item_size). (
         BoundedSszListRef('maximum),
         int('item_size),
-    ) -> (ByteSliceLength('item_size), BoundedSszListRef('maximum))
+    ) -> (StatelessInputSliceLength('item_size), BoundedSszListRef('maximum))
 
 function ssz_fixed_list_pop(items, item_size) = {
     let bytes = items.bytes;
@@ -271,27 +271,29 @@ function ssz_fixed_list_pop(items, item_size) = {
     SSZ offset tables. */
 struct StatelessInputRef = {
     protocol : ProtocolProfile,
-    new_payload_request : ByteSlice,
-    execution_payload : ByteSliceAtLeast(540),
-    versioned_hashes : ByteSlice,
-    deposits : ByteSlice,
-    withdrawal_requests : ByteSlice,
-    consolidation_requests : ByteSlice,
-    builder_deposit_requests : ByteSlice,
-    builder_exit_requests : ByteSlice,
-    extra_data : ByteSlice,
+    new_payload_request : StatelessInputSlice,
+    execution_payload : StatelessInputSliceAtLeast(540),
+    versioned_hashes : StatelessInputSlice,
+    deposits : StatelessInputSlice,
+    withdrawal_requests : StatelessInputSlice,
+    consolidation_requests : StatelessInputSlice,
+    builder_deposit_requests : StatelessInputSlice,
+    builder_exit_requests : StatelessInputSlice,
+    extra_data : StatelessInputSlice,
     transactions : TransactionListRef,
     withdrawals : WithdrawalListRef,
-    block_access_list : ByteSlice,
+    block_access_list : StatelessInputSlice,
     witness_state : WitnessNodeListRef,
     witness_codes : WitnessCodeListRef,
     witness_headers : WitnessHeaderListRef,
-    chain_config : ByteSlice,
-    public_keys : ByteSlice,
+    chain_config : StatelessInputSlice,
+    public_keys : StatelessInputSlice,
 }
 
 /*! Retains a successfully checked fixed-region bound in the slice type. */
-val ssz_container_bytes : forall 'minimum, 0 <= 'minimum. (ByteSlice, int('minimum)) -> ByteSliceAtLeast('minimum)
+val ssz_container_bytes : forall 'minimum, 0 <= 'minimum. (StatelessInputSlice, int('minimum)) -> StatelessInputSliceAtLeast(
+        'minimum,
+    )
 
 function ssz_container_bytes(bytes, minimum) = {
     let fields = bytes;
@@ -306,21 +308,21 @@ function ssz_container_bytes(bytes, minimum) = {
     container slice carries the region base and limit, so offsets cannot be
     mixed with those of an enclosing container. */
 struct SszContainerCursor = {
-    bytes : ByteSlice,
+    bytes : StatelessInputSlice,
     current : source_pointer,
 }
 
 /*! Starts a cursor immediately after a container's statically known fixed
     region. The region length is inferred from the validated slice type, so it
     is not carried as a second runtime value. */
-val ssz_container_cursor : forall 'minimum, 0 <= 'minimum. (ByteSliceAtLeast('minimum), int('minimum)) -> SszContainerCursor
+val ssz_container_cursor : forall 'minimum, 0 <= 'minimum. (StatelessInputSliceAtLeast('minimum), int('minimum)) -> SszContainerCursor
 
 function ssz_container_cursor(bytes, fixed_length) =
     struct { bytes = bytes, current = fixed_length }
 
 /*! Takes the next variable field, ending at its container-relative SSZ
     offset, and returns the advanced cursor. */
-function ssz_take(cursor : SszContainerCursor, stop : ssz_offset) -> (ByteSlice, SszContainerCursor) = {
+function ssz_take(cursor : SszContainerCursor, stop : ssz_offset) -> (StatelessInputSlice, SszContainerCursor) = {
     let current_value = cursor.current;
     let bytes = cursor.bytes;
     let container_length = bytes.len;
@@ -336,7 +338,7 @@ function ssz_take(cursor : SszContainerCursor, stop : ssz_offset) -> (ByteSlice,
 
 /*! Takes the remainder of a container after its last offset-delimited
     field. */
-function ssz_finish(cursor : SszContainerCursor) -> ByteSlice = {
+function ssz_finish(cursor : SszContainerCursor) -> StatelessInputSlice = {
     let current_value = cursor.current;
     let bytes = cursor.bytes;
     let container_length = bytes.len;
@@ -353,7 +355,7 @@ function ssz_finish(cursor : SszContainerCursor) -> ByteSlice = {
     consumer can construct any narrower optimized value. */
 function ssz_bounded_variable_list_ref forall ('maximum : Int) ('item_length : Int),
                                          source_valid_length('maximum) & source_valid_length('item_length). (
-    bytes : ByteSlice,
+    bytes : StatelessInputSlice,
     maximum_count : int('maximum),
     maximum_item_length : int('item_length),
 ) -> (
@@ -383,7 +385,7 @@ function ssz_bounded_variable_list_ref forall ('maximum : Int) ('item_length : I
 /*! Constructs a schema-bounded fixed-item SSZ list reference. */
 function ssz_bounded_fixed_list_ref forall ('maximum : Int) ('item_size : Int),
                                       source_valid_length('maximum) & source_valid_length('item_size). (
-    bytes : ByteSlice,
+    bytes : StatelessInputSlice,
     item_size : int('item_size),
     maximum_count : int('maximum),
 ) -> (
@@ -408,7 +410,7 @@ function ssz_bounded_fixed_list_ref forall ('maximum : Int) ('item_size : Int),
 /*! Resolves the input's offset tables into a
     [StatelessInputRef][type-StatelessInputRef], validating the schema id
     and every region bound; a malformed frame is `InvalidConfig`. */
-function decode_stateless_input_ref(input : ByteSlice) -> StatelessInputRef = {
+function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInputRef = {
     let input_fields = input;
     let input_length = input_fields.len;
     let fixed_length = STATELESS_INPUT_FIXED_LENGTH;
@@ -571,9 +573,9 @@ function decode_stateless_input_ref(input : ByteSlice) -> StatelessInputRef = {
 
 /*! The EIP-7685 per-type request digest:
     `sha256(request_type ‖ request_data)`. */
-function sha256_request_digest(request_type : byte, s : ByteSlice) -> hash = {
-    let mark = scratch_begin();
-    scratch_push_bytes([|request_type|], 1);
+function sha256_request_digest(request_type : byte, s : StatelessInputSlice) -> hash = {
+    let mark = scratch_reserve(scratch_length_add(1, s.len));
+    scratch_push_byte(request_type);
     scratch_push_slice(s);
     let digest = sha256(scratch_finish(mark));
     scratch_rewind(mark);
@@ -615,7 +617,7 @@ function index_witness_codes_cursor(cursor : WitnessCodeListCursor) -> unit =
         if MAX_WITNESS_CODE_LENGTH < code_length then {
             throw InvalidBlock(InvalidConfig)
         };
-        let executable = code_slice(code);
+        let executable = code_db_intern_input(code);
         let _ = code_db_insert(executable, k_fork);
         index_witness_codes_cursor(next)
     }
@@ -815,7 +817,7 @@ function index_witness_headers(headers : WitnessHeaderListRef) -> WitnessContext
 
 /*! Decodes the execution-payload header fields from their fixed SSZ
     offsets. */
-function decode_payload_blob_gas_used(payload : ByteSlice) -> blob_gas_used = {
+function decode_payload_blob_gas_used(payload : StatelessInputSlice) -> blob_gas_used = {
     let value = decode_ssz_uint(payload, PL_BLOB_GAS_USED);
 
     /* EIP-4844 makes this field GAS_PER_BLOB times the number of blobs.
@@ -844,7 +846,7 @@ function decode_block_header_ssz(input_ref : StatelessInputRef) -> BlockHeader =
         excess_blob_gas = decode_ssz_uint(payload, PL_EXCESS_BLOB_GAS),
         state_root = ssz_bytes32(payload, PL_STATE_ROOT),
         receipts_root = ssz_bytes32(payload, PL_RECEIPTS_ROOT),
-        logs_bloom = ssz_logs_bloom(payload, PL_LOGS_BLOOM),
+        logs_bloom = sub_slice(payload, PL_LOGS_BLOOM, 256),
         fee_recipient = ssz_addr(payload, PL_FEE_RECIPIENT),
         parent_hash = ssz_bytes32(payload, 0),
         parent_beacon_block_root = ssz_bytes32(input_ref.new_payload_request, NPR_BEACON_ROOT),
@@ -854,7 +856,7 @@ function decode_block_header_ssz(input_ref : StatelessInputRef) -> BlockHeader =
 }
 
 /*! Decodes one fixed-layout SSZ withdrawal element. */
-function decode_withdrawal(withdrawal : ByteSlice) -> Withdrawal = {
+function decode_withdrawal(withdrawal : StatelessInputSlice) -> Withdrawal = {
     struct {
         index = decode_ssz_uint(withdrawal, WD_INDEX),
         validator_index = decode_ssz_uint(withdrawal, WD_VALIDATOR_INDEX),
@@ -868,7 +870,13 @@ function decode_withdrawal(withdrawal : ByteSlice) -> Withdrawal = {
     The activation point (optional block number / timestamp, `List[u64,1]`
     each) must be reached by this payload: at least one bound set, none
     exceeding the payload's — a future activation invalidates the block. */
-function decode_chain_config(cc : ByteSlice, number : block_number, timestamp : block_timestamp) -> ChainConfig = {
+function decode_chain_config(
+    cc : StatelessInputSlice,
+    number : block_number,
+    timestamp : block_timestamp,
+) -> (
+    ChainConfig
+) = {
     let cc_length = cc.len;
     let header_length = CHAIN_CONFIG_HEADER_LENGTH;
     let minimum_length = CHAIN_CONFIG_MIN_LENGTH;
@@ -955,15 +963,9 @@ function decode_stateless_input(input_ref : StatelessInputRef) -> StatelessInput
     materialized. */
 function index_execution_witness(input_ref : StatelessInputRef) -> WitnessContext = {
     nodedb_reset();
-    cycle_scope_start(SCOPE_INDEX_WITNESS_NODES);
     index_witness_nodes(input_ref.witness_state);
-    cycle_scope_end(SCOPE_INDEX_WITNESS_NODES);
-    cycle_scope_start(SCOPE_INDEX_WITNESS_CODES);
     index_witness_codes(input_ref.witness_codes);
-    cycle_scope_end(SCOPE_INDEX_WITNESS_CODES);
-    cycle_scope_start(SCOPE_INDEX_WITNESS_HEADERS);
     let witness = index_witness_headers(input_ref.witness_headers);
-    cycle_scope_end(SCOPE_INDEX_WITNESS_HEADERS);
     k_parent_state_root = witness.parent_state_root;
     witness
 }
@@ -972,8 +974,8 @@ function index_execution_witness(input_ref : StatelessInputRef) -> WitnessContex
 val decode_transaction : forall 'transaction_off 'transaction_len 'public_key_off,
                            source_valid_range('transaction_off, 'transaction_len) &
                                source_valid_range('public_key_off, 65). (
-        ByteSliceFields('transaction_off, 'transaction_len),
-        ByteSliceFields('public_key_off, 65),
+        StatelessInputSliceFields('transaction_off, 'transaction_len),
+        StatelessInputSliceFields('public_key_off, 65),
     ) -> Transaction
 function decode_transaction(transaction, public_key) =
     if transaction.len <= sizeof(transaction_length_bound) then {

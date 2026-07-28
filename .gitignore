@@ -30,6 +30,7 @@ harness/.rtcache/
 
 # python
 **/__pycache__/
+/.venv-docs/
 
 # Workspace-local tests-zkevm@v0.6.2 conformance corpus.
 zkvm/.fixtures/
@@ -40,11 +41,11 @@ zkvm/native-runner/.build*/
 # generated parts of the MkDocs spec book (make docs-site);
 # authored pages under book/docs/ are tracked
 /book/site/
-/book/doc/
-/book/docs/reference/
+/book/.build/
+/book/docs/reference/**/*.md
+!/book/docs/reference/**/index.md
 /book/docs/extraction/
-/book/docs/assets/
-/book/mkdocs.yml
+/book/docs/assets/generated/
 
 # local editor, agent, and worktree state
 .DS_Store

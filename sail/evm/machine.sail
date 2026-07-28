@@ -177,19 +177,19 @@ function is_running() -> bool = match frame_status {
     slice at the top level, a minted slice of the suspended caller's
     memory for sub-calls, the empty slice for initcode frames.
     Saved/restored across sub-calls like the other frame registers. */
-register calldata : ByteSlice = EMPTY_SLICE
+register calldata : CalldataSlice = EMPTY_CALLDATA
 
 /*! Installs the frame's calldata reference. */
-function calldata_install(data : ByteSlice) -> unit = calldata = data
+function calldata_install(data : CalldataSlice) -> unit = calldata = data
 
 /*! The output of the frame's latest child call (EIP-211's returndata
     buffer). The active frame's own output is carried by its
     `RETURN`/`REVERT` halt value and returned from [interpret][], rather
     than stored in another register. */
-register returndata : ByteSlice = EMPTY_SLICE
+register returndata : OutputSlice = EMPTY_OUTPUT_SLICE
 
 /*! Clears the returndata buffer (a new sub-call begins). */
-function returndata_clear() -> unit = returndata = EMPTY_SLICE
+function returndata_clear() -> unit = returndata = EMPTY_OUTPUT_SLICE
 
 /*! `RETURNDATASIZE`. */
 function returndata_size() -> source_pointer = {
@@ -275,7 +275,7 @@ function returndata_copy_words(dst : memory_pointer, source_offset : word, lengt
  * representation. The slice length is the exact highest accessed byte; gas
  * and `MSIZE` round that watermark to EVM words when required. */
 /*! The active frame's established memory range in the shared memory arena. */
-register evm_memory : ByteSlice = byte_slice(EvmMemorySource, 0, 0)
+register evm_memory : MemorySlice = EMPTY_MEMORY_SLICE
 
 /*! Returns the active frame's exact byte high-water mark. */
 function evm_memory_high_water() -> memory_length = {
@@ -287,12 +287,14 @@ function evm_memory_high_water() -> memory_length = {
 /*! Clears all frame-memory storage and resets the active range. */
 function memory_reset() -> unit = {
     mem_clear();
-    evm_memory = byte_slice(EvmMemorySource, 0, 0)
+    evm_memory = EMPTY_MEMORY_SLICE
 }
 
 /*! Expands the active frame memory to an already-charged size and returns the
     resulting high-water-mark witness. */
-val memory_expand_to : forall 'required, source_valid_range(0, 'required). int('required) -> ByteSliceLength('required)
+val memory_expand_to : forall 'required, source_valid_range(0, 'required). int('required) -> MemorySliceLength(
+        'required,
+    )
 
 function memory_expand_to(new_size) = {
     let memory = evm_memory;
@@ -308,11 +310,11 @@ function memory_expand_to(new_size) = {
 /*! Returns an already-expanded memory range. The successful expansion value
     retains the high-water containment fact that would be lost by reading the
     existential [evm_memory][] register again. */
-val memory_byte_slice : forall 'off 'len, memory_valid_range('off, 'len). (int('off), int('len)) -> ByteSlice
+val active_memory_slice : forall 'off 'len, memory_valid_range('off, 'len). (int('off), int('len)) -> MemorySlice
 
-function memory_byte_slice(off, len) =
+function active_memory_slice(off, len) =
     if len == 0 then {
-        EMPTY_SLICE
+        EMPTY_MEMORY_SLICE
     } else {
         sub_slice(memory_expand_to(off + len), off, len)
     }
@@ -325,21 +327,21 @@ function memory_code_slice(off, len) =
     if len == 0 then {
         EMPTY_CODE_SLICE
     } else {
-        code_slice(sub_slice(memory_expand_to(off + len), off, len))
+        code_db_intern_memory(sub_slice(memory_expand_to(off + len), off, len))
     }
 
 /* Entering a child returns the saved parent pointer. Restoring that value is
  * the complete Sail-side memory-frame unwind; no second size register exists. */
 /*! Saves the parent range and enters an empty child-memory frame. */
-function memory_frame_enter() -> ByteSlice = {
+function memory_frame_enter() -> MemorySlice = {
     let parent = evm_memory;
     let base : source_pointer = mem_frame_enter();
-    evm_memory = byte_slice(EvmMemorySource, base, 0);
+    evm_memory = memory_slice(base, 0);
     parent
 }
 
 /*! Releases child memory and restores the saved parent range. */
-function memory_frame_leave(parent : ByteSlice) -> unit = {
+function memory_frame_leave(parent : MemorySlice) -> unit = {
     mem_frame_leave();
     evm_memory = parent
 }
@@ -439,4 +441,4 @@ function mem_codecopy(dst : memory_pointer, off : source_pointer, len : memory_l
 /*! `KECCAK256` over the memory range `[off, off+len)`: semantically, the
     caller reads the addressed bytes and hashes that byte list. */
 function mem_keccak(range : MemoryRange) -> word =
-    hash_to_word(keccak256(memory_byte_slice(range.off, range.len)))
+    hash_to_word(keccak256(active_memory_slice(range.off, range.len)))

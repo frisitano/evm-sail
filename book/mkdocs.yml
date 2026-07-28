@@ -1,0 +1,46 @@
+site_name: "EVM Sail Specification"
+site_url: "https://frisitano.github.io/evm-sail/"
+use_directory_urls: false
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - content.tooltips
+    - navigation.indexes
+    - navigation.top
+    - search.highlight
+plugins:
+  - search
+  - offline
+  - sail-book
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - autorefs:
+      link_titles: false
+  - mkdocstrings:
+      default_handler: sail
+      handlers:
+        sail:
+          bundle: .build/doc.json
+          lsp_index: .build/lsp-index.json
+markdown_extensions:
+  - admonition
+  - attr_list
+  - material.extensions.preview:
+      configurations:
+        - sources:
+            include:
+              - "**"
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+extra:
+  version:
+    provider: mike
+extra_css:
+  - assets/generated/performance-dashboard.css
+extra_javascript:
+  - assets/generated/marked.min.js
+  - assets/generated/highlight.min.js
+  - assets/generated/sail-hover.js
+  - assets/generated/performance-dashboard.js

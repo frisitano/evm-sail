@@ -285,3 +285,45 @@ function hex_prefix_decode_ref forall 'source_off 'source_len 'content_len,
         }
     }
 }
+
+/*! Scratch-backed counterpart used only when canonicalization reopens an
+    embedded node that it just encoded. */
+function scratch_hex_prefix_decode_ref forall 'source_off 'source_len 'content_len,
+                                         rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    ScratchRlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    (bool, TriePath)
+) = {
+    if f.is_list then {
+        throw InvalidBlock(RlpDecode)
+    };
+    let n = f.content_len;
+    if n == 0 then {
+        (false, path_empty())
+    } else {
+        let maximum_length = HEX_PREFIX_MAX_LENGTH;
+        if maximum_length < n then {
+            throw InvalidBlock(RlpDecode)
+        } else {
+            let content = sub_slice(f.source, f.source.len - n, n);
+            let fb = slice_byte(content, 0);
+            let flag : nibble = fb[7 .. 4];
+            let is_leaf : bool = flag[1] == bitone;
+            let odd : bool = flag[0] == bitone;
+            let tail_length : range(0, 32) = n - 1;
+            let tail = slice_suffix(content, 1);
+            let packed = slice_load(tail, 0);
+            let paired_nibbles : range(0, 64) = tail_length * 2;
+            if odd then {
+                if paired_nibbles < 64 then {
+                    var bytes = word_to_hash(word_shift_right(packed, 4));
+                    bytes[0] = append(fb[3 .. 0], bytes[0][3 .. 0]);
+                    (is_leaf, path_new(B256(bytes), paired_nibbles + 1))
+                } else {
+                    throw InvalidBlock(WitnessDeficient)
+                }
+            } else {
+                (is_leaf, path_new(word_to_hash(packed), paired_nibbles))
+            }
+        }
+    }
+}

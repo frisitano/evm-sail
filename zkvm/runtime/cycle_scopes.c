@@ -63,7 +63,7 @@ ZISK_PROFILE_TAG(tx_merge_storage);
 ZISK_PROFILE_TAG(system_call_interpret);
 ZISK_PROFILE_TAG(system_call_merge);
 
-#define ZISK_PROFILE_REPORT_STEPS(tag, command) \
+#define ZISK_PROFILE_REPORT(tag, command) \
     __asm__ volatile( \
         "csrs 0x81a, %0\n\t" \
         "addi x0, x0, " #command \
@@ -71,8 +71,16 @@ ZISK_PROFILE_TAG(system_call_merge);
         : "r" (&tag##_tag) \
         : "memory")
 
-#define START_SCOPE(id, tag) case id: ZISK_PROFILE_REPORT_STEPS(tag, 7); break
-#define END_SCOPE(id, tag) case id: ZISK_PROFILE_REPORT_STEPS(tag, 8); break
+#define START_SCOPE(id, tag) \
+    case id: \
+        ZISK_PROFILE_REPORT(tag, 3); \
+        ZISK_PROFILE_REPORT(tag, 7); \
+        break
+#define END_SCOPE(id, tag) \
+    case id: \
+        ZISK_PROFILE_REPORT(tag, 8); \
+        ZISK_PROFILE_REPORT(tag, 4); \
+        break
 
 #elif defined(__riscv)
 __asm__(

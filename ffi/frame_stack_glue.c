@@ -22,16 +22,52 @@ static void frame_int_clone(sail_int *dst, const sail_int src) {
   COPY(sail_int)(dst, src);
 }
 
-static void frame_slice_clone(struct zByteSliceFields *dst,
-                              const struct zByteSliceFields *src) {
-  *dst = *src;
-  frame_int_clone(&dst->zlen, src->zlen);
-  frame_int_clone(&dst->zoff, src->zoff);
+static void frame_slice_fields_clone(sail_int *dst_len, sail_int *dst_off,
+                                     const sail_int src_len,
+                                     const sail_int src_off) {
+  frame_int_clone(dst_len, src_len);
+  frame_int_clone(dst_off, src_off);
 }
 
-static void frame_slice_drop(struct zByteSliceFields *slice) {
-  KILL(sail_int)(&slice->zlen);
-  KILL(sail_int)(&slice->zoff);
+static void frame_slice_fields_drop(sail_int *len, sail_int *off) {
+  KILL(sail_int)(len);
+  KILL(sail_int)(off);
+}
+
+static void frame_calldata_clone(struct zCalldataSlice *dst,
+                                 const struct zCalldataSlice *src) {
+  dst->kind = src->kind;
+  switch (src->kind) {
+  case Kind_zInputCalldata:
+    frame_slice_fields_clone(
+        &dst->variants.zInputCalldata.zlen,
+        &dst->variants.zInputCalldata.zoff,
+        src->variants.zInputCalldata.zlen,
+        src->variants.zInputCalldata.zoff);
+    break;
+  case Kind_zMemoryCalldata:
+    frame_slice_fields_clone(
+        &dst->variants.zMemoryCalldata.zlen,
+        &dst->variants.zMemoryCalldata.zoff,
+        src->variants.zMemoryCalldata.zlen,
+        src->variants.zMemoryCalldata.zoff);
+    break;
+  }
+}
+
+static void frame_calldata_drop(struct zCalldataSlice *calldata) {
+  switch (calldata->kind) {
+  case Kind_zInputCalldata:
+    frame_slice_fields_drop(
+        &calldata->variants.zInputCalldata.zlen,
+        &calldata->variants.zInputCalldata.zoff);
+    break;
+  case Kind_zMemoryCalldata:
+    frame_slice_fields_drop(
+        &calldata->variants.zMemoryCalldata.zlen,
+        &calldata->variants.zMemoryCalldata.zoff);
+    break;
+  }
 }
 
 static void frame_status_clone(struct zFrameStatus *dst,
@@ -41,12 +77,18 @@ static void frame_status_clone(struct zFrameStatus *dst,
 
   switch (src->variants.zHalted.kind) {
   case Kind_zHaltReturn:
-    frame_slice_clone(&dst->variants.zHalted.variants.zHaltReturn,
-                      &src->variants.zHalted.variants.zHaltReturn);
+    frame_slice_fields_clone(
+        &dst->variants.zHalted.variants.zHaltReturn.zlen,
+        &dst->variants.zHalted.variants.zHaltReturn.zoff,
+        src->variants.zHalted.variants.zHaltReturn.zlen,
+        src->variants.zHalted.variants.zHaltReturn.zoff);
     break;
   case Kind_zHaltRevert:
-    frame_slice_clone(&dst->variants.zHalted.variants.zHaltRevert,
-                      &src->variants.zHalted.variants.zHaltRevert);
+    frame_slice_fields_clone(
+        &dst->variants.zHalted.variants.zHaltRevert.zlen,
+        &dst->variants.zHalted.variants.zHaltRevert.zoff,
+        src->variants.zHalted.variants.zHaltRevert.zlen,
+        src->variants.zHalted.variants.zHaltRevert.zoff);
     break;
   default:
     break;
@@ -58,10 +100,14 @@ static void frame_status_drop(struct zFrameStatus *status) {
 
   switch (status->variants.zHalted.kind) {
   case Kind_zHaltReturn:
-    frame_slice_drop(&status->variants.zHalted.variants.zHaltReturn);
+    frame_slice_fields_drop(
+        &status->variants.zHalted.variants.zHaltReturn.zlen,
+        &status->variants.zHalted.variants.zHaltReturn.zoff);
     break;
   case Kind_zHaltRevert:
-    frame_slice_drop(&status->variants.zHalted.variants.zHaltRevert);
+    frame_slice_fields_drop(
+        &status->variants.zHalted.variants.zHaltRevert.zlen,
+        &status->variants.zHalted.variants.zHaltRevert.zoff);
     break;
   default:
     break;
@@ -69,12 +115,16 @@ static void frame_status_drop(struct zFrameStatus *status) {
 }
 
 static void frame_checkpoint_clone(struct zFrameCheckpoint *dst,
-                                   const struct zFrameCheckpoint *src) {
+  const struct zFrameCheckpoint *src) {
   *dst = *src;
-  frame_slice_clone(&dst->zcalldata, &src->zcalldata);
-  frame_slice_clone(&dst->zcode.zbytes, &src->zcode.zbytes);
+  frame_calldata_clone(&dst->zcalldata, &src->zcalldata);
+  frame_slice_fields_clone(&dst->zcode.zbytes.zlen,
+                           &dst->zcode.zbytes.zoff,
+                           src->zcode.zbytes.zlen,
+                           src->zcode.zbytes.zoff);
   frame_int_clone(&dst->zgas_remaining, src->zgas_remaining);
-  frame_slice_clone(&dst->zmemory, &src->zmemory);
+  frame_slice_fields_clone(&dst->zmemory.zlen, &dst->zmemory.zoff,
+                           src->zmemory.zlen, src->zmemory.zoff);
   frame_int_clone(&dst->zmessage.zstate_gas_reservoir,
                   src->zmessage.zstate_gas_reservoir);
   frame_int_clone(&dst->zpc, src->zpc);
@@ -84,10 +134,12 @@ static void frame_checkpoint_clone(struct zFrameCheckpoint *dst,
 }
 
 static void frame_checkpoint_drop(struct zFrameCheckpoint *checkpoint) {
-  frame_slice_drop(&checkpoint->zcalldata);
-  frame_slice_drop(&checkpoint->zcode.zbytes);
+  frame_calldata_drop(&checkpoint->zcalldata);
+  frame_slice_fields_drop(&checkpoint->zcode.zbytes.zlen,
+                          &checkpoint->zcode.zbytes.zoff);
   KILL(sail_int)(&checkpoint->zgas_remaining);
-  frame_slice_drop(&checkpoint->zmemory);
+  frame_slice_fields_drop(&checkpoint->zmemory.zlen,
+                          &checkpoint->zmemory.zoff);
   KILL(sail_int)(&checkpoint->zmessage.zstate_gas_reservoir);
   KILL(sail_int)(&checkpoint->zpc);
   KILL(sail_int)(&checkpoint->zstate);

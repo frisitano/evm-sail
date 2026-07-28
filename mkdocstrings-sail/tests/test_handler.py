@@ -336,12 +336,50 @@ function step() = ()
 
 
 class TestBook(unittest.TestCase):
-    def test_render_mod_page_links_eips(self):
-        from mkdocstrings_handlers.sail._book import render_mod_page
-        text = "# Host interface\n\nWarming follows EIP-2929.\n"
-        out = render_mod_page(text)
+    def test_book_plugin_links_authored_markdown_eips(self):
+        from mkdocstrings_handlers.sail._plugin import SailBookPlugin
+
+        out = SailBookPlugin().on_page_markdown(
+            "Warming follows EIP-2929.",
+            page=None,
+            config=None,
+            files=None,
+        )
         self.assertIn("[EIP-2929](https://eips.ethereum.org/EIPS/eip-2929)", out)
-        self.assertIn('data-sail-hover="eip-2929"', out)
+
+    def test_generated_manifest_preserves_authored_reference_pages(self):
+        from pathlib import Path as P
+        import tempfile
+        from mkdocstrings_handlers.sail._book import GeneratedFiles
+
+        with tempfile.TemporaryDirectory() as directory:
+            book = P(directory)
+            authored = book / "docs/reference/sail/lib/index.md"
+            authored.parent.mkdir(parents=True)
+            authored.write_text("# Authored\n")
+
+            generated_page = book / "docs/reference/sail/lib/rlp.md"
+            generated = GeneratedFiles(book)
+            generated.write_text(generated_page, "# Generated\n")
+            self.assertTrue(generated_page.exists())
+
+            GeneratedFiles(book)
+            self.assertFalse(generated_page.exists())
+            self.assertEqual(authored.read_text(), "# Authored\n")
+
+    def test_generated_writer_refuses_authored_collision(self):
+        from pathlib import Path as P
+        import tempfile
+        from mkdocstrings_handlers.sail._book import GeneratedFiles
+
+        with tempfile.TemporaryDirectory() as directory:
+            book = P(directory)
+            authored = book / "docs/reference/sail/lib/index.md"
+            authored.parent.mkdir(parents=True)
+            authored.write_text("# Authored\n")
+
+            with self.assertRaises(FileExistsError):
+                GeneratedFiles(book).write_text(authored, "# Generated\n")
 
     def test_lean_page_items_split(self):
         from mkdocstrings_handlers.sail._book import lean_page_items, render_lean_page

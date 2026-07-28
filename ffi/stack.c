@@ -14,6 +14,7 @@
  * (push checks the height and raises StackOverflow); the C side only guards
  * its own capacity. */
 #include "sail.h"
+#include "optimized_stack.h"
 #include "value_convert.h"
 #include <stdint.h>
 #include <stdlib.h>
@@ -26,6 +27,9 @@ typedef struct {
   uint64_t (*w)[4];             /* HS_CAP x 4 limbs, [0] = least significant */
   uint32_t n;                   /* current height                            */
 } hs_frame;
+
+_Static_assert(sizeof(sail_u256) == sizeof(uint64_t[4]),
+               "optimized stack rows must match sail_u256");
 
 static hs_frame hs_stk[HS_MAXDEPTH];
 static int hs_top = 0;
@@ -100,4 +104,60 @@ unit stack_set_word(uint64_t n, EVMSAIL_WORD_PARAM(w)) {
   if (f->w && n < f->n)
     sail_word_to_le_words4(f->w[f->n - 1 - n], EVMSAIL_WORD_VALUE(w));
   return UNIT;
+}
+
+enum evmsail_stack_rewrite_status evmsail_stack_rewrite(
+    uint32_t inputs, uint32_t outputs, sail_u256 **rows) {
+  hs_frame *f = &hs_stk[hs_top];
+  if (!f->w || f->n < inputs)
+    return EVMSAIL_STACK_REWRITE_UNDERFLOW;
+
+  const uint32_t retained = f->n - inputs;
+  if (outputs > 1024 - retained)
+    return EVMSAIL_STACK_REWRITE_OVERFLOW;
+
+  *rows = (sail_u256 *)&f->w[retained];
+  f->n = retained + outputs;
+  return EVMSAIL_STACK_REWRITE_OK;
+}
+
+enum evmsail_stack_rewrite_status evmsail_stack_dup(uint32_t depth) {
+  hs_frame *f = &hs_stk[hs_top];
+  if (!f->w || depth == 0 || f->n < depth)
+    return EVMSAIL_STACK_REWRITE_UNDERFLOW;
+  if (f->n == 1024)
+    return EVMSAIL_STACK_REWRITE_OVERFLOW;
+
+  memcpy(f->w[f->n], f->w[f->n - depth], sizeof(f->w[f->n]));
+  f->n++;
+  return EVMSAIL_STACK_REWRITE_OK;
+}
+
+enum evmsail_stack_rewrite_status evmsail_stack_swap(uint32_t other_depth) {
+  hs_frame *f = &hs_stk[hs_top];
+  if (!f->w || other_depth >= f->n)
+    return EVMSAIL_STACK_REWRITE_UNDERFLOW;
+
+  uint64_t temporary[4];
+  memcpy(temporary, f->w[f->n - 1], sizeof(temporary));
+  memcpy(f->w[f->n - 1], f->w[f->n - 1 - other_depth],
+         sizeof(f->w[f->n - 1]));
+  memcpy(f->w[f->n - 1 - other_depth], temporary, sizeof(temporary));
+  return EVMSAIL_STACK_REWRITE_OK;
+}
+
+enum evmsail_stack_rewrite_status evmsail_stack_exchange(
+    uint32_t left_depth, uint32_t right_depth) {
+  hs_frame *f = &hs_stk[hs_top];
+  const uint32_t required =
+      left_depth > right_depth ? left_depth : right_depth;
+  if (!f->w || required >= f->n)
+    return EVMSAIL_STACK_REWRITE_UNDERFLOW;
+
+  uint64_t temporary[4];
+  memcpy(temporary, f->w[f->n - 1 - left_depth], sizeof(temporary));
+  memcpy(f->w[f->n - 1 - left_depth], f->w[f->n - 1 - right_depth],
+         sizeof(f->w[f->n - 1 - left_depth]));
+  memcpy(f->w[f->n - 1 - right_depth], temporary, sizeof(temporary));
+  return EVMSAIL_STACK_REWRITE_OK;
 }
